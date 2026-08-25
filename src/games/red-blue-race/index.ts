@@ -1,4 +1,5 @@
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { AVATAR_URLS } from "../../ui/avatars";
 import { CHAPTERS, LEVELS, TRACK_LEN, type Obstacle, type RaceLevel } from "./levels";
 
 export const meta = {
@@ -20,7 +21,12 @@ const OB_EMOJI: Record<Obstacle["type"], string> = {
 const CSS = `
 .rbr-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F8E0, #FFF7E0); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
 .rbr-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; }
-.rbr-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #4E8A3E; box-shadow: 0 2px 6px rgba(110,170,90,.25); font-size: 14px; }
+.rbr-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 4px 12px 4px 4px; font-weight: 700; color: #4E8A3E; box-shadow: 0 2px 6px rgba(110,170,90,.25); font-size: 14px; }
+.rbr-badge.rbr-badge-right { padding: 4px 4px 4px 12px; }
+.rbr-ava { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 1px 4px rgba(90,130,80,.3); }
+.rbr-runner-img { width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff; object-fit: cover; box-shadow: 0 3px 8px rgba(90,110,80,.35); background: #fff; display: block; }
+.rbr-runner.rbr-me .rbr-runner-img { border-color: #FFB3B3; }
+.rbr-runner.rbr-airun .rbr-runner-img { border-color: #A9C6FF; }
 .rbr-lane { position: relative; height: 56px; border-radius: 14px; margin-bottom: 8px; overflow: hidden; }
 .rbr-lane-red { background: linear-gradient(180deg, #FFE4E4, #FFD4D4); }
 .rbr-lane-blue { background: linear-gradient(180deg, #E0EEFF, #D0E4FF); }
@@ -57,16 +63,16 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="rbr-top">
-      <span class="rbr-badge">🔴 你的赛道</span>
-      <span class="rbr-badge rbr-ai">🔵 小电脑</span>
+      <span class="rbr-badge"><img class="rbr-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />🔴 朵朵 · 你的赛道</span>
+      <span class="rbr-badge rbr-badge-right rbr-ai">🔵 星星 · 小电脑<img class="rbr-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
     </div>
     <div class="rbr-lane rbr-lane-red">
       <div class="rbr-finish">🏁</div>
-      <div class="rbr-runner rbr-me" style="left:0%">🏃</div>
+      <div class="rbr-runner rbr-me" style="left:0%"><img class="rbr-runner-img" src="${AVATAR_URLS.duoduo}" alt="朵朵在奔跑" /></div>
     </div>
     <div class="rbr-lane rbr-lane-blue">
       <div class="rbr-finish">🏁</div>
-      <div class="rbr-runner rbr-airun" style="left:0%">🤖</div>
+      <div class="rbr-runner rbr-airun" style="left:0%"><img class="rbr-runner-img" src="${AVATAR_URLS.xingxing}" alt="星星在奔跑" /></div>
     </div>
     <div class="rbr-ctrl">
       <button class="rbr-run" type="button">跑！跑！跑！</button>

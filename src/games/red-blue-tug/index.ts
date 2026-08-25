@@ -1,4 +1,5 @@
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { AVATAR_URLS } from "../../ui/avatars";
 import { CHAPTERS, LEVELS, type TugLevel } from "./levels";
 
 export const meta = {
@@ -15,7 +16,12 @@ const WIN_AT = 100;
 const CSS = `
 .rbg-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0E4, #FFE4EC); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
 .rbg-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; align-items: center; }
-.rbg-badge { background: #fff; border-radius: 14px; padding: 5px 12px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(200,120,120,.25); }
+.rbg-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 4px 12px 4px 4px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(200,120,120,.25); }
+.rbg-badge.rbg-badge-right { padding: 4px 4px 4px 12px; }
+.rbg-ava { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 1px 4px rgba(120,80,120,.3); }
+.rbg-puller { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #fff; object-fit: cover; box-shadow: 0 3px 8px rgba(120,80,120,.3); background: #fff; }
+.rbg-team-red .rbg-puller { border-color: #FFB3B3; }
+.rbg-team-blue .rbg-puller { border-color: #A9C6FF; }
 .rbg-light { font-size: 26px; min-width: 34px; text-align: center; }
 .rbg-field { position: relative; height: 110px; border-radius: 16px; background: linear-gradient(180deg, #E8F6DA 0 68%, #CFE8B8 68% 100%); overflow: hidden; margin-bottom: 8px; }
 .rbg-team { position: absolute; top: 26px; font-size: 34px; transition: left .15s linear; }
@@ -51,17 +57,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="rbg-top">
-      <span class="rbg-badge" style="color:#C24545">🔴 你队</span>
+      <span class="rbg-badge" style="color:#C24545"><img class="rbg-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />🔴 朵朵队 · 你</span>
       ${cfg.redlight ? '<span class="rbg-light">🟢</span>' : ""}
-      <span class="rbg-badge" style="color:#3576BF">🔵 小电脑队</span>
+      <span class="rbg-badge rbg-badge-right" style="color:#3576BF">🔵 星星队 · 小电脑<img class="rbg-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
     </div>
     <div class="rbg-field">
       <div class="rbg-zone" style="left:15%"></div>
       <div class="rbg-zone" style="right:15%"></div>
-      <div class="rbg-team rbg-red">🧒🧒</div>
+      <div class="rbg-team rbg-red rbg-team-red"><img class="rbg-puller" src="${AVATAR_URLS.duoduo}" alt="朵朵在拔河" /></div>
       <div class="rbg-rope"></div>
       <div class="rbg-flag">🚩</div>
-      <div class="rbg-team rbg-blue-team">🤖🤖</div>
+      <div class="rbg-team rbg-blue-team rbg-team-blue"><img class="rbg-puller" src="${AVATAR_URLS.xingxing}" alt="星星在拔河" /></div>
     </div>
     <div class="rbg-ctrl">
       ${cfg.rhythm

@@ -10,6 +10,7 @@
  * 各游戏只需提供 chapters 与 playLevel(stage, ctx)，其余交给框架。
  * 本文件不在游戏子目录内，不会被 loader 的 import.meta.glob 收集。
  */
+import { AVATAR_URLS } from "../ui/avatars";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -304,6 +305,11 @@ const L99_CSS = `
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .l99-ov-big{font-size:56px;line-height:1;}
+.l99-ov-buddy{width:104px;height:104px;object-fit:contain;pointer-events:none;
+  filter:drop-shadow(0 6px 10px rgba(180,120,180,.28));animation:l99buddy .5s cubic-bezier(.34,1.56,.64,1);}
+.l99-ov-buddy-round{border-radius:50%;border:3px solid #fff;object-fit:cover;width:84px;height:84px;
+  box-shadow:0 5px 12px rgba(150,120,200,.3);}
+@keyframes l99buddy{from{transform:scale(.3) rotate(-8deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
 .l99-ov-stars{font-size:34px;letter-spacing:6px;}
 .l99-ov-title{font-size:23px;font-weight:900;color:#8a5aa8;}
 .l99-ov-sub{font-size:16px;font-weight:700;color:#a687c0;line-height:1.6;max-width:320px;}
@@ -473,8 +479,10 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     buttons.push({ label: "🔁 再玩一次", ghost: true, onClick: () => startLevel(level) });
     buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap() });
 
+    const buddy = level % 2 === 0 ? AVATAR_URLS.duoduoCheer : AVATAR_URLS.xingxingRun;
+    const buddyAlt = level % 2 === 0 ? "朵朵在为你庆祝" : "星星在为你欢呼";
     showOverlay(
-      `<div class="l99-ov-big">🎉</div>
+      `<img class="l99-ov-buddy" src="${buddy}" alt="${buddyAlt}" />
        <div class="l99-ov-stars">${starRowHTML(got)}</div>
        <div class="l99-ov-title">第 ${level + 1} 关过关！</div>
        <div class="l99-ov-sub">${msg ?? word}</div>`,
@@ -491,8 +499,10 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     settled = true;
     api.play("oops");
     const word = msg ?? LOSE_WORDS[Math.floor(Math.random() * LOSE_WORDS.length)];
+    const buddy = level % 2 === 0 ? AVATAR_URLS.xingxing : AVATAR_URLS.duoduo;
+    const buddyAlt = level % 2 === 0 ? "星星给你打气" : "朵朵给你打气";
     showOverlay(
-      `<div class="l99-ov-big">🌈</div>
+      `<img class="l99-ov-buddy l99-ov-buddy-round" src="${buddy}" alt="${buddyAlt}" />
        <div class="l99-ov-title">就差一点点！</div>
        <div class="l99-ov-sub">${word}</div>`,
       [

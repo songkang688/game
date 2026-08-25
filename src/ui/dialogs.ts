@@ -1,6 +1,7 @@
 /**
  * 通用弹窗:胜利 / 失败 / 家长面板都基于它。
  */
+import { createAvatarImg } from "./avatars";
 
 export interface DialogButton {
   label: string;
@@ -94,6 +95,22 @@ export function showResultDialog(opts: {
 }): DialogHandle {
   const content = document.createElement("div");
   content.className = "result-content";
+
+  // 朵朵和星星出来一起庆祝 / 打气
+  const buddies = document.createElement("div");
+  buddies.className = `result-buddies ${opts.win ? "result-buddies--win" : "result-buddies--lose"}`;
+  if (opts.win) {
+    buddies.append(
+      createAvatarImg("duoduoCheer", { round: false, className: "result-buddy" }),
+      createAvatarImg("xingxingRun", { round: false, className: "result-buddy" })
+    );
+  } else {
+    buddies.append(
+      createAvatarImg("duoduo", { className: "result-buddy result-buddy--round" }),
+      createAvatarImg("xingxing", { className: "result-buddy result-buddy--round" })
+    );
+  }
+  content.appendChild(buddies);
 
   const face = document.createElement("div");
   face.className = "result-face";
