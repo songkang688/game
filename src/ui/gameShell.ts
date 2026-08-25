@@ -6,6 +6,7 @@ import type { GameAPI, GameModule } from "../engine/types";
 import { save } from "../engine/save";
 import { playSound } from "../engine/audio";
 import { showResultDialog, type DialogHandle } from "./dialogs";
+import { createDuoPair } from "./avatars";
 
 export function mountGameScreen(
   container: HTMLElement,
@@ -48,7 +49,10 @@ export function mountGameScreen(
   renderStars();
   const unsubscribe = save.onChange(renderStars);
 
-  topbar.append(backBtn, title, starChip);
+  const duoPair = createDuoPair(38);
+  duoPair.title = "朵朵和星星陪你一起玩";
+
+  topbar.append(backBtn, title, duoPair, starChip);
   screen.appendChild(topbar);
 
   // ---- 舞台 ----

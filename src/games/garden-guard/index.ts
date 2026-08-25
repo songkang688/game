@@ -780,31 +780,86 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   // ---- 绘制 ----
-  function drawFace(x: number, y: number, r: number): void {
+  /** 把 #rrggbb 变深/变浅(amt 为 -255..255) */
+  function shade(hex: string, amt: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, Math.min(255, (n >> 16) + amt));
+    const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt));
+    const b = Math.max(0, Math.min(255, (n & 0xff) + amt));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function drawFace(x: number, y: number, r: number, blush = true): void {
+    if (blush) {
+      ctx.fillStyle = "rgba(255,150,160,0.4)";
+      ctx.beginPath();
+      ctx.arc(x - r * 0.52, y + r * 0.12, r * 0.16, 0, Math.PI * 2);
+      ctx.arc(x + r * 0.52, y + r * 0.12, r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = "#3a3a4a";
     ctx.beginPath();
     ctx.arc(x - r * 0.32, y - r * 0.1, r * 0.1, 0, Math.PI * 2);
     ctx.arc(x + r * 0.32, y - r * 0.1, r * 0.1, 0, Math.PI * 2);
     ctx.fill();
+    // 眼睛高光
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath();
+    ctx.arc(x - r * 0.35, y - r * 0.13, r * 0.035, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.29, y - r * 0.13, r * 0.035, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = "#3a3a4a";
     ctx.lineWidth = Math.max(1.5, r * 0.08);
+    ctx.lineCap = "round";
     ctx.beginPath();
     ctx.arc(x, y + r * 0.15, r * 0.28, 0.15 * Math.PI, 0.85 * Math.PI);
     ctx.stroke();
   }
 
+  /** 已种下的植物底座:小土丘 + 两片叶子,让"这是种在土里的植物"一目了然 */
+  function drawTowerBase(tx: number, ty: number, r: number): void {
+    ctx.fillStyle = "rgba(58,58,74,0.12)";
+    ctx.beginPath();
+    ctx.ellipse(tx, ty + r * 1.15, r * 1.05, r * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#b98c62";
+    ctx.beginPath();
+    ctx.ellipse(tx, ty + r * 1.05, r * 0.85, r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#a3764e";
+    ctx.beginPath();
+    ctx.ellipse(tx, ty + r * 1.02, r * 0.62, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 两片小叶子
+    ctx.fillStyle = "#8fd8a8";
+    ctx.beginPath();
+    ctx.ellipse(tx - r * 0.72, ty + r * 0.88, r * 0.3, r * 0.14, -0.6, 0, Math.PI * 2);
+    ctx.ellipse(tx + r * 0.72, ty + r * 0.88, r * 0.3, r * 0.14, 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function drawTowerIcon(kind: TowerKind, tx: number, ty: number, r: number, level = 1, anim = 0): void {
+    ctx.save();
+    ctx.lineJoin = "round";
     if (kind === "bubble") {
       const squish = 1 + anim * 0.15;
       ctx.fillStyle = "#fff7f0";
+      ctx.strokeStyle = "#e8b8c8";
+      ctx.lineWidth = Math.max(1, r * 0.08);
       ctx.beginPath();
       ctx.ellipse(tx, ty + r * 0.35, r * 0.55, r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#ff9eb5";
+      ctx.stroke();
+      const bodyGrad = ctx.createRadialGradient(tx - r * 0.3, ty - r * 0.5, r * 0.1, tx, ty - r * 0.25, r * 1.1);
+      bodyGrad.addColorStop(0, "#ffc3d4");
+      bodyGrad.addColorStop(1, "#ff8aa8");
+      ctx.fillStyle = bodyGrad;
+      ctx.strokeStyle = "#e87a9a";
       ctx.beginPath();
       ctx.ellipse(tx, ty - r * 0.25, r * squish, r * 0.75 * squish, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#fff";
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
       for (const [dx2, dy2] of [
         [-0.45, -0.3],
         [0.35, -0.5],
@@ -816,74 +871,131 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       drawFace(tx, ty + r * 0.4, r * 0.55);
     } else if (kind === "needle") {
-      ctx.fillStyle = "#8fd8a8";
-      ctx.beginPath();
-      ctx.ellipse(tx, ty, r * 0.62, r * 0.85, 0, 0, Math.PI * 2);
-      ctx.fill();
       ctx.strokeStyle = "#5aa878";
-      ctx.lineWidth = Math.max(1.5, r * 0.09);
+      ctx.lineWidth = Math.max(1.5, r * 0.11);
+      ctx.lineCap = "round";
       const spikes = 6;
       for (let i = 0; i < spikes; i++) {
         const a = (Math.PI * 2 * i) / spikes + anim * 0.5;
         ctx.beginPath();
         ctx.moveTo(tx + Math.cos(a) * r * 0.62, ty + Math.sin(a) * r * 0.8);
-        ctx.lineTo(tx + Math.cos(a) * r * (0.85 + anim * 0.2), ty + Math.sin(a) * r * (1.05 + anim * 0.2));
+        ctx.lineTo(tx + Math.cos(a) * r * (0.9 + anim * 0.2), ty + Math.sin(a) * r * (1.1 + anim * 0.2));
         ctx.stroke();
       }
-      ctx.fillStyle = "#ffb3c8";
+      const cactusGrad = ctx.createLinearGradient(tx, ty - r, tx, ty + r);
+      cactusGrad.addColorStop(0, "#a8e8bc");
+      cactusGrad.addColorStop(1, "#76c894");
+      ctx.fillStyle = cactusGrad;
+      ctx.strokeStyle = "#4e9a6a";
+      ctx.lineWidth = Math.max(1, r * 0.08);
       ctx.beginPath();
-      ctx.arc(tx, ty - r * 0.85, r * 0.2, 0, Math.PI * 2);
+      ctx.ellipse(tx, ty, r * 0.62, r * 0.85, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // 仙人掌花
+      ctx.fillStyle = "#ffb3c8";
+      for (let i = 0; i < 5; i++) {
+        const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(tx + Math.cos(a) * r * 0.18, ty - r * 0.85 + Math.sin(a) * r * 0.18, r * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffe387";
+      ctx.beginPath();
+      ctx.arc(tx, ty - r * 0.85, r * 0.09, 0, Math.PI * 2);
       ctx.fill();
       drawFace(tx, ty, r * 0.55);
     } else if (kind === "dew") {
-      ctx.fillStyle = "#9fd8f5";
+      const dewGrad = ctx.createLinearGradient(tx, ty - r, tx, ty + r);
+      dewGrad.addColorStop(0, "#c8ecfc");
+      dewGrad.addColorStop(1, "#7ec4ea");
+      ctx.fillStyle = dewGrad;
+      ctx.strokeStyle = "#5aa0cc";
+      ctx.lineWidth = Math.max(1, r * 0.08);
       ctx.beginPath();
       ctx.moveTo(tx, ty - r * 0.95);
       ctx.quadraticCurveTo(tx + r * 0.75, ty - r * 0.05, tx + r * 0.6, ty + r * 0.4);
       ctx.arc(tx, ty + r * 0.28, r * 0.62, 0.1 * Math.PI, 0.9 * Math.PI);
       ctx.quadraticCurveTo(tx - r * 0.75, ty - r * 0.05, tx, ty - r * 0.95);
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
       ctx.beginPath();
-      ctx.arc(tx - r * 0.22, ty - r * 0.05, r * 0.15, 0, Math.PI * 2);
+      ctx.ellipse(tx - r * 0.24, ty - r * 0.1, r * 0.12, r * 0.2, -0.4, 0, Math.PI * 2);
       ctx.fill();
       drawFace(tx, ty + r * 0.25, r * 0.5);
     } else if (kind === "sunny") {
       // 阳光花:黄色花瓣圈
       ctx.fillStyle = "#ffe387";
+      ctx.strokeStyle = "#f2c24e";
+      ctx.lineWidth = Math.max(1, r * 0.06);
       for (let i = 0; i < 8; i++) {
         const a = (Math.PI * 2 * i) / 8 + anim * 0.4;
         ctx.beginPath();
         ctx.ellipse(tx + Math.cos(a) * r * 0.62, ty + Math.sin(a) * r * 0.62, r * 0.3, r * 0.3, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
       }
-      ctx.fillStyle = "#ffd868";
+      const coreGrad = ctx.createRadialGradient(tx - r * 0.15, ty - r * 0.15, r * 0.05, tx, ty, r * 0.7);
+      coreGrad.addColorStop(0, "#ffe9a8");
+      coreGrad.addColorStop(1, "#ffc94e");
+      ctx.fillStyle = coreGrad;
+      ctx.strokeStyle = "#e8a830";
       ctx.beginPath();
       ctx.arc(tx, ty, r * (0.55 + anim * 0.1), 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       drawFace(tx, ty, r * 0.5);
     } else {
-      // 花火塔:小炮筒
-      ctx.fillStyle = "#ffc09b";
+      // 花火果:圆滚滚的小果子炮
+      const potGrad = ctx.createLinearGradient(tx, ty - r * 0.2, tx, ty + r * 0.75);
+      potGrad.addColorStop(0, "#ffd0ae");
+      potGrad.addColorStop(1, "#f2a878");
+      ctx.fillStyle = potGrad;
+      ctx.strokeStyle = "#d88a58";
+      ctx.lineWidth = Math.max(1, r * 0.08);
       ctx.beginPath();
       ctx.ellipse(tx, ty + r * 0.25, r * 0.62, r * 0.5, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = "#e8926a";
+      ctx.strokeStyle = "#c8744e";
       ctx.beginPath();
       ctx.ellipse(tx + r * 0.1, ty - r * 0.4, r * 0.3, r * 0.5, -0.5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
+      // 引信小火花
       ctx.fillStyle = "#ffd868";
       ctx.beginPath();
       ctx.arc(tx + r * (0.35 + anim * 0.3), ty - r * (0.75 + anim * 0.3), r * 0.16, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = "#ff9a4e";
+      ctx.beginPath();
+      ctx.arc(tx + r * (0.35 + anim * 0.3), ty - r * (0.75 + anim * 0.3), r * 0.08, 0, Math.PI * 2);
+      ctx.fill();
       drawFace(tx, ty + r * 0.25, r * 0.5);
     }
+    // 等级:头顶小星星
     for (let i = 1; i < level; i++) {
-      ctx.fillStyle = "#ffd868";
+      const sx = tx - r * 0.5 + (i - 1) * r * 0.45;
+      const sy = ty - r * 1.2;
+      ctx.fillStyle = "#ffc94e";
       ctx.beginPath();
-      ctx.arc(tx - r * 0.5 + (i - 1) * r * 0.45, ty - r * 1.15, r * 0.14, 0, Math.PI * 2);
+      for (let k = 0; k < 5; k++) {
+        const a = (Math.PI * 2 * k) / 5 - Math.PI / 2;
+        const outX = sx + Math.cos(a) * r * 0.16;
+        const outY = sy + Math.sin(a) * r * 0.16;
+        const a2 = a + Math.PI / 5;
+        const inX = sx + Math.cos(a2) * r * 0.07;
+        const inY = sy + Math.sin(a2) * r * 0.07;
+        if (k === 0) ctx.moveTo(outX, outY);
+        else ctx.lineTo(outX, outY);
+        ctx.lineTo(inX, inY);
+      }
+      ctx.closePath();
       ctx.fill();
     }
+    ctx.restore();
   }
 
   const MONSTER_COLORS: Record<MonsterKind, string> = {
@@ -915,10 +1027,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const sq = 1 + Math.sin(m.wob) * 0.08;
     ctx.save();
     if (m.hidden) ctx.globalAlpha = 0.22;
-    ctx.fillStyle = m.enraged ? "#7aa8e8" : MONSTER_COLORS[m.kind];
+    // 脚下软阴影
+    ctx.fillStyle = "rgba(58,58,74,0.14)";
+    ctx.beginPath();
+    ctx.ellipse(mx, my + r * 1.02, r * 0.9, r * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const bodyColor = m.enraged ? "#7aa8e8" : MONSTER_COLORS[m.kind];
+    const bodyGrad = ctx.createRadialGradient(mx - r * 0.35, my - r * 0.4, r * 0.15, mx, my, r * 1.25);
+    bodyGrad.addColorStop(0, shade(bodyColor, 26));
+    bodyGrad.addColorStop(1, bodyColor);
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = shade(bodyColor, -46);
+    ctx.lineWidth = Math.max(1.5, r * 0.09);
     ctx.beginPath();
     ctx.ellipse(mx, my, r * sq, r / sq, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     if (m.kind === "fasty" || m.kind === "sneaky") {
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       const flap = Math.sin(m.wob * 2) * r * 0.3;
@@ -1288,10 +1412,59 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fillRect(px(c), py(r), cell + 0.5, cell + 0.5);
       }
     }
+    // 可种植的空格画成圆角"花园土坑",种在哪里一目了然
+    const canAfford = petals >= TOWER_INFO[selectedCard].cost;
+    const hintPulse = 0.22 + Math.sin(time * 4) * 0.1;
+    for (let r = 0; r < GRID_ROWS; r++) {
+      for (let c = 0; c < GRID_COLS; c++) {
+        const key = `${c},${r}`;
+        if (blocked.has(key)) continue;
+        const inset = cell * 0.1;
+        ctx.fillStyle = "rgba(150,110,70,0.13)";
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = Math.max(1, cell * 0.03);
+        ctx.beginPath();
+        ctx.roundRect(px(c) + inset, py(r) + inset, cell - inset * 2, cell - inset * 2, cell * 0.2);
+        ctx.fill();
+        ctx.stroke();
+        if (!occupied.has(key) && (phase === "wave" || phase === "prewave") && canAfford) {
+          // 呼吸的绿色"+":告诉小朋友这里能种
+          ctx.strokeStyle = `rgba(90,168,120,${hintPulse})`;
+          ctx.lineWidth = Math.max(2, cell * 0.06);
+          ctx.lineCap = "round";
+          const cxc = px(c + 0.5);
+          const cyc = py(r + 0.5);
+          const arm = cell * 0.12;
+          ctx.beginPath();
+          ctx.moveTo(cxc - arm, cyc);
+          ctx.lineTo(cxc + arm, cyc);
+          ctx.moveTo(cxc, cyc - arm);
+          ctx.lineTo(cxc, cyc + arm);
+          ctx.stroke();
+        }
+      }
+    }
+    // 怪物走的小路:圆润路面 + 小鹅卵石
     for (const key of blocked) {
       const [c, r] = key.split(",").map(Number);
       ctx.fillStyle = st.path;
       ctx.fillRect(px(c), py(r), cell + 0.5, cell + 0.5);
+    }
+    for (const key of blocked) {
+      const [c, r] = key.split(",").map(Number);
+      const seed = (c * 31 + r * 17) % 7;
+      ctx.fillStyle = "rgba(255,255,255,0.28)";
+      ctx.beginPath();
+      ctx.ellipse(
+        px(c) + cell * (0.25 + (seed % 3) * 0.22),
+        py(r) + cell * (0.3 + ((seed * 5) % 4) * 0.14),
+        cell * 0.07,
+        cell * 0.05,
+        seed,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
     }
 
     // 起点小门与终点花朵(每条路)
@@ -1344,6 +1517,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     for (const t of towers) {
+      drawTowerBase(px(t.col + 0.5), py(t.row + 0.5), cell * 0.3);
       drawTowerIcon(t.kind, px(t.col + 0.5), py(t.row + 0.5), cell * 0.3, t.level, t.firedAnim);
     }
 

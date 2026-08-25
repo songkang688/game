@@ -1,4 +1,5 @@
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { AVATAR_URLS } from "../../ui/avatars";
 import { CHAPTERS, LEVELS, type TapLevel } from "./levels";
 
 export const meta = {
@@ -23,7 +24,10 @@ const SKINS = [
 const CSS = `
 .rbt-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E4F0FF, #FFE9F0); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
 .rbt-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; }
-.rbt-badge { background: #fff; border-radius: 14px; padding: 5px 12px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(120,140,200,.25); }
+.rbt-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 5px 12px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(120,140,200,.25); }
+.rbt-badge.rbt-me { padding: 4px 12px 4px 4px; }
+.rbt-badge.rbt-ai { padding: 4px 4px 4px 12px; }
+.rbt-ava { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 1px 4px rgba(100,120,180,.3); }
 .rbt-me { color: #3576BF; }
 .rbt-ai { color: #C24545; }
 .rbt-arena { position: relative; height: 320px; border-radius: 16px; background: #ffffffa8; overflow: hidden; }
@@ -55,9 +59,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="rbt-top">
-      <span class="rbt-badge rbt-me">你 0</span>
+      <span class="rbt-badge rbt-me"><img class="rbt-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" /><span class="rbt-me-score">朵朵(你) 0</span></span>
       <span class="rbt-badge">先到 ${cfg.targetPoints} 分</span>
-      <span class="rbt-badge rbt-ai">小电脑 0</span>
+      <span class="rbt-badge rbt-ai"><span class="rbt-ai-score">星星(电脑) 0</span><img class="rbt-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
     </div>
     <div class="rbt-arena"></div>
     <div class="rbt-msg"></div>
@@ -65,8 +69,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   stage.appendChild(wrap);
 
   const arenaEl = wrap.querySelector(".rbt-arena") as HTMLElement;
-  const meEl = wrap.querySelector(".rbt-me") as HTMLElement;
-  const aiEl = wrap.querySelector(".rbt-ai") as HTMLElement;
+  const meEl = wrap.querySelector(".rbt-me-score") as HTMLElement;
+  const aiEl = wrap.querySelector(".rbt-ai-score") as HTMLElement;
   const msgEl = wrap.querySelector(".rbt-msg") as HTMLElement;
 
   msgEl.textContent = cfg.trapChance > 0
@@ -82,8 +86,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   function renderTop(): void {
-    meEl.textContent = `你 ${meScore}`;
-    aiEl.textContent = `小电脑 ${aiScore}`;
+    meEl.textContent = `朵朵(你) ${meScore}`;
+    aiEl.textContent = `星星(电脑) ${aiScore}`;
   }
 
   function clearDots(): void {

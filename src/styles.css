@@ -193,6 +193,35 @@ button {
   white-space: nowrap;
 }
 
+/* ---------- 朵朵 & 星星头像 ---------- */
+.avatar-img {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.avatar-img--round {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #fff;
+  background: #fffbef;
+  box-shadow: 0 4px 12px rgba(242, 105, 159, 0.22);
+}
+
+.duo-pair {
+  display: flex;
+  align-items: center;
+}
+
+.duo-pair .duo-pair-img:last-child {
+  margin-left: -12px;
+}
+
+.duo-pair .duo-pair-img:first-child {
+  z-index: 1;
+}
+
 /* ---------- 首页 ---------- */
 .screen {
   position: relative;
@@ -218,6 +247,9 @@ button {
 
 .logo h1 {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: clamp(30px, 6vw, 42px);
   font-weight: 900;
   letter-spacing: 2px;
@@ -225,6 +257,31 @@ button {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.logo-avatar {
+  width: clamp(46px, 8vw, 60px);
+  height: clamp(46px, 8vw, 60px);
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #fff;
+  background: #fffbef;
+  box-shadow: 0 5px 14px rgba(242, 105, 159, 0.28);
+}
+
+.logo-avatar--duoduo {
+  transform: rotate(-6deg);
+  animation: bob-soft 3.6s ease-in-out infinite;
+}
+
+.logo-avatar--xingxing {
+  transform: rotate(6deg);
+  animation: bob-soft 3.6s ease-in-out 1.8s infinite;
+}
+
+@keyframes bob-soft {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -5px; }
 }
 
 .logo-emoji {
@@ -258,6 +315,73 @@ button {
 .home-greeting {
   margin: 10px 0 0;
   font-size: clamp(17px, 3.6vw, 21px);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* 朵朵和星星的欢迎区 */
+.home-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(6px, 2vw, 18px);
+  margin: 14px 0 4px;
+}
+
+.hero-figure {
+  width: clamp(76px, 15vw, 118px);
+  height: clamp(76px, 15vw, 118px);
+  filter: drop-shadow(0 8px 14px rgba(242, 105, 159, 0.22));
+}
+
+.hero-figure--duoduo {
+  animation: bob-soft 3.2s ease-in-out infinite;
+}
+
+.hero-figure--xingxing {
+  animation: bob-soft 3.2s ease-in-out 1.6s infinite;
+}
+
+.hero-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  max-width: 420px;
+  margin-bottom: 14px;
+  padding: 14px 22px;
+  border: 3px solid #fff;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+}
+
+.hero-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -13px;
+  width: 20px;
+  height: 20px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 3px solid #fff;
+  border-bottom: 3px solid #fff;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
+}
+
+.hero-bubble strong {
+  font-size: clamp(18px, 4vw, 23px);
+  font-weight: 900;
+  background: linear-gradient(120deg, var(--pink-deep), #b57ce0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-bubble span {
+  font-size: clamp(13px, 3vw, 16px);
   font-weight: 700;
   color: var(--ink-soft);
 }
@@ -561,8 +685,39 @@ button {
     linear-gradient(180deg, #f4f8ff 0%, #ffffff 52%);
 }
 
+/* 结算弹窗里的朵朵和星星 */
+.result-buddies {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.result-buddy {
+  width: 96px;
+  height: 96px;
+  animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 6px 12px rgba(242, 105, 159, 0.25));
+}
+
+.result-buddies--win .result-buddy:last-child {
+  animation-delay: 0.1s;
+  animation-fill-mode: backwards;
+}
+
+.result-buddy--round {
+  width: 74px;
+  height: 74px;
+}
+
+.result-buddies--lose .result-buddy {
+  animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    sway 2.8s ease-in-out 0.6s infinite;
+}
+
 .result-face {
-  font-size: 68px;
+  font-size: 40px;
+  margin-top: -6px;
   animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -708,5 +863,19 @@ button {
   .game-title {
     font-size: 17px;
     padding: 4px 12px;
+  }
+
+  .game-topbar .duo-pair {
+    display: none;
+  }
+
+  .hero-figure {
+    width: 68px;
+    height: 68px;
+  }
+
+  .logo-avatar {
+    width: 42px;
+    height: 42px;
   }
 }

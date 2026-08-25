@@ -6,6 +6,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER } from "../engine/types";
 import { save } from "../engine/save";
 import { playSound, toggleSound } from "../engine/audio";
 import { showParentGate } from "./parentGate";
+import { createAvatarImg } from "./avatars";
 
 type Tab = "all" | GameCategory;
 
@@ -34,7 +35,13 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   const logo = document.createElement("div");
   logo.className = "logo";
-  logo.innerHTML = `<span class="logo-emoji logo-emoji--flower" aria-hidden="true">🌸</span><h1>一朵一星</h1><span class="logo-emoji logo-emoji--star" aria-hidden="true">⭐</span>`;
+  const logoDuoduo = createAvatarImg("duoduo", { className: "logo-avatar logo-avatar--duoduo" });
+  const logoTitle = document.createElement("h1");
+  logoTitle.innerHTML = `<span class="logo-emoji logo-emoji--flower" aria-hidden="true">🌸</span>一朵一星<span class="logo-emoji logo-emoji--star" aria-hidden="true">⭐</span>`;
+  const logoXingxing = createAvatarImg("xingxing", {
+    className: "logo-avatar logo-avatar--xingxing"
+  });
+  logo.append(logoDuoduo, logoTitle, logoXingxing);
   header.appendChild(logo);
 
   const actions = document.createElement("div");
@@ -78,11 +85,22 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   header.appendChild(actions);
   screen.appendChild(header);
 
-  // ---- 问候语 ----
-  const greeting = document.createElement("p");
-  greeting.className = "home-greeting";
-  greeting.textContent = "🌈 今天想玩什么呀?挑一张卡片吧!";
-  screen.appendChild(greeting);
+  // ---- 问候语:朵朵和星星的欢迎气泡 ----
+  const hero = document.createElement("div");
+  hero.className = "home-hero";
+  const heroDuoduo = createAvatarImg("duoduoCheer", {
+    round: false,
+    className: "hero-figure hero-figure--duoduo"
+  });
+  const heroBubble = document.createElement("div");
+  heroBubble.className = "hero-bubble";
+  heroBubble.innerHTML = `<strong>朵朵和星星请你来玩!</strong><span>今天想玩什么呀?挑一张卡片吧 🌈</span>`;
+  const heroXingxing = createAvatarImg("xingxingRun", {
+    round: false,
+    className: "hero-figure hero-figure--xingxing"
+  });
+  hero.append(heroDuoduo, heroBubble, heroXingxing);
+  screen.appendChild(hero);
 
   // ---- 分类页签 ----
   const tabs = document.createElement("nav");

@@ -102,6 +102,8 @@ interface Half {
   r: number;
   skin: string;
   flesh: string;
+  /** 水果名,决定切面细节(瓜籽/橙瓣/桃核…) */
+  name: string;
   life: number;
 }
 
@@ -467,6 +469,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         r: f.r,
         skin: kind.skin,
         flesh: kind.flesh,
+        name: kind.name,
         life: 1.2,
       });
     }
@@ -777,6 +780,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   // ---- 绘制 ----
+  /** 把 #rrggbb 变深/变浅(amt 为 -255..255) */
+  function shade(hex: string, amt: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, Math.min(255, (n >> 16) + amt));
+    const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt));
+    const b = Math.max(0, Math.min(255, (n & 0xff) + amt));
+    return `rgb(${r},${g},${b})`;
+  }
+
   function drawBomb(f: Flying, big: boolean): void {
     ctx.fillStyle = big ? "#4a4258" : "#5c6b8a";
     ctx.beginPath();
@@ -926,22 +938,100 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     const k = f.kind as FruitKind;
-    ctx.fillStyle = k.skin;
+    // 果身:高光渐变 + 描边
+    const bodyGrad = ctx.createRadialGradient(-f.r * 0.35, -f.r * 0.4, f.r * 0.1, 0, 0, f.r * 1.15);
+    bodyGrad.addColorStop(0, shade(k.skin, 30));
+    bodyGrad.addColorStop(1, k.skin);
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = shade(k.skin, -42);
+    ctx.lineWidth = Math.max(1.5, f.r * 0.07);
     ctx.beginPath();
     ctx.arc(0, 0, f.r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+    // 品种细节(裁到果身里画)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, f.r * 0.97, 0, Math.PI * 2);
+    ctx.clip();
+    if (k.name === "瓜瓜") {
+      ctx.strokeStyle = "#4e9a4e";
+      ctx.lineWidth = f.r * 0.16;
+      ctx.lineCap = "round";
+      for (const dx of [-0.55, 0, 0.55]) {
+        ctx.beginPath();
+        ctx.moveTo(dx * f.r, -f.r);
+        ctx.quadraticCurveTo(dx * 1.7 * f.r, 0, dx * f.r, f.r);
+        ctx.stroke();
+      }
+    } else if (k.name === "桃桃") {
+      ctx.strokeStyle = shade(k.skin, -30);
+      ctx.lineWidth = Math.max(1.5, f.r * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(f.r * 0.05, -f.r * 0.98);
+      ctx.quadraticCurveTo(f.r * 0.45, -f.r * 0.3, f.r * 0.15, f.r * 0.6);
+      ctx.stroke();
+    } else if (k.name === "橙橙") {
+      ctx.fillStyle = shade(k.skin, -22);
+      for (let i = 0; i < 7; i++) {
+        const a = (Math.PI * 2 * i) / 7 + 0.4;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * f.r * 0.62, Math.sin(a) * f.r * 0.62, f.r * 0.045, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (k.name === "莓莓") {
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6 + 0.7;
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * f.r * 0.55, Math.sin(a) * f.r * 0.55, f.r * 0.07, f.r * 0.11, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (k.name === "柠柠") {
+      ctx.fillStyle = shade(k.skin, -18);
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8 + 0.2;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * f.r * 0.7, Math.sin(a) * f.r * 0.7, f.r * 0.035, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+    // 叶子 + 果柄
+    ctx.strokeStyle = "#8a6a3e";
+    ctx.lineWidth = Math.max(2, f.r * 0.08);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(0, -f.r * 0.92);
+    ctx.lineTo(f.r * 0.06, -f.r * 1.14);
+    ctx.stroke();
     ctx.fillStyle = "#7ac97a";
+    ctx.strokeStyle = "#55a855";
+    ctx.lineWidth = Math.max(1, f.r * 0.04);
     ctx.beginPath();
-    ctx.ellipse(f.r * 0.2, -f.r * 1.02, f.r * 0.3, f.r * 0.14, -0.6, 0, Math.PI * 2);
+    ctx.ellipse(f.r * 0.26, -f.r * 1.08, f.r * 0.3, f.r * 0.14, -0.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.stroke();
+    // 高光
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.beginPath();
-    ctx.arc(-f.r * 0.3, -f.r * 0.3, f.r * 0.18, 0, Math.PI * 2);
+    ctx.ellipse(-f.r * 0.34, -f.r * 0.36, f.r * 0.2, f.r * 0.13, -0.7, 0, Math.PI * 2);
+    ctx.fill();
+    // 呆萌表情
+    ctx.fillStyle = "rgba(255,140,150,0.4)";
+    ctx.beginPath();
+    ctx.arc(-f.r * 0.45, f.r * 0.18, f.r * 0.11, 0, Math.PI * 2);
+    ctx.arc(f.r * 0.45, f.r * 0.18, f.r * 0.11, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#3a3a4a";
     ctx.beginPath();
     ctx.arc(-f.r * 0.28, -f.r * 0.05, f.r * 0.09, 0, Math.PI * 2);
     ctx.arc(f.r * 0.28, -f.r * 0.05, f.r * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath();
+    ctx.arc(-f.r * 0.31, -f.r * 0.08, f.r * 0.03, 0, Math.PI * 2);
+    ctx.arc(f.r * 0.25, -f.r * 0.08, f.r * 0.03, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "#3a3a4a";
     ctx.lineWidth = Math.max(1.5, f.r * 0.07);
@@ -952,19 +1042,102 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawHalf(half: Half): void {
+    const r = half.r;
     ctx.save();
     ctx.translate(half.x, half.y);
     ctx.rotate(half.rot);
     ctx.globalAlpha = Math.min(1, half.life / 0.5);
-    ctx.fillStyle = half.skin;
+    // 半球果皮(带渐变和描边)
+    const domeGrad = ctx.createLinearGradient(0, 0, 0, r);
+    domeGrad.addColorStop(0, half.skin);
+    domeGrad.addColorStop(1, shade(half.skin, -24));
+    ctx.fillStyle = domeGrad;
+    ctx.strokeStyle = shade(half.skin, -42);
+    ctx.lineWidth = Math.max(1.5, r * 0.07);
     ctx.beginPath();
-    ctx.arc(0, 0, half.r, 0, Math.PI);
+    ctx.arc(0, 0, r, 0, Math.PI);
     ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // 切面:白瓤圈 + 果肉
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.98, r * 0.34, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = half.flesh;
     ctx.beginPath();
-    ctx.ellipse(0, 0, half.r, half.r * 0.32, 0, 0, Math.PI);
+    ctx.ellipse(0, 0, r * 0.84, r * 0.27, 0, 0, Math.PI * 2);
     ctx.fill();
+    // 品种切面细节(压扁坐标系里按圆画)
+    ctx.save();
+    ctx.scale(1, 0.27 / 0.84);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.84, 0, Math.PI * 2);
+    ctx.clip();
+    if (half.name === "瓜瓜") {
+      // 西瓜籽
+      ctx.fillStyle = "#3a3a4a";
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6 + 0.5;
+        const d = r * (i % 2 === 0 ? 0.5 : 0.3);
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * 0.05, r * 0.09, a + Math.PI / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (half.name === "橙橙" || half.name === "柠柠") {
+      // 橙瓣 / 柠檬瓣
+      ctx.strokeStyle = shade(half.flesh, -36);
+      ctx.lineWidth = r * 0.05;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r * 0.14, Math.sin(a) * r * 0.14);
+        ctx.lineTo(Math.cos(a) * r * 0.72, Math.sin(a) * r * 0.72);
+        ctx.stroke();
+      }
+      ctx.fillStyle = shade(half.flesh, -20);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (half.name === "桃桃") {
+      // 桃核 + 放射纹
+      ctx.strokeStyle = shade(half.flesh, -26);
+      ctx.lineWidth = r * 0.04;
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI * 2 * i) / 10;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r * 0.28, Math.sin(a) * r * 0.28);
+        ctx.lineTo(Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#c47a4a";
+      ctx.strokeStyle = "#a05c32";
+      ctx.lineWidth = r * 0.04;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      // 莓莓:小籽点点
+      ctx.fillStyle = shade(half.flesh, -42);
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8 + 0.4;
+        const d = r * (i % 2 === 0 ? 0.5 : 0.28);
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * d, Math.sin(a) * d, r * 0.045, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+    // 果汁往下滴一滴
+    if (half.life < 1) {
+      ctx.fillStyle = half.flesh;
+      ctx.globalAlpha *= 0.85;
+      ctx.beginPath();
+      ctx.ellipse(r * 0.2, r * 0.55 + (1 - half.life) * r * 0.7, r * 0.08, r * 0.13, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
   }
