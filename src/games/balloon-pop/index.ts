@@ -1,19 +1,5 @@
-/**
- * 气球砰砰 balloon-pop
- * 五个阶段的气球雨!每阶段 25 秒达成目标分数。
- * 连击越高加分越多,🌈 彩虹气球能赶跑全场乌云球!
- */
-
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (n: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
+import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, LEVELS, type BalloonLevel } from "./levels";
 
 export const meta = {
   id: "balloon-pop",
@@ -21,399 +7,307 @@ export const meta = {
   emoji: "🎈",
   category: "casual" as const,
   color: "#ff8fab",
-  blurb: "五阶段气球雨！连击加分，彩虹气球赶跑乌云球！",
+  blurb: "99 关六大天空！颜色指令、数字顺序、乌云捣乱、彩虹清屏！",
 };
 
-const STAGE_MS = 25_000;
+const H = 420;
 
-interface StageConfig {
-  target: number;
-  cloudChance: number;
-  goldChance: number;
-  rainbowChance: number;
+const BALLOON_COLORS = [
+  { name: "红", css: "radial-gradient(circle at 35% 30%, #FFB3B3, #F0605F)", key: "#F0605F" },
+  { name: "黄", css: "radial-gradient(circle at 35% 30%, #FFF0B3, #F5C142)", key: "#F5C142" },
+  { name: "蓝", css: "radial-gradient(circle at 35% 30%, #B3D9FF, #4F94E8)", key: "#4F94E8" },
+  { name: "绿", css: "radial-gradient(circle at 35% 30%, #C9F0B3, #6BBB4E)", key: "#6BBB4E" },
+  { name: "紫", css: "radial-gradient(circle at 35% 30%, #E3CCFF, #9E6BD9)", key: "#9E6BD9" },
+];
+
+type Kind = "normal" | "cloud" | "rainbow";
+
+interface Balloon {
+  el: HTMLButtonElement;
+  y: number;
+  x: number;
+  kind: Kind;
+  color: number;
+  num: number;
+  sway: number;
+  gone: boolean;
 }
 
-const STAGES: StageConfig[] = [
-  { target: 12, cloudChance: 0.1, goldChance: 0.1, rainbowChance: 0 },
-  { target: 16, cloudChance: 0.14, goldChance: 0.1, rainbowChance: 0.04 },
-  { target: 20, cloudChance: 0.16, goldChance: 0.1, rainbowChance: 0.05 },
-  { target: 24, cloudChance: 0.18, goldChance: 0.11, rainbowChance: 0.05 },
-  { target: 28, cloudChance: 0.2, goldChance: 0.12, rainbowChance: 0.06 },
-];
-
-const COLORS = [
-  "radial-gradient(circle at 35% 30%,#ffa8a8,#fa5252)",
-  "radial-gradient(circle at 35% 30%,#a5d8ff,#339af0)",
-  "radial-gradient(circle at 35% 30%,#ffe08a,#fab005)",
-  "radial-gradient(circle at 35% 30%,#b2f2bb,#40c057)",
-  "radial-gradient(circle at 35% 30%,#fcc2d7,#f06595)",
-];
-
-const STYLE = `
-.bp-wrap{position:relative;width:100%;height:100%;min-height:480px;overflow:hidden;
-  background:linear-gradient(#bde8ff,#e7f9ff 70%,#d3f9d8);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
-  user-select:none;-webkit-user-select:none;touch-action:manipulation;}
-.bp-hud{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;gap:6px;
-  padding:10px 12px;pointer-events:none;flex-wrap:wrap;}
-.bp-pill{background:#fffd;border-radius:999px;padding:7px 13px;font-size:15px;font-weight:900;
-  color:#1d5b80;box-shadow:0 3px 8px #0002;}
-.bp-combo{color:#e8590c;}
-.bp-field{position:absolute;inset:0;overflow:hidden;}
-.bp-cloud{position:absolute;font-size:44px;opacity:.8;pointer-events:none;}
-.bp-balloon{position:absolute;bottom:-110px;display:flex;align-items:center;justify-content:center;
-  border-radius:50% 50% 48% 48%;cursor:pointer;box-shadow:inset -6px -8px 0 #0002;
-  will-change:transform;touch-action:manipulation;font-size:24px;}
-.bp-balloon::after{content:"";position:absolute;bottom:-15px;left:50%;width:2px;height:15px;
-  background:#8888;transform:translateX(-50%);}
-.bp-gold{box-shadow:inset -6px -8px 0 #0003,0 0 18px #ffd43bcc;}
-.bp-rainbow{box-shadow:inset -6px -8px 0 #0003,0 0 20px #b197fccc;animation:bpHue 2s linear infinite;}
-@keyframes bpHue{0%{filter:hue-rotate(0)}100%{filter:hue-rotate(360deg)}}
-.bp-pop{animation:bpPop .22s ease forwards;}
-@keyframes bpPop{0%{transform:scale(1)}55%{transform:scale(1.4)}100%{transform:scale(0);opacity:0}}
-.bp-shake{animation:bpShake .3s ease;}
-@keyframes bpShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
-.bp-bits{position:absolute;z-index:9;pointer-events:none;font-size:20px;animation:bpBits .5s ease forwards;}
-@keyframes bpBits{0%{opacity:1;transform:scale(.6)}100%{opacity:0;transform:scale(1.8)}}
-.bp-float{position:absolute;z-index:9;font-size:24px;font-weight:900;pointer-events:none;
-  animation:bpFloat .7s ease forwards;}
-@keyframes bpFloat{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-46px)}}
-.bp-cover{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;gap:14px;
-  align-items:center;justify-content:center;background:#e7f9ffee;text-align:center;padding:20px;}
-.bp-cover-title{font-size:28px;font-weight:900;color:#1d5b80;}
-.bp-cover-sub{font-size:17px;font-weight:800;color:#4a7a95;line-height:1.7;}
-.bp-start{border:none;border-radius:24px;padding:15px 44px;font-size:21px;font-weight:900;color:#fff;
-  background:#f06595;cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;}
-.bp-start:active{transform:translateY(4px);box-shadow:0 2px 0 #0003;}
-.bp-result-big{font-size:56px;}
+const CSS = `
+.blp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.blp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
+.blp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C75A82; box-shadow: 0 2px 6px rgba(210,120,160,.25); font-size: 14px; }
+.blp-sky { position: relative; height: ${H}px; border-radius: 16px; overflow: hidden; }
+.blp-balloon { position: absolute; width: 56px; height: 68px; border: none; border-radius: 50% 50% 46% 46%; cursor: pointer; font-size: 22px; font-weight: 900; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.3); padding: 0; }
+.blp-balloon::after { content: ""; position: absolute; left: 50%; bottom: -12px; width: 2px; height: 12px; background: rgba(120,100,90,.5); }
+.blp-balloon:active { transform: scale(.9); }
+.blp-pop { animation: blpPop .22s ease forwards; pointer-events: none; }
+@keyframes blpPop { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+.blp-msg { text-align: center; min-height: 20px; color: #C75A82; font-weight: 700; margin-top: 8px; font-size: 14px; }
 `;
 
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, onWin } = api;
-  let alive = true;
-  let running = false;
-  let stage = 0;
-  let retries = 0;
-  let score = 0;
-  let combo = 0;
-  let timeLeft = STAGE_MS;
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: BalloonLevel = LEVELS[ctx.level];
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  const intervals = new Set<ReturnType<typeof setInterval>>();
   let raf = 0;
-  let lastTs = 0;
-  let spawnCooldown = 0;
-  let elapsed = 0;
-
-  interface Balloon {
-    el: HTMLElement;
-    y: number;
-    speed: number;
-    sway: number;
-    swaySeed: number;
-    kind: "normal" | "gold" | "cloud" | "rainbow";
-    dead: boolean;
-  }
+  let lastTime = 0;
+  let destroyed = false;
+  let ended = false;
+  let popped = 0;
+  let mistakes = 0;
+  let escaped = 0;
+  let targetColor = Math.floor(Math.random() * BALLOON_COLORS.length);
+  let targetNum = 1;
+  let sincePops = 0;
   const balloons: Balloon[] = [];
 
-  const timers = new Set<number>();
-  const after = (ms: number, fn: () => void): number => {
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      if (alive) fn();
-    }, ms);
-    timers.add(id);
-    return id;
-  };
-
   const wrap = document.createElement("div");
-  wrap.className = "bp-wrap";
+  wrap.className = "blp-wrap";
+  wrap.style.background = cfg.night
+    ? "linear-gradient(180deg, #3E4578, #7A6BA8)"
+    : "linear-gradient(180deg, #DFF1FF, #FFE9F3)";
   wrap.innerHTML = `
-    <style>${STYLE}</style>
-    <div class="bp-field">
-      <span class="bp-cloud" style="left:8%;top:12%">☁️</span>
-      <span class="bp-cloud" style="right:12%;top:22%">☁️</span>
+    <style>${CSS}</style>
+    <div class="blp-top">
+      <span class="blp-badge blp-score">🎈 0 / ${cfg.target}</span>
+      <span class="blp-badge blp-order"></span>
+      <span class="blp-badge blp-life">💗💗💗</span>
     </div>
-    <div class="bp-hud" style="display:none">
-      <div class="bp-pill bp-stage">阶段 1/5</div>
-      <div class="bp-pill bp-time">⏰ 25</div>
-      <div class="bp-pill bp-score">🎯 0 / 12</div>
-      <div class="bp-pill bp-combo">🔥 x0</div>
-    </div>
-    <div class="bp-cover">
-      <div class="bp-cover-title">🎈 气球砰砰 · 五阶段挑战</div>
-      <div class="bp-cover-sub">每个阶段 25 秒,达到目标分就过关!<br>连击越高加分越多 🔥<br>⭐ 金星 +3 · 🌈 彩虹赶跑乌云 · 🌩️ 乌云 -2 还会断连击</div>
-      <button class="bp-start">开始!</button>
-    </div>`;
-  root.appendChild(wrap);
+    <div class="blp-sky" style="background:${cfg.night ? "linear-gradient(180deg,#2E3560,#5A4E8C)" : "linear-gradient(180deg,#C5E8FF,#F0F8FF)"}"></div>
+    <div class="blp-msg"></div>
+  `;
+  stage.appendChild(wrap);
 
-  const q = <T extends Element>(sel: string): T => wrap.querySelector(sel) as T;
-  const field = q<HTMLElement>(".bp-field");
-  const hud = q<HTMLElement>(".bp-hud");
-  const stageEl = q<HTMLElement>(".bp-stage");
-  const timeEl = q<HTMLElement>(".bp-time");
-  const scoreEl = q<HTMLElement>(".bp-score");
-  const comboEl = q<HTMLElement>(".bp-combo");
-  const cover = q<HTMLElement>(".bp-cover");
+  const skyEl = wrap.querySelector(".blp-sky") as HTMLElement;
+  const scoreEl = wrap.querySelector(".blp-score") as HTMLElement;
+  const orderEl = wrap.querySelector(".blp-order") as HTMLElement;
+  const lifeEl = wrap.querySelector(".blp-life") as HTMLElement;
+  const msgEl = wrap.querySelector(".blp-msg") as HTMLElement;
 
-  function cfg(): StageConfig {
-    return STAGES[stage];
+  msgEl.textContent =
+    cfg.mode === "color"
+      ? "看清指令颜色再戳！"
+      : cfg.mode === "number"
+        ? "按 1→2→3→4→5 的顺序戳气球！"
+        : cfg.cloudChance > 0
+          ? "乌云球 ☁️ 不能戳哦！"
+          : "气球飘上来就戳破它！";
+
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
   }
 
-  function renderHud(): void {
-    stageEl.textContent = `阶段 ${stage + 1}/${STAGES.length}`;
-    scoreEl.textContent = `🎯 ${score} / ${cfg().target}`;
-    comboEl.textContent = `🔥 x${combo}`;
+  function renderTop(): void {
+    scoreEl.textContent = `🎈 ${popped} / ${cfg.target}`;
+    lifeEl.textContent = "💗".repeat(Math.max(0, 3 - mistakes)) + "🤍".repeat(Math.min(3, mistakes));
+    if (cfg.mode === "color") {
+      orderEl.textContent = `🎯 戳${BALLOON_COLORS[targetColor].name}色`;
+      orderEl.style.color = BALLOON_COLORS[targetColor].key;
+    } else if (cfg.mode === "number") {
+      orderEl.textContent = `🎯 下一个：${targetNum}`;
+    } else {
+      orderEl.textContent = `🌤️ 可飘走 ${Math.max(0, cfg.escapes - escaped)}`;
+    }
   }
 
-  function setScore(n: number): void {
-    score = Math.max(0, n);
-    renderHud();
+  function finish(won: boolean, reason?: string): void {
+    if (ended) return;
+    ended = true;
+    cancelAnimationFrame(raf);
+    intervals.forEach((t) => clearInterval(t));
+    intervals.clear();
+    if (won) {
+      const bad = mistakes + Math.max(0, escaped - 1);
+      const got = bad === 0 ? 3 : bad <= 2 ? 2 : 1;
+      later(() => ctx.win(got as 1 | 2 | 3, `砰砰砰！${cfg.target} 个气球全部搞定！`), 350);
+    } else {
+      later(() => ctx.lose(reason ?? "气球飞走的有点多，站到它们下面早点戳！"), 350);
+    }
   }
 
-  function floatText(x: number, y: number, text: string, color: string): void {
-    const f = document.createElement("div");
-    f.className = "bp-float";
-    f.textContent = text;
-    f.style.left = `${x}px`;
-    f.style.top = `${y}px`;
-    f.style.color = color;
-    field.appendChild(f);
-    after(700, () => f.remove());
+  function isTarget(b: Balloon): boolean {
+    if (b.kind !== "normal") return false;
+    if (cfg.mode === "color") return b.color === targetColor;
+    if (cfg.mode === "number") return b.num === targetNum;
+    return true;
   }
 
-  function burst(x: number, y: number, emoji: string): void {
-    const b = document.createElement("div");
-    b.className = "bp-bits";
-    b.textContent = emoji;
-    b.style.left = `${x - 10}px`;
-    b.style.top = `${y}px`;
-    field.appendChild(b);
-    after(500, () => b.remove());
+  function removeBalloon(b: Balloon, popAnim: boolean): void {
+    b.gone = true;
+    if (popAnim) {
+      b.el.classList.add("blp-pop");
+      later(() => b.el.remove(), 240);
+    } else {
+      b.el.remove();
+    }
   }
 
-  function comboBonus(): number {
-    return combo >= 10 ? 2 : combo >= 5 ? 1 : 0;
+  function popNormal(b: Balloon): void {
+    ctx.sfx("pop");
+    popped++;
+    sincePops++;
+    removeBalloon(b, true);
+    if (cfg.mode === "number") {
+      targetNum = targetNum >= 5 ? 1 : targetNum + 1;
+    } else if (cfg.mode === "color" && sincePops >= 4) {
+      sincePops = 0;
+      let next = Math.floor(Math.random() * BALLOON_COLORS.length);
+      if (next === targetColor) next = (next + 1) % BALLOON_COLORS.length;
+      targetColor = next;
+      msgEl.textContent = `指令换啦：现在戳${BALLOON_COLORS[targetColor].name}色！`;
+    }
+    renderTop();
+    if (popped >= cfg.target) finish(true);
+  }
+
+  function onBalloon(b: Balloon): void {
+    if (ended || b.gone) return;
+    if (b.kind === "cloud") {
+      mistakes++;
+      ctx.sfx("oops");
+      msgEl.textContent = "☁️ 乌云球不能戳！";
+      removeBalloon(b, true);
+      renderTop();
+      if (mistakes >= 3) finish(false, "乌云球戳到三次啦，看清楚再出手～");
+      return;
+    }
+    if (b.kind === "rainbow") {
+      ctx.sfx("coin");
+      msgEl.textContent = "🌈 彩虹清屏！";
+      let cleared = 0;
+      for (const other of balloons) {
+        if (!other.gone && other.kind === "normal") {
+          if (cfg.mode === "free" || isTarget(other)) {
+            cleared++;
+            popped++;
+          }
+          removeBalloon(other, true);
+        }
+      }
+      removeBalloon(b, true);
+      if (cleared >= 4) ctx.bonusStars(1);
+      renderTop();
+      if (popped >= cfg.target) finish(true);
+      return;
+    }
+    if (!isTarget(b)) {
+      mistakes++;
+      ctx.sfx("oops");
+      msgEl.textContent = cfg.mode === "color"
+        ? `现在要戳${BALLOON_COLORS[targetColor].name}色的！`
+        : `要按顺序，下一个是 ${targetNum}！`;
+      renderTop();
+      if (mistakes >= 3) finish(false, "戳错三次啦，看清指令再出手，你可以的！");
+      return;
+    }
+    popNormal(b);
   }
 
   function spawn(): void {
-    const c = cfg();
+    if (ended || destroyed) return;
     const r = Math.random();
-    let kind: Balloon["kind"] = "normal";
-    if (r < c.rainbowChance) kind = "rainbow";
-    else if (r < c.rainbowChance + c.goldChance) kind = "gold";
-    else if (r < c.rainbowChance + c.goldChance + c.cloudChance) kind = "cloud";
-    const el = document.createElement("div");
-    el.className = "bp-balloon";
-    const size = kind === "gold" || kind === "rainbow" ? 60 : 56 + Math.random() * 26;
-    el.style.width = `${size}px`;
-    el.style.height = `${size * 1.22}px`;
-    if (kind === "gold") {
-      el.classList.add("bp-gold");
-      el.style.background = "radial-gradient(circle at 35% 30%,#fff3bf,#ffd43b)";
-      el.textContent = "⭐";
+    let kind: Kind = "normal";
+    if (r < cfg.cloudChance) kind = "cloud";
+    else if (r < cfg.cloudChance + cfg.rainbowChance) kind = "rainbow";
+    const color = Math.floor(Math.random() * BALLOON_COLORS.length);
+    const num = 1 + Math.floor(Math.random() * 5);
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "blp-balloon";
+    if (kind === "cloud") {
+      el.style.background = "radial-gradient(circle at 35% 30%, #E8E8EE, #9A9AAE)";
+      el.textContent = "☁️";
     } else if (kind === "rainbow") {
-      el.classList.add("bp-rainbow");
-      el.style.background = "conic-gradient(#fa5252,#fab005,#40c057,#339af0,#b197fc,#fa5252)";
+      el.style.background = "conic-gradient(#F0605F, #F5C142, #6BBB4E, #4F94E8, #9E6BD9, #F0605F)";
       el.textContent = "🌈";
-    } else if (kind === "cloud") {
-      el.style.background = "radial-gradient(circle at 35% 30%,#ced4da,#868e96)";
-      el.textContent = "🌩️";
     } else {
-      el.style.background = COLORS[Math.floor(Math.random() * COLORS.length)];
+      el.style.background = BALLOON_COLORS[color].css;
+      el.textContent = cfg.mode === "number" ? String(num) : "";
     }
-    el.style.left = `${5 + Math.random() * 80}%`;
     const b: Balloon = {
       el,
-      y: 0,
-      speed: (kind === "gold" || kind === "rainbow" ? 130 : 85) + Math.random() * 55 + elapsed / 600,
-      sway: 8 + Math.random() * 14,
-      swaySeed: Math.random() * Math.PI * 2,
+      x: 8 + Math.random() * 76,
+      y: H + 40,
       kind,
-      dead: false,
+      color,
+      num,
+      sway: Math.random() * Math.PI * 2,
+      gone: false,
     };
+    el.style.left = `${b.x}%`;
     el.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      if (!running || b.dead) return;
-      b.dead = true;
-      const rect = el.getBoundingClientRect();
-      const fieldRect = field.getBoundingClientRect();
-      const fx = rect.left - fieldRect.left + rect.width / 2;
-      const fy = rect.top - fieldRect.top;
-      el.classList.add("bp-pop");
-      if (b.kind === "gold") {
-        combo++;
-        const gain = 3 + comboBonus();
-        play("coin");
-        setScore(score + gain);
-        floatText(fx, fy, `+${gain}`, "#e8590c");
-        burst(fx, fy, "✨");
-      } else if (b.kind === "rainbow") {
-        combo++;
-        let cleared = 0;
-        for (const other of balloons) {
-          if (!other.dead && other.kind === "cloud") {
-            other.dead = true;
-            other.el.classList.add("bp-pop");
-            const oid = other.el;
-            after(250, () => oid.remove());
-            cleared++;
-          }
-        }
-        const gain = 5 + comboBonus();
-        play("coin");
-        setScore(score + gain);
-        floatText(fx, fy, `+${gain} 🌈`, "#7048e8");
-        burst(fx, fy, "🌈");
-        if (cleared > 0) floatText(fx, fy + 30, `乌云跑光啦!`, "#4a7a95");
-      } else if (b.kind === "cloud") {
-        combo = 0;
-        play("oops");
-        setScore(score - 2);
-        floatText(fx, fy, "-2", "#e03131");
-        wrap.classList.remove("bp-shake");
-        void wrap.offsetWidth;
-        wrap.classList.add("bp-shake");
-      } else {
-        combo++;
-        const gain = 1 + comboBonus();
-        play("pop");
-        setScore(score + gain);
-        floatText(fx, fy, `+${gain}`, "#2b8a3e");
-        burst(fx, fy, "💥");
-        if (combo === 10) {
-          api.addStars(1);
-          floatText(fx, fy + 30, "🔥 十连击，奖励一颗小星星!", "#e8590c");
-        }
-      }
-      after(250, () => el.remove());
+      onBalloon(b);
     });
-    field.appendChild(el);
+    skyEl.appendChild(el);
     balloons.push(b);
   }
 
-  function tick(ts: number): void {
-    if (!alive || !running) return;
-    if (lastTs === 0) lastTs = ts;
-    const dt = Math.min(50, ts - lastTs);
-    lastTs = ts;
-    elapsed += dt;
-    timeLeft -= dt;
-    timeEl.textContent = `⏰ ${Math.max(0, Math.ceil(timeLeft / 1000))}`;
-
-    spawnCooldown -= dt;
-    if (spawnCooldown <= 0) {
-      spawn();
-      spawnCooldown = Math.max(380, 700 - elapsed / 55) + Math.random() * 120;
-    }
-
-    const fieldH = field.clientHeight || 600;
+  function tick(now: number): void {
+    if (destroyed || ended) return;
+    const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
+    lastTime = now;
     for (let i = balloons.length - 1; i >= 0; i--) {
       const b = balloons[i];
-      if (b.dead) {
+      if (b.gone) {
         balloons.splice(i, 1);
         continue;
       }
-      b.y += (b.speed * dt) / 1000;
-      const swayX = Math.sin(b.swaySeed + elapsed / 500) * b.sway;
-      b.el.style.transform = `translate(${swayX}px,${-b.y}px)`;
-      if (b.y > fieldH + 130) {
-        b.dead = true;
-        b.el.remove();
+      b.y -= cfg.riseSpeed * dt;
+      b.sway += dt * 2;
+      b.el.style.top = `${b.y}px`;
+      b.el.style.marginLeft = `${Math.sin(b.sway) * 8}px`;
+      if (b.y < -80) {
+        const wasTarget = isTarget(b);
+        removeBalloon(b, false);
         balloons.splice(i, 1);
+        if (wasTarget) {
+          escaped++;
+          renderTop();
+          if (escaped > cfg.escapes) {
+            finish(false);
+            return;
+          }
+        }
       }
     }
-
-    if (timeLeft <= 0) {
-      endStage();
-      return;
-    }
     raf = requestAnimationFrame(tick);
   }
 
-  function clearField(): void {
-    balloons.forEach((b) => b.el.remove());
-    balloons.length = 0;
-  }
-
-  function endStage(): void {
-    running = false;
-    cancelAnimationFrame(raf);
-    clearField();
-    const passed = score >= cfg().target;
-    const result = document.createElement("div");
-    result.className = "bp-cover";
-    if (passed && stage >= STAGES.length - 1) {
-      result.innerHTML = `
-        <div class="bp-result-big">👑</div>
-        <div class="bp-cover-title">五个阶段全部通过!</div>
-        <div class="bp-cover-sub">最终得了 ${score} 分,气球小猎手就是你!</div>`;
-      wrap.appendChild(result);
-      play("win");
-      const stars: 1 | 2 | 3 = retries === 0 ? 3 : retries <= 2 ? 2 : 1;
-      after(1100, () => onWin(stars, `五阶段气球雨全部达标，砰砰砰太棒啦!`));
-    } else if (passed) {
-      result.innerHTML = `
-        <div class="bp-result-big">🎊</div>
-        <div class="bp-cover-title">阶段 ${stage + 1} 达标!得了 ${score} 分</div>
-        <div class="bp-cover-sub">下一阶段目标更高、乌云更多,加油!</div>
-        <button class="bp-start">下一阶段 ▶</button>`;
-      wrap.appendChild(result);
-      play("win");
-      (result.querySelector(".bp-start") as HTMLButtonElement).addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        play("jump");
-        result.remove();
-        stage++;
-        startStage();
-      });
-    } else {
-      result.innerHTML = `
-        <div class="bp-result-big">💪</div>
-        <div class="bp-cover-title">差一点点!得了 ${score} 分</div>
-        <div class="bp-cover-sub">目标是 ${cfg().target} 分,这个阶段再来一次!</div>
-        <button class="bp-start">🔁 重试本阶段</button>`;
-      wrap.appendChild(result);
-      play("oops");
-      (result.querySelector(".bp-start") as HTMLButtonElement).addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        play("tap");
-        result.remove();
-        retries++;
-        startStage();
-      });
-    }
-  }
-
-  function startStage(): void {
-    score = 0;
-    combo = 0;
-    elapsed = 0;
-    timeLeft = STAGE_MS;
-    spawnCooldown = 0;
-    hud.style.display = "";
-    renderHud();
-    timeEl.textContent = "⏰ 25";
-    running = true;
-    lastTs = 0;
+  const spawner = setInterval(() => spawn(), cfg.spawnMs);
+  intervals.add(spawner);
+  spawn();
+  renderTop();
+  raf = requestAnimationFrame((t) => {
+    lastTime = t;
     raf = requestAnimationFrame(tick);
-  }
-
-  q<HTMLButtonElement>(".bp-start").addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (running) return;
-    play("jump");
-    cover.style.display = "none";
-    startStage();
   });
 
   return {
     destroy() {
-      alive = false;
-      running = false;
+      destroyed = true;
+      ended = true;
       cancelAnimationFrame(raf);
-      timers.forEach((id) => {
-        clearTimeout(id);
-        clearInterval(id);
-      });
-      timers.clear();
+      intervals.forEach((t) => clearInterval(t));
+      intervals.clear();
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "不戳错、不放跑气球，就能拿 3 星！",
+    grandMessage: "99 关气球全部砰砰完，天空都被你点亮啦！",
+  });
 }
