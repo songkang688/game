@@ -1,16 +1,19 @@
-// 海底大胃王:20 关四大海域战役!涡流、气泡墙、电电草等 8 种障碍逐关登场,
-// 每片海域有区域 BOSS,吃过见过的生物都会记进生物图鉴!
+// 海底大胃王:99 关九大海域战役!先选海域再选关,每片海域专属配色、障碍组合
+// 和区域 BOSS(共 9 位),吃过见过的生物都会记进生物图鉴!
 import {
   BOSS_INFO,
   BossKind,
+  DARK_SIGHT,
   DEX,
   DEX_KEY,
   HEARTS_PER_LEVEL,
   LEVELS,
+  LEVELS_PER_THEME,
   PROGRESS_KEY,
   SHIELD_SECONDS,
   START_RADIUS,
   VORTEX_RADIUS,
+  ZONE_ORDER,
   ZONE_STYLE,
   bossBiteReady,
   canEat,
@@ -19,15 +22,19 @@ import {
   eatScore,
   eelActive,
   grow,
+  hazardTier,
   inBubbleGap,
   isDanger,
   isLevelUnlocked,
+  isThemeUnlocked,
   parseDex,
   parseProgress,
   serializeDex,
   serializeProgress,
   spawnRadius,
   starsForLevel,
+  themeCleared,
+  themeStars,
   totalStars,
   vortexPull,
 } from "./logic";
@@ -49,10 +56,10 @@ export const meta = {
   emoji: "🐟",
   category: "action" as const,
   color: "#bfe9ff",
-  blurb: "20 关四大海域战役!收集生物图鉴,挑战四位海域大王!",
+  blurb: "99 关九大海域战役!收集生物图鉴,挑战九位海域大王!",
 };
 
-type Phase = "map" | "dex" | "intro" | "play" | "clear" | "retry";
+type Phase = "themes" | "map" | "dex" | "intro" | "play" | "clear" | "retry";
 type NpcKind = "fish" | "jelly" | "puffer" | "urchin" | "squid";
 
 interface Npc {
@@ -90,6 +97,7 @@ interface Boss {
   vy: number;
   dashTimer: number;
   inkTimer: number;
+  summonTimer: number;
   hurt: number;
 }
 
@@ -209,7 +217,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   // ---- 局状态 ----
   let levelIdx = 0;
-  let phase: Phase = "map";
+  let chapterIdx = 0;
+  let phase: Phase = "themes";
   let hearts = HEARTS_PER_LEVEL;
   let heartsLost = 0;
   let score = 0;
@@ -250,6 +259,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let urchinTimer = 0;
 
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
+  const themeCards: Array<{ idx: number; rect: Rect }> = [];
   let btnNext: Rect | null = null;
   let btnMap: Rect | null = null;
   let btnRetry: Rect | null = null;
@@ -308,23 +318,30 @@ export function mount(api: GameAPI): { destroy: () => void } {
     starTimer = 6;
     urchinTimer = 0.5;
 
+    // 章节越深,环境障碍越密、越快
+    const tier = hazardTier(levelIdx);
     currents.length = 0;
     vortexes.length = 0;
     eels.length = 0;
     wall = null;
-    wallTimer = 5;
+    wallTimer = tier >= 3 ? 3 : 5;
     if (def.hazards.includes("current")) {
-      currents.push({ fy: 0.26, fh: 0.14, dir: 1, speed: 72 });
-      currents.push({ fy: 0.62, fh: 0.14, dir: -1, speed: 64 });
+      const boost = 1 + (tier - 1) * 0.18;
+      currents.push({ fy: 0.26, fh: 0.14, dir: 1, speed: 72 * boost });
+      currents.push({ fy: 0.62, fh: 0.14, dir: -1, speed: 64 * boost });
+      if (tier >= 2) currents.push({ fy: 0.44, fh: 0.1, dir: 1, speed: 58 * boost });
     }
     if (def.hazards.includes("vortex")) {
       vortexes.push({ fx: 0.3, fy: 0.34 });
       vortexes.push({ fx: 0.72, fy: 0.68 });
+      if (tier >= 3) vortexes.push({ fx: 0.5, fy: 0.18 });
     }
     if (def.hazards.includes("eel")) {
       eels.push({ fx: 0.28, offset: 0 });
       eels.push({ fx: 0.55, offset: 1.3 });
       eels.push({ fx: 0.82, offset: 2.5 });
+      if (tier >= 2) eels.push({ fx: 0.12, offset: 1.9 });
+      if (tier >= 3) eels.push({ fx: 0.68, offset: 0.7 });
     }
   }
 
@@ -340,7 +357,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       finaleFired = true;
       api.onWin(
         earnedStars,
-        `四大海域全部通关,鲸鲸大王都服气啦!图鉴 ${dexSeen.size}/${DEX.length} · 总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
+        `99 关九大海域全部通关,海龙王都服气啦!图鉴 ${dexSeen.size}/${DEX.length} · 总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
       );
     } else if (gained > 0) {
       api.addStars(gained);
@@ -385,18 +402,42 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
 
-    if (phase === "map") {
+    if (phase === "themes") {
       if (inRect(px, py, btnDex)) {
         api.play("tap");
         phase = "dex";
         return;
       }
+      for (const c of themeCards) {
+        if (inRect(px, py, c.rect)) {
+          if (isThemeUnlocked(progress, c.idx)) {
+            api.play("tap");
+            chapterIdx = c.idx;
+            phase = "map";
+          } else {
+            api.play("oops");
+          }
+          return;
+        }
+      }
+      return;
+    }
+    if (phase === "map") {
+      if (inRect(px, py, btnBack)) {
+        api.play("tap");
+        phase = "themes";
+        return;
+      }
       for (const n of mapNodes) {
-        if (Math.hypot(px - n.x, py - n.y) <= n.r + 8 && isLevelUnlocked(progress, n.idx)) {
-          api.play("tap");
-          levelIdx = n.idx;
-          resetLevel();
-          phase = "intro";
+        if (Math.hypot(px - n.x, py - n.y) <= n.r + 8) {
+          if (isLevelUnlocked(progress, n.idx)) {
+            api.play("tap");
+            levelIdx = n.idx;
+            resetLevel();
+            phase = "intro";
+          } else {
+            api.play("oops");
+          }
           return;
         }
       }
@@ -404,7 +445,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
     if (phase === "dex") {
       api.play("tap");
-      phase = "map";
+      phase = "themes";
       return;
     }
     if (phase === "intro") {
@@ -417,6 +458,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (inRect(px, py, btnNext)) {
         api.play("tap");
         levelIdx++;
+        chapterIdx = Math.floor(levelIdx / LEVELS_PER_THEME);
         resetLevel();
         phase = "intro";
       } else if (inRect(px, py, btnMap)) {
@@ -442,6 +484,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   // ---- 生成 ----
   function spawnNpc(): void {
     const def = level();
+    const sm = ZONE_STYLE[def.zone].speedMult;
     const fromLeft = Math.random() < 0.5;
     const roll = Math.random();
     if (def.hazards.includes("puffer") && roll < 0.15) {
@@ -451,7 +494,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         x: fromLeft ? -r - 10 : w + r + 10,
         y: 60 + Math.random() * Math.max(60, h - 160),
         r,
-        vx: (fromLeft ? 1 : -1) * (30 + Math.random() * 25),
+        vx: (fromLeft ? 1 : -1) * (30 + Math.random() * 25) * sm,
         vy: 0,
         phase: Math.random() * Math.PI * 2,
         color: "#ffd6a8",
@@ -469,7 +512,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         x: fromLeft ? -r - 10 : w + r + 10,
         y: 60 + Math.random() * Math.max(60, h - 160),
         r,
-        vx: (fromLeft ? 1 : -1) * (36 + Math.random() * 22),
+        vx: (fromLeft ? 1 : -1) * (36 + Math.random() * 22) * sm,
         vy: 0,
         phase: Math.random() * Math.PI * 2,
         color: "#d8b8f0",
@@ -481,7 +524,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     const r = spawnRadius(player.r, Math.random(), def.bigFishBias);
-    const speed = 40 + Math.random() * 55 + (r < player.r ? 15 : 0);
+    const speed = (40 + Math.random() * 55 + (r < player.r ? 15 : 0)) * sm;
     npcs.push({
       kind: "fish",
       x: fromLeft ? -r - 10 : w + r + 10,
@@ -501,7 +544,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function ensureJellies(): void {
     if (!level().hazards.includes("jelly")) return;
-    const want = 2 + Math.floor(levelIdx / 7);
+    const sm = ZONE_STYLE[level().zone].speedMult;
+    const want = 2 + hazardTier(levelIdx);
     const have = npcs.filter((n) => n.kind === "jelly").length;
     for (let i = have; i < want; i++) {
       npcs.push({
@@ -509,8 +553,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
         x: 60 + Math.random() * (w - 120),
         y: -30 - Math.random() * 80,
         r: 20 + Math.random() * 8,
-        vx: (Math.random() - 0.5) * 24,
-        vy: 26 + Math.random() * 18,
+        vx: (Math.random() - 0.5) * 24 * sm,
+        vy: (26 + Math.random() * 18) * sm,
         phase: Math.random() * Math.PI * 2,
         color: "#e5c4f2",
         inflated: 0,
@@ -523,7 +567,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function ensureUrchins(): void {
     if (!level().hazards.includes("urchin")) return;
-    const want = 3;
+    const sm = ZONE_STYLE[level().zone].speedMult;
+    const want = 2 + hazardTier(levelIdx);
     const have = npcs.filter((n) => n.kind === "urchin").length;
     urchinTimer -= 1 / 60;
     for (let i = have; i < want; i++) {
@@ -533,8 +578,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
         x: 60 + Math.random() * (w - 120),
         y: Math.random() < 0.5 ? -26 : h + 26,
         r: 16 + Math.random() * 6,
-        vx: Math.cos(ang) * 34,
-        vy: 20 + Math.random() * 16,
+        vx: Math.cos(ang) * 34 * sm,
+        vy: (20 + Math.random() * 16) * sm,
         phase: Math.random() * Math.PI * 2,
         color: "#9a7ab8",
         inflated: 0,
@@ -561,6 +606,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       vy: 0,
       dashTimer: spec.dashCd,
       inkTimer: 2.5,
+      summonTimer: 3.5,
       hurt: 0,
     };
     markDex(def.boss);
@@ -807,9 +853,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
       b.dashTimer -= dt;
       if (b.dashTimer <= 0) {
         b.dashTimer = spec.dashCd + Math.random() * 1.2;
+        // 狂暴 BOSS:血越少冲刺越快
+        const rage = spec.enrages ? 1 + (1 - b.hp / b.maxHp) * 0.6 : 1;
         const d = Math.hypot(player.x - b.x, player.y - b.y) || 1;
-        b.vx = ((player.x - b.x) / d) * spec.dashSpeed;
-        b.vy = ((player.y - b.y) / d) * spec.dashSpeed;
+        b.vx = ((player.x - b.x) / d) * spec.dashSpeed * rage;
+        b.vy = ((player.y - b.y) / d) * spec.dashSpeed * rage;
         api.play("meow");
       }
       if (spec.inks) {
@@ -818,6 +866,39 @@ export function mount(api: GameAPI): { destroy: () => void } {
           b.inkTimer = 3.2;
           inks.push({ x: b.x, y: b.y, r: 78, life: 2.6 });
           api.play("pop");
+        }
+      }
+      // 召唤型 BOSS:周期叫小怪帮忙
+      if (spec.summons) {
+        b.summonTimer -= dt;
+        if (b.summonTimer <= 0) {
+          b.summonTimer = 4.5;
+          const ang = Math.random() * Math.PI * 2;
+          npcs.push({
+            kind: spec.summons,
+            x: Math.max(40, Math.min(w - 40, b.x + Math.cos(ang) * (b.r + 30))),
+            y: Math.max(40, Math.min(h - 40, b.y + Math.sin(ang) * (b.r + 30))),
+            r: 17 + Math.random() * 5,
+            vx: (Math.random() - 0.5) * 40,
+            vy: spec.summons === "jelly" ? 24 + Math.random() * 14 : 26 + Math.random() * 12,
+            phase: Math.random() * Math.PI * 2,
+            color: spec.summons === "jelly" ? "#e5c4f2" : "#9a7ab8",
+            inflated: 0,
+            inflateClock: 0,
+            inkCd: 0,
+          });
+          markDex(spec.summons);
+          addFloat(b.x, b.y - b.r - 8, "帮手来啦!", "#8a5ac9");
+          api.play("pop");
+        }
+      }
+      // 吸力型 BOSS:把玩家往嘴边吸
+      if (spec.pulls) {
+        const d = Math.hypot(player.x - b.x, player.y - b.y);
+        if (d > 1 && d < 230) {
+          const pull = 62 * (1 - d / 230);
+          player.x += ((b.x - player.x) / d) * pull * dt;
+          player.y += ((b.y - player.y) / d) * pull * dt;
         }
       }
       b.vx *= 1 - Math.min(1, dt * 0.7);
@@ -1117,6 +1198,176 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.closePath();
         ctx.fill();
       }
+    } else if (b.kind === "turtle") {
+      // 龟壳
+      ctx.fillStyle = "#6aa87a";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r, b.r * 0.72, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#4a8858";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r * 0.62, b.r * 0.45, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * b.r * 0.62, Math.sin(a) * b.r * 0.45);
+        ctx.lineTo(Math.cos(a) * b.r * 0.95, Math.sin(a) * b.r * 0.68);
+        ctx.stroke();
+      }
+      // 脑袋和鳍
+      ctx.fillStyle = "#8ac89a";
+      ctx.beginPath();
+      ctx.arc(b.r * 0.95, -b.r * 0.15, b.r * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(-b.r * 0.5, s * b.r * 0.62, b.r * 0.3, b.r * 0.14, s * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (b.kind === "sword") {
+      // 长条身体 + 剑鼻
+      ctx.fillStyle = "#7ab8d8";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r, b.r * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(b.r * 0.8, -b.r * 0.1);
+      ctx.lineTo(b.r * 1.75, 0);
+      ctx.lineTo(b.r * 0.8, b.r * 0.1);
+      ctx.closePath();
+      ctx.fillStyle = "#e8e0c8";
+      ctx.fill();
+      // 背帆
+      ctx.fillStyle = "#5a98b8";
+      ctx.beginPath();
+      ctx.moveTo(-b.r * 0.6, -b.r * 0.3);
+      ctx.quadraticCurveTo(0, -b.r * 1.05, b.r * 0.5, -b.r * 0.32);
+      ctx.closePath();
+      ctx.fill();
+      // 尾巴
+      ctx.beginPath();
+      ctx.moveTo(-b.r * 0.85, 0);
+      ctx.lineTo(-b.r * 1.35, -b.r * 0.45);
+      ctx.lineTo(-b.r * 1.35, b.r * 0.45);
+      ctx.closePath();
+      ctx.fill();
+    } else if (b.kind === "lobster") {
+      // 长身
+      ctx.fillStyle = "#e87a5a";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r, b.r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 尾节
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.ellipse(-b.r * (0.7 + i * 0.28), 0, b.r * (0.34 - i * 0.07), b.r * (0.4 - i * 0.08), 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 双钳
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.arc(b.r * 0.9, s * b.r * 0.5, b.r * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ffe0c2";
+        ctx.beginPath();
+        ctx.arc(b.r * 0.98, s * b.r * 0.5, b.r * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#e87a5a";
+      }
+      // 火光触须
+      ctx.strokeStyle = `rgba(255,180,80,${0.6 + Math.sin(time * 5) * 0.3})`;
+      ctx.lineWidth = 3;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(b.r * 0.6, s * b.r * 0.2 - b.r * 0.3);
+        ctx.quadraticCurveTo(b.r * 1.3, s * b.r * 0.5 - b.r * 0.7, b.r * 1.6, s * b.r * 0.3 - b.r * 0.9);
+        ctx.stroke();
+      }
+    } else if (b.kind === "shark") {
+      ctx.fillStyle = "#98a8b8";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, b.r, b.r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 背鳍
+      ctx.beginPath();
+      ctx.moveTo(-b.r * 0.25, -b.r * 0.45);
+      ctx.lineTo(b.r * 0.05, -b.r * 1.05);
+      ctx.lineTo(b.r * 0.3, -b.r * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      // 尾巴
+      ctx.beginPath();
+      ctx.moveTo(-b.r * 0.85, 0);
+      ctx.lineTo(-b.r * 1.4, -b.r * 0.55);
+      ctx.lineTo(-b.r * 1.15, 0);
+      ctx.lineTo(-b.r * 1.4, b.r * 0.4);
+      ctx.closePath();
+      ctx.fill();
+      // 白肚皮 + 尖牙
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.beginPath();
+      ctx.ellipse(b.r * 0.1, b.r * 0.25, b.r * 0.75, b.r * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(b.r * (0.2 + i * 0.13), b.r * 0.3);
+        ctx.lineTo(b.r * (0.25 + i * 0.13), b.r * 0.5);
+        ctx.lineTo(b.r * (0.3 + i * 0.13), b.r * 0.3);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else if (b.kind === "dragon") {
+      // 蛇形长身
+      ctx.strokeStyle = "#8a5ac9";
+      ctx.lineWidth = b.r * 0.5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      for (let i = 0; i <= 8; i++) {
+        const t = i / 8;
+        const x = -b.r * 1.5 + t * b.r * 1.9;
+        const y = Math.sin(t * Math.PI * 2 + time * 3) * b.r * 0.3;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // 龙头
+      ctx.fillStyle = "#a97ae0";
+      ctx.beginPath();
+      ctx.ellipse(b.r * 0.55, 0, b.r * 0.52, b.r * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 龙角
+      ctx.strokeStyle = "#ffd868";
+      ctx.lineWidth = 5;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(b.r * (0.45 + s * 0.12), -b.r * 0.35);
+        ctx.quadraticCurveTo(b.r * (0.45 + s * 0.3), -b.r * 0.85, b.r * (0.6 + s * 0.35), -b.r * 0.95);
+        ctx.stroke();
+      }
+      // 龙须
+      ctx.strokeStyle = "#e0c8ff";
+      ctx.lineWidth = 2.5;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(b.r * 1.0, s * b.r * 0.12);
+        ctx.quadraticCurveTo(b.r * 1.5, s * b.r * 0.3 + Math.sin(time * 4) * 5, b.r * 1.75, s * b.r * 0.15);
+        ctx.stroke();
+      }
+      // 鹿角般的背鳍
+      ctx.fillStyle = "#ffd868";
+      for (let i = 0; i < 4; i++) {
+        const x = -b.r * 1.2 + i * b.r * 0.5;
+        const y = Math.sin(((x + b.r * 1.5) / (b.r * 1.9)) * Math.PI * 2 + time * 3) * b.r * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y - b.r * 0.2);
+        ctx.lineTo(x, y - b.r * 0.55);
+        ctx.lineTo(x + 6, y - b.r * 0.2);
+        ctx.closePath();
+        ctx.fill();
+      }
     } else {
       // whale
       ctx.fillStyle = "#8fc8e8";
@@ -1258,7 +1509,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function drawZoneDecor(): void {
     const def = level();
     if (def.zone === "shallow") {
-      ctx.fillStyle = ZONE_STYLE.shallow.accent;
+      ctx.fillStyle = "#ffeeba";
       ctx.beginPath();
       ctx.ellipse(w / 2, h + 24, w * 0.75, 56, 0, Math.PI, Math.PI * 2);
       ctx.fill();
@@ -1287,6 +1538,86 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.lineTo(x + 90, h);
         ctx.lineTo(x - 60, h);
         ctx.closePath();
+        ctx.fill();
+      }
+    } else if (def.zone === "kelp") {
+      // 海带森林:摇曳的宽叶海带
+      for (let i = 0; i < 6; i++) {
+        const x = (w / 6) * i + w / 12;
+        ctx.strokeStyle = i % 2 === 0 ? "rgba(74,138,90,0.5)" : "rgba(106,168,122,0.45)";
+        ctx.lineWidth = 14;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        for (let y = h; y > h * 0.2; y -= 24) {
+          const sway = Math.sin(y * 0.025 + time * 1.2 + i * 1.4) * 22;
+          if (y === h) ctx.moveTo(x + sway, y);
+          else ctx.lineTo(x + sway, y);
+        }
+        ctx.stroke();
+      }
+    } else if (def.zone === "wreck") {
+      // 沉船湾:半埋的船身和桅杆
+      ctx.fillStyle = "rgba(90,64,40,0.55)";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.15, h);
+      ctx.quadraticCurveTo(w * 0.3, h - 90, w * 0.55, h - 70);
+      ctx.quadraticCurveTo(w * 0.7, h - 55, w * 0.78, h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(90,64,40,0.6)";
+      ctx.lineWidth = 9;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.42, h - 74);
+      ctx.lineTo(w * 0.46, h - 190);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(200,180,140,0.4)";
+      ctx.beginPath();
+      ctx.moveTo(w * 0.46, h - 188);
+      ctx.lineTo(w * 0.6, h - 150);
+      ctx.lineTo(w * 0.465, h - 130);
+      ctx.closePath();
+      ctx.fill();
+    } else if (def.zone === "volcano") {
+      // 火山温泉:底部红光和上升的热泡
+      const g = ctx.createLinearGradient(0, h, 0, h - 130);
+      g.addColorStop(0, "rgba(255,110,60,0.5)");
+      g.addColorStop(1, "rgba(255,110,60,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, h - 130, w, 130);
+      for (let i = 0; i < 7; i++) {
+        const t = (time * 0.4 + i * 0.37) % 1;
+        const x = w * ((i * 0.148 + 0.06) % 1) + Math.sin(time * 2 + i) * 8;
+        ctx.fillStyle = `rgba(255,190,120,${0.5 * (1 - t)})`;
+        ctx.beginPath();
+        ctx.arc(x, h - t * h, 5 + i % 3 * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (def.zone === "abyss") {
+      // 午夜深渊:远处的微光浮游生物
+      for (let i = 0; i < 12; i++) {
+        const x = w * ((i * 0.083 + 0.04) % 1);
+        const y = h * ((i * 0.19 + 0.1 + Math.sin(time * 0.5 + i) * 0.02) % 1);
+        ctx.fillStyle = `rgba(154,138,232,${0.25 + Math.sin(time * 2 + i * 1.7) * 0.15})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (def.zone === "pearl") {
+      // 珍珠龙宫:发光珍珠和宫殿拱门
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 10;
+      for (let i = 0; i < 3; i++) {
+        const x = w * (0.2 + i * 0.3);
+        ctx.beginPath();
+        ctx.arc(x, h, 70, Math.PI, Math.PI * 2);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 5; i++) {
+        const x = w * (0.1 + i * 0.2);
+        const glow = 0.45 + Math.sin(time * 2 + i * 1.3) * 0.25;
+        ctx.fillStyle = `rgba(255,240,250,${glow})`;
+        ctx.beginPath();
+        ctx.arc(x, h - 18, 9, 0, Math.PI * 2);
         ctx.fill();
       }
     } else {
@@ -1329,7 +1660,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
   }
 
-  function drawMap(): void {
+  function drawThemes(): void {
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, "#c9edff");
     grad.addColorStop(0.45, "#9fc8ec");
@@ -1341,33 +1672,100 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🐟 海底大胃王 · 海域地图", w / 2, 30);
-    ctx.font = "15px sans-serif";
+    ctx.fillText("🐟 海底大胃王 · 九大海域", w / 2, 26);
+    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#3a5a7e";
     ctx.fillText(
-      `⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 不掉爱心通关就有 3 星!`,
+      `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选海域,再选关卡`,
       w / 2,
-      58,
+      52,
     );
 
-    btnDex = { x: w - 118, y: 74, w: 106, h: 34 };
+    btnDex = { x: w - 118, y: 8, w: 110, h: 30 };
     drawButton(btnDex, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
 
+    themeCards.length = 0;
+    const cols = w > h * 1.15 ? 3 : 2;
+    const rows = Math.ceil(ZONE_ORDER.length / cols);
+    const pad = 10;
+    const x0 = Math.max(10, w * 0.06);
+    const y0 = 70;
+    const cw = (w - x0 * 2 - pad * (cols - 1)) / cols;
+    const ch = Math.min(96, (h - y0 - 16 - pad * (rows - 1)) / rows);
+    for (let i = 0; i < ZONE_ORDER.length; i++) {
+      const st = ZONE_STYLE[ZONE_ORDER[i]];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
+      themeCards.push({ idx: i, rect });
+      const unlocked = isThemeUnlocked(progress, i);
+      const cleared = themeCleared(progress, i);
+      ctx.fillStyle = unlocked ? st.top : "#e8e8ee";
+      ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
+      ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
+      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
+      ctx.fillStyle = unlocked ? "#3a4a5e" : "#a8a8b4";
+      ctx.fillText(unlocked ? st.blurb : "通关上一片海域解锁", rect.x + 10, rect.y + ch * 0.6);
+      ctx.fillText(
+        unlocked
+          ? `${cleared}/${LEVELS_PER_THEME} 关 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3} · BOSS ${BOSS_INFO[st.boss].name}`
+          : "",
+        rect.x + 10,
+        rect.y + ch * 0.82,
+      );
+    }
+  }
+
+  function drawMap(): void {
+    const st = ZONE_STYLE[ZONE_ORDER[chapterIdx]];
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, st.top);
+    grad.addColorStop(1, st.bottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    btnBack = { x: 6, y: 7, w: 62, h: 30 };
+    drawButton(btnBack, "◀ 海域", "rgba(255,255,255,0.85)", "#5a5a6e");
+
+    ctx.fillStyle = st.accent;
+    ctx.font = "bold 22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    ctx.font = "14px sans-serif";
+    ctx.fillText(
+      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 通关解锁下一关,回放可刷 3 星`,
+      w / 2,
+      54,
+    );
+
     mapNodes.length = 0;
-    const cols: number = 5;
-    const rows = Math.ceil(LEVELS.length / cols);
-    const mx0 = w * 0.1;
-    const mx1 = w * 0.9;
-    const my0 = 130;
-    const my1 = h - 34;
-    const nr = Math.max(16, Math.min(26, (mx1 - mx0) / cols / 2.6, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < LEVELS.length; i++) {
+    const base = chapterIdx * LEVELS_PER_THEME;
+    const cols = 4;
+    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const mx0 = w * 0.12;
+    const mx1 = w * 0.88;
+    const my0 = 96;
+    const my1 = h - 40;
+    const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < LEVELS_PER_THEME; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + (mx1 - mx0) * (cols === 1 ? 0.5 : col / (cols - 1));
+      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
       const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
-      mapNodes.push({ idx: i, x, y, r: nr });
+      mapNodes.push({ idx: base + i, x, y, r: nr });
     }
     ctx.strokeStyle = "rgba(255,255,255,0.65)";
     ctx.lineWidth = 5;
@@ -1382,13 +1780,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.setLineDash([]);
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
-      const zone = ZONE_STYLE[def.zone];
       const unlocked = isLevelUnlocked(progress, n.idx);
       const got = progress[n.idx] ?? 0;
       const isBoss = !!def.boss;
       const r = isBoss ? n.r * 1.22 : n.r;
-      ctx.fillStyle = unlocked ? (got > 0 ? zone.top : "#ffffff") : "#e4e4ea";
-      ctx.strokeStyle = unlocked ? (isBoss ? "#e05a7a" : "#5a8ac9") : "#b8b8c2";
+      ctx.fillStyle = unlocked ? (got > 0 ? "#ffffff" : "#fffef5") : "rgba(230,230,236,0.92)";
+      ctx.strokeStyle = unlocked ? (isBoss ? "#e05a7a" : st.accent) : "#b8b8c2";
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
@@ -1400,12 +1797,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
         ctx.fillText("🔒", n.x, n.y);
       } else {
-        ctx.fillStyle = isBoss ? "#e05a7a" : "#2a6a9a";
+        ctx.fillStyle = isBoss ? "#e05a7a" : st.accent;
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
-        ctx.fillText(String(n.idx + 1), n.x, n.y);
+        ctx.fillText(String(n.idx - base + 1), n.x, n.y);
         if (isBoss) {
           ctx.font = `${Math.round(r * 0.62)}px sans-serif`;
           ctx.fillText("👑", n.x, n.y - r * 0.95);
+        } else if (def.gen) {
+          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
+          ctx.fillText("⚔", n.x, n.y - r * 0.95);
         }
         ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
         let starTxt = "";
@@ -1510,7 +1910,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`第 ${levelIdx + 1} 关 · ${def.name}`, w / 2, y + 42);
+    ctx.fillText(
+      `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 第${(levelIdx % LEVELS_PER_THEME) + 1}关 · ${def.name}`,
+      w / 2,
+      y + 42,
+    );
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
     ctx.fillText(def.hint, w / 2, y + 88);
@@ -1520,6 +1924,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function draw(): void {
+    if (phase === "themes") {
+      drawThemes();
+      return;
+    }
     if (phase === "map") {
       drawMap();
       return;
@@ -1608,6 +2016,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.globalAlpha = 1;
     }
 
+    // 午夜深渊:漆黑一片,只能看清玩家身边一圈
+    if (zone.dark && phase === "play") {
+      const sight = player.r * DARK_SIGHT;
+      const g = ctx.createRadialGradient(player.x, player.y, sight * 0.45, player.x, player.y, sight);
+      g.addColorStop(0, "rgba(10,10,26,0)");
+      g.addColorStop(1, "rgba(10,10,26,0.88)");
+      ctx.fillStyle = g;
+      ctx.fillRect(-20, -20, w + 40, h + 40);
+    }
+
     for (const p of pops) {
       ctx.globalAlpha = Math.max(0, p.life / 0.5);
       ctx.strokeStyle = p.color;
@@ -1657,7 +2075,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     );
     ctx.textAlign = "left";
     ctx.font = "15px sans-serif";
-    ctx.fillText(`第 ${levelIdx + 1}/${LEVELS.length} 关 · ${zone.name}`, 12, 21);
+    ctx.fillText(
+      `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 ${(levelIdx % LEVELS_PER_THEME) + 1}/${LEVELS_PER_THEME} · ${zone.name}`,
+      12,
+      21,
+    );
     ctx.textAlign = "right";
     ctx.fillText(
       "💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, HEARTS_PER_LEVEL - hearts)) + `  分 ${score}`,

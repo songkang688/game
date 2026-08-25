@@ -5,11 +5,14 @@ import {
   DEX,
   EEL_OFF,
   EEL_ON,
+  HANDMADE_PER_THEME,
   HEARTS_PER_LEVEL,
   LEVELS,
+  LEVELS_PER_THEME,
   SHIELD_SECONDS,
   START_RADIUS,
   VORTEX_RADIUS,
+  ZONE_ORDER,
   ZONE_STYLE,
   bossBiteReady,
   canEat,
@@ -18,69 +21,170 @@ import {
   eatScore,
   eelActive,
   grow,
+  hazardTier,
   inBubbleGap,
   isDanger,
   isLevelUnlocked,
+  isThemeUnlocked,
+  levelIndicesOfTheme,
   parseDex,
   parseProgress,
   serializeDex,
   serializeProgress,
   spawnRadius,
   starsForLevel,
+  themeCleared,
+  themeOfLevel,
+  themeStars,
   totalStars,
   vortexPull,
 } from "./logic";
 
-describe("ocean-munch 战役关卡", () => {
-  it("至少 18 关,覆盖四大海域", () => {
-    expect(LEVELS.length).toBeGreaterThanOrEqual(18);
-    const zones = new Set(LEVELS.map((l) => l.zone));
-    expect(zones.size).toBe(4);
-    expect(zones.has("shallow")).toBe(true);
-    expect(zones.has("coral")).toBe(true);
-    expect(zones.has("deep")).toBe(true);
-    expect(zones.has("ice")).toBe(true);
+describe("ocean-munch 99 关九大海域", () => {
+  it("正好 99 关 = 9 章 × 11 关", () => {
+    expect(LEVELS.length).toBe(99);
+    expect(ZONE_ORDER.length).toBe(9);
+    expect(LEVELS_PER_THEME).toBe(11);
+    expect(ZONE_ORDER.length * LEVELS_PER_THEME).toBe(99);
   });
 
-  it("每关都有独特机制标记", () => {
+  it("章内关卡海域一致,顺序与 ZONE_ORDER 对应", () => {
+    for (let ci = 0; ci < ZONE_ORDER.length; ci++) {
+      for (const li of levelIndicesOfTheme(ci)) {
+        expect(LEVELS[li].zone).toBe(ZONE_ORDER[ci]);
+        expect(themeOfLevel(li)).toBe(ZONE_ORDER[ci]);
+      }
+    }
+  });
+
+  it("每章至少 8 关手写(非生成)且布局互不相同", () => {
+    for (let ci = 0; ci < ZONE_ORDER.length; ci++) {
+      const hand = levelIndicesOfTheme(ci)
+        .map((i) => LEVELS[i])
+        .filter((l) => !l.gen);
+      expect(hand.length).toBeGreaterThanOrEqual(HANDMADE_PER_THEME);
+      // 手写关布局签名 = 障碍组合 + 目标大小 + BOSS
+      const sigs = new Set(
+        hand.map((l) => `${[...l.hazards].sort().join(",")}|${l.targetR}|${l.boss ?? "-"}`),
+      );
+      expect(sigs.size).toBe(hand.length);
+    }
+  });
+
+  it("生成关卡的障碍组合不重复同一模板(全局唯一)", () => {
+    const gens = LEVELS.filter((l) => l.gen);
+    expect(gens.length).toBe(ZONE_ORDER.length * (LEVELS_PER_THEME - HANDMADE_PER_THEME));
+    const sigs = new Set(gens.map((l) => `${l.zone}|${[...l.hazards].sort().join(",")}`));
+    expect(sigs.size).toBe(gens.length);
+  });
+
+  it("生成关卡的障碍组合也不和同章手写关重复", () => {
+    for (let ci = 0; ci < ZONE_ORDER.length; ci++) {
+      const chapter = levelIndicesOfTheme(ci).map((i) => LEVELS[i]);
+      const handSigs = new Set(
+        chapter.filter((l) => !l.gen).map((l) => [...l.hazards].sort().join(",")),
+      );
+      for (const g of chapter.filter((l) => l.gen)) {
+        expect(handSigs.has([...g.hazards].sort().join(","))).toBe(false);
+      }
+    }
+  });
+
+  it("99 关每关都有全局唯一的机制标记", () => {
     const feats = new Set(LEVELS.map((l) => l.feature));
-    expect(feats.size).toBe(LEVELS.length);
+    expect(feats.size).toBe(99);
     for (const l of LEVELS) expect(l.feature.length).toBeGreaterThan(0);
   });
 
-  it("战役中至少引入 8 种障碍", () => {
+  it("九片海域配色两两不同,障碍组合(palette)两两不同", () => {
+    const tops = new Set(ZONE_ORDER.map((z) => ZONE_STYLE[z].top));
+    expect(tops.size).toBe(9);
+    const bottoms = new Set(ZONE_ORDER.map((z) => ZONE_STYLE[z].bottom));
+    expect(bottoms.size).toBe(9);
+    const palettes = new Set(ZONE_ORDER.map((z) => [...ZONE_STYLE[z].palette].sort().join(",")));
+    expect(palettes.size).toBe(9);
+    for (const z of ZONE_ORDER) {
+      expect(ZONE_STYLE[z].name).toBeTruthy();
+      expect(ZONE_STYLE[z].top).toMatch(/^#/);
+      expect(ZONE_STYLE[z].speedMult).toBeGreaterThan(0.8);
+    }
+  });
+
+  it("战役覆盖全部 8 种障碍,越深的海域越湍急", () => {
     const hazards = new Set(LEVELS.flatMap((l) => l.hazards));
-    expect(hazards.size).toBeGreaterThanOrEqual(8);
-    expect(hazards.has("vortex")).toBe(true);
-    expect(hazards.has("bubbleWall")).toBe(true);
-    expect(hazards.has("eel")).toBe(true);
+    expect(hazards.size).toBe(8);
+    expect(ZONE_STYLE.pearl.speedMult).toBeGreaterThan(ZONE_STYLE.shallow.speedMult);
+    expect(ZONE_STYLE.ice.speedMult).toBeGreaterThan(1);
+    // 午夜深渊是黑暗海域
+    expect(ZONE_STYLE.abyss.dark).toBe(true);
   });
 
-  it("四片海域各有一个区域 BOSS,最终 BOSS 是鲸鲸", () => {
-    const bosses = LEVELS.filter((l) => l.boss);
-    expect(bosses.length).toBe(4);
-    const kinds = new Set(bosses.map((l) => l.boss));
-    expect(kinds.size).toBe(4);
-    expect(LEVELS[LEVELS.length - 1].boss).toBe("whale");
+  it("环境障碍密度随章节分三档", () => {
+    expect(hazardTier(0)).toBe(1);
+    expect(hazardTier(2 * LEVELS_PER_THEME)).toBe(1);
+    expect(hazardTier(3 * LEVELS_PER_THEME)).toBe(2);
+    expect(hazardTier(6 * LEVELS_PER_THEME)).toBe(3);
+    expect(hazardTier(98)).toBe(3);
+  });
+});
+
+describe("ocean-munch 九位海域 BOSS", () => {
+  it("每章最后一关都是本海域专属 BOSS,九位互不相同", () => {
+    const seen = new Set<string>();
+    for (let ci = 0; ci < ZONE_ORDER.length; ci++) {
+      const last = LEVELS[ci * LEVELS_PER_THEME + LEVELS_PER_THEME - 1];
+      expect(last.boss).toBe(ZONE_STYLE[ZONE_ORDER[ci]].boss);
+      seen.add(last.boss!);
+    }
+    expect(seen.size).toBe(9);
+    expect(LEVELS[98].boss).toBe("dragon");
   });
 
-  it("BOSS 血量随海域递增", () => {
-    expect(BOSS_INFO.crab.hp).toBeLessThan(BOSS_INFO.octopus.hp);
-    expect(BOSS_INFO.octopus.hp).toBeLessThan(BOSS_INFO.angler.hp);
-    expect(BOSS_INFO.angler.hp).toBeLessThan(BOSS_INFO.whale.hp);
+  it("BOSS 血量沿章节不减,最终 BOSS 最多", () => {
+    const hps = ZONE_ORDER.map((z) => BOSS_INFO[ZONE_STYLE[z].boss].hp);
+    for (let i = 1; i < hps.length; i++) expect(hps[i]).toBeGreaterThanOrEqual(hps[i - 1]);
+    expect(BOSS_INFO.dragon.hp).toBe(Math.max(...hps));
   });
 
-  it("每关目标都比初始大小大,难度元素逐步引入", () => {
+  it("BOSS 技能组合至少 7 种不同", () => {
+    const sigs = new Set(
+      ZONE_ORDER.map((z) => {
+        const s = BOSS_INFO[ZONE_STYLE[z].boss];
+        return `${s.inks}|${s.summons ?? "-"}|${!!s.pulls}|${!!s.enrages}`;
+      }),
+    );
+    expect(sigs.size).toBeGreaterThanOrEqual(7);
+  });
+
+  it("长到 BOSS 六成大才能咬", () => {
+    expect(bossBiteReady(BOSS_INFO.whale.r * 0.5, BOSS_INFO.whale.r)).toBe(false);
+    expect(bossBiteReady(BOSS_INFO.whale.r * 0.62, BOSS_INFO.whale.r)).toBe(true);
+    expect(bossBiteReady(30, 40)).toBe(true);
+  });
+});
+
+describe("ocean-munch 难度曲线", () => {
+  it("每关目标都比初始大小大,目标整体随章节上升", () => {
     for (const l of LEVELS) expect(l.targetR).toBeGreaterThan(START_RADIUS);
     expect(LEVELS[0].hazards.length).toBe(0);
-    expect(LEVELS[LEVELS.length - 2].hazards.length).toBeGreaterThanOrEqual(4);
+    const firstZoneMax = Math.max(...levelIndicesOfTheme(0).map((i) => LEVELS[i].targetR));
+    const lastZoneMin = Math.min(...levelIndicesOfTheme(8).map((i) => LEVELS[i].targetR));
+    expect(lastZoneMin).toBeGreaterThan(firstZoneMax);
   });
 
-  it("四片海域都有配色", () => {
-    expect(ZONE_STYLE.shallow.name).toBeTruthy();
-    expect(ZONE_STYLE.coral.top).toMatch(/^#/);
-    expect(ZONE_STYLE.deep.bottom).toMatch(/^#/);
-    expect(ZONE_STYLE.ice.accent).toMatch(/^#/);
+  it("大鱼概率随章节上升且有上限", () => {
+    expect(LEVELS[0].bigFishBias).toBe(0);
+    for (const l of LEVELS) expect(l.bigFishBias).toBeLessThanOrEqual(0.2);
+    const early = LEVELS[3].bigFishBias;
+    const late = LEVELS[92].bigFishBias;
+    expect(late).toBeGreaterThan(early);
+  });
+
+  it("每章毕业关(第 10 关)障碍至少 3 种", () => {
+    for (let ci = 1; ci < ZONE_ORDER.length; ci++) {
+      const challenge = LEVELS[ci * LEVELS_PER_THEME + 9];
+      expect(challenge.hazards.length).toBeGreaterThanOrEqual(3);
+    }
   });
 });
 
@@ -115,15 +219,9 @@ describe("ocean-munch 吃鱼规则", () => {
     expect(eatScore(2)).toBeGreaterThan(eatScore(1));
     expect(eatScore(8)).toBe(eatScore(20));
   });
-
-  it("长到 BOSS 六成大才能咬", () => {
-    expect(bossBiteReady(BOSS_INFO.whale.r * 0.5, BOSS_INFO.whale.r)).toBe(false);
-    expect(bossBiteReady(BOSS_INFO.whale.r * 0.62, BOSS_INFO.whale.r)).toBe(true);
-    expect(bossBiteReady(30, 40)).toBe(true);
-  });
 });
 
-describe("ocean-munch 新障碍机制", () => {
+describe("ocean-munch 障碍机制", () => {
   it("电电草按周期通电", () => {
     expect(EEL_ON).toBeGreaterThan(0);
     expect(EEL_OFF).toBeGreaterThan(0);
@@ -157,12 +255,12 @@ describe("ocean-munch 新障碍机制", () => {
 });
 
 describe("ocean-munch 生物图鉴", () => {
-  it("图鉴条目覆盖普通鱼、障碍生物和 4 个 BOSS", () => {
-    expect(DEX.length).toBeGreaterThanOrEqual(10);
+  it("图鉴条目覆盖普通鱼、障碍生物和 9 个 BOSS", () => {
+    expect(DEX.length).toBeGreaterThanOrEqual(16);
     const ids = new Set(DEX.map((d) => d.id));
     expect(ids.size).toBe(DEX.length);
-    for (const boss of ["crab", "octopus", "angler", "whale"]) {
-      expect(ids.has(boss)).toBe(true);
+    for (const z of ZONE_ORDER) {
+      expect(ids.has(ZONE_STYLE[z].boss)).toBe(true);
     }
   });
 
@@ -214,5 +312,17 @@ describe("ocean-munch 星级与进度", () => {
     expect(isLevelUnlocked(stars, 1)).toBe(true);
     stars[1] = 3;
     expect(totalStars(stars)).toBe(4);
+  });
+
+  it("章节解锁:通关上一章 BOSS 才开下一片海域", () => {
+    const stars = new Array(LEVELS.length).fill(0);
+    expect(isThemeUnlocked(stars, 0)).toBe(true);
+    expect(isThemeUnlocked(stars, 1)).toBe(false);
+    for (let i = 0; i < LEVELS_PER_THEME; i++) stars[i] = 2;
+    expect(isThemeUnlocked(stars, 1)).toBe(true);
+    expect(isThemeUnlocked(stars, 2)).toBe(false);
+    expect(themeStars(stars, 0)).toBe(LEVELS_PER_THEME * 2);
+    expect(themeCleared(stars, 0)).toBe(LEVELS_PER_THEME);
+    expect(themeCleared(stars, 1)).toBe(0);
   });
 });
