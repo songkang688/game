@@ -2,6 +2,7 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { speak, stopSpeaking, whenSpeechReady } from "../speech";
 import { buildBoard, CHAPTERS, LEVELS, type DiffLevel } from "./levels";
 
 const THEME_BG = [
@@ -36,10 +37,14 @@ const CSS = `
 .fd-cell.fd-hintcell{animation:fdBlink .7s 3;}
 @keyframes fdBlink{50%{background:#ffec99;}}
 .fd-msg{min-height:20px;font-size:14px;font-weight:800;text-align:center;}
+.fd-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .fd-hint{border:none;border-radius:999px;padding:8px 18px;font-size:15px;font-weight:900;cursor:pointer;
   color:#fff;background:linear-gradient(180deg,#74c0fc,#4dabf7);box-shadow:0 4px 0 #1c7ed6;font-family:inherit;}
 .fd-hint:active{transform:translateY(2px);box-shadow:0 2px 0 #1c7ed6;}
 .fd-hint:disabled{opacity:.45;}
+.fd-say{border:none;border-radius:999px;padding:8px 18px;font-size:15px;font-weight:900;cursor:pointer;
+  min-height:44px;color:#7a5aa0;background:#ffffffe6;box-shadow:0 4px 0 rgba(120,90,160,.3);font-family:inherit;}
+.fd-say:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(120,90,160,.3);}
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -84,7 +89,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       </div>
     </div>
     <div class="fd-msg" style="color:${cfg.theme === 4 ? "#ffe066" : "#8a7aa8"}"></div>
-    <button type="button" class="fd-hint">🔎 放大镜提示（1 次）</button>
+    <div class="fd-btns">
+      <button type="button" class="fd-hint">🔎 放大镜提示（1 次）</button>
+      <button type="button" class="fd-say" hidden>🔈 再听一遍</button>
+    </div>
   `;
   stage.appendChild(wrap);
 
@@ -95,8 +103,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const playGrid = wrap.querySelector(".fd-grid-play") as HTMLElement;
   const msgEl = wrap.querySelector(".fd-msg") as HTMLElement;
   const hintBtn = wrap.querySelector(".fd-hint") as HTMLButtonElement;
+  const sayBtn = wrap.querySelector(".fd-say") as HTMLButtonElement;
 
   msgEl.textContent = cfg.lookalike ? "小心！有些图案是双胞胎，长得很像～" : "上下对比，找到不一样的格子！";
+
+  // 朗读：开关自动读题目要求；没有中文语音包时按钮保持隐藏、全程静默
+  const askLine = `找出下面 ${cfg.diffs} 个不一样的地方，找到就点它！`;
+  sayBtn.addEventListener("click", () => speak(askLine));
+  const unwatchSpeech = whenSpeechReady(() => {
+    sayBtn.hidden = false;
+    if (!destroyed && !ended) speak(askLine);
+  });
 
   const playCells: HTMLButtonElement[] = [];
   board.base.forEach((emoji, i) => {
@@ -182,6 +199,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     destroy() {
       destroyed = true;
       ended = true;
+      unwatchSpeech();
+      stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       if (timerId) clearInterval(timerId);

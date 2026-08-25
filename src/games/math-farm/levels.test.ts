@@ -45,6 +45,47 @@ describe("算数小农场 99 关", () => {
     }
   });
 
+  it("抽 20+ 题机器校验：答案可从题面验算、引导语口语化（≤15 个汉字）", () => {
+    const qs = [0, 24, 49, 74, 98].flatMap((i) => buildQuestions(i));
+    expect(qs.length).toBeGreaterThanOrEqual(20);
+    const kindsSeen = new Set(qs.map((q) => q.kind));
+    expect(kindsSeen.size).toBeGreaterThanOrEqual(4);
+    for (const q of qs) {
+      expect((q.ask.match(/[\u4e00-\u9fff]/g) ?? []).length).toBeLessThanOrEqual(15);
+      const text = q.promptHTML.replace(/<[^>]+>/g, "");
+      if (q.kind === "count") {
+        expect(text.trim().split(/\s+/)).toHaveLength(q.answer as number);
+        expect(q.choices[q.correct]).toBe(String(q.answer));
+      } else if (q.kind === "add" || q.kind === "sub" || q.kind === "chain") {
+        const m = text.match(/^(\d+) ([+-]) (\d+)(?: ([+-]) (\d+))? = \?$/);
+        expect(m).not.toBeNull();
+        let v = m![2] === "+" ? Number(m![1]) + Number(m![3]) : Number(m![1]) - Number(m![3]);
+        if (m![4]) v = m![4] === "+" ? v + Number(m![5]) : v - Number(m![5]);
+        expect(v).toBe(q.answer);
+        expect(q.choices[q.correct]).toBe(String(q.answer));
+      } else if (q.kind === "missing") {
+        const m = text.match(/^(\d+|⬜) ([+-]) (\d+|⬜) = (\d+)$/);
+        expect(m).not.toBeNull();
+        const fill = (s: string) => (s === "⬜" ? Number(q.answer) : Number(s));
+        const left = m![2] === "+" ? fill(m![1]) + fill(m![3]) : fill(m![1]) - fill(m![3]);
+        expect(left).toBe(Number(m![4]));
+        expect(q.choices[q.correct]).toBe(String(q.answer));
+      } else {
+        // compare：左边是数或算式，右边是数，符号必须判断正确
+        const m = text.match(/^(.+) ○ (\d+)$/);
+        expect(m).not.toBeNull();
+        const lm = m![1].match(/^(\d+)(?: ([+-]) (\d+))?$/);
+        expect(lm).not.toBeNull();
+        let left = Number(lm![1]);
+        if (lm![2]) left = lm![2] === "+" ? left + Number(lm![3]) : left - Number(lm![3]);
+        const right = Number(m![2]);
+        const sym = left > right ? "＞" : left < right ? "＜" : "＝";
+        expect(q.answer).toBe(sym);
+        expect(q.choices[q.correct]).toBe(sym);
+      }
+    }
+  });
+
   it("同一关重试题目一致（确定性生成）", () => {
     for (const i of [0, 17, 40, 66, 98]) {
       expect(JSON.stringify(buildQuestions(i))).toBe(JSON.stringify(buildQuestions(i)));

@@ -29,20 +29,25 @@ export const CHAPTERS: Chapter[] = [
   { name: "冠军之路", emoji: "🏆", color: "#EBDFFB", desc: "红灯+节奏+星星全都来，终极拔河！", size: 16 }
 ];
 
+/**
+ * 小电脑拉力按「一年级每秒 4~5 次点击」校准：
+ * 红灯章只有约 2/3 时间能拉、节奏章要左右手交替（有效点速更低）、
+ * 混合章机关叠加，这三章的拉力基线与坡度都相应放缓，保证章末仍然拉得赢。
+ */
 function buildLevel(ci: number, t: number): TugLevel {
   switch (ci) {
     case 0:
-      return { aiRate: 5 + t * 0.5, pullPower: 2.6, star: false, redlight: false, rhythm: false, theme: 0 };
+      return { aiRate: 5 + t * 0.22, pullPower: 2.6, star: false, redlight: false, rhythm: false, theme: 0 };
     case 1:
-      return { aiRate: 7 + t * 0.45, pullPower: 2.5, star: true, redlight: false, rhythm: false, theme: 1 };
+      return { aiRate: 6.5 + t * 0.3, pullPower: 2.5, star: true, redlight: false, rhythm: false, theme: 1 };
     case 2:
-      return { aiRate: 6 + t * 0.45, pullPower: 2.6, star: false, redlight: true, rhythm: false, theme: 2 };
+      return { aiRate: 4.8 + t * 0.1, pullPower: 2.6, star: false, redlight: true, rhythm: false, theme: 2 };
     case 3:
-      return { aiRate: 6 + t * 0.45, pullPower: 3.0, star: false, redlight: false, rhythm: true, theme: 3 };
+      return { aiRate: 6 + t * 0.2, pullPower: 3.0, star: false, redlight: false, rhythm: true, theme: 3 };
     case 4:
-      return { aiRate: 8.5 + t * 0.45, pullPower: 2.8, star: true, redlight: false, rhythm: false, theme: 4 };
+      return { aiRate: 7.5 + t * 0.3, pullPower: 2.8, star: true, redlight: false, rhythm: false, theme: 4 };
     default:
-      return { aiRate: 8 + t * 0.5, pullPower: 2.8, star: true, redlight: true, rhythm: t % 2 === 1, theme: 5 };
+      return { aiRate: 6 + t * 0.25, pullPower: 2.8, star: true, redlight: true, rhythm: t % 2 === 1, theme: 5 };
   }
 }
 

@@ -69,6 +69,34 @@ describe("时钟小屋 99 关", () => {
     expect(seen).toBeGreaterThan(5);
   });
 
+  it("抽 20+ 题机器校验：认钟/拨针/推理时刻全对、引导语口语化（≤15 个汉字）", () => {
+    const fmt = (h: number, qt: number) =>
+      qt === 0 ? `${h} 点` : qt === 1 ? `${h} 点 1 刻` : qt === 2 ? `${h} 点半` : `${h} 点 3 刻`;
+    const qs = [0, 24, 49, 74, 98].flatMap((i) => buildQuestions(i));
+    expect(qs.length).toBeGreaterThanOrEqual(20);
+    for (const q of qs) {
+      expect((q.ask.match(/[\u4e00-\u9fff]/g) ?? []).length).toBeLessThanOrEqual(15);
+      if (q.kind === "read") {
+        const m = q.promptHTML.match(/data-h="(\d+)" data-q="(\d)"/);
+        expect(m).not.toBeNull();
+        expect(q.answer).toBe(fmt(Number(m![1]), Number(m![2])));
+        expect(q.choices[q.correct]).toBe(q.answer);
+      } else if (q.kind === "set") {
+        const label = q.ask.match(/「(.+)」/)![1];
+        const cm = q.choices[q.correct].match(/data-h="(\d+)" data-q="(\d)"/);
+        expect(cm).not.toBeNull();
+        expect(fmt(Number(cm![1]), Number(cm![2]))).toBe(label);
+      } else {
+        const m = q.ask.match(/现在是 (\d+) 点，再过 (\d+) 小时/);
+        expect(m).not.toBeNull();
+        let after = Number(m![1]) + Number(m![2]);
+        if (after > 12) after -= 12;
+        expect(q.answer).toBe(`${after} 点`);
+        expect(q.choices[q.correct]).toBe(q.answer);
+      }
+    }
+  });
+
   it("同一关重试题目一致（确定性生成）", () => {
     for (const i of [0, 20, 45, 70, 98]) {
       expect(JSON.stringify(buildQuestions(i))).toBe(JSON.stringify(buildQuestions(i)));

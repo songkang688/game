@@ -52,6 +52,44 @@ describe("识字小花园 99 关", () => {
     }
   });
 
+  it("抽 20+ 题机器校验：字-图-音-词配对正确、引导语口语化（≤15 个汉字）", () => {
+    const ALL_CARDS = CHAPTER_POOLS.flat();
+    const NUM_VALUE: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+    const qs = [0, 24, 49, 74, 98].flatMap((i) => buildQuestions(i));
+    expect(qs.length).toBeGreaterThanOrEqual(20);
+    for (const q of qs) {
+      expect((q.ask.match(/[\u4e00-\u9fff]/g) ?? []).length).toBeLessThanOrEqual(15);
+      if (q.kind === "pic2char") {
+        const card = ALL_CARDS.find((c) => c.char === q.answer && q.promptHTML.includes(c.emoji));
+        expect(card).toBeDefined();
+        expect(q.ask).toContain(card!.word);
+        expect(q.choices[q.correct]).toBe(card!.char);
+      } else if (q.kind === "char2pic") {
+        const card = ALL_CARDS.find((c) => c.char === q.promptHTML);
+        expect(card).toBeDefined();
+        expect(q.answer).toBe(card!.emoji);
+        expect(q.choices[q.correct]).toContain(card!.emoji);
+      } else if (q.kind === "py2char") {
+        const card = ALL_CARDS.find((c) => c.char === q.answer && q.promptHTML.includes(c.pinyin));
+        expect(card).toBeDefined();
+        expect(q.choices[q.correct]).toBe(card!.char);
+      } else if (q.kind === "char2word") {
+        const char = q.promptHTML.trim().slice(-1);
+        const card = ALL_CARDS.find((c) => c.char === char);
+        expect(card).toBeDefined();
+        expect(q.answer).toBe(card!.word);
+        expect(q.choices[q.correct]).toBe(card!.word);
+      } else {
+        // count：图里的个数 = 汉字数字的数值
+        const n = NUM_VALUE[q.answer];
+        expect(n).toBeGreaterThanOrEqual(1);
+        const strip = q.promptHTML.replace(/<[^>]+>/g, "").trim();
+        expect(strip.split(/\s+/)).toHaveLength(n);
+        expect(q.choices[q.correct]).toBe(q.answer);
+      }
+    }
+  });
+
   it("同一关重试题目一致（确定性生成）", () => {
     for (const i of [0, 20, 45, 70, 98]) {
       expect(JSON.stringify(buildQuestions(i))).toBe(JSON.stringify(buildQuestions(i)));

@@ -37,6 +37,22 @@ describe("找不同 99 关", () => {
     }
   });
 
+  it("抽 20 关机器校验：标记处必不同、其余格子完全一样、diff 下标有序", () => {
+    const samples = [0, 8, 12, 16, 20, 24, 30, 36, 42, 49, 55, 61, 67, 70, 74, 80, 86, 90, 94, 98];
+    expect(samples).toHaveLength(20);
+    for (const i of samples) {
+      const cfg = LEVELS[i];
+      const { base, changed, diffIdx } = buildBoard(i);
+      expect(diffIdx).toHaveLength(cfg.diffs);
+      expect([...diffIdx]).toEqual([...diffIdx].sort((a, b) => a - b));
+      const diffSet = new Set(diffIdx);
+      base.forEach((e, k) => {
+        if (diffSet.has(k)) expect(changed[k]).not.toBe(e);
+        else expect(changed[k]).toBe(e);
+      });
+    }
+  });
+
   it("同一关重试布局一致（确定性生成）", () => {
     for (const i of [0, 20, 45, 70, 98]) {
       expect(JSON.stringify(buildBoard(i))).toBe(JSON.stringify(buildBoard(i)));
