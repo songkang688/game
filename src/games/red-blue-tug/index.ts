@@ -1,7 +1,7 @@
 /**
- * 红蓝拔河 red-blue-tug
- * 左右两个超大按钮拼手速:双人各按一边,或单人挑战蓝方 AI。
- * 把中间的蝴蝶结拉过自己一侧的线就赢啦。
+ * 红蓝拔河 red-blue-tug —— 红蓝运动会第一项
+ * 三局两胜(BO3)!双人各按一边,或单人挑战蓝方 AI(简单/普通)。
+ * 场上会随机冒出加油星,点到它自己队伍就猛拉一大截!
  */
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -21,7 +21,7 @@ export const meta = {
   emoji: "🪢",
   category: "party" as const,
   color: "#ff6b6b",
-  blurb: "红队蓝队拼手速!把绳子上的蝴蝶结拉到自己这边就赢!",
+  blurb: "红蓝运动会·拔河!三局两胜,抢加油星猛拉一把!",
 };
 
 const STYLE = `
@@ -29,14 +29,18 @@ const STYLE = `
   background:linear-gradient(#d0f4ff,#fff6d6);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
   user-select:none;-webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;}
 .tug-menu{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:18px;background:linear-gradient(#d0f4ff,#fff6d6);}
-.tug-menu-title{font-size:30px;font-weight:900;color:#5c4a1e;}
-.tug-menu-sub{font-size:16px;font-weight:700;color:#8a7a4a;}
-.tug-mode{border:none;border-radius:24px;padding:18px 40px;font-size:22px;font-weight:900;color:#fff;
-  cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;min-width:240px;}
+  align-items:center;justify-content:center;gap:14px;background:linear-gradient(#d0f4ff,#fff6d6);padding:16px;}
+.tug-menu-title{font-size:28px;font-weight:900;color:#5c4a1e;}
+.tug-menu-sub{font-size:15px;font-weight:700;color:#8a7a4a;text-align:center;line-height:1.6;}
+.tug-mode{border:none;border-radius:24px;padding:15px 36px;font-size:20px;font-weight:900;color:#fff;
+  cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;min-width:250px;}
 .tug-mode:active{transform:translateY(4px);box-shadow:0 2px 0 #0003;}
-.tug-mode-solo{background:#ff6b6b;}
+.tug-mode-easy{background:#51cf66;}
+.tug-mode-normal{background:#ff6b6b;}
 .tug-mode-duo{background:#845ef7;}
+.tug-hud{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 14px 0;}
+.tug-pill{background:#fffd;border-radius:999px;padding:7px 14px;font-size:16px;font-weight:900;
+  color:#5c4a1e;box-shadow:0 3px 8px #0002;}
 .tug-scene{position:relative;flex:1;min-height:200px;}
 .tug-line{position:absolute;top:12%;bottom:34%;width:6px;border-radius:3px;opacity:.75;}
 .tug-line-red{left:22%;background:#ff6b6b;}
@@ -52,6 +56,9 @@ const STYLE = `
 .tug-team-blue{left:56%;transform:scaleX(-1);}
 .tug-shake .tug-rope-row{animation:tugShake .18s;}
 @keyframes tugShake{0%,100%{margin-top:0}50%{margin-top:-5px}}
+.tug-star{position:absolute;z-index:15;font-size:44px;cursor:pointer;
+  animation:tugStar .5s ease infinite alternate;filter:drop-shadow(0 0 10px #ffd43b);}
+@keyframes tugStar{from{transform:scale(1)}to{transform:scale(1.2)}}
 .tug-count{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
   font-size:110px;font-weight:900;color:#ff922b;text-shadow:0 5px 0 #fff;pointer-events:none;}
 .tug-btns{display:flex;height:42%;min-height:170px;}
@@ -65,20 +72,27 @@ const STYLE = `
 .tug-btn-blue{background:linear-gradient(#74c0fc,#339af0);border-radius:28px 0 0 0;}
 .tug-btn .tug-big{font-size:44px;}
 .tug-result{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;gap:12px;
-  align-items:center;justify-content:center;background:#ffffffd9;animation:tugFade .3s ease;}
+  align-items:center;justify-content:center;background:#ffffffd9;animation:tugFade .3s ease;text-align:center;}
 @keyframes tugFade{from{opacity:0}to{opacity:1}}
 .tug-result-big{font-size:60px;}
-.tug-result-text{font-size:28px;font-weight:900;color:#5c4a1e;}
+.tug-result-text{font-size:26px;font-weight:900;color:#5c4a1e;}
+.tug-result-sub{font-size:17px;font-weight:800;color:#8a7a4a;}
 `;
+
+type Side = "red" | "blue";
+type Difficulty = "easy" | "normal";
 
 export function mount(api: GameApi): { destroy: () => void } {
   const { root, play, onWin, onLose } = api;
   let alive = true;
-  let ended = false;
+  let matchOver = false;
   let running = false;
   let solo = true;
-  // pos ∈ [-1, 1],负数偏向红方(左),正数偏向蓝方(右)
+  let difficulty: Difficulty = "easy";
   let pos = 0;
+  let redWins = 0;
+  let blueWins = 0;
+  let round = 1;
 
   const timers = new Set<number>();
   const after = (ms: number, fn: () => void): number => {
@@ -94,6 +108,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.className = "tug-wrap";
   wrap.innerHTML = `
     <style>${STYLE}</style>
+    <div class="tug-hud" style="display:none">
+      <div class="tug-pill tug-round">第 1 回合</div>
+      <div class="tug-pill tug-score">🐹 0 : 0 🐧</div>
+    </div>
     <div class="tug-scene">
       <div class="tug-line tug-line-red"></div>
       <div class="tug-line tug-line-blue"></div>
@@ -115,8 +133,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     </div>
     <div class="tug-menu">
       <div class="tug-menu-title">🪢 红蓝拔河</div>
-      <div class="tug-menu-sub">把 🎀 拉过自己那条线就赢!</div>
-      <button class="tug-mode tug-mode-solo">🐹 单人挑战(我是红队)</button>
+      <div class="tug-menu-sub">红蓝运动会第一项 · 三局两胜!<br>把 🎀 拉过自己那条线,场上的 ⭐ 点到就猛拉一把!</div>
+      <button class="tug-mode tug-mode-easy">🐹 单人 · 小电脑简单</button>
+      <button class="tug-mode tug-mode-normal">🐹 单人 · 小电脑普通</button>
       <button class="tug-mode tug-mode-duo">🐹🆚🐧 双人对战</button>
     </div>`;
   root.appendChild(wrap);
@@ -126,13 +145,20 @@ export function mount(api: GameApi): { destroy: () => void } {
   const ropeRow = q<HTMLElement>(".tug-rope-row");
   const countEl = q<HTMLElement>(".tug-count");
   const menu = q<HTMLElement>(".tug-menu");
+  const hud = q<HTMLElement>(".tug-hud");
+  const roundEl = q<HTMLElement>(".tug-round");
+  const scoreEl = q<HTMLElement>(".tug-score");
   const btnRed = q<HTMLButtonElement>(".tug-btn-red");
   const btnBlue = q<HTMLButtonElement>(".tug-btn-blue");
   const blueLabel = q<HTMLElement>(".tug-btn-blue small");
 
   function render(): void {
-    // 绳子整体平移,±1 对应 ±28% 屏宽
     ropeRow.style.transform = `translateX(${pos * 28}%)`;
+  }
+
+  function renderHud(): void {
+    roundEl.textContent = `第 ${round} 回合`;
+    scoreEl.textContent = `🐹 ${redWins} : ${blueWins} 🐧`;
   }
 
   function shake(): void {
@@ -141,45 +167,104 @@ export function mount(api: GameApi): { destroy: () => void } {
     scene.classList.add("tug-shake");
   }
 
-  function pull(side: "red" | "blue", strength: number): void {
-    if (!running || ended) return;
+  function pull(side: Side, strength: number): void {
+    if (!running || matchOver) return;
     pos += side === "red" ? -strength : strength;
     pos = Math.max(-1, Math.min(1, pos));
     render();
     shake();
-    if (pos <= -1) finish("red");
-    else if (pos >= 1) finish("blue");
+    if (pos <= -1) finishRound("red");
+    else if (pos >= 1) finishRound("blue");
   }
 
-  function finish(winner: "red" | "blue"): void {
-    ended = true;
-    running = false;
-    btnRed.disabled = btnBlue.disabled = true;
-    const result = document.createElement("div");
-    result.className = "tug-result";
-    const emoji = winner === "red" ? "🐹🏆" : "🐧🏆";
-    const name = winner === "red" ? "红队" : "蓝队";
-    result.innerHTML = `
-      <div class="tug-result-big">${emoji}</div>
-      <div class="tug-result-text">${name}获胜!</div>`;
-    wrap.appendChild(result);
-    after(900, () => {
-      if (solo) {
-        if (winner === "red") onWin(3, "太厉害了,红队大胜!");
-        else onLose("蓝队赢了这局,再挑战一次!");
-      } else {
-        onWin(2, `${name}获胜,击掌庆祝!`);
+  // 加油星
+  let starEl: HTMLElement | null = null;
+  let starTimer = 0;
+  function clearStar(): void {
+    if (starEl) { starEl.remove(); starEl = null; }
+  }
+  function scheduleStar(): void {
+    if (!alive || matchOver) return;
+    starTimer = after(2600 + Math.random() * 1800, () => {
+      if (running && !starEl) {
+        const side: Side = Math.random() < 0.5 ? "red" : "blue";
+        const star = document.createElement("div");
+        star.className = "tug-star";
+        star.textContent = "⭐";
+        star.style.left = side === "red" ? `${8 + Math.random() * 22}%` : `${68 + Math.random() * 22}%`;
+        star.style.top = `${10 + Math.random() * 26}%`;
+        star.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          clearStar();
+          play("coin");
+          pull(side, 0.16);
+        });
+        scene.appendChild(star);
+        starEl = star;
+        after(2000, () => { if (starEl === star) clearStar(); });
       }
+      scheduleStar();
     });
   }
 
   let aiTimer = 0;
   function scheduleAi(): void {
-    if (!alive || ended) return;
-    aiTimer = after(240 + Math.random() * 260, () => {
-      pull("blue", 0.04 + Math.random() * 0.02);
+    if (!alive || matchOver) return;
+    const base = difficulty === "easy" ? 320 : 240;
+    const jitter = difficulty === "easy" ? 300 : 240;
+    const power = difficulty === "easy" ? 0.03 : 0.045;
+    aiTimer = after(base + Math.random() * jitter, () => {
+      pull("blue", power + Math.random() * 0.015);
       scheduleAi();
     });
+  }
+
+  function finishRound(winner: Side): void {
+    running = false;
+    btnRed.disabled = btnBlue.disabled = true;
+    clearStar();
+    if (winner === "red") redWins++;
+    else blueWins++;
+    renderHud();
+    const matchWinner: Side | null = redWins >= 2 ? "red" : blueWins >= 2 ? "blue" : null;
+
+    const result = document.createElement("div");
+    result.className = "tug-result";
+    const emoji = winner === "red" ? "🐹🏆" : "🐧🏆";
+    const name = winner === "red" ? "红队" : "蓝队";
+    if (matchWinner) {
+      matchOver = true;
+      const mEmoji = matchWinner === "red" ? "🐹👑" : "🐧👑";
+      const mName = matchWinner === "red" ? "红队" : "蓝队";
+      result.innerHTML = `
+        <div class="tug-result-big">${mEmoji}</div>
+        <div class="tug-result-text">${mName}赢得拔河比赛!</div>
+        <div class="tug-result-sub">大比分 ${redWins} : ${blueWins}</div>`;
+      wrap.appendChild(result);
+      play(matchWinner === "red" || !solo ? "win" : "oops");
+      after(1100, () => {
+        if (solo) {
+          if (matchWinner === "red") onWin(difficulty === "normal" ? 3 : 2, `${redWins}:${blueWins} 拿下拔河冠军!`);
+          else onLose(`${redWins}:${blueWins} 惜败，再挑战一次!`);
+        } else {
+          onWin(2, `${mName}赢得拔河比赛，击掌庆祝!`);
+        }
+      });
+    } else {
+      result.innerHTML = `
+        <div class="tug-result-big">${emoji}</div>
+        <div class="tug-result-text">${name}拿下第 ${round} 回合!</div>
+        <div class="tug-result-sub">大比分 ${redWins} : ${blueWins}，下一回合马上开始</div>`;
+      wrap.appendChild(result);
+      play("pop");
+      after(1400, () => {
+        result.remove();
+        round++;
+        renderHud();
+        startRound();
+      });
+    }
   }
 
   function startRound(): void {
@@ -208,18 +293,35 @@ export function mount(api: GameApi): { destroy: () => void } {
     tick();
   }
 
-  q<HTMLButtonElement>(".tug-mode-solo").addEventListener("pointerdown", (e) => {
+  function startMatch(): void {
+    redWins = blueWins = 0;
+    round = 1;
+    matchOver = false;
+    hud.style.display = "";
+    renderHud();
+    menu.style.display = "none";
+    scheduleStar();
+    startRound();
+  }
+
+  q<HTMLButtonElement>(".tug-mode-easy").addEventListener("pointerdown", (e) => {
     e.preventDefault();
     solo = true;
-    blueLabel.textContent = "蓝队是小电脑";
-    menu.style.display = "none";
-    startRound();
+    difficulty = "easy";
+    blueLabel.textContent = "蓝队是小电脑(简单)";
+    startMatch();
+  });
+  q<HTMLButtonElement>(".tug-mode-normal").addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    solo = true;
+    difficulty = "normal";
+    blueLabel.textContent = "蓝队是小电脑(普通)";
+    startMatch();
   });
   q<HTMLButtonElement>(".tug-mode-duo").addEventListener("pointerdown", (e) => {
     e.preventDefault();
     solo = false;
-    menu.style.display = "none";
-    startRound();
+    startMatch();
   });
 
   btnRed.addEventListener("pointerdown", (e) => {
@@ -240,7 +342,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   return {
     destroy() {
       alive = false;
+      matchOver = true;
       clearTimeout(aiTimer);
+      clearTimeout(starTimer);
       timers.forEach((id) => {
         clearTimeout(id);
         clearInterval(id);

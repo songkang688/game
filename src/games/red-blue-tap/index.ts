@@ -1,7 +1,8 @@
 /**
- * 红蓝点点 red-blue-tap
- * 红蓝气球从天上飘下来,只点指定颜色:点对 +1,点错 -1。
- * 30 秒倒计时结束后按得分结算星星。
+ * 红蓝点点 red-blue-tap —— 红蓝运动会第二项
+ * 和小电脑比赛点气球,三局两胜(BO3)!
+ * 每回合 20 秒,只点目标颜色:点对 +1,点错 -1。
+ * 小电脑有简单/普通两档,回合结束比分高的拿下一局。
  */
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -21,18 +22,19 @@ export const meta = {
   emoji: "🎈",
   category: "party" as const,
   color: "#4dabf7",
-  blurb: "红蓝气球飘下来,只点对的颜色!眼明手快得高分!",
+  blurb: "红蓝运动会·点点!和小电脑三局两胜比手速!",
 };
 
-const ROUND_MS = 30_000;
+const ROUND_MS = 20_000;
+const TOTAL_ROUNDS = 3;
 
 const STYLE = `
 .rbt-wrap{position:relative;width:100%;height:100%;min-height:480px;overflow:hidden;
   background:linear-gradient(#c5f0ff,#e8f9ff);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
   user-select:none;-webkit-user-select:none;touch-action:manipulation;}
 .rbt-hud{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;
-  gap:8px;padding:10px 14px;pointer-events:none;}
-.rbt-pill{background:#fffd;border-radius:999px;padding:8px 16px;font-size:17px;font-weight:900;
+  gap:6px;padding:10px 12px;pointer-events:none;flex-wrap:wrap;}
+.rbt-pill{background:#fffd;border-radius:999px;padding:7px 13px;font-size:15px;font-weight:900;
   color:#1d5b80;box-shadow:0 3px 8px #0002;}
 .rbt-target{margin-left:auto;}
 .rbt-field{position:absolute;inset:0;overflow:hidden;}
@@ -51,24 +53,34 @@ const STYLE = `
 .rbt-float{position:absolute;z-index:9;font-size:24px;font-weight:900;pointer-events:none;
   animation:rbtFloat .7s ease forwards;}
 @keyframes rbtFloat{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-46px)}}
-.rbt-cover{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;gap:14px;
+.rbt-cover{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;gap:13px;
   align-items:center;justify-content:center;background:#e8f9ffee;text-align:center;padding:20px;}
-.rbt-cover-title{font-size:30px;font-weight:900;color:#1d5b80;}
-.rbt-cover-sub{font-size:19px;font-weight:800;color:#4a7a95;line-height:1.6;}
-.rbt-demo{font-size:52px;}
-.rbt-start{border:none;border-radius:24px;padding:16px 48px;font-size:22px;font-weight:900;color:#fff;
-  background:#ff922b;cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;}
+.rbt-cover-title{font-size:28px;font-weight:900;color:#1d5b80;}
+.rbt-cover-sub{font-size:17px;font-weight:800;color:#4a7a95;line-height:1.6;}
+.rbt-demo{font-size:48px;}
+.rbt-start{border:none;border-radius:24px;padding:14px 40px;font-size:20px;font-weight:900;color:#fff;
+  cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;min-width:240px;}
 .rbt-start:active{transform:translateY(4px);box-shadow:0 2px 0 #0003;}
+.rbt-start-easy{background:#51cf66;}
+.rbt-start-normal{background:#ff922b;}
 .rbt-result-big{font-size:56px;}
 `;
+
+type Difficulty = "easy" | "normal";
 
 export function mount(api: GameApi): { destroy: () => void } {
   const { root, play, onWin, onLose } = api;
   let alive = true;
   let running = false;
+  let difficulty: Difficulty = "easy";
+  let round = 1;
+  let myWins = 0;
+  let aiWins = 0;
   let score = 0;
+  let aiScore = 0;
+  let aiCarry = 0;
   let timeLeft = ROUND_MS;
-  const target: "red" | "blue" = Math.random() < 0.5 ? "red" : "blue";
+  let target: "red" | "blue" = Math.random() < 0.5 ? "red" : "blue";
   let raf = 0;
   let lastTs = 0;
   let spawnCooldown = 0;
@@ -100,30 +112,39 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.innerHTML = `
     <style>${STYLE}</style>
     <div class="rbt-field"></div>
-    <div class="rbt-hud">
-      <div class="rbt-pill rbt-time">⏰ 30</div>
-      <div class="rbt-pill rbt-score">得分 0</div>
+    <div class="rbt-hud" style="display:none">
+      <div class="rbt-pill rbt-round">第 1 局</div>
+      <div class="rbt-pill rbt-time">⏰ 20</div>
+      <div class="rbt-pill rbt-score">我 0 : 0 🤖</div>
       <div class="rbt-pill rbt-target"></div>
     </div>
     <div class="rbt-cover">
-      <div class="rbt-cover-title">🎈 红蓝点点</div>
-      <div class="rbt-demo">${target === "red" ? "🔴" : "🔵"}</div>
-      <div class="rbt-cover-sub">这一局只点 <b>${targetName()}</b> 气球!<br>点对 +1 分,点错 -1 分哦</div>
-      <button class="rbt-start">开始!</button>
+      <div class="rbt-cover-title">🎈 红蓝点点 · 三局两胜</div>
+      <div class="rbt-demo">🎈🆚🤖</div>
+      <div class="rbt-cover-sub">每局 20 秒,只点目标颜色的气球!<br>点对 +1,点错 -1,比小电脑分高就赢一局</div>
+      <button class="rbt-start rbt-start-easy">🤖 小电脑 · 简单</button>
+      <button class="rbt-start rbt-start-normal">🤖 小电脑 · 普通</button>
     </div>`;
   root.appendChild(wrap);
 
   const q = <T extends Element>(sel: string): T => wrap.querySelector(sel) as T;
   const field = q<HTMLElement>(".rbt-field");
+  const hud = q<HTMLElement>(".rbt-hud");
+  const roundEl = q<HTMLElement>(".rbt-round");
   const timeEl = q<HTMLElement>(".rbt-time");
   const scoreEl = q<HTMLElement>(".rbt-score");
   const targetEl = q<HTMLElement>(".rbt-target");
   const cover = q<HTMLElement>(".rbt-cover");
-  targetEl.textContent = `只点${targetName()} ${target === "red" ? "🔴" : "🔵"}`;
+
+  function renderHud(): void {
+    roundEl.textContent = `第 ${round} 局(${myWins}胜${aiWins}负)`;
+    scoreEl.textContent = `我 ${score} : ${aiScore} 🤖`;
+    targetEl.textContent = `只点${targetName()} ${target === "red" ? "🔴" : "🔵"}`;
+  }
 
   function setScore(n: number): void {
     score = Math.max(0, n);
-    scoreEl.textContent = `得分 ${score}`;
+    renderHud();
   }
 
   function floatText(x: number, y: number, text: string, color: string): void {
@@ -185,10 +206,19 @@ export function mount(api: GameApi): { destroy: () => void } {
     timeLeft -= dt;
     timeEl.textContent = `⏰ ${Math.max(0, Math.ceil(timeLeft / 1000))}`;
 
+    // 小电脑得分:简单约 6 分/局,普通约 11 分/局
+    const rate = difficulty === "easy" ? 0.3 : 0.55;
+    aiCarry += (rate * dt) / 1000;
+    if (aiCarry >= 1) {
+      const gain = Math.floor(aiCarry);
+      aiCarry -= gain;
+      aiScore += gain;
+      renderHud();
+    }
+
     spawnCooldown -= dt;
     if (spawnCooldown <= 0) {
       spawn();
-      // 越到后面出球越快:750ms → 420ms
       spawnCooldown = Math.max(420, 750 - elapsed / 60) + Math.random() * 120;
     }
 
@@ -215,34 +245,91 @@ export function mount(api: GameApi): { destroy: () => void } {
     raf = requestAnimationFrame(tick);
   }
 
+  function clearField(): void {
+    balloons.forEach((b) => b.el.remove());
+    balloons.length = 0;
+  }
+
   function endRound(): void {
     running = false;
     cancelAnimationFrame(raf);
-    balloons.forEach((b) => b.el.remove());
-    balloons.length = 0;
+    clearField();
+
     const result = document.createElement("div");
     result.className = "rbt-cover";
-    const stars: 0 | 1 | 2 | 3 =
-      score >= 16 ? 3 : score >= 10 ? 2 : score >= 5 ? 1 : 0;
-    result.innerHTML = `
-      <div class="rbt-result-big">${stars > 0 ? "🎉" : "💪"}</div>
-      <div class="rbt-cover-title">得了 ${score} 分!</div>
-      <div class="rbt-cover-sub">${"⭐".repeat(stars) || "还差一点点"}</div>`;
-    wrap.appendChild(result);
-    after(1000, () => {
-      if (stars !== 0) onWin(stars, `${score} 分,${targetName()}小达人!`);
-      else onLose("再练一练,下次一定行!");
-    });
+    if (score > aiScore) myWins++;
+    else if (aiScore > score) aiWins++;
+
+    const matchOver = myWins >= 2 || aiWins >= 2 || round >= TOTAL_ROUNDS;
+    if (!matchOver) {
+      const title = score > aiScore ? "这一局你赢啦!" : score < aiScore ? "这局小电脑快了一步" : "平局!不分胜负";
+      result.innerHTML = `
+        <div class="rbt-result-big">${score > aiScore ? "🎉" : score < aiScore ? "🤖" : "🤝"}</div>
+        <div class="rbt-cover-title">${title}</div>
+        <div class="rbt-cover-sub">本局 ${score} : ${aiScore}<br>大比分 我 ${myWins} : ${aiWins} 🤖</div>
+        <button class="rbt-start rbt-start-normal">下一局!</button>`;
+      wrap.appendChild(result);
+      play(score > aiScore ? "win" : "oops");
+      (result.querySelector(".rbt-start") as HTMLButtonElement).addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        play("jump");
+        result.remove();
+        round++;
+        startRound();
+      });
+    } else {
+      const iWon = myWins > aiWins;
+      result.innerHTML = `
+        <div class="rbt-result-big">${iWon ? "🏆" : "💪"}</div>
+        <div class="rbt-cover-title">${iWon ? "你赢得点点比赛!" : "小电脑这次赢了"}</div>
+        <div class="rbt-cover-sub">大比分 我 ${myWins} : ${aiWins} 🤖</div>`;
+      wrap.appendChild(result);
+      play(iWon ? "win" : "oops");
+      after(1100, () => {
+        if (iWon) {
+          const stars: 1 | 2 | 3 = difficulty === "normal" ? 3 : aiWins === 0 ? 3 : 2;
+          onWin(stars, `${myWins}:${aiWins} 战胜小电脑，点点小冠军!`);
+        } else {
+          onLose(`${myWins}:${aiWins} 惜败，换个颜色再来挑战!`);
+        }
+      });
+    }
   }
 
-  q<HTMLButtonElement>(".rbt-start").addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (running) return;
-    play("jump");
-    cover.style.display = "none";
+  function startRound(): void {
+    score = 0;
+    aiScore = 0;
+    aiCarry = 0;
+    elapsed = 0;
+    timeLeft = ROUND_MS;
+    spawnCooldown = 0;
+    target = Math.random() < 0.5 ? "red" : "blue";
+    hud.style.display = "";
+    renderHud();
+    timeEl.textContent = "⏰ 20";
     running = true;
     lastTs = 0;
     raf = requestAnimationFrame(tick);
+  }
+
+  function pickMode(d: Difficulty): void {
+    difficulty = d;
+    myWins = aiWins = 0;
+    round = 1;
+    play("jump");
+    cover.style.display = "none";
+    startRound();
+  }
+
+  q<HTMLButtonElement>(".rbt-start-easy").addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (running) return;
+    pickMode("easy");
+  });
+  q<HTMLButtonElement>(".rbt-start-normal").addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (running) return;
+    pickMode("normal");
   });
 
   return {
