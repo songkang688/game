@@ -96,6 +96,29 @@ describe("level99 星级存档", () => {
     for (let i = 0; i < TOTAL_LEVELS; i++) saveStar("demo", i, 1, st);
     expect(furthestPlayable(loadStars("demo", st))).toBe(TOTAL_LEVELS - 1);
   });
+
+  it("默认存储探测完不残留 probe key", () => {
+    const map = new Map<string, string>();
+    const fake: StorageLike = {
+      getItem: (k) => map.get(k) ?? null,
+      setItem: (k, v) => {
+        map.set(k, v);
+      },
+      removeItem: (k) => {
+        map.delete(k);
+      }
+    };
+    const g = globalThis as { localStorage?: StorageLike };
+    const prev = g.localStorage;
+    g.localStorage = fake;
+    try {
+      loadStars("demo");
+      expect(map.has("yiduo-yixing.l99.probe")).toBe(false);
+    } finally {
+      if (prev === undefined) delete g.localStorage;
+      else g.localStorage = prev;
+    }
+  });
 });
 
 describe("level99 随机与评星工具", () => {
