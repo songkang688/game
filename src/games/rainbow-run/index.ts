@@ -504,7 +504,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function onPointerMove(e: PointerEvent): void {
     if (!swiping || swipeDone) return;
-    const dir = detectSwipe(e.clientX - swipeStartX, e.clientY - swipeStartY, 28);
+    // 触控修复:滑动阈值统一为 24px(原来滑动中 28 / 松手 24 不一致),
+    // 360px 窄屏一年级短滑约 30~40px,24px 阈值实测能稳定触发且不误触
+    const dir = detectSwipe(e.clientX - swipeStartX, e.clientY - swipeStartY, 24);
     if (dir) {
       swipeDone = true;
       doAction(dir);
@@ -1432,59 +1434,62 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.restore();
 
     // ---- HUD ----
-    const bw = Math.min(300, w - 240);
+    // 窄屏修复:HUD 拆成两行——第一行(左糖果星星/右爱心)与第二行(赛道进度+任务条)
+    // 不再挤在同一行,360 宽也互不压盖;任务/纪录文字 12→14px,对比色加深到 ≥4.5:1
+    const rowY = 40;
+    const bw = Math.min(340, w - 20);
     const bx = (w - bw) / 2;
     if (endless) {
-      // 无尽跑:显示距离与最好成绩
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      // 无尽跑:第二行显示距离与最好成绩
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
       ctx.beginPath();
-      ctx.roundRect(bx, 10, bw, 38, 12);
+      ctx.roundRect(bx, rowY, bw, 42, 12);
       ctx.fill();
       ctx.fillStyle = "#8a5ac9";
       ctx.font = "bold 17px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`🏃 ${Math.floor(dist)} 米`, w / 2, 22);
-      ctx.font = "12px sans-serif";
-      ctx.fillStyle = "#9a8ab2";
+      ctx.fillText(`🏃 ${Math.floor(dist)} 米`, w / 2, rowY + 12);
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#6a5a86";
       ctx.fillText(
         Math.floor(dist) > endlessBest && endlessBest > 0
           ? "🎉 新纪录保持中!"
           : `最远纪录 ${Math.max(endlessBest, 0)} 米`,
         w / 2,
-        39,
+        rowY + 30,
       );
     } else {
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       ctx.beginPath();
-      ctx.roundRect(bx, 10, bw, 14, 7);
+      ctx.roundRect(bx, rowY, bw, 10, 5);
       ctx.fill();
       ctx.fillStyle = "#b28ae8";
       ctx.beginPath();
-      ctx.roundRect(bx, 10, Math.max(14, (bw * Math.min(dist, def.len)) / def.len), 14, 7);
+      ctx.roundRect(bx, rowY, Math.max(10, (bw * Math.min(dist, def.len)) / def.len), 10, 5);
       ctx.fill();
 
       // 任务条
       const m: Mission = def.mission;
       const prog = missionProgress(m, stats);
       const done = missionDone(m, stats);
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
       ctx.beginPath();
-      ctx.roundRect(bx, 30, bw, 18, 9);
+      ctx.roundRect(bx, rowY + 14, bw, 24, 12);
       ctx.fill();
       ctx.fillStyle = done ? "#7ac97a" : "#ffd868";
       const mfrac = m.type === "noHit" ? (done ? 1 : stats.heartsLost === 0 ? 1 : 0) : prog / m.n;
       ctx.beginPath();
-      ctx.roundRect(bx, 30, Math.max(10, bw * Math.min(1, mfrac)), 18, 9);
+      ctx.roundRect(bx, rowY + 14, Math.max(12, bw * Math.min(1, mfrac)), 24, 12);
       ctx.fill();
-      ctx.fillStyle = "#5a5a6e";
-      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#4a4a5e";
+      ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(
         `🎯 ${missionLabel(m)}${m.type === "noHit" ? (stats.heartsLost === 0 ? " ✓保持中" : " ✗") : ` ${prog}/${m.n}`}`,
         w / 2,
-        39,
+        rowY + 26,
       );
     }
 
@@ -1494,19 +1499,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText(`🍬${stats.coins} ⭐${stats.stars}`, 76, 20);
     ctx.textAlign = "right";
     ctx.fillText("💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, MAX_HEARTS - hearts)), w - 10, 20);
-    // 道具倒计时
+    // 道具倒计时:移到任务条下方,不再和第二行进度条打架;13→14px
     let px2 = w - 10;
-    ctx.font = "13px sans-serif";
+    ctx.font = "14px sans-serif";
+    const ptY = rowY + 52;
     if (magnetTimer > 0) {
-      ctx.fillText(`🧲${Math.ceil(magnetTimer)}s`, px2, 44);
-      px2 -= 56;
+      ctx.fillText(`🧲${Math.ceil(magnetTimer)}s`, px2, ptY);
+      px2 -= 58;
     }
     if (jetTimer > 0) {
-      ctx.fillText(`🚀${Math.ceil(jetTimer)}s`, px2, 44);
-      px2 -= 56;
+      ctx.fillText(`🚀${Math.ceil(jetTimer)}s`, px2, ptY);
+      px2 -= 58;
     }
     if (boardTimer > 0) {
-      ctx.fillText(`🛹${Math.ceil(boardTimer)}s`, px2, 44);
+      ctx.fillText(`🛹${Math.ceil(boardTimer)}s`, px2, ptY);
     }
 
     btnBack = { x: 6, y: 6, w: 62, h: 28 };

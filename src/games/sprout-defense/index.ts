@@ -228,7 +228,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function cardRect(i: number): Rect {
-    const cw = Math.min(96, (w - 80) / tools.length);
+    // 窄屏(360px)修复:右侧预留 100px 给露珠/波次文字,卡片不再压到文字
+    const cw = Math.min(96, (w - 100) / tools.length);
     return { x: 6 + i * (cw + 4), y: 8, w: cw, h: TOOLBAR_H - 16 };
   }
 
@@ -1200,8 +1201,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
+  /** 本关有 BOSS 时,失败面板给一句针对性的短提示。 */
+  function bossFailHint(): string | null {
+    for (const wave of level().waves) {
+      for (const e of wave) {
+        if (!BUG_INFO[e.kind].boss) continue;
+        return e.kind === "queen"
+          ? "冰冰花冻住女王,星星芽集火!"
+          : "大虫王那条道多种果果墩顶住!";
+      }
+    }
+    return null;
+  }
+
   function drawRetryPanel(): void {
-    const { y } = panelBox(Math.min(440, w - 40), 210);
+    const hint = bossFailHint();
+    const { y } = panelBox(Math.min(440, w - 40), hint ? 240 : 210);
     ctx.fillStyle = "#b28ae8";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
@@ -1209,10 +1224,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText("虫虫溜进小屋啦……", w / 2, y + 46);
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText("没关系!就在这一关重新布阵", w / 2, y + 88);
+    ctx.fillText("没关系!就在这一关重新布阵", w / 2, y + 84);
+    let by = y + 130;
+    if (hint) {
+      // BOSS 失败给一句针对性提示,温柔不吓人
+      ctx.fillStyle = "#c47a2a";
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(`💡 ${hint}`, w / 2, y + 116, Math.min(400, w - 60));
+      by = y + 160;
+    }
     const bw2 = 132;
-    btnMap = { x: w / 2 - bw2 - 10, y: y + 130, w: bw2, h: 44 };
-    btnRetry = { x: w / 2 + 10, y: y + 130, w: bw2, h: 44 };
+    btnMap = { x: w / 2 - bw2 - 10, y: by, w: bw2, h: 44 };
+    btnRetry = { x: w / 2 + 10, y: by, w: bw2, h: 44 };
     drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
     drawButton(btnRetry, "再试一次", "#ffd868", "#7a5a1a");
   }
@@ -1444,26 +1467,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = afford ? 1 : 0.45;
+      // 窄屏修复:卡片改为"图标在上 + 价格在下",价格 11→14px 加粗;
+      // 植物名和说明挪到下方的"正在种什么"提示条,360 宽 5 张卡也不挤
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       if (tool === "shovel") {
-        drawShovelIcon(r.x + 18, r.y + r.h / 2, 14);
+        drawShovelIcon(r.x + r.w / 2, r.y + 14, 11);
         ctx.fillStyle = "#5a5a6e";
-        ctx.font = "bold 11px sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.fillText("铲子", r.x + 36, r.y + r.h / 2 - 8);
-        ctx.font = "9px sans-serif";
-        ctx.fillStyle = "#9a9aa8";
-        ctx.fillText("退半价", r.x + 36, r.y + r.h / 2 + 8);
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText("铲子", r.x + r.w / 2, r.y + r.h - 11);
       } else {
-        drawPlantIcon(r.x + 18, r.y + r.h / 2, 13, tool);
-        ctx.fillStyle = "#5a5a6e";
-        ctx.font = "bold 11px sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.fillText(`${PLANT_INFO[tool].name}💧${PLANT_INFO[tool].cost}`, r.x + 36, r.y + r.h / 2 - 8);
-        ctx.font = "9px sans-serif";
-        ctx.fillStyle = "#9a9aa8";
-        ctx.fillText(PLANT_INFO[tool].desc, r.x + 36, r.y + r.h / 2 + 8);
+        drawPlantIcon(r.x + r.w / 2, r.y + 14, 11, tool);
+        ctx.fillStyle = afford ? "#5a5a6e" : "#8a8a9a";
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText(`💧${PLANT_INFO[tool].cost}`, r.x + r.w / 2, r.y + r.h - 11);
       }
       ctx.globalAlpha = 1;
     }
@@ -1473,7 +1490,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textBaseline = "middle";
     ctx.fillText(`💧 ${dew}`, w - 8, TOOLBAR_H / 2 - 12);
     ctx.fillStyle = "#5a5a6e";
-    ctx.font = "11px sans-serif";
+    // 波次文字 11→14px,窄屏也够看清
+    ctx.font = "14px sans-serif";
     ctx.fillText(
       `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} 波${Math.max(1, currentWave + 1)}/${level().waves.length}`,
       w - 8,
@@ -1490,9 +1508,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
         selected === "shovel"
           ? "🪏 铲子:点植物退回一半露珠"
           : `正在种:${PLANT_INFO[selected].name} 💧${PLANT_INFO[selected].cost} · 点绿色 ➕ 种下`;
-      ctx.font = "bold 12px sans-serif";
+      // 提示条文字 12→14px:两段式(先点卡再点格子)的关键引导,要看得清
+      ctx.font = "bold 14px sans-serif";
       const tw = ctx.measureText(label).width;
-      const chip: Rect = { x: 74, y: TOOLBAR_H + 4, w: tw + 34, h: 28 };
+      const chip: Rect = { x: 74, y: TOOLBAR_H + 4, w: Math.min(w - 80, tw + 34), h: 28 };
       ctx.fillStyle = "rgba(255,255,255,0.88)";
       ctx.strokeStyle = "rgba(90,168,120,0.5)";
       ctx.lineWidth = 2;
@@ -1508,7 +1527,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#4a7a5a";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(label.replace("🪏 ", ""), chip.x + 28, chip.y + 15);
+      ctx.fillText(label.replace("🪏 ", ""), chip.x + 28, chip.y + 15, chip.w - 34);
     }
 
     // 波次横幅

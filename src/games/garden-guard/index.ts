@@ -1346,8 +1346,28 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
+  /** 本关有 BOSS 时,失败面板给一句针对性的短提示。 */
+  function bossFailHint(): string | null {
+    const def = LEVELS[levelIdx];
+    for (const wave of def.waves) {
+      for (const e of wave) {
+        const spec = MONSTER_INFO[e.kind];
+        if (!spec.boss) continue;
+        if (spec.heals) return `${spec.name}会给随从回血,先集火它本体!`;
+        if (spec.sneaks) return `${spec.name}会隐身,现身那几秒赶紧集火!`;
+        if (spec.summons) return `${spec.name}会叫小兵,花火塔一炸一片!`;
+        if (spec.splits) return `${spec.name}倒下会裂开,留塔看住路口!`;
+        if (spec.dashes) return `${spec.name}会冲刺,露珠塔能拖住它!`;
+        if (spec.enrages) return `${spec.name}半血会暴走,提前升级好塔!`;
+        return `${spec.name}皮很厚,提前把塔升一升级!`;
+      }
+    }
+    return null;
+  }
+
   function drawRetryPanel(): void {
-    const { y } = panelBox(Math.min(440, w - 40), 210);
+    const hint = bossFailHint();
+    const { y } = panelBox(Math.min(440, w - 40), hint ? 240 : 210);
     ctx.fillStyle = "#b28ae8";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
@@ -1355,10 +1375,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText("哎呀,花朵蔫了……", w / 2, y + 46);
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText("没关系!就在这一关再来一次", w / 2, y + 88);
+    ctx.fillText("没关系!就在这一关再来一次", w / 2, y + 84);
+    let by = y + 130;
+    if (hint) {
+      // BOSS 失败给一句针对性提示,温柔不吓人
+      ctx.fillStyle = "#c47a2a";
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(`💡 ${hint}`, w / 2, y + 116, Math.min(400, w - 60));
+      by = y + 160;
+    }
     const bw2 = 132;
-    btnMap = { x: w / 2 - bw2 - 10, y: y + 130, w: bw2, h: 44 };
-    btnRetry = { x: w / 2 + 10, y: y + 130, w: bw2, h: 44 };
+    btnMap = { x: w / 2 - bw2 - 10, y: by, w: bw2, h: 44 };
+    btnRetry = { x: w / 2 + 10, y: by, w: bw2, h: 44 };
     drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
     drawButton(btnRetry, "再试一次", "#ffd868", "#7a5a1a");
   }
@@ -1626,14 +1654,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "center";
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "15px sans-serif";
+    // 窄屏修复:360 宽中间只显示"章-关 · 波n/m",右侧只留爱心,
+    // 原"(99/99)+分数"三段长文字会和左边花瓣数、右边爱心互相压盖
+    const narrowHud = w < 480;
     ctx.fillText(
-      `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} (${levelIdx + 1}/${LEVELS.length}) · 波 ${waveIdx + 1}/${def.waves.length}`,
+      narrowHud
+        ? `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · 波${waveIdx + 1}/${def.waves.length}`
+        : `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} (${levelIdx + 1}/${LEVELS.length}) · 波 ${waveIdx + 1}/${def.waves.length}`,
       w / 2,
       HUD_H / 2,
     );
     ctx.textAlign = "right";
     ctx.fillText(
-      "💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, HEARTS_PER_LEVEL - hearts)) + `  分 ${score}`,
+      "💗".repeat(Math.max(0, hearts)) +
+        "🤍".repeat(Math.max(0, HEARTS_PER_LEVEL - hearts)) +
+        (narrowHud ? "" : `  分 ${score}`),
       w - 12,
       HUD_H / 2,
     );
@@ -1642,14 +1677,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#b28ae8";
       ctx.font = `bold ${20 + Math.min(combo, 8)}px sans-serif`;
       ctx.textAlign = "center";
-      ctx.fillText(`连击 ×${combo}`, w / 2, HUD_H + TOOLBAR_H + 22);
+      // 连击字样往下挪,避开工具栏下方的选中提示条
+      ctx.fillText(`连击 ×${combo}`, w / 2, HUD_H + TOOLBAR_H + 52);
     }
 
     // ---- 工具栏(只显示已解锁的塔) ----
     ctx.fillStyle = "rgba(255,255,255,0.82)";
     ctx.fillRect(0, HUD_H, w, TOOLBAR_H);
     cardRects.length = 0;
-    const cw = Math.min(136, (w - 24) / unlockedTowers.length);
+    // 窄屏修复:卡片改为"图标在上 + 价格在下",价格 12→14px 加粗;
+    // 塔名和说明挪到工具栏下方的选中提示条里,360 宽放 5 张卡也不挤
+    const cw = Math.min(96, (w - 24) / unlockedTowers.length);
     for (let i = 0; i < unlockedTowers.length; i++) {
       const kind = unlockedTowers[i];
       const rect: Rect = { x: 8 + i * (cw + 6), y: HUD_H + 6, w: cw, h: TOOLBAR_H - 12 };
@@ -1663,16 +1701,28 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = afford ? 1 : 0.45;
-      drawTowerIcon(kind, rect.x + 20, rect.y + rect.h / 2 + 2, 12);
-      ctx.fillStyle = "#5a5a6e";
-      ctx.font = "bold 12px sans-serif";
-      ctx.textAlign = "left";
+      drawTowerIcon(kind, rect.x + rect.w / 2, rect.y + 13, 10);
+      ctx.fillStyle = afford ? "#5a5a6e" : "#8a8a9a";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${TOWER_INFO[kind].name} ${TOWER_INFO[kind].cost}🌸`, rect.x + 38, rect.y + rect.h / 2 - 8);
-      ctx.font = "10px sans-serif";
-      ctx.fillStyle = "#9a9aa8";
-      ctx.fillText(TOWER_INFO[kind].desc, rect.x + 38, rect.y + rect.h / 2 + 9);
+      ctx.fillText(`${TOWER_INFO[kind].cost}🌸`, rect.x + rect.w / 2, rect.y + rect.h - 11);
       ctx.globalAlpha = 1;
+    }
+    // 两段式放塔提示:选中卡片后,工具栏下方一条 14px 说明,再点草地格就能种
+    if (selectedCard) {
+      const info = TOWER_INFO[selectedCard];
+      const tip = `${info.name} ${info.cost}🌸 · ${info.desc} · 点草地放置`;
+      ctx.font = "14px sans-serif";
+      const tipW = Math.min(w - 16, ctx.measureText(tip).width + 24);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.roundRect((w - tipW) / 2, HUD_H + TOOLBAR_H + 4, tipW, 26, 13);
+      ctx.fill();
+      ctx.fillStyle = "#5a5a6e";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(tip, w / 2, HUD_H + TOOLBAR_H + 17, tipW - 16);
     }
 
     // ---- 覆盖层 ----

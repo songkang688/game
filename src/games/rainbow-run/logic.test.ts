@@ -168,6 +168,43 @@ describe("rainbow-run 99 关九大世界", () => {
       for (const pat of pool) expect(patternIsSurvivable(pat)).toBe(true);
     }
   });
+
+  it("坏关修复回归:任务数不超过花样池供给的安全线", () => {
+    // 与 index.ts 保持一致:每 250 距离刷一行,640 高屏幕上最后 ~604 距离刷的行到不了玩家
+    const ROW_GAP = 250;
+    const TRAVEL = 604;
+    for (const l of LEVELS) {
+      if (l.mission.type === "noHit") continue;
+      const pool = patternsForKinds(l.obstacleKinds);
+      let coins = 0;
+      let stars = 0;
+      let obs = 0;
+      let rows = 0;
+      for (const pat of pool) {
+        for (const row of pat) {
+          coins += row.coins.length;
+          stars += row.stars.length;
+          obs += row.obstacles.length;
+          rows++;
+        }
+      }
+      const reach = (l.len - TRAVEL) / ROW_GAP;
+      const perRow =
+        l.mission.type === "coins" ? coins / rows : l.mission.type === "stars" ? stars / rows : obs / rows;
+      const supply = reach * perRow;
+      // 收集类(要跑对车道)至少 1.6 倍供给,躲避类(路过就算)至少 1.4 倍
+      const slack = l.mission.type === "dodge" ? 1.4 : 1.6;
+      expect(supply, `${l.name} 任务 ${l.mission.type} ${l.mission.n}`).toBeGreaterThanOrEqual(l.mission.n * slack);
+    }
+  });
+
+  it("坏关修复回归:关卡时长适合一年级(12~22 秒)", () => {
+    for (const l of LEVELS) {
+      const dur = l.len / l.speed;
+      expect(dur).toBeGreaterThanOrEqual(12);
+      expect(dur).toBeLessThanOrEqual(22);
+    }
+  });
 });
 
 describe("rainbow-run 花样与活路", () => {
