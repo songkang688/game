@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="yiduo-yixing">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe9f5"/>
+      <stop offset="1" stop-color="#e3f2ff"/>
+    </linearGradient>
+    <linearGradient id="petal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb3d4"/>
+      <stop offset="1" stop-color="#ff8fbe"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+
+  <g fill="#ffd166" opacity="0.85">
+    <path d="M92 84 l7 16 16 3 -12 12 3 17 -14 -8 -15 8 3 -17 -12 -12 16 -3 z"/>
+    <path d="M424 96 l6 13 13 2 -10 10 3 14 -12 -7 -12 7 3 -14 -10 -10 13 -2 z" opacity="0.7"/>
+    <path d="M416 396 l7 15 15 3 -11 11 3 16 -14 -8 -14 8 3 -16 -11 -11 15 -3 z" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(256 262)">
+    <g fill="url(#petal)">
+      <ellipse cx="0" cy="-118" rx="70" ry="102"/>
+      <ellipse cx="0" cy="-118" rx="70" ry="102" transform="rotate(72)"/>
+      <ellipse cx="0" cy="-118" rx="70" ry="102" transform="rotate(144)"/>
+      <ellipse cx="0" cy="-118" rx="70" ry="102" transform="rotate(216)"/>
+      <ellipse cx="0" cy="-118" rx="70" ry="102" transform="rotate(288)"/>
+    </g>
+
+    <circle r="96" fill="#fff6fb"/>
+    <path
+      d="M0,-84 L21,-29 L80,-26 L34,11 L49,68 L0,36 L-49,68 L-34,11 L-80,-26 L-21,-29 Z"
+      fill="#ffd166" stroke="#ffd166" stroke-width="26" stroke-linejoin="round"/>
+    <circle cx="-19" cy="-6" r="7" fill="#5b4a3f"/>
+    <circle cx="19" cy="-6" r="7" fill="#5b4a3f"/>
+    <path d="M-15 13 Q0 27 15 13" fill="none" stroke="#5b4a3f" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="-32" cy="7" r="8" fill="#ffb3c8" opacity="0.9"/>
+    <circle cx="32" cy="7" r="8" fill="#ffb3c8" opacity="0.9"/>
+  </g>
+</svg>

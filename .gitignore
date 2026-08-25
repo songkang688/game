@@ -1,0 +1,28 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+dev-dist/
+release/
+
+# Capacitor / Android 构建产物(工程本身可提交,构建输出不提交)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+android/capacitor-cordova-android-plugins/
+
+# 测试与缓存
+coverage/
+.vite/
+*.tsbuildinfo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
