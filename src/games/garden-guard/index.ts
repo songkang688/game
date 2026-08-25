@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 花园守卫:99 关九大主题章节塔防战役!先选主题再选关,每章专属配色、怪物阵容和 BOSS。
 // 通关解锁下一关,回放刷 3 星;失败只重试本关。
 import {
@@ -65,15 +68,6 @@ export interface GameAPI {
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
 }
-
-export const meta = {
-  id: "garden-guard",
-  title: "花园守卫",
-  emoji: "🌼",
-  category: "action" as const,
-  color: "#ffd6e7",
-  blurb: "99 关九大主题塔防战役!五种塔九章 BOSS,越守越上头!",
-};
 
 const HUD_H = 44;
 const TOOLBAR_H = 58;

@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, type BalloonLevel } from "./levels";
-
-export const meta = {
-  id: "balloon-pop",
-  title: "气球砰砰",
-  emoji: "🎈",
-  category: "casual" as const,
-  color: "#ff8fab",
-  blurb: "99 关六大天空！颜色指令、数字顺序、乌云捣乱、彩虹清屏！",
-};
 
 const H = 420;
 

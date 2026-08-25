@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 朵星擂台 —— 双人同屏抢分擂台赛：
 // 上半场星星、下半场朵朵，两边目标完全相同（同一份时间表），
 // 3 回合制 + 决胜回合，金币、炸弹、礼物道具（+3 / 冰冻对手 / 双倍星光）。
@@ -14,15 +17,6 @@ import {
   roundWinner,
   tapScore,
 } from "./logic";
-
-export const meta = {
-  id: "duo-arena",
-  title: "朵星擂台",
-  emoji: "🥊",
-  category: "party" as const,
-  color: "#FFE3D0",
-  blurb: "上下半场同时开抢！三回合点点大战，金币礼物加炸弹，先赢两回合称王！",
-};
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 

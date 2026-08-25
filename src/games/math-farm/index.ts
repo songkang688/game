@@ -1,15 +1,9 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi } from "../level99";
 import { runQuiz } from "../quiz99";
 import { buildQuestions, CHAPTERS, CHAPTER_THEMES } from "./levels";
-
-export const meta = {
-  id: "math-farm",
-  title: "算数小农场",
-  emoji: "🐮",
-  category: "edu" as const,
-  color: "#8ce99a",
-  blurb: "六大农场 99 关！数一数、加减法、凑十破十、连加连减，喂饱全部小动物！",
-};
 
 export function mount(api: GameApi): { destroy: () => void } {
   return mountLevelGame(api, {

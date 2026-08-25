@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { buildMelodies, CHAPTERS, LEVELS, type MusicLevel } from "./levels";
-
-export const meta = {
-  id: "music-stars",
-  title: "音乐星星",
-  emoji: "🌟",
-  category: "create" as const,
-  color: "#ffe066",
-  blurb: "六大音乐会 99 关！星星越加越多、回声森林凭记忆弹，还有小星星终曲！",
-};
 
 // 五声音阶 do re mi sol la，听起来怎么按都不难听
 const NOTES = [

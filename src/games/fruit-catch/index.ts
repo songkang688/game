@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, THEME_SETS, type CatchLevel } from "./levels";
-
-export const meta = {
-  id: "fruit-catch",
-  title: "接住小水果",
-  emoji: "🧺",
-  category: "casual" as const,
-  color: "#FFF4D6",
-  blurb: "99 关六种天气！乌鸦丢炸弹、大风吹水果、夜晚追萤火！",
-};
 
 const W = 360;
 const H = 460;

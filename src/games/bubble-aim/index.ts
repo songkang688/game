@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 泡泡瞄准手 —— 泡泡龙玩法 + 关卡战役：
 // 选关地图、进度存档、石泡/彩虹泡/黑洞/云挡板/下落新行五种机关。
 // 瞄准虚线和真实飞行用同一个 simulateShot，保证指哪打哪。
@@ -31,15 +34,6 @@ import {
   starsForShotsLeft,
 } from "./logic";
 import { LEVELS, MECH_INFO, THEMES, THEME_SIZES, levelMechanisms, themeOfLevel, themeStart } from "./levels";
-
-export const meta = {
-  id: "bubble-aim",
-  title: "泡泡瞄准手",
-  emoji: "🫧",
-  category: "casual" as const,
-  color: "#D9EFFF",
-  blurb: "99 关 6 大主题世界：石泡、彩虹、黑洞、云挡板、泡泡雨，拖一拖瞄准线全爆掉！",
-};
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 

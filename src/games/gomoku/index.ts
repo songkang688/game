@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 五子棋 —— 自由对战（15×15/9×9，人机三档 + 双人 + 禁手可选）
 // 与「棋谜战役」：16 个 9×9 残局，限定步数内连成五，带提示与进度存档。
 import {
@@ -14,15 +17,6 @@ import {
   setCell,
 } from "./ai";
 import { PUZZLES, THEMES, puzzleBoard, puzzlesOfTheme, themeStart } from "./puzzles";
-
-export const meta = {
-  id: "gomoku",
-  title: "五子棋",
-  emoji: "⚫",
-  category: "casual" as const,
-  color: "#F6E3C5",
-  blurb: "自由对战加 99 道残局棋谜、6 大主题，先连成五颗就是小棋王！",
-};
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 

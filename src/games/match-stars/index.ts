@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, type MatchLevel } from "./levels";
-
-export const meta = {
-  id: "match-stars",
-  title: "星星消消乐",
-  emoji: "⭐",
-  category: "casual" as const,
-  color: "#FFE3F1",
-  blurb: "99 关七大主题！冰块、藤蔓、彩虹星，一路消到流星圣殿！",
-};
 
 const SIZE = 8;
 

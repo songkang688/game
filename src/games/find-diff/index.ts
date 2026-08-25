@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { buildBoard, CHAPTERS, LEVELS, type DiffLevel } from "./levels";
-
-export const meta = {
-  id: "find-diff",
-  title: "找不同",
-  emoji: "🔍",
-  category: "edu" as const,
-  color: "#63e6be",
-  blurb: "六大主题 99 关！上下两幅图找不同，后面还有双胞胎图案和限时挑战！",
-};
 
 const THEME_BG = [
   "linear-gradient(#fff4e6,#ffe8cc)",

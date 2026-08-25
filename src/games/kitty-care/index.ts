@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, shuffled, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, type KittyLevel, type KittyTask } from "./levels";
-
-export const meta = {
-  id: "kitty-care",
-  title: "萌猫小屋",
-  emoji: "🐱",
-  category: "casual" as const,
-  color: "#f7a23b",
-  blurb: "99 关六大季节！喂饭、逗猫、洗澡、哄睡、打扮，把团团照顾好！",
-};
 
 const CAT_SVG = `
 <svg viewBox="0 0 220 210" class="kc-cat-svg" aria-label="圆滚滚的橘猫">

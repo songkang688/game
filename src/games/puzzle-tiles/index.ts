@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, THEME_TILES, type PuzzleLevel } from "./levels";
-
-export const meta = {
-  id: "puzzle-tiles",
-  title: "拼图乐园",
-  emoji: "🧩",
-  category: "casual" as const,
-  color: "#E5E9FF",
-  blurb: "99 关六大画册！3×3 到 4×4，还有看一眼就藏起来的记忆拼图！",
-};
 
 const CSS = `
 .pz-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EEF0FF, #FFF3F9); border-radius: 16px; padding: 12px; user-select: none; position: relative; }

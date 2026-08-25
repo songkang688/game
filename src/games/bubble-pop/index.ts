@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, type BubbleLevel } from "./levels";
-
-export const meta = {
-  id: "bubble-pop",
-  title: "泡泡噗噗",
-  emoji: "🫧",
-  category: "casual" as const,
-  color: "#DCF3FF",
-  blurb: "99 关六大主题！彩虹、闪电、冰冻泡泡轮番登场，全消更痛快！",
-};
 
 const COLS = 8;
 const RAINBOW = 99;

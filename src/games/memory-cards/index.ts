@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, shuffled, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, THEME_EMOJIS, type MemoryLevel } from "./levels";
-
-export const meta = {
-  id: "memory-cards",
-  title: "记忆翻翻乐",
-  emoji: "🃏",
-  category: "casual" as const,
-  color: "#E3F2FF",
-  blurb: "99 关六大主题！偷看、章鱼换牌、三连卡、限时赛，记忆小达人冲鸭！",
-};
 
 const BACKS = ["#FFD6E7", "#D6EBFF", "#DFF7DC", "#FFF0C9", "#EBDFFF", "#FFE4D6"];
 

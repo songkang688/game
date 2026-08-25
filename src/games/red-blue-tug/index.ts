@@ -1,15 +1,9 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { CHAPTERS, LEVELS, type TugLevel } from "./levels";
-
-export const meta = {
-  id: "red-blue-tug",
-  title: "红蓝拔河",
-  emoji: "🪢",
-  category: "party" as const,
-  color: "#ff6b6b",
-  blurb: "99 关六大赛场！抢加油星、看红绿灯、左右手打节奏，拔赢小电脑！",
-};
 
 const WIN_AT = 100;
 

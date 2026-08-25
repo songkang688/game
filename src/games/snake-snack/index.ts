@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, GRID, LEVELS, type SnakeLevel } from "./levels";
-
-export const meta = {
-  id: "snake-snack",
-  title: "贪吃毛毛虫",
-  emoji: "🐛",
-  category: "casual" as const,
-  color: "#E2F7DC",
-  blurb: "99 关六大花园！树篱石柱回字迷宫，追上星星果多拿星！",
-};
 
 const CELL = 26;
 const SIZE = GRID * CELL;

@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 朵星双人冲刺 —— 双人同屏竞技无尽跑：
 // 上下两条赛道（同种子同赛道，绝对公平），三车道 + 金币 + 障碍 + 加速带 + 跳跃，
 // 速度随距离上升。无尽对战比谁跑得远，金币赛先抢 30 枚金币。
@@ -17,15 +20,6 @@ import {
   speedAt,
   survives,
 } from "./logic";
-
-export const meta = {
-  id: "duo-rush",
-  title: "朵星双人冲刺",
-  emoji: "🏃",
-  category: "party" as const,
-  color: "#CDE9FF",
-  blurb: "朵朵星星同屏开跑！三条车道躲石头跳木栏，吃金币踩加速带，看谁跑得远！",
-};
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 

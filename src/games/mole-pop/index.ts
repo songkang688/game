@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, type MoleLevel } from "./levels";
-
-export const meta = {
-  id: "mole-pop",
-  title: "地鼠嘭嘭",
-  emoji: "🐹",
-  category: "casual" as const,
-  color: "#EBDFC8",
-  blurb: "99 关六大乐园！金地鼠、瞌睡鼠、闪电鼠，还要保护小兔子！",
-};
 
 type MoleKind = "normal" | "sleepy" | "gold" | "bunny";
 

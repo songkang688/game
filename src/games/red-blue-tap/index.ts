@@ -1,15 +1,9 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { CHAPTERS, LEVELS, type TapLevel } from "./levels";
-
-export const meta = {
-  id: "red-blue-tap",
-  title: "红蓝点点",
-  emoji: "🎈",
-  category: "party" as const,
-  color: "#4dabf7",
-  blurb: "99 关六大赛场！抢蓝点、躲陷阱、双子点点，和小电脑拼手速！",
-};
 
 /** 各主题的「该抢的点」与「陷阱点」外观 */
 const SKINS = [
