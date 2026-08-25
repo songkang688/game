@@ -1,9 +1,10 @@
-// 彩虹跑跑:20 关四大主题世界跑酷战役!每关一个小任务,
-// 坑洞、云朵怪新障碍,喷气鞋/磁铁/滑板道具,还能花星星复活一次!
+// 彩虹跑跑:99 关九大主题世界跑酷战役!先选世界再选关,每关一个小任务,
+// 滚滚球、电光门等七种障碍,喷气鞋/磁铁/滑板道具,还能花星星复活一次!
 import {
   BOARD_SECONDS,
   JET_SECONDS,
   LEVELS,
+  LEVELS_PER_THEME,
   MAGNET_SECONDS,
   MAX_HEARTS,
   Mission,
@@ -13,11 +14,14 @@ import {
   PowerKind,
   PROGRESS_KEY,
   REVIVE_COST,
+  ROLLER_SPEED_MULT,
   RunStats,
+  THEME_ORDER,
   THEME_STYLE,
   clampLane,
   detectSwipe,
   isLevelUnlocked,
+  isThemeUnlocked,
   missionDone,
   missionLabel,
   missionProgress,
@@ -25,8 +29,11 @@ import {
   patternsForKinds,
   serializeProgress,
   starsForLevel,
+  themeCleared,
+  themeStars,
   totalStars,
   wouldHit,
+  zapperActive,
 } from "./logic";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -46,10 +53,10 @@ export const meta = {
   emoji: "🌈",
   category: "action" as const,
   color: "#e5d4ff",
-  blurb: "20 关四大世界跑酷!任务挑战、喷气鞋滑板、星星复活!",
+  blurb: "99 关九大世界跑酷!任务挑战、喷气鞋滑板、星星复活!",
 };
 
-type Phase = "map" | "intro" | "run" | "clear" | "retry";
+type Phase = "themes" | "map" | "intro" | "run" | "clear" | "retry";
 
 interface Obstacle {
   baseLane: number;
@@ -143,7 +150,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   // ---- 局状态 ----
   let levelIdx = 0;
-  let phase: Phase = "map";
+  let chapterIdx = 0;
+  let phase: Phase = "themes";
   let lane = 1;
   let laneFloat = 1;
   let action: PlayerAction = "run";
@@ -179,6 +187,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let powerTimer = 8;
 
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
+  const themeCards: Array<{ idx: number; rect: Rect }> = [];
   let btnNext: Rect | null = null;
   let btnMap: Rect | null = null;
   let btnRetry: Rect | null = null;
@@ -234,6 +243,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function loadLevel(idx: number): void {
     levelIdx = idx;
+    chapterIdx = Math.floor(idx / LEVELS_PER_THEME);
     patternPool = patternsForKinds(LEVELS[idx].obstacleKinds);
     resetLevel();
     phase = "intro";
@@ -276,7 +286,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     api.play("win");
     if (levelIdx >= LEVELS.length - 1 && !finaleFired) {
       finaleFired = true;
-      api.onWin(earnedStars, `20 关跑酷战役全部通关!总星 ${totalStars(progress)}/60`);
+      api.onWin(
+        earnedStars,
+        `99 关九大世界跑酷全部通关!总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
+      );
     } else if (gained > 0) {
       api.addStars(gained);
     }
@@ -320,7 +333,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    if (phase === "themes") {
+      for (const c of themeCards) {
+        if (inRect(x, y, c.rect)) {
+          if (isThemeUnlocked(progress, c.idx)) {
+            api.play("tap");
+            chapterIdx = c.idx;
+            phase = "map";
+          } else {
+            api.play("oops");
+          }
+          return;
+        }
+      }
+      return;
+    }
     if (phase === "map") {
+      if (inRect(x, y, btnBack)) {
+        api.play("tap");
+        phase = "themes";
+        return;
+      }
       for (const n of mapNodes) {
         if (Math.hypot(x - n.x, y - n.y) <= n.r + 6) {
           if (isLevelUnlocked(progress, n.idx)) {
@@ -509,7 +542,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const py = playerY();
     for (let i = obstacles.length - 1; i >= 0; i--) {
       const o = obstacles[i];
-      o.y += speed * dt;
+      // 滚滚球比路面滚得快
+      o.y += speed * dt * (o.kind === "roller" ? ROLLER_SPEED_MULT : 1);
       if (o.kind === "cloudy") o.phase += dt * 1.6;
       if (o.y > h + 60) {
         obstacles.splice(i, 1);
@@ -522,6 +556,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
         jetTimer <= 0 &&
         obstacleLane(o) === lane &&
         Math.abs(o.y - py) < HIT_WINDOW &&
+        // 电光门只有通电(亮)的时候才伤人
+        (o.kind !== "zapper" || zapperActive(time, o.phase)) &&
         wouldHit(o.kind, action)
       ) {
         obstacles.splice(i, 1);
@@ -639,6 +675,51 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.beginPath();
       ctx.ellipse(x, o.y, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (o.kind === "roller") {
+      // 滚滚球:带旋转纹路的大圆球
+      const rr = laneW * 0.27;
+      const spin = o.y * 0.04;
+      ctx.fillStyle = "#e8a05a";
+      ctx.beginPath();
+      ctx.arc(x, o.y, rr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.65)";
+      ctx.lineWidth = 3.5;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(x, o.y, rr * 0.65, spin + (i * Math.PI * 2) / 3, spin + (i * Math.PI * 2) / 3 + 1.1);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(120,70,30,0.4)";
+      ctx.beginPath();
+      ctx.ellipse(x, o.y + rr + 5, rr * 0.9, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (o.kind === "zapper") {
+      // 电光门:两根柱子,通电时中间闪电
+      const active = zapperActive(time, o.phase);
+      const half = laneW * 0.36;
+      ctx.fillStyle = active ? "#ffd868" : "#9a9ab8";
+      ctx.beginPath();
+      ctx.roundRect(x - half - 5, o.y - 26, 10, 42, 4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(x + half - 5, o.y - 26, 10, 42, 4);
+      ctx.fill();
+      if (active) {
+        ctx.strokeStyle = `rgba(255,238,120,${0.75 + Math.sin(time * 20) * 0.25})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x - half + 5, o.y - 6);
+        for (let i = 1; i <= 4; i++) {
+          const zx = x - half + 5 + ((half * 2 - 10) * i) / 4;
+          ctx.lineTo(zx, o.y - 6 + (i % 2 === 0 ? 6 : -8));
+        }
+        ctx.stroke();
+        ctx.font = "13px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("⚡", x, o.y - 34);
+      }
     } else {
       // 云朵怪:飘来飘去的软云
       ctx.fillStyle = "rgba(255,255,255,0.95)";
@@ -761,7 +842,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
   }
 
-  function drawMap(): void {
+  function drawThemes(): void {
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, "#dff1ff");
     grad.addColorStop(0.4, "#ffe3ee");
@@ -773,26 +854,97 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌈 彩虹跑跑 · 战役地图", w / 2, 30);
-    ctx.font = "15px sans-serif";
+    ctx.fillText("🌈 彩虹跑跑 · 九大世界", w / 2, 26);
+    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#6a5a7e";
-    ctx.fillText(`⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 每关都有小任务,做完才有 3 星!`, w / 2, 58);
+    ctx.fillText(
+      `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选世界,再选关卡`,
+      w / 2,
+      52,
+    );
+
+    themeCards.length = 0;
+    const cols = w > h * 1.15 ? 3 : 2;
+    const rows = Math.ceil(THEME_ORDER.length / cols);
+    const pad = 10;
+    const x0 = Math.max(10, w * 0.06);
+    const y0 = 70;
+    const cw = (w - x0 * 2 - pad * (cols - 1)) / cols;
+    const ch = Math.min(96, (h - y0 - 16 - pad * (rows - 1)) / rows);
+    for (let i = 0; i < THEME_ORDER.length; i++) {
+      const st = THEME_STYLE[THEME_ORDER[i]];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
+      themeCards.push({ idx: i, rect });
+      const unlocked = isThemeUnlocked(progress, i);
+      const cleared = themeCleared(progress, i);
+      ctx.fillStyle = unlocked ? st.lanes[1] : "#e8e8ee";
+      ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
+      ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
+      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
+      ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
+      ctx.fillText(unlocked ? st.blurb : "通关上一个世界解锁", rect.x + 10, rect.y + ch * 0.6);
+      ctx.fillText(
+        unlocked
+          ? `${cleared}/${LEVELS_PER_THEME} 关 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3}`
+          : "",
+        rect.x + 10,
+        rect.y + ch * 0.82,
+      );
+    }
+  }
+
+  function drawMap(): void {
+    const st = THEME_STYLE[THEME_ORDER[chapterIdx]];
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, st.skyTop);
+    grad.addColorStop(1, st.skyBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    btnBack = { x: 6, y: 7, w: 62, h: 30 };
+    drawButton(btnBack, "◀ 世界", "rgba(255,255,255,0.85)", "#5a5a6e");
+
+    ctx.fillStyle = st.accent;
+    ctx.font = "bold 22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    ctx.font = "14px sans-serif";
+    ctx.fillText(
+      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 通关解锁下一关,回放可刷 3 星`,
+      w / 2,
+      54,
+    );
 
     mapNodes.length = 0;
-    const cols: number = 5;
-    const rows = Math.ceil(LEVELS.length / cols);
-    const mx0 = w * 0.1;
-    const mx1 = w * 0.9;
-    const my0 = 92;
-    const my1 = h - 30;
-    const nr = Math.max(16, Math.min(26, (mx1 - mx0) / cols / 2.6, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < LEVELS.length; i++) {
+    const base = chapterIdx * LEVELS_PER_THEME;
+    const cols = 4;
+    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const mx0 = w * 0.12;
+    const mx1 = w * 0.88;
+    const my0 = 96;
+    const my1 = h - 40;
+    const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < LEVELS_PER_THEME; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + ((mx1 - mx0) * (cols === 1 ? 0.5 : col / (cols - 1)));
+      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
       const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
-      mapNodes.push({ idx: i, x, y, r: nr });
+      mapNodes.push({ idx: base + i, x, y, r: nr });
     }
     ctx.strokeStyle = "rgba(255,255,255,0.65)";
     ctx.lineWidth = 5;
@@ -807,12 +959,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.setLineDash([]);
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
-      const st = THEME_STYLE[def.world];
       const unlocked = isLevelUnlocked(progress, n.idx);
       const got = progress[n.idx] ?? 0;
-      const isFinal = n.idx === LEVELS.length - 1;
+      const isFinal = (n.idx - base) === LEVELS_PER_THEME - 1;
       const r = isFinal ? n.r * 1.25 : n.r;
-      ctx.fillStyle = unlocked ? (got > 0 ? st.lanes[0] : "#ffffff") : "#e4e4ea";
+      ctx.fillStyle = unlocked ? (got > 0 ? st.lanes[0] : "#ffffff") : "rgba(230,230,236,0.92)";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -827,10 +978,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       } else {
         ctx.fillStyle = st.accent;
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
-        ctx.fillText(String(n.idx + 1), n.x, n.y);
+        ctx.fillText(String(n.idx - base + 1), n.x, n.y);
         if (isFinal) {
           ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
           ctx.fillText("🏁", n.x, n.y - r * 0.95);
+        } else if (def.gen) {
+          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
+          ctx.fillText("⏱", n.x, n.y - r * 0.95);
         }
         ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
         let starTxt = "";
@@ -909,7 +1063,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`第 ${levelIdx + 1} 关 · ${def.name}`, w / 2, y + 42);
+    ctx.fillText(
+      `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 第${(levelIdx % LEVELS_PER_THEME) + 1}关 · ${def.name}`,
+      w / 2,
+      y + 42,
+    );
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
     ctx.fillText(def.hint, w / 2, y + 84);
@@ -922,6 +1080,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function draw(): void {
+    if (phase === "themes") {
+      drawThemes();
+      return;
+    }
     if (phase === "map") {
       drawMap();
       return;
@@ -1010,6 +1172,66 @@ export function mount(api: GameAPI): { destroy: () => void } {
           ctx.beginPath();
           ctx.arc(x, y - 6, 5, 0.3, Math.PI * 1.4);
           ctx.stroke();
+        } else if (def.world === "forest") {
+          // 小杉树
+          ctx.fillStyle = theme.deco;
+          ctx.fillRect(x - 3, y + 4, 6, 10);
+          ctx.fillStyle = "#4a8a4a";
+          ctx.beginPath();
+          ctx.moveTo(x - 12, y + 6);
+          ctx.lineTo(x, y - 16);
+          ctx.lineTo(x + 12, y + 6);
+          ctx.closePath();
+          ctx.fill();
+        } else if (def.world === "beach") {
+          // 小贝壳
+          ctx.fillStyle = theme.deco;
+          ctx.beginPath();
+          ctx.arc(x, y, 9, Math.PI, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 2;
+          for (let i = -1; i <= 1; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + i * 5, y - 8);
+            ctx.stroke();
+          }
+        } else if (def.world === "desert") {
+          // 小仙人掌
+          ctx.fillStyle = theme.deco;
+          ctx.beginPath();
+          ctx.roundRect(x - 4, y - 14, 8, 26, 4);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.roundRect(x - 13, y - 6, 8, 5, 3);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.roundRect(x + 5, y - 2, 8, 5, 3);
+          ctx.fill();
+        } else if (def.world === "snow") {
+          // 小雪花
+          ctx.strokeStyle = theme.deco;
+          ctx.lineWidth = 2.5;
+          for (let i = 0; i < 3; i++) {
+            const a = (Math.PI * i) / 3;
+            ctx.beginPath();
+            ctx.moveTo(x - Math.cos(a) * 9, y - Math.sin(a) * 9);
+            ctx.lineTo(x + Math.cos(a) * 9, y + Math.sin(a) * 9);
+            ctx.stroke();
+          }
+        } else if (def.world === "lava") {
+          // 冒火星的小石头
+          ctx.fillStyle = "#5a3a35";
+          ctx.beginPath();
+          ctx.arc(x, y + 4, 8, Math.PI, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = theme.deco;
+          ctx.beginPath();
+          ctx.arc(x, y - 5 + Math.sin(time * 4 + x) * 3, 3, 0, Math.PI * 2);
+          ctx.fill();
         } else {
           drawStar(x, y, 8, "#ffe387");
         }
