@@ -1,20 +1,5 @@
-/**
- * 红蓝赛跑 red-blue-race
- * 上下两条跑道:红方小仓鼠 vs 蓝方小企鹅。
- * 点自己那边的大按钮就往前冲一步,先碰到 🏁 的赢。
- * 单人模式里蓝方是节奏 AI。
- */
-
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (n: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
+import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, LEVELS, TRACK_LEN, type Obstacle, type RaceLevel } from "./levels";
 
 export const meta = {
   id: "red-blue-race",
@@ -22,251 +7,247 @@ export const meta = {
   emoji: "🏁",
   category: "party" as const,
   color: "#51cf66",
-  blurb: "点点点往前冲!红方蓝方谁先跑到终点小红旗?",
+  blurb: "99 关六大赛道！水坑要跳、栏架要跨、上坡要拼，冲线夺冠！",
 };
 
-const GOAL = 100;
-const STEP = 2.4;
+const OB_EMOJI: Record<Obstacle["type"], string> = {
+  puddle: "💧",
+  hurdle: "🚧",
+  hill: "⛰️",
+  star: "⭐",
+};
 
-const STYLE = `
-.race-wrap{position:relative;width:100%;height:100%;min-height:480px;overflow:hidden;
-  background:linear-gradient(#d3f9d8,#fff9db);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
-  user-select:none;-webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;}
-.race-menu{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;gap:18px;
-  align-items:center;justify-content:center;background:linear-gradient(#d3f9d8,#fff9db);}
-.race-menu-title{font-size:30px;font-weight:900;color:#2b6a2f;}
-.race-menu-sub{font-size:16px;font-weight:700;color:#5a8a5e;}
-.race-mode{border:none;border-radius:24px;padding:18px 40px;font-size:22px;font-weight:900;color:#fff;
-  cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;min-width:240px;}
-.race-mode:active{transform:translateY(4px);box-shadow:0 2px 0 #0003;}
-.race-mode-solo{background:#ff6b6b;}
-.race-mode-duo{background:#845ef7;}
-.race-track-area{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;
-  padding:16px 12px;position:relative;}
-.race-track{position:relative;height:74px;border-radius:18px;background:#fff9;
-  box-shadow:inset 0 2px 8px #0002;overflow:visible;}
-.race-track::before{content:"";position:absolute;left:4%;right:10%;top:50%;height:4px;
-  background:repeating-linear-gradient(90deg,#bbb 0 16px,transparent 16px 32px);}
-.race-flag{position:absolute;right:2%;top:50%;transform:translateY(-58%);font-size:40px;}
-.race-runner{position:absolute;left:2%;top:50%;transform:translate(0,-50%);font-size:46px;
-  transition:left .1s linear;filter:drop-shadow(0 3px 2px #0003);will-change:left;}
-.race-runner.race-hop{animation:raceHop .18s ease;}
-@keyframes raceHop{0%,100%{margin-top:0}50%{margin-top:-14px}}
-.race-runner .race-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);
-  font-size:14px;font-weight:900;border-radius:999px;padding:1px 8px;color:#fff;}
-.race-badge-red{background:#fa5252;}
-.race-badge-blue{background:#339af0;}
-.race-count{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
-  font-size:110px;font-weight:900;color:#ff922b;text-shadow:0 5px 0 #fff;pointer-events:none;}
-.race-btns{display:flex;height:40%;min-height:160px;}
-.race-btn{flex:1;border:none;font-size:24px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;touch-action:manipulation;display:flex;flex-direction:column;gap:6px;
-  align-items:center;justify-content:center;transition:filter .05s;}
-.race-btn:active{filter:brightness(1.2);}
-.race-btn:disabled{opacity:.85;}
-.race-btn small{font-size:14px;font-weight:700;opacity:.9;}
-.race-btn .race-big{font-size:42px;}
-.race-btn-red{background:linear-gradient(#ff8787,#fa5252);border-radius:0 28px 0 0;}
-.race-btn-blue{background:linear-gradient(#74c0fc,#339af0);border-radius:28px 0 0 0;}
-.race-result{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;gap:12px;
-  align-items:center;justify-content:center;background:#ffffffd9;animation:raceFade .3s ease;}
-@keyframes raceFade{from{opacity:0}to{opacity:1}}
-.race-result-big{font-size:60px;}
-.race-result-text{font-size:28px;font-weight:900;color:#2b6a2f;}
+const CSS = `
+.rbr-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F8E0, #FFF7E0); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
+.rbr-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; }
+.rbr-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #4E8A3E; box-shadow: 0 2px 6px rgba(110,170,90,.25); font-size: 14px; }
+.rbr-lane { position: relative; height: 56px; border-radius: 14px; margin-bottom: 8px; overflow: hidden; }
+.rbr-lane-red { background: linear-gradient(180deg, #FFE4E4, #FFD4D4); }
+.rbr-lane-blue { background: linear-gradient(180deg, #E0EEFF, #D0E4FF); }
+.rbr-finish { position: absolute; right: 4px; top: 0; bottom: 0; display: flex; align-items: center; font-size: 22px; }
+.rbr-runner { position: absolute; top: 50%; transform: translateY(-50%); font-size: 30px; transition: left .12s linear; }
+.rbr-runner.rbr-jump { animation: rbrJump .45s ease; }
+@keyframes rbrJump { 0%,100% { transform: translateY(-50%); } 50% { transform: translateY(-110%); } }
+.rbr-ob { position: absolute; top: 4px; font-size: 17px; opacity: .9; }
+.rbr-hill { position: absolute; top: 0; bottom: 0; background: rgba(160,130,80,.18); border-radius: 8px; }
+.rbr-ctrl { display: flex; justify-content: center; gap: 16px; margin-top: 6px; }
+.rbr-run { flex: 1; max-width: 200px; height: 68px; border: none; border-radius: 20px; font-size: 24px; font-weight: 900; color: #fff; background: linear-gradient(180deg, #FF8A8A, #E85555); cursor: pointer; box-shadow: 0 5px 0 #C23B3B; font-family: inherit; touch-action: manipulation; }
+.rbr-run:active { transform: translateY(3px); box-shadow: 0 2px 0 #C23B3B; }
+.rbr-jump-btn { width: 110px; height: 68px; border: none; border-radius: 20px; font-size: 20px; font-weight: 900; color: #fff; background: linear-gradient(180deg, #7FBFFF, #4D97E8); cursor: pointer; box-shadow: 0 5px 0 #3576BF; font-family: inherit; touch-action: manipulation; }
+.rbr-jump-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #3576BF; }
+.rbr-msg { text-align: center; min-height: 20px; color: #4E8A3E; font-weight: 700; margin-top: 8px; font-size: 14px; }
 `;
 
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, onWin, onLose } = api;
-  let alive = true;
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: RaceLevel = LEVELS[ctx.level];
+  let destroyed = false;
   let ended = false;
-  let running = false;
-  let solo = true;
-  let redPos = 0;
-  let bluePos = 0;
-  let redCheered = false;
-  let blueCheered = false;
-
-  const timers = new Set<number>();
-  const after = (ms: number, fn: () => void): number => {
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      if (alive) fn();
-    }, ms);
-    timers.add(id);
-    return id;
-  };
+  let raf = 0;
+  let lastTime = 0;
+  let me = 0;
+  let ai = 0;
+  let stunnedUntil = 0;
+  let jumping = false;
+  const clearedObs = new Set<Obstacle>();
+  const aiPaused = new Set<Obstacle>();
+  let aiPauseUntil = 0;
 
   const wrap = document.createElement("div");
-  wrap.className = "race-wrap";
+  wrap.className = "rbr-wrap";
   wrap.innerHTML = `
-    <style>${STYLE}</style>
-    <div class="race-track-area">
-      <div class="race-track">
-        <span class="race-flag">🏁</span>
-        <span class="race-runner race-runner-red">🐹<span class="race-badge race-badge-red">红</span></span>
-      </div>
-      <div class="race-track">
-        <span class="race-flag">🏁</span>
-        <span class="race-runner race-runner-blue">🐧<span class="race-badge race-badge-blue">蓝</span></span>
-      </div>
-      <div class="race-count" style="display:none"></div>
+    <style>${CSS}</style>
+    <div class="rbr-top">
+      <span class="rbr-badge">🔴 你的赛道</span>
+      <span class="rbr-badge rbr-ai">🔵 小电脑</span>
     </div>
-    <div class="race-btns">
-      <button class="race-btn race-btn-red" disabled>
-        <span class="race-big">🐹</span>红方 冲呀!<small>点点点加速</small>
-      </button>
-      <button class="race-btn race-btn-blue" disabled>
-        <span class="race-big">🐧</span>蓝方 冲呀!<small>点点点加速</small>
-      </button>
+    <div class="rbr-lane rbr-lane-red">
+      <div class="rbr-finish">🏁</div>
+      <div class="rbr-runner rbr-me" style="left:0%">🏃</div>
     </div>
-    <div class="race-menu">
-      <div class="race-menu-title">🏁 红蓝赛跑</div>
-      <div class="race-menu-sub">拼命点按钮,先到小红旗的赢!</div>
-      <button class="race-mode race-mode-solo">🐹 单人挑战(我是红方)</button>
-      <button class="race-mode race-mode-duo">🐹🆚🐧 双人对战</button>
-    </div>`;
-  root.appendChild(wrap);
+    <div class="rbr-lane rbr-lane-blue">
+      <div class="rbr-finish">🏁</div>
+      <div class="rbr-runner rbr-airun" style="left:0%">🤖</div>
+    </div>
+    <div class="rbr-ctrl">
+      <button class="rbr-run" type="button">跑！跑！跑！</button>
+      <button class="rbr-jump-btn" type="button">🦘 跳！</button>
+    </div>
+    <div class="rbr-msg">狂点「跑」，遇到 💧🚧 提前按「跳」！</div>
+  `;
+  stage.appendChild(wrap);
 
-  const q = <T extends Element>(sel: string): T => wrap.querySelector(sel) as T;
-  const menu = q<HTMLElement>(".race-menu");
-  const countEl = q<HTMLElement>(".race-count");
-  const redRunner = q<HTMLElement>(".race-runner-red");
-  const blueRunner = q<HTMLElement>(".race-runner-blue");
-  const btnRed = q<HTMLButtonElement>(".race-btn-red");
-  const btnBlue = q<HTMLButtonElement>(".race-btn-blue");
-  const blueLabel = q<HTMLElement>(".race-btn-blue small");
+  const redLane = wrap.querySelector(".rbr-lane-red") as HTMLElement;
+  const meEl = wrap.querySelector(".rbr-me") as HTMLElement;
+  const aiEl = wrap.querySelector(".rbr-airun") as HTMLElement;
+  const msgEl = wrap.querySelector(".rbr-msg") as HTMLElement;
+  const runBtn = wrap.querySelector(".rbr-run") as HTMLButtonElement;
+  const jumpBtn = wrap.querySelector(".rbr-jump-btn") as HTMLButtonElement;
+
+  // 画机关
+  for (const ob of cfg.obstacles) {
+    if (ob.type === "hill") {
+      const zone = document.createElement("div");
+      zone.className = "rbr-hill";
+      zone.style.left = `${ob.pos}%`;
+      zone.style.width = `${ob.len}%`;
+      redLane.appendChild(zone);
+    }
+    const mark = document.createElement("div");
+    mark.className = "rbr-ob";
+    mark.style.left = `${ob.pos}%`;
+    mark.textContent = OB_EMOJI[ob.type];
+    redLane.appendChild(mark);
+  }
+
+  function inZone(pos: number, ob: Obstacle): boolean {
+    return pos >= ob.pos && pos <= ob.pos + ob.len;
+  }
 
   function render(): void {
-    // 跑道从 2% 跑到 84%
-    redRunner.style.left = `${2 + (redPos / GOAL) * 82}%`;
-    blueRunner.style.left = `${2 + (bluePos / GOAL) * 82}%`;
+    meEl.style.left = `${Math.min(92, me * 0.92)}%`;
+    aiEl.style.left = `${Math.min(92, ai * 0.92)}%`;
   }
 
-  function hop(runner: HTMLElement): void {
-    runner.classList.remove("race-hop");
-    void runner.offsetWidth;
-    runner.classList.add("race-hop");
-  }
-
-  function advance(side: "red" | "blue", step: number): void {
-    if (!running || ended) return;
-    if (side === "red") {
-      redPos = Math.min(GOAL, redPos + step);
-      hop(redRunner);
-      if (!redCheered && redPos >= GOAL / 2) {
-        redCheered = true;
-        play("jump");
-      }
+  function finish(won: boolean): void {
+    if (ended) return;
+    ended = true;
+    cancelAnimationFrame(raf);
+    if (won) {
+      const got = ai <= 70 ? 3 : ai <= 88 ? 2 : 1;
+      setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, `你先冲线！小电脑才跑到 ${Math.round(ai)} 米！`); }, 350);
     } else {
-      bluePos = Math.min(GOAL, bluePos + step);
-      hop(blueRunner);
-      if (!blueCheered && bluePos >= GOAL / 2) {
-        blueCheered = true;
-        play("jump");
+      setTimeout(() => { if (!destroyed) ctx.lose("小电脑先到啦，手指再快一点、跳得再准一点！"); }, 350);
+    }
+  }
+
+  function onRun(): void {
+    if (ended) return;
+    const now = performance.now();
+    if (now < stunnedUntil) return;
+    let step = cfg.tapStep;
+    for (const ob of cfg.obstacles) {
+      if (ob.type === "hill" && inZone(me, ob)) step *= 0.5;
+    }
+    const before = me;
+    me = Math.min(TRACK_LEN, me + step);
+    // 撞机关检查
+    for (const ob of cfg.obstacles) {
+      if (clearedObs.has(ob)) continue;
+      if (ob.type === "star" && before < ob.pos && me >= ob.pos) {
+        clearedObs.add(ob);
+        me = Math.min(TRACK_LEN, me + 8);
+        ctx.sfx("coin");
+        msgEl.textContent = "⭐ 踩到星星，咻——冲刺！";
+      } else if ((ob.type === "puddle" || ob.type === "hurdle") && !jumping && before < ob.pos && me >= ob.pos) {
+        clearedObs.add(ob);
+        if (ob.type === "puddle") {
+          me = Math.max(0, ob.pos - 2);
+          stunnedUntil = performance.now() + 800;
+          ctx.sfx("oops");
+          msgEl.textContent = "💧 踩进水坑打滑啦！下次提前按「跳」！";
+        } else {
+          me = Math.max(0, ob.pos - 4);
+          stunnedUntil = performance.now() + 600;
+          ctx.sfx("oops");
+          msgEl.textContent = "🚧 撞上栏架弹回来啦！提前按「跳」！";
+        }
+      }
+    }
+    ctx.sfx("tap");
+    render();
+    if (me >= TRACK_LEN) finish(true);
+  }
+
+  function onJump(): void {
+    if (ended) return;
+    const now = performance.now();
+    if (now < stunnedUntil || jumping) return;
+    jumping = true;
+    meEl.classList.add("rbr-jump");
+    ctx.sfx("jump");
+    // 前方 8 米内有水坑/栏架就跃过去
+    const target = cfg.obstacles.find(
+      (ob) => (ob.type === "puddle" || ob.type === "hurdle") && !clearedObs.has(ob) && ob.pos >= me && ob.pos <= me + 8
+    );
+    if (target) {
+      clearedObs.add(target);
+      me = Math.min(TRACK_LEN, target.pos + target.len + 1);
+      msgEl.textContent = "跳得漂亮！";
+    } else {
+      me = Math.min(TRACK_LEN, me + 1.5);
+    }
+    render();
+    setTimeout(() => {
+      jumping = false;
+      meEl.classList.remove("rbr-jump");
+    }, 450);
+    if (me >= TRACK_LEN) finish(true);
+  }
+
+  function tick(now: number): void {
+    if (destroyed || ended) return;
+    const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
+    lastTime = now;
+    if (now >= aiPauseUntil) {
+      let speed = cfg.aiSpeed;
+      for (const ob of cfg.obstacles) {
+        if (ob.type === "hill" && inZone(ai, ob)) speed *= 0.7;
+      }
+      const before = ai;
+      ai = Math.min(TRACK_LEN, ai + speed * dt);
+      // 小电脑遇到水坑/栏架会停顿一下（它也会犯难）
+      for (const ob of cfg.obstacles) {
+        if ((ob.type === "puddle" || ob.type === "hurdle") && !aiPaused.has(ob) && before < ob.pos && ai >= ob.pos) {
+          aiPaused.add(ob);
+          aiPauseUntil = now + 550;
+        }
       }
     }
     render();
-    if (redPos >= GOAL) finish("red");
-    else if (bluePos >= GOAL) finish("blue");
+    if (ai >= TRACK_LEN) {
+      finish(false);
+      return;
+    }
+    raf = requestAnimationFrame(tick);
   }
 
-  function finish(winner: "red" | "blue"): void {
-    ended = true;
-    running = false;
-    btnRed.disabled = btnBlue.disabled = true;
-    const result = document.createElement("div");
-    result.className = "race-result";
-    const emoji = winner === "red" ? "🐹🏆" : "🐧🏆";
-    const name = winner === "red" ? "红方" : "蓝方";
-    result.innerHTML = `
-      <div class="race-result-big">${emoji}</div>
-      <div class="race-result-text">${name}冲线啦!</div>`;
-    wrap.appendChild(result);
-    after(900, () => {
-      if (solo) {
-        if (winner === "red") onWin(3, "红方第一名,跑得真快!");
-        else onLose("蓝方先到了一步,再比一次!");
-      } else {
-        onWin(2, `${name}赢了这场比赛!`);
-      }
-    });
-  }
-
-  let aiTimer = 0;
-  function scheduleAi(): void {
-    if (!alive || ended) return;
-    aiTimer = after(250 + Math.random() * 200, () => {
-      advance("blue", STEP * (0.85 + Math.random() * 0.3));
-      scheduleAi();
-    });
-  }
-
-  function startRound(): void {
-    redPos = bluePos = 0;
-    redCheered = blueCheered = false;
-    render();
-    countEl.style.display = "";
-    let n = 3;
-    const tick = (): void => {
-      if (n > 0) {
-        countEl.textContent = String(n);
-        play("pop");
-        n--;
-        after(700, tick);
-      } else {
-        countEl.textContent = "冲!";
-        play("jump");
-        after(500, () => {
-          countEl.style.display = "none";
-          running = true;
-          btnRed.disabled = false;
-          btnBlue.disabled = solo;
-          if (solo) scheduleAi();
-        });
-      }
-    };
-    tick();
-  }
-
-  q<HTMLButtonElement>(".race-mode-solo").addEventListener("pointerdown", (e) => {
+  runBtn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    solo = true;
-    blueLabel.textContent = "蓝方是小电脑";
-    menu.style.display = "none";
-    startRound();
+    onRun();
   });
-  q<HTMLButtonElement>(".race-mode-duo").addEventListener("pointerdown", (e) => {
+  jumpBtn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    solo = false;
-    menu.style.display = "none";
-    startRound();
+    onJump();
   });
-
-  btnRed.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (btnRed.disabled) return;
-    play("tap");
-    advance("red", STEP);
-  });
-  btnBlue.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (btnBlue.disabled) return;
-    play("tap");
-    advance("blue", STEP);
-  });
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "ArrowRight" || e.key === "d") { onRun(); e.preventDefault(); }
+    if (e.key === " " || e.key === "ArrowUp") { onJump(); e.preventDefault(); }
+  };
+  window.addEventListener("keydown", onKeyDown);
 
   render();
+  raf = requestAnimationFrame((t) => {
+    lastTime = t;
+    raf = requestAnimationFrame(tick);
+  });
 
   return {
     destroy() {
-      alive = false;
-      clearTimeout(aiTimer);
-      timers.forEach((id) => {
-        clearTimeout(id);
-        clearInterval(id);
-      });
-      timers.clear();
+      destroyed = true;
+      ended = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKeyDown);
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "赢得越多、甩开小电脑越远，星星越多！",
+    grandMessage: "99 场比赛全部夺冠，你就是赛跑总冠军！",
+  });
 }

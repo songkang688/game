@@ -1,19 +1,5 @@
-/**
- * 萌猫小屋 kitty-care
- * 一只圆滚滚的原创橘猫:摸头会眯眼喵喵叫、喂鱼干、逗毛线球、换装。
- * 心情条满格就通关。纯本地互动,无联网、无 UGC。
- */
-
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (n: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
+import { mountLevelGame, shuffled, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, LEVELS, type KittyLevel, type KittyTask } from "./levels";
 
 export const meta = {
   id: "kitty-care",
@@ -21,25 +7,21 @@ export const meta = {
   emoji: "🐱",
   category: "casual" as const,
   color: "#f7a23b",
-  blurb: "摸摸头、喂鱼干、逗毛线球,把圆滚滚的橘猫哄开心吧!",
+  blurb: "99 关六大季节！喂饭、逗猫、洗澡、哄睡、打扮，把团团照顾好！",
 };
 
 const CAT_SVG = `
 <svg viewBox="0 0 220 210" class="kc-cat-svg" aria-label="圆滚滚的橘猫">
-  <!-- 尾巴 -->
   <path class="kc-tail" d="M180 152 q36 -4 32 -40 q-2 -18 -20 -18"
     stroke="#f2a44a" stroke-width="15" fill="none" stroke-linecap="round"/>
   <path d="M204 122 q4 -10 -4 -20" stroke="#e08a2e" stroke-width="5"
     fill="none" stroke-linecap="round"/>
-  <!-- 身体 -->
   <ellipse cx="108" cy="148" rx="64" ry="48" fill="#f7b357"/>
   <path d="M52 132 q12 8 8 22" stroke="#e08a2e" stroke-width="6" fill="none" stroke-linecap="round"/>
   <path d="M166 132 q-12 8 -8 22" stroke="#e08a2e" stroke-width="6" fill="none" stroke-linecap="round"/>
   <ellipse cx="108" cy="160" rx="34" ry="26" fill="#fff3dd"/>
-  <!-- 小脚爪 -->
   <ellipse cx="84" cy="192" rx="15" ry="9" fill="#f9c477"/>
   <ellipse cx="132" cy="192" rx="15" ry="9" fill="#f9c477"/>
-  <!-- 头(整体可点) -->
   <g class="kc-head">
     <path d="M60 54 L72 14 L96 44 Z" fill="#f7b357"/>
     <path d="M68 47 L76 26 L88 41 Z" fill="#ffc9d4"/>
@@ -49,14 +31,12 @@ const CAT_SVG = `
     <path d="M98 26 q2 10 0 15" stroke="#e08a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
     <path d="M110 24 q2 11 0 17" stroke="#e08a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
     <path d="M122 26 q2 10 0 15" stroke="#e08a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
-    <!-- 睁开的眼睛 -->
     <g class="kc-eyes-open">
       <circle cx="88" cy="72" r="7.5" fill="#3d2b1f"/>
       <circle cx="90.6" cy="69.4" r="2.6" fill="#fff"/>
       <circle cx="132" cy="72" r="7.5" fill="#3d2b1f"/>
       <circle cx="134.6" cy="69.4" r="2.6" fill="#fff"/>
     </g>
-    <!-- 眯眯眼(开心) -->
     <g class="kc-eyes-happy" style="display:none">
       <path d="M79 73 q9 -9 18 0" stroke="#3d2b1f" stroke-width="4.5" fill="none" stroke-linecap="round"/>
       <path d="M123 73 q9 -9 18 0" stroke="#3d2b1f" stroke-width="4.5" fill="none" stroke-linecap="round"/>
@@ -68,12 +48,10 @@ const CAT_SVG = `
       stroke="#3d2b1f" stroke-width="2.6" fill="none" stroke-linecap="round"/>
     <ellipse class="kc-mouth-open" cx="110" cy="96" rx="7" ry="8"
       fill="#b3564f" style="display:none"/>
-    <!-- 胡须 -->
     <g stroke="#c98a3f" stroke-width="2.4" stroke-linecap="round" fill="none">
       <path d="M56 82 q-14 -3 -24 -8"/><path d="M57 92 q-14 1 -25 0"/>
       <path d="M164 82 q14 -3 24 -8"/><path d="M163 92 q14 1 25 0"/>
     </g>
-    <!-- 换装配饰 -->
     <g class="kc-acc kc-acc-bow" style="display:none">
       <path d="M132 18 l-14 9 l14 9 z" fill="#ff6b81"/>
       <path d="M160 18 l14 9 l-14 9 z" fill="#ff6b81"/>
@@ -89,279 +67,369 @@ const CAT_SVG = `
       <path d="M124 118 l16 10 l-16 10 z" fill="#4dabf7"/>
       <circle cx="110" cy="128" r="7" fill="#74c0fc"/>
     </g>
+    <g class="kc-acc kc-acc-scarf" style="display:none">
+      <path d="M72 114 q38 22 76 0 l-3 15 q-35 18 -70 0 z" fill="#69db7c"/>
+      <rect x="96" y="122" width="14" height="34" rx="6" fill="#51cf66"/>
+      <rect x="96" y="150" width="14" height="8" rx="3" fill="#40c057"/>
+    </g>
   </g>
 </svg>`;
 
-const STYLE = `
-.kc-wrap{position:relative;width:100%;height:100%;min-height:480px;overflow:hidden;
-  background:linear-gradient(#ffe9c7,#ffd9e8);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
-  user-select:none;-webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;}
-.kc-top{display:flex;align-items:center;gap:10px;padding:12px 16px;}
-.kc-title{font-size:20px;font-weight:900;color:#8a5a1e;}
-.kc-stars{margin-left:auto;font-size:16px;font-weight:800;color:#8a5a1e;
-  background:#fff8;border-radius:999px;padding:6px 14px;}
-.kc-moodbox{padding:0 16px;}
-.kc-moodlabel{font-size:14px;font-weight:800;color:#b06a1f;margin-bottom:4px;}
-.kc-moodbar{height:22px;border-radius:999px;background:#fff;box-shadow:inset 0 2px 6px #0002;overflow:hidden;}
-.kc-moodfill{height:100%;width:0%;border-radius:999px;
-  background:linear-gradient(90deg,#ffb3c0,#ff6b81);transition:width .35s ease;}
-.kc-stage{position:relative;flex:1;display:flex;align-items:center;justify-content:center;}
-.kc-cat{position:relative;width:min(70vw,320px);cursor:pointer;transition:transform .15s;}
-.kc-cat:active{transform:scale(.97);}
-.kc-cat-svg{width:100%;height:auto;display:block;}
-.kc-cat.kc-bounce{animation:kcBounce .6s ease;}
-.kc-cat.kc-wiggle{animation:kcWiggle .7s ease;}
-@keyframes kcBounce{0%{transform:scale(1)}30%{transform:scale(1.08,.92)}60%{transform:scale(.95,1.05)}100%{transform:scale(1)}}
-@keyframes kcWiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}}
-.kc-bubble{position:absolute;top:-6px;left:50%;transform:translateX(-50%);
-  background:#fff;border-radius:16px;padding:8px 16px;font-size:16px;font-weight:800;color:#b06a1f;
-  box-shadow:0 4px 10px #0002;opacity:0;transition:opacity .2s;white-space:nowrap;pointer-events:none;}
-.kc-bubble.kc-show{opacity:1;}
-.kc-heart{position:absolute;font-size:24px;pointer-events:none;animation:kcHeart 1s ease forwards;}
-@keyframes kcHeart{0%{opacity:1;transform:translateY(0) scale(.6)}100%{opacity:0;transform:translateY(-70px) scale(1.3)}}
-.kc-fish{position:absolute;font-size:34px;pointer-events:none;transition:all .55s cubic-bezier(.4,-0.2,.6,1.2);z-index:5;}
-.kc-ball{position:absolute;font-size:38px;pointer-events:none;z-index:5;animation:kcBall 1.1s ease forwards;}
-@keyframes kcBall{0%{transform:translate(0,0) rotate(0)}40%{transform:translate(-60px,-90px) rotate(-180deg)}
-  70%{transform:translate(-120px,-20px) rotate(-320deg)}100%{transform:translate(-190px,-60px) rotate(-540deg);opacity:0}}
-.kc-btns{display:flex;gap:10px;padding:14px 16px calc(18px + env(safe-area-inset-bottom));}
-.kc-btn{flex:1;border:none;border-radius:20px;padding:14px 6px;font-size:17px;font-weight:900;
-  color:#fff;cursor:pointer;box-shadow:0 5px 0 #0003;transition:transform .1s,box-shadow .1s;
-  font-family:inherit;touch-action:manipulation;}
-.kc-btn:active{transform:translateY(4px);box-shadow:0 1px 0 #0003;}
-.kc-btn:disabled{opacity:.55;}
-.kc-btn-fish{background:#4dabf7;}
-.kc-btn-ball{background:#9775fa;}
-.kc-btn-dress{background:#ff8787;}
-.kc-win{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:#fff9e6ee;z-index:20;gap:12px;animation:kcFade .4s ease;}
-@keyframes kcFade{from{opacity:0}to{opacity:1}}
-.kc-win-big{font-size:52px;}
-.kc-win-text{font-size:26px;font-weight:900;color:#e8590c;}
+const FOODS = [
+  { emoji: "🐟", name: "小鱼干" },
+  { emoji: "🥛", name: "牛奶" },
+  { emoji: "🍗", name: "鸡腿" },
+  { emoji: "🍤", name: "虾虾" },
+  { emoji: "🥩", name: "肉肉" },
+  { emoji: "🧀", name: "奶酪" }
+];
+
+const TOYS = ["🧶", "🪶", "🐭", "🦋"];
+
+const ACCS = [
+  { emoji: "🎀", name: "蝴蝶结", cls: "kc-acc-bow" },
+  { emoji: "🎩", name: "小帽子", cls: "kc-acc-hat" },
+  { emoji: "👔", name: "领结", cls: "kc-acc-tie" },
+  { emoji: "🧣", name: "围巾", cls: "kc-acc-scarf" }
+];
+
+const NOTES = ["🎵", "🎶", "🎼"];
+
+const TASK_INFO: Record<KittyTask, { icon: string; name: string }> = {
+  feed: { icon: "🍽️", name: "喂饭" },
+  play: { icon: "🧶", name: "逗猫" },
+  wash: { icon: "🫧", name: "洗澡" },
+  sleep: { icon: "🌙", name: "哄睡" },
+  dress: { icon: "🎀", name: "打扮" }
+};
+
+const THEME_BG = [
+  "linear-gradient(#ffe9f0,#fff6e4)",
+  "linear-gradient(#d8f1ff,#e8fbf4)",
+  "linear-gradient(#ffe9d0,#fff3e0)",
+  "linear-gradient(#dfeaf8,#f0f4fb)",
+  "linear-gradient(#f6e3fa,#ffeef6)",
+  "linear-gradient(#4a5590,#8a7ab0)"
+];
+
+const CSS = `
+.kc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; min-height: 460px; }
+.kc-top { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 6px; }
+.kc-badge { background: #ffffffd9; border-radius: 14px; padding: 5px 10px; font-weight: 800; color: #8a5a1e; box-shadow: 0 2px 6px rgba(180,130,60,.2); font-size: 13px; }
+.kc-badge.kc-done { background: #d9f5d0; color: #3f7a36; }
+.kc-badge.kc-now { outline: 2px solid #f7a23b; }
+.kc-bubble { min-height: 34px; margin: 4px auto; background: #fff; border-radius: 18px; padding: 8px 18px; font-size: 20px; font-weight: 900; color: #6b4a20; width: fit-content; max-width: 90%; box-shadow: 0 3px 8px rgba(160,110,40,.18); text-align: center; }
+.kc-stagebox { position: relative; width: min(300px, 82vw); margin: 4px auto; }
+.kc-cat-svg { width: 100%; display: block; }
+.kc-cat-svg .kc-head { transform-origin: 110px 80px; }
+.kc-happy .kc-head { animation: kcNod .55s ease; }
+@keyframes kcNod { 0%,100% { transform: rotate(0); } 40% { transform: rotate(-6deg) scale(1.04); } }
+.kc-spot { position: absolute; border: none; background: none; font-size: 30px; cursor: pointer; padding: 2px; filter: drop-shadow(0 2px 3px rgba(60,120,180,.4)); animation: kcFloat 1.6s ease infinite; }
+@keyframes kcFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.kc-toy { position: absolute; border: none; background: #ffffffd0; border-radius: 50%; width: 54px; height: 54px; font-size: 30px; cursor: pointer; box-shadow: 0 3px 8px rgba(160,110,40,.3); transition: left .35s, top .35s; }
+.kc-toy:active { transform: scale(.88); }
+.kc-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.kc-btn { min-width: 74px; min-height: 62px; border: none; border-radius: 18px; background: #fff; cursor: pointer; font-size: 30px; box-shadow: 0 4px 0 rgba(180,130,60,.3); font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 10px; }
+.kc-btn small { font-size: 12px; font-weight: 800; color: #8a5a1e; }
+.kc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(180,130,60,.3); }
+.kc-btn.kc-wrong { animation: kcShake .4s; opacity: .55; }
+@keyframes kcShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.kc-msg { text-align: center; min-height: 22px; font-weight: 800; color: #a86a28; margin-top: 8px; font-size: 15px; }
+.kc-night .kc-msg { color: #ffe9c0; }
+.kc-night .kc-bubble { background: #fffdf3; }
 `;
 
-const PAT_WORDS = ["喵~ 好舒服", "呼噜呼噜~", "再摸摸嘛", "喵呜~ 最喜欢你啦"];
-const FEED_WORDS = ["鱼干真好吃!", "啊呜~ 咔嚓咔嚓", "喵!还想吃~"];
-const BALL_WORDS = ["毛线球最好玩啦!", "喵!接住了~", "扑~ 抓到你咯"];
-const DRESS_NAMES = ["摘掉啦,清爽~", "粉色蝴蝶结,好看!", "小黄帽,神气!", "蓝色领结,帅气!"];
-
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, getStars, onWin } = api;
-  let alive = true;
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: KittyLevel = LEVELS[ctx.level];
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  const intervals = new Set<ReturnType<typeof setInterval>>();
+  let destroyed = false;
   let ended = false;
-  let mood = 0;
-  let busy = false;
-  let dressIndex = 0;
-
-  const timers = new Set<number>();
-  const after = (ms: number, fn: () => void): number => {
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      if (alive) fn();
-    }, ms);
-    timers.add(id);
-    return id;
-  };
+  let taskIdx = 0;
+  let mistakes = 0;
 
   const wrap = document.createElement("div");
-  wrap.className = "kc-wrap";
+  wrap.className = `kc-wrap${cfg.theme === 5 ? " kc-night" : ""}`;
+  wrap.style.background = THEME_BG[cfg.theme];
   wrap.innerHTML = `
-    <style>${STYLE}</style>
-    <div class="kc-top">
-      <div class="kc-title">🐱 萌猫小屋</div>
-      <div class="kc-stars">⭐ ${getStars()}</div>
-    </div>
-    <div class="kc-moodbox">
-      <div class="kc-moodlabel">💗 小猫心情</div>
-      <div class="kc-moodbar"><div class="kc-moodfill"></div></div>
-    </div>
-    <div class="kc-stage">
-      <div class="kc-cat" role="button" aria-label="摸摸小猫">
-        <div class="kc-bubble">点我摸摸头~</div>
-        ${CAT_SVG}
-      </div>
-    </div>
-    <div class="kc-btns">
-      <button class="kc-btn kc-btn-fish">🐟 喂鱼干</button>
-      <button class="kc-btn kc-btn-ball">🧶 逗毛线球</button>
-      <button class="kc-btn kc-btn-dress">🎀 换装</button>
-    </div>`;
-  root.appendChild(wrap);
+    <style>${CSS}</style>
+    <div class="kc-top"></div>
+    <div class="kc-bubble"></div>
+    <div class="kc-stagebox">${CAT_SVG}</div>
+    <div class="kc-btns"></div>
+    <div class="kc-msg">团团在等你照顾它～</div>
+  `;
+  stage.appendChild(wrap);
 
-  const q = <T extends Element>(sel: string): T => wrap.querySelector(sel) as T;
-  const cat = q<HTMLElement>(".kc-cat");
-  const stage = q<HTMLElement>(".kc-stage");
-  const bubble = q<HTMLElement>(".kc-bubble");
-  const moodFill = q<HTMLElement>(".kc-moodfill");
-  const eyesOpen = q<SVGGElement>(".kc-eyes-open");
-  const eyesHappy = q<SVGGElement>(".kc-eyes-happy");
-  const mouth = q<SVGPathElement>(".kc-mouth");
-  const mouthOpen = q<SVGEllipseElement>(".kc-mouth-open");
-  const btnFish = q<HTMLButtonElement>(".kc-btn-fish");
-  const btnBall = q<HTMLButtonElement>(".kc-btn-ball");
-  const btnDress = q<HTMLButtonElement>(".kc-btn-dress");
-  const accs = [
-    null,
-    q<SVGGElement>(".kc-acc-bow"),
-    q<SVGGElement>(".kc-acc-hat"),
-    q<SVGGElement>(".kc-acc-tie"),
-  ];
+  const topEl = wrap.querySelector(".kc-top") as HTMLElement;
+  const bubbleEl = wrap.querySelector(".kc-bubble") as HTMLElement;
+  const boxEl = wrap.querySelector(".kc-stagebox") as HTMLElement;
+  const btnsEl = wrap.querySelector(".kc-btns") as HTMLElement;
+  const msgEl = wrap.querySelector(".kc-msg") as HTMLElement;
 
-  function say(text: string): void {
-    bubble.textContent = text;
-    bubble.classList.add("kc-show");
-    after(1300, () => bubble.classList.remove("kc-show"));
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
   }
 
-  function squint(ms: number): void {
-    eyesOpen.style.display = "none";
-    eyesHappy.style.display = "";
-    after(ms, () => {
-      eyesOpen.style.display = "";
-      eyesHappy.style.display = "none";
-    });
+  function renderTop(): void {
+    topEl.innerHTML = cfg.tasks
+      .map((task, i) => {
+        const info = TASK_INFO[task];
+        const cls = i < taskIdx ? " kc-done" : i === taskIdx ? " kc-now" : "";
+        return `<span class="kc-badge${cls}">${i < taskIdx ? "✅" : info.icon} ${info.name}</span>`;
+      })
+      .join("");
   }
 
-  function hearts(count: number): void {
-    for (let i = 0; i < count; i++) {
-      const h = document.createElement("span");
-      h.className = "kc-heart";
-      h.textContent = ["💗", "💛", "✨"][i % 3];
-      h.style.left = `${38 + Math.random() * 24}%`;
-      h.style.top = `${20 + Math.random() * 25}%`;
-      stage.appendChild(h);
-      after(1000, () => h.remove());
-    }
+  function happyCat(): void {
+    wrap.classList.add("kc-happy");
+    const open = wrap.querySelector(".kc-eyes-open") as SVGElement | null;
+    const happy = wrap.querySelector(".kc-eyes-happy") as SVGElement | null;
+    if (open) open.style.display = "none";
+    if (happy) happy.style.display = "";
+    later(() => {
+      wrap.classList.remove("kc-happy");
+      if (open) open.style.display = "";
+      if (happy) happy.style.display = "none";
+    }, 800);
   }
 
-  function animateCat(cls: "kc-bounce" | "kc-wiggle"): void {
-    cat.classList.remove("kc-bounce", "kc-wiggle");
-    // 强制重排以便动画可重复触发
-    void cat.offsetWidth;
-    cat.classList.add(cls);
-  }
-
-  function addMood(n: number): void {
-    if (ended) return;
-    mood = Math.min(100, mood + n);
-    moodFill.style.width = `${mood}%`;
-    if (mood >= 100) {
+  function mistake(gentle: string): void {
+    mistakes++;
+    ctx.sfx("oops");
+    msgEl.textContent = gentle;
+    if (mistakes > 4) {
       ended = true;
-      squint(9999);
-      hearts(6);
-      after(700, () => {
-        const win = document.createElement("div");
-        win.className = "kc-win";
-        win.innerHTML = `
-          <div class="kc-win-big">🐱💗</div>
-          <div class="kc-win-text">小猫咪超级开心!</div>`;
-        wrap.appendChild(win);
-        onWin(3, "你把小猫照顾得真好!");
-      });
+      later(() => ctx.lose("团团有点晕啦，休息一下，看清它想要什么再选～"), 500);
     }
   }
 
-  function lock(ms: number): void {
-    busy = true;
-    btnFish.disabled = btnBall.disabled = btnDress.disabled = true;
-    after(ms, () => {
-      busy = false;
-      if (!ended) {
-        btnFish.disabled = btnBall.disabled = btnDress.disabled = false;
+  function taskDone(): void {
+    if (ended) return;
+    happyCat();
+    ctx.sfx("meow");
+    taskIdx++;
+    renderTop();
+    if (taskIdx >= cfg.tasks.length) {
+      ended = true;
+      const got = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+      later(() => ctx.win(got as 1 | 2 | 3, mistakes === 0
+        ? "每件事都一次做对，团团幸福得打呼噜！"
+        : "任务全部完成，团团舒服地眯起了眼！"), 800);
+      return;
+    }
+    later(() => startTask(), 800);
+  }
+
+  // ---- 各任务 ----
+
+  function taskFeed(): void {
+    const want = FOODS[Math.floor(Math.random() * FOODS.length)];
+    bubbleEl.textContent = `💭 团团想吃 ${want.emoji}`;
+    msgEl.textContent = "在下面找到它想吃的东西！";
+    const opts = shuffled(
+      [want, ...shuffled(FOODS.filter((f) => f !== want), Math.random as () => number).slice(0, cfg.options - 1)],
+      Math.random as () => number
+    );
+    btnsEl.innerHTML = "";
+    for (const f of opts) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "kc-btn";
+      btn.innerHTML = `${f.emoji}<small>${f.name}</small>`;
+      btn.addEventListener("click", () => {
+        if (ended) return;
+        if (f === want) {
+          const mouth = wrap.querySelector(".kc-mouth-open") as SVGElement | null;
+          if (mouth) {
+            mouth.style.display = "";
+            later(() => { mouth.style.display = "none"; }, 700);
+          }
+          ctx.sfx("coin");
+          msgEl.textContent = `啊呜～${f.name}真好吃！`;
+          btnsEl.innerHTML = "";
+          taskDone();
+        } else {
+          btn.classList.add("kc-wrong");
+          btn.disabled = true;
+          mistake("团团摇摇头，再看看它想要什么～");
+        }
+      });
+      btnsEl.appendChild(btn);
+    }
+  }
+
+  function taskPlay(): void {
+    const toy = TOYS[Math.floor(Math.random() * TOYS.length)];
+    let taps = 0;
+    bubbleEl.textContent = `💭 团团想玩 ${toy}`;
+    msgEl.textContent = `快拍玩具逗它！还差 ${cfg.playTaps} 下`;
+    btnsEl.innerHTML = "";
+    const toyBtn = document.createElement("button");
+    toyBtn.type = "button";
+    toyBtn.className = "kc-toy";
+    toyBtn.textContent = toy;
+    const move = () => {
+      toyBtn.style.left = `${8 + Math.random() * 72}%`;
+      toyBtn.style.top = `${8 + Math.random() * 70}%`;
+    };
+    move();
+    boxEl.appendChild(toyBtn);
+    const mover = setInterval(() => { if (!destroyed && !ended) move(); }, 1100);
+    intervals.add(mover);
+    toyBtn.addEventListener("click", () => {
+      if (ended) return;
+      taps++;
+      ctx.sfx("pop");
+      move();
+      if (taps >= cfg.playTaps) {
+        clearInterval(mover);
+        toyBtn.remove();
+        msgEl.textContent = "玩累啦，团团心满意足！";
+        taskDone();
+      } else {
+        msgEl.textContent = `真好玩！还差 ${cfg.playTaps - taps} 下`;
       }
     });
   }
 
-  // 摸头
-  cat.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended) return;
-    play("meow");
-    squint(900);
-    animateCat("kc-bounce");
-    hearts(2);
-    say(PAT_WORDS[Math.floor(Math.random() * PAT_WORDS.length)]);
-    addMood(8);
-  });
+  function taskWash(): void {
+    bubbleEl.textContent = "💭 团团身上脏脏的";
+    msgEl.textContent = `把 ${cfg.washSpots} 个泡泡全都搓掉！`;
+    btnsEl.innerHTML = "";
+    let left = cfg.washSpots;
+    for (let i = 0; i < cfg.washSpots; i++) {
+      const spot = document.createElement("button");
+      spot.type = "button";
+      spot.className = "kc-spot";
+      spot.textContent = "🫧";
+      spot.style.left = `${14 + Math.random() * 62}%`;
+      spot.style.top = `${26 + Math.random() * 52}%`;
+      spot.style.animationDelay = `${Math.random()}s`;
+      spot.addEventListener("click", () => {
+        if (ended) return;
+        ctx.sfx("pop");
+        spot.remove();
+        left--;
+        msgEl.textContent = left > 0 ? `搓搓搓～还剩 ${left} 个泡泡` : "洗得香喷喷！";
+        if (left <= 0) taskDone();
+      });
+      boxEl.appendChild(spot);
+    }
+  }
 
-  // 喂鱼干
-  btnFish.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || busy) return;
-    lock(800);
-    play("coin");
-    const fish = document.createElement("span");
-    fish.className = "kc-fish";
-    fish.textContent = "🐟";
-    fish.style.left = "12%";
-    fish.style.bottom = "6%";
-    stage.appendChild(fish);
-    after(30, () => {
-      fish.style.left = "48%";
-      fish.style.bottom = "48%";
-      fish.style.transform = "scale(.4) rotate(140deg)";
-      fish.style.opacity = "0";
-    });
-    mouth.style.display = "none";
-    mouthOpen.style.display = "";
-    after(650, () => {
-      fish.remove();
-      mouth.style.display = "";
-      mouthOpen.style.display = "none";
-      animateCat("kc-bounce");
-      squint(700);
-      say(FEED_WORDS[Math.floor(Math.random() * FEED_WORDS.length)]);
-      addMood(14);
-    });
-  });
+  function taskSleep(): void {
+    const seq: string[] = Array.from({ length: cfg.notes }, () => NOTES[Math.floor(Math.random() * NOTES.length)]);
+    let step = 0;
+    let showing = true;
+    bubbleEl.textContent = `🌙 摇篮曲：${seq.join(" ")}`;
+    msgEl.textContent = "记住音符的顺序，马上照着弹！";
+    btnsEl.innerHTML = "";
+    later(() => {
+      if (ended) return;
+      showing = false;
+      bubbleEl.textContent = "🌙 轮到你弹啦";
+      msgEl.textContent = "按刚才的顺序点音符！";
+      for (const n of NOTES) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "kc-btn";
+        btn.textContent = n;
+        btn.addEventListener("click", () => {
+          if (ended || showing) return;
+          if (n === seq[step]) {
+            ctx.sfx("tap");
+            step++;
+            msgEl.textContent = `好听！${step}/${seq.length}`;
+            if (step >= seq.length) {
+              btnsEl.innerHTML = "";
+              msgEl.textContent = "呼噜呼噜～团团睡着啦";
+              taskDone();
+            }
+          } else {
+            step = 0;
+            mistake(`不是这个音，从头再弹：${seq.join(" ")}`);
+            bubbleEl.textContent = `🌙 摇篮曲：${seq.join(" ")}`;
+            later(() => { if (!ended) bubbleEl.textContent = "🌙 轮到你弹啦"; }, 1800);
+          }
+        });
+        btnsEl.appendChild(btn);
+      }
+    }, 2400);
+  }
 
-  // 逗毛线球
-  btnBall.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || busy) return;
-    lock(1100);
-    play("jump");
-    const ball = document.createElement("span");
-    ball.className = "kc-ball";
-    ball.textContent = "🧶";
-    ball.style.right = "10%";
-    ball.style.bottom = "10%";
-    stage.appendChild(ball);
-    animateCat("kc-wiggle");
-    after(1050, () => {
-      ball.remove();
-      hearts(2);
-      say(BALL_WORDS[Math.floor(Math.random() * BALL_WORDS.length)]);
-      addMood(12);
-    });
-  });
+  function taskDress(): void {
+    const want = ACCS[Math.floor(Math.random() * ACCS.length)];
+    bubbleEl.textContent = `💭 团团想戴 ${want.emoji}`;
+    msgEl.textContent = "帮它挑对打扮！";
+    const opts = shuffled(
+      [want, ...shuffled(ACCS.filter((a) => a !== want), Math.random as () => number).slice(0, cfg.options - 1)],
+      Math.random as () => number
+    );
+    btnsEl.innerHTML = "";
+    for (const a of opts) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "kc-btn";
+      btn.innerHTML = `${a.emoji}<small>${a.name}</small>`;
+      btn.addEventListener("click", () => {
+        if (ended) return;
+        if (a === want) {
+          wrap.querySelectorAll<SVGElement>(".kc-acc").forEach((el) => { el.style.display = "none"; });
+          const acc = wrap.querySelector(`.${a.cls}`) as SVGElement | null;
+          if (acc) acc.style.display = "";
+          ctx.sfx("coin");
+          msgEl.textContent = `${a.name}戴上啦，真好看！`;
+          btnsEl.innerHTML = "";
+          taskDone();
+        } else {
+          btn.classList.add("kc-wrong");
+          btn.disabled = true;
+          mistake("团团歪歪头，好像不是这件～");
+        }
+      });
+      btnsEl.appendChild(btn);
+    }
+  }
 
-  // 换装
-  btnDress.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || busy) return;
-    lock(600);
-    play("tap");
-    dressIndex = (dressIndex + 1) % accs.length;
-    accs.forEach((g, i) => {
-      if (g) g.style.display = i === dressIndex ? "" : "none";
-    });
-    animateCat("kc-wiggle");
-    squint(600);
-    say(DRESS_NAMES[dressIndex]);
-    addMood(6);
-  });
+  function startTask(): void {
+    if (ended || destroyed) return;
+    boxEl.querySelectorAll(".kc-spot, .kc-toy").forEach((el) => el.remove());
+    renderTop();
+    const task = cfg.tasks[taskIdx];
+    if (task === "feed") taskFeed();
+    else if (task === "play") taskPlay();
+    else if (task === "wash") taskWash();
+    else if (task === "sleep") taskSleep();
+    else taskDress();
+  }
 
-  after(600, () => say("你好呀,我是团团!"));
+  renderTop();
+  startTask();
 
   return {
     destroy() {
-      alive = false;
-      timers.forEach((id) => {
-        clearTimeout(id);
-        clearInterval(id);
-      });
-      timers.clear();
+      destroyed = true;
+      ended = true;
+      intervals.forEach((t) => clearInterval(t));
+      intervals.clear();
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "一次都不选错就是 3 星，团团最喜欢细心的你！",
+    grandMessage: "99 天的照顾全部完成，团团已经离不开你啦！",
+  });
 }

@@ -1,119 +1,134 @@
+import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, LEVELS, THEME_TILES, type PuzzleLevel } from "./levels";
+
 export const meta = {
   id: "puzzle-tiles",
   title: "拼图乐园",
   emoji: "🧩",
   category: "casual" as const,
   color: "#E5E9FF",
-  blurb: "推一推滑块，把打乱的小图案拼回原样吧！",
+  blurb: "99 关六大画册！3×3 到 4×4，还有看一眼就藏起来的记忆拼图！",
 };
 
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
+const CSS = `
+.pz-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EEF0FF, #FFF3F9); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.pz-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
+.pz-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #7B7FD0; box-shadow: 0 2px 6px rgba(130,130,210,.25); font-size: 14px; }
+.pz-row2 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+.pz-preview { display: grid; gap: 2px; background: #fff; padding: 5px; border-radius: 10px; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
+.pz-preview i { width: 16px; height: 16px; border-radius: 4px; font-style: normal; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+.pz-preview.pz-hidden i { background: #E8E6F5 !important; color: transparent; }
+.pz-hint { border: none; border-radius: 14px; padding: 8px 14px; font-weight: 800; background: #D5C8F8; color: #5D48A0; cursor: pointer; box-shadow: 0 3px 0 #B7A3E8; font-size: 15px; font-family: inherit; }
+.pz-hint:active { transform: translateY(2px); box-shadow: 0 1px 0 #B7A3E8; }
+.pz-hint:disabled { opacity: .5; }
+.pz-board { display: grid; gap: 8px; }
+.pz-tile { aspect-ratio: 1; border: none; border-radius: 16px; font-size: clamp(22px, 8vw, 44px); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: transform .14s; box-shadow: 0 3px 8px rgba(120,120,200,.2); padding: 0; }
+.pz-tile small { font-size: 12px; color: rgba(90,80,120,.65); font-weight: 700; }
+.pz-tile:active { transform: scale(.94); }
+.pz-tile.pz-empty { background: rgba(255,255,255,.35) !important; box-shadow: inset 0 2px 6px rgba(120,120,200,.2); cursor: default; }
+.pz-tile.pz-glow { animation: pzGlow 1s ease infinite; box-shadow: 0 0 0 4px #FFD86E; }
+@keyframes pzGlow { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+.pz-msg { text-align: center; min-height: 22px; color: #7B7FD0; font-weight: 700; margin-top: 10px; font-size: 15px; }
+`;
 
-interface GameApi {
-  root: HTMLElement;
-  play: (name: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
-
-const N = 3;
-const TILES = [
-  { emoji: "🌸", bg: "#FFD9E8" },
-  { emoji: "🌞", bg: "#FFF1BD" },
-  { emoji: "🌈", bg: "#D9F1FF" },
-  { emoji: "🍎", bg: "#FFDCD2" },
-  { emoji: "🐝", bg: "#FDF3C7" },
-  { emoji: "🍀", bg: "#D9F5D3" },
-  { emoji: "⛵", bg: "#D5EAFB" },
-  { emoji: "🎈", bg: "#F3DBFF" },
-];
-
-export function mount(api: GameApi): { destroy: () => void } {
-  let finished = false;
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: PuzzleLevel = LEVELS[ctx.level];
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  let destroyed = false;
+  let levelDone = false;
   let moves = 0;
-  // board[pos] = 值 0..7 表示第几块，8 表示空格
-  const board: number[] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  let hintsLeft = cfg.hints;
+  const total = cfg.rows * cfg.cols;
+  const EMPTY = total - 1;
+  const pic = THEME_TILES[cfg.theme].slice(0, total - 1);
+  const board: number[] = Array.from({ length: total }, (_, i) => i);
 
   const wrap = document.createElement("div");
   wrap.className = "pz-wrap";
   wrap.innerHTML = `
-    <style>
-      .pz-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EEF0FF, #FFF3F9); border-radius: 20px; padding: 14px; max-width: 400px; margin: 0 auto; user-select: none; }
-      .pz-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-      .pz-badge { background: #fff; border-radius: 14px; padding: 6px 14px; font-weight: 700; color: #7B7FD0; box-shadow: 0 2px 6px rgba(130,130,210,.25); font-size: 15px; }
-      .pz-preview { display: grid; grid-template-columns: repeat(3, 18px); gap: 2px; background: #fff; padding: 5px; border-radius: 10px; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
-      .pz-preview i { width: 18px; height: 18px; border-radius: 4px; font-style: normal; font-size: 12px; display: flex; align-items: center; justify-content: center; }
-      .pz-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-      .pz-tile { aspect-ratio: 1; border: none; border-radius: 16px; font-size: clamp(30px, 11vw, 52px); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: transform .14s; box-shadow: 0 3px 8px rgba(120,120,200,.2); padding: 0; }
-      .pz-tile small { font-size: 13px; color: rgba(90,80,120,.65); font-weight: 700; }
-      .pz-tile:active { transform: scale(.94); }
-      .pz-tile.pz-empty { background: rgba(255,255,255,.35) !important; box-shadow: inset 0 2px 6px rgba(120,120,200,.2); cursor: default; }
-      .pz-msg { text-align: center; min-height: 22px; color: #7B7FD0; font-weight: 700; margin-top: 10px; font-size: 15px; }
-    </style>
+    <style>${CSS}</style>
     <div class="pz-top">
-      <span class="pz-badge pz-moves">👣 0 步</span>
-      <div class="pz-preview"></div>
+      <span class="pz-badge pz-moves">👣 0 / ${cfg.moveLimit} 步</span>
+      <span class="pz-badge">⭐ ≤${cfg.three} 步 3 星</span>
     </div>
-    <div class="pz-board"></div>
-    <div class="pz-msg">点空格旁边的方块，把图案拼成右上角的样子！</div>
+    <div class="pz-row2">
+      <button class="pz-hint" type="button">💡 提示 x${cfg.hints}</button>
+      <div class="pz-preview" style="grid-template-columns:repeat(${cfg.cols},16px)"></div>
+    </div>
+    <div class="pz-board" style="grid-template-columns:repeat(${cfg.cols},1fr)"></div>
+    <div class="pz-msg"></div>
   `;
-  api.root.appendChild(wrap);
+  stage.appendChild(wrap);
 
   const boardEl = wrap.querySelector(".pz-board") as HTMLElement;
   const movesEl = wrap.querySelector(".pz-moves") as HTMLElement;
   const msgEl = wrap.querySelector(".pz-msg") as HTMLElement;
   const previewEl = wrap.querySelector(".pz-preview") as HTMLElement;
+  const hintBtn = wrap.querySelector(".pz-hint") as HTMLButtonElement;
 
-  for (let v = 0; v < 9; v++) {
-    const cell = document.createElement("i");
-    if (v < 8) {
-      cell.style.background = TILES[v].bg;
-      cell.textContent = TILES[v].emoji;
-    }
-    previewEl.appendChild(cell);
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
   }
 
   const tiles: HTMLButtonElement[] = [];
-  for (let pos = 0; pos < 9; pos++) {
+  for (let pos = 0; pos < total; pos++) {
     const btn = document.createElement("button");
     btn.className = "pz-tile";
     btn.type = "button";
-    btn.addEventListener("click", () => onTile(pos));
+    const p = pos;
+    btn.addEventListener("click", () => onTile(p));
     boardEl.appendChild(btn);
     tiles.push(btn);
   }
 
   function emptyPos(): number {
-    return board.indexOf(8);
+    return board.indexOf(EMPTY);
   }
 
   function neighbors(pos: number): number[] {
-    const r = Math.floor(pos / N), c = pos % N;
+    const r = Math.floor(pos / cfg.cols), c = pos % cfg.cols;
     const out: number[] = [];
-    if (r > 0) out.push(pos - N);
-    if (r < N - 1) out.push(pos + N);
+    if (r > 0) out.push(pos - cfg.cols);
+    if (r < cfg.rows - 1) out.push(pos + cfg.cols);
     if (c > 0) out.push(pos - 1);
-    if (c < N - 1) out.push(pos + 1);
+    if (c < cfg.cols - 1) out.push(pos + 1);
     return out;
   }
 
+  function renderPreview(): void {
+    previewEl.innerHTML = "";
+    for (let v = 0; v < total; v++) {
+      const cell = document.createElement("i");
+      if (v < EMPTY) {
+        cell.style.background = pic[v].bg;
+        cell.textContent = pic[v].emoji;
+      }
+      previewEl.appendChild(cell);
+    }
+  }
+
   function render(): void {
-    for (let pos = 0; pos < 9; pos++) {
+    for (let pos = 0; pos < total; pos++) {
       const v = board[pos];
       const el = tiles[pos];
-      if (v === 8) {
+      el.classList.remove("pz-glow");
+      if (v === EMPTY) {
         el.className = "pz-tile pz-empty";
         el.innerHTML = "";
         el.style.background = "";
       } else {
         el.className = "pz-tile";
-        el.style.background = TILES[v].bg;
-        el.innerHTML = `${TILES[v].emoji}<small>${v + 1}</small>`;
+        el.style.background = pic[v].bg;
+        el.innerHTML = `${pic[v].emoji}<small>${v + 1}</small>`;
       }
     }
-    movesEl.textContent = `👣 ${moves} 步`;
+    movesEl.textContent = `👣 ${moves} / ${cfg.moveLimit} 步`;
+    hintBtn.textContent = `💡 提示 x${hintsLeft}`;
+    hintBtn.disabled = hintsLeft <= 0;
   }
 
   function isSolved(): boolean {
@@ -121,48 +136,110 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function shuffle(): void {
-    // 从完成状态随机走 70 步，保证一定可以拼回去
+    board.forEach((_, i) => { board[i] = i; });
     let prev = -1;
-    for (let k = 0; k < 70 || isSolved(); k++) {
+    for (let k = 0; k < cfg.shuffleSteps || isSolved(); k++) {
       const e = emptyPos();
       const opts = neighbors(e).filter((p) => p !== prev);
-      const pick = opts[Math.floor(Math.random() * opts.length)];
-      [board[e], board[pick]] = [board[pick], board[e]];
+      const chosen = opts[Math.floor(Math.random() * opts.length)];
+      [board[e], board[chosen]] = [board[chosen], board[e]];
       prev = e;
-      if (k > 200) break;
+      if (k > 500) break;
+    }
+  }
+
+  function showHint(): void {
+    if (levelDone || hintsLeft <= 0) return;
+    hintsLeft--;
+    ctx.sfx("coin");
+    if (cfg.hidePreview) {
+      // 记忆模式：提示 = 再偷看一眼完整图案
+      previewEl.classList.remove("pz-hidden");
+      msgEl.textContent = "👀 快看完整图案，马上又要藏起来啦！";
+      render();
+      later(() => previewEl.classList.add("pz-hidden"), 2200);
+      return;
+    }
+    const e = emptyPos();
+    const movable = neighbors(e);
+    let best = movable.find((p) => board[p] === e);
+    if (best === undefined) {
+      let bestGain = -99;
+      for (const p of movable) {
+        const v = board[p];
+        const tr = Math.floor(v / cfg.cols), tc = v % cfg.cols;
+        const now = Math.abs(Math.floor(p / cfg.cols) - tr) + Math.abs((p % cfg.cols) - tc);
+        const after = Math.abs(Math.floor(e / cfg.cols) - tr) + Math.abs((e % cfg.cols) - tc);
+        const gain = now - after;
+        if (gain > bestGain) { bestGain = gain; best = p; }
+      }
+    }
+    render();
+    if (best !== undefined) {
+      tiles[best].classList.add("pz-glow");
+      msgEl.textContent = "💡 亮亮的那块，推它试试！";
+      later(() => tiles[best as number].classList.remove("pz-glow"), 2200);
     }
   }
 
   function onTile(pos: number): void {
-    if (finished) return;
+    if (levelDone) return;
     const e = emptyPos();
     if (!neighbors(e).includes(pos)) {
-      if (board[pos] !== 8) {
-        api.play("oops");
+      if (board[pos] !== EMPTY) {
+        ctx.sfx("oops");
         msgEl.textContent = "这块推不动哦，先点空格旁边的方块～";
       }
       return;
     }
     [board[e], board[pos]] = [board[pos], board[e]];
     moves++;
-    api.play("tap");
+    ctx.sfx("tap");
     render();
     if (isSolved()) {
-      finished = true;
-      const stars: 1 | 2 | 3 = moves <= 45 ? 3 : moves <= 90 ? 2 : 1;
-      api.play("win");
-      msgEl.textContent = "🎉 拼好啦，图案完整无缺！";
-      api.onWin(stars, `只用了 ${moves} 步就拼好了，真聪明！`);
+      levelDone = true;
+      const got = moves <= cfg.three ? 3 : moves <= cfg.two ? 2 : 1;
+      later(() => ctx.win(got as 1 | 2 | 3, `只用了 ${moves} 步就拼好啦！`), 400);
+      return;
+    }
+    if (moves >= cfg.moveLimit) {
+      levelDone = true;
+      later(() => ctx.lose("步数用完啦，重新打乱再拼一次，你一定行！"), 300);
     }
   }
 
+  hintBtn.addEventListener("click", showHint);
+
   shuffle();
+  renderPreview();
   render();
+  if (cfg.hidePreview) {
+    msgEl.textContent = "👀 记住完整图案，5 秒后就藏起来！";
+    later(() => {
+      previewEl.classList.add("pz-hidden");
+      msgEl.textContent = "图案藏起来啦，凭记忆拼一拼（提示能再偷看）！";
+    }, 5000);
+  } else {
+    msgEl.textContent = "点空格旁边的方块，把图案拼成小图的样子！";
+  }
 
   return {
     destroy() {
-      finished = true;
+      destroyed = true;
+      levelDone = true;
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "步数越省星星越多，六大画册等你复原！",
+    grandMessage: "99 幅拼图全部复原，拼图小天才就是你！",
+  });
 }

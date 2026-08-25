@@ -1,19 +1,5 @@
-/**
- * 红蓝点点 red-blue-tap
- * 红蓝气球从天上飘下来,只点指定颜色:点对 +1,点错 -1。
- * 30 秒倒计时结束后按得分结算星星。
- */
-
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (n: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
+import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, LEVELS, type TapLevel } from "./levels";
 
 export const meta = {
   id: "red-blue-tap",
@@ -21,241 +7,198 @@ export const meta = {
   emoji: "🎈",
   category: "party" as const,
   color: "#4dabf7",
-  blurb: "红蓝气球飘下来,只点对的颜色!眼明手快得高分!",
+  blurb: "99 关六大赛场！抢蓝点、躲陷阱、双子点点，和小电脑拼手速！",
 };
 
-const ROUND_MS = 30_000;
+/** 各主题的「该抢的点」与「陷阱点」外观 */
+const SKINS = [
+  { mine: "🔵", trap: "🔴" },
+  { mine: "🔵", trap: "🔴" },
+  { mine: "⭐", trap: "🌑" },
+  { mine: "⚡", trap: "🌩️" },
+  { mine: "💙", trap: "❤️" },
+  { mine: "👑", trap: "💣" },
+];
 
-const STYLE = `
-.rbt-wrap{position:relative;width:100%;height:100%;min-height:480px;overflow:hidden;
-  background:linear-gradient(#c5f0ff,#e8f9ff);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
-  user-select:none;-webkit-user-select:none;touch-action:manipulation;}
-.rbt-hud{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;
-  gap:8px;padding:10px 14px;pointer-events:none;}
-.rbt-pill{background:#fffd;border-radius:999px;padding:8px 16px;font-size:17px;font-weight:900;
-  color:#1d5b80;box-shadow:0 3px 8px #0002;}
-.rbt-target{margin-left:auto;}
-.rbt-field{position:absolute;inset:0;overflow:hidden;}
-.rbt-balloon{position:absolute;top:-90px;width:64px;height:78px;border-radius:50% 50% 48% 48%;
-  display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;
-  box-shadow:inset -6px -8px 0 #0002;will-change:transform;touch-action:manipulation;}
-.rbt-balloon::after{content:"";position:absolute;bottom:-16px;left:50%;width:2px;height:16px;
-  background:#8888;transform:translateX(-50%);}
-.rbt-balloon-red{background:radial-gradient(circle at 35% 30%,#ffa8a8,#fa5252);}
-.rbt-balloon-blue{background:radial-gradient(circle at 35% 30%,#a5d8ff,#339af0);}
-.rbt-pop{animation:rbtPop .25s ease forwards;}
-@keyframes rbtPop{0%{transform:scale(1)}60%{transform:scale(1.35)}100%{transform:scale(0);opacity:0}}
-.rbt-bad{animation:rbtBad .3s ease forwards;}
-@keyframes rbtBad{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}
-  75%{transform:translateX(8px)}100%{transform:scale(.6);opacity:0}}
-.rbt-float{position:absolute;z-index:9;font-size:24px;font-weight:900;pointer-events:none;
-  animation:rbtFloat .7s ease forwards;}
-@keyframes rbtFloat{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-46px)}}
-.rbt-cover{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;gap:14px;
-  align-items:center;justify-content:center;background:#e8f9ffee;text-align:center;padding:20px;}
-.rbt-cover-title{font-size:30px;font-weight:900;color:#1d5b80;}
-.rbt-cover-sub{font-size:19px;font-weight:800;color:#4a7a95;line-height:1.6;}
-.rbt-demo{font-size:52px;}
-.rbt-start{border:none;border-radius:24px;padding:16px 48px;font-size:22px;font-weight:900;color:#fff;
-  background:#ff922b;cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;}
-.rbt-start:active{transform:translateY(4px);box-shadow:0 2px 0 #0003;}
-.rbt-result-big{font-size:56px;}
+const CSS = `
+.rbt-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E4F0FF, #FFE9F0); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
+.rbt-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; }
+.rbt-badge { background: #fff; border-radius: 14px; padding: 5px 12px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(120,140,200,.25); }
+.rbt-me { color: #3576BF; }
+.rbt-ai { color: #C24545; }
+.rbt-arena { position: relative; height: 320px; border-radius: 16px; background: #ffffffa8; overflow: hidden; }
+.rbt-dot { position: absolute; width: 62px; height: 62px; border: none; background: #fff; border-radius: 50%; font-size: 34px; cursor: pointer; box-shadow: 0 4px 10px rgba(100,120,180,.3); padding: 0; animation: rbtIn .18s ease; }
+@keyframes rbtIn { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.rbt-dot:active { transform: scale(.88); }
+.rbt-msg { text-align: center; min-height: 22px; color: #5B7FC9; font-weight: 700; margin-top: 10px; font-size: 15px; }
 `;
 
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, onWin, onLose } = api;
-  let alive = true;
-  let running = false;
-  let score = 0;
-  let timeLeft = ROUND_MS;
-  const target: "red" | "blue" = Math.random() < 0.5 ? "red" : "blue";
-  let raf = 0;
-  let lastTs = 0;
-  let spawnCooldown = 0;
-  let elapsed = 0;
+interface Dot {
+  el: HTMLButtonElement;
+  trap: boolean;
+  aiTimer: ReturnType<typeof setTimeout>;
+  gone: boolean;
+}
 
-  interface Balloon {
-    el: HTMLElement;
-    y: number;
-    speed: number;
-    color: "red" | "blue";
-    dead: boolean;
-  }
-  const balloons: Balloon[] = [];
-
-  const timers = new Set<number>();
-  const after = (ms: number, fn: () => void): number => {
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      if (alive) fn();
-    }, ms);
-    timers.add(id);
-    return id;
-  };
-
-  const targetName = (): string => (target === "red" ? "红色" : "蓝色");
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: TapLevel = LEVELS[ctx.level];
+  const skin = SKINS[cfg.theme];
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  let destroyed = false;
+  let ended = false;
+  let meScore = 0;
+  let aiScore = 0;
+  const dots = new Set<Dot>();
 
   const wrap = document.createElement("div");
   wrap.className = "rbt-wrap";
   wrap.innerHTML = `
-    <style>${STYLE}</style>
-    <div class="rbt-field"></div>
-    <div class="rbt-hud">
-      <div class="rbt-pill rbt-time">⏰ 30</div>
-      <div class="rbt-pill rbt-score">得分 0</div>
-      <div class="rbt-pill rbt-target"></div>
+    <style>${CSS}</style>
+    <div class="rbt-top">
+      <span class="rbt-badge rbt-me">你 0</span>
+      <span class="rbt-badge">先到 ${cfg.targetPoints} 分</span>
+      <span class="rbt-badge rbt-ai">小电脑 0</span>
     </div>
-    <div class="rbt-cover">
-      <div class="rbt-cover-title">🎈 红蓝点点</div>
-      <div class="rbt-demo">${target === "red" ? "🔴" : "🔵"}</div>
-      <div class="rbt-cover-sub">这一局只点 <b>${targetName()}</b> 气球!<br>点对 +1 分,点错 -1 分哦</div>
-      <button class="rbt-start">开始!</button>
-    </div>`;
-  root.appendChild(wrap);
+    <div class="rbt-arena"></div>
+    <div class="rbt-msg"></div>
+  `;
+  stage.appendChild(wrap);
 
-  const q = <T extends Element>(sel: string): T => wrap.querySelector(sel) as T;
-  const field = q<HTMLElement>(".rbt-field");
-  const timeEl = q<HTMLElement>(".rbt-time");
-  const scoreEl = q<HTMLElement>(".rbt-score");
-  const targetEl = q<HTMLElement>(".rbt-target");
-  const cover = q<HTMLElement>(".rbt-cover");
-  targetEl.textContent = `只点${targetName()} ${target === "red" ? "🔴" : "🔵"}`;
+  const arenaEl = wrap.querySelector(".rbt-arena") as HTMLElement;
+  const meEl = wrap.querySelector(".rbt-me") as HTMLElement;
+  const aiEl = wrap.querySelector(".rbt-ai") as HTMLElement;
+  const msgEl = wrap.querySelector(".rbt-msg") as HTMLElement;
 
-  function setScore(n: number): void {
-    score = Math.max(0, n);
-    scoreEl.textContent = `得分 ${score}`;
+  msgEl.textContent = cfg.trapChance > 0
+    ? `抢 ${skin.mine}，${skin.trap} 是陷阱别碰！`
+    : `${skin.mine} 一冒出来就抢先拍！`;
+
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
   }
 
-  function floatText(x: number, y: number, text: string, color: string): void {
-    const f = document.createElement("div");
-    f.className = "rbt-float";
-    f.textContent = text;
-    f.style.left = `${x}px`;
-    f.style.top = `${y}px`;
-    f.style.color = color;
-    field.appendChild(f);
-    after(700, () => f.remove());
+  function renderTop(): void {
+    meEl.textContent = `你 ${meScore}`;
+    aiEl.textContent = `小电脑 ${aiScore}`;
   }
 
-  function spawn(): void {
-    const color: "red" | "blue" = Math.random() < 0.5 ? "red" : "blue";
-    const el = document.createElement("div");
-    el.className = `rbt-balloon rbt-balloon-${color}`;
-    el.textContent = color === "red" ? "🐹" : "🐧";
-    const x = 6 + Math.random() * 78;
-    el.style.left = `${x}%`;
-    const b: Balloon = {
+  function clearDots(): void {
+    dots.forEach((d) => {
+      clearTimeout(d.aiTimer);
+      d.el.remove();
+    });
+    dots.clear();
+  }
+
+  function finish(): void {
+    if (ended) return;
+    ended = true;
+    clearDots();
+    if (meScore >= cfg.targetPoints) {
+      const got = aiScore <= 2 ? 3 : aiScore <= cfg.targetPoints - 2 ? 2 : 1;
+      later(() => ctx.win(got as 1 | 2 | 3, `${meScore} 比 ${aiScore}，你赢了小电脑！`), 400);
+    } else {
+      later(() => ctx.lose("小电脑这局手快了一点，盯紧屏幕再来！"), 400);
+    }
+  }
+
+  function score(mine: boolean, msg?: string): void {
+    if (ended) return;
+    if (mine) {
+      meScore++;
+      ctx.sfx("coin");
+    } else {
+      aiScore++;
+      ctx.sfx("oops");
+    }
+    if (msg) msgEl.textContent = msg;
+    renderTop();
+    if (meScore >= cfg.targetPoints || aiScore >= cfg.targetPoints) {
+      finish();
+      return;
+    }
+    if (dots.size === 0) later(spawnRound, 550);
+  }
+
+  function removeDot(d: Dot): void {
+    d.gone = true;
+    clearTimeout(d.aiTimer);
+    d.el.remove();
+    dots.delete(d);
+  }
+
+  function spawnDot(trap: boolean): void {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "rbt-dot";
+    el.textContent = trap ? skin.trap : skin.mine;
+    el.style.left = `${6 + Math.random() * 72}%`;
+    el.style.top = `${6 + Math.random() * 72}%`;
+    const d: Dot = {
       el,
-      y: -90,
-      speed: 90 + Math.random() * 55 + elapsed / 700,
-      color,
-      dead: false,
+      trap,
+      gone: false,
+      aiTimer: setTimeout(() => {
+        if (destroyed || ended || d.gone) return;
+        removeDot(d);
+        if (!trap) {
+          // 小电脑抢走了
+          score(false, "被小电脑抢走啦，再快一点！");
+        } else if (dots.size === 0 && !ended) {
+          later(spawnRound, 400);
+        }
+      }, trap ? cfg.aiDelayMs * 1.6 : cfg.aiDelayMs + Math.random() * 200),
     };
     el.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      if (!running || b.dead) return;
-      b.dead = true;
-      const rect = el.getBoundingClientRect();
-      const fieldRect = field.getBoundingClientRect();
-      const fx = rect.left - fieldRect.left + rect.width / 2;
-      const fy = rect.top - fieldRect.top;
-      if (b.color === target) {
-        play("pop");
-        setScore(score + 1);
-        el.classList.add("rbt-pop");
-        floatText(fx, fy, "+1", "#2b8a3e");
+      if (ended || d.gone) return;
+      removeDot(d);
+      if (trap) {
+        score(false, `碰到 ${skin.trap} 啦，这可是陷阱！`);
       } else {
-        play("oops");
-        setScore(score - 1);
-        el.classList.add("rbt-bad");
-        floatText(fx, fy, "-1", "#e03131");
+        ctx.sfx("pop");
+        score(true, "抢到！");
       }
-      after(300, () => el.remove());
     });
-    field.appendChild(el);
-    balloons.push(b);
+    arenaEl.appendChild(el);
+    dots.add(d);
   }
 
-  function tick(ts: number): void {
-    if (!alive || !running) return;
-    if (lastTs === 0) lastTs = ts;
-    const dt = Math.min(50, ts - lastTs);
-    lastTs = ts;
-    elapsed += dt;
-    timeLeft -= dt;
-    timeEl.textContent = `⏰ ${Math.max(0, Math.ceil(timeLeft / 1000))}`;
-
-    spawnCooldown -= dt;
-    if (spawnCooldown <= 0) {
-      spawn();
-      // 越到后面出球越快:750ms → 420ms
-      spawnCooldown = Math.max(420, 750 - elapsed / 60) + Math.random() * 120;
+  function spawnRound(): void {
+    if (ended || destroyed || dots.size > 0) return;
+    const count = cfg.double ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      spawnDot(Math.random() < cfg.trapChance);
     }
-
-    const fieldH = field.clientHeight || 600;
-    for (let i = balloons.length - 1; i >= 0; i--) {
-      const b = balloons[i];
-      if (b.dead) {
-        balloons.splice(i, 1);
-        continue;
-      }
-      b.y += (b.speed * dt) / 1000;
-      b.el.style.transform = `translateY(${b.y}px)`;
-      if (b.y > fieldH + 40) {
-        b.dead = true;
-        b.el.remove();
-        balloons.splice(i, 1);
-      }
-    }
-
-    if (timeLeft <= 0) {
-      endRound();
-      return;
-    }
-    raf = requestAnimationFrame(tick);
+    // 保证每轮至少有一个能抢的点
+    if ([...dots].every((d) => d.trap)) spawnDot(false);
   }
 
-  function endRound(): void {
-    running = false;
-    cancelAnimationFrame(raf);
-    balloons.forEach((b) => b.el.remove());
-    balloons.length = 0;
-    const result = document.createElement("div");
-    result.className = "rbt-cover";
-    const stars: 0 | 1 | 2 | 3 =
-      score >= 16 ? 3 : score >= 10 ? 2 : score >= 5 ? 1 : 0;
-    result.innerHTML = `
-      <div class="rbt-result-big">${stars > 0 ? "🎉" : "💪"}</div>
-      <div class="rbt-cover-title">得了 ${score} 分!</div>
-      <div class="rbt-cover-sub">${"⭐".repeat(stars) || "还差一点点"}</div>`;
-    wrap.appendChild(result);
-    after(1000, () => {
-      if (stars !== 0) onWin(stars, `${score} 分,${targetName()}小达人!`);
-      else onLose("再练一练,下次一定行!");
-    });
-  }
-
-  q<HTMLButtonElement>(".rbt-start").addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (running) return;
-    play("jump");
-    cover.style.display = "none";
-    running = true;
-    lastTs = 0;
-    raf = requestAnimationFrame(tick);
-  });
+  later(spawnRound, 700);
+  renderTop();
 
   return {
     destroy() {
-      alive = false;
-      running = false;
-      cancelAnimationFrame(raf);
-      timers.forEach((id) => {
-        clearTimeout(id);
-        clearInterval(id);
-      });
-      timers.clear();
+      destroyed = true;
+      ended = true;
+      clearDots();
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "让小电脑得分越少，星星越多！",
+    grandMessage: "99 场抢点大战全部获胜，你的手速天下第一！",
+  });
 }

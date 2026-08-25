@@ -1,6 +1,6 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
-import { makeSequence } from "./logic";
+import { makeSequence, TWINKLE_FINALE } from "./logic";
 
 function seeded(seed: number): () => number {
   let s = seed >>> 0;
@@ -30,4 +30,21 @@ test("makeSequence: 边界情况", () => {
   assert.deepEqual(makeSequence(3, 0, rand), []);
   // 只有一颗星时允许重复（否则无法生成）
   assert.deepEqual(makeSequence(3, 1, rand), [0, 0, 0]);
+});
+
+test("makeSequence: maxJump 限制相邻音跨度", () => {
+  const rand = seeded(7);
+  for (let i = 0; i < 300; i++) {
+    const seq = makeSequence(7, 5, rand, 2);
+    assert.equal(seq.length, 7);
+    for (let k = 1; k < seq.length; k++) {
+      assert.ok(Math.abs(seq[k] - seq[k - 1]) <= 2, `跨度超过 2: ${seq[k - 1]} -> ${seq[k]}`);
+      assert.notEqual(seq[k], seq[k - 1]);
+    }
+  }
+});
+
+test("终曲《小星星》：哆哆索索拉拉索", () => {
+  assert.deepEqual(TWINKLE_FINALE, [0, 0, 3, 3, 4, 4, 3]);
+  for (const n of TWINKLE_FINALE) assert.ok(n >= 0 && n < 5);
 });
