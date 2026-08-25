@@ -11,6 +11,7 @@
  * 本文件不在游戏子目录内，不会被 loader 的 import.meta.glob 收集。
  */
 import { AVATAR_URLS } from "../ui/avatars";
+import { isGuardedClick } from "../ui/dialogs";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -454,6 +455,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     const ov = document.createElement("div");
     ov.className = "l99-overlay";
     ov.innerHTML = html;
+    const shownAt = performance.now();
     const btns = document.createElement("div");
     btns.className = "l99-ov-btns";
     for (const b of buttons) {
@@ -462,6 +464,9 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       btn.className = `l99-ov-btn${b.ghost ? " l99-ov-ghost" : ""}`;
       btn.textContent = b.label;
       btn.addEventListener("click", () => {
+        // 冷静期:狂点型关卡(拔河/点点/地鼠…)胜负一出孩子手还在连点,
+        // 结算刚弹出的一小会儿不吃点击,免得「下一关/再玩一次」被误触
+        if (isGuardedClick(shownAt, performance.now())) return;
         api.play("tap");
         ov.remove();
         b.onClick();
