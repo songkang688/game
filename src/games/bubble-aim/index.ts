@@ -532,6 +532,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     return true;
   }
 
+  let pressing = false;
   const onPointerDown = (e: PointerEvent): void => {
     e.preventDefault();
     if (phase === "failed") {
@@ -539,15 +540,17 @@ export function mount(api: GameApi): { destroy: () => void } {
       return;
     }
     if (phase !== "play" || flight) return;
+    pressing = true;
     aiming = setAim(toCanvas(e));
   };
   const onPointerMove = (e: PointerEvent): void => {
-    if (phase !== "play" || flight) return;
-    if (!aiming) return;
-    setAim(toCanvas(e));
+    if (!pressing || phase !== "play" || flight) return;
+    // 按住期间持续更新：从发射台往上拖也能获得有效瞄准
+    aiming = setAim(toCanvas(e)) || aiming;
   };
   const onPointerUp = (): void => {
-    if (aiming && phase === "play" && !flight) fire();
+    if (pressing && aiming && phase === "play" && !flight) fire();
+    pressing = false;
     aiming = false;
   };
 

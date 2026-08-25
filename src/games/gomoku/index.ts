@@ -396,8 +396,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
     if (p === 2) {
-      ctx.strokeStyle = "rgba(190, 160, 120, 0.7)";
-      ctx.lineWidth = 1.2;
+      // 白棋在浅色木纹上要有清楚的描边
+      ctx.strokeStyle = "rgba(150, 110, 70, 0.85)";
+      ctx.lineWidth = 2;
       ctx.stroke();
     }
     // 高光

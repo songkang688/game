@@ -237,6 +237,139 @@ describe("candy-swing 关卡可玩性仿真（剪断即掉落进嘴）", () => {
     expect(collected.size).toBe(3);
   });
 
+  interface SimWorld {
+    ps: Particle[];
+    links: Link[];
+    addRope: (ax: number, ay: number, totalLength?: number) => void;
+  }
+
+  /** 按游戏同样的规则搭建关卡物理世界（糖果是 ps[0]） */
+  function buildWorld(lvIndex: number): SimWorld {
+    const lv = LEVELS[lvIndex];
+    const ps: Particle[] = [makeParticle(lv.candy.x, lv.candy.y, false, 0.3)];
+    const links: Link[] = [];
+    const addRope = (ax: number, ay: number, totalLength?: number): void => {
+      const dist = totalLength ?? Math.hypot(ps[0].x - ax, ps[0].y - ay);
+      const segs = Math.max(3, Math.min(14, Math.round(dist / 16)));
+      const build = buildRope(ax, ay, ps[0].x, ps[0].y, segs, totalLength);
+      const base = ps.length;
+      for (const p of build.particles) ps.push(p);
+      for (const l of build.links) {
+        links.push({ a: base + l.a, b: l.b === -1 ? 0 : base + l.b, rest: l.rest, active: true });
+      }
+    };
+    for (const r of lv.ropes) addRope(r.x, r.y, r.length);
+    return { ps, links, addRope };
+  }
+
+  function stepWorld(w: SimWorld, inBubble: boolean): void {
+    const dt = 1 / 120;
+    integrate(w.ps, 0, 900, dt);
+    if (inBubble) {
+      const c = w.ps[0];
+      c.y += (-260 - 900) * dt * dt;
+      const up = (c.py - c.y) / dt;
+      if (up > 95) c.py = c.y + 95 * dt;
+    }
+    solveLinks(w.ps, w.links, 6);
+  }
+
+  it("第 2 关（荡一荡）：荡到低点剪断，飞进嘴巴", () => {
+    const lv = LEVELS[1];
+    const w = buildWorld(1);
+    const c = w.ps[0];
+    let cut = false;
+    let ate = false;
+    for (let i = 0; i < 120 * 6 && !ate; i++) {
+      stepWorld(w, false);
+      const vx = c.x - c.px;
+      // 标准玩法：荡过最低点、向右运动时剪断
+      if (!cut && c.x >= lv.ropes[0].x && vx > 0) {
+        cut = true;
+        for (const l of w.links) l.active = false;
+      }
+      if (cut && Math.hypot(c.x - lv.monster.x, c.y - (lv.monster.y + 4)) <= 42) ate = true;
+    }
+    expect(cut).toBe(true);
+    expect(ate).toBe(true);
+  });
+
+  it("第 4 关（泡泡电梯）：剪断双绳→落进泡泡→飘上去被吃掉", () => {
+    const lv = LEVELS[3];
+    const w = buildWorld(3);
+    const c = w.ps[0];
+    const bubble = lv.bubbles![0];
+    // 稳定后直接剪断双绳
+    for (let i = 0; i < 60; i++) stepWorld(w, false);
+    for (const l of w.links) l.active = false;
+    let inBubble = false;
+    let ate = false;
+    for (let i = 0; i < 120 * 8 && !ate; i++) {
+      stepWorld(w, inBubble);
+      if (!inBubble && circlesOverlap(c.x, c.y, 16, bubble.x, bubble.y, 50 - 16)) inBubble = true;
+      if (Math.hypot(c.x - lv.monster.x, c.y - (lv.monster.y + 4)) <= 42) ate = true;
+    }
+    expect(inBubble).toBe(true);
+    expect(ate).toBe(true);
+  });
+
+  it("第 5 关（小心刺刺）：低点剪断飞向右侧缺口，不碰刺", () => {
+    const lv = LEVELS[4];
+    const w = buildWorld(4);
+    const c = w.ps[0];
+    let cut = false;
+    let ate = false;
+    let spiked = false;
+    for (let i = 0; i < 120 * 6 && !ate && !spiked; i++) {
+      stepWorld(w, false);
+      const vx = c.x - c.px;
+      if (!cut && c.x >= lv.ropes[0].x && vx > 0) {
+        cut = true;
+        for (const l of w.links) l.active = false;
+      }
+      if (!cut) continue;
+      for (const sp of lv.spikes ?? []) {
+        if (circleRectOverlap(c.x, c.y, 14, sp.x, sp.y, sp.w, sp.h)) spiked = true;
+      }
+      if (Math.hypot(c.x - lv.monster.x, c.y - (lv.monster.y + 4)) <= 42) ate = true;
+    }
+    expect(spiked).toBe(false);
+    expect(ate).toBe(true);
+  });
+
+  it("第 6 关（挂钩接力）：低点剪断→挂钩接住→荡到右边再剪→进嘴", () => {
+    const lv = LEVELS[5];
+    const w = buildWorld(5);
+    const c = w.ps[0];
+    const hook = lv.hooks![0];
+    let cut1 = false;
+    let hooked = false;
+    let cut2 = false;
+    let ate = false;
+    for (let i = 0; i < 120 * 10 && !ate; i++) {
+      stepWorld(w, false);
+      const vx = c.x - c.px;
+      if (!cut1 && c.x >= lv.ropes[0].x && vx > 0) {
+        cut1 = true;
+        for (const l of w.links) l.active = false;
+      }
+      if (cut1 && !hooked && circlesOverlap(c.x, c.y, 16, hook.x, hook.y, hook.radius - 16)) {
+        hooked = true;
+        const dist = Math.hypot(c.x - hook.x, c.y - hook.y);
+        w.addRope(hook.x, hook.y, Math.max(dist * 0.95, 55));
+      }
+      // 第二剪：荡到挂钩右侧尽头（几乎停住）再剪
+      if (hooked && !cut2 && c.x >= hook.x + 40 && Math.abs(vx) < 0.3) {
+        cut2 = true;
+        for (const l of w.links) l.active = false;
+      }
+      if (cut2 && Math.hypot(c.x - lv.monster.x, c.y - (lv.monster.y + 4)) <= 42) ate = true;
+    }
+    expect(hooked).toBe(true);
+    expect(cut2).toBe(true);
+    expect(ate).toBe(true);
+  });
+
   it("第 3 关（双绳）：全剪断后直落进嘴", () => {
     const lv = LEVELS[2];
     const ps: Particle[] = [makeParticle(lv.candy.x, lv.candy.y, false, 0.3)];

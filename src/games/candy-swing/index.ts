@@ -231,11 +231,34 @@ export function mount(api: GameApi): { destroy: () => void } {
     msgEl.textContent = "没关系，点重试再来一次！";
   }
 
+  /** 糖果被吃掉时，把还连在糖果上的绳段一起收走（不然会悬空残留） */
+  function removeCandyRopes(): void {
+    const visited = new Set<number>([0]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const link of links) {
+        if (!link.active) continue;
+        if (visited.has(link.a) !== visited.has(link.b)) {
+          visited.add(link.a);
+          visited.add(link.b);
+          changed = true;
+        }
+      }
+    }
+    for (const link of links) {
+      if (link.active && visited.has(link.a) && visited.has(link.b)) {
+        link.active = false;
+      }
+    }
+  }
+
   function winLevel(): void {
     if (phase !== "play") return;
     phase = "won";
     phaseTime = 0;
     candyEaten = true;
+    removeCandyRopes();
     chew = 1;
     api.play("coin");
     api.play("win");
