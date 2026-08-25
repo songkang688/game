@@ -730,10 +730,12 @@ const caveHand: LevelDef[] = [
     ],
   },
   {
-    name: "洞穴大虫王", scene: "cave", waterLanes: [], startDew: 15, feature: "洞穴章BOSS",
+    // 第 88 关修复:洞穴露珠产得最慢(dewMult 1.5),原 15 珠开局压力比 >1,
+    // 提高开局露珠并把第二波风风虫 8→7,难度回到章末 BOSS 应有的紧张但可过。
+    name: "洞穴大虫王", scene: "cave", waterLanes: [], startDew: 20, feature: "洞穴章BOSS",
     hint: "大虫王守着洞穴宝藏,拿下它!", flagWaves: [2],
     waves: [
-      W(["digger", 6, 1.0], ["bucket", 3, 1.7]), W(["racer", 8, 0.7], ["walker", 7, 0.9]),
+      W(["digger", 6, 1.0], ["bucket", 3, 1.7]), W(["racer", 7, 0.7], ["walker", 7, 0.9]),
       W(["bossbug", 1, 1], ["digger", 5, 0.95]),
     ],
   },
@@ -787,12 +789,15 @@ const stormHand: LevelDef[] = [
     ],
   },
   {
-    name: "虫虫女王决战", scene: "storm", waterLanes: [], startDew: 16, feature: "最终BOSS虫虫女王",
+    // 第 99 关修复:雷雨夜露珠最慢(dewMult 1.6)+全重甲阵容,原压力比 1.20 过难,
+    // 开局露珠 16→28、铁桶 4→3/3→2、飞虫 7→6、终波风风虫 7→6;
+    // 女王本体不动,压力比回到 ~0.95,仍是全战役最难一关。
+    name: "虫虫女王决战", scene: "storm", waterLanes: [], startDew: 28, feature: "最终BOSS虫虫女王",
     hint: "最终决战!虫虫女王和大虫王一起来啦!", flagWaves: [3],
     waves: [
-      W(["armor", 6, 1.0], ["racer", 6, 0.75]), W(["bucket", 4, 1.4], ["speedy", 7, 0.75]),
+      W(["armor", 6, 1.0], ["racer", 6, 0.75]), W(["bucket", 3, 1.4], ["speedy", 6, 0.75]),
       W(["bossbug", 1, 1], ["racer", 6, 0.7]),
-      W(["queen", 1, 1], ["bucket", 3, 1.4], ["racer", 7, 0.65]),
+      W(["queen", 1, 1], ["bucket", 2, 1.4], ["racer", 6, 0.65]),
     ],
   },
 ];

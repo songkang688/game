@@ -957,7 +957,9 @@ const candyHand: LevelDef[] = [
     ],
   },
   {
-    name: "糖果魔王", theme: "candy", paths: [P_UTURN], startPetals: 18, feature: "最终BOSS糖果魔王",
+    // 第 99 关修复:抽验压力比 1.00(最紧一波刚好卡满),开局花瓣 18→22
+    // 留出第一波前多种一棵塔的余量,终局仍是全战役最难。
+    name: "糖果魔王", theme: "candy", paths: [P_UTURN], startPetals: 22, feature: "最终BOSS糖果魔王",
     hint: "最终 BOSS!糖果魔王会召唤、会暴走、倒下还会裂开!",
     waves: [
       W(["shieldy", 6, 0.85], ["sneaky", 6, 0.8]), W(["healy", 3, 1.8], ["tanky", 5, 0.9]),

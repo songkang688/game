@@ -253,20 +253,22 @@ function R(
 }
 
 /** 生成回合:炸弹概率取三位小数,保证和手写回合(两位小数)不同模板。 */
+// 第 75/95/97 等生成回合修复:原目标 16+ci*8+pos*2 在后期章节超过全场水果供给
+// (R95 满切也只有 ~85% 目标,数学上不可能),改为 26+ci*5+sub*2 并把每波上限
+// 提到 4~5 颗,保证一年级(切到 ~65% 水果)也能达标。
 function genRound(ci: number, sub: number): RoundDef {
   const orchard = ORCHARD_ORDER[ci];
   const st = ORCHARD_STYLE[orchard];
-  const pos = 6 + sub;
   return {
     name: `${st.name}加宴 ${sub + 1} 号`,
     orchard,
-    target: 16 + ci * 8 + pos * 2,
+    target: 26 + ci * 5 + sub * 2,
     time: 40 + (ci % 3) * 2,
     bombChance: Math.round((0.101 + ci * 0.02 + sub * 0.025) * 1000) / 1000,
     bigBombChance: ci >= 2 ? Math.round((0.02 + ci * 0.008) * 1000) / 1000 : 0,
     maxOnScreen: 7 + Math.floor(ci / 2) + (sub === 2 ? 1 : 0),
     volleyMin: 2 + (sub % 2),
-    volleyMax: 3 + ((sub + ci) % 2),
+    volleyMax: 4 + ((sub + ci) % 2),
     specials: [...st.specials],
     feature: `${st.name}加宴${sub + 1}号`,
     gen: true,
