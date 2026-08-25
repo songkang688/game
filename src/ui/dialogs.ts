@@ -16,6 +16,18 @@ export interface DialogHandle {
   el: HTMLElement;
 }
 
+/**
+ * 弹窗/结算浮层刚弹出的「冷静期」(毫秒):
+ * 狂点型玩法(拔河、点点、地鼠…)里孩子的手停不下来,胜负一出手指还在连点,
+ * 没有冷静期时会瞬间误触「再玩一次/下一关/回首页」,结果画面根本没看到。
+ */
+export const CLICK_GUARD_MS = 400;
+
+/** 弹出后 nowMs 距 shownAtMs 不足冷静期时,应忽略这次点击(纯函数便于测试) */
+export function isGuardedClick(shownAtMs: number, nowMs: number, guardMs = CLICK_GUARD_MS): boolean {
+  return nowMs - shownAtMs < guardMs;
+}
+
 export function showDialog(opts: {
   className?: string;
   content: HTMLElement;
@@ -40,6 +52,8 @@ export function showDialog(opts: {
     window.setTimeout(() => overlay.remove(), 160);
   };
 
+  const shownAt = performance.now();
+
   if (opts.buttons && opts.buttons.length > 0) {
     const row = document.createElement("div");
     row.className = "dialog-buttons";
@@ -49,6 +63,8 @@ export function showDialog(opts: {
       b.className = `btn ${btn.kind === "ghost" ? "btn--ghost" : "btn--primary"}`;
       b.textContent = btn.label;
       b.addEventListener("click", () => {
+        // 冷静期内的点击是孩子狂点的余波,不当成选择
+        if (isGuardedClick(shownAt, performance.now())) return;
         close();
         btn.onClick();
       });
