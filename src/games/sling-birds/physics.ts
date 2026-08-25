@@ -46,6 +46,58 @@ export function launchVelocity(dragX: number, dragY: number): { vx: number; vy: 
   return { vx, vy };
 }
 
+export interface WindLike {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fx: number;
+  fy: number;
+}
+
+/**
+ * 弹道预览点(与 index.ts stepBirds 同一套半隐式欧拉积分:
+ * 风区加速 → 重力(乘小鸟重力系数) → 位移),保证预览虚线与实弹一致。
+ * subStep 取 1/180 ≈ 实际飞行 60fps × 3 子步的步长。
+ */
+export function simulateTrajectory(
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  gfactor = 1,
+  winds: WindLike[] = [],
+  count = 13,
+  sampleEvery = 0.07,
+  subStep = 1 / 180,
+  gravity = GRAVITY
+): Array<{ x: number; y: number }> {
+  const pts: Array<{ x: number; y: number }> = [];
+  let px = x;
+  let py = y;
+  let pvx = vx;
+  let pvy = vy;
+  let acc = 0;
+  const maxSteps = Math.ceil((count * sampleEvery) / subStep) + 8;
+  for (let i = 0; i < maxSteps && pts.length < count; i++) {
+    for (const w of winds) {
+      if (px > w.x && px < w.x + w.w && py > w.y && py < w.y + w.h) {
+        pvx += w.fx * subStep;
+        pvy += w.fy * subStep;
+      }
+    }
+    pvy += gravity * gfactor * subStep;
+    px += pvx * subStep;
+    py += pvy * subStep;
+    acc += subStep;
+    if (acc >= sampleEvery - 1e-9) {
+      pts.push({ x: px, y: py });
+      acc = 0;
+    }
+  }
+  return pts;
+}
+
 /** 弹道预览点(不考虑风,给小朋友一个大概方向) */
 export function trajectoryPoints(
   x: number,
