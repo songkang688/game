@@ -1,7 +1,7 @@
 /**
  * 弹弹小鸟 —— 拉开大弹弓,把捣蛋的绿绿豆全都弹走!
  *
- * - 60 关、4 个章节选关地图,通关解锁,可回放刷 3 星
+ * - 99 关、6 个主题世界选关地图,通关解锁,可回放刷 3 星
  * - 4 种原创小鸟技能:糯糯(直球)/ 云云(分裂)/ 墩墩(下砸)/ 闪闪(加速钻)
  * - 自写 2D 弹弓 + 重力 + 方块破坏物理,不用任何物理引擎
  */
@@ -9,7 +9,7 @@ import {
   BALLOON_ROPE,
   CHAPTERS,
   LEVELS,
-  LEVELS_PER_CHAPTER,
+  chapterStartId,
   levelsOfChapter,
   type BirdKind,
   type BlockKind,
@@ -42,7 +42,7 @@ export const meta = {
   emoji: "🐦",
   category: "action" as const,
   color: "#CFEBFF",
-  blurb: "拉开大弹弓,弹出小鸟撞倒积木,把捣蛋的绿绿豆全都弹走!"
+  blurb: "99 关 6 大世界!拉开大弹弓,弹出小鸟撞倒积木,把捣蛋的绿绿豆全都弹走!"
 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -139,7 +139,7 @@ const EXPLODE_R = 88;
 
 /* ---------------- 本地进度(独立存档,不动平台存档) ---------------- */
 
-const STORE_KEY = "yiduo-yixing.sling-birds.v1";
+const STORE_KEY = "yiduo-yixing.sling-birds.v2";
 
 interface Progress {
   stars: Record<string, number>;
@@ -163,7 +163,10 @@ function loadProgress(): Progress {
     return {
       stars,
       resume: typeof obj.resume === "number" ? obj.resume : null,
-      chapter: typeof obj.chapter === "number" ? clamp(Math.round(obj.chapter), 0, 3) : 0
+      chapter:
+        typeof obj.chapter === "number"
+          ? clamp(Math.round(obj.chapter), 0, CHAPTERS.length - 1)
+          : 0
     };
   } catch {
     return fallback;
@@ -354,7 +357,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function chapterUnlocked(c: number): boolean {
-    return isUnlocked(c * LEVELS_PER_CHAPTER + 1);
+    return isUnlocked(chapterStartId(c));
   }
 
   /* ---------------- 选关地图 ---------------- */
@@ -1310,7 +1313,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     { skyTop: "#D8F3FF", skyBot: "#F2FFE3", ground: "#B7E39B", groundEdge: "#96CE7A", hill: "#CBEDB0" },
     { skyTop: "#CFF0FF", skyBot: "#FFF6DC", ground: "#F6E0A8", groundEdge: "#E3C685", hill: "#BDE8F2" },
     { skyTop: "#DCE9FB", skyBot: "#FFFFFF", ground: "#EEF4FB", groundEdge: "#CFDFF0", hill: "#E4EEF9" },
-    { skyTop: "#3B4879", skyBot: "#7D89C4", ground: "#8F97CE", groundEdge: "#737DB8", hill: "#5E6AA6" }
+    { skyTop: "#3B4879", skyBot: "#7D89C4", ground: "#8F97CE", groundEdge: "#737DB8", hill: "#5E6AA6" },
+    { skyTop: "#57334A", skyBot: "#E08356", ground: "#8A5148", groundEdge: "#6E3E38", hill: "#B05548" },
+    { skyTop: "#BFE3FF", skyBot: "#FFE9F4", ground: "#F0E9FF", groundEdge: "#D7C7F2", hill: "#E6F4FF" }
   ];
 
   function drawBg(c: CanvasRenderingContext2D, chapter: number): void {
@@ -1360,7 +1365,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.arc(sx, sy, i % 3 === 0 ? 2.4 : 1.6, 0, Math.PI * 2);
         c.fill();
       }
-    } else {
+    } else if (chapter === 3) {
       c.fillStyle = "#FFF3B8";
       c.beginPath();
       c.arc(480, 52, 24, 0, Math.PI * 2);
@@ -1378,6 +1383,52 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.fill();
       }
       c.globalAlpha = 1;
+    } else if (chapter === 4) {
+      // 火山峡谷:远处火山口 + 飘升的火星
+      c.fillStyle = st.hill;
+      c.beginPath();
+      c.moveTo(360, GROUND_Y);
+      c.lineTo(440, 90);
+      c.lineTo(468, 90);
+      c.lineTo(540, GROUND_Y);
+      c.closePath();
+      c.fill();
+      c.fillStyle = "#FFB65C";
+      c.beginPath();
+      c.ellipse(454, 90, 20, 7, 0, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = "rgba(255,150,70,.85)";
+      for (let i = 0; i < 12; i++) {
+        const t = (simT * 30 + i * 47) % 140;
+        const ex = 454 + Math.sin(simT * 1.4 + i * 2.1) * (10 + i * 3);
+        c.globalAlpha = 0.75 - (t / 140) * 0.7;
+        c.beginPath();
+        c.arc(ex, 86 - t, i % 3 === 0 ? 3 : 2, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1;
+    } else {
+      // 彩虹云端:大彩虹拱 + 飘飘白云
+      const arc = ["#FF9E9E", "#FFCE8A", "#FFF3A8", "#B4E8A5", "#A5D4F5", "#CBB2F0"];
+      c.lineWidth = 10;
+      for (let i = 0; i < arc.length; i++) {
+        c.strokeStyle = arc[i];
+        c.globalAlpha = 0.55;
+        c.beginPath();
+        c.arc(WORLD_W / 2, GROUND_Y + 210, 330 - i * 11, Math.PI * 1.2, Math.PI * 1.8);
+        c.stroke();
+      }
+      c.globalAlpha = 1;
+      c.fillStyle = "rgba(255,255,255,.9)";
+      for (let i = 0; i < 4; i++) {
+        const drift = ((simT * 9 + i * 150) % (WORLD_W + 120)) - 60;
+        const cy = 46 + i * 58;
+        c.beginPath();
+        c.arc(drift, cy, 16, 0, Math.PI * 2);
+        c.arc(drift + 19, cy - 7, 12, 0, Math.PI * 2);
+        c.arc(drift + 37, cy, 14, 0, Math.PI * 2);
+        c.fill();
+      }
     }
 
     // 地面

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   CHAPTERS,
+  CHAPTER_SIZES,
   GENERATED_LEVELS,
   LEVELS,
-  LEVELS_PER_CHAPTER,
   SPECIAL_KINDS,
+  chapterOfId,
+  chapterStartId,
   levelsOfChapter,
   obstacleKinds,
   targetCount,
@@ -14,26 +16,29 @@ import {
 import { GROUND_Y, WORLD_W } from "./physics";
 
 describe("sling-birds 关卡总量与章节", () => {
-  it("至少 56 关", () => {
-    expect(LEVELS.length).toBeGreaterThanOrEqual(56);
+  it("正好 99 关", () => {
+    expect(LEVELS.length).toBe(99);
   });
 
   it("id 从 1 开始连续且唯一", () => {
     LEVELS.forEach((l, i) => expect(l.id).toBe(i + 1));
   });
 
-  it("4 个章节,每章 15 关,chapter 字段与 id 对应", () => {
-    expect(CHAPTERS.length).toBe(4);
-    for (let c = 0; c < 4; c++) {
-      expect(levelsOfChapter(c).length).toBe(LEVELS_PER_CHAPTER);
+  it("6 个主题章节,章节大小与 chapter 字段对应", () => {
+    expect(CHAPTERS.length).toBe(6);
+    expect(CHAPTER_SIZES.length).toBe(6);
+    expect(CHAPTER_SIZES.reduce((a, b) => a + b, 0)).toBe(99);
+    for (let c = 0; c < 6; c++) {
+      expect(levelsOfChapter(c).length, `第 ${c + 1} 章`).toBe(CHAPTER_SIZES[c]);
+      expect(chapterOfId(chapterStartId(c))).toBe(c);
     }
     for (const l of LEVELS) {
-      expect(l.chapter).toBe(Math.floor((l.id - 1) / LEVELS_PER_CHAPTER));
+      expect(l.chapter, `第 ${l.id} 关`).toBe(chapterOfId(l.id));
     }
   });
 
-  it("手写独特布局 ≥ 20 关", () => {
-    expect(LEVELS.filter((l) => l.handmade).length).toBeGreaterThanOrEqual(20);
+  it("手写独特布局 ≥ 28 关", () => {
+    expect(LEVELS.filter((l) => l.handmade).length).toBeGreaterThanOrEqual(28);
   });
 
   it("所有关卡布局互不相同", () => {
@@ -80,6 +85,26 @@ describe("sling-birds 障碍组合", () => {
     const all = new Set(LEVELS.flatMap(obstacleKinds));
     for (const k of ["wood", "stone", "ice", "glass", "tnt", "boulder", "slope", "platform", "balloon", "wind"]) {
       expect(all.has(k), `缺少障碍:${k}`).toBe(true);
+    }
+  });
+
+  it("火山峡谷章每关都有 TNT / 滚石 / 斜坡之一", () => {
+    for (const l of levelsOfChapter(4)) {
+      const kinds = obstacleKinds(l);
+      expect(
+        kinds.includes("tnt") || kinds.includes("boulder") || kinds.includes("slope"),
+        `第 ${l.id} 关 ${l.name}`
+      ).toBe(true);
+    }
+  });
+
+  it("彩虹云端章每关都有平台 / 气球 / 风区之一", () => {
+    for (const l of levelsOfChapter(5)) {
+      const kinds = obstacleKinds(l);
+      expect(
+        kinds.includes("platform") || kinds.includes("balloon") || kinds.includes("wind"),
+        `第 ${l.id} 关 ${l.name}`
+      ).toBe(true);
     }
   });
 });

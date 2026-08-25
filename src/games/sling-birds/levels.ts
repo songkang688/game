@@ -1,9 +1,9 @@
 /**
  * 弹弹小鸟 —— 关卡数据。
  *
- * 共 60 关、4 个章节(草地 / 沙滩 / 雪地 / 夜晚),每章 15 关。
- * 其中 24 关为手写独特布局(handmade: true),
- * 其余 36 关由确定性生成器按「配方」生成——每个配方的障碍组合都不同,
+ * 共 99 关、6 个主题世界(草地 / 沙滩 / 雪地 / 夜晚 / 火山 / 云端)。
+ * 其中 32 关为手写独特布局(handmade: true),
+ * 其余 67 关由确定性生成器按「配方」生成——每个配方的障碍组合都不同,
  * 同一个种子永远生成同样的关卡。
  */
 import { GROUND_Y, makeRng } from "./physics";
@@ -81,7 +81,8 @@ export interface LevelDef {
   winds?: WindDef[];
 }
 
-export const LEVELS_PER_CHAPTER = 15;
+/** 每章关卡数(共 99 关) */
+export const CHAPTER_SIZES = [15, 15, 15, 15, 20, 19] as const;
 /** 气球绳长:吊着的豆在气球下方这么远 */
 export const BALLOON_ROPE = 34;
 
@@ -89,8 +90,28 @@ export const CHAPTERS = [
   { name: "青青草地", emoji: "🌿" },
   { name: "阳光沙滩", emoji: "🏖️" },
   { name: "白白雪原", emoji: "❄️" },
-  { name: "星星夜空", emoji: "🌙" }
+  { name: "星星夜空", emoji: "🌙" },
+  { name: "火山峡谷", emoji: "🌋" },
+  { name: "彩虹云端", emoji: "🌈" }
 ] as const;
+
+/** 某章第一关的 id */
+export function chapterStartId(c: number): number {
+  let id = 1;
+  for (let i = 0; i < c; i++) id += CHAPTER_SIZES[i];
+  return id;
+}
+
+/** 关卡 id 所属章节 */
+export function chapterOfId(id: number): number {
+  let c = 0;
+  let start = 1;
+  while (c < CHAPTER_SIZES.length - 1 && id >= start + CHAPTER_SIZES[c]) {
+    start += CHAPTER_SIZES[c];
+    c++;
+  }
+  return c;
+}
 
 const G = GROUND_Y;
 
@@ -99,7 +120,7 @@ function bl(kind: BlockKind, x: number, y: number, w: number, h: number): BlockD
 }
 
 /* ------------------------------------------------------------------ */
-/* 手写关卡(24 关)                                                    */
+/* 手写关卡(32 关)                                                    */
 /* ------------------------------------------------------------------ */
 
 const HANDMADE_LEVELS: LevelDef[] = [
@@ -483,11 +504,160 @@ const HANDMADE_LEVELS: LevelDef[] = [
     ],
     slopes: [{ x: 255, y: G - 56, w: 70, h: 56, dir: "up-right" }],
     balloons: [{ x: 315, y: 120 }]
+  },
+  // —— 火山峡谷(第 5 章)——
+  {
+    id: 61,
+    chapter: 4,
+    name: "峡谷入口",
+    handmade: true,
+    birds: ["straight", "slam", "split"],
+    beans: [
+      { x: 426, y: G - 10 },
+      { x: 426, y: G - 88 }
+    ],
+    blocks: [
+      bl("stone", 400, G - 40, 12, 40),
+      bl("stone", 440, G - 40, 12, 40),
+      bl("glass", 394, G - 52, 64, 12),
+      bl("stone", 413, G - 78, 26, 26),
+      bl("tnt", 480, G - 24, 24, 24)
+    ]
+  },
+  {
+    id: 62,
+    chapter: 4,
+    name: "滚石峡谷",
+    handmade: true,
+    birds: ["straight", "split", "slam"],
+    beans: [
+      { x: 461, y: G - 10 },
+      { x: 461, y: G - 58 }
+    ],
+    blocks: [
+      bl("stone", 280, G - 80, 36, 80),
+      bl("stone", 440, G - 36, 12, 36),
+      bl("stone", 470, G - 36, 12, 36),
+      bl("stone", 434, G - 48, 54, 12)
+    ],
+    slopes: [{ x: 316, y: G - 70, w: 90, h: 70, dir: "up-left" }],
+    boulders: [{ x: 298, y: G - 94, r: 14 }]
+  },
+  {
+    id: 70,
+    chapter: 4,
+    name: "岩浆炸弹",
+    handmade: true,
+    birds: ["straight", "drill", "split"],
+    beans: [
+      { x: 433, y: G - 40 },
+      { x: 495, y: G - 40 }
+    ],
+    blocks: [
+      bl("glass", 360, G - 40, 14, 40),
+      bl("tnt", 390, G - 24, 24, 24),
+      bl("stone", 420, G - 30, 26, 30),
+      bl("tnt", 452, G - 24, 24, 24),
+      bl("stone", 482, G - 30, 26, 30)
+    ]
+  },
+  {
+    id: 80,
+    chapter: 4,
+    name: "火山大喷发",
+    handmade: true,
+    birds: ["drill", "slam", "split", "straight", "straight"],
+    beans: [
+      { x: 407, y: G - 108 },
+      { x: 466, y: G - 10 }
+    ],
+    blocks: [
+      bl("stone", 370, G - 60, 14, 60),
+      bl("stone", 430, G - 60, 14, 60),
+      bl("stone", 362, G - 72, 90, 12),
+      bl("tnt", 395, G - 24, 24, 24),
+      bl("glass", 400, G - 98, 26, 26),
+      bl("tnt", 484, G - 24, 24, 24)
+    ],
+    slopes: [{ x: 240, y: G - 56, w: 70, h: 56, dir: "up-right" }],
+    boulders: [{ x: 330, y: G - 13, r: 13 }],
+    winds: [{ x: 250, y: 40, w: 120, h: 160, fx: 0, fy: -220 }]
+  },
+  // —— 彩虹云端(第 6 章)——
+  {
+    id: 81,
+    chapter: 5,
+    name: "云端漫步",
+    handmade: true,
+    birds: ["straight", "split", "slam"],
+    beans: [
+      { x: 375, y: 170 },
+      { x: 470, y: G - 36 }
+    ],
+    blocks: [bl("wood", 457, G - 26, 26, 26)],
+    platforms: [{ x: 340, y: 180, w: 70, h: 12, dx: 0, dy: 40, period: 5 }],
+    balloons: [{ x: 300, y: 120 }]
+  },
+  {
+    id: 82,
+    chapter: 5,
+    name: "彩虹气球",
+    handmade: true,
+    birds: ["split", "straight", "straight", "slam"],
+    beans: [{ x: 479, y: G - 66 }],
+    blocks: [bl("glass", 470, G - 56, 18, 56)],
+    balloons: [
+      { x: 350, y: 100 },
+      { x: 430, y: 140 }
+    ],
+    winds: [{ x: 240, y: 50, w: 130, h: 170, fx: 0, fy: -240 }]
+  },
+  {
+    id: 90,
+    chapter: 5,
+    name: "云中宫殿",
+    handmade: true,
+    birds: ["drill", "split", "slam", "straight"],
+    beans: [
+      { x: 418, y: G - 10 },
+      { x: 418, y: G - 118 },
+      { x: 282, y: 140 }
+    ],
+    blocks: [
+      bl("glass", 380, G - 70, 16, 70),
+      bl("glass", 440, G - 70, 16, 70),
+      bl("ice", 372, G - 82, 92, 12),
+      bl("ice", 405, G - 108, 26, 26)
+    ],
+    platforms: [{ x: 250, y: 150, w: 64, h: 12, dx: 45, dy: 0, period: 4 }]
+  },
+  {
+    id: 99,
+    chapter: 5,
+    name: "彩虹终点大狂欢",
+    handmade: true,
+    birds: ["drill", "slam", "split", "straight", "split", "straight"],
+    beans: [
+      { x: 413, y: G - 104 },
+      { x: 443, y: G - 104 },
+      { x: 500, y: G - 10 }
+    ],
+    blocks: [
+      bl("stone", 380, G - 56, 14, 56),
+      bl("stone", 442, G - 56, 14, 56),
+      bl("stone", 372, G - 68, 92, 12),
+      bl("tnt", 406, G - 24, 24, 24),
+      bl("glass", 400, G - 94, 26, 26),
+      bl("ice", 430, G - 94, 26, 26)
+    ],
+    platforms: [{ x: 260, y: 130, w: 64, h: 12, dx: 0, dy: 50, period: 5.5 }],
+    balloons: [{ x: 320, y: 90 }],
+    winds: [{ x: 235, y: 40, w: 110, h: 170, fx: 0, fy: -230 }]
   }
 ];
 
 /* ------------------------------------------------------------------ */
-/* 生成关卡(36 关):每个配方的障碍组合都不一样                          */
+/* 生成关卡(67 关):每个配方的障碍组合都不一样                          */
 /* ------------------------------------------------------------------ */
 
 type FeatKind = BlockKind | "boulder" | "slope" | "platform" | "balloon" | "wind";
@@ -544,7 +714,40 @@ const RECIPES: Recipe[] = [
   { id: 57, chapter: 3, name: "极光钻冰夜", seed: 408, feats: ["wood", "ice", "tnt", "boulder", "wind"], beans: 3, birds: ["drill", "drill", "slam", "split"] },
   { id: 58, chapter: 3, name: "星桥升降梯", seed: 409, feats: ["stone", "ice", "slope", "platform", "balloon"], beans: 4, birds: ["slam", "split", "drill", "straight", "drill"] },
   { id: 59, chapter: 3, name: "午夜大爆炸", seed: 410, feats: ["wood", "stone", "glass", "tnt", "boulder", "wind"], beans: 4, birds: ["drill", "slam", "split", "straight", "slam"] },
-  { id: 60, chapter: 3, name: "梦境终点站", seed: 411, feats: ["wood", "stone", "ice", "glass", "tnt", "balloon", "platform", "wind"], beans: 5, birds: ["drill", "slam", "split", "straight", "drill", "split"] }
+  { id: 60, chapter: 3, name: "梦境终点站", seed: 411, feats: ["wood", "stone", "ice", "glass", "tnt", "balloon", "platform", "wind"], beans: 5, birds: ["drill", "slam", "split", "straight", "drill", "split"] },
+  // —— 火山峡谷(第 5 章):石头、炸药、滚石与斜坡的世界 ——
+  { id: 63, chapter: 4, name: "熔岩石桥", seed: 501, feats: ["stone", "tnt", "boulder"], beans: 2, birds: ["straight", "slam", "split"] },
+  { id: 64, chapter: 4, name: "火山口滑坡", seed: 502, feats: ["stone", "tnt", "slope"], beans: 2, birds: ["slam", "straight", "split"] },
+  { id: 65, chapter: 4, name: "岩浆采石场", seed: 503, feats: ["wood", "stone", "tnt", "slope"], beans: 3, birds: ["straight", "split", "slam", "straight"] },
+  { id: 66, chapter: 4, name: "滚烫滚石道", seed: 504, feats: ["wood", "tnt", "slope", "boulder"], beans: 2, birds: ["straight", "slam", "split"] },
+  { id: 67, chapter: 4, name: "黑曜石塔", seed: 505, feats: ["stone", "glass", "tnt"], beans: 2, birds: ["drill", "slam", "straight"] },
+  { id: 68, chapter: 4, name: "喷发平台", seed: 506, feats: ["stone", "tnt", "boulder", "platform"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 69, chapter: 4, name: "热风峡谷", seed: 507, feats: ["stone", "tnt", "slope", "wind"], beans: 2, birds: ["split", "slam", "straight"] },
+  { id: 71, chapter: 4, name: "火山玻璃棚", seed: 508, feats: ["glass", "tnt", "slope", "boulder"], beans: 2, birds: ["drill", "straight", "slam"] },
+  { id: 72, chapter: 4, name: "碎石营地", seed: 509, feats: ["wood", "stone", "tnt", "boulder"], beans: 3, birds: ["straight", "slam", "split", "straight"] },
+  { id: 73, chapter: 4, name: "缆车采矿场", seed: 510, feats: ["stone", "tnt", "slope", "platform"], beans: 3, birds: ["slam", "split", "drill", "straight"] },
+  { id: 74, chapter: 4, name: "岩浆水晶洞", seed: 511, feats: ["stone", "glass", "tnt", "boulder"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 75, chapter: 4, name: "热气球侦察", seed: 512, feats: ["stone", "slope", "boulder", "balloon"], beans: 3, birds: ["straight", "split", "slam", "straight"] },
+  { id: 76, chapter: 4, name: "灰烬风暴", seed: 513, feats: ["wood", "tnt", "boulder", "wind"], beans: 2, birds: ["slam", "drill", "split"] },
+  { id: 77, chapter: 4, name: "熔岩瞭望塔", seed: 514, feats: ["stone", "glass", "tnt", "platform"], beans: 3, birds: ["drill", "split", "slam", "straight"] },
+  { id: 78, chapter: 4, name: "火山要塞", seed: 515, feats: ["wood", "stone", "tnt", "slope", "boulder"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 79, chapter: 4, name: "大喷发前夜", seed: 516, feats: ["stone", "glass", "tnt", "boulder", "platform", "wind"], beans: 4, birds: ["drill", "slam", "split", "straight", "slam"] },
+  // —— 彩虹云端(第 6 章):平台、气球与风的空中世界 ——
+  { id: 83, chapter: 5, name: "软软白云", seed: 601, feats: ["wood", "platform", "balloon"], beans: 3, birds: ["straight", "split", "slam"] },
+  { id: 84, chapter: 5, name: "玻璃风铃", seed: 602, feats: ["glass", "balloon", "wind"], beans: 2, birds: ["split", "straight", "drill"] },
+  { id: 85, chapter: 5, name: "顺风木桥", seed: 603, feats: ["wood", "platform", "wind"], beans: 2, birds: ["straight", "slam", "split"] },
+  { id: 86, chapter: 5, name: "飘飘热气球", seed: 604, feats: ["wood", "platform", "balloon", "wind"], beans: 3, birds: ["split", "straight", "slam", "straight"] },
+  { id: 87, chapter: 5, name: "云朵玻璃屋", seed: 605, feats: ["glass", "platform", "balloon"], beans: 3, birds: ["drill", "split", "straight"] },
+  { id: 88, chapter: 5, name: "微风观景桥", seed: 606, feats: ["wood", "glass", "platform", "wind"], beans: 3, birds: ["straight", "drill", "split", "slam"] },
+  { id: 89, chapter: 5, name: "泡泡飞行队", seed: 607, feats: ["glass", "platform", "balloon", "wind"], beans: 3, birds: ["split", "drill", "straight", "slam"] },
+  { id: 91, chapter: 5, name: "冰晶云梯", seed: 608, feats: ["ice", "platform", "balloon"], beans: 3, birds: ["drill", "split", "straight"] },
+  { id: 92, chapter: 5, name: "云上烟花铺", seed: 609, feats: ["stone", "tnt", "platform", "balloon"], beans: 3, birds: ["slam", "split", "drill", "straight"] },
+  { id: 93, chapter: 5, name: "极光水晶桥", seed: 610, feats: ["ice", "glass", "platform", "balloon", "wind"], beans: 3, birds: ["drill", "split", "slam", "straight"] },
+  { id: 94, chapter: 5, name: "雪云缆车", seed: 611, feats: ["wood", "ice", "platform", "balloon", "wind"], beans: 3, birds: ["split", "drill", "slam", "straight"] },
+  { id: 95, chapter: 5, name: "云端爆竹节", seed: 612, feats: ["glass", "tnt", "platform", "balloon", "wind"], beans: 4, birds: ["drill", "slam", "split", "straight", "split"] },
+  { id: 96, chapter: 5, name: "彩虹大桥", seed: 613, feats: ["stone", "ice", "glass", "platform", "balloon", "wind"], beans: 4, birds: ["drill", "slam", "split", "straight", "drill"] },
+  { id: 97, chapter: 5, name: "云海滚滚", seed: 614, feats: ["wood", "boulder", "platform", "balloon", "wind"], beans: 3, birds: ["straight", "slam", "drill", "split"] },
+  { id: 98, chapter: 5, name: "银河嘉年华", seed: 615, feats: ["wood", "ice", "glass", "tnt", "platform", "balloon", "wind"], beans: 4, birds: ["drill", "slam", "split", "straight", "split", "straight"] }
 ];
 
 function buildLevel(r: Recipe): LevelDef {
@@ -696,7 +899,7 @@ function buildLevel(r: Recipe): LevelDef {
 
 export const GENERATED_LEVELS: LevelDef[] = RECIPES.map(buildLevel);
 
-/** 全部 60 关,按 id 从小到大 */
+/** 全部 99 关,按 id 从小到大 */
 export const LEVELS: LevelDef[] = [...HANDMADE_LEVELS, ...GENERATED_LEVELS].sort(
   (a, b) => a.id - b.id
 );
