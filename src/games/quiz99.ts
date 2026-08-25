@@ -5,6 +5,7 @@
  * 答错太多次则温柔失败，可重试本关（绝不批评孩子）。
  */
 import type { PlayCtx, PlayHandle } from "./level99";
+import { speak, speechReady, stopSpeaking, whenSpeechReady } from "./speech";
 
 export interface QuizQuestion {
   /** 题干 HTML（可以是大表情、汉字、SVG…） */
@@ -55,6 +56,9 @@ const QUIZ_CSS = `
 .qz-choice.qz-right { animation: qzPop2 .4s; background: #E4F9E0; }
 @keyframes qzPop2 { 50% { transform: scale(1.12); } }
 .qz-msg { text-align: center; min-height: 24px; font-weight: 800; font-size: 15px; }
+.qz-say-row { display: flex; justify-content: center; }
+.qz-say { border: none; border-radius: 999px; background: #ffffffe6; cursor: pointer; font-family: inherit; font-weight: 900; font-size: 16px; padding: 10px 24px; min-height: 46px; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
+.qz-say:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,120,160,.3); }
 `;
 
 export function runQuiz(opts: QuizOptions): PlayHandle {
@@ -80,6 +84,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
     <div class="qz-bar"><div class="qz-fill" style="background:${theme.accent}"></div></div>
     <div class="qz-prompt"></div>
     <div class="qz-ask" style="color:${theme.accent}"></div>
+    <div class="qz-say-row"><button type="button" class="qz-say" style="color:${theme.accent}" hidden>🔈 再听一遍</button></div>
     <div class="qz-choices"></div>
     <div class="qz-msg" style="color:${theme.accent}"></div>
   `;
@@ -92,6 +97,21 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
   const askEl = wrap.querySelector(".qz-ask") as HTMLElement;
   const choicesEl = wrap.querySelector(".qz-choices") as HTMLElement;
   const msgEl = wrap.querySelector(".qz-msg") as HTMLElement;
+  const sayBtn = wrap.querySelector(".qz-say") as HTMLButtonElement;
+
+  // 朗读：题目切换自动读 ask；没有中文语音包时按钮保持隐藏、全程静默
+  sayBtn.addEventListener("click", () => {
+    if (!ended && index < questions.length) speak(questions[index].ask);
+  });
+  let speechOn = speechReady();
+  const unwatchSpeech = whenSpeechReady(() => {
+    sayBtn.hidden = false;
+    if (!speechOn) {
+      // 语音包姗姗来迟：补读当前这道题
+      speechOn = true;
+      if (!destroyed && !ended && index < questions.length) speak(questions[index].ask);
+    }
+  });
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -118,6 +138,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
       choicesEl.appendChild(btn);
     });
     locked = false;
+    speak(q.ask);
   }
 
   function onChoice(btn: HTMLButtonElement, i: number): void {
@@ -135,6 +156,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
         praise = `🔥 连对 ${streak} 题，奖励一颗小星星！`;
       }
       msgEl.textContent = praise;
+      speak(praise);
       streakEl.textContent = `🔥 连对 ${streak}`;
       later(() => {
         index++;
@@ -161,7 +183,9 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
         later(() => ctx.lose("这一关的题目有点调皮，我们休息一下再来一次！"), 500);
         return;
       }
-      msgEl.textContent = CHEERS[Math.floor(Math.random() * CHEERS.length)];
+      const cheer = CHEERS[Math.floor(Math.random() * CHEERS.length)];
+      msgEl.textContent = cheer;
+      speak(cheer);
     }
   }
 
@@ -171,6 +195,8 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
     destroy() {
       destroyed = true;
       ended = true;
+      unwatchSpeech();
+      stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       wrap.remove();
