@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
+import { INITIALS, SYLLABLE_CARDS, TONE_MARKS, TONE_NAMES, VOWELS } from "./logic";
 import { SINGLE_VOWELS, COMPOUND_VOWELS, buildQuestions, CHAPTERS, kindPool, LEVELS, questionCount } from "./levels";
 
 describe("拼音小火车 99 关", () => {
@@ -33,6 +34,37 @@ describe("拼音小火车 99 关", () => {
     for (let i = 67; i < 83; i++) {
       for (const q of buildQuestions(i)) {
         if (q.kind === "vowel") expect(COMPOUND_VOWELS).toContain(q.answer);
+      }
+    }
+  });
+
+  it("抽 20+ 题机器校验：声母/韵母/声调/音节全对、引导语口语化（≤15 个汉字）", () => {
+    const qs = [0, 24, 49, 74, 98].flatMap((i) => buildQuestions(i));
+    expect(qs.length).toBeGreaterThanOrEqual(20);
+    for (const q of qs) {
+      expect((q.ask.match(/[\u4e00-\u9fff]/g) ?? []).length).toBeLessThanOrEqual(15);
+      expect(q.choices[q.correct]).toBe(q.answer);
+      if (q.kind === "vowel") {
+        expect(VOWELS).toContain(q.answer);
+        for (const c of q.choices) if (c !== q.answer) expect(INITIALS).toContain(c);
+      } else if (q.kind === "initial") {
+        expect(INITIALS).toContain(q.answer);
+        for (const c of q.choices) if (c !== q.answer) expect(VOWELS).toContain(c);
+      } else if (q.kind === "match") {
+        expect(q.answer).toBe(q.promptHTML);
+      } else if (q.kind === "tone") {
+        const m = q.ask.match(/「(.+)」的(第[一二三四]声)/);
+        expect(m).not.toBeNull();
+        const idx = TONE_NAMES.indexOf(m![2]);
+        expect(idx).toBeGreaterThanOrEqual(0);
+        expect(q.answer).toBe(TONE_MARKS[m![1]][idx]);
+      } else {
+        const m = q.ask.match(/「(.+)」的拼音/);
+        expect(m).not.toBeNull();
+        const card = SYLLABLE_CARDS.find((c) => c.word === m![1]);
+        expect(card).toBeDefined();
+        expect(q.answer).toBe(card!.pinyin);
+        expect(q.promptHTML).toContain(card!.emoji);
       }
     }
   });
