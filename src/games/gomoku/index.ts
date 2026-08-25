@@ -146,6 +146,13 @@ export function mount(api: GameApi): { destroy: () => void } {
       .gm-pz .m { font-size: 10px; color: #B08A5C; }
       .gm-pz.locked { background: rgba(255,255,255,.5); box-shadow: none; cursor: default; }
       .gm-pz.locked .n { color: #C4B49B; }
+      .gm-wrap { position: relative; }
+      .gm-rulesbtn { border: none; border-radius: 16px; padding: 12px; font-size: 16px; font-weight: 800; background: #D9F2C4; color: #4A7A2A; cursor: pointer; box-shadow: 0 4px 0 #ADD68E; width: 100%; font-family: inherit; }
+      .gm-rulesbtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #ADD68E; }
+      .gm-rules { position: absolute; inset: 0; background: #FFF9F0; border-radius: 20px; padding: 14px; overflow-y: auto; z-index: 6; }
+      .gm-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
+      .gm-rules p { color: #7A5A3A; font-size: 14.5px; line-height: 1.7; margin: 6px 0; }
+      .gm-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #FFB3CD; color: #86285A; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #E890B2; font-family: inherit; }
     </style>
     <div class="gm-panel gm-setup">
       <div>
@@ -169,7 +176,7 @@ export function mount(api: GameApi): { destroy: () => void } {
             <button type="button" data-v="easy">🐱 棋灵喵·简单</button>
             <button type="button" data-v="normal" class="on">🦊 棋灵狐·普通</button>
             <button type="button" data-v="smart">🐲 棋灵龙·聪明</button>
-            <button type="button" data-v="pvp">👫 双人对战</button>
+            <button type="button" data-v="pvp">👫 朵朵 VS 星星</button>
           </div>
         </div>
         <div style="margin-top:14px">
@@ -179,7 +186,8 @@ export function mount(api: GameApi): { destroy: () => void } {
             <button type="button" data-v="on">开</button>
           </div>
         </div>
-        <button class="gm-start" type="button" style="margin-top:14px; width:100%">开始下棋 ▶</button>
+        <button class="gm-rulesbtn" type="button" style="margin-top:14px">📖 怎么玩（点我看规则）</button>
+        <button class="gm-start" type="button" style="margin-top:10px; width:100%">开始下棋 ▶</button>
       </div>
       <div class="gm-puzzle-list gm-hidden">
         <div class="gm-group-label">🧩 棋谜战役 · 99 道残局 6 大主题（黑棋 N 步内连五）</div>
@@ -201,6 +209,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       </div>
       <div class="gm-msg">点棋盘落子，按住可以滑动瞄准～</div>
     </div>
+    <div class="gm-rules gm-hidden">
+      <button class="gm-rules-close" type="button">✖ 关闭</button>
+      <h3 style="margin-top:2px">📖 五子棋 · 完整规则</h3>
+      <h3>🎯 怎么赢</h3>
+      <p>两个人轮流在棋盘的交叉点上放棋子，<b>横着、竖着、斜着</b>任何一个方向，先把自己的 <b>5 颗棋子连成一条线</b>就赢啦！</p>
+      <h3>👫 双人对战怎么下</h3>
+      <p>① <b>黑棋先下</b>（朵朵拿黑棋、星星拿白棋）；<br>② 一人一步轮流下，棋子放下就不能挪动；<br>③ 谁先连成五颗谁赢；<br>④ 棋盘全部下满还没人连五，就是<b>平局</b>，握手言和！</p>
+      <h3>🖐️ 怎么操作</h3>
+      <p>点棋盘就能落子；<b>按住手指滑动</b>可以慢慢瞄准，松手才落子。走错了可以按「↩️ 悔棋」（双人模式悔一步，和电脑下悔一个来回）。</p>
+      <h3>🚫 禁手是什么（大孩子玩法，默认关闭）</h3>
+      <p>正式比赛里黑棋先下太占便宜，所以有「禁手」规则：<b>黑棋</b>不能一步同时形成两个活三（三三）、两个四（四四），也不能连成超过五颗的长连，踩了就算输。<br>一年级的小朋友<b>先关着玩</b>就好，想挑战再打开开关！</p>
+      <h3>🤖 和电脑下</h3>
+      <p>棋灵喵最温柔、棋灵狐会防守、棋灵龙最厉害。赢不了的时候可以用「✨ 提示」，闪绿光的位置就是好棋！</p>
+    </div>
   `;
   api.root.appendChild(wrap);
 
@@ -219,6 +241,16 @@ export function mount(api: GameApi): { destroy: () => void } {
   const hintBtn = wrap.querySelector(".gm-hint") as HTMLButtonElement;
   const retryBtn = wrap.querySelector(".gm-retry") as HTMLButtonElement;
   const backBtn = wrap.querySelector(".gm-back") as HTMLButtonElement;
+  const rulesEl = wrap.querySelector(".gm-rules") as HTMLElement;
+
+  (wrap.querySelector(".gm-rulesbtn") as HTMLButtonElement).addEventListener("click", () => {
+    api.play("tap");
+    rulesEl.classList.remove("gm-hidden");
+  });
+  (wrap.querySelector(".gm-rules-close") as HTMLButtonElement).addEventListener("click", () => {
+    api.play("tap");
+    rulesEl.classList.add("gm-hidden");
+  });
 
   function segInit(selector: string, onPick: (v: string) => void): void {
     const seg = wrap.querySelector(selector) as HTMLElement;
@@ -309,7 +341,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (mode === "easy") return "🐱 棋灵喵·简单";
     if (mode === "normal") return "🦊 棋灵狐·普通";
     if (mode === "smart") return "🐲 棋灵龙·聪明";
-    return "👫 双人对战";
+    return "👫 朵朵 VS 星星";
   }
 
   function updateHud(): void {
@@ -321,11 +353,14 @@ export function mount(api: GameApi): { destroy: () => void } {
       }
     } else if (gameOver) {
       if (winner === 0) turnEl.textContent = "🤝 平局";
+      else if (mode === "pvp") turnEl.textContent = winner === 1 ? "⚫ 朵朵赢啦！" : "⚪ 星星赢啦！";
       else turnEl.textContent = winner === 1 ? "⚫ 黑棋赢啦！" : "⚪ 白棋赢啦！";
     } else if (aiThinking) {
       turnEl.textContent =
         mode === "easy" ? "🐱 棋灵喵思考中…" :
         mode === "smart" ? "🐲 棋灵龙思考中…" : "🦊 棋灵狐思考中…";
+    } else if (mode === "pvp" && playKind === "free") {
+      turnEl.textContent = current === 1 ? "⚫ 该朵朵（黑棋）啦" : "⚪ 该星星（白棋）啦";
     } else {
       turnEl.textContent = current === 1 ? "⚫ 该黑棋啦" : "⚪ 该白棋啦";
     }
@@ -363,7 +398,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     resetGameState();
     msgEl.textContent =
       mode === "pvp"
-        ? "黑棋先下，轮流点棋盘落子！"
+        ? "🌸 朵朵执黑先下，⭐ 星星执白，轮流点棋盘落子！"
         : "你执黑棋先下，点棋盘落子，按住可滑动瞄准～";
     updateHud();
   }
@@ -405,7 +440,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (win === 0) {
         api.onWin(1, "棋盘下满了，握手言和！");
       } else if (mode === "pvp") {
-        api.onWin(1, win === 1 ? "⚫ 黑棋小朋友赢啦！" : "⚪ 白棋小朋友赢啦！");
+        api.onWin(1, win === 1 ? "⚫ 朵朵（黑棋）连成五颗，赢啦！" : "⚪ 星星（白棋）连成五颗，赢啦！");
       } else if (win === 1) {
         const stars: 1 | 2 | 3 = mode === "easy" ? 2 : 3;
         api.onWin(
@@ -630,32 +665,40 @@ export function mount(api: GameApi): { destroy: () => void } {
     const cs = cellSize();
     const cx = cs + x * cs;
     const cy = cs + y * cs;
-    const r = cs * 0.44;
+    // 更大更圆的棋子：几乎占满一格，带柔和的立体高光
+    const r = cs * 0.47;
     ctx.globalAlpha = alpha;
     ctx.beginPath();
-    ctx.arc(cx, cy + 1.5, r, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(120, 80, 40, 0.25)";
+    ctx.arc(cx + r * 0.06, cy + r * 0.12, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(120, 80, 40, 0.28)";
     ctx.fill();
-    const grad = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.15, cx, cy, r);
+    const grad = ctx.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.1, cx, cy, r * 1.05);
     if (p === 1) {
-      grad.addColorStop(0, "#7E6E80");
-      grad.addColorStop(1, "#453A4A");
+      grad.addColorStop(0, "#8E7E92");
+      grad.addColorStop(0.55, "#544860");
+      grad.addColorStop(1, "#3B3244");
     } else {
       grad.addColorStop(0, "#FFFFFF");
-      grad.addColorStop(1, "#F2E8DA");
+      grad.addColorStop(0.6, "#FBF4E8");
+      grad.addColorStop(1, "#EBDFC9");
     }
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
     if (p === 2) {
-      ctx.strokeStyle = "rgba(150, 110, 70, 0.85)";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(150, 110, 70, 0.8)";
+      ctx.lineWidth = 1.6;
       ctx.stroke();
     }
-    ctx.fillStyle = p === 1 ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.9)";
+    // 主高光 + 小反光，让棋子看起来圆滚滚
+    ctx.fillStyle = p === 1 ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.95)";
     ctx.beginPath();
-    ctx.ellipse(cx - r * 0.3, cy - r * 0.38, r * 0.22, r * 0.14, -0.6, 0, Math.PI * 2);
+    ctx.ellipse(cx - r * 0.32, cy - r * 0.4, r * 0.26, r * 0.16, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = p === 1 ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.55)";
+    ctx.beginPath();
+    ctx.ellipse(cx + r * 0.3, cy + r * 0.34, r * 0.12, r * 0.07, 0.8, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
