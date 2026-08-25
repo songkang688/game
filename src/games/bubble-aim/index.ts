@@ -29,7 +29,7 @@ import {
   simulateShot,
   starsForShotsLeft,
 } from "./logic";
-import { LEVELS, MECH_INFO, levelMechanisms } from "./levels";
+import { LEVELS, MECH_INFO, THEMES, THEME_SIZES, levelMechanisms, themeOfLevel, themeStart } from "./levels";
 
 export const meta = {
   id: "bubble-aim",
@@ -37,7 +37,7 @@ export const meta = {
   emoji: "🫧",
   category: "casual" as const,
   color: "#D9EFFF",
-  blurb: "20 关泡泡战役：石泡、彩虹、黑洞、云挡板，拖一拖瞄准线全爆掉！",
+  blurb: "99 关 6 大主题世界：石泡、彩虹、黑洞、云挡板、泡泡雨，拖一拖瞄准线全爆掉！",
 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -54,7 +54,7 @@ interface GameApi {
 const SHOOTER_X = W / 2;
 const SHOOTER_Y = 444;
 const FLY_SPEED = 820;
-const SAVE_KEY = "yiduo.bubble-aim.campaign.v1";
+const SAVE_KEY = "yiduo.bubble-aim.campaign.v2";
 
 const COLOR_FILL: Record<string, [string, string]> = {
   R: ["#FFA7BD", "#F26D93"],
@@ -175,9 +175,12 @@ export function mount(api: GameApi): { destroy: () => void } {
       .ba-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #A9CCEE; }
       .ba-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
-      .ba-map { background: rgba(255,255,255,0.7); border-radius: 16px; padding: 12px; }
+      .ba-map { background: rgba(255,255,255,0.7); border-radius: 16px; padding: 12px; max-height: 520px; overflow-y: auto; }
       .ba-map-title { text-align: center; font-weight: 800; color: #2A6099; font-size: 17px; margin-bottom: 4px; }
       .ba-map-sub { text-align: center; color: #5E86B0; font-size: 12px; margin-bottom: 10px; }
+      .ba-theme { border-radius: 14px; padding: 10px; margin-bottom: 10px; }
+      .ba-th-head { font-weight: 800; font-size: 14px; margin-bottom: 2px; }
+      .ba-th-blurb { font-size: 11px; opacity: 0.85; margin-bottom: 8px; }
       .ba-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
       .ba-lv { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 3px 0 #C7DEF2; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
       .ba-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 #C7DEF2; }
@@ -195,9 +198,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       <button class="ba-btn ba-retry" type="button">🔄</button>
     </div>
     <div class="ba-map">
-      <div class="ba-map-title">🫧 泡泡瞄准手 · 关卡地图</div>
+      <div class="ba-map-title">🫧 泡泡瞄准手 · 99 关主题地图</div>
       <div class="ba-map-sub"></div>
-      <div class="ba-grid"></div>
+      <div class="ba-themes"></div>
     </div>
     <canvas class="ba-canvas" width="${W}" height="${H}"></canvas>
     <div class="ba-msg"></div>
@@ -209,7 +212,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   const topBar = wrap.querySelector(".ba-top") as HTMLElement;
   const mapEl = wrap.querySelector(".ba-map") as HTMLElement;
   const mapSubEl = wrap.querySelector(".ba-map-sub") as HTMLElement;
-  const gridEl = wrap.querySelector(".ba-grid") as HTMLElement;
+  const themesEl = wrap.querySelector(".ba-themes") as HTMLElement;
   const levelEl = wrap.querySelector(".ba-level") as HTMLElement;
   const countEl = wrap.querySelector(".ba-count") as HTMLElement;
   const shotsEl = wrap.querySelector(".ba-shots") as HTMLElement;
@@ -239,31 +242,53 @@ export function mount(api: GameApi): { destroy: () => void } {
     canvas.style.display = "none";
     mapEl.style.display = "";
     mapSubEl.textContent = `⭐ ${totalStars()}/${LEVELS.length * 3} · 通关 ${progress.stars.filter((s) => s > 0).length}/${LEVELS.length}`;
-    gridEl.innerHTML = "";
-    LEVELS.forEach((def, i) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      const open = unlocked(i);
-      btn.className = open ? "ba-lv" : "ba-lv locked";
-      const s = progress.stars[i];
-      const icons = levelMechanisms(def).map((m) => MECH_INFO[m].icon).join("");
-      btn.innerHTML = `
-        <span class="num">${open ? i + 1 : "🔒"}</span>
-        <span class="stars">${s > 0 ? "⭐".repeat(s) + "☆".repeat(3 - s) : open ? "☆☆☆" : ""}</span>
-        <span class="mech">${icons}</span>
-      `;
-      btn.title = def.name;
-      if (open) {
-        btn.addEventListener("click", () => {
-          api.play("tap");
-          startLevel(i);
-        });
+    themesEl.innerHTML = "";
+    THEMES.forEach((th, t) => {
+      const start = themeStart(t);
+      const size = THEME_SIZES[t];
+      const cleared = progress.stars.slice(start, start + size).filter((s) => s > 0).length;
+      const box = document.createElement("div");
+      box.className = "ba-theme";
+      box.style.background = th.tint;
+      const head = document.createElement("div");
+      head.className = "ba-th-head";
+      head.style.color = th.ink;
+      head.textContent = `${th.icon} ${th.name} · ${cleared}/${size}`;
+      const blurb = document.createElement("div");
+      blurb.className = "ba-th-blurb";
+      blurb.style.color = th.ink;
+      blurb.textContent = th.blurb;
+      const grid = document.createElement("div");
+      grid.className = "ba-grid";
+      for (let k = 0; k < size; k++) {
+        const i = start + k;
+        const def = LEVELS[i];
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const open = unlocked(i);
+        btn.className = open ? "ba-lv" : "ba-lv locked";
+        const s = progress.stars[i];
+        const icons = levelMechanisms(def).map((m) => MECH_INFO[m].icon).join("");
+        btn.innerHTML = `
+          <span class="num">${open ? i + 1 : "🔒"}</span>
+          <span class="stars">${s > 0 ? "⭐".repeat(s) + "☆".repeat(3 - s) : open ? "☆☆☆" : ""}</span>
+          <span class="mech">${icons}</span>
+        `;
+        btn.title = def.name;
+        if (open) {
+          btn.addEventListener("click", () => {
+            api.play("tap");
+            startLevel(i);
+          });
+        }
+        grid.appendChild(btn);
       }
-      gridEl.appendChild(btn);
+      box.append(head, blurb, grid);
+      themesEl.appendChild(box);
     });
     msgEl.textContent = allCleared()
       ? "全部通关！还可以回去刷三星哦！"
-      : "点亮的关卡都能玩，一路打到终极嘉年华！";
+      : "点亮的关卡都能玩，一路打到风暴嘉年华！";
   }
 
   // ---------- 关卡 ----------
@@ -553,14 +578,26 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawBackground(): void {
+    const th = THEMES[themeOfLevel(levelIndex)];
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#EDF7FF");
-    g.addColorStop(1, "#FFF2F8");
+    g.addColorStop(0, th.skyTop);
+    g.addColorStop(1, th.skyBottom);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+    if (th.dark) {
+      // 夜空主题:一闪一闪的小星星
+      for (let k = 0; k < 26; k++) {
+        const sx = (k * 73.7 + 11) % W;
+        const sy = (k * 137.3 + 23) % (H - 130);
+        ctx.globalAlpha = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(animTime * 2 + k * 1.7));
+        ctx.fillStyle = "#FFF6D8";
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
     // 警戒线
     const dy = TOP + R + DEADLINE_ROW * ROW_H - R - 4;
-    ctx.strokeStyle = "rgba(255, 130, 150, 0.55)";
+    ctx.strokeStyle = th.dark ? "rgba(255, 170, 190, 0.85)" : "rgba(255, 130, 150, 0.55)";
     ctx.setLineDash([8, 8]);
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -673,7 +710,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (phase === "play" && shotsLeft > 0) {
       drawBubbleAt(SHOOTER_X, SHOOTER_Y, currentColor);
     }
-    ctx.fillStyle = "#5E86B0";
+    ctx.fillStyle = THEMES[themeOfLevel(levelIndex)].dark ? "rgba(255,255,255,0.85)" : "#5E86B0";
     ctx.font = "12px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("下一个", W - 46, SHOOTER_Y - 24);
@@ -749,21 +786,24 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (bannerTime > 0 && phase === "play") {
       const a = Math.min(1, bannerTime / 0.4);
       const def = LEVELS[levelIndex];
+      const th = THEMES[themeOfLevel(levelIndex)];
       const mechs = levelMechanisms(def);
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.85 * a})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * a})`;
       ctx.beginPath();
-      ctx.roundRect(30, 180, 300, mechs.length > 0 ? 104 : 84, 18);
+      ctx.roundRect(30, 168, 300, mechs.length > 0 ? 120 : 100, 18);
       ctx.fill();
       ctx.fillStyle = `rgba(62, 124, 184, ${a})`;
-      ctx.font = "bold 21px sans-serif";
+      ctx.font = "13px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`第 ${levelIndex + 1} 关 · ${def.name}`, W / 2, 216);
+      ctx.fillText(`${th.icon} ${th.name}`, W / 2, 192);
+      ctx.font = "bold 21px sans-serif";
+      ctx.fillText(`第 ${levelIndex + 1} 关 · ${def.name}`, W / 2, 220);
       ctx.font = "12px sans-serif";
-      ctx.fillText(def.tip, W / 2, 244);
+      ctx.fillText(def.tip, W / 2, 248);
       if (mechs.length > 0) {
         ctx.fillText(
           "机关：" + mechs.map((m) => MECH_INFO[m].icon + MECH_INFO[m].name).join(" "),
-          W / 2, 268
+          W / 2, 272
         );
       }
       ctx.textAlign = "left";

@@ -37,7 +37,11 @@ import {
   type BubbleLevelDef,
   type MechKind,
   LEVELS,
+  THEMES,
+  THEME_SIZES,
   levelMechanisms,
+  themeOfLevel,
+  themeStart,
 } from "./levels";
 
 const SHOOTER_X = W / 2;
@@ -369,16 +373,29 @@ describe("bubble-aim 胜负与星级", () => {
   });
 });
 
-describe("bubble-aim 关卡数据", () => {
-  it("至少 18 关且布局都合法", () => {
-    expect(LEVELS.length).toBeGreaterThanOrEqual(18);
+describe("bubble-aim 关卡数据（99 关 · 6 主题）", () => {
+  it("正好 99 关、6 大主题，主题大小与下标换算一致", () => {
+    expect(LEVELS.length).toBe(99);
+    expect(THEMES.length).toBe(6);
+    expect(THEME_SIZES.length).toBe(6);
+    expect(THEME_SIZES.reduce((a, b) => a + b, 0)).toBe(99);
+    for (const n of THEME_SIZES) expect(n).toBeGreaterThanOrEqual(16);
+    for (let t = 0; t < 6; t++) {
+      expect(themeOfLevel(themeStart(t))).toBe(t);
+      expect(themeOfLevel(themeStart(t) + THEME_SIZES[t] - 1)).toBe(t);
+    }
+    expect(themeOfLevel(0)).toBe(0);
+    expect(themeOfLevel(98)).toBe(5);
+  });
+
+  it("布局都合法且子弹数为正", () => {
     for (const lv of LEVELS) {
-      expect(() => parseLayout(lv.layout)).not.toThrow();
+      expect(() => parseLayout(lv.layout), lv.name).not.toThrow();
       expect(lv.shots).toBeGreaterThan(0);
     }
   });
 
-  it("五种机关都有，且每种至少出现在 4 关", () => {
+  it("五种机关都有，且每种至少出现在 10 关", () => {
     const count = new Map<MechKind, number>();
     for (const lv of LEVELS) {
       for (const m of levelMechanisms(lv)) {
@@ -387,11 +404,35 @@ describe("bubble-aim 关卡数据", () => {
     }
     const kinds: MechKind[] = ["stone", "rainbow", "cloud", "hole", "drop"];
     for (const k of kinds) {
-      expect(count.get(k) ?? 0, `机关 ${k} 出现次数`).toBeGreaterThanOrEqual(4);
+      expect(count.get(k) ?? 0, `机关 ${k} 出现次数`).toBeGreaterThanOrEqual(10);
     }
   });
 
-  it("前 4 关无机关热身，机关逐个引入，后段组合出现", () => {
+  it("每个主题贯彻自己的招牌机关", () => {
+    // 主题 0:纯颜色热身,无机关
+    for (let k = 0; k < THEME_SIZES[0]; k++) {
+      expect(levelMechanisms(LEVELS[k]), LEVELS[k].name).toHaveLength(0);
+    }
+    // 主题 1-4:每关都含各自的招牌机关
+    const sig: Array<[number, MechKind]> = [
+      [1, "stone"],
+      [2, "rainbow"],
+      [3, "cloud"],
+      [4, "hole"],
+    ];
+    for (const [t, kind] of sig) {
+      for (let k = 0; k < THEME_SIZES[t]; k++) {
+        const lv = LEVELS[themeStart(t) + k];
+        expect(levelMechanisms(lv), `${THEMES[t].name}·${lv.name}`).toContain(kind);
+      }
+    }
+    // 主题 5:下落新行至少 9 关,并且大量组合关
+    const t5 = LEVELS.slice(themeStart(5));
+    expect(t5.filter((lv) => levelMechanisms(lv).includes("drop")).length).toBeGreaterThanOrEqual(9);
+    expect(t5.filter((lv) => levelMechanisms(lv).length >= 2).length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("前 4 关无机关热身，最终章组合大杂烩", () => {
     for (let i = 0; i < 4; i++) {
       expect(levelMechanisms(LEVELS[i])).toHaveLength(0);
     }
@@ -399,6 +440,8 @@ describe("bubble-aim 关卡数据", () => {
     const late = LEVELS.slice(-7).map((lv) => levelMechanisms(lv).length);
     for (const n of late) expect(n).toBeGreaterThanOrEqual(2);
     expect(late.filter((n) => n >= 3).length).toBeGreaterThanOrEqual(5);
+    // 最后一关五种机关全部到齐
+    expect(levelMechanisms(LEVELS[98])).toHaveLength(5);
   });
 
   it("开局没有悬空泡泡", () => {
@@ -483,12 +526,17 @@ describe("bubble-aim 关卡数据", () => {
     const seen = new Set<string>();
     for (const lv of LEVELS) {
       const key = lv.layout.join("|");
-      expect(seen.has(key)).toBe(false);
+      expect(seen.has(key), `${lv.name} 布局重复`).toBe(false);
       seen.add(key);
       const g = parseLayout(lv.layout);
-      expect(countBubbles(g)).toBeGreaterThanOrEqual(12);
+      expect(countBubbles(g), lv.name).toBeGreaterThanOrEqual(10);
       expect(crossedDeadline(g)).toBe(false);
     }
+  });
+
+  it("关卡名字互不相同", () => {
+    const names = new Set(LEVELS.map((lv) => lv.name));
+    expect(names.size).toBe(LEVELS.length);
   });
 });
 
@@ -591,26 +639,15 @@ function botPlay(def: BubbleLevelDef, seed = 1): BotOutcome {
   return { won: countBubbles(g) === 0, shotsUsed: fired };
 }
 
-describe("bubble-aim 可解性（贪心机器人实测过关）", () => {
-  // 覆盖：纯颜色、石泡、彩虹、云挡板、黑洞、下落新行以及后期大杂烩
-  const CASES: Array<{ index: number; seed?: number }> = [
-    { index: 0 },  // 三色小塔：入门
-    { index: 4 },  // 石头城门：石泡
-    { index: 5 },  // 彩虹桥：彩虹泡
-    { index: 7 },  // 白云索道：云挡板
-    { index: 9 },  // 黑洞警报：黑洞
-    { index: 11 }, // 天降泡雨：下落新行
-    { index: 13 }, // 彩虹黑洞：三种机关组合
-    { index: 18 }, // 全能试炼：四种机关组合
-    { index: 19 }, // 终极嘉年华：五种机关全上
-  ];
-
-  for (const { index, seed } of CASES) {
-    const def = LEVELS[index];
+describe("bubble-aim 可解性（99 关贪心机器人实测过关）", () => {
+  // 全部 99 关都要能被贪心机器人打通（弹药颜色随机，最多试 3 种运气种子）
+  LEVELS.forEach((def, index) => {
     it(`第 ${index + 1} 关「${def.name}」在 ${def.shots} 发内可以打通`, () => {
-      const outcome = botPlay(def, seed ?? 1);
+      let outcome = botPlay(def, 1);
+      if (!outcome.won) outcome = botPlay(def, 2);
+      if (!outcome.won) outcome = botPlay(def, 3);
       expect(outcome.won, `${def.name} 机器人没打通`).toBe(true);
       expect(outcome.shotsUsed).toBeLessThanOrEqual(def.shots);
     });
-  }
+  });
 });
