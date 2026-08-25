@@ -33,6 +33,23 @@ export const SAVE_KEY = "yiduo-yixing.save.v1";
 /** 本应用全部存档 key 的公共前缀(平台钱包、l99 关卡、各游戏 PROGRESS_KEY、最近玩过等) */
 export const SAVE_PREFIX = "yiduo-yixing.";
 
+/**
+ * 三款经典游戏(五子棋/糖果秋千/泡泡瞄准手)历史上用的旧前缀。
+ * 存档 key 不能改(老玩家进度不能丢),所以导出/导入/清空都必须同时覆盖两代前缀,
+ * 否则备份会静默漏掉这三款的 99 关战役进度。
+ */
+export const LEGACY_SAVE_PREFIX = "yiduo.";
+
+/** 是否属于本应用的存档 key(两代前缀都算) */
+function isOwnSaveKey(key: string): boolean {
+  return key.startsWith(SAVE_PREFIX) || key.startsWith(LEGACY_SAVE_PREFIX);
+}
+
+/** 隐私模式探测写下的临时 key(如 yiduo-yixing.l99.probe),不该进备份 */
+function isProbeKey(key: string): boolean {
+  return key.endsWith(".probe");
+}
+
 function defaultData(): SaveData {
   return { stars: 0, soundOn: true, bgmOn: false, games: {} };
 }
@@ -236,7 +253,7 @@ export class SaveStore {
     // 平台钱包一定带上(即使还没写进 storage)
     collected.set(SAVE_KEY, JSON.stringify(this.data));
     for (const key of listKeys(this.storage)) {
-      if (!key.startsWith(SAVE_PREFIX)) continue;
+      if (!isOwnSaveKey(key) || isProbeKey(key)) continue;
       try {
         const value = this.storage.getItem(key);
         if (value !== null) collected.set(key, value);
@@ -291,7 +308,7 @@ export class SaveStore {
     }
     const entries = obj.entries as Record<string, unknown>;
     for (const [key, value] of Object.entries(entries)) {
-      if (!key.startsWith(SAVE_PREFIX) || typeof value !== "string") {
+      if (!isOwnSaveKey(key) || typeof value !== "string") {
         return { ok: false, error: `备份里混进了不认识的内容,${failKeep}` };
       }
     }
@@ -329,10 +346,22 @@ export class SaveStore {
     return { ok: true, count: list.length };
   }
 
-  /** 家长面板里的「清空全部进度」 */
+  /**
+   * 家长面板里的「清空全部进度」:
+   * 除了平台钱包,还要清掉 l99 关卡、各游戏战役(含旧前缀)、最近玩过等全部进度 key。
+   */
   resetAll(): void {
     this.data = defaultData();
     try {
+      for (const key of listKeys(this.storage)) {
+        if (!isOwnSaveKey(key)) continue;
+        try {
+          this.storage.removeItem(key);
+        } catch {
+          // 个别 key 删不掉就跳过,尽量清干净
+        }
+      }
+      // storage 不支持枚举 key 时,至少把平台钱包清掉
       this.storage.removeItem(SAVE_KEY);
     } catch {
       // 忽略

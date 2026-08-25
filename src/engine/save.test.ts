@@ -95,6 +95,22 @@ describe("SaveStore 星星存档", () => {
     expect(storage.getItem(SAVE_KEY)).toBeNull();
   });
 
+  it("resetAll 连同 99 关 / 旧前缀经典包 / 最近玩过一起清空,不动别家应用的 key", () => {
+    const storage = memStorage();
+    const store = new SaveStore(storage);
+    store.addStars(10);
+    storage.setItem("yiduo-yixing.l99.rainbow-run", "[3,3,3]");
+    storage.setItem("yiduo.gomoku.campaign.v2", JSON.stringify({ stars: [3, 2] }));
+    storage.setItem("yiduo-yixing.recent.v1", JSON.stringify(["gomoku"]));
+    storage.setItem("other-app.data", "keep-me");
+    store.resetAll();
+    expect(storage.getItem(SAVE_KEY)).toBeNull();
+    expect(storage.getItem("yiduo-yixing.l99.rainbow-run")).toBeNull();
+    expect(storage.getItem("yiduo.gomoku.campaign.v2")).toBeNull();
+    expect(storage.getItem("yiduo-yixing.recent.v1")).toBeNull();
+    expect(storage.getItem("other-app.data")).toBe("keep-me");
+  });
+
   it("onChange 订阅会在存档变化时触发,退订后不再触发", () => {
     const store = new SaveStore(memStorage());
     let calls = 0;
@@ -231,6 +247,38 @@ describe("SaveStore 进度导出与导入", () => {
     const result = store.importAll(forged);
     expect(result.ok).toBe(false);
     expect(storage.getItem("evil-key")).toBeNull();
+  });
+
+  it("旧前缀经典包(五子棋等)的进度也会进备份,导入后完整恢复", () => {
+    const storage = memStorage();
+    const store = new SaveStore(storage);
+    store.addStars(3);
+    const gomoku = JSON.stringify({ stars: [3, 2, 1] });
+    storage.setItem("yiduo.gomoku.campaign.v2", gomoku);
+    storage.setItem("yiduo.candy-swing.campaign.v2", JSON.stringify({ stars: [3] }));
+    const text = store.exportAll();
+
+    store.resetAll();
+    expect(storage.getItem("yiduo.gomoku.campaign.v2")).toBeNull();
+
+    const result = store.importAll(text);
+    expect(result.ok).toBe(true);
+    expect(store.getStars()).toBe(3);
+    expect(storage.getItem("yiduo.gomoku.campaign.v2")).toBe(gomoku);
+    expect(storage.getItem("yiduo.candy-swing.campaign.v2")).toBe(JSON.stringify({ stars: [3] }));
+  });
+
+  it("隐私模式探测残留的 probe key 不会混进备份", () => {
+    const storage = memStorage();
+    const store = new SaveStore(storage);
+    store.addStars(1);
+    storage.setItem("yiduo-yixing.l99.probe", "1");
+    const text = store.exportAll();
+    const payload = JSON.parse(
+      Buffer.from(text.slice("YDYX1.".length), "base64").toString("utf8")
+    ) as { entries: Record<string, string> };
+    expect(Object.keys(payload.entries)).not.toContain("yiduo-yixing.l99.probe");
+    expect(Object.keys(payload.entries)).toContain(SAVE_KEY);
   });
 
   it("导入中途写入失败会整体回滚,不留半套存档", () => {

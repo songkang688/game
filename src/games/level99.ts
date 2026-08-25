@@ -122,6 +122,7 @@ export function rateAbove(value: number, three: number, two: number): 1 | 2 | 3 
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem?(key: string): void;
 }
 
 function defaultStorage(): StorageLike | null {
@@ -130,6 +131,8 @@ function defaultStorage(): StorageLike | null {
     if (ls) {
       const probe = "yiduo-yixing.l99.probe";
       ls.setItem(probe, "1");
+      // 探测完就删,不在用户存储里留垃圾(也不混进导出的备份)
+      ls.removeItem?.(probe);
       return ls;
     }
   } catch {
