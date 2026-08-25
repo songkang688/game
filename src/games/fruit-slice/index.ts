@@ -539,7 +539,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase !== "play") return;
     for (let i = flying.length - 1; i >= 0; i--) {
       const f = flying[i];
-      if (!segCircleHit(x1, y1, x2, y2, f.x, f.y, f.r + 6)) continue;
+      // 触控放宽:判定走廊 = 果半径 + 12px,配合 ≥24px 的可见刀光,一年级拖不准也切得中
+      if (!segCircleHit(x1, y1, x2, y2, f.x, f.y, f.r + 12)) continue;
       flying.splice(i, 1);
       if (f.fly === "bomb" || f.fly === "bigbomb") {
         sliceBomb(f, f.fly === "bigbomb");
@@ -1143,10 +1144,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (let i = 1; i < trail.length; i++) {
       const age = time - trail[i].t;
       const alpha = Math.max(0, 1 - age / 0.18);
-      const width = 10 * (i / trail.length) + 2;
+      // 刀光加宽到最粗 24px(白芯)+32px(粉晕),和判定走廊一致,孩子看得清切到哪
+      const width = 18 * (i / trail.length) + 6;
       ctx.globalAlpha = alpha * 0.45;
       ctx.strokeStyle = "#ff9eb5";
-      ctx.lineWidth = width + 6;
+      ctx.lineWidth = width + 8;
       ctx.beginPath();
       ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
       ctx.lineTo(trail[i].x, trail[i].y);
@@ -1235,8 +1237,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#5a5a6e";
       ctx.font = "bold 21px sans-serif";
       ctx.fillText(c.title, w / 2, rect.y + cardH * 0.36);
-      ctx.font = "13px sans-serif";
-      ctx.fillStyle = "#9a9aa8";
+      // 副标题 13→14px、加深颜色,360 窄屏也够看清且对比度 ≥4.5:1
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#7a7a8c";
       ctx.fillText(c.sub, w / 2, rect.y + cardH * 0.7);
     }
   }
@@ -1419,7 +1422,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (st.fruitScale > 1) tags.push("🍉 大瓜好切");
       if (tags.length > 0) {
         ctx.fillStyle = "#8a7a5e";
-        ctx.font = "13px sans-serif";
+        ctx.font = "14px sans-serif";
         ctx.fillText(tags.join(" · "), w / 2, y + 108);
       }
       ctx.fillStyle = "#c47a2a";
@@ -1631,26 +1634,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.restore();
 
     // ---- HUD ----
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.beginPath();
-    ctx.roundRect(10, 10, Math.min(290, w * 0.52), 40, 17);
-    ctx.fill();
-    ctx.fillStyle = "#c47a2a";
+    // 窄屏修复:左侧药丸按实测文字宽度伸缩(原固定 290/w*0.52 在 360 宽会被文字撑破)
     ctx.font = "bold 16px sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
+    let hudText: string;
     if (mode === "classic") {
       const rel = roundIdx - chapterIdx * LEVELS_PER_THEME + 1;
-      ctx.fillText(
-        `第${chapterIdx + 1}章 ${rel}/${LEVELS_PER_THEME} · 🍑 ${roundScore}/${round().target}`,
-        24,
-        30,
-      );
+      hudText = `第${chapterIdx + 1}章 ${rel}/${LEVELS_PER_THEME} · 🍑 ${roundScore}/${round().target}`;
     } else if (mode === "zen") {
-      ctx.fillText(`禅宗 · 分 ${totalScore}`, 24, 30);
+      hudText = `禅宗 · 分 ${totalScore}`;
     } else {
-      ctx.fillText(`街机 · 分 ${totalScore}`, 24, 30);
+      hudText = `街机 · 分 ${totalScore}`;
     }
+    const hudW = Math.min(w - 90, ctx.measureText(hudText).width + 28);
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath();
+    ctx.roundRect(10, 10, hudW, 40, 17);
+    ctx.fill();
+    ctx.fillStyle = "#c47a2a";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(hudText, 24, 30);
     if (mode !== "zen") {
       ctx.textAlign = "right";
       ctx.fillStyle = "#5a5a6e";

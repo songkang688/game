@@ -108,6 +108,15 @@ describe("fruit-slice 99 回合九大果园结构", () => {
     }
   });
 
+  it("坏关修复回归:目标分不超过水果供给的安全线(全切 ≥1.25 倍目标)", () => {
+    // 与 index.ts 一致:经典模式约 1.4 秒一波,普通果每颗 1 分
+    for (const r of ROUNDS) {
+      const volleys = r.time / 1.4;
+      const fruits = (volleys * (r.volleyMin + r.volleyMax)) / 2;
+      expect(fruits, `${r.name} 目标 ${r.target}/${r.time}s`).toBeGreaterThanOrEqual(r.target * 1.25);
+    }
+  });
+
   it("难度随章节爬升:每章平均目标分递增,最终回合是全战役最高", () => {
     const avg: number[] = [];
     for (let ci = 0; ci < ORCHARD_ORDER.length; ci++) {

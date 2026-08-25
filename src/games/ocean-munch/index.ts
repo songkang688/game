@@ -646,8 +646,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     const def = level();
 
-    // 玩家跟随指针
-    const k = Math.min(1, dt * 5.5);
+    // 玩家跟随指针(单指:按下即游、指哪游哪)
+    // 触控修复:跟随速度 5.5→7,窄屏上小鱼贴手更紧,不再有"慢半拍"的拖沓感
+    const k = Math.min(1, dt * 7);
     const dx = targetX - player.x;
     player.x += dx * k;
     player.y += (targetY - player.y) * k;
@@ -1880,8 +1881,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
+  /** BOSS 战失败时给一句针对这只 BOSS 的具体提示(短句,360 宽面板放得下)。 */
+  function bossFailHint(): string | null {
+    const def = level();
+    if (!def.boss || !bossActive) return null;
+    const b = BOSS_INFO[def.boss];
+    if (b.inks) return "先绕开大墨团,再贴上去咬!";
+    if (b.pulls) return "被吸住就往反方向使劲游!";
+    if (b.summons) return "别理小帮手,躲开冲刺再咬!";
+    if (b.enrages) return "它冲完停下的那一下最好咬!";
+    return "等它冲刺停下,再贴上去咬!";
+  }
+
   function drawRetryPanel(): void {
-    const { y } = panelBox(Math.min(450, w - 40), 210);
+    const hint = bossFailHint();
+    const { y } = panelBox(Math.min(450, w - 40), hint ? 240 : 210);
     ctx.fillStyle = "#b28ae8";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
@@ -1889,10 +1903,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText("小鱼晕乎乎……", w / 2, y + 44);
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText("没关系!这片海再游一次就好", w / 2, y + 84);
+    ctx.fillText("没关系!这片海再游一次就好", w / 2, y + 80);
+    let by = y + 128;
+    if (hint) {
+      // BOSS 失败给一句针对性提示,温柔不吓人
+      ctx.fillStyle = "#c47a2a";
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(`💡 ${hint}`, w / 2, y + 112);
+      by = y + 158;
+    }
     const bw2 = 132;
-    btnMap = { x: w / 2 - bw2 - 10, y: y + 128, w: bw2, h: 44 };
-    btnRetry = { x: w / 2 + 10, y: y + 128, w: bw2, h: 44 };
+    btnMap = { x: w / 2 - bw2 - 10, y: by, w: bw2, h: 44 };
+    btnRetry = { x: w / 2 + 10, y: by, w: bw2, h: 44 };
     drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
     drawButton(btnRetry, "再游一次", "#ffd868", "#7a5a1a");
   }
@@ -2043,32 +2065,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.restore();
 
     // ---- HUD ----
-    const bw = Math.min(280, w - 250);
-    const bx = (w - bw) / 2;
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    ctx.beginPath();
-    ctx.roundRect(bx, 12, bw, 18, 9);
-    ctx.fill();
-    const prog = bossActive
-      ? 1
-      : Math.max(0, Math.min(1, (player.r - START_RADIUS) / (def.targetR - START_RADIUS)));
-    ctx.fillStyle = "#ff9eb5";
-    ctx.beginPath();
-    ctx.roundRect(bx, 12, Math.max(18, bw * prog), 18, 9);
-    ctx.fill();
-    ctx.fillStyle = "#5a5a6e";
-    ctx.font = "13px sans-serif";
-    ctx.textAlign = "center";
+    // 窄屏修复:HUD 拆两行——第一行左章节/右爱心得分,第二行长大进度条独占,
+    // 原来三块挤同一行在 360 宽互相压盖;进度文字 13→14px
     ctx.textBaseline = "middle";
-    ctx.fillText(
-      bossActive && def.boss
-        ? `去咬${BOSS_INFO[def.boss].name}!`
-        : `长大进度 ${Math.round(prog * 100)}%`,
-      w / 2,
-      21,
-    );
     ctx.textAlign = "left";
     ctx.font = "15px sans-serif";
+    ctx.fillStyle = "#5a5a6e";
     ctx.fillText(
       `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 ${(levelIdx % LEVELS_PER_THEME) + 1}/${LEVELS_PER_THEME} · ${zone.name}`,
       12,
@@ -2080,16 +2082,40 @@ export function mount(api: GameAPI): { destroy: () => void } {
       w - 12,
       21,
     );
+
+    const bw = Math.min(340, w - 24);
+    const bx = (w - bw) / 2;
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.roundRect(bx, 34, bw, 22, 11);
+    ctx.fill();
+    const prog = bossActive
+      ? 1
+      : Math.max(0, Math.min(1, (player.r - START_RADIUS) / (def.targetR - START_RADIUS)));
+    ctx.fillStyle = "#ff9eb5";
+    ctx.beginPath();
+    ctx.roundRect(bx, 34, Math.max(22, bw * prog), 22, 11);
+    ctx.fill();
+    ctx.fillStyle = "#4a4a5e";
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      bossActive && def.boss
+        ? `去咬${BOSS_INFO[def.boss].name}!`
+        : `长大进度 ${Math.round(prog * 100)}%`,
+      w / 2,
+      45,
+    );
     if (shield > 0) {
       ctx.textAlign = "right";
       ctx.fillStyle = "#5a8ac9";
-      ctx.fillText(`🛡 ${Math.ceil(shield)}s`, w - 12, 44);
+      ctx.fillText(`🛡 ${Math.ceil(shield)}s`, w - 12, 70);
     }
     if (streak >= 3 && streakTimer > 0) {
       ctx.fillStyle = "#b28ae8";
       ctx.font = `bold ${18 + Math.min(streak, 8)}px sans-serif`;
       ctx.textAlign = "center";
-      ctx.fillText(`连吃 ×${streak}`, w / 2, 52);
+      ctx.fillText(`连吃 ×${streak}`, w / 2, 76);
     }
 
     // ---- 覆盖层 ----
