@@ -1,25 +1,35 @@
-// 泡泡瞄准 —— 经典泡泡龙玩法：虚线瞄准、碰墙反弹、三个同色连消、悬空掉落。
+// 泡泡瞄准手 —— 泡泡龙玩法 + 关卡战役：
+// 选关地图、进度存档、石泡/彩虹泡/黑洞/云挡板/下落新行五种机关。
+// 瞄准虚线和真实飞行用同一个 simulateShot，保证指哪打哪。
 import {
-  type Color,
   type Grid,
-  COLS,
+  type Obstacles,
+  type ShotResult,
   DEADLINE_ROW,
   H,
+  HOLE_R,
   R,
+  RAINBOW,
   ROW_H,
+  STONE,
+  STONE_CRACKED,
   TOP,
   W,
   cellCenter,
   colorsInGrid,
   countBubbles,
   crossedDeadline,
+  damageStone,
+  descend,
+  isStone,
   parseLayout,
+  releaseLoneRainbows,
   rowLength,
   settleShot,
   simulateShot,
   starsForShotsLeft,
 } from "./logic";
-import { LEVELS } from "./levels";
+import { LEVELS, MECH_INFO, levelMechanisms } from "./levels";
 
 export const meta = {
   id: "bubble-aim",
@@ -27,7 +37,7 @@ export const meta = {
   emoji: "🫧",
   category: "casual" as const,
   color: "#D9EFFF",
-  blurb: "拖一拖瞄准线，同色泡泡碰三个，啵啵啵全爆掉！",
+  blurb: "20 关泡泡战役：石泡、彩虹、黑洞、云挡板，拖一拖瞄准线全爆掉！",
 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -44,19 +54,57 @@ interface GameApi {
 const SHOOTER_X = W / 2;
 const SHOOTER_Y = 444;
 const FLY_SPEED = 820;
+const SAVE_KEY = "yiduo.bubble-aim.campaign.v1";
 
-const COLOR_FILL: Record<Color, [string, string]> = {
+const COLOR_FILL: Record<string, [string, string]> = {
   R: ["#FFA7BD", "#F26D93"],
   Y: ["#FFE38A", "#F0BE3E"],
   B: ["#A6D9FA", "#5BA7E0"],
   G: ["#BCE8A5", "#7CBE5F"],
   P: ["#DCC2FA", "#A87FDE"],
+  [STONE]: ["#C9CBD4", "#8B8FA0"],
+  [STONE_CRACKED]: ["#C9CBD4", "#7C8093"],
+  [RAINBOW]: ["#FFFFFF", "#C9A7F5"],
 };
+
+interface Progress {
+  /** 每关最佳星数 0-3（0=未通过） */
+  stars: number[];
+}
+
+function loadProgress(): Progress {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw) as { stars?: unknown };
+      if (Array.isArray(data.stars)) {
+        const arr = data.stars as unknown[];
+        return {
+          stars: LEVELS.map((_, i) => {
+            const v = arr[i];
+            return typeof v === "number" && v >= 0 && v <= 3 ? Math.floor(v) : 0;
+          }),
+        };
+      }
+    }
+  } catch {
+    // 读不到就当新档
+  }
+  return { stars: LEVELS.map(() => 0) };
+}
+
+function saveProgress(p: Progress): void {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(p));
+  } catch {
+    // 存不了也不影响本次游玩
+  }
+}
 
 interface PopAnim {
   x: number;
   y: number;
-  color: Color;
+  color: string;
   t: number;
 }
 
@@ -65,7 +113,13 @@ interface FallAnim {
   y: number;
   vx: number;
   vy: number;
-  color: Color;
+  color: string;
+  t: number;
+}
+
+interface CrackFx {
+  x: number;
+  y: number;
   t: number;
 }
 
@@ -75,50 +129,75 @@ export function mount(api: GameApi): { destroy: () => void } {
   let lastTime = 0;
   let animTime = 0;
 
+  const progress = loadProgress();
+  let allDoneReported = false;
+
+  let screen: "map" | "play" = "map";
   let levelIndex = 0;
-  let phase: "play" | "won" | "failed" | "alldone" = "play";
+  let phase: "play" | "won" | "failed" = "play";
   let phaseTime = 0;
   let bannerTime = 0;
   let failReason = "";
+  let wonStars: 1 | 2 | 3 = 1;
 
   let grid: Grid = parseLayout(LEVELS[0].layout);
+  let obstacles: Obstacles = {};
+  let dropQueue: string[] = [];
+  let dropEvery = 0;
   let shotsTotal = LEVELS[0].shots;
   let shotsLeft = shotsTotal;
-  let currentColor: Color = "R";
-  let nextColor: Color = "B";
-  const earnedStars: number[] = [];
+  let shotsFired = 0;
+  let currentColor = "R";
+  let nextColor = "B";
 
   let aiming = false;
   let aimDx = 0;
   let aimDy = -1;
   let flight: {
-    path: Array<{ x: number; y: number }>;
+    result: ShotResult;
     seg: number;
     segPos: number;
-    landing: { r: number; c: number } | null;
-    color: Color;
+    color: string;
   } | null = null;
 
   const pops: PopAnim[] = [];
   const falls: FallAnim[] = [];
+  const cracks: CrackFx[] = [];
 
   const wrap = document.createElement("div");
   wrap.className = "ba-wrap";
   wrap.innerHTML = `
     <style>
       .ba-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F4FF, #FFEFF7); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: none; }
-      .ba-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
-      .ba-badge { background: #fff; border-radius: 14px; padding: 6px 10px; font-weight: 700; color: #3E7CB8; box-shadow: 0 2px 6px rgba(90,140,200,.2); font-size: 13px; white-space: nowrap; }
-      .ba-retry { border: none; border-radius: 14px; padding: 6px 12px; font-size: 13px; font-weight: 700; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 3px 0 #A9CCEE; }
-      .ba-retry:active { transform: translateY(2px); box-shadow: 0 1px 0 #A9CCEE; }
+      .ba-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
+      .ba-badge { background: #fff; border-radius: 14px; padding: 6px 8px; font-weight: 700; color: #3E7CB8; box-shadow: 0 2px 6px rgba(90,140,200,.2); font-size: 12px; white-space: nowrap; }
+      .ba-btn { border: none; border-radius: 14px; padding: 6px 10px; font-size: 12px; font-weight: 700; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 3px 0 #A9CCEE; }
+      .ba-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #A9CCEE; }
       .ba-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
-      .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 14px; }
+      .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
+      .ba-map { background: rgba(255,255,255,0.7); border-radius: 16px; padding: 12px; }
+      .ba-map-title { text-align: center; font-weight: 800; color: #2A6099; font-size: 17px; margin-bottom: 4px; }
+      .ba-map-sub { text-align: center; color: #5E86B0; font-size: 12px; margin-bottom: 10px; }
+      .ba-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .ba-lv { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #fff; box-shadow: 0 3px 0 #C7DEF2; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .ba-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 #C7DEF2; }
+      .ba-lv .num { font-weight: 800; font-size: 15px; color: #2A6099; }
+      .ba-lv .stars { font-size: 10px; letter-spacing: -1px; }
+      .ba-lv .mech { font-size: 10px; min-height: 13px; }
+      .ba-lv.locked { background: #E3EAF2; box-shadow: 0 3px 0 #CBD6E2; cursor: not-allowed; }
+      .ba-lv.locked .num { color: #9AA9BC; }
     </style>
     <div class="ba-top">
+      <button class="ba-btn ba-back" type="button">🗺️ 地图</button>
       <span class="ba-badge ba-level">第 1 关</span>
       <span class="ba-badge ba-count">🫧 0</span>
       <span class="ba-badge ba-shots">🎯 0</span>
-      <button class="ba-retry" type="button">🔄 重试</button>
+      <button class="ba-btn ba-retry" type="button">🔄</button>
+    </div>
+    <div class="ba-map">
+      <div class="ba-map-title">🫧 泡泡瞄准手 · 关卡地图</div>
+      <div class="ba-map-sub"></div>
+      <div class="ba-grid"></div>
     </div>
     <canvas class="ba-canvas" width="${W}" height="${H}"></canvas>
     <div class="ba-msg"></div>
@@ -127,19 +206,81 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   const canvas = wrap.querySelector(".ba-canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d")!;
+  const topBar = wrap.querySelector(".ba-top") as HTMLElement;
+  const mapEl = wrap.querySelector(".ba-map") as HTMLElement;
+  const mapSubEl = wrap.querySelector(".ba-map-sub") as HTMLElement;
+  const gridEl = wrap.querySelector(".ba-grid") as HTMLElement;
   const levelEl = wrap.querySelector(".ba-level") as HTMLElement;
   const countEl = wrap.querySelector(".ba-count") as HTMLElement;
   const shotsEl = wrap.querySelector(".ba-shots") as HTMLElement;
   const msgEl = wrap.querySelector(".ba-msg") as HTMLElement;
   const retryBtn = wrap.querySelector(".ba-retry") as HTMLButtonElement;
+  const backBtn = wrap.querySelector(".ba-back") as HTMLButtonElement;
 
-  function updateHud(): void {
-    levelEl.textContent = `第 ${levelIndex + 1}/${LEVELS.length} 关`;
-    countEl.textContent = `🫧 剩 ${countBubbles(grid)}`;
-    shotsEl.textContent = `🎯 子弹 ${shotsLeft}`;
+  function unlocked(i: number): boolean {
+    return i === 0 || progress.stars[i - 1] > 0;
   }
 
-  function randomColor(pool: Color[]): Color {
+  function allCleared(): boolean {
+    return progress.stars.every((s) => s > 0);
+  }
+
+  function totalStars(): number {
+    return progress.stars.reduce((a, b) => a + b, 0);
+  }
+
+  // ---------- 地图 ----------
+
+  function showMap(): void {
+    screen = "map";
+    flight = null;
+    aiming = false;
+    topBar.style.display = "none";
+    canvas.style.display = "none";
+    mapEl.style.display = "";
+    mapSubEl.textContent = `⭐ ${totalStars()}/${LEVELS.length * 3} · 通关 ${progress.stars.filter((s) => s > 0).length}/${LEVELS.length}`;
+    gridEl.innerHTML = "";
+    LEVELS.forEach((def, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const open = unlocked(i);
+      btn.className = open ? "ba-lv" : "ba-lv locked";
+      const s = progress.stars[i];
+      const icons = levelMechanisms(def).map((m) => MECH_INFO[m].icon).join("");
+      btn.innerHTML = `
+        <span class="num">${open ? i + 1 : "🔒"}</span>
+        <span class="stars">${s > 0 ? "⭐".repeat(s) + "☆".repeat(3 - s) : open ? "☆☆☆" : ""}</span>
+        <span class="mech">${icons}</span>
+      `;
+      btn.title = def.name;
+      if (open) {
+        btn.addEventListener("click", () => {
+          api.play("tap");
+          startLevel(i);
+        });
+      }
+      gridEl.appendChild(btn);
+    });
+    msgEl.textContent = allCleared()
+      ? "全部通关！还可以回去刷三星哦！"
+      : "点亮的关卡都能玩，一路打到终极嘉年华！";
+  }
+
+  // ---------- 关卡 ----------
+
+  function updateHud(): void {
+    const def = LEVELS[levelIndex];
+    levelEl.textContent = `${levelIndex + 1}. ${def.name}`;
+    countEl.textContent = `🫧 ${countBubbles(grid)}`;
+    let shotsText = `🎯 ${shotsLeft}`;
+    if (dropQueue.length > 0 && dropEvery > 0) {
+      const untilDrop = dropEvery - (shotsFired % dropEvery);
+      shotsText += ` ⬇️${untilDrop}`;
+    }
+    shotsEl.textContent = shotsText;
+  }
+
+  function randomColor(pool: string[]): string {
     return pool[Math.floor(Math.random() * pool.length)] ?? "R";
   }
 
@@ -150,19 +291,28 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (!pool.includes(nextColor)) nextColor = randomColor(pool);
   }
 
-  function loadLevel(index: number): void {
+  function startLevel(index: number): void {
+    screen = "play";
+    topBar.style.display = "";
+    canvas.style.display = "";
+    mapEl.style.display = "none";
     levelIndex = index;
     const def = LEVELS[index];
     grid = parseLayout(def.layout);
+    obstacles = { clouds: def.clouds, holes: def.holes };
+    dropQueue = [...(def.dropRows ?? [])];
+    dropEvery = def.dropEvery ?? 0;
     shotsTotal = def.shots;
     shotsLeft = def.shots;
+    shotsFired = 0;
     phase = "play";
     phaseTime = 0;
-    bannerTime = 1.4;
+    bannerTime = 1.6;
     flight = null;
     aiming = false;
     pops.length = 0;
     falls.length = 0;
+    cracks.length = 0;
     const pool = colorsInGrid(grid);
     currentColor = randomColor(pool);
     nextColor = randomColor(pool);
@@ -171,9 +321,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function retryLevel(): void {
-    if (phase === "alldone") return;
+    if (screen !== "play") return;
     api.play("tap");
-    loadLevel(levelIndex);
+    startLevel(levelIndex);
   }
 
   function failLevel(reason: string): void {
@@ -182,79 +332,132 @@ export function mount(api: GameApi): { destroy: () => void } {
     phaseTime = 0;
     failReason = reason;
     api.play("oops");
-    msgEl.textContent = "没关系，点重试再来一次！";
+    msgEl.textContent = "没关系，点画面再来一次！";
   }
 
   function winLevel(): void {
     if (phase !== "play") return;
     phase = "won";
     phaseTime = 0;
-    earnedStars.push(starsForShotsLeft(shotsLeft, shotsTotal));
+    wonStars = starsForShotsLeft(shotsLeft, shotsTotal);
+    const wasAllCleared = allCleared();
+    progress.stars[levelIndex] = Math.max(progress.stars[levelIndex], wonStars);
+    saveProgress(progress);
     api.play("win");
     msgEl.textContent = "全部清光，太棒啦！";
+    // 剩下的石泡开心地掉下去
+    for (let r = 0; r < grid.rows.length; r++) {
+      for (let c = 0; c < rowLength(grid, r); c++) {
+        const cell = grid.rows[r][c];
+        if (cell && isStone(cell)) {
+          const cc = cellCenter(grid, r, c);
+          falls.push({
+            x: cc.x, y: cc.y,
+            vx: (Math.random() - 0.5) * 100,
+            vy: -50 - Math.random() * 50,
+            color: cell, t: 0,
+          });
+          grid.rows[r][c] = null;
+        }
+      }
+    }
+    if (!wasAllCleared && allCleared() && !allDoneReported) {
+      allDoneReported = true;
+      const sum = totalStars();
+      const max = LEVELS.length * 3;
+      const rating: 1 | 2 | 3 = sum / max >= 0.8 ? 3 : sum / max >= 0.5 ? 2 : 1;
+      api.onWin(rating, `${LEVELS.length} 关泡泡战役全部通过，共 ${sum} 颗星！`);
+    }
   }
 
-  function finishAll(): void {
-    phase = "alldone";
-    const sum = earnedStars.reduce((a, b) => a + b, 0);
-    const max = LEVELS.length * 3;
-    const rating: 1 | 2 | 3 = sum / max >= 0.8 ? 3 : sum / max >= 0.5 ? 2 : 1;
-    api.onWin(rating, `${LEVELS.length} 关全部通过，共拿到 ${sum} 颗关卡星！`);
+  function pushPop(r: number, c: number, color: string): void {
+    const cc = cellCenter(grid, r, c);
+    pops.push({ x: cc.x, y: cc.y, color, t: 0 });
+  }
+
+  function pushFall(r: number, c: number, color: string): void {
+    const cc = cellCenter(grid, r, c);
+    falls.push({
+      x: cc.x, y: cc.y,
+      vx: (Math.random() - 0.5) * 120,
+      vy: -60 - Math.random() * 60,
+      color, t: 0,
+    });
   }
 
   function fire(): void {
     if (phase !== "play" || flight || shotsLeft <= 0) return;
-    const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy);
+    const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy, obstacles);
     shotsLeft--;
-    flight = { path: result.path, seg: 0, segPos: 0, landing: result.landing, color: currentColor };
+    flight = { result, seg: 0, segPos: 0, color: currentColor };
     currentColor = nextColor;
-    const pool = colorsInGrid(grid);
-    nextColor = randomColor(pool);
+    nextColor = randomColor(colorsInGrid(grid));
     api.play("jump");
     updateHud();
   }
 
   function landFlight(): void {
     if (!flight) return;
-    const { landing, color } = flight;
+    const { result, color } = flight;
     flight = null;
-    if (!landing) {
-      checkAfterShot();
+    if (result.swallowed) {
+      // 被黑洞吞掉：这发就没了
+      api.play("oops");
+      afterShot();
       return;
     }
-    grid[landing.r][landing.c] = color;
-    const result = settleShot(grid, landing.r, landing.c);
-    if (result.popped.length > 0) {
+    if (result.hitCell && isStone(grid.rows[result.hitCell.r]?.[result.hitCell.c] ?? null)) {
+      const { r, c } = result.hitCell;
+      const cc = cellCenter(grid, r, c);
+      const hit = damageStone(grid, r, c);
+      if (hit.result === "cracked") {
+        api.play("tap");
+        cracks.push({ x: cc.x, y: cc.y, t: 0 });
+      } else if (hit.result === "broken") {
+        api.play("pop");
+        pops.push({ x: cc.x, y: cc.y, color: STONE, t: 0 });
+        for (const f of hit.dropped) pushFall(f.r, f.c, f.color);
+        if (hit.dropped.length > 0) api.play("coin");
+      }
+      afterShot();
+      return;
+    }
+    if (!result.landing) {
+      afterShot();
+      return;
+    }
+    const { r, c } = result.landing;
+    grid.rows[r][c] = color;
+    const settle = settleShot(grid, r, c);
+    if (settle.popped.length > 0) {
       api.play("pop");
-      for (const p of result.popped) {
-        const cc = cellCenter(p.r, p.c);
-        pops.push({ x: cc.x, y: cc.y, color: p.color, t: 0 });
-      }
-      for (const f of result.dropped) {
-        const cc = cellCenter(f.r, f.c);
-        falls.push({
-          x: cc.x,
-          y: cc.y,
-          vx: (Math.random() - 0.5) * 120,
-          vy: -60 - Math.random() * 60,
-          color: f.color,
-          t: 0,
-        });
-      }
-      if (result.dropped.length > 0) api.play("coin");
+      for (const p of settle.popped) pushPop(p.r, p.c, p.color);
+      for (const f of settle.dropped) pushFall(f.r, f.c, f.color);
+      if (settle.dropped.length > 0) api.play("coin");
     } else {
       api.play("tap");
     }
-    refreshQueue();
-    updateHud();
-    checkAfterShot();
+    afterShot();
   }
 
-  function checkAfterShot(): void {
+  function afterShot(): void {
+    shotsFired++;
+    // 孤零零的彩虹泡自己飞走
+    for (const p of releaseLoneRainbows(grid)) pushPop(p.r, p.c, p.color);
     if (countBubbles(grid) === 0) {
+      refreshQueue();
+      updateHud();
       winLevel();
       return;
     }
+    // 下落新行
+    if (dropEvery > 0 && dropQueue.length > 0 && shotsFired % dropEvery === 0) {
+      descend(grid, dropQueue.shift()!);
+      api.play("jump");
+      msgEl.textContent = "⬇️ 新的一排泡泡压下来啦！";
+    }
+    refreshQueue();
+    updateHud();
     if (crossedDeadline(grid)) {
       failLevel("泡泡越过警戒线啦！");
       return;
@@ -266,7 +469,72 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   // ---------- 绘制 ----------
 
-  function drawBubbleAt(x: number, y: number, color: Color, radius = R, alpha = 1): void {
+  function drawStoneAt(x: number, y: number, cracked: boolean, radius = R, alpha = 1): void {
+    ctx.globalAlpha = alpha;
+    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.15, x, y, radius);
+    grad.addColorStop(0, "#EDEFF4");
+    grad.addColorStop(0.4, "#C9CBD4");
+    grad.addColorStop(1, "#8B8FA0");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    // 石头斑点
+    ctx.fillStyle = "rgba(110,115,132,0.5)";
+    ctx.beginPath();
+    ctx.arc(x + radius * 0.3, y + radius * 0.2, radius * 0.16, 0, Math.PI * 2);
+    ctx.arc(x - radius * 0.25, y + radius * 0.35, radius * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+    if (cracked) {
+      ctx.strokeStyle = "#5A5E70";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - radius * 0.5, y - radius * 0.3);
+      ctx.lineTo(x - radius * 0.1, y);
+      ctx.lineTo(x - radius * 0.35, y + radius * 0.45);
+      ctx.moveTo(x - radius * 0.1, y);
+      ctx.lineTo(x + radius * 0.45, y - radius * 0.15);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawRainbowAt(x: number, y: number, radius = R, alpha = 1): void {
+    ctx.globalAlpha = alpha;
+    const spin = animTime * 0.8;
+    for (let k = 0; k < 6; k++) {
+      ctx.fillStyle = `hsl(${k * 60 + animTime * 40}, 85%, 72%)`;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, radius, spin + (k * Math.PI) / 3, spin + ((k + 1) * Math.PI) / 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+    const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.35, radius * 0.1, x, y, radius);
+    grad.addColorStop(0, "rgba(255,255,255,0.95)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.25)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, radius - 1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBubbleAt(x: number, y: number, color: string, radius = R, alpha = 1): void {
+    if (color === STONE || color === STONE_CRACKED) {
+      drawStoneAt(x, y, color === STONE_CRACKED, radius, alpha);
+      return;
+    }
+    if (color === RAINBOW) {
+      drawRainbowAt(x, y, radius, alpha);
+      return;
+    }
     const [light, dark] = COLOR_FILL[color] ?? COLOR_FILL.R;
     ctx.globalAlpha = alpha;
     const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.15, x, y, radius);
@@ -302,12 +570,53 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.setLineDash([]);
   }
 
+  function drawObstacles(): void {
+    for (const hole of obstacles.holes ?? []) {
+      const grad = ctx.createRadialGradient(hole.x, hole.y, 2, hole.x, hole.y, HOLE_R);
+      grad.addColorStop(0, "#1B1433");
+      grad.addColorStop(0.6, "#3A2C66");
+      grad.addColorStop(1, "rgba(90, 70, 150, 0.15)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(hole.x, hole.y, HOLE_R, 0, Math.PI * 2);
+      ctx.fill();
+      // 旋转的吸入弧线
+      ctx.strokeStyle = "rgba(190, 170, 255, 0.8)";
+      ctx.lineWidth = 2;
+      for (let k = 0; k < 2; k++) {
+        const a = animTime * 2.4 + k * Math.PI;
+        ctx.beginPath();
+        ctx.arc(hole.x, hole.y, HOLE_R * 0.62, a, a + 1.6);
+        ctx.stroke();
+      }
+    }
+    for (const cl of obstacles.clouds ?? []) {
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+      ctx.beginPath();
+      ctx.roundRect(cl.x, cl.y, cl.w, cl.h, cl.h / 2);
+      ctx.fill();
+      // 云朵鼓包
+      const bumps = 3;
+      for (let k = 0; k < bumps; k++) {
+        const bx = cl.x + (cl.w * (k + 0.5)) / bumps;
+        ctx.beginPath();
+        ctx.arc(bx, cl.y + 2, cl.h * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = "rgba(150, 180, 215, 0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(cl.x, cl.y, cl.w, cl.h, cl.h / 2);
+      ctx.stroke();
+    }
+  }
+
   function drawGrid(): void {
-    for (let r = 0; r < grid.length; r++) {
-      for (let c = 0; c < rowLength(r); c++) {
-        const color = grid[r][c];
+    for (let r = 0; r < grid.rows.length; r++) {
+      for (let c = 0; c < rowLength(grid, r); c++) {
+        const color = grid.rows[r][c];
         if (!color) continue;
-        const cc = cellCenter(r, c);
+        const cc = cellCenter(grid, r, c);
         drawBubbleAt(cc.x, cc.y, color);
       }
     }
@@ -315,8 +624,9 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawAim(): void {
     if (!aiming || phase !== "play" || flight) return;
-    const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy);
-    ctx.strokeStyle = "rgba(90, 150, 220, 0.75)";
+    // 和 fire() 完全一样的调用 → 预览即实弹
+    const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy, obstacles);
+    ctx.strokeStyle = result.swallowed ? "rgba(120, 90, 200, 0.75)" : "rgba(90, 150, 220, 0.75)";
     ctx.lineWidth = 3;
     ctx.setLineDash([7, 9]);
     ctx.lineDashOffset = -animTime * 40;
@@ -329,7 +639,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
     if (result.landing) {
-      const cc = cellCenter(result.landing.r, result.landing.c);
+      const cc = cellCenter(grid, result.landing.r, result.landing.c);
       ctx.strokeStyle = "rgba(90, 150, 220, 0.8)";
       ctx.lineWidth = 2.5;
       ctx.setLineDash([4, 5]);
@@ -337,11 +647,22 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.arc(cc.x, cc.y, R - 2, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+    } else if (result.hitCell) {
+      // 会砸到石泡：画个小炸花
+      const cc = cellCenter(grid, result.hitCell.r, result.hitCell.c);
+      ctx.strokeStyle = "rgba(240, 160, 90, 0.9)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k * Math.PI) / 3;
+        ctx.moveTo(cc.x + Math.cos(a) * (R - 6), cc.y + Math.sin(a) * (R - 6));
+        ctx.lineTo(cc.x + Math.cos(a) * (R + 4), cc.y + Math.sin(a) * (R + 4));
+      }
+      ctx.stroke();
     }
   }
 
   function drawShooter(): void {
-    // 发射台
     ctx.fillStyle = "#FFFFFF";
     ctx.beginPath();
     ctx.arc(SHOOTER_X, SHOOTER_Y, R + 9, 0, Math.PI * 2);
@@ -352,7 +673,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (phase === "play" && shotsLeft > 0) {
       drawBubbleAt(SHOOTER_X, SHOOTER_Y, currentColor);
     }
-    // 下一个
     ctx.fillStyle = "#5E86B0";
     ctx.font = "12px sans-serif";
     ctx.textAlign = "center";
@@ -365,14 +685,20 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawFlight(): void {
     if (!flight) return;
-    const seg = flight.path[flight.seg];
-    const next = flight.path[flight.seg + 1];
+    const path = flight.result.path;
+    const seg = path[flight.seg];
+    const next = path[flight.seg + 1];
     if (!next) return;
     const segLen = Math.hypot(next.x - seg.x, next.y - seg.y) || 1;
     const t = flight.segPos / segLen;
     const x = seg.x + (next.x - seg.x) * t;
     const y = seg.y + (next.y - seg.y) * t;
-    drawBubbleAt(x, y, flight.color);
+    // 被黑洞吞时越飞越小
+    let radius = R;
+    if (flight.result.swallowed && flight.seg >= path.length - 2) {
+      radius = R * Math.max(0.15, 1 - t);
+    }
+    drawBubbleAt(x, y, flight.color, radius);
   }
 
   function drawAnims(dt: number): void {
@@ -403,27 +729,47 @@ export function mount(api: GameApi): { destroy: () => void } {
       }
       drawBubbleAt(f.x, f.y, f.color, R, Math.max(0.3, 1 - f.t * 0.6));
     }
+    for (let i = cracks.length - 1; i >= 0; i--) {
+      const cfx = cracks[i];
+      cfx.t += dt;
+      if (cfx.t > 0.4) {
+        cracks.splice(i, 1);
+        continue;
+      }
+      const k = cfx.t / 0.4;
+      ctx.strokeStyle = `rgba(255, 200, 90, ${1 - k})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cfx.x, cfx.y, R + k * 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   function drawOverlays(): void {
     if (bannerTime > 0 && phase === "play") {
       const a = Math.min(1, bannerTime / 0.4);
       const def = LEVELS[levelIndex];
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * a})`;
+      const mechs = levelMechanisms(def);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.85 * a})`;
       ctx.beginPath();
-      ctx.roundRect(40, 190, 280, 84, 18);
+      ctx.roundRect(30, 180, 300, mechs.length > 0 ? 104 : 84, 18);
       ctx.fill();
       ctx.fillStyle = `rgba(62, 124, 184, ${a})`;
-      ctx.font = "bold 22px sans-serif";
+      ctx.font = "bold 21px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`第 ${levelIndex + 1} 关 · ${def.name}`, W / 2, 226);
-      ctx.font = "13px sans-serif";
-      ctx.fillText(def.tip, W / 2, 254);
+      ctx.fillText(`第 ${levelIndex + 1} 关 · ${def.name}`, W / 2, 216);
+      ctx.font = "12px sans-serif";
+      ctx.fillText(def.tip, W / 2, 244);
+      if (mechs.length > 0) {
+        ctx.fillText(
+          "机关：" + mechs.map((m) => MECH_INFO[m].icon + MECH_INFO[m].name).join(" "),
+          W / 2, 268
+        );
+      }
       ctx.textAlign = "left";
     }
     if (phase === "won") {
-      const got = earnedStars[earnedStars.length - 1] ?? 1;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.beginPath();
       ctx.roundRect(60, 170, 240, 120, 20);
       ctx.fill();
@@ -432,16 +778,16 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.textAlign = "center";
       ctx.fillText("清空啦！", W / 2, 210);
       ctx.font = "26px sans-serif";
-      ctx.fillText("⭐".repeat(got) + "☆".repeat(3 - got), W / 2, 248);
+      ctx.fillText("⭐".repeat(wonStars) + "☆".repeat(3 - wonStars), W / 2, 248);
       ctx.font = "13px sans-serif";
       ctx.fillText(
-        levelIndex + 1 < LEVELS.length ? "马上进入下一关…" : "全部通关！",
+        levelIndex + 1 < LEVELS.length ? "马上进入下一关…" : "最后一关通关！",
         W / 2, 276
       );
       ctx.textAlign = "left";
     }
     if (phase === "failed") {
-      ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.beginPath();
       ctx.roundRect(50, 180, 260, 100, 20);
       ctx.fill();
@@ -458,6 +804,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function draw(dt: number): void {
     drawBackground();
+    drawObstacles();
     drawGrid();
     drawAim();
     drawFlight();
@@ -476,39 +823,42 @@ export function mount(api: GameApi): { destroy: () => void } {
     phaseTime += dt;
     if (bannerTime > 0) bannerTime -= dt;
 
-    // 飞行推进
-    if (flight) {
-      let travel = FLY_SPEED * dt;
-      while (travel > 0 && flight) {
-        const seg = flight.path[flight.seg];
-        const next = flight.path[flight.seg + 1];
-        if (!next) {
-          landFlight();
-          break;
-        }
-        const segLen = Math.hypot(next.x - seg.x, next.y - seg.y);
-        const remain = segLen - flight.segPos;
-        if (travel >= remain) {
-          travel -= remain;
-          flight.seg++;
-          flight.segPos = 0;
-          if (flight.seg >= flight.path.length - 1) {
+    if (screen === "play") {
+      // 飞行推进
+      if (flight) {
+        let travel = FLY_SPEED * dt;
+        while (travel > 0 && flight) {
+          const path = flight.result.path;
+          const seg = path[flight.seg];
+          const next = path[flight.seg + 1];
+          if (!next) {
             landFlight();
             break;
           }
-        } else {
-          flight.segPos += travel;
-          travel = 0;
+          const segLen = Math.hypot(next.x - seg.x, next.y - seg.y);
+          const remain = segLen - flight.segPos;
+          if (travel >= remain) {
+            travel -= remain;
+            flight.seg++;
+            flight.segPos = 0;
+            if (flight.seg >= path.length - 1) {
+              landFlight();
+              break;
+            }
+          } else {
+            flight.segPos += travel;
+            travel = 0;
+          }
         }
       }
-    }
 
-    if (phase === "won" && phaseTime > 1.7) {
-      if (levelIndex + 1 < LEVELS.length) loadLevel(levelIndex + 1);
-      else finishAll();
-    }
+      if (phase === "won" && phaseTime > 1.8) {
+        if (levelIndex + 1 < LEVELS.length) startLevel(levelIndex + 1);
+        else showMap();
+      }
 
-    draw(dt);
+      draw(dt);
+    }
     raf = requestAnimationFrame(tick);
   }
 
@@ -535,6 +885,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   let pressing = false;
   const onPointerDown = (e: PointerEvent): void => {
     e.preventDefault();
+    if (screen !== "play") return;
     if (phase === "failed") {
       retryLevel();
       return;
@@ -558,8 +909,12 @@ export function mount(api: GameApi): { destroy: () => void } {
   canvas.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
   retryBtn.addEventListener("click", retryLevel);
+  backBtn.addEventListener("click", () => {
+    api.play("tap");
+    showMap();
+  });
 
-  loadLevel(0);
+  showMap();
   raf = requestAnimationFrame((t) => {
     lastTime = t;
     raf = requestAnimationFrame(tick);
