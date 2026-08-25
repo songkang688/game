@@ -1,20 +1,5 @@
-/**
- * 萌猫小屋 kitty-care
- * 三天成长计划:每天要把团团喂饱、哄睡、陪玩(逗猫小游戏)。
- * 每过一天解锁一件新装扮,三天全部照顾好,团团就长大啦!
- * 纯本地互动,无联网、无 UGC。
- */
-
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (n: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
+import { mountLevelGame, shuffled, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, LEVELS, type KittyLevel, type KittyTask } from "./levels";
 
 export const meta = {
   id: "kitty-care",
@@ -22,7 +7,7 @@ export const meta = {
   emoji: "🐱",
   category: "casual" as const,
   color: "#f7a23b",
-  blurb: "三天成长计划！喂饱、哄睡、陪玩，每天还能解锁新装扮！",
+  blurb: "99 关六大季节！喂饭、逗猫、洗澡、哄睡、打扮，把团团照顾好！",
 };
 
 const CAT_SVG = `
@@ -90,440 +75,361 @@ const CAT_SVG = `
   </g>
 </svg>`;
 
-const STYLE = `
-.kc-wrap{position:relative;width:100%;height:100%;min-height:520px;overflow:hidden;
-  background:linear-gradient(#ffe9c7,#ffd9e8);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
-  user-select:none;-webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;}
-.kc-wrap.kc-night{background:linear-gradient(#4a5590,#8a7ab0);}
-.kc-top{display:flex;align-items:center;gap:10px;padding:12px 16px;}
-.kc-title{font-size:19px;font-weight:900;color:#8a5a1e;}
-.kc-day{margin-left:auto;font-size:16px;font-weight:800;color:#8a5a1e;
-  background:#fff8;border-radius:999px;padding:6px 14px;}
-.kc-needs{display:flex;gap:8px;padding:0 14px;}
-.kc-need{flex:1;background:#fff8;border-radius:14px;padding:6px 8px;}
-.kc-need-label{font-size:13px;font-weight:800;color:#b06a1f;margin-bottom:3px;text-align:center;}
-.kc-need-bar{height:14px;border-radius:999px;background:#fff;box-shadow:inset 0 2px 5px #0002;overflow:hidden;}
-.kc-need-fill{height:100%;width:0%;border-radius:999px;transition:width .35s ease;}
-.kc-fill-food{background:linear-gradient(90deg,#ffc078,#ff922b);}
-.kc-fill-sleep{background:linear-gradient(90deg,#b197fc,#845ef7);}
-.kc-fill-play{background:linear-gradient(90deg,#8ce99a,#40c057);}
-.kc-need.kc-full .kc-need-label{color:#2b8a3e;}
-.kc-stage{position:relative;flex:1;display:flex;align-items:center;justify-content:center;}
-.kc-cat{position:relative;width:min(66vw,300px);cursor:pointer;transition:transform .4s;}
-.kc-cat:active{transform:scale(.97);}
-.kc-cat-svg{width:100%;height:auto;display:block;}
-.kc-cat.kc-bounce{animation:kcBounce .6s ease;}
-.kc-cat.kc-wiggle{animation:kcWiggle .7s ease;}
-@keyframes kcBounce{0%{transform:scale(1)}30%{transform:scale(1.08,.92)}60%{transform:scale(.95,1.05)}100%{transform:scale(1)}}
-@keyframes kcWiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}}
-.kc-bubble{position:absolute;top:-6px;left:50%;transform:translateX(-50%);
-  background:#fff;border-radius:16px;padding:8px 16px;font-size:16px;font-weight:800;color:#b06a1f;
-  box-shadow:0 4px 10px #0002;opacity:0;transition:opacity .2s;white-space:nowrap;pointer-events:none;z-index:8;}
-.kc-bubble.kc-show{opacity:1;}
-.kc-heart{position:absolute;font-size:24px;pointer-events:none;animation:kcHeart 1s ease forwards;z-index:6;}
-@keyframes kcHeart{0%{opacity:1;transform:translateY(0) scale(.6)}100%{opacity:0;transform:translateY(-70px) scale(1.3)}}
-.kc-fish{position:absolute;font-size:34px;pointer-events:none;transition:all .55s cubic-bezier(.4,-0.2,.6,1.2);z-index:5;}
-.kc-zzz{position:absolute;font-size:28px;pointer-events:none;animation:kcZzz 1.4s ease forwards;z-index:6;}
-@keyframes kcZzz{0%{opacity:0;transform:translate(0,0) scale(.6)}30%{opacity:1}
-  100%{opacity:0;transform:translate(26px,-80px) scale(1.2)}}
-.kc-yarn{position:absolute;font-size:46px;cursor:pointer;z-index:10;transition:left .25s,top .25s;
-  filter:drop-shadow(0 3px 3px #0003);animation:kcYarnIn .3s ease;}
-@keyframes kcYarnIn{from{transform:scale(0)}to{transform:scale(1)}}
-.kc-minihud{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:11;
-  background:#fffd;border-radius:999px;padding:8px 18px;font-size:16px;font-weight:900;color:#8a5a1e;
-  box-shadow:0 3px 8px #0002;pointer-events:none;}
-.kc-btns{display:flex;gap:8px;padding:12px 14px calc(16px + env(safe-area-inset-bottom));}
-.kc-btn{flex:1;border:none;border-radius:18px;padding:13px 4px;font-size:15px;font-weight:900;
-  color:#fff;cursor:pointer;box-shadow:0 5px 0 #0003;transition:transform .1s,box-shadow .1s;
-  font-family:inherit;touch-action:manipulation;}
-.kc-btn:active{transform:translateY(4px);box-shadow:0 1px 0 #0003;}
-.kc-btn:disabled{opacity:.55;}
-.kc-btn-fish{background:#4dabf7;}
-.kc-btn-sleep{background:#845ef7;}
-.kc-btn-ball{background:#51cf66;}
-.kc-btn-dress{background:#ff8787;}
-.kc-daydone{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:#fff9e6ee;z-index:20;gap:12px;animation:kcFade .4s ease;text-align:center;padding:16px;}
-@keyframes kcFade{from{opacity:0}to{opacity:1}}
-.kc-daydone-big{font-size:52px;}
-.kc-daydone-text{font-size:24px;font-weight:900;color:#e8590c;}
-.kc-daydone-sub{font-size:17px;font-weight:800;color:#b06a1f;line-height:1.6;}
-.kc-daydone-btn{border:none;border-radius:20px;padding:14px 40px;font-size:20px;font-weight:900;color:#fff;
-  background:#ff922b;cursor:pointer;box-shadow:0 5px 0 #c9701c;font-family:inherit;}
-.kc-daydone-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #c9701c;}
-`;
-
-const PAT_WORDS = ["喵~ 好舒服", "呼噜呼噜~", "再摸摸嘛", "喵呜~ 最喜欢你啦"];
-const FEED_WORDS = ["鱼干真好吃!", "啊呜~ 咔嚓咔嚓", "喵!还想吃~"];
-const SLEEP_WORDS = ["呼~ 好困呀", "眼皮打架了~", "呼噜…呼噜…"];
-const YARN_WORDS = ["接住了!", "扑~ 抓到你咯", "毛线球别跑!"];
-const OUTFITS = [
-  { cls: "", name: "清爽素颜" },
-  { cls: "kc-acc-bow", name: "粉色蝴蝶结" },
-  { cls: "kc-acc-hat", name: "小黄帽" },
-  { cls: "kc-acc-tie", name: "蓝色领结" },
-  { cls: "kc-acc-scarf", name: "绿围巾" },
+const FOODS = [
+  { emoji: "🐟", name: "小鱼干" },
+  { emoji: "🥛", name: "牛奶" },
+  { emoji: "🍗", name: "鸡腿" },
+  { emoji: "🍤", name: "虾虾" },
+  { emoji: "🥩", name: "肉肉" },
+  { emoji: "🧀", name: "奶酪" }
 ];
 
-const TOTAL_DAYS = 3;
-const NEED_MAX = 100;
+const TOYS = ["🧶", "🪶", "🐭", "🦋"];
 
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, onWin } = api;
-  let alive = true;
+const ACCS = [
+  { emoji: "🎀", name: "蝴蝶结", cls: "kc-acc-bow" },
+  { emoji: "🎩", name: "小帽子", cls: "kc-acc-hat" },
+  { emoji: "👔", name: "领结", cls: "kc-acc-tie" },
+  { emoji: "🧣", name: "围巾", cls: "kc-acc-scarf" }
+];
+
+const NOTES = ["🎵", "🎶", "🎼"];
+
+const TASK_INFO: Record<KittyTask, { icon: string; name: string }> = {
+  feed: { icon: "🍽️", name: "喂饭" },
+  play: { icon: "🧶", name: "逗猫" },
+  wash: { icon: "🫧", name: "洗澡" },
+  sleep: { icon: "🌙", name: "哄睡" },
+  dress: { icon: "🎀", name: "打扮" }
+};
+
+const THEME_BG = [
+  "linear-gradient(#ffe9f0,#fff6e4)",
+  "linear-gradient(#d8f1ff,#e8fbf4)",
+  "linear-gradient(#ffe9d0,#fff3e0)",
+  "linear-gradient(#dfeaf8,#f0f4fb)",
+  "linear-gradient(#f6e3fa,#ffeef6)",
+  "linear-gradient(#4a5590,#8a7ab0)"
+];
+
+const CSS = `
+.kc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; min-height: 460px; }
+.kc-top { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 6px; }
+.kc-badge { background: #ffffffd9; border-radius: 14px; padding: 5px 10px; font-weight: 800; color: #8a5a1e; box-shadow: 0 2px 6px rgba(180,130,60,.2); font-size: 13px; }
+.kc-badge.kc-done { background: #d9f5d0; color: #3f7a36; }
+.kc-badge.kc-now { outline: 2px solid #f7a23b; }
+.kc-bubble { min-height: 34px; margin: 4px auto; background: #fff; border-radius: 18px; padding: 8px 18px; font-size: 20px; font-weight: 900; color: #6b4a20; width: fit-content; max-width: 90%; box-shadow: 0 3px 8px rgba(160,110,40,.18); text-align: center; }
+.kc-stagebox { position: relative; width: min(300px, 82vw); margin: 4px auto; }
+.kc-cat-svg { width: 100%; display: block; }
+.kc-cat-svg .kc-head { transform-origin: 110px 80px; }
+.kc-happy .kc-head { animation: kcNod .55s ease; }
+@keyframes kcNod { 0%,100% { transform: rotate(0); } 40% { transform: rotate(-6deg) scale(1.04); } }
+.kc-spot { position: absolute; border: none; background: none; font-size: 30px; cursor: pointer; padding: 2px; filter: drop-shadow(0 2px 3px rgba(60,120,180,.4)); animation: kcFloat 1.6s ease infinite; }
+@keyframes kcFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.kc-toy { position: absolute; border: none; background: #ffffffd0; border-radius: 50%; width: 54px; height: 54px; font-size: 30px; cursor: pointer; box-shadow: 0 3px 8px rgba(160,110,40,.3); transition: left .35s, top .35s; }
+.kc-toy:active { transform: scale(.88); }
+.kc-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.kc-btn { min-width: 74px; min-height: 62px; border: none; border-radius: 18px; background: #fff; cursor: pointer; font-size: 30px; box-shadow: 0 4px 0 rgba(180,130,60,.3); font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 10px; }
+.kc-btn small { font-size: 12px; font-weight: 800; color: #8a5a1e; }
+.kc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(180,130,60,.3); }
+.kc-btn.kc-wrong { animation: kcShake .4s; opacity: .55; }
+@keyframes kcShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.kc-msg { text-align: center; min-height: 22px; font-weight: 800; color: #a86a28; margin-top: 8px; font-size: 15px; }
+.kc-night .kc-msg { color: #ffe9c0; }
+.kc-night .kc-bubble { background: #fffdf3; }
+`;
+
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: KittyLevel = LEVELS[ctx.level];
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  const intervals = new Set<ReturnType<typeof setInterval>>();
+  let destroyed = false;
   let ended = false;
-  let busy = false;
-  let day = 1;
-  let food = 0;
-  let sleep = 0;
-  let fun = 0;
-  let dressIndex = 0;
-  let unlockedOutfits = 2; // 素颜 + 蝴蝶结
-  let yarnTaps = 0;
-  let miniActive = false;
-
-  const timers = new Set<number>();
-  const after = (ms: number, fn: () => void): number => {
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      if (alive) fn();
-    }, ms);
-    timers.add(id);
-    return id;
-  };
+  let taskIdx = 0;
+  let mistakes = 0;
 
   const wrap = document.createElement("div");
-  wrap.className = "kc-wrap";
+  wrap.className = `kc-wrap${cfg.theme === 5 ? " kc-night" : ""}`;
+  wrap.style.background = THEME_BG[cfg.theme];
   wrap.innerHTML = `
-    <style>${STYLE}</style>
-    <div class="kc-top">
-      <div class="kc-title">🐱 萌猫小屋 · 三天成长计划</div>
-      <div class="kc-day">☀️ 第 1 / ${TOTAL_DAYS} 天</div>
-    </div>
-    <div class="kc-needs">
-      <div class="kc-need kc-need-food">
-        <div class="kc-need-label">🍖 吃饱</div>
-        <div class="kc-need-bar"><div class="kc-need-fill kc-fill-food"></div></div>
-      </div>
-      <div class="kc-need kc-need-sleep">
-        <div class="kc-need-label">😴 睡饱</div>
-        <div class="kc-need-bar"><div class="kc-need-fill kc-fill-sleep"></div></div>
-      </div>
-      <div class="kc-need kc-need-play">
-        <div class="kc-need-label">🧶 玩够</div>
-        <div class="kc-need-bar"><div class="kc-need-fill kc-fill-play"></div></div>
-      </div>
-    </div>
-    <div class="kc-stage">
-      <div class="kc-cat" role="button" aria-label="摸摸小猫">
-        <div class="kc-bubble">点我摸摸头~</div>
-        ${CAT_SVG}
-      </div>
-    </div>
-    <div class="kc-btns">
-      <button class="kc-btn kc-btn-fish">🐟 喂鱼干</button>
-      <button class="kc-btn kc-btn-sleep">🌙 哄睡觉</button>
-      <button class="kc-btn kc-btn-ball">🧶 逗猫玩</button>
-      <button class="kc-btn kc-btn-dress">🎀 换装</button>
-    </div>`;
-  root.appendChild(wrap);
+    <style>${CSS}</style>
+    <div class="kc-top"></div>
+    <div class="kc-bubble"></div>
+    <div class="kc-stagebox">${CAT_SVG}</div>
+    <div class="kc-btns"></div>
+    <div class="kc-msg">团团在等你照顾它～</div>
+  `;
+  stage.appendChild(wrap);
 
-  const q = <T extends Element>(sel: string): T => wrap.querySelector(sel) as T;
-  const cat = q<HTMLElement>(".kc-cat");
-  const stage = q<HTMLElement>(".kc-stage");
-  const bubble = q<HTMLElement>(".kc-bubble");
-  const dayEl = q<HTMLElement>(".kc-day");
-  const foodFill = q<HTMLElement>(".kc-fill-food");
-  const sleepFill = q<HTMLElement>(".kc-fill-sleep");
-  const playFill = q<HTMLElement>(".kc-fill-play");
-  const foodBox = q<HTMLElement>(".kc-need-food");
-  const sleepBox = q<HTMLElement>(".kc-need-sleep");
-  const playBox = q<HTMLElement>(".kc-need-play");
-  const eyesOpen = q<SVGGElement>(".kc-eyes-open");
-  const eyesHappy = q<SVGGElement>(".kc-eyes-happy");
-  const mouth = q<SVGPathElement>(".kc-mouth");
-  const mouthOpen = q<SVGEllipseElement>(".kc-mouth-open");
-  const btnFish = q<HTMLButtonElement>(".kc-btn-fish");
-  const btnSleep = q<HTMLButtonElement>(".kc-btn-sleep");
-  const btnBall = q<HTMLButtonElement>(".kc-btn-ball");
-  const btnDress = q<HTMLButtonElement>(".kc-btn-dress");
+  const topEl = wrap.querySelector(".kc-top") as HTMLElement;
+  const bubbleEl = wrap.querySelector(".kc-bubble") as HTMLElement;
+  const boxEl = wrap.querySelector(".kc-stagebox") as HTMLElement;
+  const btnsEl = wrap.querySelector(".kc-btns") as HTMLElement;
+  const msgEl = wrap.querySelector(".kc-msg") as HTMLElement;
 
-  function say(text: string): void {
-    bubble.textContent = text;
-    bubble.classList.add("kc-show");
-    after(1300, () => bubble.classList.remove("kc-show"));
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
   }
 
-  function squint(ms: number): void {
-    eyesOpen.style.display = "none";
-    eyesHappy.style.display = "";
-    after(ms, () => {
-      eyesOpen.style.display = "";
-      eyesHappy.style.display = "none";
-    });
+  function renderTop(): void {
+    topEl.innerHTML = cfg.tasks
+      .map((task, i) => {
+        const info = TASK_INFO[task];
+        const cls = i < taskIdx ? " kc-done" : i === taskIdx ? " kc-now" : "";
+        return `<span class="kc-badge${cls}">${i < taskIdx ? "✅" : info.icon} ${info.name}</span>`;
+      })
+      .join("");
   }
 
-  function hearts(count: number): void {
-    for (let i = 0; i < count; i++) {
-      const h = document.createElement("span");
-      h.className = "kc-heart";
-      h.textContent = ["💗", "💛", "✨"][i % 3];
-      h.style.left = `${38 + Math.random() * 24}%`;
-      h.style.top = `${20 + Math.random() * 25}%`;
-      stage.appendChild(h);
-      after(1000, () => h.remove());
+  function happyCat(): void {
+    wrap.classList.add("kc-happy");
+    const open = wrap.querySelector(".kc-eyes-open") as SVGElement | null;
+    const happy = wrap.querySelector(".kc-eyes-happy") as SVGElement | null;
+    if (open) open.style.display = "none";
+    if (happy) happy.style.display = "";
+    later(() => {
+      wrap.classList.remove("kc-happy");
+      if (open) open.style.display = "";
+      if (happy) happy.style.display = "none";
+    }, 800);
+  }
+
+  function mistake(gentle: string): void {
+    mistakes++;
+    ctx.sfx("oops");
+    msgEl.textContent = gentle;
+    if (mistakes > 4) {
+      ended = true;
+      later(() => ctx.lose("团团有点晕啦，休息一下，看清它想要什么再选～"), 500);
     }
   }
 
-  function animateCat(cls: "kc-bounce" | "kc-wiggle"): void {
-    cat.classList.remove("kc-bounce", "kc-wiggle");
-    void cat.offsetWidth;
-    cat.classList.add(cls);
-  }
-
-  function renderNeeds(): void {
-    foodFill.style.width = `${food}%`;
-    sleepFill.style.width = `${sleep}%`;
-    playFill.style.width = `${fun}%`;
-    foodBox.classList.toggle("kc-full", food >= NEED_MAX);
-    sleepBox.classList.toggle("kc-full", sleep >= NEED_MAX);
-    playBox.classList.toggle("kc-full", fun >= NEED_MAX);
-    dayEl.textContent = `☀️ 第 ${day} / ${TOTAL_DAYS} 天`;
-    // 小猫一天天长大
-    cat.style.width = `min(${62 + day * 4}vw, ${280 + day * 14}px)`;
-  }
-
-  function lock(ms: number): void {
-    busy = true;
-    btnFish.disabled = btnSleep.disabled = btnBall.disabled = btnDress.disabled = true;
-    after(ms, () => {
-      busy = false;
-      if (!ended && !miniActive) {
-        btnFish.disabled = btnSleep.disabled = btnBall.disabled = btnDress.disabled = false;
-      }
-    });
-  }
-
-  function checkDay(): void {
+  function taskDone(): void {
     if (ended) return;
-    if (food >= NEED_MAX && sleep >= NEED_MAX && fun >= NEED_MAX) {
-      if (day >= TOTAL_DAYS) {
-        ended = true;
-        squint(9999);
-        hearts(8);
-        play("win");
-        after(800, () => {
-          const done = document.createElement("div");
-          done.className = "kc-daydone";
-          done.innerHTML = `
-            <div class="kc-daydone-big">🐱🎓</div>
-            <div class="kc-daydone-text">团团长大啦!</div>
-            <div class="kc-daydone-sub">三天都照顾得妥妥帖帖<br>衣柜里还有 ${unlockedOutfits - 1} 件漂亮装扮!</div>`;
-          wrap.appendChild(done);
-          after(900, () => onWin(3, "三天成长计划完成，你是最棒的小铲屎官!"));
-        });
-      } else {
-        ended = false;
-        busy = true;
-        btnFish.disabled = btnSleep.disabled = btnBall.disabled = btnDress.disabled = true;
-        play("coin");
-        const newOutfit = OUTFITS[Math.min(unlockedOutfits, OUTFITS.length - 1)];
-        const done = document.createElement("div");
-        done.className = "kc-daydone";
-        done.innerHTML = `
-          <div class="kc-daydone-big">🌙✨</div>
-          <div class="kc-daydone-text">第 ${day} 天照顾好啦!</div>
-          <div class="kc-daydone-sub">团团睡了个香香的觉<br>🎁 解锁新装扮:「${newOutfit.name}」!</div>
-          <button class="kc-daydone-btn">开始第 ${day + 1} 天 ☀️</button>`;
-        wrap.appendChild(done);
-        (done.querySelector(".kc-daydone-btn") as HTMLButtonElement).addEventListener("click", () => {
-          play("jump");
-          done.remove();
-          unlockedOutfits = Math.min(unlockedOutfits + 1, OUTFITS.length);
-          day++;
-          food = 0; sleep = 0; fun = 0;
-          busy = false;
-          btnFish.disabled = btnSleep.disabled = btnBall.disabled = btnDress.disabled = false;
-          renderNeeds();
-          say(`第 ${day} 天开始，今天也要元气满满!`);
-        });
-      }
+    happyCat();
+    ctx.sfx("meow");
+    taskIdx++;
+    renderTop();
+    if (taskIdx >= cfg.tasks.length) {
+      ended = true;
+      const got = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
+      later(() => ctx.win(got as 1 | 2 | 3, mistakes === 0
+        ? "每件事都一次做对，团团幸福得打呼噜！"
+        : "任务全部完成，团团舒服地眯起了眼！"), 800);
+      return;
     }
+    later(() => startTask(), 800);
   }
 
-  function addNeed(kind: "food" | "sleep" | "fun", n: number): void {
-    if (ended) return;
-    if (kind === "food") food = Math.min(NEED_MAX, food + n);
-    else if (kind === "sleep") sleep = Math.min(NEED_MAX, sleep + n);
-    else fun = Math.min(NEED_MAX, fun + n);
-    renderNeeds();
-    checkDay();
-  }
+  // ---- 各任务 ----
 
-  // 摸头:三种心情都加一点点
-  cat.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || miniActive) return;
-    play("meow");
-    squint(900);
-    animateCat("kc-bounce");
-    hearts(2);
-    say(PAT_WORDS[Math.floor(Math.random() * PAT_WORDS.length)]);
-    food = Math.min(NEED_MAX, food + 3);
-    sleep = Math.min(NEED_MAX, sleep + 3);
-    fun = Math.min(NEED_MAX, fun + 3);
-    renderNeeds();
-    checkDay();
-  });
-
-  // 喂鱼干
-  btnFish.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || busy || miniActive) return;
-    if (food >= NEED_MAX) { say("喵~ 已经吃得饱饱的啦"); return; }
-    lock(800);
-    play("coin");
-    const fish = document.createElement("span");
-    fish.className = "kc-fish";
-    fish.textContent = "🐟";
-    fish.style.left = "12%";
-    fish.style.bottom = "6%";
-    stage.appendChild(fish);
-    after(30, () => {
-      fish.style.left = "48%";
-      fish.style.bottom = "48%";
-      fish.style.transform = "scale(.4) rotate(140deg)";
-      fish.style.opacity = "0";
-    });
-    mouth.style.display = "none";
-    mouthOpen.style.display = "";
-    after(650, () => {
-      fish.remove();
-      mouth.style.display = "";
-      mouthOpen.style.display = "none";
-      animateCat("kc-bounce");
-      squint(700);
-      say(FEED_WORDS[Math.floor(Math.random() * FEED_WORDS.length)]);
-      addNeed("food", 34);
-    });
-  });
-
-  // 哄睡觉
-  btnSleep.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || busy || miniActive) return;
-    if (sleep >= NEED_MAX) { say("喵~ 睡饱啦，精神满满!"); return; }
-    lock(1300);
-    play("meow");
-    wrap.classList.add("kc-night");
-    squint(1300);
-    for (let i = 0; i < 3; i++) {
-      after(200 + i * 320, () => {
-        const z = document.createElement("span");
-        z.className = "kc-zzz";
-        z.textContent = "💤";
-        z.style.left = `${52 + i * 5}%`;
-        z.style.top = `${26 - i * 3}%`;
-        stage.appendChild(z);
-        after(1400, () => z.remove());
+  function taskFeed(): void {
+    const want = FOODS[Math.floor(Math.random() * FOODS.length)];
+    bubbleEl.textContent = `💭 团团想吃 ${want.emoji}`;
+    msgEl.textContent = "在下面找到它想吃的东西！";
+    const opts = shuffled(
+      [want, ...shuffled(FOODS.filter((f) => f !== want), Math.random as () => number).slice(0, cfg.options - 1)],
+      Math.random as () => number
+    );
+    btnsEl.innerHTML = "";
+    for (const f of opts) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "kc-btn";
+      btn.innerHTML = `${f.emoji}<small>${f.name}</small>`;
+      btn.addEventListener("click", () => {
+        if (ended) return;
+        if (f === want) {
+          const mouth = wrap.querySelector(".kc-mouth-open") as SVGElement | null;
+          if (mouth) {
+            mouth.style.display = "";
+            later(() => { mouth.style.display = "none"; }, 700);
+          }
+          ctx.sfx("coin");
+          msgEl.textContent = `啊呜～${f.name}真好吃！`;
+          btnsEl.innerHTML = "";
+          taskDone();
+        } else {
+          btn.classList.add("kc-wrong");
+          btn.disabled = true;
+          mistake("团团摇摇头，再看看它想要什么～");
+        }
       });
+      btnsEl.appendChild(btn);
     }
-    say(SLEEP_WORDS[Math.floor(Math.random() * SLEEP_WORDS.length)]);
-    after(1200, () => {
-      wrap.classList.remove("kc-night");
-      addNeed("sleep", 34);
-    });
-  });
+  }
 
-  // 逗猫小游戏:毛线球乱跳,点中 5 次
-  btnBall.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || busy || miniActive) return;
-    if (fun >= NEED_MAX) { say("喵~ 今天玩够啦，好开心!"); return; }
-    miniActive = true;
-    yarnTaps = 0;
-    btnFish.disabled = btnSleep.disabled = btnBall.disabled = btnDress.disabled = true;
-    play("jump");
-
-    const hud = document.createElement("div");
-    hud.className = "kc-minihud";
-    hud.textContent = "🧶 点中毛线球 0 / 5";
-    stage.appendChild(hud);
-
-    const yarn = document.createElement("span");
-    yarn.className = "kc-yarn";
-    yarn.textContent = "🧶";
-    stage.appendChild(yarn);
-
-    const moveYarn = (): void => {
-      yarn.style.left = `${10 + Math.random() * 70}%`;
-      yarn.style.top = `${18 + Math.random() * 55}%`;
+  function taskPlay(): void {
+    const toy = TOYS[Math.floor(Math.random() * TOYS.length)];
+    let taps = 0;
+    bubbleEl.textContent = `💭 团团想玩 ${toy}`;
+    msgEl.textContent = `快拍玩具逗它！还差 ${cfg.playTaps} 下`;
+    btnsEl.innerHTML = "";
+    const toyBtn = document.createElement("button");
+    toyBtn.type = "button";
+    toyBtn.className = "kc-toy";
+    toyBtn.textContent = toy;
+    const move = () => {
+      toyBtn.style.left = `${8 + Math.random() * 72}%`;
+      toyBtn.style.top = `${8 + Math.random() * 70}%`;
     };
-    moveYarn();
-
-    const endMini = (): void => {
-      miniActive = false;
-      yarn.remove();
-      hud.remove();
-      if (!ended) {
-        btnFish.disabled = btnSleep.disabled = btnBall.disabled = btnDress.disabled = false;
-      }
-      hearts(3);
-      say("玩得好开心，喵!");
-      addNeed("fun", 50);
-    };
-
-    yarn.addEventListener("pointerdown", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      yarnTaps++;
-      play("pop");
-      animateCat("kc-wiggle");
-      hud.textContent = `🧶 点中毛线球 ${yarnTaps} / 5`;
-      say(YARN_WORDS[Math.floor(Math.random() * YARN_WORDS.length)]);
-      if (yarnTaps >= 5) {
-        play("coin");
-        endMini();
+    move();
+    boxEl.appendChild(toyBtn);
+    const mover = setInterval(() => { if (!destroyed && !ended) move(); }, 1100);
+    intervals.add(mover);
+    toyBtn.addEventListener("click", () => {
+      if (ended) return;
+      taps++;
+      ctx.sfx("pop");
+      move();
+      if (taps >= cfg.playTaps) {
+        clearInterval(mover);
+        toyBtn.remove();
+        msgEl.textContent = "玩累啦，团团心满意足！";
+        taskDone();
       } else {
-        moveYarn();
+        msgEl.textContent = `真好玩！还差 ${cfg.playTaps - taps} 下`;
       }
     });
-  });
+  }
 
-  // 换装(逐天解锁)
-  btnDress.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (ended || busy || miniActive) return;
-    lock(600);
-    play("tap");
-    dressIndex = (dressIndex + 1) % unlockedOutfits;
-    OUTFITS.forEach((o, i) => {
-      if (!o.cls) return;
-      const g = wrap.querySelector(`.${o.cls}`) as SVGGElement | null;
-      if (g) g.style.display = i === dressIndex ? "" : "none";
-    });
-    animateCat("kc-wiggle");
-    squint(600);
-    const locked = OUTFITS.length - unlockedOutfits;
-    say(`${OUTFITS[dressIndex].name}!${locked > 0 ? `(还有 ${locked} 件待解锁)` : ""}`);
-    fun = Math.min(NEED_MAX, fun + 4);
-    renderNeeds();
-    checkDay();
-  });
+  function taskWash(): void {
+    bubbleEl.textContent = "💭 团团身上脏脏的";
+    msgEl.textContent = `把 ${cfg.washSpots} 个泡泡全都搓掉！`;
+    btnsEl.innerHTML = "";
+    let left = cfg.washSpots;
+    for (let i = 0; i < cfg.washSpots; i++) {
+      const spot = document.createElement("button");
+      spot.type = "button";
+      spot.className = "kc-spot";
+      spot.textContent = "🫧";
+      spot.style.left = `${14 + Math.random() * 62}%`;
+      spot.style.top = `${26 + Math.random() * 52}%`;
+      spot.style.animationDelay = `${Math.random()}s`;
+      spot.addEventListener("click", () => {
+        if (ended) return;
+        ctx.sfx("pop");
+        spot.remove();
+        left--;
+        msgEl.textContent = left > 0 ? `搓搓搓～还剩 ${left} 个泡泡` : "洗得香喷喷！";
+        if (left <= 0) taskDone();
+      });
+      boxEl.appendChild(spot);
+    }
+  }
 
-  renderNeeds();
-  after(600, () => say("你好呀,我是团团!今天请多关照~"));
+  function taskSleep(): void {
+    const seq: string[] = Array.from({ length: cfg.notes }, () => NOTES[Math.floor(Math.random() * NOTES.length)]);
+    let step = 0;
+    let showing = true;
+    bubbleEl.textContent = `🌙 摇篮曲：${seq.join(" ")}`;
+    msgEl.textContent = "记住音符的顺序，马上照着弹！";
+    btnsEl.innerHTML = "";
+    later(() => {
+      if (ended) return;
+      showing = false;
+      bubbleEl.textContent = "🌙 轮到你弹啦";
+      msgEl.textContent = "按刚才的顺序点音符！";
+      for (const n of NOTES) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "kc-btn";
+        btn.textContent = n;
+        btn.addEventListener("click", () => {
+          if (ended || showing) return;
+          if (n === seq[step]) {
+            ctx.sfx("tap");
+            step++;
+            msgEl.textContent = `好听！${step}/${seq.length}`;
+            if (step >= seq.length) {
+              btnsEl.innerHTML = "";
+              msgEl.textContent = "呼噜呼噜～团团睡着啦";
+              taskDone();
+            }
+          } else {
+            step = 0;
+            mistake(`不是这个音，从头再弹：${seq.join(" ")}`);
+            bubbleEl.textContent = `🌙 摇篮曲：${seq.join(" ")}`;
+            later(() => { if (!ended) bubbleEl.textContent = "🌙 轮到你弹啦"; }, 1800);
+          }
+        });
+        btnsEl.appendChild(btn);
+      }
+    }, 2400);
+  }
+
+  function taskDress(): void {
+    const want = ACCS[Math.floor(Math.random() * ACCS.length)];
+    bubbleEl.textContent = `💭 团团想戴 ${want.emoji}`;
+    msgEl.textContent = "帮它挑对打扮！";
+    const opts = shuffled(
+      [want, ...shuffled(ACCS.filter((a) => a !== want), Math.random as () => number).slice(0, cfg.options - 1)],
+      Math.random as () => number
+    );
+    btnsEl.innerHTML = "";
+    for (const a of opts) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "kc-btn";
+      btn.innerHTML = `${a.emoji}<small>${a.name}</small>`;
+      btn.addEventListener("click", () => {
+        if (ended) return;
+        if (a === want) {
+          wrap.querySelectorAll<SVGElement>(".kc-acc").forEach((el) => { el.style.display = "none"; });
+          const acc = wrap.querySelector(`.${a.cls}`) as SVGElement | null;
+          if (acc) acc.style.display = "";
+          ctx.sfx("coin");
+          msgEl.textContent = `${a.name}戴上啦，真好看！`;
+          btnsEl.innerHTML = "";
+          taskDone();
+        } else {
+          btn.classList.add("kc-wrong");
+          btn.disabled = true;
+          mistake("团团歪歪头，好像不是这件～");
+        }
+      });
+      btnsEl.appendChild(btn);
+    }
+  }
+
+  function startTask(): void {
+    if (ended || destroyed) return;
+    boxEl.querySelectorAll(".kc-spot, .kc-toy").forEach((el) => el.remove());
+    renderTop();
+    const task = cfg.tasks[taskIdx];
+    if (task === "feed") taskFeed();
+    else if (task === "play") taskPlay();
+    else if (task === "wash") taskWash();
+    else if (task === "sleep") taskSleep();
+    else taskDress();
+  }
+
+  renderTop();
+  startTask();
 
   return {
     destroy() {
-      alive = false;
+      destroyed = true;
       ended = true;
-      timers.forEach((id) => {
-        clearTimeout(id);
-        clearInterval(id);
-      });
-      timers.clear();
+      intervals.forEach((t) => clearInterval(t));
+      intervals.clear();
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "一次都不选错就是 3 星，团团最喜欢细心的你！",
+    grandMessage: "99 天的照顾全部完成，团团已经离不开你啦！",
+  });
 }
