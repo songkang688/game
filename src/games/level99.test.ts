@@ -12,6 +12,7 @@ import {
   rateAbove,
   rateBelow,
   saveStar,
+  settleSpeechLine,
   shuffled,
   totalSize,
   totalStars,
@@ -126,5 +127,18 @@ describe("level99 随机与评星工具", () => {
     expect(rateAbove(10, 9, 6)).toBe(3);
     expect(rateAbove(7, 9, 6)).toBe(2);
     expect(rateAbove(1, 9, 6)).toBe(1);
+  });
+});
+
+describe("level99 结算朗读文案", () => {
+  it("过关朗读:先报第几关过关,再连读鼓励语(关卡号是 1 基)", () => {
+    expect(settleSpeechLine("win", 0, "太棒啦！")).toBe("第 1 关过关！太棒啦！");
+    expect(settleSpeechLine("win", 98, "你做到啦！")).toBe("第 99 关过关！你做到啦！");
+  });
+
+  it("失败朗读:先安抚再鼓励,绝无批评措辞", () => {
+    const line = settleSpeechLine("lose", 4, "没关系，慢慢来，你可以的！");
+    expect(line).toBe("就差一点点！没关系，慢慢来，你可以的！");
+    expect(line).not.toMatch(/输|失败|错/);
   });
 });

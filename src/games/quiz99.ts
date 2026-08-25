@@ -38,6 +38,17 @@ export interface QuizOptions {
 
 const PRAISES = ["答对啦！真棒！", "好厉害呀！", "又快又准！", "太聪明啦！", "就是它！"];
 const CHEERS = ["没关系，再想一想～", "差一点点，你可以的！", "别着急，慢慢来～", "再看一眼，答案就在里面！"];
+const HINT_LINE = "悄悄提示：一闪一闪的那个就是答案！";
+
+/**
+ * 是否给「悄悄提示」（让正确选项一闪一闪）：
+ * - 同一道题连错 2 次：孩子明显卡住了，指条路比让他乱猜更能学到东西；
+ * - 或者总错数已到上限（再错一次就温柔失败）：最后一次机会不让孩子踩空。
+ * 纯函数便于测试。
+ */
+export function shouldHint(wrongHere: number, wrongTotal: number, maxWrong: number): boolean {
+  return wrongHere >= 2 || wrongTotal >= maxWrong;
+}
 
 const QUIZ_CSS = `
 .qz-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 14px; user-select: none; position: relative; min-height: 380px; display: flex; flex-direction: column; gap: 10px; }
@@ -55,6 +66,8 @@ const QUIZ_CSS = `
 @keyframes qzShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 .qz-choice.qz-right { animation: qzPop2 .4s; background: #E4F9E0; }
 @keyframes qzPop2 { 50% { transform: scale(1.12); } }
+.qz-choice.qz-hint { animation: qzTwinkle 1s ease-in-out infinite; box-shadow: 0 0 0 4px #ffd43b, 0 4px 0 rgba(120,120,160,.3); }
+@keyframes qzTwinkle { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 .qz-msg { text-align: center; min-height: 24px; font-weight: 800; font-size: 15px; }
 .qz-say-row { display: flex; justify-content: center; }
 .qz-say { border: none; border-radius: 999px; background: #ffffffe6; cursor: pointer; font-family: inherit; font-weight: 900; font-size: 16px; padding: 10px 24px; min-height: 46px; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
@@ -69,6 +82,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
   let ended = false;
   let index = 0;
   let wrong = 0;
+  let wrongHere = 0;
   let streak = 0;
   let locked = false;
 
@@ -79,7 +93,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
     <style>${QUIZ_CSS}</style>
     <div class="qz-top">
       <span class="qz-badge qz-progress" style="color:${theme.accent}">第 1 / ${questions.length} 题</span>
-      <span class="qz-badge qz-streak" style="color:#e8590c">🔥 连对 0</span>
+      <span class="qz-badge qz-streak" style="color:#b84708">🔥 连对 0</span>
     </div>
     <div class="qz-bar"><div class="qz-fill" style="background:${theme.accent}"></div></div>
     <div class="qz-prompt"></div>
@@ -137,6 +151,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
       btn.addEventListener("click", () => onChoice(btn, i));
       choicesEl.appendChild(btn);
     });
+    wrongHere = 0;
     locked = false;
     speak(q.ask);
   }
@@ -173,6 +188,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
       }, 850);
     } else {
       wrong++;
+      wrongHere++;
       streak = 0;
       ctx.sfx("oops");
       btn.classList.add("qz-wrong");
@@ -181,6 +197,14 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
       if (wrong > maxWrong) {
         ended = true;
         later(() => ctx.lose("这一关的题目有点调皮，我们休息一下再来一次！"), 500);
+        return;
+      }
+      if (shouldHint(wrongHere, wrong, maxWrong)) {
+        // 孩子卡住了：让正确选项一闪一闪,不让最后一次机会踩空
+        const rightBtn = choicesEl.children[q.correct];
+        if (rightBtn instanceof HTMLElement) rightBtn.classList.add("qz-hint");
+        msgEl.textContent = HINT_LINE;
+        speak(HINT_LINE);
         return;
       }
       const cheer = CHEERS[Math.floor(Math.random() * CHEERS.length)];

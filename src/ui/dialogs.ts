@@ -3,6 +3,7 @@
  */
 import { createAvatarImg } from "./avatars";
 import { playSound } from "../engine/audio";
+import { speak, stopSpeaking } from "../games/speech";
 
 export interface DialogButton {
   label: string;
@@ -86,6 +87,11 @@ function pick<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)] as T;
 }
 
+/** 结算弹窗要朗读的整句话：标题 + 鼓励语连读（一年级孩子靠听懂结果） */
+export function resultSpeechLine(title: string, message: string): string {
+  return `${title}${message}`;
+}
+
 /** 胜负结算弹窗 */
 export function showResultDialog(opts: {
   win: boolean;
@@ -120,7 +126,8 @@ export function showResultDialog(opts: {
 
   const title = document.createElement("h2");
   title.className = "result-title";
-  title.textContent = opts.win ? pick(WIN_TITLES) : pick(LOSE_TITLES);
+  const titleText = opts.win ? pick(WIN_TITLES) : pick(LOSE_TITLES);
+  title.textContent = titleText;
   content.appendChild(title);
 
   // 三星逐颗弹出的音效节奏,与星星动画的 delay 对齐
@@ -155,11 +162,12 @@ export function showResultDialog(opts: {
 
   const msg = document.createElement("p");
   msg.className = "result-message";
-  msg.textContent =
+  const msgText =
     opts.message ?? (opts.win ? pick(WIN_MESSAGES) : pick(LOSE_MESSAGES));
+  msg.textContent = msgText;
   content.appendChild(msg);
 
-  return showDialog({
+  const handle = showDialog({
     className: opts.win ? "dialog--win" : "dialog--lose",
     content,
     buttons: [
@@ -167,6 +175,7 @@ export function showResultDialog(opts: {
         label: "🔁 再玩一次",
         kind: "primary",
         onClick: () => {
+          stopSpeaking();
           clearStarTimers();
           opts.onReplay();
         }
@@ -175,10 +184,23 @@ export function showResultDialog(opts: {
         label: "🏠 回首页",
         kind: "ghost",
         onClick: () => {
+          stopSpeaking();
           clearStarTimers();
           opts.onHome();
         }
       }
     ]
   });
+
+  // 弹出即朗读结果:识字量不够的孩子也能"听"到夸奖;无中文语音包时静默
+  speak(resultSpeechLine(titleText, msgText));
+
+  return {
+    el: handle.el,
+    close: () => {
+      stopSpeaking();
+      clearStarTimers();
+      handle.close();
+    }
+  };
 }
