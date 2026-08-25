@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   GRID_COLS,
   GRID_ROWS,
+  HANDMADE_PER_THEME,
   LEVELS,
+  LEVELS_PER_THEME,
   MAX_TOWER_LEVEL,
   MONSTER_INFO,
   MonsterKind,
+  THEME_ORDER,
+  THEME_STYLE,
   TOWER_INFO,
   TOWER_KINDS,
   applyHit,
@@ -15,9 +19,13 @@ import {
   comboPetalBonus,
   dewSlowFactor,
   isLevelUnlocked,
+  isThemeUnlocked,
+  levelIndicesOfTheme,
   levelMonsterCount,
+  levelWaveSignature,
   monsterArmor,
   monsterHp,
+  monsterReward,
   parseProgress,
   pathCellSet,
   pathLength,
@@ -29,6 +37,9 @@ import {
   starsForLevel,
   sunnyInterval,
   boomSplash,
+  themeCleared,
+  themeOfLevel,
+  themeStars,
   totalStars,
   towerCooldown,
   towerDamage,
@@ -91,9 +102,50 @@ describe("garden-guard 路径", () => {
   });
 });
 
-describe("garden-guard 战役关卡(深度)", () => {
-  it("关卡数量 >= 18,数据驱动", () => {
-    expect(LEVELS.length).toBeGreaterThanOrEqual(18);
+describe("garden-guard 99 关九大主题战役", () => {
+  it("正好 99 关,9 章 × 11 关", () => {
+    expect(LEVELS.length).toBe(99);
+    expect(THEME_ORDER.length).toBeGreaterThanOrEqual(6);
+    expect(THEME_ORDER.length * LEVELS_PER_THEME).toBe(99);
+  });
+
+  it("关卡按章节分组,每章正好 11 关且主题一致", () => {
+    for (let ci = 0; ci < THEME_ORDER.length; ci++) {
+      const idxs = levelIndicesOfTheme(ci);
+      expect(idxs.length).toBe(LEVELS_PER_THEME);
+      for (const i of idxs) {
+        expect(LEVELS[i].theme).toBe(THEME_ORDER[ci]);
+        expect(themeOfLevel(i)).toBe(THEME_ORDER[ci]);
+      }
+    }
+  });
+
+  it("每章至少 8 关手写布局,生成关不超过 3 关", () => {
+    for (let ci = 0; ci < THEME_ORDER.length; ci++) {
+      const defs = levelIndicesOfTheme(ci).map((i) => LEVELS[i]);
+      const hand = defs.filter((d) => !d.gen);
+      expect(hand.length).toBeGreaterThanOrEqual(HANDMADE_PER_THEME);
+      expect(defs.length - hand.length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("每章手写关的布局(路径+波次)互不相同", () => {
+    for (let ci = 0; ci < THEME_ORDER.length; ci++) {
+      const hand = levelIndicesOfTheme(ci)
+        .map((i) => LEVELS[i])
+        .filter((d) => !d.gen);
+      const layouts = new Set(
+        hand.map((d) => JSON.stringify(d.paths) + "|" + levelWaveSignature(d)),
+      );
+      expect(layouts.size).toBe(hand.length);
+    }
+  });
+
+  it("生成关的波次模板互不重复(全局查重)", () => {
+    const genDefs = LEVELS.filter((d) => d.gen);
+    expect(genDefs.length).toBe(THEME_ORDER.length * 3);
+    const sigs = new Set(genDefs.map((d) => levelWaveSignature(d)));
+    expect(sigs.size).toBe(genDefs.length);
   });
 
   it("每关都有独特机制标记(feature),且互不相同", () => {
@@ -110,18 +162,46 @@ describe("garden-guard 战役关卡(深度)", () => {
     expect(kinds.size).toBeGreaterThanOrEqual(8);
   });
 
-  it("有三个章节主题,每章都有 BOSS 关", () => {
-    const themes = new Set(LEVELS.map((l) => l.theme));
-    expect(themes.size).toBeGreaterThanOrEqual(3);
-    const bossLevels = LEVELS.filter((l) =>
-      l.waves.some((w) => w.some((e) => MONSTER_INFO[e.kind].boss)),
+  it("九章配色互不相同,每章都有自己的 BOSS 关", () => {
+    const palettes = new Set(THEME_ORDER.map((t) => THEME_STYLE[t].bgA + THEME_STYLE[t].accent));
+    expect(palettes.size).toBe(THEME_ORDER.length);
+    const bossKinds = new Set<MonsterKind>();
+    for (let ci = 0; ci < THEME_ORDER.length; ci++) {
+      const defs = levelIndicesOfTheme(ci).map((i) => LEVELS[i]);
+      const bossLevels = defs.filter((l) =>
+        l.waves.some((w) => w.some((e) => MONSTER_INFO[e.kind].boss)),
+      );
+      expect(bossLevels.length).toBeGreaterThanOrEqual(1);
+      // 章末一定是 BOSS 关
+      const last = defs[defs.length - 1];
+      const lastBoss = last.waves.flat().find((e) => MONSTER_INFO[e.kind].boss);
+      expect(lastBoss).toBeDefined();
+      expect(lastBoss!.kind).toBe(THEME_STYLE[THEME_ORDER[ci]].boss);
+      bossKinds.add(lastBoss!.kind);
+    }
+    // 九个 BOSS 互不相同
+    expect(bossKinds.size).toBe(THEME_ORDER.length);
+  });
+
+  it("每章怪物主力阵容组合互不相同", () => {
+    const combos = new Set(
+      THEME_ORDER.map((t) => [...THEME_STYLE[t].palette].sort().join(",")),
     );
-    expect(bossLevels.length).toBeGreaterThanOrEqual(3);
-    expect(new Set(bossLevels.map((l) => l.theme)).size).toBeGreaterThanOrEqual(3);
+    expect(combos.size).toBe(THEME_ORDER.length);
+  });
+
+  it("BOSS 技能组合各有特色(冲刺/隐身/回血/召唤/暴走/分裂)", () => {
+    const sigs = THEME_ORDER.map((t) => {
+      const s = MONSTER_INFO[THEME_STYLE[t].boss];
+      return [s.dashes, s.sneaks, s.heals, s.summons, s.enrages, s.splits]
+        .map((v) => (v ? "1" : "0"))
+        .join("");
+    });
+    expect(new Set(sigs).size).toBeGreaterThanOrEqual(7);
   });
 
   it("有双路(绕路)关卡", () => {
-    expect(LEVELS.some((l) => l.paths.length >= 2)).toBe(true);
+    expect(LEVELS.filter((l) => l.paths.length >= 2).length).toBeGreaterThanOrEqual(6);
   });
 
   it("所有路径都在棋盘内且够长", () => {
@@ -154,10 +234,12 @@ describe("garden-guard 战役关卡(深度)", () => {
     }
   });
 
-  it("怪物血量与护甲随关卡上涨", () => {
-    expect(monsterHp("softy", 15)).toBeGreaterThan(monsterHp("softy", 0));
-    expect(monsterArmor("shieldy", 12)).toBeGreaterThan(monsterArmor("shieldy", 0));
-    expect(monsterArmor("softy", 12)).toBe(0);
+  it("怪物血量/护甲/奖励随关卡上涨", () => {
+    expect(monsterHp("softy", 50)).toBeGreaterThan(monsterHp("softy", 0));
+    expect(monsterHp("softy", 98)).toBeGreaterThan(monsterHp("softy", 50));
+    expect(monsterArmor("shieldy", 40)).toBeGreaterThan(monsterArmor("shieldy", 0));
+    expect(monsterArmor("softy", 40)).toBe(0);
+    expect(monsterReward("softy", 98)).toBeGreaterThan(monsterReward("softy", 0));
   });
 });
 
@@ -271,5 +353,17 @@ describe("garden-guard 3 星与进度", () => {
     expect(isLevelUnlocked(stars, 1)).toBe(true);
     expect(isLevelUnlocked(stars, 2)).toBe(false);
     expect(totalStars([3, 2, 1])).toBe(6);
+  });
+
+  it("章节解锁:第一章永远开放,后一章要打通前一章末关", () => {
+    const stars = new Array(LEVELS.length).fill(0);
+    expect(isThemeUnlocked(stars, 0)).toBe(true);
+    expect(isThemeUnlocked(stars, 1)).toBe(false);
+    for (let i = 0; i < LEVELS_PER_THEME; i++) stars[i] = 2;
+    expect(isThemeUnlocked(stars, 1)).toBe(true);
+    expect(isThemeUnlocked(stars, 2)).toBe(false);
+    expect(themeStars(stars, 0)).toBe(LEVELS_PER_THEME * 2);
+    expect(themeCleared(stars, 0)).toBe(LEVELS_PER_THEME);
+    expect(themeCleared(stars, 1)).toBe(0);
   });
 });

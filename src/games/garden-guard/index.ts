@@ -1,5 +1,5 @@
-// 花园守卫:20 关三大章节塔防战役!草地→沙滩→雪山,五种塔、八种怪、三个章节 BOSS。
-// 关卡地图选关,通关解锁下一关,回放刷 3 星。
+// 花园守卫:99 关九大主题章节塔防战役!先选主题再选关,每章专属配色、怪物阵容和 BOSS。
+// 通关解锁下一关,回放刷 3 星;失败只重试本关。
 import {
   DASH_CYCLE,
   DASH_MULT,
@@ -11,6 +11,7 @@ import {
   HEAL_RANGE,
   HEARTS_PER_LEVEL,
   LEVELS,
+  LEVELS_PER_THEME,
   MAX_TOWER_LEVEL,
   MONSTER_INFO,
   MonsterKind,
@@ -18,6 +19,7 @@ import {
   SNEAK_HIDDEN,
   SNEAK_VISIBLE,
   SUMMON_INTERVAL,
+  THEME_ORDER,
   THEME_STYLE,
   TOWER_INFO,
   TowerKind,
@@ -29,8 +31,10 @@ import {
   comboPetalBonus,
   dewSlowFactor,
   isLevelUnlocked,
+  isThemeUnlocked,
   monsterArmor,
   monsterHp,
+  monsterReward,
   parseProgress,
   pathLength,
   pathsCellSet,
@@ -40,6 +44,8 @@ import {
   serializeProgress,
   starsForLevel,
   sunnyInterval,
+  themeCleared,
+  themeStars,
   totalStars,
   towerCooldown,
   towerDamage,
@@ -66,13 +72,13 @@ export const meta = {
   emoji: "🌼",
   category: "action" as const,
   color: "#ffd6e7",
-  blurb: "20 关塔防大战役!五种塔八种怪,三章 BOSS 等你挑战!",
+  blurb: "99 关九大主题塔防战役!五种塔九章 BOSS,越守越上头!",
 };
 
 const HUD_H = 44;
 const TOOLBAR_H = 58;
 
-type Phase = "map" | "intro" | "prewave" | "wave" | "clear" | "retry";
+type Phase = "themes" | "map" | "intro" | "prewave" | "wave" | "clear" | "retry";
 
 interface Monster {
   kind: MonsterKind;
@@ -174,7 +180,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   // ---- 局状态 ----
   let levelIdx = 0;
-  let phase: Phase = "map";
+  let chapterIdx = 0;
+  let phase: Phase = "themes";
   let phaseTimer = 0;
   let waveIdx = 0;
   let petals = LEVELS[0].startPetals;
@@ -213,6 +220,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let panelSell: Rect | null = null;
   const cardRects: Array<{ kind: TowerKind; rect: Rect }> = [];
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
+  const themeCards: Array<{ idx: number; rect: Rect }> = [];
   let btnNext: Rect | null = null;
   let btnMap: Rect | null = null;
   let btnRetry: Rect | null = null;
@@ -267,6 +275,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   // ---- 关卡流程 ----
   function loadLevel(idx: number): void {
     levelIdx = idx;
+    chapterIdx = Math.floor(idx / LEVELS_PER_THEME);
     const def = LEVELS[idx];
     wpList = def.paths.map((p) => buildWaypoints(p));
     lenList = wpList.map((wp) => pathLength(wp));
@@ -313,7 +322,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     api.play("win");
     if (levelIdx >= LEVELS.length - 1 && !finaleFired) {
       finaleFired = true;
-      api.onWin(earnedStars, `20 关战役全部通关!雪雪大王也被请回家啦!总星 ${totalStars(progress)}/60`);
+      api.onWin(earnedStars, `99 关九章战役全部通关!糖果魔王也被请回家啦!总星 ${totalStars(progress)}/${LEVELS.length * 3}`);
     } else if (gained > 0) {
       api.addStars(gained);
       addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
@@ -331,7 +340,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    if (phase === "themes") {
+      for (const c of themeCards) {
+        if (inRect(x, y, c.rect)) {
+          if (isThemeUnlocked(progress, c.idx)) {
+            api.play("tap");
+            chapterIdx = c.idx;
+            phase = "map";
+          } else {
+            api.play("oops");
+          }
+          return;
+        }
+      }
+      return;
+    }
     if (phase === "map") {
+      if (inRect(x, y, btnBack)) {
+        api.play("tap");
+        phase = "themes";
+        return;
+      }
       for (const n of mapNodes) {
         if (Math.hypot(x - n.x, y - n.y) <= n.r + 6) {
           if (isLevelUnlocked(progress, n.idx)) {
@@ -500,7 +529,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function onMonsterKilled(m: Monster): void {
     const spec = MONSTER_INFO[m.kind];
-    petals += spec.reward;
+    petals += monsterReward(m.kind, levelIdx);
     combo++;
     comboTimer = 2.2;
     const gain = 10 + (Math.min(combo, 8) - 1) * 5;
@@ -515,7 +544,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
     addFloat(px(m.x), py(m.y), `+${gain}`, "#c47a2a");
     burst(px(m.x), py(m.y), "#c9b6f2", spec.boss ? 26 : 12, spec.boss ? 1.8 : 1);
-    if (m.kind === "splity") {
+    if (spec.splits) {
       spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.2));
       spawnMonster("mini", m.pathIdx, m.dist + 0.15);
       addFloat(px(m.x), py(m.y) - 30, "分身!", "#b28ae8");
@@ -591,11 +620,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     if (phase !== "wave" && phase !== "prewave") return;
 
-    // 怪物行为
+    // 怪物行为(由 MonsterSpec 行为开关驱动,BOSS 可组合多个技能)
     for (let i = monsters.length - 1; i >= 0; i--) {
       const m = monsters[i];
-      // 冲冲怪:周期冲刺
-      if (m.kind === "dashy") {
+      const mSpec = MONSTER_INFO[m.kind];
+      // 周期冲刺
+      if (mSpec.dashes) {
         m.dashTimer -= dt;
         if (m.dashTimer <= 0) {
           m.dashing = !m.dashing;
@@ -603,16 +633,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
           if (m.dashing) burst(px(m.x), py(m.y), "#ffd868", 5, 0.6);
         }
       }
-      // 隐隐怪:周期隐身
-      if (m.kind === "sneaky") {
+      // 周期隐身
+      if (mSpec.sneaks) {
         m.sneakTimer -= dt;
         if (m.sneakTimer <= 0) {
           m.hidden = !m.hidden;
           m.sneakTimer = m.hidden ? SNEAK_HIDDEN : SNEAK_VISIBLE;
         }
       }
-      // 奶油怪:治疗附近
-      if (m.kind === "healy") {
+      // 治疗附近
+      if (mSpec.heals) {
         m.healTimer -= dt;
         if (m.healTimer <= 0) {
           m.healTimer = HEAL_INTERVAL;
@@ -626,8 +656,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
           burst(px(m.x), py(m.y), "#d8f5d8", 6, 0.5);
         }
       }
-      // 蟹蟹将军:召唤小分身
-      if (m.kind === "boss2") {
+      // 召唤小分身
+      if (mSpec.summons) {
         m.summonTimer -= dt;
         if (m.summonTimer <= 0) {
           m.summonTimer = SUMMON_INTERVAL;
@@ -637,11 +667,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
           api.play("meow");
         }
       }
-      // 雪雪大王:半血暴走
-      if (m.kind === "boss3" && !m.enraged && m.hp <= m.maxHp / 2) {
+      // 半血暴走
+      if (mSpec.enrages && !m.enraged && m.hp <= m.maxHp / 2) {
         m.enraged = true;
         shake = 0.4;
-        addFloat(px(m.x), py(m.y) - 34, "雪雪大王暴走啦!", "#5a8ac9", true);
+        addFloat(px(m.x), py(m.y) - 34, `${mSpec.name}暴走啦!`, "#5a8ac9", true);
         api.play("oops");
       }
 
@@ -868,7 +898,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     mini: "#d5c9f5",
     boss1: "#ff9eb5",
     boss2: "#f0a878",
-    boss3: "#a8c8f0",
+    boss3: "#c9a86a",
+    boss4: "#e8c060",
+    boss5: "#8aa86a",
+    boss6: "#a8c8f0",
+    boss7: "#e87a5a",
+    boss8: "#9a8ac9",
+    boss9: "#f078b0",
   };
 
   function drawMonster(m: Monster): void {
@@ -1006,8 +1042,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
   }
 
-  function drawMap(): void {
-    // 三段渐变背景
+  function drawThemes(): void {
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, "#e3f7dc");
     grad.addColorStop(0.5, "#fdf3e0");
@@ -1019,29 +1054,101 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌼 花园守卫 · 战役地图", w / 2, 30);
-    ctx.font = "15px sans-serif";
+    ctx.fillText("🌼 花园守卫 · 九大主题战役", w / 2, 28);
+    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#8a7a5e";
-    ctx.fillText(`⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 通关解锁下一关,回放可刷 3 星`, w / 2, 58);
+    ctx.fillText(
+      `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选主题,再选关卡`,
+      w / 2,
+      54,
+    );
+
+    themeCards.length = 0;
+    const cols = w > h * 1.15 ? 3 : 2;
+    const rows = Math.ceil(THEME_ORDER.length / cols);
+    const pad = 10;
+    const x0 = Math.max(10, w * 0.06);
+    const y0 = 72;
+    const cw = (w - x0 * 2 - pad * (cols - 1)) / cols;
+    const ch = Math.min(96, (h - y0 - 16 - pad * (rows - 1)) / rows);
+    for (let i = 0; i < THEME_ORDER.length; i++) {
+      const st = THEME_STYLE[THEME_ORDER[i]];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
+      themeCards.push({ idx: i, rect });
+      const unlocked = isThemeUnlocked(progress, i);
+      const cleared = themeCleared(progress, i);
+      ctx.fillStyle = unlocked ? st.bgA : "#e8e8ee";
+      ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
+      ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
+      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
+      ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
+      ctx.fillText(unlocked ? st.blurb : "通关上一章解锁", rect.x + 10, rect.y + ch * 0.6);
+      ctx.fillText(
+        unlocked
+          ? `${cleared}/${LEVELS_PER_THEME} 关 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3}`
+          : "",
+        rect.x + 10,
+        rect.y + ch * 0.82,
+      );
+    }
+  }
+
+  function drawMap(): void {
+    const st = THEME_STYLE[THEME_ORDER[chapterIdx]];
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, st.bgA);
+    grad.addColorStop(1, st.bgB);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    btnBack = { x: 6, y: 7, w: 62, h: 30 };
+    drawButton(btnBack, "◀ 主题", "rgba(255,255,255,0.85)", "#5a5a6e");
+
+    ctx.fillStyle = st.accent;
+    ctx.font = "bold 22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "#6a6a7e";
+    ctx.fillText(
+      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 通关解锁下一关,回放可刷 3 星`,
+      w / 2,
+      54,
+    );
 
     mapNodes.length = 0;
-    const cols: number = 5;
-    const rows = Math.ceil(LEVELS.length / cols);
-    const mx0 = w * 0.1;
-    const mx1 = w * 0.9;
-    const my0 = 92;
-    const my1 = h - 30;
-    const nr = Math.max(16, Math.min(26, (mx1 - mx0) / cols / 2.6, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < LEVELS.length; i++) {
+    const base = chapterIdx * LEVELS_PER_THEME;
+    const cols = 4;
+    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const mx0 = w * 0.12;
+    const mx1 = w * 0.88;
+    const my0 = 96;
+    const my1 = h - 40;
+    const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < LEVELS_PER_THEME; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + ((mx1 - mx0) * (cols === 1 ? 0.5 : col / (cols - 1)));
+      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
       const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
-      mapNodes.push({ idx: i, x, y, r: nr });
+      mapNodes.push({ idx: base + i, x, y, r: nr });
     }
     // 连线
-    ctx.strokeStyle = "rgba(200,170,140,0.5)";
+    ctx.strokeStyle = "rgba(120,110,90,0.4)";
     ctx.lineWidth = 5;
     ctx.setLineDash([2, 9]);
     ctx.beginPath();
@@ -1055,12 +1162,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 节点
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
-      const st = THEME_STYLE[def.theme];
       const unlocked = isLevelUnlocked(progress, n.idx);
       const got = progress[n.idx] ?? 0;
       const isBoss = def.feature.includes("BOSS");
       const r = isBoss ? n.r * 1.25 : n.r;
-      ctx.fillStyle = unlocked ? (got > 0 ? st.bgA : "#ffffff") : "#e4e4ea";
+      ctx.fillStyle = unlocked ? (got > 0 ? "#ffffff" : "#fffef5") : "rgba(230,230,236,0.9)";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -1074,11 +1180,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fillText("🔒", n.x, n.y);
       } else {
         ctx.fillStyle = st.accent;
-        ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
-        ctx.fillText(String(n.idx + 1), n.x, n.y - (isBoss ? r * 0.1 : 0));
+        ctx.font = `bold ${Math.round(r * 0.8)}px sans-serif`;
+        ctx.fillText(String(n.idx - base + 1), n.x, n.y - (isBoss ? r * 0.1 : 0));
         if (isBoss) {
           ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
           ctx.fillText("👑", n.x, n.y - r * 0.95);
+        } else if (def.gen) {
+          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
+          ctx.fillText("⚔", n.x, n.y - r * 1.05);
         }
         // 星星
         ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
@@ -1096,7 +1205,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 25px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`第 ${levelIdx + 1} 关 · ${def.name} 通过!`, w / 2, y + 42);
+    ctx.fillText(`${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · ${def.name} 通过!`, w / 2, y + 42);
     ctx.font = "34px sans-serif";
     let starTxt = "";
     for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
@@ -1144,7 +1253,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`第 ${levelIdx + 1} 关 · ${def.name}`, w / 2, y + 44);
+    ctx.fillText(`${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · ${def.name}`, w / 2, y + 44);
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
     ctx.fillText(def.hint, w / 2, y + 90);
@@ -1155,6 +1264,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function draw(): void {
+    if (phase === "themes") {
+      drawThemes();
+      return;
+    }
     if (phase === "map") {
       drawMap();
       return;
@@ -1346,7 +1459,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "15px sans-serif";
     ctx.fillText(
-      `第 ${levelIdx + 1}/${LEVELS.length} 关 · 波 ${waveIdx + 1}/${def.waves.length}`,
+      `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} (${levelIdx + 1}/${LEVELS.length}) · 波 ${waveIdx + 1}/${def.waves.length}`,
       w / 2,
       HUD_H / 2,
     );
