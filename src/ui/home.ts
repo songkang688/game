@@ -4,7 +4,7 @@
 import type { GameCategory, GameModule } from "../engine/types";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "../engine/types";
 import { save } from "../engine/save";
-import { playSound, toggleSound } from "../engine/audio";
+import { isBgmOn, playSound, toggleBgm, toggleSound } from "../engine/audio";
 import { showParentGate } from "./parentGate";
 import { createAvatarImg } from "./avatars";
 
@@ -124,6 +124,23 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     renderSound();
   });
 
+  const bgmBtn = document.createElement("button");
+  bgmBtn.type = "button";
+  bgmBtn.className = "icon-btn";
+  bgmBtn.title = "背景音乐";
+  const renderBgm = (): void => {
+    const on = isBgmOn();
+    bgmBtn.textContent = "🎵";
+    bgmBtn.style.opacity = on ? "1" : "0.4";
+    bgmBtn.setAttribute("aria-pressed", String(on));
+    bgmBtn.setAttribute("aria-label", on ? "关闭背景音乐" : "打开背景音乐");
+  };
+  renderBgm();
+  bgmBtn.addEventListener("click", () => {
+    toggleBgm();
+    renderBgm();
+  });
+
   const parentBtn = document.createElement("button");
   parentBtn.type = "button";
   parentBtn.className = "icon-btn";
@@ -135,7 +152,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     showParentGate();
   });
 
-  actions.append(starChip, soundBtn, parentBtn);
+  actions.append(starChip, soundBtn, bgmBtn, parentBtn);
   header.appendChild(actions);
   screen.appendChild(header);
 
