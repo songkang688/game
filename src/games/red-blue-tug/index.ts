@@ -1,19 +1,5 @@
-/**
- * 红蓝拔河 red-blue-tug —— 红蓝运动会第一项
- * 三局两胜(BO3)!双人各按一边,或单人挑战蓝方 AI(简单/普通)。
- * 场上会随机冒出加油星,点到它自己队伍就猛拉一大截!
- */
-
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (n: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
+import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, LEVELS, type TugLevel } from "./levels";
 
 export const meta = {
   id: "red-blue-tug",
@@ -21,336 +7,238 @@ export const meta = {
   emoji: "🪢",
   category: "party" as const,
   color: "#ff6b6b",
-  blurb: "红蓝运动会·拔河!三局两胜,抢加油星猛拉一把!",
+  blurb: "99 关六大赛场！抢加油星、看红绿灯、左右手打节奏，拔赢小电脑！",
 };
 
-const STYLE = `
-.tug-wrap{position:relative;width:100%;height:100%;min-height:480px;overflow:hidden;
-  background:linear-gradient(#d0f4ff,#fff6d6);font-family:"PingFang SC","Microsoft YaHei",sans-serif;
-  user-select:none;-webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;}
-.tug-menu{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:14px;background:linear-gradient(#d0f4ff,#fff6d6);padding:16px;}
-.tug-menu-title{font-size:28px;font-weight:900;color:#5c4a1e;}
-.tug-menu-sub{font-size:15px;font-weight:700;color:#8a7a4a;text-align:center;line-height:1.6;}
-.tug-mode{border:none;border-radius:24px;padding:15px 36px;font-size:20px;font-weight:900;color:#fff;
-  cursor:pointer;box-shadow:0 6px 0 #0003;font-family:inherit;touch-action:manipulation;min-width:250px;}
-.tug-mode:active{transform:translateY(4px);box-shadow:0 2px 0 #0003;}
-.tug-mode-easy{background:#51cf66;}
-.tug-mode-normal{background:#ff6b6b;}
-.tug-mode-duo{background:#845ef7;}
-.tug-hud{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 14px 0;}
-.tug-pill{background:#fffd;border-radius:999px;padding:7px 14px;font-size:16px;font-weight:900;
-  color:#5c4a1e;box-shadow:0 3px 8px #0002;}
-.tug-scene{position:relative;flex:1;min-height:200px;}
-.tug-line{position:absolute;top:12%;bottom:34%;width:6px;border-radius:3px;opacity:.75;}
-.tug-line-red{left:22%;background:#ff6b6b;}
-.tug-line-blue{right:22%;background:#4dabf7;}
-.tug-rope-row{position:absolute;left:0;right:0;top:46%;height:70px;
-  transition:transform .12s ease-out;will-change:transform;}
-.tug-rope{position:absolute;left:-30%;right:-30%;top:30px;height:12px;border-radius:6px;
-  background:repeating-linear-gradient(90deg,#c98a3f 0 18px,#a76a28 18px 36px);}
-.tug-knot{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-size:44px;
-  filter:drop-shadow(0 3px 3px #0003);}
-.tug-team{position:absolute;top:-6px;font-size:44px;letter-spacing:-14px;}
-.tug-team-red{right:56%;}
-.tug-team-blue{left:56%;transform:scaleX(-1);}
-.tug-shake .tug-rope-row{animation:tugShake .18s;}
-@keyframes tugShake{0%,100%{margin-top:0}50%{margin-top:-5px}}
-.tug-star{position:absolute;z-index:15;font-size:44px;cursor:pointer;
-  animation:tugStar .5s ease infinite alternate;filter:drop-shadow(0 0 10px #ffd43b);}
-@keyframes tugStar{from{transform:scale(1)}to{transform:scale(1.2)}}
-.tug-count{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
-  font-size:110px;font-weight:900;color:#ff922b;text-shadow:0 5px 0 #fff;pointer-events:none;}
-.tug-btns{display:flex;height:42%;min-height:170px;}
-.tug-btn{flex:1;border:none;font-size:26px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;touch-action:manipulation;display:flex;flex-direction:column;gap:6px;
-  align-items:center;justify-content:center;transition:filter .05s;}
-.tug-btn:active{filter:brightness(1.2);}
-.tug-btn:disabled{opacity:.85;}
-.tug-btn small{font-size:15px;font-weight:700;opacity:.9;}
-.tug-btn-red{background:linear-gradient(#ff8787,#fa5252);border-radius:0 28px 0 0;}
-.tug-btn-blue{background:linear-gradient(#74c0fc,#339af0);border-radius:28px 0 0 0;}
-.tug-btn .tug-big{font-size:44px;}
-.tug-result{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;gap:12px;
-  align-items:center;justify-content:center;background:#ffffffd9;animation:tugFade .3s ease;text-align:center;}
-@keyframes tugFade{from{opacity:0}to{opacity:1}}
-.tug-result-big{font-size:60px;}
-.tug-result-text{font-size:26px;font-weight:900;color:#5c4a1e;}
-.tug-result-sub{font-size:17px;font-weight:800;color:#8a7a4a;}
+const WIN_AT = 100;
+
+const CSS = `
+.rbg-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0E4, #FFE4EC); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
+.rbg-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; align-items: center; }
+.rbg-badge { background: #fff; border-radius: 14px; padding: 5px 12px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(200,120,120,.25); }
+.rbg-light { font-size: 26px; min-width: 34px; text-align: center; }
+.rbg-field { position: relative; height: 110px; border-radius: 16px; background: linear-gradient(180deg, #E8F6DA 0 68%, #CFE8B8 68% 100%); overflow: hidden; margin-bottom: 8px; }
+.rbg-team { position: absolute; top: 26px; font-size: 34px; transition: left .15s linear; }
+.rbg-rope { position: absolute; top: 46px; height: 6px; background: #C9975A; border-radius: 3px; transition: left .15s linear, width .15s linear; }
+.rbg-flag { position: absolute; top: 22px; font-size: 26px; transition: left .15s linear; }
+.rbg-zone { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(200,80,80,.4); }
+.rbg-starbtn { position: absolute; border: none; background: none; font-size: 34px; cursor: pointer; animation: rbgTwinkle .5s ease infinite alternate; padding: 2px; }
+@keyframes rbgTwinkle { from { transform: scale(1); } to { transform: scale(1.25); } }
+.rbg-ctrl { display: flex; justify-content: center; gap: 14px; }
+.rbg-pull { flex: 1; max-width: 170px; height: 72px; border: none; border-radius: 20px; font-size: 22px; font-weight: 900; color: #fff; background: linear-gradient(180deg, #FF8A8A, #E85555); cursor: pointer; box-shadow: 0 5px 0 #C23B3B; font-family: inherit; touch-action: manipulation; }
+.rbg-pull:active { transform: translateY(3px); box-shadow: 0 2px 0 #C23B3B; }
+.rbg-pull.rbg-blue { background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; }
+.rbg-pull.rbg-blue:active { box-shadow: 0 2px 0 #3B55C2; }
+.rbg-msg { text-align: center; min-height: 22px; color: #C25555; font-weight: 700; margin-top: 8px; font-size: 15px; }
 `;
 
-type Side = "red" | "blue";
-type Difficulty = "easy" | "normal";
-
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, onWin, onLose } = api;
-  let alive = true;
-  let matchOver = false;
-  let running = false;
-  let solo = true;
-  let difficulty: Difficulty = "easy";
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: TugLevel = LEVELS[ctx.level];
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  const intervals = new Set<ReturnType<typeof setInterval>>();
+  let destroyed = false;
+  let ended = false;
+  let raf = 0;
+  let lastTime = 0;
+  /** -100(小电脑赢) .. +100(你赢)，0 为中线 */
   let pos = 0;
-  let redWins = 0;
-  let blueWins = 0;
-  let round = 1;
-
-  const timers = new Set<number>();
-  const after = (ms: number, fn: () => void): number => {
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      if (alive) fn();
-    }, ms);
-    timers.add(id);
-    return id;
-  };
+  let green = true;
+  let lastHand: "L" | "R" | null = null;
+  let startAt = 0;
 
   const wrap = document.createElement("div");
-  wrap.className = "tug-wrap";
+  wrap.className = "rbg-wrap";
   wrap.innerHTML = `
-    <style>${STYLE}</style>
-    <div class="tug-hud" style="display:none">
-      <div class="tug-pill tug-round">第 1 回合</div>
-      <div class="tug-pill tug-score">🐹 0 : 0 🐧</div>
+    <style>${CSS}</style>
+    <div class="rbg-top">
+      <span class="rbg-badge" style="color:#C24545">🔴 你队</span>
+      ${cfg.redlight ? '<span class="rbg-light">🟢</span>' : ""}
+      <span class="rbg-badge" style="color:#3576BF">🔵 小电脑队</span>
     </div>
-    <div class="tug-scene">
-      <div class="tug-line tug-line-red"></div>
-      <div class="tug-line tug-line-blue"></div>
-      <div class="tug-rope-row">
-        <div class="tug-rope"></div>
-        <div class="tug-team tug-team-red">🐹🐹🐹</div>
-        <div class="tug-team tug-team-blue">🐧🐧🐧</div>
-        <div class="tug-knot">🎀</div>
-      </div>
-      <div class="tug-count" style="display:none"></div>
+    <div class="rbg-field">
+      <div class="rbg-zone" style="left:15%"></div>
+      <div class="rbg-zone" style="right:15%"></div>
+      <div class="rbg-team rbg-red">🧒🧒</div>
+      <div class="rbg-rope"></div>
+      <div class="rbg-flag">🚩</div>
+      <div class="rbg-team rbg-blue-team">🤖🤖</div>
     </div>
-    <div class="tug-btns">
-      <button class="tug-btn tug-btn-red" disabled>
-        <span class="tug-big">🐹</span>红队 加油!<small>拼命点这里</small>
-      </button>
-      <button class="tug-btn tug-btn-blue" disabled>
-        <span class="tug-big">🐧</span>蓝队 加油!<small>拼命点这里</small>
-      </button>
+    <div class="rbg-ctrl">
+      ${cfg.rhythm
+        ? '<button class="rbg-pull rbg-left" type="button">👈 左手</button><button class="rbg-pull rbg-blue rbg-right" type="button">右手 👉</button>'
+        : '<button class="rbg-pull rbg-only" type="button">🪢 用力拉！</button>'}
     </div>
-    <div class="tug-menu">
-      <div class="tug-menu-title">🪢 红蓝拔河</div>
-      <div class="tug-menu-sub">红蓝运动会第一项 · 三局两胜!<br>把 🎀 拉过自己那条线,场上的 ⭐ 点到就猛拉一把!</div>
-      <button class="tug-mode tug-mode-easy">🐹 单人 · 小电脑简单</button>
-      <button class="tug-mode tug-mode-normal">🐹 单人 · 小电脑普通</button>
-      <button class="tug-mode tug-mode-duo">🐹🆚🐧 双人对战</button>
-    </div>`;
-  root.appendChild(wrap);
+    <div class="rbg-msg"></div>
+  `;
+  stage.appendChild(wrap);
 
-  const q = <T extends Element>(sel: string): T => wrap.querySelector(sel) as T;
-  const scene = q<HTMLElement>(".tug-scene");
-  const ropeRow = q<HTMLElement>(".tug-rope-row");
-  const countEl = q<HTMLElement>(".tug-count");
-  const menu = q<HTMLElement>(".tug-menu");
-  const hud = q<HTMLElement>(".tug-hud");
-  const roundEl = q<HTMLElement>(".tug-round");
-  const scoreEl = q<HTMLElement>(".tug-score");
-  const btnRed = q<HTMLButtonElement>(".tug-btn-red");
-  const btnBlue = q<HTMLButtonElement>(".tug-btn-blue");
-  const blueLabel = q<HTMLElement>(".tug-btn-blue small");
+  const flagEl = wrap.querySelector(".rbg-flag") as HTMLElement;
+  const ropeEl = wrap.querySelector(".rbg-rope") as HTMLElement;
+  const redEl = wrap.querySelector(".rbg-red") as HTMLElement;
+  const blueEl = wrap.querySelector(".rbg-blue-team") as HTMLElement;
+  const fieldEl = wrap.querySelector(".rbg-field") as HTMLElement;
+  const lightEl = wrap.querySelector(".rbg-light") as HTMLElement | null;
+  const msgEl = wrap.querySelector(".rbg-msg") as HTMLElement;
+
+  msgEl.textContent = cfg.rhythm
+    ? "左手右手轮着点，节奏对了才有力！"
+    : cfg.redlight
+      ? "看到 🟢 才能拉，🔴 时拉绳会打滑！"
+      : cfg.star
+        ? "狂点拉绳，⭐ 出现就赶紧抢！"
+        : "狂点按钮，把小旗拉到你这边！";
+
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
+  }
 
   function render(): void {
-    ropeRow.style.transform = `translateX(${pos * 28}%)`;
+    // pos +100 → 旗到左边 15%（你这边），-100 → 右边 85%
+    const flagPct = 50 - (pos / WIN_AT) * 35;
+    flagEl.style.left = `calc(${flagPct}% - 13px)`;
+    ropeEl.style.left = `calc(${flagPct}% - 90px)`;
+    ropeEl.style.width = "180px";
+    redEl.style.left = `calc(${flagPct}% - 140px)`;
+    blueEl.style.left = `calc(${flagPct}% + 66px)`;
   }
 
-  function renderHud(): void {
-    roundEl.textContent = `第 ${round} 回合`;
-    scoreEl.textContent = `🐹 ${redWins} : ${blueWins} 🐧`;
-  }
-
-  function shake(): void {
-    scene.classList.remove("tug-shake");
-    void scene.offsetWidth;
-    scene.classList.add("tug-shake");
-  }
-
-  function pull(side: Side, strength: number): void {
-    if (!running || matchOver) return;
-    pos += side === "red" ? -strength : strength;
-    pos = Math.max(-1, Math.min(1, pos));
-    render();
-    shake();
-    if (pos <= -1) finishRound("red");
-    else if (pos >= 1) finishRound("blue");
-  }
-
-  // 加油星
-  let starEl: HTMLElement | null = null;
-  let starTimer = 0;
-  function clearStar(): void {
-    if (starEl) { starEl.remove(); starEl = null; }
-  }
-  function scheduleStar(): void {
-    if (!alive || matchOver) return;
-    starTimer = after(2600 + Math.random() * 1800, () => {
-      if (running && !starEl) {
-        const side: Side = Math.random() < 0.5 ? "red" : "blue";
-        const star = document.createElement("div");
-        star.className = "tug-star";
-        star.textContent = "⭐";
-        star.style.left = side === "red" ? `${8 + Math.random() * 22}%` : `${68 + Math.random() * 22}%`;
-        star.style.top = `${10 + Math.random() * 26}%`;
-        star.addEventListener("pointerdown", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          clearStar();
-          play("coin");
-          pull(side, 0.16);
-        });
-        scene.appendChild(star);
-        starEl = star;
-        after(2000, () => { if (starEl === star) clearStar(); });
-      }
-      scheduleStar();
-    });
-  }
-
-  let aiTimer = 0;
-  function scheduleAi(): void {
-    if (!alive || matchOver) return;
-    const base = difficulty === "easy" ? 320 : 240;
-    const jitter = difficulty === "easy" ? 300 : 240;
-    const power = difficulty === "easy" ? 0.03 : 0.045;
-    aiTimer = after(base + Math.random() * jitter, () => {
-      pull("blue", power + Math.random() * 0.015);
-      scheduleAi();
-    });
-  }
-
-  function finishRound(winner: Side): void {
-    running = false;
-    btnRed.disabled = btnBlue.disabled = true;
-    clearStar();
-    if (winner === "red") redWins++;
-    else blueWins++;
-    renderHud();
-    const matchWinner: Side | null = redWins >= 2 ? "red" : blueWins >= 2 ? "blue" : null;
-
-    const result = document.createElement("div");
-    result.className = "tug-result";
-    const emoji = winner === "red" ? "🐹🏆" : "🐧🏆";
-    const name = winner === "red" ? "红队" : "蓝队";
-    if (matchWinner) {
-      matchOver = true;
-      const mEmoji = matchWinner === "red" ? "🐹👑" : "🐧👑";
-      const mName = matchWinner === "red" ? "红队" : "蓝队";
-      result.innerHTML = `
-        <div class="tug-result-big">${mEmoji}</div>
-        <div class="tug-result-text">${mName}赢得拔河比赛!</div>
-        <div class="tug-result-sub">大比分 ${redWins} : ${blueWins}</div>`;
-      wrap.appendChild(result);
-      play(matchWinner === "red" || !solo ? "win" : "oops");
-      after(1100, () => {
-        if (solo) {
-          if (matchWinner === "red") onWin(difficulty === "normal" ? 3 : 2, `${redWins}:${blueWins} 拿下拔河冠军!`);
-          else onLose(`${redWins}:${blueWins} 惜败，再挑战一次!`);
-        } else {
-          onWin(2, `${mName}赢得拔河比赛，击掌庆祝!`);
-        }
-      });
+  function finish(won: boolean): void {
+    if (ended) return;
+    ended = true;
+    cancelAnimationFrame(raf);
+    intervals.forEach((t) => clearInterval(t));
+    intervals.clear();
+    if (won) {
+      const secs = (performance.now() - startAt) / 1000;
+      const got = secs <= 16 ? 3 : secs <= 28 ? 2 : 1;
+      later(() => ctx.win(got as 1 | 2 | 3, `嘿咻！只用 ${Math.round(secs)} 秒就拔赢了小电脑！`), 400);
     } else {
-      result.innerHTML = `
-        <div class="tug-result-big">${emoji}</div>
-        <div class="tug-result-text">${name}拿下第 ${round} 回合!</div>
-        <div class="tug-result-sub">大比分 ${redWins} : ${blueWins}，下一回合马上开始</div>`;
-      wrap.appendChild(result);
-      play("pop");
-      after(1400, () => {
-        result.remove();
-        round++;
-        renderHud();
-        startRound();
-      });
+      later(() => ctx.lose("绳子被拉走啦，点得再快一点、看准时机！"), 400);
     }
   }
 
-  function startRound(): void {
-    pos = 0;
+  function pull(power: number): void {
+    if (ended) return;
+    if (cfg.redlight && !green) {
+      pos = Math.max(-WIN_AT, pos - 6);
+      ctx.sfx("oops");
+      msgEl.textContent = "🔴 红灯拉绳打滑啦！等绿灯！";
+      render();
+      return;
+    }
+    pos = Math.min(WIN_AT, pos + power);
+    ctx.sfx("tap");
     render();
-    countEl.style.display = "";
-    let n = 3;
-    const tick = (): void => {
-      if (n > 0) {
-        countEl.textContent = String(n);
-        play("pop");
-        n--;
-        after(700, tick);
-      } else {
-        countEl.textContent = "开始!";
-        play("jump");
-        after(500, () => {
-          countEl.style.display = "none";
-          running = true;
-          btnRed.disabled = false;
-          btnBlue.disabled = solo;
-          if (solo) scheduleAi();
-        });
-      }
+    if (pos >= WIN_AT) finish(true);
+  }
+
+  function onHand(hand: "L" | "R"): void {
+    if (ended) return;
+    if (lastHand === hand) {
+      msgEl.textContent = "要换另一只手啦，左右轮着来！";
+      ctx.sfx("oops");
+      return;
+    }
+    lastHand = hand;
+    pull(cfg.pullPower);
+  }
+
+  if (cfg.rhythm) {
+    (wrap.querySelector(".rbg-left") as HTMLButtonElement).addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      onHand("L");
+    });
+    (wrap.querySelector(".rbg-right") as HTMLButtonElement).addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      onHand("R");
+    });
+  } else {
+    (wrap.querySelector(".rbg-only") as HTMLButtonElement).addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      pull(cfg.pullPower);
+    });
+  }
+
+  if (cfg.redlight && lightEl) {
+    const flip = () => {
+      if (ended || destroyed) return;
+      green = !green;
+      lightEl.textContent = green ? "🟢" : "🔴";
+      later(flip, green ? 1800 + Math.random() * 1400 : 900 + Math.random() * 700);
     };
-    tick();
+    later(flip, 2000);
   }
 
-  function startMatch(): void {
-    redWins = blueWins = 0;
-    round = 1;
-    matchOver = false;
-    hud.style.display = "";
-    renderHud();
-    menu.style.display = "none";
-    scheduleStar();
-    startRound();
+  if (cfg.star) {
+    const starSpawner = setInterval(() => {
+      if (ended || destroyed) return;
+      if (fieldEl.querySelector(".rbg-starbtn")) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "rbg-starbtn";
+      btn.textContent = "⭐";
+      btn.style.left = `${15 + Math.random() * 70}%`;
+      btn.style.top = `${8 + Math.random() * 50}%`;
+      btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        if (ended) return;
+        btn.remove();
+        ctx.sfx("coin");
+        msgEl.textContent = "⭐ 加油星！猛拉一大把！";
+        pos = Math.min(WIN_AT, pos + 12);
+        render();
+        if (pos >= WIN_AT) finish(true);
+      });
+      fieldEl.appendChild(btn);
+      later(() => btn.remove(), 1600);
+    }, 2600);
+    intervals.add(starSpawner);
   }
 
-  q<HTMLButtonElement>(".tug-mode-easy").addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    solo = true;
-    difficulty = "easy";
-    blueLabel.textContent = "蓝队是小电脑(简单)";
-    startMatch();
-  });
-  q<HTMLButtonElement>(".tug-mode-normal").addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    solo = true;
-    difficulty = "normal";
-    blueLabel.textContent = "蓝队是小电脑(普通)";
-    startMatch();
-  });
-  q<HTMLButtonElement>(".tug-mode-duo").addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    solo = false;
-    startMatch();
-  });
+  function tick(now: number): void {
+    if (destroyed || ended) return;
+    const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
+    lastTime = now;
+    pos = Math.max(-WIN_AT, pos - cfg.aiRate * dt);
+    render();
+    if (pos <= -WIN_AT) {
+      finish(false);
+      return;
+    }
+    raf = requestAnimationFrame(tick);
+  }
 
-  btnRed.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (btnRed.disabled) return;
-    play("tap");
-    pull("red", 0.055);
-  });
-  btnBlue.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (btnBlue.disabled) return;
-    play("tap");
-    pull("blue", 0.055);
-  });
-
+  startAt = performance.now();
   render();
+  raf = requestAnimationFrame((t) => {
+    lastTime = t;
+    raf = requestAnimationFrame(tick);
+  });
 
   return {
     destroy() {
-      alive = false;
-      matchOver = true;
-      clearTimeout(aiTimer);
-      clearTimeout(starTimer);
-      timers.forEach((id) => {
-        clearTimeout(id);
-        clearInterval(id);
-      });
-      timers.clear();
+      destroyed = true;
+      ended = true;
+      cancelAnimationFrame(raf);
+      intervals.forEach((t) => clearInterval(t));
+      intervals.clear();
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "拔得越快星星越多，六大赛场等你称王！",
+    grandMessage: "99 场拔河全部胜利，大力士奖杯归你！",
+  });
 }
