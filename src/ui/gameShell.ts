@@ -63,6 +63,9 @@ export function mountGameScreen(
   let mounted: { destroy: () => void } | null = null;
   let dialog: DialogHandle | null = null;
   let finished = false;
+  // 异步加载防竞态:每次 start 领一个序号,过期(重开/离开)的结果直接丢弃
+  let startSeq = 0;
+  let disposed = false;
 
   function closeDialog(): void {
     dialog?.close();
@@ -79,11 +82,23 @@ export function mountGameScreen(
     stage.innerHTML = "";
   }
 
+  function showLoading(): void {
+    stage.innerHTML = `<div class="game-loading" role="status"><span class="game-loading-flower" aria-hidden="true">🌸</span><p class="game-loading-text">马上就好～</p></div>`;
+  }
+
+  function showError(): void {
+    stage.innerHTML = `<div class="empty-state"><div class="empty-emoji">🛠️</div><p>这个游戏出了点小问题,先玩别的吧!</p></div>`;
+  }
+
   function start(): void {
+    const seq = ++startSeq;
     closeDialog();
     unmount();
     finished = false;
     save.recordPlay(game.meta.id);
+    showLoading();
+
+    const stale = (): boolean => disposed || seq !== startSeq;
 
     const api: GameAPI = {
       root: stage,
@@ -91,7 +106,7 @@ export function mountGameScreen(
       addStars: (n) => save.addStars(n),
       getStars: () => save.getStars(),
       onWin: (stars, message) => {
-        if (finished) return;
+        if (finished || stale()) return;
         finished = true;
         save.recordWin(game.meta.id, stars);
         save.addStars(stars);
@@ -105,7 +120,7 @@ export function mountGameScreen(
         });
       },
       onLose: (message) => {
-        if (finished) return;
+        if (finished || stale()) return;
         finished = true;
         playSound("oops");
         dialog = showResultDialog({
@@ -117,17 +132,29 @@ export function mountGameScreen(
       }
     };
 
-    try {
-      mounted = game.mount(api);
-    } catch (err) {
-      console.error(`[一朵一星] 游戏 ${game.meta.id} 启动失败:`, err);
-      stage.innerHTML = `<div class="empty-state"><div class="empty-emoji">🛠️</div><p>这个游戏出了点小问题,先玩别的吧!</p></div>`;
-    }
+    game
+      .load()
+      .then((mount) => {
+        if (stale()) return;
+        stage.innerHTML = "";
+        try {
+          mounted = mount(api);
+        } catch (err) {
+          console.error(`[一朵一星] 游戏 ${game.meta.id} 启动失败:`, err);
+          showError();
+        }
+      })
+      .catch((err: unknown) => {
+        if (stale()) return;
+        console.error(`[一朵一星] 游戏 ${game.meta.id} 加载失败:`, err);
+        showError();
+      });
   }
 
   start();
 
   return () => {
+    disposed = true;
     closeDialog();
     unmount();
     unsubscribe();

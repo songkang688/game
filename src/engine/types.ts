@@ -1,9 +1,11 @@
 /**
  * 「一朵一星」游戏模块约定。
  *
- * 每个小游戏放在 src/games/<游戏id>/index.ts,
- * 导出 `meta`(游戏信息)和 `mount`(挂载函数),
- * 平台壳会用 import.meta.glob 自动收集并显示在首页。
+ * 每个小游戏放在 src/games/<游戏id>/ 目录:
+ * - meta.ts:导出纯数据 `meta`(游戏信息),被首页 eager 收集,随主包加载;
+ * - index.ts:导出 `mount`(挂载函数)并在顶部 re-export `meta` 保持兼容,
+ *   进入游戏时才动态加载对应 chunk(按需拆包,首页不背玩法代码)。
+ * 平台壳会用 import.meta.glob 自动收集并显示在首页,合并目录即上首页。
  */
 
 /** 游戏分类:action=闯关 casual=休闲 party=对战 edu=学习 create=动手 */
@@ -45,10 +47,23 @@ export interface GameAPI {
   onLose: (message?: string) => void;
 }
 
+/** 挂载函数:游戏把自己挂到 api.root,返回 destroy 以便离开时清理定时器、事件等 */
+export type GameMount = (api: GameAPI) => { destroy: () => void };
+
+/** 游戏实现模块:src/games/<id>/index.ts 的导出形状(meta re-export + mount) */
+export interface GameImplModule {
+  meta: GameMeta;
+  mount: GameMount;
+}
+
+/**
+ * 首页与路由使用的游戏条目(异步 mount 载体):
+ * meta 随主包立即可用;load() 动态加载该游戏的实现 chunk 并返回 mount,
+ * 模块加载失败或缺少 mount 时 reject。
+ */
 export interface GameModule {
   meta: GameMeta;
-  /** 挂载游戏,返回 destroy 以便离开时清理定时器、事件等 */
-  mount: (api: GameAPI) => { destroy: () => void };
+  load: () => Promise<GameMount>;
 }
 
 /** 分类中文标签(首页页签使用) */

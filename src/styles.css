@@ -1082,3 +1082,44 @@ button {
     font-size: 15px;
   }
 }
+
+/* ---------- 游戏 chunk 按需加载:粉彩加载态(第 3 步新增,只增不改) ---------- */
+.game-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  min-height: 220px;
+  text-align: center;
+  color: var(--pink-deep);
+}
+
+.game-loading-flower {
+  display: inline-block;
+  font-size: 56px;
+  line-height: 1;
+  animation: game-loading-spin 1.6s linear infinite;
+}
+
+.game-loading-text {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+@keyframes game-loading-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-loading-flower {
+    animation: game-loading-spin 4s steps(8) infinite;
+  }
+}

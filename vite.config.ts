@@ -10,12 +10,14 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png"],
       manifest: {
+        id: "/",
         name: "一朵一星",
         short_name: "一朵一星",
         description: "一朵一星 —— 送给小朋友的原创小游戏合集,无广告、无内购。",
         lang: "zh-CN",
         display: "standalone",
         orientation: "any",
+        categories: ["games", "kids", "education"],
         theme_color: "#ffd9ea",
         background_color: "#fff5fa",
         icons: [
