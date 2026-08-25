@@ -51,7 +51,8 @@ export function makeShapeRound(rand: () => number = Math.random, mode?: "shape" 
   const m: "shape" | "color" = mode ?? (rand() < 0.5 ? "shape" : "color");
   const shape = pick(SHAPE_KINDS, rand);
   const color = pick(SHAPE_COLORS, rand);
-  const bins = m === "shape" ? shuffle(SHAPE_KINDS.slice(), rand) : shuffle(SHAPE_COLORS.slice(), rand);
-  const answer = m === "shape" ? shape : color;
+  const pool: string[] = m === "shape" ? SHAPE_KINDS.slice() : SHAPE_COLORS.slice();
+  const bins = shuffle(pool, rand);
+  const answer: string = m === "shape" ? shape : color;
   return { mode: m, shape, color, bins, answerIndex: bins.indexOf(answer) };
 }
