@@ -13,7 +13,8 @@ import {
 describe("ocean-munch 吃与被吃", () => {
   it("明显更大才能吃", () => {
     expect(canEat(20, 15)).toBe(true);
-    expect(canEat(20, 19)).toBe(true);
+    expect(canEat(20, 18)).toBe(true);
+    expect(canEat(20, 19)).toBe(false); // 只差一点点,还不能吃
     expect(canEat(20, 20)).toBe(false);
     expect(canEat(15, 20)).toBe(false);
   });
