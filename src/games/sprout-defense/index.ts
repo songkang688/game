@@ -660,19 +660,40 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   // ---- 绘制 ----
+  /** 把 #rrggbb 变深/变浅(amt 为 -255..255) */
+  function shade(hex: string, amt: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, Math.min(255, (n >> 16) + amt));
+    const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt));
+    const b = Math.max(0, Math.min(255, (n & 0xff) + amt));
+    return `rgb(${r},${g},${b})`;
+  }
+
   function drawFace(x: number, y: number, r: number, munch = 0): void {
+    ctx.fillStyle = "rgba(255,150,160,0.35)";
+    ctx.beginPath();
+    ctx.arc(x - r * 0.52, y + r * 0.1, r * 0.15, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.52, y + r * 0.1, r * 0.15, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = "#3a3a4a";
     ctx.beginPath();
     ctx.arc(x - r * 0.32, y - r * 0.12, r * 0.1, 0, Math.PI * 2);
     ctx.arc(x + r * 0.32, y - r * 0.12, r * 0.1, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath();
+    ctx.arc(x - r * 0.35, y - r * 0.15, r * 0.035, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.29, y - r * 0.15, r * 0.035, 0, Math.PI * 2);
+    ctx.fill();
     if (munch > 0) {
+      ctx.fillStyle = "#3a3a4a";
       ctx.beginPath();
       ctx.arc(x, y + r * 0.22, r * (0.12 + 0.14 * munch), 0, Math.PI * 2);
       ctx.fill();
     } else {
       ctx.strokeStyle = "#3a3a4a";
       ctx.lineWidth = Math.max(1.5, r * 0.08);
+      ctx.lineCap = "round";
       ctx.beginPath();
       ctx.arc(x, y + r * 0.12, r * 0.26, 0.15 * Math.PI, 0.85 * Math.PI);
       ctx.stroke();
@@ -680,42 +701,80 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawPlantIcon(x: number, y: number, r: number, kind: PlantKind, anim = 0): void {
+    ctx.save();
+    ctx.lineJoin = "round";
+    // 先画土里的小茎叶(荷叶除外),说明"这是种下的植物"
+    if (kind !== "lily") {
+      ctx.fillStyle = "rgba(170,130,90,0.35)";
+      ctx.beginPath();
+      ctx.ellipse(x, y + r * 0.75, r * 0.55, r * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#8fd8a8";
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.5, y + r * 0.66, r * 0.24, r * 0.11, -0.5, 0, Math.PI * 2);
+      ctx.ellipse(x + r * 0.5, y + r * 0.66, r * 0.24, r * 0.11, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (kind === "sparkle") {
       ctx.fillStyle = "#ffe387";
+      ctx.strokeStyle = "#f2c24e";
+      ctx.lineWidth = Math.max(1, r * 0.06);
       for (let i = 0; i < 5; i++) {
         const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
         ctx.beginPath();
         ctx.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.34, r * 0.34, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
       }
-      ctx.fillStyle = "#ffd868";
+      const g = ctx.createRadialGradient(x - r * 0.15, y - r * 0.15, r * 0.05, x, y, r * 0.7);
+      g.addColorStop(0, "#ffe9a8");
+      g.addColorStop(1, "#ffc94e");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#e8a830";
       ctx.beginPath();
       ctx.arc(x, y, r * 0.55, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       drawFace(x, y, r * 0.55);
     } else if (kind === "bubble") {
       const sq = 1 + anim * 0.2;
-      ctx.fillStyle = "#8fd8c8";
+      const g = ctx.createRadialGradient(x - r * 0.2, y - r * 0.25, r * 0.08, x, y, r * 0.95);
+      g.addColorStop(0, "#b2ecdc");
+      g.addColorStop(1, "#74c8b2");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#54a890";
+      ctx.lineWidth = Math.max(1, r * 0.07);
       ctx.beginPath();
       ctx.ellipse(x, y, r * 0.62 * sq, (r * 0.62) / sq, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = "#6fc4b0";
+      ctx.strokeStyle = "#54a890";
       ctx.beginPath();
       ctx.ellipse(x - r * 0.15, y - r * 0.62, r * 0.2, r * 0.32, -0.5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       drawFace(x, y, r * 0.62, anim);
     } else if (kind === "nut") {
-      ctx.fillStyle = "#e8c89a";
+      const g = ctx.createLinearGradient(x, y - r * 0.7, x, y + r * 0.7);
+      g.addColorStop(0, "#f2d8ae");
+      g.addColorStop(1, "#dcb684");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#bc9662";
+      ctx.lineWidth = Math.max(1, r * 0.07);
       ctx.beginPath();
       ctx.ellipse(x, y + r * 0.05, r * 0.58, r * 0.68, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#d5b083";
+      ctx.stroke();
+      ctx.fillStyle = "#c8a06e";
       ctx.beginPath();
       ctx.ellipse(x, y - r * 0.35, r * 0.5, r * 0.3, 0, Math.PI, 0);
       ctx.fill();
       drawFace(x, y + r * 0.1, r * 0.55);
     } else if (kind === "star") {
       ctx.fillStyle = "#ffd868";
+      ctx.strokeStyle = "#e8a830";
+      ctx.lineWidth = Math.max(1, r * 0.07);
       ctx.beginPath();
       for (let i = 0; i < 10; i++) {
         const a = (Math.PI * i) / 5 - Math.PI / 2 + anim * 0.3;
@@ -727,6 +786,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
       drawFace(x, y + r * 0.08, r * 0.45);
     } else if (kind === "ice") {
       // 冰冰花:淡蓝雪花瓣
@@ -740,17 +800,29 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.lineTo(x + Math.cos(a) * r * 0.7, y + Math.sin(a) * r * 0.7);
         ctx.stroke();
       }
-      ctx.fillStyle = "#d4f0ff";
+      const g = ctx.createRadialGradient(x - r * 0.1, y - r * 0.1, r * 0.05, x, y, r * 0.55);
+      g.addColorStop(0, "#eefaff");
+      g.addColorStop(1, "#bce4f8");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#82c0e2";
+      ctx.lineWidth = Math.max(1, r * 0.07);
       ctx.beginPath();
       ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       drawFace(x, y, r * 0.45);
     } else if (kind === "boom") {
       // 爆爆果:红彤彤圆果 + 小引线
-      ctx.fillStyle = "#ff9d8a";
+      const g = ctx.createRadialGradient(x - r * 0.2, y - r * 0.1, r * 0.08, x, y + r * 0.08, r * 0.85);
+      g.addColorStop(0, "#ffb8a8");
+      g.addColorStop(1, "#f27862");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#d05846";
+      ctx.lineWidth = Math.max(1, r * 0.07);
       ctx.beginPath();
       ctx.arc(x, y + r * 0.08, r * 0.6, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       ctx.strokeStyle = "#c47a2a";
       ctx.lineWidth = Math.max(2, r * 0.1);
       ctx.beginPath();
@@ -759,26 +831,31 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.stroke();
       ctx.fillStyle = "#ffd868";
       ctx.beginPath();
-      ctx.arc(x + r * 0.5, y - r * 0.7, r * (0.12 + anim * 0.06), 0, Math.PI * 2);
+      ctx.arc(x + r * 0.5, y - r * 0.7, r * (0.14 + anim * 0.06), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ff9a4e";
+      ctx.beginPath();
+      ctx.arc(x + r * 0.5, y - r * 0.7, r * (0.07 + anim * 0.03), 0, Math.PI * 2);
       ctx.fill();
       drawFace(x, y + r * 0.08, r * 0.55);
     } else {
       // 荷叶垫
-      ctx.fillStyle = "#7ac97a";
+      const g = ctx.createRadialGradient(x - r * 0.2, y, r * 0.1, x, y + r * 0.2, r * 0.9);
+      g.addColorStop(0, "#96dc96");
+      g.addColorStop(1, "#5cb45c");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#48a048";
+      ctx.lineWidth = Math.max(1, r * 0.06);
       ctx.beginPath();
       ctx.ellipse(x, y + r * 0.2, r * 0.72, r * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#a8e0a0";
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
       ctx.beginPath();
       ctx.ellipse(x - r * 0.15, y + r * 0.12, r * 0.3, r * 0.15, -0.3, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (kind !== "lily") {
-      ctx.fillStyle = "rgba(170,130,90,0.35)";
-      ctx.beginPath();
-      ctx.ellipse(x, y + r * 0.75, r * 0.55, r * 0.16, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.restore();
   }
 
   function drawShovelIcon(x: number, y: number, r: number): void {
@@ -825,13 +902,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.ellipse(x + r * 0.2, y - r * 0.9 + flap, r * 0.55, r * 0.25, 0.4, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = bug.freeze > 0 ? "#9fd8f5" : color;
+    // 脚下软阴影
+    ctx.fillStyle = "rgba(58,58,74,0.13)";
+    ctx.beginPath();
+    ctx.ellipse(x + r * 0.6, laneCenterY(bug.lane) + r * 1.05, r * 1.4, r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const bodyColor = bug.freeze > 0 ? "#9fd8f5" : color;
+    ctx.strokeStyle = shade(bodyColor, -46);
+    ctx.lineWidth = Math.max(1.5, r * 0.09);
     for (let s = 2; s >= 0; s--) {
       const sx = x + s * r * 0.9;
       const sr = r * (1 - s * 0.15);
+      const grad = ctx.createRadialGradient(sx - sr * 0.3, y - sr * 0.35, sr * 0.1, sx, y, sr * 1.2);
+      grad.addColorStop(0, shade(bodyColor, 26));
+      grad.addColorStop(1, bodyColor);
+      ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(sx, y + Math.sin(bug.wob + s) * r * 0.12, sr, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     }
     // 护甲壳(壳壳虫是半圆壳,桶桶虫是铁桶)
     if (bug.maxArmor > 0 && bug.armor > 0) {
@@ -1186,6 +1275,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
     }
 
+    const plantSelected = selected !== "shovel";
+    const affordSelected = plantSelected && canAfford(dew, selected as PlantKind);
+    const hintPulse = 0.25 + Math.sin(time * 4) * 0.12;
     for (let lane = 0; lane < LANES; lane++) {
       const water = isWaterLane(lane);
       if (water) {
@@ -1205,8 +1297,36 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fillRect(ox - cell * HOME_W_CELLS, oy + lane * cell, cell * (PLANT_COLS + HOME_W_CELLS), cell);
       }
       for (let c = 0; c < PLANT_COLS; c++) {
-        ctx.strokeStyle = night ? "rgba(255,255,255,0.1)" : "rgba(120,160,110,0.18)";
-        ctx.strokeRect(px(c), oy + lane * cell, cell, cell);
+        const key = `${c},${lane}`;
+        if (!water) {
+          // 旱地画成圆角小土坑,种在哪里一目了然
+          const inset = cell * 0.09;
+          ctx.fillStyle = night ? "rgba(255,255,255,0.05)" : "rgba(150,110,70,0.1)";
+          ctx.strokeStyle = night ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.55)";
+          ctx.lineWidth = Math.max(1, cell * 0.03);
+          ctx.beginPath();
+          ctx.roundRect(px(c) + inset, oy + lane * cell + inset, cell - inset * 2, cell - inset * 2, cell * 0.18);
+          ctx.fill();
+          ctx.stroke();
+        }
+        // 呼吸的绿色"+":选中的植物能种在这里
+        if (phase === "play" && affordSelected && plantSelected) {
+          const ok = canPlantOnCell(selected as PlantKind, water, lilies.has(key), plants.has(key));
+          if (ok) {
+            ctx.strokeStyle = `rgba(90,168,120,${hintPulse})`;
+            ctx.lineWidth = Math.max(2, cell * 0.055);
+            ctx.lineCap = "round";
+            const cxc = px(c + 0.5);
+            const cyc = oy + (lane + 0.5) * cell;
+            const arm = cell * 0.11;
+            ctx.beginPath();
+            ctx.moveTo(cxc - arm, cyc);
+            ctx.lineTo(cxc + arm, cyc);
+            ctx.moveTo(cxc, cyc - arm);
+            ctx.lineTo(cxc, cyc + arm);
+            ctx.stroke();
+          }
+        }
       }
     }
 
@@ -1369,6 +1489,33 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 回地图按钮(叠在工具栏下方左侧)
     btnBack = { x: 6, y: TOOLBAR_H + 4, w: 62, h: 28 };
     drawButton(btnBack, "◀ 地图", "rgba(255,255,255,0.85)", "#5a5a6e");
+
+    // 「正在种什么」提示条:选中的工具一目了然
+    if (phase === "play") {
+      const label =
+        selected === "shovel"
+          ? "🪏 铲子:点植物退回一半露珠"
+          : `正在种:${PLANT_INFO[selected].name} 💧${PLANT_INFO[selected].cost} · 点绿色 ➕ 种下`;
+      ctx.font = "bold 12px sans-serif";
+      const tw = ctx.measureText(label).width;
+      const chip: Rect = { x: 74, y: TOOLBAR_H + 4, w: tw + 34, h: 28 };
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.strokeStyle = "rgba(90,168,120,0.5)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(chip.x, chip.y, chip.w, chip.h, 14);
+      ctx.fill();
+      ctx.stroke();
+      if (selected !== "shovel") {
+        drawPlantIcon(chip.x + 15, chip.y + 14, 9, selected);
+      } else {
+        drawShovelIcon(chip.x + 15, chip.y + 14, 9);
+      }
+      ctx.fillStyle = "#4a7a5a";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label.replace("🪏 ", ""), chip.x + 28, chip.y + 15);
+    }
 
     // 波次横幅
     if (waveBanner > 0 && phase === "play") {
