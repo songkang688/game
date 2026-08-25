@@ -95,6 +95,22 @@ describe("SaveStore 星星存档", () => {
     expect(storage.getItem(SAVE_KEY)).toBeNull();
   });
 
+  it("resetAll 连 99 关框架、游戏战役与最近玩过一起清掉,但不动别人的 key", () => {
+    const storage = memStorage();
+    const store = new SaveStore(storage);
+    store.addStars(10);
+    storage.setItem("yiduo-yixing.l99.match-stars", JSON.stringify([3, 2, 0]));
+    storage.setItem("yiduo-yixing.fruit-slice.campaign.v2", JSON.stringify({ level: 5 }));
+    storage.setItem("yiduo-yixing.recent.v1", JSON.stringify(["match-stars"]));
+    storage.setItem("other-app.data", "keep-me");
+    store.resetAll();
+    expect(storage.getItem("yiduo-yixing.l99.match-stars")).toBeNull();
+    expect(storage.getItem("yiduo-yixing.fruit-slice.campaign.v2")).toBeNull();
+    expect(storage.getItem("yiduo-yixing.recent.v1")).toBeNull();
+    expect(storage.getItem(SAVE_KEY)).toBeNull();
+    expect(storage.getItem("other-app.data")).toBe("keep-me");
+  });
+
   it("onChange 订阅会在存档变化时触发,退订后不再触发", () => {
     const store = new SaveStore(memStorage());
     let calls = 0;

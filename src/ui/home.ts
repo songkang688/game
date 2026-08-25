@@ -7,6 +7,7 @@ import { save } from "../engine/save";
 import { isBgmOn, playSound, toggleBgm, toggleSound } from "../engine/audio";
 import { showParentGate } from "./parentGate";
 import { createAvatarImg } from "./avatars";
+import { loadRecentIds } from "./recent";
 
 type Tab = "all" | GameCategory;
 
@@ -24,33 +25,8 @@ const TABS: { key: Tab; label: string }[] = [
   ...CATEGORY_ORDER.map((c) => ({ key: c as Tab, label: CATEGORY_LABELS[c] }))
 ];
 
-// ---------------------------------------------------------------------------
-// 最近玩过:独立 localStorage key,只在 home.ts 里读写,不动 save.ts 的存档结构
-// ---------------------------------------------------------------------------
-
-const RECENT_KEY = "yiduo-yixing.recent.v1";
+/** 首页「最近玩过」最多展示的张数(列表本身在 recent.ts 里维护) */
 const RECENT_SHOWN = 4;
-
-function loadRecentIds(): string[] {
-  try {
-    const raw = globalThis.localStorage?.getItem(RECENT_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((v): v is string => typeof v === "string");
-  } catch {
-    return [];
-  }
-}
-
-function recordRecent(id: string): void {
-  try {
-    const next = [id, ...loadRecentIds().filter((x) => x !== id)].slice(0, 8);
-    globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(next));
-  } catch {
-    // 存不进去(隐私模式等)就算了,不影响游玩
-  }
-}
 
 /** 只读 99 关框架的存档(yiduo-yixing.l99.<id>),返回已通关数;没有存档返回 null */
 function l99ClearedCount(id: string): number | null {
@@ -226,7 +202,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   function openGame(id: string): void {
     playSound("pop");
-    recordRecent(id);
+    // 「最近玩过」由游戏壳在真正进入游戏时记录(深链进入也算),这里只负责跳转
     location.hash = `#/game/${encodeURIComponent(id)}`;
   }
 

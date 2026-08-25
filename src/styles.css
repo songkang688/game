@@ -122,6 +122,15 @@ button {
   transform: scale(0.94);
 }
 
+/* 禁用态要一眼能看出来(家长门锁定倒计时、已清空等),不然孩子会一直戳 */
+.btn:disabled {
+  opacity: 0.5;
+  filter: grayscale(0.45);
+  box-shadow: none;
+  cursor: default;
+  pointer-events: none;
+}
+
 .btn--primary {
   background: linear-gradient(135deg, var(--pink-strong) 0%, var(--pink-deep) 100%);
   color: #fff;
@@ -1026,7 +1035,19 @@ button {
 
   .game-title {
     font-size: 17px;
-    padding: 4px 12px;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  /* 窄屏把「返回」缩成 🏠 图标(aria-label 仍是「返回首页」),
+     省下的宽度留给游戏标题,不然标题会被截成一个字 */
+  .btn--back .btn-back-label {
+    display: none;
+  }
+
+  .btn--back {
+    min-width: 52px;
+    padding: 0 14px;
   }
 
   .game-topbar .duo-pair {
@@ -1067,6 +1088,11 @@ button {
   .game-title {
     padding: 4px 10px;
     gap: 4px;
+  }
+
+  /* 超窄屏标题空间太挤:藏掉标题 emoji,把宽度全部让给游戏名 */
+  .game-title-emoji {
+    display: none;
   }
 
   .recent-grid {

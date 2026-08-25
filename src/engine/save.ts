@@ -329,13 +329,31 @@ export class SaveStore {
     return { ok: true, count: list.length };
   }
 
-  /** 家长面板里的「清空全部进度」 */
+  /**
+   * 家长面板里的「清空全部进度」:
+   * 除了钱包本身,还要清掉 99 关框架(yiduo-yixing.l99.*)、
+   * 各游戏私有战役进度与「最近玩过」等全部 yiduo-yixing. 前缀的 key,
+   * 否则孩子再进游戏会发现进度还在,清空名不副实。
+   */
   resetAll(): void {
     this.data = defaultData();
     try {
-      this.storage.removeItem(SAVE_KEY);
+      // 先收集再删除,避免边遍历 localStorage 边删导致漏删
+      for (const key of listKeys(this.storage)) {
+        if (!key.startsWith(SAVE_PREFIX)) continue;
+        try {
+          this.storage.removeItem(key);
+        } catch {
+          // 个别 key 删不掉就跳过,尽量清干净
+        }
+      }
     } catch {
-      // 忽略
+      // 枚举失败时至少把钱包清掉
+      try {
+        this.storage.removeItem(SAVE_KEY);
+      } catch {
+        // 忽略
+      }
     }
     for (const fn of this.listeners) fn();
   }
