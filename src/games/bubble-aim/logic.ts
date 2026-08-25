@@ -434,6 +434,16 @@ export function crossedDeadline(g: Grid): boolean {
   return false;
 }
 
+/** 泡泡已经压到警戒线上一行(含更低):提前闪烁预警 */
+export function nearDeadline(g: Grid): boolean {
+  for (let r = DEADLINE_ROW - 1; r < g.rows.length; r++) {
+    for (let c = 0; c < rowLength(g, r); c++) {
+      if (g.rows[r][c]) return true;
+    }
+  }
+  return false;
+}
+
 /** 本关星级：剩的子弹越多星越多 */
 export function starsForShotsLeft(left: number, total: number): 1 | 2 | 3 {
   if (total <= 0) return 1;

@@ -22,6 +22,7 @@ import {
   damageStone,
   descend,
   isStone,
+  nearDeadline,
   parseLayout,
   releaseLoneRainbows,
   rowLength,
@@ -551,6 +552,45 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.globalAlpha = 1;
   }
 
+  /** 色弱友好:每种颜色配一个专属白色小图案,不靠颜色也能分清 */
+  function drawColorMark(x: number, y: number, color: string, radius: number): void {
+    const s = radius * 0.34;
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = Math.max(1.5, radius * 0.12);
+    ctx.beginPath();
+    if (color === "R") {
+      // 红:实心三角
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x + s, y + s * 0.8);
+      ctx.lineTo(x - s, y + s * 0.8);
+      ctx.closePath();
+      ctx.fill();
+    } else if (color === "Y") {
+      // 黄:实心菱形
+      ctx.moveTo(x, y - s * 1.15);
+      ctx.lineTo(x + s * 1.15, y);
+      ctx.lineTo(x, y + s * 1.15);
+      ctx.lineTo(x - s * 1.15, y);
+      ctx.closePath();
+      ctx.fill();
+    } else if (color === "B") {
+      // 蓝:空心圆环
+      ctx.arc(x, y, s, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (color === "G") {
+      // 绿:实心方块
+      ctx.fillRect(x - s * 0.85, y - s * 0.85, s * 1.7, s * 1.7);
+    } else if (color === "P") {
+      // 紫:十字
+      ctx.moveTo(x - s, y);
+      ctx.lineTo(x + s, y);
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x, y + s);
+      ctx.stroke();
+    }
+  }
+
   function drawBubbleAt(x: number, y: number, color: string, radius = R, alpha = 1): void {
     if (color === STONE || color === STONE_CRACKED) {
       drawStoneAt(x, y, color === STONE_CRACKED, radius, alpha);
@@ -570,6 +610,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
+    drawColorMark(x, y + radius * 0.08, color, radius);
     ctx.fillStyle = "rgba(255,255,255,0.85)";
     ctx.beginPath();
     ctx.ellipse(x - radius * 0.32, y - radius * 0.4, radius * 0.24, radius * 0.15, -0.6, 0, Math.PI * 2);
@@ -595,16 +636,27 @@ export function mount(api: GameApi): { destroy: () => void } {
       }
       ctx.globalAlpha = 1;
     }
-    // 警戒线
+    // 警戒线:泡泡压到上一行时提前闪烁预警
     const dy = TOP + R + DEADLINE_ROW * ROW_H - R - 4;
-    ctx.strokeStyle = th.dark ? "rgba(255, 170, 190, 0.85)" : "rgba(255, 130, 150, 0.55)";
+    const danger = phase === "play" && nearDeadline(grid);
+    const blink = danger ? 0.55 + 0.45 * Math.sin(animTime * 9) : 0;
+    ctx.strokeStyle = danger
+      ? `rgba(255, 70, 100, ${0.55 + blink * 0.45})`
+      : th.dark ? "rgba(255, 170, 190, 0.85)" : "rgba(255, 130, 150, 0.55)";
     ctx.setLineDash([8, 8]);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = danger ? 3 + blink * 1.5 : 2;
     ctx.beginPath();
     ctx.moveTo(8, dy);
     ctx.lineTo(W - 8, dy);
     ctx.stroke();
     ctx.setLineDash([]);
+    if (danger) {
+      ctx.fillStyle = `rgba(255, 70, 100, ${0.6 + blink * 0.4})`;
+      ctx.font = "bold 12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("⚠️ 快到警戒线啦!", W / 2, dy + 16);
+      ctx.textAlign = "left";
+    }
   }
 
   function drawObstacles(): void {
@@ -944,10 +996,16 @@ export function mount(api: GameApi): { destroy: () => void } {
     pressing = false;
     aiming = false;
   };
+  const onPointerCancel = (): void => {
+    // 系统手势打断:收起瞄准线但不发射,子弹不浪费
+    pressing = false;
+    aiming = false;
+  };
 
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerCancel);
   retryBtn.addEventListener("click", retryLevel);
   backBtn.addEventListener("click", () => {
     api.play("tap");
@@ -965,6 +1023,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       destroyed = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
       wrap.remove();
     },
   };

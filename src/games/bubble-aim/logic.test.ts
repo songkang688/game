@@ -24,6 +24,7 @@ import {
   floodSameColor,
   isClearable,
   isStone,
+  nearDeadline,
   neighbors,
   parseLayout,
   releaseLoneRainbows,
@@ -284,6 +285,26 @@ describe("bubble-aim 弹道", () => {
     expect(result.landing).not.toBeNull();
   });
 
+  it("两次反弹(左墙+右墙)后瞄准线仍准:折点在墙上、终点=吸附落位中心", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    // 很平的角度:从中间往右下压着射,先撞右墙再撞左墙
+    const result = simulateShot(g, SHOOTER_X, SHOOTER_Y, 0.985, -0.174);
+    const bounces = result.path.slice(1, -1).filter(
+      (p) => Math.abs(p.x - R) < 0.01 || Math.abs(p.x - (W - R)) < 0.01
+    );
+    expect(bounces.length).toBeGreaterThanOrEqual(2);
+    expect(bounces.some((p) => Math.abs(p.x - (W - R)) < 0.01)).toBe(true);
+    expect(bounces.some((p) => Math.abs(p.x - R) < 0.01)).toBe(true);
+    // 预览虚线的终点就是吸附格中心,飞行动画沿同一条 path 走 → 指哪打哪
+    expect(result.landing).not.toBeNull();
+    const cc = cellCenter(g, result.landing!.r, result.landing!.c);
+    const last = result.path[result.path.length - 1];
+    expect(last.x).toBeCloseTo(cc.x);
+    expect(last.y).toBeCloseTo(cc.y);
+    // 两次调用逐点一致(纯函数,预览即实弹)
+    expect(simulateShot(g, SHOOTER_X, SHOOTER_Y, 0.985, -0.174)).toEqual(result);
+  });
+
   it("落位一定是贴着泡泡或顶行的空格", () => {
     const g = parseLayout(["RRRGGGBBB", "RRRGGBBB"]);
     const result = simulateShot(g, SHOOTER_X, SHOOTER_Y, 0.3, -0.9);
@@ -362,6 +383,21 @@ describe("bubble-aim 胜负与星级", () => {
     expect(crossedDeadline(g)).toBe(false);
     g.rows[DEADLINE_ROW][0] = "R";
     expect(crossedDeadline(g)).toBe(true);
+  });
+
+  it("nearDeadline 提前一行预警:占到警戒线上一行就报警,越线也算", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    expect(nearDeadline(g)).toBe(false);
+    // 离警戒线还有两行:不预警
+    g.rows[DEADLINE_ROW - 2][0] = "R";
+    expect(nearDeadline(g)).toBe(false);
+    // 警戒线上一行:开始闪烁预警,但还没输
+    g.rows[DEADLINE_ROW - 1][0] = "R";
+    expect(nearDeadline(g)).toBe(true);
+    expect(crossedDeadline(g)).toBe(false);
+    // 已越线:预警保持
+    g.rows[DEADLINE_ROW][0] = "R";
+    expect(nearDeadline(g)).toBe(true);
   });
 
   it("starsForShotsLeft 阈值", () => {
