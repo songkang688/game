@@ -4,6 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Capacitor CLI 读取 capacitor.config.ts 需要 Node 的 strip-types 支持
+export NODE_OPTIONS="--experimental-strip-types${NODE_OPTIONS:+ $NODE_OPTIONS}"
+
 if [ -z "${ANDROID_HOME:-}" ] && [ -z "${ANDROID_SDK_ROOT:-}" ]; then
   echo "错误:未检测到 Android SDK。" >&2
   echo "请先安装 Android Studio(或命令行 SDK),并设置 ANDROID_HOME,再重新运行:" >&2

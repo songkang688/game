@@ -17,8 +17,9 @@
     "electron:dev": "bash scripts/electron-dev.sh",
     "dist": "bash scripts/build-desktop.sh",
     "dist:linux": "npm run build && electron-builder --linux AppImage",
-    "dist:win": "npm run build && electron-builder --win portable nsis",
-    "android:sync": "npm run build && capacitor sync android",
+    "dist:win": "npm run build && electron-builder --win portable",
+    "dist:win:nsis": "npm run build && electron-builder --win nsis",
+    "android:sync": "npm run build && NODE_OPTIONS=--experimental-strip-types cap sync android",
     "android:apk": "bash scripts/build-android.sh"
   },
   "build": {
@@ -48,15 +49,18 @@
     },
     "win": {
       "target": [
-        "portable",
-        "nsis"
+        "portable"
       ],
       "icon": "public/icons/icon-256.png"
+    },
+    "portable": {
+      "artifactName": "yiduo-yixing-${version}-win-portable.${ext}"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "yiduo-yixing-${version}-win-setup.${ext}"
     }
   },
   "devDependencies": {
