@@ -24,9 +24,10 @@ import {
 } from "./physics";
 import {
   CHAPTERS,
-  CHAPTER_SIZE,
+  CHAPTER_SIZES,
   LEVELS,
   chapterOf,
+  chapterStart,
   mechanismKinds,
   totalStars,
   type LevelDef,
@@ -273,46 +274,65 @@ describe("candy-swing 木板运动与评级", () => {
   });
 });
 
-describe("candy-swing 关卡与章节数据", () => {
-  it("至少 24 关、3 个章节，每章 8 关", () => {
-    expect(LEVELS.length).toBeGreaterThanOrEqual(24);
-    expect(CHAPTERS.length).toBe(3);
-    expect(CHAPTER_SIZE * CHAPTERS.length).toBe(LEVELS.length);
+describe("candy-swing 关卡与章节数据（99 关 · 6 主题）", () => {
+  it("正好 99 关、6 个主题章节，大小与下标换算一致", () => {
+    expect(LEVELS.length).toBe(99);
+    expect(CHAPTERS.length).toBe(6);
+    expect(CHAPTER_SIZES.length).toBe(6);
+    expect(CHAPTER_SIZES.reduce((a, b) => a + b, 0)).toBe(99);
+    for (const n of CHAPTER_SIZES) expect(n).toBeGreaterThanOrEqual(16);
+    for (let c = 0; c < 6; c++) {
+      expect(chapterOf(chapterStart(c))).toBe(c);
+      expect(chapterOf(chapterStart(c) + CHAPTER_SIZES[c] - 1)).toBe(c);
+    }
     expect(chapterOf(0)).toBe(0);
-    expect(chapterOf(8)).toBe(1);
-    expect(chapterOf(23)).toBe(2);
+    expect(chapterOf(98)).toBe(5);
   });
 
-  it("三个章节主题各不相同", () => {
+  it("六个章节主题各不相同", () => {
     const themes = new Set(CHAPTERS.map((c) => c.theme));
-    expect(themes.size).toBe(3);
+    expect(themes.size).toBe(6);
   });
 
-  it("每关 1-3 颗星、至少 1 根绳", () => {
+  it("每关 1-3 颗星、至少 1 根绳、带通关配方", () => {
     for (const lv of LEVELS) {
       expect(lv.stars.length).toBeGreaterThanOrEqual(1);
       expect(lv.stars.length).toBeLessThanOrEqual(3);
       expect(lv.ropes.length).toBeGreaterThanOrEqual(1);
+      expect(lv.solve, `${lv.name} 缺配方`).toBeTruthy();
     }
   });
 
-  it("机关种类 ≥ 8 种且都有关卡用到", () => {
-    const all = new Set<string>();
-    for (const lv of LEVELS) for (const k of mechanismKinds(lv)) all.add(k);
-    expect(all.size).toBeGreaterThanOrEqual(8);
+  it("机关种类 ≥ 8 种且都有关卡用到，每种至少出现 8 关", () => {
+    const count = new Map<string, number>();
+    for (const lv of LEVELS) {
+      for (const k of mechanismKinds(lv)) count.set(k, (count.get(k) ?? 0) + 1);
+    }
+    expect(count.size).toBeGreaterThanOrEqual(8);
     for (const kind of [
       "multiRope", "bubble", "spike", "hook", "board",
       "portal", "balloon", "scissors", "moth",
     ]) {
-      expect(all.has(kind), `缺少机关 ${kind}`).toBe(true);
+      expect(count.get(kind) ?? 0, `机关 ${kind} 出现次数`).toBeGreaterThanOrEqual(8);
     }
   });
 
-  it("后半程（第 13 关起）每关至少 3 种机关同时出现", () => {
-    for (let i = 12; i < LEVELS.length; i++) {
+  it("最终章（彩虹嘉年华）每关至少 3 种机关，压轴关至少 5 种", () => {
+    for (let i = chapterStart(5); i < LEVELS.length; i++) {
       const kinds = mechanismKinds(LEVELS[i]);
       expect(kinds.length, `第 ${i + 1} 关只有 ${kinds.join(",")}`).toBeGreaterThanOrEqual(3);
     }
+    expect(mechanismKinds(LEVELS[98]).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("关卡布局互不相同（忽略名字与提示）", () => {
+    const sigs = new Set(
+      LEVELS.map((lv) => {
+        const { name: _n, tip: _t, solve: _s, ...rest } = lv;
+        return JSON.stringify(rest);
+      })
+    );
+    expect(sigs.size).toBe(LEVELS.length);
   });
 
   it("元素都在画布内", () => {
@@ -386,7 +406,10 @@ interface SimWorld {
   hooksUsed: boolean[];
   puffsLeft: number[];
   portalCooldown: number;
+  ropeLinkRanges: Array<[number, number]>;
   cutAll: () => void;
+  cutRope: (i: number) => void;
+  pop: () => void;
   puff: (i: number) => void;
   candy: () => Particle;
 }
@@ -395,15 +418,18 @@ function makeSim(lvIndex: number): SimWorld {
   const lv = LEVELS[lvIndex];
   const ps: Particle[] = [makeParticle(lv.candy.x, lv.candy.y, false, 0.3)];
   const links: Link[] = [];
+  const ropeLinkRanges: Array<[number, number]> = [];
   const addRope = (ax: number, ay: number, totalLength?: number): void => {
     const dist = totalLength ?? Math.hypot(ps[0].x - ax, ps[0].y - ay);
     const segs = Math.max(3, Math.min(14, Math.round(dist / 16)));
     const build = buildRope(ax, ay, ps[0].x, ps[0].y, segs, totalLength);
     const base = ps.length;
+    const linkBase = links.length;
     for (const p of build.particles) ps.push(p);
     for (const l of build.links) {
       links.push({ a: base + l.a, b: l.b === -1 ? 0 : base + l.b, rest: l.rest, active: true });
     }
+    ropeLinkRanges.push([linkBase, links.length]);
   };
   for (const r of lv.ropes) addRope(r.x, r.y, r.length);
   const w: SimWorld = {
@@ -426,8 +452,17 @@ function makeSim(lvIndex: number): SimWorld {
     hooksUsed: (lv.hooks ?? []).map(() => false),
     puffsLeft: (lv.balloons ?? []).map((b) => b.puffs),
     portalCooldown: 0,
+    ropeLinkRanges,
     cutAll: () => {
       for (const l of links) l.active = false;
+    },
+    cutRope: (i: number) => {
+      const range = ropeLinkRanges[i];
+      if (!range) return;
+      for (let k = range[0]; k < range[1]; k++) links[k].active = false;
+    },
+    pop: () => {
+      w.inBubble = false;
     },
     puff: (i: number) => {
       const b = (lv.balloons ?? [])[i];
@@ -596,315 +631,183 @@ function searchCutTime(lvIndex: number, tMax: number, step = 0.1): number | null
   return null;
 }
 
-describe("candy-swing 关卡可解性仿真", () => {
-  it("第 1 关（直直落）：剪断后直落进嘴并收满 3 星", () => {
-    const w = makeSim(0);
-    let cut = false;
-    runSim(w, 8, (world) => {
-      if (!cut && world.t >= 0.5) {
-        cut = true;
-        world.cutAll();
+/* ================ 99 关全量可解性:按每关 solve 配方逐帧仿真 ================ */
+
+const DEFAULT_TIME: Record<string, number> = {
+  wait: 12,
+  cut: 8,
+  low: 8,
+  lowPop: 12,
+  hookRelay: 12,
+  ropeRelay: 16,
+  cutPuff: 10,
+  relaySettle: 16,
+};
+
+function playRecipe(index: number): SimWorld {
+  const lv = LEVELS[index];
+  const s = lv.solve;
+  const w = makeSim(index);
+  const time = ("time" in s ? s.time : undefined) ?? DEFAULT_TIME[s.kind] ?? 12;
+  let cut1 = false;
+  let cut2 = false;
+  let preCut = false;
+  let puffed = false;
+  let popped = false;
+  let hookedAt = -1;
+  runSim(w, time, (world) => {
+    const c = world.candy();
+    const vx = c.x - c.px;
+    const vy = c.y - c.py;
+    switch (s.kind) {
+      case "wait":
+        break;
+      case "cut":
+        if (!cut1 && world.t >= (s.t ?? 0.5)) {
+          cut1 = true;
+          world.cutAll();
+        }
+        break;
+      case "low":
+        if (!cut1 && s.dir * (c.x - lv.ropes[0].x) >= 0 && s.dir * vx > 0) {
+          cut1 = true;
+          world.cutAll();
+        }
+        break;
+      case "lowPop":
+        if (!cut1 && s.dir * (c.x - lv.ropes[0].x) >= 0 && s.dir * vx > 0) {
+          cut1 = true;
+          world.cutAll();
+        }
+        if (cut1 && !popped && world.inBubble && s.dir * (c.x - s.popX) >= 0) {
+          popped = true;
+          world.pop();
+        }
+        break;
+      case "hookRelay": {
+        const d2 = s.dir2 ?? s.dir;
+        if (!cut1 && s.dir * (c.x - lv.ropes[0].x) >= 0 && s.dir * vx > 0) {
+          cut1 = true;
+          world.cutAll();
+        }
+        const hook = lv.hooks![0];
+        if (world.hooked > 0 && !cut2 && d2 * (c.x - hook.x) >= 40 && Math.abs(vx) < 0.3) {
+          cut2 = true;
+          world.cutAll();
+        }
+        break;
+      }
+      case "ropeRelay": {
+        const d2 = s.dir2 ?? s.dir;
+        if (!preCut && world.t >= 0.3) {
+          preCut = true;
+          world.cutRope(s.rope);
+        }
+        const other = lv.ropes[1 - s.rope];
+        if (preCut && !cut1 && s.dir * (c.x - other.x) >= 0 && s.dir * vx > 0) {
+          cut1 = true;
+          world.cutAll();
+        }
+        const hook = lv.hooks![0];
+        if (world.hooked > 0 && !cut2 && d2 * (c.x - hook.x) >= 40 && Math.abs(vx) < 0.3) {
+          cut2 = true;
+          world.cutAll();
+        }
+        break;
+      }
+      case "cutPuff":
+        if (!cut1 && world.t >= (s.t ?? 0.3)) {
+          cut1 = true;
+          world.cutAll();
+        }
+        if (cut1 && !puffed) {
+          const ready = s.afterTeleport
+            ? w.teleports > 0
+            : world.t >= (s.puffAt ?? (s.t ?? 0.3) + 0.06);
+          if (ready) {
+            puffed = true;
+            world.puff(0);
+          }
+        }
+        break;
+      case "relaySettle":
+        if (!cut1 && world.t >= (s.t ?? 0.5)) {
+          cut1 = true;
+          world.cutAll();
+        }
+        if (world.hooked > 0 && hookedAt < 0) hookedAt = world.t;
+        if (
+          world.hooked > 0 && !cut2 && world.t > hookedAt + (s.settle ?? 1.5) &&
+          Math.abs(vx) < 0.5 && Math.abs(vy) < 0.5
+        ) {
+          cut2 = true;
+          world.cutAll();
+        }
+        break;
+      default:
+        break;
+    }
+  });
+  return w;
+}
+
+describe("candy-swing 99 关全量可解性（按配方逐帧仿真）", () => {
+  LEVELS.forEach((lv, i) => {
+    it(`第 ${i + 1} 关「${lv.name}」按配方可通关`, () => {
+      if (lv.solve.kind === "search") {
+        expect(
+          searchCutTime(i, lv.solve.tMax),
+          `${lv.name} 找不到能过关的剪绳时机`
+        ).not.toBeNull();
+      } else {
+        const w = playRecipe(i);
+        expect(w.failed, `${lv.name} 中途失败:${w.failed}`).toBe("");
+        expect(w.ate, `${lv.name} 没吃到糖果`).toBe(true);
       }
     });
+  });
+});
+
+describe("candy-swing 抽样加严验证", () => {
+  it("第 1 关（直直落）收满 3 星", () => {
+    const w = playRecipe(0);
     expect(w.ate).toBe(true);
     expect(w.collected.size).toBe(3);
   });
 
-  it("第 2 关（荡一荡）：低点剪断飞进嘴", () => {
-    const w = makeSim(1);
-    let cut = false;
-    runSim(w, 8, (world) => {
-      const c = world.candy();
-      const vx = c.x - c.px;
-      if (!cut && c.x >= world.lv.ropes[0].x && vx > 0) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 3 关（双绳结）：全剪断直落进嘴", () => {
-    const w = makeSim(2);
-    let cut = false;
-    runSim(w, 8, (world) => {
-      if (!cut && world.t >= 0.5) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 4 关（泡泡电梯）：剪断双绳→泡泡→飘上去被吃", () => {
-    const w = makeSim(3);
-    let cut = false;
-    runSim(w, 10, (world) => {
-      if (!cut && world.t >= 0.5) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.inBubble).toBe(true);
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 5 关（小心刺刺）：低点剪断飞向右侧缺口，不碰刺", () => {
-    const w = makeSim(4);
-    let cut = false;
-    runSim(w, 8, (world) => {
-      const c = world.candy();
-      const vx = c.x - c.px;
-      if (!cut && c.x >= world.lv.ropes[0].x && vx > 0) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.failed).toBe("");
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 6 关（挂钩接力）：剪→挂钩接住→再剪→进嘴", () => {
-    const w = makeSim(5);
-    let cut1 = false;
-    let cut2 = false;
-    runSim(w, 12, (world) => {
-      const c = world.candy();
-      const vx = c.x - c.px;
-      if (!cut1 && c.x >= world.lv.ropes[0].x && vx > 0) {
-        cut1 = true;
-        world.cutAll();
-      }
-      const hook = world.lv.hooks![0];
-      if (world.hooked > 0 && !cut2 && c.x >= hook.x + 40 && Math.abs(vx) < 0.3) {
-        cut2 = true;
-        world.cutAll();
-      }
-    });
-    expect(w.hooked).toBe(1);
-    expect(cut2).toBe(true);
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 7 关（调皮木板）：存在能穿过木板空档的剪绳时机", () => {
-    expect(searchCutTime(6, 3.2)).not.toBeNull();
-  });
-
-  it("第 10 关（星空传送门）：剪断→传送→落进嘴，3 星全收", () => {
-    const w = makeSim(9);
-    let cut = false;
-    runSim(w, 8, (world) => {
-      if (!cut && world.t >= 0.3) {
-        cut = true;
-        world.cutAll();
-      }
-    });
+  it("星空传送门确实发生一次传送", () => {
+    const w = playRecipe(18);
     expect(w.teleports).toBe(1);
     expect(w.ate).toBe(true);
-    expect(w.collected.size).toBe(3);
   });
 
-  it("第 11 关（呼呼气球）：剪断后点气球吹过刺坑", () => {
-    const w = makeSim(10);
-    let cut = false;
-    let puffed = false;
-    runSim(w, 8, (world) => {
-      if (!cut && world.t >= 0.1) {
-        cut = true;
-        world.cutAll();
-      }
-      if (cut && !puffed && world.t >= 0.16) {
-        puffed = true;
-        world.puff(0);
-      }
-    });
-    expect(w.failed).toBe("");
-    expect(w.ate).toBe(true);
-    expect(w.collected.size).toBeGreaterThanOrEqual(2);
-  });
-
-  it("第 12 关（咔嚓剪刀）：不用动手，剪刀自动剪断后直落进嘴", () => {
-    const w = makeSim(11);
-    runSim(w, 8);
-    expect(w.ate).toBe(true);
-    expect(w.collected.size).toBe(3);
-  });
-
-  it("第 13 关（夜泡电梯）：剪双绳→泡泡软接→升到嘴边", () => {
-    const w = makeSim(12);
-    let cut = false;
-    runSim(w, 10, (world) => {
-      if (!cut && world.t >= 0.5) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.inBubble).toBe(true);
-    expect(w.failed).toBe("");
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 14 关（穿星之旅）：传送→泡泡→上楼进嘴", () => {
-    const w = makeSim(13);
-    let cut = false;
-    runSim(w, 12, (world) => {
-      if (!cut && world.t >= 0.3) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.teleports).toBe(1);
+  it("泡泡电梯确实坐上了泡泡", () => {
+    const w = playRecipe(3);
     expect(w.inBubble).toBe(true);
     expect(w.ate).toBe(true);
   });
 
-  it("第 15 关（星夜钩月）：赶在剪刀咔嚓前完成挂钩接力", () => {
-    const w = makeSim(14);
-    let cut1 = false;
-    let cut2 = false;
-    runSim(w, 12, (world) => {
-      const c = world.candy();
-      const vx = c.x - c.px;
-      if (!cut1 && c.x >= world.lv.ropes[0].x && vx > 0) {
-        cut1 = true;
-        world.cutAll();
-      }
-      const hook = world.lv.hooks![0];
-      if (world.hooked > 0 && !cut2 && c.x >= hook.x + 40 && Math.abs(vx) < 0.3) {
-        cut2 = true;
-        world.cutAll();
-      }
-    });
+  it("挂钩接力确实被钩住并二次剪断", () => {
+    const w = playRecipe(5);
     expect(w.hooked).toBe(1);
     expect(w.ate).toBe(true);
   });
 
-  it("第 16 关（午夜过山车）：存在避开木板的剪绳时机", () => {
-    expect(searchCutTime(15, 3)).not.toBeNull();
-  });
-
-  it("第 17 关（糖果蛾来了）：赶在蛾子咬绳前剪断直落", () => {
-    const w = makeSim(16);
-    let cut = false;
-    runSim(w, 8, (world) => {
-      if (!cut && world.t >= 0.4) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.failed).toBe("");
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 17 关：一直不动手，糖果蛾最终会咬断支撑绳让糖果掉落", () => {
-    const w = makeSim(16);
+  it("糖果蛾关:一直不动手,蛾子最终咬断支撑绳", () => {
+    const idx = 34; // 第三章第 1 关「糖果蛾来了」
+    expect(LEVELS[idx].moths?.length).toBeGreaterThan(0);
+    const w = makeSim(idx);
     runSim(w, 30);
-    // 蛾子专咬连着锚点的绳：最终糖果不再挂着（掉进嘴/掉落失败都算）
+    // 蛾子专咬连着锚点的绳:最终糖果不再挂着(掉进嘴/掉落失败都算)
     const stillHanging =
       !w.ate && w.failed === "" && attachedToAnchor(w.ps, w.links);
     expect(stillHanging).toBe(false);
   });
 
-  it("第 18 关（蛾口夺糖）：剪断双绳坐泡泡上楼，蛾子来不及", () => {
-    const w = makeSim(17);
-    let cut = false;
-    runSim(w, 10, (world) => {
-      if (!cut && world.t >= 0.5) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.inBubble).toBe(true);
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 19 关（工厂传送带）：存在穿过双层木板的剪绳时机", () => {
-    expect(searchCutTime(18, 6.4)).not.toBeNull();
-  });
-
-  it("第 20 关（甜蜜配送）：快剪→传送→直落进嘴", () => {
-    const w = makeSim(19);
-    let cut = false;
-    runSim(w, 8, (world) => {
-      if (!cut && world.t >= 0.3) {
-        cut = true;
-        world.cutAll();
-      }
-    });
-    expect(w.teleports).toBe(1);
-    expect(w.ate).toBe(true);
-    expect(w.collected.size).toBeGreaterThanOrEqual(2);
-  });
-
-  it("第 21 关（剪刀车间）：存在合适的剪绳时机穿过木板", () => {
-    expect(searchCutTime(20, 2.1)).not.toBeNull();
-  });
-
-  it("第 22 关（钩子流水线）：镜像挂钩接力，蛾子来之前完成", () => {
-    const w = makeSim(21);
-    let cut1 = false;
-    let cut2 = false;
-    runSim(w, 12, (world) => {
-      const c = world.candy();
-      const vx = c.x - c.px;
-      if (!cut1 && c.x <= world.lv.ropes[0].x && vx < 0) {
-        cut1 = true;
-        world.cutAll();
-      }
-      const hook = world.lv.hooks![0];
-      if (world.hooked > 0 && !cut2 && c.x <= hook.x - 40 && Math.abs(vx) < 0.3) {
-        cut2 = true;
-        world.cutAll();
-      }
-    });
-    expect(w.hooked).toBe(1);
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 23 关（风暴车间）：传送后马上吹气球，糖果飞进嘴", () => {
-    const w = makeSim(22);
-    let cut = false;
-    let puffed = false;
-    runSim(w, 10, (world) => {
-      if (!cut && world.t >= 0.3) {
-        cut = true;
-        world.cutAll();
-      }
-      if (!puffed && world.teleports > 0) {
-        puffed = true;
-        world.puff(0);
-      }
-    });
-    expect(w.teleports).toBe(1);
-    expect(w.failed).toBe("");
-    expect(w.ate).toBe(true);
-  });
-
-  it("第 24 关（超级大糖厂）：剪→传送→挂钩→再剪→进嘴", () => {
-    const w = makeSim(23);
-    let cut1 = false;
-    let cut2 = false;
-    let hookedAt = -1;
-    runSim(w, 16, (world) => {
-      const c = world.candy();
-      if (!cut1 && world.t >= 0.5) {
-        cut1 = true;
-        world.cutAll();
-      }
-      if (world.hooked > 0 && hookedAt < 0) hookedAt = world.t;
-      const vx = c.x - c.px;
-      const vy = c.y - c.py;
-      if (
-        world.hooked > 0 && !cut2 && world.t > hookedAt + 1.5 &&
-        Math.abs(vx) < 0.5 && Math.abs(vy) < 0.5
-      ) {
-        cut2 = true;
-        world.cutAll();
-      }
-    });
+  it("超级大糖厂全流程:传送+挂钩都发生", () => {
+    const w = playRecipe(41); // 第三章第 8 关 B24
     expect(w.teleports).toBe(1);
     expect(w.hooked).toBe(1);
-    expect(cut2).toBe(true);
     expect(w.ate).toBe(true);
   });
 });

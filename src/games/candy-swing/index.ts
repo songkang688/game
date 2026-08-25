@@ -1,5 +1,5 @@
 // 糖果秋千 —— 割绳子类物理益智：划断绳子，把糖果送进小怪物"啾啾"的嘴巴。
-// 24 关 3 章节：草地 / 夜空 / 糖果工厂，9 种机关，带选关地图与进度存档。
+// 99 关 6 大主题：草地 / 夜空 / 工厂 / 云朵 / 冰雪 / 彩虹，9 种机关，带选关地图与进度存档。
 import {
   type Link,
   type Particle,
@@ -24,9 +24,10 @@ import {
 } from "./physics";
 import {
   CHAPTERS,
-  CHAPTER_SIZE,
+  CHAPTER_SIZES,
   LEVELS,
   chapterOf,
+  chapterStart,
   totalStars,
   type ChapterTheme,
   type LevelDef,
@@ -38,7 +39,7 @@ export const meta = {
   emoji: "🍬",
   category: "action" as const,
   color: "#FFE0EE",
-  blurb: "24 关大冒险！剪绳、传送、气球，把糖果送进啾啾嘴里！",
+  blurb: "99 关 6 大主题！剪绳、传送、气球，把糖果送进啾啾嘴里！",
 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -67,7 +68,7 @@ const PUFF_SPEED = 320;
 const BALLOON_TAP_R = 42;
 const MOTH_BITE_DIST = 12;
 
-const SAVE_KEY = "yiduo.candy-swing.campaign.v1";
+const SAVE_KEY = "yiduo.candy-swing.campaign.v2";
 
 interface Progress {
   /** 每关最佳星数 0-3（0=未通过） */
@@ -106,13 +107,16 @@ interface ThemePalette {
   skyTop: string;
   skyBottom: string;
   accent: string;
-  deco: "meadow" | "night" | "factory";
+  deco: ChapterTheme;
 }
 
 const THEMES: Record<ChapterTheme, ThemePalette> = {
   meadow: { skyTop: "#FFF7FB", skyBottom: "#DCF3E1", accent: "#7CBE5F", deco: "meadow" },
   night: { skyTop: "#252A55", skyBottom: "#4A3E78", accent: "#8E7BE0", deco: "night" },
   factory: { skyTop: "#FFEFF7", skyBottom: "#FFD9EA", accent: "#F06FA5", deco: "factory" },
+  sky: { skyTop: "#BFE3FF", skyBottom: "#E8F6FF", accent: "#5FA8E0", deco: "sky" },
+  ice: { skyTop: "#D8F0FA", skyBottom: "#EDF9FF", accent: "#5BB8D4", deco: "ice" },
+  rainbow: { skyTop: "#FFF3D6", skyBottom: "#FFE3F1", accent: "#F0975F", deco: "rainbow" },
 };
 
 interface StarState {
@@ -233,12 +237,21 @@ export function mount(api: GameApi): { destroy: () => void } {
       .cs-chapter.meadow { background: linear-gradient(160deg, #E9F8DF, #D5F0E2); }
       .cs-chapter.night { background: linear-gradient(160deg, #3A3E77, #55488F); }
       .cs-chapter.factory { background: linear-gradient(160deg, #FFE2F0, #FFD1E6); }
+      .cs-chapter.sky { background: linear-gradient(160deg, #CDE8FF, #E4F4FF); }
+      .cs-chapter.ice { background: linear-gradient(160deg, #DDF3FC, #F0FBFF); }
+      .cs-chapter.rainbow { background: linear-gradient(160deg, #FFE9C9, #FFD9EC, #DDE7FF); }
       .cs-ch-name { font-weight: 800; font-size: 15px; margin-bottom: 2px; color: #4E7A3A; }
       .cs-ch-blurb { font-size: 12px; margin-bottom: 8px; color: #6F9A5C; }
       .cs-chapter.night .cs-ch-name { color: #E7DFFF; }
       .cs-chapter.night .cs-ch-blurb { color: #B9AEE8; }
       .cs-chapter.factory .cs-ch-name { color: #C2497E; }
       .cs-chapter.factory .cs-ch-blurb { color: #D97BA5; }
+      .cs-chapter.sky .cs-ch-name { color: #2E6FAE; }
+      .cs-chapter.sky .cs-ch-blurb { color: #5A93C7; }
+      .cs-chapter.ice .cs-ch-name { color: #2C7E9C; }
+      .cs-chapter.ice .cs-ch-blurb { color: #5FA6BF; }
+      .cs-chapter.rainbow .cs-ch-name { color: #C7642E; }
+      .cs-chapter.rainbow .cs-ch-blurb { color: #C9856B; }
       .cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
       .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
       .cs-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
@@ -305,14 +318,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       box.className = `cs-chapter ${ch.theme}`;
       const name = document.createElement("div");
       name.className = "cs-ch-name";
-      name.textContent = `第${["一", "二", "三"][ci]}章 · ${ch.name}`;
+      name.textContent = `第${["一", "二", "三", "四", "五", "六"][ci]}章 · ${ch.name}`;
       const blurb = document.createElement("div");
       blurb.className = "cs-ch-blurb";
       blurb.textContent = ch.blurb;
       const grid = document.createElement("div");
       grid.className = "cs-grid";
-      for (let k = 0; k < CHAPTER_SIZE; k++) {
-        const i = ci * CHAPTER_SIZE + k;
+      const start = chapterStart(ci);
+      for (let k = 0; k < CHAPTER_SIZES[ci]; k++) {
+        const i = start + k;
         if (i >= LEVELS.length) break;
         const btn = document.createElement("button");
         btn.type = "button";
@@ -460,7 +474,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       const rating = starsForCollected(bestTotal(), totalStars());
       window.setTimeout(() => {
         if (destroyed) return;
-        api.onWin(rating, `24 关全部通关！共收集 ${bestTotal()} 颗星星！`);
+        api.onWin(rating, `99 关全部通关！共收集 ${bestTotal()} 颗星星！`);
       }, 1500);
     }
   }
@@ -743,7 +757,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.beginPath();
       ctx.arc(303, 47, 18, 0, Math.PI * 2);
       ctx.fill();
-    } else {
+    } else if (theme.deco === "factory") {
       // 糖果工厂：斜条纹 + 齿轮
       ctx.save();
       ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
@@ -768,6 +782,69 @@ export function mount(api: GameApi): { destroy: () => void } {
           ctx.lineTo(gx + Math.cos(ang) * (gr + 7), gy + Math.sin(ang) * (gr + 7));
           ctx.stroke();
         }
+      }
+    } else if (theme.deco === "sky") {
+      // 云朵乐园：飘动的大朵白云 + 远处小鸟
+      for (let i = 0; i < 4; i++) {
+        const drift = ((simTime * 8 + i * 110) % (W + 140)) - 70;
+        const cy = 60 + i * 95;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.beginPath();
+        ctx.arc(drift, cy, 22, 0, Math.PI * 2);
+        ctx.arc(drift + 24, cy - 8, 17, 0, Math.PI * 2);
+        ctx.arc(drift + 46, cy, 19, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = "rgba(80, 120, 170, 0.5)";
+      ctx.lineWidth = 2;
+      for (const [bx, by] of [[70, 90], [280, 150]] as const) {
+        const w2 = Math.sin(simTime * 6 + bx) * 3;
+        ctx.beginPath();
+        ctx.moveTo(bx - 8, by + w2);
+        ctx.quadraticCurveTo(bx, by - 6, bx + 1, by + w2);
+        ctx.quadraticCurveTo(bx + 2, by - 6, bx + 9, by + w2);
+        ctx.stroke();
+      }
+    } else if (theme.deco === "ice") {
+      // 冰雪王国：飘雪 + 底部冰山
+      for (let i = 0; i < 14; i++) {
+        const fx = (i * 71 + 30 + Math.sin(simTime + i) * 14) % W;
+        const fy = (i * 53 + simTime * 26) % (H + 20);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.beginPath();
+        ctx.arc(fx, fy, 2 + (i % 3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "rgba(190, 226, 245, 0.55)";
+      ctx.beginPath();
+      ctx.moveTo(-10, H);
+      ctx.lineTo(60, H - 70);
+      ctx.lineTo(130, H);
+      ctx.moveTo(210, H);
+      ctx.lineTo(290, H - 90);
+      ctx.lineTo(375, H);
+      ctx.fill();
+    } else if (theme.deco === "rainbow") {
+      // 彩虹嘉年华：大彩虹拱 + 彩纸屑
+      const colors = ["#FF8A8A", "#FFC46B", "#FFEC8A", "#9DE58F", "#8FCBF0", "#C79DF5"];
+      ctx.lineWidth = 9;
+      for (let i = 0; i < colors.length; i++) {
+        ctx.strokeStyle = colors[i] + "66";
+        ctx.beginPath();
+        ctx.arc(W / 2, H + 120, 300 - i * 10, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 10; i++) {
+        const cx = (i * 89 + 25) % W;
+        const cy = (i * 67 + simTime * 34) % (H + 16);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(simTime * 2 + i);
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(-3, -2, 6, 4);
+        ctx.restore();
+        ctx.globalAlpha = 1;
       }
     }
   }
