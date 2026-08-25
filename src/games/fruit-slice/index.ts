@@ -25,14 +25,17 @@ import {
   ZEN_SECONDS,
   arcadePace,
   arcadeStars,
+  clearSpeechLine,
   comboBonus,
   comboLabel,
+  endSpeechLine,
   gravityFor,
   isLevelUnlocked,
   isThemeUnlocked,
   makeLaunch,
   parseBest,
   parseProgress,
+  retrySpeechLine,
   segCircleHit,
   serializeBest,
   serializeProgress,
@@ -42,6 +45,7 @@ import {
   totalStars,
   zenStars,
 } from "./logic";
+import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -316,9 +320,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
         earnedStars,
         `99 回合九大果园全通关,你就是传说果神!最高 ${bestCombo} 连切 · 总星 ${totalStars(progress)}/${ROUNDS.length * 3}`,
       );
-    } else if (gained > 0) {
-      api.addStars(gained);
-      addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
+    } else {
+      // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
+      speak(clearSpeechLine(round().name, earnedStars, bestCombo));
+      if (gained > 0) {
+        api.addStars(gained);
+        addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
+      }
     }
   }
 
@@ -337,6 +345,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       addFloat(w / 2, h / 2 - 120, `+${gained} ⭐`, "#e0a030", true);
     }
     api.play(endStars > 0 ? "win" : "oops");
+    // 结束面板自动朗读:破纪录大声夸
+    speak(endSpeechLine(mode === "zen", totalScore, totalScore > prevBest));
   }
 
   function roundFail(): void {
@@ -344,6 +354,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (mode === "classic") {
       phase = "retry";
       api.play("oops");
+      speak(retrySpeechLine());
     } else {
       endFreeMode();
     }
@@ -629,11 +640,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "clear") {
       if (inRect(x, y, btnNext)) {
         api.play("tap");
+        stopSpeaking();
         roundIdx++;
         resetRound();
         phase = "intro";
       } else if (inRect(x, y, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = "map";
       }
       return;
@@ -641,10 +654,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "retry") {
       if (inRect(x, y, btnRetry)) {
         api.play("tap");
+        stopSpeaking();
         resetRound();
         phase = "play";
       } else if (inRect(x, y, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = "map";
       }
       return;
@@ -652,11 +667,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "end") {
       if (inRect(x, y, btnRetry)) {
         api.play("tap");
+        stopSpeaking();
         resetRound();
         totalScore = 0;
         phase = "intro";
       } else if (inRect(x, y, btnMenu)) {
         api.play("tap");
+        stopSpeaking();
         phase = "menu";
       }
       return;
@@ -1482,7 +1499,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function drawRetryPanel(): void {
     const { y } = panelBox(Math.min(450, w - 40), 210);
-    ctx.fillStyle = "#b28ae8";
+    // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
+    ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1727,6 +1745,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
+      stopSpeaking();
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);

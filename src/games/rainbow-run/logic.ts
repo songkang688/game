@@ -652,3 +652,22 @@ export function themeCleared(stars: ReadonlyArray<number>, themeIdx: number): nu
 export function totalStars(stars: ReadonlyArray<number>): number {
   return stars.reduce((s, v) => s + v, 0);
 }
+
+/* ---------------- 结算面板朗读 ---------------- */
+// 结算面板不走 level99 浮层,识字量有限的孩子靠听。
+// 纯函数便于测试;朗读本身走 speech.ts,无中文语音包时静默降级。
+
+/** 过关结算面板要朗读的整句话。 */
+export function clearSpeechLine(name: string, stars: number, missionOk: boolean): string {
+  return missionOk
+    ? `${name}跑完啦!小任务完成,得到 ${stars} 颗星,真棒!`
+    : `${name}跑完啦!得到 ${stars} 颗星,下次试试完成小任务!`;
+}
+
+/** 失败结算面板要朗读的整句话:战役温柔安抚;无尽模式报里程,破纪录要大声夸。 */
+export function retrySpeechLine(endless: boolean, meters: number, newBest: boolean): string {
+  if (!endless) return "摔了一跤,晕乎乎。没关系,就从这一关重新出发!";
+  return newBest
+    ? `这次跑了 ${meters} 米,新纪录!太厉害啦!`
+    : `这次跑了 ${meters} 米!休息一下,再来挑战纪录!`;
+}

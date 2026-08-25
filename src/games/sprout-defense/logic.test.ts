@@ -17,6 +17,7 @@ import {
   buildLevelSchedule,
   canAfford,
   canPlantOnCell,
+  clearSpeechLine,
   isLevelUnlocked,
   isThemeUnlocked,
   levelBugCount,
@@ -26,6 +27,7 @@ import {
   passiveDewInterval,
   plantsUnlockedAt,
   projectileCanHit,
+  retrySpeechLine,
   serializeProgress,
   shovelRefund,
   starsForLevel,
@@ -238,5 +240,19 @@ describe("sprout-defense 3 星与进度", () => {
     expect(isThemeUnlocked(stars, 2)).toBe(false);
     expect(themeStars(stars, 0)).toBe(LEVELS_PER_THEME * 3);
     expect(themeCleared(stars, 0)).toBe(LEVELS_PER_THEME);
+  });
+});
+
+describe("结算面板朗读文案", () => {
+  it("几乎无伤夸完美防守,其余报星数", () => {
+    expect(clearSpeechLine("小小菜园", 3, 0)).toBe("小小菜园守住啦!得到 3 颗星,植物几乎无伤,完美防守!");
+    expect(clearSpeechLine("小小菜园", 2, 3)).toBe("小小菜园守住啦!得到 2 颗星,真棒!");
+  });
+
+  it("失败朗读温柔安抚,BOSS 关带悄悄提示", () => {
+    expect(retrySpeechLine(null)).toBe("虫虫溜进小屋啦。没关系,就在这一关重新布阵!");
+    expect(retrySpeechLine("冰冰花冻住女王,星星芽集火!")).toBe(
+      "虫虫溜进小屋啦。没关系,就在这一关重新布阵!悄悄告诉你:冰冰花冻住女王,星星芽集火!"
+    );
   });
 });

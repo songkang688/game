@@ -532,3 +532,21 @@ export function puzzleBoard(p: PuzzleDef): Board {
   for (const [x, y] of p.white) setCell(b, x, y, 2);
   return b;
 }
+
+/* ---------------- 残局结算朗读 ---------------- */
+// 残局逐题结算不走平台弹窗（自动进下一题），识字量有限的孩子靠听。
+// 纯函数便于测试；朗读本身走 speech.ts，无中文语音包时静默降级。
+
+/** 残局解开时要朗读的整句话。 */
+export function puzzleSolvedSpeechLine(hintUsed: boolean): string {
+  return hintUsed
+    ? "解开啦！下次不用提示，能拿三颗星哦！"
+    : "太棒了！不用提示就解开，三颗星到手！";
+}
+
+/** 残局失败时要朗读的整句话：报第一步正解方向（列/行从 1 数起），没有就纯安抚。 */
+export function puzzleFailSpeechLine(opening: { x: number; y: number } | null): string {
+  return opening
+    ? `没关系！第一步试试第 ${opening.x + 1} 列、第 ${opening.y + 1} 行附近，点重摆再来一次！`
+    : "没关系！点重摆，再想一想！";
+}

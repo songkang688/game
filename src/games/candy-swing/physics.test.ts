@@ -29,8 +29,10 @@ import {
   LEVELS,
   chapterOf,
   chapterStart,
+  failedSpeechLine,
   mechanismKinds,
   totalStars,
+  wonSpeechLine,
   type LevelDef,
 } from "./levels";
 
@@ -832,5 +834,15 @@ describe("candy-swing 抽样加严验证", () => {
     expect(w.teleports).toBe(1);
     expect(w.hooked).toBe(1);
     expect(w.ate).toBe(true);
+  });
+});
+
+describe("candy-swing 结算朗读文案", () => {
+  it("过关朗读报星数", () => {
+    expect(wonSpeechLine(3)).toBe("过关啦！啾啾吃到糖果，得到 3 颗星！");
+  });
+
+  it("失败朗读先说原因再安抚", () => {
+    expect(failedSpeechLine("糖果碰到刺啦！")).toBe("糖果碰到刺啦！没关系，点一下屏幕再来一次！");
   });
 });

@@ -558,3 +558,20 @@ export function themeCleared(stars: ReadonlyArray<number>, themeIdx: number): nu
 export function totalStars(stars: ReadonlyArray<number>): number {
   return stars.reduce((s, v) => s + v, 0);
 }
+
+/* ---------------- 结算面板朗读 ---------------- */
+// 结算面板不走 level99 浮层,识字量有限的孩子靠听。
+// 纯函数便于测试;朗读本身走 speech.ts,无中文语音包时静默降级。
+
+/** 过关结算面板要朗读的整句话。 */
+export function clearSpeechLine(name: string, stars: number, eaten: number): string {
+  return stars >= 3
+    ? `${name}通过啦!三颗星,吃了 ${eaten} 条鱼,完美!`
+    : `${name}通过啦!得到 ${stars} 颗星,吃了 ${eaten} 条鱼,真棒!`;
+}
+
+/** 失败结算面板要朗读的整句话:温柔安抚,BOSS 关再带一句悄悄提示。 */
+export function retrySpeechLine(hint: string | null): string {
+  const base = "小鱼晕乎乎。没关系,这片海再游一次就好!";
+  return hint ? `${base}悄悄告诉你:${hint}` : base;
+}

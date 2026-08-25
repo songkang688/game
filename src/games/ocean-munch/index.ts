@@ -21,6 +21,7 @@ import {
   bossBiteReady,
   canEat,
   circlesOverlap,
+  clearSpeechLine,
   dexIdForFish,
   eatScore,
   eelActive,
@@ -32,6 +33,7 @@ import {
   isThemeUnlocked,
   parseDex,
   parseProgress,
+  retrySpeechLine,
   serializeDex,
   serializeProgress,
   spawnRadius,
@@ -41,6 +43,7 @@ import {
   totalStars,
   vortexPull,
 } from "./logic";
+import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -353,9 +356,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
         earnedStars,
         `99 关九大海域全部通关,海龙王都服气啦!图鉴 ${dexSeen.size}/${DEX.length} · 总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
       );
-    } else if (gained > 0) {
-      api.addStars(gained);
-      addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
+    } else {
+      // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
+      speak(clearSpeechLine(level().name, earnedStars, eaten));
+      if (gained > 0) {
+        api.addStars(gained);
+        addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
+      }
     }
   }
 
@@ -376,7 +383,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     shake = 0.4;
     api.play("oops");
     pops.push({ x, y, life: 0.6, color: "#ff9eb5" });
-    if (hearts <= 0) phase = "retry";
+    if (hearts <= 0) {
+      phase = "retry";
+      speak(retrySpeechLine(bossFailHint()));
+    }
   }
 
   // ---- 输入 ----
@@ -451,12 +461,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "clear") {
       if (inRect(px, py, btnNext)) {
         api.play("tap");
+        stopSpeaking();
         levelIdx++;
         chapterIdx = Math.floor(levelIdx / LEVELS_PER_THEME);
         resetLevel();
         phase = "intro";
       } else if (inRect(px, py, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = "map";
       }
       return;
@@ -464,10 +476,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "retry") {
       if (inRect(px, py, btnRetry)) {
         api.play("tap");
+        stopSpeaking();
         resetLevel();
         phase = "play";
       } else if (inRect(px, py, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = "map";
       }
       return;
@@ -1896,7 +1910,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function drawRetryPanel(): void {
     const hint = bossFailHint();
     const { y } = panelBox(Math.min(450, w - 40), hint ? 240 : 210);
-    ctx.fillStyle = "#b28ae8";
+    // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
+    ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1906,8 +1921,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText("没关系!这片海再游一次就好", w / 2, y + 80);
     let by = y + 128;
     if (hint) {
-      // BOSS 失败给一句针对性提示,温柔不吓人
-      ctx.fillStyle = "#c47a2a";
+      // BOSS 失败给一句针对性提示,温柔不吓人(深橙 5.3:1,14px 小字要 4.5:1)
+      ctx.fillStyle = "#a05914";
       ctx.font = "bold 14px sans-serif";
       ctx.fillText(`💡 ${hint}`, w / 2, y + 112);
       by = y + 158;
@@ -2144,6 +2159,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
+      stopSpeaking();
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.remove();

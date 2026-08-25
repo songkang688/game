@@ -15,6 +15,7 @@ import {
   applyHit,
   buildWaypoints,
   canPlace,
+  clearSpeechLine,
   combineSlow,
   comboPetalBonus,
   dewSlowFactor,
@@ -32,6 +33,7 @@ import {
   pathsCellSet,
   pickTarget,
   pointAlongPath,
+  retrySpeechLine,
   sellRefund,
   serializeProgress,
   starsForLevel,
@@ -365,5 +367,19 @@ describe("garden-guard 3 星与进度", () => {
     expect(themeStars(stars, 0)).toBe(LEVELS_PER_THEME * 2);
     expect(themeCleared(stars, 0)).toBe(LEVELS_PER_THEME);
     expect(themeCleared(stars, 1)).toBe(0);
+  });
+});
+
+describe("结算面板朗读文案", () => {
+  it("三星过关夸完美守卫,其余报星数", () => {
+    expect(clearSpeechLine("新手花圃", 3)).toBe("新手花圃通过!三颗星,一颗心都没掉,完美守卫!");
+    expect(clearSpeechLine("新手花圃", 2)).toBe("新手花圃通过!得到 2 颗星,真棒!");
+  });
+
+  it("失败朗读温柔安抚,BOSS 关带悄悄提示", () => {
+    expect(retrySpeechLine(null)).toBe("哎呀,花朵蔫了。没关系,就在这一关再来一次!");
+    expect(retrySpeechLine("露珠塔能拖住它!")).toBe(
+      "哎呀,花朵蔫了。没关系,就在这一关再来一次!悄悄告诉你:露珠塔能拖住它!"
+    );
   });
 });

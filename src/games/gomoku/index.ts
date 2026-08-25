@@ -16,7 +16,16 @@ import {
   other,
   setCell,
 } from "./ai";
-import { PUZZLES, THEMES, puzzleBoard, puzzlesOfTheme, themeStart } from "./puzzles";
+import {
+  PUZZLES,
+  THEMES,
+  puzzleBoard,
+  puzzleFailSpeechLine,
+  puzzleSolvedSpeechLine,
+  puzzlesOfTheme,
+  themeStart,
+} from "./puzzles";
+import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -421,6 +430,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function backToSetup(): void {
     clearTimeout(aiTimer);
     clearTimeout(endTimer);
+    stopSpeaking();
     gameEl.classList.add("gm-hidden");
     setupEl.classList.remove("gm-hidden");
     if (playKind === "puzzle") renderPuzzleList();
@@ -478,6 +488,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         ? "解开啦！下次不用提示能拿 3 星哦"
         : "太棒了，不用提示就解开，3 星到手！";
       const nowAll = campaign.stars.every((s) => s > 0);
+      // 逐题结算自动朗读（战役全通那次走平台弹窗，那边自带朗读，不叠音）
+      if (wasAll || !nowAll || campaignDoneReported) speak(puzzleSolvedSpeechLine(hintUsedInPuzzle));
       clearTimeout(endTimer);
       endTimer = window.setTimeout(() => {
         if (destroyed) return;
@@ -495,11 +507,12 @@ export function mount(api: GameApi): { destroy: () => void } {
         }
       }, 1600);
     } else {
-      // 失败时提示第一步正解的方向,帮小朋友找到思路
+      // 失败时提示第一步正解的方向,帮小朋友找到思路(同时朗读给识字量有限的孩子听)
       const opening = bestMove(puzzleBoard(PUZZLES[puzzleIndex]), 1, "smart", () => 0);
       msgEl.textContent = opening
         ? `没关系！第一步试试第 ${opening.x + 1} 列第 ${opening.y + 1} 行附近,点「重摆」再来～`
         : "没关系！点「重摆」再想一想～";
+      speak(puzzleFailSpeechLine(opening));
     }
     updateHud();
   }
@@ -867,6 +880,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   hintBtn.addEventListener("click", useHint);
   retryBtn.addEventListener("click", () => {
     api.play("tap");
+    stopSpeaking();
     startPuzzle(puzzleIndex);
   });
   backBtn.addEventListener("click", backToSetup);
@@ -879,6 +893,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       cancelAnimationFrame(raf);
       clearTimeout(aiTimer);
       clearTimeout(endTimer);
+      stopSpeaking();
       wrap.remove();
     },
   };
