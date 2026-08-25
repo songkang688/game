@@ -1,223 +1,205 @@
+import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { CHAPTERS, COLS, LEVELS, type BrickLevel } from "./levels";
+
 export const meta = {
   id: "brick-break",
   title: "碰碰砖块",
   emoji: "🧱",
   category: "casual" as const,
   color: "#FFE2D9",
-  blurb: "小球弹呀弹，用挡板接住它，把彩虹砖块全敲开！",
+  blurb: "99 关六大砖阵！金字塔、钻石阵、钢铁堡垒，弹球全打碎！",
 };
 
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (name: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
-
 const W = 360;
-const H = 440;
-const PADDLE_W = 84;
-const PADDLE_H = 14;
-const BALL_R = 8;
-const COLS = 6;
-const ROWS = 4;
-const BRICK_W = 52;
-const BRICK_H = 22;
-const BRICK_GAP = 6;
-const BRICK_TOP = 50;
-const BRICK_LEFT = (W - COLS * BRICK_W - (COLS - 1) * BRICK_GAP) / 2;
-const ROW_COLORS = ["#FFB3C7", "#FFD9A0", "#B8E6A6", "#A9D7FF"];
+const H = 430;
+const BRICK_H = 18;
+const BRICK_TOP = 42;
+const PADDLE_H = 12;
+const BALL_R = 7;
 
-export function mount(api: GameApi): { destroy: () => void } {
-  let finished = false;
+const BRICK_COLORS = ["#FF9EC8", "#FFD26E", "#9FE08D", "#8FCBFF", "#C9A0F0", "#FFB48A"];
+const STEEL_COLOR = "#9AA0AE";
+const STEEL_HIT_COLOR = "#C4C9D4";
+
+const CSS = `
+.bb-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
+.bb-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; }
+.bb-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(210,140,110,.25); font-size: 14px; }
+.bb-canvas { width: 100%; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDF8F0, #F4EFFB); touch-action: none; }
+.bb-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
+.bb-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFC9AE; color: #8A4A20; cursor: pointer; box-shadow: 0 4px 0 #EBA987; touch-action: none; }
+.bb-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBA987; }
+.bb-msg { text-align: center; min-height: 20px; color: #C97B5A; font-weight: 700; margin-top: 8px; font-size: 14px; }
+`;
+
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: BrickLevel = LEVELS[ctx.level];
+  let destroyed = false;
+  let ended = false;
+  let running = false;
   let raf = 0;
   let lastTime = 0;
   let lives = 3;
-  let launched = false;
-  let paddleX = W / 2;
   let dir = 0;
+  let paddleX = W / 2;
   let ballX = W / 2;
   let ballY = H - 60;
-  let vx = 150;
-  let vy = -230;
-  const bricks: boolean[] = new Array(COLS * ROWS).fill(true);
+  let vx = 0;
+  let vy = 0;
+
+  const brickW = W / COLS;
+  // hp 矩阵（复制布局，2=钢砖打两下）
+  const hp: number[][] = cfg.layout.map((row) => row.slice());
+  let bricksLeft = hp.flat().filter((v) => v > 0).length;
+  const totalBricks = bricksLeft;
 
   const wrap = document.createElement("div");
   wrap.className = "bb-wrap";
   wrap.innerHTML = `
-    <style>
-      .bb-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0EA, #F0F4FF); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: none; }
-      .bb-top { display: flex; justify-content: space-between; margin-bottom: 8px; }
-      .bb-badge { background: #fff; border-radius: 14px; padding: 6px 12px; font-weight: 700; color: #E07A5F; box-shadow: 0 2px 6px rgba(220,140,110,.25); font-size: 15px; }
-      .bb-canvas { width: 100%; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDF6FF, #EFF7FF); touch-action: none; }
-      .bb-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
-      .bb-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFC9B5; color: #8A4A30; cursor: pointer; box-shadow: 0 4px 0 #EFAA90; touch-action: none; }
-      .bb-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EFAA90; }
-      .bb-msg { text-align: center; min-height: 20px; color: #E07A5F; font-weight: 700; margin-top: 8px; font-size: 14px; }
-    </style>
+    <style>${CSS}</style>
     <div class="bb-top">
-      <span class="bb-badge bb-count">🧱 剩 ${COLS * ROWS} 块</span>
-      <span class="bb-badge bb-lives">💗💗💗</span>
+      <span class="bb-badge bb-bricks">🧱 ${bricksLeft}</span>
+      <span class="bb-badge bb-life">💗💗💗</span>
     </div>
     <canvas class="bb-canvas" width="${W}" height="${H}"></canvas>
     <div class="bb-ctrl">
       <button class="bb-btn bb-left" type="button">⬅️</button>
       <button class="bb-btn bb-right" type="button">➡️</button>
     </div>
-    <div class="bb-msg">点一下画面发球，按住按钮移动挡板！</div>
+    <div class="bb-msg">点一下画面发球！灰色钢砖要打两下～</div>
   `;
-  api.root.appendChild(wrap);
+  stage.appendChild(wrap);
 
   const canvas = wrap.querySelector(".bb-canvas") as HTMLCanvasElement;
-  const ctx = canvas.getContext("2d");
-  const countEl = wrap.querySelector(".bb-count") as HTMLElement;
-  const livesEl = wrap.querySelector(".bb-lives") as HTMLElement;
+  const c2d = canvas.getContext("2d");
+  const bricksEl = wrap.querySelector(".bb-bricks") as HTMLElement;
+  const lifeEl = wrap.querySelector(".bb-life") as HTMLElement;
   const msgEl = wrap.querySelector(".bb-msg") as HTMLElement;
   const leftBtn = wrap.querySelector(".bb-left") as HTMLButtonElement;
   const rightBtn = wrap.querySelector(".bb-right") as HTMLButtonElement;
 
-  function bricksLeft(): number {
-    return bricks.filter(Boolean).length;
-  }
-
-  function updateTop(): void {
-    countEl.textContent = `🧱 剩 ${bricksLeft()} 块`;
-    livesEl.textContent = "💗".repeat(lives) + "🤍".repeat(3 - lives);
+  function renderTop(): void {
+    bricksEl.textContent = `🧱 ${bricksLeft}`;
+    lifeEl.textContent = "💗".repeat(Math.max(0, lives)) + "🤍".repeat(Math.max(0, 3 - lives));
   }
 
   function resetBall(): void {
-    launched = false;
+    running = false;
     ballX = paddleX;
-    ballY = H - PADDLE_H - 20 - BALL_R;
-    vx = (Math.random() < 0.5 ? -1 : 1) * (120 + Math.random() * 60);
-    vy = -230;
+    ballY = H - 40;
+    vx = 0;
+    vy = 0;
+  }
+
+  function launch(): void {
+    if (running || ended) return;
+    running = true;
+    const angle = (-55 - Math.random() * 60) * (Math.PI / 180);
+    vx = Math.cos(angle) * cfg.ballSpeed;
+    vy = Math.sin(angle) * cfg.ballSpeed;
+    ctx.sfx("jump");
+    msgEl.textContent = "";
   }
 
   function draw(): void {
-    if (!ctx) return;
-    ctx.clearRect(0, 0, W, H);
-    // 砖块
-    for (let r = 0; r < ROWS; r++) {
+    if (!c2d) return;
+    c2d.clearRect(0, 0, W, H);
+    for (let r = 0; r < hp.length; r++) {
       for (let c = 0; c < COLS; c++) {
-        if (!bricks[r * COLS + c]) continue;
-        const x = BRICK_LEFT + c * (BRICK_W + BRICK_GAP);
-        const y = BRICK_TOP + r * (BRICK_H + BRICK_GAP);
-        ctx.fillStyle = ROW_COLORS[r % ROW_COLORS.length];
-        ctx.beginPath();
-        ctx.roundRect(x, y, BRICK_W, BRICK_H, 7);
-        ctx.fill();
+        const v = hp[r][c];
+        if (v <= 0) continue;
+        const orig = cfg.layout[r][c];
+        c2d.fillStyle = orig === 2 ? (v === 2 ? STEEL_COLOR : STEEL_HIT_COLOR) : BRICK_COLORS[(r + c) % BRICK_COLORS.length];
+        c2d.beginPath();
+        c2d.roundRect(c * brickW + 2, BRICK_TOP + r * BRICK_H + 2, brickW - 4, BRICK_H - 4, 5);
+        c2d.fill();
       }
     }
-    // 挡板
-    ctx.fillStyle = "#F49FB6";
-    ctx.beginPath();
-    ctx.roundRect(paddleX - PADDLE_W / 2, H - PADDLE_H - 20, PADDLE_W, PADDLE_H, 8);
-    ctx.fill();
-    // 小球（毛球脸）
-    ctx.fillStyle = "#FFD86E";
-    ctx.beginPath();
-    ctx.arc(ballX, ballY, BALL_R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#7A5A1E";
-    ctx.beginPath();
-    ctx.arc(ballX - 3, ballY - 2, 1.4, 0, Math.PI * 2);
-    ctx.arc(ballX + 3, ballY - 2, 1.4, 0, Math.PI * 2);
-    ctx.fill();
-    if (!launched && !finished) {
-      ctx.fillStyle = "#B98BC9";
-      ctx.font = "16px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("点一下发球！", W / 2, H - 70);
-      ctx.textAlign = "left";
+    c2d.fillStyle = "#8A6BD0";
+    c2d.beginPath();
+    c2d.roundRect(paddleX - cfg.paddleW / 2, H - 24, cfg.paddleW, PADDLE_H, 6);
+    c2d.fill();
+    c2d.fillStyle = "#FF6B9E";
+    c2d.beginPath();
+    c2d.arc(ballX, ballY, BALL_R, 0, Math.PI * 2);
+    c2d.fill();
+  }
+
+  function finish(won: boolean): void {
+    if (ended) return;
+    ended = true;
+    cancelAnimationFrame(raf);
+    if (won) {
+      const got = lives >= 3 ? 3 : lives === 2 ? 2 : 1;
+      setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, `${totalBricks} 块砖全部打碎，爱心还剩 ${lives} 颗！`); }, 350);
+    } else {
+      setTimeout(() => { if (!destroyed) ctx.lose("球溜走三次啦，球拍早点移过去接住它！"); }, 350);
     }
   }
 
-  function endGame(win: boolean): void {
-    if (finished) return;
-    finished = true;
-    if (win) {
-      const stars: 1 | 2 | 3 = lives >= 3 ? 3 : lives === 2 ? 2 : 1;
-      api.play("win");
-      msgEl.textContent = "🎉 砖块全部敲开啦！";
-      api.onWin(stars, `还剩 ${lives} 颗爱心，弹球小高手！`);
+  function hitBrick(r: number, c: number): void {
+    hp[r][c]--;
+    if (hp[r][c] <= 0) {
+      bricksLeft--;
+      ctx.sfx("pop");
     } else {
-      api.play("oops");
-      msgEl.textContent = "小球溜走了，再来挑战一次！";
-      api.onLose(`还差 ${bricksLeft()} 块砖，下次一定能全敲开！`);
+      ctx.sfx("tap");
     }
+    renderTop();
+    if (bricksLeft <= 0) finish(true);
   }
 
   function tick(now: number): void {
-    if (finished) return;
-    const dt = Math.min(0.04, (now - lastTime) / 1000 || 0.016);
+    if (destroyed || ended) return;
+    const dt = Math.min(0.03, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
 
     paddleX += dir * 300 * dt;
-    paddleX = Math.max(PADDLE_W / 2, Math.min(W - PADDLE_W / 2, paddleX));
-
-    if (!launched) {
+    paddleX = Math.max(cfg.paddleW / 2, Math.min(W - cfg.paddleW / 2, paddleX));
+    if (!running) {
       ballX = paddleX;
-      ballY = H - PADDLE_H - 20 - BALL_R;
     } else {
       ballX += vx * dt;
       ballY += vy * dt;
 
-      if (ballX < BALL_R) { ballX = BALL_R; vx = Math.abs(vx); api.play("tap"); }
-      if (ballX > W - BALL_R) { ballX = W - BALL_R; vx = -Math.abs(vx); api.play("tap"); }
-      if (ballY < BALL_R) { ballY = BALL_R; vy = Math.abs(vy); api.play("tap"); }
+      if (ballX < BALL_R) { ballX = BALL_R; vx = Math.abs(vx); }
+      if (ballX > W - BALL_R) { ballX = W - BALL_R; vx = -Math.abs(vx); }
+      if (ballY < BALL_R) { ballY = BALL_R; vy = Math.abs(vy); }
 
-      // 挡板
-      const py = H - PADDLE_H - 20;
-      if (vy > 0 && ballY + BALL_R >= py && ballY + BALL_R <= py + PADDLE_H + 6 &&
-          ballX > paddleX - PADDLE_W / 2 - BALL_R && ballX < paddleX + PADDLE_W / 2 + BALL_R) {
+      // 球拍
+      if (vy > 0 && ballY >= H - 24 - BALL_R && ballY <= H - 24 + PADDLE_H && Math.abs(ballX - paddleX) <= cfg.paddleW / 2 + BALL_R) {
         vy = -Math.abs(vy);
-        const offset = (ballX - paddleX) / (PADDLE_W / 2);
-        vx = offset * 220;
-        api.play("jump");
+        const off = (ballX - paddleX) / (cfg.paddleW / 2);
+        vx = off * cfg.ballSpeed * 0.85;
+        const speed = Math.hypot(vx, vy);
+        vx = (vx / speed) * cfg.ballSpeed;
+        vy = (vy / speed) * cfg.ballSpeed;
+        ctx.sfx("tap");
       }
 
       // 砖块
-      for (let i = 0; i < bricks.length; i++) {
-        if (!bricks[i]) continue;
-        const r = Math.floor(i / COLS), c = i % COLS;
-        const bx = BRICK_LEFT + c * (BRICK_W + BRICK_GAP);
-        const by = BRICK_TOP + r * (BRICK_H + BRICK_GAP);
-        if (ballX + BALL_R > bx && ballX - BALL_R < bx + BRICK_W &&
-            ballY + BALL_R > by && ballY - BALL_R < by + BRICK_H) {
-          bricks[i] = false;
-          api.play("pop");
-          // 判断从哪边撞的
-          const fromLeft = Math.abs(ballX - bx);
-          const fromRight = Math.abs(bx + BRICK_W - ballX);
-          const fromTop = Math.abs(ballY - by);
-          const fromBottom = Math.abs(by + BRICK_H - ballY);
-          const m = Math.min(fromLeft, fromRight, fromTop, fromBottom);
-          if (m === fromTop || m === fromBottom) vy = -vy;
-          else vx = -vx;
-          updateTop();
-          if (bricksLeft() === 0) {
-            draw();
-            endGame(true);
-            return;
-          }
-          break;
-        }
+      const r = Math.floor((ballY - BRICK_TOP) / BRICK_H);
+      const c = Math.floor(ballX / brickW);
+      if (r >= 0 && r < hp.length && c >= 0 && c < COLS && hp[r][c] > 0) {
+        const brickCx = c * brickW + brickW / 2;
+        const brickCy = BRICK_TOP + r * BRICK_H + BRICK_H / 2;
+        const dx = (ballX - brickCx) / brickW;
+        const dy2 = (ballY - brickCy) / BRICK_H;
+        if (Math.abs(dx) > Math.abs(dy2)) vx = dx > 0 ? Math.abs(vx) : -Math.abs(vx);
+        else vy = dy2 > 0 ? Math.abs(vy) : -Math.abs(vy);
+        hitBrick(r, c);
       }
 
       // 掉落
       if (ballY > H + BALL_R) {
         lives--;
-        updateTop();
+        renderTop();
+        ctx.sfx("oops");
         if (lives <= 0) {
-          endGame(false);
+          finish(false);
           return;
         }
-        api.play("oops");
-        msgEl.textContent = "没关系，再发一球！";
+        msgEl.textContent = "球溜走了，点画面再发一次！";
         resetBall();
       }
     }
@@ -230,6 +212,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     btn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       dir = d;
+      launch();
     });
     const stop = () => { if (dir === d) dir = 0; };
     btn.addEventListener("pointerup", stop);
@@ -246,15 +229,11 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
   const onPointerDown = (e: PointerEvent) => {
     dragging = true;
-    paddleX = Math.max(PADDLE_W / 2, Math.min(W - PADDLE_W / 2, canvasX(e)));
-    if (!launched && !finished) {
-      launched = true;
-      api.play("jump");
-      msgEl.textContent = "小球出发！瞄准砖块～";
-    }
+    paddleX = Math.max(cfg.paddleW / 2, Math.min(W - cfg.paddleW / 2, canvasX(e)));
+    launch();
   };
   const onPointerMove = (e: PointerEvent) => {
-    if (dragging) paddleX = Math.max(PADDLE_W / 2, Math.min(W - PADDLE_W / 2, canvasX(e)));
+    if (dragging) paddleX = Math.max(cfg.paddleW / 2, Math.min(W - cfg.paddleW / 2, canvasX(e)));
   };
   const onPointerUp = () => { dragging = false; };
   canvas.addEventListener("pointerdown", onPointerDown);
@@ -263,8 +242,8 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "ArrowLeft") { dir = -1; e.preventDefault(); }
-    else if (e.key === "ArrowRight") { dir = 1; e.preventDefault(); }
-    else if (e.key === " " && !launched && !finished) { launched = true; api.play("jump"); e.preventDefault(); }
+    if (e.key === "ArrowRight") { dir = 1; e.preventDefault(); }
+    if (e.key === " ") { launch(); e.preventDefault(); }
   };
   const onKeyUp = (e: KeyboardEvent) => {
     if ((e.key === "ArrowLeft" && dir === -1) || (e.key === "ArrowRight" && dir === 1)) dir = 0;
@@ -272,8 +251,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
 
-  updateTop();
   resetBall();
+  renderTop();
   draw();
   raf = requestAnimationFrame((t) => {
     lastTime = t;
@@ -282,7 +261,8 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   return {
     destroy() {
-      finished = true;
+      destroyed = true;
+      ended = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("keydown", onKeyDown);
@@ -290,4 +270,14 @@ export function mount(api: GameApi): { destroy: () => void } {
       wrap.remove();
     },
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    playLevel,
+    mapHint: "一颗爱心都不丢就是 3 星！",
+    grandMessage: "99 座砖阵全部打穿，弹球小勇士！",
+  });
 }

@@ -1,6 +1,13 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
-import { makeMathQuestion, randInt, shuffle } from "./logic";
+import {
+  makeCarryQuestion,
+  makeMathQuestion,
+  makeNoCarryQuestion,
+  makeQuestionForLevel,
+  randInt,
+  shuffle,
+} from "./logic";
 
 // 简单可复现的伪随机数（LCG）
 function seeded(seed: number): () => number {
@@ -31,6 +38,53 @@ test("makeMathQuestion: 500 道题都符合一年级规则", () => {
     for (const c of q.choices) {
       assert.ok(c >= 0 && c <= 10, `候选超范围: ${c}`);
     }
+  }
+});
+
+test("makeNoCarryQuestion: 500 道题 20 以内且不进位不退位", () => {
+  const rand = seeded(7);
+  for (let i = 0; i < 500; i++) {
+    const q = makeNoCarryQuestion(rand);
+    if (q.op === "+") {
+      assert.equal(q.answer, q.a + q.b);
+      assert.ok(q.answer <= 20, `和超过 20: ${q.a}+${q.b}`);
+      assert.ok((q.a % 10) + (q.b % 10) < 10, `不应进位: ${q.a}+${q.b}`);
+    } else {
+      assert.equal(q.answer, q.a - q.b);
+      assert.ok(q.a <= 20 && q.answer >= 0);
+      assert.ok(q.a % 10 >= q.b % 10, `不应退位: ${q.a}-${q.b}`);
+    }
+    assert.equal(new Set(q.choices).size, 3);
+    assert.ok(q.choices.includes(q.answer));
+    for (const c of q.choices) assert.ok(c >= 0 && c <= 20);
+  }
+});
+
+test("makeCarryQuestion: 500 道题必须真正进位/退位", () => {
+  const rand = seeded(99);
+  for (let i = 0; i < 500; i++) {
+    const q = makeCarryQuestion(rand);
+    if (q.op === "+") {
+      assert.equal(q.answer, q.a + q.b);
+      assert.ok(q.answer >= 11 && q.answer <= 20, `进位和应在 11..20: ${q.a}+${q.b}`);
+      assert.ok((q.a % 10) + (q.b % 10) >= 10, `必须进位: ${q.a}+${q.b}`);
+    } else {
+      assert.equal(q.answer, q.a - q.b);
+      assert.ok(q.a >= 11 && q.a <= 18);
+      assert.ok(q.a % 10 < q.b, `必须退位: ${q.a}-${q.b}`);
+      assert.ok(q.answer >= 1);
+    }
+    assert.equal(new Set(q.choices).size, 3);
+    assert.ok(q.choices.includes(q.answer));
+  }
+});
+
+test("makeQuestionForLevel: 开关关闭时第 3 关退回不进退位", () => {
+  const rand = seeded(5);
+  for (let i = 0; i < 200; i++) {
+    const q = makeQuestionForLevel(3, false, rand);
+    if (q.op === "+") assert.ok((q.a % 10) + (q.b % 10) < 10);
+    else assert.ok(q.a % 10 >= q.b % 10);
   }
 });
 
