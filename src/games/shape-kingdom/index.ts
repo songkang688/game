@@ -67,7 +67,7 @@ const CSS = `
 
 export function mount(api: GameApi): { destroy: () => void } {
   const { root, play, onWin } = api;
-  const timers: number[] = [];
+  const timers: ReturnType<typeof setTimeout>[] = [];
   const later = (fn: () => void, ms: number) => {
     timers.push(setTimeout(fn, ms));
   };

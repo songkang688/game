@@ -18,9 +18,16 @@ function fakeModule(id: string, extra: Partial<GameModule["meta"]> = {}): unknow
 }
 
 describe("游戏加载器", () => {
-  it("仓库里还没有游戏时,loadGames 返回空数组且不崩溃", () => {
+  it("合并后的游戏会被自动发现,id 唯一且不崩溃", () => {
     expect(() => loadGames()).not.toThrow();
-    expect(loadGames()).toEqual([]);
+    const games = loadGames();
+    expect(games.length).toBeGreaterThanOrEqual(20);
+    const ids = games.map((g) => g.meta.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const g of games) {
+      expect(g.meta.title.length).toBeGreaterThan(0);
+      expect(typeof g.mount).toBe("function");
+    }
   });
 
   it("collectGames 处理空模块表", () => {

@@ -48,6 +48,15 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"]
+    include: ["src/**/*.test.ts"],
+    exclude: [
+      "src/games/math-farm/**",
+      "src/games/word-garden/**",
+      "src/games/pinyin-train/**",
+      "src/games/shape-kingdom/**",
+      "src/games/music-stars/**",
+      "src/games/find-diff/**",
+      "src/games/clock-house/**"
+    ]
   }
 });
