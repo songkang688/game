@@ -1,5 +1,5 @@
-// 水果切切乐:18 回合经典战役 + 禅宗无炸弹限时 + 街机无尽!
-// 冰冻果慢动作、爆裂果开花、大炸弹警报、彩虹香蕉水果雨,唰唰唰!
+// 水果切切乐:99 回合九大果园经典战役 + 禅宗无炸弹限时 + 街机无尽!
+// 先选果园再选回合;侧风、低重力、急坠、小果大瓜,每个果园手感都不一样!
 import {
   BEST_KEY,
   BIG_BOMB_HEARTS,
@@ -11,6 +11,10 @@ import {
   HEARTS_PER_ROUND,
   ICE_SECONDS,
   ICE_SLOW,
+  LEVELS_PER_THEME,
+  ORCHARD_ORDER,
+  ORCHARD_STYLE,
+  OrchardStyle,
   PROGRESS_KEY,
   ROUNDS,
   SPECIAL_CHANCE,
@@ -22,6 +26,7 @@ import {
   comboLabel,
   gravityFor,
   isLevelUnlocked,
+  isThemeUnlocked,
   makeLaunch,
   parseBest,
   parseProgress,
@@ -29,6 +34,8 @@ import {
   serializeBest,
   serializeProgress,
   starsForRound,
+  themeCleared,
+  themeStars,
   totalStars,
   zenStars,
 } from "./logic";
@@ -50,11 +57,11 @@ export const meta = {
   emoji: "🍑",
   category: "action" as const,
   color: "#ffe0a3",
-  blurb: "18 回合切果战役!冰冻果、爆裂果、大炸弹、禅宗街机三种玩法!",
+  blurb: "99 回合九大果园切果战役!侧风低重力手感各异,禅宗街机三种玩法!",
 };
 
 type Mode = "classic" | "zen" | "arcade";
-type Phase = "menu" | "map" | "intro" | "play" | "clear" | "retry" | "end";
+type Phase = "menu" | "themes" | "map" | "intro" | "play" | "clear" | "retry" | "end";
 
 interface FruitKind {
   name: string;
@@ -199,6 +206,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   // ---- 局状态 ----
   let mode: Mode = "classic";
   let phase: Phase = "menu";
+  let chapterIdx = 0;
   let roundIdx = 0;
   let roundScore = 0;
   let totalScore = 0;
@@ -236,6 +244,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let comboY = 0;
 
   const menuRects: Array<{ mode: Mode; rect: Rect }> = [];
+  const themeCards: Array<{ idx: number; rect: Rect }> = [];
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
   let btnNext: Rect | null = null;
   let btnMap: Rect | null = null;
@@ -247,11 +256,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return ROUNDS[Math.min(roundIdx, ROUNDS.length - 1)];
   }
 
+  const NEUTRAL_STYLE: OrchardStyle = ORCHARD_STYLE.sunny;
+
+  /** 经典模式用当前回合所在果园的手感;禅宗/街机用阳光果园的中性手感。 */
+  function orchardStyle(): OrchardStyle {
+    return mode === "classic" ? ORCHARD_STYLE[round().orchard] : NEUTRAL_STYLE;
+  }
+
+  /** 星夜/火山是深色背景,文字要换成浅色。 */
+  function isDarkOrchard(ci: number): boolean {
+    const id = ORCHARD_ORDER[ci];
+    return id === "night" || id === "volcano";
+  }
+
   function addFloat(x: number, y: number, text: string, color: string, big = false): void {
     floats.push({ x, y, text, color, life: big ? 1.2 : 0.85, big });
   }
 
   function resetRound(): void {
+    if (mode === "classic") chapterIdx = Math.floor(roundIdx / LEVELS_PER_THEME);
     flying.length = 0;
     halves.length = 0;
     splashes.length = 0;
@@ -275,7 +298,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     bestCombo = 0;
     time = 0;
     if (m === "classic") {
-      phase = "map";
+      phase = "themes";
     } else {
       resetRound();
       phase = "intro";
@@ -295,7 +318,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       finaleFired = true;
       api.onWin(
         earnedStars,
-        `18 回合果神大宴全通关!最高 ${bestCombo} 连切 · 总星 ${totalStars(progress)}/${ROUNDS.length * 3}`,
+        `99 回合九大果园全通关,你就是传说果神!最高 ${bestCombo} 连切 · 总星 ${totalStars(progress)}/${ROUNDS.length * 3}`,
       );
     } else if (gained > 0) {
       api.addStars(gained);
@@ -338,7 +361,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function launchOne(fly: FlyKind): void {
+    const st = orchardStyle();
     const l = makeLaunch(w, h, Math.random(), Math.random(), Math.random());
+    // 初速按重力倍率开方缩放:抛物线顶点不变,低重力飘、高重力砸。
+    const vyScale = Math.sqrt(st.gravityMult);
     if (fly === "fruit") {
       const kind = FRUITS[Math.floor(Math.random() * FRUITS.length)];
       flying.push({
@@ -347,10 +373,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
         x: l.x,
         y: l.y,
         vx: l.vx,
-        vy: l.vy,
+        vy: l.vy * vyScale,
         rot: Math.random() * Math.PI * 2,
         vrot: (Math.random() - 0.5) * 4,
-        r: kind.r,
+        r: kind.r * st.fruitScale,
       });
     } else {
       flying.push({
@@ -359,7 +385,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         x: l.x,
         y: l.y,
         vx: l.vx,
-        vy: l.vy * (fly === "bigbomb" ? 0.92 : 1),
+        vy: l.vy * vyScale * (fly === "bigbomb" ? 0.92 : 1),
         rot: fly === "banana" ? Math.random() * Math.PI : 0,
         vrot: (Math.random() - 0.5) * (fly === "banana" ? 5 : 2),
         r: radiusFor(fly),
@@ -556,18 +582,42 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       return;
     }
-    if (phase === "map") {
+    if (phase === "themes") {
       if (inRect(x, y, btnBack)) {
         api.play("tap");
         phase = "menu";
         return;
       }
+      for (const c of themeCards) {
+        if (inRect(x, y, c.rect)) {
+          if (isThemeUnlocked(progress, c.idx)) {
+            api.play("tap");
+            chapterIdx = c.idx;
+            phase = "map";
+          } else {
+            api.play("oops");
+          }
+          return;
+        }
+      }
+      return;
+    }
+    if (phase === "map") {
+      if (inRect(x, y, btnBack)) {
+        api.play("tap");
+        phase = "themes";
+        return;
+      }
       for (const n of mapNodes) {
-        if (Math.hypot(x - n.x, y - n.y) <= n.r + 8 && isLevelUnlocked(progress, n.idx)) {
-          api.play("tap");
-          roundIdx = n.idx;
-          resetRound();
-          phase = "intro";
+        if (Math.hypot(x - n.x, y - n.y) <= n.r + 8) {
+          if (isLevelUnlocked(progress, n.idx)) {
+            api.play("tap");
+            roundIdx = n.idx;
+            resetRound();
+            phase = "intro";
+          } else {
+            api.play("oops");
+          }
           return;
         }
       }
@@ -701,13 +751,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
     }
 
-    // 冰冻果:飞行物慢动作,好切!
+    // 冰冻果:飞行物慢动作,好切!果园手感:重力倍率 + 侧风漂移。
+    const st = orchardStyle();
     const simDt = dt * (freezeTimer > 0 ? ICE_SLOW : 1);
-    const g = gravityFor(h);
+    const g = gravityFor(h) * st.gravityMult;
+    const wind = st.wind;
     for (let i = flying.length - 1; i >= 0; i--) {
       const f = flying[i];
       f.vy += g * simDt;
-      f.x += f.vx * simDt;
+      f.x += (f.vx + wind) * simDt;
       f.y += f.vy * simDt;
       f.rot += f.vrot * simDt;
       if (f.y > h + 80 && f.vy > 0) flying.splice(i, 1);
@@ -716,7 +768,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (let i = halves.length - 1; i >= 0; i--) {
       const half = halves[i];
       half.vy += g * simDt;
-      half.x += half.vx * simDt;
+      half.x += (half.vx + wind) * simDt;
       half.y += half.vy * simDt;
       half.rot += half.vrot * simDt;
       half.life -= dt;
@@ -985,7 +1037,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       {
         mode: "classic",
         title: "🏅 经典战役",
-        sub: `18 回合闯关 · ⭐ ${totalStars(progress)}/${ROUNDS.length * 3}`,
+        sub: `九大果园 ${ROUNDS.length} 回合 · ⭐ ${totalStars(progress)}/${ROUNDS.length * 3}`,
         color: "#ffb84d",
       },
       {
@@ -1022,7 +1074,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
-  function drawMap(): void {
+  function drawThemes(): void {
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, "#fdf3e0");
     grad.addColorStop(1, "#ffd9e5");
@@ -1033,31 +1085,103 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🍑 经典战役 · 果园地图", w / 2, 30);
-    ctx.font = "15px sans-serif";
+    ctx.fillText("🍑 经典战役 · 九大果园", w / 2, 26);
+    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#8a7a5e";
-    ctx.fillText(`⭐ ${totalStars(progress)}/${ROUNDS.length * 3} · 不切到炸弹通关就有 3 星!`, w / 2, 58);
+    ctx.fillText(
+      `共 ${ROUNDS.length} 回合 · ⭐ ${totalStars(progress)}/${ROUNDS.length * 3} · 先选果园,再选回合`,
+      w / 2,
+      52,
+    );
 
-    btnBack = { x: 12, y: 12, w: 80, h: 34 };
-    drawButton(btnBack, "◀ 菜单", "#fff", "#5a5a6e");
+    btnBack = { x: 8, y: 8, w: 70, h: 32 };
+    drawButton(btnBack, "◀ 菜单", "rgba(255,255,255,0.9)", "#5a5a6e");
+
+    themeCards.length = 0;
+    const cols = w > h * 1.15 ? 3 : 2;
+    const rows = Math.ceil(ORCHARD_ORDER.length / cols);
+    const pad = 10;
+    const x0 = Math.max(10, w * 0.06);
+    const y0 = 70;
+    const cw = (w - x0 * 2 - pad * (cols - 1)) / cols;
+    const ch = Math.min(96, (h - y0 - 16 - pad * (rows - 1)) / rows);
+    for (let i = 0; i < ORCHARD_ORDER.length; i++) {
+      const st = ORCHARD_STYLE[ORCHARD_ORDER[i]];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
+      themeCards.push({ idx: i, rect });
+      const unlocked = isThemeUnlocked(progress, i);
+      const cleared = themeCleared(progress, i);
+      ctx.fillStyle = unlocked ? st.bgTop : "#e8e8ee";
+      ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 14);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
+      ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
+      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
+      ctx.fillStyle = unlocked ? (isDarkOrchard(i) ? "#f0e8da" : "#5a5a6e") : "#a8a8b4";
+      ctx.fillText(unlocked ? st.blurb : "通关上一个果园解锁", rect.x + 10, rect.y + ch * 0.6);
+      ctx.fillText(
+        unlocked
+          ? `${cleared}/${LEVELS_PER_THEME} 回合 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3}`
+          : "",
+        rect.x + 10,
+        rect.y + ch * 0.82,
+      );
+    }
+  }
+
+  function drawMap(): void {
+    const st = ORCHARD_STYLE[ORCHARD_ORDER[chapterIdx]];
+    const dark = isDarkOrchard(chapterIdx);
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, st.bgTop);
+    grad.addColorStop(1, st.bgBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    btnBack = { x: 8, y: 8, w: 70, h: 32 };
+    drawButton(btnBack, "◀ 果园", "rgba(255,255,255,0.9)", "#5a5a6e");
+
+    ctx.fillStyle = dark ? "#ffe8c2" : st.accent;
+    ctx.font = "bold 22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    ctx.font = "14px sans-serif";
+    ctx.fillText(
+      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 不掉心通关 3 星,回放可刷星`,
+      w / 2,
+      54,
+    );
 
     mapNodes.length = 0;
-    const cols: number = 5;
-    const rows = Math.ceil(ROUNDS.length / cols);
-    const mx0 = w * 0.1;
-    const mx1 = w * 0.9;
+    const base = chapterIdx * LEVELS_PER_THEME;
+    const cols = 4;
+    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const mx0 = w * 0.12;
+    const mx1 = w * 0.88;
     const my0 = 96;
-    const my1 = h - 34;
-    const nr = Math.max(16, Math.min(26, (mx1 - mx0) / cols / 2.6, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < ROUNDS.length; i++) {
+    const my1 = h - 40;
+    const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < LEVELS_PER_THEME; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + (mx1 - mx0) * (cols === 1 ? 0.5 : col / (cols - 1));
+      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
       const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
-      mapNodes.push({ idx: i, x, y, r: nr });
+      mapNodes.push({ idx: base + i, x, y, r: nr });
     }
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.strokeStyle = "rgba(255,255,255,0.75)";
     ctx.lineWidth = 5;
     ctx.setLineDash([2, 9]);
     ctx.beginPath();
@@ -1069,12 +1193,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.stroke();
     ctx.setLineDash([]);
     for (const n of mapNodes) {
+      const def = ROUNDS[n.idx];
       const unlocked = isLevelUnlocked(progress, n.idx);
       const got = progress[n.idx] ?? 0;
-      const isFinal = n.idx === ROUNDS.length - 1;
+      const isFinal = n.idx - base === LEVELS_PER_THEME - 1;
       const r = isFinal ? n.r * 1.25 : n.r;
-      ctx.fillStyle = unlocked ? (got > 0 ? "#ffe8c2" : "#ffffff") : "#e4e4ea";
-      ctx.strokeStyle = unlocked ? "#ffb84d" : "#b8b8c2";
+      ctx.fillStyle = unlocked ? (got > 0 ? "#ffe8c2" : "#ffffff") : "rgba(230,230,236,0.92)";
+      ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
@@ -1086,12 +1211,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
         ctx.fillText("🔒", n.x, n.y);
       } else {
-        ctx.fillStyle = "#c47a2a";
+        ctx.fillStyle = st.accent;
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
-        ctx.fillText(String(n.idx + 1), n.x, n.y);
+        ctx.fillText(String(n.idx - base + 1), n.x, n.y);
         if (isFinal) {
           ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
-          ctx.fillText("🏆", n.x, n.y - r * 0.95);
+          ctx.fillText(chapterIdx === ORCHARD_ORDER.length - 1 ? "🏆" : "🚩", n.x, n.y - r * 0.95);
+        } else if (def.gen) {
+          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
+          ctx.fillText("🍲", n.x, n.y - r * 0.95);
         }
         ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
         let starTxt = "";
@@ -1107,15 +1235,29 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textBaseline = "middle";
     if (mode === "classic") {
       const r = round();
-      ctx.fillStyle = "#ffb84d";
-      ctx.font = "bold 24px sans-serif";
-      ctx.fillText(`第 ${roundIdx + 1} 回合 · ${r.name}`, w / 2, y + 42);
+      const st = ORCHARD_STYLE[r.orchard];
+      const rel = roundIdx - chapterIdx * LEVELS_PER_THEME + 1;
+      ctx.fillStyle = st.accent;
+      ctx.font = "bold 22px sans-serif";
+      ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 第${rel}回合 · ${r.name}`, w / 2, y + 40);
       ctx.fillStyle = "#5a5a6e";
-      ctx.font = "16px sans-serif";
-      ctx.fillText(r.hint, w / 2, y + 86);
+      ctx.font = "15px sans-serif";
+      ctx.fillText(r.hint, w / 2, y + 82);
+      const tags: string[] = [];
+      if (st.wind > 0) tags.push("💨 侧风向右");
+      if (st.wind < 0) tags.push("💨 侧风向左");
+      if (st.gravityMult < 1) tags.push("🎈 低重力飘");
+      if (st.gravityMult > 1) tags.push("⚡ 急坠快落");
+      if (st.fruitScale < 1) tags.push("🔍 小果考精准");
+      if (st.fruitScale > 1) tags.push("🍉 大瓜好切");
+      if (tags.length > 0) {
+        ctx.fillStyle = "#8a7a5e";
+        ctx.font = "13px sans-serif";
+        ctx.fillText(tags.join(" · "), w / 2, y + 108);
+      }
       ctx.fillStyle = "#c47a2a";
       ctx.font = "bold 16px sans-serif";
-      ctx.fillText(`🎯 ${r.time} 秒内切到 ${r.target} 分`, w / 2, y + 122);
+      ctx.fillText(`🎯 ${r.time} 秒内切到 ${r.target} 分`, w / 2, y + 134);
     } else if (mode === "zen") {
       ctx.fillStyle = "#8fd8c8";
       ctx.font = "bold 24px sans-serif";
@@ -1212,6 +1354,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       drawMenu();
       return;
     }
+    if (phase === "themes") {
+      drawThemes();
+      return;
+    }
     if (phase === "map") {
       drawMap();
       return;
@@ -1220,6 +1366,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 16, (Math.random() - 0.5) * shake * 16);
 
+    const st = orchardStyle();
+    const dark = mode === "classic" && isDarkOrchard(chapterIdx);
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     if (freezeTimer > 0) {
       grad.addColorStop(0, "#e0f2ff");
@@ -1228,13 +1376,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
       grad.addColorStop(0, "#fff3d6");
       grad.addColorStop(1, "#ffe0ee");
     } else {
-      grad.addColorStop(0, "#fdf3e0");
-      grad.addColorStop(1, "#ffe6ee");
+      grad.addColorStop(0, st.bgTop);
+      grad.addColorStop(1, st.bgBottom);
     }
     ctx.fillStyle = grad;
     ctx.fillRect(-24, -24, w + 48, h + 48);
 
-    ctx.fillStyle = freezeTimer > 0 ? "rgba(140,190,240,0.22)" : "rgba(255,180,200,0.18)";
+    ctx.fillStyle =
+      freezeTimer > 0
+        ? "rgba(140,190,240,0.22)"
+        : dark
+          ? "rgba(255,255,255,0.10)"
+          : "rgba(255,180,200,0.18)";
     for (let y = 30; y < h; y += 70) {
       for (let x = ((y / 70) % 2) * 35 + 20; x < w; x += 70) {
         ctx.beginPath();
@@ -1251,6 +1404,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.beginPath();
         ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+    if (st.wind !== 0 && freezeTimer <= 0) {
+      // 侧风线条:提示水果会横向漂移
+      ctx.strokeStyle = dark ? "rgba(255,220,180,0.35)" : "rgba(255,255,255,0.55)";
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      const dir = Math.sign(st.wind);
+      for (let i = 0; i < 8; i++) {
+        const wy = (((i * 131) % 100) / 100) * h * 0.8 + h * 0.06;
+        const phaseX = ((time * Math.abs(st.wind) * 1.6 + i * 160) % (w + 200)) - 100;
+        const wx = dir > 0 ? phaseX : w - phaseX;
+        ctx.beginPath();
+        ctx.moveTo(wx, wy);
+        ctx.quadraticCurveTo(wx + 18 * dir, wy - 4, wx + 40 * dir, wy);
+        ctx.stroke();
       }
     }
 
@@ -1304,7 +1473,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     if (mode === "classic") {
-      ctx.fillText(`回合 ${roundIdx + 1}/${ROUNDS.length} · 🍑 ${roundScore}/${round().target}`, 24, 30);
+      const rel = roundIdx - chapterIdx * LEVELS_PER_THEME + 1;
+      ctx.fillText(
+        `第${chapterIdx + 1}章 ${rel}/${LEVELS_PER_THEME} · 🍑 ${roundScore}/${round().target}`,
+        24,
+        30,
+      );
     } else if (mode === "zen") {
       ctx.fillText(`禅宗 · 分 ${totalScore}`, 24, 30);
     } else {
