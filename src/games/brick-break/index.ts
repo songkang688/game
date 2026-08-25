@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, COLS, LEVELS, type BrickLevel } from "./levels";
-
-export const meta = {
-  id: "brick-break",
-  title: "碰碰砖块",
-  emoji: "🧱",
-  category: "casual" as const,
-  color: "#FFE2D9",
-  blurb: "99 关六大砖阵！金字塔、钻石阵、钢铁堡垒，弹球全打碎！",
-};
 
 const W = 360;
 const H = 430;

@@ -1,15 +1,9 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { CHAPTERS, LEVELS, TRACK_LEN, type Obstacle, type RaceLevel } from "./levels";
-
-export const meta = {
-  id: "red-blue-race",
-  title: "红蓝赛跑",
-  emoji: "🏁",
-  category: "party" as const,
-  color: "#51cf66",
-  blurb: "99 关六大赛道！水坑要跳、栏架要跨、上坡要拼，冲线夺冠！",
-};
 
 const OB_EMOJI: Record<Obstacle["type"], string> = {
   puddle: "💧",

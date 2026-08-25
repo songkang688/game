@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 水果切切乐:99 回合九大果园经典战役 + 禅宗无炸弹限时 + 街机无尽!
 // 先选果园再选回合;侧风、低重力、急坠、小果大瓜,每个果园手感都不一样!
 import {
@@ -50,15 +53,6 @@ export interface GameAPI {
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
 }
-
-export const meta = {
-  id: "fruit-slice",
-  title: "水果切切乐",
-  emoji: "🍑",
-  category: "action" as const,
-  color: "#ffe0a3",
-  blurb: "99 回合九大果园切果战役!侧风低重力手感各异,禅宗街机三种玩法!",
-};
 
 type Mode = "classic" | "zen" | "arcade";
 type Phase = "menu" | "themes" | "map" | "intro" | "play" | "clear" | "retry" | "end";

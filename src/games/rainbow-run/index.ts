@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 彩虹跑跑:99 关九大主题世界跑酷战役!先选世界再选关,每关一个小任务,
 // 滚滚球、电光门等七种障碍,喷气鞋/磁铁/滑板道具,还能花星星复活一次!
 // 另有「无尽彩虹跑」:一直跑吃金币,每 1600 米换世界,越跑越快,挑战最远纪录!
@@ -48,15 +51,6 @@ export interface GameAPI {
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
 }
-
-export const meta = {
-  id: "rainbow-run",
-  title: "彩虹跑跑",
-  emoji: "🌈",
-  category: "action" as const,
-  color: "#e5d4ff",
-  blurb: "99 关九大世界跑酷+无尽彩虹跑!一直跑吃金币,挑战最远纪录!",
-};
 
 type Phase = "themes" | "map" | "intro" | "run" | "clear" | "retry";
 

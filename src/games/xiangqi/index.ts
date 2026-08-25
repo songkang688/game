@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 朵朵星星象棋 —— 标准中国象棋：双人同屏（朵朵 vs 星星）+ 简单电脑。
 // 大棋子、点选或拖动、合法落点高亮、将军提示、悔棋一档、图文规则页。
 import {
@@ -16,15 +19,6 @@ import {
   other,
   statusOf,
 } from "./logic";
-
-export const meta = {
-  id: "xiangqi",
-  title: "朵朵星星象棋",
-  emoji: "🐘",
-  category: "party" as const,
-  color: "#F6DFC5",
-  blurb: "楚河汉界摆开阵！朵朵战星星，也能挑战棋灵象，将军——",
-};
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 

@@ -5,6 +5,9 @@
  * - 4 种原创小鸟技能:糯糯(直球)/ 云云(分裂)/ 墩墩(下砸)/ 闪闪(加速钻)
  * - 自写 2D 弹弓 + 重力 + 方块破坏物理,不用任何物理引擎
  */
+import { meta } from "./meta";
+export { meta };
+
 import {
   BALLOON_ROPE,
   CHAPTERS,
@@ -35,15 +38,6 @@ import {
   simulateTrajectory,
   slopeSurfaceY
 } from "./physics";
-
-export const meta = {
-  id: "sling-birds",
-  title: "弹弹小鸟",
-  emoji: "🐦",
-  category: "action" as const,
-  color: "#CFEBFF",
-  blurb: "99 关 6 大世界!拉开大弹弓,弹出小鸟撞倒积木,把捣蛋的绿绿豆全都弹走!"
-};
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 

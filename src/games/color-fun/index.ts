@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { ALL_PAINTS, CHAPTERS, LEVELS, MIX_TABLE, PICTURES, type ColorLevel } from "./levels";
-
-export const meta = {
-  id: "color-fun",
-  title: "涂色小屋",
-  emoji: "🎨",
-  category: "create" as const,
-  color: "#ffd43b",
-  blurb: "六大村镇 99 关！指令涂色、调色锅变新颜色、数字涂色还有记忆涂色！",
-};
 
 const THEME_BG = [
   "linear-gradient(#fff9db,#ffec99)",

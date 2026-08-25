@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 海底大胃王:99 关九大海域战役!先选海域再选关,每片海域专属配色、障碍组合
 // 和区域 BOSS(共 9 位),吃过见过的生物都会记进生物图鉴!
 import {
@@ -49,15 +52,6 @@ export interface GameAPI {
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
 }
-
-export const meta = {
-  id: "ocean-munch",
-  title: "海底大胃王",
-  emoji: "🐟",
-  category: "action" as const,
-  color: "#bfe9ff",
-  blurb: "99 关九大海域战役!收集生物图鉴,挑战九位海域大王!",
-};
 
 type Phase = "themes" | "map" | "dex" | "intro" | "play" | "clear" | "retry";
 type NpcKind = "fish" | "jelly" | "puffer" | "urchin" | "squid";

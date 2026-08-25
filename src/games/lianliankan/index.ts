@@ -1,14 +1,8 @@
+import { meta } from "./meta";
+export { meta };
+
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, THEME_EMOJIS, type LlkLevel } from "./levels";
-
-export const meta = {
-  id: "lianliankan",
-  title: "连连看",
-  emoji: "🔗",
-  category: "casual" as const,
-  color: "#FFEBDD",
-  blurb: "99 关六大场馆！玩具会下落、鱼儿会游动，连连看新玩法！",
-};
 
 const BGS = [
   "#FFE3E3", "#FFF3CE", "#EBDDFB", "#FFE0EC", "#E0F0FF", "#FFE9F3", "#FFF6D8",

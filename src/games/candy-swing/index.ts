@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 糖果秋千 —— 划绳物理益智：划断绳子，把糖果送进小怪物"啾啾"的嘴巴。
 // 99 关 6 大主题：草地 / 夜空 / 工厂 / 云朵 / 冰雪 / 彩虹，9 种机关，带选关地图与进度存档。
 import {
@@ -32,15 +35,6 @@ import {
   type ChapterTheme,
   type LevelDef,
 } from "./levels";
-
-export const meta = {
-  id: "candy-swing",
-  title: "糖果秋千",
-  emoji: "🍬",
-  category: "action" as const,
-  color: "#FFE0EE",
-  blurb: "99 关 6 大主题！剪绳、传送、气球，把糖果送进啾啾嘴里！",
-};
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 

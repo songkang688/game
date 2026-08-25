@@ -1,3 +1,6 @@
+import { meta } from "./meta";
+export { meta };
+
 // 绿芽保卫战:99 关九大花园场景守家战役!先选场景再选关,九种虫虫、旗帜大波、
 // 章末 BOSS,最终决战虫虫女王!失败只重试本关。
 import {
@@ -50,15 +53,6 @@ export interface GameAPI {
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
 }
-
-export const meta = {
-  id: "sprout-defense",
-  title: "绿芽保卫战",
-  emoji: "🌱",
-  category: "action" as const,
-  color: "#d5f2ca",
-  blurb: "99 关九大花园守家战役!七种植物九种虫,决战虫虫女王!",
-};
 
 const TOOLBAR_H = 64;
 const HOME_W_CELLS = 1.2;
