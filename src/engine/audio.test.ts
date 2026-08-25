@@ -133,6 +133,37 @@ describe("playSound 音效回归", () => {
   });
 });
 
+describe("playSound 环境降级", () => {
+  it("AudioContext 构造抛错时静音降级,不打断按钮点击", async () => {
+    vi.resetModules();
+    class ThrowingAudioContext {
+      constructor() {
+        throw new Error("audio resources exhausted");
+      }
+    }
+    vi.stubGlobal("window", { AudioContext: ThrowingAudioContext, setTimeout, clearTimeout });
+    const fresh = await import("./audio");
+    expect(() => fresh.playSound("tap")).not.toThrow();
+    expect(() => fresh.playSound("win")).not.toThrow();
+  });
+
+  it("resume 被自动播放策略拒绝时不产生未处理异常", async () => {
+    vi.resetModules();
+    const { Ctor } = makeFakeAudioContext();
+    class SuspendedCtx extends (Ctor as new () => { state: string }) {
+      state = "suspended";
+      resume(): Promise<void> {
+        return Promise.reject(new Error("NotAllowedError"));
+      }
+    }
+    vi.stubGlobal("window", { AudioContext: SuspendedCtx, setTimeout, clearTimeout });
+    const fresh = await import("./audio");
+    expect(() => fresh.playSound("tap")).not.toThrow();
+    // 等一拍,让 rejected promise 有机会冒出来(有未处理异常时 vitest 会直接判失败)
+    await new Promise((r) => setTimeout(r, 10));
+  });
+});
+
 describe("toggleBgm 背景音乐开关", () => {
   it("默认关;切换会翻转存档里的 bgmOn,在无音频环境下也不报错", () => {
     expect(isBgmOn()).toBe(false);

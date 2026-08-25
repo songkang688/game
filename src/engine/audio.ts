@@ -13,8 +13,23 @@ function ensureCtx(): AudioContext | null {
     window.AudioContext ??
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
-  if (!ctx) ctx = new Ctor();
-  if (ctx.state === "suspended") void ctx.resume();
+  if (!ctx) {
+    // 个别 WebView / 音频资源耗尽的环境里构造会抛错;
+    // playSound 挂在几乎所有按钮的 click 里,这里必须兜住,失败就静音降级
+    try {
+      ctx = new Ctor();
+    } catch {
+      return null;
+    }
+  }
+  if (ctx.state === "suspended") {
+    // resume 被自动播放策略拒绝时返回 rejected promise,不能让它变成未处理异常
+    try {
+      void ctx.resume().catch(() => {});
+    } catch {
+      // 忽略,下次用户手势再试
+    }
+  }
   return ctx;
 }
 
