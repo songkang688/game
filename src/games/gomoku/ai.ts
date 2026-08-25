@@ -9,7 +9,7 @@ export interface Board {
   cells: Uint8Array;
 }
 
-export type Difficulty = "easy" | "normal";
+export type Difficulty = "easy" | "normal" | "smart";
 
 const DIRS: Array<[number, number]> = [
   [1, 0],
@@ -270,7 +270,59 @@ export function candidateMoves(b: Board): Array<[number, number]> {
 }
 
 /**
+ * 聪明档：两层搜索。
+ * 先按"进攻分+防守分"初筛前 12 个点，然后对每个点假设落子，
+ * 计算对手的最佳回应分值（含对手成五检查），
+ * 总分 = 自身点分 + 0.95×防守分 − 0.6×对手最佳回应。
+ * 这样活二/眠三/冲四的权重（见 evaluatePoint）在两层里都会生效，
+ * 能提前一步看到"对手活三将变活四"之类的威胁。
+ */
+export function smartMove(
+  b: Board,
+  me: Player,
+  rng: () => number = Math.random
+): { x: number; y: number } | null {
+  const cands = candidateMoves(b);
+  if (cands.length === 0) return null;
+  const opp = other(me);
+
+  const myWin = cands.find(([x, y]) => makesFive(b, x, y, me));
+  if (myWin) return { x: myWin[0], y: myWin[1] };
+  const oppWin = cands.find(([x, y]) => makesFive(b, x, y, opp));
+  if (oppWin) return { x: oppWin[0], y: oppWin[1] };
+
+  const scored = cands.map(([x, y]) => ({
+    x,
+    y,
+    base: evaluatePoint(b, x, y, me) + 0.95 * evaluatePoint(b, x, y, opp),
+  }));
+  scored.sort((a, c) => c.base - a.base);
+  const top = scored.slice(0, 12);
+
+  let best = top[0];
+  let bestVal = -Infinity;
+  for (const m of top) {
+    setCell(b, m.x, m.y, me);
+    // 对手的最佳回应分（对手成五 = 天文数字，等价于必输警告）
+    let reply = 0;
+    for (const [ox, oy] of candidateMoves(b)) {
+      const v = evaluatePoint(b, ox, oy, opp);
+      if (v > reply) reply = v;
+      if (reply >= 10_000_000) break;
+    }
+    setCell(b, m.x, m.y, 0);
+    const val = m.base - 0.6 * reply + rng() * 4;
+    if (val > bestVal) {
+      bestVal = val;
+      best = m;
+    }
+  }
+  return { x: best.x, y: best.y };
+}
+
+/**
  * AI 选点。
+ * - smart：两层搜索（见 smartMove），最强。
  * - normal：永远抓住成五机会、必挡对方成五，评分带 0.9 防守权重
  *   （活三/冲四威胁都会被看见并处理）。
  * - easy：会漏——60% 概率才挡对方的成五，防守权重也低，
@@ -283,6 +335,7 @@ export function bestMove(
   difficulty: Difficulty,
   rng: () => number = Math.random
 ): { x: number; y: number } | null {
+  if (difficulty === "smart") return smartMove(b, me, rng);
   const cands = candidateMoves(b);
   if (cands.length === 0) return null;
   const opp = other(me);

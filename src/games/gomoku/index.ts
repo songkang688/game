@@ -1,5 +1,5 @@
-// 五子棋 —— 15×15 标准棋盘（可切 9×9 入门），人机两档 + 同屏双人，
-// 支持悔棋、提示、禁手开关、五连高亮。
+// 五子棋 —— 自由对战（15×15/9×9，人机三档 + 双人 + 禁手可选）
+// 与「棋谜战役」：16 个 9×9 残局，限定步数内连成五，带提示与进度存档。
 import {
   type Board,
   type Difficulty,
@@ -13,6 +13,7 @@ import {
   other,
   setCell,
 } from "./ai";
+import { PUZZLES, puzzleBoard } from "./puzzles";
 
 export const meta = {
   id: "gomoku",
@@ -20,7 +21,7 @@ export const meta = {
   emoji: "⚫",
   category: "casual" as const,
   color: "#F6E3C5",
-  blurb: "黑白棋子排排站，先连成五颗就是小棋王！",
+  blurb: "自由对战加 16 关棋谜战役，先连成五颗就是小棋王！",
 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -36,7 +37,43 @@ interface GameApi {
 
 const W = 380;
 
-type Mode = "easy" | "normal" | "pvp";
+type Mode = "easy" | "normal" | "smart" | "pvp";
+type PlayKind = "free" | "puzzle";
+
+const CAMPAIGN_KEY = "yiduo.gomoku.campaign.v1";
+
+interface CampaignProgress {
+  stars: number[];
+}
+
+function loadCampaign(): CampaignProgress {
+  try {
+    const raw = localStorage.getItem(CAMPAIGN_KEY);
+    if (raw) {
+      const data = JSON.parse(raw) as { stars?: unknown };
+      if (Array.isArray(data.stars)) {
+        const arr = data.stars as unknown[];
+        return {
+          stars: PUZZLES.map((_, i) => {
+            const v = arr[i];
+            return typeof v === "number" ? Math.max(0, Math.min(3, Math.round(v))) : 0;
+          }),
+        };
+      }
+    }
+  } catch {
+    // 读不到就当新档
+  }
+  return { stars: PUZZLES.map(() => 0) };
+}
+
+function saveCampaign(p: CampaignProgress): void {
+  try {
+    localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(p));
+  } catch {
+    // 忽略
+  }
+}
 
 export function mount(api: GameApi): { destroy: () => void } {
   let destroyed = false;
@@ -48,6 +85,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   let boardSize = 15;
   let mode: Mode = "normal";
   let forbiddenOn = false;
+  let playKind: PlayKind = "free";
 
   // 对局状态
   let board: Board = makeBoard(boardSize);
@@ -64,6 +102,13 @@ export function mount(api: GameApi): { destroy: () => void } {
   let lastMove: { x: number; y: number } | null = null;
   let animTime = 0;
   let reported = false;
+
+  // 战役状态
+  const campaign = loadCampaign();
+  let puzzleIndex = 0;
+  let movesLeft = 0;
+  let hintUsedInPuzzle = false;
+  let campaignDoneReported = false;
 
   const wrap = document.createElement("div");
   wrap.className = "gm-wrap";
@@ -85,34 +130,59 @@ export function mount(api: GameApi): { destroy: () => void } {
       .gm-btns button:disabled { opacity: .45; cursor: default; }
       .gm-undo { background: #CDE6FF; color: #2A6099; }
       .gm-hint { background: #D9F2C4; color: #4A7A2A; }
+      .gm-retry { background: #FFD9C4; color: #A0522D; }
       .gm-back { background: #FFE0C2; color: #9A5A20; }
       .gm-msg { text-align: center; min-height: 20px; color: #B06AB3; font-weight: 700; margin-top: 8px; font-size: 14px; }
       .gm-hidden { display: none; }
+      .gm-pz-total { text-align: center; font-weight: 700; color: #A8743C; font-size: 14px; margin-bottom: 8px; }
+      .gm-pz-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .gm-pz { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #FFFDF8; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
+      .gm-pz:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
+      .gm-pz .n { font-size: 16px; font-weight: 800; color: #A8743C; }
+      .gm-pz .s { font-size: 10px; letter-spacing: 1px; color: #E8A93C; }
+      .gm-pz .m { font-size: 10px; color: #B08A5C; }
+      .gm-pz.locked { background: rgba(255,255,255,.5); box-shadow: none; cursor: default; }
+      .gm-pz.locked .n { color: #C4B49B; }
     </style>
     <div class="gm-panel gm-setup">
       <div>
-        <div class="gm-group-label">🎯 棋盘大小</div>
-        <div class="gm-seg gm-size">
-          <button type="button" data-v="9">9×9 入门</button>
-          <button type="button" data-v="15" class="on">15×15 标准</button>
+        <div class="gm-group-label">🎮 玩法</div>
+        <div class="gm-seg gm-kind">
+          <button type="button" data-v="free" class="on">♟️ 自由对战</button>
+          <button type="button" data-v="puzzle">🧩 棋谜战役</button>
         </div>
       </div>
-      <div>
-        <div class="gm-group-label">🤝 和谁下</div>
-        <div class="gm-seg gm-mode">
-          <button type="button" data-v="easy">🐱 棋灵喵·简单</button>
-          <button type="button" data-v="normal" class="on">🦊 棋灵狐·普通</button>
-          <button type="button" data-v="pvp">👫 双人对战</button>
+      <div class="gm-free-opts">
+        <div>
+          <div class="gm-group-label">🎯 棋盘大小</div>
+          <div class="gm-seg gm-size">
+            <button type="button" data-v="9">9×9 入门</button>
+            <button type="button" data-v="15" class="on">15×15 标准</button>
+          </div>
         </div>
-      </div>
-      <div>
-        <div class="gm-group-label">🚫 禁手规则（大孩子玩法）</div>
-        <div class="gm-seg gm-forbid">
-          <button type="button" data-v="off" class="on">关（推荐）</button>
-          <button type="button" data-v="on">开</button>
+        <div style="margin-top:14px">
+          <div class="gm-group-label">🤝 和谁下</div>
+          <div class="gm-seg gm-mode">
+            <button type="button" data-v="easy">🐱 棋灵喵·简单</button>
+            <button type="button" data-v="normal" class="on">🦊 棋灵狐·普通</button>
+            <button type="button" data-v="smart">🐲 棋灵龙·聪明</button>
+            <button type="button" data-v="pvp">👫 双人对战</button>
+          </div>
         </div>
+        <div style="margin-top:14px">
+          <div class="gm-group-label">🚫 禁手规则（大孩子玩法）</div>
+          <div class="gm-seg gm-forbid">
+            <button type="button" data-v="off" class="on">关（推荐）</button>
+            <button type="button" data-v="on">开</button>
+          </div>
+        </div>
+        <button class="gm-start" type="button" style="margin-top:14px; width:100%">开始下棋 ▶</button>
       </div>
-      <button class="gm-start" type="button">开始下棋 ▶</button>
+      <div class="gm-puzzle-list gm-hidden">
+        <div class="gm-group-label">🧩 棋谜战役 · 残局闯关（黑棋 N 步内连五）</div>
+        <div class="gm-pz-total"></div>
+        <div class="gm-pz-grid"></div>
+      </div>
     </div>
     <div class="gm-game gm-hidden">
       <div class="gm-top">
@@ -123,6 +193,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       <div class="gm-btns">
         <button class="gm-undo" type="button">↩️ 悔棋</button>
         <button class="gm-hint" type="button">✨ 提示×1</button>
+        <button class="gm-retry gm-hidden" type="button">🔄 重摆</button>
         <button class="gm-back" type="button">🔧 换玩法</button>
       </div>
       <div class="gm-msg">点棋盘落子，按住可以滑动瞄准～</div>
@@ -131,6 +202,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   api.root.appendChild(wrap);
 
   const setupEl = wrap.querySelector(".gm-setup") as HTMLElement;
+  const freeOptsEl = wrap.querySelector(".gm-free-opts") as HTMLElement;
+  const puzzleListEl = wrap.querySelector(".gm-puzzle-list") as HTMLElement;
+  const pzTotalEl = wrap.querySelector(".gm-pz-total") as HTMLElement;
+  const pzGridEl = wrap.querySelector(".gm-pz-grid") as HTMLElement;
   const gameEl = wrap.querySelector(".gm-game") as HTMLElement;
   const canvas = wrap.querySelector(".gm-canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d")!;
@@ -139,6 +214,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   const msgEl = wrap.querySelector(".gm-msg") as HTMLElement;
   const undoBtn = wrap.querySelector(".gm-undo") as HTMLButtonElement;
   const hintBtn = wrap.querySelector(".gm-hint") as HTMLButtonElement;
+  const retryBtn = wrap.querySelector(".gm-retry") as HTMLButtonElement;
   const backBtn = wrap.querySelector(".gm-back") as HTMLButtonElement;
 
   function segInit(selector: string, onPick: (v: string) => void): void {
@@ -152,6 +228,12 @@ export function mount(api: GameApi): { destroy: () => void } {
       onPick(btn.dataset.v!);
     });
   }
+  segInit(".gm-kind", (v) => {
+    playKind = v as PlayKind;
+    freeOptsEl.classList.toggle("gm-hidden", playKind !== "free");
+    puzzleListEl.classList.toggle("gm-hidden", playKind !== "puzzle");
+    if (playKind === "puzzle") renderPuzzleList();
+  });
   segInit(".gm-size", (v) => { boardSize = Number(v); });
   segInit(".gm-mode", (v) => { mode = v as Mode; });
   segInit(".gm-forbid", (v) => { forbiddenOn = v === "on"; });
@@ -160,43 +242,83 @@ export function mount(api: GameApi): { destroy: () => void } {
     return W / (boardSize + 1);
   }
 
+  function puzzleUnlocked(i: number): boolean {
+    return i === 0 || campaign.stars[i - 1] > 0;
+  }
+
+  function renderPuzzleList(): void {
+    const total = campaign.stars.reduce((a, b) => a + b, 0);
+    pzTotalEl.textContent = `⭐ ${total} / ${PUZZLES.length * 3} · 不用提示解开可得 3 星`;
+    pzGridEl.innerHTML = "";
+    PUZZLES.forEach((p, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const unlocked = puzzleUnlocked(i);
+      btn.className = unlocked ? "gm-pz" : "gm-pz locked";
+      const got = campaign.stars[i];
+      btn.innerHTML = unlocked
+        ? `<span class="n">${i + 1}</span><span class="s">${"★".repeat(got)}${"☆".repeat(3 - got)}</span><span class="m">${p.moves} 步</span>`
+        : `<span class="n">🔒</span><span class="s">&nbsp;</span><span class="m">&nbsp;</span>`;
+      if (unlocked) {
+        btn.addEventListener("click", () => {
+          api.play("jump");
+          startPuzzle(i);
+        });
+      }
+      pzGridEl.appendChild(btn);
+    });
+  }
+
   function humanTurn(): boolean {
     if (gameOver) return false;
+    if (playKind === "puzzle") return current === 1 && !aiThinking;
     if (mode === "pvp") return true;
     return current === 1 && !aiThinking;
   }
 
   function modeLabel(): string {
+    if (playKind === "puzzle") {
+      return `🧩 第 ${puzzleIndex + 1} 谜 · ${PUZZLES[puzzleIndex].name}`;
+    }
     if (mode === "easy") return "🐱 棋灵喵·简单";
     if (mode === "normal") return "🦊 棋灵狐·普通";
+    if (mode === "smart") return "🐲 棋灵龙·聪明";
     return "👫 双人对战";
   }
 
   function updateHud(): void {
-    if (gameOver) {
+    if (playKind === "puzzle") {
+      if (gameOver) {
+        turnEl.textContent = winner === 1 ? "🎉 解开啦！" : "😢 差一点点";
+      } else {
+        turnEl.textContent = aiThinking ? "⚪ 白棋防守中…" : `⚫ 还可以走 ${movesLeft} 步`;
+      }
+    } else if (gameOver) {
       if (winner === 0) turnEl.textContent = "🤝 平局";
       else turnEl.textContent = winner === 1 ? "⚫ 黑棋赢啦！" : "⚪ 白棋赢啦！";
     } else if (aiThinking) {
-      turnEl.textContent = mode === "easy" ? "🐱 棋灵喵思考中…" : "🦊 棋灵狐思考中…";
+      turnEl.textContent =
+        mode === "easy" ? "🐱 棋灵喵思考中…" :
+        mode === "smart" ? "🐲 棋灵龙思考中…" : "🦊 棋灵狐思考中…";
     } else {
       turnEl.textContent = current === 1 ? "⚫ 该黑棋啦" : "⚪ 该白棋啦";
     }
     modeLabelEl.textContent = modeLabel();
     undoBtn.disabled = history.length === 0 || gameOver || aiThinking;
-    const hintUsable = mode === "normal" && hintLeft > 0 && !gameOver && humanTurn();
+    const hintAllowed = playKind === "puzzle" || mode === "normal" || mode === "smart";
+    const hintUsable = hintAllowed && hintLeft > 0 && !gameOver && humanTurn();
     hintBtn.disabled = !hintUsable;
     hintBtn.textContent = `✨ 提示×${hintLeft}`;
-    hintBtn.style.display = mode === "normal" ? "" : "none";
+    hintBtn.style.display = hintAllowed ? "" : "none";
+    retryBtn.classList.toggle("gm-hidden", playKind !== "puzzle");
   }
 
-  function startGame(): void {
-    board = makeBoard(boardSize);
+  function resetGameState(): void {
     current = 1;
     history = [];
     gameOver = false;
     winner = 0;
     winLine = null;
-    hintLeft = 1;
     hintCell = null;
     aiThinking = false;
     ghost = null;
@@ -206,10 +328,31 @@ export function mount(api: GameApi): { destroy: () => void } {
     clearTimeout(endTimer);
     setupEl.classList.add("gm-hidden");
     gameEl.classList.remove("gm-hidden");
+  }
+
+  function startGame(): void {
+    playKind = "free";
+    board = makeBoard(boardSize);
+    hintLeft = 1;
+    resetGameState();
     msgEl.textContent =
       mode === "pvp"
         ? "黑棋先下，轮流点棋盘落子！"
         : "你执黑棋先下，点棋盘落子，按住可滑动瞄准～";
+    updateHud();
+  }
+
+  function startPuzzle(index: number): void {
+    playKind = "puzzle";
+    puzzleIndex = index;
+    const p = PUZZLES[index];
+    boardSize = p.size;
+    board = puzzleBoard(p);
+    movesLeft = p.moves;
+    hintUsedInPuzzle = false;
+    hintLeft = 1;
+    resetGameState();
+    msgEl.textContent = `${p.tip}（${p.moves} 步内连成五）`;
     updateHud();
   }
 
@@ -218,10 +361,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     clearTimeout(endTimer);
     gameEl.classList.add("gm-hidden");
     setupEl.classList.remove("gm-hidden");
+    if (playKind === "puzzle") renderPuzzleList();
     api.play("tap");
   }
 
-  function finishGame(win: Player | 0): void {
+  function finishFreeGame(win: Player | 0): void {
     gameOver = true;
     winner = win;
     aiThinking = false;
@@ -237,12 +381,61 @@ export function mount(api: GameApi): { destroy: () => void } {
       } else if (mode === "pvp") {
         api.onWin(1, win === 1 ? "⚫ 黑棋小朋友赢啦！" : "⚪ 白棋小朋友赢啦！");
       } else if (win === 1) {
-        const stars: 1 | 2 | 3 = mode === "normal" ? 3 : 2;
-        api.onWin(stars, mode === "normal" ? "赢了棋灵狐，真是小棋王！" : "赢了棋灵喵，继续挑战棋灵狐吧！");
+        const stars: 1 | 2 | 3 = mode === "easy" ? 2 : 3;
+        api.onWin(
+          stars,
+          mode === "smart"
+            ? "居然赢了棋灵龙，你是真正的棋王！"
+            : mode === "normal"
+              ? "赢了棋灵狐，去挑战棋灵龙吧！"
+              : "赢了棋灵喵，继续挑战棋灵狐吧！"
+        );
       } else {
-        api.onLose(mode === "easy" ? "棋灵喵这局赢了，再来一盘！" : "棋灵狐好厉害，再试一次！");
+        api.onLose(
+          mode === "easy"
+            ? "棋灵喵这局赢了，再来一盘！"
+            : mode === "smart"
+              ? "棋灵龙太厉害了，先去棋谜战役练练！"
+              : "棋灵狐好厉害，再试一次！"
+        );
       }
     }, 1300);
+  }
+
+  function finishPuzzle(solved: boolean): void {
+    gameOver = true;
+    winner = solved ? 1 : 2;
+    aiThinking = false;
+    api.play(solved ? "win" : "oops");
+    if (solved) {
+      const got = hintUsedInPuzzle ? 2 : 3;
+      const wasAll = campaign.stars.every((s) => s > 0);
+      campaign.stars[puzzleIndex] = Math.max(campaign.stars[puzzleIndex], got);
+      saveCampaign(campaign);
+      msgEl.textContent = hintUsedInPuzzle
+        ? "解开啦！下次不用提示能拿 3 星哦"
+        : "太棒了，不用提示就解开，3 星到手！";
+      const nowAll = campaign.stars.every((s) => s > 0);
+      clearTimeout(endTimer);
+      endTimer = window.setTimeout(() => {
+        if (destroyed) return;
+        if (!wasAll && nowAll && !campaignDoneReported) {
+          campaignDoneReported = true;
+          const total = campaign.stars.reduce((a, b) => a + b, 0);
+          const ratio = total / (PUZZLES.length * 3);
+          const rating: 1 | 2 | 3 = ratio >= 0.85 ? 3 : ratio >= 0.6 ? 2 : 1;
+          api.onWin(rating, `棋谜战役 ${PUZZLES.length} 关全部解开，共 ${total} 星！`);
+          backToSetup();
+        } else if (puzzleIndex + 1 < PUZZLES.length) {
+          startPuzzle(puzzleIndex + 1);
+        } else {
+          backToSetup();
+        }
+      }, 1600);
+    } else {
+      msgEl.textContent = "没关系！点「重摆」再想一想～";
+    }
+    updateHud();
   }
 
   function placeStone(x: number, y: number): void {
@@ -252,30 +445,54 @@ export function mount(api: GameApi): { destroy: () => void } {
     hintCell = null;
     api.play(current === 1 ? "tap" : "pop");
     const line = findWinLine(board, x, y);
+
+    if (playKind === "puzzle") {
+      if (line) {
+        winLine = line;
+        finishPuzzle(current === 1);
+        return;
+      }
+      if (current === 1) {
+        movesLeft--;
+        if (movesLeft <= 0) {
+          finishPuzzle(false);
+          return;
+        }
+        current = 2;
+        updateHud();
+        scheduleAi("smart");
+      } else {
+        current = 1;
+        updateHud();
+      }
+      return;
+    }
+
     if (line) {
       winLine = line;
-      finishGame(current);
+      finishFreeGame(current);
       return;
     }
     if (boardFull(board)) {
-      finishGame(0);
+      finishFreeGame(0);
       return;
     }
     current = other(current);
     updateHud();
-    if (mode !== "pvp" && current === 2) scheduleAi();
+    if (mode !== "pvp" && current === 2) scheduleAi(mode as Difficulty);
   }
 
-  function scheduleAi(): void {
+  function scheduleAi(difficulty: Difficulty): void {
     aiThinking = true;
     updateHud();
     clearTimeout(aiTimer);
     aiTimer = window.setTimeout(() => {
       if (destroyed || gameOver) return;
-      const mv = bestMove(board, 2, mode as Difficulty);
+      const mv = bestMove(board, 2, difficulty);
       aiThinking = false;
       if (!mv) {
-        finishGame(0);
+        if (playKind === "puzzle") finishPuzzle(false);
+        else finishFreeGame(0);
         return;
       }
       placeStone(mv.x, mv.y);
@@ -286,7 +503,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (!humanTurn()) return;
     if (x < 0 || y < 0 || x >= boardSize || y >= boardSize) return;
     if (board.cells[y * boardSize + x] !== 0) return;
-    if (forbiddenOn && current === 1) {
+    if (playKind === "free" && forbiddenOn && current === 1) {
       const f = isForbidden(board, x, y);
       if (f.forbidden) {
         api.play("oops");
@@ -299,10 +516,11 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function useHint(): void {
-    if (mode !== "normal" || hintLeft <= 0 || !humanTurn()) return;
-    const mv = hintMove(board, 1);
+    if (hintLeft <= 0 || !humanTurn()) return;
+    const mv = playKind === "puzzle" ? bestMove(board, 1, "smart", () => 0) : hintMove(board, 1);
     if (!mv) return;
     hintLeft--;
+    if (playKind === "puzzle") hintUsedInPuzzle = true;
     hintCell = mv;
     hintShownAt = animTime;
     api.play("coin");
@@ -312,14 +530,27 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function undo(): void {
     if (history.length === 0 || gameOver || aiThinking) return;
-    const count = mode === "pvp" ? 1 : Math.min(2, history.length);
-    for (let i = 0; i < count; i++) {
-      const mv = history.pop();
-      if (mv) setCell(board, mv.x, mv.y, 0);
+    if (playKind === "puzzle") {
+      // 战役里悔一个来回（黑+白），步数还回来
+      const count = Math.min(2, history.length);
+      for (let i = 0; i < count; i++) {
+        const mv = history.pop();
+        if (mv) {
+          setCell(board, mv.x, mv.y, 0);
+          if (mv.p === 1) movesLeft = Math.min(PUZZLES[puzzleIndex].moves, movesLeft + 1);
+        }
+      }
+      current = 1;
+    } else {
+      const count = mode === "pvp" ? 1 : Math.min(2, history.length);
+      for (let i = 0; i < count; i++) {
+        const mv = history.pop();
+        if (mv) setCell(board, mv.x, mv.y, 0);
+      }
+      current = mode === "pvp" ? (history.length % 2 === 0 ? 1 : 2) : 1;
     }
     const last = history[history.length - 1];
     lastMove = last ? { x: last.x, y: last.y } : null;
-    current = mode === "pvp" ? (history.length % 2 === 0 ? 1 : 2) : 1;
     hintCell = null;
     api.play("pop");
     msgEl.textContent = "悔棋成功，再想一想～";
@@ -331,7 +562,6 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawBoard(): void {
     const n = boardSize;
     const cs = cellSize();
-    // 粉彩木纹
     const g = ctx.createLinearGradient(0, 0, W, W);
     g.addColorStop(0, "#F9E4C3");
     g.addColorStop(0.5, "#F5D9AE");
@@ -346,7 +576,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.bezierCurveTo(W * 0.3, i * 64 - 16, W * 0.6, i * 64 + 34, W + 20, i * 64 + 4);
       ctx.stroke();
     }
-    // 网格
     ctx.strokeStyle = "#C79A66";
     ctx.lineWidth = 1.4;
     for (let i = 0; i < n; i++) {
@@ -360,10 +589,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.lineTo(p, cs + (n - 1) * cs);
       ctx.stroke();
     }
-    // 星位
     ctx.fillStyle = "#B9854E";
-    const starPts =
-      n === 15 ? [3, 7, 11] : [2, 4, 6];
+    const starPts = n === 15 ? [3, 7, 11] : [2, 4, 6];
     for (const sy of starPts) {
       for (const sx of starPts) {
         ctx.beginPath();
@@ -396,12 +623,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
     if (p === 2) {
-      // 白棋在浅色木纹上要有清楚的描边
       ctx.strokeStyle = "rgba(150, 110, 70, 0.85)";
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    // 高光
     ctx.fillStyle = p === 1 ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.9)";
     ctx.beginPath();
     ctx.ellipse(cx - r * 0.3, cy - r * 0.38, r * 0.22, r * 0.14, -0.6, 0, Math.PI * 2);
@@ -419,7 +644,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       }
     }
     const cs = cellSize();
-    // 最后一手标记
     if (lastMove && !winLine) {
       const cx = cs + lastMove.x * cs;
       const cy = cs + lastMove.y * cs;
@@ -429,7 +653,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.arc(cx, cy, cs * 0.44 + 3 + Math.sin(animTime * 5) * 1.2, 0, Math.PI * 2);
       ctx.stroke();
     }
-    // 提示
     if (hintCell && !gameOver && animTime - hintShownAt < 5) {
       const cx = cs + hintCell.x * cs;
       const cy = cs + hintCell.y * cs;
@@ -444,7 +667,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.arc(cx, cy, cs * 0.44 * pulse, 0, Math.PI * 2);
       ctx.fill();
     }
-    // 落子预览
     if (ghost && humanTurn() && board.cells[ghost.y * n + ghost.x] === 0) {
       drawStone(ghost.x, ghost.y, current, 0.45);
       const cx = cs + ghost.x * cs;
@@ -460,7 +682,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    // 五连高亮
     if (winLine) {
       const glow = 0.55 + Math.sin(animTime * 6) * 0.35;
       const [x0, y0] = winLine[0];
@@ -536,6 +757,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   });
   undoBtn.addEventListener("click", undo);
   hintBtn.addEventListener("click", useHint);
+  retryBtn.addEventListener("click", () => {
+    api.play("tap");
+    startPuzzle(puzzleIndex);
+  });
   backBtn.addEventListener("click", backToSetup);
 
   raf = requestAnimationFrame(tick);

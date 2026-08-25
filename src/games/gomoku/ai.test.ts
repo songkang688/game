@@ -127,6 +127,59 @@ describe("gomoku 普通档 AI（不会漏）", () => {
   });
 });
 
+describe("gomoku 聪明档 AI（两层搜索）", () => {
+  it("自己能成五就直接赢", () => {
+    const b = makeBoard(15);
+    put(b, [[3, 7], [4, 7], [5, 7], [6, 7]], 2);
+    put(b, [[3, 8], [4, 8], [5, 8]], 1);
+    const mv = bestMove(b, 2, "smart", () => 0)!;
+    expect(makesFive(b, mv.x, mv.y, 2)).toBe(true);
+  });
+
+  it("必挡对方成五", () => {
+    const b = makeBoard(15);
+    put(b, [[3, 7], [4, 7], [5, 7], [6, 7]], 1);
+    put(b, [[3, 8], [4, 8]], 2);
+    const mv = bestMove(b, 2, "smart", () => 0)!;
+    expect([[2, 7], [7, 7]]).toContainEqual([mv.x, mv.y]);
+  });
+
+  it("有活三时主动扩成活四", () => {
+    const b = makeBoard(15);
+    put(b, [[6, 7], [7, 7], [8, 7]], 1); // 黑活三
+    put(b, [[0, 0], [14, 14]], 2);
+    const mv = bestMove(b, 1, "smart", () => 0)!;
+    expect([[5, 7], [9, 7]]).toContainEqual([mv.x, mv.y]);
+  });
+
+  it("会堵对方的活三", () => {
+    const b = makeBoard(15);
+    put(b, [[6, 7], [7, 7], [8, 7]], 1);
+    put(b, [[6, 9]], 2);
+    const mv = bestMove(b, 2, "smart", () => 0)!;
+    expect([[5, 7], [9, 7]]).toContainEqual([mv.x, mv.y]);
+  });
+
+  it("两层搜索：能看见「对手下一手将形成双冲四」的危险点并规避/抢占", () => {
+    // 黑有一个眠三 + 一个跳三共享点 (5,5)：白（聪明档）应优先占住这个焦点
+    const b = makeBoard(15);
+    put(b, [[2, 2], [3, 3], [4, 4]], 1); // 斜眠三（(1,1) 处被白挡）
+    put(b, [[1, 1]], 2);
+    put(b, [[5, 3], [5, 4]], 1); // 竖二
+    put(b, [[5, 8], [8, 5]], 2);
+    const mv = bestMove(b, 2, "smart", () => 0)!;
+    // (5,5) 是黑棋的双威胁焦点（斜冲四 + 竖活三），聪明档要么占它要么堵斜线
+    const good = [[5, 5], [6, 6], [5, 2], [5, 6]];
+    expect(good).toContainEqual([mv.x, mv.y]);
+  });
+
+  it("空棋盘先手下天元", () => {
+    const b = makeBoard(15);
+    const mv = bestMove(b, 1, "smart", () => 0)!;
+    expect(mv).toEqual({ x: 7, y: 7 });
+  });
+});
+
 describe("gomoku 简单档 AI（会漏）", () => {
   it("rng 大时会漏掉必挡点", () => {
     const b = makeBoard(15);
