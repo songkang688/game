@@ -1,9 +1,11 @@
 // 彩虹跑跑:99 关九大主题世界跑酷战役!先选世界再选关,每关一个小任务,
 // 滚滚球、电光门等七种障碍,喷气鞋/磁铁/滑板道具,还能花星星复活一次!
+// 另有「无尽彩虹跑」:一直跑吃金币,每 1600 米换世界,越跑越快,挑战最远纪录!
 import {
   BOARD_SECONDS,
   JET_SECONDS,
   LEVELS,
+  LevelDef,
   LEVELS_PER_THEME,
   MAGNET_SECONDS,
   MAX_HEARTS,
@@ -53,7 +55,7 @@ export const meta = {
   emoji: "🌈",
   category: "action" as const,
   color: "#e5d4ff",
-  blurb: "99 关九大世界跑酷!任务挑战、喷气鞋滑板、星星复活!",
+  blurb: "99 关九大世界跑酷+无尽彩虹跑!一直跑吃金币,挑战最远纪录!",
 };
 
 type Phase = "themes" | "map" | "intro" | "run" | "clear" | "retry";
@@ -112,6 +114,35 @@ function loadProgress(): number[] {
 function saveProgress(stars: number[]): void {
   try {
     localStorage.setItem(PROGRESS_KEY, serializeProgress(stars));
+  } catch {
+    // 静默失败
+  }
+}
+
+/* ---- 无尽跑:随距离换世界,速度有封顶,记录最好成绩 ---- */
+
+const ENDLESS_BEST_KEY = "yiduo-yixing.rainbow-run.endless-best.v1";
+/** 每跑多少米换一个主题世界。 */
+const ENDLESS_STAGE_LEN = 1600;
+const ENDLESS_BASE_SPEED = 250;
+const ENDLESS_MAX_SPEED = 500;
+
+function endlessSpeedAt(dist: number): number {
+  return Math.min(ENDLESS_MAX_SPEED, ENDLESS_BASE_SPEED + dist * 0.02);
+}
+
+function loadEndlessBest(): number {
+  try {
+    const v = Number(localStorage.getItem(ENDLESS_BEST_KEY));
+    return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveEndlessBest(v: number): void {
+  try {
+    localStorage.setItem(ENDLESS_BEST_KEY, String(Math.floor(v)));
   } catch {
     // 静默失败
   }
@@ -186,6 +217,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let rowDist = 0;
   let powerTimer = 8;
 
+  // ---- 无尽跑状态 ----
+  let endless = false;
+  let endlessBest = loadEndlessBest();
+  let btnEndless: Rect | null = null;
+  const endlessDef: LevelDef = {
+    name: "无尽彩虹跑",
+    world: "grass",
+    len: Infinity,
+    speed: ENDLESS_BASE_SPEED,
+    obstacleKinds: [...THEME_STYLE.grass.palette],
+    powerups: ["magnet", "jet", "board"],
+    mission: { type: "coins", n: 999999 },
+    feature: "endless",
+    hint: "一直跑一直跑!吃金币躲障碍,每 1600 米换一个世界,越跑越快!",
+  };
+
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
   const themeCards: Array<{ idx: number; rect: Rect }> = [];
   let btnNext: Rect | null = null;
@@ -201,7 +248,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let swipeDone = false;
 
   function level() {
-    return LEVELS[levelIdx];
+    return endless ? endlessDef : LEVELS[levelIdx];
   }
 
   function addFloat(x: number, y: number, text: string, color: string, big = false): void {
@@ -242,11 +289,36 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function loadLevel(idx: number): void {
+    endless = false;
     levelIdx = idx;
     chapterIdx = Math.floor(idx / LEVELS_PER_THEME);
     patternPool = patternsForKinds(LEVELS[idx].obstacleKinds);
     resetLevel();
     phase = "intro";
+  }
+
+  function startEndless(): void {
+    endless = true;
+    endlessDef.world = "grass";
+    patternPool = patternsForKinds(THEME_STYLE.grass.palette);
+    resetLevel();
+    phase = "intro";
+  }
+
+  /** 无尽跑:根据当前距离切换主题世界(换世界时广播一下)。 */
+  function syncEndlessTheme(): void {
+    const stage = Math.floor(dist / ENDLESS_STAGE_LEN) % THEME_ORDER.length;
+    const world = THEME_ORDER[stage];
+    if (endlessDef.world !== world) {
+      endlessDef.world = world;
+      patternPool = patternsForKinds(THEME_STYLE[world].palette);
+      pendingRows = [];
+      if (dist > 50) {
+        const st = THEME_STYLE[world];
+        addFloat(w / 2, h * 0.35, `${st.emoji} 进入${st.name}!`, st.accent, true);
+        api.play("win");
+      }
+    }
   }
 
   function resetLevel(): void {
@@ -318,6 +390,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       });
     }
     if (hearts <= 0) {
+      if (endless && Math.floor(dist) > endlessBest) {
+        endlessBest = Math.floor(dist);
+        saveEndlessBest(endlessBest);
+      }
       phase = "retry";
     }
   }
@@ -334,6 +410,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const y = e.clientY - rect.top;
 
     if (phase === "themes") {
+      if (inRect(x, y, btnEndless)) {
+        api.play("jump");
+        startEndless();
+        return;
+      }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
           if (isThemeUnlocked(progress, c.idx)) {
@@ -370,7 +451,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "intro") {
       if (inRect(x, y, btnBack)) {
         api.play("tap");
-        phase = "map";
+        phase = endless ? "themes" : "map";
         return;
       }
       api.play("tap");
@@ -410,14 +491,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
-        phase = "map";
+        phase = endless ? "themes" : "map";
       }
       return;
     }
 
     if (inRect(x, y, btnBack)) {
       api.play("tap");
-      phase = "map";
+      phase = endless ? "themes" : "map";
       return;
     }
 
@@ -492,12 +573,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase !== "run") return;
 
     const def = level();
-    const frac = Math.min(1, dist / def.len);
-    speed = def.speed * (1 + frac * 0.1);
+    if (endless) {
+      speed = endlessSpeedAt(dist);
+      syncEndlessTheme();
+    } else {
+      const frac = Math.min(1, dist / def.len);
+      speed = def.speed * (1 + frac * 0.1);
+    }
     dist += speed * dt;
     scrollPhase += speed * dt;
 
-    if (dist >= def.len) {
+    if (!endless && dist >= def.len) {
       levelCleared();
       return;
     }
@@ -863,12 +949,36 @@ export function mount(api: GameAPI): { destroy: () => void } {
       52,
     );
 
+    // 无尽跑入口:一直跑、吃金币、越跑越快
+    const ex = Math.max(10, w * 0.06);
+    btnEndless = { x: ex, y: 68, w: w - ex * 2, h: 42 };
+    const eg = ctx.createLinearGradient(btnEndless.x, 0, btnEndless.x + btnEndless.w, 0);
+    eg.addColorStop(0, "#ffd868");
+    eg.addColorStop(0.5, "#ff9eb5");
+    eg.addColorStop(1, "#9adcf0");
+    ctx.fillStyle = eg;
+    ctx.beginPath();
+    ctx.roundRect(btnEndless.x, btnEndless.y, btnEndless.w, btnEndless.h, 16);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = "#5a3a6e";
+    ctx.font = "bold 17px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      `♾️ 无尽彩虹跑 · 一直跑吃金币${endlessBest > 0 ? ` · 最远 ${endlessBest} 米` : " · 点我开跑!"}`,
+      w / 2,
+      btnEndless.y + btnEndless.h / 2,
+    );
+
     themeCards.length = 0;
     const cols = w > h * 1.15 ? 3 : 2;
     const rows = Math.ceil(THEME_ORDER.length / cols);
     const pad = 10;
     const x0 = Math.max(10, w * 0.06);
-    const y0 = 70;
+    const y0 = 120;
     const cw = (w - x0 * 2 - pad * (cols - 1)) / cols;
     const ch = Math.min(96, (h - y0 - 16 - pad * (rows - 1)) / rows);
     for (let i = 0; i < THEME_ORDER.length; i++) {
@@ -1033,14 +1143,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("摔了一跤,晕乎乎……", w / 2, y + 44);
+    ctx.fillText(
+      endless ? `这次跑了 ${Math.floor(dist)} 米!` : "摔了一跤,晕乎乎……",
+      w / 2,
+      y + 44,
+    );
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText(
-      canRevive ? `看小星星帮帮忙:花 ${REVIVE_COST} 颗⭐原地复活!` : "没关系!就从这一关重新出发",
-      w / 2,
-      y + 84,
-    );
+    const subText = endless
+      ? Math.floor(dist) >= endlessBest && endlessBest > 0
+        ? `🎉 新纪录!🍬${stats.coins} ⭐${stats.stars}${canRevive ? ` · 花 ${REVIVE_COST}⭐ 还能接着跑!` : ""}`
+        : `最远纪录 ${endlessBest} 米 · 🍬${stats.coins}${canRevive ? ` · 花 ${REVIVE_COST}⭐ 原地复活!` : ""}`
+      : canRevive
+        ? `看小星星帮帮忙:花 ${REVIVE_COST} 颗⭐原地复活!`
+        : "没关系!就从这一关重新出发";
+    ctx.fillText(subText, w / 2, y + 84);
     let by = y + 116;
     btnRevive = null;
     if (canRevive) {
@@ -1051,7 +1168,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const bw2 = 132;
     btnMap = { x: w / 2 - bw2 - 10, y: by, w: bw2, h: 44 };
     btnRetry = { x: w / 2 + 10, y: by, w: bw2, h: 44 };
-    drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
+    drawButton(btnMap, endless ? "回主页" : "回地图", "#f0f0f5", "#5a5a6e");
     drawButton(btnRetry, "再跑一次", "#ffd868", "#7a5a1a");
   }
 
@@ -1063,6 +1180,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    if (endless) {
+      ctx.fillText("♾️ 无尽彩虹跑", w / 2, y + 42);
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "16px sans-serif";
+      ctx.fillText(def.hint, w / 2, y + 84);
+      ctx.fillStyle = "#c47a2a";
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillText(
+        endlessBest > 0 ? `🎯 目标:超过最远纪录 ${endlessBest} 米!` : "🎯 目标:跑得越远越厉害!",
+        w / 2,
+        y + 122,
+      );
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#a0a0b2";
+      ctx.fillText("左右滑换道 上滑跳 下滑趴 · 3 颗心 · 点一下开始", w / 2, y + 158);
+      return;
+    }
     ctx.fillText(
       `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 第${(levelIdx % LEVELS_PER_THEME) + 1}关 · ${def.name}`,
       w / 2,
@@ -1306,37 +1440,59 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // ---- HUD ----
     const bw = Math.min(300, w - 240);
     const bx = (w - bw) / 2;
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
-    ctx.beginPath();
-    ctx.roundRect(bx, 10, bw, 14, 7);
-    ctx.fill();
-    ctx.fillStyle = "#b28ae8";
-    ctx.beginPath();
-    ctx.roundRect(bx, 10, Math.max(14, (bw * Math.min(dist, def.len)) / def.len), 14, 7);
-    ctx.fill();
+    if (endless) {
+      // 无尽跑:显示距离与最好成绩
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(bx, 10, bw, 38, 12);
+      ctx.fill();
+      ctx.fillStyle = "#8a5ac9";
+      ctx.font = "bold 17px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`🏃 ${Math.floor(dist)} 米`, w / 2, 22);
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#9a8ab2";
+      ctx.fillText(
+        Math.floor(dist) > endlessBest && endlessBest > 0
+          ? "🎉 新纪录保持中!"
+          : `最远纪录 ${Math.max(endlessBest, 0)} 米`,
+        w / 2,
+        39,
+      );
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.beginPath();
+      ctx.roundRect(bx, 10, bw, 14, 7);
+      ctx.fill();
+      ctx.fillStyle = "#b28ae8";
+      ctx.beginPath();
+      ctx.roundRect(bx, 10, Math.max(14, (bw * Math.min(dist, def.len)) / def.len), 14, 7);
+      ctx.fill();
 
-    // 任务条
-    const m: Mission = def.mission;
-    const prog = missionProgress(m, stats);
-    const done = missionDone(m, stats);
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.beginPath();
-    ctx.roundRect(bx, 30, bw, 18, 9);
-    ctx.fill();
-    ctx.fillStyle = done ? "#7ac97a" : "#ffd868";
-    const mfrac = m.type === "noHit" ? (done ? 1 : stats.heartsLost === 0 ? 1 : 0) : prog / m.n;
-    ctx.beginPath();
-    ctx.roundRect(bx, 30, Math.max(10, bw * Math.min(1, mfrac)), 18, 9);
-    ctx.fill();
-    ctx.fillStyle = "#5a5a6e";
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(
-      `🎯 ${missionLabel(m)}${m.type === "noHit" ? (stats.heartsLost === 0 ? " ✓保持中" : " ✗") : ` ${prog}/${m.n}`}`,
-      w / 2,
-      39,
-    );
+      // 任务条
+      const m: Mission = def.mission;
+      const prog = missionProgress(m, stats);
+      const done = missionDone(m, stats);
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(bx, 30, bw, 18, 9);
+      ctx.fill();
+      ctx.fillStyle = done ? "#7ac97a" : "#ffd868";
+      const mfrac = m.type === "noHit" ? (done ? 1 : stats.heartsLost === 0 ? 1 : 0) : prog / m.n;
+      ctx.beginPath();
+      ctx.roundRect(bx, 30, Math.max(10, bw * Math.min(1, mfrac)), 18, 9);
+      ctx.fill();
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        `🎯 ${missionLabel(m)}${m.type === "noHit" ? (stats.heartsLost === 0 ? " ✓保持中" : " ✗") : ` ${prog}/${m.n}`}`,
+        w / 2,
+        39,
+      );
+    }
 
     ctx.font = "15px sans-serif";
     ctx.textAlign = "left";
@@ -1360,12 +1516,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     btnBack = { x: 6, y: 6, w: 62, h: 28 };
-    drawButton(btnBack, "◀ 地图", "rgba(255,255,255,0.85)", "#5a5a6e");
+    drawButton(btnBack, endless ? "◀ 回家" : "◀ 地图", "rgba(255,255,255,0.85)", "#5a5a6e");
 
     // ---- 覆盖层 ----
     if (phase === "intro") {
       drawIntroPanel();
-      drawButton(btnBack, "◀ 地图", "#f0f0f5", "#5a5a6e");
+      drawButton(btnBack, endless ? "◀ 回家" : "◀ 地图", "#f0f0f5", "#5a5a6e");
     } else if (phase === "clear") {
       drawClearPanel();
     } else if (phase === "retry") {
