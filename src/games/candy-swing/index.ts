@@ -31,10 +31,13 @@ import {
   LEVELS,
   chapterOf,
   chapterStart,
+  failedSpeechLine,
   totalStars,
+  wonSpeechLine,
   type ChapterTheme,
   type LevelDef,
 } from "./levels";
+import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -352,6 +355,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function showMap(): void {
     screen = "map";
+    stopSpeaking();
     renderMap();
     gameEl.classList.add("cs-hidden");
     mapEl.classList.remove("cs-hidden");
@@ -430,6 +434,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function retryLevel(): void {
     if (screen !== "play") return;
     api.play("tap");
+    stopSpeaking();
     startLevel(levelIndex);
   }
 
@@ -448,6 +453,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     failReason = reason;
     api.play("oops");
     msgEl.textContent = "没关系，点击画面再来一次！";
+    // 结算自动朗读：识字量有限的孩子靠听（无中文语音包时静默）
+    speak(failedSpeechLine(reason));
   }
 
   function winLevel(): void {
@@ -476,6 +483,9 @@ export function mount(api: GameApi): { destroy: () => void } {
         if (destroyed) return;
         api.onWin(rating, `99 关全部通关！共收集 ${bestTotal()} 颗星星！`);
       }, 1500);
+    } else {
+      // 逐关结算自动朗读（全通关那次走平台弹窗，那边自带朗读，不叠音）
+      speak(wonSpeechLine(wonStars));
     }
   }
 
@@ -1374,8 +1384,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.font = "26px sans-serif";
       const got = stars.filter((s) => s.collected).length;
       ctx.fillText("⭐".repeat(Math.max(1, got)) + "☆".repeat(3 - Math.max(1, got)), W / 2, 248);
-      ctx.font = "13px sans-serif";
-      ctx.fillStyle = "#9B7BC8";
+      // 14px 深紫：小字对比 5.5:1（原 13px #9B7BC8 只有 3.5:1，不达 AA）
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#7a5aa8";
       ctx.fillText(
         levelIndex + 1 < LEVELS.length ? "马上进入下一关…" : "最后一关通过！",
         W / 2, 276
@@ -1392,7 +1403,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.textAlign = "center";
       ctx.fillText(failReason, W / 2, 220);
       ctx.font = "14px sans-serif";
-      ctx.fillStyle = "#9B7BC8";
+      // 深紫：小字对比 5.5:1（原 #9B7BC8 只有 3.5:1，不达 AA）
+      ctx.fillStyle = "#7a5aa8";
       ctx.fillText("点击画面重试本关", W / 2, 252);
       ctx.textAlign = "left";
     }
@@ -1548,6 +1560,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
+      stopSpeaking();
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       wrap.remove();

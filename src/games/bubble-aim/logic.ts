@@ -452,3 +452,17 @@ export function starsForShotsLeft(left: number, total: number): 1 | 2 | 3 {
   if (ratio >= 0.15) return 2;
   return 1;
 }
+
+/* ---------------- 结算朗读 ---------------- */
+// 逐关结算不走 level99 浮层，识字量有限的孩子靠听。
+// 纯函数便于测试；朗读本身走 speech.ts，无中文语音包时静默降级。
+
+/** 过关时要朗读的整句话。 */
+export function wonSpeechLine(stars: number): string {
+  return `清空啦！得到 ${stars} 颗星，瞄得真准！`;
+}
+
+/** 失败时要朗读的整句话：先说原因，再温柔安抚。 */
+export function failedSpeechLine(reason: string): string {
+  return `${reason}没关系，点一下屏幕再来一次！`;
+}

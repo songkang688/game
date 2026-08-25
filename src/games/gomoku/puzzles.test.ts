@@ -8,7 +8,15 @@ import {
   makesFive,
   setCell,
 } from "./ai";
-import { PUZZLES, THEMES, puzzleBoard, puzzlesOfTheme, themeStart } from "./puzzles";
+import {
+  PUZZLES,
+  THEMES,
+  puzzleBoard,
+  puzzleFailSpeechLine,
+  puzzleSolvedSpeechLine,
+  puzzlesOfTheme,
+  themeStart,
+} from "./puzzles";
 
 /** 当前 p 方所有"下一手就成五"的点 */
 function fiveSpots(b: Board, p: Player): Array<[number, number]> {
@@ -212,5 +220,19 @@ describe("gomoku 棋谜可解性(99 关强制胜验证)", () => {
       }
       expect(won, `${p.name} 在 ${p.moves} 步内没赢`).toBe(true);
     }
+  });
+});
+
+describe("残局结算朗读文案", () => {
+  it("解开朗读按是否用过提示区分夸法", () => {
+    expect(puzzleSolvedSpeechLine(false)).toBe("太棒了！不用提示就解开，三颗星到手！");
+    expect(puzzleSolvedSpeechLine(true)).toBe("解开啦！下次不用提示，能拿三颗星哦！");
+  });
+
+  it("失败朗读报第一步正解方向(列/行从 1 数起),没有就纯安抚", () => {
+    expect(puzzleFailSpeechLine({ x: 3, y: 5 })).toBe(
+      "没关系！第一步试试第 4 列、第 6 行附近，点重摆再来一次！"
+    );
+    expect(puzzleFailSpeechLine(null)).toBe("没关系！点重摆，再想一想！");
   });
 });

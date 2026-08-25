@@ -24,6 +24,7 @@ import {
   THEME_ORDER,
   THEME_STYLE,
   clampLane,
+  clearSpeechLine,
   detectSwipe,
   isLevelUnlocked,
   isThemeUnlocked,
@@ -32,6 +33,7 @@ import {
   missionProgress,
   parseProgress,
   patternsForKinds,
+  retrySpeechLine,
   serializeProgress,
   starsForLevel,
   themeCleared,
@@ -40,6 +42,7 @@ import {
   wouldHit,
   zapperActive,
 } from "./logic";
+import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -356,8 +359,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
         earnedStars,
         `99 关九大世界跑酷全部通关!总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
       );
-    } else if (gained > 0) {
-      api.addStars(gained);
+    } else {
+      // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
+      speak(clearSpeechLine(def.name, earnedStars, missionOk));
+      if (gained > 0) api.addStars(gained);
     }
   }
 
@@ -384,11 +389,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
       });
     }
     if (hearts <= 0) {
+      // 与结算面板"🎉 新纪录"的显示条件一致(平了或破了旧纪录都算)
+      const newRecord = endless && Math.floor(dist) >= endlessBest && Math.floor(dist) > 0;
       if (endless && Math.floor(dist) > endlessBest) {
         endlessBest = Math.floor(dist);
         saveEndlessBest(endlessBest);
       }
       phase = "retry";
+      speak(retrySpeechLine(endless, Math.floor(dist), newRecord));
     }
   }
 
@@ -456,11 +464,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "clear") {
       if (inRect(x, y, btnNext) && levelIdx < LEVELS.length - 1) {
         api.play("tap");
+        stopSpeaking();
         loadLevel(levelIdx + 1);
         return;
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = "map";
       }
       return;
@@ -473,11 +483,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
         invincible = 2.5;
         phase = "run";
         api.play("win");
+        stopSpeaking();
         addFloat(w / 2, h / 2, "复活啦!继续冲!", "#e0a030", true);
         return;
       }
       if (inRect(x, y, btnRetry)) {
         api.play("tap");
+        stopSpeaking();
         resetLevel();
         phase = "run";
         invincible = 1.5;
@@ -485,6 +497,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = endless ? "themes" : "map";
       }
       return;
@@ -1113,7 +1126,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
     ctx.fillText(starTxt, w / 2, y + 86);
     ctx.font = "15px sans-serif";
-    ctx.fillStyle = missionOk ? "#4a9a5a" : "#9a9aa8";
+    // 深绿/深灰:15px 小字要 4.5:1(原 #4a9a5a/#9a9aa8 只有 3.5/2.8:1)
+    ctx.fillStyle = missionOk ? "#357a42" : "#62626f";
     ctx.fillText(
       `${missionOk ? "✓" : "✗"} 任务:${missionLabel(def.mission)}`,
       w / 2,
@@ -1135,7 +1149,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function drawRetryPanel(): void {
     const canRevive = !reviveUsed && api.getStars() >= REVIVE_COST;
     const { y } = panelBox(Math.min(450, w - 40), canRevive ? 260 : 210);
-    ctx.fillStyle = "#b28ae8";
+    // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
+    ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1550,6 +1565,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
+      stopSpeaking();
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);

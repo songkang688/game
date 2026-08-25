@@ -13,6 +13,7 @@ import {
   ZAPPER_OFF,
   ZAPPER_ON,
   clampLane,
+  clearSpeechLine,
   detectSwipe,
   isLevelUnlocked,
   isThemeUnlocked,
@@ -21,6 +22,7 @@ import {
   missionLabel,
   missionProgress,
   parseProgress,
+  retrySpeechLine,
   patternIsSurvivable,
   patternsForKinds,
   rowIsSurvivable,
@@ -310,5 +312,18 @@ describe("rainbow-run 星级与进度", () => {
     expect(themeStars(stars, 0)).toBe(LEVELS_PER_THEME * 3);
     expect(themeCleared(stars, 0)).toBe(LEVELS_PER_THEME);
     expect(themeCleared(stars, 1)).toBe(0);
+  });
+});
+
+describe("结算面板朗读文案", () => {
+  it("过关朗读按任务完成与否给不同鼓励", () => {
+    expect(clearSpeechLine("彩虹起点", 3, true)).toBe("彩虹起点跑完啦!小任务完成,得到 3 颗星,真棒!");
+    expect(clearSpeechLine("彩虹起点", 2, false)).toBe("彩虹起点跑完啦!得到 2 颗星,下次试试完成小任务!");
+  });
+
+  it("失败朗读:战役安抚,无尽报里程,破纪录大声夸", () => {
+    expect(retrySpeechLine(false, 0, false)).toBe("摔了一跤,晕乎乎。没关系,就从这一关重新出发!");
+    expect(retrySpeechLine(true, 320, false)).toBe("这次跑了 320 米!休息一下,再来挑战纪录!");
+    expect(retrySpeechLine(true, 500, true)).toBe("这次跑了 500 米,新纪录!太厉害啦!");
   });
 });

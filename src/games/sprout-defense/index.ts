@@ -29,12 +29,14 @@ import {
   buildLevelSchedule,
   canAfford,
   canPlantOnCell,
+  clearSpeechLine,
   isLevelUnlocked,
   isThemeUnlocked,
   parseProgress,
   passiveDewInterval,
   plantsUnlockedAt,
   projectileCanHit,
+  retrySpeechLine,
   serializeProgress,
   shovelRefund,
   starsForLevel,
@@ -42,6 +44,7 @@ import {
   themeStars,
   totalStars,
 } from "./logic";
+import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -278,8 +281,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (levelIdx >= LEVELS.length - 1 && !finaleFired) {
       finaleFired = true;
       api.onWin(earnedStars, `99 关九大花园全部守住,虫虫女王也认输啦!总星 ${totalStars(progress)}/${LEVELS.length * 3}`);
-    } else if (gained > 0) {
-      api.addStars(gained);
+    } else {
+      // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
+      speak(clearSpeechLine(level().name, earnedStars, plantsLost));
+      if (gained > 0) api.addStars(gained);
     }
   }
 
@@ -287,6 +292,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     shake = 0.5;
     api.play("oops");
     phase = "retry";
+    speak(retrySpeechLine(bossFailHint()));
   }
 
   // ---- 输入 ----
@@ -347,11 +353,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "clear") {
       if (inRect(x, y, btnNext) && levelIdx < LEVELS.length - 1) {
         api.play("tap");
+        stopSpeaking();
         loadLevel(levelIdx + 1);
         return;
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = "map";
       }
       return;
@@ -359,12 +367,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "retry") {
       if (inRect(x, y, btnRetry)) {
         api.play("tap");
+        stopSpeaking();
         resetLevel();
         phase = "play";
         return;
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
+        stopSpeaking();
         phase = "map";
       }
       return;
@@ -1217,7 +1227,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function drawRetryPanel(): void {
     const hint = bossFailHint();
     const { y } = panelBox(Math.min(440, w - 40), hint ? 240 : 210);
-    ctx.fillStyle = "#b28ae8";
+    // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
+    ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1227,8 +1238,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText("没关系!就在这一关重新布阵", w / 2, y + 84);
     let by = y + 130;
     if (hint) {
-      // BOSS 失败给一句针对性提示,温柔不吓人
-      ctx.fillStyle = "#c47a2a";
+      // BOSS 失败给一句针对性提示,温柔不吓人(深橙 5.3:1,14px 小字要 4.5:1)
+      ctx.fillStyle = "#a05914";
       ctx.font = "bold 14px sans-serif";
       ctx.fillText(`💡 ${hint}`, w / 2, y + 116, Math.min(400, w - 60));
       by = y + 160;
@@ -1577,6 +1588,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
+      stopSpeaking();
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.remove();
     },

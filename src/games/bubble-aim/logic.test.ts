@@ -29,10 +29,12 @@ import {
   parseLayout,
   releaseLoneRainbows,
   rowLength,
+  failedSpeechLine,
   settleShot,
   simulateShot,
   snapCell,
   starsForShotsLeft,
+  wonSpeechLine,
 } from "./logic";
 import {
   type BubbleLevelDef,
@@ -685,5 +687,15 @@ describe("bubble-aim 可解性（99 关贪心机器人实测过关）", () => {
       expect(outcome.won, `${def.name} 机器人没打通`).toBe(true);
       expect(outcome.shotsUsed).toBeLessThanOrEqual(def.shots);
     });
+  });
+});
+
+describe("bubble-aim 结算朗读文案", () => {
+  it("过关朗读报星数", () => {
+    expect(wonSpeechLine(2)).toBe("清空啦！得到 2 颗星，瞄得真准！");
+  });
+
+  it("失败朗读先说原因再安抚", () => {
+    expect(failedSpeechLine("子弹用完了！")).toBe("子弹用完了！没关系，点一下屏幕再来一次！");
   });
 });

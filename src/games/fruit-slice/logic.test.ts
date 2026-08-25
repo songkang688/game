@@ -19,8 +19,10 @@ import {
   ZEN_SECONDS,
   arcadePace,
   arcadeStars,
+  clearSpeechLine,
   comboBonus,
   comboLabel,
+  endSpeechLine,
   gravityFor,
   isLevelUnlocked,
   isThemeUnlocked,
@@ -28,6 +30,7 @@ import {
   makeLaunch,
   parseBest,
   parseProgress,
+  retrySpeechLine,
   segCircleHit,
   serializeBest,
   serializeProgress,
@@ -310,5 +313,21 @@ describe("fruit-slice 进度与最好成绩", () => {
     expect(best.arcade).toBe(120);
     expect(parseBest(null)).toEqual({ zen: 0, arcade: 0 });
     expect(parseBest("oops")).toEqual({ zen: 0, arcade: 0 });
+  });
+});
+
+describe("结算面板朗读文案", () => {
+  it("过关朗读:高连切要点名夸刀法", () => {
+    expect(clearSpeechLine("苹果园 1", 3, 7)).toBe("苹果园 1完成!得到 3 颗星,最高 7 连切,刀法真棒!");
+    expect(clearSpeechLine("苹果园 1", 2, 3)).toBe("苹果园 1完成!得到 2 颗星,切得真棒!");
+  });
+
+  it("失败朗读温柔安抚", () => {
+    expect(retrySpeechLine()).toBe("差一点点。没关系,重切这一回合就好!");
+  });
+
+  it("自由模式结束朗读:破纪录大声夸", () => {
+    expect(endSpeechLine(true, 66, true)).toBe("禅宗时间到!本局 66 分,新纪录,太厉害啦!");
+    expect(endSpeechLine(false, 20, false)).toBe("街机挑战结束!本局 20 分,休息一下再来!");
   });
 });

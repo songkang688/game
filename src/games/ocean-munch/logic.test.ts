@@ -17,6 +17,7 @@ import {
   bossBiteReady,
   canEat,
   circlesOverlap,
+  clearSpeechLine,
   dexIdForFish,
   eatScore,
   eelActive,
@@ -29,6 +30,7 @@ import {
   levelIndicesOfTheme,
   parseDex,
   parseProgress,
+  retrySpeechLine,
   serializeDex,
   serializeProgress,
   spawnRadius,
@@ -324,5 +326,19 @@ describe("ocean-munch 星级与进度", () => {
     expect(themeStars(stars, 0)).toBe(LEVELS_PER_THEME * 2);
     expect(themeCleared(stars, 0)).toBe(LEVELS_PER_THEME);
     expect(themeCleared(stars, 1)).toBe(0);
+  });
+});
+
+describe("结算面板朗读文案", () => {
+  it("三星夸完美,其余报星数和吃鱼数", () => {
+    expect(clearSpeechLine("浅浅珊瑚湾", 3, 12)).toBe("浅浅珊瑚湾通过啦!三颗星,吃了 12 条鱼,完美!");
+    expect(clearSpeechLine("浅浅珊瑚湾", 1, 8)).toBe("浅浅珊瑚湾通过啦!得到 1 颗星,吃了 8 条鱼,真棒!");
+  });
+
+  it("失败朗读温柔安抚,BOSS 关带悄悄提示", () => {
+    expect(retrySpeechLine(null)).toBe("小鱼晕乎乎。没关系,这片海再游一次就好!");
+    expect(retrySpeechLine("先绕开大墨团,再贴上去咬!")).toBe(
+      "小鱼晕乎乎。没关系,这片海再游一次就好!悄悄告诉你:先绕开大墨团,再贴上去咬!"
+    );
   });
 });

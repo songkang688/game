@@ -24,6 +24,7 @@ import {
   crossedDeadline,
   damageStone,
   descend,
+  failedSpeechLine,
   isStone,
   nearDeadline,
   parseLayout,
@@ -32,8 +33,10 @@ import {
   settleShot,
   simulateShot,
   starsForShotsLeft,
+  wonSpeechLine,
 } from "./logic";
 import { LEVELS, MECH_INFO, THEMES, THEME_SIZES, levelMechanisms, themeOfLevel, themeStart } from "./levels";
+import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -231,6 +234,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function showMap(): void {
     screen = "map";
+    stopSpeaking();
     flight = null;
     aiming = false;
     topBar.style.display = "none";
@@ -343,6 +347,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function retryLevel(): void {
     if (screen !== "play") return;
     api.play("tap");
+    stopSpeaking();
     startLevel(levelIndex);
   }
 
@@ -353,6 +358,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     failReason = reason;
     api.play("oops");
     msgEl.textContent = "没关系，点画面再来一次！";
+    // 结算自动朗读：识字量有限的孩子靠听（无中文语音包时静默）
+    speak(failedSpeechLine(reason));
   }
 
   function winLevel(): void {
@@ -387,6 +394,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       const max = LEVELS.length * 3;
       const rating: 1 | 2 | 3 = sum / max >= 0.8 ? 3 : sum / max >= 0.5 ? 2 : 1;
       api.onWin(rating, `${LEVELS.length} 关泡泡战役全部通过，共 ${sum} 颗星！`);
+    } else {
+      // 逐关结算自动朗读（全通关那次走平台弹窗，那边自带朗读，不叠音）
+      speak(wonSpeechLine(wonStars));
     }
   }
 
@@ -865,7 +875,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.fillText("清空啦！", W / 2, 210);
       ctx.font = "26px sans-serif";
       ctx.fillText("⭐".repeat(wonStars) + "☆".repeat(3 - wonStars), W / 2, 248);
-      ctx.font = "13px sans-serif";
+      // 14px 深蓝：小字对比 5.5:1（标题的 #3E7CB8 只有 4.4:1，13px 小字不达 AA）
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#3a6c9e";
       ctx.fillText(
         levelIndex + 1 < LEVELS.length ? "马上进入下一关…" : "最后一关通关！",
         W / 2, 276
@@ -882,7 +894,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.textAlign = "center";
       ctx.fillText(failReason, W / 2, 220);
       ctx.font = "14px sans-serif";
-      ctx.fillStyle = "#5E86B0";
+      // 深蓝：小字对比 5.8:1（原 #5E86B0 只有 3.8:1，不达 AA）
+      ctx.fillStyle = "#46688f";
       ctx.fillText("点击画面重试本关", W / 2, 252);
       ctx.textAlign = "left";
     }
@@ -1016,6 +1029,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
+      stopSpeaking();
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       wrap.remove();

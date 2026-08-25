@@ -538,3 +538,26 @@ export function parseBest(raw: string | null): BestScores {
 export function serializeBest(best: BestScores): string {
   return JSON.stringify(best);
 }
+
+/* ---------------- 结算面板朗读 ---------------- */
+// 结算面板不走 level99 浮层,识字量有限的孩子靠听。
+// 纯函数便于测试;朗读本身走 speech.ts,无中文语音包时静默降级。
+
+/** 经典战役过关结算面板要朗读的整句话。 */
+export function clearSpeechLine(name: string, stars: number, bestCombo: number): string {
+  const praise = bestCombo >= 5 ? `最高 ${bestCombo} 连切,刀法真棒!` : "切得真棒!";
+  return `${name}完成!得到 ${stars} 颗星,${praise}`;
+}
+
+/** 经典战役失败结算面板要朗读的整句话。 */
+export function retrySpeechLine(): string {
+  return "差一点点。没关系,重切这一回合就好!";
+}
+
+/** 禅宗/街机自由模式结束面板要朗读的整句话:破纪录要大声夸。 */
+export function endSpeechLine(zen: boolean, score: number, newBest: boolean): string {
+  const head = zen ? "禅宗时间到!" : "街机挑战结束!";
+  return newBest
+    ? `${head}本局 ${score} 分,新纪录,太厉害啦!`
+    : `${head}本局 ${score} 分,休息一下再来!`;
+}
