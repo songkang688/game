@@ -1,44 +1,47 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DIFFS, sceneMarkup, VIEW_H, VIEW_W } from "./scene";
+import { SCENES, VIEW_H, VIEW_W } from "./scene";
 
-test("正好 3 处不同，id 不重复，热区都在画面内", () => {
-  assert.equal(DIFFS.length, 3);
-  assert.equal(new Set(DIFFS.map((d) => d.id)).size, 3);
-  for (const d of DIFFS) {
-    assert.ok(d.x >= 0 && d.x <= VIEW_W, `${d.id} x 超出画面`);
-    assert.ok(d.y >= 0 && d.y <= VIEW_H, `${d.id} y 超出画面`);
-    assert.ok(d.r > 10, "热区太小，孩子不好点");
-    assert.ok(d.label.length > 0);
+test("共 5 组场景，每组 5 处不同", () => {
+  assert.equal(SCENES.length, 5);
+  for (const scene of SCENES) {
+    assert.equal(scene.diffs.length, 5, `${scene.name} 应有 5 处不同`);
+    assert.equal(new Set(scene.diffs.map((d) => d.id)).size, 5, `${scene.name} 的 id 应唯一`);
   }
 });
 
-test("左右两幅画确实不一样，且差异与 DIFFS 一一对应", () => {
-  const left = sceneMarkup("left");
-  const right = sceneMarkup("right");
-  assert.notEqual(left, right);
-
-  // 太阳光芒：左有右无
-  assert.ok(left.includes("<line"), "左图应有太阳光芒");
-  assert.ok(!right.includes("<line"), "右图不应有太阳光芒");
-
-  // 门颜色：左红右蓝
-  assert.ok(left.includes("#e5533d"));
-  assert.ok(right.includes("#4d8af0"));
-  assert.ok(!left.includes("#4d8af0"));
-  assert.ok(!right.includes("#e5533d"));
-
-  // 小花数量：左 3 朵、右 2 朵
-  const count = (s: string) => (s.match(/🌼/g) || []).length;
-  assert.equal(count(left), 3);
-  assert.equal(count(right), 2);
+test("热区都在画面内且带说明", () => {
+  for (const scene of SCENES) {
+    for (const d of scene.diffs) {
+      assert.ok(d.x >= 0 && d.x <= VIEW_W, `${scene.name}/${d.id} x 超界`);
+      assert.ok(d.y >= 0 && d.y <= VIEW_H, `${scene.name}/${d.id} y 超界`);
+      assert.ok(d.r > 10 && d.r < 60, `${scene.name}/${d.id} 半径不合理: ${d.r}`);
+      assert.ok(d.label.length > 0);
+    }
+  }
 });
 
-test("两幅画的公共部分一致（房子、小猫、树都在）", () => {
-  for (const side of ["left", "right"] as const) {
-    const s = sceneMarkup(side);
-    assert.ok(s.includes("🐱"), `${side} 应有小猫`);
-    assert.ok(s.includes("#7ccf7c"), `${side} 应有树冠`);
-    assert.ok(s.includes("#fff3d6"), `${side} 应有房子墙壁`);
+test("每组场景左右两侧画面确实不同", () => {
+  for (const scene of SCENES) {
+    const left = scene.markup("left");
+    const right = scene.markup("right");
+    assert.notEqual(left, right, `${scene.name} 两侧应有差异`);
+    assert.ok(left.length > 100 && right.length > 100);
+  }
+});
+
+test("同一场景内热区不重叠（避免误点到别的答案）", () => {
+  for (const scene of SCENES) {
+    for (let i = 0; i < scene.diffs.length; i++) {
+      for (let j = i + 1; j < scene.diffs.length; j++) {
+        const a = scene.diffs[i];
+        const b = scene.diffs[j];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        assert.ok(
+          dist >= a.r + b.r - 1,
+          `${scene.name}: ${a.id} 与 ${b.id} 热区重叠 (dist=${dist.toFixed(1)}, r=${a.r}+${b.r})`
+        );
+      }
+    }
   }
 });
