@@ -21,6 +21,30 @@ export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/** 竖屏画布最多延展到世界高度的多少倍(再高就纯留白居中,不无限拉天空) */
+export const MAX_BUFFER_RATIO = 2.6;
+
+/**
+ * 按舞台可用空间算画布缓冲高度(世界坐标):宽度固定 WORLD_W,
+ * 竖屏时向上延展天空、向下延展泥土,让画面尽量填满舞台;
+ * 横屏(box 比世界扁)保持原始 WORLD_H,不裁剪玩法区。
+ */
+export function canvasBufferHeight(boxW: number, boxH: number): number {
+  if (!(boxW > 0) || !(boxH > 0)) return WORLD_H;
+  const ideal = Math.round((boxH / boxW) * WORLD_W);
+  return clamp(ideal, WORLD_H, Math.round(WORLD_H * MAX_BUFFER_RATIO));
+}
+
+/**
+ * 把延展出来的高度拆成「上方天空 + 下方泥土」:
+ * 天空占大头(高弧线的小鸟不再飞出画面),泥土只垫一点当装饰。
+ */
+export function padSplit(bufferH: number): { sky: number; ground: number } {
+  const extra = Math.max(0, Math.round(bufferH) - WORLD_H);
+  const sky = Math.round(extra * 0.72);
+  return { sky, ground: extra - sky };
+}
+
 /** mulberry32 —— 确定性随机数,生成关卡时用同一个种子结果永远一样 */
 export function makeRng(seed: number): () => number {
   let s = seed >>> 0;

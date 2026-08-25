@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   GRAVITY,
+  MAX_BUFFER_RATIO,
   MAX_LAUNCH,
+  WORLD_H,
+  WORLD_W,
   calcStars,
+  canvasBufferHeight,
   circleRectHit,
   circleSlopeHit,
   impactDamage,
   launchVelocity,
   makeRng,
+  padSplit,
   simulateTrajectory,
   slopeSurfaceY,
   trajectoryPoints
@@ -27,6 +32,32 @@ describe("sling-birds 评分", () => {
     expect(calcStars(0, 0.65)).toBe(2);
     expect(calcStars(0, 0.5)).toBe(1);
     expect(calcStars(0, 0)).toBe(1);
+  });
+});
+
+describe("sling-birds 竖屏画布自适应", () => {
+  it("横屏(舞台比世界扁)保持原始世界高度,不延展", () => {
+    expect(canvasBufferHeight(800, 400)).toBe(WORLD_H);
+    expect(canvasBufferHeight(WORLD_W, WORLD_H)).toBe(WORLD_H);
+  });
+  it("竖屏按舞台宽高比向上取,填满舞台", () => {
+    // 412×915 手机:舞台约 380×760 → 760/380*540 = 1080,超过上限被夹住
+    expect(canvasBufferHeight(380, 570)).toBe(Math.round((570 / 380) * WORLD_W));
+    expect(canvasBufferHeight(380, 570)).toBeGreaterThan(WORLD_H);
+  });
+  it("再高也不超过上限倍数,避免无限拉天空", () => {
+    const max = Math.round(WORLD_H * MAX_BUFFER_RATIO);
+    expect(canvasBufferHeight(380, 5000)).toBe(max);
+  });
+  it("空间量不出来(0/负数)时退回原始高度", () => {
+    expect(canvasBufferHeight(0, 500)).toBe(WORLD_H);
+    expect(canvasBufferHeight(400, 0)).toBe(WORLD_H);
+  });
+  it("延展高度拆成天空大头 + 泥土装饰,合计守恒", () => {
+    expect(padSplit(WORLD_H)).toEqual({ sky: 0, ground: 0 });
+    const p = padSplit(WORLD_H + 200);
+    expect(p.sky + p.ground).toBe(200);
+    expect(p.sky).toBeGreaterThan(p.ground);
   });
 });
 

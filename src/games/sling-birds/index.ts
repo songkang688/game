@@ -30,14 +30,17 @@ import {
   WORLD_H,
   WORLD_W,
   calcStars,
+  canvasBufferHeight,
   circleRectHit,
   circleSlopeHit,
   clamp,
   impactDamage,
   launchVelocity,
+  padSplit,
   simulateTrajectory,
   slopeSurfaceY
 } from "./physics";
+import { speak, stopSpeaking, whenSpeechReady } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -270,28 +273,42 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.className = "slb-wrap";
   wrap.innerHTML = `
     <style>
-      .slb-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EAF6FF, #FFF4F9); border-radius: 20px; padding: 12px; max-width: 640px; margin: 0 auto; user-select: none; -webkit-user-select: none; }
-      .slb-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #5A82B0; box-shadow: 0 2px 6px rgba(120,160,220,.25); font-size: 13px; white-space: nowrap; }
-      .slb-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-      .slb-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
-      .slb-ctrl { display: flex; justify-content: center; gap: 12px; margin-top: 10px; }
-      .slb-btn { border: none; border-radius: 16px; font-size: 15px; font-weight: 700; padding: 10px 18px; background: #BFE0FB; color: #2F5D8A; cursor: pointer; box-shadow: 0 4px 0 #97C4EC; touch-action: manipulation; }
+      /* 布局:竖屏时游戏区填满舞台,不再在画布下方留一大片空白(三人组 R2 遗留) */
+      .slb-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EAF6FF, #FFF4F9); border-radius: 20px; padding: 12px; max-width: 640px; margin: 0 auto; user-select: none; -webkit-user-select: none; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; overflow-y: auto; }
+      .slb-play { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+      /* 画布绝对定位脱离布局流:自身尺寸不反过来影响舞台测量(避免布局反馈环) */
+      .slb-stagebox { flex: 1; min-height: 180px; position: relative; overflow: hidden; }
+      /* 文字对比度按 WCAG AA 实测调深:徽章 4.0→6.0、提示 2.8→5.2(小字最小 14px) */
+      .slb-badge { background: #fff; border-radius: 14px; padding: 6px 10px; font-weight: 700; color: #40658F; box-shadow: 0 2px 6px rgba(120,160,220,.25); font-size: 14px; white-space: nowrap; }
+      .slb-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .slb-canvas { position: absolute; inset: 0; margin: auto; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
+      .slb-ctrl { display: flex; justify-content: center; gap: 12px; }
+      /* 按钮热区 ≥48px,一年级手指点得准 */
+      .slb-btn { border: none; border-radius: 16px; font-size: 16px; font-weight: 800; padding: 12px 22px; min-height: 48px; background: #BFE0FB; color: #2F5D8A; cursor: pointer; box-shadow: 0 4px 0 #97C4EC; touch-action: manipulation; font-family: inherit; }
       .slb-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #97C4EC; }
-      .slb-msg { text-align: center; min-height: 20px; color: #7A6FB0; font-weight: 700; margin-top: 8px; font-size: 14px; }
+      /* 教练卡:当前小鸟是谁、技能怎么用,大字 + 可朗读(识字量 300–800 字的孩子靠听) */
+      .slb-coach { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 16px; padding: 9px 12px; box-shadow: 0 2px 8px rgba(120,160,220,.22); }
+      .slb-coach-dot { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.9); box-shadow: 0 2px 5px rgba(0,0,0,.18); }
+      .slb-coach-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+      .slb-coach-name { font-size: 15px; font-weight: 900; color: #574C8F; line-height: 1.2; }
+      .slb-coach-text { font-size: 15px; font-weight: 700; color: #4A5568; line-height: 1.35; }
+      .slb-say { flex: 0 0 auto; border: none; border-radius: 14px; width: 46px; height: 46px; font-size: 21px; background: #EAF2FD; cursor: pointer; box-shadow: 0 3px 0 #C6DCF5; touch-action: manipulation; }
+      .slb-say:active { transform: translateY(2px); box-shadow: 0 1px 0 #C6DCF5; }
       .slb-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin: 0 1px; vertical-align: -2px; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
       .slb-map-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
       .slb-map-title { font-size: 20px; font-weight: 900; color: #4C7DB3; }
       .slb-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-      .slb-tab { flex: 1; min-width: 110px; border: none; border-radius: 16px; padding: 10px 6px; font-size: 14px; font-weight: 800; cursor: pointer; color: #56637F; background: #fff; box-shadow: 0 3px 0 rgba(150,170,210,.35); }
-      .slb-tab.slb-on { color: #fff; background: linear-gradient(135deg, #7FB6F2, #A08BE8); box-shadow: 0 3px 0 #7A98D8; }
+      .slb-tab { flex: 1; min-width: 110px; min-height: 44px; border: none; border-radius: 16px; padding: 10px 6px; font-size: 14px; font-weight: 800; cursor: pointer; color: #56637F; background: #fff; box-shadow: 0 3px 0 rgba(150,170,210,.35); font-family: inherit; }
+      /* 激活页签改「彩底深字白描边」(与 l99 地图一致):原白字浅底只有 2.1:1 */
+      .slb-tab.slb-on { color: #3D3660; background: linear-gradient(135deg, #BFE0FB, #D9CCF7); outline: 3px solid #fff; box-shadow: 0 3px 8px rgba(140,120,200,.3); }
       .slb-tab:disabled { opacity: .55; cursor: not-allowed; }
       .slb-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-      .slb-cell { position: relative; border: none; border-radius: 14px; aspect-ratio: 1; font-size: 17px; font-weight: 900; cursor: pointer; background: #fff; color: #4C7DB3; box-shadow: 0 3px 0 rgba(150,170,210,.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px; }
+      .slb-cell { position: relative; border: none; border-radius: 14px; aspect-ratio: 1; font-size: 17px; font-weight: 900; cursor: pointer; background: #fff; color: #3E6D9E; box-shadow: 0 3px 0 rgba(150,170,210,.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px; font-family: inherit; }
       .slb-cell:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(150,170,210,.35); }
       .slb-cell.slb-lock { background: #E9EDF5; color: #A9B4C8; cursor: not-allowed; }
-      .slb-cell.slb-next { background: linear-gradient(135deg, #FFE9A8, #FFC9DC); color: #8A5B2F; }
+      .slb-cell.slb-next { background: linear-gradient(135deg, #FFE9A8, #FFC9DC); color: #6E4523; }
       .slb-cell .slb-stars { font-size: 9px; letter-spacing: -1px; line-height: 1; }
-      .slb-map-tip { text-align: center; color: #8B94AE; font-weight: 700; font-size: 13px; margin-top: 12px; }
+      .slb-map-tip { text-align: center; color: #5E6880; font-weight: 700; font-size: 14px; margin-top: 12px; }
       .slb-crew { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
       .slb-crew span { background: #fff; border-radius: 12px; padding: 5px 9px; font-size: 12px; font-weight: 700; color: #56637F; box-shadow: 0 2px 5px rgba(120,160,220,.2); }
     </style>
@@ -304,10 +321,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       <div class="slb-grid"></div>
       <div class="slb-map-tip">打赢一关就解锁下一关,集满 3 星可以随时回来再挑战!</div>
       <div class="slb-crew">
-        <span style="color:#B36B85">🩷 糯糯·直球</span>
-        <span style="color:#7B68A8">💜 云云·分裂</span>
-        <span style="color:#4E7FA6">💙 墩墩·下砸</span>
-        <span style="color:#A87840">🧡 闪闪·加速钻</span>
+        <span style="color:#9A4E6C">🩷 糯糯·直球</span>
+        <span style="color:#655388">💜 云云·分裂</span>
+        <span style="color:#3F6B8F">💙 墩墩·下砸</span>
+        <span style="color:#8A5F2C">🧡 闪闪·加速钻</span>
       </div>
     </div>
     <div class="slb-play" style="display:none">
@@ -316,12 +333,21 @@ export function mount(api: GameApi): { destroy: () => void } {
         <span class="slb-badge slb-birds"></span>
         <span class="slb-badge slb-beans"></span>
       </div>
-      <canvas class="slb-canvas" width="${WORLD_W}" height="${WORLD_H}"></canvas>
+      <div class="slb-stagebox">
+        <canvas class="slb-canvas" width="${WORLD_W}" height="${WORLD_H}"></canvas>
+      </div>
+      <div class="slb-coach">
+        <span class="slb-coach-dot" aria-hidden="true"></span>
+        <div class="slb-coach-body">
+          <b class="slb-coach-name"></b>
+          <span class="slb-coach-text"></span>
+        </div>
+        <button class="slb-say" type="button" hidden aria-label="再听一遍">🔈</button>
+      </div>
       <div class="slb-ctrl">
         <button class="slb-btn slb-retry" type="button">↺ 重来</button>
         <button class="slb-btn slb-back" type="button">🗺️ 选关</button>
       </div>
-      <div class="slb-msg"></div>
     </div>
   `;
   api.root.appendChild(wrap);
@@ -331,14 +357,76 @@ export function mount(api: GameApi): { destroy: () => void } {
   const tabsEl = wrap.querySelector(".slb-tabs") as HTMLElement;
   const gridEl = wrap.querySelector(".slb-grid") as HTMLElement;
   const totalEl = wrap.querySelector(".slb-total") as HTMLElement;
+  const stageBox = wrap.querySelector(".slb-stagebox") as HTMLElement;
   const canvas = wrap.querySelector(".slb-canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d");
   const lvlEl = wrap.querySelector(".slb-lvl") as HTMLElement;
   const birdsEl = wrap.querySelector(".slb-birds") as HTMLElement;
   const beansEl = wrap.querySelector(".slb-beans") as HTMLElement;
-  const msgEl = wrap.querySelector(".slb-msg") as HTMLElement;
+  const coachDotEl = wrap.querySelector(".slb-coach-dot") as HTMLElement;
+  const coachNameEl = wrap.querySelector(".slb-coach-name") as HTMLElement;
+  const msgEl = wrap.querySelector(".slb-coach-text") as HTMLElement;
+  const sayBtn = wrap.querySelector(".slb-say") as HTMLButtonElement;
   const retryBtn = wrap.querySelector(".slb-retry") as HTMLButtonElement;
   const backBtn = wrap.querySelector(".slb-back") as HTMLButtonElement;
+
+  /* ---------------- 画布竖屏自适应(R2 遗留:下方留白偏大) ----------------
+   * 宽度固定映射 WORLD_W;竖屏时缓冲高度按舞台比例延展,
+   * 上方多出来的是天空(高弧线不再飞出画面),下方垫一条泥土装饰。 */
+
+  let bufH = WORLD_H;
+  let skyPad = 0;
+  let groundPad = 0;
+
+  function measureCanvas(): void {
+    const bw = stageBox.clientWidth;
+    const bh = stageBox.clientHeight;
+    if (!(bw > 0) || !(bh > 0)) return;
+    const next = canvasBufferHeight(bw, bh);
+    const scale = Math.min(bw / WORLD_W, bh / next);
+    canvas.style.width = `${Math.floor(WORLD_W * scale)}px`;
+    canvas.style.height = `${Math.floor(next * scale)}px`;
+    if (next !== bufH || canvas.height !== next) {
+      bufH = next;
+      const pads = padSplit(next);
+      skyPad = pads.sky;
+      groundPad = pads.ground;
+      canvas.height = next;
+    }
+  }
+
+  window.addEventListener("resize", measureCanvas);
+  let resizeObserver: ResizeObserver | null = null;
+  if (typeof ResizeObserver === "function") {
+    resizeObserver = new ResizeObserver(measureCanvas);
+    resizeObserver.observe(stageBox);
+  }
+
+  /* ---------------- 教练卡与朗读 ---------------- */
+
+  // 每关第一只小鸟、以及换了不同种类的小鸟时自动念技能口诀;同种连发不重复念
+  let lastSpokenKind: BirdKind | null = null;
+
+  function setCoach(kind: BirdKind): void {
+    const info = BIRD_INFO[kind];
+    coachDotEl.style.background = `radial-gradient(circle at 32% 30%, ${info.belly}, ${info.color})`;
+    coachDotEl.style.borderColor = "rgba(255,255,255,.9)";
+    coachDotEl.style.boxShadow = `0 2px 5px rgba(0,0,0,.18), inset 0 0 0 1.5px ${info.dark}`;
+    coachNameEl.textContent = `${info.name} · ${info.skill}`;
+    msgEl.textContent = info.hint;
+    if (kind !== lastSpokenKind) {
+      lastSpokenKind = kind;
+      speak(info.hint);
+    }
+  }
+
+  sayBtn.addEventListener("click", () => {
+    const line = msgEl.textContent;
+    if (line) speak(line);
+  });
+  const unwatchSpeech = whenSpeechReady(() => {
+    sayBtn.hidden = false;
+  });
 
   /* ---------------- 进度辅助 ---------------- */
 
@@ -400,6 +488,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function showMap(): void {
+    stopSpeaking();
     progress.resume = null;
     saveProgress(progress);
     level = null;
@@ -473,6 +562,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       showMap();
       return;
     }
+    // 换到别的关才重置朗读记忆:同一关反复重试不重复念口诀(想再听点 🔈)
+    if (!level || level.id !== def.id) lastSpokenKind = null;
     level = def;
     progress.resume = id;
     progress.chapter = def.chapter;
@@ -522,9 +613,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     lastSound = {};
     aiming = false;
 
-    loadNextBird(false);
     mapView.style.display = "none";
     playView.style.display = "";
+    measureCanvas();
+    loadNextBird(false);
     updateHud();
   }
 
@@ -537,7 +629,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     loadedBird = makeBird(kind);
     phase = "aim";
     if (chirp) playThrottled("meow", 0.3);
-    msgEl.textContent = `${BIRD_INFO[kind].name}(${BIRD_INFO[kind].skill}):${BIRD_INFO[kind].hint}`;
+    setCoach(kind);
     updateHud();
   }
 
@@ -1219,7 +1311,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     const rect = canvas.getBoundingClientRect();
     return {
       x: ((e.clientX - rect.left) / rect.width) * WORLD_W,
-      y: ((e.clientY - rect.top) / rect.height) * WORLD_H
+      // 缓冲区可能延展了天空,先映射到缓冲坐标再减掉天空高度得到世界坐标
+      y: ((e.clientY - rect.top) / rect.height) * bufH - skyPad
     };
   }
 
@@ -1322,6 +1415,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   retryBtn.addEventListener("click", () => {
     if (!level) return;
     api.play("tap");
+    stopSpeaking();
     openLevel(level.id);
   });
   backBtn.addEventListener("click", () => {
@@ -1351,11 +1445,26 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawBg(c: CanvasRenderingContext2D, chapter: number): void {
     const st = CH_STYLE[chapter];
-    const grad = c.createLinearGradient(0, 0, 0, WORLD_H);
+    // 天空渐变一直铺到画布顶(竖屏时上方延展出的天空区)
+    const grad = c.createLinearGradient(0, -skyPad, 0, WORLD_H);
     grad.addColorStop(0, st.skyTop);
     grad.addColorStop(1, st.skyBot);
     c.fillStyle = grad;
-    c.fillRect(0, 0, WORLD_W, WORLD_H);
+    c.fillRect(0, -skyPad, WORLD_W, skyPad + WORLD_H);
+
+    // 延展天空里飘几朵慢云,画面不空
+    if (skyPad > 40) {
+      c.fillStyle = "rgba(255,255,255,.55)";
+      for (let i = 0; i < 5; i++) {
+        const drift = ((simT * (7 + i * 2) + i * 210) % (WORLD_W + 160)) - 80;
+        const cy = -skyPad + 26 + ((i * 97) % Math.max(skyPad - 46, 1));
+        c.beginPath();
+        c.arc(drift, cy, 14, 0, Math.PI * 2);
+        c.arc(drift + 17, cy - 6, 10, 0, Math.PI * 2);
+        c.arc(drift + 33, cy, 12, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
 
     if (chapter === 0) {
       c.fillStyle = st.hill;
@@ -1462,11 +1571,25 @@ export function mount(api: GameApi): { destroy: () => void } {
       }
     }
 
-    // 地面
+    // 地面(向下延展的泥土区一起铺满)
     c.fillStyle = st.ground;
-    c.fillRect(0, GROUND_Y, WORLD_W, WORLD_H - GROUND_Y);
+    c.fillRect(0, GROUND_Y, WORLD_W, WORLD_H + groundPad - GROUND_Y);
     c.fillStyle = st.groundEdge;
     c.fillRect(0, GROUND_Y, WORLD_W, 5);
+
+    // 延展泥土里点缀小石子当装饰
+    if (groundPad > 14) {
+      c.fillStyle = st.groundEdge;
+      c.globalAlpha = 0.5;
+      for (let i = 0; i < 12; i++) {
+        const px = (i * 89 + 40) % WORLD_W;
+        const py = WORLD_H + 8 + ((i * 53) % Math.max(groundPad - 12, 1));
+        c.beginPath();
+        c.ellipse(px, py, i % 3 === 0 ? 5 : 3.4, i % 3 === 0 ? 3.4 : 2.4, (i % 5) * 0.5, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1;
+    }
   }
 
   function drawWinds(c: CanvasRenderingContext2D): void {
@@ -2021,26 +2144,30 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawBanner(c: CanvasRenderingContext2D): void {
     if (!level || introT <= 0) return;
     const a = clamp(introT > 1.6 ? (2 - introT) * 2.5 : introT / 0.5, 0, 1);
+    // 钉在画布顶部(天空延展时不跟着世界坐标掉到屏幕中间)
+    const by = 24 - skyPad;
     c.globalAlpha = a;
     c.fillStyle = "rgba(255,255,255,0.92)";
     c.beginPath();
-    c.roundRect(WORLD_W / 2 - 120, 24, 240, 46, 16);
+    c.roundRect(WORLD_W / 2 - 120, by, 240, 46, 16);
     c.fill();
-    c.fillStyle = "#4C7DB3";
+    c.fillStyle = "#3E6D9E";
     c.font = "bold 17px sans-serif";
     c.textAlign = "center";
-    c.fillText(`${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`, WORLD_W / 2, 53);
+    c.fillText(`${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`, WORLD_W / 2, by + 29);
     c.textAlign = "left";
     c.globalAlpha = 1;
   }
 
   function draw(): void {
     if (!ctx || !level) return;
-    ctx.clearRect(0, 0, WORLD_W, WORLD_H);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     if (shake > 0.01) {
       ctx.translate((Math.random() - 0.5) * shake * 14, (Math.random() - 0.5) * shake * 14);
     }
+    // 世界坐标整体下移天空高度:上方是延展天空,下方是延展泥土
+    ctx.translate(0, skyPad);
     drawBg(ctx, level.chapter);
     drawWinds(ctx);
     drawSlopes(ctx, level.chapter);
@@ -2106,11 +2233,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
+      stopSpeaking();
+      unwatchSpeech();
+      resizeObserver?.disconnect();
       canvas.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", measureCanvas);
       wrap.remove();
     }
   };
