@@ -1,4 +1,5 @@
-import { SCENES, VIEW_H, VIEW_W, type Scene } from "./scene";
+import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { buildBoard, CHAPTERS, LEVELS, type DiffLevel } from "./levels";
 
 export const meta = {
   id: "find-diff",
@@ -6,242 +7,201 @@ export const meta = {
   emoji: "🔍",
   category: "edu" as const,
   color: "#63e6be",
-  blurb: "五组小画每组藏着 5 处不同，还有放大镜提示帮忙，睁大眼睛找！",
+  blurb: "六大主题 99 关！上下两幅图找不同，后面还有双胞胎图案和限时挑战！",
 };
 
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-export type GameApi = {
-  root: HTMLElement;
-  play: (name: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-};
-
-const SVG_NS = "http://www.w3.org/2000/svg";
-const TOTAL_HINTS = 3;
+const THEME_BG = [
+  "linear-gradient(#fff4e6,#ffe8cc)",
+  "linear-gradient(#e3fafc,#d3f9d8)",
+  "linear-gradient(#e7f5ff,#d0f0fd)",
+  "linear-gradient(#fff0f6,#ffdeeb)",
+  "linear-gradient(#2b2a5e,#4a3f8f)",
+  "linear-gradient(#fff9db,#fff3bf)",
+];
+const THEME_ACCENT = ["#d9480f", "#2b8a3e", "#1971c2", "#c2255c", "#ffe066", "#e8590c"];
 
 const CSS = `
-.fd-wrap{height:100%;min-height:460px;display:flex;flex-direction:column;align-items:center;gap:10px;
-  padding:14px;box-sizing:border-box;background:linear-gradient(#d3f9d8,#96f2d7);
-  border-radius:20px;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-  user-select:none;-webkit-user-select:none;touch-action:manipulation;position:relative;}
-.fd-top{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
-.fd-badge-pill{font-size:15px;font-weight:800;color:#087f5b;background:#ffffffcc;border-radius:999px;padding:5px 14px;}
-.fd-msg{min-height:26px;font-size:18px;font-weight:700;color:#e8590c;text-align:center;}
-.fd-pics{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
-.fd-pic{background:#fff;border-radius:14px;box-shadow:0 4px 0 #0001;padding:6px;}
-.fd-pic svg{display:block;border-radius:10px;max-width:100%;height:auto;}
-.fd-spot{fill:transparent;cursor:pointer;}
-.fd-found{fill:none;stroke:#ff5d8f;stroke-width:5;stroke-dasharray:10 7;pointer-events:none;}
-.fd-hint-ring{fill:none;stroke:#f59f00;stroke-width:5;pointer-events:none;animation:fd-pulse .8s infinite;}
-@keyframes fd-pulse{0%,100%{opacity:.25}50%{opacity:1}}
-.fd-badges{display:flex;gap:10px;font-size:26px;min-height:36px;}
-.fd-badge{filter:grayscale(1) opacity(.4);transition:filter .3s,transform .3s;}
-.fd-badge.fd-on{filter:none;transform:scale(1.2);}
-.fd-hint-btn{min-height:48px;padding:0 22px;font-size:18px;font-weight:800;color:#856000;border:none;cursor:pointer;
-  border-radius:999px;background:#ffe066;box-shadow:0 4px 0 #d9b800;font-family:inherit;transition:transform .12s,opacity .2s;}
-.fd-hint-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #d9b800;}
-.fd-hint-btn:disabled{opacity:.4;}
-.fd-overlay{position:absolute;inset:0;background:#e6fcf5de;display:flex;flex-direction:column;gap:14px;
-  align-items:center;justify-content:center;border-radius:20px;z-index:10;text-align:center;padding:20px;box-sizing:border-box;}
-.fd-ov-title{font-size:26px;font-weight:900;color:#087f5b;}
-.fd-ov-sub{font-size:17px;font-weight:700;color:#868e96;line-height:1.6;}
-.fd-ov-btn{min-height:60px;padding:0 34px;font-size:22px;font-weight:900;color:#fff;border:none;cursor:pointer;
-  border-radius:999px;background:linear-gradient(135deg,#38d9a9,#0ca678);box-shadow:0 6px 0 #087f5b;font-family:inherit;}
-.fd-ov-btn:active{transform:translateY(4px);box-shadow:0 2px 0 #087f5b;}
+.fd-wrap{border-radius:16px;padding:12px;user-select:none;-webkit-user-select:none;
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  display:flex;flex-direction:column;gap:10px;align-items:center;}
+.fd-top{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.fd-badge{font-size:14px;font-weight:800;background:#ffffffd9;border-radius:999px;padding:5px 12px;
+  box-shadow:0 2px 6px rgba(120,120,160,.2);}
+.fd-panels{display:flex;flex-direction:column;gap:10px;width:100%;align-items:center;}
+.fd-panel{background:#ffffffec;border-radius:14px;padding:8px;box-shadow:0 3px 10px rgba(120,120,160,.18);}
+.fd-label{text-align:center;font-size:12px;font-weight:800;color:#8a7aa8;margin-bottom:4px;}
+.fd-grid{display:grid;gap:4px;}
+.fd-cell{width:100%;aspect-ratio:1;border:none;border-radius:10px;background:#f6f2fb;cursor:pointer;
+  font-size:clamp(18px,6vw,30px);display:flex;align-items:center;justify-content:center;padding:0;
+  transition:transform .1s;font-family:inherit;position:relative;}
+.fd-cell:active{transform:scale(.92);}
+.fd-cell.fd-found{background:#d3f9d8;outline:3px solid #69db7c;}
+.fd-cell.fd-found::after{content:"✓";position:absolute;right:2px;top:0;font-size:12px;color:#2b8a3e;font-weight:900;}
+.fd-cell.fd-wrong{animation:fdShake .35s;}
+@keyframes fdShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.fd-cell.fd-hintcell{animation:fdBlink .7s 3;}
+@keyframes fdBlink{50%{background:#ffec99;}}
+.fd-msg{min-height:20px;font-size:14px;font-weight:800;text-align:center;}
+.fd-hint{border:none;border-radius:999px;padding:8px 18px;font-size:15px;font-weight:900;cursor:pointer;
+  color:#fff;background:linear-gradient(180deg,#74c0fc,#4dabf7);box-shadow:0 4px 0 #1c7ed6;font-family:inherit;}
+.fd-hint:active{transform:translateY(2px);box-shadow:0 2px 0 #1c7ed6;}
+.fd-hint:disabled{opacity:.45;}
 `;
 
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, onWin } = api;
-  const timers: ReturnType<typeof setTimeout>[] = [];
-  const later = (fn: () => void, ms: number) => {
-    timers.push(setTimeout(fn, ms));
-  };
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: DiffLevel = LEVELS[ctx.level];
+  const board = buildBoard(ctx.level);
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  let timerId: ReturnType<typeof setInterval> | null = null;
+  let destroyed = false;
+  let ended = false;
+  let found = 0;
+  let misses = 0;
+  let hintLeft = 1;
+  let timeLeft = cfg.timeSec;
+  const foundSet = new Set<number>();
 
-  root.innerHTML = "";
-  const style = document.createElement("style");
-  style.textContent = CSS;
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed && !ended) fn();
+    }, ms);
+    timeouts.add(t);
+  }
+
   const wrap = document.createElement("div");
   wrap.className = "fd-wrap";
+  wrap.style.background = THEME_BG[cfg.theme];
   wrap.innerHTML = `
+    <style>${CSS}</style>
     <div class="fd-top">
-      <div class="fd-badge-pill fd-scene"></div>
-      <div class="fd-badge-pill fd-count"></div>
-      <button type="button" class="fd-hint-btn"></button>
+      <span class="fd-badge fd-count" style="color:${THEME_ACCENT[cfg.theme] === "#ffe066" ? "#8a6d00" : THEME_ACCENT[cfg.theme]}">🔍 0/${cfg.diffs}</span>
+      <span class="fd-badge fd-miss" style="color:#c2255c">💗 ${"❤".repeat(cfg.maxMiss + 1)}</span>
+      ${cfg.timeSec > 0 ? `<span class="fd-badge fd-time" style="color:#e8590c">⏰ ${cfg.timeSec}s</span>` : ""}
     </div>
-    <div class="fd-badges"></div>
-    <div class="fd-pics"></div>
-    <div class="fd-msg">左边和右边，哪里不一样呢？</div>
+    <div class="fd-panels">
+      <div class="fd-panel">
+        <div class="fd-label">原图（看这里）</div>
+        <div class="fd-grid fd-grid-base" style="grid-template-columns:repeat(${cfg.cols},minmax(0,44px))"></div>
+      </div>
+      <div class="fd-panel">
+        <div class="fd-label">找出下图不一样的 ${cfg.diffs} 个地方，点它！</div>
+        <div class="fd-grid fd-grid-play" style="grid-template-columns:repeat(${cfg.cols},minmax(0,44px))"></div>
+      </div>
+    </div>
+    <div class="fd-msg" style="color:${cfg.theme === 4 ? "#ffe066" : "#8a7aa8"}"></div>
+    <button type="button" class="fd-hint">🔎 放大镜提示（1 次）</button>
   `;
-  root.append(style, wrap);
+  stage.appendChild(wrap);
 
-  const sceneEl = wrap.querySelector(".fd-scene") as HTMLElement;
   const countEl = wrap.querySelector(".fd-count") as HTMLElement;
-  const hintBtn = wrap.querySelector(".fd-hint-btn") as HTMLButtonElement;
-  const badgesEl = wrap.querySelector(".fd-badges") as HTMLElement;
-  const picsEl = wrap.querySelector(".fd-pics") as HTMLElement;
+  const missEl = wrap.querySelector(".fd-miss") as HTMLElement;
+  const timeEl = wrap.querySelector(".fd-time") as HTMLElement | null;
+  const baseGrid = wrap.querySelector(".fd-grid-base") as HTMLElement;
+  const playGrid = wrap.querySelector(".fd-grid-play") as HTMLElement;
   const msgEl = wrap.querySelector(".fd-msg") as HTMLElement;
+  const hintBtn = wrap.querySelector(".fd-hint") as HTMLButtonElement;
 
-  let sceneIdx = 0;
-  let scene: Scene = SCENES[0];
-  let found = new Set<string>();
-  let wrongTaps = 0;
-  let hintsLeft = TOTAL_HINTS;
-  let finished = false;
-  let svgs: SVGSVGElement[] = [];
+  msgEl.textContent = cfg.lookalike ? "小心！有些图案是双胞胎，长得很像～" : "上下对比，找到不一样的格子！";
 
-  function updateHud() {
-    sceneEl.textContent = `${scene.emoji} 第${sceneIdx + 1}/${SCENES.length}幅·${scene.name}`;
-    countEl.textContent = `🔍 找到 ${found.size}/${scene.diffs.length}`;
-    hintBtn.textContent = `💡 提示 x${hintsLeft}`;
-    hintBtn.disabled = hintsLeft <= 0 || finished;
+  const playCells: HTMLButtonElement[] = [];
+  board.base.forEach((emoji, i) => {
+    const cell = document.createElement("div");
+    cell.className = "fd-cell";
+    cell.textContent = emoji;
+    baseGrid.appendChild(cell);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fd-cell";
+    btn.textContent = board.changed[i];
+    btn.addEventListener("click", () => onCell(btn, i));
+    playGrid.appendChild(btn);
+    playCells.push(btn);
+  });
+
+  function updateHud(): void {
+    countEl.textContent = `🔍 ${found}/${cfg.diffs}`;
+    missEl.textContent = `💗 ${"❤".repeat(Math.max(0, cfg.maxMiss + 1 - misses))}${"🤍".repeat(Math.min(misses, cfg.maxMiss + 1))}`;
+    if (timeEl) timeEl.textContent = `⏰ ${timeLeft}s`;
   }
 
-  function markFound(id: string) {
-    const spot = scene.diffs.find((d) => d.id === id);
-    if (!spot) return;
-    for (const svg of svgs) {
-      const ring = document.createElementNS(SVG_NS, "circle");
-      ring.setAttribute("cx", String(spot.x));
-      ring.setAttribute("cy", String(spot.y));
-      ring.setAttribute("r", String(Math.max(14, spot.r - 6)));
-      ring.setAttribute("class", "fd-found");
-      svg.appendChild(ring);
-    }
+  function finish(): void {
+    ended = true;
+    if (timerId) clearInterval(timerId);
+    const got = rateBelow(misses, 0, 2);
+    ctx.win(got, misses === 0 ? "一次都没点错，眼力真棒！" : `${cfg.diffs} 处不同全部找到！`);
   }
 
-  function showHint() {
-    if (hintsLeft <= 0 || finished) return;
-    const unfound = scene.diffs.filter((d) => !found.has(d.id));
-    if (unfound.length === 0) return;
-    hintsLeft--;
-    play("pop");
-    const spot = unfound[Math.floor(Math.random() * unfound.length)];
-    msgEl.textContent = "💡 放大镜提示：看一看一闪一闪的圈圈里～";
-    const rings: SVGElement[] = [];
-    for (const svg of svgs) {
-      const ring = document.createElementNS(SVG_NS, "circle");
-      ring.setAttribute("cx", String(spot.x));
-      ring.setAttribute("cy", String(spot.y));
-      ring.setAttribute("r", String(spot.r));
-      ring.setAttribute("class", "fd-hint-ring");
-      svg.appendChild(ring);
-      rings.push(ring);
-    }
-    later(() => rings.forEach((r) => r.remove()), 2400);
-    updateHud();
-  }
-
-  function onSpotTap(id: string) {
-    if (finished || found.has(id)) return;
-    found.add(id);
-    play("coin");
-    markFound(id);
-    const badge = badgesEl.children[found.size - 1] as HTMLElement | undefined;
-    if (badge) badge.classList.add("fd-on");
-    const spot = scene.diffs.find((d) => d.id === id);
-    msgEl.textContent = `找到啦！${spot ? spot.label : "这里"}不一样！`;
-    updateHud();
-    if (found.size >= scene.diffs.length) {
-      finished = true;
-      later(() => sceneDone(), 900);
-    }
-  }
-
-  function onMissTap() {
-    if (finished) return;
-    wrongTaps++;
-    play("tap");
-    msgEl.textContent = "这里两边是一样的哦，再仔细看看～";
-  }
-
-  function renderScene() {
-    scene = SCENES[sceneIdx];
-    found = new Set();
-    finished = false;
-    svgs = [];
-    picsEl.innerHTML = "";
-    badgesEl.innerHTML = scene.diffs.map(() => `<span class="fd-badge">✅</span>`).join("");
-
-    for (const side of ["left", "right"] as const) {
-      const box = document.createElement("div");
-      box.className = "fd-pic";
-      const svg = document.createElementNS(SVG_NS, "svg");
-      svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${VIEW_H}`);
-      svg.setAttribute("width", "330");
-      svg.setAttribute("height", String(Math.round((330 / VIEW_W) * VIEW_H)));
-      svg.innerHTML = scene.markup(side);
-      svg.addEventListener("click", onMissTap);
-      for (const d of scene.diffs) {
-        const spot = document.createElementNS(SVG_NS, "circle");
-        spot.setAttribute("cx", String(d.x));
-        spot.setAttribute("cy", String(d.y));
-        spot.setAttribute("r", String(d.r));
-        spot.setAttribute("class", "fd-spot");
-        spot.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          onSpotTap(d.id);
-        });
-        svg.appendChild(spot);
-      }
-      box.appendChild(svg);
-      picsEl.appendChild(box);
-      svgs.push(svg);
-    }
-    updateHud();
-  }
-
-  function showOverlay(title: string, sub: string, btnText: string, onNext: () => void) {
-    const ov = document.createElement("div");
-    ov.className = "fd-overlay";
-    const t = document.createElement("div");
-    t.className = "fd-ov-title";
-    t.textContent = title;
-    const s = document.createElement("div");
-    s.className = "fd-ov-sub";
-    s.textContent = sub;
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "fd-ov-btn";
-    b.textContent = btnText;
-    b.addEventListener("click", () => {
-      play("tap");
-      ov.remove();
-      onNext();
-    });
-    ov.append(t, s, b);
-    wrap.appendChild(ov);
-  }
-
-  function sceneDone() {
-    if (sceneIdx < SCENES.length - 1) {
-      const next = SCENES[sceneIdx + 1];
-      showOverlay(
-        `🎉 ${scene.name}全找到啦！`,
-        `下一幅是「${next.name}」，又藏了 ${next.diffs.length} 处不同哦～`,
-        `看下一幅 ${next.emoji}`,
-        () => {
-          sceneIdx++;
-          renderScene();
-          msgEl.textContent = "新的两幅画来啦，哪里不一样呢？";
-        }
-      );
+  function onCell(btn: HTMLButtonElement, i: number): void {
+    if (ended || foundSet.has(i)) return;
+    if (board.diffIdx.includes(i)) {
+      foundSet.add(i);
+      found++;
+      ctx.sfx("coin");
+      btn.classList.add("fd-found");
+      msgEl.textContent = "找到啦！👀";
+      updateHud();
+      if (found >= cfg.diffs) later(() => finish(), 400);
     } else {
-      const stars: 1 | 2 | 3 = wrongTaps <= 3 ? 3 : wrongTaps <= 8 ? 2 : 1;
-      onWin(stars, "五组画共 25 处不同全被你找到啦，眼睛真亮！");
+      misses++;
+      ctx.sfx("oops");
+      btn.classList.add("fd-wrong");
+      later(() => btn.classList.remove("fd-wrong"), 400);
+      msgEl.textContent = "这里上下是一样的，再仔细看看～";
+      updateHud();
+      if (misses > cfg.maxMiss) {
+        ended = true;
+        if (timerId) clearInterval(timerId);
+        ctx.lose("眼睛累了吧？休息一下，我们再来找一次！");
+      }
     }
   }
 
-  hintBtn.addEventListener("click", showHint);
-  renderScene();
+  hintBtn.addEventListener("click", () => {
+    if (ended || hintLeft <= 0) return;
+    const remaining = board.diffIdx.filter((i) => !foundSet.has(i));
+    if (remaining.length === 0) return;
+    hintLeft--;
+    hintBtn.disabled = true;
+    hintBtn.textContent = "🔎 提示用完啦";
+    ctx.sfx("pop");
+    playCells[remaining[0]].classList.add("fd-hintcell");
+    later(() => playCells[remaining[0]].classList.remove("fd-hintcell"), 2200);
+  });
+
+  if (cfg.timeSec > 0) {
+    timerId = setInterval(() => {
+      if (destroyed || ended) return;
+      timeLeft--;
+      updateHud();
+      if (timeLeft <= 0) {
+        ended = true;
+        if (timerId) clearInterval(timerId);
+        ctx.lose("时间到啦！剩下的不同点下次一定能找到～");
+      }
+    }, 1000);
+  }
+
+  updateHud();
 
   return {
     destroy() {
-      timers.forEach(clearTimeout);
-      root.innerHTML = "";
-    },
+      destroyed = true;
+      ended = true;
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
+      if (timerId) clearInterval(timerId);
+      wrap.remove();
+    }
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    mapHint: "睁大眼睛，每一关都藏着新的不同点～",
+    grandMessage: "99 关全部找完，你的眼睛比放大镜还厉害！",
+    playLevel,
+  });
 }

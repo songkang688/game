@@ -1,356 +1,351 @@
+import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { ALL_PAINTS, CHAPTERS, LEVELS, MIX_TABLE, PICTURES, type ColorLevel } from "./levels";
+
 export const meta = {
   id: "color-fun",
   title: "涂色小屋",
   emoji: "🎨",
   category: "create" as const,
   color: "#ffd43b",
-  blurb: "三幅线稿连着涂，还能用调色锅把红黄蓝变出新颜色！",
+  blurb: "六大村镇 99 关！指令涂色、调色锅变新颜色、数字涂色还有记忆涂色！",
 };
 
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-export type GameApi = {
-  root: HTMLElement;
-  play: (name: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-};
-
-type Region = { id: string; name: string; svg: string };
-type Picture = { name: string; emoji: string; regions: Region[] };
-
-// 三幅线稿，每幅的可涂色区域（fill 由代码控制，初始白色）
-const PICTURES: Picture[] = [
-  {
-    name: "温馨小屋",
-    emoji: "🏠",
-    regions: [
-      { id: "grass", name: "草地", svg: `<rect x="0" y="230" width="400" height="70" rx="6"/>` },
-      { id: "wall", name: "墙壁", svg: `<rect x="70" y="130" width="150" height="100"/>` },
-      { id: "roof", name: "屋顶", svg: `<polygon points="60,132 230,132 145,60"/>` },
-      { id: "door", name: "小门", svg: `<rect x="125" y="168" width="42" height="62" rx="6"/>` },
-      { id: "window", name: "窗户", svg: `<circle cx="100" cy="160" r="17"/>` },
-      { id: "sun", name: "太阳", svg: `<circle cx="330" cy="60" r="30"/>` },
-      { id: "crown", name: "树冠", svg: `<circle cx="310" cy="165" r="42"/>` },
-      { id: "trunk", name: "树干", svg: `<rect x="298" y="196" width="24" height="42" rx="5"/>` },
-    ],
-  },
-  {
-    name: "快乐农场",
-    emoji: "🚜",
-    regions: [
-      { id: "field", name: "田野", svg: `<rect x="0" y="225" width="400" height="75" rx="6"/>` },
-      { id: "barn", name: "谷仓", svg: `<rect x="60" y="122" width="120" height="103"/>` },
-      { id: "barnroof", name: "仓顶", svg: `<polygon points="48,124 192,124 120,58"/>` },
-      { id: "barndoor", name: "仓门", svg: `<rect x="98" y="160" width="44" height="65" rx="8"/>` },
-      { id: "sun2", name: "太阳", svg: `<circle cx="342" cy="55" r="28"/>` },
-      { id: "cloud", name: "云朵", svg: `<ellipse cx="245" cy="70" rx="42" ry="20"/>` },
-      { id: "pond", name: "池塘", svg: `<ellipse cx="300" cy="255" rx="62" ry="24"/>` },
-      { id: "flower", name: "花朵", svg: `<circle cx="42" cy="196" r="17"/>` },
-    ],
-  },
-  {
-    name: "海底世界",
-    emoji: "🐠",
-    regions: [
-      { id: "fishbody", name: "鱼身", svg: `<ellipse cx="150" cy="145" rx="56" ry="36"/>` },
-      { id: "fishtail", name: "鱼尾", svg: `<polygon points="205,145 252,113 252,177"/>` },
-      {
-        id: "starfish",
-        name: "海星",
-        svg: `<polygon points="60,212 68,233 91,233 73,247 80,270 60,256 40,270 47,247 29,233 52,233"/>`,
-      },
-      { id: "seaweed", name: "水草", svg: `<rect x="322" y="178" width="18" height="92" rx="9"/>` },
-      { id: "bubble1", name: "小泡泡", svg: `<circle cx="262" cy="78" r="17"/>` },
-      { id: "bubble2", name: "大泡泡", svg: `<circle cx="60" cy="70" r="24"/>` },
-      { id: "shell", name: "贝壳", svg: `<path d="M120,262 a30,30 0 0 1 60,0 z"/>` },
-      { id: "crab", name: "小螃蟹", svg: `<ellipse cx="332" cy="118" rx="30" ry="20"/>` },
-    ],
-  },
+const THEME_BG = [
+  "linear-gradient(#fff9db,#ffec99)",
+  "linear-gradient(#e9fac8,#d3f9d8)",
+  "linear-gradient(#d0f4ff,#a5d8ff)",
+  "linear-gradient(#c8c3f0,#e5dbff)",
+  "linear-gradient(#fff3bf,#ffe8cc)",
+  "linear-gradient(#ffdeeb,#fcc2d7)",
 ];
-
-type Paint = { name: string; value: string };
-
-/** 三原色（可倒进调色锅） */
-const PRIMARY: Paint[] = [
-  { name: "红色", value: "#ff6b6b" },
-  { name: "黄色", value: "#ffe066" },
-  { name: "蓝色", value: "#74c0fc" },
-];
-/** 开局就有的其它颜色 */
-const EXTRA: Paint[] = [
-  { name: "粉色", value: "#faa2c1" },
-  { name: "棕色", value: "#c08552" },
-];
-/** 调色配方：红+黄=橙 等 */
-const MIX_TABLE: Record<string, Paint> = {
-  "红色+黄色": { name: "橙色", value: "#ffa94d" },
-  "黄色+蓝色": { name: "绿色", value: "#8ce99a" },
-  "红色+蓝色": { name: "紫色", value: "#b197fc" },
-  "红色+红色": { name: "深红", value: "#e03131" },
-  "黄色+黄色": { name: "金黄", value: "#fab005" },
-  "蓝色+蓝色": { name: "深蓝", value: "#4263eb" },
-};
-
-function mixKey(a: Paint, b: Paint): string {
-  return [a.name, b.name].sort().join("+");
-}
 
 const CSS = `
-.cf-wrap{height:100%;min-height:460px;display:flex;flex-direction:column;align-items:center;gap:10px;
-  padding:14px;box-sizing:border-box;background:linear-gradient(#fff9db,#ffec99);
-  border-radius:20px;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+.cf-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px;box-sizing:border-box;
+  border-radius:16px;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
   user-select:none;-webkit-user-select:none;touch-action:manipulation;position:relative;}
 .cf-top{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.cf-badge{font-size:15px;font-weight:800;color:#e67700;background:#ffffffcc;border-radius:999px;padding:5px 14px;}
-.cf-msg{min-height:24px;font-size:17px;font-weight:700;color:#e8590c;text-align:center;}
-.cf-canvas{background:#fff;border-radius:16px;box-shadow:0 4px 0 #0001;max-width:100%;height:auto;}
+.cf-badge{font-size:14px;font-weight:800;color:#7a5a20;background:#ffffffd9;border-radius:999px;padding:5px 12px;
+  box-shadow:0 2px 6px rgba(150,130,80,.2);}
+.cf-msg{min-height:22px;font-size:15px;font-weight:800;color:#e8590c;text-align:center;}
+.cf-canvas{background:#fff;border-radius:14px;box-shadow:0 4px 0 #0001;max-width:100%;height:auto;}
 .cf-canvas .cf-region{cursor:pointer;stroke:#495057;stroke-width:3;stroke-linejoin:round;transition:fill .2s;}
+.cf-canvas .cf-region.cf-shake{animation:cfShake .35s;}
+@keyframes cfShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.cf-canvas .cf-num{font-weight:900;pointer-events:none;}
+.cf-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:400px;}
+.cf-chip{display:flex;align-items:center;gap:5px;background:#ffffffd9;border-radius:999px;padding:4px 10px;
+  font-size:13px;font-weight:800;color:#5c4a30;box-shadow:0 2px 5px rgba(150,130,80,.18);}
+.cf-chip-dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 2px #0003;}
 .cf-palette{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.cf-swatch{width:50px;height:50px;border-radius:50%;border:4px solid #fff;cursor:pointer;
+.cf-swatch{width:46px;height:46px;border-radius:50%;border:4px solid #fff;cursor:pointer;position:relative;
   box-shadow:0 3px 0 #0002;transition:transform .15s;padding:0;}
 .cf-swatch:active{transform:scale(.92);}
 .cf-swatch.cf-picked{transform:scale(1.18);border-color:#343a40;}
-.cf-swatch.cf-unlock{animation:cf-unlock .6s;}
-@keyframes cf-unlock{0%{transform:scale(0)}70%{transform:scale(1.3)}100%{transform:scale(1)}}
-.cf-mixer{display:flex;gap:8px;align-items:center;background:#ffffffcc;border-radius:16px;padding:6px 12px;flex-wrap:wrap;justify-content:center;}
-.cf-mix-label{font-size:15px;font-weight:800;color:#e67700;}
-.cf-mix-slot{width:38px;height:38px;border-radius:50%;border:3px dashed #ced4da;background:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:18px;}
-.cf-mix-primary{width:38px;height:38px;border-radius:50%;border:3px solid #fff;cursor:pointer;
+.cf-swatch.cf-unlock{animation:cfUnlock .6s;}
+@keyframes cfUnlock{0%{transform:scale(0)}70%{transform:scale(1.3)}100%{transform:scale(1)}}
+.cf-swatch .cf-swatch-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:900;color:#fff;text-shadow:0 1px 3px #0008;}
+.cf-mixer{display:flex;gap:8px;align-items:center;background:#ffffffd9;border-radius:14px;padding:6px 12px;
+  flex-wrap:wrap;justify-content:center;}
+.cf-mix-label{font-size:14px;font-weight:800;color:#e67700;}
+.cf-mix-slot{width:34px;height:34px;border-radius:50%;border:3px dashed #ced4da;background:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:16px;}
+.cf-mix-primary{width:34px;height:34px;border-radius:50%;border:3px solid #fff;cursor:pointer;
   box-shadow:0 2px 0 #0002;padding:0;}
 .cf-mix-primary:active{transform:scale(.9);}
-.cf-overlay{position:absolute;inset:0;background:#fff9dbde;display:flex;flex-direction:column;gap:14px;
-  align-items:center;justify-content:center;border-radius:20px;z-index:10;text-align:center;padding:20px;box-sizing:border-box;}
-.cf-ov-title{font-size:26px;font-weight:900;color:#e67700;}
-.cf-ov-sub{font-size:17px;font-weight:700;color:#868e96;line-height:1.6;}
-.cf-ov-btn{min-height:60px;padding:0 34px;font-size:22px;font-weight:900;color:#fff;border:none;cursor:pointer;
-  border-radius:999px;background:linear-gradient(135deg,#ffa94d,#e8590c);box-shadow:0 6px 0 #d9480f;font-family:inherit;}
-.cf-ov-btn:active{transform:translateY(4px);box-shadow:0 2px 0 #d9480f;}
+.cf-preview{font-size:15px;font-weight:900;color:#6741d9;background:#ffffffd9;border-radius:999px;padding:6px 14px;}
 `;
 
-export function mount(api: GameApi): { destroy: () => void } {
-  const { root, play, addStars, onWin } = api;
-  const timers: ReturnType<typeof setTimeout>[] = [];
-  const later = (fn: () => void, ms: number) => {
-    timers.push(setTimeout(fn, ms));
-  };
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: ColorLevel = LEVELS[ctx.level];
+  const pic = PICTURES[cfg.pic];
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  let destroyed = false;
+  let ended = false;
+  let wrong = 0;
+  let picked: string | null = null;
+  let previewing = cfg.mode === "memory";
+  const pending = new Map<string, string>(cfg.tasks.map((k) => [k.region, k.color]));
+  const unlocked: string[] = [...cfg.palette];
+  let mixA: string | null = null;
+  /** 数字涂色：颜色 → 编号（按调色盘顺序） */
+  const numberOf = new Map<string, number>(cfg.palette.map((c, i) => [c, i + 1]));
 
-  root.innerHTML = "";
-  const style = document.createElement("style");
-  style.textContent = CSS;
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed && !ended) fn();
+    }, ms);
+    timeouts.add(t);
+  }
+
   const wrap = document.createElement("div");
   wrap.className = "cf-wrap";
+  wrap.style.background = THEME_BG[cfg.pic];
   wrap.innerHTML = `
+    <style>${CSS}</style>
     <div class="cf-top">
-      <div class="cf-badge cf-pic"></div>
-      <div class="cf-badge cf-progress"></div>
-      <div class="cf-badge cf-colors"></div>
+      <span class="cf-badge">${pic.emoji} ${pic.name}</span>
+      <span class="cf-badge cf-progress">🖌️ 0/${cfg.tasks.length}</span>
+      <span class="cf-badge cf-miss">💗 ${"❤".repeat(cfg.maxWrong + 1)}</span>
     </div>
+    ${cfg.mode === "memory" ? `<div class="cf-preview">👀 记住每个地方的颜色…</div>` : ""}
     <svg class="cf-canvas" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="待涂色的线稿"></svg>
+    <div class="cf-chips"></div>
+    ${cfg.needMix.length > 0 ? `
     <div class="cf-mixer">
       <span class="cf-mix-label">🥣 调色锅：</span>
       <span class="cf-mix-slot cf-slot-a">?</span>
       <span class="cf-mix-label">+</span>
       <span class="cf-mix-slot cf-slot-b">?</span>
-      <span class="cf-mix-label">→ 倒入两种原色试试</span>
+      <span class="cf-mix-label cf-mix-tip">→ 倒两种原色试试</span>
       <span class="cf-mix-primaries"></span>
-    </div>
+    </div>` : ""}
     <div class="cf-palette"></div>
-    <div class="cf-msg">先点一个颜色，再点画上想涂的地方～</div>
+    <div class="cf-msg"></div>
   `;
-  root.append(style, wrap);
+  stage.appendChild(wrap);
 
-  const picEl = wrap.querySelector(".cf-pic") as HTMLElement;
-  const progressEl = wrap.querySelector(".cf-progress") as HTMLElement;
-  const colorsEl = wrap.querySelector(".cf-colors") as HTMLElement;
   const svg = wrap.querySelector(".cf-canvas") as unknown as SVGSVGElement;
-  const slotA = wrap.querySelector(".cf-slot-a") as HTMLElement;
-  const slotB = wrap.querySelector(".cf-slot-b") as HTMLElement;
-  const mixLabel = wrap.querySelectorAll(".cf-mix-label")[2] as HTMLElement;
-  const primariesEl = wrap.querySelector(".cf-mix-primaries") as HTMLElement;
+  const progressEl = wrap.querySelector(".cf-progress") as HTMLElement;
+  const missEl = wrap.querySelector(".cf-miss") as HTMLElement;
+  const chipsEl = wrap.querySelector(".cf-chips") as HTMLElement;
   const paletteEl = wrap.querySelector(".cf-palette") as HTMLElement;
   const msgEl = wrap.querySelector(".cf-msg") as HTMLElement;
+  const previewEl = wrap.querySelector(".cf-preview") as HTMLElement | null;
+  const slotA = wrap.querySelector(".cf-slot-a") as HTMLElement | null;
+  const slotB = wrap.querySelector(".cf-slot-b") as HTMLElement | null;
+  const mixTip = wrap.querySelector(".cf-mix-tip") as HTMLElement | null;
+  const primariesEl = wrap.querySelector(".cf-mix-primaries") as HTMLElement | null;
 
-  let picIdx = 0;
-  let picked: Paint = PRIMARY[0];
-  let colored = new Set<string>();
-  let finished = false;
-  let mixedCount = 0;
-  const unlocked: Paint[] = [...PRIMARY, ...EXTRA];
-  let mixA: Paint | null = null;
+  // --- 画布 ---
+  svg.innerHTML = pic.regions
+    .map((r) => r.svg.replace(/\/>$/, ` class="cf-region" data-id="${r.id}" fill="#ffffff"/>`))
+    .join("");
+  const regionEls = new Map<string, SVGElement>();
+  svg.querySelectorAll<SVGElement>(".cf-region").forEach((el) => {
+    const id = el.getAttribute("data-id") ?? "";
+    regionEls.set(id, el);
+    el.addEventListener("click", () => onRegion(id));
+  });
 
-  function updateHud() {
-    const pic = PICTURES[picIdx];
-    picEl.textContent = `${pic.emoji} 第${picIdx + 1}幅·${pic.name}`;
-    progressEl.textContent = `🖌️ 涂好 ${colored.size}/${pic.regions.length}`;
-    colorsEl.textContent = `🎨 颜色 ${unlocked.length}`;
+  // 数字涂色：给每个任务区域贴编号
+  const numEls = new Map<string, SVGTextElement>();
+  if (cfg.mode === "number") {
+    for (const task of cfg.tasks) {
+      const r = pic.regions.find((x) => x.id === task.region);
+      if (!r) continue;
+      const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      txt.setAttribute("x", String(r.lx));
+      txt.setAttribute("y", String(r.ly));
+      txt.setAttribute("text-anchor", "middle");
+      txt.setAttribute("font-size", "18");
+      txt.setAttribute("fill", "#495057");
+      txt.setAttribute("class", "cf-num");
+      txt.textContent = String(numberOf.get(task.color) ?? "?");
+      svg.appendChild(txt);
+      numEls.set(task.region, txt);
+    }
   }
 
-  function renderPalette() {
+  function updateHud(): void {
+    progressEl.textContent = `🖌️ ${cfg.tasks.length - pending.size}/${cfg.tasks.length}`;
+    missEl.textContent = `💗 ${"❤".repeat(Math.max(0, cfg.maxWrong + 1 - wrong))}${"🤍".repeat(Math.min(wrong, cfg.maxWrong + 1))}`;
+  }
+
+  function renderChips(): void {
+    if (cfg.mode === "number" || cfg.mode === "memory") {
+      chipsEl.innerHTML = "";
+      return;
+    }
+    chipsEl.innerHTML = "";
+    for (const task of cfg.tasks) {
+      if (!pending.has(task.region)) continue;
+      const r = pic.regions.find((x) => x.id === task.region);
+      const chip = document.createElement("span");
+      chip.className = "cf-chip";
+      chip.innerHTML = `<span class="cf-chip-dot" style="background:${ALL_PAINTS[task.color]}"></span>${r?.name ?? task.region}→${task.color}`;
+      chipsEl.appendChild(chip);
+    }
+  }
+
+  function renderPalette(): void {
     paletteEl.innerHTML = "";
-    unlocked.forEach((color) => {
-      const swatch = document.createElement("button");
-      swatch.type = "button";
-      swatch.className = "cf-swatch" + (color === picked ? " cf-picked" : "");
-      swatch.style.background = color.value;
-      swatch.title = color.name;
-      swatch.setAttribute("aria-label", color.name);
-      swatch.addEventListener("click", () => {
-        play("tap");
-        picked = color;
-        paletteEl.querySelectorAll(".cf-swatch").forEach((s) => s.classList.remove("cf-picked"));
-        swatch.classList.add("cf-picked");
-        msgEl.textContent = `选好${color.name}啦，去涂吧！`;
+    for (const name of unlocked) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cf-swatch" + (name === picked ? " cf-picked" : "");
+      btn.style.background = ALL_PAINTS[name];
+      btn.title = name;
+      btn.setAttribute("aria-label", name);
+      if (cfg.mode === "number" && numberOf.has(name)) {
+        btn.innerHTML = `<span class="cf-swatch-num">${numberOf.get(name)}</span>`;
+      }
+      btn.addEventListener("click", () => {
+        if (ended || previewing) return;
+        ctx.sfx("tap");
+        picked = name;
+        renderPalette();
+        msgEl.textContent = `选好${name}啦，去涂吧！`;
       });
-      paletteEl.appendChild(swatch);
-    });
+      paletteEl.appendChild(btn);
+    }
   }
 
-  function renderMixer() {
-    primariesEl.innerHTML = "";
-    PRIMARY.forEach((p) => {
+  function finish(): void {
+    ended = true;
+    const got = rateBelow(wrong, 0, 2);
+    ctx.win(got, wrong === 0 ? `${pic.name}一笔都没涂错，真是小画家！` : `${pic.name}涂得五彩缤纷，真好看！`);
+  }
+
+  function onRegion(id: string): void {
+    if (ended || previewing) return;
+    const el = regionEls.get(id);
+    if (!el) return;
+    const want = pending.get(id);
+    if (want === undefined) {
+      msgEl.textContent = "这里不用涂哦，看看还差哪里～";
+      return;
+    }
+    if (!picked) {
+      msgEl.textContent = "先在下面选一个颜色～";
+      return;
+    }
+    if (picked === want) {
+      el.setAttribute("fill", ALL_PAINTS[want]);
+      pending.delete(id);
+      numEls.get(id)?.remove();
+      ctx.sfx("pop");
+      const r = pic.regions.find((x) => x.id === id);
+      msgEl.textContent = `${r?.name ?? "这里"}涂上${want}，真好看！`;
+      updateHud();
+      renderChips();
+      if (pending.size === 0) later(() => finish(), 500);
+    } else {
+      wrong++;
+      ctx.sfx("oops");
+      el.classList.add("cf-shake");
+      later(() => el.classList.remove("cf-shake"), 400);
+      msgEl.textContent = cfg.mode === "memory" ? "想一想刚才这里是什么颜色～" : "颜色不对哦，看看提示再试试～";
+      updateHud();
+      if (wrong > cfg.maxWrong) {
+        ended = true;
+        ctx.lose("颜料有点调皮，我们休息一下再画一次！");
+      }
+    }
+  }
+
+  // --- 调色锅 ---
+  if (primariesEl && slotA && slotB && mixTip) {
+    for (const p of ["红色", "黄色", "蓝色"]) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "cf-mix-primary";
-      btn.style.background = p.value;
-      btn.title = `倒入${p.name}`;
-      btn.setAttribute("aria-label", `倒入${p.name}`);
+      btn.style.background = ALL_PAINTS[p];
+      btn.title = `倒入${p}`;
+      btn.setAttribute("aria-label", `倒入${p}`);
       btn.addEventListener("click", () => onPour(p));
       primariesEl.appendChild(btn);
-    });
+    }
   }
 
-  function onPour(p: Paint) {
-    play("tap");
+  function resetPot(): void {
+    mixA = null;
+    if (slotA) { slotA.style.background = "#fff"; slotA.textContent = "?"; }
+    if (slotB) { slotB.style.background = "#fff"; slotB.textContent = "?"; }
+    if (mixTip) mixTip.textContent = "→ 倒两种原色试试";
+  }
+
+  function onPour(p: string): void {
+    if (ended || previewing) return;
+    ctx.sfx("tap");
     if (!mixA) {
       mixA = p;
-      slotA.style.background = p.value;
-      slotA.textContent = "";
-      mixLabel.textContent = "→ 再倒一种原色";
+      if (slotA) { slotA.style.background = ALL_PAINTS[p]; slotA.textContent = ""; }
+      if (mixTip) mixTip.textContent = "→ 再倒一种原色";
       return;
     }
-    const key = mixKey(mixA, p);
-    slotB.style.background = p.value;
-    slotB.textContent = "";
+    const key = [mixA, p].sort().join("+");
+    if (slotB) { slotB.style.background = ALL_PAINTS[p]; slotB.textContent = ""; }
     const result = MIX_TABLE[key];
     later(() => {
-      if (result) {
-        const exists = unlocked.some((c) => c.name === result.name);
-        if (!exists) {
+      if (result && cfg.needMix.includes(result)) {
+        if (!unlocked.includes(result)) {
           unlocked.push(result);
-          mixedCount++;
-          play("coin");
-          msgEl.textContent = `🥣 ${key.replace("+", " 加 ")}变出了${result.name}！新颜色进调色盘啦！`;
-          if (mixedCount === 1) {
-            addStars(1);
-            msgEl.textContent += " 第一次调色成功，奖励一颗小星星！";
-          }
+          ctx.sfx("coin");
+          msgEl.textContent = `🥣 ${key.replace("+", " 加 ")}变出了${result}！`;
           picked = result;
           renderPalette();
-          const last = paletteEl.lastElementChild as HTMLElement;
-          if (last) last.classList.add("cf-unlock");
+          (paletteEl.lastElementChild as HTMLElement | null)?.classList.add("cf-unlock");
         } else {
-          play("pop");
+          ctx.sfx("pop");
           picked = result;
           renderPalette();
-          msgEl.textContent = `又调出一锅${result.name}，接着涂吧～`;
+          msgEl.textContent = `又调出一锅${result}，接着涂吧～`;
         }
+      } else if (result) {
+        ctx.sfx("pop");
+        msgEl.textContent = `调出了${result}，不过这一关用不到它～`;
       } else {
-        play("oops");
+        ctx.sfx("oops");
         msgEl.textContent = "这两种颜色调不出新颜色，换个搭配试试～";
       }
-      mixA = null;
-      slotA.style.background = "#fff";
-      slotA.textContent = "?";
-      slotB.style.background = "#fff";
-      slotB.textContent = "?";
-      mixLabel.textContent = "→ 倒入两种原色试试";
-      updateHud();
-    }, 350);
+      resetPot();
+    }, 320);
   }
 
-  function renderPicture() {
-    const pic = PICTURES[picIdx];
-    colored = new Set();
-    finished = false;
-    svg.innerHTML = pic.regions
-      .map((r) => r.svg.replace(/\/>$/, ` class="cf-region" data-id="${r.id}" fill="#ffffff"/>`))
-      .join("");
-    svg.querySelectorAll<SVGElement>(".cf-region").forEach((el) => {
-      el.addEventListener("click", () => {
-        if (finished) return;
-        const id = el.getAttribute("data-id") || "";
-        const region = pic.regions.find((r) => r.id === id);
-        el.setAttribute("fill", picked.value);
-        play("pop");
-        colored.add(id);
-        msgEl.textContent = `${region ? region.name : "这里"}涂上${picked.name}，真好看！`;
-        updateHud();
-        if (colored.size >= pic.regions.length) {
-          finished = true;
-          play("coin");
-          later(() => pictureDone(), 700);
-        }
-      });
-    });
-    updateHud();
-  }
-
-  function showOverlay(title: string, sub: string, btnText: string, onNext: () => void) {
-    const ov = document.createElement("div");
-    ov.className = "cf-overlay";
-    const t = document.createElement("div");
-    t.className = "cf-ov-title";
-    t.textContent = title;
-    const s = document.createElement("div");
-    s.className = "cf-ov-sub";
-    s.textContent = sub;
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "cf-ov-btn";
-    b.textContent = btnText;
-    b.addEventListener("click", () => {
-      play("tap");
-      ov.remove();
-      onNext();
-    });
-    ov.append(t, s, b);
-    wrap.appendChild(ov);
-  }
-
-  function pictureDone() {
-    if (picIdx < PICTURES.length - 1) {
-      const next = PICTURES[picIdx + 1];
-      showOverlay(
-        `🎉 ${PICTURES[picIdx].name}涂好啦！`,
-        `下一幅是「${next.name}」，试试用调色锅变出新颜色再涂哦～`,
-        `画下一幅 ${next.emoji}`,
-        () => {
-          picIdx++;
-          renderPicture();
-          msgEl.textContent = "新的线稿来啦，先选颜色再涂～";
-        }
-      );
-    } else {
-      const msg =
-        mixedCount >= 2
-          ? "三幅画全部涂完，还调出了好多新颜色，真是小画家！"
-          : "三幅画全部涂得五彩缤纷，真是小画家！";
-      onWin(3, msg);
+  // --- 记忆模式：先展示答案再擦掉 ---
+  if (cfg.mode === "memory") {
+    for (const task of cfg.tasks) {
+      regionEls.get(task.region)?.setAttribute("fill", ALL_PAINTS[task.color]);
     }
+    let leftMs = cfg.previewMs;
+    const step = 100;
+    const tick = (): void => {
+      leftMs -= step;
+      if (previewEl) previewEl.textContent = `👀 记住每个地方的颜色… ${(leftMs / 1000).toFixed(1)}s`;
+      if (leftMs > 0) {
+        later(tick, step);
+        return;
+      }
+      previewing = false;
+      previewEl?.remove();
+      for (const task of cfg.tasks) {
+        regionEls.get(task.region)?.setAttribute("fill", "#ffffff");
+      }
+      msgEl.textContent = "开始凭记忆涂色吧！";
+    };
+    later(tick, step);
+  } else {
+    msgEl.textContent =
+      cfg.mode === "number"
+        ? "看画上的数字，用同号颜色涂它～"
+        : cfg.needMix.length > 0
+          ? "有些颜色要用调色锅调出来哦～"
+          : "先点一个颜色，再点画上想涂的地方～";
   }
 
-  renderMixer();
+  updateHud();
+  renderChips();
   renderPalette();
-  renderPicture();
 
   return {
     destroy() {
-      timers.forEach(clearTimeout);
-      root.innerHTML = "";
-    },
+      destroyed = true;
+      ended = true;
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
+      wrap.remove();
+    }
   };
+}
+
+export function mount(api: GameApi): { destroy: () => void } {
+  return mountLevelGame(api, {
+    id: meta.id,
+    chapters: CHAPTERS,
+    mapHint: "六个村镇六幅画，每关的颜色搭配都不一样～",
+    grandMessage: "99 关全部涂完，你是五彩缤纷的小画家！",
+    playLevel,
+  });
 }
