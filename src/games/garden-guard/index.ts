@@ -1,29 +1,50 @@
-// 花园守卫:五关塔防。三种蘑菇塔可升级可卖,拦住一路软软怪,最后打倒大软软 BOSS!
+// 花园守卫:20 关三大章节塔防战役!草地→沙滩→雪山,五种塔、八种怪、三个章节 BOSS。
+// 关卡地图选关,通关解锁下一关,回放刷 3 星。
 import {
+  DASH_CYCLE,
+  DASH_MULT,
+  DASH_TIME,
+  ENRAGE_MULT,
   GRID_COLS,
   GRID_ROWS,
+  HEAL_INTERVAL,
+  HEAL_RANGE,
+  HEARTS_PER_LEVEL,
   LEVELS,
   MAX_TOWER_LEVEL,
   MONSTER_INFO,
   MonsterKind,
+  PROGRESS_KEY,
+  SNEAK_HIDDEN,
+  SNEAK_VISIBLE,
+  SUMMON_INTERVAL,
+  THEME_STYLE,
   TOWER_INFO,
-  TOWER_KINDS,
   TowerKind,
+  applyHit,
+  boomSplash,
   buildWaypoints,
   canPlace,
   combineSlow,
   comboPetalBonus,
   dewSlowFactor,
+  isLevelUnlocked,
+  monsterArmor,
   monsterHp,
-  pathCellSet,
+  parseProgress,
   pathLength,
+  pathsCellSet,
   pickTarget,
   pointAlongPath,
   sellRefund,
-  starsForRun,
+  serializeProgress,
+  starsForLevel,
+  sunnyInterval,
+  totalStars,
   towerCooldown,
   towerDamage,
   towerRange,
+  towersUnlockedAt,
   upgradeCost,
   waveSpawnTimes,
 } from "./logic";
@@ -45,25 +66,34 @@ export const meta = {
   emoji: "🌼",
   category: "action" as const,
   color: "#ffd6e7",
-  blurb: "五关塔防!放蘑菇塔、升级卖塔,打倒大软软 BOSS!",
+  blurb: "20 关塔防大战役!五种塔八种怪,三章 BOSS 等你挑战!",
 };
 
 const HUD_H = 44;
 const TOOLBAR_H = 58;
-const HEARTS_PER_LEVEL = 3;
 
-type Phase = "intro" | "prewave" | "wave" | "clear" | "retry" | "done";
+type Phase = "map" | "intro" | "prewave" | "wave" | "clear" | "retry";
 
 interface Monster {
   kind: MonsterKind;
+  pathIdx: number;
   dist: number;
   baseSpeed: number;
   hp: number;
   maxHp: number;
+  armor: number;
+  maxArmor: number;
   x: number;
   y: number;
   wob: number;
   slowed: boolean;
+  hidden: boolean;
+  dashTimer: number;
+  dashing: boolean;
+  sneakTimer: number;
+  healTimer: number;
+  summonTimer: number;
+  enraged: boolean;
 }
 
 interface Tower {
@@ -72,6 +102,7 @@ interface Tower {
   row: number;
   level: number;
   cd: number;
+  prodTimer: number;
   firedAnim: number;
 }
 
@@ -83,6 +114,7 @@ interface Bullet {
   dmg: number;
   speed: number;
   needle: boolean;
+  splash: number;
 }
 
 interface Particle {
@@ -111,6 +143,22 @@ interface Rect {
   h: number;
 }
 
+function loadProgress(): number[] {
+  try {
+    return parseProgress(localStorage.getItem(PROGRESS_KEY), LEVELS.length);
+  } catch {
+    return parseProgress(null, LEVELS.length);
+  }
+}
+
+function saveProgress(stars: number[]): void {
+  try {
+    localStorage.setItem(PROGRESS_KEY, serializeProgress(stars));
+  } catch {
+    // 存储被禁用时静默失败
+  }
+}
+
 export function mount(api: GameAPI): { destroy: () => void } {
   const { root } = api;
   const canvas = document.createElement("canvas");
@@ -121,9 +169,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
   root.appendChild(canvas);
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 
+  // ---- 战役进度 ----
+  const progress = loadProgress();
+
   // ---- 局状态 ----
   let levelIdx = 0;
-  let phase: Phase = "intro";
+  let phase: Phase = "map";
   let phaseTimer = 0;
   let waveIdx = 0;
   let petals = LEVELS[0].startPetals;
@@ -131,16 +182,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let score = 0;
   let combo = 0;
   let comboTimer = 0;
-  let retries = 0;
-  let heartsLostTotal = 0;
-  let over = false;
+  let heartsLost = 0;
+  let earnedStars: 1 | 2 | 3 = 1;
+  let finaleFired = false;
+  let destroyed = false;
   let petalFlash = 0;
   let shake = 0;
   let time = 0;
 
-  let waypoints = buildWaypoints(LEVELS[0].corners);
-  let totalLen = pathLength(waypoints);
-  let blocked = pathCellSet(LEVELS[0].corners);
+  let wpList = LEVELS[0].paths.map((p) => buildWaypoints(p));
+  let lenList = wpList.map((wp) => pathLength(wp));
+  let blocked = pathsCellSet(LEVELS[0].paths);
   const occupied = new Map<string, Tower>();
 
   const monsters: Monster[] = [];
@@ -152,12 +204,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let spawnList: Array<{ kind: MonsterKind; time: number }> = [];
   let spawnIdx = 0;
   let spawnClock = 0;
+  let spawnCounter = 0;
 
+  let unlockedTowers: TowerKind[] = towersUnlockedAt(0, LEVELS);
   let selectedCard: TowerKind = "bubble";
   let selectedTower: Tower | null = null;
   let panelUpgrade: Rect | null = null;
   let panelSell: Rect | null = null;
   const cardRects: Array<{ kind: TowerKind; rect: Rect }> = [];
+  const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
+  let btnNext: Rect | null = null;
+  let btnMap: Rect | null = null;
+  let btnRetry: Rect | null = null;
+  let btnBack: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   // ---- 布局 ----
   let w = 640;
@@ -209,9 +268,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function loadLevel(idx: number): void {
     levelIdx = idx;
     const def = LEVELS[idx];
-    waypoints = buildWaypoints(def.corners);
-    totalLen = pathLength(waypoints);
-    blocked = pathCellSet(def.corners);
+    wpList = def.paths.map((p) => buildWaypoints(p));
+    lenList = wpList.map((wp) => pathLength(wp));
+    blocked = pathsCellSet(def.paths);
+    unlockedTowers = towersUnlockedAt(idx, LEVELS);
+    if (!unlockedTowers.includes(selectedCard)) selectedCard = "bubble";
     resetLevel();
     phase = "intro";
   }
@@ -224,12 +285,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
     occupied.clear();
     petals = def.startPetals;
     hearts = HEARTS_PER_LEVEL;
+    heartsLost = 0;
     waveIdx = 0;
     combo = 0;
+    score = 0;
     selectedTower = null;
     spawnList = [];
     spawnIdx = 0;
     spawnClock = 0;
+    spawnCounter = 0;
   }
 
   function startWave(): void {
@@ -239,53 +303,90 @@ export function mount(api: GameAPI): { destroy: () => void } {
     phase = "wave";
   }
 
-  function finishRun(): void {
-    if (over) return;
-    over = true;
-    phase = "done";
+  function levelCleared(): void {
+    earnedStars = starsForLevel(heartsLost);
+    const prev = progress[levelIdx] ?? 0;
+    const gained = Math.max(0, earnedStars - prev);
+    progress[levelIdx] = Math.max(prev, earnedStars);
+    saveProgress(progress);
+    phase = "clear";
     api.play("win");
-    api.onWin(
-      starsForRun(retries, heartsLostTotal),
-      `五关全部守住,大软软也被请回家啦!得分 ${score}`,
-    );
-  }
-
-  function failFinalLevel(): void {
-    if (over) return;
-    over = true;
-    phase = "done";
-    api.play("oops");
-    api.onLose("最后一关好险呀,再来挑战一次大软软!");
+    if (levelIdx >= LEVELS.length - 1 && !finaleFired) {
+      finaleFired = true;
+      api.onWin(earnedStars, `20 关战役全部通关!雪雪大王也被请回家啦!总星 ${totalStars(progress)}/60`);
+    } else if (gained > 0) {
+      api.addStars(gained);
+      addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
+    }
   }
 
   // ---- 输入 ----
-  function inRect(x: number, y: number, r: Rect): boolean {
-    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  function inRect(x: number, y: number, r: Rect | null): boolean {
+    return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
 
   function onPointerDown(e: PointerEvent): void {
-    if (over) return;
+    if (destroyed) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    if (phase === "map") {
+      for (const n of mapNodes) {
+        if (Math.hypot(x - n.x, y - n.y) <= n.r + 6) {
+          if (isLevelUnlocked(progress, n.idx)) {
+            api.play("tap");
+            loadLevel(n.idx);
+          } else {
+            api.play("oops");
+          }
+          return;
+        }
+      }
+      return;
+    }
     if (phase === "intro") {
+      if (inRect(x, y, btnBack)) {
+        api.play("tap");
+        phase = "map";
+        return;
+      }
       api.play("tap");
       phase = "prewave";
       phaseTimer = 1.6;
       return;
     }
     if (phase === "clear") {
-      api.play("tap");
-      loadLevel(levelIdx + 1);
+      if (inRect(x, y, btnNext) && levelIdx < LEVELS.length - 1) {
+        api.play("tap");
+        loadLevel(levelIdx + 1);
+        return;
+      }
+      if (inRect(x, y, btnMap)) {
+        api.play("tap");
+        phase = "map";
+      }
       return;
     }
     if (phase === "retry") {
+      if (inRect(x, y, btnRetry)) {
+        api.play("tap");
+        resetLevel();
+        phase = "prewave";
+        phaseTimer = 1.6;
+        return;
+      }
+      if (inRect(x, y, btnMap)) {
+        api.play("tap");
+        phase = "map";
+      }
+      return;
+    }
+
+    // 玩关卡时左上角随时回地图
+    if (inRect(x, y, btnBack)) {
       api.play("tap");
-      retries++;
-      resetLevel();
-      phase = "prewave";
-      phaseTimer = 1.6;
+      phase = "map";
       return;
     }
 
@@ -302,7 +403,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 塔操作面板
     if (selectedTower) {
       const t = selectedTower;
-      if (panelUpgrade && inRect(x, y, panelUpgrade) && t.level < MAX_TOWER_LEVEL) {
+      if (inRect(x, y, panelUpgrade) && t.level < MAX_TOWER_LEVEL) {
         const cost = upgradeCost(t.kind, t.level);
         if (petals >= cost) {
           petals -= cost;
@@ -316,7 +417,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         }
         return;
       }
-      if (panelSell && inRect(x, y, panelSell)) {
+      if (inRect(x, y, panelSell)) {
         const refund = sellRefund(t.kind, t.level);
         petals += refund;
         occupied.delete(`${t.col},${t.row}`);
@@ -333,7 +434,6 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const row = Math.floor((y - oy) / cell);
     const key = `${col},${row}`;
 
-    // 点已有塔 → 打开升级/卖塔面板
     const existing = occupied.get(key);
     if (existing) {
       selectedTower = selectedTower === existing ? null : existing;
@@ -353,17 +453,54 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     petals -= cost;
-    const tw: Tower = { kind: selectedCard, col, row, level: 1, cd: 0.2, firedAnim: 0 };
+    const tw: Tower = {
+      kind: selectedCard,
+      col,
+      row,
+      level: 1,
+      cd: 0.2,
+      prodTimer: sunnyInterval(1),
+      firedAnim: 0,
+    };
     occupied.set(key, tw);
     towers.push(tw);
     api.play("pop");
     burst(px(col + 0.5), py(row + 0.5), "#ffd6e7", 10);
   }
 
-  // ---- 更新 ----
+  // ---- 怪物生成与死亡 ----
+  function spawnMonster(kind: MonsterKind, pathIdx: number, dist = 0): void {
+    const spec = MONSTER_INFO[kind];
+    const hp = monsterHp(kind, levelIdx);
+    const armor = monsterArmor(kind, levelIdx);
+    const wp = wpList[pathIdx];
+    const p = pointAlongPath(wp, dist);
+    monsters.push({
+      kind,
+      pathIdx,
+      dist,
+      baseSpeed: spec.speed * (LEVELS[levelIdx].speedMult ?? 1),
+      hp,
+      maxHp: hp,
+      armor,
+      maxArmor: armor,
+      x: p.x,
+      y: p.y,
+      wob: Math.random() * Math.PI * 2,
+      slowed: false,
+      hidden: false,
+      dashTimer: DASH_CYCLE * Math.random(),
+      dashing: false,
+      sneakTimer: SNEAK_VISIBLE * Math.random(),
+      healTimer: HEAL_INTERVAL,
+      summonTimer: SUMMON_INTERVAL,
+      enraged: false,
+    });
+  }
+
   function onMonsterKilled(m: Monster): void {
-    const reward = MONSTER_INFO[m.kind].reward;
-    petals += reward;
+    const spec = MONSTER_INFO[m.kind];
+    petals += spec.reward;
     combo++;
     comboTimer = 2.2;
     const gain = 10 + (Math.min(combo, 8) - 1) * 5;
@@ -374,16 +511,37 @@ export function mount(api: GameAPI): { destroy: () => void } {
       addFloat(px(m.x), py(m.y) - 22, `连击 ×${combo} +${bonus}🌸`, "#b28ae8", true);
       api.play("coin");
     } else {
-      api.play(m.kind === "boss" ? "win" : "coin");
+      api.play(spec.boss ? "win" : "coin");
     }
     addFloat(px(m.x), py(m.y), `+${gain}`, "#c47a2a");
-    burst(px(m.x), py(m.y), "#c9b6f2", m.kind === "boss" ? 26 : 12, m.kind === "boss" ? 1.8 : 1);
-    if (m.kind === "boss") {
-      addFloat(px(m.x), py(m.y) - 40, "BOSS 打倒啦!", "#e05a7a", true);
+    burst(px(m.x), py(m.y), "#c9b6f2", spec.boss ? 26 : 12, spec.boss ? 1.8 : 1);
+    if (m.kind === "splity") {
+      spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.2));
+      spawnMonster("mini", m.pathIdx, m.dist + 0.15);
+      addFloat(px(m.x), py(m.y) - 30, "分身!", "#b28ae8");
+    }
+    if (spec.boss) {
+      addFloat(px(m.x), py(m.y) - 40, `${spec.name} 打倒啦!`, "#e05a7a", true);
       shake = 0.5;
     }
   }
 
+  function damageMonster(m: Monster, dmg: number): void {
+    const res = applyHit(m.hp, m.armor, dmg);
+    m.hp = res.hp;
+    m.armor = res.armor;
+    if (res.brokeArmor) {
+      api.play("meow");
+      addFloat(px(m.x), py(m.y) - 18, "壳碎啦!", "#c47a2a");
+    }
+    if (m.hp <= 0) {
+      const mi = monsters.indexOf(m);
+      if (mi >= 0) monsters.splice(mi, 1);
+      onMonsterKilled(m);
+    }
+  }
+
+  // ---- 更新 ----
   function update(dt: number): void {
     time += dt;
     petalFlash = Math.max(0, petalFlash - dt);
@@ -393,6 +551,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (comboTimer <= 0) combo = 0;
     }
 
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = floats.length - 1; i >= 0; i--) {
+      const f = floats[i];
+      f.life -= dt;
+      f.y -= dt * 34;
+      if (f.life <= 0) floats.splice(i, 1);
+    }
+
     if (phase === "prewave") {
       phaseTimer -= dt;
       if (phaseTimer <= 0) startWave();
@@ -400,29 +572,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       spawnClock += dt;
       while (spawnIdx < spawnList.length && spawnList[spawnIdx].time <= spawnClock) {
         const s = spawnList[spawnIdx++];
-        const spec = MONSTER_INFO[s.kind];
-        monsters.push({
-          kind: s.kind,
-          dist: 0,
-          baseSpeed: spec.speed,
-          hp: monsterHp(s.kind, levelIdx + 1),
-          maxHp: monsterHp(s.kind, levelIdx + 1),
-          x: waypoints[0].x,
-          y: waypoints[0].y,
-          wob: Math.random() * Math.PI * 2,
-          slowed: false,
-        });
+        spawnMonster(s.kind, spawnCounter++ % wpList.length);
       }
       if (spawnIdx >= spawnList.length && monsters.length === 0) {
         petals += 3;
         addFloat(w / 2, oy + 40, "波次奖励 +3 🌸", "#e05a7a", true);
         if (waveIdx >= LEVELS[levelIdx].waves.length - 1) {
-          if (levelIdx >= LEVELS.length - 1) {
-            finishRun();
-          } else {
-            phase = "clear";
-            api.play("win");
-          }
+          levelCleared();
         } else {
           waveIdx++;
           phase = "prewave";
@@ -435,8 +591,61 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     if (phase !== "wave" && phase !== "prewave") return;
 
-    // 露珠塔光环
-    for (const m of monsters) {
+    // 怪物行为
+    for (let i = monsters.length - 1; i >= 0; i--) {
+      const m = monsters[i];
+      // 冲冲怪:周期冲刺
+      if (m.kind === "dashy") {
+        m.dashTimer -= dt;
+        if (m.dashTimer <= 0) {
+          m.dashing = !m.dashing;
+          m.dashTimer = m.dashing ? DASH_TIME : DASH_CYCLE;
+          if (m.dashing) burst(px(m.x), py(m.y), "#ffd868", 5, 0.6);
+        }
+      }
+      // 隐隐怪:周期隐身
+      if (m.kind === "sneaky") {
+        m.sneakTimer -= dt;
+        if (m.sneakTimer <= 0) {
+          m.hidden = !m.hidden;
+          m.sneakTimer = m.hidden ? SNEAK_HIDDEN : SNEAK_VISIBLE;
+        }
+      }
+      // 奶油怪:治疗附近
+      if (m.kind === "healy") {
+        m.healTimer -= dt;
+        if (m.healTimer <= 0) {
+          m.healTimer = HEAL_INTERVAL;
+          for (const o of monsters) {
+            if (o === m || o.hp >= o.maxHp) continue;
+            if (Math.hypot(o.x - m.x, o.y - m.y) <= HEAL_RANGE) {
+              o.hp = Math.min(o.maxHp, o.hp + 1);
+              addFloat(px(o.x), py(o.y) - 14, "+1", "#7ac97a");
+            }
+          }
+          burst(px(m.x), py(m.y), "#d8f5d8", 6, 0.5);
+        }
+      }
+      // 蟹蟹将军:召唤小分身
+      if (m.kind === "boss2") {
+        m.summonTimer -= dt;
+        if (m.summonTimer <= 0) {
+          m.summonTimer = SUMMON_INTERVAL;
+          spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.4));
+          spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.8));
+          addFloat(px(m.x), py(m.y) - 30, "召唤小兵!", "#e05a7a");
+          api.play("meow");
+        }
+      }
+      // 雪雪大王:半血暴走
+      if (m.kind === "boss3" && !m.enraged && m.hp <= m.maxHp / 2) {
+        m.enraged = true;
+        shake = 0.4;
+        addFloat(px(m.x), py(m.y) - 34, "雪雪大王暴走啦!", "#5a8ac9", true);
+        api.play("oops");
+      }
+
+      // 减速光环
       const factors: number[] = [];
       for (const t of towers) {
         if (t.kind !== "dew") continue;
@@ -445,36 +654,46 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       const factor = combineSlow(factors);
       m.slowed = factor < 1;
-      m.dist += m.baseSpeed * factor * dt;
+      let spd = m.baseSpeed * factor;
+      if (m.dashing) spd *= DASH_MULT;
+      if (m.enraged) spd *= ENRAGE_MULT;
+      m.dist += spd * dt;
       m.wob += dt * 7;
-      const p = pointAlongPath(waypoints, m.dist);
+      const wp = wpList[m.pathIdx];
+      const p = pointAlongPath(wp, m.dist);
       m.x = p.x;
       m.y = p.y;
-      if (p.done || m.dist >= totalLen) {
-        const mi = monsters.indexOf(m);
-        if (mi >= 0) monsters.splice(mi, 1);
+      if (p.done || m.dist >= lenList[m.pathIdx]) {
+        monsters.splice(i, 1);
         hearts--;
-        heartsLostTotal++;
+        heartsLost++;
         shake = 0.35;
         api.play("oops");
         burst(px(m.x), py(m.y), "#ff9eb5", 14);
         if (hearts <= 0) {
-          if (levelIdx >= LEVELS.length - 1) {
-            failFinalLevel();
-          } else {
-            phase = "retry";
-            api.play("oops");
-          }
+          phase = "retry";
+          api.play("oops");
           return;
         }
       }
     }
 
-    // 攻击塔开火
+    // 塔行为
     for (const t of towers) {
-      if (t.kind === "dew") continue;
-      t.cd -= dt;
       t.firedAnim = Math.max(0, t.firedAnim - dt * 4);
+      if (t.kind === "dew") continue;
+      if (t.kind === "sunny") {
+        t.prodTimer -= dt;
+        if (t.prodTimer <= 0) {
+          t.prodTimer = sunnyInterval(t.level);
+          petals += 1;
+          t.firedAnim = 1;
+          api.play("coin");
+          addFloat(px(t.col + 0.5), py(t.row), "+1🌸", "#e0a030");
+        }
+        continue;
+      }
+      t.cd -= dt;
       if (t.cd <= 0) {
         const idx = pickTarget(monsters, t.col + 0.5, t.row + 0.5, towerRange(t.kind, t.level));
         if (idx >= 0) {
@@ -486,8 +705,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
             target: monsters[idx],
             life: 2,
             dmg: towerDamage(t.kind, t.level),
-            speed: t.kind === "needle" ? 12 : 6,
+            speed: t.kind === "needle" ? 12 : t.kind === "boom" ? 5 : 6,
             needle: t.kind === "needle",
+            splash: t.kind === "boom" ? boomSplash(t.level) : 0,
           });
         }
       }
@@ -507,34 +727,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const d = Math.hypot(dx, dy) || 1e-6;
       const step = b.speed * dt;
       if (d <= Math.max(0.22, step)) {
-        tgt.hp -= b.dmg;
         bullets.splice(i, 1);
-        burst(px(tgt.x), py(tgt.y), b.needle ? "#c8f2d8" : "#bfe9ff", 6);
-        if (tgt.hp <= 0) {
-          const mi = monsters.indexOf(tgt);
-          if (mi >= 0) monsters.splice(mi, 1);
-          onMonsterKilled(tgt);
-        } else {
+        if (b.splash > 0) {
+          burst(px(tgt.x), py(tgt.y), "#ffc09b", 16, 1.4);
           api.play("pop");
+          const hitX = tgt.x;
+          const hitY = tgt.y;
+          const inRange = monsters.filter(
+            (m) => Math.hypot(m.x - hitX, m.y - hitY) <= b.splash,
+          );
+          for (const m of inRange) damageMonster(m, b.dmg);
+        } else {
+          burst(px(tgt.x), py(tgt.y), b.needle ? "#c8f2d8" : "#bfe9ff", 6);
+          damageMonster(tgt, b.dmg);
+          if (tgt.hp > 0) api.play("pop");
         }
       } else {
         b.x += (dx / d) * step;
         b.y += (dy / d) * step;
       }
-    }
-
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.life -= dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      if (p.life <= 0) particles.splice(i, 1);
-    }
-    for (let i = floats.length - 1; i >= 0; i--) {
-      const f = floats[i];
-      f.life -= dt;
-      f.y -= dt * 34;
-      if (f.life <= 0) floats.splice(i, 1);
     }
   }
 
@@ -575,7 +786,6 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       drawFace(tx, ty + r * 0.4, r * 0.55);
     } else if (kind === "needle") {
-      // 仙人掌小塔
       ctx.fillStyle = "#8fd8a8";
       ctx.beginPath();
       ctx.ellipse(tx, ty, r * 0.62, r * 0.85, 0, 0, Math.PI * 2);
@@ -595,8 +805,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.arc(tx, ty - r * 0.85, r * 0.2, 0, Math.PI * 2);
       ctx.fill();
       drawFace(tx, ty, r * 0.55);
-    } else {
-      // 露珠塔
+    } else if (kind === "dew") {
       ctx.fillStyle = "#9fd8f5";
       ctx.beginPath();
       ctx.moveTo(tx, ty - r * 0.95);
@@ -609,8 +818,36 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.arc(tx - r * 0.22, ty - r * 0.05, r * 0.15, 0, Math.PI * 2);
       ctx.fill();
       drawFace(tx, ty + r * 0.25, r * 0.5);
+    } else if (kind === "sunny") {
+      // 阳光花:黄色花瓣圈
+      ctx.fillStyle = "#ffe387";
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8 + anim * 0.4;
+        ctx.beginPath();
+        ctx.ellipse(tx + Math.cos(a) * r * 0.62, ty + Math.sin(a) * r * 0.62, r * 0.3, r * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffd868";
+      ctx.beginPath();
+      ctx.arc(tx, ty, r * (0.55 + anim * 0.1), 0, Math.PI * 2);
+      ctx.fill();
+      drawFace(tx, ty, r * 0.5);
+    } else {
+      // 花火塔:小炮筒
+      ctx.fillStyle = "#ffc09b";
+      ctx.beginPath();
+      ctx.ellipse(tx, ty + r * 0.25, r * 0.62, r * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#e8926a";
+      ctx.beginPath();
+      ctx.ellipse(tx + r * 0.1, ty - r * 0.4, r * 0.3, r * 0.5, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffd868";
+      ctx.beginPath();
+      ctx.arc(tx + r * (0.35 + anim * 0.3), ty - r * (0.75 + anim * 0.3), r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+      drawFace(tx, ty + r * 0.25, r * 0.5);
     }
-    // 等级小星星
     for (let i = 1; i < level; i++) {
       ctx.fillStyle = "#ffd868";
       ctx.beginPath();
@@ -619,24 +856,34 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
+  const MONSTER_COLORS: Record<MonsterKind, string> = {
+    softy: "#c9b6f2",
+    fasty: "#9fd8f5",
+    tanky: "#ffc09b",
+    dashy: "#ffd868",
+    shieldy: "#b8c8d8",
+    splity: "#b5e8a8",
+    sneaky: "#d8c8f0",
+    healy: "#f5d8e8",
+    mini: "#d5c9f5",
+    boss1: "#ff9eb5",
+    boss2: "#f0a878",
+    boss3: "#a8c8f0",
+  };
+
   function drawMonster(m: Monster): void {
     const mx = px(m.x);
     const my = py(m.y);
     const spec = MONSTER_INFO[m.kind];
     const r = cell * spec.size;
     const sq = 1 + Math.sin(m.wob) * 0.08;
-    const colors: Record<MonsterKind, string> = {
-      softy: "#c9b6f2",
-      fasty: "#9fd8f5",
-      tanky: "#ffc09b",
-      boss: "#ff9eb5",
-    };
-    ctx.fillStyle = colors[m.kind];
+    ctx.save();
+    if (m.hidden) ctx.globalAlpha = 0.22;
+    ctx.fillStyle = m.enraged ? "#7aa8e8" : MONSTER_COLORS[m.kind];
     ctx.beginPath();
     ctx.ellipse(mx, my, r * sq, r / sq, 0, 0, Math.PI * 2);
     ctx.fill();
-    if (m.kind === "fasty") {
-      // 小翅膀
+    if (m.kind === "fasty" || m.kind === "sneaky") {
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       const flap = Math.sin(m.wob * 2) * r * 0.3;
       ctx.beginPath();
@@ -645,14 +892,45 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
     }
     if (m.kind === "tanky") {
-      // 小头盔
       ctx.fillStyle = "#e8a878";
       ctx.beginPath();
       ctx.arc(mx, my - r * 0.55, r * 0.6, Math.PI, 0);
       ctx.fill();
     }
-    if (m.kind === "boss") {
-      // 小皇冠
+    if (m.kind === "dashy" && m.dashing) {
+      ctx.strokeStyle = "rgba(255,216,104,0.8)";
+      ctx.lineWidth = 3;
+      for (let k = 1; k <= 2; k++) {
+        ctx.beginPath();
+        ctx.arc(mx - k * r * 0.9, my, r * 0.7, -0.6, 0.6);
+        ctx.stroke();
+      }
+    }
+    if (m.maxArmor > 0 && m.armor > 0) {
+      ctx.fillStyle = "rgba(150,170,190,0.9)";
+      ctx.beginPath();
+      ctx.arc(mx, my - r * 0.2, r * 1.05, Math.PI, 0);
+      ctx.fill();
+      ctx.strokeStyle = "#7a90a8";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    if (m.kind === "healy") {
+      ctx.fillStyle = "#e05a7a";
+      ctx.font = `${Math.round(r * 0.8)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("💗", mx, my - r * 1.1);
+    }
+    if (m.kind === "splity") {
+      // 两个小圆点表示会分身
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.arc(mx - r * 0.4, my - r * 0.75, r * 0.2, 0, Math.PI * 2);
+      ctx.arc(mx + r * 0.4, my - r * 0.75, r * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (spec.boss) {
       ctx.fillStyle = "#ffd868";
       ctx.beginPath();
       ctx.moveTo(mx - r * 0.4, my - r * 0.95);
@@ -662,6 +940,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.lineTo(mx + r * 0.4, my - r * 0.95);
       ctx.closePath();
       ctx.fill();
+      if (m.kind === "boss2") {
+        // 蟹蟹钳子
+        ctx.strokeStyle = "#d0885a";
+        ctx.lineWidth = Math.max(2, r * 0.14);
+        ctx.beginPath();
+        ctx.arc(mx - r * 1.15, my - r * 0.1, r * 0.3, 0.4, Math.PI * 1.6);
+        ctx.arc(mx + r * 1.15, my - r * 0.1, r * 0.3, Math.PI * 1.4, Math.PI * 0.6);
+        ctx.stroke();
+      }
     }
     if (m.slowed) {
       ctx.fillStyle = "rgba(160,220,255,0.5)";
@@ -675,87 +962,250 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.arc(mx + r * 0.4, my + r * 0.9, r * 0.16, 0, Math.PI * 2);
     ctx.fill();
     drawFace(mx, my, r);
-    // 血条
+    // 血条(带护甲段)
     const bw = r * 2.2;
+    const bh = Math.max(3, r * 0.16);
     ctx.fillStyle = "rgba(0,0,0,0.12)";
     ctx.beginPath();
-    ctx.roundRect(mx - bw / 2, my - r * 1.55, bw, Math.max(3, r * 0.16), 3);
+    ctx.roundRect(mx - bw / 2, my - r * 1.55, bw, bh, 3);
     ctx.fill();
-    ctx.fillStyle = m.kind === "boss" ? "#e05a7a" : "#7ac97a";
+    ctx.fillStyle = spec.boss ? "#e05a7a" : "#7ac97a";
     ctx.beginPath();
-    ctx.roundRect(mx - bw / 2, my - r * 1.55, (bw * m.hp) / m.maxHp, Math.max(3, r * 0.16), 3);
+    ctx.roundRect(mx - bw / 2, my - r * 1.55, (bw * m.hp) / m.maxHp, bh, 3);
     ctx.fill();
+    if (m.maxArmor > 0) {
+      ctx.fillStyle = "#8aa0b8";
+      ctx.beginPath();
+      ctx.roundRect(mx - bw / 2, my - r * 1.55 - bh - 1, (bw * m.armor) / m.maxArmor, bh * 0.8, 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
-  function overlayPanel(title: string, sub: string, accent: string): void {
-    ctx.fillStyle = "rgba(255,245,250,0.82)";
+  function panelBox(pw: number, ph: number): { x: number; y: number } {
+    const x = (w - pw) / 2;
+    const y = h / 2 - ph / 2;
+    ctx.fillStyle = "rgba(255,245,250,0.85)";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#ffffff";
-    const pw = Math.min(430, w - 40);
     ctx.beginPath();
-    ctx.roundRect((w - pw) / 2, h / 2 - 76, pw, 152, 22);
+    ctx.roundRect(x, y, pw, ph, 22);
     ctx.fill();
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fillStyle = accent;
-    ctx.font = "bold 26px sans-serif";
+    return { x, y };
+  }
+
+  function drawButton(r: Rect, label: string, bg: string, fg: string): void {
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.roundRect(r.x, r.y, r.w, r.h, 14);
+    ctx.fill();
+    ctx.fillStyle = fg;
+    ctx.font = "bold 17px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(title, w / 2, h / 2 - 26);
-    ctx.fillStyle = "#5a5a6e";
-    ctx.font = "17px sans-serif";
-    ctx.fillText(sub, w / 2, h / 2 + 16);
+    ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
+  }
+
+  function drawMap(): void {
+    // 三段渐变背景
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#e3f7dc");
+    grad.addColorStop(0.5, "#fdf3e0");
+    grad.addColorStop(1, "#e8f0fb");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = "#e05a7a";
+    ctx.font = "bold 24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🌼 花园守卫 · 战役地图", w / 2, 30);
     ctx.font = "15px sans-serif";
+    ctx.fillStyle = "#8a7a5e";
+    ctx.fillText(`⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 通关解锁下一关,回放可刷 3 星`, w / 2, 58);
+
+    mapNodes.length = 0;
+    const cols: number = 5;
+    const rows = Math.ceil(LEVELS.length / cols);
+    const mx0 = w * 0.1;
+    const mx1 = w * 0.9;
+    const my0 = 92;
+    const my1 = h - 30;
+    const nr = Math.max(16, Math.min(26, (mx1 - mx0) / cols / 2.6, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < LEVELS.length; i++) {
+      const row = Math.floor(i / cols);
+      const colRaw = i % cols;
+      const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
+      const x = mx0 + ((mx1 - mx0) * (cols === 1 ? 0.5 : col / (cols - 1)));
+      const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
+      mapNodes.push({ idx: i, x, y, r: nr });
+    }
+    // 连线
+    ctx.strokeStyle = "rgba(200,170,140,0.5)";
+    ctx.lineWidth = 5;
+    ctx.setLineDash([2, 9]);
+    ctx.beginPath();
+    for (let i = 0; i < mapNodes.length; i++) {
+      const n = mapNodes[i];
+      if (i === 0) ctx.moveTo(n.x, n.y);
+      else ctx.lineTo(n.x, n.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 节点
+    for (const n of mapNodes) {
+      const def = LEVELS[n.idx];
+      const st = THEME_STYLE[def.theme];
+      const unlocked = isLevelUnlocked(progress, n.idx);
+      const got = progress[n.idx] ?? 0;
+      const isBoss = def.feature.includes("BOSS");
+      const r = isBoss ? n.r * 1.25 : n.r;
+      ctx.fillStyle = unlocked ? (got > 0 ? st.bgA : "#ffffff") : "#e4e4ea";
+      ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (!unlocked) {
+        ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
+        ctx.fillText("🔒", n.x, n.y);
+      } else {
+        ctx.fillStyle = st.accent;
+        ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
+        ctx.fillText(String(n.idx + 1), n.x, n.y - (isBoss ? r * 0.1 : 0));
+        if (isBoss) {
+          ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
+          ctx.fillText("👑", n.x, n.y - r * 0.95);
+        }
+        // 星星
+        ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
+        let starTxt = "";
+        for (let s = 0; s < 3; s++) starTxt += s < got ? "⭐" : "▫";
+        ctx.fillText(starTxt, n.x, n.y + r * 1.45);
+      }
+    }
+  }
+
+  function drawLevelSummaryPanel(): void {
+    const def = LEVELS[levelIdx];
+    const { y } = panelBox(Math.min(440, w - 40), 230);
+    ctx.fillStyle = "#4a9a5a";
+    ctx.font = "bold 25px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`第 ${levelIdx + 1} 关 · ${def.name} 通过!`, w / 2, y + 42);
+    ctx.font = "34px sans-serif";
+    let starTxt = "";
+    for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
+    ctx.fillText(starTxt, w / 2, y + 90);
+    ctx.font = "15px sans-serif";
+    ctx.fillStyle = "#5a5a6e";
+    ctx.fillText(
+      earnedStars === 3 ? "一颗心都没掉,完美守卫!" : `掉了 ${heartsLost} 颗心 · 得分 ${score}`,
+      w / 2,
+      y + 126,
+    );
+    const bw2 = 132;
+    btnMap = { x: w / 2 - bw2 - 10, y: y + 158, w: bw2, h: 44 };
+    drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
+    if (levelIdx < LEVELS.length - 1) {
+      btnNext = { x: w / 2 + 10, y: y + 158, w: bw2, h: 44 };
+      drawButton(btnNext, "下一关 ▶", "#ffd868", "#7a5a1a");
+    } else {
+      btnNext = null;
+    }
+  }
+
+  function drawRetryPanel(): void {
+    const { y } = panelBox(Math.min(440, w - 40), 210);
+    ctx.fillStyle = "#b28ae8";
+    ctx.font = "bold 24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("哎呀,花朵蔫了……", w / 2, y + 46);
+    ctx.font = "15px sans-serif";
+    ctx.fillStyle = "#5a5a6e";
+    ctx.fillText("没关系!就在这一关再来一次", w / 2, y + 88);
+    const bw2 = 132;
+    btnMap = { x: w / 2 - bw2 - 10, y: y + 130, w: bw2, h: 44 };
+    btnRetry = { x: w / 2 + 10, y: y + 130, w: bw2, h: 44 };
+    drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
+    drawButton(btnRetry, "再试一次", "#ffd868", "#7a5a1a");
+  }
+
+  function drawIntroPanel(): void {
+    const def = LEVELS[levelIdx];
+    const st = THEME_STYLE[def.theme];
+    const { y } = panelBox(Math.min(450, w - 40), 200);
+    ctx.fillStyle = st.accent;
+    ctx.font = "bold 24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`第 ${levelIdx + 1} 关 · ${def.name}`, w / 2, y + 44);
+    ctx.fillStyle = "#5a5a6e";
+    ctx.font = "16px sans-serif";
+    ctx.fillText(def.hint, w / 2, y + 90);
+    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#a0a0b2";
-    ctx.fillText("点一下屏幕继续", w / 2, h / 2 + 50);
+    ctx.fillText(`${st.name} · ${def.waves.length} 波 · 点一下屏幕开始`, w / 2, y + 130);
+    ctx.fillText("(左上角 ◀ 可回地图)", w / 2, y + 158);
   }
 
   function draw(): void {
+    if (phase === "map") {
+      drawMap();
+      return;
+    }
+
+    const def = LEVELS[levelIdx];
+    const st = THEME_STYLE[def.theme];
     ctx.save();
     if (shake > 0) {
       ctx.translate((Math.random() - 0.5) * shake * 14, (Math.random() - 0.5) * shake * 14);
     }
 
-    // 草地
-    ctx.fillStyle = "#e3f7dc";
+    ctx.fillStyle = st.bgB;
     ctx.fillRect(-20, -20, w + 40, h + 40);
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
-        ctx.fillStyle = (r + c) % 2 === 0 ? "#d5f2ca" : "#def5d5";
+        ctx.fillStyle = (r + c) % 2 === 0 ? st.bgA : st.bgB;
         ctx.fillRect(px(c), py(r), cell + 0.5, cell + 0.5);
       }
     }
     for (const key of blocked) {
       const [c, r] = key.split(",").map(Number);
-      ctx.fillStyle = "#f9e9bd";
+      ctx.fillStyle = st.path;
       ctx.fillRect(px(c), py(r), cell + 0.5, cell + 0.5);
     }
 
-    // 起点小门
-    const start = waypoints[0];
-    ctx.fillStyle = "#c9b6f2";
-    ctx.beginPath();
-    ctx.arc(px(start.x), py(start.y), cell * 0.32, Math.PI, 0);
-    ctx.fill();
-
-    // 终点花朵
-    const end = waypoints[waypoints.length - 1];
-    const fx = px(end.x);
-    const fy = py(end.y);
-    const fr = cell * 0.34;
-    for (let i = 0; i < 6; i++) {
-      const a = (Math.PI * 2 * i) / 6 + time * 0.4;
-      ctx.fillStyle = i < hearts * 2 ? "#ffb3c8" : "#e9d8dd";
+    // 起点小门与终点花朵(每条路)
+    for (let pi = 0; pi < wpList.length; pi++) {
+      const wp = wpList[pi];
+      const start = wp[0];
+      ctx.fillStyle = "#c9b6f2";
       ctx.beginPath();
-      ctx.arc(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr, fr * 0.62, 0, Math.PI * 2);
+      ctx.arc(px(start.x), py(start.y), cell * 0.32, Math.PI, 0);
       ctx.fill();
+      const end = wp[wp.length - 1];
+      const fx = px(end.x);
+      const fy = py(end.y);
+      const fr = cell * 0.34;
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6 + time * 0.4;
+        ctx.fillStyle = i < hearts ? "#ffb3c8" : "#e9d8dd";
+        ctx.beginPath();
+        ctx.arc(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr, fr * 0.62, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffe387";
+      ctx.beginPath();
+      ctx.arc(fx, fy, fr * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      drawFace(fx, fy, fr * 0.8);
     }
-    ctx.fillStyle = "#ffe387";
-    ctx.beginPath();
-    ctx.arc(fx, fy, fr * 0.8, 0, Math.PI * 2);
-    ctx.fill();
-    drawFace(fx, fy, fr * 0.8);
 
     // 露珠塔光环
     for (const t of towers) {
@@ -767,16 +1217,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
     }
 
-    // 选中塔的射程圈
     if (selectedTower) {
       const t = selectedTower;
-      ctx.strokeStyle = "rgba(224,90,122,0.5)";
-      ctx.setLineDash([6, 6]);
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(px(t.col + 0.5), py(t.row + 0.5), towerRange(t.kind, t.level) * cell, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      if (TOWER_INFO[t.kind].range > 0) {
+        ctx.strokeStyle = "rgba(224,90,122,0.5)";
+        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px(t.col + 0.5), py(t.row + 0.5), towerRange(t.kind, t.level) * cell, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     for (const t of towers) {
@@ -785,7 +1236,6 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     for (const m of monsters) drawMonster(m);
 
-    // 子弹
     for (const b of bullets) {
       const bx = px(b.x);
       const by = py(b.y);
@@ -798,6 +1248,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.beginPath();
         ctx.moveTo(bx - Math.cos(a) * cell * 0.14, by - Math.sin(a) * cell * 0.14);
         ctx.lineTo(bx + Math.cos(a) * cell * 0.14, by + Math.sin(a) * cell * 0.14);
+        ctx.stroke();
+      } else if (b.splash > 0) {
+        ctx.fillStyle = "#e8926a";
+        ctx.beginPath();
+        ctx.arc(bx, by, cell * 0.14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffd868";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(bx, by, cell * 0.2, time * 8, time * 8 + Math.PI);
         ctx.stroke();
       } else {
         ctx.fillStyle = "rgba(160,220,255,0.85)";
@@ -823,7 +1283,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 塔操作面板
     panelUpgrade = null;
     panelSell = null;
-    if (selectedTower && !over && (phase === "wave" || phase === "prewave")) {
+    if (selectedTower && (phase === "wave" || phase === "prewave")) {
       const t = selectedTower;
       const cxp = px(t.col + 0.5);
       const topY = py(t.row) - 46;
@@ -860,7 +1320,6 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(`卖 +${sellRefund(t.kind, t.level)}🌸`, panelSell.x + bw2 / 2, panelSell.y + 18);
     }
 
-    // 飘字
     for (const f of floats) {
       ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.6));
       ctx.fillStyle = f.color;
@@ -876,16 +1335,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // ---- HUD ----
     ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.fillRect(0, 0, w, HUD_H);
+    btnBack = { x: 6, y: 7, w: 62, h: 30 };
+    drawButton(btnBack, "◀ 地图", "#f0f0f5", "#5a5a6e");
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     ctx.font = "17px sans-serif";
     ctx.fillStyle = petalFlash > 0 && Math.floor(petalFlash * 8) % 2 === 0 ? "#e05a7a" : "#5a5a6e";
-    ctx.fillText(`🌸 ${petals}`, 12, HUD_H / 2);
+    ctx.fillText(`🌸 ${petals}`, 78, HUD_H / 2);
     ctx.textAlign = "center";
     ctx.fillStyle = "#5a5a6e";
+    ctx.font = "15px sans-serif";
     ctx.fillText(
-      `第 ${levelIdx + 1}/${LEVELS.length} 关 · 波 ${waveIdx + 1}/${LEVELS[levelIdx].waves.length}`,
-      w / 2 - 40,
+      `第 ${levelIdx + 1}/${LEVELS.length} 关 · 波 ${waveIdx + 1}/${def.waves.length}`,
+      w / 2,
       HUD_H / 2,
     );
     ctx.textAlign = "right";
@@ -895,7 +1357,6 @@ export function mount(api: GameAPI): { destroy: () => void } {
       HUD_H / 2,
     );
 
-    // 连击提示
     if (combo >= 2 && comboTimer > 0) {
       ctx.fillStyle = "#b28ae8";
       ctx.font = `bold ${20 + Math.min(combo, 8)}px sans-serif`;
@@ -903,13 +1364,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(`连击 ×${combo}`, w / 2, HUD_H + TOOLBAR_H + 22);
     }
 
-    // ---- 工具栏 ----
+    // ---- 工具栏(只显示已解锁的塔) ----
     ctx.fillStyle = "rgba(255,255,255,0.82)";
     ctx.fillRect(0, HUD_H, w, TOOLBAR_H);
     cardRects.length = 0;
-    const cw = Math.min(150, (w - 24) / TOWER_KINDS.length);
-    for (let i = 0; i < TOWER_KINDS.length; i++) {
-      const kind = TOWER_KINDS[i];
+    const cw = Math.min(136, (w - 24) / unlockedTowers.length);
+    for (let i = 0; i < unlockedTowers.length; i++) {
+      const kind = unlockedTowers[i];
       const rect: Rect = { x: 8 + i * (cw + 6), y: HUD_H + 6, w: cw, h: TOOLBAR_H - 12 };
       cardRects.push({ kind, rect });
       const afford = petals >= TOWER_INFO[kind].cost;
@@ -921,42 +1382,35 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = afford ? 1 : 0.45;
-      drawTowerIcon(kind, rect.x + 22, rect.y + rect.h / 2 + 2, 13);
+      drawTowerIcon(kind, rect.x + 20, rect.y + rect.h / 2 + 2, 12);
       ctx.fillStyle = "#5a5a6e";
-      ctx.font = "bold 13px sans-serif";
+      ctx.font = "bold 12px sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${TOWER_INFO[kind].name} ${TOWER_INFO[kind].cost}🌸`, rect.x + 42, rect.y + rect.h / 2 - 8);
-      ctx.font = "11px sans-serif";
+      ctx.fillText(`${TOWER_INFO[kind].name} ${TOWER_INFO[kind].cost}🌸`, rect.x + 38, rect.y + rect.h / 2 - 8);
+      ctx.font = "10px sans-serif";
       ctx.fillStyle = "#9a9aa8";
-      ctx.fillText(TOWER_INFO[kind].desc, rect.x + 42, rect.y + rect.h / 2 + 9);
+      ctx.fillText(TOWER_INFO[kind].desc, rect.x + 38, rect.y + rect.h / 2 + 9);
       ctx.globalAlpha = 1;
     }
 
     // ---- 覆盖层 ----
     if (phase === "intro") {
-      const def = LEVELS[levelIdx];
-      overlayPanel(
-        `第 ${levelIdx + 1} 关 · ${def.name}`,
-        levelIdx === 0
-          ? "选一张塔卡,点绿草地放塔,守住小花朵!"
-          : levelIdx === LEVELS.length - 1
-            ? "大软软 BOSS 要来啦!多放塔、记得升级!"
-            : `${def.waves.length} 波怪要来,点塔可以升级或卖掉`,
-        "#e05a7a",
-      );
+      drawIntroPanel();
+      // 覆盖层上补画返回按钮,保证可点
+      drawButton(btnBack, "◀ 地图", "#f0f0f5", "#5a5a6e");
     } else if (phase === "clear") {
-      overlayPanel(`第 ${levelIdx + 1} 关完成!`, `得分 ${score} · 下一关小路会变哦`, "#4a9a5a");
+      drawLevelSummaryPanel();
     } else if (phase === "retry") {
-      overlayPanel("哎呀,花朵蔫了……", "没关系!点一下重新挑战这一关", "#b28ae8");
-    } else if (phase === "prewave" && !over) {
+      drawRetryPanel();
+    } else if (phase === "prewave") {
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       ctx.fillRect(0, h / 2 - 30, w, 60);
       ctx.fillStyle = "#e05a7a";
       ctx.font = "bold 24px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`第 ${waveIdx + 1} 波软软怪要来啦!`, w / 2, h / 2);
+      ctx.fillText(`第 ${waveIdx + 1} 波怪要来啦!`, w / 2, h / 2);
     }
   }
 
@@ -966,18 +1420,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     syncSize();
-    if (!over) update(dt);
+    update(dt);
     draw();
     raf = requestAnimationFrame(frame);
   }
 
   canvas.addEventListener("pointerdown", onPointerDown);
   syncSize();
-  loadLevel(0);
   raf = requestAnimationFrame(frame);
 
   return {
     destroy(): void {
+      destroyed = true;
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.remove();
