@@ -252,3 +252,51 @@ describe("gomoku 候选点", () => {
     }
   });
 });
+
+describe("gomoku AI 响应速度(思考中不卡 UI)", () => {
+  /** 摆一个 15×15 中盘局面:40 手散布在中腹,候选点最多的场景 */
+  function midGameBoard(): Board {
+    const b = makeBoard(15);
+    let p: Player = 1;
+    let seed = 7;
+    const rng = (): number => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    let placed = 0;
+    while (placed < 40) {
+      const x = 2 + Math.floor(rng() * 11);
+      const y = 2 + Math.floor(rng() * 11);
+      if (b.cells[y * 15 + x] !== 0) continue;
+      // 避免摆出现成的五连干扰测试
+      setCell(b, x, y, p);
+      if (findWinLine(b, x, y)) {
+        setCell(b, x, y, 0);
+        continue;
+      }
+      p = p === 1 ? 2 : 1;
+      placed++;
+    }
+    return b;
+  }
+
+  it("聪明档中盘一步 < 100ms(同步计算不阻塞动画)", () => {
+    const warm = midGameBoard();
+    bestMove(warm, 2, "smart", () => 0); // 预热 JIT
+    const b = midGameBoard();
+    const t0 = performance.now();
+    const mv = bestMove(b, 2, "smart", () => 0);
+    const elapsed = performance.now() - t0;
+    expect(mv).not.toBeNull();
+    expect(elapsed).toBeLessThan(100);
+  });
+
+  it("简单/普通档同样在 100ms 内", () => {
+    for (const d of ["easy", "normal"] as const) {
+      const b = midGameBoard();
+      const t0 = performance.now();
+      expect(bestMove(b, 2, d, () => 0)).not.toBeNull();
+      expect(performance.now() - t0).toBeLessThan(100);
+    }
+  });
+});

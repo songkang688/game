@@ -17,6 +17,7 @@ import {
   nearestActiveLink,
   nearestAnchoredLink,
   segmentsIntersect,
+  segmentsWithinDistance,
   snipOccurred,
   solveLinks,
   starsForCollected,
@@ -45,6 +46,28 @@ describe("candy-swing 线段相交（剪绳判定）", () => {
   });
   it("端点刚好落在线段上算相交", () => {
     expect(segmentsIntersect(0, 0, 10, 0, 5, 0, 5, 10)).toBe(true);
+  });
+});
+
+describe("candy-swing 割绳判定带(线段间距,≥20px 线宽)", () => {
+  it("真正相交时距离为 0,任何容差都命中", () => {
+    expect(segmentsWithinDistance(0, 0, 10, 10, 0, 10, 10, 0, 0)).toBe(true);
+  });
+  it("平行相距 8px:10px 半宽命中,5px 半宽不命中", () => {
+    expect(segmentsWithinDistance(0, 0, 40, 0, 0, 8, 40, 8, 10)).toBe(true);
+    expect(segmentsWithinDistance(0, 0, 40, 0, 0, 8, 40, 8, 5)).toBe(false);
+  });
+  it("擦着绳段端点划过(端点距 6px)也能割断", () => {
+    // 手指竖着划,离绳段右端点 6px
+    expect(segmentsWithinDistance(46, -20, 46, 20, 0, 0, 40, 0, 10)).toBe(true);
+    expect(segmentsWithinDistance(46, -20, 46, 20, 0, 0, 40, 0, 4)).toBe(false);
+  });
+  it("离得远(25px)不误割", () => {
+    expect(segmentsWithinDistance(0, 25, 40, 25, 0, 0, 40, 0, 10)).toBe(false);
+  });
+  it("零长度手指轨迹(原地点一下)按点到线段距离算", () => {
+    expect(segmentsWithinDistance(20, 9, 20, 9, 0, 0, 40, 0, 10)).toBe(true);
+    expect(segmentsWithinDistance(20, 30, 20, 30, 0, 0, 40, 0, 10)).toBe(false);
   });
 });
 

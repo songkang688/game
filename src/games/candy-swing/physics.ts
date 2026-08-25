@@ -107,6 +107,39 @@ function cross(ax: number, ay: number, bx: number, by: number): number {
   return ax * by - ay * bx;
 }
 
+/** 点 P 到线段 AB 的最短距离。 */
+function pointSegmentDistance(
+  px: number, py: number,
+  ax: number, ay: number, bx: number, by: number
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = 0;
+  if (len2 > 1e-12) {
+    t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  }
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+
+/**
+ * 线段 AB(手指轨迹)与线段 CD(绳段)间距是否 ≤ dist。
+ * 给割绳一个"胖判定带"(dist=10 即 20px 线宽),小朋友不用划得正正好好。
+ */
+export function segmentsWithinDistance(
+  ax: number, ay: number, bx: number, by: number,
+  cx: number, cy: number, dx: number, dy: number,
+  dist: number
+): boolean {
+  if (segmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy)) return true;
+  return (
+    pointSegmentDistance(ax, ay, cx, cy, dx, dy) <= dist ||
+    pointSegmentDistance(bx, by, cx, cy, dx, dy) <= dist ||
+    pointSegmentDistance(cx, cy, ax, ay, bx, by) <= dist ||
+    pointSegmentDistance(dx, dy, ax, ay, bx, by) <= dist
+  );
+}
+
 function onSegment(
   ax: number, ay: number, bx: number, by: number,
   px: number, py: number

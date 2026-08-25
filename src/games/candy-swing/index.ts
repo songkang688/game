@@ -16,7 +16,7 @@ import {
   makeParticle,
   moveToward,
   nearestAnchoredLink,
-  segmentsIntersect,
+  segmentsWithinDistance,
   snipOccurred,
   solveLinks,
   starsForCollected,
@@ -67,6 +67,10 @@ const PUFF_RANGE = 130;
 const PUFF_SPEED = 320;
 const BALLOON_TAP_R = 42;
 const MOTH_BITE_DIST = 12;
+/** 割绳判定带半宽:10px 半宽 = 20px 线宽,小手划过附近就算割中 */
+const CUT_HALF_WIDTH = 10;
+/** 糖果落出画面后先给 0.5s 缓冲(可能被风口吹回/荡回)再判失败 */
+const FALL_GRACE = 0.5;
 
 const SAVE_KEY = "yiduo.candy-swing.campaign.v2";
 
@@ -215,6 +219,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   let mouthOpenAmount = 0;
   let portalCooldown = 0;
   let wonStars = 0;
+  let fallGraceT = 0;
 
   const trail: TrailPoint[] = [];
   const sparkles: Sparkle[] = [];
@@ -401,6 +406,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     mouthOpenAmount = 0;
     portalCooldown = 0;
     wonStars = 0;
+    fallGraceT = 0;
     trail.length = 0;
     sparkles.length = 0;
 
@@ -488,7 +494,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (!link.active) continue;
       const pa = particles[link.a];
       const pb = particles[link.b];
-      if (segmentsIntersect(x0, y0, x1, y1, pa.x, pa.y, pb.x, pb.y)) {
+      if (segmentsWithinDistance(x0, y0, x1, y1, pa.x, pa.y, pb.x, pb.y, CUT_HALF_WIDTH)) {
         link.active = false;
         cutCount++;
         const len = Math.hypot(x1 - x0, y1 - y0) || 1;
@@ -707,10 +713,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       return;
     }
 
-    // 掉出画面
+    // 掉出画面:先给 0.5s 缓冲(还可能荡回来/被气球吹回来),超时才判失败
     if (c.y > H + 60 || c.x < -60 || c.x > W + 60 || c.y < -80) {
-      candyGone = true;
-      failLevel(c.y < 0 ? "糖果飞走啦！" : "糖果掉出去啦！");
+      fallGraceT += dt;
+      if (fallGraceT >= FALL_GRACE) {
+        candyGone = true;
+        failLevel(c.y < 0 ? "糖果飞走啦！" : "糖果掉出去啦！");
+      }
+    } else {
+      fallGraceT = 0;
     }
   }
 
@@ -1496,11 +1507,39 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   };
 
+  const onPointerCancel = (): void => {
+    // 系统手势打断:只收起划痕,不触发轻点动作
+    pointerDown = false;
+  };
+
+  /** 只响应"原地轻点"：连续割绳的滑动手势扫过按钮时不误触重试/返回 */
+  function tapOnly(btn: HTMLButtonElement, handler: () => void): void {
+    let downX2 = 0;
+    let downY2 = 0;
+    let swiped = false;
+    btn.addEventListener("pointerdown", (e) => {
+      downX2 = e.clientX;
+      downY2 = e.clientY;
+      swiped = false;
+    });
+    btn.addEventListener("pointermove", (e) => {
+      if (Math.hypot(e.clientX - downX2, e.clientY - downY2) > 12) swiped = true;
+    });
+    btn.addEventListener("click", () => {
+      if (swiped) {
+        swiped = false;
+        return;
+      }
+      handler();
+    });
+  }
+
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
-  retryBtn.addEventListener("click", retryLevel);
-  backBtn.addEventListener("click", () => {
+  window.addEventListener("pointercancel", onPointerCancel);
+  tapOnly(retryBtn, retryLevel);
+  tapOnly(backBtn, () => {
     api.play("tap");
     showMap();
   });
@@ -1516,6 +1555,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       destroyed = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
       wrap.remove();
     },
   };

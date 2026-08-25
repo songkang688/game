@@ -32,8 +32,8 @@ import {
   clamp,
   impactDamage,
   launchVelocity,
-  slopeSurfaceY,
-  trajectoryPoints
+  simulateTrajectory,
+  slopeSurfaceY
 } from "./physics";
 
 export const meta = {
@@ -443,6 +443,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   let lastSound: Record<string, number> = {};
 
   let aiming = false;
+  let aimPointer = -1;
   let dragX = 0;
   let dragY = 0;
 
@@ -1134,6 +1135,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     for (const bean of beans) {
       if (!bean.dead && !bean.held && Math.hypot(bean.vx, bean.vy) > 26) return false;
     }
+    // 滚石还在滚就可能撞倒方块/压到豆子,先别急着判负
+    for (const bo of boulders) {
+      if (Math.hypot(bo.vx, bo.vy) > 26) return false;
+    }
     return true;
   }
 
@@ -1203,8 +1208,9 @@ export function mount(api: GameApi): { destroy: () => void } {
           loadNextBird(true);
         }
       } else {
+        // 小鸟用完但场上还在动:等一切静止再判负(至少缓冲 0.6s,最长 3s 超时)
         loseWaitT += dt;
-        if (worldCalm() || loseWaitT > 2.8) {
+        if ((loseWaitT > 0.6 && worldCalm()) || loseWaitT > 3) {
           phase = "lost";
           endT = 0;
           playThrottled("oops", 0);
@@ -1226,8 +1232,15 @@ export function mount(api: GameApi): { destroy: () => void } {
   function onPointerDown(e: PointerEvent): void {
     if (!level || finishSent) return;
     e.preventDefault();
-    if (phase === "aim" && loadedBird && !loadedBird.flying) {
+    if (phase === "aim" && loadedBird && !loadedBird.flying && !aiming) {
       aiming = true;
+      aimPointer = e.pointerId;
+      // 捕获指针:手指拖出画布甚至拖出窗口都保持拉弓状态
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // 部分旧浏览器不支持,拖出画布时靠 window 监听兜底
+      }
       const p = canvasPos(e);
       setDrag(p.x, p.y);
     } else if (phase === "fly") {
@@ -1252,14 +1265,15 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function onPointerMove(e: PointerEvent): void {
-    if (!aiming) return;
+    if (!aiming || e.pointerId !== aimPointer) return;
     const p = canvasPos(e);
     setDrag(p.x, p.y);
   }
 
-  function onPointerUp(): void {
-    if (!aiming) return;
+  function onPointerUp(e: PointerEvent): void {
+    if (!aiming || e.pointerId !== aimPointer) return;
     aiming = false;
+    aimPointer = -1;
     if (!loadedBird || finishSent) return;
     if (Math.hypot(dragX, dragY) < 13) {
       loadedBird.x = SLING_X;
@@ -1283,6 +1297,19 @@ export function mount(api: GameApi): { destroy: () => void } {
     updateHud();
   }
 
+  function onPointerCancel(e: PointerEvent): void {
+    // 系统手势打断(来电、通知栏下拉等):小鸟放回弹弓,拉弓状态不丢
+    if (!aiming || e.pointerId !== aimPointer) return;
+    aiming = false;
+    aimPointer = -1;
+    dragX = 0;
+    dragY = 0;
+    if (loadedBird) {
+      loadedBird.x = SLING_X;
+      loadedBird.y = SLING_Y;
+    }
+  }
+
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key === " " || e.key === "Enter") {
       if (phase === "fly" && !finishSent) {
@@ -1295,6 +1322,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   canvas.addEventListener("pointerdown", onPointerDown);
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerCancel);
   window.addEventListener("keydown", onKeyDown);
 
   retryBtn.addEventListener("click", () => {
@@ -1939,7 +1967,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawTrajectory(c: CanvasRenderingContext2D): void {
     if (!aiming || !loadedBird || Math.hypot(dragX, dragY) < 13) return;
     const v = launchVelocity(dragX, dragY);
-    const pts = trajectoryPoints(loadedBird.x, loadedBird.y, v.vx, v.vy, 13, 0.07);
+    // 与 stepBirds 同一套积分(含风区与小鸟重力系数),预览即实弹
+    const pts = simulateTrajectory(loadedBird.x, loadedBird.y, v.vx, v.vy, loadedBird.gfactor, winds, 13, 0.07);
     for (let i = 0; i < pts.length; i++) {
       c.globalAlpha = 0.85 - (i / pts.length) * 0.7;
       c.fillStyle = "#FFFFFF";
@@ -2086,6 +2115,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       canvas.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onKeyDown);
       wrap.remove();
     }

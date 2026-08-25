@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  GRAVITY,
   MAX_LAUNCH,
   calcStars,
   circleRectHit,
@@ -7,6 +8,7 @@ import {
   impactDamage,
   launchVelocity,
   makeRng,
+  simulateTrajectory,
   slopeSurfaceY,
   trajectoryPoints
 } from "./physics";
@@ -43,6 +45,69 @@ describe("sling-birds 弹弓", () => {
     expect(pts.length).toBe(20);
     expect(pts[19].y).toBeGreaterThan(pts[0].y);
     expect(pts[19].x).toBeGreaterThan(pts[0].x);
+  });
+});
+
+describe("sling-birds 弹道预览与实弹一致(simulateTrajectory)", () => {
+  it("与飞行积分逐子步一致(半隐式欧拉:先加重力再挪位置)", () => {
+    // 手工复现 stepBirds 的积分顺序,预览必须逐点吻合
+    const sub = 1 / 180;
+    let x = 74;
+    let y = 236;
+    let vx = 300;
+    let vy = -260;
+    const expected: Array<{ x: number; y: number }> = [];
+    let acc = 0;
+    while (expected.length < 6) {
+      vy += GRAVITY * sub;
+      x += vx * sub;
+      y += vy * sub;
+      acc += sub;
+      if (acc >= 0.07 - 1e-9) {
+        expected.push({ x, y });
+        acc = 0;
+      }
+    }
+    const pts = simulateTrajectory(74, 236, 300, -260, 1, [], 6, 0.07, sub);
+    expect(pts.length).toBe(6);
+    pts.forEach((p, i) => {
+      expect(p.x).toBeCloseTo(expected[i].x, 6);
+      expect(p.y).toBeCloseTo(expected[i].y, 6);
+    });
+  });
+
+  it("重力系数小的小鸟(糯糯 0.75)同时刻下坠更少", () => {
+    const heavy = simulateTrajectory(74, 236, 300, -200, 1, [], 10, 0.07);
+    const floaty = simulateTrajectory(74, 236, 300, -200, 0.75, [], 10, 0.07);
+    expect(floaty[9].y).toBeLessThan(heavy[9].y);
+    // 水平速度不受重力系数影响
+    expect(floaty[9].x).toBeCloseTo(heavy[9].x, 6);
+  });
+
+  it("穿过风区时被风推着走,预览终点明显偏移", () => {
+    const wind = { x: 0, y: 0, w: 540, h: 340, fx: 400, fy: 0 };
+    const calm = simulateTrajectory(74, 236, 200, -220, 1, [], 12, 0.07);
+    const windy = simulateTrajectory(74, 236, 200, -220, 1, [wind], 12, 0.07);
+    expect(windy[11].x).toBeGreaterThan(calm[11].x + 30);
+    // 纯横向风不改变纵向运动
+    expect(windy[11].y).toBeCloseTo(calm[11].y, 6);
+  });
+
+  it("风区只在区域内生效,区域外弹道不受影响", () => {
+    const farWind = { x: 5000, y: 5000, w: 10, h: 10, fx: 900, fy: 900 };
+    const calm = simulateTrajectory(74, 236, 200, -220, 1, [], 12, 0.07);
+    const unaffected = simulateTrajectory(74, 236, 200, -220, 1, [farWind], 12, 0.07);
+    unaffected.forEach((p, i) => {
+      expect(p.x).toBeCloseTo(calm[i].x, 9);
+      expect(p.y).toBeCloseTo(calm[i].y, 9);
+    });
+  });
+
+  it("同参数两次调用完全一致(确定性,预览即实弹)", () => {
+    const wind = { x: 100, y: 0, w: 200, h: 300, fx: -180, fy: 60 };
+    const a = simulateTrajectory(74, 236, 320, -300, 0.75, [wind], 13, 0.07);
+    const b = simulateTrajectory(74, 236, 320, -300, 0.75, [wind], 13, 0.07);
+    expect(a).toEqual(b);
   });
 });
 
