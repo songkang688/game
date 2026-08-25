@@ -6,9 +6,13 @@
   --bg-3: #fdfff2;
   --card: #ffffff;
   --ink: #5b4a55;
-  --ink-soft: #9c8794;
+  /* 正文次要色:白底对比 6.3:1、粉彩底(#ffd9ea)对比 4.9:1,满足 WCAG AA */
+  --ink-soft: #6d5b66;
   --pink: #ff9ec7;
-  --pink-deep: #f2699f;
+  /* 深粉(可做白底文字):白底对比 4.8:1 */
+  --pink-deep: #c73a80;
+  /* 白字渐变的浅端:白字对比 3.6:1(仅用于大号粗体) */
+  --pink-strong: #e2519b;
   --pink-soft: #ffd9ea;
   --yellow: #ffd166;
   --mint: #9ee7c8;
@@ -58,6 +62,12 @@ button {
   font-family: inherit;
   color: inherit;
   cursor: pointer;
+}
+
+/* ---------- 键盘焦点(粉色 3px 外圈,遥控/键盘可玩) ---------- */
+:focus-visible {
+  outline: 3px solid var(--pink-deep);
+  outline-offset: 3px;
 }
 
 /* ---------- 背景漂浮装饰 ---------- */
@@ -113,7 +123,7 @@ button {
 }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--pink) 0%, var(--pink-deep) 100%);
+  background: linear-gradient(135deg, var(--pink-strong) 0%, var(--pink-deep) 100%);
   color: #fff;
   box-shadow: 0 8px 18px rgba(242, 105, 159, 0.38), inset 0 -3px 0 rgba(0, 0, 0, 0.08);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -137,7 +147,7 @@ button {
 
 .btn--danger {
   background: #fff;
-  color: #e05a50;
+  color: #c8392f;
   border: 3px solid #ffcdd2;
   min-height: 52px;
   font-size: 17px;
@@ -188,7 +198,8 @@ button {
   background: linear-gradient(180deg, #fffdf3 0%, #fff4d6 100%);
   font-size: 19px;
   font-weight: 800;
-  color: #d9930d;
+  /* 旧 #d9930d 对淡黄底只有 2.4:1,加深到 4.6:1 */
+  color: #96660a;
   box-shadow: var(--shadow-soft);
   white-space: nowrap;
 }
@@ -374,7 +385,8 @@ button {
 .hero-bubble strong {
   font-size: clamp(18px, 4vw, 23px);
   font-weight: 900;
-  background: linear-gradient(120deg, var(--pink-deep), #b57ce0);
+  /* 渐变两端在白底上都 ≥4.5:1(#c73a80 4.8 / #8a4fc0 5.3) */
+  background: linear-gradient(120deg, var(--pink-deep), #8a4fc0);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -428,12 +440,113 @@ button {
 }
 
 .tab--active {
-  background: linear-gradient(135deg, var(--pink) 0%, var(--pink-deep) 100%);
+  background: linear-gradient(135deg, var(--pink-strong) 0%, var(--pink-deep) 100%);
   border-color: #ffeaf4;
   color: #fff;
   box-shadow: 0 8px 18px rgba(242, 105, 159, 0.4);
   transform: translateY(-2px) scale(1.04);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* 首页分区标题(最近玩过 / 全部页签的分类小节) */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: clamp(19px, 4vw, 23px);
+  font-weight: 900;
+  color: var(--ink);
+}
+
+.section-title::after {
+  content: "";
+  flex: 1;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--pink-soft), transparent);
+}
+
+.section-emoji {
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+/* 最近玩过:页签上方的小卡片行 */
+.recent-section {
+  margin: 14px 0 2px;
+}
+
+.recent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 10px;
+}
+
+.recent-card {
+  --card-color: var(--pink-soft);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 8px 12px;
+  border: 3px solid #fff;
+  border-radius: 20px;
+  background:
+    linear-gradient(120deg, var(--card-color) 0%, #ffffff 62%);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.recent-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(242, 105, 159, 0.2);
+}
+
+.recent-card:active {
+  transform: scale(0.96);
+}
+
+.recent-emoji {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.recent-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recent-name {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-sub {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* 全部页签里的分类小节 */
+.category-section {
+  margin: 0 0 26px;
 }
 
 /* 卡片网格 */
@@ -458,6 +571,20 @@ button {
   box-shadow: var(--shadow);
   text-align: center;
   transition: transform 0.16s ease, box-shadow 0.16s ease;
+  /* 错峰浮现(prefers-reduced-motion 时由全局规则关闭) */
+  animation: card-in 0.4s ease backwards;
+  animation-delay: calc(var(--card-i, 0) * 45ms);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .game-card:hover {
@@ -510,6 +637,14 @@ button {
   overflow: hidden;
 }
 
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .card-best {
   font-size: 15px;
   letter-spacing: 3px;
@@ -517,6 +652,18 @@ button {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
   box-shadow: inset 0 0 0 2px rgba(255, 209, 102, 0.4);
+}
+
+/* 99 关进度徽章(只读 l99 存档) */
+.card-progress {
+  font-size: 13px;
+  font-weight: 900;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #7a5da8;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 0 0 2px rgba(203, 178, 255, 0.55);
+  white-space: nowrap;
 }
 
 /* 空状态 */
@@ -746,7 +893,8 @@ button {
 }
 
 .dialog--lose .result-title {
-  color: #7f96c9;
+  /* 旧 #7f96c9 只有 2.8:1,加深到 4.3:1(30px 大字,AA 大文本 ≥3:1) */
+  color: #5a76b8;
 }
 
 .result-confetti {
@@ -822,6 +970,22 @@ button {
   line-height: 1.5;
 }
 
+/* ---------- 99 关地图:补足 ≥44×44 热区(纯加法,不覆盖框架样式) ---------- */
+.l99-tab,
+.l99-back,
+.l99-continue {
+  min-height: 44px;
+}
+
+.l99-ov-btn {
+  min-height: 48px;
+}
+
+.l99-node {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 /* ---------- 动画弱化 ---------- */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -877,5 +1041,44 @@ button {
   .logo-avatar {
     width: 42px;
     height: 42px;
+  }
+}
+
+/* ---------- 超窄屏(≤380px):顶栏与页签不横向溢出,热区仍 ≥44px ---------- */
+@media (max-width: 380px) {
+  .chip {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 17px;
+  }
+
+  .icon-btn {
+    width: 46px;
+    height: 46px;
+    font-size: 22px;
+  }
+
+  .btn--back {
+    min-height: 46px;
+    padding: 0 12px;
+    font-size: 16px;
+  }
+
+  .game-title {
+    padding: 4px 10px;
+    gap: 4px;
+  }
+
+  .recent-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .recent-card {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .recent-name {
+    font-size: 15px;
   }
 }
