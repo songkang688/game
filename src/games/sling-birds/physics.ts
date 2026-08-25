@@ -15,7 +15,7 @@ export const SLING_X = 74;
 export const SLING_Y = 236;
 /** 最大拖拽半径 / 最大出弓速度 */
 export const MAX_DRAG = 58;
-export const MAX_LAUNCH = 660;
+export const MAX_LAUNCH = 560;
 
 export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -35,7 +35,7 @@ export function makeRng(seed: number): () => number {
 
 /** 拖拽向量(指尖 - 锚点)→ 发射速度:方向相反,拉得越满越快,有上限 */
 export function launchVelocity(dragX: number, dragY: number): { vx: number; vy: number } {
-  const k = 11.4;
+  const k = 9.6;
   let vx = -dragX * k;
   let vy = -dragY * k;
   const sp = Math.hypot(vx, vy);

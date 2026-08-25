@@ -724,12 +724,12 @@ export function mount(api: GameApi): { destroy: () => void } {
       bl.y += bl.vy * h;
       bl.supported = false;
 
-      // 地面
+      // 地面(摩擦按时间衰减,与子步频率无关)
       if (bl.y + bl.h > GROUND_Y) {
         const impact = bl.vy;
         bl.y = GROUND_Y - bl.h;
         bl.vy = 0;
-        bl.vx *= bl.kind === "ice" ? 0.97 : 0.8;
+        bl.vx *= Math.exp((bl.kind === "ice" ? -0.9 : -6) * h);
         bl.supported = true;
         if (impact > 240) {
           bl.hp -= (impact - 240) * 0.18 * MAT[bl.kind].vuln;
@@ -826,7 +826,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (bo.y + bo.r > GROUND_Y) {
         bo.y = GROUND_Y - bo.r;
         bo.vy = bo.vy > 90 ? -bo.vy * 0.2 : 0;
-        bo.vx *= 0.995;
+        bo.vx *= Math.exp(-0.5 * h);
       }
       if (bo.x < bo.r + 4) {
         bo.x = bo.r + 4;
@@ -928,7 +928,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         }
         bean.y = GROUND_Y - bean.r;
         bean.vy = bean.vy > 70 ? -bean.vy * 0.25 : 0;
-        bean.vx *= 0.82;
+        bean.vx *= Math.exp(-4 * h);
       }
       for (const s of slopes) {
         const hit = circleSlopeHit(bean.x, bean.y, bean.r, s);
@@ -994,12 +994,13 @@ export function mount(api: GameApi): { destroy: () => void } {
         bird.y = GROUND_Y - bird.r;
         if (bird.vy > 70) {
           bird.vy = -bird.vy * 0.36;
-          bird.vx *= 0.78;
+          bird.vx *= 0.82;
           playThrottled("tap", 0.12);
           burst(bird.x, GROUND_Y, ["#FFFFFF", "#EFE6D8"], 4, 60, false);
         } else {
           bird.vy = 0;
-          bird.vx *= 0.9;
+          // 落地后继续往前滚,慢慢停下
+          bird.vx *= Math.exp(-1.9 * h);
         }
         onGround = true;
       }
@@ -1055,9 +1056,11 @@ export function mount(api: GameApi): { destroy: () => void } {
           bl.vy -= hit.ny * speed * m.push * 0.7;
           const died = bl.hp <= 0;
           if (died) destroyBlock(bl);
-          if (bird.pierce && died) {
-            bird.vx *= 0.84;
-            bird.vy *= 0.84;
+          if (died) {
+            // 打碎方块:损失一点速度,继续往前冲(钻头模式几乎不减速)
+            const keep = bird.pierce ? 0.9 : 0.72;
+            bird.vx *= keep;
+            bird.vy *= keep;
           } else {
             bird.vx -= hit.nx * rel * 1.34;
             bird.vy -= hit.ny * rel * 1.34;
