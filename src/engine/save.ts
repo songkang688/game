@@ -7,6 +7,10 @@ export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
+  /** 可选:枚举全部 key(导出进度用;真 localStorage 走 length/key,内存实现直接给数组) */
+  keys?(): string[];
+  readonly length?: number;
+  key?(index: number): string | null;
 }
 
 export type BestStars = 0 | 1 | 2 | 3;
@@ -19,13 +23,18 @@ export interface GameProgress {
 interface SaveData {
   stars: number;
   soundOn: boolean;
+  /** 背景音乐开关,默认关(尊重家长) */
+  bgmOn: boolean;
   games: Record<string, GameProgress>;
 }
 
 export const SAVE_KEY = "yiduo-yixing.save.v1";
 
+/** 本应用全部存档 key 的公共前缀(平台钱包、l99 关卡、各游戏 PROGRESS_KEY、最近玩过等) */
+export const SAVE_PREFIX = "yiduo-yixing.";
+
 function defaultData(): SaveData {
-  return { stars: 0, soundOn: true, games: {} };
+  return { stars: 0, soundOn: true, bgmOn: false, games: {} };
 }
 
 function createMemoryStorage(): StorageLike {
@@ -37,7 +46,8 @@ function createMemoryStorage(): StorageLike {
     },
     removeItem: (key) => {
       map.delete(key);
-    }
+    },
+    keys: () => [...map.keys()]
   };
 }
 
@@ -65,6 +75,7 @@ function sanitize(raw: unknown): SaveData {
     data.stars = Math.max(0, Math.round(obj.stars));
   }
   if (typeof obj.soundOn === "boolean") data.soundOn = obj.soundOn;
+  if (typeof obj.bgmOn === "boolean") data.bgmOn = obj.bgmOn;
   if (typeof obj.games === "object" && obj.games !== null) {
     for (const [id, value] of Object.entries(obj.games as Record<string, unknown>)) {
       if (typeof value !== "object" || value === null) continue;
@@ -78,6 +89,57 @@ function sanitize(raw: unknown): SaveData {
     }
   }
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// 导出 / 导入:带版本号与校验和的 Base64 文本,换设备或清缓存前备份用
+// ---------------------------------------------------------------------------
+
+/** 导出文本的版本头,一眼能认出是「一朵一星」的备份 */
+const EXPORT_HEADER = "YDYX1.";
+const EXPORT_VERSION = 1;
+
+export type ImportResult = { ok: true; count: number } | { ok: false; error: string };
+
+function listKeys(storage: StorageLike): string[] {
+  if (typeof storage.keys === "function") return storage.keys();
+  if (typeof storage.length === "number" && typeof storage.key === "function") {
+    const out: string[] = [];
+    for (let i = 0; i < storage.length; i++) {
+      const k = storage.key(i);
+      if (k !== null) out.push(k);
+    }
+    return out;
+  }
+  return [];
+}
+
+/** FNV-1a 32 位校验和,防备份文本被截断或改动 */
+function checksum(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/** UTF-8 安全的 Base64 编码(浏览器与 Node 都可用) */
+function encodeBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+function decodeBase64(b64: string): string {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
 }
 
 export class SaveStore {
@@ -134,6 +196,15 @@ export class SaveStore {
     this.persist();
   }
 
+  isBgmOn(): boolean {
+    return this.data.bgmOn;
+  }
+
+  setBgmOn(on: boolean): void {
+    this.data.bgmOn = on;
+    this.persist();
+  }
+
   getGameProgress(id: string): GameProgress {
     return this.data.games[id] ?? { bestStars: 0, plays: 0 };
   }
@@ -153,6 +224,109 @@ export class SaveStore {
       bestStars: Math.max(p.bestStars, stars) as BestStars
     };
     this.persist();
+  }
+
+  /**
+   * 导出全部进度:收集所有 yiduo-yixing. 前缀的存档
+   * (平台钱包、l99 关卡、各游戏 PROGRESS_KEY、最近玩过等),
+   * 打包成带版本号与校验和的 Base64 文本。
+   */
+  exportAll(): string {
+    const collected = new Map<string, string>();
+    // 平台钱包一定带上(即使还没写进 storage)
+    collected.set(SAVE_KEY, JSON.stringify(this.data));
+    for (const key of listKeys(this.storage)) {
+      if (!key.startsWith(SAVE_PREFIX)) continue;
+      try {
+        const value = this.storage.getItem(key);
+        if (value !== null) collected.set(key, value);
+      } catch {
+        // 个别 key 读不出来就跳过,导出尽量多
+      }
+    }
+    // 按 key 排序保证同一份进度导出的文本(与校验和)稳定
+    const entries: Record<string, string> = {};
+    for (const key of [...collected.keys()].sort()) {
+      entries[key] = collected.get(key) as string;
+    }
+    const payload = JSON.stringify({
+      v: EXPORT_VERSION,
+      sum: checksum(JSON.stringify(entries)),
+      entries
+    });
+    return EXPORT_HEADER + encodeBase64(payload);
+  }
+
+  /**
+   * 导入进度:先整体校验(版本、格式、key 前缀、校验和),
+   * 全部通过才写入;写入途中任何一步失败都会回滚,不留半套存档。
+   */
+  importAll(text: string): ImportResult {
+    const failKeep = "没有导入,现有进度保持不变";
+    const trimmed = (text ?? "").trim();
+    if (!trimmed) return { ok: false, error: "先把备份文本粘贴进来哦" };
+    if (!trimmed.startsWith(EXPORT_HEADER)) {
+      return { ok: false, error: `这段文字不是「一朵一星」的进度备份,${failKeep}` };
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(decodeBase64(trimmed.slice(EXPORT_HEADER.length)));
+    } catch {
+      return { ok: false, error: `备份文本好像缺了一块,请重新完整复制,${failKeep}` };
+    }
+    if (typeof payload !== "object" || payload === null) {
+      return { ok: false, error: `备份内容不完整,${failKeep}` };
+    }
+    const obj = payload as Record<string, unknown>;
+    if (obj.v !== EXPORT_VERSION) {
+      return { ok: false, error: `备份版本不认识(可能来自其它版本),${failKeep}` };
+    }
+    if (
+      typeof obj.sum !== "string" ||
+      typeof obj.entries !== "object" ||
+      obj.entries === null ||
+      Array.isArray(obj.entries)
+    ) {
+      return { ok: false, error: `备份内容不完整,${failKeep}` };
+    }
+    const entries = obj.entries as Record<string, unknown>;
+    for (const [key, value] of Object.entries(entries)) {
+      if (!key.startsWith(SAVE_PREFIX) || typeof value !== "string") {
+        return { ok: false, error: `备份里混进了不认识的内容,${failKeep}` };
+      }
+    }
+    if (checksum(JSON.stringify(entries)) !== obj.sum) {
+      return { ok: false, error: `备份校验没通过(内容可能被改动过),${failKeep}` };
+    }
+
+    // 校验全部通过,开始写入;先记住旧值,失败就整体回滚
+    const list = Object.entries(entries) as [string, string][];
+    const backup = new Map<string, string | null>();
+    try {
+      for (const [key, value] of list) {
+        backup.set(key, this.storage.getItem(key));
+        this.storage.setItem(key, value);
+      }
+    } catch {
+      for (const [key, old] of backup) {
+        try {
+          const cur = this.storage.getItem(key);
+          if (old === null) {
+            if (cur !== null) this.storage.removeItem(key);
+          } else if (cur !== old) {
+            this.storage.setItem(key, old);
+          }
+        } catch {
+          // 回滚尽力而为
+        }
+      }
+      return { ok: false, error: `设备存储空间不够,${failKeep}` };
+    }
+
+    // 平台钱包重新从导入后的 storage 读一遍,并通知订阅方刷新
+    this.data = this.load();
+    for (const fn of this.listeners) fn();
+    return { ok: true, count: list.length };
   }
 
   /** 家长面板里的「清空全部进度」 */

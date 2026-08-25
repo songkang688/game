@@ -4,7 +4,7 @@
  */
 import type { GameAPI, GameModule } from "../engine/types";
 import { save } from "../engine/save";
-import { playSound } from "../engine/audio";
+import { isBgmOn, playSound, toggleBgm } from "../engine/audio";
 import { showResultDialog, type DialogHandle } from "./dialogs";
 import { createDuoPair } from "./avatars";
 
@@ -52,7 +52,25 @@ export function mountGameScreen(
   const duoPair = createDuoPair(38);
   duoPair.title = "朵朵和星星陪你一起玩";
 
-  topbar.append(backBtn, title, duoPair, starChip);
+  // 游戏内也能开关背景音乐(与首页共用同一个 BGM 实例)
+  const bgmBtn = document.createElement("button");
+  bgmBtn.type = "button";
+  bgmBtn.className = "icon-btn";
+  bgmBtn.title = "背景音乐";
+  const renderBgm = (): void => {
+    const on = isBgmOn();
+    bgmBtn.textContent = "🎵";
+    bgmBtn.style.opacity = on ? "1" : "0.4";
+    bgmBtn.setAttribute("aria-pressed", String(on));
+    bgmBtn.setAttribute("aria-label", on ? "关闭背景音乐" : "打开背景音乐");
+  };
+  renderBgm();
+  bgmBtn.addEventListener("click", () => {
+    toggleBgm();
+    renderBgm();
+  });
+
+  topbar.append(backBtn, title, duoPair, bgmBtn, starChip);
   screen.appendChild(topbar);
 
   // ---- 舞台 ----
