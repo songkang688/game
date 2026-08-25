@@ -34,7 +34,7 @@ function buildLevel(ci: number, t: number): TugLevel {
     case 0:
       return { aiRate: 5 + t * 0.5, pullPower: 2.6, star: false, redlight: false, rhythm: false, theme: 0 };
     case 1:
-      return { aiRate: 7 + t * 0.5, pullPower: 2.4, star: true, redlight: false, rhythm: false, theme: 1 };
+      return { aiRate: 7 + t * 0.45, pullPower: 2.5, star: true, redlight: false, rhythm: false, theme: 1 };
     case 2:
       return { aiRate: 6 + t * 0.45, pullPower: 2.6, star: false, redlight: true, rhythm: false, theme: 2 };
     case 3:
