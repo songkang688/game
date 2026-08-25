@@ -1,8 +1,9 @@
-/* ============ 一朵一星 · 粉彩萌系主题 ============ */
+/* ============ 一朵一星 · 粉彩萌系主题(一年级小朋友版) ============ */
 
 :root {
   --bg-1: #fff1f7;
   --bg-2: #eef6ff;
+  --bg-3: #fdfff2;
   --card: #ffffff;
   --ink: #5b4a55;
   --ink-soft: #9c8794;
@@ -14,8 +15,8 @@
   --blue: #9ecbff;
   --purple: #cbb2ff;
   --danger: #ff8a80;
-  --radius-lg: 28px;
-  --radius-md: 20px;
+  --radius-lg: 30px;
+  --radius-md: 22px;
   --shadow: 0 10px 30px rgba(242, 105, 159, 0.14);
   --shadow-soft: 0 6px 18px rgba(140, 120, 170, 0.12);
   --font: "PingFang SC", "HarmonyOS Sans SC", "Source Han Sans SC",
@@ -37,7 +38,11 @@ body {
 body {
   font-family: var(--font);
   color: var(--ink);
-  background: linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 209, 102, 0.16) 0%, transparent 32%),
+    radial-gradient(circle at 88% 16%, rgba(158, 231, 200, 0.2) 0%, transparent 34%),
+    radial-gradient(circle at 80% 88%, rgba(203, 178, 255, 0.18) 0%, transparent 36%),
+    linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 58%, var(--bg-3) 100%);
   background-attachment: fixed;
   overscroll-behavior: none;
   -webkit-user-select: none;
@@ -94,12 +99,12 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 56px;
-  padding: 0 28px;
+  min-height: 58px;
+  padding: 0 30px;
   border: none;
   border-radius: 999px;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 21px;
+  font-weight: 800;
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 
@@ -110,17 +115,24 @@ button {
 .btn--primary {
   background: linear-gradient(135deg, var(--pink) 0%, var(--pink-deep) 100%);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(242, 105, 159, 0.35);
+  box-shadow: 0 8px 18px rgba(242, 105, 159, 0.38), inset 0 -3px 0 rgba(0, 0, 0, 0.08);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .btn--primary:hover {
   filter: brightness(1.05);
+  transform: translateY(-2px);
 }
 
 .btn--ghost {
   background: #fff;
   color: var(--pink-deep);
   border: 3px solid var(--pink-soft);
+  box-shadow: var(--shadow-soft);
+}
+
+.btn--ghost:hover {
+  border-color: var(--pink);
 }
 
 .btn--danger {
@@ -135,21 +147,30 @@ button {
   background: #fff;
   color: var(--pink-deep);
   border: 3px solid var(--pink-soft);
-  min-height: 48px;
+  min-height: 50px;
   padding: 0 20px;
   font-size: 18px;
   box-shadow: var(--shadow-soft);
 }
 
+.btn--back:hover {
+  border-color: var(--pink);
+  transform: translateY(-1px);
+}
+
 .icon-btn {
-  width: 52px;
-  height: 52px;
-  border: none;
+  width: 54px;
+  height: 54px;
+  border: 3px solid #fff;
   border-radius: 50%;
-  background: #fff;
-  font-size: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 25px;
   box-shadow: var(--shadow-soft);
   transition: transform 0.12s ease;
+}
+
+.icon-btn:hover {
+  transform: translateY(-2px) rotate(6deg);
 }
 
 .icon-btn:active {
@@ -160,10 +181,11 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 44px;
+  min-height: 46px;
   padding: 0 18px;
   border-radius: 999px;
-  background: #fff;
+  border: 3px solid #fff;
+  background: linear-gradient(180deg, #fffdf3 0%, #fff4d6 100%);
   font-size: 19px;
   font-weight: 800;
   color: #d9930d;
@@ -174,7 +196,7 @@ button {
 /* ---------- 首页 ---------- */
 .screen {
   position: relative;
-  max-width: 1024px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 18px clamp(14px, 4vw, 32px) 28px;
 }
@@ -196,7 +218,7 @@ button {
 
 .logo h1 {
   margin: 0;
-  font-size: clamp(28px, 6vw, 40px);
+  font-size: clamp(30px, 6vw, 42px);
   font-weight: 900;
   letter-spacing: 2px;
   background: linear-gradient(120deg, var(--pink-deep), #f4a83a);
@@ -233,13 +255,20 @@ button {
   gap: 10px;
 }
 
+.home-greeting {
+  margin: 10px 0 0;
+  font-size: clamp(17px, 3.6vw, 21px);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
 /* 分类页签 */
 .tabs {
   display: flex;
-  gap: 10px;
-  margin: 18px 0 20px;
+  gap: 12px;
+  margin: 16px 0 22px;
   overflow-x: auto;
-  padding-bottom: 6px;
+  padding: 6px 4px 10px;
   scrollbar-width: none;
 }
 
@@ -249,29 +278,45 @@ button {
 
 .tab {
   flex: 0 0 auto;
-  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
   padding: 0 24px;
-  border: none;
+  border: 3px solid #fff;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.85);
   color: var(--ink-soft);
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 800;
+  box-shadow: var(--shadow-soft);
   transition: all 0.15s ease;
+}
+
+.tab:hover {
+  transform: translateY(-2px);
+  color: var(--pink-deep);
+}
+
+.tab-emoji {
+  font-size: 22px;
+  line-height: 1;
 }
 
 .tab--active {
   background: linear-gradient(135deg, var(--pink) 0%, var(--pink-deep) 100%);
+  border-color: #ffeaf4;
   color: #fff;
-  box-shadow: 0 6px 14px rgba(242, 105, 159, 0.35);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(242, 105, 159, 0.4);
+  transform: translateY(-2px) scale(1.04);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 /* 卡片网格 */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 18px;
 }
 
 .game-card {
@@ -279,20 +324,31 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 20px 14px 16px;
-  border: none;
+  gap: 8px;
+  padding: 22px 14px 18px;
+  border: 4px solid #fff;
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(180deg, var(--card-color) 0%, #ffffff 68%);
+    radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.9) 0%, transparent 52%),
+    linear-gradient(180deg, var(--card-color) 0%, #ffffff 72%);
   box-shadow: var(--shadow);
   text-align: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .game-card:hover {
-  transform: translateY(-4px) rotate(-1deg);
-  box-shadow: 0 14px 34px rgba(242, 105, 159, 0.22);
+  transform: translateY(-6px) rotate(-1.2deg);
+  box-shadow: 0 16px 38px rgba(242, 105, 159, 0.24);
+}
+
+.game-card:hover .card-emoji {
+  animation: card-wiggle 0.5s ease;
+}
+
+@keyframes card-wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-8deg) scale(1.08); }
+  60% { transform: rotate(6deg) scale(1.05); }
 }
 
 .game-card:active {
@@ -300,14 +356,20 @@ button {
 }
 
 .card-emoji {
-  font-size: 52px;
-  line-height: 1.1;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.08));
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, #ffffff 0%, rgba(255, 255, 255, 0.55) 100%);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9), 0 6px 14px rgba(0, 0, 0, 0.06);
+  font-size: 54px;
+  line-height: 1;
 }
 
 .card-title {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 21px;
+  font-weight: 900;
   color: var(--ink);
 }
 
@@ -322,8 +384,12 @@ button {
 }
 
 .card-best {
-  font-size: 16px;
-  letter-spacing: 2px;
+  font-size: 15px;
+  letter-spacing: 3px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 0 0 2px rgba(255, 209, 102, 0.4);
 }
 
 /* 空状态 */
@@ -345,7 +411,7 @@ button {
 }
 
 .home-footer {
-  margin-top: 28px;
+  margin-top: 30px;
   text-align: center;
   font-size: 14px;
   color: var(--ink-soft);
@@ -368,11 +434,25 @@ button {
 }
 
 .game-title {
-  font-size: clamp(18px, 4vw, 24px);
-  font-weight: 800;
-  text-align: center;
   flex: 1;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  margin: 0 2px;
+  padding: 4px 18px;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-soft);
+  font-size: clamp(18px, 4vw, 24px);
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.game-title-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -382,6 +462,7 @@ button {
   position: relative;
   flex: 1;
   min-height: 0;
+  border: 4px solid #fff;
   border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: var(--shadow);
@@ -416,12 +497,13 @@ button {
 }
 
 .dialog {
-  width: min(92vw, 360px);
+  width: min(92vw, 372px);
   max-height: 86dvh;
   overflow-y: auto;
-  background: #fff;
-  border-radius: 32px;
-  padding: 26px 24px 24px;
+  background: linear-gradient(180deg, #fff9fc 0%, #ffffff 40%);
+  border: 4px solid #fff;
+  border-radius: 36px;
+  padding: 28px 24px 24px;
   text-align: center;
   box-shadow: 0 24px 60px rgba(91, 74, 85, 0.3);
   animation: pop-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -463,14 +545,36 @@ button {
 }
 
 /* 结算弹窗 */
+.dialog--win {
+  background:
+    radial-gradient(circle at 16% 12%, rgba(255, 209, 102, 0.28) 0%, transparent 36%),
+    radial-gradient(circle at 86% 20%, rgba(255, 158, 199, 0.24) 0%, transparent 40%),
+    linear-gradient(180deg, #fff9ef 0%, #ffffff 52%);
+}
+
+.dialog--lose {
+  background:
+    radial-gradient(circle at 84% 12%, rgba(158, 203, 255, 0.24) 0%, transparent 40%),
+    linear-gradient(180deg, #f4f8ff 0%, #ffffff 52%);
+}
+
 .result-face {
-  font-size: 64px;
+  font-size: 68px;
   animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dialog--lose .result-face {
+  animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), sway 2.6s ease-in-out 0.5s infinite;
 }
 
 @keyframes bounce-in {
   from { transform: scale(0) rotate(-30deg); }
   to { transform: scale(1) rotate(0); }
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
 }
 
 .result-title {
@@ -487,12 +591,19 @@ button {
   color: #7f96c9;
 }
 
+.result-confetti {
+  margin-top: 4px;
+  font-size: 22px;
+  letter-spacing: 8px;
+  animation: fade-in 0.6s ease;
+}
+
 .result-stars {
   display: flex;
   justify-content: center;
   gap: 8px;
   margin: 10px 0 4px;
-  font-size: 40px;
+  font-size: 42px;
 }
 
 .star {
@@ -572,10 +683,27 @@ button {
   }
 
   .card-emoji {
+    width: 76px;
+    height: 76px;
     font-size: 44px;
   }
 
+  .card-title {
+    font-size: 19px;
+  }
+
+  .tab {
+    min-height: 50px;
+    padding: 0 18px;
+    font-size: 17px;
+  }
+
   .btn {
-    font-size: 18px;
+    font-size: 19px;
+  }
+
+  .game-title {
+    font-size: 17px;
+    padding: 4px 12px;
   }
 }

@@ -23,7 +23,7 @@ export function mountGameScreen(
   const backBtn = document.createElement("button");
   backBtn.type = "button";
   backBtn.className = "btn btn--back";
-  backBtn.innerHTML = `<span aria-hidden="true">←</span> 返回`;
+  backBtn.innerHTML = `<span aria-hidden="true">🏠</span> 返回`;
   backBtn.setAttribute("aria-label", "返回首页");
   backBtn.addEventListener("click", () => {
     playSound("tap");
@@ -32,7 +32,13 @@ export function mountGameScreen(
 
   const title = document.createElement("div");
   title.className = "game-title";
-  title.textContent = `${game.meta.emoji} ${game.meta.title}`;
+  const titleEmoji = document.createElement("span");
+  titleEmoji.setAttribute("aria-hidden", "true");
+  titleEmoji.textContent = game.meta.emoji;
+  const titleText = document.createElement("span");
+  titleText.className = "game-title-text";
+  titleText.textContent = game.meta.title;
+  title.append(titleEmoji, titleText);
 
   const starChip = document.createElement("div");
   starChip.className = "chip star-chip";

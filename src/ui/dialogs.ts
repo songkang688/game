@@ -65,6 +65,25 @@ export function showDialog(opts: {
   return { close, el: dialog };
 }
 
+const WIN_FACES = ["🎉", "🥳", "🌟", "🎈"];
+const WIN_TITLES = ["太棒啦!", "好厉害呀!", "真了不起!"];
+const WIN_MESSAGES = [
+  "你真厉害,星星收好啦!",
+  "闪闪的星星送给你!",
+  "哇,你越来越棒了!"
+];
+const LOSE_FACES = ["🌦️", "🫧", "🌱"];
+const LOSE_TITLES = ["差一点点!", "就差一点啦!", "快成功啦!"];
+const LOSE_MESSAGES = [
+  "没关系,再来一次一定行!",
+  "深呼吸,下一次会更棒!",
+  "你已经很努力啦,再试试看!"
+];
+
+function pick<T>(list: T[]): T {
+  return list[Math.floor(Math.random() * list.length)] as T;
+}
+
 /** 胜负结算弹窗 */
 export function showResultDialog(opts: {
   win: boolean;
@@ -78,15 +97,21 @@ export function showResultDialog(opts: {
 
   const face = document.createElement("div");
   face.className = "result-face";
-  face.textContent = opts.win ? "🎉" : "🌦️";
+  face.textContent = opts.win ? pick(WIN_FACES) : pick(LOSE_FACES);
   content.appendChild(face);
 
   const title = document.createElement("h2");
   title.className = "result-title";
-  title.textContent = opts.win ? "太棒啦!" : "差一点点!";
+  title.textContent = opts.win ? pick(WIN_TITLES) : pick(LOSE_TITLES);
   content.appendChild(title);
 
   if (opts.win) {
+    const confetti = document.createElement("div");
+    confetti.className = "result-confetti";
+    confetti.setAttribute("aria-hidden", "true");
+    confetti.textContent = "🎊 ✨ 🎊";
+    content.appendChild(confetti);
+
     const starRow = document.createElement("div");
     starRow.className = "result-stars";
     const earned = opts.stars ?? 1;
@@ -103,15 +128,15 @@ export function showResultDialog(opts: {
   const msg = document.createElement("p");
   msg.className = "result-message";
   msg.textContent =
-    opts.message ?? (opts.win ? "你真厉害,星星收好啦!" : "没关系,再来一次一定行!");
+    opts.message ?? (opts.win ? pick(WIN_MESSAGES) : pick(LOSE_MESSAGES));
   content.appendChild(msg);
 
   return showDialog({
     className: opts.win ? "dialog--win" : "dialog--lose",
     content,
     buttons: [
-      { label: "再玩一次", kind: "primary", onClick: opts.onReplay },
-      { label: "回首页", kind: "ghost", onClick: opts.onHome }
+      { label: "🔁 再玩一次", kind: "primary", onClick: opts.onReplay },
+      { label: "🏠 回首页", kind: "ghost", onClick: opts.onHome }
     ]
   });
 }

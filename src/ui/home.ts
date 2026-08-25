@@ -9,6 +9,15 @@ import { showParentGate } from "./parentGate";
 
 type Tab = "all" | GameCategory;
 
+const TAB_EMOJI: Record<Tab, string> = {
+  all: "🌈",
+  action: "🚀",
+  casual: "🍭",
+  party: "🤝",
+  edu: "📚",
+  create: "🎨"
+};
+
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "全部" },
   ...CATEGORY_ORDER.map((c) => ({ key: c as Tab, label: CATEGORY_LABELS[c] }))
@@ -69,6 +78,12 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   header.appendChild(actions);
   screen.appendChild(header);
 
+  // ---- 问候语 ----
+  const greeting = document.createElement("p");
+  greeting.className = "home-greeting";
+  greeting.textContent = "🌈 今天想玩什么呀?挑一张卡片吧!";
+  screen.appendChild(greeting);
+
   // ---- 分类页签 ----
   const tabs = document.createElement("nav");
   tabs.className = "tabs";
@@ -96,7 +111,13 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       btn.className = `tab ${key === activeTab ? "tab--active" : ""}`.trim();
       btn.setAttribute("role", "tab");
       btn.setAttribute("aria-selected", String(key === activeTab));
-      btn.textContent = label;
+      const tabEmoji = document.createElement("span");
+      tabEmoji.className = "tab-emoji";
+      tabEmoji.setAttribute("aria-hidden", "true");
+      tabEmoji.textContent = TAB_EMOJI[key];
+      const tabLabel = document.createElement("span");
+      tabLabel.textContent = label;
+      btn.append(tabEmoji, tabLabel);
       btn.addEventListener("click", () => {
         if (activeTab === key) return;
         activeTab = key;
