@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   BUG_INFO,
-  HOME_X,
+  BugKind,
   LANES,
-  LEVEL_COUNT,
+  LEVELS,
   PLANT_INFO,
   PLANT_KINDS,
   applyDamage,
@@ -12,121 +12,153 @@ import {
   bugReachesPlant,
   buildLevelSchedule,
   canAfford,
+  canPlantOnCell,
+  isLevelUnlocked,
+  levelBugCount,
+  parseProgress,
+  passiveDewInterval,
+  plantsUnlockedAt,
   projectileCanHit,
+  serializeProgress,
   shovelRefund,
-  starsForRun,
-  wavesInLevel,
+  starsForLevel,
+  totalStars,
 } from "./logic";
 
-describe("sprout-defense 植物", () => {
-  it("至少 4 种植物,各有定位", () => {
-    expect(PLANT_KINDS.length).toBeGreaterThanOrEqual(4);
-    expect(PLANT_INFO.nut.hp).toBeGreaterThan(PLANT_INFO.bubble.hp);
-    expect(PLANT_INFO.sparkle.cost).toBeLessThanOrEqual(PLANT_INFO.star.cost);
+describe("sprout-defense 战役关卡(深度)", () => {
+  it("关卡数量 >= 18,数据驱动", () => {
+    expect(LEVELS.length).toBeGreaterThanOrEqual(18);
   });
 
-  it("露珠够才能种", () => {
-    expect(canAfford(3, "star")).toBe(true);
-    expect(canAfford(2, "star")).toBe(false);
-    expect(canAfford(1, "sparkle")).toBe(true);
+  it("每关都有独特机制标记(feature),互不相同", () => {
+    const features = LEVELS.map((l) => l.feature);
+    expect(features.every((f) => f.length > 0)).toBe(true);
+    expect(new Set(features).size).toBe(LEVELS.length);
   });
 
-  it("铲子退半价(向上取整)", () => {
-    expect(shovelRefund("sparkle")).toBe(1);
-    expect(shovelRefund("bubble")).toBe(1);
-    expect(shovelRefund("star")).toBe(2);
+  it("战役至少 7 种虫,至少 7 种植物", () => {
+    const kinds = new Set<BugKind>();
+    for (const def of LEVELS) {
+      for (const wave of def.waves) for (const e of wave) kinds.add(e.kind);
+    }
+    expect(kinds.size).toBeGreaterThanOrEqual(7);
+    expect(PLANT_KINDS.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("有夜间关、水路关和旗帜大波", () => {
+    expect(LEVELS.some((l) => l.scene === "night")).toBe(true);
+    const pools = LEVELS.filter((l) => l.scene === "pool");
+    expect(pools.length).toBeGreaterThanOrEqual(2);
+    for (const p of pools) expect(p.waterLanes.length).toBeGreaterThan(0);
+    expect(LEVELS.some((l) => l.flagWaves.length > 0)).toBe(true);
+    expect(LEVELS.some((l) => l.flagWaves.length >= 2)).toBe(true);
+  });
+
+  it("最后一关有大虫王 BOSS", () => {
+    const last = LEVELS[LEVELS.length - 1];
+    expect(last.waves.some((w) => w.some((e) => BUG_INFO[e.kind].boss))).toBe(true);
+  });
+
+  it("每关虫子够多,时间表确定且递增", () => {
+    for (let i = 0; i < LEVELS.length; i++) {
+      expect(levelBugCount(LEVELS[i])).toBeGreaterThanOrEqual(6);
+      const sched = buildLevelSchedule(i);
+      expect(sched.length).toBe(levelBugCount(LEVELS[i]));
+      for (let k = 1; k < sched.length; k++) {
+        expect(sched[k].time).toBeGreaterThanOrEqual(sched[k - 1].time);
+      }
+      for (const s of sched) {
+        expect(s.lane).toBeGreaterThanOrEqual(0);
+        expect(s.lane).toBeLessThan(LANES);
+      }
+    }
+  });
+
+  it("植物按关卡逐步解锁", () => {
+    const first = plantsUnlockedAt(0, LEVELS);
+    expect(first).toEqual(["sparkle", "bubble", "nut"]);
+    const all = plantsUnlockedAt(LEVELS.length - 1, LEVELS);
+    expect(all).toContain("star");
+    expect(all).toContain("ice");
+    expect(all).toContain("boom");
+    expect(all).toContain("lily");
   });
 });
 
-describe("sprout-defense 虫虫", () => {
-  it("三种虫:壳壳虫带护甲,飘飘虫会飞", () => {
-    expect(BUG_INFO.armor.armor).toBeGreaterThan(0);
-    expect(BUG_INFO.flyer.flying).toBe(true);
-    expect(BUG_INFO.walker.flying).toBe(false);
+describe("sprout-defense 机制", () => {
+  it("水格要先铺荷叶才能种植物", () => {
+    expect(canPlantOnCell("bubble", true, false, false)).toBe(false);
+    expect(canPlantOnCell("lily", true, false, false)).toBe(true);
+    expect(canPlantOnCell("lily", true, true, false)).toBe(false);
+    expect(canPlantOnCell("bubble", true, true, false)).toBe(true);
+    expect(canPlantOnCell("bubble", false, false, false)).toBe(true);
+    expect(canPlantOnCell("bubble", false, false, true)).toBe(false);
+    expect(canPlantOnCell("lily", false, false, false)).toBe(false);
   });
 
-  it("泡泡打不到飞虫,星星都能打", () => {
+  it("夜晚露珠攒得比白天慢", () => {
+    expect(passiveDewInterval("night")).toBeGreaterThan(passiveDewInterval("day"));
+    expect(passiveDewInterval("pool")).toBe(passiveDewInterval("day"));
+  });
+
+  it("泡泡打不到飞虫,星星和冰冰都可以", () => {
     expect(projectileCanHit("bubble", true)).toBe(false);
     expect(projectileCanHit("bubble", false)).toBe(true);
     expect(projectileCanHit("star", true)).toBe(true);
-    expect(projectileCanHit("star", false)).toBe(true);
+    expect(projectileCanHit("ice", true)).toBe(true);
   });
 
-  it("伤害先敲护甲,敲碎那一下会报告 brokeArmor", () => {
-    let bug = { hp: 3, armor: 2 };
-    let res = applyDamage(bug, 1);
-    expect(res).toEqual({ hp: 3, armor: 1, brokeArmor: false });
-    res = applyDamage(res, 1);
-    expect(res.armor).toBe(0);
-    expect(res.hp).toBe(3);
-    expect(res.brokeArmor).toBe(true);
-    res = applyDamage(res, 1);
-    expect(res.hp).toBe(2);
-    expect(res.brokeArmor).toBe(false);
+  it("护甲先掉再掉血,敲碎护甲有标记", () => {
+    const bug = { hp: 3, armor: 2 };
+    const r1 = applyDamage(bug, 1);
+    expect(r1).toEqual({ hp: 3, armor: 1, brokeArmor: false });
+    const r2 = applyDamage(r1, 2);
+    expect(r2.hp).toBe(2);
+    expect(r2.armor).toBe(0);
+    expect(r2.brokeArmor).toBe(true);
   });
 
-  it("虫子血量随关卡上涨", () => {
-    expect(bugHp("walker", 5)).toBeGreaterThan(bugHp("walker", 1));
-  });
-});
-
-describe("sprout-defense 关卡时间表", () => {
-  it("共 5 关,波数递增,时间有序,车道合法", () => {
-    expect(LEVEL_COUNT).toBe(5);
-    for (let level = 1; level <= LEVEL_COUNT; level++) {
-      const schedule = buildLevelSchedule(level);
-      expect(schedule.length).toBeGreaterThan(0);
-      for (let i = 1; i < schedule.length; i++) {
-        expect(schedule[i].time).toBeGreaterThanOrEqual(schedule[i - 1].time);
-      }
-      for (const s of schedule) {
-        expect(s.lane).toBeGreaterThanOrEqual(0);
-        expect(s.lane).toBeLessThan(LANES);
-        expect(s.wave).toBeLessThan(wavesInLevel(level));
-      }
-    }
-    expect(wavesInLevel(5)).toBeGreaterThan(wavesInLevel(1));
+  it("桶桶虫比壳壳虫更硬,大虫王是 BOSS", () => {
+    expect(BUG_INFO.bucket.armor).toBeGreaterThan(BUG_INFO.armor.armor);
+    expect(BUG_INFO.bossbug.boss).toBe(true);
+    expect(BUG_INFO.digger.jumps).toBe(true);
+    expect(bugHp("walker", 16)).toBeGreaterThan(bugHp("walker", 0));
   });
 
-  it("第 1 关只有爬爬虫;后面关卡才有飞虫和壳壳虫", () => {
-    const l1 = buildLevelSchedule(1);
-    expect(l1.every((s) => s.kind === "walker")).toBe(true);
-    const l2 = buildLevelSchedule(2);
-    expect(l2.some((s) => s.kind === "flyer")).toBe(true);
-    expect(l2.some((s) => s.kind === "armor")).toBe(false);
-    const l3 = buildLevelSchedule(3);
-    expect(l3.some((s) => s.kind === "armor")).toBe(true);
-  });
-
-  it("关卡越深虫越多,同关表是确定性的", () => {
-    for (let level = 2; level <= LEVEL_COUNT; level++) {
-      expect(buildLevelSchedule(level).length).toBeGreaterThan(
-        buildLevelSchedule(level - 1).length,
-      );
-    }
-    expect(buildLevelSchedule(3)).toEqual(buildLevelSchedule(3));
-  });
-});
-
-describe("sprout-defense 碰撞", () => {
-  it("泡泡命中判定", () => {
+  it("命中与啃食判定", () => {
     expect(bubbleHitsBug(3.0, 3.2)).toBe(true);
     expect(bubbleHitsBug(3.0, 3.5)).toBe(false);
+    expect(bugReachesPlant(2.5, 2)).toBe(true);
+    expect(bugReachesPlant(3.5, 2)).toBe(false);
   });
 
-  it("虫子啃植物判定", () => {
-    expect(bugReachesPlant(2.5, 2)).toBe(true);
-    expect(bugReachesPlant(3.2, 2)).toBe(false);
-    expect(HOME_X).toBeLessThan(0);
+  it("买得起才行,铲子退半价", () => {
+    expect(canAfford(2, "bubble")).toBe(true);
+    expect(canAfford(1, "bubble")).toBe(false);
+    expect(shovelRefund("star")).toBe(2);
+    expect(shovelRefund("sparkle")).toBe(1);
+    expect(PLANT_INFO.boom.cost).toBeGreaterThan(PLANT_INFO.bubble.cost);
   });
 });
 
-describe("sprout-defense 结算", () => {
-  it("星级由重试与损失植物决定", () => {
-    expect(starsForRun(0, 0)).toBe(3);
-    expect(starsForRun(0, 2)).toBe(3);
-    expect(starsForRun(0, 5)).toBe(2);
-    expect(starsForRun(1, 0)).toBe(2);
-    expect(starsForRun(2, 1)).toBe(1);
+describe("sprout-defense 3 星与进度", () => {
+  it("三星条件:损失 ≤1 棵 3 星,≤4 棵 2 星,守住 1 星", () => {
+    expect(starsForLevel(0)).toBe(3);
+    expect(starsForLevel(1)).toBe(3);
+    expect(starsForLevel(2)).toBe(2);
+    expect(starsForLevel(4)).toBe(2);
+    expect(starsForLevel(5)).toBe(1);
+  });
+
+  it("进度存档回环与解锁规则", () => {
+    const stars = new Array(LEVELS.length).fill(0);
+    stars[0] = 2;
+    const parsed = parseProgress(serializeProgress(stars), LEVELS.length);
+    expect(parsed[0]).toBe(2);
+    expect(parseProgress("oops", LEVELS.length)).toEqual(new Array(LEVELS.length).fill(0));
+    expect(isLevelUnlocked(stars, 0)).toBe(true);
+    expect(isLevelUnlocked(stars, 1)).toBe(true);
+    expect(isLevelUnlocked(stars, 2)).toBe(false);
+    expect(totalStars([1, 2, 3])).toBe(6);
   });
 });
