@@ -99,6 +99,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   let hintShownAt = 0;
   let aiThinking = false;
   let ghost: { x: number; y: number } | null = null;
+  /** 窄屏防误触:第一次点选中(粉圈预览),再点同一格才真正落子 */
+  let pendingCell: { x: number; y: number } | null = null;
   let lastMove: { x: number; y: number } | null = null;
   let animTime = 0;
   let reported = false;
@@ -124,6 +126,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       .gm-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #E890B2; }
       .gm-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
       .gm-badge { background: #fff; border-radius: 14px; padding: 6px 12px; font-weight: 700; color: #A8743C; box-shadow: 0 2px 6px rgba(180,130,80,.2); font-size: 14px; white-space: nowrap; }
+      .gm-badge.gm-think { animation: gm-think-pulse 1.1s ease-in-out infinite; }
+      @keyframes gm-think-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .55; transform: scale(.97); } }
       .gm-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; box-shadow: 0 4px 14px rgba(190,140,90,.25); }
       .gm-btns { display: flex; gap: 8px; margin-top: 10px; }
       .gm-btns button { flex: 1; border: none; border-radius: 14px; padding: 10px 6px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); }
@@ -329,6 +333,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     } else {
       turnEl.textContent = current === 1 ? "⚫ 该黑棋啦" : "⚪ 该白棋啦";
     }
+    // 「对手思考中…」呼吸动画(纯 CSS,不占主线程)
+    turnEl.classList.toggle("gm-think", aiThinking && !gameOver);
     modeLabelEl.textContent = modeLabel();
     undoBtn.disabled = history.length === 0 || gameOver || aiThinking;
     const hintAllowed = playKind === "puzzle" || mode === "normal" || mode === "smart";
@@ -348,6 +354,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     hintCell = null;
     aiThinking = false;
     ghost = null;
+    pendingCell = null;
     lastMove = null;
     reported = false;
     clearTimeout(aiTimer);
@@ -459,7 +466,11 @@ export function mount(api: GameApi): { destroy: () => void } {
         }
       }, 1600);
     } else {
-      msgEl.textContent = "没关系！点「重摆」再想一想～";
+      // 失败时提示第一步正解的方向,帮小朋友找到思路
+      const opening = bestMove(puzzleBoard(PUZZLES[puzzleIndex]), 1, "smart", () => 0);
+      msgEl.textContent = opening
+        ? `没关系！第一步试试第 ${opening.x + 1} 列第 ${opening.y + 1} 行附近,点「重摆」再来～`
+        : "没关系！点「重摆」再想一想～";
     }
     updateHud();
   }
@@ -469,6 +480,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     history.push({ x, y, p: current });
     lastMove = { x, y };
     hintCell = null;
+    pendingCell = null;
     api.play(current === 1 ? "tap" : "pop");
     const line = findWinLine(board, x, y);
 
@@ -578,6 +590,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     const last = history[history.length - 1];
     lastMove = last ? { x: last.x, y: last.y } : null;
     hintCell = null;
+    pendingCell = null;
     api.play("pop");
     msgEl.textContent = "悔棋成功，再想一想～";
     updateHud();
@@ -708,6 +721,17 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    // 待确认落点:半透明棋子 + 跳动粉圈,再点一次才真正落子
+    if (pendingCell && !pressing && humanTurn() && board.cells[pendingCell.y * n + pendingCell.x] === 0) {
+      drawStone(pendingCell.x, pendingCell.y, current, 0.5);
+      const cx = cs + pendingCell.x * cs;
+      const cy = cs + pendingCell.y * cs;
+      ctx.strokeStyle = "#FF6FA5";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, cs * 0.52 + Math.sin(animTime * 6) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (winLine) {
       const glow = 0.55 + Math.sin(animTime * 6) * 0.35;
       const [x0, y0] = winLine[0];
@@ -754,6 +778,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     return { x, y };
   }
 
+  /** 窄屏上格子触点小于 28px 时启用"两次点击确认"防误触(360px 宽的 15×15 约 21px) */
+  function needsConfirm(): boolean {
+    const shown = canvas.getBoundingClientRect().width || W;
+    return shown / (boardSize + 1) < 28;
+  }
+
   let pressing = false;
   const onPointerDown = (e: PointerEvent): void => {
     e.preventDefault();
@@ -769,7 +799,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     pressing = false;
     const cell = ghost ?? eventCell(e);
     ghost = null;
-    if (cell) tryHumanMove(cell.x, cell.y);
+    if (!cell) {
+      pendingCell = null;
+      return;
+    }
+    if (!humanTurn()) return;
+    if (board.cells[cell.y * boardSize + cell.x] !== 0) {
+      pendingCell = null;
+      return;
+    }
+    if (needsConfirm() && !(pendingCell && pendingCell.x === cell.x && pendingCell.y === cell.y)) {
+      pendingCell = { x: cell.x, y: cell.y };
+      api.play("tap");
+      msgEl.textContent = "再点一次粉圈的位置就落子,点别处可以换地方~";
+      return;
+    }
+    tryHumanMove(cell.x, cell.y);
   };
 
   canvas.addEventListener("pointerdown", onPointerDown);
