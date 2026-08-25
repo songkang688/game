@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { makeSequence, TWINKLE_FINALE } from "./logic";
 
