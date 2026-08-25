@@ -283,7 +283,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       if (taps >= cfg.playTaps) {
         clearInterval(mover);
         toyBtn.remove();
-        msgEl.textContent = "玩累啦，团团心满意足！";
+        msgEl.textContent = "玩累啦，团团开心极了！";
         taskDone();
       } else {
         msgEl.textContent = `真好玩！还差 ${cfg.playTaps - taps} 下`;

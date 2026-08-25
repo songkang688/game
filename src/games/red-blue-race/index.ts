@@ -114,9 +114,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     cancelAnimationFrame(raf);
     if (won) {
       const got = ai <= 70 ? 3 : ai <= 88 ? 2 : 1;
-      setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, `你先冲线！小电脑才跑到 ${Math.round(ai)} 米！`); }, 350);
+      setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, `朵朵先冲线啦！星星跑了 ${Math.round(ai)} 米，也很努力！`); }, 350);
     } else {
-      setTimeout(() => { if (!destroyed) ctx.lose("小电脑先到啦，手指再快一点、跳得再准一点！"); }, 350);
+      setTimeout(() => { if (!destroyed) ctx.lose("这局星星先到啦，朵朵也跑得好棒！再来一局一定行！"); }, 350);
     }
   }
 

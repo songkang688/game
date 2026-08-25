@@ -98,9 +98,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     clearDots();
     if (meScore >= cfg.targetPoints) {
       const got = aiScore <= 2 ? 3 : aiScore <= cfg.targetPoints - 2 ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `${meScore} 比 ${aiScore}，你赢了小电脑！`), 400);
+      later(() => ctx.win(got as 1 | 2 | 3, `${meScore} 比 ${aiScore}，朵朵队赢啦！星星队也好棒！`), 400);
     } else {
-      later(() => ctx.lose("小电脑这局手快了一点，盯紧屏幕再来！"), 400);
+      later(() => ctx.lose("这局星星队赢啦，朵朵队也好棒！盯紧屏幕再来一局！"), 400);
     }
   }
 

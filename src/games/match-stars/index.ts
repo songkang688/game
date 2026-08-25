@@ -266,7 +266,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ctx.bonusStars(1);
       msgEl.textContent = `哇！一下消掉 ${matched.size} 颗，奖励一颗小星星！`;
     } else if (chain > 1) {
-      msgEl.textContent = `连锁反应 x${chain}，太棒啦！`;
+      msgEl.textContent = `连着消了 ${chain} 次，太棒啦！`;
     }
     clearCells(matched);
     renderGoals();

@@ -153,7 +153,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
     if (snake.some(([sx, sy], i) => i > 0 && sx === nx && sy === ny)) {
       ctx.sfx("oops");
-      finish(false, "咬到自己尾巴啦，身体长了要小心盘绕！");
+      finish(false, "咬到自己尾巴啦，身体变长要早点转弯！");
       return;
     }
     snake.unshift([nx, ny]);

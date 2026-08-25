@@ -115,9 +115,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (won) {
       const secs = (performance.now() - startAt) / 1000;
       const got = secs <= 16 ? 3 : secs <= 28 ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `嘿咻！只用 ${Math.round(secs)} 秒就拔赢了小电脑！`), 400);
+      later(() => ctx.win(got as 1 | 2 | 3, `嘿咻！只用 ${Math.round(secs)} 秒，朵朵队赢啦！星星队也好棒！`), 400);
     } else {
-      later(() => ctx.lose("绳子被拉走啦，点得再快一点、看准时机！"), 400);
+      later(() => ctx.lose("这局星星队赢啦，朵朵队也好棒！看准时机再拉一次！"), 400);
     }
   }
 
