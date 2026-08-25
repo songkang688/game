@@ -48,26 +48,31 @@ function spread(n: number, rand: () => number): number[] {
   return out.sort((a, b) => a - b);
 }
 
+/**
+ * 小电脑速度按「一年级每秒 4~5 次点击（每次 1.6 格）」校准：
+ * 全程约 63 次点击，AI 跑完全程要留出 12 秒以上；上坡章点击减半格、
+ * 拖累最大，AI 基线与上坡数量都放缓，保证章末仍追得上。
+ */
 function buildLevel(ci: number, t: number, rand: () => number): RaceLevel {
   const obstacles: Obstacle[] = [];
   switch (ci) {
     case 0:
-      return { aiSpeed: 7 + t * 0.45, tapStep: 1.6, obstacles, theme: 0 };
+      return { aiSpeed: 6.2 + t * 0.09, tapStep: 1.6, obstacles, theme: 0 };
     case 1: {
       for (const pos of spread(1 + Math.floor(t / 6), rand)) obstacles.push({ type: "puddle", pos, len: 4 });
-      return { aiSpeed: 7.5 + t * 0.4, tapStep: 1.6, obstacles, theme: 1 };
+      return { aiSpeed: 6.4 + t * 0.1, tapStep: 1.6, obstacles, theme: 1 };
     }
     case 2: {
       for (const pos of spread(1 + Math.floor(t / 5), rand)) obstacles.push({ type: "hurdle", pos, len: 4 });
-      return { aiSpeed: 8 + t * 0.4, tapStep: 1.6, obstacles, theme: 2 };
+      return { aiSpeed: 6.6 + t * 0.1, tapStep: 1.6, obstacles, theme: 2 };
     }
     case 3: {
-      for (const pos of spread(1 + Math.floor(t / 7), rand)) obstacles.push({ type: "hill", pos, len: 14 });
-      return { aiSpeed: 8 + t * 0.4, tapStep: 1.7, obstacles, theme: 3 };
+      for (const pos of spread(1 + Math.floor(t / 9), rand)) obstacles.push({ type: "hill", pos, len: 14 });
+      return { aiSpeed: 6.2 + t * 0.08, tapStep: 1.7, obstacles, theme: 3 };
     }
     case 4: {
       for (const pos of spread(2 + Math.floor(t / 7), rand)) obstacles.push({ type: "star", pos, len: 4 });
-      return { aiSpeed: 9.5 + t * 0.42, tapStep: 1.6, obstacles, theme: 4 };
+      return { aiSpeed: 7 + t * 0.12, tapStep: 1.6, obstacles, theme: 4 };
     }
     default: {
       const kinds: ObstacleType[] = ["puddle", "hurdle", "hill", "star"];
@@ -76,7 +81,7 @@ function buildLevel(ci: number, t: number, rand: () => number): RaceLevel {
         const type = kinds[(i + t) % kinds.length];
         obstacles.push({ type, pos, len: type === "hill" ? 12 : 4 });
       });
-      return { aiSpeed: 10 + t * 0.45, tapStep: 1.6, obstacles, theme: 5 };
+      return { aiSpeed: 7.2 + t * 0.12, tapStep: 1.6, obstacles, theme: 5 };
     }
   }
 }
