@@ -242,6 +242,215 @@ export function collideCircleRect(
   return true;
 }
 
+/** 给粒子施加一个速度冲量（Verlet：把上一帧位置往反方向挪）。 */
+export function applyImpulse(
+  p: Particle,
+  dvx: number,
+  dvy: number,
+  dt: number
+): void {
+  if (p.pinned) return;
+  p.px -= dvx * dt;
+  p.py -= dvy * dt;
+}
+
+/** 传送：瞬移到目标点，保留当前速度（Verlet 位置差平移）。 */
+export function teleport(p: Particle, toX: number, toY: number): void {
+  const vx = p.x - p.px;
+  const vy = p.y - p.py;
+  p.x = toX;
+  p.y = toY;
+  p.px = toX - vx;
+  p.py = toY - vy;
+}
+
+/**
+ * 指定粒子（默认糖果=0 号）沿活动绳段能否连到某个钉住的锚点。
+ * 剪断后拖着的绳尾不算"挂着"。
+ */
+export function attachedToAnchor(
+  ps: Particle[],
+  links: Link[],
+  index = 0
+): boolean {
+  const seen = new Set<number>([index]);
+  const queue = [index];
+  while (queue.length > 0) {
+    const cur = queue.pop()!;
+    if (ps[cur].pinned) return true;
+    for (const l of links) {
+      if (!l.active) continue;
+      let next = -1;
+      if (l.a === cur) next = l.b;
+      else if (l.b === cur) next = l.a;
+      if (next >= 0 && !seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+/** 把与指定粒子连通的所有活动绳段一起置为不活动（吃掉/传送时收走绳尾）。 */
+export function deactivateConnectedLinks(links: Link[], index = 0): number {
+  const visited = new Set<number>([index]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const link of links) {
+      if (!link.active) continue;
+      if (visited.has(link.a) !== visited.has(link.b)) {
+        visited.add(link.a);
+        visited.add(link.b);
+        changed = true;
+      }
+    }
+  }
+  let count = 0;
+  for (const link of links) {
+    if (link.active && visited.has(link.a) && visited.has(link.b)) {
+      link.active = false;
+      count++;
+    }
+  }
+  return count;
+}
+
+/** 剪断中点落在 (x,y) 半径 radius 内的所有绳段，返回剪断数量。 */
+export function cutLinksNear(
+  ps: Particle[],
+  links: Link[],
+  x: number,
+  y: number,
+  radius: number
+): number {
+  let count = 0;
+  for (const link of links) {
+    if (!link.active) continue;
+    const mx = (ps[link.a].x + ps[link.b].x) / 2;
+    const my = (ps[link.a].y + ps[link.b].y) / 2;
+    if (Math.hypot(mx - x, my - y) <= radius) {
+      link.active = false;
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * 自动剪刀的咔嚓时刻：offset、offset+period、offset+2*period…
+ * 返回 (t0, t1] 时间窗内是否发生了咔嚓。
+ */
+export function snipOccurred(
+  period: number,
+  offset: number,
+  t0: number,
+  t1: number
+): boolean {
+  if (period <= 0 || t1 < offset) return false;
+  const k0 = Math.floor((t0 - offset) / period);
+  const k1 = Math.floor((t1 - offset) / period);
+  if (t0 < offset) return t1 >= offset;
+  return k1 > k0;
+}
+
+/** 距 (x,y) 最近的活动绳段索引（按中点距离），没有则 -1。 */
+export function nearestActiveLink(
+  ps: Particle[],
+  links: Link[],
+  x: number,
+  y: number
+): number {
+  let best = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    if (!link.active) continue;
+    const mx = (ps[link.a].x + ps[link.b].x) / 2;
+    const my = (ps[link.a].y + ps[link.b].y) / 2;
+    const d = Math.hypot(mx - x, my - y);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** 沿活动绳段能连到钉住锚点的粒子集合。 */
+export function anchoredParticles(ps: Particle[], links: Link[]): Set<number> {
+  const seen = new Set<number>();
+  const queue: number[] = [];
+  for (let i = 0; i < ps.length; i++) {
+    if (ps[i].pinned) {
+      seen.add(i);
+      queue.push(i);
+    }
+  }
+  while (queue.length > 0) {
+    const cur = queue.pop()!;
+    for (const l of links) {
+      if (!l.active) continue;
+      let next = -1;
+      if (l.a === cur) next = l.b;
+      else if (l.b === cur) next = l.a;
+      if (next >= 0 && !seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return seen;
+}
+
+/**
+ * 糖果蛾的目标：距 (x,y) 最近、且仍连着锚点的绳段
+ * （垂着的绳尾咬了也没用，蛾子不理它们）。
+ */
+export function nearestAnchoredLink(
+  ps: Particle[],
+  links: Link[],
+  x: number,
+  y: number
+): number {
+  const anchored = anchoredParticles(ps, links);
+  let best = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    if (!link.active) continue;
+    if (!anchored.has(link.a) && !anchored.has(link.b)) continue;
+    const mx = (ps[link.a].x + ps[link.b].x) / 2;
+    const my = (ps[link.a].y + ps[link.b].y) / 2;
+    const d = Math.hypot(mx - x, my - y);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** 朝目标点匀速移动一步，返回新位置和是否到达。 */
+export function moveToward(
+  x: number,
+  y: number,
+  tx: number,
+  ty: number,
+  speed: number,
+  dt: number
+): { x: number; y: number; arrived: boolean } {
+  const dx = tx - x;
+  const dy = ty - y;
+  const dist = Math.hypot(dx, dy);
+  const step = speed * dt;
+  if (dist <= step || dist < 1e-6) {
+    return { x: tx, y: ty, arrived: true };
+  }
+  return { x: x + (dx / dist) * step, y: y + (dy / dist) * step, arrived: false };
+}
+
 /** 木板在两点间来回滑动的插值位置（余弦缓动，period 秒一个来回）。 */
 export function boardPosition(
   x1: number, y1: number, x2: number, y2: number,

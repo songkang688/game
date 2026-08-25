@@ -1,19 +1,36 @@
 // 糖果秋千 —— 割绳子类物理益智：划断绳子，把糖果送进小怪物"啾啾"的嘴巴。
+// 24 关 3 章节：草地 / 夜空 / 糖果工厂，9 种机关，带选关地图与进度存档。
 import {
   type Link,
   type Particle,
+  applyImpulse,
+  attachedToAnchor,
   boardPosition,
   buildRope,
   circleRectOverlap,
   circlesOverlap,
   collideCircleRect,
+  cutLinksNear,
+  deactivateConnectedLinks,
   integrate,
   makeParticle,
+  moveToward,
+  nearestAnchoredLink,
   segmentsIntersect,
+  snipOccurred,
   solveLinks,
   starsForCollected,
+  teleport,
 } from "./physics";
-import { LEVELS, totalStars, type LevelDef } from "./levels";
+import {
+  CHAPTERS,
+  CHAPTER_SIZE,
+  LEVELS,
+  chapterOf,
+  totalStars,
+  type ChapterTheme,
+  type LevelDef,
+} from "./levels";
 
 export const meta = {
   id: "candy-swing",
@@ -21,7 +38,7 @@ export const meta = {
   emoji: "🍬",
   category: "action" as const,
   color: "#FFE0EE",
-  blurb: "划断绳子，让糖果荡进小怪物啾啾的嘴巴里！",
+  blurb: "24 关大冒险！剪绳、传送、气球，把糖果送进啾啾嘴里！",
 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -43,12 +60,65 @@ const STEP = 1 / 120;
 const MOUTH_EAT_R = 42;
 const STAR_COLLECT_R = 30;
 const BUBBLE_CATCH_R = 50;
+const PORTAL_R = 24;
+const PORTAL_COOLDOWN = 0.45;
+const PUFF_RANGE = 130;
+const PUFF_SPEED = 320;
+const BALLOON_TAP_R = 42;
+const MOTH_BITE_DIST = 12;
+
+const SAVE_KEY = "yiduo.candy-swing.campaign.v1";
+
+interface Progress {
+  /** 每关最佳星数 0-3（0=未通过） */
+  stars: number[];
+}
+
+function loadProgress(): Progress {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw) as { stars?: unknown };
+      if (Array.isArray(data.stars)) {
+        const arr = data.stars as unknown[];
+        const stars = LEVELS.map((_, i) => {
+          const v = arr[i];
+          return typeof v === "number" ? Math.max(0, Math.min(3, Math.round(v))) : 0;
+        });
+        return { stars };
+      }
+    }
+  } catch {
+    // 隐私模式等读不到就当新档
+  }
+  return { stars: LEVELS.map(() => 0) };
+}
+
+function saveProgress(p: Progress): void {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(p));
+  } catch {
+    // 存不了也不影响本次游玩
+  }
+}
+
+interface ThemePalette {
+  skyTop: string;
+  skyBottom: string;
+  accent: string;
+  deco: "meadow" | "night" | "factory";
+}
+
+const THEMES: Record<ChapterTheme, ThemePalette> = {
+  meadow: { skyTop: "#FFF7FB", skyBottom: "#DCF3E1", accent: "#7CBE5F", deco: "meadow" },
+  night: { skyTop: "#252A55", skyBottom: "#4A3E78", accent: "#8E7BE0", deco: "night" },
+  factory: { skyTop: "#FFEFF7", skyBottom: "#FFD9EA", accent: "#F06FA5", deco: "factory" },
+};
 
 interface StarState {
   x: number;
   y: number;
   collected: boolean;
-  /** 吸入动画进度 0..1 */
   suck: number;
 }
 
@@ -73,6 +143,24 @@ interface BoardState {
   prevY: number;
 }
 
+interface BalloonState {
+  def: NonNullable<LevelDef["balloons"]>[number];
+  puffsLeft: number;
+}
+
+interface ScissorsState {
+  def: NonNullable<LevelDef["scissors"]>[number];
+  lastSnipAt: number;
+}
+
+interface MothState {
+  def: NonNullable<LevelDef["moths"]>[number];
+  x: number;
+  y: number;
+  chewT: number;
+  chewing: boolean;
+}
+
 interface TrailPoint {
   x: number;
   y: number;
@@ -95,15 +183,15 @@ export function mount(api: GameApi): { destroy: () => void } {
   let acc = 0;
   let simTime = 0;
 
+  const progress = loadProgress();
+
+  let screen: "map" | "play" = "map";
   let levelIndex = 0;
-  let phase: "play" | "won" | "failed" | "alldone" = "play";
+  let phase: "play" | "won" | "failed" = "play";
   let phaseTime = 0;
   let bannerTime = 0;
   let failReason = "";
-
-  let totalCollected = 0;
-  /** 本关进入前已拿的总数（重试时回滚用） */
-  let collectedBeforeLevel = 0;
+  let allDoneReported = false;
 
   // 物理世界
   let particles: Particle[] = [];
@@ -112,12 +200,17 @@ export function mount(api: GameApi): { destroy: () => void } {
   let bubbles: BubbleState[] = [];
   let hooks: HookState[] = [];
   let boards: BoardState[] = [];
+  let balloons: BalloonState[] = [];
+  let scissorsArr: ScissorsState[] = [];
+  let moths: MothState[] = [];
   let level: LevelDef = LEVELS[0];
+  let theme: ThemePalette = THEMES.meadow;
   let inBubble = false;
   let candyEaten = false;
   let candyGone = false;
   let mouthOpenAmount = 0;
-  let chew = 0;
+  let portalCooldown = 0;
+  let wonStars = 0;
 
   const trail: TrailPoint[] = [];
   const sparkles: Sparkle[] = [];
@@ -126,38 +219,137 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.className = "cs-wrap";
   wrap.innerHTML = `
     <style>
-      .cs-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0F6, #EAF4FF); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: none; }
-      .cs-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
-      .cs-badge { background: #fff; border-radius: 14px; padding: 6px 12px; font-weight: 700; color: #D65C8B; box-shadow: 0 2px 6px rgba(214,92,139,.2); font-size: 14px; white-space: nowrap; }
-      .cs-retry { border: none; border-radius: 14px; padding: 6px 14px; font-size: 14px; font-weight: 700; background: #FFD3E3; color: #B03A6B; cursor: pointer; box-shadow: 0 3px 0 #F2AECB; }
-      .cs-retry:active { transform: translateY(2px); box-shadow: 0 1px 0 #F2AECB; }
+      .cs-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0F6, #EAF4FF); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: manipulation; }
+      .cs-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
+      .cs-badge { background: #fff; border-radius: 14px; padding: 6px 10px; font-weight: 700; color: #D65C8B; box-shadow: 0 2px 6px rgba(214,92,139,.2); font-size: 13px; white-space: nowrap; }
+      .cs-btn { border: none; border-radius: 14px; padding: 6px 12px; font-size: 13px; font-weight: 700; background: #FFD3E3; color: #B03A6B; cursor: pointer; box-shadow: 0 3px 0 #F2AECB; }
+      .cs-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #F2AECB; }
       .cs-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .cs-msg { text-align: center; min-height: 20px; color: #B06AB3; font-weight: 700; margin-top: 8px; font-size: 14px; }
+      .cs-hidden { display: none; }
+      .cs-map-title { text-align: center; font-size: 20px; font-weight: 800; color: #D65C8B; margin: 4px 0 2px; }
+      .cs-map-total { text-align: center; font-size: 14px; font-weight: 700; color: #B06AB3; margin-bottom: 10px; }
+      .cs-chapter { border-radius: 18px; padding: 10px 12px 12px; margin-bottom: 12px; }
+      .cs-chapter.meadow { background: linear-gradient(160deg, #E9F8DF, #D5F0E2); }
+      .cs-chapter.night { background: linear-gradient(160deg, #3A3E77, #55488F); }
+      .cs-chapter.factory { background: linear-gradient(160deg, #FFE2F0, #FFD1E6); }
+      .cs-ch-name { font-weight: 800; font-size: 15px; margin-bottom: 2px; color: #4E7A3A; }
+      .cs-ch-blurb { font-size: 12px; margin-bottom: 8px; color: #6F9A5C; }
+      .cs-chapter.night .cs-ch-name { color: #E7DFFF; }
+      .cs-chapter.night .cs-ch-blurb { color: #B9AEE8; }
+      .cs-chapter.factory .cs-ch-name { color: #C2497E; }
+      .cs-chapter.factory .cs-ch-blurb { color: #D97BA5; }
+      .cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
+      .cs-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
+      .cs-lv .n { font-size: 16px; font-weight: 800; color: #B03A6B; }
+      .cs-lv .s { font-size: 10px; letter-spacing: 1px; }
+      .cs-lv.locked { background: rgba(255,255,255,.45); cursor: default; box-shadow: none; }
+      .cs-lv.locked .n { color: #A99DB5; }
+      .cs-chapter.night .cs-lv { background: rgba(255,255,255,.92); }
+      .cs-chapter.night .cs-lv.locked { background: rgba(255,255,255,.22); }
     </style>
-    <div class="cs-top">
-      <span class="cs-badge cs-level">第 1 关</span>
-      <span class="cs-badge cs-stars">⭐ 0/${totalStars()}</span>
-      <button class="cs-retry" type="button">🔄 重试</button>
+    <div class="cs-map">
+      <div class="cs-map-title">🍬 糖果秋千</div>
+      <div class="cs-map-total"></div>
+      <div class="cs-chapters"></div>
     </div>
-    <canvas class="cs-canvas" width="${W}" height="${H}"></canvas>
-    <div class="cs-msg"></div>
+    <div class="cs-game cs-hidden">
+      <div class="cs-top">
+        <span class="cs-badge cs-level">第 1 关</span>
+        <span class="cs-badge cs-stars">⭐ 0/3</span>
+        <button class="cs-btn cs-retry" type="button">🔄 重试</button>
+        <button class="cs-btn cs-back" type="button">🗺️ 选关</button>
+      </div>
+      <canvas class="cs-canvas" width="${W}" height="${H}"></canvas>
+      <div class="cs-msg"></div>
+    </div>
   `;
   api.root.appendChild(wrap);
 
+  const mapEl = wrap.querySelector(".cs-map") as HTMLElement;
+  const mapTotalEl = wrap.querySelector(".cs-map-total") as HTMLElement;
+  const chaptersEl = wrap.querySelector(".cs-chapters") as HTMLElement;
+  const gameEl = wrap.querySelector(".cs-game") as HTMLElement;
   const canvas = wrap.querySelector(".cs-canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d")!;
   const levelEl = wrap.querySelector(".cs-level") as HTMLElement;
   const starsEl = wrap.querySelector(".cs-stars") as HTMLElement;
   const msgEl = wrap.querySelector(".cs-msg") as HTMLElement;
   const retryBtn = wrap.querySelector(".cs-retry") as HTMLButtonElement;
+  const backBtn = wrap.querySelector(".cs-back") as HTMLButtonElement;
 
   function candy(): Particle {
     return particles[0];
   }
 
+  function levelUnlocked(i: number): boolean {
+    return i === 0 || progress.stars[i - 1] > 0;
+  }
+
+  function allCleared(): boolean {
+    return progress.stars.every((s) => s > 0);
+  }
+
+  function bestTotal(): number {
+    return progress.stars.reduce((a, b) => a + b, 0);
+  }
+
+  // ---------- 选关地图 ----------
+
+  function renderMap(): void {
+    mapTotalEl.textContent = `⭐ ${bestTotal()} / ${totalStars()} · 共 ${LEVELS.length} 关`;
+    chaptersEl.innerHTML = "";
+    CHAPTERS.forEach((ch, ci) => {
+      const box = document.createElement("div");
+      box.className = `cs-chapter ${ch.theme}`;
+      const name = document.createElement("div");
+      name.className = "cs-ch-name";
+      name.textContent = `第${["一", "二", "三"][ci]}章 · ${ch.name}`;
+      const blurb = document.createElement("div");
+      blurb.className = "cs-ch-blurb";
+      blurb.textContent = ch.blurb;
+      const grid = document.createElement("div");
+      grid.className = "cs-grid";
+      for (let k = 0; k < CHAPTER_SIZE; k++) {
+        const i = ci * CHAPTER_SIZE + k;
+        if (i >= LEVELS.length) break;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const unlocked = levelUnlocked(i);
+        btn.className = unlocked ? "cs-lv" : "cs-lv locked";
+        const got = progress.stars[i];
+        btn.innerHTML = unlocked
+          ? `<span class="n">${i + 1}</span><span class="s">${"★".repeat(got)}${"☆".repeat(3 - got)}</span>`
+          : `<span class="n">🔒</span><span class="s">&nbsp;</span>`;
+        if (unlocked) {
+          btn.addEventListener("click", () => {
+            api.play("tap");
+            startLevel(i);
+          });
+        }
+        grid.appendChild(btn);
+      }
+      box.appendChild(name);
+      box.appendChild(blurb);
+      box.appendChild(grid);
+      chaptersEl.appendChild(box);
+    });
+  }
+
+  function showMap(): void {
+    screen = "map";
+    renderMap();
+    gameEl.classList.add("cs-hidden");
+    mapEl.classList.remove("cs-hidden");
+  }
+
+  // ---------- 关卡装载 ----------
+
   function updateHud(): void {
+    const got = stars.filter((s) => s.collected).length;
     levelEl.textContent = `第 ${levelIndex + 1}/${LEVELS.length} 关 · ${level.name}`;
-    starsEl.textContent = `⭐ ${totalCollected}/${totalStars()}`;
+    starsEl.textContent = `⭐ ${got}/${level.stars.length}`;
   }
 
   function addRopeToCandy(ax: number, ay: number, totalLength?: number): void {
@@ -177,19 +369,24 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
-  function loadLevel(index: number): void {
+  function startLevel(index: number): void {
+    screen = "play";
+    mapEl.classList.add("cs-hidden");
+    gameEl.classList.remove("cs-hidden");
     levelIndex = index;
     level = LEVELS[index];
-    collectedBeforeLevel = totalCollected;
+    theme = THEMES[CHAPTERS[chapterOf(index)].theme];
     phase = "play";
     phaseTime = 0;
     bannerTime = 1.4;
     simTime = 0;
+    acc = 0;
     inBubble = false;
     candyEaten = false;
     candyGone = false;
     mouthOpenAmount = 0;
-    chew = 0;
+    portalCooldown = 0;
+    wonStars = 0;
     trail.length = 0;
     sparkles.length = 0;
 
@@ -203,15 +400,23 @@ export function mount(api: GameApi): { destroy: () => void } {
       const pos = boardPosition(def.x1, def.y1, def.x2, def.y2, def.period, 0);
       return { def, x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y };
     });
+    balloons = (level.balloons ?? []).map((def) => ({ def, puffsLeft: def.puffs }));
+    scissorsArr = (level.scissors ?? []).map((def) => ({ def, lastSnipAt: -99 }));
+    moths = (level.moths ?? []).map((def) => ({
+      def,
+      x: def.x,
+      y: def.y,
+      chewT: 0,
+      chewing: false,
+    }));
     msgEl.textContent = level.tip;
     updateHud();
   }
 
   function retryLevel(): void {
-    if (phase === "alldone") return;
-    totalCollected = collectedBeforeLevel;
+    if (screen !== "play") return;
     api.play("tap");
-    loadLevel(levelIndex);
+    startLevel(levelIndex);
   }
 
   function burst(x: number, y: number, color: string, count = 8, speed = 120): void {
@@ -228,29 +433,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     phaseTime = 0;
     failReason = reason;
     api.play("oops");
-    msgEl.textContent = "没关系，点重试再来一次！";
-  }
-
-  /** 糖果被吃掉时，把还连在糖果上的绳段一起收走（不然会悬空残留） */
-  function removeCandyRopes(): void {
-    const visited = new Set<number>([0]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const link of links) {
-        if (!link.active) continue;
-        if (visited.has(link.a) !== visited.has(link.b)) {
-          visited.add(link.a);
-          visited.add(link.b);
-          changed = true;
-        }
-      }
-    }
-    for (const link of links) {
-      if (link.active && visited.has(link.a) && visited.has(link.b)) {
-        link.active = false;
-      }
-    }
+    msgEl.textContent = "没关系，点击画面再来一次！";
   }
 
   function winLevel(): void {
@@ -258,18 +441,28 @@ export function mount(api: GameApi): { destroy: () => void } {
     phase = "won";
     phaseTime = 0;
     candyEaten = true;
-    removeCandyRopes();
-    chew = 1;
+    // 吃掉时把还连在糖果上的绳段一起收走（不然会悬空残留）
+    deactivateConnectedLinks(links, 0);
     api.play("coin");
     api.play("win");
     burst(level.monster.x, level.monster.y - 10, "#FF9DBE", 12, 160);
-    msgEl.textContent = "啾啾吃到糖果啦！";
-  }
 
-  function finishAll(): void {
-    phase = "alldone";
-    const rating = starsForCollected(totalCollected, totalStars());
-    api.onWin(rating, `全部 ${LEVELS.length} 关通过，收集了 ${totalCollected} 颗星星！`);
+    const collected = stars.filter((s) => s.collected).length;
+    wonStars = Math.max(1, collected);
+    const before = progress.stars[levelIndex];
+    const wasAllCleared = allCleared();
+    progress.stars[levelIndex] = Math.max(before, wonStars);
+    saveProgress(progress);
+    msgEl.textContent = "啾啾吃到糖果啦！";
+
+    if (!wasAllCleared && allCleared() && !allDoneReported) {
+      allDoneReported = true;
+      const rating = starsForCollected(bestTotal(), totalStars());
+      window.setTimeout(() => {
+        if (destroyed) return;
+        api.onWin(rating, `24 关全部通关！共收集 ${bestTotal()} 颗星星！`);
+      }, 1500);
+    }
   }
 
   // ---------- 物理与规则 ----------
@@ -284,7 +477,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (segmentsIntersect(x0, y0, x1, y1, pa.x, pa.y, pb.x, pb.y)) {
         link.active = false;
         cutCount++;
-        // 切断弹出：给两端一点垂直于刀痕的冲量，绳子会"弹"开
         const len = Math.hypot(x1 - x0, y1 - y0) || 1;
         const nx = -(y1 - y0) / len;
         const ny = (x1 - x0) / len;
@@ -304,8 +496,105 @@ export function mount(api: GameApi): { destroy: () => void } {
     api.play("pop");
   }
 
+  function tryPuff(x: number, y: number): boolean {
+    for (const b of balloons) {
+      if (b.puffsLeft <= 0) continue;
+      if (Math.hypot(x - b.def.x, y - b.def.y) > BALLOON_TAP_R) continue;
+      b.puffsLeft--;
+      const dir = b.def.dir;
+      const dx = dir === "left" ? -1 : dir === "right" ? 1 : 0;
+      const dy = dir === "up" ? -1 : dir === "down" ? 1 : 0;
+      const c = candy();
+      if (!candyGone && Math.hypot(c.x - b.def.x, c.y - b.def.y) <= PUFF_RANGE) {
+        applyImpulse(c, dx * PUFF_SPEED, dy * PUFF_SPEED, STEP);
+      }
+      api.play("jump");
+      for (let i = 0; i < 10; i++) {
+        sparkles.push({
+          x: b.def.x + dx * 20,
+          y: b.def.y + dy * 20,
+          vx: dx * (120 + Math.random() * 160) + (Math.random() - 0.5) * 60,
+          vy: dy * (120 + Math.random() * 160) + (Math.random() - 0.5) * 60,
+          t: 0,
+          color: "#E8F6FF",
+        });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function stepScissors(prevT: number, nowT: number): void {
+    for (const s of scissorsArr) {
+      const offset = s.def.offset ?? s.def.period;
+      if (snipOccurred(s.def.period, offset, prevT, nowT)) {
+        s.lastSnipAt = nowT;
+        const cut = cutLinksNear(particles, links, s.def.x, s.def.y, s.def.radius);
+        if (cut > 0) {
+          burst(s.def.x, s.def.y, "#C58A4F", 6, 90);
+          api.play("pop");
+        }
+      }
+    }
+  }
+
+  function stepMoths(dt: number): void {
+    for (const m of moths) {
+      m.chewing = false;
+      if (simTime < m.def.delay) continue;
+      const li = nearestAnchoredLink(particles, links, m.x, m.y);
+      if (li < 0) {
+        // 没绳可咬就飘走
+        const away = moveToward(m.x, m.y, m.def.x, m.def.y - 30, m.def.speed * 0.5, dt);
+        m.x = away.x;
+        m.y = away.y;
+        continue;
+      }
+      const link = links[li];
+      const tx = (particles[link.a].x + particles[link.b].x) / 2;
+      const ty = (particles[link.a].y + particles[link.b].y) / 2;
+      const dist = Math.hypot(tx - m.x, ty - m.y);
+      if (dist > MOTH_BITE_DIST) {
+        const mv = moveToward(m.x, m.y, tx, ty, m.def.speed, dt);
+        m.x = mv.x;
+        m.y = mv.y;
+        m.chewT = 0;
+      } else {
+        m.chewing = true;
+        m.chewT += dt;
+        if (m.chewT >= m.def.chew) {
+          link.active = false;
+          m.chewT = 0;
+          burst(tx, ty, "#D9A05B", 6, 80);
+          api.play("pop");
+        }
+      }
+    }
+  }
+
+  function stepPortals(): void {
+    if (portalCooldown > 0 || candyGone) return;
+    // 还挂在锚点上的糖果进不了传送门
+    if (attachedToAnchor(particles, links)) return;
+    const c = candy();
+    for (const p of level.portals ?? []) {
+      if (Math.hypot(c.x - p.ax, c.y - p.ay) <= PORTAL_R) {
+        burst(p.ax, p.ay, "#C79DF5", 8, 100);
+        // 拖着的绳尾进不了门，留在门口散掉
+        deactivateConnectedLinks(links, 0);
+        teleport(c, p.bx, p.by);
+        burst(p.bx, p.by, "#9DE0F5", 8, 100);
+        portalCooldown = PORTAL_COOLDOWN;
+        api.play("jump");
+        return;
+      }
+    }
+  }
+
   function step(dt: number): void {
+    const prevSim = simTime;
     simTime += dt;
+    if (portalCooldown > 0) portalCooldown -= dt;
 
     // 移动木板
     for (const b of boards) {
@@ -316,12 +605,16 @@ export function mount(api: GameApi): { destroy: () => void } {
       b.y = pos.y;
     }
 
-    if (phase === "won" || phase === "alldone") return;
+    if (phase === "won") return;
+
+    if (phase === "play") {
+      stepScissors(prevSim, simTime);
+      stepMoths(dt);
+    }
 
     integrate(particles, 0, GRAVITY, dt);
     const c = candy();
     if (inBubble && !candyGone) {
-      // 泡泡浮力：抵消重力并向上加速，限制最大上升速度
       c.y += (-260 - GRAVITY) * dt * dt;
       const upSpeed = (c.py - c.y) / dt;
       const maxUp = 95;
@@ -329,7 +622,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
     solveLinks(particles, links, 6);
 
-    // 木板碰撞（糖果被木板带着走）
     if (!candyGone) {
       for (const b of boards) {
         collideCircleRect(
@@ -341,6 +633,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
 
     if (phase !== "play" || candyGone) return;
+
+    stepPortals();
 
     // 挂钩自动抓住
     for (const h of hooks) {
@@ -354,12 +648,14 @@ export function mount(api: GameApi): { destroy: () => void } {
       }
     }
 
-    // 泡泡
+    // 泡泡（接住时吸收大部分冲量，软着陆再慢慢上浮）
     for (const b of bubbles) {
       if (b.used) continue;
       if (circlesOverlap(c.x, c.y, CANDY_R, b.x, b.y, BUBBLE_CATCH_R - CANDY_R)) {
         b.used = true;
         inBubble = true;
+        c.px = c.x - (c.x - c.px) * 0.25;
+        c.py = c.y - (c.y - c.py) * 0.25;
         api.play("jump");
       }
     }
@@ -369,7 +665,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (s.collected) continue;
       if (circlesOverlap(c.x, c.y, STAR_COLLECT_R - 14, s.x, s.y, 14)) {
         s.collected = true;
-        totalCollected++;
         api.play("coin");
         updateHud();
       }
@@ -409,18 +704,71 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawBackground(): void {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#FFF7FB");
-    g.addColorStop(1, "#E7F3FF");
+    g.addColorStop(0, theme.skyTop);
+    g.addColorStop(1, theme.skyBottom);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    // 远处的小圆点装饰
-    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-    for (let i = 0; i < 5; i++) {
-      const bx = ((i * 83 + 40) % W);
-      const by = 60 + ((i * 127) % 300);
+    if (theme.deco === "meadow") {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+      for (let i = 0; i < 5; i++) {
+        const bx = (i * 83 + 40) % W;
+        const by = 60 + ((i * 127) % 300);
+        ctx.beginPath();
+        ctx.arc(bx, by, 20 + (i % 3) * 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "rgba(150, 210, 130, 0.35)";
       ctx.beginPath();
-      ctx.arc(bx, by, 20 + (i % 3) * 8, 0, Math.PI * 2);
+      ctx.ellipse(70, H + 30, 180, 90, 0, Math.PI, Math.PI * 2);
       ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(300, H + 40, 200, 100, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+    } else if (theme.deco === "night") {
+      for (let i = 0; i < 18; i++) {
+        const sx = (i * 61 + 23) % W;
+        const sy = (i * 97 + 15) % (H - 100);
+        const tw = 0.5 + Math.abs(Math.sin(simTime * 2 + i)) * 0.5;
+        ctx.fillStyle = `rgba(255, 245, 200, ${0.35 + tw * 0.45})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.2 + (i % 3) * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 月亮
+      ctx.fillStyle = "#FFF3C2";
+      ctx.beginPath();
+      ctx.arc(312, 54, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = theme.skyTop;
+      ctx.beginPath();
+      ctx.arc(303, 47, 18, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // 糖果工厂：斜条纹 + 齿轮
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.lineWidth = 14;
+      for (let i = -2; i < 8; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * 70, -20);
+        ctx.lineTo(i * 70 + 120, H + 20);
+        ctx.stroke();
+      }
+      ctx.restore();
+      for (const [gx, gy, gr] of [[40, 70, 24], [326, 250, 18]] as const) {
+        ctx.strokeStyle = "rgba(240, 111, 165, 0.35)";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const ang = simTime * 0.6 + (Math.PI * i) / 4;
+          ctx.beginPath();
+          ctx.moveTo(gx + Math.cos(ang) * gr, gy + Math.sin(ang) * gr);
+          ctx.lineTo(gx + Math.cos(ang) * (gr + 7), gy + Math.sin(ang) * (gr + 7));
+          ctx.stroke();
+        }
+      }
     }
   }
 
@@ -443,7 +791,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.lineTo(pb.x, pb.y);
       ctx.stroke();
     }
-    // 锚点木钉
     for (const p of particles) {
       if (!p.pinned) continue;
       ctx.fillStyle = "#C9915F";
@@ -458,8 +805,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawSpikes(): void {
+    const isNight = theme.deco === "night";
     for (const sp of level.spikes ?? []) {
-      ctx.fillStyle = "#DCE3F5";
+      ctx.fillStyle = isNight ? "#59548C" : "#DCE3F5";
       ctx.beginPath();
       ctx.roundRect(sp.x, sp.y, sp.w, sp.h, 4);
       ctx.fill();
@@ -509,6 +857,177 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  function drawPortals(): void {
+    for (const p of level.portals ?? []) {
+      // 入口：紫色漩涡
+      ctx.save();
+      ctx.translate(p.ax, p.ay);
+      ctx.rotate(simTime * 2);
+      ctx.strokeStyle = "#B06AF0";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 7]);
+      ctx.beginPath();
+      ctx.arc(0, 0, PORTAL_R, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "rgba(176, 106, 240, 0.65)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let a = 0; a < Math.PI * 4; a += 0.25) {
+        const r = (a / (Math.PI * 4)) * (PORTAL_R - 5);
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        if (a === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.restore();
+      // 出口：青色圆环
+      ctx.save();
+      ctx.translate(p.bx, p.by);
+      ctx.rotate(-simTime * 2);
+      ctx.strokeStyle = "#4FC7E8";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 7]);
+      ctx.beginPath();
+      ctx.arc(0, 0, PORTAL_R, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      ctx.fillStyle = "rgba(79, 199, 232, 0.25)";
+      ctx.beginPath();
+      ctx.arc(p.bx, p.by, PORTAL_R - 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawBalloons(): void {
+    for (const b of balloons) {
+      const { x, y, dir } = b.def;
+      const bob = Math.sin(simTime * 2.4 + x) * 3;
+      const dx = dir === "left" ? -1 : dir === "right" ? 1 : 0;
+      const dy = dir === "up" ? -1 : dir === "down" ? 1 : 0;
+      const empty = b.puffsLeft <= 0;
+      // 系绳
+      ctx.strokeStyle = "rgba(150, 120, 90, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y + bob + 20);
+      ctx.quadraticCurveTo(x + 5, y + bob + 34, x - 3, y + bob + 46);
+      ctx.stroke();
+      // 气球本体
+      ctx.fillStyle = empty ? "#D8CFE0" : "#FF9E64";
+      ctx.beginPath();
+      ctx.ellipse(x, y + bob, 17, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.beginPath();
+      ctx.ellipse(x - 5, y + bob - 6, 5, 7, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      // 嘴巴（出风口方向箭头）
+      if (!empty) {
+        ctx.fillStyle = "#4FA3E8";
+        ctx.beginPath();
+        const ax = x + dx * 26;
+        const ay = y + bob + dy * 30;
+        ctx.moveTo(ax + dx * 10 + dy * 0, ay + dy * 10);
+        ctx.lineTo(ax - dy * 7, ay - dx * 7);
+        ctx.lineTo(ax + dy * 7, ay + dx * 7);
+        ctx.closePath();
+        ctx.fill();
+        // 剩余口数
+        for (let i = 0; i < b.puffsLeft; i++) {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.beginPath();
+          ctx.arc(x - 8 + i * 8, y + bob + 26, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawScissors(): void {
+    for (const s of scissorsArr) {
+      const { x, y, radius, period } = s.def;
+      const offset = s.def.offset ?? period;
+      // 提示圈
+      ctx.strokeStyle = "rgba(240, 130, 130, 0.4)";
+      ctx.setLineDash([5, 7]);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 距下次咔嚓越近，刀刃张得越开
+      let next = offset;
+      while (next <= simTime) next += period;
+      const until = next - simTime;
+      const justSnipped = simTime - s.lastSnipAt < 0.18;
+      const open = justSnipped ? 0.06 : Math.min(0.55, 0.15 + (1 - Math.min(1, until / period)) * 0.5);
+      ctx.save();
+      ctx.translate(x, y);
+      for (const side of [-1, 1]) {
+        ctx.rotate(0);
+        ctx.strokeStyle = "#9AA7C4";
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(side * open) * 17, Math.sin(side * open) * 17 - 6);
+        ctx.stroke();
+        ctx.fillStyle = "#F08282";
+        ctx.beginPath();
+        ctx.arc(-Math.cos(side * open) * 8, -Math.sin(side * open) * 8 + 7, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawMoths(): void {
+    for (const m of moths) {
+      if (simTime < m.def.delay - 1.2) continue;
+      const flap = Math.sin(simTime * 18) * (m.chewing ? 0.35 : 0.8);
+      const jx = m.chewing ? (Math.random() - 0.5) * 2 : 0;
+      ctx.save();
+      ctx.translate(m.x + jx, m.y);
+      // 翅膀
+      ctx.fillStyle = "rgba(230, 190, 250, 0.9)";
+      ctx.beginPath();
+      ctx.ellipse(-7, -2, 9, 5 + flap * 4, -0.5 + flap * 0.3, 0, Math.PI * 2);
+      ctx.ellipse(7, -2, 9, 5 + flap * 4, 0.5 - flap * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // 身体
+      ctx.fillStyle = "#8D6BB8";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 4.5, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 触角
+      ctx.strokeStyle = "#8D6BB8";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-1, -7);
+      ctx.quadraticCurveTo(-5, -13, -7, -12);
+      ctx.moveTo(1, -7);
+      ctx.quadraticCurveTo(5, -13, 7, -12);
+      ctx.stroke();
+      // 眼睛
+      ctx.fillStyle = "#FFF";
+      ctx.beginPath();
+      ctx.arc(-2, -4, 1.6, 0, Math.PI * 2);
+      ctx.arc(2, -4, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      if (m.chewing) {
+        ctx.fillStyle = "#B03A6B";
+        ctx.font = "10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("咔嚓咔嚓", m.x, m.y - 18);
+        ctx.textAlign = "left";
+      }
+    }
+  }
+
   function drawStar(x: number, y: number, r: number, rot = 0): void {
     ctx.beginPath();
     for (let i = 0; i < 10; i++) {
@@ -528,7 +1047,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     for (const s of stars) {
       if (s.collected) {
         if (s.suck < 1) {
-          // 星星被吸向糖果并缩小
           s.suck = Math.min(1, s.suck + 0.06);
           const tx = candyGone ? s.x : c.x;
           const ty = candyGone ? s.y - 20 : c.y;
@@ -550,7 +1068,6 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawHooks(): void {
     for (const h of hooks) {
       if (h.used) continue;
-      // 抓取范围提示圈
       ctx.strokeStyle = "rgba(150, 200, 130, 0.4)";
       ctx.setLineDash([6, 8]);
       ctx.lineWidth = 2;
@@ -558,7 +1075,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.arc(h.x, h.y, h.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      // 挂钩本体
       ctx.fillStyle = "#8CC170";
       ctx.beginPath();
       ctx.arc(h.x, h.y, 10, 0, Math.PI * 2);
@@ -595,7 +1111,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (candyGone && !candyEaten) return;
     if (candyEaten) return;
     const c = candy();
-    // 泡泡包着糖果
     if (inBubble) {
       const wob = Math.sin(simTime * 6) * 1.5;
       ctx.fillStyle = "rgba(170, 220, 255, 0.3)";
@@ -612,7 +1127,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.save();
     ctx.translate(c.x, c.y);
     ctx.rotate(rot);
-    // 糖纸小翅膀
     ctx.fillStyle = "#FF6FA5";
     ctx.beginPath();
     ctx.moveTo(-CANDY_R - 9, -7);
@@ -624,12 +1138,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.lineTo(CANDY_R + 9, 7);
     ctx.closePath();
     ctx.fill();
-    // 糖果本体
     ctx.fillStyle = "#FF8FB1";
     ctx.beginPath();
     ctx.arc(0, 0, CANDY_R, 0, Math.PI * 2);
     ctx.fill();
-    // 螺旋纹
     ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -638,7 +1150,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.beginPath();
     ctx.arc(0, 0, CANDY_R * 0.3, Math.PI, Math.PI * 2.1);
     ctx.stroke();
-    // 高光
     ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.beginPath();
     ctx.arc(-5, -6, 3.5, 0, Math.PI * 2);
@@ -652,13 +1163,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     const bounce = phase === "won" ? Math.abs(Math.sin(phaseTime * 8)) * 6 : 0;
     const y = my - bounce;
     ctx.save();
-    // 耳朵
     ctx.fillStyle = "#B48CE8";
     ctx.beginPath();
     ctx.arc(mx - 20, y - 26, 9, 0, Math.PI * 2);
     ctx.arc(mx + 20, y - 26, 9, 0, Math.PI * 2);
     ctx.fill();
-    // 身体（圆滚滚）
     ctx.fillStyle = "#C7A6F2";
     ctx.beginPath();
     ctx.ellipse(mx, y, 32, 30, 0, 0, Math.PI * 2);
@@ -667,7 +1176,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.beginPath();
     ctx.ellipse(mx, y + 12, 20, 14, 0, 0, Math.PI * 2);
     ctx.fill();
-    // 眼睛（看向糖果）
     const c = candy();
     const lookX = candyGone ? 0 : Math.max(-3, Math.min(3, (c.x - mx) * 0.03));
     const lookY = candyGone ? 0 : Math.max(-3, Math.min(3, (c.y - y) * 0.03));
@@ -681,7 +1189,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.arc(mx - 11 + lookX, y - 10 + lookY, 3.4, 0, Math.PI * 2);
     ctx.arc(mx + 11 + lookX, y - 10 + lookY, 3.4, 0, Math.PI * 2);
     ctx.fill();
-    // 嘴巴：糖果靠近时张大
     const open = phase === "won" ? Math.max(0, 1 - phaseTime * 2) : mouthOpenAmount;
     if (open > 0.15) {
       ctx.fillStyle = "#5A3A6E";
@@ -699,13 +1206,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.arc(mx, y + 6, 8, Math.PI * 0.15, Math.PI * 0.85);
       ctx.stroke();
     }
-    // 腮红
     ctx.fillStyle = "rgba(255, 150, 180, 0.5)";
     ctx.beginPath();
     ctx.arc(mx - 22, y + 2, 5, 0, Math.PI * 2);
     ctx.arc(mx + 22, y + 2, 5, 0, Math.PI * 2);
     ctx.fill();
-    // 吃到后的爱心
     if (phase === "won" && phaseTime < 1.2) {
       ctx.fillStyle = "rgba(255, 110, 150, " + (1 - phaseTime / 1.2) + ")";
       ctx.font = "20px sans-serif";
@@ -755,47 +1260,50 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  function overlayTextColor(): string {
+    return "#D65C8B";
+  }
+
   function drawOverlays(): void {
     if (bannerTime > 0 && phase === "play") {
       const a = Math.min(1, bannerTime / 0.4);
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.75 * a})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * a})`;
       ctx.beginPath();
-      ctx.roundRect(50, 190, 260, 84, 18);
+      ctx.roundRect(40, 190, 280, 84, 18);
       ctx.fill();
       ctx.fillStyle = `rgba(214, 92, 139, ${a})`;
       ctx.font = "bold 22px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(`第 ${levelIndex + 1} 关 · ${level.name}`, W / 2, 226);
-      ctx.font = "14px sans-serif";
+      ctx.font = "13px sans-serif";
       ctx.fillStyle = `rgba(150, 100, 190, ${a})`;
       ctx.fillText(level.tip, W / 2, 254);
       ctx.textAlign = "left";
     }
     if (phase === "won") {
-      const got = stars.filter((s) => s.collected).length;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
       ctx.beginPath();
       ctx.roundRect(60, 170, 240, 120, 20);
       ctx.fill();
-      ctx.fillStyle = "#D65C8B";
+      ctx.fillStyle = overlayTextColor();
       ctx.font = "bold 24px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("过关啦！", W / 2, 210);
       ctx.font = "26px sans-serif";
-      const starsStr = "⭐".repeat(got) + "☆".repeat(level.stars.length - got);
-      ctx.fillText(starsStr, W / 2, 248);
+      const got = stars.filter((s) => s.collected).length;
+      ctx.fillText("⭐".repeat(Math.max(1, got)) + "☆".repeat(3 - Math.max(1, got)), W / 2, 248);
       ctx.font = "13px sans-serif";
       ctx.fillStyle = "#9B7BC8";
       ctx.fillText(
-        levelIndex + 1 < LEVELS.length ? "马上进入下一关…" : "全部通关！",
+        levelIndex + 1 < LEVELS.length ? "马上进入下一关…" : "最后一关通过！",
         W / 2, 276
       );
       ctx.textAlign = "left";
     }
     if (phase === "failed") {
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
       ctx.beginPath();
-      ctx.roundRect(60, 180, 240, 100, 20);
+      ctx.roundRect(50, 180, 260, 100, 20);
       ctx.fill();
       ctx.fillStyle = "#E0708C";
       ctx.font = "bold 22px sans-serif";
@@ -812,11 +1320,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawBackground();
     drawSpikes();
     drawBoards();
+    drawPortals();
     drawHooks();
     drawBubbles();
+    drawBalloons();
     drawStars();
     drawMonster();
     drawRopes();
+    drawScissors();
+    drawMoths();
     drawCandy();
     drawSparkles(dt);
     drawTrail();
@@ -829,24 +1341,26 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (destroyed) return;
     const frameDt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
-    acc += frameDt;
-    let sub = 0;
-    while (acc >= STEP && sub < 6) {
-      step(STEP);
-      acc -= STEP;
-      sub++;
+    if (screen === "play") {
+      acc += frameDt;
+      let sub = 0;
+      while (acc >= STEP && sub < 6) {
+        step(STEP);
+        acc -= STEP;
+        sub++;
+      }
+      if (acc > STEP * 6) acc = 0;
+
+      phaseTime += frameDt;
+      if (bannerTime > 0) bannerTime -= frameDt;
+
+      if (phase === "won" && phaseTime > 1.8) {
+        if (levelIndex + 1 < LEVELS.length) startLevel(levelIndex + 1);
+        else showMap();
+      }
+
+      draw(frameDt);
     }
-    if (acc > STEP * 6) acc = 0;
-
-    phaseTime += frameDt;
-    if (bannerTime > 0) bannerTime -= frameDt;
-
-    if (phase === "won" && phaseTime > 1.6) {
-      if (levelIndex + 1 < LEVELS.length) loadLevel(levelIndex + 1);
-      else finishAll();
-    }
-
-    draw(frameDt);
     raf = requestAnimationFrame(tick);
   }
 
@@ -856,6 +1370,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   let lastX = 0;
   let lastY = 0;
   let movedDist = 0;
+  let downX = 0;
+  let downY = 0;
 
   function toCanvas(e: PointerEvent): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect();
@@ -866,6 +1382,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   const onPointerDown = (e: PointerEvent): void => {
+    if (screen !== "play") return;
     e.preventDefault();
     if (phase === "failed") {
       retryLevel();
@@ -875,12 +1392,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     const p = toCanvas(e);
     lastX = p.x;
     lastY = p.y;
+    downX = p.x;
+    downY = p.y;
     movedDist = 0;
     trail.push({ x: p.x, y: p.y, t: simTime });
   };
 
   const onPointerMove = (e: PointerEvent): void => {
-    if (!pointerDown) return;
+    if (!pointerDown || screen !== "play") return;
     const p = toCanvas(e);
     movedDist += Math.hypot(p.x - lastX, p.y - lastY);
     if (Math.hypot(p.x - lastX, p.y - lastY) > 0.5) {
@@ -894,16 +1413,22 @@ export function mount(api: GameApi): { destroy: () => void } {
   const onPointerUp = (): void => {
     if (!pointerDown) return;
     pointerDown = false;
-    // 轻点（几乎没移动）＝戳泡泡
-    if (movedDist < 12 && phase === "play") popBubble();
+    if (movedDist < 12 && phase === "play") {
+      // 轻点：先看是不是点了气球，否则试着戳破泡泡
+      if (!tryPuff(downX, downY)) popBubble();
+    }
   };
 
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
   retryBtn.addEventListener("click", retryLevel);
+  backBtn.addEventListener("click", () => {
+    api.play("tap");
+    showMap();
+  });
 
-  loadLevel(0);
+  showMap();
   raf = requestAnimationFrame((t) => {
     lastTime = t;
     raf = requestAnimationFrame(tick);
