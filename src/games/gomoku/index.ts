@@ -13,7 +13,7 @@ import {
   other,
   setCell,
 } from "./ai";
-import { PUZZLES, puzzleBoard } from "./puzzles";
+import { PUZZLES, THEMES, puzzleBoard, puzzlesOfTheme, themeStart } from "./puzzles";
 
 export const meta = {
   id: "gomoku",
@@ -21,7 +21,7 @@ export const meta = {
   emoji: "⚫",
   category: "casual" as const,
   color: "#F6E3C5",
-  blurb: "自由对战加 16 关棋谜战役，先连成五颗就是小棋王！",
+  blurb: "自由对战加 99 道残局棋谜、6 大主题，先连成五颗就是小棋王！",
 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -40,7 +40,7 @@ const W = 380;
 type Mode = "easy" | "normal" | "smart" | "pvp";
 type PlayKind = "free" | "puzzle";
 
-const CAMPAIGN_KEY = "yiduo.gomoku.campaign.v1";
+const CAMPAIGN_KEY = "yiduo.gomoku.campaign.v2";
 
 interface CampaignProgress {
   stars: number[];
@@ -135,6 +135,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       .gm-msg { text-align: center; min-height: 20px; color: #B06AB3; font-weight: 700; margin-top: 8px; font-size: 14px; }
       .gm-hidden { display: none; }
       .gm-pz-total { text-align: center; font-weight: 700; color: #A8743C; font-size: 14px; margin-bottom: 8px; }
+      .gm-theme { border-radius: 16px; padding: 10px 10px 12px; margin-bottom: 12px; }
+      .gm-theme-name { font-weight: 800; font-size: 15px; margin-bottom: 2px; }
+      .gm-theme-blurb { font-size: 12px; opacity: .85; margin-bottom: 8px; }
       .gm-pz-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
       .gm-pz { border: none; border-radius: 14px; padding: 8px 2px 6px; background: #FFFDF8; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
       .gm-pz:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
@@ -179,9 +182,9 @@ export function mount(api: GameApi): { destroy: () => void } {
         <button class="gm-start" type="button" style="margin-top:14px; width:100%">开始下棋 ▶</button>
       </div>
       <div class="gm-puzzle-list gm-hidden">
-        <div class="gm-group-label">🧩 棋谜战役 · 残局闯关（黑棋 N 步内连五）</div>
+        <div class="gm-group-label">🧩 棋谜战役 · 99 道残局 6 大主题（黑棋 N 步内连五）</div>
         <div class="gm-pz-total"></div>
-        <div class="gm-pz-grid"></div>
+        <div class="gm-pz-themes"></div>
       </div>
     </div>
     <div class="gm-game gm-hidden">
@@ -205,7 +208,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   const freeOptsEl = wrap.querySelector(".gm-free-opts") as HTMLElement;
   const puzzleListEl = wrap.querySelector(".gm-puzzle-list") as HTMLElement;
   const pzTotalEl = wrap.querySelector(".gm-pz-total") as HTMLElement;
-  const pzGridEl = wrap.querySelector(".gm-pz-grid") as HTMLElement;
+  const pzThemesEl = wrap.querySelector(".gm-pz-themes") as HTMLElement;
   const gameEl = wrap.querySelector(".gm-game") as HTMLElement;
   const canvas = wrap.querySelector(".gm-canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d")!;
@@ -249,23 +252,45 @@ export function mount(api: GameApi): { destroy: () => void } {
   function renderPuzzleList(): void {
     const total = campaign.stars.reduce((a, b) => a + b, 0);
     pzTotalEl.textContent = `⭐ ${total} / ${PUZZLES.length * 3} · 不用提示解开可得 3 星`;
-    pzGridEl.innerHTML = "";
-    PUZZLES.forEach((p, i) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      const unlocked = puzzleUnlocked(i);
-      btn.className = unlocked ? "gm-pz" : "gm-pz locked";
-      const got = campaign.stars[i];
-      btn.innerHTML = unlocked
-        ? `<span class="n">${i + 1}</span><span class="s">${"★".repeat(got)}${"☆".repeat(3 - got)}</span><span class="m">${p.moves} 步</span>`
-        : `<span class="n">🔒</span><span class="s">&nbsp;</span><span class="m">&nbsp;</span>`;
-      if (unlocked) {
-        btn.addEventListener("click", () => {
-          api.play("jump");
-          startPuzzle(i);
-        });
-      }
-      pzGridEl.appendChild(btn);
+    pzThemesEl.innerHTML = "";
+    THEMES.forEach((th, t) => {
+      const box = document.createElement("div");
+      box.className = "gm-theme";
+      box.style.background = th.tint;
+      const start = themeStart(t);
+      const puzzles = puzzlesOfTheme(t);
+      const gotInTheme = puzzles.reduce((s, _, k) => s + (campaign.stars[start + k] > 0 ? 1 : 0), 0);
+      const name = document.createElement("div");
+      name.className = "gm-theme-name";
+      name.style.color = th.ink;
+      name.textContent = `${th.icon} ${th.name} · ${gotInTheme}/${puzzles.length}`;
+      const blurb = document.createElement("div");
+      blurb.className = "gm-theme-blurb";
+      blurb.style.color = th.ink;
+      blurb.textContent = th.blurb;
+      const grid = document.createElement("div");
+      grid.className = "gm-pz-grid";
+      puzzles.forEach((p, k) => {
+        const i = start + k;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const unlocked = puzzleUnlocked(i);
+        btn.className = unlocked ? "gm-pz" : "gm-pz locked";
+        const got = campaign.stars[i];
+        btn.title = p.name;
+        btn.innerHTML = unlocked
+          ? `<span class="n">${i + 1}</span><span class="s">${"★".repeat(got)}${"☆".repeat(3 - got)}</span><span class="m">${p.moves} 步</span>`
+          : `<span class="n">🔒</span><span class="s">&nbsp;</span><span class="m">&nbsp;</span>`;
+        if (unlocked) {
+          btn.addEventListener("click", () => {
+            api.play("jump");
+            startPuzzle(i);
+          });
+        }
+        grid.appendChild(btn);
+      });
+      box.append(name, blurb, grid);
+      pzThemesEl.appendChild(box);
     });
   }
 
@@ -278,7 +303,8 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function modeLabel(): string {
     if (playKind === "puzzle") {
-      return `🧩 第 ${puzzleIndex + 1} 谜 · ${PUZZLES[puzzleIndex].name}`;
+      const p = PUZZLES[puzzleIndex];
+      return `${THEMES[p.theme].icon} 第 ${puzzleIndex + 1} 谜 · ${p.name}`;
     }
     if (mode === "easy") return "🐱 棋灵喵·简单";
     if (mode === "normal") return "🦊 棋灵狐·普通";
