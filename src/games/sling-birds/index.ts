@@ -1309,6 +1309,15 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 渲染 ---------------- */
 
+  /** 把 #rrggbb 变深/变浅(amt 为 -255..255) */
+  function shade(hex: string, amt: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, Math.min(255, (n >> 16) + amt));
+    const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt));
+    const b = Math.max(0, Math.min(255, (n & 0xff) + amt));
+    return `rgb(${r},${g},${b})`;
+  }
+
   const CH_STYLE = [
     { skyTop: "#D8F3FF", skyBot: "#F2FFE3", ground: "#B7E39B", groundEdge: "#96CE7A", hill: "#CBEDB0" },
     { skyTop: "#CFF0FF", skyBot: "#FFF6DC", ground: "#F6E0A8", groundEdge: "#E3C685", hill: "#BDE8F2" },
@@ -1518,7 +1527,20 @@ export function mount(api: GameApi): { destroy: () => void } {
     for (const bl of blocks) {
       if (bl.dead) continue;
       const m = MAT[bl.kind];
-      c.fillStyle = m.fill;
+      if (bl.kind === "wood") {
+        const g = c.createLinearGradient(bl.x, bl.y, bl.w >= bl.h ? bl.x : bl.x + bl.w, bl.w >= bl.h ? bl.y + bl.h : bl.y);
+        g.addColorStop(0, "#F2CFA0");
+        g.addColorStop(0.5, m.fill);
+        g.addColorStop(1, "#D8AC76");
+        c.fillStyle = g;
+      } else if (bl.kind === "stone") {
+        const g = c.createLinearGradient(bl.x, bl.y, bl.x, bl.y + bl.h);
+        g.addColorStop(0, "#E0E4EC");
+        g.addColorStop(1, "#BCC2CF");
+        c.fillStyle = g;
+      } else {
+        c.fillStyle = m.fill;
+      }
       c.strokeStyle = m.edge;
       c.lineWidth = 2;
       c.beginPath();
@@ -1526,7 +1548,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.fill();
       c.stroke();
       if (bl.kind === "wood") {
-        c.strokeStyle = "rgba(160,110,60,0.35)";
+        // 木板纹理:板缝 + 短木纹
+        c.strokeStyle = "rgba(160,110,60,0.4)";
         c.lineWidth = 1.5;
         c.beginPath();
         if (bl.w >= bl.h) {
@@ -1537,28 +1560,87 @@ export function mount(api: GameApi): { destroy: () => void } {
           c.lineTo(bl.x + bl.w / 2, bl.y + bl.h - 4);
         }
         c.stroke();
+        c.strokeStyle = "rgba(160,110,60,0.22)";
+        c.lineWidth = 1;
+        c.beginPath();
+        if (bl.w >= bl.h) {
+          c.moveTo(bl.x + bl.w * 0.22, bl.y + bl.h * 0.26);
+          c.lineTo(bl.x + bl.w * 0.42, bl.y + bl.h * 0.26);
+          c.moveTo(bl.x + bl.w * 0.55, bl.y + bl.h * 0.74);
+          c.lineTo(bl.x + bl.w * 0.8, bl.y + bl.h * 0.74);
+        } else {
+          c.moveTo(bl.x + bl.w * 0.26, bl.y + bl.h * 0.22);
+          c.lineTo(bl.x + bl.w * 0.26, bl.y + bl.h * 0.42);
+          c.moveTo(bl.x + bl.w * 0.74, bl.y + bl.h * 0.55);
+          c.lineTo(bl.x + bl.w * 0.74, bl.y + bl.h * 0.8);
+        }
+        c.stroke();
       } else if (bl.kind === "stone") {
-        c.fillStyle = "rgba(120,130,150,0.35)";
+        // 砖缝
+        c.strokeStyle = "rgba(140,148,165,0.5)";
+        c.lineWidth = 1.2;
         c.beginPath();
-        c.arc(bl.x + bl.w * 0.3, bl.y + bl.h * 0.35, 1.8, 0, Math.PI * 2);
-        c.arc(bl.x + bl.w * 0.68, bl.y + bl.h * 0.62, 1.5, 0, Math.PI * 2);
-        c.fill();
+        if (bl.w >= bl.h) {
+          c.moveTo(bl.x + 3, bl.y + bl.h / 2);
+          c.lineTo(bl.x + bl.w - 3, bl.y + bl.h / 2);
+          c.moveTo(bl.x + bl.w * 0.33, bl.y + 2);
+          c.lineTo(bl.x + bl.w * 0.33, bl.y + bl.h / 2);
+          c.moveTo(bl.x + bl.w * 0.66, bl.y + bl.h / 2);
+          c.lineTo(bl.x + bl.w * 0.66, bl.y + bl.h - 2);
+        } else {
+          c.moveTo(bl.x + 2, bl.y + bl.h * 0.33);
+          c.lineTo(bl.x + bl.w - 2, bl.y + bl.h * 0.33);
+          c.moveTo(bl.x + 2, bl.y + bl.h * 0.66);
+          c.lineTo(bl.x + bl.w - 2, bl.y + bl.h * 0.66);
+        }
+        c.stroke();
       } else if (bl.kind === "ice" || bl.kind === "glass") {
-        c.strokeStyle = "rgba(255,255,255,0.85)";
-        c.lineWidth = 2;
+        // 斜向闪光
+        c.strokeStyle = "rgba(255,255,255,0.9)";
+        c.lineWidth = 2.5;
         c.beginPath();
-        c.moveTo(bl.x + 3, bl.y + bl.h * 0.32);
-        c.lineTo(bl.x + bl.w * 0.4, bl.y + 3);
+        c.moveTo(bl.x + 3, bl.y + bl.h * 0.4);
+        c.lineTo(bl.x + bl.w * 0.42, bl.y + 3);
+        c.stroke();
+        c.lineWidth = 1.2;
+        c.beginPath();
+        c.moveTo(bl.x + bl.w * 0.3, bl.y + bl.h - 4);
+        c.lineTo(bl.x + bl.w - 4, bl.y + bl.h * 0.25);
         c.stroke();
       } else if (bl.kind === "tnt") {
+        // 警示斜纹 + 内框 + 「爆」字
+        c.save();
+        c.beginPath();
+        c.roundRect(bl.x, bl.y, bl.w, bl.h, 4);
+        c.clip();
+        c.strokeStyle = "rgba(226,132,141,0.4)";
+        c.lineWidth = 3;
+        for (let sx = bl.x - bl.h; sx < bl.x + bl.w; sx += 10) {
+          c.beginPath();
+          c.moveTo(sx, bl.y + bl.h);
+          c.lineTo(sx + bl.h, bl.y);
+          c.stroke();
+        }
+        c.restore();
         c.strokeStyle = "#E2848D";
         c.lineWidth = 2;
         c.strokeRect(bl.x + 3.5, bl.y + 3.5, bl.w - 7, bl.h - 7);
+        c.fillStyle = "#FFE9EB";
+        c.beginPath();
+        c.arc(bl.x + bl.w / 2, bl.y + bl.h / 2, Math.min(bl.w, bl.h) * 0.32, 0, Math.PI * 2);
+        c.fill();
         c.fillStyle = "#C0392B";
         c.font = "bold 9px sans-serif";
         c.textAlign = "center";
         c.fillText("爆", bl.x + bl.w / 2, bl.y + bl.h / 2 + 3.5);
         c.textAlign = "left";
+      }
+      // 顶部受光条
+      if (bl.kind !== "tnt") {
+        c.fillStyle = "rgba(255,255,255,0.3)";
+        c.beginPath();
+        c.roundRect(bl.x + 2, bl.y + 2, bl.w - 4, Math.min(4, bl.h * 0.2), 2);
+        c.fill();
       }
       // 裂纹
       const ratio = bl.hp / bl.maxHp;
@@ -1584,7 +1666,10 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawBoulders(c: CanvasRenderingContext2D): void {
     for (const bo of boulders) {
-      c.fillStyle = "#B8B2AA";
+      const g = c.createRadialGradient(bo.x - bo.r * 0.35, bo.y - bo.r * 0.4, bo.r * 0.2, bo.x, bo.y, bo.r * 1.1);
+      g.addColorStop(0, "#D2CCC3");
+      g.addColorStop(1, "#A29B91");
+      c.fillStyle = g;
       c.strokeStyle = "#948D84";
       c.lineWidth = 2;
       c.beginPath();
@@ -1596,6 +1681,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.moveTo(bo.x, bo.y);
       c.lineTo(bo.x + Math.cos(bo.rot) * bo.r * 0.7, bo.y + Math.sin(bo.rot) * bo.r * 0.7);
       c.stroke();
+      c.fillStyle = "rgba(255,255,255,0.35)";
+      c.beginPath();
+      c.ellipse(bo.x - bo.r * 0.32, bo.y - bo.r * 0.4, bo.r * 0.26, bo.r * 0.15, -0.5, 0, Math.PI * 2);
+      c.fill();
     }
   }
 
@@ -1610,13 +1699,24 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.lineTo(bal.bean.x, bal.bean.y - bal.bean.r);
         c.stroke();
       }
-      c.fillStyle = "#FFC1D8";
+      const g = c.createRadialGradient(bal.x - bal.r * 0.3, bal.y - bal.r * 0.4, bal.r * 0.2, bal.x, bal.y, bal.r * 1.25);
+      g.addColorStop(0, "#FFDCEA");
+      g.addColorStop(1, "#FFAECB");
+      c.fillStyle = g;
       c.strokeStyle = "#EE9BBB";
       c.lineWidth = 2;
       c.beginPath();
       c.ellipse(bal.x, bal.y, bal.r, bal.r * 1.15, 0, 0, Math.PI * 2);
       c.fill();
       c.stroke();
+      // 气球结
+      c.fillStyle = "#EE9BBB";
+      c.beginPath();
+      c.moveTo(bal.x - 3, bal.y + bal.r * 1.15 + 3);
+      c.lineTo(bal.x + 3, bal.y + bal.r * 1.15 + 3);
+      c.lineTo(bal.x, bal.y + bal.r * 1.15 - 2);
+      c.closePath();
+      c.fill();
       c.fillStyle = "rgba(255,255,255,0.75)";
       c.beginPath();
       c.ellipse(bal.x - 4, bal.y - 5, 3.4, 5, -0.5, 0, Math.PI * 2);
@@ -1627,11 +1727,15 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawBeans(c: CanvasRenderingContext2D): void {
     for (const bean of beans) {
       if (bean.dead) continue;
-      c.fillStyle = "#A5D96C";
+      const wob = Math.sin(simT * 4 + bean.x * 0.13) * 1.2;
+      const g = c.createRadialGradient(bean.x - bean.r * 0.35, bean.y - bean.r * 0.4, bean.r * 0.2, bean.x, bean.y, bean.r * 1.15);
+      g.addColorStop(0, "#C4EA92");
+      g.addColorStop(1, "#8FC957");
+      c.fillStyle = g;
       c.strokeStyle = "#7FB84B";
       c.lineWidth = 2;
       c.beginPath();
-      c.arc(bean.x, bean.y, bean.r, 0, Math.PI * 2);
+      c.ellipse(bean.x, bean.y, bean.r + wob * 0.3, bean.r - wob * 0.3, 0, 0, Math.PI * 2);
       c.fill();
       c.stroke();
       // 小叶子
@@ -1661,10 +1765,22 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawBird(c: CanvasRenderingContext2D, bird: RtBird): void {
     const info = BIRD_INFO[bird.kind];
     const ang = bird.flying ? Math.atan2(bird.vy, bird.vx) * 0.25 : 0;
+    const flap = bird.flying ? Math.sin(bird.age * 18) * 0.35 : Math.sin(simT * 3 + bird.x) * 0.08;
     c.save();
     c.translate(bird.x, bird.y);
     c.rotate(ang);
-    c.fillStyle = info.color;
+    // 尾羽(三根小羽毛)
+    c.fillStyle = shade(info.color, -26);
+    for (const [dy, len] of [[-0.28, 0.9], [0, 1.05], [0.28, 0.9]] as const) {
+      c.beginPath();
+      c.ellipse(-bird.r * (0.75 + len * 0.25), bird.r * dy, bird.r * 0.42 * len, bird.r * 0.16, dy * 0.7, 0, Math.PI * 2);
+      c.fill();
+    }
+    // 身体:径向渐变 + 描边
+    const bodyGrad = c.createRadialGradient(-bird.r * 0.35, -bird.r * 0.4, bird.r * 0.2, 0, 0, bird.r * 1.15);
+    bodyGrad.addColorStop(0, shade(info.color, 26));
+    bodyGrad.addColorStop(1, shade(info.color, -14));
+    c.fillStyle = bodyGrad;
     c.strokeStyle = info.dark;
     c.lineWidth = 1.8;
     c.beginPath();
@@ -1675,22 +1791,59 @@ export function mount(api: GameApi): { destroy: () => void } {
     c.beginPath();
     c.arc(0, bird.r * 0.35, bird.r * 0.55, 0, Math.PI * 2);
     c.fill();
-    // 眼睛 + 腮红
+    // 小翅膀(飞行时扑动)
+    c.save();
+    c.translate(-bird.r * 0.25, bird.r * 0.05);
+    c.rotate(flap);
+    c.fillStyle = shade(info.color, -20);
+    c.strokeStyle = info.dark;
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.ellipse(0, 0, bird.r * 0.5, bird.r * 0.3, -0.5, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    c.restore();
+    // 高光
+    c.fillStyle = "rgba(255,255,255,0.5)";
+    c.beginPath();
+    c.ellipse(-bird.r * 0.32, -bird.r * 0.45, bird.r * 0.28, bird.r * 0.16, -0.5, 0, Math.PI * 2);
+    c.fill();
+    // 眼睛(白底 + 瞳孔 + 高光)+ 腮红
+    c.fillStyle = "#FFFFFF";
+    c.beginPath();
+    c.arc(bird.r * 0.25, -bird.r * 0.25, bird.r * 0.24, 0, Math.PI * 2);
+    c.arc(bird.r * 0.68, -bird.r * 0.25, bird.r * 0.24, 0, Math.PI * 2);
+    c.fill();
     c.fillStyle = "#4A3B45";
     c.beginPath();
-    c.arc(bird.r * 0.25, -bird.r * 0.25, bird.r * 0.16, 0, Math.PI * 2);
-    c.arc(bird.r * 0.68, -bird.r * 0.25, bird.r * 0.16, 0, Math.PI * 2);
+    c.arc(bird.r * 0.3, -bird.r * 0.23, bird.r * 0.14, 0, Math.PI * 2);
+    c.arc(bird.r * 0.73, -bird.r * 0.23, bird.r * 0.14, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#FFFFFF";
+    c.beginPath();
+    c.arc(bird.r * 0.34, -bird.r * 0.28, bird.r * 0.05, 0, Math.PI * 2);
+    c.arc(bird.r * 0.77, -bird.r * 0.28, bird.r * 0.05, 0, Math.PI * 2);
     c.fill();
     c.fillStyle = "rgba(255,120,140,0.45)";
     c.beginPath();
     c.arc(-bird.r * 0.3, bird.r * 0.1, bird.r * 0.2, 0, Math.PI * 2);
     c.fill();
-    // 小嘴巴
-    c.fillStyle = "#F5A25D";
+    // 小嘴巴(上下两瓣)
+    c.fillStyle = "#F7B267";
+    c.strokeStyle = "#D98E3F";
+    c.lineWidth = 1;
     c.beginPath();
-    c.moveTo(bird.r * 0.95, -bird.r * 0.05);
-    c.lineTo(bird.r * 1.35, bird.r * 0.1);
-    c.lineTo(bird.r * 0.9, bird.r * 0.28);
+    c.moveTo(bird.r * 0.95, -bird.r * 0.08);
+    c.lineTo(bird.r * 1.35, bird.r * 0.06);
+    c.lineTo(bird.r * 0.92, bird.r * 0.12);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.fillStyle = "#EFA050";
+    c.beginPath();
+    c.moveTo(bird.r * 0.92, bird.r * 0.14);
+    c.lineTo(bird.r * 1.28, bird.r * 0.14);
+    c.lineTo(bird.r * 0.9, bird.r * 0.3);
     c.closePath();
     c.fill();
     // 角色标记
@@ -1723,21 +1876,48 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawSlingshot(c: CanvasRenderingContext2D): void {
-    // 大弹弓:粗木叉
-    c.strokeStyle = "#B98A63";
+    // 地面阴影
+    c.fillStyle = "rgba(80,90,60,0.18)";
+    c.beginPath();
+    c.ellipse(SLING_X, GROUND_Y, 16, 4, 0, 0, Math.PI * 2);
+    c.fill();
+    // 大弹弓:粗木叉(深色描边 + 木色内芯,更立体)
     c.lineCap = "round";
-    c.lineWidth = 9;
+    c.strokeStyle = "#96683F";
+    c.lineWidth = 11;
     c.beginPath();
     c.moveTo(SLING_X, GROUND_Y);
     c.lineTo(SLING_X, SLING_Y + 26);
     c.stroke();
-    c.lineWidth = 7;
+    c.lineWidth = 9;
     c.beginPath();
     c.moveTo(SLING_X, SLING_Y + 26);
     c.lineTo(SLING_X - 15, SLING_Y - 12);
     c.moveTo(SLING_X, SLING_Y + 26);
     c.lineTo(SLING_X + 15, SLING_Y - 12);
     c.stroke();
+    c.strokeStyle = "#C99A6B";
+    c.lineWidth = 6.5;
+    c.beginPath();
+    c.moveTo(SLING_X, GROUND_Y - 1);
+    c.lineTo(SLING_X, SLING_Y + 26);
+    c.stroke();
+    c.lineWidth = 5;
+    c.beginPath();
+    c.moveTo(SLING_X, SLING_Y + 26);
+    c.lineTo(SLING_X - 15, SLING_Y - 12);
+    c.moveTo(SLING_X, SLING_Y + 26);
+    c.lineTo(SLING_X + 15, SLING_Y - 12);
+    c.stroke();
+    // 缠绕的绑带
+    c.strokeStyle = "#E2698A";
+    c.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      c.beginPath();
+      c.moveTo(SLING_X - 5, SLING_Y + 30 + i * 4);
+      c.lineTo(SLING_X + 5, SLING_Y + 32 + i * 4);
+      c.stroke();
+    }
 
     // 皮筋
     c.strokeStyle = "#E2698A";
