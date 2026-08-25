@@ -11,6 +11,7 @@
  * 本文件不在游戏子目录内，不会被 loader 的 import.meta.glob 收集。
  */
 import { AVATAR_URLS } from "../ui/avatars";
+import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -254,6 +255,14 @@ const LOSE_WORDS = [
   "小挫折不算什么，加油！"
 ];
 
+/**
+ * 结算浮层要朗读的整句话（一年级识字量有限，鼓励语靠听）。
+ * 纯函数便于测试；朗读本身走 speech.ts，无语音包时静默降级。
+ */
+export function settleSpeechLine(kind: "win" | "lose", level: number, msg: string): string {
+  return kind === "win" ? `第 ${level + 1} 关过关！${msg}` : `就差一点点！${msg}`;
+}
+
 function starRowHTML(stars: number): string {
   let s = "";
   for (let i = 0; i < 3; i++) {
@@ -353,6 +362,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
 
   function showMap(): void {
     cleanupLevel();
+    stopSpeaking();
     currentLevel = -1;
     view.innerHTML = "";
 
@@ -488,6 +498,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
        <div class="l99-ov-sub">${msg ?? word}</div>`,
       buttons
     );
+    speak(settleSpeechLine("win", level, msg ?? word));
 
     if (isLast && allCleared) {
       api.onWin(3, opts.grandMessage ?? "99 关全部通关，你就是本游戏的小冠军！");
@@ -510,11 +521,13 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         { label: "🗺️ 回地图", ghost: true, onClick: () => showMap() }
       ]
     );
+    speak(settleSpeechLine("lose", level, word));
   }
 
   function startLevel(level: number): void {
     if (destroyed) return;
     cleanupLevel();
+    stopSpeaking();
     settled = false;
     currentLevel = level;
     const ci = chapterOf(opts.chapters, level);
@@ -574,6 +587,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     destroy() {
       destroyed = true;
       cleanupLevel();
+      stopSpeaking();
       wrap.remove();
     }
   };
