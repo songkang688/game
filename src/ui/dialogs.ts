@@ -2,6 +2,7 @@
  * 通用弹窗:胜利 / 失败 / 家长面板都基于它。
  */
 import { createAvatarImg } from "./avatars";
+import { playSound } from "../engine/audio";
 
 export interface DialogButton {
   label: string;
@@ -122,6 +123,13 @@ export function showResultDialog(opts: {
   title.textContent = opts.win ? pick(WIN_TITLES) : pick(LOSE_TITLES);
   content.appendChild(title);
 
+  // 三星逐颗弹出的音效节奏,与星星动画的 delay 对齐
+  const starTimers: number[] = [];
+  const clearStarTimers = (): void => {
+    for (const t of starTimers) window.clearTimeout(t);
+    starTimers.length = 0;
+  };
+
   if (opts.win) {
     const confetti = document.createElement("div");
     confetti.className = "result-confetti";
@@ -138,6 +146,9 @@ export function showResultDialog(opts: {
       s.textContent = i < earned ? "⭐" : "☆";
       s.style.animationDelay = `${0.15 + i * 0.18}s`;
       starRow.appendChild(s);
+      if (i < earned) {
+        starTimers.push(window.setTimeout(() => playSound("coin"), 150 + i * 180));
+      }
     }
     content.appendChild(starRow);
   }
@@ -152,8 +163,22 @@ export function showResultDialog(opts: {
     className: opts.win ? "dialog--win" : "dialog--lose",
     content,
     buttons: [
-      { label: "🔁 再玩一次", kind: "primary", onClick: opts.onReplay },
-      { label: "🏠 回首页", kind: "ghost", onClick: opts.onHome }
+      {
+        label: "🔁 再玩一次",
+        kind: "primary",
+        onClick: () => {
+          clearStarTimers();
+          opts.onReplay();
+        }
+      },
+      {
+        label: "🏠 回首页",
+        kind: "ghost",
+        onClick: () => {
+          clearStarTimers();
+          opts.onHome();
+        }
+      }
     ]
   });
 }
