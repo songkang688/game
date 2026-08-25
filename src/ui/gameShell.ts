@@ -7,6 +7,7 @@ import { save } from "../engine/save";
 import { isBgmOn, playSound, toggleBgm } from "../engine/audio";
 import { showResultDialog, type DialogHandle } from "./dialogs";
 import { createDuoPair } from "./avatars";
+import { recordRecent } from "./recent";
 
 export function mountGameScreen(
   container: HTMLElement,
@@ -24,7 +25,7 @@ export function mountGameScreen(
   const backBtn = document.createElement("button");
   backBtn.type = "button";
   backBtn.className = "btn btn--back";
-  backBtn.innerHTML = `<span aria-hidden="true">🏠</span> 返回`;
+  backBtn.innerHTML = `<span aria-hidden="true">🏠</span><span class="btn-back-label">返回</span>`;
   backBtn.setAttribute("aria-label", "返回首页");
   backBtn.addEventListener("click", () => {
     playSound("tap");
@@ -34,6 +35,7 @@ export function mountGameScreen(
   const title = document.createElement("div");
   title.className = "game-title";
   const titleEmoji = document.createElement("span");
+  titleEmoji.className = "game-title-emoji";
   titleEmoji.setAttribute("aria-hidden", "true");
   titleEmoji.textContent = game.meta.emoji;
   const titleText = document.createElement("span");
@@ -114,6 +116,8 @@ export function mountGameScreen(
     unmount();
     finished = false;
     save.recordPlay(game.meta.id);
+    // 深链/PWA 恢复直接进游戏也要进「最近玩过」,所以记录放在壳里而不是首页
+    recordRecent(game.meta.id);
     showLoading();
 
     const stale = (): boolean => disposed || seq !== startSeq;
