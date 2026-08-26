@@ -70,8 +70,24 @@ import {
   upgradeCost,
   waveSpawnTimes,
   weatherSpeedMult,
+  type LevelDef,
 } from "./logic";
 import { speak, stopSpeaking } from "../speech";
+import { save } from "../../engine/save";
+import {
+  FIXED_STEP,
+  THREAT_LABEL,
+  bestWave,
+  buildEndlessLevel,
+  earlyCallBonus,
+  endlessLine,
+  endlessPetalGrant,
+  nextSpeed,
+  planSteps,
+  previewAdvice,
+  speedLabel,
+  wavePreview,
+} from "./defense12";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -211,6 +227,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let shake = 0;
   let time = 0;
 
+  /** 1.2 播放倍速与固定步长的余量 */
+  let speed = 1;
+  let stepCarry = 0;
+  /** 非 null 时正在跑无尽「守到底」 */
+  let endless: { wave: number; seed: number } | null = null;
+  /** 无尽模式下临时拼出来的一关（复用整套战役画面与操作） */
+  let endlessDef: LevelDef | null = null;
+  let endlessBest = save.getGameProgress("garden-guard").endlessBest;
+  let btnSpeed: Rect | null = null;
+  let btnCallNow: Rect | null = null;
+  let btnEndless: Rect | null = null;
+
+  /** 当前这一关的数据：无尽模式给临时关，闯关给 LEVELS 里的那一关 */
+  function curDef(): LevelDef {
+    return endlessDef ?? LEVELS[levelIdx];
+  }
+
   let wpList = LEVELS[0].paths.map((p) => buildWaypoints(p));
   let lenList = wpList.map((wp) => pathLength(wp));
   let blocked = pathsCellSet(LEVELS[0].paths);
@@ -288,21 +321,81 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   // ---- 关卡流程 ----
-  function loadLevel(idx: number): void {
-    levelIdx = idx;
-    chapterIdx = themeIndexOfLevel(idx);
-    const def = LEVELS[idx];
+  /** 换一份关卡数据：路径、可放格、已解锁的塔都要跟着换 */
+  function applyDef(def: LevelDef, towerList: TowerKind[]): void {
     wpList = def.paths.map((p) => buildWaypoints(p));
     lenList = wpList.map((wp) => pathLength(wp));
     blocked = pathsCellSet(def.paths);
-    unlockedTowers = towersUnlockedAt(idx, LEVELS);
+    unlockedTowers = towerList;
     if (!unlockedTowers.includes(selectedCard)) selectedCard = "bubble";
+  }
+
+  /**
+   * 无尽「守到底」：一波接一波，塔和花瓣全程带着走，只有爱心掉光才结束。
+   *
+   * 每一波都现拼一份「只有一波的关卡」丢给战役那套画面，
+   * 所以无尽不需要另写渲染，也不会和 188 关的进度互相污染。
+   */
+  function loadEndlessWave(wave: number): void {
+    if (!endless) return;
+    endless.wave = wave;
+    endlessDef = buildEndlessLevel(wave, endless.seed);
+    chapterIdx = THEME_ORDER.indexOf(endlessDef.theme);
+    if (chapterIdx < 0) chapterIdx = 0;
+    applyDef(endlessDef, towersUnlockedAt(LEVELS.length - 1, LEVELS));
+    waveIdx = 0;
+    spawnList = [];
+    spawnIdx = 0;
+    spawnClock = 0;
+    // 换路线时把老怪清掉，免得它们沿着已经不存在的路走
+    monsters.length = 0;
+    bullets.length = 0;
+  }
+
+  function startEndless(): void {
+    endless = { wave: 1, seed: 733 };
+    endlessDef = buildEndlessLevel(1, endless.seed);
+    loadEndlessWave(1);
+    resetLevel();
+    phase = "intro";
+  }
+
+  /** 无尽里守住一波：给花瓣、换下一波，不结算不记星 */
+  function endlessWaveCleared(): void {
+    if (!endless) return;
+    const grant = endlessPetalGrant(endless.wave);
+    petals += grant;
+    addFloat(w / 2, oy + 40, `守住第 ${endless.wave} 波 +${grant} 🌸`, "#e05a7a", true);
+    score += endless.wave * 5;
+    loadEndlessWave(endless.wave + 1);
+    phase = "prewave";
+    phaseTimer = 6;
+    api.play("jump");
+  }
+
+  /** 无尽结束：记成绩，面板只鼓励 */
+  function endlessOver(): void {
+    if (!endless) return;
+    const reached = Math.max(0, endless.wave - 1);
+    endlessBest = bestWave(endlessBest, reached);
+    save.recordEndlessBest("garden-guard", reached);
+    phase = "retry";
+    api.play("oops");
+    speak(endlessLine(reached, endlessBest));
+  }
+
+  function loadLevel(idx: number): void {
+    endless = null;
+    endlessDef = null;
+    levelIdx = idx;
+    chapterIdx = themeIndexOfLevel(idx);
+    applyDef(LEVELS[idx], towersUnlockedAt(idx, LEVELS));
     resetLevel();
     phase = "intro";
   }
 
   function resetLevel(): void {
-    const def = LEVELS[levelIdx];
+    const def = curDef();
     monsters.length = 0;
     bullets.length = 0;
     towers.length = 0;
@@ -322,7 +415,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function startWave(): void {
-    spawnList = waveSpawnTimes(LEVELS[levelIdx].waves[waveIdx]);
+    spawnList = waveSpawnTimes(curDef().waves[waveIdx]);
     spawnIdx = 0;
     spawnClock = -0.3;
     phase = "wave";
@@ -341,7 +434,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       api.onWin(earnedStars, `188 关十三章战役全部通关!星尘魔王也被请回家啦!总星 ${totalStars(progress)}/${LEVELS.length * 3}`);
     } else {
       // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
-      speak(clearSpeechLine(LEVELS[levelIdx].name, earnedStars));
+      speak(clearSpeechLine(curDef().name, earnedStars));
       if (gained > 0) {
         api.addStars(gained);
         addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
@@ -361,6 +454,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const y = e.clientY - rect.top;
 
     if (phase === "themes") {
+      if (inRect(x, y, btnEndless)) {
+        api.play("tap");
+        startEndless();
+        return;
+      }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
           if (isThemeUnlocked(progress, c.idx)) {
@@ -397,12 +495,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "intro") {
       if (inRect(x, y, btnBack)) {
         api.play("tap");
-        phase = "map";
+        phase = endless ? "themes" : "map";
         return;
       }
       api.play("tap");
       phase = "prewave";
-      phaseTimer = 1.6;
+      // 无尽第一波多给几秒:一座塔都还没有,不能一开门就来怪
+      phaseTimer = endless ? 6 : 1.6;
       return;
     }
     if (phase === "clear") {
@@ -423,15 +522,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (inRect(x, y, btnRetry)) {
         api.play("tap");
         stopSpeaking();
-        resetLevel();
-        phase = "prewave";
-        phaseTimer = 1.6;
+        if (endless) {
+          startEndless();
+          phase = "prewave";
+          phaseTimer = 6;
+        } else {
+          resetLevel();
+          phase = "prewave";
+          phaseTimer = 1.6;
+        }
         return;
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
         stopSpeaking();
-        phase = "map";
+        phase = endless ? "themes" : "map";
       }
       return;
     }
@@ -439,7 +544,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 玩关卡时左上角随时回地图
     if (inRect(x, y, btnBack)) {
       api.play("tap");
-      phase = "map";
+      phase = endless ? "themes" : "map";
+      return;
+    }
+
+    // 倍速:布阵和打波次时都能切,切完立刻生效
+    if (inRect(x, y, btnSpeed)) {
+      speed = nextSpeed(speed);
+      api.play("tap");
+      return;
+    }
+
+    // 提前召唤下一波:早叫几秒就多几片花瓣
+    if (phase === "prewave" && inRect(x, y, btnCallNow)) {
+      const bonus = earlyCallBonus(phaseTimer);
+      petals += bonus;
+      if (bonus > 0) addFloat(w / 2, oy + 60, `提前召唤 +${bonus} 🌸`, "#c47a2a", true);
+      api.play("coin");
+      phaseTimer = 0;
+      startWave();
       return;
     }
 
@@ -550,7 +673,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       kind,
       pathIdx,
       dist,
-      baseSpeed: spec.speed * (LEVELS[levelIdx].speedMult ?? 1) * weatherSpeedMult(LEVELS[levelIdx].weather),
+      baseSpeed: spec.speed * (curDef().speedMult ?? 1) * weatherSpeedMult(curDef().weather),
       hp,
       maxHp: hp,
       armor,
@@ -617,7 +740,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   // ---- 更新 ----
   function update(dt: number): void {
-    const def = LEVELS[levelIdx];
+    const def = curDef();
     time += dt;
     petalFlash = Math.max(0, petalFlash - dt);
     shake = Math.max(0, shake - dt);
@@ -650,9 +773,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
         spawnMonster(s.kind, spawnCounter++ % wpList.length);
       }
       if (spawnIdx >= spawnList.length && monsters.length === 0) {
+        if (endless) {
+          endlessWaveCleared();
+          return;
+        }
         petals += 3;
         addFloat(w / 2, oy + 40, "波次奖励 +3 🌸", "#e05a7a", true);
-        if (waveIdx >= LEVELS[levelIdx].waves.length - 1) {
+        if (waveIdx >= curDef().waves.length - 1) {
           levelCleared();
         } else {
           waveIdx++;
@@ -752,6 +879,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
         api.play("oops");
         burst(px(m.x), py(m.y), "#ff9eb5", 14);
         if (hearts <= 0) {
+          if (endless) {
+            endlessOver();
+            return;
+          }
           phase = "retry";
           api.play("oops");
           speak(retrySpeechLine(bossFailHint()));
@@ -1326,18 +1457,35 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
+    // 无尽入口固定在右上角,标题在窄屏收短给它让位
+    btnEndless = { x: w - 104, y: 8, w: 96, h: 34 };
     ctx.fillStyle = "#e05a7a";
     ctx.font = "bold 24px sans-serif";
-    ctx.textAlign = "center";
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌼 花园守卫 · 十三章主题战役", w / 2, 28);
+    ctx.fillText(
+      w < 480 ? "🌼 花园守卫" : "🌼 花园守卫 · 十三章主题战役",
+      10,
+      25,
+      w - 124,
+    );
+    ctx.textAlign = "center";
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#8a7a5e";
     ctx.fillText(
       `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选主题,再选关卡`,
       w / 2,
       54,
+      w - 20,
     );
+    drawButton(btnEndless, "🛡️ 守到底", "#ffd868", "#7a5a1a");
+    if (endlessBest > 0) {
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = "#8a7a5e";
+      ctx.textAlign = "right";
+      ctx.fillText(`最好第 ${endlessBest} 波`, w - 8, 48);
+      ctx.textAlign = "center";
+    }
 
     themeCards.length = 0;
     const cols = w > h * 1.15 ? 3 : 2;
@@ -1477,7 +1625,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawLevelSummaryPanel(): void {
-    const def = LEVELS[levelIdx];
+    const def = curDef();
     const { y } = panelBox(Math.min(440, w - 40), 230);
     ctx.fillStyle = "#4a9a5a";
     ctx.font = "bold 25px sans-serif";
@@ -1508,7 +1656,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   /** 本关有 BOSS 时,失败面板给一句针对性的短提示。 */
   function bossFailHint(): string | null {
-    const def = LEVELS[levelIdx];
+    const def = curDef();
     for (const wave of def.waves) {
       for (const e of wave) {
         const spec = MONSTER_INFO[e.kind];
@@ -1525,7 +1673,33 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return null;
   }
 
+  /** 无尽结束的面板：报成绩、报纪录，只鼓励 */
+  function drawEndlessOverPanel(): void {
+    const reached = Math.max(0, (endless?.wave ?? 1) - 1);
+    const { y } = panelBox(Math.min(440, w - 40), 240);
+    ctx.fillStyle = "#8a5ac9";
+    ctx.font = "bold 24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`守到了第 ${reached} 波!`, w / 2, y + 46);
+    ctx.font = "15px sans-serif";
+    ctx.fillStyle = "#5a5a6e";
+    ctx.fillText(endlessLine(reached, endlessBest), w / 2, y + 90, Math.min(400, w - 60));
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillStyle = "#a05914";
+    ctx.fillText(`🏅 最好成绩:第 ${endlessBest} 波`, w / 2, y + 126);
+    const bw2 = 132;
+    btnMap = { x: w / 2 - bw2 - 10, y: y + 168, w: bw2, h: 44 };
+    btnRetry = { x: w / 2 + 10, y: y + 168, w: bw2, h: 44 };
+    drawButton(btnMap, "回主题", "#f0f0f5", "#5a5a6e");
+    drawButton(btnRetry, "再守一次", "#ffd868", "#7a5a1a");
+  }
+
   function drawRetryPanel(): void {
+    if (endless) {
+      drawEndlessOverPanel();
+      return;
+    }
     const hint = bossFailHint();
     const { y } = panelBox(Math.min(440, w - 40), hint ? 240 : 210);
     // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
@@ -1553,14 +1727,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawIntroPanel(): void {
-    const def = LEVELS[levelIdx];
+    const def = curDef();
     const st = THEME_STYLE[def.theme];
     const { y } = panelBox(Math.min(450, w - 40), 200);
     ctx.fillStyle = st.accent;
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${def.name}`, w / 2, y + 44);
+    ctx.fillText(
+      endless
+        ? `🛡️ 无尽守到底 · 最好第 ${endlessBest} 波`
+        : `${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${def.name}`,
+      w / 2,
+      y + 44,
+    );
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
     ctx.fillText(def.hint, w / 2, y + 90, Math.min(420, w - 60));
@@ -1568,11 +1748,90 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = "#a0a0b2";
     const wSpec = def.weather && def.weather !== "clear" ? WEATHER_INFO[def.weather] : null;
     ctx.fillText(
-      `${st.name} · ${def.waves.length} 波${wSpec ? ` · ${wSpec.emoji}${wSpec.name}` : ""} · 点一下屏幕开始`,
+      endless
+        ? `${st.name} · 一波接一波,守住就还有下一波 · 点一下屏幕开始`
+        : `${st.name} · ${def.waves.length} 波${wSpec ? ` · ${wSpec.emoji}${wSpec.name}` : ""} · 点一下屏幕开始`,
       w / 2,
       y + 130,
+      Math.min(420, w - 60),
     );
-    ctx.fillText("(左上角 ◀ 可回地图)", w / 2, y + 158);
+    ctx.fillText(endless ? "(左上角 ◀ 可回主题)" : "(左上角 ◀ 可回地图)", w / 2, y + 158);
+  }
+
+  /**
+   * 下一波预览:提前把「来什么、来几只、该防什么」摆在孩子面前。
+   *
+   * 这块是本款 1.2 最重要的一处改动——1.1 只写「第 N 波要来啦」，
+   * 孩子只能等怪出来再手忙脚乱地补塔；有了预览才谈得上「准备」。
+   * 顺手挂一个「提前召唤」按钮：布好了就早点叫，早几秒换几片花瓣。
+   */
+  function drawWavePreview(): void {
+    const def = curDef();
+    const wave = def.waves[Math.min(waveIdx, def.waves.length - 1)] ?? [];
+    const items = wavePreview(wave);
+    // 只画前三种:再多在 360 宽就要挤成一团,剩下的用「+n 种」带过
+    const shown = items.slice(0, 3);
+    const stripY = HUD_H + TOOLBAR_H + 4;
+    const stripH = 34;
+    ctx.fillStyle = "rgba(255,255,255,0.94)";
+    ctx.beginPath();
+    ctx.roundRect(8, stripY, w - 16, stripH, 17);
+    ctx.fill();
+
+    const cy = stripY + stripH / 2;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#e05a7a";
+    ctx.font = "bold 13px sans-serif";
+    const waveNo = endless ? endless.wave : waveIdx + 1;
+    ctx.fillText(`第${waveNo}波 ${Math.max(0, phaseTimer).toFixed(1)}s`, 18, cy);
+
+    const bonus = earlyCallBonus(phaseTimer);
+    const callW = 78;
+    btnCallNow = { x: w - 14 - callW, y: stripY + 3, w: callW, h: stripH - 6 };
+
+    // 图标 + 数量:一只一只画,BOSS 加一圈金边
+    let ix = 96;
+    const iconRight = btnCallNow.x - 8;
+    for (const it of shown) {
+      if (ix + 40 > iconRight) break;
+      ctx.fillStyle = MONSTER_COLORS[it.kind];
+      ctx.beginPath();
+      ctx.arc(ix + 9, cy, it.boss ? 11 : 8, 0, Math.PI * 2);
+      ctx.fill();
+      if (it.boss) {
+        ctx.strokeStyle = "#e0a030";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillText(`×${it.count}`, ix + 21, cy);
+      ix += 21 + ctx.measureText(`×${it.count}`).width + 12;
+    }
+    if (items.length > shown.length && ix + 40 <= iconRight) {
+      ctx.fillStyle = "#8a8a9a";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(`+${items.length - shown.length}种`, ix, cy);
+    }
+
+    ctx.textAlign = "center";
+    drawButton(btnCallNow, bonus > 0 ? `召唤+${bonus}🌸` : "召唤", "#ffd868", "#7a5a1a");
+
+    // 「该防什么」只在栅格上方还有空地时才画,免得盖住要放塔的第一排格子
+    const slack = oy - (stripY + stripH);
+    if (slack >= 26) {
+      const tip = previewAdvice(items);
+      ctx.font = "13px sans-serif";
+      const tw = Math.min(w - 24, ctx.measureText(tip).width + 22);
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.roundRect((w - tw) / 2, stripY + stripH + 3, tw, 22, 11);
+      ctx.fill();
+      ctx.fillStyle = "#5a5a6e";
+      ctx.textAlign = "center";
+      ctx.fillText(tip, w / 2, stripY + stripH + 14, tw - 14);
+    }
   }
 
   function draw(): void {
@@ -1585,7 +1844,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
 
-    const def = LEVELS[levelIdx];
+    const def = curDef();
     const st = THEME_STYLE[def.theme];
     ctx.save();
     if (shake > 0) {
@@ -1860,21 +2119,30 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const narrowHud = w < 480;
     const levelInTheme = levelIdx - themeOffset(chapterIdx) + 1;
     const hudWeather = def.weather && def.weather !== "clear" ? ` ${WEATHER_INFO[def.weather].emoji}` : "";
+    // 倍速按钮吃掉右上角一小块,爱心和分数往左让
+    btnSpeed = { x: w - 52, y: 6, w: 46, h: 32 };
+    const hudRight = w - 60;
     ctx.fillText(
-      narrowHud
-        ? `${chapterIdx + 1}-${levelInTheme}${hudWeather} · 波${waveIdx + 1}/${def.waves.length}`
-        : `${chapterIdx + 1}-${levelInTheme} (${levelIdx + 1}/${LEVELS.length})${hudWeather} · 波 ${waveIdx + 1}/${def.waves.length}`,
+      endless
+        ? `🛡️ 守到底 · 第 ${endless.wave} 波`
+        : narrowHud
+          ? `${chapterIdx + 1}-${levelInTheme}${hudWeather} · 波${waveIdx + 1}/${def.waves.length}`
+          : `${chapterIdx + 1}-${levelInTheme} (${levelIdx + 1}/${LEVELS.length})${hudWeather} · 波 ${waveIdx + 1}/${def.waves.length}`,
       w / 2,
       HUD_H / 2,
+      w - 220,
     );
     ctx.textAlign = "right";
     ctx.fillText(
-      "💗".repeat(Math.max(0, hearts)) +
-        "🤍".repeat(Math.max(0, HEARTS_PER_LEVEL - hearts)) +
+      // 窄屏爱心收成「💗×n」,不然 5 颗爱心 + 倍速按钮会挤出屏幕
+      (narrowHud
+        ? `💗×${Math.max(0, hearts)}`
+        : "💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, HEARTS_PER_LEVEL - hearts))) +
         (narrowHud ? "" : `  分 ${score}`),
-      w - 12,
+      hudRight,
       HUD_H / 2,
     );
+    drawButton(btnSpeed, speed >= 2 ? "2×" : "1×", speed >= 2 ? "#ffd868" : "#f0f0f5", speed >= 2 ? "#7a5a1a" : "#5a5a6e");
 
     if (combo >= 2 && comboTimer > 0) {
       ctx.fillStyle = "#b28ae8";
@@ -1913,7 +2181,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.globalAlpha = 1;
     }
     // 两段式放塔提示:选中卡片后,工具栏下方一条 14px 说明,再点草地格就能种
-    if (selectedCard) {
+    // (布阵倒计时里这条让位给下一波预览,两者共用同一行)
+    if (selectedCard && phase !== "prewave") {
       const info = TOWER_INFO[selectedCard];
       const tip = `${info.name} ${info.cost}🌸 · ${info.desc} · 点草地放置`;
       ctx.font = "14px sans-serif";
@@ -1938,13 +2207,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     } else if (phase === "retry") {
       drawRetryPanel();
     } else if (phase === "prewave") {
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.fillRect(0, h / 2 - 30, w, 60);
-      ctx.fillStyle = "#e05a7a";
-      ctx.font = "bold 24px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`第 ${waveIdx + 1} 波怪要来啦!`, w / 2, h / 2);
+      drawWavePreview();
     }
   }
 
@@ -1954,7 +2217,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     syncSize();
-    update(dt);
+    // 固定步长:2 倍速只是同样的子步多跑几个,所以 2× 和 1× 的结果完全一致
+    const plan = planSteps(stepCarry, dt, speed);
+    stepCarry = plan.rest;
+    for (let i = 0; i < plan.steps; i++) update(FIXED_STEP);
     draw();
     raf = requestAnimationFrame(frame);
   }

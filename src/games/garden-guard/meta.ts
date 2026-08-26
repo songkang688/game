@@ -8,8 +8,9 @@ export const meta = {
   emoji: "🌼",
   category: "action" as const,
   color: "#ffd6e7",
-  blurb: "188 关十三大主题塔防战役!五种塔、冰晶塔和毒雾塔,越守越上头!",
-  // logic.ts 的 TOTAL_LEVELS = 188,只有闯关
-  modes: ["campaign"] as const,
+  blurb: "188 关十三大主题塔防战役!七种塔各有克星,还能开无尽守到底!",
+  // logic.ts 的 TOTAL_LEVELS = 188;1.2 补了无尽「守到底」(波次无限递增,记最高波数)
+  // 对战不做:同屏两人抢着布塔会互相拆台,规则解释成本比玩法本身还高,不适合这个年龄段
+  modes: ["campaign", "endless"] as const,
   levels: 188,
 };
