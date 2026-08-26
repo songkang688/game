@@ -1,12 +1,19 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import {
+  compareFractions,
+  divideWithRemainder,
+  formatFraction,
+  formatTenths,
+  gcd,
   makeCarryQuestion,
   makeMathQuestion,
   makeNoCarryQuestion,
   makeQuestionForLevel,
+  parseTenths,
   randInt,
   shuffle,
+  simplifyFraction,
 } from "./logic";
 
 // 简单可复现的伪随机数（LCG）
@@ -101,4 +108,63 @@ test("shuffle 不改变元素集合、不改动原数组", () => {
   const out = shuffle(src, rand);
   assert.deepEqual(src, [1, 2, 3, 4, 5]);
   assert.deepEqual(out.slice().sort(), [1, 2, 3, 4, 5]);
+});
+
+// --- 1.1 新增：第 100–188 关用到的纯逻辑 ---
+
+test("gcd：最大公约数", () => {
+  assert.equal(gcd(12, 18), 6);
+  assert.equal(gcd(7, 13), 1);
+  assert.equal(gcd(0, 5), 5);
+  assert.equal(gcd(0, 0), 1);
+  assert.equal(gcd(-12, 18), 6);
+});
+
+test("simplifyFraction：约分到最简且分母为正", () => {
+  assert.deepEqual(simplifyFraction(6, 8), { n: 3, d: 4 });
+  assert.deepEqual(simplifyFraction(10, 5), { n: 2, d: 1 });
+  assert.deepEqual(simplifyFraction(3, 7), { n: 3, d: 7 });
+  assert.deepEqual(simplifyFraction(4, 0), { n: 0, d: 1 });
+  for (let n = 1; n <= 20; n++) {
+    for (let d = 1; d <= 20; d++) {
+      const s = simplifyFraction(n, d);
+      assert.equal(gcd(s.n, s.d), 1, `${n}/${d} 应该约到最简`);
+      assert.equal(s.n * d, n * s.d, `${n}/${d} 约分后大小要不变`);
+    }
+  }
+});
+
+test("formatFraction / compareFractions：分数写法与比大小", () => {
+  assert.equal(formatFraction(3, 4), "3/4");
+  assert.equal(compareFractions(3, 4, 2, 3), 1);
+  assert.equal(compareFractions(2, 3, 3, 4), -1);
+  assert.equal(compareFractions(1, 2, 2, 4), 0);
+  assert.equal(compareFractions(1, 8, 1, 3), -1);
+});
+
+test("divideWithRemainder：带余除法的商与余数", () => {
+  assert.deepEqual(divideWithRemainder(17, 5), { quotient: 3, remainder: 2 });
+  assert.deepEqual(divideWithRemainder(20, 5), { quotient: 4, remainder: 0 });
+  for (let a = 0; a < 200; a++) {
+    for (const b of [2, 3, 7, 9]) {
+      const { quotient, remainder } = divideWithRemainder(a, b);
+      assert.equal(quotient * b + remainder, a);
+      assert.ok(remainder >= 0 && remainder < b, `${a}÷${b} 余数越界`);
+    }
+  }
+});
+
+test("formatTenths / parseTenths：一位小数不会有浮点毛刺", () => {
+  assert.equal(formatTenths(35), "3.5");
+  assert.equal(formatTenths(30), "3");
+  assert.equal(formatTenths(5), "0.5");
+  assert.equal(formatTenths(-25), "-2.5");
+  assert.equal(parseTenths("3.5"), 35);
+  assert.equal(parseTenths("3"), 30);
+  assert.equal(parseTenths("-2.5"), -25);
+  for (let v = 0; v <= 500; v++) {
+    assert.equal(parseTenths(formatTenths(v)), v, `${v} 来回转换要一致`);
+  }
+  // 经典浮点陷阱：0.1 + 0.2 走整数通道恰好是 0.3
+  assert.equal(formatTenths(parseTenths("0.1") + parseTenths("0.2")), "0.3");
 });
