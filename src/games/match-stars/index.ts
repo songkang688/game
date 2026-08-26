@@ -118,10 +118,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (cfg.belts?.length) return "虚线那几行是传送带，每走一步就整排挪一格。";
     if (cfg.orders?.length) return "看看订单：要一次消得多，或者连着消好几轮！";
     if (cfg.vine > 0 && cfg.ice > 0) return "冰块旁边消、藤蔓上面消，机关全清才过关！";
-    if (cfg.vine > 0) return "在藤蔓格子上消除，才能剪断藤蔓哦！";
-    if (cfg.ice > 0) return "在冰块上或旁边消除，就能敲开冰块哦！";
-    if (cfg.rainbow) return "彩虹星🌈和谁交换，就消掉全场那种图案！";
-    return "收集目标里的图案，步数要省着用～";
+    if (cfg.vine > 0) return "藤蔓格必须在它上面消除才剪得断，旁边消没用！";
+    if (cfg.ice > 0) return "在冰块上或旁边消除才敲得开，从边缘往里推！";
+    if (cfg.rainbow) return "彩虹星🌈和谁交换就清掉全场那种图案，挑最多的那种！";
+    return "从盘面下方消起容易连锁，步数是最贵的资源～";
   }
 
   function renderGoals(): void {
@@ -182,10 +182,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (goalsMet(state, cfg)) {
       levelDone = true;
       const got = moves >= cfg.three ? 3 : moves >= cfg.two ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${moves} 步没用完，真会计划！`), 450);
+      later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${moves} 步没用完，这一局的规划很省！`), 450);
     } else if (moves <= 0) {
       levelDone = true;
-      later(() => ctx.lose("步数用完了，差一点点就成功啦！"), 450);
+      later(() => ctx.lose("步数用完啦～下一局先扫一遍全盘，挑能连锁的那一步再出手，省得下来！"), 450);
     }
   }
 
@@ -194,7 +194,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const gained = creditOrders(state, cfg, info);
     if (gained > 0) {
       ctx.sfx("coin");
-      msgEl.textContent = "🧾 订单完成一笔，客人笑开花啦！";
+      msgEl.textContent = "🧾 订单完成一笔，继续攒大消除！";
     }
     state.used++;
     if (cfg.belts?.length) {
@@ -234,9 +234,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     ctx.sfx("pop");
     if (matched.size >= 5) {
       ctx.bonusStars(1);
-      msgEl.textContent = `哇！一下消掉 ${matched.size} 颗，奖励一颗小星星！`;
+      msgEl.textContent = `一步消掉 ${matched.size} 颗，奖励一颗小星星！`;
     } else if (chain > 1) {
-      msgEl.textContent = `连着消了 ${chain} 次，太棒啦！`;
+      msgEl.textContent = `${chain} 连锁！连锁产生的消除不花步数～`;
     }
     const next: CascadeInfo = {
       steps: acc.steps + 1,
@@ -307,7 +307,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (findMatches(state.grid).size === 0) {
       [state.grid[a], state.grid[b]] = [state.grid[b], state.grid[a]];
       ctx.sfx("oops");
-      msgEl.textContent = "这样换不能消除哦，换个方向试试～";
+      msgEl.textContent = "这样换消不掉，不算步数～换个方向再试～";
       render();
       return;
     }
@@ -337,7 +337,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "步数剩得越多，星星越多！机关全清才能过关～",
-    grandMessage: "188 关全部消除完毕，你是真正的消除大师！",
+    mapHint: "步数剩得越多星星越多，机关全清才能过关～",
+    grandMessage: "188 关全部消除完毕，你的盘面规划和连锁意识都很到位！",
   });
 }

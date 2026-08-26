@@ -149,7 +149,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (cfg.hidePreview) {
       // 记忆模式：提示 = 再偷看一眼完整图案
       previewEl.classList.remove("pz-hidden");
-      msgEl.textContent = "👀 快看完整图案，马上又要藏起来啦！";
+      msgEl.textContent = "👀 再看一眼完整图案，重点记特征明显的那几块！";
       render();
       later(() => previewEl.classList.add("pz-hidden"), 2200);
       return;
@@ -171,7 +171,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     render();
     if (best !== undefined) {
       tiles[best].classList.add("pz-glow");
-      msgEl.textContent = "💡 亮亮的那块，推它试试！";
+      msgEl.textContent = "💡 发光的那块离归位最近，先推它！";
       later(() => tiles[best as number].classList.remove("pz-glow"), 2200);
     }
   }
@@ -182,7 +182,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (!neighbors(e).includes(pos)) {
       if (board[pos] !== EMPTY) {
         ctx.sfx("oops");
-        msgEl.textContent = "这块推不动哦，先点空格旁边的方块～";
+        msgEl.textContent = "这块推不动～真正在移动的是空格，点它旁边的方块～";
       }
       return;
     }
@@ -193,12 +193,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (isSolved()) {
       levelDone = true;
       const got = moves <= cfg.three ? 3 : moves <= cfg.two ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `只用了 ${moves} 步就拼好啦！`), 400);
+      later(() => ctx.win(got as 1 | 2 | 3, `只用了 ${moves} 步就复原，路线规划得很省！`), 400);
       return;
     }
     if (moves >= cfg.moveLimit) {
       levelDone = true;
-      later(() => ctx.lose("步数用完啦，重新打乱再拼一次，你一定行！"), 300);
+      later(() => ctx.lose("步数用完啦～下一次先拼好第一行并锁住它，再一行行往下推，会省很多步！"), 300);
     }
   }
 
@@ -208,13 +208,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   renderPreview();
   render();
   if (cfg.hidePreview) {
-    msgEl.textContent = "👀 记住完整图案，5 秒后就藏起来！";
+    msgEl.textContent = "👀 记住完整图案，5 秒后藏起来，先记几块特征明显的！";
     later(() => {
       previewEl.classList.add("pz-hidden");
-      msgEl.textContent = "图案藏起来啦，凭记忆拼一拼（提示能再偷看）！";
+      msgEl.textContent = "图案藏起来了，先把记住的那几块归位当参照（提示能再看一眼）！";
     }, 5000);
   } else {
-    msgEl.textContent = "点空格旁边的方块，把图案拼成小图的样子！";
+    msgEl.textContent = "从上往下、从左往右一行一行复原，拼好的那行就别再动～";
   }
 
   return {
@@ -233,7 +233,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "步数越省星星越多，六大画册等你复原！",
-    grandMessage: "99 幅拼图全部复原，拼图小天才就是你！",
+    mapHint: "步数越省星星越多，一行一行推最不容易返工！",
+    grandMessage: "99 幅拼图全部复原，你的空间感和步数规划都练出来了！",
   });
 }

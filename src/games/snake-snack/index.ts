@@ -131,7 +131,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       const got = starsGot >= 2 ? 3 : starsGot >= 1 ? 2 : 1;
       setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, `吃饱 ${cfg.target} 口，还追到了 ${starsGot} 颗星星果！`); }, 350);
     } else {
-      setTimeout(() => { if (!destroyed) ctx.lose(reason ?? "撞到啦，没关系，转弯早一点点就好！"); }, 350);
+      setTimeout(() => { if (!destroyed) ctx.lose(reason ?? "这一局到这儿～转弯提前一格，身体越长这条越管用！"); }, 350);
     }
   }
 
@@ -143,17 +143,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const ny = head[1] + dir[1];
     if (nx < 0 || nx >= GRID || ny < 0 || ny >= GRID) {
       ctx.sfx("oops");
-      finish(false, "碰到花园围栏啦，早点转弯就好！");
+      finish(false, "碰到围栏啦～沿着边缘绕圈走，把中间的空地留给自己回旋！");
       return;
     }
     if (walls.has(ny * GRID + nx)) {
       ctx.sfx("oops");
-      finish(false, "撞到树篱啦，下次绕着走！");
+      finish(false, "撞到障碍啦～进通道前先看清出口在哪，路线就顺了！");
       return;
     }
     if (snake.some(([sx, sy], i) => i > 0 && sx === nx && sy === ny)) {
       ctx.sfx("oops");
-      finish(false, "咬到自己尾巴啦，身体变长要早点转弯！");
+      finish(false, "咬到自己啦～吃之前先想好「吃完从哪儿出来」,就不会把自己钉进死角！");
       return;
     }
     snake.unshift([nx, ny]);
@@ -181,7 +181,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           // 星星果限时溜走，换回普通点心
           snackIsStar = false;
           snackEmoji = SNACKS[Math.floor(Math.random() * SNACKS.length)];
-          msgEl.textContent = "星星果溜走了，下次快一点！";
+          msgEl.textContent = "星星果溜走了～下一颗顺路的时候优先去拿！";
         }
       }
     }
@@ -233,7 +233,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "追到 2 颗限时星星果就能拿 3 星！",
-    grandMessage: "99 座花园全部吃遍，毛毛虫长成大明星！",
+    mapHint: "追到 2 颗限时星星果就能拿 3 星，顺路再去最划算！",
+    grandMessage: "99 座花园全部吃遍，你的走位和路线规划都很老练了！",
   });
 }

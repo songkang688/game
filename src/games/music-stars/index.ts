@@ -180,7 +180,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   function playSequence(): void {
     phase = "watch";
     replayBtn.disabled = true;
-    msgEl.textContent = cfg.replays >= 0 ? "重听次数有限，用心记住旋律～" : "小星星在唱歌，仔细看仔细听～";
+    msgEl.textContent = cfg.replays >= 0
+      ? "重听次数有限，先记旋律的走向：往上爬还是往下走～"
+      : "把旋律切成两三小段来记，比整句一起记牢得多～";
     inputPos = 0;
     renderDots();
     seq.forEach((starIdx, k) => {
@@ -219,7 +221,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   function finish(): void {
     ended = true;
     const got = rateBelow(misses, 0, 2);
-    ctx.win(got, misses === 0 ? "一个音都没弹错，太好听啦！" : "整关旋律全部弹完，真好听！");
+    ctx.win(got, misses === 0 ? "一个音都没弹错，听辨和记忆都很准！" : "整关旋律全部弹完，节奏稳住了！");
   }
 
   function onMiss(): void {
@@ -228,10 +230,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     updateHud();
     if (misses > cfg.maxMiss) {
       ended = true;
-      ctx.lose("旋律有点长，我们休息一下耳朵再来～");
+      ctx.lose("这段旋律先放一放～下次试试边听边用手比高低，身体记住了手就找得到位置！");
       return;
     }
-    msgEl.textContent = "没关系，我们再听一遍，慢慢来～";
+    msgEl.textContent = "再听一遍～这次把它切成两小段来记～";
     phase = "watch";
     later(() => playSequence(), 900);
   }
@@ -266,7 +268,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         phase = "watch";
         replayBtn.disabled = true;
         ctx.sfx("coin");
-        msgEl.textContent = "弹对啦！真好听！🎵";
+        msgEl.textContent = "整句都对上了！🎵";
         later(() => {
           roundIdx++;
           if (roundIdx >= melodies.length) finish();
@@ -311,8 +313,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   return mountLevelGame(api, {
     id: meta.id,
     chapters: CHAPTERS,
-    mapHint: "每一关都是一段新旋律，弹给星星听～",
-    grandMessage: "188 关全部弹完，你是闪闪发光的小小音乐家！",
+    mapHint: "先记旋律的走向,再补具体的音,分段记最牢～",
+    grandMessage: "188 关全部弹完，你的听辨和视奏都练出来了！",
     playLevel,
   });
 }
