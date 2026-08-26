@@ -77,13 +77,22 @@ export function readProgress(storage: StorageLike | null, total: number): Progre
   return { stars };
 }
 
-/** 只往主 key 写。老 key 原样留着，装了旧版也不会看到一个空档。 */
+/**
+ * 上一代主 key。1.2 起主档写在 `yiduo-yixing.` 前缀那个上，
+ * 但这一个继续同步写一份：万一有人装回旧版，看到的还是最新进度，而不是空档。
+ */
+export const MIRROR_SAVE_KEY = "yiduo.candy-swing.campaign.v2";
+
+/** 写进度：主 key 必写，上一代 key 顺带镜像一份。两个都是「只增不改」里的 key。 */
 export function writeProgress(storage: StorageLike | null, p: Progress): void {
   if (!storage) return;
-  try {
-    storage.setItem(SAVE_KEY, JSON.stringify({ stars: p.stars }));
-  } catch {
-    // 存不了也不影响本次游玩
+  const json = JSON.stringify({ stars: p.stars });
+  for (const key of [SAVE_KEY, MIRROR_SAVE_KEY]) {
+    try {
+      storage.setItem(key, json);
+    } catch {
+      // 存不了也不影响本次游玩
+    }
   }
 }
 

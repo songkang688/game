@@ -452,6 +452,86 @@ export function searchCutTimeFor(lv: LevelDef, tMax: number, step = 0.1): number
   return null;
 }
 
+/* ---------------- 1.2：三星解搜索 ---------------- */
+
+export interface StarSearchResult {
+  /** 搜到过至少一条通关路线 */
+  win: boolean;
+  /** 所有通关路线里收到最多的星数 */
+  bestStars: number;
+  /** 一共试了多少条路线（找到满星就提前收工） */
+  tries: number;
+}
+
+/** 固定种子的伪随机，保证「三星解存在」这个结论每次跑都一样 */
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 随机化搜索一条「既能通关、又能把星星收满」的操作路线。
+ * 一条路线 = 每根绳各自的剪断时刻 + 可选的戳泡泡 / 点气球时刻。
+ * 先拿关卡自带的配方打底（那条一定能通关），再撒随机路线找收得更多的。
+ * 找到满星立刻收工，所以简单关几乎不花时间。
+ */
+export function searchStarSolution(
+  lv: LevelDef,
+  opts: { tMax?: number; tries?: number; seed?: number } = {}
+): StarSearchResult {
+  const tMax = opts.tMax ?? 3;
+  const tries = opts.tries ?? 220;
+  const rand = rng(opts.seed ?? 0x5eed);
+  const want = lv.stars.length;
+
+  // 打底：关卡自带配方
+  const baseline = playRecipeFor(lv);
+  let win = baseline.ate;
+  let bestStars = baseline.ate ? baseline.collected.size : 0;
+  if (win && bestStars >= want) return { win, bestStars, tries: 1 };
+
+  const nRopes = lv.ropes.length;
+  const nBalloons = (lv.balloons ?? []).length;
+  const hasBubble = (lv.bubbles ?? []).length > 0;
+
+  let n = 1;
+  for (; n <= tries; n++) {
+    const acts: Array<{ at: number; run: (w: SimWorld) => void }> = [];
+    // 每根绳一个剪断时刻；三分之一的路线让所有绳同时断（最常见的玩法）
+    const together = rand() < 0.34 ? +(rand() * tMax).toFixed(2) : NaN;
+    for (let r = 0; r < nRopes; r++) {
+      const at = Number.isNaN(together) ? +(rand() * tMax).toFixed(2) : together;
+      acts.push({ at, run: (w) => w.cutRope(r) });
+    }
+    if (hasBubble && rand() < 0.7) {
+      acts.push({ at: +(rand() * (tMax + 3)).toFixed(2), run: (w) => w.pop() });
+    }
+    for (let b = 0; b < nBalloons; b++) {
+      if (rand() < 0.7) {
+        acts.push({ at: +(rand() * (tMax + 3)).toFixed(2), run: (w) => w.puff(b) });
+      }
+    }
+    acts.sort((a, b) => a.at - b.at);
+
+    const w = makeSimFor(lv);
+    let k = 0;
+    runSim(w, tMax + 9, (world) => {
+      while (k < acts.length && world.t >= acts[k].at) acts[k++].run(world);
+    });
+    if (!w.ate) continue;
+    win = true;
+    if (w.collected.size > bestStars) bestStars = w.collected.size;
+    if (bestStars >= want) break;
+  }
+  return { win, bestStars, tries: n };
+}
+
 const DEFAULT_TIME: Record<string, number> = {
   wait: 12,
   cut: 8,
