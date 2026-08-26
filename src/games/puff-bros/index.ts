@@ -116,9 +116,10 @@ const CSS = `
 .pb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.32);}
 .pb-btn:focus-visible,.pb-key:focus-visible,.pb-mode:focus-visible,.pb-veil-btn:focus-visible,
 .pb-pick:focus-visible{outline:3px solid #274766;outline-offset:2px;}
-.pb-stagebox{position:relative;border-radius:16px;overflow:hidden;background:#EEF7FF;
+.pb-stagebox{position:relative;border-radius:16px;overflow:hidden;background:#EEF7FF;margin:0 auto;
   box-shadow:0 4px 12px rgba(110,140,175,.26);}
-.pb-cv{display:block;width:100%;height:320px;}
+/* 这个高度只是脚本量出真正剩余空间之前的垫底值,量完会被行内样式盖掉 */
+.pb-cv{display:block;width:100%;height:300px;}
 .pb-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:8px;text-align:center;padding:16px;background:rgba(246,252,255,.94);}
 .pb-veil-title{font-size:20px;font-weight:900;color:#2F5A8C;}
@@ -135,8 +136,10 @@ const CSS = `
 .pb-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;}
 .pb-pads[data-pads="1"]{justify-content:center;}
 .pb-pads[data-pads="2"]{--k:40px;}
-.pb-pad{display:grid;grid-template-columns:repeat(4,var(--k));grid-auto-rows:var(--k);gap:4px;
-  justify-content:center;}
+/* 第一行是键位说明,按字数占多高就多高:按钮的行号是写死的,
+   要是让它跟按钮一样高,说明藏起来之后会在这儿留一个空行 */
+.pb-pad{display:grid;grid-template-columns:repeat(4,var(--k));grid-template-rows:auto var(--k) var(--k);
+  grid-auto-rows:var(--k);gap:4px;justify-content:center;}
 .pb-pad-name{grid-column:1/-1;font-size:11px;font-weight:800;color:#3F5C77;text-align:center;line-height:1.3;}
 .pb-key{border:none;border-radius:14px;font-size:19px;font-weight:900;cursor:pointer;font-family:inherit;
   background:#ffffffe0;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.34);touch-action:none;padding:0;}
@@ -167,7 +170,6 @@ const CSS = `
 .pb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
 @media (max-width:420px){
   .pb-cv{height:210px;}
-  .pb-wrap[data-pads="2"] .pb-cv{height:186px;}
   .pb-pads{--k:46px;margin-top:6px;}
   .pb-pads[data-pads="2"]{--k:36px;}
   .pb-chip{font-size:12px;padding:3px 7px;}
@@ -182,7 +184,6 @@ const CSS = `
 @media (hover:none) and (max-width:420px){ .pb-pad-name{display:none;} }
 @media (max-height:620px){
   .pb-cv{height:170px;}
-  .pb-wrap[data-pads="2"] .pb-cv{height:158px;}
   .pb-pads{--k:42px;margin-top:4px;}
   .pb-pads[data-pads="2"]{--k:34px;}
   .pb-tip{margin-top:4px;font-size:11px;}
@@ -388,6 +389,74 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   host.appendChild(wrap);
 
   const g = canvas.getContext("2d");
+
+  // ---- 画面高度 ----
+  // 外壳不滚动,超出窗口的部分是直接看不见的,所以画面高度不能写死:
+  // 量一下画布上边到窗口底之间还剩多少,再扣掉底下按键和提示语占的那一截,
+  // 剩下的全给画面。
+  /** 画面底下留一点空,不要顶死窗口边 */
+  const VIEW_PAD = 10;
+  /** 再挤也得看得清人在哪儿 */
+  const VIEW_MIN = 150;
+
+  /**
+   * 往下最多画到哪儿。
+   *
+   * 光看窗口高度不够:外壳一路上套着几层 overflow:hidden,提示语可能在够到
+   * 窗口底之前就先被外壳裁掉了。但这几层里也有一部分是被内容自己撑起来的 ——
+   * 画面多高它们就多高,拿它们当天花板,画面就再也长不大了。
+   *
+   * 所以把画面缩一下,看谁的下沿跟着一起动:动了的是被撑起来的,不算数;
+   * 纹丝不动的才是真的天花板。
+   */
+  function bottomLimit(): number {
+    const walls: HTMLElement[] = [];
+    for (let e: HTMLElement | null = wrap.parentElement; e; e = e.parentElement) {
+      if (getComputedStyle(e).overflowY !== "visible") walls.push(e);
+    }
+    if (walls.length === 0) return window.innerHeight;
+
+    const before = walls.map((e) => e.getBoundingClientRect().bottom);
+    const keep = canvas.style.height;
+    canvas.style.height = `${Math.max(1, canvas.getBoundingClientRect().height - 40)}px`;
+    const after = walls.map((e) => e.getBoundingClientRect().bottom);
+    canvas.style.height = keep;
+
+    let limit = window.innerHeight;
+    for (let i = 0; i < walls.length; i++) {
+      if (Math.abs(after[i] - before[i]) < 1) limit = Math.min(limit, before[i]);
+    }
+    return limit;
+  }
+
+  function fitCanvas(): void {
+    // 宽度按 wrap 量,不按画框自己量 —— 下面会把画框改窄,拿它当基准会越量越窄
+    const availW = wrap.clientWidth;
+    if (availW <= 0) return;
+    const boxRect = box.getBoundingClientRect();
+    // 按键和提示语的高度跟画面多高无关,所以这一段量出来是稳的,不会跟着自己变
+    const below = wrap.getBoundingClientRect().bottom - boxRect.bottom;
+    const room = bottomLimit() - boxRect.top - below - VIEW_PAD;
+    // 比场地本身还高只会多出两条天空,不如把余量留给别人
+    const aspect = ARENA_W / ARENA_H;
+    const h = Math.round(Math.max(VIEW_MIN, Math.min(room, availW / aspect)));
+    // 场地是等比缩放居中画的,画框比它宽多少,左右就空多少;
+    // 干脆把画框收到跟场地一样宽,圆角正好贴着围墙
+    const w = Math.round(Math.min(availW, h * aspect));
+    if (Math.abs(h - canvas.getBoundingClientRect().height) < 1 && Math.abs(w - boxRect.width) < 1) return;
+    canvas.style.height = `${h}px`;
+    box.style.width = `${w}px`;
+  }
+
+  // 模式按钮换行、外壳收起标题栏都会顶得画面上下移动,窗口尺寸却没变,
+  // 所以除了 resize 还得盯着容器自己
+  let ro: ResizeObserver | null = null;
+  if (typeof ResizeObserver === "function") {
+    ro = new ResizeObserver(() => fitCanvas());
+    ro.observe(host);
+  }
+  window.addEventListener("resize", fitCanvas);
+  fitCanvas();
 
   // ---- 输入 ----
   function setKey(player: number, act: InputName, down: boolean): void {
@@ -819,6 +888,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("pointerup", releaseAll);
       window.removeEventListener("blur", releaseAll);
+      window.removeEventListener("resize", fitCanvas);
+      ro?.disconnect();
       wrap.remove();
     },
     world: () => world,
@@ -1197,7 +1268,18 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 真下到某一关里就把这排模式按钮收起来:窄屏上它要占两行,
+      // 那点高度留给画面比留给「现在能换模式」有用得多。回到关卡地图再放回来
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy() {
+            handle.destroy?.();
+            if (!current) bar.hidden = false;
+          },
+        };
+      },
       mapHint: "吹一口气流裹住咕噜怪,再噗一下把它变成糖果!用时、糖果、不丢心,三样都做到就是三颗星。",
       grandMessage: "188 关全部清空,噗噗兄弟就是泡泡糖工坊的大冠军!",
       guide: GUIDE,
