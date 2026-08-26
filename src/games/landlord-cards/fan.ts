@@ -93,6 +93,27 @@ export function boxHits(slots: readonly FanSlot[], cardW: number, cardH: number,
   return out;
 }
 
+/**
+ * 点到了第几张:从最上面(最后一张)往回找,谁露出来的那一条被点中就是谁。
+ * lifts 是每张牌被挑起来的高度(选中的牌会往上抬),点选时要跟着抬。
+ */
+export function hitIndex(
+  slots: readonly FanSlot[],
+  cardW: number,
+  cardH: number,
+  x: number,
+  y: number,
+  lifts: readonly number[] = []
+): number {
+  for (let i = slots.length - 1; i >= 0; i--) {
+    const left = slots[i].x;
+    const right = i === slots.length - 1 ? left + cardW : Math.max(slots[i + 1].x, left + 1);
+    const top = slots[i].y - (lifts[i] ?? 0);
+    if (x >= left && x < right && y >= top && y <= top + cardH) return i;
+  }
+  return -1;
+}
+
 /** 键盘光标左右移动后落在第几张(到头就停住,不绕圈,免得小朋友晕) */
 export function moveCursor(cursor: number, delta: number, n: number): number {
   if (n <= 0) return 0;
