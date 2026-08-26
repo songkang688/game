@@ -424,6 +424,72 @@ export function releaseLoneRainbows(g: Grid): SettleResult["popped"] {
   return out;
 }
 
+/* ---------------- 1.1 新增:顶板下压 ---------------- */
+
+/**
+ * 顶板下压时新插进来的那一行:整行石板。
+ * 长度按 descend 翻转后的顶行算(8/9 交替)。
+ */
+export function ceilingRow(g: Grid): string {
+  return STONE.repeat(rowLen(g.flip ^ 1, 0));
+}
+
+/**
+ * 顶板往下压一格:顶上多出一整行石板,原有泡泡整体下移一行。
+ * 石板不参与连消、也不算待清空泡泡,它只做两件事——
+ * 继续替下面的泡泡当挂点,以及把整片泡泡往警戒线推。
+ */
+export function pressCeiling(g: Grid): void {
+  descend(g, ceilingRow(g));
+}
+
+/* ---------------- 1.1 新增:反弹次数 ---------------- */
+
+/** 一条弹道折了几次(起点和终点不算折点) */
+export function countBounces(path: Array<{ x: number; y: number }>): number {
+  return Math.max(0, path.length - 2);
+}
+
+/**
+ * 从发射台把 3°~177° 扫一遍,记下每个落点格「最少折几次能进去」。
+ * key 是 `${r},${c}`;扫不到的格子不在表里。
+ */
+export function landingBounceMap(
+  g: Grid,
+  sx: number,
+  sy: number,
+  obs: Obstacles = {},
+  stepDeg = 0.5
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (let deg = 3; deg <= 177; deg += stepDeg) {
+    const a = (deg * Math.PI) / 180;
+    const res = simulateShot(g, sx, sy, Math.cos(a), -Math.sin(a), obs);
+    if (!res.landing) continue;
+    const key = `${res.landing.r},${res.landing.c}`;
+    const n = countBounces(res.path);
+    const prev = out.get(key);
+    if (prev === undefined || n < prev) out.set(key, n);
+  }
+  return out;
+}
+
+/**
+ * 落到 target 这一格最少要折几次;够不到就返回 Infinity。
+ * 用来判定「死角」:必须借墙反弹两次以上才进得去。
+ */
+export function minBouncesToCell(
+  g: Grid,
+  target: { r: number; c: number },
+  sx: number,
+  sy: number,
+  obs: Obstacles = {},
+  stepDeg = 0.5
+): number {
+  const map = landingBounceMap(g, sx, sy, obs, stepDeg);
+  return map.get(`${target.r},${target.c}`) ?? Infinity;
+}
+
 /** 是否有泡泡越过失败线 */
 export function crossedDeadline(g: Grid): boolean {
   for (let r = DEADLINE_ROW; r < g.rows.length; r++) {
