@@ -1715,8 +1715,9 @@ const C10: LevelDef[] = [
     ],
     solve: { kind: "wait", time: 12 },
   }),
-  V(K2, "月下长摆", "发条长摆加刺墙，摆幅一定要够。", {
+  V(K2, "月下长摆", "发条长摆加刺墙，摆幅一定要够；左边那级台阶是给你看高度的。", {
     spikes: [{ x: 0, y: 456, w: 180, h: 24, dir: "up" }],
+    boards: [{ x1: 2, y1: 306, x2: 2, y2: 306, w: 52, h: 14, period: 4 }],
     stars: [{ x: 170, y: 250 }, { x: 208, y: 304 }, { x: 240, y: 362 }],
     solve: { kind: "search", tMax: 3 },
   }),
@@ -1761,6 +1762,11 @@ const C10: LevelDef[] = [
       { x1: 306, y1: 336, x2: 54, y2: 336, period: 2.4, radius: 22 },
       { x1: 54, y1: 402, x2: 306, y2: 402, period: 3.8, radius: 22 },
     ],
+    magnets: [{ x: 180, y: 404, radius: 130, strength: 600 }],
+    spikes: [
+      { x: 0, y: 458, w: 96, h: 22, dir: "up" },
+      { x: 264, y: 458, w: 96, h: 22, dir: "up" },
+    ],
     stars: [{ x: 180, y: 236 }, { x: 180, y: 306 }, { x: 180, y: 380 }],
     solve: { kind: "search", tMax: 6 },
   }),
@@ -1778,18 +1784,25 @@ const C10: LevelDef[] = [
     magnets: [{ x: 280, y: 300, radius: 170, strength: 700 }],
     stars: [{ x: 80, y: 242 }, { x: 280, y: 244 }, { x: 280, y: 344 }],
   }),
-  V(B12, "月夜剪刀", "自动剪刀配上升气流，看着就好玩。", {
+  V(B12, "月夜剪刀", "自动剪刀配上升气流，落得慢慢的；两边高台看热闹。", {
     fans: [{ x: 130, y: 300, w: 100, h: 160, dir: "up", power: 500 }],
+    boards: [
+      { x1: 16, y1: 330, x2: 16, y2: 330, w: 66, h: 14, period: 4 },
+      { x1: 278, y1: 330, x2: 278, y2: 330, w: 66, h: 14, period: 4 },
+    ],
     monster: { x: 180, y: 442 },
     stars: [{ x: 180, y: 258 }, { x: 180, y: 322 }, { x: 180, y: 392 }],
     solve: { kind: "wait", time: 14 },
   }),
-  V(B02, "月光秋千", "老秋千挂上发条，荡起来手感不一样。", {
+  V(B02, "月光秋千", "老秋千挂上发条，荡起来手感不一样；地上还铺了刺。", {
     ropes: [{ x: 122, y: 56, winch: { min: 0.94, max: 1.18, period: 2.6 } }],
+    spikes: [{ x: 0, y: 460, w: 150, h: 20, dir: "up" }],
+    boards: [{ x1: 2, y1: 320, x2: 2, y2: 320, w: 48, h: 14, period: 4 }],
     solve: { kind: "search", tMax: 2.6 },
   }),
-  V(B06, "月钩接力", "挂钩接力，下面还有块磁铁帮忙。", {
+  V(B06, "月钩接力", "挂钩接力，下面有块磁铁帮忙，可别掉进刺坑。", {
     magnets: [{ x: 280, y: 380, radius: 170, strength: 600 }],
+    spikes: [{ x: 0, y: 460, w: 140, h: 20, dir: "up" }],
     solve: { kind: "hookRelay", dir: 1, time: 14 },
   }),
   V(M5, "月夜抢糖", "磁铁、咕噜噜、刺墙，全都凑齐了！", {
