@@ -79,11 +79,12 @@ export function previewDots(
 /* ------------------------------------------------------------------ */
 
 /**
- * 手指与小鸟之间至少隔开的世界像素。
+ * 手指与小鸟之间至少隔开的世界像素,同时也是弹弓周围的「手指禁区」半径。
  * 画布 540 世界像素宽,360px 手机上大约映射成 336 CSS px(比例 ~0.62),
- * 所以 72 世界像素 ≈ 45 CSS px —— 正好一根手指的宽度,弹弓不会被盖住。
+ * 58 世界像素 ≈ 36 CSS px —— 一个指尖的接触面,弹弓与小鸟不会被盖住。
+ * 取值正好等于 MAX_DRAG:这样「按在弹弓上」被推开之后,小鸟还在拉得到的范围内。
  */
-export const FINGER_GAP = 72;
+export const FINGER_GAP = MAX_DRAG;
 
 export interface GrabOffset {
   ox: number;
@@ -92,10 +93,12 @@ export interface GrabOffset {
 
 /**
  * 按下时求锚点偏移:小鸟位置 = 手指位置 - 偏移。
- * - 按在离弹弓较远的地方:偏移就是「按下点 - 弹弓」,小鸟原地不动,
- *   之后手指怎么挪,小鸟就跟着挪多少(相对拖动)。
- * - 按在弹弓身上(偏移不足一根手指):把偏移撑到 (0, FINGER_GAP),
- *   小鸟被抬到手指正上方,照样看得见皮筋。
+ * - 按在离弹弓一个指尖以外的地方:偏移就是「按下点 - 弹弓」,小鸟原地不动,
+ *   之后手指怎么挪,小鸟就跟着挪多少(相对拖动,手指想放哪儿放哪儿)。
+ * - 按进了弹弓的手指禁区:把锚点沿同方向推到禁区边上,小鸟顺势往反方向拉开一点,
+ *   手指与小鸟之间还是隔着一个指尖 —— 弹弓永远露在外面。
+ * - 正正好按在弹弓中心(方向都算不出来):默认往右上推,小鸟落在左下,
+ *   正是拉弓该去的方向。
  */
 export function grabOffset(
   downX: number,
@@ -106,25 +109,72 @@ export function grabOffset(
 ): GrabOffset {
   const ox = downX - slingX;
   const oy = downY - slingY;
-  if (Math.hypot(ox, oy) < gap) return { ox: 0, oy: gap };
-  return { ox, oy };
+  const d = Math.hypot(ox, oy);
+  if (d >= gap) return { ox, oy };
+  if (d < 1e-6) return { ox: gap * 0.6, oy: -gap * 0.8 };
+  return { ox: (ox / d) * gap, oy: (oy / d) * gap };
 }
 
-/** 当前手指位置换算成拉弓向量(已按 MAX_DRAG 夹住) */
+/**
+ * 当前手指位置换算成拉弓向量。
+ *
+ * 理想位置就是「手指 - 偏移」,拉不到那么远时要夹回 MAX_DRAG 的圆里。
+ * 但直愣愣地往弹弓方向缩会把小鸟拽到手指底下,所以夹的时候优先**转角度**:
+ * 在「离手指恰好一个偏移距离」的圆上找还够得着的那个点。
+ * 实在找不到就退回缩放,并做一次兜底检查 —— 保证手指与小鸟始终隔着 gap。
+ */
 export function dragFromPointer(
   px: number,
   py: number,
   off: GrabOffset,
   slingX = SLING_X,
   slingY = SLING_Y,
-  maxDrag = MAX_DRAG
+  maxDrag = MAX_DRAG,
+  gap = FINGER_GAP
 ): { dx: number; dy: number } {
-  let dx = px - off.ox - slingX;
-  let dy = py - off.oy - slingY;
-  const d = Math.hypot(dx, dy);
-  if (d > maxDrag) {
-    dx = (dx / d) * maxDrag;
-    dy = (dy / d) * maxDrag;
+  const tx = px - off.ox - slingX;
+  const ty = py - off.oy - slingY;
+  const want = Math.hypot(tx, ty);
+  if (want <= maxDrag) return { dx: tx, dy: ty };
+
+  const R = Math.hypot(off.ox, off.oy);
+  const cx = slingX - px;
+  const cy = slingY - py;
+  const dist = Math.hypot(cx, cy);
+
+  // 两圆(手指圆 R / 弹弓圆 maxDrag)相交时,取靠近理想方向的那个交点:距离一点不缩水
+  if (dist > 1e-6 && dist <= R + maxDrag && Math.abs(R - maxDrag) <= dist) {
+    const a = (R * R - maxDrag * maxDrag + dist * dist) / (2 * dist);
+    const h = Math.sqrt(Math.max(0, R * R - a * a));
+    const ux = cx / dist;
+    const uy = cy / dist;
+    const mx = px + ux * a;
+    const my = py + uy * a;
+    const cands = [
+      { x: mx - uy * h, y: my + ux * h },
+      { x: mx + uy * h, y: my - ux * h }
+    ];
+    let best = cands[0];
+    let bestD = Infinity;
+    for (const c of cands) {
+      const d = Math.hypot(c.x - (slingX + tx), c.y - (slingY + ty));
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return { dx: best.x - slingX, dy: best.y - slingY };
+  }
+
+  // 退回缩放
+  let dx = (tx / want) * maxDrag;
+  let dy = (ty / want) * maxDrag;
+  if (Math.hypot(px - (slingX + dx), py - (slingY + dy)) < gap) {
+    // 兜底:取弹弓够得着的范围里离手指最远的那个点(顺着「手指 → 弹弓」再往外)
+    if (dist > 1e-6) {
+      dx = (cx / dist) * maxDrag;
+      dy = (cy / dist) * maxDrag;
+    }
   }
   return { dx, dy };
 }

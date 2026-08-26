@@ -147,6 +147,7 @@ interface Particle {
 export function mount(api: GameApi): { destroy: () => void } {
   let destroyed = false;
   let raf = 0;
+  let nextTowerTimer = 0;
   let lastTime = 0;
 
   const progress = loadProgress();
@@ -448,6 +449,9 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /** 场景通用的开局:建世界、清粒子、把小鸟排上队 */
   function startScene(src: WorldSource & { birds: BirdKind[] }): void {
+    // 新开一幕就作废上一座塔排队中的自动续关,免得退出再进时凭空跳一轮
+    window.clearTimeout(nextTowerTimer);
+    nextTowerTimer = 0;
     world = createWorld(src, worldFx, quality);
     particles = [];
     queue = [...src.birds];
@@ -604,7 +608,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       const next = (endlessRound?.round ?? 1) + 1;
       msgEl.textContent = `这座塔全倒啦!当前 ${endlessScore} 分,下一座更高!`;
       playThrottled("win", 0);
-      window.setTimeout(() => {
+      window.clearTimeout(nextTowerTimer);
+      nextTowerTimer = window.setTimeout(() => {
+        nextTowerTimer = 0;
         if (!destroyed && mode === "endless") openEndlessRound(next);
       }, 700);
       return;
@@ -1948,6 +1954,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
+      window.clearTimeout(nextTowerTimer);
       stopSpeaking();
       unwatchSpeech();
       resizeObserver?.disconnect();

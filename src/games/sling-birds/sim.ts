@@ -80,6 +80,27 @@ export function velocityToDrag(vx: number, vy: number): { dragX: number; dragY: 
  * 抛射反解:从弹弓以速度 speed 打到 (tx,ty),返回 0/1/2 条可行弹道的拉弓向量。
  * 经典公式 tanθ = (v² ± √(v⁴ - g(g·x² + 2y·v²))) / (g·x),y 轴向上为正。
  */
+function aimOnce(
+  tx: number,
+  ty: number,
+  speed: number,
+  gfactor: number,
+  fromX: number,
+  fromY: number,
+  sign: 1 | -1
+): ShotPlan | null {
+  const g = GRAVITY * gfactor;
+  const dx = tx - fromX;
+  const dy = fromY - ty;
+  if (Math.abs(dx) < 1e-6) return null;
+  const v2 = speed * speed;
+  const disc = v2 * v2 - g * (g * dx * dx + 2 * dy * v2);
+  if (disc < 0) return null;
+  const angle = Math.atan2(v2 + sign * Math.sqrt(disc), g * dx);
+  const drag = velocityToDrag(speed * Math.cos(angle), -speed * Math.sin(angle));
+  return drag ? { ...drag, skillAt: null } : null;
+}
+
 export function aimAt(
   tx: number,
   ty: number,
@@ -88,21 +109,18 @@ export function aimAt(
   fromX = SLING_X,
   fromY = SLING_Y
 ): ShotPlan[] {
-  const g = GRAVITY * gfactor;
-  const dx = tx - fromX;
-  const dy = fromY - ty;
   const out: ShotPlan[] = [];
-  if (Math.abs(dx) < 1e-6) return out;
-  const v2 = speed * speed;
-  const disc = v2 * v2 - g * (g * dx * dx + 2 * dy * v2);
-  if (disc < 0) return out;
-  const root = Math.sqrt(disc);
-  for (const sign of [1, -1]) {
-    const angle = Math.atan2(v2 + sign * root, g * dx);
-    const vx = speed * Math.cos(angle);
-    const vy = -speed * Math.sin(angle);
-    const drag = velocityToDrag(vx, vy);
-    if (drag) out.push({ ...drag, skillAt: null });
+  for (const sign of [1, -1] as const) {
+    let shot = aimOnce(tx, ty, speed, gfactor, fromX, fromY, sign);
+    if (!shot) continue;
+    // 小鸟其实是从「被拉开的那一点」起飞的,不是从弹弓中心;
+    // 拿解出来的拉弓量把起点挪过去再解一次,两三轮就收敛。
+    for (let i = 0; i < 3; i++) {
+      const again = aimOnce(tx, ty, speed, gfactor, fromX + shot.dragX, fromY + shot.dragY, sign);
+      if (!again) break;
+      shot = again;
+    }
+    out.push(shot);
   }
   return out;
 }
