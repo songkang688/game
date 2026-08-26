@@ -5,10 +5,25 @@
  * 其他子代理只要把游戏目录(meta.ts + index.ts)合并进来,首页就会自动出现,
  * 无需改壳代码。
  */
-import type { GameCategory, GameMeta, GameModule, GameMount } from "./types";
-import { CATEGORY_ORDER } from "./types";
+import type { GameCategory, GameMeta, GameMode, GameModule, GameMount } from "./types";
+import { CATEGORY_ORDER, GAME_MODES } from "./types";
 
 const VALID_CATEGORIES = new Set<string>(CATEGORY_ORDER);
+const VALID_MODES = new Set<string>(GAME_MODES);
+
+/** 归一化 meta.modes:只留认识的模式、去重、顺序按 GAME_MODES;没有合法项就当没填 */
+function normalizeModes(raw: unknown): GameMode[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const kept = GAME_MODES.filter((m) => raw.some((v) => v === m && VALID_MODES.has(String(v))));
+  return kept.length > 0 ? kept : undefined;
+}
+
+/** 归一化正整数字段(关数、年龄):非正整数一律当没填 */
+function normalizePositiveInt(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  const n = Math.round(raw);
+  return n > 0 ? n : undefined;
+}
 
 /** 懒 glob 的取值形状:() => import("../games/<id>/index.ts") */
 export type LazyImport = () => Promise<unknown>;
@@ -38,7 +53,7 @@ function extractMeta(raw: unknown): GameMeta | null {
     ? (m.category as GameCategory)
     : "casual";
 
-  return {
+  const normalized: GameMeta = {
     id: m.id.trim(),
     title: m.title.trim(),
     emoji: typeof m.emoji === "string" && m.emoji !== "" ? m.emoji : "🎮",
@@ -46,6 +61,16 @@ function extractMeta(raw: unknown): GameMeta | null {
     color: typeof m.color === "string" && m.color !== "" ? m.color : "#ffd6e7",
     blurb: typeof m.blurb === "string" ? m.blurb : ""
   };
+
+  // 1.1 新增的可选字段:填了才带上,老 meta 不填照样能上首页
+  const modes = normalizeModes(m.modes);
+  if (modes) normalized.modes = modes;
+  const levels = normalizePositiveInt(m.levels);
+  if (levels !== undefined) normalized.levels = levels;
+  const ageHint = normalizePositiveInt(m.ageHint);
+  if (ageHint !== undefined) normalized.ageHint = ageHint;
+
+  return normalized;
 }
 
 /** 从实现模块(index.ts)提取 mount;不合法返回 null */

@@ -9,4 +9,6 @@ export const meta = {
   category: "party" as const,
   color: "#CDE9FF",
   blurb: "朵朵星星同屏开跑！三条车道躲石头跳木栏，吃金币踩加速带，看谁跑得远！",
+  // index.ts 两个赛制:无尽对战比谁远 + 抢金币赛,都是双人同屏,没有闯关地图
+  modes: ["versus", "endless", "twoPlayer"] as const,
 };

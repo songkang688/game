@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#FFF4D6",
   blurb: "188 关十条果道！双篮镜像、沉甸水果、半空传送带、连击星光全新开张！",
+  // 10 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };

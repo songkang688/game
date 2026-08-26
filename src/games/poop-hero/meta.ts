@@ -9,4 +9,7 @@ export const meta = {
   category: "action" as const,
   color: "#F3E0CE",
   blurb: "披上披风当噗噗超人!188 关跳跳冲冲把臭臭怪变成小花,还有清洁马拉松和双人合作。",
+  // 8 章合计 188 关;index.ts 的模式条有清洁马拉松(无尽)与双人合作
+  modes: ["campaign", "endless", "coop"] as const,
+  levels: 188,
 };

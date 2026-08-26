@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#E2F7DC",
   blurb: "99 关六大花园！树篱石柱回字迷宫，追上星星果多拿星！",
+  // levels.ts 的 6 章合计 99 关(还没扩到 188),只有闯关
+  modes: ["campaign"] as const,
+  levels: 99,
 };

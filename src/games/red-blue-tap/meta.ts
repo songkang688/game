@@ -9,4 +9,7 @@ export const meta = {
   category: "party" as const,
   color: "#4dabf7",
   blurb: "188 关十大赛场！抢点躲陷阱，还要接连击、抢道具、按号码顺序拍，外加无尽抢点！",
+  // 10 章合计 188 关;对手是小电脑(星星),另有「霓虹抢点」无尽模式,不是双人同屏
+  modes: ["campaign", "versus", "endless"] as const,
+  levels: 188,
 };

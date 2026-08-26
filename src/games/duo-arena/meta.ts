@@ -9,4 +9,6 @@ export const meta = {
   category: "party" as const,
   color: "#FFE3D0",
   blurb: "上下半场同时开抢！三回合点点大战，金币礼物加炸弹，先赢两回合称王！",
+  // 没有闯关地图,只有一局定胜负的双人同屏擂台,所以不填 levels
+  modes: ["versus", "twoPlayer"] as const,
 };

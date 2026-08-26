@@ -9,4 +9,7 @@ export const meta = {
   category: "edu" as const,
   color: "#faa2c1",
   blurb: "十一座花园 188 关！看图认字、形近字辨析、成语补全、近反义词还有偏旁推字义！",
+  // 11 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };

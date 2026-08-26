@@ -9,4 +9,7 @@ export const meta = {
   category: "edu" as const,
   color: "#74c0fc",
   blurb: "十座车站 188 关！从单韵母声母一路开到整体认读、多音字、轻声儿化和句子注音！",
+  // 10 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };

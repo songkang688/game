@@ -9,4 +9,7 @@ export const meta = {
   category: "create" as const,
   color: "#ffd43b",
   blurb: "十大村镇 188 关！指令涂色、调色锅、明暗渐变、互补配色，还有限色大挑战！",
+  // 10 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };

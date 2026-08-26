@@ -9,4 +9,7 @@ export const meta = {
   category: "create" as const,
   color: "#ffe066",
   blurb: "十场音乐会 188 关！跟弹旋律、节奏跟打、音程听辨、双声部合奏还有简谱视奏！",
+  // 10 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };
