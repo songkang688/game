@@ -8,6 +8,7 @@
  */
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
+import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
 import type { BuildCharRound, BuildCharTask } from "./levels";
 
 export interface BuildCharOptions {
@@ -62,7 +63,11 @@ const CSS = `
 .bc-pick.bc-good{background:#e4f9e0;animation:bcPop .35s;}
 @keyframes bcPop{50%{transform:scale(1.14)}}
 .bc-msg{min-height:24px;text-align:center;font-size:15px;font-weight:800;}
-.bc-pick:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.bc-say-row{display:flex;justify-content:center;}
+.bc-say{border:none;border-radius:999px;background:#ffffffe6;cursor:pointer;font-family:inherit;font-weight:900;
+  font-size:16px;padding:10px 22px;min-height:44px;box-shadow:0 3px 0 rgba(120,120,160,.3);}
+.bc-say:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,120,160,.3);}
+.bc-pick:focus-visible,.bc-say:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (max-width:420px){
   .bc-slot{width:62px;height:62px;font-size:30px;}
   .bc-pick{min-width:70px;min-height:62px;font-size:27px;}
@@ -113,6 +118,7 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
       <span class="bc-slot bc-made bc-slot-c">?</span>
     </div>
     <div class="bc-step" style="color:${theme.accent}"></div>
+    <div class="bc-say-row"><button type="button" class="bc-say" style="color:${theme.accent}" hidden>🔈 读一读</button></div>
     <div class="bc-choices"></div>
     <div class="bc-msg" style="color:${theme.accent}"></div>
   `;
@@ -127,6 +133,14 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
   const stepEl = wrap.querySelector(".bc-step") as HTMLElement;
   const choicesEl = wrap.querySelector(".bc-choices") as HTMLElement;
   const msgEl = wrap.querySelector(".bc-msg") as HTMLElement;
+  const sayBtn = wrap.querySelector(".bc-say") as HTMLButtonElement;
+
+  /** 没有中文语音包时按钮一直藏着，拼字一点不受影响 */
+  const unwatchSpeech = whenSpeechReady(() => {
+    sayBtn.hidden = false;
+  });
+  if (speechReady()) sayBtn.hidden = false;
+  sayBtn.addEventListener("click", () => speak(clueEl.textContent ?? ""));
 
   function updateHud(): void {
     progressEl.textContent = `🧩 第 ${Math.min(roundIdx + 1, task.rounds.length)}/${task.rounds.length} 个字`;
@@ -139,6 +153,7 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
     const round = task.rounds[roundIdx];
     updateHud();
     clueEl.textContent = `「${round.word}」的这个字：${round.clue}`;
+    speak(clueEl.textContent);
     slotR.textContent = step === "part" ? round.radical : "?";
     slotR.classList.toggle("bc-filled", step === "part");
     slotP.textContent = "?";
@@ -211,6 +226,8 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
     destroy() {
       destroyed = true;
       ended = true;
+      unwatchSpeech();
+      stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       wrap.remove();
