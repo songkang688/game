@@ -638,7 +638,7 @@ function mountEndless(host: HTMLElement, api: GameApi, assist: boolean, onBack: 
     run = createBoard(stage, {
       cfg,
       assist,
-      banner: `♾️ 还能错 ${Math.max(0, ENDLESS_MAX_MISS - missUsed)} 次`,
+      banner: `♾️ 第 ${round} 轮 · 三次机会已用 ${missUsed}`,
       sfx: (n) => api.play(n),
       onDone: (r) => {
         cleared += r.matched;
