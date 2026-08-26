@@ -38,7 +38,10 @@ import {
   type Wallet,
 } from "./logic";
 import {
+  LIGHT_BAND_TOP,
+  LIGHT_MAX_DIM,
   PARALLAX,
+  TALLY_MS,
   applySupply,
   createTwin,
   extendRamp,
@@ -49,11 +52,15 @@ import {
   muddySlips,
   parallaxOffset,
   priceAt,
+  ropeSag,
   supplyChoices,
+  tallyValue,
   twinGrab,
   type SupplyOption,
   type TwinState,
 } from "./depth12";
+import { CSS } from "./style";
+import { bestLine, loadEndlessBest, mergeEndlessBest, saveEndlessBest, type EndlessBest } from "./endlessBest";
 
 // ---------------------------------------------------------------------------
 // 配色:一章一套粉彩矿洞
@@ -90,97 +97,6 @@ const CREW = [
   { name: "星星", body: "#8FBEF5", dark: "#6693CE", helmet: "#9AD07C", face: "#FFE7D6" },
 ];
 
-// ---------------------------------------------------------------------------
-// 样式
-// ---------------------------------------------------------------------------
-
-const CSS = `
-.gh-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
-  -webkit-user-select:none;touch-action:manipulation;position:relative;}
-.gh-run{display:flex;flex-direction:column;gap:6px;}
-.gh-hud{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
-.gh-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:800;color:#7A5A2E;
-  box-shadow:0 2px 6px rgba(170,140,90,.24);white-space:nowrap;}
-.gh-chip-goal{background:#FFF0D4;color:#9A6A16;}
-.gh-chip-bag{background:#F1EAFB;color:#6B4E9A;}
-.gh-bar{position:relative;flex:1;min-width:96px;height:18px;border-radius:999px;background:#ffffffcc;
-  overflow:hidden;box-shadow:inset 0 1px 3px rgba(160,130,90,.3);}
-.gh-bar-fill{height:100%;width:100%;border-radius:999px;background:linear-gradient(90deg,#FFD98A,#FF9E5E);
-  transition:width .2s linear;}
-.gh-bar-fill.gh-low{background:linear-gradient(90deg,#FFB3A7,#F0776A);}
-.gh-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:900;color:#6E4A18;}
-.gh-box{position:relative;display:flex;justify-content:center;}
-.gh-cv{display:block;border-radius:16px;box-shadow:0 4px 12px rgba(150,120,80,.26);max-width:100%;
-  touch-action:manipulation;cursor:pointer;}
-.gh-ctrl{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
-.gh-btn{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffe6;color:#7A5A2E;box-shadow:0 3px 0 rgba(170,140,90,.34);white-space:nowrap;}
-.gh-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,140,90,.34);}
-.gh-btn[disabled]{opacity:.45;cursor:default;}
-.gh-btn-fire{background:linear-gradient(180deg,#FFC96B,#EEA23A);color:#fff;box-shadow:0 4px 0 #C67F22;
-  padding:10px 26px;font-size:17px;}
-.gh-btn-bomb{background:linear-gradient(180deg,#FFA9A0,#EE7A6E);color:#fff;box-shadow:0 4px 0 #C75648;}
-.gh-btn-shop{background:linear-gradient(180deg,#B8A2EA,#9077D2);color:#fff;box-shadow:0 4px 0 #6F58AB;}
-.gh-tip{text-align:center;font-size:12px;font-weight:700;color:#8A6C42;line-height:1.5;margin:0;}
-.gh-toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
-  padding:5px 14px;font-size:13px;font-weight:800;color:#7A5A2E;box-shadow:0 3px 8px rgba(160,130,90,.32);
-  pointer-events:none;opacity:0;transition:opacity .2s ease;max-width:92%;text-align:center;}
-.gh-toast.gh-on{opacity:1;}
-/* 首尾的 auto 外边距代替 justify-content:center:内容装得下时照样居中,
-   装不下时 auto 收成 0,从顶上开始往下排,标题不会被剪掉,滚动条也够得着 */
-.gh-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-  gap:10px;text-align:center;padding:16px;background:rgba(255,251,244,.95);border-radius:16px;overflow:auto;}
-.gh-veil>:first-child{margin-top:auto;}
-.gh-veil>:last-child{margin-bottom:auto;}
-.gh-veil[hidden]{display:none;}
-.gh-veil-title{font-size:19px;font-weight:900;color:#8A5A22;}
-.gh-veil-sub{font-size:14px;font-weight:700;color:#7A6242;line-height:1.6;max-width:320px;}
-.gh-shoplist{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;}
-.gh-shopitem{display:flex;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:8px 10px;
-  box-shadow:0 3px 8px rgba(170,140,90,.22);text-align:left;}
-.gh-shopemoji{font-size:24px;line-height:1;}
-.gh-shoptext{flex:1;min-width:0;}
-.gh-shopname{font-size:14px;font-weight:900;color:#7A5A2E;}
-.gh-shopdesc{font-size:11px;font-weight:700;color:#93795A;line-height:1.4;}
-.gh-buy{border:none;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#FFC96B,#EEA23A);color:#fff;box-shadow:0 3px 0 #C67F22;
-  white-space:nowrap;}
-.gh-buy:active{transform:translateY(2px);box-shadow:0 1px 0 #C67F22;}
-.gh-buy[disabled]{opacity:.42;cursor:default;}
-.gh-modes{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 10px;}
-.gh-modes-title{font-size:19px;font-weight:900;color:#8A5A22;text-align:center;}
-.gh-modes-sub{font-size:13px;font-weight:700;color:#8A6C42;text-align:center;line-height:1.6;max-width:340px;}
-.gh-cards{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
-.gh-card{border:none;border-radius:20px;padding:14px 16px;min-width:150px;max-width:220px;cursor:pointer;
-  font-family:inherit;background:#fff;box-shadow:0 5px 0 rgba(170,140,90,.28);text-align:center;}
-.gh-card:active{transform:translateY(2px);box-shadow:0 3px 0 rgba(170,140,90,.28);}
-.gh-card-emoji{font-size:30px;line-height:1.2;}
-.gh-card-name{font-size:16px;font-weight:900;color:#7A5A2E;}
-.gh-card-sub{margin-top:4px;font-size:12px;font-weight:700;color:#93795A;line-height:1.5;}
-.gh-topbar{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-.gh-topbar[hidden]{display:none;}
-.gh-topbar-title{flex:1;text-align:center;font-size:14px;font-weight:900;color:#7A5A2E;}
-.gh-btn:focus-visible,.gh-buy:focus-visible,.gh-card:focus-visible,.gh-cv:focus-visible{
-  outline:3px solid #6B4A16;outline-offset:3px;}
-@media (max-width:420px){
-  .gh-chip{font-size:12px;padding:3px 8px;}
-  .gh-btn{padding:8px 12px;font-size:14px;}
-  .gh-btn-fire{padding:9px 20px;font-size:16px;}
-  .gh-tip{font-size:11px;}
-  /* 商店那三行在窄屏上得瘦一圈,不然浮层比画面还高,得滚动才看得全 */
-  .gh-veil{padding:10px;gap:7px;}
-  .gh-veil-title{font-size:17px;}
-  .gh-veil-sub{font-size:12px;line-height:1.5;}
-  .gh-shoplist{gap:6px;}
-  .gh-shopitem{padding:6px 8px;border-radius:13px;}
-  .gh-shopemoji{font-size:20px;}
-  .gh-shopname{font-size:13px;}
-  .gh-shopdesc{font-size:10px;}
-  .gh-buy{padding:6px 10px;font-size:12px;}
-}
-`;
-
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   cls?: string,
@@ -196,6 +112,39 @@ function button(cls: string, text: string): HTMLButtonElement {
   const b = el("button", cls, text);
   b.type = "button";
   return b;
+}
+
+/**
+ * 图标 + 文字两截的按钮。
+ *
+ * 420px 以下 CSS 会把 `.gdh-lb` 那一截收起来只留图标,底部那一行才塞得进 360px。
+ * 文字收起来了,`aria-label` 还留着完整的名字,读屏和长按提示都不受影响。
+ */
+function iconButton(cls: string, icon: string, label: string): HTMLButtonElement {
+  const b = button(cls, "");
+  const ic = el("span", "gdh-ic", icon);
+  const lb = el("span", "gdh-lb", label);
+  b.append(ic, lb);
+  b.setAttribute("aria-label", label);
+  return b;
+}
+
+/** 改这个按钮上那截会被收起来的文字（图标不动） */
+function setLabel(b: HTMLButtonElement, icon: string, label: string): void {
+  const ic = b.querySelector(".gdh-ic");
+  const lb = b.querySelector(".gdh-lb");
+  if (ic) ic.textContent = icon;
+  if (lb) lb.textContent = label;
+  b.setAttribute("aria-label", label);
+}
+
+/** 系统里关了动效吗（关了就不抖屏、不跳数） */
+function prefersCalm(): boolean {
+  try {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -259,40 +208,48 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   const pinned = new Set<number>();
   /** 双层晶剥壳进度：ore.id → 还剩几层 */
   const twin = new Map<number, TwinState>();
+  /** 这一颗泥泥矿已经拉了多久:头半秒不判打滑,不然「抓到就掉」像在耍赖 */
+  let heldFor = 0;
+  /** 系统里关了动效就别抖屏,径向渐变的照明圈本来就是静的,不受影响 */
+  const calm = prefersCalm();
 
-  const wrap = el("div", "gh-run");
-  const hud = el("div", "gh-hud");
-  const coinChip = el("span", "gh-chip");
-  const goalChip = el("span", "gh-chip gh-chip-goal");
-  const bar = el("div", "gh-bar");
-  const barFill = el("div", "gh-bar-fill");
-  const barTxt = el("span", "gh-bar-txt");
+  const wrap = el("div", "gdh-run");
+  // 顶部一行只放「金币 / 目标 / 剩余时间」三样,字号钉死 14px。
+  // 道具栏挪到底下和放绳按钮同一行去了 —— 360px 上四样挤一行必换行,一换行字就得缩。
+  const hud = el("div", "gdh-hud");
+  const coinChip = el("span", "gdh-chip");
+  const goalChip = el("span", "gdh-chip gdh-chip-goal");
+  const bar = el("div", "gdh-bar");
+  const barFill = el("div", "gdh-bar-fill");
+  const barTxt = el("span", "gdh-bar-txt");
   bar.append(barFill, barTxt);
-  const bagChip = el("span", "gh-chip gh-chip-bag");
-  hud.append(coinChip, goalChip, bar, bagChip);
+  hud.append(coinChip, goalChip, bar);
 
-  const box = el("div", "gh-box");
-  const canvas = el("canvas", "gh-cv");
+  const box = el("div", "gdh-box");
+  const canvas = el("canvas", "gdh-cv");
   canvas.width = FIELD_W * 2;
   canvas.height = FIELD_H * 2;
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "button");
   canvas.setAttribute("aria-label", "矿洞画面,点一下放绳");
-  const toast = el("div", "gh-toast");
-  const veil = el("div", "gh-veil");
+  const toast = el("div", "gdh-toast");
+  const veil = el("div", "gdh-veil");
   veil.hidden = true;
   box.append(canvas, toast, veil);
 
-  const ctrl = el("div", "gh-ctrl");
-  const fireBtn = button("gh-btn gh-btn-fire", "⬇️ 放绳");
-  const bombBtn = button("gh-btn gh-btn-bomb", "💥 炸药");
-  const shopBtn = button("gh-btn gh-btn-shop", "🛒 商店");
-  const pauseBtn = button("gh-btn", "⏸️ 暂停");
-  const doneBtn = button("gh-btn", "✅ 收工");
+  // 底部一行 = 放绳 + 道具栏。`gdh-lb` 那截文字在 420px 以下会收起来只留图标,
+  // 一行才塞得下;热区靠 CSS 的 min-height/min-width 钉在 44px,一格都不缩。
+  const ctrl = el("div", "gdh-ctrl");
+  const fireBtn = iconButton("gdh-btn gdh-btn-fire", "⬇️", "放绳");
+  const bombBtn = iconButton("gdh-btn gdh-btn-bomb", "💥", "炸药");
+  const kitChip = el("span", "gdh-kit");
+  const shopBtn = iconButton("gdh-btn gdh-btn-shop", "🛒", "商店");
+  const pauseBtn = iconButton("gdh-btn", "⏸️", "暂停");
+  const doneBtn = iconButton("gdh-btn", "✅", "收工");
   doneBtn.hidden = true;
-  ctrl.append(fireBtn, bombBtn, shopBtn, doneBtn, pauseBtn);
+  ctrl.append(fireBtn, bombBtn, kitChip, shopBtn, doneBtn, pauseBtn);
 
-  const tip = el("p", "gh-tip", o.hint);
+  const tip = el("p", "gdh-tip", o.hint);
   wrap.append(hud, box, ctrl, tip);
   host.appendChild(wrap);
 
@@ -540,16 +497,40 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     const r = lightRadius(o.depth);
     const g = c.createRadialGradient(PIVOT_X, PIVOT_Y + 90, r * 0.55, PIVOT_X, PIVOT_Y + 90, r * 1.5);
     g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(24,16,8,0.55)");
+    g.addColorStop(1, `rgba(24,16,8,${LIGHT_MAX_DIM})`);
     c.fillStyle = g;
-    c.fillRect(0, 96, FIELD_W, FIELD_H - 96);
+    // 只压 LIGHT_BAND_TOP 以下:上面那条是地面、绞盘台和悬挂点,压暗了连绳子从哪出来都看不清
+    c.fillRect(0, LIGHT_BAND_TOP, FIELD_W, FIELD_H - LIGHT_BAND_TOP);
+  }
+
+  /**
+   * 绳子。空钩时绷成直线,钩着东西时中段往下垂一点 ——
+   * 「这一钩很沉」除了拉得慢,还得有个一眼能看出来的样子。
+   * 垂的方向永远是屏幕的下方(重力方向),不跟着钩子角度转。
+   */
+  function drawRope(c: CanvasRenderingContext2D, tipPt: { x: number; y: number }): void {
+    const sag = carrying ? ropeSag(carrying.weight) : 0;
+    c.strokeStyle = "#8A6B45";
+    c.lineWidth = 2.4;
+    c.beginPath();
+    c.moveTo(PIVOT_X, PIVOT_Y);
+    if (sag <= 0.2) {
+      c.lineTo(tipPt.x, tipPt.y);
+    } else {
+      // 二次贝塞尔:控制点放在两端中点再往下推 2 倍垂度,曲线中点正好垂 sag
+      const mx = (PIVOT_X + tipPt.x) / 2;
+      const my = (PIVOT_Y + tipPt.y) / 2;
+      c.quadraticCurveTo(mx, my + sag * 2, tipPt.x, tipPt.y);
+    }
+    c.stroke();
   }
 
   function draw(): void {
     if (!c2d) return;
     const c = c2d;
     c.save();
-    if (shake > 0) c.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    // 关了动效就不抖屏。照明圈是静态径向渐变,本来就不闪,不用另外处理
+    if (shake > 0 && !calm) c.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
     c.clearRect(-8, -8, FIELD_W + 16, FIELD_H + 16);
 
     const g = c.createLinearGradient(0, 0, 0, FIELD_H);
@@ -591,13 +572,10 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     // 绳子与钩子
     const angle = phase === "swing" ? hookAngle(o.field, swingClock) : fireAngle;
     const tipPt = hookTip(angle, ropeLen);
-    c.strokeStyle = "#8A6B45";
-    c.lineWidth = 2.4;
-    c.beginPath();
-    c.moveTo(PIVOT_X, PIVOT_Y);
-    c.lineTo(tipPt.x, tipPt.y);
-    c.stroke();
-    if (carrying) drawOre(c, carrying, tipPt.x);
+    drawRope(c, tipPt);
+    // 钩住的那颗要跟着钩尖走。`drawOre` 用的是 ore.y,所以得临时把埋点换成钩尖,
+    // 不然拉的过程里矿石会一直留在原来那个坑里,只有绳子在动
+    if (carrying) drawOre(c, { ...carrying, y: tipPt.y + carrying.radius * 0.5 }, tipPt.x);
     c.save();
     c.translate(tipPt.x, tipPt.y);
     c.rotate((-angle * Math.PI) / 180);
@@ -633,19 +611,19 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
 
   function say(text: string): void {
     toast.textContent = text;
-    toast.classList.add("gh-on");
+    toast.classList.add("gdh-on");
     toastLeft = 1.6;
   }
 
   function refreshHud(): void {
     coinChip.textContent = `💰 ${wallet.coins}`;
     goalChip.textContent = `🎯 ${o.goal}`;
-    bagChip.textContent = `💥${wallet.bombs} 💪${wallet.strength} 🍀${wallet.luck}`;
     const ratio = Math.max(0, Math.min(1, timeLeft / Math.max(1, o.field.time)));
     barFill.style.width = `${ratio * 100}%`;
-    barFill.classList.toggle("gh-low", timeLeft <= 10);
+    barFill.classList.toggle("gdh-low", timeLeft <= 10);
     barTxt.textContent = `⏳ ${Math.ceil(Math.max(0, timeLeft))} 秒`;
-    bombBtn.textContent = `💥 炸药 ×${wallet.bombs}`;
+    kitChip.textContent = `💪${wallet.strength} 🍀${wallet.luck}`;
+    setLabel(bombBtn, `💥${wallet.bombs}`, `炸药 ${wallet.bombs} 个`);
     bombBtn.disabled = wallet.bombs <= 0 || !carrying;
     fireBtn.disabled = phase !== "swing";
     doneBtn.hidden = wallet.coins < o.goal || phase === "done";
@@ -753,17 +731,17 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     veil.hidden = false;
     veil.innerHTML = "";
     veil.append(
-      el("div", "gh-veil-title", "🛒 矿洞小商店"),
-      el("div", "gh-veil-sub", "花的是这一趟挖到的金币,买完记得再挖回来。")
+      el("div", "gdh-veil-title", "🛒 矿洞小商店"),
+      el("div", "gdh-veil-sub", "花的是这一趟挖到的金币,买完记得再挖回来。")
     );
-    const list = el("div", "gh-shoplist");
+    const list = el("div", "gdh-shoplist");
     const rows: Array<{ kind: ShopKind; btn: HTMLButtonElement }> = [];
     for (const kind of SHOP_KINDS) {
       const entry = SHOP[kind];
-      const row = el("div", "gh-shopitem");
-      const text = el("div", "gh-shoptext");
-      text.append(el("div", "gh-shopname", entry.label), el("div", "gh-shopdesc", entry.desc));
-      const btn = button("gh-buy", "");
+      const row = el("div", "gdh-shopitem");
+      const text = el("div", "gdh-shoptext");
+      text.append(el("div", "gdh-shopname", entry.label), el("div", "gdh-shopdesc", entry.desc));
+      const btn = button("gdh-buy", "");
       btn.addEventListener("click", () => {
         const owned = ownedOf(wallet, kind);
         const price = priceAt(kind, owned, o.priceChapter ?? 0);
@@ -780,12 +758,12 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
         refreshShop();
         refreshHud();
       });
-      row.append(el("div", "gh-shopemoji", entry.emoji), text, btn);
+      row.append(el("div", "gdh-shopemoji", entry.emoji), text, btn);
       list.appendChild(row);
       rows.push({ kind, btn });
     }
-    const purse = el("div", "gh-veil-sub", "");
-    const close = button("gh-btn gh-btn-fire", "接着挖 ▶");
+    const purse = el("div", "gdh-veil-sub", "");
+    const close = button("gdh-btn gdh-btn-fire", "接着挖 ▶");
     close.addEventListener("click", () => {
       o.sfx("tap");
       closeVeil();
@@ -811,14 +789,14 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     paused = true;
     veil.hidden = false;
     veil.innerHTML = "";
-    const back = button("gh-btn gh-btn-fire", "继续挖 ▶");
+    const back = button("gdh-btn gdh-btn-fire", "继续挖 ▶");
     back.addEventListener("click", () => {
       o.sfx("tap");
       closeVeil();
     });
     veil.append(
-      el("div", "gh-veil-title", "⏸️ 先歇一下"),
-      el("div", "gh-veil-sub", "时间也跟着停了,想好再继续。"),
+      el("div", "gdh-veil-title", "⏸️ 先歇一下"),
+      el("div", "gdh-veil-sub", "时间也跟着停了,想好再继续。"),
       back
     );
   }
@@ -877,7 +855,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     shake = Math.max(0, shake - dt * 22);
     if (toastLeft > 0) {
       toastLeft -= dt;
-      if (toastLeft <= 0) toast.classList.remove("gh-on");
+      if (toastLeft <= 0) toast.classList.remove("gdh-on");
     }
 
     timeLeft -= dt;
@@ -909,13 +887,20 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
         phase = "back";
         shake = 3;
         hitch = grabHitch(hit.weight);
+        heldFor = 0;
         o.sfx("tap");
       } else if (ropeExhausted(o.field, ropeLen, tipPt)) {
         phase = "back";
       }
     } else {
-      // 泥泥矿在半路可能滑脱:掉回原埋点,还能再钩一次(用炸药固定过就不滑)
-      if (carrying && carrying.kind === "muddy" && muddySlips(slipRng, dt, pinned.has(carrying.id))) {
+      // 泥泥矿在半路可能滑脱:掉回原埋点,还能再钩一次。
+      // 炸药固定过的不滑;刚钩上来的头半秒也不滑 —— 抓到就掉小朋友只会以为是耍赖
+      heldFor += dt;
+      if (
+        carrying &&
+        carrying.kind === "muddy" &&
+        muddySlips(slipRng, dt, pinned.has(carrying.id), heldFor)
+      ) {
         ores.push(carrying);
         ores.sort((a, b) => a.y - b.y);
         say("🟤 泥泥矿滑掉啦!先用炸药把它固定住");
@@ -993,9 +978,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
 function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { destroy: () => void } {
   const root = el("div");
-  const topbar = el("div", "gh-topbar");
-  const back = button("gh-btn", "↩️ 换模式");
-  const title = el("div", "gh-topbar-title", "♾️ 无尽矿井");
+  const topbar = el("div", "gdh-topbar");
+  const back = button("gdh-btn", "↩️ 换模式");
+  const title = el("div", "gdh-topbar-title", "♾️ 无尽矿井");
   topbar.append(back, title);
   const body = el("div");
   root.append(topbar, body);
@@ -1003,21 +988,48 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 
   let run: { destroy: () => void } | null = null;
   let depth = 1;
+  /** 真的下去过的最深一层(达标后 depth 会先加,拿它记纪录会多一层) */
+  let deepest = 1;
   let wallet: Wallet = emptyWallet(40);
+  /** 结算跳数那一段的 rAF,换面板和 destroy 时都要收掉 */
+  let tallyRaf = 0;
+  const calm = prefersCalm();
+  // 1.1 记的是金币,1.2 起记层深。第一次进来把 1.1 那个数搬进本款自己的新 key,
+  // 之后界面上显示的都是这一份,平台那个 endlessBest 只按规格继续写层深
+  let best: EndlessBest = loadEndlessBest(save.getGameProgress(meta.id).endlessBest);
+  saveEndlessBest(best);
+
+  function stopTally(): void {
+    if (tallyRaf) cancelAnimationFrame(tallyRaf);
+    tallyRaf = 0;
+  }
 
   function clearBody(): void {
+    stopTally();
     run?.destroy();
     run = null;
     body.innerHTML = "";
   }
 
-  function panel(titleText: string, subText: string, buttons: Array<{ label: string; go: () => void }>): void {
+  interface PanelOpts {
+    /** 结算金额:给了就在标题下面跳数,点一下立刻停在终值 */
+    tally?: { coins: number; caption: string };
+  }
+
+  function panel(
+    titleText: string,
+    subText: string,
+    buttons: Array<{ label: string; go: () => void }>,
+    opts: PanelOpts = {}
+  ): void {
     clearBody();
-    const box = el("div", "gh-modes");
-    box.append(el("div", "gh-modes-title", titleText), el("div", "gh-modes-sub", subText));
-    const row = el("div", "gh-cards");
+    const box = el("div", "gdh-modes");
+    box.append(el("div", "gdh-modes-title", titleText));
+    if (opts.tally) box.appendChild(tallyBlock(opts.tally.coins, opts.tally.caption));
+    box.appendChild(el("div", "gdh-modes-sub", subText));
+    const row = el("div", "gdh-cards");
     for (const b of buttons) {
-      const btn = button("gh-btn gh-btn-fire", b.label);
+      const btn = button("gdh-btn gdh-btn-fire", b.label);
       btn.addEventListener("click", () => {
         api.play("tap");
         b.go();
@@ -1028,12 +1040,54 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     body.appendChild(box);
   }
 
+  /**
+   * 金额跳数:`TALLY_MS`(640ms,规格上限是 800)走完,点一下立刻跳到终值。
+   * 系统里关了动效就直接显示终值,一帧都不跳。
+   */
+  function tallyBlock(coins: number, caption: string): HTMLElement {
+    const wrapper = el("div");
+    const line = el("div", "gdh-tally", `💰 ${calm ? coins : 0}`);
+    const hint = el("div", "gdh-tally-hint", calm ? caption : "点一下直接看总数");
+    wrapper.append(line, hint);
+    if (calm) return wrapper;
+
+    const t0 = performance.now();
+    const settle = (): void => {
+      stopTally();
+      line.textContent = `💰 ${coins}`;
+      hint.textContent = caption;
+    };
+    const tick = (now: number): void => {
+      const ms = now - t0;
+      line.textContent = `💰 ${tallyValue(coins, ms)}`;
+      if (ms >= TALLY_MS) {
+        settle();
+        return;
+      }
+      tallyRaf = requestAnimationFrame(tick);
+    };
+    tallyRaf = requestAnimationFrame(tick);
+    line.addEventListener("click", settle);
+    wrapper.addEventListener("click", settle);
+    return wrapper;
+  }
+
+  /** 一趟结束:层深进平台纪录,金币进本款自己那份,两个都只增不减 */
+  function recordRun(reachedDepth: number, coins: number): void {
+    save.recordEndlessBest(meta.id, reachedDepth);
+    best = mergeEndlessBest(best, reachedDepth, coins);
+    saveEndlessBest(best);
+  }
+
   function endRun(reason: string): void {
     const score = wallet.coins;
-    const best = save.recordEndlessBest(meta.id, score);
+    // 记的是「真的下去过的最深那一层」。达标之后 depth 就先加上了,
+    // 这时候选「收工上井」其实没进过新那一层,拿 depth 记会多算一层
+    const reached = Math.max(1, deepest);
+    recordRun(reached, score);
     panel(
-      depth > 1 ? `⛏️ 下潜到第 ${depth} 层` : "⛏️ 收工上井",
-      `${reason}这一趟一共带回 ${score} 金币,历史最好 ${best} 金币。`,
+      reached > 1 ? `⛏️ 下潜到第 ${reached} 层` : "⛏️ 收工上井",
+      `${reason}${bestLine(best)}`,
       [
         {
           label: "🔁 再挖一趟",
@@ -1045,7 +1099,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
           },
         },
         { label: "↩️ 换模式", go: onExit },
-      ]
+      ],
+      { tally: { coins: score, caption: `这一趟一共带回 ${score} 金币。` } }
     );
   }
 
@@ -1068,6 +1123,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
   function startLayer(): void {
     clearBody();
     const layer: EndlessLayer = endlessLayer(depth);
+    deepest = Math.max(deepest, depth);
     title.textContent = `♾️ 第 ${depth} 层 · ${layer.name}`;
     run = runField(body, {
       field: layer.field,
@@ -1091,11 +1147,12 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
           const next = endlessLayer(depth);
           panel(
             `✅ 第 ${cleared} 层达标!`,
-            `这一层净赚 ${r.gained} 金币,钱包里现在有 ${wallet.coins} 金币。往下是第 ${depth} 层「${next.name}」,配额 ${next.quota} 金币。`,
+            `这一层净赚 ${r.gained} 金币。往下是第 ${depth} 层「${next.name}」,配额 ${next.quota} 金币。`,
             [
               { label: "⛏️ 继续下潜", go: startLayer },
               { label: "🧺 收工上井", go: () => endRun("见好就收!") },
-            ]
+            ],
+            { tally: { coins: wallet.coins, caption: `钱包里现在有 ${wallet.coins} 金币。` } }
           );
         } else {
           api.play("oops");
@@ -1110,12 +1167,9 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     onExit();
   });
 
-  const bestNow = save.getGameProgress(meta.id).endlessBest;
   panel(
     "♾️ 无尽矿井",
-    bestNow > 0
-      ? `一层一层往下挖,挖够配额才能继续下潜。道具和金币会一路带下去。历史最好 ${bestNow} 金币。`
-      : "一层一层往下挖,挖够配额才能继续下潜。道具和金币会一路带下去,看你能到第几层。",
+    `一层一层往下挖,挖够配额才能继续下潜。道具和金币会一路带下去,越深越暗,每挖穿五层有一次三选一的补给。${bestLine(best)}`,
     [{ label: "⛏️ 开挖", go: startLayer }]
   );
 
@@ -1132,7 +1186,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 // ---------------------------------------------------------------------------
 
 export function mount(api: GameApi): { destroy: () => void } {
-  const root = el("div", "gh-wrap");
+  const root = el("div", "gdh-wrap");
   const style = el("style");
   style.textContent = CSS;
   const home = el("div");
@@ -1149,34 +1203,38 @@ export function mount(api: GameApi): { destroy: () => void } {
     modeHost.hidden = true;
     home.hidden = false;
     home.innerHTML = "";
-    const box = el("div", "gh-modes");
+    const box = el("div", "gdh-modes");
     box.append(
-      el("div", "gh-modes-title", "⛏️ 金矿钩钩"),
+      el("div", "gdh-modes-title", "⛏️ 金矿钩钩"),
       el(
         "div",
-        "gh-modes-sub",
+        "gdh-modes-sub",
         "钩子在矿洞顶来回摆,看准角度按「放绳」。重的东西拉得慢,挖到的金币能在商店换炸药、力量水和幸运石。"
       )
     );
-    const cards = el("div", "gh-cards");
-    const best = save.getGameProgress(meta.id).endlessBest;
+    const cards = el("div", "gdh-cards");
+    const best = loadEndlessBest(save.getGameProgress(meta.id).endlessBest);
 
-    const campaignCard = button("gh-card", "");
+    const campaignCard = button("gdh-card", "");
     campaignCard.append(
-      el("div", "gh-card-emoji", "🚩"),
-      el("div", "gh-card-name", "闯关矿洞"),
-      el("div", "gh-card-sub", `八条矿脉共 188 关,每关一个金币目标。`)
+      el("div", "gdh-card-emoji", "🚩"),
+      el("div", "gdh-card-name", "闯关矿洞"),
+      el("div", "gdh-card-sub", `八条矿脉共 188 关,每关一个金币目标。`)
     );
     campaignCard.addEventListener("click", () => {
       api.play("tap");
       openCampaign();
     });
 
-    const endlessCard = button("gh-card", "");
+    const endlessCard = button("gdh-card", "");
     endlessCard.append(
-      el("div", "gh-card-emoji", "♾️"),
-      el("div", "gh-card-name", "无尽矿井"),
-      el("div", "gh-card-sub", best > 0 ? `矿层无限下探,最好成绩 ${best} 金币。` : "矿层无限下探,看你能挖到第几层。")
+      el("div", "gdh-card-emoji", "♾️"),
+      el("div", "gdh-card-name", "无尽矿井"),
+      el(
+        "div",
+        "gdh-card-sub",
+        best.depth > 0 ? `矿层无限下探,最深挖到过第 ${best.depth} 层。` : "矿层无限下探,看你能挖到第几层。"
+      )
     );
     endlessCard.addEventListener("click", () => {
       api.play("tap");
@@ -1195,9 +1253,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     modeHost.hidden = false;
     modeHost.innerHTML = "";
 
-    const topbar = el("div", "gh-topbar");
-    const back = button("gh-btn", "↩️ 换模式");
-    topbar.append(back, el("div", "gh-topbar-title", "🚩 闯关矿洞 · 188 关"));
+    const topbar = el("div", "gdh-topbar");
+    const back = button("gdh-btn", "↩️ 换模式");
+    topbar.append(back, el("div", "gdh-topbar-title", "🚩 闯关矿洞 · 188 关"));
     const levelHost = el("div");
     modeHost.append(topbar, levelHost);
 

@@ -53,6 +53,23 @@ export function haulIsSlowerThanEmpty(weight: number, strength = 0): boolean {
   return weight <= 0 || retractSpeed(weight, strength) < emptyRetractSpeed();
 }
 
+/**
+ * 绳子中段垂下来多少像素。
+ *
+ * 空钩绷直，钩着东西才垂；越重垂得越多，但收敛到 `ROPE_SAG_MAX`，
+ * 再重也不会垂到把下面的矿石挡住。这是「拉得沉」这件事唯一的视觉出口 ——
+ * 速度慢是要盯着秒表才看得出来的，绳子弯了是一眼就看得出来的。
+ */
+export const ROPE_SAG_MAX = 10;
+/** 垂度的换算单位：重量等于它时垂到最大值的一半 */
+export const ROPE_SAG_UNIT = 14;
+
+export function ropeSag(weight: number): number {
+  const w = Math.max(0, Number.isFinite(weight) ? weight : 0);
+  if (w <= 0) return 0;
+  return (ROPE_SAG_MAX * w) / (w + ROPE_SAG_UNIT);
+}
+
 /* ---------------- 二、矿洞纵深（三层视差） ---------------- */
 
 export type ParallaxLayer = "wall" | "seam" | "cavern";
@@ -186,8 +203,22 @@ export const NEW_ORES: Record<NewOreKind, NewOreSpec> = {
   },
 };
 
-/** 泥泥矿每秒打滑的概率（拉得越久越容易滑，所以按秒判） */
-export const MUDDY_SLIP_PER_SEC = 0.35;
+/**
+ * 泥泥矿的打滑速率（每秒）。
+ *
+ * 走**指数**模型：拉了 t 秒还没滑掉的概率是 `e^(-rate*t)`。选它的理由是
+ * 「每一帧独立掷一次」这件事在数学上就等价于指数分布 —— 逐帧实现
+ * (`muddySlips`) 和给关卡设计估算用的闭式公式 (`muddySlipChance`) 因此是
+ * 同一条曲线，不会出现「测试算出来四成、真玩起来六成」的两套数。
+ */
+export const MUDDY_SLIP_PER_SEC = 0.15;
+/**
+ * 刚钩上来的这一小段不判滑。
+ *
+ * 没有它的话会出现「钩到的瞬间就掉了」，小朋友根本来不及理解发生了什么，
+ * 只会觉得是游戏在耍赖。给半秒，让「抓住了」先成立，再谈会不会滑。
+ */
+export const MUDDY_SLIP_GRACE = 0.5;
 
 /** 一小段可复现随机 */
 export function makeHookRng(seed: number): () => number {
@@ -202,17 +233,25 @@ export function makeHookRng(seed: number): () => number {
   };
 }
 
-/** 泥泥矿这一帧滑不滑手：炸药固定过就永远不滑 */
-export function muddySlips(rand: () => number, dt: number, pinned: boolean): boolean {
+/**
+ * 泥泥矿这一帧滑不滑手。
+ *
+ * 炸药固定过就永远不滑；刚钩上来的 `MUDDY_SLIP_GRACE` 秒内也不滑。
+ * `heldFor` 是已经拉了多久（秒），不传就当早过了宽限期。
+ */
+export function muddySlips(rand: () => number, dt: number, pinned: boolean, heldFor = Infinity): boolean {
   if (pinned) return false;
-  return rand() < MUDDY_SLIP_PER_SEC * Math.max(0, dt);
+  if (heldFor < MUDDY_SLIP_GRACE) return false;
+  const step = Math.max(0, dt);
+  if (step <= 0) return false;
+  return rand() < 1 - Math.exp(-MUDDY_SLIP_PER_SEC * step);
 }
 
-/** 拉 seconds 秒里滑掉的概率（给关卡设计与测试估算用） */
+/** 拉 seconds 秒里滑掉的概率（给关卡设计与测试估算用，和逐帧实现是同一条曲线） */
 export function muddySlipChance(seconds: number, pinned = false): number {
   if (pinned) return 0;
-  const t = Math.max(0, seconds);
-  return 1 - Math.pow(1 - Math.min(1, MUDDY_SLIP_PER_SEC), t);
+  const t = Math.max(0, seconds - MUDDY_SLIP_GRACE);
+  return 1 - Math.exp(-MUDDY_SLIP_PER_SEC * t);
 }
 
 export interface TwinState {
@@ -230,11 +269,19 @@ export function twinGrab(state: TwinState): { state: TwinState; taken: boolean }
   return { state: { layers }, taken: layers === 0 };
 }
 
-/** 剥了壳还没拿走的那一颗，价钱按比例给一部分（不能白剥） */
+/**
+ * 双层晶已经到手多少钱。
+ *
+ * 剥壳和取芯**对半分**，不能白剥一趟。这个比例不是随便定的：`index.ts` 每钩中一次
+ * 就按 `ORES.twinCrystal.value` 发一次钱，钩两次正好是 `NEW_ORES.twinCrystal.value`
+ * 的全价，所以这里必须跟着是二分之一，否则同一颗矿会有两套价目表。
+ */
+export const TWIN_SHELL_SHARE = 0.5;
+
 export function twinValue(state: TwinState): number {
   const full = NEW_ORES.twinCrystal.value;
   if (state.layers <= 0) return full;
-  if (state.layers === 1) return Math.round(full * 0.35);
+  if (state.layers === 1) return Math.round(full * TWIN_SHELL_SHARE);
   return 0;
 }
 
@@ -250,9 +297,25 @@ export const LIGHT_STEP = 7;
  */
 export const LIGHT_MIN = 150;
 
+/**
+ * 照明圈最外圈的黑度。**再深也不许压成全黑** ——
+ * 矿洞画面里除了钩子还有矿石要认，看不见就只剩瞎钩了。
+ */
+export const LIGHT_MAX_DIM = 0.55;
+/**
+ * 照明圈从这条线往下画。上面那一条是地面、绞盘台和朵朵星星，
+ * 也是钩子悬挂点所在的那一带 —— 压暗了连绳子从哪儿出来都看不清。
+ */
+export const LIGHT_BAND_TOP = 96;
+
 export function lightRadius(depth: number): number {
   const n = Math.max(1, Math.round(depth));
   return Math.max(LIGHT_MIN, LIGHT_BASE - LIGHT_STEP * (n - 1));
+}
+
+/** 到第几层照明圈就收到下限了（再深也不会更暗，深度曲线是「先收后平」） */
+export function lightFloorDepth(): number {
+  return Math.ceil((LIGHT_BASE - LIGHT_MIN) / LIGHT_STEP) + 1;
 }
 
 /** 每几层给一次补给 */
@@ -300,3 +363,31 @@ export function applySupply(wallet: Wallet, option: SupplyOption): Wallet {
   }
   return { ...wallet, luck: Math.min(MAX_LUCK, wallet.luck + option.amount) };
 }
+
+/* ---------------- 六、结算跳数与版面下限 ---------------- */
+
+/**
+ * 结算时金额跳数动画的时长（毫秒）。规格给的上限是 800，这里取 640 ——
+ * 跳数是「看自己赚了多少」的爽点，不是过场，拖满 800 反而像卡住了。
+ */
+export const TALLY_MS = 640;
+
+/**
+ * 跳数动画走到第 `ms` 毫秒时该显示的数。
+ *
+ * 缓出曲线：一上来跳得飞快，收尾慢下来停在终值。整段走完一定**精确**等于 total，
+ * 不会因为浮点误差差个一两块钱 —— 结算数字对不上是最伤信任的。
+ */
+export function tallyValue(total: number, ms: number, duration = TALLY_MS): number {
+  const end = Math.round(total);
+  const d = Math.max(1, duration);
+  if (!(ms > 0)) return 0;
+  if (ms >= d) return end;
+  const p = ms / d;
+  return Math.round(end * (1 - (1 - p) * (1 - p)));
+}
+
+/** 顶部那行「金币 / 目标 / 剩余时间」的最小字号（px）：360px 上也不许再小 */
+export const HUD_MIN_FONT = 14;
+/** 底部一行「放绳 + 道具栏」的最小热区（px）：小手也要点得中 */
+export const TOUCH_MIN = 44;
