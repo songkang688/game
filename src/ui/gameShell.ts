@@ -8,6 +8,54 @@ import { isBgmOn, playSound, toggleBgm } from "../engine/audio";
 import { showResultDialog, type DialogHandle } from "./dialogs";
 import { createDuoPair } from "./avatars";
 import { recordRecent } from "./recent";
+import { registerLevelExtras } from "./level188Contract";
+import { loadGuideBook, mountGuide, readCurrentLevel } from "./guide";
+
+// ---------------------------------------------------------------------------
+// 关卡框架的两个外挂能力:攻略侧栏(本档实现)与跳关授权(家长高权限门)
+// ---------------------------------------------------------------------------
+
+/** 游戏 id → 中文名,给家长看的授权说明用(壳层每次挂载时补一条) */
+const gameTitles = new Map<string, string>();
+
+// 家长高权限门 `src/ui/parentAuth.ts` 由另一档提供,可能还没合进来。
+// 用 glob 懒加载而不是写死的动态 import:文件不在时 glob 返回空表,
+// 构建期不会报「模块找不到」,运行期直接判定为"无授权能力"。
+const parentAuthModules = import.meta.glob("./parentAuth.ts") as Record<
+  string,
+  () => Promise<unknown>
+>;
+
+interface ParentAuthModule {
+  requestParentAuth: (level: "basic" | "high", reason: string) => Promise<boolean>;
+}
+
+async function loadParentAuth(): Promise<ParentAuthModule | null> {
+  const loader = parentAuthModules["./parentAuth.ts"];
+  if (!loader) return null;
+  const mod = await loader().catch(() => null);
+  if (!mod || typeof (mod as ParentAuthModule).requestParentAuth !== "function") return null;
+  return mod as ParentAuthModule;
+}
+
+/** 跳关授权说明(level 与关卡框架一致,0 基;显示时 +1) */
+export function skipReason(gameId: string, level: number): string {
+  const title = gameTitles.get(gameId) ?? gameId;
+  return `孩子想跳过《${title}》第 ${level + 1} 关,需要家长确认`;
+}
+
+/** 请求跳关授权:家长高权限门通过才返回 true;门还没接上时一律不放行 */
+export async function requestSkip(gameId: string, level: number): Promise<boolean> {
+  const m = await loadParentAuth();
+  if (!m) return false;
+  try {
+    return (await m.requestParentAuth("high", skipReason(gameId, level))) === true;
+  } catch {
+    return false;
+  }
+}
+
+registerLevelExtras({ mountGuide, requestSkip });
 
 export function mountGameScreen(
   container: HTMLElement,
@@ -72,8 +120,14 @@ export function mountGameScreen(
     renderBgm();
   });
 
-  topbar.append(backBtn, title, duoPair, bgmBtn, starChip);
+  // 攻略按钮的位置(有攻略数据才会被填上,没有就是个空占位)
+  const guideSlot = document.createElement("div");
+  guideSlot.className = "guide-slot";
+
+  topbar.append(backBtn, title, duoPair, bgmBtn, guideSlot, starChip);
   screen.appendChild(topbar);
+
+  gameTitles.set(game.meta.id, game.meta.title);
 
   // ---- 舞台 ----
   const stage = document.createElement("div");
@@ -86,6 +140,13 @@ export function mountGameScreen(
   // 异步加载防竞态:每次 start 领一个序号,过期(重开/离开)的结果直接丢弃
   let startSeq = 0;
   let disposed = false;
+
+  // 攻略数据是每款游戏自己的 `guide.ts`,没有这个模块就静默不显示攻略按钮
+  let guideCleanup: (() => void) | null = null;
+  void loadGuideBook(game.meta.id).then((book) => {
+    if (!book || disposed) return;
+    guideCleanup = mountGuide(guideSlot, book, () => readCurrentLevel(game.meta.id));
+  });
 
   function closeDialog(): void {
     dialog?.close();
@@ -179,6 +240,8 @@ export function mountGameScreen(
     disposed = true;
     closeDialog();
     unmount();
+    guideCleanup?.();
+    guideCleanup = null;
     unsubscribe();
     screen.remove();
   };
