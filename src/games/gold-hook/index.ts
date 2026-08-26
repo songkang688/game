@@ -60,6 +60,7 @@ import {
   type TwinState,
 } from "./depth12";
 import { CSS } from "./style";
+import { bombLine, haulLine, slipLine, twinLine } from "./copy";
 import { bestLine, loadEndlessBest, mergeEndlessBest, saveEndlessBest, type EndlessBest } from "./endlessBest";
 
 // ---------------------------------------------------------------------------
@@ -212,6 +213,12 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   let heldFor = 0;
   /** 系统里关了动效就别抖屏,径向渐变的照明圈本来就是静的,不受影响 */
   const calm = prefersCalm();
+  /**
+   * 炸药撒出来的彩纸。**这是「炸药」在画面上的全部内容** ——
+   * 没有火光、没有冲击波,就是一把花花绿绿的纸片飘下去,
+   * 和生日会拉炮一个意思。
+   */
+  const confetti: Array<{ x: number; y: number; vx: number; vy: number; life: number; hue: string }> = [];
 
   const wrap = el("div", "gdh-run");
   // 顶部一行只放「金币 / 目标 / 剩余时间」三样,字号钉死 14px。
@@ -525,6 +532,54 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     c.stroke();
   }
 
+  /** 彩纸的颜色:全是粉彩,没有一格是火焰色 */
+  const CONFETTI_HUES = ["#FF9EC4", "#FFD166", "#8FBEF5", "#9AD07C", "#C9A7F0", "#FFB38A"];
+
+  /** 在钩尖那儿撒一把彩纸 */
+  function popConfetti(): void {
+    const at = hookTip(fireAngle, ropeLen);
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2 + Math.random() * 0.3;
+      const speed = 40 + Math.random() * 70;
+      confetti.push({
+        x: at.x,
+        y: at.y,
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed - 30,
+        life: 0.7 + Math.random() * 0.4,
+        hue: CONFETTI_HUES[i % CONFETTI_HUES.length],
+      });
+    }
+  }
+
+  function stepConfetti(dt: number): void {
+    for (let i = confetti.length - 1; i >= 0; i--) {
+      const p = confetti[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        confetti.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      // 纸片很轻,飘下去而不是砸下去
+      p.vy += 120 * dt;
+      p.vx *= 0.96;
+    }
+  }
+
+  function drawConfetti(c: CanvasRenderingContext2D): void {
+    for (const p of confetti) {
+      c.save();
+      c.globalAlpha = Math.max(0, Math.min(1, p.life * 1.6));
+      c.fillStyle = p.hue;
+      c.translate(p.x, p.y);
+      c.rotate(p.x * 0.08);
+      c.fillRect(-2.5, -1.5, 5, 3);
+      c.restore();
+    }
+  }
+
   function draw(): void {
     if (!c2d) return;
     const c = c2d;
@@ -601,6 +656,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       c.stroke();
       c.restore();
     }
+    drawConfetti(c);
     drawLight(c);
     c.restore();
   }
@@ -644,19 +700,17 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   function bomb(): void {
     if (paused || phase !== "back" || !carrying || wallet.bombs <= 0) return;
     wallet = useBomb(wallet);
-    if (carrying.kind === "muddy") {
+    const kind = carrying.kind;
+    if (kind === "muddy") {
       // 泥泥矿不炸掉,而是把外面那层泥「砰」一下震掉,接下来这一颗再也不滑
       pinned.add(carrying.id);
-      shake = 5;
-      o.sfx("pop");
-      say("💥 泥震掉啦!这颗泥泥矿不会再滑");
-      refreshHud();
-      return;
+    } else {
+      carrying = null;
     }
-    carrying = null;
     shake = 5;
+    popConfetti();
     o.sfx("pop");
-    say("💥 炸开了!空钩收得飞快");
+    say(bombLine(kind));
     refreshHud();
   }
 
@@ -688,24 +742,17 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       if (!next.taken) {
         ores.push(carrying);
         ores.sort((a, b) => a.y - b.y);
-        say(`🔷 外壳裂开啦 +${got} 金币,里面的晶芯再钩一次!`);
-      } else {
-        say(`🔷 双层晶到手 +${got} 金币!`);
       }
+      say(twinLine(got, next.taken));
       carrying = null;
       return;
     }
 
     const got = haulValue(carrying, wallet.luck);
     wallet = { ...wallet, coins: wallet.coins + got };
-    const label = ORES[carrying.kind].label;
-    if (ORES[carrying.kind].treasure) {
-      o.sfx("coin");
-      say(`${ORES[carrying.kind].emoji} ${label} +${got} 金币`);
-    } else {
-      o.sfx("oops");
-      say(`${ORES[carrying.kind].emoji} ${label} 只值 ${got} 金币…`);
-    }
+    const profile = ORES[carrying.kind];
+    o.sfx(profile.treasure ? "coin" : "oops");
+    say(haulLine(carrying.kind, profile.label, profile.emoji, got, profile.treasure));
     carrying = null;
   }
 
@@ -853,6 +900,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
 
     worldClock += dt;
     shake = Math.max(0, shake - dt * 22);
+    stepConfetti(dt);
     if (toastLeft > 0) {
       toastLeft -= dt;
       if (toastLeft <= 0) toast.classList.remove("gdh-on");
@@ -903,7 +951,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       ) {
         ores.push(carrying);
         ores.sort((a, b) => a.y - b.y);
-        say("🟤 泥泥矿滑掉啦!先用炸药把它固定住");
+        say(slipLine());
         o.sfx("oops");
         carrying = null;
       }
