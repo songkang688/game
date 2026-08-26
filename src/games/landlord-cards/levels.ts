@@ -124,8 +124,8 @@ export const LEVELS: TowerLevel[] = Array.from({ length: TOWER_TOP }, (_, i) => 
 export function dealForLevel(lv: TowerLevel): DealResult & { playerSeat: number; landlord: number } {
   const d = dealCards(lv.seed);
   const order = [0, 1, 2].sort((a, b) => handStrength(d.hands[b]) - handStrength(d.hands[a]));
-  // boost=2 拿最强的一手,boost=1 拿中间那手,boost=0 拿最弱的那手(真刀真枪)
-  const playerSeat = order[2 - lv.boost];
+  // boost=2 把最好的一手给玩家,boost=1 给中间那手,boost=0 不做任何安排(按种子落座,发到什么算什么)
+  const playerSeat = lv.boost === 0 ? lv.seed % 3 : order[2 - lv.boost];
   const landlord = lv.playerIsLandlord ? playerSeat : (playerSeat + 1) % 3;
   return { ...d, playerSeat, landlord };
 }
