@@ -2,8 +2,27 @@
 //
 // 1.1 起总关数 99 → 188：前 99 关（前 6 章）的章节切分、seed、生成参数逐字未动，
 // 新的 4 章共 89 关只在末尾追加，面向约小学六年级，允许多步推理。
+//
+// 1.2 只动第 100–188 关：补齐题型（分类归纳 / 挑展开图 / 复合变换 / 多步坐标）、
+// 给每道题写上「推理步数」与三级提示、几何结论一律改从 `geometry.ts` / `nets.ts` 求，
+// 图形改用 `figures.ts` 的精确顶点与等距斜投影。
+// **前 6 章的分支、seed、生成参数一个字都没动**，`upgrade12.test.ts` 用 99 个逐关指纹钉死。
 import { TOTAL_LEVELS, mulberry32, pick, randInt, shuffled, chapterOf, indexInChapter, type Chapter } from "../level99";
 import type { QuizQuestion, QuizTheme } from "../quiz99";
+import {
+  cellSet,
+  compositeArea,
+  lShapeCells,
+  notchCells,
+  notchPerimeter,
+  polyominoArea,
+  polyominoPerimeter,
+  rectCells,
+  stackedCells,
+} from "./geometry";
+import { exactAxisCount, exactShapeSVG, gridFigureSVG, isoSolidSVG } from "./figures";
+import { cubeNetSVG, cubeNets, nonCubeNets } from "./nets";
+import { safeHints, trio, type HintTrio } from "./hints";
 import {
   COLOR_NAMES,
   COLOR_VALUES,
@@ -100,12 +119,59 @@ export type AdvancedShapeQKind =
   | "solid"
   | "net"
   | "coord"
-  | "path";
+  | "path"
+  // ↓ 1.2 新增
+  | "classify"
+  | "netpick"
+  | "symsum"
+  | "transform"
+  | "solidcalc"
+  | "coordmove";
 export type ShapeQKind = LegacyShapeQKind | AdvancedShapeQKind;
 
 export interface ShapeQ extends QuizQuestion {
   kind: ShapeQKind;
   answer: string;
+  /**
+   * 这道题要推几步（1.2 新增）。**只有第 100–188 关才有**：
+   * 前 99 关的题目对象一个键都不多，快照才钉得死。
+   */
+  steps?: 1 | 2 | 3;
+  /** 三级提示（同样只给第 100–188 关）；任何一级都不含答案 */
+  hints?: HintTrio;
+}
+
+/** 每种进阶题型最多能撑到几步推理（难度曲线按它裁剪） */
+export const MAX_STEPS: Record<AdvancedShapeQKind, 1 | 2 | 3> = {
+  perimeter: 3,
+  area: 3,
+  symmetry: 1,
+  mirror: 1,
+  rotate: 3,
+  solid: 2,
+  net: 1,
+  coord: 1,
+  path: 3,
+  classify: 3,
+  netpick: 2,
+  symsum: 3,
+  transform: 3,
+  solidcalc: 3,
+  coordmove: 3,
+};
+
+/**
+ * 本关的推理步数目标：前 6 章一律 1 步（契约冻结），
+ * 后 4 章按章内位置走难度曲线——前 1/3 单步、中 1/3 两步、后 1/3 三步。
+ */
+export function stepsForLevel(level: number): 1 | 2 | 3 {
+  const ci = chapterOf(CHAPTERS, level);
+  if (ci < LEGACY_CHAPTER_COUNT) return 1;
+  const idx = indexInChapter(CHAPTERS, level);
+  const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
+  if (t < 1 / 3) return 1;
+  if (t < 2 / 3) return 2;
+  return 3;
 }
 
 function pickDistinct<T>(arr: readonly T[], n: number, rand: () => number, exclude: T[]): T[] {
@@ -315,52 +381,118 @@ function unitChoices(rand: () => number, answer: number, unit: string, deltas: n
   return { choices: arr.map((v) => `${v} ${unit}`), correct: arr.indexOf(answer), answer: label };
 }
 
-/** 周长题：长方形或缺角 L 形 */
-function qPerimeter(rand: () => number, t: number): ShapeQ {
-  const useL = t > 0.5 && rand() < 0.45;
-  const w = randInt(rand, 4, t < 0.5 ? 9 : 14);
-  const h = randInt(rand, 2, t < 0.5 ? 7 : 10);
-  if (useL) {
+/**
+ * 周长题。步数决定图形：
+ *  1 步 —— 长方形，套公式；
+ *  2 步 —— 缺一个角的 L 形，要先想明白「缺角不改变周长」再套公式；
+ *  3 步 —— 边中间啃了一个凹槽，先算大长方形周长、再数凹槽深度、再补上两条竖边。
+ */
+function qPerimeter(rand: () => number, t: number, steps: 1 | 2 | 3): ShapeQ {
+  if (steps >= 3) {
+    const w = randInt(rand, 5, 9);
+    const h = randInt(rand, 3, 6);
+    const notchW = randInt(rand, 1, Math.max(1, w - 4));
+    const notchH = randInt(rand, 1, Math.max(1, h - 2));
+    const atC = randInt(rand, 1, w - notchW - 1);
+    const cells = notchCells(w, h, notchW, notchH, atC);
+    const value = polyominoPerimeter(cells);
+    const { choices, correct, answer } = unitChoices(rand, value, "厘米", [2, 4, notchH * 2, w, h]);
+    return {
+      kind: "perimeter", answer, steps,
+      promptHTML: gridFigureSVG(cells, { fig: "notch", fill: "#ffd8a8", stroke: "#e8590c" }),
+      ask: "沿着边走一圈有多长？",
+      choices, correct,
+      hints: trio(
+        "先想清楚：周长是沿着边界走一圈的长度，凹进去的那几段也得走。",
+        "先按没有缺口的大长方形算 （长 + 宽）× 2，再补上凹槽两侧多出来的两条竖边。",
+        `没有凹槽时这个长方形的周长是 ${rectPerimeter(w, h)} 厘米，接着数凹槽有多深。`
+      ),
+    };
+  }
+  if (steps === 2) {
+    const w = randInt(rand, 4, 12);
+    const h = randInt(rand, 3, 8);
     const cutW = randInt(rand, 1, Math.max(1, w - 2));
     const cutH = randInt(rand, 1, Math.max(1, h - 1));
     const value = lShapePerimeter(w, h);
     const { choices, correct, answer } = unitChoices(rand, value, "厘米", [2, 4, cutW * 2, cutH * 2, 6]);
     return {
-      kind: "perimeter", answer,
+      kind: "perimeter", answer, steps,
       promptHTML: lFigSVG(w, h, cutW, cutH),
       ask: "沿着边走一圈有多长？",
       choices, correct,
+      hints: trio(
+        "先想周长是绕一圈，再看看缺掉的那一角有没有把「一圈」变长或者变短。",
+        "把缺口的两条边平移回去，正好补成原来的长方形：周长 = （长 + 宽）× 2。",
+        `补回去以后长是 ${w} 厘米、宽是 ${h} 厘米，长加宽先算出来是 ${w + h}。`
+      ),
     };
   }
+  const w = randInt(rand, 4, t < 0.5 ? 9 : 14);
+  const h = randInt(rand, 2, t < 0.5 ? 7 : 10);
   const value = rectPerimeter(w, h);
   const { choices, correct, answer } = unitChoices(rand, value, "厘米", [2, 4, w, h, 10]);
   return {
-    kind: "perimeter", answer,
+    kind: "perimeter", answer, steps,
     promptHTML: rectFigSVG(w, h),
     ask: "这个长方形的周长是多少？",
     choices, correct,
+    hints: trio(
+      "先想周长是绕一圈：四条边都要走到，不是只走两条。",
+      "长方形周长 = （长 + 宽）× 2。",
+      `图上长是 ${w} 厘米、宽是 ${h} 厘米，长加宽先算出来是 ${w + h}。`
+    ),
   };
 }
 
-/** 面积题：长方形 / 直角三角形 / 缺角 L 形 */
-function qArea(rand: () => number, t: number): ShapeQ {
-  const form = t < 0.35 ? 0 : randInt(rand, 0, 2);
-  if (form === 1) {
-    // 直角三角形：保证底 × 高是偶数，面积一定是整数
-    let base = randInt(rand, 3, 12);
-    let height = randInt(rand, 2, 9);
-    if ((base * height) % 2 !== 0) height = height + 1 <= 10 ? height + 1 : height - 1;
-    if ((base * height) % 2 !== 0) base = base + 1;
-    const value = triangleArea(base, height);
-    const { choices, correct, answer } = unitChoices(rand, value, "平方厘米", [base, height, 2, base * height - value]);
+/**
+ * 面积题。步数决定图形：
+ *  1 步 —— 长方形；
+ *  2 步 —— 直角三角形（先算长方形再对半）或缺角 L 形（先整块再减缺口）；
+ *  3 步 —— 上下两块拼起来的组合图形，分别算完再相加。
+ */
+function qArea(rand: () => number, t: number, steps: 1 | 2 | 3): ShapeQ {
+  if (steps >= 3) {
+    const topW = randInt(rand, 2, 4);
+    const topH = randInt(rand, 1, 3);
+    const bottomW = randInt(rand, topW + 1, topW + 4);
+    const bottomH = randInt(rand, 1, 3);
+    const cells = stackedCells(topW, topH, bottomW, bottomH);
+    const value = compositeArea([{ w: topW, h: topH }, { w: bottomW, h: bottomH }]);
+    const { choices, correct, answer } = unitChoices(rand, value, "平方厘米", [topW * topH, bottomW * bottomH, 2, 3]);
     return {
-      kind: "area", answer,
-      promptHTML: triFigSVG(base, height),
-      ask: "这个三角形的面积是多少？",
+      kind: "area", answer, steps,
+      promptHTML: gridFigureSVG(cells, { fig: "comp", fill: "#b2f2bb", stroke: "#2f9e44" }),
+      ask: "这个图形的面积是多少？",
       choices, correct,
+      hints: trio(
+        "先想面积是「铺满里面要多少个方格」，跟绕一圈的长度不是一回事。",
+        "把它切成上下两块长方形，各自「长 × 宽」，最后把两块加起来。",
+        `上面那块是 ${topW} 乘 ${topH}，先把它算出来是 ${topW * topH} 平方厘米。`
+      ),
     };
   }
-  if (form === 2) {
+  if (steps === 2) {
+    if (rand() < 0.5) {
+      // 直角三角形：保证底 × 高是偶数，面积一定是整数
+      let base = randInt(rand, 3, 12);
+      let height = randInt(rand, 2, 9);
+      if ((base * height) % 2 !== 0) height = height + 1 <= 10 ? height + 1 : height - 1;
+      if ((base * height) % 2 !== 0) base = base + 1;
+      const value = triangleArea(base, height);
+      const { choices, correct, answer } = unitChoices(rand, value, "平方厘米", [base, height, 2, base * height - value]);
+      return {
+        kind: "area", answer, steps,
+        promptHTML: triFigSVG(base, height),
+        ask: "这个三角形的面积是多少？",
+        choices, correct,
+        hints: trio(
+          "先想：这个直角三角形正好是某个长方形的一半。",
+          "三角形面积 = 底 × 高 ÷ 2。",
+          `底乘高先算出来是 ${base * height}，别忘了后面还有一步。`
+        ),
+      };
+    }
     const w = randInt(rand, 5, 12);
     const h = randInt(rand, 3, 9);
     const cutW = randInt(rand, 1, w - 2);
@@ -368,10 +500,15 @@ function qArea(rand: () => number, t: number): ShapeQ {
     const value = lShapeArea(w, h, cutW, cutH);
     const { choices, correct, answer } = unitChoices(rand, value, "平方厘米", [cutW * cutH, w, h, 2]);
     return {
-      kind: "area", answer,
+      kind: "area", answer, steps,
       promptHTML: lFigSVG(w, h, cutW, cutH),
       ask: "缺了一角，面积还有多少？",
       choices, correct,
+      hints: trio(
+        "先想面积是铺满里面要几个方格，缺掉的那块不算。",
+        "整块长方形的面积减去缺口那一小块：长 × 宽 − 缺口的长 × 缺口的宽。",
+        `整块长方形先算出来是 ${w * h} 平方厘米，接着看缺口有多大。`
+      ),
     };
   }
   const w = randInt(rand, 3, t < 0.5 ? 9 : 14);
@@ -379,10 +516,15 @@ function qArea(rand: () => number, t: number): ShapeQ {
   const value = rectArea(w, h);
   const { choices, correct, answer } = unitChoices(rand, value, "平方厘米", [w, h, 2, w + h]);
   return {
-    kind: "area", answer,
+    kind: "area", answer, steps,
     promptHTML: rectFigSVG(w, h),
     ask: "这个长方形的面积是多少？",
     choices, correct,
+    hints: trio(
+      "先想面积是「铺满要多少个方格」，别跟绕一圈的周长搞混。",
+      "长方形面积 = 长 × 宽。",
+      `一行能摆 ${w} 个方格，接下来数一数一共有几行。`
+    ),
   };
 }
 
@@ -390,7 +532,13 @@ function qArea(rand: () => number, t: number): ShapeQ {
 // 1.1 新机制二：对称轴、镜像、旋转
 // ---------------------------------------------------------------------------
 
-/** 数对称轴 */
+/**
+ * 数对称轴。
+ *
+ * 1.2 改用 `figures.ts` 的**精确顶点**渲染：1.1 那个「五边形」其实不是正五边形
+ * （边长 50/52.2 交替，只有 1 条对称轴），图和「5 条」的答案对不上。
+ * 现在正五边形、正五角星都是现算顶点，`exactAxisCount` 数出来多少条就是多少条。
+ */
 function qSymmetry(rand: () => number): ShapeQ {
   const shape = pick(rand, SYMMETRIC_SHAPES);
   const color = pick(rand, SHAPE_COLORS);
@@ -403,11 +551,73 @@ function qSymmetry(rand: () => number): ShapeQ {
   }
   const arr = shuffled([...set], rand);
   return {
-    kind: "symmetry", answer: `${axes} 条`,
-    promptHTML: shapeSVG(shape, color, 100),
+    kind: "symmetry", answer: `${axes} 条`, steps: 1,
+    promptHTML: exactShapeSVG(shape, color, 100),
     ask: "它有几条对称轴？",
     choices: arr.map((v) => `${v} 条`),
     correct: arr.indexOf(axes),
+    hints: trio(
+      "先想清楚对称轴是什么：一条能让图形对折之后完全重合的线。",
+      "横着、竖着、斜着都要试一遍，别只试竖的那一条。",
+      "先从最容易看出来的竖线开始试，试完再把图形在心里转一转换个方向试。"
+    ),
+  };
+}
+
+/**
+ * 对称轴的合计与比较（1.2 新增，两步 / 三步）。
+ * 两步：两个图形一共几条；三步：三个图形里最多的那个有几条。
+ */
+function qSymSum(rand: () => number, steps: 2 | 3): ShapeQ {
+  const n = steps === 2 ? 2 : 3;
+  const kinds: ShapeKind[] = [];
+  let guard = 0;
+  while (kinds.length < n && guard++ < 200) {
+    const k = pick(rand, SYMMETRIC_SHAPES);
+    if (!kinds.includes(k)) kinds.push(k);
+  }
+  const axes = kinds.map((k) => SYMMETRY_AXES[k]);
+  let value: number;
+  let ask: string;
+  if (steps === 2) {
+    value = axes[0] + axes[1];
+    ask = "两个图形一共几条对称轴？";
+  } else {
+    // 保证「最多的那一个」唯一，答案才不含糊
+    const max = Math.max(...axes);
+    if (axes.filter((a) => a === max).length > 1) {
+      const spare = SYMMETRIC_SHAPES.filter((k) => !kinds.includes(k) && SYMMETRY_AXES[k] < max);
+      if (spare.length > 0) {
+        const idx = axes.lastIndexOf(max);
+        kinds[idx] = spare[0];
+        axes[idx] = SYMMETRY_AXES[spare[0]];
+      }
+    }
+    value = Math.max(...axes);
+    ask = "对称轴最多的有几条？";
+  }
+  const set = new Set<number>([value]);
+  guard = 0;
+  while (set.size < 3 && guard++ < 80) {
+    const v = value + randInt(rand, -3, 3);
+    if (v >= 1 && v !== value) set.add(v);
+  }
+  let filler = 1;
+  while (set.size < 3) set.add(value + filler++);
+  const arr = shuffled([...set], rand);
+  const colors = kinds.map(() => pick(rand, SHAPE_COLORS));
+  const figures = kinds.map((k, i) => exactShapeSVG(k, colors[i], 72)).join("");
+  return {
+    kind: "symsum", answer: `${value} 条`, steps,
+    promptHTML: `<span data-sym="${kinds.join(",")}" data-symask="${steps === 2 ? "sum" : "max"}" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${figures}</span>`,
+    ask,
+    choices: arr.map((v) => `${v} 条`),
+    correct: arr.indexOf(value),
+    hints: trio(
+      "先想清楚：要先把每个图形各自的对称轴数清楚，再拿它们做比较或者相加。",
+      steps === 2 ? "把第一个图形的条数和第二个图形的条数加起来。" : "把每个图形的条数都数出来，再挑其中最大的那个。",
+      "先只看最左边那一个，把它对折的方向一个个试完，别急着看后面的。"
+    ),
   };
 }
 
@@ -423,26 +633,40 @@ export function patternSVG(cells: readonly boolean[], size: number, px: number, 
   return `<svg data-cells="${cellsKey(cells)}" data-size="${size}" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-label="方格图案">${body}</svg>`;
 }
 
-/** 随机一个不对称、旋转后也不重样的图案 */
+/**
+ * 图案的八种摆法：四个旋转 + 四个「先照镜子再旋转」。
+ * 八个 key 全都不同，才说明这个图案完全不对称，出题时任何两个选项都不会撞车。
+ */
+function dihedralKeys(cells: readonly boolean[], size: number): string[] {
+  const mirrored = mirrorCellsH(cells, size);
+  const out: string[] = [];
+  for (let q = 0; q < 4; q++) {
+    out.push(cellsKey(rotateCells(cells, size, q)));
+    out.push(cellsKey(rotateCells(mirrored, size, q)));
+  }
+  return out;
+}
+
+/**
+ * 随机一个完全不对称的图案。
+ *
+ * 1.1 只要求「四个旋转 + 一个镜像」共 5 个不重样，而且兜底图案是 L 形三格骨牌——
+ * 它顺时针 90° 恰好等于左右镜像，一旦走到兜底就会冒出两个一样的选项。
+ * 1.2 把条件收紧成八种摆法全不同，兜底也换成一个真正手性的四格骨牌。
+ */
 function makePattern(rand: () => number, size: number): boolean[] {
   for (let guard = 0; guard < 400; guard++) {
     const cells = Array.from({ length: size * size }, () => rand() < 0.42);
     const on = cells.filter(Boolean).length;
     if (on < 3 || on > size * size - 3) continue;
-    const keys = new Set([
-      cellsKey(cells),
-      cellsKey(rotateCells(cells, size, 1)),
-      cellsKey(rotateCells(cells, size, 2)),
-      cellsKey(rotateCells(cells, size, 3)),
-      cellsKey(mirrorCellsH(cells, size)),
-    ]);
-    if (keys.size === 5) return cells;
+    if (new Set(dihedralKeys(cells, size)).size === 8) return cells;
   }
-  // 兜底：一个必定不对称的小图案
+  // 兜底：J 形四格骨牌，八种摆法互不相同
   const cells = new Array<boolean>(size * size).fill(false);
   cells[0] = true;
-  cells[1] = true;
   cells[size] = true;
+  cells[size * 2] = true;
+  cells[size * 2 + 1] = true;
   return cells;
 }
 
@@ -455,30 +679,63 @@ function qMirror(rand: () => number, t: number): ShapeQ {
   const wrongs = [rotateCells(cells, size, 1), rotateCells(cells, size, 2)];
   const order = shuffled([mirror, ...wrongs], rand);
   return {
-    kind: "mirror", answer: `data-cells="${cellsKey(mirror)}"`,
+    kind: "mirror", answer: `data-cells="${cellsKey(mirror)}"`, steps: 1,
     promptHTML: `${patternSVG(cells, size, 96, color)}<span style="font-size:26px">🪞</span>`,
     ask: "哪个是它照镜子的样子？",
     choices: order.map((c) => patternSVG(c, size, 76, color)),
     correct: order.findIndex((c) => cellsKey(c) === cellsKey(mirror)),
+    hints: trio(
+      "照镜子考的是左右互换：上下不动，左边的跑到右边去。",
+      "原图最左边那一列，在镜子里会变成最右边那一列。",
+      "先只盯住最上面那一行，把它左右反过来，再拿去跟三个选项比。"
+    ),
   };
 }
 
-/** 旋转：顺时针转 90° / 180° 后是哪个 */
-function qRotate(rand: () => number, t: number): ShapeQ {
+/** 旋转：顺时针转 90° / 180° / 270° 后是哪个（转几个 90° 就是几步） */
+function qRotate(rand: () => number, t: number, steps: 1 | 2 | 3): ShapeQ {
   const size = t < 0.5 ? 3 : 4;
   const color = COLOR_VALUES[pick(rand, SHAPE_COLORS)];
   const cells = makePattern(rand, size);
-  const quarters = t < 0.5 ? 1 : pick(rand, [1, 2, 3]);
+  const quarters = steps;
   const target = rotateCells(cells, size, quarters);
   const others = [1, 2, 3].filter((q) => q !== quarters).map((q) => rotateCells(cells, size, q));
   const order = shuffled([target, ...others], rand);
   const degree = quarters * 90;
   return {
-    kind: "rotate", answer: `data-cells="${cellsKey(target)}"`,
+    kind: "rotate", answer: `data-cells="${cellsKey(target)}"`, steps,
     promptHTML: `${patternSVG(cells, size, 96, color)}<span style="font-size:26px">🔄</span>`,
     ask: `顺时针转 ${degree} 度后是哪个？`,
     choices: order.map((c) => patternSVG(c, size, 76, color)),
     correct: order.findIndex((c) => cellsKey(c) === cellsKey(target)),
+    hints: trio(
+      "旋转考的是整块一起转，格子之间的相对位置一点都不会变。",
+      "每转一个直角，原来的第一行就会变成最后一列；转几个直角就重复几次。",
+      "先只转一个直角看看变成什么样，再接着往下转，别想一步到位。"
+    ),
+  };
+}
+
+/** 复合变换（1.2 新增，三步）：先照镜子，再顺时针转一个直角 */
+function qTransform(rand: () => number, t: number): ShapeQ {
+  const size = t < 0.5 ? 3 : 4;
+  const color = COLOR_VALUES[pick(rand, SHAPE_COLORS)];
+  const cells = makePattern(rand, size);
+  const mirror = mirrorCellsH(cells, size);
+  const target = rotateCells(mirror, size, 1);
+  const wrongs = [mirror, rotateCells(cells, size, 1)];
+  const order = shuffled([target, ...wrongs], rand);
+  return {
+    kind: "transform", answer: `data-cells="${cellsKey(target)}"`, steps: 3,
+    promptHTML: `${patternSVG(cells, size, 96, color)}<span style="font-size:24px">🪞→🔄</span>`,
+    ask: "先照镜子再转一个直角是哪个？",
+    choices: order.map((c) => patternSVG(c, size, 76, color)),
+    correct: order.findIndex((c) => cellsKey(c) === cellsKey(target)),
+    hints: trio(
+      "这题要连做两件事：先左右翻，再整块转，顺序不能颠倒。",
+      "照镜子把左右对调，再把镜子里的样子顺时针转一个直角。",
+      "先只做第一步：把原图左右翻过来，脑子里记住这个中间的样子。"
+    ),
   };
 }
 
@@ -510,9 +767,9 @@ const SOLID_ASK_TEXT: Record<SolidAsk, string> = {
 };
 const SOLID_ASK_UNIT: Record<SolidAsk, string> = { face: "个", edge: "条", vertex: "个" };
 
-/** 立体图形的面 / 棱 / 顶点数 */
-function qSolid(rand: () => number, t: number): ShapeQ {
-  const which: SolidAsk = t < 0.4 ? "face" : pick(rand, ["face", "edge", "vertex"] as SolidAsk[]);
+/** 立体图形的面 / 棱 / 顶点数（一步问面，两步问棱或顶点） */
+function qSolid(rand: () => number, t: number, steps: 1 | 2): ShapeQ {
+  const which: SolidAsk = steps === 1 ? "face" : pick(rand, ["edge", "vertex"] as SolidAsk[]);
   // 棱和顶点只问多面体，避免圆柱圆锥的说法有争议
   const kind = which === "face" ? pick(rand, SOLID_KINDS) : pick(rand, POLYHEDRA);
   const table = which === "face" ? SOLID_FACES : which === "edge" ? SOLID_EDGES : SOLID_VERTICES;
@@ -525,30 +782,117 @@ function qSolid(rand: () => number, t: number): ShapeQ {
     if (v >= 0 && v !== value) set.add(v);
   }
   const arr = shuffled([...set], rand);
+  void t;
   return {
-    kind: "solid", answer: `${value} ${unit}`,
-    promptHTML: `${solidSVG(kind, 96)}<div style="font-size:16px;font-weight:900;color:#0b7285">${SOLID_NAMES[kind]}</div>`,
+    kind: "solid", answer: `${value} ${unit}`, steps,
+    promptHTML: `${isoSolidSVG(kind, 100)}<div style="font-size:16px;font-weight:900;color:#0b7285">${SOLID_NAMES[kind]}</div>`,
     ask: SOLID_ASK_TEXT[which],
     choices: arr.map((v) => `${v} ${unit}`),
     correct: arr.indexOf(value),
+    hints: trio(
+      which === "face"
+        ? "先看清楚问的是「面」：面是一整块平的皮，不是边也不是角。"
+        : which === "edge"
+          ? "先看清楚问的是「棱」：棱是两个面交出来的那条线。"
+          : "先看清楚问的是「顶点」：顶点是几条棱碰头的那个尖。",
+      "按上下、前后、左右分组数，看不见的那一半也要算进去。",
+      "先把图上看得见的部分数完，再想想被挡住的那边跟它是不是一样多。"
+    ),
   };
 }
 
-/** 认展开图 */
+/**
+ * 棱数比顶点数多几（1.2 新增，三步）：查棱数 → 查顶点数 → 相减。
+ * 欧拉公式 V − E + F = 2 保证这个差一定等于「面数减 2」，是能自洽验算的。
+ */
+function qSolidCalc(rand: () => number): ShapeQ {
+  const kind = pick(rand, POLYHEDRA);
+  const value = SOLID_EDGES[kind] - SOLID_VERTICES[kind];
+  const set = new Set<number>([value]);
+  let guard = 0;
+  while (set.size < 3 && guard++ < 80) {
+    const v = value + randInt(rand, -3, 3);
+    if (v >= 1 && v !== value) set.add(v);
+  }
+  let filler = 1;
+  while (set.size < 3) set.add(value + filler++);
+  const arr = shuffled([...set], rand);
+  return {
+    kind: "solidcalc", answer: `${value} 条`, steps: 3,
+    promptHTML: `${isoSolidSVG(kind, 100)}<div style="font-size:16px;font-weight:900;color:#0b7285">${SOLID_NAMES[kind]}</div>`,
+    ask: "棱比顶点多几条？",
+    choices: arr.map((v) => `${v} 条`),
+    correct: arr.indexOf(value),
+    hints: trio(
+      "这题要分成三小步：先数棱，再数顶点，最后相减。",
+      "棱是两个面交出来的线，顶点是几条棱碰头的尖，用棱数减去顶点数。",
+      "先只数棱：按上面一圈、下面一圈、竖着连的那几条分组数，别一口气数完。"
+    ),
+  };
+}
+
+/**
+ * 认展开图（文字版）。
+ *
+ * 1.2 修掉一处真错：正方形本来就是长方形的特例，
+ * 所以问「正方体的展开图」时，「6 个长方形，对面两两相同」也说得通——
+ * 1.1 挑干扰项只排除「文字与答案相同」的，于是同一道题会冒出两个正确选项。
+ * 现在把正方体 ↔ 长方体这一对互斥掉。
+ */
+const NET_CONFUSABLE: Partial<Record<SolidKind, SolidKind>> = { cube: "cuboid", cuboid: "cube" };
+
 function qNet(rand: () => number): ShapeQ {
   const kind = pick(rand, SOLID_KINDS.filter((k) => k !== "sphere"));
   const answer = SOLID_NETS[kind];
-  const others = SOLID_KINDS.filter((k) => SOLID_NETS[k] !== answer).map((k) => SOLID_NETS[k]);
+  const banned = NET_CONFUSABLE[kind];
+  const others = SOLID_KINDS.filter((k) => SOLID_NETS[k] !== answer && k !== banned).map((k) => SOLID_NETS[k]);
   const picked = new Set<string>();
   let guard = 0;
   while (picked.size < 2 && guard++ < 80) picked.add(pick(rand, others));
   const order = shuffled([answer, ...picked], rand);
   return {
-    kind: "net", answer,
-    promptHTML: `${solidSVG(kind, 96)}<div style="font-size:16px;font-weight:900;color:#0b7285">${SOLID_NAMES[kind]}</div>`,
+    kind: "net", answer, steps: 1,
+    promptHTML: `${isoSolidSVG(kind, 100)}<div style="font-size:16px;font-weight:900;color:#0b7285">${SOLID_NAMES[kind]}</div>`,
     ask: "它的展开图是哪一个？",
     choices: order.map((s) => `<span style="font-size:15px;font-weight:800;line-height:1.5">${s}</span>`),
     correct: order.indexOf(answer),
+    hints: trio(
+      "先想清楚：展开图是把立体沿着棱剪开、摊平之后的样子。",
+      "数一数这个立体有几个面、都是什么形状，展开图上就该有一样多、一样形状的块。",
+      "先只数面：上下两个底面是什么形状，侧面又是什么形状，分开来看。"
+    ),
+  };
+}
+
+/**
+ * 挑展开图（1.2 新增，两步）：三张六格展开图里挑能折成正方体的那一张。
+ * 正确项来自折叠校验器筛过的 11 张，干扰项来自被校验器判否的 24 张，**不可能出错**。
+ */
+function qNetPick(rand: () => number): ShapeQ {
+  const good = cubeNets();
+  const bad = nonCubeNets();
+  const right = pick(rand, good);
+  const wrongs: Array<Set<string>> = [];
+  let guard = 0;
+  while (wrongs.length < 2 && guard++ < 200) {
+    const b = pick(rand, bad);
+    const key = [...b].sort().join(" ");
+    if (!wrongs.some((w) => [...w].sort().join(" ") === key)) wrongs.push(b);
+  }
+  const order = shuffled([right, ...wrongs], rand);
+  const svgOf = (cells: Set<string>): string => cubeNetSVG(cells, 84);
+  const answer = svgOf(right).match(/data-net="[^"]*"/)?.[0] ?? "";
+  return {
+    kind: "netpick", answer, steps: 2,
+    promptHTML: `${isoSolidSVG("cube", 96)}<div style="font-size:15px;font-weight:900;color:#0b7285">正方体</div>`,
+    ask: "哪张展开图能折成正方体？",
+    choices: order.map(svgOf),
+    correct: order.indexOf(right),
+    hints: trio(
+      "先想清楚：正方体有六个面，展开图必须正好六格，而且折起来六个面各占一次。",
+      "找出会成为「相对面」的两格：在展开图里它们中间通常隔着一格，不会挨在一起。",
+      "先在心里把中间那一排折成一圈，看看剩下的两格是不是刚好当盖子和底。"
+    ),
   };
 }
 
@@ -584,8 +928,11 @@ export function coordSVG(n: number, items: readonly Placed[], star?: { x: number
     const cy = H - star.y * u;
     body += `<rect x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" width="${u}" height="${u}" fill="none" stroke="#e64980" stroke-width="4"/>`;
   }
+  // 1.2 补两个字：数对是「先列后行」，把「列」「行」标出来，孩子不用猜先读哪个
+  body += `<text x="${(ox + n * u + 4).toFixed(1)}" y="${(H + 18).toFixed(1)}" font-size="12" font-weight="800" text-anchor="start" fill="#5c4a7d">列</text>`;
+  body += `<text x="${(ox - 8).toFixed(1)}" y="${(oy + 10).toFixed(1)}" font-size="12" font-weight="800" text-anchor="end" fill="#5c4a7d">行</text>`;
   const grid = items.map((it) => `${it.x},${it.y},${it.kind}`).join("|");
-  return `<svg data-grid="${grid}" data-n="${n}" width="${ox + n * u + 8}" height="${H + 26}" viewBox="0 0 ${ox + n * u + 8} ${H + 26}" aria-label="坐标格">${body}</svg>`;
+  return `<svg data-grid="${grid}" data-n="${n}" width="${ox + n * u + 22}" height="${H + 26}" viewBox="0 0 ${ox + n * u + 22} ${H + 26}" aria-label="坐标格，横着是列、竖着是行">${body}</svg>`;
 }
 
 /** 坐标题：看坐标说形状，或者说出某个形状的坐标 */
@@ -610,11 +957,12 @@ function qCoord(rand: () => number, t: number): ShapeQ {
       rand
     );
     return {
-      kind: "coord", answer: SHAPE_NAMES[target.kind],
+      kind: "coord", answer: SHAPE_NAMES[target.kind], steps: 1,
       promptHTML: coordSVG(n, items, { x: target.x, y: target.y }),
       ask: `${formatPoint(target.x, target.y)} 上是什么形状？`,
       choices: names,
       correct: names.indexOf(SHAPE_NAMES[target.kind]),
+      hints: COORD_HINTS,
     };
   }
   // 找形状说坐标
@@ -628,18 +976,83 @@ function qCoord(rand: () => number, t: number): ShapeQ {
   }
   const arr = shuffled([...set], rand);
   return {
-    kind: "coord", answer,
+    kind: "coord", answer, steps: 1,
     promptHTML: coordSVG(n, items),
     ask: `${SHAPE_NAMES[target.kind]}在哪个位置？`,
     choices: arr,
     correct: arr.indexOf(answer),
+    hints: COORD_HINTS,
   };
 }
 
-/** 方位题：从起点出发按方位走几步，最后停在哪 */
-function qPath(rand: () => number, t: number): ShapeQ {
+/** 坐标题的三级提示：一个数字都不提，绝不可能漏答案 */
+const COORD_HINTS: HintTrio = trio(
+  "先想清楚数对怎么读：括号里先写列、后写行，顺序固定不会变。",
+  "从左往右数是第几列，从下往上数是第几行，两个数按这个顺序配成一对。",
+  "先只找列：把手指从格子的最左边一列一列往右挪，挪到目标那一列先停下。"
+);
+
+/**
+ * 先按方位走、再读那个位置上的形状（1.2 新增，两步 / 三步）。
+ * 两步：走一段再读；三步：走两段再读。
+ */
+function qCoordMove(rand: () => number, steps: 2 | 3): ShapeQ {
+  const n = 5;
+  const spots = new Set<string>();
+  const items: Placed[] = [];
+  const kinds = shuffled(SHAPE_KINDS, rand).slice(0, 5);
+  let guard = 0;
+  while (items.length < 5 && guard++ < 300) {
+    const x = randInt(rand, 1, n);
+    const y = randInt(rand, 1, n);
+    if (spots.has(`${x},${y}`)) continue;
+    spots.add(`${x},${y}`);
+    items.push({ x, y, kind: kinds[items.length], color: pick(rand, SHAPE_COLORS) });
+  }
+  // 起点和终点：两步题要求同一行或同一列（走一段），三步题要求行列都不同（走两段）
+  const pairs: Array<[Placed, Placed]> = [];
+  for (const a of items) {
+    for (const b of items) {
+      if (a === b) continue;
+      const straight = a.x === b.x || a.y === b.y;
+      if (steps === 2 ? straight : !straight) pairs.push([a, b]);
+    }
+  }
+  // 这一批图形凑不出合适的起终点时，退回同样步数的方位题，绝不降难度
+  if (pairs.length === 0) return qPath(rand, steps === 2 ? 0.3 : 0.9, steps);
+  const [start, end] = pairs[randInt(rand, 0, pairs.length - 1)];
+  const moves: Move[] = [];
+  if (end.x !== start.x) moves.push({ dir: end.x > start.x ? "右" : "左", steps: Math.abs(end.x - start.x) });
+  if (end.y !== start.y) moves.push({ dir: end.y > start.y ? "上" : "下", steps: Math.abs(end.y - start.y) });
+  const names = shuffled(
+    [SHAPE_NAMES[end.kind], ...items.filter((i) => i.kind !== end.kind).slice(0, 2).map((i) => SHAPE_NAMES[i.kind])],
+    rand
+  );
+  const moveText = moves.map((m) => `向${m.dir}走 ${m.steps} 格`).join("，");
+  return {
+    kind: "coordmove", answer: SHAPE_NAMES[end.kind], steps,
+    promptHTML: `${coordSVG(n, items, { x: start.x, y: start.y })}
+      <div data-start="${start.x},${start.y}" data-moves="${moves
+        .map((m) => `${m.dir}${m.steps}`)
+        .join("|")}" style="font-size:15px;font-weight:800;color:#2f9e44;line-height:1.5">从 ${formatPoint(
+      start.x,
+      start.y
+    )} 出发：${moveText}</div>`,
+    ask: "照着走完，落在什么形状上？",
+    choices: names,
+    correct: names.indexOf(SHAPE_NAMES[end.kind]),
+    hints: trio(
+      "这题要先走路、再看图形，两件事分开做才不会乱。",
+      "向右列号变大、向左变小；向上行号变大、向下变小，一段一段改。",
+      "先只走第一段，把走到的那个位置在心里记成一个新的数对。"
+    ),
+  };
+}
+
+/** 方位题：从起点出发按方位走几段，最后停在哪（走几段就是几步推理） */
+function qPath(rand: () => number, t: number, want?: 2 | 3): ShapeQ {
   const n = 6;
-  const steps = t < 0.4 ? 2 : 3;
+  const steps = want ?? (t < 0.4 ? 2 : 3);
   for (let guard = 0; guard < 300; guard++) {
     const start = { x: randInt(rand, 1, n), y: randInt(rand, 1, n) };
     const moves: Move[] = [];
@@ -669,38 +1082,116 @@ function qPath(rand: () => number, t: number): ShapeQ {
     const arr = shuffled([...set], rand);
     const moveText = moves.map((m) => `向${m.dir}走 ${m.steps} 格`).join("，");
     return {
-      kind: "path", answer,
+      kind: "path", answer, steps: steps as 2 | 3,
       promptHTML: `${coordSVG(n, [{ x: start.x, y: start.y, kind: "star", color: "yellow" }], start)}
         <div data-start="${start.x},${start.y}" data-moves="${moves.map((m) => `${m.dir}${m.steps}`).join("|")}" style="font-size:15px;font-weight:800;color:#2f9e44;line-height:1.5">从 ${formatPoint(start.x, start.y)} 出发：${moveText}</div>`,
       ask: "一步步走，最后停在哪？",
       choices: arr,
       correct: arr.indexOf(answer),
+      hints: PATH_HINTS,
     };
   }
   // 兜底：一条一定合法的路线
   const answer = formatPoint(3, 3);
   const arr = shuffled([answer, formatPoint(2, 3), formatPoint(3, 2)], rand);
   return {
-    kind: "path", answer,
+    kind: "path", answer, steps: steps as 2 | 3,
     promptHTML: `${coordSVG(n, [{ x: 1, y: 1, kind: "star", color: "yellow" }], { x: 1, y: 1 })}
       <div data-start="1,1" data-moves="右2|上2" style="font-size:15px;font-weight:800;color:#2f9e44">从 (1, 1) 出发：向右走 2 格，向上走 2 格</div>`,
     ask: "一步步走，最后停在哪？",
     choices: arr,
     correct: arr.indexOf(answer),
+    hints: PATH_HINTS,
   };
 }
 
-function makeAdvanced(rand: () => number, kind: AdvancedShapeQKind, t: number): ShapeQ {
+/** 方位题的三级提示：不出现任何数字，答案里的坐标不可能被漏出去 */
+const PATH_HINTS: HintTrio = trio(
+  "先想清楚每一段是往哪个方向走，方向弄反了后面全错。",
+  "向右列号变大、向左变小；向上行号变大、向下变小，一段一段地改。",
+  "先只走第一段，把落脚的位置在心里写成一个新的数对，再接着走下一段。"
+);
+
+// ---------------------------------------------------------------------------
+// 1.2 新机制：分类归纳
+// ---------------------------------------------------------------------------
+
+/** 有确定边数、又能画出精确顶点的形状（分类题只用这些） */
+const FOUR_SIDED: ShapeKind[] = ["square", "rectangle", "diamond"];
+const OTHER_SIDED: ShapeKind[] = ["triangle", "pentagon"];
+
+/**
+ * 分类归纳（1.2 新增）。
+ *  两步：三个图形里挑出「和另外两个不是一类」的那个（另外两个边数相同、颜色全同）。
+ *  三步：既要边数对、又要颜色跟另外两个都不一样，两个条件都满足才算。
+ */
+function qClassify(rand: () => number, steps: 2 | 3): ShapeQ {
+  const pair = shuffled(FOUR_SIDED, rand).slice(0, 2);
+  const odd = pick(rand, OTHER_SIDED);
+  if (steps === 2) {
+    const color = pick(rand, SHAPE_COLORS);
+    const cards: Array<{ kind: ShapeKind; color: ShapeColor }> = [
+      { kind: pair[0], color },
+      { kind: pair[1], color },
+      { kind: odd, color },
+    ];
+    const order = shuffled(cards, rand);
+    const answer = `data-kind="${odd}" data-color="${color}"`;
+    return {
+      kind: "classify", answer, steps,
+      promptHTML: `<span data-classify="sides" style="font-size:30px">🗂️</span>`,
+      ask: "哪一个和另外两个不是一类？",
+      choices: order.map((c) => exactShapeSVG(c.kind, c.color, 74)),
+      correct: order.findIndex((c) => c.kind === odd),
+      hints: trio(
+        "先找一找这三个图形有什么地方可以拿来比：边数、颜色，还是大小。",
+        "颜色都一样的时候，就只剩边数可以比了：把每个图形的边一条一条数出来。",
+        "先只数最左边那个图形有几条边，再拿这个数去对另外两个。"
+      ),
+    };
+  }
+  const colorA = pick(rand, SHAPE_COLORS);
+  const colorB = pick(rand, SHAPE_COLORS.filter((c) => c !== colorA));
+  const cards: Array<{ kind: ShapeKind; color: ShapeColor }> = [
+    { kind: pair[0], color: colorA }, // 四条边 + 独一份的颜色 → 就是它
+    { kind: odd, color: colorB },
+    { kind: pair[1], color: colorB },
+  ];
+  const order = shuffled(cards, rand);
+  const answer = `data-kind="${pair[0]}" data-color="${colorA}"`;
+  return {
+    kind: "classify", answer, steps,
+    promptHTML: `<span data-classify="sides+color" style="font-size:30px">🗂️</span>`,
+    ask: "哪个是四条边、颜色又不一样？",
+    choices: order.map((c) => exactShapeSVG(c.kind, c.color, 74)),
+    correct: order.findIndex((c) => c.kind === pair[0] && c.color === colorA),
+    hints: trio(
+      "这题有两个条件要同时满足，缺一个都不行，得分开来查。",
+      "先按边数筛一遍，把不是四条边的划掉；再在剩下的里面比颜色。",
+      "先只数边数：三个图形各有几条边，把不满足的那个先排除掉。"
+    ),
+  };
+}
+
+function makeAdvanced(rand: () => number, kind: AdvancedShapeQKind, t: number, want: 1 | 2 | 3): ShapeQ {
+  // 步数按题型能力裁剪：撑不到三步的题型就停在它的上限，不硬凑
+  const steps = Math.min(want, MAX_STEPS[kind]) as 1 | 2 | 3;
   switch (kind) {
-    case "perimeter": return qPerimeter(rand, t);
-    case "area": return qArea(rand, t);
+    case "perimeter": return qPerimeter(rand, t, steps);
+    case "area": return qArea(rand, t, steps);
     case "symmetry": return qSymmetry(rand);
     case "mirror": return qMirror(rand, t);
-    case "rotate": return qRotate(rand, t);
-    case "solid": return qSolid(rand, t);
+    case "rotate": return qRotate(rand, t, steps);
+    case "solid": return qSolid(rand, t, steps === 1 ? 1 : 2);
     case "net": return qNet(rand);
     case "coord": return qCoord(rand, t);
-    default: return qPath(rand, t);
+    case "classify": return qClassify(rand, steps === 3 ? 3 : 2);
+    case "netpick": return qNetPick(rand);
+    case "symsum": return qSymSum(rand, steps === 3 ? 3 : 2);
+    case "transform": return qTransform(rand, t);
+    case "solidcalc": return qSolidCalc(rand);
+    case "coordmove": return qCoordMove(rand, steps === 3 ? 3 : 2);
+    default: return qPath(rand, t, steps === 1 ? 2 : (steps as 2 | 3));
   }
 }
 
@@ -732,23 +1223,24 @@ export function kindPool(level: number): ShapeQKind[] {
       return t < 0.4
         ? ["shape", "color", "size"]
         : ["shape", "findcolor", "size", "sides", "countshape"];
-    // ↓ 1.1 新增章节
+    // ↓ 1.1 新增章节；1.2 按「前 1/3 单步、中 1/3 两步、后 1/3 三步」重排题型池，
+    //   每一段的题型池里只放撑得起那个步数的题型（`MAX_STEPS` 兜底裁剪）
     case 6:
-      if (t < 0.35) return ["perimeter"];
-      if (t < 0.7) return ["perimeter", "area"];
-      return ["area", "perimeter", "area"];
+      if (t < 1 / 3) return ["perimeter"];
+      if (t < 2 / 3) return ["perimeter", "area"];
+      return ["area", "perimeter", "classify"];
     case 7:
-      if (t < 0.35) return ["symmetry"];
-      if (t < 0.7) return ["symmetry", "mirror"];
-      return ["symmetry", "mirror", "rotate"];
+      if (t < 1 / 3) return ["symmetry", "mirror"];
+      if (t < 2 / 3) return ["symsum", "rotate"];
+      return ["transform", "symsum", "rotate"];
     case 8:
-      if (t < 0.4) return ["solid"];
-      if (t < 0.7) return ["solid", "net"];
-      return ["solid", "net", "symmetry"];
+      if (t < 1 / 3) return ["solid", "net"];
+      if (t < 2 / 3) return ["solid", "netpick"];
+      return ["solidcalc", "netpick", "symsum"];
     default:
-      if (t < 0.35) return ["coord"];
-      if (t < 0.7) return ["coord", "path"];
-      return ["coord", "path", "area", "solid"];
+      if (t < 1 / 3) return ["coord"];
+      if (t < 2 / 3) return ["path", "coordmove"];
+      return ["path", "coordmove", "classify"];
   }
 }
 
@@ -760,21 +1252,23 @@ export function buildQuestions(level: number): ShapeQ[] {
   const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
   const kinds = kindPool(level);
   const count = questionCount(level);
+  const steps = stepsForLevel(level);
   const out: ShapeQ[] = [];
   for (let i = 0; i < count; i++) {
     const kind = i < kinds.length ? kinds[i] : pick(rand, kinds);
-    out.push(makeOne(rand, kind, t));
+    out.push(makeOne(rand, kind, t, steps));
   }
   return shuffled(out, rand);
 }
 
 const ADVANCED_SET = new Set<ShapeQKind>([
   "perimeter", "area", "symmetry", "mirror", "rotate", "solid", "net", "coord", "path",
+  "classify", "netpick", "symsum", "transform", "solidcalc", "coordmove",
 ]);
 
-function makeOne(rand: () => number, kind: ShapeQKind, t: number): ShapeQ {
+function makeOne(rand: () => number, kind: ShapeQKind, t: number, steps: 1 | 2 | 3): ShapeQ {
   // 1.1 新章节走独立的进阶生成器；前 6 章的分支一行都没动
-  if (ADVANCED_SET.has(kind)) return makeAdvanced(rand, kind as AdvancedShapeQKind, t);
+  if (ADVANCED_SET.has(kind)) return makeAdvanced(rand, kind as AdvancedShapeQKind, t, steps);
   switch (kind) {
     case "shape": return qShape(rand);
     case "findshape": return qFindShape(rand);
