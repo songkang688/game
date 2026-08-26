@@ -4,6 +4,7 @@
  * 1.1 在末尾追加四个新主题（第 100–188 关）：
  *  ⑦倒影天湖=每消一组重力翻转  ⑧幻彩溶洞=变色泡泡每步换色
  *  ⑨步数栈桥=限步数达标  ⑩灯影迷宫=隐藏泡泡先点亮
+ * 1.2 追加连锁泡（消掉后炸开一圈），只出现在第 100 关之后的两章里。
  * 1.0 的六个主题章节、六种泡泡机关（并非同一模板）：
  *  ①清泉湖=经典同色连消  ②彩虹湾=彩虹泡泡  ③石头滩=敲不破的石头
  *  ④闪电云=闪电泡泡清一行一列  ⑤冻冻港=冰冻泡泡两步消
@@ -37,6 +38,8 @@ export interface BubbleLevel {
   moveLimit?: number;
   /** 1.1 隐藏泡泡数量（要先点亮才看得见颜色），前 99 关不带 */
   hidden?: number;
+  /** 1.2 连锁泡数量（消掉后炸开一圈），前 99 关不带 */
+  chain?: number;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -108,7 +111,9 @@ function buildLevel(ci: number, t: number): BubbleLevel {
         colors: t < 8 ? 4 : 5,
         maxLeft: Math.max(6, 14 - Math.floor(t / 2)),
         rainbow: 0, stone: 0, bolt: 0, frozen: 0,
-        flipGravity: true
+        flipGravity: true,
+        // 1.2 连锁泡：翻转章后半段开始零星登场，消掉炸开一圈
+        chain: t >= 8 ? 1 : 0
       };
     case 7:
       // 幻彩溶洞：变色泡泡每步换色
@@ -139,7 +144,9 @@ function buildLevel(ci: number, t: number): BubbleLevel {
         colors: t < 8 ? 4 : 5,
         maxLeft: Math.max(6, 12 - Math.floor(t / 3)),
         rainbow: 0, stone: 0, bolt: t >= 10 ? 1 : 0, frozen: t >= 16 ? 2 : 0,
-        hidden: 6 + Math.floor(t / 2)
+        hidden: 6 + Math.floor(t / 2),
+        // 1.2 连锁泡：灯影迷宫后半段用它一次点亮一圈
+        chain: t >= 6 ? 1 + Math.floor(t / 12) : 0
       };
   }
 }
