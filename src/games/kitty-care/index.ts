@@ -285,13 +285,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       renderMood();
       if (mood <= 0) {
         ended = true;
-        later(() => ctx.lose(`${catName()}今天有点累啦，明天再陪它玩一定更顺！`), 500);
+        later(() => ctx.lose(`${catName()}今天累啦～下一次先看它头顶冒的那个小图标，对着需求选，心情就一直是满的！`), 500);
         return;
       }
     }
     if (moodMax <= 0 && mistakes > 4) {
       ended = true;
-      later(() => ctx.lose("团团有点晕啦，休息一下，看清它想要什么再选～"), 500);
+      later(() => ctx.lose("这一轮先到这儿～照顾顺序按「先吃再玩后睡」来排，团团的心情掉得就慢多了！"), 500);
     }
   }
 

@@ -639,7 +639,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     showTimer: false,
     sfx: ctx.sfx,
     onClear: (info) => ctx.win(levelStars(info.artifacts, info.hurts), clearLine(info)),
-    onFail: () => ctx.lose("心用完啦!歇一口气,这条走廊我们再闯一次～"),
+    onFail: () => ctx.lose("这条走廊先撤一步～下一趟贴着墙走、先清掉挡路的那只,血量就省下来了!"),
   });
   return { destroy: () => runner.destroy() };
 }
@@ -654,7 +654,7 @@ export function clearLine(info: ClearInfo): string {
 /** 无尽遗迹结束时的一句话 */
 export function endlessLine(floor: number, best: number): string {
   if (floor > best) return `新纪录!你钻到了第 ${floor} 层遗迹!`;
-  return `这次到第 ${floor} 层,最深纪录是第 ${best} 层,再来一次!`;
+  return `这次下到第 ${floor} 层,最深纪录是第 ${best} 层。血量剩一半就先绕开怪、找补给,再来一趟就能刷新它!`;
 }
 
 // ---------------------------------------------------------------------------
@@ -839,7 +839,7 @@ function mountSpeedrun(host: HTMLElement, api: GameApi, onBack: () => void): { d
           `用时 ${formatTime(info.timeMs)}(目标 ${level.parSec} 秒)· 本章最好成绩 ${formatTime(times[ci])}`
         );
       },
-      onFail: () => showResult(ci, "这次没跑完", "心用完啦,喘口气再来一趟,路线你已经记住啦!"),
+      onFail: () => showResult(ci, "这次没跑完", "路线你已经记住一大半了～下一趟在拐角提前减速,少撞一次就能跑完全程!"),
     });
   }
 

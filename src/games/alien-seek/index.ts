@@ -845,7 +845,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     sfx: ctx.sfx,
     onDone: (res) => {
       if (!res.cleared) {
-        ctx.lose(deduce ? "线索还没对上就没时间啦,回去再读一遍～" : "时间到啦!深呼吸,我们再找一次。");
+        ctx.lose(deduce
+          ? "线索还差一步就对上了～下一轮读到一条线索先在心里划掉一批,范围会缩得很快!"
+          : "时间到～下一轮按「从上到下、一行行扫」的顺序找,不回头重复看,速度立刻就上来了!");
         return;
       }
       if (deduce) ctx.win(deduceStars(res.misses, res.secondsLeft), deduceLine(res));

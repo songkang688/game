@@ -277,11 +277,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
             ? "回到色环想一想这两种颜色的关系～"
             : cfg.mode === "legend"
               ? "对照图例再看一眼这块的符号～"
-              : "颜色不对哦，看看提示再试试～";
+              : "这块的颜色再对一下提示，慢一点也没关系～";
       updateHud();
       if (wrong > cfg.maxWrong) {
         ended = true;
-        ctx.lose("颜料有点调皮，我们休息一下再画一次！");
+        ctx.lose("这幅先放一放～下一次先把同色号的格子一次性涂完，再换下一个颜色，出错就少很多！");
       }
     }
   }
@@ -353,7 +353,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       const stillNeed = [...pending.values()].some((c) => !unlocked.includes(c));
       if (mixLeft <= 0 && stillNeed) {
         ended = true;
-        ctx.lose("调色锅的柴火用完啦，我们重新规划一下顺序再来！");
+        ctx.lose("调色锅的柴火用完啦～下一次先想好要的颜色由哪两种原色组成，再动手倒，一次就能调出来！");
       }
     }, 320);
   }
