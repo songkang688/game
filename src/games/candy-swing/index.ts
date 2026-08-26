@@ -56,6 +56,18 @@ import {
   type ChapterTheme,
   type LevelDef,
 } from "./levels";
+import {
+  MUSHROOM_R,
+  createSticky,
+  mushroomAxis,
+  mushroomBounce,
+  mushroomTriggers,
+  stickyCatch,
+  stickyProgress,
+  stickyRelease,
+  tickSticky,
+  type StickyState as BubbleStickyState,
+} from "./swing12";
 import { makeTowerLevel, towerTitle } from "./endless";
 import { readProgress, writeProgress, type Progress } from "./progress";
 import { save } from "../../engine/save";
@@ -159,6 +171,8 @@ interface BubbleState {
   x: number;
   y: number;
   used: boolean;
+  /** 1.2 粘性泡泡：挂住糖果这么多秒（普通泡泡不填） */
+  sticky?: number;
 }
 
 interface HookState {
@@ -225,6 +239,12 @@ interface SpringState {
   def: NonNullable<LevelDef["springs"]>[number];
   squash: number;
   hits: number;
+}
+
+/** 1.2 弹簧蘑菇（swing12 那一版，按朝向弹开）的运行时状态 */
+interface MushroomState {
+  def: NonNullable<LevelDef["mushrooms"]>[number];
+  squash: number;
 }
 
 interface TrailPoint {
@@ -298,6 +318,11 @@ export function mount(api: GameApi): CandySwingHandle {
   let winches: WinchState[] = [];
   let stickies: StickyState[] = [];
   let springs: SpringState[] = [];
+  let mushrooms: MushroomState[] = [];
+  /** 粘性泡泡（bubbles[i].sticky）挂住糖果的那一段时间，与 sim.ts 同一套纯函数 */
+  let bubbleSticky: BubbleStickyState = createSticky();
+  /** 挂住糖果的那个泡泡：画倒计时圈用 */
+  let bubbleStickyAt: { x: number; y: number; hold: number } | null = null;
   /** 第 i 根绳对应的发条（没挂发条就是 undefined），画发条盘时用 */
   let winchOfRope: Array<WinchState | undefined> = [];
   /** 第 i 根绳占用的 link 下标区间 [from, to)，「一刀两断」按根数算 */
@@ -604,7 +629,7 @@ export function mount(api: GameApi): CandySwingHandle {
       winchOfRope.push(winches.length > before ? winches[winches.length - 1] : undefined);
     }
     stars = level.stars.map((s) => ({ x: s.x, y: s.y, collected: false, suck: 0 }));
-    bubbles = (level.bubbles ?? []).map((b) => ({ x: b.x, y: b.y, used: false }));
+    bubbles = (level.bubbles ?? []).map((b) => ({ x: b.x, y: b.y, used: false, sticky: b.sticky }));
     hooks = (level.hooks ?? []).map((h) => ({ x: h.x, y: h.y, radius: h.radius, used: false }));
     boards = (level.boards ?? []).map((def) => {
       const pos = boardPosition(def.x1, def.y1, def.x2, def.y2, def.period, 0);
@@ -629,6 +654,9 @@ export function mount(api: GameApi): CandySwingHandle {
       flash: 0,
     }));
     springs = (level.springs ?? []).map((s) => ({ def: s, squash: 0, hits: 0 }));
+    mushrooms = (level.mushrooms ?? []).map((def) => ({ def, squash: 0 }));
+    bubbleSticky = createSticky();
+    bubbleStickyAt = null;
     msgEl.textContent = level.tip;
     updateHud();
   }
@@ -958,8 +986,25 @@ export function mount(api: GameApi): CandySwingHandle {
 
     if (phase !== "play" || candyGone) return;
 
-    // 1.2 黏黏泡：黏住期间把糖果钉在泡泡中心，孩子有几秒看清下半程
+    // 1.2 粘性泡泡：挂住期间原地不动，到点自己松手，把攒下的速度还回去
     let gripped = false;
+    if (bubbleSticky.held && bubbleStickyAt) {
+      c.x = bubbleStickyAt.x;
+      c.y = bubbleStickyAt.y;
+      setVelocity(c, 0, 0, dt);
+      gripped = true;
+      const before = bubbleSticky;
+      bubbleSticky = tickSticky(bubbleSticky, dt);
+      if (!bubbleSticky.held) {
+        const out = stickyRelease(before);
+        setVelocity(c, out.vx, out.vy, dt);
+        api.play("jump");
+        burst(bubbleStickyAt.x, bubbleStickyAt.y, "#C8F5E8", lessMotion ? 3 : 8, 110);
+        bubbleStickyAt = null;
+      }
+    }
+
+    // 1.2 黏黏泡：黏住期间把糖果钉在泡泡中心，孩子有几秒看清下半程
     for (const st of stickies) {
       if (st.flash > 0) st.flash -= dt;
       const r = stickyGripStep(
@@ -1004,6 +1049,22 @@ export function mount(api: GameApi): CandySwingHandle {
       burst(sp.def.x, sp.def.y, "#FFB4D2", lessMotion ? 3 : 8, 120);
     }
 
+    // 1.2 弹簧蘑菇（swing12 版）：压上伞面就沿朝向弹开
+    for (const mu of mushrooms) {
+      if (mu.squash > 0) mu.squash -= dt;
+      if (!circlesOverlap(c.x, c.y, CANDY_R, mu.def.x, mu.def.y, MUSHROOM_R)) continue;
+      const v = velocityOf(c, dt);
+      if (!mushroomTriggers(v.vx, v.vy, mu.def.dir)) continue;
+      const out = mushroomBounce(v.vx, v.vy, mu.def.dir);
+      const axis = mushroomAxis(mu.def.dir);
+      c.x = mu.def.x + axis.x * (MUSHROOM_R + CANDY_R + 1);
+      c.y = mu.def.y + axis.y * (MUSHROOM_R + CANDY_R + 1);
+      setVelocity(c, out.vx, out.vy, dt);
+      mu.squash = 0.25;
+      api.play("jump");
+      burst(mu.def.x, mu.def.y, "#FFD59E", lessMotion ? 3 : 8, 120);
+    }
+
     stepPortals();
 
     // 挂钩自动抓住
@@ -1023,10 +1084,21 @@ export function mount(api: GameApi): CandySwingHandle {
       if (b.used) continue;
       if (circlesOverlap(c.x, c.y, CANDY_R, b.x, b.y, BUBBLE_CATCH_R - CANDY_R)) {
         b.used = true;
-        inBubble = true;
-        c.px = c.x - (c.x - c.px) * 0.25;
-        c.py = c.y - (c.y - c.py) * 0.25;
-        api.play("jump");
+        if (b.sticky && b.sticky > 0) {
+          const v = velocityOf(c, dt);
+          bubbleSticky = stickyCatch(bubbleSticky, v.vx, v.vy, b.sticky);
+          bubbleStickyAt = { x: b.x, y: b.y, hold: b.sticky };
+          c.x = b.x;
+          c.y = b.y;
+          setVelocity(c, 0, 0, dt);
+          api.play("pop");
+          burst(b.x, b.y, "#8FE0C8", lessMotion ? 3 : 8, 90);
+        } else {
+          inBubble = true;
+          c.px = c.x - (c.x - c.px) * 0.25;
+          c.py = c.y - (c.y - c.py) * 0.25;
+          api.play("jump");
+        }
       }
     }
 
@@ -1915,11 +1987,12 @@ export function mount(api: GameApi): CandySwingHandle {
     for (const b of bubbles) {
       if (b.used) continue;
       const wob = Math.sin(simTime * 3 + b.x) * 2;
-      ctx.fillStyle = "rgba(170, 220, 255, 0.35)";
+      const gooey = b.sticky !== undefined && b.sticky > 0;
+      ctx.fillStyle = gooey ? "rgba(150, 232, 205, 0.4)" : "rgba(170, 220, 255, 0.35)";
       ctx.beginPath();
       ctx.arc(b.x, b.y + wob, 26, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(140, 200, 250, 0.9)";
+      ctx.strokeStyle = gooey ? "rgba(58, 168, 138, 0.9)" : "rgba(140, 200, 250, 0.9)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(b.x, b.y + wob, 26, 0, Math.PI * 2);
@@ -1928,6 +2001,15 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.beginPath();
       ctx.arc(b.x - 9, b.y + wob - 9, 5, 0, Math.PI * 2);
       ctx.fill();
+    }
+    // 挂住糖果的粘性泡泡：画一圈倒计时，孩子看得见「还剩多久放开」
+    if (bubbleSticky.held && bubbleStickyAt) {
+      const frac = stickyProgress(bubbleSticky, bubbleStickyAt.hold);
+      ctx.strokeStyle = "#2E8F73";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.arc(bubbleStickyAt.x, bubbleStickyAt.y, 32, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
+      ctx.stroke();
     }
   }
 
@@ -2177,6 +2259,47 @@ export function mount(api: GameApi): CandySwingHandle {
     }
   }
 
+  /** 1.2 弹簧蘑菇（swing12 版）：伞盖朝哪边，糖果就往哪边弹 */
+  function drawMushrooms(): void {
+    for (const mu of mushrooms) {
+      const axis = mushroomAxis(mu.def.dir);
+      const squash = mu.squash > 0 ? mu.squash / 0.25 : 0;
+      const r = MUSHROOM_R * (1 + squash * 0.2);
+      ctx.save();
+      ctx.translate(mu.def.x, mu.def.y);
+      ctx.rotate(Math.atan2(axis.y, axis.x) + Math.PI / 2);
+      ctx.strokeStyle = "#C08A5A";
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, 14 * (1 - squash * 0.5));
+      ctx.stroke();
+      ctx.fillStyle = "#FFB25C";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * 0.7 * (1 - squash * 0.3), 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#FFF3DC";
+      for (const [dx, dy, dr] of [[-9, -8, 3.4], [7, -10, 2.8], [0, -4, 2.2]] as const) {
+        ctx.beginPath();
+        ctx.arc(dx * (r / MUSHROOM_R), dy * (r / MUSHROOM_R), dr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      // 朝哪弹的小箭头
+      ctx.strokeStyle = "rgba(198, 118, 40, 0.9)";
+      ctx.lineWidth = 2.5;
+      const ax = mu.def.x + axis.x * (r + 9);
+      const ay = mu.def.y + axis.y * (r + 9);
+      ctx.beginPath();
+      ctx.moveTo(mu.def.x + axis.x * (r + 2), mu.def.y + axis.y * (r + 2));
+      ctx.lineTo(ax, ay);
+      ctx.lineTo(ax - axis.x * 5 - axis.y * 4, ay - axis.y * 5 + axis.x * 4);
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - axis.x * 5 + axis.y * 4, ay - axis.y * 5 - axis.x * 4);
+      ctx.stroke();
+    }
+  }
+
   /** 1.2 糖果残影：300ms 淡出，帮孩子回看刚才那一段是怎么飞的 */
   function drawGhosts(): void {
     const life = CANDY_GHOST_MS / 1000;
@@ -2363,6 +2486,7 @@ export function mount(api: GameApi): CandySwingHandle {
     drawBubbles();
     drawStickies();
     drawSprings();
+    drawMushrooms();
     drawBalloons();
     drawStars();
     drawMonster();
@@ -2626,6 +2750,9 @@ export function mount(api: GameApi): CandySwingHandle {
       winches = [];
       stickies = [];
       springs = [];
+      mushrooms = [];
+      bubbleSticky = createSticky();
+      bubbleStickyAt = null;
       ropeLinkRanges = [];
       trail.length = 0;
       ghosts.length = 0;

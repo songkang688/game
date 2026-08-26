@@ -60,7 +60,24 @@
 音效只走 `api.play`；`destroy` 拆干净 pointer 监听 / rAF / timer；
 CSS 新类名一律 `cds-` 前缀且写在本款局部 `<style>` 里，不动 `src/styles.css`。
 
-## 六、测试下限
+## 六、两版 12-B 怎么合的（`swing12.ts` 与本版的关系）
+
+同一格 12-B 有两份实现先后落到 `game-1.2-window3` 上，功能清单几乎一样，合流时都留下了，
+分工按「谁在跑」划清楚，不做二选一的删档：
+
+| 东西 | swing12.ts 那一版 | 本版 | 合流后 |
+| --- | --- | --- | --- |
+| 切绳 / 连击 / 残影 | `strokeCutIndices`、`comboLabel`、`ghostAlpha` | `physics.ts` 的 `linksCrossedBySwipe` + `swipeSubSegments` + `whipImpulse` | 运行时走本版（多了子线段细分与切断甩绳），swing12 那几个纯函数留着，用例照跑 |
+| 粘性泡泡 | `bubbles[i].sticky` + `stickyCatch/tickSticky/stickyRelease` | `stickies[]` + `stickyGripStep` | **两套字段都认**：`sim.ts` 与 `index.ts` 各自实现两条分支，同一关里混着摆也不打架 |
+| 弹簧蘑菇 | `mushrooms[]`（四朝向、有上下限） | `springs[]`（法向 + `bounce`/`minOut`） | 同上，两套都能玩、都能仿真 |
+| 无尽 | `buildSweetLevel` 一颗接一颗 | `endless.ts` 甜甜塔一层一层（带限时与层名） | 运行时走 `endless.ts`（逐层验过可解性）；`buildSweetLevel` 作为另一套生成器保留在纯逻辑层 |
+| 存档 | `readStars` / `needsMigration` | `progress.ts` 的 `readProgress` / `writeProgress`（还回写老 key 给冒烟脚本用） | 运行时走 `progress.ts`，两套迁移用例都留着 |
+
+要点是 **sim.ts 与 index.ts 必须认同一套规则**：合流后两处都直接调 `swing12.ts` 的纯函数处理
+`bubbles[].sticky` 与 `mushrooms`，所以「仿真里能通关的关，跑起来也能通关」这条不会因为合流被破坏，
+`upgrade12.test.ts` 第十一节专门盯这件事。
+
+## 七、测试下限
 
 新增 ≥ 20 个用例：切绳子分段不漏切、甩绳冲量、粘性泡泡（≥3）、弹簧蘑菇（≥3）、
 一刀两断计数、30 关抽样「通关解 + 三星解」、旧 key 迁移、甜甜塔生成与计分、`destroy` 归零。

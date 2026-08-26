@@ -826,3 +826,115 @@ describe("candy-swing 1.2 样式与热区（360px）", () => {
     expect(INDEX_SRC).toContain('save.recordEndlessBest("candy-swing"');
   });
 });
+
+/* ================= 十一、两版 12-B 合流：swing12 的机关也得能玩 ================= */
+
+// 同一格 12-B 有两份实现落在同一条分支上（见 UPGRADE-1.2.md）：
+// swing12.ts 那一版把粘性泡泡写成 bubbles[i].sticky、弹簧蘑菇写成 mushrooms[]。
+// 合流后 sim.ts 两套字段都认，这一组用例盯住「跑起来的游戏和仿真是同一套规则」。
+
+describe("candy-swing 1.2 合流后 swing12 的机关在仿真里生效", () => {
+  it("粘性泡泡（bubbles[].sticky）先把糖果挂住，到点再松手落进嘴里", () => {
+    const lv: LevelDef = {
+      name: "粘性泡泡试验", tip: "试验",
+      candy: { x: 180, y: 150 },
+      monster: { x: 180, y: 430 },
+      ropes: [{ x: 180, y: 60 }],
+      stars: [{ x: 180, y: 320 }],
+      bubbles: [{ x: 180, y: 250, sticky: 1 }],
+      solve: { kind: "cut", t: 0.2 },
+    };
+    const w = makeSimFor(lv);
+    w.cutAll();
+    runSim(w, 0.85);
+    expect(w.sticky.held, "该被粘住").toBe(true);
+    expect(Math.abs(w.candy().y - 250), "挂住期间原地不动").toBeLessThan(3);
+    runSim(w, 4);
+    expect(w.sticky.held).toBe(false);
+    expect(w.ate, "松手之后还是会掉进嘴里").toBe(true);
+  });
+
+  it("普通泡泡（不带 sticky）还是 1.1 的软着陆，不会被当成粘性泡泡", () => {
+    const lv: LevelDef = {
+      name: "普通泡泡", tip: "试验",
+      candy: { x: 180, y: 150 },
+      monster: { x: 180, y: 430 },
+      ropes: [{ x: 180, y: 60 }],
+      stars: [{ x: 180, y: 320 }],
+      bubbles: [{ x: 180, y: 250 }],
+      solve: { kind: "cut", t: 0.2 },
+    };
+    const w = makeSimFor(lv);
+    w.cutAll();
+    runSim(w, 0.85);
+    expect(w.sticky.held).toBe(false);
+    expect(w.inBubble).toBe(true);
+  });
+
+  it("弹簧蘑菇（mushrooms[]）把掉下来的糖果改道", () => {
+    const base: LevelDef = {
+      name: "蘑菇试验", tip: "试验",
+      candy: { x: 120, y: 150 },
+      monster: { x: 300, y: 460 },
+      ropes: [{ x: 120, y: 60 }],
+      stars: [{ x: 200, y: 300 }],
+      solve: { kind: "cut", t: 0.2 },
+    };
+    const withMushroom: LevelDef = {
+      ...base,
+      mushrooms: [{ x: 120, y: 360, dir: "right" }],
+    };
+    const plain = makeSimFor(base);
+    plain.cutAll();
+    runSim(plain, 1.6);
+    const bounced = makeSimFor(withMushroom);
+    bounced.cutAll();
+    runSim(bounced, 1.6);
+    expect(bounced.candy().x, "朝右的蘑菇该把糖果推向右边").toBeGreaterThan(plain.candy().x + 20);
+  });
+
+  it("两套机关字段可以同时出现在一关里，互不打架", () => {
+    const lv: LevelDef = {
+      name: "混编试验", tip: "试验",
+      candy: { x: 180, y: 150 },
+      monster: { x: 180, y: 440 },
+      ropes: [{ x: 180, y: 60 }],
+      stars: [{ x: 180, y: 320 }],
+      bubbles: [{ x: 180, y: 230, sticky: 0.6 }],
+      stickies: [{ x: 180, y: 330, radius: 28, hold: 0.6 }],
+      mushrooms: [{ x: 40, y: 400, dir: "right" }],
+      springs: [{ x: 320, y: 400, radius: 22, dir: "left", bounce: 1, minOut: 200 }],
+      solve: { kind: "cut", t: 0.2 },
+    };
+    const w = makeSimFor(lv);
+    w.cutAll();
+    runSim(w, 6);
+    expect(w.stuckT, "黏黏泡与粘性泡泡都该轮到过").toBeGreaterThan(0);
+    expect(w.ate).toBe(true);
+  });
+});
+
+describe("candy-swing 1.2 合流后 swing12 的机关在运行时也接上了", () => {
+  it("index.ts 直接用 swing12 的纯函数，跑起来的规则和 sim.ts 一模一样", () => {
+    for (const fn of ["stickyCatch", "stickyRelease", "tickSticky", "mushroomBounce", "mushroomTriggers"]) {
+      expect(INDEX_SRC, `index.ts 没接 swing12 的 ${fn}`).toContain(fn);
+    }
+    expect(INDEX_SRC).toContain('from "./swing12"');
+    // 关卡里两套机关字段都要建运行时状态
+    expect(INDEX_SRC).toContain("level.mushrooms ?? []");
+    expect(INDEX_SRC).toContain("sticky: b.sticky");
+  });
+
+  it("粘性泡泡有倒计时圈、蘑菇有朝向箭头，孩子看得见规则", () => {
+    expect(INDEX_SRC).toContain("stickyProgress(bubbleSticky");
+    expect(INDEX_SRC).toContain("function drawMushrooms()");
+    expect(INDEX_SRC).toContain("drawMushrooms()");
+  });
+
+  it("destroy 里这两套新状态也清干净了", () => {
+    const destroyBody = INDEX_SRC.slice(INDEX_SRC.indexOf("    destroy() {"));
+    expect(destroyBody).toContain("mushrooms = []");
+    expect(destroyBody).toContain("bubbleSticky = createSticky()");
+    expect(destroyBody).toContain("bubbleStickyAt = null");
+  });
+});
