@@ -196,7 +196,9 @@ const CSS = `
   .ld-face{width:28px;height:28px;font-size:16px;}
   .ld-foe-name{font-size:11px;max-width:60px;}
   .ld-mini{flex-basis:100%;min-height:20px;justify-content:flex-start;}
-  .ld-btn{padding:6px 10px;font-size:14px;min-height:40px;}
+  /* 出牌阶段一排有 5 个按钮,挤瘦一点才不会折行掉到屏幕外头去 */
+  .ld-btns{gap:4px;}
+  .ld-btn{padding:6px 5px;font-size:13px;min-height:40px;border-radius:12px;}
   .ld-keys{font-size:10px;}
 }
 @media (prefers-reduced-motion:reduce){
