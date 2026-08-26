@@ -146,6 +146,32 @@ npm run preview    # 本地预览构建产物
 
 ## 💻 电脑安装包（Electron）
 
+### ⬇️ 从 GitHub Release 下载（不用装开发环境，推荐给普通用户）
+
+每个正式版本的安装包都由 GitHub Actions 自动打好，挂在
+**[Releases 页面](https://github.com/songkang688/game/releases/latest)** 上，下载对应的文件即可：
+
+| 你的设备 | 下载这个 | 怎么用 |
+| ---- | ---- | ---- |
+| Windows 10/11 | `yiduo-yixing-<版本>-win-setup.exe` | **推荐**。双击安装，开始菜单里会有图标 |
+| Windows 10/11（免安装） | `yiduo-yixing-<版本>-win-portable.exe` | 双击直接玩，可以放 U 盘里带走 |
+| Mac（M1/M2/M3… Apple 芯片） | `yiduo-yixing-<版本>-mac-arm64.dmg` | 双击打开，把图标拖进「应用程序」 |
+| Mac（Intel 芯片） | `yiduo-yixing-<版本>-mac-x64.dmg` | 同上 |
+| Mac（不想用 dmg） | `yiduo-yixing-<版本>-mac-<架构>.zip` | 解压出来就是 App，拖进「应用程序」 |
+| Linux x64 | `yiduo-yixing-<版本>-linux-x86_64.AppImage` | `chmod +x` 后双击运行 |
+| 安卓手机 / 平板 | `yiduo-yixing-<版本>-android-debug.apk` | 传到手机点开安装（需允许「安装未知来源应用」） |
+
+第一次打开的提示：
+
+- **Mac 用户注意**：这些包没有花钱买苹果开发者签名，直接双击会提示「无法验证开发者」。
+  请 **右键点图标 → 选「打开」→ 弹窗里再点一次「打开」**，之后就能正常双击了。
+- **Windows**：SmartScreen 可能提示「不常见的应用」，点「更多信息 → 仍要运行」即可。
+- **安卓**：是 debug 签名的 APK，家里自己装够用。
+
+> 维护者怎么发版（打 tag 触发出包）见 [`docs/RELEASE.md`](docs/RELEASE.md)。
+
+### 🔨 自己编译
+
 ```bash
 npm run dist        # 构建 + 打 Linux AppImage,产物在 release/
 ```
