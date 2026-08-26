@@ -69,7 +69,7 @@ import {
   type StickyState as BubbleStickyState,
 } from "./swing12";
 import { makeTowerLevel, towerTitle } from "./endless";
-import { readProgress, writeProgress, type Progress } from "./progress";
+import { needsMigration, readProgress, writeProgress, type Progress } from "./progress";
 import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
 
@@ -123,7 +123,10 @@ const localStore: Storage | null = (() => {
 })();
 
 function loadProgress(): Progress {
-  return readProgress(localStore, LEVELS.length);
+  const p = readProgress(localStore, LEVELS.length);
+  // 两代老 key 里还有更高的星就地搬一次，不用等下一次通关才落盘
+  if (needsMigration(localStore, LEVELS.length)) writeProgress(localStore, p);
+  return p;
 }
 
 function saveProgress(p: Progress): void {
@@ -418,6 +421,9 @@ export function mount(api: GameApi): CandySwingHandle {
       .cds-hud { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
       .cds-hud .cs-badge { font-size: 14px; padding: 7px 10px; }
       .cds-hud .cds-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* 360px 上「第几关 · 关名」和两个按钮挤一行会只剩省略号，让 HUD 单独占一行 */
+      .cds-top { flex-wrap: wrap; }
+      .cds-top .cds-hud { flex: 1 1 100%; order: -1; }
       .cds-tap { min-height: 44px; min-width: 44px; font-size: 14px; padding: 8px 12px; }
       .cds-clock { color: #C2497E; }
       .cds-clock.hot { color: #E0453F; }
@@ -438,7 +444,7 @@ export function mount(api: GameApi): CandySwingHandle {
       <div class="cs-chapters"></div>
     </div>
     <div class="cs-game cs-hidden">
-      <div class="cs-top">
+      <div class="cs-top cds-top">
         <span class="cds-hud">
           <span class="cs-badge cs-level cds-name">第 1 关</span>
           <span class="cs-badge cs-stars">⭐ 0/3</span>

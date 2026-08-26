@@ -515,6 +515,19 @@ describe("candy-swing 1.2 存档 key 迁移", () => {
     expect(needsMigration(null, 3)).toBe(false);
   });
 
+  it("开局读一次就把老档搬到主 key，不用等下一次通关", () => {
+    // index.ts 的 loadProgress 就是这两步：读一次 → 需要搬就立刻落盘
+    const store = fakeStore({
+      "yiduo.candy-swing.campaign.v2": JSON.stringify({ stars: [3, 1, 2] }),
+    });
+    expect(store.data[SAVE_KEY]).toBeUndefined();
+    const p = readProgress(store, 3);
+    if (needsMigration(store, 3)) writeProgress(store, p);
+    expect(JSON.parse(store.data[SAVE_KEY]).stars).toEqual([3, 1, 2]);
+    expect(needsMigration(store, 3)).toBe(false);
+    expect(INDEX_SRC).toContain("if (needsMigration(localStore, LEVELS.length)) writeProgress(localStore, p)");
+  });
+
   it("normalizeStars / mergeStars：越界夹紧、脏数据当 0、合并只增不减", () => {
     expect(normalizeStars([5, -2, 1.6, "x", null, undefined], 6)).toEqual([3, 0, 2, 0, 0, 0]);
     expect(normalizeStars(null, 3)).toEqual([0, 0, 0]);
@@ -786,6 +799,12 @@ describe("candy-swing 1.2 样式与热区（360px）", () => {
     // 提示行本来就是 14px
     expect(INDEX_SRC).toContain(".cs-msg { text-align: center; min-height: 20px;");
     expect(INDEX_SRC).toMatch(/\.cs-msg \{[^}]*font-size: 1[4-9]px/);
+  });
+
+  it("360px 上 HUD 单独占一行，关名不会被挤成省略号", () => {
+    expect(INDEX_SRC).toContain(".cds-top { flex-wrap: wrap; }");
+    expect(INDEX_SRC).toContain(".cds-top .cds-hud { flex: 1 1 100%;");
+    expect(INDEX_SRC).toContain('class="cs-top cds-top"');
   });
 
   it("暂停/攻略这类按钮的热区 ≥ 44px，且划线扫过去不会误触", () => {
