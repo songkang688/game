@@ -3,7 +3,7 @@
  * 所有关卡都由确定性随机生成,同一关每次都是同一份编队,可测可复现。
  */
 import { mulberry32, randInt, type Chapter } from "../level99";
-import { makeSpec, type BossSpec, type PatternSpec, type PhaseSpec } from "./bullets";
+import { compileDecl, makeSpec, type BossSpec, type PatternDecl, type PatternSpec, type PhaseCue, type PhaseSpec } from "./bullets";
 import type { FoeKind, PickupKind } from "./logic";
 
 export const CHAPTERS: Chapter[] = [
@@ -27,9 +27,26 @@ function phase(
   color: string,
   shout: string,
   swing: number,
-  patterns: PatternSpec[]
+  patterns: PatternSpec[],
+  cue: PhaseCue
 ): PhaseSpec {
-  return { name, until, color, shout, swing, patterns };
+  return { name, until, color, shout, swing, patterns, cue };
+}
+
+/** 声明式弹幕的快捷写法(1.2 起新写的 Boss 段落都走这条) */
+function decl(...decls: PatternDecl[]): PatternSpec[] {
+  return decls.map(compileDecl);
+}
+
+/** 三种预告动作,配一句「要来了」 */
+function inhale(call: string, seconds = 1.5): PhaseCue {
+  return { move: "inhale", seconds, call };
+}
+function bloom(call: string, seconds = 1.6): PhaseCue {
+  return { move: "bloom", seconds, call };
+}
+function spinUp(call: string, seconds = 1.5): PhaseCue {
+  return { move: "spin", seconds, call };
 }
 
 export const BOSSES: BossSpec[] = [
@@ -39,16 +56,36 @@ export const BOSSES: BossSpec[] = [
     emoji: "☁️",
     hp: 60,
     phases: [
-      phase("散步棉花", 0.66, "#DCEBFB", "棉花云慢慢摊开啦,先看清扇形的缝。", 90, [
-        makeSpec("fan", { count: 7, speed: 108, radius: 12, interval: 1.7, spread: Math.PI * 0.55 }),
-      ]),
-      phase("棉花墙", 0.33, "#CFE3F7", "它把棉花排成一堵墙,缺口每次都会挪一挪。", 60, [
-        makeSpec("wall", { count: 10, speed: 96, radius: 13, interval: 2, gaps: 2 }),
-      ]),
-      phase("棉花花环", 0, "#C3DAF2", "最后一段是花环加小雨,沿着边上绕就行。", 110, [
-        makeSpec("ring", { count: 11, speed: 100, radius: 11, interval: 2.1, rotate: 0.3 }),
-        makeSpec("rain", { count: 4, speed: 118, radius: 12, interval: 1.9, delay: 0.9 }),
-      ]),
+      phase(
+        "散步棉花",
+        0.66,
+        "#DCEBFB",
+        "棉花云慢慢摊开啦,先看清扇形的缝。",
+        90,
+        [makeSpec("fan", { count: 7, speed: 108, radius: 12, interval: 1.7, spread: Math.PI * 0.55 })],
+        inhale("它深吸一口气,棉花要摊开了!")
+      ),
+      phase(
+        "棉花墙",
+        0.33,
+        "#CFE3F7",
+        "它把棉花排成一堵墙,缺口每次都会挪一挪。",
+        60,
+        [makeSpec("wall", { count: 10, speed: 96, radius: 13, interval: 2, gaps: 2 })],
+        bloom("棉花在排队了,下一段是一堵墙!")
+      ),
+      phase(
+        "棉花花环",
+        0,
+        "#C3DAF2",
+        "最后一段是花环加小雨,沿着边上绕就行。",
+        110,
+        [
+          makeSpec("ring", { count: 11, speed: 100, radius: 11, interval: 2.1, rotate: 0.3 }),
+          makeSpec("rain", { count: 4, speed: 118, radius: 12, interval: 1.9, delay: 0.9 }),
+        ],
+        spinUp("它转起来啦,最后一段是花环加小雨!")
+      ),
     ],
   },
   {
@@ -57,16 +94,36 @@ export const BOSSES: BossSpec[] = [
     emoji: "🌈",
     hp: 72,
     phases: [
-      phase("慢转陀螺", 0.66, "#FFE0EF", "陀螺转起来了,螺旋弹其实很好数。", 70, [
-        makeSpec("spiral", { count: 8, speed: 112, radius: 12, interval: 0.34, rotate: 0.52 }),
-      ]),
-      phase("反转陀螺", 0.33, "#FFD3E8", "它换了个方向转,你也跟着换边。", 100, [
-        makeSpec("spiral", { count: 12, speed: 116, radius: 11, interval: 0.32, rotate: -0.58 }),
-      ]),
-      phase("彩虹光环", 0, "#FFC7E0", "光环加扫射,贴着光环的缝走。", 120, [
-        makeSpec("ring", { count: 12, speed: 104, radius: 11, interval: 2, rotate: 0.26 }),
-        makeSpec("sweep", { count: 3, speed: 128, radius: 12, interval: 1.5, delay: 0.7 }),
-      ]),
+      phase(
+        "慢转陀螺",
+        0.66,
+        "#FFE0EF",
+        "陀螺转起来了,螺旋弹其实很好数。",
+        70,
+        [makeSpec("spiral", { count: 8, speed: 112, radius: 12, interval: 0.34, rotate: 0.52 })],
+        spinUp("陀螺开始转啦,螺旋要来了!")
+      ),
+      phase(
+        "反转陀螺",
+        0.33,
+        "#FFD3E8",
+        "它换了个方向转,你也跟着换边。",
+        100,
+        [makeSpec("spiral", { count: 12, speed: 116, radius: 11, interval: 0.32, rotate: -0.58 })],
+        spinUp("它停了一下 —— 要往反方向转了,你也换边!")
+      ),
+      phase(
+        "彩虹光环",
+        0,
+        "#FFC7E0",
+        "光环加扫射,贴着光环的缝走。",
+        120,
+        [
+          makeSpec("ring", { count: 12, speed: 104, radius: 11, interval: 2, rotate: 0.26 }),
+          makeSpec("sweep", { count: 3, speed: 128, radius: 12, interval: 1.5, delay: 0.7 }),
+        ],
+        bloom("彩虹张开了,最后一段是光环加扫射!")
+      ),
     ],
   },
   {
@@ -75,16 +132,36 @@ export const BOSSES: BossSpec[] = [
     emoji: "🕰️",
     hp: 84,
     phases: [
-      phase("整点报时", 0.66, "#E6E2F5", "钟摆一晃就是一堵墙,缺口在往一边走。", 80, [
-        makeSpec("wall", { count: 11, speed: 104, radius: 13, interval: 1.9, gaps: 2 }),
-      ]),
-      phase("摆锤扫过", 0.33, "#DCD6F0", "摆锤扫射来回摆,你走它的反方向。", 130, [
-        makeSpec("sweep", { count: 4, speed: 132, radius: 12, interval: 1.15 }),
-      ]),
-      phase("发条全开", 0, "#D0C8EA", "墙加环一起来,先钻墙缝再绕环。", 100, [
-        makeSpec("wall", { count: 10, speed: 98, radius: 12, interval: 2.3, gaps: 2 }),
-        makeSpec("ring", { count: 10, speed: 108, radius: 11, interval: 2.4, rotate: 0.34, delay: 1.1 }),
-      ]),
+      phase(
+        "整点报时",
+        0.66,
+        "#E6E2F5",
+        "钟摆一晃就是一堵墙,缺口在往一边走。",
+        80,
+        [makeSpec("wall", { count: 11, speed: 104, radius: 13, interval: 1.9, gaps: 2 })],
+        inhale("钟摆举起来了,要报时啦!")
+      ),
+      phase(
+        "摆锤扫过",
+        0.33,
+        "#DCD6F0",
+        "摆锤扫射来回摆,你走它的反方向。",
+        130,
+        [makeSpec("sweep", { count: 4, speed: 132, radius: 12, interval: 1.15 })],
+        spinUp("摆锤荡起来了,下一段是来回扫!")
+      ),
+      phase(
+        "发条全开",
+        0,
+        "#D0C8EA",
+        "墙加环一起来,先钻墙缝再绕环。",
+        100,
+        [
+          makeSpec("wall", { count: 10, speed: 98, radius: 12, interval: 2.3, gaps: 2 }),
+          makeSpec("ring", { count: 10, speed: 108, radius: 11, interval: 2.4, rotate: 0.34, delay: 1.1 }),
+        ],
+        bloom("发条拧到头啦,最后一段墙和环一起来!")
+      ),
     ],
   },
   {
@@ -93,16 +170,36 @@ export const BOSSES: BossSpec[] = [
     emoji: "🍭",
     hp: 96,
     phases: [
-      phase("糖霜螺旋", 0.66, "#FFE8D2", "糖霜绕成螺旋,顺着一个方向跑就好。", 90, [
-        makeSpec("spiral", { count: 10, speed: 118, radius: 12, interval: 0.3, rotate: 0.46 }),
-      ]),
-      phase("糖豆雨", 0.33, "#FFDDBE", "糖豆雨永远给你留四条泳道。", 70, [
-        makeSpec("rain", { count: 6, speed: 126, radius: 13, interval: 1.15 }),
-      ]),
-      phase("旋塔加班", 0, "#FFD2AA", "螺旋加缺口墙,数着缺口走。", 120, [
-        makeSpec("spiral", { count: 8, speed: 112, radius: 11, interval: 0.4, rotate: 0.5 }),
-        makeSpec("wall", { count: 10, speed: 92, radius: 12, interval: 2.6, gaps: 2, delay: 1.3 }),
-      ]),
+      phase(
+        "糖霜螺旋",
+        0.66,
+        "#FFE8D2",
+        "糖霜绕成螺旋,顺着一个方向跑就好。",
+        90,
+        [makeSpec("spiral", { count: 10, speed: 118, radius: 12, interval: 0.3, rotate: 0.46 })],
+        spinUp("糖霜开始绕圈啦,螺旋要来了!")
+      ),
+      phase(
+        "糖豆雨",
+        0.33,
+        "#FFDDBE",
+        "糖豆雨永远给你留四条泳道。",
+        70,
+        [makeSpec("rain", { count: 6, speed: 126, radius: 13, interval: 1.15 })],
+        inhale("它鼓起来了 —— 下一段是糖豆雨,先找泳道!")
+      ),
+      phase(
+        "旋塔加班",
+        0,
+        "#FFD2AA",
+        "螺旋加缺口墙,数着缺口走。",
+        120,
+        [
+          makeSpec("spiral", { count: 8, speed: 112, radius: 11, interval: 0.4, rotate: 0.5 }),
+          makeSpec("wall", { count: 10, speed: 92, radius: 12, interval: 2.6, gaps: 2, delay: 1.3 }),
+        ],
+        bloom("旋塔全亮了,最后一段螺旋加墙!")
+      ),
     ],
   },
   {
@@ -111,16 +208,39 @@ export const BOSSES: BossSpec[] = [
     emoji: "❄️",
     hp: 104,
     phases: [
-      phase("冰花绽放", 0.66, "#E1F4FA", "冰花是一圈一圈的,站在两圈中间最安全。", 100, [
-        makeSpec("ring", { count: 13, speed: 106, radius: 12, interval: 1.7, rotate: 0.28 }),
-      ]),
-      phase("冰墙推进", 0.33, "#D3EDF7", "冰墙压下来了,提前站到缺口那边。", 60, [
-        makeSpec("wall", { count: 12, speed: 100, radius: 12, interval: 1.9, gaps: 2 }),
-      ]),
-      phase("极光合奏", 0, "#C5E6F4", "冰花配上极光扫射,别贪打,先躲。", 130, [
-        makeSpec("ring", { count: 11, speed: 104, radius: 11, interval: 2.1, rotate: -0.3 }),
-        makeSpec("sweep", { count: 4, speed: 130, radius: 12, interval: 1.4, delay: 0.8 }),
-      ]),
+      phase(
+        "冰花绽放",
+        0.66,
+        "#E1F4FA",
+        "冰花是一圈一圈的,站在两圈中间最安全。",
+        100,
+        decl({ pattern: "ring", count: 13, speed: 106, radius: 12, interval: 1.7, rotate: 16, warn: 0.4 }),
+        bloom("冰花要开了,一圈一圈往外铺!")
+      ),
+      phase(
+        "冰墙推进",
+        0.33,
+        "#D3EDF7",
+        "冰墙压下来了,提前站到缺口那边;中间还会补一发锁定弹。",
+        60,
+        decl(
+          { pattern: "wall", count: 12, speed: 100, radius: 12, interval: 1.9, gaps: 2, warn: 0.4 },
+          { pattern: "aimed", count: 2, speed: 108, radius: 12, interval: 2.6, arc: 26, delay: 1.2, warn: 0.5 }
+        ),
+        inhale("冰墙在结冻了,认准缺口先站过去!")
+      ),
+      phase(
+        "极光合奏",
+        0,
+        "#C5E6F4",
+        "冰花配上极光扫射,别贪打,先躲。",
+        130,
+        decl(
+          { pattern: "ring", count: 11, speed: 104, radius: 11, interval: 2.1, rotate: -17, warn: 0.4 },
+          { pattern: "sweep", count: 4, speed: 130, radius: 12, interval: 1.4, delay: 0.8, warn: 0.35 }
+        ),
+        spinUp("极光亮起来啦,最后一段冰花配扫射!")
+      ),
     ],
   },
   {
@@ -129,16 +249,37 @@ export const BOSSES: BossSpec[] = [
     emoji: "⏳",
     hp: 116,
     phases: [
-      phase("细沙落下", 0.66, "#FBEBD1", "细沙一条一条落,泳道之间就是路。", 80, [
-        makeSpec("rain", { count: 6, speed: 120, radius: 13, interval: 1.1 }),
-      ]),
-      phase("沙暴扇面", 0.33, "#F8E2BF", "沙暴是扇形的,扇子边上最空。", 110, [
-        makeSpec("fan", { count: 9, speed: 114, radius: 12, interval: 1.5, spread: Math.PI * 0.62 }),
-      ]),
-      phase("翻转沙漏", 0, "#F5D8AC", "沙雨加螺旋,一边绕一边找缝。", 120, [
-        makeSpec("rain", { count: 5, speed: 118, radius: 12, interval: 1.4 }),
-        makeSpec("spiral", { count: 8, speed: 110, radius: 11, interval: 0.42, rotate: 0.48, delay: 0.7 }),
-      ]),
+      phase(
+        "细沙落下",
+        0.66,
+        "#FBEBD1",
+        "细沙一条一条落,泳道之间就是路。",
+        80,
+        decl({ pattern: "rain", count: 6, speed: 120, radius: 13, interval: 1.1, warn: 0.32 }),
+        inhale("沙漏翻过来了,细沙要落下来啦!")
+      ),
+      phase(
+        "沙暴扇面",
+        0.33,
+        "#F8E2BF",
+        "沙暴是扇形的,扇子边上最空。",
+        110,
+        decl({ pattern: "fan", count: 9, speed: 114, radius: 12, interval: 1.5, arc: 112, warn: 0.36 }),
+        bloom("沙暴张开成扇子了,往两边让!")
+      ),
+      phase(
+        "翻转沙漏",
+        0,
+        "#F5D8AC",
+        "沙雨加螺旋,还有一发十字弹,一边绕一边找缝。",
+        120,
+        decl(
+          { pattern: "rain", count: 5, speed: 118, radius: 12, interval: 1.4, warn: 0.32 },
+          { pattern: "spiral", count: 8, speed: 110, radius: 11, interval: 0.42, rotate: 27, delay: 0.7, warn: 0.28 },
+          { pattern: "cross", count: 4, speed: 100, radius: 12, interval: 3.4, rotate: 25, delay: 2, warn: 0.5 }
+        ),
+        spinUp("沙漏整个转起来了,最后一段三套一起来!")
+      ),
     ],
   },
   {
@@ -147,16 +288,39 @@ export const BOSSES: BossSpec[] = [
     emoji: "🤖",
     hp: 128,
     phases: [
-      phase("滚球预热", 0.66, "#EAE4FA", "陨石球先排成墙滚下来,认准缝。", 90, [
-        makeSpec("wall", { count: 12, speed: 106, radius: 13, interval: 1.8, gaps: 2 }),
-      ]),
-      phase("碎星四射", 0.33, "#E1D8F6", "碎星是环形的,顺着圈跑不会撞。", 120, [
-        makeSpec("ring", { count: 14, speed: 110, radius: 11, interval: 1.7, rotate: 0.24 }),
-      ]),
-      phase("陨石全开", 0, "#D6CBF2", "墙加扫射,先看墙缝再看扫射走向。", 140, [
-        makeSpec("wall", { count: 11, speed: 98, radius: 12, interval: 2.4, gaps: 2 }),
-        makeSpec("sweep", { count: 4, speed: 134, radius: 12, interval: 1.5, delay: 1.2 }),
-      ]),
+      phase(
+        "滚球预热",
+        0.66,
+        "#EAE4FA",
+        "陨石球先排成墙滚下来,认准缝。",
+        90,
+        decl({ pattern: "wall", count: 12, speed: 106, radius: 13, interval: 1.8, gaps: 2, warn: 0.4 }),
+        inhale("它把球一个个摞起来了,要排成墙!")
+      ),
+      phase(
+        "碎星四射",
+        0.33,
+        "#E1D8F6",
+        "碎星是环形的,顺着圈跑不会撞;十字弹的四条胳膊之间是空的。",
+        120,
+        decl(
+          { pattern: "ring", count: 14, speed: 110, radius: 11, interval: 1.7, rotate: 14, warn: 0.4 },
+          { pattern: "cross", count: 4, speed: 104, radius: 12, interval: 3, rotate: 30, delay: 1.4, warn: 0.5 }
+        ),
+        bloom("球裂开成碎星了,下一段是环加十字!")
+      ),
+      phase(
+        "陨石全开",
+        0,
+        "#D6CBF2",
+        "墙加扫射,先看墙缝再看扫射走向。",
+        140,
+        decl(
+          { pattern: "wall", count: 11, speed: 98, radius: 12, interval: 2.4, gaps: 2, warn: 0.4 },
+          { pattern: "sweep", count: 4, speed: 134, radius: 12, interval: 1.5, delay: 1.2, warn: 0.35 }
+        ),
+        spinUp("它整个转起来啦,最后一段墙加扫射!")
+      ),
     ],
   },
   {
@@ -165,16 +329,40 @@ export const BOSSES: BossSpec[] = [
     emoji: "🌙",
     hp: 144,
     phases: [
-      phase("灯笼摆动", 0.66, "#E8EDFC", "灯笼来回摆,扫射跟着摆,你走反方向。", 130, [
-        makeSpec("sweep", { count: 5, speed: 132, radius: 12, interval: 1.1 }),
-      ]),
-      phase("月光螺旋", 0.33, "#DDE4FA", "月光转成螺旋,顺时针跟着走一圈。", 110, [
-        makeSpec("spiral", { count: 12, speed: 118, radius: 11, interval: 0.3, rotate: 0.55 }),
-      ]),
-      phase("满月合唱", 0, "#D0DAF7", "满月是环加雨,这是最后一段,稳住!", 140, [
-        makeSpec("ring", { count: 13, speed: 108, radius: 11, interval: 2, rotate: 0.3 }),
-        makeSpec("rain", { count: 5, speed: 124, radius: 12, interval: 1.5, delay: 0.9 }),
-      ]),
+      phase(
+        "灯笼摆动",
+        0.66,
+        "#E8EDFC",
+        "灯笼来回摆,扫射跟着摆,你走反方向。",
+        130,
+        decl(
+          { pattern: "sweep", count: 5, speed: 132, radius: 12, interval: 1.1, warn: 0.35 },
+          { pattern: "aimed", count: 3, speed: 112, radius: 12, interval: 3, arc: 24, delay: 1.6, warn: 0.55 }
+        ),
+        inhale("灯笼亮了一下 —— 它要开始来回摆了!")
+      ),
+      phase(
+        "月光螺旋",
+        0.33,
+        "#DDE4FA",
+        "月光转成螺旋,顺时针跟着走一圈。",
+        110,
+        decl({ pattern: "spiral", count: 12, speed: 118, radius: 11, interval: 0.3, rotate: 32, warn: 0.28 }),
+        spinUp("月光开始打转啦,下一段跟着它绕!")
+      ),
+      phase(
+        "满月合唱",
+        0,
+        "#D0DAF7",
+        "满月是环加雨再加一发十字,这是最后一段,稳住!",
+        140,
+        decl(
+          { pattern: "ring", count: 13, speed: 108, radius: 11, interval: 2, rotate: 17, warn: 0.4 },
+          { pattern: "rain", count: 5, speed: 124, radius: 12, interval: 1.5, delay: 0.9, warn: 0.32 },
+          { pattern: "cross", count: 4, speed: 98, radius: 12, interval: 3.6, rotate: 20, delay: 2.4, warn: 0.55 }
+        ),
+        bloom("满月整个亮起来了,最后一段三套合唱 —— 稳住!")
+      ),
     ],
   },
 ];
@@ -249,7 +437,10 @@ const FORMATIONS: Formation[] = ["line", "vee", "arc", "column"];
 /** 普通关敌机的弹幕:比 Boss 稀薄得多,而且一样是低速大弹 */
 function foeFire(ci: number, depth: number, rand: () => number): PatternSpec {
   const kinds = ["fan", "rain", "sweep", "wall"] as const;
-  const kind = ci <= 1 ? "fan" : kinds[randInt(rand, 0, Math.min(3, 1 + Math.floor(ci / 2)))];
+  const drawn = ci <= 1 ? "fan" : kinds[randInt(rand, 0, Math.min(3, 1 + Math.floor(ci / 2)))];
+  // 第六章起换两种新图案上场。这里是**确定性替换**,不多抽一次随机数,
+  // 所以前面章节(含前 99 关)的编队与弹幕一个字节都没动。
+  const kind = ci >= 5 && drawn === "sweep" ? "aimed" : ci >= 6 && drawn === "wall" ? "cross" : drawn;
   return makeSpec(kind, {
     count: kind === "wall" ? 8 : kind === "rain" ? 3 : 2 + Math.floor(depth * 2),
     speed: 96 + ci * 5 + depth * 18,

@@ -119,8 +119,9 @@ describe("sky-squad 分级与文案红线", () => {
     expect(Object.values(WEAPONS).map((w) => w.name)).toEqual(["星星弹", "波纹弹", "光束"]);
   });
 
-  it("弹幕可读性写进了数据:六种图案都有中文名,敌弹都是低速大弹", () => {
-    expect(Object.keys(PATTERN_LABEL).length).toBe(6);
+  it("弹幕可读性写进了数据:八种图案都有中文名,敌弹都是低速大弹", () => {
+    // 1.2 在 1.1 的六种基础上补了「锁定弹 / 十字弹」
+    expect(Object.keys(PATTERN_LABEL).length).toBe(8);
     for (const b of BOSSES) {
       for (const ph of b.phases) {
         for (const spec of ph.patterns) {
