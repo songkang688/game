@@ -4,6 +4,35 @@ export { meta };
 // 朵星擂台 —— 双人同屏抢分擂台赛：
 // 上半场星星、下半场朵朵，两边目标完全相同（同一份时间表），
 // 3 回合制 + 决胜回合，金币、炸弹、礼物道具（+3 / 冰冻对手 / 双倍星光）。
+import { save } from "../../engine/save";
+import {
+  ARENA_AI_HINTS,
+  ARENA_AI_LABELS,
+  ARENA_AI_LEVELS,
+  SKILLS,
+  SKILL_KINDS,
+  STAGES,
+  type AiTapPlan,
+  type ArenaAiLevel,
+  type SkillKind,
+  type SkillState,
+  type StageSpec,
+  applyStage,
+  arenaHandicap,
+  arenaHandicapBadge,
+  createArenaAi,
+  createDefense,
+  createSkill,
+  defenseAiLevel,
+  defenseNext,
+  defenseStage,
+  matchPointLine,
+  planArenaTaps,
+  pressSkill,
+  shieldAbsorb,
+  sparkleActive,
+  tickSkill,
+} from "./arena12";
 import {
   BOMB_STUN_SECONDS,
   DOUBLE_SECONDS,
@@ -57,12 +86,19 @@ interface ArenaPlayer {
   zone: HTMLElement;
   fx: HTMLElement;
   scoreEl: HTMLElement;
+  skillBar: HTMLElement;
   score: number;
   next: number; // 时间表指针
   active: ActiveTarget[];
   frozenUntil: number;
   stunUntil: number;
   doubleUntil: number;
+  /** 1.2:三个技能各自的状态机 */
+  skills: Record<SkillKind, SkillState>;
+  /** 1.2:这一半场是电脑在打时的出手计划（按 at 升序），null 表示真人 */
+  aiPlan: AiTapPlan[] | null;
+  /** 计划执行到第几条 */
+  aiCursor: number;
 }
 
 const RULES_HTML = `
@@ -100,6 +136,14 @@ export function mount(api: GameApi): { destroy: () => void } {
   let roundTime = 0;
   let roundDuration = ROUND_SECONDS;
   let matchSeed = 0;
+  /** 1.2:赛制 —— 三局两胜 / 守擂无尽 */
+  let arenaMode: "bo3" | "defense" = "bo3";
+  /** 1.2:星星那半场交给电脑时的档位,null 表示两个真人 */
+  let aiLevel: ArenaAiLevel | null = null;
+  let stage: StageSpec = STAGES[0];
+  let handicapOn = false;
+  let defense = createDefense();
+  let endlessBest = 0;
 
   const wrap = document.createElement("div");
   wrap.className = "da-wrap";
@@ -135,6 +179,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       .da-btns button { flex: 1; border: none; border-radius: 14px; padding: 11px 4px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); font-family: inherit; }
       .da-help { background: #D9F2C4; color: #4A7A2A; }
       .da-back { background: #FFE0C2; color: #9A5A20; }
+      .da-label { font-weight: 800; color: #7A5AA8; font-size: 14.5px; }
+      .da-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+      .da-seg button { flex: 1 1 44%; min-height: 44px; border: none; border-radius: 14px; padding: 9px 6px; font-size: 14px; font-weight: 800; background: #FFF3E6; color: #9A5A20; cursor: pointer; font-family: inherit; line-height: 1.35; }
+      .da-seg button.on { background: #FFB37E; color: #5B2A08; box-shadow: inset 0 0 0 2px #E08F55; }
+      .da-hint { color: #7A5A4A; font-size: 14px; line-height: 1.5; margin: 0; min-height: 21px; }
+      .da-handicap { display: flex; align-items: center; gap: 8px; color: #7A5A4A; font-size: 14px; line-height: 1.5; cursor: pointer; }
+      .da-handicap input { width: 20px; height: 20px; accent-color: #FFB37E; flex: none; }
+      .da-skills { display: flex; gap: 6px; padding: 5px 2px; }
+      .da-skills button { flex: 1; min-height: 44px; border: none; border-radius: 13px; font-size: 13px; font-weight: 800; background: #EFE6FF; color: #6A4A9A; cursor: pointer; font-family: inherit; padding: 4px 2px; line-height: 1.3; }
+      .da-skills button:disabled { opacity: .45; cursor: default; }
+      .da-skills.da-ai button { visibility: hidden; }
+      /* 赛点局的氛围:背景换成暖金色 + 顶上一行提示,不闪不抖 */
+      .da-wrap.da-matchpoint { background: linear-gradient(180deg, #FFF1D6, #FFE3EE); }
+      .da-wrap.da-matchpoint .da-clock { color: #C2701A; }
       .da-hidden { display: none; }
       .da-splash { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(255,250,244,.94); border-radius: 20px; z-index: 5; font-weight: 900; color: #B06AB3; font-size: 22px; text-align: center; padding: 12px; }
       .da-splash .sub { font-size: 15px; color: #8A7AA0; font-weight: 700; }
@@ -145,18 +203,39 @@ export function mount(api: GameApi): { destroy: () => void } {
     </style>
     <div class="da-panel da-setup">
       <div class="da-title">🥊 上半场 ⭐星星 · 下半场 🌸朵朵<br>两边目标一模一样，拼手速！</div>
+      <div class="da-label">🏁 选赛制</div>
+      <div class="da-seg da-mode">
+        <button type="button" data-v="bo3" class="on">🏆 三局两胜</button>
+        <button type="button" data-v="defense">♾️ 守擂无尽 · 连赢几场</button>
+      </div>
+      <div class="da-label">🙋 选对手</div>
+      <div class="da-seg da-rival">
+        <button type="button" data-v="human" class="on">${avatarHTML("duoduo", 20)} 两个人一起玩</button>
+        ${ARENA_AI_LEVELS.map((lv) => `<button type="button" data-v="${lv}">🤖 ${ARENA_AI_LABELS[lv]}</button>`).join("")}
+      </div>
+      <div class="da-label">🏟 选擂台</div>
+      <div class="da-seg da-stage">
+        ${STAGES.map((st, i) => `<button type="button" data-v="${st.id}"${i === 0 ? ' class="on"' : ""}>${st.emoji} ${st.label}</button>`).join("")}
+      </div>
+      <p class="da-hint"></p>
+      <label class="da-handicap">
+        <input type="checkbox" class="da-handicap-box">
+        <span>🤝 让分：落后的人目标多留一点点（最多 8%）</span>
+      </label>
       <button class="da-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
-      <button class="da-start" type="button">两人就位，开擂 ▶</button>
+      <button class="da-start" type="button">就位，开擂 ▶</button>
     </div>
     <div class="da-game da-hidden">
       <div class="da-zone da-zone-x">
         <div class="da-fx da-fx-x"></div>
       </div>
+      <div class="da-skills da-skills-x"></div>
       <div class="da-mid">
         <span class="da-score da-score-x">${avatarHTML("xingxing")} <span class="pts">0</span> <span class="wins"></span></span>
         <span class="da-clock"><div class="t">25</div><div class="r">第 1 回合</div></span>
         <span class="da-score da-score-d">${avatarHTML("duoduo")} <span class="pts">0</span> <span class="wins"></span></span>
       </div>
+      <div class="da-skills da-skills-d"></div>
       <div class="da-zone da-zone-d">
         <div class="da-fx da-fx-d"></div>
       </div>
@@ -183,18 +262,30 @@ export function mount(api: GameApi): { destroy: () => void } {
   const clockTEl = wrap.querySelector(".da-clock .t") as HTMLElement;
   const clockREl = wrap.querySelector(".da-clock .r") as HTMLElement;
 
+  function freshSkills(): Record<SkillKind, SkillState> {
+    return {
+      shieldBubble: createSkill("shieldBubble"),
+      pushWave: createSkill("pushWave"),
+      sparkle: createSkill("sparkle"),
+    };
+  }
+
   const px: ArenaPlayer = {
     name: "星星",
     emoji: "⭐",
     zone: wrap.querySelector(".da-zone-x") as HTMLElement,
     fx: wrap.querySelector(".da-fx-x") as HTMLElement,
     scoreEl: wrap.querySelector(".da-score-x .pts") as HTMLElement,
+    skillBar: wrap.querySelector(".da-skills-x") as HTMLElement,
     score: 0,
     next: 0,
     active: [],
     frozenUntil: -1,
     stunUntil: -1,
     doubleUntil: -1,
+    skills: freshSkills(),
+    aiPlan: null,
+    aiCursor: 0,
   };
   const pd: ArenaPlayer = {
     name: "朵朵",
@@ -202,18 +293,81 @@ export function mount(api: GameApi): { destroy: () => void } {
     zone: wrap.querySelector(".da-zone-d") as HTMLElement,
     fx: wrap.querySelector(".da-fx-d") as HTMLElement,
     scoreEl: wrap.querySelector(".da-score-d .pts") as HTMLElement,
+    skillBar: wrap.querySelector(".da-skills-d") as HTMLElement,
     score: 0,
     next: 0,
     active: [],
     frozenUntil: -1,
     stunUntil: -1,
     doubleUntil: -1,
+    skills: freshSkills(),
+    aiPlan: null,
+    aiCursor: 0,
   };
   const winsXEl = wrap.querySelector(".da-score-x .wins") as HTMLElement;
   const winsDEl = wrap.querySelector(".da-score-d .wins") as HTMLElement;
 
   function opponent(p: ArenaPlayer): ArenaPlayer {
     return p === px ? pd : px;
+  }
+
+  /* ---------------- 1.2:技能 ---------------- */
+
+  function skillLabel(p: ArenaPlayer, kind: SkillKind): string {
+    const st = p.skills[kind];
+    const spec = SKILLS[kind];
+    if (st.phase === "ready") return `${spec.emoji} ${spec.label}`;
+    if (st.phase === "windup") return `${spec.emoji} 蓄力…`;
+    if (st.phase === "active") return `${spec.emoji} 生效 ${Math.ceil(st.remain)}s`;
+    return `${spec.emoji} ${Math.ceil(st.remain)}s`;
+  }
+
+  function buildSkillBar(p: ArenaPlayer): void {
+    p.skillBar.textContent = "";
+    for (const kind of SKILL_KINDS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.skill = kind;
+      btn.title = SKILLS[kind].hint;
+      btn.textContent = skillLabel(p, kind);
+      btn.addEventListener("click", () => useSkill(p, kind));
+      p.skillBar.appendChild(btn);
+    }
+  }
+
+  function refreshSkillBar(p: ArenaPlayer): void {
+    for (const btn of Array.from(p.skillBar.querySelectorAll("button"))) {
+      const kind = btn.dataset.skill as SkillKind;
+      btn.textContent = skillLabel(p, kind);
+      btn.disabled = !playing || p.skills[kind].phase !== "ready";
+    }
+  }
+
+  function useSkill(p: ArenaPlayer, kind: SkillKind): void {
+    if (!playing || roundTime < 0) return;
+    if (p.aiPlan) return; // 电脑那半场不给点
+    const before = p.skills[kind];
+    const after = pressSkill(before);
+    if (after === before) return;
+    p.skills[kind] = after;
+    api.play("pop");
+    refreshSkillBar(p);
+  }
+
+  /** 弹开波生效：把对手场上最值钱的一个目标轻轻弹走。 */
+  function firePushWave(p: ArenaPlayer): void {
+    const o = opponent(p);
+    if (o.active.length === 0) return;
+    const worth = (k: SpawnEvent["kind"]): number =>
+      k === "gift" ? 3 : k === "coin" ? 2 : k === "bloom" ? 1 : -1;
+    let best = o.active[0];
+    for (const t of o.active) if (worth(t.ev.kind) > worth(best.ev.kind)) best = t;
+    o.active = o.active.filter((t) => t !== best);
+    best.el.remove();
+    o.fx.textContent = "🌀";
+    o.fx.classList.add("on");
+    later(() => o.fx.classList.remove("on"), 400);
+    api.play("meow");
   }
 
   function updateScores(): void {
@@ -286,8 +440,23 @@ export function mount(api: GameApi): { destroy: () => void } {
     entry.el.remove();
     const doubled = roundTime < p.doubleUntil;
     const kind = entry.ev.kind;
+    if (kind === "bomb") {
+      // 1.2:护盾泡先挡一次,挡下来只是啵一声,不扣点数也不晕
+      const guard = shieldAbsorb(p.skills.shieldBubble);
+      if (guard.blocked) {
+        p.skills.shieldBubble = guard.state;
+        floatText(p, tx, ty, "🫧 挡下啦", "#4A90D9");
+        api.play("pop");
+        refreshSkillBar(p);
+        return;
+      }
+    }
     const delta = tapScore(kind, doubled);
     p.score = applyTap(p.score, kind, doubled);
+    // 1.2:星光冲刺让每个好东西多算 1 点
+    if (sparkleActive(p.skills.sparkle) && (kind === "bloom" || kind === "coin")) {
+      p.score += 1;
+    }
     if (kind === "bomb") {
       p.stunUntil = roundTime + BOMB_STUN_SECONDS;
       p.fx.textContent = "💫";
@@ -329,8 +498,23 @@ export function mount(api: GameApi): { destroy: () => void } {
     roundIdx = 0;
     setupEl.classList.add("da-hidden");
     gameEl.classList.remove("da-hidden");
+    px.skillBar.classList.toggle("da-ai", aiLevel !== null);
+    buildSkillBar(px);
+    buildSkillBar(pd);
     updateScores();
     startRound(false);
+  }
+
+  /** 守擂无尽：一场打完接着打下一场，对手越来越强、擂台轮换。 */
+  function startDefenseMatch(): void {
+    aiLevel = defenseAiLevel(defense.round);
+    stage = defenseStage(defense.round);
+    startMatch();
+  }
+
+  /** 这一场的实际对手档位（守擂时由场次决定）。 */
+  function currentAiLevel(): ArenaAiLevel | null {
+    return aiLevel;
   }
 
   function startRound(sudden: boolean): void {
@@ -340,16 +524,39 @@ export function mount(api: GameApi): { destroy: () => void } {
     pd.next = 0;
     px.frozenUntil = px.stunUntil = px.doubleUntil = -1;
     pd.frozenUntil = pd.stunUntil = pd.doubleUntil = -1;
+    px.skills = freshSkills();
+    pd.skills = freshSkills();
+    px.aiCursor = 0;
+    pd.aiCursor = 0;
     clearTargets(px);
     clearTargets(pd);
     roundDuration = sudden ? SUDDEN_SECONDS : ROUND_SECONDS;
     const intensity = sudden ? 3 : Math.min(3, roundIdx + 1);
-    schedule = buildRoundSchedule(matchSeed + roundIdx * 1000, intensity, roundDuration);
+    // 1.2:同一份时间表先按擂台改写,两边仍然完全相同 —— 公平性不变
+    schedule = applyStage(
+      buildRoundSchedule(matchSeed + roundIdx * 1000, intensity, roundDuration),
+      stage,
+    );
+    const lv = currentAiLevel();
+    px.aiPlan =
+      lv === null
+        ? null
+        : planArenaTaps(createArenaAi(lv, matchSeed + roundIdx * 7919), schedule);
     roundTime = -2.2; // 负数时段用来倒数
     playing = true;
     updateScores();
+    refreshSkillBar(px);
+    refreshSkillBar(pd);
+    const wd = results.filter((r) => r === 0).length;
+    const wx = results.filter((r) => r === 1).length;
+    const point = sudden ? null : matchPointLine(wd, wx, ["朵朵", "星星"]);
+    wrap.classList.toggle("da-matchpoint", point !== null);
     clockREl.textContent = sudden ? "⚡ 决胜回合" : `第 ${roundIdx + 1} 回合`;
-    msgEl.textContent = sudden ? "决胜回合！谁先领先谁称王！" : "准备——各点各的半场！";
+    const badge = arenaHandicapBadge(handicapOn);
+    const base = sudden
+      ? "决胜回合！谁先领先谁称王！"
+      : (point ?? `${stage.emoji} ${stage.label}：${stage.hint}`);
+    msgEl.textContent = badge ? `${badge}｜${base}` : base;
     splashEl.classList.add("da-hidden");
     api.play("tap");
   }
@@ -363,6 +570,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     results.push(r);
     updateScores();
     const st = matchState(results);
+    wrap.classList.remove("da-matchpoint");
     const roundText = r === -1
       ? `平局！${pd.score} : ${px.score}`
       : r === 0
@@ -372,6 +580,28 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (st.done) {
       const winner = st.winner === 0 ? pd : px;
       const finalText = `${winner.emoji} ${winner.name}赢得擂台赛！`;
+      if (arenaMode === "defense") {
+        // 守擂：朵朵赢了就接着打下一场，输了整条连胜结束
+        const won = st.winner === 0;
+        defense = defenseNext(defense, won);
+        if (won) {
+          endlessBest = save.recordEndlessBest(meta.id, defense.streak);
+          splashEl.innerHTML =
+            `<div>🏆 守擂成功！第 ${defense.streak} 场</div>` +
+            `<div class="sub">下一位挑战者：${ARENA_AI_LABELS[defenseAiLevel(defense.round)]} · ${defenseStage(defense.round).label}<br>最高连胜 ${endlessBest} 场</div>`;
+          splashEl.classList.remove("da-hidden");
+          later(() => startDefenseMatch(), 2200);
+          return;
+        }
+        endlessBest = save.recordEndlessBest(meta.id, defense.streak);
+        splashEl.innerHTML =
+          `<div>${roundText}</div><div class="sub">这次守住了 ${defense.streak} 场，最高连胜 ${endlessBest} 场</div>`;
+        splashEl.classList.remove("da-hidden");
+        later(() => {
+          api.onLose(`守住了 ${defense.streak} 场，已经很厉害啦！歇一口气再来守一次。`);
+        }, 1600);
+        return;
+      }
       splashEl.innerHTML = `<div>${roundText}</div><div>🏆 ${finalText}</div>`;
       splashEl.classList.remove("da-hidden");
       later(() => {
@@ -406,13 +636,42 @@ export function mount(api: GameApi): { destroy: () => void } {
             spawnTarget(p, schedule[p.next]);
             p.next++;
           }
+          // 1.2 让分：落后一方的目标多留一点点（封顶 8%）
+          const ttlMult = arenaHandicap(handicapOn, p.score, opponent(p).score);
           // 过期目标消失
           const alive: ActiveTarget[] = [];
           for (const t of p.active) {
-            if (roundTime > t.ev.t + t.ev.ttl) t.el.remove();
+            if (roundTime > t.ev.t + t.ev.ttl * ttlMult) t.el.remove();
             else alive.push(t);
           }
           p.active = alive;
+          // 1.2 技能状态机
+          let skillChanged = false;
+          for (const kind of SKILL_KINDS) {
+            const before = p.skills[kind];
+            const after = tickSkill(before, dt);
+            if (after.phase !== before.phase || after.charges !== before.charges) {
+              skillChanged = true;
+              if (kind === "pushWave" && before.phase === "windup" && after.phase !== "windup") {
+                firePushWave(p);
+              }
+            }
+            p.skills[kind] = after;
+          }
+          if (skillChanged) refreshSkillBar(p);
+          // 1.2 电脑那半场：按计划出手
+          if (p.aiPlan) {
+            while (p.aiCursor < p.aiPlan.length && p.aiPlan[p.aiCursor].at <= roundTime) {
+              const plan = p.aiPlan[p.aiCursor];
+              p.aiCursor++;
+              const hit = p.active.find((t) => t.ev === schedule[plan.index]);
+              if (!hit) continue;
+              if (roundTime < p.frozenUntil || roundTime < p.stunUntil) continue;
+              const left = Number.parseFloat(hit.el.style.left) || 0;
+              const top = Number.parseFloat(hit.el.style.top) || 0;
+              onTap(p, hit, left, top);
+            }
+          }
         }
         if (roundTime >= roundDuration) endRound();
       }
@@ -420,8 +679,65 @@ export function mount(api: GameApi): { destroy: () => void } {
     raf = requestAnimationFrame(frame);
   }
 
+  const hintEl = wrap.querySelector(".da-hint") as HTMLElement;
+  const handicapBox = wrap.querySelector(".da-handicap-box") as HTMLInputElement;
+
+  function refreshSetupHint(): void {
+    if (arenaMode === "defense") {
+      hintEl.textContent = "守擂：一场接一场，对手越来越强、擂台轮着换。输一场就结束，看能守住几场。";
+      return;
+    }
+    hintEl.textContent =
+      aiLevel === null
+        ? "两个人一起玩：上半场星星、下半场朵朵，两边目标一模一样。"
+        : `🤖 ${ARENA_AI_LABELS[aiLevel]}：${ARENA_AI_HINTS[aiLevel]}`;
+  }
+
+  function bindSeg(sel: string, onPick: (v: string) => void): void {
+    (wrap.querySelector(sel) as HTMLElement).addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest("button");
+      if (!btn || btn.disabled) return;
+      for (const b of Array.from(wrap.querySelectorAll(`${sel} button`))) b.classList.remove("on");
+      btn.classList.add("on");
+      api.play("tap");
+      onPick(btn.dataset.v ?? "");
+    });
+  }
+
+  bindSeg(".da-mode", (v) => {
+    arenaMode = v === "defense" ? "defense" : "bo3";
+    const rivalBox = wrap.querySelector(".da-rival") as HTMLElement;
+    const stageBox = wrap.querySelector(".da-stage") as HTMLElement;
+    const locked = arenaMode === "defense";
+    rivalBox.style.opacity = locked ? "0.45" : "1";
+    stageBox.style.opacity = locked ? "0.45" : "1";
+    for (const b of Array.from(wrap.querySelectorAll<HTMLButtonElement>(".da-rival button, .da-stage button"))) {
+      b.disabled = locked;
+    }
+    refreshSetupHint();
+  });
+  bindSeg(".da-rival", (v) => {
+    aiLevel = v === "human" ? null : (Number(v) as ArenaAiLevel);
+    refreshSetupHint();
+  });
+  bindSeg(".da-stage", (v) => {
+    stage = STAGES.find((st) => st.id === v) ?? STAGES[0];
+    refreshSetupHint();
+  });
+  const onHandicap = (): void => {
+    handicapOn = handicapBox.checked;
+    api.play("tap");
+  };
+  handicapBox.addEventListener("change", onHandicap);
+  refreshSetupHint();
+
   (wrap.querySelector(".da-start") as HTMLButtonElement).addEventListener("click", () => {
     api.play("jump");
+    if (arenaMode === "defense") {
+      defense = createDefense();
+      startDefenseMatch();
+      return;
+    }
     startMatch();
   });
   (wrap.querySelector(".da-back") as HTMLButtonElement).addEventListener("click", () => {
@@ -457,6 +773,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       destroyed = true;
       cancelAnimationFrame(raf);
       clearTimers();
+      handicapBox.removeEventListener("change", onHandicap);
+      clearTargets(px);
+      clearTargets(pd);
       wrap.remove();
     },
   };
