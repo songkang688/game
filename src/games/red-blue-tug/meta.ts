@@ -9,4 +9,7 @@ export const meta = {
   category: "party" as const,
   color: "#ff6b6b",
   blurb: "188 关十大赛场！抢加油星看红绿灯，还要管体力、抢补给、喊号子，外加无尽连胜！",
+  // 10 章合计 188 关;对手是小电脑(星星队),另有「绳王连胜」无尽模式,不是双人同屏
+  modes: ["campaign", "versus", "endless"] as const,
+  levels: 188,
 };

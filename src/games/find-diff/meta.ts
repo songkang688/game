@@ -9,4 +9,7 @@ export const meta = {
   category: "edu" as const,
   color: "#63e6be",
   blurb: "六大主题 99 关！上下两幅图找不同，后面还有双胞胎图案和限时挑战！",
+  // 10 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
+  modes: ["campaign"] as const,
+  levels: 188,
 };

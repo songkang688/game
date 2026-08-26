@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#DCF3FF",
   blurb: "188 关十大主题！重力翻转、变色泡泡、限步挑战、灯影迷宫等你来！",
+  // 10 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };

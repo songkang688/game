@@ -9,4 +9,7 @@ export const meta = {
   category: "edu" as const,
   color: "#8ce99a",
   blurb: "六大农场 99 关！数一数、加减法、凑十破十、连加连减，喂饱全部小动物！",
+  // 10 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
+  modes: ["campaign"] as const,
+  levels: 188,
 };

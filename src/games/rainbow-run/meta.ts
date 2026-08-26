@@ -9,4 +9,7 @@ export const meta = {
   category: "action" as const,
   color: "#e5d4ff",
   blurb: "99 关九大世界跑酷+无尽彩虹跑!一直跑吃金币,挑战最远纪录!",
+  // logic.ts 是 9 个世界 × LEVELS_PER_THEME 11 = 99 关;index.ts 另有无尽彩虹跑
+  modes: ["campaign", "endless"] as const,
+  levels: 99,
 };

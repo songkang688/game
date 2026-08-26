@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#FFE2D9",
   blurb: "188 关十大砖阵！双球齐发、滑动迷阵、星门传送、图案工坊全新登场！",
+  // 10 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };

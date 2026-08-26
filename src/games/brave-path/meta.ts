@@ -9,4 +9,7 @@ export const meta = {
   category: "action" as const,
   color: "#e9e2ff",
   blurb: "188 关轻 RPG 冒险!五系克制、技能冷却、装备成长,还能下无尽深渊、和星星的队伍打擂台。",
+  // levels.ts 的 TOTAL_LEVELS = 188;index.ts 三个模式入口:闯关 / 无尽深渊 / 对战星星的队伍
+  modes: ["campaign", "endless", "versus"] as const,
+  levels: 188,
 };

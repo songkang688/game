@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#EBDFC8",
   blurb: "99 关六大乐园！金地鼠、瞌睡鼠、闪电鼠，还要保护小兔子！",
+  // levels.ts 的 6 章合计 99 关(还没扩到 188),只有闯关
+  modes: ["campaign"] as const,
+  levels: 99,
 };

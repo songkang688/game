@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#E5E9FF",
   blurb: "99 关六大画册！3×3 到 4×4，还有看一眼就藏起来的记忆拼图！",
+  // levels.ts 的 6 章合计 99 关(还没扩到 188),只有闯关
+  modes: ["campaign"] as const,
+  levels: 99,
 };

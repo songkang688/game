@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#E3F2FF",
   blurb: "99 关六大主题！偷看、章鱼换牌、三连卡、限时赛，记忆小达人冲鸭！",
+  // 10 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
+  modes: ["campaign"] as const,
+  levels: 188,
 };
