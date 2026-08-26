@@ -1,14 +1,22 @@
 /**
- * 游戏壳:顶栏(返回、标题、星星) + 游戏舞台 + 胜负结算。
+ * 游戏壳:顶栏(返回、标题、星星) + 游戏舞台 + 胜负结算 + 统一暂停面板。
  * 负责把 GameAPI 交给游戏模块,并在离开时清理。
  */
 import type { GameAPI, GameModule } from "../engine/types";
 import { save } from "../engine/save";
 import { isBgmOn, playSound, toggleBgm } from "../engine/audio";
-import { showResultDialog, type DialogHandle } from "./dialogs";
+import {
+  announce,
+  isDismissKey,
+  showDialog,
+  showResultDialog,
+  starsAnnouncement,
+  type DialogButton,
+  type DialogHandle
+} from "./dialogs";
 import { createDuoPair } from "./avatars";
 import { recordRecent } from "./recent";
-import { registerLevelExtras } from "./level188Contract";
+import { getLevelExtras, registerLevelExtras, type GuideBook } from "./level188Contract";
 import { loadGuideBook, mountGuide, readCurrentLevel } from "./guide";
 
 // ---------------------------------------------------------------------------
@@ -57,6 +65,61 @@ export async function requestSkip(gameId: string, level: number): Promise<boolea
 
 registerLevelExtras({ mountGuide, requestSkip });
 
+// ---------------------------------------------------------------------------
+// 统一暂停面板(纯数据部分,便于单测)
+// ---------------------------------------------------------------------------
+
+export type PauseActionKey = "resume" | "replay" | "guide" | "sound" | "home";
+
+export interface PauseAction {
+  key: PauseActionKey;
+  label: string;
+  kind: "primary" | "ghost";
+  /** 开关型按钮的按下态(只有音效按钮有) */
+  pressed?: boolean;
+  /** 点完不关面板 */
+  keepOpen?: boolean;
+  ariaLabel?: string;
+}
+
+export interface PauseMenuState {
+  /** 这一局能不能开攻略(壳层注册了 mountGuide 且这款游戏真有攻略数据) */
+  guideAvailable: boolean;
+  /** 背景音乐当前开着没 */
+  soundOn: boolean;
+}
+
+/**
+ * 暂停面板的按钮清单:继续 / 重玩 / 攻略 / 音效 / 回首页。
+ * 攻略没得看时整颗按钮不出现(而不是灰着让孩子白点)。
+ */
+export function buildPauseActions(state: PauseMenuState): PauseAction[] {
+  const actions: PauseAction[] = [
+    { key: "resume", label: "▶️ 继续玩", kind: "primary" },
+    { key: "replay", label: "🔁 重玩这一局", kind: "ghost" }
+  ];
+  if (state.guideAvailable) {
+    actions.push({ key: "guide", label: "📖 看攻略", kind: "ghost" });
+  }
+  actions.push({
+    key: "sound",
+    label: state.soundOn ? "🎵 音乐:开" : "🔇 音乐:关",
+    kind: "ghost",
+    pressed: state.soundOn,
+    keepOpen: true,
+    ariaLabel: state.soundOn ? "关闭背景音乐" : "打开背景音乐"
+  });
+  actions.push({ key: "home", label: "🏠 回首页", kind: "ghost" });
+  return actions;
+}
+
+/** 攻略入口到底能不能用:契约里注册了实现,且这款游戏有攻略数据 */
+export function guideAvailable(book: GuideBook | null | undefined): boolean {
+  return Boolean(book) && typeof getLevelExtras().mountGuide === "function";
+}
+
+// ---------------------------------------------------------------------------
+
 export function mountGameScreen(
   container: HTMLElement,
   game: GameModule,
@@ -90,17 +153,26 @@ export function mountGameScreen(
   titleText.className = "game-title-text";
   titleText.textContent = game.meta.title;
   title.append(titleEmoji, titleText);
+  // 顶栏标题就是这一页的 h1,读屏软件按标题跳转时能落在这儿
+  title.setAttribute("role", "heading");
+  title.setAttribute("aria-level", "1");
 
   const starChip = document.createElement("div");
   starChip.className = "chip star-chip";
+  // 星星余额是「分数」,变了要播报;chip 自己也是个 status
+  starChip.setAttribute("role", "status");
+  starChip.setAttribute("aria-live", "polite");
   const renderStars = (): void => {
-    starChip.textContent = `⭐ ${save.getStars()}`;
+    const n = save.getStars();
+    starChip.textContent = `⭐ ${n}`;
+    starChip.setAttribute("aria-label", starsAnnouncement(n));
   };
   renderStars();
   const unsubscribe = save.onChange(renderStars);
 
   const duoPair = createDuoPair(38);
   duoPair.title = "朵朵和星星陪你一起玩";
+  duoPair.setAttribute("aria-hidden", "true");
 
   // 游戏内也能开关背景音乐(与首页共用同一个 BGM 实例)
   const bgmBtn = document.createElement("button");
@@ -120,11 +192,24 @@ export function mountGameScreen(
     renderBgm();
   });
 
+  // 暂停:键盘按 Esc,手指点这颗按钮,两条路进同一个面板
+  const pauseBtn = document.createElement("button");
+  pauseBtn.type = "button";
+  pauseBtn.className = "icon-btn icon-btn--pause";
+  pauseBtn.title = "暂停";
+  pauseBtn.textContent = "⏸";
+  pauseBtn.setAttribute("aria-label", "暂停,打开菜单");
+  pauseBtn.setAttribute("aria-haspopup", "dialog");
+  pauseBtn.addEventListener("click", () => {
+    playSound("tap");
+    openPause();
+  });
+
   // 攻略按钮的位置(有攻略数据才会被填上,没有就是个空占位)
   const guideSlot = document.createElement("div");
   guideSlot.className = "guide-slot";
 
-  topbar.append(backBtn, title, duoPair, bgmBtn, guideSlot, starChip);
+  topbar.append(backBtn, title, duoPair, bgmBtn, guideSlot, pauseBtn, starChip);
   screen.appendChild(topbar);
 
   gameTitles.set(game.meta.id, game.meta.title);
@@ -132,10 +217,13 @@ export function mountGameScreen(
   // ---- 舞台 ----
   const stage = document.createElement("div");
   stage.className = "game-stage";
+  stage.setAttribute("role", "application");
+  stage.setAttribute("aria-label", `${game.meta.title} 游戏区`);
   screen.appendChild(stage);
 
   let mounted: { destroy: () => void } | null = null;
   let dialog: DialogHandle | null = null;
+  let pauseDialog: DialogHandle | null = null;
   let finished = false;
   // 异步加载防竞态:每次 start 领一个序号,过期(重开/离开)的结果直接丢弃
   let startSeq = 0;
@@ -143,8 +231,10 @@ export function mountGameScreen(
 
   // 攻略数据是每款游戏自己的 `guide.ts`,没有这个模块就静默不显示攻略按钮
   let guideCleanup: (() => void) | null = null;
+  let guideBook: GuideBook | null = null;
   void loadGuideBook(game.meta.id).then((book) => {
     if (!book || disposed) return;
+    guideBook = book;
     guideCleanup = mountGuide(guideSlot, book, () => readCurrentLevel(game.meta.id));
   });
 
@@ -152,6 +242,122 @@ export function mountGameScreen(
     dialog?.close();
     dialog = null;
   }
+
+  function closePause(): void {
+    pauseDialog?.close();
+    pauseDialog = null;
+  }
+
+  /** 游戏模块自己实现了 pause/resume 就顺手调一下,没实现也不影响面板 */
+  function tellGame(method: "pause" | "resume"): void {
+    const fn = (mounted as unknown as Record<string, unknown> | null)?.[method];
+    if (typeof fn !== "function") return;
+    try {
+      (fn as () => void).call(mounted);
+    } catch (err) {
+      console.warn(`[一朵一星] 游戏 ${game.meta.id} ${method} 时出错:`, err);
+    }
+  }
+
+  function openPause(): void {
+    if (disposed || pauseDialog) return;
+    tellGame("pause");
+
+    const content = document.createElement("div");
+    content.className = "pause-content";
+    const h = document.createElement("h2");
+    h.className = "dialog-title";
+    h.textContent = "先歇一会儿";
+    const note = document.createElement("p");
+    note.className = "dialog-text";
+    note.textContent = "想接着玩就按「继续玩」,按 Esc 也能马上回到游戏。";
+    content.append(h, note);
+
+    const actions = buildPauseActions({
+      guideAvailable: guideAvailable(guideBook),
+      soundOn: isBgmOn()
+    });
+
+    const buttons: DialogButton[] = actions.map((action) => ({
+      label: action.label,
+      kind: action.kind,
+      pressed: action.pressed,
+      keepOpen: action.keepOpen,
+      ariaLabel: action.ariaLabel,
+      onClick: () => runPauseAction(action.key)
+    }));
+
+    pauseDialog = showDialog({
+      className: "dialog--pause",
+      content,
+      buttons,
+      dismissible: true,
+      returnFocusTo: pauseBtn,
+      onDismiss: () => {
+        pauseDialog = null;
+        tellGame("resume");
+      }
+    });
+    announce("游戏暂停了");
+  }
+
+  function runPauseAction(key: PauseActionKey): void {
+    switch (key) {
+      case "resume":
+        pauseDialog = null;
+        playSound("tap");
+        tellGame("resume");
+        return;
+      case "replay":
+        pauseDialog = null;
+        playSound("tap");
+        start();
+        return;
+      case "guide": {
+        pauseDialog = null;
+        // 攻略按钮就在顶栏里,复用它,免得同一份抽屉出现两套实现
+        const btn = guideSlot.querySelector(".guide-btn");
+        if (btn instanceof HTMLElement) btn.click();
+        else tellGame("resume");
+        return;
+      }
+      case "sound": {
+        // keepOpen:原地切换,面板不关,按钮文案与 aria-pressed 一起刷新
+        toggleBgm();
+        renderBgm();
+        refreshPauseSoundButton();
+        return;
+      }
+      case "home":
+        pauseDialog = null;
+        playSound("tap");
+        goHome();
+        return;
+    }
+  }
+
+  function refreshPauseSoundButton(): void {
+    const el = pauseDialog?.el;
+    if (!el) return;
+    const on = isBgmOn();
+    for (const btn of Array.from(el.querySelectorAll(".dialog-buttons .btn"))) {
+      if (btn.getAttribute("aria-pressed") === null) continue;
+      btn.textContent = on ? "🎵 音乐:开" : "🔇 音乐:关";
+      btn.setAttribute("aria-pressed", String(on));
+      btn.setAttribute("aria-label", on ? "关闭背景音乐" : "打开背景音乐");
+    }
+    announce(on ? "背景音乐打开了" : "背景音乐关掉了");
+  }
+
+  // Esc 统一暂停:游戏自己已经处理过这一下(defaultPrevented)就让给游戏
+  function onGlobalKeyDown(e: KeyboardEvent): void {
+    if (disposed || !isDismissKey(e.key) || e.defaultPrevented) return;
+    // 弹窗自己会吃掉 Esc(捕获阶段),走到这里说明当前没有打开的弹窗
+    if (dialog || pauseDialog) return;
+    e.preventDefault();
+    openPause();
+  }
+  document.addEventListener("keydown", onGlobalKeyDown);
 
   function unmount(): void {
     try {
@@ -168,12 +374,13 @@ export function mountGameScreen(
   }
 
   function showError(): void {
-    stage.innerHTML = `<div class="empty-state"><div class="empty-emoji">🛠️</div><p>这个游戏出了点小问题,先玩别的吧!</p></div>`;
+    stage.innerHTML = `<div class="empty-state" role="alert"><div class="empty-emoji" aria-hidden="true">🛠️</div><p>这个游戏出了点小问题,先玩别的吧!</p></div>`;
   }
 
   function start(): void {
     const seq = ++startSeq;
     closeDialog();
+    closePause();
     unmount();
     finished = false;
     save.recordPlay(game.meta.id);
@@ -199,7 +406,11 @@ export function mountGameScreen(
           stars,
           message,
           onReplay: start,
-          onHome: goHome
+          onHome: goHome,
+          returnFocusTo: pauseBtn,
+          onDismiss: () => {
+            dialog = null;
+          }
         });
       },
       onLose: (message) => {
@@ -210,7 +421,11 @@ export function mountGameScreen(
           win: false,
           message,
           onReplay: start,
-          onHome: goHome
+          onHome: goHome,
+          returnFocusTo: pauseBtn,
+          onDismiss: () => {
+            dialog = null;
+          }
         });
       }
     };
@@ -238,10 +453,13 @@ export function mountGameScreen(
 
   return () => {
     disposed = true;
+    document.removeEventListener("keydown", onGlobalKeyDown);
     closeDialog();
+    closePause();
     unmount();
     guideCleanup?.();
     guideCleanup = null;
+    guideBook = null;
     unsubscribe();
     screen.remove();
   };
