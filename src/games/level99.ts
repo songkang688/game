@@ -589,7 +589,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
 
   /**
    * 跳关入口：壳层没注册 requestSkip 就不显示按钮。
-   * 传给授权方的关号是 1 基的（家长弹窗里要直接给人看）。
+   * 传给授权方的关号与框架内部一致，是 0 基的（家长弹窗自己 +1 后展示）。
    */
   function attachSkip(host: HTMLElement, level: number, after: (level: number) => void): void {
     const request = getLevelExtras().requestSkip;
@@ -602,7 +602,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     btn.addEventListener("click", () => {
       api.play("tap");
       btn.disabled = true;
-      Promise.resolve(request(opts.id, level + 1))
+      Promise.resolve(request(opts.id, level))
         .then((ok) => {
           if (destroyed) return;
           btn.disabled = false;
