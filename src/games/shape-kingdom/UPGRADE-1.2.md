@@ -165,3 +165,42 @@
   `blurb` 与 `CHAPTERS`/`levels` 一致、作图关能挂能拆、`destroy` 归零。
 - `levels.test.ts` / `logic.test.ts`：**一条不删**，只把 `ADVANCED_KINDS` 名单和
   `verify()` 的分支扩到新题型（新增分支，老分支原样保留）。
+
+## 八、落地记录（收尾补写）
+
+### 实际交付
+
+| 文件 | 干了什么 |
+| --- | --- |
+| `geometry.ts`（新） | 格子集合的面积 / 周长、连通性、八种摆法、凹槽与组合图形构造，`countSymmetryAxes` 数值求对称轴，`eulerHolds` 与 `edgesFromFaceSides` |
+| `nets.ts`（新） | `foldsIntoCube` 三维折叠模拟；穷举 35 张六连方格 → 11 张对 / 24 张错；多边形展开图的不重叠 + 折痕生成树 + 面映射三关校验；圆柱圆锥改判长度关系 |
+| `figures.ts`（新） | 精确顶点形状（正五边形真的 5 条轴）＋ 五种纹理；方格纸图形；等距斜投影（背面剔除 + 三档明度）与逐帧序列 |
+| `hints.ts`（新） | 三级提示结构、泄题探测 `hintLeaksAnswer`、运行时保险丝 `safeHints` |
+| `draw.ts`（新） | 三类作图题的生成与判定纯函数 ＋ 点阵作图台（吸附 / 拖动预览 / 实时读数 / 城堡长高） |
+| `review.ts`（新） | 错题本（`yiduo-yixing.shape-kingdom.wrong.v1`）、回顾计划、提示条、正题轮 + 回顾轮 |
+| `domStub.ts`（新） | 本目录测试用的极简 DOM 桩，玩法代码不碰 |
+| `levels.ts` | 后 4 章重排：新增 `classify` / `netpick` / `symsum` / `transform` / `solidcalc` / `coordmove`，每题写 `steps` 与 `hints`，`buildReviewQuestions` |
+| `meta.ts` | 删掉「归 B 改」的过期注释，`blurb` 按 1.2 事实重写，补 `platform: "both"` |
+| `index.ts` | 作图关走 `runDrawRound`，答题关走 `runQuizWithReview` |
+| `guide.ts` | 通用心得补一条多步 + 提示的说法，后 4 章各补两条 1.2 打法 |
+
+### 与计划的三处出入
+
+1. **`draw.test.ts` 没单独建**，三类作图题的判定用例并进了 `upgrade12.test.ts`
+   的「作图题判定」与「作图台」两节，省一个文件、内容一条不少。
+2. **`foldsIntoSolid` 改名 `checkPolygonNet`**，并且返回 `{ ok, reason }` 而不是布尔——
+   校验器报错时能直接说出是哪一关没过，写进测试断言更好读。
+3. **`checkPolygonNet` 补了一道三维模拟**。原本以为「面映射」这一关足够，
+   写用例时发现 1×6 长条能通过全部组合校验（折痕正好 5 条、连成一棵树、
+   每条折痕两侧在正方体上确实相邻），只有真折一遍才知道它会绕成筒。
+   现在正方体 / 长方体那一路会把展开图还原成格子集合再跑一遍 `foldsIntoCube`。
+
+### 前 99 关未变的证明
+
+`upgrade12.test.ts` 里钉了 99 个逐关 SHA-256 指纹（各取前 12 位）加一个总指纹
+`614cb43a…9dd93c`。这串数是把升级前的 `levels.ts` 原样拷成一个临时模块、
+和改完的版本逐关 `JSON.stringify` 对拍确认全等之后才落下来的，
+所以它代表的就是 1.1 的输出。改动前 6 章的任何一个分支、seed 或参数，这串就会红。
+
+另有两条辅助断言：前 99 关的题目对象**一个多余的键都没有**（`steps` / `hints`
+只给后 4 章），以及前 6 章的题量公式与题型池逐关按 1.0 公式回归。
