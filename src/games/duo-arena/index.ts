@@ -12,6 +12,8 @@ export { meta };
 //
 // 全程没有血、没有伤、没有淘汰:被弹到只是原地转个圈,输了只有鼓励。
 import { save } from "../../engine/save";
+// 1.2 深度层里几条与走位无关的纯规则(让分曲线、赛点提示语、连胜纪录)直接复用,不再造第二套
+import { arenaHandicap, arenaHandicapBadge, bestStreak, matchPointLine } from "./arena12";
 import { createLifecycle } from "./lifecycle";
 import {
   BOMB_STUN_SECONDS,
@@ -674,10 +676,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     mpTagEl.classList.toggle("dua-hidden", !hot);
     clockREl.textContent = roundLabel(sudden);
     stageTagEl.textContent = `${stage.emoji} ${stage.name}`;
-    hcapTagEl.textContent = handicapLabel(handicapOn);
+    hcapTagEl.textContent = arenaHandicapBadge(handicapOn) ?? handicapLabel(handicapOn);
     hcapTagEl.classList.toggle("hot", handicapOn);
+    const mpLine = matchPointLine(progress.wins[0], progress.wins[1], [duo.name, star.name]);
     msgEl.textContent = hot
-      ? "赛点局!赢下这一回合就拿下整场,深呼吸,稳住节奏。"
+      ? `${mpLine ?? "赛点局"}!赢下这一回合就拿下整场,深呼吸,稳住节奏。`
       : mode === "keep"
         ? `守擂第 ${keepBout} 场:对手是${AI_SPECS[star.aiLevel ?? "rookie"].label},守住就继续。`
         : "准备——走到目标身上就收元气,出手能够得更远!";
@@ -708,7 +711,10 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function spawnFor(f: Fighter, ev: SpawnEvent): void {
     const spot = placeTarget(stage, ev.x, ev.y, TARGET_R, roundTime);
-    const ttl = ev.ttl * (1 + f.boost) * stage.paceScale;
+    // 让分有两层,都封顶 8%:回合开始时按回合比分给的那份 `f.boost`,
+    // 以及本回合内实时按元气差补的那份(落后越多留得越久),取更宽的一份。
+    const live = arenaHandicap(handicapOn, f.score, other(f).score);
+    const ttl = ev.ttl * Math.max(1 + f.boost, live) * stage.paceScale;
     f.targets.push({
       id: targetId++,
       kind: ev.kind,
@@ -931,8 +937,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       return;
     }
     api.play("oops");
-    const best = save.recordEndlessBest(meta.id, keepWins);
-    const fresh = keepWins > 0 && keepWins >= best;
+    const prev = save.getGameProgress(meta.id).endlessBest;
+    const best = save.recordEndlessBest(meta.id, bestStreak(prev, keepWins));
+    const fresh = keepWins > 0 && keepWins > prev;
     showSplash(
       `<div>🏰 守擂结束,连胜 ${keepWins} 场</div><div class="sub">${
         fresh ? `新纪录!最高连胜 ${best} 场` : `最高纪录还是 ${best} 场,再来一次就有机会`

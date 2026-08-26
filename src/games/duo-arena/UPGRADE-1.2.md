@@ -40,7 +40,20 @@
 新增单测 ≥ 18（规格下限，窗口下限是 8）；`npm test` 与 `npm run build` 全绿；
 商标黑名单 0 命中；`destroy` 拆掉全部监听 / timer / rAF；360px 不溢出。
 
-## 五、实测记录（真浏览器跑出来的，不是推演）
+## 五、与分支上另一份 11-B 的合并结论
+
+收尾 rebase 时发现 `origin/game-1.2-window3` 上已经有另一份 11-B 提交（`arena12.ts` + `arena12.test.ts`，
+外加对 `index.ts` / `meta.ts` / `guide.ts` 的改动）。两份的取舍如下，**没有删掉任何既有测试**：
+
+- `arena12.ts` 与它的 37 个用例**原样保留**，并且在 `index.ts` 里真接上了：
+  让分曲线 `arenaHandicap`（本回合实时按元气差补的那一层）、HUD 徽标 `arenaHandicapBadge`、
+  赛点提示语 `matchPointLine`、连胜纪录 `bestStreak`。
+- `index.ts` / `meta.ts` / `guide.ts` 取本档版本。原因是那一份的擂台仍然是**纯点击**玩法，
+  全文件搜不到一个键盘监听：没有朵朵 `WASD`+`F`+`G`、没有星星 `↑←↓→`+`L`+`K`、没有 `Esc` 暂停，
+  而这是主管文档第九节第 5 条的硬约定。本档版本是走位对战，两套键位、`Esc`、以及每个半场自带的
+  摇杆 + 两个动作钮都齐了，`meta.platform` 也按实测填了 `both`。
+
+## 六、实测记录（真浏览器跑出来的，不是推演）
 
 在本机 dev server 上用无头 Chrome 从首页进游戏,逐条走了一遍:
 
