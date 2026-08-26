@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🐹",
   category: "casual" as const,
   color: "#EBDFC8",
-  blurb: "99 关六大乐园！金地鼠、瞌睡鼠、闪电鼠，还要保护小兔子！",
+  blurb: "188 关十大地洞！算式鼠、连击槽、铁盔鼠、月夜手电筒，还有无尽地鼠场！",
 };
