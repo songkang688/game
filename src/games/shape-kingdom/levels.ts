@@ -1280,6 +1280,23 @@ function makeOne(rand: () => number, kind: ShapeQKind, t: number, steps: 1 | 2 |
   }
 }
 
+/**
+ * 错题回顾用的加练题（1.2 新增）。
+ *
+ * 传进来的是这一关错过的题型，出的是**同知识点的新题**——种子跟正题那一轮岔开，
+ * 所以绝不会把刚才那道原样再考一遍。步数比着本关的曲线走，回顾不降难度也不加难度。
+ * 前 6 章不走这条路（那 6 章的题型池里根本没有进阶题型），契约不受影响。
+ */
+export function buildReviewQuestions(level: number, kinds: readonly ShapeQKind[], round = 1): ShapeQ[] {
+  if (kinds.length === 0) return [];
+  const rand = mulberry32(31337 + level * 2179 + round * 8191);
+  const ci = chapterOf(CHAPTERS, level);
+  const idx = indexInChapter(CHAPTERS, level);
+  const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
+  const steps = stepsForLevel(level);
+  return kinds.map((kind) => makeOne(rand, kind, t, steps));
+}
+
 /** 188 关概览（测试用） */
 export const LEVELS = Array.from({ length: TOTAL_LEVELS }, (_, i) => ({
   count: questionCount(i),
