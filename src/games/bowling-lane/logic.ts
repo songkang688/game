@@ -618,6 +618,8 @@ export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {
   ArrowRight: { player: 1, action: "right" },
   KeyL: { player: 1, action: "confirm" },
   KeyK: { player: 1, action: "cancel" },
+  // 空格谁按都算「停指针」,单人玩的时候最顺手
+  Space: { player: 0, action: "confirm" },
 };
 
 /** 键盘 code 翻译成「几号玩家的哪个动作」;单人玩的时候两套键位都归 0 号 */

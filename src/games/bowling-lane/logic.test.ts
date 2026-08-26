@@ -446,6 +446,11 @@ describe("键位", () => {
     expect(keyToAction("KeyL", 1)).toEqual({ player: 0, action: "confirm" });
   });
 
+  it("空格谁按都算停指针,双人局里也归 0 号玩家", () => {
+    expect(keyToAction("Space", 1)).toEqual({ player: 0, action: "confirm" });
+    expect(keyToAction("Space", 2)).toEqual({ player: 0, action: "confirm" });
+  });
+
   it("不认识的键返回 null,Esc 是暂停", () => {
     expect(keyToAction("KeyZ", 2)).toBeNull();
     expect(isPauseKey("Escape")).toBe(true);
