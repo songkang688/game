@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CHAPTERS, GRID, LEVELS } from "./levels";
 
-describe("贪吃毛毛虫 99 关", () => {
-  it("恰好 99 关，至少 6 个主题章节", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("贪吃毛毛虫 188 关", () => {
+  it("恰好 188 关，至少 6 个主题章节", () => {
+    expect(LEVELS).toHaveLength(188);
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
   it("每关墙体合法：不出界、不堵出生区", () => {

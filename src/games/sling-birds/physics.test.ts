@@ -5,6 +5,7 @@ import {
   MAX_LAUNCH,
   WORLD_H,
   WORLD_W,
+  boomerangVelocity,
   calcStars,
   canvasBufferHeight,
   circleRectHit,
@@ -13,6 +14,9 @@ import {
   launchVelocity,
   makeRng,
   padSplit,
+  portalExitPoint,
+  portalHop,
+  shellBreak,
   simulateTrajectory,
   slopeSurfaceY,
   trajectoryPoints
@@ -199,5 +203,91 @@ describe("sling-birds 伤害与随机数", () => {
       expect(v).toBeLessThan(1);
     }
     expect(makeRng(1)()).not.toBe(makeRng(2)());
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 1.1 新机制(以下全部为新增用例,上面的老断言一个都没改)               */
+/* ------------------------------------------------------------------ */
+
+describe("sling-birds 1.1 传送门(portalHop / portalExitPoint)", () => {
+  const pair = { ax: 250, ay: 140, bx: 445, by: 84, r: 16 };
+
+  it("钻进 A 口 → 从 B 口附近飞出", () => {
+    const out = portalHop(252, 138, 200, -50, pair);
+    expect(out).not.toBeNull();
+    expect(Math.hypot(out!.x - pair.bx, out!.y - pair.by)).toBeLessThan(pair.r + 8);
+  });
+
+  it("钻进 B 口 → 从 A 口附近飞出(双向都通)", () => {
+    const out = portalHop(444, 86, -120, 90, pair);
+    expect(out).not.toBeNull();
+    expect(Math.hypot(out!.x - pair.ax, out!.y - pair.ay)).toBeLessThan(pair.r + 8);
+  });
+
+  it("没碰到任何一口返回 null", () => {
+    expect(portalHop(100, 100, 200, 0, pair)).toBeNull();
+    expect(portalHop(250, 140 + pair.r + 1, 0, 0, pair)).toBeNull();
+  });
+
+  it("出口点站在出口圈外,不会立刻被同一口吸回去", () => {
+    const out = portalExitPoint(445, 84, 16, 300, -100);
+    expect(Math.hypot(out.x - 445, out.y - 84)).toBeGreaterThan(16);
+  });
+
+  it("出口点沿速度方向偏移:往右飞就出在右边", () => {
+    const right = portalExitPoint(445, 84, 16, 300, 0);
+    expect(right.x).toBeGreaterThan(445);
+    expect(right.y).toBeCloseTo(84, 6);
+    const down = portalExitPoint(445, 84, 16, 0, 300);
+    expect(down.y).toBeGreaterThan(84);
+  });
+
+  it("速度为零也有确定的出口点(直接放到口的上方)", () => {
+    const out = portalExitPoint(445, 84, 16, 0, 0);
+    expect(out.x).toBe(445);
+    expect(out.y).toBeLessThan(84 - 16);
+  });
+
+  it("同输入两次调用完全一致(确定性)", () => {
+    const a = portalHop(252, 138, 200, -50, pair);
+    const b = portalHop(252, 138, 200, -50, pair);
+    expect(a).toEqual(b);
+  });
+});
+
+describe("sling-birds 1.1 卷卷的回旋(boomerangVelocity)", () => {
+  it("水平方向调头并略微加速", () => {
+    const v = boomerangVelocity(300, 50);
+    expect(v.vx).toBeLessThan(0);
+    expect(Math.abs(v.vx)).toBeGreaterThan(300);
+    const back = boomerangVelocity(-200, 0);
+    expect(back.vx).toBeGreaterThan(200);
+  });
+
+  it("回旋的同时向上抬一把(vy 变为向上)", () => {
+    expect(boomerangVelocity(300, 200).vy).toBeLessThan(0);
+    expect(boomerangVelocity(300, 0).vy).toBeLessThan(0);
+  });
+
+  it("上升途中回旋保留一部分上升速度", () => {
+    const v = boomerangVelocity(300, -200);
+    expect(v.vy).toBeLessThan(-120);
+  });
+
+  it("确定性:同输入同输出", () => {
+    expect(boomerangVelocity(123, -45)).toEqual(boomerangVelocity(123, -45));
+  });
+});
+
+describe("sling-birds 1.1 岩壳块的两段连锁(shellBreak)", () => {
+  it("岩壳碎一层露出晶核,而不是直接消失", () => {
+    expect(shellBreak("shell")).toBe("core");
+  });
+
+  it("其他材质(含晶核本身)不受两段连锁影响,照常摧毁", () => {
+    for (const k of ["wood", "stone", "ice", "glass", "tnt", "core"]) {
+      expect(shellBreak(k), k).toBeNull();
+    }
   });
 });

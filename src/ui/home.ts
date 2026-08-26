@@ -1,5 +1,8 @@
 /**
- * 首页:标题、星星余额、分类页签、游戏卡片网格、家长入口。
+ * 首页:标题、星星余额、收藏区、最近玩过、分类页签 + 玩法芯片 + 搜索、游戏卡片网格、家长入口。
+ *
+ * 「怎么筛、怎么搜、怎么排、徽章写什么」全在 homeFilters.ts 里(纯函数、有单测),
+ * 这个文件只管把结果画出来、接事件。
  */
 import type { GameCategory, GameModule } from "../engine/types";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "../engine/types";
@@ -7,9 +10,21 @@ import { save } from "../engine/save";
 import { isBgmOn, playSound, toggleBgm, toggleSound } from "../engine/audio";
 import { showParentGate } from "./parentGate";
 import { createAvatarImg } from "./avatars";
-import { loadRecentIds } from "./recent";
-
-type Tab = "all" | GameCategory;
+import { RECENT_SHOWN, loadRecentIds } from "./recent";
+import {
+  MODE_CHIPS,
+  emptyStateText,
+  favoriteGames,
+  filterGames,
+  isFav,
+  isFiltering,
+  loadFavIds,
+  progressBadgeText,
+  saveFavIds,
+  toggleFavIds,
+  type ModeChip,
+  type Tab
+} from "./homeFilters";
 
 const TAB_EMOJI: Record<Tab, string> = {
   all: "🌈",
@@ -25,10 +40,78 @@ const TABS: { key: Tab; label: string }[] = [
   ...CATEGORY_ORDER.map((c) => ({ key: c as Tab, label: CATEGORY_LABELS[c] }))
 ];
 
-/** 首页「最近玩过」最多展示的张数(列表本身在 recent.ts 里维护) */
-const RECENT_SHOWN = 4;
+/**
+ * 第 6 步的「收藏册」是另一个窗口在做的,可能还没进仓库。
+ * 用 glob 探一眼:文件不在就连按钮都不出现,绝不因为缺模块把首页打崩。
+ */
+const COLLECTION_MODULES = import.meta.glob("./collection.ts");
+const COLLECTION_PATH = "./collection.ts";
 
-/** 只读 99 关框架的存档(yiduo-yixing.l99.<id>),返回已通关数;没有存档返回 null */
+function hasCollection(): boolean {
+  return typeof COLLECTION_MODULES[COLLECTION_PATH] === "function";
+}
+
+async function openCollectionSafely(): Promise<void> {
+  const loader = COLLECTION_MODULES[COLLECTION_PATH];
+  if (typeof loader !== "function") return;
+  try {
+    const mod = (await loader()) as { openCollection?: () => void };
+    mod.openCollection?.();
+  } catch {
+    // 收藏册加载失败就当没这个按钮,首页照常玩
+  }
+}
+
+/** 1.1 新增控件的样式:styles.css 归别的窗口管,这里只补自己新加的那几个类 */
+const HOME_EXTRA_CSS = `
+.home-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 18px}
+.home-search{flex:1 1 190px;display:flex;align-items:center;gap:8px;min-height:50px;padding:0 16px;
+  border:3px solid #fff;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:var(--shadow-soft)}
+.home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;
+  font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
+.home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
+.home-search-clear{display:grid;place-items:center;min-width:44px;min-height:44px;margin-right:-10px;
+  border:0;background:transparent;font-size:19px;line-height:1;color:var(--ink-soft)}
+.tabs.cat-tabs{margin-bottom:2px}
+.tabs.mode-chips{margin:0;padding-top:0;gap:10px}
+.mode-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
+.mode-chips .tab-emoji{font-size:19px}
+/* 心形是卡片的兄弟节点(按钮不能套按钮),浮在卡片右上角,热区 44×44 */
+.fav-slot{position:relative;display:flex}
+.fav-slot>.game-card,.fav-slot>.recent-card{flex:1;min-width:0}
+.fav-btn{position:absolute;top:2px;right:2px;display:grid;place-items:center;
+  min-width:44px;min-height:44px;border:0;background:transparent;font-size:22px;line-height:1;
+  filter:grayscale(1) opacity(.5);transition:transform .14s ease,filter .14s ease}
+.fav-btn:hover{transform:scale(1.16)}
+.fav-btn[aria-pressed="true"]{filter:none}
+.fav-slot:hover>.fav-btn{transform:translateY(-5px)}
+.fav-slot:hover>.fav-btn:hover{transform:translateY(-5px) scale(1.16)}
+/* 收藏区的小卡:心形浮角不占宽度,游戏名才不会被挤成省略号 */
+.fav-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.fav-grid .recent-info{flex:1 1 auto;min-width:0;padding-right:18px}
+.fav-grid .fav-btn{top:-4px;right:-4px;font-size:17px}
+/* 窄屏两列。1fr 的下限是 min-content,320px 上第二张卡会顶出屏幕,这里夹成 minmax(0,1fr) */
+@media (max-width:380px){
+  .recent-grid,.fav-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:reduce){
+  .fav-btn,.fav-btn:hover,.fav-slot:hover>.fav-btn,.fav-slot:hover>.fav-btn:hover{transform:none}
+}
+.home-count{font-size:14px;font-weight:700;color:var(--ink-soft);margin:0 0 10px}
+`;
+
+const EXTRA_STYLE_ID = "home-extra-style";
+
+function ensureExtraStyle(): void {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(EXTRA_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = EXTRA_STYLE_ID;
+  style.textContent = HOME_EXTRA_CSS;
+  document.head.appendChild(style);
+}
+
+/** 只读 188 关框架的存档(yiduo-yixing.l99.<id>),返回已通关数;没有存档返回 null */
 function l99ClearedCount(id: string): number | null {
   try {
     const raw = globalThis.localStorage?.getItem(`yiduo-yixing.l99.${id}`);
@@ -55,6 +138,8 @@ function greetingText(): string {
 }
 
 export function renderHome(container: HTMLElement, games: GameModule[]): () => void {
+  ensureExtraStyle();
+
   const screen = document.createElement("div");
   screen.className = "screen home-screen";
   container.appendChild(screen);
@@ -129,6 +214,22 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   });
 
   actions.append(starChip, soundBtn, bgmBtn, parentBtn);
+
+  // 收藏册入口:第 6 步的模块进仓库了才出现
+  if (hasCollection()) {
+    const collectionBtn = document.createElement("button");
+    collectionBtn.type = "button";
+    collectionBtn.className = "icon-btn";
+    collectionBtn.title = "我的收藏册";
+    collectionBtn.setAttribute("aria-label", "我的收藏册");
+    collectionBtn.textContent = "🎁";
+    collectionBtn.addEventListener("click", () => {
+      playSound("tap");
+      void openCollectionSafely();
+    });
+    actions.appendChild(collectionBtn);
+  }
+
   header.appendChild(actions);
   screen.appendChild(header);
 
@@ -141,13 +242,19 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   });
   const heroBubble = document.createElement("div");
   heroBubble.className = "hero-bubble";
-  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>今天想玩什么呀?挑一张卡片吧 🌈</span>`;
+  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>55 款原创小游戏,闯关最长 188 关。上面可以筛选、搜索、收藏 🌈</span>`;
   const heroXingxing = createAvatarImg("xingxingRun", {
     round: false,
     className: "hero-figure hero-figure--xingxing"
   });
   hero.append(heroDuoduo, heroBubble, heroXingxing);
   screen.appendChild(hero);
+
+  // ---- 收藏区(置顶,空则整个分区不显示) ----
+  const favSection = document.createElement("section");
+  favSection.className = "recent-section";
+  favSection.setAttribute("aria-label", "我的最爱");
+  screen.appendChild(favSection);
 
   // ---- 最近玩过(空则整个分区不显示) ----
   const recentSection = document.createElement("section");
@@ -157,12 +264,44 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   // ---- 分类页签 ----
   const tabs = document.createElement("nav");
-  tabs.className = "tabs";
+  tabs.className = "tabs cat-tabs";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "游戏分类");
   screen.appendChild(tabs);
 
-  // ---- 卡片区(全部页签按分类分节,其余页签单个网格) ----
+  // ---- 玩法筛选芯片(与分类页签叠加) ----
+  const modeBar = document.createElement("nav");
+  modeBar.className = "tabs mode-chips";
+  modeBar.setAttribute("role", "tablist");
+  modeBar.setAttribute("aria-label", "玩法筛选");
+  screen.appendChild(modeBar);
+
+  // ---- 搜索框 ----
+  const toolbar = document.createElement("div");
+  toolbar.className = "home-toolbar";
+  const searchBox = document.createElement("div");
+  searchBox.className = "home-search";
+  const searchIcon = document.createElement("span");
+  searchIcon.setAttribute("aria-hidden", "true");
+  searchIcon.textContent = "🔍";
+  const searchInput = document.createElement("input");
+  searchInput.type = "search";
+  searchInput.className = "home-search-input";
+  searchInput.placeholder = "找游戏:打名字或拼音首字母";
+  searchInput.setAttribute("aria-label", "搜索游戏,可以打名字或者拼音首字母");
+  searchInput.autocomplete = "off";
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "home-search-clear";
+  clearBtn.textContent = "✖";
+  clearBtn.title = "清空";
+  clearBtn.setAttribute("aria-label", "清空搜索");
+  clearBtn.hidden = true;
+  searchBox.append(searchIcon, searchInput, clearBtn);
+  toolbar.appendChild(searchBox);
+  screen.appendChild(toolbar);
+
+  // ---- 卡片区(不筛不搜时按分类分节,否则一整片结果) ----
   const main = document.createElement("main");
   main.className = "home-main";
   screen.appendChild(main);
@@ -173,6 +312,9 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   screen.appendChild(footer);
 
   let activeTab: Tab = "all";
+  let activeMode: ModeChip = "all";
+  let query = "";
+  let favIds = loadFavIds(globalThis.localStorage);
 
   function renderTabs(): void {
     tabs.innerHTML = "";
@@ -200,10 +342,65 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     }
   }
 
+  function renderModeChips(): void {
+    modeBar.innerHTML = "";
+    for (const { key, emoji, label } of MODE_CHIPS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `tab ${key === activeMode ? "tab--active" : ""}`.trim();
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", String(key === activeMode));
+      const em = document.createElement("span");
+      em.className = "tab-emoji";
+      em.setAttribute("aria-hidden", "true");
+      em.textContent = emoji;
+      const text = document.createElement("span");
+      text.textContent = label;
+      btn.append(em, text);
+      btn.addEventListener("click", () => {
+        if (activeMode === key) return;
+        activeMode = key;
+        playSound("tap");
+        renderModeChips();
+        renderGrid();
+      });
+      modeBar.appendChild(btn);
+    }
+  }
+
   function openGame(id: string): void {
     playSound("pop");
     // 「最近玩过」由游戏壳在真正进入游戏时记录(深链进入也算),这里只负责跳转
     location.hash = `#/game/${encodeURIComponent(id)}`;
+  }
+
+  function toggleFav(id: string): void {
+    favIds = toggleFavIds(id, favIds);
+    saveFavIds(favIds, globalThis.localStorage);
+    playSound(isFav(id, favIds) ? "coin" : "tap");
+    renderFavorites();
+    renderRecent();
+    renderGrid();
+  }
+
+  /**
+   * 把卡片和收藏心形并排放进一个定位容器:
+   * 心形绝对定位浮在卡片右上角,既不套在卡片按钮里(按钮不能嵌按钮),也不占走标题的宽度。
+   */
+  function withFavHeart(card: HTMLElement, id: string, title: string, extraClass = ""): HTMLElement {
+    const slot = document.createElement("div");
+    slot.className = `fav-slot ${extraClass}`.trim();
+    const on = isFav(id, favIds);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fav-btn";
+    btn.textContent = on ? "💖" : "🤍";
+    btn.setAttribute("aria-pressed", String(on));
+    btn.setAttribute("aria-label", on ? `把 ${title} 移出最爱` : `把 ${title} 加进最爱`);
+    btn.title = on ? "移出最爱" : "加进最爱";
+    btn.addEventListener("click", () => toggleFav(id));
+    slot.append(card, btn);
+    return slot;
   }
 
   function makeSectionTitle(emoji: string, text: string): HTMLElement {
@@ -217,6 +414,59 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     label.textContent = text;
     h.append(em, label);
     return h;
+  }
+
+  /** 收藏区与最近玩过共用的小卡片(收藏区多一颗心形) */
+  function createSmallCard(game: GameModule, withFav: boolean): HTMLElement {
+    const { meta } = game;
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "recent-card";
+    card.style.setProperty("--card-color", meta.color);
+    card.setAttribute("aria-label", `继续玩 ${meta.title}`);
+
+    const emoji = document.createElement("span");
+    emoji.className = "recent-emoji";
+    emoji.setAttribute("aria-hidden", "true");
+    emoji.textContent = meta.emoji;
+
+    const info = document.createElement("span");
+    info.className = "recent-info";
+    const name = document.createElement("span");
+    name.className = "recent-name";
+    name.textContent = meta.title;
+    const sub = document.createElement("span");
+    sub.className = "recent-sub";
+    const badge = progressBadgeText(l99ClearedCount(meta.id), meta);
+    if (badge) {
+      sub.textContent = `${badge} 关`;
+    } else {
+      const progress = save.getGameProgress(meta.id);
+      sub.textContent =
+        progress.bestStars > 0
+          ? "⭐".repeat(progress.bestStars) + "☆".repeat(3 - progress.bestStars)
+          : "继续玩 ▶";
+    }
+    info.append(name, sub);
+
+    card.append(emoji, info);
+    card.addEventListener("click", () => openGame(meta.id));
+    return withFav ? withFavHeart(card, meta.id, meta.title) : card;
+  }
+
+  function renderFavorites(): void {
+    favSection.innerHTML = "";
+    const favs = favoriteGames(games, favIds);
+    if (favs.length === 0) {
+      favSection.hidden = true;
+      return;
+    }
+    favSection.hidden = false;
+    favSection.appendChild(makeSectionTitle("💖", "我的最爱"));
+    const row = document.createElement("div");
+    row.className = "recent-grid fav-grid";
+    for (const game of favs) row.appendChild(createSmallCard(game, true));
+    favSection.appendChild(row);
   }
 
   function renderRecent(): void {
@@ -234,42 +484,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
     const row = document.createElement("div");
     row.className = "recent-grid";
-    for (const game of recent) {
-      const { meta } = game;
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = "recent-card";
-      card.style.setProperty("--card-color", meta.color);
-      card.setAttribute("aria-label", `继续玩 ${meta.title}`);
-
-      const emoji = document.createElement("span");
-      emoji.className = "recent-emoji";
-      emoji.setAttribute("aria-hidden", "true");
-      emoji.textContent = meta.emoji;
-
-      const info = document.createElement("span");
-      info.className = "recent-info";
-      const name = document.createElement("span");
-      name.className = "recent-name";
-      name.textContent = meta.title;
-      const sub = document.createElement("span");
-      sub.className = "recent-sub";
-      const cleared = l99ClearedCount(meta.id);
-      if (cleared !== null && cleared > 0) {
-        sub.textContent = `🚩 ${cleared}/99 关`;
-      } else {
-        const progress = save.getGameProgress(meta.id);
-        sub.textContent =
-          progress.bestStars > 0
-            ? "⭐".repeat(progress.bestStars) + "☆".repeat(3 - progress.bestStars)
-            : "继续玩 ▶";
-      }
-      info.append(name, sub);
-
-      card.append(emoji, info);
-      card.addEventListener("click", () => openGame(meta.id));
-      row.appendChild(card);
-    }
+    for (const game of recent) row.appendChild(createSmallCard(game, false));
     recentSection.appendChild(row);
   }
 
@@ -307,34 +522,46 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
         : "☆☆☆";
     metaRow.appendChild(best);
 
-    // 99 关进度徽章:只读 yiduo-yixing.l99.<id>,有进度才显示
-    const cleared = l99ClearedCount(meta.id);
-    if (cleared !== null && cleared > 0) {
-      const badge = document.createElement("span");
-      badge.className = "card-progress";
-      badge.textContent = `🚩 ${cleared}/99`;
-      badge.title = `已闯过 ${cleared} 关`;
-      metaRow.appendChild(badge);
+    // 闯关进度徽章:只读 yiduo-yixing.l99.<id>,有进度才显示,分母取 meta.levels
+    const badge = progressBadgeText(l99ClearedCount(meta.id), meta);
+    if (badge) {
+      const badgeEl = document.createElement("span");
+      badgeEl.className = "card-progress";
+      badgeEl.textContent = badge;
+      badgeEl.title = `已闯过 ${badge.replace("🚩 ", "")} 关`;
+      metaRow.appendChild(badgeEl);
     }
 
     card.append(emoji, titleEl, blurb, metaRow);
     card.addEventListener("click", () => openGame(meta.id));
-    return card;
+    return withFavHeart(card, meta.id, meta.title);
+  }
+
+  function makeEmptyState(): HTMLElement {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    const em = document.createElement("div");
+    em.className = "empty-emoji";
+    em.setAttribute("aria-hidden", "true");
+    em.textContent = "🌱";
+    const p = document.createElement("p");
+    p.textContent = emptyStateText({ tab: activeTab, mode: activeMode, query });
+    empty.append(em, p);
+    return empty;
   }
 
   function renderGrid(): void {
     main.innerHTML = "";
 
     if (games.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.innerHTML = `<div class="empty-emoji" aria-hidden="true">🌱</div><p>小游戏正在路上,很快就到啦!</p>`;
-      main.appendChild(empty);
+      main.appendChild(makeEmptyState());
       return;
     }
 
-    if (activeTab === "all") {
-      // 全部页签:按分类分小节,孩子滚动时有方位感
+    const filtering = isFiltering({ mode: activeMode, query });
+
+    // 不筛玩法也不搜索时,「全部」页签仍旧按分类分小节,孩子滚动时有方位感
+    if (!filtering && activeTab === "all") {
       for (const category of CATEGORY_ORDER) {
         const inCategory = games.filter((g) => g.meta.category === category);
         if (inCategory.length === 0) continue;
@@ -351,21 +578,42 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       return;
     }
 
-    const shown = games.filter((g) => g.meta.category === activeTab);
+    const shown = filterGames(games, { tab: activeTab, mode: activeMode, query });
+    if (filtering && shown.length > 0) {
+      const count = document.createElement("p");
+      count.className = "home-count";
+      count.setAttribute("role", "status");
+      count.textContent = `找到 ${shown.length} 个游戏 🎉`;
+      main.appendChild(count);
+    }
+
     const grid = document.createElement("div");
     grid.className = "grid";
     if (shown.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.innerHTML = `<div class="empty-emoji" aria-hidden="true">🌱</div><p>这个分类还没有游戏,去别的分类看看吧!</p>`;
-      grid.appendChild(empty);
+      grid.appendChild(makeEmptyState());
     } else {
       shown.forEach((game, i) => grid.appendChild(createGameCard(game, i)));
     }
     main.appendChild(grid);
   }
 
+  searchInput.addEventListener("input", () => {
+    query = searchInput.value;
+    clearBtn.hidden = query.trim() === "";
+    renderGrid();
+  });
+  clearBtn.addEventListener("click", () => {
+    searchInput.value = "";
+    query = "";
+    clearBtn.hidden = true;
+    playSound("tap");
+    renderGrid();
+    searchInput.focus();
+  });
+
   renderTabs();
+  renderModeChips();
+  renderFavorites();
   renderRecent();
   renderGrid();
 

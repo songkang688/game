@@ -8,5 +8,8 @@ export const meta = {
   emoji: "🌱",
   category: "action" as const,
   color: "#d5f2ca",
-  blurb: "99 关九大花园守家战役!七种植物九种虫,决战虫虫女王!",
+  blurb: "188 关十三大花园守家战役!七种植物九种虫,决战虫虫女王!",
+  // logic.ts 前 9 章各 11 关 + 新 4 章 22/22/22/23,合计 188;只有闯关
+  modes: ["campaign"] as const,
+  levels: 188,
 };

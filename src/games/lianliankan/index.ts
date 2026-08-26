@@ -2,37 +2,79 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, THEME_EMOJIS, type LlkLevel } from "./levels";
+import {
+  anyMove,
+  applyGravity,
+  createBoard,
+  findPath,
+  MASK_FACE,
+  maskKey,
+  pickMasked,
+  removePair,
+  rotateBoard,
+  shuffleBoard,
+  tilesLeft,
+  type BoardState,
+  type Pt
+} from "./board";
+import { CHAPTERS, LEVELS, THEME_EMOJIS, turnsOf, type LlkLevel } from "./levels";
 
 const BGS = [
   "#FFE3E3", "#FFF3CE", "#EBDDFB", "#FFE0EC", "#E0F0FF", "#FFE9F3", "#FFF6D8",
   "#E2F0FF", "#F6E3FF", "#FFEFE0", "#FFE4D0", "#FFDFE8", "#E3EBFF", "#E2F7DF",
 ];
 
-type Pt = [number, number];
-
 const CSS = `
 .llk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF2E4, #FDEBF3); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .llk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
 .llk-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #D98548; box-shadow: 0 2px 6px rgba(220,160,100,.25); font-size: 14px; }
 .llk-badge.llk-hurry { color: #E8590C; animation: llkBlink 1s infinite; }
+.llk-badge.llk-rule { color: #7A5AA8; background: #F3ECFF; }
 @keyframes llkBlink { 50% { opacity: .5; } }
 .llk-shuffle { border: none; border-radius: 14px; padding: 6px 12px; font-weight: 700; background: #FFD9A8; color: #8A5A20; cursor: pointer; box-shadow: 0 3px 0 #EFBC82; font-size: 14px; font-family: inherit; }
 .llk-shuffle:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFBC82; }
 .llk-shuffle:disabled { opacity: .5; }
 .llk-boardbox { position: relative; }
-.llk-board { display: grid; gap: 3px; }
+.llk-board { display: grid; gap: 3px; transition: transform .3s ease; }
+.llk-board.llk-spin { transform: rotate(90deg) scale(.86); }
 .llk-cell { aspect-ratio: 1; border: none; border-radius: 10px; font-size: clamp(13px, 4vw, 24px); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform .12s, opacity .25s; padding: 0; box-shadow: 0 2px 4px rgba(200,140,90,.18); }
 .llk-cell.llk-gone { background: transparent !important; box-shadow: none; cursor: default; }
 .llk-cell.llk-sel { box-shadow: 0 0 0 3px #FF9E5E; transform: scale(1.1); }
+.llk-cell.llk-mask { background: #E7E0F5 !important; color: #8B7BB8; }
 .llk-cell:active { transform: scale(.9); }
 .llk-line { position: absolute; inset: 0; pointer-events: none; }
 .llk-msg { text-align: center; min-height: 22px; color: #D98548; font-weight: 700; margin-top: 8px; font-size: 15px; }
+@media (prefers-reduced-motion: reduce) {
+  .llk-board { transition: none; }
+  .llk-badge.llk-hurry { animation: none; }
+}
 `;
+
+/** 头部那句规则小贴纸：一眼看出这一关的新花样 */
+function ruleChip(cfg: LlkLevel): string {
+  if (cfg.rotateMs) return "🌀 棋盘会转";
+  if (turnsOf(cfg) <= 1) return "📏 只准拐一次";
+  if (cfg.disguise) return "🎭 有面具";
+  if (cfg.gravity === "up") return "🧲 往上飘";
+  if (cfg.gravity === "right") return "🧲 往右滑";
+  return "";
+}
+
+function openingHint(cfg: LlkLevel): string {
+  if (cfg.rotateMs) return "每过一会儿整块棋盘就转 90°，记图案别记坐标。";
+  if (turnsOf(cfg) <= 1) return "这里的线最多只准拐一次弯，先找同一行同一列的。";
+  if (cfg.disguise) return "戴面具的图案点一下露真身，先翻一遍摸清盘面再动手。";
+  if (cfg.gravity === "up") return "重力向上：消掉一对后，下面的图案会补上来。";
+  if (cfg.gravity === "right") return "重力向右：消掉一对后，左边的图案会挤过来。";
+  if (cfg.gravity === "down") return "重力向下：消掉一对后，上面的图案会落下来。";
+  if (cfg.gravity === "left") return "重力向左：消掉一对后，右边的图案会挤过来。";
+  return `${cfg.rows}×${cfg.cols} 棋盘，${cfg.seconds} 秒内全部连完，先从边角下手！`;
+}
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg: LlkLevel = LEVELS[ctx.level];
   const EMOJIS = THEME_EMOJIS[cfg.theme];
+  const maxTurns = turnsOf(cfg);
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
   const intervals = new Set<ReturnType<typeof setInterval>>();
   let destroyed = false;
@@ -40,9 +82,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   let selected: Pt | null = null;
   let timeLeft = cfg.seconds;
   let shufflesLeft = cfg.shuffles;
-  const R = cfg.rows + 2;
-  const C = cfg.cols + 2;
-  const grid: number[][] = [];
+  const board: BoardState = createBoard(
+    { rows: cfg.rows, cols: cfg.cols, kinds: cfg.kinds, gravity: cfg.gravity, maxTurns },
+    Math.random
+  );
+  const { R, C } = board;
+  let masked: Set<string> = new Set();
+  const revealed = new Set<string>();
   const cells: HTMLButtonElement[][] = [];
 
   const wrap = document.createElement("div");
@@ -52,6 +98,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <div class="llk-top">
       <span class="llk-badge llk-left">🧸 剩 0 对</span>
       <span class="llk-badge llk-time">⏰ 0 秒</span>
+      ${ruleChip(cfg) ? `<span class="llk-badge llk-rule">${ruleChip(cfg)}</span>` : ""}
       <button class="llk-shuffle" type="button">🔀 洗牌</button>
     </div>
     <div class="llk-boardbox">
@@ -77,23 +124,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     timeouts.add(t);
   }
 
-  function setup(): void {
-    for (let r = 0; r < R; r++) grid.push(new Array(C).fill(-1));
-    const total = cfg.rows * cfg.cols;
-    const bag: number[] = [];
-    let k = 0;
-    while (bag.length < total) {
-      bag.push(k % cfg.kinds, k % cfg.kinds);
-      k++;
-    }
-    bag.length = total;
-    for (let i = bag.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [bag[i], bag[j]] = [bag[j], bag[i]];
-    }
-    let bi = 0;
-    for (let r = 1; r <= cfg.rows; r++) for (let col = 1; col <= cfg.cols; col++) grid[r][col] = bag[bi++];
+  function rerollMasks(): void {
+    if (!cfg.disguise) return;
+    masked = pickMasked(board, cfg.disguise, Math.random);
+    revealed.clear();
+  }
 
+  function setup(): void {
     boardEl.style.gridTemplateColumns = `repeat(${C}, 1fr)`;
     for (let r = 0; r < R; r++) {
       const row: HTMLButtonElement[] = [];
@@ -109,28 +146,39 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       cells.push(row);
     }
 
-    if (!anyMoveExists()) doShuffle(true, true);
+    if (!anyMove(board, maxTurns)) doShuffle(true, true);
+    rerollMasks();
     render();
-    msgEl.textContent =
-      cfg.gravity === "down"
-        ? "小心！消掉一对后，上面的图案会掉下来！"
-        : cfg.gravity === "left"
-          ? "小心！消掉一对后，右边的图案会向左滑！"
-          : `${cfg.rows}×${cfg.cols} 棋盘，${cfg.seconds} 秒内全部连完！`;
+    msgEl.textContent = openingHint(cfg);
 
     const clock = setInterval(() => {
       if (levelDone || destroyed) return;
       timeLeft--;
       renderTop();
-      if (timeLeft <= 0) fail("时间到啦，下次先连容易看到的那几对！");
+      if (timeLeft <= 0) fail("时间到～下一局先清边角，边角的线拐弯少，还能给里面让出通道！");
     }, 1000);
     intervals.add(clock);
+
+    if (cfg.rotateMs && cfg.rotateMs > 0) {
+      const spin = setInterval(() => {
+        if (levelDone || destroyed) return;
+        doRotate();
+      }, Math.max(4000, cfg.rotateMs));
+      intervals.add(spin);
+    }
+    if (cfg.disguise && cfg.disguiseMs && cfg.disguiseMs > 0) {
+      const swapMask = setInterval(() => {
+        if (levelDone || destroyed) return;
+        rerollMasks();
+        render();
+        msgEl.textContent = "🎭 面具换了一批，之前记的失效了，重新翻一遍～";
+      }, Math.max(3500, cfg.disguiseMs));
+      intervals.add(swapMask);
+    }
   }
 
   function pairsLeft(): number {
-    let n = 0;
-    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (grid[r][c] >= 0) n++;
-    return n / 2;
+    return tilesLeft(board) / 2;
   }
 
   function renderTop(): void {
@@ -141,84 +189,40 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     shuffleBtn.disabled = shufflesLeft <= 0 || levelDone;
   }
 
+  function faceOf(r: number, c: number): { text: string; bg: string; hidden: boolean } {
+    const v = board.grid[r][c];
+    const key = maskKey(r, c);
+    const isSel = !!selected && selected[0] === r && selected[1] === c;
+    if (masked.has(key) && !revealed.has(key) && !isSel) {
+      return { text: MASK_FACE, bg: "", hidden: true };
+    }
+    return { text: EMOJIS[v], bg: BGS[v % BGS.length], hidden: false };
+  }
+
   function render(): void {
     for (let r = 0; r < R; r++) {
       for (let c = 0; c < C; c++) {
         const el = cells[r][c];
-        const v = grid[r][c];
+        const v = board.grid[r][c];
         if (v < 0) {
           el.classList.add("llk-gone");
-          el.classList.remove("llk-sel");
+          el.classList.remove("llk-sel", "llk-mask");
           el.textContent = "";
           el.style.background = "";
-        } else {
-          el.classList.remove("llk-gone");
-          el.textContent = EMOJIS[v];
-          el.style.background = BGS[v % BGS.length];
-          el.classList.toggle("llk-sel", !!selected && selected[0] === r && selected[1] === c);
+          el.setAttribute("aria-hidden", "true");
+          continue;
         }
+        const face = faceOf(r, c);
+        el.classList.remove("llk-gone");
+        el.removeAttribute("aria-hidden");
+        el.textContent = face.text;
+        el.style.background = face.bg;
+        el.classList.toggle("llk-mask", face.hidden);
+        el.setAttribute("aria-label", face.hidden ? "戴着面具的图案，点一下看看" : `图案 ${face.text}`);
+        el.classList.toggle("llk-sel", !!selected && selected[0] === r && selected[1] === c);
       }
     }
     renderTop();
-  }
-
-  function isEmpty(r: number, c: number): boolean {
-    return grid[r][c] < 0;
-  }
-
-  function clearLine(a: Pt, b: Pt): boolean {
-    if (a[0] === b[0]) {
-      const [lo, hi] = a[1] < b[1] ? [a[1], b[1]] : [b[1], a[1]];
-      for (let c = lo + 1; c < hi; c++) if (!isEmpty(a[0], c)) return false;
-      return true;
-    }
-    if (a[1] === b[1]) {
-      const [lo, hi] = a[0] < b[0] ? [a[0], b[0]] : [b[0], a[0]];
-      for (let r = lo + 1; r < hi; r++) if (!isEmpty(r, a[1])) return false;
-      return true;
-    }
-    return false;
-  }
-
-  function findPath(a: Pt, b: Pt): Pt[] | null {
-    if ((a[0] === b[0] || a[1] === b[1]) && clearLine(a, b)) return [a, b];
-    const c1: Pt = [a[0], b[1]];
-    if (isEmpty(c1[0], c1[1]) && clearLine(a, c1) && clearLine(c1, b)) return [a, c1, b];
-    const c2: Pt = [b[0], a[1]];
-    if (isEmpty(c2[0], c2[1]) && clearLine(a, c2) && clearLine(c2, b)) return [a, c2, b];
-    for (let r = 0; r < R; r++) {
-      if (r === a[0] || r === b[0]) continue;
-      const p1: Pt = [r, a[1]];
-      const p2: Pt = [r, b[1]];
-      if (isEmpty(p1[0], p1[1]) && isEmpty(p2[0], p2[1]) &&
-          clearLine(a, p1) && clearLine(p1, p2) && clearLine(p2, b)) {
-        return [a, p1, p2, b];
-      }
-    }
-    for (let c = 0; c < C; c++) {
-      if (c === a[1] || c === b[1]) continue;
-      const p1: Pt = [a[0], c];
-      const p2: Pt = [b[0], c];
-      if (isEmpty(p1[0], p1[1]) && isEmpty(p2[0], p2[1]) &&
-          clearLine(a, p1) && clearLine(p1, p2) && clearLine(p2, b)) {
-        return [a, p1, p2, b];
-      }
-    }
-    return null;
-  }
-
-  function anyMoveExists(): boolean {
-    const tiles: Pt[] = [];
-    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (grid[r][c] >= 0) tiles.push([r, c]);
-    for (let i = 0; i < tiles.length; i++) {
-      for (let j = i + 1; j < tiles.length; j++) {
-        const [r1, c1] = tiles[i];
-        const [r2, c2] = tiles[j];
-        if (grid[r1][c1] !== grid[r2][c2]) continue;
-        if (findPath(tiles[i], tiles[j])) return true;
-      }
-    }
-    return false;
   }
 
   function drawPath(path: Pt[]): void {
@@ -249,46 +253,39 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }, 380);
   }
 
-  /** 重力：down = 内圈图案往下落；left = 内圈图案向左滑 */
-  function applyGravity(): void {
-    if (cfg.gravity === "down") {
-      for (let c = 1; c <= cfg.cols; c++) {
-        const vals: number[] = [];
-        for (let r = cfg.rows; r >= 1; r--) if (grid[r][c] >= 0) vals.push(grid[r][c]);
-        for (let r = cfg.rows, i = 0; r >= 1; r--, i++) grid[r][c] = i < vals.length ? vals[i] : -1;
-      }
-    } else if (cfg.gravity === "left") {
-      for (let r = 1; r <= cfg.rows; r++) {
-        const vals: number[] = [];
-        for (let c = 1; c <= cfg.cols; c++) if (grid[r][c] >= 0) vals.push(grid[r][c]);
-        for (let c = 1, i = 0; c <= cfg.cols; c++, i++) grid[r][c] = i < vals.length ? vals[i] : -1;
-      }
+  /** 1.1 风车旋转：整块棋盘顺时针转 90°，图案一个不少 */
+  function doRotate(): void {
+    if (!rotateBoard(board)) return;
+    selected = null;
+    revealed.clear();
+    rerollMasks();
+    boardEl.classList.add("llk-spin");
+    later(() => boardEl.classList.remove("llk-spin"), 320);
+    ctx.sfx("tap");
+    msgEl.textContent = "🌀 棋盘转了 90°，先花一秒重新定位再动手！";
+    render();
+    if (!anyMove(board, maxTurns) && tilesLeft(board) > 0) {
+      if (cfg.autoShuffleFree || shufflesLeft > 0) doShuffle(true);
+      else fail("转完之后没有可连的了～洗牌留给真正的死局，再来一局就顺了！");
     }
   }
 
   function doShuffle(auto: boolean, free = false): void {
-    if (!free) {
+    // 1.1 新场馆规则更花，连不动时的自动重排不计次，绝不把人堵死
+    const noCharge = free || (auto && !!cfg.autoShuffleFree);
+    if (!noCharge) {
       if (shufflesLeft <= 0) return;
       shufflesLeft--;
     }
-    const tiles: Pt[] = [];
-    const values: number[] = [];
-    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
-      if (grid[r][c] >= 0) { tiles.push([r, c]); values.push(grid[r][c]); }
-    }
-    let guard = 0;
-    do {
-      for (let i = values.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [values[i], values[j]] = [values[j], values[i]];
-      }
-      tiles.forEach(([r, c], i) => { grid[r][c] = values[i]; });
-      guard++;
-    } while (!anyMoveExists() && guard < 40);
+    shuffleBoard(board, Math.random, maxTurns);
     selected = null;
+    revealed.clear();
+    rerollMasks();
     ctx.sfx("meow");
     msgEl.textContent = auto
-      ? `连不动啦，自动洗牌一次（还剩 ${shufflesLeft} 次）`
+      ? cfg.autoShuffleFree
+        ? "连不动啦，这一关会自动帮你重排，接着找！"
+        : `连不动啦，自动洗牌一次（还剩 ${shufflesLeft} 次）`
       : `洗好啦，重新找找看（还剩 ${shufflesLeft} 次）`;
     render();
   }
@@ -310,11 +307,20 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     stopAll();
     const frac = timeLeft / cfg.seconds;
     const got = frac >= 0.4 ? 3 : frac >= 0.15 ? 2 : 1;
-    later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${timeLeft} 秒，眼睛真尖！`), 350);
+    later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${timeLeft} 秒，扫盘的效率很高！`), 350);
   }
 
   function onCell(r: number, c: number): void {
-    if (levelDone || grid[r][c] < 0) return;
+    if (levelDone || board.grid[r][c] < 0) return;
+    const key = maskKey(r, c);
+    // 戴面具的先露脸：点一下就记住它，之后再来连
+    if (masked.has(key) && !revealed.has(key)) {
+      revealed.add(key);
+      ctx.sfx("tap");
+      selected = [r, c];
+      render();
+      return;
+    }
     if (!selected) {
       selected = [r, c];
       ctx.sfx("tap");
@@ -327,34 +333,43 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       return;
     }
     const [sr, sc] = selected;
-    if (grid[sr][sc] !== grid[r][c]) {
+    if (board.grid[sr][sc] !== board.grid[r][c]) {
       selected = [r, c];
       ctx.sfx("tap");
       render();
       return;
     }
-    const path = findPath(selected, [r, c]);
+    const path = findPath(board, selected, [r, c], maxTurns);
     if (!path) {
       ctx.sfx("oops");
-      msgEl.textContent = "这两个连不到一起，线最多拐两次弯哦～";
+      msgEl.textContent = maxTurns <= 1
+        ? "这两个连不上：这一关的线只准拐一次弯，先找同行同列的～"
+        : "这两个连不上：线最多拐两次弯，中间还不能有别的图案～";
       selected = [r, c];
       render();
       return;
     }
     drawPath(path);
     ctx.sfx("pop");
-    grid[sr][sc] = -1;
-    grid[r][c] = -1;
+    removePair(board, selected, [r, c]);
     selected = null;
-    applyGravity();
+    revealed.delete(maskKey(sr, sc));
+    revealed.delete(key);
+    masked.delete(maskKey(sr, sc));
+    masked.delete(key);
+    if (cfg.gravity !== "none") {
+      applyGravity(board, cfg.gravity);
+      revealed.clear();
+      rerollMasks();
+    }
     render();
-    if (pairsLeft() === 0) {
+    if (tilesLeft(board) === 0) {
       succeed();
       return;
     }
-    if (!anyMoveExists()) {
-      if (shufflesLeft > 0) doShuffle(true);
-      else fail("连不动了，洗牌次数也用完了，再来一局吧！");
+    if (!anyMove(board, maxTurns)) {
+      if (cfg.autoShuffleFree || shufflesLeft > 0) doShuffle(true);
+      else fail("场上没有可连的了～洗牌是应急用的，下一局多留一次就够翻盘啦！");
     }
   }
 
@@ -382,7 +397,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "剩的时间越多星星越多，六大场馆等你逛！",
-    grandMessage: "99 关连连看全部通关，火眼金睛就是你！",
+    mapHint: "剩的时间越多星星越多，先清边角效率最高！",
+    grandMessage: "188 关全部通关，你的扫盘路线已经很有章法了！",
   });
 }

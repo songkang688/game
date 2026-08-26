@@ -1,18 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
   type Board,
+  type Difficulty,
   type Player,
   analyzeWindow,
   bestMove,
   boardFull,
   candidateMoves,
+  evaluateMaster,
   evaluatePoint,
+  findVcf,
+  findVct,
   findWinLine,
+  forcingMoves,
   hintMove,
+  hotPoints,
   isForbidden,
+  killerPoints,
   makeBoard,
   makesFive,
+  masterMove,
   setCell,
+  threatMoves,
 } from "./ai";
 
 function put(b: Board, moves: Array<[number, number]>, p: Player): void {
@@ -299,4 +308,212 @@ describe("gomoku AI 响应速度(思考中不卡 UI)", () => {
       expect(performance.now() - t0).toBeLessThan(100);
     }
   });
+
+  it("大师档要算杀，慢一些也得在 500ms 内出手", () => {
+    const warm = midGameBoard();
+    bestMove(warm, 2, "master", () => 0);
+    const b = midGameBoard();
+    const t0 = performance.now();
+    expect(bestMove(b, 2, "master", () => 0)).not.toBeNull();
+    expect(performance.now() - t0).toBeLessThan(500);
+  });
+});
+
+/* ================= 1.1 新增：棋灵象·大师档 ================= */
+
+/** 固定种子的伪随机，保证对局可复现 */
+function lcg(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+/** 让两档 AI 从空棋盘对到分出胜负，返回赢家（0 = 下满平局） */
+function duel(
+  black: Difficulty,
+  white: Difficulty,
+  seed: number,
+  size: number
+): { winner: Player | 0; plies: number } {
+  const b = makeBoard(size);
+  const rng = lcg(seed);
+  let cur: Player = 1;
+  for (let ply = 0; ply < size * size; ply++) {
+    const mv = bestMove(b, cur, cur === 1 ? black : white, rng);
+    if (!mv) break;
+    expect(b.cells[mv.y * size + mv.x], "AI 下到了非空点").toBe(0);
+    setCell(b, mv.x, mv.y, cur);
+    if (findWinLine(b, mv.x, mv.y)) return { winner: cur, plies: ply + 1 };
+    if (boardFull(b)) break;
+    cur = cur === 1 ? 2 : 1;
+  }
+  return { winner: 0, plies: size * size };
+}
+
+const SEEDS = [1, 7, 42, 99, 2024, 31337];
+
+describe("gomoku 1.1 · 大师档的算杀本事", () => {
+  it("forcingMoves 只挑冲四这种对手非挡不可的点", () => {
+    const b = makeBoard(15);
+    put(b, [[3, 7], [4, 7], [5, 7]], 1); // 黑活三
+    const moves = forcingMoves(b, 1);
+    // 活三还不是四，补成四的两个点才算强迫手
+    const keys = moves.map((m) => `${m.x},${m.y}`);
+    expect(keys).toContain("6,7");
+    expect(keys).toContain("2,7");
+    expect(keys).not.toContain("7,9");
+  });
+
+  it("threatMoves 比 forcingMoves 多认活三", () => {
+    const b = makeBoard(15);
+    put(b, [[6, 7], [7, 7]], 1); // 黑活二
+    expect(forcingMoves(b, 1)).toHaveLength(0);
+    const three = threatMoves(b, 1).map((m) => `${m.x},${m.y}`);
+    expect(three).toContain("8,7");
+  });
+
+  it("killerPoints 找出活四点：一步造出两个成五点", () => {
+    const b = makeBoard(15);
+    put(b, [[5, 7], [6, 7], [7, 7]], 1); // 黑活三，两头都空
+    const kp = killerPoints(b, 1).map((m) => `${m.x},${m.y}`);
+    expect(kp).toContain("8,7");
+    expect(kp).toContain("4,7");
+    // 白棋在这儿什么都没有
+    expect(killerPoints(b, 2)).toHaveLength(0);
+  });
+
+  it("hotPoints 认得出双活三这种要害点", () => {
+    const b = makeBoard(15);
+    put(b, [[5, 7], [6, 7], [7, 5], [7, 6]], 1); // (7,7) 同时接上横竖两个活三
+    const hot = hotPoints(b, 1).map((m) => `${m.x},${m.y}`);
+    expect(hot).toContain("7,7");
+  });
+
+  it("findVcf 算得出两手冲四的杀棋", () => {
+    const b = makeBoard(15);
+    put(b, [[4, 7], [5, 7], [6, 7], [5, 5], [5, 6]], 1);
+    put(b, [[3, 7], [5, 9], [0, 0], [14, 14], [0, 14]], 2);
+    const kill = findVcf(b, 1, 4);
+    expect(kill).not.toBeNull();
+    // 冲四点，白棋不得不挡
+    setCell(b, kill!.x, kill!.y, 1);
+    expect(candidateMoves(b).some(([x, y]) => makesFive(b, x, y, 1))).toBe(true);
+  });
+
+  it("findVcf 在没有杀棋时老老实实返回 null", () => {
+    const b = makeBoard(15);
+    put(b, [[7, 7]], 1);
+    put(b, [[8, 8]], 2);
+    expect(findVcf(b, 1, 5)).toBeNull();
+    expect(findVct(b, 1, 3)).toBeNull();
+  });
+
+  it("findVct 认得出活四这种一步定胜负的形", () => {
+    const b = makeBoard(15);
+    put(b, [[5, 7], [6, 7], [7, 7]], 1);
+    put(b, [[0, 0], [14, 14], [0, 14]], 2);
+    const kill = findVct(b, 1, 3);
+    expect(kill).not.toBeNull();
+    expect([[4, 7], [8, 7]]).toContainEqual([kill!.x, kill!.y]);
+  });
+
+  it("evaluateMaster 看不上没有后续的冲四，但很看重活三", () => {
+    const b = makeBoard(15);
+    put(b, [[3, 7], [4, 7], [5, 7]], 1);
+    put(b, [[2, 7]], 2); // 左边被堵，(6,7) 只是个冲四
+    const rush = evaluateMaster(b, 6, 7, 1);
+    const b2 = makeBoard(15);
+    put(b2, [[6, 9], [7, 9]], 1);
+    const three = evaluateMaster(b2, 8, 9, 1); // 活三
+    expect(rush).toBeLessThan(three);
+    // 而普通评估函数里冲四反而更高，两套权重确实不一样
+    const bb = makeBoard(15);
+    put(bb, [[3, 7], [4, 7], [5, 7]], 1);
+    put(bb, [[2, 7]], 2);
+    expect(evaluatePoint(bb, 6, 7, 1)).toBeGreaterThan(rush);
+  });
+
+  it("大师档该赢就赢、该挡就挡", () => {
+    const win = makeBoard(15);
+    put(win, [[3, 7], [4, 7], [5, 7], [6, 7]], 2);
+    put(win, [[3, 8], [4, 8], [5, 8]], 1);
+    const mv = masterMove(win, 2, () => 0)!;
+    expect(makesFive(win, mv.x, mv.y, 2)).toBe(true);
+
+    const block = makeBoard(15);
+    put(block, [[3, 7], [4, 7], [5, 7], [6, 7]], 1);
+    put(block, [[3, 9], [4, 9]], 2);
+    const mv2 = bestMove(block, 2, "master", () => 0)!;
+    expect([[2, 7], [7, 7]]).toContainEqual([mv2.x, mv2.y]);
+  });
+
+  it("大师档会提前拆掉对手的双活三要害点", () => {
+    const b = makeBoard(15);
+    put(b, [[5, 7], [6, 7], [7, 5], [7, 6]], 1); // (7,7) 是黑棋的双活三点
+    put(b, [[0, 0], [14, 14]], 2);
+    const mv = bestMove(b, 2, "master", () => 0)!;
+    // 要么直接占住要害点，要么把其中一条活三拆掉
+    const good = [[7, 7], [4, 7], [8, 7], [7, 4], [7, 8]];
+    expect(good).toContainEqual([mv.x, mv.y]);
+  });
+
+  it("大师档空棋盘先手下天元", () => {
+    expect(bestMove(makeBoard(15), 1, "master", () => 0)).toEqual({ x: 7, y: 7 });
+    expect(bestMove(makeBoard(9), 1, "master", () => 0)).toEqual({ x: 4, y: 4 });
+  });
+});
+
+describe("gomoku 1.1 · 大师档实战对局（固定种子）", () => {
+  it("大师档执黑，六个种子两种棋盘全胜简单档", () => {
+    for (const size of [9, 15]) {
+      for (const seed of SEEDS) {
+        const r = duel("master", "easy", seed, size);
+        expect(r.winner, `${size}×${size} 种子 ${seed}`).toBe(1);
+      }
+    }
+  }, 120_000);
+
+  // 五子棋黑棋先行本来就占便宜（正式比赛要靠禁手规则找补），
+  // 所以后手的大师档只要求「大比分领先」，不要求一局不输。
+  it("大师档执白对简单档也是大比分领先", () => {
+    const seeds = [1, 3, 7, 11, 42, 99, 123, 777, 2024, 31337];
+    let win = 0;
+    let lose = 0;
+    for (const seed of seeds) {
+      const r = duel("easy", "master", seed, 15);
+      if (r.winner === 2) win++;
+      else if (r.winner === 1) lose++;
+    }
+    expect(win).toBeGreaterThanOrEqual(7);
+    expect(win).toBeGreaterThan(lose * 2);
+  }, 120_000);
+
+  it("大师档在标准棋盘上黑白两边都赢得过聪明档", () => {
+    for (const seed of SEEDS) {
+      expect(duel("master", "smart", seed, 15).winner, `执黑 种子 ${seed}`).toBe(1);
+      expect(duel("smart", "master", seed, 15).winner, `执白 种子 ${seed}`).toBe(2);
+    }
+  }, 180_000);
+
+  it("大师档在标准棋盘上黑白两边都赢得过普通档", () => {
+    for (const seed of SEEDS) {
+      expect(duel("master", "normal", seed, 15).winner, `执黑 种子 ${seed}`).toBe(1);
+      expect(duel("normal", "master", seed, 15).winner, `执白 种子 ${seed}`).toBe(2);
+    }
+  }, 180_000);
+
+  it("同样的种子跑两遍，走的每一步都一模一样（对局可复现）", () => {
+    const a = duel("master", "smart", 2024, 15);
+    const b = duel("master", "smart", 2024, 15);
+    expect(a).toEqual(b);
+  }, 60_000);
+
+  it("对局全程合法：没有落在已有棋子上，赢家确实连成了五", () => {
+    const r = duel("master", "easy", 42, 15);
+    expect(r.winner).toBe(1);
+    expect(r.plies).toBeGreaterThan(4);
+    expect(r.plies % 2).toBe(1); // 黑棋赢，落子数必为奇数
+  }, 60_000);
 });

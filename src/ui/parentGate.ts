@@ -1,145 +1,19 @@
 /**
- * 家长说明:先过一道简单算术门(乘法,一年级小朋友一般不会),
- * 通过后显示家长面板(关于、隐私、清空进度)。
+ * 家长说明:先过一道简单算术门(乘法,小朋友一般不会),
+ * 通过后显示家长面板(关于、隐私、清空进度、进度备份、跳关记录)。
+ *
+ * 1.1 起算术门本身搬到了 `parentAuth.ts`(basic 档),这里只负责调用与面板。
  */
 import { save } from "../engine/save";
 import { playSound } from "../engine/audio";
+import { loadGames } from "../engine/loader";
 import { showDialog } from "./dialogs";
-
-function rand(min: number, max: number): number {
-  return min + Math.floor(Math.random() * (max - min + 1));
-}
-
-// 防暴力试答案:答错 3 次锁 30 秒。
-// 用模块级时间戳记录,关闭弹窗再打开也不重置(刷新页面才清零,不进存档)。
-const MAX_WRONG = 3;
-const LOCK_MS = 30_000;
-let lockUntil = 0;
-let wrongStreak = 0;
+import { clearSkipRecords, formatSkipSummary, readSkipRecords, requestParentAuth } from "./parentAuth";
 
 export function showParentGate(): void {
-  const content = document.createElement("div");
-  content.className = "gate-content";
-
-  const title = document.createElement("h2");
-  title.className = "dialog-title";
-  title.textContent = "家长请回答";
-  content.appendChild(title);
-
-  const hint = document.createElement("p");
-  hint.className = "dialog-text";
-  hint.textContent = "为了确认是家长本人,请回答一道乘法题:";
-  content.appendChild(hint);
-
-  const question = document.createElement("div");
-  question.className = "gate-question";
-  content.appendChild(question);
-
-  const input = document.createElement("input");
-  input.className = "gate-input";
-  input.type = "number";
-  input.inputMode = "numeric";
-  input.placeholder = "答案";
-  input.setAttribute("aria-label", "算术题答案");
-  content.appendChild(input);
-
-  const lockMsg = document.createElement("p");
-  lockMsg.className = "dialog-text";
-  lockMsg.style.color = "var(--pink-deep)";
-  lockMsg.style.fontWeight = "bold";
-  lockMsg.hidden = true;
-  content.appendChild(lockMsg);
-
-  let answer = 0;
-  function newQuestion(): void {
-    const a = rand(3, 9);
-    const b = rand(3, 9);
-    answer = a * b;
-    question.textContent = `${a} × ${b} = ?`;
-    input.value = "";
-    input.focus();
-  }
-
-  const handle = showDialog({
-    className: "dialog--gate",
-    content,
-    dismissible: true,
-    buttons: []
+  void requestParentAuth("basic", "要打开家长面板,先确认一下你是家长。").then((ok) => {
+    if (ok) showParentPanel();
   });
-
-  const row = document.createElement("div");
-  row.className = "dialog-buttons";
-
-  const okBtn = document.createElement("button");
-  okBtn.type = "button";
-  okBtn.className = "btn btn--primary";
-  okBtn.textContent = "确认";
-
-  let wasLocked = false;
-  function refreshLock(): void {
-    const remainMs = lockUntil - Date.now();
-    const locked = remainMs > 0;
-    okBtn.disabled = locked;
-    input.disabled = locked;
-    lockMsg.hidden = !locked;
-    if (locked) {
-      lockMsg.textContent = `休息一下,${Math.ceil(remainMs / 1000)} 秒后再试`;
-    } else if (wasLocked) {
-      // 倒计时刚结束:换一道新题重新来
-      newQuestion();
-    }
-    wasLocked = locked;
-  }
-
-  // 每半秒刷新一次倒计时;弹窗被关掉(节点脱离文档)后自动停表
-  const lockTimer = window.setInterval(() => {
-    if (!content.isConnected) {
-      window.clearInterval(lockTimer);
-      return;
-    }
-    refreshLock();
-  }, 500);
-
-  okBtn.addEventListener("click", () => {
-    if (Date.now() < lockUntil) return;
-    if (Number(input.value) === answer) {
-      playSound("coin");
-      wrongStreak = 0;
-      window.clearInterval(lockTimer);
-      handle.close();
-      showParentPanel();
-    } else {
-      playSound("oops");
-      handle.el.classList.remove("dialog--shake");
-      // 触发重排以便重新播放抖动动画
-      void handle.el.offsetWidth;
-      handle.el.classList.add("dialog--shake");
-      wrongStreak += 1;
-      if (wrongStreak >= MAX_WRONG) {
-        wrongStreak = 0;
-        lockUntil = Date.now() + LOCK_MS;
-      }
-      newQuestion();
-      refreshLock();
-    }
-  });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") okBtn.click();
-  });
-
-  const cancelBtn = document.createElement("button");
-  cancelBtn.type = "button";
-  cancelBtn.className = "btn btn--ghost";
-  cancelBtn.textContent = "返回";
-  cancelBtn.addEventListener("click", () => {
-    window.clearInterval(lockTimer);
-    handle.close();
-  });
-
-  row.append(okBtn, cancelBtn);
-  content.appendChild(row);
-  newQuestion();
-  refreshLock();
 }
 
 function showParentPanel(): void {
@@ -154,7 +28,7 @@ function showParentPanel(): void {
   const list = document.createElement("ul");
   list.className = "parent-list";
   const items = [
-    "🌸 「一朵一星」是送给一年级左右小朋友的小游戏合集。",
+    "🌸 「一朵一星」1.1 有 55 款原创小游戏。闯关最长 188 关:前 99 关适合低年级,后面的关卡和新玩法会更有挑战。",
     "🎨 所有游戏均为原创同类型玩法,不使用任何商业 IP。",
     "🚫 无广告、无内购、无联网账号。",
     "💾 星星和进度只保存在本机(localStorage),不上传。",
@@ -278,7 +152,7 @@ function showParentPanel(): void {
   });
 
   backupRow.append(exportBtn, importBtn);
-  content.append(backupRow, importArea, feedback);
+  content.append(backupRow, importArea, feedback, buildSkipSection());
 
   showDialog({
     className: "dialog--parent",
@@ -286,4 +160,81 @@ function showParentPanel(): void {
     dismissible: true,
     buttons: [{ label: "关闭", kind: "ghost", onClick: () => undefined }]
   });
+}
+
+/** id → 中文名;拿不到游戏清单时退回用 id 显示 */
+function gameTitles(): Map<string, string> {
+  const map = new Map<string, string>();
+  try {
+    for (const g of loadGames()) map.set(g.meta.id, g.meta.title);
+  } catch {
+    // 清单读不出来不影响看记录
+  }
+  return map;
+}
+
+/**
+ * 「跳关记录」一段:哪些游戏被跳过了几关(读 `yiduo-yixing.l99skip.<id>`),
+ * 并给一个二次确认的「清空全部跳关记录」。只动这一组 key,不碰星级与钱包存档。
+ */
+function buildSkipSection(): HTMLElement {
+  const box = document.createElement("div");
+  box.className = "parent-skip";
+
+  const heading = document.createElement("h3");
+  heading.className = "dialog-title";
+  heading.textContent = "跳关记录";
+  box.appendChild(heading);
+
+  const note = document.createElement("p");
+  note.className = "dialog-text";
+  note.textContent = "孩子每次跳关都要你亲自确认,这里能看到跳过的关卡。跳过的关记 0 星,随时可以回去重打。";
+  box.appendChild(note);
+
+  const list = document.createElement("ul");
+  list.className = "parent-list";
+  box.appendChild(list);
+
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "btn btn--ghost";
+  clearBtn.textContent = "🧹 清空全部跳关记录";
+
+  function renderList(): void {
+    list.innerHTML = "";
+    const records = readSkipRecords();
+    if (records.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "暂无";
+      list.appendChild(li);
+      clearBtn.disabled = true;
+      return;
+    }
+    const titles = gameTitles();
+    for (const rec of records) {
+      const li = document.createElement("li");
+      li.textContent = `🎮 《${titles.get(rec.gameId) ?? rec.gameId}》:${formatSkipSummary(rec.levels)}`;
+      list.appendChild(li);
+    }
+    clearBtn.disabled = false;
+  }
+
+  let confirming = false;
+  clearBtn.addEventListener("click", () => {
+    if (!confirming) {
+      confirming = true;
+      clearBtn.textContent = "再点一次确认清空";
+      return;
+    }
+    clearSkipRecords();
+    playSound("pop");
+    confirming = false;
+    clearBtn.textContent = "已清空 ✓";
+    renderList();
+    clearBtn.disabled = true;
+  });
+
+  box.appendChild(clearBtn);
+  renderList();
+  return box;
 }

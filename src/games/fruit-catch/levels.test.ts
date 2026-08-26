@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CHAPTERS, LEVELS, THEME_SETS } from "./levels";
 
-describe("接住小水果 99 关", () => {
-  it("恰好 99 关，至少 6 个主题章节", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("接住小水果 188 关", () => {
+  it("恰好 188 关，至少 6 个主题章节", () => {
+    expect(LEVELS).toHaveLength(188);
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
   it("每关参数合法", () => {
@@ -30,8 +30,8 @@ describe("接住小水果 99 关", () => {
     expect(LEVELS[0].wind).toBe(0);
     // 金色午后金星概率更高
     expect(LEVELS[40].goldChance).toBeGreaterThan(LEVELS[0].goldChance);
-    // 六个主题都有覆盖
-    expect(new Set(LEVELS.map((l) => l.theme)).size).toBe(6);
+    // 前 99 关六个主题都有覆盖
+    expect(new Set(LEVELS.slice(0, 99).map((l) => l.theme)).size).toBe(6);
   });
 
   it("章节内目标与速度递增", () => {

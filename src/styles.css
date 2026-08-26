@@ -5,14 +5,19 @@
   --bg-2: #eef6ff;
   --bg-3: #fdfff2;
   --card: #ffffff;
-  --ink: #5b4a55;
-  /* 正文次要色:白底对比 6.3:1、粉彩底(#ffd9ea)对比 4.9:1,满足 WCAG AA */
-  --ink-soft: #6d5b66;
+  /* 正文主色:白底 10.5:1、粉彩底(#ffd9ea)8.2:1 */
+  --ink: #4a3b45;
+  /* 正文次要色:白底 8.1:1、粉彩底(#ffd9ea)6.3:1,小字号也稳过 AA */
+  --ink-soft: #5c4b56;
   --pink: #ff9ec7;
-  /* 深粉(可做白底文字):白底对比 4.8:1 */
-  --pink-deep: #c73a80;
-  /* 白字渐变的浅端:白字对比 3.6:1(仅用于大号粗体) */
-  --pink-strong: #e2519b;
+  /* 深粉(可做白底正文):白底对比 5.8:1 */
+  --pink-deep: #b52f74;
+  /* 白字渐变的浅端:白字对比 4.5:1,正文大小也够 */
+  --pink-strong: #cf3d86;
+  /* 标题渐变的暖色端:白底 4.2:1(只用于大号粗体) */
+  --amber-deep: #b8690a;
+  /* 键盘焦点描边:白底 9.3:1、粉彩底 7.2:1,任何底色上都看得清 */
+  --focus-ring: #7a1f4c;
   --pink-soft: #ffd9ea;
   --yellow: #ffd166;
   --mint: #9ee7c8;
@@ -64,10 +69,15 @@ button {
   cursor: pointer;
 }
 
-/* ---------- 键盘焦点(粉色 3px 外圈,遥控/键盘可玩) ---------- */
+/* ---------- 键盘焦点(深粉 3px 外圈 + 白色垫圈,深浅底上都看得见) ---------- */
 :focus-visible {
-  outline: 3px solid var(--pink-deep);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
+}
+
+/* 鼠标点击不该留描边,只有键盘/遥控才显示 */
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* ---------- 背景漂浮装饰 ---------- */
@@ -156,7 +166,8 @@ button {
 
 .btn--danger {
   background: #fff;
-  color: #c8392f;
+  /* 白底 7.1:1 */
+  color: #a52a20;
   border: 3px solid #ffcdd2;
   min-height: 52px;
   font-size: 17px;
@@ -207,8 +218,8 @@ button {
   background: linear-gradient(180deg, #fffdf3 0%, #fff4d6 100%);
   font-size: 19px;
   font-weight: 800;
-  /* 旧 #d9930d 对淡黄底只有 2.4:1,加深到 4.6:1 */
-  color: #96660a;
+  /* 对淡黄底(#fff4d6)6.3:1 */
+  color: #7a520a;
   box-shadow: var(--shadow-soft);
   white-space: nowrap;
 }
@@ -273,7 +284,7 @@ button {
   font-size: clamp(30px, 6vw, 42px);
   font-weight: 900;
   letter-spacing: 2px;
-  background: linear-gradient(120deg, var(--pink-deep), #f4a83a);
+  background: linear-gradient(120deg, var(--pink-deep), var(--amber-deep));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -394,7 +405,7 @@ button {
 .hero-bubble strong {
   font-size: clamp(18px, 4vw, 23px);
   font-weight: 900;
-  /* 渐变两端在白底上都 ≥4.5:1(#c73a80 4.8 / #8a4fc0 5.3) */
+  /* 渐变两端在白底上都 ≥4.5:1(--pink-deep 5.8 / #8a4fc0 5.3) */
   background: linear-gradient(120deg, var(--pink-deep), #8a4fc0);
   -webkit-background-clip: text;
   background-clip: text;
@@ -435,7 +446,10 @@ button {
   font-size: 19px;
   font-weight: 800;
   box-shadow: var(--shadow-soft);
-  transition: all 0.15s ease;
+  /* 逐项写死而不是 all:`all` 会把 outline-color 也一起过渡,
+     键盘 Tab 过去时焦点圈会先是白色再慢慢变深,那半秒里根本看不清落点 */
+  transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .tab:hover {
@@ -669,7 +683,8 @@ button {
   font-weight: 900;
   padding: 4px 10px;
   border-radius: 999px;
-  color: #7a5da8;
+  /* 白底 8.1:1 */
+  color: #5f3f8f;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: inset 0 0 0 2px rgba(203, 178, 255, 0.55);
   white-space: nowrap;
@@ -902,8 +917,8 @@ button {
 }
 
 .dialog--lose .result-title {
-  /* 旧 #7f96c9 只有 2.8:1,加深到 4.3:1(30px 大字,AA 大文本 ≥3:1) */
-  color: #5a76b8;
+  /* 淡蓝弹窗底 6.3:1,正文标准也过 */
+  color: #41599c;
 }
 
 .result-confetti {
@@ -1144,8 +1159,546 @@ button {
   }
 }
 
+/* 晕动症友好:全局那条规则会把周期压到 0.01ms,再让它转就成了高频闪烁,
+   所以这里直接停下来,靠「马上就好～」这句话表示还在加载 */
 @media (prefers-reduced-motion: reduce) {
   .game-loading-flower {
-    animation: game-loading-spin 4s steps(8) infinite;
+    animation: none !important;
+  }
+}
+
+/* ---------- 攻略侧栏(1.1 新增,只增不改) ---------- */
+.guide-slot {
+  display: contents;
+}
+
+.guide-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  /* 深粉字 + 近白粉底:对比度约 5.3:1 */
+  color: var(--pink-deep);
+  background: #fff2f8;
+  box-shadow: var(--shadow-soft);
+}
+
+.guide-btn:active {
+  transform: translateY(2px);
+}
+
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(91, 74, 85, 0.34);
+}
+
+.guide-drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 92vw);
+  height: 100%;
+  border-radius: 28px 0 0 28px;
+  background: linear-gradient(170deg, #fff8fc 0%, #fdf5ff 60%, #f4f9ff 100%);
+  box-shadow: -12px 0 34px rgba(140, 110, 160, 0.24);
+  animation: guide-slide-in 0.24s ease-out;
+}
+
+@keyframes guide-slide-in {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* 窄屏:改成底部升起的半屏抽屉,单手够得着 */
+.guide-drawer--sheet {
+  width: 100%;
+  height: 62vh;
+  margin-top: auto;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -12px 34px rgba(140, 110, 160, 0.24);
+  animation: guide-slide-up 0.24s ease-out;
+}
+
+@keyframes guide-slide-up {
+  from {
+    transform: translateY(26px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.guide-overlay:has(.guide-drawer--sheet) {
+  align-items: flex-end;
+}
+
+.guide-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 18px 10px;
+}
+
+.guide-title {
+  flex: 1;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  /* #7a3f66 在 #fff8fc 上对比度约 7.4:1 */
+  color: #7a3f66;
+}
+
+.guide-level {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  /* #4c3070 在 #ede4ff 上对比度约 8.7:1 */
+  color: #4c3070;
+  background: #ede4ff;
+}
+
+.guide-close {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  font-size: 17px;
+  font-weight: 900;
+  /* #5f3d51 在白底上对比度约 9.2:1 */
+  color: #5f3d51;
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+.guide-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 18px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.guide-section {
+  margin: 0 0 14px;
+  border-radius: 22px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+.guide-section-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 900;
+  /* #6a3f80 在白底上对比度约 8.1:1 */
+  color: #6a3f80;
+}
+
+.guide-tips {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.guide-tip {
+  margin: 6px 0;
+  font-size: 15px;
+  line-height: 1.7;
+  /* #4b3f52 在白底上对比度约 9.7:1,远超 4.5:1 */
+  color: #4b3f52;
+}
+
+.guide-note {
+  margin: 0 0 12px;
+  border-radius: 18px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+  /* #7a4a2e 在 #fff3e2 上对比度约 6.9:1 */
+  color: #7a4a2e;
+  background: #fff3e2;
+}
+
+.guide-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.guide-tail {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  /* #5d4a66 在渐变浅底上对比度约 8:1 */
+  color: #5d4a66;
+}
+
+.guide-done {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 999px;
+  padding: 11px 22px;
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffffff;
+  /* #b3306f 上的白字对比度约 6.2:1 */
+  background: #b3306f;
+  box-shadow: 0 4px 0 #8f2258;
+}
+
+.guide-done:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #8f2258;
+}
+
+@media (max-width: 420px) {
+  .guide-btn {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+}
+
+/* 晕动症友好:关掉滑入动画,只保留静态抽屉 */
+@media (prefers-reduced-motion: reduce) {
+  .guide-drawer,
+  .guide-drawer--sheet {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   1.1 第 12 步 · 无障碍与壳层收口(只增不改,追加在最后)
+   ========================================================================== */
+
+/* ---------- 只给读屏软件看的文字 ---------- */
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- 跳过导航:平时藏起来,Tab 到才露出来 ---------- */
+.skip-link {
+  position: fixed;
+  top: -80px;
+  left: 12px;
+  z-index: 200;
+  padding: 12px 22px;
+  border-radius: 0 0 18px 18px;
+  background: #fff;
+  color: var(--pink-deep);
+  font-family: var(--font);
+  font-size: 17px;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 0;
+}
+
+/* 跳过导航落点自己不画描边(容器铺满整屏,描边只会框住整个页面) */
+#app:focus,
+#app:focus-visible {
+  outline: none;
+}
+
+/* ---------- 触控热区:一年级小朋友的手指按 44px 起步 ---------- */
+.btn,
+.icon-btn,
+.chip,
+.tab,
+.recent-card,
+.game-card,
+.guide-btn,
+.guide-close,
+.guide-done {
+  min-height: 44px;
+}
+
+.icon-btn,
+.guide-close {
+  min-width: 44px;
+}
+
+/* ---------- 暂停面板 ---------- */
+.icon-btn--pause {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* 窄屏顶栏塞不下这么多按钮:音乐开关收进暂停面板,把宽度让给游戏名。
+   ⏸ 必须留在顶栏 —— 它是触屏唯一的暂停入口(键盘还有 Esc)。 */
+@media (max-width: 420px) {
+  .game-topbar > .icon-btn:not(.icon-btn--pause) {
+    display: none;
+  }
+}
+
+.dialog--pause {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(203, 178, 255, 0.22) 0%, transparent 40%),
+    linear-gradient(180deg, #fff9fc 0%, #ffffff 52%);
+}
+
+.pause-content .dialog-title {
+  color: var(--pink-deep);
+}
+
+.pause-content .dialog-text {
+  margin-bottom: 4px;
+}
+
+/* 音效这类「原地切换」的按钮:按下态一眼可辨,不是只靠图标变 */
+.dialog-buttons .btn[aria-pressed="false"] {
+  filter: saturate(0.35);
+}
+
+/* ---------- 焦点描边:被 overflow 裁掉就没意义了 ---------- */
+.tabs,
+.l99-tabs {
+  /* 横向滚动容器要留出描边的 3px offset,否则第一颗页签的圈会被切掉 */
+  padding-inline: 6px;
+}
+
+.game-stage:focus-visible,
+.game-stage *:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* 舞台内部的 canvas 游戏常把根节点做成 application,描边别被圆角裁掉 */
+.game-stage {
+  /* 顶栏和舞台一起构成一屏,窄屏时不许把内容顶出横向滚动 */
+  min-width: 0;
+}
+
+/* ---------- 选关地图:热区、对比度补齐(纯加法,靠 .l99-wrap 提高优先级) ---------- */
+.l99-wrap .l99-node {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.l99-wrap .l99-tab,
+.l99-wrap .l99-tool,
+.l99-wrap .l99-back,
+.l99-wrap .l99-continue {
+  min-height: 44px;
+}
+
+.l99-wrap .l99-ov-btn {
+  min-height: 48px;
+}
+
+/* 翻页提示原本 #8d7bab 只有 3.6:1,12px 小字不够;加深到 7.4:1 */
+.l99-wrap .l99-pagehint {
+  color: #5c4783;
+}
+
+/* 跳过关卡的格子序号原本 #8d85a3 压在 #ecebf1 上只有 2.9:1,加深到 5.6:1 */
+.l99-wrap .l99-node-skip .l99-node-num {
+  color: #5f5975;
+}
+
+/* 已锁住的格子是纯装饰的 🔒,但序号色也顺手加深,放大镜用户能分辨 */
+.l99-wrap .l99-node-lock .l99-node-num {
+  color: #8d84a8;
+}
+
+/* ---------- 响应式:320 / 375×667 / 768 / 1280×800 四档都不横向滚动 ---------- */
+/* 任何一处算错宽度都不许把整页顶出横向滚动条。
+   只能挂在 <html> 上:body 已经是 height:100%,再给它 overflow-x 会让 body
+   自己变成裁剪容器,溢出的卡片被切掉、整页竖着也滚不动了。 */
+html {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.screen,
+.game-screen,
+.home-screen {
+  width: 100%;
+  max-width: min(1080px, 100%);
+}
+
+.game-topbar,
+.home-header,
+.header-actions,
+.card-meta,
+.dialog-buttons {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.game-title,
+.recent-info,
+.recent-name {
+  min-width: 0;
+}
+
+/* 320px:顶栏挤成一行会溢出,允许换行,热区仍旧 44px 起 */
+@media (max-width: 340px) {
+  .screen {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .game-topbar {
+    gap: 6px;
+  }
+
+  .home-header {
+    gap: 8px;
+  }
+
+  .logo h1 {
+    letter-spacing: 0;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .hero-bubble {
+    padding: 12px 14px;
+  }
+
+  .dialog {
+    width: min(96vw, 320px);
+    padding: 22px 16px 18px;
+  }
+}
+
+/* 平板竖屏(768):卡片一行放得下三四张,标题不再吃满整行 */
+@media (min-width: 700px) and (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  }
+
+  .recent-grid {
+    grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+  }
+}
+
+/* 矮屏横放(比如 1280×800 分屏、平板横屏):游戏舞台别被顶栏挤没 */
+@media (max-height: 560px) {
+  .game-screen {
+    padding-bottom: 8px;
+  }
+
+  .game-topbar {
+    padding: 6px 0;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 21px;
+  }
+
+  .dialog {
+    max-height: 92dvh;
+    padding: 18px 18px 16px;
+  }
+
+  .result-buddy {
+    width: 64px;
+    height: 64px;
+  }
+
+  .result-buddy--round {
+    width: 54px;
+    height: 54px;
+  }
+
+  .result-face {
+    font-size: 30px;
+  }
+}
+
+/* ---------- 弱化动效:位移、抖动、闪烁一律停掉 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  /* 悬停位移与旋转:全局那条只压时长,元素还是会「跳」到新位置 */
+  .btn:active,
+  .btn--primary:hover,
+  .btn--back:hover,
+  .icon-btn:hover,
+  .icon-btn:active,
+  .tab:hover,
+  .tab--active,
+  .game-card:hover,
+  .game-card:active,
+  .recent-card:hover,
+  .recent-card:active,
+  .guide-btn:active,
+  .guide-done:active {
+    transform: none;
+  }
+
+  /* 循环飘动、旋转、闪烁 */
+  .decor-item,
+  .logo-avatar--duoduo,
+  .logo-avatar--xingxing,
+  .logo-emoji--flower,
+  .logo-emoji--star,
+  .hero-figure--duoduo,
+  .hero-figure--xingxing,
+  .empty-emoji,
+  .game-card,
+  .result-confetti,
+  .l99-wrap .l99-node-cur,
+  .l99-wrap .l99-ov-buddy {
+    animation: none !important;
+  }
+
+  /* 弹入 / 抖动 / 淡入:直接给终态,别让画面动 */
+  .overlay,
+  .overlay--closing,
+  .dialog,
+  .dialog--shake,
+  .result-buddy,
+  .result-buddies--lose .result-buddy,
+  .result-face,
+  .dialog--lose .result-face {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  /* 星星平时靠动画从 opacity:0 亮起来,停掉动画必须补上终态,否则整排看不见 */
+  .star--on {
+    animation: none !important;
+    opacity: 1;
+  }
+
+  .decor-item {
+    opacity: 0.22;
   }
 }

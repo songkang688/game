@@ -1,6 +1,9 @@
 // 彩虹跑跑 —— 纯逻辑函数,不依赖 DOM,方便单独测试。
-// 99 关九大主题世界跑酷战役:青草→云朵→糖果→森林→海滩→沙漠→冰雪→火山→星夜。
+// 经典战役 99 关九大主题世界:青草→云朵→糖果→森林→海滩→沙漠→冰雪→火山→星夜,
 // 每个世界 11 关(8 关手写 + 3 关生成),每关一个小任务,先选世界再选关。
+// 1.1:末尾追加三个新世界(霓虹地铁站 30 / 云上索道 30 / 星屑隧道 29)补足 188 关,
+// 带来彩纸箱(可破坏)、加速滑轨、三连完美跳节奏段、随机分岔路线四种新机制,
+// 以及三位章节大王。前 99 关的数据一字不动。
 
 /* ---------------- 操作 ---------------- */
 
@@ -20,7 +23,8 @@ export type ObstacleKind =
   | "pit" // 坑洞:必须跳
   | "cloudy" // 云朵怪:会左右飘,只能躲
   | "roller" // 滚滚球:滚得比路还快,只能躲
-  | "zapper"; // 电光门:周期通电,亮的时候碰不得
+  | "zapper" // 电光门:周期通电,亮的时候碰不得
+  | "crate"; // 1.1 彩纸箱:可破坏,下滑铲碎或起跳越过,平跑会撞
 
 export type PlayerAction = "run" | "jump" | "slide";
 
@@ -31,7 +35,59 @@ const BLOCKING = new Set<ObstacleKind>(["rock", "cloudy", "roller", "zapper"]);
 export function wouldHit(kind: ObstacleKind, action: PlayerAction): boolean {
   if (kind === "hurdle" || kind === "pit") return action !== "jump";
   if (kind === "bar") return action !== "slide";
+  // 彩纸箱是唯一「两种动作都有解」的障碍:铲碎或越过都行
+  if (kind === "crate") return action === "run";
   return true; // rock / cloudy / roller / zapper 只能换道
+}
+
+/* ---------------- 1.1 机制一:可破坏的彩纸箱 ---------------- */
+
+/** 只有下滑铲过去才算把彩纸箱撞碎(起跳只是越过,不计数)。 */
+export function smashesCrate(kind: ObstacleKind, action: PlayerAction): boolean {
+  return kind === "crate" && action === "slide";
+}
+
+/** 撞碎一个彩纸箱给的分数。 */
+export const CRATE_SCORE = 12;
+
+/* ---------------- 1.1 机制二:加速滑轨 ---------------- */
+
+/** 踩上滑轨后加速持续多久(秒)。 */
+export const RAIL_SECONDS = 2.8;
+/** 滑轨加速倍率:跑得更快,留给自己的反应窗口也更短。 */
+export const RAIL_SPEED_MULT = 1.32;
+
+/** 当前该用的滑轨倍率。 */
+export function railSpeedMult(railTimer: number): number {
+  return railTimer > 0 ? RAIL_SPEED_MULT : 1;
+}
+
+/* ---------------- 1.1 机制三:三连完美跳节奏段 ---------------- */
+
+/** 起跳后多久之内蹭过障碍算「完美跳」:越接近障碍才起跳越精准。 */
+export const PERFECT_WINDOW = 0.26;
+/** 连续几次完美跳算完成一组。 */
+export const PERFECT_STREAK_GOAL = 3;
+
+/**
+ * 这一次跨越是不是完美跳(elapsed = 起跳到蹭过障碍之间的秒数)。
+ * 只判定「起跳后跨过的第一个障碍」:一跳带过两道栏时,第二道不参与连击判定,
+ * 既不算完美也不清零——不然节奏段会因为跳得太远反而断连,那不讲道理。
+ */
+export function isPerfectJump(elapsed: number): boolean {
+  return elapsed >= 0 && elapsed <= PERFECT_WINDOW;
+}
+
+/** 完美跳连击计数:完美就 +1,失手清零;满一组回到 0 重新数。 */
+export function nextPerfectStreak(streak: number, perfect: boolean): number {
+  if (!perfect) return 0;
+  const next = streak + 1;
+  return next >= PERFECT_STREAK_GOAL ? 0 : next;
+}
+
+/** 这一次完美跳有没有刚好凑满一组三连。 */
+export function completesPerfectRun(streak: number, perfect: boolean): boolean {
+  return perfect && streak + 1 >= PERFECT_STREAK_GOAL;
 }
 
 export function clampLane(lane: number): number {
@@ -53,6 +109,17 @@ export function zapperActive(time: number, offset: number): boolean {
 /** 滚滚球比路面快多少倍。 */
 export const ROLLER_SPEED_MULT = 1.45;
 
+/* ---------------- 跑图节拍(渲染层与模拟器共用一套) ---------------- */
+
+/** 一次跳跃在空中停留多久(秒)。 */
+export const JUMP_TIME = 0.55;
+/** 一次下滑贴地多久(秒)。 */
+export const SLIDE_TIME = 0.6;
+/** 判定为「撞上/蹭过」的纵向窗口(像素)。 */
+export const HIT_WINDOW = 34;
+/** 每跑多远刷一行花样(像素)。 */
+export const ROW_GAP = 250;
+
 /* ---------------- 主题世界 ---------------- */
 
 export type Theme =
@@ -64,7 +131,11 @@ export type Theme =
   | "desert"
   | "snow"
   | "lava"
-  | "space";
+  | "space"
+  // ---- 1.1 新世界 ----
+  | "neon"
+  | "ropeway"
+  | "stardust";
 
 export const THEME_ORDER: Theme[] = [
   "grass",
@@ -76,11 +147,46 @@ export const THEME_ORDER: Theme[] = [
   "snow",
   "lava",
   "space",
+  "neon",
+  "ropeway",
+  "stardust",
 ];
 
-/** 每章 11 关:8 关手写 + 3 关生成。 */
+/** 经典九章每章 11 关:8 关手写 + 3 关生成。 */
 export const LEVELS_PER_THEME = 11;
 export const HANDMADE_PER_THEME = 8;
+/** 1.0 战役规模:9 章 99 关,1.1 只在末尾追加。 */
+export const CLASSIC_THEME_COUNT = 9;
+export const CLASSIC_LEVEL_COUNT = CLASSIC_THEME_COUNT * LEVELS_PER_THEME;
+
+/** 1.1 变长章节:前 9 章各 11 关,新三章 30/30/29 关,共 188 关。 */
+export const THEME_SIZES: number[] = [11, 11, 11, 11, 11, 11, 11, 11, 11, 30, 30, 29];
+export const TOTAL_LEVELS = THEME_SIZES.reduce((s, n) => s + n, 0);
+
+/** 1.1 新世界的集合:只有这三章会用到彩纸箱、滑轨、分岔这些新花样。 */
+export const NEW_THEMES: ReadonlySet<Theme> = new Set<Theme>(["neon", "ropeway", "stardust"]);
+
+/** 章节 ci 的第一关下标。 */
+export function themeOffset(ci: number): number {
+  let off = 0;
+  for (let i = 0; i < ci; i++) off += THEME_SIZES[i];
+  return off;
+}
+
+/** 章节 ci 的关卡数。 */
+export function themeSize(ci: number): number {
+  return THEME_SIZES[ci];
+}
+
+/** 关卡下标 → 章节下标(0 起)。 */
+export function themeIndexOfLevel(idx: number): number {
+  let off = 0;
+  for (let ci = 0; ci < THEME_SIZES.length; ci++) {
+    off += THEME_SIZES[ci];
+    if (idx < off) return ci;
+  }
+  return THEME_SIZES.length - 1;
+}
 
 export interface ThemeStyle {
   name: string;
@@ -168,6 +274,31 @@ export const THEME_STYLE: Record<Theme, ThemeStyle> = {
     palette: ["rock", "hurdle", "bar", "pit", "cloudy", "roller", "zapper"],
     blurb: "全部障碍列队的银河终点,冲向彩虹终点站!",
   },
+  /* ---- 1.1 新增三章 ---- */
+  neon: {
+    name: "霓虹地铁站", emoji: "🚇",
+    skyTop: "#231a3e", skyBottom: "#4a2f6e",
+    lanes: ["#3a2b58", "#463465", "#3f2f5e"],
+    deco: "#5ae0d0", accent: "#ff6ab0",
+    palette: ["rock", "hurdle", "bar", "pit", "roller", "zapper", "crate"],
+    blurb: "灯牌闪烁的地下月台,彩纸箱可以铲碎,滑轨带你加速",
+  },
+  ropeway: {
+    name: "云上索道", emoji: "🚡",
+    skyTop: "#bfe4ff", skyBottom: "#fbe6f2",
+    lanes: ["#d8ecff", "#e6f2ff", "#dceeff"],
+    deco: "#7fb8e8", accent: "#2f7ab0",
+    palette: ["hurdle", "bar", "pit", "cloudy", "roller", "zapper", "crate"],
+    blurb: "高空缆车索道,岔路一条接一条,节奏跳最考验人",
+  },
+  stardust: {
+    name: "星屑隧道", emoji: "✨",
+    skyTop: "#1b2340", skyBottom: "#3d2b5e",
+    lanes: ["#2c3357", "#353c64", "#30375d"],
+    deco: "#ffd6f2", accent: "#c98aff",
+    palette: ["rock", "hurdle", "bar", "pit", "cloudy", "roller", "zapper", "crate"],
+    blurb: "星屑翻涌的终极隧道,八种障碍与三种新机制全部登场",
+  },
 };
 
 /* ---------------- 障碍花样 ---------------- */
@@ -176,6 +307,10 @@ export interface PatternRow {
   obstacles: Array<{ lane: number; kind: ObstacleKind }>;
   stars: number[];
   coins: number[];
+  /** 1.1:这一行哪几条道上铺了加速滑轨。 */
+  rails?: number[];
+  /** 1.1:这一行属于「三连完美跳」节奏段(三条道等距同款障碍)。 */
+  beat?: boolean;
 }
 
 /** 一行是否有活路:存在一条道没障碍,或障碍可以跳/趴过去。 */
@@ -297,17 +432,233 @@ export const PATTERNS: PatternRow[][] = [
   ],
 ];
 
-/** 只挑"用到的障碍全都在 allowed 里"的花样组。 */
-export function patternsForKinds(allowed: ReadonlyArray<ObstacleKind>): PatternRow[][] {
+function filterPatterns(
+  pool: ReadonlyArray<PatternRow[]>,
+  allowed: ReadonlyArray<ObstacleKind>,
+): PatternRow[][] {
   const set = new Set(allowed);
-  return PATTERNS.filter((pat) =>
-    pat.every((row) => row.obstacles.every((o) => set.has(o.kind))),
+  return pool.filter((pat) => pat.every((row) => row.obstacles.every((o) => set.has(o.kind))));
+}
+
+/** 只挑"用到的障碍全都在 allowed 里"的花样组(经典花样池)。 */
+export function patternsForKinds(allowed: ReadonlyArray<ObstacleKind>): PatternRow[][] {
+  return filterPatterns(PATTERNS, allowed);
+}
+
+/* ---------------- 1.1 新花样:彩纸箱与加速滑轨 ---------------- */
+// 单独一池,只有新三章会接上,前 99 关的花样池一行都不会变。
+
+export const NEW_PATTERNS: PatternRow[][] = [
+  // 纸箱走廊:一路铲过去
+  [
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [], coins: [1] },
+    { obstacles: [{ lane: 1, kind: "crate" }], stars: [0], coins: [2] },
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 1, kind: "crate" }], stars: [], coins: [2] },
+  ],
+  // 纸箱三连:三条道都是箱子,只能铲或跳
+  [
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 1, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [], coins: [] },
+    { obstacles: [], stars: [1], coins: [0, 2] },
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 1, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [], coins: [1] },
+  ],
+  // 纸箱加软糖:软糖只能躲,箱子随便挑一种解法
+  [
+    { obstacles: [{ lane: 0, kind: "rock" }, { lane: 1, kind: "crate" }], stars: [], coins: [2] },
+    { obstacles: [{ lane: 2, kind: "rock" }, { lane: 1, kind: "crate" }], stars: [0], coins: [] },
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [], coins: [1] },
+  ],
+  // 滑轨直道:踩上去一路加速
+  [
+    { obstacles: [], stars: [], coins: [0, 2], rails: [1] },
+    { obstacles: [{ lane: 0, kind: "hurdle" }, { lane: 2, kind: "hurdle" }], stars: [1], coins: [] },
+    { obstacles: [], stars: [], coins: [1], rails: [0, 2] },
+  ],
+  // 滑轨加纸箱:加速之后再铲箱子
+  [
+    { obstacles: [], stars: [0], coins: [2], rails: [1] },
+    { obstacles: [{ lane: 1, kind: "crate" }], stars: [], coins: [0, 2] },
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [1], coins: [] },
+  ],
+  // 节奏跳三连:连着三行栅栏,练三连完美跳
+  [
+    { obstacles: [{ lane: 0, kind: "hurdle" }, { lane: 1, kind: "hurdle" }, { lane: 2, kind: "hurdle" }], stars: [], coins: [1], beat: true },
+    { obstacles: [{ lane: 0, kind: "hurdle" }, { lane: 1, kind: "hurdle" }, { lane: 2, kind: "hurdle" }], stars: [1], coins: [], beat: true },
+    { obstacles: [{ lane: 0, kind: "hurdle" }, { lane: 1, kind: "hurdle" }, { lane: 2, kind: "hurdle" }], stars: [], coins: [0, 2], beat: true },
+  ],
+  // 节奏坑三连:坑洞版的三连跳
+  [
+    { obstacles: [{ lane: 0, kind: "pit" }, { lane: 1, kind: "pit" }, { lane: 2, kind: "pit" }], stars: [], coins: [1], beat: true },
+    { obstacles: [{ lane: 0, kind: "pit" }, { lane: 1, kind: "pit" }, { lane: 2, kind: "pit" }], stars: [1], coins: [], beat: true },
+    { obstacles: [{ lane: 0, kind: "pit" }, { lane: 1, kind: "pit" }, { lane: 2, kind: "pit" }], stars: [], coins: [0, 2], beat: true },
+  ],
+  // 纸箱与彩虹杆:两种都要下滑,连着趴
+  [
+    { obstacles: [{ lane: 0, kind: "bar" }, { lane: 1, kind: "crate" }], stars: [], coins: [2] },
+    { obstacles: [{ lane: 1, kind: "bar" }, { lane: 2, kind: "crate" }], stars: [0], coins: [] },
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 2, kind: "bar" }], stars: [], coins: [1] },
+  ],
+  // 滑轨绕电门:加速冲过闪着的门缝
+  [
+    { obstacles: [{ lane: 0, kind: "zapper" }], stars: [], coins: [1, 2], rails: [2] },
+    { obstacles: [{ lane: 2, kind: "zapper" }], stars: [1], coins: [0], rails: [0] },
+    { obstacles: [{ lane: 1, kind: "zapper" }, { lane: 0, kind: "crate" }], stars: [], coins: [2] },
+  ],
+  // 纸箱与滚球:滚球只能躲,箱子顺手铲
+  [
+    { obstacles: [{ lane: 0, kind: "roller" }, { lane: 1, kind: "crate" }], stars: [], coins: [2] },
+    { obstacles: [{ lane: 2, kind: "roller" }, { lane: 1, kind: "crate" }], stars: [0], coins: [] },
+    { obstacles: [{ lane: 1, kind: "roller" }, { lane: 0, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [], coins: [] },
+  ],
+  // 纸箱雨:箱子多得像下雨,专为砸大王准备
+  [
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 1, kind: "crate" }], stars: [], coins: [2] },
+    { obstacles: [{ lane: 1, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [0], coins: [] },
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [], coins: [1] },
+    { obstacles: [{ lane: 0, kind: "crate" }, { lane: 1, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [1], coins: [] },
+  ],
+  // 云怪与纸箱:飘的要躲,箱子要铲
+  [
+    { obstacles: [{ lane: 1, kind: "cloudy" }, { lane: 0, kind: "crate" }], stars: [], coins: [2] },
+    { obstacles: [{ lane: 0, kind: "cloudy" }, { lane: 2, kind: "crate" }], stars: [1], coins: [] },
+    { obstacles: [{ lane: 2, kind: "cloudy" }, { lane: 1, kind: "crate" }], stars: [], coins: [0] },
+  ],
+];
+
+/** 关卡有没有开滑轨 / 节奏段(没开就把对应的花样从池子里摘掉)。 */
+export interface PatternPoolSpec {
+  world: Theme;
+  obstacleKinds: ObstacleKind[];
+  rails?: boolean;
+  rhythm?: number;
+  boss?: BossId;
+}
+
+function hasRails(pat: PatternRow[]): boolean {
+  return pat.some((row) => (row.rails?.length ?? 0) > 0);
+}
+
+function hasBeat(pat: PatternRow[]): boolean {
+  return pat.some((row) => row.beat === true);
+}
+
+/**
+ * 关卡真正能用的花样池:经典九章只用老花样,1.1 新三章额外接上新花样。
+ * `rhythm` 是「这一关安排几段节奏段」,数字越大,节奏花样在池子里出现得越密。
+ */
+export function patternsForLevel(def: PatternPoolSpec): PatternRow[][] {
+  const raw = NEW_THEMES.has(def.world) ? [...PATTERNS, ...NEW_PATTERNS] : PATTERNS;
+  const pool = filterPatterns(raw, def.obstacleKinds).filter(
+    (pat) => (def.rails ? true : !hasRails(pat)) && (def.rhythm ? true : !hasBeat(pat)),
   );
+  const extra = Math.max(0, (def.rhythm ?? 0) - 1);
+  if (extra > 0) {
+    const beats = pool.filter(hasBeat);
+    for (let i = 0; i < extra; i++) pool.push(...beats);
+  }
+  // 大王把整条轨道都堆上了彩纸箱:带箱子的花样在大王关出现得更密,
+  // 不然八种障碍摊薄之后,打满血量的机会太少。
+  if (def.boss) {
+    const crates = pool.filter((pat) =>
+      pat.some((row) => row.obstacles.some((o) => o.kind === "crate")),
+    );
+    pool.push(...crates, ...crates);
+  }
+  return pool;
+}
+
+/* ---------------- 1.1 机制四:随机分岔路线 ---------------- */
+
+export interface ForkGate {
+  /** 岔路口的名字,跑到牌子前会亮出来。 */
+  name: string;
+  /** 站在左道或中道时走的那一边。 */
+  left: PatternRow[];
+  /** 站在右道时走的那一边。 */
+  right: PatternRow[];
+}
+
+/** 分岔口的判定:右道(2)拐右,左道和中道都拐左。 */
+export function forkSideForLane(lane: number): "left" | "right" {
+  return lane >= 2 ? "right" : "left";
+}
+
+export const FORKS: ForkGate[] = [
+  {
+    name: "纸箱仓库 / 滑轨快线",
+    left: [
+      { obstacles: [{ lane: 0, kind: "crate" }, { lane: 1, kind: "crate" }], stars: [], coins: [2] },
+      { obstacles: [{ lane: 1, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [0], coins: [] },
+      { obstacles: [{ lane: 0, kind: "crate" }], stars: [], coins: [1, 2] },
+    ],
+    right: [
+      { obstacles: [], stars: [], coins: [1, 2], rails: [2] },
+      { obstacles: [{ lane: 0, kind: "hurdle" }], stars: [2], coins: [] },
+      { obstacles: [{ lane: 1, kind: "hurdle" }], stars: [], coins: [0, 2] },
+    ],
+  },
+  {
+    name: "节奏跳台 / 绕行小道",
+    left: [
+      { obstacles: [{ lane: 0, kind: "hurdle" }, { lane: 1, kind: "hurdle" }, { lane: 2, kind: "hurdle" }], stars: [1], coins: [] },
+      { obstacles: [{ lane: 0, kind: "hurdle" }, { lane: 1, kind: "hurdle" }, { lane: 2, kind: "hurdle" }], stars: [], coins: [0, 2] },
+      { obstacles: [{ lane: 0, kind: "hurdle" }, { lane: 1, kind: "hurdle" }, { lane: 2, kind: "hurdle" }], stars: [], coins: [1] },
+    ],
+    right: [
+      { obstacles: [{ lane: 0, kind: "rock" }], stars: [], coins: [1, 2] },
+      { obstacles: [{ lane: 2, kind: "rock" }], stars: [1], coins: [0] },
+      { obstacles: [{ lane: 1, kind: "rock" }], stars: [], coins: [0, 2] },
+    ],
+  },
+  {
+    name: "低矮涵洞 / 高架平台",
+    left: [
+      { obstacles: [{ lane: 0, kind: "bar" }, { lane: 1, kind: "bar" }], stars: [2], coins: [] },
+      { obstacles: [{ lane: 1, kind: "bar" }, { lane: 2, kind: "bar" }], stars: [], coins: [0] },
+      { obstacles: [{ lane: 0, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [], coins: [1] },
+    ],
+    right: [
+      { obstacles: [{ lane: 0, kind: "pit" }, { lane: 1, kind: "pit" }], stars: [], coins: [2] },
+      { obstacles: [{ lane: 1, kind: "pit" }, { lane: 2, kind: "pit" }], stars: [0], coins: [] },
+      { obstacles: [], stars: [1], coins: [0, 2], rails: [1] },
+    ],
+  },
+  {
+    name: "检修通道 / 星屑快轨",
+    left: [
+      { obstacles: [{ lane: 1, kind: "zapper" }], stars: [], coins: [0, 2] },
+      { obstacles: [{ lane: 0, kind: "crate" }, { lane: 2, kind: "crate" }], stars: [1], coins: [] },
+      { obstacles: [{ lane: 2, kind: "zapper" }, { lane: 1, kind: "crate" }], stars: [], coins: [0] },
+    ],
+    right: [
+      { obstacles: [], stars: [], coins: [0, 1], rails: [0] },
+      { obstacles: [{ lane: 2, kind: "roller" }], stars: [1], coins: [] },
+      { obstacles: [{ lane: 0, kind: "roller" }, { lane: 1, kind: "crate" }], stars: [], coins: [2] },
+    ],
+  },
+];
+
+/** 按随机数抽一个岔路口(r 取 [0,1))。 */
+export function pickFork(r: number): ForkGate {
+  const i = Math.min(FORKS.length - 1, Math.max(0, Math.floor(r * FORKS.length)));
+  return FORKS[i];
+}
+
+/** 分岔口选定之后要塞进待刷队列的那几行。 */
+export function forkRows(gate: ForkGate, lane: number): PatternRow[] {
+  return forkSideForLane(lane) === "right" ? gate.right : gate.left;
 }
 
 /* ---------------- 任务 ---------------- */
 
-export type MissionType = "coins" | "stars" | "dodge" | "noHit";
+export type MissionType =
+  | "coins"
+  | "stars"
+  | "dodge"
+  | "noHit"
+  // ---- 1.1 新任务 ----
+  | "smash" // 铲碎 N 个彩纸箱
+  | "perfect" // 打出 N 组三连完美跳
+  | "boss"; // 把章节大王打到 N 下
 
 export interface Mission {
   type: MissionType;
@@ -319,12 +670,21 @@ export interface RunStats {
   stars: number;
   dodged: number;
   heartsLost: number;
+  /** 1.1:铲碎的彩纸箱数 */
+  smashed?: number;
+  /** 1.1:完成的三连完美跳组数 */
+  perfectRuns?: number;
+  /** 1.1:打在章节大王身上的次数 */
+  bossHits?: number;
 }
 
 export function missionProgress(mission: Mission, stats: RunStats): number {
   if (mission.type === "coins") return Math.min(stats.coins, mission.n);
   if (mission.type === "stars") return Math.min(stats.stars, mission.n);
   if (mission.type === "dodge") return Math.min(stats.dodged, mission.n);
+  if (mission.type === "smash") return Math.min(stats.smashed ?? 0, mission.n);
+  if (mission.type === "perfect") return Math.min(stats.perfectRuns ?? 0, mission.n);
+  if (mission.type === "boss") return Math.min(stats.bossHits ?? 0, mission.n);
   return stats.heartsLost === 0 ? 1 : 0;
 }
 
@@ -337,7 +697,55 @@ export function missionLabel(mission: Mission): string {
   if (mission.type === "coins") return `吃到 ${mission.n} 颗糖果币`;
   if (mission.type === "stars") return `捡到 ${mission.n} 颗小星星`;
   if (mission.type === "dodge") return `躲过 ${mission.n} 个障碍`;
+  if (mission.type === "smash") return `铲碎 ${mission.n} 个彩纸箱`;
+  if (mission.type === "perfect") return `打出 ${mission.n} 组三连完美跳`;
+  if (mission.type === "boss") return `打中大王 ${mission.n} 下`;
   return "一路不撞到终点";
+}
+
+/* ---------------- 1.1 章节大王 ---------------- */
+
+export type BossId = "conductor" | "windLord" | "stardustLord";
+
+export interface BossDef {
+  name: string;
+  emoji: string;
+  /** 要打中多少下才算打赢。 */
+  hp: number;
+  blurb: string;
+}
+
+export const BOSSES: Record<BossId, BossDef> = {
+  conductor: {
+    name: "霓虹车长",
+    emoji: "🎩",
+    hp: 8,
+    blurb: "他把整站的彩纸箱堆到轨道上,铲碎一个就等于打他一下",
+  },
+  windLord: {
+    name: "索道风王",
+    emoji: "🌪",
+    hp: 10,
+    blurb: "他掀起乱流让缆车摇晃,三连完美跳能把他的风阵直接吹散",
+  },
+  stardustLord: {
+    name: "星屑之主",
+    emoji: "👑",
+    hp: 12,
+    blurb: "隧道尽头的最终对手,铲箱与节奏跳都要用上才打得动他",
+  },
+};
+
+/** 铲碎一箱算 1 下,打出一组三连完美跳算 2 下。 */
+export const PERFECT_RUN_BOSS_DAMAGE = 2;
+
+export function bossHitsOf(stats: RunStats): number {
+  return (stats.smashed ?? 0) + (stats.perfectRuns ?? 0) * PERFECT_RUN_BOSS_DAMAGE;
+}
+
+/** 大王有没有被打趴下。 */
+export function bossDefeated(boss: BossDef, stats: RunStats): boolean {
+  return bossHitsOf(stats) >= boss.hp;
 }
 
 /* ---------------- 关卡 ---------------- */
@@ -358,17 +766,26 @@ export interface LevelDef {
   /** 生成器产出的关卡 */
   gen?: boolean;
   hint: string;
+  /** 1.1:这一关会铺加速滑轨 */
+  rails?: boolean;
+  /** 1.1:这一关安排几段三连完美跳节奏段 */
+  rhythm?: number;
+  /** 1.1:这一关中途会出现随机岔路口 */
+  fork?: boolean;
+  /** 1.1:章节大王关 */
+  boss?: BossId;
 }
 
 /** idx(0 起)关属于哪个世界。 */
 export function themeOfLevel(idx: number): Theme {
-  return THEME_ORDER[Math.floor(idx / LEVELS_PER_THEME)];
+  return THEME_ORDER[themeIndexOfLevel(idx)];
 }
 
 /** 章节 ci(0 起)包含的关卡下标。 */
 export function levelIndicesOfTheme(ci: number): number[] {
   const out: number[] = [];
-  for (let i = 0; i < LEVELS_PER_THEME; i++) out.push(ci * LEVELS_PER_THEME + i);
+  const off = themeOffset(ci);
+  for (let i = 0; i < THEME_SIZES[ci]; i++) out.push(off + i);
   return out;
 }
 
@@ -408,7 +825,8 @@ function L(
 
 /* ---- 生成关卡:每章 3 关,障碍组合+任务不与本章手写关重复 ---- */
 
-const GEN_KINDS: Record<Theme, ObstacleKind[][]> = {
+/** 生成关只出现在经典九章;1.1 新三章全部手写,不进这张表。 */
+const GEN_KINDS: Partial<Record<Theme, ObstacleKind[][]>> = {
   grass: [["hurdle"], ["rock", "hurdle"], ["hurdle", "bar"]],
   sky: [["bar", "cloudy"], ["bar", "pit"], ["hurdle", "cloudy"]],
   candy: [["bar", "roller"], ["pit", "roller"], ["rock", "hurdle", "roller"]],
@@ -423,7 +841,7 @@ const GEN_KINDS: Record<Theme, ObstacleKind[][]> = {
 function genLevel(worldIdx: number, sub: number): LevelDef {
   const world = THEME_ORDER[worldIdx];
   const st = THEME_STYLE[world];
-  const kinds = GEN_KINDS[world][sub];
+  const kinds = (GEN_KINDS[world] ?? [])[sub] ?? [];
   // 生成关(每章第 7/8/9 关)修复:原任务数(糖果 15+4w/躲避 12+4w)按 6 秒赛道
   // 也配不平,按新赛道的花样池供给(约 45%~60%)重定,保证一年级能三星。
   const mission: Mission =
@@ -572,6 +990,241 @@ const spaceHand: LevelDef[] = [
   L(8, 10, "彩虹终点站", ["rock", "hurdle", "bar", "pit", "cloudy", "roller", "zapper"], ["magnet", "jet", "board"], { type: "coins", n: 15 }, "最终大关", "冲过这里就是彩虹终点!!"), // 第99关修复:糖果 60→15
 ];
 
+/* ================= 1.1 新章节(第 100–188 关,只在末尾追加) ================= */
+// 新三章一律手写:每关自己挑障碍组合与任务,不再走生成器。
+// 速度与长度继续沿用 speedFor / lenFor,曲线自然接在星夜世界后面。
+
+const FULL_POWERS: PowerKind[] = ["magnet", "jet", "board"];
+
+interface NewLevelOpts {
+  powerups?: PowerKind[];
+  rails?: boolean;
+  rhythm?: number;
+  fork?: boolean;
+  boss?: BossId;
+}
+
+function N(
+  worldIdx: number,
+  pos: number,
+  name: string,
+  kinds: ObstacleKind[],
+  mission: Mission,
+  feature: string,
+  hint: string,
+  opts: NewLevelOpts = {},
+): LevelDef {
+  const def: LevelDef = {
+    name,
+    world: THEME_ORDER[worldIdx],
+    len: lenFor(worldIdx, pos),
+    speed: speedFor(worldIdx, pos),
+    obstacleKinds: kinds,
+    powerups: opts.powerups ?? FULL_POWERS,
+    mission,
+    feature,
+    hint,
+  };
+  if (opts.rails) def.rails = true;
+  if (opts.rhythm) def.rhythm = opts.rhythm;
+  if (opts.fork) def.fork = true;
+  if (opts.boss) def.boss = opts.boss;
+  return def;
+}
+
+/* ---- 第 10 章 · 霓虹地铁站(第 100–129 关) ---- */
+const neonHand: LevelDef[] = [
+  N(9, 0, "月台第一班", ["rock", "hurdle", "crate"], { type: "coins", n: 12 }, "霓虹章开场",
+    "地下月台开跑!新障碍彩纸箱:下滑铲碎它,起跳越过也行", { powerups: ["magnet"] }),
+  N(9, 1, "铲箱练习场", ["crate"], { type: "smash", n: 6 }, "彩纸箱专项",
+    "整条轨道都摆着彩纸箱,下滑一路铲过去", { powerups: ["magnet"] }),
+  N(9, 2, "灯牌走廊", ["bar", "crate"], { type: "noHit", n: 1 }, "霓虹灯牌走廊",
+    "灯牌挂得很低,趴下的同时顺手把箱子铲了", { powerups: ["magnet", "board"] }),
+  N(9, 3, "滑轨初体验", ["hurdle", "crate"], { type: "coins", n: 14 }, "加速滑轨登场",
+    "蓝色滑轨踩上去会加速一小段,所有动作都要提前", { rails: true, powerups: ["magnet"] }),
+  N(9, 4, "快线滑轨", ["hurdle", "bar", "crate"], { type: "dodge", n: 16 }, "滑轨长直道",
+    "长直滑轨接力,加速状态下别为一枚币冲错道", { rails: true }),
+  N(9, 5, "检票闸机", ["zapper", "crate"], { type: "dodge", n: 14 }, "闸机电门",
+    "闸机亮着就是不让过,等它灭掉那一拍再冲", { powerups: ["board"] }),
+  N(9, 6, "换乘通道", ["rock", "hurdle", "bar", "crate"], { type: "coins", n: 13 }, "换乘岔路",
+    "通道中间会分成两条:站右道往右拐,其他都往左", { fork: true }),
+  N(9, 7, "节拍跳台", ["hurdle", "crate"], { type: "perfect", n: 2 }, "三连完美跳登场",
+    "贴到栅栏跟前再起跳算完美,连着三次凑成一组", { rhythm: 3, powerups: ["board"] }),
+  N(9, 8, "纸箱仓库", ["rock", "crate"], { type: "smash", n: 8 }, "仓库堆箱",
+    "仓库里箱子堆成排,专心铲箱,金币顺路收就好", { powerups: ["magnet"] }),
+  N(9, 9, "末班车滚轮", ["roller", "crate"], { type: "dodge", n: 12 }, "末班滚轮",
+    "清运车的滚轮比路面还快,只能靠换道让开", { powerups: ["board"] }),
+  N(9, 10, "霓虹夜跑", ["rock", "hurdle", "bar", "pit", "crate"], { type: "noHit", n: 1 }, "霓虹五障无伤",
+    "五种障碍轮着来,保持节奏比抢速度重要"),
+  N(9, 11, "站台风口", ["pit", "crate"], { type: "dodge", n: 13 }, "站台风口",
+    "风口把地板吹出了缺口,看清坑沿再起跳"),
+  N(9, 12, "广告墙走廊", ["bar", "rock"], { type: "stars", n: 5 }, "广告墙走廊",
+    "广告牌一块接一块,趴着过时留意星星在哪条道"),
+  N(9, 13, "深夜滑轨", ["pit", "crate"], { type: "coins", n: 16 }, "深夜滑轨",
+    "夜里滑轨最长的一段,加速时坑洞来得特别急", { rails: true }),
+  N(9, 14, "三连跳月台", ["hurdle", "pit"], { type: "perfect", n: 3 }, "月台三连跳",
+    "整段月台都是等距障碍,把起跳节拍数出来", { rhythm: 3 }),
+  N(9, 15, "检修隧道", ["bar", "zapper", "crate"], { type: "dodge", n: 15 }, "检修隧道电网",
+    "检修灯和低矮支架混在一起,趴与换道要接得上"),
+  N(9, 16, "分岔月台", ["rock", "bar", "crate"], { type: "coins", n: 13 }, "月台分流",
+    "岔路牌前先想好走哪边,右边的路总是更空一点", { fork: true }),
+  N(9, 17, "纸箱与电闸", ["hurdle", "zapper", "crate"], { type: "smash", n: 7 }, "电闸旁的箱子",
+    "电闸灭掉的那几秒,正好用来铲掉旁边的箱子"),
+  N(9, 18, "地下水道", ["bar", "pit", "crate"], { type: "stars", n: 6 }, "地下水道",
+    "水道又低又有缺口,趴和跳要连着切换"),
+  N(9, 19, "反向轨道", ["rock", "roller", "crate"], { type: "dodge", n: 17 }, "反向轨道",
+    "对面轨道有东西滚过来,提前挪到空的那条道"),
+  N(9, 20, "霓虹马拉松", ["rock", "hurdle", "bar", "pit", "roller", "crate"], { type: "dodge", n: 20 }, "霓虹长跑",
+    "本章最长的一段路,前半程先求稳再谈金币"),
+  N(9, 21, "深夜清运车", ["roller", "zapper"], { type: "stars", n: 5 }, "清运车电网",
+    "清运车和电网轮着挡路,星星常常挂在最险的那条道"),
+  N(9, 22, "静音夜行", ["roller", "zapper", "crate"], { type: "noHit", n: 1 }, "清运线无伤",
+    "整条清运线一次都不能碰,宁可绕远也别硬冲"),
+  N(9, 23, "闪灯连环", ["zapper"], { type: "dodge", n: 11 }, "闪灯连环",
+    "一整排电门轮流亮,记住它们的间隔就不慌"),
+  N(9, 24, "滑轨接力", ["hurdle", "zapper", "crate"], { type: "coins", n: 17 }, "滑轨接力",
+    "滑轨一段接一段,加速中经过电门要提前判断", { rails: true }),
+  N(9, 25, "大堂分流", ["rock", "pit", "crate"], { type: "coins", n: 14 }, "大堂分流",
+    "大堂中央分成两股人流,挑金币多的那一边", { fork: true }),
+  N(9, 26, "节奏终段", ["hurdle", "pit", "crate"], { type: "perfect", n: 3 }, "霓虹节奏终段",
+    "本章节奏最密的一段,三连完美跳能连着刷出来", { rhythm: 3 }),
+  N(9, 27, "纸箱山", ["rock", "hurdle", "crate"], { type: "smash", n: 9 }, "纸箱山",
+    "箱子堆得像小山,铲碎的越多,待会儿越好打"),
+  N(9, 28, "车长的前哨", ["rock", "hurdle", "bar", "pit", "roller", "zapper", "crate"], { type: "dodge", n: 22 }, "车长前哨全障碍",
+    "车长把全站的障碍都搬来了,当成大王前的热身"),
+  N(9, 29, "霓虹车长", ["rock", "hurdle", "bar", "pit", "roller", "zapper", "crate"], { type: "boss", n: BOSSES.conductor.hp }, "章节大王霓虹车长",
+    "铲碎一个箱子就等于打他一下,三连完美跳算两下,跑到终点前打满才算赢",
+    { boss: "conductor", rails: true, rhythm: 2 }),
+];
+
+/* ---- 第 11 章 · 云上索道(第 130–159 关) ---- */
+const ropewayHand: LevelDef[] = [
+  N(10, 0, "索道起点站", ["hurdle", "bar"], { type: "coins", n: 13 }, "索道章开场",
+    "缆车索道悬在半空,先把跳和趴的手感找回来", { powerups: ["magnet"] }),
+  N(10, 1, "缆绳跳台", ["hurdle", "pit"], { type: "dodge", n: 15 }, "缆绳跳台",
+    "跳台之间有缺口,落地马上准备下一次起跳"),
+  N(10, 2, "云中吊桥", ["bar", "pit", "crate"], { type: "coins", n: 15 }, "云中吊桥",
+    "吊桥两侧都是低横梁,趴过去之后紧跟着是缺口"),
+  N(10, 3, "风口岔路", ["hurdle", "cloudy", "crate"], { type: "coins", n: 14 }, "风口分岔",
+    "岔路口正对着风口,飘云会挡住其中一条", { fork: true }),
+  N(10, 4, "空中纸箱", ["cloudy", "crate"], { type: "smash", n: 7 }, "空中货箱",
+    "货箱吊在半空,铲碎它比绕开更省时间"),
+  N(10, 5, "滑索加速", ["hurdle", "crate"], { type: "coins", n: 16 }, "云端滑索",
+    "滑索会把速度顶上去,收币也要顺着滑索的方向", { rails: true }),
+  N(10, 6, "三连缆绳", ["hurdle", "crate"], { type: "perfect", n: 2 }, "缆绳三连跳",
+    "三根缆绳间距一样,数着拍子起跳最稳", { rhythm: 3 }),
+  N(10, 7, "雾里飘云", ["bar", "cloudy"], { type: "dodge", n: 13 }, "雾中飘云",
+    "雾里的云怪飘忽不定,别在它正下方停留"),
+  N(10, 8, "高空检修", ["zapper", "crate"], { type: "dodge", n: 14 }, "高空检修电门",
+    "检修电网在高空更密,灭灯的窗口只有一瞬"),
+  N(10, 9, "断桥连跳", ["pit", "crate"], { type: "perfect", n: 3 }, "断桥连跳",
+    "断桥的缺口等距排列,是练三连完美跳的好地方", { rhythm: 4 }),
+  N(10, 10, "缆车顶盖", ["bar", "crate"], { type: "noHit", n: 1 }, "缆车顶盖无伤",
+    "顶盖压得很低,全程贴地滑行,一次都别碰"),
+  N(10, 11, "双线索道", ["bar", "pit", "crate"], { type: "coins", n: 17 }, "双线索道",
+    "两条索道并排走,岔路牌决定你能吃到哪一串币", { fork: true }),
+  N(10, 12, "滚轮吊篮", ["roller", "crate"], { type: "dodge", n: 12 }, "滚轮吊篮",
+    "吊篮的滚轮松脱了,滚得比缆车还快"),
+  N(10, 13, "星光缆车站", ["hurdle", "bar", "pit", "cloudy"], { type: "stars", n: 6 }, "星光缆车站",
+    "站台上星星最多,规划一条能连着收的路线"),
+  N(10, 14, "云海滑索", ["pit", "cloudy", "crate"], { type: "coins", n: 16 }, "云海滑索",
+    "滑索穿过云海,加速时飘云的位置更难判断", { rails: true }),
+  N(10, 15, "节拍风口", ["hurdle", "pit", "crate"], { type: "perfect", n: 3 }, "风口节奏段",
+    "风一阵一阵地吹,起跳的拍子跟着风走", { rhythm: 3 }),
+  N(10, 16, "纸箱货运舱", ["cloudy", "roller", "crate"], { type: "smash", n: 8 }, "货运舱堆箱",
+    "货运舱里箱子最多,铲箱的手感在这一关练熟"),
+  N(10, 17, "高塔换乘", ["bar", "zapper", "crate"], { type: "coins", n: 15 }, "高塔换乘",
+    "换乘塔里两条路都通,选那条电门少的", { fork: true }),
+  N(10, 18, "雷雨索道", ["cloudy", "zapper"], { type: "dodge", n: 13 }, "雷雨索道",
+    "雷雨天电门亮得更久,宁可多等半拍"),
+  N(10, 19, "逆风长线", ["hurdle", "bar", "pit", "cloudy", "roller"], { type: "dodge", n: 21 }, "逆风长线",
+    "逆风段又长又乱,把注意力分给远处的那几行"),
+  N(10, 20, "云梯连跳", ["hurdle", "bar", "pit"], { type: "stars", n: 6 }, "云梯连跳",
+    "云梯一级一级往上,星星藏在跳跃的最高点旁边"),
+  N(10, 21, "静音夜航", ["cloudy", "roller", "zapper"], { type: "noHit", n: 1 }, "夜航无伤",
+    "夜航看不清,只能靠记住这三种障碍的行为"),
+  N(10, 22, "货运滑轨", ["hurdle", "roller", "crate"], { type: "coins", n: 18 }, "货运滑轨",
+    "货运滑轨最长,加速之后滚轮追得更紧", { rails: true }),
+  N(10, 23, "三岔云台", ["hurdle", "pit", "cloudy", "crate"], { type: "coins", n: 16 }, "三岔云台",
+    "云台上岔路接岔路,选完就别犹豫", { fork: true }),
+  N(10, 24, "完美跳走廊", ["hurdle", "bar", "pit", "crate"], { type: "perfect", n: 4 }, "完美跳走廊",
+    "整条走廊都在考起跳时机,四组三连是本章的门槛", { rhythm: 4 }),
+  N(10, 25, "缆索大清仓", ["bar", "roller", "crate"], { type: "smash", n: 9 }, "缆索清仓",
+    "清仓日货箱堆满索道,能铲多少铲多少"),
+  N(10, 26, "高空马拉松", ["hurdle", "bar", "pit", "cloudy", "roller", "zapper", "crate"], { type: "dodge", n: 23 }, "高空长跑",
+    "本章最长的一程,七种障碍全部登场"),
+  N(10, 27, "风阵前奏", ["cloudy", "zapper", "crate"], { type: "dodge", n: 15 }, "风阵前奏",
+    "风王的乱流已经开始了,先摸清它的节奏"),
+  N(10, 28, "星尘缆车顶", ["pit", "cloudy", "zapper", "crate"], { type: "stars", n: 7 }, "缆车顶星尘",
+    "缆车顶上的星星最亮,也最难收齐"),
+  N(10, 29, "索道风王", ["hurdle", "bar", "pit", "cloudy", "roller", "zapper", "crate"], { type: "boss", n: BOSSES.windLord.hp }, "章节大王索道风王",
+    "风王的风阵怕三连完美跳,一组抵两下;铲箱同样管用",
+    { boss: "windLord", rails: true, rhythm: 3, fork: true }),
+];
+
+/* ---- 第 12 章 · 星屑隧道(第 160–188 关) ---- */
+const stardustHand: LevelDef[] = [
+  N(11, 0, "隧道入口", ["rock", "hurdle", "bar"], { type: "coins", n: 14 }, "星屑章开场",
+    "最后一章开跑,先用熟悉的三种障碍热身", { powerups: ["magnet", "jet"] }),
+  N(11, 1, "星屑滑轨", ["hurdle", "crate"], { type: "coins", n: 17 }, "星屑滑轨",
+    "隧道里的滑轨闪着星屑,速度上得比之前都快", { rails: true }),
+  N(11, 2, "陨石纸箱", ["rock", "crate"], { type: "smash", n: 8 }, "陨石区堆箱",
+    "陨石之间卡着一排箱子,铲开才有路"),
+  N(11, 3, "隧道岔口", ["rock", "hurdle", "crate"], { type: "coins", n: 15 }, "隧道岔口",
+    "岔口的两条支线难度不同,看清再决定", { fork: true }),
+  N(11, 4, "星轨三连", ["hurdle", "pit"], { type: "perfect", n: 3 }, "星轨三连跳",
+    "星轨的间距是固定的,把拍子记住就能连出三连", { rhythm: 3 }),
+  N(11, 5, "幽光电门", ["zapper", "crate"], { type: "dodge", n: 15 }, "幽光电门",
+    "幽光电门亮得很暗,靠数拍子比靠看更准"),
+  N(11, 6, "陨石滚道", ["rock", "roller"], { type: "dodge", n: 14 }, "陨石滚道",
+    "滚下来的陨石只能躲,提前把中间道让出来"),
+  N(11, 7, "星尘低廊", ["bar", "crate"], { type: "noHit", n: 1 }, "星尘低廊无伤",
+    "低廊全程贴地,滑行时顺手铲箱也不能碰到横梁"),
+  N(11, 8, "引力坑洞", ["rock", "pit", "crate"], { type: "dodge", n: 16 }, "引力坑洞",
+    "坑洞边缘有引力,起跳要比平时早半拍"),
+  N(11, 9, "双色岔路", ["bar", "pit", "crate"], { type: "coins", n: 16 }, "双色岔路",
+    "两条支线一条低一条高,按自己顺手的选", { fork: true }),
+  N(11, 10, "星云飘怪", ["cloudy", "crate"], { type: "smash", n: 9 }, "星云货箱",
+    "飘怪会挡住箱子,先躲开它再回头铲"),
+  N(11, 11, "极速滑轨", ["pit", "crate"], { type: "coins", n: 18 }, "极速滑轨",
+    "全章最快的滑轨段,坑洞来得比想象中急", { rails: true }),
+  N(11, 12, "节拍隧道", ["hurdle", "pit", "crate"], { type: "perfect", n: 4 }, "隧道节奏段",
+    "隧道回声就是节拍器,跟着它连出四组三连", { rhythm: 4 }),
+  N(11, 13, "碎石连环", ["rock", "roller", "crate"], { type: "dodge", n: 18 }, "碎石连环",
+    "碎石一波接一波,换道要连着做两三次"),
+  N(11, 14, "星屑马拉松", ["rock", "hurdle", "bar", "pit", "cloudy"], { type: "dodge", n: 21 }, "星屑长跑",
+    "长跑段考的是耐心,别在前半程把心用完"),
+  N(11, 15, "银河电网", ["roller", "zapper", "crate"], { type: "dodge", n: 16 }, "银河电网",
+    "电网和滚石同时来,先算电门的拍子再挑道"),
+  N(11, 16, "无声星海", ["rock", "cloudy", "zapper"], { type: "noHit", n: 1 }, "星海无伤",
+    "星海一片安静,三种只能躲的障碍,靠预判过关"),
+  N(11, 17, "星桥岔路", ["hurdle", "cloudy", "crate"], { type: "coins", n: 17 }, "星桥岔路",
+    "星桥中段分成两条,右边的币多但飘怪也多", { fork: true }),
+  N(11, 18, "流星滑轨", ["hurdle", "roller", "crate"], { type: "coins", n: 19 }, "流星滑轨",
+    "流星带着滑轨一起冲,加速时视线要放得更远", { rails: true }),
+  N(11, 19, "三连星门", ["pit", "zapper"], { type: "perfect", n: 3 }, "星门三连跳",
+    "星门之间的缺口等距排列,是最后一段节奏练习", { rhythm: 3 }),
+  N(11, 20, "陨石清仓", ["rock", "hurdle", "crate"], { type: "smash", n: 10 }, "陨石清仓",
+    "把陨石区的箱子全部清掉,为最后一战攒手感"),
+  N(11, 21, "星屑洪流", ["rock", "hurdle", "bar", "pit", "roller", "crate"], { type: "dodge", n: 22 }, "星屑洪流",
+    "洪流一样的障碍密度,只看最近的两行就够"),
+  N(11, 22, "静默隧道", ["bar", "pit", "zapper", "crate"], { type: "noHit", n: 1 }, "静默隧道无伤",
+    "静默段没有提示音,全靠眼睛盯着远处"),
+  N(11, 23, "光年快线", ["hurdle", "bar", "crate"], { type: "coins", n: 18 }, "光年快线",
+    "快线一路直冲,滑轨接得很密", { rails: true }),
+  N(11, 24, "星尘岔口", ["rock", "pit", "cloudy", "crate"], { type: "coins", n: 16 }, "星尘岔口",
+    "最后一个岔口,两边都不轻松,挑熟悉的那种", { fork: true }),
+  N(11, 25, "完美跳终考", ["hurdle", "bar", "pit", "crate"], { type: "perfect", n: 4 }, "完美跳终考",
+    "五组三连完美跳,是整个战役对节奏感的最终考核", { rhythm: 5 }),
+  N(11, 26, "全障碍演练", ["rock", "hurdle", "bar", "pit", "cloudy", "roller", "zapper", "crate"], { type: "dodge", n: 24 }, "八障碍演练",
+    "八种障碍同场,把这一章学到的全用上"),
+  N(11, 27, "之主前哨", ["rock", "hurdle", "bar", "pit", "cloudy", "roller", "zapper", "crate"], { type: "stars", n: 7 }, "之主前哨",
+    "星屑之主的前哨站,星星就摆在最险的位置"),
+  N(11, 28, "星屑之主", ["rock", "hurdle", "bar", "pit", "cloudy", "roller", "zapper", "crate"], { type: "boss", n: BOSSES.stardustLord.hp }, "最终大王星屑之主",
+    "最后一关!铲箱与三连完美跳一起上,跑到终点前把他打满才算通关",
+    { boss: "stardustLord", rails: true, rhythm: 4, fork: true }),
+];
+
 export const LEVELS: LevelDef[] = [
   ...buildWorld(0, grassHand),
   ...buildWorld(1, skyHand),
@@ -582,6 +1235,10 @@ export const LEVELS: LevelDef[] = [
   ...buildWorld(6, snowHand),
   ...buildWorld(7, lavaHand),
   ...buildWorld(8, spaceHand),
+  // ---- 1.1 追加 ----
+  ...neonHand,
+  ...ropewayHand,
+  ...stardustHand,
 ];
 
 /* ---------------- 道具 ---------------- */
@@ -632,7 +1289,7 @@ export function isLevelUnlocked(stars: ReadonlyArray<number>, idx: number): bool
 
 /** 章节解锁:上一章终点关通过即可。 */
 export function isThemeUnlocked(stars: ReadonlyArray<number>, themeIdx: number): boolean {
-  return isLevelUnlocked(stars, themeIdx * LEVELS_PER_THEME);
+  return isLevelUnlocked(stars, themeOffset(themeIdx));
 }
 
 /** 本章已得的星星数。 */

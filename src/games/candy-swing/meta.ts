@@ -8,5 +8,8 @@ export const meta = {
   emoji: "🍬",
   category: "action" as const,
   color: "#FFE0EE",
-  blurb: "99 关 6 大主题！剪绳、传送、气球，把糖果送进啾啾嘴里！",
+  blurb: "188 关 10 大主题！剪绳、发条、磁铁、气流，把糖果送进啾啾嘴里！",
+  // levels.ts 的 CHAPTER_SIZES 合计 188 关(自带存档),只有闯关
+  modes: ["campaign"] as const,
+  levels: 188,
 };

@@ -2,9 +2,23 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, type MatchLevel } from "./levels";
-
-const SIZE = 8;
+import {
+  adjacent,
+  applyGravity,
+  bossRoar,
+  clearCells,
+  createState,
+  creditOrders,
+  findMatches,
+  goalsMet,
+  rainbowTargets,
+  runBelts,
+  RAINBOW,
+  SIZE,
+  type CascadeInfo,
+  type MatchState
+} from "./engine";
+import { CHAPTERS, LEVELS, orderLabel, type MatchLevel } from "./levels";
 
 const TOKENS = [
   { emoji: "⭐", bg: "#FFF3C4" },
@@ -14,8 +28,6 @@ const TOKENS = [
   { emoji: "🍊", bg: "#FFE8D1" },
 ];
 
-const RAINBOW = -2;
-
 const CSS = `
 .mst-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0F7, #F3F0FF); border-radius: 16px; padding: 10px; user-select: none; position: relative; }
 .mst-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -23,6 +35,9 @@ const CSS = `
 .mst-goals { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }
 .mst-goal { background: #fff; border-radius: 12px; padding: 4px 10px; font-weight: 700; color: #8B6BAE; font-size: 14px; box-shadow: 0 2px 5px rgba(180,140,220,.2); }
 .mst-goal.mst-done { background: #E4F9E0; color: #57A05B; }
+.mst-goal.mst-order { background: #FFF1DC; color: #A8762F; }
+.mst-goal.mst-order.mst-done { background: #E4F9E0; color: #57A05B; }
+.mst-goal.mst-boss { background: #EDEFE8; color: #6B7360; }
 .mst-bar { height: 12px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mst-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFB6D9, #C9A7F5); border-radius: 8px; transition: width .3s; }
 .mst-board { display: grid; grid-template-columns: repeat(${SIZE}, 1fr); gap: 4px; }
@@ -33,8 +48,15 @@ const CSS = `
 .mst-cell.mst-ice::after { content: "🧊"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.15em; background: rgba(200,235,255,.55); border-radius: 12px; }
 .mst-cell.mst-vine::after { content: "🌿"; position: absolute; right: -2px; top: -2px; font-size: .8em; }
 .mst-cell.mst-vine { box-shadow: inset 0 0 0 3px #8FD08A; }
+.mst-cell.mst-frost1::before { content: ""; position: absolute; inset: 0; border-radius: 12px; background: rgba(255,224,240,.62); box-shadow: inset 0 0 0 2px #F7B8D6; pointer-events: none; }
+.mst-cell.mst-frost2::before { content: ""; position: absolute; inset: 0; border-radius: 12px; background: rgba(255,203,232,.85); box-shadow: inset 0 0 0 3px #EE8FBF; pointer-events: none; }
+.mst-cell.mst-frost1::after, .mst-cell.mst-frost2::after { content: "🍥"; position: absolute; right: -1px; bottom: -1px; font-size: .72em; }
+.mst-cell.mst-belt { outline: 2px dashed #7FB7D8; outline-offset: -3px; }
 @keyframes mstBoom { 0% { transform: scale(1.25); opacity: .4; } 100% { transform: scale(1); opacity: 1; } }
 .mst-msg { text-align: center; min-height: 22px; color: #B06BC0; font-weight: 700; margin-top: 8px; font-size: 15px; }
+@media (prefers-reduced-motion: reduce) {
+  .mst-cell.mst-boom { animation: none; }
+}
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -45,13 +67,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   let levelDone = false;
   let moves = cfg.moves;
   let selected = -1;
-  let collected: number[] = cfg.goals.map(() => 0);
-  let iceLeft = 0;
-  let vineLeft = 0;
-
-  const grid: number[] = new Array(SIZE * SIZE).fill(0);
-  const ice: boolean[] = new Array(SIZE * SIZE).fill(false);
-  const vine: boolean[] = new Array(SIZE * SIZE).fill(false);
+  const state: MatchState = createState(cfg, Math.random as () => number);
+  const beltRows = new Set((cfg.belts ?? []).map((b) => ((b.row % SIZE) + SIZE) % SIZE));
+  /** 开局铺了多少层糖霜（进度条按它算） */
+  const frostTotal = state.frostLeft;
 
   const wrap = document.createElement("div");
   wrap.className = "mst-wrap";
@@ -60,6 +79,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <div class="mst-top">
       <span class="mst-badge mst-moves">👣 ${moves} 步</span>
       ${cfg.rainbow ? '<span class="mst-badge">🌈 会出现彩虹星</span>' : ""}
+      ${cfg.belts?.length ? '<span class="mst-badge">🏭 虚线行会平移</span>' : ""}
     </div>
     <div class="mst-goals"></div>
     <div class="mst-bar"><div class="mst-fill"></div></div>
@@ -92,97 +112,50 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     timeouts.add(t);
   }
 
-  function randToken(): number {
-    return Math.floor(Math.random() * cfg.colors);
-  }
-
-  function refillToken(): number {
-    if (cfg.rainbow && Math.random() < 0.06) return RAINBOW;
-    return randToken();
-  }
-
-  /** 把 n 个机关放在中间区域且互不相邻 */
-  function placeMarks(marks: boolean[], n: number, avoid: boolean[]): number {
-    const candidates: number[] = [];
-    for (let r = 2; r < SIZE - 2; r++) for (let c = 1; c < SIZE - 1; c++) candidates.push(r * SIZE + c);
-    let placed = 0;
-    let guard = 0;
-    while (placed < n && guard < 600) {
-      guard++;
-      const i = candidates[Math.floor(Math.random() * candidates.length)];
-      if (marks[i] || avoid[i]) continue;
-      const r = Math.floor(i / SIZE), c = i % SIZE;
-      const near =
-        (r > 0 && (marks[i - SIZE] || avoid[i - SIZE])) || (r < SIZE - 1 && (marks[i + SIZE] || avoid[i + SIZE])) ||
-        (c > 0 && (marks[i - 1] || avoid[i - 1])) || (c < SIZE - 1 && (marks[i + 1] || avoid[i + 1]));
-      if (near) continue;
-      marks[i] = true;
-      placed++;
-    }
-    return placed;
-  }
-
-  function setup(): void {
-    iceLeft = placeMarks(ice, cfg.ice, vine);
-    vineLeft = placeMarks(vine, cfg.vine, ice);
-    for (let i = 0; i < grid.length; i++) {
-      let v = randToken();
-      const r = Math.floor(i / SIZE);
-      const c = i % SIZE;
-      while (
-        (c >= 2 && grid[i - 1] === v && grid[i - 2] === v) ||
-        (r >= 2 && grid[i - SIZE] === v && grid[i - 2 * SIZE] === v)
-      ) {
-        v = randToken();
-      }
-      grid[i] = v;
-    }
-    renderGoals();
-    render();
-    if (cfg.vine > 0 && cfg.ice > 0) msgEl.textContent = "冰块旁边消、藤蔓上面消，机关全清才过关！";
-    else if (cfg.vine > 0) msgEl.textContent = "在藤蔓格子上消除，才能剪断藤蔓哦！";
-    else if (cfg.ice > 0) msgEl.textContent = "在冰块上或旁边消除，就能敲开冰块哦！";
-    else if (cfg.rainbow) msgEl.textContent = "彩虹星🌈和谁交换，就消掉全场那种图案！";
-    else msgEl.textContent = "收集目标里的图案，步数要省着用～";
+  function openingHint(): string {
+    if (cfg.boss) return `石巨人怕 ${TOKENS[cfg.boss.token].emoji}，多消它就能敲掉护甲！`;
+    if (cfg.frost) return "粉色格子盖着糖霜，在上面消一次刮一层！";
+    if (cfg.belts?.length) return "虚线那几行是传送带，每走一步就整排挪一格。";
+    if (cfg.orders?.length) return "看看订单：要一次消得多，或者连着消好几轮！";
+    if (cfg.vine > 0 && cfg.ice > 0) return "冰块旁边消、藤蔓上面消，机关全清才过关！";
+    if (cfg.vine > 0) return "藤蔓格必须在它上面消除才剪得断，旁边消没用！";
+    if (cfg.ice > 0) return "在冰块上或旁边消除才敲得开，从边缘往里推！";
+    if (cfg.rainbow) return "彩虹星🌈和谁交换就清掉全场那种图案，挑最多的那种！";
+    return "从盘面下方消起容易连锁，步数是最贵的资源～";
   }
 
   function renderGoals(): void {
     const parts: string[] = cfg.goals.map((g, gi) => {
-      const done = collected[gi] >= g.count;
-      return `<span class="mst-goal${done ? " mst-done" : ""}">${TOKENS[g.token].emoji} ${Math.min(collected[gi], g.count)}/${g.count}</span>`;
+      const done = state.collected[gi] >= g.count;
+      return `<span class="mst-goal${done ? " mst-done" : ""}">${TOKENS[g.token].emoji} ${Math.min(state.collected[gi], g.count)}/${g.count}</span>`;
     });
-    if (cfg.ice > 0) parts.push(`<span class="mst-goal${iceLeft <= 0 ? " mst-done" : ""}">🧊 ${cfg.ice - iceLeft}/${cfg.ice}</span>`);
-    if (cfg.vine > 0) parts.push(`<span class="mst-goal${vineLeft <= 0 ? " mst-done" : ""}">🌿 ${cfg.vine - vineLeft}/${cfg.vine}</span>`);
+    if (cfg.ice > 0) parts.push(`<span class="mst-goal${state.iceLeft <= 0 ? " mst-done" : ""}">🧊 ${cfg.ice - state.iceLeft}/${cfg.ice}</span>`);
+    if (cfg.vine > 0) parts.push(`<span class="mst-goal${state.vineLeft <= 0 ? " mst-done" : ""}">🌿 ${cfg.vine - state.vineLeft}/${cfg.vine}</span>`);
+    if (frostTotal > 0) parts.push(`<span class="mst-goal${state.frostLeft <= 0 ? " mst-done" : ""}">🍥 糖霜 ${frostTotal - state.frostLeft}/${frostTotal} 层</span>`);
+    (cfg.orders ?? []).forEach((order, oi) => {
+      const done = state.orders[oi] >= order.count;
+      parts.push(`<span class="mst-goal mst-order${done ? " mst-done" : ""}">🧾 ${orderLabel(order)}（${Math.min(state.orders[oi], order.count)}/${order.count}）</span>`);
+    });
+    if (cfg.boss) {
+      parts.push(`<span class="mst-goal mst-boss${state.armor <= 0 ? " mst-done" : ""}">🗿 护甲 ${state.armor}/${cfg.boss.armor}</span>`);
+    }
     goalsEl.innerHTML = parts.join("");
+
     let total = 0, got = 0;
-    cfg.goals.forEach((g, gi) => { total += g.count; got += Math.min(collected[gi], g.count); });
+    cfg.goals.forEach((g, gi) => { total += g.count; got += Math.min(state.collected[gi], g.count); });
     total += cfg.ice + cfg.vine;
-    got += cfg.ice - iceLeft + (cfg.vine - vineLeft);
+    got += cfg.ice - state.iceLeft + (cfg.vine - state.vineLeft);
+    total += frostTotal;
+    got += Math.max(0, frostTotal - state.frostLeft);
+    (cfg.orders ?? []).forEach((order, oi) => { total += order.count; got += Math.min(state.orders[oi], order.count); });
+    if (cfg.boss) { total += cfg.boss.armor; got += cfg.boss.armor - state.armor; }
     fillEl.style.width = `${total > 0 ? Math.min(100, (got / total) * 100) : 0}%`;
   }
 
-  function findMatches(g: number[]): Set<number> {
-    const out = new Set<number>();
-    for (let r = 0; r < SIZE; r++) {
-      for (let c = 0; c < SIZE; c++) {
-        const i = r * SIZE + c;
-        const v = g[i];
-        if (v < 0) continue;
-        if (c <= SIZE - 3 && g[i + 1] === v && g[i + 2] === v) {
-          out.add(i); out.add(i + 1); out.add(i + 2);
-        }
-        if (r <= SIZE - 3 && g[i + SIZE] === v && g[i + 2 * SIZE] === v) {
-          out.add(i); out.add(i + SIZE); out.add(i + 2 * SIZE);
-        }
-      }
-    }
-    return out;
-  }
-
   function render(boomSet?: Set<number>): void {
-    for (let i = 0; i < grid.length; i++) {
+    for (let i = 0; i < state.grid.length; i++) {
       const cell = cells[i];
-      const v = grid[i];
+      const v = state.grid[i];
       if (v === RAINBOW) {
         cell.textContent = "🌈";
         cell.style.background = "#fff";
@@ -193,124 +166,116 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         cell.textContent = TOKENS[v].emoji;
         cell.style.background = TOKENS[v].bg;
       }
-      cell.classList.toggle("mst-ice", ice[i]);
-      cell.classList.toggle("mst-vine", vine[i]);
+      cell.classList.toggle("mst-ice", state.ice[i]);
+      cell.classList.toggle("mst-vine", state.vine[i]);
+      cell.classList.toggle("mst-frost1", state.frost[i] === 1);
+      cell.classList.toggle("mst-frost2", state.frost[i] >= 2);
+      cell.classList.toggle("mst-belt", beltRows.has(Math.floor(i / SIZE)));
       cell.classList.toggle("mst-sel", i === selected);
       cell.classList.toggle("mst-boom", !!boomSet && boomSet.has(i));
     }
     movesEl.textContent = `👣 ${moves} 步`;
   }
 
-  function applyGravity(): void {
-    for (let c = 0; c < SIZE; c++) {
-      const vals: number[] = [];
-      for (let r = SIZE - 1; r >= 0; r--) {
-        const i = r * SIZE + c;
-        if (!ice[i] && !vine[i] && grid[i] >= 0) vals.push(grid[i]);
-      }
-      let vi = 0;
-      for (let r = SIZE - 1; r >= 0; r--) {
-        const i = r * SIZE + c;
-        if (ice[i] || vine[i]) continue;
-        grid[i] = vi < vals.length ? vals[vi++] : refillToken();
-      }
-    }
-  }
-
-  function goalsMet(): boolean {
-    return cfg.goals.every((g, gi) => collected[gi] >= g.count) && iceLeft <= 0 && vineLeft <= 0;
-  }
-
   function checkEnd(): void {
     if (levelDone) return;
-    if (goalsMet()) {
+    if (goalsMet(state, cfg)) {
       levelDone = true;
       const got = moves >= cfg.three ? 3 : moves >= cfg.two ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${moves} 步没用完，真会计划！`), 450);
+      later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${moves} 步没用完，这一局的规划很省！`), 450);
     } else if (moves <= 0) {
       levelDone = true;
-      later(() => ctx.lose("步数用完了，差一点点就成功啦！"), 450);
+      later(() => ctx.lose("步数用完啦～下一局先扫一遍全盘，挑能连锁的那一步再出手，省得下来！"), 450);
     }
   }
 
-  /** 消除一组格子：计目标、敲冰、剪藤 */
-  function clearCells(set: Set<number>): void {
-    set.forEach((i) => {
-      const v = grid[i];
-      cfg.goals.forEach((g, gi) => {
-        if (g.token === v) collected[gi]++;
-      });
-      if (vine[i]) { vine[i] = false; vineLeft--; }
-      if (ice[i]) { ice[i] = false; iceLeft--; }
-      const r = Math.floor(i / SIZE), c = i % SIZE;
-      const neighbors = [
-        r > 0 ? i - SIZE : -1, r < SIZE - 1 ? i + SIZE : -1,
-        c > 0 ? i - 1 : -1, c < SIZE - 1 ? i + 1 : -1,
-      ];
-      for (const n of neighbors) {
-        if (n >= 0 && ice[n]) { ice[n] = false; iceLeft--; }
+  /** 这一步走完的收尾：结算订单、转传送带、石巨人捣乱 */
+  function finishMove(info: CascadeInfo): void {
+    const gained = creditOrders(state, cfg, info);
+    if (gained > 0) {
+      ctx.sfx("coin");
+      msgEl.textContent = "🧾 订单完成一笔，继续攒大消除！";
+    }
+    state.used++;
+    if (cfg.belts?.length) {
+      runBelts(state, cfg);
+      render();
+    }
+    if (cfg.boss && cfg.boss.roarEvery > 0 && state.used % cfg.boss.roarEvery === 0 && state.armor > 0) {
+      const at = bossRoar(state, cfg, Math.random as () => number);
+      if (at >= 0) {
+        ctx.sfx("oops");
+        msgEl.textContent = "🗿 石巨人吼了一声，冻住了一颗星星！";
       }
-      grid[i] = -1;
-    });
+    }
+    renderGoals();
+    render();
+    // 传送带挪完可能又凑出三连，让它自然连锁掉
+    if (cfg.belts?.length && findMatches(state.grid).size > 0) {
+      busy = true;
+      later(() => resolveCascade(1, { steps: 0, total: 0, best: 0 }, false), 200);
+      return;
+    }
+    busy = false;
+    checkEnd();
   }
 
-  function resolveCascade(chain: number): void {
-    const matched = findMatches(grid);
+  function resolveCascade(chain: number, acc: CascadeInfo, settle: boolean): void {
+    const matched = findMatches(state.grid);
     if (matched.size === 0) {
-      busy = false;
-      checkEnd();
+      if (settle) {
+        finishMove(acc);
+      } else {
+        busy = false;
+        checkEnd();
+      }
       return;
     }
     ctx.sfx("pop");
     if (matched.size >= 5) {
       ctx.bonusStars(1);
-      msgEl.textContent = `哇！一下消掉 ${matched.size} 颗，奖励一颗小星星！`;
+      msgEl.textContent = `一步消掉 ${matched.size} 颗，奖励一颗小星星！`;
     } else if (chain > 1) {
-      msgEl.textContent = `连着消了 ${chain} 次，太棒啦！`;
+      msgEl.textContent = `${chain} 连锁！连锁产生的消除不花步数～`;
     }
-    clearCells(matched);
+    const next: CascadeInfo = {
+      steps: acc.steps + 1,
+      total: acc.total + matched.size,
+      best: Math.max(acc.best, matched.size)
+    };
+    clearCells(state, cfg, matched);
     renderGoals();
     render(matched);
     later(() => {
-      applyGravity();
+      applyGravity(state, cfg, Math.random as () => number);
       render();
-      later(() => resolveCascade(chain + 1), 180);
+      later(() => resolveCascade(chain + 1, next, settle), 180);
     }, 220);
   }
 
-  function adjacent(a: number, b: number): boolean {
-    const ra = Math.floor(a / SIZE), ca = a % SIZE;
-    const rb = Math.floor(b / SIZE), cb = b % SIZE;
-    return Math.abs(ra - rb) + Math.abs(ca - cb) === 1;
-  }
-
-  /** 彩虹星交换：清掉全场目标图案 */
+  /** 彩虹星交换：清掉全场某种图案 */
   function rainbowSwap(a: number, b: number): void {
-    const other = grid[a] === RAINBOW ? grid[b] : grid[a];
-    const target = other === RAINBOW ? Math.floor(Math.random() * cfg.colors) : other;
-    const set = new Set<number>([a, b]);
-    for (let i = 0; i < grid.length; i++) {
-      if (grid[i] === target) set.add(i);
-    }
+    const set = rainbowTargets(state, a, b, cfg.colors, Math.random as () => number);
+    const target = state.grid[a] === RAINBOW ? state.grid[b] : state.grid[a];
     ctx.sfx("coin");
-    msgEl.textContent = `彩虹星把 ${TOKENS[target].emoji} 全都变没啦！`;
+    if (target >= 0) msgEl.textContent = `彩虹星把 ${TOKENS[target].emoji} 全都变没啦！`;
     moves--;
     busy = true;
-    clearCells(set);
+    clearCells(state, cfg, set);
     renderGoals();
     render(set);
     later(() => {
-      applyGravity();
+      applyGravity(state, cfg, Math.random as () => number);
       render();
-      later(() => resolveCascade(1), 180);
+      later(() => resolveCascade(1, { steps: 1, total: set.size, best: set.size }, true), 180);
     }, 260);
   }
 
   function onCell(i: number): void {
     if (levelDone || busy) return;
-    if (ice[i] || vine[i]) {
+    if (state.ice[i] || state.vine[i]) {
       ctx.sfx("oops");
-      msgEl.textContent = ice[i]
+      msgEl.textContent = state.ice[i]
         ? "这颗被冰冻住啦，在它旁边消除就能敲开！"
         : "这颗被藤蔓缠住啦，在它上面消除才能剪断！";
       return;
@@ -334,25 +299,27 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
     const a = selected, b = i;
     selected = -1;
-    if (grid[a] === RAINBOW || grid[b] === RAINBOW) {
+    if (state.grid[a] === RAINBOW || state.grid[b] === RAINBOW) {
       rainbowSwap(a, b);
       return;
     }
-    [grid[a], grid[b]] = [grid[b], grid[a]];
-    if (findMatches(grid).size === 0) {
-      [grid[a], grid[b]] = [grid[b], grid[a]];
+    [state.grid[a], state.grid[b]] = [state.grid[b], state.grid[a]];
+    if (findMatches(state.grid).size === 0) {
+      [state.grid[a], state.grid[b]] = [state.grid[b], state.grid[a]];
       ctx.sfx("oops");
-      msgEl.textContent = "这样换不能消除哦，换个方向试试～";
+      msgEl.textContent = "这样换消不掉，不算步数～换个方向再试～";
       render();
       return;
     }
     moves--;
     busy = true;
     render();
-    later(() => resolveCascade(1), 120);
+    later(() => resolveCascade(1, { steps: 0, total: 0, best: 0 }, true), 120);
   }
 
-  setup();
+  renderGoals();
+  render();
+  msgEl.textContent = openingHint();
 
   return {
     destroy() {
@@ -370,7 +337,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "步数剩得越多，星星越多！机关全清才能过关～",
-    grandMessage: "99 关全部消除完毕，你是真正的消除大师！",
+    mapHint: "步数剩得越多星星越多，机关全清才能过关～",
+    grandMessage: "188 关全部消除完毕，你的盘面规划和连锁意识都很到位！",
   });
 }

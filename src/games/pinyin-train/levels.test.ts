@@ -3,18 +3,18 @@ import { totalSize } from "../level99";
 import { INITIALS, SYLLABLE_CARDS, TONE_MARKS, TONE_NAMES, VOWELS } from "./logic";
 import { SINGLE_VOWELS, COMPOUND_VOWELS, buildQuestions, CHAPTERS, kindPool, LEVELS, questionCount } from "./levels";
 
-describe("拼音小火车 99 关", () => {
-  it("恰好 99 关", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("拼音小火车 188 关", () => {
+  it("恰好 188 关", () => {
+    expect(LEVELS).toHaveLength(188);
   });
 
-  it("至少 6 个主题章节，章节大小之和为 99", () => {
+  it("至少 6 个主题章节，章节大小之和为 188", () => {
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
   it("每关题目合法：3 个唯一选项、正确项与答案一致", () => {
-    for (let i = 0; i < 99; i++) {
+    for (let i = 0; i < 188; i++) {
       const qs = buildQuestions(i);
       expect(qs.length).toBe(questionCount(i));
       for (const q of qs) {

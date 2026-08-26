@@ -1,17 +1,23 @@
 /**
- * 「一朵一星」99 关通用框架（休闲 / 对战 / 学习游戏共用）。
+ * 「一朵一星」188 关通用框架（休闲 / 对战 / 学习游戏共用）。
  *
- * 提供四件事：
- *  1. 章节定义与工具：≥6 个主题章节，章节大小之和恒等于 99；
+ * 1.1 起总关卡数从 99 提升到 188，文件名与存档 key 一律保持 `l99` 不变，
+ * 老玩家的长度 99 存档读出来会自动补 0 到 188，前 99 位原样保留。
+ *
+ * 提供六件事：
+ *  1. 章节定义与工具：≥6 个主题章节，章节大小之和恒等于 188（`assertTotal`）；
  *  2. 每关星级进度存档（localStorage，独立于平台钱包存档）；
- *  3. 选关地图 UI：章节页签 + 关卡格子（星级 / 当前关 / 锁定）；
- *  4. 胜负结算：过关最多 3 星、失败温柔鼓励并可"重试本关"。
+ *  3. 家长授权后的「跳关」标记（并存的小数组 `yiduo-yixing.l99skip.<id>`）；
+ *  4. 选关地图 UI：章节分页 + 跳到当前关 + 窄屏自适应 + 键盘可达；
+ *  5. 攻略 / 跳关入口：来自 `src/ui/level188Contract.ts` 的运行时注册表，没注册就自动隐藏；
+ *  6. 胜负结算：过关最多 3 星、失败温柔鼓励并可"重试本关"。
  *
  * 各游戏只需提供 chapters 与 playLevel(stage, ctx)，其余交给框架。
  * 本文件不在游戏子目录内，不会被 loader 的 import.meta.glob 收集。
  */
 import { AVATAR_URLS } from "../ui/avatars";
 import { isGuardedClick } from "../ui/dialogs";
+import { getLevelExtras, type GuideBook } from "../ui/level188Contract";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -25,8 +31,14 @@ export interface GameApi {
   onLose: (message?: string) => void;
 }
 
-/** 每个游戏固定 99 关 */
-export const TOTAL_LEVELS = 99;
+/** 每个游戏固定 188 关（1.1 起） */
+export const TOTAL_LEVELS = 188;
+
+/** 1.0 时代的关卡总数：只用于存档迁移与回归测试，不要拿它当上限 */
+export const LEGACY_TOTAL_LEVELS = 99;
+
+/** 188 关全三星的满星数 */
+export const MAX_TOTAL_STARS = TOTAL_LEVELS * 3;
 
 export interface Chapter {
   /** 主题章节名，例如「冰雪山谷」 */
@@ -36,7 +48,7 @@ export interface Chapter {
   color: string;
   /** 一句话介绍本章的主题 / 新玩法 */
   desc: string;
-  /** 本章包含的关卡数，所有章节之和必须是 99 */
+  /** 本章包含的关卡数，所有章节之和必须是 188 */
   size: number;
 }
 
@@ -47,6 +59,22 @@ export interface Chapter {
 /** 全部章节的关卡总数 */
 export function totalSize(chapters: Chapter[]): number {
   return chapters.reduce((s, c) => s + c.size, 0);
+}
+
+/**
+ * 校验章节切分：和不等于 expected 时在控制台报错并返回 false（不抛异常）。
+ * 各游戏的 levels.test.ts 直接 `expect(assertTotal(CHAPTERS, 188)).toBe(true)` 即可。
+ */
+export function assertTotal(chapters: Chapter[], expected: number = TOTAL_LEVELS, label = "chapters"): boolean {
+  const got = totalSize(chapters);
+  if (got === expected) return true;
+  console.error(`[一朵一星] ${label} 章节大小之和是 ${got}，应为 ${expected}；已降级到实际总数继续运行。`);
+  return false;
+}
+
+/** 章节和异常时框架实际使用的总关数（至少 1 关，保证不白屏） */
+export function effectiveTotal(chapters: Chapter[]): number {
+  return Math.max(1, totalSize(chapters));
 }
 
 /** level（0 基）所属章节的下标 */
@@ -69,6 +97,22 @@ export function chapterStart(chapters: Chapter[], ci: number): number {
 /** level 在其章节内的序号（0 基） */
 export function indexInChapter(chapters: Chapter[], level: number): number {
   return level - chapterStart(chapters, chapterOf(chapters, level));
+}
+
+/** 章节 ci 覆盖的关卡区间（1 基，含两端），给地图分页页眉用 */
+export function chapterRange(chapters: Chapter[], ci: number): { from: number; to: number } {
+  const start = chapterStart(chapters, ci);
+  return { from: start + 1, to: start + Math.max(0, chapters[ci]?.size ?? 0) };
+}
+
+/** 选关地图每行格子数：窄屏少放几个，免得 188 个格子挤成一坨 */
+export function mapColumns(width: number): number {
+  if (!Number.isFinite(width) || width <= 0) return 5;
+  if (width <= 320) return 4;
+  if (width <= 420) return 5;
+  if (width <= 560) return 6;
+  if (width <= 760) return 7;
+  return 8;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,31 +192,55 @@ function storageKey(gameId: string): string {
   return `yiduo-yixing.l99.${gameId}`;
 }
 
-/** 读取某游戏 99 关的星级数组（每项 0..3，0 表示未通过） */
-export function loadStars(gameId: string, storage?: StorageLike | null): number[] {
-  const store = storage === undefined ? defaultStorage() : storage;
-  const out = new Array<number>(TOTAL_LEVELS).fill(0);
-  let raw: string | null = null;
+/** 跳关标记 key：与星级存档并存，绝不动原来的 `yiduo-yixing.l99.<id>` */
+function skipKey(gameId: string): string {
+  return `yiduo-yixing.l99skip.${gameId}`;
+}
+
+function readRaw(key: string, store: StorageLike | null): string | null {
   try {
-    raw = store ? store.getItem(storageKey(gameId)) : memoryFallback.get(storageKey(gameId)) ?? null;
+    return store ? store.getItem(key) : memoryFallback.get(key) ?? null;
   } catch {
-    raw = null;
+    return null;
   }
-  if (!raw) return out;
+}
+
+function writeRaw(key: string, raw: string, store: StorageLike | null): void {
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      for (let i = 0; i < TOTAL_LEVELS && i < parsed.length; i++) {
-        const v = parsed[i];
-        if (typeof v === "number" && Number.isFinite(v)) {
-          out[i] = Math.max(0, Math.min(3, Math.round(v)));
-        }
-      }
-    }
+    if (store) store.setItem(key, raw);
+    else memoryFallback.set(key, raw);
   } catch {
-    // 数据坏了就当作全新进度
+    // 存不进去也不影响继续玩
+  }
+}
+
+/**
+ * 把任意来源的存档值整理成长度 188 的星级数组（纯函数，便于测试）：
+ * 老的长度 99 数组后面补 0、前 99 位原样保留；超长截断；非数组 / 非数字一律当 0。
+ */
+export function migrateStars(parsed: unknown): number[] {
+  const out = new Array<number>(TOTAL_LEVELS).fill(0);
+  if (!Array.isArray(parsed)) return out;
+  for (let i = 0; i < TOTAL_LEVELS && i < parsed.length; i++) {
+    const v: unknown = parsed[i];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      out[i] = Math.max(0, Math.min(3, Math.round(v)));
+    }
   }
   return out;
+}
+
+/** 读取某游戏 188 关的星级数组（每项 0..3，0 表示未通过） */
+export function loadStars(gameId: string, storage?: StorageLike | null): number[] {
+  const store = storage === undefined ? defaultStorage() : storage;
+  const raw = readRaw(storageKey(gameId), store);
+  if (!raw) return new Array<number>(TOTAL_LEVELS).fill(0);
+  try {
+    return migrateStars(JSON.parse(raw) as unknown);
+  } catch {
+    // 数据坏了就当作全新进度
+    return new Array<number>(TOTAL_LEVELS).fill(0);
+  }
 }
 
 /** 记录某关星级（保留历史最好成绩），返回最新的星级数组 */
@@ -184,35 +252,94 @@ export function saveStar(
 ): number[] {
   const store = storage === undefined ? defaultStorage() : storage;
   const arr = loadStars(gameId, store);
-  if (level >= 0 && level < TOTAL_LEVELS) {
-    arr[level] = Math.max(arr[level], Math.max(0, Math.min(3, Math.round(stars))));
+  if (Number.isFinite(level) && level >= 0 && level < TOTAL_LEVELS) {
+    const idx = Math.round(level);
+    arr[idx] = Math.max(arr[idx], Math.max(0, Math.min(3, Math.round(stars))));
   }
-  const raw = JSON.stringify(arr);
-  try {
-    if (store) store.setItem(storageKey(gameId), raw);
-    else memoryFallback.set(storageKey(gameId), raw);
-  } catch {
-    // 存不进去也不影响继续玩
-  }
+  writeRaw(storageKey(gameId), JSON.stringify(arr), store);
   return arr;
 }
 
-/** 已通关数 */
+// ---------------------------------------------------------------------------
+// 跳关标记（家长授权后才会写；星级仍记 0，只负责解锁后面的关）
+// ---------------------------------------------------------------------------
+
+/** 把任意来源的跳关值整理成「升序去重的 0 基关号数组」（纯函数，便于测试） */
+export function migrateSkips(parsed: unknown): number[] {
+  if (!Array.isArray(parsed)) return [];
+  const set = new Set<number>();
+  for (const v of parsed as unknown[]) {
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    const idx = Math.round(v);
+    if (idx >= 0 && idx < TOTAL_LEVELS) set.add(idx);
+  }
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+/** 读取某游戏被跳过的关号（0 基，升序） */
+export function loadSkips(gameId: string, storage?: StorageLike | null): number[] {
+  const store = storage === undefined ? defaultStorage() : storage;
+  const raw = readRaw(skipKey(gameId), store);
+  if (!raw) return [];
+  try {
+    return migrateSkips(JSON.parse(raw) as unknown);
+  } catch {
+    return [];
+  }
+}
+
+/** 标记某关「已跳过」（幂等），返回最新的跳关数组 */
+export function markSkipped(gameId: string, level: number, storage?: StorageLike | null): number[] {
+  const store = storage === undefined ? defaultStorage() : storage;
+  const next = migrateSkips([...loadSkips(gameId, store), level]);
+  writeRaw(skipKey(gameId), JSON.stringify(next), store);
+  return next;
+}
+
+/** 清空某游戏的跳关记录（家长面板用） */
+export function clearSkips(gameId: string, storage?: StorageLike | null): void {
+  const store = storage === undefined ? defaultStorage() : storage;
+  writeRaw(skipKey(gameId), "[]", store);
+}
+
+/** 某关是否被跳过 */
+export function isSkipped(skips: readonly number[], level: number): boolean {
+  return skips.includes(level);
+}
+
+/** 已通关数（真打过的，跳过的不算） */
 export function clearedCount(stars: number[]): number {
   return stars.filter((s) => s > 0).length;
 }
 
-/** 全部关卡累计星数（满分 297） */
+/** 已推进的关数：真通关 + 家长授权跳过的 */
+export function reachedCount(stars: number[], skips: readonly number[] = []): number {
+  let n = 0;
+  for (let i = 0; i < stars.length; i++) {
+    if (stars[i] > 0 || isSkipped(skips, i)) n++;
+  }
+  return n;
+}
+
+/** 全部关卡累计星数（满分 564） */
 export function totalStars(stars: number[]): number {
   return stars.reduce((a, b) => a + b, 0);
 }
 
-/** 当前可以玩到的最远关卡（0 基）：第一个未通过的关；全通则是最后一关 */
-export function furthestPlayable(stars: number[]): number {
-  for (let i = 0; i < TOTAL_LEVELS; i++) {
-    if (stars[i] <= 0) return i;
+/**
+ * 当前可以玩到的最远关卡（0 基）：第一个既没通过、也没被跳过的关；
+ * 全部推进完就停在最后一关。total 允许传入实际总关数（章节和异常时的降级值）。
+ */
+export function furthestPlayable(
+  stars: number[],
+  skips: readonly number[] = [],
+  total: number = TOTAL_LEVELS
+): number {
+  const max = Math.max(1, Math.min(total, TOTAL_LEVELS));
+  for (let i = 0; i < max; i++) {
+    if (stars[i] <= 0 && !isSkipped(skips, i)) return i;
   }
-  return TOTAL_LEVELS - 1;
+  return max - 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -220,12 +347,14 @@ export function furthestPlayable(stars: number[]): number {
 // ---------------------------------------------------------------------------
 
 export interface PlayCtx {
-  /** 当前关（0 基，0..98） */
+  /** 当前关（0 基，0..187） */
   level: number;
   chapter: Chapter;
   chapterIndex: number;
   /** 本关在章节内的序号（0 基） */
   indexInChapter: number;
+  /** 本关此前被家长授权跳过过（重玩时给个温柔的提示，不批评） */
+  skipped?: boolean;
   /** 过关：报告 1..3 星与一句夸奖 */
   win: (stars: 1 | 2 | 3, msg?: string) => void;
   /** 失败：报告一句温柔的话，框架会给「再试本关」按钮 */
@@ -247,8 +376,12 @@ export interface LevelGameOptions {
   playLevel: (stage: HTMLElement, ctx: PlayCtx) => PlayHandle | void;
   /** 地图底部的一句话提示 */
   mapHint?: string;
-  /** 全部 99 关通关后的庆祝语（走平台 onWin） */
+  /** 全部 188 关通关后的庆祝语（走平台 onWin） */
   grandMessage?: string;
+  /** 攻略数据；不给就按章节自动生成一份「只讲方法」的通用攻略 */
+  guide?: GuideBook;
+  /** 攻略面板标题（不给 guide 时用来生成兜底攻略） */
+  guideTitle?: string;
 }
 
 const WIN_WORDS = ["太棒啦！", "好厉害！", "真会动脑筋！", "漂亮！", "你做到啦！"];
@@ -260,11 +393,46 @@ const LOSE_WORDS = [
 ];
 
 /**
- * 结算浮层要朗读的整句话（一年级识字量有限，鼓励语靠听）。
+ * 结算浮层要朗读的整句话（鼓励语靠听，识字量不够时也能懂）。
  * 纯函数便于测试；朗读本身走 speech.ts，无语音包时静默降级。
  */
 export function settleSpeechLine(kind: "win" | "lose", level: number, msg: string): string {
   return kind === "win" ? `第 ${level + 1} 关过关！${msg}` : `就差一点点！${msg}`;
+}
+
+/** 选关格子的无障碍标签（读屏与键盘用户靠它区分状态） */
+export function nodeAriaLabel(level: number, stars: number, state: "locked" | "skipped" | "open"): string {
+  const n = level + 1;
+  if (state === "locked") return `第 ${n} 关，还没解锁`;
+  if (state === "skipped") return `第 ${n} 关，已跳过，可以回来挑战`;
+  if (stars > 0) return `第 ${n} 关，已通关 ${stars} 星`;
+  return `第 ${n} 关，还没通关`;
+}
+
+/**
+ * 没有专属攻略数据时，按章节自动拼一份「只讲方法、不给答案」的攻略。
+ * 纯函数便于测试；具体游戏的细则由后续步骤补 `guide` 字段覆盖。
+ */
+export function buildFallbackGuide(gameId: string, chapters: Chapter[], title?: string): GuideBook {
+  return {
+    gameId,
+    title: title ?? "闯关小攻略",
+    general: [
+      "先看清这一关要达成什么目标，再动手，别急着乱点。",
+      "卡住的时候把关卡拆成两三个小步骤，一步一步过。",
+      "同一关可以重玩，多试几种顺序，找到最省步数的那条路。",
+      "手感类关卡先慢后快：稳住节奏，命中率上来了速度自然就快。"
+    ],
+    entries: chapters.map((ch, ci) => {
+      const { from, to } = chapterRange(chapters, ci);
+      return {
+        from,
+        to,
+        title: `${ch.emoji} ${ch.name}`,
+        tips: [ch.desc || "这一章的重点是熟悉新机制，先摸清规则再冲成绩。", `本章覆盖第 ${from}–${to} 关，难度是逐关往上走的。`]
+      };
+    })
+  };
 }
 
 function starRowHTML(stars: number): string {
@@ -282,16 +450,24 @@ const L99_CSS = `
 .l99-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .l99-chip{background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:14px;color:#7a5da8;
   box-shadow:0 2px 6px rgba(150,130,200,.2);}
+.l99-chip-skip{color:#6d6580;background:#efedf5;}
 .l99-continue{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
 .l99-continue:active{transform:translateY(2px);box-shadow:0 2px 0 #8f2c5c;}
+.l99-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin:0 0 8px;}
+.l99-tool{border:none;border-radius:999px;padding:7px 14px;font-size:14px;font-weight:800;cursor:pointer;
+  font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
+.l99-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
+.l99-tool-skip{background:#efe9fb;color:#665390;}
 .l99-tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:none;}
 .l99-tabs::-webkit-scrollbar{display:none;}
 .l99-tab{flex:0 0 auto;border:none;border-radius:14px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
 .l99-tab.l99-tab-on{color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
 .l99-tab.l99-tab-lock{opacity:.55;}
-.l99-chapdesc{font-size:13px;font-weight:700;color:#77619b;text-align:center;margin:2px 0 10px;min-height:18px;}
+.l99-chapdesc{font-size:13px;font-weight:700;color:#77619b;text-align:center;margin:2px 0 4px;min-height:18px;}
+.l99-pagehint{font-size:12px;font-weight:700;color:#8d7bab;text-align:center;margin:0 0 10px;}
+.l99-flash{font-size:13px;font-weight:800;color:#5f6f9b;text-align:center;margin:0 0 8px;}
 .l99-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
 .l99-node{aspect-ratio:1;border:none;border-radius:16px;cursor:pointer;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:2px;background:#fff;box-shadow:0 3px 8px rgba(140,130,190,.18);
@@ -306,9 +482,14 @@ const L99_CSS = `
 @keyframes l99pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 .l99-node-lock{background:#f2eef8;box-shadow:none;cursor:default;}
 .l99-node-lock .l99-node-num{color:#c8bedd;font-size:14px;}
+.l99-node-skip{background:#ecebf1;box-shadow:none;}
+.l99-node-skip .l99-node-num{color:#8d85a3;}
+.l99-node-flag{font-size:15px;line-height:1;filter:grayscale(1);opacity:.75;}
+.l99-node:focus-visible,.l99-tab:focus-visible,.l99-tool:focus-visible,.l99-continue:focus-visible,
+.l99-back:focus-visible,.l99-ov-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .l99-maphint{margin-top:12px;text-align:center;font-size:13px;font-weight:700;color:#77619b;}
 .l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}
-.l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;}
+.l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;}
 .l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
@@ -332,19 +513,34 @@ const L99_CSS = `
 .l99-ov-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .l99-ov-btn.l99-ov-ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 5px 0 #34498a;}
 .l99-ov-btn.l99-ov-ghost:active{box-shadow:0 2px 0 #34498a;}
+@media (max-width:420px){
+  .l99-map{padding:10px;}
+  .l99-grid{gap:6px;}
+  .l99-node-num{font-size:15px;}
+  .l99-node-stars{font-size:10px;}
+}
+@media (prefers-reduced-motion:reduce){
+  .l99-node-cur{animation:none;}
+  .l99-ov-buddy{animation:none;}
+}
 `;
 
 export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy: () => void } {
-  if (totalSize(opts.chapters) !== TOTAL_LEVELS) {
-    console.warn(`[一朵一星] ${opts.id} 章节大小之和不是 ${TOTAL_LEVELS}`);
-  }
+  // 章节和不等于 188 时只报错、不抛异常：降级到实际总数照常开玩，绝不白屏
+  assertTotal(opts.chapters, TOTAL_LEVELS, opts.id);
+  const total = effectiveTotal(opts.chapters);
 
   let destroyed = false;
   let stars = loadStars(opts.id);
+  let skips = loadSkips(opts.id);
   let handle: PlayHandle | void = undefined;
   let currentLevel = -1;
   let settled = false;
-  let viewChapter = chapterOf(opts.chapters, furthestPlayable(stars));
+  let flash = "";
+  let viewChapter = chapterOf(opts.chapters, furthestPlayable(stars, skips, total));
+
+  const guideBook = opts.guide ?? buildFallbackGuide(opts.id, opts.chapters, opts.guideTitle);
+  const guideCleanups: Array<() => void> = [];
 
   const wrap = document.createElement("div");
   wrap.className = "l99-wrap";
@@ -355,6 +551,75 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   wrap.appendChild(view);
   api.root.appendChild(wrap);
 
+  function viewportWidth(): number {
+    const w = (globalThis as { innerWidth?: number }).innerWidth;
+    return typeof w === "number" && w > 0 ? w : 480;
+  }
+
+  const onResize = (): void => {
+    const grid = view.querySelector(".l99-grid");
+    if (grid instanceof HTMLElement) {
+      grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+    }
+  };
+  (globalThis as { addEventListener?: typeof window.addEventListener }).addEventListener?.("resize", onResize);
+
+  function dropGuides(): void {
+    while (guideCleanups.length) {
+      const fn = guideCleanups.pop();
+      try {
+        fn?.();
+      } catch (err) {
+        console.warn(`[一朵一星] ${opts.id} 攻略面板清理出错:`, err);
+      }
+    }
+  }
+
+  /** 攻略入口：壳层没注册 mountGuide 就什么都不挂（单测环境保持干净） */
+  function attachGuide(host: HTMLElement, getLevel: () => number): void {
+    const mount = getLevelExtras().mountGuide;
+    if (!mount) return;
+    try {
+      const off = mount(host, guideBook, getLevel);
+      if (typeof off === "function") guideCleanups.push(off);
+    } catch (err) {
+      console.warn(`[一朵一星] ${opts.id} 攻略面板挂载失败:`, err);
+    }
+  }
+
+  /**
+   * 跳关入口：壳层没注册 requestSkip 就不显示按钮。
+   * 传给授权方的关号与框架内部一致，是 0 基的（家长弹窗自己 +1 后展示）。
+   */
+  function attachSkip(host: HTMLElement, level: number, after: (level: number) => void): void {
+    const request = getLevelExtras().requestSkip;
+    if (!request || level >= total) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "l99-tool l99-tool-skip";
+    btn.textContent = `⏭️ 跳过 第${level + 1}关`;
+    btn.title = "需要家长确认才能跳过这一关";
+    btn.addEventListener("click", () => {
+      api.play("tap");
+      btn.disabled = true;
+      Promise.resolve(request(opts.id, level))
+        .then((ok) => {
+          if (destroyed) return;
+          btn.disabled = false;
+          if (!ok) return;
+          skips = markSkipped(opts.id, level);
+          flash = `已跳过 第 ${level + 1} 关，第 ${Math.min(level + 2, total)} 关解锁啦，随时可以回来挑战它。`;
+          after(level);
+        })
+        .catch((err) => {
+          if (destroyed) return;
+          btn.disabled = false;
+          console.warn(`[一朵一星] ${opts.id} 跳关授权失败:`, err);
+        });
+    });
+    host.appendChild(btn);
+  }
+
   function cleanupLevel(): void {
     try {
       if (handle && typeof handle.destroy === "function") handle.destroy();
@@ -364,25 +629,27 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     handle = undefined;
   }
 
-  function showMap(): void {
+  function showMap(focusCurrent = false): void {
     cleanupLevel();
+    dropGuides();
     stopSpeaking();
     currentLevel = -1;
     view.innerHTML = "";
 
-    const furthest = furthestPlayable(stars);
+    const furthest = furthestPlayable(stars, skips, total);
     const map = document.createElement("div");
     map.className = "l99-map";
 
     const head = document.createElement("div");
     head.className = "l99-head";
     head.innerHTML = `
-      <span class="l99-chip">🚩 ${clearedCount(stars)}/${TOTAL_LEVELS} 关</span>
-      <span class="l99-chip">⭐ ${totalStars(stars)}/${TOTAL_LEVELS * 3}</span>`;
+      <span class="l99-chip">🚩 ${clearedCount(stars)}/${total} 关</span>
+      <span class="l99-chip">⭐ ${totalStars(stars)}/${total * 3}</span>
+      ${skips.length ? `<span class="l99-chip l99-chip-skip">🏳️ 跳过 ${skips.length}</span>` : ""}`;
     const cont = document.createElement("button");
     cont.type = "button";
     cont.className = "l99-continue";
-    cont.textContent = clearedCount(stars) === 0 ? "开始冒险 ▶" : `继续 第${furthest + 1}关 ▶`;
+    cont.textContent = reachedCount(stars, skips) === 0 ? "开始冒险 ▶" : `继续 第${furthest + 1}关 ▶`;
     cont.addEventListener("click", () => {
       api.play("tap");
       startLevel(furthest);
@@ -390,12 +657,32 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     head.appendChild(cont);
     map.appendChild(head);
 
+    // 工具行：跳到当前关 + 攻略（壳层注册了才有）+ 跳关（壳层注册了才有）
+    const tools = document.createElement("div");
+    tools.className = "l99-tools";
+    const jump = document.createElement("button");
+    jump.type = "button";
+    jump.className = "l99-tool";
+    jump.textContent = "🎯 跳到当前关";
+    jump.addEventListener("click", () => {
+      api.play("tap");
+      viewChapter = chapterOf(opts.chapters, furthestPlayable(stars, skips, total));
+      showMap(true);
+    });
+    tools.appendChild(jump);
+    attachGuide(tools, () => furthestPlayable(stars, skips, total) + 1);
+    attachSkip(tools, furthest, () => showMap(true));
+    map.appendChild(tools);
+
     const tabs = document.createElement("div");
     tabs.className = "l99-tabs";
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "章节");
     const desc = document.createElement("div");
     desc.className = "l99-chapdesc";
     const grid = document.createElement("div");
     grid.className = "l99-grid";
+    grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
     const furthestChapter = chapterOf(opts.chapters, furthest);
 
     opts.chapters.forEach((ch, ci) => {
@@ -405,6 +692,8 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       tab.className = `l99-tab${ci === viewChapter ? " l99-tab-on" : ""}${locked ? " l99-tab-lock" : ""}`;
       tab.style.background = ci === viewChapter ? ch.color : "";
       tab.textContent = `${ch.emoji} ${ch.name}${locked ? " 🔒" : ""}`;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", ci === viewChapter ? "true" : "false");
       tab.addEventListener("click", () => {
         api.play("tap");
         viewChapter = ci;
@@ -418,18 +707,46 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     desc.textContent = ch.desc;
     map.appendChild(desc);
 
+    const range = chapterRange(opts.chapters, viewChapter);
+    const page = document.createElement("div");
+    page.className = "l99-pagehint";
+    page.textContent = `第 ${viewChapter + 1} / ${opts.chapters.length} 章 · 第 ${range.from}–${range.to} 关`;
+    map.appendChild(page);
+
+    if (flash) {
+      const flashEl = document.createElement("div");
+      flashEl.className = "l99-flash";
+      flashEl.textContent = flash;
+      map.appendChild(flashEl);
+      flash = "";
+    }
+
+    grid.setAttribute("role", "tabpanel");
+    grid.setAttribute("aria-label", `${ch.name} 关卡`);
     const start = chapterStart(opts.chapters, viewChapter);
     for (let i = 0; i < ch.size; i++) {
       const level = start + i;
+      if (level >= total) break;
       const node = document.createElement("button");
       node.type = "button";
       const locked = level > furthest;
       const isCurrent = level === furthest;
-      node.className = `l99-node${locked ? " l99-node-lock" : ""}${isCurrent ? " l99-node-cur" : ""}`;
-      if (!locked) node.style.background = ch.color;
-      node.innerHTML = locked
-        ? `<span class="l99-node-num">🔒</span>`
-        : `<span class="l99-node-num">${level + 1}</span><span class="l99-node-stars">${starRowHTML(stars[level])}</span>`;
+      const skipped = !locked && stars[level] <= 0 && isSkipped(skips, level);
+      node.className = `l99-node${locked ? " l99-node-lock" : ""}${skipped ? " l99-node-skip" : ""}${
+        isCurrent ? " l99-node-cur" : ""
+      }`;
+      if (!locked && !skipped) node.style.background = ch.color;
+      node.setAttribute("aria-label", nodeAriaLabel(level, stars[level], locked ? "locked" : skipped ? "skipped" : "open"));
+      if (locked) {
+        node.innerHTML = `<span class="l99-node-num">🔒</span>`;
+      } else if (skipped) {
+        // 灰色小旗子：一眼能和真正的三星区分开
+        node.innerHTML = `<span class="l99-node-num">${level + 1}</span><span class="l99-node-flag">🏳️</span>`;
+      } else {
+        node.innerHTML = `<span class="l99-node-num">${level + 1}</span><span class="l99-node-stars">${starRowHTML(
+          stars[level]
+        )}</span>`;
+      }
       if (!locked) {
         node.addEventListener("click", () => {
           api.play("tap");
@@ -449,6 +766,18 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       map.appendChild(hint);
     }
     view.appendChild(map);
+
+    if (focusCurrent) {
+      const cur = grid.querySelector(".l99-node-cur");
+      if (cur instanceof HTMLElement) {
+        try {
+          cur.scrollIntoView?.({ block: "center" });
+        } catch {
+          // 老浏览器不支持 options 就算了
+        }
+        cur.focus?.();
+      }
+    }
   }
 
   function showOverlay(html: string, buttons: Array<{ label: string; ghost?: boolean; onClick: () => void }>): void {
@@ -487,8 +816,8 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     if (gain > 0) api.addStars(gain);
     api.play("win");
 
-    const allCleared = clearedCount(stars) >= TOTAL_LEVELS;
-    const isLast = level >= TOTAL_LEVELS - 1;
+    const allCleared = clearedCount(stars) >= total;
+    const isLast = level >= total - 1;
     const word = WIN_WORDS[Math.floor(Math.random() * WIN_WORDS.length)];
     const buttons: Array<{ label: string; ghost?: boolean; onClick: () => void }> = [];
     if (!isLast) {
@@ -509,7 +838,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     speak(settleSpeechLine("win", level, msg ?? word));
 
     if (isLast && allCleared) {
-      api.onWin(3, opts.grandMessage ?? "99 关全部通关，你就是本游戏的小冠军！");
+      api.onWin(3, opts.grandMessage ?? `${total} 关全部通关，你就是本游戏的小冠军！`);
     }
   }
 
@@ -535,6 +864,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   function startLevel(level: number): void {
     if (destroyed) return;
     cleanupLevel();
+    dropGuides();
     stopSpeaking();
     settled = false;
     currentLevel = level;
@@ -563,6 +893,16 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     best.className = "l99-beststars";
     best.innerHTML = starRowHTML(stars[level]);
     bar.append(back, title, best);
+    // 关内菜单：攻略 + 跳关，同样是壳层注册了才出现
+    const barTools = document.createElement("div");
+    barTools.className = "l99-tools";
+    barTools.style.margin = "0";
+    attachGuide(barTools, () => currentLevel + 1);
+    attachSkip(barTools, level, (skipped) => {
+      if (skipped + 1 < total) startLevel(skipped + 1);
+      else showMap(true);
+    });
+    if (barTools.childElementCount > 0) bar.appendChild(barTools);
     stageWrap.appendChild(bar);
 
     const stage = document.createElement("div");
@@ -575,6 +915,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       chapter: ch,
       chapterIndex: ci,
       indexInChapter: level - chapterStart(opts.chapters, ci),
+      skipped: isSkipped(skips, level),
       win: (got, msg) => onLevelWin(level, got, msg),
       lose: (msg) => onLevelLose(level, msg),
       sfx: (name) => api.play(name),
@@ -595,7 +936,12 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     destroy() {
       destroyed = true;
       cleanupLevel();
+      dropGuides();
       stopSpeaking();
+      (globalThis as { removeEventListener?: typeof window.removeEventListener }).removeEventListener?.(
+        "resize",
+        onResize
+      );
       wrap.remove();
     }
   };

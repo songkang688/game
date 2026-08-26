@@ -8,5 +8,8 @@ export const meta = {
   emoji: "🫧",
   category: "casual" as const,
   color: "#DCF3FF",
-  blurb: "99 关六大主题！彩虹、闪电、冰冻泡泡轮番登场，全消更痛快！",
+  blurb: "188 关十大主题！重力翻转、变色泡泡、限步挑战、灯影迷宫等你来！",
+  // 10 章合计 188 关,只有闯关一种玩法
+  modes: ["campaign"] as const,
+  levels: 188,
 };

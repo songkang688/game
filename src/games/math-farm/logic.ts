@@ -121,3 +121,68 @@ export function makeQuestionForLevel(
   if (level === 2) return makeNoCarryQuestion(rand);
   return carryEnabled ? makeCarryQuestion(rand) : makeNoCarryQuestion(rand);
 }
+
+// ---------------------------------------------------------------------------
+// 1.1 新增：带余除法、分数、一位小数（第 100–188 关专用纯逻辑）
+// 上面那套 20 以内加减法接口一个都没动，前 99 关照旧。
+// ---------------------------------------------------------------------------
+
+/** 最大公约数（辗转相除） */
+export function gcd(a: number, b: number): number {
+  let x = Math.abs(Math.round(a));
+  let y = Math.abs(Math.round(b));
+  while (y !== 0) {
+    [x, y] = [y, x % y];
+  }
+  return x === 0 ? 1 : x;
+}
+
+/** 约分成最简分数（分母恒为正） */
+export function simplifyFraction(n: number, d: number): { n: number; d: number } {
+  if (d === 0) return { n: 0, d: 1 };
+  const sign = d < 0 ? -1 : 1;
+  const g = gcd(n, d);
+  return { n: (sign * Math.round(n)) / g, d: (sign * Math.round(d)) / g };
+}
+
+/** 分数写法「3/4」 */
+export function formatFraction(n: number, d: number): string {
+  return `${n}/${d}`;
+}
+
+/** 比较两个分数：a 大返回 1，b 大返回 -1，一样大返回 0 */
+export function compareFractions(an: number, ad: number, bn: number, bd: number): -1 | 0 | 1 {
+  const left = an * bd;
+  const right = bn * ad;
+  if (left > right) return 1;
+  if (left < right) return -1;
+  return 0;
+}
+
+/** 带余除法：返回商与余数（除数必须是正整数） */
+export function divideWithRemainder(a: number, b: number): { quotient: number; remainder: number } {
+  const d = Math.max(1, Math.round(b));
+  const n = Math.round(a);
+  return { quotient: Math.floor(n / d), remainder: n - Math.floor(n / d) * d };
+}
+
+/**
+ * 一位小数：内部一律按「十分之几」的整数算，避免浮点误差。
+ * 传入 35 得到 "3.5"，传入 30 得到 "3"。
+ */
+export function formatTenths(tenths: number): string {
+  const v = Math.round(tenths);
+  const sign = v < 0 ? "-" : "";
+  const abs = Math.abs(v);
+  const whole = Math.floor(abs / 10);
+  const frac = abs % 10;
+  return frac === 0 ? `${sign}${whole}` : `${sign}${whole}.${frac}`;
+}
+
+/** "3.5" / "3" → 35 / 30（一位小数的整数化） */
+export function parseTenths(text: string): number {
+  const m = text.trim().match(/^(-?)(\d+)(?:\.(\d))?$/);
+  if (!m) return NaN;
+  const v = Number(m[2]) * 10 + (m[3] ? Number(m[3]) : 0);
+  return m[1] === "-" ? -v : v;
+}

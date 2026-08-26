@@ -1,14 +1,39 @@
 import { meta } from "./meta";
 export { meta };
 
+// 地鼠嘭嘭:188 关十大地洞闯关 + 无尽地鼠场。
+// 1.1 新机制:出题地鼠(算式牌)、连击槽(嘭嘭时间)、护盾鼠(连打两下)、夜视关(月光圈)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, type MoleLevel } from "./levels";
+import { save } from "../../engine/save";
+import {
+  buildQuizCard,
+  CHAPTERS,
+  endlessFieldName,
+  endlessLine,
+  endlessWave,
+  LEVELS,
+  quizTarget,
+  type MoleLevel,
+  type QuizCard,
+} from "./levels";
+import {
+  levelTips,
+  loseLine,
+  roundStars,
+  torchHoles,
+  usesHearts,
+  winLine,
+  type RoundResult,
+} from "./logic";
 
-type MoleKind = "normal" | "sleepy" | "gold" | "bunny";
+type MoleKind = "normal" | "sleepy" | "gold" | "bunny" | "shield" | "quiz";
 
 interface HoleState {
   kind: MoleKind | null;
-  hideAt: number;
+  /** 出题地鼠举的牌子 */
+  card: QuizCard | null;
+  /** 护盾鼠已经被敲过几下 */
+  hits: number;
   timer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -18,12 +43,35 @@ const CSS = `
 .mp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #8A7A3E; box-shadow: 0 2px 6px rgba(170,150,90,.25); font-size: 14px; }
 .mp-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #C8E06E, #8FBB4E); border-radius: 8px; transition: width .3s; }
+.mp-quiz { text-align: center; font-weight: 900; font-size: 16px; color: #5B5EA6; background: #fff; border-radius: 14px; padding: 6px 10px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(120,120,200,.22); }
+.mp-quiz b { font-size: 21px; color: #C2456F; }
+.mp-combo { height: 9px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
+.mp-combofill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFC46B, #F0714A); border-radius: 8px; transition: width .2s; }
+.mp-combo.mp-combo-on .mp-combofill { background: linear-gradient(90deg, #FF9A3C, #E8452C); animation: mpBlaze .5s ease infinite alternate; }
+@keyframes mpBlaze { from { opacity: .7; } to { opacity: 1; } }
 .mp-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.mp-hole { aspect-ratio: 1; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: radial-gradient(circle at 50% 62%, #9A7B4F 0 42%, #C9A876 46% 60%, #E4D3AE 64%); display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s; }
+.mp-hole { aspect-ratio: 1; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: radial-gradient(circle at 50% 62%, #9A7B4F 0 42%, #C9A876 46% 60%, #E4D3AE 64%); display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
 .mp-hole:active { transform: scale(.93); }
 .mp-hole .mp-face { transform: translateY(6px); animation: mpUp .18s ease; }
+.mp-hole .mp-card { font-size: clamp(15px, 5.4vw, 24px); font-weight: 900; color: #4A4A7A; background: #FFF8E4; border-radius: 10px; padding: 3px 7px; box-shadow: 0 2px 5px rgba(90,80,50,.3); }
 @keyframes mpUp { from { transform: translateY(26px); opacity: .4; } to { transform: translateY(6px); opacity: 1; } }
+.mp-wrap.mp-night { background: linear-gradient(180deg, #2B2C46, #3C3A55); }
+.mp-wrap.mp-night .mp-badge { background: #4B4A6B; color: #FFF0C0; }
+.mp-wrap.mp-night .mp-msg { color: #FFE9A8; }
+.mp-wrap.mp-night .mp-hole { filter: brightness(.32); }
+.mp-wrap.mp-night .mp-hole.mp-lit { filter: none; box-shadow: 0 0 16px 7px rgba(255,240,170,.8); }
 .mp-msg { text-align: center; min-height: 20px; color: #8A7A3E; font-weight: 700; margin-top: 10px; font-size: 14px; }
+.mp-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
+.mp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8FBB4E, #6F9C36); box-shadow: 0 4px 0 #567A28; }
+.mp-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #567A28; }
+.mp-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+.mp-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+.mp-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6F8C42; box-shadow: 0 3px 0 rgba(110,150,60,.3); }
+.mp-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(110,150,60,.3); }
+.mp-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #6F8C42; box-shadow: 0 2px 6px rgba(130,170,90,.25); }
+.mp-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(150,170,110,.25); }
+.mp-over-t { font-size: 22px; font-weight: 900; color: #6F8C42; margin-bottom: 8px; }
+.mp-over-s { font-size: 15px; font-weight: 700; color: #8A7A3E; line-height: 1.6; margin-bottom: 14px; }
 `;
 
 const FACE: Record<MoleKind, string> = {
@@ -31,29 +79,51 @@ const FACE: Record<MoleKind, string> = {
   sleepy: "😴",
   gold: "🌟",
   bunny: "🐰",
+  shield: "🪖",
+  quiz: "🧮",
 };
 
-function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
-  const cfg: MoleLevel = LEVELS[ctx.level];
+interface RoundOpts {
+  cfg: MoleLevel;
+  /** 顶部左边那颗徽章前面的小标题，例如「♾️ 第 3 波」 */
+  banner?: string;
+  sfx: (name: "tap" | "win" | "oops" | "coin" | "pop") => void;
+  onDone: (result: RoundResult) => void;
+}
+
+/**
+ * 一轮地鼠：闯关关卡和无尽波次共用这一套。
+ * 结束时通过 onDone 交出战报，由外面决定是过关、下一波还是收摊。
+ */
+function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void } {
+  const cfg = opts.cfg;
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
   const intervals = new Set<ReturnType<typeof setInterval>>();
   let destroyed = false;
   let ended = false;
   let score = 0;
   let mistakes = 0;
+  let streak = 0;
+  let bestCombo = 0;
+  let blazeUntil = 0;
   let timeLeft = cfg.duration;
-  const holes: HoleState[] = Array.from({ length: 9 }, () => ({ kind: null, hideAt: 0, timer: null }));
+  let torchCenter = 4;
+  let quizNow = cfg.quizChance ? quizTarget(Math.max(0, cfg.target - 8), Math.random) : 0;
+  const holes: HoleState[] = Array.from({ length: 9 }, () => ({ kind: null, card: null, hits: 0, timer: null }));
 
   const wrap = document.createElement("div");
-  wrap.className = "mp-wrap";
+  wrap.className = `mp-wrap${cfg.night ? " mp-night" : ""}`;
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="mp-top">
       <span class="mp-badge mp-score">🔨 0 / ${cfg.target}</span>
       <span class="mp-badge mp-time">⏰ ${cfg.duration}s</span>
-      ${cfg.bunnyChance > 0 ? '<span class="mp-badge mp-heart">💗💗💗</span>' : ""}
+      ${opts.banner ? `<span class="mp-badge mp-banner">${opts.banner}</span>` : ""}
+      ${usesHearts(cfg) ? '<span class="mp-badge mp-heart">💗💗💗</span>' : ""}
     </div>
+    ${cfg.quizChance ? '<div class="mp-quiz">🧮 这一轮请拍出 <b class="mp-qnum">0</b></div>' : ""}
     <div class="mp-bar"><div class="mp-fill"></div></div>
+    ${cfg.comboTarget ? '<div class="mp-combo"><div class="mp-combofill"></div></div>' : ""}
     <div class="mp-board"></div>
     <div class="mp-msg"></div>
   `;
@@ -65,12 +135,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const heartEl = wrap.querySelector(".mp-heart") as HTMLElement | null;
   const fillEl = wrap.querySelector(".mp-fill") as HTMLElement;
   const msgEl = wrap.querySelector(".mp-msg") as HTMLElement;
+  const quizNumEl = wrap.querySelector(".mp-qnum") as HTMLElement | null;
+  const comboEl = wrap.querySelector(".mp-combo") as HTMLElement | null;
+  const comboFillEl = wrap.querySelector(".mp-combofill") as HTMLElement | null;
 
-  const tips: string[] = [];
-  if (cfg.sleepyChance > 0) tips.push("😴 瞌睡鼠待得久");
-  if (cfg.goldChance > 0) tips.push("🌟 金地鼠一只顶两只");
-  if (cfg.bunnyChance > 0) tips.push("🐰 小兔子不能拍");
-  msgEl.textContent = tips.length > 0 ? tips.join("；") + "！" : "地鼠冒头就拍它！";
+  msgEl.textContent = levelTips(cfg);
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -90,9 +159,31 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     holeEls.push(btn);
   }
 
+  function blazing(): boolean {
+    return blazeUntil > Date.now();
+  }
+
   function renderHole(i: number): void {
     const h = holes[i];
-    holeEls[i].innerHTML = h.kind ? `<span class="mp-face">${FACE[h.kind]}</span>` : "";
+    if (!h.kind) {
+      holeEls[i].innerHTML = "";
+      return;
+    }
+    if (h.kind === "quiz" && h.card) {
+      holeEls[i].innerHTML = `<span class="mp-face mp-card">${h.card.expr}</span>`;
+      return;
+    }
+    if (h.kind === "shield" && h.hits > 0) {
+      holeEls[i].innerHTML = `<span class="mp-face">🐹</span>`;
+      return;
+    }
+    holeEls[i].innerHTML = `<span class="mp-face">${FACE[h.kind]}</span>`;
+  }
+
+  function renderTorch(): void {
+    if (!cfg.night) return;
+    const lit = new Set(torchHoles(torchCenter));
+    holeEls.forEach((el, i) => el.classList.toggle("mp-lit", lit.has(i)));
   }
 
   function renderTop(): void {
@@ -100,13 +191,31 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     timeEl.textContent = `⏰ ${timeLeft}s`;
     if (heartEl) heartEl.textContent = "💗".repeat(Math.max(0, 3 - mistakes)) + "🤍".repeat(Math.min(3, mistakes));
     fillEl.style.width = `${Math.min(100, (score / cfg.target) * 100)}%`;
+    if (quizNumEl) quizNumEl.textContent = String(quizNow);
+    if (comboEl && comboFillEl && cfg.comboTarget) {
+      const on = blazing();
+      comboEl.classList.toggle("mp-combo-on", on);
+      comboFillEl.style.width = on ? "100%" : `${Math.min(100, (streak / cfg.comboTarget) * 100)}%`;
+    }
   }
 
   function hideMole(i: number): void {
     const h = holes[i];
     h.kind = null;
+    h.card = null;
+    h.hits = 0;
     if (h.timer) { clearTimeout(h.timer); h.timer = null; }
     renderHole(i);
+  }
+
+  function anyCorrectUp(): boolean {
+    return holes.some((h) => h.kind === "quiz" && h.card?.correct);
+  }
+
+  function nextQuiz(): void {
+    quizNow = quizTarget(Math.max(0, cfg.target - 8), Math.random);
+    // 换题时把台面上的旧牌子收走,免得孩子照着上一轮的答案拍
+    holes.forEach((h, i) => { if (h.kind === "quiz") hideMole(i); });
   }
 
   function spawn(): void {
@@ -117,19 +226,31 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     holes.forEach((h, i) => { if (h.kind === null) free.push(i); });
     if (free.length === 0) return;
     const i = free[Math.floor(Math.random() * free.length)];
-    const r = Math.random();
-    let kind: MoleKind = "normal";
-    if (r < cfg.bunnyChance) kind = "bunny";
-    else if (r < cfg.bunnyChance + cfg.goldChance) kind = "gold";
-    else if (r < cfg.bunnyChance + cfg.goldChance + cfg.sleepyChance) kind = "sleepy";
     const h = holes[i];
-    h.kind = kind;
+    let stayScale = 1;
+    if (cfg.quizChance && Math.random() < cfg.quizChance) {
+      h.kind = "quiz";
+      // 台面上没有正确答案时必定补一只,保证这一轮一直有得拍
+      h.card = buildQuizCard(quizNow, !anyCorrectUp() || Math.random() < 0.45, Math.random);
+      stayScale = 1.15;
+    } else {
+      const r = Math.random();
+      const shield = cfg.shieldChance ?? 0;
+      let kind: MoleKind = "normal";
+      if (r < cfg.bunnyChance) kind = "bunny";
+      else if (r < cfg.bunnyChance + cfg.goldChance) kind = "gold";
+      else if (r < cfg.bunnyChance + cfg.goldChance + cfg.sleepyChance) kind = "sleepy";
+      else if (r < cfg.bunnyChance + cfg.goldChance + cfg.sleepyChance + shield) kind = "shield";
+      h.kind = kind;
+      h.card = null;
+      stayScale = kind === "sleepy" ? 1.8 : kind === "bunny" ? 1.4 : kind === "shield" ? 1.9 : 1;
+    }
+    h.hits = 0;
     const stay = cfg.upMsMin + Math.random() * (cfg.upMsMax - cfg.upMsMin);
-    const ms = kind === "sleepy" ? stay * 1.8 : kind === "bunny" ? stay * 1.4 : stay;
     h.timer = setTimeout(() => {
       h.timer = null;
       if (!destroyed && !ended) hideMole(i);
-    }, ms);
+    }, stay * stayScale);
     timeouts.add(h.timer);
     renderHole(i);
   }
@@ -140,40 +261,72 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     intervals.forEach((t) => clearInterval(t));
     intervals.clear();
     holes.forEach((_, i) => hideMole(i));
-    if (won) {
-      const frac = timeLeft / cfg.duration;
-      const got = mistakes === 0 && frac >= 0.12 ? 3 : mistakes <= 1 ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `拍中 ${cfg.target} 分，还剩 ${timeLeft} 秒，好快的手！`), 350);
-    } else {
-      later(() => ctx.lose(mistakes >= 3
-        ? "小兔子被拍到三次啦，下次看清楚再出手～"
-        : `时间到，拍到了 ${score} 分，再快一点点就赢了！`), 350);
+    const result: RoundResult = { won, score, mistakes, timeLeft, bestCombo };
+    later(() => opts.onDone(result), 350);
+  }
+
+  function scored(gain: number): void {
+    score += blazing() ? gain * 2 : gain;
+    streak++;
+    bestCombo = Math.max(bestCombo, streak);
+    if (cfg.comboTarget && streak >= cfg.comboTarget) {
+      streak = 0;
+      blazeUntil = Date.now() + (cfg.comboMs ?? 5000);
+      opts.sfx("coin");
+      msgEl.textContent = "🔥 嘭嘭时间！这一小会儿一只顶两只！";
+      later(() => { if (!ended) renderTop(); }, (cfg.comboMs ?? 5000) + 60);
     }
+    renderTop();
+    if (score >= cfg.target) finish(true);
+  }
+
+  function stumble(msg: string): void {
+    mistakes++;
+    streak = 0;
+    opts.sfx("oops");
+    msgEl.textContent = msg;
+    renderTop();
+    if (mistakes >= 3) finish(false);
   }
 
   function onHole(i: number): void {
     if (ended) return;
     const h = holes[i];
     if (!h.kind) {
-      ctx.sfx("tap");
+      opts.sfx("tap");
       return;
     }
     if (h.kind === "bunny") {
-      mistakes++;
-      ctx.sfx("oops");
-      msgEl.textContent = "哎呀，那是小兔子！轻轻放它回家～";
       hideMole(i);
-      renderTop();
-      if (mistakes >= 3) finish(false);
+      stumble("那是小兔子，送它回洞里～下次先认清再落手！");
       return;
     }
-    const gain = h.kind === "gold" ? 2 : 1;
-    score += gain;
-    ctx.sfx(h.kind === "gold" ? "coin" : "pop");
+    if (h.kind === "quiz") {
+      const card = h.card;
+      hideMole(i);
+      if (card?.correct) {
+        opts.sfx("pop");
+        msgEl.textContent = `🧮 ${card.expr} = ${quizNow}，算得真准！`;
+        scored(1);
+        if (!ended) nextQuiz();
+      } else {
+        stumble(`这只举的是 ${card?.expr ?? "别的算式"}，得数不是 ${quizNow}，再找找看～`);
+      }
+      return;
+    }
+    if (h.kind === "shield" && h.hits === 0) {
+      h.hits = 1;
+      opts.sfx("tap");
+      msgEl.textContent = "🪖 头盔掀掉啦，再补一下！";
+      renderHole(i);
+      return;
+    }
+    const gain = h.kind === "gold" ? 2 : h.kind === "shield" ? 2 : 1;
+    opts.sfx(h.kind === "gold" || h.kind === "shield" ? "coin" : "pop");
     if (h.kind === "gold") msgEl.textContent = "🌟 金地鼠 +2！";
+    if (h.kind === "shield") msgEl.textContent = "🛡️ 铁盔鼠拿下 +2！";
     hideMole(i);
-    renderTop();
-    if (score >= cfg.target) finish(true);
+    scored(gain);
   }
 
   const clock = setInterval(() => {
@@ -186,6 +339,14 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const spawner = setInterval(() => spawn(), cfg.gapMs);
   intervals.add(spawner);
+  if (cfg.night) {
+    renderTorch();
+    const torch = setInterval(() => {
+      torchCenter = Math.floor(Math.random() * 9);
+      renderTorch();
+    }, Math.max(1200, cfg.torchMs ?? 2400));
+    intervals.add(torch);
+  }
   later(() => spawn(), 350);
   renderTop();
 
@@ -202,12 +363,168 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   };
 }
 
-export function mount(api: GameApi): { destroy: () => void } {
-  return mountLevelGame(api, {
-    id: meta.id,
-    chapters: CHAPTERS,
-    playLevel,
-    mapHint: "不拍错、留点时间，就能拿 3 星！",
-    grandMessage: "99 关地鼠全部拍完，锤子小冠军就是你！",
+function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const cfg: MoleLevel = LEVELS[ctx.level];
+  const round = createRound(stage, {
+    cfg,
+    sfx: ctx.sfx,
+    onDone: (result) => {
+      if (result.won) ctx.win(roundStars(result, cfg.duration), winLine(cfg, result));
+      else ctx.lose(loseLine(cfg, result));
+    },
   });
+  return { destroy: () => round.destroy() };
+}
+
+// ---------------------------------------------------------------------------
+// 无尽地鼠场
+// ---------------------------------------------------------------------------
+
+function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
+  const wrap = document.createElement("div");
+  wrap.className = "mp-mode";
+  wrap.innerHTML = `<style>${CSS}</style>`;
+  const head = document.createElement("div");
+  head.className = "mp-mhead";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "mp-back";
+  back.textContent = "◀ 回选关";
+  const chip = document.createElement("span");
+  chip.className = "mp-chip";
+  head.append(back, chip);
+  const stage = document.createElement("div");
+  wrap.append(head, stage);
+  host.appendChild(wrap);
+
+  let wave = 1;
+  let round: { destroy: () => void } | null = null;
+  let best = save.getGameProgress(meta.id).endlessBest;
+
+  back.addEventListener("click", () => {
+    api.play("tap");
+    onBack();
+  });
+
+  function showOver(sub: string): void {
+    round?.destroy();
+    round = null;
+    stage.innerHTML = "";
+    const box = document.createElement("div");
+    box.className = "mp-over";
+    box.innerHTML = `<div class="mp-over-t">地鼠们回家啦</div><div class="mp-over-s">${sub}</div>`;
+    const again = document.createElement("button");
+    again.type = "button";
+    again.className = "mp-open";
+    again.textContent = "🔁 从第 1 波再来";
+    again.addEventListener("click", () => {
+      api.play("tap");
+      wave = 1;
+      startWave();
+    });
+    box.appendChild(again);
+    stage.appendChild(box);
+  }
+
+  function startWave(): void {
+    round?.destroy();
+    stage.innerHTML = "";
+    chip.textContent = `♾️ ${endlessFieldName(wave)} · 第 ${wave} 波 · 最好 ${best} 波`;
+    round = createRound(stage, {
+      cfg: endlessWave(wave),
+      banner: `♾️ 第 ${wave} 波`,
+      sfx: (n) => api.play(n),
+      onDone: (result) => {
+        if (result.won) {
+          best = save.recordEndlessBest(meta.id, wave);
+          api.addStars(1);
+          wave++;
+          startWave();
+        } else {
+          const reached = Math.max(0, wave - 1);
+          best = save.recordEndlessBest(meta.id, reached);
+          showOver(endlessLine(reached, best));
+        }
+      },
+    });
+  }
+
+  startWave();
+
+  return {
+    destroy() {
+      round?.destroy();
+      round = null;
+      wrap.remove();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 挂载：模式条 + 188 关地图
+// ---------------------------------------------------------------------------
+
+export function mount(api: GameApi): { destroy: () => void } {
+  const root = document.createElement("div");
+  const style = document.createElement("style");
+  style.textContent = CSS;
+  const bar = document.createElement("div");
+  bar.className = "mp-bar-modes";
+  const levelHost = document.createElement("div");
+  const modeHost = document.createElement("div");
+  modeHost.hidden = true;
+  root.append(style, bar, levelHost, modeHost);
+  api.root.appendChild(root);
+
+  const endlessBtn = document.createElement("button");
+  endlessBtn.type = "button";
+  endlessBtn.className = "mp-open";
+  bar.appendChild(endlessBtn);
+
+  let mode: { destroy: () => void } | null = null;
+
+  function refreshBar(): void {
+    const best = save.getGameProgress(meta.id).endlessBest;
+    endlessBtn.textContent = best > 0 ? `♾️ 无尽地鼠场 · 最好 ${best} 波` : "♾️ 无尽地鼠场 · 点我开锤！";
+  }
+
+  function closeMode(): void {
+    mode?.destroy();
+    mode = null;
+    modeHost.hidden = true;
+    levelHost.hidden = false;
+    bar.hidden = false;
+    refreshBar();
+  }
+
+  endlessBtn.addEventListener("click", () => {
+    if (mode) return;
+    api.play("tap");
+    levelHost.hidden = true;
+    bar.hidden = true;
+    modeHost.hidden = false;
+    mode = mountEndless(modeHost, api, closeMode);
+  });
+  refreshBar();
+
+  const level = mountLevelGame(
+    { ...api, root: levelHost },
+    {
+      id: meta.id,
+      chapters: CHAPTERS,
+      playLevel,
+      mapHint: "命中率满分、再留点时间，3 星就到手！",
+      grandMessage: "188 关地鼠全部拍完，你的反应和判断都练出来了！",
+      guideTitle: "地鼠嘭嘭 · 锤子手册",
+    }
+  );
+
+  return {
+    destroy() {
+      mode?.destroy();
+      mode = null;
+      level.destroy();
+      root.remove();
+    },
+  };
 }

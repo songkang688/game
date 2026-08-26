@@ -9,14 +9,27 @@
     <meta name="theme-color" content="#ffd9ea" />
     <meta
       name="description"
-      content="一朵一星 —— 送给小朋友的原创小游戏合集,无广告、无内购、进度只存在本机。"
+      content="一朵一星 1.1:55 款原创小游戏合集。闯关最长 188 关,含双人、无尽与 2.5D 跑酷;粉彩画风,支持键盘与读屏;无广告、无内购、不联网,进度只存在这台设备上。"
     />
+    <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-    <title>一朵一星</title>
+    <title>一朵一星 1.1 · 55 款原创小游戏合集</title>
   </head>
   <body>
-    <div id="app" aria-live="polite"></div>
+    <!-- 键盘用户第一下 Tab 就能跳过顶栏装饰,直接进游戏区 -->
+    <a class="skip-link" href="#app">跳到主要内容</a>
+    <div id="app" tabindex="-1"></div>
+    <!--
+      读屏软件的播报区:分数变化、胜负结果往这里写。
+      整个 #app 挂 aria-live 会把每次换页都念一遍,所以只留这一小块。
+    -->
+    <div id="a11y-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+    <noscript>
+      <p style="padding: 24px; font-size: 18px; text-align: center">
+        这个小游戏合集需要浏览器打开 JavaScript 才能玩,请在设置里打开后刷新页面。
+      </p>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

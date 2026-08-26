@@ -2,30 +2,30 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CHAPTERS, LEVELS, type KittyTask } from "./levels";
 
-describe("萌猫小屋 99 关", () => {
-  it("恰好 99 关，至少 6 个主题章节", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("萌猫小屋 188 关", () => {
+  it("恰好 188 关，至少 6 个主题章节", () => {
+    expect(LEVELS).toHaveLength(188);
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
   it("每关任务清单合法", () => {
-    const kinds: KittyTask[] = ["feed", "play", "wash", "sleep", "dress"];
+    const kinds: KittyTask[] = ["feed", "play", "wash", "sleep", "dress", "cure", "style"];
     for (const lv of LEVELS) {
       expect(lv.tasks.length).toBeGreaterThanOrEqual(2);
-      expect(lv.tasks.length).toBeLessThanOrEqual(4);
+      expect(lv.tasks.length).toBeLessThanOrEqual(5);
       for (const task of lv.tasks) expect(kinds).toContain(task);
       expect(lv.playTaps).toBeGreaterThanOrEqual(3);
       expect(lv.washSpots).toBeGreaterThanOrEqual(3);
-      expect([3, 4]).toContain(lv.options);
+      expect([3, 4, 5]).toContain(lv.options);
       expect(lv.notes).toBeGreaterThanOrEqual(3);
-      expect(lv.notes).toBeLessThanOrEqual(5);
+      expect(lv.notes).toBeLessThanOrEqual(6);
     }
   });
 
-  it("五种任务都有出现，且章节任务池不同（并非同一模板）", () => {
+  it("七种任务都有出现，且章节任务池不同（并非同一模板）", () => {
     const all = new Set(LEVELS.flatMap((lv) => lv.tasks));
-    expect(all.size).toBe(5);
+    expect(all.size).toBe(7);
     // 第一章没有洗澡/哄睡/打扮
     const ch1 = new Set(LEVELS.slice(0, 17).flatMap((lv) => lv.tasks));
     expect(ch1.has("wash")).toBe(false);

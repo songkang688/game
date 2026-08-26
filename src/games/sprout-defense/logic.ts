@@ -1,5 +1,8 @@
 // 绿芽保卫战 —— 纯逻辑函数,不依赖 DOM,方便单独测试。
-// 99 关九大花园场景守家战役:每章 11 关(8 关手写 + 3 关生成),章末 BOSS 压轴。
+// 1.1 版:188 关十三大花园战役。前 99 关(九章 × 11 关)一字不动;
+// 新增月光花田/地底根须园/糖霜花圃/虫巢王庭四章(22/22/22/23 关),
+// 新植物望望草·月月菇,新虫地地虫·扑扑蛾·分分虫,昼夜循环、露珠上限,
+// 终章 BOSS「虫虫女王进化体」。
 
 /* ---------------- 植物 ---------------- */
 
@@ -10,7 +13,9 @@ export type PlantKind =
   | "star" // 星星芽:连飞虫都能打
   | "ice" // 冰冰花:子弹会减速虫虫
   | "boom" // 爆爆果:虫靠近就轰一大片(一次性)
-  | "lily"; // 荷叶垫:铺在水格上,别的植物才能种
+  | "lily" // 荷叶垫:铺在水格上,别的植物才能种
+  | "scout" // 望望草(1.1):照亮整条车道,地地虫无处遁形
+  | "moon"; // 月月菇(1.1):黑夜里咕嘟咕嘟冒露珠
 
 export const PLANT_INFO: Record<
   PlantKind,
@@ -23,9 +28,13 @@ export const PLANT_INFO: Record<
   ice: { cost: 3, hp: 3, name: "冰冰花", desc: "打中就冻得慢慢的" },
   boom: { cost: 4, hp: 2, name: "爆爆果", desc: "虫靠近就轰一片!" },
   lily: { cost: 1, hp: 6, name: "荷叶垫", desc: "铺水上才能种别的" },
+  scout: { cost: 2, hp: 3, name: "望望草", desc: "照出这条道钻地的虫" },
+  moon: { cost: 2, hp: 3, name: "月月菇", desc: "黑夜里咕嘟冒露珠" },
 };
 
-export const PLANT_KINDS: PlantKind[] = ["sparkle", "bubble", "nut", "star", "ice", "boom", "lily"];
+export const PLANT_KINDS: PlantKind[] = [
+  "sparkle", "bubble", "nut", "star", "ice", "boom", "lily", "scout", "moon",
+];
 
 export const LANES = 4;
 export const PLANT_COLS = 8;
@@ -76,12 +85,29 @@ export type BugKind =
   | "bucket" // 桶桶虫:重甲慢吞吞
   | "racer" // 风风虫:全场最快的小旋风
   | "bossbug" // 大虫王:超厚血,啃得飞快
-  | "queen"; // 虫虫女王:终章 BOSS,重甲慢行血超厚
+  | "queen" // 虫虫女王:第九章 BOSS,重甲慢行血超厚
+  | "mole" // 地地虫(1.1):钻在土里,要望望草照出来才打得到
+  | "moth" // 扑扑蛾(1.1):会飞,一到黑夜就加速扑过来
+  | "mama" // 分分虫(1.1):被打倒会蹦出两只爬爬虫宝宝
+  | "queenx"; // 虫虫女王进化体(1.1):终章 BOSS,血少一半就狂暴加速
 
-export const BUG_INFO: Record<
-  BugKind,
-  { hp: number; armor: number; speed: number; flying: boolean; jumps: boolean; name: string; boss: boolean }
-> = {
+export interface BugSpec {
+  hp: number;
+  armor: number;
+  speed: number;
+  flying: boolean;
+  jumps: boolean;
+  name: string;
+  boss: boolean;
+  /** 1.1:钻在地下,车道上没有望望草时打不到也不啃植物 */
+  underground?: boolean;
+  /** 1.1:被打倒时分裂出的爬爬虫宝宝数量 */
+  splits?: number;
+  /** 1.1:黑夜里的速度倍率(昼夜循环关生效) */
+  nightMult?: number;
+}
+
+export const BUG_INFO: Record<BugKind, BugSpec> = {
   walker: { hp: 3, armor: 0, speed: 0.5, flying: false, jumps: false, name: "爬爬虫", boss: false },
   flyer: { hp: 2, armor: 0, speed: 0.66, flying: true, jumps: false, name: "飘飘虫", boss: false },
   armor: { hp: 3, armor: 3, speed: 0.42, flying: false, jumps: false, name: "壳壳虫", boss: false },
@@ -91,11 +117,21 @@ export const BUG_INFO: Record<
   racer: { hp: 2, armor: 0, speed: 1.25, flying: false, jumps: false, name: "风风虫", boss: false },
   bossbug: { hp: 40, armor: 4, speed: 0.24, flying: false, jumps: false, name: "大虫王", boss: true },
   queen: { hp: 70, armor: 10, speed: 0.2, flying: false, jumps: false, name: "虫虫女王", boss: true },
+  mole: { hp: 3, armor: 0, speed: 0.5, flying: false, jumps: false, name: "地地虫", boss: false, underground: true },
+  moth: { hp: 1, armor: 0, speed: 0.55, flying: true, jumps: false, name: "扑扑蛾", boss: false, nightMult: 1.6 },
+  mama: { hp: 5, armor: 2, speed: 0.4, flying: false, jumps: false, name: "分分虫", boss: false, splits: 2 },
+  queenx: { hp: 95, armor: 12, speed: 0.2, flying: false, jumps: false, name: "虫虫女王进化体", boss: true },
 };
 
-/** 虫子血量随关卡(0 起)缓慢加深。 */
+/**
+ * 虫子血量随关卡(0 起)缓慢加深。
+ * 1.1:前 99 关公式一字不动;新章(第 100 关起)血量回落到温和档再慢慢爬坡——
+ * 新章的难度靠昼夜循环/地下虫/分裂/露珠上限这些新机制,而不是把血条堆到打不动
+ * (飞虫拦不了墙,血太厚会变成数学上的死局)。
+ */
 export function bugHp(kind: BugKind, levelIdx: number): number {
-  return BUG_INFO[kind].hp + Math.floor(levelIdx / 8);
+  const extra = levelIdx <= 98 ? Math.floor(levelIdx / 8) : 6 + Math.floor((levelIdx - 99) / 32);
+  return BUG_INFO[kind].hp + extra;
 }
 
 /** 泡泡打不到飞虫,星星和冰冰什么都能打。 */
@@ -126,6 +162,71 @@ export const BOOM_TRIGGER = 0.55;
 export const BOOM_RANGE = 1.6;
 export const BOOM_DAMAGE = 10;
 
+/* ---------------- 1.1 新机制:昼夜循环 / 地下虫 / 露珠上限 / 分裂 / 进化体 ---------------- */
+
+/** 昼夜循环:白天 day 秒,黑夜 night 秒,循环往复(开局是白天)。 */
+export interface DayNightCycle {
+  day: number;
+  night: number;
+}
+
+export function cyclePhase(time: number, cycle?: DayNightCycle): "day" | "night" {
+  if (!cycle) return "day";
+  const period = cycle.day + cycle.night;
+  const t = ((time % period) + period) % period;
+  return t < cycle.day ? "day" : "night";
+}
+
+/** 黑夜里自然露珠攒得更慢的倍率。 */
+export const NIGHT_DEW_SLOW = 1.45;
+
+/** 露珠自然产出间隔:场景倍率 × 黑夜倍率。 */
+export function passiveDewIntervalAt(scene: SceneId, night: boolean): number {
+  return passiveDewInterval(scene) * (night ? NIGHT_DEW_SLOW : 1);
+}
+
+/** 月月菇产露间隔(比闪光芽快,但只在"月光时段"工作)。 */
+export const MOON_DEW_EVERY = 3.0;
+
+/** 月月菇何时工作:昼夜循环关看夜晚,没有循环的暗场景(星夜/洞穴等)整关工作。 */
+export function moonActive(hasCycle: boolean, night: boolean, sceneDark: boolean): boolean {
+  return hasCycle ? night : sceneDark;
+}
+
+/** 黑夜速度倍率:扑扑蛾在昼夜循环关的黑夜里扑得飞快。 */
+export function bugNightSpeedMult(kind: BugKind, night: boolean): number {
+  const m = BUG_INFO[kind].nightMult;
+  return night && m ? m : 1;
+}
+
+/** 地下虫是否露出地面:车道上有望望草才现形(现形才能被打、才会啃植物)。 */
+export function moleRevealed(kind: BugKind, scoutInLane: boolean): boolean {
+  return !BUG_INFO[kind].underground || scoutInLane;
+}
+
+/** 露珠上限管理:关卡有上限时,每棵产露植物(闪光芽/月月菇)把罐子加大一点。 */
+export const DEW_CAP_PER_PRODUCER = 3;
+
+export function effectiveDewCap(dewCap: number | undefined, producerCount: number): number {
+  if (dewCap === undefined) return Infinity;
+  return dewCap + producerCount * DEW_CAP_PER_PRODUCER;
+}
+
+export function clampDew(dew: number, cap: number): number {
+  return Math.min(dew, cap);
+}
+
+/** 分分虫被打倒后蹦出的宝宝种类。 */
+export const MAMA_SPLIT_KIND: BugKind = "walker";
+
+/** 女王进化体:血量剩一半以下进入狂暴,速度倍增。 */
+export const QUEENX_RAGE_FRAC = 0.5;
+export const QUEENX_RAGE_SPEED = 1.35;
+
+export function queenxSpeedMult(kind: BugKind, hpFrac: number): number {
+  return kind === "queenx" && hpFrac <= QUEENX_RAGE_FRAC ? QUEENX_RAGE_SPEED : 1;
+}
+
 /* ---------------- 主题场景(九大花园) ---------------- */
 
 export type SceneId =
@@ -137,7 +238,11 @@ export type SceneId =
   | "beach" // 沙滩园圃
   | "winter" // 冰霜花园
   | "cave" // 萤光洞穴
-  | "storm"; // 雷雨之夜
+  | "storm" // 雷雨之夜
+  | "moonfield" // 月光花田(1.1):昼夜循环 + 扑扑蛾
+  | "burrow" // 地底根须园(1.1):地地虫要望望草照
+  | "candy" // 糖霜花圃(1.1):分分虫 + 露珠上限
+  | "hive"; // 虫巢王庭(1.1):终章,女王进化体
 
 export interface SceneStyle {
   name: string;
@@ -197,22 +302,68 @@ export const SCENE_STYLE: Record<SceneId, SceneStyle> = {
     name: "雷雨之夜", emoji: "⛈️", dark: true, laneA: "#465074", laneB: "#4e5880", bg: "#363e60", accent: "#c9a84a",
     dewMult: 1.6, speedMult: 1.15, palette: ["racer", "armor", "bucket", "speedy"], boss: "queen", blurb: "虫虫女王率全军的最终决战",
   },
+  moonfield: {
+    name: "月光花田", emoji: "🌕", dark: true, laneA: "#5a628c", laneB: "#636b98", bg: "#454c74", accent: "#b9a6e8",
+    dewMult: 1.3, speedMult: 1, palette: ["moth", "walker", "speedy", "flyer"], boss: "bossbug", blurb: "昼夜交替,扑扑蛾夜里扑得飞快",
+  },
+  burrow: {
+    name: "地底根须园", emoji: "🕳️", dark: true, laneA: "#6a5a48", laneB: "#746450", bg: "#4a4038", accent: "#e8b878",
+    dewMult: 1.35, speedMult: 0.95, palette: ["mole", "digger", "armor", "walker"], boss: "bossbug", blurb: "地地虫钻土里,望望草才照得出",
+  },
+  candy: {
+    name: "糖霜花圃", emoji: "🧁", dark: false, laneA: "#fbdce8", laneB: "#fde8f0", bg: "#fff0f6", accent: "#e06a9a",
+    dewMult: 0.9, speedMult: 1.1, palette: ["mama", "speedy", "racer", "flyer"], boss: "bossbug", blurb: "露珠罐有上限,分分虫越打越多",
+  },
+  hive: {
+    name: "虫巢王庭", emoji: "👑", dark: true, laneA: "#5c4a6a", laneB: "#665476", bg: "#3e3450", accent: "#d88ae0",
+    dewMult: 1.45, speedMult: 1.1, palette: ["mama", "mole", "moth", "bucket"], boss: "queenx", blurb: "女王进化体坐镇的最终王庭",
+  },
 };
 
 export const SCENE_ORDER: SceneId[] = [
   "day", "night", "pool", "fog", "autumn", "beach", "winter", "cave", "storm",
+  "moonfield", "burrow", "candy", "hive",
 ];
 
 export const LEVELS_PER_THEME = 11;
 export const HANDMADE_PER_THEME = 8;
+export const CLASSIC_THEME_COUNT = 9;
+export const CLASSIC_LEVEL_COUNT = 99;
+
+/** 1.1 变长章节:前 9 章各 11 关,新 4 章 22/22/22/23 关,共 188 关。 */
+export const THEME_SIZES: number[] = [11, 11, 11, 11, 11, 11, 11, 11, 11, 22, 22, 22, 23];
+export const TOTAL_LEVELS = THEME_SIZES.reduce((s, n) => s + n, 0);
+
+/** 章节 ci 的第一关下标。 */
+export function themeOffset(ci: number): number {
+  let off = 0;
+  for (let i = 0; i < ci; i++) off += THEME_SIZES[i];
+  return off;
+}
+
+/** 章节 ci 的关卡数。 */
+export function themeSize(ci: number): number {
+  return THEME_SIZES[ci];
+}
+
+/** 关卡下标 → 章节下标(0 起)。 */
+export function themeIndexOfLevel(idx: number): number {
+  let off = 0;
+  for (let ci = 0; ci < THEME_SIZES.length; ci++) {
+    off += THEME_SIZES[ci];
+    if (idx < off) return ci;
+  }
+  return THEME_SIZES.length - 1;
+}
 
 export function themeOfLevel(idx: number): SceneId {
-  return SCENE_ORDER[Math.floor(idx / LEVELS_PER_THEME)];
+  return SCENE_ORDER[themeIndexOfLevel(idx)];
 }
 
 export function levelIndicesOfTheme(ci: number): number[] {
   const out: number[] = [];
-  for (let i = 0; i < LEVELS_PER_THEME; i++) out.push(ci * LEVELS_PER_THEME + i);
+  const off = themeOffset(ci);
+  for (let i = 0; i < THEME_SIZES[ci]; i++) out.push(off + i);
   return out;
 }
 
@@ -239,6 +390,10 @@ export interface LevelDef {
   /** true = 生成器产出的遭遇战关 */
   gen?: boolean;
   hint: string;
+  /** 1.1:昼夜循环(白天/黑夜各多少秒,开局白天) */
+  cycle?: DayNightCycle;
+  /** 1.1:露珠上限(不设 = 无上限;产露植物每棵 +3) */
+  dewCap?: number;
 }
 
 type WSpec = readonly [BugKind, number, number];
@@ -806,7 +961,349 @@ const HAND_BY_SCENE: LevelDef[][] = [
   dayHand, nightHand, poolHand, fogHand, autumnHand, beachHand, winterHand, caveHand, stormHand,
 ];
 
-export const LEVELS: LevelDef[] = HAND_BY_SCENE.flatMap((hand, ci) => buildTheme(ci, hand));
+/* ================= 1.1 新章(第 100–188 关,前 99 关一字不动) ================= */
+
+/* ---- 第十章 · 月光花田:昼夜循环 + 扑扑蛾 + 月月菇 ---- */
+const moonfieldHand: LevelDef[] = [
+  {
+    name: "月出东篱", scene: "moonfield", waterLanes: [], startDew: 14, unlockPlant: "moon",
+    feature: "月光章开场+月月菇", cycle: { day: 24, night: 10 },
+    hint: "天黑露珠攒得慢,新植物月月菇夜里冒露珠!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.5]), W(["walker", 5, 1.2], ["speedy", 4, 1.1]), W(["walker", 6, 1.0], ["flyer", 4, 1.1])],
+  },
+  {
+    name: "扑扑蛾初见", scene: "moonfield", waterLanes: [], startDew: 17,
+    feature: "扑扑蛾登场", cycle: { day: 24, night: 12 },
+    hint: "扑扑蛾一到黑夜就加速!星星芽多种几排", flagWaves: [2],
+    waves: [W(["moth", 2, 1.8], ["walker", 4, 1.4]), W(["moth", 3, 1.4], ["speedy", 3, 1.0]), W(["walker", 6, 1.0], ["moth", 4, 1.2])],
+  },
+  {
+    name: "银辉水洼", scene: "moonfield", waterLanes: [2], startDew: 17,
+    feature: "月光水洼战", cycle: { day: 22, night: 12 },
+    hint: "月光下有一条水洼道,先铺荷叶垫!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.3], ["flyer", 3, 1.4]), W(["speedy", 4, 1.0], ["moth", 3, 1.4]), W(["flyer", 5, 1.0], ["walker", 6, 1.0])],
+  },
+  {
+    name: "月食断粮夜", scene: "moonfield", waterLanes: [], startDew: 8,
+    feature: "月光经济挑战", cycle: { day: 14, night: 16 },
+    hint: "月食之夜黑得特别久,月月菇是救星!", flagWaves: [2],
+    waves: [W(["walker", 4, 1.8]), W(["speedy", 4, 1.2], ["walker", 5, 1.3]), W(["moth", 4, 1.3], ["walker", 5, 1.1])],
+  },
+  {
+    name: "四更虫鸣", scene: "moonfield", waterLanes: [], startDew: 16,
+    feature: "月光四波夜战", cycle: { day: 18, night: 12 },
+    hint: "四波虫虫轮着叫,黑夜里别松劲!", flagWaves: [3],
+    waves: [
+      W(["walker", 5, 1.3]), W(["moth", 3, 1.3], ["speedy", 3, 1.0]),
+      W(["flyer", 5, 1.0], ["walker", 5, 1.1]), W(["moth", 5, 1.1], ["speedy", 5, 0.9], ["walker", 5, 1.0]),
+    ],
+  },
+  {
+    name: "双月大旗", scene: "moonfield", waterLanes: [], startDew: 17,
+    feature: "月光双旗", cycle: { day: 18, night: 14 },
+    hint: "两面月光大旗!蛾群趁夜色猛扑", flagWaves: [1, 3],
+    waves: [
+      W(["walker", 5, 1.2], ["moth", 3, 1.3]), W(["speedy", 6, 0.9], ["flyer", 4, 1.0]),
+      W(["moth", 4, 1.2], ["walker", 5, 1.0]), W(["moth", 5, 1.0], ["speedy", 5, 0.9], ["flyer", 4, 0.95]),
+    ],
+  },
+  {
+    name: "月光马拉松", scene: "moonfield", waterLanes: [], startDew: 18,
+    feature: "月光五波长跑", cycle: { day: 20, night: 12 },
+    hint: "五波昼夜连轴转,月月菇闪光芽一起攒!", flagWaves: [4],
+    waves: [
+      W(["walker", 6, 1.2]), W(["speedy", 5, 1.0]), W(["moth", 5, 1.2]),
+      W(["flyer", 5, 0.95], ["walker", 5, 1.0]), W(["moth", 5, 1.0], ["speedy", 6, 0.85], ["walker", 6, 0.9]),
+    ],
+  },
+  {
+    name: "月下大虫王", scene: "moonfield", waterLanes: [], startDew: 22,
+    feature: "月光章BOSS", cycle: { day: 26, night: 12 },
+    hint: "大虫王披着月光来啦,蛾群给它开路!", flagWaves: [2],
+    waves: [
+      W(["walker", 6, 1.1], ["moth", 3, 1.3]), W(["speedy", 6, 0.9], ["flyer", 4, 1.0]),
+      W(["bossbug", 1, 1], ["moth", 4, 1.1]),
+    ],
+  },
+];
+
+/* ---- 第十一章 · 地底根须园:地地虫 + 望望草 ---- */
+const burrowHand: LevelDef[] = [
+  {
+    name: "根须洞口", scene: "burrow", waterLanes: [], startDew: 18, unlockPlant: "scout",
+    feature: "地底章开场+望望草",
+    hint: "地地虫钻在土里打不到!快种望望草照出它", flagWaves: [2],
+    waves: [W(["mole", 3, 2.0], ["walker", 4, 1.5]), W(["mole", 4, 1.6], ["digger", 2, 1.5]), W(["walker", 5, 1.1], ["mole", 3, 1.4])],
+  },
+  {
+    name: "钻地小队", scene: "burrow", waterLanes: [], startDew: 16,
+    feature: "地地虫小队",
+    hint: "每条道都要一棵望望草,别漏了!", flagWaves: [2],
+    waves: [W(["mole", 4, 1.6], ["walker", 4, 1.3]), W(["mole", 5, 1.3], ["armor", 3, 1.5]), W(["mole", 6, 1.1], ["digger", 4, 1.2])],
+  },
+  {
+    name: "泥壳车队", scene: "burrow", waterLanes: [], startDew: 17,
+    feature: "地底重甲阵",
+    hint: "壳壳虫在地面列队,地地虫在土里配合!", flagWaves: [2],
+    waves: [W(["armor", 4, 1.4], ["mole", 3, 1.5]), W(["armor", 5, 1.2], ["digger", 4, 1.3]), W(["mole", 5, 1.2], ["armor", 5, 1.1])],
+  },
+  {
+    name: "黑土断粮", scene: "burrow", waterLanes: [], startDew: 12,
+    feature: "地底经济挑战",
+    hint: "黑土里露珠难攒,望望草也不能省!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.5]), W(["mole", 4, 1.5], ["walker", 4, 1.3]), W(["digger", 4, 1.2], ["mole", 4, 1.3])],
+  },
+  {
+    name: "地道四震", scene: "burrow", waterLanes: [], startDew: 18,
+    feature: "地底四波震动",
+    hint: "地道里传来四波震动,越来越近!", flagWaves: [3],
+    waves: [
+      W(["walker", 6, 1.2]), W(["mole", 5, 1.3], ["digger", 4, 1.2]),
+      W(["armor", 5, 1.15], ["walker", 5, 1.05]), W(["mole", 6, 1.05], ["armor", 5, 1.0], ["digger", 4, 1.05]),
+    ],
+  },
+  {
+    name: "根须双旗", scene: "burrow", waterLanes: [], startDew: 18,
+    feature: "地底双旗",
+    hint: "两面泥土大旗,地上地下一起上!", flagWaves: [1, 3],
+    waves: [
+      W(["mole", 4, 1.4], ["walker", 5, 1.2]), W(["digger", 5, 1.1], ["mole", 5, 1.15]),
+      W(["armor", 5, 1.1], ["walker", 5, 1.0]), W(["mole", 6, 1.0], ["armor", 5, 0.95], ["digger", 5, 1.0]),
+    ],
+  },
+  {
+    name: "地心五连震", scene: "burrow", waterLanes: [], startDew: 19,
+    feature: "地底五波远征",
+    hint: "五波地心大军!望望草阵一棵都不能倒", flagWaves: [4],
+    waves: [
+      W(["walker", 6, 1.15]), W(["mole", 5, 1.2]), W(["digger", 5, 1.1], ["armor", 4, 1.1]),
+      W(["mole", 5, 1.1], ["walker", 5, 1.0]), W(["armor", 5, 1.0], ["mole", 6, 0.95], ["digger", 5, 0.95]),
+    ],
+  },
+  {
+    name: "地底大虫王", scene: "burrow", waterLanes: [], startDew: 24,
+    feature: "地底章BOSS",
+    hint: "大虫王从最深的地道钻出来啦!", flagWaves: [2],
+    waves: [
+      W(["mole", 5, 1.2], ["armor", 4, 1.15]), W(["digger", 5, 1.0], ["walker", 6, 0.95]),
+      W(["bossbug", 1, 1], ["mole", 5, 1.1]),
+    ],
+  },
+];
+
+/* ---- 第十二章 · 糖霜花圃:分分虫 + 露珠上限 ---- */
+const candyHand: LevelDef[] = [
+  {
+    name: "糖霜初雪", scene: "candy", waterLanes: [], startDew: 15, dewCap: 26,
+    feature: "糖霜章开场+分分虫",
+    hint: "露珠罐装满就溢出来!分分虫倒下还会分身", flagWaves: [2],
+    waves: [W(["mama", 2, 2.0], ["walker", 4, 1.4]), W(["mama", 3, 1.6], ["speedy", 4, 1.0]), W(["walker", 6, 1.0], ["mama", 3, 1.4])],
+  },
+  {
+    name: "分分小队", scene: "candy", waterLanes: [], startDew: 17, dewCap: 26,
+    feature: "分分虫小队",
+    hint: "分分虫组团来袭,爆爆果一锅端最划算!", flagWaves: [2],
+    waves: [W(["mama", 2, 1.6], ["speedy", 3, 1.1]), W(["mama", 3, 1.4], ["flyer", 3, 1.0]), W(["mama", 3, 1.2], ["racer", 3, 0.9])],
+  },
+  {
+    name: "蜜糖水渠", scene: "candy", waterLanes: [1], startDew: 18, dewCap: 28,
+    feature: "糖霜水渠战",
+    hint: "蜜糖渠是条水路,风风虫沿着岸边飙!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.2], ["racer", 2, 1.0]), W(["speedy", 4, 0.95], ["mama", 3, 1.4]), W(["racer", 3, 0.85], ["flyer", 3, 0.95])],
+  },
+  {
+    name: "小糖罐挑战", scene: "candy", waterLanes: [], startDew: 12, dewCap: 16,
+    feature: "糖霜上限挑战",
+    hint: "罐子特别小,攒到就赶紧花掉!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.4]), W(["speedy", 4, 1.05], ["mama", 2, 1.6]), W(["racer", 3, 0.9], ["walker", 5, 1.05])],
+  },
+  {
+    name: "果酱四连波", scene: "candy", waterLanes: [], startDew: 17, dewCap: 30,
+    feature: "糖霜四波混战",
+    hint: "四波果酱大军,一波更比一波甜(凶)!", flagWaves: [3],
+    waves: [
+      W(["walker", 6, 1.15]), W(["mama", 3, 1.4], ["speedy", 4, 1.0]),
+      W(["racer", 5, 0.85], ["flyer", 4, 0.95]), W(["mama", 4, 1.15], ["speedy", 5, 0.9], ["walker", 5, 0.95]),
+    ],
+  },
+  {
+    name: "糖霜双旗", scene: "candy", waterLanes: [], startDew: 17, dewCap: 30,
+    feature: "糖霜双旗",
+    hint: "两面糖霜大旗,分分虫越打越多!", flagWaves: [1, 3],
+    waves: [
+      W(["speedy", 3, 1.0], ["mama", 2, 1.5]), W(["racer", 3, 0.85], ["mama", 2, 1.3]),
+      W(["flyer", 5, 0.95], ["walker", 4, 1.0]), W(["mama", 2, 1.1], ["racer", 4, 0.8], ["speedy", 4, 0.85]),
+    ],
+  },
+  {
+    name: "甜蜜马拉松", scene: "candy", waterLanes: [], startDew: 18, dewCap: 32,
+    feature: "糖霜五波长跑",
+    hint: "五波甜蜜大军,露珠罐要精打细算!", flagWaves: [4],
+    waves: [
+      W(["walker", 6, 1.1]), W(["speedy", 5, 0.95]), W(["mama", 4, 1.25]),
+      W(["racer", 5, 0.85], ["flyer", 4, 0.9]), W(["mama", 4, 1.1], ["racer", 5, 0.8], ["walker", 6, 0.9]),
+    ],
+  },
+  {
+    name: "糖霜大虫王", scene: "candy", waterLanes: [], startDew: 24, dewCap: 34,
+    feature: "糖霜章BOSS",
+    hint: "大虫王闻着糖香来啦,分分虫全程护驾!", flagWaves: [2],
+    waves: [
+      W(["mama", 3, 1.3], ["speedy", 5, 0.95]), W(["racer", 4, 0.8], ["flyer", 4, 0.9]),
+      W(["bossbug", 1, 1], ["mama", 3, 1.2]),
+    ],
+  },
+];
+
+/* ---- 第十三章 · 虫巢王庭:全机制汇合,终章 BOSS 女王进化体 ---- */
+const hiveHand: LevelDef[] = [
+  {
+    name: "王庭前哨", scene: "hive", waterLanes: [], startDew: 20,
+    feature: "王庭章开场", cycle: { day: 20, night: 12 },
+    hint: "终章!地上地下天上,虫虫全家出动!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.3], ["mole", 3, 1.4]), W(["moth", 4, 1.3], ["armor", 4, 1.2]), W(["mama", 3, 1.3], ["walker", 5, 1.0])],
+  },
+  {
+    name: "蛾群夜袭", scene: "hive", waterLanes: [], startDew: 22,
+    feature: "王庭蛾群夜战", cycle: { day: 18, night: 16 },
+    hint: "长夜漫漫,蛾群一波接一波扑过来!", flagWaves: [2],
+    waves: [W(["moth", 2, 1.4], ["walker", 4, 1.2]), W(["moth", 4, 1.2], ["mole", 4, 1.3]), W(["moth", 6, 1.0], ["mama", 3, 1.2])],
+  },
+  {
+    name: "王家钻地队", scene: "hive", waterLanes: [], startDew: 21,
+    feature: "王庭钻地重甲",
+    hint: "女王的钻地亲卫队,铁桶虫殿后!", flagWaves: [2],
+    waves: [W(["mole", 5, 1.3], ["bucket", 2, 2.2]), W(["mole", 5, 1.15], ["armor", 4, 1.1]), W(["bucket", 3, 1.8], ["mole", 5, 1.05])],
+  },
+  {
+    name: "王庭断粮日", scene: "hive", waterLanes: [], startDew: 15, dewCap: 20,
+    feature: "王庭经济挑战",
+    hint: "露珠罐又小攒得又慢,这是穷日子的硬仗!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.4]), W(["mole", 4, 1.3], ["walker", 4, 1.15]), W(["mama", 3, 1.3], ["moth", 3, 1.2])],
+  },
+  {
+    name: "亲卫四连阵", scene: "hive", waterLanes: [], startDew: 22,
+    feature: "王庭四波亲卫", cycle: { day: 18, night: 12 },
+    hint: "女王亲卫排成四阵,昼夜不停!", flagWaves: [3],
+    waves: [
+      W(["walker", 6, 1.1]), W(["moth", 4, 1.2], ["mole", 4, 1.2]),
+      W(["bucket", 3, 1.8], ["mama", 3, 1.2]), W(["moth", 5, 1.0], ["mole", 5, 1.0], ["bucket", 3, 1.6]),
+    ],
+  },
+  {
+    name: "王庭双旗", scene: "hive", waterLanes: [], startDew: 24, dewCap: 32,
+    feature: "王庭双旗",
+    hint: "两面王旗压阵,罐子上限要靠产露植物撑大!", flagWaves: [1, 3],
+    waves: [
+      W(["mole", 4, 1.15], ["walker", 4, 1.05]), W(["mama", 3, 1.1], ["moth", 4, 1.1]),
+      W(["bucket", 3, 1.7], ["armor", 3, 1.0]), W(["mama", 3, 1.0], ["moth", 5, 0.95], ["mole", 4, 0.95]),
+    ],
+  },
+  {
+    name: "决战前夜", scene: "hive", waterLanes: [], startDew: 24,
+    feature: "王庭六波前夜", cycle: { day: 20, night: 14 },
+    hint: "决战前的最后试炼,整整六波!", flagWaves: [2, 5],
+    waves: [
+      W(["walker", 6, 1.1]), W(["moth", 4, 1.15], ["mole", 4, 1.15]),
+      W(["bucket", 3, 1.7], ["mama", 3, 1.15]), W(["mole", 5, 1.0], ["walker", 5, 1.0]),
+      W(["moth", 5, 0.95], ["armor", 5, 0.95]), W(["mama", 4, 1.0], ["bucket", 3, 1.5], ["moth", 4, 0.95]),
+    ],
+  },
+  {
+    name: "女王进化体降临", scene: "hive", waterLanes: [], startDew: 32,
+    feature: "最终BOSS女王进化体", cycle: { day: 26, night: 12 },
+    hint: "最终决战!进化体血少一半会狂暴加速,冰冰花备好!", flagWaves: [3],
+    waves: [
+      W(["mole", 4, 1.1], ["moth", 3, 1.1]), W(["mama", 3, 1.15], ["bucket", 3, 1.6]),
+      W(["bossbug", 1, 1], ["moth", 4, 1.0]),
+      W(["queenx", 1, 1], ["mama", 2, 1.2], ["mole", 4, 1.0]),
+    ],
+  },
+];
+
+/** 1.1 遭遇战生成器:新章的虫潮关,带昼夜/上限标记,签名全局唯一。 */
+function genLevel2(sceneIdx: number, sub: number): LevelDef {
+  const scene = SCENE_ORDER[sceneIdx];
+  const st = SCENE_STYLE[scene];
+  const pal = st.palette;
+  const t2 = sceneIdx - CLASSIC_THEME_COUNT; // 0..3
+  const waveCount = 3 + ((sub + t2) % 3); // 3~5 波
+  const waves: WaveEntry[][] = [];
+  for (let wi = 0; wi < waveCount; wi++) {
+    const batches: WaveEntry[] = [];
+    // 开场两波只派单路纵队探路,防线立起来之后才上双队混编
+    const nBatches = wi <= 1 ? 1 : 1 + ((wi + sub) % 2);
+    for (let b = 0; b < nBatches; b++) {
+      // sub ≥ 12 时轮换阵容错开一位,避免与 sub-12 的波次模板撞车
+      let kind = pal[(wi + b * 2 + sub + Math.floor(sub / 12)) % pal.length];
+      // 第 1 波只派慢速地面小虫探路(飞的/钻地的/狂飙的从第 2 波起,防线来得及立)
+      if (
+        wi === 0 &&
+        (BUG_INFO[kind].flying || BUG_INFO[kind].underground || BUG_INFO[kind].speed >= 1.1)
+      ) {
+        kind = "walker";
+      }
+      let count = 2 + Math.min(wi, 2) + ((wi * 2 + b + sub + t2) % 3);
+      if (wi === 0) count = Math.min(count, 3);
+      if (wi === 1) count = Math.min(count, 4);
+      // 重家伙与分裂虫打六折,夜蛾一批最多 4 只
+      if (kind === "bucket" || kind === "mama") count = Math.ceil(count * 0.6);
+      if (kind === "moth") count = Math.min(count, 4);
+      const gap = Math.max(0.7, 1.8 - wi * 0.15 - t2 * 0.05);
+      batches.push({ kind, count, gap: Math.round(gap * 100) / 100 });
+    }
+    waves.push(batches);
+  }
+  const water =
+    scene === "moonfield" && sub % 4 === 2 ? [2] : scene === "candy" && sub % 5 === 3 ? [1] : [];
+  const cycle: DayNightCycle | undefined =
+    scene === "moonfield"
+      ? { day: 18 + (sub % 3) * 4, night: 10 + (sub % 2) * 4 }
+      : scene === "hive" && sub % 2 === 0
+        ? { day: 16 + (sub % 4) * 2, night: 12 }
+        : undefined;
+  const dewCap =
+    scene === "candy" ? 22 + sub : scene === "hive" && sub % 2 === 1 ? 20 + sub : undefined;
+  return {
+    name: `${st.name}虫潮 ${sub + 1} 号`,
+    scene,
+    waterLanes: water,
+    waves,
+    flagWaves: [waveCount - 1],
+    startDew: 13 + t2 * 2 + Math.floor(sub / 3),
+    feature: `${st.name}虫潮${sub + 1}号`,
+    gen: true,
+    cycle,
+    dewCap,
+    hint: `${st.name}的杂虫突袭!顶住 ${waveCount} 波,最后一波是大旗!`,
+  };
+}
+
+/** 新章组装:手写 8 关打骨架,虫潮关填满,章末必是 BOSS。 */
+function buildTheme2(sceneIdx: number, hand: LevelDef[], size: number): LevelDef[] {
+  if (hand.length !== HANDMADE_PER_THEME) {
+    throw new Error(`scene ${sceneIdx} 手写关数量应为 ${HANDMADE_PER_THEME}`);
+  }
+  const genCount = size - hand.length;
+  const gens = Array.from({ length: genCount }, (_, i) => genLevel2(sceneIdx, i));
+  const out: LevelDef[] = [hand[0]];
+  let gi = 0;
+  for (const mid of hand.slice(1, 7)) {
+    out.push(gens[gi++], gens[gi++], mid);
+  }
+  while (gi < genCount) out.push(gens[gi++]);
+  out.push(hand[7]);
+  return out;
+}
+
+const NEW_HAND_BY_SCENE: LevelDef[][] = [moonfieldHand, burrowHand, candyHand, hiveHand];
+
+export const LEVELS: LevelDef[] = [
+  ...HAND_BY_SCENE.flatMap((hand, ci) => buildTheme(ci, hand)),
+  ...NEW_HAND_BY_SCENE.flatMap((hand, i) =>
+    buildTheme2(CLASSIC_THEME_COUNT + i, hand, THEME_SIZES[CLASSIC_THEME_COUNT + i]),
+  ),
+];
 
 export interface BugSpawn {
   time: number;
@@ -854,6 +1351,17 @@ export function levelWaveSignature(def: LevelDef): string {
     .map((w) => w.map((e) => `${e.kind}x${e.count}`).join("+"))
     .join("|");
 }
+
+/* ---- 战斗节奏常量(运行时与模拟器共用,1.1 起集中在这里) ---- */
+export const BUBBLE_SPEED = 3.5;
+export const STAR_SPEED = 4.2;
+export const ICE_SPEED = 3.8;
+export const SHOOT_CD = 1.3;
+export const CHEW_INTERVAL = 0.9;
+export const BOSS_CHEW_INTERVAL = 0.35;
+export const SPARKLE_DEW_EVERY = 4.5;
+/** 虫子出生的 x 坐标(格)。 */
+export const BUG_SPAWN_X = PLANT_COLS + 0.7;
 
 /** 泡泡/星星打没打到虫(同车道,x 方向足够近,单位:格)。 */
 export function bubbleHitsBug(bubbleX: number, bugX: number, hitRange = 0.3): boolean {
@@ -913,9 +1421,9 @@ export function isLevelUnlocked(stars: ReadonlyArray<number>, idx: number): bool
   return (stars[idx - 1] ?? 0) > 0;
 }
 
-/** 章节是否解锁:本章第一关解锁即可进入。 */
+/** 章节是否解锁:本章第一关解锁即可进入(1.1 起章节长度不一,按偏移算)。 */
 export function isThemeUnlocked(stars: ReadonlyArray<number>, themeIdx: number): boolean {
-  return isLevelUnlocked(stars, themeIdx * LEVELS_PER_THEME);
+  return isLevelUnlocked(stars, themeOffset(themeIdx));
 }
 
 export function themeStars(stars: ReadonlyArray<number>, themeIdx: number): number {

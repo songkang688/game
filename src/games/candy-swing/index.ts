@@ -2,10 +2,13 @@ import { meta } from "./meta";
 export { meta };
 
 // 糖果秋千 —— 划绳物理益智：划断绳子，把糖果送进小怪物"啾啾"的嘴巴。
-// 99 关 6 大主题：草地 / 夜空 / 工厂 / 云朵 / 冰雪 / 彩虹，9 种机关，带选关地图与进度存档。
+// 188 关 10 大主题：草地 / 夜空 / 工厂 / 云朵 / 冰雪 / 彩虹 / 钟楼 / 浮岛 / 星糖 / 月夜，
+// 14 种机关（1.1 新增发条伸缩绳、风扇气流、糖霜磁铁、捣蛋鬼咕噜噜、多段高台），
+// 带选关地图与进度存档。
 import {
   type Link,
   type Particle,
+  applyAcceleration,
   applyImpulse,
   attachedToAnchor,
   boardPosition,
@@ -15,15 +18,21 @@ import {
   collideCircleRect,
   cutLinksNear,
   deactivateConnectedLinks,
+  fanForceAt,
+  fanOn,
   integrate,
+  magnetForceAt,
   makeParticle,
   moveToward,
   nearestAnchoredLink,
+  patrolPosition,
+  retuneLinks,
   segmentsWithinDistance,
   snipOccurred,
   solveLinks,
   starsForCollected,
   teleport,
+  winchScale,
 } from "./physics";
 import {
   CHAPTERS,
@@ -118,6 +127,10 @@ const THEMES: Record<ChapterTheme, ThemePalette> = {
   sky: { skyTop: "#BFE3FF", skyBottom: "#E8F6FF", accent: "#5FA8E0", deco: "sky" },
   ice: { skyTop: "#D8F0FA", skyBottom: "#EDF9FF", accent: "#5BB8D4", deco: "ice" },
   rainbow: { skyTop: "#FFF3D6", skyBottom: "#FFE3F1", accent: "#F0975F", deco: "rainbow" },
+  clock: { skyTop: "#F6EEDD", skyBottom: "#E7DCC6", accent: "#B08A4E", deco: "clock" },
+  isle: { skyTop: "#DFF6F2", skyBottom: "#F2FBF8", accent: "#4FBFA8", deco: "isle" },
+  starfac: { skyTop: "#EFE6FF", skyBottom: "#FBF2FF", accent: "#8E6FD8", deco: "starfac" },
+  moonfair: { skyTop: "#2B2F5E", skyBottom: "#5A4A86", accent: "#FFD98A", deco: "moonfair" },
 };
 
 interface StarState {
@@ -166,6 +179,24 @@ interface MothState {
   chewing: boolean;
 }
 
+/** 咕噜噜：在两点间来回巡逻，碰到糖果就抢走 */
+interface GremlinState {
+  def: NonNullable<LevelDef["gremlins"]>[number];
+  x: number;
+  y: number;
+  prevX: number;
+}
+
+/** 发条绳：记下这段绳的原始节长，每帧按倍率重设 */
+interface WinchState {
+  def: NonNullable<NonNullable<LevelDef["ropes"]>[number]["winch"]>;
+  from: number;
+  to: number;
+  baseRests: number[];
+  /** 当前倍率，绘制发条盘时用 */
+  scale: number;
+}
+
 interface TrailPoint {
   x: number;
   y: number;
@@ -208,6 +239,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   let balloons: BalloonState[] = [];
   let scissorsArr: ScissorsState[] = [];
   let moths: MothState[] = [];
+  let gremlins: GremlinState[] = [];
+  let winches: WinchState[] = [];
+  /** 第 i 根绳对应的发条（没挂发条就是 undefined），画发条盘时用 */
+  let winchOfRope: Array<WinchState | undefined> = [];
   let level: LevelDef = LEVELS[0];
   let theme: ThemePalette = THEMES.meadow;
   let inBubble = false;
@@ -242,6 +277,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       .cs-chapter.sky { background: linear-gradient(160deg, #CDE8FF, #E4F4FF); }
       .cs-chapter.ice { background: linear-gradient(160deg, #DDF3FC, #F0FBFF); }
       .cs-chapter.rainbow { background: linear-gradient(160deg, #FFE9C9, #FFD9EC, #DDE7FF); }
+      .cs-chapter.clock { background: linear-gradient(160deg, #F5EAD3, #E6D9BF); }
+      .cs-chapter.isle { background: linear-gradient(160deg, #D9F4EE, #EFFBF7); }
+      .cs-chapter.starfac { background: linear-gradient(160deg, #EDE2FF, #FBF1FF); }
+      .cs-chapter.moonfair { background: linear-gradient(160deg, #3B3F72, #6A5A96); }
       .cs-ch-name { font-weight: 800; font-size: 15px; margin-bottom: 2px; color: #4E7A3A; }
       .cs-ch-blurb { font-size: 12px; margin-bottom: 8px; color: #6F9A5C; }
       .cs-chapter.night .cs-ch-name { color: #E7DFFF; }
@@ -254,6 +293,14 @@ export function mount(api: GameApi): { destroy: () => void } {
       .cs-chapter.ice .cs-ch-blurb { color: #5FA6BF; }
       .cs-chapter.rainbow .cs-ch-name { color: #C7642E; }
       .cs-chapter.rainbow .cs-ch-blurb { color: #C9856B; }
+      .cs-chapter.clock .cs-ch-name { color: #8A6420; }
+      .cs-chapter.clock .cs-ch-blurb { color: #9C7C43; }
+      .cs-chapter.isle .cs-ch-name { color: #1F7F6C; }
+      .cs-chapter.isle .cs-ch-blurb { color: #4A9A8A; }
+      .cs-chapter.starfac .cs-ch-name { color: #6B47C0; }
+      .cs-chapter.starfac .cs-ch-blurb { color: #8A6BC8; }
+      .cs-chapter.moonfair .cs-ch-name { color: #FFE9B8; }
+      .cs-chapter.moonfair .cs-ch-blurb { color: #C9BDEA; }
       .cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
       .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
       .cs-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
@@ -263,6 +310,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       .cs-lv.locked .n { color: #A99DB5; }
       .cs-chapter.night .cs-lv { background: rgba(255,255,255,.92); }
       .cs-chapter.night .cs-lv.locked { background: rgba(255,255,255,.22); }
+      .cs-chapter.moonfair .cs-lv { background: rgba(255,255,255,.92); }
+      .cs-chapter.moonfair .cs-lv.locked { background: rgba(255,255,255,.22); }
     </style>
     <div class="cs-map">
       <div class="cs-map-title">🍬 糖果秋千</div>
@@ -320,7 +369,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       box.className = `cs-chapter ${ch.theme}`;
       const name = document.createElement("div");
       name.className = "cs-ch-name";
-      name.textContent = `第${["一", "二", "三", "四", "五", "六"][ci]}章 · ${ch.name}`;
+      const numeral = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"][ci] ?? `${ci + 1}`;
+      name.textContent = `第${numeral}章 · ${ch.name}`;
       const blurb = document.createElement("div");
       blurb.className = "cs-ch-blurb";
       blurb.textContent = ch.blurb;
@@ -369,12 +419,18 @@ export function mount(api: GameApi): { destroy: () => void } {
     starsEl.textContent = `⭐ ${got}/${level.stars.length}`;
   }
 
-  function addRopeToCandy(ax: number, ay: number, totalLength?: number): void {
+  function addRopeToCandy(
+    ax: number,
+    ay: number,
+    totalLength?: number,
+    winch?: WinchState["def"]
+  ): void {
     const c = candy();
     const dist = totalLength ?? Math.hypot(c.x - ax, c.y - ay);
     const segments = Math.max(3, Math.min(14, Math.round(dist / 16)));
     const build = buildRope(ax, ay, c.x, c.y, segments, totalLength);
     const base = particles.length;
+    const linkBase = links.length;
     for (const p of build.particles) particles.push(p);
     for (const l of build.links) {
       links.push({
@@ -382,6 +438,15 @@ export function mount(api: GameApi): { destroy: () => void } {
         b: l.b === -1 ? 0 : base + l.b,
         rest: l.rest,
         active: true,
+      });
+    }
+    if (winch) {
+      winches.push({
+        def: winch,
+        from: linkBase,
+        to: links.length,
+        baseRests: links.slice(linkBase).map((l) => l.rest),
+        scale: winch.max,
       });
     }
   }
@@ -410,7 +475,13 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     particles = [makeParticle(level.candy.x, level.candy.y, false, 0.3)];
     links = [];
-    for (const r of level.ropes) addRopeToCandy(r.x, r.y, r.length);
+    winches = [];
+    winchOfRope = [];
+    for (const r of level.ropes) {
+      const before = winches.length;
+      addRopeToCandy(r.x, r.y, r.length, r.winch);
+      winchOfRope.push(winches.length > before ? winches[winches.length - 1] : undefined);
+    }
     stars = level.stars.map((s) => ({ x: s.x, y: s.y, collected: false, suck: 0 }));
     bubbles = (level.bubbles ?? []).map((b) => ({ x: b.x, y: b.y, used: false }));
     hooks = (level.hooks ?? []).map((h) => ({ x: h.x, y: h.y, radius: h.radius, used: false }));
@@ -427,6 +498,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       chewT: 0,
       chewing: false,
     }));
+    gremlins = (level.gremlins ?? []).map((def) => {
+      const pos = patrolPosition(def.x1, def.y1, def.x2, def.y2, def.period, 0, def.offset ?? 0);
+      return { def, x: pos.x, y: pos.y, prevX: pos.x };
+    });
     msgEl.textContent = level.tip;
     updateHud();
   }
@@ -481,7 +556,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       const rating = starsForCollected(bestTotal(), totalStars());
       window.setTimeout(() => {
         if (destroyed) return;
-        api.onWin(rating, `99 关全部通关！共收集 ${bestTotal()} 颗星星！`);
+        api.onWin(rating, `${LEVELS.length} 关全部通关！共收集 ${bestTotal()} 颗星星！`);
       }, 1500);
     } else {
       // 逐关结算自动朗读（全通关那次走平台弹窗，那边自带朗读，不叠音）
@@ -620,13 +695,30 @@ export function mount(api: GameApi): { destroy: () => void } {
     simTime += dt;
     if (portalCooldown > 0) portalCooldown -= dt;
 
-    // 移动木板
+    // 移动木板（静止的那种就是「高台」，位置恒定）
     for (const b of boards) {
       b.prevX = b.x;
       b.prevY = b.y;
       const pos = boardPosition(b.def.x1, b.def.y1, b.def.x2, b.def.y2, b.def.period, simTime);
       b.x = pos.x;
       b.y = pos.y;
+    }
+
+    // 捣蛋鬼巡逻
+    for (const g of gremlins) {
+      g.prevX = g.x;
+      const pos = patrolPosition(
+        g.def.x1, g.def.y1, g.def.x2, g.def.y2,
+        g.def.period, simTime, g.def.offset ?? 0
+      );
+      g.x = pos.x;
+      g.y = pos.y;
+    }
+
+    // 发条绳一收一放：按倍率重设这段绳的静止长度
+    for (const wi of winches) {
+      wi.scale = winchScale(wi.def.min, wi.def.max, wi.def.period, simTime, wi.def.offset ?? 0);
+      retuneLinks(links, wi.from, wi.to, wi.baseRests, wi.scale);
     }
 
     if (phase === "won") return;
@@ -643,6 +735,18 @@ export function mount(api: GameApi): { destroy: () => void } {
       const upSpeed = (c.py - c.y) / dt;
       const maxUp = 95;
       if (upSpeed > maxUp) c.py = c.y + maxUp * dt;
+    }
+    if (!candyGone) {
+      // 风扇气流与糖霜磁铁：都是叠加在重力上的加速度
+      for (const f of level.fans ?? []) {
+        if (!fanOn(f.period, f.duty ?? 0.5, f.offset ?? 0, simTime)) continue;
+        const force = fanForceAt(f.x, f.y, f.w, f.h, f.dir, f.power, c.x, c.y);
+        applyAcceleration(c, force.fx, force.fy, dt);
+      }
+      for (const mg of level.magnets ?? []) {
+        const force = magnetForceAt(mg.x, mg.y, mg.radius, mg.strength, c.x, c.y);
+        applyAcceleration(c, force.fx, force.fy, dt);
+      }
     }
     solveLinks(particles, links, 6);
 
@@ -701,6 +805,18 @@ export function mount(api: GameApi): { destroy: () => void } {
         inBubble = false;
         burst(c.x, c.y, "#FF8FB1", 12, 150);
         failLevel("糖果碰到刺啦！");
+        return;
+      }
+    }
+
+    // 捣蛋鬼咕噜噜抢糖
+    for (const g of gremlins) {
+      if (simTime < (g.def.delay ?? 0)) continue;
+      if (circlesOverlap(c.x, c.y, CANDY_R, g.x, g.y, g.def.radius)) {
+        candyGone = true;
+        inBubble = false;
+        burst(c.x, c.y, "#9FE0A8", 12, 150);
+        failLevel("咕噜噜把糖果抢走啦！");
         return;
       }
     }
@@ -861,6 +977,320 @@ export function mount(api: GameApi): { destroy: () => void } {
         ctx.restore();
         ctx.globalAlpha = 1;
       }
+    } else if (theme.deco === "clock") {
+      // 发条钟楼：墙上的大钟 + 慢慢转的齿轮
+      ctx.strokeStyle = "rgba(176, 138, 78, 0.35)";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(300, 78, 34, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      for (const [len, speed] of [[24, 0.25], [16, 3]] as const) {
+        const ang = simTime * speed - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(300, 78);
+        ctx.lineTo(300 + Math.cos(ang) * len, 78 + Math.sin(ang) * len);
+        ctx.stroke();
+      }
+      for (const [gx, gy, gr, spin] of [[48, 200, 26, 0.5], [330, 330, 20, -0.7]] as const) {
+        ctx.strokeStyle = "rgba(176, 138, 78, 0.28)";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+        ctx.stroke();
+        for (let i = 0; i < 8; i++) {
+          const ang = simTime * spin + (Math.PI * i) / 4;
+          ctx.beginPath();
+          ctx.moveTo(gx + Math.cos(ang) * gr, gy + Math.sin(ang) * gr);
+          ctx.lineTo(gx + Math.cos(ang) * (gr + 7), gy + Math.sin(ang) * (gr + 7));
+          ctx.stroke();
+        }
+      }
+    } else if (theme.deco === "isle") {
+      // 泡泡浮岛：漂浮的小岛 + 一串串小气泡
+      for (const [ix, iy, iw] of [[70, 130, 46], [286, 216, 38], [140, 330, 30]] as const) {
+        const bob = Math.sin(simTime * 1.4 + ix) * 4;
+        ctx.fillStyle = "rgba(120, 200, 180, 0.35)";
+        ctx.beginPath();
+        ctx.ellipse(ix, iy + bob, iw, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(160, 220, 200, 0.4)";
+        ctx.beginPath();
+        ctx.moveTo(ix - iw * 0.7, iy + bob);
+        ctx.lineTo(ix, iy + bob + 26);
+        ctx.lineTo(ix + iw * 0.7, iy + bob);
+        ctx.fill();
+      }
+      for (let i = 0; i < 12; i++) {
+        const bx = (i * 47 + 20) % W;
+        const by = (H - ((i * 61 + simTime * 40) % (H + 40)));
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(bx, by, 3 + (i % 3) * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else if (theme.deco === "starfac") {
+      // 星糖工厂：糖霜管道 + 飘落的糖粒
+      ctx.strokeStyle = "rgba(142, 111, 216, 0.25)";
+      ctx.lineWidth = 12;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-10, 96);
+      ctx.lineTo(96, 96);
+      ctx.lineTo(96, 168);
+      ctx.moveTo(370, 300);
+      ctx.lineTo(272, 300);
+      ctx.lineTo(272, 232);
+      ctx.stroke();
+      ctx.lineCap = "butt";
+      for (let i = 0; i < 12; i++) {
+        const sx = (i * 59 + 18) % W;
+        const sy = (i * 83 + simTime * 30) % (H + 12);
+        ctx.fillStyle = i % 2 === 0 ? "rgba(255, 200, 235, 0.8)" : "rgba(200, 225, 255, 0.8)";
+        ctx.fillRect(sx, sy, 3, 3);
+      }
+    } else if (theme.deco === "moonfair") {
+      // 月光大巡游：大月亮 + 挂满的小彩灯
+      ctx.fillStyle = "rgba(255, 240, 190, 0.9)";
+      ctx.beginPath();
+      ctx.arc(58, 62, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = theme.skyTop;
+      ctx.beginPath();
+      ctx.arc(48, 54, 21, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < 20; i++) {
+        const sx = (i * 71 + 40) % W;
+        const sy = (i * 53 + 20) % (H - 140);
+        const tw = 0.5 + Math.abs(Math.sin(simTime * 2.4 + i)) * 0.5;
+        ctx.fillStyle = `rgba(255, 244, 210, ${0.25 + tw * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.4 + (i % 3) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const lampColors = ["#FFB3C7", "#FFE08A", "#A8E6CF", "#B3C7FF"];
+      ctx.strokeStyle = "rgba(255, 230, 180, 0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 24);
+      ctx.quadraticCurveTo(W / 2, 52, W, 24);
+      ctx.stroke();
+      for (let i = 0; i < 9; i++) {
+        const t = i / 8;
+        const lx = t * W;
+        const ly = 24 + Math.sin(Math.PI * t) * 28;
+        ctx.fillStyle = lampColors[i % lampColors.length];
+        ctx.globalAlpha = 0.55 + Math.abs(Math.sin(simTime * 3 + i)) * 0.45;
+        ctx.beginPath();
+        ctx.arc(lx, ly + 6, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  function drawFans(): void {
+    for (const f of level.fans ?? []) {
+      const on = fanOn(f.period, f.duty ?? 0.5, f.offset ?? 0, simTime);
+      const dx = f.dir === "left" ? -1 : f.dir === "right" ? 1 : 0;
+      const dy = f.dir === "up" ? -1 : f.dir === "down" ? 1 : 0;
+      // 风道
+      ctx.fillStyle = on ? "rgba(140, 220, 235, 0.16)" : "rgba(170, 180, 190, 0.1)";
+      ctx.beginPath();
+      ctx.roundRect(f.x, f.y, f.w, f.h, 10);
+      ctx.fill();
+      ctx.strokeStyle = on ? "rgba(90, 190, 210, 0.5)" : "rgba(160, 170, 180, 0.35)";
+      ctx.setLineDash([8, 8]);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 流动的风线
+      if (on) {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = "round";
+        const along = dx !== 0 ? f.w : f.h;
+        const lanes = 4;
+        for (let i = 0; i < lanes; i++) {
+          const lane = (i + 0.5) / lanes;
+          const flow = ((simTime * 170 + i * 45) % (along + 60)) - 30;
+          const sx = dx !== 0
+            ? (dx > 0 ? f.x + flow : f.x + f.w - flow)
+            : f.x + f.w * lane;
+          const sy = dy !== 0
+            ? (dy > 0 ? f.y + flow : f.y + f.h - flow)
+            : f.y + f.h * lane;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + dx * 22, sy + dy * 22);
+          ctx.stroke();
+        }
+        ctx.lineCap = "butt";
+      }
+      // 出风口那面的扇叶
+      const bx = dx > 0 ? f.x : dx < 0 ? f.x + f.w : f.x + f.w / 2;
+      const by = dy > 0 ? f.y : dy < 0 ? f.y + f.h : f.y + f.h / 2;
+      const spin = on ? simTime * 9 : simTime * 0.6;
+      ctx.save();
+      ctx.translate(bx + dx * 8, by + dy * 8);
+      ctx.fillStyle = on ? "#5FC6D8" : "#AEB8C2";
+      for (let i = 0; i < 3; i++) {
+        ctx.save();
+        ctx.rotate(spin + (Math.PI * 2 * i) / 3);
+        ctx.beginPath();
+        ctx.ellipse(0, -8, 4.5, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawMagnets(): void {
+    for (const mg of level.magnets ?? []) {
+      const pull = mg.strength >= 0;
+      const main = pull ? "#F05B7A" : "#4F84E8";
+      // 作用范围
+      ctx.strokeStyle = pull ? "rgba(240, 91, 122, 0.25)" : "rgba(79, 132, 232, 0.25)";
+      ctx.setLineDash([4, 9]);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(mg.x, mg.y, mg.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 一圈一圈的磁力波
+      const wave = (simTime * 0.55) % 1;
+      for (let i = 0; i < 3; i++) {
+        const k = (wave + i / 3) % 1;
+        const r = pull ? mg.radius * (1 - k) : mg.radius * k;
+        ctx.strokeStyle = pull
+          ? `rgba(240, 91, 122, ${0.3 * (1 - Math.abs(k - 0.5) * 1.4)})`
+          : `rgba(79, 132, 232, ${0.3 * (1 - Math.abs(k - 0.5) * 1.4)})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(mg.x, mg.y, Math.max(6, r), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // 马蹄形磁铁本体
+      ctx.save();
+      ctx.translate(mg.x, mg.y);
+      ctx.strokeStyle = main;
+      ctx.lineWidth = 9;
+      ctx.lineCap = "butt";
+      ctx.beginPath();
+      ctx.arc(0, 0, 11, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-11, 0);
+      ctx.lineTo(-11, 9);
+      ctx.moveTo(11, 0);
+      ctx.lineTo(11, 9);
+      ctx.stroke();
+      ctx.strokeStyle = "#F2F4F8";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(-11, 9);
+      ctx.lineTo(-11, 14);
+      ctx.moveTo(11, 9);
+      ctx.lineTo(11, 14);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  /** 咕噜噜：圆滚滚一团糖霜怪，大嘴、两颗小角，本作原创形象 */
+  function drawGremlins(): void {
+    for (const g of gremlins) {
+      const napping = simTime < (g.def.delay ?? 0);
+      const facing = g.x >= g.prevX ? 1 : -1;
+      const bob = Math.sin(simTime * 5 + g.x * 0.05) * 2;
+      const r = g.def.radius;
+      ctx.save();
+      ctx.translate(g.x, g.y + bob);
+      ctx.scale(facing, 1);
+      // 抢糖范围
+      ctx.strokeStyle = napping ? "rgba(150, 160, 170, 0.2)" : "rgba(120, 200, 140, 0.3)";
+      ctx.setLineDash([4, 7]);
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, r + CANDY_R, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 两只小角
+      ctx.fillStyle = "#63B383";
+      ctx.beginPath();
+      ctx.moveTo(-7, -r + 2);
+      ctx.lineTo(-11, -r - 8);
+      ctx.lineTo(-2, -r - 1);
+      ctx.closePath();
+      ctx.moveTo(7, -r + 2);
+      ctx.lineTo(11, -r - 8);
+      ctx.lineTo(2, -r - 1);
+      ctx.closePath();
+      ctx.fill();
+      // 身体
+      ctx.fillStyle = napping ? "#BFD9C6" : "#8FD8A6";
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.35, -r * 0.4, r * 0.28, r * 0.2, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      // 眼睛
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.arc(-r * 0.3, -r * 0.15, r * 0.26, 0, Math.PI * 2);
+      ctx.arc(r * 0.32, -r * 0.15, r * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#2F4A38";
+      if (napping) {
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = "#2F4A38";
+        ctx.beginPath();
+        ctx.arc(-r * 0.3, -r * 0.15, r * 0.2, 0.2, Math.PI - 0.2);
+        ctx.arc(r * 0.32, -r * 0.15, r * 0.2, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(-r * 0.26, -r * 0.12, r * 0.13, 0, Math.PI * 2);
+        ctx.arc(r * 0.36, -r * 0.12, r * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 大嘴（睡着时抿成一条线）
+      if (napping) {
+        ctx.strokeStyle = "#4A6B54";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.25, r * 0.42);
+        ctx.lineTo(r * 0.25, r * 0.42);
+        ctx.stroke();
+      } else {
+        const open = 0.5 + Math.abs(Math.sin(simTime * 4)) * 0.5;
+        ctx.fillStyle = "#3F6B4C";
+        ctx.beginPath();
+        ctx.ellipse(0, r * 0.42, r * 0.34, r * 0.2 * open + 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.2, r * 0.3);
+        ctx.lineTo(-r * 0.1, r * 0.44);
+        ctx.lineTo(0, r * 0.3);
+        ctx.fill();
+      }
+      ctx.restore();
+      if (napping) {
+        ctx.fillStyle = "rgba(90, 120, 100, 0.75)";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("呼呼…", g.x, g.y - r - 12);
+        ctx.textAlign = "left";
+      }
     }
   }
 
@@ -894,6 +1324,44 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  /** 发条绳的锚点画成一枚会转的发条盘，收绳/放绳转向相反 */
+  function drawWinchAnchors(): void {
+    level.ropes.forEach((r, i) => {
+      const w = r.winch;
+      if (!w) return;
+      const scale = winchOfRope[i]?.scale ?? w.max;
+      const span = Math.max(1e-6, w.max - w.min);
+      const t = (scale - w.min) / span;
+      // 正在放绳还是收绳：看下一瞬间的倍率往哪走
+      const next = winchScale(w.min, w.max, w.period, simTime + 0.05, w.offset ?? 0);
+      const dir = next >= scale ? 1 : -1;
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.fillStyle = "#C9A96A";
+      ctx.beginPath();
+      ctx.arc(0, 0, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#9A7B42";
+      ctx.lineWidth = 3;
+      for (let k = 0; k < 8; k++) {
+        const ang = dir * simTime * 2.2 + (Math.PI * k) / 4;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ang) * 10, Math.sin(ang) * 10);
+        ctx.lineTo(Math.cos(ang) * 15, Math.sin(ang) * 15);
+        ctx.stroke();
+      }
+      // 中间的小指针：绳越长指得越靠外
+      ctx.strokeStyle = "#6E4E1F";
+      ctx.lineWidth = 2;
+      const hand = -Math.PI / 2 + t * Math.PI * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(hand) * 7, Math.sin(hand) * 7);
+      ctx.stroke();
+      ctx.restore();
+    });
   }
 
   function drawSpikes(): void {
@@ -1412,17 +1880,21 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function draw(dt: number): void {
     drawBackground();
+    drawFans();
     drawSpikes();
     drawBoards();
     drawPortals();
+    drawMagnets();
     drawHooks();
     drawBubbles();
     drawBalloons();
     drawStars();
     drawMonster();
     drawRopes();
+    drawWinchAnchors();
     drawScissors();
     drawMoths();
+    drawGremlins();
     drawCandy();
     drawSparkles(dt);
     drawTrail();

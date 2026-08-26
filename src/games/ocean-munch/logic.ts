@@ -1,7 +1,11 @@
 // 海底大胃王 —— 纯逻辑函数,不依赖 DOM,方便单独测试。
-// 99 关九大海域战役:浅浅海湾 → 珊瑚花园 → 海带森林 → 沉船湾 → 深深海沟
+// 1.0 的 99 关九大海域战役:浅浅海湾 → 珊瑚花园 → 海带森林 → 沉船湾 → 深深海沟
 // → 冰冰海域 → 火山温泉 → 午夜深渊 → 珍珠龙宫。
 // 每片海域 11 关(8 关手写 + 3 关生成),都有专属配色、障碍组合和区域 BOSS。
+//
+// 1.1 在末尾续了三片新海域共 89 关(前 99 关一字不动):
+// 洋流海峡(30)→ 荧光藻湾(30)→ 万丈压渊(29),合计 188 关。
+// 新机制:洋流(整片海周期换向)、含毒生物、共生小鱼、深渊压力(体型上限)。
 
 export const START_RADIUS = 14;
 
@@ -16,7 +20,10 @@ export type ZoneId =
   | "ice"
   | "volcano"
   | "abyss"
-  | "pearl";
+  | "pearl"
+  | "strait"
+  | "bloom"
+  | "trench";
 
 export const ZONE_ORDER: ZoneId[] = [
   "shallow",
@@ -28,11 +35,61 @@ export const ZONE_ORDER: ZoneId[] = [
   "volcano",
   "abyss",
   "pearl",
+  "strait",
+  "bloom",
+  "trench",
 ];
 
-/** 每章 11 关:8 关手写 + 3 关生成。 */
+/** 1.0 的九片海域(1.1 的三片新海域不参与老生成器)。 */
+export type LegacyZoneId =
+  | "shallow"
+  | "coral"
+  | "kelp"
+  | "wreck"
+  | "deep"
+  | "ice"
+  | "volcano"
+  | "abyss"
+  | "pearl";
+
+/** 1.0 的九片海域,每片 11 关:8 关手写 + 3 关生成。 */
 export const LEVELS_PER_THEME = 11;
 export const HANDMADE_PER_THEME = 8;
+export const LEGACY_ZONES = 9;
+export const LEGACY_LEVELS = LEGACY_ZONES * LEVELS_PER_THEME;
+
+/** 1.1 新三片海域的关数(前 99 关的切分一格都没动)。 */
+export const NEW_ZONE_SIZES = [30, 30, 29] as const;
+
+/** 每章关数:前九章各 11 关,后三章 30/30/29。 */
+export const THEME_SIZES: number[] = [
+  ...Array.from({ length: LEGACY_ZONES }, () => LEVELS_PER_THEME),
+  ...NEW_ZONE_SIZES,
+];
+
+export const TOTAL_LEVELS = THEME_SIZES.reduce((a, b) => a + b, 0);
+
+/** 章节 ci(0 起)有几关。 */
+export function themeSize(ci: number): number {
+  return THEME_SIZES[ci] ?? 0;
+}
+
+/** 章节 ci(0 起)的第一关下标。 */
+export function themeStart(ci: number): number {
+  let s = 0;
+  for (let i = 0; i < ci && i < THEME_SIZES.length; i++) s += THEME_SIZES[i];
+  return s;
+}
+
+/** idx(0 起)关属于第几章。 */
+export function themeIndexOf(idx: number): number {
+  let s = 0;
+  for (let ci = 0; ci < THEME_SIZES.length; ci++) {
+    s += THEME_SIZES[ci];
+    if (idx < s) return ci;
+  }
+  return THEME_SIZES.length - 1;
+}
 
 export type HazardKind =
   | "jelly" // 水母:碰到会痛
@@ -42,7 +99,10 @@ export type HazardKind =
   | "bubbleWall" // 气泡墙:整面墙,只能从缺口穿过
   | "squid" // 墨墨鱼:靠近就喷墨遮眼
   | "vortex" // 涡流:把你往中心吸
-  | "eel"; // 电电草:周期通电,碰到会麻
+  | "eel" // 电电草:周期通电,碰到会麻
+  | "drift" // 洋流:整片海按周期换向,推着所有人走(1.1)
+  | "toxin" // 毒藻鱼:看着能吃,吃下去会缩小发麻(1.1)
+  | "pressure"; // 深渊压力:体型有上限,长不过头(1.1)
 
 export type BossKind =
   | "crab"
@@ -53,7 +113,10 @@ export type BossKind =
   | "whale"
   | "lobster"
   | "shark"
-  | "dragon";
+  | "dragon"
+  | "ray"
+  | "anemone"
+  | "clam";
 
 export interface ZoneStyle {
   name: string;
@@ -119,6 +182,28 @@ export const ZONE_STYLE: Record<ZoneId, ZoneStyle> = {
     boss: "dragon",
     blurb: "亮晶晶的龙宫大殿,所有障碍列队欢迎最终决战",
   },
+  // ---- 1.1 新增三片海域 ----
+  strait: {
+    name: "洋流海峡", emoji: "🌀", top: "#cfeaf5", bottom: "#5f96bc", accent: "#1f6a8a",
+    speedMult: 1.14,
+    palette: ["drift", "current", "urchin", "squid", "bubbleWall", "puffer"],
+    boss: "ray",
+    blurb: "整片海峡的洋流会定时换向,顺流省力逆流费劲",
+  },
+  bloom: {
+    name: "荧光藻湾", emoji: "✨", top: "#e6ffe9", bottom: "#5aa88a", accent: "#1f7a5a",
+    speedMult: 1.1,
+    palette: ["toxin", "jelly", "eel", "squid", "vortex", "urchin"],
+    boss: "anemone",
+    blurb: "亮闪闪的藻丛里混着毒藻鱼,好看的不一定能吃",
+  },
+  trench: {
+    name: "万丈压渊", emoji: "🕳", top: "#b9c4e0", bottom: "#2e3450", accent: "#3f4f8e",
+    speedMult: 1.24,
+    palette: ["pressure", "drift", "toxin", "vortex", "eel", "bubbleWall"],
+    boss: "clam",
+    blurb: "越潜越挤的深渊,水压把你的体型死死摁住",
+  },
 };
 
 /* ---------------- BOSS ---------------- */
@@ -139,6 +224,12 @@ export interface BossSpec {
   pulls?: boolean;
   /** 血越少冲刺越快 */
   enrages?: boolean;
+  /** 1.1:会掀起洋流,把整片海的水推着换向 */
+  drifts?: boolean;
+  /** 1.1:会吐毒云,碰到会缩小发麻(不掉心) */
+  poisons?: boolean;
+  /** 1.1:会加压,把你的体型上限一点点压低 */
+  crushes?: boolean;
 }
 
 export const BOSS_INFO: Record<BossKind, BossSpec> = {
@@ -151,6 +242,16 @@ export const BOSS_INFO: Record<BossKind, BossSpec> = {
   lobster: { name: "火火龙虾", hp: 7, r: 58, dashCd: 2.0, dashSpeed: 175, inks: false, summons: "urchin" },
   shark: { name: "鲨鲨霸王", hp: 8, r: 62, dashCd: 1.7, dashSpeed: 190, inks: false, enrages: true },
   dragon: { name: "海龙王", hp: 9, r: 72, dashCd: 1.9, dashSpeed: 180, inks: true, pulls: true },
+  // ---- 1.1 新增三位海域大王 ----
+  ray: { name: "旋旋鳐", hp: 9, r: 66, dashCd: 2.1, dashSpeed: 195, inks: false, drifts: true },
+  anemone: {
+    name: "荧荧海葵王", hp: 10, r: 70, dashCd: 2.4, dashSpeed: 170, inks: false,
+    summons: "jelly", poisons: true,
+  },
+  clam: {
+    name: "咔咔巨蚌", hp: 11, r: 76, dashCd: 1.8, dashSpeed: 200, inks: true,
+    pulls: true, enrages: true, crushes: true,
+  },
 };
 
 /** 长到 BOSS 的六成大就可以咬它了。 */
@@ -174,23 +275,32 @@ export interface LevelDef {
   /** 生成器产出的关卡 */
   gen?: boolean;
   hint: string;
+  /** 1.1:本关会漂来共生小鱼泡泡,捡到就有小伙伴帮你吃 */
+  buddy?: boolean;
+  /**
+   * 1.1:深渊压力下体型上限相对目标的余量(像素)。
+   * 只有 hazards 含 "pressure" 的关卡才用得上,越小压得越狠。
+   */
+  pressureSlack?: number;
 }
 
 /** idx(0 起)关属于哪片海域。 */
 export function themeOfLevel(idx: number): ZoneId {
-  return ZONE_ORDER[Math.floor(idx / LEVELS_PER_THEME)];
+  return ZONE_ORDER[themeIndexOf(idx)];
 }
 
 /** 章节 ci(0 起)包含的关卡下标。 */
 export function levelIndicesOfTheme(ci: number): number[] {
   const out: number[] = [];
-  for (let i = 0; i < LEVELS_PER_THEME; i++) out.push(ci * LEVELS_PER_THEME + i);
+  const base = themeStart(ci);
+  for (let i = 0; i < themeSize(ci); i++) out.push(base + i);
   return out;
 }
 
 /* ---- 生成关卡:每章 3 关,障碍组合不与本章任何手写关重复 ---- */
 
-const GEN_HAZARDS: Record<ZoneId, HazardKind[][]> = {
+/** 1.0 九片海域的生成关模板(1.1 新海域走 buildDeepZone 的枚举器)。 */
+const GEN_HAZARDS: Record<(typeof ZONE_ORDER)[number] & LegacyZoneId, HazardKind[][]> = {
   shallow: [["puffer", "squid"], ["current", "squid", "jelly"], ["puffer", "current"]],
   coral: [["urchin", "jelly"], ["bubbleWall", "squid"], ["urchin", "squid", "jelly"]],
   kelp: [["puffer", "urchin"], ["squid", "jelly"], ["current", "puffer", "urchin"]],
@@ -203,7 +313,7 @@ const GEN_HAZARDS: Record<ZoneId, HazardKind[][]> = {
 };
 
 function genLevel(zoneIdx: number, sub: number): LevelDef {
-  const zone = ZONE_ORDER[zoneIdx];
+  const zone = ZONE_ORDER[zoneIdx] as LegacyZoneId;
   const st = ZONE_STYLE[zone];
   const hazards = GEN_HAZARDS[zone][sub];
   return {
@@ -341,6 +451,159 @@ const pearlHand: LevelDef[] = [
   { name: "海龙王", zone: "pearl", targetR: 56, hazards: ["vortex"], boss: "dragon", bigFishBias: 0.2, feature: "最终BOSS海龙王", hint: "最终决战!海龙王又喷墨又吸人,咬它 9 口!" },
 ];
 
+/* ================ 1.1:三片新海域(第 100–188 关) ================ */
+// 前 99 关一格不动,这三章整段追加在数组末尾。
+// 每章 12 关手写 + 其余生成,生成关的障碍组合由固定枚举分配,保证:
+// 同章内互不重复、也不和同章手写关撞车。
+
+/** 按固定顺序枚举 pool 的 2~4 元子集(带上 forced 里必带的障碍)。 */
+function hazardCombos(pool: HazardKind[], forced: HazardKind[] = []): HazardKind[][] {
+  const out: HazardKind[][] = [];
+  for (let size = 2; size <= 4; size++) {
+    for (let mask = 0; mask < 1 << pool.length; mask++) {
+      let bits = 0;
+      for (let i = 0; i < pool.length; i++) if (mask & (1 << i)) bits++;
+      if (bits !== size) continue;
+      const combo: HazardKind[] = [...forced];
+      for (let i = 0; i < pool.length; i++) if (mask & (1 << i)) combo.push(pool[i]);
+      out.push(combo);
+    }
+  }
+  return out;
+}
+
+function sig(hazards: ReadonlyArray<HazardKind>): string {
+  return [...hazards].sort().join(",");
+}
+
+/** 新海域的生成关:名字/机制标记全章唯一,目标随进度缓慢爬升。 */
+function genDeepLevel(
+  zone: ZoneId,
+  sub: number,
+  hazards: HazardKind[],
+  targetR: number,
+  bigFishBias: number,
+  extra: Partial<LevelDef> = {},
+): LevelDef {
+  const st = ZONE_STYLE[zone];
+  return {
+    name: `${st.name}巡游 ${sub + 1} 号`,
+    zone,
+    targetR,
+    hazards,
+    bigFishBias,
+    feature: `${st.name}巡游${sub + 1}号`,
+    gen: true,
+    hint: `${st.name}的常驻巡游队来了!这回是 ${hazards.length} 种麻烦混着上`,
+    ...extra,
+  };
+}
+
+/**
+ * 拼一片新海域:手写关按 [0..7] → 生成关 → [8,9] → 生成关 → 挑战关 → BOSS 关 排布。
+ * 生成关自动跳过手写关已经用掉的障碍组合。
+ */
+function buildDeepZone(
+  zone: ZoneId,
+  hand: LevelDef[],
+  size: number,
+  opts: {
+    /** 生成关的障碍从这些里挑(不含必带的 forced) */
+    pool: HazardKind[];
+    forced?: HazardKind[];
+    /** 生成关目标半径的起点与终点 */
+    fromR: number;
+    toR: number;
+    bigFishBias: number;
+    /** 深渊压力:生成关的体型余量(从松到紧) */
+    slackFrom?: number;
+    slackTo?: number;
+  },
+): LevelDef[] {
+  if (hand.length !== 12) throw new Error(`${zone} 手写关数量应为 12`);
+  const genCount = size - hand.length;
+  const used = new Set(hand.map((l) => sig(l.hazards)));
+  const combos = hazardCombos(opts.pool, opts.forced).filter((c) => !used.has(sig(c)));
+  if (combos.length < genCount) throw new Error(`${zone} 生成关障碍组合不够用`);
+  const gens: LevelDef[] = [];
+  for (let i = 0; i < genCount; i++) {
+    const t = genCount === 1 ? 0 : i / (genCount - 1);
+    const extra: Partial<LevelDef> = {};
+    if (i % 3 === 1) extra.buddy = true;
+    if (opts.slackFrom !== undefined && opts.slackTo !== undefined) {
+      extra.pressureSlack = Math.round(opts.slackFrom + (opts.slackTo - opts.slackFrom) * t);
+    }
+    gens.push(
+      genDeepLevel(
+        zone,
+        i,
+        combos[i],
+        Math.round(opts.fromR + (opts.toR - opts.fromR) * t),
+        opts.bigFishBias,
+        extra,
+      ),
+    );
+  }
+  const firstGen = Math.ceil(genCount / 2);
+  return [
+    ...hand.slice(0, 8),
+    ...gens.slice(0, firstGen),
+    hand[8],
+    hand[9],
+    ...gens.slice(firstGen),
+    hand[10],
+    hand[11],
+  ];
+}
+
+/* ---- 第 10 章 · 洋流海峡:整片海定时换向 + 共生小鱼登场 ---- */
+const straitHand: LevelDef[] = [
+  { name: "海峡初潮", zone: "strait", targetR: 56, hazards: ["drift"], bigFishBias: 0.16, feature: "洋流登场", hint: "整片海峡都在流动!看屏幕上的箭头,顺着流游省力气" },
+  { name: "顺流逆流", zone: "strait", targetR: 56, hazards: ["drift", "current"], bigFishBias: 0.16, feature: "洋流叠水流带", hint: "洋流之外还夹着水流带,两股力气方向不一样" },
+  { name: "共生小鱼", zone: "strait", targetR: 57, hazards: ["drift"], bigFishBias: 0.16, feature: "共生小鱼登场", buddy: true, hint: "捡到共生小鱼泡泡,就有小伙伴跟着你,帮你吃小鱼!" },
+  { name: "泡门换向", zone: "strait", targetR: 57, hazards: ["drift", "bubbleWall"], bigFishBias: 0.17, feature: "洋流泡门", hint: "洋流一换向,泡泡墙的缺口就更难对准了" },
+  { name: "刺球顺流漂", zone: "strait", targetR: 58, hazards: ["drift", "urchin"], bigFishBias: 0.17, feature: "洋流刺球漂", hint: "刺刺球被洋流推着成排漂过来,提前让开" },
+  { name: "墨影借流", zone: "strait", targetR: 58, hazards: ["drift", "squid"], bigFishBias: 0.17, feature: "洋流墨影", hint: "墨墨鱼借着洋流溜得飞快,喷完墨就没影了" },
+  { name: "鼓鼓鱼冲浪", zone: "strait", targetR: 59, hazards: ["drift", "puffer"], bigFishBias: 0.18, feature: "洋流鼓鼓鱼", hint: "鼓鼓鱼在洋流里像冲浪一样滚过来,等它瘪了再吃" },
+  { name: "双流夹击", zone: "strait", targetR: 59, hazards: ["drift", "current", "bubbleWall"], bigFishBias: 0.18, feature: "洋流双流夹击", hint: "洋流、水流带、泡泡墙,三样一起把你往边上推" },
+  { name: "换向练习场", zone: "strait", targetR: 61, hazards: ["drift", "urchin", "puffer"], bigFishBias: 0.18, feature: "洋流换向练习", buddy: true, hint: "洋流换得更勤了,记住换向前水面会先安静一下" },
+  { name: "泡帘急流", zone: "strait", targetR: 61, hazards: ["drift", "current", "squid"], bigFishBias: 0.19, feature: "洋流泡帘急流", hint: "急流里的墨墨鱼最会偷袭,盯紧再下嘴" },
+  { name: "海峡大回旋", zone: "strait", targetR: 63, hazards: ["drift", "current", "urchin", "squid", "bubbleWall", "puffer"], bigFishBias: 0.2, feature: "洋流海峡毕业考", hint: "海峡毕业考!六种麻烦全在洋流里打转" },
+  { name: "旋旋鳐", zone: "strait", targetR: 62, hazards: ["drift", "current"], boss: "ray", bigFishBias: 0.19, feature: "海峡BOSS旋旋鳐", buddy: true, hint: "旋旋鳐一挥翅膀就把洋流掀反!顺着它掀出来的流,咬它 9 口" },
+];
+
+/* ---- 第 11 章 · 荧光藻湾:含毒生物,好看的不一定能吃 ---- */
+const bloomHand: LevelDef[] = [
+  { name: "荧光初见", zone: "bloom", targetR: 62, hazards: ["toxin"], bigFishBias: 0.17, feature: "毒藻鱼登场", hint: "亮紫色一闪一闪的是毒藻鱼,吃下去会缩小发麻,别贪嘴!" },
+  { name: "亮亮陷阱", zone: "bloom", targetR: 62, hazards: ["toxin", "jelly"], bigFishBias: 0.17, feature: "毒藻配水母", hint: "水母也会发光,和毒藻鱼混在一起,看清颜色再张嘴" },
+  { name: "电藻荧光", zone: "bloom", targetR: 63, hazards: ["toxin", "eel"], bigFishBias: 0.18, feature: "毒藻带电", hint: "电电草亮起来的时候,毒藻鱼反而看不清了" },
+  { name: "毒影墨云", zone: "bloom", targetR: 63, hazards: ["toxin", "squid"], bigFishBias: 0.18, feature: "毒藻墨云", buddy: true, hint: "墨云一糊眼,毒藻鱼就趁机混进鱼群,让小伙伴帮你分辨" },
+  { name: "涡里荧光", zone: "bloom", targetR: 64, hazards: ["toxin", "vortex"], bigFishBias: 0.18, feature: "毒藻漩涡", hint: "涡流会把毒藻鱼一股脑吸到你面前,绕着涡边走" },
+  { name: "刺球藻田", zone: "bloom", targetR: 64, hazards: ["toxin", "urchin"], bigFishBias: 0.19, feature: "毒藻刺球田", hint: "藻田里刺刺球和毒藻鱼各占一半,慢慢挑着吃" },
+  { name: "荧光夜游", zone: "bloom", targetR: 65, hazards: ["toxin", "jelly", "eel"], bigFishBias: 0.19, feature: "毒藻夜游三重", hint: "整片藻湾都在发光,越亮的地方越要当心" },
+  { name: "毒涡双缠", zone: "bloom", targetR: 65, hazards: ["toxin", "vortex", "urchin"], bigFishBias: 0.19, feature: "毒藻涡刺双缠", hint: "被涡流拽进刺球堆的时候,先稳住方向再加速" },
+  { name: "小鱼帮帮忙", zone: "bloom", targetR: 67, hazards: ["toxin", "jelly", "squid"], bigFishBias: 0.19, feature: "共生小鱼助攻", buddy: true, hint: "共生小鱼不会去碰毒藻鱼,让它替你清干净小鱼群" },
+  { name: "藻田电网", zone: "bloom", targetR: 67, hazards: ["toxin", "eel", "vortex"], bigFishBias: 0.2, feature: "毒藻电网", hint: "电电草排成一张网,毒藻鱼就守在网眼里" },
+  { name: "藻湾大绽放", zone: "bloom", targetR: 69, hazards: ["toxin", "jelly", "eel", "squid", "vortex", "urchin"], bigFishBias: 0.2, feature: "荧光藻湾毕业考", hint: "藻湾毕业考!整片海一起绽放,六种麻烦全到齐" },
+  { name: "荧荧海葵王", zone: "bloom", targetR: 68, hazards: ["toxin", "jelly"], boss: "anemone", bigFishBias: 0.2, feature: "藻湾BOSS荧荧海葵王", buddy: true, hint: "荧荧海葵王会吐毒云还会叫水母帮忙!躲开紫雾,咬它 10 口" },
+];
+
+/* ---- 第 12 章 · 万丈压渊:水压把体型摁住,长不过头 ---- */
+const trenchHand: LevelDef[] = [
+  { name: "下潜第一压", zone: "trench", targetR: 68, hazards: ["pressure"], bigFishBias: 0.18, feature: "深渊压力登场", pressureSlack: 6, hint: "水压太大,你长到一定大小就长不动了!够到目标就够了" },
+  { name: "压力与洋流", zone: "trench", targetR: 68, hazards: ["pressure", "drift"], bigFishBias: 0.18, feature: "压力叠洋流", pressureSlack: 6, hint: "又挤又流,省着点力气,专挑顺路的小鱼吃" },
+  { name: "压渊毒藻", zone: "trench", targetR: 69, hazards: ["pressure", "toxin"], bigFishBias: 0.19, feature: "压力叠毒藻", pressureSlack: 5, hint: "体型本来就到顶了,再被毒藻鱼缩一口就更难追平" },
+  { name: "压里漩涡", zone: "trench", targetR: 69, hazards: ["pressure", "vortex"], bigFishBias: 0.19, feature: "压力叠漩涡", pressureSlack: 5, buddy: true, hint: "涡流在高压下转得更急,让共生小鱼替你去边上捡漏" },
+  { name: "深压电网", zone: "trench", targetR: 70, hazards: ["pressure", "eel"], bigFishBias: 0.19, feature: "压力叠电网", pressureSlack: 5, hint: "电电草在深压里亮得更久,数着节拍穿过去" },
+  { name: "压门泡帘", zone: "trench", targetR: 70, hazards: ["pressure", "bubbleWall"], bigFishBias: 0.19, feature: "压力叠泡帘", pressureSlack: 4, hint: "泡泡墙被压得又厚又窄,缺口要早早对准" },
+  { name: "洋流压顶", zone: "trench", targetR: 71, hazards: ["pressure", "drift", "vortex"], bigFishBias: 0.2, feature: "压力洋流漩涡三叠", pressureSlack: 4, hint: "洋流加漩涡,方向乱成一团,先看清再动" },
+  { name: "毒压双重", zone: "trench", targetR: 71, hazards: ["pressure", "toxin", "eel"], bigFishBias: 0.2, feature: "压力毒藻电草三叠", pressureSlack: 4, hint: "毒藻鱼躲在电草缝里,宁可少吃一口也别吃错" },
+  { name: "小鱼陪你潜", zone: "trench", targetR: 73, hazards: ["pressure", "drift", "toxin"], bigFishBias: 0.2, feature: "深渊共生助潜", pressureSlack: 3, buddy: true, hint: "共生小鱼不受水压影响,越到深处它越顶用" },
+  { name: "压渊泡阵", zone: "trench", targetR: 73, hazards: ["pressure", "bubbleWall", "vortex"], bigFishBias: 0.2, feature: "深渊泡阵漩涡", pressureSlack: 3, hint: "泡泡墙和漩涡把海沟切成一格一格,挑空档冲" },
+  { name: "万丈总压", zone: "trench", targetR: 75, hazards: ["pressure", "drift", "toxin", "vortex", "eel", "bubbleWall"], bigFishBias: 0.2, feature: "万丈压渊毕业考", pressureSlack: 3, hint: "压渊毕业考!六种麻烦压在一起,稳住呼吸慢慢来" },
+  { name: "咔咔巨蚌", zone: "trench", targetR: 74, hazards: ["pressure", "drift"], boss: "clam", bigFishBias: 0.2, feature: "压渊BOSS咔咔巨蚌", pressureSlack: 4, buddy: true, hint: "咔咔巨蚌一合壳就加压,把你的体型上限越压越低!趁它张壳咬满 11 口" },
+];
+
 export const LEVELS: LevelDef[] = [
   ...buildZone(0, shallowHand),
   ...buildZone(1, coralHand),
@@ -351,6 +614,29 @@ export const LEVELS: LevelDef[] = [
   ...buildZone(6, volcanoHand),
   ...buildZone(7, abyssHand),
   ...buildZone(8, pearlHand),
+  ...buildDeepZone("strait", straitHand, NEW_ZONE_SIZES[0], {
+    pool: ["current", "urchin", "squid", "bubbleWall", "puffer"],
+    forced: ["drift"],
+    fromR: 60,
+    toR: 62,
+    bigFishBias: 0.18,
+  }),
+  ...buildDeepZone("bloom", bloomHand, NEW_ZONE_SIZES[1], {
+    pool: ["jelly", "eel", "squid", "vortex", "urchin"],
+    forced: ["toxin"],
+    fromR: 66,
+    toR: 68,
+    bigFishBias: 0.19,
+  }),
+  ...buildDeepZone("trench", trenchHand, NEW_ZONE_SIZES[2], {
+    pool: ["drift", "toxin", "vortex", "eel", "bubbleWall"],
+    forced: ["pressure"],
+    fromR: 72,
+    toR: 74,
+    bigFishBias: 0.2,
+    slackFrom: 5,
+    slackTo: 3,
+  }),
 ];
 
 /* ---------------- 吃与长大 ---------------- */
@@ -420,6 +706,36 @@ export function eelActive(time: number, offset: number): boolean {
   return t < EEL_ON;
 }
 
+/** 电电草的电场半宽:碰到判定是 |玩家 x − 草 x| < 体型 + 13。 */
+export function eelReach(playerR: number): number {
+  return playerR + 13;
+}
+
+/**
+ * 一关里的电电草怎么插。前九片海按 1.0 的老样子,一棵都不动。
+ *
+ * 1.1 的三片深海把目标体型推到了 67~75,而电场半宽是跟着体型长的,
+ * 老密度的五棵草并排就连成一张连缝都不留的电网,再稳的手也只能硬吃伤害。
+ * 所以深海只留两棵、贴着左右两边站,而且相位正好错开——两棵永远不会同时
+ * 通电,中间那条水道任何时候都游得过去。
+ */
+export function eelPlan(zone: ZoneId, tier: number): { fx: number; offset: number }[] {
+  if (zone === "strait" || zone === "bloom" || zone === "trench") {
+    return [
+      { fx: 0.14, offset: 0 },
+      { fx: 0.86, offset: EEL_ON + 0.5 },
+    ];
+  }
+  const plan = [
+    { fx: 0.28, offset: 0 },
+    { fx: 0.55, offset: 1.3 },
+    { fx: 0.82, offset: 2.5 },
+  ];
+  if (tier >= 2) plan.push({ fx: 0.12, offset: 1.9 });
+  if (tier >= 3) plan.push({ fx: 0.68, offset: 0.7 });
+  return plan;
+}
+
 /** 涡流对 (dx,dy) 处物体的吸力(指向涡心,越近越强;涡心外无力)。 */
 export function vortexPull(dx: number, dy: number): { fx: number; fy: number } {
   const d = Math.hypot(dx, dy);
@@ -435,10 +751,96 @@ export function inBubbleGap(y: number, gapY: number, gapH = BUBBLE_GAP): boolean
 
 /** 章节越深,环境障碍越密(1/2/3 档)。 */
 export function hazardTier(levelIdx: number): 1 | 2 | 3 {
-  const zi = Math.floor(levelIdx / LEVELS_PER_THEME);
+  const zi = themeIndexOf(levelIdx);
   if (zi <= 2) return 1;
   if (zi <= 5) return 2;
   return 3;
+}
+
+/* ---------------- 1.1 新机制 ---------------- */
+
+/** 洋流换向周期(秒):整片海一起转,转到一半会先安静下来再反过来。 */
+export const DRIFT_PERIOD = 8;
+/** 洋流推力(像素/秒)。 */
+export const DRIFT_SPEED = 62;
+
+/**
+ * 洋流在 time 时刻的推力(整片海一个方向,横向为主、竖向轻一点)。
+ * 用连续的三角函数换向:换向前后都会自然减速到零,不会突然把人甩飞。
+ */
+export function driftVector(time: number, phase = 0): { fx: number; fy: number } {
+  const a = ((time / DRIFT_PERIOD) + phase) * Math.PI * 2;
+  return { fx: Math.cos(a) * DRIFT_SPEED, fy: Math.sin(a * 0.5) * DRIFT_SPEED * 0.4 };
+}
+
+/** 洋流现在往右推还是往左推(HUD 上画箭头用)。 */
+export function driftDir(time: number, phase = 0): 1 | -1 {
+  return driftVector(time, phase).fx >= 0 ? 1 : -1;
+}
+
+/** 吃到毒藻鱼会缩小的比例。 */
+export const TOXIN_SHRINK = 0.86;
+/** 吃到毒藻鱼后麻酥酥的秒数(只是变迟钝,不掉心)。 */
+export const TOXIN_NUMB = 1.6;
+
+/** 吃到毒藻鱼:缩一点点,但绝不会缩回比出生还小。 */
+export function toxinShrink(r: number): number {
+  return Math.max(START_RADIUS, r * TOXIN_SHRINK);
+}
+
+/** 麻酥酥期间跟手的迟钝程度:剩余时间越少越灵活。 */
+export function numbFollowMult(left: number): number {
+  if (left <= 0) return 1;
+  const t = Math.min(1, left / TOXIN_NUMB);
+  return 0.45 + 0.55 * (1 - t);
+}
+
+/** 共生小鱼能顺手帮你吃掉的范围(像素)。 */
+export const BUDDY_REACH = 74;
+/** 最多能带几条共生小鱼。 */
+export const BUDDY_MAX = 2;
+/** 共生小鱼吃一口给的分。 */
+export const BUDDY_SCORE = 8;
+
+/** 共生小鱼的体型:跟着你长,但只有你的四成。 */
+export function buddyRadius(playerR: number): number {
+  return Math.max(7, playerR * 0.4);
+}
+
+/** 共生小鱼只帮你吃不比它大的小鱼(毒藻鱼它才不碰)。 */
+export function buddyCanEat(buddyR: number, fishR: number): boolean {
+  return fishR <= buddyR * 0.95;
+}
+
+/** 共生小鱼跟随:朝跟随点靠拢,离得越远追得越急。 */
+export function buddyStep(
+  bx: number,
+  by: number,
+  tx: number,
+  ty: number,
+  dt: number,
+): { x: number; y: number } {
+  const k = Math.min(1, dt * 4.5);
+  return { x: bx + (tx - bx) * k, y: by + (ty - by) * k };
+}
+
+/** 深渊压力没生效时,还能比目标多长 10 像素(1.0 的老手感)。 */
+export const FREE_GROW_SLACK = 10;
+/** 深渊压力默认余量。 */
+export const PRESSURE_SLACK = 4;
+
+/**
+ * 本关能长到的体型上限。
+ * 没有深渊压力就是老规矩(目标 + 10);有压力时余量收紧,想赢就得精打细算。
+ */
+export function sizeCapFor(def: LevelDef): number {
+  if (!def.hazards.includes("pressure")) return def.targetR + FREE_GROW_SLACK;
+  return def.targetR + (def.pressureSlack ?? PRESSURE_SLACK);
+}
+
+/** 咔咔巨蚌合壳加压:上限一档一档往下压,但永远不会压到够不着目标。 */
+export function crushedCap(cap: number, crushes: number, targetR: number): number {
+  return Math.max(targetR + 1, cap - crushes * 1.5);
 }
 
 /* ---------------- 生物图鉴 ---------------- */
@@ -466,7 +868,14 @@ export const DEX: DexEntry[] = [
   { id: "whale", name: "鲸鲸大王", emoji: "🐳", desc: "冰海老大,会把你吸过去" },
   { id: "lobster", name: "火火龙虾", emoji: "🦞", desc: "火山老大,会召刺刺球" },
   { id: "shark", name: "鲨鲨霸王", emoji: "🦈", desc: "深渊老大,越伤越猛" },
-  { id: "dragon", name: "海龙王", emoji: "🐉", desc: "龙宫之主,最终 BOSS!" },
+  { id: "dragon", name: "海龙王", emoji: "🐉", desc: "龙宫之主,九大海域的终点" },
+  // ---- 1.1 新收录 ----
+  { id: "drift", name: "洋流", emoji: "🌀", desc: "整片海一起换向的大水流" },
+  { id: "toxin", name: "毒藻鱼", emoji: "🦠", desc: "亮闪闪的,吃了会缩小发麻" },
+  { id: "buddy", name: "共生小鱼", emoji: "🐬", desc: "跟着你游,顺手帮你吃小鱼" },
+  { id: "ray", name: "旋旋鳐", emoji: "🪁", desc: "海峡老大,翅膀一挥掀反洋流" },
+  { id: "anemone", name: "荧荧海葵王", emoji: "🪸", desc: "藻湾老大,会吐一团团毒雾" },
+  { id: "clam", name: "咔咔巨蚌", emoji: "🐚", desc: "压渊之主,合壳就加压" },
 ];
 
 export const DEX_KEY = "yiduo-yixing.ocean-munch.dex.v1";
@@ -538,7 +947,7 @@ export function isLevelUnlocked(stars: ReadonlyArray<number>, idx: number): bool
 
 /** 章节解锁:上一章 BOSS 关(也就是本章第一关的前一关)通过即可。 */
 export function isThemeUnlocked(stars: ReadonlyArray<number>, themeIdx: number): boolean {
-  return isLevelUnlocked(stars, themeIdx * LEVELS_PER_THEME);
+  return isLevelUnlocked(stars, themeStart(themeIdx));
 }
 
 /** 本章已得的星星数。 */

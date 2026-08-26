@@ -251,3 +251,64 @@ export function calcStars(birdsLeft: number, destroyRatio: number): 1 | 2 | 3 {
   if (birdsLeft >= 1 || destroyRatio >= 0.6) return 2;
   return 1;
 }
+
+/* ------------------------------------------------------------------ */
+/* 1.1 新机制(全部叠加实现:上面的既有手感参数与函数一个都没动)          */
+/* ------------------------------------------------------------------ */
+
+/** 一对传送门:小鸟钻进任意一口,就从另一口飞出 */
+export interface PortalPairLike {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  r: number;
+}
+
+/**
+ * 传送出口点:沿当前速度方向站到出口圈外一点点,
+ * 保证出来的一瞬间不会又被同一口吸回去。速度本身不变。
+ */
+export function portalExitPoint(
+  exitX: number,
+  exitY: number,
+  exitR: number,
+  vx: number,
+  vy: number
+): { x: number; y: number } {
+  const sp = Math.hypot(vx, vy);
+  if (sp < 1e-6) return { x: exitX, y: exitY - exitR - 4 };
+  return { x: exitX + (vx / sp) * (exitR + 4), y: exitY + (vy / sp) * (exitR + 4) };
+}
+
+/**
+ * 传送判定:圆心进了 A 口就从 B 口出,进了 B 口就从 A 口出(双向)。
+ * 没碰到任何一口返回 null。只挪位置不改速度,调用方负责冷却时间。
+ */
+export function portalHop(
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  p: PortalPairLike
+): { x: number; y: number } | null {
+  if (Math.hypot(x - p.ax, y - p.ay) < p.r) return portalExitPoint(p.bx, p.by, p.r, vx, vy);
+  if (Math.hypot(x - p.bx, y - p.by) < p.r) return portalExitPoint(p.ax, p.ay, p.r, vx, vy);
+  return null;
+}
+
+/**
+ * 卷卷的回旋技:水平方向调头并略微加速,同时向上抬一把,
+ * 专门用来绕到堡垒背面、敲开只朝一边开口的藏身处。
+ */
+export function boomerangVelocity(vx: number, vy: number): { vx: number; vy: number } {
+  return { vx: -vx * 1.12, vy: Math.min(vy, 0) * 0.4 - 120 };
+}
+
+/**
+ * 岩壳块的两段连锁:外壳被打碎后不是消失,而是露出更脆的晶核,
+ * 必须再打一次才算真正拆掉。不是岩壳的材质返回 null(照常摧毁)。
+ */
+export function shellBreak(kind: string): "core" | null {
+  return kind === "shell" ? "core" : null;
+}

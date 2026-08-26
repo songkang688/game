@@ -494,6 +494,145 @@ export function boardPosition(
   return { x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t };
 }
 
+/* ================= 1.1 新机制纯函数（叠加在老绳物理之上） ================= */
+
+/**
+ * 发条绳的伸缩倍率：在 min..max 之间余弦来回，period 秒一个来回。
+ * t = offset 时正好收到最短（min），半个周期后放到最长（max）。
+ */
+export function winchScale(
+  min: number,
+  max: number,
+  period: number,
+  t: number,
+  offset = 0
+): number {
+  if (period <= 0) return max;
+  const phase = ((t - offset) / period) * Math.PI * 2;
+  return min + ((max - min) * (1 - Math.cos(phase))) / 2;
+}
+
+/**
+ * 按倍率重设 [from, to) 这一段绳的静止长度（发条绳每帧调用）。
+ * baseRests 是这段绳刚搭好时的原始长度，索引与 from 对齐。
+ */
+export function retuneLinks(
+  links: Link[],
+  from: number,
+  to: number,
+  baseRests: number[],
+  scale: number
+): void {
+  const end = Math.min(to, links.length);
+  for (let i = Math.max(0, from); i < end; i++) {
+    const base = baseRests[i - from];
+    if (base === undefined) continue;
+    links[i].rest = base * scale;
+  }
+}
+
+/**
+ * 风扇是否正在吹：period 不传（或 ≤0）就是常开；
+ * 否则每个周期里前 duty 比例的时间在吹，offset 是相位偏移。
+ */
+export function fanOn(
+  period: number | undefined,
+  duty: number,
+  offset: number,
+  t: number
+): boolean {
+  if (!period || period <= 0) return true;
+  if (duty <= 0) return false;
+  if (duty >= 1) return true;
+  const phase = (((t - offset) % period) + period) % period;
+  return phase < period * duty;
+}
+
+/**
+ * 风扇气流：只在矩形风道内推，方向 dir，离出风口越远越弱（最远端剩 55%）。
+ * 返回的是加速度（和重力同量纲），风道外为 0。
+ */
+export function fanForceAt(
+  rx: number, ry: number, rw: number, rh: number,
+  dir: "up" | "down" | "left" | "right",
+  power: number,
+  x: number,
+  y: number
+): { fx: number; fy: number } {
+  if (x < rx || x > rx + rw || y < ry || y > ry + rh) return { fx: 0, fy: 0 };
+  let ux = 0;
+  let uy = 0;
+  let span = 1;
+  let travelled = 0;
+  if (dir === "up") {
+    uy = -1;
+    span = rh;
+    travelled = ry + rh - y;
+  } else if (dir === "down") {
+    uy = 1;
+    span = rh;
+    travelled = y - ry;
+  } else if (dir === "left") {
+    ux = -1;
+    span = rw;
+    travelled = rx + rw - x;
+  } else {
+    ux = 1;
+    span = rw;
+    travelled = x - rx;
+  }
+  const s = span > 0 ? Math.max(0, Math.min(1, travelled / span)) : 0;
+  const strength = power * (1 - 0.45 * s);
+  return { fx: ux * strength, fy: uy * strength };
+}
+
+/**
+ * 糖霜磁铁：半径内朝磁铁中心吸（strength > 0）或往外推（< 0），越近越强。
+ * 返回的是加速度，半径外为 0。
+ */
+export function magnetForceAt(
+  mx: number,
+  my: number,
+  radius: number,
+  strength: number,
+  x: number,
+  y: number
+): { fx: number; fy: number } {
+  const dx = mx - x;
+  const dy = my - y;
+  const d = Math.hypot(dx, dy);
+  if (radius <= 0 || d > radius || d < 1e-6) return { fx: 0, fy: 0 };
+  const k = strength * (1 - d / radius);
+  return { fx: (dx / d) * k, fy: (dy / d) * k };
+}
+
+/** 施加一个加速度（与重力同量纲）：Verlet 里直接叠到位置上。 */
+export function applyAcceleration(
+  p: Particle,
+  ax: number,
+  ay: number,
+  dt: number
+): void {
+  if (p.pinned) return;
+  p.x += ax * dt * dt;
+  p.y += ay * dt * dt;
+}
+
+/**
+ * 捣蛋鬼「咕噜噜」的巡逻位置：在两点间余弦往返，offset 秒相位差。
+ * period 秒一个来回；period ≤ 0 视为站着不动。
+ */
+export function patrolPosition(
+  x1: number, y1: number, x2: number, y2: number,
+  period: number,
+  t: number,
+  offset = 0
+): { x: number; y: number } {
+  if (period <= 0) return { x: x1, y: y1 };
+  const s = (1 - Math.cos(((t + offset) * Math.PI * 2) / period)) / 2;
+  return { x: x1 + (x2 - x1) * s, y: y1 + (y2 - y1) * s };
+}
+
 /** 总星数换最终评级。 */
 export function starsForCollected(collected: number, total: number): 1 | 2 | 3 {
   if (total <= 0) return 1;

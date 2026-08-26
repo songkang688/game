@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { allowedQuarters, buildQuestions, CHAPTERS, kindPool, LEVELS, questionCount } from "./levels";
 
-describe("时钟小屋 99 关", () => {
-  it("恰好 99 关", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("时钟小屋 188 关", () => {
+  it("恰好 188 关", () => {
+    expect(LEVELS).toHaveLength(188);
   });
 
-  it("至少 6 个主题章节，章节大小之和为 99", () => {
+  it("至少 6 个主题章节，章节大小之和为 188", () => {
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
   it("每关题目合法：3 个唯一选项、正确项与答案一致", () => {
@@ -116,5 +116,385 @@ describe("时钟小屋 99 关", () => {
   it("章节内题量递进", () => {
     expect(questionCount(0)).toBeLessThan(questionCount(16));
     expect(questionCount(83)).toBeLessThanOrEqual(questionCount(98));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.1：第 100–188 关（出发到达站 / 廿四时钟塔 / 星期日历屋 / 时刻表车站）
+// ---------------------------------------------------------------------------
+
+/** 1.0 的前 99 关章节切分，硬编码做回归断言 */
+const LEGACY_CHAPTER_SNAPSHOT = [
+  { name: "整点钟楼", size: 17 },
+  { name: "半点小屋", size: 17 },
+  { name: "一刻花园", size: 17 },
+  { name: "三刻广场", size: 16 },
+  { name: "拨针工坊", size: 16 },
+  { name: "时间冒险家", size: 16 },
+];
+
+const NEW_FROM = 99;
+const NEW_LEVELS = Array.from({ length: 188 - NEW_FROM }, (_, i) => NEW_FROM + i);
+const ADVANCED_KINDS = new Set([
+  "span", "arrive", "depart", "h24", "h12", "zone",
+  "weekday", "monthdays", "nthday", "tableEarly", "tableFast", "tableWait",
+]);
+
+function strip(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** "1 小时 45 分" / "45 分" / "2 小时" → 分钟数 */
+function parseDur(text: string): number {
+  const h = text.match(/(\d+)\s*小时/);
+  const m = text.match(/(\d+)\s*分/);
+  return (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
+}
+
+function parseHM(text: string): number {
+  const m = text.match(/(\d{1,2}):(\d{2})/);
+  if (!m) throw new Error(`时刻解析失败: ${text}`);
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+function fmtHM(mins: number): string {
+  const v = ((mins % 1440) + 1440) % 1440;
+  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`;
+}
+
+function fmtHM24(mins: number): string {
+  const v = ((mins % 1440) + 1440) % 1440;
+  return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+}
+
+function fmtDur(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} 分`;
+  if (m === 0) return `${h} 小时`;
+  return `${h} 小时 ${m} 分`;
+}
+
+const WEEK = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+const MONTH_LEN = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function parseTrips(text: string): Array<{ no: number; dep: number; arr: number }> {
+  const out: Array<{ no: number; dep: number; arr: number }> = [];
+  const re = /(\d+) 号车 (\d{2}):(\d{2}) → (\d{2}):(\d{2})/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    out.push({
+      no: Number(m[1]),
+      dep: Number(m[2]) * 60 + Number(m[3]),
+      arr: Number(m[4]) * 60 + Number(m[5]),
+    });
+  }
+  return out;
+}
+
+/** 逐题机器验算：从题面重新算一遍答案，对不上就是这一关不可解 */
+function verify(q: ReturnType<typeof buildQuestions>[number], where: string): void {
+  const text = strip(q.promptHTML);
+  switch (q.kind) {
+    case "span": {
+      const m = text.match(/(\d{1,2}):(\d{2}) ➜ .*?(\d{1,2}):(\d{2})/);
+      expect(m, where).not.toBeNull();
+      const from = Number(m![1]) * 60 + Number(m![2]);
+      const to = Number(m![3]) * 60 + Number(m![4]);
+      expect(q.answer, where).toBe(fmtDur(((to - from) % 1440 + 1440) % 1440));
+      break;
+    }
+    case "arrive": {
+      const m = text.match(/(\d{1,2}):(\d{2}) 出发 · 走 (.+)$/);
+      expect(m, where).not.toBeNull();
+      expect(q.answer, where).toBe(fmtHM(Number(m![1]) * 60 + Number(m![2]) + parseDur(m![3])));
+      break;
+    }
+    case "depart": {
+      const m = text.match(/(\d{1,2}):(\d{2}) 到站 · 走 (.+)$/);
+      expect(m, where).not.toBeNull();
+      expect(q.answer, where).toBe(fmtHM(Number(m![1]) * 60 + Number(m![2]) - parseDur(m![3])));
+      break;
+    }
+    case "h24": {
+      const m = text.match(/(上午|下午) (\d{1,2}):(\d{2})/);
+      expect(m, where).not.toBeNull();
+      const h12 = Number(m![2]);
+      const base = h12 === 12 ? 0 : h12;
+      const h24 = m![1] === "上午" ? base : base + 12;
+      expect(q.answer, where).toBe(fmtHM24(h24 * 60 + Number(m![3])));
+      break;
+    }
+    case "h12": {
+      const mins = parseHM(text);
+      const h = Math.floor(mins / 60);
+      const period = h < 12 ? "上午" : "下午";
+      const hour = h % 12 === 0 ? 12 : h % 12;
+      expect(q.answer, where).toBe(`${period} ${hour}:${String(mins % 60).padStart(2, "0")}`);
+      break;
+    }
+    case "zone": {
+      const m = text.match(/(\d{2}):(\d{2}) · (.+?) 比 (.+?) (早|晚) (\d+) 小时/);
+      expect(m, where).not.toBeNull();
+      const now = Number(m![1]) * 60 + Number(m![2]);
+      const delta = (m![5] === "早" ? 1 : -1) * Number(m![6]);
+      expect(q.answer, where).toBe(fmtHM24(now + delta * 60));
+      // 问的必须是「另一座城」，方向不能搞反
+      expect(q.ask, where).toContain(m![3]);
+      expect(m![3], where).not.toBe(m![4]);
+      break;
+    }
+    case "weekday": {
+      const m = text.match(/(星期[一二三四五六日]) ＋ (\d+) 天/);
+      expect(m, where).not.toBeNull();
+      expect(q.answer, where).toBe(WEEK[(WEEK.indexOf(m![1]) + Number(m![2])) % 7]);
+      break;
+    }
+    case "monthdays": {
+      const m = text.match(/平年 (\d{1,2}) 月/);
+      expect(m, where).not.toBeNull();
+      expect(q.answer, where).toBe(`${MONTH_LEN[Number(m![1]) - 1]} 天`);
+      break;
+    }
+    case "nthday": {
+      const pm = text.match(/(\d{1,2}) 月 1 号是(星期[一二三四五六日])/);
+      const am = q.ask.match(/第 (\d) 个(星期[一二三四五六日])是几号？/);
+      expect(pm, where).not.toBeNull();
+      expect(am, where).not.toBeNull();
+      const first = WEEK.indexOf(pm![2]);
+      const want = WEEK.indexOf(am![2]);
+      const date = 1 + (((want - first) % 7) + 7) % 7 + (Number(am![1]) - 1) * 7;
+      expect(date, where).toBeLessThanOrEqual(MONTH_LEN[Number(pm![1]) - 1]);
+      expect(q.answer, where).toBe(`${date} 号`);
+      break;
+    }
+    case "tableEarly": {
+      const trips = parseTrips(text);
+      expect(trips.length, where).toBe(3);
+      const best = trips.reduce((a, b) => (b.arr < a.arr ? b : a));
+      expect(new Set(trips.map((x) => x.arr)).size, where).toBe(3);
+      expect(q.answer, where).toBe(`${best.no} 号车`);
+      break;
+    }
+    case "tableFast": {
+      const trips = parseTrips(text);
+      expect(trips.length, where).toBe(3);
+      const best = trips.reduce((a, b) => (b.arr - b.dep < a.arr - a.dep ? b : a));
+      expect(new Set(trips.map((x) => x.arr - x.dep)).size, where).toBe(3);
+      expect(q.answer, where).toBe(`${best.no} 号车`);
+      break;
+    }
+    case "tableWait": {
+      const trips = parseTrips(text);
+      const now = parseHM(text.match(/现在 (\d{2}:\d{2})/)![1]);
+      const no = Number(q.ask.match(/等 (\d+) 号车/)![1]);
+      const target = trips.find((x) => x.no === no);
+      expect(target, where).toBeDefined();
+      expect(target!.dep - now, where).toBeGreaterThan(0);
+      expect(q.answer, where).toBe(fmtDur(target!.dep - now));
+      break;
+    }
+    default:
+      throw new Error(`${where}：第 100–188 关不该出现旧题型 ${q.kind}`);
+  }
+}
+
+describe("时钟小屋 · 1.1 第 100–188 关", () => {
+  it("前 99 关章节切分与 1.0 完全一致（回归）", () => {
+    expect(CHAPTERS.slice(0, 6).map((c) => ({ name: c.name, size: c.size }))).toEqual(LEGACY_CHAPTER_SNAPSHOT);
+    expect(CHAPTERS.slice(0, 6).reduce((s, c) => s + c.size, 0)).toBe(99);
+  });
+
+  it("末尾追加 4 个全新章节共 89 关，总数正好 188", () => {
+    const extra = CHAPTERS.slice(6);
+    expect(extra).toHaveLength(4);
+    expect(extra.reduce((s, c) => s + c.size, 0)).toBe(89);
+    expect(totalSize(CHAPTERS)).toBe(188);
+    expect(new Set(CHAPTERS.map((c) => c.name)).size).toBe(CHAPTERS.length);
+  });
+
+  it("新章节都配齐了 emoji、粉彩色和一句话介绍", () => {
+    for (const ch of CHAPTERS.slice(6)) {
+      expect(ch.emoji.length).toBeGreaterThan(0);
+      expect(ch.color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(ch.desc.length).toBeGreaterThanOrEqual(8);
+      expect(ch.size).toBeGreaterThan(0);
+    }
+  });
+
+  it("前 99 关的题量与题型池不受扩容影响（按 1.0 公式回归）", () => {
+    const legacySizes = [17, 17, 17, 16, 16, 16];
+    let start = 0;
+    legacySizes.forEach((size, ci) => {
+      for (let i = 0; i < size; i++) {
+        const level = start + i;
+        const t = i / Math.max(1, size - 1);
+        expect(questionCount(level)).toBe(4 + Math.min(3, Math.floor(t * 3.6)));
+        const expected =
+          ci <= 3 ? ["read"]
+            : ci === 4 ? (t < 0.6 ? ["set"] : ["set", "read"])
+              : t < 0.4 ? ["read", "set"] : ["read", "set", "next"];
+        expect(kindPool(level)).toEqual(expected);
+      }
+      start += size;
+    });
+    expect(start).toBe(99);
+  });
+
+  it("第 100–188 关逐关合法：题量 6–10、3 个唯一选项、正确项即答案", () => {
+    for (const level of NEW_LEVELS) {
+      const qs = buildQuestions(level);
+      expect(qs.length, `第 ${level + 1} 关`).toBe(questionCount(level));
+      expect(qs.length).toBeGreaterThanOrEqual(6);
+      expect(qs.length).toBeLessThanOrEqual(10);
+      for (const q of qs) {
+        expect(q.choices.length, `第 ${level + 1} 关`).toBe(3);
+        expect(new Set(q.choices).size, `第 ${level + 1} 关`).toBe(3);
+        expect(q.correct).toBeGreaterThanOrEqual(0);
+        expect(q.correct).toBeLessThan(3);
+        expect(q.choices[q.correct], `第 ${level + 1} 关`).toBe(q.answer);
+        expect(ADVANCED_KINDS.has(q.kind)).toBe(true);
+      }
+    }
+  });
+
+  it("第 100–188 关逐关可解：每道题都能从题面重新算出答案", () => {
+    let checked = 0;
+    for (const level of NEW_LEVELS) {
+      for (const q of buildQuestions(level)) {
+        verify(q, `第 ${level + 1} 关 · ${q.kind}`);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(600);
+  });
+
+  it("出发到达站：出发 / 到达 / 时长三种问法都出现过且互相自洽", () => {
+    const kinds = new Set<string>();
+    for (let level = 99; level < 122; level++) {
+      for (const q of buildQuestions(level)) kinds.add(q.kind);
+    }
+    expect(kinds.has("span")).toBe(true);
+    expect(kinds.has("arrive")).toBe(true);
+    expect(kinds.has("depart")).toBe(true);
+    // 同一段行程正着算和倒着算必须闭合
+    for (const level of [99, 108, 121]) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind !== "arrive") continue;
+        const m = strip(q.promptHTML).match(/(\d{1,2}):(\d{2}) 出发 · 走 (.+)$/)!;
+        const start = Number(m[1]) * 60 + Number(m[2]);
+        const dur = parseDur(m[3]);
+        expect(dur).toBeGreaterThan(0);
+        expect(fmtHM(start + dur)).toBe(q.answer);
+        expect(fmtHM(parseHM(q.answer) - dur)).toBe(fmtHM(start));
+      }
+    }
+  });
+
+  it("廿四时钟塔：24 小时制互换与跨城对表都覆盖到了", () => {
+    const kinds = new Set<string>();
+    for (let level = 122; level < 144; level++) {
+      for (const q of buildQuestions(level)) kinds.add(q.kind);
+    }
+    expect(kinds.has("h24")).toBe(true);
+    expect(kinds.has("h12")).toBe(true);
+    expect(kinds.has("zone")).toBe(true);
+    // 24 小时制答案一律是补零的 00:00–23:59
+    for (let level = 122; level < 144; level++) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind === "h24" || q.kind === "zone") {
+          expect(q.answer).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/);
+        }
+        if (q.kind === "h12") expect(q.answer).toMatch(/^(上午|下午) ([1-9]|1[0-2]):[0-5]\d$/);
+      }
+    }
+  });
+
+  it("星期日历屋：星期推算 / 平年月份天数 / 第 n 个星期几都覆盖到了", () => {
+    const kinds = new Set<string>();
+    for (let level = 144; level < 166; level++) {
+      for (const q of buildQuestions(level)) kinds.add(q.kind);
+    }
+    expect(kinds.has("weekday")).toBe(true);
+    expect(kinds.has("monthdays")).toBe(true);
+    expect(kinds.has("nthday")).toBe(true);
+    for (let level = 144; level < 166; level++) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind === "weekday") expect(WEEK).toContain(q.answer);
+        if (q.kind === "monthdays") expect(["28 天", "29 天", "30 天", "31 天"]).toContain(q.answer);
+      }
+    }
+  });
+
+  it("时刻表车站：最早到 / 最快 / 候车时长的答案都唯一", () => {
+    const kinds = new Set<string>();
+    for (let level = 166; level < 188; level++) {
+      for (const q of buildQuestions(level)) kinds.add(q.kind);
+    }
+    expect(kinds.has("tableEarly")).toBe(true);
+    expect(kinds.has("tableFast")).toBe(true);
+    expect(kinds.has("tableWait")).toBe(true);
+    for (let level = 166; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        if (!q.kind.startsWith("table")) continue;
+        const trips = parseTrips(strip(q.promptHTML));
+        expect(trips).toHaveLength(3);
+        for (const trip of trips) expect(trip.arr).toBeGreaterThan(trip.dep);
+        expect(new Set(trips.map((x) => x.no)).size).toBe(3);
+      }
+    }
+  });
+
+  it("引入了前 99 关没有的新机制（时长计算 / 24 小时制 / 日历 / 时刻表）", () => {
+    const legacy = new Set<string>();
+    for (let level = 0; level < 99; level++) for (const q of buildQuestions(level)) legacy.add(q.kind);
+    const fresh = new Set<string>();
+    for (const level of NEW_LEVELS) for (const q of buildQuestions(level)) fresh.add(q.kind);
+    for (const k of legacy) expect(fresh.has(k)).toBe(false);
+    expect(fresh.size).toBeGreaterThanOrEqual(2);
+    expect([...fresh].every((k) => ADVANCED_KINDS.has(k))).toBe(true);
+  });
+
+  it("第 100–188 关明显更长：题量比前 99 关多", () => {
+    expect(questionCount(121)).toBe(10);
+    expect(questionCount(187)).toBe(10);
+    const legacyMax = Math.max(...Array.from({ length: 99 }, (_, i) => questionCount(i)));
+    const freshMin = Math.min(...NEW_LEVELS.map((i) => questionCount(i)));
+    expect(legacyMax).toBe(7);
+    expect(freshMin).toBe(6);
+    // 章节起点略缓一点，但整体明显更长
+    const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    expect(avg(NEW_LEVELS.map((i) => questionCount(i)))).toBeGreaterThan(
+      avg(Array.from({ length: 99 }, (_, i) => questionCount(i)))
+    );
+  });
+
+  it("第 100–188 关同一关重试题目一致（确定性生成）", () => {
+    for (const level of [99, 121, 122, 139, 144, 165, 166, 187]) {
+      expect(JSON.stringify(buildQuestions(level))).toBe(JSON.stringify(buildQuestions(level)));
+    }
+  });
+
+  it("引导语依旧口语化：全部 188 关的 ask 都不超过 15 个汉字", () => {
+    for (let level = 0; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        expect((q.ask.match(/[\u4e00-\u9fff]/g) ?? []).length, `第 ${level + 1} 关：${q.ask}`).toBeLessThanOrEqual(15);
+      }
+    }
+  });
+
+  it("文案零商标：题面与选项里没有英文字母（城市名全是原创中文）", () => {
+    for (const level of NEW_LEVELS) {
+      for (const q of buildQuestions(level)) {
+        expect(strip(q.promptHTML)).not.toMatch(/[A-Za-z]/);
+        expect(q.ask).not.toMatch(/[A-Za-z]/);
+        for (const c of q.choices) expect(c).not.toMatch(/[A-Za-z]/);
+      }
+    }
+  });
+
+  it("四个新章节的题型池互不相同", () => {
+    const sigs = new Set([110, 133, 155, 180].map((i) => kindPool(i).slice().sort().join(",")));
+    expect(sigs.size).toBe(4);
   });
 });

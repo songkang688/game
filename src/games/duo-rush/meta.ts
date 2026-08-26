@@ -8,5 +8,7 @@ export const meta = {
   emoji: "🏃",
   category: "party" as const,
   color: "#CDE9FF",
-  blurb: "朵朵星星同屏开跑！三条车道躲石头跳木栏，吃金币踩加速带，看谁跑得远！",
+  blurb: "2.5D 分屏竞速!朵朵星星各控三车道,无尽、抢金币、幽灵配速和人机三档都能跑。",
+  // index.ts:2.5D 分屏无尽竞速 / 抢金币 / 幽灵对战 / 人机三档,没有闯关地图
+  modes: ["versus", "endless", "twoPlayer"] as const,
 };

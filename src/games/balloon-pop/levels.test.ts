@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CHAPTERS, LEVELS } from "./levels";
 
-describe("气球砰砰 99 关", () => {
-  it("恰好 99 关，至少 6 个主题章节", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("气球砰砰 188 关", () => {
+  it("恰好 188 关，至少 6 个主题章节", () => {
+    expect(LEVELS).toHaveLength(188);
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
   it("每关参数合法", () => {
@@ -20,14 +20,14 @@ describe("气球砰砰 99 关", () => {
     }
   });
 
-  it("三种玩法模式与机关分布正确（并非同一模板）", () => {
+  it("前 99 关的三种玩法模式与机关分布正确（并非同一模板）", () => {
     expect(LEVELS[5].mode).toBe("free");
     expect(LEVELS[20].mode).toBe("color");
     expect(LEVELS[40].mode).toBe("number");
     expect(LEVELS[55].cloudChance).toBeGreaterThan(0);
     expect(LEVELS[70].rainbowChance).toBeGreaterThan(0);
     expect(LEVELS[90].night).toBe(true);
-    const modes = new Set(LEVELS.map((l) => l.mode));
+    const modes = new Set(LEVELS.slice(0, 99).map((l) => l.mode));
     expect(modes.size).toBe(3);
   });
 

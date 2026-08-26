@@ -7,7 +7,10 @@
 export const RECENT_KEY = "yiduo-yixing.recent.v1";
 
 /** 列表最多保留的游戏数(首页展示时再截取) */
-const RECENT_MAX = 8;
+const RECENT_MAX = 12;
+
+/** 首页「最近玩过」最多摆几张卡(1.1 从 4 提到 6,一屏刚好两行) */
+export const RECENT_SHOWN = 6;
 
 interface RecentStorage {
   getItem(key: string): string | null;

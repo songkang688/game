@@ -1,0 +1,204 @@
+/**
+ * 挑拣车厢：1.1 新增的多选玩法（第 100–188 关专用）。
+ *
+ * 和前 99 关的「三选一」完全不同：一整车卡片里，要把**全部**符合条件的都挑出来，
+ * 多挑、漏挑都算一次没挑对。提交后只报「还差几个 / 多挑了几个」，
+ * 不指名道姓说哪个错——孩子自己再判断一遍，这才是练出来的。
+ */
+import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
+import type { QuizTheme } from "../quiz99";
+import type { PickAllTask } from "./levels";
+
+export interface PickAllOptions {
+  stage: HTMLElement;
+  ctx: PlayCtx;
+  task: PickAllTask;
+  theme: QuizTheme;
+}
+
+/** 提交结果：漏了几个、多挑了几个 */
+export interface PickAllVerdict {
+  missing: number;
+  extra: number;
+  ok: boolean;
+}
+
+/** 对一次提交打分（纯函数，便于测试） */
+export function judgePickAll(picked: readonly string[], correct: readonly string[]): PickAllVerdict {
+  const want = new Set(correct);
+  const got = new Set(picked);
+  let missing = 0;
+  let extra = 0;
+  for (const c of want) if (!got.has(c)) missing++;
+  for (const p of got) if (!want.has(p)) extra++;
+  return { missing, extra, ok: missing === 0 && extra === 0 };
+}
+
+/** 提交后的一句话反馈：只说差多少，不说哪个错，也绝不批评 */
+export function pickAllFeedback(v: PickAllVerdict): string {
+  if (v.ok) return "全挑对啦！";
+  if (v.missing > 0 && v.extra > 0) return `还差 ${v.missing} 个没挑到，另外有 ${v.extra} 个再想想～`;
+  if (v.missing > 0) return `方向对了，还差 ${v.missing} 个没挑到～`;
+  return `挑得有点多啦，有 ${v.extra} 个再看看～`;
+}
+
+const CSS = `
+.pk-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:16px;padding:14px;
+  display:flex;flex-direction:column;gap:10px;min-height:380px;user-select:none;-webkit-user-select:none;}
+.pk-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+.pk-badge{background:#ffffffd9;border-radius:999px;padding:5px 12px;font-weight:800;font-size:14px;
+  box-shadow:0 2px 6px rgba(120,120,160,.2);}
+.pk-title{text-align:center;font-size:20px;font-weight:900;}
+.pk-hint{text-align:center;font-size:14px;font-weight:700;line-height:1.5;}
+.pk-chips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
+.pk-chip{border:none;border-radius:16px;padding:12px 16px;min-width:74px;min-height:56px;cursor:pointer;
+  font-family:inherit;font-size:20px;font-weight:900;color:#4a4460;background:#fff;
+  box-shadow:0 4px 0 rgba(120,120,160,.3);transition:transform .12s;}
+.pk-chip:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(120,120,160,.3);}
+.pk-chip.pk-on{outline:4px solid #ff8fc0;background:#fff0f6;transform:translateY(2px);}
+.pk-chip.pk-good{background:#e4f9e0;outline:4px solid #69db7c;}
+.pk-chip.pk-shake{animation:pkShake .38s;}
+@keyframes pkShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.pk-bottom{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.pk-go{border:none;border-radius:18px;padding:12px 30px;font-size:18px;font-weight:900;color:#fff;cursor:pointer;
+  font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
+.pk-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
+.pk-msg{min-height:24px;font-size:15px;font-weight:800;text-align:center;}
+.pk-chip:focus-visible,.pk-go:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+@media (max-width:420px){
+  .pk-chip{font-size:17px;min-width:64px;min-height:50px;padding:10px 12px;}
+  .pk-title{font-size:18px;}
+}
+`;
+
+export function runPickAll(opts: PickAllOptions): PlayHandle {
+  const { stage, ctx, task, theme } = opts;
+  const timeouts = new Set<ReturnType<typeof setTimeout>>();
+  const picked = new Set<string>();
+  let destroyed = false;
+  let ended = false;
+  let wrong = 0;
+
+  function later(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed && !ended) fn();
+    }, ms);
+    timeouts.add(t);
+  }
+
+  /** 结算专用：ended 已经置位，只要没被销毁就一定要报出胜负 */
+  function settle(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "pk-wrap";
+  wrap.style.background = theme.bg;
+  wrap.innerHTML = `
+    <style>${CSS}</style>
+    <div class="pk-top">
+      <span class="pk-badge pk-count" style="color:${theme.accent}">已挑 0 个</span>
+      <span class="pk-badge pk-life" style="color:#b84708">💗 ${"❤".repeat(task.maxWrong + 1)}</span>
+    </div>
+    <div class="pk-title" style="color:${theme.accent}">🚃 ${task.title}</div>
+    <div class="pk-hint" style="color:${theme.accent}">${task.hint}</div>
+    <div class="pk-chips"></div>
+    <div class="pk-bottom">
+      <button type="button" class="pk-go">✅ 就挑这些</button>
+      <div class="pk-msg" style="color:${theme.accent}"></div>
+    </div>
+  `;
+  stage.appendChild(wrap);
+
+  const chipsEl = wrap.querySelector(".pk-chips") as HTMLElement;
+  const countEl = wrap.querySelector(".pk-count") as HTMLElement;
+  const lifeEl = wrap.querySelector(".pk-life") as HTMLElement;
+  const msgEl = wrap.querySelector(".pk-msg") as HTMLElement;
+  const goBtn = wrap.querySelector(".pk-go") as HTMLButtonElement;
+
+  const chipEls = new Map<string, HTMLButtonElement>();
+  for (const chip of task.chips) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pk-chip";
+    btn.textContent = chip;
+    btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute("aria-label", `${chip}，还没挑中`);
+    btn.addEventListener("click", () => toggle(chip));
+    chipsEl.appendChild(btn);
+    chipEls.set(chip, btn);
+  }
+
+  function updateHud(): void {
+    countEl.textContent = `已挑 ${picked.size} 个`;
+    lifeEl.textContent = `💗 ${"❤".repeat(Math.max(0, task.maxWrong + 1 - wrong))}${"🤍".repeat(
+      Math.min(wrong, task.maxWrong + 1)
+    )}`;
+  }
+
+  function toggle(chip: string): void {
+    if (ended) return;
+    const btn = chipEls.get(chip);
+    if (!btn) return;
+    ctx.sfx("tap");
+    if (picked.has(chip)) picked.delete(chip);
+    else picked.add(chip);
+    const on = picked.has(chip);
+    btn.classList.toggle("pk-on", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", `${chip}，${on ? "已挑中" : "还没挑中"}`);
+    updateHud();
+  }
+
+  function submit(): void {
+    if (ended) return;
+    if (picked.size === 0) {
+      msgEl.textContent = "先点几张卡片，再按这个按钮～";
+      return;
+    }
+    const verdict = judgePickAll([...picked], task.correct);
+    if (verdict.ok) {
+      ended = true;
+      ctx.sfx("coin");
+      for (const c of task.correct) chipEls.get(c)?.classList.add("pk-good");
+      msgEl.textContent = pickAllFeedback(verdict);
+      const got = rateBelow(wrong, 0, 1);
+      settle(() => ctx.win(got, wrong === 0 ? "一次就全挑对，眼力真准！" : "全挑对啦，这一车稳稳到站！"), 700);
+      return;
+    }
+    wrong++;
+    ctx.sfx("oops");
+    updateHud();
+    for (const btn of chipEls.values()) {
+      btn.classList.add("pk-shake");
+    }
+    later(() => {
+      for (const btn of chipEls.values()) btn.classList.remove("pk-shake");
+    }, 400);
+    if (wrong > task.maxWrong) {
+      ended = true;
+      msgEl.textContent = "这一车有点难挑～";
+      settle(() => ctx.lose("这一车的卡片有点狡猾，歇一口气我们再挑一次！"), 500);
+      return;
+    }
+    msgEl.textContent = pickAllFeedback(verdict);
+  }
+
+  goBtn.addEventListener("click", submit);
+  updateHud();
+
+  return {
+    destroy() {
+      destroyed = true;
+      ended = true;
+      timeouts.forEach((t) => clearTimeout(t));
+      timeouts.clear();
+      wrap.remove();
+    },
+  };
+}

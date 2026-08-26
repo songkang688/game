@@ -8,5 +8,8 @@ export const meta = {
   emoji: "🐛",
   category: "casual" as const,
   color: "#E2F7DC",
-  blurb: "99 关六大花园！树篱石柱回字迷宫，追上星星果多拿星！",
+  blurb: "188 关十座花园！双身位、传送星门、巡逻小刺猬、窄门大考，还有无尽花园！",
+  // levels.ts 的 10 章合计 188 关,外加无尽花园
+  modes: ["campaign", "endless"] as const,
+  levels: 188,
 };

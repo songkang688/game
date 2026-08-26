@@ -8,5 +8,8 @@ export const meta = {
   emoji: "⭐",
   category: "casual" as const,
   color: "#FFE3F1",
-  blurb: "99 关七大主题！冰块、藤蔓、彩虹星，一路消到流星圣殿！",
+  blurb: "188 关十一大主题！冰块、藤蔓、彩虹星、订单和传送带，一路消到云顶！",
+  // 11 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
+  modes: ["campaign"] as const,
+  levels: 188,
 };

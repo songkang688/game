@@ -1,8 +1,9 @@
 /**
  * 弹弹小鸟 —— 拉开大弹弓,把捣蛋的绿绿豆全都弹走!
  *
- * - 99 关、6 个主题世界选关地图,通关解锁,可回放刷 3 星
- * - 4 种原创小鸟技能:糯糯(直球)/ 云云(分裂)/ 墩墩(下砸)/ 闪闪(加速钻)
+ * - 188 关、9 个主题世界选关地图,通关解锁,可回放刷 3 星
+ * - 5 种原创小鸟技能:糯糯(直球)/ 云云(分裂)/ 墩墩(下砸)/ 闪闪(加速钻)/ 卷卷(回旋)
+ * - 1.1 新机制:传送门(钻进去从另一口飞出)、岩壳块(要连敲两次才碎)
  * - 自写 2D 弹弓 + 重力 + 方块破坏物理,不用任何物理引擎
  */
 import { meta } from "./meta";
@@ -18,6 +19,7 @@ import {
   type BlockKind,
   type LevelDef,
   type PlatformDef,
+  type PortalDef,
   type SlopeDef,
   type WindDef
 } from "./levels";
@@ -29,6 +31,7 @@ import {
   SLING_Y,
   WORLD_H,
   WORLD_W,
+  boomerangVelocity,
   calcStars,
   canvasBufferHeight,
   circleRectHit,
@@ -37,6 +40,8 @@ import {
   impactDamage,
   launchVelocity,
   padSplit,
+  portalHop,
+  shellBreak,
   simulateTrajectory,
   slopeSurfaceY
 } from "./physics";
@@ -111,6 +116,17 @@ const BIRD_INFO: Record<BirdKind, BirdInfo> = {
     power: 0.95,
     gfactor: 1,
     hint: "飞行时点一下屏幕,闪闪会加速往前钻!"
+  },
+  boomerang: {
+    name: "卷卷",
+    skill: "回旋",
+    color: "#C3E8CF",
+    belly: "#E9F8EE",
+    dark: "#4F8A66",
+    r: 9,
+    power: 1.1,
+    gfactor: 1,
+    hint: "飞行时点一下屏幕,卷卷会掉头往回冲,专打堡垒的背面!"
   }
 };
 
@@ -129,7 +145,10 @@ const MAT: Record<BlockKind, MatInfo> = {
   stone: { hp: 90, vuln: 0.5, push: 0.28, fill: "#CDD2DC", edge: "#A6ADBC" },
   ice: { hp: 26, vuln: 1.5, push: 0.6, fill: "rgba(190,230,255,0.88)", edge: "#8FC6E8" },
   glass: { hp: 14, vuln: 2.6, push: 0.7, fill: "rgba(226,245,255,0.72)", edge: "#A5D8F0" },
-  tnt: { hp: 10, vuln: 2.2, push: 0.5, fill: "#FFB3B9", edge: "#E2848D" }
+  tnt: { hp: 10, vuln: 2.2, push: 0.5, fill: "#FFB3B9", edge: "#E2848D" },
+  // 1.1 岩壳块:外壳厚实,碎一层后露出脆脆的晶核(两段连锁)
+  shell: { hp: 62, vuln: 0.7, push: 0.3, fill: "#B49A85", edge: "#846852" },
+  core: { hp: 16, vuln: 2.2, push: 0.6, fill: "#FFD98E", edge: "#E0A452" }
 };
 
 const EXPLODE_R = 88;
@@ -195,6 +214,8 @@ interface RtBird {
   pierce: boolean;
   restT: number;
   age: number;
+  /** 传送冷却:刚从门里出来的一小会儿不再触发传送 */
+  portalCd: number;
 }
 
 interface RtBlock {
@@ -315,7 +336,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     <div class="slb-map">
       <div class="slb-map-head">
         <span class="slb-map-title">🐦 弹弹小鸟</span>
-        <span class="slb-badge slb-total">⭐ 0/180</span>
+        <span class="slb-badge slb-total">⭐ 0/564</span>
       </div>
       <div class="slb-tabs"></div>
       <div class="slb-grid"></div>
@@ -325,6 +346,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         <span style="color:#655388">💜 云云·分裂</span>
         <span style="color:#3F6B8F">💙 墩墩·下砸</span>
         <span style="color:#8A5F2C">🧡 闪闪·加速钻</span>
+        <span style="color:#3E7A55">💚 卷卷·回旋</span>
       </div>
     </div>
     <div class="slb-play" style="display:none">
@@ -507,6 +529,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   let platforms: RtPlatform[] = [];
   let slopes: SlopeDef[] = [];
   let winds: WindDef[] = [];
+  let portals: PortalDef[] = [];
   let particles: Particle[] = [];
   let queue: BirdKind[] = [];
   let loadedBird: RtBird | null = null;
@@ -552,7 +575,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       skillUsed: false,
       pierce: false,
       restT: 0,
-      age: 0
+      age: 0,
+      portalCd: 0
     };
   }
 
@@ -594,6 +618,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     platforms = (def.platforms ?? []).map((p) => ({ def: p, x: p.x, y: p.y, dxm: 0, dym: 0 }));
     slopes = def.slopes ?? [];
     winds = def.winds ?? [];
+    portals = def.portals ?? [];
     particles = [];
     pendingBooms = [];
     queue = [...def.birds];
@@ -693,6 +718,17 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function destroyBlock(block: RtBlock): void {
     if (block.dead) return;
+    // 1.1 岩壳块两段连锁:外壳碎掉不算拆除,露出更脆的晶核,再打一次才倒
+    const inner = shellBreak(block.kind);
+    if (inner) {
+      const shellMat = MAT[block.kind];
+      burst(block.x + block.w / 2, block.y + block.h / 2, [shellMat.fill, shellMat.edge, "#FFFFFF"], 14, 150, true);
+      block.kind = inner;
+      block.hp = MAT[inner].hp;
+      block.maxHp = MAT[inner].hp;
+      playThrottled("pop", 0.05);
+      return;
+    }
     block.dead = true;
     destroyedCount++;
     const m = MAT[block.kind];
@@ -787,6 +823,13 @@ export function mount(api: GameApi): { destroy: () => void } {
       bird.power *= 1.45;
       burst(bird.x, bird.y, ["#FFE0B0", "#FFC978", "#FFFFFF"], 10, 110, false);
       msgEl.textContent = "闪闪加速钻!嗖——!";
+    } else if (bird.kind === "boomerang") {
+      const v = boomerangVelocity(bird.vx, bird.vy);
+      bird.vx = v.vx;
+      bird.vy = v.vy;
+      bird.power *= 1.3;
+      burst(bird.x, bird.y, ["#C3E8CF", "#8FD1A8", "#FFFFFF"], 12, 120, false);
+      msgEl.textContent = "卷卷回旋!掉头咚——!";
     }
     playThrottled("tap", 0);
   }
@@ -1076,6 +1119,24 @@ export function mount(api: GameApi): { destroy: () => void } {
       bird.x += bird.vx * h;
       bird.y += bird.vy * h;
 
+      // 1.1 传送门:钻进任意一口就从另一口飞出,速度不变;出门后有短冷却
+      if (bird.portalCd > 0) {
+        bird.portalCd -= h;
+      } else {
+        for (const p of portals) {
+          const hop = portalHop(bird.x, bird.y, bird.vx, bird.vy, p);
+          if (hop) {
+            burst(bird.x, bird.y, ["#B8A6F2", "#7FD8E8", "#FFFFFF"], 10, 110, false);
+            bird.x = hop.x;
+            bird.y = hop.y;
+            bird.portalCd = 0.3;
+            burst(bird.x, bird.y, ["#B8A6F2", "#7FD8E8", "#FFFFFF"], 10, 110, false);
+            playThrottled("jump", 0.15);
+            break;
+          }
+        }
+      }
+
       if (bird.pierce && Math.hypot(bird.vx, bird.vy) < 150) bird.pierce = false;
 
       // 地面
@@ -1246,18 +1307,18 @@ export function mount(api: GameApi): { destroy: () => void } {
     msgEl.textContent = "🎉 绿绿豆全被弹走啦!";
     const detail =
       left >= 2
-        ? `还省下 ${left} 只小鸟,真是神射手!`
+        ? `还省下 ${left} 只小鸟,每一发都打在了关键点上!`
         : left === 1
-          ? "还留了一只小鸟,好厉害!"
-          : `破坏率 ${Math.round(ratio * 100)}%,拆得真彻底!`;
+          ? "还留了一只小鸟备用,落点算得很准!"
+          : `破坏率 ${Math.round(ratio * 100)}%,结构被你拆得很干净!`;
     api.onWin(stars, `第 ${level.id} 关「${level.name}」通关!${detail}`);
   }
 
   function finishLose(): void {
     if (finishSent || !level) return;
     finishSent = true;
-    msgEl.textContent = "小鸟用完啦,再试一次!";
-    api.onLose(`还剩 ${beansAlive()} 颗绿绿豆,换个角度、试试技能,再来一次一定行!`);
+    msgEl.textContent = "小鸟用完啦,换个思路再来一次!";
+    api.onLose(`还剩 ${beansAlive()} 颗绿绿豆～先打最下面那根撑着的柱子,上面塌下来常常能一次带走一片!`);
   }
 
   function updateFlow(dt: number): void {
@@ -1440,7 +1501,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     { skyTop: "#DCE9FB", skyBot: "#FFFFFF", ground: "#EEF4FB", groundEdge: "#CFDFF0", hill: "#E4EEF9" },
     { skyTop: "#3B4879", skyBot: "#7D89C4", ground: "#8F97CE", groundEdge: "#737DB8", hill: "#5E6AA6" },
     { skyTop: "#57334A", skyBot: "#E08356", ground: "#8A5148", groundEdge: "#6E3E38", hill: "#B05548" },
-    { skyTop: "#BFE3FF", skyBot: "#FFE9F4", ground: "#F0E9FF", groundEdge: "#D7C7F2", hill: "#E6F4FF" }
+    { skyTop: "#BFE3FF", skyBot: "#FFE9F4", ground: "#F0E9FF", groundEdge: "#D7C7F2", hill: "#E6F4FF" },
+    // 1.1 新三章:风车高地 / 冰晶矿洞 / 熔岩工坊
+    { skyTop: "#CDEFE3", skyBot: "#FDFBE3", ground: "#A8D9A0", groundEdge: "#84BE7E", hill: "#C4E8B8" },
+    { skyTop: "#2E3A5C", skyBot: "#57699B", ground: "#6E7FB2", groundEdge: "#55628F", hill: "#48568A" },
+    { skyTop: "#4A3244", skyBot: "#E0985E", ground: "#7A4F3E", groundEdge: "#5E3B30", hill: "#A4573F" }
   ];
 
   function drawBg(c: CanvasRenderingContext2D, chapter: number): void {
@@ -1547,7 +1612,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.fill();
       }
       c.globalAlpha = 1;
-    } else {
+    } else if (chapter === 5) {
       // 彩虹云端:大彩虹拱 + 飘飘白云
       const arc = ["#FF9E9E", "#FFCE8A", "#FFF3A8", "#B4E8A5", "#A5D4F5", "#CBB2F0"];
       c.lineWidth = 10;
@@ -1569,6 +1634,132 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.arc(drift + 37, cy, 14, 0, Math.PI * 2);
         c.fill();
       }
+    } else if (chapter === 6) {
+      // 风车高地:远山 + 一座慢慢转的大风车
+      c.fillStyle = st.hill;
+      c.beginPath();
+      c.ellipse(140, GROUND_Y + 22, 190, 64, 0, Math.PI, 0);
+      c.ellipse(430, GROUND_Y + 28, 210, 78, 0, Math.PI, 0);
+      c.fill();
+      const wx = 452;
+      const wy = 118;
+      c.fillStyle = "#E9DFC8";
+      c.strokeStyle = "#C9B992";
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(wx - 16, GROUND_Y);
+      c.lineTo(wx - 7, wy);
+      c.lineTo(wx + 7, wy);
+      c.lineTo(wx + 16, GROUND_Y);
+      c.closePath();
+      c.fill();
+      c.stroke();
+      c.save();
+      c.translate(wx, wy);
+      c.rotate(simT * 0.7);
+      c.fillStyle = "rgba(255,255,255,.92)";
+      c.strokeStyle = "#B9CFE8";
+      c.lineWidth = 1.6;
+      for (let i = 0; i < 4; i++) {
+        c.rotate(Math.PI / 2);
+        c.beginPath();
+        c.ellipse(0, -30, 8, 26, 0, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+      }
+      c.fillStyle = "#F2B4C6";
+      c.beginPath();
+      c.arc(0, 0, 5, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+      // 空中飘着几缕被风吹动的草叶
+      c.strokeStyle = "rgba(140,190,130,.7)";
+      c.lineWidth = 1.6;
+      for (let i = 0; i < 8; i++) {
+        const t = (simT * 60 + i * 71) % (WORLD_W + 80);
+        const ly = 60 + ((i * 47) % 170);
+        c.beginPath();
+        c.moveTo(t - 40, ly);
+        c.quadraticCurveTo(t - 28, ly - 5, t - 16, ly);
+        c.stroke();
+      }
+    } else if (chapter === 7) {
+      // 冰晶矿洞:洞顶垂下的钟乳石 + 一闪一闪的蓝水晶
+      c.fillStyle = "rgba(40,52,88,.9)";
+      for (let i = 0; i < 7; i++) {
+        const sx = 40 + i * 78;
+        const sh = 26 + ((i * 31) % 34);
+        c.beginPath();
+        c.moveTo(sx - 13, 0);
+        c.lineTo(sx, sh);
+        c.lineTo(sx + 13, 0);
+        c.closePath();
+        c.fill();
+      }
+      for (let i = 0; i < 10; i++) {
+        const tw = 0.4 + 0.6 * Math.abs(Math.sin(simT * 1.6 + i * 1.1));
+        const cx2 = ((i * 103 + 30) % WORLD_W);
+        const cy2 = 70 + ((i * 61) % 160);
+        c.globalAlpha = 0.35 + tw * 0.5;
+        c.fillStyle = i % 2 === 0 ? "#9FD8F2" : "#C4B2F0";
+        c.beginPath();
+        c.moveTo(cx2, cy2 - 7);
+        c.lineTo(cx2 + 5, cy2);
+        c.lineTo(cx2, cy2 + 7);
+        c.lineTo(cx2 - 5, cy2);
+        c.closePath();
+        c.fill();
+      }
+      c.globalAlpha = 1;
+      c.fillStyle = st.hill;
+      c.beginPath();
+      c.ellipse(90, GROUND_Y + 16, 150, 46, 0, Math.PI, 0);
+      c.fill();
+    } else if (chapter === 8) {
+      // 熔岩工坊:两只慢慢转的大齿轮 + 底部熔炉红光
+      const gearAt = (gx: number, gy: number, gr: number, dir: number): void => {
+        c.save();
+        c.translate(gx, gy);
+        c.rotate(simT * 0.5 * dir);
+        c.fillStyle = "rgba(120,86,70,.55)";
+        for (let i = 0; i < 8; i++) {
+          c.rotate(Math.PI / 4);
+          c.fillRect(-4, -gr - 7, 8, 9);
+        }
+        c.beginPath();
+        c.arc(0, 0, gr, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = "rgba(224,152,94,.5)";
+        c.beginPath();
+        c.arc(0, 0, gr * 0.4, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      };
+      gearAt(468, 70, 26, 1);
+      gearAt(508, 108, 17, -1);
+      c.fillStyle = st.hill;
+      c.beginPath();
+      c.moveTo(60, GROUND_Y);
+      c.lineTo(110, 150);
+      c.lineTo(150, 150);
+      c.lineTo(196, GROUND_Y);
+      c.closePath();
+      c.fill();
+      c.fillStyle = "#FFB65C";
+      c.beginPath();
+      c.ellipse(130, 150, 18, 6, 0, 0, Math.PI * 2);
+      c.fill();
+      // 熔炉里飘起的火星
+      c.fillStyle = "rgba(255,170,90,.85)";
+      for (let i = 0; i < 10; i++) {
+        const t = (simT * 34 + i * 53) % 150;
+        const ex = 130 + Math.sin(simT * 1.2 + i * 1.9) * (8 + i * 2.5);
+        c.globalAlpha = 0.7 - (t / 150) * 0.65;
+        c.beginPath();
+        c.arc(ex, 146 - t, i % 3 === 0 ? 2.8 : 2, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1;
     }
 
     // 地面(向下延展的泥土区一起铺满)
@@ -1645,6 +1836,57 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.lineTo(s.x + s.w, s.y + s.h);
       }
       c.stroke();
+    }
+  }
+
+  function drawPortals(c: CanvasRenderingContext2D): void {
+    for (let i = 0; i < portals.length; i++) {
+      const p = portals[i];
+      // 同一对门用同一组颜色,两口各偏一点色相好区分进出
+      const colA = i % 2 === 0 ? "#8F7BE0" : "#5FBF8F";
+      const colB = i % 2 === 0 ? "#5FC4DC" : "#E0A45F";
+      for (const [mx, my, col] of [
+        [p.ax, p.ay, colA],
+        [p.bx, p.by, colB]
+      ] as Array<[number, number, string]>) {
+        const wob = Math.sin(simT * 3 + mx * 0.05) * 1.5;
+        c.save();
+        c.translate(mx, my);
+        c.rotate(simT * 1.4);
+        c.strokeStyle = col;
+        c.globalAlpha = 0.9;
+        c.lineWidth = 3;
+        c.beginPath();
+        c.ellipse(0, 0, p.r + wob, (p.r + wob) * 0.62, 0, 0, Math.PI * 2);
+        c.stroke();
+        c.globalAlpha = 0.45;
+        c.lineWidth = 2;
+        c.beginPath();
+        c.ellipse(0, 0, (p.r + wob) * 0.6, (p.r + wob) * 0.34, 0.6, 0, Math.PI * 2);
+        c.stroke();
+        c.restore();
+        c.globalAlpha = 0.22;
+        c.fillStyle = col;
+        c.beginPath();
+        c.arc(mx, my, p.r * 0.85, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1;
+        // 小星星在门口打转,提示这是能钻进去的洞
+        const sa = simT * 2.2 + (mx + my) * 0.01;
+        c.fillStyle = "#FFFFFF";
+        c.beginPath();
+        c.arc(mx + Math.cos(sa) * (p.r + 4), my + Math.sin(sa) * (p.r + 4) * 0.62, 1.8, 0, Math.PI * 2);
+        c.fill();
+      }
+      // 两口之间画一条淡淡的虚线,小朋友一眼看懂它们是一对
+      c.strokeStyle = "rgba(160,150,220,0.3)";
+      c.lineWidth = 1.5;
+      c.setLineDash([3, 7]);
+      c.beginPath();
+      c.moveTo(p.ax, p.ay);
+      c.lineTo(p.bx, p.by);
+      c.stroke();
+      c.setLineDash([]);
     }
   }
 
@@ -1752,6 +1994,37 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.moveTo(bl.x + bl.w * 0.3, bl.y + bl.h - 4);
         c.lineTo(bl.x + bl.w - 4, bl.y + bl.h * 0.25);
         c.stroke();
+      } else if (bl.kind === "shell") {
+        // 岩壳:粗糙的鹅卵石纹 + 中缝透出的一线暖光,暗示里面藏着晶核
+        c.strokeStyle = "rgba(90,66,48,0.5)";
+        c.lineWidth = 1.4;
+        c.beginPath();
+        c.arc(bl.x + bl.w * 0.32, bl.y + bl.h * 0.34, Math.min(bl.w, bl.h) * 0.16, 0, Math.PI * 2);
+        c.moveTo(bl.x + bl.w * 0.78, bl.y + bl.h * 0.62);
+        c.arc(bl.x + bl.w * 0.66, bl.y + bl.h * 0.62, Math.min(bl.w, bl.h) * 0.12, 0, Math.PI * 2);
+        c.stroke();
+        c.strokeStyle = "rgba(255,214,140,0.85)";
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(bl.x + bl.w * 0.5, bl.y + bl.h * 0.2);
+        c.lineTo(bl.x + bl.w * 0.42, bl.y + bl.h * 0.5);
+        c.lineTo(bl.x + bl.w * 0.56, bl.y + bl.h * 0.82);
+        c.stroke();
+      } else if (bl.kind === "core") {
+        // 晶核:亮闪闪的钻石切面,一看就很脆
+        c.strokeStyle = "rgba(255,255,255,0.95)";
+        c.lineWidth = 1.6;
+        c.beginPath();
+        c.moveTo(bl.x + bl.w / 2, bl.y + 3);
+        c.lineTo(bl.x + bl.w - 4, bl.y + bl.h / 2);
+        c.lineTo(bl.x + bl.w / 2, bl.y + bl.h - 3);
+        c.lineTo(bl.x + 4, bl.y + bl.h / 2);
+        c.closePath();
+        c.stroke();
+        c.fillStyle = "rgba(255,255,255,0.5)";
+        c.beginPath();
+        c.arc(bl.x + bl.w * 0.38, bl.y + bl.h * 0.36, 2.2, 0, Math.PI * 2);
+        c.fill();
       } else if (bl.kind === "tnt") {
         // 警示斜纹 + 内框 + 「爆」字
         c.save();
@@ -2009,13 +2282,24 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.beginPath();
       c.roundRect(-bird.r * 0.6, -bird.r * 1.1, bird.r * 1.2, bird.r * 0.32, 2);
       c.fill();
-    } else {
+    } else if (bird.kind === "drill") {
       c.beginPath();
       c.moveTo(-bird.r * 0.2, -bird.r * 0.8);
       c.lineTo(bird.r * 0.45, -bird.r * 0.95);
       c.lineTo(bird.r * 0.15, -bird.r * 0.55);
       c.closePath();
       c.fill();
+    } else {
+      // 卷卷:头顶一撮打着圈的回旋呆毛
+      c.strokeStyle = info.dark;
+      c.lineWidth = bird.r * 0.22;
+      c.lineCap = "round";
+      c.beginPath();
+      c.arc(bird.r * 0.05, -bird.r * 1.05, bird.r * 0.32, Math.PI * 0.2, Math.PI * 1.6);
+      c.stroke();
+      c.beginPath();
+      c.arc(bird.r * 0.05, -bird.r * 1.05, bird.r * 0.14, Math.PI * 0.6, Math.PI * 2);
+      c.stroke();
     }
     c.restore();
   }
@@ -2118,7 +2402,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         skillUsed: false,
         pierce: false,
         restT: 0,
-        age: 0
+        age: 0,
+        portalCd: 0
       };
       drawBird(c, fake);
       qx -= 24;
@@ -2171,6 +2456,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawBg(ctx, level.chapter);
     drawWinds(ctx);
     drawSlopes(ctx, level.chapter);
+    drawPortals(ctx);
     drawPlatforms(ctx);
     drawBlocks(ctx);
     drawBoulders(ctx);

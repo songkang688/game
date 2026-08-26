@@ -1,8 +1,8 @@
 {
   "name": "yiduo-yixing",
   "private": true,
-  "version": "1.0.0",
-  "description": "一朵一星 —— 送给一年级小朋友的原创小游戏合集(平台壳)",
+  "version": "1.1.0",
+  "description": "一朵一星 1.1 —— 55 款原创小游戏合集(188 关战役 / 双人 / 无尽)",
   "author": "yiduo-yixing",
   "license": "MIT",
   "type": "module",
@@ -19,6 +19,8 @@
     "dist:linux": "npm run build && electron-builder --linux AppImage",
     "dist:win": "npm run build && electron-builder --win portable",
     "dist:win:nsis": "npm run build && electron-builder --win nsis",
+    "dist:win:all": "bash scripts/dist-win.sh",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip",
     "android:sync": "npm run build && NODE_OPTIONS=--experimental-strip-types cap sync android",
     "android:apk": "bash scripts/build-android.sh"
   },
@@ -47,9 +49,42 @@
       "icon": "public/icons/icon-512.png",
       "maintainer": "yiduo-yixing"
     },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.games",
+      "icon": "public/icons/icon-512.png",
+      "identity": null,
+      "notarize": false
+    },
     "win": {
       "target": [
-        "portable"
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "public/icons/icon-256.png"
     },

@@ -65,3 +65,98 @@ export function makeClockQuestion(
   }
   return { hour, quarter, label, choices, answerIndex: choices.indexOf(label) };
 }
+
+// ---------------------------------------------------------------------------
+// 1.1 新增：分钟级时刻、时长、24 小时制、时区、日历（第 100–188 关专用）
+// 上面那套「整点 / 刻」的接口一个都没动，前 99 关照旧。
+// ---------------------------------------------------------------------------
+
+/** 一整天的分钟数 */
+export const DAY_MINUTES = 24 * 60;
+
+/** 「时:分」折算成一天内的分钟数（越界自动回绕到 0..1439） */
+export function hmToMinutes(hour: number, minute: number): number {
+  const raw = Math.round(hour) * 60 + Math.round(minute);
+  return ((raw % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+}
+
+function normMinutes(mins: number): number {
+  return ((Math.round(mins) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+}
+
+/** 分钟数 → 「7:05」（24 小时制，小时不补零） */
+export function formatHM(mins: number): string {
+  const m = normMinutes(mins);
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** 分钟数 → 「07:05」（时刻表与时区题用的补零写法） */
+export function formatHM24(mins: number): string {
+  const m = normMinutes(mins);
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** from 到 to 经过的分钟数；跨过午夜就按第二天算 */
+export function elapsedMinutes(from: number, to: number): number {
+  const d = (Math.round(to) - Math.round(from)) % DAY_MINUTES;
+  return d < 0 ? d + DAY_MINUTES : d;
+}
+
+/** 时长 → 「1 小时 45 分」/「45 分」/「2 小时」 */
+export function formatDuration(mins: number): string {
+  const total = Math.max(0, Math.round(mins));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${m} 分`;
+  if (m === 0) return `${h} 小时`;
+  return `${h} 小时 ${m} 分`;
+}
+
+export type DayPeriod = "上午" | "下午";
+
+/** 12 小时制 → 24 小时制的小时数（上午 12 点是 0 点，下午 12 点还是 12 点） */
+export function to24Hour(hour12: number, period: DayPeriod): number {
+  const h = ((((Math.round(hour12) - 1) % 12) + 12) % 12) + 1;
+  if (period === "上午") return h === 12 ? 0 : h;
+  return h === 12 ? 12 : h + 12;
+}
+
+/** 24 小时制 → 12 小时制 */
+export function to12Hour(hour24: number): { hour: number; period: DayPeriod } {
+  const h = ((Math.round(hour24) % 24) + 24) % 24;
+  if (h === 0) return { hour: 12, period: "上午" };
+  if (h < 12) return { hour: h, period: "上午" };
+  if (h === 12) return { hour: 12, period: "下午" };
+  return { hour: h - 12, period: "下午" };
+}
+
+/** 时刻整体加减若干小时（跨天回绕），时区题用 */
+export function shiftHours(mins: number, deltaHours: number): number {
+  return hmToMinutes(0, Math.round(mins) + Math.round(deltaHours) * 60);
+}
+
+/** 星期名，下标 0 = 星期一 */
+export const WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+
+/** 从 index（0 = 星期一）往后数 days 天是星期几 */
+export function weekdayAfter(index: number, days: number): number {
+  return ((((Math.round(index) + Math.round(days)) % 7) + 7) % 7);
+}
+
+/** 平年每月天数，下标 0 = 1 月 */
+export const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** 平年某月有几天 */
+export function daysInMonth(month: number): number {
+  return MONTH_DAYS[((((Math.round(month) - 1) % 12) + 12) % 12)];
+}
+
+/**
+ * 某月 1 号是 firstWeekday（0 = 星期一）时，这个月第 nth 个 weekday 是几号。
+ * 排不下（比如第 5 个星期六）就返回 0，出题时会换一组重来。
+ */
+export function nthWeekdayDate(firstWeekday: number, weekday: number, nth: number, month: number): number {
+  const offset = ((((Math.round(weekday) - Math.round(firstWeekday)) % 7) + 7) % 7);
+  const date = 1 + offset + (Math.round(nth) - 1) * 7;
+  return date >= 1 && date <= daysInMonth(month) ? date : 0;
+}

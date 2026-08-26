@@ -9,6 +9,8 @@ import {
   HEARTS_PER_ROUND,
   ICE_SECONDS,
   ICE_SLOW,
+  LEGACY_ORCHARDS,
+  LEGACY_ROUNDS,
   LEVELS_PER_THEME,
   ORCHARD_ORDER,
   ORCHARD_STYLE,
@@ -56,23 +58,26 @@ function signature(r: RoundDef): string {
 }
 
 describe("fruit-slice 99 回合九大果园结构", () => {
-  it("经典战役恰好 99 回合 = 9 果园 × 11 回合", () => {
-    expect(ROUNDS.length).toBe(99);
-    expect(ORCHARD_ORDER.length).toBe(9);
+  it("1.0 的经典战役仍是 9 果园 × 11 回合 = 99 回合(1.1 只在末尾追加)", () => {
+    expect(LEGACY_ORCHARDS).toBe(9);
     expect(LEVELS_PER_THEME).toBe(11);
-    expect(ORCHARD_ORDER.length * LEVELS_PER_THEME).toBe(99);
+    expect(LEGACY_ORCHARDS * LEVELS_PER_THEME).toBe(99);
+    expect(LEGACY_ROUNDS).toBe(99);
+    expect(ROUNDS.length).toBeGreaterThanOrEqual(LEGACY_ROUNDS);
+    for (let i = 0; i < LEGACY_ROUNDS; i++) {
+      expect(ROUNDS[i].orchard).toBe(ORCHARD_ORDER[Math.floor(i / LEVELS_PER_THEME)]);
+    }
   });
 
   it("每个回合的果园与所在章节一致", () => {
     for (let i = 0; i < ROUNDS.length; i++) {
       expect(ROUNDS[i].orchard).toBe(themeOfLevel(i));
-      expect(ROUNDS[i].orchard).toBe(ORCHARD_ORDER[Math.floor(i / LEVELS_PER_THEME)]);
     }
   });
 
   it("每章 8 回合手写 + 3 回合生成", () => {
     expect(HANDMADE_PER_THEME).toBe(8);
-    for (let ci = 0; ci < ORCHARD_ORDER.length; ci++) {
+    for (let ci = 0; ci < LEGACY_ORCHARDS; ci++) {
       const rounds = levelIndicesOfTheme(ci).map((i) => ROUNDS[i]);
       expect(rounds.length).toBe(LEVELS_PER_THEME);
       expect(rounds.filter((r) => !r.gen).length).toBe(HANDMADE_PER_THEME);
@@ -161,9 +166,9 @@ describe("fruit-slice 九大果园风格", () => {
     const names = new Set(ORCHARD_ORDER.map((o) => ORCHARD_STYLE[o].name));
     const emojis = new Set(ORCHARD_ORDER.map((o) => ORCHARD_STYLE[o].emoji));
     const tops = new Set(ORCHARD_ORDER.map((o) => ORCHARD_STYLE[o].bgTop));
-    expect(names.size).toBe(9);
-    expect(emojis.size).toBe(9);
-    expect(tops.size).toBe(9);
+    expect(names.size).toBe(ORCHARD_ORDER.length);
+    expect(emojis.size).toBe(ORCHARD_ORDER.length);
+    expect(tops.size).toBe(ORCHARD_ORDER.length);
     for (const o of ORCHARD_ORDER) expect(ORCHARD_STYLE[o].blurb.length).toBeGreaterThan(0);
   });
 

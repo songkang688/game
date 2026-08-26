@@ -1,7 +1,32 @@
-// 时钟小屋：99 关 · 六层小屋章节题库生成（一年级认时间，确定性可测试）
-import { mulberry32, pick, randInt, shuffled, chapterOf, indexInChapter, type Chapter } from "../level99";
+// 时钟小屋：188 关 · 十层小屋章节题库生成（认时间 → 时长/24 小时制/日历/时刻表，确定性可测试）
+//
+// 1.1 起总关数 99 → 188：前 99 关（前 6 章）的章节切分、seed、生成参数逐字未动，
+// 新的 4 章共 89 关只在末尾追加，面向约小学六年级，允许多步推理。
+import { TOTAL_LEVELS, mulberry32, pick, randInt, shuffled, chapterOf, indexInChapter, type Chapter } from "../level99";
 import type { QuizQuestion, QuizTheme } from "../quiz99";
-import { formatClock, hourHandAngle, minuteHandAngle, type Quarter } from "./logic";
+import {
+  DAY_MINUTES,
+  WEEKDAYS,
+  daysInMonth,
+  elapsedMinutes,
+  formatClock,
+  formatDuration,
+  formatHM,
+  formatHM24,
+  hmToMinutes,
+  hourHandAngle,
+  minuteHandAngle,
+  nthWeekdayDate,
+  shiftHours,
+  to12Hour,
+  to24Hour,
+  weekdayAfter,
+  type DayPeriod,
+  type Quarter,
+} from "./logic";
+
+/** 1.0 时代的章节数：下标 < 这个数的章节一律保持原样 */
+export const LEGACY_CHAPTER_COUNT = 6;
 
 export const CHAPTERS: Chapter[] = [
   { name: "整点钟楼", emoji: "🕐", color: "#ffe8cc", desc: "分针指 12，就是整点", size: 17 },
@@ -10,6 +35,11 @@ export const CHAPTERS: Chapter[] = [
   { name: "三刻广场", emoji: "⛲", color: "#d0f0fd", desc: "分针指 9，三刻登场", size: 16 },
   { name: "拨针工坊", emoji: "🔧", color: "#fff3bf", desc: "反过来：听时间找钟面", size: 16 },
   { name: "时间冒险家", emoji: "🧭", color: "#e5dbff", desc: "混合挑战 + 再过几小时", size: 16 },
+  // ↓ 1.1 新增：第 100–188 关
+  { name: "出发到达站", emoji: "🚉", color: "#ffe3e3", desc: "出发、到达、路上花了多久，缺哪个算哪个", size: 23 },
+  { name: "廿四时钟塔", emoji: "🗼", color: "#dbe4ff", desc: "12 小时制和 24 小时制互换，还要跨城对表", size: 22 },
+  { name: "星期日历屋", emoji: "📅", color: "#d8f5e3", desc: "往后数几天是星期几、这个月第几个星期几", size: 22 },
+  { name: "时刻表车站", emoji: "🚏", color: "#fff0d6", desc: "看懂一张班次表：谁最早到、谁最快、还要等多久", size: 22 },
 ];
 
 export const CHAPTER_THEMES: QuizTheme[] = [
@@ -19,6 +49,10 @@ export const CHAPTER_THEMES: QuizTheme[] = [
   { bg: "linear-gradient(#e7f5ff,#d0f0fd)", accent: "#1971c2" },
   { bg: "linear-gradient(#fff9db,#fff3bf)", accent: "#e8590c" },
   { bg: "linear-gradient(#f3f0ff,#e5dbff)", accent: "#6741d9" },
+  { bg: "linear-gradient(#fff5f5,#ffe3e3)", accent: "#c92a2a" },
+  { bg: "linear-gradient(#edf2ff,#dbe4ff)", accent: "#3b5bdb" },
+  { bg: "linear-gradient(#ebfbee,#d8f5e3)", accent: "#2f9e44" },
+  { bg: "linear-gradient(#fff8e1,#fff0d6)", accent: "#b8860b" },
 ];
 
 /** 画一个钟面 SVG（data-h / data-q 供测试与判定） */
@@ -42,7 +76,22 @@ export function clockSVG(hour: number, quarter: Quarter, size: number): string {
   </svg>`;
 }
 
-export type ClockKind = "read" | "set" | "next";
+export type LegacyClockKind = "read" | "set" | "next";
+/** 1.1 新增的进阶题型（第 100–188 关专用） */
+export type AdvancedClockKind =
+  | "span"
+  | "arrive"
+  | "depart"
+  | "h24"
+  | "h12"
+  | "zone"
+  | "weekday"
+  | "monthdays"
+  | "nthday"
+  | "tableEarly"
+  | "tableFast"
+  | "tableWait";
+export type ClockKind = LegacyClockKind | AdvancedClockKind;
 
 export interface ClockQ extends QuizQuestion {
   kind: ClockKind;
@@ -122,6 +171,332 @@ function qNext(rand: () => number): ClockQ {
   };
 }
 
+// ---------------------------------------------------------------------------
+// 1.1 新机制一：分钟级时长计算（出发 / 到达 / 路上花了多久，缺哪个求哪个）
+// ---------------------------------------------------------------------------
+
+const BIG = `font-size:20px;font-weight:900;letter-spacing:.5px;line-height:1.6`;
+
+/** 随机一个 5 分钟对齐的时刻 */
+function randTime(rand: () => number, minHour: number, maxHour: number): number {
+  return hmToMinutes(randInt(rand, minHour, maxHour), randInt(rand, 0, 11) * 5);
+}
+
+/** 从一组候选里凑够 3 个互不相同的选项文字 */
+function threeChoices(rand: () => number, answer: string, more: () => string | null): { choices: string[]; correct: number } {
+  const set = new Set<string>([answer]);
+  let guard = 0;
+  while (set.size < 3 && guard++ < 200) {
+    const v = more();
+    if (v) set.add(v);
+  }
+  // 极端情况下兜底，绝不返回少于 3 个选项
+  let filler = 1;
+  while (set.size < 3) set.add(`${answer}·${filler++}`);
+  const arr = shuffled([...set], rand);
+  return { choices: arr, correct: arr.indexOf(answer) };
+}
+
+const DURATION_DELTAS = [-60, -45, -30, -20, -15, -10, -5, 5, 10, 15, 20, 30, 45, 60];
+
+/** 出发 ➜ 到达，路上花了多久 */
+function qSpan(rand: () => number, t: number): ClockQ {
+  const start = randTime(rand, 6, t < 0.5 ? 16 : 20);
+  const dur = randInt(rand, 5, t < 0.5 ? 24 : 38) * 5;
+  const end = hmToMinutes(0, start + dur);
+  const answer = formatDuration(dur);
+  const { choices, correct } = threeChoices(rand, answer, () => {
+    const v = dur + pick(rand, DURATION_DELTAS);
+    return v > 0 && v < DAY_MINUTES ? formatDuration(v) : null;
+  });
+  return {
+    kind: "span", answer,
+    promptHTML: `<span style="${BIG}">🚉 ${formatHM(start)} ➜ 🏁 ${formatHM(end)}</span>`,
+    ask: "路上一共花了多久？",
+    choices, correct,
+  };
+}
+
+/** 出发时刻 + 路上时长 = 几点到 */
+function qArrive(rand: () => number, t: number): ClockQ {
+  const start = randTime(rand, 6, t < 0.5 ? 16 : 20);
+  const dur = randInt(rand, 5, t < 0.5 ? 24 : 38) * 5;
+  const answer = formatHM(hmToMinutes(0, start + dur));
+  const { choices, correct } = threeChoices(rand, answer, () =>
+    formatHM(hmToMinutes(0, start + dur + pick(rand, DURATION_DELTAS)))
+  );
+  return {
+    kind: "arrive", answer,
+    promptHTML: `<span style="${BIG}">🚉 ${formatHM(start)} 出发 · 走 ${formatDuration(dur)}</span>`,
+    ask: "几点到站？",
+    choices, correct,
+  };
+}
+
+/** 到达时刻 − 路上时长 = 几点出发 */
+function qDepart(rand: () => number, t: number): ClockQ {
+  const start = randTime(rand, 6, t < 0.5 ? 16 : 20);
+  const dur = randInt(rand, 5, t < 0.5 ? 24 : 38) * 5;
+  const end = hmToMinutes(0, start + dur);
+  const answer = formatHM(start);
+  const { choices, correct } = threeChoices(rand, answer, () =>
+    formatHM(hmToMinutes(0, start + pick(rand, DURATION_DELTAS)))
+  );
+  return {
+    kind: "depart", answer,
+    promptHTML: `<span style="${BIG}">🏁 ${formatHM(end)} 到站 · 走 ${formatDuration(dur)}</span>`,
+    ask: "几点出发的？",
+    choices, correct,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 1.1 新机制二：24 小时制 ↔ 12 小时制，以及跨城对表
+// ---------------------------------------------------------------------------
+
+const PERIODS: DayPeriod[] = ["上午", "下午"];
+
+/** 12 小时制说法 → 24 小时制写法 */
+function qH24(rand: () => number): ClockQ {
+  const period = pick(rand, PERIODS);
+  const hour12 = randInt(rand, 1, 12);
+  const minute = randInt(rand, 0, 11) * 5;
+  const answer = formatHM24(hmToMinutes(to24Hour(hour12, period), minute));
+  const { choices, correct } = threeChoices(rand, answer, () => {
+    const roll = randInt(rand, 0, 2);
+    if (roll === 0) return formatHM24(hmToMinutes(hour12, minute));
+    if (roll === 1) return formatHM24(hmToMinutes(to24Hour(hour12, period) + 12, minute));
+    return formatHM24(hmToMinutes(to24Hour(hour12, period), minute + randInt(rand, 1, 11) * 5));
+  });
+  return {
+    kind: "h24", answer,
+    promptHTML: `<span style="${BIG}">🗼 ${period} ${hour12}:${String(minute).padStart(2, "0")}</span>`,
+    ask: "写成 24 小时制是几点？",
+    choices, correct,
+  };
+}
+
+/** 24 小时制写法 → 上午 / 下午几点 */
+function qH12(rand: () => number): ClockQ {
+  const hour24 = randInt(rand, 0, 23);
+  const minute = randInt(rand, 0, 11) * 5;
+  const { hour, period } = to12Hour(hour24);
+  const mm = String(minute).padStart(2, "0");
+  const answer = `${period} ${hour}:${mm}`;
+  const other: DayPeriod = period === "上午" ? "下午" : "上午";
+  const { choices, correct } = threeChoices(rand, answer, () => {
+    const roll = randInt(rand, 0, 2);
+    if (roll === 0) return `${other} ${hour}:${mm}`;
+    if (roll === 1) return `${period} ${(hour % 12) + 1}:${mm}`;
+    return `${other} ${((hour + 10) % 12) + 1}:${mm}`;
+  });
+  return {
+    kind: "h12", answer,
+    promptHTML: `<span style="${BIG}">🗼 ${formatHM24(hmToMinutes(hour24, minute))}</span>`,
+    ask: "这是上午还是下午几点？",
+    choices, correct,
+  };
+}
+
+/** 原创城市名（不使用任何真实商标或官方角色名） */
+const CITIES = ["花城", "云城", "雪城", "海城", "星城", "月城", "枫城", "橘城"];
+const ZONE_DELTAS = [-9, -7, -6, -5, -3, -2, 2, 3, 5, 6, 7, 9];
+
+/** 跨城对表：另一座城市现在几点 */
+function qZone(rand: () => number): ClockQ {
+  const here = pick(rand, CITIES);
+  let there = pick(rand, CITIES);
+  let guard = 0;
+  while (there === here && guard++ < 30) there = pick(rand, CITIES);
+  if (there === here) there = CITIES[(CITIES.indexOf(here) + 1) % CITIES.length];
+  const now = randTime(rand, 0, 23);
+  const delta = pick(rand, ZONE_DELTAS);
+  const answer = formatHM24(shiftHours(now, delta));
+  const { choices, correct } = threeChoices(rand, answer, () =>
+    formatHM24(shiftHours(now, delta + pick(rand, [-3, -2, -1, 1, 2, 3, -2 * delta])))
+  );
+  const word = delta > 0 ? "早" : "晚";
+  return {
+    kind: "zone", answer,
+    promptHTML: `<span style="${BIG}">🌍 ${here} ${formatHM24(now)} · ${there} 比 ${here} ${word} ${Math.abs(delta)} 小时</span>`,
+    ask: `${there}现在几点？`,
+    choices, correct,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 1.1 新机制三：日历与星期推理
+// ---------------------------------------------------------------------------
+
+/** 往后数 N 天是星期几 */
+function qWeekday(rand: () => number, t: number): ClockQ {
+  const from = randInt(rand, 0, 6);
+  const days = randInt(rand, t < 0.5 ? 8 : 20, t < 0.5 ? 40 : 99);
+  const answer = WEEKDAYS[weekdayAfter(from, days)];
+  const { choices, correct } = threeChoices(rand, answer, () => WEEKDAYS[randInt(rand, 0, 6)]);
+  return {
+    kind: "weekday", answer,
+    promptHTML: `<span style="${BIG}">📅 ${WEEKDAYS[from]} ＋ ${days} 天</span>`,
+    ask: "往后数是星期几？",
+    choices, correct,
+  };
+}
+
+/** 平年某月有几天 */
+function qMonthDays(rand: () => number): ClockQ {
+  const month = randInt(rand, 1, 12);
+  const answer = `${daysInMonth(month)} 天`;
+  const { choices, correct } = threeChoices(rand, answer, () => `${pick(rand, [28, 29, 30, 31])} 天`);
+  return {
+    kind: "monthdays", answer,
+    promptHTML: `<span style="${BIG}">📅 平年 ${month} 月</span>`,
+    ask: "这个月一共有多少天？",
+    choices, correct,
+  };
+}
+
+/** 已知某月 1 号星期几，求这个月第 n 个星期几是几号 */
+function qNthDay(rand: () => number): ClockQ {
+  let month = 1;
+  let firstWeekday = 0;
+  let weekday = 0;
+  let nth = 1;
+  let date = 0;
+  let guard = 0;
+  do {
+    month = randInt(rand, 1, 12);
+    firstWeekday = randInt(rand, 0, 6);
+    weekday = randInt(rand, 0, 6);
+    nth = randInt(rand, 2, 4);
+    date = nthWeekdayDate(firstWeekday, weekday, nth, month);
+  } while (date === 0 && guard++ < 60);
+  if (date === 0) {
+    // 兜底成一定排得下的一组（1 号就是目标星期几，第 2 个必然是 8 号）
+    firstWeekday = weekday;
+    nth = 2;
+    date = 8;
+  }
+  const answer = `${date} 号`;
+  const { choices, correct } = threeChoices(rand, answer, () => {
+    const v = date + pick(rand, [-14, -7, -1, 1, 7, 14]);
+    return v >= 1 && v <= daysInMonth(month) ? `${v} 号` : null;
+  });
+  return {
+    kind: "nthday", answer,
+    promptHTML: `<span style="${BIG}">📅 ${month} 月 1 号是${WEEKDAYS[firstWeekday]}</span>`,
+    ask: `第 ${nth} 个${WEEKDAYS[weekday]}是几号？`,
+    choices, correct,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 1.1 新机制四：时刻表阅读（三班车，最早到 / 最快 / 还要等多久）
+// ---------------------------------------------------------------------------
+
+export interface Trip {
+  no: number;
+  dep: number;
+  arr: number;
+  dur: number;
+}
+
+/** 三班车：到站时刻互不相同、路上时长也互不相同，保证「最早 / 最快」唯一 */
+export function makeTrips(rand: () => number): Trip[] {
+  for (let guard = 0; guard < 200; guard++) {
+    const trips: Trip[] = [1, 2, 3].map((no) => {
+      const dep = hmToMinutes(randInt(rand, 6, 17), randInt(rand, 0, 11) * 5);
+      const dur = randInt(rand, 4, 24) * 5;
+      return { no, dep, arr: dep + dur, dur };
+    });
+    const arrs = new Set(trips.map((x) => x.arr));
+    const durs = new Set(trips.map((x) => x.dur));
+    const deps = new Set(trips.map((x) => x.dep));
+    if (arrs.size === 3 && durs.size === 3 && deps.size === 3) return trips;
+  }
+  // 理论上到不了这里；给一组固定的合法数据兜底
+  return [
+    { no: 1, dep: 7 * 60, arr: 7 * 60 + 40, dur: 40 },
+    { no: 2, dep: 8 * 60, arr: 8 * 60 + 25, dur: 25 },
+    { no: 3, dep: 9 * 60, arr: 10 * 60, dur: 60 },
+  ];
+}
+
+function tableHTML(trips: Trip[], nowLine: string): string {
+  const rows = trips
+    .map((x) => `<div>🚌 ${x.no} 号车 ${formatHM24(x.dep)} → ${formatHM24(x.arr)}</div>`)
+    .join("");
+  return `<span style="font-size:17px;font-weight:900;line-height:1.7;display:block;text-align:left">${nowLine}${rows}</span>`;
+}
+
+function busChoices(rand: () => number, trips: Trip[], answerNo: number): { choices: string[]; correct: number; answer: string } {
+  const labels = shuffled(trips.map((x) => `${x.no} 号车`), rand);
+  const answer = `${answerNo} 号车`;
+  return { choices: labels, correct: labels.indexOf(answer), answer };
+}
+
+/** 哪班车最早到站 */
+function qTableEarly(rand: () => number): ClockQ {
+  const trips = makeTrips(rand);
+  const best = trips.reduce((a, b) => (b.arr < a.arr ? b : a));
+  const { choices, correct, answer } = busChoices(rand, trips, best.no);
+  return {
+    kind: "tableEarly", answer,
+    promptHTML: tableHTML(trips, ""),
+    ask: "哪班车最早到站？",
+    choices, correct,
+  };
+}
+
+/** 哪班车路上花的时间最短 */
+function qTableFast(rand: () => number): ClockQ {
+  const trips = makeTrips(rand);
+  const best = trips.reduce((a, b) => (b.dur < a.dur ? b : a));
+  const { choices, correct, answer } = busChoices(rand, trips, best.no);
+  return {
+    kind: "tableFast", answer,
+    promptHTML: tableHTML(trips, ""),
+    ask: "哪班车路上最快？",
+    choices, correct,
+  };
+}
+
+/** 现在几点，坐某班车还要等多久 */
+function qTableWait(rand: () => number): ClockQ {
+  const trips = makeTrips(rand);
+  const earliestDep = Math.min(...trips.map((x) => x.dep));
+  const now = earliestDep - randInt(rand, 1, 12) * 5;
+  const target = trips[randInt(rand, 0, trips.length - 1)];
+  const wait = target.dep - now;
+  const answer = formatDuration(wait);
+  const { choices, correct } = threeChoices(rand, answer, () => {
+    const v = wait + pick(rand, DURATION_DELTAS);
+    return v > 0 && v < DAY_MINUTES ? formatDuration(v) : null;
+  });
+  return {
+    kind: "tableWait", answer,
+    promptHTML: tableHTML(trips, `<div>⏰ 现在 ${formatHM24(now)}</div>`),
+    ask: `等 ${target.no} 号车还要多久？`,
+    choices, correct,
+  };
+}
+
+function makeAdvanced(rand: () => number, kind: AdvancedClockKind, t: number): ClockQ {
+  switch (kind) {
+    case "span": return qSpan(rand, t);
+    case "arrive": return qArrive(rand, t);
+    case "depart": return qDepart(rand, t);
+    case "h24": return qH24(rand);
+    case "h12": return qH12(rand);
+    case "zone": return qZone(rand);
+    case "weekday": return qWeekday(rand, t);
+    case "monthdays": return qMonthDays(rand);
+    case "nthday": return qNthDay(rand);
+    case "tableEarly": return qTableEarly(rand);
+    case "tableFast": return qTableFast(rand);
+    default: return qTableWait(rand);
+  }
+}
+
 /** 各章允许出现的分钟类型 */
 export function allowedQuarters(level: number): Quarter[] {
   const ci = chapterOf(CHAPTERS, level);
@@ -137,21 +512,44 @@ export function allowedQuarters(level: number): Quarter[] {
   }
 }
 
-/** 每关题目数：章节内 4 → 7 题递增 */
-export function questionCount(level: number): number {
+/** 本关在所属章节里的进度（0 → 1） */
+function chapterProgress(level: number): number {
   const ci = chapterOf(CHAPTERS, level);
   const idx = indexInChapter(CHAPTERS, level);
-  const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
+  return idx / Math.max(1, CHAPTERS[ci].size - 1);
+}
+
+/** 每关题目数：前 99 关 4 → 7 题；第 100–188 关 6 → 10 题（明显更长） */
+export function questionCount(level: number): number {
+  const ci = chapterOf(CHAPTERS, level);
+  const t = chapterProgress(level);
+  if (ci >= LEGACY_CHAPTER_COUNT) return 6 + Math.min(4, Math.floor(t * 4.6));
   return 4 + Math.min(3, Math.floor(t * 3.6));
 }
 
 export function kindPool(level: number): ClockKind[] {
   const ci = chapterOf(CHAPTERS, level);
-  const idx = indexInChapter(CHAPTERS, level);
-  const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
+  const t = chapterProgress(level);
   if (ci <= 3) return ["read"];
   if (ci === 4) return t < 0.6 ? ["set"] : ["set", "read"];
-  return t < 0.4 ? ["read", "set"] : ["read", "set", "next"];
+  if (ci === 5) return t < 0.4 ? ["read", "set"] : ["read", "set", "next"];
+  // ↓ 1.1 新增章节
+  if (ci === 6) {
+    if (t < 0.35) return ["span"];
+    if (t < 0.7) return ["span", "arrive"];
+    return ["span", "arrive", "depart"];
+  }
+  if (ci === 7) {
+    if (t < 0.4) return ["h24", "h12"];
+    return ["h24", "h12", "zone"];
+  }
+  if (ci === 8) {
+    if (t < 0.4) return ["weekday", "monthdays"];
+    return ["weekday", "monthdays", "nthday"];
+  }
+  if (t < 0.35) return ["tableEarly", "tableFast"];
+  if (t < 0.7) return ["tableEarly", "tableFast", "tableWait"];
+  return ["tableEarly", "tableFast", "tableWait", "span", "zone"];
 }
 
 /** 生成某一关的全部题目（确定性，重试不换题） */
@@ -160,18 +558,20 @@ export function buildQuestions(level: number): ClockQ[] {
   const quarters = allowedQuarters(level);
   const kinds = kindPool(level);
   const count = questionCount(level);
+  const t = chapterProgress(level);
   const out: ClockQ[] = [];
   for (let i = 0; i < count; i++) {
     const kind = i < kinds.length ? kinds[i] : pick(rand, kinds);
     if (kind === "read") out.push(qRead(rand, quarters));
     else if (kind === "set") out.push(qSet(rand, quarters));
-    else out.push(qNext(rand));
+    else if (kind === "next") out.push(qNext(rand));
+    else out.push(makeAdvanced(rand, kind, t));
   }
   return shuffled(out, rand);
 }
 
-/** 99 关概览（测试用） */
-export const LEVELS = Array.from({ length: 99 }, (_, i) => ({
+/** 188 关概览（测试用） */
+export const LEVELS = Array.from({ length: TOTAL_LEVELS }, (_, i) => ({
   count: questionCount(i),
   kinds: kindPool(i),
   quarters: allowedQuarters(i),

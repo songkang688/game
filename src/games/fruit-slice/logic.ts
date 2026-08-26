@@ -1,6 +1,12 @@
 // 切切乐 —— 纯逻辑函数,不依赖 DOM,方便单独测试。
-// 99 回合九大果园经典战役 + 禅宗限时无炸弹 + 街机无尽!
+// 1.0:99 回合九大果园经典战役 + 禅宗限时无炸弹 + 街机无尽!
 // 每个果园 11 回合(8 回合手写 + 3 回合生成),配色、特殊水果和物理手感都不一样。
+//
+// 1.1 在末尾续了三个新果园共 89 回合(前 99 回合一字不动):
+// 回旋果谷(30)→ 指令果市(30)→ 镜湖果宫(29),合计 188 回合。
+// 新机制:连刀判定(一刀之内第 n 颗值 n 分)、指令果(按号码顺序切)、
+// 硬壳果(要切两刀,第一刀会被弹开)、镜像模式(左右每隔几秒翻一次)。
+// 每个新果园的压轴都是一位「果王」,最后一位就是大果王。
 
 /* ---------------- 碰撞与抛射 ---------------- */
 
@@ -99,7 +105,10 @@ export type OrchardId =
   | "frost"
   | "night"
   | "volcano"
-  | "royal";
+  | "royal"
+  | "swirl"
+  | "decree"
+  | "mirror";
 
 export const ORCHARD_ORDER: OrchardId[] = [
   "sunny",
@@ -111,11 +120,61 @@ export const ORCHARD_ORDER: OrchardId[] = [
   "night",
   "volcano",
   "royal",
+  "swirl",
+  "decree",
+  "mirror",
 ];
 
-/** 每章 11 回合:8 回合手写 + 3 回合生成。 */
+/** 1.0 的九个果园(1.1 的三个新果园不参与老生成器)。 */
+export type LegacyOrchardId =
+  | "sunny"
+  | "berry"
+  | "citrus"
+  | "melon"
+  | "tropic"
+  | "frost"
+  | "night"
+  | "volcano"
+  | "royal";
+
+/** 1.0 的九个果园,每章 11 回合:8 回合手写 + 3 回合生成。 */
 export const LEVELS_PER_THEME = 11;
 export const HANDMADE_PER_THEME = 8;
+export const LEGACY_ORCHARDS = 9;
+export const LEGACY_ROUNDS = LEGACY_ORCHARDS * LEVELS_PER_THEME;
+
+/** 1.1 新三个果园的回合数(前 99 回合的切分一格都没动)。 */
+export const NEW_ORCHARD_SIZES = [30, 30, 29] as const;
+
+/** 每章回合数:前九章各 11 回合,后三章 30/30/29。 */
+export const THEME_SIZES: number[] = [
+  ...Array.from({ length: LEGACY_ORCHARDS }, () => LEVELS_PER_THEME),
+  ...NEW_ORCHARD_SIZES,
+];
+
+export const TOTAL_ROUNDS = THEME_SIZES.reduce((a, b) => a + b, 0);
+
+/** 章节 ci(0 起)有几回合。 */
+export function themeSize(ci: number): number {
+  return THEME_SIZES[ci] ?? 0;
+}
+
+/** 章节 ci(0 起)的第一回合下标。 */
+export function themeStart(ci: number): number {
+  let s = 0;
+  for (let i = 0; i < ci && i < THEME_SIZES.length; i++) s += THEME_SIZES[i];
+  return s;
+}
+
+/** idx(0 起)回合属于第几章。 */
+export function themeIndexOf(idx: number): number {
+  let s = 0;
+  for (let ci = 0; ci < THEME_SIZES.length; ci++) {
+    s += THEME_SIZES[ci];
+    if (idx < s) return ci;
+  }
+  return THEME_SIZES.length - 1;
+}
 
 export interface OrchardStyle {
   name: string;
@@ -180,7 +239,197 @@ export const ORCHARD_STYLE: Record<OrchardId, OrchardStyle> = {
     specials: ["banana", "ice", "boom"], wind: 30, gravityMult: 1.05, fruitScale: 0.9,
     blurb: "最终试炼!小果子、侧风、全部炸弹一起上",
   },
+  swirl: {
+    name: "回旋果谷", emoji: "🌀", bgTop: "#e0f5e8", bgBottom: "#fff0d6", accent: "#1f7a5e",
+    specials: ["banana", "boom"], wind: 45, gravityMult: 0.95, fruitScale: 1.02,
+    blurb: "山谷的果子成串打转,一刀连着切分数翻着涨",
+  },
+  decree: {
+    name: "指令果市", emoji: "🔖", bgTop: "#f6e4ff", bgBottom: "#ffe4ee", accent: "#6a2a9a",
+    specials: ["banana", "ice", "boom"], wind: -35, gravityMult: 1.08, fruitScale: 0.95,
+    blurb: "挂号码牌的指令果要按顺序切,记性和手速一起考",
+  },
+  mirror: {
+    name: "镜湖果宫", emoji: "🪞", bgTop: "#d6f0f5", bgBottom: "#e8e0ff", accent: "#1f6a8a",
+    specials: ["banana", "ice", "boom"], wind: 25, gravityMult: 1, fruitScale: 0.94,
+    blurb: "湖面一翻,左右就颠倒过来,全部机制在这里收官",
+  },
 };
+
+/* ---------------- 1.1 新机制:连刀 / 指令果 / 硬壳果 / 镜像 ---------------- */
+
+/** 连刀:一刀之内连着切,第 n 颗值 n 分,最多按 CHAIN_MAX 算。 */
+export const CHAIN_MAX = 5;
+
+/** 一刀之内第 n 颗(1 起)水果值几分:1,2,3,4,5,5,5…… */
+export function chainGain(n: number): number {
+  if (n <= 1) return 1;
+  return Math.min(CHAIN_MAX, Math.floor(n));
+}
+
+/** 一刀切到 n 颗水果一共几分。 */
+export function chainTotal(n: number): number {
+  let s = 0;
+  for (let i = 1; i <= n; i++) s += chainGain(i);
+  return s;
+}
+
+/** 连刀文案;一刀只切到一颗不报。 */
+export function chainLabel(n: number): string | null {
+  if (n < 2) return null;
+  if (n === 2) return "连刀 ×2";
+  if (n < CHAIN_MAX) return `连刀 ×${n}!`;
+  return `满连刀 ×${n}!!`;
+}
+
+/** 指令果:一组最多挂几颗号码牌。 */
+export const COMMAND_MAX = 4;
+/** 切对第 step 颗(1 起)指令果得几分。 */
+export function commandStepScore(step: number): number {
+  return 2 + Math.max(0, Math.floor(step));
+}
+/** 一整组指令果按顺序切完的额外奖励。 */
+export const COMMAND_CLEAR_BONUS = 12;
+
+/** 一组 count 颗指令果的号码顺序。 */
+export function commandSequence(count: number): number[] {
+  const n = Math.max(1, Math.min(COMMAND_MAX, Math.floor(count)));
+  return Array.from({ length: n }, (_, i) => i + 1);
+}
+
+/** 切到号码 got 时,期待的是 need:对了继续,错了从头数。 */
+export function commandCheck(need: number, got: number): "ok" | "wrong" {
+  return got === need ? "ok" : "wrong";
+}
+
+/** 切错顺序不掉心,只是这组重新数(失败只鼓励)。 */
+export function commandResetNeed(): number {
+  return 1;
+}
+
+/** 指令果提示文案。 */
+export function commandLabel(need: number, total: number): string {
+  return `按号码切:下一颗 ${need}/${total}`;
+}
+
+/** 硬壳果:要切两刀,第一刀只会把它弹开。 */
+export const SHELL_HITS = 2;
+/** 硬壳果被切开给几分(比普通果值钱)。 */
+export const SHELL_SCORE = 4;
+/** 第一刀之后速度保留多少。 */
+export const SHELL_BOUNCE = 0.55;
+/** 第一刀额外把硬壳果向上顶多少(像素/秒),留出补刀时间。 */
+export const SHELL_KICK = 170;
+
+/** 硬壳果挨了 hits 刀之后是不是裂开了。 */
+export function shellCracked(hits: number): boolean {
+  return hits >= SHELL_HITS;
+}
+
+/**
+ * 硬壳果第一刀:速度关于刀线镜像反射,再乘上保留系数并向上弹一下。
+ * (dx, dy) 是刀的方向向量。
+ */
+export function shellBounce(
+  vx: number,
+  vy: number,
+  dx: number,
+  dy: number,
+): { vx: number; vy: number } {
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return { vx: -vx * SHELL_BOUNCE, vy: -vy * SHELL_BOUNCE - SHELL_KICK };
+  const ux = dx / len;
+  const uy = dy / len;
+  const dot = vx * ux + vy * uy;
+  return {
+    vx: (2 * dot * ux - vx) * SHELL_BOUNCE,
+    vy: (2 * dot * uy - vy) * SHELL_BOUNCE - SHELL_KICK,
+  };
+}
+
+/** 镜像模式:每隔这么多秒左右翻一次。 */
+export const MIRROR_PERIOD = 6;
+
+/** t 秒时镜像开着没有(前半个周期正常,后半个周期翻过来)。 */
+export function mirrorOn(t: number, period: number = MIRROR_PERIOD): boolean {
+  const p = period > 0 ? period : MIRROR_PERIOD;
+  return Math.floor(Math.max(0, t) / p) % 2 === 1;
+}
+
+/** 镜像开着的时候,手指的横坐标要翻到对面去。 */
+export function mirrorX(x: number, w: number, on: boolean): number {
+  return on ? w - x : x;
+}
+
+/* ---------------- 1.1 果王 ---------------- */
+
+export type FruitKingId = "swirlKing" | "decreeKing" | "grandKing";
+
+export interface FruitKingSpec {
+  name: string;
+  emoji: string;
+  /** 要切几刀才倒下 */
+  hp: number;
+  /** 果王本体半径 */
+  r: number;
+  /** 每次现身待几秒 */
+  showTime: number;
+  /** 两次现身之间躲几秒 */
+  hideTime: number;
+  /** 切中一刀得几分 */
+  hitScore: number;
+  /** 倒下时的额外奖励分 */
+  downBonus: number;
+  /** 会甩硬壳果出来 */
+  throwsShell?: boolean;
+  /** 会挂指令果号码牌 */
+  decrees?: boolean;
+  /** 会把左右翻过来 */
+  flips?: boolean;
+  /** 血量过半会加速躲闪 */
+  enrages?: boolean;
+  blurb: string;
+}
+
+export const KING_INFO: Record<FruitKingId, FruitKingSpec> = {
+  swirlKing: {
+    name: "回旋果王", emoji: "🌀", hp: 8, r: 62, showTime: 4.6, hideTime: 2.4,
+    hitScore: 6, downBonus: 20, throwsShell: true,
+    blurb: "转着圈甩硬壳果,连刀切它最划算",
+  },
+  decreeKing: {
+    name: "令牌果王", emoji: "🔖", hp: 10, r: 66, showTime: 4.2, hideTime: 2.2,
+    hitScore: 7, downBonus: 24, throwsShell: true, decrees: true,
+    blurb: "一边发号码牌一边扔硬壳果,按顺序拆它的招",
+  },
+  grandKing: {
+    name: "大果王", emoji: "👑", hp: 12, r: 72, showTime: 4, hideTime: 2,
+    hitScore: 8, downBonus: 30, throwsShell: true, decrees: true, flips: true, enrages: true,
+    blurb: "果园的压轴对手:发令牌、甩硬壳,还会把镜湖整个翻过来",
+  },
+};
+
+/** 果王被切了 hits 刀之后倒了没有。 */
+export function kingDown(spec: FruitKingSpec, hits: number): boolean {
+  return hits >= spec.hp;
+}
+
+/** 果王剩一半血会加速躲闪:返回现身时长的倍率。 */
+export function kingShowMult(spec: FruitKingSpec, hits: number): number {
+  if (!spec.enrages) return 1;
+  return hits * 2 >= spec.hp ? 0.75 : 1;
+}
+
+/** 果王回合的过关判定:分数达标 + 果王倒下,缺一不可。 */
+export function roundIsCleared(
+  score: number,
+  target: number,
+  hasKing: boolean,
+  down: boolean,
+): boolean {
+  if (score < target) return false;
+  return !hasKing || down;
+}
 
 /* ---------------- 经典战役(99 回合) ---------------- */
 
@@ -207,17 +456,32 @@ export interface RoundDef {
   /** 生成器产出的回合 */
   gen?: boolean;
   hint: string;
+
+  /* ---- 1.1 新机制(前 99 回合都不带这些字段) ---- */
+  /** 连刀判定:一刀之内第 n 颗值 n 分 */
+  chain?: boolean;
+  /** 指令果:每组挂几颗号码牌(要按号码从小到大切) */
+  command?: number;
+  /** 硬壳果:每次抛射混进硬壳果的概率 */
+  shellChance?: number;
+  /** 镜像模式:左右每隔几秒翻一次 */
+  mirror?: boolean;
+  /** 镜像翻转周期(秒),不填走 MIRROR_PERIOD */
+  mirrorPeriod?: number;
+  /** 果王回合 */
+  king?: FruitKingId;
 }
 
 /** idx(0 起)回合属于哪个果园。 */
 export function themeOfLevel(idx: number): OrchardId {
-  return ORCHARD_ORDER[Math.floor(idx / LEVELS_PER_THEME)];
+  return ORCHARD_ORDER[themeIndexOf(idx)];
 }
 
 /** 章节 ci(0 起)包含的回合下标。 */
 export function levelIndicesOfTheme(ci: number): number[] {
+  const base = themeStart(ci);
   const out: number[] = [];
-  for (let i = 0; i < LEVELS_PER_THEME; i++) out.push(ci * LEVELS_PER_THEME + i);
+  for (let i = 0; i < themeSize(ci); i++) out.push(base + i);
   return out;
 }
 
@@ -409,6 +673,185 @@ const royalHand: RoundDef[] = [
   R(8, "传说果神宴", 100, 50, 0.3, 0.12, 12, 3, 5, ["banana", "ice", "boom"], "最终盛宴", "最终回合!切出 100 分成为果神!"),
 ];
 
+/* ================ 1.1:三个新果园(第 100–188 回合) ================ */
+// 前 99 回合一格不动,这三章整段追加在数组末尾。
+// 每章 12 回合手写 + 其余生成;生成回合的目标分在相邻手写回合之间插值,
+// 保证整章目标分一路往上爬,而且抛射节奏("4-7"这类)和手写回合不同,
+// 模板签名不会撞车。
+
+/** 新果园每章手写 12 回合,其余交给巡宴生成器。 */
+export const NEW_HANDMADE_PER_THEME = 12;
+
+/** 新果园手写回合的简写构造器。 */
+function N(
+  orchard: OrchardId,
+  name: string,
+  target: number,
+  time: number,
+  bombChance: number,
+  bigBombChance: number,
+  maxOnScreen: number,
+  volleyMin: number,
+  volleyMax: number,
+  specials: SpecialKind[],
+  feature: string,
+  hint: string,
+  extra: Partial<RoundDef> = {},
+): RoundDef {
+  return {
+    name,
+    orchard,
+    target,
+    time,
+    bombChance,
+    bigBombChance,
+    maxOnScreen,
+    volleyMin,
+    volleyMax,
+    specials,
+    feature,
+    hint,
+    ...extra,
+  };
+}
+
+/** 巡宴回合的提示语:把本回合真正开着的机制念一遍。 */
+function feastHint(st: OrchardStyle, r: Partial<RoundDef>): string {
+  const bits: string[] = [];
+  if (r.chain) bits.push("连刀照算");
+  if (r.command) bits.push(`${r.command} 颗指令果按号码来`);
+  if (r.shellChance) bits.push("硬壳果要补第二刀");
+  if (r.mirror) bits.push("湖面还会翻镜像");
+  return `${st.name}的常驻巡宴!${bits.join(",")},稳住节奏别乱刀`;
+}
+
+/**
+ * 拼一个新果园:手写回合按 [0..7] → 巡宴 → [8,9] → 巡宴 → 毕业考 → 果王 排布。
+ * 巡宴回合的目标分/时长在左右两侧手写回合之间插值,所以整章严格递增。
+ */
+function buildNewOrchard(
+  orchard: OrchardId,
+  hand: RoundDef[],
+  size: number,
+  opts: {
+    volleyMin: number;
+    volleyMax: number;
+    maxOnScreen: number;
+    specials: SpecialKind[];
+    bombFrom: number;
+    bombTo: number;
+    bigBombFrom: number;
+    bigBombTo: number;
+    /** 巡宴回合固定带上的新机制 */
+    base: Partial<RoundDef>;
+    /** 巡宴回合轮换的附加机制 */
+    rotate: Array<Partial<RoundDef>>;
+  },
+): RoundDef[] {
+  if (hand.length !== NEW_HANDMADE_PER_THEME) {
+    throw new Error(`${orchard} 手写回合数量应为 ${NEW_HANDMADE_PER_THEME}`);
+  }
+  const st = ORCHARD_STYLE[orchard];
+  const genCount = size - hand.length;
+  if (genCount < 2) throw new Error(`${orchard} 巡宴回合不够排`);
+  const firstRun = Math.ceil(genCount / 2);
+  const runs = [
+    { from: hand[7], to: hand[8], n: firstRun },
+    { from: hand[9], to: hand[10], n: genCount - firstRun },
+  ];
+
+  let sub = 0;
+  const made: RoundDef[][] = [];
+  for (const run of runs) {
+    const list: RoundDef[] = [];
+    for (let i = 0; i < run.n; i++) {
+      const f = (i + 1) / (run.n + 1);
+      const g = genCount === 1 ? 0 : sub / (genCount - 1);
+      const extra: Partial<RoundDef> = {
+        ...opts.base,
+        ...opts.rotate[sub % opts.rotate.length],
+      };
+      list.push({
+        name: `${st.name}巡宴 ${sub + 1} 号`,
+        orchard,
+        target: run.from.target + Math.round((run.to.target - run.from.target) * f),
+        time: run.from.time + Math.round((run.to.time - run.from.time) * f),
+        bombChance: Math.round((opts.bombFrom + (opts.bombTo - opts.bombFrom) * g) * 1000) / 1000,
+        bigBombChance:
+          Math.round((opts.bigBombFrom + (opts.bigBombTo - opts.bigBombFrom) * g) * 1000) / 1000,
+        maxOnScreen: opts.maxOnScreen,
+        volleyMin: opts.volleyMin,
+        volleyMax: opts.volleyMax,
+        specials: [...opts.specials],
+        feature: `${st.name}巡宴${sub + 1}号`,
+        gen: true,
+        hint: feastHint(st, extra),
+        ...extra,
+      });
+      sub++;
+    }
+    made.push(list);
+  }
+
+  return [
+    ...hand.slice(0, 8),
+    ...made[0],
+    hand[8],
+    hand[9],
+    ...made[1],
+    hand[10],
+    hand[11],
+  ];
+}
+
+/* ---- 第 10 章 · 回旋果谷:连刀判定 + 硬壳果登场 ---- */
+const swirlHand: RoundDef[] = [
+  N("swirl", "回旋初课", 84, 44, 0.2, 0.08, 12, 4, 6, ["banana"], "连刀判定登场", "新规矩:一刀不松手连着切,第 2 颗算 2 分、第 3 颗算 3 分!", { chain: true }),
+  N("swirl", "长刀练习", 85, 44, 0.21, 0.08, 12, 4, 6, ["banana"], "连刀长划练习", "别急着抬手,把一刀划长一点,连刀分才叠得起来", { chain: true }),
+  N("swirl", "谷风串果", 86, 44, 0.22, 0.08, 12, 4, 6, ["banana", "boom"], "连刀谷风串果", "谷风把果子吹成一串,顺着风向划过去正好连刀", { chain: true }),
+  N("swirl", "硬壳登场", 87, 46, 0.21, 0.09, 12, 4, 6, ["banana"], "硬壳果登场", "带木纹的硬壳果要切两刀!第一刀会被弹开,追上去补一刀", { chain: true, shellChance: 0.1 }),
+  N("swirl", "补刀练习", 88, 46, 0.22, 0.09, 12, 4, 6, ["banana", "boom"], "硬壳补刀练习", "硬壳果被弹开后会往上飘一下,那一下就是补刀的机会", { chain: true, shellChance: 0.12 }),
+  N("swirl", "壳里带连", 90, 46, 0.23, 0.09, 12, 4, 6, ["banana", "boom"], "硬壳混进连刀", "硬壳果混在果串里,连刀被它挡住也别慌,划完再回头", { chain: true, shellChance: 0.14 }),
+  N("swirl", "纯连刀擂台", 91, 48, 0.24, 0.1, 12, 4, 6, ["banana"], "纯连刀擂台", "这回没有硬壳果,专心把连刀拉长,冲满连刀!", { chain: true }),
+  N("swirl", "回旋炸弹阵", 92, 48, 0.3, 0.11, 12, 4, 6, ["banana", "boom"], "回旋炸弹阵", "炸弹也跟着打转,连刀划长了容易扫到,看准再出手", { chain: true, shellChance: 0.16 }),
+  N("swirl", "壳阵回旋", 103, 48, 0.24, 0.1, 12, 4, 6, ["banana", "boom"], "硬壳回旋阵", "整片山谷都是硬壳果,先弹开再一起补刀最省时间", { chain: true, shellChance: 0.14 }),
+  N("swirl", "谷底大回旋", 104, 48, 0.25, 0.11, 12, 4, 6, ["banana", "boom"], "谷底大回旋", "果子绕着谷底转圈,画一条大弧线就能连一整串", { chain: true, shellChance: 0.18 }),
+  N("swirl", "果谷毕业宴", 115, 50, 0.27, 0.12, 12, 4, 6, ["banana", "boom"], "回旋果谷毕业考", "果谷毕业考!连刀、硬壳、炸弹一起来", { chain: true, shellChance: 0.2 }),
+  N("swirl", "回旋果王", 116, 52, 0.24, 0.1, 12, 4, 6, ["banana", "boom"], "果谷果王回旋果王", "回旋果王转着圈甩硬壳果!趁它停下来的时候连刀砍满 8 下", { chain: true, shellChance: 0.16, king: "swirlKing" }),
+];
+
+/* ---- 第 11 章 · 指令果市:挂号码牌的指令果 ---- */
+const decreeHand: RoundDef[] = [
+  N("decree", "号码牌初见", 106, 46, 0.2, 0.08, 12, 4, 6, ["banana", "ice"], "指令果登场", "挂号码牌的是指令果,要先切 1 再切 2,顺序对了才加分", { chain: true, command: 2 }),
+  N("decree", "一二顺序", 107, 46, 0.21, 0.08, 12, 4, 6, ["banana", "ice"], "指令果两连顺序", "切错顺序不掉心,只是这一组重新数,放心大胆试", { chain: true, command: 2 }),
+  N("decree", "三牌齐挂", 108, 46, 0.22, 0.09, 12, 4, 6, ["banana", "ice", "boom"], "指令果三连顺序", "一次挂三张号码牌,眼睛先找 1,再找 2、3", { chain: true, command: 3 }),
+  N("decree", "壳上号码", 109, 48, 0.22, 0.09, 12, 4, 6, ["banana", "ice"], "指令果配硬壳", "硬壳果也来抢镜,别把它当成号码牌", { chain: true, command: 3, shellChance: 0.12 }),
+  N("decree", "市集叫号", 110, 48, 0.23, 0.1, 12, 4, 6, ["banana", "ice", "boom"], "指令果市集叫号", "市集一叫号,三张牌就同时飞上来,先规划再下刀", { chain: true, command: 3 }),
+  N("decree", "四牌大单", 112, 48, 0.24, 0.1, 12, 4, 6, ["banana", "ice", "boom"], "指令果四连顺序", "四张牌一整组,按顺序切完有一大笔奖励分!", { chain: true, command: 4 }),
+  N("decree", "号码与硬壳", 113, 50, 0.25, 0.11, 12, 4, 6, ["banana", "ice", "boom"], "指令果硬壳混编", "硬壳果和号码牌混编,补刀的时候别把顺序切乱", { chain: true, command: 3, shellChance: 0.16 }),
+  N("decree", "急单快切", 114, 50, 0.26, 0.11, 12, 4, 6, ["banana", "ice"], "指令果急单", "急单来了!四张牌加硬壳果,手要快心要稳", { chain: true, command: 4, shellChance: 0.14 }),
+  N("decree", "对账大单", 125, 50, 0.25, 0.11, 12, 4, 6, ["banana", "ice", "boom"], "指令果对账大单", "整场都在对账,一组切完马上来下一组", { chain: true, command: 4 }),
+  N("decree", "壳单齐飞", 126, 50, 0.27, 0.12, 12, 4, 6, ["banana", "ice", "boom"], "指令果壳单齐飞", "硬壳果和四张号码牌齐飞,先弹壳再对号最省事", { chain: true, command: 4, shellChance: 0.18 }),
+  N("decree", "果市毕业宴", 137, 50, 0.29, 0.13, 12, 4, 6, ["banana", "ice", "boom"], "指令果市毕业考", "果市毕业考!连刀、号码牌、硬壳果、炸弹全上", { chain: true, command: 4, shellChance: 0.2 }),
+  N("decree", "令牌果王", 140, 52, 0.25, 0.11, 12, 4, 6, ["banana", "ice", "boom"], "果市果王令牌果王", "令牌果王一边发号码牌一边扔硬壳果!按顺序拆招,砍它 10 下", { chain: true, command: 4, shellChance: 0.16, king: "decreeKing" }),
+];
+
+/* ---- 第 12 章 · 镜湖果宫:左右翻镜像,全机制收官 ---- */
+const mirrorHand: RoundDef[] = [
+  N("mirror", "湖面初翻", 130, 46, 0.2, 0.08, 13, 5, 7, ["banana", "ice"], "镜像模式登场", "湖面一翻,手往右划刀就往左走!画面上方有镜子图标提醒你", { chain: true, mirror: true, mirrorPeriod: 8 }),
+  N("mirror", "翻与不翻", 131, 46, 0.21, 0.08, 13, 5, 7, ["banana", "ice"], "镜像翻与不翻", "镜像每 8 秒开一次关一次,盯住图标就不会切空", { chain: true, mirror: true, mirrorPeriod: 8 }),
+  N("mirror", "镜中硬壳", 132, 46, 0.22, 0.09, 13, 5, 7, ["banana", "ice", "boom"], "镜像配硬壳", "镜像里补硬壳果的第二刀,手感要反过来想", { chain: true, mirror: true, mirrorPeriod: 7, shellChance: 0.12 }),
+  N("mirror", "镜中号码", 133, 48, 0.22, 0.09, 13, 5, 7, ["banana", "ice", "boom"], "镜像配指令果", "号码牌在镜像里也不会变,顺序照旧,只是手要反着来", { chain: true, mirror: true, mirrorPeriod: 7, command: 2 }),
+  N("mirror", "镜湖连刀", 134, 48, 0.23, 0.1, 13, 5, 7, ["banana", "ice", "boom"], "镜像长连刀", "镜像里也能拉长连刀,划出一条反方向的大弧线", { chain: true, mirror: true, mirrorPeriod: 6, shellChance: 0.14 }),
+  N("mirror", "三牌照镜", 136, 48, 0.24, 0.1, 13, 5, 7, ["banana", "ice", "boom"], "镜像三牌顺序", "三张号码牌照着镜子挂,别被自己的手带跑偏", { chain: true, mirror: true, mirrorPeriod: 6, command: 3 }),
+  N("mirror", "镜壳令牌", 137, 50, 0.25, 0.11, 13, 5, 7, ["banana", "ice", "boom"], "镜像壳牌混编", "镜像、硬壳、号码牌三样叠一起,慢一点也没关系", { chain: true, mirror: true, mirrorPeriod: 6, command: 3, shellChance: 0.16 }),
+  N("mirror", "快翻急切", 138, 50, 0.27, 0.12, 13, 5, 7, ["banana", "ice"], "镜像快翻", "镜像 5 秒就翻一次,翻的瞬间先停半拍再下刀", { chain: true, mirror: true, mirrorPeriod: 5, shellChance: 0.18 }),
+  N("mirror", "宫前大单", 148, 50, 0.26, 0.12, 13, 5, 7, ["banana", "ice", "boom"], "镜像四牌大单", "果宫门前的四牌大单,镜像里也要一次对完", { chain: true, mirror: true, mirrorPeriod: 5, command: 4 }),
+  N("mirror", "镜宫壳阵", 149, 50, 0.28, 0.13, 13, 5, 7, ["banana", "ice", "boom"], "镜像壳阵", "满屏硬壳果照着镜子飞,补刀一定要预判反方向", { chain: true, mirror: true, mirrorPeriod: 5, command: 4, shellChance: 0.18 }),
+  N("mirror", "果宫毕业宴", 168, 52, 0.3, 0.14, 13, 5, 7, ["banana", "ice", "boom"], "镜湖果宫毕业考", "果宫毕业考!镜像每 4 秒一翻,连刀号码硬壳炸弹全到齐", { chain: true, mirror: true, mirrorPeriod: 4, command: 4, shellChance: 0.2 }),
+  N("mirror", "大果王", 188, 56, 0.26, 0.12, 13, 5, 7, ["banana", "ice", "boom"], "终局果王大果王", "大果王发令牌、甩硬壳,还会亲手翻镜湖!砍它 12 下,拿下第 188 回合", { chain: true, mirror: true, mirrorPeriod: 5, command: 4, shellChance: 0.18, king: "grandKing" }),
+];
+
 export const ROUNDS: RoundDef[] = [
   ...buildOrchard(0, sunnyHand),
   ...buildOrchard(1, berryHand),
@@ -419,6 +862,53 @@ export const ROUNDS: RoundDef[] = [
   ...buildOrchard(6, nightHand),
   ...buildOrchard(7, volcanoHand),
   ...buildOrchard(8, royalHand),
+  ...buildNewOrchard("swirl", swirlHand, NEW_ORCHARD_SIZES[0], {
+    volleyMin: 4,
+    volleyMax: 7,
+    maxOnScreen: 13,
+    specials: ["banana", "boom"],
+    bombFrom: 0.221,
+    bombTo: 0.263,
+    bigBombFrom: 0.083,
+    bigBombTo: 0.113,
+    base: { chain: true },
+    rotate: [{}, { shellChance: 0.13 }, { shellChance: 0.17 }],
+  }),
+  ...buildNewOrchard("decree", decreeHand, NEW_ORCHARD_SIZES[1], {
+    volleyMin: 5,
+    volleyMax: 6,
+    maxOnScreen: 13,
+    specials: ["banana", "ice", "boom"],
+    bombFrom: 0.223,
+    bombTo: 0.271,
+    bigBombFrom: 0.087,
+    bigBombTo: 0.121,
+    base: { chain: true },
+    rotate: [
+      { command: 3 },
+      { command: 4, shellChance: 0.13 },
+      { command: 3, shellChance: 0.17 },
+      { command: 4 },
+    ],
+  }),
+  ...buildNewOrchard("mirror", mirrorHand, NEW_ORCHARD_SIZES[2], {
+    volleyMin: 4,
+    volleyMax: 8,
+    maxOnScreen: 14,
+    specials: ["banana", "ice", "boom"],
+    bombFrom: 0.227,
+    bombTo: 0.279,
+    bigBombFrom: 0.091,
+    bigBombTo: 0.129,
+    base: { chain: true, mirror: true },
+    rotate: [
+      { mirrorPeriod: 7, command: 3 },
+      { mirrorPeriod: 6, shellChance: 0.15 },
+      { mirrorPeriod: 6, command: 4, shellChance: 0.17 },
+      { mirrorPeriod: 5, command: 3 },
+      { mirrorPeriod: 5, shellChance: 0.19 },
+    ],
+  }),
 ];
 
 export const HEARTS_PER_ROUND = 3;
@@ -495,7 +985,7 @@ export function isLevelUnlocked(stars: ReadonlyArray<number>, idx: number): bool
 
 /** 果园章节解锁 = 该章第一回合解锁(即上一章最后一回合已通过)。 */
 export function isThemeUnlocked(stars: ReadonlyArray<number>, themeIdx: number): boolean {
-  return isLevelUnlocked(stars, themeIdx * LEVELS_PER_THEME);
+  return isLevelUnlocked(stars, themeStart(themeIdx));
 }
 
 /** 本章已得的星星数。 */
