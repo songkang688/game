@@ -191,6 +191,14 @@ export function fighterAt(index: number): Fighter {
   return ROSTER[i];
 }
 
+/** 窄屏（360px）名牌放不下全名时截断，末尾补省略号 */
+export function shortName(name: string, max = 3): string {
+  const chars = Array.from(name ?? "");
+  const limit = Math.max(1, Math.trunc(max));
+  if (chars.length <= limit) return chars.join("");
+  return `${chars.slice(0, limit).join("")}…`;
+}
+
 /** 队伍配色：0 号粉队、1 号蓝队、2 号绿队、3 号黄队 */
 export const TEAM_COLORS = ["#ff8fbe", "#7fb2ff", "#8fd6a4", "#ffd166"];
 export const TEAM_NAMES = ["粉粉队", "蓝蓝队", "绿绿队", "黄黄队"];

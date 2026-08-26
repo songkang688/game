@@ -7,11 +7,30 @@
  *
  * 状态机不碰 DOM：同一份 `stepMatch` 既给 canvas 渲染用，也给单测跑完整对局。
  */
-import { AI_TIERS, decideAi, emptyInput, type AiTier, type AiIntent, type Input } from "./ai";
+import {
+  AI_TIERS,
+  decideAi,
+  emptyInput,
+  type AiStyle,
+  type AiTier,
+  type AiIntent,
+  type Input,
+} from "./ai";
+import {
+  CATCH_COOLDOWN,
+  LIFT_COOLDOWN,
+  LIFT_RELIEF,
+  canCatch,
+  canLift,
+  catchVelocity,
+  liftVelocity,
+  type CoopActorView,
+} from "./coop";
 import {
   emptyBuffs,
   extraAirJumps,
   fallMul,
+  itemSpawnX,
   jumpMul,
   powerMul,
   rollItem,
@@ -23,12 +42,15 @@ import {
 } from "./items";
 import {
   SHIELD_MAX,
+  STRUGGLE_WINDOW,
   addBump,
+  canStruggle,
   clampBump,
   coolBump,
   outOfBoundsSide,
   resolveHit,
   stepFlight,
+  struggleVelocity,
   type HitKind,
 } from "./knockback";
 import { fighterById, type Fighter } from "./roster";
@@ -84,6 +106,8 @@ export interface FighterSlot {
   team: number;
   control: ControlKind;
   aiTier?: AiTier;
+  /** 小电脑的打法（会绕后 / 抢道具 / 等你出招），不给就是正面来 */
+  aiStyle?: AiStyle;
   /** 关卡给对手的力度加成 */
   powerBonus?: number;
   /** 单独指定这一位的上场机会（不给就用全局 stocks） */
@@ -146,6 +170,16 @@ export interface Actor {
   /** 刚吃到的道具（给 UI 弹字用） */
   lastItem: string | null;
   lastItemT: number;
+  /** 低元气挨拍后的挣扎窗口（秒），朝场地里按方向键就能挣一下 */
+  struggle: number;
+  /** 顶举 / 接应的冷却 */
+  coopCd: number;
+  /** 顶举成功几次 */
+  lifts: number;
+  /** 接应成功几次 */
+  catches: number;
+  /** 被队友顶举 / 拉回来几次（给合作特训数进度） */
+  helped: number;
 }
 
 export interface ItemDrop {
@@ -169,6 +203,9 @@ export type MatchEvent =
   | { kind: "respawn"; actor: number; x: number; y: number }
   | { kind: "retire"; actor: number }
   | { kind: "syrup"; actor: number; x: number; y: number }
+  | { kind: "struggle"; actor: number; x: number; y: number }
+  | { kind: "lift"; actor: number; rider: number; x: number; y: number }
+  | { kind: "catch"; actor: number; flyer: number; x: number; y: number }
   | { kind: "collapse"; plat: number }
   | { kind: "end"; winnerTeam: number | null };
 
@@ -259,7 +296,17 @@ function makeActor(slot: FighterSlot, index: number, stage: Stage): Actor {
     aiIntent: "wait",
     lastItem: null,
     lastItemT: 0,
+    struggle: 0,
+    coopCd: 0,
+    lifts: 0,
+    catches: 0,
+    helped: 0,
   };
+}
+
+/** 把角色削成 `coop.ts` 认得的那点信息 */
+function coopView(a: Actor): CoopActorView {
+  return { x: a.x, y: a.y, team: a.team, onStage: a.onStage, onGround: a.onGround, cooldown: a.coopCd };
 }
 
 export function createMatch(cfg: MatchConfig): MatchState {
@@ -328,8 +375,10 @@ function actorRadius(a: Actor): number {
 function spawnItem(s: MatchState): void {
   const def = rollItem(s.rand(), s.cfg.itemPool);
   const zone = safeZone(s.stage);
-  const x = zone.min + 30 + s.rand() * Math.max(20, zone.max - zone.min - 60);
-  s.items.push({ id: s.nextItemId++, def, x, y: -30, vy: 90, landed: false, life: 0 });
+  // 左右轮流、镜像对称：第几件道具决定落在中线的哪一边，两边的机会长期完全一样
+  const id = s.nextItemId++;
+  const x = itemSpawnX(zone.min, zone.max, id - 1, s.rand());
+  s.items.push({ id, def, x, y: -30, vy: 90, landed: false, life: 0 });
 }
 
 function nearestOpponent(s: MatchState, a: Actor): Actor | null {
@@ -352,6 +401,8 @@ function applyItem(s: MatchState, a: Actor, def: ItemDef): void {
   switch (def.id) {
     case "hammer":
       a.buffs.hammer = def.duration;
+      // 强道具要先举满：这段时间里锤子还是软的，对手来得及躲
+      a.buffs.hammerCharge = def.charge ?? 0;
       break;
     case "springshoe":
       a.buffs.spring = def.duration;
@@ -546,6 +597,8 @@ function tryHit(s: MatchState, a: Actor): void {
     o.attack = null;
     // 被弹飞的人重新拿满空中跳跃次数：救场的机会永远留着，不至于一下就没戏
     o.jumpsLeft = o.char.airJumps + extraAirJumps(o.buffs);
+    // 元气见底的时候给 0.4 秒挣扎窗口：朝场地里按方向键就能把这一下挣回来大半
+    o.struggle = canStruggle(o.bump) ? STRUGGLE_WINDOW : 0;
     o.stun = Math.min(0.7, 0.14 + hit.speed / 2600);
     s.lastHitBy[o.index] = a.index;
     s.lastHitT[o.index] = s.t;
@@ -560,6 +613,61 @@ function tryHit(s: MatchState, a: Actor): void {
     });
     if (popped) s.events.push({ kind: "pop", actor: o.index, x: o.x, y: o.y });
   }
+}
+
+// ---------------------------------------------------------------------------
+// 配合：顶举与接应
+// ---------------------------------------------------------------------------
+
+/**
+ * 顶举：头顶上正踩着队友就把他送上去，自己不跳。
+ * 成功返回 true，调用方据此跳过这一帧的普通跳跃。
+ */
+function tryLift(s: MatchState, a: Actor): boolean {
+  if (a.coopCd > 0 || !a.onGround) return false;
+  const me = coopView(a);
+  for (const rider of s.actors) {
+    if (rider === a || !canLift(me, coopView(rider))) continue;
+    rider.vy = liftVelocity(a.char.power, actorWeight(rider));
+    rider.vx += (rider.x - a.x) * 1.6;
+    rider.onGround = false;
+    rider.platIndex = -1;
+    rider.stun = 0;
+    rider.jumpsLeft = rider.char.airJumps + extraAirJumps(rider.buffs);
+    // 互相打气：顶的那一下两个人都松快一点
+    rider.bump = clampBump(rider.bump - LIFT_RELIEF);
+    a.bump = clampBump(a.bump - LIFT_RELIEF);
+    a.coopCd = LIFT_COOLDOWN;
+    a.lifts++;
+    rider.helped++;
+    s.events.push({ kind: "lift", actor: a.index, rider: rider.index, x: rider.x, y: rider.y });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 接应：甩一条星星绳，把飘在场边外面的队友往场地里拽一把。
+ * 成功返回 true，调用方据此不再把这一下当成重击。
+ */
+function tryCatch(s: MatchState, a: Actor): boolean {
+  if (a.coopCd > 0) return false;
+  const zone = safeZone(s.stage);
+  const me = coopView(a);
+  for (const flyer of s.actors) {
+    if (flyer === a || !canCatch(me, coopView(flyer), zone)) continue;
+    const v = catchVelocity(flyer.x, flyer.vx, flyer.vy, zone);
+    flyer.vx = v.vx;
+    flyer.vy = v.vy;
+    flyer.stun = 0;
+    flyer.jumpsLeft = flyer.char.airJumps + extraAirJumps(flyer.buffs);
+    a.coopCd = CATCH_COOLDOWN;
+    a.catches++;
+    flyer.helped++;
+    s.events.push({ kind: "catch", actor: a.index, flyer: flyer.index, x: flyer.x, y: flyer.y });
+    return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -587,7 +695,16 @@ function buildAiView(s: MatchState, a: Actor) {
       bump: a.bump,
       jumpsLeft: a.jumpsLeft,
     },
-    target: target ? { x: target.x, y: target.y, bump: target.bump, onGround: target.onGround } : null,
+    target: target
+      ? {
+          x: target.x,
+          y: target.y,
+          bump: target.bump,
+          onGround: target.onGround,
+          attacking: attackPhase(target) === "windup" || attackPhase(target) === "active",
+          recovering: attackPhase(target) === "recover",
+        }
+      : null,
     item,
     safe: safeZone(s.stage),
     bounds: s.stage.bounds,
@@ -610,6 +727,8 @@ function respawnActor(s: MatchState, a: Actor): void {
   a.platIndex = -1;
   a.jumpsLeft = a.char.airJumps;
   a.onStage = true;
+  a.struggle = 0;
+  a.coopCd = 0;
   s.events.push({ kind: "respawn", actor: a.index, x: a.x, y: a.y });
 }
 
@@ -642,6 +761,18 @@ export function teamStats(s: MatchState): TeamStat[] {
   return Array.from(map.values()).sort(
     (x, y) => y.stocks - x.stocks || y.kos - x.kos || x.outs - y.outs
   );
+}
+
+/** 一整队做成了多少次配合动作（合作特训按它算过关） */
+export function coopTally(s: MatchState, team: number): { lifts: number; catches: number } {
+  let lifts = 0;
+  let catches = 0;
+  for (const a of s.actors) {
+    if (a.team !== team) continue;
+    lifts += a.lifts;
+    catches += a.catches;
+  }
+  return { lifts, catches };
 }
 
 /** 时间到的时候按战况判胜负；并列就是平局（返回 null） */
@@ -697,6 +828,8 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
 
     a.safe = Math.max(0, a.safe - step);
     a.stun = Math.max(0, a.stun - step);
+    a.struggle = Math.max(0, a.struggle - step);
+    a.coopCd = Math.max(0, a.coopCd - step);
     a.buffs = tickBuffs(a.buffs, step);
     a.lastItemT = Math.max(0, a.lastItemT - step);
     if (a.onGround && a.stun <= 0) a.bump = coolBump(a.bump, step, 2.4);
@@ -707,7 +840,7 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       a.aiT -= step;
       if (a.aiT <= 0) {
         const tier: AiTier = a.slot.aiTier ?? "normal";
-        const d = decideAi(buildAiView(s, a), tier, s.rand());
+        const d = decideAi(buildAiView(s, a), tier, s.rand(), a.slot.aiStyle ?? "plain");
         a.aiInput = d.input;
         a.aiIntent = d.intent;
         a.aiT = AI_TIERS[tier].think;
@@ -719,7 +852,28 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
     } else {
       input = inputs[a.index] ?? emptyInput();
     }
+    // 挣扎窗口：僵直里唯一还能按的东西，所以要在「僵直清空操作」之前读
+    const raw = input;
+    if (a.struggle > 0 && (raw.left || raw.right)) {
+      const zone = safeZone(s.stage);
+      const inward: 1 | -1 = a.x < (zone.min + zone.max) / 2 ? 1 : -1;
+      const pushing = inward === 1 ? raw.right : raw.left;
+      if (pushing) {
+        const v = struggleVelocity(a.vx, a.vy, inward);
+        a.vx = v.vx;
+        a.vy = v.vy;
+        a.stun = Math.min(a.stun, 0.12);
+        a.struggle = 0;
+        s.events.push({ kind: "struggle", actor: a.index, x: a.x, y: a.y });
+      }
+    }
     if (a.stun > 0 || a.buffs.dizzy > 0) input = emptyInput();
+
+    // ---- 配合：接应（按下 + 副动作，把飘在外面的队友拉回来） ----
+    const caught =
+      input.down && input.heavy && !a.prev.heavy && a.stun <= 0 && a.buffs.dizzy <= 0
+        ? tryCatch(s, a)
+        : false;
 
     // ---- 出招 ----
     if (a.attack) {
@@ -727,7 +881,7 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       a.attack.t += step;
       if (attackPhase(a) === "active") tryHit(s, a);
       if (a.attack.t >= spec.windup + spec.active + spec.recover) a.attack = null;
-    } else if (a.stun <= 0 && a.buffs.dizzy <= 0) {
+    } else if (!caught && a.stun <= 0 && a.buffs.dizzy <= 0) {
       if (input.heavy && !a.prev.heavy) a.attack = { kind: "heavy", t: 0, hit: [] };
       else if (input.light && !a.prev.light) a.attack = { kind: "light", t: 0, hit: [] };
     }
@@ -752,8 +906,9 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       if (Math.abs(a.vx) > run) a.vx = Math.sign(a.vx) * Math.max(run, Math.abs(a.vx) * 0.985);
     }
 
-    // ---- 跳 ----
-    if (canMove && input.up && !a.prev.up) {
+    // ---- 跳（先看看头顶上是不是站着队友：那就改成顶举） ----
+    const lifted = canMove && input.up && !a.prev.up ? tryLift(s, a) : false;
+    if (canMove && input.up && !a.prev.up && !lifted) {
       const maxJumps = a.char.airJumps + extraAirJumps(a.buffs);
       if (a.onGround) {
         a.vy = JUMP_V * a.char.jump * jumpMul(a.buffs);
