@@ -107,6 +107,24 @@ export function clampPan(pan: number, zoom: number, size: number): number {
 /** 1× 时格子小于这个像素就该提醒孩子「可以放大」 */
 export const SMALL_CELL_PX = 44;
 
+/**
+ * 主棋盘一格的边长。竖屏上下两图必须同时看得见（不许滚动来回比对），
+ * 所以每张图最多占约 40% 的屏高，格子按行数摊下来，再夹在 26–44px。
+ * 摊到最小的 26px 时命中半径仍有 22px（热区直径 44px），点得到。
+ */
+export function panelCellPx(rows: number, viewportHeight: number, max = SMALL_CELL_PX): number {
+  const h = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 640;
+  const perPanel = Math.max(140, h * 0.4) - 28;
+  return Math.max(26, Math.min(max, Math.floor(perPanel / Math.max(1, rows))));
+}
+
+/** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */
+export function miniCellPx(cols: number, viewportWidth: number): number {
+  const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;
+  const usable = Math.max(240, Math.min(w, 420)) - 40;
+  return Math.max(22, Math.min(32, Math.floor(usable / 2 / Math.max(1, cols)) - 4));
+}
+
 /** 这块棋盘在 1× 下是不是已经小到该提示放大了 */
 export function shouldSuggestZoom(cellWidth: number, zoom: number): boolean {
   return zoom <= ZOOM_MIN + 1e-9 && cellWidth < SMALL_CELL_PX;

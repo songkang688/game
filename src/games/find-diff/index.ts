@@ -36,7 +36,9 @@ import {
   hintArea,
   hintStageOf,
   hitRadius,
+  miniCellPx,
   missCooldownMs,
+  panelCellPx,
   openLevelOnMap,
   parseLevelParam,
   pickNearest,
@@ -46,10 +48,8 @@ import {
   type CellCenter,
 } from "./runtime";
 
-/** 主棋盘一格的边长：配合 22px 的命中半径下限，热区直径稳稳 ≥ 44px */
+/** 主棋盘一格的边长上限：配合 22px 的命中半径下限，热区直径稳稳 ≥ 44px */
 export const PLAY_CELL_PX = 44;
-/** 三图模式上排两张参考图的格子（只看不点，可以小一点） */
-export const MINI_CELL_PX = 32;
 /** 图案字号下限：双胞胎替换在 360px 小屏上也得认得出 */
 export const MIN_GLYPH_PX = 22;
 const GAP_PX = 4;
@@ -223,6 +223,12 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   let panY = 0;
   let perm = movePermutation(scene.rows, scene.cols, 0);
 
+  const view = globalThis as { innerHeight?: number; innerWidth?: number };
+  const triple = scene.second !== null;
+  // 竖屏上下两图各占约 40% 高度，中间留 UI 条：格子按屏高摊，两张图始终同时可见
+  const playPx = panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
+  const miniPx = triple ? miniCellPx(scene.cols, view.innerWidth ?? 360) : playPx;
+
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -282,7 +288,6 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     return { panel, grid };
   }
 
-  const triple = scene.second !== null;
   const refGrids: HTMLElement[] = [];
   const refCells: HTMLElement[][] = [];
   let playCells: HTMLButtonElement[] = [];
@@ -290,20 +295,20 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   if (triple) {
     const row = document.createElement("div");
     row.className = "fdf-row";
-    const a = makePanel("图 ①", MINI_CELL_PX);
-    const b = makePanel("图 ②", MINI_CELL_PX);
+    const a = makePanel("图 ①", miniPx);
+    const b = makePanel("图 ②", miniPx);
     row.append(a.panel, b.panel);
     panelsEl.appendChild(row);
     refGrids.push(a.grid, b.grid);
   } else {
-    const top = makePanel(scene.mirrored ? "原图（下面是它的镜子像）" : "原图（看这里）", PLAY_CELL_PX);
+    const top = makePanel(scene.mirrored ? "原图（下面是它的镜子像）" : "原图（看这里）", playPx);
     panelsEl.appendChild(top.panel);
     refGrids.push(top.grid);
   }
   const split = document.createElement("div");
   split.className = "fdf-split";
   panelsEl.appendChild(split);
-  const play = makePanel(opts.playLabel, PLAY_CELL_PX);
+  const play = makePanel(opts.playLabel, playPx);
   panelsEl.appendChild(play.panel);
   const playGrid = play.grid;
 
@@ -326,7 +331,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `fdf-cell fdf-cell-play${slide ? " fdf-slide" : ""}`;
-      paintCell(btn, scene.right[src], PLAY_CELL_PX);
+      paintCell(btn, scene.right[src], playPx);
       btn.setAttribute("aria-label", `第 ${Math.floor(pos / scene.cols) + 1} 行第 ${(pos % scene.cols) + 1} 个`);
       // 鼠标/手指走 viewport 上的几何命中判定（有容差）；这里只接键盘敲出来的 click
       btn.addEventListener("click", (ev) => {
@@ -342,7 +347,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   function paintAll(slide: boolean): void {
     refGrids.forEach((grid, gi) => {
       const cells = gi === 0 ? scene.left : scene.second ?? scene.left;
-      fillRef(grid, cells, gi, triple ? MINI_CELL_PX : PLAY_CELL_PX, slide);
+      fillRef(grid, cells, gi, triple ? miniPx : playPx, slide);
     });
     fillPlay(slide);
   }
@@ -448,7 +453,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   /** 屏幕坐标 →（有容差的）格子：半径内取最近的那个 */
   function hitAt(clientX: number, clientY: number): void {
     const centers: CellCenter[] = [];
-    let width = PLAY_CELL_PX * zoom;
+    let width = playPx * zoom;
     playCells.forEach((btn, index) => {
       if (!btn) return;
       const r = btn.getBoundingClientRect();
@@ -561,7 +566,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   paintAll(false);
   applyTransform();
   refreshHintBtn();
-  msgEl.textContent = shouldSuggestZoom(PLAY_CELL_PX, zoom)
+  msgEl.textContent = shouldSuggestZoom(playPx, zoom)
     ? "格子有点小，可以两根手指放大，两张图会一起放大～"
     : "";
 
@@ -821,6 +826,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
       playLabel: `找出下图不一样的 ${scene.diffIdx.length} 个地方，点它！`,
       sfx: (name) => api.play(name),
       onCleared: () => {
+        api.play("win");
         best = save.recordEndlessBest(meta.id, round);
         api.addStars(1);
         round++;
