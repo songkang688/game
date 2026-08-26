@@ -19,6 +19,7 @@ import {
 import {
   CATCH_COOLDOWN,
   LIFT_COOLDOWN,
+  LIFT_RANGE,
   LIFT_RELIEF,
   canCatch,
   canLift,
@@ -174,6 +175,11 @@ export interface Actor {
   struggle: number;
   /** 顶举 / 接应的冷却 */
   coopCd: number;
+  /**
+   * 正踩在哪位队友的头顶上（队友的下标，-1 = 没踩着）。
+   * 队友的脑袋对同队的人来说就是一小块软平台——站得住，才有工夫喊他「顶我一下」。
+   */
+  ride: number;
   /** 顶举成功几次 */
   lifts: number;
   /** 接应成功几次 */
@@ -298,6 +304,7 @@ function makeActor(slot: FighterSlot, index: number, stage: Stage): Actor {
     lastItemT: 0,
     struggle: 0,
     coopCd: 0,
+    ride: -1,
     lifts: 0,
     catches: 0,
     helped: 0,
@@ -529,6 +536,40 @@ function updatePlatforms(s: MatchState, dt: number): void {
   });
 }
 
+/** 队友脑袋顶那条线（世界 y） */
+function headTop(a: Actor): number {
+  return a.y - actorRadius(a);
+}
+
+/**
+ * 这一位队友的脑袋现在还站得住吗。
+ * 他自己得在场上、站稳了，而且踩着的人没歪出去太远。
+ */
+function headHolds(rider: Actor, lifter: Actor): boolean {
+  if (!lifter.onStage || !lifter.onGround) return false;
+  if (lifter.team !== rider.team) return false;
+  return Math.abs(rider.x - lifter.x) <= LIFT_RANGE + 8;
+}
+
+/**
+ * 这一帧有没有落到某位队友的头顶上；没有就返回 -1。
+ *
+ * 同队的人本来就打不到彼此，1.1 里连站都站不到一起去；
+ * 1.2 让队友的脑袋变成一小块软平台——踩上去站得住，才谈得上「顶我一下」。
+ * 对手的头顶一律踩不住，所以这条路只通向配合。
+ */
+function landingHead(s: MatchState, a: Actor, prevFeet: number, feet: number): number {
+  if (a.vy < 0) return -1;
+  for (const o of s.actors) {
+    if (o === a || !headHolds(a, o)) continue;
+    const top = headTop(o);
+    if (prevFeet > top + 6) continue;
+    if (feet < top) continue;
+    return o.index;
+  }
+  return -1;
+}
+
 /** 找脚下这一帧踩到的平台；没踩到返回 -1 */
 function landingPlatform(s: MatchState, a: Actor, prevFeet: number, feet: number): number {
   if (a.vy < 0) return -1;
@@ -594,6 +635,7 @@ function tryHit(s: MatchState, a: Actor): void {
     o.vy = hit.vy;
     o.onGround = false;
     o.platIndex = -1;
+    o.ride = -1;
     o.attack = null;
     // 被弹飞的人重新拿满空中跳跃次数：救场的机会永远留着，不至于一下就没戏
     o.jumpsLeft = o.char.airJumps + extraAirJumps(o.buffs);
@@ -632,6 +674,7 @@ function tryLift(s: MatchState, a: Actor): boolean {
     rider.vx += (rider.x - a.x) * 1.6;
     rider.onGround = false;
     rider.platIndex = -1;
+    rider.ride = -1;
     rider.stun = 0;
     rider.jumpsLeft = rider.char.airJumps + extraAirJumps(rider.buffs);
     // 互相打气：顶的那一下两个人都松快一点
@@ -729,6 +772,7 @@ function respawnActor(s: MatchState, a: Actor): void {
   a.onStage = true;
   a.struggle = 0;
   a.coopCd = 0;
+  a.ride = -1;
   s.events.push({ kind: "respawn", actor: a.index, x: a.x, y: a.y });
 }
 
@@ -923,6 +967,7 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
         a.vy = JUMP_V * a.char.jump * jumpMul(a.buffs);
         a.onGround = false;
         a.platIndex = -1;
+        a.ride = -1;
         a.jumpsLeft = maxJumps;
       } else if (a.jumpsLeft > 0) {
         a.jumpsLeft--;
@@ -941,8 +986,11 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
     const prevFeet = a.y + actorRadius(a);
     if (a.onGround) {
       a.vy = 0;
-      // 平台自己在动（升降台 / 平移台）：站在上面的人跟着一起走
-      if (a.platIndex >= 0) {
+      // 踩在队友头顶上：他往哪走，脑袋就跟到哪，站着的人也跟着挪
+      if (a.ride >= 0) {
+        const lifter = s.actors[a.ride];
+        a.y = headTop(lifter) - actorRadius(a);
+      } else if (a.platIndex >= 0) {
         const st = s.plats[a.platIndex];
         if (st.hidden) {
           a.onGround = false;
@@ -974,8 +1022,17 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
     // ---- 落地 ----
     if (!a.onGround) {
       const feet = a.y + actorRadius(a);
-      const pi = landingPlatform(s, a, prevFeet, feet);
-      if (pi >= 0) {
+      // 先看看有没有落到队友头顶上——那是这一款唯一「站得住的人」
+      const hi = landingHead(s, a, prevFeet, feet);
+      const pi = hi >= 0 ? -1 : landingPlatform(s, a, prevFeet, feet);
+      if (hi >= 0) {
+        a.onGround = true;
+        a.ride = hi;
+        a.platIndex = -1;
+        a.y = headTop(s.actors[hi]) - actorRadius(a);
+        a.vy = 0;
+        a.jumpsLeft = a.char.airJumps + extraAirJumps(a.buffs);
+      } else if (pi >= 0) {
         const p = s.stage.platforms[pi];
         const st = s.plats[pi];
         if (p.bounce) {
@@ -988,6 +1045,12 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
           a.vy = 0;
           a.jumpsLeft = a.char.airJumps + extraAirJumps(a.buffs);
         }
+      }
+    } else if (a.ride >= 0) {
+      // 踩着的队友走开了、跳走了或者被撞飞了，脚下自然就空了
+      if (!headHolds(a, s.actors[a.ride])) {
+        a.onGround = false;
+        a.ride = -1;
       }
     } else {
       // 走出平台边缘就自然掉下去

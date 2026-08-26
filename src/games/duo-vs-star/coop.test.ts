@@ -281,6 +281,100 @@ describe("一个人过不了合作特训", () => {
     expect(coopTally(s, 0).catches).toBe(0);
   });
 
+  it("队友的脑袋是一小块软平台：跳上去站得住，不会直接穿过去", () => {
+    const s = createMatch({
+      ...soloCfg(),
+      slots: [
+        { charId: "duoduo", team: 0, control: "p1", stocks: 9 },
+        { charId: "xingxing", team: 0, control: "p2", stocks: 9 },
+      ],
+    });
+    for (let i = 0; i < 120; i++) stepMatch(s, 1 / 60, {});
+    const [lifter, rider] = s.actors;
+    rider.x = lifter.x;
+    rider.y = lifter.y - 90;
+    rider.vy = 60;
+    rider.onGround = false;
+    rider.platIndex = -1;
+    for (let i = 0; i < 30 && rider.ride < 0; i++) stepMatch(s, 1 / 60, {});
+    expect(rider.ride).toBe(lifter.index);
+    expect(rider.onGround).toBe(true);
+    // 站着不动就一直站得住，有的是工夫喊队友顶一下
+    for (let i = 0; i < 60; i++) stepMatch(s, 1 / 60, {});
+    expect(rider.ride).toBe(lifter.index);
+  });
+
+  it("对手的脑袋踩不住——这条路只通向配合", () => {
+    const s = createMatch({
+      ...soloCfg(),
+      slots: [
+        { charId: "duoduo", team: 0, control: "p1", stocks: 9 },
+        { charId: "xingxing", team: 1, control: "p2", stocks: 9 },
+      ],
+    });
+    for (let i = 0; i < 120; i++) stepMatch(s, 1 / 60, {});
+    const [under, over] = s.actors;
+    over.safe = 0;
+    over.x = under.x;
+    over.y = under.y - 90;
+    over.vy = 60;
+    over.onGround = false;
+    over.platIndex = -1;
+    for (let i = 0; i < 30; i++) stepMatch(s, 1 / 60, {});
+    expect(over.ride).toBe(-1);
+  });
+
+  it("站在队友头顶上按「上」就是顶举，不是自己起跳", () => {
+    const s = createMatch({
+      ...soloCfg(),
+      slots: [
+        { charId: "duoduo", team: 0, control: "p1", stocks: 9 },
+        { charId: "xingxing", team: 0, control: "p2", stocks: 9 },
+      ],
+    });
+    for (let i = 0; i < 120; i++) stepMatch(s, 1 / 60, {});
+    const [lifter, rider] = s.actors;
+    rider.x = lifter.x;
+    rider.y = lifter.y - 90;
+    rider.vy = 60;
+    rider.onGround = false;
+    rider.platIndex = -1;
+    for (let i = 0; i < 30 && rider.ride < 0; i++) stepMatch(s, 1 / 60, {});
+    expect(rider.ride).toBe(lifter.index);
+    stepMatch(s, 1 / 60, { 0: press({ up: true }) });
+    expect(coopTally(s, 0).lifts).toBe(1);
+    expect(rider.ride).toBe(-1);
+    expect(rider.vy).toBeLessThan(-400);
+    expect(lifter.onGround).toBe(true);
+  });
+
+  it("被顶起来的队友飞得比自己起跳高得多", () => {
+    const s = createMatch({
+      ...soloCfg(),
+      slots: [
+        { charId: "duoduo", team: 0, control: "p1", stocks: 9 },
+        { charId: "xingxing", team: 0, control: "p2", stocks: 9 },
+      ],
+    });
+    for (let i = 0; i < 120; i++) stepMatch(s, 1 / 60, {});
+    const [lifter, rider] = s.actors;
+    const floor = rider.y;
+    rider.x = lifter.x;
+    rider.y = lifter.y - 90;
+    rider.vy = 60;
+    rider.onGround = false;
+    rider.platIndex = -1;
+    for (let i = 0; i < 30 && rider.ride < 0; i++) stepMatch(s, 1 / 60, {});
+    stepMatch(s, 1 / 60, { 0: press({ up: true }) });
+    let top = rider.y;
+    for (let i = 0; i < 60; i++) {
+      stepMatch(s, 1 / 60, {});
+      top = Math.min(top, rider.y);
+    }
+    const own = (JUMP_V * fighterById("xingxing").jump) ** 2 / (2 * GRAVITY);
+    expect(floor - top).toBeGreaterThan(own);
+  });
+
   it("合作特训里两个人同队，一局不会因为「只剩一队」被判提前结束", () => {
     const s = createMatch({
       ...soloCfg(),
