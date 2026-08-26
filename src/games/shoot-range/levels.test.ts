@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, assertTotal, chapterOf } from "../level99";
-import { CHAPTERS, TARGET_BOUNDS, buildDuelTargets, buildLevel, buildTide, hasCleanShot } from "./levels";
+import {
+  CHAPTERS,
+  TARGET_BOUNDS,
+  buildDuelTargets,
+  buildLevel,
+  buildTide,
+  fingerprintHash,
+  hasCleanShot,
+} from "./levels";
 import { isForbidden, mustClear, resolveHit } from "./targets12";
 import {
   MUZZLE_X,
@@ -12,6 +20,7 @@ import {
   stepGun,
   stepTarget,
   traceShot,
+  type TargetKind,
 } from "./logic";
 
 describe("shoot-range 188 关战役", () => {
@@ -213,6 +222,30 @@ describe("shoot-range 188 关战役", () => {
       // 这套打法全程不该误伤好人靶
       expect(friendHits).toBe(0);
     }
+  });
+
+  it("1.2 一个字节都没动老关卡:前 118 关(第 1–118 关)的指纹和 1.1 完全一致", () => {
+    // 这两个哈希是拿 1.1 的 levels.ts / logic.ts 逐关 JSON 对出来的。
+    // `Target` 的 1.2 新字段(hp / ttl / far / gen)全是可选的、不写就不进 JSON,
+    // 新靶种也只从第 119 关(第 7 章)才进池子——所以老存档回来重玩,布局一模一样。
+    // 改了这里的任何一个数,老玩家的关卡就变了,这条用例会先红。
+    expect(fingerprintHash(0, 98)).toBe("c4c4cc3c");
+    expect(fingerprintHash(0, 117)).toBe("5a0c1d9f");
+  });
+
+  it("1.2 的新靶种一个都不许出现在前 118 关里", () => {
+    const fresh = new Set<TargetKind>(["split", "shield", "rainbow", "flower"]);
+    for (let lv = 0; lv <= 117; lv++) {
+      for (const t of buildLevel(lv).targets) {
+        expect(fresh.has(t.kind), `第 ${lv + 1} 关混进了 ${t.kind}`).toBe(false);
+        // 可选字段也一个都不许写进去,不然 JSON 就变长了
+        expect(Object.keys(t)).toEqual(["id", "kind", "x", "y", "r", "vx", "vy", "order", "alive", "phase"]);
+      }
+    }
+    // 第 119 关起才是新东西
+    const later = new Set<TargetKind>();
+    for (let lv = 118; lv < TOTAL_LEVELS; lv++) for (const t of buildLevel(lv).targets) later.add(t.kind);
+    for (const k of fresh) expect(later.has(k), `${k} 一关都没登场`).toBe(true);
   });
 
   it("站位靠前的靶挡住后面的靶时,先打掉前面那个后面就能打了", () => {

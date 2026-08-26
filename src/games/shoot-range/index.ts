@@ -523,6 +523,8 @@ function createField(opts: FieldOptions): FieldHandle {
     if (opts.shotBudget > 0) shotsLeft--;
     const aim = liveAim(s);
     s.windup = { left: WINDUP_S, x: aim.x, y: aim.y };
+    // 前摇期间弹夹与余弹已经扣掉了,HUD 当场跟上,不然按下去要等一帧才看到反应
+    refreshHud();
     opts.sfx("tap");
   }
 
