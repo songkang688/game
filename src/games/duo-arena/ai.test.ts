@@ -151,11 +151,41 @@ describe("实时大脑", () => {
     expect(thinkAi(far, 1, { x: 0.1, y: 0.9 }, targets).grab).toBe(false);
   });
 
-  it("不去追迷糊泡", () => {
+  it("多数时候不去追迷糊泡", () => {
     const brain = createBrain("master", 8);
     const only: AiTargetView[] = [{ id: 7, x: 0.9, y: 0.9, kind: "bomb", bornAt: 0, dieAt: 9 }];
     const cmd = thinkAi(brain, 2, { x: 0.5, y: 0.5 }, only);
     expect(cmd.grab).toBe(false);
+    expect(Math.hypot(cmd.dx, cmd.dy)).toBe(0);
+  });
+
+  it("档位越低越容易看走眼,一头撞上迷糊泡", () => {
+    function blunders(level: "rookie" | "normal" | "master"): number {
+      let n = 0;
+      for (let seed = 0; seed < 120; seed++) {
+        const brain = createBrain(level, seed * 13 + 1);
+        const bomb: AiTargetView[] = [{ id: 1, x: 0.9, y: 0.5, kind: "bomb", bornAt: 0, dieAt: 9 }];
+        const cmd = thinkAi(brain, 2, { x: 0.5, y: 0.5 }, bomb);
+        if (Math.hypot(cmd.dx, cmd.dy) > 0.5) n++;
+      }
+      return n;
+    }
+    const rookie = blunders("rookie");
+    const master = blunders("master");
+    expect(rookie).toBeGreaterThan(10);
+    expect(rookie).toBeGreaterThan(master);
+    expect(master).toBeLessThan(20);
+  });
+
+  it("同一个迷糊泡只判一次,不会这一帧躲下一帧又追", () => {
+    const brain = createBrain("rookie", 4);
+    const bomb: AiTargetView[] = [{ id: 42, x: 0.85, y: 0.5, kind: "bomb", bornAt: 0, dieAt: 30 }];
+    thinkAi(brain, 2, { x: 0.5, y: 0.5 }, bomb); // 第一帧先掷骰子(可能还在犹豫)
+    const decided = thinkAi(brain, 3, { x: 0.5, y: 0.5 }, bomb);
+    for (let t = 3.1; t < 8; t += 0.1) {
+      const cmd = thinkAi(brain, t, { x: 0.5, y: 0.5 }, bomb);
+      expect(Math.hypot(cmd.dx, cmd.dy) > 0.5).toBe(Math.hypot(decided.dx, decided.dy) > 0.5);
+    }
   });
 
   it("会隔一段时间放一次技能,高档比低档放得勤", () => {

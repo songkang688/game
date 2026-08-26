@@ -41,12 +41,12 @@ export const AI_SPECS: Readonly<Record<AiLevel, AiSpec>> = {
     level: "rookie",
     label: "菜鸟",
     emoji: "🐣",
-    reactionS: 0.72,
-    speed: 0.72,
-    missRate: 0.34,
-    bombRisk: 0.3,
+    reactionS: 0.85,
+    speed: 0.6,
+    missRate: 0.4,
+    bombRisk: 0.34,
     skillGap: 14,
-    counterWindowS: 0.72,
+    counterWindowS: 0.85,
     blurb: "刚学会走位,常常慢半拍,还会自己撞上迷糊泡。第一次玩挑它。",
   },
   normal: {
@@ -226,6 +226,10 @@ export interface AiBrain {
   nextSkillAt: number;
   /** 没有目标时闲逛的方向 */
   wanderAngle: number;
+  /** 已经对哪些迷糊泡掷过骰子(每个泡只判一次,免得每帧重掷) */
+  judgedBombs: Set<number>;
+  /** 看走眼、真的会去踩的那些迷糊泡 */
+  fooledBy: Set<number>;
 }
 
 export function createBrain(level: AiLevel, seed: number, now = 0): AiBrain {
@@ -238,7 +242,26 @@ export function createBrain(level: AiLevel, seed: number, now = 0): AiBrain {
     hesitateUntil: now,
     nextSkillAt: now + spec.skillGap * (0.5 + rng() * 0.5),
     wanderAngle: rng() * Math.PI * 2,
+    judgedBombs: new Set<number>(),
+    fooledBy: new Set<number>(),
   };
+}
+
+/**
+ * 这个迷糊泡会不会被看走眼。
+ * 每个泡只掷一次骰子并记下来:低档常常一头撞上去,地狱档基本不会,但也不是绝对。
+ */
+function fooledByBomb(brain: AiBrain, id: number): boolean {
+  if (!brain.judgedBombs.has(id)) {
+    brain.judgedBombs.add(id);
+    if (brain.rng() < brain.spec.bombRisk) brain.fooledBy.add(id);
+    // 记忆不无限长,免得一局下来越攒越多
+    if (brain.judgedBombs.size > 64) {
+      brain.judgedBombs.clear();
+      brain.fooledBy.clear();
+    }
+  }
+  return brain.fooledBy.has(id);
 }
 
 function targetValue(kind: TargetKind): number {
@@ -286,11 +309,14 @@ export function thinkAi(
   let best: AiTargetView | null = null;
   let bestScore = -Infinity;
   for (const t of visible) {
-    if (t.kind === "bomb") continue; // 迷糊泡不去追(误碰是走位撞上的,见 bombRisk)
+    // 迷糊泡本来是躲着走的,只有看走眼的时候才会一头撞上去(档位越低越容易上当)
+    if (t.kind === "bomb" && !fooledByBomb(brain, t.id)) continue;
     const dist = Math.hypot(t.x - self.x, t.y - self.y) + 0.02;
     const left = Math.max(0.05, t.dieAt - now);
     const keep = brain.lockedId === t.id ? 1.25 : 1; // 已经在追的略微加权,免得来回摇摆
-    const s = (targetValue(t.kind) / dist) * Math.min(1, left * 1.6) * keep;
+    // 看走眼的迷糊泡在它眼里就是个普通目标,所以按 +1 估值
+    const value = t.kind === "bomb" ? 1 : targetValue(t.kind);
+    const s = (value / dist) * Math.min(1, left * 1.6) * keep;
     if (s > bestScore) {
       bestScore = s;
       best = t;

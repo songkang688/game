@@ -854,7 +854,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (roundTime < f.spinUntil || roundTime < f.frozenUntil) return;
     if (grabPhase(f.grabStart, roundTime) === "windup") return; // 前摇要站定,这是给对手的窗口
     const dash = isSkillActive(f.skills, "dash", roundTime) ? DASH_SPEED_SCALE : 1;
-    const speed = BASE_SPEED * dash * (1 + f.boost);
+    // 人机的脚力按档位来:菜鸟真的跑得慢,地狱档才跑得比人快一点
+    const tier = f.aiLevel ? AI_SPECS[f.aiLevel].speed : 1;
+    const speed = BASE_SPEED * dash * tier * (1 + f.boost);
     const w = f.courtEl.clientWidth || 336;
     const h = f.courtEl.clientHeight || 186;
     const aspect = h > 0 ? w / h : 1.8;
