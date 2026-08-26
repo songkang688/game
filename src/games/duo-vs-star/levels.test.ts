@@ -10,6 +10,7 @@ import {
   levelAt,
   rateLevel,
 } from "./levels";
+import GUIDE from "./guide";
 import { ITEMS } from "./items";
 import { ROSTER, fighterById } from "./roster";
 import { STAGES, stageById } from "./stages";
@@ -217,6 +218,31 @@ describe("星级与无尽", () => {
     expect(endlessBonusStars(-4)).toBe(0);
     expect(endlessBonusStars(Number.NaN)).toBe(0);
     expect(endlessBonusStars(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe("攻略跟着章节走", () => {
+  it("攻略的关卡区间正好铺满 188 关，一关不漏也不重叠", () => {
+    const entries = [...GUIDE.entries].sort((a, b) => a.from - b.from);
+    expect(entries).toHaveLength(CHAPTERS.length);
+    expect(entries[0].from).toBe(1);
+    expect(entries[entries.length - 1].to).toBe(TOTAL_LEVELS);
+    for (let i = 1; i < entries.length; i++) {
+      expect(entries[i].from).toBe(entries[i - 1].to + 1);
+    }
+  });
+
+  it("每一章的攻略标题对得上章节名，提示都写满了", () => {
+    CHAPTERS.forEach((ch, i) => {
+      expect(GUIDE.entries[i].title).toContain(ch.name);
+      expect(GUIDE.entries[i].tips.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it("攻略挂在本游戏名下，通用心得条数符合壳层要求", () => {
+    expect(GUIDE.gameId).toBe("duo-vs-star");
+    expect(GUIDE.general.length).toBeGreaterThanOrEqual(3);
+    expect(GUIDE.general.length).toBeLessThanOrEqual(6);
   });
 });
 

@@ -38,6 +38,7 @@ import {
 } from "./levels";
 import { ROSTER, TEAM_COLORS, TEAM_NAMES, fighterById } from "./roster";
 import { STAGES, WORLD_H, WORLD_W, platformAt, stageById, syrupLevel } from "./stages";
+import GUIDE from "./guide";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
 
@@ -1231,27 +1232,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         playLevel,
         mapHint: "十张场地、十种花样，越往后的对手越会抓你落地那一下。",
         grandMessage: "188 关全部通关，全明星混战的冠军就是你！",
-        guideTitle: "弹飞小攻略",
-        guide: {
-          gameId: meta.id,
-          title: "弹飞小攻略",
-          general: [
-            "这一款不比谁更抗打：先用轻击把对手的击退值磨上去，数字变红了再来一记重击。",
-            "自己的数字变红时别硬拼，退到平台中间站一会儿，击退值会慢慢降下去。",
-            "被撞飞出去不要慌，空中还能再跳一次，朝场地方向按住方向键就能飘回来。",
-            "站在平台边上最危险——同一下轻击，站中间接得住，站边上就直接出去了。",
-            "锤子和护盾泡泡优先抢：锤子让你的挥击力度接近翻倍，泡泡能替你挡下好几下。",
-          ],
-          entries: CHAPTERS.map((ch, ci) => {
-            const from = CHAPTERS.slice(0, ci).reduce((s, c) => s + c.size, 0) + 1;
-            return {
-              from,
-              to: from + ch.size - 1,
-              title: `${ch.emoji} ${ch.name}`,
-              tips: [ch.desc, STAGES[ci % STAGES.length].blurb],
-            };
-          }),
-        },
+        guideTitle: GUIDE.title,
+        guide: GUIDE,
       }
     );
   }
