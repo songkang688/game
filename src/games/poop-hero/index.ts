@@ -1,27 +1,51 @@
 import { meta } from "./meta";
 export { meta };
 
-import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+import {
+  furthestPlayable,
+  loadSkips,
+  loadStars,
+  mountLevelGame,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+  type SoundName,
+} from "../level99";
 import { save } from "../../engine/save";
-import { CHAPTERS, buildCoop, buildEndless, buildLevel, type LevelDef } from "./levels";
+import {
+  CHAPTERS,
+  MISSION_INFO,
+  TOTAL,
+  buildCoop,
+  buildEndless,
+  buildLevel,
+  chapterIndexOf,
+  type LevelDef,
+} from "./levels";
+import { BINS, binInfo, hygieneTip, trashById } from "./trash";
+import { createDisposer, padMetrics, parseLevelParam, resolveInitialLevel } from "./runtime";
 import {
   BEAM_BOTTOM,
   BEAM_TOP,
+  CART_H,
+  CART_W,
   CROUCH_H,
   JUNK_R,
   MONSTER_H,
   MONSTER_W,
   PLAYER_H,
   PLAYER_W,
+  cartLeft,
   cleanRatio,
+  coopMessage,
+  coopProgress,
+  coopStars,
   createWorld,
   doorOpen,
   drainEvents,
   emptyInput,
-  endlessScore,
   isPauseKey,
   keyToAction,
-  metersOf,
   remainingForDoor,
   starsForRun,
   stepWorld,
@@ -66,6 +90,21 @@ const HERO_COLORS = [
 ];
 
 const FLOWERS = ["🌸", "🌼", "🌷", "🌻", "💐"];
+
+/**
+ * 「豆豆怪」的粉彩配色:一章一套,全是浅浅的糖果色。
+ * 造型统一成圆润的小豆豆 + 大眼睛 + 微笑,**一点棕色写实都不要**。
+ */
+const BEAN_COLORS = [
+  { body: "#FFC9DE", shade: "#F7A8C6", face: "#B4577E" },
+  { body: "#C9E7C0", shade: "#A9D6A0", face: "#4F8258" },
+  { body: "#C6DCF7", shade: "#A6C4E8", face: "#3F6C9E" },
+  { body: "#FFE0AE", shade: "#F6CB86", face: "#A9782C" },
+  { body: "#F6C6EA", shade: "#E7A6D6", face: "#9B4E86" },
+  { body: "#BFE6F2", shade: "#9CD2E4", face: "#3C7C92" },
+  { body: "#FFF0B0", shade: "#F3DE86", face: "#9C8320" },
+  { body: "#DACDF6", shade: "#C0AEE8", face: "#6A4FA8" },
+];
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -147,6 +186,38 @@ const CSS = `
   .ph-pads[data-players="2"]{--k:34px;}
   .ph-tip{margin-top:4px;font-size:11px;}
 }
+
+/* ---- 1.2 新增(一律 pph- 前缀)---- */
+.pph-chip-sort{background:#EAF3FF;color:#3F72A8;}
+.pph-chip-mission{background:#FFF0E2;color:#A5643A;}
+.pph-goal{display:flex;align-items:center;gap:6px;margin:0 0 6px;flex-wrap:wrap;}
+.pph-goal-label{font-size:12px;font-weight:900;color:#8A5A3C;white-space:nowrap;}
+.pph-goal-bar{position:relative;flex:1;min-width:120px;height:16px;border-radius:999px;background:#ffffffcc;
+  overflow:hidden;box-shadow:inset 0 1px 3px rgba(150,120,90,.25);}
+.pph-goal-fill{height:100%;width:0%;border-radius:999px;transition:width .18s linear;}
+.pph-goal-sweep{background:linear-gradient(90deg,#FFB6CE,#F98BB2);}
+.pph-goal-haul{background:linear-gradient(90deg,#A7CBFF,#7FA9F0);}
+.pph-goal-mess{background:linear-gradient(90deg,#FFD9A8,#EFA9A9);}
+.pph-goal-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;color:#6B4A32;}
+.pph-roles{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 6px;}
+.pph-role{border-radius:999px;padding:3px 10px;font-size:12px;font-weight:900;color:#fff;}
+.pph-role-sweep{background:#F290B4;}
+.pph-role-haul{background:#7FA9F0;}
+.pph-bins{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
+.pph-bin{display:flex;align-items:center;gap:4px;border-radius:12px;padding:4px 9px;font-size:12px;
+  font-weight:800;color:#4A3A2C;background:#ffffffd9;box-shadow:0 2px 5px rgba(160,130,100,.2);
+  min-height:32px;}
+.pph-bin-dot{width:14px;height:14px;border-radius:50%;flex:0 0 auto;}
+.pph-bin-emoji{font-size:16px;line-height:1;}
+@media (max-width:420px){
+  .pph-goal-label{font-size:11px;}
+  .pph-bin{font-size:11px;padding:3px 7px;}
+}
+@media (prefers-reduced-motion:reduce){
+  .pph-goal-fill,.ph-bar-fill{transition:none;}
+  .ph-toast{transition:none;}
+}
 `;
 
 // ---------------------------------------------------------------------------
@@ -179,6 +250,21 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
   g.closePath();
 }
 
+/** 系统里开了「减少动态效果」就把抖动、拖尾、冒泡特效全关掉 */
+function reducedMotion(): boolean {
+  try {
+    const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    return mm ? mm("(prefers-reduced-motion: reduce)").matches === true : false;
+  } catch {
+    return false;
+  }
+}
+
+function viewportWidth(): number {
+  const w = (globalThis as { innerWidth?: number }).innerWidth;
+  return typeof w === "number" && w > 0 ? w : 360;
+}
+
 function emoji(g: CanvasRenderingContext2D, ch: string, x: number, y: number, size: number): void {
   g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
   g.textAlign = "center";
@@ -207,8 +293,10 @@ interface FieldOpts {
   tip: string;
   /** HUD 右侧要不要显示计时 */
   showTimer: boolean;
-  /** 每帧给 HUD 补一段自定义文字(无尽的分数) */
+  /** 每帧给 HUD 补一段自定义文字(无尽的街区数) */
   extraChip?: (w: World) => string;
+  /** 画面上方多加一根条:coop 是共同目标,endless 是脏乱度 */
+  goalBar?: "coop" | "mess";
   onEnd: (win: boolean, w: World) => void;
   /** 暂停面板里的「退出」按钮;不给就不显示 */
   onQuit?: () => void;
@@ -219,8 +307,8 @@ interface FieldOpts {
 interface Field {
   destroy: () => void;
   world: World;
-  /** 换一张图接着玩(无尽用) */
-  swap: (def: LevelDef, keep: { hearts: number }) => void;
+  /** 换一张图接着玩(无尽用:心和脏乱度都带过去) */
+  swap: (def: LevelDef, keep: { hearts: number; mess?: number }) => void;
   showVeil: (title: string, sub: string, buttons: Array<{ label: string; ghost?: boolean; onClick: () => void }>) => void;
   toast: (text: string) => void;
 }
@@ -235,6 +323,10 @@ const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
   hurt: "oops",
   spring: "jump",
   smash: "pop",
+  pickup: "tap",
+  sortGood: "coin",
+  sortSoft: "tap",
+  cart: "win",
   win: "win",
   lose: "oops",
 };
@@ -246,6 +338,10 @@ const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
   hurt: "💫",
   smash: "💨",
   spring: "🍄",
+  pickup: "🫳",
+  sortGood: "⭐",
+  sortSoft: "🤔",
+  cart: "🚚",
 };
 
 function createField(host: HTMLElement, opts: FieldOpts): Field {
@@ -260,7 +356,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const particles: Particle[] = [];
   const inputs: Input[] = [emptyInput(), emptyInput()];
   const sfxAt = new Map<SoundName, number>();
-  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const gentle = reducedMotion();
+  const bag = createDisposer();
 
   const wrap = el("div", "ph-wrap");
   wrap.dataset.players = String(opts.players);
@@ -276,6 +373,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const barTxt = el("span", "ph-bar-txt");
   bar.append(barFill, barTxt);
   const sparkChip = el("span", "ph-chip");
+  const sortChip = el("span", "ph-chip pph-chip-sort");
   const timerChip = el("span", "ph-chip");
   const extraChip = el("span", "ph-chip");
   const pauseBtn = el("button", "ph-btn");
@@ -283,10 +381,35 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   pauseBtn.innerHTML = `⏸<span class="ph-lbl"> 暂停</span>`;
   pauseBtn.setAttribute("aria-label", "暂停(也可以按 Esc)");
   hud.append(hearts, bar, sparkChip);
+  const hasSorting = opts.def.bins.length > 0;
+  if (hasSorting) hud.appendChild(sortChip);
   if (opts.showTimer) hud.appendChild(timerChip);
   if (opts.extraChip) hud.appendChild(extraChip);
   hud.appendChild(pauseBtn);
   wrap.appendChild(hud);
+
+  // ---- 任务条:限时 / 护送 / 暴雨天各说一句,双人是共同目标条,无尽是脏乱度 ----
+  const goalRow = el("div", "pph-goal");
+  const goalLabel = el("div", "pph-goal-label");
+  const goalBar = el("div", "pph-goal-bar");
+  const goalFill = el("div", "pph-goal-fill");
+  const goalTxt = el("span", "pph-goal-txt");
+  goalBar.append(goalFill, goalTxt);
+  goalRow.append(goalLabel, goalBar);
+  if (opts.goalBar) {
+    goalLabel.textContent = opts.goalBar === "coop" ? "👫 共同目标" : "🧹 脏乱度";
+    goalFill.classList.add(opts.goalBar === "coop" ? "pph-goal-sweep" : "pph-goal-mess");
+    wrap.appendChild(goalRow);
+  }
+
+  if (opts.def.roles && opts.players === 2) {
+    const roles = el("div", "pph-roles");
+    roles.append(
+      el("span", "pph-role pph-role-sweep", "朵朵 · 清扫"),
+      el("span", "pph-role pph-role-haul", "星星 · 搬运分类")
+    );
+    wrap.appendChild(roles);
+  }
 
   // ---- 画布 ----
   const box = el("div", "ph-stagebox");
@@ -300,6 +423,10 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   // ---- 触屏按键 ----
   const pads = el("div", "ph-pads");
   pads.dataset.players = String(opts.players);
+  // 360px 上摇杆(前三列)与清扫钮(第四列)之间永远隔着一个 gap,热区不缩到 44px 以下
+  const layout = padMetrics(viewportWidth(), opts.players);
+  pads.style.setProperty("--k", `${layout.key}px`);
+  pads.style.gap = `${layout.gap * 2}px`;
   const PAD_KEYS: Array<{ act: InputName; label: string; cls?: string; aria: string; col: number; row: number }> = [
     { act: "up", label: "⬆", aria: "跳", col: 2, row: 2 },
     { act: "act", label: "💨", cls: "ph-key-act", aria: "冲刺清扫", col: 4, row: 2 },
@@ -330,9 +457,25 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       pad.appendChild(btn);
       padButtons.push({ btn, player: pi, act: k.act });
     }
+    pad.style.gap = `${layout.gap}px`;
     pads.appendChild(pad);
   }
   wrap.appendChild(pads);
+
+  // ---- 三色桶小图例:图标 ≥ 32px,孩子照着颜色就能投 ----
+  if (hasSorting) {
+    const legend = el("div", "pph-bins");
+    for (const info of BINS) {
+      const item = el("div", "pph-bin");
+      const dot = el("span", "pph-bin-dot");
+      dot.style.background = info.color;
+      const face = el("span", "pph-bin-emoji", info.emoji);
+      item.append(dot, face, el("span", undefined, info.short));
+      item.title = info.hint;
+      legend.appendChild(item);
+    }
+    wrap.appendChild(legend);
+  }
 
   const tip = el("div", "ph-tip", opts.tip);
   wrap.appendChild(tip);
@@ -348,7 +491,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   }
 
   for (const { btn, player, act } of padButtons) {
-    btn.addEventListener("pointerdown", (e) => {
+    bag.listen<PointerEvent>(btn, "pointerdown", (e) => {
       e.preventDefault();
       btn.classList.add("ph-down");
       setKey(player, act, true);
@@ -357,9 +500,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       btn.classList.remove("ph-down");
       setKey(player, act, false);
     };
-    btn.addEventListener("pointerup", up);
-    btn.addEventListener("pointercancel", up);
-    btn.addEventListener("pointerleave", up);
+    bag.listen(btn, "pointerup", up);
+    bag.listen(btn, "pointercancel", up);
+    bag.listen(btn, "pointerleave", up);
   }
 
   const releaseAll = (): void => {
@@ -368,8 +511,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       setKey(player, act, false);
     }
   };
-  window.addEventListener("pointerup", releaseAll);
-  window.addEventListener("blur", releaseAll);
+  bag.listen(window, "pointerup", releaseAll);
+  bag.listen(window, "blur", releaseAll);
 
   const onKeyDown = (e: KeyboardEvent): void => {
     if (isPauseKey(e.code)) {
@@ -388,8 +531,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     e.preventDefault();
     setKey(hit.player, hit.action, false);
   };
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
+  bag.listen<KeyboardEvent>(window, "keydown", onKeyDown);
+  bag.listen<KeyboardEvent>(window, "keyup", onKeyUp);
 
   // ---- 遮罩(暂停 / 结算) ----
   let veil: HTMLElement | null = null;
@@ -463,6 +606,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     for (const ev of drainEvents(world)) {
       const sound = SFX_FOR_EVENT[ev.kind];
       if (sound) playThrottled(sound, now);
+      // 投桶的一句话:对了夸一句,错了温和地讲一遍该去哪个桶(不扣任何分)
+      if (ev.kind === "sortGood" || ev.kind === "sortSoft") toast(world.sortHint);
+      if (gentle) continue;
       const art = PARTICLE_FOR_EVENT[ev.kind];
       if (art) {
         particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, text: art, size: 18 });
@@ -591,73 +737,67 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     idx: number
   ): void {
     if (m.clean) {
-      const pop = m.bloom > 0 ? 1 + m.bloom : 1;
+      const pop = m.bloom > 0 && !gentle ? 1 + m.bloom : 1;
       emoji(ctx2, FLOWERS[idx % FLOWERS.length], sx, groundY - MONSTER_H * 0.45 * scale, 24 * scale * pop);
       return;
     }
-    // 「臭臭怪」画成一朵横着的奶茶色小云:宽大于高、顶上三个一样高的圆边、
-    // 底下两只小短脚、头顶一个粉蝴蝶结 —— 一眼是小怪兽,不是别的什么东西。
-    const w = MONSTER_W * 1.2 * scale;
-    const h = MONSTER_H * 0.82 * scale;
-    const cy = groundY - h * 0.62 - 3 * scale;
-    const bob = Math.sin(world.time * 4 + idx) * 1.6 * scale;
+    // 「豆豆怪」:一颗圆润的粉彩小豆豆,头顶一个小卷,两只大眼睛加一张笑脸。
+    // 配色一律走糖果色,**不用棕色写实**,离「脏」远一点、离「该扫干净」近一点。
+    const col = BEAN_COLORS[world.def.chapterIndex % BEAN_COLORS.length];
+    const w = MONSTER_W * 1.05 * scale;
+    const h = MONSTER_H * 0.95 * scale;
+    const cy = groundY - h * 0.52 - 2 * scale;
+    const bob = gentle ? 0 : Math.sin(world.time * 3 + idx) * 1.4 * scale;
     ctx2.save();
     ctx2.translate(0, bob);
 
     // 小短脚
-    ctx2.fillStyle = "#C9A583";
+    ctx2.fillStyle = col.shade;
     ctx2.beginPath();
-    ctx2.ellipse(sx - w * 0.2, groundY - 3 * scale, w * 0.14, 4 * scale, 0, 0, Math.PI * 2);
-    ctx2.ellipse(sx + w * 0.2, groundY - 3 * scale, w * 0.14, 4 * scale, 0, 0, Math.PI * 2);
+    ctx2.ellipse(sx - w * 0.2, groundY - 3 * scale, w * 0.15, 4 * scale, 0, 0, Math.PI * 2);
+    ctx2.ellipse(sx + w * 0.2, groundY - 3 * scale, w * 0.15, 4 * scale, 0, 0, Math.PI * 2);
     ctx2.fill();
 
-    // 云朵身体
-    ctx2.fillStyle = "#E4C6A7";
+    // 豆豆身体:下面胖、上面收,一颗鼓鼓的圆豆子
+    ctx2.fillStyle = col.body;
     ctx2.beginPath();
-    ctx2.arc(sx - w * 0.3, cy - h * 0.04, h * 0.4, 0, Math.PI * 2);
-    ctx2.arc(sx, cy - h * 0.1, h * 0.44, 0, Math.PI * 2);
-    ctx2.arc(sx + w * 0.3, cy - h * 0.04, h * 0.4, 0, Math.PI * 2);
-    ctx2.ellipse(sx, cy + h * 0.2, w * 0.52, h * 0.38, 0, 0, Math.PI * 2);
+    ctx2.ellipse(sx, cy + h * 0.14, w * 0.48, h * 0.42, 0, 0, Math.PI * 2);
+    ctx2.arc(sx, cy - h * 0.14, h * 0.38, 0, Math.PI * 2);
+    ctx2.fill();
+    // 头顶的小卷卷(圆的,可爱的那种)
+    ctx2.beginPath();
+    ctx2.arc(sx, cy - h * 0.52, h * 0.16, 0, Math.PI * 2);
     ctx2.fill();
     // 高光
-    ctx2.fillStyle = "#F2DCC6";
+    ctx2.fillStyle = "#FFFFFF";
+    ctx2.globalAlpha = 0.55;
     ctx2.beginPath();
-    ctx2.ellipse(sx - w * 0.22, cy - h * 0.24, w * 0.16, h * 0.14, -0.4, 0, Math.PI * 2);
+    ctx2.ellipse(sx - w * 0.2, cy - h * 0.26, w * 0.13, h * 0.1, -0.4, 0, Math.PI * 2);
     ctx2.fill();
-
-    // 头顶小蝴蝶结
-    ctx2.fillStyle = "#F79BC0";
-    ctx2.beginPath();
-    ctx2.ellipse(sx - h * 0.2, cy - h * 0.56, h * 0.16, h * 0.11, -0.5, 0, Math.PI * 2);
-    ctx2.ellipse(sx + h * 0.2, cy - h * 0.56, h * 0.16, h * 0.11, 0.5, 0, Math.PI * 2);
-    ctx2.fill();
-    ctx2.fillStyle = "#FFD3E4";
-    ctx2.beginPath();
-    ctx2.arc(sx, cy - h * 0.56, h * 0.08, 0, Math.PI * 2);
-    ctx2.fill();
+    ctx2.globalAlpha = 1;
 
     // 腮红 + 眼睛 + 微笑
-    ctx2.fillStyle = "#F7B9C4";
-    ctx2.globalAlpha = 0.75;
+    ctx2.fillStyle = "#FF9FBE";
+    ctx2.globalAlpha = 0.6;
     ctx2.beginPath();
-    ctx2.ellipse(sx - w * 0.34, cy + h * 0.12, w * 0.09, h * 0.09, 0, 0, Math.PI * 2);
-    ctx2.ellipse(sx + w * 0.34, cy + h * 0.12, w * 0.09, h * 0.09, 0, 0, Math.PI * 2);
+    ctx2.ellipse(sx - w * 0.29, cy + h * 0.08, w * 0.1, h * 0.08, 0, 0, Math.PI * 2);
+    ctx2.ellipse(sx + w * 0.29, cy + h * 0.08, w * 0.1, h * 0.08, 0, 0, Math.PI * 2);
     ctx2.fill();
     ctx2.globalAlpha = 1;
     ctx2.fillStyle = "#FFFFFF";
     ctx2.beginPath();
-    ctx2.arc(sx - w * 0.17, cy - h * 0.06, h * 0.17, 0, Math.PI * 2);
-    ctx2.arc(sx + w * 0.17, cy - h * 0.06, h * 0.17, 0, Math.PI * 2);
+    ctx2.arc(sx - w * 0.16, cy - h * 0.12, h * 0.16, 0, Math.PI * 2);
+    ctx2.arc(sx + w * 0.16, cy - h * 0.12, h * 0.16, 0, Math.PI * 2);
     ctx2.fill();
-    ctx2.fillStyle = "#6B4A32";
+    ctx2.fillStyle = col.face;
     ctx2.beginPath();
-    ctx2.arc(sx - w * 0.15 + m.dir * h * 0.04, cy - h * 0.04, h * 0.08, 0, Math.PI * 2);
-    ctx2.arc(sx + w * 0.19 + m.dir * h * 0.04, cy - h * 0.04, h * 0.08, 0, Math.PI * 2);
+    ctx2.arc(sx - w * 0.14 + m.dir * h * 0.03, cy - h * 0.1, h * 0.08, 0, Math.PI * 2);
+    ctx2.arc(sx + w * 0.18 + m.dir * h * 0.03, cy - h * 0.1, h * 0.08, 0, Math.PI * 2);
     ctx2.fill();
-    ctx2.strokeStyle = "#B08A66";
-    ctx2.lineWidth = Math.max(1, scale * 1.5);
+    ctx2.strokeStyle = col.face;
+    ctx2.lineWidth = Math.max(1, scale * 1.6);
     ctx2.beginPath();
-    ctx2.arc(sx, cy + h * 0.16, h * 0.13, 0.12 * Math.PI, 0.88 * Math.PI);
+    ctx2.arc(sx, cy + h * 0.06, h * 0.13, 0.12 * Math.PI, 0.88 * Math.PI);
     ctx2.stroke();
     ctx2.restore();
   }
@@ -757,8 +897,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         }
         return;
       }
-      // 黏答答的泥洼:浅奶茶色 + 一串小泡泡,离「脏」远一点、离「该擦干净」近一点
-      g.fillStyle = "#E0C8AC";
+      // 一摊小水洼:浅蓝 + 一串小泡泡,擦一下就亮
+      g.fillStyle = "#C9E2F2";
       roundRect(g, x0, groundY - 7 * scale, x1 - x0, 10 * scale, 5 * scale);
       g.fill();
       g.fillStyle = "#FFFFFF";
@@ -777,12 +917,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         emoji(g, FLOWERS[i % FLOWERS.length], x, groundY - 10 * scale, 15 * scale);
         return;
       }
-      // 小污渍:一小片浅浅的灰尘印,扫一下就变成花
-      g.fillStyle = "#E5D2BB";
+      // 小灰尘印:一小片浅浅的粉灰,扫一下就变成花
+      g.fillStyle = "#E4D8E8";
       g.beginPath();
       g.ellipse(x, groundY - 3 * scale, 14 * scale, 5.5 * scale, 0, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = "#F3E6D6";
+      g.fillStyle = "#F4ECF6";
       g.beginPath();
       g.ellipse(x + 6 * scale, groundY - 6 * scale, 5 * scale, 3 * scale, 0, 0, Math.PI * 2);
       g.fill();
@@ -850,7 +990,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       emoji(g, "✨", x, sy(s.y) + bob, 19 * scale);
     });
 
-    // 臭臭怪 / 小花
+    // 豆豆怪 / 小花
     world.monsters.forEach((m, i) => {
       const x = sx(m.x);
       if (x < -60 || x > cssW + 60) return;
@@ -876,6 +1016,75 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.stroke();
     }
 
+    // 地上等着分类的垃圾
+    for (const l of world.litters) {
+      if (l.taken || l.sorted) continue;
+      const x = sx(l.x);
+      if (x < -30 || x > cssW + 30) continue;
+      const item = trashById(l.item);
+      if (!item) continue;
+      g.fillStyle = "#FFFFFF";
+      g.globalAlpha = 0.7;
+      g.beginPath();
+      g.ellipse(x, groundY - 3 * scale, 15 * scale, 5 * scale, 0, 0, Math.PI * 2);
+      g.fill();
+      g.globalAlpha = 1;
+      emoji(g, item.emoji, x, groundY - 15 * scale, 20 * scale);
+    }
+
+    // 三色分类站
+    world.bins.forEach((bin) => {
+      const x = sx(bin.x);
+      if (x < -60 || x > cssW + 60) return;
+      const info = binInfo(bin.kind);
+      const lift = bin.flash > 0 && !gentle ? 3 * scale : 0;
+      g.fillStyle = info.color;
+      roundRect(g, x - 17 * scale, groundY - 40 * scale - lift, 34 * scale, 40 * scale, 8 * scale);
+      g.fill();
+      g.fillStyle = "#FFFFFF";
+      g.globalAlpha = 0.65;
+      roundRect(g, x - 19 * scale, groundY - 46 * scale - lift, 38 * scale, 8 * scale, 4 * scale);
+      g.fill();
+      g.globalAlpha = 1;
+      emoji(g, info.emoji, x, groundY - 24 * scale - lift, 17 * scale);
+      g.fillStyle = "#3C3348";
+      g.font = `900 ${Math.round(9 * Math.max(0.9, scale))}px system-ui,sans-serif`;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(info.short, x, groundY - 9 * scale - lift);
+      if (bin.flash > 0) {
+        emoji(g, bin.lastOk ? "⭐" : "🤔", x, groundY - 58 * scale, 16 * scale);
+      }
+    });
+
+    // 清洁车(护送关)
+    if (world.cart) {
+      const x = sx(world.cart.x);
+      if (x > -90 && x < cssW + 90) {
+        const wheel = 6 * scale;
+        g.fillStyle = "#FFF3E4";
+        roundRect(g, x - (CART_W / 2) * scale, groundY - CART_H * scale, CART_W * scale, CART_H * scale * 0.78, 8 * scale);
+        g.fill();
+        g.fillStyle = world.cart.delivered ? "#8FD69C" : "#9BC7F2";
+        roundRect(
+          g,
+          x - (CART_W / 2 - 4) * scale,
+          groundY - (CART_H - 5) * scale,
+          (CART_W - 8) * scale,
+          CART_H * scale * 0.42,
+          6 * scale
+        );
+        g.fill();
+        g.fillStyle = "#7A6B86";
+        g.beginPath();
+        g.arc(x - 13 * scale, groundY - wheel, wheel, 0, Math.PI * 2);
+        g.arc(x + 13 * scale, groundY - wheel, wheel, 0, Math.PI * 2);
+        g.fill();
+        emoji(g, "🧽", x, groundY - (CART_H - 12) * scale, 15 * scale);
+        if (world.cart.pushed && !gentle) emoji(g, "💨", x - 34 * scale, groundY - 16 * scale, 13 * scale);
+      }
+    }
+
     // 净化门
     const doorX = sx(def.goalX);
     if (doorX > -90 && doorX < cssW + 90) {
@@ -894,7 +1103,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fillText(open ? "香喷喷!" : `还差 ${remainingForDoor(world)} 处`, doorX, groundY - 22 * scale);
     }
 
-    // 臭味潮
+    // 尘土风
     if (world.chaserX !== null) {
       const cx = sx(world.chaserX);
       if (cx > -140) {
@@ -909,6 +1118,24 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
           emoji(g, "💨", cx - (12 + k * 26) * scale, groundY - (18 + ((k * 37) % 60)) * scale, 15 * scale);
         }
       }
+    }
+
+    // 暴雨天:斜斜的雨丝 + 一层浅浅的雨幕(减少动态效果时只留雨幕)
+    if (def.weather === "storm") {
+      g.strokeStyle = "rgba(150,180,215,.55)";
+      g.lineWidth = Math.max(1, 1.4 * scale);
+      if (!gentle) {
+        for (let i = 0; i < 46; i++) {
+          const rx = ((i * 97 + world.time * 320) % (cssW + 120)) - 60;
+          const ry = ((i * 53 + world.time * 520) % cssH) - 10;
+          g.beginPath();
+          g.moveTo(rx, ry);
+          g.lineTo(rx - 6 * scale, ry + 14 * scale);
+          g.stroke();
+        }
+      }
+      g.fillStyle = "rgba(190,214,236,.18)";
+      g.fillRect(0, 0, cssW, cssH);
     }
 
     // 角色
@@ -931,6 +1158,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         return;
       }
       drawHero(g, x, sy(p.y), scale, i, p);
+      // 手上抱着的垃圾:顶在头上,一眼看得出在搬什么
+      if (p.carry) {
+        const item = trashById(p.carry);
+        if (item) emoji(g, item.emoji, x, sy(p.y) - (PLAYER_H + 18) * scale, 17 * scale);
+      }
     });
 
     // 小特效
@@ -952,6 +1184,10 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.font = `800 ${Math.round(13 * Math.max(0.85, scale))}px system-ui,sans-serif`;
       g.fillStyle = "#9A7A5E";
       g.fillText(def.hint.slice(0, 24), cssW / 2, cssH * 0.56);
+      // 开场顺带念一条卫生小知识(洗手 / 分类 / 少用一次性)
+      g.font = `700 ${Math.round(12 * Math.max(0.85, scale))}px system-ui,sans-serif`;
+      g.fillStyle = "#A98F76";
+      g.fillText(hygieneTip(def.index + def.chapterIndex), cssW / 2, cssH * 0.64);
     }
   }
 
@@ -963,8 +1199,23 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     barFill.style.width = `${pct}%`;
     barTxt.textContent = `清洁度 ${pct}%`;
     sparkChip.textContent = `✨ ${world.sparklesTaken}/${world.sparkles.length}`;
-    if (opts.showTimer) timerChip.textContent = `⏱ ${Math.floor(world.time)}″`;
+    if (hasSorting) sortChip.textContent = `♻️ ${world.sorted}/${world.litters.length}`;
+    if (opts.showTimer) {
+      // 限时清扫显示倒计时,其余显示已用时间
+      timerChip.textContent =
+        world.def.timeLimit > 0 && world.def.mission === "timed"
+          ? `⏳ ${Math.max(0, Math.ceil(world.def.timeLimit - world.time))}″`
+          : `⏱ ${Math.floor(world.time)}″`;
+    }
     if (opts.extraChip) extraChip.textContent = opts.extraChip(world);
+    if (opts.goalBar === "coop") {
+      const prog = coopProgress(world);
+      goalFill.style.width = `${Math.round(prog.total * 100)}%`;
+      goalTxt.textContent = `清扫 ${Math.round(prog.sweep * 100)}% · 分类 ${world.sorted}/${world.def.haulGoal}`;
+    } else if (opts.goalBar === "mess") {
+      goalFill.style.width = `${Math.round(world.mess * 100)}%`;
+      goalTxt.textContent = `脏乱度 ${Math.round(world.mess * 100)}%`;
+    }
   }
 
   // ---- 主循环 ----
@@ -1000,9 +1251,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       const win = world.status === "won";
       opts.onEnd(win, world);
     }
-    raf = requestAnimationFrame(frame);
+    raf = bag.raf(requestAnimationFrame(frame));
   }
-  raf = requestAnimationFrame(frame);
+  raf = bag.raf(requestAnimationFrame(frame));
 
   return {
     get world() {
@@ -1011,6 +1262,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     swap(def, keep) {
       world = createWorld(def, opts.players);
       world.hearts = Math.max(1, Math.min(def.hearts, keep.hearts));
+      world.mess = Math.max(0, Math.min(0.95, keep.mess ?? 0));
       ended = false;
       readyT = 1.1;
       particles.length = 0;
@@ -1022,12 +1274,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
-      timers.forEach((t) => clearTimeout(t));
-      timers.clear();
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("pointerup", releaseAll);
-      window.removeEventListener("blur", releaseAll);
+      // rAF、定时器、window 上的监听全在 bag 里登记过,一把归零
+      bag.dispose();
       clearVeil();
       wrap.remove();
     },
@@ -1040,12 +1288,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const def = buildLevel(ctx.level);
+  const info = MISSION_INFO[def.mission];
   const field = createField(stage, {
     def,
     players: 1,
     sfx: ctx.sfx,
     title: def.name,
-    tip: def.hint,
+    tip: `${info.emoji} ${info.label} · ${def.hint}`,
     showTimer: true,
     onEnd: (win, w) => {
       const summary = summarize(w);
@@ -1070,71 +1319,70 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
   const head = el("div", "ph-head");
   const back = el("button", "ph-btn", "🗺️ 回关卡");
   back.type = "button";
-  const title = el("div", "ph-head-title", "♾️ 清洁马拉松");
+  const title = el("div", "ph-head-title", "♾️ 打扫不完的城市");
   const bestChip = el("span", "ph-chip");
   head.append(back, title, bestChip);
   const fieldHost = el("div");
   root.append(style, head, fieldHost);
   host.appendChild(root);
 
+  /** 已经打扫干净的街区数,也就是这一趟的成绩 */
+  let blocks = 0;
   let round = 0;
-  let scoreBase = 0;
   let best = save.getGameProgress(meta.id).endlessBest;
-  bestChip.textContent = best > 0 ? `🏅 最好 ${best} 分` : "🏅 还没有纪录";
-
-  const liveScore = (w: World): number =>
-    scoreBase + endlessScore(w.cleaned, w.sparklesTaken, metersOf(Math.max(...w.players.map((p) => p.x))));
+  bestChip.textContent = best > 0 ? `🏅 最好 ${best} 个街区` : "🏅 还没有纪录";
 
   let field: Field | null = null;
 
-  function startRound(def: LevelDef, hearts: number): void {
+  function startRound(def: LevelDef, hearts: number, mess: number): void {
     field?.destroy();
     field = createField(fieldHost, {
       def,
       players: 1,
       sfx: (n) => api.play(n),
       title: def.name,
-      tip: "一路清一路跑!身后的臭味潮越追越快,心用完就结算。",
+      tip: "区块一段接一段拼上来,脏乱度一直在涨 —— 清得越快,它压得越低。",
       showTimer: false,
-      extraChip: (w) => `🧽 ${liveScore(w)} 分`,
+      goalBar: "mess",
+      extraChip: (w) => `🏙️ ${blocks} 个街区`,
       onQuit: onExit,
       onEnd: (win, w) => {
         if (win) {
-          // 街区清完啦,接着跑下一段
-          scoreBase = liveScore(w);
+          // 这一段街区扫完了,接着拼下一段:脏乱度带过去,只回一点点
+          blocks++;
           round++;
           const hp = Math.min(3, w.hearts + 1);
-          const next = buildEndless(round);
-          field?.swap(next, { hearts: hp });
-          field?.toast(`第 ${round} 段街区变香啦!补一颗心,继续冲!`);
+          const carry = Math.max(0, w.mess - 0.12);
+          field?.swap(buildEndless(round), { hearts: hp, mess: carry });
+          field?.toast(`第 ${blocks} 个街区干干净净!补一颗心,下一段接上了。`);
           api.play("win");
           return;
         }
-        finish(liveScore(w), w);
+        finish(w);
       },
     });
   }
 
-  function finish(score: number, w: World): void {
-    const record = score > best;
-    if (record) best = save.recordEndlessBest(meta.id, score);
-    bestChip.textContent = `🏅 最好 ${best} 分`;
-    const bonus = Math.min(6, Math.floor(score / 120));
+  function finish(w: World): void {
+    const record = blocks > best;
+    if (record) best = save.recordEndlessBest(meta.id, blocks);
+    bestChip.textContent = `🏅 最好 ${best} 个街区`;
+    const bonus = Math.min(6, Math.floor(blocks / 2));
     if (bonus > 0) api.addStars(bonus);
     api.play(record ? "win" : "oops");
-    const why = w.message || "这趟清洁马拉松先到这儿,近处的先清、远处的边跑边收,路线会顺很多。";
+    const why = w.message || "这趟先打扫到这儿,近处的先清、远处的边跑边收,路线会顺很多。";
     field?.showVeil(
-      record ? `新纪录 ${score} 分!` : `这趟拿了 ${score} 分`,
-      `${why}${record ? "不过这已经是你跑得最远最干净的一趟了!" : `最好成绩 ${best} 分,再来一趟就能追上它。`}${
-        bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""
-      }`,
+      record ? `新纪录 ${blocks} 个街区!` : `这趟扫干净了 ${blocks} 个街区`,
+      `${why}${
+        record ? "这已经是你坚持得最久的一趟了!" : `最好成绩 ${best} 个街区,再来一趟就能追上它。`
+      }${bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""}`,
       [
         {
-          label: "🔁 再跑一趟",
+          label: "🔁 再来一趟",
           onClick: () => {
             round = 0;
-            scoreBase = 0;
-            startRound(buildEndless(0), 3);
+            blocks = 0;
+            startRound(buildEndless(0), 3, 0);
           },
         },
         { label: "🗺️ 回关卡", ghost: true, onClick: onExit },
@@ -1147,7 +1395,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     onExit();
   });
 
-  startRound(buildEndless(0), 3);
+  startRound(buildEndless(0), 3, 0);
 
   return {
     destroy() {
@@ -1188,20 +1436,18 @@ function mountCoop(host: HTMLElement, api: GameApi, onExit: () => void): { destr
       players: 2,
       sfx: (n) => api.play(n),
       title: def.name,
-      tip: "分头行动!全部清干净以后,两个人一起站到净化门前才算成功。",
+      tip: "分工行动!朵朵清扫,星星把垃圾送进三色桶,最后一起站到净化门前。",
       showTimer: true,
+      goalBar: "coop",
       onQuit: onExit,
       onEnd: (win, w) => {
         if (win) {
           api.play("win");
-          const a = w.players[0].cleaned;
-          const b = w.players[1].cleaned;
-          api.addStars(2);
+          const stars = coopStars(def, summarize(w));
+          api.addStars(stars);
           field?.showVeil(
-            "整条街都香喷喷啦!",
-            `用了 ${Math.round(w.time)} 秒。朵朵清了 ${a} 处,星星清了 ${b} 处,${
-              a === b ? "配合得一样棒!" : "两个人加起来才是最快的!"
-            }送你们 2 颗小星星。`,
+            `${"⭐".repeat(stars)} 城市干干净净,大家都笑啦!`,
+            `${coopMessage(def, w)}用了 ${Math.round(w.time)} 秒,送你们 ${stars} 颗小星星。`,
             [
               {
                 label: "▶ 下一关",
@@ -1249,6 +1495,35 @@ function mountCoop(host: HTMLElement, api: GameApi, onExit: () => void): { destr
 // 入口:模式选择 + 188 关地图
 // ---------------------------------------------------------------------------
 
+/** 壳层给的 `initialLevel`(1 基),没有就看地址栏的 `?level=N` */
+function wantedLevel(api: GameApi): unknown {
+  const given = (api as { initialLevel?: unknown }).initialLevel;
+  if (given !== undefined && given !== null) return given;
+  const loc = (globalThis as { location?: { search?: string; hash?: string } }).location;
+  if (!loc) return undefined;
+  return parseLevelParam(loc.search ?? "") ?? parseLevelParam(loc.hash ?? "") ?? undefined;
+}
+
+/**
+ * 替玩家在地图上点开第 level 关(0 基)。
+ * 通用闯关框架没开放「打开第 N 关」的接口,又不许改它,所以这里照着地图上的按钮点一下;
+ * 点不到就安安静静停在地图上,绝不因为这一步把游戏卡住。
+ */
+function openLevelOnMap(host: HTMLElement, level: number): boolean {
+  const ci = chapterIndexOf(level);
+  const tab = host.querySelectorAll<HTMLButtonElement>("button.l99-tab")[ci];
+  if (!tab || tab.classList.contains("l99-tab-lock")) return false;
+  tab.click();
+  const label = `第 ${level + 1} 关`;
+  for (const node of Array.from(host.querySelectorAll<HTMLButtonElement>("button.l99-node"))) {
+    if (!(node.getAttribute("aria-label") ?? "").startsWith(label)) continue;
+    if (node.classList.contains("l99-node-lock")) return false;
+    node.click();
+    return true;
+  }
+  return false;
+}
+
 export function mount(api: GameApi): { destroy: () => void } {
   const root = el("div");
   const style = el("style");
@@ -1270,7 +1545,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function refreshBar(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
-    endlessBtn.textContent = best > 0 ? `♾️ 清洁马拉松 · 最好 ${best} 分` : "♾️ 清洁马拉松 · 来一趟!";
+    endlessBtn.textContent = best > 0 ? `♾️ 打扫不完的城市 · 最好 ${best} 个街区` : "♾️ 打扫不完的城市 · 来一趟!";
   }
 
   function closeMode(): void {
@@ -1306,6 +1581,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       guideTitle: "清洁小攻略",
     }
   );
+
+  // 壳层或地址栏点名了某一关就直接开进去,不用玩家再在地图上找一遍
+  const target = resolveInitialLevel(
+    wantedLevel(api),
+    furthestPlayable(loadStars(meta.id), loadSkips(meta.id), TOTAL),
+    TOTAL
+  );
+  if (target !== null) {
+    try {
+      openLevelOnMap(levelHost, target);
+    } catch (err) {
+      console.warn("[一朵一星] poop-hero 直开关卡失败,停在地图上:", err);
+    }
+  }
 
   return {
     destroy() {
