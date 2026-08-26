@@ -1,46 +1,66 @@
 import { meta } from "./meta";
 export { meta };
 
-// 绿芽保卫战:99 关九大花园场景守家战役!先选场景再选关,九种虫虫、旗帜大波、
-// 章末 BOSS,最终决战虫虫女王!失败只重试本关。
+// 绿芽保卫战 1.1:188 关十三大花园守家战役!先选场景再选关,十三种虫虫、旗帜大波、
+// 章末 BOSS,终章决战虫虫女王进化体!新机制:昼夜循环、地下虫(望望草照出)、
+// 露珠罐上限、分分虫分裂、进化体狂暴。失败只重试本关。
 import {
   BOOM_DAMAGE,
   BOOM_RANGE,
   BOOM_TRIGGER,
+  BOSS_CHEW_INTERVAL,
+  BUBBLE_SPEED,
   BUG_INFO,
   BugKind,
   BugSpawn,
+  CHEW_INTERVAL,
   HOME_X,
   ICE_SECONDS,
   ICE_SLOW,
+  ICE_SPEED,
   LANES,
   LEVELS,
-  LEVELS_PER_THEME,
+  MAMA_SPLIT_KIND,
+  MOON_DEW_EVERY,
   PLANT_COLS,
   PLANT_INFO,
   PROGRESS_KEY,
   PlantKind,
+  QUEENX_RAGE_FRAC,
   SCENE_ORDER,
   SCENE_STYLE,
+  SHOOT_CD,
+  SPARKLE_DEW_EVERY,
+  STAR_SPEED,
   applyDamage,
   bubbleHitsBug,
   bugHp,
+  bugNightSpeedMult,
   bugReachesPlant,
   buildLevelSchedule,
   canAfford,
   canPlantOnCell,
+  clampDew,
   clearSpeechLine,
+  cyclePhase,
+  effectiveDewCap,
   isLevelUnlocked,
   isThemeUnlocked,
+  moleRevealed,
+  moonActive,
   parseProgress,
-  passiveDewInterval,
+  passiveDewIntervalAt,
   plantsUnlockedAt,
   projectileCanHit,
+  queenxSpeedMult,
   retrySpeechLine,
   serializeProgress,
   shovelRefund,
   starsForLevel,
   themeCleared,
+  themeIndexOfLevel,
+  themeOffset,
+  themeSize,
   themeStars,
   totalStars,
 } from "./logic";
@@ -59,13 +79,6 @@ export interface GameAPI {
 
 const TOOLBAR_H = 64;
 const HOME_W_CELLS = 1.2;
-const BUBBLE_SPEED = 3.5;
-const STAR_SPEED = 4.2;
-const ICE_SPEED = 3.8;
-const SHOOT_CD = 1.3;
-const CHEW_INTERVAL = 0.9;
-const BOSS_CHEW_INTERVAL = 0.35;
-const SPARKLE_DEW_EVERY = 4.5;
 
 type Phase = "themes" | "map" | "intro" | "play" | "clear" | "retry";
 type Tool = PlantKind | "shovel";
@@ -96,6 +109,10 @@ interface Bug {
   freeze: number;
   jumped: boolean;
   jumpAnim: number;
+  /** 1.1:进化体已进入狂暴(只触发一次特效) */
+  raged: boolean;
+  /** 1.1:地下虫已播过"现形"特效 */
+  surfacedFx: boolean;
 }
 
 interface Shot {
@@ -230,6 +247,42 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return level().waterLanes.includes(lane);
   }
 
+  /** 章内关号(1 起):1.1 起章节长短不一,按偏移算。 */
+  function levelLabel(): string {
+    return `${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1}`;
+  }
+
+  /** 现在是不是黑夜(昼夜循环关跟着钟走,其余关恒为白天)。 */
+  function isNightNow(): boolean {
+    return cyclePhase(time, level().cycle) === "night";
+  }
+
+  /** 产露植物数(闪光芽+月月菇),露珠罐上限随之变大。 */
+  function producerCount(): number {
+    let n = 0;
+    for (const p of plants.values()) if (p.kind === "sparkle" || p.kind === "moon") n++;
+    return n;
+  }
+
+  function dewCapNow(): number {
+    return effectiveDewCap(level().dewCap, producerCount());
+  }
+
+  /** 拿露珠都走这里:有上限的关多出来的会溢出去。 */
+  function gainDew(n: number): void {
+    dew = clampDew(dew + n, dewCapNow());
+  }
+
+  function scoutInLane(lane: number): boolean {
+    for (const p of plants.values()) if (p.kind === "scout" && p.lane === lane) return true;
+    return false;
+  }
+
+  /** 地下虫要车道上有望望草才现形(现形才能被打、才会啃植物)。 */
+  function revealed(bug: Bug): boolean {
+    return moleRevealed(bug.kind, scoutInLane(bug.lane));
+  }
+
   function cardRect(i: number): Rect {
     // 窄屏(360px)修复:右侧预留 100px 给露珠/波次文字,卡片不再压到文字
     const cw = Math.min(96, (w - 100) / tools.length);
@@ -246,7 +299,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function loadLevel(idx: number): void {
     levelIdx = idx;
-    chapterIdx = Math.floor(idx / LEVELS_PER_THEME);
+    chapterIdx = themeIndexOfLevel(idx);
     unlockedPlants = plantsUnlockedAt(idx, LEVELS);
     tools = [...unlockedPlants, "shovel"];
     if (!tools.includes(selected)) selected = "bubble";
@@ -263,7 +316,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     dew = level().startDew;
     time = 0;
     spawnIdx = 0;
-    passiveTimer = passiveDewInterval(level().scene);
+    passiveTimer = passiveDewIntervalAt(level().scene, false);
     plantsLost = 0;
     score = 0;
     currentWave = -1;
@@ -280,7 +333,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     api.play("win");
     if (levelIdx >= LEVELS.length - 1 && !finaleFired) {
       finaleFired = true;
-      api.onWin(earnedStars, `99 关九大花园全部守住,虫虫女王也认输啦!总星 ${totalStars(progress)}/${LEVELS.length * 3}`);
+      api.onWin(earnedStars, `${LEVELS.length} 关十三大花园全部守住,虫虫女王进化体也认输啦!总星 ${totalStars(progress)}/${LEVELS.length * 3}`);
     } else {
       // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
       speak(clearSpeechLine(level().name, earnedStars, plantsLost));
@@ -407,14 +460,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (selected === "shovel") {
       if (existing) {
         const refund = shovelRefund(existing.kind);
-        dew += refund;
         plants.delete(key);
+        gainDew(refund); // 先铲再进账:铲掉的要是产露植物,罐口也跟着缩
         api.play("pop");
         addSparkle(px(col + 0.5), laneCenterY(lane), "#d5c9a8");
         addFloat(px(col + 0.5), laneCenterY(lane) - 14, `+${refund}💧`, "#5a8ac9");
       } else if (hasLily) {
         lilies.delete(key);
-        dew += shovelRefund("lily");
+        gainDew(shovelRefund("lily"));
         api.play("pop");
         addSparkle(px(col + 0.5), laneCenterY(lane), "#bfe9ff");
       } else {
@@ -448,11 +501,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
       kind: selected,
       hp: PLANT_INFO[selected].hp,
       cd: 0.5,
-      prodTimer: SPARKLE_DEW_EVERY,
+      prodTimer: selected === "moon" ? MOON_DEW_EVERY : SPARKLE_DEW_EVERY,
       anim: 1,
     });
     api.play("pop");
     addSparkle(px(col + 0.5), laneCenterY(lane), "#d5f2ca");
+    if (selected === "scout") {
+      // 望望草落地即照亮:这条道藏土里的地地虫马上现形(特效在 update 里播)
+      addFloat(px(col + 0.5), laneCenterY(lane) - cell * 0.6, "这条道亮啦!", "#ffe387");
+    }
   }
 
   function plantInLaneCell(lane: number, colFloat: number): Plant | undefined {
@@ -463,7 +520,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function killBug(i: number): void {
     const bug = bugs[i];
     bugs.splice(i, 1);
-    dew++;
+    gainDew(1);
     const gain = 10 * (currentWave + 1) * (BUG_INFO[bug.kind].boss ? 5 : 1);
     score += gain;
     api.play(BUG_INFO[bug.kind].boss ? "win" : "coin");
@@ -472,6 +529,32 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (BUG_INFO[bug.kind].boss) {
       shake = 0.5;
       addFloat(px(bug.x), laneCenterY(bug.lane) - 40, `${BUG_INFO[bug.kind].name}倒下啦!`, "#e05a7a", true);
+    }
+    // 1.1 分分虫:倒下时蹦出爬爬虫宝宝(与模拟器同规则)
+    const splits = BUG_INFO[bug.kind].splits ?? 0;
+    if (splits > 0) {
+      addFloat(px(bug.x), laneCenterY(bug.lane) - 30, "分裂啦!", "#e06a9a", true);
+      for (let s = 0; s < splits; s++) {
+        const info = BUG_INFO[MAMA_SPLIT_KIND];
+        bugs.push({
+          kind: MAMA_SPLIT_KIND,
+          x: bug.x + s * 0.25,
+          lane: bug.lane,
+          hp: bugHp(MAMA_SPLIT_KIND, levelIdx),
+          maxHp: bugHp(MAMA_SPLIT_KIND, levelIdx),
+          armor: info.armor,
+          maxArmor: info.armor,
+          speed: info.speed * sceneStyle().speedMult,
+          flying: info.flying,
+          chewTimer: 0,
+          wob: Math.random() * Math.PI * 2,
+          freeze: 0,
+          jumped: true,
+          jumpAnim: 0,
+          raged: false,
+          surfacedFx: true,
+        });
+      }
     }
   }
 
@@ -483,6 +566,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     addFloat(px(p.col + 0.5), laneCenterY(p.lane) - 20, "轰!!", "#e05a7a", true);
     for (let bi = bugs.length - 1; bi >= 0; bi--) {
       const b = bugs[bi];
+      if (!revealed(b)) continue; // 藏在土里的地地虫轰不到
       if (Math.abs(b.lane - p.lane) <= 1 && Math.abs(b.x - (p.col + 0.5)) <= BOOM_RANGE) {
         const res = applyDamage(b, BOOM_DAMAGE);
         b.hp = res.hp;
@@ -509,6 +593,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     dewFlash = Math.max(0, dewFlash - dt);
     waveBanner = Math.max(0, waveBanner - dt);
     shake = Math.max(0, shake - dt);
+    const night = isNightNow();
 
     // 出虫
     while (spawnIdx < schedule.length && schedule[spawnIdx].time <= time) {
@@ -535,14 +620,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
         freeze: 0,
         jumped: false,
         jumpAnim: 0,
+        raged: false,
+        surfacedFx: !info.underground,
       });
     }
 
-    // 露珠
+    // 露珠(黑夜里攒得慢)
     passiveTimer -= dt;
     if (passiveTimer <= 0) {
-      passiveTimer = passiveDewInterval(level().scene);
-      dew++;
+      passiveTimer = passiveDewIntervalAt(level().scene, night);
+      gainDew(1);
       addSparkle(60, TOOLBAR_H + 8, "#bfe9ff");
     }
 
@@ -553,16 +640,31 @@ export function mount(api: GameAPI): { destroy: () => void } {
         p.prodTimer -= dt;
         if (p.prodTimer <= 0) {
           p.prodTimer = SPARKLE_DEW_EVERY;
-          dew++;
+          gainDew(1);
           api.play("coin");
           addSparkle(px(p.col + 0.5), laneCenterY(p.lane) - cell * 0.4, "#ffe387");
+        }
+      } else if (p.kind === "moon") {
+        // 月月菇只在月光时段咕嘟冒露珠(昼夜关的黑夜/整关都暗的场景)
+        if (moonActive(!!level().cycle, night, sceneStyle().dark)) {
+          p.prodTimer -= dt;
+          if (p.prodTimer <= 0) {
+            p.prodTimer = MOON_DEW_EVERY;
+            gainDew(1);
+            api.play("coin");
+            addSparkle(px(p.col + 0.5), laneCenterY(p.lane) - cell * 0.4, "#c9d8ff");
+          }
         }
       } else if (p.kind === "bubble" || p.kind === "star" || p.kind === "ice") {
         p.cd -= dt;
         if (p.cd <= 0) {
           const proj: Proj = p.kind === "bubble" ? "bubble" : p.kind === "star" ? "star" : "ice";
           const hasTarget = bugs.some(
-            (b) => b.lane === p.lane && b.x > p.col + 0.3 && projectileCanHit(proj, b.flying),
+            (b) =>
+              b.lane === p.lane &&
+              b.x > p.col + 0.3 &&
+              projectileCanHit(proj, b.flying) &&
+              revealed(b),
           );
           if (hasTarget) {
             p.cd = SHOOT_CD;
@@ -572,7 +674,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         }
       } else if (p.kind === "boom") {
         const near = bugs.some(
-          (b) => b.lane === p.lane && Math.abs(b.x - (p.col + 0.5)) <= BOOM_TRIGGER,
+          (b) => b.lane === p.lane && Math.abs(b.x - (p.col + 0.5)) <= BOOM_TRIGGER && revealed(b),
         );
         if (near) {
           boomExplode(p);
@@ -593,6 +695,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         const bug = bugs[bi];
         if (bug.lane !== s.lane || bug.hp <= 0) continue;
         if (!projectileCanHit(s.proj, bug.flying)) continue;
+        if (!revealed(bug)) continue; // 子弹从藏土的地地虫头顶飞过
         if (bubbleHitsBug(s.x, bug.x)) {
           const res = applyDamage(bug, 1);
           bug.hp = res.hp;
@@ -625,8 +728,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
         killBug(i);
         continue;
       }
-      const speedMul = bug.freeze > 0 ? ICE_SLOW : 1;
-      const p = bug.flying ? undefined : plantInLaneCell(bug.lane, bug.x - 0.3);
+      const surfaced = revealed(bug);
+      // 地地虫被望望草照出来的那一下,播个"现形"特效
+      if (surfaced && !bug.surfacedFx) {
+        bug.surfacedFx = true;
+        api.play("jump");
+        addSparkle(px(bug.x), laneCenterY(bug.lane), "#e8b878");
+        addFloat(px(bug.x), laneCenterY(bug.lane) - cell * 0.5, "现形啦!", "#e8b878");
+      }
+      // 进化体掉到半血进入狂暴:提速 + 一次性大特效
+      if (bug.kind === "queenx" && !bug.raged && bug.hp / bug.maxHp <= QUEENX_RAGE_FRAC) {
+        bug.raged = true;
+        shake = 0.5;
+        api.play("oops");
+        addFloat(px(bug.x), laneCenterY(bug.lane) - cell * 0.8, "女王狂暴啦!!", "#e05a7a", true);
+      }
+      const speedMul =
+        (bug.freeze > 0 ? ICE_SLOW : 1) *
+        bugNightSpeedMult(bug.kind, night) *
+        queenxSpeedMult(bug.kind, bug.hp / bug.maxHp);
+      // 飞虫越过植物;没现形的地地虫在土里钻,也不啃植物
+      const p = bug.flying || !surfaced ? undefined : plantInLaneCell(bug.lane, bug.x - 0.3);
       if (p && bugReachesPlant(bug.x, p.col)) {
         // 钻钻虫第一次遇到植物直接跳过去
         if (BUG_INFO[bug.kind].jumps && !bug.jumped) {
@@ -843,6 +965,60 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.arc(x + r * 0.5, y - r * 0.7, r * (0.07 + anim * 0.03), 0, Math.PI * 2);
       ctx.fill();
       drawFace(x, y + r * 0.08, r * 0.55);
+    } else if (kind === "scout") {
+      // 望望草(1.1):长脖子潜望镜小草,头顶一盏亮灯照出地地虫
+      ctx.strokeStyle = "#5aa878";
+      ctx.lineWidth = Math.max(2, r * 0.18);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x, y + r * 0.6);
+      ctx.quadraticCurveTo(x - r * 0.15, y - r * 0.1, x, y - r * 0.5);
+      ctx.stroke();
+      // 灯光光晕
+      ctx.fillStyle = `rgba(255,227,135,${0.35 + anim * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(x, y - r * 0.55, r * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      const g = ctx.createRadialGradient(x - r * 0.1, y - r * 0.65, r * 0.05, x, y - r * 0.55, r * 0.4);
+      g.addColorStop(0, "#fff6d5");
+      g.addColorStop(1, "#ffe387");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#e8a830";
+      ctx.lineWidth = Math.max(1, r * 0.07);
+      ctx.beginPath();
+      ctx.arc(x, y - r * 0.55, r * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawFace(x, y - r * 0.55, r * 0.38);
+    } else if (kind === "moon") {
+      // 月月菇(1.1):月牙帽小蘑菇,夜里咕嘟冒露珠
+      ctx.fillStyle = "#f2ecd8";
+      ctx.strokeStyle = "#c9b88a";
+      ctx.lineWidth = Math.max(1, r * 0.07);
+      ctx.beginPath();
+      ctx.roundRect(x - r * 0.22, y - r * 0.1, r * 0.44, r * 0.7, r * 0.12);
+      ctx.fill();
+      ctx.stroke();
+      const g = ctx.createRadialGradient(x - r * 0.2, y - r * 0.5, r * 0.08, x, y - r * 0.35, r * 0.75);
+      g.addColorStop(0, "#d5ddff");
+      g.addColorStop(1, "#8f9fe8");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#6a7ac9";
+      ctx.beginPath();
+      ctx.ellipse(x, y - r * 0.3, r * 0.68, r * 0.45, 0, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // 帽子上的小月牙
+      ctx.fillStyle = "#fff1c9";
+      ctx.beginPath();
+      ctx.arc(x + r * 0.2, y - r * 0.42, r * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#8f9fe8";
+      ctx.beginPath();
+      ctx.arc(x + r * 0.28, y - r * 0.46, r * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      drawFace(x, y + r * 0.18, r * 0.35);
     } else {
       // 荷叶垫
       const g = ctx.createRadialGradient(x - r * 0.2, y, r * 0.1, x, y + r * 0.2, r * 0.9);
@@ -889,9 +1065,41 @@ export function mount(api: GameAPI): { destroy: () => void } {
     racer: "#8ae0d0",
     bossbug: "#e88aa5",
     queen: "#c95a9a",
+    mole: "#d8b088",
+    moth: "#d8c8f0",
+    mama: "#f0a0c0",
+    queenx: "#b04a8a",
   };
 
+  /** 没现形的地地虫:只画一个拱起来的小土包和扬起的土粒。 */
+  function drawMoleMound(bug: Bug): void {
+    const x = px(bug.x);
+    const y = laneCenterY(bug.lane);
+    const r = cell * 0.3;
+    ctx.fillStyle = "rgba(150,110,70,0.75)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + r * 0.5, r * 1.1, r * 0.55, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = "rgba(120,88,56,0.6)";
+    for (let i = 0; i < 3; i++) {
+      const a = bug.wob * 2 + (i * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * r * 0.9, y + r * 0.2 - Math.abs(Math.sin(a)) * r * 0.6, r * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(90,66,42,0.85)";
+    ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("?", x, y - r * 0.35);
+  }
+
   function drawBug(bug: Bug): void {
+    // 1.1 地地虫:没被望望草照出来时只画土包
+    if (!revealed(bug)) {
+      drawMoleMound(bug);
+      return;
+    }
     const hover = bug.flying ? -cell * 0.22 + Math.sin(bug.wob * 1.4) * cell * 0.06 : 0;
     const hop = bug.jumpAnim > 0 ? -Math.sin(bug.jumpAnim * Math.PI) * cell * 0.5 : 0;
     const x = px(bug.x);
@@ -899,6 +1107,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const boss = BUG_INFO[bug.kind].boss;
     const r = cell * (boss ? 0.42 : 0.26);
     const color = BUG_COLORS[bug.kind];
+    // 狂暴中的进化体:一圈红色气浪
+    if (bug.raged) {
+      ctx.fillStyle = `rgba(224,90,122,${0.2 + 0.12 * Math.abs(Math.sin(bug.wob * 2))})`;
+      ctx.beginPath();
+      ctx.arc(x + r * 0.6, y, r * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (bug.flying) {
       ctx.fillStyle = "rgba(255,255,255,0.75)";
       const flap = Math.sin(bug.wob * 4) * r * 0.4;
@@ -929,7 +1144,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
     // 护甲壳(壳壳虫是半圆壳,桶桶虫是铁桶)
     if (bug.maxArmor > 0 && bug.armor > 0) {
-      if (bug.kind === "bucket" || bug.kind === "bossbug" || bug.kind === "queen") {
+      if (bug.kind === "bucket" || bug.kind === "bossbug" || bug.kind === "queen" || bug.kind === "queenx") {
         ctx.fillStyle = "rgba(140,150,170,0.95)";
         ctx.beginPath();
         ctx.roundRect(x - r * 0.8, y - r * 1.6, r * 1.6, r * 1.0, r * 0.2);
@@ -966,6 +1181,49 @@ export function mount(api: GameAPI): { destroy: () => void } {
       for (let k = 1; k <= 2; k++) {
         ctx.beginPath();
         ctx.arc(x + k * r * 1.1, y, r * 0.55, -0.5, 0.5);
+        ctx.stroke();
+      }
+    }
+    if (bug.kind === "mole") {
+      // 现形的地地虫:一对挖土小爪子 + 脚边土堆
+      ctx.fillStyle = "rgba(150,110,70,0.55)";
+      ctx.beginPath();
+      ctx.ellipse(x, y + r * 1.05, r * 1.2, r * 0.32, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#9a6a3a";
+      ctx.lineWidth = Math.max(2, r * 0.16);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.65, y + r * 0.3);
+      ctx.lineTo(x - r * 0.95, y + r * 0.75);
+      ctx.moveTo(x - r * 0.45, y + r * 0.55);
+      ctx.lineTo(x - r * 0.7, y + r * 0.95);
+      ctx.stroke();
+    }
+    if (bug.kind === "moth") {
+      // 扑扑蛾:一对打圈的小触角,夜里更精神
+      ctx.strokeStyle = shade(color, -60);
+      ctx.lineWidth = 2;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(x + s * r * 0.2, y - r * 0.75);
+        ctx.quadraticCurveTo(x + s * r * 0.7, y - r * 1.5, x + s * r * 0.35, y - r * 1.6);
+        ctx.stroke();
+        ctx.fillStyle = shade(color, -40);
+        ctx.beginPath();
+        ctx.arc(x + s * r * 0.35, y - r * 1.6, r * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (bug.kind === "mama") {
+      // 分分虫:身上背着两只小圆点宝宝
+      for (const s of [-0.35, 0.45]) {
+        ctx.fillStyle = shade(color, 40);
+        ctx.strokeStyle = shade(color, -40);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x + s * r * 1.4, y - r * 0.95, r * 0.3, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
       }
     }
@@ -1045,7 +1303,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌱 绿芽保卫战 · 九大花园", w / 2, 28);
+    ctx.fillText("🌱 绿芽保卫战 · 十三大花园", w / 2, 28);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#7a8a6e";
     ctx.fillText(
@@ -1089,7 +1347,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(unlocked ? st.blurb : "通关上一章解锁", rect.x + 10, rect.y + ch * 0.6);
       ctx.fillText(
         unlocked
-          ? `${cleared}/${LEVELS_PER_THEME} 关 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3}`
+          ? `${cleared}/${themeSize(i)} 关 · ⭐${themeStars(progress, i)}/${themeSize(i) * 3}`
           : "",
         rect.x + 10,
         rect.y + ch * 0.82,
@@ -1116,21 +1374,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "14px sans-serif";
     ctx.fillStyle = st.dark ? "#d8d8e8" : "#6a6a7e";
     ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 通关解锁下一关,回放可刷 3 星`,
+      `⭐ ${themeStars(progress, chapterIdx)}/${themeSize(chapterIdx) * 3} · 通关解锁下一关,回放可刷 3 星`,
       w / 2,
       54,
     );
 
     mapNodes.length = 0;
-    const base = chapterIdx * LEVELS_PER_THEME;
-    const cols = 4;
-    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const count = themeSize(chapterIdx);
+    const base = themeOffset(chapterIdx);
+    // 1.1 长章节(22/23 关)一行放 5 个,行数不至于太多
+    const cols = count > 12 ? 5 : 4;
+    const rows = Math.ceil(count / cols);
     const mx0 = w * 0.12;
     const mx1 = w * 0.88;
     const my0 = 96;
     const my1 = h - 40;
-    const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < LEVELS_PER_THEME; i++) {
+    const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
@@ -1188,7 +1448,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 25px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · ${def.name} 守住啦!`, w / 2, y + 42);
+    ctx.fillText(`${levelLabel()} · ${def.name} 守住啦!`, w / 2, y + 42);
     ctx.font = "34px sans-serif";
     let starTxt = "";
     for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
@@ -1216,9 +1476,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (const wave of level().waves) {
       for (const e of wave) {
         if (!BUG_INFO[e.kind].boss) continue;
-        return e.kind === "queen"
-          ? "冰冰花冻住女王,星星芽集火!"
-          : "大虫王那条道多种果果墩顶住!";
+        if (e.kind === "queenx") return "进化体半血会狂暴,提前埋爆爆果,冰冰花别停!";
+        if (e.kind === "queen") return "冰冰花冻住女王,星星芽集火!";
+        return "大虫王那条道多种果果墩顶住!";
       }
     }
     return null;
@@ -1259,14 +1519,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · ${def.name}`, w / 2, y + 44);
+    ctx.fillText(`${levelLabel()} · ${def.name}`, w / 2, y + 44);
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
-    ctx.fillText(def.hint, w / 2, y + 90);
+    ctx.fillText(def.hint, w / 2, y + 88, Math.min(420, w - 60));
+    // 1.1 新机制角标:昼夜循环 / 露珠罐上限
+    const badges: string[] = [];
+    if (def.cycle) badges.push(`☀️${def.cycle.day}s→🌙${def.cycle.night}s 昼夜循环`);
+    if (def.dewCap !== undefined) badges.push(`露珠罐上限 ${def.dewCap}(种产露植物变大)`);
+    if (badges.length > 0) {
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillStyle = "#8a5ac9";
+      ctx.fillText(badges.join(" · "), w / 2, y + 114, Math.min(430, w - 50));
+    }
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#a0a0b2";
-    ctx.fillText(`${st.name} · ${def.waves.length} 波 · 点一下屏幕开始`, w / 2, y + 130);
-    ctx.fillText("(左上角 ◀ 可回地图)", w / 2, y + 158);
+    ctx.fillText(`${st.name} · ${def.waves.length} 波 · 点一下屏幕开始`, w / 2, y + 138);
+    ctx.fillText("(左上角 ◀ 可回地图)", w / 2, y + 162);
   }
 
   function draw(): void {
@@ -1281,7 +1550,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     const def = level();
     const st = sceneStyle();
-    const night = st.dark;
+    const cycleNight = !!def.cycle && isNightNow();
+    const night = st.dark || cycleNight;
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 12, (Math.random() - 0.5) * shake * 12);
 
@@ -1461,6 +1731,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.globalAlpha = 1;
     }
 
+    // 1.1 昼夜循环:黑夜给全场罩一层柔柔的夜色
+    if (cycleNight) {
+      ctx.fillStyle = "rgba(30,34,80,0.24)";
+      ctx.fillRect(-20, -20, w + 40, h + 40);
+    }
+
     ctx.restore();
 
     // ---- 工具栏 ----
@@ -1478,20 +1754,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = afford ? 1 : 0.45;
-      // 窄屏修复:卡片改为"图标在上 + 价格在下",价格 11→14px 加粗;
-      // 植物名和说明挪到下方的"正在种什么"提示条,360 宽 5 张卡也不挤
+      // 窄屏修复:卡片改为"图标在上 + 价格在下";1.1 后期 10 张卡,
+      // 窄卡(375 宽约 27px)把价格字号降到 11px,不挤不溢出
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      const priceFont = r.w < 40 ? "bold 11px sans-serif" : "bold 14px sans-serif";
+      const iconR = Math.min(11, r.w * 0.36);
       if (tool === "shovel") {
-        drawShovelIcon(r.x + r.w / 2, r.y + 14, 11);
+        drawShovelIcon(r.x + r.w / 2, r.y + 14, iconR);
         ctx.fillStyle = "#5a5a6e";
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText("铲子", r.x + r.w / 2, r.y + r.h - 11);
+        ctx.font = priceFont;
+        ctx.fillText("铲子", r.x + r.w / 2, r.y + r.h - 11, r.w - 2);
       } else {
-        drawPlantIcon(r.x + r.w / 2, r.y + 14, 11, tool);
+        drawPlantIcon(r.x + r.w / 2, r.y + 14, iconR, tool);
         ctx.fillStyle = afford ? "#5a5a6e" : "#8a8a9a";
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText(`💧${PLANT_INFO[tool].cost}`, r.x + r.w / 2, r.y + r.h - 11);
+        ctx.font = priceFont;
+        ctx.fillText(`💧${PLANT_INFO[tool].cost}`, r.x + r.w / 2, r.y + r.h - 11, r.w - 2);
       }
       ctx.globalAlpha = 1;
     }
@@ -1499,12 +1777,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "15px sans-serif";
     ctx.fillStyle = dewFlash > 0 && Math.floor(dewFlash * 8) % 2 === 0 ? "#e05a7a" : "#5a5a6e";
     ctx.textBaseline = "middle";
-    ctx.fillText(`💧 ${dew}`, w - 8, TOOLBAR_H / 2 - 12);
+    // 1.1 露珠罐上限:有上限的关显示 "现有/罐口"
+    const capNow = dewCapNow();
+    ctx.fillText(Number.isFinite(capNow) ? `💧 ${dew}/${capNow}` : `💧 ${dew}`, w - 8, TOOLBAR_H / 2 - 12);
     ctx.fillStyle = "#5a5a6e";
     // 波次文字 11→14px,窄屏也够看清
     ctx.font = "14px sans-serif";
     ctx.fillText(
-      `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} 波${Math.max(1, currentWave + 1)}/${level().waves.length}`,
+      `${levelLabel()} 波${Math.max(1, currentWave + 1)}/${level().waves.length}`,
       w - 8,
       TOOLBAR_H / 2 + 10,
     );
@@ -1539,6 +1819,28 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText(label.replace("🪏 ", ""), chip.x + 28, chip.y + 15, chip.w - 34);
+    }
+
+    // 1.1 昼夜钟:循环关显示当前时段和还剩几秒(挂在提示条下面一行,窄屏不挤)
+    if (def.cycle && phase === "play") {
+      const period = def.cycle.day + def.cycle.night;
+      const t = ((time % period) + period) % period;
+      const remain = Math.ceil(cycleNight ? period - t : def.cycle.day - t);
+      const label = cycleNight ? `🌙 黑夜 ${remain}s` : `☀️ 白天 ${remain}s`;
+      ctx.font = "bold 13px sans-serif";
+      const tw2 = ctx.measureText(label).width;
+      const chip2: Rect = { x: 6, y: TOOLBAR_H + 36, w: tw2 + 20, h: 24 };
+      ctx.fillStyle = cycleNight ? "rgba(62,68,104,0.88)" : "rgba(255,255,255,0.88)";
+      ctx.strokeStyle = cycleNight ? "rgba(185,166,232,0.7)" : "rgba(224,160,48,0.6)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(chip2.x, chip2.y, chip2.w, chip2.h, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = cycleNight ? "#e0e0f5" : "#a06a14";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, chip2.x + 10, chip2.y + 13);
     }
 
     // 波次横幅
