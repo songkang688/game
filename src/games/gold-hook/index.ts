@@ -110,8 +110,12 @@ const CSS = `
   padding:5px 14px;font-size:13px;font-weight:800;color:#7A5A2E;box-shadow:0 3px 8px rgba(160,130,90,.32);
   pointer-events:none;opacity:0;transition:opacity .2s ease;max-width:92%;text-align:center;}
 .gh-toast.gh-on{opacity:1;}
-.gh-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+/* 首尾的 auto 外边距代替 justify-content:center:内容装得下时照样居中,
+   装不下时 auto 收成 0,从顶上开始往下排,标题不会被剪掉,滚动条也够得着 */
+.gh-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   gap:10px;text-align:center;padding:16px;background:rgba(255,251,244,.95);border-radius:16px;overflow:auto;}
+.gh-veil>:first-child{margin-top:auto;}
+.gh-veil>:last-child{margin-bottom:auto;}
 .gh-veil[hidden]{display:none;}
 .gh-veil-title{font-size:19px;font-weight:900;color:#8A5A22;}
 .gh-veil-sub{font-size:14px;font-weight:700;color:#7A6242;line-height:1.6;max-width:320px;}
@@ -147,6 +151,16 @@ const CSS = `
   .gh-btn{padding:8px 12px;font-size:14px;}
   .gh-btn-fire{padding:9px 20px;font-size:16px;}
   .gh-tip{font-size:11px;}
+  /* 商店那三行在窄屏上得瘦一圈,不然浮层比画面还高,得滚动才看得全 */
+  .gh-veil{padding:10px;gap:7px;}
+  .gh-veil-title{font-size:17px;}
+  .gh-veil-sub{font-size:12px;line-height:1.5;}
+  .gh-shoplist{gap:6px;}
+  .gh-shopitem{padding:6px 8px;border-radius:13px;}
+  .gh-shopemoji{font-size:20px;}
+  .gh-shopname{font-size:13px;}
+  .gh-shopdesc{font-size:10px;}
+  .gh-buy{padding:6px 10px;font-size:12px;}
 }
 `;
 
@@ -258,12 +272,31 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   // 版面:按剩下的空间算画布多大,375×667 和 1280×800 都得一屏放下
   // ------------------------------------------------------------------
 
+  /**
+   * 画面到底能画到多低。
+   *
+   * 外壳(`.game-screen` / `.game-stage`)是不滚动的,超出去的部分直接看不见,
+   * 所以拦住我们的往往不是窗口下沿,而是上面某一层 overflow 不为 visible 的容器。
+   * 挨个往上问一遍,取最靠上的那条线。
+   */
+  function limitBottom(): number {
+    let limit = window.innerHeight || 640;
+    for (let node = wrap.parentElement; node; node = node.parentElement) {
+      const style = window.getComputedStyle?.(node);
+      if (style && style.overflowY !== "visible") {
+        limit = Math.min(limit, node.getBoundingClientRect().bottom);
+      }
+    }
+    return limit;
+  }
+
   function relayout(): void {
-    const vh = (globalThis as { innerHeight?: number }).innerHeight ?? 640;
     const top = box.getBoundingClientRect().top;
-    const below = ctrl.offsetHeight + tip.offsetHeight + 26;
-    const availH = Math.max(180, vh - top - below);
-    const availW = Math.max(160, Math.min(wrap.clientWidth || 320, 400));
+    // 按钮行和提示行是写死在画面下面的,先把它们的高度让出来,再留 10px 呼吸
+    const below = ctrl.offsetHeight + tip.offsetHeight + 22;
+    const availH = Math.max(170, limitBottom() - top - below);
+    // 上限 520:画布后备位图是 800×944,放到 520 还在缩小,不会糊
+    const availW = Math.max(150, Math.min(wrap.clientWidth || 320, 520));
     const w = Math.min(availW, (availH * FIELD_W) / FIELD_H);
     canvas.style.width = `${Math.round(w)}px`;
     canvas.style.height = `${Math.round((w * FIELD_H) / FIELD_W)}px`;
@@ -307,16 +340,132 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     c.fillText(k.name, x, y + 30);
   }
 
-  function drawOre(c: CanvasRenderingContext2D, ore: Ore, x: number): void {
-    c.save();
-    c.fillStyle = "rgba(120,95,60,.16)";
+  /**
+   * 矿石的皮肤。
+   *
+   * 全都手画成矢量而不是直接甩 emoji:矿洞底色是浅米黄,emoji 在上面又小又糊,
+   * 而且换个设备字体一变就认不出来了。自己画能保证「金的是暖黄、石头是冷灰」这条
+   * 最要紧的分辨线一直在。
+   */
+  const ORE_SKIN: Record<Ore["kind"], { fill: string; lit: string; edge: string }> = {
+    nugget: { fill: "#FFD264", lit: "#FFF0BC", edge: "#CF9A20" },
+    goldSmall: { fill: "#FFC441", lit: "#FFE79A", edge: "#C1880F" },
+    goldBig: { fill: "#FFB22C", lit: "#FFDD8C", edge: "#AE7305" },
+    goldHuge: { fill: "#FF9F14", lit: "#FFD07A", edge: "#9C6100" },
+    pebble: { fill: "#C6BFB4", lit: "#E6E1D9", edge: "#8F887E" },
+    boulder: { fill: "#A9A299", lit: "#CFC9C1", edge: "#77716A" },
+    gem: { fill: "#7DDDF0", lit: "#D6F7FF", edge: "#2F97AF" },
+    chest: { fill: "#C98C58", lit: "#E7B98C", edge: "#8A5A31" },
+    mole: { fill: "#D8A87A", lit: "#F0CFAC", edge: "#A57A4E" },
+  };
+
+  /** 金块 / 石头共用的圆角块 */
+  function nuggetPath(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
     c.beginPath();
-    c.ellipse(x, ore.y + ore.radius * 0.7, ore.radius * 0.9, ore.radius * 0.35, 0, 0, Math.PI * 2);
-    c.fill();
-    c.font = `${Math.round(ore.radius * 2.1)}px serif`;
+    c.roundRect(x - r, y - r * 0.86, r * 2, r * 1.72, r * 0.44);
+  }
+
+  function drawOre(c: CanvasRenderingContext2D, ore: Ore, x: number): void {
+    const r = ore.radius;
+    const y = ore.y;
+    const skin = ORE_SKIN[ore.kind];
+    c.save();
     c.textAlign = "center";
     c.textBaseline = "middle";
-    c.fillText(ORES[ore.kind].emoji, x, ore.y);
+
+    // 影子:让矿石从背景里浮起来一点
+    c.fillStyle = "rgba(120,95,60,.18)";
+    c.beginPath();
+    c.ellipse(x, y + r * 0.92, r * 0.86, r * 0.3, 0, 0, Math.PI * 2);
+    c.fill();
+
+    c.fillStyle = skin.fill;
+    c.strokeStyle = skin.edge;
+    c.lineWidth = 1.6;
+
+    if (ore.kind === "gem") {
+      c.beginPath();
+      c.moveTo(x, y - r);
+      c.lineTo(x + r * 0.92, y - r * 0.16);
+      c.lineTo(x, y + r);
+      c.lineTo(x - r * 0.92, y - r * 0.16);
+      c.closePath();
+      c.fill();
+      c.stroke();
+      c.strokeStyle = "rgba(255,255,255,.85)";
+      c.lineWidth = 1.2;
+      c.beginPath();
+      c.moveTo(x - r * 0.92, y - r * 0.16);
+      c.lineTo(x + r * 0.92, y - r * 0.16);
+      c.moveTo(x - r * 0.42, y - r * 0.16);
+      c.lineTo(x, y - r);
+      c.lineTo(x + r * 0.42, y - r * 0.16);
+      c.stroke();
+    } else if (ore.kind === "chest") {
+      c.beginPath();
+      c.roundRect(x - r, y - r * 0.8, r * 2, r * 1.6, r * 0.26);
+      c.fill();
+      c.stroke();
+      c.fillStyle = skin.lit;
+      c.beginPath();
+      c.roundRect(x - r, y - r * 0.8, r * 2, r * 0.62, r * 0.26);
+      c.fill();
+      c.fillStyle = "#F4C64A";
+      c.fillRect(x - r * 0.2, y - r * 0.8, r * 0.4, r * 1.6);
+      c.beginPath();
+      c.arc(x, y - r * 0.06, r * 0.26, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = skin.edge;
+      c.lineWidth = 1.2;
+      c.stroke();
+    } else if (ore.kind === "mole") {
+      // 两只耳朵先画,才会被脑袋压住一半
+      c.beginPath();
+      c.arc(x - r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
+      c.arc(x + r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.beginPath();
+      c.arc(x, y, r * 0.92, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.fillStyle = skin.lit;
+      c.beginPath();
+      c.ellipse(x, y + r * 0.3, r * 0.5, r * 0.36, 0, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = "#5A3F2A";
+      c.beginPath();
+      c.arc(x - r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
+      c.arc(x + r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
+      c.arc(x, y + r * 0.16, r * 0.16, 0, Math.PI * 2);
+      c.fill();
+    } else {
+      nuggetPath(c, x, y, r);
+      c.fill();
+      c.stroke();
+      // 左上角一小块高光,金子看着才有光泽;石头也留着,当作被磨亮的一面
+      c.fillStyle = skin.lit;
+      c.beginPath();
+      c.ellipse(x - r * 0.3, y - r * 0.34, r * 0.36, r * 0.22, -0.5, 0, Math.PI * 2);
+      c.fill();
+      if (ore.kind === "goldHuge") {
+        // 巨型金块再压一道分层的纹,免得和大金块只差个头
+        c.strokeStyle = skin.edge;
+        c.lineWidth = 1.2;
+        c.beginPath();
+        c.moveTo(x - r * 0.72, y + r * 0.24);
+        c.lineTo(x + r * 0.72, y + r * 0.24);
+        c.stroke();
+      }
+      if (!ORES[ore.kind].treasure) {
+        // 石头补两个坑,一眼看出来是不值钱的那种
+        c.fillStyle = skin.edge;
+        c.beginPath();
+        c.arc(x + r * 0.32, y + r * 0.2, r * 0.16, 0, Math.PI * 2);
+        c.arc(x - r * 0.42, y + r * 0.34, r * 0.11, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
     c.restore();
   }
 
@@ -338,8 +487,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     c.fillRect(0, 96, WALL, FIELD_H - 96);
     c.fillRect(FIELD_W - WALL, 96, WALL, FIELD_H - 96);
     c.fillStyle = pal.vein;
-    for (let i = 0; i < 12; i++) {
-      const y = 120 + i * 32;
+    for (let y = 120; y < FIELD_H - 8; y += 32) {
       c.fillRect(3, y, WALL - 8, 4);
       c.fillRect(FIELD_W - WALL + 5, y + 14, WALL - 8, 4);
     }
@@ -579,9 +727,12 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   canvas.addEventListener("click", () => fire());
 
   const onKey = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") {
-      if (veilMode === "pause") closeVeil();
-      else if (veilMode === "none") openPause();
+    if (e.key === "Escape" || e.key === "Esc") {
+      // 一定要 preventDefault:外壳收到没被接住的 Esc 会再弹一次它自己的暂停,
+      // 两层暂停叠在一起以后,下一次 Esc 只会被外壳那层吃掉,这一层就再也关不上了
+      e.preventDefault();
+      if (veilMode === "none") openPause();
+      else closeVeil();
       return;
     }
     if (veilMode !== "none") return;

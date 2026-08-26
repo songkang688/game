@@ -18,15 +18,22 @@
 // 场地尺寸(逻辑坐标;渲染时整体等比缩放到可用宽度)
 // ---------------------------------------------------------------------------
 
-export const FIELD_W = 360;
-export const FIELD_H = 520;
+/**
+ * 逻辑画布,刻意画成横的(宽高比约 1.1)。
+ *
+ * 外壳的关卡头部在手机上要占掉两行,留给矿洞的高度本来就不多;而画布是等比缩放的,
+ * 竖着画就意味着宽度被高度卡死,矿石跟着一起缩到看不清。横过来以后同样的高度能撑开
+ * 更宽的画面,矿石大了一圈。钩子的摆幅本来就是左右扫的,横画反而更贴玩法。
+ */
+export const FIELD_W = 460;
+export const FIELD_H = 420;
 /** 钩子的悬挂点 */
-export const PIVOT_X = 180;
-export const PIVOT_Y = 58;
+export const PIVOT_X = 230;
+export const PIVOT_Y = 52;
 /** 矿石最高只能埋到这条线以下,免得贴着钩子生成 */
-export const DIG_TOP = 126;
+export const DIG_TOP = 112;
 /** 矿石最低埋到这条线 */
-export const DIG_BOTTOM = 502;
+export const DIG_BOTTOM = 402;
 /** 左右各留出来的石壁厚度 */
 export const WALL = 20;
 
