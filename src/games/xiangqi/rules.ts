@@ -59,11 +59,12 @@ export const REPEAT_LIMIT = 3;
  * 从最后一步往回数，只要走方每一步都在将军，就算作一段「连将」；
  * 这段连将里同一个局面指纹出现 `REPEAT_LIMIT` 次，走方负。
  */
-export function perpetualCheckLoser(entries: readonly RecordEntry[]): Side | null {
+export function perpetualCheckLoser(entries: readonly RecordEntry[], startKey = ""): Side | null {
   const last = entries[entries.length - 1];
   if (!last || !last.check) return null;
   const side = last.side;
-  let seen = 0;
+  // 开局那个局面也算一次：不然「走回起点」的循环会比实际慢一圈才判出来
+  let seen = startKey === last.key ? 1 : 0;
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
     if (e.side !== side) continue;
@@ -88,7 +89,7 @@ export function repetitionCount(startKey: string, entries: readonly RecordEntry[
  * 一直将军把局面走回去三次的是「输」，不是「和」。
  */
 export function judgeRecord(startKey: string, entries: readonly RecordEntry[]): Verdict {
-  const loser = perpetualCheckLoser(entries);
+  const loser = perpetualCheckLoser(entries, startKey);
   if (loser) {
     return {
       kind: "perpetual",
