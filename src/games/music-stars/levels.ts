@@ -214,6 +214,17 @@ export function buildScores(level: number): number[][] {
   return buildMelodies(level);
 }
 
+/**
+ * 简谱视奏台的时值（1.2 新增）：0 是半拍（数字下加横线），1 是两拍（数字后加增时线）。
+ * 1.1 的谱面只有裸数字，节奏在谱上完全看不出来；这里给每个音配一个时值，
+ * 谱面第一次真的能读出长短。判定仍然只看音高顺序，不因此变难。
+ */
+export function buildScoreValues(level: number): number[][] {
+  const rounds = buildScores(level);
+  const rand = mulberry32(17300 + level * 7919);
+  return rounds.map((seq) => makeRhythm(seq.length, rand));
+}
+
 function shuffledBy<T>(arr: readonly T[], rand: () => number): T[] {
   const out = arr.slice();
   for (let i = out.length - 1; i > 0; i--) {
