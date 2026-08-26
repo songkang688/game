@@ -3,7 +3,7 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { save } from "../../engine/save";
-import type { GuideBook } from "../../ui/level188Contract";
+import GUIDE from "./guide";
 import {
   ARENA_H,
   ARENA_W,
@@ -832,40 +832,6 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     toast,
   };
 }
-
-// ---------------------------------------------------------------------------
-// 攻略
-// ---------------------------------------------------------------------------
-
-const GUIDE: GuideBook = {
-  gameId: meta.id,
-  title: "噗噗小攻略",
-  general: [
-    "先吹再噗:泡泡糖气流只是把咕噜怪裹起来,得再「噗」一下(G / K)才算清掉。",
-    "泡泡飘到头顶就停住了,站在地上按噗键就够得着,不用非得跳。",
-    "站在浮台正下方按跳能顶穿上去;蹲着按跳(下+跳)就从脚下穿回来。",
-    "起跳和落地那一下身上带着气浪,能把咕噜怪撞得发懵;站着不动去蹭它才会挨打。",
-    "连着戳破好几个泡泡有连击,糖果也掉得更多。",
-  ],
-  entries: CHAPTERS.map((ch, ci) => {
-    let from = 1;
-    for (let i = 0; i < ci; i++) from += CHAPTERS[i].size;
-    return {
-      from,
-      to: from + ch.size - 1,
-      title: `${ch.emoji} ${ch.name}`,
-      tips: [
-        ch.desc,
-        ci <= 1
-          ? "怪不多,趁机把「吹—噗」的节奏练熟:吹完马上跟过去戳。"
-          : ci <= 3
-            ? "蹦蹦怪要等它落地再吹,追追怪要退半步再吹。"
-            : "先清最上面一层,糖果会自己掉下来,回头顺路捡。",
-        `本章覆盖第 ${from}–${from + ch.size - 1} 关,难度逐关往上走。`,
-      ],
-    };
-  }),
-};
 
 // ---------------------------------------------------------------------------
 // 188 关合作闯关
