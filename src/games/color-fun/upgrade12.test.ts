@@ -64,7 +64,17 @@ import {
   saveWork,
   type StorageLike,
 } from "./sandbox";
-import { CANVAS_MIN_VH, CLF_CSS, SPREAD_MS, SWATCH_MIN_PX, makeChip, makePrimary, makeSwatch, thumbnailSvg } from "./ui";
+import {
+  CANVAS_MIN_VH,
+  CLF_CSS,
+  SPREAD_MS,
+  SWATCH_MIN_PX,
+  makeChip,
+  makePrimary,
+  makeSwatch,
+  pinCanvas,
+  thumbnailSvg,
+} from "./ui";
 import { openLevelOnMap, parseLevelParam, resolveInitialLevel } from "./runtime";
 
 const DIR = fileURLToPath(new URL(".", import.meta.url));
@@ -820,6 +830,78 @@ describe("涂色小屋 1.2 · 外壳与红线", () => {
     // 小块点不准就双指放大到 2.5×
     expect(INDEX_SRC).toContain("MAX_ZOOM = 2.5");
     expect(INDEX_SRC).toContain("pointers.size === 2");
+  });
+
+  it("画布钉在滚动区顶上：滑到调色盘也看得见画，越过整块下沿就不再跟", () => {
+    /**
+     * 照着壳层真实的层次搭一个桩：`.l99-stage-wrap` 只裁不滚，
+     * 外面的 `.game-stage` 才是真滚的那一层，所以不能碰到第一个会裁的就收手。
+     */
+    type PinNode = {
+      overflowY: string;
+      parentElement: PinNode | null;
+      ownerDocument?: Document;
+      style: { transform?: string };
+      getBoundingClientRect: () => { top: number; height: number; bottom: number };
+      addEventListener: (type: string, fn: () => void) => void;
+      removeEventListener: (type: string, fn: () => void) => void;
+    };
+    const bound: Array<() => void> = [];
+    const node = (overflowY: string, box: () => { top: number; height: number }): PinNode => ({
+      overflowY,
+      parentElement: null,
+      style: {},
+      getBoundingClientRect: () => {
+        const b = box();
+        return { ...b, bottom: b.top + b.height };
+      },
+      addEventListener: (_t, fn) => void bound.push(fn),
+      removeEventListener: (_t, fn) => void bound.splice(bound.indexOf(fn), 1),
+    });
+    /** 画布现在被挪了多少 */
+    const shift = (el: PinNode): number => Number(/translateY\(([-\d.]+)px\)/.exec(el.style.transform ?? "")?.[1] ?? 0);
+
+    let scrolled = 0;
+    const port = node("hidden", () => ({ top: 88, height: 557 }));
+    const clip = node("hidden", () => ({ top: -26, height: 900 }));
+    // 整块从 270 起、685 高；画布原本从 316 起、367 高，滚多少往上走多少
+    const wrap = node("visible", () => ({ top: 270 - scrolled, height: 685 }));
+    const stage = node("visible", () => ({ top: 316 - scrolled + shift(stage), height: 367 }));
+    clip.parentElement = port;
+    wrap.parentElement = clip;
+    stage.parentElement = wrap;
+    const view = {
+      getComputedStyle: (el: PinNode) => ({ overflowY: el.overflowY }),
+      addEventListener: (_t: string, fn: () => void) => void bound.push(fn),
+      removeEventListener: (_t: string, fn: () => void) => void bound.splice(bound.indexOf(fn), 1),
+    };
+    wrap.ownerDocument = { defaultView: view } as unknown as Document;
+    stage.ownerDocument = wrap.ownerDocument;
+    const fire = (): void => bound.slice().forEach((fn) => fn());
+
+    const unpin = pinCanvas(wrap as unknown as HTMLElement, stage as unknown as HTMLElement);
+    // 没滚之前画布本来就在滚动区里，一动不动
+    expect(shift(stage)).toBe(0);
+    // 滚过头了就跟下来，正好停在滚动区上沿，不会钻到标题栏后面去
+    scrolled = 400;
+    fire();
+    expect(stage.getBoundingClientRect().top).toBeCloseTo(88, 1);
+    // 一直滚到底也不会盖住底下的调色盘：最多跟到整块的下沿
+    scrolled = 2000;
+    fire();
+    expect(shift(stage)).toBeLessThanOrEqual(685 - (316 - 270) - 367 + 0.5);
+    // destroy 之后监听全摘、位移归零
+    unpin();
+    expect(bound).toHaveLength(0);
+    expect(stage.style.transform).toBe("");
+  });
+
+  it("画室里的每一排都不许被压扁：线稿那一排点得到（曾经只剩 4px 高）", () => {
+    expect(CLF_CSS).toMatch(/\.clf-sheet>\*\{[^}]*flex:0 0 auto/);
+    // 指令多的时候给个天花板，不然把画布挤到屏幕外面去
+    expect(CLF_CSS).toMatch(/\.clf-chips\{[^}]*max-height:\d+px;overflow-y:auto/);
+    // 画布要压在后面的控件上面，跟着滚动挪的时候才不会被盖住
+    expect(CLF_CSS).toMatch(/\.clf-stage\{[^}]*z-index:2/);
   });
 
   it("prefers-reduced-motion：漫开与搅拌全关掉，直接换色", () => {

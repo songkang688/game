@@ -32,7 +32,8 @@ export const CLF_CSS = `
   box-shadow:0 2px 6px rgba(150,130,80,.2);white-space:nowrap;}
 .clf-msg{min-height:22px;font-size:15px;font-weight:800;color:#8a5a1c;text-align:center;line-height:1.5;
   max-width:400px;word-break:break-word;}
-.clf-stage{position:relative;width:100%;max-width:400px;overflow:hidden;border-radius:14px;
+/* z-index：画布会跟着滚动往下挪（见 pinCanvas），得压在后面那些控件上面 */
+.clf-stage{position:relative;z-index:2;width:100%;max-width:400px;overflow:hidden;border-radius:14px;
   min-height:${CANVAS_MIN_VH}vh;display:flex;align-items:center;justify-content:center;background:#fff;
   box-shadow:0 4px 0 #0001;touch-action:none;}
 .clf-canvas{background:#fff;max-width:100%;height:auto;display:block;transform-origin:center center;
@@ -45,7 +46,9 @@ export const CLF_CSS = `
   font-size:18px;font-weight:900;cursor:pointer;background:#ffffffe6;color:#5c4a30;font-family:inherit;
   box-shadow:0 3px 0 rgba(150,130,80,.28);}
 .clf-zoom:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(150,130,80,.28);}
-.clf-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:400px;}
+/* 指令多的时候能排到五六行，把画布挤得老远，所以给它一个天花板、自己滚 */
+.clf-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:400px;width:100%;
+  max-height:84px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;}
 .clf-legend{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:400px;}
 .clf-chip{display:flex;align-items:center;gap:5px;background:#ffffffd9;border-radius:999px;padding:5px 10px;
   font-size:14px;font-weight:800;color:#5c4a30;box-shadow:0 2px 5px rgba(150,130,80,.18);line-height:1.4;
@@ -97,6 +100,9 @@ export const CLF_CSS = `
 @keyframes clfFall{to{transform:translateY(360px) rotate(420deg);opacity:.1}}
 .clf-sheet{position:absolute;inset:0;z-index:9;background:linear-gradient(#fff8f0,#ffeedd);border-radius:16px;
   display:flex;flex-direction:column;gap:8px;padding:12px;box-sizing:border-box;overflow-y:auto;align-items:center;}
+/* 画室是竖着的弹性盒，装不下时子项会被压扁（线稿那一排一度只剩 4px 高，点都点不着），
+   所以一律不许收缩，装不下就让画室自己滚 */
+.clf-sheet>*{flex:0 0 auto;}
 .clf-sheet-head{display:flex;gap:8px;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;}
 .clf-sheet-title{font-size:17px;font-weight:900;color:#8a5a1c;}
 .clf-picks{display:flex;gap:6px;overflow-x:auto;max-width:100%;padding:2px;scrollbar-width:none;}
@@ -113,6 +119,7 @@ export const CLF_CSS = `
 .clf-empty{font-size:13px;font-weight:700;color:#96795a;text-align:center;}
 @media (max-width:400px){
   .clf-wrap{padding:8px;gap:8px;}
+  .clf-controls{gap:8px;}
   .clf-chip{font-size:14px;}
   .clf-msg{font-size:14px;}
   .clf-gallery{grid-template-columns:repeat(3,1fr);}
@@ -126,6 +133,62 @@ export const CLF_CSS = `
   .clf-flake{animation:none;display:none;}
 }
 `;
+
+/**
+ * 往上收集所有会裁掉内容的祖先。
+ *
+ * 壳层里这样的有两层：`.l99-stage-wrap` 只裁不滚，`.game-stage` 才是真正滚的那个，
+ * 所以不能碰到第一个就收手——上边界要按最靠里的那一层算，滚动要每一层都听。
+ */
+function clippersOf(el: HTMLElement): HTMLElement[] {
+  const view = el.ownerDocument.defaultView;
+  if (!view) return [];
+  const out: HTMLElement[] = [];
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const oy = view.getComputedStyle(p).overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "hidden") out.push(p);
+  }
+  return out;
+}
+
+/**
+ * 把画布钉在滚动区顶上，滑到下面选颜色时它也不会被顶出屏幕。
+ *
+ * 手机上光标题栏加关卡条就吃掉三成屏高，画布再占 55% 就一屏装不下，
+ * 底下的调色盘必须滑出来点——滑一下画就没影了，选完颜色还得滑回去找那一块。
+ *
+ * 本该交给 `position:sticky`，可壳层的滚动区是 `overflow:hidden`，
+ * 浏览器不拿它当粘性定位的参照物，画照样滑走，所以这里自己按滚动量挪。
+ * 挪的幅度卡在「不超出整块的下沿」，画布不会盖到调色盘上。
+ *
+ * 返回值是拆监听的函数，`destroy` 时记得叫一声。
+ */
+export function pinCanvas(wrap: HTMLElement, stage: HTMLElement): () => void {
+  const view = wrap.ownerDocument.defaultView;
+  const ports = clippersOf(wrap);
+  if (!view || ports.length === 0) return () => {};
+  let shift = 0;
+  const relayout = (): void => {
+    // getBoundingClientRect 带着已经挪过的量，先减回去还原成原本的位置
+    const raw = stage.getBoundingClientRect().top - shift;
+    const room = wrap.getBoundingClientRect().bottom - raw - stage.getBoundingClientRect().height;
+    const top = Math.max(...ports.map((p) => p.getBoundingClientRect().top));
+    const want = Math.min(Math.max(top - raw, 0), Math.max(room, 0));
+    if (Math.abs(want - shift) < 0.5) return;
+    shift = want;
+    stage.style.transform = shift > 0 ? `translateY(${shift.toFixed(1)}px)` : "";
+  };
+  for (const p of ports) p.addEventListener("scroll", relayout, { passive: true });
+  view.addEventListener("resize", relayout);
+  view.addEventListener("scroll", relayout, { passive: true });
+  relayout();
+  return () => {
+    for (const p of ports) p.removeEventListener("scroll", relayout);
+    view.removeEventListener("resize", relayout);
+    view.removeEventListener("scroll", relayout);
+    stage.style.transform = "";
+  };
+}
 
 /** 系统里开了「减弱动效」吗；取不到就当没开 */
 export function prefersReducedMotion(): boolean {

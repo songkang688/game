@@ -36,6 +36,7 @@ import {
   makePrimary,
   makeSwatch,
   pictureSvgBody,
+  pinCanvas,
   prefersReducedMotion,
 } from "./ui";
 
@@ -571,11 +572,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   renderChips();
   renderPalette();
   applyZoom(1);
+  const unpin = pinCanvas(wrap, stageBox);
 
   return {
     destroy() {
       destroyed = true;
       ended = true;
+      unpin();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       stageBox.removeEventListener("pointerdown", onPointerDown);
