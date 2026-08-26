@@ -196,12 +196,65 @@ describe("meta.ts 抽取一致性", () => {
     }
   });
 
-  it("meta.ts 是纯数据模块:字段全为字符串,可 JSON 序列化", () => {
+  it("1.1 新增的 modes / levels / ageHint 会原样带到首页", () => {
+    const [metas, impls] = tables({
+      a: fakeMeta("a", { modes: ["campaign", "endless"], levels: 99, ageHint: 6 })
+    });
+    const meta = collectGames(metas, impls)[0]?.meta;
+    expect(meta?.modes).toEqual(["campaign", "endless"]);
+    expect(meta?.levels).toBe(99);
+    expect(meta?.ageHint).toBe(6);
+  });
+
+  it("modes 里不认识的模式名被剔除,顺序按 GAME_MODES 归一", () => {
+    const [metas, impls] = tables({
+      a: fakeMeta("a", { modes: ["endless", "解谜", "campaign"] as unknown as GameMeta["modes"] })
+    });
+    expect(collectGames(metas, impls)[0]?.meta.modes).toEqual(["campaign", "endless"]);
+  });
+
+  it("modes 不是数组、或者一个合法项都没有,就当没填", () => {
+    const [metas, impls] = tables({
+      a: fakeMeta("a", { modes: "campaign" as unknown as GameMeta["modes"] }),
+      b: fakeMeta("b", { modes: ["瞎写的"] as unknown as GameMeta["modes"] })
+    });
+    const games = collectGames(metas, impls);
+    expect(games[0]?.meta.modes).toBeUndefined();
+    expect(games[1]?.meta.modes).toBeUndefined();
+  });
+
+  it("levels / ageHint 是 0、负数、NaN 或非数字时一律当没填", () => {
+    const [metas, impls] = tables({
+      a: fakeMeta("a", { levels: 0, ageHint: -3 }),
+      b: fakeMeta("b", { levels: Number.NaN, ageHint: "六岁" as unknown as number })
+    });
+    const games = collectGames(metas, impls);
+    for (const g of games) {
+      expect(g.meta.levels).toBeUndefined();
+      expect(g.meta.ageHint).toBeUndefined();
+    }
+  });
+
+  it("没填新字段的老 meta 不会凭空多出这几个键", () => {
+    const [metas, impls] = tables({ a: fakeMeta("a") });
+    const meta = collectGames(metas, impls)[0]?.meta as Record<string, unknown>;
+    expect(Object.keys(meta).sort()).toEqual(
+      ["blurb", "category", "color", "emoji", "id", "title"].sort()
+    );
+  });
+
+  it("meta.ts 是纯数据模块:只有字符串 / 数字 / 字符串数组,可 JSON 序列化", () => {
     for (const [metaPath, metaMod] of Object.entries(realMetaModules)) {
       const meta = metaMod.meta as Record<string, unknown>;
       expect(meta && typeof meta === "object", metaPath).toBe(true);
       for (const [key, value] of Object.entries(meta)) {
-        expect(typeof value, `${metaPath} 的 ${key} 应是字符串`).toBe("string");
+        const where = `${metaPath} 的 ${key}`;
+        if (Array.isArray(value)) {
+          // 1.1 起 modes 是字符串数组,其余仍旧是标量
+          expect(value.every((v) => typeof v === "string"), `${where} 应是字符串数组`).toBe(true);
+          continue;
+        }
+        expect(["string", "number"], where).toContain(typeof value);
       }
       expect(JSON.parse(JSON.stringify(meta))).toEqual(meta);
     }
