@@ -70,24 +70,33 @@ const HOME_EXTRA_CSS = `
 .home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;
   font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
 .home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
-.home-search-clear{border:0;background:transparent;font-size:19px;line-height:1;padding:4px;color:var(--ink-soft)}
+.home-search-clear{display:grid;place-items:center;min-width:44px;min-height:44px;margin-right:-10px;
+  border:0;background:transparent;font-size:19px;line-height:1;color:var(--ink-soft)}
 .tabs.cat-tabs{margin-bottom:2px}
 .tabs.mode-chips{margin:0;padding-top:0;gap:10px}
 .mode-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
 .mode-chips .tab-emoji{font-size:19px}
-/* 收藏卡上的心形浮在右上角,不占一行的宽度,游戏名才不会被挤成省略号 */
+/* 心形是卡片的兄弟节点(按钮不能套按钮),浮在卡片右上角,热区 44×44 */
+.fav-slot{position:relative;display:flex}
+.fav-slot>.game-card,.fav-slot>.recent-card{flex:1;min-width:0}
+.fav-btn{position:absolute;top:2px;right:2px;display:grid;place-items:center;
+  min-width:44px;min-height:44px;border:0;background:transparent;font-size:22px;line-height:1;
+  filter:grayscale(1) opacity(.5);transition:transform .14s ease,filter .14s ease}
+.fav-btn:hover{transform:scale(1.16)}
+.fav-btn[aria-pressed="true"]{filter:none}
+.fav-slot:hover>.fav-btn{transform:translateY(-5px)}
+.fav-slot:hover>.fav-btn:hover{transform:translateY(-5px) scale(1.16)}
+/* 收藏区的小卡:心形浮角不占宽度,游戏名才不会被挤成省略号 */
 .fav-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
-.fav-grid .recent-card{position:relative}
-.fav-grid .recent-info{flex:1 1 auto;min-width:0;padding-right:16px}
-.fav-grid .fav-btn{position:absolute;top:3px;right:6px;font-size:16px}
-/* 窄屏跟着 styles.css 里「最近玩过」的两列走,别一张卡霸一整行 */
-@media (max-width:380px){.fav-grid{grid-template-columns:repeat(2,1fr)}}
-.card-head{display:flex;align-items:flex-start;justify-content:flex-end;width:100%;min-height:4px}
-.fav-btn{border:0;background:transparent;font-size:22px;line-height:1;padding:2px 2px 0;
-  filter:grayscale(1) opacity(.45);transition:transform .14s ease,filter .14s ease}
-.fav-btn:hover{transform:scale(1.18)}
-.fav-btn[aria-pressed="true"]{filter:none;transform:scale(1.06)}
-.recent-card .fav-btn{font-size:18px}
+.fav-grid .recent-info{flex:1 1 auto;min-width:0;padding-right:18px}
+.fav-grid .fav-btn{top:-4px;right:-4px;font-size:17px}
+/* 窄屏两列。1fr 的下限是 min-content,320px 上第二张卡会顶出屏幕,这里夹成 minmax(0,1fr) */
+@media (max-width:380px){
+  .recent-grid,.fav-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:reduce){
+  .fav-btn,.fav-btn:hover,.fav-slot:hover>.fav-btn,.fav-slot:hover>.fav-btn:hover{transform:none}
+}
 .home-count{font-size:14px;font-weight:700;color:var(--ink-soft);margin:0 0 10px}
 `;
 
@@ -374,8 +383,13 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     renderGrid();
   }
 
-  /** 卡片右上角的收藏心形;stopPropagation 保证点心形不会顺手把游戏打开 */
-  function makeFavButton(id: string, title: string): HTMLElement {
+  /**
+   * 把卡片和收藏心形并排放进一个定位容器:
+   * 心形绝对定位浮在卡片右上角,既不套在卡片按钮里(按钮不能嵌按钮),也不占走标题的宽度。
+   */
+  function withFavHeart(card: HTMLElement, id: string, title: string, extraClass = ""): HTMLElement {
+    const slot = document.createElement("div");
+    slot.className = `fav-slot ${extraClass}`.trim();
     const on = isFav(id, favIds);
     const btn = document.createElement("button");
     btn.type = "button";
@@ -384,12 +398,9 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     btn.setAttribute("aria-pressed", String(on));
     btn.setAttribute("aria-label", on ? `把 ${title} 移出最爱` : `把 ${title} 加进最爱`);
     btn.title = on ? "移出最爱" : "加进最爱";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      toggleFav(id);
-    });
-    return btn;
+    btn.addEventListener("click", () => toggleFav(id));
+    slot.append(card, btn);
+    return slot;
   }
 
   function makeSectionTitle(emoji: string, text: string): HTMLElement {
@@ -405,7 +416,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     return h;
   }
 
-  /** 收藏区与最近玩过共用的小卡片 */
+  /** 收藏区与最近玩过共用的小卡片(收藏区多一颗心形) */
   function createSmallCard(game: GameModule, withFav: boolean): HTMLElement {
     const { meta } = game;
     const card = document.createElement("button");
@@ -439,9 +450,8 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     info.append(name, sub);
 
     card.append(emoji, info);
-    if (withFav) card.appendChild(makeFavButton(meta.id, meta.title));
     card.addEventListener("click", () => openGame(meta.id));
-    return card;
+    return withFav ? withFavHeart(card, meta.id, meta.title) : card;
   }
 
   function renderFavorites(): void {
@@ -487,10 +497,6 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     // 错峰浮现动画的序号(封顶,后面的卡片不再继续拖延)
     card.style.setProperty("--card-i", String(Math.min(index, 11)));
 
-    const head = document.createElement("span");
-    head.className = "card-head";
-    head.appendChild(makeFavButton(meta.id, meta.title));
-
     const emoji = document.createElement("span");
     emoji.className = "card-emoji";
     emoji.setAttribute("aria-hidden", "true");
@@ -526,9 +532,9 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       metaRow.appendChild(badgeEl);
     }
 
-    card.append(head, emoji, titleEl, blurb, metaRow);
+    card.append(emoji, titleEl, blurb, metaRow);
     card.addEventListener("click", () => openGame(meta.id));
-    return card;
+    return withFavHeart(card, meta.id, meta.title);
   }
 
   function makeEmptyState(): HTMLElement {
