@@ -83,6 +83,7 @@ import {
   MAX_DEPTH,
   PATTERN_INFO,
   RARITY_TIERS,
+  RED_AT,
   SNAP_AT,
   TIGHT_AT,
   bandMark,
@@ -323,6 +324,8 @@ const BITE_WINDOW_MS = 400;
 
 /** 上鱼小演出多长(可跳过) */
 const SHOW_MS = 900;
+/** 演出至少放这么久才允许按掉,免得手快的人根本没看见鱼 */
+const SHOW_SKIP_MS = 220;
 
 export interface CatchInfo {
   fish: Fish;
@@ -487,10 +490,11 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   const zoneTight = el("div", "fs-zone fs-zone--tight");
   zoneTight.style.left = `${TIGHT_AT * 100}%`;
   zoneTight.style.width = `${(SNAP_AT - TIGHT_AT) * 100}%`;
-  // 红区:1.2 秒倒计时的那一段;鱼线越好它越靠右
+  // 红区:1.2 秒倒计时的那一段(鱼线越好它越靠右);竖线是浮标的预警刻度,比红区更早
+  const redStart = RED_AT + (bonus.snapAt - SNAP_AT);
   const zoneRed = el("div", "fss-zone--red");
-  zoneRed.style.left = `${clamp(bonus.warnAt, 0, 1) * 100}%`;
-  zoneRed.style.width = `${clamp(1 - bonus.warnAt, 0, 1) * 100}%`;
+  zoneRed.style.left = `${clamp(redStart, 0, 1) * 100}%`;
+  zoneRed.style.width = `${clamp(1 - redStart, 0, 1) * 100}%`;
   const warnMark = el("div", "fss-warn");
   warnMark.style.left = `${clamp(bonus.warnAt, 0, 1) * 100}%`;
   const tensionFill = el("div", "fs-fill fs-fill--tension");
@@ -532,6 +536,11 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   // ---- 输入 ---------------------------------------------------------------
   function press(): void {
     if (paused || finished) return;
+    // 举鱼那一下看够了就能按掉,但先留 SHOW_SKIP_MS 让人看清是哪条鱼
+    if (phase === "show") {
+      if (phaseMs >= SHOW_SKIP_MS) afterShow();
+      return;
+    }
     holding = true;
   }
   function release(): void {
@@ -887,8 +896,8 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     bandMarkEl.className = `fss-mark fss-mark--${band === "slack" ? "green" : band}`;
     pullFill.style.width = `${(phase === "charge" ? power : phase === "fight" ? fight.progress : 0) * 100}%`;
 
-    // 红区倒计时:走满就断线,所以它一出现就得抢眼
-    const inRed = phase === "fight" && band === "red" && params !== null;
+    // 预警条:浮标越好亮得越早(还没进红区就先出现),进了红区才真的开始走倒计时
+    const inRed = phase === "fight" && params !== null && fight.tension >= bonus.warnAt;
     redBar.hidden = !inRed;
     if (inRed && params) {
       const ratio = redRatio(fight, params);
@@ -915,7 +924,8 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
       actBtn.textContent = holding ? "🪝 收线中…" : "🪝 按住收线";
       actBtn.className = "fs-act fss-act fs-act--reel";
     } else {
-      actBtn.textContent = phase === "show" ? "…" : phase === "bite" ? "❗ 咬钩了,按住!" : "🌊 等咬钩…";
+      actBtn.textContent =
+        phase === "show" ? "👀 看看它(按一下继续)" : phase === "bite" ? "❗ 咬钩了,按住!" : "🌊 等咬钩…";
       actBtn.className = `fs-act fss-act${phase === "bite" ? " fs-act--reel" : " fs-act--wait"}`;
     }
 
