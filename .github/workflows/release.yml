@@ -1,0 +1,317 @@
+name: Release
+
+# 打 tag 就出发行包:v1.1.0 这样的 tag 一 push,
+# 这里会把 Windows / macOS / Linux / 安卓的安装包全打出来,挂到 GitHub Release 上。
+on:
+  push:
+    tags:
+      - "v*"
+  # 补包用:某个平台的包当时没打出来时,不用重新打 tag,
+  # 在 Actions 页面手动跑一次,产物会补挂到那个 tag 已有的 Release 上。
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要补包的已有 tag,例如 v1.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  # tag 推上来时就是那个 tag;手动补包时用输入的 tag。两种情况都拿 tag 上的代码来打包。
+  BUILD_REF: ${{ inputs.tag || github.ref }}
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  test:
+    name: 测试 + 版本号校验
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 校验 tag 与 package.json 版本号一致
+        id: ver
+        run: |
+          TAG_VERSION="${RELEASE_TAG#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG_VERSION  package.json=$PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::tag $RELEASE_TAG 与 package.json 的 $PKG_VERSION 对不上,发行包文件名会和 tag 不一致。请先改版本号再打 tag。"
+            exit 1
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      # 与 ci.yml 一致:runner 比开发机慢,放宽单个用例的超时,避免重模拟用例假失败。
+      - name: 单元测试
+        run: npm test -- --testTimeout=30000
+
+      - name: 类型检查 + 构建
+        run: npm run build
+
+  linux-windows:
+    name: 出包 · Linux AppImage + Windows
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 构建 Web 产物
+        run: npm run build
+
+      # Windows 便携版在 Linux 上交叉打没问题(exe 资源改写用的是纯 JS 的 resedit);
+      # NSIS 安装器则要 wine,单独放到下面的 windows-setup job 用原生 Windows 打。
+      - name: 打包 Linux AppImage 与 Windows portable
+        run: npx electron-builder --linux AppImage --win portable --publish never
+
+      - name: 列出产物
+        run: ls -lh release/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux-windows
+          if-no-files-found: error
+          path: |
+            release/*.AppImage
+            release/*.exe
+
+  windows-setup:
+    name: 出包 · Windows 安装器 (NSIS)
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 构建 Web 产物
+        run: npm run build
+
+      - name: 打包 Windows 安装器
+        run: npx electron-builder --win nsis --publish never
+
+      - name: 列出产物
+        run: dir release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows-setup
+          if-no-files-found: error
+          path: release/*.exe
+
+  mac:
+    name: 出包 · macOS dmg + zip
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 构建 Web 产物
+        run: npm run build
+
+      # 无签名分发:不去钥匙串找证书,也不写签名身份。
+      # mac 的目标/分类/图标都用命令行 --config 覆盖,不依赖 package.json 里有没有 mac 段。
+      - name: 打包 macOS(无签名,Intel + Apple 芯片)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          npx electron-builder --mac dmg zip --x64 --arm64 \
+            --config.mac.identity=null \
+            --config.mac.category=public.app-category.games \
+            --config.mac.icon=public/icons/icon-512.png \
+            --publish never
+
+      - name: 列出产物
+        run: ls -lh release/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-mac
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*.zip
+
+  android:
+    name: 出包 · 安卓 debug APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Capacitor 8 的 capacitor-android 模块是按 Java 21 编的,
+          # 用 17 会在 :capacitor-android:compileDebugJavaWithJavac 报 invalid source release: 21。
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+
+      - name: Gradle 缓存
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - run: npm ci
+
+      # 脚本里已经带上了 Capacitor CLI 读 capacitor.config.ts 需要的 --experimental-strip-types
+      - name: 构建 debug APK
+        run: npm run android:apk
+
+      - name: 重命名成带版本号的文件名
+        run: |
+          mkdir -p upload
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+             "upload/yiduo-yixing-${{ needs.test.outputs.version }}-android-debug.apk"
+          ls -lh upload/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          if-no-files-found: error
+          path: upload/*.apk
+
+  release:
+    name: 发布 Release
+    needs: [test, linux-windows, windows-setup, mac, android]
+    # 某个平台打包失败时,已经成功的那几个包照样发出去。
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - name: 收集各平台产物
+        uses: actions/download-artifact@v4
+        with:
+          path: assets
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: 列出要挂上去的文件
+        run: ls -lh assets/ || echo "(没有任何产物)"
+
+      - name: 生成 Release 说明
+        env:
+          VERSION: ${{ needs.test.outputs.version }}
+        run: |
+          cat > RELEASE_BODY.md <<EOF
+          # 🌸 一朵一星 ⭐ $VERSION
+
+          给小朋友的 **55 款原创小游戏**合集:**188 关**战役地图,还有双人对战和无尽挑战。
+          **没有广告、没有内购、不用注册、不联网、不收集任何数据。**
+
+          ## 下载哪一个?
+
+          | 文件 | 适用 | 怎么用 |
+          | ---- | ---- | ---- |
+          EOF
+
+          # 只列真的打出来了的包,免得表里写着某个文件、Release 上却没有。
+          missing=""
+          add() {
+            local pattern="$1" who="$2" how="$3" found=0 f
+            for f in assets/$pattern; do
+              [ -e "$f" ] || continue
+              found=1
+              echo "| \`$(basename "$f")\` | $who | $how |" >> RELEASE_BODY.md
+            done
+            [ "$found" = 1 ] || missing="$missing $4"
+          }
+
+          add "*-win-setup.exe"        "Windows 10/11"              "**推荐**。双击安装,开始菜单和桌面会有图标" "Windows 安装器"
+          add "*-win-portable.exe"     "Windows 10/11"              "免安装,双击直接玩,可放 U 盘"           "Windows 便携版"
+          add "*-mac-arm64.dmg"        "Apple 芯片 Mac(M1/M2/M3…)"  "双击打开,把图标拖进「应用程序」"          "Mac(Apple 芯片)"
+          add "*-mac-x64.dmg"          "Intel 芯片 Mac"             "双击打开,把图标拖进「应用程序」"          "Mac(Intel)"
+          add "*-mac-*.zip"            "Mac(不想用 dmg 就下这个)"   "解压出来就是 App,拖进「应用程序」"        "Mac zip"
+          add "*.AppImage"             "Linux x64"                  "\`chmod +x\` 之后双击运行"               "Linux AppImage"
+          add "*-android-debug.apk"    "安卓手机/平板"              "传到手机点开安装(需允许「安装未知来源应用」)" "安卓 APK"
+
+          if [ -n "$missing" ]; then
+            {
+              echo ""
+              echo "> 这次没能打出来的包:**${missing# }**。晚点会补上,先用上面这些。"
+            } >> RELEASE_BODY.md
+          fi
+
+          cat >> RELEASE_BODY.md <<EOF
+
+          ## 第一次打开要注意
+
+          - **Mac**:这个包没有花钱买苹果开发者签名,直接双击会提示「无法打开」。
+            请在「应用程序」里 **右键点图标 → 选「打开」→ 再点一次「打开」**,之后就能正常双击了。
+          - **Windows**:SmartScreen 可能提示「不常见的应用」,点「更多信息 → 仍要运行」即可。
+          - **安卓**:是 debug 版签名的 APK,安装时按提示允许即可;不会覆盖应用商店里的其它应用。
+
+          ## 也可以不装
+
+          手机上直接用浏览器打开网页版,再「添加到主屏幕」就能全屏离线玩(PWA),
+          做法见仓库 README 的「手机上安装」一节。
+
+          ---
+          源码与更新记录见仓库;安装包由 GitHub Actions 在打 tag 时自动构建。
+          EOF
+          cat RELEASE_BODY.md
+
+      - name: 挂到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: 一朵一星 ${{ needs.test.outputs.version }}
+          body_path: RELEASE_BODY.md
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: |
+            assets/*
+            docs/demos/*.mp4

@@ -22,11 +22,16 @@ import {
   descend,
   findFloating,
   floodSameColor,
+  ceilingRow,
+  countBounces,
   isClearable,
   isStone,
+  landingBounceMap,
+  minBouncesToCell,
   nearDeadline,
   neighbors,
   parseLayout,
+  pressCeiling,
   releaseLoneRainbows,
   rowLength,
   failedSpeechLine,
@@ -39,10 +44,16 @@ import {
 import {
   type BubbleLevelDef,
   type MechKind,
+  LEGACY_LEVELS,
   LEVELS,
   THEMES,
   THEME_SIZES,
+  TIGHT_BUDGET,
+  clearableCount,
+  isTightShots,
   levelMechanisms,
+  parseStars,
+  shotBudget,
   themeOfLevel,
   themeStart,
 } from "./levels";
@@ -411,19 +422,20 @@ describe("bubble-aim 胜负与星级", () => {
   });
 });
 
-describe("bubble-aim 关卡数据（99 关 · 6 主题）", () => {
-  it("正好 99 关、6 大主题，主题大小与下标换算一致", () => {
-    expect(LEVELS.length).toBe(99);
-    expect(THEMES.length).toBe(6);
-    expect(THEME_SIZES.length).toBe(6);
-    expect(THEME_SIZES.reduce((a, b) => a + b, 0)).toBe(99);
+describe("bubble-aim 关卡数据（188 关 · 9 主题）", () => {
+  it("正好 188 关、9 大主题，主题大小与下标换算一致", () => {
+    expect(LEVELS.length).toBe(188);
+    expect(THEMES.length).toBe(9);
+    expect(THEME_SIZES.length).toBe(9);
+    expect(THEME_SIZES.reduce((a, b) => a + b, 0)).toBe(188);
     for (const n of THEME_SIZES) expect(n).toBeGreaterThanOrEqual(16);
-    for (let t = 0; t < 6; t++) {
+    for (let t = 0; t < THEME_SIZES.length; t++) {
       expect(themeOfLevel(themeStart(t))).toBe(t);
       expect(themeOfLevel(themeStart(t) + THEME_SIZES[t] - 1)).toBe(t);
     }
     expect(themeOfLevel(0)).toBe(0);
     expect(themeOfLevel(98)).toBe(5);
+    expect(themeOfLevel(187)).toBe(8);
   });
 
   it("布局都合法且子弹数为正", () => {
@@ -465,9 +477,21 @@ describe("bubble-aim 关卡数据（99 关 · 6 主题）", () => {
       }
     }
     // 主题 5:下落新行至少 9 关,并且大量组合关
-    const t5 = LEVELS.slice(themeStart(5));
+    const t5 = LEVELS.slice(themeStart(5), themeStart(6));
     expect(t5.filter((lv) => levelMechanisms(lv).includes("drop")).length).toBeGreaterThanOrEqual(9);
     expect(t5.filter((lv) => levelMechanisms(lv).length >= 2).length).toBeGreaterThanOrEqual(10);
+    // 1.1 追加的三章各有自己的招牌机关
+    const newSig: Array<[number, MechKind]> = [
+      [6, "bank"],
+      [7, "press"],
+      [8, "tight"],
+    ];
+    for (const [t, kind] of newSig) {
+      for (let k = 0; k < THEME_SIZES[t]; k++) {
+        const lv = LEVELS[themeStart(t) + k];
+        expect(levelMechanisms(lv), `${THEMES[t].name}·${lv.name}`).toContain(kind);
+      }
+    }
   });
 
   it("前 4 关无机关热身，最终章组合大杂烩", () => {
@@ -591,7 +615,7 @@ interface BotOutcome {
 
 /**
  * 贪心机器人：每发在 20°~160° 里扫一遍角度，用和游戏完全相同的
- * simulateShot / settleShot / damageStone 结算，挑得分最高的一击。
+ * simulateShot / settleShot / damageStone / pressCeiling 结算，挑得分最高的一击。
  * 颜色用种子随机从场上颜色里抽，模拟真实弹药队列。
  */
 function botPlay(def: BubbleLevelDef, seed = 1): BotOutcome {
@@ -599,6 +623,8 @@ function botPlay(def: BubbleLevelDef, seed = 1): BotOutcome {
   const obs: Obstacles = { clouds: def.clouds, holes: def.holes };
   const dropQueue = [...(def.dropRows ?? [])];
   const dropEvery = def.dropEvery ?? 0;
+  const pressEvery = def.pressEvery ?? 0;
+  let pressLeft = pressEvery > 0 ? (def.pressMax ?? 0) : 0;
   let rng = seed >>> 0;
   const rand = (): number => {
     rng = (rng * 1664525 + 1013904223) >>> 0;
@@ -665,6 +691,10 @@ function botPlay(def: BubbleLevelDef, seed = 1): BotOutcome {
     if (dropEvery > 0 && dropQueue.length > 0 && fired % dropEvery === 0) {
       descend(g, dropQueue.shift()!);
     }
+    if (pressEvery > 0 && pressLeft > 0 && fired % pressEvery === 0) {
+      pressCeiling(g);
+      pressLeft--;
+    }
     releaseLoneRainbows(g);
     if (countBubbles(g) === 0) return { won: true, shotsUsed: fired };
     if (crossedDeadline(g)) return { won: false, shotsUsed: fired };
@@ -677,8 +707,8 @@ function botPlay(def: BubbleLevelDef, seed = 1): BotOutcome {
   return { won: countBubbles(g) === 0, shotsUsed: fired };
 }
 
-describe("bubble-aim 可解性（99 关贪心机器人实测过关）", () => {
-  // 全部 99 关都要能被贪心机器人打通（弹药颜色随机，最多试 3 种运气种子）
+describe("bubble-aim 可解性（188 关贪心机器人实测过关）", () => {
+  // 全部 188 关都要能被贪心机器人打通（弹药颜色随机，最多试 3 种运气种子）
   LEVELS.forEach((def, index) => {
     it(`第 ${index + 1} 关「${def.name}」在 ${def.shots} 发内可以打通`, () => {
       let outcome = botPlay(def, 1);
@@ -687,6 +717,268 @@ describe("bubble-aim 可解性（99 关贪心机器人实测过关）", () => {
       expect(outcome.won, `${def.name} 机器人没打通`).toBe(true);
       expect(outcome.shotsUsed).toBeLessThanOrEqual(def.shots);
     });
+  });
+});
+
+/* ================= 1.1:99 → 188 ================= */
+
+const NEW_START = LEGACY_LEVELS;
+const NEW_LEVELS = LEVELS.slice(NEW_START);
+
+/** 前 99 关的「指纹」:任何一处参数被改动都会对不上 */
+function fnv(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16);
+}
+
+describe("bubble-aim 1.1 · 顶板下压", () => {
+  it("ceilingRow 长度跟着翻转后的顶行走（8/9 交替）", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    expect(ceilingRow(g)).toBe(STONE.repeat(COLS - 1));
+    pressCeiling(g);
+    expect(ceilingRow(g)).toBe(STONE.repeat(COLS));
+  });
+
+  it("压一层：顶上多出一整行石板，原有泡泡整体下移一行、横向不动", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    const before = cellCenter(g, 0, 0);
+    pressCeiling(g);
+    expect(g.rows[0].every((c) => c === STONE)).toBe(true);
+    expect(g.rows[0]).toHaveLength(COLS - 1);
+    expect(g.rows[1][0]).toBe("R");
+    const after = cellCenter(g, 1, 0);
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.y).toBeCloseTo(before.y + ROW_H);
+  });
+
+  it("压下来的石板会接着当挂点，下面的泡泡不会整片掉光", () => {
+    const g = parseLayout(["RRRGGGBBB", "RRRGGBBB"]);
+    pressCeiling(g);
+    expect(findFloating(g)).toHaveLength(0);
+    pressCeiling(g);
+    expect(findFloating(g)).toHaveLength(0);
+  });
+
+  it("石板不算待清空泡泡：清光彩泡就算赢，石板只负责压", () => {
+    const g = parseLayout(["RRR......"]);
+    const before = countBubbles(g);
+    pressCeiling(g);
+    expect(countBubbles(g)).toBe(before);
+    expect(countStones(g)).toBe(COLS - 1);
+    for (let c = 0; c < 3; c++) g.rows[1][c] = null;
+    expect(countBubbles(g)).toBe(0);
+  });
+
+  it("一层层压下去，泡泡迟早会越过警戒线", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    expect(crossedDeadline(g)).toBe(false);
+    for (let i = 0; i < DEADLINE_ROW; i++) pressCeiling(g);
+    expect(crossedDeadline(g)).toBe(true);
+  });
+
+  it("压过之后邻居关系照样正确（奇偶跟着翻）", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    pressCeiling(g);
+    const n = neighbors(g, 0, 0).map(([r, c]) => `${r},${c}`);
+    expect(n).toContain("1,0");
+    expect(n).toContain("1,1");
+  });
+});
+
+describe("bubble-aim 1.1 · 反弹死角", () => {
+  it("countBounces 只数折点，起点终点不算", () => {
+    expect(countBounces([{ x: 0, y: 0 }, { x: 1, y: 1 }])).toBe(0);
+    expect(countBounces([{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }])).toBe(1);
+    expect(countBounces([{ x: 0, y: 0 }])).toBe(0);
+  });
+
+  it("空场直射顶行是 0 折，斜着撞墙就有折点", () => {
+    const g = parseLayout(["........."]);
+    expect(countBounces(simulateShot(g, SHOOTER_X, SHOOTER_Y, 0, -1).path)).toBe(0);
+    expect(
+      countBounces(simulateShot(g, SHOOTER_X, SHOOTER_Y, 0.96, -0.28).path)
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("landingBounceMap 扫一圈就能给出每个落点的最少折数", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    const map = landingBounceMap(g, SHOOTER_X, SHOOTER_Y);
+    expect(map.size).toBeGreaterThan(3);
+    for (const n of map.values()) expect(n).toBeGreaterThanOrEqual(0);
+    // 正对着发射台的那一格一定是直射够得到的
+    const straight = simulateShot(g, SHOOTER_X, SHOOTER_Y, 0, -1).landing!;
+    expect(map.get(`${straight.r},${straight.c}`)).toBe(0);
+  });
+
+  it("minBouncesToCell 对够不到的格子返回 Infinity", () => {
+    const g = parseLayout(["RRRGGGBBB"]);
+    expect(minBouncesToCell(g, { r: 0, c: 0 }, SHOOTER_X, SHOOTER_Y)).toBe(Infinity);
+  });
+
+  it("回音峡谷每一关的死角都真的要拐两次弯（直射和一次反弹都够不到）", () => {
+    for (let k = 0; k < THEME_SIZES[6]; k++) {
+      const lv = LEVELS[themeStart(6) + k];
+      expect(lv.bankTargets?.length, `${lv.name} 没标死角`).toBeGreaterThan(0);
+      const g = parseLayout(lv.layout);
+      const map = landingBounceMap(g, SHOOTER_X, SHOOTER_Y, {
+        clouds: lv.clouds,
+        holes: lv.holes,
+      });
+      for (const [r, c] of lv.bankTargets!) {
+        // 死角必须是空的、而且挂得住
+        expect(g.rows[r][c], `${lv.name} 死角 (${r},${c}) 不是空格`).toBeNull();
+        expect(
+          r === 0 || neighbors(g, r, c).some(([nr, nc]) => g.rows[nr][nc]),
+          `${lv.name} 死角 (${r},${c}) 悬空`
+        ).toBe(true);
+        const min = map.get(`${r},${c}`);
+        expect(min, `${lv.name} 死角 (${r},${c}) 根本打不到`).not.toBeUndefined();
+        expect(min, `${lv.name} 死角 (${r},${c}) 折 ${min} 次就进去了`).toBeGreaterThanOrEqual(2);
+      }
+    }
+  }, 60_000); // 30 关各扫一圈 348 个角度,慢但值得
+});
+
+describe("bubble-aim 1.1 · 限弹", () => {
+  it("clearableCount 把会压下来的新行也算进待清泡泡", () => {
+    const def: BubbleLevelDef = {
+      name: "x",
+      tip: "x",
+      layout: ["RRSGG....", "........"],
+      shots: 10,
+      dropEvery: 3,
+      dropRows: ["YYBBYYBB"],
+    };
+    expect(clearableCount(def)).toBe(4 + 8);
+    expect(shotBudget(def)).toBeCloseTo(10 / 12, 6);
+  });
+
+  it("限弹线卡在 1.0 最紧的一关之下：老 99 关一关都不算限弹", () => {
+    let minLegacy = Infinity;
+    for (let i = 0; i < LEGACY_LEVELS; i++) {
+      minLegacy = Math.min(minLegacy, shotBudget(LEVELS[i]));
+      expect(isTightShots(LEVELS[i]), `${LEVELS[i].name} 被误判成限弹`).toBe(false);
+    }
+    expect(minLegacy).toBeGreaterThan(TIGHT_BUDGET);
+  });
+
+  it("星尘试炼整章都限弹，而且比 1.0 最紧的一关还紧", () => {
+    let minLegacy = Infinity;
+    for (let i = 0; i < LEGACY_LEVELS; i++) minLegacy = Math.min(minLegacy, shotBudget(LEVELS[i]));
+    for (let k = 0; k < THEME_SIZES[8]; k++) {
+      const lv = LEVELS[themeStart(8) + k];
+      expect(isTightShots(lv), `${lv.name} 不够紧`).toBe(true);
+      expect(shotBudget(lv), lv.name).toBeLessThan(minLegacy);
+    }
+  });
+});
+
+describe("bubble-aim 1.1 · 前 99 关回归", () => {
+  it("前 99 关一笔未改（生成指纹回归），新关全部追加在末尾", () => {
+    expect(LEGACY_LEVELS).toBe(99);
+    expect(THEME_SIZES.slice(0, 6)).toEqual([17, 17, 17, 16, 16, 16]);
+    expect(THEME_SIZES.slice(6)).toEqual([30, 30, 29]);
+    expect(NEW_LEVELS).toHaveLength(89);
+    expect(fnv(JSON.stringify(LEVELS.slice(0, LEGACY_LEVELS)))).toBe("1c62ba86");
+  });
+
+  it("前 99 关一个 1.1 新机关都不沾", () => {
+    for (let i = 0; i < LEGACY_LEVELS; i++) {
+      const lv = LEVELS[i];
+      expect(lv.pressEvery, lv.name).toBeUndefined();
+      expect(lv.pressMax, lv.name).toBeUndefined();
+      expect(lv.bankTargets, lv.name).toBeUndefined();
+      const mech = levelMechanisms(lv);
+      expect(mech).not.toContain("press");
+      expect(mech).not.toContain("bank");
+      expect(mech).not.toContain("tight");
+    }
+  });
+
+  it("1.0 老存档（长度 99 的星级数组）读出来前 99 位一位不差，后面补 0", () => {
+    const legacy = Array.from({ length: 99 }, (_, i) => (i % 3) + 1);
+    const restored = parseStars(legacy);
+    expect(restored).toHaveLength(188);
+    expect(restored.slice(0, 99)).toEqual(legacy);
+    expect(restored.slice(99).every((v) => v === 0)).toBe(true);
+  });
+
+  it("老存档全通关时第 100 关正好自然解锁，脏数据一律当 0", () => {
+    const legacy = new Array(99).fill(3);
+    const restored = parseStars(legacy);
+    expect(restored[98]).toBe(3);
+    expect(restored[99]).toBe(0);
+    expect(parseStars(null)).toHaveLength(188);
+    expect(parseStars(["3", -1, 9, 2.7, Number.NaN]).slice(0, 5)).toEqual([0, 0, 0, 2, 0]);
+  });
+});
+
+describe("bubble-aim 1.1 · 三个新主题", () => {
+  it("回音峡谷 / 压顶冰川 / 星尘试炼 各自 30 / 30 / 29 关，招牌机关不越界", () => {
+    expect(THEMES.slice(6).map((t) => t.name)).toEqual(["回音峡谷", "压顶冰川", "星尘试炼"]);
+    // 死角只在回音峡谷,顶板只在压顶冰川与星尘试炼的混合关
+    for (let i = 0; i < LEVELS.length; i++) {
+      if (LEVELS[i].bankTargets) expect(themeOfLevel(i), LEVELS[i].name).toBe(6);
+      if (LEVELS[i].pressEvery) expect(themeOfLevel(i), LEVELS[i].name).toBeGreaterThanOrEqual(7);
+    }
+    for (let k = 0; k < THEME_SIZES[7]; k++) {
+      const lv = LEVELS[themeStart(7) + k];
+      expect(lv.pressEvery, lv.name).toBeGreaterThan(0);
+      expect(lv.pressMax, lv.name).toBeGreaterThan(0);
+    }
+  });
+
+  it("顶板关就算压满也留得下翻盘空间（不会一压就必输）", () => {
+    for (const lv of LEVELS) {
+      if (!lv.pressEvery) continue;
+      const g = parseLayout(lv.layout);
+      for (let i = 0; i < (lv.pressMax ?? 0); i++) pressCeiling(g);
+      expect(crossedDeadline(g), `${lv.name} 压满就直接越线了`).toBe(false);
+      // 而且压满的层数乘以间隔要够长,不能第一发就见分晓
+      expect((lv.pressMax ?? 0) * (lv.pressEvery ?? 0), lv.name).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it("新章文案面向高年级：够长、没有一个英文字母", () => {
+    for (const th of THEMES.slice(6)) {
+      expect(th.name).not.toMatch(/[A-Za-z]/);
+      expect(th.blurb).not.toMatch(/[A-Za-z]/);
+      expect(th.blurb.length).toBeGreaterThanOrEqual(10);
+    }
+    for (const lv of NEW_LEVELS) {
+      expect(lv.name, lv.name).not.toMatch(/[A-Za-z]/);
+      expect(lv.tip, lv.name).not.toMatch(/[A-Za-z]/);
+      expect(lv.tip.length, lv.name).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it("新增 89 关的机关组合足够丰富，三章各自的难度在往上走", () => {
+    const combos = new Set(NEW_LEVELS.map((lv) => levelMechanisms(lv).join(",")));
+    expect(combos.size).toBeGreaterThanOrEqual(18);
+    const avg = (t: number) => {
+      const start = themeStart(t);
+      let s = 0;
+      for (let k = 0; k < THEME_SIZES[t]; k++) s += levelMechanisms(LEVELS[start + k]).length;
+      return s / THEME_SIZES[t];
+    };
+    // 每一章都比它前面那章更花哨,而且章内也是越往后机关越多
+    expect(avg(6)).toBeGreaterThan(avg(5));
+    expect(avg(8)).toBeGreaterThan(avg(7));
+    for (const t of [6, 7, 8]) {
+      const start = themeStart(t);
+      const size = THEME_SIZES[t];
+      const head = LEVELS.slice(start, start + 10);
+      const tail = LEVELS.slice(start + size - 10, start + size);
+      const mean = (xs: typeof head) =>
+        xs.reduce((s, lv) => s + levelMechanisms(lv).length, 0) / xs.length;
+      expect(mean(tail), `第 ${t + 1} 章后段没比前段难`).toBeGreaterThan(mean(head));
+    }
+    // 最后一关七种机关一次到齐
+    expect(levelMechanisms(LEVELS[187]).length).toBeGreaterThanOrEqual(7);
   });
 });
 

@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🕒",
   category: "edu" as const,
   color: "#ffa94d",
-  blurb: "六层小屋 99 关！整点半点、1 刻 3 刻、拨针找钟面，还有时间小推理！",
+  blurb: "十层小屋 188 关！整点半点、24 小时、日历推理、时刻表，还有时间小推理！",
   // 10 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
   modes: ["campaign"] as const,
   levels: 188,

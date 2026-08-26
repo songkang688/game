@@ -9,4 +9,7 @@ export const meta = {
   category: "action" as const,
   color: "#FBEFD6",
   blurb: "188 关推箱子!帮小仓鼠把箱子推到脚印上,后面还有滑溜溜的冰面、成对的传送门和双鼠搭档。",
+  // levels.ts 七章合计 188 关;index.ts 模式条另有无尽「仓库大挑战」
+  modes: ["campaign", "endless"] as const,
+  levels: 188,
 };

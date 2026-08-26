@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🌈",
   category: "action" as const,
   color: "#e5d4ff",
-  blurb: "188 关十二大世界跑酷+无尽彩虹跑!铲彩纸箱、踩加速滑轨、三连完美跳挑战大王!",
+  blurb: "2.5D 三车道跑酷!188 关十二大世界+无尽彩虹跑,跳跃换道下滑,铲彩纸箱踩滑轨挑战大王!",
   // logic.ts 是经典 9 章 × 11 关 + 1.1 新三章 30/30/29 = 188 关;index.ts 另有无尽彩虹跑
   modes: ["campaign", "endless"] as const,
   levels: 188,

@@ -3,9 +3,12 @@
 // 特殊:S 石泡(被直接命中两次才碎、不参与连消)、W 彩虹泡(百搭)。
 // 障碍:clouds 云挡板(弹道反弹)、holes 黑洞(吞掉泡泡)、
 // dropEvery/dropRows 每打 N 发顶部压下来一行新泡泡(队列用完为止)。
+// 1.1 追加:pressEvery/pressMax 顶板每 N 发压下一整层石板、
+// bankTargets 必须靠两次以上反弹才够得到的死角、限弹(子弹预算收紧)。
 //
-// 共 99 关、6 大主题世界:20 关手工设计 + 79 关由确定性生成器按主题配方生成
-// (同一个种子永远生成同样的关卡,全部经贪心机器人实测可通关)。
+// 共 188 关、9 大主题世界:1.0 的前 99 关一字不动(20 关手工设计 + 79 关生成),
+// 1.1 在末尾追加三个主题共 89 关。生成器是确定性的:同一个种子永远生成同样的
+// 关卡,全部经贪心机器人实测可通关。
 
 import type { CloudDef, HoleDef } from "./logic";
 
@@ -21,9 +24,44 @@ export interface BubbleLevelDef {
   dropEvery?: number;
   /** 待下落的新行队列(用完就不再下落),长度按 8/9 交替 */
   dropRows?: string[];
+  /** 顶板:每打出多少发就压下来一整层石板(1.1 新增) */
+  pressEvery?: number;
+  /** 顶板最多压几层(留出翻盘空间) */
+  pressMax?: number;
+  /** 死角:必须靠两次以上反弹才够得到的空格 [行, 列](1.1 新增) */
+  bankTargets?: Array<[number, number]>;
 }
 
-export type MechKind = "stone" | "rainbow" | "cloud" | "hole" | "drop";
+export type MechKind =
+  | "stone"
+  | "rainbow"
+  | "cloud"
+  | "hole"
+  | "drop"
+  | "press"
+  | "bank"
+  | "tight";
+
+/** 一关里待清空的泡泡数:开局布局 + 会压下来的新行(石泡不算) */
+export function clearableCount(def: BubbleLevelDef): number {
+  let n = 0;
+  for (const ch of [...def.layout, ...(def.dropRows ?? [])].join("")) {
+    if (ch !== "." && ch !== "S") n++;
+  }
+  return n;
+}
+
+/** 子弹预算:平均每颗待清泡泡能分到几发。越小越紧 */
+export function shotBudget(def: BubbleLevelDef): number {
+  return def.shots / Math.max(1, clearableCount(def));
+}
+
+/** 限弹线:1.0 的 99 关里最紧的一关也有 0.66,低于这条线才算「限弹」 */
+export const TIGHT_BUDGET = 0.62;
+
+export function isTightShots(def: BubbleLevelDef): boolean {
+  return shotBudget(def) < TIGHT_BUDGET;
+}
 
 /** 一关里用到的机关种类 */
 export function levelMechanisms(def: BubbleLevelDef): MechKind[] {
@@ -34,6 +72,9 @@ export function levelMechanisms(def: BubbleLevelDef): MechKind[] {
   if ((def.clouds?.length ?? 0) > 0) out.push("cloud");
   if ((def.holes?.length ?? 0) > 0) out.push("hole");
   if ((def.dropRows?.length ?? 0) > 0) out.push("drop");
+  if ((def.pressEvery ?? 0) > 0) out.push("press");
+  if ((def.bankTargets?.length ?? 0) > 0) out.push("bank");
+  if (isTightShots(def)) out.push("tight");
   return out;
 }
 
@@ -43,6 +84,9 @@ export const MECH_INFO: Record<MechKind, { icon: string; name: string }> = {
   cloud: { icon: "☁️", name: "云挡板" },
   hole: { icon: "🕳️", name: "黑洞" },
   drop: { icon: "⬇️", name: "下落新行" },
+  press: { icon: "🧊", name: "下压顶板" },
+  bank: { icon: "🪃", name: "反弹死角" },
+  tight: { icon: "🎯", name: "限弹" },
 };
 
 /* ================= 主题世界 ================= */
@@ -68,10 +112,16 @@ export const THEMES: ThemeDef[] = [
   { name: "白云天空", icon: "☁️", blurb: "云挡板会弹开泡泡,学会借墙反弹!", skyTop: "#E4F3FF", skyBottom: "#FBFEFF", tint: "#E2F1FD", ink: "#2A6099" },
   { name: "黑洞星河", icon: "🕳️", blurb: "黑洞会吞泡泡,瞄准线躲着走!", skyTop: "#2C2A55", skyBottom: "#4A3E78", tint: "#DDDAF2", ink: "#4A3E78", dark: true },
   { name: "风暴嘉年华", icon: "🌀", blurb: "新行不断压下来,五种机关大混战!", skyTop: "#DFF3F0", skyBottom: "#FFE9D6", tint: "#DFF2EE", ink: "#1F7A6B" },
+  { name: "回音峡谷", icon: "🪃", blurb: "云墙封死正面,死角要靠两次反弹才够得到!", skyTop: "#E8F0FF", skyBottom: "#F6ECFF", tint: "#E6EDFC", ink: "#3B4E8C" },
+  { name: "压顶冰川", icon: "🧊", blurb: "顶板每隔几发就压下一层石板,手要快!", skyTop: "#E6F7FB", skyBottom: "#F2FBFF", tint: "#E2F4FA", ink: "#1F6E86" },
+  { name: "星尘试炼", icon: "🌌", blurb: "子弹卡得死紧,每一发都要打出连锁!", skyTop: "#2A2350", skyBottom: "#4B3A72", tint: "#DCD7F0", ink: "#453473", dark: true },
 ];
 
-/** 每个主题的关卡数(共 99) */
-export const THEME_SIZES = [17, 17, 17, 16, 16, 16];
+/** 1.0 的关卡数,老存档就是这么长 */
+export const LEGACY_LEVELS = 99;
+
+/** 每个主题的关卡数(前六个是 1.0 的 99 关,后三个是 1.1 追加的 89 关,共 188) */
+export const THEME_SIZES = [17, 17, 17, 16, 16, 16, 30, 30, 29];
 
 /** 关卡下标 → 主题序号 */
 export function themeOfLevel(index: number): number {
@@ -120,14 +170,25 @@ interface GenOpts {
   stoneRuns?: number;
   /** 彩虹泡个数 */
   rainbows?: number;
-  /** 云挡板布局:0 无 / 1 居中一朵 / 2 两侧各一朵 / 3 偏侧一朵 */
-  cloudKind?: 0 | 1 | 2 | 3;
+  /**
+   * 云挡板布局:0 无 / 1 居中一朵 / 2 两侧各一朵 / 3 偏侧一朵
+   * 1.1 追加:4 一整片云横在下半场只留一侧走廊 / 5 上下两片错开的回音墙
+   */
+  cloudKind?: 0 | 1 | 2 | 3 | 4 | 5;
   /** 黑洞布局:0 无 / 1 居中 / 2 两侧 / 3 偏侧 */
   holeKind?: 0 | 1 | 2 | 3;
   /** 下落新行数(0 无) */
   dropRows?: number;
   /** 额外子弹(调难度用) */
   bonusShots?: number;
+  /** 顶板每几发压一层(0 无) */
+  pressEvery?: number;
+  /** 顶板最多压几层 */
+  pressMax?: number;
+  /** 扣掉的子弹(限弹章用) */
+  penaltyShots?: number;
+  /** 子弹数下限(限弹章要压到 14 发以下时才需要动它) */
+  minShots?: number;
 }
 
 interface Run {
@@ -212,6 +273,25 @@ function genLevel(o: GenOpts): BubbleLevelDef {
     const left = rng() < 0.5;
     const w = 80 + Math.floor(rng() * 20);
     clouds = [{ x: left ? 50 + Math.floor(rng() * 16) : 300 - w - Math.floor(rng() * 16), y: 288 + Math.floor(rng() * 40), w, h: 22 }];
+  } else if (o.cloudKind === 4) {
+    // 回音走廊:一整片云横在下半场,正面封死,只在一侧留一条走廊
+    const y = 292 + Math.floor(rng() * 20);
+    const w = 186 + Math.floor(rng() * 14);
+    clouds = [{ x: rng() < 0.5 ? 41 : 319 - w, y, w, h: 22 }];
+  } else if (o.cloudKind === 5) {
+    // 双层回音墙:走廊那一侧照旧留着,走廊对面再架一小片云,
+    // 想打到小云背后的格子就得先撞墙再拐回来
+    const y = 282 + Math.floor(rng() * 12);
+    const wideLeft = rng() < 0.5;
+    const w = 178 + Math.floor(rng() * 12);
+    const sw = 58 + Math.floor(rng() * 12);
+    const sx = wideLeft
+      ? 70 + Math.floor(rng() * 16)
+      : 182 + Math.floor(rng() * 16);
+    clouds = [
+      { x: wideLeft ? 41 : 319 - w, y: y + 48, w, h: 20 },
+      { x: sx, y, w: sw, h: 20 },
+    ];
   }
 
   // 黑洞(离初始泡泡和发射台都足够远)
@@ -255,14 +335,15 @@ function genLevel(o: GenOpts): BubbleLevelDef {
     stones * 2 +
     (holes?.length ?? 0) * 2 +
     (clouds?.length ?? 0) +
-    (o.bonusShots ?? 0) +
+    (o.bonusShots ?? 0) -
+    (o.penaltyShots ?? 0) +
     4;
 
   const def: BubbleLevelDef = {
     name: o.name,
     tip: o.tip,
     layout,
-    shots: Math.max(14, shots),
+    shots: Math.max(o.minShots ?? 14, shots),
   };
   if (clouds) def.clouds = clouds;
   if (holes) def.holes = holes;
@@ -270,6 +351,16 @@ function genLevel(o: GenOpts): BubbleLevelDef {
     def.dropRows = dropRows;
     def.dropEvery = dropEvery;
   }
+  if ((o.pressEvery ?? 0) > 0) {
+    def.pressEvery = o.pressEvery;
+    def.pressMax = o.pressMax ?? 6;
+  }
+  return def;
+}
+
+/** 给一关标上「死角」坐标(离线扫过全部角度算出来,测试里逐关复验) */
+function bank(def: BubbleLevelDef, targets: Array<[number, number]>): BubbleLevelDef {
+  def.bankTargets = targets;
   return def;
 }
 
@@ -662,4 +753,271 @@ const T5: BubbleLevelDef[] = [
   ...H_STORM_FINAL,
 ];
 
-export const LEVELS: BubbleLevelDef[] = [...T0, ...T1, ...T2, ...T3, ...T4, ...T5];
+/* ================= 1.1 追加:三个新主题共 89 关 ================= */
+
+const TIP6 = "正面被云墙封死了,对着侧墙打,让泡泡拐两次弯再进死角!";
+const TIP7 = "顶板每隔几发压下一层石板,先打能让一大片掉下来的位置!";
+const TIP8 = "子弹只有这么多,每一发都得打出连锁掉落才够用!";
+
+/** 主题 6 · 回音峡谷:云墙封正面,死角靠反弹 30 关 */
+const H_ECHO: BubbleLevelDef[] = [
+  {
+    name: "回音初课",
+    tip: "云墙把正面挡死了,对着侧墙打一发,看虚线怎么拐进去。",
+    layout: [
+      "RRRYYYRRR",
+      "RRYYYYRR",
+      "..GGGGG..",
+    ],
+    clouds: [{ x: 41, y: 300, w: 206, h: 22 }],
+    bankTargets: [[3, 6], [2, 1]],
+    shots: 24,
+  },
+  {
+    name: "双层回音墙",
+    tip: "上下两片云错开了,进了走廊还得再拐一次才上得去。",
+    layout: [
+      "BBBPPPBBB",
+      "BBPPPPBB",
+      ".YYYYYYY.",
+    ],
+    clouds: [
+      { x: 41, y: 330, w: 200, h: 20 },
+      { x: 110, y: 286, w: 196, h: 20 },
+    ],
+    bankTargets: [[3, 6], [3, 2]],
+    shots: 26,
+  },
+  {
+    name: "石壁回声",
+    tip: "石泡守着走廊口,先把它敲裂再谈反弹。",
+    layout: [
+      "GGGSSGGG.",
+      "GGYYYYGG",
+      "..PPPPP..",
+    ],
+    clouds: [{ x: 105, y: 296, w: 208, h: 22 }],
+    bankTargets: [[2, 1], [2, 7]],
+    shots: 26,
+  },
+  {
+    name: "虹光回旋",
+    tip: "彩虹泡藏在死角里,拐两次弯把它接出来。",
+    layout: [
+      "YYWBBWYY.",
+      "YYBBBBYY",
+      ".GGGGGGG.",
+    ],
+    clouds: [{ x: 41, y: 306, w: 204, h: 22 }],
+    bankTargets: [[3, 7], [3, 6]],
+    shots: 24,
+  },
+];
+
+const T6: BubbleLevelDef[] = [
+  ...H_ECHO,
+  bank(g({ name: "峡谷回声", tip: TIP6, seed: 9601, palette: ["R", "Y", "G"], rows: 3, cloudKind: 4 }), [[2, 8]]),
+  bank(g({ name: "石桥回音", tip: TIP6, seed: 9602, palette: ["B", "P", "Y"], rows: 3, cloudKind: 4 }), [[2, 7], [2, 0]]),
+  bank(g({ name: "折角走廊", tip: TIP6, seed: 9603, palette: ["G", "R", "B"], rows: 3, cloudKind: 5 }), [[2, 2], [1, 1]]),
+  bank(g({ name: "两拐小径", tip: TIP6, seed: 9604, palette: ["Y", "P", "G"], rows: 3, cloudKind: 5 }), [[2, 7], [3, 6]]),
+  bank(g({ name: "回声阶梯", tip: TIP6, seed: 9605, palette: ["R", "B", "P"], rows: 4, cloudKind: 4 }), [[3, 0]]),
+  bank(g({ name: "壁上留声", tip: TIP6, seed: 9606, palette: ["G", "Y", "B"], rows: 4, cloudKind: 4, stoneRuns: 1 }), [[3, 1], [4, 8]]),
+  bank(g({ name: "回音石门", tip: TIP6, seed: 9607, palette: ["P", "R", "Y"], rows: 4, cloudKind: 5, stoneRuns: 1 }), [[4, 8], [4, 7]]),
+  bank(g({ name: "虹影折射", tip: TIP6, seed: 9608, palette: ["B", "G", "R"], rows: 4, cloudKind: 4, rainbows: 2 }), [[4, 8]]),
+  bank(g({ name: "峡口双弯", tip: TIP6, seed: 9609, palette: ["Y", "R", "G"], rows: 4, cloudKind: 5, rainbows: 2 }), [[3, 7], [4, 7]]),
+  bank(g({ name: "崖下暗窝", tip: TIP6, seed: 9610, palette: ["P", "B", "Y"], rows: 4, cloudKind: 4, stoneRuns: 2 }), [[4, 8], [3, 2]]),
+  bank(g({ name: "反弹练兵场", tip: TIP6, seed: 9611, palette: ["R", "G", "P"], rows: 4, cloudKind: 5, stoneRuns: 2 }), [[2, 2], [3, 2]]),
+  bank(g({ name: "长廊回音", tip: TIP6, seed: 9612, palette: ["G", "B", "Y"], rows: 5, cloudKind: 4 }), [[4, 1], [3, 1]]),
+  bank(g({ name: "折线迷谷", tip: TIP6, seed: 9613, palette: ["B", "R", "Y"], rows: 5, cloudKind: 5 }), [[4, 2], [4, 8]]),
+  bank(g({ name: "洞口回声", tip: "黑洞守着走廊口,反弹的时候躲远一点。", seed: 9614, palette: ["Y", "P", "R"], rows: 4, cloudKind: 4, holeKind: 1 }), [[3, 0]]),
+  bank(g({ name: "暗谷双弯", tip: "黑洞加双层云墙,虚线要看清楚再撒手。", seed: 9615, palette: ["R", "B", "G"], rows: 4, cloudKind: 5, holeKind: 1 }), [[2, 7], [3, 0]]),
+  bank(g({ name: "崖顶彩窝", tip: TIP6, seed: 9616, palette: ["P", "Y", "G"], rows: 5, cloudKind: 4, rainbows: 3 }), [[5, 6]]),
+  bank(g({ name: "回声石阵", tip: TIP6, seed: 9617, palette: ["G", "R", "B"], rows: 5, cloudKind: 5, stoneRuns: 2 }), [[4, 6], [2, 7]]),
+  bank(g({ name: "深谷折光", tip: TIP6, seed: 9618, palette: ["B", "Y", "P"], rows: 5, cloudKind: 4, rainbows: 2, stoneRuns: 1 }), [[4, 1], [5, 1]]),
+  bank(g({ name: "双壁夹音", tip: TIP6, seed: 9619, palette: ["Y", "G", "R"], rows: 5, cloudKind: 5, rainbows: 2, stoneRuns: 1 }), [[4, 8], [4, 2]]),
+  bank(g({ name: "谷底藏虹", tip: TIP6, seed: 9630, palette: ["R", "P", "B"], rows: 5, cloudKind: 4, rainbows: 3, stoneRuns: 1 }), [[4, 7], [5, 6]]),
+  bank(g({ name: "回音钟塔", tip: TIP6, seed: 9621, palette: ["G", "B", "P"], rows: 5, cloudKind: 5, stoneRuns: 3 }), [[5, 7], [4, 8]]),
+  bank(g({ name: "崖间飞索", tip: "黑洞挂在拐弯处,先算好第二次反弹落在哪。", seed: 9622, palette: ["Y", "R", "B"], rows: 5, cloudKind: 4, holeKind: 1, rainbows: 2 }), [[4, 1], [5, 1]]),
+  bank(g({ name: "回声穿云", tip: "双层云墙加黑洞,这是回音峡谷的正式考题。", seed: 9633, palette: ["P", "G", "Y"], rows: 5, cloudKind: 5, holeKind: 1, stoneRuns: 1 }), [[4, 3], [3, 2]]),
+  bank(g({ name: "深壁虹桥", tip: TIP6, seed: 9624, palette: ["B", "R", "G", "Y"], rows: 5, cloudKind: 4, rainbows: 3, stoneRuns: 2 }), [[5, 1], [4, 1]]),
+  bank(g({ name: "回音大厅", tip: TIP6, seed: 9625, palette: ["R", "Y", "P", "G"], rows: 5, cloudKind: 5, rainbows: 3, stoneRuns: 2 }), [[4, 3], [3, 2]]),
+  bank(g({ name: "峡谷终章", tip: "回音峡谷毕业考:云墙、石泡、彩虹、黑洞一起上!", seed: 9626, palette: ["G", "P", "B", "R"], rows: 5, cloudKind: 5, rainbows: 3, stoneRuns: 2, holeKind: 1, bonusShots: 3 }), [[4, 2], [5, 6]]),
+];
+
+/** 主题 7 · 压顶冰川:顶板下压 30 关 */
+const H_GLACIER: BubbleLevelDef[] = [
+  {
+    name: "初见顶板",
+    tip: "每打 7 发,顶上就压下来一整层石板,别磨蹭。",
+    layout: [
+      "RRRGGGRRR",
+      "RRGGGGRR",
+    ],
+    pressEvery: 7,
+    pressMax: 5,
+    shots: 22,
+  },
+  {
+    name: "冰层加速",
+    tip: "这次每 6 发就压一层,优先打能让一大片掉下来的位置。",
+    layout: [
+      "BBBYYYBBB",
+      "BBYYYYBB",
+      "..PPPPP..",
+    ],
+    pressEvery: 6,
+    pressMax: 5,
+    shots: 24,
+  },
+  {
+    name: "板下彩虹",
+    tip: "彩虹泡能一次串起两团同色,留给最长的一串。",
+    layout: [
+      "GGWPPWGG.",
+      "GGPPPPGG",
+    ],
+    pressEvery: 6,
+    pressMax: 5,
+    shots: 22,
+  },
+  {
+    name: "冰川石心",
+    tip: "石泡是整片泡泡的挂钩,敲碎它上面全掉。",
+    layout: [
+      "YYYSSYYY.",
+      "YYBBBBYY",
+      "..GGGG...",
+    ],
+    pressEvery: 7,
+    pressMax: 5,
+    shots: 26,
+  },
+];
+
+const T7: BubbleLevelDef[] = [
+  ...H_GLACIER,
+  g({ name: "冰原初雪", tip: TIP7, seed: 9701, palette: ["R", "Y", "B"], rows: 2, pressEvery: 8, pressMax: 5 }),
+  g({ name: "雪线下压", tip: TIP7, seed: 9702, palette: ["G", "P", "Y"], rows: 2, pressEvery: 8, pressMax: 5 }),
+  g({ name: "冰锥垂落", tip: TIP7, seed: 9703, palette: ["B", "R", "G"], rows: 3, pressEvery: 8, pressMax: 5 }),
+  g({ name: "霜壁回廊", tip: TIP7, seed: 9704, palette: ["Y", "P", "B"], rows: 3, pressEvery: 7, pressMax: 5 }),
+  g({ name: "碎冰小径", tip: TIP7, seed: 9705, palette: ["R", "G", "P"], rows: 3, pressEvery: 7, pressMax: 5, stoneRuns: 1 }),
+  g({ name: "冰湖倒影", tip: TIP7, seed: 9706, palette: ["G", "B", "Y"], rows: 3, pressEvery: 7, pressMax: 5, rainbows: 2 }),
+  g({ name: "板缝求生", tip: TIP7, seed: 9707, palette: ["P", "R", "Y"], rows: 3, pressEvery: 6, pressMax: 5 }),
+  g({ name: "雪檐悬冰", tip: TIP7, seed: 9708, palette: ["B", "Y", "G"], rows: 3, pressEvery: 6, pressMax: 5, stoneRuns: 1 }),
+  g({ name: "冰河裂谷", tip: TIP7, seed: 9709, palette: ["R", "P", "B"], rows: 4, pressEvery: 7, pressMax: 5 }),
+  g({ name: "霜花簇拥", tip: TIP7, seed: 9710, palette: ["Y", "G", "R"], rows: 4, pressEvery: 7, pressMax: 5, rainbows: 2 }),
+  g({ name: "顶板双压", tip: TIP7, seed: 9711, palette: ["G", "B", "P"], rows: 4, pressEvery: 6, pressMax: 5, stoneRuns: 1 }),
+  g({ name: "冰窟回声", tip: "顶板加云挡板,先想好路线再发射。", seed: 9712, palette: ["B", "R", "Y"], rows: 3, pressEvery: 7, pressMax: 5, cloudKind: 3 }),
+  g({ name: "雪夜黑洞", tip: "顶板压着,黑洞还在吞泡泡,别浪费子弹。", seed: 9713, palette: ["P", "Y", "G"], rows: 3, pressEvery: 7, pressMax: 5, holeKind: 3 }),
+  g({ name: "冰晶塔楼", tip: TIP7, seed: 9714, palette: ["R", "B", "G"], rows: 4, pressEvery: 6, pressMax: 5, rainbows: 2 }),
+  g({ name: "极地风口", tip: TIP7, seed: 9715, palette: ["Y", "P", "R"], rows: 4, pressEvery: 6, pressMax: 5, stoneRuns: 2 }),
+  g({ name: "冰脊连绵", tip: TIP7, seed: 9716, palette: ["G", "R", "B"], rows: 4, pressEvery: 6, pressMax: 6 }),
+  g({ name: "板压虹桥", tip: TIP7, seed: 9717, palette: ["B", "G", "P"], rows: 4, pressEvery: 6, pressMax: 6, rainbows: 3 }),
+  g({ name: "霜甲石阵", tip: TIP7, seed: 9718, palette: ["P", "B", "Y"], rows: 4, pressEvery: 6, pressMax: 6, stoneRuns: 2 }),
+  g({ name: "冰川夹缝", tip: "顶板加云挡板,窄缝里更要算准反弹。", seed: 9719, palette: ["R", "Y", "G"], rows: 4, pressEvery: 6, pressMax: 6, cloudKind: 3 }),
+  g({ name: "深蓝冰渊", tip: "顶板压着还有黑洞,每一发都得有收益。", seed: 9720, palette: ["B", "P", "R"], rows: 4, pressEvery: 6, pressMax: 6, holeKind: 3 }),
+  g({ name: "雪崩前夜", tip: TIP7, seed: 9721, palette: ["G", "Y", "P"], rows: 4, pressEvery: 5, pressMax: 6 }),
+  g({ name: "碎板求生", tip: TIP7, seed: 9722, palette: ["Y", "R", "B"], rows: 4, pressEvery: 5, pressMax: 6, rainbows: 2 }),
+  g({ name: "冰封石心", tip: TIP7, seed: 9723, palette: ["P", "G", "R"], rows: 4, pressEvery: 5, pressMax: 6, stoneRuns: 2 }),
+  g({ name: "极夜压顶", tip: "顶板、石泡、彩虹一起来,先清最下面那一串。", seed: 9724, palette: ["B", "Y", "G"], rows: 4, pressEvery: 5, pressMax: 6, stoneRuns: 1, rainbows: 2 }),
+  g({ name: "冰川终章", tip: "压顶冰川毕业考:顶板压得最凶的一关!", seed: 9725, palette: ["R", "G", "B", "P"], rows: 4, pressEvery: 5, pressMax: 6, stoneRuns: 2, rainbows: 2, bonusShots: 3 }),
+  g({ name: "冰下暗河", tip: "顶板加黑洞加云墙,冰川的隐藏考题。", seed: 9726, palette: ["Y", "B", "P"], rows: 4, pressEvery: 6, pressMax: 6, holeKind: 3, cloudKind: 3, bonusShots: 2 }),
+];
+
+/** 主题 8 · 星尘试炼:限弹 + 全机关混战 29 关 */
+const H_STARDUST: BubbleLevelDef[] = [
+  {
+    name: "星尘节流",
+    tip: "子弹一下子少了一半,先找能一次带下一大片的位置。",
+    layout: [
+      "YYYRRRYYY",
+      "YYRRRRYY",
+      "..BBBBB..",
+    ],
+    shots: 13,
+  },
+  {
+    name: "省弹练习",
+    tip: "打断「腰」,上面挂着的整串都会掉,这才是省子弹的办法。",
+    layout: [
+      "BBBBBBBBB",
+      "BBPPPPBB",
+      "..YYYYY..",
+      "...YYY..",
+    ],
+    shots: 15,
+  },
+];
+
+const T8: BubbleLevelDef[] = [
+  ...H_STARDUST,
+  g({ name: "星屑初炼", tip: TIP8, seed: 9801, palette: ["R", "Y", "G"], rows: 3, penaltyShots: 5, minShots: 10 }),
+  g({ name: "陨石节奏", tip: TIP8, seed: 9802, palette: ["B", "P", "Y"], rows: 3, penaltyShots: 5, minShots: 10 }),
+  g({ name: "星轨连锁", tip: TIP8, seed: 9803, palette: ["G", "R", "B"], rows: 4, penaltyShots: 6, minShots: 10 }),
+  g({ name: "尘埃计数", tip: TIP8, seed: 9804, palette: ["Y", "G", "P"], rows: 4, penaltyShots: 6, minShots: 10 }),
+  g({ name: "银河省弹", tip: TIP8, seed: 9805, palette: ["P", "B", "R"], rows: 4, penaltyShots: 6, minShots: 10, rainbows: 2 }),
+  g({ name: "星岩掉落", tip: TIP8, seed: 9806, palette: ["R", "G", "Y"], rows: 4, penaltyShots: 10, minShots: 10, stoneRuns: 1 }),
+  g({ name: "流星走廊", tip: TIP8, seed: 9807, palette: ["B", "Y", "G"], rows: 4, penaltyShots: 6, minShots: 10, cloudKind: 3 }),
+  g({ name: "黑洞节流", tip: TIP8, seed: 9808, palette: ["G", "P", "R"], rows: 4, penaltyShots: 6, minShots: 10, holeKind: 3 }),
+  g({ name: "星尘虹弦", tip: TIP8, seed: 9809, palette: ["Y", "R", "B"], rows: 5, penaltyShots: 7, minShots: 10, rainbows: 3 }),
+  g({ name: "碎星石垒", tip: TIP8, seed: 9810, palette: ["P", "G", "B"], rows: 5, penaltyShots: 12, minShots: 10, stoneRuns: 2 }),
+  g({ name: "星云窄门", tip: TIP8, seed: 9811, palette: ["R", "B", "P"], rows: 5, penaltyShots: 7, minShots: 10, cloudKind: 4 }),
+  g({ name: "双洞省弹", tip: TIP8, seed: 9812, palette: ["G", "Y", "R"], rows: 5, penaltyShots: 7, minShots: 10, holeKind: 2 }),
+  g({ name: "冰尘压顶", tip: "顶板压着还限弹,这一关只能靠连锁。", seed: 9813, palette: ["B", "P", "Y"], rows: 3, penaltyShots: 5, minShots: 10, pressEvery: 7, pressMax: 5 }),
+  g({ name: "星雨压城", tip: "新行压下来还限弹,先把最下面一串清掉。", seed: 9814, palette: ["Y", "G", "B"], rows: 2, penaltyShots: 4, minShots: 10, dropRows: 1 }),
+  g({ name: "虹尘回响", tip: TIP8, seed: 9815, palette: ["P", "R", "G"], rows: 5, penaltyShots: 7, minShots: 10, rainbows: 3, cloudKind: 5 }),
+  g({ name: "石尘窄巷", tip: TIP8, seed: 9816, palette: ["R", "Y", "B"], rows: 5, penaltyShots: 13, minShots: 10, stoneRuns: 2, cloudKind: 3 }),
+  g({ name: "星穹裂隙", tip: TIP8, seed: 9817, palette: ["G", "B", "P"], rows: 5, penaltyShots: 7, minShots: 10, holeKind: 3, rainbows: 2 }),
+  g({ name: "尘暴压顶", tip: "顶板加石泡还限弹,先敲支点。", seed: 9818, palette: ["Y", "P", "R"], rows: 3, penaltyShots: 7, minShots: 10, pressEvery: 6, pressMax: 5, stoneRuns: 1 }),
+  g({ name: "银沙连锁", tip: TIP8, seed: 9819, palette: ["B", "G", "Y"], rows: 5, penaltyShots: 8, minShots: 10, rainbows: 3, stoneRuns: 1 }),
+  g({ name: "星门回音", tip: "云墙封正面,子弹还少,反弹要一次到位。", seed: 9820, palette: ["P", "R", "B"], rows: 5, penaltyShots: 7, minShots: 10, cloudKind: 5, rainbows: 2 }),
+  g({ name: "陨坑黑洞", tip: TIP8, seed: 9821, palette: ["R", "G", "P"], rows: 5, penaltyShots: 11, minShots: 10, holeKind: 2, stoneRuns: 1 }),
+  g({ name: "冰星双压", tip: "顶板压着、新行也压着,还限弹。", seed: 9822, palette: ["G", "Y", "B"], rows: 2, penaltyShots: 4, minShots: 10, pressEvery: 7, pressMax: 4, dropRows: 1 }),
+  g({ name: "星海虹潮", tip: TIP8, seed: 9823, palette: ["B", "R", "Y", "G"], rows: 5, penaltyShots: 8, minShots: 10, rainbows: 4 }),
+  g({ name: "深空石阵", tip: TIP8, seed: 9824, palette: ["Y", "B", "P"], rows: 5, penaltyShots: 20, minShots: 10, stoneRuns: 3 }),
+  g({ name: "星尘迷宫", tip: "云墙、黑洞、石泡全在,子弹却只有这些。", seed: 9825, palette: ["P", "G", "R"], rows: 5, penaltyShots: 10, minShots: 10, cloudKind: 4, holeKind: 1, stoneRuns: 1 }),
+  g({ name: "银河终试", tip: "限弹加顶板加彩虹,倒数第二关别慌。", seed: 9826, palette: ["R", "B", "G"], rows: 3, penaltyShots: 5, minShots: 10, pressEvery: 6, pressMax: 5, rainbows: 2 }),
+  {
+    name: "星尘大师",
+    tip: "八种机关全到齐,子弹卡到最紧——打完这关你就是泡泡大师!",
+    layout: [
+      "RRWSSWRR.",
+      "RRBBBBRR",
+      ".GGGGGGG.",
+    ],
+    clouds: [{ x: 41, y: 306, w: 202, h: 22 }],
+    holes: [{ x: 300, y: 258 }],
+    pressEvery: 8,
+    pressMax: 4,
+    dropEvery: 5,
+    dropRows: ["YYPPYYPP"],
+    shots: 16,
+  },
+];
+
+export const LEVELS: BubbleLevelDef[] = [
+  ...T0,
+  ...T1,
+  ...T2,
+  ...T3,
+  ...T4,
+  ...T5,
+  ...T6,
+  ...T7,
+  ...T8,
+];
+
+/**
+ * 读存档里的星级数组。
+ * 1.0 的老存档只有 99 位:前 99 位原样保留,后面补 0;
+ * 超长的截断,非数组 / 非数字 / 越界的一律当 0。
+ */
+export function parseStars(raw: unknown, total: number = LEVELS.length): number[] {
+  const arr = Array.isArray(raw) ? (raw as unknown[]) : [];
+  const out = new Array<number>(total);
+  for (let i = 0; i < total; i++) {
+    const v = arr[i];
+    out[i] = typeof v === "number" && v >= 0 && v <= 3 ? Math.floor(v) : 0;
+  }
+  return out;
+}

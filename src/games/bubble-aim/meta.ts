@@ -8,8 +8,8 @@ export const meta = {
   emoji: "🫧",
   category: "casual" as const,
   color: "#D9EFFF",
-  blurb: "99 关 6 大主题世界：石泡、彩虹、黑洞、云挡板、泡泡雨，拖一拖瞄准线全爆掉！",
-  // levels.ts 的 THEME_SIZES 合计 99 关(自带存档,没走 188 关通用框架)
+  blurb: "188 关 9 大主题世界：石泡、彩虹、黑洞、云挡板、泡泡雨、下压顶板、反弹死角与限弹，拖一拖瞄准线全爆掉！",
+  // levels.ts 的 THEME_SIZES 合计 188 关(自带存档,没走 188 关通用框架)
   modes: ["campaign"] as const,
-  levels: 99,
+  levels: 188,
 };

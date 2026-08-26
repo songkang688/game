@@ -3,6 +3,7 @@ export { meta };
 
 // 泡泡瞄准手 —— 泡泡龙玩法 + 关卡战役：
 // 选关地图、进度存档、石泡/彩虹泡/黑洞/云挡板/下落新行五种机关。
+// 1.1 追加：下压顶板（每 N 发压下一整层石板）、反弹死角、限弹三章。
 // 瞄准虚线和真实飞行用同一个 simulateShot，保证指哪打哪。
 import {
   type Grid,
@@ -28,6 +29,7 @@ import {
   isStone,
   nearDeadline,
   parseLayout,
+  pressCeiling,
   releaseLoneRainbows,
   rowLength,
   settleShot,
@@ -35,7 +37,16 @@ import {
   starsForShotsLeft,
   wonSpeechLine,
 } from "./logic";
-import { LEVELS, MECH_INFO, THEMES, THEME_SIZES, levelMechanisms, themeOfLevel, themeStart } from "./levels";
+import {
+  LEVELS,
+  MECH_INFO,
+  THEMES,
+  THEME_SIZES,
+  levelMechanisms,
+  parseStars,
+  themeOfLevel,
+  themeStart,
+} from "./levels";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -75,15 +86,7 @@ function loadProgress(): Progress {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
       const data = JSON.parse(raw) as { stars?: unknown };
-      if (Array.isArray(data.stars)) {
-        const arr = data.stars as unknown[];
-        return {
-          stars: LEVELS.map((_, i) => {
-            const v = arr[i];
-            return typeof v === "number" && v >= 0 && v <= 3 ? Math.floor(v) : 0;
-          }),
-        };
-      }
+      if (Array.isArray(data.stars)) return { stars: parseStars(data.stars) };
     }
   } catch {
     // 读不到就当新档
@@ -142,6 +145,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   let obstacles: Obstacles = {};
   let dropQueue: string[] = [];
   let dropEvery = 0;
+  let pressEvery = 0;
+  let pressLeft = 0;
   let shotsTotal = LEVELS[0].shots;
   let shotsLeft = shotsTotal;
   let shotsFired = 0;
@@ -196,7 +201,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       <button class="ba-btn ba-retry" type="button">🔄</button>
     </div>
     <div class="ba-map">
-      <div class="ba-map-title">🫧 泡泡瞄准手 · 99 关主题地图</div>
+      <div class="ba-map-title">🫧 泡泡瞄准手 · 188 关主题地图</div>
       <div class="ba-map-sub"></div>
       <div class="ba-themes"></div>
     </div>
@@ -287,7 +292,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     });
     msgEl.textContent = allCleared()
       ? "全部通关！还可以回去刷三星哦！"
-      : "点亮的关卡都能玩，一路打到风暴嘉年华！";
+      : "点亮的关卡都能玩，一路打到星尘试炼！";
   }
 
   // ---------- 关卡 ----------
@@ -300,6 +305,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (dropQueue.length > 0 && dropEvery > 0) {
       const untilDrop = dropEvery - (shotsFired % dropEvery);
       shotsText += ` ⬇️${untilDrop}`;
+    }
+    if (pressLeft > 0 && pressEvery > 0) {
+      shotsText += ` 🧊${pressEvery - (shotsFired % pressEvery)}`;
     }
     shotsEl.textContent = shotsText;
   }
@@ -326,6 +334,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     obstacles = { clouds: def.clouds, holes: def.holes };
     dropQueue = [...(def.dropRows ?? [])];
     dropEvery = def.dropEvery ?? 0;
+    pressEvery = def.pressEvery ?? 0;
+    pressLeft = pressEvery > 0 ? (def.pressMax ?? 0) : 0;
     shotsTotal = def.shots;
     shotsLeft = def.shots;
     shotsFired = 0;
@@ -485,6 +495,13 @@ export function mount(api: GameApi): { destroy: () => void } {
       descend(grid, dropQueue.shift()!);
       api.play("jump");
       msgEl.textContent = "⬇️ 新的一排泡泡压下来啦！";
+    }
+    // 顶板下压：顶上多出一整层石板，整片泡泡往警戒线推一格
+    if (pressEvery > 0 && pressLeft > 0 && shotsFired % pressEvery === 0) {
+      pressCeiling(grid);
+      pressLeft--;
+      api.play("jump");
+      msgEl.textContent = "🧊 顶板压下来一层，快清掉最下面那一串！";
     }
     refreshQueue();
     updateHud();

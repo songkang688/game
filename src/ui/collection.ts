@@ -248,8 +248,8 @@ export function drawFigure(ctx: Ctx2D, width: number, height: number, palette: F
 
   ctx.clearRect(0, 0, w, h);
 
-  // 脚下的软影子
-  circle(ctx, cx, bodyTop + bodyH + unit * 1.1, unit * 1.7, "rgba(0,0,0,0.06)");
+  // 脚下压一道扁扁的影子(不用椭圆 API,一条圆角似的矮条就够意思)
+  box(ctx, cx - unit * 1.7, bodyTop + bodyH + unit * 1.35, unit * 3.4, unit * 0.34, "rgba(90,70,110,0.10)");
 
   // 披风在身子后面
   if (palette.cape) {
@@ -263,8 +263,15 @@ export function drawFigure(ctx: Ctx2D, width: number, height: number, palette: F
     ctx.fill();
   }
 
-  // 身子
+  // 身子:方角上圆一点,看起来像件小外套
   box(ctx, cx - bodyW / 2, bodyTop, bodyW, bodyH, palette.body);
+  circle(ctx, cx, bodyTop + bodyH, bodyW / 2, palette.body);
+  // 前襟用浅色分一道,身子才不是一整坨
+  box(ctx, cx - bodyW * 0.2, bodyTop + bodyH * 0.22, bodyW * 0.4, bodyH * 0.66, palette.light);
+  // 胳膊
+  const armY = bodyTop + bodyH * 0.26;
+  box(ctx, cx - bodyW * 0.74, armY, bodyW * 0.24, bodyH * 0.46, palette.body);
+  box(ctx, cx + bodyW * 0.5, armY, bodyW * 0.24, bodyH * 0.46, palette.body);
   // 两条腿
   box(ctx, cx - bodyW * 0.34, bodyTop + bodyH, unit * 0.6, unit * 0.9, palette.body);
   box(ctx, cx + bodyW * 0.1, bodyTop + bodyH, unit * 0.6, unit * 0.9, palette.body);
@@ -272,26 +279,35 @@ export function drawFigure(ctx: Ctx2D, width: number, height: number, palette: F
   const shoeColor = palette.shoes ?? palette.light;
   box(ctx, cx - bodyW * 0.42, bodyTop + bodyH + unit * 0.9, unit * 0.9, unit * 0.45, shoeColor);
   box(ctx, cx + bodyW * 0.05, bodyTop + bodyH + unit * 0.9, unit * 0.9, unit * 0.45, shoeColor);
-  // 手套
+  // 手套套在手上
   if (palette.gloves) {
-    circle(ctx, cx - bodyW * 0.62, bodyTop + bodyH * 0.55, unit * 0.42, palette.gloves);
-    circle(ctx, cx + bodyW * 0.62, bodyTop + bodyH * 0.55, unit * 0.42, palette.gloves);
+    circle(ctx, cx - bodyW * 0.62, armY + bodyH * 0.46, unit * 0.4, palette.gloves);
+    circle(ctx, cx + bodyW * 0.62, armY + bodyH * 0.46, unit * 0.4, palette.gloves);
   }
   // 围巾
   if (palette.scarf) {
-    box(ctx, cx - bodyW * 0.6, bodyTop - unit * 0.25, bodyW * 1.2, unit * 0.5, palette.scarf);
+    box(ctx, cx - bodyW * 0.6, bodyTop - unit * 0.3, bodyW * 1.2, unit * 0.55, palette.scarf);
   }
 
   // 脑袋与脸
   circle(ctx, cx, headY, headR, palette.light);
-  circle(ctx, cx - headR * 0.35, headY + headR * 0.1, unit * 0.18, "#5b5470");
-  circle(ctx, cx + headR * 0.35, headY + headR * 0.1, unit * 0.18, "#5b5470");
-  circle(ctx, cx - headR * 0.62, headY + headR * 0.42, unit * 0.26, "rgba(255,150,180,0.5)");
-  circle(ctx, cx + headR * 0.62, headY + headR * 0.42, unit * 0.26, "rgba(255,150,180,0.5)");
+  // 头发:半个圆盖在脑袋上,颜色跟着人物走,六位主角一眼分得开
+  ctx.beginPath();
+  ctx.arc(cx, headY, headR, Math.PI, Math.PI * 2);
+  ctx.closePath();
+  ctx.fillStyle = palette.body;
+  ctx.fill();
+  box(ctx, cx - headR, headY - headR * 0.1, headR * 2, headR * 0.16, palette.body);
+  circle(ctx, cx - headR * 0.35, headY + headR * 0.22, unit * 0.19, "#5b5470");
+  circle(ctx, cx + headR * 0.35, headY + headR * 0.22, unit * 0.19, "#5b5470");
+  circle(ctx, cx - headR * 0.66, headY + headR * 0.5, unit * 0.26, "rgba(255,150,180,0.45)");
+  circle(ctx, cx + headR * 0.66, headY + headR * 0.5, unit * 0.26, "rgba(255,150,180,0.45)");
+  // 一张小小的笑嘴
+  box(ctx, cx - unit * 0.22, headY + headR * 0.58, unit * 0.44, unit * 0.12, "#c98aa0");
 
   // 护目镜盖在眼睛上
   if (palette.goggles) {
-    box(ctx, cx - headR * 0.85, headY - headR * 0.15, headR * 1.7, unit * 0.55, palette.goggles);
+    box(ctx, cx - headR * 0.9, headY + headR * 0.02, headR * 1.8, unit * 0.62, palette.goggles);
   }
 
   // 帽子
@@ -338,7 +354,9 @@ const COLLECTION_CSS = `
 .collection-body{display:flex;flex:1 1 auto;gap:14px;padding:12px 18px;overflow:hidden}
 .collection-preview{flex:0 0 232px;display:flex;flex-direction:column;align-items:center;gap:8px;
   padding:12px;border-radius:20px;background:rgba(255,255,255,.72)}
-.collection-canvas{width:200px;height:230px;border-radius:16px;background:linear-gradient(180deg,#fdfbff,#eef4ff)}
+.collection-canvas{flex:0 0 auto;width:200px;height:230px;border-radius:16px;
+  background:linear-gradient(180deg,#fdfbff,#eef4ff)}
+.collection-meta{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0}
 .collection-outfit{margin:0;font-size:13px;color:#6b4d72;text-align:center;line-height:1.5}
 .collection-bonus{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 .collection-bonus li{padding:3px 9px;border-radius:999px;background:#eaf6ff;color:#3f6d99;font-size:12px}
@@ -373,7 +391,9 @@ const COLLECTION_CSS = `
   .collection-panel{width:100%;max-height:100%;height:100%;border-radius:0;border-width:0}
   .collection-body{flex-direction:column;overflow-y:auto}
   .collection-preview{flex:0 0 auto;flex-direction:row;align-items:center;gap:12px}
-  .collection-canvas{width:104px;height:124px}
+  .collection-canvas{width:112px;height:132px}
+  .collection-meta{flex:1 1 auto;align-items:flex-start}
+  .collection-outfit{text-align:left}
   .collection-bonus{justify-content:flex-start}
   .collection-grid{overflow:visible;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 }
@@ -502,7 +522,11 @@ export function openCollection(scope?: string, opts?: OpenCollectionOptions): Co
   outfit.className = "collection-outfit";
   const bonusList = doc.createElement("ul");
   bonusList.className = "collection-bonus";
-  preview.append(canvas, outfit, bonusList);
+  // 窄屏时小人在左、文字在右,这一层包住文字才不会被挤成一列单字
+  const meta = doc.createElement("div");
+  meta.className = "collection-meta";
+  meta.append(outfit, bonusList);
+  preview.append(canvas, meta);
 
   // ---- 卡片区 ----
   const main = doc.createElement("div");
