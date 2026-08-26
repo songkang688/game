@@ -1,6 +1,10 @@
 /**
- * 贪吃毛毛虫 · 99 关关卡表。
- * 六个主题花园，每章用不同的墙型生成器（并非同一模板）：
+ * 贪吃毛毛虫 · 188 关关卡表。
+ * 前 99 关是 1.0 的六座花园，生成参数一个字都没动；
+ * 1.1 在末尾追加四座新花园（第 100–188 关）：
+ *  ⑦双子藤园=两条毛毛虫左右镜像一起走  ⑧星门花园=踩进星门从对面钻出来
+ *  ⑨巡逻小刺猬=会移动的障碍来回巡逻  ⑩窄门大考=身子太长挤不过窄门，先吃剪刀果
+ * 1.0 的六个主题花园，每章用不同的墙型生成器（并非同一模板）：
  *  ①青青草原=空地热身  ②树篱花园=横排树篱  ③石柱庭院=竖排石柱
  *  ④回字迷宫=带缺口的回字墙  ⑤十字花坛=中心十字  ⑥星光夜园=混合墙+提速
  * 墙体由确定性随机生成，同一关每次进入布局一致。
@@ -9,6 +13,16 @@ import { mulberry32, randInt, type Chapter } from "../level99";
 
 export const GRID = 13;
 
+/** 1.0 的六座花园：合计 99 关，1.1 起不再改动 */
+export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
+/** 1.0 的总关数（新花园从这里开始往后排） */
+export const LEGACY_LEVELS = 99;
+
+/** 会移动的小刺猬：[起点 x, 起点 y, 方向 dx, 方向 dy, 来回巡逻的格数] */
+export type Mover = [number, number, number, number, number];
+/** 一对星门：[甲门 x, 甲门 y, 乙门 x, 乙门 y] */
+export type Portal = [number, number, number, number];
+
 export interface SnakeLevel {
   /** 要吃到的点心数 */
   target: number;
@@ -16,6 +30,17 @@ export interface SnakeLevel {
   tickMs: number;
   /** 墙格 [x, y] 列表 */
   walls: Array<[number, number]>;
+  /** 1.1 双身位：第二条毛毛虫左右镜像跟着走，前 99 关不带 */
+  twin?: boolean;
+  /** 1.1 传送门：踩进一扇就从对面那扇钻出来，前 99 关不带 */
+  portals?: Portal[];
+  /** 1.1 会移动的障碍：小刺猬沿直线来回巡逻，前 99 关不带 */
+  movers?: Mover[];
+  /** 1.1 窄门：身子不超过 gateMax 节才挤得过去，前 99 关不带 */
+  gate?: Array<[number, number]>;
+  gateMax?: number;
+  /** 1.1 剪刀果：每隔这么多口出现一次，吃了身子短三节，前 99 关不带 */
+  trimEvery?: number;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -24,7 +49,12 @@ export const CHAPTERS: Chapter[] = [
   { name: "石柱庭院", emoji: "🏛️", color: "#EDEAE0", desc: "竖排石柱林立，小心转弯！", size: 17 },
   { name: "回字迷宫", emoji: "🌀", color: "#DCE9F5", desc: "回字形围墙，从缺口钻进去！", size: 16 },
   { name: "十字花坛", emoji: "🌼", color: "#FFF3D0", desc: "中间的十字花坛别撞上！", size: 16 },
-  { name: "星光夜园", emoji: "🌟", color: "#E3DFF5", desc: "夜里的墙更多、爬得更快！", size: 16 }
+  { name: "星光夜园", emoji: "🌟", color: "#E3DFF5", desc: "夜里的墙更多、爬得更快！", size: 16 },
+  // ↓ 1.1 追加：四座新花园，合计 89 关
+  { name: "双子藤园", emoji: "👯", color: "#E8F6E0", desc: "两条毛毛虫左右镜像一起走，哪条撞了都不行！", size: 23 },
+  { name: "星门花园", emoji: "🌀", color: "#E1EAFB", desc: "踩进星门，就会从对面那扇门钻出来！", size: 22 },
+  { name: "巡逻小刺猬", emoji: "🦔", color: "#F6EBDA", desc: "小刺猬沿着固定路线来回巡逻，看准空档再过！", size: 22 },
+  { name: "窄门大考", emoji: "🚪", color: "#F2E3F0", desc: "身子太长挤不过窄门，先吃把剪刀果变短再走！", size: 22 }
 ];
 
 function hLine(y: number, x1: number, x2: number): Array<[number, number]> {
@@ -45,9 +75,28 @@ function safe(walls: Array<[number, number]>): Array<[number, number]> {
   return walls.filter(([x, y]) => !(y === mid && x >= 1 && x <= 7));
 }
 
+/** 双子藤园还要多留一段：第二条毛毛虫出生在第 2 行右半段 */
+function safeTwin(walls: Array<[number, number]>): Array<[number, number]> {
+  return safe(walls).filter(([x, y]) => !(y === 2 && x >= GRID - 8 && x <= GRID - 2));
+}
+
+/** 去掉重复的墙格（镜像生成时可能撞车） */
+function dedupe(walls: Array<[number, number]>): Array<[number, number]> {
+  const seen = new Set<number>();
+  const out: Array<[number, number]> = [];
+  for (const [x, y] of walls) {
+    const k = y * GRID + x;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push([x, y]);
+  }
+  return out;
+}
+
 function buildLevel(ci: number, t: number, rand: () => number): SnakeLevel {
-  const speedBase = [300, 290, 280, 275, 268, 258][ci];
+  const speedBase = [300, 290, 280, 275, 268, 258, 300, 292, 286, 280][ci];
   const tickMs = Math.max(170, speedBase - t * 3);
+  const mid = Math.floor(GRID / 2);
   switch (ci) {
     case 0: {
       // 空地或一小段树篱
@@ -95,7 +144,6 @@ function buildLevel(ci: number, t: number, rand: () => number): SnakeLevel {
         ...vLine(GRID - 1 - m, m, GRID - 1 - m)
       ];
       const gaps = new Set<string>();
-      const mid = Math.floor(GRID / 2);
       // 四边中点开口，开口宽 2~3
       for (const [gx, gy] of [[mid, m], [mid, GRID - 1 - m], [m, mid], [GRID - 1 - m, mid]] as Array<[number, number]>) {
         for (let d = -1; d <= (t < 8 ? 1 : 0); d++) {
@@ -109,7 +157,6 @@ function buildLevel(ci: number, t: number, rand: () => number): SnakeLevel {
     }
     case 4: {
       // 中心十字，臂长渐长
-      const mid = Math.floor(GRID / 2);
       const arm = 2 + Math.floor(t / 5);
       const walls = [
         ...hLine(mid, mid - arm, mid + arm),
@@ -117,7 +164,7 @@ function buildLevel(ci: number, t: number, rand: () => number): SnakeLevel {
       ];
       return { target: 10 + Math.floor(t / 3), tickMs, walls: safe(walls) };
     }
-    default: {
+    case 5: {
       // 混合：随机横竖小段墙
       const n = 3 + Math.floor(t / 4);
       const walls: Array<[number, number]> = [];
@@ -134,6 +181,91 @@ function buildLevel(ci: number, t: number, rand: () => number): SnakeLevel {
       }
       return { target: 11 + Math.floor(t / 3), tickMs, walls: safe(walls) };
     }
+    case 6: {
+      // 双子藤园：墙左右对称，两条毛毛虫的出生行一律留空
+      const pairs = Math.floor(t / 5);
+      const walls: Array<[number, number]> = [];
+      for (let i = 0; i < pairs; i++) {
+        const x = randInt(rand, 2, 5);
+        const y = i % 2 === 0 ? 4 : 9;
+        walls.push([x, y], [x, y + 1], [GRID - 1 - x, y], [GRID - 1 - x, y + 1]);
+      }
+      return { target: 6 + Math.floor(t / 3), tickMs, walls: dedupe(safeTwin(walls)), twin: true };
+    }
+    case 7: {
+      // 星门花园：一道竖墙把园子分成两半，只能靠星门穿过去
+      const walls: Array<[number, number]> = [];
+      if (t >= 4) walls.push(...vLine(9, 0, GRID - 1));
+      const n = Math.floor(t / 6);
+      for (let i = 0; i < n; i++) {
+        const y = randInt(rand, 3, GRID - 4);
+        const x1 = randInt(rand, 1, 4);
+        walls.push(...hLine(y, x1, x1 + randInt(rand, 1, 2)));
+      }
+      const portals: Portal[] = [[7, 1, 11, 1], [7, GRID - 2, 11, GRID - 2]];
+      if (t >= 12) portals.push([1, 4, 11, 8]);
+      const blocked = new Set(portals.flatMap(([ax, ay, bx, by]) => [ay * GRID + ax, by * GRID + bx]));
+      return {
+        target: 8 + Math.floor(t / 3), tickMs,
+        walls: dedupe(safe(walls)).filter(([x, y]) => !blocked.has(y * GRID + x)),
+        portals
+      };
+    }
+    case 8: {
+      // 巡逻小刺猬：固定石柱少，主要靠躲会动的小刺猬
+      const walls: Array<[number, number]> = [];
+      const pillars = 1 + Math.floor(t / 8);
+      for (let i = 0; i < pillars; i++) {
+        const x = randInt(rand, 2, GRID - 3);
+        const y = i % 2 === 0 ? 1 : GRID - 2;
+        walls.push([x, y]);
+      }
+      const clean = dedupe(safe(walls));
+      const taken = new Set(clean.map(([x, y]) => y * GRID + x));
+      const movers: Mover[] = [];
+      const n = 1 + Math.floor(t / 5);
+      for (let i = 0; i < n; i++) {
+        const span = randInt(rand, 2, 4);
+        let m: Mover;
+        if (i % 2 === 0) {
+          // 竖着巡逻：上半场或下半场，绝不压到出生那一行
+          const x = randInt(rand, 2, GRID - 3);
+          const y1 = i % 4 === 0 ? randInt(rand, 0, mid - 1 - span) : randInt(rand, mid + 1, GRID - 1 - span);
+          m = [x, y1, 0, 1, span];
+        } else {
+          // 横着巡逻：贴着上下边巡，出生行照样留空
+          const y = i % 4 === 1 ? randInt(rand, 0, mid - 2) : randInt(rand, mid + 1, GRID - 2);
+          const x1 = randInt(rand, 1, GRID - 2 - span);
+          m = [x1, y, 1, 0, span];
+        }
+        // 巡逻路线压到石柱就挪走这根石柱，别让小刺猬卡死
+        for (let s = 0; s <= m[4]; s++) taken.delete((m[1] + m[3] * s) * GRID + (m[0] + m[2] * s));
+        movers.push(m);
+      }
+      return {
+        target: 9 + Math.floor(t / 3), tickMs,
+        walls: clean.filter(([x, y]) => taken.has(y * GRID + x)),
+        movers
+      };
+    }
+    default: {
+      // 窄门大考：竖墙留一扇窄门，身子短才挤得过去；剪刀果负责让你变短
+      const gy = 3 + (t % 7);
+      const walls: Array<[number, number]> = vLine(9, 0, GRID - 1).filter(([, y]) => y !== gy);
+      const gate: Array<[number, number]> = [[9, gy]];
+      if (t >= 8) {
+        const dx = 3 + (t % 5);
+        walls.push(...hLine(2, 1, GRID - 2).filter(([x]) => x !== dx));
+        gate.push([dx, 2]);
+      }
+      return {
+        target: 10 + Math.floor(t / 3), tickMs,
+        walls: dedupe(safe(walls)),
+        gate,
+        gateMax: Math.max(6, 11 - Math.floor(t / 4)),
+        trimEvery: 5
+      };
+    }
   }
 }
 
@@ -146,3 +278,85 @@ export const LEVELS: SnakeLevel[] = (() => {
   });
   return out;
 })();
+
+// ---------------------------------------------------------------------------
+// 1.1 无尽花园（纯函数，可测试）
+// ---------------------------------------------------------------------------
+
+/** 无尽花园每一座的名字：每 3 座换一种风景 */
+export const ENDLESS_GARDENS = ["露水园", "藤蔓园", "星门园", "刺猬园", "窄门园"];
+
+/** 无尽花园第 garden 座（1 基）的名字 */
+export function endlessGardenName(garden: number): string {
+  const n = Math.max(1, Math.round(garden) || 1);
+  return ENDLESS_GARDENS[(n - 1) % ENDLESS_GARDENS.length];
+}
+
+/**
+ * 无尽花园第 garden 座（1 基）：四种新机制轮着上，越往后越快，
+ * 但速度、墙量与目标口数都有封顶。
+ */
+export function endlessGarden(garden: number): SnakeLevel {
+  const n = Math.max(1, Math.round(garden) || 1);
+  const k = Math.min(n - 1, 15);
+  const rand = mulberry32(60000 + n * 197);
+  const mid = Math.floor(GRID / 2);
+  const tickMs = Math.max(180, 300 - k * 8);
+  const target = 6 + Math.floor(k / 2);
+  switch ((n - 1) % 5) {
+    case 1: {
+      const walls: Array<[number, number]> = [];
+      for (let i = 0; i < 1 + Math.floor(k / 4); i++) {
+        const x = randInt(rand, 2, 5);
+        const y = i % 2 === 0 ? 4 : 9;
+        walls.push([x, y], [x, y + 1], [GRID - 1 - x, y], [GRID - 1 - x, y + 1]);
+      }
+      return { target, tickMs, walls: dedupe(safeTwin(walls)), twin: true };
+    }
+    case 2: {
+      const portals: Portal[] = [[7, 1, 11, 1], [7, GRID - 2, 11, GRID - 2]];
+      const blocked = new Set(portals.flatMap(([ax, ay, bx, by]) => [ay * GRID + ax, by * GRID + bx]));
+      return {
+        target, tickMs,
+        walls: dedupe(safe(vLine(9, 0, GRID - 1))).filter(([x, y]) => !blocked.has(y * GRID + x)),
+        portals
+      };
+    }
+    case 3: {
+      const movers: Mover[] = [];
+      for (let i = 0; i < 1 + Math.floor(k / 4); i++) {
+        const span = randInt(rand, 2, 4);
+        const x = randInt(rand, 2, GRID - 3);
+        const y1 = i % 2 === 0 ? randInt(rand, 0, mid - 1 - span) : randInt(rand, mid + 1, GRID - 1 - span);
+        movers.push([x, y1, 0, 1, span]);
+      }
+      return { target, tickMs, walls: [], movers };
+    }
+    case 4: {
+      const gy = 3 + (k % 7);
+      return {
+        target, tickMs,
+        walls: dedupe(safe(vLine(9, 0, GRID - 1).filter(([, y]) => y !== gy))),
+        gate: [[9, gy]],
+        gateMax: Math.max(6, 11 - Math.floor(k / 4)),
+        trimEvery: 5
+      };
+    }
+    default: {
+      const walls: Array<[number, number]> = [];
+      for (let i = 0; i < Math.floor(k / 3); i++) {
+        const y = randInt(rand, 1, GRID - 2);
+        const x1 = randInt(rand, 1, GRID - 5);
+        walls.push(...hLine(y, x1, x1 + randInt(rand, 2, 3)));
+      }
+      return { target, tickMs, walls: dedupe(safe(walls)) };
+    }
+  }
+}
+
+/** 无尽花园收工时的一句话（只鼓励，不批评） */
+export function endlessLine(eaten: number, best: number): string {
+  if (eaten <= 0) return "刚出发就停下啦，慢慢转弯、别贴着围栏，下一次一定吃得到！";
+  if (eaten > best) return `新纪录！这一路你吃了 ${eaten} 口点心！`;
+  return `这次吃了 ${eaten} 口，最好成绩是 ${best} 口，再来一次准能追上！`;
+}
