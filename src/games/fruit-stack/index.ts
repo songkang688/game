@@ -181,6 +181,8 @@ interface Bowl {
   moveAim: (dx: number) => void;
   requestDrop: () => void;
   aimTo: (clientX: number) => void;
+  /** 把这一盆的状态写成读屏文字挂到画布上 */
+  describe: (paused: boolean) => void;
   destroy: () => void;
 }
 
@@ -201,6 +203,7 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
   name.style.color = opts.seat === 0 ? "#a8306a" : "#28568f";
   const wrap = el("div", "fs-canvaswrap");
   const canvas = document.createElement("canvas");
+  canvas.setAttribute("role", "img");
   wrap.appendChild(canvas);
   const nextRow = el("div", "fs-next");
   root.append(name, wrap, nextRow);
@@ -469,8 +472,23 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     }
   }
 
+  // 画布上的果子读屏读不出来,所以把这一盆的状态写成一句话挂上去;
+  // 手动冒烟脚本也靠它读盘面,不用去猜像素。
+  let lastLabel = "";
+  function describe(paused: boolean): void {
+    const who = opts.ai ? "电脑" : P_NAME[opts.seat];
+    const big = CHAIN[clamp(world.bestLevel, 0, TOP_LEVEL)].name;
+    const rest = opts.limited ? `剩${left()}颗` : "不限";
+    const text = `${who}的果盆，${world.score}分，最大「${big}」，盆里${world.fruits.length}颗，${rest}${paused ? "，已暂停" : ""}`;
+    if (text === lastLabel) return;
+    lastLabel = text;
+    canvas.setAttribute("aria-label", text);
+    canvas.setAttribute("data-drops", String(world.drops));
+  }
+
   refreshNext();
   layout(lv.box.w);
+  describe(false);
   render();
 
   return {
@@ -494,6 +512,7 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     moveAim,
     requestDrop,
     aimTo,
+    describe,
     destroy() {
       root.remove();
     },
@@ -706,6 +725,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     } else {
       clearVeil();
     }
+    refreshHud();
   }
   runtime.on(pauseBtn, "click", () => {
     opts.sfx("tap");
@@ -721,6 +741,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
       chipScore[i].textContent = `${P_EMOJI[i]}${who} ${w.score}分 · 最大「${big}」${
         opts.limited ? ` · 余 ${bowls[i].left}` : ""
       }`;
+      bowls[i].describe(paused);
     }
   }
 

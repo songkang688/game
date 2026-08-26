@@ -180,6 +180,38 @@ describe("键位与投放", () => {
   });
 });
 
+describe("画布的读屏文字", () => {
+  it("盘面读得出分数、最大果和盆里几颗", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi(dom.root).api);
+    byText("无尽果盆")!.dispatch("click");
+    flushFrames(dom, 3);
+    const canvas = dom.root.find((e) => e.tagName === "canvas")!;
+    expect(canvas.getAttribute("role")).toBe("img");
+    expect(canvas.getAttribute("aria-label")).toMatch(/朵朵的果盆，0分，最大「籽」，盆里0颗/);
+
+    fireWindow(dom, "keydown", { code: "KeyF" });
+    flushFrames(dom, 4);
+    expect(canvas.getAttribute("data-drops")).toBe("1");
+    expect(canvas.getAttribute("aria-label")).toContain("盆里1颗");
+    handle.destroy();
+  });
+
+  it("暂停的时候读屏文字会说已暂停", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi(dom.root).api);
+    byText("无尽果盆")!.dispatch("click");
+    flushFrames(dom, 3);
+    const canvas = dom.root.find((e) => e.tagName === "canvas")!;
+    expect(canvas.getAttribute("aria-label")).not.toContain("已暂停");
+    fireWindow(dom, "keydown", { code: "Escape" });
+    expect(canvas.getAttribute("aria-label")).toContain("已暂停");
+    fireWindow(dom, "keydown", { code: "Escape" });
+    expect(canvas.getAttribute("aria-label")).not.toContain("已暂停");
+    handle.destroy();
+  });
+});
+
 describe("360px 上的排布", () => {
   it("盆按 360px 的可用宽度缩放,警戒线还在画布里", async () => {
     restoreDom();
