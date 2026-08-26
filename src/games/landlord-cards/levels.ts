@@ -39,11 +39,19 @@ export interface TowerLevel {
   base: number;
   /** 发牌照顾:2 = 把最好的一手给玩家,1 = 给中间那手,0 = 全凭手气 */
   boost: 0 | 1 | 2;
-  /** 赢下来时对手阵营还剩这么多张就是 3 星 */
+  /** 赢下来时对手阵营还剩这么多张就是 3 星(按预设身份给的预告) */
   starThree: number;
   /** …这么多张就是 2 星 */
   starTwo: number;
   hint: string;
+}
+
+/**
+ * 评星门槛:当地主时对面是两个人(最多 34 张),当农民时只对一个地主(最多 20 张),
+ * 所以两种身份的门槛不一样。真正评星按「这一局实际当了什么」算,叫分叫到哪算哪。
+ */
+export function starGate(isLandlord: boolean): { three: number; two: number } {
+  return isLandlord ? { three: 14, two: 7 } : { three: 10, two: 5 };
 }
 
 const CHAPTER_HINTS = [
@@ -91,6 +99,7 @@ export function buildLevel(index: number): TowerLevel {
   // 第一章一律当地主,先把规则玩熟;之后每三关轮一次农民
   const playerIsLandlord = i < CHAPTERS[0].size ? true : i % 3 !== 2;
   const base = chapter <= 1 ? 1 : chapter <= 5 ? 2 : 3;
+  const gate = starGate(playerIsLandlord);
   return {
     index: i,
     chapter,
@@ -99,8 +108,8 @@ export function buildLevel(index: number): TowerLevel {
     playerIsLandlord,
     base,
     boost: boostOf(i),
-    starThree: playerIsLandlord ? 14 : 10,
-    starTwo: playerIsLandlord ? 7 : 5,
+    starThree: gate.three,
+    starTwo: gate.two,
     hint: CHAPTER_HINTS[chapter],
   };
 }
@@ -122,22 +131,23 @@ export function dealForLevel(lv: TowerLevel): DealResult & { playerSeat: number;
 }
 
 /** 赢下这一关能拿几星:对手阵营手上剩的牌越多,赢得越漂亮 */
-export function towerStars(remaining: number, lv: TowerLevel): 1 | 2 | 3 {
-  return rateAbove(remaining, lv.starThree, lv.starTwo);
+export function towerStars(remaining: number, isLandlord: boolean): 1 | 2 | 3 {
+  const gate = starGate(isLandlord);
+  return rateAbove(remaining, gate.three, gate.two);
 }
 
 /** 过关时那句夸奖 */
-export function towerWinLine(stars: 1 | 2 | 3, remaining: number, lv: TowerLevel): string {
-  const who = lv.playerIsLandlord ? "两个农民" : "地主";
+export function towerWinLine(stars: 1 | 2 | 3, remaining: number, isLandlord: boolean): string {
+  const who = isLandlord ? "两个农民" : "地主";
   if (stars === 3) return `${who}手上还剩 ${remaining} 张就被你走完啦,赢得真漂亮!`;
   if (stars === 2) return `稳稳拿下!${who}还剩 ${remaining} 张,再快一点就是三星。`;
-  return `赢啦!这一局咬得挺紧,下次早点把长牌型走掉会更轻松。`;
+  return "赢啦!这一局咬得挺紧,下次早点把长牌型走掉会更轻松。";
 }
 
 /** 输掉时那句安慰 */
-export function towerLoseLine(remaining: number, lv: TowerLevel): string {
+export function towerLoseLine(remaining: number, isLandlord: boolean): string {
   if (remaining <= 3) return `就差 ${remaining} 张牌!再来一次一定能赢回来。`;
-  if (lv.playerIsLandlord) return "当地主要一个人打两个,先把小牌顺出去,大牌留到最后。";
+  if (isLandlord) return "当地主要一个人打两个,先把小牌顺出去,大牌留到最后。";
   return "农民要一起使劲:队友压住了就让他走,别自己人压自己人。";
 }
 

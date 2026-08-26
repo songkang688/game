@@ -11,6 +11,7 @@ import {
   buildLevel,
   dealForLevel,
   endlessLine,
+  starGate,
   towerLoseLine,
   towerStars,
   towerWinLine,
@@ -150,33 +151,38 @@ describe("按关卡发牌", () => {
 
 describe("评星与文案", () => {
   it("对手剩的牌越多星越高", () => {
-    const lv = buildLevel(0);
-    expect(towerStars(20, lv)).toBe(3);
-    expect(towerStars(10, lv)).toBe(2);
-    expect(towerStars(2, lv)).toBe(1);
+    expect(towerStars(20, true)).toBe(3);
+    expect(towerStars(10, true)).toBe(2);
+    expect(towerStars(2, true)).toBe(1);
   });
 
   it("当农民时门槛低一些(对手只有一家)", () => {
+    expect(starGate(false).three).toBeLessThan(starGate(true).three);
+    expect(towerStars(11, false)).toBe(3);
+    expect(towerStars(11, true)).toBe(2);
+  });
+
+  it("关卡预告的门槛跟预设身份对得上", () => {
     const asFarmer = buildLevel(26);
     const asLandlord = buildLevel(24);
     expect(asFarmer.playerIsLandlord).toBe(false);
     expect(asLandlord.playerIsLandlord).toBe(true);
-    expect(asFarmer.starThree).toBeLessThan(asLandlord.starThree);
+    expect(asFarmer.starThree).toBe(starGate(false).three);
+    expect(asLandlord.starThree).toBe(starGate(true).three);
   });
 
   it("过关的话都是好话,而且会点出对手剩多少张", () => {
-    const lv = buildLevel(0);
-    expect(towerWinLine(3, 18, lv)).toContain("18");
+    expect(towerWinLine(3, 18, true)).toContain("18");
     for (const s of [1, 2, 3] as const) {
-      expect(towerWinLine(s, 9, lv)).not.toMatch(/错|不行|笨/);
+      expect(towerWinLine(s, 9, true)).not.toMatch(/错|不行|笨/);
     }
   });
 
   it("输了给的是方法,不是批评", () => {
-    expect(towerLoseLine(2, buildLevel(0))).toContain("2");
-    expect(towerLoseLine(9, buildLevel(0))).toContain("地主");
-    expect(towerLoseLine(9, buildLevel(26))).toContain("队友");
-    expect(towerLoseLine(9, buildLevel(0))).not.toMatch(/错|不行|笨/);
+    expect(towerLoseLine(2, true)).toContain("2");
+    expect(towerLoseLine(9, true)).toContain("地主");
+    expect(towerLoseLine(9, false)).toContain("队友");
+    expect(towerLoseLine(9, true)).not.toMatch(/错|不行|笨/);
   });
 });
 
