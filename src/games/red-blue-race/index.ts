@@ -185,6 +185,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       comboChip.textContent = "🎵 连击 0";
       gearEl.append(beat, comboChip);
     }
+    if (cfg.obstacles.some((o) => o.type === "item")) {
+      const tag = document.createElement("span");
+      tag.className = "rbr-chip";
+      tag.textContent = "🎁 礼物箱靠抢";
+      gearEl.appendChild(tag);
+    }
     if (cfg.aiAdapt) {
       const tag = document.createElement("span");
       tag.className = "rbr-chip";
