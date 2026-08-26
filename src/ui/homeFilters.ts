@@ -4,8 +4,8 @@
  * home.ts 只负责把结果画出来;要改「怎么筛、怎么搜、怎么排」都在这个文件里改。
  * 存档约定:收藏单独一个 key `yiduo-yixing.fav.v1`,与 save.ts、l99 进度互不影响。
  */
-import type { GameCategory, GameMeta, GameMode, GameModule } from "../engine/types";
-import { DEFAULT_LEVEL_TOTAL } from "../engine/types";
+import type { GameCategory, GameMeta, GameMode, GameModule, GamePlatform } from "../engine/types";
+import { DEFAULT_LEVEL_TOTAL, GAME_PLATFORMS } from "../engine/types";
 
 /** 分类页签:全部 + 五个分类 */
 export type Tab = "all" | GameCategory;
@@ -29,6 +29,34 @@ const CHIP_MODES: Record<Exclude<ModeChip, "all">, GameMode[]> = {
   endless: ["endless"],
   duo: ["twoPlayer", "coop"]
 };
+
+/** 平台筛选芯片(1.2 新增):与分类页签、玩法芯片、搜索四条件叠加 */
+export type PlatformChip = "all" | "mobile" | "desktop";
+
+/** 平台芯片的展示顺序与文案(home.ts 直接照着渲染) */
+export const PLATFORM_CHIPS: { key: PlatformChip; emoji: string; label: string }[] = [
+  { key: "all", emoji: "🌈", label: "全部" },
+  { key: "mobile", emoji: "📱", label: "手游" },
+  { key: "desktop", emoji: "💻", label: "端游" }
+];
+
+/**
+ * 这款游戏是否命中某个平台芯片。
+ * 没填 platform、填了 `"both"`、或者填了看不懂的脏值,一律当「两边都顺手」,手游端游都命中。
+ */
+export function matchesPlatformChip(
+  meta: Pick<GameMeta, "platform">,
+  chip: PlatformChip
+): boolean {
+  if (chip === "all") return true;
+  const raw = meta.platform;
+  const platform: GamePlatform =
+    typeof raw === "string" && (GAME_PLATFORMS as string[]).includes(raw)
+      ? (raw as GamePlatform)
+      : "both";
+  if (platform === "both") return true;
+  return platform === chip;
+}
 
 /** 收藏存档 key(1.1 新增,只存一个 id 数组) */
 export const FAV_KEY = "yiduo-yixing.fav.v1";
@@ -190,25 +218,36 @@ export function favoriteGames(games: readonly GameModule[], favIds: readonly str
 export interface HomeFilter {
   tab: Tab;
   mode: ModeChip;
+  /** 1.2 新增:手游 / 端游 */
+  platform: PlatformChip;
   query: string;
 }
 
-/** 分类 + 玩法 + 搜索三个条件叠加(缺省都当「全部」) */
+/** 分类 + 玩法 + 平台 + 搜索四个条件叠加(缺省都当「全部」) */
 export function filterGames(
   games: readonly GameModule[],
   filter: Partial<HomeFilter> = {}
 ): GameModule[] {
   const tab = filter.tab ?? "all";
   const mode = filter.mode ?? "all";
+  const platform = filter.platform ?? "all";
   const query = filter.query ?? "";
   return games.filter(
-    (g) => matchesTab(g.meta, tab) && matchesModeChip(g.meta, mode) && matchesSearch(g.meta, query)
+    (g) =>
+      matchesTab(g.meta, tab) &&
+      matchesModeChip(g.meta, mode) &&
+      matchesPlatformChip(g.meta, platform) &&
+      matchesSearch(g.meta, query)
   );
 }
 
 /** 有没有在筛/在搜(决定首页是分类分节展示还是一整片结果) */
 export function isFiltering(filter: Partial<HomeFilter> = {}): boolean {
-  return (filter.mode ?? "all") !== "all" || normalizeQuery(filter.query ?? "") !== "";
+  return (
+    (filter.mode ?? "all") !== "all" ||
+    (filter.platform ?? "all") !== "all" ||
+    normalizeQuery(filter.query ?? "") !== ""
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -240,9 +279,19 @@ export function progressBadgeText(
 export function emptyStateText(filter: Partial<HomeFilter> = {}): string {
   if (normalizeQuery(filter.query ?? "") !== "") return "没找到这个名字的游戏,换个词试试吧!";
   const mode = filter.mode ?? "all";
+  const platform = filter.platform ?? "all";
+  if (mode !== "all" && platform !== "all") {
+    const modeLabel = MODE_CHIPS.find((c) => c.key === mode)?.label ?? "这种";
+    const platformLabel = PLATFORM_CHIPS.find((c) => c.key === platform)?.label ?? "这类设备";
+    return `${platformLabel}里还没有${modeLabel}玩法的游戏,换个筛选试试吧!`;
+  }
   if (mode !== "all") {
     const label = MODE_CHIPS.find((c) => c.key === mode)?.label ?? "这种";
     return `这里还没有${label}玩法的游戏,换个筛选看看吧!`;
+  }
+  if (platform !== "all") {
+    const label = PLATFORM_CHIPS.find((c) => c.key === platform)?.label ?? "这类设备";
+    return `${label}这边还没有合适的游戏,换个筛选试试吧!`;
   }
   if ((filter.tab ?? "all") !== "all") return "这个分类还没有游戏,去别的分类看看吧!";
   return "小游戏正在路上,很快就到啦!";

@@ -11,8 +11,10 @@ import { isBgmOn, playSound, toggleBgm, toggleSound } from "../engine/audio";
 import { showParentGate } from "./parentGate";
 import { createAvatarImg } from "./avatars";
 import { RECENT_SHOWN, loadRecentIds } from "./recent";
+import { applyMobileTextVars } from "./mobileText";
 import {
   MODE_CHIPS,
+  PLATFORM_CHIPS,
   emptyStateText,
   favoriteGames,
   filterGames,
@@ -23,6 +25,7 @@ import {
   saveFavIds,
   toggleFavIds,
   type ModeChip,
+  type PlatformChip,
   type Tab
 } from "./homeFilters";
 
@@ -51,6 +54,28 @@ function hasCollection(): boolean {
   return typeof COLLECTION_MODULES[COLLECTION_PATH] === "function";
 }
 
+/**
+ * 「管理员权限」入口(1.2):`rootGate.ts` 可能还没进仓库,
+ * 同样用 glob 探一眼,模块不在就连按钮都不出现,首页绝不因此崩。
+ */
+const ROOT_GATE_MODULES = import.meta.glob("./rootGate.ts");
+const ROOT_GATE_PATH = "./rootGate.ts";
+
+function hasRootGate(): boolean {
+  return typeof ROOT_GATE_MODULES[ROOT_GATE_PATH] === "function";
+}
+
+async function openRootGateSafely(): Promise<void> {
+  const loader = ROOT_GATE_MODULES[ROOT_GATE_PATH];
+  if (typeof loader !== "function") return;
+  try {
+    const mod = (await loader()) as { requestRootOpen?: (reason: string) => Promise<boolean> };
+    await mod.requestRootOpen?.("管理员要打开直达关卡");
+  } catch {
+    // 密码门加载失败就当没这个按钮,首页照常玩
+  }
+}
+
 async function openCollectionSafely(): Promise<void> {
   const loader = COLLECTION_MODULES[COLLECTION_PATH];
   if (typeof loader !== "function") return;
@@ -76,6 +101,12 @@ const HOME_EXTRA_CSS = `
 .tabs.mode-chips{margin:0;padding-top:0;gap:10px}
 .mode-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
 .mode-chips .tab-emoji{font-size:19px}
+.tabs.platform-chips{margin:0 0 4px;padding-top:0;gap:10px}
+.platform-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
+.platform-chips .tab-emoji{font-size:19px}
+/* 管理员入口:大人才用,做得不显眼,但热区仍是 44×44 */
+.icon-btn--admin{opacity:.55;font-size:17px}
+.icon-btn--admin:hover,.icon-btn--admin:focus-visible{opacity:1}
 /* 心形是卡片的兄弟节点(按钮不能套按钮),浮在卡片右上角,热区 44×44 */
 .fav-slot{position:relative;display:flex}
 .fav-slot>.game-card,.fav-slot>.recent-card{flex:1;min-width:0}
@@ -215,6 +246,21 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   actions.append(starChip, soundBtn, bgmBtn, parentBtn);
 
+  // 管理员权限入口:密码门模块进仓库了才出现,文案不写「root」
+  if (hasRootGate()) {
+    const adminBtn = document.createElement("button");
+    adminBtn.type = "button";
+    adminBtn.className = "icon-btn icon-btn--admin";
+    adminBtn.title = "管理员权限";
+    adminBtn.setAttribute("aria-label", "管理员权限");
+    adminBtn.textContent = "🔑";
+    adminBtn.addEventListener("click", () => {
+      playSound("tap");
+      void openRootGateSafely();
+    });
+    actions.appendChild(adminBtn);
+  }
+
   // 收藏册入口:第 6 步的模块进仓库了才出现
   if (hasCollection()) {
     const collectionBtn = document.createElement("button");
@@ -276,6 +322,13 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   modeBar.setAttribute("aria-label", "玩法筛选");
   screen.appendChild(modeBar);
 
+  // ---- 平台筛选芯片(手游 / 端游,与前两排叠加) ----
+  const platformBar = document.createElement("nav");
+  platformBar.className = "tabs platform-chips";
+  platformBar.setAttribute("role", "tablist");
+  platformBar.setAttribute("aria-label", "设备筛选");
+  screen.appendChild(platformBar);
+
   // ---- 搜索框 ----
   const toolbar = document.createElement("div");
   toolbar.className = "home-toolbar";
@@ -313,6 +366,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   let activeTab: Tab = "all";
   let activeMode: ModeChip = "all";
+  let activePlatform: PlatformChip = "all";
   let query = "";
   let favIds = loadFavIds(globalThis.localStorage);
 
@@ -365,6 +419,33 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
         renderGrid();
       });
       modeBar.appendChild(btn);
+    }
+  }
+
+  function renderPlatformChips(): void {
+    platformBar.innerHTML = "";
+    for (const { key, emoji, label } of PLATFORM_CHIPS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `tab ${key === activePlatform ? "tab--active" : ""}`.trim();
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", String(key === activePlatform));
+      btn.setAttribute("aria-pressed", String(key === activePlatform));
+      const em = document.createElement("span");
+      em.className = "tab-emoji";
+      em.setAttribute("aria-hidden", "true");
+      em.textContent = emoji;
+      const text = document.createElement("span");
+      text.textContent = label;
+      btn.append(em, text);
+      btn.addEventListener("click", () => {
+        if (activePlatform === key) return;
+        activePlatform = key;
+        playSound("tap");
+        renderPlatformChips();
+        renderGrid();
+      });
+      platformBar.appendChild(btn);
     }
   }
 
@@ -545,7 +626,12 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     em.setAttribute("aria-hidden", "true");
     em.textContent = "🌱";
     const p = document.createElement("p");
-    p.textContent = emptyStateText({ tab: activeTab, mode: activeMode, query });
+    p.textContent = emptyStateText({
+      tab: activeTab,
+      mode: activeMode,
+      platform: activePlatform,
+      query
+    });
     empty.append(em, p);
     return empty;
   }
@@ -558,7 +644,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       return;
     }
 
-    const filtering = isFiltering({ mode: activeMode, query });
+    const filtering = isFiltering({ mode: activeMode, platform: activePlatform, query });
 
     // 不筛玩法也不搜索时,「全部」页签仍旧按分类分小节,孩子滚动时有方位感
     if (!filtering && activeTab === "all") {
@@ -578,7 +664,12 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       return;
     }
 
-    const shown = filterGames(games, { tab: activeTab, mode: activeMode, query });
+    const shown = filterGames(games, {
+      tab: activeTab,
+      mode: activeMode,
+      platform: activePlatform,
+      query
+    });
     if (filtering && shown.length > 0) {
       const count = document.createElement("p");
       count.className = "home-count";
@@ -611,8 +702,10 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     searchInput.focus();
   });
 
+  applyMobileTextVars(screen);
   renderTabs();
   renderModeChips();
+  renderPlatformChips();
   renderFavorites();
   renderRecent();
   renderGrid();

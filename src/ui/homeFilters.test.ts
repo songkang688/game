@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { GameMeta, GameModule } from "../engine/types";
-import { GAME_MODES } from "../engine/types";
+import { GAME_MODES, GAME_PLATFORMS } from "../engine/types";
 import {
   FAV_KEY,
   FAV_MAX,
   MODE_CHIPS,
+  PLATFORM_CHIPS,
+  matchesPlatformChip,
   emptyStateText,
   favoriteGames,
   filterGames,
@@ -343,5 +345,110 @@ describe("和已上架 meta 的约定", () => {
       if (!expected || !meta.title) continue;
       expect(pinyinInitials(meta.title), meta.id).toBe(expected);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2 新增：手游 / 端游筛选
+// ---------------------------------------------------------------------------
+
+describe("平台筛选芯片", () => {
+  it("三颗芯片就是全部 / 手游 / 端游，顺序固定", () => {
+    expect(PLATFORM_CHIPS.map((c) => c.key)).toEqual(["all", "mobile", "desktop"]);
+    expect(PLATFORM_CHIPS.map((c) => c.label)).toEqual(["全部", "手游", "端游"]);
+  });
+
+  it("芯片文案不写系统名与商店名", () => {
+    const text = PLATFORM_CHIPS.map((c) => c.label).join("");
+    expect(text).not.toMatch(/iOS|安卓|Android|应用商店|App Store/i);
+  });
+
+  it("不填 platform 的老游戏三种筛选都能找到", () => {
+    const meta = { platform: undefined };
+    expect(matchesPlatformChip(meta, "all")).toBe(true);
+    expect(matchesPlatformChip(meta, "mobile")).toBe(true);
+    expect(matchesPlatformChip(meta, "desktop")).toBe(true);
+  });
+
+  it("填 both 的游戏两边都命中", () => {
+    expect(matchesPlatformChip({ platform: "both" }, "mobile")).toBe(true);
+    expect(matchesPlatformChip({ platform: "both" }, "desktop")).toBe(true);
+  });
+
+  it("mobile 的游戏会被端游筛掉", () => {
+    expect(matchesPlatformChip({ platform: "mobile" }, "mobile")).toBe(true);
+    expect(matchesPlatformChip({ platform: "mobile" }, "desktop")).toBe(false);
+    expect(matchesPlatformChip({ platform: "mobile" }, "all")).toBe(true);
+  });
+
+  it("desktop 的游戏会被手游筛掉", () => {
+    expect(matchesPlatformChip({ platform: "desktop" }, "desktop")).toBe(true);
+    expect(matchesPlatformChip({ platform: "desktop" }, "mobile")).toBe(false);
+  });
+
+  it("脏值当 both，不抛异常", () => {
+    const dirty = { platform: "switch" } as unknown as Pick<GameMeta, "platform">;
+    expect(() => matchesPlatformChip(dirty, "mobile")).not.toThrow();
+    expect(matchesPlatformChip(dirty, "mobile")).toBe(true);
+    expect(matchesPlatformChip(dirty, "desktop")).toBe(true);
+  });
+
+  it("GAME_PLATFORMS 三个取值齐全且不重复", () => {
+    expect(GAME_PLATFORMS).toEqual(["mobile", "desktop", "both"]);
+    expect(new Set(GAME_PLATFORMS).size).toBe(3);
+  });
+});
+
+describe("四条件叠加筛选", () => {
+  const pool: GameModule[] = [
+    game({ id: "tap-only", title: "点点乐", platform: "mobile", modes: ["endless"], category: "casual" }),
+    game({ id: "keys-only", title: "双人对战", platform: "desktop", modes: ["versus", "twoPlayer"], category: "party" }),
+    game({ id: "anywhere", title: "五子棋", modes: ["campaign", "versus"], category: "party" })
+  ];
+
+  it("端游筛选选不到只适合手指的那款", () => {
+    const ids = filterGames(pool, { platform: "desktop" }).map((g) => g.meta.id);
+    expect(ids).not.toContain("tap-only");
+    expect(ids).toContain("keys-only");
+    expect(ids).toContain("anywhere");
+  });
+
+  it("手游筛选选不到只适合键盘的那款", () => {
+    const ids = filterGames(pool, { platform: "mobile" }).map((g) => g.meta.id);
+    expect(ids).toEqual(["tap-only", "anywhere"]);
+  });
+
+  it("分类 × 玩法 × 平台 × 搜索四条件一起叠", () => {
+    const ids = filterGames(pool, {
+      tab: "party",
+      mode: "versus",
+      platform: "desktop",
+      query: "zzz"
+    }).map((g) => g.meta.id);
+    expect(ids).toEqual([]);
+    const hit = filterGames(pool, { tab: "party", mode: "versus", platform: "desktop" }).map(
+      (g) => g.meta.id
+    );
+    expect(hit).toEqual(["keys-only", "anywhere"]);
+  });
+
+  it("只切平台芯片也算「在筛」", () => {
+    expect(isFiltering({ platform: "mobile" })).toBe(true);
+    expect(isFiltering({ platform: "all" })).toBe(false);
+    expect(isFiltering({})).toBe(false);
+  });
+
+  it("平台维度的空态文案是「换个筛选」的口气", () => {
+    expect(emptyStateText({ platform: "mobile" })).toContain("手游");
+    expect(emptyStateText({ platform: "desktop" })).toContain("端游");
+    expect(emptyStateText({ platform: "mobile", mode: "campaign" })).toContain("闯关");
+    expect(emptyStateText({ platform: "mobile" })).not.toMatch(/宝宝|乖乖/);
+  });
+
+  it("1.1 已有的三条筛选行为一个字都没变", () => {
+    expect(matchesTab({ category: "party" }, "party")).toBe(true);
+    expect(matchesModeChip({ modes: ["coop"] }, "duo")).toBe(true);
+    expect(matchesSearch({ id: "gomoku", title: "五子棋" }, "wzq")).toBe(true);
+    expect(filterGames(pool, {}).length).toBe(3);
   });
 });

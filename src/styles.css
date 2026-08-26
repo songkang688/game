@@ -1702,3 +1702,95 @@ html {
     opacity: 0.22;
   }
 }
+
+/* ===========================================================================
+   1.2 mobile text —— 360px 手机上的文字约定
+   正文 ≥16px、行高 ≥1.4、标题 clamp() 到 ≥20px、长文案能断行、底部躲开 Home 条。
+   颜色一个都不动:对比度归 src/ui/contrast.ts 管,那份检查必须继续通过。
+   =========================================================================== */
+:root {
+  --mt-body: 16px;
+  --mt-control: 14px;
+  --mt-line: 1.4;
+  --mt-title: clamp(20px, 5.4vw, 30px);
+  --mt-safe-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.card-blurb,
+.hero-bubble span,
+.empty-state p,
+.home-count,
+.result-message {
+  font-size: max(var(--mt-body), 16px);
+  line-height: max(var(--mt-line), 1.4);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.card-title,
+.recent-name {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.section-title,
+.result-title {
+  font-size: var(--mt-title);
+  line-height: max(var(--mt-line), 1.4);
+}
+
+.home-footer {
+  padding-bottom: var(--mt-safe-bottom);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 360px) {
+  /* 窄屏两列，卡片不许横向溢出：1fr 的下限是 min-content，这里夹成 minmax(0,1fr) */
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-screen,
+  .game-screen {
+    overflow-x: hidden;
+  }
+
+  /* 游戏名允许折两行，折不下再省略，绝不撑出屏幕 */
+  .card-title {
+    font-size: 17px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-blurb {
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  /* 小卡上的游戏名在窄屏改成折两行，别用省略号把名字砍一半 */
+  .recent-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .tab,
+  .btn {
+    font-size: max(var(--mt-control), 14px);
+  }
+
+  .game-topbar,
+  .home-footer {
+    padding-bottom: var(--mt-safe-bottom);
+  }
+}
