@@ -8,8 +8,8 @@ export const meta = {
   emoji: "🐹",
   category: "casual" as const,
   color: "#EBDFC8",
-  blurb: "99 关六大乐园！金地鼠、瞌睡鼠、闪电鼠，还要保护小兔子！",
-  // levels.ts 的 6 章合计 99 关(还没扩到 188),只有闯关
-  modes: ["campaign"] as const,
-  levels: 99,
+  blurb: "188 关十大地洞！算式鼠、连击槽、铁盔鼠、月夜手电筒，还有无尽地鼠场！",
+  // levels.ts 的 10 章合计 188 关,外加无尽地鼠场
+  modes: ["campaign", "endless"] as const,
+  levels: 188,
 };
