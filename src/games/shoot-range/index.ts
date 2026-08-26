@@ -7,6 +7,7 @@ export { meta };
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
 import { CHAPTERS, buildDuelTargets, buildLevel, buildTide, type LevelDef } from "./levels";
+import GUIDE from "./guide";
 import {
   AIM_BOUNDS,
   FIELD_H,
@@ -1347,36 +1348,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       playLevel,
       mapHint: "清完全部靶子就过关,命中率越高星星越多。好人靶碰一下就掉星。",
       grandMessage: "188 关靶场全部打通,你就是名副其实的星星神射手!",
-      guideTitle: "靶场小攻略",
-      guide: {
-        gameId: meta.id,
-        title: "靶场小攻略",
-        general: [
-          "先扫一眼全场,把「会跑的」和「站着不动的」分开:先打会跑的,站着的什么时候打都行。",
-          "连击断了不心疼,乱开一发才是真亏——命中率是评星的大头。",
-          "弹夹打空会自动换弹,与其被迫等,不如在打完一波的空当主动按换弹。",
-          "移动靶在掉头的一瞬间几乎是静止的,那一下最好打。",
-        ],
-        entries: CHAPTERS.map((ch, ci) => {
-          let from = 1;
-          for (let i = 0; i < ci; i++) from += CHAPTERS[i].size;
-          return {
-            from,
-            to: from + ch.size - 1,
-            title: `${ch.emoji} ${ch.name}`,
-            tips: [
-              ch.desc,
-              ci === 4
-                ? "木板挡住的靶不是打不到,是要换个角度:靶子会动,等它露出来再打。"
-                : ci === 5
-                  ? "编号靶先在心里数一遍 1234,再动手,打错顺序只会白费一发。"
-                  : ci === 6
-                    ? "看到举小旗子的笑脸就把准星移开,它是好人靶。"
-                    : "越往后靶子越小,准星停稳半秒再按发射比抢时间划算。",
-            ],
-          };
-        }),
-      },
+      guideTitle: GUIDE.title,
+      guide: GUIDE,
     }
   );
 

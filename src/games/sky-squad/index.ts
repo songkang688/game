@@ -20,6 +20,7 @@ import {
   type PhaseSpec,
 } from "./bullets";
 import { BOSSES, CHAPTERS, buildEndlessWave, buildSortie, formationSlot, type FoeWave, type SortieDef } from "./levels";
+import GUIDE from "./guide";
 import {
   FOE_INFO,
   PICKUP_INFO,
@@ -1475,33 +1476,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       playLevel,
       mapHint: "每章最后一关是大 Boss,三段弹幕各有各的躲法。一下都不挨碰才是三星。",
       grandMessage: "八片天空全部飞完,你就是飞机小队的队长!",
-      guideTitle: "飞行小攻略",
-      guide: {
-        gameId: meta.id,
-        title: "飞行小攻略",
-        general: [
-          "机身判定点只有中间那一小白点,看着擦到翅膀其实没事,别怕。",
-          "敌弹是暖色大圆点,我们打出去的是冷色小点,分不清的时候先看颜色。",
-          "每发敌弹起飞前会先亮一圈预警,看到亮圈就开始挪位置,来得及。",
-          "炸弹留给 Boss 的最后一段最划算,平时能躲就别按。",
-        ],
-        entries: CHAPTERS.map((ch, ci) => {
-          let from = 1;
-          for (let i = 0; i < ci; i++) from += CHAPTERS[i].size;
-          const boss = BOSSES[ci];
-          return {
-            from,
-            to: from + ch.size - 1,
-            title: `${ch.emoji} ${ch.name}`,
-            tips: [
-              ch.desc,
-              `本章 Boss 是${boss.emoji} ${boss.name},三段分别是「${boss.phases
-                .map((p) => p.name)
-                .join("」「")}」,每段换一套躲法。`,
-            ],
-          };
-        }),
-      },
+      guideTitle: GUIDE.title,
+      guide: GUIDE,
     }
   );
 

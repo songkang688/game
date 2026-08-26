@@ -3,6 +3,7 @@ import { TOTAL_LEVELS } from "../level99";
 import { meta } from "./meta";
 import { CHAPTERS, buildLevel } from "./levels";
 import { TARGET_INFO, accuracyGrade, gradeWord, roundMessage } from "./logic";
+import GUIDE from "./guide";
 
 /**
  * 分级红线的自动自审:凡是小朋友看得见的文字,都不许出现流血 / 受伤 / 死亡描写,
@@ -32,6 +33,8 @@ const MEAN_WORDS = ["笨", "蠢", "真差", "没用", "废物"];
 function visibleStrings(): string[] {
   const out: string[] = [meta.title, meta.blurb];
   for (const ch of CHAPTERS) out.push(ch.name, ch.desc);
+  out.push(GUIDE.title, ...GUIDE.general);
+  for (const entry of GUIDE.entries) out.push(entry.title, ...entry.tips);
   for (const info of Object.values(TARGET_INFO)) out.push(info.name, info.desc);
   for (const g of ["S", "A", "B", "C"] as const) out.push(gradeWord(g));
   for (let lv = 0; lv < TOTAL_LEVELS; lv++) out.push(buildLevel(lv).hint);
@@ -75,6 +78,27 @@ describe("shoot-range 分级与文案红线", () => {
     expect(TARGET_INFO.friend.desc).toContain("别打");
     expect(TARGET_INFO.robot.desc).toContain("坐下");
     expect(TARGET_INFO.balloon.desc).toContain("彩纸");
+  });
+
+  it("攻略十章无缝铺满 188 关,区间与章节切分对得上", () => {
+    expect(GUIDE.gameId).toBe(meta.id);
+    expect(GUIDE.entries.length).toBe(CHAPTERS.length);
+    let expected = 1;
+    for (const [i, entry] of GUIDE.entries.entries()) {
+      expect(entry.from, `第 ${i + 1} 章攻略的起点接不上`).toBe(expected);
+      expect(entry.to).toBe(expected + CHAPTERS[i].size - 1);
+      expect(entry.title).toContain(CHAPTERS[i].name);
+      expect(entry.tips.length).toBeGreaterThanOrEqual(2);
+      expected = entry.to + 1;
+    }
+    expect(expected - 1).toBe(TOTAL_LEVELS);
+  });
+
+  it("攻略只讲思路,不写死某一关的靶子摆位", () => {
+    for (const line of [...GUIDE.general, ...GUIDE.entries.flatMap((e) => e.tips)]) {
+      expect(line).not.toMatch(/第\s*\d+\s*关的?靶/);
+      expect(line.length).toBeGreaterThanOrEqual(10);
+    }
   });
 
   it("章节名与介绍都是原创的粉彩靶场主题,没有商标或官方角色名", () => {

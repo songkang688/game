@@ -4,6 +4,7 @@ import { meta } from "./meta";
 import { BOSSES, CHAPTERS, buildSortie } from "./levels";
 import { FOE_INFO, PICKUP_INFO, WEAPONS, makePlane, sortieMessage, touchPlane } from "./logic";
 import { PATTERN_LABEL } from "./bullets";
+import GUIDE from "./guide";
 
 /**
  * 分级红线的自动自审。飞机小队的底线是「被击中只是冒烟迫降」:
@@ -32,6 +33,8 @@ const MEAN_WORDS = ["笨", "蠢", "真差", "没用", "废物"];
 function visibleStrings(): string[] {
   const out: string[] = [meta.title, meta.blurb];
   for (const ch of CHAPTERS) out.push(ch.name, ch.desc);
+  out.push(GUIDE.title, ...GUIDE.general);
+  for (const entry of GUIDE.entries) out.push(entry.title, ...entry.tips);
   for (const b of BOSSES) {
     out.push(b.name);
     for (const ph of b.phases) out.push(ph.name, ph.shout);
@@ -85,6 +88,24 @@ describe("sky-squad 分级与文案红线", () => {
         expect(line.includes(mean), `「${line}」在训孩子`).toBe(false);
       }
     }
+  });
+
+  it("攻略八章无缝铺满 188 关,而且每章都点名了本章 Boss", () => {
+    expect(GUIDE.gameId).toBe(meta.id);
+    expect(GUIDE.entries.length).toBe(CHAPTERS.length);
+    let expected = 1;
+    for (const [i, entry] of GUIDE.entries.entries()) {
+      expect(entry.from, `第 ${i + 1} 章攻略的起点接不上`).toBe(expected);
+      expect(entry.to).toBe(expected + CHAPTERS[i].size - 1);
+      expect(entry.title).toContain(CHAPTERS[i].name);
+      const text = entry.tips.join("");
+      expect(text, `第 ${i + 1} 章攻略没提本章 Boss`).toContain(BOSSES[i].name);
+      for (const ph of BOSSES[i].phases) {
+        expect(text, `第 ${i + 1} 章攻略漏了「${ph.name}」这一段`).toContain(ph.name);
+      }
+      expected = entry.to + 1;
+    }
+    expect(expected - 1).toBe(TOTAL_LEVELS);
   });
 
   it("八位 Boss 与四种敌机都是原创卡通造型,名字里没有商标或官方角色名", () => {
