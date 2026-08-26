@@ -173,6 +173,9 @@ async function runViewport(page, label, width, height) {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= window.innerWidth + 1;
     };
+    // 舞台是 overflow:hidden,超出去的那截既看不见也点不到 —— 方向盘一旦被挤出去就没法玩了
+    const stage = q(".game-stage");
+    const lastPad = [...document.querySelectorAll(".mc-pad .mc-btn")].pop();
     return {
       shop: inView(q(".mc-shop")),
       pads: inView(q(".mc-pads")),
@@ -180,12 +183,21 @@ async function runViewport(page, label, width, height) {
       items: document.querySelectorAll(".mc-item").length,
       padBtns: document.querySelectorAll(".mc-pad .mc-btn").length,
       overflowX: document.documentElement.scrollWidth - window.innerWidth,
+      stageOverflowY: stage ? stage.scrollHeight - stage.clientHeight : -1,
+      lastPadBottom: lastPad ? Math.round(lastPad.getBoundingClientRect().bottom) : -1,
+      stageBottom: stage ? Math.round(stage.getBoundingClientRect().bottom) : -1,
     };
   });
   check(layout.shop && layout.pads && layout.hud, "建筑栏 / 方向盘 / 状态条都在屏内");
   check(layout.items === 3, "第一章解锁三件建筑", `${layout.items} 件`);
   check(layout.padBtns >= 6, "虚拟方向盘按钮齐全", `${layout.padBtns} 个`);
   check(layout.overflowX <= 1, "没有横向溢出", `${layout.overflowX}px`);
+  check(layout.stageOverflowY <= 1, "一屏装得下,没有内容被舞台裁掉", `多出 ${layout.stageOverflowY}px`);
+  check(
+    layout.lastPadBottom > 0 && layout.lastPadBottom <= layout.stageBottom + 1,
+    "方向盘最后一颗按钮还在舞台里,手指够得到",
+    `按钮底 ${layout.lastPadBottom} / 舞台底 ${layout.stageBottom}`
+  );
 
   // ---- 真打一局到胜利 ----
   const winText = await playUntilSettled(page, box, { fire: true, build: true, maxSeconds: 180 });
