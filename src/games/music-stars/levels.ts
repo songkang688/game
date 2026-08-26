@@ -10,6 +10,8 @@ import {
   makeSequence,
   TWINKLE_FINALE,
 } from "./logic";
+import { pentatonicIntervalName } from "./tuning";
+import { DUET_MIN_GAP_STEPS } from "./touch";
 
 /** 1.0 的六场音乐会：合计 99 关，1.1 起不再改动 */
 export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
@@ -157,6 +159,12 @@ export interface IntervalRound {
   b: number;
   choices: string[];
   correct: number;
+  /**
+   * 1.2 新增：这一对音在乐理上的真名（大三度 / 纯四度…）。
+   * 选项文案仍然是 1.1 的「往上几格」——「格」好懂，但同样的格数在五声音阶上
+   * 可能是三度也可能是四度，所以答对之后要把真名亮出来，别让孩子记岔。
+   */
+  theory: string;
 }
 
 /** 音程听辨馆：每关若干道听辨题 */
@@ -177,16 +185,28 @@ export function buildIntervals(level: number): IntervalRound[] {
       if (!choices.includes(c)) choices.push(c);
     }
     const mixed = shuffledBy(choices, rand);
-    out.push({ a, b, choices: mixed, correct: mixed.indexOf(answer) });
+    out.push({
+      a,
+      b,
+      choices: mixed,
+      correct: mixed.indexOf(answer),
+      theory: pentatonicIntervalName(a, b),
+    });
   }
   return out;
 }
 
-/** 双声部合奏厅：每句若干拍，每拍两个音 */
+/**
+ * 双声部合奏厅：每句若干拍，每拍两个音。
+ * 1.2 起两个音至少隔 2 格——这一章要真的同时按下去，挨着的两颗星星
+ * 会被一根手指同时盖住（`touch.ts` 的 `DUET_MIN_GAP_PX`）。
+ */
 export function buildDuets(level: number): number[][][] {
   const cfg = LEVELS[level];
   const rand = mulberry32(16700 + level * 7919);
-  return Array.from({ length: cfg.rounds }, () => makeChords(cfg.seqLen, cfg.starCount, rand));
+  return Array.from({ length: cfg.rounds }, () =>
+    makeChords(cfg.seqLen, cfg.starCount, rand, DUET_MIN_GAP_STEPS)
+  );
 }
 
 /** 简谱视奏台：谱面直接给出来，不放范奏 */
