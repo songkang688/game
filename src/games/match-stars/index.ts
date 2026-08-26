@@ -22,7 +22,7 @@ import {
   type PlayHandle,
 } from "../level99";
 import { prefersReducedMotion } from "./anim";
-import { RAINBOW, rotateSlots, type Cellset } from "./board";
+import { legalSwapsOn, RAINBOW, rotateSlots, shuffleOn, type Cellset } from "./board";
 import {
   applyPlan,
   creditOrder,
@@ -55,6 +55,7 @@ import {
   creditOrders,
   findMatches,
   goalsMet,
+  legalSwaps,
   rainbowTargets,
   spawnToken,
   SIZE,
@@ -293,6 +294,12 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
       stage.paint();
       checkEnd();
     },
+    reshuffle: () => {
+      if (levelDone || legalSwaps(state, cfg).length > 0) return false;
+      const ok = shuffleOn(state, Math.random as () => number);
+      if (ok) msgEl.textContent = "一步都消不动啦～重新洗了一次牌，接着来！";
+      return ok;
+    },
     onPaint: () => {
       movesEl.textContent = `👣 ${moves} 步`;
     },
@@ -427,6 +434,7 @@ function makeSeat(opts: SeatOpts): Seat {
       refreshHud();
       opts.onStable?.();
     },
+    reshuffle: () => legalSwapsOn(cell).length === 0 && shuffleOn(cell, rand),
     onPaint: () => undefined,
   });
 

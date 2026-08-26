@@ -25,6 +25,7 @@ import {
   rewardAt,
   runsOn,
   settleOn,
+  shuffleOn,
   specialOf,
   blastCells,
   type Cellset,
@@ -116,7 +117,10 @@ export function creditOrder(o: DuelOrder, info: CascadeInfo, cleared: readonly n
 // 棋盘
 // ---------------------------------------------------------------------------
 
-/** 发一副 6×6 的牌：开局不许自带三连 */
+/**
+ * 发一副 6×6 的牌：开局不许自带三连，也不许一步都走不动。
+ * 6×6 比闯关的 8×8 小，随手发出来的死局并不罕见，所以发完还得洗到能走为止。
+ */
 export function makeDuelBoard(rand: () => number, colors = DUEL_COLORS): Cellset {
   const s = makeCellset(DUEL_COLS, DUEL_ROWS, 0);
   for (let i = 0; i < s.grid.length; i++) {
@@ -133,6 +137,7 @@ export function makeDuelBoard(rand: () => number, colors = DUEL_COLORS): Cellset
     }
     s.grid[i] = v;
   }
+  if (legalSwapsOn(s).length === 0) shuffleOn(s, rand);
   return s;
 }
 
@@ -140,8 +145,15 @@ function rank(r: Reward): number {
   return r === "rainbow" ? 3 : r === "bomb" ? 2 : r === "none" ? 0 : 1;
 }
 
-/** 把一堆匹配格按上下左右连通分成几团 */
-export function componentsOf(cells: Iterable<number>, cols: number): number[][] {
+/**
+ * 把一堆匹配格按上下左右连通分成几团。
+ * `same` 用来判断两格算不算一团——同色才算，不然贴在一起的红三连和蓝三连会被并成一团。
+ */
+export function componentsOf(
+  cells: Iterable<number>,
+  cols: number,
+  same: (a: number, b: number) => boolean = () => true
+): number[][] {
   const left = new Set(cells);
   const out: number[][] = [];
   while (left.size > 0) {
@@ -155,7 +167,7 @@ export function componentsOf(cells: Iterable<number>, cols: number): number[][] 
       const c = i % cols;
       const around = [i - cols, i + cols, c > 0 ? i - 1 : -1, c < cols - 1 ? i + 1 : -1];
       for (const j of around) {
-        if (j >= 0 && left.has(j)) {
+        if (j >= 0 && left.has(j) && same(i, j)) {
           left.delete(j);
           stack.push(j);
         }
@@ -175,7 +187,7 @@ export function planRound(s: Cellset, focus = -1): RoundPlan | null {
   if (matched.size === 0) return null;
   const runs = runsOn(s.grid, s.cols, s.rows);
   const rewards: NonNullable<RoundPlan["rewards"]> = [];
-  for (const comp of componentsOf(matched, s.cols)) {
+  for (const comp of componentsOf(matched, s.cols, (a, b) => s.grid[a] === s.grid[b])) {
     let best: Reward = "none";
     let at = comp[0];
     for (const i of comp) {

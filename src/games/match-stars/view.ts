@@ -92,6 +92,11 @@ export interface StageOpts {
   applyBelt?: (b: BeltMove) => void;
   /** 全稳了：结算订单 / 胜负。整局里这是唯一允许结算的地方 */
   onSettled?: (info: StageCascade) => void;
+  /**
+   * 结算完了发现一步都消不动：洗一次牌。洗过返回 true，
+   * 视图会把整盘重新从顶上落一遍——洗牌也不许瞬间换脸。
+   */
+  reshuffle?: () => boolean;
   /** 每帧画完调一次（刷新面板） */
   onPaint?: () => void;
 }
@@ -474,8 +479,48 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
         acc = { steps: 0, total: 0, best: 0 };
         beltsDone = false;
         opts.onSettled?.(info);
+        restockStep();
       },
     });
+  }
+
+  /**
+   * 第 8 段（少见）：盘面死了，洗完牌整盘从棋盘顶外重新落进来。
+   * 洗牌保证洗完没有现成的三连，所以这一段走完就直接 idle，不再回连锁。
+   */
+  function restockStep(): void {
+    if (destroyed || !opts.reshuffle?.()) return;
+    const step: Step = {
+      phase: "fall",
+      durMs: 1,
+      enter: () => {
+        // 能动的格子全当成空的来排队，冰块 / 藤蔓 / 挡板原地不动
+        const blank = cell.grid.map((v, i) => (cell.fixed[i] || cell.solid[i] ? v : EMPTY));
+        const spawns = planRefill(blank, cols, {
+          fixed: cell.fixed,
+          solid: cell.solid,
+          perCellMs: T.perCellMs,
+          staggerMs: T.staggerMs,
+        });
+        for (const sp of spawns) sp.cell = cell.grid[sp.toRow * cols + sp.col];
+        const slides = spawns.map((f) => asSlide(f, cols));
+        setMoving(slides);
+        landSet = new Set(slides.map((s) => s.cell));
+        step.durMs = Math.max(1, planEndMs(spawns));
+        opts.sfx?.("pop");
+      },
+      done: () => {
+        setMoving([]);
+        pushStep({
+          phase: "land",
+          durMs: T.landMs,
+          done: () => {
+            landSet = new Set();
+          },
+        });
+      },
+    };
+    pushStep(step);
   }
 
   /** 第 1/2 段：交换 → 没匹配就原路弹回来 */

@@ -372,3 +372,39 @@ export function legalSwapsOn(s: Cellset): Array<[number, number]> {
   }
   return out;
 }
+
+/**
+ * 死局救场：一步都消不动的时候，把还能动的格子重洗一遍，
+ * 洗到「盘上没有现成的三连、又至少有一步能消」为止。
+ *
+ * 洗成功返回 true；洗不出来（能动的格子太少之类）就原样放回去、返回 false。
+ * 洗牌不改任何规则，只是重排既有图案——图案的种类和数量一颗都没变。
+ */
+export function shuffleOn(s: Cellset, rand: () => number, tries = 80): boolean {
+  const spots: number[] = [];
+  for (let i = 0; i < s.grid.length; i++) {
+    if (!s.fixed[i] && !s.solid[i] && s.grid[i] !== EMPTY) spots.push(i);
+  }
+  if (spots.length < 3) return false;
+  const grid0 = spots.map((i) => s.grid[i]);
+  const sp0 = spots.map((i) => s.special[i]);
+  for (let t = 0; t < tries; t++) {
+    const g = grid0.slice();
+    const sp = sp0.slice();
+    for (let k = g.length - 1; k > 0; k--) {
+      const j = Math.floor(rand() * (k + 1));
+      [g[k], g[j]] = [g[j], g[k]];
+      [sp[k], sp[j]] = [sp[j], sp[k]];
+    }
+    spots.forEach((at, k) => {
+      s.grid[at] = g[k];
+      s.special[at] = sp[k];
+    });
+    if (findMatchesOn(s.grid, s.cols, s.rows).size === 0 && legalSwapsOn(s).length > 0) return true;
+  }
+  spots.forEach((at, k) => {
+    s.grid[at] = grid0[k];
+    s.special[at] = sp0[k];
+  });
+  return false;
+}

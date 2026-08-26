@@ -154,7 +154,8 @@ export function planGravity(before: number[], after: number[], cols: number, opt
           toRow,
           col: c,
           delayMs: base + k * stagger,
-          durMs: Math.max(1, (fromRow - toRow) * perCell),
+          // 行号往下是变大的，掉几格就是 toRow - fromRow
+          durMs: Math.max(1, (toRow - fromRow) * perCell),
         });
       }
     }
