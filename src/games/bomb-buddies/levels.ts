@@ -429,7 +429,8 @@ export function buildArena(round: number, players = 2): BombLevel {
 
   return {
     index: -1,
-    chapter: 0,
+    // 每一局换一套章节配色,连打几局也不会看腻
+    chapter: (round - 1 + CHAPTERS.length) % CHAPTERS.length,
     board,
     spawns,
     critters: [],

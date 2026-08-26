@@ -129,6 +129,8 @@ const CSS = `
 .bb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
 .bb-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bb-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.bb-bar[hidden],.bb-picks[hidden]{display:none;}
 .bb-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
 .bb-open:active{transform:translateY(2px);box-shadow:0 2px 0 #57429f;}
@@ -148,6 +150,24 @@ const CSS = `
   .bb-acts button{height:31px;padding:0 9px;font-size:11.5px;}
   .bb-chip{font-size:11.5px;padding:3px 8px;}
   .bb-pads{gap:8px;}
+}
+/* 手机竖屏一共就 667 像素高,棋盘上面还压着标题栏和选关条。
+   这里把每一行都收一点,保证方向盘整块留在首屏里,不用一边滚屏一边躲炸弹。 */
+@media (max-height:720px){
+  .bb-wrap{gap:5px;}
+  .bb-chip{font-size:11px;padding:2px 7px;}
+  .bb-btn{padding:5px 11px;font-size:12px;}
+  .bb-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
+  .bb-padname{font-size:10.5px;}
+  .bb-pad{gap:3px;}
+  .bb-pad button{width:34px;height:34px;font-size:14px;}
+  .bb-acts button{height:29px;padding:0 8px;font-size:11px;}
+  /* 只有一个人玩的时候,放弹/引爆挪到方向盘右边,又省下一行的高度 */
+  .bb-pads--one .bb-padwrap{display:grid;grid-template-columns:auto auto;grid-template-areas:"name name" "pad acts";
+    align-items:center;column-gap:8px;}
+  .bb-pads--one .bb-padname{grid-area:name;}
+  .bb-pads--one .bb-pad{grid-area:pad;}
+  .bb-pads--one .bb-acts{grid-area:acts;flex-direction:column;}
 }
 @media (prefers-reduced-motion:reduce){
   .bb-btn:active,.bb-pad button:active,.bb-acts button:active,.bb-pick:active{transform:none;}
@@ -185,15 +205,17 @@ interface Palette {
   brickTop: string;
 }
 
+// 每一章一套粉彩配色。软砖要和地板拉开差距(砖是暖色、地板近白),
+// 不然孩子一眼分不清「这块能炸」还是「这里能走」。
 const PALETTES: Palette[] = [
-  { bg: "#eef8ef", floor: "#f8fdf7", line: "#e2f0e0", wall: "#8fbf94", wallTop: "#a9d5ad", brick: "#cfe6b8", brickTop: "#e2f2cf" },
-  { bg: "#fdeef4", floor: "#fffafc", line: "#f6e2ea", wall: "#d191aa", wallTop: "#e6adc3", brick: "#f5c9d9", brickTop: "#ffdde8" },
-  { bg: "#eaf4fc", floor: "#f9fcff", line: "#dcecf7", wall: "#84aecb", wallTop: "#9dc6de", brick: "#bcdcf0", brickTop: "#d6ecfa" },
-  { bg: "#eeeffb", floor: "#fbfbff", line: "#e4e6f5", wall: "#9096ca", wallTop: "#aab0dd", brick: "#c8cdee", brickTop: "#dfe2f8" },
-  { bg: "#f5f0e6", floor: "#fdfbf6", line: "#eee6d8", wall: "#bfa47f", wallTop: "#d5bd9b", brick: "#e6d4b6", brickTop: "#f3e6cf" },
-  { bg: "#e9f5f8", floor: "#f8fdfe", line: "#dcedf1", wall: "#84bccb", wallTop: "#9dd3e0", brick: "#bfe4ec", brickTop: "#d8f1f6" },
-  { bg: "#fdf1e4", floor: "#fffaf4", line: "#f6e6d5", wall: "#d3a373", wallTop: "#e6bd93", brick: "#f2d7b4", brickTop: "#fbe9d2" },
-  { bg: "#f0ecfa", floor: "#fcfaff", line: "#e7e1f4", wall: "#a08fc9", wallTop: "#b8a9dc", brick: "#d5c9ee", brickTop: "#e8def8" },
+  { bg: "#eef8ef", floor: "#fbfefa", line: "#e2f0e0", wall: "#7fb389", wallTop: "#9ccba4", brick: "#f0cf94", brickTop: "#ffe6b8" },
+  { bg: "#fdeef4", floor: "#fffbfd", line: "#f6e2ea", wall: "#cd8aa5", wallTop: "#e3a5bd", brick: "#f3b183", brickTop: "#ffcfa6" },
+  { bg: "#eaf4fc", floor: "#fbfdff", line: "#dcecf7", wall: "#6fa3c4", wallTop: "#8dbcd9", brick: "#eec98f", brickTop: "#ffe1b2" },
+  { bg: "#eeeffb", floor: "#fcfcff", line: "#e4e6f5", wall: "#868dc6", wallTop: "#a2a8d9", brick: "#e9bfa0", brickTop: "#fbd9c0" },
+  { bg: "#f5f0e6", floor: "#fefdfa", line: "#eee6d8", wall: "#b0906a", wallTop: "#cbae8b", brick: "#d9b98f", brickTop: "#f0d5ae" },
+  { bg: "#e9f5f8", floor: "#fafeff", line: "#dcedf1", wall: "#6fb2c4", wallTop: "#8ecada", brick: "#f0cba1", brickTop: "#ffe3bf" },
+  { bg: "#fdf1e4", floor: "#fffcf8", line: "#f6e6d5", wall: "#c9925f", wallTop: "#e0ae7f", brick: "#e8c07e", brickTop: "#fbdaa8" },
+  { bg: "#f0ecfa", floor: "#fdfcff", line: "#e7e1f4", wall: "#9280c2", wallTop: "#ac9bd6", brick: "#e3bfa2", brickTop: "#f7dcc4" },
 ];
 
 const FLAME_CORE = "#ffe9a8";
@@ -385,6 +407,7 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   for (let i = 0; i < seats; i++) {
     if (!fighters[i].ai) buildPad(i);
   }
+  pads.classList.add(pads.childElementCount > 1 ? "bb-pads--two" : "bb-pads--one");
 
   for (const { btn, seat, action } of padButtons) {
     btn.addEventListener("pointerdown", (e) => {
@@ -432,8 +455,11 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   function layout(): void {
     const avail = Math.max(220, Math.min(host.clientWidth || 340, 620));
     const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
-    const maxH = Math.max(180, Math.min(400, viewH * 0.46));
-    cell = Math.max(16, Math.floor(Math.min(avail / board.w, maxH / board.h)));
+    // 手机竖屏(667 那一档)要给下面两套方向盘留位置,棋盘就得矮一点,
+    // 不然孩子得一边滚屏一边按方向键。大屏上再放开限制。
+    const share = viewH <= 560 ? 0.42 : viewH <= 720 ? 0.3 : 0.46;
+    const maxH = Math.max(150, Math.min(400, viewH * share));
+    cell = Math.max(14, Math.floor(Math.min(avail / board.w, maxH / board.h)));
     const cssW = cell * board.w;
     const cssH = cell * board.h;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1);
@@ -1328,7 +1354,21 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 开打的时候把模式条收起来:手机竖屏上这一百来像素正好够棋盘和方向盘同框
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        picks.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy: () => {
+            if (!mode) {
+              bar.hidden = false;
+              picks.hidden = false;
+            }
+            handle.destroy();
+          },
+        };
+      },
       guide: GUIDE,
       mapHint: "放弹之前先想好往哪躲,拐角后面永远安全。",
       grandMessage: "188 关全部通关,你就是泡泡炸弹人里最会算退路的那一个!",

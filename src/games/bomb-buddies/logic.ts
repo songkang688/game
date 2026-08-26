@@ -382,7 +382,7 @@ export interface CritterInfo {
 }
 
 export const CRITTER_INFO: Record<CritterKind, CritterInfo> = {
-  slime: { emoji: "🟢", name: "咕噜怪", stepMs: 520, ghost: false, layers: 1 },
+  slime: { emoji: "🐸", name: "咕噜怪", stepMs: 520, ghost: false, layers: 1 },
   hopper: { emoji: "🐰", name: "蹦蹦怪", stepMs: 340, ghost: false, layers: 1 },
   chaser: { emoji: "🐱", name: "追追怪", stepMs: 300, ghost: false, layers: 1 },
   ghosty: { emoji: "👻", name: "钻墙怪", stepMs: 420, ghost: true, layers: 1 },
