@@ -271,8 +271,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
       renderDots();
       if (inputPos >= seq.length) {
         phase = "watch";
-        setListening(true);
-        listenEl.hidden = true;
+        // 结算这一小会儿不吃输入，但不是范奏，所以不亮「听」
+        board.setEnabled(false);
+        replayBtn.disabled = true;
         ctx.sfx("coin");
         board.drawConstellation(seq);
         msgEl.textContent = "整句都对上了！🎵";

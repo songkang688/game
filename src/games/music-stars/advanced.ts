@@ -402,6 +402,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       onMiss(`漏了 ${missed} 下～黄线压到方块上再敲，慢速练习也可以先开着。`);
       return;
     }
+    // 这一句判完就把拍点表收走，免得下一句开始前的空档里误判
+    beatTimes = [];
     void pattern;
     ctx.sfx("coin");
     const perfect = beatGrades.filter((g) => g === "perfect").length;
@@ -419,6 +421,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
     btn?.classList.add("mst-lit");
     synth.play(DRUM_FREQ[kind], beatMs(noteMs(), kind === 1), 1);
     later(() => btn?.classList.remove("mst-lit"), 200);
+    // 还没排上拍点（上一句刚判完的空档）：让他随便敲两下出声，不判也不罚
+    if (beatTimes.length === 0) return;
 
     // 判定基准是音频时钟，不是 Date.now()；开局量到的输出延迟先减掉
     const hit = judgeTap(beatTimes, synth.now(), beatTaken, synth.latencyMs);
@@ -556,9 +560,9 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       return;
     }
     if (!sameChord(got, chord)) {
-      // 只按到一颗：不算失误，提醒他两根手指一起来
+      // 只按到一颗：不算失误，提醒他两根手指一起来。
+      // 这里**不清和弦板**——第一根手指还按着的话，慢半拍落下的第二根仍然算数。
       msgEl.textContent = "对了一颗！两根手指一起按下去，两个音才会一起响～";
-      pad.reset();
       return;
     }
     pad.reset();

@@ -251,3 +251,65 @@ intervalLabel(0, 2) === "往上 2 格"
 - 全部可见文案无商标、无低幼措辞。
 
 ## 七、落地记录（收尾补写）
+
+### 实际交付
+
+| 文件 | 干了什么 |
+| --- | --- |
+| `tuning.ts`（新） | 十二平均律 `midiToFreq` / `freqToMidi`；五声与七声音阶的 MIDI 表；0–12 半音的乐理音程名表；`pentatonicIntervalName` 说出「2 格」到底是三度还是四度；`pitchOffsetPx` 音高→纵坐标 |
+| `timing.ts`（新） | 三档窗口常量与 `judgeHit`；`measureLatencyMs` 三条降级路径；`compensate` / `judgeTap` / `beatSchedule` / `summarize` |
+| `synth.ts`（新） | 三种音色的波形 + ADSR（软风琴挂低通）；主音量节点收口在 0.6；`voicePeak` 按同时发声数分摊；`StarSynth` 的 `unlock` / `suspend` / `destroy` 与节点回收；设置存 `yiduo-yixing.music-stars.audio.v1` |
+| `touch.ts`（新） | `ChordPad` 按 `pointerId` 记录；`CHORD_WINDOW_MS` 容纳「差几十毫秒」的两根手指；`keyGapPx` / `duetKeysSeparated` / `DUET_MIN_GAP_STEPS` |
+| `practice.ts`（新） | 0.6 / 0.8 / 1.0 三档倍率；`scaleMs`；`rateWithSpeed` 把慢速封顶在一星；`allowsDemo` |
+| `sandbox.ts`（新） | 30 秒截断 `trimClip`、6 段轮换 `pushClip`、`ClipRecorder`、存 `yiduo-yixing.music-stars.sandbox.v1` |
+| `notation.ts`（新） | 简谱字形：数字 + 八度点 + 时值下划线 / 增时线；`glyphAria` 读屏说法 |
+| `runtime.ts`（新） | `parseLevelParam` / `resolveInitialLevel` / `openLevelOnMap`；`prefersReducedMotion`；`keyLayout` 保 56px 热区与 8px 间距 |
+| `ui.ts`（新） | `mst-` 全套样式；星星键盘（多点触控 / 按音高摆位 / 按下下沉 4px / 星座连线）；声音设置条；简谱渲染；横向滚动节拍条（减少动效时逐格跳） |
+| `sandboxUi.ts`（新） | 自由弹奏台：五声↔七声切换、录音与回放、6 段列表 |
+| `domStub.ts`（新） | 本目录测试用的 DOM 与 `AudioContext` 桩（时钟可拨、节点可数），玩法代码不碰 |
+| `upgrade12.test.ts`（新） | 61 个 1.2 用例 |
+| `advanced.ts` | 节奏关改成节拍条 + 音频时钟三档判定；双声部改成两指同时按；音程关答对后亮乐理真名；简谱补时值；`mst-` 前缀 |
+| `index.ts` | 换成 `StarSynth` + 星星键盘；范奏时禁输入并亮「听」；慢速练习；星座连线；沙盒入口；`?level=` 直开；`visibilitychange` 挂起；`destroy` 全拆 |
+| `levels.ts` | `IntervalRound` 加 `theory`；`buildDuets` 传 `DUET_MIN_GAP_STEPS`；新增 `buildScoreValues` |
+| `logic.ts` | `makeChords` 加可选 `minGap`（默认 1，老行为一格不变） |
+| `meta.ts` | 补 `platform: "both"`，`blurb` 按 1.2 事实重写 |
+| `guide.ts` | 通用心得补慢速与自由弹奏台，四章各补 1.2 打法，仍不写任何一关的旋律 |
+
+### 与计划的四处出入
+
+1. **`intervalLabel` 一个字没动**，1.2 的乐理名走 `IntervalRound.theory` 这个新字段，
+   答对之后才亮出来。原因是 `levels188.test.ts` 用
+   `expect(q.choices[q.correct]).toBe(intervalLabel(q.a, q.b))` 钉着选项文案，
+   而「几格」对低年级本来就更好懂——教学上正确的做法是**先给好懂的说法，再补上真名**，
+   不是把「格」换掉。
+2. **`makeChords` 用可选参数而不是直接改行为**。双声部要求同拍两音隔 ≥2 格，
+   但 `makeChords` 是 1.1 起就有的公开函数、老用例按默认行为断言，
+   所以默认仍是 1，只有 `buildDuets` 传 2。
+3. **简谱的八度点在关卡里看不到**。五声音阶键盘全在同一个八度内，
+   按乐理就不该加点。八度点真正用得上的地方是自由弹奏台的七声音阶（高八度的哆），
+   那里会显示；渲染器与单测两边都覆盖了高八度与低八度。
+4. **加了一条计划里没写的兜底**：`StarSynth.now()` 在拿不到 `AudioContext` 时
+   退回一把单调墙钟。写节奏关的时候才发现，如果浏览器压根不给 Web Audio，
+   `currentTime` 会一直是 0，节奏关的每一次敲击都会被判成「没落在拍子上」——
+   一路判负。有音频时仍然一律用 `AudioContext.currentTime`。
+
+### 节奏判定与延迟补偿
+
+- 拍点表 `beatTimes` 在范奏放完之后按 `synth.now() + 1.2 秒` 起排，
+  单位是秒、尺子是 `AudioContext.currentTime`；
+- 每次敲击 `judgeTap(beatTimes, synth.now(), beatTaken, synth.latencyMs)`，
+  先把 `latencyMs` 从敲击时刻里减掉，再找最近的、还没被占用的拍点；
+- `latencyMs` 在 `unlock()`（首次用户手势）里量一次：
+  `outputLatency` → `baseLatency` → 0，夹进 0–400ms；
+- 敲对拍点但长短敲反了，算一次失误并把那一拍标掉；一句结束时还没被敲到的拍点算漏。
+
+### 前 99 关未变的证明
+
+`upgrade12.test.ts` 钉了 **99 个逐关指纹**：每一关取
+`JSON.stringify([LEVELS[i], buildMelodies(i)])` 的 FNV-1a 摘要。
+这串数是在动第一行玩法代码之前、从 1.1 的输出上取下来的，
+前 6 章的任何一个分支、seed 或参数被改动，对应那一关就会红。
+
+原有的两条聚合指纹（`levels188.test.ts` 里的 `de52474f` 与 `71ee0837`）**一条没删**，
+和逐关指纹互为交叉验证。另有两条辅助断言：前 99 关一律不带 `mode` 字段，
+且这 99 个关卡对象的键集合恰好是 1.0 的那九个，一个都不多。

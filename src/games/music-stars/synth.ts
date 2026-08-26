@@ -343,10 +343,18 @@ export class StarSynth {
     }
   }
 
-  /** 现在的音频时钟（秒）；没有音频环境退回 0 */
+  /**
+   * 现在几点（秒）。
+   * 有音频上下文就用 `AudioContext.currentTime`——它和实际发声用的是同一把尺，
+   * 节奏判定必须靠它；没有音频环境（比如浏览器压根不给 Web Audio）时退回一个
+   * 单调递增的墙钟，让节奏关照样能玩，只是判定没有音频那么准。
+   */
   now(): number {
     const ctx = this.ctx;
-    return ctx ? ctx.currentTime : 0;
+    if (ctx) return ctx.currentTime;
+    const perf = (globalThis as { performance?: { now?: () => number } }).performance;
+    const ms = typeof perf?.now === "function" ? perf.now() : Date.now();
+    return ms / 1000;
   }
 
   /**

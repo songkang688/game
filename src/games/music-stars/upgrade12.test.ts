@@ -582,6 +582,23 @@ describe("音乐星星 1.2 · AudioContext 解锁与回收", () => {
     expect(silent.liveNodes).toBe(0);
   });
 
+  it("判定时钟优先用音频时钟；没有音频环境时退回一把单调的墙钟", () => {
+    const ctx = new StubAudioContext();
+    const synth = new StarSynth({ makeContext: () => ctx, storage: null });
+    synth.unlock();
+    expect(synth.now()).toBe(0);
+    ctx.tick(1.5);
+    expect(synth.now()).toBe(1.5);
+    synth.destroy();
+
+    // 浏览器不给 Web Audio 时节奏关也得能玩：时钟必须还在往前走
+    const silent = new StarSynth({ makeContext: () => null, storage: null });
+    const t0 = silent.now();
+    expect(t0).toBeGreaterThan(0);
+    expect(silent.now()).toBeGreaterThanOrEqual(t0);
+    silent.destroy();
+  });
+
   it("destroy 之后节点全断、上下文关掉，再弹也不会新建节点", () => {
     const ctx = new StubAudioContext();
     const synth = new StarSynth({ makeContext: () => ctx, storage: null });
