@@ -9,7 +9,14 @@
  *
  * 另外把「没有战役」的本款接到平台的 `initialLevel` 上：第 N 关映射成「赛道难度档 + 人机档」。
  */
-import { MAX_SPEED, makeRng, trackHasRoute, type Entity, type EntityKind } from "./logic";
+import {
+  MAX_SPEED,
+  makeRng,
+  trackHasRoute,
+  type Entity,
+  type EntityKind,
+  type PowerKind,
+} from "./logic";
 
 /* ---------------- 一、温和道具 ---------------- */
 
@@ -20,7 +27,7 @@ import { MAX_SPEED, makeRng, trackHasRoute, type Entity, type EntityKind } from 
  * - `confetti` 减速彩纸：撒给对手，对手慢一阵（不掉血、不打断操作）；
  * - `magnetStar` 磁力星：金币会自己飞过来一阵。
  */
-export type PowerupKind = "speedCloud" | "shieldBubble" | "confetti" | "magnetStar";
+export type PowerupKind = PowerKind;
 
 export const POWERUP_KINDS: readonly PowerupKind[] = [
   "speedCloud",
@@ -272,6 +279,12 @@ export interface GhostSnapshot {
 
 export const GHOST_SNAPSHOT_VERSION = 2;
 
+/**
+ * 存档 key 只增不改：1.1 的 `logic.GHOST_KEY` 继续放**自己**的最好成绩，
+ * **对手上一局**那一趟放这把新 key，两边互不覆盖。
+ */
+export const GHOST_RIVAL_KEY = "yiduo-yixing.duo-rush.ghost-rival.v1";
+
 export function makeGhostSnapshot(
   source: GhostSource,
   dist: number,
@@ -369,6 +382,22 @@ export function levelToSetup(level: number): RushSetup {
   const tier = Math.min(3, Math.floor((n - 1) / 47)) as TrackTier;
   const aiLevel = tier as 0 | 1 | 2 | 3;
   return { tier, aiLevel, label: TRACK_TIER_LABELS[tier] };
+}
+
+/**
+ * 从 `?level=12` 这样的查询串里取关号；没有、不是数字就返回 null（按默认档开局）。
+ * 平台以后若改用 `initialLevel` 直接传参，这里照旧兜底，不冲突。
+ */
+export function levelFromQuery(search: string | null | undefined): number | null {
+  if (typeof search !== "string" || search === "") return null;
+  const q = search.startsWith("?") ? search.slice(1) : search;
+  for (const part of q.split("&")) {
+    const [k, v] = part.split("=");
+    if (k !== "level") continue;
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.floor(n) : null;
+  }
+  return null;
 }
 
 /* ---------------- 六、无尽成绩 ---------------- */

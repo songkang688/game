@@ -5,9 +5,12 @@ export { meta };
 // 两个人各占半屏，各自三条车道向远处收拢；赛道是同一份，比的完全是操作。
 // 玩法状态机在 match.ts，透视投影在 view25d.ts，键位在 keys.ts，
 // 这里只干三件事：把画面画出来、把输入接进去、离开时清干净。
+import { save } from "../../engine/save";
 import { AI_HINTS, AI_LABELS, AI_LEVELS, type AiLevel } from "./ai";
 import {
+  PAD_BUTTONS,
   type Action,
+  padRects,
   type Seat,
   isPauseKey,
   isWatchedKey,
@@ -24,12 +27,8 @@ import {
   JUMP_SECONDS,
   SLIDE_SECONDS,
   type Entity,
-  type GhostRecord,
   type RaceMode,
-  betterGhost,
-  makeGhostRecord,
   parseGhostRecord,
-  serializeGhostRecord,
 } from "./logic";
 import {
   type MatchState,
@@ -37,10 +36,26 @@ import {
   applyAction,
   createMatch,
   drainEvents,
+  entitiesFor,
+  leaderSeat,
   livesLeft,
   stepMatch,
 } from "./match";
-import { HANDICAP_MAX, handicapBadge, handicapMult, levelToSetup } from "./rush12";
+import {
+  GHOST_RIVAL_KEY,
+  HANDICAP_MAX,
+  POWERUPS,
+  POWERUP_KINDS,
+  type ForkSection,
+  type GhostSnapshot,
+  type GhostSource,
+  handicapMult,
+  levelFromQuery,
+  levelToSetup,
+  makeGhostSnapshot,
+  parseGhostSnapshot,
+  serializeGhostSnapshot,
+} from "./rush12";
 import {
   DRAW_DISTANCE,
   GRID_SPACING,
@@ -48,11 +63,14 @@ import {
   RUNNER_Z,
   type Rect,
   type SplitLayout,
+  bumpShake,
+  crownOffset,
   fogAlpha,
   gridLineZs,
   groundY,
   horizonY,
   jumpArc,
+  laneTiltDeg,
   laneWidthAt,
   paneRects,
   parallaxOffset,
@@ -159,23 +177,36 @@ const THEMES: [Theme, Theme] = [
 
 const MODE_LABELS: Record<RaceMode, string> = {
   rush: "无尽竞速",
+  items: "道具竞速",
   ghost: "幽灵对战",
   endless: "无尽对战",
   coins: "抢金币赛",
 };
 
 const RULES_HTML = `
-  <h3>🏁 四种赛制</h3>
+  <h3>🏁 五种赛制</h3>
   <p><b>🏁 无尽竞速</b>：两个人一直往前跑，<b>先撞满 ${CRASH_LIMIT} 次的人输</b>，跑得再远也救不回来。<br>
-  <b>👻 幽灵对战</b>：和自己上一次的最好成绩赛跑，半透明的小影子就是上一次的你，<b>跑得比它远就赢</b>。<br>
+  <b>✨ 道具竞速</b>：在无尽竞速上加了<b>四种道具</b>和<b>中途分岔</b>，胜负规矩一样。<br>
+  <b>👻 幽灵对战</b>：和上一次的成绩赛跑，可以选<b>自己上次</b>或<b>对手上一局</b>，<b>跑得比影子远就赢</b>。<br>
   <b>♾️ 无尽对战</b>：各有 ${CRASH_LIMIT} 颗心，都用完了比谁跑得远。<br>
   <b>🪙 抢金币赛</b>：撞了不掉心但会绊一下，<b>先吃到 ${COIN_RACE_TARGET} 枚金币</b>的人获胜。</p>
   <h3>⌨️ 两个人怎么分键</h3>
-  <p>朵朵用左手：<b>W 跳 / A 左道 / S 下滑 / D 右道</b>。<br>
-  星星用右手：<b>↑ 跳 / ← 左道 / ↓ 下滑 / → 右道</b>。<br>
+  <p>朵朵用左手：<b>W 跳 / A 左道 / S 下滑 / D 右道 / F 用道具 / G 加油</b>。<br>
+  星星用右手：<b>↑ 跳 / ← 左道 / ↓ 下滑 / → 右道 / L 用道具 / K 加油</b>。<br>
   两套键完全分开，同时按也不会串台。<b>Esc</b> 随时暂停。</p>
   <h3>📱 手机怎么玩</h3>
-  <p>画面切成两半，<b>各自在自己那半边滑</b>：上滑跳、下滑滚、左右滑换道，和键盘一模一样。</p>
+  <p>画面切成两半，<b>各自在自己那半边滑</b>：上滑跳、下滑滚、左右滑换道，和键盘一模一样。<br>
+  每半屏右下角还有两颗圆按钮：<b>✨ 用道具</b>和<b>📣 加油</b>。</p>
+  <h3>✨ 四种道具（道具竞速里才有）</h3>
+  <p>${POWERUP_KINDS.map((k) => `${POWERUPS[k].emoji} <b>${POWERUPS[k].label}</b>：${POWERUPS[k].hint}`).join("<br>")}<br>
+  手上一次只拿得下一件，捡到新的就把旧的换下来，按 <b>F</b> / <b>L</b> 才用出去。</p>
+  <h3>🌿 中途分岔</h3>
+  <p>跑到分岔口，路会裂成两条：站<b>右道</b>就走右边那条，站<b>左道或中道</b>就走左边那条。<br>
+  一条稳一条快，<b>但难的那条不固定在哪一边</b>，得看清楚再决定。<br>
+  两条路<b>一样长</b>，不管选哪条都在同一米汇合，谁也不吃亏。</p>
+  <h3>🤝 让分模式</h3>
+  <p>大人带小孩玩的时候可以打开：<b>落后的一方</b>会得到一点点追赶助推，
+  <b>最多 ${Math.round(HANDICAP_MAX * 100)}%</b>，开着的时候画面上一直写着，默认是关的。</p>
   <h3>🚧 四种障碍</h3>
   <p>🪨 <b>大石头</b>：跳不过也钻不过，只能<b>提前换道</b>。<br>
   🚧 <b>矮木栏</b>：按<b>跳</b>跃过去。<br>
@@ -184,26 +215,65 @@ const RULES_HTML = `
   <h3>🪙 路上的好东西</h3>
   <p>🪙 金币：吃一枚加 1 分。⚡ 加速带：踩上去冲刺 ${BOOST_SECONDS} 秒，超车全靠它。</p>
   <h3>🤖 一个人也能玩</h3>
-  <p>选「电脑对手」就有三档：<b>新手</b>反应慢还爱愣神，<b>稳当</b>基本不失误，<b>高手</b>几乎不出错——但它也有反应延迟，抓住那半拍就能超过去。</p>
+  <p>选「电脑对手」有四档：<b>新手</b>反应慢还爱愣神，<b>稳当</b>基本不失误，<b>高手</b>几乎不出错，
+  <b>老练</b>还会提前占住最好的那条道。<br>
+  四档电脑的速度和你<b>完全一样</b>，不会偷偷加速，它强只强在看得早、站得好。</p>
   <h3>📈 小提醒</h3>
   <p>速度会随距离一直往上涨（有封顶，不会快到反应不过来）。能换道就别跳，跳在半空中没法再改主意。</p>
 `;
 
 /* ---------------- 幽灵存档 ---------------- */
 
-function loadGhost(): GhostRecord | null {
+/**
+ * 存档 key 只增不改：
+ *  · `GHOST_KEY`（1.1 就有）继续放**自己**的最好成绩，写进去的 JSON 多了两个字段，
+ *    1.1 的 `parseGhostRecord` 照样读得出来；
+ *  · `GHOST_RIVAL_KEY`（1.2 新增）放**对手上一局**那一趟。
+ */
+function ghostKeyOf(source: GhostSource): string {
+  return source === "rival" ? GHOST_RIVAL_KEY : GHOST_KEY;
+}
+
+/** 读影子：新版快照优先，读不到就退回 1.1 的老格式，老纪录一条都不丢。 */
+function loadGhost(source: GhostSource): GhostSnapshot | null {
   try {
-    return parseGhostRecord(localStorage.getItem(GHOST_KEY));
+    const raw = localStorage.getItem(ghostKeyOf(source));
+    const snap = parseGhostSnapshot(raw);
+    if (snap) return snap;
+    if (source !== "self") return null;
+    const legacy = parseGhostRecord(raw);
+    return legacy ? makeGhostSnapshot("self", legacy.dist, legacy.seconds, "朵朵") : null;
   } catch {
     return null;
   }
 }
 
-function saveGhost(rec: GhostRecord): void {
+function saveGhost(snap: GhostSnapshot): void {
   try {
-    localStorage.setItem(GHOST_KEY, serializeGhostRecord(rec));
+    localStorage.setItem(ghostKeyOf(snap.source), serializeGhostSnapshot(snap));
   } catch {
     // 隐私模式写不进去就算了，比赛不受影响
+  }
+}
+
+/** HUD / 设置面板上那一行：「🫥 对手上一局 · 星星 1200 米（22 秒）」 */
+function ghostCaption(snap: GhostSnapshot | null): string {
+  if (!snap) return "";
+  const who = snap.source === "rival" ? "对手上一局" : "上次的自己";
+  const emoji = snap.source === "rival" ? "🫥" : "👻";
+  return `${emoji} ${who} · ${snap.who} ${snap.dist} 米（${snap.seconds} 秒）`;
+}
+
+/**
+ * 无尽成绩统一走平台的 `recordEndlessBest`。
+ * 1.1 只把里程存在幽灵 key 里，这里读一次搬过去——只取较大值，**绝不清零**。
+ */
+function migrateEndlessBest(): void {
+  try {
+    const legacy = parseGhostRecord(localStorage.getItem(GHOST_KEY));
+    if (legacy) save.recordEndlessBest(meta.id, legacy.dist);
+  } catch {
+    // 读不到就算了，纪录本来就在平台存档里
   }
 }
 
@@ -221,7 +291,28 @@ export function mount(api: GameApi): { destroy: () => void } {
   let state: MatchState | null = null;
   let running = false;
   let paused = false;
-  let ghost: GhostRecord | null = loadGhost();
+  let ghostSource: GhostSource = "self";
+  const ghosts: Record<GhostSource, GhostSnapshot | null> = {
+    self: loadGhost("self"),
+    rival: loadGhost("rival"),
+  };
+  /** 让分助推：默认关，家长要开才开 */
+  let handicapOn = false;
+
+  migrateEndlessBest();
+
+  /**
+   * 平台可能带着关号进来（`?level=N`，或以后由壳层传 `initialLevel`）。
+   * 本款没有 188 战役，所以关号只用来定「赛道难度档 + 人机档 + 要不要分岔」。
+   */
+  const initialLevel =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" ? location.search : null);
+  const levelSetup = levelToSetup(initialLevel ?? 1);
+  if (initialLevel !== null && initialLevel !== undefined) aiLevel = levelSetup.aiLevel as AiLevel;
+
+  const reducedMotion = (): boolean =>
+    globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
   const wrap = document.createElement("div");
   wrap.className = "dr-wrap";
@@ -260,8 +351,22 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
       .dr-rules p { color: #4A6A8A; font-size: 14.5px; line-height: 1.75; margin: 6px 0; }
       .dr-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #8FD3FF; color: #14496E; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #64AEE0; font-family: inherit; }
-      .dr-handicap { display: flex; align-items: center; gap: 8px; color: #4A6A8A; font-size: 14.5px; line-height: 1.5; cursor: pointer; padding: 6px 2px; }
-      .dr-handicap input { width: 20px; height: 20px; accent-color: #8FD3FF; flex: none; }
+      /* ---- 1.2 第 11 步 A 新增,一律 dur- 前缀 ---- */
+      .dur-stage { position: relative; line-height: 0; }
+      .dur-pad { position: absolute; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+      .dur-padbtn { pointer-events: auto; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,.92); background: rgba(255,255,255,.74); color: #4A6A8A; font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 0 2px 6px rgba(90,140,190,.25); font-family: inherit; touch-action: manipulation; }
+      .dur-padbtn:active { transform: scale(.93); background: #FFE4EF; }
+      .dur-note { text-align: center; color: #6E86A0; font-size: 13px; font-weight: 700; margin-top: 6px; min-height: 18px; line-height: 1.5; }
+      .dur-handicap-hint { margin-top: 6px; }
+      @media (max-width: 380px) {
+        .dr-wrap { padding: 8px; }
+        .dr-keys { font-size: 12px; gap: 6px; }
+        .dr-keys span { padding: 4px 8px; }
+        .dur-padbtn { font-size: 18px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dur-padbtn:active { transform: none; }
+      }
       /* 放在最后:上面几条盖层自带 display:flex,权重一样时靠顺序压住它们 */
       .dr-wrap .dr-hidden { display: none; }
     </style>
@@ -270,7 +375,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         <div class="dr-label">🏁 选比赛方式</div>
         <div class="dr-seg dr-mode">
           <button type="button" data-v="rush" class="on">🏁 无尽竞速 · 先撞 ${CRASH_LIMIT} 次者输</button>
-          <button type="button" data-v="ghost">👻 幽灵对战 · 追上次的自己</button>
+          <button type="button" data-v="items">✨ 道具竞速 · 道具＋中途分岔</button>
+          <button type="button" data-v="ghost">👻 幽灵对战 · 追上一次的成绩</button>
           <button type="button" data-v="endless">♾️ 无尽对战 · 比谁远</button>
           <button type="button" data-v="coins">🪙 抢金币赛 · 先到 ${COIN_RACE_TARGET}</button>
         </div>
@@ -279,28 +385,48 @@ export function mount(api: GameApi): { destroy: () => void } {
         <div class="dr-label">🙋 选对手</div>
         <div class="dr-seg dr-rival">
           <button type="button" data-v="human" class="on">${avatarHTML("xingxing", 22)} 两个人一起玩</button>
-          <button type="button" data-v="0">🤖 电脑 · ${AI_LABELS[0]}</button>
-          <button type="button" data-v="1">🤖 电脑 · ${AI_LABELS[1]}</button>
-          <button type="button" data-v="2">🤖 电脑 · ${AI_LABELS[2]}</button>
-          <button type="button" data-v="3">🤖 电脑 · ${AI_LABELS[3]}</button>
+          ${AI_LEVELS.map((lv) => `<button type="button" data-v="${lv}">🤖 电脑 · ${AI_LABELS[lv]}</button>`).join("\n          ")}
         </div>
         <p class="dr-hint"></p>
       </div>
-      <label class="dr-handicap">
-        <input type="checkbox" class="dr-handicap-box">
-        <span>🤝 让分：落后的人跑快一点点（最多 ${Math.round(HANDICAP_MAX * 100)}%）</span>
-      </label>
+      <div class="dur-ghostbox dr-hidden">
+        <div class="dr-label">👻 追谁的影子</div>
+        <div class="dr-seg dur-ghostpick">
+          <button type="button" data-v="self" class="on">👻 上次的自己</button>
+          <button type="button" data-v="rival">🫥 对手上一局</button>
+        </div>
+      </div>
+      <div>
+        <div class="dr-label">🤝 让分模式（大人带小孩玩）</div>
+        <div class="dr-seg dur-handicap">
+          <button type="button" data-v="off" class="on">关闭 · 公平对跑</button>
+          <button type="button" data-v="on">打开 · 落后的一方最多 +${Math.round(HANDICAP_MAX * 100)}%</button>
+        </div>
+        <p class="dr-hint dur-handicap-hint">默认关闭。打开以后画面上会一直写着「让分」，谁都看得见。</p>
+      </div>
       <p class="dr-ghostline"></p>
       <button class="dr-softbtn dr-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
       <button class="dr-softbtn dr-collectbtn dr-hidden" type="button">🎁 我的收藏册</button>
       <button class="dr-start" type="button">准备好，开跑 ▶</button>
     </div>
     <div class="dr-game dr-hidden">
-      <canvas class="dr-canvas" role="img" aria-label="两人分屏赛道"></canvas>
+      <div class="dur-stage">
+        <canvas class="dr-canvas" role="img" aria-label="两人分屏赛道"></canvas>
+        ${[0, 1]
+          .map(
+            (seat) => `<div class="dur-pad dur-pad-${seat}" data-seat="${seat}">
+          ${PAD_BUTTONS.map(
+            (b) =>
+              `<button type="button" class="dur-padbtn" data-act="${b.action}" aria-label="${seat === 0 ? "朵朵" : "星星"}${b.label}">${b.emoji}</button>`,
+          ).join("\n          ")}
+        </div>`,
+          )
+          .join("\n        ")}
+      </div>
       <div class="dr-keys">
-        <span class="k1">${avatarHTML("duoduo", 18)} 朵朵 W 跳 · A 左 · S 滑 · D 右</span>
-        <span class="k2">${avatarHTML("xingxing", 18)} 星星 ↑ 跳 · ← 左 · ↓ 滑 · → 右</span>
-        <span>📱 各自在自己那半边滑动</span>
+        <span class="k1">${avatarHTML("duoduo", 18)} 朵朵 W 跳 · A 左 · S 滑 · D 右 · F 道具 · G 加油</span>
+        <span class="k2">${avatarHTML("xingxing", 18)} 星星 ↑ 跳 · ← 左 · ↓ 滑 · → 右 · L 道具 · K 加油</span>
+        <span>📱 各自在自己那半边滑动，右下角两颗按钮是道具和加油</span>
       </div>
       <div class="dr-btns">
         <button class="dr-pause" type="button">⏸ 暂停</button>
@@ -308,6 +434,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         <button class="dr-back" type="button">🔧 换玩法</button>
       </div>
       <div class="dr-msg"></div>
+      <div class="dur-note"></div>
       <div class="dr-count dr-hidden"></div>
       <div class="dr-pausepanel dr-hidden">
         <h3>⏸ 暂停中</h3>
@@ -330,10 +457,12 @@ export function mount(api: GameApi): { destroy: () => void } {
   const countEl = pick(".dr-count");
   const pauseEl = pick(".dr-pausepanel");
   const msgEl = pick(".dr-msg");
+  const noteEl = pick(".dur-note");
   const hintEl = pick(".dr-hint");
   const ghostLineEl = pick(".dr-ghostline");
   const rivalBox = pick(".dr-rivalbox");
-  const handicapBox = pick<HTMLInputElement>(".dr-handicap-box");
+  const ghostBox = pick(".dur-ghostbox");
+  const pads: [HTMLElement, HTMLElement] = [pick(".dur-pad-0"), pick(".dur-pad-1")];
   const collectBtn = pick<HTMLButtonElement>(".dr-collectbtn");
   const canvas = pick<HTMLCanvasElement>(".dr-canvas");
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
@@ -355,6 +484,19 @@ export function mount(api: GameApi): { destroy: () => void } {
     canvas.width = Math.round(size.width * dpr);
     canvas.height = Math.round(size.height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layoutPads();
+  }
+
+  /** 触屏按钮贴在各自那半屏的内侧下角，位置由 `padRects` 算，两人永不重叠。 */
+  function layoutPads(): void {
+    for (const seat of [0, 1] as const) {
+      const [first, second] = padRects(size, size.layout, seat);
+      const el = pads[seat];
+      el.style.left = `${first.x}px`;
+      el.style.top = `${first.y}px`;
+      el.style.width = `${second.x + second.width - first.x}px`;
+      el.style.height = `${first.height}px`;
+    }
   }
   relayout();
 
@@ -387,9 +529,9 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function refreshHint(): void {
     if (mode === "ghost") {
-      hintEl.textContent = "幽灵对战是一个人的项目，对手就是上一次的自己。";
+      hintEl.textContent = "幽灵对战一个人就能跑，对手是一段录下来的配速。";
     } else if (aiLevel === null) {
-      hintEl.textContent = "两个人一起玩：朵朵用左手 W A S D，星星用右手方向键。";
+      hintEl.textContent = "两个人一起玩：朵朵用左手 W A S D + F G，星星用右手方向键 + L K。";
     } else {
       hintEl.textContent = `电脑 · ${AI_LABELS[aiLevel]}：${AI_HINTS[aiLevel]}`;
     }
@@ -397,9 +539,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     for (const b of Array.from(wrap.querySelectorAll<HTMLButtonElement>(".dr-rival button"))) {
       b.disabled = mode === "ghost";
     }
-    ghostLineEl.textContent = ghost
-      ? `👻 上一次的最好成绩：${ghost.dist} 米（用了 ${ghost.seconds} 秒）`
-      : `👻 还没有幽灵。先跑一局 ${GHOST_MIN_DIST} 米以上，它就会记下来。`;
+    ghostBox.classList.toggle("dr-hidden", mode !== "ghost");
+    const snap = ghosts[ghostSource];
+    ghostLineEl.textContent = snap
+      ? ghostCaption(snap)
+      : `${mode === "ghost" ? "" : "👻 "}还没有影子。先跑一局 ${GHOST_MIN_DIST} 米以上，它就会记下来。`;
   }
 
   function bindSeg(sel: string, onPick: (value: string) => void): void {
@@ -421,12 +565,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     aiLevel = v === "human" ? null : (Number(v) as AiLevel);
     refreshHint();
   });
-  let handicap = false;
-  const onHandicap = (): void => {
-    handicap = handicapBox.checked;
-    api.play("tap");
-  };
-  handicapBox.addEventListener("change", onHandicap);
+  bindSeg(".dur-ghostpick", (v) => {
+    ghostSource = v === "rival" ? "rival" : "self";
+    refreshHint();
+  });
+  bindSeg(".dur-handicap", (v) => {
+    handicapOn = v === "on";
+    refreshHint();
+  });
   refreshHint();
 
   /* ---------------- 开局与收尾 ---------------- */
@@ -435,15 +581,26 @@ export function mount(api: GameApi): { destroy: () => void } {
     clearTimeout(endTimer);
     clearTimeout(countTimer);
     const seed = (Math.random() * 0xffffffff) >>> 0;
-    state = createMatch({ mode, seed, aiLevel, ghost, handicap });
+    const snap = ghosts[ghostSource];
+    state = createMatch({
+      mode,
+      seed,
+      aiLevel,
+      ghost: snap ? { dist: snap.dist, seconds: snap.seconds } : null,
+      ghostSource,
+      difficulty: levelSetup.tier,
+      // 关号越高赛道越紧，第二档起主赛道也会出现分岔；道具竞速则一律带道具与分岔
+      forks: mode === "items" || (levelSetup.tier >= 1 && mode !== "coins" && mode !== "ghost"),
+      powerups: mode === "items",
+      handicap: handicapOn,
+    });
     running = false;
     paused = false;
     pauseEl.classList.add("dr-hidden");
     setupEl.classList.add("dr-hidden");
     gameEl.classList.remove("dr-hidden");
     relayout();
-    const badge = handicapBadge(handicap);
-    msgEl.textContent = badge ? `${badge}｜${openingLine()}` : openingLine();
+    msgEl.textContent = openingLine();
     let n = 3;
     countEl.classList.remove("dr-hidden");
     countEl.textContent = "3";
@@ -466,23 +623,42 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function openingLine(): string {
     if (mode === "rush") return `两条赛道一模一样，先撞满 ${CRASH_LIMIT} 次的人输！`;
+    if (mode === "items") {
+      return "捡到道具按 F / L 用出去；分岔口站右道走右边那条，站左道或中道走左边那条！";
+    }
     if (mode === "ghost") {
-      return ghost
-        ? `追上那个半透明的自己——超过 ${ghost.dist} 米就赢了！`
-        : "第一次跑，先把成绩留下来，下一局就有幽灵陪你了。";
+      const snap = ghosts[ghostSource];
+      return snap
+        ? `追上那个半透明的影子——超过 ${snap.dist} 米就赢了！`
+        : "第一次跑，先把成绩留下来，下一局就有影子陪你了。";
     }
     if (mode === "coins") return `先吃到 ${COIN_RACE_TARGET} 枚金币就赢！`;
     return "三颗心用完就定格，比谁跑得远！";
   }
 
+  /**
+   * 把这一局留下来：自己那一趟存成「自己的影子」，
+   * 真人对手 / 电脑那一趟存成「对手上一局」，两把 key 各存各的，谁也不覆盖谁。
+   */
   function rememberGhost(s: MatchState): void {
-    const rec = makeGhostRecord(s.runners[0].dist, s.time);
-    if (!rec) return;
-    const best = betterGhost(ghost, rec);
-    if (best && best !== ghost) {
-      ghost = best;
-      saveGhost(best);
+    // 自己那份留**最好**的一次；对手那份留**上一局**（名字就叫「对手上一局」）
+    const self = makeGhostSnapshot("self", s.runners[0].dist, s.time, s.runners[0].name);
+    if (self && self.dist >= GHOST_MIN_DIST && self.dist > (ghosts.self?.dist ?? 0)) {
+      ghosts.self = self;
+      saveGhost(self);
     }
+    if (s.runners[1].ghost) return;
+    const rival = makeGhostSnapshot("rival", s.runners[1].dist, s.time, s.runners[1].name);
+    if (rival && rival.dist >= GHOST_MIN_DIST) {
+      ghosts.rival = rival;
+      saveGhost(rival);
+    }
+  }
+
+  /** 无尽类赛制的里程统一记进平台的无尽纪录（只增不减）。 */
+  function rememberEndless(s: MatchState): number {
+    if (s.mode === "coins") return save.getGameProgress(meta.id).endlessBest;
+    return save.recordEndlessBest(meta.id, Math.floor(s.runners[0].dist));
   }
 
   function resultLine(s: MatchState): string {
@@ -493,19 +669,20 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
     if (s.mode === "ghost") {
       const best = s.ghost?.dist ?? 0;
+      const who = s.ghostSource === "rival" ? "对手上一局" : "上一次";
       if (s.winner === 0) {
         return s.ghost
-          ? `👻 追过去了！这一次 ${meters} 米，上一次只有 ${best} 米。`
+          ? `${s.ghostSource === "rival" ? "🫥" : "👻"} 追过去了！这一次 ${meters} 米，${who}只有 ${best} 米。`
           : `这一趟 ${meters} 米已经记下来啦，下一局就能和这个影子赛跑。`;
       }
-      return `这一次 ${meters} 米，上一次跑到 ${best} 米。差的这一段，下一局补回来。`;
+      return `这一次 ${meters} 米，${who}跑到 ${best} 米。差的这一段，下一局补回来。`;
     }
     const w = s.winner === 0 ? a : b;
     const l = s.winner === 0 ? b : a;
     if (s.mode === "coins") {
       return `${w.emoji} ${w.name}先抢到 ${COIN_RACE_TARGET} 枚金币，获胜！`;
     }
-    if (s.mode === "rush") {
+    if (s.mode === "rush" || s.mode === "items") {
       return `${w.emoji} ${w.name}赢啦！${l.name}先撞满了 ${CRASH_LIMIT} 次（${w.name} ${Math.floor(w.dist)} 米 / ${l.name} ${Math.floor(l.dist)} 米）。`;
     }
     return `${w.emoji} ${w.name}赢啦！跑了 ${Math.floor(w.dist)} 米，对手 ${Math.floor(l.dist)} 米。`;
@@ -514,9 +691,12 @@ export function mount(api: GameApi): { destroy: () => void } {
   function onMatchOver(s: MatchState): void {
     running = false;
     rememberGhost(s);
+    const best = rememberEndless(s);
     refreshHint();
     const text = resultLine(s);
     msgEl.textContent = text;
+    noteEl.textContent =
+      s.mode === "coins" ? "" : `📏 无尽最好成绩：${best} 米。慢慢来，每一局都在进步。`;
     api.play("win");
     clearTimeout(endTimer);
     endTimer = window.setTimeout(() => {
@@ -711,6 +891,27 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.beginPath();
       ctx.ellipse(p.x, cy, u * 0.085, u * 0.12, 0, 0, Math.PI * 2);
       ctx.fill();
+    } else if (e.kind === "power") {
+      // 道具是一颗软软的糖泡，里面浮着它自己的小图标
+      const cy = p.y - u * 0.5;
+      ctx.fillStyle = "rgba(60,60,90,.12)";
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, u * 0.16, u * 0.06, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,.86)";
+      ctx.beginPath();
+      ctx.ellipse(p.x, cy, u * 0.24, u * 0.24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(178,150,220,.85)";
+      ctx.lineWidth = Math.max(1, u * 0.03);
+      ctx.stroke();
+      const icon = POWERUPS[e.power ?? "speedCloud"].emoji;
+      ctx.font = `${Math.max(6, Math.round(u * 0.3))}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(icon, p.x, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
     } else if (e.kind === "boost") {
       ctx.fillStyle = "rgba(126,220,150,.8)";
       ctx.beginPath();
@@ -739,9 +940,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     const squash = slideT > 0 ? slideSquash(slideT) : 1;
     const base = laneWidthAt(pane, RUNNER_Z) * 0.6;
     const bodyH = base * squash;
-    const shake = r.bump > 0 ? Math.sin(s.time * 42) * base * 0.12 * r.bump : 0;
+    const calm = reducedMotion();
+    const shake = bumpShake(r.bump, s.time, base, calm);
     const cx = p.x + shake;
     const cy = p.y - lift - bodyH / 2;
+    // 换道中的轻侧倾：reduced-motion 下自动归零，位移照旧
+    const tilt = (laneTiltDeg(r.lane, r.laneFloat, calm) * Math.PI) / 180;
 
     ctx.save();
     // 影子
@@ -749,6 +953,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, base * 0.42 * (1 - jumpArc(jumpT) * 0.4), base * 0.15, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    if (tilt !== 0) {
+      ctx.translate(cx, cy);
+      ctx.rotate(tilt);
+      ctx.translate(-cx, -cy);
+    }
 
     const blink = s.time < r.safeUntil && Math.floor(s.time * 9) % 2 === 0;
     if (r.ghost) ctx.globalAlpha = 0.45;
@@ -799,29 +1009,104 @@ export function mount(api: GameApi): { destroy: () => void } {
         ctx.ellipse(cx - base * 0.5, p.y, base * 0.3, base * 0.09, 0, 0, Math.PI * 2);
         ctx.fill();
       }
+      // 护盾泡：一圈半透明的光壳裹着人
+      if (r.powers.shield > 0) {
+        ctx.strokeStyle = "rgba(140,200,255,.9)";
+        ctx.lineWidth = Math.max(1.5, base * 0.07);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, base * 0.62, bodyH * 0.68, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // 被撒了彩纸：头顶飘几片纸屑，慢一点点而已
+      if (r.powers.confetti > 0) {
+        for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = ["#FFC6DC", "#B9D4FA", "#FFE39B"][i];
+          const dx = Math.sin(s.time * 6 + i * 2) * base * 0.35;
+          ctx.fillRect(cx + dx, cy - bodyH * 0.8 - i * base * 0.16, base * 0.12, base * 0.08);
+        }
+      }
+      // 加油：冒一个小爱心，纯打气
+      if (s.time < r.cheerUntil) {
+        ctx.font = `${Math.round(base * 0.5)}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("💖", cx + base * 0.72, cy - bodyH * 0.5);
+      }
     }
     ctx.restore();
+    // 领先者头顶一顶小皇冠（落后的一方什么都不写，绝不出现羞辱文案）
+    if (!r.ghost && !r.out && leaderSeat(s) === seat) {
+      ctx.save();
+      ctx.font = `${Math.round(base * 0.46)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("👑", p.x, cy - crownOffset(base));
+      ctx.restore();
+    }
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     void theme;
   }
 
-  function drawHud(pane: Rect, s: MatchState, r: Runner, seat: Seat, theme: Theme): void {
-    const fs = Math.max(11, Math.min(17, Math.round(pane.height * 0.085)));
-    const pad = Math.round(fs * 0.5);
+  /** 身上还挂着的道具效果，画成一串小图标（没有就返回空串） */
+  function activeIcons(r: Runner): string {
+    let out = "";
+    if (r.powers.speedCloud > 0) out += POWERUPS.speedCloud.emoji;
+    if (r.powers.shield > 0) out += POWERUPS.shieldBubble.emoji.repeat(r.powers.shield);
+    if (r.powers.magnetStar > 0) out += POWERUPS.magnetStar.emoji;
+    if (r.powers.confetti > 0) out += POWERUPS.confetti.emoji;
+    return out;
+  }
+
+  /** 正走在哪条支路：左路 / 右路，加一个「稳」或「快」的小标记 */
+  function branchTag(s: MatchState, r: Runner): string {
+    const fork: ForkSection | undefined = s.forks.find((f) => f.at === r.branchAt);
+    if (!fork || r.branch === null) return "";
+    const mine = fork.branches[r.branch];
+    const other = fork.branches[r.branch === 0 ? 1 : 0];
+    const side = mine.side === "left" ? "🌿 左路" : "🌈 右路";
+    return `${side}${mine.difficulty <= other.difficulty ? "·稳" : "·快"}`;
+  }
+
+  /** HUD 压成一行：名字 + 里程 + 金币 + 心 + 道具槽 + 身上的效果 + 让分标注 */
+  function hudText(s: MatchState, r: Runner, seat: Seat): string {
     const lives = livesLeft(s, seat);
-    const hearts = r.ghost ? "👻" : "❤️".repeat(lives) + "🤍".repeat(Math.max(0, CRASH_LIMIT - lives));
-    const text = `${r.emoji} ${r.name}　${Math.floor(r.dist)} 米　🪙 ${r.coins}　${hearts}`;
+    const hearts = r.ghost
+      ? r.emoji
+      : "❤️".repeat(lives) + "🤍".repeat(Math.max(0, CRASH_LIMIT - lives));
+    const parts = [`${r.emoji} ${r.name}`, `${Math.floor(r.dist)} 米`, `🪙 ${r.coins}`, hearts];
+    if (s.usePowerups && !r.ghost) {
+      parts.push(r.held ? `✋${POWERUPS[r.held].emoji}` : "✋—");
+      const on = activeIcons(r);
+      if (on) parts.push(on);
+    }
+    if (r.branch !== null) parts.push(branchTag(s, r));
+    const other = s.runners[seat === 0 ? 1 : 0];
+    const boost = r.ghost ? 1 : handicapMult(s.handicap, r.dist, other.dist);
+    if (boost > 1) parts.push(`🤝 让分 +${Math.round((boost - 1) * 100)}%`);
+    return parts.join("　");
+  }
+
+  function drawHud(pane: Rect, s: MatchState, r: Runner, seat: Seat, theme: Theme): void {
+    const fs = Math.max(10, Math.min(17, Math.round(pane.height * 0.085)));
+    const pad = Math.round(fs * 0.5);
+    const text = hudText(s, r, seat);
     ctx.save();
     ctx.font = `800 ${fs}px "PingFang SC", "Microsoft YaHei", sans-serif`;
-    const w = ctx.measureText(text).width + pad * 2;
+    // 窄屏上一行放不下就整条压扁横向缩放，绝不换行、绝不溢出自己那一格
+    const raw = ctx.measureText(text).width;
+    const room = pane.width - pad * 3;
+    const squeeze = raw > room ? room / raw : 1;
+    const w = Math.min(raw, room) + pad * 2;
     ctx.fillStyle = theme.hud;
     ctx.beginPath();
     ctx.roundRect(pane.x + pad, pane.y + pad, w, fs + pad * 1.4, 10);
     ctx.fill();
     ctx.fillStyle = theme.ink;
     ctx.textBaseline = "middle";
-    ctx.fillText(text, pane.x + pad * 2, pane.y + pad + (fs + pad * 1.4) / 2);
+    ctx.translate(pane.x + pad * 2, pane.y + pad + (fs + pad * 1.4) / 2);
+    ctx.scale(squeeze, 1);
+    ctx.fillText(text, 0, 0);
     ctx.restore();
     ctx.textBaseline = "alphabetic";
   }
@@ -836,14 +1121,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawSky(pane, theme, r.dist);
     drawRoad(pane, theme, r.dist);
 
-    // 远的先画、近的后画，遮挡关系才对
-    const entities = s.gen.ensure(r.dist + DRAW_DISTANCE + 40);
+    // 远的先画、近的后画，遮挡关系才对。在分岔支路上就画支路的东西。
+    const view = entitiesFor(s, seat);
     const visible: Array<{ e: Entity; z: number }> = [];
-    for (let i = r.resolved; i < entities.length; i++) {
-      const z = entities[i].at - r.dist;
+    for (let i = view.from; i < view.entities.length; i++) {
+      const z = view.entities[i].at - r.dist;
       if (z > DRAW_DISTANCE) break;
       if (z < -1) continue;
-      visible.push({ e: entities[i], z });
+      visible.push({ e: view.entities[i], z });
     }
     for (let i = visible.length - 1; i >= 0; i--) drawEntity(pane, visible[i].e, visible[i].z);
 
@@ -869,19 +1154,24 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.restore();
   }
 
+  /** 两格之间的粉彩描边：外面一圈粉、里面一条白，谁是谁的地盘一眼看得清 */
   function drawDivider(): void {
+    const line = (w: number, color: string): void => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      if (size.layout === "column") {
+        ctx.moveTo(0, size.height / 2);
+        ctx.lineTo(size.width, size.height / 2);
+      } else {
+        ctx.moveTo(size.width / 2, 0);
+        ctx.lineTo(size.width / 2, size.height);
+      }
+      ctx.stroke();
+    };
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,.9)";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    if (size.layout === "column") {
-      ctx.moveTo(0, size.height / 2);
-      ctx.lineTo(size.width, size.height / 2);
-    } else {
-      ctx.moveTo(size.width / 2, 0);
-      ctx.lineTo(size.width / 2, size.height);
-    }
-    ctx.stroke();
+    line(7, "rgba(242,160,192,.85)");
+    line(3, "rgba(255,255,255,.95)");
     ctx.restore();
   }
 
@@ -915,6 +1205,13 @@ export function mount(api: GameApi): { destroy: () => void } {
     jump: "jump",
     slide: "tap",
     crash: "oops",
+    power: "coin",
+    use: "pop",
+    shield: "pop",
+    confetti: "tap",
+    cheer: "meow",
+    fork: "tap",
+    merge: "tap",
   };
 
   function playEvents(s: MatchState): void {
@@ -1024,6 +1321,17 @@ export function mount(api: GameApi): { destroy: () => void } {
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerUp);
 
+  /* 手机：每半屏右下角两颗圆按钮，等价于键盘的 F/G 与 L/K */
+  const onPadClick = (e: Event): void => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".dur-padbtn");
+    if (!btn) return;
+    const seat = Number(btn.parentElement?.dataset.seat ?? 0) === 1 ? 1 : 0;
+    const act = btn.dataset.act === "cheer" ? "cheer" : "use";
+    e.preventDefault();
+    doAction(seat as Seat, act);
+  };
+  for (const pad of pads) pad.addEventListener("click", onPadClick);
+
   /* ---------------- 按钮 ---------------- */
 
   pick<HTMLButtonElement>(".dr-start").addEventListener("click", () => {
@@ -1076,11 +1384,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       clearTimeout(countTimer);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
-      handicapBox.removeEventListener("change", onHandicap);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointercancel", onPointerUp);
+      for (const pad of pads) pad.removeEventListener("click", onPadClick);
       ro?.disconnect();
       ro = null;
       touches.clear();

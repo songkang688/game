@@ -70,6 +70,13 @@ export const AI_BLOCKING: Record<AiLevel, boolean> = {
   3: true,
 };
 
+/**
+ * **不许耍赖的白纸黑字**：电脑的速度倍率永远是 1，四档都一样。
+ * 它跑的是玩家一模一样的速度曲线，也只吃玩家能吃到的加速带与道具，
+ * 强只强在「看得早、想得清、站得好」。`ai.test.ts` 会逐档检查这张表。
+ */
+export const AI_SPEED_MULT: Record<AiLevel, 1> = { 0: 1, 1: 1, 2: 1, 3: 1 };
+
 /** 提前多少秒开始横移（换道比跳跃安全，所以给的提前量大得多） */
 export const LANE_LEAD_SECONDS = 1.25;
 /** 跳跃 / 下滑在离障碍还有这么久的时候按下，正好在半空中撞上 */
