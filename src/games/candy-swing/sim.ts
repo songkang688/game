@@ -24,10 +24,16 @@ import {
   nearestAnchoredLink,
   patrolPosition,
   retuneLinks,
+  setVelocity,
   snipOccurred,
   solveLinks,
+  springBounce,
+  springNormal,
+  stickyGripStep,
   teleport,
+  velocityOf,
   winchScale,
+  type StickyGrip,
 } from "./physics";
 import { LEVELS, type LevelDef } from "./levels";
 import {
@@ -89,6 +95,12 @@ export interface SimWorld {
   sticky: StickyState;
   hooksUsed: boolean[];
   puffsLeft: number[];
+  /** 1.2 黏黏泡：每个泡泡一份黏住状态 */
+  grips: StickyGrip[];
+  /** 1.2 弹簧蘑菇：每个蘑菇被踩了几次（诊断与用例断言用） */
+  springHits: number[];
+  /** 全程被黏住的总秒数（用例断言用） */
+  stuckT: number;
   portalCooldown: number;
   ropeLinkRanges: Array<[number, number]>;
   cutAll: () => void;
@@ -161,6 +173,9 @@ export function makeSimFor(lv: LevelDef): SimWorld {
     sticky: createSticky(),
     hooksUsed: (lv.hooks ?? []).map(() => false),
     puffsLeft: (lv.balloons ?? []).map((b) => b.puffs),
+    grips: (lv.stickies ?? []).map(() => ({ left: 0, used: false })),
+    springHits: (lv.springs ?? []).map(() => 0),
+    stuckT: 0,
     portalCooldown: 0,
     ropeLinkRanges,
     cutAll: () => {
@@ -284,6 +299,32 @@ export function stepSim(w: SimWorld): void {
 
   if (!playing) return;
 
+  // 1.2 黏黏泡：黏住期间把糖果钉在泡泡中心，速度归零
+  (w.lv.stickies ?? []).forEach((st, i) => {
+    const r = stickyGripStep(w.grips[i], st.hold, c.x, c.y, CANDY_R, st.x, st.y, st.radius, DT);
+    w.grips[i] = r.grip;
+    if (r.gripped) {
+      w.stuckT += DT;
+      c.x = st.x;
+      c.y = st.y;
+      setVelocity(c, 0, 0, DT);
+    }
+  });
+
+  // 1.2 弹簧蘑菇：踩到就换个方向弹走
+  (w.lv.springs ?? []).forEach((sp, i) => {
+    if (!circlesOverlap(c.x, c.y, CANDY_R, sp.x, sp.y, sp.radius)) return;
+    const n = springNormal(sp.dir);
+    const v = velocityOf(c, DT);
+    const out = springBounce(v.vx, v.vy, n.nx, n.ny, sp.bounce, sp.minOut);
+    // 先推出伞盖再给速度，免得下一帧又判一次
+    const push = sp.radius + CANDY_R + 1;
+    c.x = sp.x + n.nx * push;
+    c.y = sp.y + n.ny * push;
+    setVelocity(c, out.vx, out.vy, DT);
+    w.springHits[i]++;
+  });
+
   // 传送门（单向）
   if (w.portalCooldown <= 0 && !attachedToAnchor(w.ps, w.links)) {
     for (const p of w.lv.portals ?? []) {
@@ -369,6 +410,12 @@ export function stepSim(w: SimWorld): void {
 
   if (c.y > 480 + 60 || c.x < -60 || c.x > 360 + 60 || c.y < -80) {
     w.failed = "out";
+    return;
+  }
+
+  // 无尽「甜甜塔」的限时（闯关模式不填 timeLimit，永远不会走到这里）
+  if (w.lv.timeLimit !== undefined && w.t > w.lv.timeLimit) {
+    w.failed = "time";
   }
 }
 

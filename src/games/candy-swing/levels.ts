@@ -157,6 +157,30 @@ export interface GremlinDef {
   delay?: number;
 }
 
+/** 1.2 新增机关①：黏黏泡。糖果撞进来被黏住 hold 秒，到点自己放开（一次性）。 */
+export interface StickyDef {
+  x: number;
+  y: number;
+  /** 黏住判定半径 */
+  radius: number;
+  /** 黏住几秒 */
+  hold: number;
+}
+
+/** 1.2 新增机关②：弹簧蘑菇。踩到就朝 dir 方向弹走，换个方向继续飞。 */
+export interface SpringDef {
+  x: number;
+  y: number;
+  /** 蘑菇伞盖半径（碰撞判定用） */
+  radius: number;
+  /** 弹出方向 */
+  dir: "up" | "down" | "left" | "right";
+  /** 法向速度放大倍数 */
+  bounce: number;
+  /** 保底弹出速度 px/s：轻轻蹭一下也弹得动 */
+  minOut: number;
+}
+
 /**
  * 通关配方：测试用它逐帧仿真验证每一关都能赢。
  * dir 为 1 表示往右、-1 表示往左；镜像变换会自动翻转。
@@ -205,6 +229,13 @@ export interface LevelDef {
   gremlins?: GremlinDef[];
   /** 1.2 新增机关 */
   mushrooms?: MushroomDef[];
+  stickies?: StickyDef[];
+  springs?: SpringDef[];
+  /**
+   * 1.2 无尽「甜甜塔」用：本层必须在这么多秒内把糖果送进嘴里。
+   * 闯关模式不填（不限时）。
+   */
+  timeLimit?: number;
   /** 通关配方（测试仿真用） */
   solve: SolveRecipe;
 }
@@ -287,6 +318,9 @@ export function mechanismKinds(lv: LevelDef): string[] {
   if ((lv.fans ?? []).length > 0) kinds.push("fan");
   if ((lv.magnets ?? []).length > 0) kinds.push("magnet");
   if ((lv.gremlins ?? []).length > 0) kinds.push("gremlin");
+  // ---- 1.2 新机关 ----
+  if ((lv.stickies ?? []).length > 0) kinds.push("sticky");
+  if ((lv.springs ?? []).length > 0) kinds.push("spring");
   return kinds;
 }
 
@@ -339,6 +373,10 @@ function mirrorLevel(lv: LevelDef): LevelDef {
       x1: CANVAS_W - g.x1,
       x2: CANVAS_W - g.x2,
     }));
+  }
+  if (lv.stickies) m.stickies = lv.stickies.map((s) => ({ ...s, x: CANVAS_W - s.x }));
+  if (lv.springs) {
+    m.springs = lv.springs.map((s) => ({ ...s, x: CANVAS_W - s.x, dir: flipDir(s.dir) }));
   }
   m.solve = mirrorSolve(lv.solve);
   return m;

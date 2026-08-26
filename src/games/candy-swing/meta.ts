@@ -8,11 +8,13 @@ export const meta = {
   emoji: "🍬",
   category: "action" as const,
   color: "#FFE0EE",
-  blurb: "188 关 10 大主题！剪绳、发条、磁铁、气流、粘性泡泡和弹簧蘑菇，把糖果送进啾啾嘴里；还有一颗接一颗的无尽甜甜塔。",
-  // levels.ts 的 CHAPTER_SIZES 合计 188 关(自带存档);
-  // 1.2 补了无尽「甜甜塔」,机关随颗数登场,成绩走 save.recordEndlessBest("candy-swing")。
-  // 对战没做:划绳是「一个人静下心算轨迹」的玩法,同屏两个人只能轮流干等,做了也不好玩。
-  // platform 字段等窗口 1 的平台模块合进来再补,这里不自造一套。
+  blurb: "188 关 10 大主题，外加无尽甜甜塔！剪绳、黏黏泡、弹簧蘑菇，一刀两断把糖送进啾啾嘴里！",
+  // levels.ts 的 CHAPTER_SIZES 合计 188 关(自带存档)
+  // 无尽「甜甜塔」在 endless.ts 现搭关卡,成绩走 save.recordEndlessBest("candy-swing", n)
+  // 不做对战:割绳是「观察 → 规划 → 一次性下刀」的单人解谜,同屏两人划同一根绳,
+  // 先下刀那个直接决定糖果轨迹,后手完全没有可操作空间;拆成两块画布又变成各玩各的,不是对战。
   modes: ["campaign", "endless"] as const,
+  // 手指划线与鼠标拖拽完全等价,手游端游都能玩
+  platform: "both" as const,
   levels: 188,
 };
