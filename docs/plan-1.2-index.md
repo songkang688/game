@@ -117,3 +117,4 @@ docs/plan-1.2-step<步号>-<档>-<英文短名>.md
 3. 全部工作在分支 `game-1.2`，不改 `main`。
 4. 执行子代理的模型 slug 一律 `claude-opus-5-thinking-high-fast`（不带方括号）。
 5. 步 0（合入最新 `game-1.1` 代码）**已经做完**：库存 55 款，`npm test` 158 文件 / 4456 用例。
+6. **五窗口并行派发（现行）：** 说明见 [`plan-1.2-windows.md`](./plan-1.2-windows.md)。复制 [`plan-1.2-window1.md`](./plan-1.2-window1.md) … [`window5.md`](./plan-1.2-window5.md) 发给五个窗口。第 27–29 步不再单派，改由每窗自己的 +1 三轮验收覆盖本窗游戏。
