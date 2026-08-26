@@ -8,6 +8,10 @@
  *  ①春日小奶猫=喂饭+逗猫  ②夏日玩水=洗澡登场  ③秋日野餐=打扮登场
  *  ④冬日暖炉=哄睡摇篮曲  ⑤生日派对=四任务连做  ⑥梦幻旅行=五任务终极照顾
  * 每关由确定性生成器排出任务清单，同一关每次进入一致。
+ *
+ * 1.2 只动这份表里的两处内容，一个生成参数都没碰：
+ *  · 护理柜与症状表整表换成温和的日常照料词（见 `CURE_TOOLS` / `SYMPTOMS`）；
+ *  · 衣柜每件配饰补上 `tags`，让搭配评分能照着规则表逐条讲理由。
  */
 import { mulberry32, pick, shuffled, type Chapter } from "../level99";
 
@@ -33,7 +37,7 @@ export interface KittyLevel {
   theme: number;
   /** 1.1 同屋要照顾的猫数（2..3），前 99 关不带 */
   cats?: number;
-  /** 1.1 心情值起点，掉到 0 本关就要重来，前 99 关不带 */
+  /** 1.1 心情值起点（1.2 起掉到 0 不再重来，猫会躲进纸箱等安抚），前 99 关不带 */
   moodStart?: number;
   /** 1.1 心情值上限，前 99 关不带 */
   moodMax?: number;
@@ -229,38 +233,54 @@ export function moodMistakeBudget(start: number, max: number): number {
 // 1.1 机制三：生病与看病
 // ---------------------------------------------------------------------------
 
+/**
+ * 1.2 起护理柜分成两类：`check` 是「先看一看」的观察动作，`care` 是日常照料动作。
+ * 全表只留温和的日常照料，**没有任何打针、喂药、伤口、手术的字眼**，
+ * 每种小毛病的最后一步固定是「带去看兽医」——照顾归孩子，看病归大人和兽医。
+ */
+export type CureKind = "check" | "care";
+
 export interface CureTool {
   emoji: string;
   name: string;
+  /** check=先观察，care=动手照料 */
+  kind: CureKind;
 }
 
-/** 诊所里的护理用品（也当作错误选项的干扰项） */
+/** 护理柜：先看一看的四种观察 + 八种日常照料（也互相当作干扰项） */
 export const CURE_TOOLS: CureTool[] = [
-  { emoji: "🌡️", name: "体温计" },
-  { emoji: "💧", name: "温水" },
-  { emoji: "💊", name: "小药丸" },
-  { emoji: "🧣", name: "小毯子" },
-  { emoji: "🧴", name: "药水" },
-  { emoji: "🩹", name: "创可贴" },
-  { emoji: "🧻", name: "纸巾" },
-  { emoji: "🩺", name: "听诊器" }
+  { emoji: "👀", name: "看看小鼻子", kind: "check" },
+  { emoji: "🥣", name: "看看饭碗", kind: "check" },
+  { emoji: "🐾", name: "看看小爪子", kind: "check" },
+  { emoji: "🪶", name: "摸摸毛", kind: "check" },
+  { emoji: "💧", name: "喝点温水", kind: "care" },
+  { emoji: "🧣", name: "盖上小毯子", kind: "care" },
+  { emoji: "🤏", name: "轻轻拔小刺", kind: "care" },
+  { emoji: "🧤", name: "戴手套梳毛", kind: "care" },
+  { emoji: "🍲", name: "换成软软的饭", kind: "care" },
+  { emoji: "🛏️", name: "安安静静休息", kind: "care" },
+  { emoji: "🧻", name: "擦擦小鼻子", kind: "care" },
+  { emoji: "🩺", name: "带去看兽医", kind: "care" }
 ];
 
 export interface Symptom {
   name: string;
   emoji: string;
-  /** 正确的护理顺序（按名字引用 CURE_TOOLS） */
+  /** 正确的护理顺序（按名字引用 CURE_TOOLS）：第一步一定是观察，最后一步一定是找兽医 */
   order: string[];
 }
 
-/** 五种小毛病，各有各的护理顺序（顺序不同，才不是同一个模板） */
+/** 五种小毛病，全是轻症；护理顺序各不相同（顺序不同，才不是同一个模板） */
 export const SYMPTOMS: Symptom[] = [
-  { name: "有点发烧", emoji: "🥵", order: ["体温计", "温水", "小药丸", "小毯子"] },
-  { name: "一直打喷嚏", emoji: "🤧", order: ["纸巾", "温水", "小毯子", "小药丸"] },
-  { name: "爪子擦破皮", emoji: "🐾", order: ["药水", "创可贴", "温水", "小毯子"] },
-  { name: "肚子不舒服", emoji: "😿", order: ["听诊器", "温水", "小药丸", "小毯子"] },
-  { name: "咳嗽个不停", emoji: "😷", order: ["听诊器", "温水", "纸巾", "小药丸"] }
+  { name: "一直打喷嚏", emoji: "🤧", order: ["看看小鼻子", "擦擦小鼻子", "盖上小毯子", "喝点温水", "带去看兽医"] },
+  { name: "今天没胃口", emoji: "🥣", order: ["看看饭碗", "换成软软的饭", "喝点温水", "安安静静休息", "带去看兽医"] },
+  { name: "爪子上有小刺", emoji: "🐾", order: ["看看小爪子", "轻轻拔小刺", "喝点温水", "盖上小毯子", "带去看兽医"] },
+  { name: "毛打结了", emoji: "🪶", order: ["摸摸毛", "戴手套梳毛", "喝点温水", "安安静静休息", "带去看兽医"] },
+  { name: "有点没精神", emoji: "🥱", order: ["看看小鼻子", "喝点温水", "盖上小毯子", "安安静静休息", "带去看兽医"] }
 ];
+
+/** 每次看病收尾都要说的一句话：拿不准就交给大人和兽医，孩子不自己给动物治病 */
+export const CURE_SAFETY_LINE = "拿不准要找大人和兽医，我们只做喂水、保暖这些日常照顾。";
 
 export interface CureStep {
   /** 这一步该用的护理用品 */
@@ -307,6 +327,12 @@ export interface StyleItem {
   name: string;
   /** 属于哪个主题；null 表示怎么搭都不出错的百搭款 */
   theme: StyleTheme | null;
+  /**
+   * 1.2 新增：这件东西身上的标签。评分不再看隐藏的 `theme` 字段，
+   * 而是拿标签去对 `tasks.ts` 里那张写死的规则表，逐条讲清为什么加分、为什么减分。
+   * 空数组 = 百搭款：不加不减，稳稳当当拿一分。
+   */
+  tags: readonly string[];
 }
 
 /** 四个搭配部位，各有五件主题款 + 一件百搭款 */
@@ -314,45 +340,45 @@ export const STYLE_WARDROBE: Array<{ slot: string; items: StyleItem[] }> = [
   {
     slot: "帽子",
     items: [
-      { emoji: "👒", name: "遮阳帽", theme: "夏日海边" },
-      { emoji: "🧶", name: "毛线帽", theme: "冬日雪天" },
-      { emoji: "🎩", name: "小礼帽", theme: "生日派对" },
-      { emoji: "🧢", name: "鸭舌帽", theme: "森林野餐" },
-      { emoji: "👑", name: "小皇冠", theme: "星空晚会" },
-      { emoji: "🎀", name: "蝴蝶结", theme: null }
+      { emoji: "👒", name: "遮阳帽", theme: "夏日海边", tags: ["清凉", "沙滩"] },
+      { emoji: "🧶", name: "毛线帽", theme: "冬日雪天", tags: ["保暖", "厚实"] },
+      { emoji: "🎩", name: "小礼帽", theme: "生日派对", tags: ["闪亮", "热闹"] },
+      { emoji: "🧢", name: "鸭舌帽", theme: "森林野餐", tags: ["轻便", "耐脏"] },
+      { emoji: "👑", name: "小皇冠", theme: "星空晚会", tags: ["闪亮", "夜色"] },
+      { emoji: "🎀", name: "蝴蝶结", theme: null, tags: [] }
     ]
   },
   {
     slot: "围脖",
     items: [
-      { emoji: "🐚", name: "贝壳项链", theme: "夏日海边" },
-      { emoji: "🧣", name: "厚围巾", theme: "冬日雪天" },
-      { emoji: "🎉", name: "彩带领结", theme: "生日派对" },
-      { emoji: "🍀", name: "三叶草挂坠", theme: "森林野餐" },
-      { emoji: "⭐", name: "星星项链", theme: "星空晚会" },
-      { emoji: "🔔", name: "小铃铛", theme: null }
+      { emoji: "🐚", name: "贝壳项链", theme: "夏日海边", tags: ["清凉", "沙滩"] },
+      { emoji: "🧣", name: "厚围巾", theme: "冬日雪天", tags: ["保暖", "厚实"] },
+      { emoji: "🎉", name: "彩带领结", theme: "生日派对", tags: ["闪亮", "热闹"] },
+      { emoji: "🍀", name: "三叶草挂坠", theme: "森林野餐", tags: ["轻便", "耐脏"] },
+      { emoji: "⭐", name: "星星项链", theme: "星空晚会", tags: ["闪亮", "夜色"] },
+      { emoji: "🔔", name: "小铃铛", theme: null, tags: [] }
     ]
   },
   {
     slot: "小包",
     items: [
-      { emoji: "🧺", name: "沙滩篮", theme: "夏日海边" },
-      { emoji: "🎒", name: "绒面背包", theme: "冬日雪天" },
-      { emoji: "🎁", name: "礼物袋", theme: "生日派对" },
-      { emoji: "🍄", name: "蘑菇小包", theme: "森林野餐" },
-      { emoji: "🌙", name: "月亮小包", theme: "星空晚会" },
-      { emoji: "👜", name: "小手袋", theme: null }
+      { emoji: "🧺", name: "沙滩篮", theme: "夏日海边", tags: ["清凉", "沙滩"] },
+      { emoji: "🎒", name: "绒面背包", theme: "冬日雪天", tags: ["保暖", "厚实"] },
+      { emoji: "🎁", name: "礼物袋", theme: "生日派对", tags: ["闪亮", "热闹"] },
+      { emoji: "🍄", name: "蘑菇小包", theme: "森林野餐", tags: ["轻便", "耐脏"] },
+      { emoji: "🌙", name: "月亮小包", theme: "星空晚会", tags: ["闪亮", "夜色"] },
+      { emoji: "👜", name: "小手袋", theme: null, tags: [] }
     ]
   },
   {
     slot: "鞋子",
     items: [
-      { emoji: "🩴", name: "沙滩拖鞋", theme: "夏日海边" },
-      { emoji: "🥾", name: "雪地靴", theme: "冬日雪天" },
-      { emoji: "👞", name: "亮皮鞋", theme: "生日派对" },
-      { emoji: "👟", name: "运动鞋", theme: "森林野餐" },
-      { emoji: "🥿", name: "星光软鞋", theme: "星空晚会" },
-      { emoji: "🧦", name: "厚棉袜", theme: null }
+      { emoji: "🩴", name: "沙滩拖鞋", theme: "夏日海边", tags: ["清凉", "沙滩"] },
+      { emoji: "🥾", name: "雪地靴", theme: "冬日雪天", tags: ["保暖", "厚实"] },
+      { emoji: "👞", name: "亮皮鞋", theme: "生日派对", tags: ["闪亮", "热闹"] },
+      { emoji: "👟", name: "运动鞋", theme: "森林野餐", tags: ["轻便", "耐脏"] },
+      { emoji: "🥿", name: "星光软鞋", theme: "星空晚会", tags: ["闪亮", "夜色"] },
+      { emoji: "🧦", name: "厚棉袜", theme: null, tags: [] }
     ]
   }
 ];
