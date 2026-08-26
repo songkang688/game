@@ -41,6 +41,12 @@ export interface BalloonLevel {
   wind?: number;
   /** 1.1 风向翻面周期（毫秒），前 99 关不带 */
   windFlipMs?: number;
+  /** 1.2 礼物气球概率（不能戳，戳了扣分），前 99 关不带 */
+  giftChance?: number;
+  /** 1.2 双子气球概率（两个绑一起，戳一个一起爆），前 99 关不带 */
+  twinChance?: number;
+  /** 1.2 保护目标：一个礼物气球都不许飞走，前 99 关不带 */
+  protect?: boolean;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -96,20 +102,22 @@ function buildLevel(ci: number, t: number): BalloonLevel {
         mode: t % 2 === 0 ? "color" : "number", cloudChance: 0.14, rainbowChance: 0.05, night: true
       };
     case 6:
-      // 连锁峡谷：连锁气球越来越多，末段还混进乌云
+      // 连锁峡谷：连锁气球越来越多，末段还混进乌云；1.2 起后半段加双子气球
       return {
         target: 14 + t, escapes: 5,
         riseSpeed: 60 + t * 2, spawnMs: 780 - t * 8,
         mode: "free", cloudChance: t >= 12 ? 0.1 : 0, rainbowChance: 0, night: false,
-        chainChance: 0.12 + t * 0.004
+        chainChance: 0.12 + t * 0.004,
+        twinChance: t >= 10 ? 0.12 : 0
       };
     case 7:
-      // 护盾高原：护盾气球要敲两下，偶尔换成颜色指令
+      // 护盾高原：护盾气球要敲两下，偶尔换成颜色指令；1.2 起中段起送礼物气球
       return {
         target: 12 + Math.floor(t / 2), escapes: 5,
         riseSpeed: 58 + t * 2, spawnMs: 800 - t * 8,
         mode: t % 3 === 2 ? "color" : "free", cloudChance: 0.08, rainbowChance: 0, night: false,
-        shieldChance: 0.25 + t * 0.008
+        shieldChance: 0.25 + t * 0.008,
+        giftChance: t >= 6 ? 0.08 : 0
       };
     case 8:
       // 算式云梯：气球上写算式，按得数 1→5 顺序戳
@@ -119,14 +127,18 @@ function buildLevel(ci: number, t: number): BalloonLevel {
         mode: "math", cloudChance: 0, rainbowChance: t >= 10 ? 0.04 : 0, night: false
       };
     default:
-      // 镜风山口：风向定期翻面 + 前面机关轮番客串
+      // 镜风山口：风向定期翻面 + 前面机关轮番客串；
+      // 1.2 起每三关来一关「保护关」：礼物气球一个都不许被风吹跑
       return {
         target: 13 + Math.floor(t / 2), escapes: 5,
         riseSpeed: 62 + t * 2, spawnMs: 780 - t * 8,
         mode: t % 2 === 0 ? "free" : "color", cloudChance: 0.1, rainbowChance: 0.04,
         night: t >= 11,
         wind: 6 + t * 0.5, windFlipMs: 4200 - t * 80,
-        chainChance: t >= 8 ? 0.06 : 0, shieldChance: t >= 14 ? 0.1 : 0
+        chainChance: t >= 8 ? 0.06 : 0, shieldChance: t >= 14 ? 0.1 : 0,
+        giftChance: t >= 4 ? 0.08 : 0,
+        twinChance: t >= 6 ? 0.1 : 0,
+        protect: t >= 4 && t % 3 === 1
       };
   }
 }
