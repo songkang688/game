@@ -13,6 +13,7 @@ export { meta };
  *  · 闯关 188 关：走 level99 通用框架，十个主题章节
  */
 import { AI_TIERS, emptyInput, type AiTier, type Input } from "./ai";
+import { isPauseKey, isWatchedKey, readKeys } from "./keys";
 import {
   ACTOR_R,
   createMatch,
@@ -31,30 +32,6 @@ import { ROSTER, TEAM_COLORS, TEAM_NAMES, fighterById } from "./roster";
 import { STAGES, WORLD_H, WORLD_W, platformAt, stageById, syrupLevel } from "./stages";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
-
-/* ------------------------------------------------------------------ */
-/* 键位                                                                */
-/* ------------------------------------------------------------------ */
-
-/** 朵朵：WASD + F（挥击）/ G（重击） */
-const P1_KEYS: Record<string, keyof Input> = {
-  KeyW: "up",
-  KeyA: "left",
-  KeyS: "down",
-  KeyD: "right",
-  KeyF: "light",
-  KeyG: "heavy",
-};
-
-/** 星星：方向键 + L（挥击）/ K（重击） */
-const P2_KEYS: Record<string, keyof Input> = {
-  ArrowUp: "up",
-  ArrowLeft: "left",
-  ArrowDown: "down",
-  ArrowRight: "right",
-  KeyL: "light",
-  KeyK: "heavy",
-};
 
 /* ------------------------------------------------------------------ */
 /* 小工具                                                              */
@@ -285,13 +262,7 @@ function mountArena(opts: ArenaOptions): Arena {
   const padP2 = emptyInput();
 
   function inputFor(which: "p1" | "p2"): Input {
-    const map = which === "p1" ? P1_KEYS : P2_KEYS;
-    const pad = which === "p1" ? padP1 : padP2;
-    const out = { ...pad };
-    for (const [code, key] of Object.entries(map)) {
-      if (pressed.has(code)) out[key] = true;
-    }
-    return out;
+    return readKeys(pressed, which, which === "p1" ? padP1 : padP2);
   }
 
   function collectInputs(): Record<number, Input> {
@@ -301,22 +272,21 @@ function mountArena(opts: ArenaOptions): Arena {
     return out;
   }
 
-  const watched = new Set([...Object.keys(P1_KEYS), ...Object.keys(P2_KEYS)]);
-
   function onKeyDown(e: KeyboardEvent): void {
     if (destroyed) return;
-    if (e.key === "Escape") {
+    if (isPauseKey(e.key)) {
+      // 接住 Esc 并 preventDefault：壳层看到就不会再弹一次它自己的暂停面板
       e.preventDefault();
       togglePause();
       return;
     }
-    if (!watched.has(e.code)) return;
+    if (!isWatchedKey(e.code)) return;
     // 方向键会滚动页面，空格键会点到按钮，这里统统拦下来
     e.preventDefault();
     pressed.add(e.code);
   }
   function onKeyUp(e: KeyboardEvent): void {
-    if (watched.has(e.code)) pressed.delete(e.code);
+    if (isWatchedKey(e.code)) pressed.delete(e.code);
   }
   function onBlur(): void {
     pressed.clear();
