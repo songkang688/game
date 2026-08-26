@@ -19,6 +19,7 @@ import {
 import {
   PUZZLES,
   THEMES,
+  parseCampaignStars,
   puzzleBoard,
   puzzleFailSpeechLine,
   puzzleSolvedSpeechLine,
@@ -40,7 +41,7 @@ interface GameApi {
 
 const W = 380;
 
-type Mode = "easy" | "normal" | "smart" | "pvp";
+type Mode = "easy" | "normal" | "smart" | "master" | "pvp";
 type PlayKind = "free" | "puzzle";
 
 const CAMPAIGN_KEY = "yiduo.gomoku.campaign.v2";
@@ -54,20 +55,13 @@ function loadCampaign(): CampaignProgress {
     const raw = localStorage.getItem(CAMPAIGN_KEY);
     if (raw) {
       const data = JSON.parse(raw) as { stars?: unknown };
-      if (Array.isArray(data.stars)) {
-        const arr = data.stars as unknown[];
-        return {
-          stars: PUZZLES.map((_, i) => {
-            const v = arr[i];
-            return typeof v === "number" ? Math.max(0, Math.min(3, Math.round(v))) : 0;
-          }),
-        };
-      }
+      // 1.0 存的是 99 个数,1.1 有 188 道:前 99 位原样留着,后面补 0
+      if (Array.isArray(data.stars)) return { stars: parseCampaignStars(data.stars) };
     }
   } catch {
     // 读不到就当新档
   }
-  return { stars: PUZZLES.map(() => 0) };
+  return { stars: parseCampaignStars(null) };
 }
 
 function saveCampaign(p: CampaignProgress): void {
@@ -183,6 +177,7 @@ export function mount(api: GameApi): { destroy: () => void } {
             <button type="button" data-v="easy">🐱 棋灵喵·简单</button>
             <button type="button" data-v="normal" class="on">🦊 棋灵狐·普通</button>
             <button type="button" data-v="smart">🐲 棋灵龙·聪明</button>
+            <button type="button" data-v="master">🐘 棋灵象·大师</button>
             <button type="button" data-v="pvp">👫 朵朵 VS 星星</button>
           </div>
         </div>
@@ -197,7 +192,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         <button class="gm-start" type="button" style="margin-top:10px; width:100%">开始下棋 ▶</button>
       </div>
       <div class="gm-puzzle-list gm-hidden">
-        <div class="gm-group-label">🧩 棋谜战役 · 99 道残局 6 大主题（黑棋 N 步内连五）</div>
+        <div class="gm-group-label">🧩 棋谜战役 · 188 道残局 9 大主题（黑棋 N 步内连五）</div>
         <div class="gm-pz-total"></div>
         <div class="gm-pz-themes"></div>
       </div>
@@ -228,7 +223,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       <h3>🚫 禁手是什么（大孩子玩法，默认关闭）</h3>
       <p>正式比赛里黑棋先下太占便宜，所以有「禁手」规则：<b>黑棋</b>不能一步同时形成两个活三（三三）、两个四（四四），也不能连成超过五颗的长连，踩了就算输。<br>一年级的小朋友<b>先关着玩</b>就好，想挑战再打开开关！</p>
       <h3>🤖 和电脑下</h3>
-      <p>棋灵喵最温柔、棋灵狐会防守、棋灵龙最厉害。赢不了的时候可以用「✨ 提示」，闪绿光的位置就是好棋！</p>
+      <p>棋灵喵最温柔、棋灵狐会防守、棋灵龙很厉害、<b>棋灵象</b>最强——它会提前算好五步的杀招，还会把你的杀招提前堵掉。赢不了的时候可以用「✨ 提示」，闪绿光的位置就是好棋！</p>
     </div>
   `;
   api.root.appendChild(wrap);
@@ -348,6 +343,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (mode === "easy") return "🐱 棋灵喵·简单";
     if (mode === "normal") return "🦊 棋灵狐·普通";
     if (mode === "smart") return "🐲 棋灵龙·聪明";
+    if (mode === "master") return "🐘 棋灵象·大师";
     return "👫 朵朵 VS 星星";
   }
 
@@ -365,7 +361,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     } else if (aiThinking) {
       turnEl.textContent =
         mode === "easy" ? "🐱 棋灵喵思考中…" :
-        mode === "smart" ? "🐲 棋灵龙思考中…" : "🦊 棋灵狐思考中…";
+        mode === "smart" ? "🐲 棋灵龙思考中…" :
+        mode === "master" ? "🐘 棋灵象思考中…" : "🦊 棋灵狐思考中…";
     } else if (mode === "pvp" && playKind === "free") {
       turnEl.textContent = current === 1 ? "⚫ 该朵朵（黑棋）啦" : "⚪ 该星星（白棋）啦";
     } else {
@@ -375,7 +372,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     turnEl.classList.toggle("gm-think", aiThinking && !gameOver);
     modeLabelEl.textContent = modeLabel();
     undoBtn.disabled = history.length === 0 || gameOver || aiThinking;
-    const hintAllowed = playKind === "puzzle" || mode === "normal" || mode === "smart";
+    const hintAllowed = playKind === "puzzle" || mode !== "easy";
     const hintUsable = hintAllowed && hintLeft > 0 && !gameOver && humanTurn();
     hintBtn.disabled = !hintUsable;
     hintBtn.textContent = `✨ 提示×${hintLeft}`;
@@ -456,19 +453,23 @@ export function mount(api: GameApi): { destroy: () => void } {
         const stars: 1 | 2 | 3 = mode === "easy" ? 2 : 3;
         api.onWin(
           stars,
-          mode === "smart"
-            ? "居然赢了棋灵龙，你是真正的棋王！"
-            : mode === "normal"
-              ? "赢了棋灵狐，去挑战棋灵龙吧！"
-              : "赢了棋灵喵，继续挑战棋灵狐吧！"
+          mode === "master"
+            ? "连棋灵象都被你赢了，这一局值得记很久！"
+            : mode === "smart"
+              ? "居然赢了棋灵龙，再去会一会棋灵象吧！"
+              : mode === "normal"
+                ? "赢了棋灵狐，去挑战棋灵龙吧！"
+                : "赢了棋灵喵，继续挑战棋灵狐吧！"
         );
       } else {
         api.onLose(
           mode === "easy"
             ? "棋灵喵这局先赢一子～每落一步先看看对手有没有连成三颗，先堵再进攻！"
-            : mode === "smart"
-              ? "棋灵龙这局占了先手～去棋谜战役练几道「活三、冲四」，回来就能反过来将它一军！"
-              : "棋灵狐这局稍稍领先～守住它的活三，同时给自己留两个方向，再来一盘！"
+            : mode === "master"
+              ? "棋灵象会提前算好五步，它每一手都在铺后路～先去棋谜战役的「五步算杀」练一练再来！"
+              : mode === "smart"
+                ? "棋灵龙这局占了先手～去棋谜战役练几道「活三、冲四」，回来就能反过来将它一军！"
+                : "棋灵狐这局稍稍领先～守住它的活三，同时给自己留两个方向，再来一盘！"
         );
       }
     }, 1300);
