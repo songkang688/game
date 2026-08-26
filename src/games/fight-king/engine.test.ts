@@ -23,8 +23,26 @@ import {
   type InputFrame,
   type MatchState
 } from "./engine";
-import { CHARACTERS, METER_MAX, STAGE_WIDTH, WALL_MARGIN, characterById } from "./frames";
-import { COMBO_LIMIT, TECH_WINDOW } from "./rules";
+import {
+  CHARACTERS,
+  METER_MAX,
+  STAGE_WIDTH,
+  WALL_MARGIN,
+  activeBoxAt,
+  characterById,
+  type MoveSlot
+} from "./frames";
+import {
+  COMBO_LIMIT,
+  NORMAL_WAKEUP_FRAMES,
+  THROW_PROTECT_FRAMES,
+  TECH_WINDOW,
+  comboScale,
+  movePhase,
+  scaledPower,
+  type Facing
+} from "./rules";
+import { cancelTargets, emptyContext } from "./training";
 
 const N = neutralInput();
 
@@ -507,6 +525,187 @@ describe("连段", () => {
       return [inputOf({ light: true }), N];
     });
     expect(sawRepeatCancel).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 五之二、连段上限 6 的实证                                            */
+/* ------------------------------------------------------------------ */
+
+/** 某个槽位对应哪一组按键（面朝方向决定"前 / 后"是哪个方向键） */
+function keysFor(slot: MoveSlot, facing: Facing): InputFrame {
+  const fwd = facing === 1 ? "right" : "left";
+  const back = facing === 1 ? "left" : "right";
+  switch (slot) {
+    case "5L":
+      return inputOf({ light: true });
+    case "5H":
+      return inputOf({ heavy: true });
+    case "2L":
+      return inputOf({ down: true, light: true });
+    case "2H":
+      return inputOf({ down: true, heavy: true });
+    case "s1":
+      return inputOf({ [fwd]: true, light: true } as Partial<InputFrame>);
+    case "s2":
+      return inputOf({ [fwd]: true, heavy: true } as Partial<InputFrame>);
+    case "s3":
+      return inputOf({ [back]: true, heavy: true } as Partial<InputFrame>);
+    case "super":
+      return inputOf({ down: true, light: true, heavy: true });
+    case "throw":
+      return inputOf({ light: true, heavy: true });
+    default:
+      return N;
+  }
+}
+
+/**
+ * 真的能打出来的那一套：绿绿豆的 轻 → 蹲轻 → 重 → 必杀一 → 必杀二 → 必杀三。
+ * 六段刚好顶到上限，第七段无论按什么都接不上去。
+ */
+const SIX_HIT: MoveSlot[] = ["5L", "2L", "5H", "s1", "s2", "s3"];
+
+/** 按计划表打一套连段：每一段打中之后立刻按下一段的键 */
+function runCombo(s: MatchState, plan: MoveSlot[], frames = 240): { best: number; drops: number[] } {
+  let best = 0;
+  const drops: number[] = [];
+  let prev = s.fighters[1].vigor;
+  for (let i = 0; i < frames; i++) {
+    const f = s.fighters[0];
+    let input = N;
+    if (f.combo === 0 && f.phase !== "attack") input = keysFor(plan[0], f.facing);
+    else if (f.phase === "attack" && f.hitDone) {
+      const next = plan[f.comboUsed.length];
+      if (next) input = keysFor(next, f.facing);
+    }
+    stepMatch(s, [input, N]);
+    if (s.fighters[1].vigor < prev) {
+      drops.push(prev - s.fighters[1].vigor);
+      prev = s.fighters[1].vigor;
+    }
+    best = Math.max(best, s.fighters[0].combo);
+  }
+  return { best, drops };
+}
+
+describe("连段上限 6 的实证", () => {
+  it("绿绿豆的 轻→蹲轻→重→必杀一→必杀二→必杀三 真的能打满 6 段", () => {
+    const s = place(freshMatch("lvlvdou", "dundun", 0), 400, 448);
+    expect(runCombo(s, SIX_HIT).best).toBe(COMBO_LIMIT);
+  });
+
+  it("打满 6 段之后取消表就空了，第七段一招都接不上", () => {
+    const s = place(freshMatch("lvlvdou", "dundun", 0), 400, 448);
+    let cappedTargets: string[] | null = null;
+    let step = 0;
+    for (let i = 0; i < 240; i++) {
+      const f = s.fighters[0];
+      let input = N;
+      if (f.combo === 0 && f.phase !== "attack") input = keysFor(SIX_HIT[0], f.facing);
+      else if (f.phase === "attack" && f.hitDone) {
+        const ch = charOf(f);
+        const targets = cancelTargets(ch, ch.moves[f.slot!], {
+          ...emptyContext(),
+          hitDone: true,
+          used: f.comboUsed,
+          hits: f.combo,
+          // 能量给满，证明"接不上"是上限拦的，不是能量不够
+          meter: METER_MAX,
+          airborne: f.airborne
+        });
+        if (f.combo >= COMBO_LIMIT && cappedTargets === null) cappedTargets = targets;
+        const next = SIX_HIT[(step = f.comboUsed.length)];
+        if (next) input = keysFor(next, f.facing);
+      }
+      stepMatch(s, [input, N]);
+    }
+    expect(step).toBe(COMBO_LIMIT);
+    expect(cappedTargets).toEqual([]);
+  });
+
+  it("六段的伤害一段比一段轻，最后一段砍到第一段的一半以下", () => {
+    const s = place(freshMatch("lvlvdou", "dundun", 0), 400, 448);
+    const { best, drops } = runCombo(s, SIX_HIT);
+    expect(best).toBe(COMBO_LIMIT);
+    expect(drops.length).toBeGreaterThanOrEqual(COMBO_LIMIT);
+    const six = drops.slice(0, COMBO_LIMIT);
+    // 后面几段的原始威力更高，所以不逐段比大小：直接对着递减公式一段一段核
+    const raw = SIX_HIT.map((slot) => characterById("lvlvdou").moves[slot].power);
+    expect(six).toEqual(raw.map((p, i) => scaledPower(p, i)));
+    expect(six.reduce((a, b) => a + b, 0)).toBeLessThan(raw.reduce((a, b) => a + b, 0) * 0.8);
+    // 第一段原样进账，第六段只剩一半
+    expect(six[0]).toBe(raw[0]);
+    expect(six[5]).toBe(Math.round(raw[5] * comboScale(5)));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 五之三、判定框只在命中帧、倒地无敌、投技保护                        */
+/* ------------------------------------------------------------------ */
+
+describe("判定框只在命中帧存在", () => {
+  it("元气下降只会发生在攻击方的 active 段里，起手和收招一下都碰不到人", () => {
+    const s = place(freshMatch("dundun", "xingxing"), 400, 452);
+    const phases = new Set<string>();
+    let prevVigor = s.fighters[1].vigor;
+    for (let i = 0; i < 300; i++) {
+      stepMatch(s, [inputOf({ heavy: true }), N]);
+      if (s.fighters[1].vigor < prevVigor) {
+        prevVigor = s.fighters[1].vigor;
+        // 判定就发生在这一帧推进之后的那个 frame 上
+        const f = s.fighters[0];
+        const mv = f.slot ? charOf(f).moves[f.slot] : null;
+        phases.add(mv ? movePhase(mv, f.frame) : "none");
+      }
+    }
+    expect(phases.size).toBeGreaterThan(0);
+    expect([...phases]).toEqual(["active"]);
+  });
+
+  it("判定框是按帧长出来的：命中帧第一帧比最后一帧短", () => {
+    const mv = characterById("dundun").moves["5H"];
+    const first = activeBoxAt(mv, mv.startup);
+    const last = activeBoxAt(mv, mv.startup + mv.active - 1);
+    expect(first.w).toBeLessThan(last.w);
+    expect(last.w).toBe(mv.box.w);
+    // 起手帧与收招帧不参与判定，返回的是数据表原框（画预告用）
+    expect(activeBoxAt(mv, 0)).toEqual(mv.box);
+    expect(activeBoxAt(mv, mv.startup + mv.active + 1)).toEqual(mv.box);
+  });
+});
+
+describe("倒地无敌与投技保护", () => {
+  it("倒在地上到爬起来这一段有无敌帧，站旁边一直点也打不动他", () => {
+    const s = place(freshMatch("dundun", "xingxing"), 400, 448);
+    // 先摔一下让对手倒地
+    runWith(s, 20, () => [inputOf({ light: true, heavy: true }), N]);
+    expect(s.fighters[1].phase).toBe("knockdown");
+    const vigorAtDown = s.fighters[1].vigor;
+    let sawInvuln = false;
+    runWith(s, 90, () => {
+      if (s.fighters[1].invuln > 0) sawInvuln = true;
+      return [inputOf({ light: true }), N];
+    });
+    expect(sawInvuln).toBe(true);
+    // 倒地 + 起身无敌这段时间里，元气一点没掉
+    expect(s.fighters[1].vigor).toBe(vigorAtDown);
+  });
+
+  it("被摔过之后有一段抓不到的保护帧，贴着身子按投也投不上第二下", () => {
+    const s = place(freshMatch("dundun", "xingxing"), 400, 448);
+    runWith(s, 20, () => [inputOf({ light: true, heavy: true }), N]);
+    // 保护帧从"躺着"一直盖到"爬起来之后还有一小段"
+    expect(s.fighters[1].throwProtect).toBeGreaterThan(THROW_PROTECT_FRAMES);
+    expect(s.fighters[1].throwProtect).toBeLessThanOrEqual(NORMAL_WAKEUP_FRAMES + THROW_PROTECT_FRAMES);
+    let throws = 0;
+    runWith(s, 600, () => {
+      throws += s.events.filter((e) => e.type === "throw").length;
+      const gap = gapBetween(s.fighters[0], s.fighters[1]);
+      return [gap > 8 ? inputOf({ right: true }) : inputOf({ light: true, heavy: true }), N];
+    });
+    // 600 帧（10 秒）贴身狂按投，摔到的次数远少于"每次抓都成功"的那种无限投
+    expect(throws).toBeLessThan(8);
   });
 });
 
