@@ -109,8 +109,11 @@ export function assignSide(x: number, width: number, players: number): number {
   return x < width / 2 ? 0 : 1;
 }
 
-/** 分数列的一行文字（HUD 两列各一条，颜色由 `DUO_INK` 决定） */
+/**
+ * 分数列的一行文字（HUD 两列各一条，颜色由 `DUO_INK` 决定）。
+ * 写得紧一点：360px 的屏上要并排放下两列，多一个「命中」两个字就得横滑才看得全。
+ */
 export function scoreColumn(side: DuoSide): string {
   const acc = Math.round(accuracy(side.hits, side.shots) * 100);
-  return `${side.name} ${side.score} 分 · 命中 ${side.hits}/${side.shots}（${acc}%）`;
+  return `${side.name} ${side.score} 分 · ${side.hits}/${side.shots} ${acc}%`;
 }

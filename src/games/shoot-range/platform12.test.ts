@@ -292,7 +292,8 @@ describe("shoot-range 1.2 · 按下预览 + 抬起发射", () => {
     expect(toggle?.getAttribute("aria-pressed")).toBe("true");
     toggle?.fire("click");
     expect(toggle?.getAttribute("aria-pressed")).toBe("false");
-    expect(toggle?.textContent).toContain("按下就打");
+    expect(toggle?.textContent).toContain("直发");
+    expect(toggle?.getAttribute("aria-label")).toContain("按下就直接发射");
 
     const cv = canvas(h);
     const t = buildLevel(0).targets[0];
@@ -310,7 +311,7 @@ describe("shoot-range 1.2 · 按下预览 + 抬起发射", () => {
     tap(cv, t.x, t.y);
     expect(until(h, () => left(h) === 2, 20)).toBeGreaterThan(0);
     expect(score(h)).toBeGreaterThan(0);
-    expect(chip(h, "🔥 连击")).toContain("连击 1");
+    expect(chip(h, "🔥")).toContain("1 连 ×1.1");
   });
 
   it("三发清完三个靶就过关,星级和分数都报给平台", () => {
@@ -586,6 +587,28 @@ describe("shoot-range 1.2 · 360px 与样式红线", () => {
     walkAll(h.root);
     expect(styles.length).toBeGreaterThan(0);
     for (const s of styles) expect(s.parentElement).not.toBeNull();
+  });
+
+  it("暂停和预览不在横滑区里:chip 再多也把它们挤不出屏幕", () => {
+    const { h, handle } = boot();
+    handle.openCampaignLevel(1);
+    const tools = findOne(h.root, "shr-tools");
+    expect(tools).not.toBeNull();
+    const inTools = tools?.children.map((c) => c.textContent) ?? [];
+    expect(inTools.join(" ")).toContain("预览");
+    expect(inTools.join(" ")).toContain("⏸️");
+    // 横滑的那一块里只有 chip,一个按钮都没有
+    const hud = findOne(h.root, "shr-hud");
+    expect(hud?.children.every((c) => c.className.includes("shr-chip"))).toBe(true);
+  });
+
+  it("模式条离开地图就得真的消失:display:flex 会盖掉浏览器自带的 [hidden]", () => {
+    // 这一条是踩过的坑:`.shr-modebar{display:flex}` 的优先级压过 UA 的 [hidden]{display:none},
+    // 不补这条规则,进了关卡模式条还杵在那儿,360px 上白占两百多像素
+    expect(CSS).toMatch(/\.shr-modebar\[hidden\][^{]*\{[^}]*display:none/);
+    for (const cls of ["shr-bar", "shr-hud", "shr-pads"]) {
+      expect(CSS, `${cls} 也是 display:flex,一样要补 [hidden]`).toContain(`.${cls}[hidden]`);
+    }
   });
 
   it("HUD 是一行横滑不折行,所有字号都不小于 14px", () => {

@@ -107,16 +107,20 @@ import {
 export const CSS = `
 .shr-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:none;position:relative;}
-.shr-hud{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:6px;
+/* 顶栏分两块:左边一排 chip 可以横滑,右边的预览 / 暂停固定在屏幕里。
+   360px 上 chip 一定放不下,但暂停按钮绝不能被滑出去 */
+.shr-bar{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.shr-hud{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;flex:1 1 auto;min-width:0;
   padding-bottom:2px;scrollbar-width:none;}
 .shr-hud::-webkit-scrollbar{display:none;}
-.shr-chip{background:#fff;border-radius:999px;padding:5px 10px;font-size:14px;font-weight:800;color:#A2557C;
+.shr-tools{display:flex;align-items:center;gap:4px;flex:0 0 auto;}
+.shr-chip{background:#fff;border-radius:999px;padding:5px 9px;font-size:14px;font-weight:800;color:#A2557C;
   box-shadow:0 2px 6px rgba(190,130,165,.24);white-space:nowrap;flex:0 0 auto;}
 .shr-chip-warn{background:#FFF0D6;color:#A9761F;}
 .shr-chip-duo{background:#FFE6F0;color:#B44F84;}
 .shr-chip-star{background:#E4EEFF;color:#39699F;}
-.shr-mag{display:inline-flex;gap:3px;align-items:center;vertical-align:middle;}
-.shr-star{width:9px;height:9px;border-radius:50%;background:#F5B8CE;display:inline-block;}
+.shr-mag{display:inline-flex;gap:2px;align-items:center;vertical-align:middle;}
+.shr-star{width:7px;height:7px;border-radius:50%;background:#F5B8CE;display:inline-block;}
 .shr-star-off{background:#EDE6EE;}
 .shr-box{position:relative;border-radius:16px;overflow:hidden;background:#FFF6FA;
   box-shadow:0 4px 12px rgba(190,150,175,.24);}
@@ -160,8 +164,12 @@ export const CSS = `
   flex:0 0 auto;}
 .shr-toggle[aria-pressed="false"]{background:#F0EDF2;color:#8B8291;}
 .shr-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#8F4E71;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这几块要单独写一条,
+   不然离开选关地图之后模式条还杵在那儿,手机上白占两百多像素 */
+.shr-modebar[hidden],.shr-bar[hidden],.shr-hud[hidden],.shr-tools[hidden],.shr-pads[hidden],.shr-pad[hidden]{
+  display:none;}
 @media (max-width:420px){
-  .shr-chip{padding:4px 8px;}
+  .shr-chip{padding:4px 7px;}
   .shr-pads{--k:44px;}
 }
 @media (prefers-reduced-motion:reduce){
@@ -386,7 +394,10 @@ function createField(opts: FieldOptions): FieldHandle {
   const wrap = el("div", "shr-wrap");
   const style = el("style");
   style.textContent = CSS;
+  const topbar = el("div", "shr-bar");
   const hud = el("div", "shr-hud");
+  const tools = el("div", "shr-tools");
+  topbar.append(hud, tools);
   const box = el("div", "shr-box");
   const canvas = el("canvas", "shr-cv");
   const toast = el("div", "shr-toast");
@@ -395,7 +406,7 @@ function createField(opts: FieldOptions): FieldHandle {
   pads.dataset.players = String(opts.players);
   const tip = el("div", "shr-tip");
   tip.textContent = opts.hint;
-  wrap.append(style, hud, box, pads, tip);
+  wrap.append(style, topbar, box, pads, tip);
   opts.host.appendChild(wrap);
 
   const g = canvas.getContext("2d");
@@ -433,18 +444,23 @@ function createField(opts: FieldOptions): FieldHandle {
   const chipLeft = el("span", "shr-chip shr-chip-duo");
   const chipRight = el("span", "shr-chip shr-chip-star");
   const chipScore = el("span", "shr-chip");
-  const chipCombo = el("span", "shr-chip");
   const chipAmmo = el("span", "shr-chip");
   const chipTargets = el("span", "shr-chip");
   const chipTime = el("span", "shr-chip shr-chip-warn");
   const chipGoal = el("span", "shr-chip");
-  const previewBtn = el("button", "shr-toggle", "👆 按下预览");
+  const previewBtn = el("button", "shr-toggle", "👆 预览");
   previewBtn.type = "button";
   previewBtn.setAttribute("aria-pressed", "true");
-  const pauseBtn = el("button", "shr-back", "⏸️ 暂停");
+  previewBtn.setAttribute("aria-label", "按下预览、抬手发射");
+  const pauseBtn = el("button", "shr-toggle", "⏸️");
   pauseBtn.type = "button";
-  if (opts.players === 2) hud.append(chipLeft, chipRight, chipGoal, chipTime, previewBtn, pauseBtn);
-  else hud.append(chipScore, chipCombo, chipAmmo, chipTargets, chipTime, previewBtn, pauseBtn);
+  pauseBtn.setAttribute("aria-label", "暂停");
+  // 360px 上 chip 一定放不下,所以按「打的时候要看哪个」排:
+  // 篮子里还剩几颗星星 → 还剩几个靶 / 几秒 / 几发 → 分数与连击。
+  // 分数排最后不亏:打中那一下画面上会飘一个 +N 出来,比 HUD 还显眼。
+  if (opts.players === 2) hud.append(chipLeft, chipRight, chipGoal, chipTime);
+  else hud.append(chipAmmo, chipTargets, chipTime, chipScore);
+  tools.append(previewBtn, pauseBtn);
   if (!opts.goalLabel) chipGoal.hidden = true;
 
   function magHTML(gun: Gun): string {
@@ -468,8 +484,7 @@ function createField(opts: FieldOptions): FieldHandle {
       if (opts.goalLabel) chipGoal.textContent = opts.goalLabel();
     } else {
       const s = shooters[0];
-      chipScore.textContent = `🌟 ${s.score} 分`;
-      chipCombo.textContent = `🔥 连击 ${s.combo}（×${comboMultiplier(s.combo).toFixed(1)}）`;
+      chipScore.textContent = `🌟 ${s.score} 分 · 🔥 ${s.combo} 连 ×${comboMultiplier(s.combo).toFixed(1)}`;
       chipAmmo.innerHTML = s.gun.reloadLeft > 0 ? "🧺 装星星…" : magHTML(s.gun);
       chipTargets.textContent = `🎯 剩 ${aliveNeed()} 个`;
     }
@@ -756,7 +771,8 @@ function createField(opts: FieldOptions): FieldHandle {
   previewBtn.addEventListener("click", () => {
     previewOn = !previewOn;
     previewBtn.setAttribute("aria-pressed", String(previewOn));
-    previewBtn.textContent = previewOn ? "👆 按下预览" : "👆 按下就打";
+    previewBtn.textContent = previewOn ? "👆 预览" : "👆 直发";
+    previewBtn.setAttribute("aria-label", previewOn ? "按下预览、抬手发射" : "按下就直接发射");
     opts.sfx("tap");
     say(previewOn ? "按住挪准星,抬手才发射。" : "按下去就直接发射。");
   });
@@ -1263,7 +1279,8 @@ function createField(opts: FieldOptions): FieldHandle {
   function drawLauncher(ctx: CanvasRenderingContext2D, s: Shooter): void {
     const squash = s.windup ? 1 - windupProgress(s.windup.left) : 0;
     ctx.save();
-    ctx.translate(s.muzzleX, FIELD_H - 14 + squash * 6);
+    // 台子整个要留在画布里,压下去那 6 像素也算进来,不然底边会被切掉一条
+    ctx.translate(s.muzzleX, FIELD_H - 28 + squash * 6);
     ctx.fillStyle = "#F4C7DA";
     roundRect(ctx, -46, -20, 92, 40, 14);
     ctx.fill();
