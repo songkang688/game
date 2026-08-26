@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CHAPTERS, LEVELS, THEME_TILES } from "./levels";
 
-describe("拼图乐园 99 关", () => {
-  it("恰好 99 关，至少 6 个主题章节", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("拼图乐园 188 关", () => {
+  it("恰好 188 关，至少 6 个主题章节", () => {
+    expect(LEVELS).toHaveLength(188);
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
   it("每关板式合法、素材够用", () => {
@@ -36,8 +36,8 @@ describe("拼图乐园 99 关", () => {
     expect(LEVELS[83].shuffleSteps).toBeLessThan(LEVELS[98].shuffleSteps);
   });
 
-  it("六套主题素材至少 15 块且不重样", () => {
-    expect(THEME_TILES).toHaveLength(6);
+  it("十套主题素材至少 15 块且不重样", () => {
+    expect(THEME_TILES).toHaveLength(10);
     for (const pool of THEME_TILES) {
       expect(pool.length).toBeGreaterThanOrEqual(15);
       expect(new Set(pool.map((p) => p.emoji)).size).toBe(pool.length);

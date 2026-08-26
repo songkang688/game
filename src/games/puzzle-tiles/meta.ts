@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🧩",
   category: "casual" as const,
   color: "#E5E9FF",
-  blurb: "99 关六大画册！3×3 到 4×4，还有看一眼就藏起来的记忆拼图！",
+  blurb: "188 关十本画册！5×5、6×6 大画板，还有旋转块、缺块补齐和无尽画廊！",
 };
