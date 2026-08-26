@@ -2,7 +2,9 @@
 
 > 你正在读的是 1.2 的**统筹主管文档**。本文件规定谁派、按什么顺序派、文件归谁、怎样才算过关、三家提示词文档最后如何收成一份可派发总脚本。
 > 本档作者只写提示词 Markdown，**禁止实现任何游戏代码**，禁止再派生云端子代理去写代码 / 玩游戏实现。
-> 目录：[`00-index.md`](./00-index.md) · 清单：[`00-catalog.md`](./00-catalog.md) · 基线：[`../upgrade-prompts/12-game-1.2-baseline.md`](../upgrade-prompts/12-game-1.2-baseline.md) · 第 1 步：[`step-01.md`](./step-01.md)
+> 目录：[`00-index.md`](./00-index.md) · id 对照：[`00-id-map.md`](./00-id-map.md) · 规划清单：[`00-catalog.md`](./00-catalog.md) · 基线：[`../upgrade-prompts/12-game-1.2-baseline.md`](../upgrade-prompts/12-game-1.2-baseline.md) · 第 1 步：[`step-01.md`](./step-01.md)
+>
+> **收口（B/C 已合入）：** 已落地 **36** 个派发步（1 + 10–16 + 30–57）。规划稿里的 38 步 / catalog 21 个 id 仍保留作别名；**新建目录听 B 档施工 id**，见 `00-id-map.md` 与 `00-index.md`。
 
 ---
 
@@ -65,50 +67,47 @@ git push origin HEAD:game-1.2     # 普通推送；被拒就再 fetch+rebase 重
 
 ---
 
-## 三、1.2 总步数与阶段（公式写死）
+## 三、1.2 总步数与阶段
 
-「33 步」只是例子。本档按真实清单计算：
+「33 步」只是例子。规划稿按 55+21=76 款算过 38 步（含首页 60 与三轮 QA）。**B/C 交卷后按实际文件收口为 36 步：**
 
 ```
-N_1_1       = 55                 # 1.1 完成后库存（见 00-catalog.md）
-N_new       = 21
-N_total     = 55 + 21 = 76
-N_platform  = 1                  # 派发步 1
-N_new_steps = 21 / 3 = 7         # 派发步 10–16
-N_upgrade   = ceil(76 / 3) = 26  # 派发步 30–55
-N_home      = 1                  # 派发步 60
-N_qa        = 3                  # 派发步 61–63
-N_dispatch  = 1 + 7 + 26 + 1 + 3 = 38
+平台     1     step-01.md
+新游戏   7     new-games/step-10.md … 16.md
+升级    25     upgrades/step-30.md … 54.md
+冲突     1     upgrades/step-55.md
+验收     2     upgrades/step-56.md … 57.md
+合计    36
 ```
 
-**1.2 一共分 38 个派发步。** 编号有意留空：平台 01–09，新游戏从 10 连续，升级从 30 连续，QA 放最后。
+编号空隙 02–09、17–29 故意留空。没有 `step-60`–`63.md`：首页筛选在第 1 步 B，冲突/接线在第 55 步，验收两轮在 56–57。需要第三轮 QA 时再补文档。
+
+**1.2 当前一共分 36 个派发步。** 人类目录与每步 A/B/C 以 [`00-index.md`](./00-index.md) 为准。
 
 ### 3.1 阶段
 
 | 阶段 | 派发步 | 文档谁写 | 干什么 |
 | --- | --- | --- | --- |
 | 平台 | 1（预留 02–09） | A 档已写 `step-01.md` | root 门 + 手游/端游筛选 + 手机文字 + 模式/2.5D 基建 |
-| 21 新游戏接入 | 10–16 | B 档 `docs/game-1.2/new-games/` | 每步 3 款，每款一个子代理 |
-| 全量 76 款精细化升级 | 30–55 | C 档 `docs/game-1.2/upgrades/` | 每步 3 款（步 55 余 1 款 + 两份目录审计测试） |
-| 首页 / 冲突 | 60 | C 档 `upgrades/step-60.md` | 首页接线、文案、a11y、冲突收口 |
-| 验收三人组 | 61–63 | C 档 `upgrades/step-61.md`–`63.md` | 测 / 学 / 修 × 3 轮 |
+| 21 新游戏接入 | 10–16 | B 档 `docs/game-1.2/new-games/` | 每步 3 款，每款一个子代理；**id 以 B 文档为准** |
+| 精细化升级 | 30–54 | C 档 `docs/game-1.2/upgrades/` | 每步 3 款；新游戏 id 先对照 `00-id-map.md` |
+| 冲突 / 串味 | 55 | C 档 `upgrades/step-55.md` | 存档、CSS、快捷键、root API、destroy |
+| 验收三人组 | 56–57 | C 档 `upgrades/step-56.md`–`57.md` | 测 / 学 / 修 × 2 轮 |
 
-### 3.2 派发总表（38 步）
+### 3.2 派发总表（36 步）
 
 | 派发步 | 主题 | A 独占 | B 独占 | C 独占 | 提示词文档 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 平台基建 | `src/ui/rootGate.ts` + `rootGate.test.ts`；`src/games/level99.ts` + `level99.test.ts`；`src/games/quiz99.ts` + `quiz99.test.ts` | `src/engine/types.ts`；`src/ui/homeFilters.ts` + `homeFilters.test.ts`；`src/ui/home.ts`；`src/ui/mobileText.ts` + `mobileText.test.ts`；`src/styles.css`；`index.html`（仅 viewport / 安全区 meta） | `src/engine/playModes.ts` + `playModes.test.ts`；`src/engine/view25d.ts` + `view25d.test.ts` | [`step-01.md`](./step-01.md) |
-| 10–16 | 新游戏 × 21 | 见 `00-catalog.md` §2.2 | 同左 | 同左 | B：`new-games/step-1X.md` |
-| 30–54 | 升级 × 75 款 | 见 `00-catalog.md` §四 | 同左 | 同左 | C：`upgrades/step-XX.md` |
-| 55 | 最后 1 款 + 目录审计 | `src/games/air-puck/**` | `src/games/_catalog/meta-audit.test.ts` | `src/engine/view25d.catalog.test.ts` | C：`upgrades/step-55.md` |
-| 60 | 首页 / 冲突 / 文案 | `src/ui/home.ts`、`src/ui/homeFilters.ts`、`src/ui/recent.ts`、全部 `src/games/*/meta.ts` 的 platform/modes/blurb 收口 | 全部 `src/games/*/index.ts` 面向孩子的文案字符串 + 全部 `src/games/*/guide.ts` | `src/styles.css`、`src/ui/dialogs.ts`、`src/ui/gameShell.ts`、`index.html`、`src/ui/a11y.test.ts`、商标巡检测试 | C：`upgrades/step-60.md` |
-| 61 | QA 第 1 轮 | 测试员：报告 + 补 `*.test.ts` | 学习优化员：吸收优点并落地 ≥5 条 | 监督修复员：阻断/严重清零 | C：`upgrades/step-61.md` |
-| 62 | QA 第 2 轮 | 测试员：换样本 + 手感专项 | 学习优化员：性能量化 ≥6 条 | 监督修复员：清遗留 | C：`upgrades/step-62.md` |
-| 63 | QA 第 3 轮（收官） | 测试员：76 款全覆盖 + 发布结论 | 学习优化员：README + 1.2 发布说明 | 监督修复员：清零 + 终审 | C：`upgrades/step-63.md` |
+| 10–16 | 新游戏 × 21 | 见 `00-index.md`（施工 id） | 同左 | 同左 | B：`new-games/step-1X.md` |
+| 30–54 | 升级 | 见 `upgrades/README.md` 对照表 | 同左 | 同左 | C：`upgrades/step-XX.md` |
+| 55 | 冲突 / 串味 / 回归 | 见该步文档 A 段 | 见该步文档 B 段 | 见该步文档 C 段 | C：`upgrades/step-55.md` |
+| 56 | QA 第 1 轮 | 测试员 | 学习优化员 | 监督修复员 | C：`upgrades/step-56.md` |
+| 57 | QA 第 2 轮 | 测试员 | 学习优化员 | 监督修复员 | C：`upgrades/step-57.md` |
 
 步 1 三人还必须**逐字同建**公共契约 `src/ui/root12Contract.ts`（内容见 `step-01.md`）。内容完全相同的新文件 rebase 时自动跳过。
 
-步 60 与步 1 都出现 `home.ts` / `styles.css`：两步**串行**，不并行，所以不冲突。步 60 的 A 可以改首页，是因为平台筛选已在步 1 落地，步 60 只做 76 款接线与文案收口。
+步 55 与步 1 都可能碰到 `home.ts` / `styles.css`：两步**串行**，不并行。步 1 先落地筛选与 root；步 55 只做冲突/接线/destroy 审计。
 
 ---
 
@@ -118,7 +117,7 @@ N_dispatch  = 1 + 7 + 26 + 1 + 3 = 38
 | --- | --- | --- |
 | 持续优化分支 | `game-1.1` | **`game-1.2`** |
 | 派发脚本形态 | 一份 `11-game-1.1-dispatch-prompts.md` 含 15 步 | 先分三家写（本档 + B `new-games/` + C `upgrades/`），收口再拼成 `13-game-1.2-dispatch-prompts.md` |
-| 步数 | 15（框架 1 + 老游戏加深 2–5 + 2.5D 6 + 新游戏 7–11 + 首页 12 + QA 13–15） | **38**（平台 1 + 新游戏 7 + 升级 26 + 首页 1 + QA 3） |
+| 步数 | 15（框架 1 + 老游戏加深 2–5 + 2.5D 6 + 新游戏 7–11 + 首页 12 + QA 13–15） | **36**（平台 1 + 新游戏 7 + 升级 25 + 冲突 1 + QA 2） |
 | 游戏数 | 规划 55；仓库当时 54 | 规划 76 |
 | 家长门 | 算术题 `parentAuth`（basic/high，5 分钟，内存） | **保留算术门**，另加 **root 密码门**（1 小时，可关，直达任意关） |
 | 首页筛选 | 分类 + 玩法芯片（闯关/对战/无尽/双人） | 再加 **手游 / 端游**（`meta.platform`） |
@@ -183,9 +182,9 @@ N_dispatch  = 1 + 7 + 26 + 1 + 3 = 38
 | --- | --- | --- | --- |
 | A 主管 | 本文件作者 | `docs/game-1.2/00-*.md`、`docs/game-1.2/step-01.md`、`docs/upgrade-prompts/12-game-1.2-baseline.md` | 职责、步数、21 id 定稿、第 1 步完整派发词 |
 | B 新游戏 | 另一档 | **只许** `docs/game-1.2/new-games/` | 步 10–16 每步一份，内含 A/B/C 三段完整可复制提示词 |
-| C 升级 | 另一档 | **只许** `docs/game-1.2/upgrades/` | 步 30–55、60、61–63 每步一份，同样三段完整提示词 |
+| C 升级 | 另一档 | **只许** `docs/game-1.2/upgrades/` | 步 30–57 每步一份，同样三段完整提示词 |
 
-A **不要写** `new-games/` 与 `upgrades/`。B/C **不要改** A 的五个文件。B 展开 21 款细节时 **id 必须抄 `00-catalog.md`**。C 分组必须抄本档总表 / catalog 第四节，禁止重排到和文件所有权冲突。
+A **不要写** `new-games/` 与 `upgrades/`。B/C **不要改** A 的五个文件（收口提交可改 `00-*`）。B 与 catalog 的 id 分叉已记在 `00-id-map.md`，执行时 **施工听 B**。
 
 ---
 
@@ -195,17 +194,12 @@ A **不要写** `new-games/` 与 `upgrades/`。B/C **不要改** A 的五个文�
 
 检查清单（逐条打勾才算收口完成）：
 
-- [ ] B 的 `new-games/step-10.md` … `step-16.md` 七份都在，每份有三段 `~~~~text` 提示词，且开头四行与本档 §2.1 逐字一致（slug 无方括号）。
-- [ ] C 的 `upgrades/step-30.md` … `step-55.md`、`step-60.md`、`step-61.md`–`step-63.md` 都在，同样三段完整提示词。
-- [ ] 21 个新 id 与 `00-catalog.md` 完全一致，无拼写漂移。
-- [ ] 76 款每个 id 在升级总表里恰好出现一次（步 55 的 B/C 是测试文件不是游戏，不重复占用游戏 id）。
-- [ ] 每段都写了独占文件、验收、`npm test` / `npm run build`、不要做什么、禁止套娃、推 `game-1.2` 不回 main。
-- [ ] 每段都重申模块约定 / 存档 key / 离线 / 商标 / 键位 / 失败只鼓励。
-- [ ] 文件所有权两两不相交（可用表格 diff：同一 `src/**` 路径不得在同一步的 A 和 B 里同时出现）。
-- [ ] 总脚本按派发顺序拼接：步 1 → 10–16 → 30–55 → 60 → 61–63，中间用水平线分隔。
-- [ ] 总脚本开头有「〇、派发总则」抄本档第一、二节。
-- [ ] 商标黑名单在总脚本里再出现一次。
-- [ ] 链接能点：从 `00-index.md` 能跳到每一步文档。
+- [x] B 的 `new-games/step-10.md` … `step-16.md` 七份都在，每份有三段完整提示词。
+- [x] C 的 `upgrades/step-30.md` … `step-57.md` 都在（无 60–63，冲突/验收收在 55–57）。
+- [x] 三套新 id 已写成 [`00-id-map.md`](./00-id-map.md)；**施工听 B**，catalog 作别名。
+- [ ] 若要一份仿 1.1 的巨型总脚本 `13-game-1.2-dispatch-prompts.md`：按 `00-index.md` 顺序把各步文档链过去即可，不必把 36 份再复制进一个文件。
+- [x] 链接能点：从 `00-index.md` 能跳到每一步已落地文档。
+- [ ] 每步合入代码时仍走第十节监督清单（测试构建、商标、独占文件）。
 
 收口时不要改游戏代码。若发现 B/C 正文缺验收或越界，打回 B/C 补文档，不要主管代写他们的目录。
 
@@ -239,7 +233,7 @@ A **不要写** `new-games/` 与 `upgrades/`。B/C **不要改** A 的五个文�
 
 验收门（整次 1.2 收官，步 63）：
 
-- 76 款都能进、能玩到真实胜负、destroy 后再进不报错。
+- 库存老游戏 + B 档 21 款都能进、能玩到真实胜负、destroy 后再进不报错。
 - 首页手游 / 端游筛选可用。
 - root 门：密码对 → 直达关；一小时后关；可手动关；电话文案在。
 - 360px 宽：抽 10 款 + 首页，文字不溢出、对比度 ≥ 4.5:1、安全区留白。
@@ -254,6 +248,7 @@ A **不要写** `new-games/` 与 `upgrades/`。B/C **不要改** A 的五个文�
 
 - `docs/game-1.2/00-supervisor.md`（本文件）
 - `docs/game-1.2/00-index.md`
+- `docs/game-1.2/00-id-map.md`
 - `docs/game-1.2/00-catalog.md`
 - `docs/upgrade-prompts/12-game-1.2-baseline.md`
 - `docs/game-1.2/step-01.md`
