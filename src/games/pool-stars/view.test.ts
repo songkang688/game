@@ -16,10 +16,15 @@ import {
 import {
   MIN_BALL_PX,
   MIN_TOUCH_PX,
+  SHAKE_MAX_PX,
+  SHAKE_MS,
+  SHAKE_SPEED,
   aimPreview,
   chargePower,
   createTable,
   powerFromDrag,
+  shakeAmplitude,
+  shakeOffset,
   tableLayout,
   toScreen,
   toTable,
@@ -334,5 +339,81 @@ describe("球桌:自由球与电脑出杆", () => {
     const pockets = dom.root.findAll((e) => e.className === "ps-pockets");
     expect(pockets[0]?.hidden).toBe(false);
     handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 撞库的轻微抖动                                                        */
+/* ------------------------------------------------------------------ */
+
+describe("撞库抖一下", () => {
+  it("撞得不够狠就不抖，够狠才抖而且幅度有上限", () => {
+    expect(shakeAmplitude(0)).toBe(0);
+    expect(shakeAmplitude(SHAKE_SPEED - 1)).toBe(0);
+    expect(shakeAmplitude(SHAKE_SPEED + 90)).toBeGreaterThan(0);
+    expect(shakeAmplitude(9999)).toBeLessThanOrEqual(SHAKE_MAX_PX);
+    expect(shakeAmplitude(Number.NaN)).toBe(0);
+  });
+
+  it("抖动随剩余时间收敛，时间走完正好回到原位", () => {
+    const amp = SHAKE_MAX_PX;
+    const early = shakeOffset(SHAKE_MS, amp, 1000);
+    const late = shakeOffset(SHAKE_MS * 0.2, amp, 1000);
+    expect(Math.hypot(early.x, early.y)).toBeGreaterThan(Math.hypot(late.x, late.y));
+    expect(shakeOffset(0, amp, 1000)).toEqual({ x: 0, y: 0 });
+    for (const t of [0, 37, 500, 1234]) {
+      const o = shakeOffset(SHAKE_MS, amp, t);
+      expect(Math.abs(o.x)).toBeLessThanOrEqual(amp);
+      expect(Math.abs(o.y)).toBeLessThanOrEqual(amp);
+    }
+  });
+
+  /** 母球从左边满力直推右库，中途没有球挡路，一定会重重吃一次库 */
+  function hardBank() {
+    const { handle, settled } = mountTable({
+      balls: [makeBall(0, "cue", 40, 50), makeBall(1, "warm", 150, 92)],
+    });
+    fireWin("keydown", { key: "f", preventDefault: () => undefined });
+    // 蓄力条要靠动画帧往上爬，flush 到满力再松手
+    flush(15);
+    fireWin("keyup", { key: "f" });
+    return { handle, settled, box: el("ps-table")! };
+  }
+
+  it("重重吃一次库，球桌会轻轻晃一下，然后自己回正", () => {
+    const { handle, settled, box } = hardBank();
+    let shook = "";
+    for (let i = 0; i < 60 && !shook; i++) {
+      flush(1);
+      shook = box.style.transform ?? "";
+    }
+    expect(shook).toContain("translate");
+    for (let i = 0; i < 60 && settled.length === 0; i++) flush(1);
+    flush(20);
+    expect(box.style.transform ?? "").toBe("");
+    handle.destroy();
+  });
+
+  it("prefers-reduced-motion 打开时，同一杆一动不动", () => {
+    (globalThis as Record<string, unknown>).matchMedia = () => ({ matches: true });
+    try {
+      const { handle, settled, box } = hardBank();
+      for (let i = 0; i < 400 && settled.length === 0; i++) {
+        flush(1);
+        expect(box.style.transform ?? "").toBe("");
+      }
+      expect(settled).toHaveLength(1);
+      handle.destroy();
+    } finally {
+      delete (globalThis as Record<string, unknown>).matchMedia;
+    }
+  });
+
+  it("destroy 会把抖动的位移一起抹掉", () => {
+    const { handle, box } = hardBank();
+    for (let i = 0; i < 60 && !(box.style.transform ?? ""); i++) flush(1);
+    expect(box.style.transform ?? "").toContain("translate");
+    handle.destroy();
+    expect(box.style.transform).toBe("");
   });
 });

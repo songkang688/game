@@ -322,6 +322,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
     tiers: [null, tier],
     banner: `🏆 第 ${spec.index + 1} 关 · ${AI_LABEL[tier]}`,
     seed: spec.index + 3,
+    // 第六章已经练过指定袋，这里照常要指定；但闯关不用「三次犯规直接判负」这条，
+    // 手滑几下也能把一局打完，输赢还是看谁先清完。
+    requireCall: true,
+    threeFoulLoss: false,
     sfx: (n) => ctx.sfx(n),
     onOver: (winner, m) => {
       if (settled) return;

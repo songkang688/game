@@ -109,6 +109,26 @@ export function chargePower(heldMs: number, cycleMs = 1500): number {
   return clamp(0.06 + tri * 0.94, 0.06, 1);
 }
 
+/** 撞库撞到这个速度以上才值得抖一下屏 */
+export const SHAKE_SPEED = 200;
+/** 一次抖动持续多久（毫秒） */
+export const SHAKE_MS = 170;
+/** 抖动幅度上限（像素），只是「轻微」，不做夸张位移 */
+export const SHAKE_MAX_PX = 4;
+
+/** 撞库速度换成抖动幅度；不够狠就是 0（外层据此判断要不要抖） */
+export function shakeAmplitude(speed: number): number {
+  if (!Number.isFinite(speed) || speed < SHAKE_SPEED) return 0;
+  return Math.min(SHAKE_MAX_PX, 1.4 + (speed - SHAKE_SPEED) / 90);
+}
+
+/** 抖动位移：随剩余时间线性收敛到 0，保证结束时正好回到原位 */
+export function shakeOffset(msLeft: number, amp: number, t: number): Vec {
+  if (msLeft <= 0 || amp <= 0) return { x: 0, y: 0 };
+  const k = clamp(msLeft / SHAKE_MS, 0, 1);
+  return { x: Math.sin(t / 11) * amp * k, y: Math.cos(t / 8) * amp * k * 0.7 };
+}
+
 export interface AimPreview {
   /** 瞄准线的终点（撞到球或者撞到库边的位置） */
   end: Vec;
@@ -201,6 +221,7 @@ const CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .ps-btn:active,.ps-shoot:active{transform:none;}
+  .ps-table{transform:none !important;}
 }
 `;
 
@@ -344,6 +365,8 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   let shotSteps = 0;
   let crossed = false;
   let shotStartLeft = true;
+  let shakeAmp = 0;
+  let shakeUntil = 0;
   let acc = 0;
   let last = now();
   let raf = 0;
@@ -609,6 +632,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
           opts.sfx(ev.kind === "cue" ? "oops" : "coin");
         } else if (ev.type === "cushion") {
           opts.sfx("tap");
+          kickShake(ev.id);
         } else if (ev.type === "hit") {
           opts.sfx("tap");
         }
@@ -621,6 +645,30 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
         return;
       }
     }
+  }
+
+  /** 球撞库撞得够狠时，球桌轻轻晃一下；prefers-reduced-motion 下一动不动 */
+  function kickShake(id: number): void {
+    if (soft) return;
+    const b = balls.find((x) => x.id === id);
+    if (!b) return;
+    const amp = shakeAmplitude(Math.hypot(b.vx, b.vy));
+    if (amp <= 0) return;
+    shakeAmp = Math.max(shakeAmp, amp);
+    shakeUntil = now() + SHAKE_MS;
+  }
+
+  function applyShake(t: number): void {
+    if (shakeUntil <= 0) return;
+    const left = shakeUntil - t;
+    if (left <= 0) {
+      shakeUntil = 0;
+      shakeAmp = 0;
+      tableBox.style.transform = "";
+      return;
+    }
+    const o = shakeOffset(left, shakeAmp, t);
+    tableBox.style.transform = `translate(${o.x.toFixed(2)}px,${o.y.toFixed(2)}px)`;
   }
 
   function frame(): void {
@@ -642,6 +690,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
         if (nv >= 1) sinking.delete(id);
         else sinking.set(id, nv);
       }
+      applyShake(t);
       render();
     }
     raf = requestAnimationFrame(frame);
@@ -904,6 +953,9 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       sinking.clear();
+      shakeUntil = 0;
+      shakeAmp = 0;
+      tableBox.style.transform = "";
       wrap.remove();
     },
     update,
