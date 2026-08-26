@@ -638,6 +638,15 @@ export function mount(api: GameAPI): RainbowRunHandle {
   }
 
   /**
+   * 开跑那一刻罩多久的无敌。
+   * 基础 1.5 秒;宠物「泡泡」的起步护罩比它长时就用护罩那个数——
+   * 不然点一下开始就把收藏册的加成抹掉了。
+   */
+  function startShield(): number {
+    return Math.max(1.5, boosts.startShieldMs / 1000);
+  }
+
+  /**
    * 直开第 n 关(1 基)。越界夹到 1..188,不合法的数字当第 1 关。
    * 平台给了 `initialLevel`、地址栏带着 `?level=`,或者外面拿着 handle 调进来,走的都是这一条。
    */
@@ -799,7 +808,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
     // 收藏册每一局读一次:跑到一半去换装备不该让这一趟的手感变来变去
     boosts = readRunnerBoosts();
     petReviveLeft = boosts.reviveOnce ? 1 : 0;
-    invincible = 2 + boosts.startShieldMs / 1000;
+    // 开跑那一下会重新罩一次(intro 面板期间这个值就在往下走了),这里只是先摆上
+    invincible = startShield();
     light = endless ? lightingAt(0) : STATIC_DAY;
     // 幽灵竞速只在无尽模式开:战役有固定关卡长度,比的是星级不是里程
     ghostRec = endless ? new GhostRecorder() : null;
@@ -965,7 +975,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
       }
       api.play("tap");
       phase = "run";
-      invincible = 1.5;
+      invincible = startShield();
       return;
     }
     if (phase === "clear") {
@@ -1006,7 +1016,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
         stopSpeaking();
         resetLevel();
         phase = "run";
-        invincible = 1.5;
+        invincible = startShield();
         return;
       }
       if (inRect(x, y, btnMap)) {
@@ -2054,7 +2064,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
    * 它不参与任何判定,画在玩家之前,所以两个人重叠时真人永远在上面。
    */
   function drawGhost(): void {
-    if (!ghostAlive || !ghostPlayer) return;
+    if (!ghostAlive || !ghostPlayer || phase !== "run") return;
     const gx = laneX(ghostLaneFloat);
     const py = playerY();
     const lift = ghostAction === "jump" ? ghostBody.lift : 0;

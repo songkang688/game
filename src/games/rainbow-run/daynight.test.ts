@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DAY_CYCLE_METERS,
   PHASE_ANCHORS,
+  RAIN_FADE,
   RAIN_PERIOD,
   RAIN_SPAN,
   STATIC_DAY,
@@ -81,6 +82,38 @@ describe("彩虹跑跑 · 日夜循环是距离的纯函数", () => {
       expect(light.fogScale).toBeLessThan(2);
       expect(light.tint).toMatch(/^#[0-9a-f]{6}$/i);
     }
+  });
+
+  it("一档天色的长度配得上实际跑得动的距离,不会在一趟里闪好几遍", () => {
+    const perPhase = DAY_CYCLE_METERS / PHASE_ANCHORS.length;
+    // 无尽模式速度在 250–500 之间,一档天色至少要撑住四秒才看得出是在「变天」
+    expect(perPhase / 500).toBeGreaterThan(4);
+    // 也不能长到一辈子见不着夜色:六档难度 4000 米封顶,一圈别超过它的三倍
+    expect(DAY_CYCLE_METERS).toBeLessThanOrEqual(4000 * 3);
+  });
+
+  it("换天色和换世界永远错不到同一米上", () => {
+    const perPhase = DAY_CYCLE_METERS / PHASE_ANCHORS.length;
+    const STAGE = 1600; // index.ts 的 ENDLESS_STAGE_LEN:每 1600 米换一个世界
+    // 两条线要在同一米上撞,最早也得跑到它们的最小公倍数;那已经远得没人跑得到了
+    const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+    const lcm = (perPhase * STAGE) / gcd(perPhase, STAGE);
+    expect(lcm).toBeGreaterThan(50_000);
+  });
+
+  it("雨和天色各走各的周期,不会每场雨都撞上同一个天色", () => {
+    expect(DAY_CYCLE_METERS % RAIN_PERIOD).not.toBe(0);
+    expect(RAIN_PERIOD % DAY_CYCLE_METERS).not.toBe(0);
+    // 一趟三四千米大概率能碰上一场雨
+    expect(RAIN_PERIOD).toBeLessThan(6000);
+    // 进退场的坡各留得下,反光条能涨到满
+    expect(RAIN_FADE * 2).toBeLessThanOrEqual(RAIN_SPAN);
+    // 同一场雨里天色是走动的,不是从头到尾一个色
+    const phases = new Set<string>();
+    for (let m = 0; m < DAY_CYCLE_METERS * 4; m += 60) {
+      if (weatherAt(m) === "rain") phases.add(phaseAt(m));
+    }
+    expect(phases.size).toBeGreaterThanOrEqual(3);
   });
 
   it("白昼比夜里亮、雾比夜里薄", () => {

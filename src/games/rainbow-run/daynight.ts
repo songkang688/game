@@ -12,8 +12,18 @@
 
 import { mixHex } from "./view3d";
 
-/** 跑多远算一整圈日夜。 */
-export const DAY_CYCLE_METERS = 2400;
+/**
+ * 跑多远算一整圈日夜。
+ *
+ * 这个数是照着实际跑得动的距离定的,不是随手拍的:无尽模式六档难度到 4000 米封顶,
+ * 速度在 250–500 之间。一圈 9000 米摊成四档,一档 2250 米,
+ * 按平均速度大约六到九秒——慢到看得出是在「变天」,又不会在一趟里把晨昏昼夜闪过好几遍。
+ * 跑到夜色得有点本事,这也是它该有的分量。
+ *
+ * 还要躲开换世界那条线:世界每 1600 米换一次,2250 与 1600 只在 72000 米上对齐一次,
+ * 所以「换世界」和「换天色」实际上永远不会挤在同一米发生。
+ */
+export const DAY_CYCLE_METERS = 9000;
 
 export type DayPhase = "dawn" | "day" | "dusk" | "night";
 
@@ -109,12 +119,16 @@ export function phaseAt(meters: number): DayPhase {
 /* 天气                                                                */
 /* ------------------------------------------------------------------ */
 
-/** 每跑这么远来一场雨。 */
-export const RAIN_PERIOD = DAY_CYCLE_METERS * 3;
-/** 一场雨下多远。 */
-export const RAIN_SPAN = DAY_CYCLE_METERS * 0.6;
+/**
+ * 每跑这么远来一场雨。
+ * 故意比一圈日夜短:雨和天色各走各的周期,所以「黄昏的雨」和「夜里的雨」
+ * 都碰得上,不会每次下雨都是同一个天色。跑一趟三四千米大概率能遇上一场。
+ */
+export const RAIN_PERIOD = 5200;
+/** 一场雨下多远(占一个周期的三成上下)。 */
+export const RAIN_SPAN = 1500;
 /** 雨的进场与退场各留这么长一段,免得反光条突然冒出来。 */
-export const RAIN_FADE = 240;
+export const RAIN_FADE = 420;
 
 function rainPos(meters: number): number {
   if (!Number.isFinite(meters)) return 0;
