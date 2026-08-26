@@ -16,6 +16,7 @@ import { MAX_LUCK, ORES, ORE_KINDS, angleFromPivot, hookAngle, type OreKind } fr
 import { rareWeightMult } from "./depth12";
 import { BANNED } from "./copy";
 import { CSS } from "./style";
+import { save } from "../../engine/save";
 
 let harness: Harness | null = null;
 
@@ -46,11 +47,17 @@ async function mountGame(h: Harness, initialLevel?: number): Promise<{ game: Mou
   return { game, played, stars: starGains };
 }
 
-/** 结算面板上写着的那几句话（不含 `<style>` 里的注释，那是给程序员看的） */
+/**
+ * 结算面板上写着的那几句话。
+ *
+ * 取**最后**一块 `.gdh-modes`：首页那块选模式的卡片藏起来之后还留在树上，
+ * 取第一块会读到它。也不去读整棵树的文字 —— 那样会把 `<style>` 里给程序员看的
+ * 注释一起读进来。
+ */
 function settleText(root: FakeEl): string {
   let panel: FakeEl | null = null;
   walk(root, (el) => {
-    if (!panel && el.className.split(/\s+/).includes("gdh-modes")) panel = el;
+    if (el.className.split(/\s+/).includes("gdh-modes")) panel = el;
   });
   return panel === null ? "" : allText(panel);
 }
@@ -320,6 +327,29 @@ describe("1.2 360px 底部那一行塞得下", () => {
     // `.gdh-btn` 是 inline-flex,会盖掉浏览器给 [hidden] 的 display:none;
     // 少了这一条,「收工」在真浏览器里一直杵着,还白占一格宽度
     expect(CSS).toContain(".gdh-btn[hidden]{display:none;}");
+    game.destroy();
+  });
+});
+
+/* ---------------- 一之三、无尽成绩记的是层深 ---------------- */
+
+describe("1.2 无尽成绩走 save.recordEndlessBest", () => {
+  it("一趟跑完，平台那份存档记的是层深，本款自己那份也跟着写", async () => {
+    const h = install();
+    harness = h;
+    const { game } = await mountGame(h);
+
+    findButton(h.root, "无尽矿井")?.fire("click");
+    findButton(h.root, "开挖")?.fire("click");
+    // 第一层的时间是层数据算出来的，按它排够帧数让这一趟自然结束
+    const frames = Math.ceil(endlessLayer(1).field.time / 0.016) + 8;
+    h.flush(frames);
+
+    expect(settleText(h.root)).toContain("收工上井");
+    // 平台记的是「下潜到第几层」，不是这一趟带回多少金币（那会是三位数）
+    expect(save.getGameProgress("gold-hook").endlessBest).toBe(1);
+    const own = JSON.parse(h.storage.get("yiduo-yixing.gold-hook.endless.v12") ?? "{}") as { depth?: number };
+    expect(own.depth).toBe(1);
     game.destroy();
   });
 });
