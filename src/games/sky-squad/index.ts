@@ -310,6 +310,10 @@ export interface SortieSnapshot {
   footprint: number;
   created: { bullets: number; shots: number; puffs: number };
   boss: { phase: number; hp: number; cueLeft: number; firing: boolean } | null;
+  /** 屏震还剩多久(减少动态时恒为 0) */
+  shake: number;
+  /** 减少动态是不是生效了 */
+  calm: boolean;
 }
 
 export interface SortieHandle {
@@ -1801,6 +1805,8 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       boss: boss
         ? { phase: boss.phase, hp: boss.hp, cueLeft: boss.cueLeft, firing: boss.cueLeft <= 0 && boss.y >= 130 }
         : null,
+      shake,
+      calm: reduce,
     }),
   };
 }

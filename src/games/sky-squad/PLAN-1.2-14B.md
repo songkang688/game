@@ -30,7 +30,40 @@
 9. **平台接线**:`openCampaignLevel(n)` / `initialLevel` / `?level=`;Skip 继续走 188 框架的 `requestSkip`。
 10. **收尾**:CSS 类名统一 `sks-` 前缀、局部 `<style>`;`destroy` 清 rAF / 定时器 / 监听 / 朗读 / 状态;新增 ≥ 20 个用例;前 99 关数据不改。
 
-## 三、不做的事
+## 三、施工结果(逐条对账)
+
+| 规格项 | 落在哪 | 结果 |
+| --- | --- | --- |
+| 弹幕语法 | `bullets.ts` `PatternDecl` / `compileDecl` / `expandDecl` / `compileDecks` | 八种基础图案 `fan`/`ring`/`aimed`/`spiral`/`sweep`/`wall`/`rain`/`cross`;声明层字段就是规格那五个(`pattern`/`count`/`speed`/`delay`/`arc`)加四个可选(`radius`/`interval`/`rotate`/`gaps`/`warn`),纯函数展开,能直接吃 `JSON.parse` 的对象 |
+| 判定盒 | `bullets.ts` `PLAYER_HIT_R=9` / `CORE_DOT_R=6` / `GRAZE_R=30` / `hitBoxRatio()` | 判定圆直径 18 对机身 72×64 —— 横向 25%、面积 5.5%;判定核心默认常显,且按**屏幕像素**兜底(天空缩到 197px 宽时半径仍有 5px) |
+| 火力成长 | `power.ts` 四条线各 3 级、合计上限 9 | 拾取升一级、被碰到掉一级(不是结束);`planDps` 保证四条线互不碾压 |
+| boss 三阶段 | `levels.ts` `PhaseCue` + `index.ts` `advanceBossPhase` | 8 位 boss × 3 阶段 = 24 段,每段切换前有蓄力动作 + 倒计时条 + 停火窗口;`findDodgePath` 断言 24 段全部有解 |
+| 无尽 | `expedition.ts` 六种段落 + `expeditionPlan(seed, n)` | 段落拼接、连着两段不重样、每 4 段一朵补给云;同一颗种子航线完全可复现 |
+| 对象池 | `pool.ts` 子弹 / 我方弹 / 粒子三个池 | 1000 轮生成回收后 `created` 一个不涨 |
+| 双人 | `index.ts` `mountCoop` / `mountDuo` | 合作:两机靠到 130px 以内拧出彩虹合流波(真配合价值);同屏:各记各的分 |
+| 手机 | `logic.ts` `TOUCH_LIFT=40` / `canvasBoxHeight` / `skyFit` | 拖动时飞机在手指上方 40px(默认开、可关);字号全 ≥ 14px |
+| 接线 | `index.ts` `openCampaignLevel` / `levelFromQuery` | `initialLevel` / `?level=` / 越界夹回 1~188;Skip 走 188 框架的 `requestSkip` |
+
+### 版面这一刀(1.1 的老问题)
+
+外壳 `.game-stage` 是 `overflow:hidden` 的一屏。1.1 把画布固定成 460px 高、按**宽度**缩放天空,
+两件事凑一起的结果是:375×667 上画布下沿越过舞台下沿 250px,而且 `y=596` 那一行(玩家)
+本来就被裁在画布外面 —— **拖着飞却看不见自己的飞机**。这一版三处改动:
+
+1. `skyFit()`:480×720 取两边小的那个比例装进画布再居中,一格不裁,留白铺同一片天并描一圈细边框。
+2. `canvasBoxHeight()`:画布高度改成量「舞台下沿 − 画布顶边 − 画布底下那些按钮」,顺着 DOM 往上找谁在裁剪。
+3. 腾地方:模式条进关就收(`[hidden]` 得自己写,`display:flex` 会盖掉浏览器默认的)、
+   HUD 的暂停键不再被挤成三行、方向盘从九宫格改成一横条、两个开关并进 HUD 那条横条。
+
+375×667 战役关的天空因此从「飞机看不见」变成 197×296;360×720 远征是 289×433。
+
+## 四、合流说明
+
+rebase 到 `origin/game-1.2-window3` 时本格没有第二路 `sky-squad` 实现,没有发生合流。
+既有的 `bullets.test.ts` / `copy.test.ts` / `levels.test.ts` / `logic.test.ts`(53 例)一条没删,
+只有三条断言跟着玩法改了口径:图案数 6→8、boss 单阶段图案上限 2→3、被碰到的话术「迫降」→「打了个转」。
+
+## 五、不做的事
 
 - 不做真 3D,保持 2D 纵版(弹幕必须精确可读),只加云层视差。
 - 不引入任何依赖,不自建 `AudioContext` / `setInterval`,音效只走 `api.play`。

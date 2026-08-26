@@ -267,6 +267,31 @@ describe("sky-squad 1.2 运行时 · 双人", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 二点五、减少动态
+// ---------------------------------------------------------------------------
+
+describe("sky-squad 1.2 运行时 · 减少动态", () => {
+  it("开了「减少动态」就不再屏震,平时会震", async () => {
+    const h = (harness = install());
+    const loud = await openSortie(h, { boss: BOSSES[1] });
+    expect(loud.snapshot().calm).toBe(false);
+    for (let i = 0; i < 900 && loud.snapshot().shake === 0; i++) h.flush(1);
+    expect(loud.snapshot().shake).toBeGreaterThan(0);
+    loud.destroy();
+
+    h.setReducedMotion(true);
+    const calm = await openSortie(h, { boss: BOSSES[1] });
+    expect(calm.snapshot().calm).toBe(true);
+    for (let i = 0; i < 900; i++) {
+      h.flush(1);
+      expect(calm.snapshot().shake).toBe(0);
+    }
+    expect(calm.snapshot().pilots[0].touched + calm.snapshot().pilots[0].grazes).toBeGreaterThan(0);
+    calm.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 三、Boss、被击中与对象池
 // ---------------------------------------------------------------------------
 
