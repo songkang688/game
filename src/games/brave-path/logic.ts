@@ -577,8 +577,8 @@ export function endlessFoeSpec(depth: number): FighterSpec {
   const boost = Math.pow(ENDLESS_GROWTH, d - 1);
   const cap = (n: number): number => Math.min(9_999_999, Math.round(n));
   const base = {
-    maxHp: cap((40 + tier * 1.9) * (guardian ? 2.3 : 1) * boost),
-    atk: cap((11 + tier * 0.62) * (guardian ? 1.15 : 1) * boost),
+    maxHp: cap((36 + tier * 1.92) * (guardian ? 2.3 : 1) * boost),
+    atk: cap((9.5 + tier * 0.63) * (guardian ? 1.15 : 1) * boost),
     def: cap((2 + tier * 0.16) * (guardian ? 1.35 : 1) * boost),
     spd: Math.round(9 + tier * 0.09)
   };
