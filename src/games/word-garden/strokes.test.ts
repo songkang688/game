@@ -60,7 +60,7 @@ const EXPECTED: Record<string, string[]> = {
 const away: Point[] = [[2, 96], [6, 98]];
 
 describe("识字小花园 · 笔顺数据", () => {
-  it("29 个字的每一笔，顺序和笔画名一笔不差", () => {
+  it("30 个字的每一笔，顺序和笔画名一笔不差", () => {
     expect(Object.keys(EXPECTED).length).toBeGreaterThanOrEqual(20);
     expect(STROKE_CHARS).toHaveLength(Object.keys(EXPECTED).length);
     for (const [char, names] of Object.entries(EXPECTED)) {
