@@ -15,7 +15,8 @@ import {
   windowListenerCount,
   type Dom,
 } from "./domStub";
-import { cardWidthFor, meta, mount } from "./index";
+import { buildDeck, type Card, type Color } from "./deck";
+import { createTable, cardWidthFor, meta, mount, type SeatCfg, type TableDone } from "./index";
 
 let dom: Dom;
 
@@ -233,6 +234,100 @@ describe("窄屏与按钮尺寸", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
     expect(styleText()).toContain("@media (prefers-reduced-motion:reduce)");
+    handle.destroy();
+  });
+});
+
+describe("闯关的手数限制", () => {
+  const HUMAN: SeatCfg = { kind: "human", name: "朵朵", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const BOT: SeatCfg = { kind: "ai", name: "团团", avatar: "🐰", isImg: false, tier: "rookie", keys: 0 };
+
+  /** 从整副牌里挑一张还没用过的,拿到的是副本,id 天然不重复 */
+  function deal(pool: Card[], color: Color | null, num: number | null): Card {
+    const i = pool.findIndex((c) => c.kind === "num" && c.color === color && c.num === num);
+    if (i < 0) throw new Error(`牌堆里没有 ${color} ${num}`);
+    return pool.splice(i, 1)[0];
+  }
+
+  /**
+   * 摆一副顺序完全确定的牌:2 人各摸 2 张,台面翻出粉 5。
+   * 朵朵手上两张绿牌都接不上,只能摸牌;摸上来的第一张是粉 9,正好能出。
+   * 数组末尾先被 pop,所以发牌顺序要倒着排。
+   */
+  function riggedDeck(): Card[] {
+    const pool = buildDeck();
+    const mine = [deal(pool, "mint", 1), deal(pool, "mint", 2)];
+    const foe = [deal(pool, "sky", 3), deal(pool, "sky", 4)];
+    const top = deal(pool, "pink", 5);
+    const firstDraw = deal(pool, "pink", 9);
+    const rest = [deal(pool, "lemon", 6), deal(pool, "lemon", 7)];
+    return [...rest, firstDraw, top, foe[1], mine[1], foe[0], mine[0]];
+  }
+
+  function riggedTable(max: number, onDone: (r: TableDone) => void): { destroy: () => void } {
+    return createTable(dom.root as unknown as HTMLElement, {
+      cfg: { players: 2, tiers: ["rookie"], kinds: ["num"], handSize: 2, seed: 4242, hint: "试手数" },
+      deck: riggedDeck(),
+      seats: [HUMAN, BOT],
+      banner: "试手数",
+      turnLimit: { seat: 0, max },
+      sfx: () => undefined,
+      onDone,
+    });
+  }
+
+  function colorBarText(): string {
+    return dom.root.querySelector(".hh-colorbar")?.textContent ?? "";
+  }
+
+  it("色条上写着自己还剩几手,摸一张就少一手", () => {
+    const table = riggedTable(9, () => undefined);
+    expect(colorBarText()).toContain("还剩 9 手");
+    fireWindow(dom, "keydown", { key: "g" });
+    expect(colorBarText()).toContain("还剩 8 手");
+    table.destroy();
+  });
+
+  it("摸上来顺手打掉的那张只算一手,不重复扣", () => {
+    const table = riggedTable(9, () => undefined);
+    fireWindow(dom, "keydown", { key: "g" });
+    expect(colorBarText()).toContain("还剩 8 手");
+    const play = byText("出这张");
+    expect(play).toBeTruthy();
+    play?.click();
+    // 出的就是刚摸上来的粉 9:台面换成 9,手数还是停在 8
+    expect(colorBarText()).toContain("还剩 8 手");
+    expect(dom.root.querySelector(".hh-top")?.textContent).toContain("9");
+    table.destroy();
+  });
+
+  it("手数用光就收桌,按没打完算,不给赢家分", () => {
+    let done: TableDone | null = null;
+    const table = riggedTable(1, (r) => {
+      done = r;
+    });
+    expect(colorBarText()).toContain("还剩 1 手");
+    fireWindow(dom, "keydown", { key: "g" });
+    expect(dom.root.querySelector(".hh-say")?.textContent).toContain("手数用完");
+    advance(dom, 900);
+
+    const r = done as TableDone | null;
+    expect(r).toBeTruthy();
+    expect(r?.winner).toBe(-1);
+    expect(r?.gained).toBe(0);
+    // 记的是朵朵自己动的手数,不是全桌加起来的步数
+    expect(r?.actions[0]).toBe(1);
+    expect(r?.actions.length).toBe(2);
+    table.destroy();
+  });
+
+  it("不限手数的对战桌不会冒出手数提示", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("对战")?.click();
+    byText("开打")?.click();
+    expect(colorBarText()).toContain("现在是");
+    expect(colorBarText()).not.toContain("还剩");
     handle.destroy();
   });
 });

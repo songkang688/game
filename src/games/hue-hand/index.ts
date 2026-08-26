@@ -61,7 +61,7 @@ import { handScore, leftoverLine, roundScore } from "./score";
 // 座位
 // ---------------------------------------------------------------------------
 
-interface SeatCfg {
+export interface SeatCfg {
   kind: "human" | "ai";
   name: string;
   avatar: string;
@@ -121,6 +121,8 @@ const CSS = `
 .hh-colorbar-dot{width:15px;height:15px;border-radius:50%;background:#fff;opacity:.85;}
 .hh-chain{background:#fff;color:#c33b6d;border-radius:999px;padding:1px 10px;font-size:14px;font-weight:900;
   animation:hhbump .5s ease infinite;}
+.hh-turns{background:#ffffffdd;color:#6a4fa8;border-radius:999px;padding:1px 10px;font-size:14px;font-weight:900;}
+.hh-turns-low{background:#fff0d6;color:#a35c11;}
 @keyframes hhbump{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
 .hh-foes{display:flex;gap:6px;justify-content:center;align-items:flex-start;flex-wrap:wrap;}
 .hh-foe{flex:1 1 88px;min-width:0;max-width:180px;background:#ffffffcc;border-radius:14px;padding:6px 7px;
@@ -287,19 +289,24 @@ function reduceMotion(): boolean {
 
 export interface TableDone {
   state: HueState;
+  /** 谁赢了这一局;-1 表示玩家手数用光了 */
   winner: number;
   /** 赢家这一局收了多少分 */
   gained: number;
   /** 各家剩下的手牌分 */
   scores: number[];
+  /** 各家各动了几手 */
+  actions: number[];
 }
 
-interface TableOpts {
+export interface TableOpts {
   cfg: RoundConfig;
   deck: Card[];
   seats: SeatCfg[];
   banner: string;
   startTurn?: number;
+  /** 闯关的「N 手之内出完」:这个座位动满 max 手还没出完就算没过 */
+  turnLimit?: { seat: number; max: number };
   sfx: (name: SoundName) => void;
   onDone: (r: TableDone) => void;
 }
@@ -312,7 +319,7 @@ function keyHint(seat: SeatCfg): string {
   return `${seat.name}:${one}`;
 }
 
-function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void } {
+export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void } {
   let destroyed = false;
   let paused = false;
   let over = false;
@@ -325,6 +332,12 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     handSize: opts.cfg.handSize,
     startTurn: opts.startTurn ?? 0,
   });
+
+  /**
+   * 各家各动了几手。口径和 sim.ts 一致:出牌、抽牌、抽整条链、质疑各算一手,
+   * 摸到能出的牌顺手打掉仍然只算摸牌那一手。关卡的「N 手之内出完」照这个数。
+   */
+  const actions = new Array(opts.seats.length).fill(0) as number[];
 
   const humans = opts.seats.map((s, i) => (s.kind === "human" ? i : -1)).filter((i) => i >= 0);
   /** 界面下面摊开的是哪一家的手牌 */
@@ -384,6 +397,17 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     sayBad = bad;
   }
 
+  function bump(seat: number): void {
+    actions[seat]++;
+  }
+
+  /** 限手数的关卡里还剩几手;不限手数返回 null */
+  function turnsLeft(): number | null {
+    const lim = opts.turnLimit;
+    if (!lim) return null;
+    return Math.max(0, lim.max - actions[lim.seat]);
+  }
+
   // -------------------------------------------------------------------------
   // 动画:出牌飞到中央、抽牌从牌堆滑进手里
   // -------------------------------------------------------------------------
@@ -427,8 +451,16 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     const chain = chainPending(state)
       ? `<span class="hh-chain">叠加中 +${drawStack(state.chain)}</span>`
       : "";
-    colorBar.innerHTML = `<span class="hh-colorbar-dot"></span><span>现在是${COLOR_NAMES[c]}</span>${chain}`;
-    colorBar.setAttribute("aria-label", `现在是${COLOR_NAMES[c]}`);
+    const left = turnsLeft();
+    const turns =
+      left === null
+        ? ""
+        : `<span class="hh-turns${left <= 3 ? " hh-turns-low" : ""}">还剩 ${left} 手</span>`;
+    colorBar.innerHTML = `<span class="hh-colorbar-dot"></span><span>现在是${COLOR_NAMES[c]}</span>${chain}${turns}`;
+    colorBar.setAttribute(
+      "aria-label",
+      left === null ? `现在是${COLOR_NAMES[c]}` : `现在是${COLOR_NAMES[c]},还剩 ${left} 手`
+    );
   }
 
   function renderFoes(): void {
@@ -663,6 +695,10 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       finish();
       return;
     }
+    if (turnsLeft() === 0) {
+      finish(true);
+      return;
+    }
     render();
     scheduleCatch();
     pump();
@@ -673,6 +709,8 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       state.players[showSeat].hand.findIndex((c) => c.id === cardId)
     ] as HTMLElement | undefined;
     const card = state.players[showSeat].hand.find((c) => c.id === cardId);
+    // 刚摸上来顺手打掉的那张,摸牌时已经记过一手了
+    const fromDraw = state.drawnId === cardId;
     const res = playCard(state, showSeat, cardId, color);
     if (!res.ok) {
       tell(res.reason ?? "这张现在出不了。", true);
@@ -684,6 +722,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       render();
       return false;
     }
+    if (!fromDraw) bump(showSeat);
     if (card) flyCard(card, from ?? null, pileEl(), true);
     opts.sfx(card && isWild(card) ? "pop" : "tap");
     riskyConfirm = null;
@@ -734,6 +773,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
   function humanDraw(): void {
     if (!canAct() || chainPending(state) || state.drawnId !== null) return;
     const res = drawFromDeck(state, showSeat);
+    bump(showSeat);
     opts.sfx("pop");
     if (res.card) {
       const hand = state.players[showSeat].hand;
@@ -763,6 +803,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
   function humanTake(): void {
     if (!canAct() || !chainPending(state)) return;
     const got = takeChain(state, showSeat);
+    bump(showSeat);
     opts.sfx("pop");
     tell(`一次抽了 ${got} 张,这条链断在这里。`);
     afterMove();
@@ -772,6 +813,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     if (!canAct() || state.pendingW4?.target !== showSeat) return;
     const res = resolveChallenge(state, showSeat);
     if (!res) return;
+    bump(showSeat);
     opts.sfx(res.bluffed ? "coin" : "oops");
     const who = opts.seats[res.seat].name;
     tell(
@@ -882,6 +924,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
         tell(`${cfg.name} 摸了一张。`);
       }
     }
+    bump(seat);
     // 换手之后先看看有没有人忘喊
     const forgot = state.oneCard;
     if (forgot && opts.seats[forgot.player].kind === "ai") {
@@ -897,18 +940,24 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
   // 结束
   // -------------------------------------------------------------------------
 
-  function finish(): void {
+  /** timeUp:限手数的关卡里手数先用光了,这一局按没打完算 */
+  function finish(timeUp = false): void {
     if (over) return;
     over = true;
     curtainFor = -1;
+    if (timeUp) tell("手数用完啦,这一局先到这儿。", true);
     render();
     const scores = state.players.map((p) => handScore(p.hand));
-    const gained = roundScore(
-      state.players.map((p) => p.hand),
-      state.winner
-    );
+    const winner = timeUp ? -1 : state.winner;
+    const gained =
+      winner < 0
+        ? 0
+        : roundScore(
+            state.players.map((p) => p.hand),
+            winner
+          );
     later(() => {
-      if (!destroyed) opts.onDone({ state, winner: state.winner, gained, scores });
+      if (!destroyed) opts.onDone({ state, winner, gained, scores, actions: actions.slice() });
     }, 620);
   }
 
@@ -1021,11 +1070,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       deck: levelDeck(level, round),
       seats: soloSeats(level.players, level.tiers),
       startTurn: level.goalScore ? round % level.players : 0,
+      turnLimit: level.goalScore ? undefined : { seat: 0, max: level.maxTurns },
       banner: `${ch.emoji} 第 ${ctx.level + 1} 关 · ${levelBrief(level)}<br>${level.hint}${scoreLine}`,
       sfx: ctx.sfx,
       onDone: (r) => {
         if (level.goalScore) {
-          totals[r.winner] += r.gained;
+          if (r.winner >= 0) totals[r.winner] += r.gained;
           round++;
           if (totals[0] >= level.goalScore) {
             ctx.win(matchStars(round), winLine(level, matchStars(round)));
@@ -1040,8 +1090,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           return;
         }
         if (r.winner === 0) {
-          const used = r.state.moves;
-          ctx.win(levelStars(level, used), winLine(level, levelStars(level, used)));
+          const stars = levelStars(level, r.actions[0]);
+          ctx.win(stars, winLine(level, stars));
         } else {
           ctx.lose(loseLine(r.state.players[0].hand.length));
         }
