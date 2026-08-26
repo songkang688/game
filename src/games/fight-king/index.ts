@@ -138,13 +138,13 @@ const CSS = `
 .fk-pause-t{font-size:21px;font-weight:900;color:#8a5aa8;}
 .fk-pause-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .fk-pads{display:flex;gap:8px;margin-top:10px;}
-.fk-pad{flex:1;background:#fff8fc;border-radius:16px;padding:8px;display:flex;align-items:center;gap:8px;
+.fk-pad{flex:1;min-width:0;background:#fff8fc;border-radius:16px;padding:8px;display:flex;align-items:center;gap:8px;
   box-shadow:0 3px 10px rgba(140,120,190,.14);}
 .fk-stick{position:relative;width:96px;height:96px;flex:0 0 auto;border-radius:50%;background:#f0e9ff;
   box-shadow:inset 0 2px 6px rgba(110,90,160,.22);touch-action:none;}
 .fk-stick-dot{position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;
   background:#fff;box-shadow:0 2px 6px rgba(110,90,160,.3);pointer-events:none;}
-.fk-padbtns{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.fk-padbtns{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 .fk-padbtn{border:none;border-radius:14px;padding:14px 4px;font-size:14px;font-weight:900;font-family:inherit;
   cursor:pointer;background:#ffe3ef;color:#a33765;box-shadow:0 3px 0 rgba(180,110,150,.35);touch-action:none;}
 .fk-padbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(180,110,150,.35);}
@@ -163,6 +163,15 @@ const CSS = `
 .fk-live{font-size:12.5px;font-weight:800;color:#5b4890;line-height:1.7;}
 .fk-btn:focus-visible,.fk-mode:focus-visible,.fk-ch:focus-visible,.fk-padbtn:focus-visible{
   outline:3px solid #3c2a6b;outline-offset:3px;}
+/* 手机上两套摇杆挤在一行，摇杆收小、轻重击改成上下两颗，免得按键被挤出屏幕 */
+@media (max-width:520px){
+  .fk-pads{gap:6px;}
+  .fk-pad{padding:6px;gap:6px;}
+  .fk-stick{width:74px;height:74px;}
+  .fk-stick-dot{width:28px;height:28px;margin:-14px 0 0 -14px;}
+  .fk-padbtns{grid-template-columns:1fr;gap:5px;}
+  .fk-padbtn{padding:11px 2px;font-size:13px;}
+}
 @media (prefers-reduced-motion:reduce){
   .fk-vig-in{transition:none;}
 }
@@ -176,7 +185,7 @@ const FRAME_MS = 1000 / 60;
 const CANVAS_W = STAGE_WIDTH;
 /** 宽屏用扁一点的画面，窄屏用方一点的画面（手机上才装得下放大后的两个人） */
 const CANVAS_H_WIDE = 380;
-const CANVAS_H_NARROW = 600;
+const CANVAS_H_NARROW = 470;
 /** 低于这个 CSS 宽度就算窄屏 */
 const NARROW_PX = 520;
 
@@ -561,6 +570,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     if (brain) resetBrain(brain);
     state = newMatch();
     sparks.length = 0;
+    camScale = 0;
     screenPhase = "ready";
     phaseTimer = 80;
     bannerBig = `第 ${roundIndex + 1} 回合`;
@@ -741,11 +751,63 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
     const bodyTop = feet - h;
     const headR = hw * 0.74;
+    const shoulderY = bodyTop + headR * 2.15;
+    // 躯干只画到胯，剩下的留给两条腿，不然手脚全被身体盖住了
+    const hipY = feet - h * (crouch ? 0.16 : 0.28);
+    const mv = currentMove(f);
+    const ph = mv && f.phase === "attack" ? movePhase(mv, f.frame) : null;
+
+    // 判定框贴着地面的招（扫堂腿一类）用腿去够，其余用手
+    const kicking = !!mv && mv.box.y + mv.box.h * 0.5 < h * 0.42;
+    /**
+     * 出招那只手（脚）的落点：
+     * 起手往回收，看得出在蓄力；命中帧整只伸到判定框中心；收招再慢慢收回来。
+     */
+    function swingTip(anchorY: number): { x: number; y: number } | null {
+      if (!mv || !ph) return null;
+      if (ph === "startup") return { x: f.x - f.facing * hw * 1.1, y: anchorY + h * 0.12 };
+      const t = ph === "active" ? 1 : 0.5;
+      const tipX = Math.max(hw * 1.3, mv.box.x + mv.box.w * 0.62);
+      const tipY = feet - (mv.box.y + mv.box.h * 0.5);
+      return { x: f.x + f.facing * tipX * t, y: anchorY + (tipY - anchorY) * t };
+    }
+    // 走路时腿前后错开；被弹开或倒地就并拢
+    const striding = f.phase === "walk" && !f.airborne;
+    const stride = striding && !reduced ? Math.sin(state.frame * 0.28) * hw * 0.5 : 0;
+    const tuck = f.airborne ? h * 0.14 : 0;
+
+    ctx.strokeStyle = ch.ink;
+    ctx.lineCap = "round";
+
+    // 前肢在朝向对手的那一侧，后肢在另一侧
+    const fw = f.facing;
+    const kickTip = kicking ? swingTip(hipY) : null;
+    const punchTip = kicking ? null : swingTip(shoulderY);
+
+    /** `side` 取 +1 画朝着对手那一侧的手脚，取 -1 画背对的一侧 */
+    function limbs(side: 1 | -1): void {
+      ctx.lineWidth = hw * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(f.x + side * fw * hw * 0.45, hipY);
+      if (side === 1 && kickTip) ctx.lineTo(kickTip.x, kickTip.y);
+      else ctx.lineTo(f.x + side * fw * (hw * 0.45 + stride), feet - 2 - tuck);
+      ctx.stroke();
+
+      ctx.lineWidth = hw * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(f.x + side * fw * hw * 0.6, shoulderY);
+      if (side === 1 && punchTip) ctx.lineTo(punchTip.x, punchTip.y);
+      else if (side === 1 && f.blocking) ctx.lineTo(f.x + fw * hw * 1.05, shoulderY - h * 0.04);
+      else ctx.lineTo(f.x + side * fw * hw * 1.25, shoulderY + h * 0.18);
+      ctx.stroke();
+    }
+
+    limbs(-1);
+
     // 身体
     ctx.fillStyle = ch.color;
-    ctx.strokeStyle = ch.ink;
     ctx.lineWidth = 3;
-    roundRect(ctx, f.x - hw, bodyTop + headR, hw * 2, h - headR, hw * 0.6);
+    roundRect(ctx, f.x - hw, bodyTop + headR, hw * 2, hipY - bodyTop - headR, hw * 0.55);
     ctx.fill();
     ctx.stroke();
     // 脑袋
@@ -766,6 +828,33 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     ctx.beginPath();
     ctx.ellipse(ex + f.facing * headR * 0.35, ey + headR * 0.34, headR * 0.22, headR * 0.14, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // 招式：起手一层淡淡的预告，命中帧画出真正的判定框
+    if (mv && ph && ph !== "recovery") {
+      const bx = f.facing === 1 ? f.x + mv.box.x : f.x - mv.box.x - mv.box.w;
+      const by = feet - mv.box.y - mv.box.h;
+      const r = Math.min(mv.box.w, mv.box.h) * 0.42;
+      ctx.save();
+      if (ph === "active") {
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = mv.kind === "super" ? "rgba(255,214,240,.95)" : ch.color;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+        roundRect(ctx, bx, by, mv.box.w, mv.box.h, r);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = ch.ink;
+        roundRect(ctx, bx, by, mv.box.w, mv.box.h, r);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 出招的那只手脚压在判定框上面，看得清是谁伸出去的
+    ctx.strokeStyle = ch.ink;
+    limbs(1);
     ctx.restore();
 
     // 名牌 emoji
@@ -798,32 +887,6 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
       }
       ctx.restore();
     }
-
-    // 招式：起手一点小提示，命中帧画出真正的判定框
-    const mv = currentMove(f);
-    if (mv && f.phase === "attack") {
-      const ph = movePhase(mv, f.frame);
-      const bx = f.facing === 1 ? f.x + mv.box.x : f.x - mv.box.x - mv.box.w;
-      const by = line - f.y - mv.box.y - mv.box.h;
-      if (ph === "active") {
-        ctx.save();
-        ctx.globalAlpha = 0.72;
-        ctx.fillStyle = mv.kind === "super" ? "rgba(255,214,240,.92)" : ch.color;
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 3;
-        roundRect(ctx, bx, by, mv.box.w, mv.box.h, Math.min(mv.box.w, mv.box.h) * 0.42);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      } else if (ph === "startup") {
-        ctx.save();
-        ctx.globalAlpha = 0.28;
-        ctx.fillStyle = ch.ink;
-        roundRect(ctx, bx, by, mv.box.w, mv.box.h, Math.min(mv.box.w, mv.box.h) * 0.42);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
   }
 
   /**
@@ -831,20 +894,31 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
    * 不这么做的话，900 宽的场地铺满屏幕，两个小朋友会小得看不清脸。
    * 缩放以地平线为轴，所以地面永远在同一条线上，不会上下乱跳。
    */
+  let camScale = 0;
+  let camPan = 0;
+
   function camera(): { scale: number; camX: number } {
     const [a, b] = state.fighters;
-    const spread = Math.abs(a.x - b.x) + 300;
-    const wide = Math.max(CANVAS_W / 2.4, Math.min(CANVAS_W, spread));
+    const spread = Math.abs(a.x - b.x) + 250;
+    const wide = Math.max(CANVAS_W / 2.9, Math.min(CANVAS_W, spread));
     // 有人跳起来就自动拉远一点，免得脑袋顶出画面外
     const topNeeded = Math.max(
-      120,
-      ...state.fighters.map((f) => f.y + charOf(f).height + 26)
+      150,
+      ...state.fighters.map((f) => f.y + charOf(f).height + 40)
     );
-    const scale = Math.min(CANVAS_W / wide, (groundY() - 14) / topNeeded, 2.4);
+    const scale = Math.min(CANVAS_W / wide, (groundY() - 14) / topNeeded, 2.9);
     const viewW = CANVAS_W / scale;
     const mid = (a.x + b.x) / 2;
     const camX = Math.max(0, Math.min(Math.max(0, STAGE_WIDTH - viewW), mid - viewW / 2));
-    return { scale, camX };
+    // 慢慢追上目标值，跳跃和击退时镜头才不会一跳一跳的
+    if (camScale === 0) {
+      camScale = scale;
+      camPan = camX;
+    } else {
+      camScale += (scale - camScale) * 0.12;
+      camPan += (camX - camPan) * 0.16;
+    }
+    return { scale: camScale, camX: camPan };
   }
 
   function draw(): void {
