@@ -409,6 +409,9 @@ function bigText(text: string): string {
   return `<span class="mtf-word">🧑‍🌾 ${text}</span>`;
 }
 
+/** 带余除法只问余数时的引导语（校验器靠它分辨两种问法） */
+export const REMAINDER_ASK = "余数是几？";
+
 /** 一份出题参数对应的题面与引导语（引导语一律 ≤ 15 个汉字） */
 export function renderSpec(spec: MathSpec): { promptHTML: string; ask: string } {
   switch (spec.kind) {
@@ -419,7 +422,7 @@ export function renderSpec(spec: MathSpec): { promptHTML: string; ask: string } 
     case "divmod":
       return {
         promptHTML: `${spec.a} ÷ ${spec.b} = ?`,
-        ask: spec.askRemainder ? "余数是几？" : "商几余几？",
+        ask: spec.askRemainder ? REMAINDER_ASK : "商几余几？",
       };
     case "vertical":
       return {
@@ -627,11 +630,15 @@ export function wrongsOf(spec: MathSpec): Wrong[] {
             num(noCarrySum(a, b), "忘记进位：满十的那一个十没加上去"),
             num(answer - 10, "进位只进了一半"),
             num(answer + 10, "多进了一个十"),
+            num(answer + 1, "进位的那个一记到了个位上"),
+            num(answer - 1, "个位相加时少数了一个"),
           ]
         : [
             num(noBorrowDiff(a, b), "不够减就大减小，忘了向前一位借"),
             num(answer + 10, "借了一个十，前一位却没减去一"),
             num(answer - 10, "多借了一个十"),
+            num(answer - 1, "借来的十少数了一个"),
+            num(answer + 1, "个位借位之后多数了一个"),
           ];
     }
     case "paren": {
@@ -642,26 +649,32 @@ export function wrongsOf(spec: MathSpec): Wrong[] {
         case 0:
           out.push(num(a + b * c, "忽略括号，先算了乘法"));
           out.push(num(a + b, "只算了括号里那一步"));
+          out.push(num(a * c + b, "只把括号里第一个数乘了"));
           break;
         case 1:
           out.push(num(a - b * c, "忽略括号，先算了乘法"));
           out.push(num(a - b, "只算了括号里那一步"));
+          out.push(num(a * c - b, "只把括号里第一个数乘了"));
           break;
         case 2:
           out.push(num((a + b) * c, "从左往右算，忘了先乘后加"));
           out.push(num(b * c, "只算了乘法那一步"));
+          out.push(num(a + b + c, "把乘号看成了加号"));
           break;
         case 3:
           out.push(num(a + b / c, "忽略括号，先算了除法"));
           out.push(num(a + b, "只算了括号里那一步"));
+          out.push(num((a + b) * c, "把除号看成了乘号"));
           break;
         case 4:
           out.push(num((a * b - c) * d, "从左往右算，忘了两个乘法各算各的"));
           out.push(num(a * b, "只算了前一个乘法"));
+          out.push(num(a * b - c - d, "后一个乘法做成了连减"));
           break;
         default:
           out.push(num(a * b + c - d, "忽略括号，只把括号里第一个数乘了"));
           out.push(num(a * (b + c), "少减了最后一步"));
+          out.push(num(a * (b + c - d), "把减法也塞进括号里算了"));
       }
       const where = form === 2 || form === 4 ? "乘的那一步" : "括号里";
       out.push(num(answer + c, `${where}多算了一份`));
@@ -696,6 +709,8 @@ export function wrongsOf(spec: MathSpec): Wrong[] {
           why: "加号减号看反了",
         },
         { text: formatFraction(spec.an * spec.bn, spec.d), why: "把加减做成了乘" },
+        { text: formatFraction(spec.an, spec.d), why: "只抄了第一个分数，没接着算" },
+        { text: formatFraction(spec.d, Math.max(1, n)), why: "分子分母写反了" },
       ];
     }
     case "fracLcd": {
@@ -713,6 +728,25 @@ export function wrongsOf(spec: MathSpec): Wrong[] {
           why: "分母通分了，分子却没跟着变",
         },
         { text: formatFraction(n, spec.ad * spec.bd), why: "分母用了两数相乘，没找最小公倍数" },
+        { text: formatFraction(n, spec.ad + spec.bd), why: "分母直接加起来当成了公分母" },
+        {
+          text: formatFraction(
+            Math.abs(
+              spec.plus
+                ? spec.an * (L / spec.ad) - spec.bn * (L / spec.bd)
+                : spec.an * (L / spec.ad) + spec.bn * (L / spec.bd)
+            ),
+            L
+          ),
+          why: "加号减号看反了",
+        },
+        {
+          text: formatFraction(
+            Math.abs(spec.plus ? spec.an * (L / spec.ad) + spec.bn : spec.an * (L / spec.ad) - spec.bn),
+            L
+          ),
+          why: "只通分了一个分数，另一个分子照抄下来",
+        },
       ];
     }
     case "dec": {
@@ -736,34 +770,50 @@ export function wrongsOf(spec: MathSpec): Wrong[] {
     case "percent": {
       if (spec.form === "rate") {
         const v = (spec.part * 100) / spec.base;
-        return [
+        const flipped = (spec.base * 100) / spec.part;
+        const out: Wrong[] = [
           { text: `${100 - v}%`, why: "算成了剩下那部分占的百分比" },
           { text: `${v * 10}%`, why: "百分号的位置点错了" },
           { text: `${spec.base - spec.part}%`, why: "把相差的个数直接当成了百分数" },
+          { text: `${v + 10}%`, why: "百分率多看了一成" },
+          { text: `${Math.max(1, v - 10)}%`, why: "百分率少看了一成" },
         ];
+        if (Number.isInteger(flipped)) out.push({ text: `${flipped}%`, why: "部分和总数倒过来除了" });
+        return out;
       }
       const answer = (spec.base * spec.rate) / 100;
+      // 差一成：孩子把百分数看错一档，是这一类最常见的算偏
+      const step = spec.base / 10;
+      const offByTen = [
+        num(answer + step, "百分数多看了一成"),
+        num(Math.max(1, answer - step), "百分数少看了一成"),
+      ];
       if (spec.form === "discount") {
         return [
           num(spec.base - answer, "打折算成了只付折扣掉的那部分"),
           num(spec.base - spec.rate / 10, "把折数当成了要减掉的钱"),
           num(spec.base - (100 - spec.rate), "把百分数直接当成了钱数减掉"),
+          ...offByTen,
         ];
       }
       return [
         num(spec.base - answer, "算成了留下的那部分"),
         num((spec.base * spec.rate) / 10, "百分数当成了十分之几"),
         num(spec.base - spec.rate, "把百分数直接当成了个数减掉"),
+        ...offByTen,
       ];
     }
     case "ratio": {
       if (spec.form === "simplify") {
         const g = gcd(spec.a, spec.b);
-        const half = smallestFactor(g);
+        // 「只约了一半」这种错法在比里写出来数值和正解一样（6:9 就是 2:3），
+        // 那种选项没有唯一答案可言，所以这里挑的是真会写歪的几种
         return [
-          { text: `${spec.a / half}:${spec.b / half}`, why: "只约了一半，还能接着约" },
           { text: `${spec.b / g}:${spec.a / g}`, why: "前项后项写反了" },
-          { text: `${spec.a / g}:${spec.b}`, why: "只约了前项" },
+          { text: `${spec.a / g}:${spec.b}`, why: "只约了前项，后项照抄下来" },
+          { text: `${spec.a}:${spec.b / g}`, why: "只约了后项，前项照抄下来" },
+          { text: `${spec.a / g}:${spec.b / g + 1}`, why: "后项多约了一步" },
+          { text: `${spec.a / g + 1}:${spec.b / g}`, why: "前项多约了一步" },
         ];
       }
       if (spec.form === "share") {
@@ -772,6 +822,8 @@ export function wrongsOf(spec: MathSpec): Wrong[] {
           num((spec.total * spec.p) / parts, "拿错了份数，算成了另一个人的"),
           num(spec.total / parts, "只算出一份是多少就停了"),
           num(spec.total - spec.q, "把份数当成了个数直接减"),
+          num((spec.total * spec.q) / parts + spec.total / parts, "多分了一份"),
+          num(Math.max(1, (spec.total * spec.q) / parts - spec.total / parts), "少分了一份"),
         ];
       }
       const answer = spec.b * spec.k;
@@ -783,41 +835,66 @@ export function wrongsOf(spec: MathSpec): Wrong[] {
     }
     case "equation": {
       const { a, b } = spec;
+      const x = Number(answerOf(spec));
+      const out: Wrong[] = [];
       switch (spec.form) {
         case "addX":
-          return [num(b + a, "逆运算用反了，加号两边都加"), num(b, "把等号右边直接当成了未知数"), num(a, "把已知数当成了未知数")];
+          out.push(num(b + a, "逆运算用反了，加号两边都加"), num(b, "把等号右边直接当成了未知数"), num(a, "把已知数当成了未知数"));
+          break;
         case "subX":
-          return [num(Math.max(1, b - a), "逆运算用反了"), num(b, "把等号右边直接当成了未知数"), num(a, "把已知数当成了未知数")];
+          out.push(num(Math.max(1, b - a), "逆运算用反了"), num(b, "把等号右边直接当成了未知数"), num(a, "把已知数当成了未知数"));
+          break;
         case "xSub":
-          return [num(a + b, "逆运算用反了"), num(b, "把等号右边直接当成了未知数"), num(Math.max(1, b - a), "被减数和差弄反了")];
+          out.push(num(a + b, "逆运算用反了"), num(b, "把等号右边直接当成了未知数"), num(Math.max(1, b - a), "被减数和差弄反了"));
+          break;
         case "mulX":
-          return [num(b * a, "逆运算用反了，乘除弄颠倒"), num(Math.max(1, b - a), "把乘法当成了加法"), num(a + b, "把乘法当成了加法")];
+          out.push(num(b * a, "逆运算用反了，乘除弄颠倒"), num(Math.max(1, b - a), "把乘法当成了加法"), num(a + b, "把乘法当成了加法"));
+          break;
         default:
-          return [num(Math.max(1, b - a), "逆运算用反了"), num(a + b, "把除法当成了减法"), num(b, "把等号右边直接当成了未知数")];
+          out.push(num(Math.max(1, b - a), "逆运算用反了"), num(a + b, "把除法当成了减法"), num(b, "把等号右边直接当成了未知数"));
       }
+      // 逆运算方向对了、位值算歪了，也是这一类的常客
+      out.push(num(x + 10, "十位上多算了一个十"), num(Math.max(1, x - 10), "十位上少算了一个十"));
+      return out;
     }
     case "word": {
       const { form, n1, n2, n3 } = spec;
+      const answer = evalExpr(wordExpr(spec));
+      const out: Wrong[] = [];
       switch (form) {
         case "rows":
-          return [num(n1 * n2, "只算了第一步，忘了送走的"), num(n1 * n2 + n3, "该减的做成了加"), num(n1 + n2 - n3, "该乘的做成了加")];
+          out.push(num(n1 * n2, "只算了第一步，忘了送走的"), num(n1 * n2 + n3, "该减的做成了加"), num(n1 + n2 - n3, "该乘的做成了加"));
+          out.push(num(noBorrowDiff(n1 * n2, n3), "第二步不够减就大减小，忘了借位"));
+          break;
         case "pack":
-          return [num(n1 * n2, "只算了装满的，忘了多出来的"), num(n1 * n2 - n3, "该加的做成了减"), num(n1 + n2 + n3, "该乘的做成了加")];
+          out.push(num(n1 * n2, "只算了装满的，忘了多出来的"), num(n1 * n2 - n3, "该加的做成了减"), num(n1 + n2 + n3, "该乘的做成了加"));
+          out.push(num(noCarrySum(n1 * n2, n3), "第二步加的时候忘了进位"));
+          break;
         case "share":
-          return [num(n1 - n2, "只算了第一步，还没平均分"), num(Math.round(n1 / n3), "忘了先减掉卖出去的"), num(n1 - n2 - n3, "该除的做成了减")];
+          out.push(num(n1 - n2, "只算了第一步，还没平均分"), num(Math.round(n1 / n3), "忘了先减掉卖出去的"), num(n1 - n2 - n3, "该除的做成了减"));
+          out.push(num(answer + 1, "试商大了一"), num(Math.max(1, answer - 1), "试商小了一"));
+          break;
         case "fill":
-          return [num(n1 - n2, "只算了第一步，还没往里放"), num(Math.round(n1 / n3), "忘了先减掉送走的"), num(n1 - n2 - n3, "该除的做成了减")];
+          out.push(num(n1 - n2, "只算了第一步，还没往里放"), num(Math.round(n1 / n3), "忘了先减掉送走的"), num(n1 - n2 - n3, "该除的做成了减"));
+          out.push(num(answer + 1, "试商大了一"), num(Math.max(1, answer - 1), "试商小了一"));
+          break;
         case "trip":
-          return [num(n1 * n2, "只算了骑过的那一段"), num(n1 * n2 - n3, "该加的做成了减"), num(n1 + n2 + n3, "路程要用速度乘时间")];
+          out.push(num(n1 * n2, "只算了骑过的那一段"), num(n1 * n2 - n3, "该加的做成了减"), num(n1 + n2 + n3, "路程要用速度乘时间"));
+          out.push(num(noCarrySum(n1 * n2, n3), "第二步加的时候忘了进位"));
+          break;
         case "price":
-          return [num(n1 * n2, "只算了花掉的钱"), num(n3 + n1 * n2, "找回的钱做成了加"), num(n3 - n1 - n2, "该乘的做成了减")];
+          out.push(num(n1 * n2, "只算了花掉的钱"), num(n3 + n1 * n2, "找回的钱做成了加"), num(n3 - n1 - n2, "该乘的做成了减"));
+          out.push(num(noBorrowDiff(n3, n1 * n2), "第二步不够减就大减小，忘了借位"));
+          break;
         default:
-          return [
+          out.push(
             num(n1 * n2, "只算了整块地的面积"),
             num((n1 + n2) * 2 - n3, "面积算成了周长"),
-            num(n1 * n2 + n3, "该减的做成了加"),
-          ];
+            num(n1 * n2 + n3, "该减的做成了加")
+          );
+          out.push(num(noBorrowDiff(n1 * n2, n3), "第二步不够减就大减小，忘了借位"));
       }
+      return out;
     }
     default: {
       const t = spec.terms;
@@ -986,7 +1063,9 @@ export function genDec(rand: () => number, t: number): MathSpec {
     const plus = rand() < 0.5;
     if (!plus && b > a) [a, b] = [b, a];
     const r = plus ? a + b : a - b;
-    // 结果留一位小数才看得出「小数点对齐」练到了没
+    // 两个加数都得是真小数，不然「小数点对齐」根本练不到
+    if (a % 10 === 0 || b % 10 === 0) continue;
+    // 结果也留一位小数才看得出练到了没
     if (r <= 0 || r % 10 === 0) continue;
     return { kind: "dec", a, b, plus };
   }
@@ -999,12 +1078,15 @@ export function genDecMul(rand: () => number, t: number): MathSpec {
     const b = randInt(rand, 2, 9);
     if (times) {
       const a = randInt(rand, 11, t < 0.5 ? 59 : 99);
+      // 被乘的数和积都得是真小数，不然这题跟整数乘法没两样
+      if (a % 10 === 0 || (a * b) % 10 === 0) continue;
       if (a * b > 999) continue;
       return { kind: "decMul", times: true, a, b };
     }
     // 除法必须除得尽，商仍是规范的一位小数
     const q = randInt(rand, 2, t < 0.5 ? 40 : 99);
     const a = q * b;
+    if (a % 10 === 0 || q % 10 === 0) continue;
     if (a > 999) continue;
     return { kind: "decMul", times: false, a, b };
   }
@@ -1162,7 +1244,8 @@ export function genWord(rand: () => number, t: number): MathSpec {
     }
     const spec: MathSpec = { kind: "word", form, n1, n2, n3, item, bag };
     const v = evalExpr(wordExpr(spec));
-    if (!Number.isInteger(v) || v <= 0) continue;
+    // 结果太小的题不要：剩 3 个、找回 2 元这种，能凑出来的错法也所剩无几了
+    if (!Number.isInteger(v) || v < 5) continue;
     return spec;
   }
   return { kind: "word", form: "rows", n1: 5, n2: 6, n3: 8, item, bag };
@@ -1253,8 +1336,9 @@ export function buildFromSpec(spec: MathSpec, rand: () => number): MathQ {
   const answerText = String(answer);
   const seen = new Set<string>([canonAnswer(answerText)]);
   const usable: Wrong[] = [];
+  const loose = CHINESE_PROMPT_KINDS.has(spec.kind as AdvancedMathKind);
   for (const w of wrongsOf(spec)) {
-    if (!isSaneWrong(w.text, answerText)) continue;
+    if (!isSaneWrong(w.text, answerText, loose)) continue;
     const key = canonAnswer(w.text);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -1299,8 +1383,14 @@ export function exprOf(spec: MathSpec): string | undefined {
   }
 }
 
-/** 干扰项起码得像个答案：非负、写法规范、和正解不等值、不离谱 */
-function isSaneWrong(text: string, answerText: string): boolean {
+/**
+ * 干扰项起码得像个答案：非负、写法规范、和正解不等值、不离谱。
+ *
+ * `loose` 给中文叙述的题（应用题 / 百分数 / 按比分配）放宽量级：
+ * 那几类最典型的错法是「只算了第一步」，整块地的面积本来就可能是剩余面积的十几倍，
+ * 这种选项不但不离谱，还正是要考的地方。
+ */
+function isSaneWrong(text: string, answerText: string, loose = false): boolean {
   if (text === answerText) return false;
   // 比大小题的三个符号本来就是全部选项
   if (["＞", "＜", "＝"].includes(text)) return true;
@@ -1322,8 +1412,12 @@ function isSaneWrong(text: string, answerText: string): boolean {
   // 整数题就别混一个小数进来当选项，那种干扰项一眼就能排除
   if (Number.isInteger(right) && !Number.isInteger(v)) return false;
   // 同一个量级才算「像模像样的错」：差出十倍以上孩子一眼就排除了
-  return v <= right * 10 + 10 && v * 10 + 10 >= right;
+  const span = loose ? LOOSE_WRONG_SPAN : 10;
+  return v <= right * span + span && v * span + span >= right;
 }
+
+/** 中文叙述的题放宽到这个倍数（「只算了第一步」经常就是十几倍） */
+export const LOOSE_WRONG_SPAN = 40;
 
 /** 按题型出一道题（生成 → 校验，校验不过就换一份参数重来） */
 export function makeAdvanced(rand: () => number, kind: AdvancedMathKind, t: number): MathQ {
@@ -1340,8 +1434,12 @@ export function makeAdvanced(rand: () => number, kind: AdvancedMathKind, t: numb
 // 校验器：不信生成器，从题面重新算一遍
 // ---------------------------------------------------------------------------
 
-/** 从题面文字独立算出答案；算不出来返回 null（说明这题孩子也没法做） */
-export function solveFromPrompt(kind: AdvancedMathKind, text: string): string | null {
+/**
+ * 从题面文字独立算出答案；算不出来返回 null（说明这题孩子也没法做）。
+ * 带余除法的题面两种问法长得一样（`87 ÷ 5 = ?`），到底要「商几余几」还是只要余数，
+ * 得看引导语，所以这里也把 `ask` 收进来。
+ */
+export function solveFromPrompt(kind: AdvancedMathKind, text: string, ask = ""): string | null {
   const two = text.match(/^(\d+) ([×÷]) (\d+) = \?$/);
   if (two && (kind === "mul" || kind === "div" || kind === "divmod")) {
     const a = Number(two[1]);
@@ -1349,7 +1447,8 @@ export function solveFromPrompt(kind: AdvancedMathKind, text: string): string | 
     if (two[2] === "×") return String(a * b);
     if (kind === "div") return a % b === 0 ? String(a / b) : null;
     const q = Math.floor(a / b);
-    return `${q} 余 ${a - q * b}`;
+    const r = a - q * b;
+    return ask === REMAINDER_ASK ? String(r) : `${q} 余 ${r}`;
   }
   if (kind === "vertical") {
     const m = text.match(/^(\d+) ([+-]) (\d+) \?$/);
@@ -1465,7 +1564,7 @@ export function validateQuestion(q: MathQ): string[] {
   }
 
   // 从题面独立算一遍
-  const solved = solveFromPrompt(spec.kind, text);
+  const solved = solveFromPrompt(spec.kind, text, q.ask);
   if (solved !== null && canonAnswer(solved) !== canonAnswer(answerText)) {
     bad.push(`从题面算出来是 ${solved}，和答案 ${answerText} 对不上`);
   }
@@ -1538,6 +1637,8 @@ export function validateSpec(spec: MathSpec): string[] {
     case "dec": {
       const r = spec.plus ? spec.a + spec.b : spec.a - spec.b;
       if (r <= 0) bad.push("小数结果不能是负数或零");
+      if (spec.a % 10 === 0 || spec.b % 10 === 0) bad.push("小数题的两个数都得带小数");
+      if (r % 10 === 0) bad.push("小数题的结果也得带小数");
       if (!/^\d+(\.\d)?$/.test(formatTenths(r))) bad.push("小数只保留一位");
       break;
     }
@@ -1545,6 +1646,8 @@ export function validateSpec(spec: MathSpec): string[] {
       if (!spec.times && spec.a % spec.b !== 0) bad.push("小数除法必须除得尽（商仍是一位小数）");
       const r = spec.times ? spec.a * spec.b : spec.a / spec.b;
       if (r <= 0) bad.push("小数结果不能是负数或零");
+      if (spec.a % 10 === 0) bad.push("小数题的那个数得带小数");
+      if (r % 10 === 0) bad.push("小数题的结果也得带小数");
       if (!/^\d+(\.\d)?$/.test(formatTenths(r))) bad.push("小数只保留一位");
       break;
     }
