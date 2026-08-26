@@ -15,10 +15,10 @@ export const CHAPTERS: Chapter[] = [
   { name: "星光广场", emoji: "⭐", color: "#d8e6ff", desc: "对手开始会跳了，学着用对空招把他们打下来", size: 24 },
   { name: "糯米集市", emoji: "🍡", color: "#ffe9cf", desc: "扫堂腿登场：站着挡是挡不住下段的", size: 24 },
   { name: "云端回廊", emoji: "☁️", color: "#e4ecff", desc: "长手对手够得远，得会找机会贴上去", size: 24 },
-  { name: "竹林擂台", emoji: "🎋", color: "#d9f2d0", desc: "对手会格挡了，试试转圈摔和破防招", size: 23 },
-  { name: "闪电高台", emoji: "⚡", color: "#fff2c2", desc: "速度全面提升，收招大的招要少用", size: 23 },
-  { name: "豆田操场", emoji: "🌱", color: "#e2f6cf", desc: "对手连段很长，倒地记得按轻击受身", size: 23 },
-  { name: "云顶王座", emoji: "👑", color: "#ffe6f2", desc: "最后一层：会防会反击的高手，还带着满满的增益", size: 23 }
+  { name: "竹林擂台", emoji: "🎋", color: "#d9f2d0", desc: "对手学会跳进来压，也学会了转圈摔", size: 23 },
+  { name: "闪电高台", emoji: "⚡", color: "#fff2c2", desc: "对手开始防反：挡住你就立刻回敬一下", size: 23 },
+  { name: "豆田操场", emoji: "🌱", color: "#e2f6cf", desc: "防反打得更准了，倒地记得按轻击受身", size: 23 },
+  { name: "云顶王座", emoji: "👑", color: "#ffe6f2", desc: "最后一层：反应最快的高手，不过它每隔一会儿也要喘口气", size: 23 }
 ];
 
 /** 每章的场地底色（渲染背景用，和章节色分开，画面更有层次） */
@@ -81,11 +81,22 @@ export function progressOf(level: number): number {
   return TOTAL_LEVELS > 1 ? clamped / (TOTAL_LEVELS - 1) : 0;
 }
 
-/** 对手 AI 档位：前三章轻松、中间三章普通、最后两章高手；守擂者再升一档 */
+/** 每一章的对手 AI 档位（0 轻松 / 1 普通 / 2 灵巧 / 3 老练 / 4 高手） */
+const CHAPTER_AI: AiLevel[] = [0, 0, 1, 1, 2, 3, 3, 4];
+
+/** 最高档 */
+const AI_TOP: AiLevel = 4;
+
+/**
+ * 对手 AI 档位：一章一档往上走，守擂者再升一档（封顶在最高档）。
+ * 后段的难度主要靠**新的 AI 行为**（会跳会投 → 会防反 → 高手）撑起来，
+ * 而不是一味把元气和威力堆厚 —— 堆数值只会让孩子觉得"打不动"，
+ * 换行为才会让他觉得"这家伙学乖了"。
+ */
 export function aiLevelOf(level: number): AiLevel {
   const ci = chapterIndexOf(level);
-  let base: AiLevel = ci <= 2 ? 0 : ci <= 5 ? 1 : 2;
-  if (isBossLevel(level) && base < 2) base = (base + 1) as AiLevel;
+  const base = CHAPTER_AI[ci] ?? AI_TOP;
+  if (isBossLevel(level)) return Math.min(AI_TOP, base + 1) as AiLevel;
   return base;
 }
 
@@ -93,14 +104,18 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** 对手增益：随关号平滑上涨，守擂者再多一点厚度 */
+/**
+ * 对手增益：随关号平滑上涨，守擂者再多一点厚度。
+ * 涨幅刻意做得比 1.1 收敛（元气 +0.52 而不是 +0.62，威力 +0.48 而不是 +0.58）——
+ * 差出来的那一截交给 AI 档位去补，后段的对手是"更会打"，不是"更耐打"。
+ */
 export function foeBuffOf(level: number): FighterBuff {
   const p = progressOf(level);
   const boss = isBossLevel(level);
   return {
-    vigorMul: round2(0.72 + p * 0.62 + (boss ? 0.12 : 0)),
-    powerMul: round2(0.66 + p * 0.58 + (boss ? 0.08 : 0)),
-    speedMul: round2(0.86 + p * 0.28 + (boss ? 0.04 : 0))
+    vigorMul: round2(0.72 + p * 0.52 + (boss ? 0.1 : 0)),
+    powerMul: round2(0.66 + p * 0.48 + (boss ? 0.07 : 0)),
+    speedMul: round2(0.86 + p * 0.24 + (boss ? 0.04 : 0))
   };
 }
 
@@ -162,11 +177,13 @@ export function endlessFoeId(streak: number): string {
   return CHARACTERS[(i * 5 + 2) % CHARACTERS.length].id;
 }
 
-/** 无尽第 streak 场的 AI 档：连胜越多档位越高 */
+/** 无尽第 streak 场的 AI 档：连胜越多档位越高，五档一路走到顶 */
 export function endlessAiLevel(streak: number): AiLevel {
-  if (streak < 3) return 0;
-  if (streak < 9) return 1;
-  return 2;
+  if (streak < 2) return 0;
+  if (streak < 5) return 1;
+  if (streak < 9) return 2;
+  if (streak < 14) return 3;
+  return 4;
 }
 
 /** 无尽第 streak 场对手的增益：一直涨，但有封顶，不会变成打不过 */

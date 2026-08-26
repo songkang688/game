@@ -79,7 +79,7 @@ describe("守擂者", () => {
     const last = towerStage(TOTAL_LEVELS - 1);
     expect(last.boss).toBe(true);
     expect(last.chapterIndex).toBe(CHAPTERS.length - 1);
-    expect(last.aiLevel).toBe(2);
+    expect(last.aiLevel).toBe(4);
   });
 });
 
@@ -104,7 +104,7 @@ describe("每关配置", () => {
     for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
       const s = towerStage(lv);
       expect(s.level).toBe(lv);
-      expect([0, 1, 2]).toContain(s.aiLevel);
+      expect([0, 1, 2, 3, 4]).toContain(s.aiLevel);
       expect(AI_LABELS[s.aiLevel].length).toBeGreaterThan(0);
       expect(s.roundsToWin).toBeGreaterThanOrEqual(1);
       expect(s.timeLimitSec).toBeGreaterThanOrEqual(60);
@@ -124,11 +124,23 @@ describe("每关配置", () => {
 });
 
 describe("难度曲线", () => {
-  it("AI 档位从轻松一路走到高手", () => {
+  it("AI 档位从轻松一路走到高手，五档全都用得上", () => {
     expect(aiLevelOf(0)).toBe(0);
-    expect(aiLevelOf(TOTAL_LEVELS - 1)).toBe(2);
+    expect(aiLevelOf(TOTAL_LEVELS - 1)).toBe(4);
     const levels = [0, 40, 90, 140, 187].map(aiLevelOf);
     for (let i = 1; i < levels.length; i++) expect(levels[i]).toBeGreaterThanOrEqual(levels[i - 1]);
+    // 188 层里五个档位一个都不能缺席
+    const used = new Set<number>();
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) used.add(aiLevelOf(lv));
+    expect([...used].sort()).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("后段靠新 AI 行为撑难度，不是靠堆元气：档位涨得比增益快", () => {
+    const early = towerStage(20);
+    const late = towerStage(170);
+    expect(late.aiLevel - early.aiLevel).toBeGreaterThanOrEqual(3);
+    // 元气增益从头到尾涨幅不到六成，撑难度的主力不是它
+    expect(late.foeBuff.vigorMul / early.foeBuff.vigorMul).toBeLessThan(1.6);
   });
 
   it("守擂者比同章的普通关更难", () => {
@@ -179,8 +191,16 @@ describe("无尽连胜", () => {
       expect(CHARACTERS.some((c) => c.id === endlessFoeId(i))).toBe(true);
     }
     expect(endlessAiLevel(0)).toBe(0);
-    expect(endlessAiLevel(5)).toBe(1);
-    expect(endlessAiLevel(20)).toBe(2);
+    expect(endlessAiLevel(3)).toBe(1);
+    expect(endlessAiLevel(6)).toBe(2);
+    expect(endlessAiLevel(10)).toBe(3);
+    expect(endlessAiLevel(20)).toBe(4);
+    // 一路不降
+    let prev = -1;
+    for (let i = 0; i < 40; i++) {
+      expect(endlessAiLevel(i)).toBeGreaterThanOrEqual(prev);
+      prev = endlessAiLevel(i);
+    }
   });
 
   it("增益一路涨但有封顶，不会变成打不过", () => {
