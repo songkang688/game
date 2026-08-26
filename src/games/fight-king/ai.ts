@@ -119,8 +119,9 @@ function planFor(brain: AiBrain, state: MatchState, side: 0 | 1): Plan {
 
   const foePh = foePhaseNow(foe);
 
-  // 1) 看到对手起手 → 格挡（蹲挡还是站挡也要猜一猜）
-  if (foePh === "startup" || foePh === "active") {
+  // 1) 对手在够得着的距离起手 → 格挡（蹲挡还是站挡也要猜一猜）
+  //    离得老远就不用缩了，站那儿举手挡空气看着挺傻的
+  if (mid && (foePh === "startup" || foePh === "active")) {
     if (r() < AI_GUARD_CHANCE[brain.level]) {
       const crouch = r() < 0.5;
       return { input: inputOf({ [back]: true, down: crouch } as Partial<InputFrame>), frames: 6 };

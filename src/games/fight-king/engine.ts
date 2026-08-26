@@ -772,7 +772,7 @@ export function runFrames(
   return state;
 }
 
-/** 元气比例（画血条用，0..1） */
+/** 元气比例（画元气条用，0..1） */
 export function vigorRatio(f: FighterState): number {
   return f.maxVigor > 0 ? Math.max(0, f.vigor / f.maxVigor) : 0;
 }

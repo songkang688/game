@@ -644,7 +644,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
   function tick(): void {
     if (paused) return;
-    // 粒子始终在动（哪怕在读条），画面不会死气沉沉
+    // 粒子始终在动（哪怕在读条），画面不会冷冷清清
     for (let i = sparks.length - 1; i >= 0; i--) {
       const s = sparks[i];
       s.x += s.vx;

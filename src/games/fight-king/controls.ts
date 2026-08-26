@@ -2,7 +2,7 @@
  * 朵星格斗王 —— 键位表与输入换算（纯函数，不碰 DOM）。
  *
  * 两位玩家的键位必须完全不重叠，否则同屏对战会互相抢键；
- * 这件事由 `controls.test.ts` 钉死，谁改键位都会当场被测试拦下来。
+ * 这件事由 `controls.test.ts` 牢牢盯住，谁改键位都会当场被测试拦下来。
  */
 import { inputOf, type InputFrame } from "./engine";
 
@@ -86,7 +86,7 @@ export function normalizeInput(i: InputFrame): InputFrame {
   return { ...i, left: bothX ? false : i.left, right: bothX ? false : i.right };
 }
 
-/** 虚拟摇杆死区：摸得太轻不算方向 */
+/** 虚拟摇杆盲区：摸得太轻不算方向 */
 export const STICK_DEADZONE = 16;
 
 /**

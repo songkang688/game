@@ -2,7 +2,7 @@
  * 朵星格斗王 —— 判定纯函数。
  *
  * 这里一个 DOM 都不碰、一个随机数都不掷：给同样的输入永远得到同样的输出，
- * 所以判定框重叠、优先级对拼、连段取消、无限连防护这些规矩都能被单测钉死。
+ * 所以判定框重叠、优先级对拼、连段取消、无限连防护这些规矩都能被单测牢牢盯住。
  *
  * 对局状态机在 `engine.ts`，它只调用这里的函数，不自己写判定。
  */
@@ -208,7 +208,7 @@ export function isComboCapped(hits: number): boolean {
 
 /**
  * 连段到顶之后的处理：不再削元气、直接放倒并弹开。
- * 这样再厉害的连段也不可能锁死对手，绝不会出现"打到结束都动不了"。
+ * 这样再厉害的连段也不可能把对手一直按住，绝不会出现"打到结束都动不了"。
  */
 export interface CappedOutcome {
   power: number;
@@ -325,7 +325,7 @@ export const TECH_WINDOW = 8;
 export const TECH_WAKEUP_FRAMES = 18;
 /** 没受身的起身帧 */
 export const NORMAL_WAKEUP_FRAMES = 40;
-/** 起身瞬间这么多帧打不到（免得刚站起来又被压死） */
+/** 起身瞬间这么多帧打不到（免得刚站起来又被压回去） */
 export const WAKEUP_INVULN = 6;
 
 export function techWindowOpen(framesSinceKnockdown: number): boolean {

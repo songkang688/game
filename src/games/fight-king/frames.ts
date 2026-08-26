@@ -347,7 +347,7 @@ interface CharSpec {
   recoveryMod: number;
   powerMod: number;
   guardMax: number;
-  /** 三个必杀 + 一个超必杀，逐个写死（角色差异主要就体现在这儿） */
+  /** 三个必杀 + 一个超必杀，逐个写全（角色差异主要就体现在这儿） */
   specials: [Move, Move, Move, Move];
 }
 
@@ -572,14 +572,16 @@ const SPECS: CharSpec[] = [
       }),
       special("s3", {
         name: "转身星芒",
-        note: "转个圈把身边扫干净，收招小，挡住也不太亏",
+        note: "转个圈把身边扫干净，还能把跳过来的人卷上天",
         startup: 9,
         active: 5,
-        recovery: 15,
+        recovery: 20,
         power: 10,
-        hitStun: 21,
-        knockback: 5.8,
-        box: { x: 16, y: 20, w: 66, h: 48 }
+        hitStun: 23,
+        launch: 7.5,
+        knockback: 3.6,
+        priority: 7,
+        box: { x: 12, y: 20, w: 62, h: 66 }
       }),
       special("super", {
         name: "银河大转轮",
@@ -643,7 +645,7 @@ const SPECS: CharSpec[] = [
         box: { x: 26, y: 34, w: 112, h: 30 }
       }),
       special("s3", {
-        name: "团子弹跳",
+        name: "团子蹦蹦",
         note: "原地一顶，把对手挑到空中，接得上连段",
         startup: 11,
         active: 6,
@@ -944,14 +946,16 @@ const SPECS: CharSpec[] = [
       }),
       special("s3", {
         name: "连环豆豆拳",
-        note: "噼里啪啦一串小拳头，判定时间长，压制力强",
+        note: "噼里啪啦一串小拳头，最后一下往上撩，跳过来的人也接得住",
         startup: 10,
         active: 12,
-        recovery: 20,
+        recovery: 22,
         power: 11,
-        hitStun: 20,
-        knockback: 6.2,
-        box: { x: 20, y: 30, w: 78, h: 32 }
+        hitStun: 23,
+        launch: 7,
+        knockback: 4.2,
+        priority: 7,
+        box: { x: 16, y: 28, w: 72, h: 62 }
       }),
       special("super", {
         name: "豆田大丰收",
