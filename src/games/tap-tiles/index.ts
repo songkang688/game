@@ -192,8 +192,13 @@ const CSS = `
 @media (max-width:420px){
   .tt-wrap{padding:8px;gap:6px;}
   .tt-banner{font-size:13px;}
-  .tt-keys{font-size:12px;}
-  .tt-stat{font-size:14px;padding:3px 9px;}
+  .tt-keys{font-size:13px;}
+  .tt-stat{padding:4px 10px;}
+}
+/* 比规格下限还窄的老机器:收横向内边距把计分挤回一行,字号仍旧留在 16px */
+@media (max-width:340px){
+  .tt-hud{gap:6px;}
+  .tt-stat{padding:4px 7px;}
 }
 @media (prefers-reduced-motion:reduce){
   .tt-btn:active,.tt-open:active,.tt-goback:active{transform:none;}

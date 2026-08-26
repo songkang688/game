@@ -4,6 +4,7 @@
  * 单测能验的都在 `src/games/tap-tiles/*.test.ts` 里验过了（含 DOM 桩上的 destroy 断言）。
  * 这份脚本补的是桩验不了的那几件事：
  *  1. 360×640 / 375×667 / 1280×800 都不横向溢出，四列铺满且每列 ≥ 80px、HUD 字号 ≥ 16px；
+ *     以及判定线连同下面那行提示都落在 overflow:hidden 的平台舞台里（被裁掉就没法玩）；
  *  2. D F J K 真的能把分数敲上去，Esc 能停住、再按能继续；
  *  3. 四个入口（188 关闯关 / 无尽加速 / 同谱对战 / 双人同屏）都点得进去，也回得来；
  *  4. 离开游戏之后 keydown 监听与 rAF 全部停掉，不在后台空转。
@@ -79,13 +80,16 @@ async function clickText(page, selector, text) {
   if (!clicked) throw new Error(`找不到按钮：${text}`);
 }
 
-/** 读一眼舞台：画布尺寸、HUD 里的分数与连击 */
+/** 读一眼舞台：画布尺寸、HUD 里的分数与连击、判定线落在哪儿 */
 async function readStage(page) {
   return page.evaluate(() => {
     const c = document.querySelector(".tt-canvas");
     const hud = document.querySelector(".tt-hud");
-    const r = c ? c.getBoundingClientRect() : { width: 0, height: 0 };
+    const r = c ? c.getBoundingClientRect() : { width: 0, height: 0, top: 0 };
     const text = hud ? hud.textContent : "";
+    // 平台舞台是 overflow:hidden 的，判定线被推到它下面就再也点不着
+    const box = document.querySelector(".game-stage");
+    const say = document.querySelector(".tt-say");
     return {
       w: r.width,
       h: r.height,
@@ -93,7 +97,10 @@ async function readStage(page) {
       score: Number(/(\d+) 分/.exec(text)?.[1] ?? -1),
       combo: Number(/(\d+) 连/.exec(text)?.[1] ?? -1),
       paused: Boolean(document.querySelector(".tt-cover")),
-      say: document.querySelector(".tt-say")?.textContent ?? "",
+      say: say?.textContent ?? "",
+      judgeY: Math.round(r.top + r.height * 0.8),
+      sayBottom: say ? Math.round(say.getBoundingClientRect().bottom) : 0,
+      clipBottom: box ? Math.round(box.getBoundingClientRect().bottom) : 0,
     };
   });
 }
@@ -144,6 +151,17 @@ async function main() {
     log(stage.w <= vp.width, `${vp.name} 画布完整入屏`, `画布宽 ${Math.round(stage.w)} ≤ ${vp.width}`);
     log(stage.w / 4 >= MIN_LANE_PX, `${vp.name} 每列不小于 ${MIN_LANE_PX}px`, `${(stage.w / 4).toFixed(1)}px`);
     log(String(stage.label).includes("判定线"), `${vp.name} 画布有读屏文字`, String(stage.label));
+
+    log(
+      stage.judgeY > 0 && stage.judgeY <= stage.clipBottom,
+      `${vp.name} 判定线在舞台里点得着`,
+      `判定线 y=${stage.judgeY}，舞台底 ${stage.clipBottom}`,
+    );
+    log(
+      stage.sayBottom > 0 && stage.sayBottom <= stage.clipBottom,
+      `${vp.name} 判定线下面那行提示也没被裁掉`,
+      `提示底 ${stage.sayBottom}，舞台底 ${stage.clipBottom}`,
+    );
 
     const hudPx = await page.$eval(".tt-stat", (el) => parseFloat(getComputedStyle(el).fontSize));
     log(hudPx >= MIN_HUD_PX, `${vp.name} HUD 字号不小于 ${MIN_HUD_PX}px`, `${hudPx}px`);
