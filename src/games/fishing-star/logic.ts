@@ -11,7 +11,7 @@
 
 export const GAME_ID = "fishing-star";
 
-/** 图鉴存档 key:和 l99 星级存档、平台钱包互不影响 */
+/** 图鉴存档 key(1.1 的 id 列表版,1.2 起只用来迁移老存档) */
 export const DEX_KEY = "yiduo-yixing.fishing-star.dex";
 
 // ---------------------------------------------------------------------------
@@ -112,6 +112,74 @@ export function bandMiss(depth: number, band: { from: number; to: number }): num
 }
 
 // ---------------------------------------------------------------------------
+// 抛竿落点:蓄力决定甩出去多远,风把它吹偏一点点
+// ---------------------------------------------------------------------------
+//
+// 2D 侧视图里岸在左边、水面往右铺开:抛得越远,脚下的斜坡越深,鱼也越稀有。
+// 「力度 → 距离 → 深度」这条链子是线性的,所以 `depthAtDistance(castDistance(p, 0))`
+// 和老的 `castDepth(p)` 说的是同一件事,只是多了一个能看见的水平轴。
+
+/** 最远能甩出去多少米 */
+export const MAX_CAST_M = 30;
+
+/** 风最多把落点吹偏多少(满风 ±12%,只够改变手感,不至于让人抛不准) */
+export const WIND_SWAY = 0.12;
+
+/** 抛到最远处时额外的运气加成:远处更容易碰上稀有鱼 */
+export const FAR_LUCK = 0.5;
+
+/** 抽一阵风:-1(顶头逆风)..+1(推着走的顺风),按 0.25 一档,方便画箭头也方便预判 */
+export function rollWind(rand: () => number): number {
+  const v = clamp(rand(), 0, 1) * 2 - 1;
+  return Math.round(v * 4) / 4;
+}
+
+/** 风吹过以后的实际力度(0..1) */
+export function applyWind(power: number, wind: number): number {
+  const w = clamp(wind, -1, 1);
+  return clamp(clamp(power, 0, 1) * (1 + WIND_SWAY * w), 0, 1);
+}
+
+/** 松手那一刻的力度 + 风 → 甩出去多少米 */
+export function castDistance(power: number, wind = 0, maxM: number = MAX_CAST_M): number {
+  const far = maxM > 0 ? maxM : MAX_CAST_M;
+  return Math.round(applyWind(power, wind) * far * 10) / 10;
+}
+
+/** 落点离岸多远 → 那里的水有多深 */
+export function depthAtDistance(dist: number, maxM: number = MAX_CAST_M): number {
+  const far = maxM > 0 ? maxM : MAX_CAST_M;
+  return Math.round((clamp(dist, 0, far) / far) * MAX_DEPTH * 10) / 10;
+}
+
+/** 想钓这个深度,得把钩子甩到离岸多远 */
+export function distanceOfDepth(depth: number, maxM: number = MAX_CAST_M): number {
+  const far = maxM > 0 ? maxM : MAX_CAST_M;
+  return Math.round((clamp(depth, 0, MAX_DEPTH) / MAX_DEPTH) * far * 10) / 10;
+}
+
+/** 落点越远,稀有鱼越愿意来(0..FAR_LUCK) */
+export function distanceLuck(dist: number, maxM: number = MAX_CAST_M): number {
+  const far = maxM > 0 ? maxM : MAX_CAST_M;
+  return Math.round((clamp(dist, 0, far) / far) * FAR_LUCK * 100) / 100;
+}
+
+/** 风向箭头(色觉友好:形状本身就说明了方向) */
+export function windArrow(wind: number): string {
+  const w = clamp(wind, -1, 1);
+  if (Math.abs(w) < 0.13) return "•";
+  return w > 0 ? (w >= 0.75 ? "⇉" : "→") : w <= -0.75 ? "⇇" : "←";
+}
+
+/** 风向的中文说法 */
+export function windText(wind: number): string {
+  const w = clamp(wind, -1, 1);
+  if (Math.abs(w) < 0.13) return "几乎无风";
+  const strength = Math.abs(w) >= 0.75 ? "稍强" : "轻";
+  return w > 0 ? `${strength}顺风,抛得更远` : `${strength}逆风,抛得更近`;
+}
+
+// ---------------------------------------------------------------------------
 // 鱼种图鉴(25 种,全部原创)
 // ---------------------------------------------------------------------------
 
@@ -183,6 +251,91 @@ export function rarityStars(rarity: number): string {
   return "★".repeat(n) + "☆".repeat(5 - n);
 }
 
+// ---------------------------------------------------------------------------
+// 四档稀有度
+// ---------------------------------------------------------------------------
+//
+// 鱼身上的 rarity 是 1..5 的连续数值(抽签概率按它算,关卡表也依赖它,不能动);
+// 摆到图鉴上给孩子看的是四个档位。两者的对应关系只写在这一张表里。
+
+export type RarityTierKey = "common" | "uncommon" | "rare" | "legend";
+
+export interface RarityTier {
+  key: RarityTierKey;
+  name: string;
+  /** 形状标记:色觉友好,不靠颜色也分得出档位 */
+  mark: string;
+  color: string;
+  /** 归进这一档的 rarity 值 */
+  rarities: number[];
+  desc: string;
+}
+
+export const RARITY_TIERS: RarityTier[] = [
+  { key: "common", name: "常见", mark: "●", color: "#78a6c0", rarities: [1, 2], desc: "随便抛几竿就能遇上。" },
+  { key: "uncommon", name: "少见", mark: "◆", color: "#5faa82", rarities: [3], desc: "落点对了才肯来。" },
+  { key: "rare", name: "稀有", mark: "▲", color: "#7d84d6", rarities: [4], desc: "要抛得远,还得配好饵。" },
+  { key: "legend", name: "传说", mark: "★", color: "#e0912a", rarities: [5], desc: "深水、夜色,再加一点点运气。" },
+];
+
+/** rarity → 四档里的第几档(0..3) */
+export function tierIndexOf(rarity: number): number {
+  const r = clampInt(rarity, 1, 5);
+  for (let i = 0; i < RARITY_TIERS.length; i++) {
+    if (RARITY_TIERS[i].rarities.includes(r)) return i;
+  }
+  return RARITY_TIERS.length - 1;
+}
+
+export function tierOf(rarity: number): RarityTier {
+  return RARITY_TIERS[tierIndexOf(rarity)];
+}
+
+/** 图鉴卡片上的档位标签,例如「▲ 稀有」 */
+export function tierLabel(rarity: number): string {
+  const t = tierOf(rarity);
+  return `${t.mark} ${t.name}`;
+}
+
+/** 某一档里的全部鱼(图鉴筛选用) */
+export function fishOfTier(tier: number): Fish[] {
+  const i = clampInt(tier, 0, RARITY_TIERS.length - 1);
+  return FISH.filter((f) => tierIndexOf(f.rarity) === i);
+}
+
+// ---------------------------------------------------------------------------
+// 体长:图鉴要记「你钓到过的最大的一条」
+// ---------------------------------------------------------------------------
+
+/** 同一种鱼的体长上下浮动幅度 */
+export const SIZE_SPREAD = 0.22;
+
+/** 一种鱼的标准体长(厘米):按体重开三次方,大鱼长但不会长得离谱 */
+export function baseLengthCm(fish: Fish): number {
+  return Math.round((14 + 26 * Math.cbrt(Math.max(0.01, fish.weight))) * 10) / 10;
+}
+
+/** roll(0..1)→ 这一条的体长(厘米);0 是同种里最小的,1 是最大的 */
+export function rollLengthCm(fish: Fish, roll: number): number {
+  const t = clamp(roll, 0, 1);
+  return Math.round(baseLengthCm(fish) * (1 - SIZE_SPREAD + 2 * SIZE_SPREAD * t) * 10) / 10;
+}
+
+/** 体长 → 这一条的体重(千克):长一成,重量涨三次方 */
+export function weightForLength(fish: Fish, cm: number): number {
+  const base = baseLengthCm(fish);
+  if (base <= 0) return fish.weight;
+  const ratio = clamp(cm, 1, base * 3) / base;
+  // 再小的一条也是一条鱼,不许出现「0 千克」
+  return Math.max(0.01, Math.round(fish.weight * ratio * ratio * ratio * 100) / 100);
+}
+
+/** 体长的中文写法 */
+export function formatLength(cm: number): string {
+  if (!Number.isFinite(cm) || cm <= 0) return "—";
+  return `${(Math.round(cm * 10) / 10).toFixed(1)} 厘米`;
+}
+
 /** 体重的中文写法:不到一千克说克 */
 export function formatWeight(kg: number): string {
   if (!Number.isFinite(kg) || kg <= 0) return "0 克";
@@ -235,8 +388,12 @@ export function pickFish(depth: number, rand: () => number, luck = 0, pool: Fish
 // 张力拉扯(核心判定,纯函数)
 // ---------------------------------------------------------------------------
 
-/** 张力到这里线就断了 */
+/** 张力到这里线当场就断(硬顶,任何装备都救不回来) */
 export const SNAP_AT = 1;
+/** 进红区:到这里开始倒计时,不是立刻断 */
+export const RED_AT = 0.82;
+/** 在红区连续待满这么久,线才断(1.2 秒的预警窗口) */
+export const RED_SNAP_MS = 1200;
 /** 进入「太紧了」的警戒区 */
 export const TIGHT_AT = 0.68;
 /** 低于这里算「太松了」,一直松着鱼就跑了 */
@@ -271,7 +428,49 @@ export function zoneText(zone: TensionZone): string {
   return "手感正好,继续收";
 }
 
+// ---------------------------------------------------------------------------
+// 张力条的三段配色(绿 / 黄 / 红)
+// ---------------------------------------------------------------------------
+//
+// `tensionZone` 是判定用的四分区,分界点写死;
+// 下面这一套是给眼睛看的三段,红段的起点会被鱼线装备顶上去,所以要能传参。
+
+export type TensionBand = "slack" | "green" | "yellow" | "red";
+
+export function tensionBand(tension: number, redAt: number = RED_AT): TensionBand {
+  if (!Number.isFinite(tension)) return "slack";
+  const red = clamp(redAt, GOOD_AT + 0.05, 1.4);
+  if (tension >= red) return "red";
+  if (tension >= TIGHT_AT) return "yellow";
+  if (tension >= GOOD_AT) return "green";
+  return "slack";
+}
+
+/** 每一段的形状标记:色弱的孩子不靠颜色也能读懂张力条 */
+export function bandMark(band: TensionBand): string {
+  if (band === "red") return "▲▲▲";
+  if (band === "yellow") return "◆◆";
+  if (band === "green") return "●";
+  return "○";
+}
+
+/** 每一段的一句话 */
+export function bandTip(band: TensionBand): string {
+  if (band === "red") return "红区!数一下就要断线,松手!";
+  if (band === "yellow") return "有点紧了,准备松手";
+  if (band === "slack") return "太松了,收一点线";
+  return "手感正好,继续收";
+}
+
 export interface FightParams {
+  /** 鱼这一场用的挣扎节奏 */
+  pattern: StrugglePattern;
+  /** 张力硬顶:到这里当帧断线(鱼线装备可以往上顶一点点) */
+  snapAt: number;
+  /** 红区起点 */
+  redAt: number;
+  /** 在红区连续待满多久断线 */
+  redSnapMs: number;
   /** 鱼挣扎每秒往张力里加多少(会被 struggle 波形调制) */
   pull: number;
   /** 按住收线每秒涨多少张力 */
@@ -295,10 +494,16 @@ export const ESCAPE_MS = 2000;
  * 由鱼种与关卡难度算出这一场拉扯的参数。
  * hardness 是 0..1 的关卡难度,只影响鱼的力气与容错,不改玩家的收线速度。
  */
-export function fightParams(fish: Fish, hardness = 0): FightParams {
+export function fightParams(fish: Fish, hardness = 0, snapAt: number = SNAP_AT): FightParams {
   const h = clamp(hardness, 0, 1);
   const pull = round3(fish.pull * (0.85 + h * 0.45));
+  const hardTop = clamp(snapAt, SNAP_AT, SNAP_AT + 0.2);
   return {
+    pattern: patternOf(fish),
+    snapAt: hardTop,
+    // 鱼线越好,红区也跟着往上让一点点,预警窗口的长度不变
+    redAt: round3(RED_AT + (hardTop - SNAP_AT)),
+    redSnapMs: RED_SNAP_MS,
     pull,
     reel: 0.62,
     // 松手一定要比鱼的挣扎更有力,否则一放手张力还在涨,那就成死局了
@@ -323,6 +528,8 @@ export interface FightState {
   elapsedMs: number;
   /** 停在舒服区的累计时长,用来评「完美收竿」 */
   perfectMs: number;
+  /** 连续待在红区多久了(满 redSnapMs 就断线) */
+  redMs: number;
   status: FightStatus;
 }
 
@@ -333,18 +540,79 @@ export function newFight(tension: number = START_TENSION): FightState {
     slackMs: 0,
     elapsedMs: 0,
     perfectMs: 0,
+    redMs: 0,
     status: "fighting",
   };
 }
 
+// ---------------------------------------------------------------------------
+// 三种挣扎节奏
+// ---------------------------------------------------------------------------
+//
+// 每种节奏在一个周期里的平均值都恰好是 0.5(波形关于半周期反对称),
+// 所以换节奏只改手感、不改这条鱼整体有多难拉。
+// 节奏由鱼的 id 与稀有度定死:同一种鱼永远是同一个节奏,认得出来就打得过。
+
+export type StrugglePattern = "steady" | "burst" | "dig";
+
+export const STRUGGLE_PATTERNS: StrugglePattern[] = ["steady", "burst", "dig"];
+
+export interface PatternInfo {
+  key: StrugglePattern;
+  name: string;
+  mark: string;
+  /** 怎么认出它、怎么打 */
+  tell: string;
+}
+
+export const PATTERN_INFO: Record<StrugglePattern, PatternInfo> = {
+  steady: { key: "steady", name: "稳潮", mark: "〜", tell: "一涨一落像呼吸,跟着这个拍子一收一放最省力。" },
+  burst: { key: "burst", name: "猛冲", mark: "⚡", tell: "安静两拍猛冲一下,冲的那一下先松手,冲完再收。" },
+  dig: { key: "dig", name: "赖底", mark: "⛰", tell: "半程死沉半程放松,沉的时候别硬收,松的时候使劲收。" },
+};
+
+/** 稀有度决定这条鱼可能用哪几种节奏,具体哪一种由 id 定死 */
+const PATTERN_BY_RARITY: Record<number, StrugglePattern[]> = {
+  1: ["steady"],
+  2: ["steady", "burst"],
+  3: ["burst", "dig"],
+  4: ["dig", "burst"],
+  5: ["burst", "dig", "steady"],
+};
+
+/** id 的稳定哈希(FNV-1a):不用随机数,重装游戏也不会变 */
+function hashId(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** 这条鱼的挣扎节奏 */
+export function patternOf(fish: Fish): StrugglePattern {
+  const list = PATTERN_BY_RARITY[clampInt(fish.rarity, 1, 5)] ?? ["steady"];
+  return list[hashId(fish.id) % list.length];
+}
+
 /**
- * 鱼的挣扎波形:0..1 的正弦,平均 0.5。
+ * 鱼的挣扎波形:0..1,平均 0.5。
  * 用累计时长算,不看真实时钟,所以同一串输入重放出来一模一样。
  */
 export function struggle(elapsedMs: number, surgeMs: number): number {
   const cycle = surgeMs > 0 ? surgeMs : 800;
   const t = (Number.isFinite(elapsedMs) ? elapsedMs : 0) / cycle;
   return 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+}
+
+/** 按节奏取挣扎波形;`steady` 就是老的正弦 */
+export function struggleAt(pattern: StrugglePattern, elapsedMs: number, surgeMs: number): number {
+  const cycle = surgeMs > 0 ? surgeMs : 800;
+  const s = Math.sin(((Number.isFinite(elapsedMs) ? elapsedMs : 0) / cycle) * Math.PI * 2);
+  if (pattern === "burst") return 0.5 + 0.5 * s * s * s;
+  if (pattern === "dig") return 0.5 + 0.5 * (Math.tanh(2.4 * s) / Math.tanh(2.4));
+  return 0.5 + 0.5 * s;
 }
 
 /** 一帧最多按多少毫秒结算:切后台回来时不会一下子把线崩断 */
@@ -354,13 +622,20 @@ export const MAX_STEP_MS = 120;
  * 拉扯的一帧:上一帧状态 + 这一帧有没有按住收线 → 下一帧状态。
  *
  * 判定顺序是「先断线、再跑鱼、最后收竿」:
- * 张力冲到 1 的那一帧哪怕进度也满了,也算断线,免得出现「崩着线也能赢」的侥幸。
+ * 张力冲到硬顶的那一帧哪怕进度也满了,也算断线,免得出现「崩着线也能赢」的侥幸。
+ *
+ * 断线有两条路:冲到 `snapAt` 当帧就断(手滑到底了),
+ * 或者在红区(`redAt` 以上)连续赖满 `redSnapMs`(默认 1.2 秒)——
+ * 后面这一条才是常态,红区一亮还有一秒多可以救回来。
  */
 export function stepFight(state: FightState, p: FightParams, reeling: boolean, dtMs: number): FightState {
   if (state.status !== "fighting") return state;
   const ms = clamp(Number.isFinite(dtMs) ? dtMs : 0, 0, MAX_STEP_MS);
   const dt = ms / 1000;
-  const surge = struggle(state.elapsedMs, p.surgeMs);
+  const surge = struggleAt(p.pattern ?? "steady", state.elapsedMs, p.surgeMs);
+  const snapAt = Number.isFinite(p.snapAt) ? p.snapAt : SNAP_AT;
+  const redAt = Number.isFinite(p.redAt) ? p.redAt : RED_AT;
+  const redSnapMs = Number.isFinite(p.redSnapMs) ? p.redSnapMs : RED_SNAP_MS;
 
   const tension = clamp(state.tension + (reeling ? p.reel : -p.ease) * dt + p.pull * surge * dt, 0, 1.4);
   const zone = tensionZone(tension);
@@ -371,14 +646,27 @@ export function stepFight(state: FightState, p: FightParams, reeling: boolean, d
   );
   const slackMs = zone === "slack" ? state.slackMs + ms : 0;
   const perfectMs = zone === "good" ? state.perfectMs + ms : state.perfectMs;
+  const redMs = tension >= redAt ? (state.redMs ?? 0) + ms : 0;
   const elapsedMs = state.elapsedMs + ms;
 
   let status: FightStatus = "fighting";
-  if (tension >= SNAP_AT) status = "snapped";
+  if (tension >= snapAt || redMs >= redSnapMs) status = "snapped";
   else if (slackMs >= p.escapeMs) status = "escaped";
   else if (progress >= 1) status = "landed";
 
-  return { tension, progress, slackMs, elapsedMs, perfectMs, status };
+  return { tension, progress, slackMs, elapsedMs, perfectMs, redMs, status };
+}
+
+/** 红区还能撑多久(毫秒);没进红区就是满格 */
+export function redLeftMs(state: FightState, p: FightParams): number {
+  const total = Number.isFinite(p.redSnapMs) ? p.redSnapMs : RED_SNAP_MS;
+  return Math.max(0, total - (state.redMs ?? 0));
+}
+
+/** 红区倒计时已经走了多少(0..1),给预警震动条用 */
+export function redRatio(state: FightState, p: FightParams): number {
+  const total = Number.isFinite(p.redSnapMs) && p.redSnapMs > 0 ? p.redSnapMs : RED_SNAP_MS;
+  return clamp((state.redMs ?? 0) / total, 0, 1);
 }
 
 /** 这一场是不是「完美收竿」:六成以上的时间都稳在舒服区 */

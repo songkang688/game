@@ -10,16 +10,48 @@ import {
   DEX_KEY,
   ENDLESS_MS,
   ESCAPE_MS,
+  FAR_LUCK,
   FISH,
   GAME_ID,
   GOOD_AT,
   LAYERS,
+  MAX_CAST_M,
   MAX_DEPTH,
   MAX_STEP_MS,
+  PATTERN_INFO,
+  RARITY_TIERS,
+  RED_AT,
+  RED_SNAP_MS,
+  SIZE_SPREAD,
   SNAP_AT,
   START_TENSION,
+  STRUGGLE_PATTERNS,
   TIGHT_AT,
+  WIND_SWAY,
   addToDex,
+  applyWind,
+  bandMark,
+  bandTip,
+  baseLengthCm,
+  castDistance,
+  depthAtDistance,
+  distanceLuck,
+  distanceOfDepth,
+  fishOfTier,
+  formatLength,
+  patternOf,
+  redLeftMs,
+  redRatio,
+  rollLengthCm,
+  rollWind,
+  struggleAt,
+  tensionBand,
+  tierIndexOf,
+  tierLabel,
+  tierOf,
+  weightForLength,
+  windArrow,
+  windText,
   autoReel,
   bandMiss,
   biteDelayMs,
@@ -574,5 +606,341 @@ describe("小工具", () => {
     expect(clamp(-5, 0, 10)).toBe(0);
     expect(clamp(50, 0, 10)).toBe(10);
     expect(clamp(Number.NaN, 2, 10)).toBe(2);
+  });
+});
+
+// ===========================================================================
+// 1.2 新增
+// ===========================================================================
+
+describe("抛竿距离与风向(1.2)", () => {
+  it("蓄力越足抛得越远,最远不超过 MAX_CAST_M", () => {
+    expect(castDistance(0)).toBe(0);
+    expect(castDistance(1)).toBe(MAX_CAST_M);
+    expect(castDistance(0.5)).toBe(MAX_CAST_M / 2);
+    let prev = -1;
+    for (let p = 0; p <= 1.0001; p += 0.05) {
+      const d = castDistance(p);
+      expect(d).toBeGreaterThanOrEqual(prev);
+      expect(d).toBeLessThanOrEqual(MAX_CAST_M);
+      prev = d;
+    }
+  });
+
+  it("顺风抛得更远、逆风更近,但幅度只有 ±12%", () => {
+    const calm = castDistance(0.5, 0);
+    const tail = castDistance(0.5, 1);
+    const head = castDistance(0.5, -1);
+    expect(tail).toBeGreaterThan(calm);
+    expect(head).toBeLessThan(calm);
+    expect(tail / calm).toBeCloseTo(1 + WIND_SWAY, 2);
+    expect(head / calm).toBeCloseTo(1 - WIND_SWAY, 2);
+    // 满力度顺风也不会飞出水域
+    expect(castDistance(1, 1)).toBe(MAX_CAST_M);
+    expect(applyWind(0.5, 99)).toBeCloseTo(applyWind(0.5, 1), 6);
+    expect(applyWind(-3, 0)).toBe(0);
+  });
+
+  it("距离和深度是同一根轴:远处就是深处", () => {
+    expect(depthAtDistance(0)).toBe(0);
+    expect(depthAtDistance(MAX_CAST_M)).toBe(MAX_DEPTH);
+    expect(depthAtDistance(999)).toBe(MAX_DEPTH);
+    expect(distanceOfDepth(MAX_DEPTH)).toBe(MAX_CAST_M);
+    expect(distanceOfDepth(depthAtDistance(12))).toBeCloseTo(12, 1);
+    // 和 1.1 的「力度 → 深度」说的是同一件事
+    for (const p of [0, 0.25, 0.5, 0.75, 1]) {
+      expect(depthAtDistance(castDistance(p, 0))).toBeCloseTo(castDepth(applyWind(p, 0)), 0);
+    }
+  });
+
+  it("抛得越远运气越好,封顶在 FAR_LUCK", () => {
+    expect(distanceLuck(0)).toBe(0);
+    expect(distanceLuck(MAX_CAST_M)).toBe(FAR_LUCK);
+    expect(distanceLuck(9999)).toBe(FAR_LUCK);
+    expect(distanceLuck(MAX_CAST_M / 2)).toBeCloseTo(FAR_LUCK / 2, 2);
+    expect(distanceLuck(MAX_CAST_M * 0.8)).toBeGreaterThan(distanceLuck(MAX_CAST_M * 0.3));
+    // 远处更稀有:同一条传说鱼在远处的权重更高
+    const legend = FISH.find((f) => f.rarity === 5) as Fish;
+    const far = fishWeightAt(legend, 45, distanceLuck(distanceOfDepth(45)));
+    const near = fishWeightAt(legend, 45, distanceLuck(distanceOfDepth(5)));
+    expect(far).toBeGreaterThan(near);
+  });
+
+  it("风是 0.25 一档的,可复现,箭头与说明都跟着方向走", () => {
+    expect(rollWind(() => 0)).toBe(-1);
+    expect(rollWind(() => 1)).toBe(1);
+    expect(rollWind(() => 0.5)).toBe(0);
+    for (const v of [0.1, 0.33, 0.62, 0.87]) {
+      const w = rollWind(() => v);
+      expect(Math.abs(w)).toBeLessThanOrEqual(1);
+      expect(Math.round(w * 4)).toBeCloseTo(w * 4, 6);
+    }
+    expect(windArrow(0)).toBe("•");
+    expect(windArrow(0.5)).toBe("→");
+    expect(windArrow(-0.5)).toBe("←");
+    expect(windArrow(1)).toBe("⇉");
+    expect(windArrow(-1)).toBe("⇇");
+    expect(windText(0)).toContain("无风");
+    expect(windText(0.75)).toContain("顺风");
+    expect(windText(-0.75)).toContain("逆风");
+  });
+});
+
+describe("四档稀有度(1.2)", () => {
+  it("正好四档,每一档都有鱼,加起来就是整本图鉴", () => {
+    expect(RARITY_TIERS.length).toBe(4);
+    let sum = 0;
+    for (let i = 0; i < RARITY_TIERS.length; i++) {
+      const group = fishOfTier(i);
+      expect(group.length, `${RARITY_TIERS[i].name} 这一档没有鱼`).toBeGreaterThan(0);
+      sum += group.length;
+    }
+    expect(sum).toBe(FISH.length);
+    expect(FISH.length).toBeGreaterThanOrEqual(24);
+  });
+
+  it("rarity 1..5 都能落到某一档,而且档位随稀有度只升不降", () => {
+    const seen = new Set<number>();
+    let prev = -1;
+    for (let r = 1; r <= 5; r++) {
+      const i = tierIndexOf(r);
+      expect(i).toBeGreaterThanOrEqual(prev);
+      prev = i;
+      seen.add(i);
+    }
+    expect(seen.size).toBe(4);
+    expect(tierIndexOf(0)).toBe(0);
+    expect(tierIndexOf(99)).toBe(3);
+    expect(tierOf(5).key).toBe("legend");
+  });
+
+  it("档位标签带形状标记,色弱也分得清", () => {
+    for (const tier of RARITY_TIERS) {
+      expect(tier.mark.length).toBeGreaterThan(0);
+      expect(tier.color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(tier.desc.length).toBeGreaterThan(4);
+    }
+    expect(new Set(RARITY_TIERS.map((t) => t.mark)).size).toBe(4);
+    expect(tierLabel(1)).toContain(RARITY_TIERS[0].name);
+    expect(tierLabel(5)).toContain("传说");
+  });
+
+  it("越高的档平均分越高", () => {
+    const avg = RARITY_TIERS.map((_, i) => {
+      const g = fishOfTier(i);
+      return g.reduce((s, f) => s + f.score, 0) / g.length;
+    });
+    for (let i = 1; i < avg.length; i++) expect(avg[i]).toBeGreaterThan(avg[i - 1]);
+  });
+});
+
+describe("体长与图鉴纪录(1.2)", () => {
+  it("越重的鱼标准体长越长", () => {
+    const sorted = [...FISH].sort((a, b) => a.weight - b.weight);
+    for (let i = 1; i < sorted.length; i++) {
+      expect(baseLengthCm(sorted[i])).toBeGreaterThanOrEqual(baseLengthCm(sorted[i - 1]));
+    }
+    expect(baseLengthCm(FISH[0])).toBeGreaterThan(0);
+  });
+
+  it("同一种鱼的体长在 ±22% 里浮动,roll 越大越长", () => {
+    for (const f of FISH) {
+      const base = baseLengthCm(f);
+      const min = rollLengthCm(f, 0);
+      const max = rollLengthCm(f, 1);
+      expect(min).toBeCloseTo(base * (1 - SIZE_SPREAD), 1);
+      expect(max).toBeCloseTo(base * (1 + SIZE_SPREAD), 1);
+      expect(rollLengthCm(f, 0.5)).toBeCloseTo(base, 1);
+      expect(rollLengthCm(f, -9)).toBe(min);
+      expect(rollLengthCm(f, 9)).toBe(max);
+    }
+  });
+
+  it("体长换回体重:标准长度就是标准体重,长的更压秤", () => {
+    for (const f of FISH) {
+      expect(weightForLength(f, baseLengthCm(f))).toBeCloseTo(f.weight, 1);
+      expect(weightForLength(f, rollLengthCm(f, 1))).toBeGreaterThan(f.weight);
+      expect(weightForLength(f, rollLengthCm(f, 0))).toBeLessThan(f.weight);
+      expect(weightForLength(f, 0)).toBeGreaterThan(0);
+    }
+  });
+
+  it("体长的中文写法带一位小数", () => {
+    expect(formatLength(31.44)).toBe("31.4 厘米");
+    expect(formatLength(0)).toBe("—");
+    expect(formatLength(Number.NaN)).toBe("—");
+  });
+});
+
+describe("三种挣扎节奏(1.2)", () => {
+  it("三种节奏都在 0..1 之间,一个周期的平均值都恰好是 0.5", () => {
+    for (const p of STRUGGLE_PATTERNS) {
+      let sum = 0;
+      const N = 2000;
+      for (let i = 0; i < N; i++) {
+        const v = struggleAt(p, (i / N) * 800, 800);
+        expect(v, `${p} 越界`).toBeGreaterThanOrEqual(0);
+        expect(v, `${p} 越界`).toBeLessThanOrEqual(1);
+        sum += v;
+      }
+      expect(sum / N, `${p} 的平均力气不是 0.5`).toBeCloseTo(0.5, 2);
+    }
+  });
+
+  it("三种节奏形状确实不一样:猛冲最尖,赖底最方", () => {
+    const N = 1200;
+    const highShare = (p: (typeof STRUGGLE_PATTERNS)[number]): number => {
+      let n = 0;
+      for (let i = 0; i < N; i++) if (struggleAt(p, (i / N) * 800, 800) > 0.8) n++;
+      return n / N;
+    };
+    expect(highShare("burst")).toBeLessThan(highShare("steady"));
+    expect(highShare("dig")).toBeGreaterThan(highShare("steady"));
+    // steady 与老的 struggle 完全一致
+    for (const t of [0, 137, 400, 913]) {
+      expect(struggleAt("steady", t, 800)).toBeCloseTo(struggle(t, 800), 12);
+    }
+    expect(struggleAt("dig", 0, 0)).toBeCloseTo(0.5, 6);
+  });
+
+  it("每条鱼的节奏是定死的,重启也不会变;常见鱼一定最好懂", () => {
+    const used = new Set<string>();
+    for (const f of FISH) {
+      const p = patternOf(f);
+      expect(STRUGGLE_PATTERNS).toContain(p);
+      expect(patternOf(f)).toBe(p);
+      expect(fightParams(f, 0).pattern).toBe(p);
+      used.add(p);
+      if (f.rarity === 1) expect(p, `${f.id} 是最常见的鱼,节奏应该最好懂`).toBe("steady");
+    }
+    expect(used.size, "三种节奏都要用上").toBe(3);
+  });
+
+  it("每种节奏都有名字和一句「怎么打」", () => {
+    for (const p of STRUGGLE_PATTERNS) {
+      const info = PATTERN_INFO[p];
+      expect(info.key).toBe(p);
+      expect(info.name.length).toBeGreaterThan(1);
+      expect(info.mark.length).toBeGreaterThan(0);
+      expect(info.tell.length).toBeGreaterThan(8);
+    }
+  });
+
+  it("换了节奏也不会变成打不过:三种节奏下标准手法都收得上来", () => {
+    for (const p of STRUGGLE_PATTERNS) {
+      for (const h of [0, 0.5, 1]) {
+        const base = fightParams(BIG, h);
+        let st = newFight();
+        let reeling = true;
+        for (let i = 0; i < 3000 && st.status === "fighting"; i++) {
+          reeling = autoReel(st, 0.34, 0.6, reeling);
+          st = stepFight(st, { ...base, pattern: p }, reeling, 16);
+        }
+        expect(st.status, `${p} 在难度 ${h} 下收不上来`).toBe("landed");
+      }
+    }
+  });
+});
+
+describe("红区与 1.2 秒预警(1.2)", () => {
+  /** 一套「张力不会自己动」的参数:只测红区计时,不掺鱼的力气 */
+  const frozen = (tension: number) => ({
+    params: { ...fightParams(FISH[0], 0), pull: 0, reel: 0, ease: 0, gain: 0, slip: 0 },
+    state: { ...newFight(tension), tension },
+  });
+
+  it("三段配色的分界点:绿 → 黄 → 红", () => {
+    expect(tensionBand(0)).toBe("slack");
+    expect(tensionBand(GOOD_AT)).toBe("green");
+    expect(tensionBand(TIGHT_AT)).toBe("yellow");
+    expect(tensionBand(RED_AT - 0.001)).toBe("yellow");
+    expect(tensionBand(RED_AT)).toBe("red");
+    expect(tensionBand(Number.NaN)).toBe("slack");
+    // 鱼线把红区顶高以后,同一个张力就还不算红
+    expect(tensionBand(RED_AT, RED_AT + 0.09)).toBe("yellow");
+  });
+
+  it("每一段都有形状标记和一句话", () => {
+    const marks = new Set(["slack", "green", "yellow", "red"].map((b) => bandMark(b as never)));
+    expect(marks.size).toBe(4);
+    expect(bandTip("red")).toContain("松");
+    expect(bandTip("yellow")).toContain("紧");
+    expect(bandTip("green")).toContain("正好");
+    expect(bandTip("slack")).toContain("收");
+  });
+
+  it("在红区待满 1.2 秒才断线,1.1 秒还救得回来", () => {
+    const { params, state } = frozen(0.9);
+    let st = state;
+    for (let i = 0; i < 11; i++) st = stepFight(st, params, true, 100);
+    expect(st.redMs).toBe(1100);
+    expect(st.status).toBe("fighting");
+    st = stepFight(st, params, true, 100);
+    expect(st.redMs).toBeGreaterThanOrEqual(RED_SNAP_MS);
+    expect(st.status).toBe("snapped");
+    // 而且是真的没到硬顶就断的
+    expect(st.tension).toBeLessThan(SNAP_AT);
+  });
+
+  it("离开红区,倒计时立刻清零(救回来就是救回来了)", () => {
+    const { params, state } = frozen(0.9);
+    let st = state;
+    for (let i = 0; i < 10; i++) st = stepFight(st, params, true, 100);
+    expect(st.redMs).toBe(1000);
+    // 松手让张力掉回黄区
+    st = stepFight({ ...st, tension: 0.7 }, params, false, 100);
+    expect(st.redMs).toBe(0);
+    expect(st.status).toBe("fighting");
+  });
+
+  it("红区剩余时间与预警条比例都跟着走", () => {
+    const { params, state } = frozen(0.9);
+    expect(redLeftMs(state, params)).toBe(RED_SNAP_MS);
+    expect(redRatio(state, params)).toBe(0);
+    let st = state;
+    for (let i = 0; i < 6; i++) st = stepFight(st, params, true, 100);
+    expect(redLeftMs(st, params)).toBe(RED_SNAP_MS - 600);
+    expect(redRatio(st, params)).toBeCloseTo(0.5, 6);
+    expect(redRatio({ ...st, redMs: 99_999 }, params)).toBe(1);
+  });
+
+  it("冲到硬顶还是当帧就断,红区计时救不了", () => {
+    const { params, state } = frozen(0.99);
+    const out = stepFight(state, { ...params, reel: 5 }, true, 16);
+    expect(out.status).toBe("snapped");
+    expect(out.tension).toBeGreaterThanOrEqual(SNAP_AT);
+    expect(out.redMs).toBeLessThan(RED_SNAP_MS);
+  });
+
+  it("好鱼线把硬顶和红区一起抬高,同样的张力能多撑一会儿", () => {
+    const plain = fightParams(FISH[0], 0);
+    const good = fightParams(FISH[0], 0, SNAP_AT + 0.09);
+    expect(good.snapAt).toBeCloseTo(SNAP_AT + 0.09, 6);
+    expect(good.redAt).toBeCloseTo(RED_AT + 0.09, 6);
+    expect(plain.snapAt).toBe(SNAP_AT);
+    expect(plain.redAt).toBe(RED_AT);
+    expect(plain.redSnapMs).toBe(RED_SNAP_MS);
+    // 越界的鱼线参数会被夹回合法范围
+    expect(fightParams(FISH[0], 0, 99).snapAt).toBeLessThanOrEqual(SNAP_AT + 0.2);
+    expect(fightParams(FISH[0], 0, 0.1).snapAt).toBe(SNAP_AT);
+
+    const tension = 0.85;
+    let a = { ...newFight(tension), tension };
+    let b = { ...newFight(tension), tension };
+    const still = { pull: 0, reel: 0, ease: 0, gain: 0, slip: 0 };
+    for (let i = 0; i < 13; i++) {
+      a = stepFight(a, { ...plain, ...still }, true, 100);
+      b = stepFight(b, { ...good, ...still }, true, 100);
+    }
+    expect(a.status).toBe("snapped");
+    expect(b.status).toBe("fighting");
+  });
+
+  it("老的四分区判定一点没变,红区只是加在上面的一层", () => {
+    expect(tensionZone(RED_AT)).toBe("tight");
+    expect(tensionZone(SNAP_AT)).toBe("snap");
+    expect(RED_AT).toBeGreaterThan(TIGHT_AT);
+    expect(RED_AT).toBeLessThan(SNAP_AT);
+    expect(newFight().redMs).toBe(0);
   });
 });
