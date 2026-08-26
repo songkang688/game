@@ -257,6 +257,8 @@ export interface Dom {
   cancelled: number[];
   clock: { ms: number };
   timers: Array<{ id: number; at: number; fn: () => void; every?: number }>;
+  /** localStorage 桩的底账，测试可以直接翻 */
+  store: Map<string, string>;
 }
 
 const saved: Record<string, unknown> = {};
@@ -273,6 +275,7 @@ const SWAPPED = [
   "clearTimeout",
   "setInterval",
   "clearInterval",
+  "localStorage",
 ];
 
 /** 装上 DOM 桩;`width` 是屏宽,`reduced` 控制 prefers-reduced-motion */
@@ -285,6 +288,7 @@ export function installDom(width = 800, reduced = false): Dom {
   const cancelled: number[] = [];
   const clock = { ms: 1000 };
   const timers: Dom["timers"] = [];
+  const store = new Map<string, string>();
   let timerId = 1;
 
   for (const k of SWAPPED) saved[k] = (globalThis as Record<string, unknown>)[k];
@@ -343,9 +347,19 @@ export function installDom(width = 800, reduced = false): Dom {
       const at = timers.findIndex((t) => t.id === id);
       if (at >= 0) timers.splice(at, 1);
     },
+    // 每次装桩都是一份全新的空存档，用例之间的进度互不串味
+    localStorage: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v));
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+    },
   });
 
-  return { root, head, winListeners, frames, cancelled, clock, timers };
+  return { root, head, winListeners, frames, cancelled, clock, timers, store };
 }
 
 /** 卸掉 DOM 桩,把全局还回去 */

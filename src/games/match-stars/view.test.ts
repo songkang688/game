@@ -381,3 +381,37 @@ describe("360px 布局", () => {
     expect(h.stage.busy()).toBe(false);
   });
 });
+
+describe("没有「一次 render 直达终态」的后门", () => {
+  it("整局玩下来盘面每一次变动都发生在某一段里，idle 时盘面纹丝不动", () => {
+    const h = mk([4, 4, 4, 0, 1, 2]);
+    h.stage.tap(12);
+    h.stage.tap(13);
+    // 盘面每变一次，就记下这一帧走到了哪一段
+    const changedAt: Phase[] = [];
+    let last = h.cell.grid.join(",");
+    for (let f = 0; f < 400 && h.stage.busy(); f++) {
+      flushFrames(dom, 1);
+      const now = h.cell.grid.join(",");
+      if (now !== last) changedAt.push(h.stage.phase());
+      last = now;
+    }
+    // 逻辑盘面只会在 swap（换过去）和 fall（压实 + 补块）这两段里改
+    expect(new Set(changedAt)).toEqual(new Set(["swap", "fall"]));
+    // 而且中间确实变过好几次——不是「压根没动过」蒙混过关
+    expect(changedAt.filter((p) => p === "fall").length).toBeGreaterThanOrEqual(2);
+    expect(h.rounds).toBeGreaterThanOrEqual(2);
+  });
+
+  it("停在 idle 之后再怎么走帧，盘面都不会自己再变一次", () => {
+    const h = mk([0, 1, 2]);
+    h.stage.tap(12);
+    h.stage.tap(13);
+    settle(h);
+    const frozen = h.cell.grid.slice();
+    flushFrames(dom, 60);
+    expect(h.stage.phase()).toBe("idle");
+    expect(h.cell.grid).toEqual(frozen);
+    expect(h.stage.movingCount()).toBe(0);
+  });
+});

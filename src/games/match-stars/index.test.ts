@@ -4,10 +4,12 @@
  * 各自能开、能退、能玩；`initialLevel` / `?level=` 给了就直接开打那一关。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { GameApi } from "../level99";
+import { save } from "../../engine/save";
+import { markSkipped, saveStar, type GameApi } from "../level99";
 import { El, flushFrames, installDom, restoreDom, runUntil, type Dom } from "./domStub";
 import { DUEL_COLS, DUEL_ROWS } from "./duel";
 import { initialLevelOf, meta, mount, moveCursor, SEAT_KEYS } from "./index";
+import { LEVELS } from "./levels";
 
 let dom: Dom;
 
@@ -87,6 +89,24 @@ describe("直开第 N 关", () => {
     expect(dom.root.textContent).toContain("步");
     handle.destroy();
   });
+
+  it("进度推到哪儿就开得到哪儿：打过的关 + 跳过的关都算解锁", () => {
+    // 前 4 关拿了星，第 5 关按了跳过 —— 能玩的最远就是第 6 关
+    for (let lv = 0; lv < 4; lv++) saveStar(meta.id, lv, 3);
+    markSkipped(meta.id, 4);
+    const rec = fakeApi(dom.root);
+    (rec.api as unknown as { initialLevel: number }).initialLevel = 6;
+    const handle = mount(rec.api);
+    expect(boards()).toHaveLength(1);
+    expect(dom.root.textContent).toContain(`👣 ${LEVELS[5].moves} 步`);
+    handle.destroy();
+  });
+
+  it("跳关标记只写自己那把钥匙，不碰星级存档", () => {
+    markSkipped(meta.id, 3);
+    expect(dom.store.has(`yiduo-yixing.l99skip.${meta.id}`)).toBe(true);
+    expect(dom.store.has(`yiduo-yixing.l99.${meta.id}`)).toBe(false);
+  });
 });
 
 describe("首页四个入口", () => {
@@ -145,6 +165,15 @@ describe("首页四个入口", () => {
     flushFrames(dom, 4);
     byText("返回")!.dispatch("click");
     expect(boards()).toHaveLength(0);
+    handle.destroy();
+  });
+
+  it("无尽的最高分接在 save 上：进门就写着历史最好几张", () => {
+    save.recordEndlessBest(meta.id, 7);
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("无尽订单")!.dispatch("click");
+    expect(dom.root.textContent).toContain("最好 7 张");
     handle.destroy();
   });
 
