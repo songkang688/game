@@ -188,6 +188,27 @@ async function run(page, viewport, label) {
   await sleep(2200);
   const towerCanvas = await page.$$eval(".l99-stage .fk-canvas", (els) => els.length).catch(() => 0);
   check("格斗塔第 1 关能挂出对局", towerCanvas === 1, `实际 ${towerCanvas}`);
+
+  // 攻略侧栏：翻开来该是本作自己写的八章攻略，不是框架的兜底提示
+  await clickText(page, "button", "📖 攻略");
+  await sleep(500);
+  const guide = await page.evaluate(() => {
+    const panel = document.querySelector(".guide-drawer");
+    if (!panel) return null;
+    return {
+      title: panel.querySelector(".guide-title")?.textContent ?? "",
+      tips: panel.querySelectorAll(".guide-tip").length,
+      fallback: !!panel.querySelector(".guide-note")
+    };
+  });
+  check("格斗塔翻得开攻略侧栏", !!guide, guide ? "" : "没弹出面板");
+  check(
+    "第 1 关翻到的是本作写的攻略，不是兜底提示",
+    !!guide && guide.tips >= 3 && !guide.fallback,
+    guide ? `${guide.title} · ${guide.tips} 条提示` : ""
+  );
+  await clickText(page, "button", "知道啦");
+  await sleep(300);
   check("格斗塔无报错", errors.length === 0, errors.join(" | "));
 
   // ---- 5. 训练模式 ----
