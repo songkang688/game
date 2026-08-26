@@ -56,7 +56,7 @@ export const HERO_R = 11;
 export const SPEED_SCALE = 30;
 
 /** 收集几颗元气糖换回一罐元气。 */
-export const CRUMBS_PER_JAR = 8;
+export const CRUMBS_PER_JAR = 6;
 
 /** 被撞:转这么久的圈,再给这么久的无敌(转圈期间不能动也不能甩)。 */
 export const SPIN_TIME = 0.7;
@@ -70,6 +70,16 @@ export const BUBBLE_SPEED = 96;
 
 /** 两波之间的喘气时间。 */
 export const PREP_SECONDS = 3.2;
+
+/**
+ * 出场表的时间轴压缩比。
+ *
+ * `levels.ts` 里那份出场时间是 1.1 塔防用的:怪要从右边一路走完整条道,
+ * 所以放得很稀(一波八只能拖十六秒)。1.2 是围着家打的竞技场,出生圈离家近得多,
+ * 照原速放的话场上永远只有一两只,不像动作游戏。这里把时间轴压紧,
+ * 关卡数据一个数都不用改,场面就热闹起来了。
+ */
+export const SPAWN_TIME_SCALE = 0.5;
 
 /** 双人合作 / 对战各打几波(打完就结算,绝不会卡在半路)。 */
 export const COOP_WAVES = 6;
@@ -142,7 +152,7 @@ export function arenaHp(kind: MonsterKind, levelIdx: number, small = false): num
   const base = monsterHp(kind, levelIdx);
   const spec = MONSTER_INFO[kind];
   if (spec.boss) return Math.max(24, Math.round(base * (small ? 0.3 : 0.46)));
-  return Math.max(3, Math.round(base * 0.85));
+  return Math.max(3, Math.round(base * 0.78));
 }
 
 /* ------------------------------------------------------------------ */
@@ -656,7 +666,7 @@ function queueWave(state: ArenaState, wave: number): void {
   for (const side of sides) {
     for (const s of def.spawns) {
       const small = smallBoss !== null && s.kind === smallBoss && !!MONSTER_INFO[s.kind].boss;
-      queue.push({ time: s.time, kind: s.kind, lane: s.lane, side, small });
+      queue.push({ time: s.time * SPAWN_TIME_SCALE, kind: s.kind, lane: s.lane, side, small });
     }
   }
   queue.sort((a, b) => a.time - b.time || a.side - b.side);

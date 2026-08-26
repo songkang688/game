@@ -137,7 +137,7 @@ export const HERO_BASE = {
   /** 颜料弹能飞多远(场地单位;场地宽 360) */
   reach: 118,
   /** 两发之间隔多久(秒) */
-  reload: 0.46,
+  reload: 0.42,
   /** 出手前摇(秒):看得见抬手才有「打中了」的实感 */
   windup: 0.1,
   /** 一次甩几发 */
@@ -145,13 +145,13 @@ export const HERO_BASE = {
   /** 多发时相邻两发的夹角(弧度) */
   spread: 0.26,
   /** 元气糖的吸附半径 */
-  magnet: 24,
+  magnet: 44,
   /** 身上能挂几个护盾泡 */
   shields: 0,
   /** 破掉的护盾泡多久鼓回来(秒) */
   shieldRecharge: 9,
   /** 每发颜料弹的上色量 */
-  damage: 4,
+  damage: 5,
   /** 走位速度(单位/秒) */
   speed: 96,
 } as const;

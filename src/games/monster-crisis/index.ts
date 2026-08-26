@@ -121,7 +121,7 @@ export const CSS = `
 .mcr-fire:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(200,110,150,.45);}
 .mcr-fire-p2{color:#2f5fa8;background:#dbe8ff;box-shadow:0 4px 0 rgba(110,150,200,.45);}
 .mcr-fire-p2:active{box-shadow:0 1px 0 rgba(110,150,200,.45);}
-.mcr-padname{font-size:13px;font-weight:900;text-align:center;}
+.mcr-padname{font-size:14px;font-weight:900;text-align:center;}
 .mcr-tip{text-align:center;font-size:14px;font-weight:700;color:#6f6390;line-height:1.5;}
 .mcr-layer{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:18px;z-index:9;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
@@ -130,14 +130,14 @@ export const CSS = `
 .mcr-layer-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.55;max-width:340px;}
 .mcr-cards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%;max-height:62vh;overflow-y:auto;
   padding:2px;}
-.mcr-card{border:none;border-radius:16px;padding:10px 12px;cursor:pointer;font-family:inherit;background:#fff;
+.mcr-card{border:none;border-radius:16px;padding:10px 12px;cursor:pointer;font-family:inherit;font-size:14px;background:#fff;
   color:#5b4a7a;box-shadow:0 4px 0 rgba(140,120,190,.3);display:flex;flex-direction:column;align-items:center;
   gap:3px;min-width:132px;min-height:44px;flex:1 1 132px;max-width:190px;}
 .mcr-card:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(140,120,190,.3);}
 .mcr-card-emoji{font-size:26px;line-height:1.1;}
 .mcr-card-name{font-size:16px;font-weight:900;}
-.mcr-card-desc{font-size:13px;font-weight:700;color:#7c6f9b;line-height:1.4;}
-.mcr-card-lv{font-size:12px;font-weight:800;color:#a08fc0;}
+.mcr-card-desc{font-size:14px;font-weight:700;color:#7c6f9b;line-height:1.4;}
+.mcr-card-lv{font-size:14px;font-weight:800;color:#a08fc0;}
 .mcr-btn{border:none;border-radius:999px;padding:11px 20px;font-size:16px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;min-height:44px;background:linear-gradient(180deg,#8f7ae0,#6f57c8);
   box-shadow:0 4px 0 #57429f;}

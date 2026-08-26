@@ -477,12 +477,28 @@ describe("1.2 手机 360px 塞得下", () => {
     }
   });
 
-  it("界面上的字号一律 ≥ 14px(卡片副标题那种小字除外,它不是热区)", () => {
-    const hot = ["mcr-chip", "mcr-tip", "mcr-layer-s", "mcr-btn", "mcr-back", "mcr-card-name", "mcr-say"];
-    for (const cls of hot) {
+  it("界面上写着字的地方,字号一个都不许低于 14px", () => {
+    const withText = [
+      "mcr-chip",
+      "mcr-tip",
+      "mcr-layer-s",
+      "mcr-btn",
+      "mcr-back",
+      "mcr-card",
+      "mcr-card-name",
+      "mcr-card-desc",
+      "mcr-card-lv",
+      "mcr-padname",
+      "mcr-say",
+    ];
+    for (const cls of withText) {
       const size = cssValue(cls, "font-size");
       expect(size, cls).not.toBeNull();
       expect(size ?? 0, cls).toBeGreaterThanOrEqual(14);
+    }
+    // 整份 CSS 里也不许再冒出 13px 以下的字号(按钮不写 font-size 会掉到浏览器默认的 13.3px)
+    for (const hit of CSS.matchAll(/font-size:(\d+(?:\.\d+)?)px/g)) {
+      expect(Number(hit[1]), hit[0]).toBeGreaterThanOrEqual(14);
     }
   });
 

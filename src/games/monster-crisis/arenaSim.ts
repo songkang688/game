@@ -14,6 +14,7 @@ import {
   type ArenaResult,
   type ArenaState,
   HERO_R,
+  HOME_R,
   chooseGrowth,
   stepArena,
 } from "./arena";
@@ -55,19 +56,22 @@ function desiredSpot(
   return { x: mx + (dx / d) * standoff, y: my + (dy / d) * standoff };
 }
 
-function botInput(state: ArenaState, heroIdx: number): ArenaInput {
+export function botInput(state: ArenaState, heroIdx: number): ArenaInput {
   const h = state.heroes[heroIdx];
   if (!h) return { mx: 0, my: 0, fire: false };
   const home = state.homes[h.side] ?? state.homes[0];
 
-  // 最该管的那只:离家最近的
+  // 最该管的那只:**最快摸到家门口**的那只,不是离家最近的那只。
+  // 按「还要走几秒」排,慢吞吞的大怪就不会把人钉在原地,
+  // 让它旁边那几只小跟班排着队溜进家门。
   let target: { x: number; y: number; r: number } | null = null;
-  let bestD = Infinity;
+  let bestEta = Infinity;
   for (const m of state.monsters) {
     if (!m.active || m.side !== h.side) continue;
-    const d = Math.hypot(m.x - home.x, m.y - home.y);
-    if (d < bestD) {
-      bestD = d;
+    const d = Math.max(0, Math.hypot(m.x - home.x, m.y - home.y) - HOME_R - m.r * 0.6);
+    const eta = d / Math.max(6, m.speed);
+    if (eta < bestEta) {
+      bestEta = eta;
       target = m;
     }
   }

@@ -17,6 +17,7 @@ import {
   SPIN_TIME,
   VERSUS_WAVES,
   arenaEndlessWave,
+  chooseGrowth,
   createArena,
   createCampaignArena,
   disposeArena,
@@ -28,7 +29,7 @@ import {
   spawnPoint,
   stepArena,
 } from "./arena";
-import { runArena } from "./arenaSim";
+import { botInput, runArena } from "./arenaSim";
 import { MONSTER_INFO, type MonsterKind } from "./logic";
 import { buildCoopWave, endlessLevelIndex } from "./levels";
 import { emptyGrowth, heroStats } from "./growth";
@@ -352,11 +353,42 @@ describe("四种模式都能打到结算", () => {
     expect(idle.jars[0]).toBe(0);
   });
 
-  it("闯关:188 关抽样都守得住", () => {
-    for (const lv of [0, 12, 23, 49, 98, 120, 151, 187]) {
-      const res = runArena(createCampaignArena(lv), { maxSeconds: 600 });
-      expect(res.win, `第 ${lv + 1} 关没守住`).toBe(true);
+  it("闯关:188 关一关不落都守得住,而且不是白送(总共还是会丢几罐)", () => {
+    const bad: number[] = [];
+    let lost = 0;
+    for (let lv = 0; lv < 188; lv++) {
+      const st = createCampaignArena(lv);
+      const res = runArena(st, { maxSeconds: 600 });
+      if (!res.win) bad.push(lv + 1);
+      lost += res.maxJars - res.jars[0];
     }
+    expect(bad, `这几关没守住:${bad.join(",")}`).toEqual([]);
+    // 一罐不丢就说明太送了;丢太多说明这机器人已经在悬崖边上,人更打不过
+    expect(lost).toBeGreaterThan(0);
+    expect(lost).toBeLessThan(60);
+  });
+
+  it("波次时间轴压紧之后,场上真的同时站得下好几只(不是一只一只地来)", () => {
+    let peak = 0;
+    let sum = 0;
+    const levels = [30, 70, 110, 150, 187];
+    for (const lv of levels) {
+      const st = createCampaignArena(lv);
+      let mx = 0;
+      let guard = 0;
+      while (st.phase !== "over" && guard++ < 600 * 30) {
+        if (st.drafts.length > 0) {
+          chooseGrowth(st, st.drafts[0].hero, st.drafts[0].cards[0].id);
+          continue;
+        }
+        stepArena(st, DT, st.heroes.map((h) => botInput(st, h.idx)));
+        mx = Math.max(mx, st.monsters.length);
+      }
+      sum += mx;
+      peak = Math.max(peak, mx);
+    }
+    expect(peak).toBeGreaterThanOrEqual(6);
+    expect(sum / levels.length).toBeGreaterThan(3);
   });
 
   it("无尽:一定会走到结算,并且带回波数成绩", () => {
