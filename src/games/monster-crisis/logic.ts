@@ -53,6 +53,35 @@ export function clamp(v: number, lo: number, hi: number): number {
 }
 
 /* ------------------------------------------------------------------ */
+/* 画面尺寸:战场要给下面的虚拟方向盘让位置                              */
+/* ------------------------------------------------------------------ */
+
+/** 战场画布的原始像素尺寸,缩放时按这个比例走,不许拉变形。 */
+export const SCENE_W = 712;
+export const SCENE_H = 460;
+
+/**
+ * 战场最多能占屏幕高度的几成。
+ *
+ * 手机竖屏那一小块地方要塞下状态条、建筑栏、战场和虚拟方向盘四层,
+ * 战场一旦占太高,方向盘就被顶出舞台(舞台是 overflow:hidden,顶出去就点不到了)。
+ * 宽屏没这个顾虑,可以放开一半屏幕给战场。
+ */
+export function fieldHeightBudget(viewportW: number, viewportH: number): number {
+  const h = viewportH > 0 ? viewportH : 700;
+  const ratio = viewportW >= 700 ? 0.36 : 0.22;
+  return Math.min(SCENE_H, Math.max(120, Math.round(h * ratio)));
+}
+
+/** 在给定的可用宽度与视口里,算出战场画布该显示多大(始终保持原始长宽比)。 */
+export function fieldSize(availW: number, viewportW: number, viewportH: number): { w: number; h: number } {
+  const budget = fieldHeightBudget(viewportW, viewportH);
+  const wide = Math.max(200, availW > 0 ? availW : 320);
+  const w = Math.min(wide, SCENE_W, (budget * SCENE_W) / SCENE_H);
+  return { w: Math.round(w), h: Math.round((w * SCENE_H) / SCENE_W) };
+}
+
+/* ------------------------------------------------------------------ */
 /* 确定性随机:同一关每次生成的波次完全一致                              */
 /* ------------------------------------------------------------------ */
 

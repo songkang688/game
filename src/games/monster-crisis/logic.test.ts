@@ -15,6 +15,8 @@ import {
   NORMAL_KINDS,
   POP_EMOJI,
   PASSIVE_PAINT_EVERY,
+  SCENE_H,
+  SCENE_W,
   TECH_LINES,
   TECH_MAX,
   TOWER_EMOJI,
@@ -39,6 +41,8 @@ import {
   coopLine,
   emptyTech,
   endlessLine,
+  fieldHeightBudget,
+  fieldSize,
   formatClock,
   heroDamage,
   heroReload,
@@ -89,6 +93,58 @@ describe("场地几何", () => {
     expect(clamp(-1, 0, 4)).toBe(0);
     expect(clamp(9, 0, 4)).toBe(4);
     expect(clamp(2.5, 0, 4)).toBe(2.5);
+  });
+});
+
+describe("画面尺寸", () => {
+  it("手机竖屏上战场顶多占两成多高,下面留得住虚拟方向盘", () => {
+    // 375×667 是最挤的一块屏:状态条 + 建筑栏 + 战场 + 方向盘要一屏塞下,
+    // 战场吃过头,方向盘就被挤出舞台(舞台 overflow:hidden,挤出去就点不到)
+    const budget = fieldHeightBudget(375, 667);
+    expect(budget).toBeLessThanOrEqual(667 * 0.23);
+    expect(budget).toBeGreaterThan(120);
+  });
+
+  it("宽屏放得开,战场能占到三成半以上", () => {
+    expect(fieldHeightBudget(1280, 800)).toBeGreaterThan(fieldHeightBudget(375, 800));
+    expect(fieldHeightBudget(1280, 800)).toBeGreaterThan(800 * 0.35);
+  });
+
+  it("再高的屏也不会把画布拉过原始尺寸", () => {
+    expect(fieldHeightBudget(1920, 4000)).toBe(SCENE_H);
+  });
+
+  it("矮屏也留得住一块看得清的战场", () => {
+    expect(fieldHeightBudget(320, 300)).toBeGreaterThanOrEqual(120);
+  });
+
+  it("量不到视口高度时给个稳妥的默认值", () => {
+    expect(fieldHeightBudget(375, 0)).toBeGreaterThan(120);
+  });
+
+  it("缩放后长宽比始终不变形", () => {
+    for (const [w, h, avail] of [
+      [375, 667, 317],
+      [768, 1024, 700],
+      [1280, 800, 660],
+      [1920, 1080, 900],
+    ]) {
+      const size = fieldSize(avail, w, h);
+      expect(Math.abs(size.w / size.h - SCENE_W / SCENE_H)).toBeLessThan(0.02);
+    }
+  });
+
+  it("战场不会超出可用宽度,也不会超过原始画布", () => {
+    expect(fieldSize(317, 375, 667).w).toBeLessThanOrEqual(317);
+    expect(fieldSize(5000, 1920, 4000).w).toBe(SCENE_W);
+  });
+
+  it("屏幕越高战场越大,但一直守着高度预算", () => {
+    const short = fieldSize(660, 1280, 600);
+    const tall = fieldSize(660, 1280, 900);
+    expect(tall.h).toBeGreaterThan(short.h);
+    expect(short.h).toBeLessThanOrEqual(fieldHeightBudget(1280, 600));
+    expect(tall.h).toBeLessThanOrEqual(fieldHeightBudget(1280, 900));
   });
 });
 

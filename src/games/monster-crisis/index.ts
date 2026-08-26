@@ -30,6 +30,8 @@ import {
   type MonsterKind,
   POP_EMOJI,
   type ProjectileKind,
+  SCENE_H,
+  SCENE_W,
   SPAWN_X,
   type TechLine,
   type TechState,
@@ -57,6 +59,7 @@ import {
   coopLine,
   emptyTech,
   endlessLine,
+  fieldSize,
   formatClock,
   heroDamage,
   heroReload,
@@ -92,8 +95,6 @@ import {
 /* 画布尺寸与配色                                                       */
 /* ------------------------------------------------------------------ */
 
-const SCENE_W = 712;
-const SCENE_H = 460;
 const PAD_L = 56;
 const CELL_W = 68;
 const FIELD_TOP = 36;
@@ -129,7 +130,8 @@ const CSS = `
 .mc-item[aria-pressed="true"]{background:#ffdcea;color:#a8305f;outline:3px solid #ff9dc2;}
 .mc-item[disabled]{opacity:.45;cursor:default;}
 .mc-item-cost{font-size:11px;font-weight:800;color:#8a7ba8;}
-.mc-canvas{width:100%;display:block;border-radius:16px;background:#fff6fb;touch-action:none;cursor:pointer;
+.mc-field{display:flex;justify-content:center;}
+.mc-canvas{display:block;max-width:100%;border-radius:16px;background:#fff6fb;touch-action:none;cursor:pointer;
   box-shadow:0 3px 10px rgba(160,140,200,.22);}
 .mc-pads{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:flex-start;}
 .mc-pad{display:grid;grid-template-columns:repeat(3,auto);gap:4px;justify-items:center;align-items:center;}
@@ -162,6 +164,7 @@ const CSS = `
 .mc-open-co{background:linear-gradient(180deg,#68c2a0,#48a683);box-shadow:0 4px 0 #35805f;}
 .mc-open-co:active{box-shadow:0 2px 0 #35805f;}
 .mc-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
+.mc-bar[hidden]{display:none;}
 .mc-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#f6f2ff,#fff4f8);display:flex;flex-direction:column;gap:8px;}
 .mc-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -170,10 +173,22 @@ const CSS = `
 .mc-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
 .mc-over{border-radius:16px;background:#fffdfa;padding:14px;text-align:center;display:flex;
   flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
+/* 手机竖屏一屏要塞下四层,每层都得收着点,不然方向盘会被顶出舞台 */
 @media (max-width:420px){
-  .mc-item{min-width:46px;font-size:11px;padding:5px 6px;}
-  .mc-chip{font-size:12px;padding:4px 9px;}
-  .mc-btn{min-width:40px;min-height:38px;font-size:15px;}
+  .mc-item{min-width:44px;font-size:11px;padding:3px 6px;}
+  .mc-item-cost{font-size:10px;}
+  .mc-chip{font-size:11px;padding:3px 8px;}
+  .mc-hud{gap:4px;}
+  .mc-shop{gap:5px;}
+  .mc-btn{min-width:40px;min-height:36px;font-size:15px;padding:2px 6px;}
+  .mc-hud .mc-btn{min-height:28px;min-width:34px;font-size:13px;}
+  .mc-pads{gap:6px;}
+  .mc-pad{gap:3px;}
+  .mc-pad-t{font-size:10px;}
+  .mc-open{font-size:13px;padding:7px 12px;}
+  .mc-bar{gap:6px;margin-bottom:4px;}
+  .mc-wrap{gap:3px;}
+  .mc-tip{font-size:10px;line-height:1.35;}
 }
 @media (prefers-reduced-motion:reduce){.mc-btn:active,.mc-item:active{transform:none;}}
 `;
@@ -423,14 +438,21 @@ function drawTower(c: CanvasRenderingContext2D, tw: Tower, t: number): void {
   c.lineJoin = "round";
 
   if (tw.kind === "wall") {
+    // 一摞缝好的软垫子:故意和三团圆球的棉花怪长得不一样,一眼能分清敌我
     c.fillStyle = "#fffdf7";
-    c.strokeStyle = "#d9cfe6";
-    c.beginPath();
-    c.arc(x - s * 0.3, y + s * 0.1, s * 0.42, 0, Math.PI * 2);
-    c.arc(x + s * 0.3, y + s * 0.1, s * 0.42, 0, Math.PI * 2);
-    c.arc(x, y - s * 0.25, s * 0.5, 0, Math.PI * 2);
+    c.strokeStyle = "#c9a7c4";
+    roundRect(c, x - s * 0.42, y - s * 0.62, s * 0.84, s * 1.24, 7);
     c.fill();
     c.stroke();
+    c.strokeStyle = "#e6cfe0";
+    c.lineWidth = 2;
+    for (let i = 1; i < 3; i++) {
+      const ly = y - s * 0.62 + (s * 1.24 * i) / 3;
+      c.beginPath();
+      c.moveTo(x - s * 0.42, ly);
+      c.lineTo(x + s * 0.42, ly);
+      c.stroke();
+    }
   } else if (tw.kind === "jar") {
     c.fillStyle = "#ffe6a8";
     c.strokeStyle = "#d9a94f";
@@ -577,9 +599,9 @@ function drawHome(c: CanvasRenderingContext2D, hearts: number, homeHp: number, s
   c.moveTo(x, FIELD_TOP);
   c.lineTo(x, FIELD_TOP + LANE_H * LANES);
   c.stroke();
-  // 家门口摆着的颜料罐,少一罐就是被搬走一罐
+  // 家门口摆着的颜料罐,少一罐就是被搬走一罐;沿着整块家门竖着排开
   for (let i = 0; i < homeHp; i++) {
-    const cy = FIELD_TOP + 40 + i * 44;
+    const cy = FIELD_TOP + (LANE_H * LANES * (i + 0.5)) / homeHp;
     const on = i < hearts;
     c.fillStyle = on ? "#ff9ec4" : "#e7e1ee";
     c.strokeStyle = on ? "#d9628a" : "#cfc7dd";
@@ -638,14 +660,30 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", `${opts.title}:五条小路上的守家战场`);
 
+  const field = doc.createElement("div");
+  field.className = "mc-field";
+  field.appendChild(canvas);
+
   const pads = doc.createElement("div");
   pads.className = "mc-pads";
   const tip = doc.createElement("div");
   tip.className = "mc-tip";
   tip.textContent = opts.hint;
 
-  wrap.append(hud, shop, canvas, pads, tip);
+  wrap.append(hud, shop, field, pads, tip);
   host.appendChild(wrap);
+
+  // 画面缩得越小,画布上那两行字要写得越大,不然手机上糊成一片看不清
+  let textScale = 1;
+
+  // 战场按可用宽度和屏幕高度一起缩:手机上宁可画面小一点,也要把方向盘留在屏内
+  function layout(): void {
+    const view = doc.defaultView ?? window;
+    const size = fieldSize(field.clientWidth || wrap.clientWidth, view.innerWidth, view.innerHeight);
+    canvas.style.width = `${size.w}px`;
+    canvas.style.height = `${size.h}px`;
+    textScale = clamp(SCENE_W / size.w, 1, 2.4);
+  }
 
   const c2d = canvas.getContext("2d");
 
@@ -668,7 +706,8 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
   let elapsed = 0;
   let passive = paintInterval(0);
   let shake = 0;
-  let selected: TowerKind | null = unlocked.includes("jar") ? "jar" : unlocked[0] ?? null;
+  // 一开始什么都没选:点画面就是让主角跑过去甩一发,想摆东西再去点上面的建筑按钮
+  let selected: TowerKind | null = null;
 
   let waveIdx = 0;
   let wavesCleared = 0;
@@ -1058,27 +1097,64 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
     }
   }
 
+  /**
+   * 手机上的「半屏摇杆」:手指按在画面左半边就牵着朵朵走,右半边牵着星星走
+   * (只有一个人时整块画面都归朵朵)。手指按住不放会一直甩颜料弹,松手就停。
+   */
+  const dragging = new Map<number, number>();
+  const follow: Array<{ x: number; lane: number } | null> = [null, null];
+
+  function scenePoint(e: PointerEvent): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * SCENE_W,
+      y: ((e.clientY - rect.top) / rect.height) * SCENE_H,
+    };
+  }
+
   function onPointerDown(e: PointerEvent): void {
     if (paused || finished) return;
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const gx = ((e.clientX - rect.left) / rect.width) * SCENE_W;
-    const gy = ((e.clientY - rect.top) / rect.height) * SCENE_H;
-    const lane = clamp(Math.floor((gy - FIELD_TOP) / LANE_H), 0, LANES - 1);
-    const col = Math.round((gx - PAD_L) / CELL_W) - 1;
+    const p = scenePoint(e);
+    const lane = clamp(Math.floor((p.y - FIELD_TOP) / LANE_H), 0, LANES - 1);
+    const col = Math.round((p.x - PAD_L) / CELL_W) - 1;
     if (selected && col >= 0 && col < BUILD_COLS) {
       if (buildAt(selected, col, lane)) refreshShop();
       return;
     }
-    // 没选建筑时点画面 = 让朵朵跑到那条道上甩一发
-    const h = heroes[0];
-    if (h) {
-      h.lane = lane;
-      heroFire(0);
-    }
+    const player = heroes.length > 1 && p.x > SCENE_W / 2 ? 1 : 0;
+    const hero = heroes[player];
+    if (!hero) return;
+    dragging.set(e.pointerId, player);
+    follow[player] = { x: clamp(p.x / CELL_W - PAD_L / CELL_W, HERO_MIN_X, HERO_MAX_X), lane };
+    canvas.setPointerCapture?.(e.pointerId);
+    // 手指一落下就换到那条道:点哪条道就打哪条道,不然点了半天还在原地
+    hero.lane = lane;
+    heroFire(player);
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    const player = dragging.get(e.pointerId);
+    if (player === undefined || paused || finished) return;
+    e.preventDefault();
+    const p = scenePoint(e);
+    follow[player] = {
+      x: clamp(p.x / CELL_W - PAD_L / CELL_W, HERO_MIN_X, HERO_MAX_X),
+      lane: clamp(Math.floor((p.y - FIELD_TOP) / LANE_H), 0, LANES - 1),
+    };
+  }
+
+  function onPointerUp(e: PointerEvent): void {
+    const player = dragging.get(e.pointerId);
+    if (player === undefined) return;
+    dragging.delete(e.pointerId);
+    follow[player] = null;
   }
 
   canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerUp);
   const win = doc.defaultView ?? window;
   win.addEventListener("keydown", onKeyDown);
   win.addEventListener("keyup", onKeyUp);
@@ -1139,12 +1215,14 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
     hold(rightB, "right");
     hold(down, "down");
     fire.addEventListener("click", () => (commanderPad ? commanderSend() : heroFire(player)));
-    pad.append(blank(), up, blank(), leftB, fire, rightB, blank(), down, blank());
+    // 摆建筑那颗塞进方向盘左下角的空格里,省下一整行高度给手机竖屏
+    let corner: HTMLElement = blank();
     if (!commanderPad) {
       const b = mk("🔨", "在脚下摆建筑", " mc-btn-build");
       b.addEventListener("click", () => heroBuild(player));
-      pad.appendChild(b);
+      corner = b;
     }
+    pad.append(blank(), up, blank(), leftB, fire, rightB, corner, down, blank());
     pads.appendChild(pad);
   }
 
@@ -1262,8 +1340,21 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
       if (k.down) h.lane = clamp(h.lane + sp * 0.42 * dt, 0, LANES - 1);
       if (k.left) h.x = clamp(h.x - sp * 0.5 * dt, HERO_MIN_X, HERO_MAX_X);
       if (k.right) h.x = clamp(h.x + sp * 0.5 * dt, HERO_MIN_X, HERO_MAX_X);
+
+      // 手指牵着走:主角朝着手指的位置跑,跑到了就一直甩颜料弹
+      const target = follow[i];
+      if (target) {
+        const stepLane = sp * 0.55 * dt;
+        const dl = target.lane - h.lane;
+        h.lane = Math.abs(dl) <= stepLane ? target.lane : h.lane + Math.sign(dl) * stepLane;
+        const stepX = sp * 0.7 * dt;
+        const dx = target.x - h.x;
+        h.x = Math.abs(dx) <= stepX ? target.x : h.x + Math.sign(dx) * stepX;
+      }
+
       h.cd = Math.max(0, h.cd - dt);
       h.swing = Math.max(0, h.swing - dt);
+      if (target && h.cd <= 0) heroFire(i);
     }
   }
 
@@ -1421,7 +1512,7 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
       c2d.lineTo(SCENE_W - 8, y + 26);
       c2d.stroke();
       c2d.setLineDash([]);
-      c2d.font = "700 15px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
+      c2d.font = `700 ${Math.round(15 * textScale)}px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif`;
       c2d.textAlign = "right";
       c2d.textBaseline = "middle";
       c2d.fillStyle = P_COLOR[1];
@@ -1430,15 +1521,17 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
 
     // 顶上的一句话提示
     if (flashLeft > 0 && flashMsg) {
-      c2d.font = "800 16px 'PingFang SC','Microsoft YaHei',system-ui,sans-serif";
+      const fs = Math.round(16 * textScale);
+      const bh = fs + 10;
+      c2d.font = `800 ${fs}px 'PingFang SC','Microsoft YaHei',system-ui,sans-serif`;
       c2d.textAlign = "center";
       c2d.textBaseline = "middle";
       c2d.fillStyle = "rgba(255,255,255,.9)";
       const w = c2d.measureText(flashMsg).width + 24;
-      roundRect(c2d, SCENE_W / 2 - w / 2, 6, w, 24, 12);
+      roundRect(c2d, SCENE_W / 2 - w / 2, 6, w, bh, bh / 2);
       c2d.fill();
       c2d.fillStyle = "#7a4f9c";
-      c2d.fillText(flashMsg, SCENE_W / 2, 18);
+      c2d.fillText(flashMsg, SCENE_W / 2, 6 + bh / 2);
     }
   }
 
@@ -1505,6 +1598,13 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
 
   refreshShop();
   refreshHud();
+  layout();
+  win.addEventListener("resize", layout);
+  let ro: ResizeObserver | null = null;
+  if (typeof ResizeObserver === "function") {
+    ro = new ResizeObserver(layout);
+    ro.observe(field);
+  }
   last = performance.now();
   raf = requestAnimationFrame(frame);
 
@@ -1514,7 +1614,13 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
       finished = true;
       cancelAnimationFrame(raf);
       closeLayer();
+      ro?.disconnect();
+      ro = null;
       canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
+      win.removeEventListener("resize", layout);
       win.removeEventListener("keydown", onKeyDown);
       win.removeEventListener("keyup", onKeyUp);
       wrap.remove();
@@ -1537,7 +1643,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     title: `${ctx.chapter.emoji} 第 ${ctx.level + 1} 关`,
     hint: unlock
       ? `新建筑解锁:${TOWER_EMOJI[unlock]} ${TOWER_INFO[unlock].name} —— ${TOWER_INFO[unlock].desc}`
-      : "先点建筑再点格子就能摆;W A S D 走位,F 甩颜料弹,G 在脚下摆建筑。",
+      : "手指按住画面就能牵着朵朵跑,按住不放会一直甩颜料弹;想摆东西先点上面的建筑,再点格子。电脑上用 W A S D 走位、F 甩、G 摆。",
     sfx: ctx.sfx,
     onDone: (res) => {
       if (res.win) {
@@ -1630,7 +1736,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
       plan: { kind: "endless", make: (wave) => buildEndlessWave(wave) },
       heroes: 1,
       title: "无尽守家",
-      hint: "波次没有尽头,能挡多少算多少。每 8 波会来一只大怪,提前把墙加厚!",
+      hint: "波次没有尽头,能挡多少算多少。每 8 波会来一只大怪,提前把墙加厚!手指按住画面就能牵着朵朵跑。",
       sfx: (n) => api.play(n),
       onDone: (res) => {
         const reached = res.wavesCleared;
@@ -1681,7 +1787,7 @@ function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destr
       plan: { kind: "fixed", waves },
       heroes: 2,
       title: "双人合作守家",
-      hint: "朵朵 W A S D + F 甩 + G 摆;星星 ↑←↓→ + L 甩 + K 摆。颜料是两个人一起花的,商量着来!",
+      hint: "朵朵 W A S D + F 甩 + G 摆;星星 ↑←↓→ + L 甩 + K 摆。手机上按住画面左半边牵着朵朵、右半边牵着星星。颜料是两个人一起花的,商量着来!",
       sfx: (n) => api.play(n),
       onDone: (res) => {
         const done = res.wavesCleared;
@@ -1736,7 +1842,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
       heroes: 1,
       commander: true,
       title: "非对称对战",
-      hint: "朵朵:W A S D 走位 + F 甩 + G 摆建筑。星星:↑↓ 选道、←→ 换兵、L 派出去(要攒能量)。",
+      hint: "朵朵:W A S D 走位 + F 甩 + G 摆建筑,手机上按住画面拖着走。星星:↑↓ 选道、←→ 换兵、L 派出去(要攒能量),手机上用下面那套方向盘。",
       sfx: (n) => api.play(n),
       onDone: (res) => {
         const side = res.win ? "defender" : "commander";
@@ -1830,7 +1936,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关卡里那一屏得省着用,三颗模式按钮只在选关地图上露面
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy() {
+            handle.destroy?.();
+            if (!mode) bar.hidden = false;
+          },
+        };
+      },
       mapHint: "先摆两个颜料罐把钱攒起来,再架炮台、立棉花墙;波次之间记得升科技。",
       grandMessage: "188 关全部守住!彩虹总部的小怪物全变成了花花糖果,你是最棒的守家小队长!",
       guide,
