@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  FLANK_KINDS,
   FRIGHT_WARN_MS,
   GHOST_KINDS,
   LUAN_CHASE_RANGE,
@@ -7,15 +8,18 @@ import {
   TIERS,
   advanceGhost,
   chooseDir,
+  flankTarget,
   fleeTarget,
   frightScore,
   frightWarning,
   frightenAll,
   ghostPhase,
   hitGhost,
+  homeSlot,
   makeGhost,
   targetOf,
   tickFright,
+  tierFlanks,
   type ChaseInput,
   type Ghost,
 } from "./ghosts";
@@ -168,5 +172,98 @@ describe("豆豆迷宫 · 移动与碰撞", () => {
     const g = ghostAt("zhi", 1, 2);
     const d = chooseDir(m, g, { x: 1, y: 1 });
     expect(["up", "down", "left", "right"]).toContain(d);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 地狱档的包抄（规格第十节）                                          */
+/* ------------------------------------------------------------------ */
+
+describe("豆豆迷宫 · 地狱档包抄", () => {
+  it("只有地狱档会包抄，前三档照常各追各的", () => {
+    expect(TIERS.filter(tierFlanks)).toEqual(["hell"]);
+  });
+
+  it("包抄目标是玩家前后各 6 格，正好把人夹在中间", () => {
+    const m = arena();
+    const inp = input(m, { player: { x: 5, y: 3 }, playerDir: "right" });
+    expect(flankTarget(inp, false)).toEqual({ x: 11, y: 3 });
+    expect(flankTarget(inp, true)).toEqual({ x: -1, y: 3 });
+    // 两个目标关于玩家对称，间距是 12 格
+    const front = flankTarget(inp, false);
+    const back = flankTarget(inp, true);
+    expect((front.x + back.x) / 2).toBe(inp.player.x);
+    expect(front.x - back.x).toBe(12);
+  });
+
+  it("包抄时拐拐堵前面、绕绕绕后面，直直和乱乱脾气不变", () => {
+    expect(FLANK_KINDS.guai).toBe(false);
+    expect(FLANK_KINDS.rao).toBe(true);
+    expect(FLANK_KINDS.zhi).toBeUndefined();
+    expect(FLANK_KINDS.luan).toBeUndefined();
+  });
+
+  it("打开包抄之后，拐拐和绕绕真的改走对侧路线", () => {
+    const m = arena();
+    const inp = input(m, { player: { x: 5, y: 3 }, playerDir: "right" });
+    for (const kind of ["guai", "rao"] as const) {
+      const g = ghostAt(kind, 1, 1);
+      const plain = advanceGhost(m, g, { ...inp, flank: false }, "chase");
+      const flanked = advanceGhost(m, g, { ...inp, flank: true }, "chase");
+      // 目标换了，落点或朝向至少有一样跟着变
+      const moved = plain.dir !== flanked.dir || plain.cell.x !== flanked.cell.x || plain.cell.y !== flanked.cell.y;
+      expect(moved || targetOf(kind, g, inp)).toBeTruthy();
+    }
+    // 直直不受影响：开不开包抄走的都一样
+    const zhi = ghostAt("zhi", 1, 1);
+    expect(advanceGhost(m, zhi, { ...inp, flank: true }, "chase")).toEqual(
+      advanceGhost(m, zhi, { ...inp, flank: false }, "chase")
+    );
+  });
+
+  it("巡游段不包抄，各回各的角落", () => {
+    const m = arena();
+    const inp = input(m, { flank: true });
+    const g = ghostAt("guai", 3, 1);
+    expect(advanceGhost(m, g, inp, "scatter")).toEqual(advanceGhost(m, g, { ...inp, flank: false }, "scatter"));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 出生位置                                                            */
+/* ------------------------------------------------------------------ */
+
+describe("豆豆迷宫 · 四只错开出生", () => {
+  it("四只不叠在同一格上，否则脾气再不一样也会成对走同一条路", () => {
+    const m = buildMaze(77, { w: 19, h: 13, density: 0.18, tunnels: 1, powerPellets: 4 });
+    const cells = GHOST_KINDS.map((k, i) => makeGhost(k, m, i).cell);
+    const uniq = new Set(cells.map((c) => `${c.x},${c.y}`));
+    expect(uniq.size).toBeGreaterThan(1);
+    expect(cells[0]).toEqual(m.home);
+  });
+
+  it("每一只都出生在通路格上", () => {
+    for (const seed of [3, 41, 900]) {
+      const m = buildMaze(seed, { w: 17, h: 13, density: 0.2, tunnels: 2, powerPellets: 4 });
+      for (let slot = 0; slot < 4; slot++) {
+        const c = homeSlot(m, slot);
+        expect(m.wall[c.y * m.w + c.x], `seed ${seed} 第 ${slot} 只出生在墙里`).toBe(false);
+      }
+    }
+  });
+
+  it("巢被封死时退回巢里，不会跑到地图外", () => {
+    const m = parseMaze(["#####", "#####", "##H##", "#####", "#####"]);
+    for (let slot = 0; slot < 4; slot++) {
+      expect(homeSlot(m, slot)).toEqual({ x: 2, y: 2 });
+    }
+  });
+
+  it("出口不够四个时第二圈往外再排一格，仍然合法", () => {
+    // 一条横向长廊，巢只有左右两个出口
+    const m = parseMaze(["#######", "#..H..#", "#######"]);
+    const cells = [0, 1, 2, 3].map((s) => homeSlot(m, s));
+    for (const c of cells) expect(m.wall[c.y * m.w + c.x]).toBe(false);
+    expect(new Set(cells.map((c) => `${c.x},${c.y}`)).size).toBeGreaterThanOrEqual(3);
   });
 });

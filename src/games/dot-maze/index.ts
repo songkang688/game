@@ -32,7 +32,7 @@ import {
   type RunState,
 } from "./logic";
 
-/** 平台内置的那几个音效，游戏自己不碰 AudioContext */
+/** 平台内置的那几个音效。声音一律走 api.play，游戏自己不建音频上下文 */
 export type Sfx = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
 const CSS = `
