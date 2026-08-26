@@ -30,6 +30,16 @@ import {
   winchScale,
 } from "./physics";
 import { LEVELS, type LevelDef } from "./levels";
+import {
+  MUSHROOM_R,
+  createSticky,
+  mushroomBounce,
+  mushroomTriggers,
+  stickyCatch,
+  stickyRelease,
+  tickSticky,
+  type StickyState,
+} from "./swing12";
 
 export const CANDY_R = 16;
 export const GRAVITY = 900;
@@ -75,6 +85,8 @@ export interface SimWorld {
   gremlins: Array<{ def: NonNullable<LevelDef["gremlins"]>[number]; x: number; y: number }>;
   winches: WinchState[];
   bubblesUsed: boolean[];
+  /** 1.2 粘性泡泡：挂住糖果的那一段时间 */
+  sticky: StickyState;
   hooksUsed: boolean[];
   puffsLeft: number[];
   portalCooldown: number;
@@ -146,6 +158,7 @@ export function makeSimFor(lv: LevelDef): SimWorld {
     }),
     winches,
     bubblesUsed: (lv.bubbles ?? []).map(() => false),
+    sticky: createSticky(),
     hooksUsed: (lv.hooks ?? []).map(() => false),
     puffsLeft: (lv.balloons ?? []).map((b) => b.puffs),
     portalCooldown: 0,
@@ -243,6 +256,17 @@ export function stepSim(w: SimWorld): void {
     const upSpeed = (c.py - c.y) / DT;
     if (upSpeed > 95) c.py = c.y + 95 * DT;
   }
+  if (w.sticky.held) {
+    // 挂住期间原地不动，到点把攒下的速度还回去
+    teleport(c, c.px, c.py);
+    const before = w.sticky;
+    w.sticky = tickSticky(w.sticky, DT);
+    if (!w.sticky.held) {
+      const out = stickyRelease(before);
+      c.px = c.x - out.vx * DT;
+      c.py = c.y - out.vy * DT;
+    }
+  }
   for (const f of w.lv.fans ?? []) {
     if (!fanOn(f.period, f.duty ?? 0.5, f.offset ?? 0, w.t)) continue;
     const force = fanForceAt(f.x, f.y, f.w, f.h, f.dir, f.power, c.x, c.y);
@@ -285,16 +309,32 @@ export function stepSim(w: SimWorld): void {
     }
   });
 
-  // 泡泡（接住时吸收大部分冲量，软着陆）
+  // 泡泡（接住时吸收大部分冲量，软着陆）；带 sticky 的是 1.2 的粘性泡泡
   (w.lv.bubbles ?? []).forEach((b, i) => {
     if (w.bubblesUsed[i]) return;
     if (circlesOverlap(c.x, c.y, CANDY_R, b.x, b.y, BUBBLE_CATCH_R - CANDY_R)) {
       w.bubblesUsed[i] = true;
-      w.inBubble = true;
-      c.px = c.x - (c.x - c.px) * 0.25;
-      c.py = c.y - (c.y - c.py) * 0.25;
+      if (b.sticky && b.sticky > 0) {
+        w.sticky = stickyCatch(w.sticky, (c.x - c.px) / DT, (c.y - c.py) / DT, b.sticky);
+        teleport(c, b.x, b.y);
+      } else {
+        w.inBubble = true;
+        c.px = c.x - (c.x - c.px) * 0.25;
+        c.py = c.y - (c.y - c.py) * 0.25;
+      }
     }
   });
+
+  // 弹簧蘑菇：压上伞面就沿朝向弹开
+  for (const m of w.lv.mushrooms ?? []) {
+    if (!circlesOverlap(c.x, c.y, CANDY_R, m.x, m.y, MUSHROOM_R)) continue;
+    const vx = (c.x - c.px) / DT;
+    const vy = (c.y - c.py) / DT;
+    if (!mushroomTriggers(vx, vy, m.dir)) continue;
+    const out = mushroomBounce(vx, vy, m.dir);
+    c.px = c.x - out.vx * DT;
+    c.py = c.y - out.vy * DT;
+  }
 
   // 星星
   w.lv.stars.forEach((s, i) => {

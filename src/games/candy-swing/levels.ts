@@ -37,6 +37,19 @@ export interface HookDef {
 export interface BubbleDef {
   x: number;
   y: number;
+  /**
+   * 1.2 新增：粘性泡泡。挂住糖果这么多秒后自己松手，
+   * 松手时把挂住之前的速度按 STICKY_KEEP 还回去（见 swing12.ts）。
+   * 不填就是 1.1 的普通泡泡（接住后一直慢慢上浮）。
+   */
+  sticky?: number;
+}
+
+/** 1.2 新增：弹簧蘑菇。糖果压上伞面就沿 dir 弹开，有增益也有封顶。 */
+export interface MushroomDef {
+  x: number;
+  y: number;
+  dir: "up" | "down" | "left" | "right";
 }
 
 export interface SpikeDef {
@@ -190,6 +203,8 @@ export interface LevelDef {
   fans?: FanDef[];
   magnets?: MagnetDef[];
   gremlins?: GremlinDef[];
+  /** 1.2 新增机关 */
+  mushrooms?: MushroomDef[];
   /** 通关配方（测试仿真用） */
   solve: SolveRecipe;
 }

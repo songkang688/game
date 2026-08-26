@@ -47,6 +47,29 @@ import {
   type LevelDef,
 } from "./levels";
 import { speak, stopSpeaking } from "../speech";
+import {
+  MUSHROOM_R,
+  SNAP_FLICK,
+  SAVE_KEY as SAVE_KEY_V12,
+  buildSweetLevel,
+  comboBonus,
+  comboLabel,
+  createSticky,
+  ghostAlpha,
+  mushroomBounce,
+  mushroomTriggers,
+  needsMigration,
+  pruneGhosts,
+  pushGhost,
+  readStars,
+  stickyCatch,
+  stickyRelease,
+  strokeNormal,
+  sweetScore,
+  tickSticky,
+  type Ghost,
+} from "./swing12";
+import { save } from "../../engine/save";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -61,6 +84,15 @@ interface GameApi {
 
 const W = 360;
 const H = 480;
+
+/** 系统开了「减少动态效果」就少画特效，但结果与音效一个不少 */
+function reduceMotion(): boolean {
+  try {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  } catch {
+    return false;
+  }
+}
 const CANDY_R = 16;
 const GRAVITY = 900;
 const STEP = 1 / 120;
@@ -78,6 +110,7 @@ const CUT_HALF_WIDTH = 10;
 /** 糖果落出画面后先给 0.5s 缓冲(可能被风口吹回/荡回)再判失败 */
 const FALL_GRACE = 0.5;
 
+/** 1.1 之前写的两代前缀老 key，只读不写，读到就搬到 SAVE_KEY_V12 上 */
 const SAVE_KEY = "yiduo.candy-swing.campaign.v2";
 
 interface Progress {
@@ -85,29 +118,29 @@ interface Progress {
   stars: number[];
 }
 
-function loadProgress(): Progress {
+function readKey(key: string): string | null {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) {
-      const data = JSON.parse(raw) as { stars?: unknown };
-      if (Array.isArray(data.stars)) {
-        const arr = data.stars as unknown[];
-        const stars = LEVELS.map((_, i) => {
-          const v = arr[i];
-          return typeof v === "number" ? Math.max(0, Math.min(3, Math.round(v))) : 0;
-        });
-        return { stars };
-      }
-    }
+    return localStorage.getItem(key);
   } catch {
     // 隐私模式等读不到就当新档
+    return null;
   }
-  return { stars: LEVELS.map(() => 0) };
+}
+
+function loadProgress(): Progress {
+  // 新 key 与老 key 逐关取大的那个，换版本不丢星
+  const stars = readStars(readKey, LEVELS.length);
+  const p = { stars };
+  if (needsMigration(readKey, LEVELS.length)) saveProgress(p);
+  return p;
 }
 
 function saveProgress(p: Progress): void {
+  const json = JSON.stringify(p);
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(p));
+    localStorage.setItem(SAVE_KEY_V12, json);
+    // 老 key 继续跟着写一份：同一台设备上退回旧版本也还能接着玩
+    localStorage.setItem(SAVE_KEY, json);
   } catch {
     // 存不了也不影响本次游玩
   }
@@ -144,6 +177,8 @@ interface BubbleState {
   x: number;
   y: number;
   used: boolean;
+  /** 1.2 粘性泡泡：挂住糖果这么多秒（undefined 就是 1.1 的普通泡泡） */
+  sticky?: number;
 }
 
 interface HookState {
@@ -252,6 +287,16 @@ export function mount(api: GameApi): { destroy: () => void } {
   let portalCooldown = 0;
   let wonStars = 0;
   let fallGraceT = 0;
+  /** 每根绳在 links 里的区间，用来把「切断几段」换算成「切断几根」 */
+  let ropeRanges: Array<[number, number]> = [];
+  /** 一刀两断的横幅：文字与剩余显示时间 */
+  let comboText = "";
+  let comboT = 0;
+  /** 糖果的 300ms 淡出残影 */
+  let ghosts: Ghost[] = [];
+  let sticky = createSticky();
+  /** 非 null 时正在跑无尽甜甜塔 */
+  let sweet: { index: number; eaten: number; stars: number; seed: number; over: boolean } | null = null;
 
   const trail: TrailPoint[] = [];
   const sparkles: Sparkle[] = [];
@@ -302,6 +347,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       .cs-chapter.moonfair .cs-ch-name { color: #FFE9B8; }
       .cs-chapter.moonfair .cs-ch-blurb { color: #C9BDEA; }
       .cs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      /* 1.2 无尽甜甜塔入口：和选关地图放一起，热区 ≥44px，360px 宽也不挤 */
+      .cs-sweet { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+      .cs-sweet-btn { min-height: 44px; font-size: 15px; padding: 10px 16px; }
+      .cs-sweet-best { font-size: 14px; font-weight: 700; color: #B06AB3; }
       .cs-lv { border: none; border-radius: 14px; padding: 7px 2px 5px; background: #FFFFFF; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; gap: 1px; }
       .cs-lv:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
       .cs-lv .n { font-size: 16px; font-weight: 800; color: #B03A6B; }
@@ -316,6 +365,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     <div class="cs-map">
       <div class="cs-map-title">🍬 糖果秋千</div>
       <div class="cs-map-total"></div>
+      <div class="cs-sweet">
+        <button class="cs-btn cs-sweet-btn" type="button">🍭 无尽甜甜塔</button>
+        <span class="cs-sweet-best"></span>
+      </div>
       <div class="cs-chapters"></div>
     </div>
     <div class="cs-game cs-hidden">
@@ -340,6 +393,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   const levelEl = wrap.querySelector(".cs-level") as HTMLElement;
   const starsEl = wrap.querySelector(".cs-stars") as HTMLElement;
   const msgEl = wrap.querySelector(".cs-msg") as HTMLElement;
+  const sweetBtn = wrap.querySelector(".cs-sweet-btn") as HTMLButtonElement;
+  const sweetBestEl = wrap.querySelector(".cs-sweet-best") as HTMLElement;
   const retryBtn = wrap.querySelector(".cs-retry") as HTMLButtonElement;
   const backBtn = wrap.querySelector(".cs-back") as HTMLButtonElement;
 
@@ -405,8 +460,11 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function showMap(): void {
     screen = "map";
+    sweet = null;
     stopSpeaking();
     renderMap();
+    const best = save.getGameProgress("candy-swing").endlessBest;
+    sweetBestEl.textContent = best > 0 ? `最好成绩 ${best} 分` : "一颗接一颗地喂，机关越来越多";
     gameEl.classList.add("cs-hidden");
     mapEl.classList.remove("cs-hidden");
   }
@@ -415,8 +473,11 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function updateHud(): void {
     const got = stars.filter((s) => s.collected).length;
-    levelEl.textContent = `第 ${levelIndex + 1}/${LEVELS.length} 关 · ${level.name}`;
+    levelEl.textContent = sweet
+      ? `🍭 ${level.name} · ${sweetScore(sweet.eaten, sweet.stars)} 分`
+      : `第 ${levelIndex + 1}/${LEVELS.length} 关 · ${level.name}`;
     starsEl.textContent = `⭐ ${got}/${level.stars.length}`;
+    retryBtn.textContent = sweet ? (sweet.over ? "🔄 再来一轮" : "🔄 这颗重来") : "🔄 重试";
   }
 
   function addRopeToCandy(
@@ -431,6 +492,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     const build = buildRope(ax, ay, c.x, c.y, segments, totalLength);
     const base = particles.length;
     const linkBase = links.length;
+    ropeRanges.push([linkBase, linkBase + build.links.length]);
     for (const p of build.particles) particles.push(p);
     for (const l of build.links) {
       links.push({
@@ -452,12 +514,17 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function startLevel(index: number): void {
+    sweet = null;
+    levelIndex = index;
+    startLevelDef(LEVELS[index], THEMES[CHAPTERS[chapterOf(index)].theme]);
+  }
+
+  function startLevelDef(def: LevelDef, palette: ThemePalette): void {
     screen = "play";
     mapEl.classList.add("cs-hidden");
     gameEl.classList.remove("cs-hidden");
-    levelIndex = index;
-    level = LEVELS[index];
-    theme = THEMES[CHAPTERS[chapterOf(index)].theme];
+    level = def;
+    theme = palette;
     phase = "play";
     phaseTime = 0;
     bannerTime = 1.4;
@@ -472,9 +539,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     fallGraceT = 0;
     trail.length = 0;
     sparkles.length = 0;
+    ghosts = [];
+    sticky = createSticky();
+    comboT = 0;
+    comboText = "";
 
     particles = [makeParticle(level.candy.x, level.candy.y, false, 0.3)];
     links = [];
+    ropeRanges = [];
     winches = [];
     winchOfRope = [];
     for (const r of level.ropes) {
@@ -483,7 +555,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       winchOfRope.push(winches.length > before ? winches[winches.length - 1] : undefined);
     }
     stars = level.stars.map((s) => ({ x: s.x, y: s.y, collected: false, suck: 0 }));
-    bubbles = (level.bubbles ?? []).map((b) => ({ x: b.x, y: b.y, used: false }));
+    bubbles = (level.bubbles ?? []).map((b) => ({ x: b.x, y: b.y, used: false, sticky: b.sticky }));
     hooks = (level.hooks ?? []).map((h) => ({ x: h.x, y: h.y, radius: h.radius, used: false }));
     boards = (level.boards ?? []).map((def) => {
       const pos = boardPosition(def.x1, def.y1, def.x2, def.y2, def.period, 0);
@@ -510,7 +582,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (screen !== "play") return;
     api.play("tap");
     stopSpeaking();
+    if (sweet) {
+      // 一轮结束就重开一轮（换一批糖），中途重来只重来当前这一颗
+      if (sweet.over) sweet = null;
+      startSweet(sweet ? sweet.index : 1);
+      return;
+    }
     startLevel(levelIndex);
+  }
+
+  /* ---------------- 无尽甜甜塔 ---------------- */
+
+  function startSweet(index: number): void {
+    if (!sweet) sweet = { index: 1, eaten: 0, stars: 0, seed: (Date.now() & 0xffff) + 1, over: false };
+    sweet.index = Math.max(1, index);
+    sweet.over = false;
+    startLevelDef(buildSweetLevel(sweet.index, sweet.seed), THEMES.rainbow);
   }
 
   function burst(x: number, y: number, color: string, count = 8, speed = 120): void {
@@ -527,6 +614,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     phaseTime = 0;
     failReason = reason;
     api.play("oops");
+    if (sweet) {
+      sweet.over = true;
+      const score = sweetScore(sweet.eaten, sweet.stars);
+      const best = save.recordEndlessBest("candy-swing", score);
+      msgEl.textContent =
+        score >= best && score > 0
+          ? `甜甜塔喂了 ${sweet.eaten} 颗糖，${score} 分，新纪录！`
+          : `甜甜塔喂了 ${sweet.eaten} 颗糖，${score} 分，最好成绩 ${best} 分。`;
+      speak(`这一轮喂了 ${sweet.eaten} 颗糖，再来一轮一定能更多。`);
+      return;
+    }
     msgEl.textContent = "没关系，点击画面再来一次！";
     // 结算自动朗读：识字量有限的孩子靠听（无中文语音包时静默）
     speak(failedSpeechLine(reason));
@@ -545,6 +643,16 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     const collected = stars.filter((s) => s.collected).length;
     wonStars = Math.max(1, collected);
+
+    if (sweet) {
+      sweet.eaten++;
+      sweet.stars += collected;
+      sweet.index++;
+      msgEl.textContent = `第 ${sweet.eaten} 颗糖喂到啦！点一下接着喂下一颗。`;
+      speak(wonSpeechLine(wonStars));
+      return;
+    }
+
     const before = progress.stars[levelIndex];
     const wasAllCleared = allCleared();
     progress.stars[levelIndex] = Math.max(before, wonStars);
@@ -569,6 +677,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   function cutAt(x0: number, y0: number, x1: number, y1: number): void {
     if (phase !== "play") return;
     let cutCount = 0;
+    // 一笔划线连着几根绳都在这一帧里判，所以「一刀两断」按整条绳算而不是按绳段算
+    const ropesHit = new Set<number>();
+    const { nx, ny } = strokeNormal(x0, y0, x1, y1);
     for (const link of links) {
       if (!link.active) continue;
       const pa = particles[link.a];
@@ -576,15 +687,31 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (segmentsWithinDistance(x0, y0, x1, y1, pa.x, pa.y, pb.x, pb.y, CUT_HALF_WIDTH)) {
         link.active = false;
         cutCount++;
-        const len = Math.hypot(x1 - x0, y1 - y0) || 1;
-        const nx = -(y1 - y0) / len;
-        const ny = (x1 - x0) / len;
-        if (!pa.pinned) { pa.px -= nx * 3; pa.py -= ny * 3; }
-        if (!pb.pinned) { pb.px += nx * 3; pb.py += ny * 3; }
+        ropesHit.add(ropeIndexOfLink(link));
+        if (!pa.pinned) { pa.px -= nx * SNAP_FLICK; pa.py -= ny * SNAP_FLICK; }
+        if (!pb.pinned) { pb.px += nx * SNAP_FLICK; pb.py += ny * SNAP_FLICK; }
         burst((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, "#C58A4F", 5, 70);
       }
     }
     if (cutCount > 0) api.play("pop");
+    const label = comboLabel(ropesHit.size);
+    if (label) {
+      comboText = label;
+      comboT = 1.1;
+      const bonus = comboBonus(ropesHit.size);
+      if (bonus > 0) api.addStars(bonus);
+      api.play("coin");
+    }
+  }
+
+  /** 一段绳属于第几根绳（按 ropeLinkRanges 分段），认不出来就归到 -1 */
+  function ropeIndexOfLink(link: Link): number {
+    const idx = links.indexOf(link);
+    for (let i = 0; i < ropeRanges.length; i++) {
+      const [from, to] = ropeRanges[i];
+      if (idx >= from && idx < to) return i;
+    }
+    return -1;
   }
 
   function popBubble(): void {
@@ -694,6 +821,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     const prevSim = simTime;
     simTime += dt;
     if (portalCooldown > 0) portalCooldown -= dt;
+    if (comboT > 0) comboT = Math.max(0, comboT - dt);
+    if (!candyGone) {
+      // 300ms 残影：让孩子把「糖果现在有多快」直接看出来
+      const c0 = candy();
+      ghosts = pruneGhosts(pushGhost(ghosts, c0.x, c0.y, simTime), simTime);
+    }
 
     // 移动木板（静止的那种就是「高台」，位置恒定）
     for (const b of boards) {
@@ -736,6 +869,18 @@ export function mount(api: GameApi): { destroy: () => void } {
       const maxUp = 95;
       if (upSpeed > maxUp) c.py = c.y + maxUp * dt;
     }
+    if (sticky.held && !candyGone) {
+      // 粘性泡泡挂住期间原地不动，到点把攒下的速度还回去
+      teleport(c, c.px, c.py);
+      const before = sticky;
+      sticky = tickSticky(sticky, dt);
+      if (!sticky.held) {
+        const out = stickyRelease(before);
+        c.px = c.x - out.vx * dt;
+        c.py = c.y - out.vy * dt;
+        api.play("pop");
+      }
+    }
     if (!candyGone) {
       // 风扇气流与糖霜磁铁：都是叠加在重力上的加速度
       for (const f of level.fans ?? []) {
@@ -776,16 +921,34 @@ export function mount(api: GameApi): { destroy: () => void } {
       }
     }
 
-    // 泡泡（接住时吸收大部分冲量，软着陆再慢慢上浮）
+    // 泡泡（接住时吸收大部分冲量，软着陆再慢慢上浮）；带 sticky 的是 1.2 的粘性泡泡
     for (const b of bubbles) {
       if (b.used) continue;
       if (circlesOverlap(c.x, c.y, CANDY_R, b.x, b.y, BUBBLE_CATCH_R - CANDY_R)) {
         b.used = true;
-        inBubble = true;
-        c.px = c.x - (c.x - c.px) * 0.25;
-        c.py = c.y - (c.y - c.py) * 0.25;
+        if (b.sticky && b.sticky > 0) {
+          sticky = stickyCatch(sticky, (c.x - c.px) / dt, (c.y - c.py) / dt, b.sticky);
+          teleport(c, b.x, b.y);
+        } else {
+          inBubble = true;
+          c.px = c.x - (c.x - c.px) * 0.25;
+          c.py = c.y - (c.y - c.py) * 0.25;
+        }
         api.play("jump");
       }
+    }
+
+    // 弹簧蘑菇：压上伞面就沿朝向弹开
+    for (const m of level.mushrooms ?? []) {
+      if (!circlesOverlap(c.x, c.y, CANDY_R, m.x, m.y, MUSHROOM_R)) continue;
+      const vx = (c.x - c.px) / dt;
+      const vy = (c.y - c.py) / dt;
+      if (!mushroomTriggers(vx, vy, m.dir)) continue;
+      const out = mushroomBounce(vx, vy, m.dir);
+      c.px = c.x - out.vx * dt;
+      c.py = c.y - out.vy * dt;
+      burst(m.x, m.y, "#FFB4C8", 6, 90);
+      api.play("jump");
     }
 
     // 星星收集
@@ -1781,6 +1944,59 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.restore();
   }
 
+  /** 糖果的 300ms 淡出残影：`prefers-reduced-motion` 下只留一半点 */
+  function drawGhosts(): void {
+    if (candyGone || ghosts.length < 2) return;
+    const reduced = reduceMotion();
+    for (let i = 0; i < ghosts.length; i++) {
+      if (reduced && i % 2 === 1) continue;
+      const a = ghostAlpha(ghosts[i], simTime);
+      if (a <= 0) continue;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#FF9EC4";
+      ctx.beginPath();
+      ctx.arc(ghosts[i].x, ghosts[i].y, 4 + (i / ghosts.length) * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** 弹簧蘑菇：伞盖朝哪边就把柄画在反面，孩子一眼看出会往哪弹 */
+  function drawMushrooms(): void {
+    for (const m of level.mushrooms ?? []) {
+      const axis = m.dir === "up" ? [0, -1] : m.dir === "down" ? [0, 1] : m.dir === "left" ? [-1, 0] : [1, 0];
+      ctx.save();
+      ctx.translate(m.x, m.y);
+      ctx.fillStyle = "#C88CA8";
+      ctx.fillRect(-axis[0] * 8 - 5, -axis[1] * 8 - 5, 10, 10);
+      ctx.fillStyle = "#FF8FB6";
+      ctx.beginPath();
+      ctx.arc(0, 0, MUSHROOM_R * 0.72, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#FFF3F7";
+      ctx.beginPath();
+      ctx.arc(axis[0] * 6, axis[1] * 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /** 一刀两断的横幅 */
+  function drawCombo(): void {
+    if (comboT <= 0 || !comboText) return;
+    const a = Math.min(1, comboT / 0.4);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.font = "900 20px 'PingFang SC', 'Microsoft YaHei', sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "rgba(255,255,255,.95)";
+    ctx.strokeText(comboText, W / 2, 64);
+    ctx.fillStyle = "#D65C8B";
+    ctx.fillText(comboText, W / 2, 64);
+    ctx.restore();
+  }
+
   function drawTrail(): void {
     if (trail.length < 2) return;
     ctx.lineCap = "round";
@@ -1887,6 +2103,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawMagnets();
     drawHooks();
     drawBubbles();
+    drawMushrooms();
     drawBalloons();
     drawStars();
     drawMonster();
@@ -1895,9 +2112,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawScissors();
     drawMoths();
     drawGremlins();
+    drawGhosts();
     drawCandy();
     drawSparkles(dt);
     drawTrail();
+    drawCombo();
     drawOverlays();
   }
 
@@ -1921,7 +2140,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       if (bannerTime > 0) bannerTime -= frameDt;
 
       if (phase === "won" && phaseTime > 1.8) {
-        if (levelIndex + 1 < LEVELS.length) startLevel(levelIndex + 1);
+        if (sweet) startSweet(sweet.index);
+        else if (levelIndex + 1 < LEVELS.length) startLevel(levelIndex + 1);
         else showMap();
       }
 
@@ -2020,6 +2240,11 @@ export function mount(api: GameApi): { destroy: () => void } {
   tapOnly(backBtn, () => {
     api.play("tap");
     showMap();
+  });
+  tapOnly(sweetBtn, () => {
+    api.play("tap");
+    sweet = null;
+    startSweet(1);
   });
 
   showMap();
