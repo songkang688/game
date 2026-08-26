@@ -64,7 +64,7 @@ const CSS = `
 .rbg-meter-mid .rbg-meter-fill { background: repeating-linear-gradient(45deg, #FFD08A 0 7px, #F5B463 7px 14px); }
 .rbg-meter-low .rbg-meter-fill { background: repeating-linear-gradient(45deg, #F5A0A0 0 5px, #E06A6A 5px 10px); }
 .rbg-ctrl { display: flex; justify-content: center; align-items: stretch; }
-.rbg-pull { border: none; border-radius: 20px; font-size: 19px; font-weight: 900; color: #fff; background: linear-gradient(180deg, #FF8A8A, #E85555); cursor: pointer; box-shadow: 0 5px 0 #C23B3B; font-family: inherit; touch-action: none; line-height: 1.3; padding: 4px; }
+.rbg-pull { border: none; border-radius: 20px; font-size: 19px; font-weight: 900; color: #fff; background: linear-gradient(180deg, #FF8A8A, #E85555); cursor: pointer; box-shadow: 0 5px 0 #C23B3B; font-family: inherit; touch-action: none; line-height: 1.3; padding: 4px; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .rbg-pull:active, .rbg-pull.rbg-down { transform: translateY(3px); box-shadow: 0 2px 0 #C23B3B; }
 .rbg-pull.rbg-blue { background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; }
 .rbg-pull.rbg-blue:active, .rbg-pull.rbg-blue.rbg-down { box-shadow: 0 2px 0 #3B55C2; }
@@ -287,6 +287,16 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
   const btnL = makeButton("L");
   const btnR = makeButton("R");
   ctrlEl.append(btnL, btnR);
+
+  // 转屏 / 改窗口大小时重算两侧按钮,窄屏上也保证 ≥72px 与中间的隔离带
+  gone.listen(globalThis as unknown as { addEventListener?: never }, "resize", () => {
+    const next = sideLayout(viewportWidth());
+    for (const btn of [btnL, btnR]) {
+      btn.style.width = `${next.width}px`;
+      btn.style.height = `${next.height}px`;
+    }
+    btnR.style.marginLeft = `${next.gap}px`;
+  });
 
   function setDown(hand: "L" | "R", on: boolean): void {
     if (ended) return;
