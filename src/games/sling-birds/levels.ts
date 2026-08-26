@@ -1,15 +1,17 @@
 /**
  * 弹弹小鸟 —— 关卡数据。
  *
- * 共 99 关、6 个主题世界(草地 / 沙滩 / 雪地 / 夜晚 / 火山 / 云端)。
- * 其中 32 关为手写独特布局(handmade: true),
- * 其余 67 关由确定性生成器按「配方」生成——每个配方的障碍组合都不同,
+ * 1.1 版共 188 关、9 个主题世界:
+ * 1.0 的 99 关(草地 / 沙滩 / 雪地 / 夜晚 / 火山 / 云端)一字未动,
+ * 末尾追加 3 个新章(风车高地 / 冰晶矿洞 / 熔岩工坊)共 89 关,
+ * 并带来三个新机制:传送门、两段连锁的岩壳块、会回旋的新小鸟卷卷。
+ * 手写关为独特布局(handmade: true),其余由确定性生成器按「配方」生成——
  * 同一个种子永远生成同样的关卡。
  */
 import { GROUND_Y, makeRng } from "./physics";
 
-export type BirdKind = "straight" | "split" | "slam" | "drill";
-export type BlockKind = "wood" | "stone" | "ice" | "glass" | "tnt";
+export type BirdKind = "straight" | "split" | "slam" | "drill" | "boomerang";
+export type BlockKind = "wood" | "stone" | "ice" | "glass" | "tnt" | "shell" | "core";
 
 export interface BlockDef {
   kind: BlockKind;
@@ -66,6 +68,15 @@ export interface WindDef {
   fy: number;
 }
 
+/** 传送门(1.1 新机制):小鸟钻进 A 口就从 B 口飞出,双向都通 */
+export interface PortalDef {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  r: number;
+}
+
 export interface LevelDef {
   id: number;
   chapter: number;
@@ -79,10 +90,11 @@ export interface LevelDef {
   platforms?: PlatformDef[];
   balloons?: BalloonDef[];
   winds?: WindDef[];
+  portals?: PortalDef[];
 }
 
-/** 每章关卡数(共 99 关) */
-export const CHAPTER_SIZES = [15, 15, 15, 15, 20, 19] as const;
+/** 每章关卡数(1.0 六章 99 关 + 1.1 三章 89 关 = 188 关) */
+export const CHAPTER_SIZES = [15, 15, 15, 15, 20, 19, 30, 30, 29] as const;
 /** 气球绳长:吊着的豆在气球下方这么远 */
 export const BALLOON_ROPE = 34;
 
@@ -92,7 +104,10 @@ export const CHAPTERS = [
   { name: "白白雪原", emoji: "❄️" },
   { name: "星星夜空", emoji: "🌙" },
   { name: "火山峡谷", emoji: "🌋" },
-  { name: "彩虹云端", emoji: "🌈" }
+  { name: "彩虹云端", emoji: "🌈" },
+  { name: "风车高地", emoji: "🌬️" },
+  { name: "冰晶矿洞", emoji: "💎" },
+  { name: "熔岩工坊", emoji: "⚙️" }
 ] as const;
 
 /** 某章第一关的 id */
@@ -899,10 +914,489 @@ function buildLevel(r: Recipe): LevelDef {
 
 export const GENERATED_LEVELS: LevelDef[] = RECIPES.map(buildLevel);
 
-/** 全部 99 关,按 id 从小到大 */
-export const LEVELS: LevelDef[] = [...HANDMADE_LEVELS, ...GENERATED_LEVELS].sort(
-  (a, b) => a.id - b.id
-);
+/* ------------------------------------------------------------------ */
+/* 1.1 新章手写关(12 关):风车高地 / 冰晶矿洞 / 熔岩工坊                */
+/* ------------------------------------------------------------------ */
+
+const HANDMADE_LEVELS_V2: LevelDef[] = [
+  // —— 风车高地(第 7 章):大风与回旋小鸟卷卷的主场 ——
+  {
+    id: 100,
+    chapter: 6,
+    name: "进山的风",
+    handmade: true,
+    birds: ["boomerang", "straight", "straight"],
+    beans: [
+      { x: 424, y: G - 36 },
+      { x: 484, y: G - 10 }
+    ],
+    blocks: [bl("wood", 410, G - 26, 26, 26), bl("glass", 452, G - 60, 18, 60)],
+    winds: [{ x: 240, y: 60, w: 110, h: 160, fx: 0, fy: -180 }]
+  },
+  {
+    id: 101,
+    chapter: 6,
+    name: "卷卷试飞",
+    handmade: true,
+    birds: ["boomerang", "boomerang", "straight"],
+    beans: [
+      { x: 430, y: G - 10 },
+      { x: 500, y: G - 36 }
+    ],
+    blocks: [
+      bl("stone", 380, G - 80, 16, 80),
+      bl("ice", 372, G - 92, 100, 12),
+      bl("wood", 486, G - 26, 26, 26)
+    ],
+    winds: [{ x: 235, y: 50, w: 105, h: 150, fx: 0, fy: -200 }]
+  },
+  {
+    id: 115,
+    chapter: 6,
+    name: "回旋大风车",
+    handmade: true,
+    birds: ["boomerang", "split", "straight", "slam"],
+    beans: [{ x: 470, y: G - 114 }],
+    blocks: [bl("stone", 458, G - 104, 24, 104)],
+    balloons: [{ x: 380, y: 110 }],
+    winds: [{ x: 260, y: 30, w: 200, h: 120, fx: -140, fy: 0 }]
+  },
+  {
+    id: 129,
+    chapter: 6,
+    name: "高地放风节",
+    handmade: true,
+    birds: ["boomerang", "slam", "split", "straight", "straight"],
+    beans: [
+      { x: 419, y: G - 66 },
+      { x: 495, y: G - 10 }
+    ],
+    blocks: [
+      bl("glass", 410, G - 56, 18, 56),
+      bl("stone", 470, G - 36, 12, 36),
+      bl("stone", 508, G - 36, 12, 36),
+      bl("stone", 464, G - 48, 58, 12)
+    ],
+    balloons: [{ x: 340, y: 96 }],
+    winds: [{ x: 238, y: 44, w: 120, h: 170, fx: 0, fy: -230 }]
+  },
+  // —— 冰晶矿洞(第 8 章):传送门与冰晶的地下世界 ——
+  {
+    id: 130,
+    chapter: 7,
+    name: "初见传送门",
+    handmade: true,
+    birds: ["straight", "split", "straight"],
+    beans: [{ x: 445, y: G - 10 }],
+    blocks: [
+      bl("glass", 396, G - 70, 16, 70),
+      bl("stone", 415, G - 40, 14, 40),
+      bl("stone", 462, G - 40, 14, 40)
+    ],
+    portals: [{ ax: 250, ay: 140, bx: 445, by: 84, r: 16 }]
+  },
+  {
+    id: 131,
+    chapter: 7,
+    name: "水晶回廊",
+    handmade: true,
+    birds: ["drill", "straight", "split"],
+    beans: [
+      { x: 430, y: G - 80 },
+      { x: 500, y: G - 10 }
+    ],
+    blocks: [bl("ice", 420, G - 70, 20, 70), bl("glass", 480, G - 46, 16, 46)],
+    portals: [{ ax: 255, ay: 120, bx: 470, by: 70, r: 15 }]
+  },
+  {
+    id: 145,
+    chapter: 7,
+    name: "矿洞中枢",
+    handmade: true,
+    birds: ["drill", "slam", "split", "straight"],
+    beans: [
+      { x: 419, y: G - 36 },
+      { x: 480, y: G - 62 }
+    ],
+    blocks: [bl("wood", 406, G - 26, 26, 26), bl("glass", 470, G - 52, 20, 52)],
+    balloons: [{ x: 360, y: 100 }],
+    portals: [{ ax: 250, ay: 155, bx: 430, by: 78, r: 15 }]
+  },
+  {
+    id: 159,
+    chapter: 7,
+    name: "矿洞深处的大水晶",
+    handmade: true,
+    birds: ["drill", "split", "slam", "straight", "drill"],
+    beans: [
+      { x: 412, y: G - 96 },
+      { x: 466, y: G - 10 }
+    ],
+    blocks: [
+      bl("ice", 400, G - 86, 24, 86),
+      bl("stone", 446, G - 44, 12, 44),
+      bl("stone", 486, G - 44, 12, 44),
+      bl("ice", 440, G - 56, 64, 12)
+    ],
+    portals: [{ ax: 248, ay: 118, bx: 466, by: 190, r: 15 }]
+  },
+  // —— 熔岩工坊(第 9 章):两段连锁的岩壳块 + 火花四溅的机关 ——
+  {
+    id: 160,
+    chapter: 8,
+    name: "岩壳登场",
+    handmade: true,
+    birds: ["slam", "straight", "straight"],
+    beans: [
+      { x: 445, y: G - 40 },
+      { x: 512, y: G - 10 }
+    ],
+    blocks: [bl("shell", 430, G - 30, 30, 30), bl("tnt", 478, G - 24, 24, 24)]
+  },
+  {
+    id: 161,
+    chapter: 8,
+    name: "工坊流水线",
+    handmade: true,
+    birds: ["slam", "drill", "split"],
+    beans: [
+      { x: 445, y: G - 40 },
+      { x: 382, y: 140 }
+    ],
+    blocks: [bl("shell", 430, G - 30, 30, 30), bl("wood", 470, G - 26, 26, 26)],
+    platforms: [{ x: 350, y: 150, w: 64, h: 12, dx: 55, dy: 0, period: 4.2 }]
+  },
+  {
+    id: 175,
+    chapter: 8,
+    name: "双层岩壳塔",
+    handmade: true,
+    birds: ["slam", "slam", "drill", "straight"],
+    beans: [
+      { x: 445, y: G - 70 },
+      { x: 508, y: G - 10 }
+    ],
+    blocks: [
+      bl("shell", 430, G - 30, 30, 30),
+      bl("shell", 430, G - 60, 30, 30),
+      bl("glass", 478, G - 40, 16, 40)
+    ],
+    boulders: [{ x: 390, y: G - 13, r: 13 }]
+  },
+  {
+    id: 188,
+    chapter: 8,
+    name: "熔炉大决战",
+    handmade: true,
+    birds: ["boomerang", "drill", "slam", "split", "straight", "straight"],
+    beans: [
+      { x: 411, y: G - 108 },
+      { x: 432, y: G - 10 },
+      { x: 505, y: G - 36 }
+    ],
+    blocks: [
+      bl("stone", 380, G - 56, 14, 56),
+      bl("stone", 442, G - 56, 14, 56),
+      bl("stone", 372, G - 68, 92, 12),
+      bl("tnt", 396, G - 24, 24, 24),
+      bl("shell", 396, G - 98, 30, 30),
+      bl("wood", 492, G - 26, 26, 26)
+    ],
+    balloons: [{ x: 330, y: 92 }],
+    winds: [{ x: 235, y: 40, w: 110, h: 170, fx: 0, fy: -220 }],
+    portals: [{ ax: 252, ay: 128, bx: 411, by: 160, r: 15 }]
+  }
+];
+
+/* ------------------------------------------------------------------ */
+/* 1.1 新章生成关(77 关):生成器 v2 支持传送门与岩壳块                  */
+/* v1 的 buildLevel 与 RECIPES 原样保留,保证前 99 关一个字节都不变。    */
+/* ------------------------------------------------------------------ */
+
+type FeatKind2 = FeatKind | "portal" | "shell";
+
+interface Recipe2 {
+  id: number;
+  chapter: number;
+  name: string;
+  seed: number;
+  feats: FeatKind2[];
+  beans: number;
+  birds: BirdKind[];
+}
+
+const RECIPES_V2: Recipe2[] = [
+  // —— 风车高地(第 7 章):每关都有风区,卷卷全程陪飞 ——
+  { id: 102, chapter: 6, name: "微风草坡", seed: 701, feats: ["wood", "glass", "wind"], beans: 2, birds: ["boomerang", "straight", "split"] },
+  { id: 103, chapter: 6, name: "顺风信箱", seed: 702, feats: ["wood", "tnt", "wind"], beans: 2, birds: ["straight", "boomerang", "straight"] },
+  { id: 104, chapter: 6, name: "山风木塔", seed: 703, feats: ["wood", "stone", "wind", "glass"], beans: 3, birds: ["slam", "boomerang", "split", "straight"] },
+  { id: 105, chapter: 6, name: "风车磨坊", seed: 704, feats: ["stone", "glass", "wind", "slope"], beans: 2, birds: ["boomerang", "slam", "straight"] },
+  { id: 106, chapter: 6, name: "逆风飞行赛", seed: 705, feats: ["wood", "balloon", "wind"], beans: 3, birds: ["split", "boomerang", "straight", "straight"] },
+  { id: 107, chapter: 6, name: "滚草垛", seed: 706, feats: ["wood", "boulder", "wind", "slope"], beans: 2, birds: ["straight", "boomerang", "slam"] },
+  { id: 108, chapter: 6, name: "高地缆车", seed: 707, feats: ["stone", "platform", "wind"], beans: 3, birds: ["boomerang", "split", "slam", "straight"] },
+  { id: 109, chapter: 6, name: "玻璃风塔", seed: 708, feats: ["glass", "tnt", "wind"], beans: 2, birds: ["drill", "boomerang", "straight"] },
+  { id: 110, chapter: 6, name: "追风气球队", seed: 709, feats: ["wood", "balloon", "wind", "platform"], beans: 3, birds: ["split", "straight", "boomerang", "slam"] },
+  { id: 111, chapter: 6, name: "石墙背风处", seed: 710, feats: ["stone", "tnt", "wind"], beans: 3, birds: ["boomerang", "slam", "split", "straight"] },
+  { id: 112, chapter: 6, name: "冰糖风铃", seed: 711, feats: ["ice", "glass", "wind"], beans: 2, birds: ["drill", "boomerang", "split"] },
+  { id: 113, chapter: 6, name: "上升气流谷", seed: 712, feats: ["wood", "stone", "wind", "balloon"], beans: 3, birds: ["boomerang", "split", "slam", "straight"] },
+  { id: 114, chapter: 6, name: "风口滚石阵", seed: 713, feats: ["stone", "boulder", "wind", "tnt"], beans: 2, birds: ["slam", "boomerang", "straight"] },
+  { id: 116, chapter: 6, name: "半山玻璃屋", seed: 714, feats: ["glass", "stone", "wind", "platform"], beans: 3, birds: ["drill", "boomerang", "slam", "straight"] },
+  { id: 117, chapter: 6, name: "木箱风车局", seed: 715, feats: ["wood", "tnt", "wind", "boulder"], beans: 2, birds: ["straight", "slam", "boomerang"] },
+  { id: 118, chapter: 6, name: "云梯哨站", seed: 716, feats: ["stone", "platform", "wind", "balloon"], beans: 3, birds: ["boomerang", "split", "drill", "straight"] },
+  { id: 119, chapter: 6, name: "大风天工地", seed: 717, feats: ["wood", "stone", "tnt", "wind"], beans: 3, birds: ["slam", "boomerang", "split", "straight"] },
+  { id: 120, chapter: 6, name: "风筝广场", seed: 718, feats: ["glass", "balloon", "wind"], beans: 3, birds: ["split", "boomerang", "straight", "slam"] },
+  { id: 121, chapter: 6, name: "呼呼斜坡道", seed: 719, feats: ["wood", "slope", "wind", "tnt"], beans: 2, birds: ["boomerang", "straight", "slam"] },
+  { id: 122, chapter: 6, name: "冰风瞭望塔", seed: 720, feats: ["ice", "stone", "wind", "platform"], beans: 3, birds: ["drill", "slam", "boomerang", "straight"] },
+  { id: 123, chapter: 6, name: "逆风爆破组", seed: 721, feats: ["glass", "tnt", "wind", "boulder"], beans: 3, birds: ["slam", "drill", "boomerang", "split"] },
+  { id: 124, chapter: 6, name: "高地观星台", seed: 722, feats: ["glass", "platform", "wind", "balloon"], beans: 3, birds: ["split", "drill", "boomerang", "straight"] },
+  { id: 125, chapter: 6, name: "风谷木堡", seed: 723, feats: ["wood", "glass", "tnt", "wind", "slope"], beans: 3, birds: ["boomerang", "slam", "split", "straight"] },
+  { id: 126, chapter: 6, name: "翘板与风车", seed: 724, feats: ["wood", "stone", "platform", "wind"], beans: 3, birds: ["straight", "boomerang", "drill", "slam"] },
+  { id: 127, chapter: 6, name: "大风车检修日", seed: 725, feats: ["stone", "ice", "tnt", "wind", "balloon"], beans: 4, birds: ["drill", "boomerang", "slam", "split", "straight"] },
+  { id: 128, chapter: 6, name: "高地风暴眼", seed: 726, feats: ["wood", "stone", "glass", "tnt", "wind", "boulder"], beans: 4, birds: ["boomerang", "slam", "drill", "split", "straight"] },
+  // —— 冰晶矿洞(第 8 章):每关都有冰晶或传送门 ——
+  { id: 132, chapter: 7, name: "蓝晶小径", seed: 801, feats: ["ice", "glass", "portal"], beans: 2, birds: ["drill", "straight", "split"] },
+  { id: 133, chapter: 7, name: "矿车站台", seed: 802, feats: ["ice", "stone", "platform"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 134, chapter: 7, name: "门后的豆豆", seed: 803, feats: ["wood", "portal", "tnt"], beans: 2, birds: ["straight", "split", "slam"] },
+  { id: 135, chapter: 7, name: "冰柱回音厅", seed: 804, feats: ["ice", "glass", "boulder"], beans: 2, birds: ["drill", "slam", "straight"] },
+  { id: 136, chapter: 7, name: "双门矿道", seed: 805, feats: ["stone", "portal", "ice"], beans: 3, birds: ["straight", "drill", "boomerang", "split"] },
+  { id: 137, chapter: 7, name: "水晶吊灯", seed: 806, feats: ["ice", "balloon", "portal"], beans: 3, birds: ["split", "drill", "straight", "slam"] },
+  { id: 138, chapter: 7, name: "滑冰运输线", seed: 807, feats: ["ice", "slope", "boulder"], beans: 2, birds: ["drill", "straight", "slam"] },
+  { id: 139, chapter: 7, name: "矿洞爆破日", seed: 808, feats: ["stone", "tnt", "portal"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 140, chapter: 7, name: "冰镜迷宫", seed: 809, feats: ["ice", "glass", "portal", "platform"], beans: 3, birds: ["drill", "split", "boomerang", "straight"] },
+  { id: 141, chapter: 7, name: "蓝宝石堡垒", seed: 810, feats: ["ice", "stone", "tnt"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 142, chapter: 7, name: "传送门试验场", seed: 811, feats: ["glass", "portal", "wind"], beans: 2, birds: ["split", "straight", "drill"] },
+  { id: 143, chapter: 7, name: "钟乳石广场", seed: 812, feats: ["ice", "boulder", "slope", "tnt"], beans: 3, birds: ["drill", "slam", "boomerang", "straight"] },
+  { id: 144, chapter: 7, name: "矿灯气球屋", seed: 813, feats: ["wood", "ice", "balloon"], beans: 3, birds: ["split", "drill", "slam", "straight"] },
+  { id: 146, chapter: 7, name: "寒气回旋谷", seed: 814, feats: ["ice", "wind", "portal"], beans: 3, birds: ["boomerang", "drill", "split", "straight"] },
+  { id: 147, chapter: 7, name: "冰封月台", seed: 815, feats: ["ice", "platform", "portal"], beans: 3, birds: ["drill", "split", "slam", "straight"] },
+  { id: 148, chapter: 7, name: "水晶爆破房", seed: 816, feats: ["glass", "tnt", "portal"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 149, chapter: 7, name: "冰河渡口", seed: 817, feats: ["ice", "stone", "platform", "boulder"], beans: 3, birds: ["slam", "drill", "straight", "split"] },
+  { id: 150, chapter: 7, name: "蓝光电梯井", seed: 818, feats: ["ice", "portal", "balloon", "wind"], beans: 3, birds: ["split", "drill", "boomerang", "straight"] },
+  { id: 151, chapter: 7, name: "碎冰工作面", seed: 819, feats: ["ice", "tnt", "boulder"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 152, chapter: 7, name: "幽光玻璃桥", seed: 820, feats: ["glass", "portal", "platform"], beans: 3, birds: ["split", "drill", "slam", "straight"] },
+  { id: 153, chapter: 7, name: "冰洞风口", seed: 821, feats: ["ice", "wind", "slope"], beans: 2, birds: ["drill", "boomerang", "straight"] },
+  { id: 154, chapter: 7, name: "双门大厅", seed: 822, feats: ["stone", "ice", "portal", "tnt"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 155, chapter: 7, name: "水晶滚珠道", seed: 823, feats: ["ice", "boulder", "portal", "slope"], beans: 3, birds: ["drill", "straight", "slam", "boomerang"] },
+  { id: 156, chapter: 7, name: "矿洞气球节", seed: 824, feats: ["ice", "balloon", "wind", "glass"], beans: 3, birds: ["split", "boomerang", "drill", "straight"] },
+  { id: 157, chapter: 7, name: "深蓝密室", seed: 825, feats: ["ice", "glass", "portal", "tnt"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 158, chapter: 7, name: "大水晶前厅", seed: 826, feats: ["ice", "stone", "portal", "platform", "balloon"], beans: 4, birds: ["drill", "split", "slam", "boomerang", "straight"] },
+  // —— 熔岩工坊(第 9 章):每关都有岩壳块或 TNT ——
+  { id: 162, chapter: 8, name: "壳中豆豆", seed: 901, feats: ["shell", "tnt"], beans: 2, birds: ["slam", "straight", "split"] },
+  { id: 163, chapter: 8, name: "铁匠的滚石", seed: 902, feats: ["stone", "boulder", "tnt"], beans: 2, birds: ["straight", "slam", "drill"] },
+  { id: 164, chapter: 8, name: "岩壳双塔", seed: 903, feats: ["shell", "glass", "boulder"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 165, chapter: 8, name: "流水线平台", seed: 904, feats: ["shell", "platform", "tnt"], beans: 3, birds: ["slam", "split", "drill", "straight"] },
+  { id: 166, chapter: 8, name: "火花玻璃棚", seed: 905, feats: ["glass", "tnt", "slope"], beans: 2, birds: ["drill", "straight", "slam"] },
+  { id: 167, chapter: 8, name: "岩壳仓库", seed: 906, feats: ["shell", "wood", "tnt"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 168, chapter: 8, name: "热风烟囱", seed: 907, feats: ["stone", "wind", "tnt", "shell"], beans: 3, birds: ["boomerang", "slam", "drill", "straight"] },
+  { id: 169, chapter: 8, name: "锻造台连爆", seed: 908, feats: ["shell", "tnt", "boulder"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 170, chapter: 8, name: "工坊吊索", seed: 909, feats: ["shell", "balloon", "platform"], beans: 3, birds: ["split", "slam", "drill", "straight"] },
+  { id: 171, chapter: 8, name: "岩浆滑道", seed: 910, feats: ["stone", "slope", "tnt", "boulder"], beans: 3, birds: ["slam", "straight", "drill", "split"] },
+  { id: 172, chapter: 8, name: "壳里藏晶", seed: 911, feats: ["shell", "ice", "glass"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 173, chapter: 8, name: "回旋锻锤", seed: 912, feats: ["shell", "wind", "tnt"], beans: 3, birds: ["boomerang", "slam", "drill", "straight"] },
+  { id: 174, chapter: 8, name: "双壳保险库", seed: 913, feats: ["shell", "stone", "tnt", "platform"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 176, chapter: 8, name: "火花气球间", seed: 914, feats: ["tnt", "balloon", "wind"], beans: 3, birds: ["split", "slam", "boomerang", "straight"] },
+  { id: 177, chapter: 8, name: "岩壳滚珠台", seed: 915, feats: ["shell", "boulder", "slope"], beans: 3, birds: ["slam", "drill", "straight", "split"] },
+  { id: 178, chapter: 8, name: "熔炉观察窗", seed: 916, feats: ["glass", "shell", "tnt"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 179, chapter: 8, name: "传送检修门", seed: 917, feats: ["shell", "portal", "tnt"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
+  { id: 180, chapter: 8, name: "大齿轮平台", seed: 918, feats: ["stone", "platform", "tnt", "wind"], beans: 3, birds: ["slam", "split", "drill", "straight"] },
+  { id: 181, chapter: 8, name: "岩壳烟花库", seed: 919, feats: ["shell", "tnt", "balloon"], beans: 3, birds: ["slam", "split", "drill", "straight"] },
+  { id: 182, chapter: 8, name: "热浪玻璃廊", seed: 920, feats: ["glass", "wind", "tnt", "slope"], beans: 3, birds: ["drill", "boomerang", "slam", "straight"] },
+  { id: 183, chapter: 8, name: "壳塔爆破夜", seed: 921, feats: ["shell", "stone", "tnt", "boulder"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
+  { id: 184, chapter: 8, name: "工坊大风扇", seed: 922, feats: ["shell", "wind", "platform"], beans: 3, birds: ["boomerang", "slam", "drill", "straight"] },
+  { id: 185, chapter: 8, name: "岩壳传送阵", seed: 923, feats: ["shell", "portal", "ice"], beans: 3, birds: ["drill", "slam", "boomerang", "straight"] },
+  { id: 186, chapter: 8, name: "熔炉前夜", seed: 924, feats: ["shell", "tnt", "platform", "balloon"], beans: 4, birds: ["slam", "drill", "split", "boomerang", "straight"] },
+  { id: 187, chapter: 8, name: "工坊总动员", seed: 925, feats: ["shell", "stone", "glass", "tnt", "boulder", "wind"], beans: 4, birds: ["slam", "drill", "split", "boomerang", "straight"] }
+];
+
+/**
+ * 生成器 v2:在 v1 的布局套路上叠加传送门与岩壳块。
+ * 岩壳碉堡放在阵地最前排,传送门吊在半空(入口在弹弓弧线上、出口在阵地上方)。
+ */
+function buildLevel2(r: Recipe2): LevelDef {
+  const rng = makeRng(r.id * 1013 + r.seed);
+  const has = (f: FeatKind2): boolean => r.feats.includes(f);
+
+  const blocks: BlockDef[] = [];
+  const beans: BeanDef[] = [];
+  const slopes: SlopeDef[] = [];
+  const boulders: BoulderDef[] = [];
+  const platforms: PlatformDef[] = [];
+  const balloons: BalloonDef[] = [];
+  const winds: WindDef[] = [];
+  const portals: PortalDef[] = [];
+  const beanSlots: BeanDef[] = [];
+
+  let x = 230 + Math.round(rng() * 16);
+
+  if (has("slope")) {
+    const h = 44 + Math.round(rng() * 20);
+    slopes.push({ x, y: G - h, w: 70, h, dir: "up-right" });
+    x += 82;
+  }
+  if (has("boulder")) {
+    boulders.push({ x: x + 15, y: G - 13, r: 13 });
+    x += 40;
+  }
+  if (has("shell")) {
+    // 岩壳碉堡:一层或两层岩壳,顶上放一颗豆——外壳要敲两次才碎
+    const twin = rng() < 0.4;
+    blocks.push(bl("shell", x + 2, G - 30, 30, 30));
+    if (twin) {
+      blocks.push(bl("shell", x + 2, G - 60, 30, 30));
+      beanSlots.push({ x: x + 17, y: G - 70 });
+    } else {
+      beanSlots.push({ x: x + 17, y: G - 40 });
+    }
+    x += 46;
+  }
+
+  const mats = (["wood", "stone", "ice", "glass"] as BlockKind[]).filter((m) =>
+    r.feats.includes(m as FeatKind2)
+  );
+  if (mats.length === 0) mats.push("wood");
+  const towerCount =
+    has("slope") || has("boulder") || has("shell")
+      ? 2
+      : mats.length >= 4
+        ? 3
+        : 2 + (rng() < 0.55 ? 1 : 0);
+  const tntTower = has("tnt") ? Math.floor(rng() * towerCount) : -1;
+
+  for (let i = 0; i < towerCount; i++) {
+    const mat = mats[i % mats.length];
+    const accent = mats[(i + 1) % mats.length];
+    if (i % 2 === 0) {
+      if (x + 64 > 528) break;
+      const h = 40 + Math.round(rng() * 22);
+      blocks.push(bl(mat, x + 4, G - h, 14, h));
+      blocks.push(bl(mat, x + 46, G - h, 14, h));
+      blocks.push(bl(accent, x, G - h - 12, 64, 12));
+      if (i === tntTower) {
+        blocks.push(bl("tnt", x + 20, G - 24, 24, 24));
+      } else {
+        beanSlots.push({ x: x + 32, y: G - 10 });
+      }
+      beanSlots.push({ x: x + 32, y: G - h - 22 });
+      x += 78;
+    } else {
+      if (x + 26 > 528) break;
+      const n = 2 + (rng() < 0.5 ? 1 : 0);
+      let top = G;
+      for (let k = 0; k < n; k++) {
+        blocks.push(bl(k % 2 === 0 ? mat : accent, x, top - 26, 26, 26));
+        top -= 26;
+      }
+      if (i === tntTower && x + 25 <= 528) {
+        blocks.push(bl("tnt", x + 1, top - 24, 24, 24));
+        beanSlots.push({ x: x + 47, y: G - 10 });
+        x += 68;
+      } else {
+        beanSlots.push({ x: x + 13, y: top - 10 });
+        x += 44;
+      }
+    }
+  }
+
+  let platBean: BeanDef | null = null;
+  if (has("platform")) {
+    const vert = r.id % 2 === 1;
+    const px = 300 + Math.round(rng() * 60);
+    const p: PlatformDef = vert
+      ? {
+          x: px,
+          y: 110 + Math.round(rng() * 40),
+          w: 64,
+          h: 12,
+          dx: 0,
+          dy: 34 + Math.round(rng() * 20),
+          period: 4.5 + rng() * 2
+        }
+      : {
+          x: px,
+          y: 132 + Math.round(rng() * 48),
+          w: 64,
+          h: 12,
+          dx: 50 + Math.round(rng() * 25),
+          dy: 0,
+          period: 3.6 + rng() * 1.6
+        };
+    platforms.push(p);
+    platBean = { x: p.x + p.w / 2, y: p.y - 10 };
+  }
+
+  if (has("balloon")) {
+    balloons.push({ x: 330 + Math.round(rng() * 130), y: 74 + Math.round(rng() * 30) });
+  }
+
+  if (has("wind")) {
+    const up = rng() < 0.5;
+    winds.push(
+      up
+        ? {
+            x: 235 + Math.round(rng() * 25),
+            y: 46 + Math.round(rng() * 20),
+            w: 120 + Math.round(rng() * 50),
+            h: 150 + Math.round(rng() * 40),
+            fx: 0,
+            fy: -(170 + Math.round(rng() * 90))
+          }
+        : {
+            x: 245 + Math.round(rng() * 20),
+            y: 30 + Math.round(rng() * 20),
+            w: 170 + Math.round(rng() * 60),
+            h: 140 + Math.round(rng() * 40),
+            fx: -(110 + Math.round(rng() * 60)),
+            fy: 0
+          }
+    );
+  }
+
+  if (has("portal")) {
+    // 入口挂在弹弓正前方的半空,出口悬在阵地上方:钻进去就能空降
+    portals.push({
+      ax: 245 + Math.round(rng() * 30),
+      ay: 110 + Math.round(rng() * 55),
+      bx: 400 + Math.round(rng() * 70),
+      by: 66 + Math.round(rng() * 40),
+      r: 15
+    });
+  }
+
+  let need = r.beans - balloons.length;
+  if (platBean && need > 0) {
+    beans.push(platBean);
+    need--;
+  }
+  while (need > 0) {
+    if (beanSlots.length > 0) {
+      const idx = Math.floor(rng() * beanSlots.length);
+      beans.push(beanSlots.splice(idx, 1)[0]);
+    } else {
+      beans.push({ x: Math.min(505, x + 10), y: G - 10 });
+      x += 26;
+    }
+    need--;
+  }
+
+  const level: LevelDef = { id: r.id, chapter: r.chapter, name: r.name, birds: r.birds, beans, blocks };
+  if (slopes.length) level.slopes = slopes;
+  if (boulders.length) level.boulders = boulders;
+  if (platforms.length) level.platforms = platforms;
+  if (balloons.length) level.balloons = balloons;
+  if (winds.length) level.winds = winds;
+  if (portals.length) level.portals = portals;
+  return level;
+}
+
+export const GENERATED_LEVELS_V2: LevelDef[] = RECIPES_V2.map(buildLevel2);
+
+/** 全部 188 关,按 id 从小到大(前 99 关与 1.0 完全一致) */
+export const LEVELS: LevelDef[] = [
+  ...HANDMADE_LEVELS,
+  ...GENERATED_LEVELS,
+  ...HANDMADE_LEVELS_V2,
+  ...GENERATED_LEVELS_V2
+].sort((a, b) => a.id - b.id);
 
 export function levelsOfChapter(chapter: number): LevelDef[] {
   return LEVELS.filter((l) => l.chapter === chapter);
@@ -917,10 +1411,11 @@ export function obstacleKinds(l: LevelDef): string[] {
   if (l.platforms?.length) s.add("platform");
   if (l.balloons?.length) s.add("balloon");
   if (l.winds?.length) s.add("wind");
+  if (l.portals?.length) s.add("portal");
   return [...s].sort();
 }
 
-/** 「特殊障碍」:木头石头以外的花样 */
+/** 「特殊障碍」:木头石头以外的花样(1.1 新增岩壳块与传送门) */
 export const SPECIAL_KINDS = [
   "ice",
   "glass",
@@ -929,7 +1424,9 @@ export const SPECIAL_KINDS = [
   "slope",
   "platform",
   "balloon",
-  "wind"
+  "wind",
+  "shell",
+  "portal"
 ] as const;
 
 /** 本关目标总数(普通豆 + 气球吊豆) */

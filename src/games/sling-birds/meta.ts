@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🐦",
   category: "action" as const,
   color: "#CFEBFF",
-  blurb: "99 关 6 大世界!拉开大弹弓,弹出小鸟撞倒积木,把捣蛋的绿绿豆全都弹走!"
+  blurb: "188 关 9 大世界!拉开大弹弓,穿过传送门、敲碎岩壳块,把捣蛋的绿绿豆全都弹走!"
 };
