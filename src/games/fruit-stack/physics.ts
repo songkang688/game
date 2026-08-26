@@ -413,9 +413,13 @@ export function overLine(world: World, y: number = world.lineY): boolean {
   return false;
 }
 
-/** 快要越线了:任何果子的上沿冒到警戒线附近,界面先闪一闪 */
+/**
+ * 快要越线了:堆里已经停下来的果子上沿冒到警戒线附近,界面先闪一闪。
+ * 刚投下的那一颗不算,不然投放点本来就在线上方,线会一直闪。
+ */
 export function nearLine(world: World, y: number = world.lineY, margin = 18): boolean {
   for (const f of world.fruits) {
+    if (inGrace(f)) continue;
     if (f.y - f.r < y + margin) return true;
   }
   return false;

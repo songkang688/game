@@ -227,7 +227,10 @@ describe("越线只看停稳的果子", () => {
   it("快贴到线了会先给警告", () => {
     const world = emptyWorld();
     expect(nearLine(world)).toBe(false);
-    addFruit(world, { level: 5, x: 150, y: 118, r: 24 });
+    const f = addFruit(world, { level: 5, x: 150, y: 118, r: 24, graceMs: GRACE_MS });
+    // 刚投下的那一颗天生就在线上方,宽限期里不该让警戒线闪
+    expect(nearLine(world)).toBe(false);
+    f.graceMs = 0;
     expect(nearLine(world)).toBe(true);
   });
 });

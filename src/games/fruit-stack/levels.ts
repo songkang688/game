@@ -4,7 +4,7 @@
 // 每一关只吐数据,不画一个像素,所以「目标够不够得着」「容器装不装得下最大的果子」
 // 这类硬指标可以在单测里 188 关全量扫一遍。
 import { TOTAL_LEVELS, chapterOf, chapterStart, type Chapter } from "../level99";
-import { CHAIN, TOP_LEVEL } from "./merge";
+import { CHAIN, DROP_WEIGHTS, TOP_LEVEL } from "./merge";
 import { DEFAULT_TUNING, clamp, type Box, type PhysicsTuning } from "./physics";
 
 export const CHAPTERS: Chapter[] = [
@@ -46,15 +46,28 @@ export interface StackLevel {
   split: boolean;
 }
 
-/** 投放权重对应的「以最低等级为 1 的当量」期望值:0.40·1+0.30·2+0.18·4+0.09·8+0.03·16 */
-export const UNITS_PER_DROP = 2.92;
+/**
+ * 一颗果子平均顶多少个「最低等级当量」。
+ * 能投的等级区间越宽,平均个头越大——所以这个数必须跟着本关的 minDrop/maxDrop 走,
+ * 写死成五档的期望值会把只开放三档的前三章算得太宽裕。
+ */
+export function unitsPerDrop(minDrop: number, maxDrop: number): number {
+  const cap = clamp(Math.floor(maxDrop - minDrop), 0, DROP_WEIGHTS.length - 1);
+  let weight = 0;
+  let units = 0;
+  for (let k = 0; k <= cap; k++) {
+    weight += DROP_WEIGHTS[k];
+    units += DROP_WEIGHTS[k] * Math.pow(2, k);
+  }
+  return units / weight;
+}
 
 /** 边角料损耗:实战里总有半盆果子拼不成对,预算按一半算 */
 export const WASTE = 0.5;
 
 /** 本关的投放当量总预算(以最低等级果子为 1) */
-export function dropBudget(lv: Pick<StackLevel, "drops">): number {
-  return lv.drops * UNITS_PER_DROP * WASTE;
+export function dropBudget(lv: Pick<StackLevel, "drops" | "minDrop" | "maxDrop">): number {
+  return lv.drops * unitsPerDrop(lv.minDrop, lv.maxDrop) * WASTE;
 }
 
 /** 合成出 goal 级需要多少当量 */
@@ -117,35 +130,35 @@ const PLANS: ChapterPlan[] = [
   {
     minDrop: 0,
     maxDrop: 2,
-    boxW: () => 300,
-    boxH: 430,
+    boxW: () => 272,
+    boxH: 404,
     lineY: () => 96,
     restitution: () => 0.16,
-    drops: (t) => Math.round(38 + t * 14),
+    drops: (t) => Math.round(26 + t * 10),
     goal: () => ({ kind: "level", value: 3 }),
     split: false,
     hint: "同样的两颗碰在一起就会变大。先把小的放在两边,中间留给大的。",
   },
   {
     minDrop: 0,
-    maxDrop: 2,
-    boxW: () => 300,
-    boxH: 430,
+    maxDrop: 3,
+    boxW: () => 272,
+    boxH: 404,
     lineY: () => 96,
     restitution: () => 0.16,
-    drops: (t) => Math.round(52 + t * 16),
+    drops: (t) => Math.round(32 + t * 14),
     goal: (t) => ({ kind: "level", value: t < 0.5 ? 4 : 5 }),
     split: false,
     hint: "链条放宽到第五级了。大果子占地方,别把它堆在正中间挡路。",
   },
   {
     minDrop: 0,
-    maxDrop: 2,
-    boxW: () => 300,
-    boxH: 430,
+    maxDrop: 3,
+    boxW: () => 272,
+    boxH: 404,
     lineY: (t) => Math.round(88 - t * 16),
     restitution: () => 0.16,
-    drops: (t) => Math.round(56 + t * 18),
+    drops: (t) => Math.round(34 + t * 12),
     goal: (t) => ({ kind: "level", value: t < 0.6 ? 4 : 5 }),
     split: false,
     hint: "警戒线压下来了。只有停稳的果子越线才算,半空中的不算,所以先合小的再堆。",
@@ -157,7 +170,7 @@ const PLANS: ChapterPlan[] = [
     boxH: 430,
     lineY: () => 92,
     restitution: () => 0.18,
-    drops: (t) => Math.round(44 + t * 16),
+    drops: (t) => Math.round(26 + t * 10),
     goal: (t) => ({ kind: "chain", value: t < 0.55 ? 3 : 4 }),
     split: false,
     hint: "把两组同级果子并排摆好,中间补上第三颗,一次就能连着响三下。",
@@ -169,7 +182,7 @@ const PLANS: ChapterPlan[] = [
     boxH: 460,
     lineY: () => 92,
     restitution: () => 0.18,
-    drops: (t) => Math.round(58 + t * 20),
+    drops: (t) => Math.round(34 + t * 12),
     goal: (t) => ({ kind: "level", value: t < 0.5 ? 5 : 6 }),
     split: false,
     hint: "瓶子窄,果子会顺着墙滑下去。贴着墙投,让它自己滚到该去的位置。",
@@ -181,7 +194,7 @@ const PLANS: ChapterPlan[] = [
     boxH: 440,
     lineY: () => 92,
     restitution: (t) => 0.3 + t * 0.16,
-    drops: (t) => Math.round(62 + t * 20),
+    drops: (t) => Math.round(36 + t * 12),
     goal: (t) => ({ kind: "level", value: t < 0.5 ? 5 : 6 }),
     split: false,
     hint: "这一章的果子更弹更爱滚,落点要提前半格,等它自己停稳再投下一颗。",
@@ -193,22 +206,23 @@ const PLANS: ChapterPlan[] = [
     boxH: 430,
     lineY: () => 96,
     restitution: () => 0.2,
-    drops: (t) => Math.round(52 + t * 18),
+    drops: (t) => Math.round(30 + t * 10),
     goal: (t, i) =>
       i % 2 === 0
         ? { kind: "level", value: t < 0.5 ? 6 : 7 }
-        : { kind: "score", value: Math.round((30 + t * 24) * 10) },
+        : { kind: "score", value: Math.round((20 + t * 14) * 10) },
     split: true,
     hint: "左右两个盆一起看:自己这边稳住,再瞄一眼对面到了第几级。",
   },
   {
     minDrop: 5,
     maxDrop: 7,
-    boxW: () => 324,
-    boxH: 452,
-    lineY: () => 104,
+    // 盆要宽到能并排放下两颗玉瓜(84×2×2 = 336),不然最后一步永远合不出团圆瓜
+    boxW: () => 348,
+    boxH: 470,
+    lineY: () => 108,
     restitution: () => 0.2,
-    drops: (t) => Math.round(30 + t * 16),
+    drops: (t) => Math.round(26 + t * 12),
     goal: (t) => ({ kind: "level", value: t < 0.34 ? 8 : t < 0.7 ? 9 : 10 }),
     split: false,
     hint: "一上来就是大果子,盆里只装得下几颗。想清楚再放,团圆瓜就在眼前。",

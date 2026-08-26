@@ -28,19 +28,26 @@ export interface FruitKind {
   base: number;
 }
 
-/** 11 级合成链;下标就是等级 */
+/**
+ * 11 级合成链;下标就是等级。
+ *
+ * 半径的放大倍数是这一款的难度旋钮:两颗并一颗,面积从 2r² 变成 (kr)²,
+ * k 只要小于 1.414 就会腾出空间,k 越大腾得越少。
+ * 前七级取 1.28 左右,合一次几乎不回血,所以小果子一直往里投盆迟早会满;
+ * 后三级降到 1.21,不然团圆瓜大到没有任何一个盆放得下它的两颗前身。
+ */
 export const CHAIN: readonly FruitKind[] = [
   { name: "籽", emoji: "🌱", r: 9, color: "#d8b48c", edge: "#b08a63", base: 0 },
-  { name: "莓", emoji: "🍓", r: 11, color: "#f4839e", edge: "#cf5d7a", base: 3 },
-  { name: "柑", emoji: "🍊", r: 13.5, color: "#f7b267", edge: "#d18b3c", base: 6 },
-  { name: "桃", emoji: "🍑", r: 16.5, color: "#f9a7b0", edge: "#d47b88", base: 10 },
-  { name: "梨", emoji: "🍐", r: 20, color: "#cbe08a", edge: "#9fb65c", base: 15 },
-  { name: "苹", emoji: "🍎", r: 24, color: "#ef6e6e", edge: "#c44a4a", base: 21 },
-  { name: "橙", emoji: "🍊", r: 29, color: "#f79a3e", edge: "#cd7519", base: 28 },
-  { name: "柚", emoji: "🍈", r: 35, color: "#f6d365", edge: "#c9a733", base: 36 },
-  { name: "瓜", emoji: "🍏", r: 42, color: "#8ccf98", edge: "#5da56c", base: 45 },
-  { name: "玉瓜", emoji: "🥝", r: 50, color: "#a8dcc0", edge: "#6faa8c", base: 55 },
-  { name: "团圆瓜", emoji: "🍉", r: 60, color: "#77be6e", edge: "#4c8a47", base: 66 },
+  { name: "莓", emoji: "🍓", r: 11.5, color: "#f4839e", edge: "#cf5d7a", base: 3 },
+  { name: "柑", emoji: "🍊", r: 15, color: "#f7b267", edge: "#d18b3c", base: 6 },
+  { name: "桃", emoji: "🍑", r: 19.5, color: "#f9a7b0", edge: "#d47b88", base: 10 },
+  { name: "梨", emoji: "🍐", r: 25, color: "#cbe08a", edge: "#9fb65c", base: 15 },
+  { name: "苹", emoji: "🍎", r: 32, color: "#ef6e6e", edge: "#c44a4a", base: 21 },
+  { name: "橙", emoji: "🍊", r: 41, color: "#f79a3e", edge: "#cd7519", base: 28 },
+  { name: "柚", emoji: "🍈", r: 52, color: "#f6d365", edge: "#c9a733", base: 36 },
+  { name: "瓜", emoji: "🍏", r: 63, color: "#8ccf98", edge: "#5da56c", base: 45 },
+  { name: "玉瓜", emoji: "🥝", r: 76, color: "#a8dcc0", edge: "#6faa8c", base: 55 },
+  { name: "团圆瓜", emoji: "🍉", r: 92, color: "#77be6e", edge: "#4c8a47", base: 66 },
 ];
 
 /** 链条最高一级 */
@@ -61,8 +68,8 @@ export const MERGE_SLOP = 1.5;
 /** 投放点的默认高度:在警戒线上方,刚投下时不会被判越线 */
 export const DROP_Y = 34;
 
-/** 投放序列的权重:小果多、大果少 */
-const DROP_WEIGHTS = [40, 30, 18, 9, 3];
+/** 投放序列的权重:小果多、大果少。下标是「比本关最低等级高几级」 */
+export const DROP_WEIGHTS = [40, 30, 18, 9, 3];
 
 export function radiusOf(level: number): number {
   return CHAIN[clamp(Math.round(level), 0, TOP_LEVEL)].r;
