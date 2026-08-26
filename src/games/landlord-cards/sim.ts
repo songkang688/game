@@ -4,7 +4,8 @@
 // 谁该出牌、这一手合不合法、两家连过之后谁重新先手、春天怎么算、最后翻几倍,
 // 都只在这里实现一次,所以「测试里跑通的规则」和「小朋友玩到的规则」永远是同一套。
 import { mulberry32 } from "../level99";
-import { chooseAiPlay, type AiLevel } from "./ai";
+import { beatCandidates, chooseAiPlay, leadCandidates, positionScore, type AiLevel } from "./ai";
+import { searchHint } from "./hint";
 import {
   beats,
   dealCards,
@@ -264,4 +265,209 @@ export function winRate(
     if (side === "landlord" ? r.landlordWon : !r.landlordWon) wins++;
   }
   return wins / games;
+}
+
+// ---------------------------------------------------------------------------
+// 关卡可赢性:给定一副固定的牌,搜出一条真的能赢的出牌线路(1.2 新增)
+// ---------------------------------------------------------------------------
+
+/** 线路里的一步:谁出了哪几张(空数组是「不要」) */
+export interface LineMove {
+  seat: number;
+  cards: number[];
+}
+
+export interface WinningLine {
+  /** 第几次尝试搜到的 */
+  trial: number;
+  /** 这条线路里地主是谁(叫分时玩家自己可以选择抢或不抢,所以两种身份都算数) */
+  landlord: number;
+  /** 玩家这条线路里是地主还是农民 */
+  playerIsLandlord: boolean;
+  moves: LineMove[];
+  /** 玩家自己出了几手(「不要」不算) */
+  playerPlays: number;
+  /** 玩家自己用掉几个炸(炸弹 + 王炸) */
+  playerBombs: number;
+}
+
+export interface ProveInput {
+  hands: number[][];
+  bottom: number[];
+  /** 玩家坐第几家 */
+  playerSeat: number;
+  /** 关卡预设的地主 */
+  presetLandlord: number;
+  base: number;
+  /** 两个电脑对手的档位 */
+  aiLevel: AiLevel;
+  /** 随机源的种子(同一个种子搜出来的线路永远一样) */
+  seed: number;
+}
+
+/** 线路要满足的附加目标:几手内赢 / 不许用炸 */
+export interface LineGoal {
+  maxHands?: number;
+  noBomb?: boolean;
+}
+
+/** 默认搜多少次;绝大多数关卡前两次(纯困难档)就能搜到 */
+export const PROVE_TRIES = 1600;
+
+function withoutCards(hand: readonly number[], cards: readonly number[]): number[] {
+  const drop = new Set(cards);
+  return hand.filter((id) => !drop.has(id));
+}
+
+/**
+ * 玩家座位这一手怎么打:
+ * trial 0/1 用纯困难档(确定性),之后按 trial 换不同的噪声强度去翻别的走法。
+ */
+function probePlay(state: GameState, seat: number, rand: () => number, trial: number, goal: LineGoal): number[] {
+  if (trial <= 1) return aiDecide(state, "hard", rand);
+  const hand = state.hands[seat];
+  let list = state.prev ? beatCandidates(hand, state.prev) : leadCandidates(hand);
+  if (goal.noBomb) {
+    const soft = list.filter((p) => !isBombLike(p));
+    // 先手时一定得出牌,实在只剩炸弹就还是得炸(这条线路自然不满足 noBomb,会被判掉)
+    if (soft.length > 0 || state.prev) list = soft;
+  }
+  if (list.length === 0) return [];
+
+  const greed = trial % 3;
+  if (greed === 0 && rand() < 0.7) return aiDecide(state, "hard", rand);
+  const noise = greed === 2 ? 26 : 12;
+  const scored = list
+    .map((p) => ({ p, s: positionScore(withoutCards(hand, p.cards)) + rand() * noise }))
+    .sort((a, b) => a.s - b.s);
+  const width = Math.min(scored.length, greed === 2 ? 6 : 3);
+  const pick = scored[Math.floor(rand() * width)].p;
+  // 偶尔忍一手:出牌权让给对手,有时反而能把长牌型留整
+  if (state.prev && rand() < 0.15) return [];
+  return pick.cards;
+}
+
+function lineSatisfies(line: WinningLine, goal: LineGoal): boolean {
+  if (goal.noBomb && line.playerBombs > 0) return false;
+  if (goal.maxHands !== undefined && line.playerPlays > goal.maxHands) return false;
+  return true;
+}
+
+/**
+ * 搜一条「玩家这一方能赢」的出牌线路。
+ *
+ * 牌是固定的(关卡 seed 决定),变的只有玩家自己怎么打,以及叫分时抢不抢地主
+ * ——这两件事在真实牌桌上本来就是玩家自己说了算,所以两种身份都算合法线路。
+ * 搜到就返回完整的一串走法,`replayLine` 能把它一步不差地重放出来,这就是「可赢」的证明。
+ */
+export function findWinningLine(input: ProveInput, tries = PROVE_TRIES, goal: LineGoal = {}): WinningLine | null {
+  const alt = input.playerSeat === input.presetLandlord ? (input.playerSeat + 1) % SEATS : input.playerSeat;
+  for (let trial = 0; trial < tries; trial++) {
+    const landlord = trial % 2 === 0 ? input.presetLandlord : alt;
+    const state = createGame({ hands: input.hands, bottom: input.bottom, landlord, base: input.base });
+    const rand = mulberry32((input.seed ^ 0x5bd1e995) + trial * 7919);
+    const moves: LineMove[] = [];
+    let playerPlays = 0;
+    let playerBombs = 0;
+    let steps = 0;
+
+    while (!state.finished && steps < MAX_STEPS) {
+      steps++;
+      const seat = state.turn;
+      const wanted = seat === input.playerSeat ? probePlay(state, seat, rand, trial, goal) : aiDecide(state, input.aiLevel, rand);
+      let cards = wanted;
+      let res = tryMove(state, cards);
+      if (!res.ok) {
+        cards = state.prev ? [] : [state.hands[seat][0]];
+        res = tryMove(state, cards);
+        if (!res.ok) break;
+      }
+      moves.push({ seat, cards: cards.slice() });
+      if (seat === input.playerSeat && cards.length > 0) {
+        playerPlays++;
+        if (res.play && isBombLike(res.play)) playerBombs++;
+      }
+    }
+
+    if (!state.finished) continue;
+    const landlordWon = state.winner === landlord;
+    const playerIsLandlord = input.playerSeat === landlord;
+    if (playerIsLandlord !== landlordWon) continue;
+    const line: WinningLine = { trial, landlord, playerIsLandlord, moves, playerPlays, playerBombs };
+    if (!lineSatisfies(line, goal)) continue;
+    return line;
+  }
+  return null;
+}
+
+/** 把搜到的线路一步不差地重放一遍,确认它真的能赢(单测靠它验收「可赢」) */
+export function replayLine(input: ProveInput, line: WinningLine): boolean {
+  const state = createGame({ hands: input.hands, bottom: input.bottom, landlord: line.landlord, base: input.base });
+  for (const mv of line.moves) {
+    if (state.finished) return false;
+    if (state.turn !== mv.seat) return false;
+    if (!tryMove(state, mv.cards).ok) return false;
+  }
+  if (!state.finished) return false;
+  const landlordWon = state.winner === line.landlord;
+  return line.playerIsLandlord === landlordWon;
+}
+
+// ---------------------------------------------------------------------------
+// 教练代打:本地两人 + 1 AI 也能一路打到结算
+// ---------------------------------------------------------------------------
+
+/** 一家由谁来打:`ai` 交给电脑,`coach` 由牌力提示的搜索结果代打(模拟真人照着提示走) */
+export type SeatPolicy = "ai" | "coach";
+
+export interface TableRunResult {
+  state: GameState;
+  settle: SettleResult;
+  /** 一共走了多少步 */
+  steps: number;
+}
+
+/**
+ * 把一整桌打到结算。
+ * `coach` 座位走 `hint.ts` 的真实搜索——它就是双人模式里真人照着「推荐一手」出牌的样子,
+ * 所以这个函数能证明「本地两人 + 1 AI 真的能玩到结算」,而不是卡在半路。
+ */
+export function runTable(
+  input: { hands: number[][]; bottom: number[]; landlord: number; base: number },
+  policies: readonly SeatPolicy[],
+  aiLevel: AiLevel,
+  seed = 20250822
+): TableRunResult {
+  const state = createGame(input);
+  const rand = mulberry32(seed);
+  let steps = 0;
+  while (!state.finished && steps < MAX_STEPS) {
+    steps++;
+    const seat = state.turn;
+    let cards: number[];
+    if (policies[seat] === "coach") {
+      const res = searchHint(
+        {
+          hand: state.hands[seat],
+          prev: state.prev,
+          seat,
+          landlord: state.landlord,
+          counts: state.hands.map((h) => h.length),
+        },
+        "coach"
+      );
+      cards = res.play ? res.play.cards.slice() : [];
+    } else {
+      cards = aiDecide(state, aiLevel, rand);
+    }
+    if (!tryMove(state, cards).ok) {
+      const fallback = state.prev ? [] : [state.hands[seat][0]];
+      if (!tryMove(state, fallback).ok) break;
+    }
+  }
+  if (!state.finished) {
+    state.finished = true;
+    state.winner = state.hands.findIndex((h) => h.length === Math.min(...state.hands.map((x) => x.length)));
+  }
+  return { state, settle: settleGame(state), steps };
 }

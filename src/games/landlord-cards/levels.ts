@@ -10,7 +10,7 @@
 import { rateAbove, type Chapter } from "../level99";
 import type { AiLevel } from "./ai";
 import { dealCards, handStrength } from "./logic";
-import type { DealResult } from "./sim";
+import { findWinningLine, replayLine, type DealResult, type ProveInput, type WinningLine } from "./sim";
 
 export const CHAPTERS: Chapter[] = [
   { name: "客厅小牌桌", emoji: "🛋️", color: "#ffe6ef", desc: "第一次摸牌:先认清单张、对子和三张", size: 24 },
@@ -25,6 +25,59 @@ export const CHAPTERS: Chapter[] = [
 
 /** 塔顶在第几关(1 基),给文案用 */
 export const TOWER_TOP = 188;
+
+/**
+ * 每一关的目标(1.2 新增)。
+ * 「赢」是及格线,另外两种是加分挑战:达成了在评星上再加一颗(封顶三星)。
+ * 前 99 关一律是「赢」——1.1 的数据一个字不改。
+ */
+export type LevelGoal =
+  | { kind: "win" }
+  /** 自己出手不超过 hands 手就赢下来 */
+  | { kind: "hands"; hands: number }
+  /** 全程不用炸弹也不用王炸 */
+  | { kind: "noBomb" };
+
+/** 前 99 关只要求赢,从第 100 关起才开始轮加分目标 */
+export const GOAL_FROM_LEVEL = 99;
+
+/** 第 index 关(0 基)的目标 */
+export function goalOf(index: number): LevelGoal {
+  const i = Math.max(0, Math.min(TOWER_TOP - 1, Math.round(index)));
+  if (i < GOAL_FROM_LEVEL) return { kind: "win" };
+  const slot = (i - GOAL_FROM_LEVEL) % 3;
+  if (slot === 1) {
+    // 越往塔顶要求越紧:12 手起步,每 30 关收一手,最少 8 手
+    const hands = Math.max(8, 12 - Math.floor((i - GOAL_FROM_LEVEL) / 30));
+    return { kind: "hands", hands };
+  }
+  if (slot === 2) return { kind: "noBomb" };
+  return { kind: "win" };
+}
+
+/** 目标写在关卡卡片上的那一行 */
+export function goalLabel(goal: LevelGoal): string {
+  if (goal.kind === "hands") return `加分目标:自己出手不超过 ${goal.hands} 手就赢下来`;
+  if (goal.kind === "noBomb") return "加分目标:全程不用炸弹和王炸,靠牌型赢下来";
+  return "本关目标:赢下这一局";
+}
+
+/** 这一局玩家自己的战绩 */
+export interface GoalStats {
+  won: boolean;
+  /** 玩家自己出了几手(「不要」不算) */
+  plays: number;
+  /** 玩家自己用掉几个炸 */
+  bombs: number;
+}
+
+/** 加分目标达成没有(没赢就一定不算达成) */
+export function goalMet(goal: LevelGoal, stats: GoalStats): boolean {
+  if (!stats.won) return false;
+  if (goal.kind === "hands") return stats.plays <= goal.hands;
+  if (goal.kind === "noBomb") return stats.bombs === 0;
+  return true;
+}
 
 export interface TowerLevel {
   /** 0 基关号 */
@@ -43,6 +96,8 @@ export interface TowerLevel {
   starThree: number;
   /** …这么多张就是 2 星 */
   starTwo: number;
+  /** 本关的加分目标 */
+  goal: LevelGoal;
   hint: string;
 }
 
@@ -110,6 +165,7 @@ export function buildLevel(index: number): TowerLevel {
     boost: boostOf(i),
     starThree: gate.three,
     starTwo: gate.two,
+    goal: goalOf(i),
     hint: CHAPTER_HINTS[chapter],
   };
 }
@@ -136,6 +192,50 @@ export function towerStars(remaining: number, isLandlord: boolean): 1 | 2 | 3 {
   return rateAbove(remaining, gate.three, gate.two);
 }
 
+/** 达成加分目标再加一颗星(封顶三星);目标没达成就是原来的评星 */
+export function towerStarsWithGoal(remaining: number, isLandlord: boolean, met: boolean): 1 | 2 | 3 {
+  const base = towerStars(remaining, isLandlord);
+  if (!met) return base;
+  return Math.min(3, base + 1) as 1 | 2 | 3;
+}
+
+/** 达成加分目标时结算面板上多出来的那一句 */
+export function goalWinLine(goal: LevelGoal, met: boolean): string {
+  if (!met) return "";
+  if (goal.kind === "hands") return `加分目标达成:${goal.hands} 手之内就收掉了这一局!`;
+  if (goal.kind === "noBomb") return "加分目标达成:一个炸都没用,全靠牌型赢下来!";
+  return "";
+}
+
+// ---------------------------------------------------------------------------
+// 关卡可赢性:每一关都要能证明存在赢下来的线路
+// ---------------------------------------------------------------------------
+
+/** 把一关翻译成 `sim.findWinningLine` 要的入参 */
+export function proveInputOf(lv: TowerLevel): ProveInput {
+  const d = dealForLevel(lv);
+  return {
+    hands: d.hands,
+    bottom: d.bottom,
+    playerSeat: d.playerSeat,
+    presetLandlord: d.landlord,
+    base: lv.base,
+    aiLevel: lv.aiLevel,
+    seed: lv.seed,
+  };
+}
+
+/**
+ * 搜一条这一关能赢的线路;搜到就顺手重放一遍确认它真的能赢。
+ * 搜不到返回 null——这一关就得换 seed,绝不能留在塔里。
+ */
+export function proveLevelWinnable(lv: TowerLevel, tries?: number): WinningLine | null {
+  const input = proveInputOf(lv);
+  const line = findWinningLine(input, tries);
+  if (!line) return null;
+  return replayLine(input, line) ? line : null;
+}
+
 /** 过关时那句夸奖 */
 export function towerWinLine(stars: 1 | 2 | 3, remaining: number, isLandlord: boolean): string {
   const who = isLandlord ? "两个农民" : "地主";
@@ -149,6 +249,42 @@ export function towerLoseLine(remaining: number, isLandlord: boolean): string {
   if (remaining <= 3) return `就差 ${remaining} 张牌!再来一次一定能赢回来。`;
   if (isLandlord) return "当地主要一个人打两个,先把小牌顺出去,大牌留到最后。";
   return "农民要一起使劲:队友压住了就让他走,别自己人压自己人。";
+}
+
+// ---------------------------------------------------------------------------
+// 本局亮点
+// ---------------------------------------------------------------------------
+
+export interface HighlightInput {
+  won: boolean;
+  /** 自己出了几手 */
+  plays: number;
+  /** 自己用掉几个炸 */
+  bombs: number;
+  /** 自己手上还留着几个炸没用 */
+  bombsHeld: number;
+  /** 自己打出过的最长的一手有几张 */
+  longest: number;
+  /** 对手阵营还剩几张 */
+  foeLeft: number;
+}
+
+/**
+ * 结算面板上的「本局亮点」。
+ * 赢了挑最亮的一条夸,输了也只讲这一局里做得好的地方——不批评、不说「错」。
+ */
+export function battleHighlight(i: HighlightInput): string {
+  if (i.won) {
+    if (i.bombs > 0 && i.plays <= 8) return "本局亮点:炸弹压在关键时刻,八手之内就收掉了这一局!";
+    if (i.bombsHeld > 0) return "本局亮点:炸弹一直捏在手里没舍得用,靠牌型就赢下来了!";
+    if (i.longest >= 6) return `本局亮点:一口气走掉 ${i.longest} 张,对手根本接不上!`;
+    if (i.foeLeft >= 12) return `本局亮点:对手手里还压着 ${i.foeLeft} 张就被你走完了,节奏全在你这边。`;
+    return `本局亮点:${i.plays} 手就把牌走干净,出牌顺序理得很清楚!`;
+  }
+  if (i.longest >= 6) return `本局亮点:那一手 ${i.longest} 张打得漂亮,下次再早一点用出来。`;
+  if (i.bombsHeld > 0) return "本局亮点:炸弹还留在手里没来得及用——下次对手快走完时果断炸下去。";
+  if (i.foeLeft <= 3) return `本局亮点:只差 ${i.foeLeft} 张就拦住了,已经很接近啦。`;
+  return `本局亮点:${i.plays} 手牌都出得有条理,下次先把散牌清早一点就更顺了。`;
 }
 
 // ---------------------------------------------------------------------------
