@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { ALL_PAINTS, buildLevel, CHAPTERS, LEVELS, MIX_TABLE, PICTURES } from "./levels";
 
-describe("涂色小屋 99 关", () => {
-  it("恰好 99 关", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("涂色小屋 188 关", () => {
+  it("恰好 188 关", () => {
+    expect(LEVELS).toHaveLength(188);
   });
 
-  it("至少 6 个主题章节，章节大小之和为 99；六幅线稿齐全", () => {
+  it("至少 6 个主题章节，章节大小之和为 188；十幅线稿齐全", () => {
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
-    expect(PICTURES).toHaveLength(6);
+    expect(totalSize(CHAPTERS)).toBe(188);
+    expect(PICTURES).toHaveLength(CHAPTERS.length);
     for (const p of PICTURES) {
       expect(p.regions.length).toBeGreaterThanOrEqual(8);
       expect(new Set(p.regions.map((r) => r.id)).size).toBe(p.regions.length);
@@ -18,7 +18,7 @@ describe("涂色小屋 99 关", () => {
   });
 
   it("每关任务合法：区域存在、颜色可得、任务不重复", () => {
-    for (let i = 0; i < 99; i++) {
+    for (let i = 0; i < 188; i++) {
       const lv = LEVELS[i];
       const pic = PICTURES[lv.pic];
       const regionIds = new Set(pic.regions.map((r) => r.id));

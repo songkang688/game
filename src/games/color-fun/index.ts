@@ -2,7 +2,7 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { ALL_PAINTS, CHAPTERS, LEVELS, MIX_TABLE, PICTURES, type ColorLevel } from "./levels";
+import { ALL_PAINTS, CHAPTERS, LEVELS, MIX_TABLE, PICTURES, ruleText, type ColorLevel } from "./levels";
 
 const THEME_BG = [
   "linear-gradient(#fff9db,#ffec99)",
@@ -11,6 +11,10 @@ const THEME_BG = [
   "linear-gradient(#c8c3f0,#e5dbff)",
   "linear-gradient(#fff3bf,#ffe8cc)",
   "linear-gradient(#ffdeeb,#fcc2d7)",
+  "linear-gradient(#ffe3e3,#ffc9c9)",
+  "linear-gradient(#e6fcf5,#c3fae8)",
+  "linear-gradient(#f8f0fc,#eebefa)",
+  "linear-gradient(#edf2ff,#dbe4ff)",
 ];
 
 const CSS = `
@@ -27,6 +31,7 @@ const CSS = `
 @keyframes cfShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 .cf-canvas .cf-num{font-weight:900;pointer-events:none;}
 .cf-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:400px;}
+.cf-legend{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:400px;}
 .cf-chip{display:flex;align-items:center;gap:5px;background:#ffffffd9;border-radius:999px;padding:4px 10px;
   font-size:13px;font-weight:800;color:#5c4a30;box-shadow:0 2px 5px rgba(150,130,80,.18);}
 .cf-chip-dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 2px #0003;}
@@ -62,8 +67,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const pending = new Map<string, string>(cfg.tasks.map((k) => [k.region, k.color]));
   const unlocked: string[] = [...cfg.palette];
   let mixA: string | null = null;
-  /** 数字涂色：颜色 → 编号（按调色盘顺序） */
-  const numberOf = new Map<string, number>(cfg.palette.map((c, i) => [c, i + 1]));
+  /** 调色锅还能开几次（限色挑战场才有预算） */
+  let mixLeft = cfg.budget ?? Number.POSITIVE_INFINITY;
+  /** 数字涂色用编号、图例大画布用符号：颜色 → 贴在画上的标记 */
+  const markOf = new Map<string, string>();
+  if (cfg.mode === "number") cfg.palette.forEach((c, i) => markOf.set(c, String(i + 1)));
+  if (cfg.mode === "legend") for (const item of cfg.legend ?? []) markOf.set(item.color, item.symbol);
+  const regionName = (id: string): string => pic.regions.find((r) => r.id === id)?.name ?? id;
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -82,8 +92,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       <span class="cf-badge">${pic.emoji} ${pic.name}</span>
       <span class="cf-badge cf-progress">🖌️ 0/${cfg.tasks.length}</span>
       <span class="cf-badge cf-miss">💗 ${"❤".repeat(cfg.maxWrong + 1)}</span>
+      ${cfg.budget !== undefined ? `<span class="cf-badge cf-budget">🥣 还能开锅 ${cfg.budget} 次</span>` : ""}
     </div>
     ${cfg.mode === "memory" ? `<div class="cf-preview">👀 记住每个地方的颜色…</div>` : ""}
+    ${cfg.legend ? `<div class="cf-legend"></div>` : ""}
     <svg class="cf-canvas" viewBox="0 0 400 300" width="400" height="300" role="img" aria-label="待涂色的线稿"></svg>
     <div class="cf-chips"></div>
     ${cfg.needMix.length > 0 ? `
@@ -103,6 +115,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const svg = wrap.querySelector(".cf-canvas") as unknown as SVGSVGElement;
   const progressEl = wrap.querySelector(".cf-progress") as HTMLElement;
   const missEl = wrap.querySelector(".cf-miss") as HTMLElement;
+  const budgetEl = wrap.querySelector(".cf-budget") as HTMLElement | null;
+  const legendEl = wrap.querySelector(".cf-legend") as HTMLElement | null;
   const chipsEl = wrap.querySelector(".cf-chips") as HTMLElement;
   const paletteEl = wrap.querySelector(".cf-palette") as HTMLElement;
   const msgEl = wrap.querySelector(".cf-msg") as HTMLElement;
@@ -123,9 +137,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     el.addEventListener("click", () => onRegion(id));
   });
 
-  // 数字涂色：给每个任务区域贴编号
+  // 数字涂色贴编号、图例大画布贴符号
   const numEls = new Map<string, SVGTextElement>();
-  if (cfg.mode === "number") {
+  if (cfg.mode === "number" || cfg.mode === "legend") {
     for (const task of cfg.tasks) {
       const r = pic.regions.find((x) => x.id === task.region);
       if (!r) continue;
@@ -136,29 +150,57 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       txt.setAttribute("font-size", "18");
       txt.setAttribute("fill", "#495057");
       txt.setAttribute("class", "cf-num");
-      txt.textContent = String(numberOf.get(task.color) ?? "?");
+      txt.textContent = markOf.get(task.color) ?? "?";
       svg.appendChild(txt);
       numEls.set(task.region, txt);
     }
   }
 
+  // 配色规则关：参照色开局就涂好，孩子照着它推
+  for (const g of cfg.given ?? []) {
+    regionEls.get(g.region)?.setAttribute("fill", ALL_PAINTS[g.color]);
+  }
+
+  // 图例：符号 → 颜色
+  if (legendEl && cfg.legend) {
+    legendEl.innerHTML = cfg.legend
+      .map(
+        (it) =>
+          `<span class="cf-chip"><span class="cf-chip-dot" style="background:${ALL_PAINTS[it.color]}"></span>${it.symbol} = ${it.color}</span>`
+      )
+      .join("");
+  }
+
   function updateHud(): void {
     progressEl.textContent = `🖌️ ${cfg.tasks.length - pending.size}/${cfg.tasks.length}`;
     missEl.textContent = `💗 ${"❤".repeat(Math.max(0, cfg.maxWrong + 1 - wrong))}${"🤍".repeat(Math.min(wrong, cfg.maxWrong + 1))}`;
+    if (budgetEl) budgetEl.textContent = `🥣 还能开锅 ${Math.max(0, mixLeft)} 次`;
   }
 
   function renderChips(): void {
-    if (cfg.mode === "number" || cfg.mode === "memory") {
-      chipsEl.innerHTML = "";
+    chipsEl.innerHTML = "";
+    if (cfg.mode === "number" || cfg.mode === "memory" || cfg.mode === "legend") return;
+    if (cfg.mode === "rule") {
+      // 只报规则，不报颜色：孩子要自己在色环上推
+      for (const task of cfg.tasks) {
+        if (!pending.has(task.region)) continue;
+        const rule = cfg.rules?.find((x) => x.region === task.region);
+        const chip = document.createElement("span");
+        chip.className = "cf-chip";
+        chip.textContent = rule
+          ? `${regionName(task.region)}→${ruleText(rule.kind, regionName(rule.refRegion))}`
+          : `${regionName(task.region)}→${task.color}`;
+        chipsEl.appendChild(chip);
+      }
       return;
     }
-    chipsEl.innerHTML = "";
+    const order = cfg.order ? cfg.tasks.map((k) => k.region) : [];
     for (const task of cfg.tasks) {
       if (!pending.has(task.region)) continue;
-      const r = pic.regions.find((x) => x.id === task.region);
       const chip = document.createElement("span");
       chip.className = "cf-chip";
-      chip.innerHTML = `<span class="cf-chip-dot" style="background:${ALL_PAINTS[task.color]}"></span>${r?.name ?? task.region}→${task.color}`;
+      const step = cfg.order ? `${order.indexOf(task.region) + 1}. ` : "";
+      chip.innerHTML = `<span class="cf-chip-dot" style="background:${ALL_PAINTS[task.color]}"></span>${step}${regionName(task.region)}→${task.color}`;
       chipsEl.appendChild(chip);
     }
   }
@@ -172,8 +214,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       btn.style.background = ALL_PAINTS[name];
       btn.title = name;
       btn.setAttribute("aria-label", name);
-      if (cfg.mode === "number" && numberOf.has(name)) {
-        btn.innerHTML = `<span class="cf-swatch-num">${numberOf.get(name)}</span>`;
+      if (markOf.has(name)) {
+        btn.innerHTML = `<span class="cf-swatch-num">${markOf.get(name)}</span>`;
       }
       btn.addEventListener("click", () => {
         if (ended || previewing) return;
@@ -205,6 +247,14 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       msgEl.textContent = "先在下面选一个颜色～";
       return;
     }
+    if (cfg.order) {
+      // 渐变关必须由浅到深：顺序不对只提醒，不扣爱心
+      const next = cfg.tasks.find((k) => pending.has(k.region));
+      if (next && next.region !== id) {
+        msgEl.textContent = `先涂${regionName(next.region)}，顺着由浅到深来～`;
+        return;
+      }
+    }
     if (picked === want) {
       el.setAttribute("fill", ALL_PAINTS[want]);
       pending.delete(id);
@@ -220,7 +270,14 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ctx.sfx("oops");
       el.classList.add("cf-shake");
       later(() => el.classList.remove("cf-shake"), 400);
-      msgEl.textContent = cfg.mode === "memory" ? "想一想刚才这里是什么颜色～" : "颜色不对哦，看看提示再试试～";
+      msgEl.textContent =
+        cfg.mode === "memory"
+          ? "想一想刚才这里是什么颜色～"
+          : cfg.mode === "rule"
+            ? "回到色环想一想这两种颜色的关系～"
+            : cfg.mode === "legend"
+              ? "对照图例再看一眼这块的符号～"
+              : "颜色不对哦，看看提示再试试～";
       updateHud();
       if (wrong > cfg.maxWrong) {
         ended = true;
@@ -252,6 +309,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   function onPour(p: string): void {
     if (ended || previewing) return;
+    if (mixLeft <= 0) {
+      msgEl.textContent = "调色锅今天歇工啦，用手里已有的颜色接着涂～";
+      return;
+    }
     ctx.sfx("tap");
     if (!mixA) {
       mixA = p;
@@ -262,6 +323,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const key = [mixA, p].sort().join("+");
     if (slotB) { slotB.style.background = ALL_PAINTS[p]; slotB.textContent = ""; }
     const result = MIX_TABLE[key];
+    // 限色挑战场：开一次锅就少一次预算，得先想清楚再倒
+    mixLeft -= 1;
+    updateHud();
     later(() => {
       if (result && cfg.needMix.includes(result)) {
         if (!unlocked.includes(result)) {
@@ -285,6 +349,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         msgEl.textContent = "这两种颜色调不出新颜色，换个搭配试试～";
       }
       resetPot();
+      // 预算用完、还有颜色没调出来：温柔收尾，重来一次就好
+      const stillNeed = [...pending.values()].some((c) => !unlocked.includes(c));
+      if (mixLeft <= 0 && stillNeed) {
+        ended = true;
+        ctx.lose("调色锅的柴火用完啦，我们重新规划一下顺序再来！");
+      }
     }, 320);
   }
 
@@ -314,9 +384,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     msgEl.textContent =
       cfg.mode === "number"
         ? "看画上的数字，用同号颜色涂它～"
-        : cfg.needMix.length > 0
-          ? "有些颜色要用调色锅调出来哦～"
-          : "先点一个颜色，再点画上想涂的地方～";
+        : cfg.mode === "shade"
+          ? "同一种颜色分深浅，按 1、2、3 由浅到深涂～"
+          : cfg.mode === "rule"
+            ? "已经涂好的那几块是参照，按规则推出颜色～"
+            : cfg.mode === "legend"
+              ? "对着上面的图例，把每个符号涂成对应的颜色～"
+              : cfg.mode === "limited"
+                ? "只剩三原色啦，先想好顺序再开调色锅～"
+                : cfg.needMix.length > 0
+                  ? "有些颜色要用调色锅调出来哦～"
+                  : "先点一个颜色，再点画上想涂的地方～";
   }
 
   updateHud();
@@ -338,8 +416,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   return mountLevelGame(api, {
     id: meta.id,
     chapters: CHAPTERS,
-    mapHint: "六个村镇六幅画，每关的颜色搭配都不一样～",
-    grandMessage: "99 关全部涂完，你是五彩缤纷的小画家！",
+    mapHint: "十个村镇十幅画，每关的颜色搭配都不一样～",
+    grandMessage: "188 关全部涂完，你是五彩缤纷的小画家！",
     playLevel,
   });
 }
