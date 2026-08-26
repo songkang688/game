@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🍑",
   category: "action" as const,
   color: "#ffe0a3",
-  blurb: "99 回合九大果园切果战役!侧风低重力手感各异,禅宗街机三种玩法!",
+  blurb: "188 回合十二果园切果战役!连刀、指令果、硬壳果、镜像模式,最后挑战大果王!",
 };
