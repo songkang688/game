@@ -34,8 +34,14 @@ export const FLOOR_Y = ARENA_H - FLOOR_H;
 export const CEILING_Y = 26;
 /** 左右墙厚 */
 export const WALL = 14;
-/** 层高:必须明显小于 logic.ts 里一次起跳的最高点(logic.test.ts 会断言) */
-export const ROW_H = 92;
+/**
+ * 层高:必须明显小于 logic.ts 里一次起跳的最高点(logic.test.ts 会断言)。
+ * 还有一条不那么显眼的约束 —— 站在最高一层也得跳得起来,
+ * 所以顶层的头顶到天花板要留出一截,见 topRowHeadroom()。
+ */
+export const ROW_H = 80;
+/** 最多几层浮台(章节配方里的 rows 不会超过这个数) */
+export const MAX_ROWS = 3;
 /** 浮台最窄 / 最宽 */
 export const MIN_PLATFORM_W = 96;
 export const MAX_PLATFORM_W = 208;
@@ -49,6 +55,11 @@ export const PATROL_INSET = 20;
 /** 第 row 层地面的上表面(row = 0 是地板) */
 export function rowSurface(row: number): number {
   return FLOOR_Y - ROW_H * Math.max(0, Math.round(row));
+}
+
+/** 站在最高一层时,头顶到天花板还剩多少(逻辑层用它断言「顶层也跳得动」) */
+export function topRowHeadroom(playerHeight: number): number {
+  return rowSurface(MAX_ROWS) - playerHeight - CEILING_Y;
 }
 
 // ---------------------------------------------------------------------------
@@ -393,10 +404,54 @@ interface Filled {
   candies: CandyDef[];
 }
 
+/** 同一块地面上两只咕噜怪至少隔这么远,不然玩家挤在中间没处站 */
+export const MONSTER_GAP = 46;
+/** 出生角落留出的安全区:一进场就被贴脸太吓人了 */
+const SPAWN_CLEAR = 110;
+
+/** 这块地面上真正能放怪的一段(巡逻区再去掉出生角落) */
+function patrolBand(m: MonsterDef): { lo: number; hi: number } {
+  let lo = m.minX;
+  let hi = m.maxX;
+  if (m.surface === -1) {
+    lo = Math.max(lo, FLOOR_SPAN.x0 + SPAWN_CLEAR);
+    hi = Math.min(hi, FLOOR_SPAN.x1 - SPAWN_CLEAR);
+  }
+  if (hi < lo) {
+    const mid = (m.minX + m.maxX) / 2;
+    return { lo: mid, hi: mid };
+  }
+  return { lo, hi };
+}
+
+/**
+ * 在这段地面上给新来的咕噜怪挑个位置:先照掷出来的落点试,
+ * 挤着同伴就沿着这段地面找离大家最远的地方。整段都塞不下就返回 null ——
+ * 这只怪让给下一块地面,宁可少放一只,也不让两只叠在一起挪不开身。
+ */
+function spotOn(taken: readonly number[], band: { lo: number; hi: number }, wish: number): number | null {
+  const gap = (x: number): number => taken.reduce((d, o) => Math.min(d, Math.abs(o - x)), Infinity);
+  const start = Math.min(Math.max(wish, band.lo), band.hi);
+  if (gap(start) >= MONSTER_GAP) return Math.round(start);
+
+  let best = start;
+  let bestGap = gap(start);
+  const steps = 16;
+  for (let i = 0; i <= steps; i++) {
+    const x = band.lo + ((band.hi - band.lo) * i) / steps;
+    const d = gap(x);
+    if (d > bestGap) {
+      bestGap = d;
+      best = x;
+    }
+  }
+  return bestGap >= MONSTER_GAP ? Math.round(best) : null;
+}
+
 /**
  * 把怪物和糖果撒到各块地面上。
- * 同一块地面上的怪物不会挤在一起,出生点那一段地板永远留空,
- * 让玩家一进场就有地方站稳看清局面。
+ * 每只怪先随机挑一块地面,那块塞不下就顺着往下一块试:
+ * 既不会全堆在地板上,也不会三只挤在同一块小浮台上。
  */
 function fillArena(rand: () => number, kit: ChapterKit, spans: Span[], opts: FillOpts): Filled {
   const monsters: MonsterDef[] = [];
@@ -404,29 +459,19 @@ function fillArena(rand: () => number, kit: ChapterKit, spans: Span[], opts: Fil
   const usable = spans.filter((s) => s.x1 - s.x0 >= PATROL_INSET * 2 + 40);
   if (usable.length === 0) return { monsters, candies };
 
-  /** 把落点收进「巡逻区之内、又离出生角落远远的」那一段 */
-  const settle = (m: MonsterDef, x: number): number => {
-    let lo = m.minX;
-    let hi = m.maxX;
-    if (m.surface === -1) {
-      lo = Math.max(lo, FLOOR_SPAN.x0 + 110);
-      hi = Math.min(hi, FLOOR_SPAN.x1 - 110);
-    }
-    return hi >= lo ? Math.round(Math.min(Math.max(x, lo), hi)) : Math.round((lo + hi) / 2);
-  };
-
   for (let i = 0; i < opts.monsterCount; i++) {
-    // 轮着放:每块地面都能分到怪,不会全堆在地板上
-    const span = usable[(i + randInt(rand, 0, usable.length - 1)) % usable.length];
-    const m = monsterOn(rand, kit, span, opts.monsterSpeed + randInt(rand, 0, 18));
-    if (!m) continue;
-    m.x = settle(m, m.x);
-    if (monsters.some((o) => o.surface === m.surface && Math.abs(o.x - m.x) < 46)) {
-      // 挤在一起就往右让一步;右边已经到头了就往左让,总之不能挤出安全区
-      const right = settle(m, m.x + 52);
-      m.x = right > m.x ? right : settle(m, m.x - 52);
+    const start = randInt(rand, 0, usable.length - 1);
+    for (let k = 0; k < usable.length; k++) {
+      const span = usable[(i + start + k) % usable.length];
+      const m = monsterOn(rand, kit, span, opts.monsterSpeed + randInt(rand, 0, 18));
+      if (!m) continue;
+      const taken = monsters.filter((o) => o.surface === m.surface).map((o) => o.x);
+      const x = spotOn(taken, patrolBand(m), m.x);
+      if (x === null) continue;
+      m.x = x;
+      monsters.push(m);
+      break;
     }
-    monsters.push(m);
   }
 
   for (let i = 0; i < opts.candyCount; i++) {
@@ -514,9 +559,11 @@ export function buildWave(wave: number): ArenaDef {
 
   const platforms = buildPlatforms(rand, kit.rows, 2 + (r % 2));
   const spans = surfaceSpans(platforms);
+  // 无尽是一波接一波连着打的,心不回满,所以每一波单看都得是「拼一下能清完」的量,
+  // 难度靠波次叠加,而不是靠某一波突然塞满一屏怪
   const { monsters, candies } = fillArena(rand, kit, spans, {
-    monsterCount: Math.min(12, 3 + Math.floor(r * 0.8)),
-    monsterSpeed: 40 + Math.min(52, r * 5),
+    monsterCount: Math.min(10, 3 + Math.floor(r * 0.6)),
+    monsterSpeed: 40 + Math.min(40, r * 4),
     candyCount: 2 + (r % 3),
   });
 

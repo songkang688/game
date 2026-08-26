@@ -133,6 +133,7 @@ const CSS = `
   pointer-events:none;opacity:0;transition:opacity .25s ease;max-width:90%;text-align:center;}
 .pb-toast.pb-on{opacity:1;}
 .pb-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;}
+.pb-pads[data-pads="1"]{justify-content:center;}
 .pb-pads[data-pads="2"]{--k:40px;}
 .pb-pad{display:grid;grid-template-columns:repeat(4,var(--k));grid-auto-rows:var(--k);gap:4px;
   justify-content:center;}
@@ -145,6 +146,8 @@ const CSS = `
 .pb-key-sub{background:#E2F3E0;color:#3B7A46;}
 .pb-tip{margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.5;}
 .pb-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会盖掉 hidden 属性自带的 display:none,进了某个模式就得把这排按钮收起来 */
+.pb-modebar[hidden]{display:none;}
 .pb-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
 .pb-mode.pb-mode-duel{background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
@@ -154,6 +157,7 @@ const CSS = `
 .pb-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
 .pb-head-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#2F5A8C;}
 .pb-picker{display:flex;flex-direction:column;gap:10px;align-items:center;padding:14px 10px;}
+.pb-picker[hidden]{display:none;}
 .pb-picker-title{font-size:17px;font-weight:900;color:#2F5A8C;}
 .pb-picks{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .pb-pick{border:none;border-radius:18px;padding:12px 16px;min-width:132px;cursor:pointer;font-family:inherit;
@@ -662,16 +666,15 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const offX = (cw - ARENA_W * scale) / 2;
     const offY = (ch - ARENA_H * scale) / 2;
 
+    // 天空铺满整块画布:场地按等比缩放居中,两边多出来的地方接着画同一片天,
+    // 不会露出一条突兀的色带
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.fillStyle = pal.sky1;
-    g.fillRect(0, 0, cw, ch);
-    g.setTransform(scale, 0, 0, scale, offX, offY);
-
-    const sky = g.createLinearGradient(0, 0, 0, ARENA_H);
+    const sky = g.createLinearGradient(0, 0, 0, ch);
     sky.addColorStop(0, pal.sky0);
     sky.addColorStop(1, pal.sky1);
     g.fillStyle = sky;
-    g.fillRect(0, 0, ARENA_W, ARENA_H);
+    g.fillRect(0, 0, cw, ch);
+    g.setTransform(scale, 0, 0, scale, offX, offY);
 
     // 远景:几朵不动的糖云
     g.fillStyle = pal.far;
@@ -1087,8 +1090,11 @@ function mountBotPicker(host: HTMLElement, api: GameApi, onExit: () => void): { 
   picker.appendChild(
     el("div", "pb-tip", "你用 W A S D 移动、F 吹气流、G 噗一下;方向键那一套交给电脑。")
   );
+  // 选完对手整块面板(连同它自己那行标题)一起收起来,免得和对局的标题栏叠成两层
+  const panel = el("div");
+  panel.append(head, picker);
   const stage = el("div");
-  root.append(style, head, picker, stage);
+  root.append(style, panel, stage);
   host.appendChild(root);
 
   let inner: { destroy: () => void } | null = null;
@@ -1104,7 +1110,7 @@ function mountBotPicker(host: HTMLElement, api: GameApi, onExit: () => void): { 
     btn.addEventListener("click", () => {
       if (inner) return;
       api.play("tap");
-      picker.hidden = true;
+      panel.hidden = true;
       inner = mountVersus(stage, api, onExit, key);
     });
     picks.appendChild(btn);

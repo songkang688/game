@@ -81,6 +81,14 @@ export const POP_CD = 0.18;
 export const PUFF_VY = 260;
 /** 被气浪撞开的横向距离 */
 export const PUFF_PUSH = 26;
+/**
+ * 「踩一下」:正在往下落、而且脚底已经高过咕噜怪的腰,就算踩到它头上,
+ * 把它踩得发懵而不是自己挨打 —— 平地上迎面撞过去才会挨打。
+ * 这条规则和气浪各管一头:气浪管「冲得够快」,踩一下管「从上面来」。
+ */
+export const STOMP_LINE = 0.45;
+/** 踩完弹一小下,免得贴着它连撞两回 */
+export const STOMP_BOUNCE = 0.45;
 
 /** 挨了一下之后的无敌时间 */
 export const HURT_INVULN = 1.3;
@@ -943,11 +951,13 @@ function playerInteractions(w: World, p: PlayerState): void {
     if (!overlaps(box, monsterBox(m))) continue;
     // 发懵的咕噜怪正看着小星星,撞上也不疼
     if (m.dizzy > 0) continue;
-    if (Math.abs(p.vy) > PUFF_VY) {
-      // 起跳 / 落地那一下带着气浪,把它撞得晕头转向
+    const stomp = p.vy > 0 && p.y <= m.y - MONSTER_H * STOMP_LINE;
+    if (Math.abs(p.vy) > PUFF_VY || stomp) {
+      // 气浪冲过去、或者从上面踩下来,都把它撞得晕头转向
       m.dizzy = DIZZY_TIME;
       m.dir = p.x <= m.x ? 1 : -1;
       m.x = Math.min(Math.max(m.x + (p.x <= m.x ? PUFF_PUSH : -PUFF_PUSH), m.minX), m.maxX);
+      if (stomp) p.vy = -JUMP_V * STOMP_BOUNCE;
       pushEvent(w, "escape", m.x, m.y - MONSTER_H, p.index);
       continue;
     }
@@ -1187,9 +1197,13 @@ export function scoreLine(m: MatchState, names: [string, string]): string {
 
 /** 机器人站在同一块地面上、离目标多远才开吹 */
 export const BOT_BLOW_MIN = 30;
-export const BOT_BLOW_MAX = 132;
-/** 贴得比这还近就先退半步(身体半宽 13 + 咕噜怪半宽 15,再留一截余量) */
-export const BOT_BACKOFF = 54;
+/** 一口气流够得到 blowReach()(约 158),留一点余量就在这儿开火,别等它贴上来 */
+export const BOT_BLOW_MAX = 150;
+/**
+ * 贴得比这还近就先退半步。身体半宽 13 + 咕噜怪半宽 15 = 28 就贴上了,
+ * 留到 76 才够一个反应时间:追追怪跑得快,等它进到 54 再退已经来不及。
+ */
+export const BOT_BACKOFF = 76;
 /** 同一层里进到这个距离就得先处理掉,不能埋头赶路 */
 export const BOT_DANGER = 118;
 
@@ -1308,12 +1322,30 @@ function nearestThreat(w: World, p: PlayerState, range: number): MonsterState | 
   return best;
 }
 
-/** 朝 dx 的反方向退,退到墙角就跳起来换个位置 */
-function backOff(p: PlayerState, input: Input, dx: number): void {
+/** x 那一带还有没有别的咕噜怪站着(退过去等于换一只撞) */
+function threatNear(w: World, p: PlayerState, x: number, range: number): boolean {
+  for (const m of w.monsters) {
+    if (m.state !== "free" || m.surface !== p.surface || m.dizzy > 0) continue;
+    if (Math.abs(m.x - x) < range) return true;
+  }
+  return false;
+}
+
+/**
+ * 朝 dx 的反方向退半步。
+ * 退不动了就跳:冲上去那一下带着气浪,落回来又正好踩它一脚,
+ * 所以被两只夹在中间的时候,跳永远比杵着强。
+ */
+function backOff(w: World, p: PlayerState, input: Input, dx: number): void {
   const away = dx >= 0 ? -1 : 1;
   const nextX = p.x + away * 60;
-  if (nextX <= WALL + PLAYER_W || nextX >= ARENA_W - WALL - PLAYER_W) {
-    // 退无可退:跳过它头顶
+  // 走到浮台边上会掉下去,那也是一种脱身,不算走投无路;
+  // 真正退无可退的是撞墙,或者退过去又撞上另一只
+  const cornered =
+    nextX <= WALL + PLAYER_W ||
+    nextX >= ARENA_W - WALL - PLAYER_W ||
+    threatNear(w, p, nextX, BOT_BACKOFF);
+  if (cornered) {
     if (p.onGround) input.up = true;
     input.right = dx > 0;
     input.left = dx < 0;
@@ -1333,7 +1365,7 @@ export function coopBotInput(w: World, playerIndex = 0): Input {
   const p = w.players[playerIndex];
   if (!p || w.status !== "playing" || p.trapped || p.respawnT > 0) return input;
 
-  // 无敌帧里撞不疼,正好埋头干活
+  // 无敌帧里撞不疼,正好埋头干活;但快到点了就得先脱身,不然一过期就白挨第二下
   const threat = p.invuln <= 0.35 ? nearestThreat(w, p, BOT_DANGER) : null;
   if (threat) {
     const dx = threat.x - p.x;
@@ -1342,7 +1374,14 @@ export function coopBotInput(w: World, playerIndex = 0): Input {
     const safe = threat.dizzy > 0;
     if (!monsterLanded(w, threat) || (!safe && adx < BOT_BACKOFF)) {
       // 蹦在半空的裹不住,贴太近的先拉开距离(退的时候会转身,所以这一下不吹)
-      backOff(p, input, dx);
+      backOff(w, p, input, dx);
+      return input;
+    }
+    if (safe && adx < BOT_BLOW_MIN) {
+      // 正杵在发懵的那只身上,这么近吹不着它;横着挪开一步再说,
+      // 等它醒过来还站在原地,就是白挨一下
+      input.right = dx < 0;
+      input.left = dx >= 0;
       return input;
     }
     if (p.facing !== face) {
