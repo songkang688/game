@@ -83,6 +83,22 @@ describe("index 契约", () => {
   });
 });
 
+describe("变蓝过渡", () => {
+  it("两端各给原色和昏昏蓝，中间是插值", async () => {
+    const { mixColor } = await import("./index");
+    expect(mixColor("#FF9AB0", "#7FA9FF", 0)).toBe("#ff9ab0");
+    expect(mixColor("#FF9AB0", "#7FA9FF", 1)).toBe("#7fa9ff");
+    expect(mixColor("#000000", "#FFFFFF", 0.5)).toBe("#808080");
+  });
+
+  it("越界的比例会被夹回 0–1，不会算出非法颜色", async () => {
+    const { mixColor } = await import("./index");
+    expect(mixColor("#000000", "#FFFFFF", -3)).toBe("#000000");
+    expect(mixColor("#000000", "#FFFFFF", 9)).toBe("#ffffff");
+    expect(mixColor("#123456", "#654321", 0.37)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /* 二、菜单与四种模式                                                  */
 /* ------------------------------------------------------------------ */

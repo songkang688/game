@@ -35,6 +35,26 @@ import {
 /** 平台内置的那几个音效。声音一律走 api.play，游戏自己不建音频上下文 */
 export type Sfx = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
+/** 豆子被收走之后缩多久 */
+const POP_MS = 180;
+
+/** 小幽灵变蓝 / 变回来的过渡时长 */
+const BLUE_FADE_MS = 220;
+
+/** 惊吓时的「昏昏蓝」 */
+const FRIGHT_BLUE = "#7FA9FF";
+
+/** 在两个颜色之间取插值，t=0 给 a，t=1 给 b */
+export function mixColor(a: string, b: string, t: number): string {
+  const k = Math.max(0, Math.min(1, t));
+  const pick = (hex: string, at: number): number => parseInt(hex.slice(at, at + 2), 16);
+  const out: number[] = [];
+  for (let i = 1; i < 7; i += 2) {
+    out.push(Math.round(pick(a, i) + (pick(b, i) - pick(a, i)) * k));
+  }
+  return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
 const CSS = `
 .dmz-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFFBEA,#F4F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
@@ -190,6 +210,32 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   let finished = false;
   let destroyed = false;
 
+  /** 刚被收走的豆子：原地缩一下再消失（规格第九节），减弱动效时直接不记 */
+  const pops: Array<{ cell: Cell; leftMs: number }> = [];
+  /** 每只小幽灵的「蓝度」0–1，用来把变蓝和变回来做成过渡而不是硬切 */
+  const blue: number[] = state.ghosts.map(() => 0);
+
+  function notePop(cell: Cell): void {
+    if (soft) return;
+    pops.push({ cell: { ...cell }, leftMs: POP_MS });
+  }
+
+  function agePops(dt: number): void {
+    for (let i = pops.length - 1; i >= 0; i--) {
+      pops[i].leftMs -= dt;
+      if (pops[i].leftMs <= 0) pops.splice(i, 1);
+    }
+  }
+
+  function easeBlue(dt: number): void {
+    const step = soft ? 1 : dt / BLUE_FADE_MS;
+    state.ghosts.forEach((g, i) => {
+      const want = g.mood === "fright" ? 1 : 0;
+      const cur = blue[i] ?? 0;
+      blue[i] = cur < want ? Math.min(want, cur + step) : Math.max(want, cur - step);
+    });
+  }
+
   function finish(won: boolean): void {
     if (finished) return;
     finished = true;
@@ -221,9 +267,11 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
         if (maze.dot[i]) {
           maze.dot[i] = false;
           star.score += 10;
+          notePop(star.cell);
         } else if (maze.power[i]) {
           maze.power[i] = false;
           star.score += 50;
+          notePop(star.cell);
         }
       }
       star.cd += opts.cfg.stepMs;
@@ -260,6 +308,16 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
         }
       }
     }
+    // 刚被收走的豆子：原地缩一下再没
+    for (const p of pops) {
+      const k = p.leftMs / POP_MS;
+      ctx.globalAlpha = k;
+      ctx.fillStyle = "#FFF3C4";
+      ctx.beginPath();
+      ctx.arc(p.cell.x * cell + cell / 2, p.cell.y * cell + cell / 2, 2.2 + (1 - k) * 3.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     // 果子
     if (state.fruit) {
       ctx.font = `${cell - 4}px system-ui`;
@@ -269,7 +327,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
     // 小幽灵
     state.ghosts.forEach((g, i) => {
-      drawGhost(g, i === state.controlled);
+      drawGhost(g, i === state.controlled, blue[i] ?? 0);
     });
     // 星星（抢豆模式）
     if (star) {
@@ -299,7 +357,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
   }
 
-  function drawGhost(g: Ghost, isStar: boolean): void {
+  function drawGhost(g: Ghost, isStar: boolean, blueness: number): void {
     if (!ctx) return;
     const gx = g.cell.x * cell + cell / 2;
     const gy = g.cell.y * cell + cell / 2;
@@ -311,10 +369,10 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       ctx.fill();
       return;
     }
-    let color = GHOST_COLORS[g.kind];
-    if (g.mood === "fright") {
-      const blink = frightWarning(g) && !soft && Math.floor(state.elapsed / 150) % 2 === 0;
-      color = blink ? "#FFFFFF" : "#7FA9FF";
+    // 变蓝和变回来都走过渡，不硬切颜色
+    let color = mixColor(GHOST_COLORS[g.kind], FRIGHT_BLUE, blueness);
+    if (g.mood === "fright" && frightWarning(g) && !soft && Math.floor(state.elapsed / 150) % 2 === 0) {
+      color = "#FFFFFF";
     }
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -386,8 +444,12 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       renderHud();
       return;
     }
+    const dotsBefore = remaining(state);
     stepRun(state, dt);
+    if (remaining(state) < dotsBefore) notePop(state.player);
     moveStarEater(dt);
+    agePops(dt);
+    easeBlue(dt);
     speak();
     draw();
     renderHud();
