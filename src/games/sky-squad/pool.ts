@@ -119,12 +119,26 @@ export interface PooledBullet {
   kind: PatternKind;
   volley: number;
   shape: BulletShape;
+  /** 已经给哪几号飞机记过「好险!」(位掩码,免得一发弹刷一串擦弹) */
+  grazed: number;
   dead: boolean;
 }
 
 export function makeBulletPool(cap = 900): Pool<PooledBullet> {
   return new Pool<PooledBullet>(
-    () => ({ x: 0, y: 0, vx: 0, vy: 0, r: 10, warn: 0, kind: "fan", volley: 0, shape: "bubble", dead: false }),
+    () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      r: 10,
+      warn: 0,
+      kind: "fan" as PatternKind,
+      volley: 0,
+      shape: "bubble" as BulletShape,
+      grazed: 0,
+      dead: false,
+    }),
     (b) => {
       b.x = 0;
       b.y = 0;
@@ -135,6 +149,7 @@ export function makeBulletPool(cap = 900): Pool<PooledBullet> {
       b.kind = "fan";
       b.volley = 0;
       b.shape = "bubble";
+      b.grazed = 0;
       b.dead = false;
     },
     cap
@@ -157,8 +172,62 @@ export function spawnPooled(
   b.kind = src.kind;
   b.volley = src.volley;
   b.shape = src.shape ?? PATTERN_SHAPE[src.kind] ?? "bubble";
+  b.grazed = 0;
   b.dead = false;
   return b;
+}
+
+/** 池化的我方弹。形状取自 `power.ts` 的三种,和敌弹那八种不重叠 */
+export interface PooledShot {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  damage: number;
+  /** 还能穿几个目标(1 = 打中就消失) */
+  pierce: number;
+  /** 每秒最多拐多少弧度(0 = 直线) */
+  homing: number;
+  color: string;
+  shape: "arrow" | "ring" | "beam" | "merge";
+  /** 已经打过的目标 id,免得穿透弹在同一个身上反复扣血 */
+  hitIds: number[];
+  dead: boolean;
+}
+
+export function makeShotPool(cap = 420): Pool<PooledShot> {
+  return new Pool<PooledShot>(
+    () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      r: 5,
+      damage: 1,
+      pierce: 1,
+      homing: 0,
+      color: "#7FC6FF",
+      shape: "arrow" as const,
+      hitIds: [] as number[],
+      dead: false,
+    }),
+    (s) => {
+      s.x = 0;
+      s.y = 0;
+      s.vx = 0;
+      s.vy = 0;
+      s.r = 5;
+      s.damage = 1;
+      s.pierce = 1;
+      s.homing = 0;
+      s.color = "#7FC6FF";
+      s.shape = "arrow";
+      s.hitIds.length = 0;
+      s.dead = false;
+    },
+    cap
+  );
 }
 
 /** 池化的粒子:白烟、亮片、擦弹光环共用一种 */

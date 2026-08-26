@@ -6,6 +6,7 @@
  * 玩家被碰到也只是「护盾破了」或者「换一架备用小飞机」。
  */
 import { PLAYER_HIT_R, SKY_H, SKY_W, type Bullet } from "./bullets";
+import { dropOneLevel, emptyPower, upgrade, type PowerLevels, type PowerTrack } from "./power";
 
 // ---------------------------------------------------------------------------
 // 主武器
@@ -153,11 +154,16 @@ export interface PlaneState {
   wingmen: number;
   /** 刚换飞机后的无敌时间(秒) */
   invuln: number;
+  /** 1.2:四条火力成长线的等级(散射 / 追踪 / 穿透 / 僚机) */
+  levels: PowerLevels;
 }
 
 export function makePlane(weapon: WeaponKind = "star"): PlaneState {
-  return { spare: 2, shield: 0, bombs: 3, weapon, power: 1, wingmen: 0, invuln: 1.2 };
+  return { spare: 2, shield: 0, bombs: 3, weapon, power: 1, wingmen: 0, invuln: 1.2, levels: emptyPower() };
 }
+
+/** 被碰到后打转的时长(秒);打转期间连着短无敌,不是坠毁 */
+export const SPIN_SECONDS = 0.9;
 
 export type TouchOutcome = "shielded" | "swapped" | "grounded" | "ignored";
 
@@ -166,22 +172,31 @@ export interface TouchResult {
   outcome: TouchOutcome;
   /** 给玩家看的一句话 */
   line: string;
+  /** 飞机要打多久的转 */
+  spin: number;
+  /** 这一下掉了哪条火力线(没掉就是 null) */
+  lost: PowerTrack | null;
 }
 
 /**
- * 被敌弹碰到:先破护盾,再换备用小飞机(掉一级火力、僚机散开),
- * 备用机也用完了才算这一趟飞不下去了。无敌时间内直接忽略。
+ * 被敌弹碰到:先破护盾;护盾没了就**原地打个转**、短无敌一下、掉一级火力,
+ * 换一架备用小飞机接着飞 —— 不是坠毁,也没有任何伤亡描写。
+ * 备用机全都去检修了,这一趟才算飞不下去。无敌时间内直接忽略。
  */
 export function touchPlane(plane: PlaneState): TouchResult {
-  if (plane.invuln > 0) return { plane, outcome: "ignored", line: "" };
+  const levels = plane.levels ?? emptyPower();
+  if (plane.invuln > 0) return { plane, outcome: "ignored", line: "", spin: 0, lost: null };
   if (plane.shield > 0) {
     return {
       plane: { ...plane, shield: plane.shield - 1, invuln: 0.8 },
       outcome: "shielded",
       line: "护盾泡泡挡下来啦!",
+      spin: 0.35,
+      lost: null,
     };
   }
   if (plane.spare > 0) {
+    const dropped = dropOneLevel(levels);
     return {
       plane: {
         ...plane,
@@ -189,12 +204,21 @@ export function touchPlane(plane: PlaneState): TouchResult {
         power: Math.max(1, plane.power - 1),
         wingmen: Math.max(0, plane.wingmen - 1),
         invuln: 1.4,
+        levels: dropped.levels,
       },
       outcome: "swapped",
-      line: "冒烟迫降,换一架备用小飞机继续!",
+      line: "打了个转稳住啦,火力掉一级,换一架备用小飞机继续!",
+      spin: SPIN_SECONDS,
+      lost: dropped.track,
     };
   }
-  return { plane: { ...plane, invuln: 0 }, outcome: "grounded", line: "小飞机都去检修啦,这趟先到这里。" };
+  return {
+    plane: { ...plane, invuln: 0 },
+    outcome: "grounded",
+    line: "小飞机都去检修啦,这趟先到这里。",
+    spin: SPIN_SECONDS,
+    lost: null,
+  };
 }
 
 /** 炸弹:清空全场敌弹,并让在场的小飞机统统冒烟迫降 */
@@ -213,30 +237,55 @@ export function useBomb(plane: PlaneState, bullets: readonly Bullet[]): {
   };
 }
 
-export type PickupKind = "power" | "shield" | "bomb" | "wing" | "weapon";
+/**
+ * 关内拾取。1.1 的五种全部保留(关卡数据里写的就是它们),
+ * 1.2 另外加了「追踪 / 穿透」两种,让四条成长线都能在关里捡到。
+ */
+export type PickupKind = "power" | "shield" | "bomb" | "wing" | "weapon" | "homing" | "pierce";
 
 export const PICKUP_INFO: Record<PickupKind, { emoji: string; label: string }> = {
-  power: { emoji: "⬆️", label: "火力 +1" },
+  power: { emoji: "🌟", label: "散射 +1" },
   shield: { emoji: "🫧", label: "护盾泡泡" },
   bomb: { emoji: "💣", label: "炸弹 +1" },
   wing: { emoji: "🛩️", label: "僚机加入" },
   weapon: { emoji: "🔁", label: "换一把主武器" },
+  homing: { emoji: "🎈", label: "追踪 +1" },
+  pierce: { emoji: "💠", label: "穿透 +1" },
+};
+
+/** 道具 → 成长线(没有对应成长线的返回 null) */
+export const PICKUP_TRACK: Partial<Record<PickupKind, PowerTrack>> = {
+  power: "spread",
+  wing: "wing",
+  homing: "homing",
+  pierce: "pierce",
 };
 
 /** 吃到道具(纯函数) */
 export function applyPickup(plane: PlaneState, kind: PickupKind): PlaneState {
+  const levels = plane.levels ?? emptyPower();
+  const track = PICKUP_TRACK[kind];
+  const grown = track ? upgrade(levels, track).levels : levels;
   switch (kind) {
     case "power":
-      return { ...plane, power: Math.min(MAX_POWER, plane.power + 1) };
+      return { ...plane, power: Math.min(MAX_POWER, plane.power + 1), levels: grown };
     case "shield":
-      return { ...plane, shield: Math.min(3, plane.shield + 1) };
+      return { ...plane, shield: Math.min(3, plane.shield + 1), levels: grown };
     case "bomb":
-      return { ...plane, bombs: Math.min(5, plane.bombs + 1) };
+      return { ...plane, bombs: Math.min(5, plane.bombs + 1), levels: grown };
     case "wing":
-      return { ...plane, wingmen: Math.min(MAX_WINGMEN, plane.wingmen + 1) };
+      return { ...plane, wingmen: Math.min(MAX_WINGMEN, plane.wingmen + 1), levels: grown };
+    case "homing":
+    case "pierce":
+      return { ...plane, levels: grown };
     case "weapon": {
       const i = WEAPON_ORDER.indexOf(plane.weapon);
-      return { ...plane, weapon: WEAPON_ORDER[(i + 1) % WEAPON_ORDER.length], power: Math.max(1, plane.power) };
+      return {
+        ...plane,
+        weapon: WEAPON_ORDER[(i + 1) % WEAPON_ORDER.length],
+        power: Math.max(1, plane.power),
+        levels: grown,
+      };
     }
   }
 }
@@ -412,6 +461,17 @@ export function clampPlane(x: number, y: number): { x: number; y: number } {
     x: Math.max(m, Math.min(SKY_W - m, x)),
     y: Math.max(m + 40, Math.min(SKY_H - m, y)),
   };
+}
+
+/**
+ * 手机上拖着飞:飞机要停在手指**上方** `lift` 像素,
+ * 不然手指正好盖住那个判定核心,等于让孩子闭着眼躲弹幕。
+ * 默认 40px(规格第八节),设 0 就是手指底下跟手。
+ */
+export const TOUCH_LIFT = 40;
+
+export function dragTarget(px: number, py: number, lift = TOUCH_LIFT): { x: number; y: number } {
+  return clampPlane(px, py - Math.max(0, lift));
 }
 
 /** 圆与圆是否相碰(子弹打飞机、飞机吃道具都用它) */
