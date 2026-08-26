@@ -294,10 +294,9 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   const hud = el("div", "fs-hud");
   const chipGoal = el("span", "fs-chip fs-chip--goal");
   const chipTime = el("span", "fs-chip");
-  const chipCasts = el("span", "fs-chip");
   const chipCombo = el("span", "fs-chip");
   const pauseBtn = button("fs-btn fs-btn--ghost", "⏸ 暂停");
-  hud.append(chipGoal, chipTime, chipCasts, chipCombo, pauseBtn);
+  hud.append(chipGoal, chipTime, chipCombo, pauseBtn);
 
   const seaBox = el("div", "fs-sea");
   const canvas = document.createElement("canvas");
@@ -387,10 +386,11 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   function layout(): void {
     const avail = clamp(host.clientWidth || 340, 240, 620);
     const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
-    // 竖屏矮屏要给张力条和大按钮留位置,水面就矮一点
-    const share = viewH <= 560 ? 0.4 : viewH <= 720 ? 0.44 : 0.52;
+    // 手机竖屏一共 667 像素,水面上面还压着平台标题栏和 level99 的选关条。
+    // 水面必须让位,否则那颗「按住抛竿」的大按钮会被挤到首屏外面去。
+    const share = viewH <= 560 ? 0.33 : viewH <= 720 ? 0.36 : 0.42;
     W = Math.round(avail);
-    H = Math.round(clamp(viewH * share, 190, 420));
+    H = Math.round(clamp(viewH * share, 180, 380));
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
@@ -493,7 +493,7 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
       const px = 12 + x * (W - 46);
       const py = yOfDepth(s.depth) + Math.sin(ambient / 600 + s.x * 9) * 3;
       g.globalAlpha = 0.55;
-      g.font = "16px system-ui,sans-serif";
+      g.font = `${Math.round(clamp(W / 22, 13, 22))}px system-ui,sans-serif`;
       g.fillText(s.fish.emoji, px, py);
       g.globalAlpha = 1;
     }
@@ -561,7 +561,7 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g.textAlign = "center";
     g.textBaseline = "middle";
     if (phase === "fight" && hooked) {
-      g.font = "26px system-ui,sans-serif";
+      g.font = `${Math.round(clamp(W / 13, 22, 40))}px system-ui,sans-serif`;
       const shake = Math.sin(ambient / 55) * (2 + fight.tension * 4);
       g.fillText(hooked.emoji, hx + shake, hy);
     } else {
@@ -608,10 +608,12 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     } else {
       chipGoal.textContent = `🎯 ${log.score} 分`;
     }
-    chipTime.textContent = totalMs > 0 ? `⏱ ${formatClock(remainMs)}` : `🐟 ${log.count} 条`;
+    // 竖屏一行只放得下三四个 chip:竿数并进时间那一格,连击没起来时干脆不占位置
+    const casts = Number.isFinite(castsLeft) ? ` · 🎣 ${castsLeft} 竿` : "";
+    chipTime.textContent = totalMs > 0 ? `⏱ ${formatClock(remainMs)}${casts}` : `🎣 ${log.count} 条`;
     chipTime.className = totalMs > 0 && remainMs <= 10_000 ? "fs-chip fs-chip--warn" : "fs-chip";
-    chipCasts.textContent = Number.isFinite(castsLeft) ? `🎣 还剩 ${castsLeft} 竿` : `🎣 ${log.count} 条`;
-    chipCombo.textContent = combo > 0 ? `🔥 连击 ×${comboMultiplier(combo).toFixed(1)}` : "🔥 连击 —";
+    chipCombo.hidden = combo <= 0;
+    chipCombo.textContent = `🔥 连击 ×${comboMultiplier(combo).toFixed(1)}`;
 
     const zone = phase === "fight" ? tensionZone(fight.tension) : "good";
     tensionFill.style.width = `${clamp(fight.tension, 0, 1) * 100}%`;
@@ -918,8 +920,7 @@ function mulberryNow(): () => number {
 function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
   const level = buildLevel(ctx.level);
   const box = el("div");
-  const head = el("div", "fs-tip", `${goalText(level)} · ${bandText(level)}`);
-  stage.append(head, box);
+  stage.append(box);
 
   let run: Runner | null = null;
 
@@ -929,7 +930,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
     seconds: level.seconds,
     casts: level.casts,
     hardness: level.hardness,
-    hint: level.hint,
+    // 目标与鱼群带都挤在这一行:竖屏上每省一行,大按钮就多一分留在首屏里
+    hint: `${goalText(level)} · ${bandText(level)}`,
     sfx: ctx.sfx,
     onCatch: (_fish, _score, isNew) => {
       if (isNew) ctx.bonusStars(1);
@@ -953,7 +955,6 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
       run?.destroy();
       run = null;
       box.remove();
-      head.remove();
     },
   };
 }
