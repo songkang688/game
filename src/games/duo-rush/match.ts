@@ -31,6 +31,7 @@ import {
   speedAt,
   survivesMove,
 } from "./logic";
+import { handicapMult } from "./rush12";
 
 export type MatchEvent = "coin" | "boost" | "jump" | "slide" | "lane" | "crash" | "out" | "over";
 
@@ -80,6 +81,8 @@ export interface MatchOptions {
   ghost?: GhostRecord | null;
   names?: [string, string];
   emojis?: [string, string];
+  /** 让分：给落后一方最多 8% 的温和追赶助推，默认关闭 */
+  handicap?: boolean;
 }
 
 export interface MatchState {
@@ -91,6 +94,8 @@ export interface MatchState {
   ai: AiBrain | null;
   aiLevel: AiLevel | null;
   ghost: GhostRecord | null;
+  /** 让分开关（HUD 要显示） */
+  handicap: boolean;
   over: boolean;
   /** 0 = 朵朵赢，1 = 星星（或电脑 / 幽灵）赢，-1 = 平局，null = 还没打完 */
   winner: 0 | 1 | -1 | null;
@@ -140,6 +145,7 @@ export function createMatch(opts: MatchOptions): MatchState {
     ai: aiLevel === null ? null : createBrain(aiLevel, (opts.seed >>> 0) ^ 0x5bd1e995),
     aiLevel,
     ghost: isGhostRace ? (opts.ghost ?? null) : null,
+    handicap: opts.handicap === true,
     over: false,
     winner: null,
     events: [],
@@ -249,6 +255,8 @@ function advance(state: MatchState, r: Runner, h: number): void {
   if (state.time < r.stunUntil) return;
   let speed = speedAt(r.dist);
   if (state.time < r.boostUntil) speed *= BOOST_MULT;
+  // 让分：默认关，开了也只给落后的一方最多 8%
+  speed *= handicapMult(state.handicap, r.dist, state.runners[r.seat === 0 ? 1 : 0].dist);
   r.dist += speed * h;
   r.laneFloat += (r.lane - r.laneFloat) * Math.min(1, h * LANE_LERP);
   const entities = state.gen.ensure(r.dist + LOOKAHEAD_METERS);
@@ -334,6 +342,7 @@ function runAi(state: MatchState): void {
       sliding: isSliding(state, r),
       entities: state.gen.ensure(r.dist + LOOKAHEAD_METERS),
       from: r.resolved,
+      rivalLane: state.runners[0].lane,
     },
     state.time,
   );

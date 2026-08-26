@@ -40,6 +40,7 @@ import {
   livesLeft,
   stepMatch,
 } from "./match";
+import { HANDICAP_MAX, handicapBadge, handicapMult, levelToSetup } from "./rush12";
 import {
   DRAW_DISTANCE,
   GRID_SPACING,
@@ -259,6 +260,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
       .dr-rules p { color: #4A6A8A; font-size: 14.5px; line-height: 1.75; margin: 6px 0; }
       .dr-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #8FD3FF; color: #14496E; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #64AEE0; font-family: inherit; }
+      .dr-handicap { display: flex; align-items: center; gap: 8px; color: #4A6A8A; font-size: 14.5px; line-height: 1.5; cursor: pointer; padding: 6px 2px; }
+      .dr-handicap input { width: 20px; height: 20px; accent-color: #8FD3FF; flex: none; }
       /* 放在最后:上面几条盖层自带 display:flex,权重一样时靠顺序压住它们 */
       .dr-wrap .dr-hidden { display: none; }
     </style>
@@ -279,9 +282,14 @@ export function mount(api: GameApi): { destroy: () => void } {
           <button type="button" data-v="0">🤖 电脑 · ${AI_LABELS[0]}</button>
           <button type="button" data-v="1">🤖 电脑 · ${AI_LABELS[1]}</button>
           <button type="button" data-v="2">🤖 电脑 · ${AI_LABELS[2]}</button>
+          <button type="button" data-v="3">🤖 电脑 · ${AI_LABELS[3]}</button>
         </div>
         <p class="dr-hint"></p>
       </div>
+      <label class="dr-handicap">
+        <input type="checkbox" class="dr-handicap-box">
+        <span>🤝 让分：落后的人跑快一点点（最多 ${Math.round(HANDICAP_MAX * 100)}%）</span>
+      </label>
       <p class="dr-ghostline"></p>
       <button class="dr-softbtn dr-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
       <button class="dr-softbtn dr-collectbtn dr-hidden" type="button">🎁 我的收藏册</button>
@@ -325,6 +333,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   const hintEl = pick(".dr-hint");
   const ghostLineEl = pick(".dr-ghostline");
   const rivalBox = pick(".dr-rivalbox");
+  const handicapBox = pick<HTMLInputElement>(".dr-handicap-box");
   const collectBtn = pick<HTMLButtonElement>(".dr-collectbtn");
   const canvas = pick<HTMLCanvasElement>(".dr-canvas");
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
@@ -412,6 +421,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     aiLevel = v === "human" ? null : (Number(v) as AiLevel);
     refreshHint();
   });
+  let handicap = false;
+  const onHandicap = (): void => {
+    handicap = handicapBox.checked;
+    api.play("tap");
+  };
+  handicapBox.addEventListener("change", onHandicap);
   refreshHint();
 
   /* ---------------- 开局与收尾 ---------------- */
@@ -420,14 +435,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     clearTimeout(endTimer);
     clearTimeout(countTimer);
     const seed = (Math.random() * 0xffffffff) >>> 0;
-    state = createMatch({ mode, seed, aiLevel, ghost });
+    state = createMatch({ mode, seed, aiLevel, ghost, handicap });
     running = false;
     paused = false;
     pauseEl.classList.add("dr-hidden");
     setupEl.classList.add("dr-hidden");
     gameEl.classList.remove("dr-hidden");
     relayout();
-    msgEl.textContent = openingLine();
+    const badge = handicapBadge(handicap);
+    msgEl.textContent = badge ? `${badge}｜${openingLine()}` : openingLine();
     let n = 3;
     countEl.classList.remove("dr-hidden");
     countEl.textContent = "3";
@@ -1060,6 +1076,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       clearTimeout(countTimer);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
+      handicapBox.removeEventListener("change", onHandicap);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
@@ -1073,7 +1090,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   };
 }
 
-/** 供设置面板与攻略引用：三档电脑的名字（避免文案与逻辑各写一份） */
+/** 供设置面板与攻略引用：四档电脑的名字（避免文案与逻辑各写一份） */
 export const AI_CHOICES = AI_LEVELS.map((level) => ({
   level,
   label: AI_LABELS[level],

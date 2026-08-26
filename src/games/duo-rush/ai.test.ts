@@ -28,13 +28,13 @@ function view(partial: Partial<AiView> & { entities: Entity[] }): AiView {
   };
 }
 
-describe("人机三档的档位设定", () => {
-  it("三档都配了名字和说明", () => {
+describe("人机四档的档位设定", () => {
+  it("四档都配了名字和说明", () => {
     for (const level of AI_LEVELS) {
       expect(AI_LABELS[level].length).toBeGreaterThan(0);
       expect(AI_HINTS[level].length).toBeGreaterThan(0);
     }
-    expect(AI_LEVELS.length).toBe(3);
+    expect(AI_LEVELS.length).toBe(4);
   });
 
   it("档位越高反应越快、失误越少", () => {
@@ -42,6 +42,8 @@ describe("人机三档的档位设定", () => {
     expect(AI_REACTION_SECONDS[1]).toBeGreaterThan(AI_REACTION_SECONDS[2]);
     expect(AI_MISTAKE_CHANCE[0]).toBeGreaterThan(AI_MISTAKE_CHANCE[1]);
     expect(AI_MISTAKE_CHANCE[1]).toBeGreaterThan(AI_MISTAKE_CHANCE[2]);
+    expect(AI_REACTION_SECONDS[2]).toBeGreaterThan(AI_REACTION_SECONDS[3]);
+    expect(AI_MISTAKE_CHANCE[2]).toBeGreaterThan(AI_MISTAKE_CHANCE[3]);
   });
 
   it("高手档也有反应延迟,不是每帧都在重算", () => {
