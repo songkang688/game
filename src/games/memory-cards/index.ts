@@ -137,11 +137,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (won) {
       const third = Math.max(1, Math.floor(cfg.maxMiss / 3));
       const got = misses <= third ? 3 : misses <= third * 2 ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `只翻错了 ${misses} 次，记性真好！`), 400);
+      later(() => ctx.win(got as 1 | 2 | 3, `全部配对成功，只翻错 ${misses} 次，记忆很扎实！`), 400);
     } else {
       later(() => ctx.lose(cfg.timeLimit > 0 && timeLeft <= 0
-        ? "时间到啦，再试一次会更快！"
-        : "翻错的次数有点多，休息一下再来！"), 400);
+        ? "时间到啦～按行一张一张翻,建立顺序之后会快很多，再来一次！"
+        : "机会用完啦～把「图案 + 位置」一起记成一句话，下一次命中率会高不少！"), 400);
     }
   }
 
@@ -234,8 +234,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         }
       } else {
         msgEl.textContent = cfg.mathPairs
-          ? "得数对不上，再算一算～"
-          : "不太一样，再想想它们藏在哪～";
+          ? "得数对不上～重算一遍,再去找写着它的那张牌！"
+          : "这两张不是一对～把刚看到的位置记进去，下一轮就能用上！";
       }
       later(() => {
         group.forEach((c) => { faceUp[c] = false; });
@@ -261,9 +261,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (rotateEvery > 0 && decoys > 0) return "牌阵会转，还混着独苗卡，记位置也记牌面！";
     if (rotateEvery > 0) return `🎠 每翻 ${rotateEvery} 张，整个牌阵就整体挪一格！`;
     if (decoys > 0) return `🌫️ 有 ${decoys} 张牌没有同伴，认出来就别再碰它。`;
-    if (cfg.matchSize === 3) return "三张一样的才算一组哦！";
-    if (cfg.imp > 0) return "小心调皮章鱼捣乱！";
-    return "点击卡片翻开，找到一样的图案！";
+    if (cfg.matchSize === 3) return "三张一样的才算一组，凑齐再翻！";
+    if (cfg.imp > 0) return "调皮章鱼会换牌，记忆随时要重新核对！";
+    return "按行一张一张翻，把图案和位置一起记下来！";
   }
 
   renderAll();
@@ -309,6 +309,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     chapters: CHAPTERS,
     playLevel,
     mapHint: "翻错越少星星越多，十大主题等你挑战！",
-    grandMessage: "188 关全部配对成功，超级记忆小达人！",
+    grandMessage: "188 关全部配对成功，你的记忆方法已经很有一套了！",
   });
 }

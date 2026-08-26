@@ -106,7 +106,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         ? "点一下画面发球！砖阵会左右滑动，算好提前量～"
         : portals.length > 0
           ? "点一下画面发球！🌀 星门会把球传到另一扇门～"
-          : "点一下画面发球！灰色钢砖要打两下～";
+          : "点一下画面发球！灰色钢砖要打两下，先削掉旁边的普通砖～";
 
   function renderTop(): void {
     bricksEl.textContent = isPattern ? `🖼️ 还差 ${patternLeft}` : `🧱 ${bricksLeft}`;
@@ -200,7 +200,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         : `${totalBricks} 块砖全部打碎，爱心还剩 ${lives} 颗！`;
       setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, brag); }, 350);
     } else {
-      setTimeout(() => { if (!destroyed) ctx.lose("球溜走三次啦，球拍早点移过去接住它！"); }, 350);
+      setTimeout(() => { if (!destroyed) ctx.lose("这一局球溜走了～别追球，提前把球拍挪到落点下面等它，下一局就稳了！"); }, 350);
     }
   }
 
@@ -295,10 +295,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
               finish(false);
               return;
             }
-            msgEl.textContent = ballCount > 1 ? "两颗球都溜走了，点画面再发一次！" : "球溜走了，点画面再发一次！";
+            msgEl.textContent = ballCount > 1 ? "两颗球都溜走了，点画面重新发球！" : "球溜走了，点画面重新发球！";
             resetBalls();
           } else {
-            msgEl.textContent = "掉了一颗球，还有一颗，稳住！";
+            msgEl.textContent = "掉了一颗，还有一颗在场上，稳住节奏！";
           }
         }
       }
@@ -377,7 +377,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "一颗爱心都不丢就是 3 星！",
-    grandMessage: "188 座砖阵全部打穿，弹球小勇士！",
+    mapHint: "一颗爱心都不丢就是 3 星，先在砖阵侧面开条通道！",
+    grandMessage: "188 座砖阵全部打穿，你的弹道预判已经很老练了！",
   });
 }

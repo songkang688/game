@@ -101,8 +101,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
             : (cfg.shieldChance ?? 0) > 0
               ? "🛡️ 护盾气球要敲两下才破！"
               : cfg.cloudChance > 0
-                ? "乌云球 ☁️ 不能戳哦！"
-                : "气球飘上来就戳破它！";
+                ? "乌云球 ☁️ 是陷阱，手指绕开它！"
+                : "手指守在下半屏，气球一冒头就戳！";
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -141,9 +141,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (won) {
       const bad = mistakes + Math.max(0, escaped - 1);
       const got = bad === 0 ? 3 : bad <= 2 ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `砰砰砰！${cfg.target} 个气球全部搞定！`), 350);
+      later(() => ctx.win(got as 1 | 2 | 3, `${cfg.target} 个气球全部拿下，出手又快又准！`), 350);
     } else {
-      later(() => ctx.lose(reason ?? "气球飞走的有点多，站到它们下面早点戳！"), 350);
+      later(() => ctx.lose(reason ?? "这一轮飘走得多了些～优先处理最靠上的那几个，再来一次就稳了！"), 350);
     }
   }
 
@@ -199,7 +199,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       removeBalloon(other, true);
     }
     removeBalloon(b, true);
-    msgEl.textContent = counted > 0 ? `🧨 连锁爆炸！一口气炸掉 ${counted} 个！` : "🧨 砰！可惜旁边没有气球～";
+    msgEl.textContent = counted > 0 ? `🧨 连锁爆炸！一口气炸掉 ${counted} 个！` : "🧨 砰！旁边没有气球，下次挑密集的地方引爆～";
     if (counted >= 4) ctx.bonusStars(1);
     renderTop();
     if (popped >= cfg.target) finish(true);
@@ -210,10 +210,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (b.kind === "cloud") {
       mistakes++;
       ctx.sfx("oops");
-      msgEl.textContent = "☁️ 乌云球不能戳！";
+      msgEl.textContent = "☁️ 乌云球是陷阱，看清楚再落手！";
       removeBalloon(b, true);
       renderTop();
-      if (mistakes >= 3) finish(false, "乌云球戳到三次啦，看清楚再出手～");
+      if (mistakes >= 3) finish(false, "乌云球碰到三次啦～下一局先在心里给它画个圈，绕开就行！");
       return;
     }
     if (b.kind === "rainbow") {
@@ -248,7 +248,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           ? `先算一算，现在要戳得数是 ${targetNum} 的！`
           : `要按顺序，下一个是 ${targetNum}！`;
       renderTop();
-      if (mistakes >= 3) finish(false, "戳错三次啦，看清指令再出手，你可以的！");
+      if (mistakes >= 3) finish(false, "指令看岔三次啦～换指令时先停半秒确认，命中率马上就回来！");
       return;
     }
     if (b.shield) {
@@ -256,7 +256,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       b.el.classList.remove("blp-shielded");
       b.el.dataset.shield = "0";
       ctx.sfx("tap");
-      msgEl.textContent = "🛡️ 盾碎啦，再戳一下！";
+      msgEl.textContent = "🛡️ 护盾破了，再补一下就算数！";
       return;
     }
     popNormal(b);
@@ -391,7 +391,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "不戳错、不放跑气球，就能拿 3 星！",
-    grandMessage: "188 关气球全部砰砰完，天空都被你点亮啦！",
+    mapHint: "不戳错、不放跑气球，命中率满分就是 3 星！",
+    grandMessage: "188 关气球全部拿下，判断和手速都练到位了！",
   });
 }

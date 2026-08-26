@@ -67,10 +67,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const msgEl = wrap.querySelector(".mp-msg") as HTMLElement;
 
   const tips: string[] = [];
-  if (cfg.sleepyChance > 0) tips.push("😴 瞌睡鼠待得久");
-  if (cfg.goldChance > 0) tips.push("🌟 金地鼠一只顶两只");
-  if (cfg.bunnyChance > 0) tips.push("🐰 小兔子不能拍");
-  msgEl.textContent = tips.length > 0 ? tips.join("；") + "！" : "地鼠冒头就拍它！";
+  if (cfg.sleepyChance > 0) tips.push("😴 瞌睡地鼠停留久，可以留到后面补");
+  if (cfg.goldChance > 0) tips.push("🌟 金地鼠一只顶两只，优先拍它");
+  if (cfg.bunnyChance > 0) tips.push("🐰 小兔子是干扰项，别碰");
+  msgEl.textContent = tips.length > 0 ? tips.join("；") + "！" : "视线放在棋盘中间，用余光扫全场！";
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -143,11 +143,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (won) {
       const frac = timeLeft / cfg.duration;
       const got = mistakes === 0 && frac >= 0.12 ? 3 : mistakes <= 1 ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `拍中 ${cfg.target} 分，还剩 ${timeLeft} 秒，好快的手！`), 350);
+      later(() => ctx.win(got as 1 | 2 | 3, `拿下 ${cfg.target} 分，还剩 ${timeLeft} 秒，节奏保持得很稳！`), 350);
     } else {
       later(() => ctx.lose(mistakes >= 3
-        ? "小兔子被拍到三次啦，下次看清楚再出手～"
-        : `时间到，拍到了 ${score} 分，再快一点点就赢了！`), 350);
+        ? "小兔子混进来三次啦～下一局先排除小兔再出手，命中率立刻就上去了！"
+        : `时间到，拿到 ${score} 分。手指守在棋盘中间，来回的路就短了，再来一局！`), 350);
     }
   }
 
@@ -161,7 +161,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (h.kind === "bunny") {
       mistakes++;
       ctx.sfx("oops");
-      msgEl.textContent = "哎呀，那是小兔子！轻轻放它回家～";
+      msgEl.textContent = "那是小兔子，送它回洞里～下次先认清再落手！";
       hideMole(i);
       renderTop();
       if (mistakes >= 3) finish(false);
@@ -207,7 +207,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "不拍错、留点时间，就能拿 3 星！",
-    grandMessage: "99 关地鼠全部拍完，锤子小冠军就是你！",
+    mapHint: "命中率满分、再留点时间，3 星就到手！",
+    grandMessage: "99 关地鼠全部拍完，你的反应和判断都练出来了！",
   });
 }

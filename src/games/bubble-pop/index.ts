@@ -145,7 +145,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (cfg.stone > 0) tips.push("🪨 敲不破，绕开它");
     if (cfg.bolt > 0) tips.push("⚡ 清掉整行整列");
     if (cfg.frozen > 0) tips.push("🧊 在旁边消一次才解冻");
-    msgEl.textContent = tips.length > 0 ? tips.join("；") : "找到挨在一起的同色泡泡，一起点破它们！";
+    msgEl.textContent = tips.length > 0 ? tips.join("；") : "先扫一眼全场，从最大的一团同色泡泡下手！";
   }
 
   function render(): void {
@@ -220,12 +220,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       const got = left <= cfg.stone ? 3 : left <= half ? 2 : 1;
       if (left <= cfg.stone) ctx.bonusStars(1);
       later(() => ctx.win(got as 1 | 2 | 3, left <= cfg.stone
-        ? "泡泡全部清空，太厉害啦！"
-        : `只剩 ${left} 个泡泡，达标！`), 400);
+        ? "泡泡全部清空，这一局的顺序排得很漂亮！"
+        : `只剩 ${left} 个泡泡，达标通过！`), 400);
     } else if (outOfMoves) {
-      later(() => ctx.lose(`步数用完还剩 ${left} 个，下次先找最大的一团再出手，一定行！`), 400);
+      later(() => ctx.lose(`步数用完还剩 ${left} 个～下一局先在心里排一遍顺序，从最大的一团开始，收益会高很多！`), 400);
     } else {
-      later(() => ctx.lose(`还剩 ${left} 个泡泡，先找大团的同色泡泡下手！`), 400);
+      later(() => ctx.lose(`还剩 ${left} 个泡泡～从盘面下方消起，上面掉下来常常会自己连锁，再来一次！`), 400);
     }
   }
 
@@ -250,13 +250,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (v < 0) return;
     if (v === STONE) {
       ctx.sfx("oops");
-      msgEl.textContent = "石头敲不破哦，先消别的泡泡～";
+      msgEl.textContent = "石头敲不破，把它当地形绕开就好～";
       return;
     }
     if (isHidden(v)) {
       grid[r][c] = revealHidden(v);
       ctx.sfx("tap");
-      msgEl.textContent = "🏮 点亮啦！看看它是什么颜色～";
+      msgEl.textContent = "🏮 点亮了！记住它的颜色，别回头再点一次～";
       render();
       return;
     }
@@ -309,7 +309,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const g = groupAt(grid, COLS, r, c, cfg.colors);
     if (g.length < 2) {
       ctx.sfx("oops");
-      msgEl.textContent = "这颗泡泡太孤单了，找挨在一起的同色泡泡！";
+      msgEl.textContent = "这颗是单个的，消不掉～找相邻成团的同色泡泡！";
       return;
     }
     ctx.sfx("pop");
@@ -317,7 +317,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ctx.bonusStars(1);
       msgEl.textContent = `一口气消掉 ${g.length} 个，奖励一颗小星星！`;
     } else {
-      msgEl.textContent = `噗噗！消掉 ${g.length} 个泡泡～`;
+      msgEl.textContent = `消掉 ${g.length} 个～再攒大一点收益更高！`;
     }
     popCells(g);
     render();
@@ -342,7 +342,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "全部清空 3 星，剩得越少星星越多！",
-    grandMessage: "188 关泡泡全部搞定，你是泡泡小英雄！",
+    mapHint: "全部清空 3 星，剩得越少星星越多，先规划再出手！",
+    grandMessage: "188 关泡泡全部搞定，你的盘面规划能力已经很强了！",
   });
 }
