@@ -368,15 +368,27 @@ export function mountGameScreen(
     announce(on ? "背景音乐打开了" : "背景音乐关掉了");
   }
 
-  // Esc 统一暂停:游戏自己已经处理过这一下(defaultPrevented)就让给游戏
+  /**
+   * Esc 统一暂停。
+   *
+   * 挂在 window 上、并且推迟一个宏任务再判断,是因为自带暂停的游戏
+   * (噗噗超人、冒险小王、寻找外星朋友…)也把 keydown 挂在 window 上并
+   * `preventDefault()`。同一目标同一阶段按注册顺序触发,壳层永远先注册,
+   * 立刻处理就会和游戏各弹一次暂停。等这一轮派发结束再看 `defaultPrevented`,
+   * 谁先接住就归谁。
+   *
+   * 弹窗开着时 `showDialog` 在捕获阶段就把 Esc 吃掉了(还 stopPropagation),
+   * 这里根本收不到。
+   */
   function onGlobalKeyDown(e: KeyboardEvent): void {
-    if (disposed || !isDismissKey(e.key) || e.defaultPrevented) return;
-    // 弹窗自己会吃掉 Esc(捕获阶段),走到这里说明当前没有打开的弹窗
+    if (disposed || !isDismissKey(e.key)) return;
     if (dialog || pauseDialog) return;
-    e.preventDefault();
-    openPause();
+    window.setTimeout(() => {
+      if (disposed || dialog || pauseDialog || e.defaultPrevented) return;
+      openPause();
+    }, 0);
   }
-  document.addEventListener("keydown", onGlobalKeyDown);
+  window.addEventListener("keydown", onGlobalKeyDown);
 
   function unmount(): void {
     try {
@@ -472,7 +484,7 @@ export function mountGameScreen(
 
   return () => {
     disposed = true;
-    document.removeEventListener("keydown", onGlobalKeyDown);
+    window.removeEventListener("keydown", onGlobalKeyDown);
     closeDialog();
     closePause();
     unmount();
