@@ -3,17 +3,17 @@ import { totalSize } from "../level99";
 import { TWINKLE_FINALE } from "./logic";
 import { buildMelodies, CHAPTERS, LEVELS } from "./levels";
 
-describe("音乐星星 99 关", () => {
-  it("恰好 99 关", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("音乐星星 188 关", () => {
+  it("恰好 188 关", () => {
+    expect(LEVELS).toHaveLength(188);
   });
 
-  it("至少 6 个主题章节，章节大小之和为 99", () => {
+  it("至少 6 个主题章节，章节大小之和为 188", () => {
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
-  it("每关参数合法且旋律可弹", () => {
+  it("跟弹关参数合法且旋律可弹", () => {
     for (let i = 0; i < 99; i++) {
       const lv = LEVELS[i];
       expect(lv.starCount).toBeGreaterThanOrEqual(3);

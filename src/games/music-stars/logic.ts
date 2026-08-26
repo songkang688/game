@@ -36,3 +36,85 @@ export function makeSequence(
  * 下标对应五声音阶 [哆,来,咪,索,拉]。
  */
 export const TWINKLE_FINALE: number[] = [0, 0, 3, 3, 4, 4, 3];
+
+// ===========================================================================
+// 1.1 追加：第 100–188 关的新玩法纯逻辑
+// 节奏型 / 音程 / 双声部和弦 / 简谱
+// 以下全部是新增内容，前 99 关的旋律生成一个字都没动。
+// ===========================================================================
+
+/** 五声音阶对应的简谱数字（哆来咪索拉） */
+export const SCORE_DIGITS = [1, 2, 3, 5, 6];
+
+/** 简谱视奏：把音符下标翻成谱面上的数字串 */
+export function toScore(seq: readonly number[]): string {
+  return seq.map((n) => SCORE_DIGITS[n] ?? "?").join(" ");
+}
+
+/**
+ * 节奏型：0 是短音（♪），1 是长音（♩）。
+ * 保证长短都有（不然听不出节奏），也不会连着四个一模一样。
+ */
+export function makeRhythm(length: number, rand: () => number = Math.random): number[] {
+  if (length <= 1) return length === 1 ? [0] : [];
+  const out: number[] = [];
+  for (let i = 0; i < length; i++) {
+    let v = rand() < 0.45 ? 1 : 0;
+    const n = out.length;
+    if (n >= 3 && out[n - 1] === v && out[n - 2] === v && out[n - 3] === v) v = v === 1 ? 0 : 1;
+    out.push(v);
+  }
+  if (!out.includes(1)) out[Math.floor(length / 2)] = 1;
+  if (!out.includes(0)) out[0] = 0;
+  return out;
+}
+
+/** 音程：两个音之间差几格、往上还是往下 */
+export function intervalLabel(a: number, b: number): string {
+  if (a === b) return "一样高";
+  return `${b > a ? "往上" : "往下"} ${Math.abs(b - a)} 格`;
+}
+
+/** 把一段旋律拆成两两一组的音程题用的音对（相邻音不重复） */
+export function makeIntervalPair(
+  starCount: number,
+  rand: () => number = Math.random,
+  maxGap = 4
+): [number, number] {
+  const a = Math.floor(rand() * starCount);
+  const options: number[] = [];
+  for (let n = 0; n < starCount; n++) {
+    if (n === a) continue;
+    if (Math.abs(n - a) > maxGap) continue;
+    options.push(n);
+  }
+  const b = options.length > 0 ? options[Math.floor(rand() * options.length)] : (a + 1) % starCount;
+  return [a, b];
+}
+
+/**
+ * 双声部和弦：每一拍两个不同的音，两颗星星要一起按到。
+ * 相邻两拍不会完全一样，不然一直按同两颗就过关了。
+ */
+export function makeChords(
+  length: number,
+  starCount: number,
+  rand: () => number = Math.random
+): number[][] {
+  if (length <= 0 || starCount < 2) return [];
+  const out: number[][] = [];
+  for (let i = 0; i < length; i++) {
+    let chord: number[] = [];
+    for (let guard = 0; guard < 24; guard++) {
+      const lo = Math.floor(rand() * starCount);
+      const hi = Math.floor(rand() * starCount);
+      if (lo === hi) continue;
+      chord = [Math.min(lo, hi), Math.max(lo, hi)];
+      const prev = out[i - 1];
+      if (!prev || prev[0] !== chord[0] || prev[1] !== chord[1]) break;
+    }
+    if (chord.length < 2) chord = [0, Math.min(1, starCount - 1)];
+    out.push(chord);
+  }
+  return out;
+}
