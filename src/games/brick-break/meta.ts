@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🧱",
   category: "casual" as const,
   color: "#FFE2D9",
-  blurb: "188 关十大砖阵！双球齐发、滑动迷阵、星门传送、图案工坊全新登场！",
-  // 10 章合计 188 关,只有闯关一种玩法
-  modes: ["campaign"] as const,
+  blurb: "188 关十大砖阵 + 无尽砖塔!六种砖、五个限时道具,球再快也不会穿砖,板边接球也不会横着飞。",
+  // 10 章合计 188 关,外加一条会一直往下压的无尽砖塔
+  modes: ["campaign", "endless"] as const,
   levels: 188,
+  // 手指拖板与方向键都顺手
+  platform: "both" as const,
 };
