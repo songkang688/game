@@ -261,6 +261,8 @@ window.__smoke = (() => {
 
   let lastMe = null;
   const eelTrack = [];
+  const aimLog = [];
+  const push = { x: 0, y: 0 };
   function seaWorld() {
     if (frames.length === 0) return { me: null, fish: [], boss: null, eels: [], haze: [] };
     const curFrame = frames[frames.length - 1];
@@ -440,7 +442,27 @@ window.__smoke = (() => {
       if (best === null || cost < best.cost) best = { cost, x: px, y: py, room };
     }
     best = best ?? escape;
-    if (best) best.safeCount = safeCount;
+    if (!best) return null;
+    best.safeCount = safeCount;
+
+    // 洋流、漩涡、气泡墙都会把小鱼从指针位置上推开一截。与其一样样去
+    // 认这些力,不如直接量:指针停稳之后小鱼落在哪儿,差多少就往回顶多少
+    // ——真人玩久了顶流也是这么顶的。
+    const now = performance.now();
+    aimLog.push({ t: now, x: best.x, y: best.y });
+    while (aimLog.length > 40) aimLog.shift();
+    const settledAim = aimLog.find((a) => now - a.t >= 240 && now - a.t < 420);
+    if (settledAim && aimLog.every((a) => now - a.t > 420 || Math.hypot(a.x - settledAim.x, a.y - settledAim.y) < 34)) {
+      const ex = Math.max(-45, Math.min(45, me.x - settledAim.x));
+      const ey = Math.max(-45, Math.min(45, me.y - settledAim.y));
+      push.x += (ex - push.x) * 0.3;
+      push.y += (ey - push.y) * 0.3;
+    } else {
+      push.x *= 0.9;
+      push.y *= 0.9;
+    }
+    best.x = Math.max(pad, Math.min(w - pad, best.x - push.x));
+    best.y = Math.max(pad, Math.min(h - pad, best.y - push.y));
     // 顺手报一下"此刻站的地方"离最近的麻烦还有多远,方便排查挨打的原因
     if (best) {
       best.now = gapAt(me.x, me.y, 0);
@@ -462,8 +484,11 @@ window.__smoke = (() => {
   return {
     seaWorld,
     seaAim,
-    /** 画面上出没出现过某句话(用来认结算面板 / 失败面板) */
-    saw(needle) { return texts.some((t) => t.includes(needle)); },
+    /** 这一关有结果了没有:存档回调响了,或者失败面板已经画出来 */
+    settled() {
+      if (state.calls.some((c) => c[0] === 'addStars' || c[0] === 'onWin' || c[0] === 'onLose')) return true;
+      return texts.some((t) => t.includes('再游一次') || t.includes('再切一次'));
+    },
     forget() { texts = []; },
     /** 最近一次画出来的爱心行,数一数还剩几条命 */
     hud() { return texts.filter((t) => t.includes('💗') || t.includes('🤍')).slice(-1)[0] ?? ''; },
@@ -605,10 +630,7 @@ async function playFruitSlice(page, { sloppy }) {
       y + 26,
       sloppy ? 5 : 12,
     );
-    const done = await page.evaluate(() =>
-      window.__smoke.calls().some((c) => c[0] === "addStars" || c[0] === "onWin" || c[0] === "onLose"),
-    );
-    if (done) return;
+    if (await page.evaluate(() => window.__smoke.settled())) return;
   }
 }
 
@@ -619,7 +641,7 @@ async function playFruitSlice(page, { sloppy }) {
  */
 async function playOceanMunch(page, { sloppy }) {
   const r = await page.evaluate(() => window.__smoke.canvasRect());
-  const steps = sloppy ? 70 : 1400;
+  const steps = sloppy ? 90 : 3800;
   for (let k = 0; k < steps; k++) {
     if (sloppy) {
       // 手生的玩法:缩在左上角不动,专等大鱼和障碍自己撞上来
@@ -633,12 +655,7 @@ async function playOceanMunch(page, { sloppy }) {
       if (aim) await page.mouse.move(r.left + aim.x, r.top + aim.y);
       await page.waitForTimeout(24);
     }
-    if (k % 8 === 0) {
-      const done = await page.evaluate(() =>
-        window.__smoke.calls().some((c) => c[0] === "addStars" || c[0] === "onWin" || c[0] === "onLose"),
-      );
-      if (done) return;
-    }
+    if (k % 8 === 0 && (await page.evaluate(() => window.__smoke.settled()))) return;
   }
 }
 

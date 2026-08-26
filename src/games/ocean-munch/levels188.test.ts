@@ -28,6 +28,9 @@ import {
   crushedCap,
   driftDir,
   driftVector,
+  eelActive,
+  eelPlan,
+  eelReach,
   grow,
   isLevelUnlocked,
   isThemeUnlocked,
@@ -294,6 +297,56 @@ describe("海底大胃王 · 1.1 新机制", () => {
     }
     // 一个周期后回到原样
     expect(driftVector(3.3).fx).toBeCloseTo(driftVector(3.3 + DRIFT_PERIOD).fx, 6);
+  });
+
+  it("电电草:前九片海的插法和 1.0 一模一样", () => {
+    for (const zone of ZONE_ORDER.slice(0, LEGACY_ZONES)) {
+      expect(eelPlan(zone, 1)).toEqual([
+        { fx: 0.28, offset: 0 },
+        { fx: 0.55, offset: 1.3 },
+        { fx: 0.82, offset: 2.5 },
+      ]);
+      expect(eelPlan(zone, 2).map((e) => e.fx)).toEqual([0.28, 0.55, 0.82, 0.12]);
+      expect(eelPlan(zone, 3).map((e) => e.fx)).toEqual([0.28, 0.55, 0.82, 0.12, 0.68]);
+    }
+    expect(eelReach(20)).toBe(33);
+    expect(eelReach(70)).toBe(83);
+  });
+
+  it("电电草:新三章只种两棵,而且永远不会同时通电", () => {
+    for (const zone of NEW_ZONES) {
+      for (const tier of [1, 2, 3]) {
+        const plan = eelPlan(zone, tier);
+        expect(plan).toHaveLength(2);
+        // 一左一右靠边站,中间空出整整一大片
+        expect(plan[1].fx - plan[0].fx).toBeGreaterThan(0.6);
+        for (let t = 0; t < 40; t += 0.02) {
+          const live = plan.filter((e) => eelActive(t, e.offset)).length;
+          expect(live).toBeLessThanOrEqual(1);
+        }
+        // 也不能两棵都常年不通电,那这机制就白写了
+        expect(plan.some((e) => eelActive(0.1, e.offset))).toBe(true);
+        expect(plan.some((e) => eelActive(2.0, e.offset))).toBe(true);
+      }
+    }
+  });
+
+  it("电电草:新三章长到体型上限,375 窄屏上也总留得出一条水道", () => {
+    const W = 375;
+    for (let i = LEGACY_LEVELS; i < TOTAL_LEVELS; i++) {
+      const lv = LEVELS[i];
+      if (!lv.hazards.includes("eel")) continue;
+      const plan = eelPlan(lv.zone, 3);
+      const reach = eelReach(sizeCapFor(lv));
+      // 就算两棵一起通电(实际不会),中间也得站得下一条满级的鱼
+      const lane = plan[1].fx * W - reach - (plan[0].fx * W + reach);
+      expect(lane).toBeGreaterThan(0);
+      // 通电时也不能把人逼到贴着屏幕边缘
+      for (const e of plan) {
+        const gap = Math.min(e.fx * W, W - e.fx * W);
+        expect(gap).toBeLessThan(reach);
+      }
+    }
   });
 
   it("毒藻鱼:只缩一圈不掉心,永远缩不到比出生还小,麻酥酥会自己好", () => {
