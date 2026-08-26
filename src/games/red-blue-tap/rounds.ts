@@ -204,13 +204,16 @@ export function buildRound(kind: RoundKind, rand: () => number, opts: RoundOptio
   };
 }
 
-/** 指令的图形 + 文字双通道:低年级只看图标也能明白这一轮要干嘛 */
-export function roundBrief(plan: RoundPlan): { icon: string; text: string; hint: string } {
+/**
+ * 指令的图形 + 文字双通道:低年级只看图标也能明白这一轮要干嘛。
+ * `solo` 是一个人玩(无尽)的场合,反应回合没有对手可比,文案要跟着改。
+ */
+export function roundBrief(plan: RoundPlan, solo = false): { icon: string; text: string; hint: string } {
   switch (plan.kind) {
     case "reaction":
       return {
         icon: "🚦",
-        text: "等它亮了再点，谁先点到谁得分",
+        text: solo ? "等它亮了再点，越快越好" : "等它亮了再点，谁先点到谁得分",
         hint: "亮之前点会被小云朵挡一下，稳住手"
       };
     case "order":
@@ -443,20 +446,27 @@ export function createDuel(plan: RoundPlan, now: () => number, sides: Side[] = S
       const t = now();
       const slot = logicalSlot(side, pos, plan.slots.length);
       const st = stateOf(side);
-      if (finished || st.out || st.done) return result(side, pos, slot, t, "ignored", 0);
+      // 已经收工的一侧照样要过门:一巴掌拍下去时,连刚刚拿到手的那一分也得撤回来
+      if (finished || st.out) return result(side, pos, slot, t, "ignored", 0);
 
       const gate = gates.get(side)!;
       const verdict = gate.accept(pos, t);
       if (verdict.reason === "debounce") return result(side, pos, slot, t, "debounce", 0);
       if (verdict.reason === "palm") {
-        // 一巴掌拍下去:这一下不算,窗口里刚给出去的也一起收回
-        for (const p of verdict.revoke) {
-          const s = logicalSlot(side, p, plan.slots.length);
-          const at = st.hits.indexOf(s);
-          if (at >= 0) st.hits.splice(at, 1);
-        }
-        return result(side, pos, slot, t, "palm", 0);
+        // 一巴掌拍下去:这一下不算,这一轮刚拿到的分也一起收回。
+        // 反应回合里一巴掌盖住四个格子照样能压中目标,所以「赢了」也要能撤回来,
+        // 不然「用手掌拍多个点不给分」就只是一句空话。
+        const back = Math.max(0, st.score);
+        st.score -= back;
+        st.hits = [];
+        st.done = false;
+        st.finishedAt = null;
+        st.out = true;
+        if (winner === side) winner = null;
+        return result(side, pos, slot, t, "palm", -back);
       }
+
+      if (st.done) return result(side, pos, slot, t, "ignored", 0);
 
       if (t < lightAt) {
         // 抢点:亮之前点,扣自己一分,这一轮也不用再点了

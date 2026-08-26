@@ -21,6 +21,7 @@ import {
   AI_TIERS,
   COLOR_FACE,
   ENDLESS_MISS_LIMIT,
+  PALM_WINDOW_MS,
   ROUND_KINDS,
   SLOT_COUNT,
   aiMisses,
@@ -76,7 +77,7 @@ export const ARENA_CSS = `
 .rbt-key-hit::after { content: "✓"; position: absolute; right: 4px; top: 2px; font-size: 16px; color: #ffffff; }
 .rbt-key-bad { background: #FFE1E6 !important; color: #C24545 !important; }
 .rbt-key-num { position: absolute; left: 4px; bottom: 2px; font-size: 15px; font-weight: 900; color: #ffffffe8; }
-.rbt-key-cap { position: absolute; right: 5px; bottom: 2px; font-size: 11px; font-weight: 800; color: #ffffffcc; letter-spacing: .04em; }
+.rbt-key-cap { position: absolute; right: 6px; bottom: 3px; font-size: 13px; font-weight: 900; color: currentColor; opacity: .8; letter-spacing: .04em; }
 .rbt-vs-foot { text-align: center; font-size: 13px; font-weight: 700; color: #7286AE; margin-top: 8px; line-height: 1.6; }
 .rbt-vs-cloud { text-align: center; min-height: 20px; font-size: 14px; font-weight: 800; color: #8C7FBF; }
 .rbt-vs-over { position: absolute; inset: 0; border-radius: 16px; background: rgba(248,251,255,.96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px; }
@@ -88,7 +89,11 @@ export const ARENA_CSS = `
 .rbt-ready .rbt-key { animation: rbtBreath 1s ease-in-out infinite; }
 @keyframes rbtBreath { 0%, 100% { transform: scale(1); } 50% { transform: scale(.97); } }
 @media (max-width: 420px) {
-  .rbt-vs { padding: 10px 8px; }
+  .rbt-vs { padding: 10px 6px; }
+  /* 360px 上塞不下两侧各两列 72px 的按钮，改成每侧一竖排：
+     按钮不缩水，中间那条 ${SIDE_GUTTER_PX}px 的隔离带也保得住 */
+  .rbt-pad { grid-template-columns: 1fr; gap: 8px; }
+  .rbt-vs-side { padding: 6px; }
   .rbt-key { min-width: ${KEY_MIN_PX}px; min-height: ${KEY_MIN_PX}px; font-size: 26px; }
   .rbt-vs-gap { flex-basis: ${SIDE_GUTTER_PX}px; }
   .rbt-vs-brief { font-size: 16px; }
@@ -116,10 +121,15 @@ function buildPad(side: Side, caps: string[], showCaps: boolean): PadHandle {
     b.className = "rbt-key";
     b.dataset.pos = String(pos);
     b.dataset.side = side;
-    if (showCaps) {
+    if (showCaps) b.dataset.cap = caps[pos].toUpperCase();
+    // 第一轮还没开画之前先摆个空位,免得开局那半秒是四个空白框
+    const dot = document.createElement("span");
+    dot.textContent = "·";
+    b.appendChild(dot);
+    if (b.dataset.cap) {
       const cap = document.createElement("span");
       cap.className = "rbt-key-cap";
-      cap.textContent = caps[pos].toUpperCase();
+      cap.textContent = b.dataset.cap;
       b.appendChild(cap);
     }
     root.appendChild(b);
@@ -142,6 +152,13 @@ function paintPad(pad: PadHandle, plan: RoundPlan, lit: boolean): void {
     const glyph = document.createElement("span");
     glyph.textContent = lit ? face.shape : "·";
     b.appendChild(glyph);
+    if (b.dataset.cap) {
+      // 键帽每次重画都要补回来:paintPad 会把按钮里的东西全清一遍
+      const cap = document.createElement("span");
+      cap.className = "rbt-key-cap";
+      cap.textContent = b.dataset.cap;
+      b.appendChild(cap);
+    }
     if (plan.kind === "order" && lit) {
       const at = plan.order.indexOf(slot);
       if (at >= 0) {
@@ -249,13 +266,16 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
   function tapFrom(side: Side, pos: number): void {
     if (!duel || over) return;
     if (mode === "solo" && side === "right") return;
-    const res = duel.tap(side, pos);
+    const d = duel;
+    const plan = d.plan;
+    const res = d.tap(side, pos);
     const pad = pads[side];
     if (res.outcome === "debounce") return;
     if (res.outcome === "palm") {
-      for (const p of [0, 1, 2, 3]) pad.keys[p].classList.remove("rbt-key-hit");
-      cloudEl.textContent = "☁️ 一整只手拍上去啦，小云朵挡住了——一个一个点才算数";
+      for (const k of pad.keys) k.classList.remove("rbt-key-hit");
+      cloudEl.textContent = "☁️ 一整只手拍上去啦，小云朵把这一轮收走了——一个一个点才算数";
       api.play("oops");
+      settleIfDone();
       return;
     }
     if (res.outcome === "early") {
@@ -275,7 +295,15 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     if (res.outcome === "good" || res.outcome === "win") {
       markKey(pad, pos, "rbt-key-hit");
       api.play("pop");
-      if (res.outcome === "win") settleIfDone();
+      if (res.outcome !== "win") return;
+      settleIfDone();
+      // 抢点回合一分定胜负，没必要干等窗口走完；
+      // 但要多留一个「手掌拍」的窗口，好让一巴掌拍出来的胜利还来得及撤回。
+      if (duel === d && plan.kind !== "count") {
+        later(() => {
+          if (duel === d) endRound();
+        }, PALM_WINDOW_MS + 40);
+      }
     }
   }
 
@@ -290,6 +318,8 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     const r = duel.finish();
     duel = null;
     bodyEl.classList.remove("rbt-ready");
+    // 这一轮翻篇了就把「亮啦！」收掉，免得下一轮的预备还挂着上一轮的招牌
+    briefEl.textContent = "这一轮结束，下一轮马上来……";
     score = {
       left: Math.max(0, score.left + r.delta.left),
       right: Math.max(0, score.right + r.delta.right)
@@ -557,8 +587,8 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     if (res.outcome === "debounce") return;
     if (res.outcome === "palm") {
       for (const k of pad.keys) k.classList.remove("rbt-key-hit");
-      cloudEl.textContent = "☁️ 一整只手拍上去不算分哦，一个一个点";
       api.play("oops");
+      endRound("☁️ 一整只手拍上去不算分哦，一个一个点");
       return;
     }
     if (res.outcome === "early" || res.outcome === "wrong") {
@@ -579,6 +609,7 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     const r = duel.finish();
     duel = null;
     bodyEl.classList.remove("rbt-ready");
+    briefEl.textContent = "这一轮结束，下一轮马上来……";
     if (r.delta.left > 0) {
       cleared++;
       cloudEl.textContent = note ?? "漂亮，这一轮过啦！";
@@ -600,7 +631,7 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     round++;
     const kind = endlessRoundKind(round, Math.random);
     const plan = buildRound(kind, Math.random, { liveMs: endlessLiveMs(round) });
-    const brief = roundBrief(plan);
+    const brief = roundBrief(plan, true);
     briefEl.innerHTML = `${brief.icon} ${brief.text}<span class="rbt-vs-brief-hint">预备……${brief.hint}</span>`;
     paintPad(pad, plan, false);
     bodyEl.classList.add("rbt-ready");

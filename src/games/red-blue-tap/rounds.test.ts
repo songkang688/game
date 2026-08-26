@@ -82,6 +82,13 @@ describe("红蓝点点 1.2 · 四种回合都在", () => {
     }
   });
 
+  it("一个人玩的时候反应回合不说「谁先点到」,因为没有对手", () => {
+    const plan = buildRound("reaction", mulberry32(5));
+    expect(roundBrief(plan, false).text).toContain("谁先点到");
+    expect(roundBrief(plan, true).text).not.toContain("谁先点到");
+    expect(roundBrief(plan, true).text).toContain("等它亮了再点");
+  });
+
   it("颜色一律配形状:四种颜色四种形状,色弱也分得出", () => {
     const shapes = TAP_COLORS.map((c) => COLOR_FACE[c].shape);
     expect(shapes).toHaveLength(4);
@@ -367,7 +374,36 @@ describe("红蓝点点 1.2 · 防乱拍", () => {
     clock.advance(15);
     expect(d.tap("left", 1).outcome).toBe("palm");
     clock.advance(15);
-    expect(d.tap("left", 2).outcome).toBe("palm");
+    // 一巴掌下去这一轮就作废了，后面的手指再落下来也不算
+    expect(d.tap("left", 2).outcome).toBe("ignored");
+    expect(d.finish().delta.left).toBe(0);
+  });
+
+  it("反应回合里一巴掌盖住四个格子:压中了也白搭,分会被收回去", () => {
+    const clock = fakeClock();
+    const plan = buildRound("reaction", mulberry32(19));
+    const d = createDuel(plan, clock.now);
+    clock.set(d.lightAt + 90);
+    // 一巴掌下去,四个格子几乎同时响,其中一个正好是该点的那个
+    const order = [plan.targets[0], ...plan.forbidden];
+    expect(d.tap("left", slotPos("left", order[0])).outcome).toBe("win");
+    clock.advance(8);
+    expect(d.tap("left", slotPos("left", order[1])).outcome).toBe("palm");
+    const r = d.finish();
+    expect(r.delta.left).toBe(0);
+    expect(r.winner).toBeNull();
+  });
+
+  it("被判手掌拍之后这一轮就没份了,再点也不算", () => {
+    const clock = fakeClock();
+    const plan = buildRound("count", mulberry32(23), { need: 2 });
+    const d = createDuel(plan, clock.now);
+    clock.set(d.lightAt + 90);
+    d.tap("left", 0);
+    clock.advance(10);
+    expect(d.tap("left", 1).outcome).toBe("palm");
+    clock.advance(400);
+    expect(d.tap("left", 2).outcome).toBe("ignored");
     expect(d.finish().delta.left).toBe(0);
   });
 
