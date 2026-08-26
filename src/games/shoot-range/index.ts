@@ -393,15 +393,14 @@ function createField(opts: FieldOptions): FieldHandle {
       return;
     }
 
+    // 顺序打错了照样把靶打倒——不然万一它正好挡在下一个号码前面,这一关就走不下去了。
+    // 代价是断连击、记一次失误,三星线过不去。
     const outOfOrder = isOrderViolation(pane.targets, target);
     if (outOfOrder) {
       pane.orderMistakes++;
       pane.combo = 0;
-      say(`要先打 ${nextOrder(pane.targets)} 号靶哦。`);
+      say(`该打 ${nextOrder(pane.targets)} 号的,顺序乱了要掉星哦。`);
       opts.sfx("oops");
-      // 顺序打错了这一发就算废弹,靶子留在原地继续等
-      refreshHud();
-      return;
     }
 
     target.alive = false;

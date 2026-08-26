@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, assertTotal, chapterOf } from "../level99";
 import { CHAPTERS, TARGET_BOUNDS, buildDuelTargets, buildLevel, buildTide, hasCleanShot } from "./levels";
-import { MUZZLE_X, MUZZLE_Y, aimToVelocity, traceShot } from "./logic";
+import {
+  MUZZLE_X,
+  MUZZLE_Y,
+  aimToVelocity,
+  fireGun,
+  makeGun,
+  nextOrder,
+  stepGun,
+  stepTarget,
+  traceShot,
+} from "./logic";
 
 describe("shoot-range 188 关战役", () => {
   it("十个章节加起来正好 188 关", () => {
@@ -112,6 +122,81 @@ describe("shoot-range 188 关战役", () => {
         if (t.kind === "friend") continue;
         expect(hasCleanShot(t, friends, def.blocks)).toBe(true);
       }
+    }
+  });
+
+  it("照着「一个个瞄准打」的打法模拟一遍,188 关都能在弹药与时限内清完", () => {
+    // 瞄准点的候选:靶心优先,被好人靶或木板挡住时再试靶面上的几个偏移
+    const offsets: Array<[number, number]> = [
+      [0, 0],
+      [-0.6, 0],
+      [0.6, 0],
+      [0, -0.6],
+      [0, 0.6],
+    ];
+    // 一个不算快的玩家:每发之间花 0.45 秒挪准星
+    const AIM_TIME = 0.45;
+
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const def = buildLevel(lv);
+      let targets = def.targets.map((t) => ({ ...t }));
+      let gun = makeGun(def.magSize, def.reloadTime);
+      let time = 0;
+      let shots = 0;
+      let friendHits = 0;
+      const limit = def.seconds > 0 ? def.seconds : 120;
+
+      let cleared = false;
+      while (time <= limit && shots < def.shotBudget) {
+        const pending = targets.filter((t) => t.alive && t.kind !== "friend");
+        if (pending.length === 0) {
+          cleared = true;
+          break;
+        }
+        // 编号关必须按顺序,其余关就近打
+        const want = nextOrder(targets);
+        const goal = want > 0 ? pending.find((t) => t.order === want) ?? pending[0] : pending[0];
+
+        // 等到瞄准完成、冷却走完、换弹结束
+        const wait = Math.max(AIM_TIME, gun.reloadLeft, gun.cooldownLeft);
+        time += wait;
+        gun = stepGun(gun, wait);
+        targets = targets.map((t) => stepTarget(t, wait));
+
+        const live = targets.find((t) => t.id === goal.id);
+        expect(live).toBeDefined();
+        if (!live) break;
+
+        // 先试着打中目标本身;要是被另一个必打的靶挡在前面,那就先打掉挡路的那个
+        let hitId: number | null = null;
+        let shadow: number | null = null;
+        for (const [ox, oy] of offsets) {
+          const shot = aimToVelocity(MUZZLE_X, MUZZLE_Y, live.x + ox * live.r, live.y + oy * live.r);
+          const res = traceShot(shot, targets, def.blocks);
+          if (res.targetId === live.id) {
+            hitId = res.targetId;
+            break;
+          }
+          const other = targets.find((t) => t.id === res.targetId);
+          if (shadow === null && other && other.kind !== "friend") shadow = other.id;
+        }
+        if (hitId === null) hitId = shadow;
+
+        const fired = fireGun(gun);
+        expect(fired.fired).toBe(true);
+        gun = fired.gun;
+        shots++;
+        if (hitId === null) continue;
+        const struck = targets.find((t) => t.id === hitId);
+        if (struck?.kind === "friend") friendHits++;
+        else if (struck) struck.alive = false;
+      }
+
+      expect(cleared, `第 ${lv + 1} 关照着一个个瞄的打法清不完(用了 ${shots} 发 / ${time.toFixed(1)} 秒)`).toBe(true);
+      expect(shots).toBeLessThanOrEqual(def.shotBudget);
+      expect(time).toBeLessThanOrEqual(limit);
+      // 这套打法全程不该误伤好人靶
+      expect(friendHits).toBe(0);
     }
   });
 
