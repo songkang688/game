@@ -18,13 +18,13 @@
  * `destroy` 负责把两轮的壳、监听、timer、欢呼节点一起收干净。
  */
 import type { PlayCtx, PlayHandle } from "../level99";
-import { runQuiz } from "../quiz99";
+import { runQuiz, type QuizOptions } from "../quiz99";
 import { speak } from "../speech";
 import type { MathQ } from "./gen";
 import { methodHint, stepHint } from "./hints";
 import type { MathKind } from "./kinds";
 import { buildQuestions, makeReviewQuestions, typesOfKinds, CHAPTER_THEMES } from "./levels";
-import { practiceLine, recordMistakes } from "./mistakes";
+import { practiceLine, recordMistakes, type StorageLike } from "./mistakes";
 
 /** 连错几次给方法提示（和 `quiz99.shouldHint` 的门槛保持一致，两边同时发生） */
 export const HINT_AFTER_WRONG = 2;
@@ -79,15 +79,25 @@ export const MTF_CSS = `
 }
 `;
 
-interface HelperHandle {
+export interface HelperHandle {
   destroy: () => void;
+}
+
+/**
+ * 玩法之外的两个接缝，只给用例换零件用；线上跑的永远是 `quiz99` 与 `localStorage`。
+ */
+export interface FarmDeps {
+  /** 答题壳（默认 `quiz99` 的 `runQuiz`） */
+  runner?: (opts: QuizOptions) => PlayHandle;
+  /** 错题本存哪儿（默认 `localStorage`） */
+  storage?: StorageLike | null;
 }
 
 /**
  * 关卡辅助层：数错次数给两级提示、答对放一只欢呼的小动物。
  * 全程只读 `quiz99` 渲染出来的 DOM，不改它的判分，也不拦它的点击。
  */
-function attachHelper(
+export function attachFarmHelper(
   stage: HTMLElement,
   questions: readonly MathQ[],
   onFirstWrong: (q: MathQ) => void
@@ -197,7 +207,8 @@ function attachHelper(
 }
 
 /** 一关：正题一轮 + 错题回顾一轮 */
-export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps = {}): PlayHandle {
+  const runRound = deps.runner ?? runQuiz;
   const theme = CHAPTER_THEMES[ctx.chapterIndex] ?? CHAPTER_THEMES[0];
   const style = stage.ownerDocument.createElement("style");
   style.textContent = MTF_CSS;
@@ -248,7 +259,7 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ctx.win(stars, `${msg ?? ""} ${REVIEW_DONE}`.trim());
     };
     const reviewCtx: PlayCtx = { ...ctx, skipped: false, win: finish, lose: finish };
-    quiz = runQuiz({
+    quiz = runRound({
       stage,
       ctx: reviewCtx,
       questions,
@@ -258,7 +269,7 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       skipped: false,
       bigChoices: true,
     });
-    helper = attachHelper(stage, questions, () => {});
+    helper = attachFarmHelper(stage, questions, () => {});
     speak(REVIEW_NOTE);
   }
 
@@ -271,14 +282,14 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         return;
       }
       reviewing = true;
-      recordMistakes(typesOfKinds(wrongKinds));
+      recordMistakes(typesOfKinds(wrongKinds), deps.storage);
       startReview(stars, msg);
     },
   };
 
   const mainQuestions = buildQuestions(ctx.level);
-  quiz = runQuiz({ stage, ctx: mainCtx, questions: mainQuestions, theme, bigChoices: true });
-  helper = attachHelper(stage, mainQuestions, noteWrong);
+  quiz = runRound({ stage, ctx: mainCtx, questions: mainQuestions, theme, bigChoices: true });
+  helper = attachFarmHelper(stage, mainQuestions, noteWrong);
 
   return {
     destroy() {
