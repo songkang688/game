@@ -54,8 +54,10 @@ const MIX: Array<Array<[OreKind, number]>> = [
   [["nugget", 3], ["goldSmall", 4], ["goldBig", 4], ["goldHuge", 2], ["gem", 2], ["pebble", 3], ["boulder", 3]],
   [["nugget", 3], ["goldSmall", 4], ["goldBig", 4], ["goldHuge", 2], ["gem", 2], ["chest", 3], ["pebble", 3], ["boulder", 2]],
   [["nugget", 2], ["goldSmall", 3], ["goldBig", 4], ["goldHuge", 2], ["gem", 5], ["chest", 3], ["pebble", 3], ["boulder", 2]],
-  [["nugget", 3], ["goldSmall", 3], ["goldBig", 4], ["goldHuge", 3], ["gem", 4], ["chest", 3], ["pebble", 3], ["boulder", 3]],
-  [["nugget", 2], ["goldSmall", 3], ["goldBig", 4], ["goldHuge", 4], ["gem", 5], ["chest", 4], ["pebble", 4], ["boulder", 4]],
+  // 1.2 起,最后两章开始掺 1.2 的新矿(泥泥矿会打滑、双层晶要连钩两次)。
+  // 前六章的抽签袋一个字都没动 —— 老存档里的关卡不能变样。
+  [["nugget", 3], ["goldSmall", 3], ["goldBig", 4], ["goldHuge", 3], ["gem", 4], ["chest", 3], ["pebble", 3], ["boulder", 3], ["muddy", 3]],
+  [["nugget", 2], ["goldSmall", 3], ["goldBig", 4], ["goldHuge", 4], ["gem", 5], ["chest", 4], ["pebble", 4], ["boulder", 4], ["muddy", 3], ["twinCrystal", 2]],
 ];
 
 /** 第几章开始有会跑的小地鼠 */

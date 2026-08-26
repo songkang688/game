@@ -37,6 +37,23 @@ import {
   type ShopKind,
   type Wallet,
 } from "./logic";
+import {
+  PARALLAX,
+  applySupply,
+  createTwin,
+  extendRamp,
+  grabHitch,
+  isSupplyDepth,
+  lightRadius,
+  makeHookRng,
+  muddySlips,
+  parallaxOffset,
+  priceAt,
+  supplyChoices,
+  twinGrab,
+  type SupplyOption,
+  type TwinState,
+} from "./depth12";
 
 // ---------------------------------------------------------------------------
 // 配色:一章一套粉彩矿洞
@@ -206,6 +223,10 @@ interface RunOpts {
   hint: string;
   sfx: (name: SoundName) => void;
   onFinish: (r: RunResult) => void;
+  /** 无尽模式传当前层深:越深照明圈越小(有下限)。闯关不传,不画照明圈 */
+  depth?: number;
+  /** 关内商店的价钱按第几章算(无尽按层深折算) */
+  priceChapter?: number;
 }
 
 function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
@@ -228,6 +249,16 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   let last = 0;
   let toastLeft = 0;
   let shake = 0;
+  /** 放绳到现在多少秒:下钩是加速起步的,不是一按就满速 */
+  let extendT = 0;
+  /** 抓到那一下的顿感倒计时 */
+  let hitch = 0;
+  /** 泥泥矿打滑用的随机数,按矿洞种子起,重玩同一关手感一致 */
+  const slipRng = makeHookRng(Math.round(o.field.phase * 1000 + o.field.time * 7 + o.goal));
+  /** 被炸药固定过的泥泥矿 id */
+  const pinned = new Set<number>();
+  /** 双层晶剥壳进度：ore.id → 还剩几层 */
+  const twin = new Map<number, TwinState>();
 
   const wrap = el("div", "gh-run");
   const hud = el("div", "gh-hud");
@@ -357,6 +388,9 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     gem: { fill: "#7DDDF0", lit: "#D6F7FF", edge: "#2F97AF" },
     chest: { fill: "#C98C58", lit: "#E7B98C", edge: "#8A5A31" },
     mole: { fill: "#D8A87A", lit: "#F0CFAC", edge: "#A57A4E" },
+    // 1.2 新矿:泥泥矿一眼看出「裹着泥」,双层晶用冷紫和钻石区分开
+    muddy: { fill: "#A8794F", lit: "#D0A87C", edge: "#6E4A28" },
+    twinCrystal: { fill: "#9FA8F0", lit: "#DCE0FF", edge: "#5B63B8" },
   };
 
   /** 金块 / 石头共用的圆角块 */
@@ -469,6 +503,48 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     c.restore();
   }
 
+  /**
+   * 矿洞纵深:近岩壁 / 中矿层 / 远洞穴三层,跟着钩子放绳的长度错位挪动。
+   * **只有位移与明暗,没有透视** —— 钩子角度是这个玩法唯一要瞄的东西,一透视就瞄不准了。
+   */
+  function drawParallax(c: CanvasRenderingContext2D): void {
+    for (let i = PARALLAX.length - 1; i >= 0; i--) {
+      const spec = PARALLAX[i];
+      const dy = parallaxOffset(spec.layer, ropeLen);
+      c.save();
+      c.globalAlpha = 0.16 + i * 0.05;
+      c.fillStyle = shadeHex(pal.wall, spec.shade);
+      const band = 46 + i * 26;
+      for (let y = 118 - dy; y < FIELD_H; y += band * 2) {
+        c.fillRect(WALL + 4 + i * 10, y, FIELD_W - WALL * 2 - 8 - i * 20, band);
+      }
+      c.restore();
+    }
+  }
+
+  /** 把 #rrggbb 按比例调暗（远景层用） */
+  function shadeHex(hex: string, k: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.round(((n >> 16) & 255) * k);
+    const g = Math.round(((n >> 8) & 255) * k);
+    const b = Math.round((n & 255) * k);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  /**
+   * 无尽越深越暗的照明圈。半径有下限（`LIGHT_MIN`），
+   * 再深也要看得清顶部那行「金币 / 目标 / 剩余时间」，不许变成靠记忆玩。
+   */
+  function drawLight(c: CanvasRenderingContext2D): void {
+    if (o.depth === undefined) return;
+    const r = lightRadius(o.depth);
+    const g = c.createRadialGradient(PIVOT_X, PIVOT_Y + 90, r * 0.55, PIVOT_X, PIVOT_Y + 90, r * 1.5);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(24,16,8,0.55)");
+    c.fillStyle = g;
+    c.fillRect(0, 96, FIELD_W, FIELD_H - 96);
+  }
+
   function draw(): void {
     if (!c2d) return;
     const c = c2d;
@@ -481,6 +557,8 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     g.addColorStop(1, pal.sky1);
     c.fillStyle = g;
     c.fillRect(0, 0, FIELD_W, FIELD_H);
+
+    drawParallax(c);
 
     // 两侧石壁 + 几道矿脉纹路
     c.fillStyle = pal.wall;
@@ -545,6 +623,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       c.stroke();
       c.restore();
     }
+    drawLight(c);
     c.restore();
   }
 
@@ -587,6 +666,15 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   function bomb(): void {
     if (paused || phase !== "back" || !carrying || wallet.bombs <= 0) return;
     wallet = useBomb(wallet);
+    if (carrying.kind === "muddy") {
+      // 泥泥矿不炸掉,而是把外面那层泥「砰」一下震掉,接下来这一颗再也不滑
+      pinned.add(carrying.id);
+      shake = 5;
+      o.sfx("pop");
+      say("💥 泥震掉啦!这颗泥泥矿不会再滑");
+      refreshHud();
+      return;
+    }
     carrying = null;
     shake = 5;
     o.sfx("pop");
@@ -610,6 +698,26 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
 
   function collect(): void {
     if (!carrying) return;
+
+    // 双层晶:第一次钩上来只是把外壳剥了,晶芯掉回原处等你再钩一次
+    if (carrying.kind === "twinCrystal") {
+      const state = twin.get(carrying.id) ?? createTwin();
+      const next = twinGrab(state);
+      twin.set(carrying.id, next.state);
+      const got = haulValue(carrying, wallet.luck);
+      wallet = { ...wallet, coins: wallet.coins + got };
+      o.sfx("coin");
+      if (!next.taken) {
+        ores.push(carrying);
+        ores.sort((a, b) => a.y - b.y);
+        say(`🔷 外壳裂开啦 +${got} 金币,里面的晶芯再钩一次!`);
+      } else {
+        say(`🔷 双层晶到手 +${got} 金币!`);
+      }
+      carrying = null;
+      return;
+    }
+
     const got = haulValue(carrying, wallet.luck);
     wallet = { ...wallet, coins: wallet.coins + got };
     const label = ORES[carrying.kind].label;
@@ -657,12 +765,17 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       text.append(el("div", "gh-shopname", entry.label), el("div", "gh-shopdesc", entry.desc));
       const btn = button("gh-buy", "");
       btn.addEventListener("click", () => {
-        const before = wallet.coins;
-        wallet = buyItem(wallet, kind);
-        if (wallet.coins === before) {
+        const owned = ownedOf(wallet, kind);
+        const price = priceAt(kind, owned, o.priceChapter ?? 0);
+        if (owned >= SHOP[kind].max || wallet.coins < price) {
           o.sfx("oops");
           return;
         }
+        // buyItem 按 1.1 的原价扣款,章节涨价的那一部分在这里补扣
+        const before = wallet.coins;
+        wallet = buyItem(wallet, kind);
+        const paid = before - wallet.coins;
+        wallet = { ...wallet, coins: wallet.coins - Math.max(0, price - paid) };
         o.sfx("coin");
         refreshShop();
         refreshHud();
@@ -684,8 +797,9 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       for (const { kind, btn } of rows) {
         const owned = ownedOf(wallet, kind);
         const full = owned >= SHOP[kind].max;
-        btn.textContent = full ? `已满 ${owned}` : `${shopPrice(kind, owned)} 💰 (${owned}/${SHOP[kind].max})`;
-        btn.disabled = !canBuy(wallet, kind);
+        const price = priceAt(kind, owned, o.priceChapter ?? 0);
+        btn.textContent = full ? `已满 ${owned}` : `${price} 💰 (${owned}/${SHOP[kind].max})`;
+        btn.disabled = full || wallet.coins < price;
       }
     }
     refreshShop();
@@ -774,10 +888,19 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       return;
     }
 
+    // 抓到那一下的顿感:60–90ms,让「钩住了」这件事有重量
+    if (hitch > 0) {
+      hitch = Math.max(0, hitch - dt);
+      refreshHud();
+      draw();
+      return;
+    }
+
     if (phase === "swing") {
       swingClock += dt;
     } else if (phase === "out") {
-      ropeLen += EXTEND_SPEED * dt;
+      extendT += dt;
+      ropeLen += EXTEND_SPEED * extendRamp(extendT) * dt;
       const tipPt = hookTip(fireAngle, ropeLen);
       const hit = hookedOre({ ...o.field, ores }, tipPt, worldClock);
       if (hit) {
@@ -785,17 +908,27 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
         ores.splice(ores.indexOf(hit), 1);
         phase = "back";
         shake = 3;
+        hitch = grabHitch(hit.weight);
         o.sfx("tap");
       } else if (ropeExhausted(o.field, ropeLen, tipPt)) {
         phase = "back";
       }
     } else {
+      // 泥泥矿在半路可能滑脱:掉回原埋点,还能再钩一次(用炸药固定过就不滑)
+      if (carrying && carrying.kind === "muddy" && muddySlips(slipRng, dt, pinned.has(carrying.id))) {
+        ores.push(carrying);
+        ores.sort((a, b) => a.y - b.y);
+        say("🟤 泥泥矿滑掉啦!先用炸药把它固定住");
+        o.sfx("oops");
+        carrying = null;
+      }
       const speed = carrying ? retractSpeed(carrying.weight, wallet.strength) : EMPTY_RETRACT;
       ropeLen -= speed * dt;
       if (ropeLen <= 24) {
         ropeLen = 24;
         collect();
         phase = "swing";
+        extendT = 0;
         if (ores.length === 0) {
           refreshHud();
           draw();
@@ -840,6 +973,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     wallet: emptyWallet(lv.startCoins),
     palette: PALETTES[lv.chapter % PALETTES.length],
     hint: lv.hint,
+    priceChapter: lv.chapter,
     sfx: (n) => ctx.sfx(n),
     onFinish: (r) => {
       if (r.coins >= lv.target) {
@@ -915,6 +1049,22 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     );
   }
 
+  /** 每 5 层一次的补给点:三选一,选完接着往下 */
+  function openSupply(clearedDepth: number): void {
+    const options: SupplyOption[] = supplyChoices(clearedDepth, 460001 + clearedDepth * 7717);
+    panel(
+      `🎁 第 ${clearedDepth} 层补给点`,
+      `挖到这么深,井上给你捎了点东西下来,挑一样带着走。`,
+      options.map((opt) => ({
+        label: `${opt.emoji} ${opt.label}`,
+        go: () => {
+          wallet = applySupply(wallet, opt);
+          startLayer();
+        },
+      }))
+    );
+  }
+
   function startLayer(): void {
     clearBody();
     const layer: EndlessLayer = endlessLayer(depth);
@@ -924,16 +1074,23 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
       goal: wallet.coins + layer.quota,
       wallet,
       palette: PALETTES[(depth - 1) % PALETTES.length],
-      hint: `挖够 ${layer.quota} 金币就能往下一层,越深的矿层给的时间越少。`,
+      hint: `挖够 ${layer.quota} 金币就能往下一层,越深的矿层给的时间越少,照明圈也越小。`,
+      depth,
+      priceChapter: Math.floor((depth - 1) / 2),
       sfx: (n) => api.play(n),
       onFinish: (r) => {
         wallet = r.wallet;
         if (r.gained >= layer.quota) {
           api.play("win");
+          const cleared = layer.depth;
           depth += 1;
+          if (isSupplyDepth(cleared)) {
+            openSupply(cleared);
+            return;
+          }
           const next = endlessLayer(depth);
           panel(
-            `✅ 第 ${layer.depth} 层达标!`,
+            `✅ 第 ${cleared} 层达标!`,
             `这一层净赚 ${r.gained} 金币,钱包里现在有 ${wallet.coins} 金币。往下是第 ${depth} 层「${next.name}」,配额 ${next.quota} 金币。`,
             [
               { label: "⛏️ 继续下潜", go: startLayer },

@@ -293,7 +293,8 @@ describe("回收速度:越重越慢,力量水越多越快", () => {
 
 describe("矿石估值", () => {
   it("矿石表里每一种都填齐了,而且钻石最值钱、石头最不值钱", () => {
-    expect(ORE_KINDS.length).toBe(9);
+    // 1.2 加了泥泥矿与双层晶,9 → 11
+    expect(ORE_KINDS.length).toBe(11);
     for (const kind of ORE_KINDS) {
       const p = ORES[kind];
       expect(p.label.length).toBeGreaterThan(0);
