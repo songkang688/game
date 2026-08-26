@@ -79,9 +79,9 @@ export const THEMES: ThemeDef[] = [
   { name: "冲四连环", icon: "⚡", blurb: "先冲四逼白棋去挡,再开新杀招!", tint: "#F2E4FA", ink: "#7B3FA0" },
   { name: "双杀布阵", icon: "🗡️", blurb: "一颗子造出两个杀招,白棋顾此失彼!", tint: "#FFE4E9", ink: "#B03A5B" },
   { name: "大师终局", icon: "👑", blurb: "最难的残局都在这里,解开就是小棋王!", tint: "#E2E8F8", ink: "#3D5199" },
-  { name: "四手连环", icon: "🔗", blurb: "一路冲四逼白棋跟着挡,第四手才收网!", tint: "#E6F6EF", ink: "#2F7A5C" },
+  { name: "四手连环", icon: "🔗", blurb: "整整四手才收网:唯一胜点、四手杀、弃子、抓禁手全在这一章!", tint: "#E6F6EF", ink: "#2F7A5C" },
   { name: "活四陷阱", icon: "🕸️", blurb: "禁手陷阱与弃子引杀都在这里,看着能赢的那步常常是坑!", tint: "#FBEEDC", ink: "#8C5A22" },
-  { name: "五步算杀", icon: "🌌", blurb: "整整五步的杀法,而且一手禁手都不用踩!", tint: "#E7E3F7", ink: "#4B3E8E" },
+  { name: "五步算杀", icon: "🌌", blurb: "整整五步的杀法,一半以上要先弃一子把白棋支开!", tint: "#E7E3F7", ink: "#4B3E8E" },
 ];
 
 type P = [number, number];
