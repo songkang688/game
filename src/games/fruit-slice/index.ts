@@ -810,7 +810,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (checkClassicTarget()) return;
     }
     for (let i = flying.length - 1; i >= 0; i--) {
+      // 爆裂果会在这一轮里连锁清掉好几个,数组可能已经比 i 短了
       const f = flying[i];
+      if (!f) continue;
       // 触控放宽:判定走廊 = 果半径 + 12px,配合 ≥24px 的可见刀光,一年级拖不准也切得中
       if (!segCircleHit(x1, y1, x2, y2, f.x, f.y, f.r + 12)) continue;
       if (f.fly === "shell") {
@@ -1940,7 +1942,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const mx0 = w * 0.12;
     const mx1 = w * 0.88;
     const my0 = 96;
-    const my1 = h - 40;
+    // 最后一行的星星也要留得下:375×667 上原来会被切掉一截
+    const my1 = h - 62;
     const nr = Math.max(13, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
     for (let i = 0; i < size; i++) {
       const row = Math.floor(i / cols);
@@ -2269,11 +2272,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     for (const r of rings) {
-      ctx.globalAlpha = Math.max(0, r.life / 0.7);
+      // 涟漪的寿命有长有短(最长的是果王倒下那一圈),半径要夹住别变负数
+      ctx.globalAlpha = Math.min(1, Math.max(0, r.life / 0.7));
       ctx.strokeStyle = r.color;
       ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.arc(r.x, r.y, (1 - Math.max(0, r.life) / 0.7) * r.maxR + 10, 0, Math.PI * 2);
+      ctx.arc(r.x, r.y, Math.max(2, (1 - Math.max(0, r.life) / 0.7) * r.maxR + 10), 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }

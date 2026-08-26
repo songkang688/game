@@ -2139,7 +2139,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const mx0 = w * 0.12;
     const mx1 = w * 0.88;
     const my0 = 96;
-    const my1 = h - 40;
+    // 最后一行的星星也要留得下:375×667 上原来会被切掉一截
+    const my1 = h - 62;
     const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
     for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols);
