@@ -580,7 +580,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
         : `<span class="ld-mini" aria-hidden="true"></span>`;
       box.innerHTML = `${face}
         <span class="ld-foe-name">${s.name}${s.kind === "ai" ? `·${AI_LEVEL_NAMES[s.level]}` : ""}</span>
-        <span class="ld-count">${roleTag(i)} ${n} 张</span>
+        <span class="ld-count">${roleTag(i)} 🂠 ${n} 张</span>
         ${bubbleHTML}`;
       foesEl.appendChild(box);
       foeEls.set(i, box);
@@ -706,7 +706,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     const turn = actor() === showSeat ? "该你啦!" : `等 ${opts.seats[actor()].name}…`;
     meHead.innerHTML = `${face}
       <span class="ld-foe-name">${s.name}</span>
-      <span class="ld-count">${roleTag(showSeat)} ${hand.length} 张</span>
+      <span class="ld-count">${roleTag(showSeat)} 🂠 ${hand.length} 张</span>
       <span class="ld-chip">${turn}</span>`;
   }
 
