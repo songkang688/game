@@ -7,6 +7,7 @@
  * 这是嘉年华打靶场：所谓「后坐力」是**准星被星星弹弹上去一点点再自己落回来**，
  * 加上连发时准星圈会变大（星星弹撒得开一些）。没有枪械建模，没有伤害。
  */
+import { COMBO_CAP_HITS } from "./logic";
 
 // ---------------------------------------------------------------------------
 // 一、出手前摇：按下到星星弹真的出去之间的那一小段
@@ -145,4 +146,25 @@ export function crosshairRadius(spread: number, timeS: number, reduced: boolean)
 export function shakeAmount(hitStopLeft: number, reduced: boolean): number {
   if (reduced || hitStopLeft <= 0) return 0;
   return Math.min(4, hitStopLeft / FRAME_S);
+}
+
+// ---------------------------------------------------------------------------
+// 六、连击光环：倍率的第二条通道
+// ---------------------------------------------------------------------------
+
+/** 连到第几发才开始有光环（1 连就发光反而看不出"连起来了"） */
+export const COMBO_HALO_FROM = 2;
+
+/**
+ * 准星外面那圈光环：连击越高越亮越粗。
+ * HUD 上那个 `×1.3` 是数字通道，这圈光环是看得见的第二条通道 ——
+ * 孩子不用去读 HUD，光看准星就知道"现在手很顺"。
+ * 到 `COMBO_CAP_HITS` 就和倍率一起封顶，再连也不会更亮。
+ */
+export function comboHalo(combo: number): { alpha: number; width: number } {
+  const n = Math.max(0, Math.floor(combo));
+  if (n < COMBO_HALO_FROM) return { alpha: 0, width: 0 };
+  const span = Math.max(1, COMBO_CAP_HITS - COMBO_HALO_FROM);
+  const k = Math.min(1, (n - COMBO_HALO_FROM) / span);
+  return { alpha: 0.3 + 0.5 * k, width: 3 + 5 * k };
 }

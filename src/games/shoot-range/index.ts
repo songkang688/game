@@ -58,6 +58,7 @@ import {
 import {
   RECOIL_KICK,
   WINDUP_S,
+  comboHalo,
   crosshairRadius,
   hitStopSeconds,
   recoilAfterShot,
@@ -1250,6 +1251,17 @@ function createField(opts: FieldOptions): FieldHandle {
     const rad = crosshairRadius(s.spread, now, reduce);
     ctx.save();
     ctx.translate(aim.x, aim.y);
+    // 连击光环:HUD 上那个 ×1.3 是数字,这圈光是第二条通道,不用读字也知道手正顺
+    const halo = comboHalo(s.combo);
+    if (halo.alpha > 0) {
+      ctx.globalAlpha = halo.alpha;
+      ctx.strokeStyle = s.ink;
+      ctx.lineWidth = halo.width;
+      ctx.beginPath();
+      ctx.arc(0, 0, rad + 7 + halo.width / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeStyle = s.ink;
     ctx.lineWidth = 3;
     ctx.beginPath();

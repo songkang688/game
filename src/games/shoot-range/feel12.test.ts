@@ -4,7 +4,9 @@
  * 这三条是「手感」的硬指标,数值一改这里就红。
  */
 import { describe, expect, it } from "vitest";
+import { COMBO_CAP_HITS, comboMultiplier } from "./logic";
 import {
+  COMBO_HALO_FROM,
   FRAME_S,
   HIT_STOP_MAX_FRAMES,
   HIT_STOP_MIN_FRAMES,
@@ -15,6 +17,7 @@ import {
   SPREAD_SETTLE_DELAY,
   WINDUP_MS,
   WINDUP_S,
+  comboHalo,
   crosshairRadius,
   hitStopFrames,
   hitStopSeconds,
@@ -151,5 +154,30 @@ describe("shoot-range 1.2 手感 · 后坐力与 reduced-motion", () => {
     expect(shakeAmount(hitStopSeconds("big"), true)).toBe(0);
     expect(shakeAmount(hitStopSeconds("big"), false)).toBeGreaterThan(0);
     expect(shakeAmount(0, false)).toBe(0);
+  });
+});
+
+describe("shoot-range 1.2 手感 · 连击光环", () => {
+  it("连击的第二条通道:1 连还不发光,连起来越亮越粗,和倍率一起封顶", () => {
+    expect(comboHalo(0)).toEqual({ alpha: 0, width: 0 });
+    expect(comboHalo(1)).toEqual({ alpha: 0, width: 0 });
+    // 第 2 连开始有光环
+    expect(comboHalo(COMBO_HALO_FROM).alpha).toBeGreaterThan(0);
+    expect(comboHalo(COMBO_HALO_FROM).width).toBeGreaterThan(0);
+    // 一路单调变亮变粗
+    for (let n = COMBO_HALO_FROM; n < COMBO_CAP_HITS; n++) {
+      expect(comboHalo(n + 1).alpha, `${n} → ${n + 1} 连没变亮`).toBeGreaterThan(comboHalo(n).alpha);
+      expect(comboHalo(n + 1).width).toBeGreaterThan(comboHalo(n).width);
+    }
+  });
+
+  it("光环和倍率一起封顶:连到 10 连之后再连也不会更亮,而且永远不刺眼", () => {
+    const cap = comboHalo(COMBO_CAP_HITS);
+    expect(comboHalo(COMBO_CAP_HITS + 1)).toEqual(cap);
+    expect(comboHalo(999)).toEqual(cap);
+    expect(comboMultiplier(COMBO_CAP_HITS + 1)).toBe(comboMultiplier(COMBO_CAP_HITS));
+    // 最亮也只有八成不透明,盖不住底下的靶
+    expect(cap.alpha).toBeLessThanOrEqual(0.8);
+    expect(cap.width).toBeLessThanOrEqual(8);
   });
 });
