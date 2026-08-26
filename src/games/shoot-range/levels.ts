@@ -14,6 +14,14 @@ import {
   type Target,
   type TargetKind,
 } from "./logic";
+import {
+  FAR_RADIUS_SCALE,
+  RAINBOW_TTL,
+  SHIELD_HP,
+  depthRowOf,
+  isForbidden,
+  mustClear,
+} from "./targets12";
 
 export const CHAPTERS: Chapter[] = [
   { name: "新手靶场", emoji: "🎯", color: "#FFE1EC", desc: "先熟悉准星和换弹,靶子都乖乖站着。", size: 18 },
@@ -22,10 +30,10 @@ export const CHAPTERS: Chapter[] = [
   { name: "铁皮工厂", emoji: "🤖", color: "#E2F3E8", desc: "铁皮机器人来回巡逻,打中就摊手坐下。", size: 20 },
   { name: "遮挡迷城", emoji: "🧱", color: "#F3E7DA", desc: "木板会挡住星星弹,得找没被挡住的角度。", size: 20 },
   { name: "编号挑战", emoji: "🔢", color: "#E7F0FB", desc: "靶子带号码,必须从 1 号开始按顺序打。", size: 20 },
-  { name: "好人靶训练", emoji: "🙂", color: "#FFF3E1", desc: "举旗子的笑脸是好人靶,看清楚再按发射。", size: 20 },
-  { name: "限时竞速", emoji: "⏱️", color: "#FDE6F0", desc: "倒计时开始跑,手快还要手稳。", size: 20 },
-  { name: "综合考场", emoji: "📋", color: "#EAE7F8", desc: "前面所有机制混在一起考。", size: 18 },
-  { name: "星星大师赛", emoji: "🏆", color: "#FFF0C9", desc: "全机制全开,还要顶住命中率线。", size: 12 },
+  { name: "忍住不打", emoji: "🌸", color: "#FFF3E1", desc: "好人靶和朵朵的花朵靶都不能碰,看清楚再按发射。", size: 20 },
+  { name: "彩虹限时", emoji: "🌈", color: "#FDE6F0", desc: "彩虹靶只待几秒,分裂靶打中还会变两个。", size: 20 },
+  { name: "综合考场", emoji: "📋", color: "#EAE7F8", desc: "护盾靶要打两次,前面所有机制混在一起考。", size: 18 },
+  { name: "星星大师赛", emoji: "🏆", color: "#FFF0C9", desc: "全部靶种全开,还要顶住命中率线。", size: 12 },
 ];
 
 export interface LevelDef {
@@ -55,10 +63,12 @@ const KIND_POOL: TargetKind[][] = [
   ["robot", "balloon"],
   ["bull", "balloon", "ufo"],
   ["number"],
-  ["bull", "balloon", "friend"],
-  ["bull", "balloon", "ufo"],
-  ["bull", "balloon", "ufo", "robot"],
-  ["bull", "balloon", "ufo", "robot"],
+  // 第 7 章起是 1.2 的新靶种。第 1–99 关(第 0–5 章)的池子一个字都没动,
+  // 老存档回来重玩,每一关的布局与 1.1 完全一致。
+  ["bull", "balloon", "friend", "flower"],
+  ["bull", "balloon", "ufo", "rainbow", "split"],
+  ["bull", "balloon", "ufo", "robot", "split", "shield", "flower"],
+  ["bull", "balloon", "ufo", "robot", "split", "shield", "rainbow", "flower"],
 ];
 
 const HINTS = [
@@ -68,9 +78,9 @@ const HINTS = [
   "机器人来回巡逻,在它掉头的一瞬间最好打。",
   "木板挡得住星星弹,换个角度或者等靶子走出来。",
   "从 1 号开始按顺序打,打错顺序会掉连击。",
-  "举小旗子的笑脸是好人靶,千万别碰它。",
-  "倒计时在跑,但抢时间反而更容易打偏。",
-  "什么都可能出现,先扫一眼全场再动手。",
+  "笑脸靶和花朵靶都不能打,看清楚再按发射。",
+  "彩虹靶几秒就走,先打它;分裂靶记得补掉两个小的。",
+  "护盾靶要两发,第一发只是敲开壳,别急着换目标。",
   "大师赛只看命中率,少打一发废弹就多一分把握。",
 ];
 
@@ -158,28 +168,39 @@ export function buildLevel(level: number): LevelDef {
   const count = Math.min(10, 3 + Math.floor(depth * 3) + Math.floor(ci / 3));
   const targets: Target[] = [];
   let orderSeq = 0;
-  // 好人靶最多占三分之一,而且至少留两个必打的靶:不然这一关就没得打了
-  const friendCap = ci === 6 || ci >= 8 ? Math.max(1, Math.min(Math.floor(count / 3), count - 2)) : 0;
-  let friendUsed = 0;
+  // 不许打的靶最多占三分之一,而且至少留两个必打的靶:不然这一关就没得打了
+  const foulCap = ci === 6 || ci >= 8 ? Math.max(1, Math.min(Math.floor(count / 3), count - 2)) : 0;
+  let foulUsed = 0;
+  // 彩虹靶是白捡的奖励,不算必打指标,一关最多放一个
+  let rainbowUsed = 0;
 
   // 按列均匀铺开,再在列内随机抖一点,保证不重叠也不整齐得像表格
   const cols = Math.max(2, Math.min(5, Math.ceil(count / 2)));
   for (let i = 0; i < count; i++) {
     let kind = pool[randInt(rand, 0, pool.length - 1)];
     if (ci === 5) kind = "number";
-    const wantFriend = (ci === 6 && i % 3 === 2) || (ci >= 8 && rand() < 0.3);
-    if (kind === "friend" || wantFriend) {
-      // 池子里随机摸到好人靶也要过配额这一关,超了就换成同心圆靶
-      kind = friendUsed < friendCap ? "friend" : "bull";
+    const wantFoul = (ci === 6 && i % 3 === 2) || (ci >= 8 && rand() < 0.3);
+    if (isForbidden(kind) || wantFoul) {
+      // 池子里随机摸到不许打的靶也要过配额这一关,超了就换成同心圆靶。
+      // 第 7 章两种交替出场(一次好人靶一次花朵靶),后面的章节随机挑。
+      kind =
+        foulUsed < foulCap ? (ci === 6 ? (i % 2 === 0 ? "flower" : "friend") : rand() < 0.5 ? "flower" : "friend") : "bull";
     }
-    if (kind === "friend") friendUsed++;
+    if (isForbidden(kind)) foulUsed++;
+    if (kind === "rainbow") {
+      if (rainbowUsed >= 1) kind = "bull";
+      else rainbowUsed++;
+    }
 
     const col = i % cols;
     const row = Math.floor(i / cols);
     const cellW = (TARGET_BOUNDS.x1 - TARGET_BOUNDS.x0) / cols;
     const x = TARGET_BOUNDS.x0 + cellW * col + cellW * (0.28 + rand() * 0.44);
     const y = TARGET_BOUNDS.y0 + 92 + row * 128 + rand() * 46;
-    const r = radiusFor(kind, ci, depth);
+    // 伪纵深:上面那一排算远排,小一圈、分数乘 1.5。只从第 7 章起标,
+    // 前 99 关的靶子既不带 far 字段、半径也一个像素都没动。
+    const far = ci >= 6 && depthRowOf(y) === "far";
+    const r = Math.round(radiusFor(kind, ci, depth) * (far ? FAR_RADIUS_SCALE : 1));
     const spd = speedFor(kind, ci, depth, rand);
     const order = kind === "number" ? ++orderSeq : 0;
     targets.push(
@@ -188,6 +209,10 @@ export function buildLevel(level: number): LevelDef {
         vy: spd.vy,
         order,
         phase: rand() * 6,
+        ...(ci >= 6 ? { far } : {}),
+        ...(kind === "shield" ? { hp: SHIELD_HP } : {}),
+        ...(kind === "split" ? { gen: 0 } : {}),
+        ...(kind === "rainbow" ? { ttl: RAINBOW_TTL } : {}),
       })
     );
   }
@@ -195,8 +220,9 @@ export function buildLevel(level: number): LevelDef {
   // 遮挡木板:第 5 章起登场,后面几章偶尔来一块。
   // 木板只负责「难打」,不负责「打不到」:凡是会把某个必打靶彻底封死的木板一律不要。
   const blocks: Block[] = [];
-  const friends = targets.filter((t) => t.kind === "friend");
-  const mustHit = targets.filter((t) => t.kind !== "friend");
+  // 「不许打的靶」既是配额也是障碍:好人靶与花朵靶都算(打中它们就犯规)
+  const friends = targets.filter((t) => isForbidden(t.kind));
+  const mustHit = targets.filter((t) => !isForbidden(t.kind));
   const wantBlocks = ci === 4 ? 1 + Math.floor(depth * 2) : ci >= 8 ? (rand() < 0.6 ? 1 : 0) : 0;
   for (let i = 0; i < wantBlocks; i++) {
     // 位置不合适就换个地方再试几次,免得「合法的木板」被一次性否掉、这一章白瞎
@@ -213,7 +239,7 @@ export function buildLevel(level: number): LevelDef {
     }
   }
 
-  // 好人靶挡在必打靶正前方同样会把关卡卡死,横着挪开就好(挪不开就撤掉这个好人靶)
+  // 不许打的靶挡在必打靶正前方同样会把关卡卡死,横着挪开就好(挪不开就撤掉它)
   for (let guard = 0; guard < friends.length * 4; guard++) {
     const stuck = mustHit.find((t) => !hasCleanShot(t, friends, blocks));
     if (!stuck) break;
@@ -229,13 +255,17 @@ export function buildLevel(level: number): LevelDef {
   const dropped = new Set(friends.filter((f) => !f.alive).map((f) => f.id));
   const kept = targets.filter((t) => !dropped.has(t.id));
 
-  const need = kept.filter((t) => t.kind !== "friend").length;
+  // 必打靶数:分裂靶要算上它炸出来的两个小的,不然弹药预算会不够
+  const need =
+    kept.filter((t) => mustClear(t.kind)).length + kept.filter((t) => t.kind === "split").length * 2;
   const timed = ci === 7 || ci >= 8;
   const seconds = timed ? Math.max(16, 40 - Math.floor(depth * 12) - (ci - 7) * 3) : 0;
   const magSize = ci <= 1 ? 8 : ci <= 4 ? 7 : 6;
   const reloadTime = ci <= 2 ? 0.9 : ci <= 6 ? 1.05 : 1.2;
   // 三星线:必打靶数 + 允许的废弹数(越往后越紧)
   const slack = Math.max(1, Math.round(need * (0.5 - Math.min(0.4, ci * 0.045))));
+  // 护盾靶第一发只敲壳,要多留一发:这是必花的弹,不该算进废弹额度
+  const extraShots = kept.filter((t) => t.kind === "shield").length;
 
   return {
     level: lv,
@@ -245,11 +275,33 @@ export function buildLevel(level: number): LevelDef {
     seconds,
     magSize,
     reloadTime,
-    parShots: need + slack,
-    shotBudget: need + slack + Math.max(4, Math.round(need * 0.9)),
+    parShots: need + slack + extraShots,
+    shotBudget: need + slack + extraShots + Math.max(4, Math.round(need * 0.9)),
     need,
     hint: HINTS[ci],
   };
+}
+
+/**
+ * 关卡指纹:把一关的全部数据压成一行字符串。
+ * `levels.test.ts` 拿它锁死「前 99 关数据 1.2 不许改」——`Target` 的四个 1.2 新字段
+ * 都是可选的,老关卡不写,所以指纹与 1.1 逐字符一致。
+ */
+export function levelFingerprint(level: number): string {
+  return JSON.stringify(buildLevel(level));
+}
+
+/** 一串关卡的指纹合成一个短哈希(FNV-1a),用例里存一个数字就够了 */
+export function fingerprintHash(from: number, to: number): string {
+  let h = 0x811c9dc5;
+  for (let lv = from; lv <= to; lv++) {
+    const s = levelFingerprint(lv);
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+  }
+  return h.toString(16).padStart(8, "0");
 }
 
 /** 无尽靶潮的一批靶子(纯函数,给定波数与种子就确定) */

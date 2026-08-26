@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, assertTotal, chapterOf } from "../level99";
 import { CHAPTERS, TARGET_BOUNDS, buildDuelTargets, buildLevel, buildTide, hasCleanShot } from "./levels";
+import { isForbidden, mustClear, resolveHit } from "./targets12";
 import {
   MUZZLE_X,
   MUZZLE_Y,
@@ -43,11 +44,14 @@ describe("shoot-range 188 关战役", () => {
     }
   });
 
-  it("每关至少有一个必须打掉的靶,好人靶不算进指标", () => {
+  it("每关至少有一个必须打掉的靶,不许打的靶与彩虹靶不算进指标", () => {
     for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
       const def = buildLevel(lv);
       expect(def.need).toBeGreaterThan(0);
-      expect(def.need).toBe(def.targets.filter((t) => t.kind !== "friend").length);
+      // 分裂靶要算它炸出来的两个小的
+      expect(def.need).toBe(
+        def.targets.filter((t) => mustClear(t.kind)).length + def.targets.filter((t) => t.kind === "split").length * 2
+      );
       expect(def.parShots).toBeGreaterThan(def.need);
       // 弹药量要比三星线宽松,但不能宽松到「随便乱打也能过」
       expect(def.shotBudget).toBeGreaterThan(def.parShots);
@@ -114,13 +118,13 @@ describe("shoot-range 188 关战役", () => {
     expect(slackRatio(180)).toBeLessThan(slackRatio(2));
   });
 
-  it("每一关都可通过:每个必打靶都有一条绕开木板和好人靶的干净射线", () => {
+  it("每一关都可通过:每个必打靶都有一条绕开木板和「不许打的靶」的干净射线", () => {
     for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
       const def = buildLevel(lv);
-      const friends = def.targets.filter((t) => t.kind === "friend");
+      const guarded = def.targets.filter((t) => isForbidden(t.kind));
       for (const t of def.targets) {
-        if (t.kind === "friend") continue;
-        expect(hasCleanShot(t, friends, def.blocks)).toBe(true);
+        if (isForbidden(t.kind)) continue;
+        expect(hasCleanShot(t, guarded, def.blocks), `第 ${lv + 1} 关的 ${t.kind} 靶被封死了`).toBe(true);
       }
     }
   });
@@ -147,49 +151,60 @@ describe("shoot-range 188 关战役", () => {
       const limit = def.seconds > 0 ? def.seconds : 120;
 
       let cleared = false;
+      let splitSeq = 0;
       while (time <= limit && shots < def.shotBudget) {
-        const pending = targets.filter((t) => t.alive && t.kind !== "friend");
+        const pending = targets.filter((t) => t.alive && mustClear(t.kind));
         if (pending.length === 0) {
           cleared = true;
           break;
         }
-        // 编号关必须按顺序,其余关就近打
-        const want = nextOrder(targets);
-        const goal = want > 0 ? pending.find((t) => t.order === want) ?? pending[0] : pending[0];
-
         // 等到瞄准完成、冷却走完、换弹结束
         const wait = Math.max(AIM_TIME, gun.reloadLeft, gun.cooldownLeft);
         time += wait;
         gun = stepGun(gun, wait);
         targets = targets.map((t) => stepTarget(t, wait));
 
-        const live = targets.find((t) => t.id === goal.id);
-        expect(live).toBeDefined();
-        if (!live) break;
-
-        // 先试着打中目标本身;要是被另一个必打的靶挡在前面,那就先打掉挡路的那个
+        // 编号关必须按顺序,其余关谁能打就先打谁:
+        // 不许打的靶会在场上走来走去,挡住谁就先放过谁,等它自己让开——
+        // 真人也是这么打的,总比对着挡路的花朵靶硬送一发强。
+        const want = nextOrder(targets);
+        const queue = want > 0 ? targets.filter((t) => t.alive && t.order === want) : pending;
         let hitId: number | null = null;
-        let shadow: number | null = null;
-        for (const [ox, oy] of offsets) {
-          const shot = aimToVelocity(MUZZLE_X, MUZZLE_Y, live.x + ox * live.r, live.y + oy * live.r);
-          const res = traceShot(shot, targets, def.blocks);
-          if (res.targetId === live.id) {
-            hitId = res.targetId;
-            break;
+        for (const goal of queue) {
+          const live = targets.find((t) => t.id === goal.id);
+          if (!live) continue;
+          let shadow: number | null = null;
+          for (const [ox, oy] of offsets) {
+            const shot = aimToVelocity(MUZZLE_X, MUZZLE_Y, live.x + ox * live.r, live.y + oy * live.r);
+            const res = traceShot(shot, targets, def.blocks);
+            if (res.targetId === live.id) {
+              hitId = res.targetId;
+              break;
+            }
+            const other = targets.find((t) => t.id === res.targetId);
+            if (shadow === null && other && !isForbidden(other.kind)) shadow = other.id;
           }
-          const other = targets.find((t) => t.id === res.targetId);
-          if (shadow === null && other && other.kind !== "friend") shadow = other.id;
+          if (hitId === null) hitId = shadow;
+          if (hitId !== null) break;
         }
-        if (hitId === null) hitId = shadow;
+        // 一个都没有干净的射线:这一拍不开火,等靶子自己错开
+        if (hitId === null) continue;
 
         const fired = fireGun(gun);
         expect(fired.fired).toBe(true);
         gun = fired.gun;
         shots++;
-        if (hitId === null) continue;
         const struck = targets.find((t) => t.id === hitId);
-        if (struck?.kind === "friend") friendHits++;
-        else if (struck) struck.alive = false;
+        if (!struck) continue;
+        if (isForbidden(struck.kind)) {
+          friendHits++;
+          continue;
+        }
+        // 护盾靶要敲两次;分裂靶倒下时会补两个小的进场,一样得清掉
+        const out = resolveHit(struck, 0, 0, splitSeq++);
+        struck.alive = out.target.alive;
+        struck.hp = out.target.hp;
+        for (const kid of out.spawns) targets.push({ ...kid });
       }
 
       expect(cleared, `第 ${lv + 1} 关照着一个个瞄的打法清不完(用了 ${shots} 发 / ${time.toFixed(1)} 秒)`).toBe(true);
