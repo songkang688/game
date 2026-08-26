@@ -64,16 +64,24 @@ async function openCollectionSafely(): Promise<void> {
 
 /** 1.1 新增控件的样式:styles.css 归别的窗口管,这里只补自己新加的那几个类 */
 const HOME_EXTRA_CSS = `
-.home-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:10px 0 0}
+.home-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 18px}
 .home-search{flex:1 1 190px;display:flex;align-items:center;gap:8px;min-height:50px;padding:0 16px;
   border:3px solid #fff;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:var(--shadow-soft)}
 .home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;
   font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
 .home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
 .home-search-clear{border:0;background:transparent;font-size:19px;line-height:1;padding:4px;color:var(--ink-soft)}
-.mode-chips{margin:10px 0 0;gap:10px}
+.tabs.cat-tabs{margin-bottom:2px}
+.tabs.mode-chips{margin:0;padding-top:0;gap:10px}
 .mode-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
 .mode-chips .tab-emoji{font-size:19px}
+/* 收藏卡上的心形浮在右上角,不占一行的宽度,游戏名才不会被挤成省略号 */
+.fav-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+.fav-grid .recent-card{position:relative}
+.fav-grid .recent-info{flex:1 1 auto;min-width:0;padding-right:16px}
+.fav-grid .fav-btn{position:absolute;top:3px;right:6px;font-size:16px}
+/* 窄屏跟着 styles.css 里「最近玩过」的两列走,别一张卡霸一整行 */
+@media (max-width:380px){.fav-grid{grid-template-columns:repeat(2,1fr)}}
 .card-head{display:flex;align-items:flex-start;justify-content:flex-end;width:100%;min-height:4px}
 .fav-btn{border:0;background:transparent;font-size:22px;line-height:1;padding:2px 2px 0;
   filter:grayscale(1) opacity(.45);transition:transform .14s ease,filter .14s ease}
@@ -247,10 +255,17 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   // ---- 分类页签 ----
   const tabs = document.createElement("nav");
-  tabs.className = "tabs";
+  tabs.className = "tabs cat-tabs";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "游戏分类");
   screen.appendChild(tabs);
+
+  // ---- 玩法筛选芯片(与分类页签叠加) ----
+  const modeBar = document.createElement("nav");
+  modeBar.className = "tabs mode-chips";
+  modeBar.setAttribute("role", "tablist");
+  modeBar.setAttribute("aria-label", "玩法筛选");
+  screen.appendChild(modeBar);
 
   // ---- 搜索框 ----
   const toolbar = document.createElement("div");
@@ -276,13 +291,6 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   searchBox.append(searchIcon, searchInput, clearBtn);
   toolbar.appendChild(searchBox);
   screen.appendChild(toolbar);
-
-  // ---- 玩法筛选芯片(与分类页签叠加) ----
-  const modeBar = document.createElement("nav");
-  modeBar.className = "tabs mode-chips";
-  modeBar.setAttribute("role", "tablist");
-  modeBar.setAttribute("aria-label", "玩法筛选");
-  screen.appendChild(modeBar);
 
   // ---- 卡片区(不筛不搜时按分类分节,否则一整片结果) ----
   const main = document.createElement("main");
@@ -446,7 +454,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     favSection.hidden = false;
     favSection.appendChild(makeSectionTitle("💖", "我的最爱"));
     const row = document.createElement("div");
-    row.className = "recent-grid";
+    row.className = "recent-grid fav-grid";
     for (const game of favs) row.appendChild(createSmallCard(game, true));
     favSection.appendChild(row);
   }
