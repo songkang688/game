@@ -1,10 +1,15 @@
 import { meta } from "./meta";
 export { meta };
 
-// 绿芽保卫战 1.1:188 关十三大花园守家战役!先选场景再选关,十三种虫虫、旗帜大波、
-// 章末 BOSS,终章决战虫虫女王进化体!新机制:昼夜循环、地下虫(望望草照出)、
-// 露珠罐上限、分分虫分裂、进化体狂暴。失败只重试本关。
+// 绿芽保卫战 1.2:188 关十三大花园守家战役 + 无尽「守到天亮」。
+// 1.1 打底:昼夜循环、地下虫(望望草照出)、露珠罐上限、分分虫分裂、进化体狂暴。
+// 1.2 新增:☀️阳光第二条经济与三种新绿芽(暖暖花/蓬蓬花/弹弹网)、哧溜虫挖地绕后、
+// 每种机制提前 3 秒的预警角标、三类特殊关(固定苗解谜 / 传送带发苗 / 限时速攻)、
+// 苗卡冷却圈与「为什么种不下」的原因提示、铲子二段确认,以及无尽守夜模式。
+// 失败只鼓励、只重试本关。
 import {
+  BELT_QUEUE_MAX,
+  BLITZ_GRACE,
   BOOM_DAMAGE,
   BOOM_RANGE,
   BOOM_TRIGGER,
@@ -25,14 +30,20 @@ import {
   PLANT_COLS,
   PLANT_INFO,
   PROGRESS_KEY,
+  PUFF_SPEED,
+  PUFF_SPLASH_DAMAGE,
+  PUFF_SPLASH_RANGE,
   PlantKind,
+  PlantStock,
+  ProjKind,
   QUEENX_RAGE_FRAC,
   SCENE_ORDER,
   SCENE_STYLE,
-  SHOOT_CD,
   SPARKLE_DEW_EVERY,
   STAR_SPEED,
+  TUNNEL_TIME,
   applyDamage,
+  blitzLimit,
   bubbleHitsBug,
   bugHp,
   bugNightSpeedMult,
@@ -40,6 +51,7 @@ import {
   buildLevelSchedule,
   canAfford,
   canPlantOnCell,
+  canJumpOver,
   clampDew,
   clearSpeechLine,
   cyclePhase,
@@ -55,6 +67,7 @@ import {
   queenxSpeedMult,
   retrySpeechLine,
   serializeProgress,
+  shootCooldown,
   shovelRefund,
   starsForLevel,
   themeCleared,
@@ -63,7 +76,31 @@ import {
   themeSize,
   themeStars,
   totalStars,
+  tunnelExitCol,
 } from "./logic";
+import {
+  CARD_H,
+  ENDLESS_DAWN_WAVE,
+  HUD_FONT_MIN,
+  PLANT_SPEC,
+  SUN_FIRST,
+  ShovelPending,
+  SpawnWarning,
+  TRAIT_INFO,
+  activeWarnings,
+  buildWarnings,
+  bugTraits,
+  cardStripLayout,
+  endlessSkyLine,
+  endlessWave,
+  fieldMetrics,
+  plantBlockReason,
+  BLOCK_REASON_TEXT,
+  shovelStep,
+  sunInterval,
+} from "./sprout12";
+import { getLevelExtras } from "../../ui/level188Contract";
+import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -75,14 +112,25 @@ export interface GameAPI {
   getStars: () => number;
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
+  /** 1.2 平台直达:进来就打第几关(1 基) */
+  initialLevel?: number;
 }
 
-const TOOLBAR_H = 64;
+export interface SproutDefenseHandle {
+  destroy: () => void;
+  /** 1.2 平台直达第 N 关(1 基),返回真正打开的关号 */
+  openCampaignLevel: (n: number) => number;
+}
+
+/** 顶部资源/波次那一行的高度(字号 ≥ 14px,独占一行不跟卡片抢地方)。 */
+const HUD_ROW_H = 26;
+const TOOLBAR_H = HUD_ROW_H + CARD_H + 10;
 const HOME_W_CELLS = 1.2;
 
 type Phase = "themes" | "map" | "intro" | "play" | "clear" | "retry";
 type Tool = PlantKind | "shovel";
-type Proj = "bubble" | "star" | "ice";
+type Proj = ProjKind;
+type Mode = "campaign" | "endless";
 
 interface Plant {
   col: number;
@@ -113,6 +161,10 @@ interface Bug {
   raged: boolean;
   /** 1.1:地下虫已播过"现形"特效 */
   surfacedFx: boolean;
+  /** 1.2:哧溜虫挖地剩余秒数,> 0 时在土里(打不到也不啃),出土点一直冒土花 */
+  dig: number;
+  /** 1.2:出土点(挖地时提前画出来,不许突然袭击) */
+  digCol: number;
 }
 
 interface Shot {
@@ -160,15 +212,49 @@ function saveProgress(stars: number[]): void {
   }
 }
 
-export function mount(api: GameAPI): { destroy: () => void } {
+/** 平台没给 initialLevel 时,兜底看地址栏的 ?level=(1 基)。 */
+function levelFromQuery(): number | null {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("level");
+    if (!raw) return null;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 1 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  } catch {
+    return false;
+  }
+}
+
+/** 局部样式:类名一律 spd- 前缀,不碰 src/styles.css。 */
+const LOCAL_CSS = `
+.spd-root{position:absolute;inset:0;overflow:hidden;background:#eafbe0;}
+.spd-canvas{width:100%;height:100%;display:block;touch-action:none;}
+.spd-skip{position:absolute;right:8px;bottom:8px;z-index:2;min-height:44px;padding:0 14px;
+  border:0;border-radius:14px;background:rgba(255,255,255,0.92);color:#5a5a6e;
+  font:600 ${HUD_FONT_MIN}px/1.2 sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.12);cursor:pointer;}
+.spd-skip[disabled]{opacity:.5;}
+`;
+
+export function mount(api: GameAPI): SproutDefenseHandle {
   const { root } = api;
+  const wrap = document.createElement("div");
+  wrap.className = "spd-root";
+  const style = document.createElement("style");
+  style.textContent = LOCAL_CSS;
+  wrap.appendChild(style);
   const canvas = document.createElement("canvas");
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
-  canvas.style.display = "block";
-  canvas.style.touchAction = "none";
-  root.appendChild(canvas);
+  canvas.className = "spd-canvas";
+  wrap.appendChild(canvas);
+  root.appendChild(wrap);
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+  const calmMotion = prefersReducedMotion();
 
   const progress = loadProgress();
 
@@ -185,6 +271,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   const floats: Floaty[] = [];
 
   let dew = 4;
+  /** 1.2 第二条经济:☀️阳光,只有暖暖花会开,吃阳光的苗才种得下 */
+  let sun = 0;
   let unlockedPlants: PlantKind[] = plantsUnlockedAt(0, LEVELS);
   let tools: Tool[] = [...unlockedPlants, "shovel"];
   let selected: Tool = "bubble";
@@ -202,6 +290,29 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let currentWave = -1;
   let shake = 0;
 
+  // ---- 1.2 苗卡冷却 / 种不下的原因 ----
+  const cardCd = new Map<PlantKind, number>();
+  let blockTip = "";
+  let blockTipLife = 0;
+  // ---- 1.2 铲子二段确认 ----
+  let shovelPending: ShovelPending | null = null;
+  // ---- 1.2 预警 ----
+  let warnings: SpawnWarning[] = [];
+  // ---- 1.2 特殊关 ----
+  const stock = new Map<PlantKind, number>();
+  let belt: PlantKind[] = [];
+  let beltIdx = 0;
+  let beltTimer = 0;
+  let beltQueue: PlantKind[] = [];
+  let timeLimit = 0;
+  // ---- 1.2 无尽「守到天亮」 ----
+  let mode: Mode = "campaign";
+  let endlessWaveNo = 0;
+  let endlessBest = 0;
+  let endlessCleared = 0;
+  let endlessNextAt = 0;
+  let btnEndless: Rect | null = null;
+
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
   const themeCards: Array<{ idx: number; rect: Rect }> = [];
   let btnNext: Rect | null = null;
@@ -211,9 +322,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   let w = 640;
   let h = 480;
+  /** 一格的宽 */
   let cell = 48;
+  /** 一条道的高(1.2 起与宽分开算,360px 上也保证 ≥ 40px) */
+  let laneH = 48;
   let ox = 0;
   let oy = TOOLBAR_H;
+  let cardStrip = cardStripLayout(360, 4, 0);
+  let stripScroll = 0;
 
   function syncSize(): void {
     w = root.clientWidth || 640;
@@ -226,18 +342,29 @@ export function mount(api: GameAPI): { destroy: () => void } {
       canvas.height = bh;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    cell = Math.min(w / (PLANT_COLS + HOME_W_CELLS + 0.4), (h - TOOLBAR_H) / LANES);
-    const totalW = cell * (PLANT_COLS + HOME_W_CELLS);
-    ox = (w - totalW) / 2 + cell * HOME_W_CELLS;
-    oy = TOOLBAR_H + (h - TOOLBAR_H - cell * LANES) / 2;
+    const m = fieldMetrics(w, h, TOOLBAR_H, HOME_W_CELLS);
+    cell = m.cw;
+    laneH = m.ch;
+    ox = m.ox;
+    oy = m.oy;
+    cardStrip = cardStripLayout(w, tools.length, stripScroll);
+    stripScroll = cardStrip.scroll;
   }
 
   const px = (cx: number) => ox + cx * cell;
-  const laneCenterY = (lane: number) => oy + (lane + 0.5) * cell;
+  const laneCenterY = (lane: number) => oy + (lane + 0.5) * laneH;
 
   function level() {
     return LEVELS[levelIdx];
   }
+
+  /** 无尽模式没有 LevelDef,统一用这几个取值口。 */
+  function specialNow() {
+    return mode === "endless" ? undefined : level().special;
+  }
+  const isPuzzle = () => specialNow()?.kind === "puzzle";
+  const isConveyor = () => specialNow()?.kind === "conveyor";
+  const isBlitz = () => specialNow()?.kind === "blitz";
 
   function sceneStyle() {
     return SCENE_STYLE[level().scene];
@@ -268,8 +395,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return effectiveDewCap(level().dewCap, producerCount());
   }
 
-  /** 拿露珠都走这里:有上限的关多出来的会溢出去。 */
+  /** 拿露珠都走这里:有上限的关多出来的会溢出去;解谜/传送关没有露珠经济。 */
   function gainDew(n: number): void {
+    if (isPuzzle() || isConveyor()) return;
     dew = clampDew(dew + n, dewCapNow());
   }
 
@@ -278,15 +406,65 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return false;
   }
 
-  /** 地下虫要车道上有望望草才现形(现形才能被打、才会啃植物)。 */
-  function revealed(bug: Bug): boolean {
-    return moleRevealed(bug.kind, scoutInLane(bug.lane));
+  /** 1.2:这条道上的弹弹网都在第几列(哧溜虫钻不过网,只能在网前面冒头)。 */
+  function netpadColsIn(lane: number): number[] {
+    const out: number[] = [];
+    for (const p of plants.values()) if (p.kind === "netpad" && p.lane === lane) out.push(p.col);
+    return out;
   }
 
+  /** 地下虫要车道上有望望草才现形;挖地中的哧溜虫也算「不在场上」。 */
+  function revealed(bug: Bug): boolean {
+    return moleRevealed(bug.kind, scoutInLane(bug.lane)) && bug.dig <= 0;
+  }
+
+  /**
+   * 1.2 苗卡片条:一行横滑。卡片宽固定不小于 48px(热区 ≥ 44px),
+   * 放不下就整条横向滚动,绝不把十几张卡压成小豆子。
+   */
   function cardRect(i: number): Rect {
-    // 窄屏(360px)修复:右侧预留 100px 给露珠/波次文字,卡片不再压到文字
-    const cw = Math.min(96, (w - 100) / tools.length);
-    return { x: 6 + i * (cw + 4), y: 8, w: cw, h: TOOLBAR_H - 16 };
+    return {
+      x: 6 + i * (cardStrip.cardW + cardStrip.gap) - stripScroll,
+      y: HUD_ROW_H + 4,
+      w: cardStrip.cardW,
+      h: CARD_H,
+    };
+  }
+
+  /** 这一株现在能不能种(冷却 / 露珠 / 阳光 / 库存都算上)。 */
+  function cardCooldownLeft(kind: PlantKind): number {
+    return cardCd.get(kind) ?? 0;
+  }
+
+  /** 特殊关的「手里还有几张」:解谜看库存,传送看队列,普通关是 Infinity。 */
+  function suppliesLeft(kind: PlantKind): number {
+    if (isPuzzle()) return stock.get(kind) ?? 0;
+    if (isConveyor()) return beltQueue.filter((k) => k === kind).length;
+    return Infinity;
+  }
+
+  function affordablePlant(kind: PlantKind): boolean {
+    if (isPuzzle() || isConveyor()) return suppliesLeft(kind) > 0;
+    return dew >= PLANT_INFO[kind].cost && sun >= PLANT_SPEC[kind].sun;
+  }
+
+  function payPlant(kind: PlantKind): void {
+    if (isPuzzle()) {
+      stock.set(kind, Math.max(0, (stock.get(kind) ?? 0) - 1));
+      return;
+    }
+    if (isConveyor()) {
+      const i = beltQueue.indexOf(kind);
+      if (i >= 0) beltQueue.splice(i, 1);
+      return;
+    }
+    dew -= PLANT_INFO[kind].cost;
+    sun -= PLANT_SPEC[kind].sun;
+  }
+
+  function showBlockTip(text: string): void {
+    blockTip = text;
+    blockTipLife = 1.6;
   }
 
   function addSparkle(x: number, y: number, color: string): void {
@@ -298,29 +476,120 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function loadLevel(idx: number): void {
+    mode = "campaign";
     levelIdx = idx;
     chapterIdx = themeIndexOfLevel(idx);
-    unlockedPlants = plantsUnlockedAt(idx, LEVELS);
+    const sp = LEVELS[idx].special;
+    if (sp?.kind === "puzzle") unlockedPlants = (sp.stock ?? []).map((s) => s.kind);
+    else if (sp?.kind === "conveyor") unlockedPlants = [...new Set(sp.belt ?? [])];
+    else unlockedPlants = plantsUnlockedAt(idx, LEVELS);
+    if (LEVELS[idx].waterLanes.length > 0 && !unlockedPlants.includes("lily")) {
+      unlockedPlants = ["lily", ...unlockedPlants];
+    }
     tools = [...unlockedPlants, "shovel"];
-    if (!tools.includes(selected)) selected = "bubble";
+    if (!tools.includes(selected)) selected = tools[0];
     resetLevel();
     phase = "intro";
   }
 
-  function resetLevel(): void {
-    schedule = buildLevelSchedule(levelIdx);
+  /** 每局都要归零的那一堆(重开、换关、进无尽都走这里)。 */
+  function resetRun(): void {
     plants.clear();
     lilies.clear();
     bugs.length = 0;
     shots.length = 0;
-    dew = level().startDew;
+    cardCd.clear();
+    stock.clear();
+    belt = [];
+    beltIdx = 0;
+    beltTimer = 0;
+    beltQueue = [];
+    timeLimit = 0;
+    shovelPending = null;
+    blockTip = "";
+    blockTipLife = 0;
+    sun = 0;
     time = 0;
     spawnIdx = 0;
-    passiveTimer = passiveDewIntervalAt(level().scene, false);
     plantsLost = 0;
     score = 0;
     currentWave = -1;
     waveBanner = 0;
+    stripScroll = 0;
+  }
+
+  function resetLevel(): void {
+    resetRun();
+    const def = level();
+    schedule = buildLevelSchedule(levelIdx);
+    warnings = buildWarnings(schedule);
+    const sp = def.special;
+    for (const s of (sp?.stock ?? []) as PlantStock[]) stock.set(s.kind, s.count);
+    if (sp?.kind === "conveyor") {
+      belt = [...(sp.belt ?? [])];
+      beltTimer = sp.beltEvery ?? 1;
+      // 开局先发两张,不用干等第一趟传送带
+      for (let i = 0; i < 2 && belt.length > 0; i++) beltQueue.push(belt[beltIdx++ % belt.length]);
+    }
+    if (sp?.kind === "blitz") timeLimit = blitzLimit(levelIdx);
+    // 解谜关与传送关没有露珠经济:手里那几株就是全部家当
+    dew = sp?.kind === "puzzle" || sp?.kind === "conveyor" ? 0 : def.startDew;
+    passiveTimer = passiveDewIntervalAt(def.scene, false);
+  }
+
+  /* ---------------- 1.2 无尽「守到天亮」 ---------------- */
+
+  function startEndless(): void {
+    mode = "endless";
+    levelIdx = LEVELS.length - 1;
+    chapterIdx = themeIndexOfLevel(levelIdx);
+    unlockedPlants = plantsUnlockedAt(LEVELS.length - 1, LEVELS);
+    tools = [...unlockedPlants, "shovel"];
+    if (!tools.includes(selected)) selected = tools[0];
+    resetRun();
+    schedule = [];
+    warnings = [];
+    endlessWaveNo = 0;
+    endlessCleared = 0;
+    endlessNextAt = 6;
+    dew = 8;
+    passiveTimer = passiveDewIntervalAt("night", true);
+    endlessBest = save.getGameProgress("sprout-defense").endlessBest;
+    phase = "intro";
+  }
+
+  /** 排下一波夜虫:波次无限,越往后种类越全、虫越多、血越厚。 */
+  function pushEndlessWave(): void {
+    endlessWaveNo++;
+    const spec = endlessWave(endlessWaveNo);
+    let i = 0;
+    let clock = time + 0.4;
+    let waveEnd = clock;
+    for (const entry of spec.entries) {
+      for (let k = 0; k < entry.count; k++) {
+        const t = clock + k * entry.gap;
+        schedule.push({ time: t, lane: (i * 3 + endlessWaveNo * 2) % LANES, kind: entry.kind, wave: endlessWaveNo - 1 });
+        waveEnd = Math.max(waveEnd, t);
+        i++;
+      }
+      clock += 1.1;
+    }
+    schedule.sort((a, b) => a.time - b.time);
+    warnings = buildWarnings(schedule);
+    endlessNextAt = waveEnd + Math.max(4, 9 - endlessWaveNo * 0.15);
+    currentWave = endlessWaveNo - 1;
+    bannerFlag = spec.boss;
+    waveBanner = spec.boss ? 2.4 : 1.8;
+    api.play(spec.boss ? "oops" : "jump");
+  }
+
+  function endlessOver(): void {
+    endlessCleared = Math.max(0, endlessWaveNo - 1);
+    endlessBest = save.recordEndlessBest("sprout-defense", endlessCleared);
+    phase = "retry";
+    shake = calmMotion ? 0 : 0.5;
+    api.play("oops");
+    speak(`守住了 ${endlessCleared} 波,已经很棒啦!再来一夜试试?`);
   }
 
   function levelCleared(): void {
@@ -342,7 +611,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function breach(): void {
-    shake = 0.5;
+    shake = calmMotion ? 0 : 0.5;
     api.play("oops");
     phase = "retry";
     speak(retrySpeechLine(bossFailHint()));
@@ -353,13 +622,53 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
 
+  /** 卡片条横滑:按下记起点,拖过 8px 就算滑动、不选卡。 */
+  let strip: { id: number; x0: number; scroll0: number; moved: number } | null = null;
+
+  function onPointerMove(e: PointerEvent): void {
+    if (destroyed || !strip || e.pointerId !== strip.id) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const dx = x - strip.x0;
+    strip.moved = Math.max(strip.moved, Math.abs(dx));
+    stripScroll = Math.min(Math.max(0, strip.scroll0 - dx), cardStrip.maxScroll);
+  }
+
+  function onPointerUp(e: PointerEvent): void {
+    if (destroyed || !strip || e.pointerId !== strip.id) return;
+    const s = strip;
+    strip = null;
+    if (s.moved > 8) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    for (let i = 0; i < tools.length; i++) {
+      if (inRect(x, y, cardRect(i))) {
+        selected = tools[i];
+        shovelPending = null;
+        api.play("tap");
+        return;
+      }
+    }
+  }
+
   function onPointerDown(e: PointerEvent): void {
     if (destroyed) return;
+    strip = null;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
     if (phase === "themes") {
+      if (inRect(x, y, btnEndless)) {
+        if (totalStars(progress) > 0) {
+          api.play("tap");
+          startEndless();
+        } else {
+          api.play("oops");
+        }
+        return;
+      }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
           if (isThemeUnlocked(progress, c.idx)) {
@@ -382,7 +691,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const n of mapNodes) {
         if (Math.hypot(x - n.x, y - n.y) <= n.r + 6) {
-          if (isLevelUnlocked(progress, n.idx)) {
+          if (unlockedFor(n.idx)) {
             api.play("tap");
             loadLevel(n.idx);
           } else {
@@ -396,11 +705,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "intro") {
       if (inRect(x, y, btnBack)) {
         api.play("tap");
-        phase = "map";
+        phase = mode === "endless" ? "themes" : "map";
         return;
       }
       api.play("tap");
       phase = "play";
+      if (mode === "endless" && endlessWaveNo === 0) endlessNextAt = time + 6;
       return;
     }
     if (phase === "clear") {
@@ -421,36 +731,37 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (inRect(x, y, btnRetry)) {
         api.play("tap");
         stopSpeaking();
-        resetLevel();
-        phase = "play";
+        if (mode === "endless") {
+          startEndless();
+          phase = "play";
+        } else {
+          resetLevel();
+          phase = "play";
+        }
         return;
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
         stopSpeaking();
-        phase = "map";
+        phase = mode === "endless" ? "themes" : "map";
       }
       return;
     }
 
     if (inRect(x, y, btnBack)) {
       api.play("tap");
-      phase = "map";
+      phase = mode === "endless" ? "themes" : "map";
       return;
     }
 
-    // 工具栏
-    for (let i = 0; i < tools.length; i++) {
-      const r = cardRect(i);
-      if (inRect(x, y, r)) {
-        selected = tools[i];
-        api.play("tap");
-        return;
-      }
+    // 1.2 苗卡片条:按下先记住起点,松手时没横滑才算选卡(横滑是翻卡不是选卡)
+    if (y >= HUD_ROW_H + 4 && y <= HUD_ROW_H + 4 + CARD_H) {
+      strip = { id: e.pointerId, x0: x, scroll0: stripScroll, moved: 0 };
+      return;
     }
 
     const col = Math.floor((x - ox) / cell);
-    const lane = Math.floor((y - oy) / cell);
+    const lane = Math.floor((y - oy) / laneH);
     if (col < 0 || col >= PLANT_COLS || lane < 0 || lane >= LANES) return;
     const key = `${col},${lane}`;
     const existing = plants.get(key);
@@ -458,6 +769,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const hasLily = lilies.has(key);
 
     if (selected === "shovel") {
+      if (!existing && !hasLily) {
+        api.play("tap");
+        shovelPending = null;
+        return;
+      }
+      // 1.2 误触保护:第一下只是「举起铲子」,同一格再点一下才真铲
+      const step = shovelStep(shovelPending, key, time);
+      shovelPending = step.pending;
+      if (step.action === "arm") {
+        api.play("tap");
+        addFloat(px(col + 0.5), laneCenterY(lane) - 12, "再点一下才铲哦", "#c47a2a");
+        return;
+      }
       if (existing) {
         const refund = shovelRefund(existing.kind);
         plants.delete(key);
@@ -465,30 +789,44 @@ export function mount(api: GameAPI): { destroy: () => void } {
         api.play("pop");
         addSparkle(px(col + 0.5), laneCenterY(lane), "#d5c9a8");
         addFloat(px(col + 0.5), laneCenterY(lane) - 14, `+${refund}💧`, "#5a8ac9");
-      } else if (hasLily) {
+      } else {
         lilies.delete(key);
         gainDew(shovelRefund("lily"));
         api.play("pop");
         addSparkle(px(col + 0.5), laneCenterY(lane), "#bfe9ff");
-      } else {
-        api.play("tap");
       }
       return;
     }
+    shovelPending = null;
 
-    if (!canPlantOnCell(selected, water, hasLily, !!existing)) {
+    const cellOk = canPlantOnCell(selected, water, hasLily, !!existing);
+    // 1.2:种不下要说清楚为什么 —— 冷却 / 露珠 / 阳光 / 这一格
+    const reason = isPuzzle() || isConveyor()
+      ? cardCooldownLeft(selected) > 0
+        ? "cooldown"
+        : suppliesLeft(selected) <= 0
+          ? "dew"
+          : cellOk
+            ? null
+            : "cell"
+      : plantBlockReason(selected, dew, sun, cardCooldownLeft(selected), cellOk);
+    if (reason) {
       api.play("tap");
+      if (reason === "dew" || reason === "sun") dewFlash = 0.8;
+      const text =
+        (isPuzzle() || isConveyor()) && reason === "dew"
+          ? isPuzzle()
+            ? "这一种苗用完啦,换一种试试"
+            : "传送带还在送,等下一株"
+          : BLOCK_REASON_TEXT[reason];
+      showBlockTip(text);
       if (water && !hasLily && selected !== "lily") {
         addFloat(px(col + 0.5), laneCenterY(lane) - 10, "先铺荷叶垫!", "#5a8ac9");
       }
       return;
     }
-    if (!canAfford(dew, selected)) {
-      dewFlash = 0.8;
-      api.play("tap");
-      return;
-    }
-    dew -= PLANT_INFO[selected].cost;
+    payPlant(selected);
+    cardCd.set(selected, PLANT_SPEC[selected].cooldown);
     if (selected === "lily") {
       lilies.add(key);
       api.play("pop");
@@ -501,7 +839,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       kind: selected,
       hp: PLANT_INFO[selected].hp,
       cd: 0.5,
-      prodTimer: selected === "moon" ? MOON_DEW_EVERY : SPARKLE_DEW_EVERY,
+      prodTimer:
+        selected === "moon" ? MOON_DEW_EVERY : selected === "sunbud" ? SUN_FIRST : SPARKLE_DEW_EVERY,
       anim: 1,
     });
     api.play("pop");
@@ -510,7 +849,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       // 望望草落地即照亮:这条道藏土里的地地虫马上现形(特效在 update 里播)
       addFloat(px(col + 0.5), laneCenterY(lane) - cell * 0.6, "这条道亮啦!", "#ffe387");
     }
+    if (selected === "netpad") {
+      addFloat(px(col + 0.5), laneCenterY(lane) - cell * 0.6, "跳不过也钻不过!", "#8a5ac9");
+    }
   }
+
+  const isShooter = (k: PlantKind): boolean =>
+    k === "bubble" || k === "star" || k === "ice" || k === "puff";
 
   function plantInLaneCell(lane: number, colFloat: number): Plant | undefined {
     const col = Math.round(colFloat - 0.5);
@@ -527,7 +872,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     addSparkle(px(bug.x), laneCenterY(bug.lane), "#c9b6f2");
     addFloat(px(bug.x), laneCenterY(bug.lane) - 16, `+${gain}`, "#c47a2a");
     if (BUG_INFO[bug.kind].boss) {
-      shake = 0.5;
+      shake = calmMotion ? 0 : 0.5;
       addFloat(px(bug.x), laneCenterY(bug.lane) - 40, `${BUG_INFO[bug.kind].name}倒下啦!`, "#e05a7a", true);
     }
     // 1.1 分分虫:倒下时蹦出爬爬虫宝宝(与模拟器同规则)
@@ -553,6 +898,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
           jumpAnim: 0,
           raged: false,
           surfacedFx: true,
+          dig: 0,
+          digCol: 0,
         });
       }
     }
@@ -560,7 +907,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function boomExplode(p: Plant): void {
     plants.delete(`${p.col},${p.lane}`);
-    shake = 0.4;
+    shake = calmMotion ? 0 : 0.4;
     api.play("oops");
     addSparkle(px(p.col + 0.5), laneCenterY(p.lane), "#ffc09b");
     addFloat(px(p.col + 0.5), laneCenterY(p.lane) - 20, "轰!!", "#e05a7a", true);
@@ -593,24 +940,52 @@ export function mount(api: GameAPI): { destroy: () => void } {
     dewFlash = Math.max(0, dewFlash - dt);
     waveBanner = Math.max(0, waveBanner - dt);
     shake = Math.max(0, shake - dt);
-    const night = isNightNow();
+    blockTipLife = Math.max(0, blockTipLife - dt);
+    for (const [k, v] of cardCd) if (v > 0) cardCd.set(k, Math.max(0, v - dt));
+    const night = mode === "endless" ? true : isNightNow();
+
+    // 无尽:上一波清完(或时间到了)就排下一波,永远不结束
+    if (mode === "endless" && (endlessWaveNo === 0 || time >= endlessNextAt)) {
+      pushEndlessWave();
+    }
+
+    // 传送关:传送带每隔几秒送一株苗,队列满了就先等着
+    if (isConveyor() && belt.length > 0) {
+      beltTimer -= dt;
+      if (beltTimer <= 0) {
+        beltTimer = specialNow()?.beltEvery ?? 1;
+        if (beltQueue.length < BELT_QUEUE_MAX) {
+          beltQueue.push(belt[beltIdx++ % belt.length]);
+          api.play("coin");
+        }
+      }
+    }
+
+    // 速攻关:倒计时归零还没清场就算这一关没守住(仍然只鼓励)
+    if (isBlitz() && timeLimit > 0 && time >= timeLimit) {
+      breach();
+      return;
+    }
 
     // 出虫
+    const hpBonus = mode === "endless" ? endlessWave(Math.max(1, endlessWaveNo)).hpBonus : 0;
+    const hpLevel = mode === "endless" ? 40 : levelIdx;
     while (spawnIdx < schedule.length && schedule[spawnIdx].time <= time) {
       const s = schedule[spawnIdx++];
-      if (s.wave !== currentWave) {
+      if (mode === "campaign" && s.wave !== currentWave) {
         currentWave = s.wave;
         bannerFlag = level().flagWaves.includes(s.wave);
         waveBanner = bannerFlag ? 2.4 : 1.8;
         api.play(bannerFlag ? "oops" : "jump");
       }
       const info = BUG_INFO[s.kind];
+      const hp = bugHp(s.kind, hpLevel) + hpBonus;
       bugs.push({
         kind: s.kind,
         x: PLANT_COLS + 0.7,
         lane: s.lane,
-        hp: bugHp(s.kind, levelIdx),
-        maxHp: bugHp(s.kind, levelIdx),
+        hp,
+        maxHp: hp,
         armor: info.armor,
         maxArmor: info.armor,
         speed: info.speed * sceneStyle().speedMult,
@@ -622,15 +997,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
         jumpAnim: 0,
         raged: false,
         surfacedFx: !info.underground,
+        dig: info.digs ? TUNNEL_TIME : 0,
+        digCol: info.digs ? tunnelExitCol(netpadColsIn(s.lane)) : 0,
       });
     }
 
     // 露珠(黑夜里攒得慢)
-    passiveTimer -= dt;
-    if (passiveTimer <= 0) {
-      passiveTimer = passiveDewIntervalAt(level().scene, night);
-      gainDew(1);
-      addSparkle(60, TOOLBAR_H + 8, "#bfe9ff");
+    if (!isPuzzle() && !isConveyor()) {
+      passiveTimer -= dt;
+      if (passiveTimer <= 0) {
+        passiveTimer = passiveDewIntervalAt(mode === "endless" ? "night" : level().scene, night);
+        gainDew(1);
+        addSparkle(60, TOOLBAR_H + 8, "#bfe9ff");
+      }
     }
 
     // 植物
@@ -655,10 +1034,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
             addSparkle(px(p.col + 0.5), laneCenterY(p.lane) - cell * 0.4, "#c9d8ff");
           }
         }
-      } else if (p.kind === "bubble" || p.kind === "star" || p.kind === "ice") {
+      } else if (p.kind === "sunbud") {
+        // 1.2 暖暖花:唯一会开☀️阳光的苗,天黑了开得慢一大截
+        p.prodTimer -= dt;
+        if (p.prodTimer <= 0) {
+          p.prodTimer = sunInterval(sceneStyle().dark || night);
+          sun += 1;
+          api.play("coin");
+          addSparkle(px(p.col + 0.5), laneCenterY(p.lane) - laneH * 0.4, "#ffd868");
+        }
+      } else if (isShooter(p.kind)) {
         p.cd -= dt;
         if (p.cd <= 0) {
-          const proj: Proj = p.kind === "bubble" ? "bubble" : p.kind === "star" ? "star" : "ice";
+          const proj = p.kind as Proj;
           const hasTarget = bugs.some(
             (b) =>
               b.lane === p.lane &&
@@ -667,7 +1055,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
               revealed(b),
           );
           if (hasTarget) {
-            p.cd = SHOOT_CD;
+            p.cd = shootCooldown(proj);
             p.anim = 1;
             shots.push({ x: p.col + 0.7, lane: p.lane, proj });
           }
@@ -685,7 +1073,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 子弹飞行
     for (let i = shots.length - 1; i >= 0; i--) {
       const s = shots[i];
-      const spd = s.proj === "star" ? STAR_SPEED : s.proj === "ice" ? ICE_SPEED : BUBBLE_SPEED;
+      const spd =
+        s.proj === "star"
+          ? STAR_SPEED
+          : s.proj === "ice"
+            ? ICE_SPEED
+            : s.proj === "puff"
+              ? PUFF_SPEED
+              : BUBBLE_SPEED;
       s.x += spd * dt;
       if (s.x > PLANT_COLS + 1.5) {
         shots.splice(i, 1);
@@ -697,6 +1092,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         if (!projectileCanHit(s.proj, bug.flying)) continue;
         if (!revealed(bug)) continue; // 子弹从藏土的地地虫头顶飞过
         if (bubbleHitsBug(s.x, bug.x)) {
+          const hitX = bug.x;
           const res = applyDamage(bug, 1);
           bug.hp = res.hp;
           bug.armor = res.armor;
@@ -712,7 +1108,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
             api.play("pop");
             addSparkle(px(bug.x), laneCenterY(bug.lane), s.proj === "star" ? "#ffe387" : "#bfe9ff");
           }
-          if (bug.hp <= 0) killBug(bi);
+          // 1.2 蓬蓬花:花粉团炸开,溅到命中点前后一小片的地面虫
+          if (s.proj === "puff") {
+            addSparkle(px(hitX), laneCenterY(s.lane), "#ffd0e8");
+            for (let k = bugs.length - 1; k >= 0; k--) {
+              const other = bugs[k];
+              if (other === bug || other.lane !== s.lane || other.flying) continue;
+              if (!revealed(other) || Math.abs(other.x - hitX) > PUFF_SPLASH_RANGE) continue;
+              const r2 = applyDamage(other, PUFF_SPLASH_DAMAGE);
+              other.hp = r2.hp;
+              other.armor = r2.armor;
+              addSparkle(px(other.x), laneCenterY(other.lane), "#ffd0e8");
+              if (other.hp <= 0) killBug(k);
+            }
+          }
+          if (bug.hp <= 0) killBug(bugs.indexOf(bug));
           break;
         }
       }
@@ -728,6 +1138,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
         killBug(i);
         continue;
       }
+      // 1.2 哧溜虫:进场就钻土里,出土点一直冒土花(看得见,不算突然袭击)
+      if (bug.dig > 0) {
+        bug.digCol = tunnelExitCol(netpadColsIn(bug.lane));
+        bug.dig -= dt;
+        if (bug.dig <= 0) {
+          bug.dig = 0;
+          bug.x = bug.digCol + 0.5;
+          api.play("jump");
+          addSparkle(px(bug.x), laneCenterY(bug.lane), "#d8b088");
+          addFloat(px(bug.x), laneCenterY(bug.lane) - laneH * 0.45, "冒出来啦!", "#c47a2a");
+        }
+        continue;
+      }
       const surfaced = revealed(bug);
       // 地地虫被望望草照出来的那一下,播个"现形"特效
       if (surfaced && !bug.surfacedFx) {
@@ -739,7 +1162,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       // 进化体掉到半血进入狂暴:提速 + 一次性大特效
       if (bug.kind === "queenx" && !bug.raged && bug.hp / bug.maxHp <= QUEENX_RAGE_FRAC) {
         bug.raged = true;
-        shake = 0.5;
+        shake = calmMotion ? 0 : 0.5;
         api.play("oops");
         addFloat(px(bug.x), laneCenterY(bug.lane) - cell * 0.8, "女王狂暴啦!!", "#e05a7a", true);
       }
@@ -750,14 +1173,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
       // 飞虫越过植物;没现形的地地虫在土里钻,也不啃植物
       const p = bug.flying || !surfaced ? undefined : plantInLaneCell(bug.lane, bug.x - 0.3);
       if (p && bugReachesPlant(bug.x, p.col)) {
-        // 钻钻虫第一次遇到植物直接跳过去
+        // 钻钻虫第一次遇到植物直接跳过去 —— 但弹弹网专治跳跃,跳不过去
         if (BUG_INFO[bug.kind].jumps && !bug.jumped) {
+          if (canJumpOver(p.kind)) {
+            bug.jumped = true;
+            bug.jumpAnim = 1;
+            bug.x = p.col - 0.55;
+            api.play("jump");
+            addFloat(px(bug.x), laneCenterY(bug.lane) - cell * 0.5, "跳过去啦!", "#b28ae8");
+            continue;
+          }
           bug.jumped = true;
-          bug.jumpAnim = 1;
-          bug.x = p.col - 0.55;
-          api.play("jump");
-          addFloat(px(bug.x), laneCenterY(bug.lane) - cell * 0.5, "跳过去啦!", "#b28ae8");
-          continue;
+          addFloat(px(bug.x), laneCenterY(bug.lane) - cell * 0.5, "弹回来啦!", "#5aa878");
         }
         bug.chewTimer -= dt;
         if (bug.chewTimer <= 0) {
@@ -776,11 +1203,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
         bug.x -= bug.speed * speedMul * dt;
       }
       if (bug.x <= HOME_X) {
-        breach();
+        if (mode === "endless") endlessOver();
+        else breach();
         return;
       }
     }
 
+    if (mode === "endless") {
+      if (bugs.length === 0 && spawnIdx >= schedule.length && endlessWaveNo > 0) {
+        endlessCleared = endlessWaveNo;
+      }
+      return;
+    }
     if (spawnIdx >= schedule.length && bugs.length === 0) {
       levelCleared();
     }
@@ -1019,6 +1453,84 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.arc(x + r * 0.28, y - r * 0.46, r * 0.15, 0, Math.PI * 2);
       ctx.fill();
       drawFace(x, y + r * 0.18, r * 0.35);
+    } else if (kind === "sunbud") {
+      // 暖暖花(1.2):橙心花盘,一圈花瓣像小太阳,但脸是圆滚滚的小花不是星球
+      ctx.fillStyle = "#ffc46a";
+      ctx.strokeStyle = "#e08a2a";
+      ctx.lineWidth = Math.max(1, r * 0.06);
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8 + anim * 0.2;
+        ctx.beginPath();
+        ctx.ellipse(x + Math.cos(a) * r * 0.62, y + Math.sin(a) * r * 0.62, r * 0.26, r * 0.16, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      const g = ctx.createRadialGradient(x - r * 0.12, y - r * 0.12, r * 0.05, x, y, r * 0.6);
+      g.addColorStop(0, "#fff2cf");
+      g.addColorStop(1, "#ffb347");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#d0791c";
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.48, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawFace(x, y, r * 0.48);
+    } else if (kind === "puff") {
+      // 蓬蓬花(1.2):毛茸茸的粉色蒲公英,一团花粉扫一小片
+      ctx.fillStyle = "rgba(255,190,220,0.55)";
+      ctx.beginPath();
+      ctx.arc(x, y, r * (0.86 + anim * 0.08), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffd0e8";
+      ctx.strokeStyle = "#e88ab8";
+      ctx.lineWidth = Math.max(1, r * 0.05);
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI * 2 * i) / 10 + anim * 0.35;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(a) * r * 0.58, y + Math.sin(a) * r * 0.58, r * 0.19, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      const g = ctx.createRadialGradient(x - r * 0.12, y - r * 0.14, r * 0.05, x, y, r * 0.55);
+      g.addColorStop(0, "#fff0f7");
+      g.addColorStop(1, "#f5aed2");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "#dd7cae";
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawFace(x, y, r * 0.45);
+    } else if (kind === "netpad") {
+      // 弹弹网(1.2):绷紧的青色小网,会跳的弹回去、挖地的钻不过
+      ctx.fillStyle = "rgba(90,168,120,0.2)";
+      ctx.beginPath();
+      ctx.roundRect(x - r * 0.72, y - r * 0.5, r * 1.44, r * 1.0, r * 0.2);
+      ctx.fill();
+      ctx.strokeStyle = "#5aa878";
+      ctx.lineWidth = Math.max(1.5, r * 0.09);
+      ctx.lineCap = "round";
+      for (let i = 0; i <= 4; i++) {
+        const t = -0.72 + (i * 1.44) / 4;
+        ctx.beginPath();
+        ctx.moveTo(x + r * t, y - r * 0.5);
+        ctx.lineTo(x + r * t, y + r * 0.5);
+        ctx.stroke();
+      }
+      for (let i = 0; i <= 3; i++) {
+        const t = -0.5 + (i * 1.0) / 3;
+        const bow = Math.sin(anim * Math.PI) * r * 0.1;
+        ctx.beginPath();
+        ctx.moveTo(x - r * 0.72, y + r * t);
+        ctx.quadraticCurveTo(x, y + r * t + bow, x + r * 0.72, y + r * t);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "#3f7f59";
+      ctx.lineWidth = Math.max(2, r * 0.12);
+      ctx.beginPath();
+      ctx.roundRect(x - r * 0.72, y - r * 0.5, r * 1.44, r * 1.0, r * 0.2);
+      ctx.stroke();
+      drawFace(x, y, r * 0.34);
     } else {
       // 荷叶垫
       const g = ctx.createRadialGradient(x - r * 0.2, y, r * 0.1, x, y + r * 0.2, r * 0.9);
@@ -1069,13 +1581,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     moth: "#d8c8f0",
     mama: "#f0a0c0",
     queenx: "#b04a8a",
+    tunneler: "#c98f5a",
   };
 
   /** 没现形的地地虫:只画一个拱起来的小土包和扬起的土粒。 */
   function drawMoleMound(bug: Bug): void {
     const x = px(bug.x);
     const y = laneCenterY(bug.lane);
-    const r = cell * 0.3;
+    const r = Math.min(cell, laneH) * 0.3;
     ctx.fillStyle = "rgba(150,110,70,0.75)";
     ctx.beginPath();
     ctx.ellipse(x, y + r * 0.5, r * 1.1, r * 0.55, 0, Math.PI, 0);
@@ -1100,12 +1613,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       drawMoleMound(bug);
       return;
     }
-    const hover = bug.flying ? -cell * 0.22 + Math.sin(bug.wob * 1.4) * cell * 0.06 : 0;
-    const hop = bug.jumpAnim > 0 ? -Math.sin(bug.jumpAnim * Math.PI) * cell * 0.5 : 0;
+    const unit = Math.min(cell, laneH);
+    const hover = bug.flying ? -unit * 0.22 + Math.sin(bug.wob * 1.4) * unit * 0.06 : 0;
+    const hop = bug.jumpAnim > 0 ? -Math.sin(bug.jumpAnim * Math.PI) * unit * 0.5 : 0;
     const x = px(bug.x);
-    const y = laneCenterY(bug.lane) + Math.sin(bug.wob) * cell * 0.03 + hover + hop;
+    const y = laneCenterY(bug.lane) + Math.sin(bug.wob) * unit * 0.03 + hover + hop;
     const boss = BUG_INFO[bug.kind].boss;
-    const r = cell * (boss ? 0.42 : 0.26);
+    const r = unit * (boss ? 0.42 : 0.26);
     const color = BUG_COLORS[bug.kind];
     // 狂暴中的进化体:一圈红色气浪
     if (bug.raged) {
@@ -1199,6 +1713,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.moveTo(x - r * 0.45, y + r * 0.55);
       ctx.lineTo(x - r * 0.7, y + r * 0.95);
       ctx.stroke();
+    }
+    if (bug.kind === "tunneler") {
+      // 哧溜虫:两把小铲爪 + 头上还挂着土屑,一看就是刚从地里钻出来的
+      ctx.strokeStyle = "#8a5a2a";
+      ctx.lineWidth = Math.max(2, r * 0.18);
+      ctx.lineCap = "round";
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(x + s * r * 0.55, y + r * 0.35);
+        ctx.lineTo(x + s * r * 1.0, y + r * 0.85);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(150,110,70,0.6)";
+      for (let k = 0; k < 3; k++) {
+        ctx.beginPath();
+        ctx.arc(x + (k - 1) * r * 0.4, y - r * 1.05 + Math.sin(bug.wob + k) * r * 0.1, r * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     if (bug.kind === "moth") {
       // 扑扑蛾:一对打圈的小触角,夜里更精神
@@ -1318,8 +1850,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const pad = 10;
     const x0 = Math.max(10, w * 0.06);
     const y0 = 72;
+    // 底下给无尽入口留一条 60px 的地方,章节卡不许压到它
+    const endlessH = 46;
     const cw = (w - x0 * 2 - pad * (cols - 1)) / cols;
-    const ch = Math.min(96, (h - y0 - 16 - pad * (rows - 1)) / rows);
+    const ch = Math.min(96, (h - y0 - 16 - endlessH - 10 - pad * (rows - 1)) / rows);
     for (let i = 0; i < SCENE_ORDER.length; i++) {
       const st = SCENE_STYLE[SCENE_ORDER[i]];
       const col = i % cols;
@@ -1353,6 +1887,29 @@ export function mount(api: GameAPI): { destroy: () => void } {
         rect.y + ch * 0.82,
       );
     }
+
+    // 1.2 无尽入口:守到天亮。第一章通了就开,战役进度不受影响
+    const openEndless = totalStars(progress) > 0;
+    const best = save.getGameProgress("sprout-defense").endlessBest;
+    btnEndless = { x: x0, y: y0 + rows * (ch + pad) + 2, w: w - x0 * 2, h: endlessH };
+    ctx.fillStyle = openEndless ? "#3c4270" : "#e8e8ee";
+    ctx.strokeStyle = openEndless ? "#ffd27a" : "#b8b8c2";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(btnEndless.x, btnEndless.y, btnEndless.w, btnEndless.h, 14);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = openEndless ? "#fff3d0" : "#9a9aa8";
+    ctx.font = "bold 16px sans-serif";
+    ctx.fillText(
+      openEndless
+        ? `🌙 无尽守夜 · 守到天亮${best > 0 ? ` · 最好 ${best} 波` : ""}`
+        : "🔒 先在战役里拿一颗星,就能来守夜",
+      btnEndless.x + btnEndless.w / 2,
+      btnEndless.y + btnEndless.h / 2,
+    );
   }
 
   function drawMap(): void {
@@ -1411,7 +1968,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.setLineDash([]);
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
-      const unlocked = isLevelUnlocked(progress, n.idx);
+      const unlocked = unlockedFor(n.idx);
       const got = progress[n.idx] ?? 0;
       const isBoss = def.feature.includes("BOSS");
       const r = isBoss ? n.r * 1.25 : n.r;
@@ -1485,17 +2042,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawRetryPanel(): void {
-    const hint = bossFailHint();
+    const endless = mode === "endless";
+    const hint = endless ? "夜里虫虫最多的是会飞的,星星芽多留两株" : bossFailHint();
     const { y } = panelBox(Math.min(440, w - 40), hint ? 240 : 210);
     // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
     ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("虫虫溜进小屋啦……", w / 2, y + 46);
+    ctx.fillText(endless ? `守住了 ${endlessCleared} 波!` : "虫虫溜进小屋啦……", w / 2, y + 46);
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText("没关系!就在这一关重新布阵", w / 2, y + 84);
+    ctx.fillText(
+      endless
+        ? `已经很棒啦!最好成绩 ${endlessBest} 波 · 再来一夜?`
+        : isBlitz() && timeLimit > 0 && time >= timeLimit
+          ? "时间到啦!没关系,火力再密一点就成"
+          : "没关系!就在这一关重新布阵",
+      w / 2,
+      y + 84,
+    );
     let by = y + 130;
     if (hint) {
       // BOSS 失败给一句针对性提示,温柔不吓人(深橙 5.3:1,14px 小字要 4.5:1)
@@ -1512,6 +2078,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawIntroPanel(): void {
+    if (mode === "endless") {
+      const { y } = panelBox(Math.min(450, w - 40), 200);
+      ctx.fillStyle = "#5a6ac9";
+      ctx.font = "bold 24px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🌙 无尽 · 守到天亮", w / 2, y + 44);
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "16px sans-serif";
+      ctx.fillText("一波接一波,撑到第 20 波天就亮啦!", w / 2, y + 84, Math.min(420, w - 60));
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#a0a0b2";
+      ctx.fillText(`最好成绩 ${endlessBest} 波 · 点一下屏幕开始`, w / 2, y + 124);
+      ctx.fillText("(左上角 ◀ 可回花园)", w / 2, y + 154);
+      return;
+    }
     const def = level();
     const st = sceneStyle();
     const { y } = panelBox(Math.min(450, w - 40), 200);
@@ -1523,8 +2105,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
     ctx.fillText(def.hint, w / 2, y + 88, Math.min(420, w - 60));
-    // 1.1 新机制角标:昼夜循环 / 露珠罐上限
+    // 1.1 新机制角标:昼夜循环 / 露珠罐上限;1.2 再加特殊关与本关会出的机制
     const badges: string[] = [];
+    if (def.special?.kind === "puzzle") badges.push("🧩 解谜关:苗是发好的,想清楚摆哪儿");
+    if (def.special?.kind === "conveyor") badges.push("🚚 传送关:传送带来什么就用什么");
+    if (def.special?.kind === "blitz") badges.push(`⏱ 速攻关:${blitzLimit(levelIdx)}s 内清场`);
+    const traits = new Set<string>();
+    for (const wave of def.waves) {
+      for (const e of wave) for (const t of bugTraits(e.kind)) traits.add(TRAIT_INFO[t].icon + TRAIT_INFO[t].label);
+    }
+    if (traits.size > 0) badges.push(`本关机制:${[...traits].join(" ")}`);
     if (def.cycle) badges.push(`☀️${def.cycle.day}s→🌙${def.cycle.night}s 昼夜循环`);
     if (def.dewCap !== undefined) badges.push(`露珠罐上限 ${def.dewCap}(种产露植物变大)`);
     if (badges.length > 0) {
@@ -1574,36 +2164,40 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     const plantSelected = selected !== "shovel";
-    const affordSelected = plantSelected && canAfford(dew, selected as PlantKind);
+    const affordSelected =
+      plantSelected &&
+      affordablePlant(selected as PlantKind) &&
+      cardCooldownLeft(selected as PlantKind) <= 0;
     const hintPulse = 0.25 + Math.sin(time * 4) * 0.12;
     for (let lane = 0; lane < LANES; lane++) {
       const water = isWaterLane(lane);
       if (water) {
         ctx.fillStyle = "#9fd8f5";
-        ctx.fillRect(ox - cell * HOME_W_CELLS, oy + lane * cell, cell * (PLANT_COLS + HOME_W_CELLS), cell);
+        ctx.fillRect(ox - cell * HOME_W_CELLS, oy + lane * laneH, cell * (PLANT_COLS + HOME_W_CELLS), laneH);
         ctx.strokeStyle = "rgba(255,255,255,0.5)";
         ctx.lineWidth = 2;
         for (let c = 0; c < PLANT_COLS; c++) {
           ctx.beginPath();
-          const wy = oy + lane * cell + cell * 0.5 + Math.sin(time * 2 + c) * 3;
+          const wy = oy + lane * laneH + laneH * 0.5 + Math.sin(time * 2 + c) * 3;
           ctx.moveTo(px(c) + cell * 0.2, wy);
           ctx.quadraticCurveTo(px(c) + cell * 0.5, wy - 4, px(c) + cell * 0.8, wy);
           ctx.stroke();
         }
       } else {
         ctx.fillStyle = lane % 2 === 0 ? st.laneA : st.laneB;
-        ctx.fillRect(ox - cell * HOME_W_CELLS, oy + lane * cell, cell * (PLANT_COLS + HOME_W_CELLS), cell);
+        ctx.fillRect(ox - cell * HOME_W_CELLS, oy + lane * laneH, cell * (PLANT_COLS + HOME_W_CELLS), laneH);
       }
       for (let c = 0; c < PLANT_COLS; c++) {
         const key = `${c},${lane}`;
         if (!water) {
           // 旱地画成圆角小土坑,种在哪里一目了然
-          const inset = cell * 0.09;
+          const insetX = cell * 0.09;
+          const insetY = laneH * 0.09;
           ctx.fillStyle = night ? "rgba(255,255,255,0.05)" : "rgba(150,110,70,0.1)";
           ctx.strokeStyle = night ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.55)";
           ctx.lineWidth = Math.max(1, cell * 0.03);
           ctx.beginPath();
-          ctx.roundRect(px(c) + inset, oy + lane * cell + inset, cell - inset * 2, cell - inset * 2, cell * 0.18);
+          ctx.roundRect(px(c) + insetX, oy + lane * laneH + insetY, cell - insetX * 2, laneH - insetY * 2, Math.min(cell, laneH) * 0.18);
           ctx.fill();
           ctx.stroke();
         }
@@ -1615,8 +2209,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
             ctx.lineWidth = Math.max(2, cell * 0.055);
             ctx.lineCap = "round";
             const cxc = px(c + 0.5);
-            const cyc = oy + (lane + 0.5) * cell;
-            const arm = cell * 0.11;
+            const cyc = laneCenterY(lane);
+            const arm = Math.min(cell, laneH) * 0.11;
             ctx.beginPath();
             ctx.moveTo(cxc - arm, cyc);
             ctx.lineTo(cxc + arm, cyc);
@@ -1628,32 +2222,59 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
     }
 
+    // 1.2 挖地预告:哧溜虫在土里的时候,出土点一直冒土花
+    for (const bug of bugs) {
+      if (bug.dig <= 0) continue;
+      const gx = px(bug.digCol + 0.5);
+      const gy = laneCenterY(bug.lane);
+      const pulse = 0.35 + 0.3 * Math.abs(Math.sin(time * 5));
+      ctx.fillStyle = `rgba(180,130,80,${pulse})`;
+      ctx.beginPath();
+      ctx.ellipse(gx, gy + laneH * 0.16, cell * 0.3, laneH * 0.14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(120,88,56,0.85)";
+      for (let k = 0; k < 4; k++) {
+        const a = time * 4 + (k * Math.PI) / 2;
+        ctx.beginPath();
+        ctx.arc(gx + Math.cos(a) * cell * 0.22, gy - Math.abs(Math.sin(a)) * laneH * 0.28, cell * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#a05914";
+      ctx.font = `bold ${Math.max(12, Math.round(laneH * 0.26))}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🕳", gx, gy - laneH * 0.3);
+    }
+
     // 小屋
     const hx = ox - cell * HOME_W_CELLS * 0.5;
+    const hs = Math.min(cell, laneH);
     for (let lane = 0; lane < LANES; lane++) {
       const hy = laneCenterY(lane);
       ctx.fillStyle = "#ffd6e7";
       ctx.beginPath();
-      ctx.roundRect(hx - cell * 0.38, hy - cell * 0.25, cell * 0.76, cell * 0.55, 6);
+      ctx.roundRect(hx - hs * 0.38, hy - hs * 0.25, hs * 0.76, hs * 0.55, 6);
       ctx.fill();
       ctx.fillStyle = "#ff9eb5";
       ctx.beginPath();
-      ctx.moveTo(hx - cell * 0.46, hy - cell * 0.22);
-      ctx.lineTo(hx, hy - cell * 0.52);
-      ctx.lineTo(hx + cell * 0.46, hy - cell * 0.22);
+      ctx.moveTo(hx - hs * 0.46, hy - hs * 0.22);
+      ctx.lineTo(hx, hy - hs * 0.52);
+      ctx.lineTo(hx + hs * 0.46, hy - hs * 0.22);
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = "#e05a7a";
-      ctx.font = `${Math.round(cell * 0.24)}px sans-serif`;
+      ctx.font = `${Math.round(hs * 0.24)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("💗", hx, hy + cell * 0.04);
+      ctx.fillText("💗", hx, hy + hs * 0.04);
     }
+
+    const iconR = Math.min(cell, laneH) * 0.42;
 
     // 荷叶
     for (const key of lilies) {
       const [c, lane] = key.split(",").map(Number);
-      drawPlantIcon(px(c + 0.5), laneCenterY(lane) + cell * 0.12, cell * 0.42, "lily");
+      drawPlantIcon(px(c + 0.5), laneCenterY(lane) + laneH * 0.12, iconR, "lily");
     }
 
     // 植物
@@ -1661,12 +2282,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const x = px(p.col + 0.5);
       const y = laneCenterY(p.lane);
       ctx.globalAlpha = p.hp <= 1 ? 0.65 : 1;
-      drawPlantIcon(x, y, cell * 0.42, p.kind, p.anim);
-      if (p.kind === "nut") {
+      drawPlantIcon(x, y, iconR, p.kind, p.anim);
+      if (p.kind === "nut" || p.kind === "netpad") {
+        const full = PLANT_INFO[p.kind].hp;
         ctx.fillStyle = "rgba(0,0,0,0.12)";
-        ctx.fillRect(x - cell * 0.28, y - cell * 0.48, cell * 0.56, 4);
+        ctx.fillRect(x - cell * 0.28, y - laneH * 0.46, cell * 0.56, 4);
         ctx.fillStyle = "#7ac97a";
-        ctx.fillRect(x - cell * 0.28, y - cell * 0.48, (cell * 0.56 * p.hp) / PLANT_INFO.nut.hp, 4);
+        ctx.fillRect(x - cell * 0.28, y - laneH * 0.46, (cell * 0.56 * p.hp) / full, 4);
       }
       ctx.globalAlpha = 1;
     }
@@ -1739,13 +2361,55 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     ctx.restore();
 
-    // ---- 工具栏 ----
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    // ---- 顶部:资源与波次独占一行(字号 ≥ 14px),下面才是横滑的苗卡片条 ----
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.fillRect(0, 0, w, TOOLBAR_H);
+    ctx.font = `bold ${HUD_FONT_MIN}px sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    const capNow = dewCapNow();
+    const dewText = isPuzzle()
+      ? "🧩 固定苗阵"
+      : isConveyor()
+        ? "🚚 传送带发苗"
+        : Number.isFinite(capNow)
+          ? `💧${dew}/${capNow}`
+          : `💧${dew}`;
+    ctx.fillStyle = dewFlash > 0 && Math.floor(dewFlash * 8) % 2 === 0 ? "#e05a7a" : "#3f6b4a";
+    ctx.fillText(dewText, 8, HUD_ROW_H / 2 + 2);
+    let hudX = 8 + ctx.measureText(dewText).width + 12;
+    if (!isPuzzle() && !isConveyor() && unlockedPlants.includes("sunbud")) {
+      ctx.fillStyle = "#a06a14";
+      ctx.fillText(`☀️${sun}`, hudX, HUD_ROW_H / 2 + 2);
+      hudX += ctx.measureText(`☀️${sun}`).width + 12;
+    }
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#5a5a6e";
+    if (mode === "endless") {
+      ctx.fillText(`🌙 第${Math.max(1, endlessWaveNo)}波 · 最好${endlessBest}`, w - 8, HUD_ROW_H / 2 + 2);
+    } else if (isBlitz() && timeLimit > 0) {
+      const left = Math.max(0, Math.ceil(timeLimit - time));
+      ctx.fillStyle = left <= 10 ? "#c0392b" : "#5a5a6e";
+      ctx.fillText(`⏱ ${left}s · 波${Math.max(1, currentWave + 1)}/${level().waves.length}`, w - 8, HUD_ROW_H / 2 + 2);
+    } else {
+      ctx.fillText(
+        `${levelLabel()} 波${Math.max(1, currentWave + 1)}/${level().waves.length}`,
+        w - 8,
+        HUD_ROW_H / 2 + 2,
+      );
+    }
+
+    // 苗卡片条:一行横滑,卡片 ≥ 48px 宽,冷却时转一圈灰色扇形
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, HUD_ROW_H, w, CARD_H + 8);
+    ctx.clip();
     for (let i = 0; i < tools.length; i++) {
       const tool = tools[i];
       const r = cardRect(i);
-      const afford = tool === "shovel" || canAfford(dew, tool);
+      if (r.x > w || r.x + r.w < 0) continue;
+      const cdLeft = tool === "shovel" ? 0 : cardCooldownLeft(tool);
+      const afford = tool === "shovel" || (affordablePlant(tool) && cdLeft <= 0);
       ctx.fillStyle = selected === tool ? "#fff1c9" : "#f3f3f7";
       ctx.strokeStyle = selected === tool ? "#ffb84d" : "rgba(0,0,0,0.08)";
       ctx.lineWidth = 2;
@@ -1754,51 +2418,78 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = afford ? 1 : 0.45;
-      // 窄屏修复:卡片改为"图标在上 + 价格在下";1.1 后期 10 张卡,
-      // 窄卡(375 宽约 27px)把价格字号降到 11px,不挤不溢出
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      const priceFont = r.w < 40 ? "bold 11px sans-serif" : "bold 14px sans-serif";
-      const iconR = Math.min(11, r.w * 0.36);
+      const cardIconR = Math.min(13, r.w * 0.3);
       if (tool === "shovel") {
-        drawShovelIcon(r.x + r.w / 2, r.y + 14, iconR);
+        drawShovelIcon(r.x + r.w / 2, r.y + r.h * 0.36, cardIconR);
         ctx.fillStyle = "#5a5a6e";
-        ctx.font = priceFont;
-        ctx.fillText("铲子", r.x + r.w / 2, r.y + r.h - 11, r.w - 2);
+        ctx.font = `bold ${HUD_FONT_MIN}px sans-serif`;
+        ctx.fillText("铲子", r.x + r.w / 2, r.y + r.h - 12, r.w - 4);
       } else {
-        drawPlantIcon(r.x + r.w / 2, r.y + 14, iconR, tool);
+        drawPlantIcon(r.x + r.w / 2, r.y + r.h * 0.36, cardIconR, tool);
         ctx.fillStyle = afford ? "#5a5a6e" : "#8a8a9a";
-        ctx.font = priceFont;
-        ctx.fillText(`💧${PLANT_INFO[tool].cost}`, r.x + r.w / 2, r.y + r.h - 11, r.w - 2);
+        ctx.font = `bold ${HUD_FONT_MIN}px sans-serif`;
+        const left = suppliesLeft(tool);
+        const label = Number.isFinite(left)
+          ? `×${left}`
+          : PLANT_SPEC[tool].sun > 0
+            ? `${PLANT_INFO[tool].cost}💧${PLANT_SPEC[tool].sun}☀️`
+            : `💧${PLANT_INFO[tool].cost}`;
+        ctx.fillText(label, r.x + r.w / 2, r.y + r.h - 12, r.w - 4);
       }
       ctx.globalAlpha = 1;
+      // 冷却圈:灰扇形从满转到空,转完这张卡就又能种了
+      if (cdLeft > 0 && tool !== "shovel") {
+        const total = PLANT_SPEC[tool].cooldown;
+        ctx.fillStyle = "rgba(90,90,110,0.32)";
+        ctx.beginPath();
+        ctx.moveTo(r.x + r.w / 2, r.y + r.h * 0.36);
+        ctx.arc(
+          r.x + r.w / 2,
+          r.y + r.h * 0.36,
+          r.w * 0.42,
+          -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * (cdLeft / Math.max(0.01, total)),
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
     }
-    ctx.textAlign = "right";
-    ctx.font = "15px sans-serif";
-    ctx.fillStyle = dewFlash > 0 && Math.floor(dewFlash * 8) % 2 === 0 ? "#e05a7a" : "#5a5a6e";
-    ctx.textBaseline = "middle";
-    // 1.1 露珠罐上限:有上限的关显示 "现有/罐口"
-    const capNow = dewCapNow();
-    ctx.fillText(Number.isFinite(capNow) ? `💧 ${dew}/${capNow}` : `💧 ${dew}`, w - 8, TOOLBAR_H / 2 - 12);
-    ctx.fillStyle = "#5a5a6e";
-    // 波次文字 11→14px,窄屏也够看清
-    ctx.font = "14px sans-serif";
-    ctx.fillText(
-      `${levelLabel()} 波${Math.max(1, currentWave + 1)}/${level().waves.length}`,
-      w - 8,
-      TOOLBAR_H / 2 + 10,
-    );
+    ctx.restore();
+    if (cardStrip.maxScroll > 0) {
+      // 横滑提示:底部一条小滑轨,告诉小朋友卡片还能往旁边拨
+      const trackW = w - 24;
+      const knobW = Math.max(28, (trackW * w) / cardStrip.contentW);
+      const t = cardStrip.maxScroll > 0 ? stripScroll / cardStrip.maxScroll : 0;
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      ctx.beginPath();
+      ctx.roundRect(12, TOOLBAR_H - 6, trackW, 4, 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(90,168,120,0.7)";
+      ctx.beginPath();
+      ctx.roundRect(12 + (trackW - knobW) * t, TOOLBAR_H - 6, knobW, 4, 2);
+      ctx.fill();
+    }
 
     // 回地图按钮(叠在工具栏下方左侧)
     btnBack = { x: 6, y: TOOLBAR_H + 4, w: 62, h: 28 };
     drawButton(btnBack, "◀ 地图", "rgba(255,255,255,0.85)", "#5a5a6e");
 
-    // 「正在种什么」提示条:选中的工具一目了然
+    // 「正在种什么」提示条:选中的工具一目了然;种不下时改成告诉你为什么
     if (phase === "play") {
-      const label =
+      const price =
         selected === "shovel"
-          ? "🪏 铲子:点植物退回一半露珠"
-          : `正在种:${PLANT_INFO[selected].name} 💧${PLANT_INFO[selected].cost} · 点绿色 ➕ 种下`;
+          ? ""
+          : PLANT_SPEC[selected].sun > 0
+            ? `💧${PLANT_INFO[selected].cost}+☀️${PLANT_SPEC[selected].sun}`
+            : `💧${PLANT_INFO[selected].cost}`;
+      const label =
+        blockTipLife > 0
+          ? `⚠️ ${blockTip}`
+          : selected === "shovel"
+            ? "🪏 铲子:点两下同一格才铲,退回一半露珠"
+            : `正在种:${PLANT_INFO[selected].name} ${price} · 点绿色 ➕ 种下`;
       // 提示条文字 12→14px:两段式(先点卡再点格子)的关键引导,要看得清
       ctx.font = "bold 14px sans-serif";
       const tw = ctx.measureText(label).width;
@@ -1815,10 +2506,92 @@ export function mount(api: GameAPI): { destroy: () => void } {
       } else {
         drawShovelIcon(chip.x + 15, chip.y + 14, 9);
       }
-      ctx.fillStyle = "#4a7a5a";
+      ctx.fillStyle = blockTipLife > 0 ? "#a05914" : "#4a7a5a";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText(label.replace("🪏 ", ""), chip.x + 28, chip.y + 15, chip.w - 34);
+    }
+
+    // 1.2 预警角标:每种机制出场前 3 秒就在那条道右边亮起来,不许突然袭击
+    if (phase === "play") {
+      const live = activeWarnings(warnings, time);
+      const shown = new Set<string>();
+      for (const wn of live) {
+        const k = `${wn.lane}|${wn.trait}`;
+        if (shown.has(k)) continue;
+        shown.add(k);
+        const info = TRAIT_INFO[wn.trait];
+        const blink = 0.6 + 0.4 * Math.abs(Math.sin(time * 5));
+        const bx = Math.min(w - 8, px(PLANT_COLS + 0.35));
+        const by = laneCenterY(wn.lane) - laneH * 0.28;
+        ctx.font = `bold ${HUD_FONT_MIN}px sans-serif`;
+        const label = `${info.icon}${info.label}`;
+        const bw3 = ctx.measureText(label).width + 14;
+        ctx.globalAlpha = blink;
+        ctx.fillStyle = "rgba(255,244,220,0.95)";
+        ctx.strokeStyle = "#e0a030";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(bx - bw3, by - 12, bw3, 24, 12);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#a05914";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, bx - bw3 / 2, by + 1);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 1.2 传送关:传送带队列条,来什么用什么
+    if (isConveyor() && phase === "play") {
+      const qh = 34;
+      const qy = h - qh - 6;
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.strokeStyle = "rgba(90,168,120,0.5)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(6, qy, w - 12, qh, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#4a7a5a";
+      ctx.font = `bold ${HUD_FONT_MIN}px sans-serif`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🚚 传送带", 14, qy + qh / 2);
+      for (let i = 0; i < beltQueue.length; i++) {
+        const cx2 = 96 + i * 34;
+        if (cx2 > w - 20) break;
+        ctx.fillStyle = i === 0 ? "#fff1c9" : "#f3f3f7";
+        ctx.beginPath();
+        ctx.roundRect(cx2 - 14, qy + 4, 28, qh - 8, 8);
+        ctx.fill();
+        drawPlantIcon(cx2, qy + qh / 2, 10, beltQueue[i]);
+      }
+    }
+
+    // 1.2 无尽:天色进度条,「守到天亮」看得见
+    if (mode === "endless" && phase === "play") {
+      const dawn = Math.min(1, Math.max(0, (endlessWaveNo - 1) / (ENDLESS_DAWN_WAVE - 1)));
+      const bw4 = Math.min(280, w - 40);
+      const bx2 = (w - bw4) / 2;
+      const by2 = h - 30;
+      ctx.fillStyle = "rgba(40,44,88,0.75)";
+      ctx.beginPath();
+      ctx.roundRect(bx2, by2, bw4, 16, 8);
+      ctx.fill();
+      const g2 = ctx.createLinearGradient(bx2, 0, bx2 + bw4, 0);
+      g2.addColorStop(0, "#6a7ac9");
+      g2.addColorStop(1, "#ffd27a");
+      ctx.fillStyle = g2;
+      ctx.beginPath();
+      ctx.roundRect(bx2, by2, Math.max(6, bw4 * dawn), 16, 8);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${HUD_FONT_MIN}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(endlessSkyLine(endlessWaveNo), w / 2, by2 - 12);
     }
 
     // 1.1 昼夜钟:循环关显示当前时段和还剩几秒(挂在提示条下面一行,窄屏不挤)
@@ -1860,10 +2633,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.globalAlpha = 1;
     }
 
+    refreshSkip();
+
     // ---- 覆盖层 ----
     if (phase === "intro") {
       drawIntroPanel();
-      drawButton(btnBack, "◀ 地图", "#f0f0f5", "#5a5a6e");
+      drawButton(btnBack, mode === "endless" ? "◀ 花园" : "◀ 地图", "#f0f0f5", "#5a5a6e");
     } else if (phase === "clear") {
       drawClearPanel();
     } else if (phase === "retry") {
@@ -1882,17 +2657,107 @@ export function mount(api: GameAPI): { destroy: () => void } {
     raf = requestAnimationFrame(frame);
   }
 
+  /* ---------------- 1.2 平台接线 ---------------- */
+
+  /** 平台直达第 N 关(1 基)。锁着的关也允许直达 —— 家长/平台点进来就是要打这关。 */
+  function openCampaignLevel(n: number): number {
+    const idx = Math.min(LEVELS.length - 1, Math.max(0, Math.round(n) - 1));
+    stopSpeaking();
+    loadLevel(idx);
+    return idx + 1;
+  }
+
+  // 跳关:壳层没注册 requestSkip 就不挂按钮(单测环境保持干净)。
+  // 授权通过 = 本关记 0 星但放行下一关,战役星数一颗不送。
+  const skipped = new Set<number>();
+  const skipBtn = document.createElement("button");
+  let skipBusy = false;
+  function refreshSkip(): void {
+    const request = getLevelExtras().requestSkip;
+    const usable =
+      !!request && mode === "campaign" && (phase === "play" || phase === "intro" || phase === "retry");
+    skipBtn.style.display = usable ? "" : "none";
+    if (!usable) return;
+    skipBtn.textContent = `⏭️ 跳过 第${levelIdx + 1}关`;
+    skipBtn.disabled = skipBusy || levelIdx >= LEVELS.length - 1;
+  }
+  function onSkip(): void {
+    const request = getLevelExtras().requestSkip;
+    if (!request || skipBusy || mode !== "campaign") return;
+    api.play("tap");
+    skipBusy = true;
+    refreshSkip();
+    const from = levelIdx;
+    Promise.resolve(request("sprout-defense", from))
+      .then((ok) => {
+        if (destroyed) return;
+        skipBusy = false;
+        if (!ok) return;
+        skipped.add(from);
+        stopSpeaking();
+        if (from < LEVELS.length - 1) loadLevel(from + 1);
+      })
+      .catch(() => {
+        if (destroyed) return;
+        skipBusy = false;
+      });
+  }
+  skipBtn.type = "button";
+  skipBtn.className = "spd-skip";
+  skipBtn.style.display = "none";
+  skipBtn.addEventListener("click", onSkip);
+  wrap.appendChild(skipBtn);
+
+  function unlockedFor(idx: number): boolean {
+    return isLevelUnlocked(progress, idx) || skipped.has(idx - 1);
+  }
+
   canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerUp);
+
+  // 平台直达:api.initialLevel 优先,没有就看地址栏 ?level=
+  const want = api.initialLevel ?? levelFromQuery();
+  if (want != null && want >= 1) openCampaignLevel(want);
+
   syncSize();
   raf = requestAnimationFrame(frame);
 
   return {
+    openCampaignLevel,
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
+      raf = 0;
       stopSpeaking();
       canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.remove();
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
+      skipBtn.removeEventListener("click", onSkip);
+      // 局内状态一律归零,免得下一次 mount 捡到上一局的虫
+      plants.clear();
+      lilies.clear();
+      cardCd.clear();
+      stock.clear();
+      bugs.length = 0;
+      shots.length = 0;
+      sparkles.length = 0;
+      floats.length = 0;
+      schedule = [];
+      warnings = [];
+      belt = [];
+      beltQueue = [];
+      strip = null;
+      shovelPending = null;
+      mapNodes.length = 0;
+      themeCards.length = 0;
+      time = 0;
+      dew = 0;
+      sun = 0;
+      phase = "themes";
+      wrap.remove();
     },
   };
 }

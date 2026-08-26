@@ -8,8 +8,9 @@ export const meta = {
   emoji: "🌱",
   category: "action" as const,
   color: "#d5f2ca",
-  blurb: "188 关十三大花园守家战役!七种植物九种虫,决战虫虫女王!",
-  // logic.ts 前 9 章各 11 关 + 新 4 章 22/22/22/23,合计 188;只有闯关
-  modes: ["campaign"] as const,
+  blurb: "188 关十三大花园守家战役!十种绿芽十种虫,还能通宵守到天亮!",
+  // logic.ts 前 9 章各 11 关 + 新 4 章 22/22/22/23,合计 188;
+  // 1.2 起除闯关外还有无尽「守到天亮」
+  modes: ["campaign", "endless"] as const,
   levels: 188,
 };
