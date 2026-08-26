@@ -106,9 +106,10 @@ describe("商标红线", () => {
     }
   });
 
-  it("目录里真的有该有的四个实现文件", () => {
+  // 1.1 第 12 步:攻略统一走 src/games/<id>/guide.ts 的懒加载约定,这里多了一层转发文件
+  it("目录里真的有该有的五个实现文件", () => {
     const names = sourceFiles().map((f) => f.name).sort();
-    expect(names).toEqual(["index.ts", "levels.ts", "logic.ts", "meta.ts"]);
+    expect(names).toEqual(["guide.ts", "index.ts", "levels.ts", "logic.ts", "meta.ts"]);
   });
 });
 
