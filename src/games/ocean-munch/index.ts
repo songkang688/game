@@ -34,6 +34,8 @@ import {
   driftVector,
   eatScore,
   eelActive,
+  eelPlan,
+  eelReach,
   grow,
   hazardTier,
   inBubbleGap,
@@ -397,11 +399,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (tier >= 3) vortexes.push({ fx: 0.5, fy: 0.18 });
     }
     if (def.hazards.includes("eel")) {
-      eels.push({ fx: 0.28, offset: 0 });
-      eels.push({ fx: 0.55, offset: 1.3 });
-      eels.push({ fx: 0.82, offset: 2.5 });
-      if (tier >= 2) eels.push({ fx: 0.12, offset: 1.9 });
-      if (tier >= 3) eels.push({ fx: 0.68, offset: 0.7 });
+      for (const e of eelPlan(def.zone, tier)) eels.push({ ...e });
     }
   }
 
@@ -787,7 +785,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 电电草:通电时碰到会麻
     for (const e of eels) {
       const ex = e.fx * w;
-      if (eelActive(time, e.offset) && Math.abs(player.x - ex) < player.r + 13) {
+      if (eelActive(time, e.offset) && Math.abs(player.x - ex) < eelReach(player.r)) {
         loseHeart(player.x, player.y);
         if (phase !== "play") return;
       }

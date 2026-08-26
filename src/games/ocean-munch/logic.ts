@@ -706,6 +706,36 @@ export function eelActive(time: number, offset: number): boolean {
   return t < EEL_ON;
 }
 
+/** 电电草的电场半宽:碰到判定是 |玩家 x − 草 x| < 体型 + 13。 */
+export function eelReach(playerR: number): number {
+  return playerR + 13;
+}
+
+/**
+ * 一关里的电电草怎么插。前九片海按 1.0 的老样子,一棵都不动。
+ *
+ * 1.1 的三片深海把目标体型推到了 67~75,而电场半宽是跟着体型长的,
+ * 老密度的五棵草并排就连成一张连缝都不留的电网,再稳的手也只能硬吃伤害。
+ * 所以深海只留两棵、贴着左右两边站,而且相位正好错开——两棵永远不会同时
+ * 通电,中间那条水道任何时候都游得过去。
+ */
+export function eelPlan(zone: ZoneId, tier: number): { fx: number; offset: number }[] {
+  if (zone === "strait" || zone === "bloom" || zone === "trench") {
+    return [
+      { fx: 0.14, offset: 0 },
+      { fx: 0.86, offset: EEL_ON + 0.5 },
+    ];
+  }
+  const plan = [
+    { fx: 0.28, offset: 0 },
+    { fx: 0.55, offset: 1.3 },
+    { fx: 0.82, offset: 2.5 },
+  ];
+  if (tier >= 2) plan.push({ fx: 0.12, offset: 1.9 });
+  if (tier >= 3) plan.push({ fx: 0.68, offset: 0.7 });
+  return plan;
+}
+
 /** 涡流对 (dx,dy) 处物体的吸力(指向涡心,越近越强;涡心外无力)。 */
 export function vortexPull(dx: number, dy: number): { fx: number; fy: number } {
   const d = Math.hypot(dx, dy);
