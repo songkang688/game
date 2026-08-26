@@ -210,8 +210,12 @@ export const NEW_ORES: Record<NewOreKind, NewOreSpec> = {
  * 「每一帧独立掷一次」这件事在数学上就等价于指数分布 —— 逐帧实现
  * (`muddySlips`) 和给关卡设计估算用的闭式公式 (`muddySlipChance`) 因此是
  * 同一条曲线，不会出现「测试算出来四成、真玩起来六成」的两套数。
+ *
+ * 速率定在 0.08：从矿洞最深处拉一颗泥泥矿要五秒出头，滑掉的概率约三成 ——
+ * 「多半拉得上来，偶尔栽一跤」。再高就变成「泥泥矿基本别碰」，
+ * 那这颗矿就白设计了；而且它是有解的，钩着的时候按一下炸药就永远不滑。
  */
-export const MUDDY_SLIP_PER_SEC = 0.15;
+export const MUDDY_SLIP_PER_SEC = 0.08;
 /**
  * 刚钩上来的这一小段不判滑。
  *
