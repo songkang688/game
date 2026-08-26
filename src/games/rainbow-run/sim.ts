@@ -287,6 +287,9 @@ export function simulateLevel(idx: number, opts: SimOptions = {}): SimResult {
     return true;
   }
 
+  /** 包一层再比:直接写 action === "jump" 会被类型收窄误判成永假。 */
+  const actionIs = (k: PlayerAction): boolean => action === k;
+
   function think(speed: number): void {
     if (policy === "idle") return;
     // 1. 三条道都算一遍,挑最划算的那条,然后往它的方向挪一格。
@@ -376,7 +379,7 @@ export function simulateLevel(idx: number, opts: SimOptions = {}): SimResult {
 
     if (actionTimer > 0) {
       actionTimer -= DT;
-      if (action === "jump") jumpElapsed += DT;
+      if (actionIs("jump")) jumpElapsed += DT;
       if (actionTimer <= 0) action = "run";
     }
 
@@ -438,7 +441,7 @@ export function simulateLevel(idx: number, opts: SimOptions = {}): SimResult {
         continue;
       }
       // 完美跳:栅栏和坑洞才算
-      if (action === "jump" && (o.kind === "hurdle" || o.kind === "pit")) {
+      if (actionIs("jump") && (o.kind === "hurdle" || o.kind === "pit")) {
         o.done = true;
         if (jumpJudged) continue;
         jumpJudged = true;

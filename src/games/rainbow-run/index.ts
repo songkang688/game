@@ -1,42 +1,64 @@
 import { meta } from "./meta";
 export { meta };
 
-// 彩虹跑跑:99 关九大主题世界跑酷战役!先选世界再选关,每关一个小任务,
-// 滚滚球、电光门等七种障碍,喷气鞋/磁铁/滑板道具,还能花星星复活一次!
+// 彩虹跑跑:188 关十二大主题世界跑酷战役!先选世界再选关,每关一个小任务,
+// 滚滚球、电光门、彩纸箱等八种障碍,喷气鞋/磁铁/滑板道具,还能花星星复活一次!
+// 1.1 新增:可铲碎的彩纸箱、加速滑轨、三连完美跳节奏段、随机分岔路线与三位章节大王。
 // 另有「无尽彩虹跑」:一直跑吃金币,每 1600 米换世界,越跑越快,挑战最远纪录!
 import {
   BOARD_SECONDS,
+  BOSSES,
+  BossDef,
+  CRATE_SCORE,
+  ForkGate,
+  HIT_WINDOW,
   JET_SECONDS,
+  JUMP_TIME,
   LEVELS,
   LevelDef,
-  LEVELS_PER_THEME,
   MAGNET_SECONDS,
   MAX_HEARTS,
   Mission,
   ObstacleKind,
+  PERFECT_STREAK_GOAL,
   PatternRow,
   PlayerAction,
   PowerKind,
   PROGRESS_KEY,
+  RAIL_SECONDS,
   REVIVE_COST,
   ROLLER_SPEED_MULT,
+  ROW_GAP,
   RunStats,
+  SLIDE_TIME,
   THEME_ORDER,
   THEME_STYLE,
+  bossDefeated,
+  bossHitsOf,
   clampLane,
   clearSpeechLine,
+  completesPerfectRun,
   detectSwipe,
+  forkRows,
   isLevelUnlocked,
+  isPerfectJump,
   isThemeUnlocked,
   missionDone,
   missionLabel,
   missionProgress,
+  nextPerfectStreak,
   parseProgress,
-  patternsForKinds,
+  patternsForLevel,
+  pickFork,
+  railSpeedMult,
   retrySpeechLine,
   serializeProgress,
+  smashesCrate,
   starsForLevel,
   themeCleared,
+  themeIndexOfLevel,
+  themeOffset,
+  themeSize,
   themeStars,
   totalStars,
   wouldHit,
@@ -62,14 +84,23 @@ interface Obstacle {
   kind: ObstacleKind;
   y: number;
   phase: number;
+  /** 已经结算过(铲碎/完美跳判定),不再重复计 */
+  done?: boolean;
 }
 
 interface Pickup {
-  kind: "star" | "coin" | PowerKind;
+  kind: "star" | "coin" | "rail" | PowerKind;
   lane: number;
   x: number;
   y: number;
   taken: boolean;
+}
+
+/** 分岔路牌:滚到玩家身位时,按当时站的道决定接下来跑哪一条支线。 */
+interface ForkSign {
+  gate: ForkGate;
+  y: number;
+  chosen: "left" | "right" | null;
 }
 
 interface Puff {
@@ -94,11 +125,6 @@ interface Rect {
   w: number;
   h: number;
 }
-
-const JUMP_TIME = 0.55;
-const SLIDE_TIME = 0.6;
-const HIT_WINDOW = 34;
-const ROW_GAP = 250;
 
 function loadProgress(): number[] {
   try {
@@ -196,23 +222,40 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let magnetTimer = 0;
   let jetTimer = 0;
   let boardTimer = 0;
+  let railTimer = 0;
+  let jumpElapsed = 0;
+  let jumpJudged = false;
+  let perfectStreak = 0;
   let reviveUsed = false;
   let earnedStars: 1 | 2 | 3 = 1;
   let missionOk = false;
   let finaleFired = false;
   let destroyed = false;
+  let boss: BossDef | null = null;
+  let bossBeaten = false;
+  let loseReason: "hearts" | "boss" = "hearts";
 
-  const stats: RunStats = { coins: 0, stars: 0, dodged: 0, heartsLost: 0 };
+  const stats: RunStats = {
+    coins: 0,
+    stars: 0,
+    dodged: 0,
+    heartsLost: 0,
+    smashed: 0,
+    perfectRuns: 0,
+    bossHits: 0,
+  };
 
   const obstacles: Obstacle[] = [];
   const pickups: Pickup[] = [];
   const puffs: Puff[] = [];
   const floats: Floaty[] = [];
 
-  let patternPool: PatternRow[][] = patternsForKinds(LEVELS[0].obstacleKinds);
+  let patternPool: PatternRow[][] = patternsForLevel(LEVELS[0]);
   let pendingRows: PatternRow[] = [];
   let rowDist = 0;
   let powerTimer = 8;
+  let forkSign: ForkSign | null = null;
+  let forkTimer = Infinity;
 
   // ---- 无尽跑状态 ----
   let endless = false;
@@ -270,11 +313,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
         action = "jump";
         actionTimer = JUMP_TIME;
         jumpsUsed = 1;
+        jumpElapsed = 0;
+        jumpJudged = false;
         api.play("jump");
       } else if (boardTimer > 0 && jumpsUsed < 2) {
         // 滑板二段跳
         actionTimer = JUMP_TIME;
         jumpsUsed = 2;
+        jumpElapsed = 0;
+        jumpJudged = false;
         api.play("jump");
         addFloat(laneX(lane), playerY() - 90, "二段跳!", "#8a5ac9");
       }
@@ -288,8 +335,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function loadLevel(idx: number): void {
     endless = false;
     levelIdx = idx;
-    chapterIdx = Math.floor(idx / LEVELS_PER_THEME);
-    patternPool = patternsForKinds(LEVELS[idx].obstacleKinds);
+    chapterIdx = themeIndexOfLevel(idx);
+    patternPool = patternsForLevel(LEVELS[idx]);
+    boss = LEVELS[idx].boss ? BOSSES[LEVELS[idx].boss] : null;
     resetLevel();
     phase = "intro";
   }
@@ -297,7 +345,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function startEndless(): void {
     endless = true;
     endlessDef.world = "grass";
-    patternPool = patternsForKinds(THEME_STYLE.grass.palette);
+    boss = null;
+    patternPool = patternsForLevel(endlessDef);
     resetLevel();
     phase = "intro";
   }
@@ -308,7 +357,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const world = THEME_ORDER[stage];
     if (endlessDef.world !== world) {
       endlessDef.world = world;
-      patternPool = patternsForKinds(THEME_STYLE[world].palette);
+      endlessDef.obstacleKinds = [...THEME_STYLE[world].palette];
+      patternPool = patternsForLevel(endlessDef);
       pendingRows = [];
       if (dist > 50) {
         const st = THEME_STYLE[world];
@@ -336,11 +386,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     magnetTimer = 0;
     jetTimer = 0;
     boardTimer = 0;
+    railTimer = 0;
+    jumpElapsed = 0;
+    jumpJudged = false;
+    perfectStreak = 0;
+    forkSign = null;
+    forkTimer = level().fork ? 5 : Infinity;
+    bossBeaten = false;
     reviveUsed = false;
     stats.coins = 0;
     stats.stars = 0;
     stats.dodged = 0;
     stats.heartsLost = 0;
+    stats.smashed = 0;
+    stats.perfectRuns = 0;
+    stats.bossHits = 0;
   }
 
   function levelCleared(): void {
@@ -357,13 +417,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
       finaleFired = true;
       api.onWin(
         earnedStars,
-        `99 关九大世界跑酷全部通关!总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
+        `${LEVELS.length} 关十二大世界跑酷全部通关!总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
       );
     } else {
       // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
       speak(clearSpeechLine(def.name, earnedStars, missionOk));
       if (gained > 0) api.addStars(gained);
     }
+  }
+
+  /** 大王关专属的失败:活着跑到终点,但血没打完,他就溜走了。 */
+  function bossEscaped(): void {
+    loseReason = "boss";
+    phase = "retry";
+    api.play("oops");
+    speak(
+      `${boss?.name ?? "大王"}还剩一点力气就溜走了!这一次打中 ${bossHitsOf(stats)} 下,再来一次多铲几个箱子!`,
+    );
   }
 
   function onHit(x: number, y: number): void {
@@ -389,6 +459,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       });
     }
     if (hearts <= 0) {
+      loseReason = "hearts";
       // 与结算面板"🎉 新纪录"的显示条件一致(平了或破了旧纪录都算)
       const newRecord = endless && Math.floor(dist) >= endlessBest && Math.floor(dist) > 0;
       if (endless && Math.floor(dist) > endlessBest) {
@@ -559,6 +630,31 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (const l of row.coins) {
       pickups.push({ kind: "coin", lane: l, x: laneX(l), y: -50, taken: false });
     }
+    if (level().rails) {
+      for (const l of row.rails ?? []) {
+        pickups.push({ kind: "rail", lane: l, x: laneX(l), y: -50, taken: false });
+      }
+    }
+  }
+
+  function cloneRows(rows: ReadonlyArray<PatternRow>): PatternRow[] {
+    return rows.map((r) => ({
+      obstacles: r.obstacles.map((o) => ({ ...o })),
+      stars: [...r.stars],
+      coins: [...r.coins],
+      rails: r.rails ? [...r.rails] : undefined,
+      beat: r.beat,
+    }));
+  }
+
+  /** 大王掉血:铲箱 1 下,三连完美跳 2 下。打满就当场宣布打赢。 */
+  function syncBossHits(): void {
+    stats.bossHits = bossHitsOf(stats);
+    if (boss && !bossBeaten && bossDefeated(boss, stats)) {
+      bossBeaten = true;
+      api.play("win");
+      addFloat(w / 2, h * 0.32, `${boss.emoji} ${boss.name}被打趴下了!冲向终点!`, "#e05a7a", true);
+    }
   }
 
   function update(dt: number): void {
@@ -568,6 +664,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     magnetTimer = Math.max(0, magnetTimer - dt);
     jetTimer = Math.max(0, jetTimer - dt);
     boardTimer = Math.max(0, boardTimer - dt);
+    railTimer = Math.max(0, railTimer - dt);
     for (let i = puffs.length - 1; i >= 0; i--) {
       puffs[i].life -= dt;
       puffs[i].y -= dt * 40;
@@ -589,17 +686,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const frac = Math.min(1, dist / def.len);
       speed = def.speed * (1 + frac * 0.1);
     }
+    // 加速滑轨:踩上去的这几秒整条路都变快
+    speed *= railSpeedMult(railTimer);
     dist += speed * dt;
     scrollPhase += speed * dt;
 
     if (!endless && dist >= def.len) {
-      levelCleared();
+      if (boss && !bossDefeated(boss, stats)) bossEscaped();
+      else levelCleared();
       return;
     }
 
     laneFloat += (lane - laneFloat) * Math.min(1, dt * 10);
     if (actionTimer > 0) {
       actionTimer -= dt;
+      if (action === "jump") jumpElapsed += dt;
       if (actionTimer <= 0) {
         action = "run";
         jumpsUsed = 0;
@@ -612,15 +713,31 @@ export function mount(api: GameAPI): { destroy: () => void } {
       rowDist = 0;
       if (pendingRows.length === 0) {
         const pool = patternPool.length > 0 ? patternPool : [[]];
-        const pat = pool[Math.floor(Math.random() * pool.length)];
-        pendingRows = pat.map((r) => ({
-          obstacles: r.obstacles.map((o) => ({ ...o })),
-          stars: [...r.stars],
-          coins: [...r.coins],
-        }));
+        pendingRows = cloneRows(pool[Math.floor(Math.random() * pool.length)]);
       }
       const row = pendingRows.shift();
       if (row) spawnRow(row);
+    }
+
+    // 分岔路牌:滚到身位时按当时站的道决定支线
+    if (def.fork) {
+      if (forkSign) {
+        forkSign.y += speed * dt;
+        if (!forkSign.chosen && forkSign.y >= playerY()) {
+          const side = lane >= 2 ? "right" : "left";
+          forkSign.chosen = side;
+          pendingRows = cloneRows(forkRows(forkSign.gate, lane));
+          api.play("tap");
+          addFloat(laneX(lane), playerY() - 70, side === "right" ? "走右边!" : "走左边!", "#5a8ac9");
+        }
+        if (forkSign.y > h + 40) {
+          forkSign = null;
+          forkTimer = 6 + Math.random() * 3;
+        }
+      } else {
+        forkTimer -= dt;
+        if (forkTimer <= 0) forkSign = { gate: pickFork(Math.random()), y: -60, chosen: null };
+      }
     }
 
     // 定时刷道具
@@ -646,11 +763,51 @@ export function mount(api: GameAPI): { destroy: () => void } {
         stats.dodged++;
         continue;
       }
+      if (obstacleLane(o) !== lane || Math.abs(o.y - py) >= HIT_WINDOW) continue;
+
+      // 彩纸箱:下滑铲过去当场碎掉,顺便给大王一下
+      if (!o.done && smashesCrate(o.kind, action)) {
+        o.done = true;
+        obstacles.splice(i, 1);
+        stats.smashed = (stats.smashed ?? 0) + 1;
+        score += CRATE_SCORE;
+        api.play("pop");
+        addFloat(laneX(lane), py - 40, "铲碎!", "#e0a030");
+        for (let k = 0; k < 6; k++) {
+          puffs.push({
+            x: laneX(lane) + (Math.random() - 0.5) * 46,
+            y: py + (Math.random() - 0.5) * 30,
+            life: 0.45,
+            color: "#ffd868",
+          });
+        }
+        syncBossHits();
+        continue;
+      }
+
+      // 完美跳:贴着栅栏或坑沿起跳才算;一次跳只判第一个障碍
+      if (!o.done && action === "jump" && (o.kind === "hurdle" || o.kind === "pit")) {
+        o.done = true;
+        if (!jumpJudged) {
+          jumpJudged = true;
+          const perfect = isPerfectJump(jumpElapsed);
+          if (completesPerfectRun(perfectStreak, perfect)) {
+            stats.perfectRuns = (stats.perfectRuns ?? 0) + 1;
+            score += 30;
+            api.play("win");
+            addFloat(laneX(lane), py - 80, `三连完美跳!×${stats.perfectRuns}`, "#8a5ac9", true);
+            syncBossHits();
+          } else if (perfect) {
+            addFloat(laneX(lane), py - 60, "完美!", "#4a9a5a");
+          }
+          perfectStreak = nextPerfectStreak(perfectStreak, perfect);
+        }
+        continue;
+      }
+
       if (
         invincible <= 0 &&
         jetTimer <= 0 &&
-        obstacleLane(o) === lane &&
-        Math.abs(o.y - py) < HIT_WINDOW &&
         // 电光门只有通电(亮)的时候才伤人
         (o.kind !== "zapper" || zapperActive(time, o.phase)) &&
         wouldHit(o.kind, action)
@@ -692,6 +849,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
           score += 5;
           api.play("pop");
           addFloat(p.x, p.y - 20, "+1🍬", "#e05a7a");
+        } else if (p.kind === "rail") {
+          railTimer = RAIL_SECONDS;
+          api.play("jump");
+          addFloat(p.x, p.y - 24, "加速滑轨!", "#2f7ab0", true);
         } else if (p.kind === "magnet") {
           magnetTimer = MAGNET_SECONDS;
           api.play("win");
@@ -815,6 +976,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.textBaseline = "middle";
         ctx.fillText("⚡", x, o.y - 34);
       }
+    } else if (o.kind === "crate") {
+      // 彩纸箱:方方正正带丝带,下滑铲得碎
+      const s = laneW * 0.3;
+      ctx.fillStyle = "#f2c48a";
+      ctx.beginPath();
+      ctx.roundRect(x - s, o.y - s * 0.72, s * 2, s * 1.44, 6);
+      ctx.fill();
+      ctx.strokeStyle = "#c98a4a";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#ff9eb5";
+      ctx.fillRect(x - s * 0.16, o.y - s * 0.72, s * 0.32, s * 1.44);
+      ctx.fillStyle = "#9adcf0";
+      ctx.fillRect(x - s, o.y - s * 0.16, s * 2, s * 0.32);
     } else {
       // 云朵怪:飘来飘去的软云
       ctx.fillStyle = "rgba(255,255,255,0.95)";
@@ -949,7 +1124,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌈 彩虹跑跑 · 九大世界", w / 2, 26);
+    ctx.fillText("🌈 彩虹跑跑 · 十二大世界", w / 2, 26);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#6a5a7e";
     ctx.fillText(
@@ -1015,10 +1190,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
       ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
       ctx.fillText(unlocked ? st.blurb : "通关上一个世界解锁", rect.x + 10, rect.y + ch * 0.6);
+      const size = themeSize(i);
       ctx.fillText(
-        unlocked
-          ? `${cleared}/${LEVELS_PER_THEME} 关 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3}`
-          : "",
+        unlocked ? `${cleared}/${size} 关 · ⭐${themeStars(progress, i)}/${size * 3}` : "",
         rect.x + 10,
         rect.y + ch * 0.82,
       );
@@ -1041,23 +1215,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    const size = themeSize(chapterIdx);
     ctx.font = "14px sans-serif";
     ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 通关解锁下一关,回放可刷 3 星`,
+      `⭐ ${themeStars(progress, chapterIdx)}/${size * 3} · 通关解锁下一关,回放可刷 3 星`,
       w / 2,
       54,
     );
 
     mapNodes.length = 0;
-    const base = chapterIdx * LEVELS_PER_THEME;
-    const cols = 4;
-    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const base = themeOffset(chapterIdx);
+    // 1.1 的新章一章就有 29~30 关,4 列会排得太长,列数跟着关数走
+    const cols = size > 16 ? 5 : 4;
+    const rows = Math.ceil(size / cols);
     const mx0 = w * 0.12;
     const mx1 = w * 0.88;
     const my0 = 96;
     const my1 = h - 40;
-    const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < LEVELS_PER_THEME; i++) {
+    const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < size; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
@@ -1080,7 +1256,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const def = LEVELS[n.idx];
       const unlocked = isLevelUnlocked(progress, n.idx);
       const got = progress[n.idx] ?? 0;
-      const isFinal = (n.idx - base) === LEVELS_PER_THEME - 1;
+      const isFinal = n.idx - base === size - 1;
       const r = isFinal ? n.r * 1.25 : n.r;
       ctx.fillStyle = unlocked ? (got > 0 ? st.lanes[0] : "#ffffff") : "rgba(230,230,236,0.92)";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
@@ -1098,7 +1274,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fillStyle = st.accent;
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
         ctx.fillText(String(n.idx - base + 1), n.x, n.y);
-        if (isFinal) {
+        if (def.boss) {
+          ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
+          ctx.fillText(BOSSES[def.boss].emoji, n.x, n.y - r * 0.95);
+        } else if (isFinal) {
           ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
           ctx.fillText("🏁", n.x, n.y - r * 0.95);
         } else if (def.gen) {
@@ -1147,20 +1326,34 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawRetryPanel(): void {
-    const canRevive = !reviveUsed && api.getStars() >= REVIVE_COST;
-    const { y } = panelBox(Math.min(450, w - 40), canRevive ? 260 : 210);
+    // 大王溜走不给复活:那不是"摔了一跤",是伤害没打够,得重新跑一趟
+    const bossLose = !endless && loseReason === "boss";
+    const canRevive = !reviveUsed && !bossLose && api.getStars() >= REVIVE_COST;
+    const { y } = panelBox(Math.min(450, w - 40), (canRevive ? 260 : 210) + (bossLose ? 28 : 0));
     // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
     ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
-      endless ? `这次跑了 ${Math.floor(dist)} 米!` : "摔了一跤,晕乎乎……",
+      endless
+        ? `这次跑了 ${Math.floor(dist)} 米!`
+        : loseReason === "boss"
+          ? `${boss?.name ?? "大王"}溜走了……`
+          : "摔了一跤,晕乎乎……",
       w / 2,
       y + 44,
     );
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
+    if (!endless && loseReason === "boss") {
+      fitText(
+        `打中 ${bossHitsOf(stats)}/${boss?.hp ?? 0} 下:铲碎一个彩纸箱算 1 下,三连完美跳算 2 下`,
+        w / 2,
+        y + 84,
+        Math.min(420, w - 60),
+      );
+    }
     const subText = endless
       ? Math.floor(dist) >= endlessBest && endlessBest > 0
         ? `🎉 新纪录!🍬${stats.coins} ⭐${stats.stars}${canRevive ? ` · 花 ${REVIVE_COST}⭐ 还能接着跑!` : ""}`
@@ -1168,8 +1361,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       : canRevive
         ? `看小星星帮帮忙:花 ${REVIVE_COST} 颗⭐原地复活!`
         : "没关系!就从这一关重新出发";
-    ctx.fillText(subText, w / 2, y + 84);
-    let by = y + 116;
+    // 大王溜走那一行已经占了 y+84,鼓励语顺延一行
+    ctx.fillText(subText, w / 2, y + (!endless && loseReason === "boss" ? 108 : 84));
+    let by = y + (!endless && loseReason === "boss" ? 138 : 116);
     btnRevive = null;
     if (canRevive) {
       btnRevive = { x: w / 2 - 110, y: by, w: 220, h: 44 };
@@ -1208,20 +1402,42 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText("左右滑换道 上滑跳 下滑趴 · 3 颗心 · 点一下开始", w / 2, y + 158);
       return;
     }
+    const ci = themeIndexOfLevel(levelIdx);
     ctx.fillText(
-      `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 第${(levelIdx % LEVELS_PER_THEME) + 1}关 · ${def.name}`,
+      `第${ci + 1}章 第${levelIdx - themeOffset(ci) + 1}关 · ${def.name}`,
       w / 2,
       y + 42,
     );
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
-    ctx.fillText(def.hint, w / 2, y + 84);
+    fitText(def.hint, w / 2, y + 84, Math.min(430, w - 60));
     ctx.fillStyle = "#c47a2a";
     ctx.font = "bold 16px sans-serif";
     ctx.fillText(`🎯 任务:${missionLabel(def.mission)}`, w / 2, y + 122);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#a0a0b2";
-    ctx.fillText(`${st.name} · 左右滑换道 上滑跳 下滑趴 · 点一下开始`, w / 2, y + 158);
+    const tips: string[] = [];
+    if (def.rails) tips.push("有加速滑轨");
+    if (def.rhythm) tips.push("有节奏段");
+    if (def.fork) tips.push("有岔路口");
+    ctx.fillText(
+      `${st.name}${tips.length > 0 ? ` · ${tips.join("·")}` : ""} · 左右滑换道 上滑跳 下滑趴`,
+      w / 2,
+      y + 158,
+    );
+  }
+
+  /** 一行放不下就自动缩字号,窄屏上不让提示语顶出面板。 */
+  function fitText(text: string, cx: number, cy: number, maxW: number): void {
+    const base = ctx.font;
+    const size = Number(/(\d+)px/.exec(base)?.[1] ?? 16);
+    let px = size;
+    while (px > 10 && ctx.measureText(text).width > maxW) {
+      px -= 1;
+      ctx.font = base.replace(/\d+px/, `${px}px`);
+    }
+    ctx.fillText(text, cx, cy);
+    ctx.font = base;
   }
 
   function draw(): void {
@@ -1410,6 +1626,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.beginPath();
         ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
         ctx.stroke();
+      } else if (p.kind === "rail") {
+        // 加速滑轨:一小段发亮的轨道,踩上去就冲
+        const rw = laneW * 0.42;
+        ctx.fillStyle = "rgba(90,224,208,0.85)";
+        ctx.beginPath();
+        ctx.roundRect(p.x - rw, p.y - 12, rw * 2, 24, 10);
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let k = -1; k <= 1; k++) {
+          ctx.moveTo(p.x + k * 13 - 6, p.y + 6);
+          ctx.lineTo(p.x + k * 13 + 2, p.y);
+          ctx.lineTo(p.x + k * 13 - 6, p.y - 6);
+        }
+        ctx.stroke();
       } else {
         ctx.fillStyle = "rgba(255,255,255,0.92)";
         ctx.beginPath();
@@ -1423,6 +1655,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.textBaseline = "middle";
         ctx.fillText(p.kind === "magnet" ? "🧲" : p.kind === "jet" ? "🚀" : "🛹", p.x, p.y + 1);
       }
+    }
+
+    // 分岔路牌
+    if (forkSign) {
+      const sy = forkSign.y;
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.roundRect(laneX(0) - laneW / 2 + 6, sy - 18, laneW * 3 - 12, 36, 12);
+      ctx.fill();
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#4a4a5e";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`◀ 岔路口 · ${forkSign.gate.name} ▶`, w / 2, sy);
     }
 
     drawPlayer();
@@ -1508,16 +1757,42 @@ export function mount(api: GameAPI): { destroy: () => void } {
       );
     }
 
+    // 大王血条:接在任务条下面,窄屏也和任务条同宽,不会横着挤出去
+    let extraRow = 0;
+    if (!endless && boss) {
+      const by0 = rowY + 42;
+      extraRow = 26;
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.beginPath();
+      ctx.roundRect(bx, by0, bw, 22, 11);
+      ctx.fill();
+      const hits = Math.min(boss.hp, bossHitsOf(stats));
+      ctx.fillStyle = bossBeaten ? "#7ac97a" : "#ff8aa8";
+      ctx.beginPath();
+      ctx.roundRect(bx, by0, Math.max(12, (bw * hits) / boss.hp), 22, 11);
+      ctx.fill();
+      ctx.fillStyle = "#4a4a5e";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        `${boss.emoji} ${boss.name} ${hits}/${boss.hp}${bossBeaten ? " ✓打趴下了" : ""}`,
+        w / 2,
+        by0 + 11,
+      );
+    }
+
     ctx.font = "15px sans-serif";
     ctx.textAlign = "left";
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText(`🍬${stats.coins} ⭐${stats.stars}`, 76, 20);
+    const comboTxt = !endless && level().rhythm ? ` 🎵${perfectStreak}/${PERFECT_STREAK_GOAL}` : "";
+    ctx.fillText(`🍬${stats.coins} ⭐${stats.stars}${comboTxt}`, 76, 20);
     ctx.textAlign = "right";
     ctx.fillText("💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, MAX_HEARTS - hearts)), w - 10, 20);
     // 道具倒计时:移到任务条下方,不再和第二行进度条打架;13→14px
     let px2 = w - 10;
     ctx.font = "14px sans-serif";
-    const ptY = rowY + 52;
+    const ptY = rowY + 52 + extraRow;
     if (magnetTimer > 0) {
       ctx.fillText(`🧲${Math.ceil(magnetTimer)}s`, px2, ptY);
       px2 -= 58;
@@ -1528,6 +1803,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
     if (boardTimer > 0) {
       ctx.fillText(`🛹${Math.ceil(boardTimer)}s`, px2, ptY);
+      px2 -= 58;
+    }
+    if (railTimer > 0) {
+      ctx.fillText(`⚡${Math.ceil(railTimer)}s`, px2, ptY);
     }
 
     btnBack = { x: 6, y: 6, w: 62, h: 28 };
