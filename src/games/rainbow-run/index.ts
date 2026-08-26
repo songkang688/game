@@ -5,6 +5,12 @@ export { meta };
 // 滚滚球、电光门、彩纸箱等八种障碍,喷气鞋/磁铁/滑板道具,还能花星星复活一次!
 // 1.1 新增:可铲碎的彩纸箱、加速滑轨、三连完美跳节奏段、随机分岔路线与三位章节大王。
 // 另有「无尽彩虹跑」:一直跑吃金币,每 1600 米换世界,越跑越快,挑战最远纪录!
+//
+// 1.1 第 6 步把画面换成了 2.5D 伪三维:三条车道向地平线收敛,地面铺网格线,
+// 天边挂两三层视差远景,远端化进雾里。玩法仍然跑在原来的平面轨道坐标上
+// (障碍存 trackY、判定用 HIT_WINDOW),透视只发生在绘制那一刻——
+// 所以 188 关战役的可通关性一点没变。同一步还加了土狼时间与输入缓冲、
+// 程序化拼接的无限模式,以及掉帧自动降画质。
 import {
   BOARD_SECONDS,
   BOSSES,
@@ -64,6 +70,73 @@ import {
   wouldHit,
   zapperActive,
 } from "./logic";
+import type { ThemeStyle } from "./logic";
+import {
+  COYOTE_TIME,
+  RunInput,
+  feelConsume,
+  feelPress,
+  feelTick,
+  hasBufferedJump,
+  hasCoyote,
+  initJumpFeel,
+  inputForKey,
+  inputForSwipe,
+  laneStep,
+} from "./controls";
+import {
+  CHASER_COIN_BONUS,
+  CHASER_DODGE_BONUS,
+  CHASER_EMOJI,
+  CHASER_NAME,
+  CHASER_PERFECT_BONUS,
+  CHASER_RAIL_BONUS,
+  CHASER_START_GAP,
+  ENDLESS_RECORD_KEY,
+  EndlessRecord,
+  EndlessSegment,
+  FailKind,
+  buildSegment,
+  chaserBoost,
+  chaserCaught,
+  chaserDrift,
+  chaserPenalty,
+  chaserWarning,
+  emptyRecord,
+  failCopy,
+  mergeRecord,
+  parseRecord,
+  recordBroken,
+  recordLine,
+  serializeRecord,
+  tierForDistance,
+} from "./endless";
+import {
+  Camera,
+  LANE_SPREAD,
+  PARALLAX_LAYERS,
+  Projected,
+  QUALITY_TIERS,
+  SPAWN_TRACK_Y,
+  clampDt,
+  depthOf,
+  edgeOffset,
+  fogAlpha,
+  groundGridDepths,
+  laneOffset,
+  makeCamera,
+  mixHex,
+  nextQualityTier,
+  parallaxShift,
+  particleCount,
+  projectFlatX,
+  projectTrack,
+  scaleAtDepth,
+  screenYAtDepth,
+  smoothFps,
+  smoothing,
+  withAlpha,
+} from "./view3d";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -82,10 +155,13 @@ type Phase = "themes" | "map" | "intro" | "run" | "clear" | "retry";
 interface Obstacle {
   baseLane: number;
   kind: ObstacleKind;
+  /** 轨道坐标:玩家线在 playerY(),数字越小离得越远 */
   y: number;
   phase: number;
   /** 已经结算过(铲碎/完美跳判定),不再重复计 */
   done?: boolean;
+  /** 坑洞专用:踏上坑沿之后攒的土狼时间,过了这一段还没跳才算掉下去 */
+  grace?: number;
 }
 
 interface Pickup {
@@ -142,9 +218,8 @@ function saveProgress(stars: number[]): void {
   }
 }
 
-/* ---- 无尽跑:随距离换世界,速度有封顶,记录最好成绩 ---- */
+/* ---- 无尽跑:随距离换世界,速度有封顶,记录最远距离与最高糖果数 ---- */
 
-const ENDLESS_BEST_KEY = "yiduo-yixing.rainbow-run.endless-best.v1";
 /** 每跑多少米换一个主题世界。 */
 const ENDLESS_STAGE_LEN = 1600;
 const ENDLESS_BASE_SPEED = 250;
@@ -154,20 +229,41 @@ function endlessSpeedAt(dist: number): number {
   return Math.min(ENDLESS_MAX_SPEED, ENDLESS_BASE_SPEED + dist * 0.02);
 }
 
-function loadEndlessBest(): number {
+function loadEndlessRecord(): EndlessRecord {
   try {
-    const v = Number(localStorage.getItem(ENDLESS_BEST_KEY));
-    return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    return parseRecord(localStorage.getItem(ENDLESS_RECORD_KEY));
   } catch {
-    return 0;
+    return emptyRecord();
   }
 }
 
-function saveEndlessBest(v: number): void {
+function saveEndlessRecord(r: EndlessRecord): void {
   try {
-    localStorage.setItem(ENDLESS_BEST_KEY, String(Math.floor(v)));
+    localStorage.setItem(ENDLESS_RECORD_KEY, serializeRecord(r));
   } catch {
     // 静默失败
+  }
+}
+
+/**
+ * 收藏册是另一个窗口在做的,可能还没进仓库。
+ * 用 glob 探一眼:文件不在就连按钮都不画,绝不因为缺模块把跑酷打崩。
+ */
+const COLLECTION_MODULES = import.meta.glob("../../ui/collection.ts");
+const COLLECTION_PATH = "../../ui/collection.ts";
+
+function hasCollection(): boolean {
+  return typeof COLLECTION_MODULES[COLLECTION_PATH] === "function";
+}
+
+async function openCollectionSafely(): Promise<void> {
+  const loader = COLLECTION_MODULES[COLLECTION_PATH];
+  if (typeof loader !== "function") return;
+  try {
+    const mod = (await loader()) as { openCollection?: () => void };
+    mod.openCollection?.();
+  } catch {
+    // 收藏册加载失败就当没这个按钮,跑酷照常玩
   }
 }
 
@@ -183,6 +279,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   let w = 640;
   let h = 480;
+  let cam: Camera = makeCamera(w, h);
   function syncSize(): void {
     w = root.clientWidth || 640;
     h = root.clientHeight || 480;
@@ -194,11 +291,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
       canvas.height = bh;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (cam.w !== w || cam.h !== h) cam = makeCamera(w, h);
   }
   syncSize();
 
-  const laneX = (lane: number) => w * (0.5 + (lane - 1) * 0.26);
-  const playerY = () => h * 0.78;
+  // 车道中心线的「平面 x」:2.5D 只在画的时候按深度把它收向消失点,
+  // 判定与磁铁吸附全都还在这套平面坐标里,一个数都没变。
+  const laneX = (lane: number) => w / 2 + laneOffset(w, lane);
+  const playerY = () => cam.playerY;
+  /** 轨道坐标 + 车道 → 屏幕坐标与缩放 */
+  const proj = (trackY: number, laneF: number): Projected => projectTrack(cam, trackY, laneF);
+  /** 远到几乎看不见就不用画了 */
+  const VISIBLE_SCALE = 0.07;
 
   const progress = loadProgress();
 
@@ -234,6 +338,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let boss: BossDef | null = null;
   let bossBeaten = false;
   let loseReason: "hearts" | "boss" = "hearts";
+  /** 无尽模式里这一趟是怎么结束的:撞障碍 / 掉坑 / 被追上 */
+  let failKind: FailKind = "crash";
+
+  // ---- 手感:土狼时间 + 输入缓冲 ----
+  let jumpFeel = initJumpFeel();
+
+  // ---- 帧率自适应画质 ----
+  let fps = 60;
+  let qualityTier = 0;
 
   const stats: RunStats = {
     coins: 0,
@@ -249,6 +362,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
   const pickups: Pickup[] = [];
   const puffs: Puff[] = [];
   const floats: Floaty[] = [];
+  // 画之前按深度排一次序,远的先画;复用同一对数组,不每帧新建
+  const drawOrder: Obstacle[] = [];
+  const pickOrder: Pickup[] = [];
 
   let patternPool: PatternRow[][] = patternsForLevel(LEVELS[0]);
   let pendingRows: PatternRow[] = [];
@@ -259,8 +375,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   // ---- 无尽跑状态 ----
   let endless = false;
-  let endlessBest = loadEndlessBest();
+  let endlessRecord = loadEndlessRecord();
+  /** 这一趟结算时用来比对的旧纪录(结算面板要显示「破了没有」) */
+  let recordBefore = emptyRecord();
+  /** 程序化路段:接着上一段的必过车道往下拼,段与段之间横移不超过一格 */
+  let endlessLane = 1;
+  let endlessSeg: EndlessSegment | null = null;
+  /** 追风棉花云离玩家还有多远(轨道像素),归零就是被追上 */
+  let chaserGap = CHASER_START_GAP;
   let btnEndless: Rect | null = null;
+  let btnCollection: Rect | null = null;
   const endlessDef: LevelDef = {
     name: "无尽彩虹跑",
     world: "grass",
@@ -300,32 +424,40 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return clampLane(Math.round(o.baseLane + Math.sin(o.phase) * 1.2));
   }
 
-  function doAction(dir: "left" | "right" | "up" | "down"): void {
+  /** 真正起跳。返回有没有跳成。 */
+  function startJump(second = false): boolean {
+    action = "jump";
+    actionTimer = JUMP_TIME;
+    jumpsUsed = second ? 2 : 1;
+    jumpElapsed = 0;
+    jumpJudged = false;
+    api.play("jump");
+    if (second) addFloat(laneX(lane), playerY() - 90, "二段跳!", "#8a5ac9");
+    return true;
+  }
+
+  function doInput(input: RunInput): void {
     if (destroyed || phase !== "run") return;
-    if (dir === "left" || dir === "right") {
-      const next = clampLane(lane + (dir === "left" ? -1 : 1));
+    if (input === "left" || input === "right") {
+      const next = clampLane(lane + laneStep(input));
       if (next !== lane) {
         lane = next;
         api.play("tap");
       }
-    } else if (dir === "up") {
-      if (action !== "jump") {
-        action = "jump";
-        actionTimer = JUMP_TIME;
-        jumpsUsed = 1;
-        jumpElapsed = 0;
-        jumpJudged = false;
-        api.play("jump");
-      } else if (boardTimer > 0 && jumpsUsed < 2) {
-        // 滑板二段跳
-        actionTimer = JUMP_TIME;
-        jumpsUsed = 2;
-        jumpElapsed = 0;
-        jumpJudged = false;
-        api.play("jump");
-        addFloat(laneX(lane), playerY() - 90, "二段跳!", "#8a5ac9");
+      return;
+    }
+    if (input === "jump") {
+      // 滑板二段跳是空中专属的,不走缓冲那条路
+      if (action === "jump" && boardTimer > 0 && jumpsUsed < 2) {
+        startJump(true);
+        return;
       }
-    } else if (action !== "slide") {
+      // 其余情况先记下这一按:能跳就当帧跳,跳不了就交给输入缓冲,
+      // 落地那一刻 update() 会自动把它补上。
+      jumpFeel = feelPress(jumpFeel);
+      return;
+    }
+    if (action !== "slide") {
       action = "slide";
       actionTimer = SLIDE_TIME;
       api.play("tap");
@@ -351,6 +483,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     phase = "intro";
   }
 
+  /** 无尽模式:这一趟结束了,先结算纪录再弹面板。 */
+  function endEndlessRun(kind: FailKind): void {
+    failKind = kind;
+    loseReason = "hearts";
+    recordBefore = { ...endlessRecord };
+    const run: EndlessRecord = { meters: Math.floor(dist), coins: stats.coins };
+    endlessRecord = mergeRecord(endlessRecord, run);
+    saveEndlessRecord(endlessRecord);
+    hearts = 0;
+    phase = "retry";
+    api.play("oops");
+    shake = 0.45;
+    speak(failCopy(kind, dist).line);
+  }
+
   /** 无尽跑:根据当前距离切换主题世界(换世界时广播一下)。 */
   function syncEndlessTheme(): void {
     const stage = Math.floor(dist / ENDLESS_STAGE_LEN) % THEME_ORDER.length;
@@ -359,7 +506,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       endlessDef.world = world;
       endlessDef.obstacleKinds = [...THEME_STYLE[world].palette];
       patternPool = patternsForLevel(endlessDef);
-      pendingRows = [];
+      // 换世界只换皮:待刷的那一段留着不动,免得把必过窗口从中间切断
       if (dist > 50) {
         const st = THEME_STYLE[world];
         addFloat(w / 2, h * 0.35, `${st.emoji} 进入${st.name}!`, st.accent, true);
@@ -389,11 +536,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
     railTimer = 0;
     jumpElapsed = 0;
     jumpJudged = false;
+    jumpFeel = initJumpFeel();
     perfectStreak = 0;
     forkSign = null;
     forkTimer = level().fork ? 5 : Infinity;
     bossBeaten = false;
     reviveUsed = false;
+    endlessLane = 1;
+    endlessSeg = null;
+    chaserGap = CHASER_START_GAP;
+    failKind = "crash";
     stats.coins = 0;
     stats.stars = 0;
     stats.dodged = 0;
@@ -450,7 +602,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     invincible = 1.5;
     shake = 0.4;
     api.play("oops");
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < particleCount(8, qualityTier); k++) {
       puffs.push({
         x: x + (Math.random() - 0.5) * 50,
         y: y + (Math.random() - 0.5) * 50,
@@ -458,16 +610,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
         color: "#ffffff",
       });
     }
+    // 无尽模式:撞一下追风棉花云就贴近一大截
+    if (endless) chaserGap = chaserPenalty(chaserGap);
     if (hearts <= 0) {
-      loseReason = "hearts";
-      // 与结算面板"🎉 新纪录"的显示条件一致(平了或破了旧纪录都算)
-      const newRecord = endless && Math.floor(dist) >= endlessBest && Math.floor(dist) > 0;
-      if (endless && Math.floor(dist) > endlessBest) {
-        endlessBest = Math.floor(dist);
-        saveEndlessBest(endlessBest);
+      if (endless) {
+        endEndlessRun("crash");
+        return;
       }
+      loseReason = "hearts";
       phase = "retry";
-      speak(retrySpeechLine(endless, Math.floor(dist), newRecord));
+      speak(retrySpeechLine(false, Math.floor(dist), false));
     }
   }
 
@@ -486,6 +638,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (inRect(x, y, btnEndless)) {
         api.play("jump");
         startEndless();
+        return;
+      }
+      if (inRect(x, y, btnCollection)) {
+        api.play("tap");
+        void openCollectionSafely();
         return;
       }
       for (const c of themeCards) {
@@ -552,6 +709,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
         api.addStars(-REVIVE_COST);
         hearts = MAX_HEARTS;
         invincible = 2.5;
+        // 复活也把追风棉花云推回起手距离,不然一睁眼又被追上
+        chaserGap = CHASER_START_GAP;
+        obstacles.length = 0;
         phase = "run";
         api.play("win");
         stopSpeaking();
@@ -593,48 +753,52 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const dir = detectSwipe(e.clientX - swipeStartX, e.clientY - swipeStartY, 24);
     if (dir) {
       swipeDone = true;
-      doAction(dir);
+      doInput(inputForSwipe(dir));
     }
   }
 
   function onPointerUp(e: PointerEvent): void {
     if (swiping && !swipeDone) {
       const dir = detectSwipe(e.clientX - swipeStartX, e.clientY - swipeStartY, 24);
-      if (dir) doAction(dir);
+      if (dir) doInput(inputForSwipe(dir));
     }
     swiping = false;
   }
 
+  /** 跳:上滑 / W / ↑ / 空格;换道:左右滑 / A D / ← →;滚翻:下滑 / S / ↓ */
   function onKeyDown(e: KeyboardEvent): void {
-    const map: Record<string, "left" | "right" | "up" | "down"> = {
-      ArrowLeft: "left",
-      ArrowRight: "right",
-      ArrowUp: "up",
-      ArrowDown: "down",
-    };
-    const dir = map[e.key];
-    if (dir) {
+    const input = inputForKey(e.key);
+    if (input) {
       e.preventDefault();
-      doAction(dir);
+      doInput(input);
     }
   }
 
   // ---- 关卡推进 ----
   function spawnRow(row: PatternRow): void {
+    const y = SPAWN_TRACK_Y;
     for (const o of row.obstacles) {
-      obstacles.push({ baseLane: o.lane, kind: o.kind, y: -50, phase: Math.random() * Math.PI * 2 });
+      obstacles.push({ baseLane: o.lane, kind: o.kind, y, phase: Math.random() * Math.PI * 2 });
     }
     for (const l of row.stars) {
-      pickups.push({ kind: "star", lane: l, x: laneX(l), y: -50, taken: false });
+      pickups.push({ kind: "star", lane: l, x: laneX(l), y, taken: false });
     }
     for (const l of row.coins) {
-      pickups.push({ kind: "coin", lane: l, x: laneX(l), y: -50, taken: false });
+      pickups.push({ kind: "coin", lane: l, x: laneX(l), y, taken: false });
     }
-    if (level().rails) {
+    // 无尽模式的滑轨由路段模板自己带,战役沿用关卡开关
+    if (level().rails || endless) {
       for (const l of row.rails ?? []) {
-        pickups.push({ kind: "rail", lane: l, x: laneX(l), y: -50, taken: false });
+        pickups.push({ kind: "rail", lane: l, x: laneX(l), y, taken: false });
       }
     }
+  }
+
+  /** 无尽模式:pending 空了就现拼一段,接着上一段的必过车道往下走。 */
+  function refillEndlessRows(): void {
+    endlessSeg = buildSegment(dist, endlessLane, Math.random);
+    endlessLane = endlessSeg.clearPath[endlessSeg.clearPath.length - 1];
+    pendingRows = cloneRows(endlessSeg.rows);
   }
 
   function cloneRows(rows: ReadonlyArray<PatternRow>): PatternRow[] {
@@ -678,6 +842,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     if (phase !== "run") return;
 
+    // 脚下有没有地:跑在坑洞上方就算踏空了,土狼时间从这一刻开始走
+    const overPit = obstacles.some(
+      (o) =>
+        o.kind === "pit" &&
+        !o.done &&
+        o.baseLane === lane &&
+        Math.abs(o.y - playerY()) < HIT_WINDOW,
+    );
+    const onGround = action !== "jump" && !overPit;
+    jumpFeel = feelTick(jumpFeel, dt, onGround);
+    // 输入缓冲 + 土狼时间:提前按下的跳落地就补上,刚踏空的一小会儿也还跳得起来
+    if (hasBufferedJump(jumpFeel) && action !== "jump" && hasCoyote(jumpFeel, onGround)) {
+      startJump();
+      jumpFeel = feelConsume(jumpFeel);
+    }
+
     const def = level();
     if (endless) {
       speed = endlessSpeedAt(dist);
@@ -697,7 +877,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
 
-    laneFloat += (lane - laneFloat) * Math.min(1, dt * 10);
+    // 换道插值走指数逼近:60fps 和 30fps 下同样时间挪到同样位置
+    laneFloat += (lane - laneFloat) * smoothing(dt, 10);
     if (actionTimer > 0) {
       actionTimer -= dt;
       if (action === "jump") jumpElapsed += dt;
@@ -712,11 +893,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (rowDist >= ROW_GAP) {
       rowDist = 0;
       if (pendingRows.length === 0) {
-        const pool = patternPool.length > 0 ? patternPool : [[]];
-        pendingRows = cloneRows(pool[Math.floor(Math.random() * pool.length)]);
+        if (endless) {
+          // 无尽模式:现拼一段带必过窗口的路,而不是抽一组固定花样
+          refillEndlessRows();
+        } else {
+          const pool = patternPool.length > 0 ? patternPool : [[]];
+          pendingRows = cloneRows(pool[Math.floor(Math.random() * pool.length)]);
+        }
       }
       const row = pendingRows.shift();
       if (row) spawnRow(row);
+    }
+
+    // 追风棉花云:光跑不动它就一点点贴上来,躲障碍、吃糖果、踩滑轨能把它甩开
+    if (endless) {
+      chaserGap = chaserDrift(chaserGap, dt, dist);
+      if (chaserCaught(chaserGap)) {
+        endEndlessRun("chaser");
+        return;
+      }
     }
 
     // 分岔路牌:滚到身位时按当时站的道决定支线
@@ -761,9 +956,31 @@ export function mount(api: GameAPI): { destroy: () => void } {
         obstacles.splice(i, 1);
         score += 1;
         stats.dodged++;
+        if (endless) chaserGap = chaserBoost(chaserGap, CHASER_DODGE_BONUS);
         continue;
       }
       if (obstacleLane(o) !== lane || Math.abs(o.y - py) >= HIT_WINDOW) continue;
+
+      // 坑洞:踏上坑沿先不判,留 90 毫秒土狼时间;这一段过完还没跳起来才算掉下去。
+      // 坑沿整个滑过身位之前一定会结算,所以跑得再快也不会白白蹭过去。
+      if (o.kind === "pit" && !o.done && action !== "jump" && invincible <= 0 && jetTimer <= 0) {
+        o.grace = (o.grace ?? 0) + dt;
+        const passed = o.y - py >= HIT_WINDOW * 0.9;
+        if (o.grace <= COYOTE_TIME && !passed) continue;
+        if (endless) {
+          obstacles.splice(i, 1);
+          if (boardTimer > 0) {
+            // 滑板会架在坑口上,帮你滑过去一次
+            boardTimer = 0;
+            invincible = 1.5;
+            api.play("pop");
+            addFloat(laneX(lane), py - 60, "滑板架住坑口啦!", "#8a5ac9", true);
+            continue;
+          }
+          endEndlessRun("pit");
+          return;
+        }
+      }
 
       // 彩纸箱:下滑铲过去当场碎掉,顺便给大王一下
       if (!o.done && smashesCrate(o.kind, action)) {
@@ -773,7 +990,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
         score += CRATE_SCORE;
         api.play("pop");
         addFloat(laneX(lane), py - 40, "铲碎!", "#e0a030");
-        for (let k = 0; k < 6; k++) {
+        if (endless) chaserGap = chaserBoost(chaserGap, CHASER_PERFECT_BONUS);
+        for (let k = 0; k < particleCount(6, qualityTier); k++) {
           puffs.push({
             x: laneX(lane) + (Math.random() - 0.5) * 46,
             y: py + (Math.random() - 0.5) * 30,
@@ -796,8 +1014,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
             score += 30;
             api.play("win");
             addFloat(laneX(lane), py - 80, `三连完美跳!×${stats.perfectRuns}`, "#8a5ac9", true);
+            if (endless) chaserGap = chaserBoost(chaserGap, CHASER_PERFECT_BONUS * 2);
             syncBossHits();
           } else if (perfect) {
+            if (endless) chaserGap = chaserBoost(chaserGap, CHASER_PERFECT_BONUS);
             addFloat(laneX(lane), py - 60, "完美!", "#4a9a5a");
           }
           perfectStreak = nextPerfectStreak(perfectStreak, perfect);
@@ -849,10 +1069,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
           score += 5;
           api.play("pop");
           addFloat(p.x, p.y - 20, "+1🍬", "#e05a7a");
+          if (endless) chaserGap = chaserBoost(chaserGap, CHASER_COIN_BONUS);
         } else if (p.kind === "rail") {
           railTimer = RAIL_SECONDS;
           api.play("jump");
           addFloat(p.x, p.y - 24, "加速滑轨!", "#2f7ab0", true);
+          if (endless) chaserGap = chaserBoost(chaserGap, CHASER_RAIL_BONUS);
         } else if (p.kind === "magnet") {
           magnetTimer = MAGNET_SECONDS;
           api.play("win");
@@ -886,69 +1108,446 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fill();
   }
 
+  /* ---- 2.5D 背景:天空 / 视差远景 / 收敛的地面 / 两侧装饰 ---- */
+
+  /** 这一帧能看多远。 */
+  function farDepth(): number {
+    return cam.camDepth * 10;
+  }
+
+  /** 车道分隔线第 j 条(0..3)在某个缩放下的屏幕 x。 */
+  function edgeX(j: number, scale: number): number {
+    return w / 2 + edgeOffset(w, j) * scale;
+  }
+
+  function drawSky(theme: ThemeStyle, def: LevelDef): void {
+    const hy = cam.horizonY;
+    const grad = ctx.createLinearGradient(0, 0, 0, hy + 30);
+    grad.addColorStop(0, theme.skyTop);
+    grad.addColorStop(1, theme.skyBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(-20, -20, w + 40, hy + 50);
+    // 夜空的三个世界撒一把会眨眼的星星
+    if (def.world === "space" || def.world === "stardust" || def.world === "neon") {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      const stars = particleCount(30, qualityTier);
+      for (let i = 0; i < stars; i++) {
+        const sx = (((i * 89) % 100) / 100) * w;
+        const sy = (((i * 41) % 100) / 100) * hy;
+        ctx.globalAlpha = 0.3 + 0.6 * Math.abs(Math.sin(time * 2 + i));
+        ctx.fillRect(sx, sy, 2.5, 2.5);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /**
+   * 远景视差:两三层圆润的小丘挂在地平线上,越远的层跑得越慢、颜色越淡。
+   * 掉帧时从最近那层开始砍,地平线的轮廓不会一下子空掉。
+   */
+  function drawParallax(theme: ThemeStyle): void {
+    const hy = cam.horizonY;
+    const layers = Math.min(PARALLAX_LAYERS.length, QUALITY_TIERS[qualityTier].parallax);
+    for (let i = 0; i < layers; i++) {
+      const layer = PARALLAX_LAYERS[i];
+      const span = Math.max(48, layer.span * w);
+      const shift = parallaxShift(scrollPhase, layer.factor, span);
+      const top = hy - hy * layer.height * 0.55;
+      ctx.fillStyle = withAlpha(mixHex(theme.skyBottom, theme.accent, 0.2 + i * 0.22), layer.alpha);
+      ctx.beginPath();
+      ctx.moveTo(-span * 2, hy + 4);
+      for (let x = -span * 2 + shift; x < w + span; x += span) {
+        ctx.lineTo(x, hy + 4);
+        ctx.quadraticCurveTo(x + span * 0.5, top, x + span, hy + 4);
+      }
+      ctx.lineTo(w + span * 2, hy + 4);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  /** 三条车道从脚下向地平线收敛,地面铺上会往前涌的网格线,远端化进雾里。 */
+  function drawGround(theme: ThemeStyle, def: LevelDef): void {
+    const tier = QUALITY_TIERS[qualityTier];
+    const hy = cam.horizonY;
+    const far = farDepth();
+    const nearDepth = depthOf(cam, h + 80);
+    const nearS = scaleAtDepth(cam, nearDepth);
+    const nearY = screenYAtDepth(cam, nearDepth);
+    const farS = scaleAtDepth(cam, far);
+    const farY = screenYAtDepth(cam, far);
+
+    // 跑道以外的大地
+    const ground = ctx.createLinearGradient(0, hy, 0, h);
+    ground.addColorStop(0, mixHex(theme.lanes[1], theme.skyBottom, 0.7));
+    ground.addColorStop(1, mixHex(theme.lanes[1], theme.accent, 0.18));
+    ctx.fillStyle = ground;
+    ctx.fillRect(-20, hy, w + 40, h - hy + 20);
+
+    // 三条车道:每条都是一块向消失点收窄的梯形
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = theme.lanes[i];
+      ctx.beginPath();
+      ctx.moveTo(edgeX(i, farS), farY);
+      ctx.lineTo(edgeX(i + 1, farS), farY);
+      ctx.lineTo(edgeX(i + 1, nearS), nearY);
+      ctx.lineTo(edgeX(i, nearS), nearY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 地面横向网格线:等距铺在世界里,跑起来就朝人涌过来
+    const grid = groundGridDepths(scrollPhase, tier.gridSpacing, far);
+    ctx.strokeStyle = "rgba(255,255,255,0.42)";
+    for (const d of grid) {
+      const s = scaleAtDepth(cam, d);
+      const y = screenYAtDepth(cam, d);
+      ctx.globalAlpha = Math.max(0, 1 - fogAlpha(s, 1));
+      ctx.lineWidth = Math.max(0.8, 3 * s);
+      ctx.beginPath();
+      ctx.moveTo(edgeX(0, s), y);
+      ctx.lineTo(edgeX(3, s), y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // 车道分隔线:四条都指向同一个消失点,中间两条画成一段段的虚线
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    for (let j = 0; j <= 3; j++) {
+      const outer = j === 0 || j === 3;
+      ctx.lineWidth = outer ? 4 : 3;
+      if (outer || !tier.laneDashes) {
+        ctx.beginPath();
+        ctx.moveTo(edgeX(j, nearS), nearY);
+        ctx.lineTo(edgeX(j, farS), farY);
+        ctx.stroke();
+        continue;
+      }
+      for (let k = 0; k < grid.length; k += 2) {
+        const d0 = grid[k];
+        const d1 = d0 + tier.gridSpacing * 0.5;
+        const s0 = scaleAtDepth(cam, d0);
+        const s1 = scaleAtDepth(cam, d1);
+        ctx.lineWidth = Math.max(1, 3 * s0);
+        ctx.beginPath();
+        ctx.moveTo(edgeX(j, s0), screenYAtDepth(cam, d0));
+        ctx.lineTo(edgeX(j, s1), screenYAtDepth(cam, d1));
+        ctx.stroke();
+      }
+    }
+
+    // 远端雾:越靠近地平线越浓,一点点化进天空里
+    const fogH = (cam.playerY - hy) * 0.55;
+    const fog = ctx.createLinearGradient(0, hy - 2, 0, hy + fogH);
+    fog.addColorStop(0, withAlpha(theme.skyBottom, 0.96));
+    fog.addColorStop(0.55, withAlpha(theme.skyBottom, 0.45));
+    fog.addColorStop(1, withAlpha(theme.skyBottom, 0));
+    ctx.fillStyle = fog;
+    ctx.fillRect(-20, hy - 2, w + 40, fogH + 4);
+
+    if (tier.glow && def.world !== "lava") {
+      // 跑道两侧的一点点高光,只有最细腻那一档才画
+      ctx.strokeStyle = withAlpha(theme.deco, 0.35);
+      ctx.lineWidth = 2;
+      for (const j of [0, 3]) {
+        ctx.beginPath();
+        ctx.moveTo(edgeX(j, nearS), nearY);
+        ctx.lineTo(edgeX(j, farS), farY);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** 两侧的小装饰:按世界深度摆一排,越远越小,也跟着雾一起淡掉。 */
+  function drawSideDeco(theme: ThemeStyle, def: LevelDef): void {
+    const spacing = QUALITY_TIERS[qualityTier].gridSpacing * 2;
+    const off = w * (LANE_SPREAD * 1.5 + 0.07);
+    for (const d of groundGridDepths(scrollPhase, spacing, farDepth() * 0.75)) {
+      const s = scaleAtDepth(cam, d);
+      if (s < 0.14) continue;
+      const y = screenYAtDepth(cam, d);
+      for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.translate(w / 2 + side * off * s, y);
+        ctx.scale(s, s);
+        ctx.globalAlpha = Math.max(0, 1 - fogAlpha(s));
+        drawDecoShape(theme, def, d);
+        ctx.restore();
+      }
+    }
+  }
+
+  /** 一个装饰物,画在原点上,缩放交给画布变换。 */
+  function drawDecoShape(theme: ThemeStyle, def: LevelDef, seed: number): void {
+    const world = def.world;
+    if (world === "grass") {
+      ctx.fillStyle = theme.deco;
+      for (let p = 0; p < 5; p++) {
+        const a = (Math.PI * 2 * p) / 5;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * 7, Math.sin(a) * 7, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffe387";
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (world === "sky" || world === "ropeway") {
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(-8, 0, 10, 0, Math.PI * 2);
+      ctx.arc(6, -4, 12, 0, Math.PI * 2);
+      ctx.arc(16, 3, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (world === "candy") {
+      ctx.strokeStyle = "#e8a8c8";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, 14);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+      ctx.fillStyle = theme.deco;
+      ctx.beginPath();
+      ctx.arc(0, -6, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, -6, 5, 0.3, Math.PI * 1.4);
+      ctx.stroke();
+    } else if (world === "forest") {
+      ctx.fillStyle = theme.deco;
+      ctx.fillRect(-3, 4, 6, 10);
+      ctx.fillStyle = "#4a8a4a";
+      ctx.beginPath();
+      ctx.moveTo(-12, 6);
+      ctx.lineTo(0, -16);
+      ctx.lineTo(12, 6);
+      ctx.closePath();
+      ctx.fill();
+    } else if (world === "beach") {
+      ctx.fillStyle = theme.deco;
+      ctx.beginPath();
+      ctx.arc(0, 0, 9, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(i * 5, -8);
+        ctx.stroke();
+      }
+    } else if (world === "desert") {
+      ctx.fillStyle = theme.deco;
+      ctx.beginPath();
+      ctx.roundRect(-4, -14, 8, 26, 4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(-13, -6, 8, 5, 3);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(5, -2, 8, 5, 3);
+      ctx.fill();
+    } else if (world === "snow") {
+      ctx.strokeStyle = theme.deco;
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 3; i++) {
+        const a = (Math.PI * i) / 3;
+        ctx.beginPath();
+        ctx.moveTo(-Math.cos(a) * 9, -Math.sin(a) * 9);
+        ctx.lineTo(Math.cos(a) * 9, Math.sin(a) * 9);
+        ctx.stroke();
+      }
+    } else if (world === "lava") {
+      ctx.fillStyle = "#5a3a35";
+      ctx.beginPath();
+      ctx.arc(0, 4, 8, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = theme.deco;
+      ctx.beginPath();
+      ctx.arc(0, -5 + Math.sin(time * 4 + seed) * 3, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (world === "neon") {
+      // 月台上的灯牌:一根小柱子挑着一块会亮的牌子
+      ctx.fillStyle = "#5a4a7a";
+      ctx.fillRect(-2, -4, 4, 18);
+      ctx.fillStyle = withAlpha(theme.deco, 0.6 + 0.4 * Math.abs(Math.sin(time * 3 + seed)));
+      ctx.beginPath();
+      ctx.roundRect(-11, -18, 22, 14, 4);
+      ctx.fill();
+    } else {
+      drawStar(0, 0, 8, "#ffe387");
+    }
+  }
+
+  /**
+   * 把一个障碍投影到 2.5D 画面上:远的画得小、贴着地平线,还要盖一层雾。
+   * 形状本身仍旧按原来的尺寸画在原点上,缩放交给画布变换——
+   * 这样判定用的还是那套平面坐标,画法换了也不会影响手感。
+   */
   function drawObstacle(o: Obstacle, laneW: number): void {
-    const x = laneX(o.kind === "cloudy" ? clampLane(o.baseLane + Math.sin(o.phase) * 1.2) : o.baseLane);
+    const lf = o.kind === "cloudy" ? clampLane(o.baseLane + Math.sin(o.phase) * 1.2) : o.baseLane;
+    const p = proj(o.y, lf);
+    if (p.scale < VISIBLE_SCALE) return;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(p.scale, p.scale);
+    ctx.globalAlpha = 1 - fogAlpha(p.scale);
+    drawObstacleShape(o, laneW);
+    ctx.restore();
+  }
+
+  /** 一个可以吃的东西,画在原点上。 */
+  function drawPickupShape(p: Pickup, laneW: number): void {
+    if (p.kind === "star") {
+      drawStar(0, 0, 14, "#ffd868");
+      return;
+    }
+    if (p.kind === "coin") {
+      ctx.fillStyle = "#ffb84d";
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.stroke();
+      return;
+    }
+    if (p.kind === "rail") {
+      // 加速滑轨:一小段发亮的轨道,踩上去就冲
+      const rw = laneW * 0.42;
+      ctx.fillStyle = "rgba(90,224,208,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(-rw, -12, rw * 2, 24, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let k = -1; k <= 1; k++) {
+        ctx.moveTo(k * 13 - 6, 6);
+        ctx.lineTo(k * 13 + 2, 0);
+        ctx.lineTo(k * 13 - 6, -6);
+      }
+      ctx.stroke();
+      return;
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#c9a6f2";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.font = "18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(p.kind === "magnet" ? "🧲" : p.kind === "jet" ? "🚀" : "🛹", 0, 1);
+  }
+
+  /** 追风棉花云:跟在身后,越近画得越大,近到一定程度整块画面边缘会泛红。 */
+  function drawChaser(): void {
+    const trackY = playerY() + Math.max(0, chaserGap) * 0.75 + 40;
+    const s = Math.min(2.2, scaleAtDepth(cam, depthOf(cam, trackY)));
+    const y = Math.min(h + 40, screenYAtDepth(cam, depthOf(cam, trackY)));
+    ctx.save();
+    ctx.translate(w / 2, y);
+    ctx.scale(s, s);
+    const wobble = Math.sin(time * 6) * 4;
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath();
+    ctx.arc(-26 + wobble, 6, 20, 0, Math.PI * 2);
+    ctx.arc(0, -6, 26, 0, Math.PI * 2);
+    ctx.arc(26 - wobble, 6, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(178,138,232,0.8)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(0, -6, 30 + i * 7, 0.15 * Math.PI + time * 2, 0.75 * Math.PI + time * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#3a3a4a";
+    ctx.beginPath();
+    ctx.arc(-9, -10, 3.5, 0, Math.PI * 2);
+    ctx.arc(9, -10, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    if (chaserWarning(chaserGap)) {
+      ctx.fillStyle = `rgba(255,138,168,${0.16 + 0.14 * Math.abs(Math.sin(time * 7))})`;
+      ctx.fillRect(-20, -20, w + 40, h + 40);
+    }
+  }
+
+  function drawObstacleShape(o: Obstacle, laneW: number): void {
+    const x = 0;
+    const oy = 0;
     if (o.kind === "rock") {
       ctx.fillStyle = "#c9a6f2";
       ctx.beginPath();
-      ctx.ellipse(x, o.y, laneW * 0.3, laneW * 0.26, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, oy, laneW * 0.3, laneW * 0.26, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.5)";
       ctx.beginPath();
-      ctx.arc(x - laneW * 0.1, o.y - laneW * 0.08, laneW * 0.07, 0, Math.PI * 2);
+      ctx.arc(x - laneW * 0.1, oy - laneW * 0.08, laneW * 0.07, 0, Math.PI * 2);
       ctx.fill();
     } else if (o.kind === "hurdle") {
       ctx.fillStyle = "#f8f8ff";
       ctx.strokeStyle = "#e0a8bc";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(x - laneW * 0.32, o.y - 10, laneW * 0.64, 20, 8);
+      ctx.roundRect(x - laneW * 0.32, oy - 10, laneW * 0.64, 20, 8);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(x - laneW * 0.2, o.y - 10);
-      ctx.lineTo(x - laneW * 0.2, o.y + 10);
-      ctx.moveTo(x + laneW * 0.2, o.y - 10);
-      ctx.lineTo(x + laneW * 0.2, o.y + 10);
+      ctx.moveTo(x - laneW * 0.2, oy - 10);
+      ctx.lineTo(x - laneW * 0.2, oy + 10);
+      ctx.moveTo(x + laneW * 0.2, oy - 10);
+      ctx.lineTo(x + laneW * 0.2, oy + 10);
       ctx.stroke();
     } else if (o.kind === "bar") {
       ctx.fillStyle = "#9adcf0";
-      ctx.fillRect(x - laneW * 0.36, o.y - 26, 8, 30);
-      ctx.fillRect(x + laneW * 0.36 - 8, o.y - 26, 8, 30);
+      ctx.fillRect(x - laneW * 0.36, oy - 26, 8, 30);
+      ctx.fillRect(x + laneW * 0.36 - 8, oy - 26, 8, 30);
       const bands = ["#ff9eb5", "#ffd868", "#8fd8c8"];
       for (let i = 0; i < 3; i++) {
         ctx.fillStyle = bands[i];
-        ctx.fillRect(x - laneW * 0.36, o.y - 26 + i * 6, laneW * 0.72, 6);
+        ctx.fillRect(x - laneW * 0.36, oy - 26 + i * 6, laneW * 0.72, 6);
       }
     } else if (o.kind === "pit") {
       // 坑洞:深色椭圆 + 裂纹边
       ctx.fillStyle = "rgba(60,55,90,0.85)";
       ctx.beginPath();
-      ctx.ellipse(x, o.y, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, oy, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,0.5)";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.ellipse(x, o.y, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, oy, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
       ctx.stroke();
     } else if (o.kind === "roller") {
       // 滚滚球:带旋转纹路的大圆球
       const rr = laneW * 0.27;
+      // 转速跟着它在轨道上跑了多远走,不是跟着屏幕位置走
       const spin = o.y * 0.04;
       ctx.fillStyle = "#e8a05a";
       ctx.beginPath();
-      ctx.arc(x, o.y, rr, 0, Math.PI * 2);
+      ctx.arc(x, oy, rr, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,0.65)";
       ctx.lineWidth = 3.5;
       for (let i = 0; i < 3; i++) {
         ctx.beginPath();
-        ctx.arc(x, o.y, rr * 0.65, spin + (i * Math.PI * 2) / 3, spin + (i * Math.PI * 2) / 3 + 1.1);
+        ctx.arc(x, oy, rr * 0.65, spin + (i * Math.PI * 2) / 3, spin + (i * Math.PI * 2) / 3 + 1.1);
         ctx.stroke();
       }
       ctx.fillStyle = "rgba(120,70,30,0.4)";
       ctx.beginPath();
-      ctx.ellipse(x, o.y + rr + 5, rr * 0.9, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, oy + rr + 5, rr * 0.9, 5, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (o.kind === "zapper") {
       // 电光门:两根柱子,通电时中间闪电
@@ -956,58 +1555,58 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const half = laneW * 0.36;
       ctx.fillStyle = active ? "#ffd868" : "#9a9ab8";
       ctx.beginPath();
-      ctx.roundRect(x - half - 5, o.y - 26, 10, 42, 4);
+      ctx.roundRect(x - half - 5, oy - 26, 10, 42, 4);
       ctx.fill();
       ctx.beginPath();
-      ctx.roundRect(x + half - 5, o.y - 26, 10, 42, 4);
+      ctx.roundRect(x + half - 5, oy - 26, 10, 42, 4);
       ctx.fill();
       if (active) {
         ctx.strokeStyle = `rgba(255,238,120,${0.75 + Math.sin(time * 20) * 0.25})`;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(x - half + 5, o.y - 6);
+        ctx.moveTo(x - half + 5, oy - 6);
         for (let i = 1; i <= 4; i++) {
           const zx = x - half + 5 + ((half * 2 - 10) * i) / 4;
-          ctx.lineTo(zx, o.y - 6 + (i % 2 === 0 ? 6 : -8));
+          ctx.lineTo(zx, oy - 6 + (i % 2 === 0 ? 6 : -8));
         }
         ctx.stroke();
         ctx.font = "13px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("⚡", x, o.y - 34);
+        ctx.fillText("⚡", x, oy - 34);
       }
     } else if (o.kind === "crate") {
       // 彩纸箱:方方正正带丝带,下滑铲得碎
       const s = laneW * 0.3;
       ctx.fillStyle = "#f2c48a";
       ctx.beginPath();
-      ctx.roundRect(x - s, o.y - s * 0.72, s * 2, s * 1.44, 6);
+      ctx.roundRect(x - s, oy - s * 0.72, s * 2, s * 1.44, 6);
       ctx.fill();
       ctx.strokeStyle = "#c98a4a";
       ctx.lineWidth = 3;
       ctx.stroke();
       ctx.fillStyle = "#ff9eb5";
-      ctx.fillRect(x - s * 0.16, o.y - s * 0.72, s * 0.32, s * 1.44);
+      ctx.fillRect(x - s * 0.16, oy - s * 0.72, s * 0.32, s * 1.44);
       ctx.fillStyle = "#9adcf0";
-      ctx.fillRect(x - s, o.y - s * 0.16, s * 2, s * 0.32);
+      ctx.fillRect(x - s, oy - s * 0.16, s * 2, s * 0.32);
     } else {
       // 云朵怪:飘来飘去的软云
       ctx.fillStyle = "rgba(255,255,255,0.95)";
       ctx.beginPath();
-      ctx.arc(x - laneW * 0.16, o.y, laneW * 0.15, 0, Math.PI * 2);
-      ctx.arc(x, o.y - laneW * 0.08, laneW * 0.18, 0, Math.PI * 2);
-      ctx.arc(x + laneW * 0.16, o.y, laneW * 0.15, 0, Math.PI * 2);
-      ctx.arc(x, o.y + laneW * 0.06, laneW * 0.16, 0, Math.PI * 2);
+      ctx.arc(x - laneW * 0.16, oy, laneW * 0.15, 0, Math.PI * 2);
+      ctx.arc(x, oy - laneW * 0.08, laneW * 0.18, 0, Math.PI * 2);
+      ctx.arc(x + laneW * 0.16, oy, laneW * 0.15, 0, Math.PI * 2);
+      ctx.arc(x, oy + laneW * 0.06, laneW * 0.16, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#3a3a4a";
       ctx.beginPath();
-      ctx.arc(x - laneW * 0.06, o.y - laneW * 0.03, 3, 0, Math.PI * 2);
-      ctx.arc(x + laneW * 0.06, o.y - laneW * 0.03, 3, 0, Math.PI * 2);
+      ctx.arc(x - laneW * 0.06, oy - laneW * 0.03, 3, 0, Math.PI * 2);
+      ctx.arc(x + laneW * 0.06, oy - laneW * 0.03, 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#3a3a4a";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(x, o.y + laneW * 0.03, 5, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.arc(x, oy + laneW * 0.03, 5, 0.15 * Math.PI, 0.85 * Math.PI);
       ctx.stroke();
     }
   }
@@ -1152,10 +1751,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
-      `♾️ 无尽彩虹跑 · 一直跑吃金币${endlessBest > 0 ? ` · 最远 ${endlessBest} 米` : " · 点我开跑!"}`,
+      `♾️ 无尽彩虹跑 · 2.5D 一直跑${
+        endlessRecord.meters > 0
+          ? ` · 最远 ${endlessRecord.meters} 米 · 最多 🍬${endlessRecord.coins}`
+          : " · 点我开跑!"
+      }`,
       w / 2,
       btnEndless.y + btnEndless.h / 2,
     );
+
+    // 收藏册入口:另一个窗口还没把收藏册放进来时,这个按钮压根不出现
+    btnCollection = null;
+    if (hasCollection()) {
+      btnCollection = { x: w - 46, y: 8, w: 38, h: 34 };
+      drawButton(btnCollection, "🎁", "rgba(255,255,255,0.9)", "#8a5ac9");
+    }
 
     themeCards.length = 0;
     const cols = w > h * 1.15 ? 3 : 2;
@@ -1335,9 +1945,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    // 无尽模式:标题按三种失败分别说,只鼓励不批评
+    const fail = failCopy(failKind, dist);
     ctx.fillText(
       endless
-        ? `这次跑了 ${Math.floor(dist)} 米!`
+        ? fail.title
         : loseReason === "boss"
           ? `${boss?.name ?? "大王"}溜走了……`
           : "摔了一跤,晕乎乎……",
@@ -1346,7 +1958,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     );
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
-    if (!endless && loseReason === "boss") {
+    if (endless) {
+      fitText(fail.line, w / 2, y + 78, Math.min(440, w - 50));
+    } else if (loseReason === "boss") {
       fitText(
         `打中 ${bossHitsOf(stats)}/${boss?.hp ?? 0} 下:铲碎一个彩纸箱算 1 下,三连完美跳算 2 下`,
         w / 2,
@@ -1354,16 +1968,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
         Math.min(420, w - 60),
       );
     }
+    const run: EndlessRecord = { meters: Math.floor(dist), coins: stats.coins };
+    const broke = recordBroken(recordBefore, run);
     const subText = endless
-      ? Math.floor(dist) >= endlessBest && endlessBest > 0
-        ? `🎉 新纪录!🍬${stats.coins} ⭐${stats.stars}${canRevive ? ` · 花 ${REVIVE_COST}⭐ 还能接着跑!` : ""}`
-        : `最远纪录 ${endlessBest} 米 · 🍬${stats.coins}${canRevive ? ` · 花 ${REVIVE_COST}⭐ 原地复活!` : ""}`
+      ? `${recordLine(recordBefore, run)} · 这趟 🍬${stats.coins}${
+          canRevive ? ` · 花 ${REVIVE_COST}⭐ 还能接着跑!` : ""
+        }`
       : canRevive
         ? `看小星星帮帮忙:花 ${REVIVE_COST} 颗⭐原地复活!`
         : "没关系!就从这一关重新出发";
+    ctx.fillStyle = endless && (broke.meters || broke.coins) ? "#c47a2a" : "#5a5a6e";
     // 大王溜走那一行已经占了 y+84,鼓励语顺延一行
-    ctx.fillText(subText, w / 2, y + (!endless && loseReason === "boss" ? 108 : 84));
-    let by = y + (!endless && loseReason === "boss" ? 138 : 116);
+    ctx.fillText(subText, w / 2, y + (endless ? 108 : loseReason === "boss" ? 108 : 84));
+    let by = y + (endless || loseReason === "boss" ? 138 : 116);
     btnRevive = null;
     if (canRevive) {
       btnRevive = { x: w / 2 - 110, y: by, w: 220, h: 44 };
@@ -1393,13 +2010,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#c47a2a";
       ctx.font = "bold 16px sans-serif";
       ctx.fillText(
-        endlessBest > 0 ? `🎯 目标:超过最远纪录 ${endlessBest} 米!` : "🎯 目标:跑得越远越厉害!",
+        endlessRecord.meters > 0
+          ? `🎯 目标:超过 ${endlessRecord.meters} 米 · 糖果纪录 🍬${endlessRecord.coins}`
+          : "🎯 目标:跑得越远越厉害!",
         w / 2,
         y + 122,
       );
       ctx.font = "14px sans-serif";
       ctx.fillStyle = "#a0a0b2";
-      ctx.fillText("左右滑换道 上滑跳 下滑趴 · 3 颗心 · 点一下开始", w / 2, y + 158);
+      fitText(
+        "左右滑 / A D 换道 · 上滑 / W / 空格跳 · 下滑 / S 滚翻 · 点一下开始",
+        w / 2,
+        y + 158,
+        Math.min(440, w - 50),
+      );
       return;
     }
     const ci = themeIndexOfLevel(levelIdx);
@@ -1455,226 +2079,80 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 12, (Math.random() - 0.5) * shake * 12);
 
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, theme.skyTop);
-    grad.addColorStop(1, theme.skyBottom);
-    ctx.fillStyle = grad;
-    ctx.fillRect(-20, -20, w + 40, h + 40);
+    drawSky(theme, def);
+    drawParallax(theme);
+    drawGround(theme, def);
+    drawSideDeco(theme, def);
+    const laneW = w * LANE_SPREAD;
 
-    if (def.world === "space") {
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      for (let i = 0; i < 30; i++) {
-        const sx = ((i * 89) % 100) / 100 * w;
-        const sy = ((i * 41) % 100) / 100 * h;
-        ctx.globalAlpha = 0.3 + 0.6 * Math.abs(Math.sin(time * 2 + i));
-        ctx.fillRect(sx, sy, 2.5, 2.5);
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    // 跑道
-    const laneW = w * 0.26;
-    for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = theme.lanes[i];
-      ctx.fillRect(laneX(i) - laneW / 2, 0, laneW, h);
-    }
-    ctx.strokeStyle = "rgba(255,255,255,0.8)";
-    ctx.lineWidth = 4;
-    for (let i = 0; i <= 3; i++) {
-      const x = laneX(0) - laneW / 2 + i * laneW;
-      const dashOffset = scrollPhase % 48;
-      for (let y = -48 + dashOffset; y < h; y += 48) {
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y + 24);
-        ctx.stroke();
-      }
-    }
-
-    // 两侧装饰
-    const decoOffset = scrollPhase % 160;
-    for (let y = -160 + decoOffset; y < h; y += 160) {
-      const lx = laneX(0) - laneW / 2 - 26;
-      const rx = laneX(2) + laneW / 2 + 26;
-      for (const x of [lx, rx]) {
-        if (x < 10 || x > w - 10) continue;
-        if (def.world === "grass") {
-          ctx.fillStyle = theme.deco;
-          for (let p = 0; p < 5; p++) {
-            const a = (Math.PI * 2 * p) / 5;
-            ctx.beginPath();
-            ctx.arc(x + Math.cos(a) * 7, y + Math.sin(a) * 7, 5, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.fillStyle = "#ffe387";
-          ctx.beginPath();
-          ctx.arc(x, y, 5, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (def.world === "sky") {
-          ctx.fillStyle = "rgba(255,255,255,0.9)";
-          ctx.beginPath();
-          ctx.arc(x - 8, y, 10, 0, Math.PI * 2);
-          ctx.arc(x + 6, y - 4, 12, 0, Math.PI * 2);
-          ctx.arc(x + 16, y + 3, 8, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (def.world === "candy") {
-          ctx.strokeStyle = "#e8a8c8";
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(x, y + 14);
-          ctx.lineTo(x, y);
-          ctx.stroke();
-          ctx.fillStyle = theme.deco;
-          ctx.beginPath();
-          ctx.arc(x, y - 6, 9, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = "#fff";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(x, y - 6, 5, 0.3, Math.PI * 1.4);
-          ctx.stroke();
-        } else if (def.world === "forest") {
-          // 小杉树
-          ctx.fillStyle = theme.deco;
-          ctx.fillRect(x - 3, y + 4, 6, 10);
-          ctx.fillStyle = "#4a8a4a";
-          ctx.beginPath();
-          ctx.moveTo(x - 12, y + 6);
-          ctx.lineTo(x, y - 16);
-          ctx.lineTo(x + 12, y + 6);
-          ctx.closePath();
-          ctx.fill();
-        } else if (def.world === "beach") {
-          // 小贝壳
-          ctx.fillStyle = theme.deco;
-          ctx.beginPath();
-          ctx.arc(x, y, 9, Math.PI, 0);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = "#fff";
-          ctx.lineWidth = 2;
-          for (let i = -1; i <= 1; i++) {
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + i * 5, y - 8);
-            ctx.stroke();
-          }
-        } else if (def.world === "desert") {
-          // 小仙人掌
-          ctx.fillStyle = theme.deco;
-          ctx.beginPath();
-          ctx.roundRect(x - 4, y - 14, 8, 26, 4);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.roundRect(x - 13, y - 6, 8, 5, 3);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.roundRect(x + 5, y - 2, 8, 5, 3);
-          ctx.fill();
-        } else if (def.world === "snow") {
-          // 小雪花
-          ctx.strokeStyle = theme.deco;
-          ctx.lineWidth = 2.5;
-          for (let i = 0; i < 3; i++) {
-            const a = (Math.PI * i) / 3;
-            ctx.beginPath();
-            ctx.moveTo(x - Math.cos(a) * 9, y - Math.sin(a) * 9);
-            ctx.lineTo(x + Math.cos(a) * 9, y + Math.sin(a) * 9);
-            ctx.stroke();
-          }
-        } else if (def.world === "lava") {
-          // 冒火星的小石头
-          ctx.fillStyle = "#5a3a35";
-          ctx.beginPath();
-          ctx.arc(x, y + 4, 8, Math.PI, 0);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = theme.deco;
-          ctx.beginPath();
-          ctx.arc(x, y - 5 + Math.sin(time * 4 + x) * 3, 3, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          drawStar(x, y, 8, "#ffe387");
-        }
-      }
-    }
-
-    // 终点线
+    // 终点线:随地面一起收进透视里
     const toFinish = def.len - dist;
-    if (toFinish < h) {
+    if (toFinish < h + 900) {
       const fy = playerY() - toFinish;
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.fillRect(laneX(0) - laneW / 2, fy - 12, laneW * 3, 24);
-      ctx.fillStyle = "#3a3a4a";
-      for (let i = 0; i < 12; i++) {
-        if (i % 2 === 0) ctx.fillRect(laneX(0) - laneW / 2 + i * laneW * 0.25, fy - 12, laneW * 0.25, 12);
-        else ctx.fillRect(laneX(0) - laneW / 2 + i * laneW * 0.25, fy, laneW * 0.25, 12);
+      const fs = scaleAtDepth(cam, depthOf(cam, fy));
+      if (fs >= VISIBLE_SCALE) {
+        ctx.save();
+        ctx.translate(w / 2, screenYAtDepth(cam, depthOf(cam, fy)));
+        ctx.scale(fs, fs);
+        ctx.globalAlpha = 1 - fogAlpha(fs);
+        const left = edgeOffset(w, 0);
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.fillRect(left, -12, laneW * 3, 24);
+        ctx.fillStyle = "#3a3a4a";
+        for (let i = 0; i < 12; i++) {
+          const gx = left + i * laneW * 0.25;
+          ctx.fillRect(gx, i % 2 === 0 ? -12 : 0, laneW * 0.25, 12);
+        }
+        ctx.restore();
       }
     }
 
-    for (const o of obstacles) drawObstacle(o, laneW);
+    // 远的先画、近的后画,近处的东西才会正确地盖住远处的
+    drawOrder.length = 0;
+    for (const o of obstacles) drawOrder.push(o);
+    drawOrder.sort((a, b) => a.y - b.y);
+    for (const o of drawOrder) drawObstacle(o, laneW);
 
-    for (const p of pickups) {
-      if (p.kind === "star") drawStar(p.x, p.y, 14, "#ffd868");
-      else if (p.kind === "coin") {
-        ctx.fillStyle = "#ffb84d";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (p.kind === "rail") {
-        // 加速滑轨:一小段发亮的轨道,踩上去就冲
-        const rw = laneW * 0.42;
-        ctx.fillStyle = "rgba(90,224,208,0.85)";
-        ctx.beginPath();
-        ctx.roundRect(p.x - rw, p.y - 12, rw * 2, 24, 10);
-        ctx.fill();
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        for (let k = -1; k <= 1; k++) {
-          ctx.moveTo(p.x + k * 13 - 6, p.y + 6);
-          ctx.lineTo(p.x + k * 13 + 2, p.y);
-          ctx.lineTo(p.x + k * 13 - 6, p.y - 6);
-        }
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = "rgba(255,255,255,0.92)";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#c9a6f2";
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-        ctx.font = "18px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(p.kind === "magnet" ? "🧲" : p.kind === "jet" ? "🚀" : "🛹", p.x, p.y + 1);
-      }
+    pickOrder.length = 0;
+    for (const p of pickups) pickOrder.push(p);
+    pickOrder.sort((a, b) => a.y - b.y);
+    for (const p of pickOrder) {
+      const s = scaleAtDepth(cam, depthOf(cam, p.y));
+      if (s < VISIBLE_SCALE) continue;
+      ctx.save();
+      ctx.translate(projectFlatX(cam, p.x, s), screenYAtDepth(cam, depthOf(cam, p.y)));
+      ctx.scale(s, s);
+      ctx.globalAlpha = 1 - fogAlpha(s);
+      drawPickupShape(p, laneW);
+      ctx.restore();
     }
 
     // 分岔路牌
     if (forkSign) {
-      const sy = forkSign.y;
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      ctx.beginPath();
-      ctx.roundRect(laneX(0) - laneW / 2 + 6, sy - 18, laneW * 3 - 12, 36, 12);
-      ctx.fill();
-      ctx.strokeStyle = theme.accent;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = "#4a4a5e";
-      ctx.font = "bold 14px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`◀ 岔路口 · ${forkSign.gate.name} ▶`, w / 2, sy);
+      const s = scaleAtDepth(cam, depthOf(cam, forkSign.y));
+      if (s >= VISIBLE_SCALE) {
+        ctx.save();
+        ctx.translate(w / 2, screenYAtDepth(cam, depthOf(cam, forkSign.y)));
+        ctx.scale(s, s);
+        ctx.globalAlpha = 1 - fogAlpha(s);
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.beginPath();
+        ctx.roundRect(edgeOffset(w, 0) + 6, -18, laneW * 3 - 12, 36, 12);
+        ctx.fill();
+        ctx.strokeStyle = theme.accent;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = "#4a4a5e";
+        ctx.font = "bold 14px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`◀ 岔路口 · ${forkSign.gate.name} ▶`, 0, 0);
+        ctx.restore();
+      }
     }
 
     drawPlayer();
+    if (endless && phase === "run") drawChaser();
 
     for (const p of puffs) {
       ctx.globalAlpha = Math.max(0, p.life / 0.5);
@@ -1713,15 +2191,38 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.font = "bold 17px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`🏃 ${Math.floor(dist)} 米`, w / 2, rowY + 12);
+      ctx.fillText(
+        `🏃 ${Math.floor(dist)} 米 · ${tierForDistance(dist).name}`,
+        w / 2,
+        rowY + 12,
+      );
       ctx.font = "14px sans-serif";
       ctx.fillStyle = "#6a5a86";
       ctx.fillText(
-        Math.floor(dist) > endlessBest && endlessBest > 0
-          ? "🎉 新纪录保持中!"
-          : `最远纪录 ${Math.max(endlessBest, 0)} 米`,
+        Math.floor(dist) > endlessRecord.meters && endlessRecord.meters > 0
+          ? `🎉 新纪录保持中! · 糖果纪录 🍬${endlessRecord.coins}`
+          : `最远 ${endlessRecord.meters} 米 · 最多 🍬${endlessRecord.coins}`,
         w / 2,
         rowY + 30,
+      );
+
+      // 追风棉花云的距离条:贴得越近条子越短、颜色越急
+      const cy = rowY + 46;
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.beginPath();
+      ctx.roundRect(bx, cy, bw, 18, 9);
+      ctx.fill();
+      const frac = Math.max(0, Math.min(1, chaserGap / CHASER_START_GAP));
+      ctx.fillStyle = chaserWarning(chaserGap) ? "#ff8aa8" : "#9adcf0";
+      ctx.beginPath();
+      ctx.roundRect(bx, cy, Math.max(10, bw * frac), 18, 9);
+      ctx.fill();
+      ctx.fillStyle = "#4a4a5e";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(
+        `${CHASER_EMOJI} ${CHASER_NAME}${chaserWarning(chaserGap) ? " 快跑!" : " 在后面追"}`,
+        w / 2,
+        cy + 9,
       );
     } else {
       ctx.fillStyle = "rgba(255,255,255,0.75)";
@@ -1758,7 +2259,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     // 大王血条:接在任务条下面,窄屏也和任务条同宽,不会横着挤出去
-    let extraRow = 0;
+    // 无尽模式那一行已经被追风棉花云的距离条占了,道具倒计时同样往下顺一行
+    let extraRow = endless ? 24 : 0;
     if (!endless && boss) {
       const by0 = rowY + 42;
       extraRow = 26;
@@ -1826,8 +2328,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let raf = 0;
   let last = performance.now();
   function frame(now: number): void {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = clampDt(now - last);
     last = now;
+    // 帧率自适应:低端安卓掉帧就自动少画几层视差、少放几颗粒子
+    fps = smoothFps(fps, dt);
+    qualityTier = nextQualityTier(qualityTier, fps);
     syncSize();
     update(dt);
     draw();
