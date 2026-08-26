@@ -492,6 +492,12 @@ export interface Fighter {
   weakness: Element | null;
   boss: BossPlan | null;
   charge: ChargeState | null;
+  /**
+   * 还差几个回合张盾 / 读条。用倒计时而不是「回合数取余」，
+   * 是因为放大招那一回合会占掉行动，取余的窗口一旦错过就再也补不上了。
+   */
+  shieldTimer: number;
+  chargeTimer: number;
   /** 是不是 Boss（界面用来画血条样式） */
   isBoss: boolean;
 }
@@ -594,6 +600,8 @@ export function makeFighter(spec: FighterSpec): Fighter {
     weakness: spec.weakness ?? null,
     boss: spec.boss ? { ...spec.boss } : null,
     charge: null,
+    shieldTimer: Math.max(0, (spec.boss?.shieldEvery ?? 0) - 1),
+    chargeTimer: Math.max(0, (spec.boss?.chargeEvery ?? 0) - 1),
     isBoss: spec.isBoss === true
   };
 }
@@ -669,10 +677,10 @@ export function planFoeAction(state: CombatState, rng: () => number): Action {
   }
   const plan = foe.boss;
   if (plan) {
-    if (plan.shieldEvery > 0 && foe.shield <= 0 && state.round % plan.shieldEvery === 0) {
+    if (plan.shieldEvery > 0 && foe.shield <= 0 && foe.shieldTimer <= 0) {
       return { kind: "shieldUp" };
     }
-    if (plan.chargeEvery > 0 && state.round % plan.chargeEvery === 0) {
+    if (plan.chargeEvery > 0 && foe.chargeTimer <= 0) {
       return { kind: "charge" };
     }
   }
@@ -693,7 +701,10 @@ export function planFoeAction(state: CombatState, rng: () => number): Action {
  *  2. 对手有护盾 → 先用破盾 / 穿透招；
  *  3. 自己星芒见底 → 先补一口；
  *  4. 有克制对手的技能 → 打克制；
- *  5. 其余情况 → 有强招放强招，没有就普攻。
+ *  5. 其余情况 → 把每一招和普通攻击一起算一遍期望伤害，谁高用谁。
+ *
+ * 第 5 条很要紧：技能自带属性，普通攻击走徽章属性。徽章正好戳中对手弱点时，
+ * 一记普通攻击可能比属性不对路的大招还疼，AI 得算得过这笔账。
  */
 export function planHeroAction(state: CombatState, rng: () => number): Action {
   const me = state.hero;
@@ -719,18 +730,23 @@ export function planHeroAction(state: CombatState, rng: () => number): Action {
 
   if (me.stun > 0 && itemCount(me, "bell") > 0) return { kind: "item", itemId: "bell" };
 
+  /** 某个属性以某个倍率打过去，大概能打出几倍伤害 */
+  const expect = (element: Element, power: number): number =>
+    elementMultiplier(element, foe.element) * (foe.weakness === element ? WEAKNESS_BONUS : 1) * power;
+
+  const attackScore = expect(me.element, 1);
   const damaging = ready.filter((id) => def(id).kind !== "heal" && def(id).kind !== "buff");
-  if (damaging.length > 0) {
-    const best = damaging
-      .slice()
-      .sort((a, b) => {
-        const sa = elementMultiplier(def(a).element, foe.element) * def(a).power;
-        const sb = elementMultiplier(def(b).element, foe.element) * def(b).power;
-        return sb - sa;
-      })[0];
-    const score = elementMultiplier(def(best).element, foe.element) * def(best).power;
-    if (score >= 1.2 || rng() < 0.7) return { kind: "skill", skillId: best };
+  let bestSkill: string | null = null;
+  let bestScore = attackScore;
+  for (const id of damaging) {
+    const rank = me.skills.find((s) => s.id === id)?.rank ?? 1;
+    const score = expect(def(id).element, skillPowerAtRank(def(id), rank));
+    if (score > bestScore) {
+      bestScore = score;
+      bestSkill = id;
+    }
   }
+  if (bestSkill) return { kind: "skill", skillId: bestSkill };
 
   const buff = ready.find((id) => def(id).kind === "buff");
   if (buff && me.powerTurns <= 0 && rng() < 0.4) return { kind: "skill", skillId: buff };
@@ -937,6 +953,7 @@ function applyAction(state: CombatState, side: Side, action: Action, rng: () => 
     case "shieldUp": {
       const amount = me.boss?.shieldAmount ?? 0;
       me.shield += amount;
+      me.shieldTimer = me.boss?.shieldEvery ?? 0;
       events.push({
         side,
         kind: "shield",
@@ -950,6 +967,7 @@ function applyAction(state: CombatState, side: Side, action: Action, rng: () => 
       const plan = me.boss;
       const name = plan?.chargeName ?? "大招";
       me.charge = { name, power: plan?.chargePower ?? 2, turnsLeft: 0 };
+      me.chargeTimer = plan?.chargeEvery ?? 0;
       events.push({
         side,
         kind: "charge",
@@ -1035,6 +1053,8 @@ export function resolveRound(state: CombatState, heroAction: Action, rng: () => 
     }
     if (f.powerTurns > 0) f.powerTurns -= 1;
     if (f.charge && f.charge.turnsLeft > 0) f.charge.turnsLeft -= 1;
+    if (f.shieldTimer > 0) f.shieldTimer -= 1;
+    if (f.chargeTimer > 0) f.chargeTimer -= 1;
     f.guarding = false;
   }
   if (!next.over) next.round += 1;
