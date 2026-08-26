@@ -1194,9 +1194,14 @@ describe("萌猫小屋 1.2 · meta 与攻略", () => {
 
 describe("萌猫小屋 1.2 · 前 99 关一个字都没动", () => {
   it("前 99 关的 SHA-256 指纹与升级前一致", () => {
-    // 基线取自 origin/game-1.2 的 levels.ts（升级前逐关快照），本步比对过完全相同。
-    const digest = createHash("sha256").update(JSON.stringify(LEVELS.slice(0, LEGACY_LEVELS))).digest("hex");
-    expect(digest).toBe("0fe493c93b77a55f844fba1e5acd9f655719d61c60fe79abda8f029a06798a38");
+    // 基线取自 origin/game-1.2 的 levels.ts（升级前逐关快照），本步逐关比对过完全相同。
+    const whole = createHash("sha256").update(JSON.stringify(LEVELS.slice(0, LEGACY_LEVELS))).digest("hex");
+    expect(whole).toBe("0fe493c93b77a55f844fba1e5acd9f655719d61c60fe79abda8f029a06798a38");
+    // 计划书 13.3 在动代码之前钉下来的那一串（逐关串行）
+    const perLevel = createHash("sha256")
+      .update(LEVELS.slice(0, LEGACY_LEVELS).map((lv, i) => `${i}|${JSON.stringify(lv)}`).join("\n"))
+      .digest("hex");
+    expect(perLevel).toBe("b49836f7a34fbca257effd6c9e3556da84ebd0496a7ef44c4b6e4ffe57acdaea");
   });
 
   it("前 99 关照旧不带任何新机制字段，也不出现新任务", () => {
