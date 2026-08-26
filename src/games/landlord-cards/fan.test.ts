@@ -5,6 +5,7 @@ import {
   cardWidthFor,
   fanHeightFor,
   fanLayout,
+  hitIndex,
   isDragBox,
   moveCursor,
   normBox,
@@ -110,6 +111,36 @@ describe("框选", () => {
     const hits = boxHits(slots, 40, 57, normBox(20, 0, 200, 100));
     expect(hits).toEqual([...hits].sort((a, b) => a - b));
     expect(new Set(hits).size).toBe(hits.length);
+  });
+});
+
+describe("点选命中", () => {
+  it("点在露出来的那一条上就选中那一张", () => {
+    const slots = fanLayout(10, 340, 40);
+    expect(hitIndex(slots, 40, 57, slots[3].x + 2, slots[3].y + 20)).toBe(3);
+  });
+
+  it("重叠的地方算上面那一张", () => {
+    const slots = fanLayout(10, 340, 40);
+    const overlapX = slots[4].x + 2;
+    expect(hitIndex(slots, 40, 57, overlapX, slots[4].y + 20)).toBe(4);
+  });
+
+  it("最后一张整张都能点到", () => {
+    const slots = fanLayout(10, 340, 40);
+    const last = slots.length - 1;
+    expect(hitIndex(slots, 40, 57, slots[last].x + 35, slots[last].y + 20)).toBe(last);
+  });
+
+  it("点空白处什么都不选", () => {
+    const slots = fanLayout(10, 340, 40);
+    expect(hitIndex(slots, 40, 57, 5, 400)).toBe(-1);
+  });
+
+  it("被挑起来的牌,点它抬起来之后的位置也算数", () => {
+    const slots = fanLayout(10, 340, 40);
+    const lifts = slots.map((_, i) => (i === 3 ? 20 : 0));
+    expect(hitIndex(slots, 40, 57, slots[3].x + 2, slots[3].y - 15, lifts)).toBe(3);
   });
 });
 
