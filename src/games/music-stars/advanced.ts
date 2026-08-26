@@ -238,8 +238,9 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
     listenEl.hidden = !on;
     board?.setEnabled(!on);
     for (const b of drumBtns) b.disabled = on;
-    for (const b of Array.from(choicesEl.children)) {
-      if (b instanceof HTMLButtonElement && !b.classList.contains("mst-bad")) b.disabled = on;
+    for (const child of Array.from(choicesEl.children)) {
+      const b = child as HTMLButtonElement;
+      if (!b.classList.contains("mst-bad")) b.disabled = on;
     }
     replayBtn.disabled = on || cfg.mode === "score" || (cfg.replays >= 0 && replaysLeft <= 0);
   }
@@ -272,8 +273,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   }
 
   function markDot(index: number, grade: HitGrade): void {
-    const dot = dotsEl.children[index];
-    if (dot instanceof HTMLElement) dot.classList.add(`mst-dot-${grade}`);
+    const dot = dotsEl.children[index] as HTMLElement | undefined;
+    dot?.classList.add(`mst-dot-${grade}`);
   }
 
   function finish(): void {
@@ -346,8 +347,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
         btn?.classList.add("mst-lit");
         synth.play(DRUM_FREQ[long === 1 ? 1 : 0], dur, 1);
         later(() => btn?.classList.remove("mst-lit"), dur);
-        const dot = dotsEl.children[k];
-        if (dot instanceof HTMLElement) {
+        const dot = dotsEl.children[k] as HTMLElement | undefined;
+        if (dot) {
           dot.classList.add("mst-dot-on");
           later(() => dot.classList.remove("mst-dot-on"), dur);
         }

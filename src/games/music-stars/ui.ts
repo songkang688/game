@@ -192,8 +192,8 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
     btn.style.marginBottom = `${pitchOffsetPx(midi, lowMidi, highMidi, rise)}px`;
     btn.setAttribute("aria-label", note.name);
     btn.innerHTML = `<span class="mst-face">⭐</span><span class="mst-name">${note.name}</span>`;
-    const nameEl = btn.querySelector(".mst-name");
-    if (nameEl instanceof HTMLElement) nameEl.style.color = note.color;
+    const nameEl = btn.querySelector(".mst-name") as HTMLElement | null;
+    if (nameEl) nameEl.style.color = note.color;
 
     const down = (ev: Event): void => {
       const pe = ev as PointerEvent;
