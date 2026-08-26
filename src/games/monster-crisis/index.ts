@@ -1,312 +1,193 @@
 import { meta } from "./meta";
 export { meta };
 
-// 小怪物危机 —— 守家 + 波次生存。
+// 小怪物危机 1.2 —— 玩家角色亲自上场的动作防守。
 //
-// 一群圆滚滚的小怪物从右边一波波溜达过来,想把家里的颜料罐搬走。
-// 你一边摆棉花墙、架泡泡炮、埋爆米花桶,一边亲自操作主角甩颜料弹;
-// 波次之间还能升三条科技线。被颜料糊到的小怪物只会「噗」地冒一团烟,
-// 然后变成小花、棉花糖、彩色气球弹回家去 —— 全程没有一点伤害描写。
+// 家摆在场地正中间,小怪物从四面八方围上来想把元气罐抱走。
+// 你就是场上那个小人:摇杆走位、技能钮出手,每 3 波从三张成长卡里挑一张
+// (长手刷 / 快手腕 / 多彩喷 / 吸吸糖 / 护盾泡),越打越顺手。
 //
-// 四种玩法:188 关八大章节战役、无尽波次、双人合作守家、
-// 以及一人守家一人指挥出兵的非对称对战。
-import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+// 被撞到只是「转个圈、晕一下」,小怪物被涂满就「变成小云朵飘走」——
+// 全程没有一点伤害描写,守不住也只说下一次怎么办。
+//
+// 四种玩法:188 关八大章节闯关、无尽波次(每 5 波小 boss、每 10 波换场景)、
+// 双人合作(共享波次、各自成长)、一人一半的对战(先失守的那边输)。
+//
+// 世界怎么动全在 `arena.ts`(纯逻辑、可无头回放);这里只负责画出来、
+// 收手指和键盘、把引擎吐出来的事件翻译成 `api.play` 的音效与一句飘字。
+import {
+  type Chapter,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+  type SoundName,
+  chapterOf,
+  chapterStart,
+  loadStars,
+  mountLevelGame,
+  saveStar,
+} from "../level99";
 import { save } from "../../engine/save";
 import guide from "./guide";
 import {
-  BUILD_COLS,
-  CHEW_REACH,
-  FROST_SECONDS,
-  HERO_BULLET_SPEED,
-  HERO_MAX_X,
-  HERO_MIN_X,
-  HOME_X,
-  INTERMISSION_PAINT_BOOST,
-  INTERMISSION_SECONDS,
-  LANES,
-  MONSTER_COLOR,
-  MONSTER_EMOJI,
-  MONSTER_INFO,
-  type MonsterKind,
-  POP_EMOJI,
-  type ProjectileKind,
-  SCENE_H,
-  SCENE_W,
-  SPAWN_X,
-  type TechLine,
-  type TechState,
-  TECH_INFO,
-  TECH_LINES,
-  TECH_MAX,
-  TOWER_EMOJI,
-  TOWER_INFO,
-  type TowerKind,
-  type WaveDef,
-  applyHit,
-  blastDamage,
-  campaignStars,
-  canCommand,
-  canHit,
-  chewDamage,
-  chewInterval,
-  clamp,
-  clampPaint,
-  colX,
-  commanderCost,
-  commanderDeck,
-  commanderRegen,
-  COMMANDER_ENERGY_CAP,
-  coopLine,
-  emptyTech,
-  endlessLine,
-  fieldSize,
-  formatClock,
-  heroDamage,
-  heroReload,
-  heroSpeed,
-  jarInterval,
-  loseLine,
-  monsterArmor,
-  monsterHp,
-  monsterSpeed,
-  paintCap,
-  paintInterval,
-  techCost,
-  towerDamage,
-  towerRefund,
-  towersUnlockedAt,
-  versusLine,
-  versusWinner,
-  willJump,
-  winLine,
-} from "./logic";
+  ARENA_H,
+  ARENA_W,
+  type ArenaEvent,
+  type ArenaInput,
+  type ArenaMonster,
+  type ArenaResult,
+  type ArenaState,
+  BEHAVIOR_INFO,
+  COOP_WAVES,
+  HERO_R,
+  HOME_R,
+  SCENE_COUNT,
+  VERSUS_WAVES,
+  arenaEndlessWave,
+  chooseGrowth,
+  createArena,
+  createCampaignArena,
+  disposeArena,
+  stepArena,
+  waveLabel,
+} from "./arena";
 import {
-  COOP_TARGET_WAVES,
-  CHAPTERS,
-  LEVELS,
-  type LevelDef,
-  VERSUS_SECONDS,
-  buildCoopWave,
-  buildEndlessWave,
-  endlessLevelIndex,
-} from "./levels";
+  GROWTH_CARDS,
+  type GrowthState,
+  growthBadges,
+} from "./growth";
+import { deviceTier, particleBudget } from "./pool";
+import {
+  arenaCoopLine,
+  arenaEndlessLine,
+  arenaLoseLine,
+  arenaVersusLine,
+  arenaWinLine,
+  draftTitle,
+} from "./copy";
+import { MONSTER_COLOR, MONSTER_INFO, campaignStars, formatClock } from "./logic";
+import { CHAPTERS, LEVELS, TOTAL, buildCoopWave, endlessLevelIndex } from "./levels";
 
 /* ------------------------------------------------------------------ */
-/* 画布尺寸与配色                                                       */
+/* 配色与样式(类名一律 mcr- 前缀,样式只挂在自己这棵树上)                 */
 /* ------------------------------------------------------------------ */
 
-const PAD_L = 56;
-const CELL_W = 68;
-const FIELD_TOP = 36;
-const LANE_H = 80;
-
-const P_COLOR = ["#e8558f", "#3f7fd6"];
+const P_COLOR = ["#e6558f", "#3f7fd6"];
 const P_NAME = ["朵朵", "星星"];
 
-function px(gx: number): number {
-  return PAD_L + gx * CELL_W;
-}
-
-function py(lane: number): number {
-  return FIELD_TOP + lane * LANE_H + LANE_H / 2;
-}
-
-/** 章节配色:地面 / 天空,让八个章节一眼看出区别。 */
-const SCENE_SKY = ["#fff4f8", "#fff6ec", "#f4fbea", "#eef7ff", "#f1eeff", "#fff0fa", "#eef6f6", "#f8f0ff"];
-const SCENE_GROUND = ["#dff2d8", "#ffe6c9", "#e3f0cd", "#dcecfa", "#ddd8f2", "#ffd9f0", "#dceaea", "#eddcff"];
+/** 八套场景皮:无尽每 10 波换一套,闯关按章节取。 */
+const SCENE_SKY = ["#fff3f8", "#fff6ec", "#f4fbea", "#eef7ff", "#f2eeff", "#fff0fa", "#eef6f6", "#f8f0ff"];
+const SCENE_GROUND = ["#dcefd0", "#ffdfb8", "#d6ecbf", "#cbe4fb", "#dad2f5", "#ffd4ee", "#cfe5e3", "#e4d2ff"];
+const SCENE_NAME = [
+  "自家小院",
+  "彩虹街区",
+  "叮咚学校",
+  "咕噜游乐园",
+  "月光工厂",
+  "云朵糖果城",
+  "星星电影院",
+  "彩虹总部",
+];
 
 const CSS = `
-.mc-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
-  -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:7px;position:relative;}
-.mc-hud{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;}
-.mc-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:900;color:#63528c;
-  box-shadow:0 2px 6px rgba(150,140,180,.24);white-space:nowrap;}
-.mc-chip-warn{background:#ffe9f1;color:#b8386e;}
-.mc-shop{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
-.mc-item{border:none;border-radius:13px;padding:6px 9px;font-size:12px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.32);
-  display:flex;flex-direction:column;align-items:center;gap:1px;min-width:52px;line-height:1.25;}
-.mc-item:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.32);}
-.mc-item[aria-pressed="true"]{background:#ffdcea;color:#a8305f;outline:3px solid #ff9dc2;}
-.mc-item[disabled]{opacity:.45;cursor:default;}
-.mc-item-cost{font-size:11px;font-weight:800;color:#8a7ba8;}
-.mc-field{display:flex;justify-content:center;}
-.mc-canvas{display:block;max-width:100%;border-radius:16px;background:#fff6fb;touch-action:none;cursor:pointer;
-  box-shadow:0 3px 10px rgba(160,140,200,.22);}
-.mc-pads{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:flex-start;}
-.mc-pad{display:grid;grid-template-columns:repeat(3,auto);gap:4px;justify-items:center;align-items:center;}
-.mc-pad-t{grid-column:1 / -1;font-size:12px;font-weight:900;}
-.mc-btn{border:none;border-radius:12px;min-width:44px;min-height:42px;padding:3px 7px;font-size:16px;
-  font-weight:900;cursor:pointer;font-family:inherit;color:#5b4a7a;background:#efe9ff;
-  box-shadow:0 3px 0 rgba(140,120,190,.4);}
-.mc-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.4);}
-.mc-btn-fire{background:#ffdbe8;color:#a83a68;box-shadow:0 3px 0 rgba(200,110,150,.4);}
-.mc-btn-build{background:#dcf1e2;color:#2f7a56;box-shadow:0 3px 0 rgba(90,160,120,.4);}
-.mc-btn:focus-visible,.mc-item:focus-visible,.mc-open:focus-visible,.mc-back:focus-visible{
-  outline:3px solid #3c2a6b;outline-offset:3px;}
-.mc-tip{text-align:center;font-size:12px;font-weight:700;color:#6f6390;line-height:1.55;}
-.mc-layer{position:absolute;inset:0;background:rgba(255,250,253,.95);border-radius:16px;z-index:9;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:14px;}
-.mc-layer-t{font-size:19px;font-weight:900;color:#6a4fa8;}
-.mc-layer-s{font-size:13px;font-weight:700;color:#6f6390;line-height:1.6;max-width:340px;}
-.mc-tech{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.mc-techbtn{border:none;border-radius:14px;padding:8px 12px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#fff;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.32);
-  display:flex;flex-direction:column;align-items:center;gap:2px;min-width:94px;}
-.mc-techbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.32);}
-.mc-techbtn[disabled]{opacity:.5;cursor:default;}
-.mc-techbar{font-size:11px;letter-spacing:2px;color:#ffb937;}
-.mc-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
-.mc-open:active{transform:translateY(2px);box-shadow:0 2px 0 #57429f;}
-.mc-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
-.mc-open-vs:active{box-shadow:0 2px 0 #b04a6c;}
-.mc-open-co{background:linear-gradient(180deg,#68c2a0,#48a683);box-shadow:0 4px 0 #35805f;}
-.mc-open-co:active{box-shadow:0 2px 0 #35805f;}
-.mc-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
-.mc-bar[hidden]{display:none;}
-.mc-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
+.mcr-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
+  -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;position:relative;}
+.mcr-hud{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.mcr-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:900;color:#5f4e8c;
+  box-shadow:0 2px 6px rgba(150,140,180,.22);white-space:nowrap;line-height:1.3;}
+.mcr-chip-warn{background:#ffe6f0;color:#b8386e;}
+.mcr-chip-p1{color:#b83a6e;}
+.mcr-chip-p2{color:#2f5fa8;}
+.mcr-hudbtn{border:none;border-radius:999px;min-width:44px;min-height:44px;font-size:18px;cursor:pointer;
+  font-family:inherit;background:#ffffffe0;color:#5f4e8c;box-shadow:0 3px 0 rgba(140,120,190,.3);}
+.mcr-hudbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.3);}
+.mcr-stage{position:relative;display:flex;justify-content:center;}
+.mcr-canvas{display:block;max-width:100%;border-radius:18px;background:#fff6fb;touch-action:none;
+  box-shadow:0 3px 12px rgba(160,140,200,.24);}
+.mcr-say{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:#ffffffe8;border-radius:999px;
+  padding:5px 14px;font-size:14px;font-weight:800;color:#7a4f9c;pointer-events:none;max-width:92%;
+  text-align:center;box-shadow:0 2px 8px rgba(150,130,190,.25);}
+.mcr-say[hidden]{display:none;}
+.mcr-pads{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:96px;}
+.mcr-pad{display:flex;align-items:center;gap:10px;}
+.mcr-pad-r{flex-direction:row-reverse;}
+.mcr-stick{position:relative;width:92px;height:92px;border-radius:50%;background:#f1ecff;
+  box-shadow:inset 0 3px 10px rgba(120,100,170,.22);touch-action:none;cursor:pointer;flex:0 0 auto;}
+.mcr-knob{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
+  background:#fff;box-shadow:0 3px 8px rgba(120,100,170,.35);pointer-events:none;}
+.mcr-fire{border:none;border-radius:50%;width:74px;height:74px;min-width:44px;min-height:44px;font-size:28px;
+  cursor:pointer;font-family:inherit;color:#a8305f;background:#ffdbe8;box-shadow:0 4px 0 rgba(200,110,150,.45);
+  touch-action:none;flex:0 0 auto;}
+.mcr-fire:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(200,110,150,.45);}
+.mcr-fire-p2{color:#2f5fa8;background:#dbe8ff;box-shadow:0 4px 0 rgba(110,150,200,.45);}
+.mcr-fire-p2:active{box-shadow:0 1px 0 rgba(110,150,200,.45);}
+.mcr-padname{font-size:13px;font-weight:900;text-align:center;}
+.mcr-tip{text-align:center;font-size:14px;font-weight:700;color:#6f6390;line-height:1.5;}
+.mcr-layer{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:18px;z-index:9;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
+  padding:12px;overflow-y:auto;}
+.mcr-layer-t{font-size:19px;font-weight:900;color:#6a4fa8;}
+.mcr-layer-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.55;max-width:340px;}
+.mcr-cards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%;max-height:62vh;overflow-y:auto;
+  padding:2px;}
+.mcr-card{border:none;border-radius:16px;padding:10px 12px;cursor:pointer;font-family:inherit;background:#fff;
+  color:#5b4a7a;box-shadow:0 4px 0 rgba(140,120,190,.3);display:flex;flex-direction:column;align-items:center;
+  gap:3px;min-width:132px;min-height:44px;flex:1 1 132px;max-width:190px;}
+.mcr-card:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(140,120,190,.3);}
+.mcr-card-emoji{font-size:26px;line-height:1.1;}
+.mcr-card-name{font-size:16px;font-weight:900;}
+.mcr-card-desc{font-size:13px;font-weight:700;color:#7c6f9b;line-height:1.4;}
+.mcr-card-lv{font-size:12px;font-weight:800;color:#a08fc0;}
+.mcr-btn{border:none;border-radius:999px;padding:11px 20px;font-size:16px;font-weight:900;cursor:pointer;
+  font-family:inherit;color:#fff;min-height:44px;background:linear-gradient(180deg,#8f7ae0,#6f57c8);
+  box-shadow:0 4px 0 #57429f;}
+.mcr-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #57429f;}
+.mcr-btn-co{background:linear-gradient(180deg,#68c2a0,#48a683);box-shadow:0 4px 0 #35805f;}
+.mcr-btn-co:active{box-shadow:0 2px 0 #35805f;}
+.mcr-btn-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
+.mcr-btn-vs:active{box-shadow:0 2px 0 #b04a6c;}
+.mcr-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;}
+.mcr-bar[hidden]{display:none;}
+.mcr-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#f6f2ff,#fff4f8);display:flex;flex-direction:column;gap:8px;}
-.mc-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.mc-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
-.mc-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
-.mc-over{border-radius:16px;background:#fffdfa;padding:14px;text-align:center;display:flex;
+.mcr-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.mcr-back{border:none;border-radius:999px;padding:9px 15px;font-size:15px;font-weight:900;cursor:pointer;
+  min-height:44px;font-family:inherit;background:#ffffffe0;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
+.mcr-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
+.mcr-over{border-radius:16px;background:#fffdfa;padding:16px;text-align:center;display:flex;
   flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
-/* 手机竖屏一屏要塞下四层,每层都得收着点,不然方向盘会被顶出舞台 */
+.mcr-over-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.mcr-hudbtn:focus-visible,.mcr-fire:focus-visible,.mcr-card:focus-visible,.mcr-btn:focus-visible,
+.mcr-back:focus-visible,.mcr-stick:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+/* 手机竖屏 360px:字号一律 ≥14px,摇杆和技能钮的热区一律 ≥44px,谁也不许被挤出屏幕 */
 @media (max-width:420px){
-  .mc-item{min-width:44px;font-size:11px;padding:3px 6px;}
-  .mc-item-cost{font-size:10px;}
-  .mc-chip{font-size:11px;padding:3px 8px;}
-  .mc-hud{gap:4px;}
-  .mc-shop{gap:5px;}
-  .mc-btn{min-width:40px;min-height:36px;font-size:15px;padding:2px 6px;}
-  .mc-hud .mc-btn{min-height:28px;min-width:34px;font-size:13px;}
-  .mc-pads{gap:6px;}
-  .mc-pad{gap:3px;}
-  .mc-pad-t{font-size:10px;}
-  .mc-open{font-size:13px;padding:7px 12px;}
-  .mc-bar{gap:6px;margin-bottom:4px;}
-  .mc-wrap{gap:3px;}
-  .mc-tip{font-size:10px;line-height:1.35;}
+  .mcr-wrap{gap:6px;}
+  .mcr-chip{font-size:14px;padding:4px 9px;}
+  .mcr-hud{gap:4px;}
+  .mcr-stick{width:84px;height:84px;}
+  .mcr-knob{width:44px;height:44px;margin:-22px 0 0 -22px;}
+  .mcr-fire{width:64px;height:64px;font-size:24px;}
+  .mcr-pads{min-height:86px;gap:4px;}
+  .mcr-pad{gap:6px;}
+  .mcr-tip{font-size:14px;line-height:1.4;}
+  .mcr-card{min-width:118px;flex:1 1 118px;}
+  .mcr-cards{max-height:52vh;}
 }
-@media (prefers-reduced-motion:reduce){.mc-btn:active,.mc-item:active{transform:none;}}
+@media (prefers-reduced-motion:reduce){
+  .mcr-fire:active,.mcr-btn:active,.mcr-card:active,.mcr-back:active,.mcr-hudbtn:active{transform:none;}
+}
 `;
 
 /* ------------------------------------------------------------------ */
-/* 运行时状态                                                          */
-/* ------------------------------------------------------------------ */
-
-interface Monster {
-  kind: MonsterKind;
-  x: number;
-  lane: number;
-  hp: number;
-  maxHp: number;
-  armor: number;
-  base: number;
-  frost: number;
-  chewCd: number;
-  jumped: boolean;
-  flying: boolean;
-  boss: boolean;
-  /** 走路时上下晃一点,看着更有精神 */
-  phase: number;
-  /** 刚被糊到时抖一下 */
-  flash: number;
-}
-
-interface Tower {
-  kind: TowerKind;
-  col: number;
-  lane: number;
-  hp: number;
-  maxHp: number;
-  cd: number;
-  prod: number;
-  born: number;
-}
-
-interface Shot {
-  x: number;
-  lane: number;
-  dmg: number;
-  proj: ProjectileKind;
-  slows: boolean;
-  speed: number;
-}
-
-interface Puff {
-  x: number;
-  y: number;
-  age: number;
-  emoji: string;
-}
-
-interface Hero {
-  lane: number;
-  x: number;
-  cd: number;
-  /** 甩颜料弹之后手臂前伸的动画计时 */
-  swing: number;
-}
-
-type Plan =
-  | { kind: "fixed"; waves: WaveDef[] }
-  | { kind: "endless"; make: (wave: number) => WaveDef }
-  | { kind: "versus"; seconds: number };
-
-export interface RunResult {
-  win: boolean;
-  hearts: number;
-  homeHp: number;
-  /** 完整清掉的波数 */
-  wavesCleared: number;
-  waveTotal: number;
-  popped: number;
-  leaks: number[];
-  elapsed: number;
-  quit: boolean;
-}
-
-interface FieldOptions {
-  def: LevelDef;
-  levelIdx: number;
-  levelIdxFor?: (waveIdx: number) => number;
-  plan: Plan;
-  /** 有几个人在操作主角(合作是 2) */
-  heroes: 1 | 2;
-  /** 第二个人当指挥官(非对称对战) */
-  commander?: boolean;
-  title: string;
-  hint: string;
-  sfx: (n: SoundName) => void;
-  onDone: (res: RunResult) => void;
-}
-
-/** 漏怪最多的那条道(结算文案要点名),没漏过返回 -1。 */
-export function weakestLane(leaks: readonly number[]): number {
-  let best = -1;
-  let most = 0;
-  for (let i = 0; i < leaks.length; i++) {
-    if (leaks[i] > most) {
-      most = leaks[i];
-      best = i;
-    }
-  }
-  return best;
-}
-
-/* ------------------------------------------------------------------ */
-/* 画笔:全部程序化绘制,一张外部图片都不用                              */
+/* 画笔:全部程序化绘制,一张外部图片都不用                                */
 /* ------------------------------------------------------------------ */
 
 function shade(hex: string, k: number): string {
   const n = parseInt(hex.slice(1), 16);
-  const r = Math.round(((n >> 16) & 255) * k);
-  const g = Math.round(((n >> 8) & 255) * k);
-  const b = Math.round((n & 255) * k);
-  return `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`;
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * k));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * k));
+  const b = Math.min(255, Math.round((n & 255) * k));
+  return `rgb(${r},${g},${b})`;
 }
 
 function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -314,565 +195,559 @@ function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number,
   c.roundRect(x, y, w, h, r);
 }
 
-/** 两只圆眼睛 + 一张笑嘴:所有小怪物都长着这副表情,凶不起来。 */
+/** 两只圆眼睛 + 一张笑嘴:全员卡通,凶不起来。 */
 function drawFace(c: CanvasRenderingContext2D, cx: number, cy: number, r: number, blink: boolean): void {
   const ex = r * 0.34;
-  const ey = -r * 0.12;
   c.fillStyle = "#fff";
   for (const s of [-1, 1]) {
     c.beginPath();
-    c.ellipse(cx + s * ex, cy + ey, r * 0.24, blink ? r * 0.06 : r * 0.26, 0, 0, Math.PI * 2);
+    c.ellipse(cx + s * ex, cy - r * 0.1, r * 0.24, blink ? r * 0.05 : r * 0.26, 0, 0, Math.PI * 2);
     c.fill();
   }
   if (!blink) {
     c.fillStyle = "#3d3350";
     for (const s of [-1, 1]) {
       c.beginPath();
-      c.arc(cx + s * ex, cy + ey + r * 0.04, r * 0.12, 0, Math.PI * 2);
+      c.arc(cx + s * ex, cy - r * 0.06, r * 0.12, 0, Math.PI * 2);
       c.fill();
     }
   }
   c.strokeStyle = "#3d3350";
-  c.lineWidth = Math.max(1.4, r * 0.09);
+  c.lineWidth = Math.max(1.2, r * 0.09);
   c.lineCap = "round";
   c.beginPath();
-  c.arc(cx, cy + r * 0.28, r * 0.28, 0.15 * Math.PI, 0.85 * Math.PI);
+  c.arc(cx, cy + r * 0.28, r * 0.26, 0.15 * Math.PI, 0.85 * Math.PI);
   c.stroke();
 }
 
-function drawMonster(c: CanvasRenderingContext2D, m: Monster, t: number): void {
-  const spec = MONSTER_INFO[m.kind];
-  const size = spec.boss ? 40 : 24;
-  const bob = Math.sin(t * 4 + m.phase) * (m.flying ? 5 : 2.2);
-  const x = px(m.x);
-  const y = py(m.lane) + bob - (m.flying ? 16 : 0);
+/** 地面阴影:2D 俯视里唯一的「立体」,近的画在上面靠 y 轴排序。 */
+function drawShadow(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = "rgba(110,95,150,.13)";
+  c.beginPath();
+  c.ellipse(x, y + r * 0.72, r * 0.9, r * 0.42, 0, 0, Math.PI * 2);
+  c.fill();
+}
+
+/**
+ * 五种行为五种外形,不是只换个颜色:
+ * 直冲 = 圆脑袋加一个冲刺尖角、绕行 = 转着的风车星、吐泡泡 = 圆气球顶着长喇叭、
+ * 召唤 = 高个蛋壳背着小豆子、精英 = 六边形正面顶着一块盾。
+ */
+function drawMonster(c: CanvasRenderingContext2D, m: ArenaMonster, t: number, motion: boolean): void {
   const fill = MONSTER_COLOR[m.kind];
+  const r = m.r;
+  const bob = motion ? Math.sin(t * 4 + m.phase) * (m.behavior === "spit" ? 2.6 : 1.4) : 0;
+  const x = m.x;
+  const y = m.y + bob;
+  const ang = Math.atan2(m.fy, m.fx);
 
-  // 飞在天上的拖一根小尾巴,一眼看出地面炮台够不着
-  if (m.flying) {
-    c.strokeStyle = "rgba(120,110,160,.4)";
-    c.lineWidth = 1.6;
-    c.beginPath();
-    c.moveTo(x, y + size * 0.7);
-    c.lineTo(x + 3, y + size * 1.5);
-    c.stroke();
-  }
-
+  drawShadow(c, m.x, m.y, r);
   c.save();
-  if (m.flash > 0) c.globalAlpha = 0.65 + 0.35 * Math.cos(m.flash * 40);
-  c.lineWidth = 3;
+  if (motion && m.hitFlash > 0) c.globalAlpha = 0.62 + 0.38 * Math.cos(m.hitFlash * 44);
+  c.lineWidth = 2.4;
   c.lineJoin = "round";
-  c.strokeStyle = shade(fill, 0.62);
+  c.strokeStyle = shade(fill, 0.6);
   c.fillStyle = fill;
 
-  if (m.kind === "box") {
-    roundRect(c, x - size * 0.6, y - size * 0.6, size * 1.2, size * 1.2, 5);
-  } else if (m.kind === "spinner") {
+  if (m.behavior === "rush") {
     c.beginPath();
-    c.moveTo(x, y - size * 0.7);
-    c.lineTo(x + size * 0.62, y + size * 0.5);
-    c.lineTo(x - size * 0.62, y + size * 0.5);
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    // 冲刺尖角:一眼看出它奔着哪儿去
+    c.beginPath();
+    c.moveTo(x + Math.cos(ang) * (r + 8), y + Math.sin(ang) * (r + 8));
+    c.lineTo(x + Math.cos(ang + 2.4) * r, y + Math.sin(ang + 2.4) * r);
+    c.lineTo(x + Math.cos(ang - 2.4) * r, y + Math.sin(ang - 2.4) * r);
     c.closePath();
-  } else if (m.kind === "cotton" || m.kind === "bossCotton" || m.kind === "bossCloud") {
+    c.fill();
+    c.stroke();
+  } else if (m.behavior === "weave") {
+    const spin = motion ? t * 3 + m.phase : m.phase;
     c.beginPath();
-    c.arc(x - size * 0.35, y + size * 0.1, size * 0.42, 0, Math.PI * 2);
-    c.arc(x + size * 0.35, y + size * 0.1, size * 0.4, 0, Math.PI * 2);
-    c.arc(x, y - size * 0.2, size * 0.55, 0, Math.PI * 2);
+    for (let i = 0; i < 10; i++) {
+      const a = spin + (i / 10) * Math.PI * 2;
+      const rad = i % 2 === 0 ? r * 1.15 : r * 0.55;
+      const px2 = x + Math.cos(a) * rad;
+      const py2 = y + Math.sin(a) * rad;
+      if (i === 0) c.moveTo(px2, py2);
+      else c.lineTo(px2, py2);
+    }
+    c.closePath();
+    c.fill();
+    c.stroke();
+  } else if (m.behavior === "spit") {
+    // 飘着的气球:身子和影子离得远一点,看着就在天上
+    c.beginPath();
+    c.ellipse(x, y - r * 0.5, r * 0.92, r * 1.02, 0, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    c.strokeStyle = shade(fill, 0.5);
+    c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(x, y - r * 0.5);
+    c.lineTo(x + Math.cos(ang) * (r + 9), y - r * 0.5 + Math.sin(ang) * (r + 9));
+    c.stroke();
+    c.fillStyle = shade(fill, 0.85);
+    c.beginPath();
+    c.arc(x + Math.cos(ang) * (r + 10), y - r * 0.5 + Math.sin(ang) * (r + 10), r * 0.34, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+  } else if (m.behavior === "summon") {
+    roundRect(c, x - r * 0.72, y - r * 1.15, r * 1.44, r * 2.1, r * 0.7);
+    c.fill();
+    c.stroke();
+    // 背上那几颗小豆子就是待会儿要蹦出来的小跟班
+    c.fillStyle = shade(fill, 0.82);
+    for (let i = 0; i < Math.min(3, m.summons); i++) {
+      c.beginPath();
+      c.arc(x - r * 0.5 + i * r * 0.5, y + r * 0.8, r * 0.24, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.strokeStyle = shade(fill, 0.5);
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(x, y - r * 1.15);
+    c.lineTo(x, y - r * 1.65);
+    c.stroke();
+    c.fillStyle = "#ffd7ea";
+    c.beginPath();
+    c.arc(x, y - r * 1.75, r * 0.2, 0, Math.PI * 2);
+    c.fill();
   } else {
-    roundRect(c, x - size * 0.58, y - size * 0.58, size * 1.16, size * 1.16, size * 0.42);
-  }
-  c.fill();
-  c.stroke();
-
-  // 外壳:南瓜盖、纸箱盖、跳跳怪的小头盔
-  if (m.armor > 0) {
-    c.fillStyle = "rgba(255,255,255,.55)";
-    c.strokeStyle = shade(fill, 0.45);
-    c.lineWidth = 2.4;
     c.beginPath();
-    c.arc(x, y - size * 0.18, size * 0.62, Math.PI * 1.08, Math.PI * 1.92);
+    for (let i = 0; i < 6; i++) {
+      const a = ang + (i / 6) * Math.PI * 2;
+      const px2 = x + Math.cos(a) * r * 1.05;
+      const py2 = y + Math.sin(a) * r * 1.05;
+      if (i === 0) c.moveTo(px2, py2);
+      else c.lineTo(px2, py2);
+    }
+    c.closePath();
+    c.fill();
     c.stroke();
   }
 
-  const blink = Math.sin(t * 1.7 + m.phase * 2) > 0.965;
-  drawFace(c, x, y, size * 0.6, blink);
+  // 精英怪正面那块盾:挡一下掉一格,掉光就没了(绕到侧后方就打得着)
+  if (m.shield > 0) {
+    const left = m.shield / Math.max(1, m.shieldMax);
+    c.strokeStyle = m.blockFlash > 0 && motion ? "#ffffff" : "#9fd0ff";
+    c.lineWidth = 5;
+    c.lineCap = "round";
+    c.beginPath();
+    c.arc(x, y, r + 6, ang - 1.15 * left - 0.1, ang + 1.15 * left + 0.1);
+    c.stroke();
+  }
 
-  if (spec.boss) {
+  const blink = motion && Math.sin(t * 1.7 + m.phase * 2) > 0.96;
+  drawFace(c, x, m.behavior === "spit" ? y - r * 0.55 : y, r * 0.8, blink);
+
+  if (m.boss) {
     c.fillStyle = "#ffcf4d";
     c.strokeStyle = "#d99f18";
     c.lineWidth = 2;
     c.beginPath();
-    c.moveTo(x - size * 0.5, y - size * 0.62);
-    c.lineTo(x - size * 0.28, y - size * 0.98);
-    c.lineTo(x, y - size * 0.66);
-    c.lineTo(x + size * 0.28, y - size * 0.98);
-    c.lineTo(x + size * 0.5, y - size * 0.62);
+    c.moveTo(x - r * 0.55, y - r * 1.0);
+    c.lineTo(x - r * 0.3, y - r * 1.45);
+    c.lineTo(x, y - r * 1.05);
+    c.lineTo(x + r * 0.3, y - r * 1.45);
+    c.lineTo(x + r * 0.55, y - r * 1.0);
     c.closePath();
     c.fill();
     c.stroke();
   }
   c.restore();
 
-  // 上色进度条:糊到过才显示,没挨过颜料的小怪物头顶干干净净
-  if (m.hp < m.maxHp || m.armor > 0) {
-    const w = size * 1.2;
-    const bx = x - w / 2;
-    const by = y - size * (spec.boss ? 1.2 : 0.95);
+  // 上色进度条:被涂过才显示,没挨过颜料的头顶干干净净
+  if (m.hp < m.maxHp) {
+    const w = r * 2;
+    const by = y - r * (m.boss ? 1.75 : 1.5);
     c.fillStyle = "rgba(255,255,255,.85)";
-    roundRect(c, bx, by, w, 5, 2.5);
+    roundRect(c, x - w / 2, by, w, 4.5, 2.2);
     c.fill();
-    c.fillStyle = m.armor > 0 ? "#9aa6c4" : "#7fd6a3";
-    const ratio = m.armor > 0 ? 1 : Math.max(0, m.hp / m.maxHp);
-    roundRect(c, bx, by, w * ratio, 5, 2.5);
+    c.fillStyle = "#7fd6a3";
+    roundRect(c, x - w / 2, by, (w * Math.max(0, m.hp)) / m.maxHp, 4.5, 2.2);
     c.fill();
   }
 }
 
-function drawTower(c: CanvasRenderingContext2D, tw: Tower, t: number): void {
-  const x = px(colX(tw.col));
-  const y = py(tw.lane);
-  const grow = Math.min(1, (t - tw.born) * 4);
-  const s = 26 * (0.6 + 0.4 * grow);
+function drawHero(
+  c: CanvasRenderingContext2D,
+  h: { x: number; y: number; fx: number; fy: number; spin: number; invuln: number; windup: number; shields: number; idx: number },
+  t: number,
+  motion: boolean
+): void {
+  const col = P_COLOR[h.idx] ?? P_COLOR[0];
+  drawShadow(c, h.x, h.y, HERO_R);
   c.save();
-  c.lineWidth = 3;
-  c.lineJoin = "round";
-
-  if (tw.kind === "wall") {
-    // 一摞缝好的软垫子:故意和三团圆球的棉花怪长得不一样,一眼能分清敌我
-    c.fillStyle = "#fffdf7";
-    c.strokeStyle = "#c9a7c4";
-    roundRect(c, x - s * 0.42, y - s * 0.62, s * 0.84, s * 1.24, 7);
-    c.fill();
-    c.stroke();
-    c.strokeStyle = "#e6cfe0";
-    c.lineWidth = 2;
-    for (let i = 1; i < 3; i++) {
-      const ly = y - s * 0.62 + (s * 1.24 * i) / 3;
-      c.beginPath();
-      c.moveTo(x - s * 0.42, ly);
-      c.lineTo(x + s * 0.42, ly);
-      c.stroke();
-    }
-  } else if (tw.kind === "jar") {
-    c.fillStyle = "#ffe6a8";
-    c.strokeStyle = "#d9a94f";
-    roundRect(c, x - s * 0.45, y - s * 0.4, s * 0.9, s * 0.85, 6);
-    c.fill();
-    c.stroke();
-    c.fillStyle = "#ff8fc0";
-    c.beginPath();
-    c.arc(x, y - s * 0.5, s * 0.26, 0, Math.PI * 2);
-    c.fill();
-  } else if (tw.kind === "pop") {
-    c.fillStyle = "#bfe6ff";
-    c.strokeStyle = "#5d9bc4";
-    c.beginPath();
-    c.arc(x, y, s * 0.5, 0, Math.PI * 2);
-    c.fill();
-    c.stroke();
-    c.fillStyle = "#7fc3e8";
-    roundRect(c, x + s * 0.3, y - s * 0.16, s * 0.45, s * 0.32, 4);
-    c.fill();
-  } else if (tw.kind === "boom") {
-    c.fillStyle = "#fff1f1";
-    c.strokeStyle = "#e08b8b";
-    roundRect(c, x - s * 0.42, y - s * 0.3, s * 0.84, s * 0.8, 4);
-    c.fill();
-    c.stroke();
-    c.fillStyle = "#fff8d8";
-    for (let i = 0; i < 4; i++) {
-      c.beginPath();
-      c.arc(x - s * 0.28 + i * s * 0.19, y - s * 0.42 + (i % 2) * s * 0.12, s * 0.16, 0, Math.PI * 2);
-      c.fill();
-    }
-  } else if (tw.kind === "frost") {
-    c.fillStyle = "#dff4ff";
-    c.strokeStyle = "#6fb6d8";
-    roundRect(c, x - s * 0.44, y - s * 0.44, s * 0.88, s * 0.88, 7);
-    c.fill();
-    c.stroke();
-    c.strokeStyle = "#9fd9ef";
-    c.lineWidth = 2.4;
-    for (const a of [0, 1, 2]) {
-      const ang = (a / 3) * Math.PI;
-      c.beginPath();
-      c.moveTo(x - Math.cos(ang) * s * 0.3, y - Math.sin(ang) * s * 0.3);
-      c.lineTo(x + Math.cos(ang) * s * 0.3, y + Math.sin(ang) * s * 0.3);
-      c.stroke();
-    }
-  } else {
-    c.fillStyle = "#f3e6ff";
-    c.strokeStyle = "#a887d6";
-    roundRect(c, x - s * 0.3, y - s * 0.15, s * 0.6, s * 0.75, 5);
-    c.fill();
-    c.stroke();
-    const bands = ["#ff9ec4", "#ffd08a", "#9be0a8", "#a9d6ff"];
-    c.lineWidth = 3;
-    bands.forEach((col, i) => {
-      c.strokeStyle = col;
-      c.beginPath();
-      c.arc(x, y - s * 0.15, s * 0.28 + i * 5, Math.PI * 1.15, Math.PI * 1.85);
-      c.stroke();
-    });
-  }
-
-  // 被啃了才显示耐久条
-  if (tw.hp < tw.maxHp) {
-    const w = s * 1.1;
-    c.fillStyle = "rgba(255,255,255,.85)";
-    roundRect(c, x - w / 2, y + s * 0.62, w, 4, 2);
-    c.fill();
-    c.fillStyle = "#ffb2cf";
-    roundRect(c, x - w / 2, y + s * 0.62, (w * tw.hp) / tw.maxHp, 4, 2);
-    c.fill();
-  }
-  c.restore();
-}
-
-function drawHero(c: CanvasRenderingContext2D, h: Hero, idx: number, t: number): void {
-  const x = px(h.x);
-  const y = py(h.lane) + Math.sin(t * 5 + idx) * 1.8;
-  const col = P_COLOR[idx];
-  c.save();
-  c.lineWidth = 3;
-  c.strokeStyle = shade(col, 0.7);
+  if (h.invuln > 0 && motion) c.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(t * 16));
+  // 转圈:整个人打着转,晕头转向但一点都不疼
+  const spinAngle = h.spin > 0 ? t * 12 : 0;
+  c.translate(h.x, h.y);
+  c.rotate(spinAngle);
+  c.lineWidth = 2.6;
+  c.strokeStyle = shade(col, 0.68);
   c.fillStyle = col;
   c.beginPath();
-  c.arc(x, y, 15, 0, Math.PI * 2);
+  c.arc(0, 0, HERO_R, 0, Math.PI * 2);
   c.fill();
   c.stroke();
-  // 举着的刷子:甩出去的一瞬间往前伸
-  const reach = 16 + h.swing * 40;
+  // 举着的刷子:前摇时往回收,甩出去的一瞬间伸到最长
+  const ang = Math.atan2(h.fy, h.fx);
+  const reach = HERO_R + 5 + (h.windup > 0 ? -3 : 8);
   c.strokeStyle = "#8a6a4a";
-  c.lineWidth = 4;
+  c.lineWidth = 3.4;
   c.lineCap = "round";
   c.beginPath();
-  c.moveTo(x + 6, y);
-  c.lineTo(x + reach, y - 4);
+  c.moveTo(Math.cos(ang) * 4, Math.sin(ang) * 4);
+  c.lineTo(Math.cos(ang) * reach, Math.sin(ang) * reach);
   c.stroke();
   c.fillStyle = "#fff";
   c.beginPath();
-  c.arc(x + reach + 2, y - 5, 4.5, 0, Math.PI * 2);
+  c.arc(Math.cos(ang) * (reach + 3), Math.sin(ang) * (reach + 3), 3.6, 0, Math.PI * 2);
   c.fill();
-  drawFace(c, x, y - 1, 11, false);
+  drawFace(c, 0, 0, HERO_R * 0.85, false);
   c.restore();
+
+  // 护盾泡:身上挂着几个就画几个
+  for (let i = 0; i < h.shields; i++) {
+    const a = t * 1.6 + (i / Math.max(1, h.shields)) * Math.PI * 2;
+    c.strokeStyle = "rgba(150,205,255,.85)";
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(h.x + Math.cos(a) * (HERO_R + 7), h.y + Math.sin(a) * (HERO_R + 7), 5, 0, Math.PI * 2);
+    c.stroke();
+  }
+  if (h.spin > 0) {
+    c.fillStyle = "#ffd66b";
+    for (let i = 0; i < 3; i++) {
+      const a = t * 9 + (i / 3) * Math.PI * 2;
+      c.beginPath();
+      c.arc(h.x + Math.cos(a) * (HERO_R + 9), h.y - HERO_R - 6 + Math.sin(a) * 4, 2.6, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
 }
 
-function drawShot(c: CanvasRenderingContext2D, s: Shot): void {
-  const color =
-    s.proj === "paint" ? "#ff7fb4" : s.proj === "ice" ? "#a9e4ff" : s.proj === "beam" ? "#c79bff" : "#bfe6ff";
-  c.fillStyle = color;
-  c.strokeStyle = shade(color, 0.7);
-  c.lineWidth = 1.6;
+function drawHome(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  jars: number,
+  maxJars: number,
+  color: string
+): void {
+  // 判定圈:小怪物碰到这一圈就抱走一罐,画清楚孩子才知道底线在哪
+  c.strokeStyle = "rgba(150,120,190,.35)";
+  c.setLineDash([7, 6]);
+  c.lineWidth = 2;
   c.beginPath();
-  c.arc(px(s.x), py(s.lane) - 2, s.proj === "beam" ? 7 : 5.5, 0, Math.PI * 2);
-  c.fill();
+  c.arc(x, y, HOME_R, 0, Math.PI * 2);
   c.stroke();
-}
+  c.setLineDash([]);
 
-function drawPuff(c: CanvasRenderingContext2D, p: Puff): void {
-  const k = Math.min(1, p.age / 0.7);
-  c.save();
-  c.globalAlpha = 1 - k;
-  c.strokeStyle = "#cfc7e6";
-  c.lineWidth = 4 * (1 - k) + 1;
-  c.beginPath();
-  c.arc(p.x, p.y, 10 + k * 26, 0, Math.PI * 2);
-  c.stroke();
-  c.globalAlpha = 1 - k * 0.7;
-  c.font = "22px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  c.fillText(p.emoji, p.x, p.y - k * 22);
-  c.restore();
-}
-
-function drawHome(c: CanvasRenderingContext2D, hearts: number, homeHp: number, shake: number): void {
-  const x = px(HOME_X);
-  c.save();
-  c.translate(Math.sin(shake * 40) * shake * 6, 0);
-  c.fillStyle = "#ffe9f3";
-  c.fillRect(0, FIELD_TOP, x, LANE_H * LANES);
-  c.strokeStyle = "#e6a9c6";
+  c.fillStyle = "#fff";
+  c.strokeStyle = color;
   c.lineWidth = 3;
-  c.beginPath();
-  c.moveTo(x, FIELD_TOP);
-  c.lineTo(x, FIELD_TOP + LANE_H * LANES);
+  roundRect(c, x - 16, y - 12, 32, 24, 7);
+  c.fill();
   c.stroke();
-  // 家门口摆着的颜料罐,少一罐就是被搬走一罐;沿着整块家门竖着排开
-  for (let i = 0; i < homeHp; i++) {
-    const cy = FIELD_TOP + (LANE_H * LANES * (i + 0.5)) / homeHp;
-    const on = i < hearts;
+  c.beginPath();
+  c.moveTo(x - 20, y - 12);
+  c.lineTo(x, y - 26);
+  c.lineTo(x + 20, y - 12);
+  c.closePath();
+  c.fillStyle = color;
+  c.fill();
+
+  // 家门口的元气罐:被抱走一罐就灭一个
+  for (let i = 0; i < maxJars; i++) {
+    const a = (i / maxJars) * Math.PI * 2 - Math.PI / 2;
+    const jx = x + Math.cos(a) * (HOME_R - 5);
+    const jy = y + Math.sin(a) * (HOME_R - 5);
+    const on = i < jars;
     c.fillStyle = on ? "#ff9ec4" : "#e7e1ee";
     c.strokeStyle = on ? "#d9628a" : "#cfc7dd";
-    c.lineWidth = 2.5;
-    roundRect(c, x - 40, cy - 13, 28, 26, 6);
+    c.lineWidth = 2;
+    roundRect(c, jx - 4, jy - 5, 8, 10, 2.5);
     c.fill();
     c.stroke();
   }
-  c.restore();
 }
 
 /* ------------------------------------------------------------------ */
-/* 战场:实时引擎 + 渲染 + 输入                                          */
+/* 画布尺寸                                                            */
 /* ------------------------------------------------------------------ */
 
-function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => void } {
-  const { def } = opts;
+/**
+ * 战场画多大:手机竖屏要给底下的摇杆和技能钮留够位置,
+ * 所以按屏幕高度切一刀,再按原始长宽比换算宽度(永远不拉变形)。
+ */
+export function arenaCanvasSize(availW: number, viewportW: number, viewportH: number): { w: number; h: number } {
+  const vh = viewportH > 0 ? viewportH : 700;
+  const budget = Math.max(150, Math.round(vh * (viewportW >= 700 ? 0.5 : 0.4)));
+  const wide = Math.max(220, availW > 0 ? availW : 320);
+  const w = Math.min(wide, 720, (budget * ARENA_W) / ARENA_H);
+  return { w: Math.round(w), h: Math.round((w * ARENA_H) / ARENA_W) };
+}
+
+/* ------------------------------------------------------------------ */
+/* 战场视图                                                            */
+/* ------------------------------------------------------------------ */
+
+interface ViewOptions {
+  state: ArenaState;
+  title: string;
+  hint: string;
+  /** 场景皮下标(闯关按章节,无尽按波数) */
+  scene: number;
+  sfx: (n: SoundName) => void;
+  onDone: (res: ArenaResult) => void;
+}
+
+interface ViewHandle {
+  destroy: () => void;
+}
+
+function createArenaView(host: HTMLElement, opts: ViewOptions): ViewHandle {
+  const state = opts.state;
   const doc = host.ownerDocument ?? document;
-  const versus = opts.plan.kind === "versus";
-  const idxFor = opts.levelIdxFor ?? (() => opts.levelIdx);
-  const unlocked = towersUnlockedAt(def.chapter);
-  const blocked = new Set(def.blocked.map((b) => `${b.col},${b.lane}`));
-  const sky = SCENE_SKY[def.chapter % SCENE_SKY.length];
-  const ground = SCENE_GROUND[def.chapter % SCENE_GROUND.length];
+  const view = doc.defaultView ?? window;
+  const players = state.heroes.length;
+  const versus = state.mode === "versus";
+  const reduced = !!view.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  state.particleCap = particleBudget(
+    deviceTier((view.navigator as { hardwareConcurrency?: number } | undefined)?.hardwareConcurrency, view.innerWidth ?? 400),
+    reduced
+  );
 
   const wrap = doc.createElement("div");
-  wrap.className = "mc-wrap";
+  wrap.className = "mcr-wrap";
 
+  /* ---- 顶上那一行:波次 / 元气 / 成长图标 ---- */
   const hud = doc.createElement("div");
-  hud.className = "mc-hud";
-  const paintChip = doc.createElement("span");
-  paintChip.className = "mc-chip";
+  hud.className = "mcr-hud";
   const waveChip = doc.createElement("span");
-  waveChip.className = "mc-chip";
-  const homeChip = doc.createElement("span");
-  homeChip.className = "mc-chip";
-  const techBtn = doc.createElement("button");
-  techBtn.type = "button";
-  techBtn.className = "mc-btn";
-  techBtn.textContent = "🔧";
-  techBtn.setAttribute("aria-label", "打开科技面板");
+  waveChip.className = "mcr-chip";
+  const jarChips: HTMLElement[] = [];
+  for (let s = 0; s < state.homes.length; s++) {
+    const chip = doc.createElement("span");
+    chip.className = "mcr-chip";
+    jarChips.push(chip);
+  }
+  const growthChips: HTMLElement[] = [];
+  for (let i = 0; i < players; i++) {
+    const chip = doc.createElement("span");
+    chip.className = `mcr-chip mcr-chip-p${i + 1}`;
+    growthChips.push(chip);
+  }
   const pauseBtn = doc.createElement("button");
   pauseBtn.type = "button";
-  pauseBtn.className = "mc-btn";
+  pauseBtn.className = "mcr-hudbtn";
   pauseBtn.textContent = "⏸";
   pauseBtn.setAttribute("aria-label", "暂停");
-  hud.append(paintChip, homeChip, waveChip, techBtn, pauseBtn);
+  hud.append(waveChip, ...jarChips, ...growthChips, pauseBtn);
 
-  const shop = doc.createElement("div");
-  shop.className = "mc-shop";
-
+  /* ---- 战场 ---- */
+  const stage = doc.createElement("div");
+  stage.className = "mcr-stage";
   const canvas = doc.createElement("canvas");
-  canvas.className = "mc-canvas";
-  canvas.width = SCENE_W;
-  canvas.height = SCENE_H;
+  canvas.className = "mcr-canvas";
+  canvas.width = ARENA_W * 2;
+  canvas.height = ARENA_H * 2;
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", `${opts.title}:五条小路上的守家战场`);
+  canvas.setAttribute("aria-label", `${opts.title}:家在正中间,小怪物从四面八方围上来`);
+  const say = doc.createElement("div");
+  say.className = "mcr-say";
+  say.hidden = true;
+  stage.append(canvas, say);
 
-  const field = doc.createElement("div");
-  field.className = "mc-field";
-  field.appendChild(canvas);
-
+  /* ---- 摇杆左下、技能钮右下 ---- */
   const pads = doc.createElement("div");
-  pads.className = "mc-pads";
+  pads.className = "mcr-pads";
   const tip = doc.createElement("div");
-  tip.className = "mc-tip";
+  tip.className = "mcr-tip";
   tip.textContent = opts.hint;
 
-  wrap.append(hud, shop, field, pads, tip);
+  wrap.append(hud, stage, pads, tip);
   host.appendChild(wrap);
-
-  // 画面缩得越小,画布上那两行字要写得越大,不然手机上糊成一片看不清
-  let textScale = 1;
-
-  // 战场按可用宽度和屏幕高度一起缩:手机上宁可画面小一点,也要把方向盘留在屏内
-  function layout(): void {
-    const view = doc.defaultView ?? window;
-    const size = fieldSize(field.clientWidth || wrap.clientWidth, view.innerWidth, view.innerHeight);
-    canvas.style.width = `${size.w}px`;
-    canvas.style.height = `${size.h}px`;
-    textScale = clamp(SCENE_W / size.w, 1, 2.4);
-  }
 
   const c2d = canvas.getContext("2d");
 
-  /* ---------------- 状态 ---------------- */
+  /* ---------------- 输入 ---------------- */
 
-  const monsters: Monster[] = [];
-  const towers = new Map<string, Tower>();
-  const shots: Shot[] = [];
-  const puffs: Puff[] = [];
-  const tech: TechState = emptyTech();
-  const leaks = new Array<number>(LANES).fill(0);
-  const heroes: Hero[] = [];
-  for (let i = 0; i < opts.heroes; i++) {
-    heroes.push({ lane: i === 0 ? 1 : 3, x: 1.2, cd: 0, swing: 0 });
-  }
+  const inputs: ArenaInput[] = [];
+  for (let i = 0; i < players; i++) inputs.push({ mx: 0, my: 0, fire: false });
+  const keyDir: Array<{ up: boolean; down: boolean; left: boolean; right: boolean }> = [
+    { up: false, down: false, left: false, right: false },
+    { up: false, down: false, left: false, right: false },
+  ];
+  const keyFire = [false, false];
+  const stickDir: Array<{ x: number; y: number }> = [
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+  ];
+  const padFire = [false, false];
 
-  let paint = def.startPaint;
-  let hearts = def.homeHp;
-  let popped = 0;
-  let elapsed = 0;
-  let passive = paintInterval(0);
-  let shake = 0;
-  // 一开始什么都没选:点画面就是让主角跑过去甩一发,想摆东西再去点上面的建筑按钮
-  let selected: TowerKind | null = null;
+  const KEYS: Array<Record<string, "up" | "down" | "left" | "right">> = [
+    { w: "up", W: "up", s: "down", S: "down", a: "left", A: "left", d: "right", D: "right" },
+    { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" },
+  ];
+  const FIRE_KEYS = [new Set(["f", "F", " ", "Spacebar"]), new Set(["l", "L", "Enter"])];
 
-  let waveIdx = 0;
-  let wavesCleared = 0;
-  let phase: "prep" | "wave" = "prep";
-  let phaseTime = INTERMISSION_SECONDS;
-  let waveTime = 0;
-  let spawnIdx = 0;
-  let currentWave: WaveDef | null = null;
-  let versusLeft = opts.plan.kind === "versus" ? opts.plan.seconds : 0;
-
-  // 非对称对战:指挥官的能量、选中的兵与车道
-  let energy = 8;
-  let cmdLane = 2;
-  let cmdPick = 0;
-
-  let paused = false;
-  let finished = false;
-  let destroyed = false;
-  let raf = 0;
-  let last = 0;
-  let layer: HTMLElement | null = null;
-  let lastPopSound = -1;
-  let flashMsg = "";
-  let flashLeft = 0;
-
-  const waveTotal = opts.plan.kind === "fixed" ? opts.plan.waves.length : 0;
-
-  function key(col: number, lane: number): string {
-    return `${col},${lane}`;
-  }
-
-  function sfx(name: SoundName): void {
-    if (!destroyed) opts.sfx(name);
-  }
-
-  /** 同一瞬间糊掉一堆小怪物时只响一次,免得吵。 */
-  function popSound(): void {
-    if (elapsed - lastPopSound < 0.12) return;
-    lastPopSound = elapsed;
-    sfx("pop");
-  }
-
-  function say(msg: string): void {
-    flashMsg = msg;
-    flashLeft = 2.4;
-  }
-
-  function gain(n: number): void {
-    paint = clampPaint(paint + n, paintCap(tech.paint));
-  }
-
-  function nextWave(n: number): WaveDef {
-    if (opts.plan.kind === "fixed") return opts.plan.waves[Math.min(n - 1, opts.plan.waves.length - 1)];
-    if (opts.plan.kind === "endless") return opts.plan.make(n);
-    return { spawns: [], tail: 0 };
-  }
-
-  function spawn(kind: MonsterKind, lane: number, levelIdx: number): void {
-    const spec = MONSTER_INFO[kind];
-    const hp = monsterHp(kind, levelIdx);
-    monsters.push({
-      kind,
-      x: SPAWN_X,
-      lane,
-      hp,
-      maxHp: hp,
-      armor: monsterArmor(kind, levelIdx),
-      base: spec.speed,
-      frost: 0,
-      chewCd: chewInterval(!!spec.boss),
-      jumped: false,
-      flying: !!spec.flying,
-      boss: !!spec.boss,
-      phase: Math.random() * 6.283,
-      flash: 0,
-    });
-    if (spec.boss) {
-      sfx("meow");
-      say(`${spec.name}来啦!把它糊成${spec.becomes}!`);
-    }
-  }
-
-  /* ---------------- 建造 ---------------- */
-
-  function buildAt(kind: TowerKind, col: number, lane: number): boolean {
-    if (finished || paused) return false;
-    if (col < 0 || col >= BUILD_COLS || lane < 0 || lane >= LANES) return false;
-    const k = key(col, lane);
-    if (blocked.has(k)) {
-      say("这里有花坛,换个格子摆吧。");
-      return false;
-    }
-    const there = towers.get(k);
-    if (there) {
-      // 点自己已经摆好的建筑 = 收起来,退一半颜料
-      towers.delete(k);
-      gain(towerRefund(there.kind));
-      sfx("tap");
-      say(`收起${TOWER_INFO[there.kind].name},退回 ${towerRefund(there.kind)} 罐颜料。`);
-      return true;
-    }
-    const cost = TOWER_INFO[kind].cost;
-    if (paint < cost) {
-      say(`颜料还差一点,${TOWER_INFO[kind].name}要 ${cost} 罐。`);
-      sfx("oops");
-      return false;
-    }
-    paint -= cost;
-    towers.set(k, {
-      kind,
-      col,
-      lane,
-      hp: TOWER_INFO[kind].hp,
-      maxHp: TOWER_INFO[kind].hp,
-      cd: 0.4,
-      prod: jarInterval(tech.paint),
-      born: elapsed,
-    });
-    sfx("tap");
-    return true;
-  }
-
-  function buyTech(line: TechLine): void {
-    if (tech[line] >= TECH_MAX) return;
-    const cost = techCost(line, tech[line]);
-    if (paint < cost) {
-      sfx("oops");
-      say(`${TECH_INFO[line].name}要 ${cost} 罐颜料,再攒攒。`);
+  function onKeyDown(e: KeyboardEvent): void {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      togglePause();
       return;
     }
-    paint -= cost;
-    tech[line]++;
-    sfx("coin");
-    say(`${TECH_INFO[line].emoji} ${TECH_INFO[line].name}升到 ${tech[line]} 级!`);
-    renderTech();
-  }
-
-  /* ---------------- 商店按钮 ---------------- */
-
-  const shopButtons: Array<{ kind: TowerKind; btn: HTMLButtonElement }> = [];
-  for (const kind of unlocked) {
-    const btn = doc.createElement("button");
-    btn.type = "button";
-    btn.className = "mc-item";
-    btn.innerHTML = `<span>${TOWER_EMOJI[kind]} ${TOWER_INFO[kind].name}</span>
-      <span class="mc-item-cost">🎨${TOWER_INFO[kind].cost}</span>`;
-    btn.title = TOWER_INFO[kind].desc;
-    btn.setAttribute("aria-label", `选 ${TOWER_INFO[kind].name},要 ${TOWER_INFO[kind].cost} 罐颜料。${TOWER_INFO[kind].desc}`);
-    btn.addEventListener("click", () => {
-      sfx("tap");
-      selected = selected === kind ? null : kind;
-      refreshShop();
-    });
-    shop.appendChild(btn);
-    shopButtons.push({ kind, btn });
-  }
-
-  function refreshShop(): void {
-    for (const { kind, btn } of shopButtons) {
-      btn.setAttribute("aria-pressed", selected === kind ? "true" : "false");
-      btn.disabled = paint < TOWER_INFO[kind].cost && selected !== kind;
+    for (let p = 0; p < 2; p++) {
+      const slot = players === 1 ? 0 : p;
+      const dir = KEYS[p][e.key];
+      if (dir) {
+        keyDir[slot][dir] = true;
+        e.preventDefault();
+        return;
+      }
+      if (FIRE_KEYS[p].has(e.key)) {
+        keyFire[slot] = true;
+        e.preventDefault();
+        return;
+      }
     }
   }
 
-  /* ---------------- 覆盖层:科技 / 暂停 / 结算 ---------------- */
+  function onKeyUp(e: KeyboardEvent): void {
+    for (let p = 0; p < 2; p++) {
+      const slot = players === 1 ? 0 : p;
+      const dir = KEYS[p][e.key];
+      if (dir) keyDir[slot][dir] = false;
+      if (FIRE_KEYS[p].has(e.key)) keyFire[slot] = false;
+    }
+  }
+
+  view.addEventListener("keydown", onKeyDown);
+  view.addEventListener("keyup", onKeyUp);
+
+  /**
+   * 一套「摇杆 + 技能钮」。单人时摇杆钉在左下角、技能钮钉在右下角(规格第八节);
+   * 双人时两人各占一边,自己的摇杆永远在自己那一侧的外角上。
+   */
+  function buildPad(player: number, split: boolean): void {
+    const pad = doc.createElement("div");
+    pad.className = `mcr-pad${player === 1 ? " mcr-pad-r" : ""}`;
+    const stick = doc.createElement("div");
+    stick.className = "mcr-stick";
+    stick.setAttribute("role", "button");
+    stick.setAttribute("aria-label", `${P_NAME[player]}的摇杆,按住拖着走`);
+    stick.tabIndex = 0;
+    const knob = doc.createElement("div");
+    knob.className = "mcr-knob";
+    knob.style.background = player === 1 ? "#e5eeff" : "#fff";
+    stick.appendChild(knob);
+
+    const fire = doc.createElement("button");
+    fire.type = "button";
+    fire.className = `mcr-fire${player === 1 ? " mcr-fire-p2" : ""}`;
+    fire.textContent = "🎨";
+    fire.setAttribute("aria-label", `${P_NAME[player]}甩颜料弹`);
+
+    let stickId: number | null = null;
+    const setKnob = (dx: number, dy: number): void => {
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+    const moveStick = (e: PointerEvent): void => {
+      const rect = stick.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const rad = rect.width / 2;
+      let dx = e.clientX - cx;
+      let dy = e.clientY - cy;
+      const d = Math.hypot(dx, dy);
+      const max = Math.max(1, rad - 12);
+      if (d > max) {
+        dx = (dx / d) * max;
+        dy = (dy / d) * max;
+      }
+      stickDir[player] = { x: dx / max, y: dy / max };
+      setKnob(dx, dy);
+    };
+    const endStick = (): void => {
+      stickId = null;
+      stickDir[player] = { x: 0, y: 0 };
+      setKnob(0, 0);
+    };
+    stick.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      stickId = e.pointerId;
+      stick.setPointerCapture?.(e.pointerId);
+      moveStick(e);
+    });
+    stick.addEventListener("pointermove", (e) => {
+      if (stickId !== e.pointerId) return;
+      e.preventDefault();
+      moveStick(e);
+    });
+    stick.addEventListener("pointerup", endStick);
+    stick.addEventListener("pointercancel", endStick);
+    stick.addEventListener("lostpointercapture", endStick);
+
+    const fireOn = (e: Event): void => {
+      e.preventDefault();
+      padFire[player] = true;
+    };
+    const fireOff = (): void => {
+      padFire[player] = false;
+    };
+    fire.addEventListener("pointerdown", fireOn);
+    fire.addEventListener("pointerup", fireOff);
+    fire.addEventListener("pointerleave", fireOff);
+    fire.addEventListener("pointercancel", fireOff);
+    // 键盘 / 读屏用户:回车空格触发 click,给一发单点
+    fire.addEventListener("click", () => {
+      padFire[player] = true;
+      clickFireLeft[player] = 0.12;
+    });
+
+    if (split) {
+      // 单人:摇杆真的贴左下,技能钮真的贴右下,中间那块留给键盘说明
+      const note = doc.createElement("div");
+      note.className = "mcr-padname";
+      note.style.color = "#7c6f9b";
+      note.textContent = "键盘 W A S D 走位 · F 甩";
+      pads.append(stick, note, fire);
+      return;
+    }
+    pad.append(stick, fire);
+    pads.appendChild(pad);
+  }
+
+  const clickFireLeft = [0, 0];
+  buildPad(0, players === 1);
+  if (players > 1) buildPad(1, false);
+
+  function collectInputs(dt: number): void {
+    for (let i = 0; i < players; i++) {
+      const k = keyDir[i];
+      let mx = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+      let my = (k.down ? 1 : 0) - (k.up ? 1 : 0);
+      const s = stickDir[i];
+      if (Math.hypot(s.x, s.y) > 0.12) {
+        mx = s.x;
+        my = s.y;
+      }
+      if (clickFireLeft[i] > 0) {
+        clickFireLeft[i] -= dt;
+        if (clickFireLeft[i] <= 0) padFire[i] = false;
+      }
+      inputs[i] = { mx, my, fire: keyFire[i] || padFire[i] };
+    }
+  }
+
+  /* ---------------- 覆盖层:三选一 / 暂停 ---------------- */
+
+  let layer: HTMLElement | null = null;
+  let paused = false;
 
   function closeLayer(): void {
     layer?.remove();
@@ -882,778 +757,389 @@ function createField(host: HTMLElement, opts: FieldOptions): { destroy: () => vo
   function openLayer(): HTMLElement {
     closeLayer();
     const el = doc.createElement("div");
-    el.className = "mc-layer";
+    el.className = "mcr-layer";
     wrap.appendChild(el);
     layer = el;
     return el;
   }
 
-  let techOpen = false;
+  let draftShownFor = -1;
 
-  function renderTech(): void {
-    if (!techOpen || !layer) return;
-    const box = layer.querySelector(".mc-tech");
-    if (!(box instanceof HTMLElement)) return;
-    box.innerHTML = "";
-    for (const line of TECH_LINES) {
-      const lv = tech[line];
-      const cost = techCost(line, lv);
+  /** 三选一面板:图标 + 名字 + 一句话,孩子能看懂;竖屏可滚动,按钮不出屏。 */
+  function renderDraft(): void {
+    const draft = state.drafts[0];
+    if (!draft) {
+      draftShownFor = -1;
+      closeLayer();
+      return;
+    }
+    draftShownFor = draft.hero;
+    const el = openLayer();
+    const title = doc.createElement("div");
+    title.className = "mcr-layer-t";
+    title.textContent = players > 1 ? `${draftTitle(state.draftCount)} · ${P_NAME[draft.hero]}` : draftTitle(state.draftCount);
+    const sub = doc.createElement("div");
+    sub.className = "mcr-layer-s";
+    sub.textContent = "挑一样带上场,选好就继续开打。";
+    const cards = doc.createElement("div");
+    cards.className = "mcr-cards";
+    const growth: GrowthState = state.heroes[draft.hero].growth;
+    for (const card of draft.cards) {
       const btn = doc.createElement("button");
       btn.type = "button";
-      btn.className = "mc-techbtn";
-      const bar = "★".repeat(lv) + "☆".repeat(TECH_MAX - lv);
-      btn.innerHTML = `<span>${TECH_INFO[line].emoji} ${TECH_INFO[line].name}</span>
-        <span class="mc-techbar">${bar}</span>
-        <span class="mc-item-cost">${lv >= TECH_MAX ? "已满级" : `升级 🎨${cost}`}</span>`;
-      btn.title = TECH_INFO[line].desc;
-      btn.disabled = lv >= TECH_MAX || paint < cost;
-      btn.addEventListener("click", () => buyTech(line));
-      box.appendChild(btn);
+      btn.className = "mcr-card";
+      const have = growth[card.id] ?? 0;
+      btn.innerHTML = `<span class="mcr-card-emoji">${card.emoji}</span>
+        <span class="mcr-card-name">${card.name}</span>
+        <span class="mcr-card-desc">${card.desc}</span>
+        <span class="mcr-card-lv">${have > 0 ? `已经有 ${have} 层,再加一层` : "第一次拿到"}</span>`;
+      btn.setAttribute("aria-label", `${card.name}:${card.desc}`);
+      btn.addEventListener("click", () => {
+        opts.sfx("coin");
+        chooseGrowth(state, draft.hero, card.id);
+        refreshHud();
+        renderDraft();
+      });
+      cards.appendChild(btn);
     }
-    const info = layer.querySelector(".mc-layer-s");
-    if (info instanceof HTMLElement) {
-      info.textContent = `手里有 ${paint} 罐颜料。颜料线攒得更快,炮台线打得更浓,主角线跑得更快甩得更狠。`;
-    }
-  }
-
-  function openTech(): void {
-    if (finished) return;
-    techOpen = true;
-    paused = true;
-    const el = openLayer();
-    el.innerHTML = `<div class="mc-layer-t">🔧 波次之间,整理一下</div>
-      <div class="mc-layer-s"></div><div class="mc-tech"></div>`;
-    const close = doc.createElement("button");
-    close.type = "button";
-    close.className = "mc-open";
-    close.textContent = "准备好啦 ▶";
-    close.addEventListener("click", () => {
-      sfx("tap");
-      techOpen = false;
-      paused = false;
-      closeLayer();
-      // 手动关掉科技面板 = 提前开打,备战时间直接跳过
-      if (phase === "prep") phaseTime = Math.min(phaseTime, 0.4);
-    });
-    el.appendChild(close);
-    renderTech();
-    close.focus();
+    el.append(title, sub, cards);
+    const first = cards.querySelector(".mcr-card");
+    if (first instanceof HTMLElement) first.focus?.();
   }
 
   function openPause(): void {
-    if (finished) return;
     paused = true;
-    techOpen = false;
     const el = openLayer();
-    el.innerHTML = `<div class="mc-layer-t">⏸ 先歇一会儿</div>
-      <div class="mc-layer-s">小怪物们在原地等你,喝口水再继续。</div>`;
+    const t = doc.createElement("div");
+    t.className = "mcr-layer-t";
+    t.textContent = "⏸ 先歇一会儿";
+    const s = doc.createElement("div");
+    s.className = "mcr-layer-s";
+    s.textContent = "小怪物在原地等你,喝口水再继续。";
     const go = doc.createElement("button");
     go.type = "button";
-    go.className = "mc-open";
+    go.className = "mcr-btn";
     go.textContent = "继续守家 ▶";
     go.addEventListener("click", () => {
-      sfx("tap");
+      opts.sfx("tap");
       paused = false;
       closeLayer();
+      if (state.drafts.length > 0) renderDraft();
     });
-    el.appendChild(go);
-    go.focus();
+    el.append(t, s, go);
+    go.focus?.();
   }
 
   function togglePause(): void {
-    if (finished) return;
+    if (state.phase === "over") return;
     if (paused) {
       paused = false;
-      techOpen = false;
       closeLayer();
-    } else {
+      if (state.drafts.length > 0) renderDraft();
+    } else if (state.drafts.length === 0) {
       openPause();
     }
   }
 
-  function finish(win: boolean, quit = false): void {
-    if (finished) return;
-    finished = true;
-    paused = true;
-    closeLayer();
-    opts.onDone({
-      win,
-      hearts: Math.max(0, hearts),
-      homeHp: def.homeHp,
-      wavesCleared,
-      waveTotal,
-      popped,
-      leaks: leaks.slice(),
-      elapsed,
-      quit,
-    });
+  pauseBtn.addEventListener("click", () => {
+    opts.sfx("tap");
+    togglePause();
+  });
+
+  /* ---------------- 事件 → 音效 + 飘字 ---------------- */
+
+  const soundAt = new Map<string, number>();
+  let sayLeft = 0;
+  let shake = 0;
+
+  function playThrottled(name: SoundName, key: string, gap: number): void {
+    const now = state.elapsed;
+    const last = soundAt.get(key) ?? -99;
+    if (now - last < gap) return;
+    soundAt.set(key, now);
+    opts.sfx(name);
   }
 
-  /* ---------------- 输入 ---------------- */
-
-  const held: Array<Record<string, boolean>> = [
-    { up: false, down: false, left: false, right: false },
-    { up: false, down: false, left: false, right: false },
-  ];
-
-  const KEYS: Array<Record<string, string>> = [
-    { w: "up", W: "up", s: "down", S: "down", a: "left", A: "left", d: "right", D: "right" },
-    { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" },
-  ];
-  const FIRE_KEYS = [new Set(["f", "F"]), new Set(["l", "L"])];
-  const BUILD_KEYS = [new Set(["g", "G"]), new Set(["k", "K"])];
-
-  function heroFire(i: number): void {
-    const h = heroes[i];
-    if (!h || paused || finished) return;
-    if (h.cd > 0) return;
-    h.cd = heroReload(tech.hero);
-    h.swing = 0.16;
-    shots.push({
-      x: h.x + 0.25,
-      lane: h.lane,
-      dmg: heroDamage(tech.hero),
-      proj: "paint",
-      slows: false,
-      speed: HERO_BULLET_SPEED,
-    });
-  }
-
-  /** 在主角脚下这一格摆当前选中的建筑(键盘玩家的建造方式)。 */
-  function heroBuild(i: number): void {
-    const h = heroes[i];
-    if (!h || !selected || paused || finished) return;
-    const col = Math.round(h.x) - 1 < 0 ? 0 : Math.min(BUILD_COLS - 1, Math.round(h.x) - 1);
-    if (buildAt(selected, col, h.lane)) refreshShop();
-  }
-
-  function commanderSend(): void {
-    if (paused || finished) return;
-    const deck = commanderDeck(elapsed);
-    const kind = deck[Math.min(cmdPick, deck.length - 1)];
-    if (!canCommand(energy, kind)) {
-      sfx("oops");
-      return;
-    }
-    energy -= commanderCost(kind);
-    spawn(kind, cmdLane, opts.levelIdx);
-    sfx("jump");
-  }
-
-  function onKeyDown(e: KeyboardEvent): void {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      togglePause();
-      return;
-    }
-    if (paused || finished) return;
-    for (let p = 0; p < 2; p++) {
-      const dir = KEYS[p][e.key];
-      const isHero = p < heroes.length;
-      const isCommander = p === 1 && !!opts.commander;
-      if (dir && (isHero || isCommander)) {
-        held[p][dir] = true;
-        if (isCommander && !e.repeat) {
-          if (dir === "up") cmdLane = clamp(cmdLane - 1, 0, LANES - 1);
-          if (dir === "down") cmdLane = clamp(cmdLane + 1, 0, LANES - 1);
-          if (dir === "left" || dir === "right") {
-            const deck = commanderDeck(elapsed);
-            cmdPick = (cmdPick + (dir === "right" ? 1 : deck.length - 1)) % deck.length;
-          }
-        }
-        e.preventDefault();
-        return;
+  function consume(events: ArenaEvent[]): void {
+    for (const e of events) {
+      switch (e.type) {
+        case "pop":
+          playThrottled("pop", "pop", 0.12);
+          break;
+        case "block":
+          playThrottled("tap", "block", 0.35);
+          break;
+        case "shieldPop":
+          playThrottled("jump", "shield", 0.2);
+          break;
+        case "spin":
+          playThrottled("oops", "spin", 0.4);
+          shake = reduced ? 0 : 0.32;
+          break;
+        case "steal":
+          opts.sfx("oops");
+          shake = reduced ? 0 : 0.4;
+          break;
+        case "jar":
+          opts.sfx("coin");
+          break;
+        case "boss":
+          opts.sfx("meow");
+          break;
+        case "wave":
+          playThrottled("coin", "wave", 0.5);
+          break;
+        default:
+          break;
       }
-      if (FIRE_KEYS[p].has(e.key)) {
-        if (!e.repeat) {
-          if (isCommander) commanderSend();
-          else if (isHero) heroFire(p);
-        }
-        e.preventDefault();
-        return;
-      }
-      if (BUILD_KEYS[p].has(e.key)) {
-        if (!e.repeat && isHero) heroBuild(p);
-        e.preventDefault();
-        return;
-      }
-    }
-    // 单人时两套方向键都归朵朵用,谁顺手用谁
-    if (heroes.length === 1 && !opts.commander) {
-      const dir = KEYS[1][e.key];
-      if (dir) {
-        held[0][dir] = true;
-        e.preventDefault();
-      }
-    }
-  }
-
-  function onKeyUp(e: KeyboardEvent): void {
-    for (let p = 0; p < 2; p++) {
-      const dir = KEYS[p][e.key];
-      if (!dir) continue;
-      held[p][dir] = false;
-      if (heroes.length === 1 && p === 1) held[0][dir] = false;
-    }
-  }
-
-  /**
-   * 手机上的「半屏摇杆」:手指按在画面左半边就牵着朵朵走,右半边牵着星星走
-   * (只有一个人时整块画面都归朵朵)。手指按住不放会一直甩颜料弹,松手就停。
-   */
-  const dragging = new Map<number, number>();
-  const follow: Array<{ x: number; lane: number } | null> = [null, null];
-
-  function scenePoint(e: PointerEvent): { x: number; y: number } {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) / rect.width) * SCENE_W,
-      y: ((e.clientY - rect.top) / rect.height) * SCENE_H,
-    };
-  }
-
-  function onPointerDown(e: PointerEvent): void {
-    if (paused || finished) return;
-    e.preventDefault();
-    const p = scenePoint(e);
-    const lane = clamp(Math.floor((p.y - FIELD_TOP) / LANE_H), 0, LANES - 1);
-    const col = Math.round((p.x - PAD_L) / CELL_W) - 1;
-    if (selected && col >= 0 && col < BUILD_COLS) {
-      if (buildAt(selected, col, lane)) refreshShop();
-      return;
-    }
-    const player = heroes.length > 1 && p.x > SCENE_W / 2 ? 1 : 0;
-    const hero = heroes[player];
-    if (!hero) return;
-    dragging.set(e.pointerId, player);
-    follow[player] = { x: clamp(p.x / CELL_W - PAD_L / CELL_W, HERO_MIN_X, HERO_MAX_X), lane };
-    canvas.setPointerCapture?.(e.pointerId);
-    // 手指一落下就换到那条道:点哪条道就打哪条道,不然点了半天还在原地
-    hero.lane = lane;
-    heroFire(player);
-  }
-
-  function onPointerMove(e: PointerEvent): void {
-    const player = dragging.get(e.pointerId);
-    if (player === undefined || paused || finished) return;
-    e.preventDefault();
-    const p = scenePoint(e);
-    follow[player] = {
-      x: clamp(p.x / CELL_W - PAD_L / CELL_W, HERO_MIN_X, HERO_MAX_X),
-      lane: clamp(Math.floor((p.y - FIELD_TOP) / LANE_H), 0, LANES - 1),
-    };
-  }
-
-  function onPointerUp(e: PointerEvent): void {
-    const player = dragging.get(e.pointerId);
-    if (player === undefined) return;
-    dragging.delete(e.pointerId);
-    follow[player] = null;
-  }
-
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerUp);
-  const win = doc.defaultView ?? window;
-  win.addEventListener("keydown", onKeyDown);
-  win.addEventListener("keyup", onKeyUp);
-
-  /* ---------------- 触屏方向盘:左边朵朵,右边星星 ---------------- */
-
-  function buildPad(player: number, commanderPad: boolean): void {
-    const pad = doc.createElement("div");
-    pad.className = "mc-pad";
-    const title = doc.createElement("div");
-    title.className = "mc-pad-t";
-    title.style.color = P_COLOR[player];
-    title.textContent = commanderPad
-      ? "星星(指挥) ↑←↓→ / L 出兵"
-      : player === 0
-        ? "朵朵 W A S D / F 甩 / G 摆"
-        : "星星 ↑←↓→ / L 甩 / K 摆";
-    pad.appendChild(title);
-
-    const mk = (label: string, aria: string, cls = ""): HTMLButtonElement => {
-      const b = doc.createElement("button");
-      b.type = "button";
-      b.className = `mc-btn${cls}`;
-      b.textContent = label;
-      b.setAttribute("aria-label", `${P_NAME[player]}${aria}`);
-      return b;
-    };
-    const hold = (b: HTMLButtonElement, dir: "up" | "down" | "left" | "right"): void => {
-      const on = (ev: Event): void => {
-        ev.preventDefault();
-        held[player][dir] = true;
-        if (commanderPad) {
-          if (dir === "up") cmdLane = clamp(cmdLane - 1, 0, LANES - 1);
-          if (dir === "down") cmdLane = clamp(cmdLane + 1, 0, LANES - 1);
-          if (dir === "left" || dir === "right") {
-            const deck = commanderDeck(elapsed);
-            cmdPick = (cmdPick + (dir === "right" ? 1 : deck.length - 1)) % deck.length;
-          }
-        }
-      };
-      const off = (): void => {
-        held[player][dir] = false;
-      };
-      b.addEventListener("pointerdown", on);
-      b.addEventListener("pointerup", off);
-      b.addEventListener("pointerleave", off);
-      b.addEventListener("pointercancel", off);
-    };
-
-    const blank = (): HTMLElement => doc.createElement("span");
-    const up = mk("▲", "向上");
-    const leftB = mk("◀", "向左");
-    const rightB = mk("▶", "向右");
-    const down = mk("▼", "向下");
-    const fire = mk(commanderPad ? "🚀" : "🎨", commanderPad ? "派一只小怪物" : "甩颜料弹", " mc-btn-fire");
-    hold(up, "up");
-    hold(leftB, "left");
-    hold(rightB, "right");
-    hold(down, "down");
-    fire.addEventListener("click", () => (commanderPad ? commanderSend() : heroFire(player)));
-    // 摆建筑那颗塞进方向盘左下角的空格里,省下一整行高度给手机竖屏
-    let corner: HTMLElement = blank();
-    if (!commanderPad) {
-      const b = mk("🔨", "在脚下摆建筑", " mc-btn-build");
-      b.addEventListener("click", () => heroBuild(player));
-      corner = b;
-    }
-    pad.append(blank(), up, blank(), leftB, fire, rightB, corner, down, blank());
-    pads.appendChild(pad);
-  }
-
-  for (let i = 0; i < heroes.length; i++) buildPad(i, false);
-  if (opts.commander) buildPad(1, true);
-
-  /* ---------------- 每帧推进 ---------------- */
-
-  function stepWaves(dt: number): void {
-    if (opts.plan.kind === "versus") {
-      versusLeft -= dt;
-      energy = Math.min(COMMANDER_ENERGY_CAP, energy + commanderRegen(elapsed) * dt);
-      const who = versusWinner(hearts, versusLeft);
-      if (who) finish(who === "defender");
-      return;
-    }
-    if (phase === "prep") {
-      phaseTime -= dt;
-      if (phaseTime <= 0) {
-        phase = "wave";
-        waveTime = 0;
-        spawnIdx = 0;
-        currentWave = nextWave(waveIdx + 1);
-        say(`第 ${waveIdx + 1} 波来啦!`);
-      }
-      return;
-    }
-    waveTime += dt;
-    const wave = currentWave;
-    if (!wave) return;
-    while (spawnIdx < wave.spawns.length && wave.spawns[spawnIdx].time <= waveTime) {
-      const s = wave.spawns[spawnIdx++];
-      spawn(s.kind, s.lane, idxFor(waveIdx));
-    }
-    if (spawnIdx >= wave.spawns.length && monsters.length === 0) {
-      wavesCleared = waveIdx + 1;
-      if (opts.plan.kind === "fixed" && wavesCleared >= opts.plan.waves.length) {
-        finish(true);
-        return;
-      }
-      waveIdx++;
-      phase = "prep";
-      phaseTime = INTERMISSION_SECONDS;
-      currentWave = null;
-      sfx("coin");
-      // 备战面板自动弹出来:这就是「波次之间管资源」的时刻
-      openTech();
-    }
-  }
-
-  function stepEconomy(dt: number): void {
-    const boost = phase === "prep" && !versus ? INTERMISSION_PAINT_BOOST : 1;
-    passive -= dt * boost;
-    if (passive <= 0) {
-      passive += paintInterval(tech.paint);
-      gain(1);
-    }
-    for (const t of towers.values()) {
-      if (t.kind !== "jar") continue;
-      t.prod -= dt * boost;
-      if (t.prod <= 0) {
-        t.prod += jarInterval(tech.paint);
-        gain(TOWER_INFO.jar.produce ?? 1);
-      }
-    }
-  }
-
-  function stepTowers(dt: number): void {
-    for (const t of [...towers.values()]) {
-      const spec = TOWER_INFO[t.kind];
-      const blast = spec.blast;
-      if (blast) {
-        const cx = colX(t.col);
-        const hit = monsters.some(
-          (m) => !m.flying && m.lane === t.lane && Math.abs(m.x - cx) <= blast.trigger
-        );
-        if (!hit) continue;
-        const dmg = blastDamage(tech.tower);
-        for (const m of monsters) {
-          if (m.flying || m.lane !== t.lane || Math.abs(m.x - cx) > blast.range) continue;
-          const r = applyHit(m, dmg);
-          m.hp = r.hp;
-          m.armor = r.armor;
-          m.flash = 0.18;
-        }
-        towers.delete(key(t.col, t.lane));
-        puffs.push({ x: px(cx), y: py(t.lane), age: 0, emoji: "🍿" });
-        sfx("pop");
-        continue;
-      }
-      if (!spec.dmg) continue;
-      t.cd -= dt;
-      if (t.cd > 0) continue;
-      const proj: ProjectileKind = t.kind === "frost" ? "ice" : t.kind === "beam" ? "beam" : "bubble";
-      const cx = colX(t.col);
-      if (!monsters.some((m) => m.lane === t.lane && m.x >= cx - 0.2 && canHit(proj, m.flying))) continue;
-      t.cd = spec.cd ?? 1;
-      shots.push({
-        x: cx,
-        lane: t.lane,
-        dmg: towerDamage(t.kind, tech.tower),
-        proj,
-        slows: !!spec.slows,
-        speed: 7,
-      });
-    }
-  }
-
-  function stepHeroes(dt: number): void {
-    for (let i = 0; i < heroes.length; i++) {
-      const h = heroes[i];
-      const k = held[i];
-      const sp = heroSpeed(tech.hero);
-      if (k.up) h.lane = clamp(h.lane - sp * 0.42 * dt, 0, LANES - 1);
-      if (k.down) h.lane = clamp(h.lane + sp * 0.42 * dt, 0, LANES - 1);
-      if (k.left) h.x = clamp(h.x - sp * 0.5 * dt, HERO_MIN_X, HERO_MAX_X);
-      if (k.right) h.x = clamp(h.x + sp * 0.5 * dt, HERO_MIN_X, HERO_MAX_X);
-
-      // 手指牵着走:主角朝着手指的位置跑,跑到了就一直甩颜料弹
-      const target = follow[i];
-      if (target) {
-        const stepLane = sp * 0.55 * dt;
-        const dl = target.lane - h.lane;
-        h.lane = Math.abs(dl) <= stepLane ? target.lane : h.lane + Math.sign(dl) * stepLane;
-        const stepX = sp * 0.7 * dt;
-        const dx = target.x - h.x;
-        h.x = Math.abs(dx) <= stepX ? target.x : h.x + Math.sign(dx) * stepX;
-      }
-
-      h.cd = Math.max(0, h.cd - dt);
-      h.swing = Math.max(0, h.swing - dt);
-      if (target && h.cd <= 0) heroFire(i);
-    }
-  }
-
-  function stepShots(dt: number): void {
-    for (let i = shots.length - 1; i >= 0; i--) {
-      const s = shots[i];
-      s.x += s.speed * dt;
-      if (s.x > SPAWN_X + 0.6) {
-        shots.splice(i, 1);
-        continue;
-      }
-      let target: Monster | null = null;
-      for (const m of monsters) {
-        if (Math.round(m.lane) !== Math.round(s.lane) || !canHit(s.proj, m.flying)) continue;
-        if (s.x >= m.x - 0.28 && (!target || m.x < target.x)) target = m;
-      }
-      if (!target) continue;
-      const r = applyHit(target, s.dmg);
-      target.hp = r.hp;
-      target.armor = r.armor;
-      target.flash = 0.16;
-      if (s.slows) target.frost = FROST_SECONDS;
-      shots.splice(i, 1);
-    }
-  }
-
-  function stepMonsters(dt: number): void {
-    for (const m of monsters) {
-      if (m.frost > 0) m.frost -= dt;
-      if (m.flash > 0) m.flash -= dt;
-      let wallAhead: Tower | null = null;
-      if (!m.flying) {
-        for (const t of towers.values()) {
-          if (t.lane !== Math.round(m.lane)) continue;
-          const cx = colX(t.col);
-          if (cx <= m.x + CHEW_REACH && (!wallAhead || cx > colX(wallAhead.col))) wallAhead = t;
-        }
-      }
-      if (wallAhead) {
-        if (willJump(m.kind, m.jumped)) {
-          m.jumped = true;
-          m.x = Math.max(HOME_X + 0.2, colX(wallAhead.col) - 0.8);
-          sfx("jump");
-          continue;
-        }
-        m.chewCd -= dt;
-        if (m.chewCd <= 0) {
-          m.chewCd += chewInterval(m.boss);
-          wallAhead.hp -= chewDamage(m.boss);
-          if (wallAhead.hp <= 0) {
-            towers.delete(key(wallAhead.col, wallAhead.lane));
-            puffs.push({ x: px(colX(wallAhead.col)), y: py(wallAhead.lane), age: 0, emoji: "💨" });
-          }
-        }
-        continue;
-      }
-      m.x -= monsterSpeed(m.base, m.frost) * dt;
-    }
-
-    for (let i = monsters.length - 1; i >= 0; i--) {
-      const m = monsters[i];
-      if (m.hp <= 0) {
-        monsters.splice(i, 1);
-        popped++;
-        gain(MONSTER_INFO[m.kind].reward);
-        puffs.push({ x: px(m.x), y: py(m.lane), age: 0, emoji: POP_EMOJI[m.kind] });
-        popSound();
-        const kids = MONSTER_INFO[m.kind].splits ?? 0;
-        for (let k = 0; k < kids; k++) {
-          const before = monsters.length;
-          spawn("doodle", m.lane, idxFor(waveIdx));
-          const baby = monsters[before];
-          if (baby) baby.x = Math.min(SPAWN_X, m.x + 0.3 + k * 0.4);
-        }
-        continue;
-      }
-      if (m.x <= HOME_X) {
-        monsters.splice(i, 1);
-        leaks[Math.round(m.lane)]++;
-        hearts--;
-        shake = 0.4;
-        sfx("oops");
-        say(`${MONSTER_INFO[m.kind].name}搬走了一罐颜料,还剩 ${Math.max(0, hearts)} 罐!`);
-        if (hearts <= 0) {
-          finish(false);
-          return;
-        }
+      if (e.text) {
+        say.textContent = e.text;
+        say.hidden = false;
+        sayLeft = 2.4;
       }
     }
   }
 
   /* ---------------- 渲染 ---------------- */
 
+  let scene = opts.scene % SCENE_COUNT;
+
   function render(): void {
     if (!c2d) return;
-    const t = elapsed;
-    c2d.clearRect(0, 0, SCENE_W, SCENE_H);
+    const t = state.elapsed;
+    c2d.setTransform(2, 0, 0, 2, 0, 0);
+    if (state.mode === "endless") scene = state.scene % SCENE_COUNT;
+    const sky = SCENE_SKY[scene] ?? SCENE_SKY[0];
+    const ground = SCENE_GROUND[scene] ?? SCENE_GROUND[0];
+
+    c2d.clearRect(0, 0, ARENA_W, ARENA_H);
     c2d.fillStyle = sky;
-    c2d.fillRect(0, 0, SCENE_W, SCENE_H);
+    c2d.fillRect(0, 0, ARENA_W, ARENA_H);
 
-    // 五条小路
-    for (let lane = 0; lane < LANES; lane++) {
-      c2d.fillStyle = lane % 2 === 0 ? ground : shade(ground, 0.97);
-      c2d.fillRect(0, FIELD_TOP + lane * LANE_H, SCENE_W, LANE_H);
-    }
-    c2d.strokeStyle = "rgba(255,255,255,.7)";
-    c2d.lineWidth = 2;
-    for (let lane = 1; lane < LANES; lane++) {
+    c2d.save();
+    if (shake > 0 && !reduced) c2d.translate(Math.sin(t * 46) * shake * 5, Math.cos(t * 39) * shake * 3);
+
+    // 地面:一圈一圈的草地纹路,看得出家在中间、怪从外面往里挤
+    const yard = versus ? 108 : 152;
+    for (const home of state.homes) {
+      c2d.fillStyle = ground;
       c2d.beginPath();
-      c2d.moveTo(0, FIELD_TOP + lane * LANE_H);
-      c2d.lineTo(SCENE_W, FIELD_TOP + lane * LANE_H);
+      c2d.arc(home.x, home.y, yard, 0, Math.PI * 2);
+      c2d.fill();
+      c2d.strokeStyle = shade(ground, 0.86);
+      c2d.lineWidth = 3;
+      c2d.beginPath();
+      c2d.arc(home.x, home.y, yard, 0, Math.PI * 2);
       c2d.stroke();
-    }
-
-    // 建造格的虚线,顺便标出摆不了东西的花坛
-    c2d.strokeStyle = "rgba(255,255,255,.55)";
-    c2d.lineWidth = 1.4;
-    for (let lane = 0; lane < LANES; lane++) {
-      for (let col = 0; col < BUILD_COLS; col++) {
-        const cx = px(colX(col));
-        const cy = py(lane);
-        if (blocked.has(key(col, lane))) {
-          c2d.fillStyle = "rgba(150,190,150,.35)";
-          roundRect(c2d, cx - 26, cy - 26, 52, 52, 10);
-          c2d.fill();
-          c2d.font = "20px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
-          c2d.textAlign = "center";
-          c2d.textBaseline = "middle";
-          c2d.fillStyle = "rgba(80,120,80,.6)";
-          c2d.fillText("🌷", cx, cy);
-          continue;
-        }
-        roundRect(c2d, cx - 26, cy - 26, 52, 52, 10);
+      c2d.strokeStyle = "rgba(255,255,255,.65)";
+      c2d.lineWidth = 1.6;
+      for (let r = 44; r < yard; r += 36) {
+        c2d.beginPath();
+        c2d.arc(home.x, home.y, r, 0, Math.PI * 2);
         c2d.stroke();
       }
     }
-
-    drawHome(c2d, hearts, def.homeHp, shake);
-    for (const tw of towers.values()) drawTower(c2d, tw, t);
-    for (const s of shots) drawShot(c2d, s);
-    for (const m of monsters) drawMonster(c2d, m, t);
-    for (let i = 0; i < heroes.length; i++) drawHero(c2d, heroes[i], i, t);
-    for (const p of puffs) drawPuff(c2d, p);
-
-    // 指挥官的准星:告诉星星现在会从哪条道派出什么
-    if (opts.commander) {
-      const deck = commanderDeck(elapsed);
-      const kind = deck[Math.min(cmdPick, deck.length - 1)];
-      const y = py(cmdLane);
-      c2d.strokeStyle = P_COLOR[1];
-      c2d.lineWidth = 3;
-      c2d.setLineDash([8, 6]);
+    if (versus) {
+      c2d.strokeStyle = "rgba(120,100,170,.4)";
+      c2d.setLineDash([9, 7]);
+      c2d.lineWidth = 2.5;
       c2d.beginPath();
-      c2d.moveTo(SCENE_W - 8, y - 26);
-      c2d.lineTo(SCENE_W - 8, y + 26);
+      c2d.moveTo(ARENA_W / 2, 0);
+      c2d.lineTo(ARENA_W / 2, ARENA_H);
       c2d.stroke();
       c2d.setLineDash([]);
-      c2d.font = `700 ${Math.round(15 * textScale)}px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif`;
-      c2d.textAlign = "right";
-      c2d.textBaseline = "middle";
-      c2d.fillStyle = P_COLOR[1];
-      c2d.fillText(`${MONSTER_EMOJI[kind]} ${MONSTER_INFO[kind].name} ⚡${commanderCost(kind)}`, SCENE_W - 16, y);
     }
 
-    // 顶上的一句话提示
-    if (flashLeft > 0 && flashMsg) {
-      const fs = Math.round(16 * textScale);
-      const bh = fs + 10;
-      c2d.font = `800 ${fs}px 'PingFang SC','Microsoft YaHei',system-ui,sans-serif`;
-      c2d.textAlign = "center";
-      c2d.textBaseline = "middle";
-      c2d.fillStyle = "rgba(255,255,255,.9)";
-      const w = c2d.measureText(flashMsg).width + 24;
-      roundRect(c2d, SCENE_W / 2 - w / 2, 6, w, bh, bh / 2);
-      c2d.fill();
-      c2d.fillStyle = "#7a4f9c";
-      c2d.fillText(flashMsg, SCENE_W / 2, 6 + bh / 2);
+    for (let s = 0; s < state.homes.length; s++) {
+      drawHome(c2d, state.homes[s].x, state.homes[s].y, state.jars[s], state.maxJars, P_COLOR[s] ?? P_COLOR[0]);
     }
+
+    // 元气糖
+    for (const c of state.crumbs) {
+      c2d.fillStyle = "#ffd86b";
+      c2d.strokeStyle = "#e0a92c";
+      c2d.lineWidth = 1.4;
+      c2d.beginPath();
+      c2d.arc(c.x, c.y, 4.2, 0, Math.PI * 2);
+      c2d.fill();
+      c2d.stroke();
+    }
+
+    // 近的画在上面:按 y 排一下序,俯视图也有一点点前后关系
+    const actors: Array<{ y: number; draw: () => void }> = [];
+    for (const m of state.monsters) actors.push({ y: m.y, draw: () => drawMonster(c2d, m, t, !reduced) });
+    for (const h of state.heroes) actors.push({ y: h.y, draw: () => drawHero(c2d, h, t, !reduced) });
+    actors.sort((a, b) => a.y - b.y);
+    for (const a of actors) a.draw();
+
+    for (const b of state.bullets) {
+      c2d.fillStyle = b.foe ? "#a9d6ff" : "#ff7fb4";
+      c2d.strokeStyle = b.foe ? "#6ba7dd" : "#d9628a";
+      c2d.lineWidth = 1.4;
+      c2d.beginPath();
+      c2d.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      c2d.fill();
+      c2d.stroke();
+    }
+
+    for (const p of state.particles) {
+      const k = 1 - p.life / p.maxLife;
+      c2d.save();
+      c2d.globalAlpha = Math.max(0, 1 - k);
+      if (p.kind === "cloud") {
+        c2d.font = "18px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
+        c2d.textAlign = "center";
+        c2d.textBaseline = "middle";
+        c2d.fillText(p.emoji || "☁️", p.x, p.y);
+      } else if (p.kind === "ring") {
+        c2d.strokeStyle = "#bcd6ff";
+        c2d.lineWidth = 3 * (1 - k) + 1;
+        c2d.beginPath();
+        c2d.arc(p.x, p.y, 8 + k * 20, 0, Math.PI * 2);
+        c2d.stroke();
+      } else {
+        c2d.fillStyle = "#ffd6ea";
+        c2d.beginPath();
+        c2d.arc(p.x, p.y, 3.4 * (1 - k) + 1, 0, Math.PI * 2);
+        c2d.fill();
+      }
+      c2d.restore();
+    }
+
+    c2d.restore();
   }
+
+  /* ---------------- HUD ---------------- */
+
+  let lastHud = "";
 
   function refreshHud(): void {
-    paintChip.textContent = `🎨 ${paint}/${paintCap(tech.paint)}`;
-    homeChip.className = hearts <= 1 ? "mc-chip mc-chip-warn" : "mc-chip";
-    homeChip.textContent = `🏠 ${"🫙".repeat(Math.max(0, hearts))}${"·".repeat(Math.max(0, def.homeHp - hearts))}`;
-    if (opts.plan.kind === "versus") {
-      waveChip.textContent = `⏳ ${formatClock(Math.max(0, versusLeft))} · ⚡${Math.floor(energy)}`;
-    } else if (opts.plan.kind === "fixed") {
-      waveChip.textContent =
-        phase === "prep"
-          ? `🛠️ 备战 ${Math.ceil(Math.max(0, phaseTime))} 秒 · 下一波 ${waveIdx + 1}/${waveTotal}`
-          : `🌊 第 ${waveIdx + 1}/${waveTotal} 波`;
-    } else {
-      waveChip.textContent =
-        phase === "prep"
-          ? `🛠️ 备战 ${Math.ceil(Math.max(0, phaseTime))} 秒 · 下一波 ${waveIdx + 1}`
-          : `♾️ 第 ${waveIdx + 1} 波`;
+    const parts: string[] = [];
+    const wave = waveLabel(state);
+    parts.push(wave);
+    for (let s = 0; s < state.homes.length; s++) {
+      parts.push(`${state.jars[s]}`);
     }
-    refreshShop();
+    for (let i = 0; i < players; i++) parts.push(growthBadges(state.heroes[i].growth).join(""));
+    const sig = parts.join("|");
+    if (sig === lastHud) return;
+    lastHud = sig;
+    waveChip.textContent = wave;
+    for (let s = 0; s < jarChips.length; s++) {
+      const jars = state.jars[s];
+      const label = versus ? `${P_NAME[s]} ` : "";
+      jarChips[s].textContent = `${label}🫙 ${"●".repeat(Math.max(0, jars))}${"○".repeat(Math.max(0, state.maxJars - jars))}`;
+      jarChips[s].className = jars <= 1 ? "mcr-chip mcr-chip-warn" : "mcr-chip";
+    }
+    for (let i = 0; i < players; i++) {
+      const badges = growthBadges(state.heroes[i].growth);
+      growthChips[i].textContent = badges.length ? `${players > 1 ? P_NAME[i] : "成长"} ${badges.join(" ")}` : "";
+      growthChips[i].hidden = badges.length === 0;
+    }
   }
+
+  /* ---------------- 布局 ---------------- */
+
+  function layout(): void {
+    const size = arenaCanvasSize(stage.clientWidth || wrap.clientWidth, view.innerWidth, view.innerHeight);
+    canvas.style.width = `${size.w}px`;
+    canvas.style.height = `${size.h}px`;
+  }
+
+  layout();
+  view.addEventListener("resize", layout);
+  let ro: ResizeObserver | null = null;
+  if (typeof ResizeObserver === "function") {
+    ro = new ResizeObserver(() => layout());
+    ro.observe(stage);
+  }
+
+  /* ---------------- 主循环 ---------------- */
+
+  let raf = 0;
+  let last = 0;
+  let destroyed = false;
+  let done = false;
 
   function frame(now: number): void {
     if (destroyed) return;
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
-    if (!paused && !finished) {
-      elapsed += dt;
-      if (shake > 0) shake = Math.max(0, shake - dt);
-      if (flashLeft > 0) flashLeft -= dt;
-      stepWaves(dt);
-      if (!finished) {
-        stepEconomy(dt);
-        stepTowers(dt);
-        stepHeroes(dt);
-        stepShots(dt);
-        stepMonsters(dt);
-      }
+
+    if (!paused && state.phase !== "over") {
+      collectInputs(dt);
+      const events = stepArena(state, dt, inputs);
+      consume(events);
     }
-    for (let i = puffs.length - 1; i >= 0; i--) {
-      puffs[i].age += dt;
-      if (puffs[i].age > 0.75) puffs.splice(i, 1);
+    if (shake > 0) shake = Math.max(0, shake - dt);
+    if (sayLeft > 0) {
+      sayLeft -= dt;
+      if (sayLeft <= 0) say.hidden = true;
     }
+
+    if (state.drafts.length > 0 && state.drafts[0].hero !== draftShownFor && !paused) renderDraft();
+    if (state.drafts.length === 0 && draftShownFor >= 0 && !paused) {
+      draftShownFor = -1;
+      closeLayer();
+    }
+
     refreshHud();
     render();
-  }
 
-  techBtn.addEventListener("click", () => {
-    sfx("tap");
-    if (techOpen) {
-      techOpen = false;
-      paused = false;
+    if (state.result && !done) {
+      done = true;
       closeLayer();
-    } else {
-      openTech();
+      opts.onDone(state.result);
     }
-  });
-  pauseBtn.addEventListener("click", () => {
-    sfx("tap");
-    togglePause();
-  });
-
-  refreshShop();
-  refreshHud();
-  layout();
-  win.addEventListener("resize", layout);
-  let ro: ResizeObserver | null = null;
-  if (typeof ResizeObserver === "function") {
-    ro = new ResizeObserver(layout);
-    ro.observe(field);
   }
-  last = performance.now();
+
+  refreshHud();
+  render();
+  last = typeof performance === "object" ? performance.now() : 0;
   raf = requestAnimationFrame(frame);
+  if (state.drafts.length > 0) renderDraft();
 
   return {
     destroy() {
       destroyed = true;
-      finished = true;
       cancelAnimationFrame(raf);
       closeLayer();
       ro?.disconnect();
       ro = null;
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
-      win.removeEventListener("resize", layout);
-      win.removeEventListener("keydown", onKeyDown);
-      win.removeEventListener("keyup", onKeyUp);
+      view.removeEventListener("keydown", onKeyDown);
+      view.removeEventListener("keyup", onKeyUp);
+      view.removeEventListener("resize", layout);
+      disposeArena(state);
       wrap.remove();
     },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* 战役:188 关                                                        */
+/* 闯关:188 关                                                        */
 /* ------------------------------------------------------------------ */
 
+const CAMPAIGN_HINT =
+  "左下摇杆走位,右下 🎨 按住不放一直甩;小怪物碰到你只会转个圈,别怕。电脑上用 W A S D 走、F 甩。";
+
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
-  const def = LEVELS[ctx.level];
-  const unlock = def.unlock;
-  const runner = createField(stage, {
-    def,
-    levelIdx: ctx.level,
-    plan: { kind: "fixed", waves: def.waves },
-    heroes: 1,
+  const state = createCampaignArena(ctx.level);
+  const view = createArenaView(stage, {
+    state,
     title: `${ctx.chapter.emoji} 第 ${ctx.level + 1} 关`,
-    hint: unlock
-      ? `新建筑解锁:${TOWER_EMOJI[unlock]} ${TOWER_INFO[unlock].name} —— ${TOWER_INFO[unlock].desc}`
-      : "手指按住画面就能牵着朵朵跑,按住不放会一直甩颜料弹;想摆东西先点上面的建筑,再点格子。电脑上用 W A S D 走位、F 甩、G 摆。",
+    hint: CAMPAIGN_HINT,
+    scene: ctx.chapterIndex,
     sfx: ctx.sfx,
     onDone: (res) => {
       if (res.win) {
-        ctx.win(campaignStars(res.hearts, res.homeHp), winLine(res.hearts, res.homeHp, res.popped));
+        ctx.win(campaignStars(res.jars[0], res.maxJars), arenaWinLine(res.jars[0], res.maxJars, res.popped));
       } else {
-        ctx.lose(loseLine(res.wavesCleared + 1, res.waveTotal, weakestLane(res.leaks)));
+        ctx.lose(arenaLoseLine(res.wavesCleared, res.waveTotal, res.weakSide));
       }
     },
   });
-  return { destroy: () => runner.destroy() };
+  return { destroy: () => view.destroy() };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1664,24 +1150,22 @@ function modeShell(
   host: HTMLElement,
   api: GameApi,
   onBack: () => void,
-  chipText: string,
-  backClass: string
+  chipText: string
 ): { root: HTMLElement; stage: HTMLElement; chip: HTMLElement; destroy: () => void } {
   const wrap = document.createElement("div");
-  wrap.className = "mc-mode";
-  wrap.innerHTML = `<style>${CSS}</style>`;
+  wrap.className = "mcr-mode";
   const head = document.createElement("div");
-  head.className = "mc-mhead";
+  head.className = "mcr-mhead";
   const back = document.createElement("button");
   back.type = "button";
-  back.className = `mc-back ${backClass}`;
+  back.className = "mcr-back";
   back.textContent = "◀ 回选关";
   back.addEventListener("click", () => {
     api.play("tap");
     onBack();
   });
   const chip = document.createElement("span");
-  chip.className = "mc-chip";
+  chip.className = "mcr-chip";
   chip.textContent = chipText;
   head.append(back, chip);
   const stage = document.createElement("div");
@@ -1690,53 +1174,61 @@ function modeShell(
   return { root: wrap, stage, chip, destroy: () => wrap.remove() };
 }
 
-/** 附加模式共用的空场地定义:全部建筑解锁,没有花坛。 */
-function openField(startPaint: number, homeHp: number): LevelDef {
-  return { chapter: 7, homeHp, startPaint, blocked: [], boss: null, waves: [] };
-}
-
 function overBox(
   stage: HTMLElement,
   title: string,
   sub: string,
-  label: string,
-  cls: string,
-  onAgain: () => void
+  buttons: Array<{ label: string; cls?: string; onClick: () => void }>
 ): void {
   stage.innerHTML = "";
   const box = document.createElement("div");
-  box.className = "mc-over";
-  box.innerHTML = `<div class="mc-layer-t">${title}</div><div class="mc-layer-s">${sub}</div>`;
-  const again = document.createElement("button");
-  again.type = "button";
-  again.className = `mc-open ${cls}`;
-  again.textContent = label;
-  again.addEventListener("click", onAgain);
-  box.appendChild(again);
+  box.className = "mcr-over";
+  const t = document.createElement("div");
+  t.className = "mcr-layer-t";
+  t.textContent = title;
+  const s = document.createElement("div");
+  s.className = "mcr-layer-s";
+  s.textContent = sub;
+  const row = document.createElement("div");
+  row.className = "mcr-over-btns";
+  for (const b of buttons) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `mcr-btn${b.cls ? ` ${b.cls}` : ""}`;
+    btn.textContent = b.label;
+    btn.addEventListener("click", b.onClick);
+    row.appendChild(btn);
+  }
+  box.append(t, s, row);
   stage.appendChild(box);
 }
 
 /* ------------------------------------------------------------------ */
-/* 无尽                                                                */
+/* 无尽:每 5 波小 boss,每 10 波换场景                                   */
 /* ------------------------------------------------------------------ */
 
 function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
-  const shell = modeShell(host, api, onBack, "", "");
-  let runner: { destroy: () => void } | null = null;
+  const shell = modeShell(host, api, onBack, "");
+  let view: ViewHandle | null = null;
   let best = save.getGameProgress(meta.id).endlessBest;
 
   function start(): void {
-    runner?.destroy();
+    view?.destroy();
     shell.stage.innerHTML = "";
     shell.chip.textContent = best > 0 ? `♾️ 无尽守家 · 最好 第 ${best} 波` : "♾️ 无尽守家 · 挡到第几波?";
-    runner = createField(shell.stage, {
-      def: openField(10, 3),
-      levelIdx: 0,
-      levelIdxFor: (waveIdx) => endlessLevelIndex(waveIdx + 1),
-      plan: { kind: "endless", make: (wave) => buildEndlessWave(wave) },
-      heroes: 1,
+    const state = createArena({
+      mode: "endless",
+      makeWave: arenaEndlessWave,
+      levelIdxFor: (wave) => endlessLevelIndex(wave),
+      seed: 20250813,
+      jars: 5,
+      openingDraft: true,
+    });
+    view = createArenaView(shell.stage, {
+      state,
       title: "无尽守家",
-      hint: "波次没有尽头,能挡多少算多少。每 8 波会来一只大怪,提前把墙加厚!手指按住画面就能牵着朵朵跑。",
+      hint: "波次没有尽头。每 5 波来一只小 boss,每 10 波换一个场景;记得捡地上的元气糖补家里的罐子。",
+      scene: 0,
       sfx: (n) => api.play(n),
       onDone: (res) => {
         const reached = res.wavesCleared;
@@ -1744,14 +1236,12 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
         if (reached > 0) api.addStars(Math.min(3, Math.ceil(reached / 4)));
         overBox(
           shell.stage,
-          reached >= best && reached > 0 ? "🏅 新纪录!" : "🏠 颜料被搬完啦",
-          endlessLine(reached, best),
-          "🔁 从第 1 波再来",
-          "",
-          () => {
+          reached >= best && reached > 0 ? "🏅 新纪录!" : "🏠 元气被抱完啦",
+          arenaEndlessLine(reached, best),
+          [{ label: "🔁 从第 1 波再来", onClick: () => {
             api.play("tap");
             start();
-          }
+          } }]
         );
       },
     });
@@ -1760,49 +1250,52 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
   start();
   return {
     destroy() {
-      runner?.destroy();
-      runner = null;
+      view?.destroy();
+      view = null;
       shell.destroy();
     },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* 双人合作                                                            */
+/* 双人合作:共享波次,各自成长                                           */
 /* ------------------------------------------------------------------ */
 
 function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
-  const shell = modeShell(host, api, onBack, `🤝 双人合作 · 一起挡满 ${COOP_TARGET_WAVES} 波`, "");
-  let runner: { destroy: () => void } | null = null;
+  const shell = modeShell(host, api, onBack, `🤝 双人合作 · 一起挡满 ${COOP_WAVES} 波`);
+  let view: ViewHandle | null = null;
 
   function start(): void {
-    runner?.destroy();
+    view?.destroy();
     shell.stage.innerHTML = "";
-    const waves: WaveDef[] = [];
-    for (let w = 1; w <= COOP_TARGET_WAVES; w++) waves.push(buildCoopWave(w));
-    runner = createField(shell.stage, {
-      def: openField(12, 4),
-      levelIdx: 0,
-      levelIdxFor: (waveIdx) => endlessLevelIndex(waveIdx + 1),
-      plan: { kind: "fixed", waves },
+    const waves = [];
+    for (let w = 1; w <= COOP_WAVES; w++) waves.push(buildCoopWave(w));
+    const state = createArena({
+      mode: "coop",
+      waves,
       heroes: 2,
+      jars: 5,
+      levelIdxFor: (wave) => endlessLevelIndex(wave),
+      seed: 424242,
+      openingDraft: true,
+    });
+    view = createArenaView(shell.stage, {
+      state,
       title: "双人合作守家",
-      hint: "朵朵 W A S D + F 甩 + G 摆;星星 ↑←↓→ + L 甩 + K 摆。手机上按住画面左半边牵着朵朵、右半边牵着星星。颜料是两个人一起花的,商量着来!",
+      hint: "两个人守同一个家:朵朵用左边摇杆 + 🎨,星星用右边摇杆 + 🎨;键盘是 W A S D / F 和 ↑←↓→ / L。成长卡两个人分开挑!",
+      scene: 3,
       sfx: (n) => api.play(n),
       onDone: (res) => {
-        const done = res.wavesCleared;
         if (res.win) api.addStars(3);
-        else if (done >= 5) api.addStars(1);
+        else if (res.wavesCleared >= 3) api.addStars(1);
         overBox(
           shell.stage,
-          res.win ? "🎉 一起守住啦!" : "🏠 颜料被搬完啦",
-          coopLine(done, COOP_TARGET_WAVES, res.popped),
-          "🔁 再来一局",
-          "mc-open-co",
-          () => {
+          res.win ? "🎉 一起守住啦!" : "🏠 元气被抱完啦",
+          arenaCoopLine(res.wavesCleared, COOP_WAVES, res.popped),
+          [{ label: "🔁 再来一局", cls: "mcr-btn-co", onClick: () => {
             api.play("tap");
             start();
-          }
+          } }]
         );
       },
     });
@@ -1811,53 +1304,51 @@ function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destr
   start();
   return {
     destroy() {
-      runner?.destroy();
-      runner = null;
+      view?.destroy();
+      view = null;
       shell.destroy();
     },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* 非对称对战:一个守家,一个指挥出兵                                     */
+/* 对战:两人各守一半,先失守者输                                          */
 /* ------------------------------------------------------------------ */
 
 function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
-  const shell = modeShell(
-    host,
-    api,
-    onBack,
-    `⚔️ 非对称对战 · 朵朵守家 ${VERSUS_SECONDS} 秒,星星指挥出兵`,
-    ""
-  );
-  let runner: { destroy: () => void } | null = null;
+  const shell = modeShell(host, api, onBack, `⚔️ 各守一半 · ${VERSUS_WAVES} 波,先失守的那边输`);
+  let view: ViewHandle | null = null;
 
   function start(): void {
-    runner?.destroy();
+    view?.destroy();
     shell.stage.innerHTML = "";
-    runner = createField(shell.stage, {
-      def: openField(12, 4),
-      levelIdx: 60,
-      plan: { kind: "versus", seconds: VERSUS_SECONDS },
-      heroes: 1,
-      commander: true,
-      title: "非对称对战",
-      hint: "朵朵:W A S D 走位 + F 甩 + G 摆建筑,手机上按住画面拖着走。星星:↑↓ 选道、←→ 换兵、L 派出去(要攒能量),手机上用下面那套方向盘。",
+    const waves = [];
+    for (let w = 1; w <= VERSUS_WAVES; w++) waves.push(buildCoopWave(w));
+    const state = createArena({
+      mode: "versus",
+      waves,
+      heroes: 2,
+      jars: 5,
+      levelIdxFor: (wave) => endlessLevelIndex(wave),
+      seed: 987654,
+      openingDraft: true,
+    });
+    view = createArenaView(shell.stage, {
+      state,
+      title: "各守一半",
+      hint: "左边是朵朵的家,右边是星星的家,两边来的小怪物一模一样。谁先被抱光元气谁就输,撑到最后元气多的那边赢!",
+      scene: 7,
       sfx: (n) => api.play(n),
       onDone: (res) => {
-        const side = res.win ? "defender" : "commander";
         api.addStars(1);
-        overBox(
-          shell.stage,
-          res.win ? "🛡️ 朵朵守住啦!" : "🚀 星星指挥赢啦!",
-          versusLine(side, res.hearts, res.win ? VERSUS_SECONDS : res.elapsed),
-          "🔁 换边再来",
-          "mc-open-vs",
-          () => {
+        const title =
+          res.winner < 0 ? "🤝 平手!" : res.winner === 0 ? "🎀 朵朵这边守住啦!" : "⭐ 星星这边守住啦!";
+        overBox(shell.stage, title, arenaVersusLine(res.winner, res.jars, P_NAME), [
+          { label: "🔁 换边再来", cls: "mcr-btn-vs", onClick: () => {
             api.play("tap");
             start();
-          }
-        );
+          } },
+        ]);
       },
     });
   }
@@ -1865,23 +1356,37 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
   start();
   return {
     destroy() {
-      runner?.destroy();
-      runner = null;
+      view?.destroy();
+      view = null;
       shell.destroy();
     },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* 挂载:模式条 + 188 关地图                                            */
+/* 挂载:模式条 + 188 关地图 + 直达第 N 关                                */
 /* ------------------------------------------------------------------ */
 
-export function mount(api: GameApi): { destroy: () => void } {
+export interface MonsterCrisisHandle {
+  /** 平台「直达第 N 关」(1 基),返回真正打开的那一关 */
+  openCampaignLevel: (n: number) => number;
+  destroy: () => void;
+}
+
+/** 地址栏上的 `?level=N`(壳层没给 `initialLevel` 时的兜底,和 gold-hook 同一套约定)。 */
+export function levelFromQuery(search: string | null): number | null {
+  if (!search) return null;
+  const raw = new URLSearchParams(search).get("level");
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.round(n) : null;
+}
+
+export function mount(api: GameApi): MonsterCrisisHandle {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
   const bar = document.createElement("div");
-  bar.className = "mc-bar";
+  bar.className = "mcr-bar";
   const levelHost = document.createElement("div");
   const modeHost = document.createElement("div");
   modeHost.hidden = true;
@@ -1890,18 +1395,19 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   const endlessBtn = document.createElement("button");
   endlessBtn.type = "button";
-  endlessBtn.className = "mc-open";
+  endlessBtn.className = "mcr-btn";
   const coopBtn = document.createElement("button");
   coopBtn.type = "button";
-  coopBtn.className = "mc-open mc-open-co";
+  coopBtn.className = "mcr-btn mcr-btn-co";
   coopBtn.textContent = "🤝 双人合作";
   const vsBtn = document.createElement("button");
   vsBtn.type = "button";
-  vsBtn.className = "mc-open mc-open-vs";
-  vsBtn.textContent = "⚔️ 非对称对战";
+  vsBtn.className = "mcr-btn mcr-btn-vs";
+  vsBtn.textContent = "⚔️ 各守一半";
   bar.append(endlessBtn, coopBtn, vsBtn);
 
   let mode: { destroy: () => void } | null = null;
+  let direct: { destroy: () => void } | null = null;
 
   function refreshBar(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
@@ -1920,10 +1426,106 @@ export function mount(api: GameApi): { destroy: () => void } {
   function openMode(make: (host: HTMLElement, api: GameApi, back: () => void) => { destroy: () => void }): void {
     if (mode) return;
     api.play("tap");
+    closeDirect(false);
     levelHost.hidden = true;
     bar.hidden = true;
     modeHost.hidden = false;
     mode = make(modeHost, api, closeMode);
+  }
+
+  function closeDirect(showMap: boolean): void {
+    direct?.destroy();
+    direct = null;
+    modeHost.innerHTML = "";
+    if (showMap) {
+      modeHost.hidden = true;
+      levelHost.hidden = false;
+      bar.hidden = false;
+    }
+  }
+
+  /**
+   * 直达第 N 关:平台的 188 关框架只吐一个 `destroy`,没有「从第 N 关开始」的入口,
+   * 所以按规格第九节自己开一条通道 —— 星级照样按框架那套 key 存,回得去选关地图。
+   */
+  function openDirectLevel(index: number): void {
+    const i = Math.max(0, Math.min(TOTAL - 1, Math.round(index)));
+    closeDirect(false);
+    mode?.destroy();
+    mode = null;
+    levelHost.hidden = true;
+    bar.hidden = true;
+    modeHost.hidden = false;
+    modeHost.innerHTML = "";
+
+    const ci = chapterOf(CHAPTERS, i);
+    const ch: Chapter = CHAPTERS[ci];
+    const shell = modeShell(modeHost, api, () => closeDirect(true), `${ch.emoji} ${ch.name} · 第 ${i + 1} 关`);
+    let handle: PlayHandle | undefined;
+    let settled = false;
+
+    function settle(title: string, msg: string, buttons: Array<{ label: string; go: () => void }>): void {
+      handle?.destroy?.();
+      handle = undefined;
+      overBox(
+        shell.stage,
+        title,
+        msg,
+        buttons.map((b) => ({
+          label: b.label,
+          onClick: () => {
+            api.play("tap");
+            b.go();
+          },
+        }))
+      );
+    }
+
+    const ctx: PlayCtx = {
+      level: i,
+      chapter: ch,
+      chapterIndex: ci,
+      indexInChapter: i - chapterStart(CHAPTERS, ci),
+      win: (stars, msg) => {
+        if (settled) return;
+        settled = true;
+        const prev = loadStars(meta.id)[i] ?? 0;
+        saveStar(meta.id, i, stars);
+        if (stars > prev) api.addStars(stars - prev);
+        api.play("win");
+        const buttons: Array<{ label: string; go: () => void }> = [];
+        if (i + 1 < TOTAL) buttons.push({ label: "下一关 ▶", go: () => openDirectLevel(i + 1) });
+        buttons.push({ label: "🔁 再玩一次", go: () => openDirectLevel(i) });
+        buttons.push({ label: "🗺️ 选关地图", go: () => closeDirect(true) });
+        settle(`⭐ 第 ${i + 1} 关过关!`, msg ?? "守得漂亮!", buttons);
+      },
+      lose: (msg) => {
+        if (settled) return;
+        settled = true;
+        api.play("oops");
+        settle("💪 就差一点点", msg ?? "再来一次一定行!", [
+          { label: "🔁 再试一次", go: () => openDirectLevel(i) },
+          { label: "🗺️ 选关地图", go: () => closeDirect(true) },
+        ]);
+      },
+      sfx: (n) => api.play(n),
+      bonusStars: (n) => api.addStars(n),
+    };
+
+    handle = playLevel(shell.stage, ctx);
+    direct = {
+      destroy() {
+        handle?.destroy?.();
+        handle = undefined;
+        shell.destroy();
+      },
+    };
+  }
+
+  function openCampaignLevel(n: number): number {
+    const i = Math.max(0, Math.min(TOTAL - 1, Math.round(n) - 1));
+    openDirectLevel(i);
+    return i + 1;
   }
 
   endlessBtn.addEventListener("click", () => openMode(mountEndless));
@@ -1943,23 +1545,62 @@ export function mount(api: GameApi): { destroy: () => void } {
         return {
           destroy() {
             handle.destroy?.();
-            if (!mode) bar.hidden = false;
+            if (!mode && !direct) bar.hidden = false;
           },
         };
       },
-      mapHint: "先摆两个颜料罐把钱攒起来,再架炮台、立棉花墙;波次之间记得升科技。",
-      grandMessage: "188 关全部守住!彩虹总部的小怪物全变成了花花糖果,你是最棒的守家小队长!",
+      mapHint: "自己上场跑位出手:每 3 波挑一张成长卡,越打越顺手。被撞到只会转个圈,不疼的!",
+      grandMessage: "188 关全部守住!彩虹总部的小怪物全变成了小云朵,你是最棒的守家小队长!",
       guide,
       guideTitle: "小怪物危机 · 守家手册",
     }
   );
 
+  const jumpTo =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" ? location.search : null);
+  if (jumpTo !== null && jumpTo !== undefined) openCampaignLevel(jumpTo);
+
   return {
+    openCampaignLevel,
     destroy() {
       mode?.destroy();
       mode = null;
+      direct?.destroy();
+      direct = null;
       level.destroy();
       root.remove();
     },
   };
+}
+
+/** 图例:五种行为各是什么(攻略面板与无障碍说明共用)。 */
+export function behaviorLegend(): string[] {
+  return (Object.keys(BEHAVIOR_INFO) as Array<keyof typeof BEHAVIOR_INFO>).map(
+    (k) => `${BEHAVIOR_INFO[k].emoji} ${BEHAVIOR_INFO[k].name}:${BEHAVIOR_INFO[k].tip}`
+  );
+}
+
+/** 关卡小标题:哪一章、什么场景(直达第 N 关与攻略共用)。 */
+export function levelSceneName(levelIdx: number): string {
+  const ci = chapterOf(CHAPTERS, Math.max(0, Math.min(LEVELS.length - 1, levelIdx)));
+  return SCENE_NAME[ci % SCENE_NAME.length];
+}
+
+/** 一局打了多久,给结算用。 */
+export function runClock(seconds: number): string {
+  return formatClock(seconds);
+}
+
+/** 图鉴:这一关会来哪些怪(按行为归类,给攻略面板)。 */
+export function levelBehaviors(levelIdx: number): string[] {
+  const def = LEVELS[Math.max(0, Math.min(LEVELS.length - 1, levelIdx))];
+  const seen = new Set<string>();
+  for (const w of def.waves) {
+    for (const s of w.spawns) {
+      const info = MONSTER_INFO[s.kind];
+      seen.add(info.name);
+    }
+  }
+  return [...seen];
 }
