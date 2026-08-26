@@ -18,11 +18,14 @@ export const CAMPAIGN_TOTAL = LEVELS.length;
 /* 直开第 N 关                                                          */
 /* ------------------------------------------------------------------ */
 
-/** 1 基关号 → 0 基下标;越界夹到两端,不合法的数字当第 1 关。 */
+/**
+ * 1 基关号 → 0 基下标;越界夹到两端,读不成数字的当第 1 关。
+ * `Infinity` 走的是「越界」这条路而不是「读不成数字」——那分明是想开最后一关。
+ */
 export function clampLevelIndex(n: number): number {
-  const v = Math.round(Number(n));
-  if (!Number.isFinite(v)) return 0;
-  return Math.max(0, Math.min(CAMPAIGN_TOTAL - 1, v - 1));
+  const v = Number(n);
+  if (Number.isNaN(v)) return 0;
+  return Math.max(0, Math.min(CAMPAIGN_TOTAL - 1, Math.round(v) - 1));
 }
 
 /** 从 `?level=12` 这样的查询串里读 1 基关号;读不出来返回 null。 */
