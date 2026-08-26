@@ -311,7 +311,9 @@ describe("源码巡检", () => {
         "index.ts",
         "levels.ts",
         "meta.ts",
-        "rules.ts"
+        "progress.ts",
+        "rules.ts",
+        "training.ts"
       ].sort()
     );
   });

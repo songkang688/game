@@ -1109,6 +1109,16 @@ export function characterById(id: string): Character {
   return CHAR_BY_ID.get(id) ?? CHARACTERS[0];
 }
 
+/**
+ * 名字太长就缩写（窄屏 HUD 用）。
+ * 「绿绿豆」这种三个字的在 360px 上会把元气条挤歪，缩成「绿绿…」正好。
+ */
+export function shortName(name: string, max = 3): string {
+  const chars = [...name];
+  if (chars.length <= max) return name;
+  return `${chars.slice(0, Math.max(1, max - 1)).join("")}…`;
+}
+
 /** 拿某个角色某个槽位的招式 */
 export function moveOf(charId: string, slot: MoveSlot): Move {
   return characterById(charId).moves[slot];
