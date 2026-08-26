@@ -13,7 +13,7 @@
 
 ## 〇、一句话
 
-1.2 全部工作推 **`game-1.2`**，不改 `main`、不合并回 `main`。共 **30 个派发步**、**76 款游戏**（库存 55 + 新增 21）。
+1.2 全部工作推 **`game-1.2`**，不改 `main`、不合并回 `main`。共 **29 个派发步**、**76 款游戏**（库存 55 + 新增 21）。
 派发采用**三窗口滚动**：任何时刻都有且只有 **3 个云端子代理在跑**，谁交卷就立刻按登记表补下一格。
 执行子代理的模型 slug 只写进提示词正文：`claude-opus-5-thinking-high-fast`（**不带方括号**）。
 
@@ -39,7 +39,7 @@
 ### 2.1 基本规则
 
 - 三个窗口记作 **W1 / W2 / W3**。每个窗口同一时间只跑一个子代理、只认领登记表里的一格。
-- 一格 = 「某一步的某一档」（例如「第 12 步 · B 档 `sky-squad`」）。全项目共 30 × 3 = **90 格**。
+- 一格 = 「某一步的某一档」（例如「第 12 步 · B 档 `sky-squad`」）。全项目共 29 × 3 = **87 格**。
 - 窗口空出来后，按登记表**从上往下**取第一格「未派且依赖已满足」的格子；取之前先登记，避免两个窗口抢同一格。
 - 子代理被打回重做时，**占用原窗口继续做**，不算新格。
 
@@ -51,8 +51,7 @@
 | 第 2–8 步（新游戏） | 每格是一款独立新目录，互不相交，**可以跨步流水**。W1 做第 3 步 A、W2 做第 3 步 C、W3 已经跑第 4 步 B，完全允许。 |
 | 第 9–26 步（升级） | 同一款游戏**永远只能有一个窗口**在改（登记表一格一款，天然满足）。跨步流水允许。 |
 | 新游戏 → 升级 | 第 9 步的第一格必须等到**第 2–8 步全部 21 格验收通过**再开。升级步会碰首页与共享模块，和新目录并发容易撞 `styles.css`。 |
-| 第 27 步（冲突 / 接线） | 必须等第 1–26 步**全部 78 格**验收通过。这一步就是收全场的，不许提前。 |
-| 第 28 / 29 / 30 步（验收三轮） | **严格串行**：一轮的三格全绿才开下一轮。轮内 A/B/C 三格同时跑（这正好把三个窗口占满）。 |
+| 第 27 / 28 / 29 步（验收三轮） | 必须等第 1–26 步**全部 78 格**验收通过。**严格串行**：一轮的三格全绿才开下一轮。轮内 A/B/C 三格同时跑（这正好把三个窗口占满）。冲突 / 首页接线 / 全局回归已拆进第 27 步测试员与第 29 步终审，没有独立第 30 步。 |
 
 ### 2.3 派发口令（每段执行提示词开头**逐字**这四行）
 
@@ -119,47 +118,45 @@ git push origin HEAD:game-1.2
 
 ---
 
-## 四、步号 1→30 连续总表
+## 四、步号 1→29 连续总表
 
-**步号连续，不跳号，不留空隙。** 「33 步」只是当初随口举的例子，不套；旧稿的 38 步 / 36 步（步号跳到 57）也作废。
+**步号连续，不跳号、不留空隙。** 「33 步」只是当初随口举的例子，不套。初稿曾写 30 步（独立冲突步 + 三轮验收），C 档落地后冲突/接线拆进三轮验收，**定稿 29 步**；链接以 [`plan-1.2-index.md`](./plan-1.2-index.md) 为准。
 
-| 步 | 主题 | A 位 | B 位 | C 位 | 提示词文档谁写 |
+| 步 | 主题 | A 位 | B 位 | C 位 | 谁写 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 平台基建 | root 管理员门 + 直达第 N 关 | 手游 / 端游筛选 + 手机文字 | 闯关 / 对战 / 无尽口径 + 2.5D 基建 | **A（已写）** |
-| 2 | 新游戏 · IO 与方块 | `orb-arena` | `snake-royale` | `block-drop` | B |
-| 3 | 新游戏 · 深度格斗与桌游 | `combo-clash` | `mahjong-bloom` | `star-estate` | B |
-| 4 | 新游戏 · 策略棋牌 | `hero-cards` | `weiqi-garden` | `flight-chess` | B |
-| 5 | 新游戏 · 数字益智 | `merge-2048` | `mine-garden` | `sudoku-petal` | B |
-| 6 | 新游戏 · 手感休闲 | `dot-maze` | `fruit-stack` | `pool-stars` | B |
-| 7 | 新游戏 · 棋类扩展 | `junqi-camp` | `chess-garden` | `dark-chess` | B |
-| 8 | 新游戏 · 轻量三款 | `hue-hand` | `hop-pads` | `tap-tiles` | B |
-| 9 | 升级 · 塔防与吞噬 | `garden-guard` | `sprout-defense` | `ocean-munch` | C |
-| 10 | 升级 · 跑酷与切切 | `rainbow-run` | `fruit-slice` | `poop-hero` | C |
-| 11 | 升级 · 弹射与瞄准 | `sling-birds` | `candy-swing` | `bubble-aim` | C |
-| 12 | 升级 · 射击三款 | `shoot-range` | `sky-squad` | `snow-fight` | C |
-| 13 | 升级 · 战场对抗 | `monster-crisis` | `bomb-buddies` | `tank-battle` | C |
-| 14 | 升级 · 格斗与单挑 | `fight-king` | `duo-vs-star` | `duo-arena` | C |
-| 15 | 升级 · 竞速与碰撞 | `duo-rush` | `bumper-cars` | `bowling-lane` | C |
-| 16 | 升级 · 双人平台闯关 | `ice-fire-forest` | `puff-bros` | `prince-princess` | C |
-| 17 | 升级 · 冒险线 | `brave-path` | `adventure-king` | `alien-seek` | C |
-| 18 | 升级 · 推箱与拼图 | `box-hamster` | `puzzle-tiles` | `lianliankan` | C |
-| 19 | 升级 · 消除一 | `balloon-pop` | `bubble-pop` | `match-stars` | C |
-| 20 | 升级 · 消除二与记忆 | `brick-break` | `memory-cards` | `mole-pop` | C |
-| 21 | 升级 · 休闲三款 | `fruit-catch` | `snake-snack` | `kitty-care` | C |
-| 22 | 升级 · 棋牌 | `xiangqi`（**只升级**） | `gomoku` | `landlord-cards` | C |
-| 23 | 升级 · 红蓝对战三款 | `red-blue-race` | `red-blue-tap` | `red-blue-tug` | C |
-| 24 | 升级 · 学习一 | `math-farm` | `clock-house` | `shape-kingdom` | C |
-| 25 | 升级 · 学习二 | `pinyin-train` | `word-garden` | `find-diff` | C |
-| 26 | 升级 · 动手与钩钓 | `color-fun` | `music-stars` | `gold-hook` + `fishing-star` | C |
-| 27 | 冲突 / 串味 / 首页接线 / 全局回归 | 存档与 root API 审计 | 首页接线：76 款 `platform` / `modes` 填准 | CSS / 快捷键 / `destroy` 泄漏审计 | C |
-| 28 | 验收三人组 第 1 轮 | 测试员 | 学习优化员 | 监督修复员 | C |
-| 29 | 验收三人组 第 2 轮 | 测试员 | 学习优化员 | 监督修复员 | C |
-| 30 | 验收三人组 第 3 轮（收官） | 测试员 | 学习优化员 | 监督修复员 | C |
+| 2 | 新游戏 · IO 与方块 | `orb-arena` | `snake-royale` | `block-drop` | **B（已写）** |
+| 3 | 新游戏 · 深度格斗与桌游 | `combo-clash` | `mahjong-bloom` | `star-estate` | **B（已写）** |
+| 4 | 新游戏 · 策略棋牌 | `hero-cards` | `weiqi-garden` | `flight-chess` | **B（已写）** |
+| 5 | 新游戏 · 数字益智 | `merge-2048` | `mine-garden` | `sudoku-petal` | **B（已写）** |
+| 6 | 新游戏 · 手感休闲 | `dot-maze` | `fruit-stack` | `pool-stars` | **B（已写）** |
+| 7 | 新游戏 · 棋类扩展 | `junqi-camp` | `chess-garden` | `dark-chess` | **B（已写）** |
+| 8 | 新游戏 · 轻量三款 | `hue-hand` | `hop-pads` | `tap-tiles` | **B（已写）** |
+| 9 | 升级 · 点名一 | `gomoku` | `match-stars` | `rainbow-run` | **C（已写）** |
+| 10 | 升级 · 点名二 | `ocean-munch` | `xiangqi`（**只升级**） | `fight-king` | **C（已写）** |
+| 11 | 升级 · 双人对战 | `duo-rush` | `duo-arena` | `duo-vs-star` | **C（已写）** |
+| 12 | 升级 · 物理弹射 | `sling-birds` | `candy-swing` | `gold-hook` | **C（已写）** |
+| 13 | 升级 · 塔防三连 | `garden-guard` | `sprout-defense` | `monster-crisis` | **C（已写）** |
+| 14 | 升级 · 射击三连 | `shoot-range` | `sky-squad` | `tank-battle` | **C（已写）** |
+| 15 | 升级 · 派对乱斗 + 回迁 | `bomb-buddies` | `snow-fight` | `bumper-cars` + `bowling-lane` | **C（已写）** |
+| 16 | 升级 · 双人平台闯关 | `ice-fire-forest` | `puff-bros` | `prince-princess` | **C（已写）** |
+| 17 | 升级 · 冒险线 | `brave-path` | `adventure-king` | `alien-seek` | **C（已写）** |
+| 18 | 升级 · 手感小品 | `brick-break` | `mole-pop` | `box-hamster` | **C（已写）** |
+| 19 | 升级 · 泡泡三连 | `balloon-pop` | `bubble-pop` | `bubble-aim` | **C（已写）** |
+| 20 | 升级 · 水果与蛇 | `fruit-catch` | `fruit-slice` | `snake-snack` | **C（已写）** |
+| 21 | 升级 · 记忆与拼图 | `lianliankan` | `puzzle-tiles` | `memory-cards` | **C（已写）** |
+| 22 | 升级 · 牌桌与钓场 | `landlord-cards` | `fishing-star` | `poop-hero` | **C（已写）** |
+| 23 | 升级 · 红蓝三连 | `red-blue-race` | `red-blue-tap` | `red-blue-tug` | **C（已写）** |
+| 24 | 升级 · 学习一 | `clock-house` | `math-farm` | `pinyin-train` | **C（已写）** |
+| 25 | 升级 · 学习二 | `word-garden` | `shape-kingdom` | `find-diff` | **C（已写）** |
+| 26 | 升级 · 创作与养成 | `color-fun` | `music-stars` | `kitty-care` | **C（已写）** |
+| 27 | 验收三人组 第 1 轮 | 测试员 | 学习优化员 | 监督修复员 | **C（已写）** |
+| 28 | 验收三人组 第 2 轮 | 测试员 | 学习优化员 | 监督修复员 | **C（已写）** |
+| 29 | 验收三人组 第 3 轮（收官） | 测试员 | 学习优化员 | 监督修复员 | **C（已写）** |
 
-- 阶段切分：平台 **1** 步 + 新游戏 **7** 步（21 款）+ 升级 **18** 步（55 款）+ 收尾 **4** 步 = **30**。
-- 第 26 步 C 位是全项目**唯一**一个「一格两款」的位置（55 不是 3 的倍数，多出来的一款放在这里），
-  写这一格的提示词时要明确说明工作量翻倍、用例下限也翻倍。
-- 第 1 步与第 27 步都会碰 `src/ui/home.ts` 与 `src/styles.css`：两步天然相隔 25 步，**不会并发**。
+- 阶段切分：平台 **1** 步 + 新游戏 **7** 步（21 款）+ 升级 **18** 步（55 款）+ 验收 **3** 步 = **29**。
+- 第 15 步 C 位是全项目**唯一**一个「一格两款」的位置（`bumper-cars` + `bowling-lane`，同一类 1.1 回迁活）。
+- 第 1 步与第 27 步都会碰 `src/ui/home.ts` 与 `src/styles.css`：**不会并发**（第 27 步必须等 1–26 全绿）。
 
 ---
 
@@ -217,7 +214,7 @@ git push origin HEAD:game-1.2
 旧 `docs/game-1.2/00-catalog.md` / `00-id-map.md` 里那三套 id（catalog 一套、new-games 一套、upgrades 一套）**全部作废**。
 只认本节 5.2 这一套。旧稿里 B 没做的候选（`petal-scout`、`lily-hop`、`reversi-ink`、`klondike-cards`、`beat-tap`、
 `kart-dash`、`glow-survivor`、`air-puck`、`star-soccer`、`star-hoops`、`navy-grid`、`run-fast-cards` 等）**1.2 第一波不做**，
-想做就等 1.3，不许在 30 步里偷偷加目录。
+想做就等 1.3，不许在 29 步里偷偷加目录。
 
 ---
 
@@ -249,7 +246,7 @@ git push origin HEAD:game-1.2
 
 ---
 
-## 八、法律与分级红线（违反即打回，全 30 步适用）
+## 八、法律与分级红线（违反即打回，全 29 步适用）
 
 - 面向孩子的一切可见文案（`title` / `blurb` / 章节名 / 角色名 / 提示语 / 攻略 / README）**以及代码注释**，禁止出现商业商标与官方角色名。
   黑名单（`rg -i` 至少扫这些，命中即打回）：
@@ -306,16 +303,16 @@ git push origin HEAD:game-1.2
 
 ---
 
-## 十一、收口（30 步全部做完之后）
+## 十一、收口（29 步全部做完之后）
 
-1. **不做巨型总脚本。** 1.1 把 15 步塞进一个 1000 行的文件还行，1.2 是 90 格，塞一个文件没法读。
+1. **不做巨型总脚本。** 1.1 把 15 步塞进一个 1000 行的文件还行，1.2 是 87 格，塞一个文件没法读。
    收口只做一件事：把 [`plan-1.2-index.md`](./plan-1.2-index.md) 的总表链接补全，确保每一格都能点到自己那份文档。
 2. 补一份发布说明 `docs/plan-1.2-release-notes.md`（1.2 相比 1.1 的全部变化，按「新增 21 款 / 55 款精细化 / 平台能力 / 修复」分节）。
 3. 更新 `README.md`：合集款数（76）、分类表、188 关体系、对战 / 无尽 / 双人说明、键位表、
    家长功能（算术门 + 管理员门）、手游 / 端游筛选、离线与隐私声明。**必须与代码一致，不许写虚。**
 4. 是否把 `game-1.2` 合回 `main` 由用户自己决定，主管不合。
 
-**1.2 收官验收门（第 30 步结束时逐条给结论）：**
+**1.2 收官验收门（第 29 步结束时逐条给结论）：**
 
 - 76 款每一款都能进、能玩到真实胜负、`destroy` 后再进不报错。
 - 首页手游 / 端游筛选可用；76 款的 `platform` 与 `modes` 都填准了。
@@ -337,5 +334,5 @@ git push origin HEAD:game-1.2
 - `docs/plan-1.2-step1-B-platform-filter.md`
 - `docs/plan-1.2-step1-C-modes-view.md`
 
-A **不写** `plan-1.2-step2-*` 及以后（B 从第 2 步写新游戏，C 从第 9 步写升级到第 30 步）。
+A **不写** `plan-1.2-step2-*` 及以后（B 从第 2 步写新游戏，C 从第 9 步写升级到第 29 步）。
 A **不改** `src/**`、不改 `README.md`、不大段删 `docs/game-1.2/`（旧目录留着，只在本文件声明作废即可）。
