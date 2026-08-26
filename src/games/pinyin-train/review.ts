@@ -84,11 +84,14 @@ export function saveWrongBook(book: WrongBook, storage?: StorageLike | null): vo
 /** 把这一关错过的题型记进本子，返回记完之后的本子 */
 export function recordWrongKinds(kinds: readonly string[], storage?: StorageLike | null): WrongBook {
   const book = loadWrongBook(storage);
+  let touched = false;
   for (const k of kinds) {
     if (!k) continue;
     book[k] = Math.min(WRONG_CAP, (book[k] ?? 0) + 1);
+    touched = true;
   }
-  saveWrongBook(book, storage);
+  // 全对的那一关不留脚印：没错过就不碰存档
+  if (touched) saveWrongBook(book, storage);
   return book;
 }
 

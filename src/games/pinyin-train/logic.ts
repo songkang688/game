@@ -589,7 +589,7 @@ export const CONFUSE_GROUPS: ConfuseGroup[] = [
       { char: "那", pinyin: "nà", rival: "là" },
       { char: "男", pinyin: "nán", rival: "lán" },
       { char: "牛", pinyin: "niú", rival: "liú" },
-      { char: "女", pinyin: "nǚ", rival: "lǜ" },
+      { char: "女", pinyin: "nǚ", rival: "lǚ" },
       { char: "老", pinyin: "lǎo", rival: "nǎo" },
       { char: "你", pinyin: "nǐ", rival: "lǐ" },
       { char: "力", pinyin: "lì", rival: "nì" },
