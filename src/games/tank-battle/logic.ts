@@ -2,30 +2,54 @@
  * 铁皮坦克大战 · 纯逻辑层(不碰 DOM,可以直接在测试里跑完整一关)。
  *
  * 战场是一张紧凑的字符网格:
- *   `.` 空地   `#` 砖墙(能打碎)   `S` 钢墙(打不动)   `~` 水面(过不去,炮弹能飞过)
- *   `*` 草丛(能开过去,挡视线)     `B` 星星堡垒        `1`/`2` 朵朵 / 星星出生点
- *   `e` 敌人出生点
+ *   `.` 空地   `#` 积木砖(能打碎,一小角一小角地碎)   `S` 钢板(要彩纸穿甲弹)
+ *   `~` 水洼(开不过去,弹丸飞得过)   `*` 草丛(半透明遮挡)   `i` 冰面(打滑)
+ *   `B` 星星老巢   `1`/`2` 朵朵 / 星星出生点   `e` 铁皮车出生点
+ *
+ * 1.2 在这一层加了三件事:地形五件套(补冰面 + 砖的四分之一格)、
+ * 三种弹丸(直线弹 / 弹力球 / 彩纸穿甲弹,`ballistics12.ts`)、
+ * 三档 AI(乱转 / 追人 / 绕后卡位,`ai12.ts`)。
  *
  * 全程没有血量、没有受伤、没有淘汰的说法:
- *  - 敌方坦克挨够炮弹就「冒烟变成一朵花」离场;
- *  - 我方坦克挨炮弹只会「被弹飞回出生点」,转两圈接着开;
- *  - 星星堡垒被砸中就是这一关结束,重来一次即可。
+ *  - 铁皮车挨够弹丸就「冒烟变成一朵花」离场;
+ *  - 自己人被打中是「零件散一地」,3 秒后在出生点组装回来接着开;
+ *  - 星星老巢被砸中就是这一关结束,重来一次即可。
  */
 
 import { mulberry32 } from "../level99";
+import {
+  BRICK_FULL,
+  DX,
+  DY,
+  brickGone,
+  chipBrick,
+  iceGlide,
+  iceSteer,
+  isSlippery,
+  isTile,
+  maskToHp,
+  quarterSolid,
+  blocksShell,
+  blocksSight as terrainBlocksSight,
+  blocksTank as terrainBlocksTank,
+  type Cell,
+  type Dir,
+  type Tile,
+} from "./terrain12";
+import { SHELLS, reflect, shotVelocity, type BlockedAt, type ShellKind, type Vec2 } from "./ballistics12";
+import {
+  TIER_SPECS,
+  astar,
+  flankPick,
+  manhattan,
+  pathDirs,
+  wanderStep,
+  type AiTier,
+  type Grid,
+} from "./ai12";
 
-export type Tile = "." | "#" | "S" | "~" | "*" | "B";
-
-/** 0 上 1 右 2 下 3 左 */
-export type Dir = 0 | 1 | 2 | 3;
-
-export const DX: readonly number[] = [0, 1, 0, -1];
-export const DY: readonly number[] = [-1, 0, 1, 0];
-
-export interface Cell {
-  cx: number;
-  cy: number;
-}
+export type { Cell, Dir, Tile } from "./terrain12";
+export { DX, DY } from "./terrain12";
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -33,14 +57,27 @@ export interface Cell {
 
 /** 坦克半宽(格) */
 export const TANK_HALF = 0.38;
-/** 砖墙要挨几发普通炮弹才碎 */
+/** 一整块新砖要挨几发普通弹丸才没(正面对着打的话) */
 export const BRICK_HP = 2;
 /** 每位玩家开局带几块备用砖 */
 export const DEFAULT_BRICKS = 4;
-/** 被弹飞之后原地打转多久(秒),这段时间不能动也不会再被打中 */
-export const SPIN_SECONDS = 1.1;
-/** 冒烟护罩时长(秒):刚回到出生点的一小会儿不会被再弹飞 */
+/**
+ * 被打中之后要多久才回得来(秒)。
+ * 这 3 秒里零件散了一地,然后在出生点一件一件组装回来——没有淘汰,也没有伤。
+ */
+export const REBUILD_SECONDS = 3;
+/** 兼容旧名字:这段时间既不能动,也不会再被打中 */
+export const SPIN_SECONDS = REBUILD_SECONDS;
+/** 零件飞散占前面这几秒,剩下的时间在出生点组装 */
+export const SCATTER_SECONDS = 1.1;
+/** 组装好之后的护罩时长(秒):刚回场的一小会儿不会被再打散 */
 export const SHIELD_SECONDS = 2.2;
+/** 炮口前摇(秒):按下到弹丸出膛之间的一小顿,手感就靠它 */
+export const MUZZLE_WINDUP = 0.09;
+/** 后坐位移(格):渲染时折算成 4–6px */
+export const RECOIL_CELLS = 0.16;
+/** 后坐弹回来要多久(秒) */
+export const RECOIL_SECONDS = 0.18;
 
 export const PLAYER_SPEED = 3.6;
 export const PLAYER_COOL = 0.42;
@@ -174,8 +211,10 @@ export interface TankMap {
   w: number;
   h: number;
   tiles: Tile[];
-  /** 每格砖墙剩余耐久(非砖墙为 0) */
+  /** 每格砖墙剩余耐久(非砖墙为 0);= 剩下的小块数 ÷ 2,向上取整 */
   brickHp: number[];
+  /** 每格砖的四个小块还剩哪几个(四分之一格粒度) */
+  brickMask: number[];
   /** 星星堡垒所在格;对战地图没有堡垒 */
   base: Cell | null;
   /** 玩家出生点:0 号是朵朵,1 号是星星 */
@@ -183,21 +222,19 @@ export interface TankMap {
   enemySpawns: Cell[];
 }
 
-const TILE_CHARS = new Set<string>([".", "#", "S", "~", "*", "B"]);
-
-/** 坦克过不去的地形 */
+/** 坦克过不去的地形(地形字典在 `terrain12.ts`) */
 export function blocksTank(t: Tile): boolean {
-  return t === "#" || t === "S" || t === "~" || t === "B";
+  return terrainBlocksTank(t);
 }
 
-/** 炮弹飞不过去的地形(水面和草丛都能飞过) */
+/** 弹丸飞不过去的地形(水洼和草丛都飞得过) */
 export function blocksBullet(t: Tile): boolean {
-  return t === "#" || t === "S" || t === "B";
+  return blocksShell(t);
 }
 
 /** 挡视线的地形(草丛只挡视线) */
 export function blocksSight(t: Tile): boolean {
-  return t === "*" || blocksBullet(t);
+  return terrainBlocksSight(t);
 }
 
 export function cellIndex(map: TankMap, cx: number, cy: number): number {
@@ -225,6 +262,7 @@ export function parseMap(rows: readonly string[]): TankMap {
   if (w === 0) throw new Error("地图行不能是空串");
   const tiles: Tile[] = new Array<Tile>(w * h).fill(".");
   const brickHp: number[] = new Array<number>(w * h).fill(0);
+  const brickMask: number[] = new Array<number>(w * h).fill(0);
   let base: Cell | null = null;
   const playerSpawns: Cell[] = [];
   const enemySpawns: Cell[] = [];
@@ -241,9 +279,12 @@ export function parseMap(rows: readonly string[]): TankMap {
       } else if (ch === "e") {
         enemySpawns.push({ cx, cy });
         tiles[i] = ".";
-      } else if (TILE_CHARS.has(ch)) {
-        tiles[i] = ch as Tile;
-        if (ch === "#") brickHp[i] = BRICK_HP;
+      } else if (isTile(ch)) {
+        tiles[i] = ch;
+        if (ch === "#") {
+          brickHp[i] = BRICK_HP;
+          brickMask[i] = BRICK_FULL;
+        }
         if (ch === "B") base = { cx, cy };
       } else {
         throw new Error(`第 ${cy + 1} 行第 ${cx + 1} 列出现不认识的字符「${ch}」`);
@@ -251,7 +292,7 @@ export function parseMap(rows: readonly string[]): TankMap {
     }
   }
   if (playerSpawns[0] === undefined) throw new Error("地图缺少朵朵的出生点 1");
-  return { w, h, tiles, brickHp, base, playerSpawns, enemySpawns };
+  return { w, h, tiles, brickHp, brickMask, base, playerSpawns, enemySpawns };
 }
 
 /** 把地图导回字符网格(存档 / 调试 / 测试对拍用) */
@@ -391,8 +432,24 @@ export interface Tank {
   armorMax: number;
   /** 冒烟护罩剩余秒:>0 时打不中 */
   shield: number;
-  /** 被弹飞后打转剩余秒:>0 时不能动 */
+  /** 散架剩余秒:>0 时零件还在飞 / 还在组装,动不了也打不中 */
   spin: number;
+  /** 零件是从哪儿散开的(渲染用) */
+  scatterX: number;
+  scatterY: number;
+  /** 现在装的是哪种弹丸 */
+  shell: ShellKind;
+  /** 弹力球下一发往哪边斜(每打一发换一边,预测虚线会跟着翻) */
+  tilt: 1 | -1;
+  /** 炮口前摇剩余秒:>0 表示已经按下,弹丸还没出膛 */
+  windup: number;
+  /** 前摇结束要打哪种弹丸 */
+  windupShell: ShellKind;
+  /** 后坐剩余秒(渲染把车身往后推 4–6px) */
+  recoil: number;
+  /** 冰上滑行速度(格/秒)与滑行方向 */
+  glide: number;
+  glideDir: Dir;
   /** 备用砖块数(玩家) */
   bricks: number;
   /** 场上还剩几发自己的炮弹 */
@@ -402,6 +459,8 @@ export interface Tank {
   aiTimer: number;
   aiDir: Dir | -1;
   aiFire: boolean;
+  /** 这辆车的脾气分档:乱转 / 追人 / 绕后卡位 */
+  tier: AiTier;
   /** 敌人这一阵子想干嘛:去砸堡垒,还是先找玩家的麻烦 */
   goal: "base" | "player";
   goalTimer: number;
@@ -415,15 +474,34 @@ export interface Bullet {
   id: number;
   owner: number;
   side: TankSide;
-  /** 开炮的是哪位玩家(对战模式判分用) */
+  /** 开火的是哪位玩家(对战模式判分用) */
   player: number;
   x: number;
   y: number;
   dir: Dir;
   speed: number;
+  /** 哪一种弹丸;不写就是直线弹 */
+  kind?: ShellKind;
+  /** 速度方向(单位向量);不写就按 dir 走直线 */
+  vx?: number;
+  vy?: number;
+  /** 还能弹几次墙 */
+  bounces?: number;
+  /** 还能穿几层墙 */
+  pierces?: number;
 }
 
-export type EffectKind = "smoke" | "flower" | "spark" | "crumb" | "shield";
+/** 一发弹丸的速度方向(老数据只有 dir 也认) */
+export function bulletVec(b: Bullet): Vec2 {
+  if (b.vx === undefined || b.vy === undefined) return { x: DX[b.dir], y: DY[b.dir] };
+  return { x: b.vx, y: b.vy };
+}
+
+export function bulletKind(b: Bullet): ShellKind {
+  return b.kind ?? "plain";
+}
+
+export type EffectKind = "smoke" | "flower" | "spark" | "crumb" | "shield" | "parts" | "build";
 
 export interface Effect {
   kind: EffectKind;
@@ -465,8 +543,10 @@ export interface World {
   defeated: number;
   bounced: number;
   score: number;
-  /** 堡垒外面那层星星护罩:先替堡垒挡一发,碎了就要小心了 */
+  /** 老巢外面那层星星护罩:先替老巢挡一发,碎了要等它自己充能回来 */
   baseShield: boolean;
+  /** 护罩还要充几秒才回来(护罩还在时是 0) */
+  shieldTimer: number;
   /** 开局时护墙占的格子(补墙提示与 AI 都看它) */
   fortCells: Cell[];
   /** 无尽模式已经打到第几波 */
@@ -477,6 +557,11 @@ export interface World {
   rng: () => number;
   /** 两位玩家都在场?(单人时 1 号位不出场) */
   players: number;
+  /**
+   * 哪个位子交给电脑陪练(对战一个人来的时候用):
+   * `aiTiers[1] = "chase"` 就是星星那台由电脑开,难度是「追人」。
+   */
+  aiTiers: Array<AiTier | null>;
 }
 
 export interface PlayerInput {
@@ -500,6 +585,8 @@ export interface WorldOptions {
   /** 对战模式弹飞几次算赢 */
   target?: number;
   seed?: number;
+  /** 哪个位子交给电脑陪练 */
+  aiTiers?: ReadonlyArray<AiTier | null>;
 }
 
 function makePlayerTank(id: number, player: 0 | 1, spawn: Cell, bricks: number): Tank {
@@ -519,12 +606,22 @@ function makePlayerTank(id: number, player: 0 | 1, spawn: Cell, bricks: number):
     armorMax: 1,
     shield: SHIELD_SECONDS,
     spin: 0,
+    scatterX: spawn.cx + 0.5,
+    scatterY: spawn.cy + 0.5,
+    shell: "plain",
+    tilt: 1,
+    windup: 0,
+    windupShell: "plain",
+    recoil: 0,
+    glide: 0,
+    glideDir: 0,
     bricks,
     shots: 0,
     maxShots: 2,
     aiTimer: 0,
     aiDir: -1,
     aiFire: false,
+    tier: "chase",
     goal: "player",
     goalTimer: 0,
     stuck: 0,
@@ -537,10 +634,10 @@ function makePlayerTank(id: number, player: 0 | 1, spawn: Cell, bricks: number):
  * 机灵车是专门绕后偷家的,所以最高;快速兵爱追着人跑,所以最低。
  */
 export const BASE_BIAS: Record<EnemyKind, number> = {
-  swift: 0.12,
-  armor: 0.22,
-  power: 0.18,
-  smart: 0.5,
+  swift: 0.06,
+  armor: 0.11,
+  power: 0.09,
+  smart: 0.3,
 };
 
 /** 重新拿主意的间隔(秒) */
@@ -548,6 +645,17 @@ export const GOAL_SECONDS = 5;
 
 /** 卡住多久才会动手拆挡路的砖(秒) */
 export const STUCK_SECONDS = 0.7;
+
+/**
+ * 每种铁皮车的脾气分档。三档是分开的三套走法(见 `ai12.ts`):
+ * 快速兵满场乱转,装甲车和火力车认准人就追,机灵车专门绕后卡位。
+ */
+export const TIER_BY_KIND: Record<EnemyKind, AiTier> = {
+  swift: "wander",
+  armor: "chase",
+  power: "chase",
+  smart: "flank",
+};
 
 function makeEnemyTank(id: number, kind: EnemyKind, spawn: Cell, rand: () => number): Tank {
   const spec = ENEMY_SPECS[kind];
@@ -567,12 +675,22 @@ function makeEnemyTank(id: number, kind: EnemyKind, spawn: Cell, rand: () => num
     armorMax: spec.armor,
     shield: 0,
     spin: 0,
+    scatterX: spawn.cx + 0.5,
+    scatterY: spawn.cy + 0.5,
+    shell: "plain",
+    tilt: 1,
+    windup: 0,
+    windupShell: "plain",
+    recoil: 0,
+    glide: 0,
+    glideDir: 2,
     bricks: 0,
     shots: 0,
     maxShots: kind === "power" ? 2 : 1,
     aiTimer: 0,
     aiDir: -1,
     aiFire: false,
+    tier: TIER_BY_KIND[kind],
     goal: rand() < BASE_BIAS[kind] ? "base" : "player",
     goalTimer: GOAL_SECONDS + rand() * GOAL_SECONDS,
     stuck: 0,
@@ -611,12 +729,14 @@ export function createWorld(opts: WorldOptions): World {
     bounced: 0,
     score: 0,
     baseShield: true,
+    shieldTimer: 0,
     fortCells: scanFort(map),
     wave: 0,
     nextId,
     seed: opts.seed ?? 1,
     rng: mulberry32(opts.seed ?? 20260826),
     players,
+    aiTiers: [opts.aiTiers?.[0] ?? null, opts.aiTiers?.[1] ?? null],
   };
 }
 
@@ -690,30 +810,117 @@ export function moveTank(w: World, t: Tank, dir: Dir, dist: number): boolean {
   return true;
 }
 
+/** 站着的这一格滑不滑 */
+export function onIce(w: World, t: Tank): boolean {
+  return isSlippery(tileAt(w.map, Math.floor(t.x), Math.floor(t.y)));
+}
+
+/**
+ * 冰上溜车:不改车头朝向,只让车身继续往前滑。
+ * 于是在冰上「炮口指着一边、人往另一边溜」是做得到的——这也是冰面最好玩的地方。
+ */
+export function slideTank(w: World, t: Tank, dir: Dir, dist: number): boolean {
+  const nx = t.x + DX[dir] * dist;
+  const ny = t.y + DY[dir] * dist;
+  if (!canStand(w, t, nx, ny)) return false;
+  t.x = nx;
+  t.y = ny;
+  t.moved = true;
+  return true;
+}
+
+/**
+ * 走一帧。空地上说停就停;冰上起步慢、松手还要溜一段(`terrain12.ts` 的摩擦公式)。
+ * 返回这一帧到底有没有挪动。
+ */
+export function driveTank(w: World, t: Tank, want: Dir | -1, dt: number): boolean {
+  const ice = onIce(w, t);
+  if (want >= 0) {
+    if (!ice) {
+      t.glide = 0;
+      return moveTank(w, t, want as Dir, t.speed * dt);
+    }
+    // 冰上蹬地:方向立刻改,速度得慢慢加
+    if (t.glideDir !== want) {
+      t.glide = Math.max(0, t.glide - t.speed * dt);
+      if (t.glide <= 0.05) t.glideDir = want as Dir;
+    } else {
+      t.glide = iceSteer(t.glide, t.speed, dt);
+    }
+    const moved = moveTank(w, t, want as Dir, Math.max(t.glide, t.speed * 0.35) * dt);
+    if (!moved) t.glide = 0;
+    return moved;
+  }
+  if (!ice || t.glide <= 0) {
+    t.glide = 0;
+    return false;
+  }
+  // 松手了:顺着原来的方向溜,朝向不变
+  const moved = slideTank(w, t, t.glideDir, t.glide * dt);
+  t.glide = moved ? iceGlide(t.glide, dt) : 0;
+  return moved;
+}
+
 // ---------------------------------------------------------------------------
-// 开炮
+// 开火
 // ---------------------------------------------------------------------------
 
 export function canFire(t: Tank): boolean {
-  return t.cool <= 0 && t.shots < t.maxShots && t.spin <= 0;
+  return t.cool <= 0 && t.shots < t.maxShots && t.spin <= 0 && t.windup <= 0;
 }
 
-export function fire(w: World, t: Tank): Bullet | null {
-  if (!canFire(t)) return null;
-  t.cool = t.coolMax;
+/** 这一发弹丸的冷却:好用的弹丸要多等一会儿 */
+export function shellCool(t: Tank, kind: ShellKind): number {
+  return t.coolMax * SHELLS[kind].coolMul;
+}
+
+/**
+ * 扣下扳机。有一点点前摇(`MUZZLE_WINDUP`),弹丸在前摇结束的那一帧才出膛——
+ * 就是这一小顿让「开火」有分量。前摇期间再按不叠加。
+ */
+export function pullTrigger(w: World, t: Tank, kind: ShellKind = t.shell): boolean {
+  if (!canFire(t)) return false;
+  t.windup = MUZZLE_WINDUP;
+  t.windupShell = kind;
+  t.cool = shellCool(t, kind);
   t.shots += 1;
+  return true;
+}
+
+/** 弹丸真的出膛(前摇走完,或者测试 / AI 直接开一发) */
+export function launch(w: World, t: Tank, kind: ShellKind = t.shell): Bullet {
+  const spec = SHELLS[kind];
+  const v = shotVelocity(t.dir, kind, t.tilt);
   const b: Bullet = {
     id: w.nextId++,
     owner: t.id,
     side: t.side,
     player: t.player,
-    x: t.x + DX[t.dir] * (TANK_HALF + 0.08),
-    y: t.y + DY[t.dir] * (TANK_HALF + 0.08),
+    x: t.x + v.x * (TANK_HALF + 0.08),
+    y: t.y + v.y * (TANK_HALF + 0.08),
     dir: t.dir,
-    speed: t.bulletSpeed,
+    speed: t.bulletSpeed * spec.speedMul,
+    kind,
+    vx: v.x,
+    vy: v.y,
+    bounces: spec.maxBounces,
+    pierces: spec.pierceBlocks,
   };
+  if (kind === "bounce") t.tilt = t.tilt === 1 ? -1 : 1;
+  t.recoil = RECOIL_SECONDS;
   w.bullets.push(b);
   return b;
+}
+
+/**
+ * 开一发(老接口:立刻出膛,没有前摇)。
+ * 运行时走 `pullTrigger`,AI 与用例走这条,两边打出来的弹丸一模一样。
+ */
+export function fire(w: World, t: Tank, kind: ShellKind = t.shell): Bullet | null {
+  if (!canFire(t)) return null;
+  t.cool = shellCool(t, kind);
+  t.shots += 1;
+  return launch(w, t, kind);
 }
 
 /** 放一块备用砖:放在车头前面那一格,占着人或已经有东西就放不了 */
@@ -729,6 +936,7 @@ export function placeBrick(w: World, t: Tank): boolean {
   }
   w.map.tiles[i] = "#";
   w.map.brickHp[i] = BRICK_HP;
+  w.map.brickMask[i] = BRICK_FULL;
   t.bricks -= 1;
   w.effects.push({ kind: "crumb", x: cx + 0.5, y: cy + 0.5, t: 0, life: 0.35 });
   return true;
@@ -840,21 +1048,71 @@ function enemyTargets(w: World, t: Tank): Cell[] {
 }
 
 /**
- * 敌人这一帧想干什么。会缓存 0.3 秒,既省算力又让走位看起来不那么神经质。
- * 机灵车把堡垒正门封掉重算,于是自然而然会从侧面绕过去。
+ * 把当前地图翻成 `ai12.ts` 认识的格子图:
+ * 钢板 / 水洼 / 老巢是墙,砖只是「贵一点」(打得穿)。
+ */
+export function worldGrid(w: World, brickCost = 5): Grid {
+  return {
+    w: w.map.w,
+    h: w.map.h,
+    wall: (cx, cy) => {
+      const tile = tileAt(w.map, cx, cy);
+      return tile === "S" || tile === "~" || tile === "B";
+    },
+    cost: (cx, cy) => (tileAt(w.map, cx, cy) === "#" ? brickCost : 1),
+  };
+}
+
+/** 乱转的车离目标这么近就不装了,直接扑上去(格) */
+export const WANDER_LOCK = 6;
+/** 乱转的车每次拿主意时,有这么大概率会朝目标那边挪一步(其余时间真的在瞎逛) */
+export const WANDER_DRIFT = 0.25;
+
+/** 一辆车正前方的两格:绕后的时候要躲开这条炮口线 */
+export function muzzleCells(t: Tank): Cell[] {
+  const here = tankCell(t);
+  return [
+    { cx: here.cx + DX[t.dir], cy: here.cy + DY[t.dir] },
+    { cx: here.cx + DX[t.dir] * 2, cy: here.cy + DY[t.dir] * 2 },
+  ];
+}
+
+/** A\* 找路的第一步(墙角过路费默认开着,所以不会往死胡同里钻) */
+export function stepToward(grid: Grid, from: Cell, to: Cell, blocked?: readonly Cell[]): Dir | -1 {
+  const path = astar(grid, from, to, blocked ? { blocked } : {});
+  if (!path || path.length < 2) return -1;
+  return pathDirs(path)[0] ?? -1;
+}
+
+/**
+ * 铁皮车这一帧想干什么。按脾气分档走三套路子(`ai12.ts`):
+ * 乱转的瞎逛、追人的用 A\* 一路找过去、绕后的先把正门封掉再算路。
+ * 拿定的主意会缓存一小会儿,既省算力又让走位看着不神经质。
  */
 export function enemyIntent(w: World, t: Tank): { dir: Dir | -1; fire: boolean } {
   const targets = enemyTargets(w, t);
   if (targets.length === 0) return { dir: -1, fire: false };
-  const blocked = t.kind === "smart" && t.goal === "base" ? frontDoor(w.map) : undefined;
-  const field = distanceField(w.map, targets, { brickCost: t.kind === "armor" ? 3 : 5, blocked });
+  const spec = TIER_SPECS[t.tier];
   const here = tankCell(t);
-  let dir = stepDownField(w.map, field, here);
-  if (dir === -1 && blocked) {
-    // 侧门被自己人堵死了就老老实实走正门,别原地发呆
-    dir = stepDownField(w.map, distanceField(w.map, targets, { brickCost: 5 }), here);
+  const target = targets[0];
+  const grid = worldGrid(w, t.kind === "armor" ? 3 : 5);
+
+  let dir: Dir | -1 = -1;
+  // 乱转的车也不是瞎子:目标凑到眼前了就扑上去,平时也会往那边飘一飘
+  const hunts = spec.paths || manhattan(here, target) <= WANDER_LOCK || w.rng() < WANDER_DRIFT;
+  if (hunts) {
+    let goal = target;
+    let blocked: Cell[] | undefined;
+    if (spec.flanks && t.goal === "base" && w.map.base) {
+      blocked = frontDoor(w.map);
+      const side = flankPick(grid, w.map.base, blocked, here);
+      if (side) goal = side;
+    }
+    dir = stepToward(grid, here, goal, blocked);
+    // 侧门也被堵死了就老老实实走正门,别原地发呆
+    if (dir === -1) dir = stepToward(grid, here, target);
   }
-  if (dir === -1) dir = t.dir;
+  if (dir === -1) dir = wanderStep(grid, here, t.dir, w.rng);
 
   // 先看看现在这个朝向能不能直接打到东西
   const ahead = lineOfFire(w, t, 9);
@@ -870,18 +1128,87 @@ export function enemyIntent(w: World, t: Tank): { dir: Dir | -1; fire: boolean }
   return { dir, fire: false };
 }
 
+/**
+ * 电脑陪练:对战模式里一个人来的时候,另一台车交给它开。
+ * 用的是同一套三档脾气——`wander` 瞎逛顺手打、`chase` A\* 追着打、
+ * `flank` 绕开对方炮口线从侧面摸过去。
+ */
+export function aiPlayerInput(w: World, t: Tank, tier: AiTier): PlayerInput {
+  if (t.spin > 0) return IDLE_INPUT;
+  const spec = TIER_SPECS[tier];
+  const foe = w.tanks.find((o) => o.id !== t.id && (o.side !== t.side || o.player !== t.player));
+  if (!foe) return IDLE_INPUT;
+  const here = tankCell(t);
+  const there = tankCell(foe);
+  const ray = lineOfFire(w, t, spec.fireRange);
+  // 已经瞄上了:站住别动,先来一发
+  if (ray.kind === "player" || ray.kind === "enemy") return { dir: -1, fire: true, brick: false };
+
+  const grid = worldGrid(w, 4);
+  let dir: Dir | -1 = -1;
+  const hunts = spec.paths || manhattan(here, there) <= WANDER_LOCK;
+  if (hunts) {
+    let goal = there;
+    if (spec.flanks) {
+      const side = flankPick(grid, there, muzzleCells(foe), here);
+      if (side) goal = side;
+    }
+    dir = stepToward(grid, here, goal);
+    if (dir === -1) dir = stepToward(grid, here, there);
+  }
+  if (dir === -1) dir = wanderStep(grid, here, t.dir, w.rng);
+
+  const nx = here.cx + DX[dir];
+  const ny = here.cy + DY[dir];
+  const wantFire = tileAt(w.map, nx, ny) === "#" && t.dir === dir && ray.kind === "brick" && ray.dist < 1.8;
+  return { dir, fire: wantFire, brick: false };
+}
+
 // ---------------------------------------------------------------------------
-// 炮弹结算
+// 弹丸结算
 // ---------------------------------------------------------------------------
 
-function damageBrick(w: World, cx: number, cy: number): void {
+/**
+ * 一发弹丸打在砖上:按四分之一格结算。
+ * `cross` 是弹丸在另一根轴上的格内位置——打在格中线上就一次崩掉半格(老规矩两发一格),
+ * 打偏了只崩掉一角,墙上就多出一条只有弹丸钻得过的缝。
+ */
+function damageBrick(w: World, cx: number, cy: number, dir: Dir, cross: number, whole = false): void {
   const i = cellIndex(w.map, cx, cy);
-  w.map.brickHp[i] -= 1;
-  if (w.map.brickHp[i] <= 0) {
+  const before = w.map.brickMask[i] || BRICK_FULL;
+  const after = whole ? 0 : chipBrick(before, dir, cross);
+  w.map.brickMask[i] = after;
+  w.map.brickHp[i] = maskToHp(after);
+  if (brickGone(after)) {
     w.map.tiles[i] = ".";
     w.map.brickHp[i] = 0;
+    w.map.brickMask[i] = 0;
   }
   w.effects.push({ kind: "crumb", x: cx + 0.5, y: cy + 0.5, t: 0, life: 0.3 });
+}
+
+/** 彩纸穿甲弹拆钢板:钢板碎成一地彩纸,留下一块空地 */
+function breakSteel(w: World, cx: number, cy: number): void {
+  const i = cellIndex(w.map, cx, cy);
+  w.map.tiles[i] = ".";
+  w.map.brickHp[i] = 0;
+  w.map.brickMask[i] = 0;
+  w.effects.push({ kind: "spark", x: cx + 0.5, y: cy + 0.5, t: 0, life: 0.35 });
+}
+
+/** 弹丸在这一点上过不过得去(砖只看那一个小块,所以缺口能钻) */
+export function shellBlockedAt(w: World, cx: number, cy: number, x: number, y: number): boolean {
+  const tile = tileAt(w.map, cx, cy);
+  if (!blocksShell(tile)) return false;
+  if (tile !== "#") return true;
+  const i = cellIndex(w.map, cx, cy);
+  if (!inside(w.map, cx, cy)) return true;
+  return quarterSolid(w.map.brickMask[i] || BRICK_FULL, x - cx, y - cy);
+}
+
+/** 给弹道预测用:一张「哪里挡弹丸」的问答表 */
+export function blockedProbe(w: World): BlockedAt {
+  return (cx, cy, x, y) => shellBlockedAt(w, cx, cy, x, y);
 }
 
 function releaseShot(w: World, ownerId: number): void {
@@ -889,16 +1216,64 @@ function releaseShot(w: World, ownerId: number): void {
   if (owner) owner.shots = Math.max(0, owner.shots - 1);
 }
 
-/** 我方坦克被打中:弹回出生点转两圈,不掉血也不淘汰 */
-function bouncePlayer(w: World, t: Tank): void {
-  const spawn = w.map.playerSpawns[t.player] ?? w.map.playerSpawns[0];
+/**
+ * 自己人被打中:零件散一地,3 秒后在出生点一件一件组装回来。
+ * 没有淘汰、没有伤,连「掉血」这个词都不存在——只是要等一会儿才回得来。
+ */
+/** 出生点周围这么近有铁皮车,就算「有人堵门」 */
+export const SAFE_SPAWN_DIST = 3;
+
+/** 星星护罩碎了之后,过这么多秒自己充能回来 */
+export const BASE_SHIELD_REGROW = 14;
+
+/**
+ * 挑一个组装回来的地方:自己的出生点门口有车堵着,就先去队友那个点组装。
+ * 没有这一条的话,一辆车守在出生点门口就能把人按在原地反复打散,那太糟心了。
+ */
+export function safeSpawn(w: World, player: number): Cell {
+  const spots = w.map.playerSpawns;
+  const mine = spots[player] ?? spots[0];
+  const risk = (c: Cell): number => {
+    let n = 0;
+    for (const o of w.tanks) {
+      if (o.side !== "enemy") continue;
+      if (Math.abs(o.x - (c.cx + 0.5)) + Math.abs(o.y - (c.cy + 0.5)) <= SAFE_SPAWN_DIST) n += 1;
+    }
+    return n;
+  };
+  if (risk(mine) === 0) return mine;
+  let best = mine;
+  let bestRisk = risk(mine);
+  for (const spot of spots) {
+    if (!spot) continue;
+    const r = risk(spot);
+    if (r < bestRisk) {
+      bestRisk = r;
+      best = spot;
+    }
+  }
+  return best;
+}
+
+function scatterPlayer(w: World, t: Tank): void {
+  const spawn = safeSpawn(w, t.player);
+  t.scatterX = t.x;
+  t.scatterY = t.y;
   t.x = spawn.cx + 0.5;
   t.y = spawn.cy + 0.5;
   t.dir = 0;
-  t.spin = SPIN_SECONDS;
-  t.shield = SPIN_SECONDS + SHIELD_SECONDS;
+  t.glide = 0;
+  // 前摇里被打散的话,那一发没打出去,得把占着的位子还回来,
+  // 不然场上炮弹名额会被吃掉,再也开不了火
+  if (t.windup > 0) {
+    t.windup = 0;
+    t.shots = Math.max(0, t.shots - 1);
+  }
+  t.spin = REBUILD_SECONDS;
+  t.shield = REBUILD_SECONDS + SHIELD_SECONDS;
   w.bounced += 1;
-  w.effects.push({ kind: "smoke", x: t.x, y: t.y, t: 0, life: 0.6 });
+  w.effects.push({ kind: "parts", x: t.scatterX, y: t.scatterY, t: 0, life: SCATTER_SECONDS });
+  w.effects.push({ kind: "build", x: t.x, y: t.y, t: 0, life: REBUILD_SECONDS });
 }
 
 /** 敌方坦克挨一发:装甲没扣完只冒烟,扣完了变成一朵花退场 */
@@ -916,13 +1291,37 @@ function hitEnemy(w: World, t: Tank): void {
   w.effects.push({ kind: "flower", x: t.x, y: t.y, t: 0, life: 0.9 });
 }
 
-/** 单发炮弹推进一小步;返回 true 表示这发炮弹没了 */
+/** 弹丸撞墙:能弹就按反射公式弹开,返回 true 表示这一发到此为止 */
+function bounceOffWall(w: World, b: Bullet, fromX: number, fromY: number): boolean {
+  if ((b.bounces ?? 0) <= 0) return true;
+  const v = bulletVec(b);
+  const axis =
+    (shellBlockedAt(w, Math.floor(b.x), Math.floor(fromY), b.x, fromY) ? 1 : 0) +
+    (shellBlockedAt(w, Math.floor(fromX), Math.floor(b.y), fromX, b.y) ? 2 : 0);
+  const back = reflect(v, axis === 1 ? "x" : axis === 2 ? "y" : "both");
+  b.vx = back.x;
+  b.vy = back.y;
+  b.bounces = (b.bounces ?? 0) - 1;
+  // 退回撞墙前那一点,免得卡在墙里反复反射
+  b.x = fromX;
+  b.y = fromY;
+  // 车头朝向只用来画图,顺手对齐到最接近的轴向
+  b.dir = Math.abs(back.x) >= Math.abs(back.y) ? (back.x >= 0 ? 1 : 3) : back.y >= 0 ? 2 : 0;
+  w.effects.push({ kind: "spark", x: b.x, y: b.y, t: 0, life: 0.18 });
+  return false;
+}
+
+/** 单发弹丸推进一小步;返回 true 表示这一发没了 */
 function advanceBullet(w: World, b: Bullet, dist: number): boolean {
-  b.x += DX[b.dir] * dist;
-  b.y += DY[b.dir] * dist;
+  const v = bulletVec(b);
+  const fromX = b.x;
+  const fromY = b.y;
+  b.x += v.x * dist;
+  b.y += v.y * dist;
   const cx = Math.floor(b.x);
   const cy = Math.floor(b.y);
   if (!inside(w.map, cx, cy)) {
+    if ((b.bounces ?? 0) > 0) return bounceOffWall(w, b, fromX, fromY);
     w.effects.push({ kind: "spark", x: b.x, y: b.y, t: 0, life: 0.2 });
     return true;
   }
@@ -930,8 +1329,9 @@ function advanceBullet(w: World, b: Bullet, dist: number): boolean {
   if (tile === "B") {
     if (b.side === "enemy") {
       if (w.baseShield) {
-        // 护罩替堡垒挨了这一发:给玩家一次补墙救场的机会
+        // 护罩替老巢挨了这一发:给玩家一段补墙救场的时间,护罩自己会再充回来
         w.baseShield = false;
+        w.shieldTimer = BASE_SHIELD_REGROW;
         w.effects.push({ kind: "shield", x: cx + 0.5, y: cy + 0.5, t: 0, life: 0.5 });
         return true;
       }
@@ -942,11 +1342,30 @@ function advanceBullet(w: World, b: Bullet, dist: number): boolean {
     return true;
   }
   if (tile === "S") {
+    // 钢板:只有彩纸穿甲弹拆得动,弹力球会被弹开,普通弹丸就散了
+    if (SHELLS[bulletKind(b)].breaksSteel && (b.pierces ?? 0) > 0) {
+      breakSteel(w, cx, cy);
+      b.pierces = (b.pierces ?? 0) - 1;
+      return (b.pierces ?? 0) <= 0;
+    }
+    if ((b.bounces ?? 0) > 0) return bounceOffWall(w, b, fromX, fromY);
     w.effects.push({ kind: "spark", x: b.x, y: b.y, t: 0, life: 0.2 });
     return true;
   }
   if (tile === "#") {
-    damageBrick(w, cx, cy);
+    const i = cellIndex(w.map, cx, cy);
+    const mask = w.map.brickMask[i] || BRICK_FULL;
+    // 缺口已经开在这儿了,弹丸直接钻过去
+    if (!quarterSolid(mask, b.x - cx, b.y - cy)) return false;
+    const vertical = Math.abs(v.y) >= Math.abs(v.x);
+    const face: Dir = vertical ? (v.y >= 0 ? 2 : 0) : v.x >= 0 ? 1 : 3;
+    const cross = vertical ? b.x - cx : b.y - cy;
+    if (SHELLS[bulletKind(b)].breaksSteel && (b.pierces ?? 0) > 0) {
+      damageBrick(w, cx, cy, face, cross, true);
+      b.pierces = (b.pierces ?? 0) - 1;
+      return (b.pierces ?? 0) <= 0;
+    }
+    damageBrick(w, cx, cy, face, cross);
     return true;
   }
   for (const o of w.tanks) {
@@ -961,7 +1380,7 @@ function advanceBullet(w: World, b: Bullet, dist: number): boolean {
       return true;
     }
     if (o.side === "player") {
-      bouncePlayer(w, o);
+      scatterPlayer(w, o);
       if (w.mode === "versus" && b.player >= 0) {
         w.scores[b.player] += 1;
         if (w.scores[b.player] >= w.target) {
@@ -1013,20 +1432,40 @@ function spawnFromQueue(w: World, dt: number): void {
   w.spawnTimer = 0.4;
 }
 
-function stepTimers(t: Tank, dt: number): void {
+function stepTimers(w: World, t: Tank, dt: number): void {
   t.cool = Math.max(0, t.cool - dt);
   t.shield = Math.max(0, t.shield - dt);
   t.spin = Math.max(0, t.spin - dt);
+  t.recoil = Math.max(0, t.recoil - dt);
   t.moved = false;
+  if (t.windup > 0) {
+    t.windup -= dt;
+    // 前摇走完的那一帧,弹丸才真的出膛
+    if (t.windup <= 0) {
+      t.windup = 0;
+      if (t.spin <= 0) launch(w, t, t.windupShell);
+      else t.shots = Math.max(0, t.shots - 1);
+    }
+  }
+}
+
+/**
+ * 一位玩家这一帧的操作。
+ * 位子上坐的是电脑陪练(`w.aiTiers`)就把摇杆交给 AI,其余照读真人的输入。
+ */
+export function inputForPlayer(w: World, t: Tank, inputs: readonly PlayerInput[]): PlayerInput {
+  const tier = w.aiTiers[t.player];
+  if (tier) return aiPlayerInput(w, t, tier);
+  return inputs[t.player] ?? IDLE_INPUT;
 }
 
 function stepPlayers(w: World, dt: number, inputs: readonly PlayerInput[]): void {
   for (const t of w.tanks) {
     if (t.side !== "player") continue;
-    const input = inputs[t.player] ?? IDLE_INPUT;
     if (t.spin > 0) continue;
-    if (input.dir >= 0) moveTank(w, t, input.dir as Dir, t.speed * dt);
-    if (input.fire) fire(w, t);
+    const input = inputForPlayer(w, t, inputs);
+    driveTank(w, t, input.dir, dt);
+    if (input.fire) pullTrigger(w, t);
     if (input.brick) placeBrick(w, t);
   }
 }
@@ -1049,7 +1488,7 @@ function stepEnemies(w: World, dt: number): void {
       t.aiTimer = 0.3;
     }
     if (t.aiDir >= 0) {
-      const ok = moveTank(w, t, t.aiDir as Dir, t.speed * dt);
+      const ok = driveTank(w, t, t.aiDir as Dir, dt);
       if (ok) {
         t.stuck = 0;
       } else {
@@ -1102,6 +1541,16 @@ function stepBullets(w: World, dt: number): void {
   w.bullets = alive.filter((b) => !dropped.has(b.id));
 }
 
+/** 护罩充能:碎了不是就没了,等一会儿它自己会亮回来 */
+function stepBaseShield(w: World, dt: number): void {
+  if (w.baseShield || !w.map.base || w.shieldTimer <= 0) return;
+  w.shieldTimer -= dt;
+  if (w.shieldTimer > 0) return;
+  w.shieldTimer = 0;
+  w.baseShield = true;
+  w.effects.push({ kind: "shield", x: w.map.base.cx + 0.5, y: w.map.base.cy + 0.5, t: 0, life: 0.6 });
+}
+
 function stepEffects(w: World, dt: number): void {
   for (const e of w.effects) e.t += dt;
   if (w.effects.length > 0) w.effects = w.effects.filter((e) => e.t < e.life);
@@ -1132,11 +1581,12 @@ function checkEnd(w: World): void {
 export function stepWorld(w: World, dt: number, inputs: readonly PlayerInput[] = []): void {
   if (w.status !== "playing") return;
   w.time += dt;
-  for (const t of w.tanks) stepTimers(t, dt);
+  for (const t of [...w.tanks]) stepTimers(w, t, dt);
   spawnFromQueue(w, dt);
   stepPlayers(w, dt, inputs);
   stepEnemies(w, dt);
   stepBullets(w, dt);
+  stepBaseShield(w, dt);
   stepEffects(w, dt);
   checkEnd(w);
 }
