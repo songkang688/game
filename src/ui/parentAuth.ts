@@ -676,14 +676,3 @@ export function requestParentAuth(level: AuthLevel, reason: string): Promise<boo
     renderStatus();
   });
 }
-
-/**
- * 跳关授权:壳层把它注册进 `level188Contract` 的 `requestSkip`。
- * 关号按 1 基写进 reason,家长看到的就是孩子屏幕上的那一关。
- */
-export function requestSkipAuth(gameTitle: string, level: number): Promise<boolean> {
-  return requestParentAuth(
-    "high",
-    `孩子想跳过《${gameTitle}》第 ${level + 1} 关,需要家长确认。跳过的关会记 0 星并留下记录。`
-  );
-}
