@@ -248,7 +248,7 @@ export interface FieldOptions {
   makeTargets: (playerIndex: number) => Target[];
   blocks: Block[];
   sfx: (name: "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump") => void;
-  /** 一个玩家清完场 / 时间到 / 子弹打完时调用 */
+  /** 一个玩家清完场 / 时间到 / 星星弹用完时调用 */
   onFinish: (panes: Pane[], reason: "cleared" | "timeup" | "empty") => void;
   /** 靶潮模式:清完一波后要不要续下一波,返回 null 表示不续 */
   nextWave?: (pane: Pane) => { targets: Target[]; seconds: number } | null;
@@ -650,7 +650,7 @@ function createField(opts: FieldOptions): FieldHandle {
     if (finished) return;
     paused = !paused;
     if (paused) {
-      veil("休息一下 ⏸️", opts.pauseNote ?? "准星和弹匣都给你留着,随时回来继续。", [
+      veil("休息一下 ⏸️", opts.pauseNote ?? "准星和星星弹都给你留着,随时回来继续。", [
         { label: "继续 ▶", onClick: () => togglePause() },
       ]);
     } else {
@@ -1129,7 +1129,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         ctx.lose(
           reason === "timeup"
             ? `时间到,还剩 ${stat.remaining} 个靶。下次先挑好打的开手,连击起来就快了。`
-            : `子弹用完啦,还剩 ${stat.remaining} 个靶。瞄准多花半秒,能省下好几发。`
+            : `星星弹用完啦,还剩 ${stat.remaining} 个靶。瞄准多花半秒,能省下好几发。`
         );
       }
     },
@@ -1354,7 +1354,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         general: [
           "先扫一眼全场,把「会跑的」和「站着不动的」分开:先打会跑的,站着的什么时候打都行。",
           "连击断了不心疼,乱开一发才是真亏——命中率是评星的大头。",
-          "弹匣打空会自动换弹,与其被迫等,不如在打完一波的空当主动按换弹。",
+          "弹夹打空会自动换弹,与其被迫等,不如在打完一波的空当主动按换弹。",
           "移动靶在掉头的一瞬间几乎是静止的,那一下最好打。",
         ],
         entries: CHAPTERS.map((ch, ci) => {
@@ -1372,7 +1372,7 @@ export function mount(api: GameApi): { destroy: () => void } {
                   ? "编号靶先在心里数一遍 1234,再动手,打错顺序只会白费一发。"
                   : ci === 6
                     ? "看到举小旗子的笑脸就把准星移开,它是好人靶。"
-                    : "越往后靶子越小,准星停稳半秒再扣扳机比抢时间划算。",
+                    : "越往后靶子越小,准星停稳半秒再按发射比抢时间划算。",
             ],
           };
         }),

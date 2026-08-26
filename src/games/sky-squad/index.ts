@@ -3,7 +3,7 @@ export { meta };
 
 // 飞机小队:188 关八片天空 + 无尽波次 + 双人合作。
 // 全部是原创卡通小飞机,被击中只是冒烟迫降滑出画面;
-// 敌弹低速大弹、暖色,我方子弹冷色,一眼分得清谁是谁。
+// 敌弹低速大弹、暖色,我方的星星弹冷色,一眼分得清谁是谁。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
 import {
@@ -1151,7 +1151,7 @@ function createSortie(opts: SortieOptions): SortieHandle {
       g.restore();
     }
 
-    // 我方子弹:冷色
+    // 我方打出去的:冷色
     for (const s2 of myShots) {
       g.fillStyle = WEAPONS[s2.kind].color;
       g.beginPath();
@@ -1481,7 +1481,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         title: "飞行小攻略",
         general: [
           "机身判定点只有中间那一小白点,看着擦到翅膀其实没事,别怕。",
-          "敌弹是暖色大圆点,我方子弹是冷色小点,分不清的时候先看颜色。",
+          "敌弹是暖色大圆点,我们打出去的是冷色小点,分不清的时候先看颜色。",
           "每发敌弹起飞前会先亮一圈预警,看到亮圈就开始挪位置,来得及。",
           "炸弹留给 Boss 的最后一段最划算,平时能躲就别按。",
         ],

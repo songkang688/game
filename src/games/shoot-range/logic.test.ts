@@ -228,11 +228,11 @@ describe("shoot-range 计分与评级", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 弹匣与换弹节奏
+// 星星弹夹与换弹节奏
 // ---------------------------------------------------------------------------
 
 describe("shoot-range 换弹节奏", () => {
-  it("打空弹匣会自动开始换弹,换弹期间打不出子弹", () => {
+  it("打空弹夹会自动开始换弹,换弹期间发不出星星弹", () => {
     let gun = makeGun(2, 1, 0);
     gun = fireGun(gun).gun;
     gun = fireGun(gun).gun;
@@ -245,7 +245,7 @@ describe("shoot-range 换弹节奏", () => {
     expect(canFire(gun)).toBe(true);
   });
 
-  it("主动换弹能提前装满,弹匣是满的时候按了没反应", () => {
+  it("主动换弹能提前装满,弹夹是满的时候按了没反应", () => {
     let gun = makeGun(6, 1, 0);
     expect(startReload(gun)).toBe(gun);
     gun = fireGun(gun).gun;

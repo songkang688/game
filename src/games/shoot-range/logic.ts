@@ -18,7 +18,7 @@ export const FIELD_W = 1000;
 /** 靶场逻辑高度 */
 export const FIELD_H = 620;
 
-/** 枪口位置:画面底部正中,略微在场地下面一点 */
+/** 发射口位置:画面底部正中,略微在场地下面一点 */
 export const MUZZLE_X = FIELD_W / 2;
 export const MUZZLE_Y = FIELD_H + 20;
 
@@ -371,7 +371,7 @@ export function accuracyGrade(acc: number): Grade {
 /** 评级对应的一句夸奖(六年级口吻,不油腻) */
 export function gradeWord(grade: Grade): string {
   return grade === "S"
-    ? "枪枪进环,神准!"
+    ? "发发进环,神准!"
     : grade === "A"
       ? "手很稳,再练练就满分。"
       : grade === "B"
@@ -419,13 +419,13 @@ export function roundMessage(stat: RoundStat): string {
 }
 
 // ---------------------------------------------------------------------------
-// 弹匣与换弹节奏
+// 星星弹夹与换弹节奏
 // ---------------------------------------------------------------------------
 
 export interface Gun {
-  /** 弹匣里还剩几发 */
+  /** 弹夹里还剩几发 */
   mag: number;
-  /** 弹匣容量 */
+  /** 弹夹容量 */
   magSize: number;
   /** 正在换弹时的剩余秒数,0 表示可以打 */
   reloadLeft: number;
@@ -456,7 +456,7 @@ export function fireGun(gun: Gun): { gun: Gun; fired: boolean } {
   };
 }
 
-/** 主动换弹(弹匣满或者正在换就没反应) */
+/** 主动换弹(弹夹满或者正在换就没反应) */
 export function startReload(gun: Gun): Gun {
   if (gun.reloadLeft > 0 || gun.mag >= gun.magSize) return gun;
   return { ...gun, reloadLeft: gun.reloadTime };

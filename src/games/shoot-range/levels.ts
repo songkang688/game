@@ -22,7 +22,7 @@ export const CHAPTERS: Chapter[] = [
   { name: "铁皮工厂", emoji: "🤖", color: "#E2F3E8", desc: "铁皮机器人来回巡逻,打中就摊手坐下。", size: 20 },
   { name: "遮挡迷城", emoji: "🧱", color: "#F3E7DA", desc: "木板会挡住星星弹,得找没被挡住的角度。", size: 20 },
   { name: "编号挑战", emoji: "🔢", color: "#E7F0FB", desc: "靶子带号码,必须从 1 号开始按顺序打。", size: 20 },
-  { name: "好人靶训练", emoji: "🙂", color: "#FFF3E1", desc: "举旗子的笑脸是好人靶,看清楚再扣扳机。", size: 20 },
+  { name: "好人靶训练", emoji: "🙂", color: "#FFF3E1", desc: "举旗子的笑脸是好人靶,看清楚再按发射。", size: 20 },
   { name: "限时竞速", emoji: "⏱️", color: "#FDE6F0", desc: "倒计时开始跑,手快还要手稳。", size: 20 },
   { name: "综合考场", emoji: "📋", color: "#EAE7F8", desc: "前面所有机制混在一起考。", size: 18 },
   { name: "星星大师赛", emoji: "🏆", color: "#FFF0C9", desc: "全机制全开,还要顶住命中率线。", size: 12 },
@@ -62,7 +62,7 @@ const KIND_POOL: TargetKind[][] = [
 ];
 
 const HINTS = [
-  "准星对准圆心再扣扳机,越靠中间环数越高。",
+  "准星对准圆心再按发射,越靠中间环数越高。",
   "气球一直在往上飘,瞄它头顶一点点。",
   "飞碟横着走,等它到画面中间再打最稳。",
   "机器人来回巡逻,在它掉头的一瞬间最好打。",
