@@ -245,9 +245,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     cancelAnimationFrame(raf);
     if (won) {
       const got = ai <= 70 ? 3 : ai <= 88 ? 2 : 1;
-      setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, `朵朵先冲线啦！星星跑了 ${Math.round(ai)} 米，也很努力！`); }, 350);
+      setTimeout(() => { if (!destroyed) ctx.win(got as 1 | 2 | 3, `朵朵先冲线！星星跑到 ${Math.round(ai)} 米，节奏咬得很紧。`); }, 350);
     } else {
-      setTimeout(() => { if (!destroyed) ctx.lose("这局星星先到啦，朵朵也跑得好棒！再来一局一定行！"); }, 350);
+      setTimeout(() => { if (!destroyed) ctx.lose("这局星星先到线～节奏稳住、障碍提前起跳，差距一段就能追回来！"); }, 350);
     }
   }
 
