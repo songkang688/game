@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { AI_ORDER } from "./ai";
-import { createMatch, runMatch } from "./battle";
-import { CHAPTERS, LEVELS, endlessFoe, endlessStage, levelAt, rateLevel } from "./levels";
+import { AI_ORDER, type Input } from "./ai";
+import { createMatch, runMatch, stepMatch } from "./battle";
+import {
+  CHAPTERS,
+  LEVELS,
+  endlessBonusStars,
+  endlessFoe,
+  endlessStage,
+  levelAt,
+  rateLevel,
+} from "./levels";
 import { ITEMS } from "./items";
 import { ROSTER, fighterById } from "./roster";
 import { STAGES, stageById } from "./stages";
@@ -195,6 +203,52 @@ describe("星级与无尽", () => {
     expect(seen.size).toBe(STAGES.length);
     for (const id of seen) expect(stageById(id).id).toBe(id);
   });
+
+  it("车轮战的小星星：每连胜 2 场 1 颗，封顶 6 颗", () => {
+    expect(endlessBonusStars(0)).toBe(0);
+    expect(endlessBonusStars(1)).toBe(0);
+    expect(endlessBonusStars(2)).toBe(1);
+    expect(endlessBonusStars(5)).toBe(2);
+    expect(endlessBonusStars(12)).toBe(6);
+    expect(endlessBonusStars(999)).toBe(6);
+  });
+
+  it("车轮战的小星星不会被乱数字弄崩", () => {
+    expect(endlessBonusStars(-4)).toBe(0);
+    expect(endlessBonusStars(Number.NaN)).toBe(0);
+    expect(endlessBonusStars(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe("第一章是上手坡道", () => {
+  const CH1 = CHAPTERS[0].size;
+
+  it("第一章对手的上场机会从不多于玩家", () => {
+    for (let t = 0; t < CH1; t++) {
+      const lv = LEVELS[t];
+      for (const f of lv.foes) {
+        expect(f.stocks ?? 1).toBeLessThanOrEqual(lv.playerStocks);
+      }
+    }
+  });
+
+  it("第一章头几关对手明显让着玩家", () => {
+    for (let t = 0; t < 4; t++) {
+      const lv = LEVELS[t];
+      // 「一击定」双方都只有 1 次机会，不参与让子
+      if (lv.ruleTag === "一击定") continue;
+      expect(lv.foes[0].stocks!).toBeLessThan(lv.playerStocks);
+    }
+  });
+
+  it("第一章对手力度从七成一路加回十成，之后的章节不再打折", () => {
+    expect(LEVELS[0].foes[0].powerBonus!).toBeLessThan(0.75);
+    expect(LEVELS[CH1 - 1].foes[0].powerBonus!).toBeGreaterThan(
+      LEVELS[0].foes[0].powerBonus!
+    );
+    // 第二章第一关不再有上手折扣
+    expect(LEVELS[CH1].foes[0].powerBonus!).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe("关卡真的打得通", () => {
@@ -262,5 +316,74 @@ describe("关卡真的打得通", () => {
       if (s.winnerTeam === 0) wins++;
     }
     expect(wins).toBeGreaterThanOrEqual(5);
+  });
+});
+
+/**
+ * 「乱按型小玩家」：来回走、一直挥击、偶尔跳一下，完全不看局势。
+ * 这是新手能力的下限。开头几关必须连这种按法都能赢，不然小朋友第一关就卡住了。
+ */
+describe("新手也打得动开头几关", () => {
+  const DT = 1 / 60;
+
+  function masher(t: number, seed: number): Input {
+    const phase = Math.floor(t / 0.49 + seed) % 2;
+    const beat = Math.floor(t / 0.14 + seed) % 3;
+    return {
+      left: phase === 1,
+      right: phase === 0,
+      up: beat === 2 && Math.floor(t / 0.7 + seed) % 5 === 4,
+      down: false,
+      light: beat === 0,
+      heavy: beat === 1 && Math.floor(t / 0.42 + seed) % 3 === 2,
+    };
+  }
+
+  function masherWinRate(level: number, runs: number): number {
+    const lv = LEVELS[level];
+    let wins = 0;
+    for (let i = 0; i < runs; i++) {
+      const seed = 1000 + i * 7919;
+      let s = createMatch({
+        stageId: lv.stageId,
+        slots: [
+          { charId: "duoduo", team: 0, control: "p1", stocks: lv.playerStocks },
+          ...lv.foes.map((f) => ({
+            charId: f.charId,
+            team: 1,
+            control: "ai" as const,
+            aiTier: f.tier,
+            powerBonus: f.powerBonus,
+            stocks: f.stocks,
+          })),
+        ],
+        stocks: lv.playerStocks,
+        timeLimit: lv.timeLimit,
+        itemEvery: lv.itemEvery,
+        itemPool: lv.itemPool,
+        seed,
+      });
+      let t = 0;
+      while (!s.over && t < 240) {
+        s = stepMatch(s, DT, { 0: masher(t, seed % 7) });
+        t += DT;
+      }
+      if (s.winnerTeam === 0) wins++;
+    }
+    return wins / runs;
+  }
+
+  it("第 1 关：乱按也能赢下大半", () => {
+    expect(masherWinRate(0, 16)).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("第 3 关：还是很好过", () => {
+    expect(masherWinRate(2, 16)).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("越往后越不能只靠乱按：第 1 关比第一章大将战好过得多", () => {
+    const first = masherWinRate(0, 16);
+    const boss = masherWinRate(CHAPTERS[0].size - 1, 16);
+    expect(first).toBeGreaterThan(boss + 0.3);
   });
 });

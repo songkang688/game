@@ -141,7 +141,9 @@ function buildLevel(ci: number, t: number, size: number): DuoLevel {
   const isBoss = t === size - 1;
   const spec = isBoss ? RULE_CYCLE[9] : cycle;
   const baseTier = tierFor(ci, t);
-  const bonus = 1 + ci * 0.018 + t * 0.004;
+  // 第一章是上手坡道：对手先让着点，力度从七成一路加回到十成
+  const warmup = ci === 0 ? 0.7 + 0.3 * (t / Math.max(1, size - 1)) : 1;
+  const bonus = (1 + ci * 0.018 + t * 0.004) * warmup;
 
   // 对手人数：章节越靠后越容易出现两三个人
   let foeCount = 1;
@@ -212,6 +214,11 @@ function buildLevel(ci: number, t: number, size: number): DuoLevel {
   }
   // 越往后玩家的容错越少一点点，但至少留 2 条命（一击定关除外）
   if (playerStocks > 1 && ci >= 5 && t % 4 === 3) playerStocks = 2;
+  // 第一章前几关再让一手：对手的上场机会比你少，先让新手尝到赢的滋味；
+  // 连本章大将也不许比你多，免得第一个大将就把人劝退
+  if (ci === 0 && foeStocks > 1) {
+    foeStocks = Math.max(1, Math.min(playerStocks, foeStocks - (t < 4 ? 2 : t < 9 ? 1 : 0)));
+  }
 
   for (const f of foes) f.stocks = foeStocks;
   for (const f of allies) f.stocks = playerStocks;
@@ -268,6 +275,15 @@ export function endlessFoe(round: number): LevelFoe {
     powerBonus: Number((1 + r * 0.035).toFixed(3)),
     stocks: 1,
   };
+}
+
+/**
+ * 无尽车轮战的小星星奖励：每连胜 2 场给 1 颗，最多 6 颗。
+ * 上限是故意压住的——闯关才是拿星星的主线，车轮战只是零花钱。
+ */
+export function endlessBonusStars(streak: number): number {
+  if (!Number.isFinite(streak) || streak <= 0) return 0;
+  return Math.min(6, Math.floor(Math.round(streak) / 2));
 }
 
 /** 无尽车轮战第 round 轮的场地 */

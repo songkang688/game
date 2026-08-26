@@ -38,14 +38,19 @@ export interface AiTierParams {
   ledgeCare: number;
   /** 去捡道具的积极性 */
   greed: number;
+  /**
+   * 每次决策有多大概率干脆先站着不动，把机会让出来。
+   * 轻松档主要靠这个「发呆」给新手留出手时间，而不是靠把它变笨到会自己走下场。
+   */
+  passive: number;
   /** 中文档位名 */
   label: string;
 }
 
 export const AI_TIERS: Record<AiTier, AiTierParams> = {
-  easy: { think: 0.38, reach: 62, heavyAt: 200, mistake: 0.3, ledgeCare: 0.55, greed: 0.25, label: "轻松" },
-  normal: { think: 0.24, reach: 74, heavyAt: 130, mistake: 0.14, ledgeCare: 0.86, greed: 0.5, label: "正常" },
-  hard: { think: 0.14, reach: 86, heavyAt: 85, mistake: 0.05, ledgeCare: 0.98, greed: 0.75, label: "高手" },
+  easy: { think: 0.46, reach: 58, heavyAt: 220, mistake: 0.3, ledgeCare: 0.6, greed: 0.22, passive: 0.26, label: "轻松" },
+  normal: { think: 0.24, reach: 74, heavyAt: 130, mistake: 0.14, ledgeCare: 0.86, greed: 0.5, passive: 0.06, label: "正常" },
+  hard: { think: 0.14, reach: 86, heavyAt: 85, mistake: 0.05, ledgeCare: 0.98, greed: 0.75, passive: 0, label: "高手" },
 };
 
 /** 三档难度的顺序（弱 → 强），给关卡表和测试用 */
@@ -102,14 +107,17 @@ export function decideAi(view: AiView, tier: AiTier, roll: number): AiDecision {
     return { input, intent: "recover" };
   }
 
-  // 2) 偶尔手滑：随便走两步，别显得像机器人
+  // 2) 发呆：站着看一会儿。放在保命之后，所以它只会在场上安全时才走神
+  if (r > 1 - p.passive) return { input, intent: "wait" };
+
+  // 3) 偶尔手滑：随便走两步，别显得像机器人
   if (r < p.mistake) {
     if (r < p.mistake / 2) input.left = true;
     else input.right = true;
     return { input, intent: "wait" };
   }
 
-  // 3) 场上有道具而且不太远，顺手捡一个
+  // 4) 场上有道具而且不太远，顺手捡一个
   if (item && r < p.mistake + p.greed * 0.5) {
     const dx = item.x - self.x;
     if (Math.abs(dx) > 16) {
@@ -121,7 +129,7 @@ export function decideAi(view: AiView, tier: AiTier, roll: number): AiDecision {
   }
 
   if (!target) {
-    // 4) 没人可追：待在安全区中间
+    // 5) 没人可追：待在安全区中间
     const mid = (safe.min + safe.max) / 2;
     if (self.x < mid - 40) input.right = true;
     else if (self.x > mid + 40) input.left = true;
@@ -132,7 +140,7 @@ export function decideAi(view: AiView, tier: AiTier, roll: number): AiDecision {
   const dy = target.y - self.y;
   const adx = Math.abs(dx);
 
-  // 5) 够得着就打：对手击退值高的时候优先重击，把人送出去
+  // 6) 够得着就打：对手击退值高的时候优先重击，把人送出去
   if (adx <= p.reach && Math.abs(dy) < 70) {
     const wantHeavy = target.bump >= p.heavyAt && r > 0.35;
     if (wantHeavy) input.heavy = true;
@@ -143,7 +151,7 @@ export function decideAi(view: AiView, tier: AiTier, roll: number): AiDecision {
     return { input, intent: "attack" };
   }
 
-  // 6) 追人：但别追出安全区（越小心的档越早收脚）
+  // 7) 追人：但别追出安全区（越小心的档越早收脚）
   const nextX = self.x + Math.sign(dx) * 55;
   const wouldLeaveSafe = nextX < safe.min || nextX > safe.max;
   if (wouldLeaveSafe && r < p.ledgeCare) {

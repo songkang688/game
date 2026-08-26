@@ -27,7 +27,15 @@ import {
 } from "./battle";
 import { bumpLabel, bumpTier, BUMP_MAX } from "./knockback";
 import { itemById } from "./items";
-import { CHAPTERS, LEVELS, endlessFoe, endlessStage, levelAt, rateLevel } from "./levels";
+import {
+  CHAPTERS,
+  LEVELS,
+  endlessBonusStars,
+  endlessFoe,
+  endlessStage,
+  levelAt,
+  rateLevel,
+} from "./levels";
 import { ROSTER, TEAM_COLORS, TEAM_NAMES, fighterById } from "./roster";
 import { STAGES, WORLD_H, WORLD_W, platformAt, stageById, syrupLevel } from "./stages";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
@@ -1153,7 +1161,11 @@ export function mount(api: GameApi): { destroy: () => void } {
           runEndless(round + 1);
           return;
         }
+        const prevBest = save.getGameProgress(meta.id).endlessBest;
         const best = save.recordEndlessBest(meta.id, round);
+        // 车轮战奖励：每连胜 2 场给 1 颗小星星，最多 6 颗，别把闯关的星星比下去
+        const bonus = endlessBonusStars(round);
+        if (bonus > 0) api.addStars(bonus);
         sfx("oops");
         const ov = el("div", "dvs-over");
         ov.append(
@@ -1162,9 +1174,11 @@ export function mount(api: GameApi): { destroy: () => void } {
           el(
             "div",
             "sub",
-            round >= best && round > 0
-              ? `刷新了自己的最好成绩，历史最佳 ${best} 场！`
-              : `历史最佳是 ${best} 场，再来一次一定能超过！`
+            `${
+              round > prevBest
+                ? `刷新了自己的最好成绩，历史最佳 ${best} 场！`
+                : `历史最佳是 ${best} 场，再来一次一定能超过！`
+            }${bonus > 0 ? `本轮拿到 ${bonus} 颗小星星。` : ""}`
           )
         );
         const row = el("div", "row");

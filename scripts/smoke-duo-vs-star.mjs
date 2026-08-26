@@ -189,10 +189,13 @@ async function run() {
   await sleep(700);
 
   const ink0 = await page.evaluate(() => window.__dvs.canvasInk());
-  log(ink0 !== null, "擂台 canvas 挂出来了");
-  await sleep(600);
+  log(ink0 !== null && ink0 !== 0, "擂台 canvas 挂出来了，而且画了东西", String(ink0));
+  // 没人操作时画面本来就该是静止的，所以要按着方向键再取一次样才说明得了问题
+  await page.keyboard.down("KeyD");
+  await sleep(500);
+  await page.keyboard.up("KeyD");
   const ink1 = await page.evaluate(() => window.__dvs.canvasInk());
-  log(ink0 !== ink1, "画面在动（不是白板）", `${ink0} → ${ink1}`);
+  log(ink0 !== ink1, "1P 一走动画面就跟着变（不是白板）", `${ink0} → ${ink1}`);
 
   // 真实 keydown 下的两套键位
   await page.keyboard.down("KeyD");
@@ -277,12 +280,30 @@ async function run() {
   await sleep(800);
   const inLevel = await page.evaluate(() => Boolean(document.querySelector("canvas.dvs-canvas")));
   log(inLevel, "第 1 关能进去，擂台挂出来了");
-  const levelResult = await botPlay(page, 150000);
+
+  // 第 1 关是上手关，乱按也该赢下大半；给 3 次机会，一次都赢不了就说明坡道又太陡了
+  let levelResult = "";
+  let cleared = false;
+  for (let attempt = 1; attempt <= 3 && !cleared; attempt++) {
+    levelResult = await botPlay(page, 120000);
+    cleared = /过关/.test(levelResult);
+    log(
+      /过关|就差一点点/.test(levelResult),
+      `闯关第 1 关第 ${attempt} 次玩到真实胜负`,
+      levelResult.slice(0, 40)
+    );
+    if (!cleared) {
+      await page.evaluate(() => window.__dvs.clickText(".dvs-over button", "再试本关"));
+      await sleep(900);
+    }
+  }
+  log(cleared, "闯关第 1 关真的通得过（新手乱按也打得动）", levelResult.slice(0, 50));
+
   const calls = await page.evaluate(() => window.__dvs.state.calls.filter((c) => c[0] !== "play"));
   log(
-    /过关|就差一点点/.test(levelResult),
-    "闯关第 1 关玩到真实胜负",
-    `${levelResult.slice(0, 50)} ｜ 回调 ${JSON.stringify(calls).slice(0, 80)}`
+    calls.some((c) => c[0] === "addStars" && c[1] > 0),
+    "过关后真的发了小星星（level99 结算接对了）",
+    JSON.stringify(calls).slice(0, 90)
   );
 
   /* ---------- 4. 1280×800 宽屏 ---------- */

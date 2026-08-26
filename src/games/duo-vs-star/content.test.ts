@@ -11,7 +11,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { AI_TIERS, AI_ORDER, aiPowerBonus } from "./ai";
+import { AI_TIERS, AI_ORDER, aiPowerBonus, decideAi } from "./ai";
 import { ATTACKS } from "./battle";
 import {
   ITEMS,
@@ -373,6 +373,29 @@ describe("小电脑三档参数", () => {
   it("高手档也留着反应延迟，不是零帧无敌", () => {
     expect(AI_TIERS.hard.think).toBeGreaterThan(0.05);
     expect(AI_TIERS.hard.mistake).toBeGreaterThan(0);
+  });
+
+  it("档次越低越爱发呆，把出手机会让给新手", () => {
+    const [e, n, h] = AI_ORDER.map((t) => AI_TIERS[t]);
+    expect(e.passive).toBeGreaterThan(n.passive);
+    expect(n.passive).toBeGreaterThan(h.passive);
+    expect(h.passive).toBe(0);
+    // 发呆归发呆，别呆到整局不动
+    expect(e.passive).toBeLessThan(0.4);
+  });
+
+  it("发呆只发生在场上站得稳的时候，掉出去了照样会自救", () => {
+    const falling = {
+      self: { x: -400, y: 500, vx: 0, vy: 120, onGround: false, bump: 0, jumpsLeft: 1 },
+      target: null,
+      item: null,
+      safe: { min: -260, max: 260, top: 360 },
+      bounds: { left: -560, right: 560, top: -420, bottom: 640 },
+    };
+    // roll 取到最靠近 1 的一端，也就是最容易发呆的那个区间
+    const d = decideAi(falling, "easy", 0.999);
+    expect(d.intent).toBe("recover");
+    expect(d.input.right || d.input.up).toBe(true);
   });
 
   it("档次越高力度加成越大", () => {
