@@ -136,8 +136,11 @@ const LEGACY_CHAPTER_SNAPSHOT = [
 const NEW_FROM = 99;
 const NEW_LEVELS = Array.from({ length: 188 - NEW_FROM }, (_, i) => NEW_FROM + i);
 const ADVANCED_KINDS = new Set([
+  // 1.1
   "span", "arrive", "depart", "h24", "h12", "zone",
   "weekday", "monthdays", "nthday", "tableEarly", "tableFast", "tableWait",
+  // 1.2
+  "readMin", "setMin", "spanNoon", "unitHM", "unitMS", "unitMix", "routine",
 ]);
 
 function strip(html: string): string {
@@ -177,6 +180,53 @@ function fmtDur(mins: number): string {
 
 const WEEK = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 const MONTH_LEN = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** 钟面分钟数 → 「3 点」/「3 点 25 分」，独立算一遍，不复用被测代码 */
+function fmtFace(t: number): string {
+  const v = ((t % 720) + 720) % 720;
+  const h = Math.floor(v / 60) === 0 ? 12 : Math.floor(v / 60);
+  const m = v % 60;
+  return m === 0 ? `${h} 点` : `${h} 点 ${m} 分`;
+}
+
+/** 从一段 SVG 里读出钟面分钟数 */
+function faceTime(svg: string): number {
+  const m = svg.match(/data-t="(\d+)"/);
+  if (!m) throw new Error(`钟面缺 data-t: ${svg.slice(0, 60)}`);
+  return Number(m[1]);
+}
+
+/** 从一段 SVG 里读出时针末端坐标 */
+function hourTip(svg: string): { x: number; y: number } {
+  const m = svg.match(/data-clk-hand="hour" x1="50" y1="50" x2="([-\d.]+)" y2="([-\d.]+)"/);
+  if (!m) throw new Error(`钟面缺时针: ${svg.slice(0, 60)}`);
+  return { x: Number(m[1]), y: Number(m[2]) };
+}
+
+/** 「上午 10:40」/「下午 1:20」→ 一天内的分钟数 */
+function parsePeriodHM(text: string): number {
+  const m = text.match(/(上午|下午) (\d{1,2}):(\d{2})/);
+  if (!m) throw new Error(`带上下午的时刻解析失败: ${text}`);
+  const h12 = Number(m[2]) % 12;
+  return (m[1] === "上午" ? h12 : h12 + 12) * 60 + Number(m[3]);
+}
+
+/** 「3 分 20 秒」/「45 秒」/「2 分」→ 秒数 */
+function parseMinSec(text: string): number {
+  const m = text.match(/(\d+)\s*分/);
+  const s = text.match(/(\d+)\s*秒/);
+  return (m ? Number(m[1]) * 60 : 0) + (s ? Number(s[1]) : 0);
+}
+
+function parseRoutine(text: string): Array<{ name: string; at: number }> {
+  const out: Array<{ name: string; at: number }> = [];
+  const re = /🗓️ ([^\s]+) (\d{2}):(\d{2})/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    out.push({ name: m[1], at: Number(m[2]) * 60 + Number(m[3]) });
+  }
+  return out;
+}
 
 function parseTrips(text: string): Array<{ no: number; dep: number; arr: number }> {
   const out: Array<{ no: number; dep: number; arr: number }> = [];
@@ -292,6 +342,94 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
       expect(target, where).toBeDefined();
       expect(target!.dep - now, where).toBeGreaterThan(0);
       expect(q.answer, where).toBe(fmtDur(target!.dep - now));
+      break;
+    }
+    // ---- 1.2 新增题型 ----
+    case "readMin": {
+      const t = faceTime(q.promptHTML);
+      expect(q.answer, where).toBe(fmtFace(t));
+      // 时针必须带着分针带动的那一点偏移，不许死死压在数字上
+      const tip = hourTip(q.promptHTML);
+      const rad = ((t * 0.5 - 90) * Math.PI) / 180;
+      expect(tip.x, where).toBeCloseTo(50 + Math.cos(rad) * 21, 1);
+      expect(tip.y, where).toBeCloseTo(50 + Math.sin(rad) * 21, 1);
+      break;
+    }
+    case "setMin": {
+      const label = q.ask.match(/「(.+)」/)![1];
+      expect(q.answerText, where).toBe(label);
+      const right = q.choices[q.correct];
+      const t = faceTime(right);
+      expect(fmtFace(t), where).toBe(label);
+      // 正确钟面的时针联动到位；三张钟面里一定有一张是「时针压在数字上」的错钟面
+      const rad = ((t * 0.5 - 90) * Math.PI) / 180;
+      expect(hourTip(right).x, where).toBeCloseTo(50 + Math.cos(rad) * 21, 1);
+      const stiffRad = (((t - (t % 60)) * 0.5 - 90) * Math.PI) / 180;
+      const stiff = q.choices.some(
+        (c) => faceTime(c) === t && Math.abs(hourTip(c).x - (50 + Math.cos(stiffRad) * 21)) < 0.05
+      );
+      expect(stiff, `${where}：缺少「时针压数字」的干扰钟面`).toBe(true);
+      // 题面里那个能拖的钟面起点不能就是答案，否则孩子不用拨
+      expect(q.promptHTML, where).toContain('data-clk-dial="1"');
+      expect(faceTime(q.promptHTML), where).not.toBe(t);
+      break;
+    }
+    case "spanNoon": {
+      const parts = text.split("➜");
+      expect(parts.length, where).toBe(2);
+      const from = parsePeriodHM(parts[0]);
+      const to = parsePeriodHM(parts[1]);
+      expect(from, `${where}：出发必须在中午之前`).toBeLessThan(12 * 60);
+      expect(to, `${where}：到达必须在中午之后`).toBeGreaterThan(12 * 60);
+      expect(q.answer, where).toBe(fmtDur(to - from));
+      break;
+    }
+    case "unitHM": {
+      const only = text.match(/^⏳ (\d+) 分$/);
+      if (only) {
+        expect(q.answer, where).toBe(fmtDur(Number(only[1])));
+      } else {
+        expect(q.answer, where).toBe(`${parseDur(text)} 分`);
+      }
+      break;
+    }
+    case "unitMS": {
+      const only = text.match(/^⏱️ (\d+) 秒$/);
+      if (only) {
+        const total = Number(only[1]);
+        expect(q.answer, where).toBe(total % 60 === 0 ? `${total / 60} 分` : `${Math.floor(total / 60)} 分 ${total % 60} 秒`);
+      } else {
+        expect(q.answer, where).toBe(`${parseMinSec(text)} 秒`);
+      }
+      break;
+    }
+    case "unitMix": {
+      const days = text.match(/📆 (\d+) 天/);
+      if (days) expect(q.answer, where).toBe(`${Number(days[1]) * 24} 小时`);
+      else expect(q.answer, where).toBe(`${parseDur(text) * 60} 秒`);
+      break;
+    }
+    case "routine": {
+      const rows = parseRoutine(text);
+      expect(rows.length, where).toBe(5);
+      for (let i = 1; i < rows.length; i++) expect(rows[i].at, where).toBeGreaterThan(rows[i - 1].at);
+      expect(new Set(rows.map((r) => r.name)).size, where).toBe(5);
+      const gap = q.ask.match(/^从(.+?)到(.+?)隔多久？$/);
+      if (gap) {
+        const a = rows.find((r) => r.name === gap[1])!;
+        const b = rows.find((r) => r.name === gap[2])!;
+        expect(a, where).toBeDefined();
+        expect(b, where).toBeDefined();
+        expect(b.at - a.at, where).toBeGreaterThan(0);
+        expect(q.answer, where).toBe(fmtDur(b.at - a.at));
+      } else {
+        const m = q.ask.match(/^(.+?)之后紧接着是什么？$/);
+        expect(m, where).not.toBeNull();
+        const at = rows.findIndex((r) => r.name === m![1]);
+        expect(at, where).toBeGreaterThanOrEqual(0);
+        expect(at, where).toBeLessThan(rows.length - 1);
+        expect(q.answer, where).toBe(rows[at + 1].name);
+      }
       break;
     }
     default:
@@ -486,9 +624,10 @@ describe("时钟小屋 · 1.1 第 100–188 关", () => {
   it("文案零商标：题面与选项里没有英文字母（城市名全是原创中文）", () => {
     for (const level of NEW_LEVELS) {
       for (const q of buildQuestions(level)) {
+        // 钟面是 SVG,标签名与属性名当然是英文;只看渲染出来的文字
         expect(strip(q.promptHTML)).not.toMatch(/[A-Za-z]/);
         expect(q.ask).not.toMatch(/[A-Za-z]/);
-        for (const c of q.choices) expect(c).not.toMatch(/[A-Za-z]/);
+        for (const c of q.choices) expect(strip(c)).not.toMatch(/[A-Za-z]/);
       }
     }
   });
