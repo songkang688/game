@@ -1,20 +1,22 @@
 import { meta } from "./meta";
 export { meta };
 
-// 花园守卫:99 关九大主题章节塔防战役!先选主题再选关,每章专属配色、怪物阵容和 BOSS。
+// 花园守卫:188 关十三章主题塔防战役!先选主题再选关,每章专属配色、怪物阵容和 BOSS。
 // 通关解锁下一关,回放刷 3 星;失败只重试本关。
+// 1.1 新增:冰晶塔/毒雾塔、天上的飞怪、可拆路障、天气影响射程。
 import {
+  BARRICADE_SMASH_REWARD,
   DASH_CYCLE,
   DASH_MULT,
   DASH_TIME,
   ENRAGE_MULT,
+  FROST_DURATION,
   GRID_COLS,
   GRID_ROWS,
   HEAL_INTERVAL,
   HEAL_RANGE,
   HEARTS_PER_LEVEL,
   LEVELS,
-  LEVELS_PER_THEME,
   MAX_TOWER_LEVEL,
   MONSTER_INFO,
   MonsterKind,
@@ -26,7 +28,9 @@ import {
   THEME_STYLE,
   TOWER_INFO,
   TowerKind,
+  WEATHER_INFO,
   applyHit,
+  barricadeMap,
   boomSplash,
   buildWaypoints,
   canPlace,
@@ -34,8 +38,11 @@ import {
   combineSlow,
   comboPetalBonus,
   dewSlowFactor,
+  effectiveRange,
+  frostSlowFactor,
   isLevelUnlocked,
   isThemeUnlocked,
+  mistPoisonDamage,
   monsterArmor,
   monsterHp,
   monsterReward,
@@ -50,14 +57,19 @@ import {
   starsForLevel,
   sunnyInterval,
   themeCleared,
+  themeIndexOfLevel,
+  themeOffset,
+  themeSize,
   themeStars,
   totalStars,
+  towerCanHitAir,
   towerCooldown,
   towerDamage,
   towerRange,
   towersUnlockedAt,
   upgradeCost,
   waveSpawnTimes,
+  weatherSpeedMult,
 } from "./logic";
 import { speak, stopSpeaking } from "../speech";
 
@@ -91,12 +103,15 @@ interface Monster {
   wob: number;
   slowed: boolean;
   hidden: boolean;
+  flying: boolean;
   dashTimer: number;
   dashing: boolean;
   sneakTimer: number;
   healTimer: number;
   summonTimer: number;
   enraged: boolean;
+  frostTimer: number;
+  frostSlow: number;
 }
 
 interface Tower {
@@ -118,6 +133,8 @@ interface Bullet {
   speed: number;
   needle: boolean;
   splash: number;
+  /** 冰晶弹:命中后目标的减速倍率(undefined = 普通弹) */
+  frostSlow?: number;
 }
 
 interface Particle {
@@ -198,6 +215,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let lenList = wpList.map((wp) => pathLength(wp));
   let blocked = pathsCellSet(LEVELS[0].paths);
   const occupied = new Map<string, Tower>();
+  let barricades = barricadeMap(LEVELS[0].barricades);
 
   const monsters: Monster[] = [];
   const towers: Tower[] = [];
@@ -272,7 +290,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   // ---- 关卡流程 ----
   function loadLevel(idx: number): void {
     levelIdx = idx;
-    chapterIdx = Math.floor(idx / LEVELS_PER_THEME);
+    chapterIdx = themeIndexOfLevel(idx);
     const def = LEVELS[idx];
     wpList = def.paths.map((p) => buildWaypoints(p));
     lenList = wpList.map((wp) => pathLength(wp));
@@ -289,6 +307,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     bullets.length = 0;
     towers.length = 0;
     occupied.clear();
+    barricades = barricadeMap(def.barricades);
     petals = def.startPetals;
     hearts = HEARTS_PER_LEVEL;
     heartsLost = 0;
@@ -319,7 +338,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     api.play("win");
     if (levelIdx >= LEVELS.length - 1 && !finaleFired) {
       finaleFired = true;
-      api.onWin(earnedStars, `99 关九章战役全部通关!糖果魔王也被请回家啦!总星 ${totalStars(progress)}/${LEVELS.length * 3}`);
+      api.onWin(earnedStars, `188 关十三章战役全部通关!星尘魔王也被请回家啦!总星 ${totalStars(progress)}/${LEVELS.length * 3}`);
     } else {
       // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
       speak(clearSpeechLine(LEVELS[levelIdx].name, earnedStars));
@@ -476,6 +495,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
     selectedTower = null;
 
+    // 路障:点一下敲掉 1 点耐久,敲碎才腾出塔位(还奖励 1 花瓣)
+    const barrHp = barricades.get(key);
+    if (barrHp !== undefined) {
+      if (barrHp <= 1) {
+        barricades.delete(key);
+        petals += BARRICADE_SMASH_REWARD;
+        api.play("pop");
+        burst(px(col + 0.5), py(row + 0.5), "#c9a86a", 14, 1.2);
+        addFloat(px(col + 0.5), py(row), `拆掉啦!+${BARRICADE_SMASH_REWARD}🌸`, "#c47a2a");
+      } else {
+        barricades.set(key, barrHp - 1);
+        api.play("tap");
+        burst(px(col + 0.5), py(row + 0.5), "#d8c8a8", 6, 0.6);
+        shake = 0.12;
+      }
+      return;
+    }
+
     if (!canPlace(col, row, blocked, new Set(occupied.keys()))) {
       api.play("tap");
       return;
@@ -513,7 +550,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       kind,
       pathIdx,
       dist,
-      baseSpeed: spec.speed * (LEVELS[levelIdx].speedMult ?? 1),
+      baseSpeed: spec.speed * (LEVELS[levelIdx].speedMult ?? 1) * weatherSpeedMult(LEVELS[levelIdx].weather),
       hp,
       maxHp: hp,
       armor,
@@ -523,12 +560,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
       wob: Math.random() * Math.PI * 2,
       slowed: false,
       hidden: false,
+      flying: spec.flies === true,
       dashTimer: DASH_CYCLE * Math.random(),
       dashing: false,
       sneakTimer: SNEAK_VISIBLE * Math.random(),
       healTimer: HEAL_INTERVAL,
       summonTimer: SUMMON_INTERVAL,
       enraged: false,
+      frostTimer: 0,
+      frostSlow: 1,
     });
   }
 
@@ -577,6 +617,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   // ---- 更新 ----
   function update(dt: number): void {
+    const def = LEVELS[levelIdx];
     time += dt;
     petalFlash = Math.max(0, petalFlash - dt);
     shake = Math.max(0, shake - dt);
@@ -661,13 +702,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
           burst(px(m.x), py(m.y), "#d8f5d8", 6, 0.5);
         }
       }
-      // 召唤小分身
+      // 召唤小兵(飞天 BOSS 召唤的也是飞飞怪)
       if (mSpec.summons) {
         m.summonTimer -= dt;
         if (m.summonTimer <= 0) {
           m.summonTimer = SUMMON_INTERVAL;
-          spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.4));
-          spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.8));
+          const minion: MonsterKind = mSpec.flies ? "flappy" : "mini";
+          spawnMonster(minion, m.pathIdx, Math.max(0, m.dist - 0.4));
+          spawnMonster(minion, m.pathIdx, Math.max(0, m.dist - 0.8));
           addFloat(px(m.x), py(m.y) - 30, "召唤小兵!", "#e05a7a");
           api.play("meow");
         }
@@ -680,13 +722,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
         api.play("oops");
       }
 
-      // 减速光环
+      // 减速:露珠光环(只管地面)+ 冰晶弹命中减速
+      m.frostTimer = Math.max(0, m.frostTimer - dt);
       const factors: number[] = [];
-      for (const t of towers) {
-        if (t.kind !== "dew") continue;
-        const d = Math.hypot(m.x - (t.col + 0.5), m.y - (t.row + 0.5));
-        if (d <= towerRange("dew", t.level)) factors.push(dewSlowFactor(t.level));
+      if (!m.flying) {
+        for (const t of towers) {
+          if (t.kind !== "dew") continue;
+          const d = Math.hypot(m.x - (t.col + 0.5), m.y - (t.row + 0.5));
+          if (d <= effectiveRange("dew", t.level, def.weather)) factors.push(dewSlowFactor(t.level));
+        }
       }
+      if (m.frostTimer > 0) factors.push(m.frostSlow);
       const factor = combineSlow(factors);
       m.slowed = factor < 1;
       let spd = m.baseSpeed * factor;
@@ -731,7 +777,31 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       t.cd -= dt;
       if (t.cd <= 0) {
-        const idx = pickTarget(monsters, t.col + 0.5, t.row + 0.5, towerRange(t.kind, t.level));
+        const range = effectiveRange(t.kind, t.level, def.weather);
+        if (t.kind === "mist") {
+          // 毒雾塔:周期毒雾脉冲,罩住射程内所有地面怪(无视护甲,连隐身怪也躲不掉)
+          let hitAny = false;
+          const dmg = mistPoisonDamage(t.level);
+          for (let mi = monsters.length - 1; mi >= 0; mi--) {
+            const m = monsters[mi];
+            if (m.flying) continue;
+            if (Math.hypot(m.x - (t.col + 0.5), m.y - (t.row + 0.5)) <= range) {
+              hitAny = true;
+              m.hp -= dmg;
+              if (m.hp <= 0) {
+                monsters.splice(mi, 1);
+                onMonsterKilled(m);
+              }
+            }
+          }
+          if (hitAny) {
+            t.cd = towerCooldown("mist", t.level);
+            t.firedAnim = 1;
+            burst(px(t.col + 0.5), py(t.row + 0.5), "#b5d8a8", 10, 0.9);
+          }
+          continue;
+        }
+        const idx = pickTarget(monsters, t.col + 0.5, t.row + 0.5, range, towerCanHitAir(t.kind));
         if (idx >= 0) {
           t.cd = towerCooldown(t.kind, t.level);
           t.firedAnim = 1;
@@ -741,9 +811,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
             target: monsters[idx],
             life: 2,
             dmg: towerDamage(t.kind, t.level),
-            speed: t.kind === "needle" ? 12 : t.kind === "boom" ? 5 : 6,
+            speed: t.kind === "needle" ? 12 : t.kind === "boom" ? 5 : t.kind === "frost" ? 8 : 6,
             needle: t.kind === "needle",
             splash: t.kind === "boom" ? boomSplash(t.level) : 0,
+            frostSlow: t.kind === "frost" ? frostSlowFactor(t.level) : undefined,
           });
         }
       }
@@ -769,12 +840,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
           api.play("pop");
           const hitX = tgt.x;
           const hitY = tgt.y;
+          // 花火溅射只炸地面(天上的飞怪炸不到)
           const inRange = monsters.filter(
-            (m) => Math.hypot(m.x - hitX, m.y - hitY) <= b.splash,
+            (m) => !m.flying && Math.hypot(m.x - hitX, m.y - hitY) <= b.splash,
           );
           for (const m of inRange) damageMonster(m, b.dmg);
         } else {
-          burst(px(tgt.x), py(tgt.y), b.needle ? "#c8f2d8" : "#bfe9ff", 6);
+          burst(px(tgt.x), py(tgt.y), b.needle ? "#c8f2d8" : b.frostSlow !== undefined ? "#cfeafc" : "#bfe9ff", 6);
+          if (b.frostSlow !== undefined) {
+            tgt.frostTimer = FROST_DURATION;
+            tgt.frostSlow = b.frostSlow;
+          }
           damageMonster(tgt, b.dmg);
           if (tgt.hp > 0) api.play("pop");
         }
@@ -952,6 +1028,67 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       drawFace(tx, ty, r * 0.5);
+    } else if (kind === "frost") {
+      // 冰晶塔:六角小冰花
+      ctx.strokeStyle = "#8ac8ea";
+      ctx.lineWidth = Math.max(1.5, r * 0.12);
+      ctx.lineCap = "round";
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * i) / 3 + anim * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty - r * 0.1);
+        ctx.lineTo(tx + Math.cos(a) * r * 0.9, ty - r * 0.1 + Math.sin(a) * r * 0.9);
+        ctx.stroke();
+      }
+      const iceGrad = ctx.createRadialGradient(tx - r * 0.2, ty - r * 0.35, r * 0.1, tx, ty - r * 0.1, r * 0.9);
+      iceGrad.addColorStop(0, "#eaf8ff");
+      iceGrad.addColorStop(1, "#a8dcf2");
+      ctx.fillStyle = iceGrad;
+      ctx.strokeStyle = "#6ab0d8";
+      ctx.lineWidth = Math.max(1, r * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty - r * 0.85);
+      for (let i = 1; i <= 6; i++) {
+        const a = (Math.PI * i) / 3 - Math.PI / 2;
+        ctx.lineTo(tx + Math.cos(a) * r * 0.62, ty - r * 0.1 + Math.sin(a) * r * 0.75);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      drawFace(tx, ty + r * 0.05, r * 0.5);
+    } else if (kind === "mist") {
+      // 毒雾塔:胖蘑菇喷雾壶
+      ctx.fillStyle = `rgba(181,216,168,${0.35 + anim * 0.3})`;
+      for (let i = 0; i < 3; i++) {
+        const a = (Math.PI * 2 * i) / 3 + anim * 2;
+        ctx.beginPath();
+        ctx.arc(tx + Math.cos(a) * r * (0.7 + anim * 0.4), ty - r * 0.6 + Math.sin(a) * r * 0.3, r * 0.24, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const potGrad2 = ctx.createLinearGradient(tx, ty - r * 0.2, tx, ty + r * 0.8);
+      potGrad2.addColorStop(0, "#cfe8c0");
+      potGrad2.addColorStop(1, "#96c888");
+      ctx.fillStyle = potGrad2;
+      ctx.strokeStyle = "#6aa85e";
+      ctx.lineWidth = Math.max(1, r * 0.08);
+      ctx.beginPath();
+      ctx.ellipse(tx, ty + r * 0.25, r * 0.6, r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // 蘑菇帽
+      ctx.fillStyle = "#a884d8";
+      ctx.strokeStyle = "#8a68b8";
+      ctx.beginPath();
+      ctx.arc(tx, ty - r * 0.25, r * 0.62, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.beginPath();
+      ctx.arc(tx - r * 0.28, ty - r * 0.45, r * 0.12, 0, Math.PI * 2);
+      ctx.arc(tx + r * 0.2, ty - r * 0.55, r * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+      drawFace(tx, ty + r * 0.3, r * 0.45);
     } else {
       // 花火果:圆滚滚的小果子炮
       const potGrad = ctx.createLinearGradient(tx, ty - r * 0.2, tx, ty + r * 0.75);
@@ -1023,20 +1160,28 @@ export function mount(api: GameAPI): { destroy: () => void } {
     boss7: "#e87a5a",
     boss8: "#9a8ac9",
     boss9: "#f078b0",
+    flappy: "#a8d8e8",
+    glidey: "#e8e2f5",
+    boss10: "#8a9ae0",
+    boss11: "#c9985a",
+    boss12: "#9ec8ea",
+    boss13: "#b06ad8",
   };
 
   function drawMonster(m: Monster): void {
     const mx = px(m.x);
-    const my = py(m.y);
     const spec = MONSTER_INFO[m.kind];
     const r = cell * spec.size;
+    // 飞怪浮在半空:身体抬高,影子留在地面且更小
+    const lift = m.flying ? r * 0.85 + Math.sin(m.wob * 1.4) * r * 0.12 : 0;
+    const my = py(m.y) - lift;
     const sq = 1 + Math.sin(m.wob) * 0.08;
     ctx.save();
     if (m.hidden) ctx.globalAlpha = 0.22;
     // 脚下软阴影
-    ctx.fillStyle = "rgba(58,58,74,0.14)";
+    ctx.fillStyle = m.flying ? "rgba(58,58,74,0.1)" : "rgba(58,58,74,0.14)";
     ctx.beginPath();
-    ctx.ellipse(mx, my + r * 1.02, r * 0.9, r * 0.26, 0, 0, Math.PI * 2);
+    ctx.ellipse(mx, py(m.y) + r * 1.02, r * (m.flying ? 0.55 : 0.9), r * (m.flying ? 0.16 : 0.26), 0, 0, Math.PI * 2);
     ctx.fill();
     const bodyColor = m.enraged ? "#7aa8e8" : MONSTER_COLORS[m.kind];
     const bodyGrad = ctx.createRadialGradient(mx - r * 0.35, my - r * 0.4, r * 0.15, mx, my, r * 1.25);
@@ -1049,12 +1194,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.ellipse(mx, my, r * sq, r / sq, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    if (m.kind === "fasty" || m.kind === "sneaky") {
+    if (m.kind === "fasty" || m.kind === "sneaky" || m.flying) {
       ctx.fillStyle = "rgba(255,255,255,0.75)";
-      const flap = Math.sin(m.wob * 2) * r * 0.3;
+      const flap = Math.sin(m.wob * (m.flying ? 3 : 2)) * r * (m.flying ? 0.42 : 0.3);
+      const wingW = m.flying ? r * 0.6 : r * 0.45;
       ctx.beginPath();
-      ctx.ellipse(mx - r * 0.9, my - r * 0.3 - flap, r * 0.45, r * 0.22, -0.5, 0, Math.PI * 2);
-      ctx.ellipse(mx + r * 0.9, my - r * 0.3 + flap, r * 0.45, r * 0.22, 0.5, 0, Math.PI * 2);
+      ctx.ellipse(mx - r * 0.9, my - r * 0.3 - flap, wingW, r * 0.22, -0.5, 0, Math.PI * 2);
+      ctx.ellipse(mx + r * 0.9, my - r * 0.3 + flap, wingW, r * 0.22, 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
     if (m.kind === "tanky") {
@@ -1184,7 +1330,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌼 花园守卫 · 九大主题战役", w / 2, 28);
+    ctx.fillText("🌼 花园守卫 · 十三章主题战役", w / 2, 28);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#8a7a5e";
     ctx.fillText(
@@ -1228,7 +1374,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(unlocked ? st.blurb : "通关上一章解锁", rect.x + 10, rect.y + ch * 0.6);
       ctx.fillText(
         unlocked
-          ? `${cleared}/${LEVELS_PER_THEME} 关 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3}`
+          ? `${cleared}/${themeSize(i)} 关 · ⭐${themeStars(progress, i)}/${themeSize(i) * 3}`
           : "",
         rect.x + 10,
         rect.y + ch * 0.82,
@@ -1255,21 +1401,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#6a6a7e";
     ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 通关解锁下一关,回放可刷 3 星`,
+      `⭐ ${themeStars(progress, chapterIdx)}/${themeSize(chapterIdx) * 3} · 通关解锁下一关,回放可刷 3 星`,
       w / 2,
       54,
     );
 
     mapNodes.length = 0;
-    const base = chapterIdx * LEVELS_PER_THEME;
-    const cols = 4;
-    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const base = themeOffset(chapterIdx);
+    const count = themeSize(chapterIdx);
+    // 新章节 22/23 关:窄屏 4 列,宽屏 5~6 列,保证节点不挤
+    const cols = count <= 11 ? 4 : w > h * 1.1 ? 6 : 4;
+    const rows = Math.ceil(count / cols);
     const mx0 = w * 0.12;
     const mx1 = w * 0.88;
     const my0 = 96;
     const my1 = h - 40;
-    const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < LEVELS_PER_THEME; i++) {
+    const nr = Math.max(12, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
@@ -1335,7 +1483,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 25px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · ${def.name} 通过!`, w / 2, y + 42);
+    ctx.fillText(`${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${def.name} 通过!`, w / 2, y + 42);
     ctx.font = "34px sans-serif";
     let starTxt = "";
     for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
@@ -1412,13 +1560,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · ${def.name}`, w / 2, y + 44);
+    ctx.fillText(`${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${def.name}`, w / 2, y + 44);
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
-    ctx.fillText(def.hint, w / 2, y + 90);
+    ctx.fillText(def.hint, w / 2, y + 90, Math.min(420, w - 60));
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#a0a0b2";
-    ctx.fillText(`${st.name} · ${def.waves.length} 波 · 点一下屏幕开始`, w / 2, y + 130);
+    const wSpec = def.weather && def.weather !== "clear" ? WEATHER_INFO[def.weather] : null;
+    ctx.fillText(
+      `${st.name} · ${def.waves.length} 波${wSpec ? ` · ${wSpec.emoji}${wSpec.name}` : ""} · 点一下屏幕开始`,
+      w / 2,
+      y + 130,
+    );
     ctx.fillText("(左上角 ◀ 可回地图)", w / 2, y + 158);
   }
 
@@ -1462,7 +1615,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.roundRect(px(c) + inset, py(r) + inset, cell - inset * 2, cell - inset * 2, cell * 0.2);
         ctx.fill();
         ctx.stroke();
-        if (!occupied.has(key) && (phase === "wave" || phase === "prewave") && canAfford) {
+        if (!occupied.has(key) && !barricades.has(key) && (phase === "wave" || phase === "prewave") && canAfford) {
           // 呼吸的绿色"+":告诉小朋友这里能种
           ctx.strokeStyle = `rgba(90,168,120,${hintPulse})`;
           ctx.lineWidth = Math.max(2, cell * 0.06);
@@ -1528,14 +1681,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
       drawFace(fx, fy, fr * 0.8);
     }
 
-    // 露珠塔光环
+    // 露珠塔光环 / 毒雾塔毒圈(射程受天气影响)
     for (const t of towers) {
-      if (t.kind !== "dew") continue;
-      const rr = towerRange("dew", t.level) * cell;
-      ctx.fillStyle = `rgba(160,220,255,${0.12 + Math.sin(time * 3) * 0.04})`;
-      ctx.beginPath();
-      ctx.arc(px(t.col + 0.5), py(t.row + 0.5), rr, 0, Math.PI * 2);
-      ctx.fill();
+      if (t.kind === "dew") {
+        const rr = effectiveRange("dew", t.level, def.weather) * cell;
+        ctx.fillStyle = `rgba(160,220,255,${0.12 + Math.sin(time * 3) * 0.04})`;
+        ctx.beginPath();
+        ctx.arc(px(t.col + 0.5), py(t.row + 0.5), rr, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (t.kind === "mist") {
+        const rr = effectiveRange("mist", t.level, def.weather) * cell;
+        ctx.fillStyle = `rgba(150,200,136,${0.1 + t.firedAnim * 0.12})`;
+        ctx.beginPath();
+        ctx.arc(px(t.col + 0.5), py(t.row + 0.5), rr, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     if (selectedTower) {
@@ -1545,9 +1705,37 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(px(t.col + 0.5), py(t.row + 0.5), towerRange(t.kind, t.level) * cell, 0, Math.PI * 2);
+        ctx.arc(px(t.col + 0.5), py(t.row + 0.5), effectiveRange(t.kind, t.level, def.weather) * cell, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
+      }
+    }
+
+    // 路障:木箱占着塔位,点一点敲碎
+    for (const [key, bhp] of barricades) {
+      const [c, r] = key.split(",").map(Number);
+      const bx = px(c + 0.5);
+      const byc = py(r + 0.5);
+      const s = cell * 0.33;
+      ctx.fillStyle = "#c9a86a";
+      ctx.strokeStyle = "#9a7a44";
+      ctx.lineWidth = Math.max(1.5, cell * 0.035);
+      ctx.beginPath();
+      ctx.roundRect(bx - s, byc - s, s * 2, s * 2, cell * 0.08);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(bx - s, byc - s);
+      ctx.lineTo(bx + s, byc + s);
+      ctx.moveTo(bx + s, byc - s);
+      ctx.lineTo(bx - s, byc + s);
+      ctx.stroke();
+      // 耐久小点
+      ctx.fillStyle = "#7a5a34";
+      for (let i = 0; i < bhp; i++) {
+        ctx.beginPath();
+        ctx.arc(bx - s + cell * 0.09 + i * cell * 0.13, byc + s - cell * 0.1, cell * 0.04, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
@@ -1670,10 +1858,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 窄屏修复:360 宽中间只显示"章-关 · 波n/m",右侧只留爱心,
     // 原"(99/99)+分数"三段长文字会和左边花瓣数、右边爱心互相压盖
     const narrowHud = w < 480;
+    const levelInTheme = levelIdx - themeOffset(chapterIdx) + 1;
+    const hudWeather = def.weather && def.weather !== "clear" ? ` ${WEATHER_INFO[def.weather].emoji}` : "";
     ctx.fillText(
       narrowHud
-        ? `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} · 波${waveIdx + 1}/${def.waves.length}`
-        : `${chapterIdx + 1}-${(levelIdx % LEVELS_PER_THEME) + 1} (${levelIdx + 1}/${LEVELS.length}) · 波 ${waveIdx + 1}/${def.waves.length}`,
+        ? `${chapterIdx + 1}-${levelInTheme}${hudWeather} · 波${waveIdx + 1}/${def.waves.length}`
+        : `${chapterIdx + 1}-${levelInTheme} (${levelIdx + 1}/${LEVELS.length})${hudWeather} · 波 ${waveIdx + 1}/${def.waves.length}`,
       w / 2,
       HUD_H / 2,
     );
