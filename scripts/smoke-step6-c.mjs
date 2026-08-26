@@ -178,6 +178,31 @@ async function main() {
     log(p2 > p1 && !(await shown(".dr-pausepanel")), `${vp.name} Esc 再按一次继续比赛`, `${p1}m → ${p2}m`);
   }
 
+  // ---- 手机：两半屏各自滑动 ----
+  await page.setViewport({ width: 375, height: 667, hasTouch: true, isMobile: true });
+  await openGame(page);
+  await startRace(page, "rush");
+  const cvBox = await page.$eval(".dr-canvas", (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height };
+  });
+  const swipe = async (cx, cy, dx, dy) => {
+    await page.touchscreen.touchStart(cx, cy);
+    await page.touchscreen.touchMove(cx + dx, cy + dy);
+    await page.touchscreen.touchEnd();
+    await sleep(320);
+  };
+  const t0 = await readRunners(page);
+  // 上半屏（朵朵）往左滑
+  await swipe(cvBox.x + cvBox.w / 2, cvBox.y + cvBox.h * 0.25, -70, 0);
+  const t1 = await readRunners(page);
+  log(t1[0].lane < t0[0].lane && t1[1].lane === t0[1].lane, "上半屏滑动只动朵朵", `朵朵 ${t0[0].lane}→${t1[0].lane}，星星 ${t0[1].lane}→${t1[1].lane}`);
+  // 下半屏（星星）往右滑
+  await swipe(cvBox.x + cvBox.w / 2, cvBox.y + cvBox.h * 0.75, 70, 0);
+  const t2 = await readRunners(page);
+  log(t2[1].lane > t1[1].lane && t2[0].lane === t1[0].lane, "下半屏滑动只动星星", `朵朵 ${t1[0].lane}→${t2[0].lane}，星星 ${t1[1].lane}→${t2[1].lane}`);
+  await page.setViewport({ width: 375, height: 667 });
+
   // ---- 幽灵对战与人机对战各开一局 ----
   await page.setViewport({ width: 375, height: 667 });
   await openGame(page);
@@ -192,6 +217,48 @@ async function main() {
   await sleep(2500);
   const aiRunners = await readRunners(page);
   log(aiRunners[1].dist > 0, "人机对战里电脑也在跑", `电脑 ${aiRunners[1].dist}m / 剩 ${aiRunners[1].lives}`);
+
+  // ---- 一局跑完 → 成绩存成幽灵 → 下一局幽灵真的在跑 ----
+  await page.evaluate(() => localStorage.removeItem("yiduo-yixing.duo-rush.ghost.v1"));
+  await openGame(page);
+  await startRace(page, "rush");
+  for (let i = 0; i < 60; i++) {
+    const done = await page.$eval(".dr-msg", (el) => /赢啦|不分胜负/.test(el.textContent ?? ""));
+    if (done) break;
+    await sleep(1000);
+  }
+  const stored = await page.evaluate(() => localStorage.getItem("yiduo-yixing.duo-rush.ghost.v1"));
+  log(Boolean(stored) && JSON.parse(stored).dist > 0, "跑完一局把成绩存成了幽灵", stored ?? "(没存上)");
+
+  await openGame(page);
+  const ghostLine = await page.$eval(".dr-ghostline", (el) => el.textContent?.trim());
+  log(/上一次的最好成绩/.test(ghostLine ?? ""), "设置页显示上一次的最好成绩", ghostLine);
+  await startRace(page, "ghost");
+  const g0 = (await readRunners(page))[1].dist;
+  await sleep(1500);
+  const g1 = (await readRunners(page))[1].dist;
+  log(g1 > g0, "幽灵按上一次的配速在往前跑", `${g0}m → ${g1}m`);
+
+  // ---- 连续跑一段时间：帧率稳不稳、内存涨不涨 ----
+  await openGame(page);
+  await page.click('.dr-rival button[data-v="1"]');
+  await startRace(page, "endless");
+  const heap = () => page.evaluate(() => performance.memory?.usedJSHeapSize ?? 0);
+  const rafNow = () => page.evaluate(() => window.__probe.raf);
+  const heap0 = await heap();
+  const raf0 = await rafNow();
+  const SUSTAIN_MS = Number(process.env.SUSTAIN_MS ?? 60000);
+  await sleep(SUSTAIN_MS);
+  const raf1 = await rafNow();
+  const heap1 = await heap();
+  const fps = ((raf1 - raf0) / SUSTAIN_MS) * 1000;
+  log(fps > 40, `连续跑 ${Math.round(SUSTAIN_MS / 1000)} 秒帧率稳得住`, `平均 ${fps.toFixed(1)} fps`);
+  const grow = heap1 - heap0;
+  log(
+    heap0 === 0 || grow < 12 * 1024 * 1024,
+    "连续跑下来内存没有一路上涨",
+    `${(heap0 / 1048576).toFixed(1)}MB → ${(heap1 / 1048576).toFixed(1)}MB`,
+  );
 
   // ---- 离开游戏后清理 ----
   const during = await page.evaluate(() => ({ ...window.__probe }));
