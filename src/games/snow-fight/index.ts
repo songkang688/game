@@ -56,7 +56,9 @@ const P_COLOR = ["#e8558f", "#3f7fd6"];
 const P_KEYS = ["W/S 调角度 · A/D 挪位置 · 按住 F 蓄力 · G 堆雪墙", "↑/↓ 调角度 · ←/→ 挪位置 · 按住 L 蓄力 · K 堆雪墙"];
 
 /** 画面往上画到多少个单位高(再高的雪球就飞出画面了,不影响判定) */
-const VIEW_H = 16;
+const VIEW_H = 13;
+/** 地面线下面留几个像素画雪地 */
+const GROUND_PAD = 16;
 /** 一个人一回合最多能挪多远 */
 const STEP_X = 0.35;
 
@@ -111,6 +113,12 @@ const CSS = `
   .sf-btn{min-width:40px;min-height:38px;font-size:14px;padding:2px 6px;}
   .sf-btn-throw{min-width:84px;}
   .sf-pads{gap:6px;}
+  .sf-pad{padding:4px 6px;}
+  .sf-open{padding:7px 11px;font-size:13px;}
+  .sf-bar{gap:6px;margin-bottom:4px;}
+  .sf-tip{font-size:11.5px;}
+  .sf-say{font-size:12px;}
+  .sf-chip{padding:4px 9px;font-size:12px;}
 }
 @media (prefers-reduced-motion:reduce){.sf-btn:active{transform:none;}}
 `;
@@ -119,10 +127,23 @@ const CSS = `
 // 画面:全部程序化绘制,一张外部图片都不用
 // ---------------------------------------------------------------------------
 
-/** 世界坐标 → 画布坐标 */
+/** 手机上画面矮得看不清抛物线,至少给它这么多像素高 */
+const MIN_BOARD_H = 150;
+
+/**
+ * 世界坐标 → 画布坐标。
+ *
+ * 横向是老老实实的等比缩放,竖向多了一个拉伸系数:场地有 54 格宽,
+ * 挤进手机屏之后一格只剩六七个像素,抛物线会被压成一条直线。
+ * 只把竖向拉高,落点、风偏这些「横着算」的东西一点都不受影响,
+ * 弧线却看得清清楚楚——瞄准虚线指到哪儿,雪球就落到哪儿。
+ */
 interface Camera {
-  /** 一个世界单位有多少像素 */
+  /** 横向:一个世界单位有多少像素 */
   s: number;
+  /** 竖向额外拉伸多少倍(宽屏上就是 1) */
+  ys: number;
+  /** 地面线在画布上的高度(下面还有一条雪地) */
   h: number;
 }
 
@@ -131,7 +152,7 @@ function sx(cam: Camera, x: number): number {
 }
 
 function sy(cam: Camera, y: number): number {
-  return cam.h - (y - GROUND_Y) * cam.s;
+  return cam.h - (y - GROUND_Y) * cam.s * cam.ys;
 }
 
 function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -150,7 +171,7 @@ function drawSky(c: CanvasRenderingContext2D, cam: Camera, w: number, t: number)
   g.addColorStop(0, "#cfe3f7");
   g.addColorStop(1, "#f2f8ff");
   c.fillStyle = g;
-  c.fillRect(0, 0, w, cam.h);
+  c.fillRect(0, 0, w, cam.h + GROUND_PAD);
   // 慢慢飘的雪:位置只跟时间有关,不占状态
   c.fillStyle = "rgba(255,255,255,.85)";
   for (let i = 0; i < 26; i++) {
@@ -162,12 +183,51 @@ function drawSky(c: CanvasRenderingContext2D, cam: Camera, w: number, t: number)
   }
 }
 
+/** 远处的雪山和小松树:位置固定,只是让雪原不那么空 */
+function drawBackdrop(c: CanvasRenderingContext2D, cam: Camera, w: number): void {
+  const base = sy(cam, 0);
+  c.fillStyle = "#e6eff9";
+  for (const [cx, r] of [
+    [0.22, 0.3],
+    [0.55, 0.24],
+    [0.86, 0.28],
+  ] as Array<[number, number]>) {
+    c.beginPath();
+    c.ellipse(w * cx, base + 2, w * r, Math.max(14, cam.h * 0.3), 0, Math.PI, Math.PI * 2);
+    c.fill();
+  }
+  const treeH = Math.max(12, cam.h * 0.17);
+  c.fillStyle = "#cbdcec";
+  for (const cx of [0.16, 0.33, 0.47, 0.64, 0.79, 0.93]) {
+    const x = w * cx;
+    for (let k = 0; k < 3; k++) {
+      const y = base - (treeH * k) / 3.4;
+      const half = (treeH * (3 - k)) / 9;
+      c.beginPath();
+      c.moveTo(x, y - treeH / 2.6);
+      c.lineTo(x - half, y);
+      c.lineTo(x + half, y);
+      c.closePath();
+      c.fill();
+    }
+  }
+}
+
 function drawGround(c: CanvasRenderingContext2D, cam: Camera, w: number): void {
   const y = sy(cam, 0);
   c.fillStyle = "#fbfdff";
-  c.fillRect(0, y, w, cam.h - y + 4);
+  c.fillRect(0, y, w, GROUND_PAD);
+  // 雪地上一小溜起伏,不然地面就是一条直尺
+  c.fillStyle = "#f2f7fd";
+  c.beginPath();
+  c.moveTo(0, y);
+  for (let x = 0; x <= w; x += 18) c.lineTo(x, y + 2 + Math.sin(x * 0.09) * 1.6);
+  c.lineTo(w, y + GROUND_PAD);
+  c.lineTo(0, y + GROUND_PAD);
+  c.closePath();
+  c.fill();
   c.strokeStyle = "#dbe7f3";
-  c.lineWidth = 2;
+  c.lineWidth = 1.6;
   c.beginPath();
   c.moveTo(0, y);
   c.lineTo(w, y);
@@ -181,9 +241,9 @@ function drawFort(c: CanvasRenderingContext2D, cam: Camera): void {
   c.fillStyle = "#eef4fb";
   c.beginPath();
   c.moveTo(0, base);
-  c.lineTo(0, base - cam.s * 4);
-  c.lineTo(gx * 0.34, base - cam.s * 5.4);
-  c.lineTo(gx * 0.68, base - cam.s * 4);
+  c.lineTo(0, sy(cam, 4));
+  c.lineTo(gx * 0.34, sy(cam, 5.4));
+  c.lineTo(gx * 0.68, sy(cam, 4));
   c.lineTo(gx * 0.68, base);
   c.closePath();
   c.fill();
@@ -194,13 +254,13 @@ function drawFort(c: CanvasRenderingContext2D, cam: Camera): void {
   c.strokeStyle = "rgba(240,150,180,.85)";
   c.beginPath();
   c.moveTo(gx, base);
-  c.lineTo(gx, base - cam.s * 3.4);
+  c.lineTo(gx, sy(cam, 3.4));
   c.stroke();
   c.setLineDash([]);
   c.textAlign = "center";
   c.textBaseline = "bottom";
-  c.font = `${Math.max(10, Math.round(cam.s * 0.9))}px system-ui`;
-  c.fillText("🏰", gx * 0.34, base - cam.s * 0.2);
+  c.font = `${Math.max(12, Math.round(cam.s * 0.9))}px system-ui`;
+  c.fillText("🏰", gx * 0.34, base - 3);
 }
 
 function drawCover(c: CanvasRenderingContext2D, cam: Camera, cv: Cover): void {
@@ -275,6 +335,10 @@ function drawTarget(c: CanvasRenderingContext2D, cam: Camera, t: Target, time: n
   c.stroke();
   c.fillStyle = "rgba(255,255,255,.95)";
   c.fillRect(x - r * 0.9, y - r * 0.12, r * 1.8, Math.max(1.5, r * 0.16));
+  // 顶上的一小顶雪帽,一眼就知道是雪灯笼
+  c.beginPath();
+  c.ellipse(x, y - r * 0.95, r * 0.55, r * 0.28, 0, Math.PI, Math.PI * 2);
+  c.fill();
 }
 
 function drawThrower(c: CanvasRenderingContext2D, cam: Camera, who: Thrower, active: boolean, time: number): void {
@@ -431,7 +495,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   let raf = 0;
   let last = 0;
   let clock = 0;
-  let cam: Camera = { s: 8, h: 128 };
+  let cam: Camera = { s: 8, ys: 1, h: 128 };
   let cssW = 320;
 
   /** 正在飞的那一发(飞完才结算) */
@@ -449,13 +513,15 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const availW = Math.max(240, (host.clientWidth || 340) - 8);
     const maxW = Math.min(availW, 860);
     const s = maxW / opts.viewW;
-    cam = { s, h: Math.round(VIEW_H * s) };
+    const ys = Math.max(1, Math.min(1.9, MIN_BOARD_H / (VIEW_H * s)));
+    cam = { s, ys, h: Math.round(VIEW_H * s * ys) };
     cssW = Math.round(opts.viewW * s);
+    const cssH = cam.h + GROUND_PAD;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cam.h * dpr);
+    canvas.height = Math.round(cssH * dpr);
     canvas.style.width = `${cssW}px`;
-    canvas.style.height = `${cam.h}px`;
+    canvas.style.height = `${cssH}px`;
     const c = canvas.getContext("2d");
     if (c) c.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
@@ -619,6 +685,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
 
   function draw(c: CanvasRenderingContext2D): void {
     drawSky(c, cam, cssW, clock);
+    drawBackdrop(c, cam, cssW);
     drawGround(c, cam, cssW);
     if (match.mode === "campaign" || match.mode === "endless") drawFort(c, cam);
     for (const cv of match.covers) drawCover(c, cam, cv);
@@ -641,7 +708,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   function drawPowerBar(c: CanvasRenderingContext2D, power: number): void {
     const w = Math.min(180, cssW * 0.5);
     const x = (cssW - w) / 2;
-    const y = cam.h - 16;
+    const y = cam.h - 14;
     c.fillStyle = "rgba(255,255,255,.85)";
     roundRect(c, x, y, w, 9, 5);
     c.fill();
@@ -1048,12 +1115,15 @@ export function mount(api: GameApi): { destroy: () => void } {
   vsBtn.textContent = "⚔️ 双人对战";
   vsBtn.addEventListener("click", () => openMode((h, a, b) => mountDuel(h, a, b, null)));
 
+  // 三档人机的短名字:手机上一行放得下才不会把画面挤到屏幕外面
+  const AI_SHORT: Record<AiLevel, string> = { easy: "🤖 简单", normal: "🤖 普通", hard: "🤖 会算风" };
   const aiBtns = (["easy", "normal", "hard"] as AiLevel[]).map((level) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "sf-open sf-open-ai";
-    b.textContent = `🤖 ${AI_PROFILES[level].name}`;
-    b.title = AI_PROFILES[level].desc;
+    b.textContent = AI_SHORT[level];
+    b.title = `${AI_PROFILES[level].name}:${AI_PROFILES[level].desc}`;
+    b.setAttribute("aria-label", `人机对战 ${AI_PROFILES[level].name}`);
     b.addEventListener("click", () => openMode((h, a, back) => mountDuel(h, a, back, level)));
     return b;
   });

@@ -97,6 +97,10 @@ const CSS = `
 @media (max-width:420px){
   .tb-btn{min-width:38px;min-height:36px;font-size:15px;}
   .tb-pads{gap:6px;}
+  .tb-open{padding:7px 11px;font-size:13px;}
+  .tb-bar{gap:6px;margin-bottom:4px;}
+  .tb-tip{font-size:11.5px;}
+  .tb-chip{padding:4px 9px;font-size:12px;}
 }
 @media (prefers-reduced-motion:reduce){.tb-btn:active{transform:none;}}
 `;
