@@ -1,5 +1,12 @@
-// 涂色小屋：99 关 · 六大村镇章节关卡生成（指令涂色 / 调色锅 / 数字涂色 / 记忆涂色）
+// 涂色小屋：188 关 · 十大村镇章节关卡生成
+// 前 99 关是 1.0 的六大村镇（指令 / 调色锅 / 数字 / 记忆），一个字都没动；
+// 1.1 在末尾追加四个村镇（第 100–188 关）：明暗渐变、配色规则、图例大画布、限色挑战。
 import { chapterOf, indexInChapter, mulberry32, pick, shuffled, type Chapter } from "../level99";
+
+/** 1.0 的六大村镇：合计 99 关，1.1 起不再改动 */
+export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
+/** 1.0 的总关数（新村镇从这里开始往后排） */
+export const LEGACY_LEVELS = 99;
 
 export const CHAPTERS: Chapter[] = [
   { name: "温馨小屋村", emoji: "🏠", color: "#ffe8cc", desc: "按小指令给小屋涂颜色", size: 17 },
@@ -8,6 +15,11 @@ export const CHAPTERS: Chapter[] = [
   { name: "夜空数字园", emoji: "🌙", color: "#e5dbff", desc: "看数字涂颜色", size: 16 },
   { name: "彩虹深色坡", emoji: "🌈", color: "#fff3bf", desc: "深红金黄深蓝也要调", size: 16 },
   { name: "星光记忆城", emoji: "🚀", color: "#ffdeeb", desc: "先记住样子，再凭记忆涂", size: 16 },
+  // ↓ 1.1 追加：四个高年级村镇，合计 89 关
+  { name: "晨昏渐变谷", emoji: "🌄", color: "#ffe3e3", desc: "同一种颜色分深浅，从最浅的开始涂", size: 22 },
+  { name: "互补配色坊", emoji: "🎯", color: "#e6fcf5", desc: "只告诉你规则，颜色自己推出来", size: 22 },
+  { name: "图例大画布", emoji: "🗺️", color: "#f8f0fc", desc: "大画布加符号图例，一格都不能错", size: 23 },
+  { name: "限色挑战场", emoji: "🎨", color: "#edf2ff", desc: "只给三原色，调色次数还有限", size: 22 },
 ];
 
 export interface Region {
@@ -114,6 +126,72 @@ export const PICTURES: Picture[] = [
       { id: "tower2", name: "高楼", svg: `<rect x="286" y="188" width="62" height="84" rx="6"/>`, lx: 317, ly: 234 },
     ],
   },
+  // ↓ 1.1 追加：四张新线稿（渐变 / 配色 / 大画布 / 限色）
+  {
+    name: "晨昏山谷",
+    emoji: "🌄",
+    regions: [
+      { id: "sky", name: "天空", svg: `<rect x="0" y="0" width="400" height="96" rx="6"/>`, lx: 46, ly: 52 },
+      { id: "farhill", name: "远山", svg: `<polygon points="0,150 110,72 226,150"/>`, lx: 110, ly: 132 },
+      { id: "nearhill", name: "近山", svg: `<polygon points="150,168 268,84 396,168"/>`, lx: 270, ly: 150 },
+      { id: "lake", name: "湖面", svg: `<rect x="0" y="196" width="400" height="60" rx="8"/>`, lx: 60, ly: 232 },
+      { id: "shore", name: "湖岸", svg: `<rect x="0" y="256" width="400" height="44" rx="8"/>`, lx: 60, ly: 284 },
+      { id: "crownv", name: "树冠", svg: `<circle cx="330" cy="212" r="34"/>`, lx: 330, ly: 218 },
+      { id: "trunkv", name: "树干", svg: `<rect x="322" y="240" width="16" height="34" rx="4"/>`, lx: 330, ly: 264 },
+      { id: "hut", name: "小屋", svg: `<rect x="58" y="150" width="66" height="46" rx="5"/>`, lx: 91, ly: 180 },
+      { id: "hutroof", name: "屋顶", svg: `<polygon points="48,152 134,152 91,116"/>`, lx: 91, ly: 142 },
+    ],
+  },
+  {
+    name: "配色小镇",
+    emoji: "🏘️",
+    regions: [
+      { id: "csky", name: "天空", svg: `<rect x="0" y="0" width="400" height="120" rx="6"/>`, lx: 44, ly: 62 },
+      { id: "cgrass", name: "草地", svg: `<rect x="0" y="240" width="400" height="60" rx="6"/>`, lx: 44, ly: 276 },
+      { id: "roofa", name: "左屋顶", svg: `<polygon points="34,152 166,152 100,92"/>`, lx: 100, ly: 138 },
+      { id: "walla", name: "左墙", svg: `<rect x="46" y="152" width="108" height="88"/>`, lx: 78, ly: 208 },
+      { id: "roofb", name: "右屋顶", svg: `<polygon points="230,166 372,166 301,106"/>`, lx: 301, ly: 152 },
+      { id: "wallb", name: "右墙", svg: `<rect x="242" y="166" width="118" height="74"/>`, lx: 274, ly: 214 },
+      { id: "cdoor", name: "小门", svg: `<rect x="84" y="190" width="34" height="50" rx="6"/>`, lx: 101, ly: 220 },
+      { id: "cwin", name: "窗户", svg: `<rect x="284" y="188" width="34" height="30" rx="5"/>`, lx: 301, ly: 209 },
+      { id: "ctree", name: "树冠", svg: `<circle cx="196" cy="212" r="30"/>`, lx: 196, ly: 218 },
+      { id: "cflower", name: "花丛", svg: `<ellipse cx="44" cy="256" rx="30" ry="15"/>`, lx: 44, ly: 262 },
+    ],
+  },
+  {
+    name: "花海大画布",
+    emoji: "🖼️",
+    regions: [
+      { id: "bsky", name: "上层天空", svg: `<rect x="0" y="0" width="400" height="60" rx="4"/>`, lx: 40, ly: 36 },
+      { id: "bsun", name: "太阳", svg: `<circle cx="336" cy="52" r="26"/>`, lx: 336, ly: 58 },
+      { id: "bcloud", name: "云朵", svg: `<ellipse cx="120" cy="52" rx="46" ry="20"/>`, lx: 120, ly: 58 },
+      { id: "bhill", name: "山丘", svg: `<polygon points="0,150 96,74 200,150"/>`, lx: 96, ly: 134 },
+      { id: "bhill2", name: "小丘", svg: `<polygon points="184,150 276,90 372,150"/>`, lx: 278, ly: 136 },
+      { id: "bfield", name: "田野", svg: `<rect x="0" y="150" width="400" height="52" rx="4"/>`, lx: 40, ly: 182 },
+      { id: "bpath", name: "小路", svg: `<polygon points="170,202 230,202 268,300 132,300"/>`, lx: 200, ly: 262 },
+      { id: "bleft", name: "左花田", svg: `<rect x="0" y="202" width="132" height="98" rx="4"/>`, lx: 60, ly: 258 },
+      { id: "bright", name: "右花田", svg: `<rect x="268" y="202" width="132" height="98" rx="4"/>`, lx: 336, ly: 258 },
+      { id: "bflower1", name: "大花", svg: `<circle cx="58" cy="230" r="18"/>`, lx: 58, ly: 236 },
+      { id: "bflower2", name: "小花", svg: `<circle cx="340" cy="238" r="16"/>`, lx: 340, ly: 244 },
+      { id: "btree", name: "树冠", svg: `<circle cx="236" cy="126" r="26"/>`, lx: 236, ly: 132 },
+      { id: "btrunk", name: "树干", svg: `<rect x="229" y="148" width="14" height="30" rx="4"/>`, lx: 236, ly: 170 },
+    ],
+  },
+  {
+    name: "彩虹热气球",
+    emoji: "🎈",
+    regions: [
+      { id: "hsky", name: "天空", svg: `<rect x="0" y="0" width="400" height="300" rx="6"/>`, lx: 40, ly: 288 },
+      { id: "hleft", name: "气球左瓣", svg: `<path d="M200,40 A78,78 0 0 0 122,118 Q122,168 200,208 Z"/>`, lx: 152, ly: 122 },
+      { id: "hmid", name: "气球中瓣", svg: `<path d="M200,40 Q166,120 200,208 Q234,120 200,40 Z"/>`, lx: 200, ly: 116 },
+      { id: "hright", name: "气球右瓣", svg: `<path d="M200,40 A78,78 0 0 1 278,118 Q278,168 200,208 Z"/>`, lx: 248, ly: 122 },
+      { id: "hbasket", name: "吊篮", svg: `<rect x="176" y="244" width="48" height="34" rx="6"/>`, lx: 200, ly: 268 },
+      { id: "hrope", name: "吊绳", svg: `<rect x="196" y="208" width="8" height="36" rx="3"/>`, lx: 200, ly: 232 },
+      { id: "hcloud", name: "云朵", svg: `<ellipse cx="64" cy="86" rx="44" ry="20"/>`, lx: 64, ly: 92 },
+      { id: "hbird", name: "小鸟", svg: `<ellipse cx="330" cy="212" rx="26" ry="16"/>`, lx: 330, ly: 218 },
+      { id: "hflag", name: "小旗", svg: `<polygon points="224,246 262,254 224,262"/>`, lx: 244, ly: 258 },
+    ],
+  },
 ];
 
 export interface Paint {
@@ -153,15 +231,86 @@ export const MIX_TABLE: Record<string, string> = {
   "蓝色+蓝色": "深蓝",
 };
 
+/** 1.1 追加：同一种颜色的深浅阶梯用色（只在新村镇出现） */
+export const SHADE_PAINTS: Paint[] = [
+  { name: "浅粉", value: "#ffdeeb" },
+  { name: "深粉", value: "#e64980" },
+  { name: "浅蓝", value: "#d0ebff" },
+  { name: "浅绿", value: "#d3f9d8" },
+  { name: "深绿", value: "#2f9e44" },
+  { name: "浅黄", value: "#fff3bf" },
+  { name: "浅紫", value: "#e5dbff" },
+  { name: "深紫", value: "#7048e8" },
+  { name: "浅橙", value: "#ffd8a8" },
+  { name: "深橙", value: "#e8590c" },
+  { name: "浅红", value: "#ffc9c9" },
+];
+
 export const ALL_PAINTS: Record<string, string> = Object.fromEntries(
-  [...DIRECT_PAINTS, ...MIXABLE_PAINTS].map((p) => [p.name, p.value])
+  [...DIRECT_PAINTS, ...MIXABLE_PAINTS, ...SHADE_PAINTS].map((p) => [p.name, p.value])
 );
 
-export type ColorMode = "guide" | "mix" | "number" | "memory";
+/** 1.1 追加：明暗阶梯，每一组都是同一种颜色由浅到深 */
+export const SHADE_LADDERS: string[][] = [
+  ["浅粉", "粉色", "深粉"],
+  ["浅蓝", "蓝色", "深蓝"],
+  ["浅绿", "绿色", "深绿"],
+  ["浅黄", "黄色", "金黄"],
+  ["浅紫", "紫色", "深紫"],
+  ["浅橙", "橙色", "深橙"],
+  ["浅红", "红色", "深红"],
+];
+
+/** 1.1 追加：互补色（色环上正对面的那个） */
+export const COMPLEMENT: Record<string, string> = {
+  红色: "绿色",
+  绿色: "红色",
+  蓝色: "橙色",
+  橙色: "蓝色",
+  黄色: "紫色",
+  紫色: "黄色",
+};
+
+/** 1.1 追加：邻近色（彩虹上紧挨着的下一格） */
+export const ANALOGOUS_NEXT: Record<string, string> = {
+  红色: "橙色",
+  橙色: "黄色",
+  黄色: "绿色",
+  绿色: "蓝色",
+  蓝色: "紫色",
+  紫色: "红色",
+};
+
+/** 1.1 追加：图例用的符号（大画布上贴在每一块上） */
+export const LEGEND_SYMBOLS = ["●", "■", "▲", "★", "◆", "♥"];
+
+/** 配色规则读给孩子听的说法（不报颜色，只说关系） */
+export function ruleText(kind: "complement" | "analogous", refName: string): string {
+  return kind === "complement" ? `${refName}的互补色` : `彩虹上紧挨着${refName}的下一格`;
+}
+
+export type ColorMode =
+  | "guide"
+  | "mix"
+  | "number"
+  | "memory"
+  // ↓ 1.1 追加的玩法
+  | "shade"
+  | "rule"
+  | "legend"
+  | "limited";
 
 export interface ColorTask {
   region: string;
   color: string;
+}
+
+/** 1.1 追加：配色规则（不直接报颜色，只给参照区域和关系） */
+export interface ColorRule {
+  region: string;
+  /** 参照的那一块（开局就已经涂好） */
+  refRegion: string;
+  kind: "complement" | "analogous";
 }
 
 export interface ColorLevel {
@@ -175,6 +324,16 @@ export interface ColorLevel {
   maxWrong: number;
   /** memory 模式的预览时长（毫秒） */
   previewMs: number;
+  /** shade 模式：必须按 tasks 的顺序从浅到深涂 */
+  order?: boolean;
+  /** rule 模式：开局就涂好的参照区域 */
+  given?: ColorTask[];
+  /** rule 模式：每一块的推色规则，与 tasks 同区域一一对应 */
+  rules?: ColorRule[];
+  /** legend 模式：符号 → 颜色的图例 */
+  legend?: { symbol: string; color: string }[];
+  /** limited 模式：调色锅最多能开几次 */
+  budget?: number;
 }
 
 const BASIC = ["红色", "黄色", "蓝色", "粉色", "棕色"];
@@ -184,6 +343,9 @@ const MIX_EASY = ["橙色", "绿色", "紫色"];
 const MIX_DEEP = ["深红", "金黄", "深蓝", "橙色", "绿色", "紫色"];
 
 export function buildLevel(level: number): ColorLevel {
+  const ci0 = chapterOf(CHAPTERS, level);
+  // 1.1 新村镇走自己的生成器；前 99 关下面这段与 1.0 逐字相同
+  if (ci0 >= LEGACY_CHAPTER_SIZES.length) return buildAdvancedLevel(level, ci0);
   const rand = mulberry32(11800 + level * 7919);
   const ci = chapterOf(CHAPTERS, level);
   const idx = indexInChapter(CHAPTERS, level);
@@ -230,4 +392,126 @@ export function buildLevel(level: number): ColorLevel {
   return { pic: ci, mode, tasks: shuffled(tasks, rand), palette, needMix: usedMix, maxWrong, previewMs };
 }
 
-export const LEVELS: ColorLevel[] = Array.from({ length: 99 }, (_, i) => buildLevel(i));
+// ---------------------------------------------------------------------------
+// 1.1 追加：第 100–188 关的四种新玩法
+//   shade   明暗渐变——同色系分深浅，还要按由浅到深的顺序涂
+//   rule    配色规则——只给「某块的互补色 / 邻近色」，颜色得自己推
+//   legend  图例大画布——13 块的大图，靠符号图例对应颜色
+//   limited 限色挑战——调色盘只剩三原色，连开锅次数都有预算
+// ---------------------------------------------------------------------------
+
+function takeDistinct<T>(rand: () => number, pool: readonly T[], n: number, exclude: readonly T[]): T[] {
+  const out: T[] = [];
+  if (n <= 0) return out;
+  for (const x of shuffled(pool, rand)) {
+    if (exclude.includes(x) || out.includes(x)) continue;
+    out.push(x);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+function buildAdvancedLevel(level: number, ci: number): ColorLevel {
+  const rand = mulberry32(13900 + level * 7919);
+  const idx = indexInChapter(CHAPTERS, level);
+  const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
+  const picture = PICTURES[ci];
+  const regions = picture.regions.map((r) => r.id);
+
+  if (ci === 6) {
+    // 晨昏渐变谷：两组明暗阶梯，从最浅的一路涂到最深的
+    const ladders = takeDistinct(rand, SHADE_LADDERS, 2, []);
+    const spots = shuffled(regions, rand);
+    const tasks: ColorTask[] = [];
+    // 前段两组共 5 块，后段两组各三级共 6 块
+    const secondSteps = t > 0.35 ? 3 : 2;
+    const colors = [...ladders[0], ...ladders[1].slice(0, secondSteps)];
+    colors.forEach((color, i) => {
+      if (spots[i]) tasks.push({ region: spots[i], color });
+    });
+    // 由浅到深：先第一组，再第二组，组内顺序就是阶梯顺序
+    const palette = shuffled(
+      [
+        ...new Set([
+          ...tasks.map((k) => k.color),
+          ...takeDistinct(rand, SHADE_LADDERS.flat(), 1 + Math.floor(t * 2), tasks.map((k) => k.color)),
+        ]),
+      ],
+      rand
+    );
+    return {
+      pic: ci, mode: "shade", tasks, palette, needMix: [],
+      maxWrong: t > 0.6 ? 3 : 4, previewMs: 0, order: true,
+    };
+  }
+
+  if (ci === 7) {
+    // 互补配色坊：先摆两三块参照色，其余全靠色环规则推出来
+    const wheel = Object.keys(COMPLEMENT);
+    const spots = shuffled(regions, rand);
+    const refCount = 2 + (t > 0.5 ? 1 : 0);
+    const given: ColorTask[] = [];
+    const refColors = takeDistinct(rand, wheel, refCount, []);
+    refColors.forEach((color, i) => given.push({ region: spots[i], color }));
+
+    const taskCount = Math.min(spots.length - given.length, 4 + Math.floor(t * 2));
+    const tasks: ColorTask[] = [];
+    const rules: ColorRule[] = [];
+    for (let i = 0; i < taskCount; i++) {
+      const region = spots[given.length + i];
+      const ref = given[i % given.length];
+      const kind: ColorRule["kind"] = t > 0.4 && i % 2 === 1 ? "analogous" : "complement";
+      const color = kind === "complement" ? COMPLEMENT[ref.color] : ANALOGOUS_NEXT[ref.color];
+      tasks.push({ region, color });
+      rules.push({ region, refRegion: ref.region, kind });
+    }
+    const wanted = [...new Set(tasks.map((k) => k.color))];
+    const palette = shuffled(
+      [...wanted, ...takeDistinct(rand, wheel, 1 + Math.floor(t * 2), wanted)],
+      rand
+    );
+    return {
+      pic: ci, mode: "rule", tasks: shuffled(tasks, rand), palette, needMix: [],
+      maxWrong: t > 0.6 ? 3 : 4, previewMs: 0, given, rules,
+    };
+  }
+
+  if (ci === 8) {
+    // 图例大画布：13 块的大图，符号对颜色，一格都不能认错
+    const colorCount = 4 + Math.floor(t * 2);
+    const colors = takeDistinct(rand, [...DIRECT_PAINTS.map((p) => p.name), "深绿", "深粉"], colorCount, []);
+    const legend = colors.map((color, i) => ({ symbol: LEGEND_SYMBOLS[i % LEGEND_SYMBOLS.length], color }));
+    const taskCount = Math.min(regions.length, 8 + Math.floor(t * 4));
+    const spots = shuffled(regions, rand).slice(0, taskCount);
+    const tasks = spots.map((region, i) => ({ region, color: colors[i % colors.length] }));
+    const palette = shuffled(colors, rand);
+    return {
+      pic: ci, mode: "legend", tasks: shuffled(tasks, rand), palette, needMix: [],
+      maxWrong: t > 0.6 ? 3 : 4, previewMs: 0, legend,
+    };
+  }
+
+  // 限色挑战场：调色盘只剩红黄蓝，其余全靠调，开锅次数还有预算
+  const mixables = ["橙色", "绿色", "紫色", "深红", "金黄", "深蓝"];
+  const mixCount = 2 + Math.floor(t * 2);
+  const needMix = takeDistinct(rand, mixables, mixCount, []);
+  const spots = shuffled(regions, rand);
+  const taskCount = Math.min(spots.length, needMix.length + 2 + Math.floor(t * 2));
+  const tasks: ColorTask[] = [];
+  for (let i = 0; i < taskCount; i++) {
+    const color = i < needMix.length ? needMix[i] : ["红色", "黄色", "蓝色"][i % 3];
+    tasks.push({ region: spots[i], color });
+  }
+  return {
+    pic: ci,
+    mode: "limited",
+    tasks: shuffled(tasks, rand),
+    palette: ["红色", "黄色", "蓝色"],
+    needMix,
+    maxWrong: t > 0.6 ? 3 : 4,
+    previewMs: 0,
+    budget: needMix.length + (t > 0.5 ? 1 : 2),
+  };
+}
+
+export const LEVELS: ColorLevel[] = Array.from({ length: 188 }, (_, i) => buildLevel(i));
