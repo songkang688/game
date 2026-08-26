@@ -1,4 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  ROOT_TTL_MS,
+  clearRootSession,
+  resetRoot12Extras,
+  writeRootSession
+} from "../ui/root12Contract";
+import {
+  jumpTargetLevel,
+  rootJumpNote,
+  rootJumpVisible,
+  skipNeedsParentAuth
+} from "./level99";
 import {
   LEGACY_TOTAL_LEVELS,
   MAX_TOTAL_STARS,
@@ -44,6 +56,9 @@ function memStorage(): StorageLike {
     }
   };
 }
+
+/** 1.2 管理员权限测试用的假「现在」：全程假时钟，不真等一小时 */
+const NOW = 1_700_000_000_000;
 
 /** 1.0 时代的六章切分（和 = 99），用来验证「章节和不对」时的降级行为 */
 const LEGACY_CHAPTERS: Chapter[] = [
@@ -477,5 +492,86 @@ describe("level99 结算朗读文案", () => {
     const line = settleSpeechLine("lose", 4, "没关系，慢慢来，你可以的！");
     expect(line).toBe("就差一点点！没关系，慢慢来，你可以的！");
     expect(line).not.toMatch(/输|失败|错/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2 新增：管理员权限「直达第 N 关」
+// ---------------------------------------------------------------------------
+
+describe("level99 直达第 N 关（管理员权限）", () => {
+  beforeEach(() => {
+    resetRoot12Extras();
+    clearRootSession(null);
+  });
+
+  it("管理员权限关着时，直达控件根本不该出现", () => {
+    expect(rootJumpVisible(NOW)).toBe(false);
+  });
+
+  it("管理员权限开着时，直达控件才出现", () => {
+    writeRootSession(NOW + ROOT_TTL_MS, null);
+    expect(rootJumpVisible(NOW)).toBe(true);
+  });
+
+  it("假时钟推进一小时后控件重新消失", () => {
+    writeRootSession(NOW + ROOT_TTL_MS, null);
+    expect(rootJumpVisible(NOW + 59 * 60_000)).toBe(true);
+    expect(rootJumpVisible(NOW + ROOT_TTL_MS)).toBe(false);
+  });
+
+  it("能直达第 188 关（内部是 0 基的第 187）", () => {
+    expect(jumpTargetLevel("188", TOTAL_LEVELS)).toBe(187);
+    expect(jumpTargetLevel("1", TOTAL_LEVELS)).toBe(0);
+    expect(jumpTargetLevel("100", TOTAL_LEVELS)).toBe(99);
+  });
+
+  it("越界输入被夹住，坏输入原地不动且不抛异常", () => {
+    expect(jumpTargetLevel("0", TOTAL_LEVELS)).toBe(0);
+    expect(jumpTargetLevel("189", TOTAL_LEVELS)).toBe(187);
+    expect(jumpTargetLevel("1e9", TOTAL_LEVELS)).toBe(187);
+    expect(jumpTargetLevel("-3", TOTAL_LEVELS)).toBe(0);
+    expect(jumpTargetLevel("abc", TOTAL_LEVELS)).toBeNull();
+    expect(jumpTargetLevel("", TOTAL_LEVELS)).toBeNull();
+    expect(() => jumpTargetLevel("abc", TOTAL_LEVELS)).not.toThrow();
+  });
+
+  it("章节和异常降级后的总关数也夹得住，不会超出 188", () => {
+    expect(jumpTargetLevel("99", 40)).toBe(39);
+    expect(jumpTargetLevel("500", 999)).toBe(187);
+  });
+
+  it("直达一个没打过的关，星级数组一个字都不动", () => {
+    const store = memStorage();
+    saveStar("jump-demo", 0, 3, store);
+    const before = loadStars("jump-demo", store);
+    // 直达只算出关号，不碰任何存档写入口
+    expect(jumpTargetLevel("187", TOTAL_LEVELS)).toBe(186);
+    const after = loadStars("jump-demo", store);
+    expect(after).toEqual(before);
+    expect(after[186]).toBe(0);
+    expect(loadSkips("jump-demo", store)).toEqual([]);
+  });
+
+  it("管理员权限开着时跳关免算术题，关着时仍旧走家长门", () => {
+    expect(skipNeedsParentAuth(NOW)).toBe(true);
+    writeRootSession(NOW + ROOT_TTL_MS, null);
+    expect(skipNeedsParentAuth(NOW)).toBe(false);
+    expect(skipNeedsParentAuth(NOW + ROOT_TTL_MS)).toBe(true);
+  });
+
+  it("直达控件旁边那行小字报剩余分钟，不写吓人词", () => {
+    const note = rootJumpNote(43 * 60_000);
+    expect(note).toBe("管理员权限还剩 43 分钟");
+    expect(note.toLowerCase()).not.toContain("root");
+  });
+
+  it("加了直达之后总关数仍旧是 188，存档 key 语义没变", () => {
+    expect(TOTAL_LEVELS).toBe(188);
+    const store = memStorage();
+    saveStar("key-demo", 5, 2, store);
+    expect(store.getItem("yiduo-yixing.l99.key-demo")).toBeTruthy();
+    markSkipped("key-demo", 5, store);
+    expect(store.getItem("yiduo-yixing.l99skip.key-demo")).toBe("[5]");
   });
 });
