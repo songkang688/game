@@ -58,6 +58,7 @@ import {
   endlessStarReward,
   towerStage
 } from "./levels";
+import guide from "./guide";
 import { meta } from "./meta";
 import {
   isActiveFrame,
@@ -1476,6 +1477,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         id: meta.id,
         chapters: CHAPTERS,
         mapHint: "每一层的守擂者都在最后一关等你，赢得越轻松星星越多。",
+        guide,
         guideTitle: "格斗塔小攻略",
         grandMessage: "188 关全部打完，格斗塔的塔顶归你啦！",
         playLevel: (stageEl: HTMLElement, ctx: PlayCtx) => {

@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import { AI_HINTS, AI_LABELS } from "./ai";
 import { keyHintLines } from "./controls";
 import { CHARACTERS, MOVE_SLOTS } from "./frames";
+import guide from "./guide";
 import { CHAPTERS, endlessEndText, towerStage } from "./levels";
 import { meta } from "./meta";
 import { TOTAL_LEVELS } from "../level99";
@@ -137,12 +138,18 @@ const BRAND_WORDS = [
 /** 本作原创的八位小伙伴 —— 角色名只许从这里挑 */
 const ORIGINAL_NAMES = ["朵朵", "星星", "糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾"];
 
+/** 过低幼措辞：这套游戏按小学中高年级的读者写，不许把孩子当奶娃说话 */
+const BABY_TALK_WORDS = ["宝宝", "乖乖", "小笨蛋", "笨蛋", "傻瓜", "棒棒哒", "萌萌哒", "么么哒", "抱抱", "小宝贝"];
+
 /** 把一段可见文案拿去过筛子，出问题时报出来源，方便定位 */
 function checkCopy(where: string, text: string): void {
   for (const bad of HURT_WORDS) {
     expect(`${where}｜${text}`).not.toContain(bad);
   }
   for (const bad of WEAPON_WORDS) {
+    expect(`${where}｜${text}`).not.toContain(bad);
+  }
+  for (const bad of BABY_TALK_WORDS) {
     expect(`${where}｜${text}`).not.toContain(bad);
   }
   const low = text.toLowerCase();
@@ -233,6 +240,45 @@ describe("格斗塔文案", () => {
   });
 });
 
+describe("攻略", () => {
+  const allLines = [guide.title, ...guide.general, ...guide.entries.flatMap((e) => [e.title, ...e.tips])];
+
+  it("gameId 与目录名一致，标题和心得都写满了", () => {
+    expect(guide.gameId).toBe("fight-king");
+    expect(guide.title.length).toBeGreaterThan(0);
+    expect(guide.general.length).toBeGreaterThanOrEqual(3);
+    expect(guide.general.length).toBeLessThanOrEqual(6);
+  });
+
+  it("八章攻略首尾相接，正好铺满 188 关", () => {
+    expect(guide.entries.length).toBeGreaterThanOrEqual(8);
+    expect(guide.entries[0].from).toBe(1);
+    expect(guide.entries[guide.entries.length - 1].to).toBe(TOTAL_LEVELS);
+    for (let i = 0; i < guide.entries.length; i++) {
+      const e = guide.entries[i];
+      expect(e.from, `第 ${i + 1} 条区间反了`).toBeLessThanOrEqual(e.to);
+      expect(e.tips.length, `第 ${i + 1} 条没写提示`).toBeGreaterThan(0);
+      if (i > 0) expect(e.from).toBe(guide.entries[i - 1].to + 1);
+    }
+  });
+
+  it("攻略每一条区间都对得上格斗塔的章节划分", () => {
+    for (const [i, e] of guide.entries.entries()) {
+      expect(e.to - e.from + 1, `第 ${i + 1} 章关数对不上`).toBe(CHAPTERS[i].size);
+    }
+  });
+
+  it("攻略正文一样过红线筛子", () => {
+    for (const [i, text] of allLines.entries()) checkCopy(`攻略第 ${i} 句`, text);
+  });
+
+  it("攻略不说奶声奶气的话", () => {
+    for (const text of allLines) {
+      for (const bad of BABY_TALK_WORDS) expect(text).not.toContain(bad);
+    }
+  });
+});
+
 describe("模式与键位说明", () => {
   it("AI 三档的名字与说明都干净", () => {
     for (const lv of [0, 1, 2] as const) {
@@ -256,7 +302,17 @@ describe("源码巡检", () => {
 
   it("游戏目录里该有的文件都在", () => {
     expect(files.sort()).toEqual(
-      ["ai.ts", "controls.ts", "engine.ts", "frames.ts", "index.ts", "levels.ts", "meta.ts", "rules.ts"].sort()
+      [
+        "ai.ts",
+        "controls.ts",
+        "engine.ts",
+        "frames.ts",
+        "guide.ts",
+        "index.ts",
+        "levels.ts",
+        "meta.ts",
+        "rules.ts"
+      ].sort()
     );
   });
 

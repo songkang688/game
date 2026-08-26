@@ -116,7 +116,7 @@ describe("按键组合选招", () => {
     expect(pickMove(duo, inputOf({ right: true, heavy: true }), -1, ground)).toBe("s3");
   });
 
-  it("轻重一起按是抱抱摔；蹲着一起按且满槽才是超必杀", () => {
+  it("轻重一起按是转圈摔；蹲着一起按且满槽才是超必杀", () => {
     expect(pickMove(duo, inputOf({ light: true, heavy: true }), 1, ground)).toBe("throw");
     expect(pickMove(duo, inputOf({ down: true, light: true, heavy: true }), 1, ground)).toBe("throw");
     expect(pickMove(duo, inputOf({ down: true, light: true, heavy: true }), 1, { airborne: false, meter: METER_MAX })).toBe(

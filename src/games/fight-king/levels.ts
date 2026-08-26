@@ -15,7 +15,7 @@ export const CHAPTERS: Chapter[] = [
   { name: "星光广场", emoji: "⭐", color: "#d8e6ff", desc: "对手开始会跳了，学着用对空招把他们打下来", size: 24 },
   { name: "糯米集市", emoji: "🍡", color: "#ffe9cf", desc: "扫堂腿登场：站着挡是挡不住下段的", size: 24 },
   { name: "云端回廊", emoji: "☁️", color: "#e4ecff", desc: "长手对手够得远，得会找机会贴上去", size: 24 },
-  { name: "竹林擂台", emoji: "🎋", color: "#d9f2d0", desc: "对手会格挡了，试试抱抱摔和破防招", size: 23 },
+  { name: "竹林擂台", emoji: "🎋", color: "#d9f2d0", desc: "对手会格挡了，试试转圈摔和破防招", size: 23 },
   { name: "闪电高台", emoji: "⚡", color: "#fff2c2", desc: "速度全面提升，收招大的招要少用", size: 23 },
   { name: "豆田操场", emoji: "🌱", color: "#e2f6cf", desc: "对手连段很长，倒地记得按轻击受身", size: 23 },
   { name: "云顶王座", emoji: "👑", color: "#ffe6f2", desc: "最后一层：会防会反击的高手，还带着满满的增益", size: 23 }
@@ -123,7 +123,7 @@ const HINTS = [
   "扫堂腿是下段，要蹲着才挡得住。",
   "跳跃攻击是上段，得站着挡。",
   "被挡住不要紧，收招小的招挡了也不亏。",
-  "抱抱摔挡不住，但对手在硬直里就抓不到。",
+  "转圈摔挡不住，但对手在硬直里就抓不到。",
   "能量满了别憋着，超必杀是翻盘的机会。",
   "倒地那一下按轻击可以受身，快点爬起来。"
 ];

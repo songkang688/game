@@ -94,7 +94,7 @@ export interface PickContext {
 /**
  * 键位表（面向小学高年级，六种组合就够用）：
  *  地面 轻 / 重 / 蹲+轻 / 蹲+重（下段）/ 前+轻（必杀一）/ 前+重（必杀二）/ 后+重（必杀三）
- *      轻+重 同时 = 抱抱摔；蹲 + 轻+重 同时 = 超必杀（要满槽）
+ *      轻+重 同时 = 转圈摔；蹲 + 轻+重 同时 = 超必杀（要满槽）
  *  空中 轻 / 重 / 前+重（有空中必杀的角色才有）
  */
 export function pickMove(char: Character, input: InputFrame, facing: Facing, ctx: PickContext): MoveSlot | null {

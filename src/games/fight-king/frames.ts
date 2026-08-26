@@ -313,7 +313,7 @@ const NORMAL_NAMES: Record<keyof typeof NORMAL_TEMPLATES, string> = {
   "2H": "扫堂腿",
   jL: "跳跃轻击",
   jH: "跳跃重击",
-  throw: "抱抱摔"
+  throw: "转圈摔"
 };
 
 const NORMAL_NOTES: Record<keyof typeof NORMAL_TEMPLATES, string> = {
@@ -755,7 +755,7 @@ const SPECS: CharSpec[] = [
     emoji: "🐼",
     color: "#EDEDF5",
     ink: "#4B4B60",
-    blurb: "圆滚滚的大块头，最爱抱抱和竹筒饭。",
+    blurb: "圆滚滚的大块头，最爱竹筒饭和午后打盹。",
     style: "重量级：元气最多、格挡槽最厚，就是慢，靠一招定胜负。",
     vigor: 120,
     walk: 2.2,
