@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🐟",
   category: "action" as const,
   color: "#bfe9ff",
-  blurb: "99 关九大海域战役!收集生物图鉴,挑战九位海域大王!",
+  blurb: "188 关十二片海域战役!洋流、毒藻鱼、共生小鱼、深渊压力,挑战十二位海域大王!",
 };

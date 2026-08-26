@@ -1,28 +1,37 @@
 import { meta } from "./meta";
 export { meta };
 
-// 海底大胃王:99 关九大海域战役!先选海域再选关,每片海域专属配色、障碍组合
-// 和区域 BOSS(共 9 位),吃过见过的生物都会记进生物图鉴!
+// 海底大胃王:188 关十二片海域战役!先选海域再选关,每片海域专属配色、障碍组合
+// 和区域 BOSS(共 12 位),吃过见过的生物都会记进生物图鉴!
+// 1.1 新机制:洋流(整片海周期换向)、毒藻鱼、共生小鱼、深渊压力(体型上限)。
 import {
   BOSS_INFO,
+  BUDDY_MAX,
+  BUDDY_REACH,
+  BUDDY_SCORE,
   BossKind,
   DARK_SIGHT,
   DEX,
   DEX_KEY,
   HEARTS_PER_LEVEL,
   LEVELS,
-  LEVELS_PER_THEME,
   PROGRESS_KEY,
   SHIELD_SECONDS,
   START_RADIUS,
+  TOXIN_NUMB,
   VORTEX_RADIUS,
   ZONE_ORDER,
   ZONE_STYLE,
   bossBiteReady,
+  buddyCanEat,
+  buddyRadius,
+  buddyStep,
   canEat,
   circlesOverlap,
   clearSpeechLine,
+  crushedCap,
   dexIdForFish,
+  driftVector,
   eatScore,
   eelActive,
   grow,
@@ -31,15 +40,21 @@ import {
   isDanger,
   isLevelUnlocked,
   isThemeUnlocked,
+  numbFollowMult,
   parseDex,
   parseProgress,
   retrySpeechLine,
   serializeDex,
   serializeProgress,
+  sizeCapFor,
   spawnRadius,
   starsForLevel,
   themeCleared,
+  themeIndexOf,
+  themeSize,
   themeStars,
+  themeStart,
+  toxinShrink,
   totalStars,
   vortexPull,
 } from "./logic";
@@ -57,7 +72,7 @@ export interface GameAPI {
 }
 
 type Phase = "themes" | "map" | "dex" | "intro" | "play" | "clear" | "retry";
-type NpcKind = "fish" | "jelly" | "puffer" | "urchin" | "squid";
+type NpcKind = "fish" | "jelly" | "puffer" | "urchin" | "squid" | "toxin";
 
 interface Npc {
   kind: NpcKind;
@@ -76,11 +91,28 @@ interface Npc {
 }
 
 interface Pickup {
-  kind: "shield" | "star";
+  kind: "shield" | "star" | "buddy";
   x: number;
   y: number;
   vy: number;
   phase: number;
+}
+
+/** 共生小鱼:跟在你身后,顺手帮你吃掉身边的小鱼。 */
+interface Buddy {
+  x: number;
+  y: number;
+  phase: number;
+  /** 咬一口的冷却,免得瞬间清场 */
+  cd: number;
+}
+
+/** 毒云:荧荧海葵王吐的紫雾,碰到会缩小发麻,但不掉心。 */
+interface Haze {
+  x: number;
+  y: number;
+  r: number;
+  life: number;
 }
 
 interface Boss {
@@ -95,6 +127,10 @@ interface Boss {
   dashTimer: number;
   inkTimer: number;
   summonTimer: number;
+  /** 1.1:掀洋流 / 吐毒雾 / 合壳加压的冷却 */
+  driftTimer: number;
+  hazeTimer: number;
+  crushTimer: number;
   hurt: number;
 }
 
@@ -240,8 +276,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
   const pops: Pop[] = [];
   const floats: Floaty[] = [];
   const inks: Ink[] = [];
+  const buddies: Buddy[] = [];
+  const hazes: Haze[] = [];
   let boss: Boss | null = null;
   let bossActive = false;
+
+  // 1.1 新机制的局内状态
+  let numb = 0;
+  let sizeCap = 0;
+  let crushCount = 0;
+  let buddyTimer = 0;
+  let driftFlip = 0;
 
   // 关卡环境障碍
   const currents: CurrentBand[] = [];
@@ -287,7 +332,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function growCap(): number {
-    return level().targetR + 10;
+    return sizeCap;
+  }
+
+  /** 本关有没有洋流(整片海周期换向)。 */
+  function hasDrift(): boolean {
+    return level().hazards.includes("drift");
+  }
+
+  /** 洋流现在的推力;没有洋流就是零。BOSS 掀反洋流时整段相位翻过来。 */
+  function driftNow(): { fx: number; fy: number } {
+    if (!hasDrift()) return { fx: 0, fy: 0 };
+    return driftVector(time, driftFlip);
   }
 
   function resetLevel(): void {
@@ -296,6 +352,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     pickups.length = 0;
     pops.length = 0;
     inks.length = 0;
+    buddies.length = 0;
+    hazes.length = 0;
+    numb = 0;
+    crushCount = 0;
+    driftFlip = 0;
+    sizeCap = sizeCapFor(def);
+    buddyTimer = def.buddy ? 4 : Infinity;
     boss = null;
     bossActive = false;
     player.x = w / 2;
@@ -354,7 +417,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       finaleFired = true;
       api.onWin(
         earnedStars,
-        `99 关九大海域全部通关,海龙王都服气啦!图鉴 ${dexSeen.size}/${DEX.length} · 总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
+        `${LEVELS.length} 关十二片海域全部通关,连咔咔巨蚌都服气啦!图鉴 ${dexSeen.size}/${DEX.length} · 总星 ${totalStars(progress)}/${LEVELS.length * 3}`,
       );
     } else {
       // 结算面板自动朗读(终局走平台弹窗,那边自带朗读,不叠音)
@@ -463,7 +526,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         api.play("tap");
         stopSpeaking();
         levelIdx++;
-        chapterIdx = Math.floor(levelIdx / LEVELS_PER_THEME);
+        chapterIdx = themeIndexOf(levelIdx);
         resetLevel();
         phase = "intro";
       } else if (inRect(px, py, btnMap)) {
@@ -511,6 +574,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
         inkCd: 0,
       });
       markDex("puffer");
+      return;
+    }
+    if (def.hazards.includes("toxin") && roll < 0.22) {
+      // 毒藻鱼:个头永远比你小一圈,看着好吃,咬下去却会缩水
+      const r = Math.max(9, player.r * (0.4 + Math.random() * 0.28));
+      npcs.push({
+        kind: "toxin",
+        x: fromLeft ? -r - 10 : w + r + 10,
+        y: 60 + Math.random() * Math.max(60, h - 160),
+        r,
+        vx: (fromLeft ? 1 : -1) * (34 + Math.random() * 20) * sm,
+        vy: 0,
+        phase: Math.random() * Math.PI * 2,
+        color: "#c46ae8",
+        inflated: 0,
+        inflateClock: 0,
+        inkCd: 0,
+      });
+      markDex("toxin");
       return;
     }
     if (def.hazards.includes("squid") && roll < 0.3) {
@@ -615,6 +697,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       dashTimer: spec.dashCd,
       inkTimer: 2.5,
       summonTimer: 3.5,
+      driftTimer: 4,
+      hazeTimer: 3,
+      crushTimer: 6,
       hurt: 0,
     };
     markDex(def.boss);
@@ -655,18 +740,32 @@ export function mount(api: GameAPI): { destroy: () => void } {
       inks[i].r += dt * 14;
       if (inks[i].life <= 0) inks.splice(i, 1);
     }
+    for (let i = hazes.length - 1; i >= 0; i--) {
+      hazes[i].life -= dt;
+      hazes[i].r += dt * 10;
+      if (hazes[i].life <= 0) hazes.splice(i, 1);
+    }
 
     if (phase !== "play") return;
 
     const def = level();
+    numb = Math.max(0, numb - dt);
 
     // 玩家跟随指针(单指:按下即游、指哪游哪)
     // 触控修复:跟随速度 5.5→7,窄屏上小鱼贴手更紧,不再有"慢半拍"的拖沓感
-    const k = Math.min(1, dt * 7);
+    // 1.1:吃到毒藻鱼会"麻酥酥",这段时间跟手变迟钝(不掉心,只是手感变笨)
+    const k = Math.min(1, dt * 7 * numbFollowMult(numb));
     const dx = targetX - player.x;
     player.x += dx * k;
     player.y += (targetY - player.y) * k;
     if (Math.abs(dx) > 1) player.facing = dx > 0 ? 1 : -1;
+
+    // 洋流:整片海一个方向,周期换向,玩家和所有鱼一起被推着走
+    const drift = driftNow();
+    if (drift.fx !== 0 || drift.fy !== 0) {
+      player.x += drift.fx * dt;
+      player.y += drift.fy * dt;
+    }
 
     // 水流带推动
     for (const c of currents) {
@@ -740,6 +839,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
       starTimer = 7 + Math.random() * 4;
       pickups.push({ kind: "star", x: 40 + Math.random() * (w - 80), y: h + 20, vy: -46, phase: 0 });
     }
+    // 共生小鱼泡泡:带满两条就不再飘了
+    buddyTimer -= dt;
+    if (buddyTimer <= 0) {
+      buddyTimer = buddies.length >= BUDDY_MAX ? 6 : 10 + Math.random() * 5;
+      if (buddies.length < BUDDY_MAX) {
+        pickups.push({ kind: "buddy", x: 40 + Math.random() * (w - 80), y: h + 20, vy: -40, phase: 0 });
+      }
+    }
 
     // 道具
     for (let i = pickups.length - 1; i >= 0; i--) {
@@ -757,6 +864,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
           shield = SHIELD_SECONDS;
           api.play("jump");
           addFloat(p.x, p.y, "护盾泡泡!", "#5a8ac9", true);
+        } else if (p.kind === "buddy") {
+          buddies.push({ x: player.x, y: player.y, phase: Math.random() * Math.PI * 2, cd: 0 });
+          markDex("buddy");
+          api.play("meow");
+          addFloat(p.x, p.y, "共生小鱼加入!", "#2a8a9a", true);
         } else {
           score += 20;
           api.play("coin");
@@ -770,6 +882,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (let i = npcs.length - 1; i >= 0; i--) {
       const f = npcs[i];
       f.phase += dt * 3;
+      // 洋流也推鱼,但推得比玩家轻一点,顺流追鱼才有便宜可占
+      if (drift.fx !== 0 || drift.fy !== 0) {
+        f.x += drift.fx * dt * 0.6;
+        f.y += drift.fy * dt * 0.6;
+      }
       if (f.kind === "jelly") {
         f.x += f.vx * dt + Math.sin(f.phase) * 10 * dt;
         f.y += f.vy * dt;
@@ -827,6 +944,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
         if (phase !== "play") return;
         continue;
       }
+      if (f.kind === "toxin") {
+        // 毒藻鱼:不掉心,只是缩一圈 + 麻酥酥,提醒一下就好
+        npcs.splice(i, 1);
+        player.r = toxinShrink(player.r);
+        numb = TOXIN_NUMB;
+        streak = 0;
+        markDex("toxin");
+        api.play("oops");
+        pops.push({ x: f.x, y: f.y, life: 0.5, color: "#c46ae8" });
+        addFloat(f.x, f.y - 18, "毒藻鱼!缩了一圈~", "#8a3a9a", true);
+        continue;
+      }
       if (canEat(player.r, f.r)) {
         npcs.splice(i, 1);
         player.r = grow(player.r, f.r, growCap());
@@ -854,6 +983,53 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
     }
 
+    // 共生小鱼:排队跟在你身后,顺手帮你吃掉小鱼(毒藻鱼它才不碰)
+    const br = buddyRadius(player.r);
+    for (let bi = 0; bi < buddies.length; bi++) {
+      const bd = buddies[bi];
+      bd.phase += dt * 4;
+      bd.cd = Math.max(0, bd.cd - dt);
+      const side = bi === 0 ? -1 : 1;
+      const tx = player.x - player.facing * (player.r + 24);
+      const ty = player.y + side * (player.r * 0.75 + 12) + Math.sin(bd.phase) * 5;
+      const next = buddyStep(bd.x, bd.y, tx, ty, dt);
+      bd.x = Math.max(8, Math.min(w - 8, next.x));
+      bd.y = Math.max(8, Math.min(h - 8, next.y));
+      if (bd.cd > 0) continue;
+      for (let i = npcs.length - 1; i >= 0; i--) {
+        const f = npcs[i];
+        if (f.kind !== "fish" || !buddyCanEat(br, f.r)) continue;
+        if (Math.hypot(f.x - bd.x, f.y - bd.y) > BUDDY_REACH) continue;
+        npcs.splice(i, 1);
+        bd.cd = 1.1;
+        score += BUDDY_SCORE;
+        eaten++;
+        // 小伙伴叼回来喂你一口,长得比自己吃慢一半
+        player.r = grow(player.r, f.r * 0.5, growCap());
+        pops.push({ x: f.x, y: f.y, life: 0.35, color: f.color });
+        addFloat(f.x, f.y - 10, `小鱼帮忙 +${BUDDY_SCORE}`, "#2a8a9a");
+        api.play("pop");
+        if (player.r >= def.targetR && !def.boss) {
+          levelCleared();
+          return;
+        }
+        if (player.r >= def.targetR && def.boss && !bossActive) spawnBoss();
+        break;
+      }
+    }
+
+    // 毒云:碰到缩一圈 + 麻酥酥,同样不掉心
+    for (const hz of hazes) {
+      if (numb > 0) break;
+      if (Math.hypot(player.x - hz.x, player.y - hz.y) < hz.r + player.r * 0.4) {
+        player.r = toxinShrink(player.r);
+        numb = TOXIN_NUMB;
+        api.play("oops");
+        addFloat(player.x, player.y - player.r - 14, "紫雾好麻!", "#8a3a9a");
+        break;
+      }
+    }
+
     // BOSS 行为
     if (boss) {
       const b = boss;
@@ -875,6 +1051,39 @@ export function mount(api: GameAPI): { destroy: () => void } {
           b.inkTimer = 3.2;
           inks.push({ x: b.x, y: b.y, r: 78, life: 2.6 });
           api.play("pop");
+        }
+      }
+      // 旋旋鳐:翅膀一挥把整片洋流掀反
+      if (spec.drifts) {
+        b.driftTimer -= dt;
+        if (b.driftTimer <= 0) {
+          b.driftTimer = 5.5;
+          driftFlip += 0.5;
+          shake = 0.35;
+          api.play("jump");
+          addFloat(b.x, b.y - b.r - 8, "洋流掀反啦!", "#1f6a8a", true);
+        }
+      }
+      // 荧荧海葵王:吐一团紫毒雾
+      if (spec.poisons) {
+        b.hazeTimer -= dt;
+        if (b.hazeTimer <= 0) {
+          b.hazeTimer = 3.8;
+          hazes.push({ x: b.x, y: b.y, r: 52, life: 3 });
+          api.play("pop");
+        }
+      }
+      // 咔咔巨蚌:合壳加压,体型上限一档一档往下掉(但永远够得着目标)
+      if (spec.crushes) {
+        b.crushTimer -= dt;
+        if (b.crushTimer <= 0) {
+          b.crushTimer = 6;
+          crushCount++;
+          sizeCap = crushedCap(sizeCapFor(def), crushCount, def.targetR);
+          player.r = Math.min(player.r, sizeCap);
+          shake = 0.4;
+          api.play("oops");
+          addFloat(w / 2, 108, "咔!水压又重了", "#3f4f8e", true);
         }
       }
       // 召唤型 BOSS:周期叫小怪帮忙
@@ -1128,6 +1337,38 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.restore();
   }
 
+  /** 毒藻鱼:亮紫小鱼,身上有一圈会呼吸的荧光,提醒别乱吃。 */
+  function drawToxin(f: Npc): void {
+    const glow = 0.45 + Math.sin(f.phase * 3) * 0.3;
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.strokeStyle = `rgba(220,140,255,${glow})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, f.r * 1.35, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    drawFish(f.x, f.y, f.r, f.vx >= 0 ? 1 : -1, f.color, false);
+    ctx.fillStyle = `rgba(255,240,255,${0.55 + glow * 0.4})`;
+    ctx.font = `${Math.max(11, Math.round(f.r * 0.8))}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("☠", f.x, f.y - f.r * 1.5);
+  }
+
+  /** 共生小鱼:小小一条青绿色的伙伴,身后拖一串气泡。 */
+  function drawBuddy(bd: Buddy): void {
+    const r = buddyRadius(player.r);
+    drawFish(bd.x, bd.y, r, player.facing, "#7fe0c8", false);
+    ctx.strokeStyle = "rgba(160,240,220,0.7)";
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.arc(bd.x - player.facing * (r * 1.6 + i * 8), bd.y + Math.sin(bd.phase + i) * 4, 2.5 + i, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   function drawBoss(b: Boss): void {
     const spec = BOSS_INFO[b.kind];
     ctx.save();
@@ -1377,6 +1618,79 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.closePath();
         ctx.fill();
       }
+    } else if (b.kind === "ray") {
+      // 旋旋鳐:一对大翅膀 + 细长尾巴,翅膀会随时间上下扇
+      const flap = Math.sin(time * 3) * b.r * 0.22;
+      ctx.fillStyle = "#5fa8c8";
+      ctx.beginPath();
+      ctx.moveTo(0, -b.r * 0.35);
+      ctx.quadraticCurveTo(b.r * 0.9, -b.r * 0.9 - flap, b.r * 1.45, -b.r * 0.05 - flap * 0.4);
+      ctx.quadraticCurveTo(b.r * 0.9, b.r * 0.4, 0, b.r * 0.5);
+      ctx.quadraticCurveTo(-b.r * 0.9, b.r * 0.4, -b.r * 1.45, -b.r * 0.05 + flap * 0.4);
+      ctx.quadraticCurveTo(-b.r * 0.9, -b.r * 0.9 + flap, 0, -b.r * 0.35);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.4)";
+      ctx.beginPath();
+      ctx.ellipse(0, b.r * 0.1, b.r * 0.55, b.r * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#5fa8c8";
+      ctx.lineWidth = 5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(0, b.r * 0.45);
+      ctx.quadraticCurveTo(-b.r * 0.2, b.r * 1.1, b.r * 0.15 + Math.sin(time * 4) * 8, b.r * 1.6);
+      ctx.stroke();
+    } else if (b.kind === "anemone") {
+      // 荧荧海葵王:一丛会发光的触手,顶着圆圆的花心
+      const glow = 0.5 + Math.sin(time * 4) * 0.28;
+      ctx.strokeStyle = `rgba(150,240,190,${glow})`;
+      ctx.lineWidth = 6;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI + (Math.PI * i) / 8;
+        const wob = Math.sin(time * 3 + i) * b.r * 0.16;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * b.r * 0.35, Math.sin(a) * b.r * 0.35 + b.r * 0.3);
+        ctx.quadraticCurveTo(
+          Math.cos(a) * b.r * 0.9 + wob,
+          Math.sin(a) * b.r * 0.9 + b.r * 0.1,
+          Math.cos(a) * b.r * 1.25 + wob * 1.6,
+          Math.sin(a) * b.r * 1.2,
+        );
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#4ec99a";
+      ctx.beginPath();
+      ctx.arc(0, b.r * 0.15, b.r * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(220,255,235,${glow})`;
+      ctx.beginPath();
+      ctx.arc(0, b.r * 0.15, b.r * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (b.kind === "clam") {
+      // 咔咔巨蚌:一开一合的两片贝壳,中间藏着一颗大珍珠
+      const open = 0.18 + Math.max(0, Math.sin(time * 1.6)) * 0.3;
+      for (const s of [-1, 1]) {
+        ctx.save();
+        ctx.rotate(s * open);
+        ctx.fillStyle = s < 0 ? "#c8b6e8" : "#a894d8";
+        ctx.beginPath();
+        ctx.ellipse(0, s * b.r * 0.34, b.r, b.r * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 3;
+        for (let i = 1; i <= 4; i++) {
+          ctx.beginPath();
+          ctx.ellipse(0, s * b.r * 0.34, b.r * (i / 5), b.r * 0.5 * (i / 5), 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      const pearl = 0.6 + Math.sin(time * 5) * 0.3;
+      ctx.fillStyle = `rgba(255,250,255,${pearl})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, b.r * 0.26, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       // whale
       ctx.fillStyle = "#8fc8e8";
@@ -1629,6 +1943,64 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.arc(x, h - 18, 9, 0, Math.PI * 2);
         ctx.fill();
       }
+    } else if (def.zone === "strait") {
+      // 洋流海峡:一条条随洋流方向流动的长水纹
+      const d = driftNow();
+      const dir = d.fx >= 0 ? 1 : -1;
+      const speed = Math.abs(d.fx);
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 7; i++) {
+        const ly = h * (0.08 + i * 0.13);
+        const phaseX = ((time * (40 + speed) + i * 150) % (w + 260)) - 130;
+        const lx = dir > 0 ? phaseX : w - phaseX;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.quadraticCurveTo(lx + 30 * dir, ly - 7, lx + 66 * dir, ly);
+        ctx.stroke();
+      }
+    } else if (def.zone === "bloom") {
+      // 荧光藻湾:海底一丛丛会呼吸的荧光藻
+      for (let i = 0; i < 7; i++) {
+        const x = (w / 7) * i + w / 14;
+        const glow = 0.25 + Math.sin(time * 2 + i * 1.1) * 0.18;
+        ctx.strokeStyle = `rgba(140,255,190,${glow + 0.2})`;
+        ctx.lineWidth = 7;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        for (let y = h; y > h * 0.55; y -= 20) {
+          const sway = Math.sin(y * 0.03 + time * 1.4 + i) * 16;
+          if (y === h) ctx.moveTo(x + sway, y);
+          else ctx.lineTo(x + sway, y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = `rgba(220,255,235,${glow + 0.3})`;
+        ctx.beginPath();
+        ctx.arc(x + Math.sin(time * 1.4 + i) * 14, h * 0.55, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (def.zone === "trench") {
+      // 万丈压渊:两侧不断收拢的岩壁,越往下越挤
+      ctx.fillStyle = "rgba(20,24,44,0.55)";
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(s < 0 ? 0 : w, 0);
+        ctx.lineTo(s < 0 ? 0 : w, h);
+        ctx.lineTo(s < 0 ? w * 0.2 : w * 0.8, h);
+        ctx.quadraticCurveTo(s < 0 ? w * 0.06 : w * 0.94, h * 0.5, s < 0 ? w * 0.12 : w * 0.88, 0);
+        ctx.closePath();
+        ctx.fill();
+      }
+      for (let i = 0; i < 5; i++) {
+        const y = h * ((i * 0.21 + time * 0.06) % 1);
+        ctx.strokeStyle = `rgba(180,200,255,${0.1 + (i % 2) * 0.05})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(w * 0.16, y);
+        ctx.lineTo(w * 0.84, y);
+        ctx.stroke();
+      }
     } else {
       // 冰海:漂浮小冰山
       ctx.fillStyle = "rgba(255,255,255,0.8)";
@@ -1728,7 +2100,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(unlocked ? st.blurb : "通关上一片海域解锁", rect.x + 10, rect.y + ch * 0.6);
       ctx.fillText(
         unlocked
-          ? `${cleared}/${LEVELS_PER_THEME} 关 · ⭐${themeStars(progress, i)}/${LEVELS_PER_THEME * 3} · BOSS ${BOSS_INFO[st.boss].name}`
+          ? `${cleared}/${themeSize(i)} 关 · ⭐${themeStars(progress, i)}/${themeSize(i) * 3} · BOSS ${BOSS_INFO[st.boss].name}`
           : "",
         rect.x + 10,
         rect.y + ch * 0.82,
@@ -1754,21 +2126,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
     ctx.font = "14px sans-serif";
     ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${LEVELS_PER_THEME * 3} · 通关解锁下一关,回放可刷 3 星`,
+      `⭐ ${themeStars(progress, chapterIdx)}/${themeSize(chapterIdx) * 3} · 通关解锁下一关,回放可刷 3 星`,
       w / 2,
       54,
     );
 
     mapNodes.length = 0;
-    const base = chapterIdx * LEVELS_PER_THEME;
+    const base = themeStart(chapterIdx);
+    const count = themeSize(chapterIdx);
     const cols = 4;
-    const rows = Math.ceil(LEVELS_PER_THEME / cols);
+    const rows = Math.ceil(count / cols);
     const mx0 = w * 0.12;
     const mx1 = w * 0.88;
     const my0 = 96;
     const my1 = h - 40;
     const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < LEVELS_PER_THEME; i++) {
+    for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
@@ -1900,6 +2273,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const def = level();
     if (!def.boss || !bossActive) return null;
     const b = BOSS_INFO[def.boss];
+    if (b.crushes) return "趁它张开壳的那一下冲上去咬!";
+    if (b.poisons) return "紫雾会散开,等一下再从侧面贴上去!";
+    if (b.drifts) return "洋流被掀反时先别硬顶,顺着水绕过去!";
     if (b.inks) return "先绕开大墨团,再贴上去咬!";
     if (b.pulls) return "被吸住就往反方向使劲游!";
     if (b.summons) return "别理小帮手,躲开冲刺再咬!";
@@ -1942,7 +2318,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
-      `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 第${(levelIdx % LEVELS_PER_THEME) + 1}关 · ${def.name}`,
+      `第${themeIndexOf(levelIdx) + 1}章 第${levelIdx - themeStart(themeIndexOf(levelIdx)) + 1}关 · ${def.name}`,
       w / 2,
       y + 42,
     );
@@ -1990,7 +2366,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     for (const p of pickups) {
-      if (p.kind === "shield") {
+      if (p.kind === "buddy") {
+        ctx.strokeStyle = "rgba(120,220,200,0.9)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(190,245,232,0.55)";
+        ctx.fill();
+        ctx.font = "16px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("🐬", p.x, p.y);
+      } else if (p.kind === "shield") {
         ctx.strokeStyle = "rgba(120,180,255,0.9)";
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -2018,8 +2406,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
       else if (f.kind === "puffer") drawPuffer(f);
       else if (f.kind === "urchin") drawUrchin(f);
       else if (f.kind === "squid") drawSquid(f);
+      else if (f.kind === "toxin") drawToxin(f);
       else drawFish(f.x, f.y, f.r, f.vx >= 0 ? 1 : -1, f.color, false);
     }
+
+    for (const bd of buddies) drawBuddy(bd);
 
     if (boss) drawBoss(boss);
 
@@ -2033,6 +2424,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.arc(player.x, player.y, player.r * 1.5 + 6, 0, Math.PI * 2);
         ctx.stroke();
       }
+    }
+
+    // 毒雾(碰到会缩一圈)
+    for (const hz of hazes) {
+      ctx.globalAlpha = Math.max(0, Math.min(0.55, hz.life * 0.24));
+      ctx.fillStyle = "#a05ac9";
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r, 0, Math.PI * 2);
+      ctx.arc(hz.x - hz.r * 0.5, hz.y + hz.r * 0.35, hz.r * 0.6, 0, Math.PI * 2);
+      ctx.arc(hz.x + hz.r * 0.55, hz.y - hz.r * 0.3, hz.r * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
 
     // 墨云(遮挡视线)
@@ -2087,7 +2490,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
     ctx.fillText(
-      `第${Math.floor(levelIdx / LEVELS_PER_THEME) + 1}章 ${(levelIdx % LEVELS_PER_THEME) + 1}/${LEVELS_PER_THEME} · ${zone.name}`,
+      `第${themeIndexOf(levelIdx) + 1}章 ${levelIdx - themeStart(themeIndexOf(levelIdx)) + 1}/${themeSize(themeIndexOf(levelIdx))} · ${zone.name}`,
       12,
       21,
     );
@@ -2126,11 +2529,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#5a8ac9";
       ctx.fillText(`🛡 ${Math.ceil(shield)}s`, w - 12, 70);
     }
+    // 1.1 机制徽标:洋流方向 / 体型上限 / 共生小鱼 / 麻酥酥。
+    // 单独占第三行左侧,右边留给护盾,375 宽也塞得下。
+    const badges: string[] = [];
+    if (hasDrift()) badges.push(`🌀 洋流 ${driftNow().fx >= 0 ? "→" : "←"}`);
+    if (def.hazards.includes("pressure")) badges.push(`🕳 上限 ${Math.round(sizeCap)}`);
+    if (buddies.length > 0) badges.push(`🐬 ×${buddies.length}`);
+    if (numb > 0) badges.push("😵 麻");
+    if (badges.length > 0) {
+      ctx.textAlign = "left";
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#3a4a5e";
+      ctx.fillText(badges.join(" · "), 12, 70, Math.max(60, w - (shield > 0 ? 90 : 24)));
+    }
     if (streak >= 3 && streakTimer > 0) {
       ctx.fillStyle = "#b28ae8";
       ctx.font = `bold ${18 + Math.min(streak, 8)}px sans-serif`;
       ctx.textAlign = "center";
-      ctx.fillText(`连吃 ×${streak}`, w / 2, 76);
+      ctx.fillText(`连吃 ×${streak}`, w / 2, badges.length > 0 ? 98 : 76);
     }
 
     // ---- 覆盖层 ----
