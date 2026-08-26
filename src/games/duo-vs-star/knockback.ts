@@ -339,6 +339,37 @@ export function resolveHit(input: {
 }
 
 // ---------------------------------------------------------------------------
+// 命中顿帧
+// ---------------------------------------------------------------------------
+
+/**
+ * 命中顿帧的上限。
+ *
+ * 顿帧是「打中的那一下画面卡住几帧」，卡得越久手感越重；但卡过头就变成掉帧了，
+ * 所以这里钉了 6 帧（60fps 下 0.1 秒）的天花板，再重的一下也不会更久。
+ * 开了「减少动态效果」的小朋友一帧都不卡。
+ */
+export const HIT_STOP_MAX = 6;
+
+/** 顿帧换算成秒（渲染层直接拿这个数扣时间） */
+export function hitStopSeconds(frames: number, fps = 60): number {
+  const f = clamp(Number.isFinite(frames) ? frames : 0, 0, HIT_STOP_MAX);
+  return f / Math.max(1, fps);
+}
+
+/**
+ * 这一下该卡几帧：轻击垫一帧，重击垫三帧，再按弹飞初速加最多三帧。
+ * `reducedMotion` 为真时恒为 0——这条比什么手感都要紧。
+ */
+export function hitStopFrames(speed: number, heavy: boolean, reducedMotion = false): number {
+  if (reducedMotion) return 0;
+  const s = clamp(Number.isFinite(speed) ? speed : 0, 0, MAX_LAUNCH);
+  const base = heavy ? 3 : 1;
+  const extra = Math.round((s / MAX_LAUNCH) * 3);
+  return Math.min(HIT_STOP_MAX, base + extra);
+}
+
+// ---------------------------------------------------------------------------
 // 低元气的挣扎窗口
 // ---------------------------------------------------------------------------
 

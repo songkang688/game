@@ -732,6 +732,15 @@ function respawnActor(s: MatchState, a: Actor): void {
   s.events.push({ kind: "respawn", actor: a.index, x: a.x, y: a.y });
 }
 
+/**
+ * 开局时一共有几支队伍。
+ * 只有一支（沙盒练习、合作特训的双人同队）就没有「谁把谁请出场」这回事，
+ * 这一局要么打到时间到，要么由外面的过关条件说了算。
+ */
+export function startingTeams(s: MatchState): number {
+  return new Set(s.actors.map((a) => a.team)).size;
+}
+
 /** 还站在场上的队伍（有上场机会或正在场上的） */
 export function livingTeams(s: MatchState): number[] {
   const set = new Set<number>();
@@ -1070,9 +1079,13 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
   }
 
   // ---- 胜负 ----
-  // 只有一个人在场（练习 / 测试用的沙盒局）就不判胜负，让他自己玩
+  // 开局就只有一队（一个人的沙盒局、两个人的合作特训）不判胜负，让他们自己练
   const teams = livingTeams(s);
-  if (s.actors.length > 1 && teams.length <= 1) {
+  if (teams.length === 0 && s.actors.length > 0) {
+    endMatch(s, null, "ko");
+    return s;
+  }
+  if (startingTeams(s) > 1 && teams.length <= 1) {
     endMatch(s, teams.length === 1 ? teams[0] : null, "ko");
     return s;
   }
