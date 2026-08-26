@@ -5,6 +5,7 @@ import {
   DEFAULT_CRIT_MULTIPLIER,
   ELEMENTS,
   GUARD_REDUCE,
+  MAX_SINGLE_HIT_RATIO,
   MIN_DAMAGE,
   NEUTRAL_MULTIPLIER,
   RESIST_MULTIPLIER,
@@ -218,6 +219,89 @@ describe("防御减伤", () => {
       guarding: true
     });
     expect(g.hpDamage).toBe(MIN_DAMAGE);
+  });
+
+  it("一下打不空：给了勇者的星芒上限，单次命中就削不过 45%", () => {
+    const wild = computeDamage({
+      atk: 400,
+      def: 0,
+      power: 3,
+      attackElement: "fire",
+      defendElement: "grass",
+      crit: true
+    });
+    const held = computeDamage({
+      atk: 400,
+      def: 0,
+      power: 3,
+      attackElement: "fire",
+      defendElement: "grass",
+      crit: true,
+      defendMaxHp: 500
+    });
+    expect(wild.hpDamage).toBeGreaterThan(500 * MAX_SINGLE_HIT_RATIO);
+    expect(held.hpDamage).toBe(Math.floor(500 * MAX_SINGLE_HIT_RATIO));
+  });
+
+  it("保险不会把小打小闹也削掉：本来就没到上限的一下原样通过", () => {
+    const small = computeDamage({
+      atk: 30,
+      def: 5,
+      power: 1,
+      attackElement: "light",
+      defendElement: "fire",
+      defendMaxHp: 500
+    });
+    expect(small.hpDamage).toBe(25);
+  });
+
+  it("保险之后再算防御，所以顶着上限的一下，防御照样能砍一半", () => {
+    const cap = Math.floor(400 * MAX_SINGLE_HIT_RATIO);
+    const bare = computeDamage({
+      atk: 400,
+      def: 0,
+      power: 3,
+      attackElement: "fire",
+      defendElement: "grass",
+      crit: true,
+      defendMaxHp: 400
+    });
+    const guarded = computeDamage({
+      atk: 400,
+      def: 0,
+      power: 3,
+      attackElement: "fire",
+      defendElement: "grass",
+      crit: true,
+      defendMaxHp: 400,
+      guarding: true
+    });
+    expect(bare.hpDamage).toBe(cap);
+    expect(guarded.hpDamage).toBe(Math.floor(cap * GUARD_REDUCE));
+    expect(guarded.hpDamage).toBeLessThan(bare.hpDamage);
+  });
+
+  it("满状态的勇者绝不会被一回合打空，怎么倒霉都还剩一口气", () => {
+    const glass = hero({ maxHp: 200, def: 0, spd: 1, skills: [], bag: [] });
+    const bully = dummy({
+      element: "fire",
+      maxHp: 4000,
+      atk: 500,
+      spd: 99,
+      crit: 1,
+      skills: [{ id: "emberDance", rank: 5 }]
+    });
+    const r = resolveRound(startCombat(glass, bully), { kind: "attack" }, alwaysCrit);
+    expect(r.state.hero.hp).toBeGreaterThan(0);
+    expect(r.state.over).toBe(false);
+  });
+
+  it("保险只护勇者：小怪该被一口气打退还是被打退", () => {
+    const strong = hero({ atk: 400, spd: 99, element: "fire", skills: [], bag: [] });
+    const twig = dummy({ element: "grass", maxHp: 120, def: 0, spd: 1, skills: [] });
+    const r = resolveRound(startCombat(strong, twig), { kind: "attack" }, alwaysCrit);
+    expect(r.state.foe.hp).toBe(0);
+    expect(r.state.winner).toBe("hero");
   });
 
   it("防御能挡下 Boss 大招的一大半", () => {

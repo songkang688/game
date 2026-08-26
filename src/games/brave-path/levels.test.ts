@@ -18,7 +18,7 @@ import {
   stepCount,
   totalChapterSize
 } from "./levels";
-import { ELEMENTS, makeFighter, simulateBattle } from "./combat";
+import { ELEMENTS, elementMultiplier, makeFighter, simulateBattle, type Element } from "./combat";
 import { assertTotal } from "../level99";
 
 describe("章节切分", () => {
@@ -319,5 +319,200 @@ describe("平衡性抽查（推荐水平的勇者跑一遍 188 关）", () => {
     const good = simulateBattle(refHero(lv, info.weakness), makeFighter(makeBossSpec(lv)), 4242, 60);
     const bad = simulateBattle(refHero(lv, info.element), makeFighter(makeBossSpec(lv)), 4242, 60);
     expect(good.final.hero.hp).toBeGreaterThan(bad.final.hero.hp);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 整关走通：一关里好几场架是连着打的，星芒不回满                        */
+/* ------------------------------------------------------------------ */
+
+describe("整关走通（星芒在一关里连续消耗）", () => {
+  /**
+   * 一个会看提示的孩子出门前会挑徽章：既要打得动这一章的小怪，又不想被人家反过来克。
+   * 光和暗互相克制，拿光系闯暗系章节是「打得疼、挨得也疼」的赌博打法，
+   * 所以这里按「我打出去的倍率 － 我挨到的倍率」挑一枚最稳的徽章。
+   */
+  function smartBadge(level: number): Element {
+    const foes = CHAPTER_ELEMENTS[chapterOfLevel(level)];
+    let best: Element = "grass";
+    let bestScore = -Infinity;
+    for (const mine of ELEMENTS) {
+      let score = 0;
+      for (const theirs of foes) {
+        score += elementMultiplier(mine, theirs) - elementMultiplier(theirs, mine);
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = mine;
+      }
+    }
+    return best;
+  }
+
+  /** 造一个「刚好达到这一关设计水平」的勇者 */
+  function refHero(level: number, element: "fire" | "water" | "grass" | "light" | "dark") {
+    const s = expectedHero(level);
+    const rank = Math.max(1, Math.min(5, 1 + Math.floor(level / 45)));
+    return makeFighter({
+      name: "朵朵",
+      emoji: "🌸",
+      element,
+      maxHp: s.maxHp,
+      atk: s.atk,
+      def: s.def,
+      spd: s.spd,
+      crit: 0.1,
+      skills: [
+        { id: "gustStep", rank },
+        { id: "crackHammer", rank },
+        { id: "warmSong", rank }
+      ],
+      bag: [
+        { id: "honey", count: 2 },
+        { id: "berry", count: 2 }
+      ]
+    });
+  }
+
+  /**
+   * 照界面里的走法把一整关跑一遍：
+   * 星芒**不会**在两场架之间自动回满，只有歇脚石能回一点，
+   * 中途任何一场没打过就是这一关没走通。
+   *
+   * pickHardest = true 时，岔路一律挑「有架打」的那条，
+   * 也就是这一关能遇到的最吃紧的走法。
+   */
+  function walkLevel(
+    level: number,
+    hero: ReturnType<typeof makeFighter>,
+    seed: number,
+    pickHardest: boolean
+  ): { cleared: boolean; fights: number; hpLeft: number; atStep: number } {
+    const plan = buildLevel(level);
+    let cur = hero;
+    let fights = 0;
+
+    for (let i = 0; i < plan.steps.length; i++) {
+      const options = plan.steps[i];
+      const node = pickHardest ? (options.find((o) => o.foe) ?? options[0]) : options[0];
+
+      if (node.kind === "rest") {
+        const back = Math.round(cur.maxHp * (node.healRatio ?? 0.3));
+        cur = { ...cur, hp: Math.min(cur.maxHp, cur.hp + back) };
+        continue;
+      }
+      if (!node.foe) continue; // 宝箱 / 小摊：不掉星芒
+
+      fights += 1;
+      const res = simulateBattle(cur, makeFighter(node.foe), seed + i * 131 + 7, 60);
+      if (res.winner !== "hero") return { cleared: false, fights, hpLeft: 0, atStep: i };
+      cur = res.final.hero;
+      if (cur.hp <= 0) return { cleared: false, fights, hpLeft: 0, atStep: i };
+    }
+    return { cleared: true, fights, hpLeft: cur.hp, atStep: plan.steps.length };
+  }
+
+  it("188 关每一关，达标勇者都能一口气从头走到尾", () => {
+    const failed: string[] = [];
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const element = isBossLevel(lv) ? BOSSES[chapterOfLevel(lv)].weakness : smartBadge(lv);
+      const out = walkLevel(lv, refHero(lv, element), lv * 977 + 13, false);
+      if (!out.cleared) failed.push(`第 ${lv + 1} 关在第 ${out.atStep + 1} 步卡住`);
+    }
+    expect(failed).toEqual([]);
+  });
+
+  it("岔路专挑有架打的那条走，188 关照样能走通", () => {
+    const failed: string[] = [];
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const element = isBossLevel(lv) ? BOSSES[chapterOfLevel(lv)].weakness : smartBadge(lv);
+      const out = walkLevel(lv, refHero(lv, element), lv * 461 + 29, true);
+      if (!out.cleared) failed.push(`第 ${lv + 1} 关在第 ${out.atStep + 1} 步卡住`);
+    }
+    expect(failed).toEqual([]);
+  });
+
+  it("一关里真的要连打好几场，不是走两步就完事", () => {
+    let total = 0;
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const element = isBossLevel(lv) ? BOSSES[chapterOfLevel(lv)].weakness : smartBadge(lv);
+      const out = walkLevel(lv, refHero(lv, element), lv * 313 + 5, true);
+      expect(out.fights).toBeGreaterThanOrEqual(1);
+      total += out.fights;
+    }
+    expect(total / TOTAL_LEVELS).toBeGreaterThan(1.5);
+  });
+
+  it("不会连着安排两只精英：中间一定隔着人人必经的歇脚石", () => {
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const steps = buildLevel(lv).steps;
+      let sinceBreather = 0;
+      for (const opts of steps) {
+        if (opts.length > 0 && opts.every((o) => o.kind === "rest")) {
+          sinceBreather = 0;
+          continue;
+        }
+        if (opts.some((o) => o.kind === "elite")) {
+          sinceBreather += 1;
+          expect(sinceBreather, `第 ${lv + 1} 关连着排了两只精英`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  it("普通遭遇战真的很快：达标勇者 2–4 个回合就能收工", () => {
+    const rounds: number[] = [];
+    for (let lv = 0; lv < TOTAL_LEVELS; lv += 3) {
+      for (let s = 0; s < 3; s++) {
+        const r = simulateBattle(
+          refHero(lv, smartBadge(lv)),
+          makeFighter(makeFoeSpec(lv, "normal", lv * 7919 + s * 131)),
+          lv * 31 + s,
+          40
+        );
+        expect(r.winner).toBe("hero");
+        rounds.push(r.rounds);
+      }
+    }
+    expect(Math.max(...rounds)).toBeLessThanOrEqual(4);
+  });
+
+  it("Boss 关门口固定有一块能补满星芒的整装石，硬仗从满状态开打", () => {
+    for (const lv of bossLevels()) {
+      const steps = buildLevel(lv).steps;
+      const gate = steps[steps.length - 2];
+      expect(gate).toHaveLength(1);
+      expect(gate[0].kind).toBe("rest");
+      expect(gate[0].healRatio).toBe(1);
+      // 整装石只此一块，别处不再安排歇脚
+      const rests = steps.flat().filter((o) => o.kind === "rest");
+      expect(rests).toHaveLength(1);
+    }
+  });
+
+  it("裸装勇者硬闯后面的关会走不通——说明装备成长真的有用", () => {
+    const lateLevels = [90, 130, 187];
+    let stuck = 0;
+    for (const lv of lateLevels) {
+      const naked = refHero(0, "light"); // 停留在第 1 关水平
+      if (!walkLevel(lv, naked, lv * 71 + 3, false).cleared) stuck += 1;
+    }
+    expect(stuck).toBe(lateLevels.length);
+  });
+
+  it("走通之后剩下的星芒够撑出三星，也不至于关关都只剩一星", () => {
+    let three = 0;
+    let one = 0;
+    for (let lv = 0; lv < TOTAL_LEVELS; lv += 9) {
+      const element = isBossLevel(lv) ? BOSSES[chapterOfLevel(lv)].weakness : smartBadge(lv);
+      const hero = refHero(lv, element);
+      const out = walkLevel(lv, hero, lv * 199 + 11, true);
+      expect(out.cleared).toBe(true);
+      const stars = rateByHp(out.hpLeft / hero.maxHp);
+      if (stars === 3) three += 1;
+      if (stars === 1) one += 1;
+    }
+    expect(three).toBeGreaterThan(0); // 打得好能拿三星
+    expect(one).toBeLessThan(8); // 但也不至于关关狼狈
   });
 });

@@ -256,9 +256,9 @@ export function expectedHero(level: number): StatLine {
 export type FoeTier = "normal" | "elite" | "boss";
 
 const TIER_MUL: Record<FoeTier, { hp: number; atk: number; def: number; spd: number }> = {
-  normal: { hp: 0.42, atk: 0.72, def: 0.35, spd: 0.82 },
-  elite: { hp: 0.66, atk: 0.84, def: 0.46, spd: 0.9 },
-  boss: { hp: 2.4, atk: 0.83, def: 0.55, spd: 0.95 }
+  normal: { hp: 0.42, atk: 0.68, def: 0.35, spd: 0.82 },
+  elite: { hp: 0.62, atk: 0.76, def: 0.46, spd: 0.9 },
+  boss: { hp: 2.4, atk: 0.76, def: 0.55, spd: 0.95 }
 };
 
 /**
@@ -266,7 +266,7 @@ const TIER_MUL: Record<FoeTier, { hp: number; atk: number; def: number; spd: num
  * 不然一套克制连招三个回合就打完，读条和护盾根本来不及出场。
  */
 function bossHpScale(level: number): number {
-  return 1 + chapterOfLevel(level) * 0.067;
+  return 1 + chapterOfLevel(level) * 0.03;
 }
 
 /** 第 level 关某档对手的基础数值 */
@@ -332,7 +332,7 @@ export function makeBossSpec(level: number): FighterSpec {
   // 第一章的 Boss 只教「读条要防御」这一件事，从第二章起才开始张护盾
   const chargeEvery = ci <= 1 ? 4 : 3;
   const shieldEvery = ci === 0 ? 0 : ci <= 3 ? 4 : 3;
-  const shieldAmount = ci === 0 ? 0 : Math.round(s.maxHp * (0.12 + ci * 0.015));
+  const shieldAmount = ci === 0 ? 0 : Math.round(s.maxHp * (0.1 + ci * 0.006));
   return {
     name: info.name,
     emoji: info.emoji,
@@ -426,6 +426,11 @@ function restNode(): PathNode {
   return { kind: "rest", label: "长满青苔的歇脚石", emoji: "🪵", healRatio: 0.3 };
 }
 
+/** Boss 门口的整装点：坐下来把星芒补满，谁都是满状态迎战首领 */
+function bossRestNode(): PathNode {
+  return { kind: "rest", label: "首领门前的整装石", emoji: "🪵", healRatio: 1 };
+}
+
 function foeNode(level: number, tier: "normal" | "elite", seed: number): PathNode {
   const spec = makeFoeSpec(level, tier, seed);
   return {
@@ -440,6 +445,56 @@ function foeNode(level: number, tier: "normal" | "elite", seed: number): PathNod
 export function stepCount(level: number): number {
   if (isBossLevel(level)) return 4;
   return 3 + (level % 3 === 2 ? 1 : 0);
+}
+
+/**
+ * 一关里星芒是接着用的，中间不会自动回满。所以「连着两只精英」这种路
+ * 对达标勇者来说是接不上的——第一只就要啃掉一半星芒。
+ *
+ * 这里补一道保险：两只精英之间必须隔着一处**人人都要经过**的歇脚石。
+ * 优先把中间那步的宝箱/小摊换成歇脚石（路的长度不变，还多个补给点）；
+ * 实在腾不出位置，就把后面那只精英降成普通小怪。
+ */
+function easeElitePileup(steps: PathNode[][], level: number): void {
+  const isFight = (o: PathNode): boolean => o.kind === "foe" || o.kind === "elite" || o.kind === "boss";
+  const hasRest = (): boolean => steps.some((opts) => opts.some((o) => o.kind === "rest"));
+
+  /** 上一只精英之后，有没有一处人人必经的歇脚石 */
+  let breathedAt = -1;
+  let lastEliteAt = -1;
+
+  for (let i = 0; i < steps.length; i++) {
+    const opts = steps[i];
+    if (opts.length > 0 && opts.every((o) => o.kind === "rest")) {
+      breathedAt = i;
+      continue;
+    }
+    if (!opts.some((o) => o.kind === "elite")) continue;
+
+    if (lastEliteAt < 0 || breathedAt > lastEliteAt) {
+      lastEliteAt = i;
+      continue;
+    }
+
+    // 找上一只精英和这一只之间，一处没有架打的步骤，改成歇脚石
+    let converted = -1;
+    if (!hasRest()) {
+      for (let j = lastEliteAt + 1; j < i; j++) {
+        if (steps[j].some(isFight)) continue;
+        steps[j] = [restNode()];
+        converted = j;
+        break;
+      }
+    }
+    if (converted >= 0) {
+      breathedAt = converted;
+      lastEliteAt = i;
+      continue;
+    }
+    for (let k = 0; k < opts.length; k++) {
+      if (opts[k].kind === "elite") opts[k] = foeNode(level, "normal", (level + 1) * 7919 + i * 131 + k * 17 + 3);
+    }
+  }
 }
 
 /**
@@ -495,6 +550,18 @@ export function buildLevel(level: number): LevelPlan {
     if (!lastOpts.some((o) => o.kind === "foe" || o.kind === "elite")) {
       lastOpts[0] = foeNode(lv, "elite", (lv + 1) * 15485863);
     }
+  }
+  easeElitePileup(steps, lv);
+
+  // Boss 关：门口固定摆一块整装石。首领的数值本来就是照「满状态迎战」配的，
+  // 不能让前面几步的消耗把这场硬仗变成硬撑。
+  if (boss && steps.length >= 2) {
+    const gate = steps.length - 2;
+    for (let i = 0; i < steps.length; i++) {
+      if (i === gate) continue;
+      steps[i] = steps[i].map((o) => (o.kind === "rest" ? chestNode(lv, mulberry32((lv + 1) * 22801 + i)) : o));
+    }
+    steps[gate] = [bossRestNode()];
   }
 
   return {

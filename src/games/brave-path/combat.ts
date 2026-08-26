@@ -63,6 +63,18 @@ export const MIN_DAMAGE = 1;
 export const DEFAULT_CRIT_MULTIPLIER = 1.8;
 /** 破盾技能打在护盾上的额外倍率 */
 export const BREAKER_SHIELD_MULTIPLIER = 2;
+/**
+ * 「一下打不空」的保险，只护着勇者这一边。
+ *
+ * 暴击、属性克制、高阶招式的倍率是乘在一起的，运气差的时候一记普通小怪的招
+ * 能掏空大半条星芒条。孩子还没看清发生了什么，这一趟就结束了——委屈，也学不到东西。
+ * 所以打在勇者身上的单次命中最多削掉星芒上限的这么多，剩下的靠回合数堆，
+ * 至少留出一个回合去防御、去嗑蜂蜜、去换招。
+ *
+ * 对手不受这条保护：一套克制连招把小怪一口气打退，那份痛快要留着。
+ * 防御姿态是在这个上限**之后**再砍一半，所以防御永远还是有用的。
+ */
+export const MAX_SINGLE_HIT_RATIO = 0.45;
 /** 背包位上限：带什么去冒险，出发前就得想清楚 */
 export const BAG_SLOTS = 4;
 
@@ -129,6 +141,11 @@ export interface DamageInput {
   weakness?: Element | null;
   /** 穿透：直接绕过护盾打星芒 */
   pierce?: boolean;
+  /**
+   * 防守方的星芒上限。只有护着勇者那一下才会传，传了就启用「一下打不空」的保险；
+   * 不传就按老规矩硬算（纯函数，方便单独测公式）。
+   */
+  defendMaxHp?: number;
 }
 
 export interface DamageResult {
@@ -171,6 +188,10 @@ export function computeDamage(input: DamageInput): DamageResult {
   if (crit) raw *= critMul;
 
   let after = Math.max(MIN_DAMAGE, Math.round(raw) - def);
+  const maxHp = Number.isFinite(input.defendMaxHp ?? 0) ? Math.max(0, input.defendMaxHp ?? 0) : 0;
+  if (maxHp > 0) {
+    after = Math.min(after, Math.max(MIN_DAMAGE, Math.floor(maxHp * MAX_SINGLE_HIT_RATIO)));
+  }
   if (guarded) after = Math.max(MIN_DAMAGE, Math.floor(after * GUARD_REDUCE));
 
   let hpDamage = 0;
@@ -796,7 +817,9 @@ function landHit(
     shield: defender.shield,
     shieldMultiplier: opts.shieldMultiplier,
     weakness: defender.weakness,
-    pierce: opts.pierce
+    pierce: opts.pierce,
+    // 只有挨打的是勇者时才开保险，小怪该被一口气打退还是打退
+    defendMaxHp: side === "foe" ? defender.maxHp : undefined
   });
   defender.shield = res.shieldLeft;
   defender.hp = Math.max(0, defender.hp - res.hpDamage);
