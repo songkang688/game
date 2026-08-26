@@ -9,4 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#ffe0ec",
   blurb: "188 关十大靶场!气球飞碟铁皮机器人,连击加成拼命中率,好人靶可别打。",
+  // index.ts 模式条:188 关靶场 / 无尽靶潮 / 双人分屏比命中率
+  modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
+  levels: 188,
 };

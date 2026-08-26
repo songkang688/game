@@ -9,4 +9,7 @@ export const meta = {
   category: "action" as const,
   color: "#FFE3EF",
   blurb: "188 关双人横版!王子挥剑近战,公主放星星还会二段跳,共用一条心条,14 场首领战等你们。",
+  // index.ts 模式条:一个人玩 / 两人一起(共享心条) + 无尽「王国远征」;战役走 188 关地图
+  modes: ["campaign", "coop", "twoPlayer", "endless"] as const,
+  levels: 188,
 };

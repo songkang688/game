@@ -9,4 +9,7 @@ export const meta = {
   category: "action" as const,
   color: "#dbeaff",
   blurb: "188 关八片天空!三种主武器加僚机护盾炸弹,每章一位多段弹幕大 Boss。",
+  // index.ts 模式条:188 关战役 / 无尽波次 / 双人合作同屏两机
+  modes: ["campaign", "endless", "coop", "twoPlayer"] as const,
+  levels: 188,
 };
