@@ -16,7 +16,24 @@ import {
   windowListenerCount,
   type Dom,
 } from "./domStub";
-import { JUDGE_LINE_RATIO, KEYS_DUO, KEYS_SOLO, MIN_LANE_PX, laneForKey, laneForX, laneWidthAt, meta, mount, stageHeight, stageWidth } from "./index";
+import {
+  JUDGE_LINE_RATIO,
+  KEYS_DUO,
+  KEYS_SOLO,
+  MIN_LANE_PX,
+  MIN_STAGE_PX,
+  PARTICLE_LIFE_MS,
+  PARTICLE_LIFE_REDUCED_MS,
+  fitStageHeight,
+  laneForKey,
+  laneForX,
+  laneWidthAt,
+  meta,
+  mount,
+  particleCount,
+  stageHeight,
+  stageWidth,
+} from "./index";
 
 let dom: Dom;
 
@@ -50,7 +67,7 @@ function canvas(): El | null {
 }
 
 function hudText(): string {
-  return dom.root.querySelector(".tt-hud")?.innerHTML ?? "";
+  return dom.root.querySelector(".tt-stats")?.innerHTML ?? "";
 }
 
 function sayText(): string {
@@ -108,6 +125,41 @@ describe("360px 下的四列", () => {
     expect(stageHeight(336)).toBeGreaterThan(336);
   });
 
+  it("矮屏上画布会让出高度,判定线不会被挤出首屏", () => {
+    const short = stageHeight(336, 640);
+    expect(short).toBeLessThanOrEqual(640 - 300);
+    expect(short).toBeGreaterThanOrEqual(MIN_STAGE_PX);
+    expect(stageHeight(336, 1000)).toBeGreaterThan(short);
+    // 再矮也留得住一块能看清的画布
+    expect(stageHeight(336, 380)).toBe(MIN_STAGE_PX);
+  });
+
+  it("按舞台量出来的空位收画布:够宽敞就照旧,不够就贴着可用高度走", () => {
+    const roomy = stageHeight(336);
+    // 量不出来(测试桩、老浏览器)就退回原来的算法,不许因此变矮
+    expect(fitStageHeight(roomy, 0)).toBe(roomy);
+    expect(fitStageHeight(roomy, -50)).toBe(roomy);
+    expect(fitStageHeight(roomy, Number.NaN)).toBe(roomy);
+    // 空位比想要的大就还是照 roomy 来,不会撑破
+    expect(fitStageHeight(roomy, 900)).toBe(roomy);
+    // 空位不够就收到空位那么大
+    expect(fitStageHeight(roomy, 240)).toBe(240);
+    // 再挤也不会矮过下限,不然音符没有下落距离
+    expect(fitStageHeight(roomy, 40)).toBe(MIN_STAGE_PX);
+  });
+
+  it("进关时把模式入口收起来,回地图又露出来", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    const bar = dom.root.querySelector(".tt-bar")!;
+    expect(bar.hidden).toBe(false);
+    enterFirstLevel();
+    expect(bar.hidden).toBe(true);
+    byText("选关")?.click();
+    expect(bar.hidden).toBe(false);
+    handle.destroy();
+  });
+
   it("画布真的按这个尺寸建出来,判定线在下方 80% 处", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
@@ -139,6 +191,35 @@ describe("360px 下的四列", () => {
     const handle = mount(rec.api);
     expect(styleText()).toContain("prefers-reduced-motion");
     handle.destroy();
+  });
+
+  it("减少动效时粒子变少、飘得短,但命中反馈还在", () => {
+    expect(particleCount(false, true)).toBeGreaterThan(particleCount(true, true));
+    expect(particleCount(false, false)).toBeGreaterThan(particleCount(true, false));
+    expect(particleCount(true, false)).toBeGreaterThan(0);
+    expect(PARTICLE_LIFE_REDUCED_MS).toBeLessThan(PARTICLE_LIFE_MS);
+  });
+
+  it("开了减少动效,命中之后画面上的粒子确实更少", () => {
+    /** 命中一下之后那一帧多画了多少笔 */
+    function costAfterHit(reduced: boolean): number {
+      restoreDom();
+      dom = installDom(360, reduced);
+      const rec = fakeApi(dom.root);
+      const handle = mount(rec.api);
+      enterFirstLevel();
+      flushFrames(dom, 1, 0);
+      const chart = levelChart(buildLevel(0));
+      const c = canvas()!;
+      dom.clock.ms += chart.notes[0].time;
+      fireWindow(dom, "keydown", { key: KEYS_SOLO[chart.notes[0].lane] });
+      const before = c.draws;
+      flushFrames(dom, 1, 16);
+      const cost = c.draws - before;
+      handle.destroy();
+      return cost;
+    }
+    expect(costAfterHit(true)).toBeLessThan(costAfterHit(false));
   });
 });
 
@@ -325,8 +406,8 @@ describe("另外三种模式", () => {
     const keys = dom.root.querySelector(".tt-keys")?.innerHTML ?? "";
     expect(keys).toContain("朵朵");
     expect(keys).toContain("星星");
-    expect(keys).toContain("A / S");
-    expect(keys).toContain("K / L");
+    expect(keys).toContain("A S");
+    expect(keys).toContain("K L");
     handle.destroy();
   });
 

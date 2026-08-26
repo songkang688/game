@@ -71,9 +71,45 @@ export function laneWidthAt(viewport: number): number {
   return stageWidth(viewport) / LANE_COUNT;
 }
 
-/** 画布高度:比宽度略高一点,给下落留出距离 */
-export function stageHeight(width: number): number {
-  return Math.max(380, Math.min(540, Math.round(width * 1.24)));
+/** 再挤也不让画布矮过这个数,不然音符没有下落的距离 */
+export const MIN_STAGE_PX = 190;
+
+/**
+ * 画布高度:比宽度略高一点给下落留距离,但矮屏上要让出空间,
+ * 保证判定线连同下面的提示一起留在首屏里,不用滚动就能玩。
+ */
+export function stageHeight(width: number, viewportHeight = 0): number {
+  const roomy = Math.min(540, Math.round(width * 1.24));
+  const fits = viewportHeight > 0 ? viewportHeight - 300 : roomy;
+  return Math.max(MIN_STAGE_PX, Math.min(roomy, Math.max(MIN_STAGE_PX, fits)));
+}
+
+/**
+ * 平台舞台是 overflow:hidden 的,判定线一旦被挤到舞台外面就再也点不着。
+ * 所以拿量出来的可用高度再收一刀:够宽敞就用 `roomy`,不够就贴着可用高度走。
+ */
+export function fitStageHeight(roomy: number, availablePx: number): number {
+  if (!Number.isFinite(availablePx) || availablePx <= 0) return roomy;
+  return Math.max(MIN_STAGE_PX, Math.min(roomy, Math.round(availablePx)));
+}
+
+function viewportHeightPx(): number {
+  const h = (globalThis as { innerHeight?: number }).innerHeight;
+  return typeof h === "number" && h > 0 ? h : 0;
+}
+
+/** 往上找平台舞台(overflow:hidden 的那个盒子)的底边;找不到就退回视口底 */
+function clipBottomPx(el: HTMLElement | null): number {
+  let node: HTMLElement | null = el;
+  for (let i = 0; node && i < 8; i++) {
+    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+      const r = node.getBoundingClientRect?.();
+      if (r && r.bottom > 0) return r.bottom;
+      break;
+    }
+    node = node.parentElement;
+  }
+  return viewportHeightPx();
 }
 
 const LANE_COLORS = ["#B79CF0", "#7FB6EC", "#F09BC0", "#7ED3A8"];
@@ -106,7 +142,10 @@ const CSS = `
   align-items:center;background:linear-gradient(180deg,#F7F1FF,#EDF3FF);border-radius:18px;padding:10px;
   position:relative;overflow:hidden;}
 .tt-banner{text-align:center;font-size:14px;font-weight:800;color:#6b4fa0;line-height:1.5;}
-.tt-hud{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;}
+.tt-banner:empty{display:none;}
+/* 计分行不换行:暂停键掉到第二行的话,判定线就被顶出舞台了 */
+.tt-hud{display:flex;gap:8px;flex-wrap:nowrap;justify-content:center;align-items:center;width:100%;}
+.tt-stats{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;flex:1 1 auto;min-width:0;}
 .tt-stat{background:#ffffffdd;border-radius:999px;padding:4px 12px;font-size:16px;font-weight:900;color:#5f4a8a;
   box-shadow:0 2px 6px rgba(150,130,200,.2);}
 .tt-stat-combo{color:#b8446f;}
@@ -117,6 +156,7 @@ const CSS = `
 .tt-say-miss{color:#8b7fae;}
 .tt-keys{font-size:13px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
 .tt-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.tt-btns:empty{display:none;}
 .tt-btn{border:none;border-radius:14px;min-height:44px;padding:8px 16px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#5b4a7a;background:#efe9ff;box-shadow:0 3px 0 rgba(140,120,190,.4);}
 .tt-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.4);}
@@ -127,7 +167,10 @@ const CSS = `
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:18px;}
 .tt-cover-t{font-size:20px;font-weight:900;color:#6b4fa0;}
 .tt-cover-s{font-size:15px;font-weight:700;color:#7a6aa6;line-height:1.6;max-width:320px;}
+.tt-btn-pause{flex:0 0 auto;min-width:44px;padding:8px 12px;}
 .tt-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;}
+/* 关内要把这一排收起来腾竖向空间;类选择器的 display 会盖过 [hidden],得写回来 */
+.tt-bar[hidden]{display:none;}
 .tt-open{border:none;border-radius:999px;padding:10px 16px;min-height:44px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#fff;background:linear-gradient(180deg,#a98bea,#8a6ad6);
   box-shadow:0 4px 0 #6d51b4;}
@@ -149,7 +192,8 @@ const CSS = `
 @media (max-width:420px){
   .tt-wrap{padding:8px;gap:6px;}
   .tt-banner{font-size:13px;}
-  .tt-keys{font-size:13px;}
+  .tt-keys{font-size:12px;}
+  .tt-stat{font-size:14px;padding:3px 9px;}
 }
 @media (prefers-reduced-motion:reduce){
   .tt-btn:active,.tt-open:active,.tt-goback:active{transform:none;}
@@ -159,6 +203,20 @@ const CSS = `
 // ---------------------------------------------------------------------------
 // 舞台:Canvas 四列 + 判定线
 // ---------------------------------------------------------------------------
+
+/**
+ * 一次命中碎出几颗小音符:完美多一点、良好少一点;
+ * 开了「减少动效」就只留很少几颗,但仍旧看得见命中反馈(不是瞬删)。
+ */
+export function particleCount(reduced: boolean, strong: boolean): number {
+  if (reduced) return strong ? 3 : 2;
+  return strong ? 10 : 6;
+}
+
+/** 小音符飘多久淡完(毫秒) */
+export const PARTICLE_LIFE_MS = 620;
+/** 减少动效时飘得短一些 */
+export const PARTICLE_LIFE_REDUCED_MS = 320;
 
 interface Particle {
   x: number;
@@ -180,8 +238,10 @@ export interface StageDone {
 export interface StageOpts {
   chart: Chart;
   rules: RunRules;
-  /** 顶上的两行说明 */
+  /** 顶上那一行说明 */
   banner: string;
+  /** 开场提示语(显示在判定线下面那行,省一行顶部高度) */
+  hint?: string;
   /** 双人分轨:左两轨给朵朵、右两轨给星星 */
   split?: boolean;
   /** 对战对手 */
@@ -221,6 +281,9 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   banner.innerHTML = opts.banner;
   const hud = document.createElement("div");
   hud.className = "tt-hud";
+  const stats = document.createElement("div");
+  stats.className = "tt-stats";
+  hud.appendChild(stats);
   const canvas = document.createElement("canvas");
   canvas.className = "tt-canvas";
   const say = document.createElement("div");
@@ -229,13 +292,11 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   say.setAttribute("aria-live", "polite");
   const keys = document.createElement("div");
   keys.className = "tt-keys";
-  const btns = document.createElement("div");
-  btns.className = "tt-btns";
-  wrap.append(style, banner, hud, canvas, say, keys, btns);
+  wrap.append(style, banner, hud, canvas, say, keys);
   host.appendChild(wrap);
 
   let width = stageWidth(viewportWidth());
-  let height = stageHeight(width);
+  let height = stageHeight(width, viewportHeightPx());
   canvas.width = width;
   canvas.height = height;
   canvas.style.width = `${width}px`;
@@ -248,16 +309,18 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
 
   const ctx2d = (canvas.getContext("2d") ?? null) as CanvasRenderingContext2D | null;
 
+  // 暂停按钮挤进计分那一行:矮屏上单独占一行的话判定线就被推出舞台了
   const pauseBtn = document.createElement("button");
   pauseBtn.type = "button";
-  pauseBtn.className = "tt-btn";
-  pauseBtn.textContent = "⏸ 暂停";
+  pauseBtn.className = "tt-btn tt-btn-pause";
+  pauseBtn.textContent = "⏸";
+  pauseBtn.setAttribute("aria-label", "暂停");
   pauseBtn.addEventListener("click", () => togglePause());
-  btns.appendChild(pauseBtn);
+  hud.appendChild(pauseBtn);
 
   keys.innerHTML = split
-    ? "朵朵 A / S 管左两轨 · 星星 K / L 管右两轨<br>手机直接点对应的那一列 · Esc 暂停"
-    : "键盘 D F J K 对四条轨 · 手机直接点对应的那一列 · Esc 暂停";
+    ? "朵朵 A S 管左两轨 · 星星 K L 管右两轨 · Esc 暂停"
+    : "键盘 D F J K 对四条轨 · 也能直接点 · Esc 暂停";
 
   function judgeY(): number {
     return Math.round(height * JUDGE_LINE_RATIO);
@@ -273,12 +336,12 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
 
   function renderHud(): void {
     const lives = Number.isFinite(state.rules.maxMiss)
-      ? `<span class="tt-stat tt-stat-life">💗 还能漏 ${Math.max(0, state.rules.maxMiss - state.miss)} 个</span>`
+      ? `<span class="tt-stat tt-stat-life" aria-label="还能漏 ${Math.max(0, state.rules.maxMiss - state.miss)} 个">💗 ${Math.max(0, state.rules.maxMiss - state.miss)}</span>`
       : "";
     const rival = opts.rival
       ? `<span class="tt-stat">🤖 ${TIER_NAMES[opts.rival]} ${rivalScore} 分</span>`
       : "";
-    hud.innerHTML = `<span class="tt-stat">🎼 ${state.score} 分</span>
+    stats.innerHTML = `<span class="tt-stat">🎼 ${state.score} 分</span>
       <span class="tt-stat tt-stat-combo">🔥 ${state.combo} 连</span>${lives}${rival}`;
   }
 
@@ -292,7 +355,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   // -------------------------------------------------------------------------
 
   function spawnParticles(lane: number, color: string, strong: boolean): void {
-    const n = reduceMotion() ? 3 : strong ? 10 : 6;
+    const n = particleCount(reduceMotion(), strong);
     const cx = (lane + 0.5) * (width / LANE_COUNT);
     const cy = judgeY();
     for (let i = 0; i < n; i++) {
@@ -302,7 +365,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
         vx: (Math.random() - 0.5) * 0.06,
         vy: -(0.08 + Math.random() * 0.1),
         life: 0,
-        max: reduceMotion() ? 320 : 620,
+        max: reduceMotion() ? PARTICLE_LIFE_REDUCED_MS : PARTICLE_LIFE_MS,
         glyph: NOTE_GLYPHS[Math.floor(Math.random() * NOTE_GLYPHS.length)],
         color,
       });
@@ -564,7 +627,6 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
 
   function frame(): void {
     if (destroyed) return;
-    raf = requestAnimationFrame(frame);
     const t = nowMs();
     const dt = Math.max(0, Math.min(64, t - lastFrame));
     lastFrame = t;
@@ -573,17 +635,38 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
       handleEvents();
       checkOver();
     }
+    if (destroyed) return;
     step(dt, t);
+    // 这一段弹完、粒子也飘干净了就把循环停下来,不在后台空转
+    if (destroyed || (over && particles.length === 0)) {
+      raf = 0;
+      return;
+    }
+    raf = requestAnimationFrame(frame);
   }
 
-  const onResize = (): void => {
-    if (destroyed) return;
+  /** 判定线底下还得放得进提示行和键位行,这些是量出来的 */
+  function roomBelowCanvas(): number {
+    const below = (say.offsetHeight ?? 0) + (keys.offsetHeight ?? 0);
+    return (below > 0 ? below : 44) + 22;
+  }
+
+  /** 按舞台真实剩余空间收一次画布,保证判定线留在能点到的地方 */
+  function resize(): void {
     width = stageWidth(viewportWidth());
-    height = stageHeight(width);
+    const roomy = stageHeight(width, viewportHeightPx());
+    const top = canvas.getBoundingClientRect?.()?.top ?? 0;
+    const bottom = clipBottomPx(wrap);
+    height = fitStageHeight(roomy, bottom > 0 && top > 0 ? bottom - top - roomBelowCanvas() : 0);
     canvas.width = width;
     canvas.height = height;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
+  }
+
+  const onResize = (): void => {
+    if (destroyed) return;
+    resize();
   };
 
   canvas.addEventListener("pointerdown", onPointerDown as EventListener);
@@ -594,7 +677,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   window.addEventListener("resize", onResize);
 
   renderHud();
-  tell(opts.rival ? tierLine(opts.rival) : "音符压到判定线就点,空白格别碰。");
+  tell(opts.hint ?? (opts.rival ? tierLine(opts.rival) : "音符压到判定线就点,空白格别碰。"));
+  resize();
   raf = requestAnimationFrame(frame);
 
   return {
@@ -619,17 +703,21 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
 // 闯关:188 关
 // ---------------------------------------------------------------------------
 
-function playLevelWith(tones: ToneKit) {
+function playLevelWith(tones: ToneKit, modeBar: HTMLElement) {
   return function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
     const lv = buildLevel(ctx.level);
     const chart = levelChart(lv);
     const ch = CHAPTERS[lv.chapter];
     let stage: { destroy: () => void } | null = null;
+    // 关内把模式入口收起来:矮屏上这一排要占掉两行,判定线就被挤出首屏了
+    modeBar.hidden = true;
 
     stage = createStage(host, {
       chart,
       rules: levelRules(lv),
-      banner: `${ch.emoji} 第 ${ctx.level + 1} 关 · ${levelBrief(lv)}<br>${lv.hint}`,
+      // 关号和章节名平台的关卡条上已经写着了,这儿不重复占一行
+      banner: "",
+      hint: `${ch.emoji} ${levelBrief(lv)} · ${lv.hint}`,
       split: lv.split,
       sfx: ctx.sfx,
       tones,
@@ -647,6 +735,7 @@ function playLevelWith(tones: ToneKit) {
       destroy() {
         stage?.destroy();
         stage = null;
+        modeBar.hidden = false;
       },
     };
   };
@@ -973,7 +1062,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel: playLevelWith(tones),
+      playLevel: playLevelWith(tones, bar),
       mapHint: "音符压到判定线就点,空白格千万别碰;长按条要按住到尾。",
       grandMessage: "188 关全部弹完,四条轨都成了你的琴键!",
       guide: guideBook,
