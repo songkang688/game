@@ -514,8 +514,53 @@ describe("无尽深渊", () => {
       if (isBlessingFloor(d)) hero = applyBlessing(hero, rollBlessings(d)[0]);
     }
     // 走得动、也终究会走不动——深渊就该是这个手感
-    expect(depth).toBeGreaterThanOrEqual(3);
+    expect(depth).toBeGreaterThanOrEqual(15);
     expect(depth).toBeLessThan(60);
+  });
+
+  it("越会养成走得越深：新号几层就得回城，毕业号能下到三十几层", () => {
+    const dive = (s: HeroSave, seed: number): number => {
+      let hero = buildHero(s);
+      let depth = 0;
+      for (let d = 1; d <= 120; d++) {
+        const res = simulateBattle(hero, makeFighter(endlessFoeSpec(d)), d * 31 + seed, 40);
+        if (res.winner !== "hero") break;
+        hero = { ...res.final.hero, guarding: false, stun: 0, charge: null };
+        depth = d;
+        if (isBlessingFloor(d)) hero = applyBlessing(hero, rollBlessings(d)[0]);
+      }
+      return depth;
+    };
+    const median = (s: HeroSave): number => {
+      const ds: number[] = [];
+      for (let seed = 0; seed < 9; seed++) ds.push(dive(s, seed * 101 + 7));
+      ds.sort((a, b) => a - b);
+      return ds[4];
+    };
+
+    const rookie = median(defaultSave());
+    const midGame = median(
+      saveAtLevel(30, {
+        owned: GEARS.map((g) => g.id),
+        gear: { weapon: "w3", armor: "a3", charm: "c3", badge: "b-light" },
+        ranks: { gustStep: 2, crackHammer: 2, warmSong: 2 },
+        loadout: ["gustStep", "crackHammer", "warmSong"]
+      })
+    );
+    const graduate = median(
+      saveAtLevel(60, {
+        owned: GEARS.map((g) => g.id),
+        gear: { weapon: "w5", armor: "a5", charm: "c5", badge: "b-light" },
+        ranks: { gustStep: 5, crackHammer: 5, warmSong: 5, petalSlash: 5 },
+        loadout: ["gustStep", "crackHammer", "warmSong", "petalSlash"]
+      })
+    );
+
+    expect(rookie).toBeGreaterThanOrEqual(2); // 新号也不至于第一层就回城
+    expect(rookie).toBeLessThan(8);
+    expect(midGame).toBeGreaterThan(rookie * 3);
+    expect(graduate).toBeGreaterThan(midGame);
+    expect(graduate).toBeGreaterThanOrEqual(25);
   });
 });
 
@@ -561,6 +606,60 @@ describe("对战：星星的队伍", () => {
     const easy = buildRivalTeam(30, 0)[0];
     const hard = buildRivalTeam(30, 20)[0];
     expect(hard.maxHp).toBeGreaterThan(easy.maxHp);
+  });
+
+  it("擂台是一段缓坡，不是一道坎：胜率随胜场一点点往下走", () => {
+    const s = saveAtLevel(30, {
+      owned: GEARS.map((g) => g.id),
+      gear: { weapon: "w3", armor: "a3", charm: "c3", badge: "b-light" },
+      ranks: { gustStep: 2, crackHammer: 2, warmSong: 2 },
+      loadout: ["gustStep", "crackHammer", "warmSong"]
+    });
+    const rate = (wins: number): number => {
+      let w = 0;
+      const n = 30;
+      for (let i = 0; i < n; i++) if (runArena({ ...s, arenaWins: wins }, i * 7919 + 11).win) w += 1;
+      return w / n;
+    };
+    const start = rate(0);
+    const middle = rate(12);
+    const late = rate(30);
+    expect(start).toBeGreaterThan(0.7); // 刚上擂台是能赢的，不至于一开始就劝退
+    expect(middle).toBeLessThan(start); // 赢着赢着就吃力了
+    expect(late).toBeLessThan(middle); // 总有打不动的那一场，那就是这套配装的上限
+  });
+
+  it("配装越好，擂台上的连胜能走得越远", () => {
+    const mk = (over: Partial<HeroSave>): HeroSave => saveAtLevel(45, { owned: GEARS.map((g) => g.id), ...over });
+    /** 这套配装大概能连赢到第几场：从 0 胜往上试，直到赢不动为止 */
+    const wall = (s: HeroSave): number => {
+      for (const wins of [0, 8, 16, 24, 32, 40, 48]) {
+        let w = 0;
+        const n = 20;
+        for (let i = 0; i < n; i++) if (runArena({ ...s, arenaWins: wins }, i * 5171 + 3).win) w += 1;
+        if (w / n < 0.5) return wins;
+      }
+      return 56;
+    };
+
+    const plain = wall(mk({ gear: { weapon: "w2", armor: "a2", charm: "c2", badge: "b-light" } }));
+    const decent = wall(
+      mk({
+        gear: { weapon: "w4", armor: "a4", charm: "c4", badge: "b-light" },
+        ranks: { gustStep: 3, crackHammer: 3, warmSong: 3 },
+        loadout: ["gustStep", "crackHammer", "warmSong"]
+      })
+    );
+    const best = wall(
+      mk({
+        gear: { weapon: "w5", armor: "a5", charm: "c5", badge: "b-light" },
+        ranks: { gustStep: 5, crackHammer: 5, warmSong: 5, petalSlash: 5 },
+        loadout: ["gustStep", "crackHammer", "warmSong", "petalSlash"]
+      })
+    );
+    expect(decent).toBeGreaterThan(plain);
+    expect(best).toBeGreaterThanOrEqual(decent);
+    expect(best).toBeGreaterThan(plain);
   });
 
   it("装备倍数：光着身子是 1，配好装备明显大于 1，而且封顶", () => {

@@ -877,10 +877,14 @@ export const GEAR_MATCH_EXPONENT = 0.6;
 /**
  * 擂台难度：赢得越多，星星的队伍越强（倍数封顶，永远留得住翻盘的余地）。
  * gear 是勇者的装备倍数，对手会跟着抬一部分，比的是「配得好不好」而不是「肝没肝」。
+ *
+ * 三对三是接力打的，一点点数值差会被放大成几乎必胜或几乎必输。所以随胜场的
+ * 爬升要迈小步：从略低于平手起步，慢慢爬过对方，让「打到打不动为止」是一段
+ * 缓坡而不是一道坎。配装越好，这道坎就越靠后。
  */
 export function arenaScale(wins: number, gear = 1): number {
   const w = Math.max(0, Math.round(wins));
-  const byWins = Math.min(1.18, 0.88 + w * 0.01);
+  const byWins = Math.min(1.2, 0.94 + w * 0.006);
   // 只跟一部分装备差距，剩下的那部分留给玩家：认真配装就该看得见回报
   const byGear = Math.pow(Math.max(1, Math.min(2.2, gear)), GEAR_MATCH_EXPONENT);
   return Math.round(byWins * byGear * 1000) / 1000;
