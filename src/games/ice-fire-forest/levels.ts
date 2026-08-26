@@ -113,18 +113,22 @@ export type BarrierType =
   /** 光门 + 斜镜绕一圈:光路默认通,但人站上去就会把光挡断 */
   | "beamMirror";
 
-/** 屏障类型的一句话说明,进关提示与攻略共用 */
+/**
+ * 屏障类型的一句话说明,显示在棋盘下方那条提示里。
+ * 每一条都压在 25 字以内 —— 手机竖屏上这行字铺开三四行的话,
+ * 下面两套虚拟方向键就被顶出屏幕了;完整讲法在攻略面板里。
+ */
 export const BARRIER_HINTS: Record<BarrierType, string> = {
   open: "有一个两人都能过的直通口。",
-  split: "冰水潭归凛凛,岩浆池归焰焰,各走各的门。",
-  plateIce: "凛凛的路被石闸门锁着——焰焰先压住踏板,凛凛过去了再走岩浆。",
-  plateFire: "焰焰的路被石闸门锁着——凛凛先压住踏板,焰焰过去了再趟冰水。",
-  lever: "唯一的通口是石闸门,先找到拉杆把它拉开。",
-  seesaw: "石闸门和跷跷门此开彼关,一个人先过,另一个人再拉杆。",
-  belt: "传送带是单向的,踏上去就一路滑到头,回程只有窄窄一格。",
-  lift: "高坎一个人上不去,同伴得踩在托举点上;两边各有一个托举点,轮流托一次。",
-  beamPlate: "光门要光束照到接收器才开,而光路上还横着一道石闸门。",
-  beamMirror: "斜镜把光拐了个弯,注意别把自己站在光路上。",
+  split: "冰水潭归凛凛,岩浆池归焰焰。",
+  plateIce: "凛凛那条路锁着,得焰焰先压住踏板。",
+  plateFire: "焰焰那条路锁着,得凛凛先压住踏板。",
+  lever: "唯一的通口是石闸门,先找到拉杆拉开它。",
+  seesaw: "石闸门和跷跷门此开彼关,只能一个一个过。",
+  belt: "传送带单向,踏上去就一路滑到头。",
+  lift: "高坎要同伴踩住托举点才上得去,两边各一个。",
+  beamPlate: "光门要光束照到接收器才开,光路上还横着石闸门。",
+  beamMirror: "斜镜把光拐了个弯,别把自己站在光路上。",
 };
 
 /** 需要占用一个机关组编号的屏障 */
@@ -479,8 +483,18 @@ export function buildGrid(level: number, attempt = 0): LevelBlueprint | null {
   draft.set(last.x1, 1, "l");
   draft.set(last.x1, h - 2, "y");
 
-  const hint = barriers.map((ty) => BARRIER_HINTS[ty]).join(" ");
-  return { grid: draft.rows(), barriers, hint };
+  return { grid: draft.rows(), barriers, hint: buildHint(barriers) };
+}
+
+/**
+ * 进关提示:同类屏障只说一次,最多说两条。
+ * 手机竖屏上这行字要是铺成三四行,下面两套虚拟方向键就被挤出屏幕了;
+ * 说不完的细则在攻略面板里。
+ */
+export function buildHint(barriers: readonly BarrierType[]): string {
+  const seen: BarrierType[] = [];
+  for (const ty of barriers) if (!seen.includes(ty)) seen.push(ty);
+  return seen.slice(-2).map((ty) => BARRIER_HINTS[ty]).join("");
 }
 
 function takeFreeRow(sec: SectionPlan, used: Set<number>): number {

@@ -906,3 +906,19 @@ export function waitingLine(iceHome: boolean, fireHome: boolean): string {
   if (fireHome) return "焰焰已经站在火门上,等凛凛过来。";
   return "";
 }
+
+/** 棋盘最高占多少像素(再大也不铺满,免得一张小图被拉糊) */
+const MAX_BOARD_H = 360;
+
+/**
+ * 棋盘最多能占屏幕高度的几成。
+ *
+ * 手机竖屏得把下半屏整个让给两套虚拟方向键 —— 375×667 上棋盘一旦超过三成高,
+ * 焰焰那套方向键就被顶到屏幕外面去了,手指够不着,单人模式也就没法玩。
+ * 宽屏没这个顾虑,可以放开一点。
+ */
+export function boardHeightBudget(viewportW: number, viewportH: number): number {
+  const h = viewportH > 0 ? viewportH : 700;
+  const ratio = viewportW >= 700 ? 0.46 : 0.29;
+  return Math.min(MAX_BOARD_H, Math.max(150, h * ratio));
+}

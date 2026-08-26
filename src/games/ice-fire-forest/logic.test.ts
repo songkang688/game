@@ -21,6 +21,7 @@ import {
   POWER_CHARGES,
   POWER_CHARGES_MAX,
   TILE,
+  boardHeightBudget,
   canEnter,
   computeLight,
   computePower,
@@ -522,5 +523,31 @@ describe("双人键位", () => {
     expect(HERO_NAMES.fire).toBe("火灵·焰焰");
     expect(HERO_SHORT.ice).toBe("凛凛");
     expect(HERO_SHORT.fire).toBe("焰焰");
+  });
+});
+
+describe("棋盘高度预算", () => {
+  it("手机竖屏上棋盘顶多占三成高,剩下的留给两套虚拟方向键", () => {
+    // 375×667 是最紧的那块屏:棋盘吃过头,焰焰那套方向键就掉出屏幕了
+    const budget = boardHeightBudget(375, 667);
+    expect(budget).toBeLessThanOrEqual(667 * 0.3);
+    expect(budget).toBeGreaterThan(150);
+  });
+
+  it("宽屏放得开,棋盘能占到将近一半", () => {
+    const wide = boardHeightBudget(1280, 800);
+    expect(wide).toBeGreaterThan(boardHeightBudget(375, 800));
+  });
+
+  it("再高的屏也不会把一张小图拉过头", () => {
+    expect(boardHeightBudget(1920, 4000)).toBe(360);
+  });
+
+  it("矮屏也留得住一个能看清的棋盘", () => {
+    expect(boardHeightBudget(320, 400)).toBeGreaterThanOrEqual(150);
+  });
+
+  it("拿不到视口尺寸时给个稳妥的默认值,不会算出 0", () => {
+    expect(boardHeightBudget(375, 0)).toBeGreaterThanOrEqual(150);
   });
 });

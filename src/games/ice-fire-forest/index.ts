@@ -12,6 +12,7 @@ import {
   POWER_CHARGES,
   POWER_CHARGES_MAX,
   TILE,
+  boardHeightBudget,
   computeLight,
   computePower,
   formatClock,
@@ -47,8 +48,6 @@ const HURT_MS = 520;
 const HIGH_FIVE_MS = 2600;
 /** 格子最大边长(大屏上别把小小的一张图拉得糊掉) */
 const MAX_CELL = 44;
-/** 棋盘最高占多少像素(留出 HUD 与虚拟按键的位置) */
-const MAX_BOARD_H = 360;
 
 // ---------------------------------------------------------------------------
 // 配色
@@ -117,14 +116,18 @@ const CSS = `
 .iff-pad--fire button{background:linear-gradient(180deg,#FFB077,#F08B4C);box-shadow:0 3px 0 #C96B31;}
 .iff-pad button:active{transform:translateY(2px);}
 .iff-pad .iff-pad-slot{visibility:hidden;}
-.iff-padwrap{display:flex;flex-direction:column;align-items:center;gap:5px;}
+.iff-pad .iff-pad-act{background:linear-gradient(180deg,#C3B4E8,#A08FD2)!important;
+  box-shadow:0 3px 0 #7D6BB4!important;font-size:15px;}
+.iff-padwrap{display:flex;flex-direction:column;align-items:center;gap:4px;}
 .iff-padname{font-size:12px;font-weight:900;}
-.iff-padacts{display:flex;gap:5px;}
-.iff-padacts button{width:auto;padding:0 11px;height:34px;font-size:12px;}
 .iff-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 @media (max-width:420px){
-  .iff-pad button{width:38px;height:38px;font-size:15px;}
-  .iff-chip{font-size:12px;padding:4px 9px;}
+  .iff-pad button{width:36px;height:36px;font-size:15px;border-radius:10px;}
+  .iff-pad{gap:3px;}
+  .iff-chip{font-size:11.5px;padding:3px 8px;}
+  .iff-btn{font-size:11.5px;padding:5px 10px;}
+  .iff-wrap{gap:5px;}
+  .iff-tip{font-size:11.5px;padding:4px 8px;}
 }
 @media (prefers-reduced-motion:reduce){
   .iff-btn:active,.iff-pad button:active{transform:none;}
@@ -209,8 +212,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   const chipTime = chip("⏱ 0:00");
   const chipGems = chip(`💎 0/${totalGems}`);
   const chipHearts = chip("💗 ❤❤❤");
-  const chipIce = chip("");
-  const chipFire = chip("");
+  const chipPower = chip("");
   const soloBtn = document.createElement("button");
   soloBtn.type = "button";
   soloBtn.className = "iff-btn iff-btn--ghost";
@@ -222,7 +224,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   resetBtn.type = "button";
   resetBtn.className = "iff-btn iff-btn--ghost";
   resetBtn.textContent = "↺ 重摆";
-  hud.append(chipTime, chipGems, chipHearts, chipIce, chipFire, soloBtn, swapBtn, resetBtn);
+  hud.append(chipTime, chipGems, chipHearts, chipPower, soloBtn, swapBtn, resetBtn);
 
   const board = document.createElement("div");
   board.className = "iff-board";
@@ -276,10 +278,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     name.textContent = HERO_SHORT[hero];
     const grid = document.createElement("div");
     grid.className = `iff-pad iff-pad--${hero}`;
-    const cells: Array<{ label: string; action?: string }> = [
-      { label: "" },
+    // 元素之力与击掌塞进方向键的两个空角:手机竖屏上省下一整行,
+    // 375×667 才装得下「棋盘 + 两套虚拟键」而不用滚动
+    const cells: Array<{ label: string; action?: string; tap?: "power" | "cheer" }> = [
+      { label: hero === "ice" ? "❄" : "🔥", tap: "power" },
       { label: "▲", action: "up" },
-      { label: "" },
+      { label: "🤝", tap: "cheer" },
       { label: "◀", action: "left" },
       { label: "" },
       { label: "▶", action: "right" },
@@ -290,6 +294,21 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     for (const cell of cells) {
       const b = document.createElement("button");
       b.type = "button";
+      if (cell.tap) {
+        b.textContent = cell.label;
+        b.className = "iff-pad-act";
+        b.setAttribute(
+          "aria-label",
+          cell.tap === "power"
+            ? hero === "ice"
+              ? "凛凛把面前的岩浆冻成冰桥"
+              : "焰焰把面前的冰水烤干"
+            : `${HERO_SHORT[hero]}和同伴击掌,补一发元素之力`
+        );
+        b.addEventListener("click", () => (cell.tap === "power" ? doPower(hero) : doCheer()));
+        grid.appendChild(b);
+        continue;
+      }
       if (!cell.action) {
         b.className = "iff-pad-slot";
         b.tabIndex = -1;
@@ -302,23 +321,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       bindHold(b, hero, cell.action);
       grid.appendChild(b);
     }
-    const acts = document.createElement("div");
-    acts.className = "iff-padacts";
-    const powerBtn = document.createElement("button");
-    powerBtn.type = "button";
-    powerBtn.textContent = hero === "ice" ? "❄ 冻" : "🔥 烤";
-    powerBtn.setAttribute(
-      "aria-label",
-      hero === "ice" ? "凛凛把面前的岩浆冻成冰桥" : "焰焰把面前的冰水烤干"
-    );
-    powerBtn.addEventListener("click", () => doPower(hero));
-    const cheerBtn = document.createElement("button");
-    cheerBtn.type = "button";
-    cheerBtn.textContent = "🤝 击掌";
-    cheerBtn.setAttribute("aria-label", `${HERO_SHORT[hero]}和同伴击掌,补一发元素之力`);
-    cheerBtn.addEventListener("click", () => doCheer());
-    acts.append(powerBtn, cheerBtn);
-    box.append(name, grid, acts);
+    box.append(name, grid);
     return { el: box, name };
   }
 
@@ -553,13 +556,19 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     chipTime.textContent = `⏱ ${formatClock(elapsed)} / ${formatClock(analysis.limitSeconds)}`;
     chipGems.textContent = `💎 ${collected.size}/${totalGems}`;
     chipHearts.textContent = `💗 ${"❤".repeat(Math.max(0, hearts))}${"·".repeat(Math.max(0, MAX_HEARTS - hearts))}`;
-    chipIce.textContent = `❄ 凛凛 ${views.ice.charges}`;
-    chipIce.style.color = ICE_DARK;
-    chipFire.textContent = `🔥 焰焰 ${views.fire.charges}`;
-    chipFire.style.color = FIRE_DARK;
-    soloBtn.textContent = solo ? "🙋 单人中" : "👥 双人中";
+    chipPower.textContent = `❄${views.ice.charges} 🔥${views.fire.charges}`;
+    chipPower.setAttribute(
+      "aria-label",
+      `凛凛还有 ${views.ice.charges} 发元素之力,焰焰还有 ${views.fire.charges} 发`
+    );
+    soloBtn.textContent = solo ? "🙋 单人" : "👥 双人";
     soloBtn.setAttribute("aria-pressed", solo ? "true" : "false");
-    swapBtn.textContent = solo ? `🔁 换人(现在是${HERO_SHORT[active]})` : "🙋 一个人玩";
+    soloBtn.setAttribute("aria-label", solo ? "现在是单人模式,点一下换回双人" : "现在是双人模式,点一下换成单人");
+    swapBtn.textContent = solo ? `🔁 ${HERO_SHORT[active]}` : "🙋 单人玩";
+    swapBtn.setAttribute(
+      "aria-label",
+      solo ? `单人模式,现在控制${HERO_SHORT[active]},点一下换人` : "换成一个人玩,用 Tab 切换角色"
+    );
     icePad.name.textContent = solo && active !== "ice" ? "凛凛(待命)" : "凛凛";
     firePad.name.textContent = solo && active !== "fire" ? "焰焰(待命)" : "焰焰";
     if (performance.now() > toastUntil) {
@@ -574,10 +583,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
 
   function layout(): void {
     const availW = Math.max(200, (stage.clientWidth || 340) - 8);
-    cell = Math.max(
-      14,
-      Math.floor(Math.min(availW / level.w, MAX_BOARD_H / level.h, MAX_CELL))
-    );
+    const budgetH = boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667);
+    cell = Math.max(14, Math.floor(Math.min(availW / level.w, budgetH / level.h, MAX_CELL)));
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     canvas.width = Math.round(level.w * cell * dpr);
     canvas.height = Math.round(level.h * cell * dpr);

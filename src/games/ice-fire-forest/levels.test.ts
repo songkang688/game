@@ -12,6 +12,7 @@ import {
   GUIDE,
   MAX_ATTEMPTS,
   buildGrid,
+  buildHint,
   fallbackBlueprint,
   levelShape,
   type BarrierType,
@@ -231,6 +232,33 @@ describe("机关的登场顺序", () => {
     for (const [ty, text] of Object.entries(BARRIER_HINTS)) {
       expect(text.length, ty).toBeGreaterThanOrEqual(8);
       expect(text.endsWith("。")).toBe(true);
+    }
+  });
+});
+
+describe("进关提示", () => {
+  const grids = allGrids();
+
+  it("每条屏障说明都短到能在手机上一两行放完", () => {
+    for (const [ty, text] of Object.entries(BARRIER_HINTS)) {
+      expect(text.length, `${ty} 这句太长了`).toBeLessThanOrEqual(25);
+      expect(text.length).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it("同一种屏障只说一次,最多说两条", () => {
+    const hint = buildHint(["plateIce", "plateIce", "lever", "belt"]);
+    expect(hint).toBe(BARRIER_HINTS.lever + BARRIER_HINTS.belt);
+    expect(buildHint(["open"])).toBe(BARRIER_HINTS.open);
+    expect(buildHint([])).toBe("");
+  });
+
+  it("188 关的提示都控制在两句以内,虚拟按键才不会被顶下去", () => {
+    // 棋盘下面这行字要是铺成三四行,焰焰那套方向键就掉出 375×667 的屏幕了
+    for (let level = 0; level < TOTAL_LEVELS; level++) {
+      const hint = buildHint(grids[level].barriers);
+      expect(hint.length, `第 ${level + 1} 关提示太长`).toBeLessThanOrEqual(50);
+      expect(hint.length, `第 ${level + 1} 关没有提示`).toBeGreaterThan(0);
     }
   });
 });
