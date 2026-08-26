@@ -3,13 +3,26 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, LEVELS, type BubbleLevel } from "./levels";
+import {
+  BOLT,
+  CHAMELEON_BASE,
+  collapseGrid,
+  colorOf,
+  countLeftOn,
+  cycleChameleons,
+  FROZEN_OFFSET,
+  groupAt,
+  hasMovesOn,
+  HIDDEN_OFFSET,
+  isChameleon,
+  isFrozen,
+  isHidden,
+  RAINBOW,
+  revealHidden,
+  STONE,
+} from "./logic";
 
 const COLS = 8;
-const RAINBOW = 99;
-const STONE = 98;
-const BOLT = 97;
-/** 冰冻泡泡 = 颜色值 + FROZEN_OFFSET */
-const FROZEN_OFFSET = 10;
 
 const COLORS = [
   { bg: "radial-gradient(circle at 35% 30%, #FFE1EE, #FF9EC8)", ring: "#FF9EC8" },
@@ -40,6 +53,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const rows = cfg.rows;
   const grid: number[][] = [];
   const cells: HTMLButtonElement[] = [];
+  /** 1.1 倒影天湖：当前重力是否朝上 */
+  let gravityUp = false;
+  /** 1.1 步数栈桥：剩余步数（0 = 不限步） */
+  let movesLeft = cfg.moveLimit ?? 0;
 
   const wrap = document.createElement("div");
   wrap.className = "bp-wrap";
@@ -47,6 +64,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <style>${CSS}</style>
     <div class="bp-top">
       <span class="bp-badge bp-left">🫧</span>
+      ${cfg.flipGravity ? `<span class="bp-badge bp-grav"></span>` : ""}
+      ${cfg.moveLimit ? `<span class="bp-badge bp-moves"></span>` : ""}
       <span class="bp-badge">🎯 剩 ≤${cfg.maxLeft} 过关</span>
     </div>
     <div class="bp-board"></div>
@@ -56,6 +75,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const boardEl = wrap.querySelector(".bp-board") as HTMLElement;
   const leftEl = wrap.querySelector(".bp-left") as HTMLElement;
+  const gravEl = wrap.querySelector(".bp-grav") as HTMLElement | null;
+  const movesEl = wrap.querySelector(".bp-moves") as HTMLElement | null;
   const msgEl = wrap.querySelector(".bp-msg") as HTMLElement;
 
   function later(fn: () => void, ms: number): void {
@@ -89,17 +110,20 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         break;
       }
     }
-    for (let i = 0; i < cfg.frozen; i++) {
+    const wrapValue = (offset: number) => {
       let guard = 0;
       while (guard++ < 200) {
         const r = Math.floor(Math.random() * rows);
         const c = Math.floor(Math.random() * COLS);
         if (used.has(r * COLS + c)) continue;
         used.add(r * COLS + c);
-        grid[r][c] = grid[r][c] % FROZEN_OFFSET + FROZEN_OFFSET;
+        grid[r][c] = (grid[r][c] % cfg.colors) + offset;
         break;
       }
-    }
+    };
+    for (let i = 0; i < cfg.frozen; i++) wrapValue(FROZEN_OFFSET);
+    for (let i = 0; i < (cfg.hidden ?? 0); i++) wrapValue(HIDDEN_OFFSET);
+    for (let i = 0; i < (cfg.chameleon ?? 0); i++) wrapValue(CHAMELEON_BASE);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < COLS; c++) {
         const btn = document.createElement("button");
@@ -113,25 +137,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
     render();
     const tips: string[] = [];
+    if (cfg.flipGravity) tips.push("🙃 每消一组，重力就翻个面");
+    if ((cfg.chameleon ?? 0) > 0) tips.push("🦎 变色泡泡每步换一种颜色");
+    if (cfg.moveLimit) tips.push("🌉 步数有限，先数一数再出手");
+    if ((cfg.hidden ?? 0) > 0) tips.push("🏮 黑泡泡先点亮再消");
     if (cfg.rainbow > 0) tips.push("🌈 一点消掉最多的颜色");
     if (cfg.stone > 0) tips.push("🪨 敲不破，绕开它");
     if (cfg.bolt > 0) tips.push("⚡ 清掉整行整列");
     if (cfg.frozen > 0) tips.push("🧊 在旁边消一次才解冻");
     msgEl.textContent = tips.length > 0 ? tips.join("；") : "找到挨在一起的同色泡泡，一起点破它们！";
-  }
-
-  function isColor(v: number): boolean {
-    return v >= 0 && v < cfg.colors;
-  }
-
-  function isFrozen(v: number): boolean {
-    return v >= FROZEN_OFFSET && v < FROZEN_OFFSET + 5;
-  }
-
-  function countLeft(): number {
-    let n = 0;
-    for (let r = 0; r < rows; r++) for (let c = 0; c < COLS; c++) if (grid[r][c] >= 0) n++;
-    return n;
   }
 
   function render(): void {
@@ -142,6 +156,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         el.classList.remove("bp-rainbow");
         el.textContent = "";
         el.classList.toggle("bp-empty", v < 0);
+        // dataset 只是给自动冒烟脚本读的状态镜像，不参与玩法
+        el.dataset.v = String(v);
         if (v < 0) {
           el.style.background = "";
           el.style.boxShadow = "";
@@ -162,31 +178,23 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           el.style.background = COLORS[v - FROZEN_OFFSET].bg;
           el.style.boxShadow = "inset 0 0 0 3px #9FD6FF, 0 2px 5px rgba(120,180,230,.4)";
           el.textContent = "🧊";
+        } else if (isHidden(v)) {
+          el.style.background = "radial-gradient(circle at 35% 30%, #6B6580, #3E3A4E)";
+          el.style.boxShadow = "0 2px 6px rgba(60,50,80,.5)";
+          el.textContent = "🏮";
+        } else if (isChameleon(v)) {
+          el.style.background = COLORS[v - CHAMELEON_BASE].bg;
+          el.style.boxShadow = `inset 0 0 0 3px #7FCF95, 0 2px 5px ${COLORS[v - CHAMELEON_BASE].ring}66`;
+          el.textContent = "🦎";
         } else {
           el.style.background = COLORS[v].bg;
           el.style.boxShadow = `0 2px 5px ${COLORS[v].ring}66`;
         }
       }
     }
-    leftEl.textContent = `🫧 剩 ${countLeft()} 个`;
-  }
-
-  function group(r: number, c: number): Array<[number, number]> {
-    const color = grid[r][c];
-    if (!isColor(color)) return [];
-    const seen = new Set<number>();
-    const stack: Array<[number, number]> = [[r, c]];
-    const out: Array<[number, number]> = [];
-    while (stack.length) {
-      const [cr, cc] = stack.pop() as [number, number];
-      const key = cr * COLS + cc;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (cr < 0 || cr >= rows || cc < 0 || cc >= COLS || grid[cr][cc] !== color) continue;
-      out.push([cr, cc]);
-      stack.push([cr + 1, cc], [cr - 1, cc], [cr, cc + 1], [cr, cc - 1]);
-    }
-    return out;
+    leftEl.textContent = `🫧 剩 ${countLeftOn(grid)} 个`;
+    if (gravEl) gravEl.textContent = gravityUp ? "🙃 重力 ⬆️" : "🙂 重力 ⬇️";
+    if (movesEl) movesEl.textContent = `👣 剩 ${movesLeft} 步`;
   }
 
   /** 消掉一组格子，并解冻它们旁边的冰冻泡泡 */
@@ -201,50 +209,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
   }
 
-  function collapse(): void {
-    for (let c = 0; c < COLS; c++) {
-      let write = rows - 1;
-      for (let r = rows - 1; r >= 0; r--) {
-        if (grid[r][c] >= 0) {
-          grid[write][c] = grid[r][c];
-          if (write !== r) grid[r][c] = -1;
-          write--;
-        }
-      }
-      for (let r = write; r >= 0; r--) grid[r][c] = -1;
-    }
-    let writeCol = 0;
-    for (let c = 0; c < COLS; c++) {
-      const hasAny = grid.some((row) => row[c] >= 0);
-      if (hasAny) {
-        if (writeCol !== c) {
-          for (let r = 0; r < rows; r++) {
-            grid[r][writeCol] = grid[r][c];
-            grid[r][c] = -1;
-          }
-        }
-        writeCol++;
-      }
-    }
-  }
-
-  function hasMoves(): boolean {
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const v = grid[r][c];
-        if (v === RAINBOW || v === BOLT) return true;
-        if (!isColor(v)) continue;
-        if (r + 1 < rows && grid[r + 1][c] === v) return true;
-        if (c + 1 < COLS && grid[r][c + 1] === v) return true;
-      }
-    }
-    return false;
-  }
-
   function checkEnd(): void {
-    if (levelDone || hasMoves()) return;
+    if (levelDone) return;
+    const outOfMoves = cfg.moveLimit ? movesLeft <= 0 : false;
+    if (!outOfMoves && hasMovesOn(grid, COLS, cfg.colors)) return;
     levelDone = true;
-    const left = countLeft();
+    const left = countLeftOn(grid);
     if (left <= cfg.maxLeft) {
       const half = Math.max(cfg.stone, Math.floor(cfg.maxLeft / 2));
       const got = left <= cfg.stone ? 3 : left <= half ? 2 : 1;
@@ -252,14 +222,23 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       later(() => ctx.win(got as 1 | 2 | 3, left <= cfg.stone
         ? "泡泡全部清空，太厉害啦！"
         : `只剩 ${left} 个泡泡，达标！`), 400);
+    } else if (outOfMoves) {
+      later(() => ctx.lose(`步数用完还剩 ${left} 个，下次先找最大的一团再出手，一定行！`), 400);
     } else {
       later(() => ctx.lose(`还剩 ${left} 个泡泡，先找大团的同色泡泡下手！`), 400);
     }
   }
 
+  /** 每成功消一步之后的收尾：变色泡泡换色、重力方向结算、塌落、判定 */
   function afterPop(): void {
+    if (cfg.moveLimit) movesLeft = Math.max(0, movesLeft - 1);
+    if ((cfg.chameleon ?? 0) > 0) cycleChameleons(grid, cfg.colors);
+    if (cfg.flipGravity) {
+      gravityUp = !gravityUp;
+      msgEl.textContent = gravityUp ? "🙃 重力翻面，泡泡飘上去啦！" : "🙂 重力回来了，泡泡落下来～";
+    }
     later(() => {
-      collapse();
+      collapseGrid(grid, COLS, gravityUp);
       render();
       checkEnd();
     }, 200);
@@ -274,22 +253,30 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       msgEl.textContent = "石头敲不破哦，先消别的泡泡～";
       return;
     }
+    if (isHidden(v)) {
+      grid[r][c] = revealHidden(v);
+      ctx.sfx("tap");
+      msgEl.textContent = "🏮 点亮啦！看看它是什么颜色～";
+      render();
+      return;
+    }
     if (isFrozen(v)) {
       ctx.sfx("oops");
       msgEl.textContent = "这颗冻住啦，在它旁边消一组就能解冻！";
       return;
     }
     if (v === RAINBOW) {
-      // 消掉数量最多的颜色
+      // 消掉数量最多的颜色（变色泡泡按当前颜色一起算）
       const counts = new Array<number>(cfg.colors).fill(0);
       for (let rr = 0; rr < rows; rr++) for (let cc = 0; cc < COLS; cc++) {
-        if (isColor(grid[rr][cc])) counts[grid[rr][cc]]++;
+        const color = colorOf(grid[rr][cc], cfg.colors);
+        if (color >= 0) counts[color]++;
       }
       let best = 0;
       for (let i = 1; i < cfg.colors; i++) if (counts[i] > counts[best]) best = i;
       const list: Array<[number, number]> = [[r, c]];
       for (let rr = 0; rr < rows; rr++) for (let cc = 0; cc < COLS; cc++) {
-        if (grid[rr][cc] === best) list.push([rr, cc]);
+        if (colorOf(grid[rr][cc], cfg.colors) === best) list.push([rr, cc]);
       }
       ctx.sfx("coin");
       msgEl.textContent = `🌈 彩虹泡泡消掉了 ${list.length - 1} 个泡泡！`;
@@ -319,7 +306,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       afterPop();
       return;
     }
-    const g = group(r, c);
+    const g = groupAt(grid, COLS, r, c, cfg.colors);
     if (g.length < 2) {
       ctx.sfx("oops");
       msgEl.textContent = "这颗泡泡太孤单了，找挨在一起的同色泡泡！";
@@ -356,6 +343,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     chapters: CHAPTERS,
     playLevel,
     mapHint: "全部清空 3 星，剩得越少星星越多！",
-    grandMessage: "99 关泡泡全部搞定，你是泡泡小英雄！",
+    grandMessage: "188 关泡泡全部搞定，你是泡泡小英雄！",
   });
 }
