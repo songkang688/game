@@ -72,11 +72,14 @@ describe("折叠校验器 · 正方体展开图", () => {
   it("1×6 长条是「组合上像树、几何上折不成」的典型：三维模拟才抓得住", () => {
     const strip = fromArt(["######"]);
     const faces = cellsToNet(strip);
-    // 折痕数正好 5、连成一棵树，组合校验会放行
+    // 折痕数正好 5、连成一棵树：只看折痕结构的话这张图挑不出毛病
     expect(netHinges(faces)).toHaveLength(5);
-    expect(checkPolygonNet(faces, "cube").ok).toBe(true);
-    // 但真折起来第 5 格会撞回第 1 格
+    // 真折起来第 5 格会撞回第 1 格，三维模拟一试就露馅
     expect(foldsIntoCube(strip)).toBe(false);
+    // 所以正方体这一路的 `checkPolygonNet` 会补跑一遍三维模拟，长条照样判否
+    const res = checkPolygonNet(faces, "cube");
+    expect(res.ok).toBe(false);
+    expect(res.reason).toContain("撞");
   });
 
   it("格子数不对、不连通的一律折不成", () => {

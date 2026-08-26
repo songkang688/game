@@ -329,7 +329,37 @@ export function checkPolygonNet(faces: readonly NetPolygon[], solid: PolyhedronK
   if (!hasFaceMapping(netSides, hinges, shape)) {
     return { ok: false, reason: "折痕连的两个面在立体上并不相邻" };
   }
+  // 面映射只保证「折痕两侧在立体上相邻」，挡不住「1×6 长条」那种卷成筒的图：
+  // 六个正方形排一排，每条折痕都合法，可折起来同一个方向绕了一圈半。
+  // 方方正正的六格图再补一遍三维折叠模拟，那类错图才躲不掉。
+  if (solid === "cube" || solid === "cuboid") {
+    const cells = netToCells(faces);
+    if (cells && !foldsIntoCube(cells)) return { ok: false, reason: "六个面折起来会撞在一起，围不出一个封闭的盒子" };
+  }
   return { ok: true };
+}
+
+/**
+ * 把「全是同样大小的轴对齐矩形」的展开图还原成格子集合。
+ * 只有还原得出来才走三维折叠模拟；歪的、大小不一的图交给前面几关去挡。
+ */
+function netToCells(faces: readonly NetPolygon[]): Set<CellKey> | null {
+  const boxes = faces.map((f) => {
+    const xs = f.pts.map((p) => p.x);
+    const ys = f.pts.map((p) => p.y);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  });
+  const { w, h } = boxes[0];
+  if (w < EPS || h < EPS) return null;
+  const out = new Set<CellKey>();
+  for (const b of boxes) {
+    if (Math.abs(b.w - w) > 1e-4 || Math.abs(b.h - h) > 1e-4) return null;
+    const c = (b.x - boxes[0].x) / w;
+    const r = (b.y - boxes[0].y) / h;
+    if (Math.abs(c - Math.round(c)) > 1e-4 || Math.abs(r - Math.round(r)) > 1e-4) return null;
+    out.add(cellKey(Math.round(r), Math.round(c)));
+  }
+  return out.size === faces.length ? out : null;
 }
 
 // ---------------------------------------------------------------------------
