@@ -8,7 +8,7 @@ export { meta };
 // 扇形手牌、点选与横划框选、三档牌力提示、飞牌动画、温和的非法提示,以及四种玩法——
 // 对战(朵朵 vs 星星 vs 小牌灵)、188 层地主塔、无尽连胜、本地两人。
 //
-// 这是纸牌策略,不是赌博:全程没有货币、没有下注、没有筹码,倍数只是这一局的分数放大器。
+// 这是一款纸牌策略游戏:全程没有货币、没有真实价值的输赢,倍数只是这一局的分数放大器。
 import { save } from "../../engine/save";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
@@ -221,7 +221,7 @@ const CSS = `
   .ld-mini{flex-basis:100%;min-height:20px;justify-content:flex-start;}
   /* 出牌阶段一排有 5 个按钮,挤瘦一点才不会折行掉到屏幕外头去 */
   .ld-btns{gap:4px;}
-  .ld-btn{padding:6px 5px;font-size:13px;min-height:40px;border-radius:12px;}
+  .ld-btn{padding:6px 5px;font-size:13px;min-height:44px;border-radius:12px;}
   .ld-keys{font-size:10px;}
 }
 @media (prefers-reduced-motion:reduce){

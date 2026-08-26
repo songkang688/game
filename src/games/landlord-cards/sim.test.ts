@@ -1,15 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { dealCards, parsePlay } from "./logic";
+import type { AiLevel } from "./ai";
 import {
   createGame,
+  findWinningLine,
   isFarmer,
   nextSeat,
+  replayLine,
   runBidding,
+  runTable,
   settleGame,
   simulateGame,
   tryMove,
   winRate,
   MAX_STEPS,
+  type ProveInput,
+  type SeatPolicy,
 } from "./sim";
 
 const RANK_OF: Record<string, number> = {
@@ -251,5 +257,132 @@ describe("自对弈 200 局", () => {
     const both = winRate(GAMES, ["hard", "hard", "hard"], "landlord");
     expect(both).toBeGreaterThan(0.35);
     expect(both).toBeLessThan(0.75);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2:三档各 20 局的对照、可赢线路搜索、本地两人打到结算
+// ---------------------------------------------------------------------------
+
+describe("固定 seed 各 20 局:高档明显更强", () => {
+  const N = 20;
+  const SEED0 = 424242;
+
+  it("当地主时 厉害 与 认真 都明显强过轻松档(同样 20 副牌)", () => {
+    const easy = winRate(N, ["easy", "easy", "easy"], "landlord", SEED0);
+    const normal = winRate(N, ["normal", "easy", "easy"], "landlord", SEED0);
+    const hard = winRate(N, ["hard", "easy", "easy"], "landlord", SEED0);
+    expect(normal).toBeGreaterThan(easy);
+    expect(hard).toBeGreaterThan(easy);
+    expect(hard - easy).toBeGreaterThan(0.25);
+    // 20 局里 认真 与 厉害 谁高谁低是噪声,两档谁都不该跌回轻松档那一档
+    expect(Math.min(normal, hard)).toBeGreaterThan(easy + 0.2);
+  });
+
+  it("当农民时也是同一个次序(地主固定认真档)", () => {
+    const easy = winRate(N, ["normal", "easy", "easy"], "farmer", SEED0);
+    const hard = winRate(N, ["normal", "hard", "hard"], "farmer", SEED0);
+    expect(hard).toBeGreaterThan(easy);
+    expect(hard - easy).toBeGreaterThan(0.25);
+  });
+
+  it("这 20 局本身是可重复的:同样的档位组合跑两遍数字一样", () => {
+    const a = winRate(N, ["hard", "easy", "easy"], "landlord", SEED0);
+    const b = winRate(N, ["hard", "easy", "easy"], "landlord", SEED0);
+    expect(a).toBe(b);
+  });
+});
+
+describe("可赢线路搜索", () => {
+  function proveInput(seed: number, over: Partial<ProveInput> = {}): ProveInput {
+    const d = dealCards(seed);
+    return {
+      hands: d.hands,
+      bottom: d.bottom,
+      playerSeat: 0,
+      presetLandlord: 0,
+      base: 2,
+      aiLevel: "normal",
+      seed,
+      ...over,
+    };
+  }
+
+  it("搜到的线路重放一遍真的能赢", () => {
+    for (const seed of [777, 4242, 90210]) {
+      const input = proveInput(seed);
+      const line = findWinningLine(input);
+      expect(line, `seed ${seed} 搜不到能赢的线路`).not.toBeNull();
+      expect(replayLine(input, line!)).toBe(true);
+    }
+  }, 60000);
+
+  it("线路里每一步都轮得上那一家,顺序不能乱", () => {
+    const input = proveInput(4242);
+    const line = findWinningLine(input)!;
+    expect(line.moves.length).toBeGreaterThan(2);
+    const bad = { ...line, moves: [...line.moves].reverse() };
+    expect(replayLine(input, bad)).toBe(false);
+  }, 60000);
+
+  it("少走一步就不算赢:重放器不会睁一只眼闭一只眼", () => {
+    const input = proveInput(777);
+    const line = findWinningLine(input)!;
+    const short = { ...line, moves: line.moves.slice(0, -1) };
+    expect(replayLine(input, short)).toBe(false);
+  }, 60000);
+
+  it("同一副牌搜两次给的是同一条线路(确定性)", () => {
+    const input = proveInput(90210);
+    expect(findWinningLine(input)).toEqual(findWinningLine(input));
+  }, 60000);
+
+  it("带「不用炸弹」的目标去搜,搜出来的线路里玩家一个炸都没用", () => {
+    const input = proveInput(4242);
+    const line = findWinningLine(input, 1600, { noBomb: true });
+    expect(line).not.toBeNull();
+    expect(line!.playerBombs).toBe(0);
+    expect(replayLine(input, line!)).toBe(true);
+  }, 60000);
+});
+
+describe("本地两人 + 1 电脑打到结算", () => {
+  const twoHumans: SeatPolicy[] = ["coach", "coach", "ai"];
+
+  it("两个真人座位照着提示打,一路能打到结算,不会卡在半路", () => {
+    for (const seed of [1234, 5678, 9012]) {
+      const d = dealCards(seed);
+      const r = runTable({ hands: d.hands, bottom: d.bottom, landlord: 0, base: 2 }, twoHumans, "normal", seed);
+      expect(r.state.finished).toBe(true);
+      expect([0, 1, 2]).toContain(r.state.winner);
+      expect(r.steps).toBeLessThan(MAX_STEPS);
+      expect(r.state.hands[r.state.winner!]).toHaveLength(0);
+      expect(r.settle.score).not.toBe(0);
+    }
+  });
+
+  it("换谁当地主都能打完,结算的正负跟着地主输赢走", () => {
+    for (const landlord of [0, 1, 2]) {
+      const d = dealCards(30303);
+      const r = runTable({ hands: d.hands, bottom: d.bottom, landlord, base: 2 }, twoHumans, "hard", 30303);
+      expect(r.state.finished).toBe(true);
+      expect(r.settle.landlordWon).toBe(r.state.winner === landlord);
+      expect(r.settle.score > 0).toBe(r.settle.landlordWon);
+    }
+  });
+
+  it("同一副牌跑两遍结果完全一样", () => {
+    const d = dealCards(8888);
+    const mk = (): ReturnType<typeof runTable> =>
+      runTable({ hands: d.hands, bottom: d.bottom, landlord: 1, base: 3 }, twoHumans, "normal", 8888);
+    expect(mk()).toEqual(mk());
+  });
+
+  it("三家全交给电脑也一样收得了场(四种模式共用同一套引擎)", () => {
+    const d = dealCards(24680);
+    const levels: AiLevel[] = ["hard", "normal", "easy"];
+    const r = runTable({ hands: d.hands, bottom: d.bottom, landlord: 2, base: 1 }, ["ai", "ai", "ai"], levels[0], 24680);
+    expect(r.state.finished).toBe(true);
+    expect(r.state.history.length).toBeGreaterThan(3);
   });
 });

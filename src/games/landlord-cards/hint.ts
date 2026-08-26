@@ -13,6 +13,7 @@ import {
   controlScore,
   leadCandidates,
   positionScore,
+  sameTeam,
   scoreChoice,
   splitCount,
   type AiContext,
@@ -83,6 +84,14 @@ export interface HintInput {
 
 /** 「不要」的门槛:和困难档 AI 用同一个口径,压得住就尽量压 */
 const PASS_MARGIN = -32;
+
+/**
+ * 教练档比困难档多守一条:如果搜下来能压住的走法**全都要动炸弹**,
+ * 而对手谁都还剩 3 张以上,那就先过一手。
+ * 这不是拍脑袋——「全都要动炸弹」和「对手还剩几张」都是这次搜索与桌面的事实,
+ * 只是给孩子的建议比 AI 自己打牌保守一点点:炸弹留到真正拦得住人的时候。
+ */
+const BOMB_PATIENCE_CARDS = 3;
 
 function ctxOf(input: HintInput): AiContext {
   return {
@@ -248,8 +257,11 @@ export function searchHint(input: HintInput, mode: HintMode = "coach"): HintResu
   const best = ranked[0];
   // 跟牌时才有「过一手」这个选项:和困难档 AI 用同一个门槛,压得住就尽量压
   if (input.prev && !best.finisher) {
+    const foeLeft = input.counts.filter((_, i) => i !== input.seat && !sameTeam(i, input.seat, input.landlord));
+    const foeMin = foeLeft.length > 0 ? Math.min(...foeLeft) : 99;
+    const onlyBombs = ranked.every((c) => c.usesBomb);
     const passScore = positionScore(input.hand) - PASS_MARGIN;
-    if (best.score >= passScore) {
+    if ((onlyBombs && foeMin > BOMB_PATIENCE_CARDS) || best.score >= passScore) {
       return { mode, play: null, pass: true, reason: explainPass(best, searched), searched, ranked };
     }
   }
