@@ -8,8 +8,6 @@ import { save } from "../../engine/save";
 import {
   buildQuizCard,
   CHAPTERS,
-  endlessFieldName,
-  endlessLine,
   endlessWave,
   LEVELS,
   quizTarget,
@@ -25,16 +23,38 @@ import {
   winLine,
   type RoundResult,
 } from "./logic";
-
-type MoleKind = "normal" | "sleepy" | "gold" | "bunny" | "shield" | "quiz";
+import {
+  BUNNY_TEXT,
+  JUDGE_LABEL,
+  MOLE_SPECS,
+  TimerBag,
+  breakCombo,
+  buildChart,
+  bunnyPenalty,
+  comboMultiplier,
+  hitPoints,
+  hitScore,
+  judgeHit,
+  moleTimeline,
+  nightMarketChart,
+  nightMarketLine,
+  nightMarketStall,
+  type ChartNote,
+  type MoleKind,
+} from "./rhythm";
 
 interface HoleState {
   kind: MoleKind | null;
   /** 出题地鼠举的牌子 */
   card: QuizCard | null;
-  /** 护盾鼠已经被敲过几下 */
+  /** 帽子鼠 / 铁盔鼠已经被敲过几下 */
   hits: number;
-  timer: ReturnType<typeof setTimeout> | null;
+  /** 冒头的时刻（本关内的毫秒计时） */
+  spawnAt: number;
+  /** 这一只的停留期 */
+  upMs: number;
+  /** 已经在往回缩了（还能擦边打到） */
+  dropping: boolean;
 }
 
 const CSS = `
@@ -49,10 +69,14 @@ const CSS = `
 .mp-combofill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFC46B, #F0714A); border-radius: 8px; transition: width .2s; }
 .mp-combo.mp-combo-on .mp-combofill { background: linear-gradient(90deg, #FF9A3C, #E8452C); animation: mpBlaze .5s ease infinite alternate; }
 @keyframes mpBlaze { from { opacity: .7; } to { opacity: 1; } }
-.mp-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.mp-hole { aspect-ratio: 1; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: radial-gradient(circle at 50% 62%, #9A7B4F 0 42%, #C9A876 46% 60%, #E4D3AE 64%); display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
+.mp-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mp-hole { aspect-ratio: 1; min-width: 56px; min-height: 56px; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: radial-gradient(circle at 50% 62%, #9A7B4F 0 42%, #C9A876 46% 60%, #E4D3AE 64%); display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
 .mp-hole:active { transform: scale(.93); }
+/* 命中不震屏,只让洞口轻轻下沉三帧 */
+.mp-hole.mp-sink { transform: translateY(3px) scale(.97); }
 .mp-hole .mp-face { transform: translateY(6px); animation: mpUp .18s ease; }
+/* 缩回中:还能擦边打到,所以要看得见它在往下走 */
+.mp-hole .mp-face-drop { transform: translateY(22px); opacity: .55; }
 .mp-hole .mp-card { font-size: clamp(15px, 5.4vw, 24px); font-weight: 900; color: #4A4A7A; background: #FFF8E4; border-radius: 10px; padding: 3px 7px; box-shadow: 0 2px 5px rgba(90,80,50,.3); }
 @keyframes mpUp { from { transform: translateY(26px); opacity: .4; } to { transform: translateY(6px); opacity: 1; } }
 .mp-wrap.mp-night { background: linear-gradient(180deg, #2B2C46, #3C3A55); }
@@ -72,24 +96,26 @@ const CSS = `
 .mp-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(150,170,110,.25); }
 .mp-over-t { font-size: 22px; font-weight: 900; color: #6F8C42; margin-bottom: 8px; }
 .mp-over-s { font-size: 15px; font-weight: 700; color: #8A7A3E; line-height: 1.6; margin-bottom: 14px; }
+@media (max-width: 380px) { .mp-board { gap: 12px; } .mp-badge { font-size: 14px; padding: 4px 8px; } }
+@media (prefers-reduced-motion: reduce) {
+  .mp-hole .mp-face { animation: none; }
+  .mp-hole.mp-sink { transform: none; }
+  .mp-combo.mp-combo-on .mp-combofill { animation: none; }
+}
 `;
-
-const FACE: Record<MoleKind, string> = {
-  normal: "🐹",
-  sleepy: "😴",
-  gold: "🌟",
-  bunny: "🐰",
-  shield: "🪖",
-  quiz: "🧮",
-};
 
 interface RoundOpts {
   cfg: MoleLevel;
   /** 顶部左边那颗徽章前面的小标题，例如「♾️ 第 3 波」 */
   banner?: string;
+  /** 本轮的谱面；不给就按 cfg 现生成一张（同一关每次都一样，便于练） */
+  chart?: ChartNote[];
   sfx: (name: "tap" | "win" | "oops" | "coin" | "pop") => void;
   onDone: (result: RoundResult) => void;
 }
+
+/** 谱面推进的心跳（毫秒）：够细，摸得出 120ms 的 Perfect 窗口 */
+const TICK_MS = 40;
 
 /**
  * 一轮地鼠：闯关关卡和无尽波次共用这一套。
@@ -97,11 +123,16 @@ interface RoundOpts {
  */
 function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void } {
   const cfg = opts.cfg;
-  const timeouts = new Set<ReturnType<typeof setTimeout>>();
-  const intervals = new Set<ReturnType<typeof setInterval>>();
+  const bag = new TimerBag();
+  const chart = opts.chart ?? buildChart(cfg, 1, 0);
+  let cursor = 0;
+  /** 本关已经走了多少毫秒（谱面按它推进） */
+  let clockMs = 0;
   let destroyed = false;
   let ended = false;
   let score = 0;
+  /** 手感分：判定档 × 连击倍率，只影响演出与结算文案，不动过关线 */
+  let styleScore = 0;
   let mistakes = 0;
   let streak = 0;
   let bestCombo = 0;
@@ -109,7 +140,14 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   let timeLeft = cfg.duration;
   let torchCenter = 4;
   let quizNow = cfg.quizChance ? quizTarget(Math.max(0, cfg.target - 8), Math.random) : 0;
-  const holes: HoleState[] = Array.from({ length: 9 }, () => ({ kind: null, card: null, hits: 0, timer: null }));
+  const holes: HoleState[] = Array.from({ length: 9 }, () => ({
+    kind: null,
+    card: null,
+    hits: 0,
+    spawnAt: 0,
+    upMs: 0,
+    dropping: false,
+  }));
 
   const wrap = document.createElement("div");
   wrap.className = `mp-wrap${cfg.night ? " mp-night" : ""}`;
@@ -118,6 +156,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     <div class="mp-top">
       <span class="mp-badge mp-score">🔨 0 / ${cfg.target}</span>
       <span class="mp-badge mp-time">⏰ ${cfg.duration}s</span>
+      <span class="mp-badge mp-style">✨ 手感 0 · ×1</span>
       ${opts.banner ? `<span class="mp-badge mp-banner">${opts.banner}</span>` : ""}
       ${usesHearts(cfg) ? '<span class="mp-badge mp-heart">💗💗💗</span>' : ""}
     </div>
@@ -132,6 +171,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   const boardEl = wrap.querySelector(".mp-board") as HTMLElement;
   const scoreEl = wrap.querySelector(".mp-score") as HTMLElement;
   const timeEl = wrap.querySelector(".mp-time") as HTMLElement;
+  const styleEl = wrap.querySelector(".mp-style") as HTMLElement;
   const heartEl = wrap.querySelector(".mp-heart") as HTMLElement | null;
   const fillEl = wrap.querySelector(".mp-fill") as HTMLElement;
   const msgEl = wrap.querySelector(".mp-msg") as HTMLElement;
@@ -142,11 +182,9 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   msgEl.textContent = levelTips(cfg);
 
   function later(fn: () => void, ms: number): void {
-    const t = setTimeout(() => {
-      timeouts.delete(t);
+    bag.after(() => {
       if (!destroyed) fn();
     }, ms);
-    timeouts.add(t);
   }
 
   const holeEls: HTMLButtonElement[] = [];
@@ -169,15 +207,16 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
       holeEls[i].innerHTML = "";
       return;
     }
+    const dropCls = h.dropping ? " mp-face-drop" : "";
     if (h.kind === "quiz" && h.card) {
-      holeEls[i].innerHTML = `<span class="mp-face mp-card">${h.card.expr}</span>`;
+      holeEls[i].innerHTML = `<span class="mp-face mp-card${dropCls}">${h.card.expr}</span>`;
       return;
     }
-    if (h.kind === "shield" && h.hits > 0) {
-      holeEls[i].innerHTML = `<span class="mp-face">🐹</span>`;
+    if ((h.kind === "shield" || h.kind === "hat") && h.hits > 0) {
+      holeEls[i].innerHTML = `<span class="mp-face${dropCls}">🐹</span>`;
       return;
     }
-    holeEls[i].innerHTML = `<span class="mp-face">${FACE[h.kind]}</span>`;
+    holeEls[i].innerHTML = `<span class="mp-face${dropCls}">${MOLE_SPECS[h.kind].emoji}</span>`;
   }
 
   function renderTorch(): void {
@@ -189,6 +228,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   function renderTop(): void {
     scoreEl.textContent = `🔨 ${score} / ${cfg.target}`;
     timeEl.textContent = `⏰ ${timeLeft}s`;
+    styleEl.textContent = `✨ 手感 ${styleScore} · ×${comboMultiplier(streak)}`;
     if (heartEl) heartEl.textContent = "💗".repeat(Math.max(0, 3 - mistakes)) + "🤍".repeat(Math.min(3, mistakes));
     fillEl.style.width = `${Math.min(100, (score / cfg.target) * 100)}%`;
     if (quizNumEl) quizNumEl.textContent = String(quizNow);
@@ -204,7 +244,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     h.kind = null;
     h.card = null;
     h.hits = 0;
-    if (h.timer) { clearTimeout(h.timer); h.timer = null; }
+    h.dropping = false;
     renderHole(i);
   }
 
@@ -218,48 +258,53 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     holes.forEach((h, i) => { if (h.kind === "quiz") hideMole(i); });
   }
 
-  function spawn(): void {
+  /** 谱面里的一只上场:洞被占了就就近换一个空洞,一个都没有就跳过这一拍 */
+  function spawnNote(note: ChartNote): void {
     if (ended || destroyed) return;
-    const active = holes.filter((h) => h.kind !== null).length;
-    if (active >= cfg.maxConcurrent) return;
-    const free: number[] = [];
-    holes.forEach((h, i) => { if (h.kind === null) free.push(i); });
-    if (free.length === 0) return;
-    const i = free[Math.floor(Math.random() * free.length)];
-    const h = holes[i];
-    let stayScale = 1;
-    if (cfg.quizChance && Math.random() < cfg.quizChance) {
-      h.kind = "quiz";
-      // 台面上没有正确答案时必定补一只,保证这一轮一直有得拍
-      h.card = buildQuizCard(quizNow, !anyCorrectUp() || Math.random() < 0.45, Math.random);
-      stayScale = 1.15;
-    } else {
-      const r = Math.random();
-      const shield = cfg.shieldChance ?? 0;
-      let kind: MoleKind = "normal";
-      if (r < cfg.bunnyChance) kind = "bunny";
-      else if (r < cfg.bunnyChance + cfg.goldChance) kind = "gold";
-      else if (r < cfg.bunnyChance + cfg.goldChance + cfg.sleepyChance) kind = "sleepy";
-      else if (r < cfg.bunnyChance + cfg.goldChance + cfg.sleepyChance + shield) kind = "shield";
-      h.kind = kind;
-      h.card = null;
-      stayScale = kind === "sleepy" ? 1.8 : kind === "bunny" ? 1.4 : kind === "shield" ? 1.9 : 1;
+    if (holes.filter((h) => h.kind !== null).length >= cfg.maxConcurrent) return;
+    let i = note.hole;
+    if (holes[i].kind !== null) {
+      const free = holes.map((h, k) => (h.kind === null ? k : -1)).filter((k) => k >= 0);
+      if (free.length === 0) return;
+      i = free[Math.floor(Math.random() * free.length)];
     }
+    const h = holes[i];
+    h.kind = note.kind;
+    h.card = note.kind === "quiz" ? buildQuizCard(quizNow, !anyCorrectUp() || Math.random() < 0.45, Math.random) : null;
     h.hits = 0;
-    const stay = cfg.upMsMin + Math.random() * (cfg.upMsMax - cfg.upMsMin);
-    h.timer = setTimeout(() => {
-      h.timer = null;
-      if (!destroyed && !ended) hideMole(i);
-    }, stay * stayScale);
-    timeouts.add(h.timer);
+    h.spawnAt = clockMs;
+    h.upMs = note.upMs;
+    h.dropping = false;
     renderHole(i);
+  }
+
+  /** 每一拍:把到点的地鼠放上来,把该缩的缩回去(漏打的清连击) */
+  function tick(): void {
+    if (ended || destroyed) return;
+    clockMs += TICK_MS;
+    while (cursor < chart.length && chart[cursor].at <= clockMs) spawnNote(chart[cursor++]);
+    holes.forEach((h, i) => {
+      if (!h.kind) return;
+      const line = moleTimeline(h.spawnAt, h.upMs);
+      if (clockMs >= line.goneAt) {
+        const missed = MOLE_SPECS[h.kind].hittable;
+        hideMole(i);
+        if (missed && streak > 0) {
+          streak = breakCombo();
+          renderTop();
+        }
+        return;
+      }
+      if (!h.dropping && clockMs >= line.dropAt) {
+        h.dropping = true;
+        renderHole(i);
+      }
+    });
   }
 
   function finish(won: boolean): void {
     if (ended) return;
     ended = true;
-    intervals.forEach((t) => clearInterval(t));
-    intervals.clear();
     holes.forEach((_, i) => hideMole(i));
     const result: RoundResult = { won, score, mistakes, timeLeft, bestCombo };
     later(() => opts.onDone(result), 350);
@@ -282,7 +327,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
 
   function stumble(msg: string): void {
     mistakes++;
-    streak = 0;
+    streak = breakCombo();
     opts.sfx("oops");
     msgEl.textContent = msg;
     renderTop();
@@ -298,66 +343,93 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     }
     if (h.kind === "bunny") {
       hideMole(i);
-      stumble("那是小兔子，送它回洞里～下次先认清再落手！");
+      // 花花兔不参加游戏:扣一分、断连击,但话说得温和,不批评
+      score = bunnyPenalty(score);
+      stumble(BUNNY_TEXT);
       return;
     }
+
+    const judge = judgeHit(clockMs - h.spawnAt, h.upMs);
+    if (judge === "miss") {
+      opts.sfx("tap");
+      return;
+    }
+
     if (h.kind === "quiz") {
       const card = h.card;
       hideMole(i);
       if (card?.correct) {
         opts.sfx("pop");
         msgEl.textContent = `🧮 ${card.expr} = ${quizNow}，算得真准！`;
-        scored(1);
+        award(judge, 1);
         if (!ended) nextQuiz();
       } else {
         stumble(`这只举的是 ${card?.expr ?? "别的算式"}，得数不是 ${quizNow}，再找找看～`);
       }
       return;
     }
-    if (h.kind === "shield" && h.hits === 0) {
+
+    const spec = MOLE_SPECS[h.kind];
+    if (spec.hits > 1 && h.hits === 0) {
       h.hits = 1;
       opts.sfx("tap");
-      msgEl.textContent = "🪖 头盔掀掉啦，再补一下！";
+      msgEl.textContent = h.kind === "hat" ? "🎩 帽子飞啦，再补一下！" : "🪖 头盔掀掉啦，再补一下！";
       renderHole(i);
       return;
     }
-    const gain = h.kind === "gold" ? 2 : h.kind === "shield" ? 2 : 1;
-    opts.sfx(h.kind === "gold" || h.kind === "shield" ? "coin" : "pop");
-    if (h.kind === "gold") msgEl.textContent = "🌟 金地鼠 +2！";
-    if (h.kind === "shield") msgEl.textContent = "🛡️ 铁盔鼠拿下 +2！";
+
+    opts.sfx(spec.base >= 2 ? "coin" : "pop");
+    const kindLine =
+      h.kind === "gold"
+        ? "🌟 金地鼠 +2！"
+        : h.kind === "shield"
+          ? "🛡️ 铁盔鼠拿下 +2！"
+          : h.kind === "hat"
+            ? "🎩 帽子鼠拿下 +2！"
+            : h.kind === "flash"
+              ? "✨ 闪光鼠!手真快!"
+              : "";
+    msgEl.textContent = `${kindLine}${kindLine ? " · " : ""}${JUDGE_LABEL[judge]}`;
+    sink(i);
     hideMole(i);
-    scored(gain);
+    award(judge, spec.base);
   }
 
-  const clock = setInterval(() => {
+  /** 命中顿感:洞口轻轻下沉三帧就收,不震屏 */
+  function sink(i: number): void {
+    holeEls[i].classList.add("mp-sink");
+    bag.after(() => holeEls[i].classList.remove("mp-sink"), 3 * 16);
+  }
+
+  /** 记一次命中:过关线按底分算(和 1.1 一样),判定档与连击只加手感分 */
+  function award(judge: ReturnType<typeof judgeHit>, base: number): void {
+    styleScore += hitScore(judge, base) * comboMultiplier(streak);
+    scored(hitPoints(judge, base));
+  }
+
+  bag.every(() => {
     if (ended || destroyed) return;
     timeLeft--;
     renderTop();
     if (timeLeft <= 0) finish(score >= cfg.target);
   }, 1000);
-  intervals.add(clock);
 
-  const spawner = setInterval(() => spawn(), cfg.gapMs);
-  intervals.add(spawner);
+  bag.every(tick, TICK_MS);
+
   if (cfg.night) {
     renderTorch();
-    const torch = setInterval(() => {
+    bag.every(() => {
       torchCenter = Math.floor(Math.random() * 9);
       renderTorch();
     }, Math.max(1200, cfg.torchMs ?? 2400));
-    intervals.add(torch);
   }
-  later(() => spawn(), 350);
   renderTop();
 
   return {
     destroy() {
       destroyed = true;
       ended = true;
-      intervals.forEach((t) => clearInterval(t));
-      intervals.clear();
-      timeouts.forEach((t) => clearTimeout(t));
-      timeouts.clear();
+      bag.clearAll();
       wrap.remove();
     },
   };
@@ -367,6 +439,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg: MoleLevel = LEVELS[ctx.level];
   const round = createRound(stage, {
     cfg,
+    // 每一关的谱面由关号定种子:同一关每次都是同一张,练熟了就能背下来
+    chart: buildChart(cfg, ctx.level * 7919 + 1, ctx.level),
     sfx: ctx.sfx,
     onDone: (result) => {
       if (result.won) ctx.win(roundStars(result, cfg.duration), winLine(cfg, result));
@@ -416,7 +490,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     const again = document.createElement("button");
     again.type = "button";
     again.className = "mp-open";
-    again.textContent = "🔁 从第 1 波再来";
+    again.textContent = "🔁 从第 1 摊再来";
     again.addEventListener("click", () => {
       api.play("tap");
       wave = 1;
@@ -429,10 +503,12 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
   function startWave(): void {
     round?.destroy();
     stage.innerHTML = "";
-    chip.textContent = `♾️ ${endlessFieldName(wave)} · 第 ${wave} 波 · 最好 ${best} 波`;
+    chip.textContent = `🏮 ${nightMarketStall(wave)} · 第 ${wave} 摊 · 最好 ${best} 摊`;
+    const cfg = endlessWave(wave);
     round = createRound(stage, {
-      cfg: endlessWave(wave),
-      banner: `♾️ 第 ${wave} 波`,
+      cfg,
+      banner: `🏮 第 ${wave} 摊`,
+      chart: nightMarketChart(cfg, wave, Math.floor(Math.random() * 1e6) + 1),
       sfx: (n) => api.play(n),
       onDone: (result) => {
         if (result.won) {
@@ -443,7 +519,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
         } else {
           const reached = Math.max(0, wave - 1);
           best = save.recordEndlessBest(meta.id, reached);
-          showOver(endlessLine(reached, best));
+          showOver(nightMarketLine(reached, best));
         }
       },
     });
@@ -485,7 +561,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function refreshBar(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
-    endlessBtn.textContent = best > 0 ? `♾️ 无尽地鼠场 · 最好 ${best} 波` : "♾️ 无尽地鼠场 · 点我开锤！";
+    endlessBtn.textContent = best > 0 ? `🏮 无尽地鼠夜市 · 最好 ${best} 摊` : "🏮 无尽地鼠夜市 · 点我开锤！";
   }
 
   function closeMode(): void {
