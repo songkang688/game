@@ -10,13 +10,30 @@ import {
   buildEndless,
   featureTags,
   getLevel,
-  starsForMoves,
   winMessage,
   type LevelDef,
 } from "./levels";
 import {
+  assistSummary,
+  canUndo,
+  canUseHint,
+  deadlockTip,
+  difficultyBadge,
+  facingAngle,
+  hintsLeft,
+  makeEndlessRoom,
+  moveDuration,
+  newUndoStack,
+  nextHintMove,
+  pushFrame,
+  resetStack,
+  starsWithAssist,
+  stuckReport,
+  undoFrame,
+  usableDirs,
+} from "./assist";
+import {
   DIR_LABELS,
-  cloneState,
   initialState,
   isSolved,
   remainingBoxes,
@@ -25,7 +42,6 @@ import {
   type Puzzle,
   type State,
 } from "./logic";
-import { solve } from "./solver";
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -58,6 +74,17 @@ const CSS = `
 .bh-hero-b{outline-color:#4E8FD0;}
 .bh-hint{animation:bhhint .8s ease infinite;}
 @keyframes bhhint{0%,100%{box-shadow:inset 0 0 0 3px #F2A93B}50%{box-shadow:inset 0 0 0 3px #FFE0A0}}
+/* 1.2 新增:格间插值、仓鼠朝向、难度小标签(bxh- 前缀) */
+.bxh-slide{animation:bxhslide var(--bxh-dur,140ms) ease-out;}
+@keyframes bxhslide{from{transform:translate(var(--bxh-dx,0),var(--bxh-dy,0));}to{transform:translate(0,0);}}
+.bxh-face{display:inline-block;transform:rotate(var(--bxh-turn,0deg));
+  transition:transform var(--bxh-dur,140ms) ease-out;}
+.bxh-diff{background:#FFF1DC;color:#9A6A34;}
+.bxh-stuck{background:#FFE9E2;color:#B4553A;}
+@media (prefers-reduced-motion:reduce){
+  .bxh-slide{animation-duration:16ms;}
+  .bxh-face{transition-duration:16ms;}
+}
 .bh-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:8px;text-align:center;padding:16px;background:rgba(255,250,242,.94);border-radius:16px;}
 .bh-veil-title{font-size:20px;font-weight:900;color:#7A5433;}
@@ -118,6 +145,13 @@ const HAMSTERS = [
   { name: "团团", face: "🐹", cls: "bh-hero bh-hero-b" },
 ];
 
+/** 仓鼠的转身:左右靠翻面,上下靠一点点仰头低头,看得出朝哪边又不会歪成一团 */
+function faceStyle(dir: Dir): string {
+  const angle = facingAngle(dir);
+  const tilt = angle === 0 ? -8 : angle === 180 ? 8 : 0;
+  return `rotate(${tilt}deg)${angle === 270 ? " scaleX(-1)" : ""}`;
+}
+
 /** 方向键盘映射 */
 const KEY_DIRS: Record<string, Dir> = {
   ArrowUp: 0,
@@ -135,7 +169,7 @@ interface BoardOpts {
   sfx: (name: SoundName) => void;
   /** 步数用完就算这一趟结束;0 表示不限 */
   moveLimit?: number;
-  onWin: (moves: number, undos: number) => void;
+  onWin: (moves: number, undos: number, hints: number) => void;
   onOut?: (moves: number) => void;
   onQuit?: () => void;
   showBest?: boolean;
@@ -156,13 +190,25 @@ interface BoardHandle {
 function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   let def = opts.def;
   let state: State = initialState(def);
-  let history: State[] = [];
+  /** 无限撤销:一步一帧压进去,只有内存上限这一条保护 */
+  const undoStack = newUndoStack();
   let moves = 0;
   let undos = 0;
+  let hintsUsed = 0;
   let active = 0;
   let finished = false;
   let hintCell = -1;
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 每只仓鼠面朝哪边 */
+  let facings: Dir[] = [2, 2];
+  /** 这一步要播的格间插值(播完就清掉,不会每帧重放) */
+  let slide: { cell: number; dx: number; dy: number; ms: number } | null = null;
+  /** 上一次提醒过的死局局面,同一个局面不重复唠叨 */
+  let stuckSaid = "";
+  const softMotion = (() => {
+    const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    return typeof mm === "function" ? !!mm("(prefers-reduced-motion: reduce)").matches : false;
+  })();
 
   const wrap = el("div", "bh-wrap");
   const style = el("style");
@@ -210,6 +256,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     { dir: 2, label: "⬇", col: 2, row: 2 },
     { dir: 1, label: "▶", col: 3, row: 2 },
   ];
+  const padBtns: Array<{ dir: Dir; btn: HTMLButtonElement }> = [];
   for (const k of padDefs) {
     const btn = el("button", "bh-key", k.label);
     btn.type = "button";
@@ -218,6 +265,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     btn.setAttribute("aria-label", `往${DIR_LABELS[k.dir]}走`);
     btn.addEventListener("click", () => step(k.dir));
     pad.appendChild(btn);
+    padBtns.push({ dir: k.dir, btn });
   }
   wrap.appendChild(pad);
 
@@ -257,12 +305,14 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
 
       const bi = state.boxes.indexOf(c);
       const hi = state.hamsters.indexOf(c);
+      let piece: HTMLElement | null = null;
       if (bi >= 0) {
         text = "📦";
         if (def.target[c]) cls += " bh-done";
       } else if (hi >= 0) {
-        text = HAMSTERS[hi % HAMSTERS.length].face;
-        // 两只仓鼠时只给正在操作的那只描边,一眼看得出现在动的是谁
+        // 仓鼠按朝向转身,不许瞬间换脸
+        piece = el("span", "bxh-face", HAMSTERS[hi % HAMSTERS.length].face);
+        piece.style.transform = faceStyle(facings[hi] ?? 2);
         if (state.hamsters.length === 1 || hi === active) cls += ` ${HAMSTERS[hi % HAMSTERS.length].cls}`;
       } else if (def.portal[c] >= 0) {
         text = "🌀";
@@ -273,8 +323,21 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       }
       if (c === hintCell) cls += " bh-hint";
       cell.className = cls;
-      cell.textContent = text;
+      if (piece) {
+        cell.replaceChildren(piece);
+      } else {
+        cell.textContent = text;
+      }
+      // 格间插值:从上一格「滑」到这一格,推箱比走路慢一点
+      const mover = piece ?? (text === "📦" ? cell : null);
+      if (slide && slide.cell === c && mover) {
+        mover.style.setProperty("--bxh-dx", `${slide.dx * 100}%`);
+        mover.style.setProperty("--bxh-dy", `${slide.dy * 100}%`);
+        mover.style.setProperty("--bxh-dur", `${slide.ms}ms`);
+        mover.classList.add("bxh-slide");
+      }
     }
+    slide = null;
 
     const left = remainingBoxes(def, state);
     boxChip.textContent = left === 0 ? "📦 全部归位!" : `📦 还差 ${left} 个`;
@@ -286,7 +349,11 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       moveChip.textContent = `👣 ${moves} 步 · 目标 ${def.parMoves}`;
       moveChip.className = moves <= def.parMoves ? "bh-chip" : "bh-chip bh-chip-warn";
     }
-    undoBtn.disabled = history.length === 0 || finished;
+    undoBtn.disabled = !canUndo(undoStack) || finished;
+    hintBtn.disabled = finished || !canUseHint(hintsUsed);
+    hintBtn.textContent = `💡 提示 ${hintsLeft(hintsUsed)}`;
+    const walkable = usableDirs(def, state, active);
+    for (const p of padBtns) p.btn.disabled = finished || !walkable[p.dir];
     swapBtn.textContent = `🔁 换 ${HAMSTERS[(active + 1) % state.hamsters.length].name}`;
     grid.setAttribute(
       "aria-label",
@@ -296,6 +363,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
 
   function refreshTags(): void {
     tags.innerHTML = "";
+    // 难度标签是拿求解器算出来的最短推箱次数标的,关卡数据一格都没动
+    tags.appendChild(el("span", "bh-tag bxh-diff", difficultyBadge(def)));
     for (const t of featureTags(def)) tags.appendChild(el("span", "bh-tag", t));
     tip.textContent = def.hint;
   }
@@ -337,6 +406,34 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     veil = v;
   }
 
+  /** 从 from 滑到 to 的格子偏移(动画从「上一格」的位置起步) */
+  function slideFrom(from: number, to: number, kind: "walk" | "push", undoing: boolean): void {
+    if (from < 0 || to < 0) return;
+    slide = {
+      cell: to,
+      dx: (from % def.w) - (to % def.w),
+      dy: Math.floor(from / def.w) - Math.floor(to / def.w),
+      ms: moveDuration(kind, softMotion, undoing),
+    };
+  }
+
+  /** 这一步之后局面还救得回来吗:先过死局规则,推了箱子再让求解器复核一遍 */
+  function warnIfStuck(pushed: boolean): void {
+    if (finished || isSolved(def, state)) return;
+    const report = stuckReport(currentPuzzle(), state, {
+      nodeCap: 20_000,
+      useSolver: pushed && def.w * def.h <= 90,
+    });
+    if (!report.stuck) {
+      stuckSaid = "";
+      return;
+    }
+    const key = `${state.boxes.join(",")}`;
+    if (key === stuckSaid) return;
+    stuckSaid = key;
+    toast(report.tip || deadlockTip("solver"));
+  }
+
   function step(dir: Dir): void {
     if (finished) return;
     const out = tryMove(def, state, active, dir);
@@ -344,11 +441,12 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       opts.sfx("oops");
       return;
     }
-    history.push(cloneState(state));
-    if (history.length > 400) history.shift();
+    pushFrame(undoStack, state);
     state = out.state;
+    facings[active] = dir;
     moves++;
     hintCell = -1;
+    slideFrom(out.from, out.pushed ? out.to : out.to, out.pushed ? "push" : "walk", false);
     opts.sfx(out.pushed ? "pop" : "tap");
     if (out.teleported) opts.sfx("coin");
     render();
@@ -356,34 +454,42 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     if (isSolved(def, state)) {
       finished = true;
       opts.sfx("win");
-      opts.onWin(moves, undos);
+      opts.onWin(moves, undos, hintsUsed);
       return;
     }
     if (opts.moveLimit && opts.moveLimit > 0 && moves >= opts.moveLimit) {
       finished = true;
       opts.onOut?.(moves);
+      return;
     }
+    warnIfStuck(out.pushed);
   }
 
   function undo(): void {
-    if (finished || history.length === 0) return;
-    const prev = history.pop();
+    if (finished || !canUndo(undoStack)) return;
+    const prev = undoFrame(undoStack);
     if (!prev) return;
+    const wasAt = state.hamsters[active];
     state = prev;
     moves = Math.max(0, moves - 1);
     undos++;
     hintCell = -1;
+    stuckSaid = "";
+    // 撤销把刚才那一步反着播,速度快一倍
+    slideFrom(wasAt, state.hamsters[active], "walk", true);
     opts.sfx("tap");
     render();
   }
 
   function reset(): void {
     state = initialState(def);
-    history = [];
+    resetStack(undoStack);
     moves = 0;
     active = 0;
     finished = false;
     hintCell = -1;
+    stuckSaid = "";
+    facings = [2, 2];
     clearVeil();
     opts.sfx("tap");
     render();
@@ -397,21 +503,26 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     render();
   }
 
-  /** 卡住了给一步:从当前局面重新算一遍,把该走的那一格亮起来 */
+  /**
+   * 卡住了给一步:走求解器那条解的第一步,把该走的那一格亮起来。
+   * 每关只给一次,用掉这一关就封顶两星(撤销随便用,不扣星)。
+   */
   function hint(): void {
-    if (finished) return;
+    if (finished || !canUseHint(hintsUsed)) return;
     opts.sfx("tap");
-    const res = solve(currentPuzzle(), { nodeCap: 60_000 });
-    if (!res.solved || res.moves.length === 0) {
-      toast("这个局面小仓鼠也想不出来了,按「撤销」退两步试试?");
+    const res = nextHintMove(currentPuzzle(), state);
+    if (!res.move) {
+      toast(res.text);
+      render();
       return;
     }
-    const first = res.moves[0];
+    hintsUsed++;
+    const first = res.move;
     if (first.who !== active && state.hamsters.length > 1) {
       active = first.who;
       toast(`该 ${HAMSTERS[active % HAMSTERS.length].name} 动啦,往${DIR_LABELS[first.dir]}走一格`);
     } else {
-      toast(`往${DIR_LABELS[first.dir]}走一格试试(还要 ${res.moves.length} 步)`);
+      toast(res.text);
     }
     const out = tryMove(def, state, first.who, first.dir);
     hintCell = out ? out.to : -1;
@@ -461,11 +572,15 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     swap(next) {
       def = next;
       state = initialState(def);
-      history = [];
+      resetStack(undoStack);
       moves = 0;
+      undos = 0;
+      hintsUsed = 0;
       active = 0;
       finished = false;
       hintCell = -1;
+      stuckSaid = "";
+      facings = [2, 2];
       clearVeil();
       if (def.hamsters.length > 1 && !swapBtn.isConnected) hud.appendChild(swapBtn);
       if (def.hamsters.length <= 1 && swapBtn.isConnected) swapBtn.remove();
@@ -488,8 +603,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const board = createBoard(stage, {
     def,
     sfx: ctx.sfx,
-    onWin: (moves, undos) => {
-      ctx.win(starsForMoves(def, moves), winMessage(def, moves, undos));
+    onWin: (moves, undos, hints) => {
+      // 撤销一颗星都不扣;看过提示才封顶两星
+      ctx.win(starsWithAssist(def, moves, hints), `${winMessage(def, moves, undos)} ${assistSummary(undos, hints)}`);
     },
   });
   return { destroy: () => board.destroy() };
@@ -530,8 +646,13 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 
   let board: BoardHandle | null = null;
 
+  /** 生成一仓:随机生成 + 求解器验证有解,超时或验不过就自动退一档,绝不卡住画面 */
+  function makeRoom(r: number): LevelDef {
+    return makeEndlessRoom({ round: r, make: buildEndless }).def;
+  }
+
   function startRound(): void {
-    const def = buildEndless(round);
+    const def = makeRoom(round);
     const budget = budgetFor(def);
     board?.destroy();
     board = createBoard(fieldHost, {
@@ -543,7 +664,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
         score += roomScore(def, moves, budget);
         round++;
         api.play("win");
-        const next = buildEndless(round);
+        const next = makeRoom(round);
         board?.swap(next);
         board?.toast(`第 ${round} 仓收拾好啦!当前 ${score} 分,继续!`);
       },
