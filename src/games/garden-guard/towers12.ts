@@ -146,7 +146,7 @@ export const COUNTER_TABLE: CounterRow[] = [
     archetype: "healer",
     good: ["needle", "boom"],
     bad: ["dew"],
-    why: "奶油怪一直给同伴回血,要用连发快点把它先解决;光减速它不掉血,越拖越难受。",
+    why: "奶油怪一直把同伴的元气补回去,要用连发快点先把它请回家;光减速它元气一点不掉,越拖越难办。",
   },
   {
     archetype: "sneaky",

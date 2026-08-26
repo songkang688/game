@@ -148,7 +148,7 @@ export const TOWER_INFO: Record<TowerKind, TowerSpec> = {
   needle: { name: "针针塔", cost: 5, range: 2.5, cd: 0.3, dmg: 1, air: true, desc: "射得最远,咻咻咻连发" },
   dew: { name: "露珠塔", cost: 4, range: 1.9, cd: 0, dmg: 0, slow: 0.55, desc: "让怪走得慢慢的" },
   sunny: { name: "阳光花", cost: 4, range: 0, cd: 0, dmg: 0, produce: 5, desc: "慢慢攒花瓣" },
-  boom: { name: "花火塔", cost: 6, range: 2.2, cd: 1.2, dmg: 3, splash: 1.25, desc: "轰!一片都痛" },
+  boom: { name: "花火塔", cost: 6, range: 2.2, cd: 1.2, dmg: 3, splash: 1.25, desc: "轰!一炸一大片" },
   // 1.1 新塔:夜露温室解锁冰晶塔(点名减速),齿轮花房解锁毒雾塔(范围毒雾)。
   frost: { name: "冰晶塔", cost: 5, range: 2.3, cd: 0.9, dmg: 2, air: true, hitSlow: true, desc: "打中就冻得慢慢" },
   mist: { name: "毒雾塔", cost: 6, range: 2.0, cd: 1.0, dmg: 1, poison: true, desc: "毒雾无视硬壳" },

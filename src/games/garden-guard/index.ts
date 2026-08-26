@@ -1954,12 +1954,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
       for (const e of wave) {
         const spec = MONSTER_INFO[e.kind];
         if (!spec.boss) continue;
-        if (spec.heals) return `${spec.name}会给随从回血,先集火它本体!`;
+        if (spec.heals) return `${spec.name}会给随从补元气,先集火它本体!`;
         if (spec.sneaks) return `${spec.name}会隐身,现身那几秒赶紧集火!`;
         if (spec.summons) return `${spec.name}会叫小兵,花火塔一炸一片!`;
         if (spec.splits) return `${spec.name}倒下会裂开,留塔看住路口!`;
         if (spec.dashes) return `${spec.name}会冲刺,露珠塔能拖住它!`;
-        if (spec.enrages) return `${spec.name}半血会暴走,提前升级好塔!`;
+        if (spec.enrages) return `${spec.name}元气过半会暴走,提前升级好塔!`;
         return `${spec.name}皮很厚,提前把塔升一升级!`;
       }
     }
