@@ -465,6 +465,58 @@ export interface SimOptions {
   maxSeconds?: number;
 }
 
+/**
+ * 把一串事件整理成一杆的结论（谁先碰到谁、进了哪些球、有没有先吃库）。
+ * 视图那边是一帧一帧推的，攒够事件之后调这个函数，拿到的结论和 `simulateShot` 完全一致。
+ */
+export function summarizeShot(
+  balls: Ball[],
+  events: StepEvent[],
+  cueCrossedCenter: boolean,
+  steps: number
+): ShotResult {
+  let firstHit: BallKind | null = null;
+  let firstHitId: number | null = null;
+  let cushionBeforeContact = false;
+  let cushionAfterContact = false;
+  let contacted = false;
+  const potted: PottedBall[] = [];
+
+  for (const ev of events) {
+    if (ev.type === "pot") {
+      potted.push({ id: ev.id, kind: ev.kind, pocket: ev.pocket ?? -1 });
+      continue;
+    }
+    if (ev.type === "cushion") {
+      if (!contacted && ev.kind === "cue") cushionBeforeContact = true;
+      if (contacted) cushionAfterContact = true;
+      continue;
+    }
+    if (!contacted && (ev.kind === "cue" || ev.otherKind === "cue")) {
+      contacted = true;
+      if (ev.kind === "cue") {
+        firstHit = ev.otherKind ?? null;
+        firstHitId = ev.other ?? null;
+      } else {
+        firstHit = ev.kind;
+        firstHitId = ev.id;
+      }
+    }
+  }
+
+  return {
+    balls,
+    events,
+    firstHit,
+    firstHitId,
+    potted,
+    cushionBeforeContact,
+    cushionAfterContact,
+    cueCrossedCenter,
+    steps,
+  };
+}
+
 /** 把一杆从击球到全部停下推演完，返回结果与事件流 */
 export function simulateShot(state: { balls: readonly Ball[] }, opts: SimOptions = {}): ShotResult {
   const table = opts.table ?? TABLE;
@@ -489,47 +541,7 @@ export function simulateShot(state: { balls: readonly Ball[] }, opts: SimOptions
     if (!out.moving) break;
   }
 
-  let firstHit: BallKind | null = null;
-  let firstHitId: number | null = null;
-  let cushionBeforeContact = false;
-  let cushionAfterContact = false;
-  let contacted = false;
-  const potted: PottedBall[] = [];
-
-  for (const ev of events) {
-    if (ev.type === "pot") {
-      potted.push({ id: ev.id, kind: ev.kind, pocket: ev.pocket ?? -1 });
-      continue;
-    }
-    if (ev.type === "cushion") {
-      if (!contacted && ev.kind === "cue") cushionBeforeContact = true;
-      if (contacted) cushionAfterContact = true;
-      continue;
-    }
-    // hit
-    if (!contacted && (ev.kind === "cue" || ev.otherKind === "cue")) {
-      contacted = true;
-      if (ev.kind === "cue") {
-        firstHit = ev.otherKind ?? null;
-        firstHitId = ev.other ?? null;
-      } else {
-        firstHit = ev.kind;
-        firstHitId = ev.id;
-      }
-    }
-  }
-
-  return {
-    balls,
-    events,
-    firstHit,
-    firstHitId,
-    potted,
-    cushionBeforeContact,
-    cushionAfterContact,
-    cueCrossedCenter: crossed,
-    steps,
-  };
+  return summarizeShot(balls, events, crossed, steps);
 }
 
 // ---------------------------------------------------------------------------
