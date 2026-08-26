@@ -38,6 +38,46 @@ import {
   type RunInput,
   type RunState,
 } from "./sim";
+import {
+  ALBUM_KEY,
+  C_CGATE,
+  C_DOOR,
+  C_EXIT,
+  C_HIDDEN,
+  C_KEY,
+  C_PGATE,
+  C_PLATE,
+  C_PORTAL,
+  C_SEESAW_L,
+  C_SEESAW_R,
+  C_STICKER,
+  C_SWITCH,
+  C_WALL,
+  Disposer,
+  PUZZLE_KINDS,
+  STICKER_SETS,
+  albumBonusStars,
+  buildCastleRoom,
+  castleLine,
+  castleRoomTitle,
+  cellAt,
+  colorGateOpen,
+  exploredRatio,
+  isPlateDown,
+  miniMapRows,
+  nextSticker,
+  parseAlbum,
+  resetRoom,
+  roomStuck,
+  seesawOf,
+  seesawWalkable,
+  serializeAlbum,
+  stepMove,
+  stickerId,
+  type CastleRoom,
+  type Dir,
+  type RoomState,
+} from "./explore";
 
 const CSS = `
 .ak-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
@@ -79,6 +119,40 @@ const CSS = `
 .ak-over-s{font-size:14px;font-weight:700;color:#7a6046;line-height:1.6;}
 @media (min-width:560px){.ak-grid{grid-template-columns:repeat(4,1fr);}}
 @media (prefers-reduced-motion:reduce){.ak-btn:active{transform:none;}}
+
+/* 1.2 探索层:无尽古堡的俯视房间(advk- 前缀,和上面的横版走廊分开) */
+.advk-room{display:grid;gap:2px;background:#e9dfcf;border-radius:14px;padding:6px;margin:0 auto;
+  max-width:420px;width:100%;}
+.advk-cell{aspect-ratio:1;border-radius:5px;display:flex;align-items:center;justify-content:center;
+  font-size:15px;line-height:1;background:#fffaf0;}
+.advk-wall{background:#8d7a62;}
+.advk-dim{background:#f3ece0;color:#b8a88c;}
+.advk-seen{background:#fff4e0;}
+.advk-hot{background:#ffe6c9;}
+.advk-me{background:#ffd9ec;outline:2px solid #e07aae;}
+.advk-pad2{display:grid;grid-template-columns:repeat(3,56px);gap:6px;justify-content:center;margin-top:8px;}
+.advk-pad2 button{border:none;border-radius:14px;min-height:52px;font-size:20px;font-weight:900;
+  cursor:pointer;font-family:inherit;color:#6b4a2a;background:#fff3dd;box-shadow:0 4px 0 rgba(180,140,90,.45);}
+.advk-pad2 button:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(180,140,90,.45);}
+.advk-pad2 button:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.advk-pad2 .advk-slot{visibility:hidden;}
+.advk-hud{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:14px;font-weight:800;
+  color:#6b4a2a;line-height:1.5;}
+.advk-hud span{background:#fff;border-radius:999px;padding:4px 10px;box-shadow:0 2px 5px rgba(170,140,110,.25);}
+.advk-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.advk-tool{border:none;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:900;cursor:pointer;
+  font-family:inherit;background:#ffffffdd;color:#7a5230;box-shadow:0 3px 0 rgba(170,140,110,.3);}
+.advk-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,140,110,.3);}
+.advk-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.advk-mini{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.15;
+  letter-spacing:1px;color:#7a6046;background:#fffaf0cc;border-radius:12px;padding:8px;text-align:center;
+  white-space:pre;overflow-x:auto;}
+.advk-say{text-align:center;font-size:14px;font-weight:800;color:#7a6046;min-height:20px;line-height:1.5;}
+.advk-album{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;font-size:13px;font-weight:700;
+  color:#7a6046;}
+.advk-album b{color:#a4632a;}
+@media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
+@media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
 `;
 
 export interface ClearInfo {
@@ -747,6 +821,341 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 }
 
 // ---------------------------------------------------------------------------
+// 无尽古堡:俯视房间探索(1.2 新增)
+// ---------------------------------------------------------------------------
+
+function loadAlbum(): string[] {
+  try {
+    return parseAlbum(localStorage.getItem(ALBUM_KEY));
+  } catch {
+    return [];
+  }
+}
+
+function saveAlbum(album: readonly string[]): void {
+  try {
+    localStorage.setItem(ALBUM_KEY, serializeAlbum(album));
+  } catch {
+    // 存不进去也不影响这一局
+  }
+}
+
+/** 一格该画成什么样(纯展示,规则都在 explore.ts) */
+function cellGlyph(state: RoomState, x: number, y: number): { text: string; cls: string } {
+  const c = cellAt(state, x, y);
+  if (state.player.x === x && state.player.y === y) return { text: "🌸", cls: "advk-me" };
+  if (state.boxes.some((b) => b.x === x && b.y === y)) return { text: "📦", cls: "advk-hot" };
+  switch (c) {
+    case C_WALL:
+    case C_HIDDEN:
+      return { text: "", cls: "advk-wall" };
+    case C_EXIT:
+      return { text: "🚪", cls: "advk-hot" };
+    case C_KEY:
+      return { text: "🔑", cls: "advk-hot" };
+    case C_DOOR:
+      return { text: "🔒", cls: "advk-hot" };
+    case C_PLATE:
+      return { text: "🔲", cls: "advk-seen" };
+    case C_PGATE:
+      return isPlateDown(state) ? { text: "", cls: "advk-seen" } : { text: "⛓️", cls: "advk-hot" };
+    case C_SWITCH:
+      return { text: state.switchOn ? "💡" : "🔅", cls: "advk-hot" };
+    case C_CGATE:
+      return colorGateOpen(state.switchOn) ? { text: "", cls: "advk-seen" } : { text: "🟪", cls: "advk-hot" };
+    case C_SEESAW_L:
+      return { text: seesawWalkable("left", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+    case C_SEESAW_R:
+      return { text: seesawWalkable("right", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+    case C_PORTAL:
+      return { text: "🌀", cls: "advk-hot" };
+    case C_STICKER:
+      return { text: "🎟️", cls: "advk-hot" };
+    default:
+      return { text: "", cls: state.explored[y * state.w + x] ? "advk-seen" : "advk-dim" };
+  }
+}
+
+function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
+  const bag = new Disposer();
+  const wrap = document.createElement("div");
+  wrap.className = "ak-mode";
+  wrap.innerHTML = `<style>${CSS}</style>`;
+
+  const head = document.createElement("div");
+  head.className = "ak-mhead";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "ak-back";
+  back.textContent = "◀ 回选关";
+  const chip = document.createElement("span");
+  chip.className = "ak-chip";
+  head.append(back, chip);
+
+  const hud = document.createElement("div");
+  hud.className = "advk-hud";
+  const board = document.createElement("div");
+  board.className = "advk-room";
+  board.setAttribute("role", "img");
+  const say = document.createElement("div");
+  say.className = "advk-say";
+  const tools = document.createElement("div");
+  tools.className = "advk-tools";
+  const mini = document.createElement("div");
+  mini.className = "advk-mini";
+  mini.hidden = true;
+  const album = document.createElement("div");
+  album.className = "advk-album";
+  const pad = document.createElement("div");
+  pad.className = "advk-pad2";
+  wrap.append(head, hud, board, mini, say, tools, pad, album);
+  host.appendChild(wrap);
+
+  let rooms = 0;
+  let secrets = 0;
+  let best = save.getGameProgress(meta.id).endlessBest;
+  let stickers = loadAlbum();
+  let current: CastleRoom = buildCastleRoom(Math.floor(Date.now() % 100000) + 1, 1);
+  let state: RoomState = current.state;
+  let over = false;
+  let miniOpen = false;
+
+  function speakLine(text: string): void {
+    say.textContent = text;
+  }
+
+  function renderAlbum(): void {
+    const done = albumBonusStars(stickers);
+    const total = STICKER_SETS.reduce((n, s) => n + s.items.length, 0);
+    album.innerHTML = `🎟️ 贴纸图鉴 <b>${stickers.length}/${total}</b> · 集齐 <b>${done}</b> 章`;
+  }
+
+  function renderHud(): void {
+    const focus = PUZZLE_KINDS.find((p) => p.key === current.template.focus);
+    chip.textContent = `🏰 ${castleRoomTitle(current.room, current.template)} · 最好纪录 ${best} 间`;
+    hud.innerHTML =
+      `<span>🔑 钥匙 ${state.keys}</span>` +
+      `<span>🕯️ 秘密 ${secrets + state.secrets}</span>` +
+      `<span>🗺️ 已探索 ${Math.round(exploredRatio(state) * 100)}%</span>` +
+      `<span>${focus ? `${focus.emoji} ${focus.tip}` : "🚪 找到出口就进下一间"}</span>`;
+  }
+
+  function renderBoard(): void {
+    board.style.gridTemplateColumns = `repeat(${state.w},1fr)`;
+    board.setAttribute("aria-label", `${current.template.name}:朵朵在房间里找出口,已探索 ${Math.round(exploredRatio(state) * 100)}%`);
+    board.innerHTML = "";
+    for (let y = 0; y < state.h; y++) {
+      for (let x = 0; x < state.w; x++) {
+        const g = cellGlyph(state, x, y);
+        const cell = document.createElement("div");
+        cell.className = `advk-cell ${g.cls}`;
+        cell.textContent = g.text;
+        board.appendChild(cell);
+      }
+    }
+    if (miniOpen) mini.textContent = miniMapRows(state).join("\n");
+    renderHud();
+  }
+
+  function nextRoom(): void {
+    rooms++;
+    best = save.recordEndlessBest(meta.id, rooms);
+    api.addStars(1);
+    current = buildCastleRoom(Math.floor(Math.random() * 100000) + 1, rooms + 1);
+    state = current.state;
+    speakLine(`第 ${rooms} 间走通啦!下一间是${current.template.emoji} ${current.template.name}。`);
+    renderBoard();
+    renderAlbum();
+  }
+
+  function collectSticker(): void {
+    const nxt = nextSticker(stickers);
+    if (!nxt) return;
+    const id = stickerId(nxt.chapter, nxt.item);
+    const beforeChapters = albumBonusStars(stickers);
+    stickers = [...stickers, id];
+    saveAlbum(stickers);
+    const set = STICKER_SETS[nxt.chapter];
+    speakLine(`收到贴纸「${set.items[nxt.item]}」(${set.emoji} ${set.chapter})!`);
+    if (albumBonusStars(stickers) > beforeChapters) {
+      api.addStars(1);
+      speakLine(`「${set.emoji} ${set.chapter}」一章的贴纸集齐啦,额外送你一颗小星星!`);
+    }
+    renderAlbum();
+  }
+
+  function move(dir: Dir): void {
+    if (over || state.cleared) return;
+    const res = stepMove(state, dir);
+    state = res.state;
+    let cleared = false;
+    for (const ev of res.events) {
+      switch (ev.kind) {
+        case "walk":
+        case "push":
+          break;
+        case "bump":
+          break;
+        case "key":
+          api.play("coin");
+          speakLine("捡到一把钥匙!");
+          break;
+        case "unlock":
+          api.play("tap");
+          speakLine("门开了,进去看看～");
+          break;
+        case "locked":
+          api.play("oops");
+          speakLine(ev.text);
+          break;
+        case "plate":
+          api.play("tap");
+          speakLine("压板被木箱压住了,石门让开一条路!");
+          break;
+        case "switch":
+          api.play("tap");
+          speakLine(ev.on ? "开关亮了,同色的彩门开了!" : "开关灭了,彩门又合上了。");
+          break;
+        case "secret":
+          api.play("meow");
+          speakLine("这面墙是假的!里面藏着一间秘密房 +1");
+          break;
+        case "portal":
+          api.play("pop");
+          speakLine("咻——被漩涡送到对面啦!");
+          break;
+        case "sticker":
+          api.play("coin");
+          collectSticker();
+          break;
+        case "clear":
+          cleared = true;
+          break;
+      }
+    }
+    if (cleared) {
+      secrets += state.secrets;
+      api.play("win");
+      nextRoom();
+      return;
+    }
+    renderBoard();
+    if (roomStuck(state)) {
+      speakLine("这间房好像绕不出去了,按「🔄 复位本间」重新摆一次吧,一颗星都不扣。");
+    }
+  }
+
+  function doReset(): void {
+    api.play("tap");
+    secrets += state.secrets;
+    state = resetRoom(current.template);
+    speakLine("本间已复位,箱子回到原位,分数一点没少。");
+    renderBoard();
+  }
+
+  back.addEventListener("click", () => {
+    api.play("tap");
+    onBack();
+  });
+
+  const KEY_DIRS: Record<string, Dir> = {
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "right",
+    w: "up",
+    s: "down",
+    a: "left",
+    d: "right",
+    W: "up",
+    S: "down",
+    A: "left",
+    D: "right",
+  };
+
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onBack();
+      return;
+    }
+    const dir = KEY_DIRS[e.key];
+    if (!dir) return;
+    e.preventDefault();
+    move(dir);
+  };
+  window.addEventListener("keydown", onKey);
+  bag.add(() => window.removeEventListener("keydown", onKey));
+
+  const padSpec: Array<{ label: string; dir?: Dir }> = [
+    { label: "" },
+    { label: "⬆️", dir: "up" },
+    { label: "" },
+    { label: "⬅️", dir: "left" },
+    { label: "" },
+    { label: "➡️", dir: "right" },
+    { label: "" },
+    { label: "⬇️", dir: "down" },
+    { label: "" },
+  ];
+  for (const spec of padSpec) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    if (!spec.dir) {
+      btn.className = "advk-slot";
+      btn.disabled = true;
+      btn.textContent = "·";
+    } else {
+      btn.textContent = spec.label;
+      btn.setAttribute("aria-label", `向${spec.dir === "up" ? "上" : spec.dir === "down" ? "下" : spec.dir === "left" ? "左" : "右"}走一步`);
+      btn.addEventListener("click", () => move(spec.dir as Dir));
+    }
+    pad.appendChild(btn);
+  }
+
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button";
+  resetBtn.className = "advk-tool";
+  resetBtn.textContent = "🔄 复位本间";
+  resetBtn.title = "箱子推死角了就按这里,不扣星";
+  resetBtn.addEventListener("click", doReset);
+  const miniBtn = document.createElement("button");
+  miniBtn.type = "button";
+  miniBtn.className = "advk-tool";
+  miniBtn.textContent = "🗺️ 小地图";
+  miniBtn.setAttribute("aria-expanded", "false");
+  miniBtn.addEventListener("click", () => {
+    api.play("tap");
+    miniOpen = !miniOpen;
+    mini.hidden = !miniOpen;
+    miniBtn.setAttribute("aria-expanded", miniOpen ? "true" : "false");
+    renderBoard();
+  });
+  const quitBtn = document.createElement("button");
+  quitBtn.type = "button";
+  quitBtn.className = "advk-tool";
+  quitBtn.textContent = "🏁 结束这趟";
+  quitBtn.addEventListener("click", () => {
+    api.play("tap");
+    over = true;
+    best = save.recordEndlessBest(meta.id, rooms);
+    speakLine(castleLine(rooms, best));
+  });
+  tools.append(resetBtn, miniBtn, quitBtn);
+
+  speakLine("方向键 / WASD 走一步,手机点下面的方向盘。找到 🚪 就进下一间。");
+  renderBoard();
+  renderAlbum();
+
+  return {
+    destroy() {
+      bag.dispose();
+      wrap.remove();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 计时速通
 // ---------------------------------------------------------------------------
 
@@ -904,7 +1313,11 @@ export function mount(api: GameApi): { destroy: () => void } {
   timeBtn.type = "button";
   timeBtn.className = "ak-open ak-open-time";
   timeBtn.textContent = "⏱️ 计时速通";
-  bar.append(endlessBtn, timeBtn);
+  const castleBtn = document.createElement("button");
+  castleBtn.type = "button";
+  castleBtn.className = "ak-open";
+  castleBtn.textContent = "🏰 无尽古堡 · 推箱找钥匙";
+  bar.append(endlessBtn, castleBtn, timeBtn);
 
   let mode: { destroy: () => void } | null = null;
 
@@ -932,6 +1345,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   endlessBtn.addEventListener("click", () => openMode(mountEndless));
+  castleBtn.addEventListener("click", () => openMode(mountCastle));
   timeBtn.addEventListener("click", () => openMode(mountSpeedrun));
   refreshBar();
 
