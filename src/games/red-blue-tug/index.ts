@@ -434,12 +434,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       if (done) return;
       done = true;
       const got = secs <= 16 ? 3 : secs <= 28 ? 2 : 1;
-      setTimeout(() => ctx.win(got as 1 | 2 | 3, `嘿咻！只用 ${Math.round(secs)} 秒，朵朵队赢啦！星星队也好棒！`), 400);
+      setTimeout(() => ctx.win(got as 1 | 2 | 3, `只用 ${Math.round(secs)} 秒就把小旗拉过线，朵朵队的节奏踩得很准！`), 400);
     },
     onLose: () => {
       if (done) return;
       done = true;
-      setTimeout(() => ctx.lose("这局星星队赢啦，朵朵队也好棒！看准时机再拉一次！"), 400);
+      setTimeout(() => ctx.lose("这局星星队先过线～跟着号子的拍子发力，体力见底就松半秒，下一局就能拉回来！"), 400);
     }
   });
   stage.appendChild(run.root);
