@@ -1,196 +1,215 @@
-/**
- * 果果合成 · 对战假人与无头推演。
- *
- * 假人只决定「把果子放在哪一列」，其余全部交给真正的物理与合成逻辑，
- * 所以档位强弱的差别是真实打出来的，不是写死的分数。
- */
-import { CHAIN, chainMerges, nextFruit, totalScore, type MergeEvent } from "./merge";
+// 果果合成 · 四档假人 + 无头对局。
+//
+// 假人只做一件事:决定这一颗往哪儿投。四档从「随手一丢」一路到「先在脑子里
+// 把这一颗落完再决定」,固定 seed 下地狱档的分数会明显高过菜鸟档(写成断言)。
+// 同一套决策函数被对战人机、双人同屏的电脑座位和无头冒烟测试共用。
+import { goalMet, type StackLevel } from "./levels";
 import {
-  DROP_GRACE_MS,
-  addCircle,
+  biggestLevel,
+  chainMerges,
+  clampDropX,
+  dropFruit,
+  nextFruit,
+  radiusOf,
+} from "./merge";
+import {
   allSettled,
-  makeWorld,
+  clamp,
+  createWorld,
+  heightMap,
+  inGrace,
   overLine,
   stackTop,
-  stepPhysics,
-  type Box,
+  substep,
   type World,
 } from "./physics";
 
-export type Tier = "rookie" | "normal" | "pro" | "hell";
+export type AiLevel = 1 | 2 | 3 | 4;
 
-export const TIERS: readonly Tier[] = ["rookie", "normal", "pro", "hell"];
-
-export const TIER_LABELS: Record<Tier, string> = {
-  rookie: "菜鸟",
-  normal: "普通",
-  pro: "高手",
-  hell: "地狱",
+export const AI_LABEL: Record<AiLevel, string> = {
+  1: "菜鸟",
+  2: "普通",
+  3: "高手",
+  4: "地狱",
 };
 
-function rand01(seed: number, i: number): number {
-  let h = (seed ^ Math.imul(i + 7, 0x27d4eb2d)) >>> 0;
-  h = Math.imul(h ^ (h >>> 15), 0x2545f491) >>> 0;
-  return ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
+/** 一次落子最多算多少个子步(约 3.3 秒):再堆不稳也不能把一帧算死 */
+const SETTLE_STEPS = 400;
+
+/** 地狱档试探的落点个数 */
+const CANDIDATES = 9;
+
+function hash(a: number, b: number): number {
+  let h = (Math.round(a) * 374761393 + Math.round(b) * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-/** 把容器横向切成若干个候选落点 */
-export function dropSlots(box: Box, r: number, count = 9): number[] {
-  const left = box.left + r + 1;
-  const right = box.right - r - 1;
-  if (right <= left) return [(box.left + box.right) / 2];
-  const out: number[] = [];
-  for (let i = 0; i < count; i++) {
-    out.push(left + ((right - left) * i) / (count - 1));
+/** 复制一份世界用来做推演:动画一律关掉,合成瞬时完成 */
+export function cloneWorld(w: World): World {
+  return {
+    ...w,
+    box: { ...w.box },
+    tuning: { ...w.tuning },
+    fruits: w.fruits.map((f) => ({ ...f })),
+    merges: [],
+    events: [],
+    pullMs: 0,
+    popMs: 0,
+  };
+}
+
+/** 让世界自己跑到全部停稳(或者跑够 SETTLE_STEPS),中间随时结算合成 */
+export function settleWorld(w: World, maxSteps = SETTLE_STEPS): number {
+  let steps = 0;
+  while (steps < maxSteps) {
+    substep(w);
+    chainMerges(w);
+    steps++;
+    if (allSettled(w) && !w.fruits.some(inGrace)) break;
   }
-  return out;
+  return steps;
 }
 
-/** 容器的高度图：每个候选落点下方最高的果子顶端 */
-export function heightMap(world: World, slots: readonly number[], side = 0): number[] {
-  return slots.map((x) => {
-    let top = world.box.floor;
-    for (const c of world.circles) {
-      if (c.side !== side) continue;
-      if (Math.abs(c.x - x) > c.r + 6) continue;
-      top = Math.min(top, c.y - c.r);
-    }
-    return top;
-  });
+/** 高度图里最低洼的那一段的中心 x */
+export function lowestColumnX(w: World, cols = 9): number {
+  const map = heightMap(w, cols);
+  let best = 0;
+  for (let i = 1; i < map.length; i++) {
+    if (map[i] > map[best]) best = i;
+  }
+  const step = w.box.w / map.length;
+  return step * (best + 0.5);
+}
+
+/** 场上和这一级一样、而且头顶没被压住的果子里最靠上的那颗 */
+export function bestMatchX(w: World, level: number): number | null {
+  let pick: { x: number; y: number } | null = null;
+  for (const f of w.fruits) {
+    if (f.level !== level) continue;
+    const covered = w.fruits.some(
+      (o) => o !== f && o.y < f.y - f.r * 0.4 && Math.abs(o.x - f.x) < (o.r + f.r) * 0.85
+    );
+    if (covered) continue;
+    if (!pick || f.y < pick.y) pick = { x: f.x, y: f.y };
+  }
+  return pick ? pick.x : null;
+}
+
+/** 把一个候选落点推演一遍,给它打分:分数越高越值得投 */
+export function scoreCandidate(w: World, level: number, x: number): number {
+  const sim = cloneWorld(w);
+  const beforeScore = sim.score;
+  const beforeChain = sim.bestChain;
+  const beforeCount = sim.fruits.length;
+  dropFruit(sim, level, x);
+  settleWorld(sim, 260);
+  if (overLine(sim)) return -1e6;
+  const gained = sim.score - beforeScore;
+  const chained = sim.bestChain - beforeChain;
+  const merged = beforeCount + 1 - sim.fruits.length;
+  const height = sim.box.h - stackTop(sim);
+  const room = stackTop(sim) - sim.lineY;
+  return gained * 4 + chained * 30 + merged * 18 - height * 0.35 + Math.min(0, room) * 2.5;
 }
 
 /**
- * 挑一个落点。四档行为：
- *  菜鸟——随便挑；
- *  普通——找同级果子对准；
- *  高手——同级优先，否则挑最低洼处；
- *  地狱——同级优先，再看「放下去之后周围有没有可能连锁」，同时躲开最高的一列。
+ * 这一颗投在哪儿。
+ * 1 菜鸟:随手一丢;2 普通:对准同级果子;3 高手:找低洼处并顺手对同级;
+ * 4 地狱:每个候选落点都先在脑子里落一遍,挑净收益最大的那个。
  */
-export function pickDrop(world: World, tier: Tier, level: number, seed: number, turn: number, side = 0): number {
-  const r = CHAIN[level].r;
-  const slots = dropSlots(world.box, r);
-  const roll = rand01(seed, turn);
-  if (tier === "rookie") return slots[Math.floor(roll * slots.length) % slots.length];
+export function chooseDropX(w: World, level: number, skill: AiLevel, tick = 0): number {
+  const r = radiusOf(level);
+  const lo = r;
+  const hi = Math.max(r, w.box.w - r);
 
-  const heights = heightMap(world, slots, side);
-  const same = world.circles.filter((c) => c.side === side && c.level === level);
-  if (same.length > 0) {
-    // 对准同级果子里最靠下的那颗
-    let best = same[0];
-    for (const c of same) if (c.y > best.y) best = c;
-    let bestSlot = slots[0];
-    let bestD = Infinity;
-    for (const s of slots) {
-      const d = Math.abs(s - best.x);
-      if (d < bestD) {
-        bestD = d;
-        bestSlot = s;
-      }
-    }
-    if (tier !== "normal") {
-      // 高手 / 地狱：同级但堆得太高就换低洼处
-      const idx = slots.indexOf(bestSlot);
-      const lowest = Math.max(...heights);
-      if (idx >= 0 && heights[idx] < lowest - 90) {
-        return slots[heights.indexOf(lowest)];
-      }
-    }
-    return bestSlot;
+  if (skill <= 1) {
+    return clampDropX(w.box.w, level, lo + hash(tick, w.seed) * (hi - lo));
   }
 
-  if (tier === "normal") return slots[Math.floor(roll * slots.length) % slots.length];
-
-  // 高手：挑最低洼处
-  let lowIdx = 0;
-  for (let i = 1; i < heights.length; i++) if (heights[i] > heights[lowIdx]) lowIdx = i;
-  if (tier === "pro") return slots[lowIdx];
-
-  // 地狱：低洼优先，同时避开会让整体高度立刻超过一半的位置
-  const limit = world.box.line + (world.box.floor - world.box.line) * 0.35;
-  for (let i = 0; i < heights.length; i++) {
-    const idx = (lowIdx + i) % heights.length;
-    if (heights[idx] > limit) return slots[idx];
+  if (skill === 2) {
+    const match = bestMatchX(w, level);
+    const x = match ?? lo + hash(tick + 7, w.seed) * (hi - lo);
+    return clampDropX(w.box.w, level, x);
   }
-  return slots[lowIdx];
+
+  if (skill === 3) {
+    const match = bestMatchX(w, level);
+    const low = lowestColumnX(w, 9);
+    // 同级果子就在低洼附近才去对准它,否则先把坑填平,别把堆越垒越高
+    const x = match !== null && Math.abs(match - low) < w.box.w * 0.34 ? match : low;
+    return clampDropX(w.box.w, level, x);
+  }
+
+  let bestX = lowestColumnX(w, 9);
+  let bestScore = -Infinity;
+  for (let i = 0; i < CANDIDATES; i++) {
+    const x = lo + ((hi - lo) * i) / Math.max(1, CANDIDATES - 1);
+    const s = scoreCandidate(w, level, x);
+    if (s > bestScore) {
+      bestScore = s;
+      bestX = x;
+    }
+  }
+  return clampDropX(w.box.w, level, bestX);
 }
 
-export interface SimResult {
-  score: number;
-  drops: number;
-  highest: number;
-  lost: boolean;
-  /** 一次连锁最长几段 */
-  bestChain: number;
+// ---------------------------------------------------------------------------
+// 无头对局(冒烟测试与假人强弱对比共用)
+// ---------------------------------------------------------------------------
+
+export interface HeadlessOptions {
+  maxDrops?: number;
+  /** 覆盖关卡自带的 seed */
+  seed?: number;
+  /** 每颗最多算多少子步 */
+  settleSteps?: number;
+}
+
+export interface HeadlessResult {
   world: World;
-}
-
-export interface SimOptions {
-  box: Box;
-  seed: number;
-  maxSpawn: number;
+  score: number;
+  bestLevel: number;
+  bestChain: number;
   drops: number;
-  restitution?: number;
-  tier?: Tier;
-  /** 由外部指定每一颗的落点（回放用）；给了就不走 AI */
-  script?: number[];
-  /** 每颗果子落下后最多推进多少毫秒等它静止 */
-  settleMs?: number;
+  /** 有静止的果子越线了 */
+  over: boolean;
+  /** 达成关卡目标 */
+  won: boolean;
 }
 
-/**
- * 无头推演一整局：一颗一颗投放 → 等静止 → 结算连锁 → 检查越线。
- * 测试用它断言「关卡目标可达成」与「档位强弱」。
- */
-export function simulate(opts: SimOptions): SimResult {
-  const world = makeWorld(opts.box, { restitution: opts.restitution });
-  const tier = opts.tier ?? "pro";
-  const settleMs = opts.settleMs ?? 4000;
-  let score = 0;
-  let highest = -1;
-  let bestChain = 0;
-  let dropped = 0;
+/** 让某一档假人把一关从头打到尾(纯逻辑,不碰 DOM) */
+export function runHeadless(lv: StackLevel, skill: AiLevel, opts: HeadlessOptions = {}): HeadlessResult {
+  const seed = opts.seed ?? lv.seed;
+  const maxDrops = Math.min(opts.maxDrops ?? lv.drops, lv.drops);
+  const world = createWorld({
+    box: lv.box,
+    lineY: lv.lineY,
+    seed,
+    tuning: lv.tuning,
+    pullMs: 0,
+    popMs: 0,
+  });
 
-  for (let i = 0; i < opts.drops; i++) {
-    const level = nextFruit(opts.seed, i, opts.maxSpawn);
-    const x = opts.script ? opts.script[i % opts.script.length] : pickDrop(world, tier, level, opts.seed, i);
-    const c = addCircle(world, level, x, opts.box.line - CHAIN[level].r - 8, CHAIN[level].r);
-    c.vy = 60;
-    dropped++;
-
-    let t = 0;
-    let rounds: MergeEvent[][] = [];
-    while (t < settleMs) {
-      stepPhysics(world, 16);
-      t += 16;
-      const r = chainMerges(world);
-      if (r.length > 0) {
-        rounds = rounds.concat(r);
-        score += totalScore(r);
-      }
-      if (allSettled(world)) break;
-    }
-    bestChain = Math.max(bestChain, rounds.length);
-    for (const c2 of world.circles) highest = Math.max(highest, c2.level);
-    // 静止之后再看越线
-    for (const c2 of world.circles) c2.graceMs = Math.min(c2.graceMs, 0);
-    if (overLine(world).length > 0) {
-      return { score, drops: dropped, highest, lost: true, bestChain, world };
-    }
+  let over = false;
+  let won = false;
+  let i = 0;
+  for (; i < maxDrops && !over && !won; i++) {
+    const level = clamp(nextFruit(seed, i, lv.maxDrop, lv.minDrop), 0, lv.maxDrop);
+    const x = chooseDropX(world, level, skill, i);
+    dropFruit(world, level, x);
+    settleWorld(world, opts.settleSteps ?? SETTLE_STEPS);
+    if (goalMet(lv.goal, world)) won = true;
+    else if (overLine(world)) over = true;
   }
-  return { score, drops: dropped, highest, lost: false, bestChain, world };
-}
 
-/** 给前端用的落点提示（教学关的辅助线） */
-export function suggestDrop(world: World, level: number): number {
-  return pickDrop(world, "pro", level, 1, 0);
+  return {
+    world,
+    score: world.score,
+    bestLevel: Math.max(world.bestLevel, biggestLevel(world)),
+    bestChain: world.bestChain,
+    drops: i,
+    over,
+    won,
+  };
 }
-
-/** 容器的堆叠健康度：0 表示空，1 表示已经顶到警戒线 */
-export function fillRatio(world: World, side = 0): number {
-  const top = stackTop(world, side);
-  const span = world.box.floor - world.box.line;
-  if (span <= 0) return 0;
-  return Math.max(0, Math.min(1, (world.box.floor - top) / span));
-}
-
-export { DROP_GRACE_MS };
