@@ -1,10 +1,13 @@
 /**
  * 学习类游戏共用的「答题关」运行器。
  * 每关若干道选择题：答错温柔鼓励、原题继续，答对夸奖前进；
- * 全部答完按答错次数评星（0 错=3 星，≤2 错=2 星，其余 1 星）；
+ * 全部答完按答错次数评星（0 错=3 星，错得少=2 星，其余 1 星，长题组的阈值按题量放宽）；
  * 答错太多次则温柔失败，可重试本关（绝不批评孩子）。
+ *
+ * 1.1 起题量上限跟随 188 关框架：一关最多 188 道题，容错次数、连对奖励节奏、
+ * 评星阈值都按题量自动缩放；被家长授权跳过的关重玩时会显示一条温柔的「跳过」提示。
  */
-import type { PlayCtx, PlayHandle } from "./level99";
+import { TOTAL_LEVELS, type PlayCtx, type PlayHandle } from "./level99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "./speech";
 
 export interface QuizQuestion {
@@ -30,15 +33,24 @@ export interface QuizOptions {
   ctx: PlayCtx;
   questions: QuizQuestion[];
   theme: QuizTheme;
-  /** 允许答错的总次数，超过则温柔失败（默认 3） */
+  /** 允许答错的总次数，超过则温柔失败（不传则按题量自动给：短题组仍是 3） */
   maxWrong?: number;
   /** 选项按钮更大（适合单字/数字） */
   bigChoices?: boolean;
+  /** 本关此前被家长授权跳过过（不传则读 ctx.skipped） */
+  skipped?: boolean;
 }
 
-const PRAISES = ["答对啦！真棒！", "好厉害呀！", "又快又准！", "太聪明啦！", "就是它！"];
-const CHEERS = ["没关系，再想一想～", "差一点点，你可以的！", "别着急，慢慢来～", "再看一眼，答案就在里面！"];
+/** 一关最多能塞的题量，跟随 188 关框架 */
+export const MAX_QUESTIONS = TOTAL_LEVELS;
+
+export const PRAISES = ["答对啦！真棒！", "好厉害呀！", "又快又准！", "太聪明啦！", "就是它！"];
+export const CHEERS = ["没关系，再想一想～", "差一点点，你可以的！", "别着急，慢慢来～", "再看一眼，答案就在里面！"];
 const HINT_LINE = "悄悄提示：一闪一闪的那个就是答案！";
+/** 答错到上限时的收尾话：只安抚，不评价孩子 */
+export const FAIL_LINE = "这一关的题目有点调皮，我们休息一下再来一次！";
+/** 被跳过的关重玩时的提示：不提「跳过」当缺点，只当一次可以随时补回来的机会 */
+export const SKIP_NOTE = "🏳️ 这一关之前跳过了，现在回来把它拿下吧！";
 
 /**
  * 是否给「悄悄提示」（让正确选项一闪一闪）：
@@ -48,6 +60,49 @@ const HINT_LINE = "悄悄提示：一闪一闪的那个就是答案！";
  */
 export function shouldHint(wrongHere: number, wrongTotal: number, maxWrong: number): boolean {
   return wrongHere >= 2 || wrongTotal >= maxWrong;
+}
+
+/** 题量合法化：至少 1 道，最多 188 道（超出的直接截掉，绝不让长题组卡死一关） */
+export function clampQuestions<T>(questions: readonly T[]): T[] {
+  return questions.slice(0, MAX_QUESTIONS);
+}
+
+/**
+ * 没显式给 maxWrong 时的容错次数：短题组维持 1.0 的 3 次，
+ * 题量越大越宽松（188 题给 24 次），免得长关卡因为手滑一路重来。
+ */
+export function defaultMaxWrong(total: number): number {
+  return Math.max(3, Math.ceil(Math.max(0, total) / 8));
+}
+
+/**
+ * 评星：全对 3 星；错得少 2 星；其余 1 星。
+ * 2 星阈值随题量放宽（题量的一成，至少 2 次），保证 188 题的关卡不会因为错 3 次就掉到 1 星。
+ */
+export function quizStars(wrong: number, total: number): 1 | 2 | 3 {
+  if (wrong <= 0) return 3;
+  const twoAt = Math.max(2, Math.round(Math.max(0, total) * 0.1));
+  return wrong <= twoAt ? 2 : 1;
+}
+
+/** 连对多少题奖励一颗平台小星星：长题组把节奏放慢，避免一关刷出几十颗 */
+export function bonusStreakStep(total: number): number {
+  return total <= 24 ? 4 : 8;
+}
+
+/** 一关最多能拿到的连对奖励星数（长题组也不会通货膨胀） */
+export const MAX_BONUS_PER_LEVEL = 8;
+
+/** 进度徽章文案：长题组额外报一句还剩多少，孩子心里有数 */
+export function quizProgressText(index: number, total: number): string {
+  const head = `第 ${index + 1} / ${total} 题`;
+  return total >= 20 ? `${head} · 还剩 ${Math.max(0, total - index - 1)}` : head;
+}
+
+/** 全部答完时的收尾夸奖（不批评、只肯定完成度） */
+export function quizFinishLine(wrong: number, total: number): string {
+  if (wrong === 0) return "全部一次答对，太了不起啦！";
+  return `${total} 道题全部完成！`;
 }
 
 const QUIZ_CSS = `
@@ -69,14 +124,19 @@ const QUIZ_CSS = `
 .qz-choice.qz-hint { animation: qzTwinkle 1s ease-in-out infinite; box-shadow: 0 0 0 4px #ffd43b, 0 4px 0 rgba(120,120,160,.3); }
 @keyframes qzTwinkle { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 .qz-msg { text-align: center; min-height: 24px; font-weight: 800; font-size: 15px; }
+.qz-skip { text-align: center; font-weight: 800; font-size: 14px; background: #ffffffcc; border-radius: 14px; padding: 6px 10px; }
+.qz-choice:focus-visible, .qz-say:focus-visible { outline: 3px solid #3c2a6b; outline-offset: 3px; }
 .qz-say-row { display: flex; justify-content: center; }
 .qz-say { border: none; border-radius: 999px; background: #ffffffe6; cursor: pointer; font-family: inherit; font-weight: 900; font-size: 16px; padding: 10px 24px; min-height: 46px; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
 .qz-say:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,120,160,.3); }
 `;
 
 export function runQuiz(opts: QuizOptions): PlayHandle {
-  const { stage, ctx, questions, theme } = opts;
-  const maxWrong = opts.maxWrong ?? 3;
+  const { stage, ctx, theme } = opts;
+  const questions = clampQuestions(opts.questions);
+  const maxWrong = opts.maxWrong ?? defaultMaxWrong(questions.length);
+  const streakStep = bonusStreakStep(questions.length);
+  const wasSkipped = opts.skipped ?? ctx.skipped ?? false;
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
   let destroyed = false;
   let ended = false;
@@ -84,7 +144,22 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
   let wrong = 0;
   let wrongHere = 0;
   let streak = 0;
+  let bonusGiven = 0;
   let locked = false;
+
+  if (questions.length === 0) {
+    // 题目没生成出来也不许白屏：给一句温柔的话，孩子可以回地图换一关
+    const empty = document.createElement("div");
+    empty.className = "qz-wrap";
+    empty.style.background = theme.bg;
+    empty.innerHTML = `<style>${QUIZ_CSS}</style><div class="qz-msg" style="color:${theme.accent}">这一关的题目还在路上，先回地图挑一关玩吧！</div>`;
+    stage.appendChild(empty);
+    return {
+      destroy() {
+        empty.remove();
+      }
+    };
+  }
 
   const wrap = document.createElement("div");
   wrap.className = "qz-wrap";
@@ -92,10 +167,11 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
   wrap.innerHTML = `
     <style>${QUIZ_CSS}</style>
     <div class="qz-top">
-      <span class="qz-badge qz-progress" style="color:${theme.accent}">第 1 / ${questions.length} 题</span>
+      <span class="qz-badge qz-progress" style="color:${theme.accent}">${quizProgressText(0, questions.length)}</span>
       <span class="qz-badge qz-streak" style="color:#b84708">🔥 连对 0</span>
     </div>
     <div class="qz-bar"><div class="qz-fill" style="background:${theme.accent}"></div></div>
+    ${wasSkipped ? `<div class="qz-skip" style="color:${theme.accent}">${SKIP_NOTE}</div>` : ""}
     <div class="qz-prompt"></div>
     <div class="qz-ask" style="color:${theme.accent}"></div>
     <div class="qz-say-row"><button type="button" class="qz-say" style="color:${theme.accent}" hidden>🔈 再听一遍</button></div>
@@ -137,7 +213,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
 
   function show(): void {
     const q = questions[index];
-    progressEl.textContent = `第 ${index + 1} / ${questions.length} 题`;
+    progressEl.textContent = quizProgressText(index, questions.length);
     streakEl.textContent = `🔥 连对 ${streak}`;
     fillEl.style.width = `${(index / questions.length) * 100}%`;
     promptEl.innerHTML = q.promptHTML;
@@ -166,7 +242,8 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
       ctx.sfx("coin");
       btn.classList.add("qz-right");
       let praise = q.praise ?? PRAISES[Math.floor(Math.random() * PRAISES.length)];
-      if (streak > 0 && streak % 4 === 0) {
+      if (streak > 0 && streak % streakStep === 0 && bonusGiven < MAX_BONUS_PER_LEVEL) {
+        bonusGiven++;
         ctx.bonusStars(1);
         praise = `🔥 连对 ${streak} 题，奖励一颗小星星！`;
       }
@@ -178,10 +255,8 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
         if (index >= questions.length) {
           ended = true;
           fillEl.style.width = "100%";
-          const got = wrong === 0 ? 3 : wrong <= 2 ? 2 : 1;
-          later(() => ctx.win(got as 1 | 2 | 3, wrong === 0
-            ? "全部一次答对，太了不起啦！"
-            : `${questions.length} 道题全部完成！`), 350);
+          const got = quizStars(wrong, questions.length);
+          later(() => ctx.win(got, quizFinishLine(wrong, questions.length)), 350);
         } else {
           show();
         }
@@ -196,7 +271,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
       streakEl.textContent = "🔥 连对 0";
       if (wrong > maxWrong) {
         ended = true;
-        later(() => ctx.lose("这一关的题目有点调皮，我们休息一下再来一次！"), 500);
+        later(() => ctx.lose(FAIL_LINE), 500);
         return;
       }
       if (shouldHint(wrongHere, wrong, maxWrong)) {
