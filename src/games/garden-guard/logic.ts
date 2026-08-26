@@ -1,5 +1,7 @@
 // 花园守卫 —— 纯逻辑函数,不依赖 DOM,方便单独测试。
-// 99 关九大主题章节塔防战役:每章 11 关(8 关手写布局 + 3 关遭遇战),章末专属 BOSS。
+// 1.0:99 关九大主题章节(每章 11 关,8 手写 + 3 遭遇战),章末专属 BOSS。
+// 1.1:追加四大新章(夜露温室/齿轮花房/云端苗圃/星辉花冠)补足 188 关;
+//      新增冰晶塔/毒雾塔、空中单位、可拆路障、天气影响射程。前 99 关一字不动。
 
 export type Vec = { x: number; y: number };
 
@@ -88,18 +90,21 @@ export function canPlace(
   return !blocked.has(key) && !occupied.has(key);
 }
 
-/** 挑选射程内"走得最远"且没有隐身的怪物下标;没有则返回 -1。 */
+/** 挑选射程内"走得最远"且没有隐身的怪物下标;没有则返回 -1。
+ *  canHitAir=false 时跳过天上的飞怪(1.1 空中单位)。 */
 export function pickTarget(
-  monsters: ReadonlyArray<{ x: number; y: number; dist: number; hp: number; hidden?: boolean }>,
+  monsters: ReadonlyArray<{ x: number; y: number; dist: number; hp: number; hidden?: boolean; flying?: boolean }>,
   tx: number,
   ty: number,
   range: number,
+  canHitAir = true,
 ): number {
   let best = -1;
   let bestDist = -1;
   for (let i = 0; i < monsters.length; i++) {
     const m = monsters[i];
     if (m.hp <= 0 || m.hidden) continue;
+    if (!canHitAir && m.flying) continue;
     if (Math.hypot(m.x - tx, m.y - ty) <= range && m.dist > bestDist) {
       best = i;
       bestDist = m.dist;
@@ -110,7 +115,7 @@ export function pickTarget(
 
 /* ---------------- 塔 ---------------- */
 
-export type TowerKind = "bubble" | "needle" | "dew" | "sunny" | "boom";
+export type TowerKind = "bubble" | "needle" | "dew" | "sunny" | "boom" | "frost" | "mist";
 
 export interface TowerSpec {
   name: string;
@@ -125,19 +130,33 @@ export interface TowerSpec {
   splash?: number;
   /** 产花瓣间隔(秒),仅阳光花有 */
   produce?: number;
+  /** 子弹能打到天上的飞怪(1.1 新增:空中单位) */
+  air?: boolean;
+  /** 命中后给目标挂减速(倍率见 frostSlowFactor),仅冰晶塔有 */
+  hitSlow?: boolean;
+  /** 周期毒雾脉冲:无视护甲、连隐身怪也罩得住,仅毒雾塔有 */
+  poison?: boolean;
   desc: string;
 }
 
 export const TOWER_INFO: Record<TowerKind, TowerSpec> = {
-  bubble: { name: "泡泡塔", cost: 3, range: 2.4, cd: 0.8, dmg: 2, desc: "慢但一下打 2 点" },
-  needle: { name: "针针塔", cost: 5, range: 2.1, cd: 0.3, dmg: 1, desc: "咻咻咻连发" },
+  bubble: { name: "泡泡塔", cost: 3, range: 2.4, cd: 0.8, dmg: 2, air: true, desc: "慢但一下打 2 点" },
+  needle: { name: "针针塔", cost: 5, range: 2.1, cd: 0.3, dmg: 1, air: true, desc: "咻咻咻连发" },
   dew: { name: "露珠塔", cost: 4, range: 1.9, cd: 0, dmg: 0, slow: 0.55, desc: "让怪走得慢慢的" },
   sunny: { name: "阳光花", cost: 4, range: 0, cd: 0, dmg: 0, produce: 5, desc: "慢慢攒花瓣" },
   boom: { name: "花火塔", cost: 7, range: 2.2, cd: 1.6, dmg: 3, splash: 1.05, desc: "轰!一片都痛" },
+  // 1.1 新塔:夜露温室解锁冰晶塔(点名减速),齿轮花房解锁毒雾塔(范围毒雾)。
+  frost: { name: "冰晶塔", cost: 5, range: 2.3, cd: 0.9, dmg: 1, air: true, hitSlow: true, desc: "打中就冻得慢慢" },
+  mist: { name: "毒雾塔", cost: 6, range: 1.7, cd: 1.2, dmg: 1, poison: true, desc: "毒雾无视硬壳" },
 };
 
-export const TOWER_KINDS: TowerKind[] = ["bubble", "needle", "dew", "sunny", "boom"];
+export const TOWER_KINDS: TowerKind[] = ["bubble", "needle", "dew", "sunny", "boom", "frost", "mist"];
 export const MAX_TOWER_LEVEL = 3;
+
+/** 这种塔能不能打到天上的飞怪(露珠光环、毒雾、花火溅射都只管地面)。 */
+export function towerCanHitAir(kind: TowerKind): boolean {
+  return TOWER_INFO[kind].air === true;
+}
 
 /** 关卡 idx(0 起)时已解锁的塔。 */
 export function towersUnlockedAt(levelIdx: number, levels: ReadonlyArray<{ unlockTower?: TowerKind }>): TowerKind[] {
@@ -193,6 +212,19 @@ export function boomSplash(level: number): number {
   return (TOWER_INFO.boom.splash ?? 1.05) + (level - 1) * 0.2;
 }
 
+/** 冰晶塔命中减速倍率(升级冻得更狠,但有下限)。 */
+export function frostSlowFactor(level: number): number {
+  return Math.max(0.34, 0.5 - (level - 1) * 0.07);
+}
+
+/** 冰晶减速持续秒数。 */
+export const FROST_DURATION = 1.6;
+
+/** 毒雾塔每次脉冲的毒伤(无视护甲,直接掉血)。 */
+export function mistPoisonDamage(level: number): number {
+  return level;
+}
+
 /** 多个减速光环叠加:取最狠的一个,但最慢不低于 0.35。 */
 export function combineSlow(factors: ReadonlyArray<number>): number {
   if (factors.length === 0) return 1;
@@ -211,6 +243,8 @@ export type MonsterKind =
   | "sneaky" // 隐隐怪:周期隐身,塔打不到
   | "healy" // 奶油怪:给附近怪物回血
   | "mini" // 小分身
+  | "flappy" // 飞飞怪:扑棱着小翅膀飞在天上,地面塔够不着
+  | "glidey" // 云朵怪:慢悠悠的大飞怪,皮特别厚
   | "boss1" // 大软软(草地 BOSS:皮厚耐揍)
   | "boss2" // 蟹蟹将军(沙滩 BOSS:重甲+召唤小兵)
   | "boss3" // 蘑菇菇王(森林 BOSS:打倒后裂成小分身)
@@ -219,7 +253,11 @@ export type MonsterKind =
   | "boss6" // 雪雪大王(雪山 BOSS:半血后暴走加速)
   | "boss7" // 岩浆巨人(熔岩 BOSS:冲刺+暴走)
   | "boss8" // 幽幽夜影(星夜 BOSS:会隐身+召唤)
-  | "boss9"; // 糖果魔王(云端最终 BOSS:召唤+暴走+裂开)
+  | "boss9" // 糖果魔王(云端最终 BOSS:召唤+暴走+裂开)
+  | "boss10" // 露灵仙子(夜露温室 BOSS:隐身+给随从回血)
+  | "boss11" // 发条蟹皇(齿轮花房 BOSS:重甲+冲刺+召唤)
+  | "boss12" // 云绒巨鸟(云端苗圃 BOSS:会飞+召唤+半血暴走)
+  | "boss13"; // 星尘魔王(星辉花冠最终 BOSS:冲刺+召唤+暴走)
 
 export interface MonsterSpec {
   name: string;
@@ -241,6 +279,8 @@ export interface MonsterSpec {
   enrages?: boolean;
   /** 行为开关:打倒后分裂成两只小分身 */
   splits?: boolean;
+  /** 行为开关:飞在天上(免疫露珠光环/毒雾/花火溅射,只有对空塔能打) */
+  flies?: boolean;
 }
 
 export const MONSTER_INFO: Record<MonsterKind, MonsterSpec> = {
@@ -253,6 +293,8 @@ export const MONSTER_INFO: Record<MonsterKind, MonsterSpec> = {
   sneaky: { name: "隐隐怪", hp: 4, armor: 0, speed: 0.9, reward: 2, size: 0.28, boss: false, sneaks: true },
   healy: { name: "奶油怪", hp: 6, armor: 0, speed: 0.55, reward: 3, size: 0.32, boss: false, heals: true },
   mini: { name: "小分身", hp: 2, armor: 0, speed: 1.1, reward: 1, size: 0.2, boss: false },
+  flappy: { name: "飞飞怪", hp: 3, armor: 0, speed: 1.05, reward: 2, size: 0.26, boss: false, flies: true },
+  glidey: { name: "云朵怪", hp: 12, armor: 0, speed: 0.5, reward: 3, size: 0.36, boss: false, flies: true },
   boss1: { name: "大软软", hp: 60, armor: 0, speed: 0.38, reward: 12, size: 0.55, boss: true },
   boss2: { name: "蟹蟹将军", hp: 80, armor: 8, speed: 0.34, reward: 14, size: 0.58, boss: true, summons: true },
   boss3: { name: "蘑菇菇王", hp: 95, armor: 0, speed: 0.36, reward: 15, size: 0.56, boss: true, splits: true },
@@ -262,6 +304,10 @@ export const MONSTER_INFO: Record<MonsterKind, MonsterSpec> = {
   boss7: { name: "岩浆巨人", hp: 140, armor: 6, speed: 0.3, reward: 19, size: 0.62, boss: true, dashes: true, enrages: true },
   boss8: { name: "幽幽夜影", hp: 125, armor: 0, speed: 0.4, reward: 19, size: 0.56, boss: true, sneaks: true, summons: true },
   boss9: { name: "糖果魔王", hp: 170, armor: 8, speed: 0.3, reward: 25, size: 0.65, boss: true, summons: true, enrages: true, splits: true },
+  boss10: { name: "露灵仙子", hp: 165, armor: 0, speed: 0.36, reward: 26, size: 0.58, boss: true, sneaks: true, heals: true },
+  boss11: { name: "发条蟹皇", hp: 175, armor: 22, speed: 0.3, reward: 28, size: 0.62, boss: true, dashes: true, summons: true },
+  boss12: { name: "云绒巨鸟", hp: 155, armor: 0, speed: 0.38, reward: 30, size: 0.6, boss: true, flies: true, summons: true, enrages: true },
+  boss13: { name: "星尘魔王", hp: 200, armor: 10, speed: 0.28, reward: 36, size: 0.66, boss: true, dashes: true, summons: true, enrages: true },
 };
 
 /** 冲冲怪节奏:平走 → 冲刺。 */
@@ -279,15 +325,20 @@ export const SUMMON_INTERVAL = 6;
 /** 暴走型 BOSS 半血后的加速倍率。 */
 export const ENRAGE_MULT = 1.6;
 
-/** 怪物血量随关卡缓慢加深(0 起的关卡下标,99 关全程约 5 倍)。 */
+/** 怪物血量随关卡缓慢加深(0 起的关卡下标,前 99 关全程约 5 倍;
+ *  第 100 关起坡度放缓,塔位有限的棋盘后期才追得上)。 */
 export function monsterHp(kind: MonsterKind, levelIdx: number): number {
-  return Math.round(MONSTER_INFO[kind].hp * (1 + levelIdx * 0.042));
+  const classic = Math.min(levelIdx, 98);
+  const extra = Math.max(0, levelIdx - 98);
+  return Math.round(MONSTER_INFO[kind].hp * (1 + classic * 0.042 + extra * 0.012));
 }
 
 export function monsterArmor(kind: MonsterKind, levelIdx: number): number {
   const base = MONSTER_INFO[kind].armor;
   if (base === 0) return 0;
-  return base + Math.floor(levelIdx / 10);
+  const classic = Math.min(levelIdx, 98);
+  const extra = Math.max(0, levelIdx - 98);
+  return base + Math.floor(classic / 10) + Math.floor(extra / 30);
 }
 
 /** 打倒奖励也随关卡上涨,让后期经济跟得上怪物血量。 */
@@ -319,7 +370,12 @@ export type ThemeId =
   | "snow" // 雪雪山坡
   | "night" // 星夜庭院
   | "lava" // 熔岩峡谷
-  | "candy"; // 糖果云端
+  | "candy" // 糖果云端
+  // ---- 1.1 新章节 ----
+  | "dewhouse" // 夜露温室
+  | "gearhouse" // 齿轮花房
+  | "cloudfarm" // 云端苗圃
+  | "starcrown"; // 星辉花冠
 
 export interface ThemeStyle {
   name: string;
@@ -373,24 +429,118 @@ export const THEME_STYLE: Record<ThemeId, ThemeStyle> = {
     name: "糖果云端", emoji: "🍬", bgA: "#fdd6e8", bgB: "#fde8f2", path: "#c9e8ff", accent: "#d84a8a",
     boss: "boss9", palette: ["softy", "fasty", "tanky", "dashy", "shieldy", "splity", "sneaky", "healy"], blurb: "全怪种齐聚的最终云端决战",
   },
+  dewhouse: {
+    name: "夜露温室", emoji: "💠", bgA: "#d8def5", bgB: "#e4e8fa", path: "#cfe8d8", accent: "#5a6ac9",
+    boss: "boss10", palette: ["sneaky", "healy", "flappy", "softy", "shieldy"], blurb: "冰晶塔上岗,飞飞怪从天窗溜进来",
+  },
+  gearhouse: {
+    name: "齿轮花房", emoji: "⚙️", bgA: "#e8dfd0", bgB: "#f0e9dc", path: "#d5c4a8", accent: "#a8763a",
+    boss: "boss11", palette: ["shieldy", "tanky", "dashy", "flappy", "splity"], blurb: "拆路障、放毒雾,重甲发条军团来袭",
+  },
+  cloudfarm: {
+    name: "云端苗圃", emoji: "☁️", bgA: "#ddeefa", bgB: "#eaf5fd", path: "#f5e6c8", accent: "#4a9ac9",
+    boss: "boss12", palette: ["flappy", "glidey", "fasty", "sneaky", "mini"], blurb: "满天飞怪的高空防线,天气说变就变",
+  },
+  starcrown: {
+    name: "星辉花冠", emoji: "🌠", bgA: "#efe0f7", bgB: "#f6ecfb", path: "#ffe9c8", accent: "#9a4ac9",
+    boss: "boss13", palette: ["softy", "fasty", "tanky", "dashy", "shieldy", "splity", "sneaky", "healy", "flappy", "glidey"], blurb: "十三章之巅,星尘魔王的最终试炼",
+  },
 };
 
 export const THEME_ORDER: ThemeId[] = [
   "grass", "beach", "forest", "desert", "swamp", "snow", "night", "lava", "candy",
+  "dewhouse", "gearhouse", "cloudfarm", "starcrown",
 ];
 
-/** 每章关卡数:8 关手写 + 3 关生成 = 11 关,共 99 关。 */
+/** 经典章:8 关手写 + 3 关生成 = 11 关,共 99 关(1.0 战役,一字不动)。 */
 export const LEVELS_PER_THEME = 11;
 export const HANDMADE_PER_THEME = 8;
+export const CLASSIC_THEME_COUNT = 9;
+export const CLASSIC_LEVEL_COUNT = 99;
+
+/** 1.1 变长章节:前 9 章各 11 关,新 4 章 22/22/22/23 关,共 188 关。 */
+export const THEME_SIZES: number[] = [11, 11, 11, 11, 11, 11, 11, 11, 11, 22, 22, 22, 23];
+export const TOTAL_LEVELS = THEME_SIZES.reduce((s, n) => s + n, 0);
+
+/** 章节 ci 的第一关下标。 */
+export function themeOffset(ci: number): number {
+  let off = 0;
+  for (let i = 0; i < ci; i++) off += THEME_SIZES[i];
+  return off;
+}
+
+/** 章节 ci 的关卡数。 */
+export function themeSize(ci: number): number {
+  return THEME_SIZES[ci];
+}
+
+/** 关卡下标 → 章节下标(0 起)。 */
+export function themeIndexOfLevel(idx: number): number {
+  let off = 0;
+  for (let ci = 0; ci < THEME_SIZES.length; ci++) {
+    off += THEME_SIZES[ci];
+    if (idx < off) return ci;
+  }
+  return THEME_SIZES.length - 1;
+}
 
 export function themeOfLevel(idx: number): ThemeId {
-  return THEME_ORDER[Math.floor(idx / LEVELS_PER_THEME)];
+  return THEME_ORDER[themeIndexOfLevel(idx)];
 }
 
 /** 章节 ci(0 起)包含的关卡下标。 */
 export function levelIndicesOfTheme(ci: number): number[] {
   const out: number[] = [];
-  for (let i = 0; i < LEVELS_PER_THEME; i++) out.push(ci * LEVELS_PER_THEME + i);
+  const off = themeOffset(ci);
+  for (let i = 0; i < THEME_SIZES[ci]; i++) out.push(off + i);
+  return out;
+}
+
+/* ---------------- 天气(1.1:影响塔的射程) ---------------- */
+
+export type WeatherKind = "clear" | "fog" | "breeze" | "drizzle";
+
+export interface WeatherSpec {
+  name: string;
+  emoji: string;
+  /** 塔射程倍率 */
+  rangeMult: number;
+  /** 怪物速度倍率 */
+  speedMult: number;
+  desc: string;
+}
+
+export const WEATHER_INFO: Record<WeatherKind, WeatherSpec> = {
+  clear: { name: "晴朗", emoji: "☀️", rangeMult: 1, speedMult: 1, desc: "风和日丽,放心布阵" },
+  fog: { name: "起雾", emoji: "🌫️", rangeMult: 0.88, speedMult: 1, desc: "雾里塔看不远,射程变短" },
+  breeze: { name: "顺风", emoji: "🍃", rangeMult: 1.15, speedMult: 1.06, desc: "顺风射得远,怪也跑得欢" },
+  drizzle: { name: "细雨", emoji: "🌧️", rangeMult: 0.92, speedMult: 0.94, desc: "细雨绵绵,大家都慢半拍" },
+};
+
+export function weatherRangeMult(weather: WeatherKind | undefined): number {
+  return WEATHER_INFO[weather ?? "clear"].rangeMult;
+}
+
+export function weatherSpeedMult(weather: WeatherKind | undefined): number {
+  return WEATHER_INFO[weather ?? "clear"].speedMult;
+}
+
+/** 本关这种塔的实际射程 = 基础射程 × 天气倍率。 */
+export function effectiveRange(kind: TowerKind, level: number, weather: WeatherKind | undefined): number {
+  return towerRange(kind, level) * weatherRangeMult(weather);
+}
+
+/* ---------------- 路障(1.1:占住好塔位,点一点拆掉) ---------------- */
+
+/** 路障定义:[列, 行, 耐久]。每点一下掉 1 点耐久,拆完奖励 1 花瓣。 */
+export type BarricadeDef = readonly [number, number, number];
+
+export const BARRICADE_SMASH_REWARD = 1;
+
+/** 关卡的路障表:key "col,row" → 耐久。 */
+export function barricadeMap(defs: ReadonlyArray<BarricadeDef> | undefined): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [c, r, hp] of defs ?? []) out.set(`${c},${r}`, hp);
   return out;
 }
 
@@ -415,6 +565,10 @@ export interface LevelDef {
   feature: string;
   /** 雪地滑坡等:怪物速度倍率 */
   speedMult?: number;
+  /** 1.1 天气:影响塔射程与怪速(不填 = 晴朗) */
+  weather?: WeatherKind;
+  /** 1.1 路障:占住塔位,要点掉才能种(不填 = 无) */
+  barricades?: ReadonlyArray<BarricadeDef>;
   /** true = 生成器产出的遭遇战关 */
   gen?: boolean;
   /** 开场提示 */
@@ -973,7 +1127,320 @@ const HAND_BY_THEME: LevelDef[][] = [
   grassHand, beachHand, forestHand, desertHand, swampHand, snowHand, nightHand, lavaHand, candyHand,
 ];
 
-export const LEVELS: LevelDef[] = HAND_BY_THEME.flatMap((hand, ti) => buildTheme(ti, hand));
+/* ================= 1.1 新章节(第 100–188 关,只在末尾追加) ================= */
+
+/* ---- 第十章 · 夜露温室:冰晶塔 + 飞飞怪 + 天气 ---- */
+const dewhouseHand: LevelDef[] = [
+  {
+    name: "夜露初凝", theme: "dewhouse", paths: [P_MID], startPetals: 19, unlockTower: "frost", feature: "冰晶塔解锁",
+    hint: "新塔冰晶塔!打中谁,谁就被冻得慢慢的",
+    waves: [W(["softy", 8, 0.9], ["sneaky", 4, 1.1]), W(["healy", 2, 2.2], ["shieldy", 4, 1.2]), W(["sneaky", 6, 0.9], ["softy", 8, 0.8])],
+  },
+  {
+    name: "天窗飞客", theme: "dewhouse", paths: [P_HOOK], startPetals: 20, feature: "飞飞怪登场",
+    hint: "飞飞怪飞在天上!只有泡泡、针针、冰晶够得着它",
+    waves: [W(["flappy", 3, 1.6], ["softy", 6, 0.9]), W(["flappy", 5, 1.2], ["sneaky", 4, 1.0]), W(["flappy", 6, 1.0], ["healy", 2, 2.0], ["softy", 6, 0.8])],
+  },
+  {
+    name: "雾夜温房", theme: "dewhouse", paths: [P_WIND], startPetals: 21, weather: "fog", feature: "夜雾射程变短",
+    hint: "起雾啦!塔看不远,射程变短,塔要贴着小路种",
+    waves: [W(["sneaky", 5, 1.0], ["shieldy", 4, 1.1]), W(["healy", 3, 1.9], ["softy", 8, 0.8]), W(["sneaky", 6, 0.85], ["flappy", 4, 1.2])],
+  },
+  {
+    name: "露珠双廊", theme: "dewhouse", paths: [P_TOP, P_BOT], startPetals: 22, feature: "温室双路夜战",
+    hint: "两条玻璃长廊一起来怪,两边都要有对空火力!",
+    waves: [W(["softy", 8, 0.85], ["flappy", 4, 1.2]), W(["shieldy", 5, 1.0], ["sneaky", 5, 0.9]), W(["flappy", 6, 1.0], ["healy", 3, 1.8], ["softy", 6, 0.8])],
+  },
+  {
+    name: "夜露旱季", theme: "dewhouse", paths: [P_DIP], startPetals: 11, feature: "温室经济挑战",
+    hint: "夜里花瓣攒得慢,先种阳光花精打细算!",
+    waves: [
+      W(["softy", 6, 1.1]), W(["sneaky", 4, 1.1], ["softy", 6, 0.9]),
+      W(["shieldy", 4, 1.1], ["flappy", 3, 1.3]), W(["healy", 2, 2.0], ["sneaky", 6, 0.85]),
+    ],
+  },
+  {
+    name: "细雨玻璃房", theme: "dewhouse", paths: [P_RIVER], startPetals: 22, weather: "drizzle", feature: "细雨慢行军",
+    hint: "细雨绵绵,怪走得慢,塔射程也短了一点点",
+    waves: [W(["shieldy", 5, 1.0], ["healy", 3, 1.8]), W(["sneaky", 6, 0.85], ["softy", 8, 0.75]), W(["flappy", 5, 1.0], ["shieldy", 5, 0.95], ["healy", 3, 1.7])],
+  },
+  {
+    name: "温室大夜巡", theme: "dewhouse", paths: [P_SPIRAL], startPetals: 23, feature: "温室六波鏖战",
+    hint: "整整 6 波夜巡大军!波间抓紧补塔升级",
+    waves: [
+      W(["softy", 9, 0.8]), W(["sneaky", 6, 0.85]), W(["flappy", 5, 1.0], ["softy", 6, 0.8]),
+      W(["shieldy", 6, 0.95], ["healy", 3, 1.8]), W(["sneaky", 7, 0.75], ["flappy", 5, 1.0]),
+      W(["shieldy", 6, 0.9], ["healy", 4, 1.6], ["softy", 8, 0.7]),
+    ],
+  },
+  {
+    name: "露灵仙子", theme: "dewhouse", paths: [P_LOOP], startPetals: 25, feature: "章节BOSS露灵仙子",
+    hint: "露灵仙子会隐身还会给随从奶血!她现身那几秒集火!",
+    waves: [
+      W(["sneaky", 6, 0.85], ["healy", 3, 1.8]), W(["shieldy", 6, 0.95], ["flappy", 5, 1.0]),
+      W(["boss10", 1, 1], ["healy", 3, 1.8], ["sneaky", 5, 0.9]),
+    ],
+  },
+];
+
+/* ---- 第十一章 · 齿轮花房:毒雾塔 + 路障 ---- */
+const gearhouseHand: LevelDef[] = [
+  {
+    name: "上油开工日", theme: "gearhouse", paths: [P_STRAIGHT], startPetals: 21, unlockTower: "mist", feature: "毒雾塔解锁",
+    barricades: [[2, 1, 3], [7, 2, 3]],
+    hint: "新塔毒雾塔,毒雾无视硬壳!先点几下拆掉挡路的木箱",
+    waves: [W(["shieldy", 3, 1.2], ["softy", 6, 0.9]), W(["tanky", 3, 1.2], ["dashy", 4, 1.05]), W(["shieldy", 5, 0.95], ["splity", 4, 1.1])],
+  },
+  {
+    name: "发条重甲团", theme: "gearhouse", paths: [P_UTURN], startPetals: 22, feature: "齿轮重甲军团",
+    hint: "发条拧满的重甲军团!毒雾塔慢慢毒穿它们",
+    waves: [W(["shieldy", 4, 1.1], ["tanky", 3, 1.2]), W(["shieldy", 5, 0.95], ["dashy", 4, 1.0]), W(["tanky", 5, 1.0], ["shieldy", 6, 0.85])],
+  },
+  {
+    name: "传送带狂飙", theme: "gearhouse", paths: [P_ZIG], startPetals: 22, speedMult: 1.12, feature: "齿轮加速带",
+    hint: "传送带载着怪物狂飙!冰晶塔和露珠塔一起按住",
+    waves: [W(["dashy", 6, 0.9], ["softy", 8, 0.75]), W(["dashy", 7, 0.8], ["flappy", 4, 1.1]), W(["splity", 5, 1.0], ["dashy", 7, 0.75])],
+  },
+  {
+    name: "螺丝双轨", theme: "gearhouse", paths: [P_FORK_A, P_FORK_B], startPetals: 23, feature: "双轨路障阵",
+    barricades: [[5, 1, 4], [1, 2, 3]],
+    hint: "两条流水线一起开工,好塔位都被木箱占了,快拆!",
+    waves: [W(["shieldy", 4, 1.05], ["dashy", 4, 1.0]), W(["tanky", 4, 1.1], ["splity", 4, 1.05]), W(["flappy", 5, 1.0], ["shieldy", 5, 0.9], ["dashy", 5, 0.9])],
+  },
+  {
+    name: "断电旱灾", theme: "gearhouse", paths: [P_GATE], startPetals: 11, feature: "齿轮经济挑战",
+    hint: "工厂断电,花瓣只有一点点!先攒经济再开火",
+    waves: [
+      W(["softy", 7, 1.0]), W(["shieldy", 4, 1.1], ["softy", 6, 0.9]),
+      W(["dashy", 5, 0.95], ["tanky", 3, 1.2]), W(["shieldy", 6, 0.9], ["splity", 4, 1.0]),
+    ],
+  },
+  {
+    name: "毒雾车间", theme: "gearhouse", paths: [P_CANYON], startPetals: 24, feature: "毒雾对重甲",
+    hint: "满车间的硬壳怪,毒雾塔的毒能直接钻进壳里!",
+    waves: [W(["shieldy", 7, 0.85], ["tanky", 5, 1.0]), W(["shieldy", 8, 0.75], ["dashy", 6, 0.85]), W(["tanky", 6, 0.9], ["shieldy", 8, 0.7], ["flappy", 4, 1.1])],
+  },
+  {
+    name: "齿轮大过载", theme: "gearhouse", paths: [P_LONG], startPetals: 25, feature: "齿轮六波过载",
+    hint: "机器过载啦!六波零件怪一波比一波猛",
+    waves: [
+      W(["softy", 9, 0.75]), W(["dashy", 6, 0.85]), W(["shieldy", 6, 0.9], ["splity", 4, 1.0]),
+      W(["tanky", 5, 0.95], ["flappy", 5, 1.0]), W(["dashy", 7, 0.75], ["shieldy", 6, 0.85]),
+      W(["tanky", 6, 0.9], ["shieldy", 7, 0.75], ["dashy", 6, 0.75]),
+    ],
+  },
+  {
+    name: "发条蟹皇", theme: "gearhouse", paths: [P_SNAKE], startPetals: 27, feature: "章节BOSS发条蟹皇",
+    barricades: [[5, 3, 4]],
+    hint: "发条蟹皇披着大铁壳,会冲刺还会召唤小兵!毒雾伺候!",
+    waves: [
+      W(["shieldy", 7, 0.85], ["dashy", 6, 0.85]), W(["tanky", 6, 0.9], ["splity", 5, 0.95]),
+      W(["boss11", 1, 1], ["shieldy", 5, 0.9], ["flappy", 4, 1.1]),
+    ],
+  },
+];
+
+/* ---- 第十二章 · 云端苗圃:满天飞怪 ---- */
+const cloudfarmHand: LevelDef[] = [
+  {
+    name: "云上花田", theme: "cloudfarm", paths: [P_MID], startPetals: 23, feature: "云朵怪登场",
+    hint: "云朵怪又大又能飞!对空的塔多种几座",
+    waves: [W(["flappy", 5, 1.1], ["fasty", 6, 0.7]), W(["glidey", 2, 2.2], ["flappy", 5, 1.0]), W(["glidey", 3, 1.9], ["sneaky", 5, 0.85])],
+  },
+  {
+    name: "顺风飞行日", theme: "cloudfarm", paths: [P_HOOK], startPetals: 23, weather: "breeze", feature: "顺风高空战",
+    hint: "顺风天!塔射得更远,可怪也飞得更快",
+    waves: [W(["flappy", 6, 0.95], ["fasty", 7, 0.6]), W(["glidey", 3, 1.8], ["flappy", 6, 0.9]), W(["fasty", 9, 0.5], ["glidey", 3, 1.7])],
+  },
+  {
+    name: "云梯双路", theme: "cloudfarm", paths: [P_TOP, P_BOT], startPetals: 24, feature: "云端双路空袭",
+    hint: "两架云梯一起来客,天上地下都要照顾!",
+    waves: [W(["flappy", 6, 0.95], ["sneaky", 5, 0.85]), W(["glidey", 3, 1.8], ["fasty", 8, 0.55]), W(["flappy", 7, 0.85], ["glidey", 3, 1.6], ["mini", 8, 0.5])],
+  },
+  {
+    name: "云间细雨", theme: "cloudfarm", paths: [P_DIP], startPetals: 24, weather: "drizzle", feature: "云端细雨",
+    hint: "云里飘着细雨,大家都慢半拍,稳稳布阵",
+    waves: [W(["glidey", 3, 1.8], ["sneaky", 6, 0.8]), W(["flappy", 7, 0.85], ["fasty", 8, 0.55]), W(["glidey", 4, 1.5], ["flappy", 6, 0.85])],
+  },
+  {
+    name: "高空旱台", theme: "cloudfarm", paths: [P_SHORT], startPetals: 14, feature: "云端经济挑战",
+    hint: "高台上花瓣稀薄,一条短路拼手速拼算计!",
+    waves: [
+      W(["fasty", 6, 0.7]), W(["flappy", 5, 1.0], ["fasty", 5, 0.65]),
+      W(["sneaky", 6, 0.8], ["mini", 8, 0.5]), W(["glidey", 2, 1.7], ["flappy", 6, 0.85]),
+    ],
+  },
+  {
+    name: "乱流突击", theme: "cloudfarm", paths: [P_STAIRS], startPetals: 25, speedMult: 1.12, feature: "乱流加速潮",
+    hint: "乱流把怪吹得飞快!冰晶塔冻住领头的",
+    waves: [W(["fasty", 9, 0.5], ["flappy", 5, 0.95]), W(["sneaky", 7, 0.7], ["mini", 10, 0.45]), W(["flappy", 8, 0.75], ["fasty", 8, 0.5])],
+  },
+  {
+    name: "云海马拉松", theme: "cloudfarm", paths: [P_SPIRAL], startPetals: 26, feature: "云海六波马拉松",
+    hint: "云海翻涌,六波空袭连绵不断!",
+    waves: [
+      W(["fasty", 8, 0.55]), W(["flappy", 6, 0.9]), W(["glidey", 3, 1.7], ["mini", 8, 0.5]),
+      W(["sneaky", 7, 0.7], ["flappy", 6, 0.85]), W(["glidey", 4, 1.4], ["fasty", 8, 0.5]),
+      W(["flappy", 8, 0.7], ["glidey", 4, 1.3], ["sneaky", 6, 0.7]),
+    ],
+  },
+  {
+    name: "云绒巨鸟", theme: "cloudfarm", paths: [P_UTURN], startPetals: 28, feature: "章节BOSS云绒巨鸟",
+    hint: "云绒巨鸟飞在天上,半血还会暴走!泡泡、针针、冰晶全上!",
+    waves: [
+      W(["flappy", 7, 0.8], ["glidey", 3, 1.6]), W(["sneaky", 7, 0.7], ["fasty", 9, 0.5]),
+      W(["boss12", 1, 1], ["flappy", 6, 0.85], ["glidey", 3, 1.5]),
+    ],
+  },
+];
+
+/* ---- 第十三章 · 星辉花冠:最终试炼 ---- */
+const starcrownHand: LevelDef[] = [
+  {
+    name: "星门开启", theme: "starcrown", paths: [P_WIND], startPetals: 25, feature: "星辉章开场",
+    hint: "最终章!所有怪都会来,把全部本事亮出来!",
+    waves: [W(["softy", 10, 0.7], ["sneaky", 6, 0.8]), W(["shieldy", 6, 0.85], ["flappy", 6, 0.85]), W(["tanky", 6, 0.9], ["healy", 3, 1.7], ["fasty", 8, 0.5])],
+  },
+  {
+    name: "星屑顺风", theme: "starcrown", paths: [P_RIVER], startPetals: 25, weather: "breeze", feature: "星屑顺风夜",
+    hint: "星屑随风,塔射得远,怪也冲得急!",
+    waves: [W(["fasty", 9, 0.5], ["dashy", 6, 0.8]), W(["flappy", 7, 0.8], ["splity", 5, 0.95]), W(["glidey", 4, 1.4], ["dashy", 7, 0.7], ["mini", 10, 0.42])],
+  },
+  {
+    name: "银河双桥", theme: "starcrown", paths: [P_FORK_A, P_FORK_B], startPetals: 26, feature: "银河双桥总攻",
+    hint: "两座星桥一起总攻,火力要分配得聪明!",
+    waves: [W(["shieldy", 5, 0.9], ["sneaky", 5, 0.8]), W(["tanky", 4, 1.0], ["flappy", 5, 0.85]), W(["splity", 6, 0.85], ["healy", 3, 1.6], ["dashy", 6, 0.75])],
+  },
+  {
+    name: "星尘雾夜", theme: "starcrown", paths: [P_GATE], startPetals: 13, weather: "fog", feature: "星辉经济雾夜",
+    hint: "又穷又起雾的一夜……先攒钱,塔贴着路种!",
+    waves: [
+      W(["softy", 6, 0.95]), W(["sneaky", 3, 1.0], ["softy", 5, 0.9]),
+      W(["shieldy", 3, 1.1], ["flappy", 4, 1.0]), W(["healy", 3, 1.7], ["splity", 5, 0.9]),
+    ],
+  },
+  {
+    name: "路障星阵", theme: "starcrown", paths: [P_LOOP], startPetals: 26, feature: "星辉路障阵",
+    barricades: [[4, 1, 4], [5, 2, 4], [3, 4, 3]],
+    hint: "陨石木箱砸满了好塔位!边拆边守,手别停",
+    waves: [W(["dashy", 7, 0.75], ["shieldy", 6, 0.85]), W(["flappy", 7, 0.75], ["tanky", 6, 0.85]), W(["splity", 6, 0.85], ["glidey", 4, 1.35], ["fasty", 9, 0.45])],
+  },
+  {
+    name: "众王回响", theme: "starcrown", paths: [P_CANYON], startPetals: 27, feature: "历代BOSS回响",
+    hint: "以前的大王们组团回访!一个一个请回家",
+    waves: [
+      W(["boss1", 1, 1], ["softy", 8, 0.75]), W(["boss3", 1, 1], ["mini", 10, 0.45]),
+      W(["boss6", 1, 1], ["fasty", 9, 0.5]), W(["boss8", 1, 1], ["sneaky", 7, 0.7]),
+    ],
+  },
+  {
+    name: "星辉终试炼", theme: "starcrown", paths: [P_SPIRAL], startPetals: 28, feature: "星辉七波终试炼",
+    hint: "决战前最后一考:七波全怪种大巡游!",
+    waves: [
+      W(["fasty", 9, 0.5]), W(["sneaky", 7, 0.7], ["mini", 10, 0.42]), W(["shieldy", 7, 0.8], ["dashy", 7, 0.7]),
+      W(["flappy", 8, 0.7], ["glidey", 4, 1.35]), W(["tanky", 7, 0.85], ["healy", 4, 1.5]),
+      W(["splity", 7, 0.8], ["sneaky", 7, 0.65]), W(["dashy", 8, 0.6], ["fasty", 10, 0.4], ["healy", 4, 1.45]),
+    ],
+  },
+  {
+    name: "星尘魔王", theme: "starcrown", paths: [P_UTURN], startPetals: 31, feature: "最终BOSS星尘魔王",
+    hint: "最终决战!星尘魔王会冲刺、会召唤、半血还会暴走!",
+    waves: [
+      W(["shieldy", 5, 0.9], ["sneaky", 6, 0.75]), W(["healy", 3, 1.6], ["tanky", 5, 0.9]),
+      W(["glidey", 3, 1.45], ["flappy", 6, 0.8], ["dashy", 6, 0.7]),
+      W(["boss13", 1, 1], ["mini", 10, 0.5], ["healy", 3, 1.6]),
+    ],
+  },
+];
+
+/** 1.1 遭遇战生成器:新章的"星彩遭遇战",带天气与路障,签名全局唯一。 */
+function genLevel2(themeIdx: number, sub: number): LevelDef {
+  const theme = THEME_ORDER[themeIdx];
+  const st = THEME_STYLE[theme];
+  const pal = st.palette;
+  const t2 = themeIdx - CLASSIC_THEME_COUNT; // 0..3
+  const genPaths = [
+    P_WIND, P_SPIRAL, P_CANYON, P_RIVER, P_LOOP, P_STAIRS, P_DIP,
+    P_UTURN, P_LONG, P_ZIG, P_SNAKE, P_GATE, P_MID, P_HOOK,
+  ] as const;
+  const path = genPaths[(t2 * 5 + sub * 3 + 1) % genPaths.length];
+  const waveCount = 4 + ((sub + t2) % 2) + Math.floor(sub / 7); // 4~6 波
+  const waves: WaveEntry[][] = [];
+  for (let wi = 0; wi < waveCount; wi++) {
+    const batches: WaveEntry[] = [];
+    const nBatches = 2 + ((wi + sub + t2) % 3 === 0 ? 1 : 0); // 2~3 批
+    for (let b = 0; b < nBatches; b++) {
+      let kind = pal[(wi * 2 + b * 3 + sub + t2) % pal.length];
+      // 第 1 波只派地面侦察兵,空袭从第 2 波开始(对空塔来得及立起来)
+      if (wi === 0 && (kind === "glidey" || kind === "flappy")) kind = "softy";
+      // 人数随波次爬坡:前两波小股试探,后面越来越多;重型怪打六折
+      let count = 2 + Math.min(wi, 2) + ((wi * 2 + b * 2 + sub + t2 * 2) % 3) + (t2 >= 2 ? 1 : 0);
+      if (wi === 0) count = Math.min(count, 4);
+      if (wi === 1) count = Math.min(count, 5);
+      if (kind === "glidey" || kind === "tanky" || kind === "healy" || kind === "shieldy") {
+        count = Math.ceil(count * 0.6);
+      }
+      // 隐身怪在前两波也少来点(玩家火力还没铺开,躲猫猫太赖皮)
+      if (wi <= 1 && kind === "sneaky") count = Math.ceil(count * 0.7);
+      // 第 1 波飞怪最多 2 只(对空塔还没立起来)
+      if (wi === 0 && kind === "flappy") count = Math.min(count, 2);
+      const gap = Math.max(0.5, 1.5 - wi * 0.12 - sub * 0.015 - t2 * 0.05);
+      batches.push({ kind, count, gap: Math.round(gap * 100) / 100 });
+    }
+    waves.push(batches);
+  }
+  const weathers: WeatherKind[] = ["clear", "fog", "breeze", "drizzle"];
+  const weather = weathers[(sub + t2 * 2) % weathers.length];
+  // 齿轮花房的遭遇战都有路障;其他新章偶尔一格
+  const wantBarr = theme === "gearhouse" ? 2 : sub % 5 === 4 ? 1 : 0;
+  const barricades: BarricadeDef[] = [];
+  if (wantBarr > 0) {
+    const cells = pathCellSet(path);
+    const candidates = [[4, 2], [4, 3], [3, 2], [5, 3], [2, 4], [6, 3]] as const;
+    for (const [c, r] of candidates) {
+      if (barricades.length >= wantBarr) break;
+      if (!cells.has(`${c},${r}`)) barricades.push([c, r, 3 + (sub % 3)]);
+    }
+  }
+  return {
+    name: `${st.name}星彩遭遇战 ${sub + 1} 号`,
+    theme,
+    paths: [path],
+    waves,
+    startPetals: 20 + t2 * 2 + Math.floor(sub / 3),
+    feature: `${st.name}星彩遭遇战${sub + 1}号`,
+    weather,
+    barricades: barricades.length > 0 ? barricades : undefined,
+    gen: true,
+    hint: `${st.name}的杂牌军突袭!${WEATHER_INFO[weather].desc},顶住 ${waveCount} 波`,
+  };
+}
+
+/** 新章组装:手写 8 关打骨架,星彩遭遇战填满,章末必是 BOSS。 */
+function buildTheme2(themeIdx: number, hand: LevelDef[], size: number): LevelDef[] {
+  if (hand.length !== HANDMADE_PER_THEME) {
+    throw new Error(`theme ${themeIdx} 手写关数量应为 ${HANDMADE_PER_THEME}`);
+  }
+  const genCount = size - hand.length;
+  const gens = Array.from({ length: genCount }, (_, i) => genLevel2(themeIdx, i));
+  const out: LevelDef[] = [hand[0]];
+  let gi = 0;
+  for (const mid of hand.slice(1, 7)) {
+    out.push(gens[gi++], gens[gi++], mid);
+  }
+  while (gi < genCount) out.push(gens[gi++]);
+  out.push(hand[7]);
+  return out;
+}
+
+const NEW_HAND_BY_THEME: LevelDef[][] = [dewhouseHand, gearhouseHand, cloudfarmHand, starcrownHand];
+
+export const LEVELS: LevelDef[] = [
+  ...HAND_BY_THEME.flatMap((hand, ti) => buildTheme(ti, hand)),
+  ...NEW_HAND_BY_THEME.flatMap((hand, i) =>
+    buildTheme2(CLASSIC_THEME_COUNT + i, hand, THEME_SIZES[CLASSIC_THEME_COUNT + i]),
+  ),
+];
 
 /** 一波怪的出场时间表:各批依次登场,批内按 gap 排队。 */
 export function waveSpawnTimes(
@@ -1051,9 +1518,9 @@ export function isLevelUnlocked(stars: ReadonlyArray<number>, idx: number): bool
   return (stars[idx - 1] ?? 0) > 0;
 }
 
-/** 章节是否解锁:本章第一关解锁即可进入。 */
+/** 章节是否解锁:本章第一关解锁即可进入(1.1 起章节长度不一,用偏移算)。 */
 export function isThemeUnlocked(stars: ReadonlyArray<number>, themeIdx: number): boolean {
-  return isLevelUnlocked(stars, themeIdx * LEVELS_PER_THEME);
+  return isLevelUnlocked(stars, themeOffset(themeIdx));
 }
 
 /** 本章已得的星星数。 */
