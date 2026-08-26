@@ -107,6 +107,132 @@ describe("涂色小屋 · 1.1 新村镇", () => {
   });
 });
 
+/**
+ * 线稿是一层压一层画的，后画的会盖住先画的。
+ * 这里把每个形状还原成「点在不在里面」的判断，用来验证每块都还有露在外面、点得到的地方。
+ */
+type HitTest = { box: [number, number, number, number]; inside: (x: number, y: number) => boolean };
+
+/** 圆弧类的 `<path>` 算不准，就老实说算不准，别拿近似结果糊弄过去 */
+function shapeHitTest(svg: string): HitTest | null {
+  const num = (name: string): number => Number(new RegExp(`${name}="(-?[\\d.]+)"`).exec(svg)?.[1] ?? NaN);
+  if (svg.startsWith("<path")) return null;
+  if (svg.startsWith("<rect")) {
+    const x = num("x"), y = num("y"), w = num("width"), h = num("height");
+    return { box: [x, y, w, h], inside: (px, py) => px >= x && px <= x + w && py >= y && py <= y + h };
+  }
+  if (svg.startsWith("<circle")) {
+    const cx = num("cx"), cy = num("cy"), r = num("r");
+    return { box: [cx - r, cy - r, r * 2, r * 2], inside: (px, py) => (px - cx) ** 2 + (py - cy) ** 2 <= r * r };
+  }
+  if (svg.startsWith("<ellipse")) {
+    const cx = num("cx"), cy = num("cy"), rx = num("rx"), ry = num("ry");
+    return {
+      box: [cx - rx, cy - ry, rx * 2, ry * 2],
+      inside: (px, py) => ((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2 <= 1,
+    };
+  }
+  // polygon
+  const pts = (/points="([^"]+)"/.exec(svg)?.[1] ?? "")
+    .trim()
+    .split(/\s+/)
+    .map((p) => p.split(",").map(Number) as [number, number]);
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  return {
+    box: [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)],
+    inside: (px, py) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i];
+        const [xj, yj] = pts[j];
+        if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) hit = !hit;
+      }
+      return hit;
+    },
+  };
+}
+
+/** 这一块在画布上还有多少个采样点是露在外面、能点到的 */
+function exposedPoints(shapes: Array<HitTest | null>, at: number): number {
+  const me = shapes[at];
+  if (!me) return -1; // 算不准的形状交给标注点那条用例兜底
+  const [bx, by, bw, bh] = me.box;
+  let n = 0;
+  for (let gy = 1; gy <= 19; gy++) {
+    for (let gx = 1; gx <= 19; gx++) {
+      const px = bx + (bw * gx) / 20;
+      const py = by + (bh * gy) / 20;
+      if (!me.inside(px, py)) continue;
+      // 后画的形状会压在上面；算不准的 path 一律当作没压住，宁可漏报不误报
+      let covered = false;
+      for (let k = at + 1; k < shapes.length; k++) {
+        if (shapes[k]?.inside(px, py)) { covered = true; break; }
+      }
+      if (!covered) n++;
+    }
+  }
+  return n;
+}
+
+describe("涂色小屋 · 每一块都点得到", () => {
+  it("线稿的每一块都留了露在外面的地方，不会被后画的形状整块盖住", () => {
+    PICTURES.forEach((pic, pi) => {
+      const shapes = pic.regions.map((r) => shapeHitTest(r.svg));
+      pic.regions.forEach((r, ri) => {
+        const n = exposedPoints(shapes, ri);
+        expect({ pic: pi, region: r.id, ok: n !== 0 }).toEqual({ pic: pi, region: r.id, ok: true });
+      });
+    });
+  });
+
+  // 下面两条只查 1.1 的四张新线稿。1.0 的六张里「星球环」的标注点本来就压在椭圆边上一点点、
+  // 「帐篷」的编号本来就落在帐篷门上，都是 1.0 的既有画法，本步不动前 99 关的任何内容。
+  it("1.1 四张新线稿：标注点都落在自己形状里（数字和图例符号就画在这个点上）", () => {
+    PICTURES.forEach((pic, pi) => {
+      if (pi < 6) return;
+      pic.regions.forEach((r) => {
+        const me = shapeHitTest(r.svg);
+        if (!me) return; // 圆弧 path 算不准，跳过
+        expect({ pic: pi, region: r.id, in: me.inside(r.lx, r.ly) })
+          .toEqual({ pic: pi, region: r.id, in: true });
+      });
+    });
+  });
+
+  it("1.1 四张新线稿：标注点没被后画的形状压住", () => {
+    PICTURES.forEach((pic, pi) => {
+      if (pi < 6) return;
+      const shapes = pic.regions.map((r) => shapeHitTest(r.svg));
+      pic.regions.forEach((r, ri) => {
+        const buried = shapes.slice(ri + 1).some((s) => s?.inside(r.lx, r.ly));
+        expect({ pic: pi, region: r.id, buried }).toEqual({ pic: pi, region: r.id, buried: false });
+      });
+    });
+  });
+
+  it("1.0 六张老线稿的标注点仍在自己的外接框里（只做兜底，不改老画法）", () => {
+    PICTURES.slice(0, 6).forEach((pic, pi) => {
+      pic.regions.forEach((r) => {
+        const me = shapeHitTest(r.svg);
+        if (!me) return;
+        const [bx, by, bw, bh] = me.box;
+        const inBox = r.lx >= bx - 1 && r.lx <= bx + bw + 1 && r.ly >= by - 1 && r.ly <= by + bh + 1;
+        expect({ pic: pi, region: r.id, inBox }).toEqual({ pic: pi, region: r.id, inBox: true });
+      });
+    });
+  });
+
+  it("每块形状的写法都能挂上点击事件（结尾必须是自闭合的 />）", () => {
+    for (const pic of PICTURES) {
+      for (const r of pic.regions) {
+        expect(r.svg.trimEnd().endsWith("/>")).toBe(true);
+        expect(r.svg).toMatch(/^<(rect|circle|ellipse|polygon|path)\s/);
+      }
+    }
+  });
+});
+
 describe("涂色小屋 · 第 100–188 关逐关可涂完", () => {
   it("每一关都能涂完：任务颜色要么在盘里，要么调得出来", () => {
     for (const lv of NEW_LEVELS) {

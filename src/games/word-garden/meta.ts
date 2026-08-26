@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🌸",
   category: "edu" as const,
   color: "#faa2c1",
-  blurb: "六座花园 99 关！看图认字、拼音选字、数字汉字和组词，边种花边识字！",
+  blurb: "十一座花园 188 关！看图认字、形近字辨析、成语补全、近反义词还有偏旁推字义！",
 };

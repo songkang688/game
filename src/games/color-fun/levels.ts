@@ -132,7 +132,7 @@ export const PICTURES: Picture[] = [
     emoji: "🌄",
     regions: [
       { id: "sky", name: "天空", svg: `<rect x="0" y="0" width="400" height="96" rx="6"/>`, lx: 46, ly: 52 },
-      { id: "farhill", name: "远山", svg: `<polygon points="0,150 110,72 226,150"/>`, lx: 110, ly: 132 },
+      { id: "farhill", name: "远山", svg: `<polygon points="0,150 110,72 226,150"/>`, lx: 170, ly: 130 },
       { id: "nearhill", name: "近山", svg: `<polygon points="150,168 268,84 396,168"/>`, lx: 270, ly: 150 },
       { id: "lake", name: "湖面", svg: `<rect x="0" y="196" width="400" height="60" rx="8"/>`, lx: 60, ly: 232 },
       { id: "shore", name: "湖岸", svg: `<rect x="0" y="256" width="400" height="44" rx="8"/>`, lx: 60, ly: 284 },
@@ -189,7 +189,7 @@ export const PICTURES: Picture[] = [
       { id: "hrope", name: "吊绳", svg: `<rect x="196" y="208" width="8" height="36" rx="3"/>`, lx: 200, ly: 232 },
       { id: "hcloud", name: "云朵", svg: `<ellipse cx="64" cy="86" rx="44" ry="20"/>`, lx: 64, ly: 92 },
       { id: "hbird", name: "小鸟", svg: `<ellipse cx="330" cy="212" rx="26" ry="16"/>`, lx: 330, ly: 218 },
-      { id: "hflag", name: "小旗", svg: `<polygon points="224,246 262,254 224,262"/>`, lx: 244, ly: 258 },
+      { id: "hflag", name: "小旗", svg: `<polygon points="224,246 262,254 224,262"/>`, lx: 238, ly: 254 },
     ],
   },
 ];

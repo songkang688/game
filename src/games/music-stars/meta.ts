@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🌟",
   category: "create" as const,
   color: "#ffe066",
-  blurb: "六大音乐会 99 关！星星越加越多、回声森林凭记忆弹，还有小星星终曲！",
+  blurb: "十场音乐会 188 关！跟弹旋律、节奏跟打、音程听辨、双声部合奏还有简谱视奏！",
 };
