@@ -863,13 +863,16 @@ export function reviewSeed(level: number, round = 0): number {
 
 /**
  * 把这一关答错过的题按「同类换数字」重出一轮。
- * 只认题型种类，不带原题的任何数字进来，所以孩子看到的是一道新题，
- * 想蒙对只能真的把方法用一遍。
+ *
+ * 只认题型种类，不带原题的任何数字进来，所以孩子看到的是一道新题，想蒙对只能真的把方法用一遍。
+ * `avoid` 传原题的题面：前 99 关那种「12 个钟点 × 4 种分钟」的老题型可选组合本来就少，
+ * 不躲一下真会摇出一模一样的题，那这一轮回顾就白做了。
  */
 export function makeReviewQuestions(
   wrongKinds: readonly ClockKind[],
   level: number,
-  round = 0
+  round = 0,
+  avoid: readonly string[] = []
 ): ClockQ[] {
   const kinds: ClockKind[] = [];
   for (const k of wrongKinds) {
@@ -880,7 +883,15 @@ export function makeReviewQuestions(
   const rand = mulberry32(reviewSeed(level, round));
   const quarters = allowedQuarters(level);
   const t = chapterProgress(level);
-  return kinds.map((kind) => makeOne(rand, kind, quarters, t));
+  const seen = new Set(avoid);
+  return kinds.map((kind) => {
+    let q = makeOne(rand, kind, quarters, t);
+    for (let guard = 0; guard < 40 && seen.has(q.promptHTML); guard++) {
+      q = makeOne(rand, kind, quarters, t);
+    }
+    seen.add(q.promptHTML);
+    return q;
+  });
 }
 
 /** 这一关会考到的题型（去重，攻略与错题统计用） */

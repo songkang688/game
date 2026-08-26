@@ -201,7 +201,7 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   function startReview(stars: 1 | 2 | 3, msg?: string): void {
-    const questions = makeReviewQuestions(wrongKinds, ctx.level);
+    const questions = makeReviewQuestions(wrongKinds, ctx.level, 0, mainQuestions.map((q) => q.promptHTML));
     if (questions.length === 0) {
       ctx.win(stars, msg);
       return;
@@ -243,9 +243,9 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     },
   };
 
-  const questions = buildQuestions(ctx.level);
-  quiz = runQuiz({ stage, ctx: mainCtx, questions, theme });
-  helper = attachHelper(stage, questions, noteWrong);
+  const mainQuestions = buildQuestions(ctx.level);
+  quiz = runQuiz({ stage, ctx: mainCtx, questions: mainQuestions, theme });
+  helper = attachHelper(stage, mainQuestions, noteWrong);
 
   return {
     destroy() {
