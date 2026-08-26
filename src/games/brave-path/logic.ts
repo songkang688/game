@@ -552,6 +552,9 @@ export function endlessTier(depth: number): number {
   return Math.min(187, Math.round((d - 1) * 2.1));
 }
 
+/** 深渊每深一层，对手强 4.5% */
+export const ENDLESS_GROWTH = 1.045;
+
 /** 每 8 层来一个镇守的大家伙 */
 export function isEndlessGuardian(depth: number): boolean {
   return Math.max(1, Math.round(depth)) % 8 === 0;
@@ -569,12 +572,14 @@ export function endlessFoeSpec(depth: number): FighterSpec {
   const guardian = isEndlessGuardian(d);
   const idx = Math.floor(rng() * ENDLESS_NAMES.length) % ENDLESS_NAMES.length;
   const element = ENDLESS_ELEMENTS[Math.floor(rng() * ENDLESS_ELEMENTS.length) % ENDLESS_ELEMENTS.length];
-  // 深渊自带一条随层数缓慢上抬的加成，越往下越吃配装
-  const boost = 1 + d * 0.012;
+  // 深渊是复利式变难：每深一层强 4.5%。祝福也是复利，所以曲线必须比祝福更陡，
+  // 不然攒够祝福的勇者就能一直走下去，「无尽」也就不成立了。
+  const boost = Math.pow(ENDLESS_GROWTH, d - 1);
+  const cap = (n: number): number => Math.min(9_999_999, Math.round(n));
   const base = {
-    maxHp: Math.round((40 + tier * 1.9) * (guardian ? 2.3 : 1) * boost),
-    atk: Math.round((11 + tier * 0.62) * (guardian ? 1.15 : 1) * boost),
-    def: Math.round((2 + tier * 0.16) * (guardian ? 1.35 : 1) * boost),
+    maxHp: cap((40 + tier * 1.9) * (guardian ? 2.3 : 1) * boost),
+    atk: cap((11 + tier * 0.62) * (guardian ? 1.15 : 1) * boost),
+    def: cap((2 + tier * 0.16) * (guardian ? 1.35 : 1) * boost),
     spd: Math.round(9 + tier * 0.09)
   };
   const rank = Math.max(1, Math.min(5, 1 + Math.floor(d / 12)));
@@ -842,9 +847,9 @@ export function buildRivalLeader(heroLevel: number, scale: number): Fighter {
     name: RIVAL_NAME,
     emoji: RIVAL_EMOJI,
     element: "light",
-    maxHp: Math.round(base.maxHp * 1.12 * scale),
-    atk: Math.round(base.atk * 1.08 * scale),
-    def: Math.round(base.def * 1.05 * scale),
+    maxHp: Math.round(base.maxHp * 1.06 * scale),
+    atk: Math.round(base.atk * 1.04 * scale),
+    def: Math.round(base.def * 1.02 * scale),
     spd: Math.round(base.spd * 1.12),
     crit: 0.12,
     skills: [
@@ -855,15 +860,35 @@ export function buildRivalLeader(heroLevel: number, scale: number): Fighter {
   });
 }
 
-/** 擂台难度：赢得越多，星星的队伍越强（封顶 1.6 倍，不会强到没法赢） */
-export function arenaScale(wins: number): number {
+/**
+ * 装备带来的强度倍数：满配的勇者比光着身子的自己强多少。
+ * 擂台要用它来抬对手，不然一身好装备下去就是碾压，配装也就没得研究了。
+ */
+export function gearFactor(save: HeroSave): number {
+  const bare = powerScore(baseHeroStats(save.level));
+  if (bare <= 0) return 1;
+  const geared = powerScore(heroStats(save));
+  return Math.max(1, Math.min(2.2, Math.round((geared / bare) * 1000) / 1000));
+}
+
+/** 对手跟多少装备差距：小于 1 就意味着「配得越好，赢面越大」 */
+export const GEAR_MATCH_EXPONENT = 0.6;
+
+/**
+ * 擂台难度：赢得越多，星星的队伍越强（倍数封顶，永远留得住翻盘的余地）。
+ * gear 是勇者的装备倍数，对手会跟着抬一部分，比的是「配得好不好」而不是「肝没肝」。
+ */
+export function arenaScale(wins: number, gear = 1): number {
   const w = Math.max(0, Math.round(wins));
-  return Math.round(Math.min(1.6, 0.92 + w * 0.05) * 1000) / 1000;
+  const byWins = Math.min(1.18, 0.88 + w * 0.01);
+  // 只跟一部分装备差距，剩下的那部分留给玩家：认真配装就该看得见回报
+  const byGear = Math.pow(Math.max(1, Math.min(2.2, gear)), GEAR_MATCH_EXPONENT);
+  return Math.round(byWins * byGear * 1000) / 1000;
 }
 
 /** 星星的三人队伍（第几次挑战决定同伴组合，配置固定可预测） */
-export function buildRivalTeam(heroLevel: number, wins: number): Fighter[] {
-  const scale = arenaScale(wins);
+export function buildRivalTeam(heroLevel: number, wins: number, gear = 1): Fighter[] {
+  const scale = arenaScale(wins, gear);
   const order = ["shanshan", "dundun", "jiujiu", "yunyun", "lvlvdou", "nuonuo"];
   const a = order[wins % order.length];
   const b = order[(wins + 3) % order.length];
@@ -874,6 +899,9 @@ export function buildRivalTeam(heroLevel: number, wins: number): Fighter[] {
   ];
 }
 
+/** 同伴能分到多少装备红利：朵朵把换下来的装备匀给他们，但匀不满 */
+export const MATE_GEAR_SHARE = 0.75;
+
 /** 我的三人队伍：朵朵打头，后面跟着选好的两位同伴 */
 export function buildMyTeam(save: HeroSave): Fighter[] {
   const mates = save.party.filter((id) => companionById(id)).slice(0, 2);
@@ -882,7 +910,8 @@ export function buildMyTeam(save: HeroSave): Fighter[] {
     if (!next) break;
     mates.push(next.id);
   }
-  return [buildHero(save), ...mates.map((id) => buildCompanion(id, save.level))];
+  const share = 1 + (gearFactor(save) - 1) * MATE_GEAR_SHARE;
+  return [buildHero(save), ...mates.map((id) => buildCompanion(id, save.level, share))];
 }
 
 export interface ArenaOutcome {
@@ -898,7 +927,7 @@ export interface ArenaOutcome {
 /** 打一场擂台，纯函数：同样的存档 + 同样的种子必然同样的结果 */
 export function runArena(save: HeroSave, seed: number): ArenaOutcome {
   const mine = buildMyTeam(save);
-  const theirs = buildRivalTeam(save.level, save.arenaWins);
+  const theirs = buildRivalTeam(save.level, save.arenaWins, gearFactor(save));
   const result = simulateTeamBattle(mine, theirs, seed >>> 0);
   const win = result.winner === "a";
   const coins = win ? 70 + save.arenaWins * 12 : 24;

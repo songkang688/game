@@ -258,15 +258,24 @@ export type FoeTier = "normal" | "elite" | "boss";
 const TIER_MUL: Record<FoeTier, { hp: number; atk: number; def: number; spd: number }> = {
   normal: { hp: 0.42, atk: 0.72, def: 0.35, spd: 0.82 },
   elite: { hp: 0.66, atk: 0.84, def: 0.46, spd: 0.9 },
-  boss: { hp: 1.15, atk: 0.83, def: 0.5, spd: 0.95 }
+  boss: { hp: 2.4, atk: 0.83, def: 0.55, spd: 0.95 }
 };
+
+/**
+ * Boss 的耐打程度还要按章节再抬一档：越往后的 Boss 越经打，
+ * 不然一套克制连招三个回合就打完，读条和护盾根本来不及出场。
+ */
+function bossHpScale(level: number): number {
+  return 1 + chapterOfLevel(level) * 0.067;
+}
 
 /** 第 level 关某档对手的基础数值 */
 export function foeStats(level: number, tier: FoeTier): StatLine {
   const base = expectedHero(level);
   const m = TIER_MUL[tier];
+  const hpScale = tier === "boss" ? bossHpScale(level) : 1;
   return {
-    maxHp: Math.max(12, Math.round(base.maxHp * m.hp)),
+    maxHp: Math.max(12, Math.round(base.maxHp * m.hp * hpScale)),
     atk: Math.max(4, Math.round(base.atk * m.atk)),
     def: Math.max(0, Math.round(base.def * m.def)),
     spd: Math.max(3, Math.round(base.spd * m.spd))
@@ -320,8 +329,9 @@ export function makeBossSpec(level: number): FighterSpec {
   const info = BOSSES[ci];
   const s = foeStats(level, "boss");
   // 越往后的章节，机制越密：读条更勤、护盾更厚
-  const chargeEvery = ci <= 1 ? 4 : ci <= 4 ? 3 : 3;
-  const shieldEvery = ci === 0 ? 0 : ci <= 3 ? 5 : 4;
+  // 第一章的 Boss 只教「读条要防御」这一件事，从第二章起才开始张护盾
+  const chargeEvery = ci <= 1 ? 4 : 3;
+  const shieldEvery = ci === 0 ? 0 : ci <= 3 ? 4 : 3;
   const shieldAmount = ci === 0 ? 0 : Math.round(s.maxHp * (0.12 + ci * 0.015));
   return {
     name: info.name,
