@@ -231,7 +231,30 @@ async function playSnake(page) {
         }
         return true;
       };
-      const pick = plans.map((p) => p.dir).find(okFor) ?? DIRS.find(okFor);
+      // 落点还剩多大一块连通空地：小于身体长度就是死角，宁可绕路也别钻进去
+      const room = (d) => {
+        const from = stepTo(worms[0][0], d);
+        if (!safe(from)) return 0;
+        const seen = new Set([from]);
+        const queue = [from];
+        for (let i = 0; i < queue.length && seen.size <= GRID * GRID; i++) {
+          for (const dd of DIRS) {
+            const nxt = stepTo(queue[i], dd);
+            if (!safe(nxt) || seen.has(nxt)) continue;
+            seen.add(nxt);
+            queue.push(nxt);
+          }
+        }
+        return seen.size;
+      };
+      const need = worms[0].length + 2;
+      const wanted = plans.map((p) => p.dir);
+      // 先挑「走得通又不钻死角」的那条；实在只剩窄路也要奔着点心去，
+      // 一条路都算不出来时再往空地最大的方向兜一圈等点心刷新。
+      const pick =
+        wanted.find((d) => okFor(d) && room(d) >= need) ??
+        wanted.find(okFor) ??
+        DIRS.filter(okFor).sort((a, b) => room(b) - room(a))[0];
       if (!pick) return;
       const key = pick[0] === 1 ? "ArrowRight" : pick[0] === -1 ? "ArrowLeft" : pick[1] === 1 ? "ArrowDown" : "ArrowUp";
       window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
