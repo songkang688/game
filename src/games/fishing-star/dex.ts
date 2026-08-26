@@ -173,6 +173,20 @@ export function recordCatch(book: DexBook, rec: CatchRecord): DexUpdate {
   };
 }
 
+/**
+ * 把手上这一条放生(不再算一次捕获,只记一笔放生)。
+ * 返回 firstRelease:这一种鱼是不是第一次被放回水里 —— 只有第一次给星星。
+ */
+export function markReleased(book: DexBook, id: string): { book: DexBook; firstRelease: boolean } {
+  const prev = book.entries[id];
+  if (!prev) return { book, firstRelease: false };
+  const firstRelease = prev.released === 0;
+  return {
+    book: { entries: { ...book.entries, [id]: { ...prev, released: prev.released + 1 } } },
+    firstRelease,
+  };
+}
+
 export interface DexStats {
   found: number;
   total: number;

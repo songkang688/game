@@ -14,6 +14,7 @@ import {
   dexStats,
   emptyDex,
   firstCatchText,
+  markReleased,
   parseDexBook,
   recordCatch,
   serializeDexBook,
@@ -79,6 +80,25 @@ describe("图鉴 v2 · 记一条鱼", () => {
     expect(again.firstRelease).toBe(false);
     expect(dexEntry(again.book, B.id)?.released).toBe(2);
     expect(dexEntry(again.book, B.id)?.caught).toBe(2);
+  });
+
+  it("把手上这一条放生:不多算一次捕获,只有第一次给奖励", () => {
+    const book = withCatches({ id: B.id, cm: 25, at: T1 });
+    const one = markReleased(book, B.id);
+    expect(one.firstRelease).toBe(true);
+    expect(dexEntry(one.book, B.id)?.released).toBe(1);
+    expect(dexEntry(one.book, B.id)?.caught).toBe(1);
+    const two = markReleased(one.book, B.id);
+    expect(two.firstRelease).toBe(false);
+    expect(dexEntry(two.book, B.id)?.released).toBe(2);
+  });
+
+  it("没见过的鱼放生不了,图鉴原样还回来", () => {
+    const book = emptyDex();
+    const out = markReleased(book, B.id);
+    expect(out.book).toBe(book);
+    expect(out.firstRelease).toBe(false);
+    expect(markReleased(book, "查无此鱼").firstRelease).toBe(false);
   });
 
   it("不认识的鱼 id 一律忽略,原样把图鉴还回来", () => {
