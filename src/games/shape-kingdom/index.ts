@@ -9,8 +9,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   return mountLevelGame(api, {
     id: meta.id,
     chapters: CHAPTERS,
-    mapHint: "帮国王认全王国里的每一种形状～",
-    grandMessage: "99 关全部通关，国王封你为形状小骑士！",
+    mapHint: "帮国王认全王国里的形状，再一路量到坐标方位岛～",
+    grandMessage: "188 关全部通关，国王封你为形状小骑士！",
     playLevel(stage, ctx) {
       return runQuiz({
         stage,
