@@ -238,7 +238,11 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   const barFill = el("div", "gdh-bar-fill");
   const barTxt = el("span", "gdh-bar-txt");
   bar.append(barFill, barTxt);
-  hud.append(coinChip, goalChip, bar);
+  // 「收工」跟着「🎯 目标」走:达标了才冒出来,而且挂在顶部这一行 ——
+  // 底下那一行在 360px 上已经是掐着算的,再塞一格就要把「放绳」顶出屏幕
+  const doneBtn = iconButton("gdh-btn gdh-done", "✅", "收工");
+  doneBtn.hidden = true;
+  hud.append(coinChip, goalChip, doneBtn, bar);
 
   const box = el("div", "gdh-box");
   const canvas = el("canvas", "gdh-cv");
@@ -260,9 +264,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   const kitChip = el("span", "gdh-kit");
   const shopBtn = iconButton("gdh-btn gdh-btn-shop", "🛒", "商店");
   const pauseBtn = iconButton("gdh-btn", "⏸️", "暂停");
-  const doneBtn = iconButton("gdh-btn", "✅", "收工");
-  doneBtn.hidden = true;
-  ctrl.append(fireBtn, bombBtn, kitChip, shopBtn, doneBtn, pauseBtn);
+  ctrl.append(fireBtn, bombBtn, kitChip, shopBtn, pauseBtn);
 
   const tip = el("p", "gdh-tip", o.hint);
   wrap.append(hud, box, ctrl, tip);

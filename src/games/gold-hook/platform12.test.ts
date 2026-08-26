@@ -15,6 +15,7 @@ import { CHAPTERS, RARE_KINDS, TOTAL, endlessLayer, levelAt, luckyBag } from "./
 import { MAX_LUCK, ORES, ORE_KINDS, angleFromPivot, hookAngle, type OreKind } from "./logic";
 import { rareWeightMult } from "./depth12";
 import { BANNED } from "./copy";
+import { CSS } from "./style";
 
 let harness: Harness | null = null;
 
@@ -278,6 +279,48 @@ describe("1.2 平台直达第 N 关", () => {
     game.destroy();
     expect(h.windowListeners()).toBe(0);
     expect(h.pendingFrames()).toBe(0);
+  });
+});
+
+/* ---------------- 一之二、360px 底部那一行 ---------------- */
+
+/** 某个 class 下面直接挂着的那几个孩子 */
+function childrenOf(root: FakeEl, cls: string): FakeEl[] {
+  let box: FakeEl | null = null;
+  walk(root, (el) => {
+    if (!box && el.className.split(/\s+/).includes(cls)) box = el;
+  });
+  return box === null ? [] : (box as FakeEl).children;
+}
+
+describe("1.2 360px 底部那一行塞得下", () => {
+  it("「收工」挂在顶部那一行,不占底部的格子", async () => {
+    const h = install();
+    harness = h;
+    const { game } = await mountGame(h, 2);
+
+    const bottom = childrenOf(h.root, "gdh-ctrl");
+    // 底部只留五格:放绳 / 炸药 / 道具栏 / 商店 / 暂停。
+    // 360px 上这一行是掐着算的,多一格就会把「放绳」那几个字挤出屏幕
+    expect(bottom.length).toBe(5);
+    const top = childrenOf(h.root, "gdh-hud");
+    expect(top.length).toBe(4);
+    expect(top.filter((c) => c.tagName === "button").length).toBe(1);
+    game.destroy();
+  });
+
+  it("没达标时「收工」是藏起来的,而且 CSS 真能把它藏住", async () => {
+    const h = install();
+    harness = h;
+    const { game } = await mountGame(h, 2);
+    h.flush(3);
+
+    const done = childrenOf(h.root, "gdh-hud").find((c) => c.tagName === "button");
+    expect(done?.hidden).toBe(true);
+    // `.gdh-btn` 是 inline-flex,会盖掉浏览器给 [hidden] 的 display:none;
+    // 少了这一条,「收工」在真浏览器里一直杵着,还白占一格宽度
+    expect(CSS).toContain(".gdh-btn[hidden]{display:none;}");
+    game.destroy();
   });
 });
 

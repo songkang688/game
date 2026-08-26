@@ -14,8 +14,10 @@ export const CSS = `
   -webkit-user-select:none;touch-action:manipulation;position:relative;}
 .gdh-run{display:flex;flex-direction:column;gap:6px;}
 
-/* 顶部一行:金币 / 目标 / 剩余时间。字号钉死在 ${HUD_MIN_FONT}px,窄屏也不许再小 */
+/* 顶部一行:金币 / 目标 / 剩余时间。字号钉死在 ${HUD_MIN_FONT}px,窄屏也不许再小。
+   「收工」达标以后也挂在这一行:它和「🎯 目标」是同一件事,挤到底下那行会把放绳按钮顶出屏幕 */
 .gdh-hud{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:center;}
+.gdh-done{padding:6px 10px;font-size:${HUD_MIN_FONT}px;flex:none;}
 .gdh-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:${HUD_MIN_FONT}px;font-weight:800;
   color:#7A5A2E;box-shadow:0 2px 6px rgba(170,140,90,.24);white-space:nowrap;}
 .gdh-chip-goal{background:#FFF0D4;color:#9A6A16;}
@@ -40,6 +42,9 @@ export const CSS = `
   align-items:center;justify-content:center;gap:4px;}
 .gdh-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,140,90,.34);}
 .gdh-btn[disabled]{opacity:.45;cursor:default;}
+/* inline-flex 会盖掉浏览器给 [hidden] 的 display:none,不写这条「收工」就一直杵在那儿,
+   还白占一格 44px 的宽度,360px 上正是它把整行挤出了屏幕 */
+.gdh-btn[hidden]{display:none;}
 .gdh-btn-fire{background:linear-gradient(180deg,#FFC96B,#EEA23A);color:#fff;box-shadow:0 4px 0 #C67F22;
   padding:9px 22px;font-size:17px;}
 .gdh-btn-bomb{background:linear-gradient(180deg,#FFA9A0,#EE7A6E);color:#fff;box-shadow:0 4px 0 #C75648;}
@@ -103,9 +108,11 @@ export const CSS = `
   /* 窄屏上按钮把文字收起来只留图标,一行才塞得下,但热区一格都不缩 */
   .gdh-btn .gdh-lb{display:none;}
   .gdh-btn{padding:8px 10px;font-size:15px;}
-  .gdh-btn-fire{padding:8px 14px;font-size:16px;}
+  .gdh-btn-fire{padding:8px 10px;font-size:16px;}
   .gdh-btn-fire .gdh-lb{display:inline;}
-  .gdh-ctrl{gap:5px;}
+  /* 360px 上这一行是掐着算的:放绳(带字) + 炸药 + 道具栏 + 商店 + 暂停,
+     再多一格就要挤出屏幕,所以「收工」挪去了顶部那一行 */
+  .gdh-ctrl{gap:4px;}
   .gdh-kit{padding:0 7px;}
   .gdh-tip{font-size:11px;}
   /* 商店那三行在窄屏上得瘦一圈,不然浮层比画面还高,得滚动才看得全 */
