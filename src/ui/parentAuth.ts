@@ -546,7 +546,8 @@ export function requestParentAuth(level: AuthLevel, reason: string): Promise<boo
 
     const input = document.createElement("input");
     input.className = "gate-input";
-    input.type = "text";
+    // high 档的带余除法要写「商...余...」,只能用文本框;basic 档沿用数字键盘
+    input.type = level === "high" ? "text" : "number";
     input.inputMode = level === "high" ? "text" : "numeric";
     input.placeholder = "答案";
     input.setAttribute("aria-label", "算术题答案");
@@ -597,6 +598,7 @@ export function requestParentAuth(level: AuthLevel, reason: string): Promise<boo
       question.textContent = q.text;
       subHint.hidden = !q.hint;
       subHint.textContent = q.hint ?? "";
+      input.placeholder = q.placeholder;
       input.value = "";
       if (!input.disabled) input.focus();
     }
