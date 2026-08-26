@@ -13,7 +13,7 @@ export default defineConfig({
         id: "/",
         name: "一朵一星",
         short_name: "一朵一星",
-        description: "一朵一星 —— 送给小朋友的原创小游戏合集,无广告、无内购。",
+        description: "一朵一星 1.1 —— 55 款原创小游戏合集,无广告、无内购。",
         lang: "zh-CN",
         display: "standalone",
         orientation: "any",

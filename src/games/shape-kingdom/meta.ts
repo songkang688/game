@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🏰",
   category: "edu" as const,
   color: "#b197fc",
-  blurb: "六大王国区域 99 关！认形状、辨颜色、比大小、数边数还有图形大搜数！",
+  blurb: "十大王国区域 188 关！认形状、周长面积、对称旋转、立体展开还有坐标方位！",
   // 10 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
   modes: ["campaign"] as const,
   levels: 188,
