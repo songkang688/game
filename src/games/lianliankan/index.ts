@@ -61,14 +61,14 @@ function ruleChip(cfg: LlkLevel): string {
 }
 
 function openingHint(cfg: LlkLevel): string {
-  if (cfg.rotateMs) return "看准了！每过一会儿整块棋盘就会转 90°。";
+  if (cfg.rotateMs) return "每过一会儿整块棋盘就转 90°，记图案别记坐标。";
   if (turnsOf(cfg) <= 1) return "这里的线最多只准拐一次弯，先找同一行同一列的。";
-  if (cfg.disguise) return "戴面具的图案点一下就露真身，记住它藏在哪！";
-  if (cfg.gravity === "up") return "小心！消掉一对后，下面的图案会往上飘！";
-  if (cfg.gravity === "right") return "小心！消掉一对后，左边的图案会向右滑！";
-  if (cfg.gravity === "down") return "小心！消掉一对后，上面的图案会掉下来！";
-  if (cfg.gravity === "left") return "小心！消掉一对后，右边的图案会向左滑！";
-  return `${cfg.rows}×${cfg.cols} 棋盘，${cfg.seconds} 秒内全部连完！`;
+  if (cfg.disguise) return "戴面具的图案点一下露真身，先翻一遍摸清盘面再动手。";
+  if (cfg.gravity === "up") return "重力向上：消掉一对后，下面的图案会补上来。";
+  if (cfg.gravity === "right") return "重力向右：消掉一对后，左边的图案会挤过来。";
+  if (cfg.gravity === "down") return "重力向下：消掉一对后，上面的图案会落下来。";
+  if (cfg.gravity === "left") return "重力向左：消掉一对后，右边的图案会挤过来。";
+  return `${cfg.rows}×${cfg.cols} 棋盘，${cfg.seconds} 秒内全部连完，先从边角下手！`;
 }
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -155,7 +155,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       if (levelDone || destroyed) return;
       timeLeft--;
       renderTop();
-      if (timeLeft <= 0) fail("时间到啦，下次先连容易看到的那几对！");
+      if (timeLeft <= 0) fail("时间到～下一局先清边角，边角的线拐弯少，还能给里面让出通道！");
     }, 1000);
     intervals.add(clock);
 
@@ -171,7 +171,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (levelDone || destroyed) return;
         rerollMasks();
         render();
-        msgEl.textContent = "🎭 面具换了一批，点一点看看真面目～";
+        msgEl.textContent = "🎭 面具换了一批，之前记的失效了，重新翻一遍～";
       }, Math.max(3500, cfg.disguiseMs));
       intervals.add(swapMask);
     }
@@ -262,11 +262,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     boardEl.classList.add("llk-spin");
     later(() => boardEl.classList.remove("llk-spin"), 320);
     ctx.sfx("tap");
-    msgEl.textContent = "🌀 呼——棋盘转了一圈，重新找找看！";
+    msgEl.textContent = "🌀 棋盘转了 90°，先花一秒重新定位再动手！";
     render();
     if (!anyMove(board, maxTurns) && tilesLeft(board) > 0) {
       if (cfg.autoShuffleFree || shufflesLeft > 0) doShuffle(true);
-      else fail("转完就连不动啦，洗牌也用完了，再来一局吧！");
+      else fail("转完之后没有可连的了～洗牌留给真正的死局，再来一局就顺了！");
     }
   }
 
@@ -307,7 +307,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     stopAll();
     const frac = timeLeft / cfg.seconds;
     const got = frac >= 0.4 ? 3 : frac >= 0.15 ? 2 : 1;
-    later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${timeLeft} 秒，眼睛真尖！`), 350);
+    later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${timeLeft} 秒，扫盘的效率很高！`), 350);
   }
 
   function onCell(r: number, c: number): void {
@@ -343,8 +343,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (!path) {
       ctx.sfx("oops");
       msgEl.textContent = maxTurns <= 1
-        ? "这两个连不到一起，这一关的线只能拐一次弯哦～"
-        : "这两个连不到一起，线最多拐两次弯哦～";
+        ? "这两个连不上：这一关的线只准拐一次弯，先找同行同列的～"
+        : "这两个连不上：线最多拐两次弯，中间还不能有别的图案～";
       selected = [r, c];
       render();
       return;
@@ -369,7 +369,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
     if (!anyMove(board, maxTurns)) {
       if (cfg.autoShuffleFree || shufflesLeft > 0) doShuffle(true);
-      else fail("连不动了，洗牌次数也用完了，再来一局吧！");
+      else fail("场上没有可连的了～洗牌是应急用的，下一局多留一次就够翻盘啦！");
     }
   }
 
@@ -397,7 +397,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "剩的时间越多星星越多，十大场馆等你逛！",
-    grandMessage: "188 关连连看全部通关，火眼金睛就是你！",
+    mapHint: "剩的时间越多星星越多，先清边角效率最高！",
+    grandMessage: "188 关全部通关，你的扫盘路线已经很有章法了！",
   });
 }

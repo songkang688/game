@@ -102,8 +102,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   if (cfg.combo) tips.push(`连续接住攒连击，满 ${COMBO_EVERY} 连多算一颗`);
   if (cfg.badChance > 0) tips.push(`别接 ${theme.bad}`);
   if (cfg.goldChance >= 0.1) tips.push(`${theme.gold} 一颗顶${cfg.theme === 5 ? "三" : "两"}颗`);
-  if (cfg.wind > 0) tips.push("有风，水果会飘");
-  msgEl.textContent = tips.length > 0 ? `小心：${tips.join("，")}！` : "接住水果装满篮子吧！";
+  if (cfg.wind > 0) tips.push("有风，落点会偏，得算提前量");
+  msgEl.textContent = tips.length > 0 ? `本关要点：${tips.join("，")}！` : "眼睛看屏幕上方，提前挪到落点下面等！";
 
   function basketXs(): number[] {
     return basketCount > 1 ? [basketX, W - basketX] : [basketX];
@@ -194,9 +194,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     draw();
     if (won) {
       const got = missed === 0 ? 3 : missed === 1 ? 2 : 1;
-      ctx.win(got as 1 | 2 | 3, missed === 0 ? "一颗爱心都没掉，接得太稳啦！" : `装满 ${cfg.target} 个，篮子沉甸甸！`);
+      ctx.win(got as 1 | 2 | 3, missed === 0 ? "一颗爱心都没掉，落点预判得很准！" : `装满 ${cfg.target} 个，篮子沉甸甸！`);
     } else {
-      ctx.lose(`刚才接到 ${caught} 个，篮子再往水果下面挪一挪！`);
+      ctx.lose(`这一轮接到 ${caught} 个～视线往屏幕上方抬一点，提前挪到落点下面等，再来一次！`);
     }
   }
 
@@ -257,7 +257,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           missed++;
           combo = 0;
           ctx.sfx("oops");
-          msgEl.textContent = `${theme.bad} 不能进篮子，快躲开它们！`;
+          msgEl.textContent = `${theme.bad} 不能接～先规划一条避开它的路线再考虑接水果！`;
           updateTop();
           if (missed >= MAX_MISS) { finish(false); return; }
         } else if (f.kind === "gold") {
@@ -267,7 +267,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         } else if (f.kind === "heavy") {
           ctx.sfx("coin");
           slowLeft = HEAVY_SLOW_S;
-          onGoodCatch(2, "🍉 好沉呀！顶两颗，篮子慢一下下～");
+          onGoodCatch(2, "🍉 沉水果顶两颗，代价是篮子会慢一小段～");
           if (ended) return;
         } else {
           ctx.sfx("pop");
@@ -356,7 +356,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     playLevel,
-    mapHint: "一颗爱心都不掉就是 3 星！",
-    grandMessage: "188 场水果雨全部接住，果篮超级冠军！",
+    mapHint: "一颗爱心都不掉就是 3 星，走最短路线最省时间！",
+    grandMessage: "188 场水果雨全部接住，你的落点预判已经相当准了！",
   });
 }

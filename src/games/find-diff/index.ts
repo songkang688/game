@@ -24,16 +24,16 @@ const THEME_ACCENT = [
 
 /** 每种玩法的一句话说明（开局就告诉孩子这一关的规则变了） */
 export const MODE_HINTS: Record<DiffLevel["mode"], string> = {
-  classic: "上下对比，找到不一样的格子！",
+  classic: "定一条路线一行一行扫，上下对照着找！",
   triple: "三张图一起看：只有跟上面两张都不一样的才算数～",
-  moving: "图案会自己换位置，不同点也跟着跑，盯紧了！",
-  mirror: "下图是左右翻过来的，要按镜子里的位置去对～",
-  rush: "一关连打好几轮，倒计时是共用的，加油！",
+  moving: "图案会自己换位置，记图案别记坐标！",
+  mirror: "下图是左右翻过来的，上图最左对应下图最右～",
+  rush: "一关连打好几轮，倒计时是共用的，前面省下的就是后面的余粮！",
 };
 
 /** 结算时的鼓励语：一次没错就夸眼力，错过也只肯定完成度 */
 export function finishLine(misses: number, totalDiffs: number, rounds: number): string {
-  if (misses === 0) return rounds > 1 ? `${rounds} 轮一次都没点错，眼力真棒！` : "一次都没点错，眼力真棒！";
+  if (misses === 0) return rounds > 1 ? `${rounds} 轮一次都没点错，命中率满分！` : "一次都没点错，命中率满分！";
   return rounds > 1 ? `${rounds} 轮全部完成，一共找到 ${totalDiffs} 处不同！` : `${totalDiffs} 处不同全部找到！`;
 }
 
@@ -142,7 +142,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const sayBtn = wrap.querySelector(".fd-say") as HTMLButtonElement;
 
   msgEl.textContent = cfg.lookalike && cfg.mode === "classic"
-    ? "小心！有些图案是双胞胎，长得很像～"
+    ? "这一关有长得很像的一对，盯细节：数量、缺口、朝向～"
     : MODE_HINTS[cfg.mode];
 
   const askLine =
@@ -267,7 +267,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     perm = movePermutation(cfg.rows, cfg.cols, 0);
     paint(true);
     updateHud();
-    msgEl.textContent = `第 ${roundIndex + 1} 轮开始，继续加油！`;
+    msgEl.textContent = `第 ${roundIndex + 1} 轮开始，保持刚才的扫描节奏！`;
     ctx.sfx("pop");
   }
 
@@ -279,7 +279,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       foundTotal++;
       ctx.sfx("coin");
       btn.classList.add("fd-found");
-      msgEl.textContent = "找到啦！👀";
+      msgEl.textContent = "找到一处！👀 同一片区域常常还藏着第二处～";
       updateHud();
       if (found >= cfg.diffs) {
         if (roundIndex + 1 < rounds) later(() => nextRound(), 500);
@@ -292,15 +292,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       later(() => btn.classList.remove("fd-wrong"), 400);
       msgEl.textContent =
         cfg.mode === "triple"
-          ? "这一格跟上面某张是一样的，再比比看～"
+          ? "这一格只跟其中一张不同，要三张都对上才算～"
           : cfg.mode === "mirror"
-            ? "别忘了左右是反的，照着镜子再看一眼～"
-            : "这里上下是一样的，再仔细看看～";
+            ? "左右是反的，换成镜子里的位置再对一次～"
+            : "这一格上下一致，换成一列一列竖着比试试～";
       updateHud();
       if (misses > cfg.maxMiss) {
         ended = true;
         stopTimers();
-        ctx.lose("眼睛累了吧？休息一下，我们再来找一次！");
+        ctx.lose("这一关先到这儿～换个扫描方向(改成竖着比)再来一次，常常一眼就看见了！");
       }
     }
   }
@@ -330,7 +330,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       if (timeLeft <= 0) {
         ended = true;
         stopTimers();
-        ctx.lose("时间到啦！剩下的不同点下次一定能找到～");
+        ctx.lose("时间到～开局先花两秒整体扫一遍再动手，速度会明显提上来！");
       }
     }, 1000);
   }
@@ -365,8 +365,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   return mountLevelGame(api, {
     id: meta.id,
     chapters: CHAPTERS,
-    mapHint: "睁大眼睛，每一关都藏着新的不同点～",
-    grandMessage: "188 关全部找完，你的眼睛比放大镜还厉害！",
+    mapHint: "一行一行按路线扫，比满屏乱看快得多～",
+    grandMessage: "188 关全部找完，你已经练出一套自己的观察方法了！",
     playLevel,
   });
 }

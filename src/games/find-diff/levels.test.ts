@@ -311,9 +311,13 @@ describe("找不同 · 1.1 第 100–188 关", () => {
       expect(MODE_HINTS[mode].length).toBeGreaterThan(8);
       expect(MODE_HINTS[mode]).not.toMatch(/笨|差|不行|错了/);
     }
-    expect(finishLine(0, 5, 1)).toContain("眼力真棒");
+    // 1.1 第 12 步：夸奖改成说得清的「命中率满分」，不再用「真棒」这类空泛低幼夸法
+    expect(finishLine(0, 5, 1)).toContain("命中率满分");
+    expect(finishLine(0, 5, 3)).toContain("3 轮");
     expect(finishLine(2, 12, 3)).toContain("3 轮");
-    expect(finishLine(2, 12, 3)).not.toMatch(/可惜|失误|太差/);
+    for (const line of [finishLine(0, 5, 1), finishLine(0, 5, 3), finishLine(2, 12, 3)]) {
+      expect(line).not.toMatch(/可惜|失误|太差|笨|真棒|宝宝|乖乖/);
+    }
   });
 
   it("新章节明显更难：限时更紧、机制更绕，但命数仍然够用", () => {
