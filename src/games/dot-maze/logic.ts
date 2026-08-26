@@ -15,6 +15,7 @@ import {
   hitGhost,
   makeGhost,
   tickFright,
+  tierFlanks,
   type ChaseInput,
   type Ghost,
   type Tier,
@@ -56,6 +57,11 @@ export interface RunConfig {
   fruitAt: number[];
   /** 视野变小（迷雾章节），只影响渲染 */
   fog: boolean;
+  /**
+   * 第二个人操纵的那只小幽灵的下标（双人追逃用），省略或 -1 表示四只全归 AI。
+   * 被操纵的这一只不吃节奏表，方向完全听 `steerGhost` 的。
+   */
+  controlled?: number;
 }
 
 export interface RunState {
@@ -88,6 +94,10 @@ export interface RunState {
   graceMs: number;
   /** 确定性随机游标（乱乱与果子位置用） */
   rollSeed: number;
+  /** 第二个人操纵的那只小幽灵下标，-1 表示没有 */
+  controlled: number;
+  /** 第二个人给那只小幽灵下的转向（撞墙时保持原方向） */
+  controlledDir: Dir;
 }
 
 /** 果子在场上停留多久 */
@@ -133,7 +143,29 @@ export function createRun(cfg: RunConfig, seed = 1): RunState {
     notice: "",
     graceMs: 0,
     rollSeed: (seed >>> 0) || 1,
+    controlled: cfg.controlled !== undefined && cfg.controlled >= 0 && cfg.controlled < ghosts.length
+      ? Math.floor(cfg.controlled)
+      : -1,
+    controlledDir: "left",
   };
+}
+
+/**
+ * 第二个人给自己操纵的那只小幽灵下转向。撞墙的方向不会被采纳，
+ * 小幽灵会保持原来的方向继续走，不会卡在原地。
+ */
+export function steerGhost(state: RunState, dir: Dir): boolean {
+  if (state.controlled < 0) return false;
+  state.controlledDir = dir;
+  return true;
+}
+
+/** 被操纵的那只小幽灵走一格：听得懂的方向就转，撞墙就沿用原方向 */
+function stepControlled(maze: Maze, ghost: Ghost, wanted: Dir, phase: "scatter" | "chase"): Ghost {
+  const dir = canTurn(maze, ghost.cell, wanted) ? wanted : ghost.dir;
+  const cell = canTurn(maze, ghost.cell, dir) ? stepCell(maze, ghost.cell, dir) : ghost.cell;
+  const mood = ghost.mood === "fright" ? ghost.mood : phase;
+  return { ...ghost, dir, cell, mood };
 }
 
 /** 记录一次转向请求（输入缓冲） */
@@ -299,8 +331,14 @@ export function stepRun(state: RunState, dt: number): RunState {
       zhi,
       roll: nextRoll(state),
       maze: state.maze,
+      flank: tierFlanks(state.cfg.tier),
     };
-    state.ghosts = state.ghosts.map((g) => advanceGhost(state.maze, g, input, phase));
+    state.ghosts = state.ghosts.map((g, i) =>
+      // 被操纵的那一只不走 AI；只有变成眼睛往回飘的时候才交还给自动寻路
+      i === state.controlled && g.mood !== "eyes"
+        ? stepControlled(state.maze, g, state.controlledDir, phase)
+        : advanceGhost(state.maze, g, input, phase)
+    );
     checkCollision(state);
     const frightSlow = state.ghosts.some((g) => g.mood === "fright") ? 1.6 : 1;
     state.ghostCd += (state.cfg.stepMs / TIER_GHOST_SPEED[state.cfg.tier]) * frightSlow;

@@ -142,6 +142,8 @@ export interface ChaseInput {
   /** 乱乱的随机数（0–1），远距离时决定往哪个角落乱走 */
   roll: number;
   maze: Maze;
+  /** 地狱档的包抄：拐拐走玩家前方、绕绕绕到玩家后方，把人夹在中间 */
+  flank?: boolean;
 }
 
 function ahead(cell: Cell, dir: Dir, n: number): Cell {
@@ -249,6 +251,23 @@ export function hitGhost(player: Cell, ghosts: readonly Ghost[]): number {
   return -1;
 }
 
+/**
+ * 巢门口的第 slot 个位置。四只小幽灵不能叠在同一格上出生，
+ * 否则脾气再不一样也会成对地走同一条路线。往巢的各个出口依次排开，
+ * 排不下就退回巢里。
+ */
+export function homeSlot(maze: Maze, slot: number): Cell {
+  const n = Math.max(0, Math.floor(slot));
+  if (n === 0) return wrapTunnel(maze, maze.home.x, maze.home.y);
+  const exits = openDirs(maze, maze.home);
+  if (exits.length === 0) return wrapTunnel(maze, maze.home.x, maze.home.y);
+  const dir = exits[(n - 1) % exits.length];
+  const first = stepCell(maze, maze.home, dir);
+  // 出口不够用时，第二圈往同一个方向再走一格
+  if (n - 1 < exits.length) return first;
+  return canTurn(maze, first, dir) ? stepCell(maze, first, dir) : first;
+}
+
 /** 建一只小幽灵 */
 export function makeGhost(kind: GhostKind, maze: Maze, slot: number): Ghost {
   const corners: Cell[] = [
@@ -257,7 +276,7 @@ export function makeGhost(kind: GhostKind, maze: Maze, slot: number): Ghost {
     { x: maze.w - 2, y: maze.h - 2 },
     { x: 1, y: maze.h - 2 },
   ];
-  const start = wrapTunnel(maze, maze.home.x + (slot % 2 === 0 ? 0 : 0), maze.home.y);
+  const start = homeSlot(maze, slot);
   return {
     kind,
     cell: start,
@@ -277,7 +296,9 @@ export function advanceGhost(maze: Maze, ghost: Ghost, input: ChaseInput, phase:
   if (ghost.mood === "eyes") target = maze.home;
   else if (ghost.mood === "fright") target = fleeTarget(ghost, input.player, maze);
   else if (phase === "scatter") target = ghost.corner;
-  else target = targetOf(ghost.kind, ghost, input);
+  else if (input.flank && FLANK_KINDS[ghost.kind] !== undefined) {
+    target = flankTarget(input, FLANK_KINDS[ghost.kind]!);
+  } else target = targetOf(ghost.kind, ghost, input);
 
   const dir = chooseDir(maze, ghost, target);
   const cell = canTurn(maze, ghost.cell, dir) ? stepCell(maze, ghost.cell, dir) : ghost.cell;
@@ -302,6 +323,17 @@ export function tickFright(ghost: Ghost, dtMs: number, phase: "scatter" | "chase
 export function flankTarget(input: ChaseInput, back: boolean): Cell {
   const dir: Dir = back ? OPPOSITE[input.playerDir] : input.playerDir;
   return ahead(input.player, dir, 6);
+}
+
+/** 包抄时哪两只改走对侧路线：拐拐堵前面，绕绕绕到后面。直直和乱乱照旧 */
+export const FLANK_KINDS: Partial<Record<GhostKind, boolean>> = {
+  guai: false,
+  rao: true,
+};
+
+/** 包抄只在地狱档打开 */
+export function tierFlanks(tier: Tier): boolean {
+  return tier === "hell";
 }
 
 /** 保证 DIRS 顺序稳定（渲染与测试都依赖它） */

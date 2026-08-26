@@ -10,8 +10,8 @@ import {
   TIER_LABELS,
   frightWarning,
   type Ghost,
-  type Tier,
 } from "./ghosts";
+import { MAX_CELL_PX, cellPxFor, maxCanvasWidth } from "./layout";
 import { CHAPTERS, configFor, endlessConfig, planFor, rateLevel } from "./levels";
 import {
   canTurn,
@@ -26,10 +26,14 @@ import {
   createRun,
   remaining,
   requestTurn,
+  steerGhost,
   stepRun,
   type RunConfig,
   type RunState,
 } from "./logic";
+
+/** 平台内置的那几个音效，游戏自己不碰 AudioContext */
+export type Sfx = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
 const CSS = `
 .dmz-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFFBEA,#F4F0FF);
@@ -103,6 +107,8 @@ export interface StageOptions {
   onEnd: (result: { won: boolean; score: number; livesLeft: number; starScore: number }) => void;
   /** 每帧回调（HUD 额外信息） */
   extraChip?: () => string;
+  /** 音效，只走平台内置的那七个 */
+  play?: (name: Sfx) => void;
 }
 
 interface StarEater {
@@ -148,7 +154,10 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const extraEl = wrap.querySelector(".dmz-extra") as HTMLElement;
   const noteEl = wrap.querySelector(".dmz-note") as HTMLElement;
 
-  const state: RunState = createRun(opts.cfg, 20240612);
+  const sfx = opts.play ?? ((): void => {});
+  // 追逃模式里星星操纵第 0 只小幽灵：交给 logic 记下来，AI 就不会再覆盖它的方向
+  const cfg: RunConfig = opts.starRole === "ghost" ? { ...opts.cfg, controlled: 0 } : opts.cfg;
+  const state: RunState = createRun(cfg, 20240612);
   const maze: Maze = state.maze;
   let star: StarEater | null = null;
   if (opts.starRole === "eater") {
@@ -162,12 +171,14 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     // 星星的出生格不能是墙
     if (maze.wall[cellIndex(maze, star.cell.x, star.cell.y)]) star.cell = { ...maze.spawn };
   }
-  let starGhost = 0;
-  let starGhostDir: Dir = "left";
 
-  const cell = 18;
+  // 画布按屏宽定分辨率，再用 max-width 挡住大屏上的过度拉伸。
+  // 360px 下能不能保住 14px/格由 layout.mazeFits 兜底，layout.test.ts 逐关断言。
+  const viewport = typeof window !== "undefined" && window.innerWidth ? window.innerWidth : 420;
+  const cell = cellPxFor(viewport, maze.w);
   canvas.width = maze.w * cell;
   canvas.height = maze.h * cell;
+  canvas.style.maxWidth = `${maxCanvasWidth(maze.w)}px`;
   const ctx = canvas.getContext("2d");
 
   let raf = 0;
@@ -216,16 +227,6 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
   }
 
-  function moveStarGhost(): void {
-    if (opts.starRole !== "ghost") return;
-    const g = state.ghosts[starGhost];
-    if (!g) return;
-    if (canTurn(maze, g.cell, starGhostDir)) {
-      const next = stepCell(maze, g.cell, starGhostDir);
-      state.ghosts = state.ghosts.map((x, i) => (i === starGhost ? { ...x, cell: next, dir: starGhostDir } : x));
-    }
-  }
-
   function draw(): void {
     if (!ctx) return;
     ctx.fillStyle = "#241f3a";
@@ -265,7 +266,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
     // 小幽灵
     state.ghosts.forEach((g, i) => {
-      drawGhost(g, i === starGhost && opts.starRole === "ghost");
+      drawGhost(g, i === state.controlled);
     });
     // 星星（抢豆模式）
     if (star) {
@@ -349,6 +350,24 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     noteEl.textContent = paused ? "已暂停，按 Esc 继续。" : state.notice;
   }
 
+  // 上一帧的几个数，用来判断这一帧该响哪个音
+  let lastScore = state.score;
+  let lastLives = state.lives;
+  let lastChain = state.chain;
+  let lastFright = false;
+
+  function speak(): void {
+    const fright = state.ghosts.some((g) => g.mood === "fright");
+    if (state.lives < lastLives) sfx("oops");
+    else if (state.chain > lastChain) sfx("meow");
+    else if (fright && !lastFright) sfx("pop");
+    else if (state.score > lastScore) sfx("coin");
+    lastScore = state.score;
+    lastLives = state.lives;
+    lastChain = state.chain;
+    lastFright = fright;
+  }
+
   function frame(now: number): void {
     if (destroyed) return;
     raf = requestAnimationFrame(frame);
@@ -362,12 +381,15 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
     stepRun(state, dt);
     moveStarEater(dt);
+    speak();
     draw();
     renderHud();
     if (state.over) {
+      sfx(state.won ? "win" : "oops");
       if (star) finish(state.score >= star.score);
       else finish(state.won);
     } else if (star && remaining(state) === 0) {
+      sfx("win");
       finish(state.score >= star.score);
     }
   }
@@ -376,6 +398,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     const key = e.key.toLowerCase();
     if (key === "escape") {
       paused = !paused;
+      sfx("tap");
       renderHud();
       e.preventDefault();
       return;
@@ -389,12 +412,9 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     const starDir = KEY_DIR_STAR[key];
     if (starDir) {
       if (star) star.next = starDir;
-      else if (opts.starRole === "ghost") {
-        starGhostDir = starDir;
-        moveStarGhost();
-      } else {
-        requestTurn(state, starDir, state.elapsed);
-      }
+      else if (opts.starRole === "ghost") steerGhost(state, starDir);
+      // 单人玩的时候方向键和 WASD 等价，两只手随便用哪一套
+      else requestTurn(state, starDir, state.elapsed);
       e.preventDefault();
     }
   }
@@ -462,6 +482,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     cfg,
     starRole: plan.duoChase ? "ghost" : "none",
     label: `${TIER_LABELS[plan.tier]}档`,
+    play: (name) => ctx.sfx(name),
     extraChip: () => `${TIER_LABELS[plan.tier]}档 · ${plan.ghostCount} 只小幽灵`,
     onEnd: ({ won, livesLeft }) => {
       if (won) ctx.win(rateLevel(livesLeft, cfg.lives), "豆子全部吃光，路线走得很干净！");
@@ -510,6 +531,7 @@ function mountRounds(host: HTMLElement, api: GameApi, opts: SimpleModeOptions): 
       cfg: opts.makeConfig(round),
       starRole: opts.starRole,
       label: opts.title,
+      play: (name) => api.play(name),
       extraChip: () => `${opts.title} · 第 ${round + 1} 轮`,
       onEnd: ({ won, score, starScore }) => {
         api.play(won ? "win" : "oops");
@@ -579,7 +601,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     menu.className = "dmz-menu";
     menu.innerHTML = `
       <div class="dmz-title">🟡 豆豆迷宫</div>
-      <div class="dmz-sub">四只迷途小幽灵脾气各不相同：直直直追、拐拐抄前路、绕绕包夹、乱乱远则乱走。能量豆一亮，它们就变成昏昏蓝。</div>`;
+      <div class="dmz-sub">四只迷途小幽灵脾气各不相同：${GHOST_NAMES.zhi}直追、${GHOST_NAMES.guai}抄前路、${GHOST_NAMES.rao}包夹、${GHOST_NAMES.luan}远则乱走。能量豆一亮，它们就变成昏昏蓝。</div>`;
     const grid = document.createElement("div");
     grid.className = "dmz-modes";
     const modes: Array<{ label: string; cls: string; run: () => void }> = [
