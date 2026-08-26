@@ -813,13 +813,14 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   refreshHud();
   draw();
   raf = requestAnimationFrame(step);
-  // 版面要等这一帧真的排完才量得准
-  requestAnimationFrame(() => relayout());
+  // 版面要等这一帧真的排完才量得准;这一帧也得存下来,不然刚进就退会在拆掉的节点上重算
+  const layoutRaf = requestAnimationFrame(() => relayout());
 
   return {
     destroy() {
       phase = "done";
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(layoutRaf);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKey);
       wrap.remove();
