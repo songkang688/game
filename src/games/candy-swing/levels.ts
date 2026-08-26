@@ -3,6 +3,18 @@
 // 机关参数变体扩展而成。每一关都带一份 solve「通关配方」，
 // physics.test.ts 会按配方逐帧仿真，保证 99 关全部真实可通关。
 
+/** 1.1 新增：发条绳的伸缩参数（绳长在 min..max 倍之间来回） */
+export interface WinchDef {
+  /** 最短倍率（t = offset 时收到这么短） */
+  min: number;
+  /** 最长倍率 */
+  max: number;
+  /** 一收一放的秒数 */
+  period: number;
+  /** 相位偏移，不传按 0 */
+  offset?: number;
+}
+
 export interface RopeDef {
   /** 锚点位置 */
   x: number;
@@ -11,6 +23,8 @@ export interface RopeDef {
   segments?: number;
   /** 绳总长（不传用锚点到糖果的距离） */
   length?: number;
+  /** 1.1 新增：挂上发条，绳子自己一收一放 */
+  winch?: WinchDef;
 }
 
 export interface HookDef {
@@ -87,6 +101,49 @@ export interface MothDef {
   chew: number;
 }
 
+/** 1.1 新增：风扇气流。矩形风道里沿 dir 推糖果，越远越弱。 */
+export interface FanDef {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** 吹风方向 */
+  dir: "up" | "down" | "left" | "right";
+  /** 风力（加速度 px/s²，重力是 900） */
+  power: number;
+  /** 一开一关的秒数，不传就是常开 */
+  period?: number;
+  /** 每个周期里吹风的时间占比，不传按 0.5 */
+  duty?: number;
+  /** 相位偏移 */
+  offset?: number;
+}
+
+/** 1.1 新增：糖霜磁铁。半径内吸住（strength > 0）或推开（< 0）糖果。 */
+export interface MagnetDef {
+  x: number;
+  y: number;
+  radius: number;
+  /** 吸力（加速度 px/s²），负数是推力 */
+  strength: number;
+}
+
+/** 1.1 新增：捣蛋鬼「咕噜噜」。在两点间来回巡逻，碰到糖果就抢走。 */
+export interface GremlinDef {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  /** 一个来回的秒数 */
+  period: number;
+  /** 张嘴半径：糖果进来就被抢走 */
+  radius: number;
+  /** 相位偏移秒数 */
+  offset?: number;
+  /** 前几秒还在打盹，不抓糖 */
+  delay?: number;
+}
+
 /**
  * 通关配方：测试用它逐帧仿真验证每一关都能赢。
  * dir 为 1 表示往右、-1 表示往左；镜像变换会自动翻转。
@@ -100,7 +157,19 @@ export type SolveRecipe =
   | { kind: "ropeRelay"; rope: number; dir: 1 | -1; dir2?: 1 | -1; time?: number }
   | { kind: "cutPuff"; t?: number; puffAt?: number; afterTeleport?: boolean; time?: number }
   | { kind: "search"; tMax: number }
-  | { kind: "relaySettle"; t?: number; settle?: number; time?: number };
+  | { kind: "relaySettle"; t?: number; settle?: number; time?: number }
+  /**
+   * 1.1 新增：脚本化时间线。按秒数依次做动作，
+   * 够用来描述「先剪、落到台阶上、再点气球」这类多段操作。
+   */
+  | { kind: "timeline"; acts: TimelineAct[]; time?: number };
+
+/** 时间线里的一个动作：at 秒时做 do（cutRope / puff 用 i 指定第几根绳、第几个气球） */
+export interface TimelineAct {
+  at: number;
+  do: "cut" | "cutRope" | "pop" | "puff";
+  i?: number;
+}
 
 export interface LevelDef {
   name: string;
@@ -117,11 +186,25 @@ export interface LevelDef {
   balloons?: BalloonDef[];
   scissors?: ScissorsDef[];
   moths?: MothDef[];
+  /** 1.1 新增机关 */
+  fans?: FanDef[];
+  magnets?: MagnetDef[];
+  gremlins?: GremlinDef[];
   /** 通关配方（测试仿真用） */
   solve: SolveRecipe;
 }
 
-export type ChapterTheme = "meadow" | "night" | "factory" | "sky" | "ice" | "rainbow";
+export type ChapterTheme =
+  | "meadow"
+  | "night"
+  | "factory"
+  | "sky"
+  | "ice"
+  | "rainbow"
+  | "clock"
+  | "isle"
+  | "starfac"
+  | "moonfair";
 
 export interface ChapterDef {
   name: string;
@@ -136,10 +219,17 @@ export const CHAPTERS: ChapterDef[] = [
   { name: "云朵乐园", theme: "sky", blurb: "泡泡、气球和挂钩的空中乐园！" },
   { name: "冰雪王国", theme: "ice", blurb: "冰柱、冰门和滑溜溜的木板！" },
   { name: "彩虹嘉年华", theme: "rainbow", blurb: "最难的组合关都在这里，冲鸭！" },
+  { name: "发条钟楼", theme: "clock", blurb: "绳子挂上发条自己伸缩，还要借钟楼台阶接力！" },
+  { name: "泡泡浮岛", theme: "isle", blurb: "风扇气流托着糖果走，顺风逆风都要算准！" },
+  { name: "星糖工厂", theme: "starfac", blurb: "糖霜磁铁又吸又推，捣蛋鬼咕噜噜到处抢糖！" },
+  { name: "月光大巡游", theme: "moonfair", blurb: "十种机关同台压轴，糖果大师的毕业考！" },
 ];
 
-/** 每章关卡数（共 99） */
-export const CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
+/** 1.0 的前 99 关切分，做回归用，永远不许改 */
+export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
+
+/** 每章关卡数（前 6 章 99 关原样保留，1.1 追加 4 章 89 关，共 188） */
+export const CHAPTER_SIZES = [...LEGACY_CHAPTER_SIZES, 23, 22, 22, 22];
 
 /** 关卡所属章节序号 */
 export function chapterOf(levelIndex: number): number {
@@ -158,18 +248,30 @@ export function chapterStart(c: number): number {
   return acc;
 }
 
+/** 静止不动的木板就是「高台」，可以站上去接力再荡一段 */
+export function isLedge(b: BoardDef): boolean {
+  return b.x1 === b.x2 && b.y1 === b.y2;
+}
+
 /** 一关用到的机关种类（测试与选关角标用） */
 export function mechanismKinds(lv: LevelDef): string[] {
   const kinds: string[] = [];
+  const boards = lv.boards ?? [];
   if (lv.ropes.length >= 2) kinds.push("multiRope");
   if ((lv.bubbles ?? []).length > 0) kinds.push("bubble");
   if ((lv.spikes ?? []).length > 0) kinds.push("spike");
   if ((lv.hooks ?? []).length > 0) kinds.push("hook");
-  if ((lv.boards ?? []).length > 0) kinds.push("board");
+  if (boards.some((b) => !isLedge(b))) kinds.push("board");
   if ((lv.portals ?? []).length > 0) kinds.push("portal");
   if ((lv.balloons ?? []).length > 0) kinds.push("balloon");
   if ((lv.scissors ?? []).length > 0) kinds.push("scissors");
   if ((lv.moths ?? []).length > 0) kinds.push("moth");
+  // ---- 1.1 新机关 ----
+  if (lv.ropes.some((r) => r.winch)) kinds.push("winch");
+  if (boards.some(isLedge)) kinds.push("ledge");
+  if ((lv.fans ?? []).length > 0) kinds.push("fan");
+  if ((lv.magnets ?? []).length > 0) kinds.push("magnet");
+  if ((lv.gremlins ?? []).length > 0) kinds.push("gremlin");
   return kinds;
 }
 
@@ -212,6 +314,17 @@ function mirrorLevel(lv: LevelDef): LevelDef {
   if (lv.balloons) m.balloons = lv.balloons.map((b) => ({ ...b, x: CANVAS_W - b.x, dir: flipDir(b.dir) }));
   if (lv.scissors) m.scissors = lv.scissors.map((s) => ({ ...s, x: CANVAS_W - s.x }));
   if (lv.moths) m.moths = lv.moths.map((mo) => ({ ...mo, x: CANVAS_W - mo.x }));
+  if (lv.fans) {
+    m.fans = lv.fans.map((f) => ({ ...f, x: CANVAS_W - f.x - f.w, dir: flipDir(f.dir) }));
+  }
+  if (lv.magnets) m.magnets = lv.magnets.map((mg) => ({ ...mg, x: CANVAS_W - mg.x }));
+  if (lv.gremlins) {
+    m.gremlins = lv.gremlins.map((g) => ({
+      ...g,
+      x1: CANVAS_W - g.x1,
+      x2: CANVAS_W - g.x2,
+    }));
+  }
   m.solve = mirrorSolve(lv.solve);
   return m;
 }
@@ -1041,7 +1154,687 @@ const C6: LevelDef[] = [
   }),
 ];
 
-export const LEVELS: LevelDef[] = [...C1, ...C2, ...C3, ...C4, ...C5, ...C6];
+/* ================= 1.1 新增基础关（第七～第十章专属） ================= */
+
+// ---- 发条钟楼：绳子挂发条自己伸缩 + 钟楼台阶接力 ----
+
+const K1: LevelDef = {
+  name: "发条落锤",
+  tip: "绳子挂了发条，会自己一收一放，放长了再剪！",
+  candy: { x: 180, y: 168 },
+  monster: { x: 180, y: 432 },
+  ropes: [{ x: 180, y: 44, winch: { min: 0.85, max: 1.5, period: 3.2 } }],
+  stars: [
+    { x: 180, y: 252 },
+    { x: 180, y: 318 },
+    { x: 180, y: 386 },
+  ],
+  solve: { kind: "cut", t: 0.6 },
+};
+
+const K2: LevelDef = {
+  name: "长短钟摆",
+  tip: "发条绳越放越长，钟摆也就荡得越远。",
+  candy: { x: 64, y: 176 },
+  monster: { x: 258, y: 424 },
+  ropes: [{ x: 126, y: 52, winch: { min: 0.9, max: 1.3, period: 3 } }],
+  stars: [
+    { x: 172, y: 252 },
+    { x: 210, y: 306 },
+    { x: 238, y: 364 },
+  ],
+  solve: { kind: "search", tMax: 3 },
+};
+
+const K3: LevelDef = {
+  name: "钟楼台阶",
+  tip: "先荡到台阶上滑一段，再从台阶尽头掉进啾啾嘴里！",
+  candy: { x: 66, y: 176 },
+  monster: { x: 320, y: 430 },
+  ropes: [{ x: 126, y: 52 }],
+  boards: [{ x1: 150, y1: 300, x2: 150, y2: 300, w: 100, h: 14, period: 4 }],
+  spikes: [{ x: 0, y: 456, w: 250, h: 24, dir: "up" }],
+  stars: [
+    { x: 178, y: 258 },
+    { x: 232, y: 282 },
+    { x: 296, y: 356 },
+  ],
+  solve: { kind: "low", dir: 1 },
+};
+
+const K4: LevelDef = {
+  name: "双发条",
+  tip: "两根发条绳快慢不一样，糖果会左摇右摆！",
+  candy: { x: 180, y: 178 },
+  monster: { x: 180, y: 436 },
+  ropes: [
+    { x: 96, y: 50, winch: { min: 0.92, max: 1.22, period: 2.4 } },
+    { x: 264, y: 50, winch: { min: 0.92, max: 1.22, period: 3.6, offset: 0.6 } },
+  ],
+  spikes: [
+    { x: 0, y: 458, w: 92, h: 22, dir: "up" },
+    { x: 268, y: 458, w: 92, h: 22, dir: "up" },
+  ],
+  stars: [
+    { x: 180, y: 250 },
+    { x: 180, y: 318 },
+    { x: 180, y: 386 },
+  ],
+  solve: { kind: "search", tMax: 2.4 },
+};
+
+const K5: LevelDef = {
+  name: "发条越刺",
+  tip: "等发条把绳子放长，摆幅够大才越得过刺墙！",
+  candy: { x: 60, y: 148 },
+  monster: { x: 296, y: 426 },
+  ropes: [{ x: 132, y: 48, winch: { min: 0.9, max: 1.42, period: 3.4 } }],
+  spikes: [
+    { x: 0, y: 196, w: 24, h: 196, dir: "right" },
+    { x: 0, y: 452, w: 224, h: 28, dir: "up" },
+  ],
+  stars: [
+    { x: 232, y: 244 },
+    { x: 270, y: 312 },
+    { x: 296, y: 380 },
+  ],
+  solve: { kind: "search", tMax: 3.4 },
+};
+
+const K6: LevelDef = {
+  name: "齿轮星门",
+  tip: "发条绳一放长就够到齿轮漩涡，一钻就到对面！",
+  candy: { x: 86, y: 162 },
+  monster: { x: 286, y: 424 },
+  ropes: [{ x: 86, y: 50, winch: { min: 0.88, max: 1.36, period: 3 } }],
+  portals: [{ ax: 86, ay: 330, bx: 286, by: 152 }],
+  spikes: [{ x: 0, y: 456, w: 196, h: 24, dir: "up" }],
+  stars: [
+    { x: 86, y: 246 },
+    { x: 286, y: 230 },
+    { x: 286, y: 332 },
+  ],
+  solve: { kind: "cut", t: 0.4 },
+};
+
+// ---- 泡泡浮岛：风扇气流 ----
+
+const F1: LevelDef = {
+  name: "顺风滑翔",
+  tip: "风扇一路往右吹，糖果边掉边飘过去！",
+  candy: { x: 60, y: 124 },
+  monster: { x: 278, y: 436 },
+  ropes: [{ x: 60, y: 46 }],
+  fans: [{ x: 16, y: 170, w: 330, h: 300, dir: "right", power: 1650 }],
+  stars: [
+    { x: 118, y: 222 },
+    { x: 186, y: 300 },
+    { x: 252, y: 380 },
+  ],
+  solve: { kind: "cut", t: 0.4 },
+};
+
+const F2: LevelDef = {
+  name: "上升气流",
+  tip: "绳子是把糖果拴在地上的！剪断它，气流就把糖果吹上天。",
+  candy: { x: 180, y: 300 },
+  monster: { x: 180, y: 110 },
+  ropes: [
+    { x: 120, y: 462 },
+    { x: 240, y: 462 },
+  ],
+  fans: [{ x: 120, y: 150, w: 120, h: 320, dir: "up", power: 2400 }],
+  stars: [
+    { x: 180, y: 248 },
+    { x: 180, y: 200 },
+    { x: 180, y: 158 },
+  ],
+  solve: { kind: "cut", t: 0.5, time: 12 },
+};
+
+const F3: LevelDef = {
+  name: "一开一关",
+  tip: "这台风扇会歇气！风起来的时候再放糖果。",
+  candy: { x: 66, y: 132 },
+  monster: { x: 274, y: 434 },
+  ropes: [{ x: 66, y: 48 }],
+  fans: [
+    { x: 16, y: 176, w: 330, h: 300, dir: "right", power: 2200, period: 2.2, duty: 0.5 },
+  ],
+  stars: [
+    { x: 120, y: 224 },
+    { x: 188, y: 304 },
+    { x: 248, y: 382 },
+  ],
+  solve: { kind: "search", tMax: 2.2 },
+};
+
+const F4: LevelDef = {
+  name: "风送泡泡",
+  tip: "坐上泡泡往上飘，侧风会把它一路吹到对岸！",
+  candy: { x: 84, y: 196 },
+  monster: { x: 296, y: 146 },
+  ropes: [
+    { x: 34, y: 60 },
+    { x: 134, y: 60 },
+  ],
+  bubbles: [{ x: 84, y: 330 }],
+  fans: [{ x: 56, y: 130, w: 290, h: 214, dir: "right", power: 110 }],
+  stars: [
+    { x: 108, y: 300 },
+    { x: 196, y: 234 },
+    { x: 268, y: 180 },
+  ],
+  solve: { kind: "cut", t: 0.5, time: 14 },
+};
+
+const F5: LevelDef = {
+  name: "风推高台",
+  tip: "糖果落在浮岛上会被风一点点推走，别急！",
+  candy: { x: 150, y: 168 },
+  monster: { x: 306, y: 430 },
+  ropes: [{ x: 150, y: 54 }],
+  boards: [{ x1: 100, y1: 300, x2: 100, y2: 300, w: 120, h: 14, period: 4 }],
+  fans: [{ x: 90, y: 250, w: 250, h: 62, dir: "right", power: 200 }],
+  spikes: [{ x: 0, y: 458, w: 236, h: 22, dir: "up" }],
+  stars: [
+    { x: 150, y: 240 },
+    { x: 214, y: 284 },
+    { x: 286, y: 366 },
+  ],
+  solve: { kind: "cut", t: 0.4, time: 12 },
+};
+
+// ---- 星糖工厂：糖霜磁铁 + 捣蛋鬼咕噜噜 ----
+
+const M1: LevelDef = {
+  name: "磁铁引路",
+  tip: "糖霜磁铁会把糖果一路吸过去！",
+  candy: { x: 76, y: 150 },
+  monster: { x: 284, y: 420 },
+  ropes: [{ x: 76, y: 48 }],
+  magnets: [{ x: 284, y: 300, radius: 400, strength: 1300 }],
+  spikes: [{ x: 0, y: 458, w: 200, h: 22, dir: "up" }],
+  stars: [
+    { x: 128, y: 232 },
+    { x: 196, y: 292 },
+    { x: 262, y: 352 },
+  ],
+  solve: { kind: "cut", t: 0.4 },
+};
+
+const M2: LevelDef = {
+  name: "推推磁铁",
+  tip: "蓝磁铁是反着的，它会把糖果推开！",
+  candy: { x: 180, y: 158 },
+  monster: { x: 306, y: 428 },
+  ropes: [{ x: 180, y: 48 }],
+  magnets: [{ x: 148, y: 302, radius: 220, strength: -1100 }],
+  spikes: [{ x: 0, y: 458, w: 244, h: 22, dir: "up" }],
+  stars: [
+    { x: 214, y: 254 },
+    { x: 262, y: 322 },
+    { x: 300, y: 388 },
+  ],
+  solve: { kind: "cut", t: 0.4 },
+};
+
+const M3: LevelDef = {
+  name: "磁铁走廊",
+  tip: "一吸一推接着来，糖果会走出一条弯路！",
+  candy: { x: 70, y: 146 },
+  monster: { x: 292, y: 424 },
+  ropes: [{ x: 70, y: 46 }],
+  magnets: [
+    { x: 210, y: 236, radius: 200, strength: 1200 },
+    { x: 112, y: 378, radius: 240, strength: -1100 },
+  ],
+  spikes: [{ x: 0, y: 458, w: 180, h: 22, dir: "up" }],
+  stars: [
+    { x: 138, y: 208 },
+    { x: 216, y: 282 },
+    { x: 276, y: 356 },
+  ],
+  solve: { kind: "cut", t: 0.3 },
+};
+
+const M4: LevelDef = {
+  name: "咕噜噜巡逻",
+  tip: "捣蛋鬼咕噜噜来回跑，趁它走远了再剪绳！",
+  candy: { x: 180, y: 172 },
+  monster: { x: 180, y: 436 },
+  ropes: [{ x: 180, y: 48 }],
+  gremlins: [{ x1: 54, y1: 340, x2: 306, y2: 340, period: 3.4, radius: 26 }],
+  stars: [
+    { x: 180, y: 250 },
+    { x: 180, y: 300 },
+    { x: 180, y: 396 },
+  ],
+  solve: { kind: "search", tMax: 3.4 },
+};
+
+const M5: LevelDef = {
+  name: "抢糖大作战",
+  tip: "磁铁在帮忙，咕噜噜在捣乱，看准空档！",
+  candy: { x: 74, y: 152 },
+  monster: { x: 288, y: 424 },
+  ropes: [{ x: 74, y: 48 }],
+  magnets: [{ x: 288, y: 300, radius: 400, strength: 1300 }],
+  gremlins: [{ x1: 306, y1: 306, x2: 150, y2: 306, period: 2.8, radius: 22 }],
+  spikes: [{ x: 0, y: 458, w: 196, h: 22, dir: "up" }],
+  stars: [
+    { x: 130, y: 240 },
+    { x: 198, y: 296 },
+    { x: 262, y: 354 },
+  ],
+  solve: { kind: "search", tMax: 2.8 },
+};
+
+const M6: LevelDef = {
+  name: "星糖流水线",
+  tip: "木板、磁铁、咕噜噜三样一起来，慢慢数拍子！",
+  candy: { x: 180, y: 176 },
+  monster: { x: 180, y: 436 },
+  ropes: [{ x: 180, y: 48 }],
+  boards: [{ x1: 34, y1: 316, x2: 226, y2: 316, w: 100, h: 16, period: 3.2 }],
+  magnets: [{ x: 180, y: 404, radius: 150, strength: 700 }],
+  gremlins: [{ x1: 60, y1: 244, x2: 60, y2: 244, period: 3, radius: 22, delay: 30 }],
+  stars: [
+    { x: 180, y: 244 },
+    { x: 180, y: 296 },
+    { x: 180, y: 392 },
+  ],
+  solve: { kind: "search", tMax: 3.2 },
+};
+
+/* ================= 第七章 · 发条钟楼（23 关） ================= */
+
+const C7: LevelDef[] = [
+  K1,
+  K2,
+  K3,
+  K4,
+  K5,
+  K6,
+  MV(K1, "反向落锤", "同样的发条落锤，锚点换了个位置。", {
+    ropes: [{ x: 176, y: 40, winch: { min: 0.85, max: 1.5, period: 3.2 } }],
+  }),
+  MV(K2, "逆时钟摆", "钟摆往左荡，还是等绳子放长！"),
+  MV(K3, "左侧台阶", "台阶搬到了左边，接力方向反过来。"),
+  MV(K5, "换边越刺", "刺墙在右边，往左边荡过去！"),
+  MV(K6, "反向齿轮门", "齿轮漩涡换了边，路线整个镜像。"),
+  V(K1, "慢发条", "发条上得松，绳子放得慢，多等一会儿。", {
+    ropes: [{ x: 180, y: 44, winch: { min: 0.85, max: 1.55, period: 4.6 } }],
+    solve: { kind: "cut", t: 1.2 },
+  }),
+  V(K1, "急发条", "发条上得紧，一收一放特别快！", {
+    ropes: [{ x: 180, y: 44, winch: { min: 0.86, max: 1.44, period: 1.8 } }],
+    stars: [{ x: 180, y: 258 }, { x: 180, y: 322 }, { x: 180, y: 390 }],
+    solve: { kind: "cut", t: 0.4 },
+  }),
+  V(K2, "大摆长绳", "发条能把绳子放到很长，摆幅也更夸张。", {
+    ropes: [{ x: 126, y: 52, winch: { min: 0.95, max: 1.42, period: 3.6 } }],
+    solve: { kind: "search", tMax: 3.6 },
+  }),
+  MV(
+    V(K2, "", "", {
+      ropes: [{ x: 126, y: 52, winch: { min: 0.95, max: 1.42, period: 3.6 } }],
+      solve: { kind: "search", tMax: 3.6 },
+    }),
+    "大摆反向",
+    "长绳大摆照镜子，重新数拍子！"
+  ),
+  V(K3, "长台阶", "台阶更长，滑行的路也更远。", {
+    boards: [{ x1: 148, y1: 300, x2: 148, y2: 300, w: 118, h: 14, period: 4 }],
+    stars: [{ x: 178, y: 258 }, { x: 240, y: 282 }, { x: 300, y: 360 }],
+  }),
+  V(K4, "同步发条", "两根发条同进同退，糖果稳稳往下坠。", {
+    ropes: [
+      { x: 96, y: 50, winch: { min: 0.9, max: 1.24, period: 2.8 } },
+      { x: 264, y: 50, winch: { min: 0.9, max: 1.24, period: 2.8 } },
+    ],
+    solve: { kind: "search", tMax: 2.8 },
+  }),
+  V(K4, "错拍发条", "两边错着拍子，糖果晃得更厉害！", {
+    ropes: [
+      { x: 92, y: 52, winch: { min: 0.9, max: 1.28, period: 2.2 } },
+      { x: 268, y: 52, winch: { min: 0.9, max: 1.28, period: 3.3, offset: 1.1 } },
+    ],
+    solve: { kind: "search", tMax: 3.3 },
+  }),
+  V(K5, "钟楼刺阵", "刺墙更高了，摆得不够远就过不去。", {
+    spikes: [
+      { x: 0, y: 176, w: 24, h: 216, dir: "right" },
+      { x: 0, y: 452, w: 232, h: 28, dir: "up" },
+    ],
+    solve: { kind: "search", tMax: 3.4 },
+  }),
+  V(K6, "高环齿轮", "齿轮门的出口挂得更高，落点也更靠里。", {
+    portals: [{ ax: 86, ay: 330, bx: 286, by: 128 }],
+    stars: [{ x: 86, y: 246 }, { x: 286, y: 214 }, { x: 286, y: 322 }],
+  }),
+  V(K6, "剪刀齿轮", "发条绳配自动剪刀，双手都能歇一歇！", {
+    scissors: [{ x: 86, y: 108, radius: 24, period: 2.6 }],
+    stars: [{ x: 86, y: 252 }, { x: 286, y: 236 }, { x: 286, y: 340 }],
+    solve: { kind: "wait", time: 12 },
+  }),
+  V(K3, "台阶接钩", "台阶尽头有个挂钩，接住之后再剪一次！", {
+    hooks: [{ x: 296, y: 320, radius: 78 }],
+    monster: { x: 262, y: 430 },
+    spikes: [{ x: 0, y: 456, w: 196, h: 24, dir: "up" }],
+    stars: [{ x: 180, y: 258 }, { x: 236, y: 284 }, { x: 300, y: 372 }],
+    solve: { kind: "relaySettle", t: 0.62, settle: 1.4, time: 18 },
+  }),
+  MV(K4, "镜像双发条", "两根发条照镜子，节奏正好倒过来。", {
+    stars: [{ x: 180, y: 258 }, { x: 180, y: 324 }, { x: 180, y: 392 }],
+  }),
+];
+
+/* ================= 第八章 · 泡泡浮岛（22 关） ================= */
+
+const C8: LevelDef[] = [
+  F1,
+  F2,
+  F3,
+  F4,
+  F5,
+  MV(F1, "逆风滑翔", "风改成往左吹，糖果朝另一边飘。"),
+  MV(F3, "反向歇气", "会歇气的风扇换了方向，节奏重新数。"),
+  MV(F4, "西风泡泡", "泡泡往上飘，西风把它送到左岸！"),
+  MV(F5, "左推高台", "浮岛上的风改成往左推。"),
+  V(F1, "微风滑翔", "风小了一点，糖果落得更靠里。", {
+    fans: [{ x: 16, y: 170, w: 330, h: 300, dir: "right", power: 1000 }],
+    monster: { x: 236, y: 438 },
+    stars: [{ x: 110, y: 226 }, { x: 172, y: 306 }, { x: 220, y: 384 }],
+  }),
+  V(F1, "强风滑翔", "风大得很，糖果一路飞到边上！", {
+    fans: [{ x: 16, y: 170, w: 330, h: 300, dir: "right", power: 1900 }],
+    monster: { x: 312, y: 434 },
+    stars: [{ x: 124, y: 220 }, { x: 200, y: 298 }, { x: 278, y: 378 }],
+  }),
+  V(F2, "高高升起", "风扇更猛，糖果能顶得更高！", {
+    fans: [{ x: 120, y: 140, w: 120, h: 330, dir: "up", power: 3000 }],
+    monster: { x: 180, y: 92 },
+    stars: [{ x: 180, y: 246 }, { x: 180, y: 192 }, { x: 180, y: 142 }],
+  }),
+  V(F2, "浮岛喷泉", "喷泉一样的气流，把糖果稳稳托住。", {
+    fans: [{ x: 132, y: 156, w: 96, h: 314, dir: "up", power: 2800 }],
+    candy: { x: 180, y: 322 },
+    stars: [{ x: 180, y: 262 }, { x: 180, y: 208 }, { x: 180, y: 162 }],
+  }),
+  V(F3, "长气短气", "歇气时间更长，得多等一等风。", {
+    fans: [
+      { x: 16, y: 176, w: 330, h: 300, dir: "right", power: 2400, period: 3, duty: 0.45 },
+    ],
+    solve: { kind: "search", tMax: 3 },
+  }),
+  V(F3, "急促阵风", "阵风又急又短，抓紧那一下！", {
+    fans: [
+      { x: 16, y: 176, w: 330, h: 300, dir: "right", power: 2200, period: 1.6, duty: 0.55 },
+    ],
+    stars: [{ x: 122, y: 228 }, { x: 192, y: 306 }, { x: 252, y: 386 }],
+    solve: { kind: "search", tMax: 1.6 },
+  }),
+  V(F4, "斜风泡泡", "风更强，泡泡飘得更斜。", {
+    fans: [{ x: 56, y: 130, w: 290, h: 214, dir: "right", power: 145 }],
+    monster: { x: 316, y: 158 },
+    stars: [{ x: 112, y: 296 }, { x: 204, y: 232 }, { x: 284, y: 186 }],
+  }),
+  V(F5, "双台阶风道", "两层浮岛，风会一层层往下推。", {
+    boards: [
+      { x1: 100, y1: 288, x2: 100, y2: 288, w: 110, h: 14, period: 4 },
+      { x1: 214, y1: 380, x2: 214, y2: 380, w: 104, h: 14, period: 4 },
+    ],
+    fans: [{ x: 90, y: 240, w: 250, h: 62, dir: "right", power: 210 }],
+    monster: { x: 336, y: 428 },
+    spikes: [{ x: 0, y: 458, w: 200, h: 22, dir: "up" }],
+    stars: [{ x: 150, y: 236 }, { x: 210, y: 272 }, { x: 300, y: 356 }],
+    solve: { kind: "cut", t: 0.4, time: 14 },
+  }),
+  V(F1, "浮岛刺风", "顺风路上多了一排刺，别贴着地飞。", {
+    spikes: [{ x: 0, y: 458, w: 200, h: 22, dir: "up" }],
+    stars: [{ x: 116, y: 218 }, { x: 184, y: 296 }, { x: 250, y: 372 }],
+  }),
+  V(F2, "气流接星", "上升气流路上串了三颗星。", {
+    stars: [{ x: 180, y: 262 }, { x: 180, y: 214 }, { x: 180, y: 170 }],
+    monster: { x: 180, y: 124 },
+  }),
+  MV(
+    V(F1, "", "", {
+      fans: [{ x: 16, y: 170, w: 330, h: 300, dir: "right", power: 1900 }],
+      monster: { x: 312, y: 434 },
+      stars: [{ x: 124, y: 220 }, { x: 200, y: 298 }, { x: 278, y: 378 }],
+    }),
+    "强风倒吹",
+    "最猛的风倒过来吹，落点也整个翻面。"
+  ),
+  V(F4, "风扇电梯", "泡泡加气流，一路斜着飘上云端。", {
+    bubbles: [{ x: 84, y: 344 }],
+    fans: [{ x: 56, y: 128, w: 290, h: 230, dir: "right", power: 120 }],
+    monster: { x: 302, y: 138 },
+    stars: [{ x: 106, y: 306 }, { x: 198, y: 240 }, { x: 272, y: 180 }],
+  }),
+  V(F5, "风道挂钩", "浮岛边上有挂钩，被接住就再剪一次。", {
+    hooks: [{ x: 274, y: 320, radius: 76 }],
+    monster: { x: 286, y: 438 },
+    stars: [{ x: 150, y: 238 }, { x: 216, y: 284 }, { x: 286, y: 372 }],
+    solve: { kind: "relaySettle", t: 0.4, settle: 1.6, time: 18 },
+  }),
+];
+
+/* ================= 第九章 · 星糖工厂（22 关） ================= */
+
+const C9: LevelDef[] = [
+  M1,
+  M2,
+  M3,
+  M4,
+  M5,
+  M6,
+  MV(M1, "换边磁铁", "磁铁装到了左边，糖果往左拐。"),
+  MV(M2, "反推磁铁", "推力磁铁换边，糖果被推向左侧。"),
+  MV(M3, "镜像走廊", "一吸一推的走廊照了镜子。"),
+  MV(M5, "反向抢糖", "咕噜噜从另一边冲过来抢糖！"),
+  V(M1, "弱磁引路", "磁力小一些，糖果拐得没那么急。", {
+    magnets: [{ x: 284, y: 300, radius: 400, strength: 1150 }],
+    monster: { x: 234, y: 384 },
+    spikes: [{ x: 0, y: 458, w: 150, h: 22, dir: "up" }],
+    stars: [{ x: 128, y: 234 }, { x: 186, y: 296 }, { x: 232, y: 342 }],
+  }),
+  V(M1, "强磁引路", "磁力大得很，糖果几乎被拽着走！", {
+    magnets: [{ x: 292, y: 290, radius: 420, strength: 1800 }],
+    monster: { x: 300, y: 412 },
+    stars: [{ x: 134, y: 220 }, { x: 210, y: 282 }, { x: 276, y: 340 }],
+  }),
+  V(M2, "双推磁铁", "上下两块推力磁铁，糖果被赶成一条斜线。", {
+    magnets: [
+      { x: 146, y: 268, radius: 190, strength: -1000 },
+      { x: 168, y: 384, radius: 170, strength: -820 },
+    ],
+    stars: [{ x: 216, y: 246 }, { x: 268, y: 314 }, { x: 306, y: 382 }],
+  }),
+  V(M4, "两只咕噜噜", "两只捣蛋鬼一前一后，空档更小了！", {
+    gremlins: [
+      { x1: 54, y1: 300, x2: 306, y2: 300, period: 3.4, radius: 24 },
+      { x1: 306, y1: 384, x2: 54, y2: 384, period: 2.6, radius: 24 },
+    ],
+    solve: { kind: "search", tMax: 4 },
+  }),
+  V(M4, "慢吞吞咕噜噜", "这只咕噜噜走得慢，空档很好找。", {
+    gremlins: [{ x1: 60, y1: 348, x2: 300, y2: 348, period: 4.8, radius: 28 }],
+    stars: [{ x: 180, y: 244 }, { x: 180, y: 296 }, { x: 180, y: 400 }],
+    solve: { kind: "search", tMax: 4.8 },
+  }),
+  V(M4, "上下咕噜噜", "咕噜噜这次斜着跑，路线更难猜。", {
+    gremlins: [{ x1: 60, y1: 260, x2: 300, y2: 396, period: 3, radius: 24 }],
+    stars: [{ x: 180, y: 234 }, { x: 180, y: 306 }, { x: 180, y: 402 }],
+    solve: { kind: "search", tMax: 3 },
+  }),
+  V(M5, "磁铁夹道", "磁铁吸着走，咕噜噜横着拦，稳住！", {
+    gremlins: [{ x1: 300, y1: 244, x2: 150, y2: 244, period: 2.2, radius: 22 }],
+    solve: { kind: "search", tMax: 2.2 },
+  }),
+  V(M3, "磁铁与星门", "走廊尽头加了个星门，路更绕了。", {
+    portals: [{ ax: 292, ay: 330, bx: 292, by: 200 }],
+    stars: [{ x: 140, y: 212 }, { x: 220, y: 284 }, { x: 286, y: 262 }],
+  }),
+  V(M2, "推推挂钩", "被推开之后，挂钩正好接住！", {
+    hooks: [{ x: 292, y: 296, radius: 74 }],
+    monster: { x: 304, y: 434 },
+    stars: [{ x: 220, y: 250 }, { x: 274, y: 300 }, { x: 304, y: 384 }],
+    solve: { kind: "relaySettle", t: 0.4, settle: 1.4, time: 18 },
+  }),
+  V(M1, "磁铁泡泡", "磁铁把糖果吸过去，泡泡再托着它上楼。", {
+    bubbles: [{ x: 196, y: 360 }],
+    magnets: [{ x: 284, y: 120, radius: 340, strength: 1500 }],
+    monster: { x: 262, y: 182 },
+    spikes: [{ x: 0, y: 458, w: 150, h: 22, dir: "up" }],
+    stars: [{ x: 132, y: 250 }, { x: 196, y: 330 }, { x: 236, y: 226 }],
+    solve: { kind: "cut", t: 0.4, time: 16 },
+  }),
+  MV(M6, "镜像流水线", "整条流水线照镜子，节奏也翻了个面。"),
+  MV(
+    V(M4, "", "", {
+      gremlins: [{ x1: 60, y1: 348, x2: 300, y2: 348, period: 4.8, radius: 28 }],
+      stars: [{ x: 180, y: 244 }, { x: 180, y: 296 }, { x: 180, y: 400 }],
+      solve: { kind: "search", tMax: 4.8 },
+    }),
+    "反向慢咕噜",
+    "慢咕噜噜从另一头出发，一样等空档。"
+  ),
+];
+
+/* ================= 第十章 · 月光大巡游（22 关，全机关混编） ================= */
+
+const C10: LevelDef[] = [
+  V(K1, "月光落锤", "发条落锤配上剪刀，两只手都省下来了。", {
+    scissors: [{ x: 180, y: 96, radius: 24, period: 2.4 }],
+    spikes: [
+      { x: 0, y: 458, w: 96, h: 22, dir: "up" },
+      { x: 264, y: 458, w: 96, h: 22, dir: "up" },
+    ],
+    solve: { kind: "wait", time: 12 },
+  }),
+  V(K2, "月下长摆", "发条长摆加刺墙，摆幅一定要够。", {
+    spikes: [{ x: 0, y: 456, w: 180, h: 24, dir: "up" }],
+    stars: [{ x: 170, y: 250 }, { x: 208, y: 304 }, { x: 240, y: 362 }],
+    solve: { kind: "search", tMax: 3 },
+  }),
+  V(K5, "巡游刺阵", "发条越刺再加一台风扇，顺风更远！", {
+    fans: [{ x: 120, y: 220, w: 230, h: 200, dir: "right", power: 300 }],
+    solve: { kind: "search", tMax: 3.4 },
+  }),
+  V(K6, "月夜齿轮", "发条、星门、磁铁，三样连着来！", {
+    magnets: [{ x: 286, y: 330, radius: 200, strength: 900 }],
+    stars: [{ x: 86, y: 244 }, { x: 286, y: 226 }, { x: 286, y: 336 }],
+  }),
+  V(F1, "月色顺风", "顺风路上多了块磁铁，落点更靠里。", {
+    magnets: [{ x: 250, y: 380, radius: 190, strength: 700 }],
+    fans: [{ x: 16, y: 170, w: 330, h: 300, dir: "right", power: 1500 }],
+    spikes: [{ x: 0, y: 458, w: 168, h: 22, dir: "up" }],
+    stars: [{ x: 116, y: 220 }, { x: 186, y: 298 }, { x: 250, y: 374 }],
+  }),
+  V(F2, "月泉升空", "上升气流加两根绳，剪断才飞得起来。", {
+    magnets: [{ x: 180, y: 150, radius: 150, strength: 500 }],
+    stars: [{ x: 180, y: 304 }, { x: 180, y: 232 }, { x: 180, y: 172 }],
+  }),
+  V(F3, "阵风陷阱", "阵风的空档里还站着咕噜噜，看准了再剪！", {
+    gremlins: [{ x1: 60, y1: 400, x2: 172, y2: 400, period: 2.6, radius: 22 }],
+    spikes: [{ x: 0, y: 458, w: 150, h: 22, dir: "up" }],
+    stars: [{ x: 120, y: 226 }, { x: 196, y: 306 }, { x: 252, y: 384 }],
+    solve: { kind: "search", tMax: 2.6 },
+  }),
+  V(F5, "浮岛咕噜噜", "浮岛上的风还没停，咕噜噜就来了！", {
+    gremlins: [{ x1: 44, y1: 402, x2: 170, y2: 402, period: 2.4, radius: 22 }],
+    stars: [{ x: 150, y: 238 }, { x: 214, y: 282 }, { x: 292, y: 350 }],
+    solve: { kind: "cut", t: 0.4, time: 12 },
+  }),
+  V(M1, "巡游磁铁", "磁铁配上会歇气的风扇，路线弯弯的。", {
+    fans: [{ x: 60, y: 190, w: 280, h: 190, dir: "right", power: 420, period: 2, duty: 0.6 }],
+    monster: { x: 306, y: 416 },
+    stars: [{ x: 134, y: 232 }, { x: 208, y: 290 }, { x: 274, y: 348 }],
+    solve: { kind: "search", tMax: 2 },
+  }),
+  V(M4, "咕噜噜舞会", "三只咕噜噜排成三排，空档要自己找！", {
+    gremlins: [
+      { x1: 54, y1: 260, x2: 306, y2: 260, period: 3, radius: 22 },
+      { x1: 306, y1: 336, x2: 54, y2: 336, period: 2.4, radius: 22 },
+      { x1: 54, y1: 402, x2: 306, y2: 402, period: 3.8, radius: 22 },
+    ],
+    stars: [{ x: 180, y: 236 }, { x: 180, y: 306 }, { x: 180, y: 380 }],
+    solve: { kind: "search", tMax: 6 },
+  }),
+  V(M6, "月夜流水线", "木板、磁铁、发条绳，全在一条线上。", {
+    ropes: [{ x: 180, y: 48, winch: { min: 0.92, max: 1.3, period: 2.8 } }],
+    solve: { kind: "search", tMax: 3.2 },
+  }),
+  V(K3, "月台阶接力", "台阶滑行加一台风扇，多推一小段。", {
+    fans: [{ x: 240, y: 250, w: 110, h: 90, dir: "right", power: 160 }],
+    monster: { x: 336, y: 432 },
+    stars: [{ x: 178, y: 258 }, { x: 234, y: 282 }, { x: 306, y: 352 }],
+    solve: { kind: "low", dir: 1, time: 14 },
+  }),
+  V(B10, "月光星门", "老星门配新磁铁，出口那头有人接。", {
+    magnets: [{ x: 280, y: 300, radius: 170, strength: 700 }],
+    stars: [{ x: 80, y: 242 }, { x: 280, y: 244 }, { x: 280, y: 344 }],
+  }),
+  V(B12, "月夜剪刀", "自动剪刀配上升气流，看着就好玩。", {
+    fans: [{ x: 130, y: 300, w: 100, h: 160, dir: "up", power: 500 }],
+    monster: { x: 180, y: 442 },
+    stars: [{ x: 180, y: 258 }, { x: 180, y: 322 }, { x: 180, y: 392 }],
+    solve: { kind: "wait", time: 14 },
+  }),
+  V(B02, "月光秋千", "老秋千挂上发条，荡起来手感不一样。", {
+    ropes: [{ x: 122, y: 56, winch: { min: 0.94, max: 1.18, period: 2.6 } }],
+    solve: { kind: "search", tMax: 2.6 },
+  }),
+  V(B06, "月钩接力", "挂钩接力，下面还有块磁铁帮忙。", {
+    magnets: [{ x: 280, y: 380, radius: 170, strength: 600 }],
+    solve: { kind: "hookRelay", dir: 1, time: 14 },
+  }),
+  V(M5, "月夜抢糖", "磁铁、咕噜噜、刺墙，全都凑齐了！", {
+    spikes: [
+      { x: 0, y: 458, w: 196, h: 22, dir: "up" },
+      { x: 0, y: 196, w: 22, h: 150, dir: "right" },
+    ],
+    solve: { kind: "search", tMax: 2.8 },
+  }),
+  MV(
+    V(M5, "", "", {
+      spikes: [
+        { x: 0, y: 458, w: 196, h: 22, dir: "up" },
+        { x: 0, y: 196, w: 22, h: 150, dir: "right" },
+      ],
+      solve: { kind: "search", tMax: 2.8 },
+    }),
+    "镜像抢糖",
+    "同一套抢糖阵照镜子，方向全反。"
+  ),
+  V(F4, "月泡漂流", "泡泡加侧风加磁铁，慢慢漂过整条河。", {
+    magnets: [{ x: 300, y: 160, radius: 180, strength: 600 }],
+    stars: [{ x: 108, y: 298 }, { x: 198, y: 232 }, { x: 272, y: 176 }],
+  }),
+  V(K4, "月夜双发条", "两根发条加一只咕噜噜，别被它碰到！", {
+    gremlins: [{ x1: 60, y1: 356, x2: 300, y2: 356, period: 3.2, radius: 22 }],
+    solve: { kind: "search", tMax: 3.4 },
+  }),
+  V(M3, "巡游走廊", "一吸一推的走廊，末尾还有台风扇。", {
+    fans: [{ x: 200, y: 300, w: 150, h: 120, dir: "right", power: 260 }],
+    monster: { x: 316, y: 420 },
+    stars: [{ x: 138, y: 208 }, { x: 220, y: 286 }, { x: 296, y: 356 }],
+  }),
+  V(K6, "毕业大巡游", "发条、星门、磁铁、风扇、咕噜噜——全套来一遍！", {
+    magnets: [{ x: 286, y: 320, radius: 190, strength: 800 }],
+    fans: [{ x: 200, y: 180, w: 150, h: 130, dir: "down", power: 260 }],
+    gremlins: [{ x1: 40, y1: 240, x2: 40, y2: 240, period: 3, radius: 20, delay: 40 }],
+    stars: [{ x: 86, y: 248 }, { x: 286, y: 232 }, { x: 286, y: 344 }],
+  }),
+];
+
+export const LEVELS: LevelDef[] = [
+  ...C1, ...C2, ...C3, ...C4, ...C5, ...C6,
+  ...C7, ...C8, ...C9, ...C10,
+];
 
 /** 全部关卡的星星总数（评级用）。 */
 export function totalStars(): number {
