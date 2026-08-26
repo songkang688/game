@@ -42,10 +42,17 @@ import {
   padSplit,
   portalHop,
   shellBreak,
-  simulateTrajectory,
   slopeSurfaceY
 } from "./physics";
 import { speak, stopSpeaking, whenSpeechReady } from "../speech";
+import {
+  TOWER_BIRDS,
+  bestTowerScore,
+  buildTowerLevel,
+  predictDots,
+  towerFloors
+} from "./depth12";
+import { save } from "../../engine/save";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -330,6 +337,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       .slb-cell.slb-next { background: linear-gradient(135deg, #FFE9A8, #FFC9DC); color: #6E4523; }
       .slb-cell .slb-stars { font-size: 9px; letter-spacing: -1px; line-height: 1; }
       .slb-map-tip { text-align: center; color: #5E6880; font-weight: 700; font-size: 14px; margin-top: 12px; }
+      /* 无尽打靶塔入口:和选关地图放在一起,不另开一层菜单(少一次点击) */
+      .slb-tower { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+      .slb-tower-best { font-size: 14px; font-weight: 800; color: #56637F; }
       .slb-crew { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
       .slb-crew span { background: #fff; border-radius: 12px; padding: 5px 9px; font-size: 12px; font-weight: 700; color: #56637F; box-shadow: 0 2px 5px rgba(120,160,220,.2); }
     </style>
@@ -340,6 +350,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       </div>
       <div class="slb-tabs"></div>
       <div class="slb-grid"></div>
+      <div class="slb-tower">
+        <button class="slb-btn slb-tower-btn" type="button">🗼 无尽打靶塔</button>
+        <span class="slb-tower-best"></span>
+      </div>
       <div class="slb-map-tip">打赢一关就解锁下一关,集满 3 星可以随时回来再挑战!</div>
       <div class="slb-crew">
         <span style="color:#9A4E6C">🩷 糯糯·直球</span>
@@ -379,6 +393,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   const tabsEl = wrap.querySelector(".slb-tabs") as HTMLElement;
   const gridEl = wrap.querySelector(".slb-grid") as HTMLElement;
   const totalEl = wrap.querySelector(".slb-total") as HTMLElement;
+  const towerBtn = wrap.querySelector(".slb-tower-btn") as HTMLButtonElement;
+  const towerBestEl = wrap.querySelector(".slb-tower-best") as HTMLElement;
   const stageBox = wrap.querySelector(".slb-stagebox") as HTMLElement;
   const canvas = wrap.querySelector(".slb-canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d");
@@ -507,6 +523,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       });
       gridEl.appendChild(cell);
     }
+
+    renderTowerEntry();
   }
 
   function showMap(): void {
@@ -514,6 +532,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     progress.resume = null;
     saveProgress(progress);
     level = null;
+    tower = null;
+    retryBtn.textContent = "↺ 重来";
     playView.style.display = "none";
     mapView.style.display = "";
     renderMap();
@@ -522,6 +542,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   /* ---------------- 关卡运行时状态 ---------------- */
 
   let level: LevelDef | null = null;
+  /** 非 null 时正在跑无尽打靶塔:index 是第几座,score 是累计分,seed 固定一整轮 */
+  let tower: { index: number; score: number; seed: number; over: boolean } | null = null;
   let blocks: RtBlock[] = [];
   let beans: RtBean[] = [];
   let boulders: RtBoulder[] = [];
@@ -586,12 +608,18 @@ export function mount(api: GameApi): { destroy: () => void } {
       showMap();
       return;
     }
-    // 换到别的关才重置朗读记忆:同一关反复重试不重复念口诀(想再听点 🔈)
-    if (!level || level.id !== def.id) lastSpokenKind = null;
-    level = def;
+    tower = null;
+    startLevel(def);
     progress.resume = id;
     progress.chapter = def.chapter;
     saveProgress(progress);
+    updateHud();
+  }
+
+  function startLevel(def: LevelDef): void {
+    // 换到别的关才重置朗读记忆:同一关反复重试不重复念口诀(想再听点 🔈)
+    if (!level || level.id !== def.id) lastSpokenKind = null;
+    level = def;
 
     blocks = def.blocks.map((b) => ({
       kind: b.kind,
@@ -666,7 +694,13 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function updateHud(): void {
     if (!level) return;
-    lvlEl.textContent = `${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`;
+    if (tower) {
+      lvlEl.textContent = `🗼 ${level.name} · ${tower.score} 分`;
+      retryBtn.textContent = tower.over ? "↺ 再来一轮" : "🗼 换一座";
+    } else {
+      lvlEl.textContent = `${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`;
+      retryBtn.textContent = "↺ 重来";
+    }
     const kinds: BirdKind[] = [];
     if (loadedBird && !loadedBird.flying) kinds.push(loadedBird.kind);
     kinds.push(...queue);
@@ -1293,9 +1327,57 @@ export function mount(api: GameApi): { destroy: () => void } {
     return queue.length + (loadedBird && !loadedBird.flying ? 1 : 0);
   }
 
+  /* ---------------- 无尽「打靶塔」 ---------------- */
+
+  function towerBest(): number {
+    return save.getGameProgress("sling-birds").endlessBest;
+  }
+
+  function renderTowerEntry(): void {
+    const best = towerBest();
+    towerBestEl.textContent = best > 0 ? `最好成绩 ${best} 分` : `每座塔 ${TOWER_BIRDS} 只小鸟,塔越高分越多`;
+  }
+
+  function startTower(index: number): void {
+    if (!tower) tower = { index: 1, score: 0, seed: (Date.now() & 0xffff) + 1, over: false };
+    tower.index = index;
+    tower.over = false;
+    startLevel(buildTowerLevel(index, tower.seed));
+    updateHud();
+  }
+
+  function towerRoundOver(cleared: boolean): void {
+    if (!tower) return;
+    // 打塌多少算多少:清空满分,没清空按剩下的比例给分,不会「全清才有分」
+    const ratio = totalDestructible > 0 ? destroyedCount / totalDestructible : 1;
+    const gain = Math.round(towerFloors(tower.index) * 10 * (cleared ? 1 : ratio));
+    tower.score += gain;
+    if (cleared) {
+      const nextIndex = tower.index + 1;
+      msgEl.textContent = `🎉 第 ${tower.index} 座塌啦!+${gain} 分,继续第 ${nextIndex} 座!`;
+      api.onWin(3, `打靶塔第 ${tower.index} 座塌啦!这一轮已经 ${tower.score} 分。`);
+      tower.index = nextIndex;
+      updateHud();
+      return;
+    }
+    tower.over = true;
+    const best = save.recordEndlessBest("sling-birds", tower.score);
+    const line =
+      tower.score >= best
+        ? `新纪录 ${tower.score} 分!`
+        : `这一轮 ${tower.score} 分,最好成绩还是 ${best} 分,再来一轮就能追上。`;
+    msgEl.textContent = `打靶塔结束啦,一共 ${tower.score} 分。`;
+    api.onLose(`打靶塔走到第 ${tower.index} 座。${line}`);
+    updateHud();
+  }
+
   function finishWin(): void {
     if (finishSent || !level) return;
     finishSent = true;
+    if (tower) {
+      towerRoundOver(true);
+      return;
+    }
     const left = birdsRemaining();
     const ratio = totalDestructible > 0 ? destroyedCount / totalDestructible : 1;
     const stars = calcStars(left, ratio);
@@ -1317,6 +1399,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   function finishLose(): void {
     if (finishSent || !level) return;
     finishSent = true;
+    if (tower) {
+      towerRoundOver(false);
+      return;
+    }
     msgEl.textContent = "小鸟用完啦,换个思路再来一次!";
     api.onLose(`还剩 ${beansAlive()} 颗绿绿豆～先打最下面那根撑着的柱子,上面塌下来常常能一次带走一片!`);
   }
@@ -1477,11 +1563,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (!level) return;
     api.play("tap");
     stopSpeaking();
+    if (tower) {
+      // 塔塌了就接着打下一座;一轮结束了就重开一轮(分数清零、换一批塔)
+      if (tower.over) tower = null;
+      startTower(tower ? tower.index : 1);
+      return;
+    }
     openLevel(level.id);
   });
   backBtn.addEventListener("click", () => {
     api.play("tap");
     showMap();
+  });
+  towerBtn.addEventListener("click", () => {
+    api.play("tap");
+    tower = null;
+    startTower(1);
   });
 
   /* ---------------- 渲染 ---------------- */
@@ -2367,16 +2464,16 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawTrajectory(c: CanvasRenderingContext2D): void {
     if (!aiming || !loadedBird || Math.hypot(dragX, dragY) < 13) return;
-    const v = launchVelocity(dragX, dragY);
-    // 与 stepBirds 同一套积分(含风区与小鸟重力系数),预览即实弹
-    const pts = simulateTrajectory(loadedBird.x, loadedBird.y, v.vx, v.vy, loadedBird.gfactor, winds, 13, 0.07);
-    for (let i = 0; i < pts.length; i++) {
-      c.globalAlpha = 0.85 - (i / pts.length) * 0.7;
+    // 与 stepBirds 同一套积分(含风区与小鸟重力系数),预览即实弹;
+    // 只画前 60% 精确点,后 40% 淡出——落点仍然要孩子自己判断,不给答案圈
+    const dots = predictDots(dragX, dragY, winds, loadedBird.gfactor);
+    for (const d of dots) {
+      c.globalAlpha = d.alpha * 0.9;
       c.fillStyle = "#FFFFFF";
       c.strokeStyle = "rgba(120,140,190,0.6)";
       c.lineWidth = 1;
       c.beginPath();
-      c.arc(pts[i].x, pts[i].y, i % 2 === 0 ? 3.4 : 2.4, 0, Math.PI * 2);
+      c.arc(d.x, d.y, d.radius, 0, Math.PI * 2);
       c.fill();
       c.stroke();
     }
