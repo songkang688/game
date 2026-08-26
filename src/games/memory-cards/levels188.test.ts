@@ -2,20 +2,23 @@
 import { describe, expect, it } from "vitest";
 import { chapterOf, totalSize, TOTAL_LEVELS } from "../level99";
 import {
+  CHAPTERS,
+  LEGACY_CHAPTER_SIZES,
+  LEGACY_LEVELS,
+  LEVELS,
+  THEME_EMOJIS,
+} from "./levels";
+// 1.2：发牌 / 算式 / 旋转 / 可解性都搬到了 logic.ts，断言一条没动
+import {
   buildDeck,
   buildMathPairs,
-  CHAPTERS,
   deckSeed,
   deckSize,
   estimateSeconds,
   evalExpr,
-  LEGACY_CHAPTER_SIZES,
-  LEGACY_LEVELS,
-  LEVELS,
   rotatePositions,
   simulatePerfectPlay,
-  THEME_EMOJIS,
-} from "./levels";
+} from "./logic";
 
 /** 前 99 关的「指纹」：任何一处生成参数被改动都会对不上 */
 function fnv(s: string): string {
