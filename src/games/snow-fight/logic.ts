@@ -18,6 +18,7 @@ import {
   flightTime,
   positionAt,
   solvePower,
+  type AiAim,
   type AiLevel,
   type ThrowSpec,
   type Vec,
@@ -205,6 +206,11 @@ function insideTarget(t: Target, p: Vec): boolean {
 export function flyShot(match: Match, spec: ThrowSpec, self = -1, step = 0.02): ShotResult {
   const total = flightTime(spec) + 0.4;
   const points: Vec[] = [];
+  // 出手那一刻雪球还在自己怀里,当然不算砸中自己
+  const skip = new Set<number>([self]);
+  for (const who of match.throwers) {
+    if (Math.hypot(spec.x - who.x, spec.y - (who.y + 0.4)) <= BODY_R) skip.add(who.id);
+  }
   for (let t = 0; t <= total; t += step) {
     const p = positionAt(spec, t);
     points.push(p);
@@ -222,7 +228,7 @@ export function flyShot(match: Match, spec: ThrowSpec, self = -1, step = 0.02): 
       }
     }
     for (const who of match.throwers) {
-      if (who.id === self) continue;
+      if (skip.has(who.id)) continue;
       if (Math.hypot(p.x - who.x, p.y - (who.y + 0.4)) <= BODY_R) {
         return { points, hit: "player", id: who.id, x: p.x, y: p.y };
       }
@@ -452,13 +458,15 @@ export function endTurn(match: Match, keepTurn = false): void {
 const AI_ANGLES = [34, 42, 50, 58, 64, 70, 76, 82];
 
 /**
- * 轮到电脑时它怎么出手。
+ * 电脑这一发打算怎么扔(只是想一想,不真的扔出去)。
  *
  * 它做的事和小朋友一样:挑一个还没化的靶子,从平抛开始往上抬角度,
  * 心里比划一遍这一发会不会撞到掩体,选第一个「看起来能过去」的角度。
  * 差别只在手准不准——低档的心里那一遍不算风,手还抖;高档会把风偏算进去。
+ *
+ * 想和扔分开,是为了让画面能先把雪球飞出去、落地了再结算。
  */
-export function aiTurn(match: Match, rand: () => number): TurnOutcome | null {
+export function aiPlan(match: Match, rand: () => number): AiAim | null {
   const me = current(match);
   if (!me || !me.ai) return null;
   const foeSeat = 1 - me.seat;
@@ -486,7 +494,20 @@ export function aiTurn(match: Match, rand: () => number): TurnOutcome | null {
     };
     break;
   }
+  return aim;
+}
+
+/** 电脑真的扔一发 */
+export function aiTurn(match: Match, rand: () => number): TurnOutcome | null {
+  const aim = aiPlan(match, rand);
+  if (!aim) return null;
   return takeShot(match, aim.angle, aim.power);
+}
+
+/** 无尽:把下一波雪怪送进场(接着用同一局,雪球和雪墙都保留) */
+export function addTargets(match: Match, specs: TargetSpec[]): void {
+  for (const t of specs) match.targets.push(makeTarget(t, match.nextId++));
+  match.wave += 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -528,6 +549,23 @@ export interface MatchSpec {
   maxShots?: number;
 }
 
+function makeTarget(t: TargetSpec, id: number): Target {
+  return {
+    id,
+    kind: t.kind ?? "lantern",
+    homeX: t.x,
+    x: t.x,
+    y: t.y,
+    r: t.r ?? 1.2,
+    owner: t.owner ?? -1,
+    melted: false,
+    sway: t.sway ?? 0,
+    swaySpeed: t.swaySpeed ?? 0.5,
+    phase: 0,
+    march: t.march ?? 0,
+  };
+}
+
 export function createMatch(spec: MatchSpec): Match {
   let nextId = 1;
   const match: Match = {
@@ -545,20 +583,7 @@ export function createMatch(spec: MatchSpec): Match {
       maxHp: c.hp,
       kind: c.kind ?? "ice",
     })),
-    targets: spec.targets.map((t) => ({
-      id: nextId++,
-      kind: t.kind ?? "lantern",
-      homeX: t.x,
-      x: t.x,
-      y: t.y,
-      r: t.r ?? 1.2,
-      owner: t.owner ?? -1,
-      melted: false,
-      sway: t.sway ?? 0,
-      swaySpeed: t.swaySpeed ?? 0.5,
-      phase: 0,
-      march: t.march ?? 0,
-    })),
+    targets: spec.targets.map((t) => makeTarget(t, nextId++)),
     throwers: spec.throwers.map((t) => ({
       id: nextId++,
       seat: t.seat,
