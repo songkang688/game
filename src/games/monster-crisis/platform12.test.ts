@@ -447,6 +447,8 @@ describe("1.2 四种模式都能打到结算", () => {
     const { game } = await mountGame(h);
 
     expect([...meta.modes]).toEqual(["campaign", "endless", "coop", "versus"]);
+    // 电脑键盘两套键位齐全,手机摇杆 + 技能钮也齐全 → both
+    expect(meta.platform).toBe("both");
     expect(findButton(h.root, "无尽守家")).not.toBeNull();
     expect(findButton(h.root, "双人合作")).not.toBeNull();
     expect(findButton(h.root, "各守一半")).not.toBeNull();
