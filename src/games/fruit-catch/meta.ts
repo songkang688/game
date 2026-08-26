@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🧺",
   category: "casual" as const,
   color: "#FFF4D6",
-  blurb: "99 关六种天气！乌鸦丢炸弹、大风吹水果、夜晚追萤火！",
+  blurb: "188 关十条果道！双篮镜像、沉甸水果、半空传送带、连击星光全新开张！",
 };
