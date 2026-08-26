@@ -399,6 +399,7 @@ export function isPickAllLevel(level: number): boolean {
 
 function takeDistinct(rand: () => number, pool: readonly string[], n: number, exclude: string[]): string[] {
   const out: string[] = [];
+  if (n <= 0) return out;
   for (const x of shuffled(pool, rand)) {
     if (exclude.includes(x) || out.includes(x)) continue;
     out.push(x);

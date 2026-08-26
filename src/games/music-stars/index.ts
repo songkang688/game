@@ -2,6 +2,7 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { playAdvancedLevel } from "./advanced";
 import { buildMelodies, CHAPTERS, LEVELS, type MusicLevel } from "./levels";
 
 // 五声音阶 do re mi sol la，听起来怎么按都不难听
@@ -20,6 +21,10 @@ const THEME_BG = [
   "linear-gradient(#1e4636,#2d6a4f)",
   "linear-gradient(#5c3900,#8a5a00)",
   "linear-gradient(#3d1e5f,#7b2d8b)",
+  "linear-gradient(#6b2737,#a4404f)",
+  "linear-gradient(#0b3d3a,#177a6e)",
+  "linear-gradient(#432b6b,#6d4aa8)",
+  "linear-gradient(#1f3567,#3b5bad)",
 ];
 
 const CSS = `
@@ -53,6 +58,16 @@ const CSS = `
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg: MusicLevel = LEVELS[ctx.level];
+  if (cfg.mode) {
+    return playAdvancedLevel({
+      stage,
+      ctx,
+      cfg,
+      level: ctx.level,
+      notes: NOTES,
+      background: THEME_BG[cfg.theme],
+    });
+  }
   const melodies = buildMelodies(ctx.level);
   const noteGap = Math.round(cfg.noteMs * 0.7);
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
@@ -297,7 +312,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     id: meta.id,
     chapters: CHAPTERS,
     mapHint: "每一关都是一段新旋律，弹给星星听～",
-    grandMessage: "99 关全部弹完，你是闪闪发光的小小音乐家！",
+    grandMessage: "188 关全部弹完，你是闪闪发光的小小音乐家！",
     playLevel,
   });
 }
