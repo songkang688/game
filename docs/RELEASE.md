@@ -61,6 +61,14 @@
 
 产物同时用 `actions/upload-artifact` 存了一份,run 页面上可以单独下载,方便出问题时排查。
 
+## 一个已知的小坑:测试超时
+
+CI 里跑测试用的是 `npm test -- --testTimeout=30000`,不是光秃秃的 `npm test`。
+原因是 `src/games/bomb-buddies/ai.test.ts` 里那个「三档电脑在六张擂台各打三分钟」的模拟用例,
+开发机上 4 秒出头就跑完,GitHub runner 上会超过 vitest 默认的 5 秒超时而假失败。
+以后谁方便的话,把 `testTimeout: 30000` 挪进 `vite.config.ts` 的 `test` 段更干净,
+那样本地跑 `npm test` 也不会偶发红。
+
 ## macOS 包没有签名(重要)
 
 我们没有买苹果开发者账号,所以 mac 的包是 **无签名** 的:
