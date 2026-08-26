@@ -1,7 +1,11 @@
 /**
  * 1.1 第 2 步 B 的手动冒烟替身：用真浏览器把四款学习游戏的第 100/140/188 关
  * 一路点到真实胜负，并检查窄屏不溢出、老存档不丢。
- * 跑法：先 `npx vite --port 5173`，再 `node scripts/smoke188.mjs`。
+ * 跑法（playwright 是临时工具，没有进 package.json）：
+ *   npm i -D playwright --no-save && npx playwright install chromium --with-deps
+ *   npx vite --port 5173
+ *   node scripts/smoke188.mjs            # 也可以 SMOKE_ONLY=color-fun 只跑一款
+ * 它必须连着源码跑（dev server），因为要 import 关卡模块反推正确答案再点真实 UI。
  */
 import { chromium } from "playwright";
 
