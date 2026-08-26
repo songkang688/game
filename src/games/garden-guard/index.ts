@@ -386,6 +386,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let hoverCol = -1;
   let hoverRow = -1;
   let hoverActive = false;
+  // 点错格子的说明:只留最后一条,占工具栏下方那条固定位置。
+  // 早先做成飘字,连点几下就堆成一摞、长句子还会横着戳出屏幕。
+  let toastText = "";
+  let toastTimer = 0;
 
   // ---- 布局 ----
   let w = 640;
@@ -520,6 +524,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     score = 0;
     speed = 1;
     stepCarry = 0;
+    toastText = "";
+    toastTimer = 0;
     selectedTower = null;
     spawnList = [];
     spawnIdx = 0;
@@ -800,7 +806,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       // 点了不能种的格子:说清楚为什么,而不是默默没反应
       if (issue === "poor") petalFlash = 0.8;
       api.play("tap");
-      addFloat(px(col + 0.5), py(row), placementReason(issue, selectedCard), "#c47a2a");
+      toastText = placementReason(issue, selectedCard);
+      toastTimer = 1.6;
       return;
     }
     const cost = TOWER_INFO[selectedCard].cost;
@@ -956,6 +963,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     time += dt;
     petalFlash = Math.max(0, petalFlash - dt);
     shake = Math.max(0, shake - dt);
+    toastTimer = Math.max(0, toastTimer - dt);
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.life -= dt;
@@ -2503,16 +2511,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fillRect(side === 0 ? 0 : w - 22, HUD_H, 22, TOOLBAR_H);
       }
     }
-    // 选中卡片的说明条
+    // 说明条:平时说手里这座塔是干嘛的,点错格子时临时换成原因
     const info = TOWER_INFO[selectedCard];
-    const tip = `${info.name} ${info.cost}🌸 · ${info.desc}`;
+    const showToast = toastTimer > 0;
+    const tip = showToast ? toastText : `${info.name} ${info.cost}🌸 · ${info.desc}`;
     ctx.font = "14px sans-serif";
     const tipW = Math.min(w - 16, ctx.measureText(tip).width + 24);
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.fillStyle = showToast ? "rgba(255,238,238,0.96)" : "rgba(255,255,255,0.92)";
+    ctx.strokeStyle = showToast ? "#c2453f" : "rgba(0,0,0,0)";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.roundRect((w - tipW) / 2, HUD_H + TOOLBAR_H + 4, tipW, 26, 13);
     ctx.fill();
-    ctx.fillStyle = "#5a5a6e";
+    ctx.stroke();
+    ctx.fillStyle = showToast ? "#a5322d" : "#5a5a6e";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(tip, w / 2, HUD_H + TOOLBAR_H + 17, tipW - 16);
