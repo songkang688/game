@@ -18,10 +18,14 @@ export interface Box {
   y2: number;
 }
 
-/** 手牌区宽度决定一张牌多大:窄屏小一点,宽屏也不会大得离谱 */
+/**
+ * 手牌区宽度决定一张牌多大。
+ * 17 张牌摆满时,每张露出来的那一条宽度只由容器宽度决定,跟牌本身多大无关,
+ * 所以牌画大一点只会更好认,不会更挤——上限 66px 是怕宽屏上大得像扑克教具。
+ */
 export function cardWidthFor(width: number): number {
   if (!Number.isFinite(width) || width <= 0) return 44;
-  return Math.max(32, Math.min(64, Math.round(width / 9.5)));
+  return Math.max(36, Math.min(66, Math.round(width / 7)));
 }
 
 /** 牌的高宽比 */
@@ -31,9 +35,9 @@ export function cardHeightFor(cardW: number): number {
   return Math.round(cardW * CARD_RATIO);
 }
 
-/** 扇形容器要多高才装得下(牌高 + 选中时上抬的空间 + 扇形下沉) */
+/** 扇形容器要多高才装得下(牌高 + 选中时上抬的空间 + 两端下沉) */
 export function fanHeightFor(cardW: number): number {
-  return Math.round(cardHeightFor(cardW) + cardW * 0.75 + 20);
+  return Math.round(cardHeightFor(cardW) + cardW * 0.5 + 10);
 }
 
 /**

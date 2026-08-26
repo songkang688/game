@@ -13,9 +13,9 @@ import {
 
 describe("牌的尺寸", () => {
   it("窄屏(375)与宽屏(1280)都给出能看清的牌宽", () => {
-    expect(cardWidthFor(360)).toBeGreaterThanOrEqual(32);
-    expect(cardWidthFor(360)).toBeLessThanOrEqual(64);
-    expect(cardWidthFor(1200)).toBe(64);
+    expect(cardWidthFor(340)).toBeGreaterThanOrEqual(44);
+    expect(cardWidthFor(340)).toBeLessThanOrEqual(66);
+    expect(cardWidthFor(1200)).toBe(66);
   });
 
   it("宽度不合法时给一个安全值", () => {
