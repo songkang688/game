@@ -85,7 +85,16 @@ import {
   unpackItem,
   writeSave
 } from "./logic";
-import { mountLevelGame, type GameApi } from "../level99";
+import {
+  TOTAL_LEVELS,
+  chapterOf,
+  clearedCount,
+  furthestPlayable,
+  loadSkips,
+  loadStars,
+  mountLevelGame,
+  type GameApi
+} from "../level99";
 
 /* ------------------------------------------------------------------ */
 /* 样式                                                                */
@@ -238,7 +247,7 @@ class Cleanup {
 }
 
 /* ------------------------------------------------------------------ */
-/* 角色卡片（血条 / 护盾 / 读条警告）                                    */
+/* 角色卡片（星芒条 / 护盾 / 读条警告）                                    */
 /* ------------------------------------------------------------------ */
 
 interface FighterCard {
@@ -796,6 +805,18 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 首页：选玩法 ---------------- */
 
+  /** 读 188 关框架的存档，说清楚现在走到哪一章了 */
+  function campaignProgressText(): string {
+    const stars = loadStars(meta.id);
+    const skips = loadSkips(meta.id);
+    const at = furthestPlayable(stars, skips, TOTAL_LEVELS);
+    const cleared = clearedCount(stars);
+    const ch = CHAPTERS[chapterOf(CHAPTERS, at)];
+    if (cleared <= 0) return `从${CHAPTERS[0].emoji}${CHAPTERS[0].name}的第 1 关起步。`;
+    if (cleared >= TOTAL_LEVELS) return "188 关全部走通，随时可以回去刷三星。";
+    return `已经走通 ${cleared} 关，眼下在${ch.emoji}${ch.name}的第 ${at + 1} 关。`;
+  }
+
   function renderMenu(): void {
     const s = heroStats(save);
     const card = el("div", "bp-card");
@@ -841,7 +862,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     addMode(
       "🗺️",
       "闯关 · 188 关",
-      `八个主题章节，每章尽头有一位首领。现在在第 ${CHAPTERS[0].name} 那一带起步。`,
+      `八个主题章节，每章尽头有一位首领。${campaignProgressText()}`,
       "linear-gradient(180deg,#fff2f8,#ffe3ef)",
       "campaign"
     );

@@ -498,7 +498,7 @@ export interface Fighter {
    */
   shieldTimer: number;
   chargeTimer: number;
-  /** 是不是 Boss（界面用来画血条样式） */
+  /** 是不是 Boss（界面用来画星芒条样式） */
   isBoss: boolean;
 }
 
@@ -651,7 +651,7 @@ export function itemCount(f: Fighter, itemId: string): number {
   return slot ? Math.max(0, slot.count) : 0;
 }
 
-/** 星芒百分比（0..1），画血条用 */
+/** 星芒百分比（0..1），画星芒条用 */
 export function hpRatio(f: Fighter): number {
   if (f.maxHp <= 0) return 0;
   return Math.max(0, Math.min(1, f.hp / f.maxHp));
