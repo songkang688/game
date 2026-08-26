@@ -382,9 +382,36 @@ export function playRecipe(index: number): SimWorld {
   return playRecipeFor(LEVELS[index]);
 }
 
-export function playRecipeFor(lv: LevelDef): SimWorld {
+/** 配方在仿真里真正落下的一次操作（冒烟脚本据此把事件驱动的配方翻成定时动作表） */
+export interface RecipeAct {
+  at: number;
+  do: "cut" | "cutRope" | "pop" | "puff";
+  i?: number;
+}
+
+export function playRecipeFor(lv: LevelDef, onAct?: (act: RecipeAct) => void): SimWorld {
   const s = lv.solve;
   const w = makeSimFor(lv);
+  if (onAct) {
+    const raw = { cutAll: w.cutAll, cutRope: w.cutRope, pop: w.pop, puff: w.puff };
+    const stamp = (): number => +w.t.toFixed(3);
+    w.cutAll = () => {
+      onAct({ at: stamp(), do: "cut" });
+      raw.cutAll();
+    };
+    w.cutRope = (i) => {
+      onAct({ at: stamp(), do: "cutRope", i });
+      raw.cutRope(i);
+    };
+    w.pop = () => {
+      onAct({ at: stamp(), do: "pop" });
+      raw.pop();
+    };
+    w.puff = (i) => {
+      onAct({ at: stamp(), do: "puff", i });
+      raw.puff(i);
+    };
+  }
   const time = ("time" in s ? s.time : undefined) ?? DEFAULT_TIME[s.kind] ?? 12;
   let cut1 = false;
   let cut2 = false;
