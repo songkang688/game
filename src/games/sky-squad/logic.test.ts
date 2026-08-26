@@ -12,12 +12,14 @@ import {
   damageFoe,
   dps,
   endlessScore,
+  escapeLimit,
   glideAway,
   isPauseKey,
   keyToAction,
   makePlane,
   playerShots,
   shotsPerSecond,
+  sortieCleared,
   sortieMessage,
   starsForSortie,
   touchPlane,
@@ -200,11 +202,30 @@ describe("sky-squad 结算与无尽波次", () => {
     expect(starsForSortie({ downed: 8, total: 8, touched: 0, bombs: 3, bossDown: false })).toBe(1);
   });
 
+  it("放跑敌机就拿不到三星,放跑太多干脆算没完成", () => {
+    expect(starsForSortie({ downed: 7, total: 8, touched: 0, bombs: 0, escaped: 1, bossDown: false })).toBe(2);
+    expect(starsForSortie({ downed: 7, total: 8, touched: 2, bombs: 0, escaped: 1, bossDown: false })).toBe(1);
+    expect(escapeLimit(8)).toBe(2);
+    expect(escapeLimit(40)).toBe(10);
+    expect(escapeLimit(0)).toBe(2);
+    expect(sortieCleared({ downed: 6, total: 8, touched: 0, bombs: 0, escaped: 2, bossDown: false }, false)).toBe(true);
+    expect(sortieCleared({ downed: 5, total: 8, touched: 0, bombs: 0, escaped: 3, bossDown: false }, false)).toBe(false);
+  });
+
+  it("Boss 关必须把 Boss 请回机库才算完成,光清小飞机不算", () => {
+    const stat = { downed: 9, total: 9, touched: 0, bombs: 0, escaped: 0, bossDown: false };
+    expect(sortieCleared(stat, true)).toBe(false);
+    expect(sortieCleared({ ...stat, bossDown: true }, true)).toBe(true);
+    // 同一份成绩放在普通关就算完成
+    expect(sortieCleared(stat, false)).toBe(true);
+  });
+
   it("结算文案只夸不骂,也不出现任何伤亡字眼", () => {
     const lines = [
       sortieMessage({ downed: 8, total: 8, touched: 0, bombs: 0, bossDown: true }),
       sortieMessage({ downed: 8, total: 8, touched: 0, bombs: 2, bossDown: true }),
       sortieMessage({ downed: 8, total: 8, touched: 4, bombs: 1, bossDown: true }),
+      sortieMessage({ downed: 5, total: 8, touched: 0, bombs: 0, escaped: 3, bossDown: false }),
     ];
     for (const line of lines) {
       expect(line.length).toBeGreaterThan(8);

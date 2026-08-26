@@ -291,18 +291,36 @@ export interface SortieStat {
   touched: number;
   /** 用了几颗炸弹 */
   bombs: number;
+  /** 从画面底下溜过去、没被拦住的几架 */
+  escaped?: number;
   /** Boss 关才有:有没有把 Boss 请回机库 */
   bossDown: boolean;
 }
 
-/** 一趟飞行的星级:全清是底线,少挨碰、少用炸弹才是三星 */
+/** 放跑多少架就算这趟没完成任务(至少给 2 架的容错) */
+export function escapeLimit(total: number): number {
+  return Math.max(2, Math.floor(Math.max(0, total) * 0.25));
+}
+
+/** 这一趟算不算完成:Boss 关必须把 Boss 请回机库,普通关不能放跑太多 */
+export function sortieCleared(stat: SortieStat, bossLevel: boolean): boolean {
+  if (bossLevel && !stat.bossDown) return false;
+  return (stat.escaped ?? 0) <= escapeLimit(stat.total);
+}
+
+/** 一趟飞行的星级:全清是底线,少挨碰、少用炸弹才是三星;放跑了就别想三星 */
 export function starsForSortie(stat: SortieStat): 1 | 2 | 3 {
+  if ((stat.escaped ?? 0) > 0) return stat.touched === 0 ? 2 : 1;
   if (stat.touched === 0 && stat.bombs === 0) return 3;
   if (stat.touched <= 1 && stat.bombs <= 1) return 2;
   return 1;
 }
 
 export function sortieMessage(stat: SortieStat): string {
+  const escaped = stat.escaped ?? 0;
+  if (escaped > 0) {
+    return `有 ${escaped} 架从底下溜走了。让它们靠近一点再打,命中率反而更高。`;
+  }
   if (stat.touched === 0 && stat.bombs === 0) {
     return `${stat.downed} 架全部请回机库,一下都没被碰到,漂亮的满分航线!`;
   }
