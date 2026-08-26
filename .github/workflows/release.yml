@@ -255,13 +255,36 @@ jobs:
 
           | 文件 | 适用 | 怎么用 |
           | ---- | ---- | ---- |
-          | \`yiduo-yixing-$VERSION-win-setup.exe\` | Windows 10/11 | **推荐**。双击安装,开始菜单和桌面会有图标 |
-          | \`yiduo-yixing-$VERSION-win-portable.exe\` | Windows 10/11 | 免安装,双击直接玩,可放 U 盘 |
-          | \`yiduo-yixing-$VERSION-mac-arm64.dmg\` | Apple 芯片 Mac(M1/M2/M3…) | 双击打开,把图标拖进「应用程序」 |
-          | \`yiduo-yixing-$VERSION-mac-x64.dmg\` | Intel 芯片 Mac | 同上 |
-          | \`yiduo-yixing-$VERSION-mac-*.zip\` | Mac | 不想用 dmg 就下这个,解压出来就是 App |
-          | \`yiduo-yixing-$VERSION-linux-x86_64.AppImage\` | Linux x64 | \`chmod +x\` 之后双击运行 |
-          | \`yiduo-yixing-$VERSION-android-debug.apk\` | 安卓手机/平板 | 传到手机点开安装(需允许「安装未知来源应用」) |
+          EOF
+
+          # 只列真的打出来了的包,免得表里写着某个文件、Release 上却没有。
+          missing=""
+          add() {
+            local pattern="$1" who="$2" how="$3" found=0 f
+            for f in assets/$pattern; do
+              [ -e "$f" ] || continue
+              found=1
+              echo "| \`$(basename "$f")\` | $who | $how |" >> RELEASE_BODY.md
+            done
+            [ "$found" = 1 ] || missing="$missing $4"
+          }
+
+          add "*-win-setup.exe"        "Windows 10/11"              "**推荐**。双击安装,开始菜单和桌面会有图标" "Windows 安装器"
+          add "*-win-portable.exe"     "Windows 10/11"              "免安装,双击直接玩,可放 U 盘"           "Windows 便携版"
+          add "*-mac-arm64.dmg"        "Apple 芯片 Mac(M1/M2/M3…)"  "双击打开,把图标拖进「应用程序」"          "Mac(Apple 芯片)"
+          add "*-mac-x64.dmg"          "Intel 芯片 Mac"             "双击打开,把图标拖进「应用程序」"          "Mac(Intel)"
+          add "*-mac-*.zip"            "Mac(不想用 dmg 就下这个)"   "解压出来就是 App,拖进「应用程序」"        "Mac zip"
+          add "*.AppImage"             "Linux x64"                  "\`chmod +x\` 之后双击运行"               "Linux AppImage"
+          add "*-android-debug.apk"    "安卓手机/平板"              "传到手机点开安装(需允许「安装未知来源应用」)" "安卓 APK"
+
+          if [ -n "$missing" ]; then
+            {
+              echo ""
+              echo "> 这次没能打出来的包:**${missing# }**。晚点会补上,先用上面这些。"
+            } >> RELEASE_BODY.md
+          fi
+
+          cat >> RELEASE_BODY.md <<EOF
 
           ## 第一次打开要注意
 
