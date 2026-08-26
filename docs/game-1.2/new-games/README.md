@@ -116,10 +116,24 @@
 
 ---
 
-## 五、工作计划（本 commit 记录）
+## 五、工作计划（已完成）
 
 1. `rg` / `ls` 核对 `origin/game-1.2` 与 `origin/game-1.1` 的 `src/games/*/meta.ts`，避开全部已有 id。
 2. 对照 `docs/upgrade-prompts/11-game-1.1-dispatch-prompts.md` 第 7–11 步的完整度，以及 `docs/plan-1.1-step10-C-shooting.md` 的系统表 / 章节表 / 模式表粒度。
 3. 联网核对 IO / 格斗 / 国标麻将 / 地产 / 身份卡牌 / 围棋 / 飞行棋 / SRS 方块等真实规则后再写进提示词。
 4. 写出 7 个步骤文档，每步 A/B/C 三段可整段复制的派发提示词，每款写到能直接施工。
-5. 对 `game-1.2` 开 draft PR（`skip_branch_prefix_check` 如需要）。
+5. 对 `game-1.2` 开 draft PR。
+
+## 六、文档自检
+
+| 项 | 结果 |
+| --- | --- |
+| 步数 | 7 步（step-10 … step-16），每步 A/B/C 各 1 款 |
+| 新 id | 21 个，互不重复，与 1.1/1.2 现有 `meta.ts` 零撞车 |
+| 象棋 | 不新建；`dark-chess` 补名额；README 声明留给 C 档升级 `xiangqi` |
+| 开头套话 | 21 段提示词均含用户指定的 4 行 Task/slug/`game-1.2`/回复要求，逐字一致 |
+| 执行纪律 | 每段都写「你就是执行者，禁止再派生」；只推 `game-1.2`；禁止 force |
+| 独占路径 | 只写本目录；提示词禁止执行者改 `docs/game-1.2/00-*` 与 `upgrades/` |
+| 施工粒度 | 每款含 meta、完整规则、模式表、章节表（188 和）、系统表、360px、AI、GitHub 参考、文件清单、≥15 用例、destroy、验收 checkbox、测试命令 |
+| 必覆盖 | IO 双雄、方块 SRS、更深格斗、麻将、地产、英杰令、围棋、飞行棋均有；商标名只作研究对照，执行者禁止写入代码/文案 |
+| 未实现游戏 | 本目录只有 Markdown，无 `src/games` 改动 |
