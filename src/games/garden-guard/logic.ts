@@ -115,7 +115,7 @@ export function pickTarget(
 
 /* ---------------- 塔 ---------------- */
 
-export type TowerKind = "bubble" | "needle" | "dew" | "sunny" | "boom" | "frost" | "mist";
+export type TowerKind = "bubble" | "needle" | "dew" | "sunny" | "boom" | "frost" | "mist" | "chime";
 
 export interface TowerSpec {
   name: string;
@@ -136,21 +136,27 @@ export interface TowerSpec {
   hitSlow?: boolean;
   /** 周期毒雾脉冲:无视护甲、连隐身怪也罩得住,仅毒雾塔有 */
   poison?: boolean;
+  /** 支援光环:自己不打人,给射程内别的塔加攻速加射程(1.2 新增,仅铃兰铃有) */
+  support?: boolean;
   desc: string;
 }
 
 export const TOWER_INFO: Record<TowerKind, TowerSpec> = {
-  bubble: { name: "泡泡塔", cost: 3, range: 2.4, cd: 0.8, dmg: 2, air: true, desc: "慢但一下打 2 点" },
-  needle: { name: "针针塔", cost: 5, range: 2.1, cd: 0.3, dmg: 1, air: true, desc: "咻咻咻连发" },
+  // 1.2 平衡:泡泡塔原来又便宜、射程又最远、还能对空,模拟里一种塔单挑就能通全部抽样关,
+  // 是个不折不扣的支配解。改成「最便宜但射得最近」的贴脸重击手,长射程让给针针塔。
+  bubble: { name: "泡泡塔", cost: 3, range: 2.2, cd: 1.0, dmg: 2, air: true, desc: "慢吞吞,但一下打 2 点" },
+  needle: { name: "针针塔", cost: 5, range: 2.5, cd: 0.3, dmg: 1, air: true, desc: "射得最远,咻咻咻连发" },
   dew: { name: "露珠塔", cost: 4, range: 1.9, cd: 0, dmg: 0, slow: 0.55, desc: "让怪走得慢慢的" },
   sunny: { name: "阳光花", cost: 4, range: 0, cd: 0, dmg: 0, produce: 5, desc: "慢慢攒花瓣" },
-  boom: { name: "花火塔", cost: 7, range: 2.2, cd: 1.6, dmg: 3, splash: 1.05, desc: "轰!一片都痛" },
+  boom: { name: "花火塔", cost: 6, range: 2.2, cd: 1.2, dmg: 3, splash: 1.25, desc: "轰!一片都痛" },
   // 1.1 新塔:夜露温室解锁冰晶塔(点名减速),齿轮花房解锁毒雾塔(范围毒雾)。
-  frost: { name: "冰晶塔", cost: 5, range: 2.3, cd: 0.9, dmg: 1, air: true, hitSlow: true, desc: "打中就冻得慢慢" },
-  mist: { name: "毒雾塔", cost: 6, range: 1.7, cd: 1.2, dmg: 1, poison: true, desc: "毒雾无视硬壳" },
+  frost: { name: "冰晶塔", cost: 5, range: 2.3, cd: 0.9, dmg: 2, air: true, hitSlow: true, desc: "打中就冻得慢慢" },
+  mist: { name: "毒雾塔", cost: 6, range: 2.0, cd: 1.0, dmg: 1, poison: true, desc: "毒雾无视硬壳" },
+  // 1.2 新塔:补上「支援」这个空着的定位。自己一发不打,专门给邻居塔加速加射程。
+  chime: { name: "铃兰铃", cost: 6, range: 1.8, cd: 0, dmg: 0, support: true, desc: "叮铃铃,旁边的塔打得更快" },
 };
 
-export const TOWER_KINDS: TowerKind[] = ["bubble", "needle", "dew", "sunny", "boom", "frost", "mist"];
+export const TOWER_KINDS: TowerKind[] = ["bubble", "needle", "dew", "sunny", "boom", "frost", "mist", "chime"];
 export const MAX_TOWER_LEVEL = 3;
 
 /** 这种塔能不能打到天上的飞怪(露珠光环、毒雾、花火溅射都只管地面)。 */
@@ -220,9 +226,41 @@ export function frostSlowFactor(level: number): number {
 /** 冰晶减速持续秒数。 */
 export const FROST_DURATION = 1.6;
 
-/** 毒雾塔每次脉冲的毒伤(无视护甲,直接掉血)。 */
+/** 毒雾塔每次脉冲的毒伤(无视护甲,直接掉血)。1.2 起 +1:重甲局要它当主力。 */
 export function mistPoisonDamage(level: number): number {
-  return level;
+  return level + 1;
+}
+
+/* ---- 铃兰铃(1.2 支援塔) ----
+ * 一座 1 级铃兰把射程内的塔加速 18%、射程 +0.18 格;升级加得更多。
+ * 多座铃兰会叠加,但攻速加成封顶 45%——不然堆四座铃兰就变成新的支配解了。 */
+export const CHIME_RATE_CAP = 0.45;
+export const CHIME_RANGE_CAP = 0.6;
+
+/** 一座 level 级铃兰铃给出的攻速加成(0.18 / 0.24 / 0.3)。 */
+export function chimeRateBonus(level: number): number {
+  return 0.18 + (level - 1) * 0.06;
+}
+
+/** 一座 level 级铃兰铃给出的射程加成(格)。 */
+export function chimeRangeBonus(level: number): number {
+  return 0.18 + (level - 1) * 0.07;
+}
+
+/** 若干座铃兰铃罩着同一座塔时的合计加成(封顶)。 */
+export function combineChime(levels: ReadonlyArray<number>): { rate: number; range: number } {
+  let rate = 0;
+  let range = 0;
+  for (const l of levels) {
+    rate += chimeRateBonus(l);
+    range += chimeRangeBonus(l);
+  }
+  return { rate: Math.min(CHIME_RATE_CAP, rate), range: Math.min(CHIME_RANGE_CAP, range) };
+}
+
+/** 支援塔不给自己、也不给经济塔加成:被加成的必须是真出手的塔。 */
+export function chimeAffects(kind: TowerKind): boolean {
+  return kind !== "chime" && kind !== "sunny";
 }
 
 /** 多个减速光环叠加:取最狠的一个,但最慢不低于 0.35。 */
@@ -257,7 +295,12 @@ export type MonsterKind =
   | "boss10" // 露灵仙子(夜露温室 BOSS:隐身+给随从回血)
   | "boss11" // 发条蟹皇(齿轮花房 BOSS:重甲+冲刺+召唤)
   | "boss12" // 云绒巨鸟(云端苗圃 BOSS:会飞+召唤+半血暴走)
-  | "boss13"; // 星尘魔王(星辉花冠最终 BOSS:冲刺+召唤+暴走)
+  | "boss13" // 星尘魔王(星辉花冠最终 BOSS:冲刺+召唤+暴走)
+  // ---- 1.2 四大原型 BOSS:护甲/迅捷/飞行/分裂各一位,给无尽「守到底」轮着上 ----
+  | "bossArmor" // 铁壳卫士(护甲原型:超厚壳,吃穿透)
+  | "bossSwift" // 疾风信使(迅捷原型:跑得飞快还冲刺,吃减速)
+  | "bossFly" // 浮云领主(飞行原型:飞在天上,吃对空)
+  | "bossSplit"; // 双生果王(分裂原型:倒下裂成一片,吃溅射)
 
 export interface MonsterSpec {
   name: string;
@@ -308,6 +351,10 @@ export const MONSTER_INFO: Record<MonsterKind, MonsterSpec> = {
   boss11: { name: "发条蟹皇", hp: 175, armor: 22, speed: 0.3, reward: 28, size: 0.62, boss: true, dashes: true, summons: true },
   boss12: { name: "云绒巨鸟", hp: 155, armor: 0, speed: 0.38, reward: 30, size: 0.6, boss: true, flies: true, summons: true, enrages: true },
   boss13: { name: "星尘魔王", hp: 200, armor: 10, speed: 0.28, reward: 36, size: 0.66, boss: true, dashes: true, summons: true, enrages: true },
+  bossArmor: { name: "铁壳卫士", hp: 110, armor: 30, speed: 0.3, reward: 22, size: 0.6, boss: true },
+  bossSwift: { name: "疾风信使", hp: 120, armor: 0, speed: 0.72, reward: 22, size: 0.5, boss: true, dashes: true },
+  bossFly: { name: "浮云领主", hp: 130, armor: 0, speed: 0.42, reward: 24, size: 0.58, boss: true, flies: true, summons: true },
+  bossSplit: { name: "双生果王", hp: 125, armor: 0, speed: 0.36, reward: 24, size: 0.6, boss: true, splits: true, summons: true },
 };
 
 /** 冲冲怪节奏:平走 → 冲刺。 */
@@ -1137,8 +1184,8 @@ const dewhouseHand: LevelDef[] = [
     waves: [W(["softy", 8, 0.9], ["sneaky", 4, 1.1]), W(["healy", 2, 2.2], ["shieldy", 4, 1.2]), W(["sneaky", 6, 0.9], ["softy", 8, 0.8])],
   },
   {
-    name: "天窗飞客", theme: "dewhouse", paths: [P_HOOK], startPetals: 20, feature: "飞飞怪登场",
-    hint: "飞飞怪飞在天上!只有泡泡、针针、冰晶够得着它",
+    name: "天窗飞客", theme: "dewhouse", paths: [P_HOOK], startPetals: 20, unlockTower: "chime", feature: "飞飞怪登场",
+    hint: "飞飞怪飞在天上!新塔铃兰铃摇一摇,旁边的塔打得更快",
     waves: [W(["flappy", 3, 1.6], ["softy", 6, 0.9]), W(["flappy", 5, 1.2], ["sneaky", 4, 1.0]), W(["flappy", 6, 1.0], ["healy", 2, 2.0], ["softy", 6, 0.8])],
   },
   {

@@ -1297,6 +1297,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     boss11: "#c9985a",
     boss12: "#9ec8ea",
     boss13: "#b06ad8",
+    bossArmor: "#8fa8bc",
+    bossSwift: "#7ec8e0",
+    bossFly: "#c8dcf5",
+    bossSplit: "#e8909a",
   };
 
   function drawMonster(m: Monster): void {
