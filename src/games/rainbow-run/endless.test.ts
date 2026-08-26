@@ -18,16 +18,20 @@ import {
   chaserPress,
   chaserWarning,
   clearLanePath,
+  declaredPathHolds,
   emptyRecord,
   failCopy,
   freeLanes,
   mergeRecord,
   parseRecord,
+  passableLanes,
   pathStepsAreReachable,
   recordBroken,
   recordLine,
   segmentClearPath,
   segmentIsFair,
+  segmentIsPassable,
+  segmentPassablePath,
   serializeRecord,
   templatesForLevel,
   tierForDistance,
@@ -172,14 +176,28 @@ describe("无尽彩虹跑 · 必过窗口", () => {
       expect(seg.clearPath[0]).toBe(lane);
       expect(pathStepsAreReachable(seg.clearPath), `第 ${i} 段的必过路线跨了两格`).toBe(true);
       for (let r = 0; r < seg.rows.length; r++) {
-        expect(
-          freeLanes(seg.rows[r]),
-          `第 ${i} 段第 ${r} 行的必过车道上居然摆了障碍`,
-        ).toContain(seg.clearPath[r]);
+        // 1.2 起,必过路线上允许出现「跳得过 / 滑得过」的障碍(三连节拍、低梁抢道就靠这个)。
+        // 平跑那一行的口径没放松,仍旧要求整条车道是空的;
+        // 要动作的那一行则改成断言那个动作真能过去,由 declaredPathHolds 逐行核对。
+        if (seg.pathActions[r] === "run") {
+          expect(
+            freeLanes(seg.rows[r]),
+            `第 ${i} 段第 ${r} 行的必过车道上居然摆了障碍`,
+          ).toContain(seg.clearPath[r]);
+        } else {
+          expect(
+            passableLanes(seg.rows[r]),
+            `第 ${i} 段第 ${r} 行的必过车道既跳不过也滑不过`,
+          ).toContain(seg.clearPath[r]);
+        }
       }
+      expect(declaredPathHolds(seg), `第 ${i} 段报的动作序列走不通`).toBe(true);
       // 3. 独立的校验器也能自己找出一条来
-      expect(segmentClearPath(seg.rows, lane), `第 ${i} 段「${seg.name}」找不到必过路线`).not.toBeNull();
-      expect(segmentIsFair(seg, lane)).toBe(true);
+      expect(
+        segmentPassablePath(seg.rows, lane),
+        `第 ${i} 段「${seg.name}」找不到必过路线`,
+      ).not.toBeNull();
+      expect(segmentIsPassable(seg, lane), `第 ${i} 段「${seg.name}」没过必过窗口校验`).toBe(true);
 
       lane = seg.clearPath[seg.clearPath.length - 1];
       dist += seg.rows.length * 250 * 0.02 + 3;

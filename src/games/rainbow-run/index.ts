@@ -11,6 +11,14 @@ export { meta };
 // (障碍存 trackY、判定用 HIT_WINDOW),透视只发生在绘制那一刻——
 // 所以 188 关战役的可通关性一点没变。同一步还加了土狼时间与输入缓冲、
 // 程序化拼接的无限模式,以及掉帧自动降画质。
+//
+// 1.2 第 9 步接着往下做,全都长在那一版 2.5D 之上:
+//  · 日夜与天气——无尽按距离循环晨 / 昼 / 黄昏 / 夜,雨天地面多几条反光(daynight.ts);
+//  · 幽灵竞速——上一趟的操作录成快照,这一趟半透明的自己同场跑(ghost.ts);
+//  · 路段语法——三连节拍、低梁抢道、彩纸箱链、分岔合流四种新模板(endless.ts);
+//  · 手感——换道 100ms、跳跃按初速与重力积分、换道侧倾(motion.ts);
+//  · 平台接线——直开第 N 关、家长跳关、无尽成绩上报、收藏册加成(campaign.ts)。
+// 188 关的关卡表一个数都没动,改的只有渲染与手感。
 import {
   BOARD_SECONDS,
   BOSSES,
@@ -46,9 +54,7 @@ import {
   completesPerfectRun,
   detectSwipe,
   forkRows,
-  isLevelUnlocked,
   isPerfectJump,
-  isThemeUnlocked,
   missionDone,
   missionLabel,
   missionProgress,
@@ -137,6 +143,52 @@ import {
   smoothing,
   withAlpha,
 } from "./view3d";
+import {
+  JUMP_RISE,
+  SLIDE_LOCK,
+  glideLane,
+  groundedBody,
+  launchBody,
+  renderLift,
+  shadowScale,
+  stepJump,
+  tiltFor,
+} from "./motion";
+import type { JumpBody } from "./motion";
+import {
+  DAY_CYCLE_METERS,
+  STATIC_DAY,
+  lightingAt,
+  lightingLabel,
+  shade,
+} from "./daynight";
+import type { Lighting } from "./daynight";
+import {
+  GHOST_KEY,
+  GhostPlayer,
+  GhostRecorder,
+  parseGhost,
+  serializeGhost,
+} from "./ghost";
+import type { GhostRun } from "./ghost";
+import {
+  CAMPAIGN_TOTAL,
+  SKIP_KEY,
+  bestEndlessMeters,
+  clampLevelIndex,
+  describeBoosts,
+  initialLevelIndex,
+  isUnlockedWith,
+  mergeSkip,
+  neutralBoosts,
+  parseSkipList,
+  readLegacyMeters,
+  readRunnerBoosts,
+  serializeSkipList,
+} from "./campaign";
+import type { RunnerBoosts } from "./campaign";
+import { save } from "../../engine/save";
+import { getLevelExtras } from "../../ui/level188Contract";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -148,6 +200,15 @@ export interface GameAPI {
   getStars: () => number;
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
+  /** 平台可以指定直接开第几关(1 基);不给就读 `?level=`,再没有才走选世界 */
+  initialLevel?: number;
+}
+
+/** mount 返回的东西:除了 destroy,还得给平台一个「直开第 N 关」的入口。 */
+export interface RainbowRunHandle {
+  destroy: () => void;
+  /** 直接开跑第 n 关(1 基),越界夹到两端 */
+  openCampaignLevel: (n: number) => void;
 }
 
 type Phase = "themes" | "map" | "intro" | "run" | "clear" | "retry";
@@ -245,6 +306,68 @@ function saveEndlessRecord(r: EndlessRecord): void {
   }
 }
 
+/** 隐私模式下 localStorage 一碰就抛,读写全都包一层,读不到就当没有。 */
+function readKey(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeKey(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 静默失败:这一局照样能玩,只是关掉页面不留痕
+  }
+}
+
+/**
+ * 无尽最好成绩统一上报给平台。老 key 只读一次取最大值,
+ * 一路只涨不降——迁移绝不会把谁的纪录清零。
+ */
+function syncEndlessBest(record: EndlessRecord): number {
+  const platform = save.getGameProgress(meta.id).endlessBest;
+  const legacy = readLegacyMeters({ getItem: readKey });
+  const best = bestEndlessMeters(record, legacy, platform);
+  try {
+    return save.recordEndlessBest(meta.id, best);
+  } catch {
+    return best;
+  }
+}
+
+function loadGhost(): GhostRun | null {
+  return parseGhost(readKey(GHOST_KEY));
+}
+
+function saveGhost(run: GhostRun): void {
+  writeKey(GHOST_KEY, serializeGhost(run));
+}
+
+function loadSkips(): number[] {
+  return parseSkipList(readKey(SKIP_KEY));
+}
+
+/** 地址栏的查询串;测试环境或者被沙箱掐掉时当没有。 */
+function safeSearch(): string {
+  try {
+    return window.location.search ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** 用户把系统动效关掉了:换道只留位移,不再侧倾。 */
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 收藏册是另一个窗口在做的,可能还没进仓库。
  * 用 glob 探一眼:文件不在就连按钮都不画,绝不因为缺模块把跑酷打崩。
@@ -267,7 +390,7 @@ async function openCollectionSafely(): Promise<void> {
   }
 }
 
-export function mount(api: GameAPI): { destroy: () => void } {
+export function mount(api: GameAPI): RainbowRunHandle {
   const { root } = api;
   const canvas = document.createElement("canvas");
   canvas.style.width = "100%";
@@ -305,6 +428,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
   const VISIBLE_SCALE = 0.07;
 
   const progress = loadProgress();
+  /** 家长授权跳过的关(0 基);跳过的关星级仍是 0,但下一关照样解锁 */
+  let skips = loadSkips();
+  const levelUnlocked = (idx: number): boolean => isUnlockedWith(progress, skips, idx);
+  const themeUnlocked = (ci: number): boolean => levelUnlocked(themeOffset(ci));
 
   // ---- 局状态 ----
   let levelIdx = 0;
@@ -331,6 +458,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let jumpJudged = false;
   let perfectStreak = 0;
   let reviveUsed = false;
+  /** 宠物「绵绵」白送的那一次接住,不花星星 */
+  let petReviveLeft = 0;
   let earnedStars: 1 | 2 | 3 = 1;
   let missionOk = false;
   let finaleFired = false;
@@ -341,8 +470,32 @@ export function mount(api: GameAPI): { destroy: () => void } {
   /** 无尽模式里这一趟是怎么结束的:撞障碍 / 掉坑 / 被追上 */
   let failKind: FailKind = "crash";
 
-  // ---- 手感:土狼时间 + 输入缓冲 ----
+  // ---- 手感:土狼时间 + 输入缓冲 + 按 dt 积分的跳跃 ----
   let jumpFeel = initJumpFeel();
+  /** 跳跃的高度与竖直速度:每帧按重力积分,不按帧数扫一条 sin 曲线 */
+  let jumpBody: JumpBody = groundedBody();
+  /** 这次下滑贴地多久了:过了 SLIDE_LOCK 就能被跳跃打断 */
+  let slideElapsed = 0;
+  const reducedMotion = prefersReducedMotion();
+
+  // ---- 收藏册加成(只读收藏册,加成一律封顶) ----
+  let boosts: RunnerBoosts = neutralBoosts();
+
+  // ---- 日夜与天气:无尽按距离循环,战役固定白昼 ----
+  let light: Lighting = STATIC_DAY;
+
+  // ---- 幽灵竞速 ----
+  let ghostBest: GhostRun | null = loadGhost();
+  let ghostPlayer: GhostPlayer | null = null;
+  let ghostRec: GhostRecorder | null = null;
+  /** 幽灵这一刻站在哪条道、正在做什么 */
+  let ghostLane = 1;
+  let ghostLaneFloat = 1;
+  let ghostAction: PlayerAction = "run";
+  let ghostBody: JumpBody = groundedBody();
+  let ghostAlive = false;
+  /** 这一趟从起跑算起过了多少毫秒(幽灵回放与录制共用同一条时间线) */
+  let runMs = 0;
 
   // ---- 帧率自适应画质 ----
   let fps = 60;
@@ -403,6 +556,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let btnMap: Rect | null = null;
   let btnRetry: Rect | null = null;
   let btnRevive: Rect | null = null;
+  /** 「跳过这一关」:壳层没注册家长授权门时压根不画 */
+  let btnSkip: Rect | null = null;
+  let skipPending = false;
   let btnBack: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   // ---- 手势 ----
@@ -431,6 +587,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     jumpsUsed = second ? 2 : 1;
     jumpElapsed = 0;
     jumpJudged = false;
+    slideElapsed = 0;
+    // 抛物线交给初速与重力,滞空时长仍旧是 JUMP_TIME(两者是同一组数反推出来的)
+    jumpBody = launchBody();
     api.play("jump");
     if (second) addFloat(laneX(lane), playerY() - 90, "二段跳!", "#8a5ac9");
     return true;
@@ -438,6 +597,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function doInput(input: RunInput): void {
     if (destroyed || phase !== "run") return;
+    // 幽灵竞速:这一趟的每一个操作都记一笔,下一趟半透明的自己照着重跑
+    ghostRec?.push(runMs, input);
     if (input === "left" || input === "right") {
       const next = clampLane(lane + laneStep(input));
       if (next !== lane) {
@@ -452,6 +613,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
         startJump(true);
         return;
       }
+      // 滑到一半想跳:锁定期一过就放行。低梁抢道那种「滑过去马上换道再跳」
+      // 的路段就是靠这一下接上的,锁定期本身比一次跳跃短得多。
+      if (action === "slide" && slideCanCancelNow()) {
+        action = "run";
+        actionTimer = 0;
+      }
       // 其余情况先记下这一按:能跳就当帧跳,跳不了就交给输入缓冲,
       // 落地那一刻 update() 会自动把它补上。
       jumpFeel = feelPress(jumpFeel);
@@ -460,16 +627,68 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (action !== "slide") {
       action = "slide";
       actionTimer = SLIDE_TIME;
+      slideElapsed = 0;
       api.play("tap");
     }
   }
 
+  /** 这一次下滑已经贴地够久,可以被别的动作打断了吗。 */
+  function slideCanCancelNow(): boolean {
+    return slideElapsed >= SLIDE_LOCK;
+  }
+
+  /**
+   * 直开第 n 关(1 基)。越界夹到 1..188,不合法的数字当第 1 关。
+   * 平台给了 `initialLevel`、地址栏带着 `?level=`,或者外面拿着 handle 调进来,走的都是这一条。
+   */
+  function openCampaignLevel(n: number): void {
+    if (destroyed) return;
+    stopSpeaking();
+    loadLevel(clampLevelIndex(n));
+  }
+
+  /** 这一关能不能跳:战役里、不是最后一关、壳层注册过家长授权门。 */
+  function canSkip(): boolean {
+    return (
+      !endless &&
+      levelIdx < CAMPAIGN_TOTAL - 1 &&
+      typeof getLevelExtras().requestSkip === "function"
+    );
+  }
+
+  /**
+   * 跳过这一关。授权是家长那道高权限门给的,这边只负责记账:
+   * 星级仍旧记 0(跳过去不是本事),但下一关照样解锁——和 188 关框架同一个口径。
+   */
+  function askSkip(): void {
+    const request = getLevelExtras().requestSkip;
+    if (!request || skipPending || !canSkip()) return;
+    const target = levelIdx;
+    skipPending = true;
+    api.play("tap");
+    Promise.resolve(request(meta.id, target))
+      .then((ok) => {
+        if (destroyed || !ok) return;
+        skips = mergeSkip(readKey(SKIP_KEY), target);
+        writeKey(SKIP_KEY, serializeSkipList(skips));
+        api.play("win");
+        if (target < CAMPAIGN_TOTAL - 1) openCampaignLevel(target + 2);
+      })
+      .catch(() => {
+        // 授权那边出问题就当没点过,不打断这一关
+      })
+      .finally(() => {
+        skipPending = false;
+      });
+  }
+
   function loadLevel(idx: number): void {
     endless = false;
-    levelIdx = idx;
-    chapterIdx = themeIndexOfLevel(idx);
-    patternPool = patternsForLevel(LEVELS[idx]);
-    boss = LEVELS[idx].boss ? BOSSES[LEVELS[idx].boss] : null;
+    levelIdx = clampLevelIndex(idx + 1);
+    chapterIdx = themeIndexOfLevel(levelIdx);
+    const def = LEVELS[levelIdx];
+    patternPool = patternsForLevel(def);
+    boss = def.boss ? BOSSES[def.boss] : null;
     resetLevel();
     phase = "intro";
   }
@@ -488,14 +707,42 @@ export function mount(api: GameAPI): { destroy: () => void } {
     failKind = kind;
     loseReason = "hearts";
     recordBefore = { ...endlessRecord };
-    const run: EndlessRecord = { meters: Math.floor(dist), coins: stats.coins };
+    const meters = Math.floor(dist);
+    const run: EndlessRecord = { meters, coins: stats.coins };
+    const brokeMeters = recordBroken(endlessRecord, run).meters;
     endlessRecord = mergeRecord(endlessRecord, run);
     saveEndlessRecord(endlessRecord);
+    // 无尽成绩统一上报平台(老 key 在这里顺带被读一次并入最大值)
+    syncEndlessBest(endlessRecord);
+    // 跑赢了上一趟才换幽灵:留着的永远是自己最好的那一趟
+    if (ghostRec && (brokeMeters || !ghostBest)) {
+      ghostBest = ghostRec.finish(meters);
+      saveGhost(ghostBest);
+    }
+    ghostRec = null;
+    ghostPlayer = null;
+    ghostAlive = false;
     hearts = 0;
     phase = "retry";
     api.play("oops");
     shake = 0.45;
     speak(failCopy(kind, dist).line);
+  }
+
+  /**
+   * 幽灵推进一帧:按上一趟录下来的时间线走位。
+   * 它不参与任何判定——撞不到人,也撞不到障碍,纯粹是个参照物。
+   */
+  function stepGhost(dt: number): void {
+    if (!ghostPlayer) return;
+    const state = ghostPlayer.seek(runMs);
+    if (state.lane !== ghostLane) ghostLane = state.lane;
+    ghostLaneFloat = glideLane(ghostLaneFloat, ghostLane, dt);
+    if (state.action === "jump" && ghostAction !== "jump") ghostBody = launchBody();
+    ghostAction = state.action;
+    ghostBody = stepJump(ghostBody, dt);
+    // 快照放完了幽灵就淡出:上一趟就是跑到这儿结束的
+    if (state.finished) ghostAlive = false;
   }
 
   /** 无尽跑:根据当前距离切换主题世界(换世界时广播一下)。 */
@@ -537,6 +784,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     jumpElapsed = 0;
     jumpJudged = false;
     jumpFeel = initJumpFeel();
+    jumpBody = groundedBody();
+    slideElapsed = 0;
     perfectStreak = 0;
     forkSign = null;
     forkTimer = level().fork ? 5 : Infinity;
@@ -546,6 +795,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     endlessSeg = null;
     chaserGap = CHASER_START_GAP;
     failKind = "crash";
+    runMs = 0;
+    // 收藏册每一局读一次:跑到一半去换装备不该让这一趟的手感变来变去
+    boosts = readRunnerBoosts();
+    petReviveLeft = boosts.reviveOnce ? 1 : 0;
+    invincible = 2 + boosts.startShieldMs / 1000;
+    light = endless ? lightingAt(0) : STATIC_DAY;
+    // 幽灵竞速只在无尽模式开:战役有固定关卡长度,比的是星级不是里程
+    ghostRec = endless ? new GhostRecorder() : null;
+    ghostPlayer = endless && ghostBest && ghostBest.events.length > 0 ? new GhostPlayer(ghostBest) : null;
+    ghostPlayer?.reset();
+    ghostAlive = ghostPlayer !== null;
+    ghostLane = 1;
+    ghostLaneFloat = 1;
+    ghostAction = "run";
+    ghostBody = groundedBody();
     stats.coins = 0;
     stats.stars = 0;
     stats.dodged = 0;
@@ -613,6 +877,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 无尽模式:撞一下追风棉花云就贴近一大截
     if (endless) chaserGap = chaserPenalty(chaserGap);
     if (hearts <= 0) {
+      if (petCatches()) return;
       if (endless) {
         endEndlessRun("crash");
         return;
@@ -621,6 +886,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
       phase = "retry";
       speak(retrySpeechLine(false, Math.floor(dist), false));
     }
+  }
+
+  /**
+   * 收藏册里的棉花小兔「绵绵」:一局白接你一次,不花星星。
+   * 只在真要摔倒的那一刻用掉,平时撞一下不会浪费。
+   */
+  function petCatches(): boolean {
+    if (petReviveLeft <= 0) return false;
+    petReviveLeft--;
+    hearts = 1;
+    invincible = 2;
+    api.play("win");
+    addFloat(laneX(lane), playerY() - 70, "绵绵接住你啦!", "#ffc2d6", true);
+    return true;
   }
 
   // ---- 输入 ----
@@ -647,7 +926,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
-          if (isThemeUnlocked(progress, c.idx)) {
+          if (themeUnlocked(c.idx)) {
             api.play("tap");
             chapterIdx = c.idx;
             phase = "map";
@@ -667,7 +946,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const n of mapNodes) {
         if (Math.hypot(x - n.x, y - n.y) <= n.r + 6) {
-          if (isLevelUnlocked(progress, n.idx)) {
+          if (levelUnlocked(n.idx)) {
             api.play("tap");
             loadLevel(n.idx);
           } else {
@@ -716,6 +995,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
         api.play("win");
         stopSpeaking();
         addFloat(w / 2, h / 2, "复活啦!继续冲!", "#e0a030", true);
+        return;
+      }
+      if (inRect(x, y, btnSkip)) {
+        askSkip();
         return;
       }
       if (inRect(x, y, btnRetry)) {
@@ -842,6 +1125,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     if (phase !== "run") return;
 
+    runMs += dt * 1000;
+    // 跳跃高度按初速与重力积分:60fps 与 30fps 抬到同样的高度、同一刻落地
+    jumpBody = stepJump(jumpBody, dt);
+    if (action === "slide") slideElapsed += dt;
+
     // 脚下有没有地:跑在坑洞上方就算踏空了,土狼时间从这一刻开始走
     const overPit = obstacles.some(
       (o) =>
@@ -860,8 +1148,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     const def = level();
     if (endless) {
-      speed = endlessSpeedAt(dist);
+      // 收藏册的速度加成只作用在无尽模式:188 关的速度是配平过的,动了就等于改关卡数据
+      speed = endlessSpeedAt(dist) * boosts.speedMul;
       syncEndlessTheme();
+      light = lightingAt(dist);
+      stepGhost(dt);
     } else {
       const frac = Math.min(1, dist / def.len);
       speed = def.speed * (1 + frac * 0.1);
@@ -877,14 +1168,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
 
-    // 换道插值走指数逼近:60fps 和 30fps 下同样时间挪到同样位置
-    laneFloat += (lane - laneFloat) * smoothing(dt, 10);
+    // 换道插值走指数逼近:100 毫秒挪到位,60fps 和 30fps 下同一时刻在同一个位置
+    laneFloat = glideLane(laneFloat, lane, dt);
     if (actionTimer > 0) {
       actionTimer -= dt;
       if (action === "jump") jumpElapsed += dt;
       if (actionTimer <= 0) {
         action = "run";
         jumpsUsed = 0;
+        slideElapsed = 0;
       }
     }
 
@@ -977,6 +1269,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
             addFloat(laneX(lane), py - 60, "滑板架住坑口啦!", "#8a5ac9", true);
             continue;
           }
+          if (petCatches()) continue;
           endEndlessRun("pit");
           return;
         }
@@ -1045,7 +1338,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
         const dx = laneX(lane) - p.x;
         const dy = py - p.y;
         const d = Math.hypot(dx, dy);
-        if (d < 300) {
+        // 收藏册的吸金范围加成落在这条半径上
+        if (d < 300 * boosts.magnetMul) {
           p.x += (dx / (d || 1)) * 500 * dt;
           p.y += (dy / (d || 1)) * 500 * dt;
         }
@@ -1060,13 +1354,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
         pickups.splice(i, 1);
         if (p.kind === "star") {
           stats.stars++;
-          score += 10;
+          // 收藏册的糖果加成只加分,不加「吃到几颗」——任务进度得是老老实实数出来的
+          score += Math.round(10 * boosts.coinMul);
           api.play("coin");
           addFloat(p.x, p.y - 20, "+⭐", "#e0a030");
           puffs.push({ x: p.x, y: p.y, life: 0.5, color: "#ffe387" });
         } else if (p.kind === "coin") {
           stats.coins++;
-          score += 5;
+          score += Math.round(5 * boosts.coinMul);
           api.play("pop");
           addFloat(p.x, p.y - 20, "+1🍬", "#e05a7a");
           if (endless) chaserGap = chaserBoost(chaserGap, CHASER_COIN_BONUS);
@@ -1123,12 +1418,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function drawSky(theme: ThemeStyle, def: LevelDef): void {
     const hy = cam.horizonY;
     const grad = ctx.createLinearGradient(0, 0, 0, hy + 30);
-    grad.addColorStop(0, theme.skyTop);
-    grad.addColorStop(1, theme.skyBottom);
+    // 世界给底色,天色只在底色上调一调——十二个世界配四种天色都还认得出是哪儿
+    grad.addColorStop(0, shade(theme.skyTop, light));
+    grad.addColorStop(1, shade(theme.skyBottom, light));
     ctx.fillStyle = grad;
     ctx.fillRect(-20, -20, w + 40, hy + 50);
-    // 夜空的三个世界撒一把会眨眼的星星
-    if (def.world === "space" || def.world === "stardust" || def.world === "neon") {
+    // 夜空的三个世界撒一把会眨眼的星星;跑到夜里,别的世界天上也会亮起来
+    const nightSky = light.phase === "night" && light.weather === "clear";
+    if (def.world === "space" || def.world === "stardust" || def.world === "neon" || nightSky) {
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       const stars = particleCount(30, qualityTier);
       for (let i = 0; i < stars; i++) {
@@ -1139,6 +1436,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       ctx.globalAlpha = 1;
     }
+    if (light.sheen > 0) drawRain();
+  }
+
+  /**
+   * 雨:天上几道斜线,数量跟着画质档走。
+   * 位置由 `time` 直接算出来,不留粒子数组——雨停了就一颗都不剩。
+   */
+  function drawRain(): void {
+    const drops = particleCount(46, qualityTier);
+    ctx.strokeStyle = withAlpha("#dbe8ff", 0.16 + light.sheen * 0.24);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let i = 0; i < drops; i++) {
+      const speedy = 520 + (i % 7) * 90;
+      const x = (((i * 137) % 100) / 100) * (w + 120) - 60 + ((time * 90) % 40);
+      const y = ((((i * 53) % 100) / 100) * h + time * speedy) % (h + 60);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 5, y + 16);
+    }
+    ctx.stroke();
   }
 
   /**
@@ -1153,7 +1470,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const span = Math.max(48, layer.span * w);
       const shift = parallaxShift(scrollPhase, layer.factor, span);
       const top = hy - hy * layer.height * 0.55;
-      ctx.fillStyle = withAlpha(mixHex(theme.skyBottom, theme.accent, 0.2 + i * 0.22), layer.alpha);
+      // 远景层跟着天色走色温:黄昏偏橘、夜里偏靛,近处的层调得轻一点
+      const base = mixHex(theme.skyBottom, theme.accent, 0.2 + i * 0.22);
+      ctx.fillStyle = withAlpha(
+        mixHex(base, light.tint, light.layerMix * (1 - i * 0.18)),
+        layer.alpha,
+      );
       ctx.beginPath();
       ctx.moveTo(-span * 2, hy + 4);
       for (let x = -span * 2 + shift; x < w + span; x += span) {
@@ -1179,14 +1501,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     // 跑道以外的大地
     const ground = ctx.createLinearGradient(0, hy, 0, h);
-    ground.addColorStop(0, mixHex(theme.lanes[1], theme.skyBottom, 0.7));
-    ground.addColorStop(1, mixHex(theme.lanes[1], theme.accent, 0.18));
+    ground.addColorStop(0, shade(mixHex(theme.lanes[1], theme.skyBottom, 0.7), light));
+    ground.addColorStop(1, shade(mixHex(theme.lanes[1], theme.accent, 0.18), light));
     ctx.fillStyle = ground;
     ctx.fillRect(-20, hy, w + 40, h - hy + 20);
 
     // 三条车道:每条都是一块向消失点收窄的梯形
     for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = theme.lanes[i];
+      ctx.fillStyle = shade(theme.lanes[i], light);
       ctx.beginPath();
       ctx.moveTo(edgeX(i, farS), farY);
       ctx.lineTo(edgeX(i + 1, farS), farY);
@@ -1198,7 +1520,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     // 地面横向网格线:等距铺在世界里,跑起来就朝人涌过来
     const grid = groundGridDepths(scrollPhase, tier.gridSpacing, far);
-    ctx.strokeStyle = "rgba(255,255,255,0.42)";
+    // 网格线的亮度跟着天色走:白昼最亮,夜里压下去,下雨反而更亮(地面是湿的)
+    ctx.strokeStyle = withAlpha("#ffffff", light.gridAlpha);
     for (const d of grid) {
       const s = scaleAtDepth(cam, d);
       const y = screenYAtDepth(cam, d);
@@ -1210,6 +1533,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+
+    // 雨天:三条车道各拉一道竖直反光,跟着网格一起往前涌
+    if (light.sheen > 0) {
+      const sheen = ctx.createLinearGradient(0, farY, 0, nearY);
+      sheen.addColorStop(0, withAlpha("#ffffff", 0));
+      sheen.addColorStop(1, withAlpha("#dff0ff", 0.16 * light.sheen));
+      ctx.fillStyle = sheen;
+      for (let i = 0; i < 3; i++) {
+        const cf = (edgeX(i, farS) + edgeX(i + 1, farS)) / 2;
+        const cn = (edgeX(i, nearS) + edgeX(i + 1, nearS)) / 2;
+        const wf = Math.max(1, (edgeX(i + 1, farS) - edgeX(i, farS)) * 0.16);
+        const wn = Math.max(2, (edgeX(i + 1, nearS) - edgeX(i, nearS)) * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(cf - wf, farY);
+        ctx.lineTo(cf + wf, farY);
+        ctx.lineTo(cn + wn, nearY);
+        ctx.lineTo(cn - wn, nearY);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
 
     // 车道分隔线:四条都指向同一个消失点,中间两条画成一段段的虚线
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
@@ -1236,12 +1580,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
     }
 
-    // 远端雾:越靠近地平线越浓,一点点化进天空里
-    const fogH = (cam.playerY - hy) * 0.55;
+    // 远端雾:越靠近地平线越浓,一点点化进天空里。夜里与雨天铺得更厚
+    const fogH = (cam.playerY - hy) * 0.55 * Math.max(0.6, Math.min(1.8, light.fogScale));
+    const fogHue = shade(theme.skyBottom, light);
     const fog = ctx.createLinearGradient(0, hy - 2, 0, hy + fogH);
-    fog.addColorStop(0, withAlpha(theme.skyBottom, 0.96));
-    fog.addColorStop(0.55, withAlpha(theme.skyBottom, 0.45));
-    fog.addColorStop(1, withAlpha(theme.skyBottom, 0));
+    fog.addColorStop(0, withAlpha(fogHue, 0.96));
+    fog.addColorStop(0.55, withAlpha(fogHue, 0.45));
+    fog.addColorStop(1, withAlpha(fogHue, 0));
     ctx.fillStyle = fog;
     ctx.fillRect(-20, hy - 2, w + 40, fogH + 4);
 
@@ -1619,15 +1964,31 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const jumping = action === "jump";
     const sliding = action === "slide";
     const flying = jetTimer > 0;
-    const lift = flying ? 90 + Math.sin(time * 5) * 8 : jumping ? Math.sin((1 - actionTimer / JUMP_TIME) * Math.PI) * 70 : 0;
+    // 跳跃高度来自按重力积分的 jumpBody:滞空时长与最高点跟 1.1 一模一样,
+    // 只是这条弧线现在是算出来的,不再是扫一条 sin。收藏册的弹跳加成只抬高画面。
+    const lift = flying
+      ? 90 + Math.sin(time * 5) * 8
+      : jumping
+        ? renderLift(jumpBody, boosts.jumpMul)
+        : 0;
     const r = 30;
-    ctx.fillStyle = "rgba(90,90,110,0.18)";
+    // 影子跟着高度缩:跳得越高越小越淡
+    const shs = flying ? 0.42 : shadowScale(lift);
+    ctx.fillStyle = withAlpha("#5a5a6e", 0.18 * (0.45 + shs * 0.55));
     ctx.beginPath();
-    ctx.ellipse(pxx, py + r * 0.85, r * (jumping || flying ? 0.5 : 0.85), r * 0.25, 0, 0, Math.PI * 2);
+    ctx.ellipse(pxx, py + r * 0.85, r * 0.85 * shs, r * 0.25 * shs, 0, 0, Math.PI * 2);
     ctx.fill();
     const bodyY = py - lift;
     const sx = sliding ? 1.25 : 1;
     const sy = sliding ? 0.6 : 1;
+    // 换道侧倾:身体往要去的那一边压一点。系统关了动效就只剩位移,不再倾斜
+    const tilt = tiltFor(laneFloat, lane, reducedMotion);
+    ctx.save();
+    if (tilt !== 0) {
+      ctx.translate(pxx, bodyY);
+      ctx.rotate(tilt);
+      ctx.translate(-pxx, -bodyY);
+    }
     if (boardTimer > 0) {
       // 小滑板
       ctx.fillStyle = "#c9a6f2";
@@ -1685,6 +2046,43 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    ctx.restore();
+  }
+
+  /**
+   * 上一趟的自己:半透明,只画个轮廓。
+   * 它不参与任何判定,画在玩家之前,所以两个人重叠时真人永远在上面。
+   */
+  function drawGhost(): void {
+    if (!ghostAlive || !ghostPlayer) return;
+    const gx = laneX(ghostLaneFloat);
+    const py = playerY();
+    const lift = ghostAction === "jump" ? ghostBody.lift : 0;
+    const sliding = ghostAction === "slide";
+    const r = 30;
+    const bodyY = py - lift;
+    ctx.save();
+    ctx.globalAlpha = 0.34;
+    ctx.fillStyle = "rgba(90,90,110,0.5)";
+    ctx.beginPath();
+    ctx.ellipse(gx, py + r * 0.85, r * 0.8 * shadowScale(lift), r * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#9fd6ff";
+    ctx.beginPath();
+    ctx.ellipse(gx, bodyY, r * (sliding ? 1.25 : 1), r * (sliding ? 0.6 : 1), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#5aa9e0";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // 名牌上写领先还是落后:比的是「跑到这一刻,上一趟到了第几米」
+    const lead = Math.round(dist - ghostPlayer.metersAt(runMs));
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = lead >= 0 ? "#2f7a52" : "#a05a2f";
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(lead >= 0 ? `👻 领先 ${lead} 米` : `👻 落后 ${-lead} 米`, gx, bodyY - r - 8);
+    ctx.restore();
   }
 
   function panelBox(pw: number, ph: number): { x: number; y: number } {
@@ -1781,7 +2179,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const row = Math.floor(i / cols);
       const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
       themeCards.push({ idx: i, rect });
-      const unlocked = isThemeUnlocked(progress, i);
+      const unlocked = themeUnlocked(i);
       const cleared = themeCleared(progress, i);
       ctx.fillStyle = unlocked ? st.lanes[1] : "#e8e8ee";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
@@ -1795,17 +2193,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
       ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
-      ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
-      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
-      ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
+      // 章节名、简介、进度这三行都量过宽:超出先降字号,降到底就掐尾巴。
+      // 卡片在 360 宽的两列布局里只有 150 出头,不量就会横着捅出去。
+      const titleX = rect.x + 10 + ch * 0.42;
+      ctx.font = `bold ${Math.max(13, Math.min(17, Math.round(ch * 0.22)))}px sans-serif`;
+      fitText(`第${i + 1}章 ${st.name}`, titleX, rect.y + ch * 0.3, rect.x + rect.w - 8 - titleX);
       ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
-      ctx.fillText(unlocked ? st.blurb : "通关上一个世界解锁", rect.x + 10, rect.y + ch * 0.6);
+      const bodyW = rect.w - 18;
+      ctx.font = "13px sans-serif";
+      fitText(unlocked ? st.blurb : "通关上一个世界解锁", rect.x + 10, rect.y + ch * 0.6, bodyW);
       const size = themeSize(i);
-      ctx.fillText(
-        unlocked ? `${cleared}/${size} 关 · ⭐${themeStars(progress, i)}/${size * 3}` : "",
-        rect.x + 10,
-        rect.y + ch * 0.82,
-      );
+      if (unlocked) {
+        fitText(
+          `${cleared}/${size} 关 · ⭐${themeStars(progress, i)}/${size * 3}`,
+          rect.x + 10,
+          rect.y + ch * 0.82,
+          bodyW,
+        );
+      }
     }
   }
 
@@ -1864,7 +2269,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.setLineDash([]);
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
-      const unlocked = isLevelUnlocked(progress, n.idx);
+      const unlocked = levelUnlocked(n.idx);
       const got = progress[n.idx] ?? 0;
       const isFinal = n.idx - base === size - 1;
       const r = isFinal ? n.r * 1.25 : n.r;
@@ -1939,10 +2344,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 大王溜走不给复活:那不是"摔了一跤",是伤害没打够,得重新跑一趟
     const bossLose = !endless && loseReason === "boss";
     const canRevive = !reviveUsed && !bossLose && api.getStars() >= REVIVE_COST;
-    // 无尽模式多一行「跑了多少米」的鼓励语,面板要跟着高一点
+    const skippable = canSkip();
+    // 无尽模式多一行「跑了多少米」的鼓励语,能跳关时多一行按钮,面板都要跟着高一点
     const { y } = panelBox(
       Math.min(450, w - 40),
-      (canRevive ? 260 : 210) + (bossLose ? 28 : 0) + (endless ? 16 : 0),
+      (canRevive ? 260 : 210) + (bossLose ? 28 : 0) + (endless ? 16 : 0) + (skippable ? 56 : 0),
     );
     // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
     ctx.fillStyle = "#8a5ac9";
@@ -2003,6 +2409,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
     btnRetry = { x: w / 2 + 10, y: by, w: bw2, h: 44 };
     drawButton(btnMap, endless ? "回主页" : "回地图", "#f0f0f5", "#5a5a6e");
     drawButton(btnRetry, "再跑一次", "#ffd868", "#7a5a1a");
+    // 卡住太久就找家长开个门:跳过去的关星级仍记 0,但下一关会解锁
+    btnSkip = null;
+    if (skippable) {
+      btnSkip = { x: w / 2 - 137, y: by + 56, w: 274, h: 44 };
+      drawButton(
+        btnSkip,
+        skipPending ? "等家长确认中…" : `⏭️ 跳过第 ${levelIdx + 1} 关(要家长确认)`,
+        "#eef0ff",
+        "#5a5a8e",
+      );
+    }
   }
 
   function drawIntroPanel(): void {
@@ -2035,6 +2452,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         y + 158,
         Math.min(440, w - 50),
       );
+      drawIntroExtras(y + 186);
       return;
     }
     const ci = themeIndexOfLevel(levelIdx);
@@ -2055,23 +2473,52 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (def.rails) tips.push("有加速滑轨");
     if (def.rhythm) tips.push("有节奏段");
     if (def.fork) tips.push("有岔路口");
-    ctx.fillText(
+    fitText(
       `${st.name}${tips.length > 0 ? ` · ${tips.join("·")}` : ""} · 左右滑换道 上滑跳 下滑趴`,
       w / 2,
       y + 158,
+      Math.min(430, w - 60),
     );
+    drawIntroExtras(y + 186);
   }
 
-  /** 一行放不下就自动缩字号,窄屏上不让提示语顶出面板。 */
+  /**
+   * 开跑前那两行小字:身上这一套收藏册帮了什么忙,以及这一趟有没有幽灵同场。
+   * 画在面板下沿之外,不跟正文抢位置。
+   */
+  function drawIntroExtras(baseY: number): void {
+    const lines: string[] = [];
+    const boostLine = describeBoosts(boosts);
+    if (boostLine !== "") lines.push(boostLine);
+    if (endless && ghostBest && ghostBest.events.length > 0) {
+      lines.push(`👻 上一趟的自己(${ghostBest.meters} 米)会跟你一起跑`);
+    }
+    if (lines.length === 0) return;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < lines.length; i++) {
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = i === 0 && boostLine !== "" ? "#8a5ac9" : "#5a8ac9";
+      fitText(lines[i], w / 2, baseY + i * 20, Math.min(440, w - 40));
+    }
+  }
+
+  /**
+   * 一行放不下就先缩字号,缩到 13px(全站可读性下限)还是塞不进就掐尾巴加省略号。
+   * 窄屏上宁可少几个字,也不许把提示语顶出面板、把章节简介捅出卡片。
+   */
   function fitText(text: string, cx: number, cy: number, maxW: number): void {
     const base = ctx.font;
     const size = Number(/(\d+)px/.exec(base)?.[1] ?? 16);
     let px = size;
-    while (px > 10 && ctx.measureText(text).width > maxW) {
+    while (px > 13 && ctx.measureText(text).width > maxW) {
       px -= 1;
       ctx.font = base.replace(/\d+px/, `${px}px`);
     }
-    ctx.fillText(text, cx, cy);
+    let out = text;
+    while (out.length > 1 && ctx.measureText(out).width > maxW) out = out.slice(0, -1);
+    if (out !== text && out.length > 1) out = `${out.slice(0, -1)}…`;
+    ctx.fillText(out, cx, cy);
     ctx.font = base;
   }
 
@@ -2162,6 +2609,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
     }
 
+    // 幽灵画在真人之前:两个人站到同一条道上时,上面那个永远是你自己
+    drawGhost();
     drawPlayer();
     if (endless && phase === "run") drawChaser();
 
@@ -2203,7 +2652,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(
-        `🏃 ${Math.floor(dist)} 米 · ${tierForDistance(dist).name}`,
+        `🏃 ${Math.floor(dist)} 米 · ${tierForDistance(dist).name} · ${lightingLabel(light)}`,
         w / 2,
         rowY + 12,
       );
@@ -2229,7 +2678,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.roundRect(bx, cy, Math.max(10, bw * frac), 18, 9);
       ctx.fill();
       ctx.fillStyle = "#4a4a5e";
-      ctx.font = "12px sans-serif";
+      // 13px 是全站可读性下限,追赶条这一行原来是 12px
+      ctx.font = "bold 13px sans-serif";
       ctx.fillText(
         `${CHASER_EMOJI} ${CHASER_NAME}${chaserWarning(chaserGap) ? " 快跑!" : " 在后面追"}`,
         w / 2,
@@ -2356,7 +2806,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
   window.addEventListener("keydown", onKeyDown);
   raf = requestAnimationFrame(frame);
 
+  // 平台给了 initialLevel、或者地址栏带着 ?level=N,就别停在选世界那一屏
+  const wanted = initialLevelIndex(api.initialLevel, safeSearch());
+  if (wanted !== null) loadLevel(wanted);
+
   return {
+    openCampaignLevel,
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
