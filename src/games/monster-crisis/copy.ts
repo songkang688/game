@@ -8,6 +8,16 @@
 
 import { LANES } from "./logic";
 
+/**
+ * 一律不许出现的字眼。规格第七节的红线:无血无伤无死亡,
+ * 而且失败那一句只能鼓励 —— 「笨、差、又输了」这类挖苦话也一并拦掉。
+ */
+export const BANNED = ["血", "死", "杀", "尸", "受伤", "打伤", "疼", "痛", "笨", "真差", "太差", "又输"];
+
+export function isClean(line: string): boolean {
+  return !BANNED.some((w) => line.includes(w));
+}
+
 /** 家周围分成五个方向,和 `arena.laneOfPoint` 的扇区一一对应(角度从右边开始顺时针)。 */
 export const SECTOR_NAMES = ["右下角", "正下方", "左边", "左上角", "右上角"];
 

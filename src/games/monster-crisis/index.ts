@@ -89,7 +89,7 @@ const SCENE_NAME = [
   "彩虹总部",
 ];
 
-const CSS = `
+export const CSS = `
 .mcr-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;position:relative;}
 .mcr-hud{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;}
@@ -803,8 +803,8 @@ function createArenaView(host: HTMLElement, opts: ViewOptions): ViewHandle {
       cards.appendChild(btn);
     }
     el.append(title, sub, cards);
-    const first = cards.querySelector(".mcr-card");
-    if (first instanceof HTMLElement) first.focus?.();
+    const first = cards.querySelector<HTMLElement>(".mcr-card");
+    first?.focus?.();
   }
 
   function openPause(): void {
@@ -1549,7 +1549,7 @@ export function mount(api: GameApi): MonsterCrisisHandle {
           },
         };
       },
-      mapHint: "自己上场跑位出手:每 3 波挑一张成长卡,越打越顺手。被撞到只会转个圈,不疼的!",
+      mapHint: "自己上场跑位出手:每 3 波挑一张成长卡,越打越顺手。被撞到只会转个圈,一点也不要紧!",
       grandMessage: "188 关全部守住!彩虹总部的小怪物全变成了小云朵,你是最棒的守家小队长!",
       guide,
       guideTitle: "小怪物危机 · 守家手册",
