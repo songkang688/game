@@ -446,7 +446,10 @@ button {
   font-size: 19px;
   font-weight: 800;
   box-shadow: var(--shadow-soft);
-  transition: all 0.15s ease;
+  /* 逐项写死而不是 all:`all` 会把 outline-color 也一起过渡,
+     键盘 Tab 过去时焦点圈会先是白色再慢慢变深,那半秒里根本看不清落点 */
+  transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .tab:hover {
@@ -1449,6 +1452,14 @@ button {
 .icon-btn--pause {
   font-size: 22px;
   line-height: 1;
+}
+
+/* 窄屏顶栏塞不下这么多按钮:音乐开关收进暂停面板,把宽度让给游戏名。
+   ⏸ 必须留在顶栏 —— 它是触屏唯一的暂停入口(键盘还有 Esc)。 */
+@media (max-width: 420px) {
+  .game-topbar > .icon-btn:not(.icon-btn--pause) {
+    display: none;
+  }
 }
 
 .dialog--pause {

@@ -113,9 +113,21 @@ export function buildPauseActions(state: PauseMenuState): PauseAction[] {
   return actions;
 }
 
-/** 攻略入口到底能不能用:契约里注册了实现,且这款游戏有攻略数据 */
-export function guideAvailable(book: GuideBook | null | undefined): boolean {
-  return Boolean(book) && typeof getLevelExtras().mountGuide === "function";
+/**
+ * 攻略入口到底能不能用。
+ *
+ * 两个条件缺一不可:
+ *  1. 契约里注册了 `mountGuide`(没注册就整条攻略链路都不存在);
+ *  2. 真有东西可看 —— 要么这款游戏自带 `guide.ts`,要么 188 关框架已经在
+ *     舞台里挂出了攻略按钮(它会用章节信息拼一份兜底攻略)。
+ * 只满足第 1 条就放按钮,点开会是一片空白,不如不放。
+ */
+export function guideAvailable(
+  book: GuideBook | null | undefined,
+  stageHasGuideButton = false
+): boolean {
+  if (typeof getLevelExtras().mountGuide !== "function") return false;
+  return Boolean(book) || stageHasGuideButton;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +271,12 @@ export function mountGameScreen(
     }
   }
 
+  /** 页面上现成的攻略按钮:顶栏里的(游戏自带 guide.ts)或选关地图工具行里的 */
+  function findGuideTrigger(): HTMLElement | null {
+    const btn = screen.querySelector(".guide-btn");
+    return btn instanceof HTMLElement ? btn : null;
+  }
+
   function openPause(): void {
     if (disposed || pauseDialog) return;
     tellGame("pause");
@@ -274,7 +292,7 @@ export function mountGameScreen(
     content.append(h, note);
 
     const actions = buildPauseActions({
-      guideAvailable: guideAvailable(guideBook),
+      guideAvailable: guideAvailable(guideBook, Boolean(findGuideTrigger())),
       soundOn: isBgmOn()
     });
 
@@ -315,9 +333,10 @@ export function mountGameScreen(
         return;
       case "guide": {
         pauseDialog = null;
-        // 攻略按钮就在顶栏里,复用它,免得同一份抽屉出现两套实现
-        const btn = guideSlot.querySelector(".guide-btn");
-        if (btn instanceof HTMLElement) btn.click();
+        // 直接复用页面上已有的攻略按钮(顶栏的或 188 关地图里的),
+        // 免得同一份抽屉出现两套实现
+        const btn = findGuideTrigger();
+        if (btn) btn.click();
         else tellGame("resume");
         return;
       }

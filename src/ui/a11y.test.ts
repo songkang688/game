@@ -375,11 +375,18 @@ describe("统一暂停面板", () => {
     expect(actions.filter((a) => a.kind === "primary").map((a) => a.key)).toEqual(["resume"]);
   });
 
-  it("攻略入口要同时满足:契约注册了 mountGuide + 这款游戏真有攻略数据", () => {
+  it("契约没注册 mountGuide 时,攻略入口一律不出现", () => {
     resetLevelExtras();
     expect(guideAvailable(BOOK)).toBe(false);
+    expect(guideAvailable(BOOK, true)).toBe(false);
+  });
+
+  it("注册了 mountGuide 之后,自带攻略数据或地图里已有攻略按钮都算能用", () => {
     registerLevelExtras({ mountGuide: () => () => undefined });
     expect(guideAvailable(BOOK)).toBe(true);
+    // 188 关框架会拿章节信息拼一份兜底攻略并挂出按钮,这时也该给入口
+    expect(guideAvailable(null, true)).toBe(true);
+    // 既没数据也没按钮:点开是一片空白,不如不放
     expect(guideAvailable(null)).toBe(false);
   });
 });
