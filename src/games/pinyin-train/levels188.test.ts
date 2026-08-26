@@ -18,7 +18,9 @@ import {
   buildQuestions,
   CHAPTERS,
   CHAPTER_THEMES,
+  confuseGroupOf,
   isPickAllLevel,
+  splitConfuse,
   LEGACY_CHAPTER_SIZES,
   LEGACY_LEVELS,
   levelTimeLimitMs,
@@ -65,13 +67,15 @@ describe("拼音小火车 · 1.0 前 99 关回归", () => {
 });
 
 describe("拼音小火车 · 1.1 新章节", () => {
-  it("总关数 188，末尾追加了 4 个全新章节共 89 关", () => {
+  it("总关数 188，1.0 六站之后共 89 关（1.2 起是五座车站）", () => {
     expect(totalSize(CHAPTERS)).toBe(188);
     expect(totalSize(CHAPTERS)).toBe(TOTAL_LEVELS);
     const fresh = CHAPTERS.slice(6);
     expect(fresh.length).toBeGreaterThanOrEqual(3);
     expect(totalSize(fresh)).toBe(89);
-    expect(fresh.map((c) => c.name)).toEqual(["整体认读快线", "多音字岔道", "轻声儿化坡", "句子注音终点"]);
+    expect(fresh.map((c) => c.name)).toEqual([
+      "易混淆专项站", "整体认读快线", "多音字岔道", "轻声儿化坡", "句子注音终点",
+    ]);
   });
 
   it("新章节配色文案齐全，且不含任何英文商标字样", () => {
@@ -231,6 +235,17 @@ describe("拼音小火车 · 第 100–188 关逐关可解", () => {
         expect(reading).toBeDefined();
         for (const c of task.correct) expect(reading!.words).toContain(c);
         for (const c of others) expect(reading!.words).not.toContain(c);
+      } else if (task.rule === "confuse") {
+        // 1.2 易混淆专项：标题里点名了要挑的声母 / 韵母，挑出来的必须条条对得上。
+        // 判据用「最长成员匹配」——zhǎo 的声母是 zh 不是 z，靠这一条把平翘舌分开。
+        const m = task.title.match(/挑出(声母|韵母)是 (\S+) 的/);
+        expect(m).not.toBeNull();
+        const group = confuseGroupOf(lv);
+        expect(group.kind).toBe(m![1] === "声母" ? "initial" : "final");
+        const feature = m![2];
+        expect(group.members).toContain(feature);
+        for (const c of task.correct) expect(splitConfuse(group, c)?.member).toBe(feature);
+        for (const c of others) expect(splitConfuse(group, c)?.member).not.toBe(feature);
       } else {
         for (const chip of task.chips) {
           const py = chip.split(" ")[1];
@@ -303,17 +318,18 @@ describe("拼音小火车 · 新机制纯逻辑", () => {
     expect(TIME_UP_LINE).not.toMatch(/慢|笨|不行/);
   });
 
-  it("限时特快：前两站不限时，后三站逐关收紧但不过分", () => {
-    for (let lv = 99; lv < 121; lv++) expect(levelTimeLimitMs(lv)).toBe(0);
-    for (const lv of [121, 143, 166, 187]) {
+  it("限时特快：易混淆专项站与整体认读快线不限时，后三站逐关收紧但不过分", () => {
+    // 第 100–134 关（易混淆专项站 + 整体认读快线）慢慢辨，不上表
+    for (let lv = 99; lv < 134; lv++) expect(levelTimeLimitMs(lv)).toBe(0);
+    for (const lv of [134, 150, 170, 187]) {
       expect(levelTimeLimitMs(lv)).toBeGreaterThanOrEqual(90000);
       expect(levelTimeLimitMs(lv)).toBeLessThanOrEqual(180000);
     }
     // 同一章越往后时间越紧
-    const ci = chapterOf(CHAPTERS, 130);
-    const first = 121 + 0;
-    expect(levelTimeLimitMs(first)).toBeGreaterThan(levelTimeLimitMs(first + CHAPTERS[ci].size - 1));
+    const first = 134;
+    const ci = chapterOf(CHAPTERS, first);
     expect(indexInChapter(CHAPTERS, first)).toBe(0);
+    expect(levelTimeLimitMs(first)).toBeGreaterThan(levelTimeLimitMs(first + CHAPTERS[ci].size - 1));
   });
 
   it("倒计时显示：分秒好读，最后两成时间进入冲刺提醒", () => {

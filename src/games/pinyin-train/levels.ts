@@ -4,22 +4,35 @@ import { mulberry32, pick, randInt, shuffled, chapterOf, indexInChapter, type Ch
 import type { QuizQuestion, QuizTheme } from "../quiz99";
 import {
   applyTone,
+  CONFUSE_GROUPS,
   DUOYIN_CARDS,
   ERHUA_WORDS,
   INITIALS,
   LOOKALIKE_GROUPS,
   NEUTRAL_WORDS,
   PINYIN_SENTENCES,
+  SPELL_CARDS,
   SPELL_ONLY_SYLLABLES,
   stripTone,
   SYLLABLE_CARDS,
+  TONE_DRILL_CARDS,
   TONE_MARKS,
   TONE_NAMES,
   TONED_WORDS,
   toneOf,
   VOWELS,
   WHOLE_READ_SYLLABLES,
+  type ConfuseGroup,
 } from "./logic";
+import {
+  BASE_FINALS,
+  markTone,
+  markToneAt,
+  removeToneMarks,
+  spell,
+  TONEABLE_LETTERS,
+  toneTargetIndex,
+} from "./pinyin";
 
 /** 1.0 的六座车站：合计 99 关，1.1 起不再改动 */
 export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
@@ -33,11 +46,12 @@ export const CHAPTERS: Chapter[] = [
   { name: "声调站", emoji: "🎵", color: "#d0f0fd", desc: "四个声调爬山坡", size: 16 },
   { name: "复韵母站", emoji: "🌈", color: "#fff3bf", desc: "ai ei ui 复韵母来啦", size: 16 },
   { name: "音节站", emoji: "🖼️", color: "#ffdeeb", desc: "看图拼音节大终点", size: 16 },
-  // ↓ 1.1 追加：四座高年级车站，合计 89 关
-  { name: "整体认读快线", emoji: "🚄", color: "#ffe3e3", desc: "十六个整体认读音节，一眼认出不用拼", size: 22 },
-  { name: "多音字岔道", emoji: "🔀", color: "#e6fcf5", desc: "同一个字换个词就换个读音", size: 22 },
-  { name: "轻声儿化坡", emoji: "🍃", color: "#f8f0fc", desc: "轻轻一声、卷卷舌头，味道全变了", size: 23 },
-  { name: "句子注音终点", emoji: "📜", color: "#edf2ff", desc: "读懂整句话，再决定这个字念什么", size: 22 },
+  // ↓ 1.1 追加四座高年级车站；1.2 在最前面插入「易混淆专项站」，五座合计仍是 89 关
+  { name: "易混淆专项站", emoji: "🕵️", color: "#ffe0ea", desc: "六组最容易听混看混的，一组一组过筛子", size: 16 },
+  { name: "整体认读快线", emoji: "🚄", color: "#ffe3e3", desc: "十六个整体认读音节，一眼认出不用拼", size: 19 },
+  { name: "多音字岔道", emoji: "🔀", color: "#e6fcf5", desc: "同一个字换个词就换个读音", size: 19 },
+  { name: "轻声儿化坡", emoji: "🍃", color: "#f8f0fc", desc: "轻轻一声、卷卷舌头，味道全变了", size: 18 },
+  { name: "句子注音终点", emoji: "📜", color: "#edf2ff", desc: "读懂整句话，再决定这个字念什么", size: 17 },
 ];
 
 export const CHAPTER_THEMES: QuizTheme[] = [
@@ -47,11 +61,15 @@ export const CHAPTER_THEMES: QuizTheme[] = [
   { bg: "linear-gradient(#e7f5ff,#d0f0fd)", accent: "#1971c2" },
   { bg: "linear-gradient(#fff9db,#fff3bf)", accent: "#e8590c" },
   { bg: "linear-gradient(#fff0f6,#ffdeeb)", accent: "#c2255c" },
+  { bg: "linear-gradient(#fff0f3,#ffe0ea)", accent: "#a61e4d" },
   { bg: "linear-gradient(#fff5f5,#ffe3e3)", accent: "#c92a52" },
   { bg: "linear-gradient(#e6fcf5,#c3fae8)", accent: "#087f5b" },
   { bg: "linear-gradient(#f8f0fc,#eebefa)", accent: "#862e9c" },
   { bg: "linear-gradient(#edf2ff,#dbe4ff)", accent: "#364fc7" },
 ];
+
+/** 「易混淆专项站」在章节表里的下标（1.2 新增章，插在 1.0 六站之后） */
+export const CONFUSE_CHAPTER = 6;
 
 /** 单韵母 */
 export const SINGLE_VOWELS = ["a", "o", "e", "i", "u", "ü"];
@@ -75,7 +93,11 @@ export type PinyinKind =
   | "context"
   | "neutral"
   | "erhua"
-  | "sentence";
+  | "sentence"
+  // ↓ 1.2 追加：标声调 / 易混淆专项 / 找出读音不同的一个
+  | "tonemark"
+  | "confuse"
+  | "odd";
 
 export interface PinyinQ extends QuizQuestion {
   kind: PinyinKind;
@@ -278,7 +300,126 @@ function qSentence(rand: () => number): PinyinQ {
   };
 }
 
-/** 每关题目数：1.0 六站 4 → 7 题；1.1 新车站 6 → 9 题（更长的题组） */
+// ---------------------------------------------------------------------------
+// 1.2 追加：标声调 / 易混淆专项 / 找出读音不同的一个
+// ---------------------------------------------------------------------------
+
+/** 大号拼音的行内样式：`ü` 的两点、三声的小勾在手机上也要看得清（≥20px） */
+const BIG_PINYIN = `font-size:44px;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;letter-spacing:1px`;
+
+/**
+ * 标声调：调号到底该戴在哪个字母上。
+ * 甲卷选字母，乙卷选写法（干扰项就是把调号戴错了地方），两种都直指标调规则。
+ */
+function qToneMark(rand: () => number): PinyinQ {
+  const card = pick(rand, TONE_DRILL_CARDS);
+  const at = toneTargetIndex(card.plain);
+  const toneName = TONE_NAMES[card.tone - 1];
+
+  if (rand() < 0.5) {
+    const right = card.plain[at];
+    const letters = Array.from(new Set(Array.from(card.plain))).filter((l) => l !== right);
+    const choices = shuffled([right, ...pickDistinct(letters, 2, rand, [])], rand);
+    return {
+      kind: "tonemark", answer: right,
+      promptHTML: `<span style="${BIG_PINYIN}">${card.plain}</span>`,
+      ask: `「${card.word}」读${toneName}，调号戴在哪个字母上？`,
+      choices, correct: choices.indexOf(right),
+    };
+  }
+
+  const target = markTone(card.plain, card.tone);
+  const spots: number[] = [];
+  Array.from(card.plain).forEach((ch, i) => {
+    if (TONEABLE_LETTERS.includes(ch) && i !== at) spots.push(i);
+  });
+  const wrong: string[] = [];
+  for (const i of shuffled(spots, rand)) {
+    const cand = markToneAt(card.plain, i, card.tone);
+    if (cand !== target && !wrong.includes(cand)) wrong.push(cand);
+    if (wrong.length >= 2) break;
+  }
+  for (const t of shuffled([1, 2, 3, 4], rand)) {
+    if (wrong.length >= 2) break;
+    const cand = markTone(card.plain, t);
+    if (cand !== target && !wrong.includes(cand)) wrong.push(cand);
+  }
+  const choices = shuffled([target, ...wrong], rand);
+  return {
+    kind: "tonemark", answer: target,
+    promptHTML: `<span style="${BIG_PINYIN}">${card.word}</span>`,
+    ask: `「${card.word}」读${toneName}，哪个写对了？`,
+    choices, correct: choices.indexOf(target),
+  };
+}
+
+/** 把一个读音拆成「组内那个特征 + 剩下的部分」；拆不开返回 null */
+export function splitConfuse(group: ConfuseGroup, pinyin: string): { member: string; rest: string } | null {
+  const plain = removeToneMarks(pinyin);
+  const members = group.members.slice().sort((a, b) => b.length - a.length);
+  for (const m of members) {
+    if (group.kind === "initial" && plain.startsWith(m)) {
+      return { member: m, rest: pinyin.slice(m.length) };
+    }
+    if (group.kind === "final" && plain.endsWith(m)) {
+      return { member: m, rest: pinyin.slice(0, pinyin.length - m.length) };
+    }
+  }
+  return null;
+}
+
+/** 易混淆专项：甲卷整音节三选一，乙卷把混的那一段挖掉只选声母 / 韵母 */
+function qConfuse(rand: () => number, group: ConfuseGroup): PinyinQ {
+  const item = pick(rand, group.items);
+  const split = splitConfuse(group, item.pinyin);
+
+  if (split && rand() < 0.5) {
+    const what = group.kind === "initial" ? "声母" : "韵母";
+    const rivals = group.members.filter((m) => m !== split.member).concat(group.extras);
+    const choices = shuffled([split.member, ...pickDistinct(rivals, 2, rand, [split.member])], rand);
+    const blank = group.kind === "initial" ? `（　）${split.rest}` : `${split.rest}（　）`;
+    return {
+      kind: "confuse", answer: split.member,
+      promptHTML: `<span style="${BIG_PINYIN}">${item.char}</span><span style="font-size:24px;margin-left:10px">${blank}</span>`,
+      ask: `「${item.char}」的${what}是哪个？`,
+      choices, correct: choices.indexOf(split.member),
+    };
+  }
+
+  const extra = toneVariants(rand, item.pinyin, 1, [item.rival]);
+  const choices = shuffled([item.pinyin, item.rival, ...extra], rand);
+  return {
+    kind: "confuse", answer: item.pinyin,
+    promptHTML: `<span style="${BIG_PINYIN}">${item.char}</span>`,
+    ask: `「${item.char}」读哪个？`,
+    choices, correct: choices.indexOf(item.pinyin),
+  };
+}
+
+/** 找出读音不同的一个：两个同族、一个外人，考的是听出那一点点差别 */
+function qOdd(rand: () => number, group: ConfuseGroup): PinyinQ {
+  const order = shuffled(group.members, rand);
+  const same = order[0];
+  const odd = order[1];
+  const pair = pickDistinct(group.pools[same] ?? [], 2, rand, []);
+  const lonely = pick(rand, group.pools[odd] ?? []);
+  const choices = shuffled([...pair, lonely], rand);
+  const what = group.kind === "initial" ? "声母" : "韵母";
+  return {
+    kind: "odd", answer: lonely,
+    promptHTML: `<span style="font-size:38px">🔎</span>`,
+    ask: `哪个的${what}和另外两个不一样？`,
+    choices, correct: choices.indexOf(lonely),
+  };
+}
+
+/** 「易混淆专项站」里这一关练哪一组（一组连着两关：一关答题、一关车厢或挑拣） */
+export function confuseGroupOf(level: number): ConfuseGroup {
+  const idx = indexInChapter(CHAPTERS, level);
+  return CONFUSE_GROUPS[Math.floor(idx / 2) % CONFUSE_GROUPS.length];
+}
+
+/** 每关题目数：1.0 六站 4 → 7 题；1.1 起的新车站 6 → 9 题（更长的题组） */
 export function questionCount(level: number): number {
   const ci = chapterOf(CHAPTERS, level);
   const idx = indexInChapter(CHAPTERS, level);
@@ -305,10 +446,13 @@ export function kindPool(level: number): PinyinKind[] {
     case 5:
       return t < 0.4 ? ["syllable", "tone"] : ["syllable", "tone", "match", "vowel"];
     case 6:
-      return t < 0.5 ? ["whole", "tone"] : ["whole", "tone", "syllable"];
+      // 易混淆专项站：整关只练这一组，题型只用两种专项题，保证每组都练够
+      return t < 0.2 ? ["confuse"] : ["confuse", "odd"];
     case 7:
-      return t < 0.5 ? ["duoyin"] : ["duoyin", "context"];
+      return t < 0.5 ? ["whole", "tonemark"] : ["whole", "tonemark", "tone", "syllable"];
     case 8:
+      return t < 0.5 ? ["duoyin"] : ["duoyin", "context"];
+    case 9:
       return t < 0.4 ? ["neutral", "erhua"] : ["neutral", "erhua", "duoyin"];
     default:
       return t < 0.4 ? ["sentence", "context"] : ["sentence", "context", "neutral", "duoyin"];
@@ -324,13 +468,14 @@ export function buildQuestions(level: number): PinyinQ[] {
   const out: PinyinQ[] = [];
   // 新车站题量大，同一关尽量不重复考同一个字/词，老车站保持 1.0 的生成顺序
   const fresh = ci >= LEGACY_CHAPTER_SIZES.length;
+  const group = ci === CONFUSE_CHAPTER ? confuseGroupOf(level) : null;
   const used: string[] = [];
   for (let i = 0; i < count; i++) {
     const kind = i < kinds.length ? kinds[i] : pick(rand, kinds);
-    let q = makeOne(rand, ci, kind);
+    let q = makeOne(rand, ci, kind, group);
     if (fresh) {
       let guard = 0;
-      while (guard++ < 12 && used.includes(`${q.kind}:${q.answer}:${q.ask}`)) q = makeOne(rand, ci, kind);
+      while (guard++ < 12 && used.includes(`${q.kind}:${q.answer}:${q.ask}`)) q = makeOne(rand, ci, kind, group);
       used.push(`${q.kind}:${q.answer}:${q.ask}`);
     }
     out.push(q);
@@ -338,7 +483,19 @@ export function buildQuestions(level: number): PinyinQ[] {
   return shuffled(out, rand);
 }
 
-function makeOne(rand: () => number, ci: number, kind: PinyinKind): PinyinQ {
+/**
+ * 错题回顾用的「同类新题」（1.2 新增）：只按错过的题型再出几道，换个种子不重样。
+ * 复习轮只加练不判负，所以这里不控制难度，只保证题型对得上。
+ */
+export function buildReviewQuestions(level: number, kinds: readonly PinyinKind[], round = 1): PinyinQ[] {
+  const rand = mulberry32(9100 + level * 7919 + round * 131);
+  const ci = chapterOf(CHAPTERS, level);
+  const group = ci === CONFUSE_CHAPTER ? confuseGroupOf(level) : null;
+  return kinds.map((kind) => makeOne(rand, ci, kind, group));
+}
+
+function makeOne(rand: () => number, ci: number, kind: PinyinKind, group: ConfuseGroup | null = null): PinyinQ {
+  const drill = group ?? CONFUSE_GROUPS[0];
   switch (kind) {
     case "vowel":
       // 单韵母站只考单韵母，复韵母站只考复韵母，其余混合
@@ -365,6 +522,12 @@ function makeOne(rand: () => number, ci: number, kind: PinyinKind): PinyinQ {
       return qErhua(rand);
     case "sentence":
       return qSentence(rand);
+    case "tonemark":
+      return qToneMark(rand);
+    case "confuse":
+      return qConfuse(rand, drill);
+    case "odd":
+      return qOdd(rand, drill);
     default:
       return qSyllable(rand);
   }
@@ -375,7 +538,7 @@ function makeOne(rand: () => number, ci: number, kind: PinyinKind): PinyinQ {
 // 一次要把「全部符合条件的」都挑出来，多选漏选都算一次错——比三选一难得多。
 // ---------------------------------------------------------------------------
 
-export type PickAllRule = "whole" | "reading" | "neutral" | "erhua" | "tone3";
+export type PickAllRule = "whole" | "reading" | "neutral" | "erhua" | "tone3" | "confuse";
 
 export interface PickAllTask {
   rule: PickAllRule;
@@ -418,7 +581,24 @@ export function buildPickAll(level: number): PickAllTask {
   const noise = 3 + Math.floor(t * 2);
   const maxWrong = t > 0.6 ? 1 : 2;
 
-  if (ci === 7) {
+  if (ci === CONFUSE_CHAPTER) {
+    // 易混淆专项：一车音节里，挑出声母（或韵母）是指定那个的全部音节
+    const group = confuseGroupOf(level);
+    const order = shuffled(group.members, rand);
+    const target = order[0];
+    const rest = order.slice(1).flatMap((m) => group.pools[m] ?? []);
+    const correct = takeDistinct(rand, group.pools[target] ?? [], need, []);
+    const chips = shuffled([...correct, ...takeDistinct(rand, rest, noise, correct)], rand);
+    const what = group.kind === "initial" ? "声母" : "韵母";
+    return {
+      rule: "confuse",
+      title: `挑出${what}是 ${target} 的全部音节`,
+      hint: group.tip,
+      chips, correct, maxWrong,
+    };
+  }
+
+  if (ci === 8) {
     // 多音字：同一个字，挑出读某个音的全部词
     const card = pick(rand, DUOYIN_CARDS);
     const ri = randInt(rand, 0, card.readings.length - 1);
@@ -434,7 +614,7 @@ export function buildPickAll(level: number): PickAllTask {
     };
   }
 
-  if (ci === 8) {
+  if (ci === 9) {
     // 一半关考轻声、一半关考儿化，两种判断标准轮着来
     if (idx % 8 === 3) {
       const correct = takeDistinct(rand, ERHUA_WORDS.map((w) => w.word), need, []);
@@ -456,7 +636,7 @@ export function buildPickAll(level: number): PickAllTask {
     };
   }
 
-  if (ci === 9) {
+  if (ci === 10) {
     // 句子里挑出全部第三声的字（先注音，再判调）
     const usable = PINYIN_SENTENCES.filter(
       (s) => s.syllables.filter((y) => toneOf(y) === 3).length >= 2
@@ -499,11 +679,103 @@ export function buildPickAll(level: number): PickAllTask {
 export function levelTimeLimitMs(level: number): number {
   if (level < LEGACY_LEVELS) return 0;
   const ci = chapterOf(CHAPTERS, level);
-  if (ci <= 6) return 0;
+  // 易混淆专项站是慢慢辨的，和整体认读快线一样不上表
+  if (ci <= 7) return 0;
   const idx = indexInChapter(CHAPTERS, level);
   const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
-  const base = ci === 7 ? 180000 : ci === 8 ? 165000 : 150000;
+  const base = ci === 8 ? 180000 : ci === 9 ? 165000 : 150000;
   return Math.round(base - t * 30000);
+}
+
+// ---------------------------------------------------------------------------
+// 1.2 新机制：拼读车厢（声母 + 韵母 + 声调 拖成一个音节）
+// ---------------------------------------------------------------------------
+
+export interface SpellTask {
+  /** 要拼的那个字 */
+  word: string;
+  emoji: string;
+  /** 正确的三节车厢 */
+  initial: string;
+  final: string;
+  tone: number;
+  /** 三节车厢拼出来的音节（已按书写规则去点、省写、标调） */
+  target: string;
+  initialChips: string[];
+  finalChips: string[];
+  toneChips: number[];
+}
+
+/** 这一关是不是「拼读车厢」拖拽关（只在易混淆专项站里出现） */
+export function isSpellLevel(level: number): boolean {
+  if (level < LEGACY_LEVELS) return false;
+  if (chapterOf(CHAPTERS, level) !== CONFUSE_CHAPTER) return false;
+  return indexInChapter(CHAPTERS, level) % 4 === 1;
+}
+
+/** 四个声调的车厢永远都在（轻声不进拼读车厢，那是轻声儿化坡的事） */
+const TONE_CHIPS = [1, 2, 3, 4];
+
+/** 拼出同一个音节的车厢不能同时出现在选项里，否则「唯一正确答案」立不住 */
+function spellDistractors(
+  rand: () => number,
+  pool: readonly string[],
+  n: number,
+  same: (candidate: string) => boolean,
+  exclude: string[]
+): string[] {
+  const out: string[] = [];
+  for (const x of shuffled(pool, rand)) {
+    if (exclude.includes(x) || out.includes(x) || same(x)) continue;
+    out.push(x);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+/** 生成某一关的拼读车厢（3–4 个字，确定性；只对 isSpellLevel 为真的关有意义） */
+export function buildSpell(level: number): SpellTask[] {
+  const rand = mulberry32(8800 + level * 7919);
+  const ci = chapterOf(CHAPTERS, level);
+  const group = ci === CONFUSE_CHAPTER ? confuseGroupOf(level) : null;
+  const idx = indexInChapter(CHAPTERS, level);
+  const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
+  const count = 3 + Math.floor(t * 2);
+
+  const scoped = group ? SPELL_CARDS.filter((c) => c.groups.includes(group.id)) : [];
+  const pool = scoped.length >= 3 ? scoped : SPELL_CARDS;
+  const cards = shuffled(pool, rand).slice(0, Math.min(count, pool.length));
+
+  return cards.map((card) => {
+    const target = spell(card.initial, card.final, card.tone);
+    const iniPool = group && group.kind === "initial" ? [...group.members, ...INITIALS] : INITIALS;
+    const finPool = group && group.kind === "final" ? [...group.members, ...BASE_FINALS] : BASE_FINALS;
+    const initialChips = shuffled(
+      [
+        card.initial,
+        ...spellDistractors(rand, iniPool, 2, (x) => spell(x, card.final, card.tone) === target, [card.initial]),
+      ],
+      rand
+    );
+    const finalChips = shuffled(
+      [
+        card.final,
+        ...spellDistractors(rand, finPool, 2, (x) => spell(card.initial, x, card.tone) === target, [card.final]),
+      ],
+      rand
+    );
+    return {
+      word: card.word,
+      emoji: card.emoji,
+      initial: card.initial,
+      final: card.final,
+      tone: card.tone,
+      target,
+      initialChips,
+      finalChips,
+      toneChips: TONE_CHIPS.slice(),
+    };
+  });
 }
 
 /** 188 关概览（测试用） */
