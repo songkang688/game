@@ -233,6 +233,21 @@ describe("五子棋 · 自由对战", () => {
     handle.destroy();
   });
 
+  it("壳层给的关号会映射成自由对战的对手档位：第 161 关派地狱档", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi(dom.root, { initialLevel: 161 }).api);
+    findByText(dom.root, "自由对战")!.dispatch("click", {});
+    expect(findByText(dom.root, DIFFICULTY_NAME.hell)!.className).toContain("gmk-on");
+    expect(findByText(dom.root, DIFFICULTY_NAME.normal)!.className).not.toContain("gmk-on");
+    handle.destroy();
+  });
+
+  it("没给关号时自由对战默认普通档", async () => {
+    const { handle } = await openFree();
+    expect(findByText(dom.root, DIFFICULTY_NAME.normal)!.className).toContain("gmk-on");
+    handle.destroy();
+  });
+
   it("桌面上点一下就落子（确认默认关）", async () => {
     const { handle } = await openFree();
     findByText(dom.root, DIFFICULTY_NAME.novice)!.dispatch("click", {});

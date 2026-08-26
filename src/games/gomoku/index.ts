@@ -45,7 +45,6 @@ import {
 } from "./rules";
 import {
   TIER_SHORT,
-  areaContains,
   difficultyForLevel,
   emptyConfirm,
   hintArea,
@@ -671,7 +670,12 @@ function segment(
   return seg;
 }
 
-function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy: () => void } {
+function mountFree(
+  host: HTMLElement,
+  api: GameApi,
+  back: () => void,
+  startTier: Difficulty = "normal"
+): { destroy: () => void } {
   const root = document.createElement("div");
   root.className = "gmk-wrap";
   host.appendChild(root);
@@ -679,7 +683,7 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
   let panel: HTMLElement | null = null;
 
   let size = 15;
-  let tier: Difficulty | "pvp" = "normal";
+  let tier: Difficulty | "pvp" = startTier;
   let forbidden = false;
 
   function showSetup(): void {
@@ -965,7 +969,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     mode = make(modeHost, api, closeMode);
   }
 
-  freeBtn.addEventListener("click", () => openMode(mountFree));
+  // 壳层给了关号（initialLevel / 地址栏 / hash）就照它派活：解局直开第 N 题，
+  // 自由对战按同一个关号映射出对手档位——关号越大对手越强。
+  const hint = (api as unknown as { initialLevel?: number }).initialLevel;
+  const loc = (globalThis as { location?: { search?: string; hash?: string } }).location;
+  const want = initialLevelOf(hint, loc?.search ?? "", loc?.hash ?? "");
+  // 没给关号就沿用 1.1 的默认档（普通），别把新玩家直接扔给菜鸟或地狱
+  const freeTier: Difficulty = want < 0 ? "normal" : difficultyForLevel(want);
+
+  freeBtn.addEventListener("click", () => openMode((h, a, b) => mountFree(h, a, b, freeTier)));
   streakBtn.addEventListener("click", () => openMode(mountStreak));
   refreshBar();
 
@@ -982,10 +994,6 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   );
 
-  // 壳层给了 initialLevel（或者地址栏 / hash 带 level=N）就直接开第 N 题
-  const hint = (api as unknown as { initialLevel?: number }).initialLevel;
-  const loc = (globalThis as { location?: { search?: string; hash?: string } }).location;
-  const want = initialLevelOf(hint, loc?.search ?? "", loc?.hash ?? "");
   if (want >= 0) openCampaignLevel(levelHost, want);
 
   return {
@@ -1003,6 +1011,3 @@ export function mount(api: GameApi): { destroy: () => void } {
 export function openLevel(host: HTMLElement, n: number): boolean {
   return openCampaignLevel(host, Math.max(0, Math.round(n) - 1));
 }
-
-/** 自由对战里平台按关号派难度用（导出便于测试） */
-export { difficultyForLevel, areaContains };
