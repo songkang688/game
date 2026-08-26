@@ -51,8 +51,8 @@
 | 方块 | `block-drop` | SRS 旋转 / 7-bag / hold / ghost / T-spin |
 | 更深的格斗（新 id） | `combo-clash` | 相对 `fight-king` 有加深清单，**不许改 `fight-king`** |
 | 麻将 | `mahjong-bloom` | 国标简化落地，番种表 |
-| 大富翁 | `star-estate` | 原创 40 格地图，抵押 / 拍卖 / 破产两条清偿路径 |
-| 三国杀类 | `hero-cards` | 身份场简化单机，**全部原创英杰名** |
+| 地产桌游（掷骰买地建屋那类） | `star-estate` | 原创 40 格地图，抵押 / 拍卖 / 破产两条清偿路径 |
+| 身份阵营卡牌（主忠反内那类） | `hero-cards` | 身份场简化单机，**全部原创英杰名** |
 | 围棋 | `weiqi-garden` | 9 / 13 / 19 路，打劫、超劫、数目与点目 |
 | 飞行棋 | `flight-chess` | 四色四机，叠子、跳格、航线、终点折返 |
 | 象棋 | **不新建** | `xiangqi` 留给 C 档升级；名额由 `dark-chess` 补 |

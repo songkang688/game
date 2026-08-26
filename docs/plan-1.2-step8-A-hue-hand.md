@@ -81,7 +81,7 @@ platform: "both"
 | 加四合法性 | `wildDraw4Legal(hand, chosenColor)` |
 | 质疑 | `challengeW4(hand, top) → { drawer, count }` |
 | 叠加链 | `drawStack(chain)` |
-| 喊牌惩罚 | `unoPenalty(state, player)` |
+| 喊牌惩罚 | `oneCardPenalty(state, player)`（**函数名也不许带商标缩写**） |
 | 方向与跳过 | `advanceTurn(state, card)` |
 | 计分 | `handScore(hand)` |
 | AI | `aiPlay(state, tier)` |
