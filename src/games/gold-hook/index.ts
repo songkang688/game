@@ -2,9 +2,17 @@ import { meta } from "./meta";
 export { meta };
 
 import { save } from "../../engine/save";
-import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+import {
+  loadStars,
+  mountLevelGame,
+  saveStar,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+  type SoundName,
+} from "../level99";
 import GUIDE from "./guide";
-import { CHAPTERS, endlessLayer, levelAt, type EndlessLayer } from "./levels";
+import { CHAPTERS, TOTAL, chapterStartOf, endlessLayer, levelAt, type EndlessLayer } from "./levels";
 import {
   EMPTY_RETRACT,
   EXTEND_SPEED,
@@ -1170,7 +1178,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 
   function startLayer(): void {
     clearBody();
-    const layer: EndlessLayer = endlessLayer(depth);
+    // 带着幸运石下潜,这一层的钻石 / 宝箱 / 巨型金块会刷得更勤(配额不跟着涨)
+    const layer: EndlessLayer = endlessLayer(depth, wallet.luck);
     deepest = Math.max(deepest, depth);
     title.textContent = `♾️ 第 ${depth} 层 · ${layer.name}`;
     run = runField(body, {
@@ -1192,7 +1201,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
             openSupply(cleared);
             return;
           }
-          const next = endlessLayer(depth);
+          // 预告下一层用的是同一份配额:配额只看层深,不看幸运石,所以预告不会说谎
+          const next = endlessLayer(depth, wallet.luck);
           panel(
             `✅ 第 ${cleared} 层达标!`,
             `这一层净赚 ${r.gained} 金币。往下是第 ${depth} 层「${next.name}」,配额 ${next.quota} 金币。`,
@@ -1233,7 +1243,19 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 // 入口:开场先选模式
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export interface GoldHookHandle {
+  destroy: () => void;
+  /**
+   * 平台「直达第 N 关」(1 基),返回真正打开的那一关。
+   *
+   * 本款的选关地图走平台的 `mountLevelGame`,而它只吐一个 `destroy`,
+   * 没有「从第 N 关开始」的入口,所以按规格第九节自己开一条直达通道。
+   * 越界会夹到 1..188。
+   */
+  openCampaignLevel: (n: number) => number;
+}
+
+export function mount(api: GameApi): GoldHookHandle {
   const root = el("div", "gdh-wrap");
   const style = el("style");
   style.textContent = CSS;
@@ -1343,9 +1365,120 @@ export function mount(api: GameApi): { destroy: () => void } {
     });
   }
 
-  showHome();
+  /**
+   * 不经过选关地图,直接把第 index 关(0 基)摆上来。
+   *
+   * 星级仍旧写平台那份 `l99` 存档(`saveStar`),小星星也只补「比历史最好成绩多出来的那几颗」——
+   * 和从地图点进去玩完全是同一份进度,直达通道不会变成刷星的后门。
+   */
+  function openDirectLevel(index: number): void {
+    const i = Math.max(0, Math.min(TOTAL - 1, Math.round(index)));
+    current?.destroy();
+    current = null;
+    home.hidden = true;
+    modeHost.hidden = false;
+    modeHost.innerHTML = "";
+
+    const lv = levelAt(i);
+    const ch = CHAPTERS[lv.chapter];
+    const topbar = el("div", "gdh-topbar");
+    const back = button("gdh-btn", "🗺️ 选关");
+    topbar.append(back, el("div", "gdh-topbar-title", `${ch.emoji} ${ch.name} · 第 ${i + 1} 关`));
+    const stage = el("div");
+    modeHost.append(topbar, stage);
+    back.addEventListener("click", () => {
+      api.play("tap");
+      openCampaign();
+    });
+
+    let handle: PlayHandle | undefined = undefined;
+    let settled = false;
+
+    /** 结算面板:赢了给下一关,输了只鼓励,两边都能回地图 */
+    function settle(title: string, msg: string, buttons: Array<{ label: string; go: () => void }>): void {
+      handle?.destroy?.();
+      handle = undefined;
+      stage.innerHTML = "";
+      const box = el("div", "gdh-modes");
+      box.append(el("div", "gdh-modes-title", title), el("div", "gdh-modes-sub", msg));
+      const row = el("div", "gdh-cards");
+      for (const b of buttons) {
+        const btn = button("gdh-btn gdh-btn-fire", b.label);
+        btn.addEventListener("click", () => {
+          api.play("tap");
+          b.go();
+        });
+        row.appendChild(btn);
+      }
+      box.appendChild(row);
+      stage.appendChild(box);
+    }
+
+    const ctx: PlayCtx = {
+      level: i,
+      chapter: ch,
+      chapterIndex: lv.chapter,
+      indexInChapter: i - chapterStartOf(lv.chapter),
+      win: (stars, msg) => {
+        if (settled) return;
+        settled = true;
+        const prev = loadStars(meta.id)[i] ?? 0;
+        saveStar(meta.id, i, stars);
+        const gain = Math.max(0, stars - prev);
+        if (gain > 0) api.addStars?.(gain);
+        api.play("win");
+        const buttons: Array<{ label: string; go: () => void }> = [];
+        if (i + 1 < TOTAL) buttons.push({ label: "下一关 ▶", go: () => openDirectLevel(i + 1) });
+        buttons.push({ label: "🔁 再玩一次", go: () => openDirectLevel(i) });
+        buttons.push({ label: "🗺️ 选关地图", go: () => openCampaign() });
+        settle(`⭐ 第 ${i + 1} 关过关!`, msg ?? "挖得漂亮!", buttons);
+      },
+      lose: (msg) => {
+        if (settled) return;
+        settled = true;
+        api.play("oops");
+        // 输了只鼓励:一句话里既不说「失败」也不批评,给的就是「再来一次」
+        settle("⛏️ 就差一点点", msg ?? "这一趟差了几个金币,再来一次一定行!", [
+          { label: "🔁 再试一次", go: () => openDirectLevel(i) },
+          { label: "🗺️ 选关地图", go: () => openCampaign() },
+        ]);
+      },
+      sfx: (n) => api.play(n),
+      bonusStars: (n) => api.addStars?.(n),
+    };
+
+    handle = playLevel(stage, ctx);
+    current = {
+      destroy() {
+        handle?.destroy?.();
+        handle = undefined;
+        modeHost.innerHTML = "";
+      },
+    };
+  }
+
+  function openCampaignLevel(n: number): number {
+    const i = Math.max(0, Math.min(TOTAL - 1, Math.round(n) - 1));
+    openDirectLevel(i);
+    return i + 1;
+  }
+
+  /** 壳层没传 `initialLevel` 时,也认地址栏上的 `?level=N`(和 sling-birds 同一套约定) */
+  function levelFromQuery(search: string | null): number | null {
+    if (!search) return null;
+    const raw = new URLSearchParams(search).get("level");
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) && n >= 1 ? Math.round(n) : null;
+  }
+
+  const jumpTo =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" ? location.search : null);
+  if (jumpTo !== null && jumpTo !== undefined) openCampaignLevel(jumpTo);
+  else showHome();
 
   return {
+    openCampaignLevel,
     destroy() {
       current?.destroy();
       current = null;

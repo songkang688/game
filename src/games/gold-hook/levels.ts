@@ -16,6 +16,7 @@
  * 乘一个逐关抬升的难度系数(0.42 → 0.72)。所以「目标一定拿得到」是构造出来的。
  */
 import { mulberry32, type Chapter } from "../level99";
+import { rareWeightMult } from "./depth12";
 import {
   DIG_BOTTOM,
   DIG_TOP,
@@ -354,11 +355,29 @@ export function endlessQuotaRatio(depth: number): number {
   return Math.min(0.88, 0.46 + 0.035 * (n - 1));
 }
 
-/** 往下第 n 层的矿洞 */
-export function endlessLayer(depth: number): EndlessLayer {
-  const n = Math.max(1, Math.round(depth));
+/**
+ * 幸运石认得的「稀有矿」。
+ *
+ * 只有这几样的抽签权重会被幸运石抬起来:钻石、宝箱、巨型金块和双层晶。
+ * 小金粒、碎石这些照旧 —— 「刷得更勤」如果连碎石一起刷,那就等于什么都没发生。
+ */
+export const RARE_KINDS: OreKind[] = ["gem", "chest", "goldHuge", "twinCrystal"];
+
+/**
+ * 把抽签袋按幸运石的块数重新配一份(纯函数,不改传进来的那个袋子)。
+ * 没带幸运石就原样返回,老矿层一颗矿都不会变。
+ */
+export function luckyBag(
+  bag: ReadonlyArray<readonly [OreKind, number]>,
+  luck: number
+): Array<[OreKind, number]> {
+  const mult = rareWeightMult(luck);
+  return bag.map(([kind, w]) => [kind, RARE_KINDS.includes(kind) ? w * mult : w] as [OreKind, number]);
+}
+
+function endlessSpec(n: number): FieldSpec {
   const ramp = Math.min(1, (n - 1) / 16);
-  const field = buildField({
+  return {
     seed: 460001 + n * 7717,
     count: 14 + Math.round(ramp * 9) + (n % 3),
     bag: MIX[Math.min(MIX.length - 1, Math.floor((n - 1) / 2))],
@@ -368,8 +387,24 @@ export function endlessLayer(depth: number): EndlessLayer {
     phase: (n * 53) % 90,
     ropeMax: Math.round(340 + ramp * 120),
     timeFactor: 0.9 - 0.36 * ramp,
-  });
-  const reachable = simulateRun(field).coins;
+  };
+}
+
+/**
+ * 往下第 n 层的矿洞;`luck` 是身上带着的幸运石块数。
+ *
+ * 幸运石在这里才真的「提高稀有矿刷新」:带着它下潜,这一层的钻石 / 宝箱 /
+ * 巨型金块 / 双层晶会刷得更勤。但**配额永远按没带幸运石的那一版算** ——
+ * 配额跟着变富的话,买幸运石就等于自己给自己加价,那这件道具就白买了。
+ * 同一个 (n, luck) 每次算出来的矿层完全一样,可复现这条不受影响。
+ */
+export function endlessLayer(depth: number, luck = 0): EndlessLayer {
+  const n = Math.max(1, Math.round(depth));
+  const spec = endlessSpec(n);
+  const base = buildField(spec);
+  const mult = rareWeightMult(luck);
+  const field = mult === 1 ? base : buildField({ ...spec, bag: luckyBag(spec.bag, luck) });
+  const reachable = simulateRun(base).coins;
   return {
     depth: n,
     field,
