@@ -1939,7 +1939,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 大王溜走不给复活:那不是"摔了一跤",是伤害没打够,得重新跑一趟
     const bossLose = !endless && loseReason === "boss";
     const canRevive = !reviveUsed && !bossLose && api.getStars() >= REVIVE_COST;
-    const { y } = panelBox(Math.min(450, w - 40), (canRevive ? 260 : 210) + (bossLose ? 28 : 0));
+    // 无尽模式多一行「跑了多少米」的鼓励语,面板要跟着高一点
+    const { y } = panelBox(
+      Math.min(450, w - 40),
+      (canRevive ? 260 : 210) + (bossLose ? 28 : 0) + (endless ? 16 : 0),
+    );
     // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
     ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
@@ -1981,8 +1985,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
         : "没关系!就从这一关重新出发";
     ctx.fillStyle = endless && (broke.meters || broke.coins) ? "#c47a2a" : "#5a5a6e";
     // 大王溜走那一行已经占了 y+84,鼓励语顺延一行
-    ctx.fillText(subText, w / 2, y + (endless ? 108 : loseReason === "boss" ? 108 : 84));
-    let by = y + (endless || loseReason === "boss" ? 138 : 116);
+    fitText(
+      subText,
+      w / 2,
+      y + (endless ? 114 : loseReason === "boss" ? 108 : 84),
+      Math.min(440, w - 50),
+    );
+    let by = y + (endless ? 146 : loseReason === "boss" ? 138 : 116);
     btnRevive = null;
     if (canRevive) {
       btnRevive = { x: w / 2 - 110, y: by, w: 220, h: 44 };
