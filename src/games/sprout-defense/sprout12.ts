@@ -478,6 +478,8 @@ export const CARD_H = 56;
 export const HUD_FONT_MIN = 14;
 /** 每条通道最矮 40px。 */
 export const LANE_MIN_H = 40;
+/** 通道区上面那一条「◀ 地图 / 正在种什么」的高度。 */
+export const HINT_ROW_H = 38;
 
 export interface StripLayout {
   cardW: number;
@@ -526,10 +528,12 @@ export function fieldMetrics(
 ): FieldMetrics {
   const cw = viewW / (PLANT_COLS + homeCells + 0.4);
   const avail = Math.max(LANE_MIN_H, viewH - topH);
-  const ch = Math.max(LANE_MIN_H, Math.min(cw * 1.25, avail / LANES));
+  const ch = Math.max(LANE_MIN_H, Math.min(cw * 1.6, avail / LANES));
   const totalH = ch * LANES;
   const ox = (viewW - cw * (PLANT_COLS + homeCells)) / 2 + cw * homeCells;
-  const oy = topH + Math.max(0, (avail - totalH) / 2);
+  // 竖屏上通道总高常常撑不满,把空当留在下面(那儿本来就是跳关按钮和天色条),
+  // 别在提示条和第一条通道之间挖出一大块空地。
+  const oy = topH + Math.min(HINT_ROW_H, Math.max(0, (avail - totalH) / 2));
   return { cw, ch, ox, oy, scrollable: totalH > avail + 0.5, viewH: Math.min(totalH, avail) };
 }
 

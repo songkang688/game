@@ -342,7 +342,9 @@ export function mount(api: GameAPI): SproutDefenseHandle {
       canvas.height = bh;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const m = fieldMetrics(w, h, TOOLBAR_H, HOME_W_CELLS);
+    // 昼夜循环关在提示条下面还有一行时段钟,通道区要再往下让一行
+    const extraRow = mode === "campaign" && level().cycle ? 26 : 0;
+    const m = fieldMetrics(w, h, TOOLBAR_H + extraRow, HOME_W_CELLS);
     cell = m.cw;
     laneH = m.ch;
     ox = m.ox;
@@ -2595,7 +2597,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
     }
 
     // 1.1 昼夜钟:循环关显示当前时段和还剩几秒(挂在提示条下面一行,窄屏不挤)
-    if (def.cycle && phase === "play") {
+    if (def.cycle && phase === "play" && mode === "campaign") {
       const period = def.cycle.day + def.cycle.night;
       const t = ((time % period) + period) % period;
       const remain = Math.ceil(cycleNight ? period - t : def.cycle.day - t);
