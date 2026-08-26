@@ -1,7 +1,21 @@
 // 涂色小屋：188 关 · 十大村镇章节关卡生成
 // 前 99 关是 1.0 的六大村镇（指令 / 调色锅 / 数字 / 记忆），一个字都没动；
-// 1.1 在末尾追加四个村镇（第 100–188 关）：明暗渐变、配色规则、图例大画布、限色挑战。
+// 1.1 在末尾追加四个村镇（第 100–188 关）：明暗渐变、配色规则、图例大画布、限色挑战；
+// 1.2 把混色搬到 mix.ts（减色法查表），补了六幅线稿，并让后四章按关号轮换线稿。
 import { chapterOf, indexInChapter, mulberry32, pick, shuffled, type Chapter } from "../level99";
+import { EXTRA_PICTURES } from "./linework";
+import {
+  MIN_TARGET_DELTA_E,
+  MIX_TABLE,
+  PIGMENTS,
+  PIGMENT_HEX,
+  PIGMENT_SYMBOL,
+  mixName,
+  pigmentDeltaE,
+  sortLightToDark,
+} from "./mix";
+
+export { MIX_TABLE, mixName };
 
 /** 1.0 的六大村镇：合计 99 关，1.1 起不再改动 */
 export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
@@ -37,7 +51,13 @@ export interface Picture {
   regions: Region[];
 }
 
-/** 六幅线稿，每章一幅 */
+/**
+ * 全部线稿。
+ *
+ * 下标 0–5 是 1.0 的六幅、6–9 是 1.1 的四幅，**位置与内容一个字都没动**——
+ * 前 99 关的 `pic` 就是章节下标，挪一下就全乱了。
+ * 1.2 追加的六幅接在后面（见 `linework.ts`），由 `CHAPTER_PICTURES` 分给后四章轮换。
+ */
 export const PICTURES: Picture[] = [
   {
     name: "温馨小屋",
@@ -192,74 +212,104 @@ export const PICTURES: Picture[] = [
       { id: "hflag", name: "小旗", svg: `<polygon points="224,246 262,254 224,262"/>`, lx: 238, ly: 254 },
     ],
   },
+  // ↓ 1.2 追加：六幅新线稿，小船 / 蝴蝶 / 大树 / 火箭 / 城堡 / 小猫
+  ...EXTRA_PICTURES,
 ];
+
+/**
+ * 每一章能用哪几幅线稿（下标指向 `PICTURES`）。
+ *
+ * 前六章一章一幅，与 1.0 完全一致；后四章 1.1 时也是一章一幅，
+ * 于是同一张画要连看二十多关——1.2 给它们各配了一个池子，按章内序号轮换，
+ * 越靠后的章节挑块数越多的那几幅。
+ */
+export const CHAPTER_PICTURES: number[][] = [
+  [0], [1], [2], [3], [4], [5],
+  [6, 10, 12], // 晨昏渐变谷：晨昏山谷 / 小船 / 大树
+  [7, 11, 12], // 互补配色坊：配色小镇 / 蝴蝶 / 大树
+  [8, 14, 15], // 图例大画布：花海大画布 / 城堡 / 小猫
+  [9, 13, 15], // 限色挑战场：热气球 / 火箭 / 小猫
+];
+
+/** 第 `level` 关（0 基）用哪一幅线稿 */
+export function pictureOf(level: number): number {
+  const ci = chapterOf(CHAPTERS, level);
+  const pool = CHAPTER_PICTURES[ci] ?? [ci];
+  return pool[indexInChapter(CHAPTERS, level) % pool.length];
+}
 
 export interface Paint {
   name: string;
   value: string;
 }
 
+/** 颜料名 → 图例符号（限色章给每种颜色配一个能认的记号） */
+export function paintSymbol(name: string): string {
+  return PIGMENT_SYMBOL[name] ?? "◇";
+}
+
+/** 从 `mix.ts` 的颜料表里取一批出来当颜料盒 */
+function paints(...names: string[]): Paint[] {
+  return names.map((name) => ({ name, value: PIGMENT_HEX[name] }));
+}
+
 /** 可以直接拿的颜色 */
-export const DIRECT_PAINTS: Paint[] = [
-  { name: "红色", value: "#ff6b6b" },
-  { name: "黄色", value: "#ffe066" },
-  { name: "蓝色", value: "#74c0fc" },
-  { name: "粉色", value: "#faa2c1" },
-  { name: "棕色", value: "#c08552" },
-  { name: "橙色", value: "#ffa94d" },
-  { name: "绿色", value: "#8ce99a" },
-  { name: "紫色", value: "#b197fc" },
-];
+export const DIRECT_PAINTS: Paint[] = paints("红色", "黄色", "蓝色", "粉色", "棕色", "橙色", "绿色", "紫色");
 
 /** 只有调色锅能调出来的颜色（含直接色里的橙绿紫，调色章节不直接给） */
-export const MIXABLE_PAINTS: Paint[] = [
-  { name: "橙色", value: "#ffa94d" },
-  { name: "绿色", value: "#8ce99a" },
-  { name: "紫色", value: "#b197fc" },
-  { name: "深红", value: "#e03131" },
-  { name: "金黄", value: "#fab005" },
-  { name: "深蓝", value: "#4263eb" },
-];
+export const MIXABLE_PAINTS: Paint[] = paints("橙色", "绿色", "紫色", "深红", "金黄", "深蓝");
 
-/** 调色配方（key 为按名称排序的两种原色） */
-export const MIX_TABLE: Record<string, string> = {
-  "红色+黄色": "橙色",
-  "蓝色+黄色": "绿色",
-  "红色+蓝色": "紫色",
-  "红色+红色": "深红",
-  "黄色+黄色": "金黄",
-  "蓝色+蓝色": "深蓝",
-};
-
-/** 1.1 追加：同一种颜色的深浅阶梯用色（只在新村镇出现） */
-export const SHADE_PAINTS: Paint[] = [
-  { name: "浅粉", value: "#ffdeeb" },
-  { name: "深粉", value: "#e64980" },
-  { name: "浅蓝", value: "#d0ebff" },
-  { name: "浅绿", value: "#d3f9d8" },
-  { name: "深绿", value: "#2f9e44" },
-  { name: "浅黄", value: "#fff3bf" },
-  { name: "浅紫", value: "#e5dbff" },
-  { name: "深紫", value: "#7048e8" },
-  { name: "浅橙", value: "#ffd8a8" },
-  { name: "深橙", value: "#e8590c" },
-  { name: "浅红", value: "#ffc9c9" },
-];
-
-export const ALL_PAINTS: Record<string, string> = Object.fromEntries(
-  [...DIRECT_PAINTS, ...MIXABLE_PAINTS, ...SHADE_PAINTS].map((p) => [p.name, p.value])
+/**
+ * 1.1 追加：同一种颜色的深浅阶梯用色（只在新村镇出现）。
+ *
+ * 1.2 修了三处：浅粉 / 浅蓝 / 浅橙原来与白画布只差 ΔE 16 上下，涂上去看不出涂过，
+ * 各自加深了一点；另外补了「中绿」「深黄」两支，用来撑开亮度级差不够的两条阶梯。
+ */
+export const SHADE_PAINTS: Paint[] = paints(
+  "浅粉", "深粉", "浅蓝", "浅绿", "中绿", "深绿", "浅黄", "深黄", "浅紫", "深紫", "浅橙", "深橙", "浅红"
 );
 
-/** 1.1 追加：明暗阶梯，每一组都是同一种颜色由浅到深 */
+/** 颜料名 → 色值。1.2 起由 `mix.ts` 的颜料表统一供给，两边不会再各写一套 */
+export const ALL_PAINTS: Record<string, string> = Object.fromEntries(PIGMENTS.map((p) => [p.name, p.hex]));
+
+/**
+ * 1.1 追加：明暗阶梯，每一组都是同一种颜色由浅到深。
+ *
+ * 1.2 按 CIE L\* 重算了一遍，两条不合格的当场改了：
+ *  - 绿：浅绿 → 绿色只差 9.5 点亮度，中间换成「中绿」，级差变成 20.1 / 16.9；
+ *  - 黄：浅黄 → 黄色只差 6.0 点，最浅那两级孩子分不出，改成 浅黄 → 金黄 → 深黄（18.7 / 24.9）。
+ *
+ * 现在最小相邻级差 13.3 点，稳稳高于「≥ 12%」这条线（`isLightToDark` 会盯着）。
+ */
 export const SHADE_LADDERS: string[][] = [
   ["浅粉", "粉色", "深粉"],
   ["浅蓝", "蓝色", "深蓝"],
-  ["浅绿", "绿色", "深绿"],
-  ["浅黄", "黄色", "金黄"],
+  ["浅绿", "中绿", "深绿"],
+  ["浅黄", "金黄", "深黄"],
   ["浅紫", "紫色", "深紫"],
   ["浅橙", "橙色", "深橙"],
   ["浅红", "红色", "深红"],
 ];
+
+/**
+ * 两条阶梯能不能出现在同一关里。
+ *
+ * 浅色天生互相靠得近（浅粉与浅红只差 ΔE 12.5、浅黄与浅橙只差 12.8），
+ * 这不是调 hex 能解决的——再拉开就要么撞白画布、要么撞自己那一级。
+ * 所以改成开局就把相容的阶梯对算出来，同一关只挑差得开的两条。21 对里 17 对可用。
+ */
+export const LADDER_COMPATIBLE: boolean[][] = SHADE_LADDERS.map((a, i) =>
+  SHADE_LADDERS.map((b, j) => {
+    if (i === j) return false;
+    for (const x of a) for (const y of b) if (pigmentDeltaE(x, y) < MIN_TARGET_DELTA_E) return false;
+    return true;
+  })
+);
+
+/** 与这条阶梯相容的其它阶梯下标 */
+export function compatibleLadders(at: number): number[] {
+  return LADDER_COMPATIBLE[at].flatMap((ok, j) => (ok ? [j] : []));
+}
 
 /** 1.1 追加：互补色（色环上正对面的那个） */
 export const COMPLEMENT: Record<string, string> = {
@@ -281,7 +331,11 @@ export const ANALOGOUS_NEXT: Record<string, string> = {
   紫色: "红色",
 };
 
-/** 1.1 追加：图例用的符号（大画布上贴在每一块上） */
+/**
+ * 1.1 追加：图例用的符号（大画布上贴在每一块上）。
+ * 1.2 起图例改成按颜色取 `paintSymbol()`，同一种颜色在哪一关都是同一个记号，
+ * 孩子记住一次就一直有效；这份清单留着当兜底与回归基线。
+ */
 export const LEGEND_SYMBOLS = ["●", "■", "▲", "★", "◆", "♥"];
 
 /** 配色规则读给孩子听的说法（不报颜色，只说关系） */
@@ -334,7 +388,16 @@ export interface ColorLevel {
   legend?: { symbol: string; color: string }[];
   /** limited 模式：调色锅最多能开几次 */
   budget?: number;
+  /** 1.2：调色锅能倒哪几样原料（不给就是老规矩的三原色） */
+  potInputs?: string[];
+  /** 1.2：调出来的颜色能不能再倒回锅里接着调 */
+  potChain?: boolean;
+  /** 1.2：shade 模式按组卡顺序——每组内部由浅到深，换组时重新从最浅开始 */
+  orderGroups?: number[];
 }
+
+/** 调色锅默认能倒的三样原料（前 99 关一直是这三样） */
+export const DEFAULT_POT_INPUTS = ["红色", "黄色", "蓝色"];
 
 const BASIC = ["红色", "黄色", "蓝色", "粉色", "棕色"];
 const CHEERFUL = ["红色", "黄色", "蓝色", "粉色", "棕色", "橙色", "绿色", "紫色"];
@@ -411,37 +474,58 @@ function takeDistinct<T>(rand: () => number, pool: readonly T[], n: number, excl
   return out;
 }
 
+/** 一组颜色里，挑出与已选那批都差得开的（同一屏上分不清的一律不要） */
+function takeDistinguishable(
+  rand: () => number,
+  pool: readonly string[],
+  n: number,
+  chosen: readonly string[]
+): string[] {
+  const out: string[] = [];
+  if (n <= 0) return out;
+  for (const c of shuffled(pool, rand)) {
+    if (chosen.includes(c) || out.includes(c)) continue;
+    if ([...chosen, ...out].some((x) => pigmentDeltaE(x, c) < MIN_TARGET_DELTA_E)) continue;
+    out.push(c);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
 function buildAdvancedLevel(level: number, ci: number): ColorLevel {
   const rand = mulberry32(13900 + level * 7919);
   const idx = indexInChapter(CHAPTERS, level);
   const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
-  const picture = PICTURES[ci];
+  const pi = pictureOf(level);
+  const picture = PICTURES[pi];
   const regions = picture.regions.map((r) => r.id);
 
   if (ci === 6) {
-    // 晨昏渐变谷：两组明暗阶梯，从最浅的一路涂到最深的
-    const ladders = takeDistinct(rand, SHADE_LADDERS, 2, []);
+    // 晨昏渐变谷：两组明暗阶梯，从最浅的一路涂到最深的。
+    // 两组之间必须差得开（`LADDER_COMPATIBLE`），否则孩子会拿 A 组的浅色去顶 B 组的浅色。
+    const first = Math.floor(rand() * SHADE_LADDERS.length);
+    const mates = compatibleLadders(first);
+    const second = mates[Math.floor(rand() * mates.length)];
+    const ladders = [SHADE_LADDERS[first], SHADE_LADDERS[second]];
     const spots = shuffled(regions, rand);
     const tasks: ColorTask[] = [];
     // 前段两组共 5 块，后段两组各三级共 6 块
     const secondSteps = t > 0.35 ? 3 : 2;
-    const colors = [...ladders[0], ...ladders[1].slice(0, secondSteps)];
+    const groups = [ladders[0], ladders[1].slice(0, secondSteps)];
+    // 阶梯本来就是由浅到深写的，这里再按亮度排一次，数据写反了立刻现形
+    const colors = groups.flatMap((g) => sortLightToDark(g));
     colors.forEach((color, i) => {
       if (spots[i]) tasks.push({ region: spots[i], color });
     });
-    // 由浅到深：先第一组，再第二组，组内顺序就是阶梯顺序
+    const wanted = tasks.map((k) => k.color);
     const palette = shuffled(
-      [
-        ...new Set([
-          ...tasks.map((k) => k.color),
-          ...takeDistinct(rand, SHADE_LADDERS.flat(), 1 + Math.floor(t * 2), tasks.map((k) => k.color)),
-        ]),
-      ],
+      [...new Set([...wanted, ...takeDistinguishable(rand, SHADE_LADDERS.flat(), 1 + Math.floor(t * 2), wanted)])],
       rand
     );
     return {
-      pic: ci, mode: "shade", tasks, palette, needMix: [],
+      pic: pi, mode: "shade", tasks, palette, needMix: [],
       maxWrong: t > 0.6 ? 3 : 4, previewMs: 0, order: true,
+      orderGroups: groups.map((g) => g.length),
     };
   }
 
@@ -465,45 +549,54 @@ function buildAdvancedLevel(level: number, ci: number): ColorLevel {
       tasks.push({ region, color });
       rules.push({ region, refRegion: ref.region, kind });
     }
-    const wanted = [...new Set(tasks.map((k) => k.color))];
+    const wanted = [...new Set([...tasks.map((k) => k.color), ...given.map((g) => g.color)])];
     const palette = shuffled(
-      [...wanted, ...takeDistinct(rand, wheel, 1 + Math.floor(t * 2), wanted)],
+      [
+        ...new Set([
+          ...tasks.map((k) => k.color),
+          ...takeDistinguishable(rand, wheel, 1 + Math.floor(t * 2), wanted),
+        ]),
+      ],
       rand
     );
     return {
-      pic: ci, mode: "rule", tasks: shuffled(tasks, rand), palette, needMix: [],
+      pic: pi, mode: "rule", tasks: shuffled(tasks, rand), palette, needMix: [],
       maxWrong: t > 0.6 ? 3 : 4, previewMs: 0, given, rules,
     };
   }
 
   if (ci === 8) {
-    // 图例大画布：13 块的大图，符号对颜色，一格都不能认错
+    // 图例大画布：十几块的大图，符号对颜色，一格都不能认错
     const colorCount = 4 + Math.floor(t * 2);
-    const colors = takeDistinct(rand, [...DIRECT_PAINTS.map((p) => p.name), "深绿", "深粉"], colorCount, []);
-    const legend = colors.map((color, i) => ({ symbol: LEGEND_SYMBOLS[i % LEGEND_SYMBOLS.length], color }));
+    const pool = [...DIRECT_PAINTS.map((p) => p.name), "深绿", "深粉"];
+    const colors = takeDistinguishable(rand, pool, colorCount, []);
+    const legend = colors.map((color) => ({ symbol: paintSymbol(color), color }));
     const taskCount = Math.min(regions.length, 8 + Math.floor(t * 4));
     const spots = shuffled(regions, rand).slice(0, taskCount);
     const tasks = spots.map((region, i) => ({ region, color: colors[i % colors.length] }));
     const palette = shuffled(colors, rand);
     return {
-      pic: ci, mode: "legend", tasks: shuffled(tasks, rand), palette, needMix: [],
+      pic: pi, mode: "legend", tasks: shuffled(tasks, rand), palette, needMix: [],
       maxWrong: t > 0.6 ? 3 : 4, previewMs: 0, legend,
     };
   }
 
-  // 限色挑战场：调色盘只剩红黄蓝，其余全靠调，开锅次数还有预算
-  const mixables = ["橙色", "绿色", "紫色", "深红", "金黄", "深蓝"];
+  // 限色挑战场：调色盘只剩红黄蓝，其余全靠调，开锅次数还有预算。
+  // 1.2 起锅边多了白和黑两样原料——它们只进锅、不直接涂，专门用来调浅和调深。
+  const mixables = ["橙色", "绿色", "紫色", "深红", "金黄", "深蓝", "浅红", "浅黄", "浅蓝", "深黄"];
   const mixCount = 2 + Math.floor(t * 2);
-  const needMix = takeDistinct(rand, mixables, mixCount, []);
+  const needMix = takeDistinguishable(rand, mixables, mixCount, ["红色", "黄色", "蓝色"]);
   const spots = shuffled(regions, rand);
   const taskCount = Math.min(spots.length, needMix.length + 2 + Math.floor(t * 2));
   const tasks: ColorTask[] = [];
+  const plain = takeDistinguishable(rand, ["红色", "黄色", "蓝色"], 3, needMix);
   for (let i = 0; i < taskCount; i++) {
-    const color = i < needMix.length ? needMix[i] : ["红色", "黄色", "蓝色"][i % 3];
+    const color = i < needMix.length ? needMix[i] : plain[(i - needMix.length) % Math.max(1, plain.length)];
+    if (color === undefined) break;
     tasks.push({ region: spots[i], color });
   }
   return {
-    pic: ci,
+    pic: pi,
     mode: "limited",
     tasks: shuffled(tasks, rand),
     palette: ["红色", "黄色", "蓝色"],
@@ -511,6 +604,7 @@ function buildAdvancedLevel(level: number, ci: number): ColorLevel {
     maxWrong: t > 0.6 ? 3 : 4,
     previewMs: 0,
     budget: needMix.length + (t > 0.5 ? 1 : 2),
+    potInputs: ["红色", "黄色", "蓝色", "白色", "黑色"],
   };
 }
 

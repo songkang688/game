@@ -6,6 +6,7 @@ import {
   ANALOGOUS_NEXT,
   buildLevel,
   CHAPTERS,
+  CHAPTER_PICTURES,
   COMPLEMENT,
   LEGACY_CHAPTER_SIZES,
   LEGACY_LEVELS,
@@ -13,6 +14,7 @@ import {
   LEVELS,
   MIX_TABLE,
   PICTURES,
+  pictureOf,
   ruleText,
   SHADE_LADDERS,
   SHADE_PAINTS,
@@ -239,7 +241,9 @@ describe("涂色小屋 · 第 100–188 关逐关可涂完", () => {
       const cfg = LEVELS[lv];
       const pic = PICTURES[cfg.pic];
       const ids = new Set(pic.regions.map((r) => r.id));
-      expect(cfg.pic).toBe(chapterOf(CHAPTERS, lv));
+      // 1.2 起后四章按关号在自己的线稿池里轮换，不再是「章节下标 = 线稿下标」
+      expect(cfg.pic).toBe(pictureOf(lv));
+      expect(CHAPTER_PICTURES[chapterOf(CHAPTERS, lv)]).toContain(cfg.pic);
       expect(cfg.tasks.length).toBeGreaterThanOrEqual(4);
       expect(new Set(cfg.tasks.map((k) => k.region)).size).toBe(cfg.tasks.length);
       for (const task of cfg.tasks) {
