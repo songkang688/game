@@ -270,7 +270,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.className = "slb-wrap";
   wrap.innerHTML = `
     <style>
-      .slb-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EAF6FF, #FFF4F9); border-radius: 20px; padding: 12px; max-width: 640px; margin: 0 auto; user-select: none; -webkit-user-select: none; }
+      /* 竖屏时画布只占舞台上部留大片空白(R2 观察项):撑满舞台高度,把地图/关卡视图垂直居中;
+         矮屏内容超高时 auto margin 归零 + 纵向滚动,不裁顶部 */
+      .slb-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EAF6FF, #FFF4F9); border-radius: 20px; padding: 12px; max-width: 640px; margin: 0 auto; user-select: none; -webkit-user-select: none; height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
+      .slb-map, .slb-play { margin-top: auto; margin-bottom: auto; }
       .slb-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #5A82B0; box-shadow: 0 2px 6px rgba(120,160,220,.25); font-size: 13px; white-space: nowrap; }
       .slb-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
       .slb-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
