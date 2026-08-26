@@ -49,14 +49,14 @@ interface Palette {
 }
 
 const PALETTES: Palette[] = [
-  { sky0: "#FFF3E8", sky1: "#FFE4EF", far: "#FBDCC9", ground: "#F6C79E", groundDark: "#FAEADB", deco: "#FFB9CE" },
-  { sky0: "#E9F8FF", sky1: "#F1FCE7", far: "#CDEBC4", ground: "#A9D98F", groundDark: "#E9F6DC", deco: "#6FBF7A" },
-  { sky0: "#E1EBF9", sky1: "#EEF4FC", far: "#C3D2E7", ground: "#9FB8D6", groundDark: "#E2EAF4", deco: "#7FA8D4" },
-  { sky0: "#FCF3E0", sky1: "#F9EDD8", far: "#E4D3B4", ground: "#D8BE8C", groundDark: "#F4EBD8", deco: "#C9A46A" },
-  { sky0: "#FFEAF3", sky1: "#FFF5E8", far: "#F8CFDF", ground: "#F0A9C2", groundDark: "#FCE4EC", deco: "#F07FAA" },
-  { sky0: "#E8F6FE", sky1: "#F6FCFF", far: "#C6E6F5", ground: "#8FC9E8", groundDark: "#E4F3FB", deco: "#5FBCE0" },
-  { sky0: "#FFF9E4", sky1: "#FFF3D2", far: "#F5E4A9", ground: "#F5CE5E", groundDark: "#FDF3D2", deco: "#EFAE2E" },
-  { sky0: "#F0EBFC", sky1: "#F9F5FF", far: "#D8CEF2", ground: "#B79CE8", groundDark: "#EFE8FB", deco: "#9B7ADC" },
+  { sky0: "#FFF3E8", sky1: "#FFE4EF", far: "#FBDCC9", ground: "#F6C79E", groundDark: "#F7DDC3", deco: "#FFB9CE" },
+  { sky0: "#E9F8FF", sky1: "#F1FCE7", far: "#CDEBC4", ground: "#A9D98F", groundDark: "#DCEEC4", deco: "#6FBF7A" },
+  { sky0: "#E1EBF9", sky1: "#EEF4FC", far: "#C3D2E7", ground: "#9FB8D6", groundDark: "#D2E0F0", deco: "#7FA8D4" },
+  { sky0: "#FCF3E0", sky1: "#F9EDD8", far: "#E4D3B4", ground: "#D8BE8C", groundDark: "#EEDEBE", deco: "#C9A46A" },
+  { sky0: "#FFEAF3", sky1: "#FFF5E8", far: "#F8CFDF", ground: "#F0A9C2", groundDark: "#FAD6E3", deco: "#F07FAA" },
+  { sky0: "#E8F6FE", sky1: "#F6FCFF", far: "#C6E6F5", ground: "#8FC9E8", groundDark: "#D1E9F7", deco: "#5FBCE0" },
+  { sky0: "#FFF9E4", sky1: "#FFF3D2", far: "#F5E4A9", ground: "#F5CE5E", groundDark: "#FAEBB6", deco: "#EFAE2E" },
+  { sky0: "#F0EBFC", sky1: "#F9F5FF", far: "#D8CEF2", ground: "#B79CE8", groundDark: "#E2D7F6", deco: "#9B7ADC" },
 ];
 
 /** 两位小主角的配色:朵朵粉披风,星星蓝披风 */
@@ -126,6 +126,8 @@ const CSS = `
 .ph-head-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#8A5A3C;}
 @media (max-width:420px){
   .ph-cv{height:178px;}
+  /* 双人的两个摇杆并排,竖着省下不少地方,全都还给画面 */
+  .ph-wrap[data-players="2"] .ph-cv{height:280px;}
   .ph-pads{--k:46px;margin-top:6px;}
   .ph-pads[data-players="2"]{--k:36px;}
   .ph-chip{font-size:12px;padding:3px 7px;}
@@ -138,7 +140,13 @@ const CSS = `
 }
 /* 触屏设备用不上键盘提示,省下的高度留给画面 */
 @media (hover:none) and (max-width:420px){ .ph-pad-name{display:none;} }
-@media (max-height:620px){ .ph-cv{height:158px;} }
+@media (max-height:620px){
+  .ph-cv{height:138px;}
+  .ph-wrap[data-players="2"] .ph-cv{height:224px;}
+  .ph-pads{--k:42px;margin-top:4px;}
+  .ph-pads[data-players="2"]{--k:34px;}
+  .ph-tip{margin-top:4px;font-size:11px;}
+}
 `;
 
 // ---------------------------------------------------------------------------
@@ -255,6 +263,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const timers = new Set<ReturnType<typeof setTimeout>>();
 
   const wrap = el("div", "ph-wrap");
+  wrap.dataset.players = String(opts.players);
   const style = el("style");
   style.textContent = CSS;
   wrap.appendChild(style);
@@ -1113,9 +1122,10 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     const bonus = Math.min(6, Math.floor(score / 120));
     if (bonus > 0) api.addStars(bonus);
     api.play(record ? "win" : "oops");
+    const why = w.message || "心用完啦,这趟清洁马拉松先到这儿。";
     field?.showVeil(
       record ? `新纪录 ${score} 分!` : `这趟拿了 ${score} 分`,
-      `${record ? "你把最长的一条街清干净了,太厉害啦!" : `最好成绩 ${best} 分,再来一趟就能追上它。`}${
+      `${why}${record ? "不过这已经是你跑得最远最干净的一趟了!" : `最好成绩 ${best} 分,再来一趟就能追上它。`}${
         bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""
       }`,
       [
