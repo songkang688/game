@@ -6,7 +6,11 @@
 
 ## 一、id 从哪来
 
-`docs/game-1.2/00-id-map.md`（A 档主管收口稿）已经拍板过一套「施工 id」，明文写着**新建目录听 B 档施工 id**。本轮重做**照抄那 21 个施工 id**，不另开第三套目录、不改名。A catalog 里的别名（`orb-royale` `snake-clash` `combo-arena` `mahjong-table` `star-mogul` `hero-tactics` `weiqi-ink` 等）以及 C 升级稿里的暂定名（`blob-io` `noodle-io` `clash-stars` `mahjong-stars` 等）**只作别名**，派发时一律以本表为准。
+**照抄 A 档主管的 id 表。** 本轮 A 档主管文档 `docs/plan-1.2-supervisor.md` 第四节「步号 1→30 连续总表」与第五节 21 款定稿表里的 21 个 id，与上一轮收口稿 `docs/game-1.2/00-id-map.md` 的「施工 id」完全一致，本表逐字照抄，不另开第三套目录、不改名：
+
+- **步号与 A/B/C 位也照抄主管总表**（第 2–8 步，一步三款；第 1 步平台归 A 档，第 9 步以后升级归 C 档，都不在本档范围内）。
+- 各 id 的**中文名与玩法细节以本档的 21 份提示词为准**，主管表与旧 catalog 里的中文名（圆圆吞星场 / 长蛇争星场 / 方块落落乐 / 连招擂台 / 星光地产街 / 英雄牌局 / 围棋小院 / 飞行棋小站 / 翻倍方块 / 花园探雷 / 花瓣数独 / 点点迷宫 / 水果叠叠高 / 星星桌球 / 军棋营地 / 国际象棋花园 / 翻翻棋 / 跳跳格子 / 节拍方块 / 调色小手，以及 `orb-royale` `snake-clash` `combo-arena` 这类旧别名）**只作别名**。
+- 三处玩法口径以本档为准并写明理由：`hue-hand` 做**色彩手牌接龙**而不是配色练习（配色已有 `color-fun`）；`tap-tiles` 做**下落音符点击**而不是节拍创作（创作已有 `music-stars`）；`fruit-stack` 做**物理合成**而不是叠高塔（合成链与 `merge-2048` 的网格合成互不重复）。
 
 象棋：**不新建**。`xiangqi` 已在仓库（1.1 的对战象棋），留给 C 档升级。第 21 个名额由 `dark-chess`「翻翻暗棋」补上——同一套棋子的另一种大众玩法，与明棋象棋不共用任何逻辑文件。
 
@@ -29,10 +33,10 @@
 | 13 | 6 | A | `dot-maze` | 豆豆迷宫 | 🟡 | action | both | [plan-1.2-step6-A-dot-maze.md](./plan-1.2-step6-A-dot-maze.md) |
 | 14 | 6 | B | `fruit-stack` | 果果合成 | 🍉 | casual | both | [plan-1.2-step6-B-fruit-stack.md](./plan-1.2-step6-B-fruit-stack.md) |
 | 15 | 6 | C | `pool-stars` | 朵星台球 | 🎱 | casual | both | [plan-1.2-step6-C-pool-stars.md](./plan-1.2-step6-C-pool-stars.md) |
-| 16 | 7 | A | `hue-hand` | 花色接龙 | 🌈 | party | both | [plan-1.2-step7-A-hue-hand.md](./plan-1.2-step7-A-hue-hand.md) |
-| 17 | 7 | B | `junqi-camp` | 军旗对决 | 🎖️ | party | both | [plan-1.2-step7-B-junqi-camp.md](./plan-1.2-step7-B-junqi-camp.md) |
-| 18 | 7 | C | `chess-garden` | 花园国际象棋 | ♔ | party | both | [plan-1.2-step7-C-chess-garden.md](./plan-1.2-step7-C-chess-garden.md) |
-| 19 | 8 | A | `dark-chess` | 翻翻暗棋 | 🀄️ | party | both | [plan-1.2-step8-A-dark-chess.md](./plan-1.2-step8-A-dark-chess.md) |
+| 16 | 7 | A | `junqi-camp` | 军旗对决 | 🎖️ | party | both | [plan-1.2-step7-A-junqi-camp.md](./plan-1.2-step7-A-junqi-camp.md) |
+| 17 | 7 | B | `chess-garden` | 花园国际象棋 | ♔ | party | both | [plan-1.2-step7-B-chess-garden.md](./plan-1.2-step7-B-chess-garden.md) |
+| 18 | 7 | C | `dark-chess` | 翻翻暗棋 | 🀄️ | party | both | [plan-1.2-step7-C-dark-chess.md](./plan-1.2-step7-C-dark-chess.md) |
+| 19 | 8 | A | `hue-hand` | 花色接龙 | 🌈 | party | both | [plan-1.2-step8-A-hue-hand.md](./plan-1.2-step8-A-hue-hand.md) |
 | 20 | 8 | B | `hop-pads` | 跳跳台 | ⭕ | casual | both（手游优先） | [plan-1.2-step8-B-hop-pads.md](./plan-1.2-step8-B-hop-pads.md) |
 | 21 | 8 | C | `tap-tiles` | 音符下落 | 🎹 | casual | both（手游优先） | [plan-1.2-step8-C-tap-tiles.md](./plan-1.2-step8-C-tap-tiles.md) |
 
@@ -47,8 +51,8 @@
 | 方块 | `block-drop` | SRS 旋转 / 7-bag / hold / ghost / T-spin |
 | 更深的格斗（新 id） | `combo-clash` | 相对 `fight-king` 有加深清单，**不许改 `fight-king`** |
 | 麻将 | `mahjong-bloom` | 国标简化落地，番种表 |
-| 大富翁 | `star-estate` | 原创 40 格地图，抵押 / 拍卖 / 破产两条清偿路径 |
-| 三国杀类 | `hero-cards` | 身份场简化单机，**全部原创英杰名** |
+| 地产桌游（掷骰买地建屋那类） | `star-estate` | 原创 40 格地图，抵押 / 拍卖 / 破产两条清偿路径 |
+| 身份阵营卡牌（主忠反内那类） | `hero-cards` | 身份场简化单机，**全部原创英杰名** |
 | 围棋 | `weiqi-garden` | 9 / 13 / 19 路，打劫、超劫、数目与点目 |
 | 飞行棋 | `flight-chess` | 四色四机，叠子、跳格、航线、终点折返 |
 | 象棋 | **不新建** | `xiangqi` 留给 C 档升级；名额由 `dark-chess` 补 |
