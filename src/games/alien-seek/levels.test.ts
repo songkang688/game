@@ -80,14 +80,20 @@ describe("寻找外星朋友 · 章节切分", () => {
     expect(assertTotal(CHAPTERS, TOTAL_LEVELS, "alien-seek")).toBe(true);
   });
 
-  it("章节名与角色名都是本作原创,没有商标或官方角色", () => {
-    const names = CHAPTERS.map((c) => c.name).join("");
-    for (const bad of ["星球大战", "外星人E", "小绿人", "迪士尼", "宝可梦"]) {
-      expect(names.includes(bad)).toBe(false);
+  it("章节名与角色名都是本作原创的纯中文,不掺任何外来名号", () => {
+    // 商标和官方角色名基本都带拉丁字母或数字;这里直接卡死「只许出现汉字」,
+    // 比列黑名单稳妥,也省得把那些名字写进仓库里。
+    for (const ch of CHAPTERS) expect(ch.name).toMatch(/^[\u4e00-\u9fa5]+$/);
+    for (const n of ALIEN_NAMES) {
+      expect(n).toMatch(/^[\u4e00-\u9fa5]+$/);
+      expect(n.length).toBeGreaterThanOrEqual(2);
     }
-    for (const n of ALIEN_NAMES) expect(n.length).toBeGreaterThanOrEqual(2);
+    for (const it of CLUE_ITEMS) expect(it).toMatch(/^[\u4e00-\u9fa5]+$/);
     expect(new Set(ALIEN_NAMES).size).toBe(ALIEN_NAMES.length);
     expect(new Set(CLUE_ITEMS).size).toBe(CLUE_ITEMS.length);
+    // 外星小朋友必须来自本作既有的原创角色
+    const CAST = ["朵朵", "星星", "糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾"];
+    for (const n of ALIEN_NAMES) expect(CAST).toContain(n);
   });
 
   it("每章都有名字、图标、颜色和一句介绍", () => {
