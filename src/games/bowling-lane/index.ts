@@ -509,10 +509,14 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
   function refreshHud(): void {
     for (let i = 0; i < seats.length; i++) {
       const seat = seats[i];
-      const total = totalScore(seat.rolls, frames);
+      const sheet = scoreGame(seat.rolls, frames);
       const who = seat.plan.ai ? `🤖${seat.plan.name}` : `${seat.plan.emoji}${seat.plan.name}`;
       const mark = !finished && turnSeat === i ? " ◀" : "";
-      chipSeats[i].textContent = `${who} ${total} 分${mark}`;
+      // 有奖励的那几格要等后面的球才结算,所以另外报一句「已经打倒多少瓶」,
+      // 免得刚打了七瓶还看见 0 分,小朋友以为是坏了
+      const pins = seat.rolls.reduce((s, v) => s + v, 0);
+      const pending = sheet.complete ? "" : ` · 已倒 ${pins} 瓶`;
+      chipSeats[i].textContent = `${who} ${sheet.total} 分${pending}${mark}`;
       chipSeats[i].classList.toggle("bl-chip-now", !finished && turnSeat === i);
     }
     const st = turnState(currentSeat().rolls, frames);

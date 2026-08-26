@@ -50,7 +50,7 @@ interface Recipe {
 
 const RECIPES: Recipe[] = [
   {
-    frames: 2, perFrom: 8, perTo: 12, oil: 0.25, special: null, specialMax: 0,
+    frames: 2, perFrom: 6, perTo: 12, oil: 0.25, special: null, specialMax: 0,
     hint: "三下按键:先定力度,再定落点,最后定旋转。落点条停在正中间偏一点点就够了。",
   },
   {
