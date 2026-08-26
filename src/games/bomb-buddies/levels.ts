@@ -19,6 +19,7 @@ import {
   makeCritter,
   neighbors,
   rollItem,
+  rollItemV2,
   type Board,
   type Critter,
   type CritterKind,
@@ -27,13 +28,13 @@ import {
 } from "./logic";
 
 export const CHAPTERS: Chapter[] = [
-  { name: "泡泡草坪", emoji: "🫧", color: "#dff3e4", desc: "先熟悉放弹与躲弹:炸开软砖,把咕噜怪包成泡泡", size: 24 },
-  { name: "糖果工坊", emoji: "🍬", color: "#ffe6ef", desc: "道具开始变多,火力和炸弹数攒起来清场更快", size: 24 },
-  { name: "清凉水乡", emoji: "💧", color: "#dceffb", desc: "蹦蹦怪转弯很快,学会用拐角挡住爆风", size: 24 },
-  { name: "云朵集市", emoji: "☁️", color: "#eceefb", desc: "第一次出现出口关:炸开砖找到出口再走过去", size: 24 },
-  { name: "齿轮矿洞", emoji: "⚙️", color: "#f0e9dd", desc: "追追怪会一路跟着你,踢炸弹在这里很好用", size: 23 },
+  { name: "泡泡草坪", emoji: "🫧", color: "#dff3e4", desc: "先熟悉放泡泡与躲彩虹波:拍开软砖,把咕噜怪包成泡泡", size: 24 },
+  { name: "糖果工坊", emoji: "🍬", color: "#ffe6ef", desc: "道具开始变多,波长和泡泡数攒起来清场更快", size: 24 },
+  { name: "清凉水乡", emoji: "💧", color: "#dceffb", desc: "蹦蹦怪转弯很快,学会用拐角挡住彩虹波", size: 24 },
+  { name: "云朵集市", emoji: "☁️", color: "#eceefb", desc: "第一次出现出口关:拍开砖找到出口再走过去", size: 24 },
+  { name: "齿轮矿洞", emoji: "⚙️", color: "#f0e9dd", desc: "追追怪会一路跟着你,踢泡泡在这里很好用", size: 23 },
   { name: "星光冰原", emoji: "❄️", color: "#e3f1f7", desc: "钻墙怪能穿软砖,提前想好两条退路", size: 23 },
-  { name: "彩虹沙漠", emoji: "🌈", color: "#fdeedd", desc: "地图更大、限时更紧,连锁引爆能省下不少时间", size: 23 },
+  { name: "彩虹沙漠", emoji: "🌈", color: "#fdeedd", desc: "地图更大、限时更紧,连锁一串能省下不少时间", size: 23 },
   { name: "月亮城堡", emoji: "🌙", color: "#e8e2f7", desc: "泡泡王登场:要连着包三层泡泡才请得动它回家", size: 23 },
 ];
 
@@ -55,12 +56,29 @@ export interface BombLevel {
   seconds: number;
   /** 出生时就带的道具(一开始就给一点甜头) */
   starters: ItemKind[];
-  /** 爆风能不能贯通软砖 */
+  /** 彩虹波能不能贯通软砖 */
   pierce: boolean;
   /** 道具掉落丰度 */
   richness: number;
+  /**
+   * 掉落表版本。v1 是前 99 关背过板的老六件,v2 多一件泡泡护盾。
+   * 换表就等于换藏品位置,所以只在第 100 关之后的新内容上开。
+   */
+  pool: "v1" | "v2";
   seed: number;
   hint: string;
+}
+
+/**
+ * 关号 → 用哪张掉落表。
+ *
+ * 第 6 章(0 基第 5 章)整章都在第 99 关之后,拿它当分界线,
+ * 前面的关一件道具都不会挪窝。
+ */
+export const POOL_V2_FROM_CHAPTER = 5;
+
+export function poolForChapter(chapter: number): "v1" | "v2" {
+  return chapter >= POOL_V2_FROM_CHAPTER ? "v2" : "v1";
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +89,35 @@ export interface BombLevel {
 export function oddSize(n: number): number {
   const v = Math.max(7, Math.round(n));
   return v % 2 === 1 ? v : v + 1;
+}
+
+// --- 窄屏尺寸上限 -----------------------------------------------------------
+//
+// 1.2 的硬指标:360px 宽的手机上,整张图一屏看完,而且每格不小于 24px。
+// 两件事合起来就是一道除法——列数最多 360 / 24 = 15。地图再宽就只能二选一:
+// 要么缩到 20px 出头(小格子里的怪看不清、手指也点不准),要么砍掉一截靠滚动
+// (孩子看不见角落里的追追怪,被贴脸了都不知道)。两个都不能接受,所以宽高在
+// 生成器这一层就封死,而不是留给渲染层去凑合。
+
+/** 窄屏基准宽度(px) */
+export const NARROW_PX = 360;
+/** 一格最小边长(px):再小手指按不准、怪也看不清 */
+export const MIN_CELL_PX = 24;
+/** 一张图最多几列 */
+export const MAX_COLS = 15;
+/** 一张图最多几行(竖屏 720 高要留出 HUD 与摇杆,行数跟列数取齐) */
+export const MAX_ROWS = 15;
+
+/** 取奇数尺寸并压在窄屏上限内(上限本身是奇数,压完还是奇数) */
+export function fitSize(n: number, max: number): number {
+  const v = oddSize(n);
+  if (v <= max) return v;
+  return max % 2 === 1 ? max : max - 1;
+}
+
+/** 这张图在 360px 窄屏上能不能整屏放下且每格 ≥ 24px */
+export function fitsNarrow(board: Board): boolean {
+  return board.w <= MAX_COLS && board.h <= MAX_ROWS;
 }
 
 /**
@@ -160,8 +207,10 @@ interface Recipe {
 export function recipeFor(chapter: number, within: number, size: number): Recipe {
   // 章内进度 0..1:同一章里越往后,场地越大、砖越密、小怪越多
   const t = size > 1 ? within / (size - 1) : 0;
-  const w = oddSize(9 + Math.round(chapter * 0.75) + (t > 0.6 ? 2 : 0));
-  const h = oddSize(9 + Math.round(chapter * 0.5) + (t > 0.8 ? 2 : 0));
+  // fitSize 的上限只在第 7、8 章的后半段咬得到(那里原本会算出 17 列),
+  // 前 99 关一格都没动过——地图指纹用例逐关钉死了这一点。
+  const w = fitSize(9 + Math.round(chapter * 0.75) + (t > 0.6 ? 2 : 0), MAX_COLS);
+  const h = fitSize(9 + Math.round(chapter * 0.5) + (t > 0.8 ? 2 : 0), MAX_ROWS);
   const density = Math.min(0.62, 0.34 + chapter * 0.026 + t * 0.08);
 
   const pool: CritterKind[][] = [
@@ -233,13 +282,13 @@ export function withinChapter(level: number): number {
 // ---------------------------------------------------------------------------
 
 const HINTS = [
-  "放下炸弹先想好往哪躲,拐角后面最安全。",
-  "先炸开一条直路,跑起来才有回旋的余地。",
-  "火力越长越要小心,自己的爆风一样会把你包起来。",
-  "小怪都怕爆风,把它们赶进死胡同再点火。",
-  "捡到踢炸弹以后,可以把炸弹踹进走廊深处。",
-  "遥控引爆最适合埋伏:先摆好,等小怪走过来再按。",
-  "限时紧的时候用连锁:一颗点着一串,省时间。",
+  "放下泡泡先想好往哪躲,拐角后面最安全。",
+  "先拍开一条直路,跑起来才有回旋的余地。",
+  "彩虹波越长越要小心,自己的波纹一样会把你罩起来。",
+  "小怪碰到彩虹波就变泡泡,把它们赶进死胡同再放。",
+  "捡到踢泡泡以后,可以把泡泡踹进走廊深处。",
+  "遥控最适合埋伏:先摆好,等小怪走过来再按。",
+  "限时紧的时候用连锁:一颗带一串,省时间。",
   "泡泡王要连着包三层,每包一层它会跑得更快一点。",
 ];
 
@@ -302,11 +351,13 @@ export function buildLevel(level: number, players = 1): BombLevel {
   // 极端情况下(砖太少)找不到能藏出口的砖:降级成清怪关,绝不留一张过不了的图
   const goal: GoalKind = recipe.goal === "exit" && exit < 0 ? "clear" : recipe.goal;
 
+  const pool = poolForChapter(chapter);
+  const roll = pool === "v2" ? rollItemV2 : rollItem;
   const hidden = new Map<number, ItemKind>();
   for (const cell of bricks) {
     if (cell === exit) continue;
     if (board.cells[cell] !== TILE_SOFT) continue;
-    const item = rollItem(seed, cell, recipe.richness);
+    const item = roll(seed, cell, recipe.richness);
     if (item) hidden.set(cell, item);
   }
 
@@ -323,6 +374,7 @@ export function buildLevel(level: number, players = 1): BombLevel {
     starters: recipe.starters,
     pierce: recipe.pierce,
     richness: recipe.richness,
+    pool,
     seed,
     hint: HINTS[level % HINTS.length],
   };
@@ -420,6 +472,9 @@ export function buildArena(round: number, players = 2): BombLevel {
     }
   }
 
+  // 擂台**故意**留在老六件上,不发护盾。
+  // 试过发:两个人各捡一层护盾,决胜的那一下被盾吃掉,三分钟打不出结果——
+  // 护盾是「活下去」的道具,配合关和爬塔里很好用,放进三局两胜的对轰里只会把回合拖长。
   const hidden = new Map<number, ItemKind>();
   for (let i = 0; i < board.cells.length; i++) {
     if (board.cells[i] !== TILE_SOFT) continue;
@@ -441,8 +496,9 @@ export function buildArena(round: number, players = 2): BombLevel {
     starters: ["fire"],
     pierce: false,
     richness: 1.3,
+    pool: "v1",
     seed,
-    hint: "先炸开身边的砖捡道具,再去堵对手的退路。",
+    hint: "先拍开身边的砖捡道具,再去堵对手的退路。",
   };
 }
 
@@ -501,9 +557,114 @@ export function buildEndlessRound(round: number): BombLevel {
     starters: round > 3 ? ["fire", "bomb"] : ["fire"],
     pierce: false,
     richness: 1.2,
+    pool: "v1",
     seed,
     hint: "场地会一圈圈缩小,早点往中间靠。",
   };
+}
+
+// --- 泡泡塔 -----------------------------------------------------------------
+
+/** 塔的最底层是几列 */
+export const TOWER_BASE = 9;
+/** 每爬几层加宽两格 */
+export const TOWER_GROW_EVERY = 4;
+/** 一层给多少秒 */
+export const TOWER_SECONDS = 45;
+/** 从第几层起,楼板会一圈圈往里收(前几层先让孩子把手感和道具攒起来) */
+export const TOWER_SHRINK_FROM = 6;
+
+/** 第 `floor` 层(1 基)的场地边长 */
+export function towerSize(floor: number): number {
+  const f = Math.max(1, Math.round(floor));
+  return fitSize(TOWER_BASE + Math.floor((f - 1) / TOWER_GROW_EVERY) * 2, MAX_COLS);
+}
+
+/** 第 `floor` 层(1 基)有几只小怪 */
+export function towerCritters(floor: number): CritterKind[] {
+  const f = Math.max(1, Math.round(floor));
+  const kinds: CritterKind[] = ["slime", "hopper", "chaser", "ghosty"];
+  // 每三层解锁一种新怪;同一层里新老怪交替上,不会一上来全是追追怪
+  const tier = Math.min(kinds.length - 1, Math.floor((f - 1) / 3));
+  const count = Math.min(6, 1 + Math.floor(f / 2));
+  const out: CritterKind[] = [];
+  for (let i = 0; i < count; i++) out.push(kinds[Math.max(0, tier - (i % (tier + 1)))]);
+  return out;
+}
+
+/**
+ * 无尽「泡泡塔」的第 `floor` 层(1 基)。
+ *
+ * 和老的 `buildEndlessRound` 是两回事:那边是一张越铺越大的图配收缩圈,
+ * 这边一层就是一张能一眼看完的小地图——把这一层的怪全包成泡泡就上楼,
+ * 上一层的道具带着走(由 index.ts 负责搬),所以爬得越高手里的家伙越齐。
+ * 一层一张小图的好处是每一层都有明确的「赢了」,孩子随时可以停在一个整数上。
+ */
+export function buildTowerFloor(floor: number): BombLevel {
+  const f = Math.max(1, Math.round(floor));
+  const seed = 5303 + f * 211;
+  const rand = mulberry32(seed);
+  const size = towerSize(f);
+  const board = pillarBoard(size, size);
+  const spawns = [cornerSpawns(board)[0]];
+
+  const keep = new Set<number>(spawnClear(board, spawns[0]));
+  const floors: number[] = [];
+  for (let i = 0; i < board.cells.length; i++) {
+    if (board.cells[i] === TILE_FLOOR && !keep.has(i)) floors.push(i);
+  }
+  const far = floors
+    .map((cell) => ({ cell, d: dist(board, spawns[0], cell) }))
+    .sort((a, b) => b.d - a.d || a.cell - b.cell)
+    .slice(0, 12)
+    .map((v) => v.cell);
+  const spots = shuffled(far, rand);
+
+  const critters: Critter[] = [];
+  towerCritters(f).forEach((kind, i) => {
+    const cell = spots.find((c) => !keep.has(c));
+    if (cell === undefined) return;
+    keep.add(cell);
+    critters.push(makeCritter(i + 1, kind, cell, DIR_DOWN));
+  });
+
+  // 层数越高砖越密,但封顶 0.5:小图上再密就没地方躲泡泡了
+  const density = Math.min(0.5, 0.32 + f * 0.012);
+  scatterBricks(board, rand, density, keep);
+  openUp(board, spawns[0], critters, -1);
+
+  const hidden = new Map<number, ItemKind>();
+  for (let i = 0; i < board.cells.length; i++) {
+    if (board.cells[i] !== TILE_SOFT) continue;
+    const item = rollItemV2(seed, i, 1.25);
+    if (item) hidden.set(i, item);
+  }
+
+  return {
+    index: -1,
+    chapter: (f - 1) % CHAPTERS.length,
+    board,
+    spawns,
+    critters,
+    hidden,
+    goal: "clear",
+    exit: -1,
+    seconds: TOWER_SECONDS,
+    // 塔里不送起手道具:上一层带上来的才是你的家当
+    starters: [],
+    pierce: false,
+    richness: 1.25,
+    pool: "v2",
+    seed,
+    hint: towerHint(f),
+  };
+}
+
+function towerHint(floor: number): string {
+  if (floor <= 2) return "把这一层的小怪全包成泡泡就能上楼,道具跟着你一起爬。";
+  if (floor <= 5) return "小图不好躲,放泡泡之前先看清退路在哪边。";
+  if (floor <= 9) return "钻墙怪能穿软砖,别把自己堵在死胡同里。";
+  return "越往上越挤,连锁一串比一颗一颗慢慢拍省时间。";
 }
 
 /** 双人合作闯关:和单人同一张图,只是多一个出生点、时间宽一点 */
@@ -517,7 +678,7 @@ export function buildCoopLevel(level: number): BombLevel {
 // ---------------------------------------------------------------------------
 
 export function goalText(goal: GoalKind): string {
-  if (goal === "exit") return "炸开砖找到出口,走过去就过关";
+  if (goal === "exit") return "拍开砖找到出口,走过去就过关";
   if (goal === "boss") return "把泡泡王连包三层泡泡";
   return "把场上的小怪全部包成泡泡";
 }

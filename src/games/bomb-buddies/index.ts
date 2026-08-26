@@ -1,17 +1,27 @@
 import { meta } from "./meta";
 export { meta };
 
-// 泡泡炸弹人:格子迷宫里摆泡泡弹的合家欢对战游戏。
+// 泡泡炸弹人:格子迷宫里摆泡泡的合家欢对战游戏。
 //
 // 五种玩法共用同一套对局运行时 `createMatch`:
 //  - 闯关:188 关八大主题,清怪 / 找出口 / 泡泡王三种目标(走 level99 框架);
 //  - 双人对战:同屏两人,先赢 3 局;
-//  - 人机对战:三档电脑玩家,高档会算爆风与逃生路线;
-//  - 无尽泡泡:场地一圈一圈收缩,被泡泡包住就结算轮次;
-//  - 双人合作:两人同队一起闯关,进度单独存。
+//  - 人机对战:三档电脑玩家,高档会算彩虹波与逃生路线;
+//  - 泡泡塔(无尽):一层一张小地图,清完这一层就上楼,道具跟着爬;
+//  - 双人合作:两人同队一起闯关,被罩住的人可以被队友拍出来。
 //
-// 全程没有血、没有伤、没有死亡:被爆风碰到只是被泡泡包住几秒,自己就破泡泡出来。
-import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
+// 全程没有血、没有伤、没有死亡:被彩虹波扫到只是被泡泡罩住几秒,
+// 自己会晃出来,合作模式里队友还能贴上来把泡泡拍破。砖块被波及是「变成小花散开」。
+import {
+  TOTAL_LEVELS,
+  loadStars,
+  mountLevelGame,
+  saveStar,
+  type GameApi,
+  type PlayCtx,
+  type SoundName,
+} from "../level99";
+import { stopSpeaking } from "../speech";
 import { save } from "../../engine/save";
 import GUIDE from "./guide";
 import {
@@ -24,28 +34,42 @@ import {
 } from "./ai";
 import {
   CHAPTERS,
+  MIN_CELL_PX,
+  TOWER_SHRINK_FROM,
   buildArena,
   buildCoopLevel,
-  buildEndlessRound,
   buildLevel,
+  buildTowerFloor,
   goalText,
+  withinChapter,
   type BombLevel,
 } from "./levels";
 import {
   BUBBLE_MS,
+  BUBBLE_POP_MS,
+  CHAIN_WINDOW_MS,
   COOP_KEY,
   CRITTER_INFO,
+  DIR_DOWN,
+  DIR_LEFT,
   DIR_NONE,
+  DIR_RIGHT,
+  DIR_UP,
   FLAME_MS,
   FUSE_MS,
   ITEM_INFO,
+  RESCUE_MS,
+  RESCUE_TOUCH_MS,
   TILE_HARD,
   TILE_SOFT,
   actionDir,
   applyItem,
+  bubbleStage,
+  coopLine,
   createWorld,
   endlessLine,
   formatClock,
+  growProgress,
   isPauseKey,
   keyToAction,
   levelCleared,
@@ -55,6 +79,7 @@ import {
   parseCoopProgress,
   pickDir,
   rateLevel,
+  rescuerFor,
   roundWinner,
   secondsLeft,
   serializeCoopProgress,
@@ -74,114 +99,159 @@ const P_NAME = ["朵朵", "星星"];
 const P_EMOJI = ["🌸", "⭐"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 
+/** 两套键位一个字都不重叠,写在一处,暂停面板与各模式提示共用 */
+export const KEY_HELP =
+  "朵朵:WASD 走 · F 放泡 · V 踢泡 · G 拍破;星星:方向键走 · L 放泡 · J 踢泡 · K 拍破。";
+
 // ---------------------------------------------------------------------------
 // 样式
 // ---------------------------------------------------------------------------
 
-const CSS = `
-.bb-wrap{--bb-ink:#4a4266;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--bb-ink);
+// --- 触屏热区 ---------------------------------------------------------------
+//
+// 1.2 的硬指标:摇杆 + 放泡钮 + 踢泡钮在 360px 宽的手机上互不重叠,热区都 ≥ 44px。
+// 下面这几个数是「排得下」的算术依据,改之前先自己乘一遍:
+//   摇杆 104 + 间隙 6 + 按钮 46 = 每人 156;两个人 156×2 + 中缝 10 = 322 ≤ 360。
+// 老版本用的是 3×3 方向键盘(单键 40px,窄屏还会缩到 34px),既不够 44 也排不下两套,
+// 所以这一版换成「一根摇杆 + 一列动作钮」。
+/** 摇杆底盘直径 */
+export const STICK_PX = 104;
+/** 动作钮边长(最小热区 44 之上留 2px 余量) */
+export const ACT_PX = 46;
+/** 摇杆死区:手指离圆心这么近就算「不动」,免得贴着中心抖出乱七八糟的方向 */
+export const STICK_DEAD_PX = 10;
+
+/**
+ * 手指落点(相对摇杆圆心的偏移)→ 四方向。
+ *
+ * 纯函数,单测直接喂坐标。取「偏得多的那根轴」,并列时按横轴——
+ * 斜着 45° 推的时候总得选一个,横着走在这游戏里更常用。
+ */
+export function stickDir(dx: number, dy: number, dead: number = STICK_DEAD_PX): number {
+  if (Math.hypot(dx, dy) < dead) return DIR_NONE;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? DIR_RIGHT : DIR_LEFT;
+  return dy > 0 ? DIR_DOWN : DIR_UP;
+}
+
+/**
+ * 棋盘格子边长(纯函数)。
+ *
+ * 两条约束打架时以「看得见」优先:能整屏放下就按可用空间铺满,
+ * 实在放不下也不会小于 `MIN_CELL_PX` —— 24px 以下的格子,
+ * 小怪只剩一个色块,孩子分不清是咕噜怪还是道具。
+ * 关卡生成器那边已经把地图封在 15×15 以内,所以正常情况下两条都能满足。
+ */
+export function boardCellSize(cols: number, rows: number, availW: number, availH: number): number {
+  const fit = Math.floor(Math.min(availW / Math.max(1, cols), availH / Math.max(1, rows)));
+  return Math.max(MIN_CELL_PX, Math.min(46, fit));
+}
+
+export const CSS = `
+.bmb-wrap{--bmb-ink:#4a4266;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--bmb-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
-  touch-action:manipulation;position:relative;}
-.bb-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
-.bb-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:800;white-space:nowrap;
+  touch-action:none;position:relative;}
+.bmb-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
+.bmb-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(120,110,170,.18);}
-.bb-chip b{font-weight:900;}
-.bb-chip-p0{color:#a8306a;background:#ffeaf3;}
-.bb-chip-p1{color:#28568f;background:#e6f0ff;}
-.bb-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
+.bmb-chip b{font-weight:900;}
+.bmb-chip-p0{color:#a8306a;background:#ffeaf3;}
+.bmb-chip-p1{color:#28568f;background:#e6f0ff;}
+.bmb-chip--save{background:linear-gradient(180deg,#fff2c9,#ffe08a);color:#8a5a12;animation:bmb-pulse .7s ease-in-out infinite;}
+.bmb-chip[hidden]{display:none;}
+@keyframes bmb-pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+.bmb-btn{border:none;border-radius:999px;min-height:44px;padding:6px 16px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7e6bc4,#6857ae);box-shadow:0 3px 0 #52458c;}
-.bb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #52458c;}
-.bb-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
-.bb-btn--ghost{background:linear-gradient(180deg,#9db6d8,#7f9ac3);box-shadow:0 3px 0 #64809f;}
-.bb-btn--ghost:active{box-shadow:0 1px 0 #64809f;}
-.bb-board{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(110,100,160,.22);line-height:0;}
-.bb-board canvas{display:block;}
-.bb-tip{font-size:12.5px;font-weight:700;line-height:1.5;text-align:center;max-width:620px;color:#6a5f8c;
+.bmb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #52458c;}
+.bmb-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
+.bmb-btn--ghost{background:linear-gradient(180deg,#9db6d8,#7f9ac3);box-shadow:0 3px 0 #64809f;}
+.bmb-btn--ghost:active{box-shadow:0 1px 0 #64809f;}
+.bmb-board{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(110,100,160,.22);line-height:0;}
+.bmb-board canvas{display:block;}
+.bmb-tip{font-size:14px;font-weight:700;line-height:1.45;text-align:center;max-width:620px;color:#6a5f8c;
   background:#ffffffcc;border-radius:12px;padding:5px 10px;}
-.bb-pads{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;width:100%;}
-.bb-padwrap{display:flex;flex-direction:column;align-items:center;gap:4px;}
-.bb-padname{font-size:11.5px;font-weight:900;}
-.bb-pad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:4px;}
-.bb-pad button{border:none;border-radius:11px;width:40px;height:40px;font-size:16px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;}
-.bb-pad .bb-slot{visibility:hidden;}
-.bb-pad--p0 button{background:linear-gradient(180deg,#f79ac0,#e8558f);box-shadow:0 3px 0 #bf3a70;}
-.bb-pad--p1 button{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 3px 0 #2f63aa;}
-.bb-pad button:active{transform:translateY(2px);}
-.bb-pad button:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
-.bb-acts{display:flex;gap:5px;}
-.bb-acts button{border:none;border-radius:11px;height:34px;padding:0 11px;font-size:12.5px;font-weight:900;
-  cursor:pointer;font-family:inherit;color:#fff;}
-.bb-acts button:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
-.bb-acts--p0 button{background:linear-gradient(180deg,#f79ac0,#e8558f);box-shadow:0 3px 0 #bf3a70;}
-.bb-acts--p1 button{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 3px 0 #2f63aa;}
-.bb-acts button:active{transform:translateY(2px);}
-.bb-veil{position:absolute;inset:0;background:rgba(255,252,255,.94);border-radius:16px;z-index:6;display:flex;
+.bmb-pads{display:flex;justify-content:center;align-items:flex-start;gap:10px;width:100%;}
+.bmb-padwrap{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.bmb-padname{font-size:12px;font-weight:900;}
+.bmb-pad{display:flex;align-items:center;gap:6px;}
+/* 摇杆:整块底盘就是热区,按下去哪边就往哪边走,拖着不放可以一路改方向 */
+.bmb-stick{position:relative;width:${STICK_PX}px;height:${STICK_PX}px;border-radius:50%;flex:0 0 auto;
+  background:radial-gradient(circle at 50% 42%,#ffffff,#e9e4f7);box-shadow:inset 0 2px 7px rgba(90,75,140,.22),0 3px 0 rgba(120,105,170,.3);
+  touch-action:none;cursor:pointer;}
+.bmb-stick:focus-visible{outline:3px solid #ffb43c;outline-offset:3px;}
+.bmb-stick::before{content:"↑ ↓ ← →";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;color:#b3a8d4;letter-spacing:1px;}
+.bmb-knob{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;
+  box-shadow:0 2px 6px rgba(90,75,140,.35);transition:transform .06s linear;pointer-events:none;}
+.bmb-stick--p0 .bmb-knob{background:linear-gradient(180deg,#f79ac0,#e8558f);}
+.bmb-stick--p1 .bmb-knob{background:linear-gradient(180deg,#8db6ec,#3f7fd6);}
+.bmb-acts{display:flex;flex-direction:column;gap:5px;}
+.bmb-act{border:none;border-radius:13px;width:${ACT_PX}px;height:${ACT_PX}px;font-size:11px;font-weight:900;
+  line-height:1.15;cursor:pointer;font-family:inherit;color:#fff;padding:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;}
+.bmb-act b{font-size:17px;font-weight:400;}
+.bmb-act:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
+.bmb-act:active{transform:translateY(2px);}
+.bmb-acts--p0 .bmb-act{background:linear-gradient(180deg,#f79ac0,#e8558f);box-shadow:0 3px 0 #bf3a70;}
+.bmb-acts--p1 .bmb-act{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 3px 0 #2f63aa;}
+.bmb-veil{position:absolute;inset:0;background:rgba(255,252,255,.94);border-radius:16px;z-index:6;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:16px;}
-.bb-veil-t{font-size:20px;font-weight:900;color:#6a4fa8;}
-.bb-veil-s{font-size:13.5px;font-weight:700;color:#6f6390;line-height:1.6;max-width:320px;}
-.bb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.bb-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
+.bmb-veil-t{font-size:20px;font-weight:900;color:#6a4fa8;}
+.bmb-veil-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;max-width:320px;}
+.bmb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.bmb-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#f2f5ff,#fff3f8);display:flex;flex-direction:column;gap:8px;}
-.bb-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-.bb-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
+.bmb-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.bmb-back{border:none;border-radius:999px;min-height:44px;padding:6px 14px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
-.bb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
-.bb-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
-.bb-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
+.bmb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
+.bmb-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
+.bmb-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
-.bb-bar[hidden],.bb-picks[hidden]{display:none;}
-.bb-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
+.bmb-bar[hidden],.bmb-picks[hidden]{display:none;}
+.bmb-open{border:none;border-radius:999px;min-height:44px;padding:8px 15px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
-.bb-open:active{transform:translateY(2px);box-shadow:0 2px 0 #57429f;}
-.bb-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
-.bb-open--vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
-.bb-open--ai{background:linear-gradient(180deg,#6fbfa8,#4c9d86);box-shadow:0 4px 0 #3b7c69;}
-.bb-open--co{background:linear-gradient(180deg,#efb268,#d8913f);box-shadow:0 4px 0 #ab7031;}
-.bb-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
-.bb-pick{border:none;border-radius:14px;padding:7px 13px;font-size:13px;font-weight:900;cursor:pointer;
+.bmb-open:active{transform:translateY(2px);box-shadow:0 2px 0 #57429f;}
+.bmb-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
+.bmb-open--vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
+.bmb-open--ai{background:linear-gradient(180deg,#6fbfa8,#4c9d86);box-shadow:0 4px 0 #3b7c69;}
+.bmb-open--co{background:linear-gradient(180deg,#efb268,#d8913f);box-shadow:0 4px 0 #ab7031;}
+.bmb-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.bmb-pick{border:none;border-radius:14px;min-height:44px;padding:7px 14px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.35);}
-.bb-pick[aria-pressed="true"]{background:linear-gradient(180deg,#8f7ae0,#6f57c8);color:#fff;box-shadow:0 3px 0 #57429f;}
-.bb-pick:active{transform:translateY(2px);}
-.bb-pick:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
-.bb-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
-@media (max-width:420px){
-  .bb-pad button{width:36px;height:36px;font-size:14px;}
-  .bb-acts button{height:31px;padding:0 9px;font-size:11.5px;}
-  .bb-chip{font-size:11.5px;padding:3px 8px;}
-  .bb-pads{gap:8px;}
+.bmb-pick[aria-pressed="true"]{background:linear-gradient(180deg,#8f7ae0,#6f57c8);color:#fff;box-shadow:0 3px 0 #57429f;}
+.bmb-pick:active{transform:translateY(2px);}
+.bmb-pick:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
+.bmb-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+/* 360px 宽的手机:两套摇杆挤一行(156×2 + 10 = 322),中缝再收紧一点当保险。
+   热区一个都不许缩 —— 宁可字小一号,不能让按钮小于 44。 */
+@media (max-width:400px){
+  .bmb-pads{gap:6px;}
+  .bmb-tip{font-size:13px;padding:4px 8px;}
+  .bmb-chip{font-size:13px;padding:3px 8px;}
 }
 /* 手机竖屏一共就 667 像素高,棋盘上面还压着标题栏和选关条。
-   这里把每一行都收一点,保证方向盘整块留在首屏里,不用一边滚屏一边躲炸弹。 */
+   这里把行距收一点,保证摇杆整块留在首屏里,不用一边滚屏一边躲彩虹波。 */
 @media (max-height:720px){
-  .bb-wrap{gap:5px;}
-  .bb-chip{font-size:11px;padding:2px 7px;}
-  .bb-btn{padding:5px 11px;font-size:12px;}
-  .bb-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
-  .bb-padname{font-size:10.5px;}
-  .bb-pad{gap:3px;}
-  .bb-pad button{width:34px;height:34px;font-size:14px;}
-  .bb-acts button{height:29px;padding:0 8px;font-size:11px;}
-  /* 只有一个人玩的时候,放弹/引爆挪到方向盘右边,又省下一行的高度 */
-  .bb-pads--one .bb-padwrap{display:grid;grid-template-columns:auto auto;grid-template-areas:"name name" "pad acts";
-    align-items:center;column-gap:8px;}
-  .bb-pads--one .bb-padname{grid-area:name;}
-  .bb-pads--one .bb-pad{grid-area:pad;}
-  .bb-pads--one .bb-acts{grid-area:acts;flex-direction:column;}
+  .bmb-wrap{gap:4px;}
+  .bmb-padname{font-size:11px;}
+  /* 只有一个人玩的时候名字挪到摇杆左边,又省下一行的高度 */
+  .bmb-pads--one .bmb-padwrap{flex-direction:row;align-items:center;gap:6px;}
 }
 @media (prefers-reduced-motion:reduce){
-  .bb-btn:active,.bb-pad button:active,.bb-acts button:active,.bb-pick:active{transform:none;}
+  .bmb-btn:active,.bmb-act:active,.bmb-pick:active{transform:none;}
+  .bmb-knob{transition:none;}
+  .bmb-chip--save{animation:none;}
 }
 `;
 
-let cssInjected = false;
+const STYLE_ID = "bmb-style";
+
 function ensureCss(host: HTMLElement): void {
-  if (cssInjected && document.getElementById("bb-style")) return;
+  if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
-  style.id = "bb-style";
+  style.id = STYLE_ID;
   style.textContent = CSS;
   (document.head ?? host).appendChild(style);
-  cssInjected = true;
 }
 
 function el(tag: string, cls?: string, text?: string): HTMLElement {
@@ -218,10 +288,14 @@ const PALETTES: Palette[] = [
   { bg: "#f0ecfa", floor: "#fdfcff", line: "#e7e1f4", wall: "#9280c2", wallTop: "#ac9bd6", brick: "#e3bfa2", brickTop: "#f7dcc4" },
 ];
 
-const FLAME_CORE = "#ffe9a8";
-const FLAME_EDGE = "#ff9fbe";
-const BOMB_BODY = "#5c5580";
-const BOMB_SHINE = "#8d86ad";
+// 彩虹波:一圈圈软色的波纹,不是火。核心偏白、边缘走七彩,越淡越像肥皂泡的膜。
+const WAVE_CORE = "#ffffff";
+const WAVE_RING = ["#ffd7e6", "#ffe9b8", "#d6f5cf", "#cdeafc", "#ded6fb"];
+/** 泡泡本体:半透明的蓝白,和地板拉得开 */
+const BUBBLE_SKIN = "#bfe6f7";
+const BUBBLE_SHINE = "#ffffff";
+/** 砖被波及散开的小花 */
+const FLOWER_EMOJI = ["🌸", "🌼", "🌺", "💠"];
 
 // ---------------------------------------------------------------------------
 // 一场对局
@@ -234,11 +308,31 @@ export interface MatchResult {
   reason: "clear" | "time" | "bubble" | "escape";
   secondsLeft: number;
   totalSeconds: number;
-  /** 1 号玩家(或合作双方合计)被包了几次 */
+  /** 1 号玩家(或合作双方合计)被罩了几次 */
   bubbled: number;
   picked: number;
+  /** 合作:一共互相救出来几次 */
+  saves: number;
   /** 对战:赢家下标;其它模式 -1 */
   winner: number;
+  /** 1 号玩家收工时手上的家当(泡泡塔靠它把道具带上楼) */
+  carry: Carry;
+}
+
+/** 一层结束时带走的家当 */
+export type Carry = Pick<Fighter, "power" | "bombs" | "speed" | "kick" | "ghost" | "remote" | "shield">;
+
+/** 这一层结束时手上剩什么,原样交给下一层 */
+export function carryOf(f: Fighter): Carry {
+  return {
+    power: f.power,
+    bombs: f.bombs,
+    speed: f.speed,
+    kick: f.kick,
+    ghost: f.ghost,
+    remote: f.remote,
+    shield: f.shield,
+  };
 }
 
 export interface MatchOpts {
@@ -252,8 +346,12 @@ export interface MatchOpts {
   tip: string;
   sfx: (name: SoundName) => void;
   onDone: (res: MatchResult) => void;
-  /** 无尽模式的轮次(>0 时场地会收缩) */
+  /** 队友把人拍出来了:合作模式当场发一颗小星星 */
+  onRescue?: (by: number) => void;
+  /** 老无尽轮次(>0 时场地会一圈圈收缩);泡泡塔不用它 */
   shrinkRound?: number;
+  /** 上一层带上来的家当(泡泡塔用:爬楼不清空道具) */
+  carry?: Carry;
 }
 
 interface Runner {
@@ -284,6 +382,7 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const spawn = lv.spawns[i] ?? lv.spawns[0];
     const f = makeFighter(i, P_NAME[i], P_EMOJI[i], spawn, coop ? 0 : i);
     for (const item of lv.starters) applyItem(f, item);
+    if (i === 0 && opts.carry) Object.assign(f, opts.carry);
     fighters.push(f);
   }
   for (const seat of opts.ai ?? []) {
@@ -300,31 +399,42 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     exitNeedsClear: true,
     goal: lv.goal,
     pierce: lv.pierce,
+    // 合作模式才开救援:一个人玩的时候没人来拍,把困住时间从 3.6 秒改成 5 秒纯属添堵
+    rescue: coop && opts.humans >= 2,
     limit: lv.seconds > 0 ? lv.seconds * 1000 : 0,
     seed: lv.seed,
     richness: lv.richness,
+    pool: lv.pool,
   });
 
   const views: FighterView[] = fighters.map((f) => ({ rx: xOf(board, f.pos), ry: yOf(board, f.pos), hop: 0 }));
 
+  /** 砖被彩虹波扫到时散出来的小花(纯装饰,不参与判定) */
+  const petals: { x: number; y: number; dx: number; life: number; emoji: string }[] = [];
+
   // ---- DOM -----------------------------------------------------------------
-  const wrap = el("div", "bb-wrap");
-  const hud = el("div", "bb-hud");
-  const chipTime = el("span", "bb-chip");
-  const chipGoal = el("span", "bb-chip");
+  const wrap = el("div", "bmb-wrap");
+  const hud = el("div", "bmb-hud");
+  const chipTime = el("span", "bmb-chip");
+  const chipGoal = el("span", "bmb-chip");
   const chipStats: HTMLElement[] = [];
-  for (let i = 0; i < seats; i++) chipStats.push(el("span", `bb-chip bb-chip-p${i}`));
-  const pauseBtn = el("button", "bb-btn bb-btn--ghost", "⏸ 暂停") as HTMLButtonElement;
+  for (let i = 0; i < seats; i++) chipStats.push(el("span", `bmb-chip bmb-chip-p${i}`));
+  const pauseBtn = el("button", "bmb-btn bmb-btn--ghost", "⏸ 暂停") as HTMLButtonElement;
   pauseBtn.type = "button";
   hud.append(chipTime, chipGoal, ...chipStats, pauseBtn);
 
-  const boardBox = el("div", "bb-board");
+  const boardBox = el("div", "bmb-board");
   const canvas = document.createElement("canvas");
   boardBox.appendChild(canvas);
 
-  const tip = el("div", "bb-tip", opts.tip);
-  const pads = el("div", "bb-pads");
-  const live = el("div", "bb-sr");
+  // 合作模式的救援提示:队友被罩住时才亮,平时藏起来不占地方
+  const chipRescue = el("span", "bmb-chip bmb-chip--save");
+  chipRescue.hidden = true;
+  hud.appendChild(chipRescue);
+
+  const tip = el("div", "bmb-tip", opts.tip);
+  const pads = el("div", "bmb-pads");
+  const live = el("div", "bmb-sr");
   live.setAttribute("role", "status");
   live.setAttribute("aria-live", "polite");
 
@@ -336,11 +446,14 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   // ---- 输入 ----------------------------------------------------------------
   const held: boolean[][] = [];
   const recent: number[][] = [];
-  const pending: { drop: boolean; boom: boolean }[] = [];
+  const pending: { drop: boolean; boom: boolean; kick: boolean }[] = [];
+  /** 摇杆推出来的方向(和键盘各走各的,松手就归 -1) */
+  const stickDirs: number[] = [];
   for (let i = 0; i < seats; i++) {
     held.push([false, false, false, false]);
     recent.push([]);
-    pending.push({ drop: false, boom: false });
+    pending.push({ drop: false, boom: false, kick: false });
+    stickDirs.push(DIR_NONE);
   }
 
   function humanSeat(player: number): number {
@@ -363,51 +476,57 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     if (!down) return;
     if (action === "drop") pending[seat].drop = true;
     if (action === "boom") pending[seat].boom = true;
+    if (action === "kick") pending[seat].kick = true;
   }
 
   const padButtons: { btn: HTMLButtonElement; seat: number; action: InputName }[] = [];
+  const sticks: { el: HTMLElement; knob: HTMLElement; seat: number; pointer: number }[] = [];
+
+  /** 三颗动作钮:放泡 / 踢泡 / 遥控拍破。46×46,竖着排在摇杆右边,谁也不压谁。 */
+  const ACT_BUTTONS: { action: InputName; icon: string; word: string; aria: string }[] = [
+    { action: "drop", icon: "🫧", word: "放泡", aria: "放一个泡泡" },
+    { action: "kick", icon: "🦵", word: "踢泡", aria: "把脚边的泡泡踢出去" },
+    { action: "boom", icon: "📡", word: "拍破", aria: "遥控把自己的泡泡拍破" },
+  ];
 
   function buildPad(seat: number): void {
-    const box = el("div", "bb-padwrap");
-    const name = el("div", "bb-padname", `${P_EMOJI[seat]} ${P_NAME[seat]}`);
+    const box = el("div", "bmb-padwrap");
+    const name = el("div", "bmb-padname", `${P_EMOJI[seat]} ${P_NAME[seat]}`);
     name.style.color = P_COLOR[seat];
-    const pad = el("div", `bb-pad bb-pad--p${seat}`);
-    const layout: Array<InputName | null> = [null, "up", null, "left", null, "right", null, "down", null];
-    for (const slot of layout) {
+
+    const pad = el("div", "bmb-pad");
+    const stick = el("div", `bmb-stick bmb-stick--p${seat}`);
+    stick.tabIndex = 0;
+    stick.setAttribute("role", "group");
+    stick.setAttribute(
+      "aria-label",
+      `${P_NAME[seat]}的摇杆:按住往哪边推就往哪边走,也可以用${seat === 0 ? " W A S D " : "方向"}键`
+    );
+    const knob = el("span", "bmb-knob");
+    stick.appendChild(knob);
+    sticks.push({ el: stick, knob, seat, pointer: -1 });
+
+    const acts = el("div", `bmb-acts bmb-acts--p${seat}`);
+    for (const act of ACT_BUTTONS) {
       const btn = document.createElement("button");
       btn.type = "button";
-      if (!slot) {
-        btn.className = "bb-slot";
-        btn.tabIndex = -1;
-        btn.setAttribute("aria-hidden", "true");
-        pad.appendChild(btn);
-        continue;
-      }
-      btn.textContent = slot === "up" ? "↑" : slot === "down" ? "↓" : slot === "left" ? "←" : "→";
-      btn.setAttribute("aria-label", `${P_NAME[seat]}向${slot === "up" ? "上" : slot === "down" ? "下" : slot === "left" ? "左" : "右"}走`);
-      pad.appendChild(btn);
-      padButtons.push({ btn, seat, action: slot });
-    }
-    const acts = el("div", `bb-acts bb-acts--p${seat}`);
-    for (const act of [
-      { action: "drop" as InputName, label: "💣 放弹" },
-      { action: "boom" as InputName, label: "📡 引爆" },
-    ]) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = act.label;
-      btn.setAttribute("aria-label", `${P_NAME[seat]}${act.action === "drop" ? "放炸弹" : "遥控引爆"}`);
+      btn.className = "bmb-act";
+      const icon = el("b", undefined, act.icon);
+      btn.append(icon, el("span", undefined, act.word));
+      btn.setAttribute("aria-label", `${P_NAME[seat]}${act.aria}`);
       acts.appendChild(btn);
       padButtons.push({ btn, seat, action: act.action });
     }
-    box.append(name, pad, acts);
+
+    pad.append(stick, acts);
+    box.append(name, pad);
     pads.appendChild(box);
   }
 
   for (let i = 0; i < seats; i++) {
     if (!fighters[i].ai) buildPad(i);
   }
-  pads.classList.add(pads.childElementCount > 1 ? "bb-pads--two" : "bb-pads--one");
+  pads.classList.add(pads.childElementCount > 1 ? "bmb-pads--two" : "bmb-pads--one");
 
   for (const { btn, seat, action } of padButtons) {
     btn.addEventListener("pointerdown", (e) => {
@@ -420,11 +539,57 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     btn.addEventListener("pointerleave", up);
   }
 
+  /** 手指位置 → 这一格摇杆的方向,同时把小圆点挪过去让人看见自己推到哪了 */
+  function aimStick(s: { el: HTMLElement; knob: HTMLElement; seat: number }, e: PointerEvent): void {
+    const rect = s.el.getBoundingClientRect();
+    const dx = e.clientX - (rect.left + rect.width / 2);
+    const dy = e.clientY - (rect.top + rect.height / 2);
+    const dir = stickDir(dx, dy);
+    stickDirs[s.seat] = dir;
+    const shift = rect.width * 0.22;
+    const kx = dir === DIR_LEFT ? -shift : dir === DIR_RIGHT ? shift : 0;
+    const ky = dir === DIR_UP ? -shift : dir === DIR_DOWN ? shift : 0;
+    s.knob.style.transform = `translate(${kx.toFixed(1)}px,${ky.toFixed(1)}px)`;
+  }
+
+  function dropStick(s: { knob: HTMLElement; seat: number; pointer: number }): void {
+    s.pointer = -1;
+    stickDirs[s.seat] = DIR_NONE;
+    s.knob.style.transform = "translate(0px,0px)";
+  }
+
+  for (const s of sticks) {
+    s.el.addEventListener("pointerdown", (e) => {
+      const pe = e as PointerEvent;
+      pe.preventDefault();
+      s.pointer = pe.pointerId ?? 0;
+      // 抓住这根手指:滑出底盘也还归这根摇杆管,两个人的手指不会串台
+      (s.el as HTMLElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(s.pointer);
+      aimStick(s, pe);
+    });
+    s.el.addEventListener("pointermove", (e) => {
+      const pe = e as PointerEvent;
+      if (s.pointer < 0 || (pe.pointerId ?? 0) !== s.pointer) return;
+      pe.preventDefault();
+      aimStick(s, pe);
+    });
+    const release = (e: Event): void => {
+      const pe = e as PointerEvent;
+      if (s.pointer >= 0 && (pe.pointerId ?? 0) !== s.pointer) return;
+      dropStick(s);
+    };
+    s.el.addEventListener("pointerup", release);
+    s.el.addEventListener("pointercancel", release);
+    s.el.addEventListener("lostpointercapture", release);
+  }
+
   const releaseAll = (): void => {
     for (let i = 0; i < seats; i++) {
       held[i] = [false, false, false, false];
       recent[i] = [];
+      stickDirs[i] = DIR_NONE;
     }
+    for (const s of sticks) dropStick(s);
   };
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -453,13 +618,15 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   let cell = 30;
 
   function layout(): void {
-    const avail = Math.max(220, Math.min(host.clientWidth || 340, 620));
+    const wide = (globalThis as { innerWidth?: number }).innerWidth ?? 400;
+    const avail = Math.max(MIN_CELL_PX * board.w, Math.min(host.clientWidth || wide, 620));
     const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
-    // 手机竖屏(667 那一档)要给下面两套方向盘留位置,棋盘就得矮一点,
-    // 不然孩子得一边滚屏一边按方向键。大屏上再放开限制。
-    const share = viewH <= 560 ? 0.42 : viewH <= 720 ? 0.3 : 0.46;
-    const maxH = Math.max(150, Math.min(400, viewH * share));
-    cell = Math.max(14, Math.floor(Math.min(avail / board.w, maxH / board.h)));
+    // 竖屏上棋盘之外还压着:标题栏 + HUD + 提示 + 摇杆那一排。
+    // 剩下的高度给棋盘,但**不允许**把格子压到 24px 以下 —— 宁可这一屏要滑一点,
+    // 也不能让孩子看不清脚下那格是砖还是泡泡(地图本身已经封在 15×15,正常都放得下)。
+    const chrome = viewH <= 720 ? 250 : 220;
+    const maxH = Math.max(MIN_CELL_PX * board.h, viewH - chrome);
+    cell = boardCellSize(board.w, board.h, avail, maxH);
     const cssW = cell * board.w;
     const cssH = cell * board.h;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1);
@@ -541,11 +708,11 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         } else if (world.exitOpen && cellIdx === world.exit) {
           emojiAt("🚪", px + cell / 2, py + cell / 2, cell * 0.66);
         }
-        // 快要着火的格子给一圈提示,让孩子来得及跑
+        // 马上要被彩虹波扫到的格子描一圈,越近越亮,让孩子来得及跑开
         const burn = timing.get(cellIdx);
         if (burn !== undefined && !world.flames.has(cellIdx)) {
-          const heat = Math.max(0, Math.min(1, 1 - burn / FUSE_MS));
-          g.strokeStyle = `rgba(255,150,120,${0.15 + heat * 0.5})`;
+          const near = Math.max(0, Math.min(1, 1 - burn / FUSE_MS));
+          g.strokeStyle = `rgba(255,150,190,${0.15 + near * 0.55})`;
           g.lineWidth = Math.max(1.5, cell * 0.06);
           roundRect(px + 2, py + 2, cell - 4, cell - 4, Math.max(3, cell * 0.2));
           g.stroke();
@@ -563,41 +730,72 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       emojiAt(ITEM_INFO[kind].emoji, px + cell / 2, py + cell / 2 + 1, cell * 0.48);
     }
 
-    // 炸弹
+    // 泡泡:0.4 秒鼓起来 → 晃悠悠 → 最后一段绷紧发亮,三段看得出区别
     for (const bomb of world.bombs) {
       const px = (bomb.pos % board.w) * cell;
       const py = Math.floor(bomb.pos / board.w) * cell;
-      const beat = bomb.remote ? 0.9 : 0.86 + 0.1 * Math.sin((FUSE_MS - bomb.fuse) / 90);
-      const r = (cell * 0.34) * beat;
-      g.fillStyle = BOMB_BODY;
+      const grow = growProgress(bomb.fuse, bomb.remote);
+      const stage = bubbleStage(bomb.fuse, bomb.remote);
+      // 膨胀段从 0.3 倍长到 1 倍;之后轻轻晃;快破的时候绷大一点点
+      const beat =
+        stage === "grow"
+          ? 0.3 + grow * 0.7
+          : stage === "burst"
+            ? 1.06 + 0.06 * Math.sin((FUSE_MS - bomb.fuse) / 45)
+            : 0.94 + 0.05 * Math.sin((FUSE_MS - bomb.fuse) / 150);
+      const r = cell * 0.36 * beat;
+      const cx = px + cell / 2;
+      const cy = py + cell / 2;
+      g.globalAlpha = 0.9;
+      g.fillStyle = BUBBLE_SKIN;
       g.beginPath();
-      g.arc(px + cell / 2, py + cell / 2 + cell * 0.04, r, 0, Math.PI * 2);
+      g.arc(cx, cy, r, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = BOMB_SHINE;
+      g.globalAlpha = 1;
+      // 膜:遥控泡泡镶一圈青色,连锁被点着的镶一圈粉色,一眼看出这颗为什么要破
+      g.strokeStyle = bomb.remote ? "#4fc4b4" : bomb.chained ? "#f18cb4" : stage === "burst" ? "#ff9ec2" : "#8fd6f5";
+      g.lineWidth = Math.max(1.5, cell * (stage === "burst" ? 0.09 : 0.06));
       g.beginPath();
-      g.arc(px + cell / 2 - r * 0.32, py + cell / 2 - r * 0.3, r * 0.26, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = bomb.remote ? "#6fd0c4" : "#ffb35c";
-      g.lineWidth = Math.max(1.5, cell * 0.07);
-      g.beginPath();
-      g.moveTo(px + cell / 2 + r * 0.4, py + cell / 2 - r * 0.7);
-      g.quadraticCurveTo(px + cell / 2 + r, py + cell / 2 - r * 1.3, px + cell / 2 + r * 0.3, py + cell / 2 - r * 1.5);
+      g.arc(cx, cy, r, 0, Math.PI * 2);
       g.stroke();
+      g.fillStyle = BUBBLE_SHINE;
+      g.globalAlpha = 0.9;
+      g.beginPath();
+      g.arc(cx - r * 0.34, cy - r * 0.34, r * 0.22, 0, Math.PI * 2);
+      g.fill();
+      g.globalAlpha = 1;
+      // 最后一秒在泡泡上写倒数,孩子能读着数字跑
+      if (!bomb.remote && bomb.fuse <= 1000) {
+        g.fillStyle = "#6a4fa8";
+        g.font = `900 ${Math.round(cell * 0.34)}px system-ui, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText(`${Math.max(1, Math.ceil(bomb.fuse / 1000))}`, cx, cy);
+      }
     }
 
-    // 爆风
+    // 彩虹波:一圈圈化开的软色波纹(不是火,没有热度)
     for (const [cellIdx, left] of world.flames) {
       const px = (cellIdx % board.w) * cell;
       const py = Math.floor(cellIdx / board.w) * cell;
-      const k = Math.max(0.25, left / FLAME_MS);
-      g.globalAlpha = 0.35 + k * 0.5;
-      g.fillStyle = FLAME_EDGE;
-      roundRect(px + 1, py + 1, cell - 2, cell - 2, cell * 0.3);
+      const k = Math.max(0, Math.min(1, left / FLAME_MS));
+      g.globalAlpha = 0.25 + k * 0.5;
+      g.fillStyle = WAVE_RING[cellIdx % WAVE_RING.length];
+      roundRect(px + 1, py + 1, cell - 2, cell - 2, cell * 0.34);
       g.fill();
-      g.fillStyle = FLAME_CORE;
-      const inset = cell * (0.22 - k * 0.08);
-      roundRect(px + inset, py + inset, cell - inset * 2, cell - inset * 2, cell * 0.28);
+      g.fillStyle = WAVE_CORE;
+      // 波纹从中心往外化开:刚扫过时是一小团,散掉之前铺满整格
+      const inset = cell * (0.06 + k * 0.24);
+      roundRect(px + inset, py + inset, cell - inset * 2, cell - inset * 2, cell * 0.3);
       g.fill();
+      g.globalAlpha = 1;
+    }
+
+    // 砖变成小花散开:每一朵活 FLAME_MS,边飘边淡
+    for (const p of petals) {
+      const age = Math.max(0, Math.min(1, 1 - p.life / FLAME_MS));
+      g.globalAlpha = 1 - age;
+      emojiAt(p.emoji, p.x * cell + cell / 2 + p.dx * age * cell, p.y * cell + cell / 2 - age * cell * 0.6, cell * 0.42);
       g.globalAlpha = 1;
     }
 
@@ -643,6 +841,16 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       g.arc(cx + r * 0.32, cy - r * 0.16, r * 0.1, 0, Math.PI * 2);
       g.fill();
       emojiAt(f.emoji, cx, cy - r * 1.15, cell * 0.34);
+      // 护盾:头上顶几个小圈就是还剩几层
+      if (f.shield > 0 && f.bubbleT <= 0) {
+        g.strokeStyle = "#ffc95e";
+        g.lineWidth = Math.max(1.5, cell * 0.05);
+        for (let s = 0; s < f.shield; s++) {
+          g.beginPath();
+          g.arc(cx, cy, r * (1.18 + s * 0.2), 0, Math.PI * 2);
+          g.stroke();
+        }
+      }
       if (f.bubbleT > 0) {
         g.strokeStyle = "#8fd6f5";
         g.lineWidth = Math.max(2, cell * 0.08);
@@ -653,6 +861,15 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         g.fillStyle = "rgba(180,230,250,.35)";
         g.fill();
         g.globalAlpha = 1;
+        // 合作模式:队友贴上来拍的时候,泡泡外面转一圈进度弧
+        if (world.rescue && f.rescueT > 0) {
+          const k = Math.min(1, f.rescueT / RESCUE_TOUCH_MS);
+          g.strokeStyle = "#ffb43c";
+          g.lineWidth = Math.max(2.5, cell * 0.1);
+          g.beginPath();
+          g.arc(cx, cy, r * 1.72, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k);
+          g.stroke();
+        }
       }
       if (f.ai) {
         g.fillStyle = "#4a4266";
@@ -678,9 +895,35 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       chipGoal.textContent = `👾 剩 ${world.critters.length} 只`;
     }
     fighters.forEach((f, i) => {
-      const gear = `${f.kick ? "🦵" : ""}${f.ghost ? "🫧" : ""}${f.remote ? "📡" : ""}`;
-      chipStats[i].textContent = `${f.emoji}${f.name} 🔥${f.power} 💣${f.bombs} 👟${f.speed}${gear ? ` ${gear}` : ""}`;
+      const gear = `${f.kick ? "🦵" : ""}${f.ghost ? "✨" : ""}${f.remote ? "📡" : ""}${f.shield > 0 ? `🛡${f.shield}` : ""}`;
+      chipStats[i].textContent = `${f.emoji}${f.name} 🌈${f.power} 🫧${f.bombs} 👟${f.speed}${gear ? ` ${gear}` : ""}`;
     });
+    refreshRescueChip();
+  }
+
+  /**
+   * 救援提示条。
+   *
+   * 合作模式下队友被罩住时,另一个人常常根本没注意到——屏幕上两个小人都在动,
+   * 谁被罩了并不显眼。这里直接把话说出来:还剩几秒、快过去拍。
+   * 已经贴上去了就换成「拍拍拍」,让人知道按住不动就行、不用乱跑。
+   */
+  function refreshRescueChip(): void {
+    if (!world.rescue) {
+      chipRescue.hidden = true;
+      return;
+    }
+    const stuck = fighters.find((f) => f.bubbleT > 0);
+    if (!stuck) {
+      chipRescue.hidden = true;
+      return;
+    }
+    chipRescue.hidden = false;
+    const left = Math.max(1, Math.ceil(stuck.bubbleT / 1000));
+    chipRescue.textContent =
+      rescuerFor(world, stuck.index) >= 0
+        ? `🫧 拍拍拍!马上就把${stuck.name}放出来`
+        : `🆘 ${stuck.name}困在泡泡里 · 还有 ${left} 秒 · 快贴过去拍`;
   }
 
   // ---- 遮罩 ----------------------------------------------------------------
@@ -695,13 +938,13 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
 
   function showVeil(title: string, sub: string, buttons: { label: string; ghost?: boolean; onClick: () => void }[]): void {
     clearVeil();
-    const box = el("div", "bb-veil");
-    box.append(el("div", "bb-veil-t", title), el("div", "bb-veil-s", sub));
-    const row = el("div", "bb-veil-btns");
+    const box = el("div", "bmb-veil");
+    box.append(el("div", "bmb-veil-t", title), el("div", "bmb-veil-s", sub));
+    const row = el("div", "bmb-veil-btns");
     for (const b of buttons) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `bb-btn${b.ghost ? " bb-btn--ghost" : ""}`;
+      btn.className = `bmb-btn${b.ghost ? " bmb-btn--ghost" : ""}`;
       btn.textContent = b.label;
       btn.addEventListener("click", () => {
         opts.sfx("tap");
@@ -720,7 +963,7 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     pauseBtn.textContent = paused ? "▶ 继续" : "⏸ 暂停";
     if (paused) {
       releaseAll();
-      showVeil("⏸ 休息一下", "按 Esc 或点「继续」回到对局。朵朵用 WASD 走、F 放弹、G 引爆;星星用方向键走、L 放弹、K 引爆。", [
+      showVeil("⏸ 休息一下", `按 Esc 或点「继续」回到对局。${KEY_HELP}`, [
         { label: "▶ 继续", onClick: () => togglePause() },
       ]);
     } else {
@@ -737,24 +980,58 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   let toast = "";
   let toastUntil = 0;
 
+  function say(line: string, now: number, ms = 1800): void {
+    toast = line;
+    toastUntil = now + ms;
+    live.textContent = line;
+  }
+
   function consumeEvents(now: number): void {
     for (const e of world.events) {
       switch (e.kind) {
         case "boom":
+          // 一串连锁一帧里可能来好几条,90ms 内只响一声,不然像撒豆子
           if (now - lastBoom > 90) {
             opts.sfx("pop");
             lastBoom = now;
           }
           break;
+        case "brick": {
+          // 砖变成小花散开:每块砖散两朵,一左一右
+          const x = e.cell % board.w;
+          const y = Math.floor(e.cell / board.w);
+          for (let k = 0; k < 2; k++) {
+            petals.push({
+              x,
+              y,
+              dx: k === 0 ? -0.42 : 0.42,
+              life: FLAME_MS,
+              emoji: FLOWER_EMOJI[(e.cell + k) % FLOWER_EMOJI.length],
+            });
+          }
+          break;
+        }
         case "pickup":
           opts.sfx("coin");
-          toast = `${fighters[e.who].name} 捡到 ${ITEM_INFO[e.item].name}:${ITEM_INFO[e.item].line}`;
-          toastUntil = now + 1800;
+          say(`${fighters[e.who].name} 捡到 ${ITEM_INFO[e.item].name}:${ITEM_INFO[e.item].line}`, now);
           break;
         case "bubble":
           opts.sfx("oops");
-          toast = `${fighters[e.who].name} 被泡泡包住啦,${Math.round(BUBBLE_MS / 1000)} 秒后自己就出来。`;
-          toastUntil = now + 1800;
+          say(
+            world.rescue
+              ? `${fighters[e.who].name} 困在泡泡里啦!队友快贴过去拍破它,${Math.round(RESCUE_MS / 1000)} 秒内都来得及。`
+              : `${fighters[e.who].name} 被泡泡罩住啦,${Math.round(BUBBLE_MS / 1000)} 秒后自己晃出来。`,
+            now
+          );
+          break;
+        case "shield":
+          opts.sfx("tap");
+          say(`🛡 护盾替${fighters[e.who].name}挡了一下!还剩 ${e.left} 层。`, now, 1500);
+          break;
+        case "rescue":
+          opts.sfx("win");
+          say(`🤝 ${fighters[e.by].name}把${fighters[e.who].name}拍出来了!救人加一颗小星星。`, now, 2200);
+          opts.onRescue?.(e.by);
           break;
         case "critter":
           if (e.done) opts.sfx("meow");
@@ -763,7 +1040,6 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
           opts.sfx("jump");
           break;
         case "free":
-        case "brick":
           break;
       }
     }
@@ -793,8 +1069,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     ring++;
     shrinkAt = world.time + shrinkDelay(opts.shrinkRound ?? 1);
     opts.sfx("tap");
-    toast = "场地缩小了!快往中间靠。";
+    toast = "楼板往里收了!快往中间靠。";
     toastUntil = performance.now() + 1600;
+    live.textContent = toast;
   }
 
   // ---- 主循环 ---------------------------------------------------------------
@@ -812,20 +1089,22 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         aiCooldown[i] -= dt;
         const skill = opts.ai?.find((a) => a.index === i)?.skill ?? 2;
         if (aiCooldown[i] > 0) {
-          out.push({ dir: aiLastDir[i], drop: false, detonate: false });
+          out.push({ dir: aiLastDir[i], drop: false, detonate: false, kick: false });
           continue;
         }
         // 档位越低想得越慢,给孩子留出反应时间
         aiCooldown[i] = skill === 1 ? 260 : skill === 2 ? 150 : 70;
         const act = chooseAiAction(world, i, skill, aiTick++);
         aiLastDir[i] = act.dir;
-        out.push({ dir: act.dir, drop: act.drop, detonate: act.detonate });
+        out.push({ dir: act.dir, drop: act.drop, detonate: act.detonate, kick: false });
         continue;
       }
-      const dir = pickDir(held[i], recent[i]);
-      out.push({ dir, drop: pending[i].drop, detonate: pending[i].boom });
+      // 摇杆优先:手指正推着的时候不理会键盘上按住没放的那一下
+      const dir = stickDirs[i] >= 0 ? stickDirs[i] : pickDir(held[i], recent[i]);
+      out.push({ dir, drop: pending[i].drop, detonate: pending[i].boom, kick: pending[i].kick });
       pending[i].drop = false;
       pending[i].boom = false;
+      pending[i].kick = false;
     }
     return out;
   }
@@ -848,7 +1127,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       totalSeconds: lv.seconds,
       bubbled: mine,
       picked,
+      saves: fighters.reduce((s, f) => s + f.saves, 0),
       winner: -1,
+      carry: carryOf(fighters[0]),
     };
   }
 
@@ -891,6 +1172,12 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     if (opts.shrinkRound) maybeShrink();
     consumeEvents(now);
 
+    // 小花飘一会儿就散掉(纯装饰,从后往前删不影响下标)
+    for (let i = petals.length - 1; i >= 0; i--) {
+      petals[i].life -= dt;
+      if (petals[i].life <= 0) petals.splice(i, 1);
+    }
+
     // 视觉插值:格子跳到目标位,人走得顺滑一点
     fighters.forEach((f, i) => {
       const v = views[i];
@@ -916,13 +1203,27 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       if (!paused) togglePause();
     },
     destroy() {
+      // 退出必须归零到「这一局从来没发生过」:再挂一次不会有旧的帧、旧的键、旧的朗读跟过来。
       finished = true;
+      paused = false;
       cancelAnimationFrame(raf);
+      raf = 0;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("pointerup", releaseAll);
       window.removeEventListener("blur", releaseAll);
       window.removeEventListener("resize", onResize);
+      releaseAll();
+      for (let i = 0; i < seats; i++) {
+        pending[i].drop = false;
+        pending[i].boom = false;
+        pending[i].kick = false;
+      }
+      petals.length = 0;
+      world.events.length = 0;
+      toast = "";
+      toastUntil = 0;
+      stopSpeaking();
       clearVeil();
       wrap.remove();
     },
@@ -966,17 +1267,17 @@ interface Shell {
 
 function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: string): Shell {
   ensureCss(host);
-  const wrap = el("div", "bb-mode");
-  const head = el("div", "bb-mhead");
+  const wrap = el("div", "bmb-mode");
+  const head = el("div", "bmb-mhead");
   const back = document.createElement("button");
   back.type = "button";
-  back.className = "bb-back";
+  back.className = "bmb-back";
   back.textContent = "◀ 回选关";
   back.addEventListener("click", () => {
     api.play("tap");
     onBack();
   });
-  const chip = el("span", "bb-chip", title);
+  const chip = el("span", "bmb-chip", title);
   head.append(back, chip);
   const stage = el("div");
   wrap.append(head, stage);
@@ -996,14 +1297,14 @@ function overBox(
   buttons: { label: string; ghost?: boolean; onClick: () => void }[]
 ): void {
   stage.innerHTML = "";
-  const box = el("div", "bb-veil");
+  const box = el("div", "bmb-veil");
   box.style.position = "static";
-  box.append(el("div", "bb-veil-t", title), el("div", "bb-veil-s", sub));
-  const row = el("div", "bb-veil-btns");
+  box.append(el("div", "bmb-veil-t", title), el("div", "bmb-veil-s", sub));
+  const row = el("div", "bmb-veil-btns");
   for (const b of buttons) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `bb-btn${b.ghost ? " bb-btn--ghost" : ""}`;
+    btn.className = `bmb-btn${b.ghost ? " bmb-btn--ghost" : ""}`;
     btn.textContent = b.label;
     btn.addEventListener("click", b.onClick);
     row.appendChild(btn);
@@ -1039,7 +1340,7 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       `🏆 ${P_NAME[winner]}拿下整场!`,
       `${versusLine(scores, P_NAME)}。${
         winner === 1 && aiSkill
-          ? "电脑这一档已经会算爆风了,想再练手就调高一档试试。"
+          ? "电脑这一档已经会算彩虹波了,想再练手就调高一档试试。"
           : "换个开局位置再来一场,布局思路会完全不一样。"
       }`,
       [
@@ -1070,9 +1371,9 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
     }
     const title = drawn ? "🤝 这一局打平" : `🫧 ${P_NAME[winner]}赢下第 ${round} 局!`;
     const sub = drawn
-      ? `时间到,两个人都没被泡泡包住。${versusLine(scores, P_NAME)},下一局再决胜负。`
+      ? `时间到,两个人都没被泡泡罩住。${versusLine(scores, P_NAME)},下一局再决胜负。`
       : `${versusLine(scores, P_NAME)}。${
-          winner === 0 ? "堵得漂亮!" : "下一局先抢道具,火力上来就好打了。"
+          winner === 0 ? "堵得漂亮!" : "下一局先抢道具,彩虹波长起来就好打了。"
         }`;
     overBox(shell.stage, title, sub, [
       {
@@ -1098,8 +1399,8 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       ai: aiSkill ? [{ index: 1, skill: aiSkill }] : [],
       banner: `第 ${round} 局 · ${scores[0]}:${scores[1]}`,
       tip: aiSkill
-        ? "朵朵:WASD 走、F 放弹、G 引爆。把电脑逼进死胡同就赢了。"
-        : "朵朵:WASD + F/G;星星:方向键 + L/K。谁先被泡泡包住,这一局就算对方赢。",
+        ? "朵朵:WASD 走 · F 放泡 · V 踢泡 · G 拍破。把电脑逼进死胡同就赢了。"
+        : `${KEY_HELP}谁先被泡泡罩住,这一局就算对方赢。`,
       sfx: (n) => api.play(n),
       onDone: (res) => roundOver(res.winner, res.winner < 0),
     });
@@ -1117,55 +1418,70 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
 }
 
 // ---------------------------------------------------------------------------
-// 无尽泡泡(场地收缩)
+// 无尽「泡泡塔」:一层一张小地图,清完就上楼
 // ---------------------------------------------------------------------------
 
-function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
-  const shell = makeShell(host, api, onBack, "♾️ 无尽泡泡");
+function mountTower(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
+  const shell = makeShell(host, api, onBack, "🗼 泡泡塔");
   let runner: Runner | null = null;
-  let round = 1;
+  let floor = 1;
+  let carry: Carry | undefined;
   let best = save.getGameProgress(meta.id).endlessBest;
 
-  function startRound(): void {
+  function startFloor(): void {
     runner?.destroy();
     shell.stage.innerHTML = "";
-    shell.chip.textContent = `♾️ 无尽泡泡 · 第 ${round} 轮 · 最好 第 ${best} 轮`;
+    shell.chip.textContent = `🗼 泡泡塔 · 第 ${floor} 层 · 最高 第 ${best} 层`;
     runner = createMatch(shell.stage, {
-      level: buildEndlessRound(round),
+      level: buildTowerFloor(floor),
       mode: "endless",
       humans: 1,
-      banner: `第 ${round} 轮`,
-      tip: "清光小怪进下一轮。场地会一圈圈缩小,被泡泡包住这次挑战就结束。",
+      banner: `第 ${floor} 层`,
+      carry,
+      // 高层的楼板会一圈圈往里收,逼着人往中间打,不许拖到最后一秒
+      shrinkRound: floor >= TOWER_SHRINK_FROM ? floor - TOWER_SHRINK_FROM + 1 : undefined,
+      tip:
+        floor >= TOWER_SHRINK_FROM
+          ? "把这一层的小怪全包成泡泡就上楼。这一层的楼板会往里收,早点往中间靠。"
+          : "把这一层的小怪全包成泡泡就上楼,道具跟着你一起爬。被罩住或时间到,这次登塔就结束。",
       sfx: (n) => api.play(n),
-      shrinkRound: round,
       onDone: (res) => {
         if (res.cleared) {
-          best = save.recordEndlessBest(meta.id, round);
+          carry = res.carry;
+          best = save.recordEndlessBest(meta.id, floor);
+          api.play("win");
           api.addStars(1);
-          round++;
-          startRound();
+          floor++;
+          startFloor();
           return;
         }
-        const reached = Math.max(0, round - 1);
+        // 爬到第 n 层但没打完:成绩记 n-1(已经站稳的最高层)
+        const reached = Math.max(0, floor - 1);
         best = save.recordEndlessBest(meta.id, reached);
         runner?.destroy();
         runner = null;
-        overBox(shell.stage, "🫧 泡泡把你接住啦", `${endlessLine(reached, best)}`, [
-          {
-            label: "🔁 从第 1 轮再来",
-            onClick: () => {
-              api.play("tap");
-              round = 1;
-              startRound();
+        overBox(
+          shell.stage,
+          reached > 0 ? `🗼 爬到了第 ${reached} 层!` : "🫧 泡泡把你接住啦",
+          endlessLine(reached, best),
+          [
+            {
+              label: "🔁 从第 1 层再来",
+              onClick: () => {
+                api.play("tap");
+                floor = 1;
+                carry = undefined;
+                startFloor();
+              },
             },
-          },
-          { label: "◀ 回选关", ghost: true, onClick: () => { api.play("tap"); onBack(); } },
-        ]);
+            { label: "◀ 回选关", ghost: true, onClick: () => { api.play("tap"); onBack(); } },
+          ]
+        );
       },
     });
   }
 
-  startRound();
+  startFloor();
 
   return {
     destroy() {
@@ -1211,8 +1527,10 @@ function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destr
       mode: "coop",
       humans: 2,
       banner: `合作 第 ${level + 1} 关`,
-      tip: `${goalText(lv.goal)}。两个人分头行动更快:朵朵 WASD+F/G,星星 方向键+L/K。`,
+      tip: `${goalText(lv.goal)}。谁被泡泡罩住,另一个人贴过去就能拍破救出来。${KEY_HELP}`,
       sfx: (n) => api.play(n),
+      // 救一次人当场发一颗小星星:合作的好处要立刻看得见,不能等到结算
+      onRescue: () => api.addStars(1),
       onDone: (res) => {
         runner?.destroy();
         runner = null;
@@ -1224,7 +1542,7 @@ function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destr
           overBox(
             shell.stage,
             `🎉 第 ${level + 1} 关合作通过!`,
-            `两个人一共捡了 ${res.picked} 件道具,被泡泡包了 ${res.bubbled} 次。下一关记得分头开路,别挤在同一条走廊里。`,
+            coopLine(res.saves, res.picked, res.bubbled),
             [
               {
                 label: "▶ 下一关",
@@ -1265,14 +1583,33 @@ function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destr
 }
 
 // ---------------------------------------------------------------------------
-// 挂载:模式条 + 188 关地图
+// 挂载:模式条 + 188 关地图 + 直达第 N 关
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export interface BombBuddiesHandle {
+  /** 平台「直达第 N 关」(1 基),返回真正打开的那一关 */
+  openCampaignLevel: (n: number) => number;
+  destroy: () => void;
+}
+
+/**
+ * 地址栏上的 `?level=N`(1 基)。
+ *
+ * 壳层给了 `initialLevel` 就用壳层的,没给才看地址栏——
+ * 和 gold-hook / monster-crisis 同一套约定,家长把链接直接发给孩子也能落到那一关。
+ */
+export function levelFromQuery(search: string | null): number | null {
+  if (!search) return null;
+  const raw = new URLSearchParams(search).get("level");
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.round(n) : null;
+}
+
+export function mount(api: GameApi): BombBuddiesHandle {
   ensureCss(api.root);
   const root = el("div");
-  const bar = el("div", "bb-bar");
-  const picks = el("div", "bb-picks");
+  const bar = el("div", "bmb-bar");
+  const picks = el("div", "bmb-picks");
   const levelHost = el("div");
   const modeHost = el("div");
   modeHost.hidden = true;
@@ -1283,24 +1620,24 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   const vsBtn = document.createElement("button");
   vsBtn.type = "button";
-  vsBtn.className = "bb-open bb-open--vs";
+  vsBtn.className = "bmb-open bmb-open--vs";
   vsBtn.textContent = "⚔️ 双人对战";
   const aiBtn = document.createElement("button");
   aiBtn.type = "button";
-  aiBtn.className = "bb-open bb-open--ai";
+  aiBtn.className = "bmb-open bmb-open--ai";
   const endlessBtn = document.createElement("button");
   endlessBtn.type = "button";
-  endlessBtn.className = "bb-open";
+  endlessBtn.className = "bmb-open";
   const coopBtn = document.createElement("button");
   coopBtn.type = "button";
-  coopBtn.className = "bb-open bb-open--co";
+  coopBtn.className = "bmb-open bmb-open--co";
   bar.append(vsBtn, aiBtn, endlessBtn, coopBtn);
 
   const pickBtns: HTMLButtonElement[] = [];
   ([1, 2, 3] as AiLevel[]).forEach((skill) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "bb-pick";
+    btn.className = "bmb-pick";
     btn.textContent = `🤖 ${AI_LABEL[skill]}`;
     btn.setAttribute("aria-label", `电脑难度:${AI_LABEL[skill]}`);
     btn.addEventListener("click", () => {
@@ -1314,13 +1651,14 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function refreshBar(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
-    endlessBtn.textContent = best > 0 ? `♾️ 无尽泡泡 · 最好 第 ${best} 轮` : "♾️ 无尽泡泡";
+    endlessBtn.textContent = best > 0 ? `🗼 泡泡塔 · 最高 第 ${best} 层` : "🗼 泡泡塔";
     aiBtn.textContent = `🤖 人机对战 · ${AI_LABEL[aiSkill]}`;
     coopBtn.textContent = `🤝 双人合作 · 第 ${readCoop() + 1} 关`;
     pickBtns.forEach((btn, i) => btn.setAttribute("aria-pressed", String(i + 1 === aiSkill)));
   }
 
   let mode: { destroy: () => void } | null = null;
+  let direct: { destroy: () => void } | null = null;
 
   function closeMode(): void {
     mode?.destroy();
@@ -1334,7 +1672,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function openMode(make: (host: HTMLElement, api: GameApi, back: () => void) => { destroy: () => void }): void {
-    if (mode) return;
+    if (mode || direct) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -1343,9 +1681,108 @@ export function mount(api: GameApi): { destroy: () => void } {
     mode = make(modeHost, api, closeMode);
   }
 
+  function closeDirect(): void {
+    direct?.destroy();
+    direct = null;
+    modeHost.hidden = true;
+    modeHost.innerHTML = "";
+    levelHost.hidden = false;
+    bar.hidden = false;
+    picks.hidden = false;
+    refreshBar();
+  }
+
+  /**
+   * 直达第 i 关(0 基)。
+   *
+   * 地图走的是平台 `mountLevelGame`,它只吐一个 `destroy`,没有「从第 N 关开始」的口子,
+   * 所以本款自己开一条:借模式外壳把这一关单独摆出来,过关 / 失败都能接着走。
+   */
+  function openDirectLevel(i: number): void {
+    mode?.destroy();
+    mode = null;
+    direct?.destroy();
+    direct = null;
+    levelHost.hidden = true;
+    bar.hidden = true;
+    picks.hidden = true;
+    modeHost.hidden = false;
+    modeHost.innerHTML = "";
+
+    const lv = buildLevel(i, 1);
+    const ch = CHAPTERS[lv.chapter];
+    const shell = makeShell(modeHost, api, closeDirect, `${ch.emoji} ${ch.name} · 第 ${i + 1} 关`);
+    let handle: { destroy: () => void } | null = null;
+    let settled = false;
+
+    function finish(title: string, msg: string, buttons: { label: string; ghost?: boolean; go: () => void }[]): void {
+      handle?.destroy();
+      handle = null;
+      overBox(
+        shell.stage,
+        title,
+        msg,
+        buttons.map((b) => ({
+          label: b.label,
+          ghost: b.ghost,
+          onClick: () => {
+            api.play("tap");
+            b.go();
+          },
+        }))
+      );
+    }
+
+    const ctx: PlayCtx = {
+      level: i,
+      chapter: ch,
+      chapterIndex: lv.chapter,
+      indexInChapter: withinChapter(i),
+      win: (stars, msg) => {
+        if (settled) return;
+        settled = true;
+        const prev = loadStars(meta.id)[i] ?? 0;
+        saveStar(meta.id, i, stars);
+        if (stars > prev) api.addStars(stars - prev);
+        api.play("win");
+        const buttons: { label: string; ghost?: boolean; go: () => void }[] = [];
+        if (i + 1 < TOTAL_LEVELS) buttons.push({ label: "▶ 下一关", go: () => openDirectLevel(i + 1) });
+        buttons.push({ label: "🔁 再玩一次", go: () => openDirectLevel(i) });
+        buttons.push({ label: "🗺️ 回选关", ghost: true, go: closeDirect });
+        finish(`⭐ 第 ${i + 1} 关过关!`, msg ?? "放泡泡的位置挑得很准!", buttons);
+      },
+      lose: (msg) => {
+        if (settled) return;
+        settled = true;
+        api.play("oops");
+        finish("💪 就差一点点", msg ?? "再来一次一定行!", [
+          { label: "🔁 再试一次", go: () => openDirectLevel(i) },
+          { label: "🗺️ 回选关", ghost: true, go: closeDirect },
+        ]);
+      },
+      sfx: (n) => api.play(n),
+      bonusStars: (n) => api.addStars(n),
+    };
+
+    handle = playLevel(shell.stage, ctx);
+    direct = {
+      destroy() {
+        handle?.destroy();
+        handle = null;
+        shell.destroy();
+      },
+    };
+  }
+
+  function openCampaignLevel(n: number): number {
+    const i = Math.max(0, Math.min(TOTAL_LEVELS - 1, Math.round(n) - 1));
+    openDirectLevel(i);
+    return i + 1;
+  }
+
   vsBtn.addEventListener("click", () => openMode((h, a, b) => mountDuel(h, a, b, null)));
   aiBtn.addEventListener("click", () => openMode((h, a, b) => mountDuel(h, a, b, aiSkill)));
-  endlessBtn.addEventListener("click", () => openMode(mountEndless));
+  endlessBtn.addEventListener("click", () => openMode(mountTower));
   coopBtn.addEventListener("click", () => openMode(mountCoop));
   refreshBar();
 
@@ -1354,14 +1791,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      // 开打的时候把模式条收起来:手机竖屏上这一百来像素正好够棋盘和方向盘同框
+      // 开打的时候把模式条收起来:手机竖屏上这一百来像素正好够棋盘和摇杆同框
       playLevel: (stage, ctx) => {
         bar.hidden = true;
         picks.hidden = true;
         const handle = playLevel(stage, ctx);
         return {
           destroy: () => {
-            if (!mode) {
+            if (!mode && !direct) {
               bar.hidden = false;
               picks.hidden = false;
             }
@@ -1370,17 +1807,27 @@ export function mount(api: GameApi): { destroy: () => void } {
         };
       },
       guide: GUIDE,
-      mapHint: "放弹之前先想好往哪躲,拐角后面永远安全。",
+      mapHint: "放泡泡之前先想好往哪躲,拐角后面永远安全。",
       grandMessage: "188 关全部通关,你就是泡泡炸弹人里最会算退路的那一个!",
-      guideTitle: "泡泡炸弹人 · 摆弹手册",
+      guideTitle: "泡泡炸弹人 · 放泡手册",
     }
   );
 
+  // 壳层给了 `initialLevel` 就听壳层的,没给才看地址栏 `?level=`
+  const jumpTo =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" ? location.search : null);
+  if (jumpTo !== null && jumpTo !== undefined) openCampaignLevel(jumpTo);
+
   return {
+    openCampaignLevel,
     destroy() {
       mode?.destroy();
       mode = null;
+      direct?.destroy();
+      direct = null;
       level.destroy();
+      stopSpeaking();
       root.remove();
     },
   };
