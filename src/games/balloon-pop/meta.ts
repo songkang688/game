@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🎈",
   category: "casual" as const,
   color: "#ff8fab",
-  blurb: "99 关六大天空！颜色指令、数字顺序、乌云捣乱、彩虹清屏！",
+  blurb: "188 关十大天空！连锁爆炸、护盾气球、算式云梯、镜像风向轮番登场！",
 };
