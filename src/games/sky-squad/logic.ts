@@ -474,6 +474,38 @@ export function dragTarget(px: number, py: number, lift = TOUCH_LIFT): { x: numb
   return clampPlane(px, py - Math.max(0, lift));
 }
 
+// ---------------------------------------------------------------------------
+// 版面:画布多高、480×720 怎么塞进去
+// ---------------------------------------------------------------------------
+
+export const CANVAS_MIN_H = 210;
+export const CANVAS_MAX_H = 460;
+
+/**
+ * 画布盒子该多高。
+ *
+ * 平台的 `.game-stage` 是 `overflow:hidden` 的一屏,掉到它下沿外面的东西
+ * 既看不见也点不着。所以高度不能只按纵版比例算,还得听「还剩多少地方」这句话:
+ * `room` 是画布顶边到那条下沿之间、扣掉画布底下那些按钮之后剩的像素。
+ */
+export function canvasBoxHeight(cssW: number, room: number): number {
+  const ideal = (cssW / SKY_W) * SKY_H;
+  const fits = Math.min(ideal, Math.max(CANVAS_MIN_H, room));
+  return Math.round(Math.max(CANVAS_MIN_H, Math.min(CANVAS_MAX_H, fits)));
+}
+
+/**
+ * 480×720 这片天空怎么摆进画布:等比缩放 + 居中。
+ *
+ * 1.1 是按宽度定的缩放,画布一矮,玩家那一行(y=596)就被裁到画布下沿外面 ——
+ * 拖着飞却看不见自己的飞机。这里改成两边都取小的那个比例,天空一格都不裁,
+ * 富余出来的地方留白当边框。
+ */
+export function skyFit(cssW: number, cssH: number): { scale: number; offX: number; offY: number } {
+  const scale = Math.min(cssW / SKY_W, cssH / SKY_H);
+  return { scale, offX: (cssW - SKY_W * scale) / 2, offY: (cssH - SKY_H * scale) / 2 };
+}
+
 /** 圆与圆是否相碰(子弹打飞机、飞机吃道具都用它) */
 export function circlesTouch(ax: number, ay: number, ar: number, bx: number, by: number, br: number): boolean {
   const dx = ax - bx;

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { allText, findAll, findButton, findOne, install, type FakeEl, type Harness } from "./domStub";
 import { registerLevelExtras, resetLevelExtras } from "../../ui/level188Contract";
 import { PLAYER_ROW, SKY_W } from "./bullets";
-import { TOUCH_LIFT } from "./logic";
+import { CANVAS_MAX_H, CANVAS_MIN_H, TOUCH_LIFT, canvasBoxHeight, skyFit } from "./logic";
 import { LINK_DIST } from "./power";
 import { BOSSES } from "./levels";
 import { meta } from "./meta";
@@ -131,6 +131,44 @@ describe("sky-squad 1.2 运行时 · 拖着飞", () => {
     expect(sizes.length).toBeGreaterThan(8);
     expect(Math.min(...sizes)).toBeGreaterThanOrEqual(14);
     sortie.destroy();
+  });
+
+  it("舞台矮下来时画布跟着矮,玩家那一行绝不掉到画布外面", async () => {
+    const h = (harness = install());
+    // 摆一个「外壳只给 380px、而且 overflow 是裁剪的」局面
+    const stage = h.root as unknown as FakeEl;
+    stage.dataset.clip = "1";
+    stage.rect = { left: 0, top: 0, width: 340, height: 300 };
+    stage.clientWidth = 340;
+    const sortie = await openSortie(h);
+    h.flush(2);
+    const box = findOne(h.root, "sks-box") as FakeEl;
+    const canvas = findOne(h.root, "sks-cv") as FakeEl;
+    // 舞台下沿就在 300,画布不许越过那条线(1.1 一律 460,直接顶穿)
+    const cssH = Number.parseInt(canvas.style.height, 10);
+    expect(cssH).toBeLessThanOrEqual(300);
+    expect(cssH).toBeGreaterThanOrEqual(CANVAS_MIN_H);
+    // 天空整片装得下:飞机那一行落在画布里面
+    const fit = skyFit(box.getBoundingClientRect().width, cssH);
+    expect(fit.offY).toBeGreaterThanOrEqual(0);
+    expect(fit.offY + PLAYER_ROW * fit.scale).toBeLessThan(cssH);
+    sortie.destroy();
+  });
+
+  it("480×720 那片天空一格都不裁:等比缩到画布里再居中", () => {
+    // 又矮又宽的画布:按宽度缩放会把 y=596 那一行甩到外面去,取小的那个比例才行
+    const flat = skyFit(360, 240);
+    expect(flat.scale).toBeCloseTo(240 / 720, 6);
+    expect(flat.offX).toBeCloseTo((360 - 480 * flat.scale) / 2, 6);
+    expect(PLAYER_ROW * flat.scale).toBeLessThan(240);
+    // 正好是 2:3 的画布:不留白
+    const exact = skyFit(320, 480);
+    expect(exact.offX).toBeCloseTo(0, 6);
+    expect(exact.offY).toBeCloseTo(0, 6);
+    // 地方给得再多也不超过上限;地方少到离谱也保底,不会缩成一条线
+    expect(canvasBoxHeight(360, 9999)).toBeLessThanOrEqual(CANVAS_MAX_H);
+    expect(canvasBoxHeight(360, 10)).toBe(CANVAS_MIN_H);
+    expect(canvasBoxHeight(360, 300)).toBe(300);
   });
 });
 

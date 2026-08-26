@@ -185,9 +185,17 @@ export class FakeEl {
     return hit;
   }
 
-  /** 画布逻辑宽 360、高 540:正好是手机 360px 竖屏那一档 */
+  /**
+   * 画布逻辑宽 360、高 540:正好是手机 360px 竖屏那一档。
+   *
+   * `rect` 留了个口子:版面用例要摆出「舞台只有这么高」的局面,
+   * 就把这个节点的方框改掉,`limitBottom()` 才有东西可量。
+   */
+  rect: { left: number; top: number; width: number; height: number } | null = null;
+
   getBoundingClientRect(): { left: number; top: number; right: number; bottom: number; width: number; height: number } {
-    return { left: 0, top: 0, right: 360, bottom: 540, width: 360, height: 540 };
+    const r = this.rect ?? { left: 0, top: 0, width: 360, height: 540 };
+    return { ...r, right: r.left + r.width, bottom: r.top + r.height };
   }
 
   addEventListener(type: string, fn: Handler): void {
@@ -291,6 +299,8 @@ export function install(opts: { innerWidth?: number; search?: string } = {}): Ha
     location: g.location,
     matchMedia: g.matchMedia,
     dpr: g.devicePixelRatio,
+    innerHeight: g.innerHeight,
+    computed: g.getComputedStyle,
   };
 
   const frames = new Map<number, (t: number) => void>();
@@ -315,7 +325,8 @@ export function install(opts: { innerWidth?: number; search?: string } = {}): Ha
       const i = list ? list.indexOf(fn) : -1;
       if (list && i >= 0) list.splice(i, 1);
     },
-    getComputedStyle: () => ({ overflowY: "visible" }),
+    // 只有标了 `data-clip` 的节点算「会裁剪的一层」,版面用例靠它摆舞台
+    getComputedStyle: (node: FakeEl) => ({ overflowY: node?.dataset?.clip === "1" ? "hidden" : "visible" }),
     matchMedia: media,
     setTimeout: (fn: () => void) => {
       // 本款运行时不用 setTimeout(提示条走主时钟),这里只是兜底不炸
@@ -354,6 +365,8 @@ export function install(opts: { innerWidth?: number; search?: string } = {}): Ha
   g.window = win;
   g.matchMedia = media;
   g.devicePixelRatio = 2;
+  g.innerHeight = win.innerHeight;
+  g.getComputedStyle = win.getComputedStyle;
   g.location = { search: opts.search ?? "", href: `http://localhost/${opts.search ?? ""}` };
   g.requestAnimationFrame = (fn: (t: number) => void): number => {
     const id = nextId++;
@@ -403,6 +416,8 @@ export function install(opts: { innerWidth?: number; search?: string } = {}): Ha
       g.location = saved.location;
       g.matchMedia = saved.matchMedia;
       g.devicePixelRatio = saved.dpr;
+      g.innerHeight = saved.innerHeight;
+      g.getComputedStyle = saved.computed;
     },
   };
 }

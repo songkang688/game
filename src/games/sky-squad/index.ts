@@ -38,6 +38,7 @@ import {
   TOUCH_LIFT,
   WEAPONS,
   applyPickup,
+  canvasBoxHeight,
   circlesTouch,
   clampPlane,
   damageFoe,
@@ -48,6 +49,7 @@ import {
   keyToAction,
   makePlane,
   playerShots,
+  skyFit,
   sortieCleared,
   sortieMessage,
   starsForSortie,
@@ -72,6 +74,7 @@ export const CSS = `
 .sks-hud{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:6px;
   padding-bottom:2px;scrollbar-width:none;}
 .sks-hud::-webkit-scrollbar{display:none;}
+.sks-hud .sks-back{flex:none;white-space:nowrap;}
 .sks-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;color:#3F6BA8;
   box-shadow:0 2px 6px rgba(120,150,200,.24);white-space:nowrap;flex:none;}
 .sks-chip-duo{background:#FFE6F0;color:#B44F84;}
@@ -94,14 +97,20 @@ export const CSS = `
   padding:5px 14px;font-size:14px;font-weight:800;color:#3F6BA8;box-shadow:0 3px 8px rgba(110,140,190,.28);
   pointer-events:none;opacity:0;transition:opacity .25s ease;max-width:92%;text-align:center;}
 .sks-toast.sks-on{opacity:1;}
-.sks-opts{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
+.sks-opts{display:flex;gap:6px;justify-content:safe center;flex-wrap:nowrap;overflow-x:auto;margin-top:6px;
+  scrollbar-width:none;}
+.sks-opts::-webkit-scrollbar{display:none;}
 .sks-opt{border:none;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#5A7BA8;box-shadow:0 2px 0 rgba(120,150,200,.3);}
+  font-family:inherit;background:#ffffffdd;color:#5A7BA8;box-shadow:0 2px 0 rgba(120,150,200,.3);
+  white-space:nowrap;flex:none;}
 .sks-opt[aria-pressed="true"]{background:#DCEBFF;color:#2F5E9B;}
-.sks-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:46px;flex-wrap:wrap;}
-.sks-pads[data-players="2"]{--k:38px;}
-.sks-pad{display:grid;grid-template-columns:repeat(3,var(--k));grid-auto-rows:var(--k);gap:4px;justify-content:center;}
-.sks-pad-name{grid-column:1/-1;font-size:14px;font-weight:800;text-align:center;line-height:1.3;}
+.sks-legend{align-self:center;font-size:14px;font-weight:700;color:#63799C;white-space:nowrap;flex:none;}
+/* 方向盘排成一横条:纵版飞行最缺的就是竖着的地方,九宫格那一坨会把飞机顶出屏幕 */
+.sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:42px;flex-wrap:wrap;}
+.sks-pads[data-players="2"]{--k:36px;}
+.sks-pad{display:flex;align-items:center;gap:4px;}
+.sks-pad-name{font-size:14px;font-weight:800;white-space:nowrap;}
+.sks-key{width:var(--k);height:var(--k);flex:none;}
 .sks-key{border:none;border-radius:13px;font-size:17px;font-weight:900;cursor:pointer;font-family:inherit;
   background:#ffffffe0;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.34);touch-action:none;padding:0;}
 .sks-key:active,.sks-key.sks-down{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,150,200,.34);background:#E3EFFF;}
@@ -109,10 +118,16 @@ export const CSS = `
 .sks-key-bomb{background:#FFE0EC;color:#B04B7C;}
 .sks-key:focus-visible,.sks-veil-btn:focus-visible,.sks-mode:focus-visible,.sks-back:focus-visible,
 .sks-opt:focus-visible{outline:3px solid #24456F;outline-offset:2px;}
-.sks-tip{margin-top:6px;text-align:center;font-size:14px;font-weight:700;color:#63799C;line-height:1.5;}
-.sks-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
-.sks-mode{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#7FB2FF,#5A8ADD);box-shadow:0 4px 0 #4570B8;}
+.sks-tip{margin-top:6px;text-align:center;font-size:14px;font-weight:700;color:#63799C;line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.sks-modebar{display:flex;gap:6px;justify-content:safe center;flex-wrap:nowrap;overflow-x:auto;margin:0 0 8px;
+  scrollbar-width:none;}
+.sks-modebar::-webkit-scrollbar{display:none;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},进关时这条得自己收 */
+.sks-modebar[hidden]{display:none;}
+.sks-mode{border:none;border-radius:999px;padding:8px 13px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
+  font-family:inherit;background:linear-gradient(180deg,#7FB2FF,#5A8ADD);box-shadow:0 4px 0 #4570B8;
+  white-space:nowrap;flex:none;}
 .sks-mode.sks-mode-duo{background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
 .sks-mode.sks-mode-vs{background:linear-gradient(180deg,#FFC46B,#E79B36);box-shadow:0 4px 0 #C07C1F;}
 .sks-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #4570B8;}
@@ -121,7 +136,8 @@ export const CSS = `
   font-family:inherit;background:#ffffffdd;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.3);}
 .sks-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#35608F;}
 @media (max-width:420px){
-  .sks-pads{--k:42px;}
+  .sks-pads{--k:38px;gap:6px;}
+  .sks-pads[data-players="2"]{--k:34px;}
 }
 @media (prefers-reduced-motion:reduce){
   .sks-toast{transition:none;}
@@ -401,7 +417,16 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     liftBtn.setAttribute("aria-pressed", liftOn ? "true" : "false");
     opts.sfx("tap");
   });
-  optRow.append(coreBtn, liftBtn);
+  // 键位说明跟着开关排在同一条横条上:纵版飞行最缺竖着的地方,能不多占一行就不多占
+  optRow.append(
+    coreBtn,
+    liftBtn,
+    el(
+      "span",
+      "sks-legend",
+      opts.players === 2 ? "⌨️ 朵朵 WASD·F·G / 星星 方向键·L·K" : "⌨️ WASD·方向键 / F 开火 / G 炸弹"
+    )
+  );
 
   function gearLine(p: Pilot): string {
     const lv = powerLevel(p.plane.levels);
@@ -593,9 +618,9 @@ export function createSortie(opts: SortieOptions): SortieHandle {
   function toField(clientX: number, clientY: number): { x: number; y: number } | null {
     const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
-    const s = rect.width / SKY_W;
-    if (s <= 0) return null;
-    return { x: (clientX - rect.left) / s, y: (clientY - rect.top) / s };
+    const fit = skyFit(rect.width, rect.height);
+    if (fit.scale <= 0) return null;
+    return { x: (clientX - rect.left - fit.offX) / fit.scale, y: (clientY - rect.top - fit.offY) / fit.scale };
   }
 
   function aimDrag(p: Pilot, pt: { x: number; y: number }): void {
@@ -648,26 +673,17 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     const pad = el("div", "sks-pad");
     const name = el("div", "sks-pad-name");
     name.style.color = p.ink;
-    name.textContent =
-      opts.players === 2
-        ? p.index === 0
-          ? "朵朵 WASD · F 开火 · G 炸弹"
-          : "星星 方向键 · L 开火 · K 炸弹"
-        : "WASD / 方向键 · F/L 开火 · G/K 炸弹";
+    name.textContent = opts.players === 2 ? (p.index === 0 ? "朵朵" : "星星") : "拖着飞";
     pad.appendChild(name);
-    const layout: Array<{ label: string; action: SkyAction | null; cls?: string; aria: string }> = [
-      { label: "💣", action: "bomb", cls: "sks-key-bomb", aria: "放炸弹" },
-      { label: "▲", action: "up", aria: "向上飞" },
-      { label: "💠", action: "fire", cls: "sks-key-fire", aria: "开火" },
+    const layout: Array<{ label: string; action: SkyAction; cls?: string; aria: string }> = [
       { label: "◀", action: "left", aria: "向左飞" },
+      { label: "▲", action: "up", aria: "向上飞" },
       { label: "▼", action: "down", aria: "向下飞" },
       { label: "▶", action: "right", aria: "向右飞" },
+      { label: "💠", action: "fire", cls: "sks-key-fire", aria: "开火" },
+      { label: "💣", action: "bomb", cls: "sks-key-bomb", aria: "放炸弹" },
     ];
     for (const item of layout) {
-      if (!item.action) {
-        pad.appendChild(el("div"));
-        continue;
-      }
       const btn = el("button", `sks-key${item.cls ? ` ${item.cls}` : ""}`, item.label);
       btn.type = "button";
       btn.setAttribute("aria-label", `${p.name}${item.aria}`);
@@ -1215,13 +1231,42 @@ export function createSortie(opts: SortieOptions): SortieHandle {
   // 绘制
   // -------------------------------------------------------------------------
 
+  /**
+   * 画布下沿最远能到哪一行。
+   *
+   * 外壳的 `.game-stage` 是 `overflow:hidden` 的一屏,越过它下沿的东西看不见也点不着;
+   * 窗口下沿只是最后一道保险。挨个往上问一遍谁在裁剪,取最靠上的那条线。
+   */
+  function limitBottom(): number {
+    let limit = globalThis.innerHeight || 667;
+    for (let node = wrap.parentElement; node; node = node.parentElement) {
+      const style = globalThis.getComputedStyle?.(node);
+      if (style && style.overflowY !== "visible") {
+        const bottom = node.getBoundingClientRect().bottom;
+        if (bottom > 0) limit = Math.min(limit, bottom);
+      }
+    }
+    return limit;
+  }
+
+  /** 画布底下那些按钮(开关 / 方向盘 / 提示)一共占多高 */
+  function chromeBelow(): number {
+    return Math.max(0, wrap.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom);
+  }
+
+  let layoutTick = 0;
+
   function resize(): void {
     const cssW = Math.max(240, box.clientWidth || wrap.clientWidth || 320);
-    const cssH = Math.max(260, Math.min(460, Math.round((cssW / SKY_W) * SKY_H)));
-    canvas.style.height = `${cssH}px`;
+    const room = limitBottom() - box.getBoundingClientRect().top - chromeBelow() - 6;
+    const cssH = canvasBoxHeight(cssW, room);
     const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
-    canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
+    const w = Math.round(cssW * dpr);
+    const hh = Math.round(cssH * dpr);
+    if (canvas.width === w && canvas.height === hh) return;
+    canvas.style.height = `${cssH}px`;
+    canvas.width = w;
+    canvas.height = hh;
   }
 
   /** 敌弹八种形状:只靠颜色区分是不够的,形状也必须不一样 */
@@ -1543,17 +1588,33 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     if (!g) return;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, canvas.width, canvas.height);
-    const s = canvas.width / SKY_W;
+    // 天空是 480×720 的定值,画布多矮都得整片装进去:等比缩放 + 居中。
+    // 1.1 是按宽度缩放的,画布一矮,玩家那一行(596)就被裁到下沿外面,拖着飞却看不见自己。
+    const fit = skyFit(canvas.width, canvas.height);
+    const s = fit.scale;
     const jitter = shake > 0 && !reduce ? Math.sin(clock * 70) * shake * 6 : 0;
+    // 富余出来的两条边也铺同一片天,只压暗一点点当边界 —— 不留灰条
+    if (fit.offX > 0.5 || fit.offY > 0.5) {
+      const wide = g.createLinearGradient(0, 0, 0, canvas.height);
+      wide.addColorStop(0, "#FFFFFF");
+      wide.addColorStop(1, tint);
+      g.fillStyle = wide;
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      g.fillStyle = "rgba(104,136,186,.16)";
+      g.fillRect(0, 0, canvas.width, canvas.height);
+    }
     g.save();
-    g.translate(jitter * s, 0);
+    g.translate(fit.offX + jitter * s, fit.offY);
     g.scale(s, s);
+    g.beginPath();
+    g.rect(0, 0, SKY_W, SKY_H);
+    g.clip();
 
-    const grad = g.createLinearGradient(0, 0, 0, canvas.height / s);
+    const grad = g.createLinearGradient(0, 0, 0, SKY_H);
     grad.addColorStop(0, "#FFFFFF");
     grad.addColorStop(1, tint);
     g.fillStyle = grad;
-    g.fillRect(0, 0, SKY_W, canvas.height / s);
+    g.fillRect(0, 0, SKY_W, SKY_H);
 
     // 云层视差:两层不同速度往下飘,纵版的速度感就出来了(仍然是 2D)
     for (const layer of [
@@ -1562,7 +1623,7 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     ]) {
       g.fillStyle = `rgba(255,255,255,${layer.alpha})`;
       for (let i = 0; i < 5; i++) {
-        const cy = ((clock * layer.speed + i * 170 + layer.seed) % (canvas.height / s + 200)) - 100;
+        const cy = ((clock * layer.speed + i * 170 + layer.seed) % (SKY_H + 200)) - 100;
         const cx = ((i * 149 + layer.seed) % SKY_W) + 24;
         g.beginPath();
         g.ellipse(cx, cy, 44 * layer.scale, 20 * layer.scale, 0, 0, Math.PI * 2);
@@ -1645,6 +1706,15 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       drawPlane(g, p);
     }
     g.restore();
+
+    // 能飞的那一片有多大,给条细边框标出来(留白也是天,不标就看不出边)
+    if (fit.offX > 0.5 || fit.offY > 0.5) {
+      g.save();
+      g.strokeStyle = "rgba(255,255,255,.85)";
+      g.lineWidth = Math.max(1, 2 * s);
+      g.strokeRect(fit.offX, fit.offY, SKY_W * s, SKY_H * s);
+      g.restore();
+    }
   }
 
   function frame(now: number): void {
@@ -1652,6 +1722,12 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     const dt = Math.min(0.05, (now - last) / 1000 || 0);
     last = now;
     if (running && !paused && !finished) step(dt);
+    // 上面那条选关工具条会随着提示语变高变矮,窗口却没 resize 事件。
+    // 半秒量一次,发现地方变了再改画布 —— 别让飞机悄悄溜到下沿外面。
+    if (++layoutTick >= 30) {
+      layoutTick = 0;
+      resize();
+    }
     draw();
   }
 
@@ -2127,12 +2203,25 @@ export function mount(api: GameApi): SkySquadHandle {
   duoBtn.addEventListener("click", () => openMode(mountDuo));
   refreshBar();
 
+  // 一进关就把模式条收起来:平台的舞台是 overflow:hidden 的一屏,
+  // 这一条占掉的高度会直接从天空里扣,飞机那一行就被顶到看不见的地方去。
+  const playLevelHere = (stage: HTMLElement, ctx: PlayCtx): PlayHandle => {
+    bar.hidden = true;
+    const handle = playLevel(stage, ctx);
+    return {
+      destroy() {
+        bar.hidden = current !== null || !directHost.hidden;
+        handle.destroy?.();
+      },
+    };
+  };
+
   const level = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      playLevel: playLevelHere,
       mapHint: "每章最后一关是大 Boss:三段弹幕各有各的躲法,换段之前一定先给预告。",
       grandMessage: "八片天空全部飞完,你就是飞机小队的队长!",
       guideTitle: GUIDE.title,
