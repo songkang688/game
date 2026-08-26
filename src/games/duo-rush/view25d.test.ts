@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DRAW_DISTANCE,
+  FOG_START,
+  LANE_SPACING_RATIO,
   MAX_STAGE_WIDTH,
   SPLIT_BREAKPOINT,
   depthScale,
@@ -9,6 +11,7 @@ import {
   groundY,
   horizonY,
   jumpArc,
+  laneWidthAt,
   paneRects,
   parallaxOffset,
   project,
@@ -108,11 +111,35 @@ describe("2.5D 透视投影", () => {
 
 describe("远端雾化与滚动网格", () => {
   it("近处不起雾,远端糊成一片", () => {
+    const half = (FOG_START + DRAW_DISTANCE) / 2;
     expect(fogAlpha(0)).toBe(0);
-    expect(fogAlpha(20)).toBe(0);
+    expect(fogAlpha(FOG_START)).toBe(0);
     expect(fogAlpha(DRAW_DISTANCE)).toBe(1);
-    expect(fogAlpha(90)).toBeGreaterThan(0);
-    expect(fogAlpha(90)).toBeLessThan(1);
+    expect(fogAlpha(half)).toBeCloseTo(0.5, 6);
+    expect(FOG_START).toBeLessThan(DRAW_DISTANCE);
+  });
+
+  it("障碍在最后几秒里是稳稳变大的,不会挤在地平线上突然弹出来", () => {
+    // 以中等速度 60 米/秒计，前方 2 秒的东西至少要落在路面的中段以下
+    const pane = { x: 0, y: 0, width: 360, height: 200 };
+    const top = horizonY(pane);
+    const bottom = groundY(pane);
+    const at2s = project(pane, 120, 1).y;
+    const at1s = project(pane, 60, 1).y;
+    const progress = (y: number): number => (y - top) / (bottom - top);
+    expect(progress(at2s)).toBeGreaterThan(0.15);
+    expect(progress(at1s)).toBeGreaterThan(0.3);
+    expect(progress(at1s)).toBeGreaterThan(progress(at2s));
+  });
+
+  it("同一条道上的东西,不管上下分屏还是左右分屏都占车道的同一个比例", () => {
+    const tall = { x: 0, y: 0, width: 320, height: 180 };
+    const wide = { x: 0, y: 0, width: 480, height: 340 };
+    const ratio = (pane: typeof tall): number =>
+      laneWidthAt(pane, 20) / (LANE_SPACING_RATIO * pane.width);
+    expect(ratio(tall)).toBeCloseTo(ratio(wide), 6);
+    expect(laneWidthAt(tall, 0)).toBeCloseTo(LANE_SPACING_RATIO * tall.width, 6);
+    expect(laneWidthAt(tall, 50)).toBeLessThan(laneWidthAt(tall, 10));
   });
 
   it("网格线始终等间距铺满可视距离", () => {

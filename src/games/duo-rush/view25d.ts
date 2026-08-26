@@ -68,14 +68,19 @@ export function paneRects(size: Size, layout: SplitLayout): [Rect, Rect] {
 
 /* ---------------- 透视 ---------------- */
 
-/** 摄像机到跑者的距离（米）：越小透视越夸张 */
-export const CAM_DEPTH = 13;
+/**
+ * 摄像机到跑者的距离（米）：越小透视越夸张。
+ * 这一款的速度是 46～96 米/秒，取小了的话前方几十米会全挤在地平线那一条缝里，
+ * 障碍要到最后零点几秒才「唰」地长大，根本来不及看。34 米是让障碍
+ * 在最后两三秒里稳稳变大的取值。
+ */
+export const CAM_DEPTH = 34;
 /** 画到多远（米），再远就不画了 */
-export const DRAW_DISTANCE = 130;
+export const DRAW_DISTANCE = 190;
 /** 地平线在一格里的高度比例 */
-export const HORIZON_RATIO = 0.3;
+export const HORIZON_RATIO = 0.32;
 /** z = 0 落在一格里的高度比例 */
-export const GROUND_RATIO = 0.95;
+export const GROUND_RATIO = 0.97;
 /** 相邻两条道在 z = 0 时相隔多少（占一格宽度的比例） */
 export const LANE_SPACING_RATIO = 0.29;
 
@@ -114,7 +119,7 @@ export function project(pane: Rect, z: number, lane: number): Projected {
 }
 
 /** 远处开始起雾的距离 */
-export const FOG_START = 55;
+export const FOG_START = 95;
 
 /** 这个距离上要盖多浓的雾（0 = 清清楚楚，1 = 完全化进天空）。 */
 export function fogAlpha(z: number): number {
@@ -124,7 +129,7 @@ export function fogAlpha(z: number): number {
 }
 
 /** 地面横向网格线的间隔（米） */
-export const GRID_SPACING = 9;
+export const GRID_SPACING = 12;
 
 /**
  * 跑到 dist 米时，前方该画哪几条横向网格线。
@@ -152,10 +157,19 @@ export function parallaxOffset(dist: number, factor: number, period: number): nu
 }
 
 /** 跑者站在摄像机前面这么远的地方（米），留一点点前视距离 */
-export const RUNNER_Z = 1.4;
+export const RUNNER_Z = 2;
 
 /** 跳起来最高抬多高（占一格高度的比例，还要再乘透视缩放） */
 export const JUMP_LIFT_RATIO = 0.2;
+
+/**
+ * 这个深度上「一条车道有多宽」（像素）。
+ * 障碍与人物的尺寸全都按它换算，这样不管上下分屏还是左右分屏，
+ * 石头永远占车道的同一个比例，不会窄屏一个样宽屏另一个样。
+ */
+export function laneWidthAt(pane: Rect, z: number): number {
+  return LANE_SPACING_RATIO * pane.width * depthScale(z);
+}
 
 /** 跳跃的高度曲线：0 → 1 → 0 的一段抛物线，`t` 是本次跳跃的进度 0…1。 */
 export function jumpArc(t: number): number {

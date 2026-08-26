@@ -52,6 +52,7 @@ import {
   groundY,
   horizonY,
   jumpArc,
+  laneWidthAt,
   paneRects,
   parallaxOffset,
   project,
@@ -119,7 +120,12 @@ interface Theme {
   sky: [string, string];
   farHill: string;
   nearHill: string;
-  road: [string, string];
+  /** 路两边的草地（近处、远处） */
+  field: [string, string];
+  /** 路面本身 */
+  road: string;
+  /** 路面上的标线颜色（"r,g,b"，透明度按远近另算） */
+  mark: string;
   roadEdge: string;
   ink: string;
   hud: string;
@@ -127,22 +133,26 @@ interface Theme {
 
 const THEMES: [Theme, Theme] = [
   {
-    sky: ["#FFF3F8", "#FFDCEA"],
-    farHill: "#F8CFE1",
-    nearHill: "#F1B2CE",
-    road: ["#FBE3EE", "#E7B9D2"],
-    roadEdge: "#FFFFFF",
+    sky: ["#FFF3F8", "#FFD3E6"],
+    farHill: "#F6C2D9",
+    nearHill: "#EDA3C3",
+    field: ["#F3B9D2", "#E79FC0"],
+    road: "#FFF1F7",
+    mark: "236,158,192",
+    roadEdge: "#F4AECC",
     ink: "#C2497E",
-    hud: "rgba(255,255,255,.82)",
+    hud: "rgba(255,255,255,.85)",
   },
   {
-    sky: ["#F1F7FF", "#D6E7FF"],
-    farHill: "#C6DCF7",
-    nearHill: "#A9C7EE",
-    road: ["#E7F0FF", "#BFD6F3"],
-    roadEdge: "#FFFFFF",
+    sky: ["#F1F7FF", "#CFE2FF"],
+    farHill: "#B7D2F4",
+    nearHill: "#98BCEA",
+    field: ["#AFCCF0", "#93B6E4"],
+    road: "#F2F8FF",
+    mark: "146,180,226",
+    roadEdge: "#9CC0EA",
     ink: "#3A6BB0",
-    hud: "rgba(255,255,255,.82)",
+    hud: "rgba(255,255,255,.85)",
   },
 ];
 
@@ -240,7 +250,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-again { background: #D9F2C4; color: #4A7A2A; }
       .dr-back { background: #FFE0C2; color: #9A5A20; }
       .dr-msg { text-align: center; min-height: 22px; color: #B06AB3; font-weight: 700; margin-top: 8px; font-size: 14.5px; line-height: 1.5; }
-      .dr-hidden { display: none; }
       .dr-count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 84px; font-weight: 900; color: #FF7EA8; text-shadow: 0 4px 0 rgba(255,255,255,.85); z-index: 4; pointer-events: none; }
       .dr-pausepanel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(244,250,255,.94); border-radius: 20px; z-index: 5; }
       .dr-pausepanel h3 { color: #C2497E; font-size: 22px; margin: 0; }
@@ -250,6 +259,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
       .dr-rules p { color: #4A6A8A; font-size: 14.5px; line-height: 1.75; margin: 6px 0; }
       .dr-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #8FD3FF; color: #14496E; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #64AEE0; font-family: inherit; }
+      /* 放在最后:上面几条盖层自带 display:flex,权重一样时靠顺序压住它们 */
+      .dr-wrap .dr-hidden { display: none; }
     </style>
     <div class="dr-panel dr-setup">
       <div>
@@ -277,7 +288,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       <button class="dr-start" type="button">准备好，开跑 ▶</button>
     </div>
     <div class="dr-game dr-hidden">
-      <canvas class="dr-canvas"></canvas>
+      <canvas class="dr-canvas" role="img" aria-label="两人分屏赛道"></canvas>
       <div class="dr-keys">
         <span class="k1">${avatarHTML("duoduo", 18)} 朵朵 W 跳 · A 左 · S 滑 · D 右</span>
         <span class="k2">${avatarHTML("xingxing", 18)} 星星 ↑ 跳 · ← 左 · ↓ 滑 · → 右</span>
@@ -535,24 +546,25 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.fill();
   }
 
-  const ROAD_EDGE = 0.62; // 路面比最外侧车道再宽出去一点
+  /** 路面半宽（单位：车道）。最外侧车道中心在 1 车道处，多出来的就是路肩 */
+  const ROAD_HALF = 1.55;
 
   function drawRoad(pane: Rect, theme: Theme, dist: number): void {
     const hy = horizonY(pane);
     const by = groundY(pane);
-    // 地面底色
+    // 路两边的草地
     const g = ctx.createLinearGradient(0, hy, 0, pane.y + pane.height);
-    g.addColorStop(0, theme.road[1]);
-    g.addColorStop(1, theme.road[0]);
+    g.addColorStop(0, theme.field[1]);
+    g.addColorStop(1, theme.field[0]);
     ctx.fillStyle = g;
     ctx.fillRect(pane.x, hy, pane.width, pane.y + pane.height - hy);
 
     // 路面梯形
-    const nearL = project(pane, 0, 1 - ROAD_EDGE * 2);
-    const nearR = project(pane, 0, 1 + ROAD_EDGE * 2);
-    const farL = project(pane, DRAW_DISTANCE, 1 - ROAD_EDGE * 2);
-    const farR = project(pane, DRAW_DISTANCE, 1 + ROAD_EDGE * 2);
-    ctx.fillStyle = theme.road[0];
+    const nearL = project(pane, 0, 1 - ROAD_HALF);
+    const nearR = project(pane, 0, 1 + ROAD_HALF);
+    const farL = project(pane, DRAW_DISTANCE, 1 - ROAD_HALF);
+    const farR = project(pane, DRAW_DISTANCE, 1 + ROAD_HALF);
+    ctx.fillStyle = theme.road;
     ctx.beginPath();
     ctx.moveTo(nearL.x, by + 2);
     ctx.lineTo(nearR.x, by + 2);
@@ -566,9 +578,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     for (const z of gridLineZs(dist, GRID_SPACING)) {
       const a = 1 - fogAlpha(z);
       if (a <= 0.02) continue;
-      const l = project(pane, z, 1 - ROAD_EDGE * 2);
-      const r = project(pane, z, 1 + ROAD_EDGE * 2);
-      ctx.strokeStyle = `rgba(255,255,255,${(0.45 * a).toFixed(3)})`;
+      const l = project(pane, z, 1 - ROAD_HALF);
+      const r = project(pane, z, 1 + ROAD_HALF);
+      ctx.strokeStyle = `rgba(${theme.mark},${(0.3 * a).toFixed(3)})`;
       ctx.beginPath();
       ctx.moveTo(l.x, l.y);
       ctx.lineTo(r.x, r.y);
@@ -582,8 +594,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         if (a <= 0.02) continue;
         const p1 = project(pane, z, lane);
         const p2 = project(pane, z + GRID_SPACING * 0.5, lane);
-        ctx.strokeStyle = `rgba(255,255,255,${(0.9 * a).toFixed(3)})`;
-        ctx.lineWidth = Math.max(1, 4 * p1.scale);
+        ctx.strokeStyle = `rgba(${theme.mark},${(0.85 * a).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1, 7 * p1.scale);
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
@@ -594,7 +606,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     // 路肩
     ctx.lineWidth = 2;
     ctx.strokeStyle = theme.roadEdge;
-    for (const lane of [1 - ROAD_EDGE * 2, 1 + ROAD_EDGE * 2]) {
+    for (const lane of [1 - ROAD_HALF, 1 + ROAD_HALF]) {
       const p1 = project(pane, 0, lane);
       const p2 = project(pane, DRAW_DISTANCE, lane);
       ctx.beginPath();
@@ -615,79 +627,87 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawEntity(pane: Rect, e: Entity, z: number): void {
-    const p = project(pane, Math.max(0, z), e.lane);
-    const unit = pane.height * p.scale;
+    const zz = Math.max(0, z);
+    const p = project(pane, zz, e.lane);
+    // 所有尺寸都按「这个深度上一条车道有多宽」换算，横竖分屏一个样
+    const u = laneWidthAt(pane, zz);
     const alpha = 1 - fogAlpha(z);
-    if (alpha <= 0.03) return;
+    if (alpha <= 0.03 || u < 0.4) return;
     ctx.save();
     ctx.globalAlpha = alpha;
     if (e.kind === "pit") {
-      ctx.fillStyle = "#6B4B33";
+      ctx.fillStyle = "#7A5638";
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, unit * 0.2, unit * 0.075, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, u * 0.42, u * 0.16, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(0,0,0,.35)";
+      ctx.fillStyle = "#4A3020";
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y - unit * 0.008, unit * 0.15, unit * 0.05, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, u * 0.33, u * 0.11, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (e.kind === "rock") {
-      ctx.fillStyle = "rgba(60,60,90,.18)";
+      ctx.fillStyle = "rgba(60,60,90,.2)";
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, unit * 0.17, unit * 0.055, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, u * 0.36, u * 0.12, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#A99C93";
+      ctx.fillStyle = "#9E9188";
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y - unit * 0.12, unit * 0.16, unit * 0.14, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y - u * 0.28, u * 0.34, u * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#C6BBB2";
+      ctx.fillStyle = "#C4B9B0";
       ctx.beginPath();
-      ctx.ellipse(p.x - unit * 0.05, p.y - unit * 0.16, unit * 0.07, unit * 0.05, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x - u * 0.1, p.y - u * 0.38, u * 0.15, u * 0.1, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (e.kind === "hurdle") {
       // 矮木栏：横杆贴着地面 → 跳过去
-      const w = unit * 0.19;
-      const h = unit * 0.13;
-      ctx.fillStyle = "#E8B27A";
-      ctx.fillRect(p.x - w, p.y - h, w * 2, unit * 0.035);
+      const w = u * 0.4;
+      const barY = p.y - u * 0.3;
+      const th = u * 0.09;
       ctx.fillStyle = "#C98C51";
-      ctx.fillRect(p.x - w, p.y - unit * 0.05, w * 0.14, unit * 0.05);
-      ctx.fillRect(p.x + w - w * 0.14, p.y - unit * 0.05, w * 0.14, unit * 0.05);
-      ctx.fillStyle = "#FFF1DF";
-      ctx.fillRect(p.x - w * 0.3, p.y - h, w * 0.6, unit * 0.035);
+      ctx.fillRect(p.x - w, barY, w * 0.16, u * 0.3);
+      ctx.fillRect(p.x + w - w * 0.16, barY, w * 0.16, u * 0.3);
+      ctx.fillStyle = "#E8B27A";
+      ctx.fillRect(p.x - w, barY, w * 2, th);
+      ctx.fillStyle = "#FFF3E4";
+      ctx.fillRect(p.x - w * 0.34, barY, w * 0.68, th);
     } else if (e.kind === "gate") {
       // 高横杆：杆架在半空 → 要下滑钻过去
-      const w = unit * 0.2;
-      const top = p.y - unit * 0.34;
+      const w = u * 0.42;
+      const top = p.y - u * 0.95;
+      const th = u * 0.2;
       ctx.fillStyle = "#8FB9E8";
-      ctx.fillRect(p.x - w, top, w * 0.13, unit * 0.34);
-      ctx.fillRect(p.x + w - w * 0.13, top, w * 0.13, unit * 0.34);
+      ctx.fillRect(p.x - w, top, w * 0.15, u * 0.95);
+      ctx.fillRect(p.x + w - w * 0.15, top, w * 0.15, u * 0.95);
       ctx.fillStyle = "#5C8FCB";
-      ctx.fillRect(p.x - w, top, w * 2, unit * 0.075);
+      ctx.fillRect(p.x - w, top, w * 2, th);
       ctx.fillStyle = "#EAF3FF";
-      ctx.fillRect(p.x - w * 0.55, top + unit * 0.018, w * 1.1, unit * 0.028);
+      ctx.fillRect(p.x - w * 0.6, top + th * 0.3, w * 1.2, th * 0.34);
     } else if (e.kind === "coin") {
-      const cy = p.y - unit * 0.17;
-      ctx.fillStyle = "#F6C948";
+      const cy = p.y - u * 0.42;
+      ctx.fillStyle = "rgba(60,60,90,.12)";
       ctx.beginPath();
-      ctx.ellipse(p.x, cy, unit * 0.062, unit * 0.078, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, u * 0.14, u * 0.05, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#FFE9A8";
+      ctx.fillStyle = "#F1B93A";
       ctx.beginPath();
-      ctx.ellipse(p.x, cy, unit * 0.032, unit * 0.048, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, cy, u * 0.16, u * 0.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#FFE39B";
+      ctx.beginPath();
+      ctx.ellipse(p.x, cy, u * 0.085, u * 0.12, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (e.kind === "boost") {
-      ctx.fillStyle = "rgba(126,220,150,.75)";
+      ctx.fillStyle = "rgba(126,220,150,.8)";
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, unit * 0.2, unit * 0.06, 0, 0, Math.PI * 2);
+      ctx.ellipse(p.x, p.y, u * 0.42, u * 0.15, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#3E9B63";
       for (let i = 0; i < 2; i++) {
-        const dy = p.y - unit * 0.03 - i * unit * 0.045;
+        const dy = p.y - u * 0.05 - i * u * 0.13;
         ctx.beginPath();
-        ctx.moveTo(p.x - unit * 0.08, dy);
-        ctx.lineTo(p.x, dy - unit * 0.045);
-        ctx.lineTo(p.x + unit * 0.08, dy);
-        ctx.lineTo(p.x, dy - unit * 0.018);
+        ctx.moveTo(p.x - u * 0.2, dy);
+        ctx.lineTo(p.x, dy - u * 0.13);
+        ctx.lineTo(p.x + u * 0.2, dy);
+        ctx.lineTo(p.x, dy - u * 0.05);
         ctx.closePath();
         ctx.fill();
       }
@@ -697,12 +717,11 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawRunner(pane: Rect, s: MatchState, r: Runner, seat: Seat, theme: Theme): void {
     const p = project(pane, RUNNER_Z, r.laneFloat);
-    const unit = pane.height * p.scale;
     const jumpT = r.jumpUntil > s.time ? 1 - (r.jumpUntil - s.time) / JUMP_SECONDS : 0;
     const slideT = r.slideUntil > s.time ? 1 - (r.slideUntil - s.time) / SLIDE_SECONDS : 0;
     const lift = jumpArc(jumpT) * pane.height * JUMP_LIFT_RATIO * p.scale;
     const squash = slideT > 0 ? slideSquash(slideT) : 1;
-    const base = unit * 0.3;
+    const base = laneWidthAt(pane, RUNNER_Z) * 0.6;
     const bodyH = base * squash;
     const shake = r.bump > 0 ? Math.sin(s.time * 42) * base * 0.12 * r.bump : 0;
     const cx = p.x + shake;
@@ -858,6 +877,20 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawDivider();
   }
 
+  const LANE_NAMES = ["左道", "中道", "右道"];
+  let lastLabelAt = 0;
+
+  /** 画面是 canvas，读屏软件看不见，所以每 0.2 秒把两个人的处境写成一句话挂上去。 */
+  function refreshAriaLabel(s: MatchState, now: number): void {
+    if (now - lastLabelAt < 200) return;
+    lastLabelAt = now;
+    const part = (seat: Seat): string => {
+      const r = s.runners[seat];
+      return `${r.name}${LANE_NAMES[r.lane]}${Math.floor(r.dist)}米金币${r.coins}剩${livesLeft(s, seat)}`;
+    };
+    canvas.setAttribute("aria-label", `${part(0)}，${part(1)}`);
+  }
+
   /* ---------------- 主循环 ---------------- */
 
   const SOUND_OF: Partial<Record<string, SoundName>> = {
@@ -893,6 +926,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         drainEvents(s);
       }
       render();
+      refreshAriaLabel(s, now);
     }
     raf = requestAnimationFrame(frame);
   }
