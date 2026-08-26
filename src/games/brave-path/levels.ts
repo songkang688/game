@@ -70,7 +70,7 @@ export const CHAPTERS: Chapter[] = [
     name: "月影回廊",
     emoji: "🌙",
     color: "#e8e2f8",
-    desc: "第七章：暗系回廊，Boss 的读条大招一次比一次凶，防御要按准。",
+    desc: "第七章：暗系回廊，Boss 的读条大招一次攒得比一次久，防御要按准。",
     size: 26
   },
   {
@@ -151,7 +151,7 @@ export const BOSSES: BossInfo[] = [
     element: "water",
     weakness: "grass",
     chargeName: "浪花大卷",
-    tip: "速度很快，多半抢先手。草系打它最疼，读条时记得防御。"
+    tip: "速度很快，多半抢先手。草系打它最管用，读条时记得防御。"
   },
   {
     name: "咕噜熔岩团",
@@ -183,7 +183,7 @@ export const BOSSES: BossInfo[] = [
     element: "dark",
     weakness: "light",
     chargeName: "月纱缠绕",
-    tip: "光系打它最疼。大招一次比一次凶，防御按准就没事。"
+    tip: "光系打它最管用。大招攒得很久，防御按准就没事。"
   },
   {
     name: "星辉巨像",

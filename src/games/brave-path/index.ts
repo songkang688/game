@@ -412,7 +412,7 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
               : `${ELEMENT_EMOJI[def.element]} ${power.toFixed(2)} 倍${def.kind === "breaker" ? " · 破盾" : def.kind === "pierce" ? " · 穿透" : ""}`;
       add(`${def.emoji} ${def.name}`, desc, { kind: "skill", skillId: s.id }, cd <= 0);
     }
-    add("🛡️ 防御", "这回合伤害减半", { kind: "guard" });
+    add("🛡️ 防御", "这回合少掉一半星芒", { kind: "guard" });
     for (const slot of state.hero.bag) {
       const def = ITEMS[slot.id];
       if (!def || slot.count <= 0) continue;
@@ -895,7 +895,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       el(
         "div",
         "bp-sub",
-        "① 对手在蓄力大招时，按「防御」能把伤害挡掉一半；<br>" +
+        "① 对手在蓄力大招时，按「防御」能把这一下挡掉一半；<br>" +
           "② 对手张开护盾时，普通招式几乎打不动，得用破盾或穿透的招；<br>" +
           `③ 背包只有 ${BAG_SLOTS} 格，带什么出门是要想一想的。`
       )

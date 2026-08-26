@@ -508,7 +508,7 @@ describe("Boss 机制", () => {
     expect(r3.state.hero.hp).toBeLessThan(hpBefore);
   });
 
-  it("读条大招不防御会疼很多，防御能把它挡下一半", () => {
+  it("读条大招不防御会掉很多星芒，防御能把它挡下一半", () => {
     const base = hero({ spd: 1, maxHp: 900, def: 0, skills: [] });
     const boss = makeBoss({ spd: 99 }, { shieldEvery: 0 });
     let st = startCombat(base, boss);
@@ -544,7 +544,7 @@ describe("Boss 机制", () => {
     expect(b).toBeLessThan(a);
   });
 
-  it("打 Boss 弱点系比不打弱点疼得多", () => {
+  it("打 Boss 弱点系比不打弱点管用得多", () => {
     const fireHero = hero({ spd: 99, element: "fire", atk: 40, skills: [] });
     const waterHero = hero({ spd: 99, element: "water", atk: 40, skills: [] });
     const boss = makeBoss({ spd: 1 }, { chargeEvery: 0, shieldEvery: 0 });

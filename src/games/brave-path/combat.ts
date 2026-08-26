@@ -5,7 +5,7 @@
  *  1. 属性克制：火 → 草 → 水 → 火 三角，光 ↔ 暗 互相克制；
  *  2. 技能冷却：强招打完要凉几个回合，得排顺序；
  *  3. 有限背包位：出发前只能带几样道具，什么时候用是学问；
- *  4. Boss 机制：读条大招（要防御）、护盾（要破盾）、弱点系（打弱点更疼）。
+ *  4. Boss 机制：读条大招（要防御）、护盾（要破盾）、弱点系（打弱点特别管用）。
  *
  * 全篇没有流血、受伤、死亡的说法。生命值叫「星芒」，被打中就是星星飞溅、
  * 转圈圈眩晕、被弹开；星芒见底就是「累啦，坐下来歇口气」。
@@ -79,7 +79,7 @@ export function elementMultiplier(attack: Element, defend: Element): number {
 /** 给界面用的一句话：这一招打过去是占便宜还是吃亏 */
 export function affinityHint(attack: Element, defend: Element): string {
   const m = elementMultiplier(attack, defend);
-  if (m > 1) return "克制！打过去很疼";
+  if (m > 1) return "克制！这一下特别管用";
   if (m < 1) return "被克制，威力打折";
   return "不吃亏也不占便宜";
 }
@@ -704,7 +704,7 @@ export function planFoeAction(state: CombatState, rng: () => number): Action {
  *  5. 其余情况 → 把每一招和普通攻击一起算一遍期望伤害，谁高用谁。
  *
  * 第 5 条很要紧：技能自带属性，普通攻击走徽章属性。徽章正好戳中对手弱点时，
- * 一记普通攻击可能比属性不对路的大招还疼，AI 得算得过这笔账。
+ * 一记普通攻击可能比属性不对路的大招还管用，AI 得算得过这笔账。
  */
 export function planHeroAction(state: CombatState, rng: () => number): Action {
   const me = state.hero;
