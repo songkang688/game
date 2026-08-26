@@ -231,10 +231,13 @@ export function simulateRace(cfg: RaceLevel, opt: RaceSimOptions): RaceSimResult
 }
 
 // ---------------------------------------------------------------------------
-// 无尽模式「星轨长跑」：赛道不设终点，身后的追赶者越跑越快，被追上就结束
+// 无尽模式「跑不完的跑道」：赛道不设终点，机关越跑越密，摔够三次这一趟就结束
+//
+// 1.1 时它叫「星轨长跑」，被身后的追赶者追上就结束；1.2 改成「撞 3 次结束」，
+// 星星留下来当陪跑员——速度还是下面这条曲线，被它超过只是提示，不再直接收工。
 // ---------------------------------------------------------------------------
 
-/** 无尽模式的追赶者速度：每 60 米提一档，有封顶，不会快到追不上也跑不掉 */
+/** 无尽模式陪跑星星的速度：每 60 米提一档，有封顶，不会快到彻底看不见 */
 export function endlessChaserSpeed(meters: number): number {
   const m = Number.isFinite(meters) ? Math.max(0, meters) : 0;
   return Math.min(13.5, 6.4 + Math.floor(m / 60) * 0.42);
@@ -244,6 +247,29 @@ export function endlessChaserSpeed(meters: number): number {
 export function endlessGapMeters(meters: number): number {
   const m = Number.isFinite(meters) ? Math.max(0, meters) : 0;
   return Math.max(16, 34 - Math.floor(m / 90) * 2);
+}
+
+/** 无尽模式撞几次结束：摔第三跤这一趟就收工（只是坐一下，不掉血、不判输） */
+export const ENDLESS_MAX_HITS = 3;
+
+/** 撞了 hits 次之后这一趟是不是结束了 */
+export function endlessRunOver(hits: number): boolean {
+  const n = Number.isFinite(hits) ? Math.floor(hits) : 0;
+  return n >= ENDLESS_MAX_HITS;
+}
+
+/** 还能撞几次（给 HUD 用，不会是负数） */
+export function endlessHitsLeft(hits: number): number {
+  const n = Number.isFinite(hits) ? Math.max(0, Math.floor(hits)) : 0;
+  return Math.max(0, ENDLESS_MAX_HITS - n);
+}
+
+/**
+ * 机关密度：这一段每 100 米摆几个机关。
+ * 间距越跑越小，密度就随距离单调不减，最后封顶在最小安全间距对应的密度上。
+ */
+export function endlessDensity(meters: number): number {
+  return 100 / endlessGapMeters(meters);
 }
 
 /** 无尽模式跑到多少米算破纪录（0 分不写档，免得刚开跑就弹「新纪录」） */
