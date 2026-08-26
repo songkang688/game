@@ -413,7 +413,7 @@ function drawMonster(c: CanvasRenderingContext2D, m: Monster, t: number): void {
   }
   c.restore();
 
-  // 血条:只在掉过颜料之后才显示,画面清爽一点
+  // 上色进度条:糊到过才显示,没挨过颜料的小怪物头顶干干净净
   if (m.hp < m.maxHp || m.armor > 0) {
     const w = size * 1.2;
     const bx = x - w / 2;
