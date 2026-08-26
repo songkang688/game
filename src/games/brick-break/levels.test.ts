@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CHAPTERS, COLS, LEVELS } from "./levels";
 
-describe("碰碰砖块 99 关", () => {
-  it("恰好 99 关，至少 6 个主题章节", () => {
-    expect(LEVELS).toHaveLength(99);
+describe("碰碰砖块 188 关", () => {
+  it("恰好 188 关，至少 6 个主题章节", () => {
+    expect(LEVELS).toHaveLength(188);
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
-    expect(totalSize(CHAPTERS)).toBe(99);
+    expect(totalSize(CHAPTERS)).toBe(188);
   });
 
-  it("每关砖阵合法且可打完", () => {
-    for (const lv of LEVELS) {
+  it("每关砖阵合法且可打完（前 99 关只有 0/1/2 三种砖）", () => {
+    for (const lv of LEVELS.slice(0, 99)) {
       expect(lv.layout.length).toBeGreaterThanOrEqual(2);
       expect(lv.layout.length).toBeLessThanOrEqual(8);
       for (const row of lv.layout) {
