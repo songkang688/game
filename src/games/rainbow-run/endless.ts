@@ -373,7 +373,10 @@ export type FailKind = "crash" | "pit" | "chaser";
 
 export interface FailCopy {
   title: string;
+  /** 朗读用的整句 */
   line: string;
+  /** 面板上分两行显示,375 宽的窄屏也放得下 */
+  lines: [string, string];
 }
 
 /**
@@ -382,22 +385,22 @@ export interface FailCopy {
  */
 export function failCopy(kind: FailKind, meters: number): FailCopy {
   const m = Math.max(0, Math.floor(meters));
+  const head = `这一趟跑了 ${m} 米!`;
+  const make = (title: string, tail: string): FailCopy => ({
+    title,
+    line: head + tail,
+    lines: [head, tail],
+  });
   if (kind === "pit") {
-    return {
-      title: "脚下踩空啦",
-      line: `这一趟跑了 ${m} 米!坑洞看到就起跳,上滑、W 或者空格都行,再来一次准跳得过去。`,
-    };
+    return make("脚下踩空啦", "看见坑洞就起跳,上滑或者空格都行,再来一次准跳得过去。");
   }
   if (kind === "chaser") {
-    return {
-      title: `${CHASER_NAME}追上来啦`,
-      line: `这一趟跑了 ${m} 米!躲障碍、吃糖果、踩滑轨都能把它甩开,下一趟你能跑得更远。`,
-    };
+    return make(
+      `${CHASER_NAME}追上来啦`,
+      "躲障碍、吃糖果、踩滑轨都能把它甩开,下一趟你能跑得更远。",
+    );
   }
-  return {
-    title: "撞了一下,没事的",
-    line: `这一趟跑了 ${m} 米!眼睛多看远一点,提前一个身位换道就躲得开,再来一次!`,
-  };
+  return make("撞了一下,没事的", "眼睛多看远一点,提前一个身位换道就躲得开,再来一次!");
 }
 
 /* ------------------------------------------------------------------ */

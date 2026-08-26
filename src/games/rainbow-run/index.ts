@@ -1959,7 +1959,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
     if (endless) {
-      fitText(fail.line, w / 2, y + 78, Math.min(440, w - 50));
+      // 分两行写:窄屏一行塞不下这么长的鼓励语
+      fitText(fail.lines[0], w / 2, y + 74, Math.min(440, w - 50));
+      fitText(fail.lines[1], w / 2, y + 94, Math.min(440, w - 50));
     } else if (loseReason === "boss") {
       fitText(
         `打中 ${bossHitsOf(stats)}/${boss?.hp ?? 0} 下:铲碎一个彩纸箱算 1 下,三连完美跳算 2 下`,
@@ -2019,7 +2021,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.font = "14px sans-serif";
       ctx.fillStyle = "#a0a0b2";
       fitText(
-        "左右滑 / A D 换道 · 上滑 / W / 空格跳 · 下滑 / S 滚翻 · 点一下开始",
+        "左右滑或 ← → 换道 · 上滑或空格起跳 · 下滑或 ↓ 滚翻 · 点一下开始",
         w / 2,
         y + 158,
         Math.min(440, w - 50),

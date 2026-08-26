@@ -311,6 +311,20 @@ describe("无尽彩虹跑 · 三种失败", () => {
     expect(failCopy("crash", -5).line).toContain("0 米");
   });
 
+  it("面板上分两行显示,拼起来正好是朗读的那一句,窄屏一行不会太长", () => {
+    for (const kind of kinds) {
+      const copy = failCopy(kind, 1234);
+      expect(copy.lines.length).toBe(2);
+      expect(copy.lines.join("")).toBe(copy.line);
+      // 第一行报成绩、第二行给办法,两行都不超过 375 宽窄屏放得下的长度
+      expect(copy.lines[0]).toContain("1234 米");
+      for (const l of copy.lines) {
+        expect(l.trim().length).toBeGreaterThan(3);
+        expect(l.length, `${kind} 这一行太长了:${l}`).toBeLessThanOrEqual(30);
+      }
+    }
+  });
+
   it("失败文案只鼓励不批评:一个责备的字眼都没有", () => {
     const scold = ["笨", "傻", "菜", "怎么又", "太差", "不行", "失败了", "输了", "别再", "没用"];
     for (const kind of kinds) {
@@ -322,6 +336,18 @@ describe("无尽彩虹跑 · 三种失败", () => {
       // 每一条都带一句「再来一次也行 / 下一趟更远」这样的鼓励
       expect(/再来一次|下一趟|更远|准/.test(copy.line), kind).toBe(true);
     }
+  });
+
+  it("失败文案全中文:按键也用中文说,不夹外文字母", () => {
+    for (const kind of kinds) {
+      const copy = failCopy(kind, 640);
+      expect(copy.title, copy.title).not.toMatch(/[A-Za-z]/);
+      expect(copy.line, copy.line).not.toMatch(/[A-Za-z]/);
+    }
+    // 段落名与难度档名同样只用中文
+    for (const t of ENDLESS_TIERS) expect(t.name, t.name).not.toMatch(/[A-Za-z]/);
+    for (const t of SEGMENT_TEMPLATES) expect(t.name, t.name).not.toMatch(/[A-Za-z]/);
+    expect(CHASER_NAME).not.toMatch(/[A-Za-z]/);
   });
 });
 
