@@ -97,10 +97,13 @@ export interface PadLayout {
 }
 
 export const PAD_LAYOUT: Readonly<PadLayout> = {
-  stick: { x: 0.16, y: 0.74 },
-  grab: { x: 0.78, y: 0.82 },
-  skill: { x: 0.92, y: 0.62 },
+  stick: { x: 0.22, y: 0.66 },
+  grab: { x: 0.78, y: 0.8 },
+  skill: { x: 0.92, y: 0.56 },
 };
+
+/** 摇杆四个方向钮相对摇杆中心的偏移(占半场宽 / 高的比例) */
+export const STICK_OFFSET = { x: 0.14, y: 0.2 };
 
 /** 两个控件圆心之间至少要隔开多少(按热区直径算),小于这个数就会误触 */
 export function padSpacingPx(a: { x: number; y: number }, b: { x: number; y: number }, widthPx: number, heightPx: number): number {

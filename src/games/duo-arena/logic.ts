@@ -32,8 +32,9 @@ export interface SpawnEvent {
   ttl: number;
 }
 
-export const ROUND_SECONDS = 25;
-export const SUDDEN_SECONDS = 15;
+// 单局要短:一个回合 34 秒,输了立刻还有下一回合,小朋友不会觉得「这局没救了」。
+export const ROUND_SECONDS = 34;
+export const SUDDEN_SECONDS = 18;
 export const ROUNDS_TO_WIN = 2;
 export const MAX_ROUNDS = 3;
 export const FREEZE_SECONDS = 2.5;

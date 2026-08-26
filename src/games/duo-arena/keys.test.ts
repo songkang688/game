@@ -4,6 +4,7 @@ import {
   P1_KEYS,
   P2_KEYS,
   PAD_LAYOUT,
+  STICK_OFFSET,
   TAP_ACTIONS,
   TOUCH_HIT_PX,
   isPauseKey,
@@ -115,5 +116,35 @@ describe("手机控件布局", () => {
     expect(PAD_LAYOUT.stick.x).toBeLessThan(0.5);
     expect(PAD_LAYOUT.grab.x).toBeGreaterThan(0.5);
     expect(PAD_LAYOUT.skill.x).toBeGreaterThan(0.5);
+  });
+
+  it("四个方向钮不出半场边界,在 360px 上也整个露在外面", () => {
+    const w = 336;
+    const h = 186;
+    const half = TOUCH_HIT_PX / 2;
+    const spots = [
+      { x: PAD_LAYOUT.stick.x - STICK_OFFSET.x, y: PAD_LAYOUT.stick.y },
+      { x: PAD_LAYOUT.stick.x + STICK_OFFSET.x, y: PAD_LAYOUT.stick.y },
+      { x: PAD_LAYOUT.stick.x, y: PAD_LAYOUT.stick.y - STICK_OFFSET.y },
+      { x: PAD_LAYOUT.stick.x, y: PAD_LAYOUT.stick.y + STICK_OFFSET.y },
+      PAD_LAYOUT.grab,
+      PAD_LAYOUT.skill,
+    ];
+    for (const s of spots) {
+      expect(s.x * w - half).toBeGreaterThanOrEqual(0);
+      expect(s.x * w + half).toBeLessThanOrEqual(w);
+      expect(s.y * h - half).toBeGreaterThanOrEqual(0);
+      expect(s.y * h + half).toBeLessThanOrEqual(h);
+    }
+  });
+
+  it("相邻的方向钮之间留得下手指", () => {
+    const w = 336;
+    const h = 186;
+    const up = { x: PAD_LAYOUT.stick.x, y: PAD_LAYOUT.stick.y - STICK_OFFSET.y };
+    const left = { x: PAD_LAYOUT.stick.x - STICK_OFFSET.x, y: PAD_LAYOUT.stick.y };
+    const down = { x: PAD_LAYOUT.stick.x, y: PAD_LAYOUT.stick.y + STICK_OFFSET.y };
+    expect(padSpacingPx(up, left, w, h)).toBeGreaterThanOrEqual(TOUCH_HIT_PX);
+    expect(padSpacingPx(up, down, w, h)).toBeGreaterThanOrEqual(TOUCH_HIT_PX);
   });
 });
