@@ -779,7 +779,16 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
         if (win === 0) {
           api.onWin(1, "棋盘下满了，握手言和！");
         } else if (!ai) {
-          api.onWin(1, win === 1 ? "⚫ 朵朵连成五颗，赢啦！" : "⚪ 星星连成五颗，赢啦！");
+          api.onWin(
+            1,
+            r.reason === "claim"
+              ? "⚪ 星星指出了黑棋的禁手，这一局星星赢！"
+              : r.reason === "overline"
+                ? "⚫ 黑棋连成了六颗，长连禁手，这一局星星赢！"
+                : win === 1
+                  ? "⚫ 朵朵连成五颗，赢啦！"
+                  : "⚪ 星星连成五颗，赢啦！"
+          );
         } else if (win === 1) {
           const stars: 1 | 2 | 3 = ai === "novice" || ai === "easy" ? 2 : 3;
           api.onWin(stars, `你把${TIER_SHORT[ai]}档的棋灵赢下来了！再往上挑一档试试。`);

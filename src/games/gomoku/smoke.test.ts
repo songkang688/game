@@ -308,6 +308,54 @@ describe("五子棋 · 自由对战", () => {
     handle.destroy();
   });
 
+  it("开着禁手规则时，黑棋踩三三会给白棋一个 8 秒的申告窗口", async () => {
+    const { spy, handle } = await openFree();
+    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "9×9 入门")!.dispatch("click", {});
+    findByText(dom.root, "白棋能指出禁手")!.dispatch("click", {});
+    findByText(dom.root, "开始下棋")!.dispatch("click", {});
+    const canvas = dom.root.find((e) => e.tagName === "canvas")!;
+    // 黑棋摆出双活三的形，白棋下在四个角上（凑不成任何线）
+    const black: Array<[number, number]> = [[2, 2], [3, 3], [4, 2], [4, 3]];
+    const white: Array<[number, number]> = [[0, 0], [0, 8], [8, 0], [8, 8]];
+    for (let i = 0; i < black.length; i++) {
+      tapBoard(canvas, 9, black[i][0], black[i][1]);
+      tapBoard(canvas, 9, white[i][0], white[i][1]);
+    }
+    // (4,4) 同时做出两个活三 —— 三三禁手
+    tapBoard(canvas, 9, 4, 4);
+    expect(dom.root.allText()).toContain("三三");
+    const claim = findByText(dom.root, "指出三三禁手");
+    expect(claim).not.toBeNull();
+    expect(findByText(dom.root, "不指出，继续下")).not.toBeNull();
+    expect(dom.root.allText()).toContain("秒");
+    claim!.dispatch("click", {});
+    expect(spy.wins.length).toBe(1);
+    expect(spy.wins[0].msg).toContain("禁手");
+    handle.destroy();
+  });
+
+  it("白棋放过禁手就接着下，不判负", async () => {
+    const { spy, handle } = await openFree();
+    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "9×9 入门")!.dispatch("click", {});
+    findByText(dom.root, "白棋能指出禁手")!.dispatch("click", {});
+    findByText(dom.root, "开始下棋")!.dispatch("click", {});
+    const canvas = dom.root.find((e) => e.tagName === "canvas")!;
+    const black: Array<[number, number]> = [[2, 2], [3, 3], [4, 2], [4, 3]];
+    const white: Array<[number, number]> = [[0, 0], [0, 8], [8, 0], [8, 8]];
+    for (let i = 0; i < black.length; i++) {
+      tapBoard(canvas, 9, black[i][0], black[i][1]);
+      tapBoard(canvas, 9, white[i][0], white[i][1]);
+    }
+    tapBoard(canvas, 9, 4, 4);
+    findByText(dom.root, "不指出，继续下")!.dispatch("click", {});
+    expect(spy.wins.length).toBe(0);
+    expect(spy.loses.length).toBe(0);
+    expect(dom.root.allText()).toContain("该星星");
+    handle.destroy();
+  });
+
   it("悔棋按钮开局是灰的，落子之后才能按", async () => {
     const { handle } = await openFree();
     findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
