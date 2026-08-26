@@ -223,8 +223,14 @@ describe("样式表的无障碍红线", () => {
     expect(CSS).toMatch(/\.l99-wrap \.l99-ov-btn\s*\{[^}]*min-height:\s*4[8-9]px/);
   });
 
-  it("整页不许横向滚动", () => {
-    expect(CSS).toMatch(/html,\s*\nbody\s*\{[^}]*overflow-x:\s*hidden/);
+  it("整页不许横向滚动,但竖着必须还能滚", () => {
+    expect(CSS_CODE).toMatch(/(^|})\s*html\s*\{[^}]*overflow-x:\s*hidden/m);
+    // body 是 height:100%,给它加 overflow-x 会让它自己裁剪内容、整页竖着滚不动
+    const bodyRules = [...CSS_CODE.matchAll(/(?:^|})\s*body\s*\{([^}]*)\}/gm)].map((m) => m[1]);
+    expect(bodyRules.length).toBeGreaterThan(0);
+    for (const body of bodyRules) {
+      expect(body).not.toMatch(/overflow(-x|-y)?:\s*(hidden|auto|scroll|clip)/);
+    }
   });
 
   it("四个目标断点都有对应的适配规则", () => {
