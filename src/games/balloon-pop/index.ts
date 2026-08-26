@@ -2,16 +2,18 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, type BalloonLevel } from "./levels";
+import { speak } from "../speech";
+import { CHAPTERS, LEVELS, goalSpeechLine, type BalloonLevel } from "./levels";
 
 const H = 420;
 
+// key = 气球本体色（做色卡圆点）；ink = 同色系深色（白底上写字达 WCAG AA）
 const BALLOON_COLORS = [
-  { name: "红", css: "radial-gradient(circle at 35% 30%, #FFB3B3, #F0605F)", key: "#F0605F" },
-  { name: "黄", css: "radial-gradient(circle at 35% 30%, #FFF0B3, #F5C142)", key: "#F5C142" },
-  { name: "蓝", css: "radial-gradient(circle at 35% 30%, #B3D9FF, #4F94E8)", key: "#4F94E8" },
-  { name: "绿", css: "radial-gradient(circle at 35% 30%, #C9F0B3, #6BBB4E)", key: "#6BBB4E" },
-  { name: "紫", css: "radial-gradient(circle at 35% 30%, #E3CCFF, #9E6BD9)", key: "#9E6BD9" },
+  { name: "红", css: "radial-gradient(circle at 35% 30%, #FFB3B3, #F0605F)", key: "#F0605F", ink: "#C0392B" },
+  { name: "黄", css: "radial-gradient(circle at 35% 30%, #FFF0B3, #F5C142)", key: "#F5C142", ink: "#8A6D00" },
+  { name: "蓝", css: "radial-gradient(circle at 35% 30%, #B3D9FF, #4F94E8)", key: "#4F94E8", ink: "#2E6DB4" },
+  { name: "绿", css: "radial-gradient(circle at 35% 30%, #C9F0B3, #6BBB4E)", key: "#6BBB4E", ink: "#3E7434" },
+  { name: "紫", css: "radial-gradient(circle at 35% 30%, #E3CCFF, #9E6BD9)", key: "#9E6BD9", ink: "#7A4FA0" },
 ];
 
 type Kind = "normal" | "cloud" | "rainbow";
@@ -30,14 +32,16 @@ interface Balloon {
 const CSS = `
 .blp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .blp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.blp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C75A82; box-shadow: 0 2px 6px rgba(210,120,160,.25); font-size: 14px; }
+.blp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #A63E64; box-shadow: 0 2px 6px rgba(210,120,160,.25); font-size: 14px; }
+.blp-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: -2px; margin-right: 3px; box-shadow: inset 0 -2px 3px rgba(0,0,0,.15); }
 .blp-sky { position: relative; height: ${H}px; border-radius: 16px; overflow: hidden; }
 .blp-balloon { position: absolute; width: 56px; height: 68px; border: none; border-radius: 50% 50% 46% 46%; cursor: pointer; font-size: 22px; font-weight: 900; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.3); padding: 0; }
 .blp-balloon::after { content: ""; position: absolute; left: 50%; bottom: -12px; width: 2px; height: 12px; background: rgba(120,100,90,.5); }
 .blp-balloon:active { transform: scale(.9); }
 .blp-pop { animation: blpPop .22s ease forwards; pointer-events: none; }
 @keyframes blpPop { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
-.blp-msg { text-align: center; min-height: 20px; color: #C75A82; font-weight: 700; margin-top: 8px; font-size: 14px; }
+.blp-msg { text-align: center; min-height: 20px; color: #A63E64; font-weight: 700; margin-top: 8px; font-size: 14px; }
+.blp-night .blp-msg { color: #fff; background: rgba(40,35,80,.55); border-radius: 999px; padding: 4px 14px; width: fit-content; margin: 8px auto 0; }
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -57,7 +61,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const balloons: Balloon[] = [];
 
   const wrap = document.createElement("div");
-  wrap.className = "blp-wrap";
+  wrap.className = `blp-wrap${cfg.night ? " blp-night" : ""}`;
   wrap.style.background = cfg.night
     ? "linear-gradient(180deg, #3E4578, #7A6BA8)"
     : "linear-gradient(180deg, #DFF1FF, #FFE9F3)";
@@ -87,6 +91,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         : cfg.cloudChance > 0
           ? "乌云球 ☁️ 不能戳哦！"
           : "气球飘上来就戳破它！";
+  // 进关先听一句玩法（无语音包时静默）
+  speak(goalSpeechLine(cfg));
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -100,8 +106,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     scoreEl.textContent = `🎈 ${popped} / ${cfg.target}`;
     lifeEl.textContent = "💗".repeat(Math.max(0, 3 - mistakes)) + "🤍".repeat(Math.min(3, mistakes));
     if (cfg.mode === "color") {
-      orderEl.textContent = `🎯 戳${BALLOON_COLORS[targetColor].name}色`;
-      orderEl.style.color = BALLOON_COLORS[targetColor].key;
+      // 色卡圆点给"看颜色"，深色字给"认字"：不识字的孩子对色卡也能玩
+      const c = BALLOON_COLORS[targetColor];
+      orderEl.innerHTML = `🎯 戳<span class="blp-dot" style="background:${c.key}"></span>${c.name}色`;
+      orderEl.style.color = c.ink;
     } else if (cfg.mode === "number") {
       orderEl.textContent = `🎯 下一个：${targetNum}`;
     } else {
@@ -153,7 +161,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       let next = Math.floor(Math.random() * BALLOON_COLORS.length);
       if (next === targetColor) next = (next + 1) % BALLOON_COLORS.length;
       targetColor = next;
-      msgEl.textContent = `指令换啦：现在戳${BALLOON_COLORS[targetColor].name}色！`;
+      const line = `指令换啦：现在戳${BALLOON_COLORS[targetColor].name}色！`;
+      msgEl.textContent = line;
+      // 指令换色是关键指引且最多每 4 个气球一次：念出来，不识字也不迷路
+      speak(line);
     }
     renderTop();
     if (popped >= cfg.target) finish(true);

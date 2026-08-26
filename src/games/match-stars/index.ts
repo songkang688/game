@@ -2,7 +2,8 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, type MatchLevel } from "./levels";
+import { speak } from "../speech";
+import { CHAPTERS, LEVELS, goalSpeechLine, type MatchLevel } from "./levels";
 
 const SIZE = 8;
 
@@ -19,10 +20,10 @@ const RAINBOW = -2;
 const CSS = `
 .mst-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0F7, #F3F0FF); border-radius: 16px; padding: 10px; user-select: none; position: relative; }
 .mst-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-.mst-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #A66BBE; box-shadow: 0 2px 6px rgba(180,140,220,.25); font-size: 14px; }
+.mst-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #8A4FA5; box-shadow: 0 2px 6px rgba(180,140,220,.25); font-size: 14px; }
 .mst-goals { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }
-.mst-goal { background: #fff; border-radius: 12px; padding: 4px 10px; font-weight: 700; color: #8B6BAE; font-size: 14px; box-shadow: 0 2px 5px rgba(180,140,220,.2); }
-.mst-goal.mst-done { background: #E4F9E0; color: #57A05B; }
+.mst-goal { background: #fff; border-radius: 12px; padding: 4px 10px; font-weight: 700; color: #71559A; font-size: 14px; box-shadow: 0 2px 5px rgba(180,140,220,.2); }
+.mst-goal.mst-done { background: #E4F9E0; color: #3E7434; }
 .mst-bar { height: 12px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mst-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFB6D9, #C9A7F5); border-radius: 8px; transition: width .3s; }
 .mst-board { display: grid; grid-template-columns: repeat(${SIZE}, 1fr); gap: 4px; }
@@ -34,7 +35,7 @@ const CSS = `
 .mst-cell.mst-vine::after { content: "🌿"; position: absolute; right: -2px; top: -2px; font-size: .8em; }
 .mst-cell.mst-vine { box-shadow: inset 0 0 0 3px #8FD08A; }
 @keyframes mstBoom { 0% { transform: scale(1.25); opacity: .4; } 100% { transform: scale(1); opacity: 1; } }
-.mst-msg { text-align: center; min-height: 22px; color: #B06BC0; font-weight: 700; margin-top: 8px; font-size: 15px; }
+.mst-msg { text-align: center; min-height: 22px; color: #91479F; font-weight: 700; margin-top: 8px; font-size: 15px; }
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -144,6 +145,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     else if (cfg.ice > 0) msgEl.textContent = "在冰块上或旁边消除，就能敲开冰块哦！";
     else if (cfg.rainbow) msgEl.textContent = "彩虹星🌈和谁交换，就消掉全场那种图案！";
     else msgEl.textContent = "收集目标里的图案，步数要省着用～";
+    // 进关先听一句目标与机关玩法（无语音包时静默）
+    speak(goalSpeechLine(cfg));
   }
 
   function renderGoals(): void {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
-import { CHAPTERS, LEVELS } from "./levels";
+import { CHAPTERS, LEVELS, TOKEN_NAMES, goalSpeechLine } from "./levels";
 
 describe("星星消消乐 99 关", () => {
   it("恰好 99 关", () => {
@@ -46,5 +46,15 @@ describe("星星消消乐 99 关", () => {
     expect(goalSum(0)).toBeLessThan(goalSum(14));
     // 最后一章：第 86 关 vs 第 99 关
     expect(goalSum(85)).toBeLessThanOrEqual(goalSum(98));
+  });
+
+  it("进关朗读句：步数与收集目标用中文名字念出来，机关按配置追加", () => {
+    for (const lv of LEVELS) {
+      const line = goalSpeechLine(lv);
+      expect(line).toContain(`用 ${lv.moves} 步`);
+      for (const g of lv.goals) expect(line).toContain(`${g.count} 个${TOKEN_NAMES[g.token]}`);
+      if (lv.ice > 0) expect(line).toContain("冰块");
+      if (lv.vine > 0) expect(line).toContain("藤蔓");
+    }
   });
 });

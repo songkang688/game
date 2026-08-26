@@ -2,7 +2,8 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, THEME_SETS, type CatchLevel } from "./levels";
+import { speak } from "../speech";
+import { CHAPTERS, LEVELS, THEME_SETS, goalSpeechLine, type CatchLevel } from "./levels";
 
 const W = 360;
 const H = 460;
@@ -20,14 +21,14 @@ interface Falling {
 const CSS = `
 .fc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF9E8, #FFEFEF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
 .fc-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; }
-.fc-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #D08A3E; box-shadow: 0 2px 6px rgba(220,170,100,.25); font-size: 14px; }
+.fc-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #9C5D18; box-shadow: 0 2px 6px rgba(220,170,100,.25); font-size: 14px; }
 .fc-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .fc-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFD26E, #FF9E5E); border-radius: 8px; transition: width .3s; }
 .fc-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; }
 .fc-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
 .fc-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFD9A0; color: #8A5A20; cursor: pointer; box-shadow: 0 4px 0 #EBBB77; touch-action: none; }
 .fc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBBB77; }
-.fc-msg { text-align: center; min-height: 20px; color: #D08A3E; font-weight: 700; margin-top: 8px; font-size: 14px; }
+.fc-msg { text-align: center; min-height: 20px; color: #9C5D18; font-weight: 700; margin-top: 8px; font-size: 14px; }
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -43,7 +44,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   let missed = 0;
   let dir = 0;
   let basketX = W / 2;
+  let streak = 0;
   const items: Falling[] = [];
+  // 接住瞬间的浮字反馈（手感：让孩子看见"接到了"，学自动作组游戏的 addFloat）
+  const floats: Array<{ x: number; y: number; t: number; text: string; color: string }> = [];
 
   const wrap = document.createElement("div");
   wrap.className = "fc-wrap";
@@ -78,6 +82,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   if (cfg.goldChance >= 0.1) tips.push(`${theme.gold} 一颗顶${cfg.theme === 5 ? "三" : "两"}颗`);
   if (cfg.wind > 0) tips.push("有风，水果会飘");
   msgEl.textContent = tips.length > 0 ? `小心：${tips.join("，")}！` : "接住水果装满篮子吧！";
+  // 进关先听一句目标：识字量有限的孩子读不了小字提示（无语音包时静默）
+  speak(goalSpeechLine(cfg));
+
+  function addFloat(text: string, x: number, color: string): void {
+    floats.push({ x: Math.max(24, Math.min(W - 24, x)), y: H - 52, t: 0, text, color });
+  }
 
   function updateTop(): void {
     scoreEl.textContent = `🧺 ${caught} / ${cfg.target}`;
@@ -122,7 +132,28 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     for (const f of items) c2d.fillText(f.emoji, f.x, f.y);
     c2d.font = "44px serif";
     c2d.fillText("🧺", basketX, H - 18);
+    c2d.font = "900 19px 'PingFang SC','Microsoft YaHei',sans-serif";
+    c2d.lineWidth = 4;
+    c2d.lineJoin = "round";
+    for (const fl of floats) {
+      const y = fl.y - fl.t * 46;
+      c2d.globalAlpha = Math.max(0, 1 - fl.t / 0.8);
+      c2d.strokeStyle = "#ffffff";
+      c2d.strokeText(fl.text, fl.x, y);
+      c2d.fillStyle = fl.color;
+      c2d.fillText(fl.text, fl.x, y);
+    }
+    c2d.globalAlpha = 1;
     c2d.textAlign = "left";
+  }
+
+  // 连着接不落空时的中途鼓励（学水果忍者的连击夸奖：马上夸，孩子越接越起劲）
+  function cheerStreak(): void {
+    if (streak > 0 && streak % 10 === 0) {
+      ctx.sfx("coin");
+      addFloat(`连着 ${streak} 个！`, basketX, "#8E4E91");
+      msgEl.textContent = `🎉 一口气接住 ${streak} 个，接得真稳！`;
+    }
   }
 
   function finish(won: boolean): void {
@@ -153,6 +184,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       spawnTimer = Math.max(0.45, cfg.spawnMs / 1000 - caught * 0.015);
     }
 
+    for (let i = floats.length - 1; i >= 0; i--) {
+      floats[i].t += dt;
+      if (floats[i].t >= 0.8) floats.splice(i, 1);
+    }
+
     for (let i = items.length - 1; i >= 0; i--) {
       const f = items[i];
       f.y += f.vy * dt;
@@ -164,27 +200,38 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         items.splice(i, 1);
         if (f.kind === "bad") {
           missed++;
+          streak = 0;
           ctx.sfx("oops");
+          addFloat("💔", f.x, "#A33A3A");
           msgEl.textContent = `${theme.bad} 不能进篮子，快躲开它们！`;
           updateTop();
           if (missed >= MAX_MISS) { finish(false); return; }
         } else if (f.kind === "gold") {
           ctx.sfx("coin");
-          caught += cfg.theme === 5 ? 3 : 2;
+          const gain = cfg.theme === 5 ? 3 : 2;
+          caught += gain;
+          streak++;
+          addFloat(`+${gain}`, f.x, "#9C5D18");
           msgEl.textContent = cfg.theme === 5 ? "✨ 萤火虫一只顶三个！" : "🌟 金星星一颗顶两颗！";
           updateTop();
           if (caught >= cfg.target) { finish(true); return; }
+          cheerStreak();
         } else {
           ctx.sfx("pop");
           caught++;
+          streak++;
+          addFloat("+1", f.x, "#3E7434");
           updateTop();
           if (caught >= cfg.target) { finish(true); return; }
+          cheerStreak();
         }
       } else if (f.y > H + 20) {
         items.splice(i, 1);
         if (f.kind === "fruit") {
           missed++;
+          streak = 0;
           ctx.sfx("oops");
+          addFloat("💔", f.x, "#A33A3A");
           updateTop();
           if (missed >= MAX_MISS) { finish(false); return; }
         }

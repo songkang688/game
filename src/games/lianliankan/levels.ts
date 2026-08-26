@@ -94,3 +94,14 @@ export const LEVELS: LlkLevel[] = (() => {
   });
   return out;
 })();
+
+/**
+ * 进关目标朗读（识字量有限的孩子靠听懂规则与机关）。
+ * 与画面小字提示同逻辑，纯函数便于测试。
+ */
+export function goalSpeechLine(cfg: LlkLevel): string {
+  const parts = [`找到两个一样的图案连起来，${cfg.seconds} 秒内全部连完！`];
+  if (cfg.gravity === "down") parts.push("小心，消掉一对后，上面的图案会掉下来！");
+  else if (cfg.gravity === "left") parts.push("小心，消掉一对后，右边的图案会向左滑！");
+  return parts.join("");
+}

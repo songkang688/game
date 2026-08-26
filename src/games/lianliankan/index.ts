@@ -2,7 +2,8 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, THEME_EMOJIS, type LlkLevel } from "./levels";
+import { speak } from "../speech";
+import { CHAPTERS, LEVELS, THEME_EMOJIS, goalSpeechLine, type LlkLevel } from "./levels";
 
 const BGS = [
   "#FFE3E3", "#FFF3CE", "#EBDDFB", "#FFE0EC", "#E0F0FF", "#FFE9F3", "#FFF6D8",
@@ -14,10 +15,10 @@ type Pt = [number, number];
 const CSS = `
 .llk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF2E4, #FDEBF3); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .llk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.llk-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #D98548; box-shadow: 0 2px 6px rgba(220,160,100,.25); font-size: 14px; }
-.llk-badge.llk-hurry { color: #E8590C; animation: llkBlink 1s infinite; }
+.llk-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #A85E22; box-shadow: 0 2px 6px rgba(220,160,100,.25); font-size: 14px; }
+.llk-badge.llk-hurry { color: #B84708; animation: llkBlink 1s infinite; }
 @keyframes llkBlink { 50% { opacity: .5; } }
-.llk-shuffle { border: none; border-radius: 14px; padding: 6px 12px; font-weight: 700; background: #FFD9A8; color: #8A5A20; cursor: pointer; box-shadow: 0 3px 0 #EFBC82; font-size: 14px; font-family: inherit; }
+.llk-shuffle { border: none; border-radius: 14px; padding: 6px 12px; min-height: 44px; font-weight: 700; background: #FFD9A8; color: #7E5119; cursor: pointer; box-shadow: 0 3px 0 #EFBC82; font-size: 14px; font-family: inherit; }
 .llk-shuffle:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFBC82; }
 .llk-shuffle:disabled { opacity: .5; }
 .llk-boardbox { position: relative; }
@@ -27,7 +28,7 @@ const CSS = `
 .llk-cell.llk-sel { box-shadow: 0 0 0 3px #FF9E5E; transform: scale(1.1); }
 .llk-cell:active { transform: scale(.9); }
 .llk-line { position: absolute; inset: 0; pointer-events: none; }
-.llk-msg { text-align: center; min-height: 22px; color: #D98548; font-weight: 700; margin-top: 8px; font-size: 15px; }
+.llk-msg { text-align: center; min-height: 22px; color: #A85E22; font-weight: 700; margin-top: 8px; font-size: 15px; }
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -117,6 +118,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         : cfg.gravity === "left"
           ? "小心！消掉一对后，右边的图案会向左滑！"
           : `${cfg.rows}×${cfg.cols} 棋盘，${cfg.seconds} 秒内全部连完！`;
+    // 进关先听一句目标与机关玩法（无语音包时静默）
+    speak(goalSpeechLine(cfg));
 
     const clock = setInterval(() => {
       if (levelDone || destroyed) return;

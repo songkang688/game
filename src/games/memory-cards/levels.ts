@@ -113,3 +113,19 @@ export const LEVELS: MemoryLevel[] = (() => {
   });
   return out;
 })();
+
+/**
+ * 进关目标朗读（识字量有限的孩子靠听懂规则与机关）。
+ * 与画面小字提示同逻辑，纯函数便于测试。
+ */
+export function goalSpeechLine(cfg: MemoryLevel): string {
+  const parts = [
+    cfg.matchSize === 3
+      ? `翻开卡片，找到三张一样的才算一组，配齐 ${cfg.pairs} 组！`
+      : `翻开卡片，找到两张一样的配成一对，配齐 ${cfg.pairs} 对！`
+  ];
+  if (cfg.peekMs > 0) parts.push("开局先偷看一下，快记住它们的位置！");
+  if (cfg.imp > 0) parts.push("小心调皮章鱼会偷偷换牌！");
+  if (cfg.timeLimit > 0) parts.push(`要在 ${cfg.timeLimit} 秒内完成哦！`);
+  return parts.join("");
+}

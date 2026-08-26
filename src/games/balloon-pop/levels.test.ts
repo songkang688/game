@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
-import { CHAPTERS, LEVELS } from "./levels";
+import { CHAPTERS, LEVELS, goalSpeechLine } from "./levels";
 
 describe("气球砰砰 99 关", () => {
   it("恰好 99 关，至少 6 个主题章节", () => {
@@ -35,5 +35,16 @@ describe("气球砰砰 99 关", () => {
     expect(LEVELS[0].target).toBeLessThan(LEVELS[16].target);
     expect(LEVELS[0].riseSpeed).toBeLessThan(LEVELS[16].riseSpeed);
     expect(LEVELS[67].riseSpeed).toBeLessThan(LEVELS[82].riseSpeed);
+  });
+
+  it("进关朗读句按模式与机关给出对应玩法", () => {
+    for (const lv of LEVELS) {
+      const line = goalSpeechLine(lv);
+      expect(line).toContain(`${lv.target} 个`);
+      if (lv.mode === "color") expect(line).toContain("颜色");
+      if (lv.mode === "number") expect(line).toContain("顺序");
+      if (lv.cloudChance > 0) expect(line).toContain("乌云球");
+      if (lv.night) expect(line).toContain("天黑");
+    }
   });
 });

@@ -2,15 +2,16 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, shuffled, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, THEME_EMOJIS, type MemoryLevel } from "./levels";
+import { speak } from "../speech";
+import { CHAPTERS, LEVELS, THEME_EMOJIS, goalSpeechLine, type MemoryLevel } from "./levels";
 
 const BACKS = ["#FFD6E7", "#D6EBFF", "#DFF7DC", "#FFF0C9", "#EBDFFF", "#FFE4D6"];
 
 const CSS = `
 .mem-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E9F4FF, #FDF0FF); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .mem-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.mem-badge { background: #fff; border-radius: 14px; padding: 5px 12px; font-weight: 700; color: #5B8FC9; box-shadow: 0 2px 6px rgba(120,160,220,.25); font-size: 14px; }
-.mem-badge.mem-warn { color: #E8590C; }
+.mem-badge { background: #fff; border-radius: 14px; padding: 5px 12px; font-weight: 700; color: #3E6FA8; box-shadow: 0 2px 6px rgba(120,160,220,.25); font-size: 14px; }
+.mem-badge.mem-warn { color: #B84708; }
 .mem-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mem-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #8FC5FF, #C9A7F5); border-radius: 8px; transition: width .3s; }
 .mem-board { display: grid; gap: 8px; }
@@ -20,7 +21,7 @@ const CSS = `
 .mem-card.mem-swap { animation: memSwap .5s ease; }
 @keyframes memSwap { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-12deg) scale(1.1); } 70% { transform: rotate(12deg) scale(1.1); } }
 .mem-card:active { transform: scale(.92); }
-.mem-msg { text-align: center; min-height: 22px; color: #6A9BD8; font-weight: 700; margin-top: 10px; font-size: 15px; }
+.mem-msg { text-align: center; min-height: 22px; color: #3E6FA8; font-weight: 700; margin-top: 10px; font-size: 15px; }
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -188,6 +189,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   // 开局提示 / 偷看 / 计时
   deck.forEach((_, i) => renderCard(i));
   renderTop();
+  // 进关先听一句规则与机关（无语音包时静默）
+  speak(goalSpeechLine(cfg));
   if (cfg.peekMs > 0) {
     msgEl.textContent = "👀 快记住它们的位置！";
     faceUp.fill(true);

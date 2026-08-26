@@ -86,3 +86,16 @@ export const LEVELS: BubbleLevel[] = (() => {
   });
   return out;
 })();
+
+/**
+ * 进关目标朗读（识字量有限的孩子靠听懂机关）。
+ * 与画面小字提示同逻辑，用中文名字代替表情符号，纯函数便于测试。
+ */
+export function goalSpeechLine(cfg: BubbleLevel): string {
+  const parts = [`点破挨在一起的同色泡泡，最后剩下不超过 ${cfg.maxLeft} 个就过关！`];
+  if (cfg.rainbow > 0) parts.push("彩虹泡泡一点，就消掉最多的那种颜色！");
+  if (cfg.stone > 0) parts.push("石头敲不破，绕开它！");
+  if (cfg.bolt > 0) parts.push("闪电泡泡清掉一整行一整列！");
+  if (cfg.frozen > 0) parts.push("冻住的泡泡，在它旁边消一次才解冻！");
+  return parts.join("");
+}

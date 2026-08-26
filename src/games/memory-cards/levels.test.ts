@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
-import { CHAPTERS, LEVELS, THEME_EMOJIS } from "./levels";
+import { CHAPTERS, LEVELS, THEME_EMOJIS, goalSpeechLine } from "./levels";
 
 describe("记忆翻翻乐 99 关", () => {
   it("恰好 99 关，至少 6 个主题章节", () => {
@@ -42,6 +42,16 @@ describe("记忆翻翻乐 99 关", () => {
     for (const pool of THEME_EMOJIS) {
       expect(pool.length).toBeGreaterThanOrEqual(12);
       expect(new Set(pool).size).toBe(pool.length);
+    }
+  });
+
+  it("进关朗读句：组数必念，偷看/章鱼/倒计时按配置追加", () => {
+    for (const lv of LEVELS) {
+      const line = goalSpeechLine(lv);
+      expect(line).toContain(`${lv.pairs} ${lv.matchSize === 3 ? "组" : "对"}`);
+      if (lv.peekMs > 0) expect(line).toContain("偷看");
+      if (lv.imp > 0) expect(line).toContain("章鱼");
+      if (lv.timeLimit > 0) expect(line).toContain(`${lv.timeLimit} 秒`);
     }
   });
 });

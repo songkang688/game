@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
-import { CHAPTERS, LEVELS } from "./levels";
+import { CHAPTERS, LEVELS, goalSpeechLine } from "./levels";
 
 describe("泡泡噗噗 99 关", () => {
   it("恰好 99 关，至少 6 个主题章节", () => {
@@ -33,5 +33,15 @@ describe("泡泡噗噗 99 关", () => {
   it("章节内目标越来越紧", () => {
     expect(LEVELS[16].maxLeft).toBeLessThanOrEqual(LEVELS[0].maxLeft);
     expect(LEVELS[98].maxLeft).toBeLessThanOrEqual(LEVELS[83].maxLeft);
+  });
+
+  it("进关朗读句：目标必念，机关按配置用中文名字念出来", () => {
+    const first = goalSpeechLine(LEVELS[0]);
+    expect(first).toContain(`不超过 ${LEVELS[0].maxLeft} 个`);
+    expect(first).not.toContain("彩虹");
+    // 彩虹湾要念彩虹玩法，石头滩要念石头，冻冻港要念解冻
+    expect(goalSpeechLine(LEVELS[25])).toContain("彩虹泡泡");
+    expect(goalSpeechLine(LEVELS[42])).toContain("石头");
+    expect(goalSpeechLine(LEVELS[74])).toContain("解冻");
   });
 });

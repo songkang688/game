@@ -30,13 +30,26 @@ export const CHAPTERS: Chapter[] = [
 ];
 
 export const THEME_SETS = [
-  { fruits: ["🍎", "🍌", "🍓", "🍇", "🍑", "🍊"], bad: "💣", gold: "🌟", bg: "linear-gradient(180deg, #CDEBFF 0%, #EAF8E6 100%)" },
-  { fruits: ["🍎", "🍐", "🍒", "🍉", "🥝", "🍋"], bad: "💣", gold: "🌟", bg: "linear-gradient(180deg, #D8E8F5 0%, #EFE9D8 100%)" },
-  { fruits: ["🍊", "🥭", "🍍", "🍑", "🍯", "🧁"], bad: "💣", gold: "🌟", bg: "linear-gradient(180deg, #FFE8B0 0%, #FFF6DF 100%)" },
-  { fruits: ["🍏", "🍐", "🍇", "🍈", "🫐", "🍒"], bad: "🌰", gold: "🌟", bg: "linear-gradient(180deg, #CFF0DC 0%, #F2FBE8 100%)" },
-  { fruits: ["🍎", "🍌", "🍇", "🍓", "🍊", "🍉"], bad: "💧", gold: "🌟", bg: "linear-gradient(180deg, #B9CCE4 0%, #DDE8F2 100%)" },
-  { fruits: ["🏮", "🍡", "🥮", "🍬", "🍭", "🍪"], bad: "🦇", gold: "✨", bg: "linear-gradient(180deg, #4A5590 0%, #8A7AB0 100%)" }
+  { fruits: ["🍎", "🍌", "🍓", "🍇", "🍑", "🍊"], bad: "💣", badName: "炸弹", gold: "🌟", goldName: "金星星", bg: "linear-gradient(180deg, #CDEBFF 0%, #EAF8E6 100%)" },
+  { fruits: ["🍎", "🍐", "🍒", "🍉", "🥝", "🍋"], bad: "💣", badName: "乌鸦丢的炸弹", gold: "🌟", goldName: "金星星", bg: "linear-gradient(180deg, #D8E8F5 0%, #EFE9D8 100%)" },
+  { fruits: ["🍊", "🥭", "🍍", "🍑", "🍯", "🧁"], bad: "💣", badName: "炸弹", gold: "🌟", goldName: "金星星", bg: "linear-gradient(180deg, #FFE8B0 0%, #FFF6DF 100%)" },
+  { fruits: ["🍏", "🍐", "🍇", "🍈", "🫐", "🍒"], bad: "🌰", badName: "硬栗子", gold: "🌟", goldName: "金星星", bg: "linear-gradient(180deg, #CFF0DC 0%, #F2FBE8 100%)" },
+  { fruits: ["🍎", "🍌", "🍇", "🍓", "🍊", "🍉"], bad: "💧", badName: "凉雨滴", gold: "🌟", goldName: "金星星", bg: "linear-gradient(180deg, #B9CCE4 0%, #DDE8F2 100%)" },
+  { fruits: ["🏮", "🍡", "🥮", "🍬", "🍭", "🍪"], bad: "🦇", badName: "小蝙蝠", gold: "✨", goldName: "萤火虫", bg: "linear-gradient(180deg, #4A5590 0%, #8A7AB0 100%)" }
 ] as const;
+
+/**
+ * 进关目标朗读（一年级识字量有限，关卡目标与机关提示靠听）。
+ * 与画面上的小字提示同源同逻辑，纯函数便于测试。
+ */
+export function goalSpeechLine(cfg: CatchLevel): string {
+  const th = THEME_SETS[cfg.theme];
+  const parts = [`接住 ${cfg.target} 个${cfg.theme === 5 ? "小点心" : "水果"}，装满篮子！`];
+  if (cfg.badChance > 0) parts.push(`小心，${th.badName}不能接！`);
+  if (cfg.goldChance >= 0.1) parts.push(`${th.goldName}一颗顶${cfg.theme === 5 ? "三" : "两"}颗！`);
+  if (cfg.wind > 0) parts.push("有风，水果会飘！");
+  return parts.join("");
+}
 
 function buildLevel(ci: number, t: number): CatchLevel {
   switch (ci) {

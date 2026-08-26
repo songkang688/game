@@ -2,7 +2,8 @@ import { meta } from "./meta";
 export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { CHAPTERS, LEVELS, type BubbleLevel } from "./levels";
+import { speak } from "../speech";
+import { CHAPTERS, LEVELS, goalSpeechLine, type BubbleLevel } from "./levels";
 
 const COLS = 8;
 const RAINBOW = 99;
@@ -22,14 +23,14 @@ const COLORS = [
 const CSS = `
 .bp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E4F6FF, #F2EDFF); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .bp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.bp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #4FA3C7; box-shadow: 0 2px 6px rgba(100,170,210,.25); font-size: 14px; }
+.bp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #28698A; box-shadow: 0 2px 6px rgba(100,170,210,.25); font-size: 14px; }
 .bp-board { display: grid; grid-template-columns: repeat(${COLS}, 1fr); gap: 4px; }
 .bp-cell { aspect-ratio: 1; border: none; border-radius: 50%; cursor: pointer; transition: transform .12s, opacity .2s; padding: 0; font-size: clamp(12px, 3.6vw, 20px); display: flex; align-items: center; justify-content: center; }
 .bp-cell:active { transform: scale(.85); }
 .bp-cell.bp-empty { background: transparent !important; box-shadow: none !important; cursor: default; }
 .bp-cell.bp-rainbow { animation: bpSpin 2.5s linear infinite; }
 @keyframes bpSpin { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
-.bp-msg { text-align: center; min-height: 22px; color: #4FA3C7; font-weight: 700; margin-top: 10px; font-size: 15px; }
+.bp-msg { text-align: center; min-height: 22px; color: #28698A; font-weight: 700; margin-top: 10px; font-size: 15px; }
 `;
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -118,6 +119,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (cfg.bolt > 0) tips.push("⚡ 清掉整行整列");
     if (cfg.frozen > 0) tips.push("🧊 在旁边消一次才解冻");
     msgEl.textContent = tips.length > 0 ? tips.join("；") : "找到挨在一起的同色泡泡，一起点破它们！";
+    // 进关先听一句目标与机关玩法（无语音包时静默）
+    speak(goalSpeechLine(cfg));
   }
 
   function isColor(v: number): boolean {

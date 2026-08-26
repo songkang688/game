@@ -82,3 +82,20 @@ export const LEVELS: BalloonLevel[] = (() => {
   });
   return out;
 })();
+
+/**
+ * 进关目标朗读（识字量有限的孩子靠听懂玩法与机关）。
+ * 与画面小字提示同逻辑，纯函数便于测试。
+ */
+export function goalSpeechLine(cfg: BalloonLevel): string {
+  const base =
+    cfg.mode === "color"
+      ? `戳破 ${cfg.target} 个气球！看清指令说的颜色再戳！`
+      : cfg.mode === "number"
+        ? `按 1 到 5 的顺序戳气球，戳满 ${cfg.target} 个！`
+        : `气球飘上来就戳破它，戳满 ${cfg.target} 个！`;
+  const parts = [base];
+  if (cfg.cloudChance > 0) parts.push("乌云球不能戳！");
+  if (cfg.night) parts.push("天黑啦，看仔细再出手！");
+  return parts.join("");
+}

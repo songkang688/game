@@ -139,3 +139,20 @@ export const LEVELS: MatchLevel[] = (() => {
   });
   return out;
 })();
+
+/** 图案的中文名（与 index.ts 的 TOKENS 表情一一对应），朗读时用名字代替表情 */
+export const TOKEN_NAMES = ["星星", "爱心", "四叶草", "月亮", "橘子"] as const;
+
+/**
+ * 进关目标朗读（识字量有限的孩子靠听懂目标与机关）。
+ * 与画面小字提示同逻辑，纯函数便于测试。
+ */
+export function goalSpeechLine(cfg: MatchLevel): string {
+  const goals = cfg.goals.map((g) => `${g.count} 个${TOKEN_NAMES[g.token]}`).join("、");
+  const parts = [`用 ${cfg.moves} 步收集 ${goals}！`];
+  if (cfg.ice > 0 && cfg.vine > 0) parts.push("冰块旁边消、藤蔓上面消，机关全清才过关！");
+  else if (cfg.vine > 0) parts.push("在藤蔓格子上消除，才能剪断藤蔓！");
+  else if (cfg.ice > 0) parts.push("在冰块上或旁边消除，就能敲开冰块！");
+  else if (cfg.rainbow) parts.push("彩虹星和谁交换，就消掉全场那种图案！");
+  return parts.join("");
+}
