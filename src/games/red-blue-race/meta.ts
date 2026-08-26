@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🏁",
   category: "party" as const,
   color: "#51cf66",
-  blurb: "99 关六大赛道！水坑要跳、栏架要跨、上坡要拼，冲线夺冠！",
+  blurb: "188 关十大赛道！跳水坑跨栏架，还要拼体力、抢礼物箱、踩节拍，外加无尽长跑！",
 };

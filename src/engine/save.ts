@@ -18,6 +18,11 @@ export type BestStars = 0 | 1 | 2 | 3;
 export interface GameProgress {
   bestStars: BestStars;
   plays: number;
+  /**
+   * 无尽模式最好成绩(1.1 新增)。老存档没有这个字段,读出来就是 0;
+   * 不同游戏的单位自己定义(米数 / 得分 / 回合数),平台只负责保存最大值。
+   */
+  endlessBest: number;
 }
 
 interface SaveData {
@@ -99,9 +104,11 @@ function sanitize(raw: unknown): SaveData {
       const v = value as Record<string, unknown>;
       const best = typeof v.bestStars === "number" ? v.bestStars : 0;
       const plays = typeof v.plays === "number" ? v.plays : 0;
+      const endless = typeof v.endlessBest === "number" && Number.isFinite(v.endlessBest) ? v.endlessBest : 0;
       data.games[id] = {
         bestStars: (Math.min(3, Math.max(0, Math.round(best))) as BestStars) ?? 0,
-        plays: Math.max(0, Math.round(plays))
+        plays: Math.max(0, Math.round(plays)),
+        endlessBest: Math.max(0, Math.round(endless))
       };
     }
   }
@@ -223,7 +230,7 @@ export class SaveStore {
   }
 
   getGameProgress(id: string): GameProgress {
-    return this.data.games[id] ?? { bestStars: 0, plays: 0 };
+    return this.data.games[id] ?? { bestStars: 0, plays: 0, endlessBest: 0 };
   }
 
   /** 记录一次开始游玩 */
@@ -237,10 +244,21 @@ export class SaveStore {
   recordWin(id: string, stars: BestStars): void {
     const p = this.getGameProgress(id);
     this.data.games[id] = {
-      plays: p.plays,
+      ...p,
       bestStars: Math.max(p.bestStars, stars) as BestStars
     };
     this.persist();
+  }
+
+  /** 记录一次无尽模式成绩,保留历史最高分,返回保存后的最好成绩 */
+  recordEndlessBest(id: string, score: number): number {
+    const p = this.getGameProgress(id);
+    if (!Number.isFinite(score)) return p.endlessBest;
+    const next = Math.max(p.endlessBest, Math.max(0, Math.round(score)));
+    if (next === p.endlessBest && this.data.games[id]) return p.endlessBest;
+    this.data.games[id] = { ...p, endlessBest: next };
+    this.persist();
+    return next;
   }
 
   /**
