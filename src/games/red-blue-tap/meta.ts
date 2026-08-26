@@ -8,5 +8,5 @@ export const meta = {
   emoji: "🎈",
   category: "party" as const,
   color: "#4dabf7",
-  blurb: "99 关六大赛场！抢蓝点、躲陷阱、双子点点，和小电脑拼手速！",
+  blurb: "188 关十大赛场！抢点躲陷阱，还要接连击、抢道具、按号码顺序拍，外加无尽抢点！",
 };
