@@ -170,6 +170,25 @@ describe("迷宫舞台", () => {
     handle.destroy();
   });
 
+  it("画布带读屏文字与列数，暂停也会写进去", async () => {
+    const { mountStage } = await import("./index");
+    const cfg = { ...configFor(0), ghostCount: 0 };
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg,
+      starRole: "none",
+      label: "测试",
+      onEnd: () => undefined,
+    });
+    const canvas = dom.root.querySelector(".dmz-canvas")!;
+    expect(canvas.getAttribute("data-cols")).toBe(String(cfg.maze.w));
+    expect(canvas.getAttribute("role")).toBe("img");
+    expect(canvas.getAttribute("aria-label")).toMatch(/朵朵\d+分，小星命\d+，剩\d+颗豆$/);
+    key("Escape");
+    flushFrames(dom, 1, 60);
+    expect(canvas.getAttribute("aria-label")).toContain("已暂停");
+    handle.destroy();
+  });
+
   it("画布分辨率按屏宽算，窄屏上格子不会小于 14px", async () => {
     restoreDom();
     dom = installDom(360);

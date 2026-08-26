@@ -179,6 +179,9 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   canvas.width = maze.w * cell;
   canvas.height = maze.h * cell;
   canvas.style.maxWidth = `${maxCanvasWidth(maze.w)}px`;
+  // 读屏和冒烟脚本都靠这两个属性认迷宫：列数用来反推每格实际占多少像素
+  canvas.setAttribute("role", "img");
+  canvas.setAttribute("data-cols", String(maze.w));
   const ctx = canvas.getContext("2d");
 
   let raf = 0;
@@ -348,6 +351,10 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     leftEl.textContent = `🫐 剩 ${remaining(state)}`;
     extraEl.textContent = opts.extraChip ? opts.extraChip() : opts.label;
     noteEl.textContent = paused ? "已暂停，按 Esc 继续。" : state.notice;
+    canvas.setAttribute(
+      "aria-label",
+      `朵朵${state.score}分，小星命${state.lives}，剩${remaining(state)}颗豆${paused ? "，已暂停" : ""}`
+    );
   }
 
   // 上一帧的几个数，用来判断这一帧该响哪个音
