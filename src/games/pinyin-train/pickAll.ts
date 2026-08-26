@@ -7,7 +7,13 @@
  */
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
+import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
 import type { PickAllTask } from "./levels";
+
+/** 挑拣车厢要朗读的整句话：题目加判断方法，听一遍就知道该挑什么 */
+export function pickAllSpeech(task: PickAllTask): string {
+  return `${task.title}。${task.hint}`;
+}
 
 export interface PickAllOptions {
   stage: HTMLElement;
@@ -64,7 +70,11 @@ const CSS = `
   font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;}
 .pk-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .pk-msg{min-height:24px;font-size:15px;font-weight:800;text-align:center;}
-.pk-chip:focus-visible,.pk-go:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.pk-say-row{display:flex;justify-content:center;position:sticky;top:4px;z-index:3;}
+.pk-say{border:none;border-radius:999px;background:#ffffffe6;cursor:pointer;font-family:inherit;font-weight:900;
+  font-size:16px;padding:10px 24px;min-height:46px;box-shadow:0 3px 0 rgba(120,120,160,.3);}
+.pk-say:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,120,160,.3);}
+.pk-chip:focus-visible,.pk-go:focus-visible,.pk-say:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (max-width:420px){
   .pk-chip{font-size:17px;min-width:64px;min-height:50px;padding:10px 12px;}
   .pk-title{font-size:18px;}
@@ -107,6 +117,7 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
     </div>
     <div class="pk-title" style="color:${theme.accent}">🚃 ${task.title}</div>
     <div class="pk-hint" style="color:${theme.accent}">${task.hint}</div>
+    <div class="pk-say-row"><button type="button" class="pk-say" style="color:${theme.accent}" hidden>🔈 再听一遍</button></div>
     <div class="pk-chips"></div>
     <div class="pk-bottom">
       <button type="button" class="pk-go">✅ 就挑这些</button>
@@ -120,6 +131,23 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
   const lifeEl = wrap.querySelector(".pk-life") as HTMLElement;
   const msgEl = wrap.querySelector(".pk-msg") as HTMLElement;
   const goBtn = wrap.querySelector(".pk-go") as HTMLButtonElement;
+  const sayBtn = wrap.querySelector(".pk-say") as HTMLButtonElement;
+
+  // 朗读：进关自动读一遍题目与判断方法；没有中文语音包时按钮不出现，照样能挑
+  const line = pickAllSpeech(task);
+  sayBtn.addEventListener("click", () => {
+    if (!destroyed) speak(line);
+  });
+  let speechOn = speechReady();
+  if (speechOn) sayBtn.hidden = false;
+  const unwatchSpeech = whenSpeechReady(() => {
+    sayBtn.hidden = false;
+    if (!speechOn) {
+      speechOn = true;
+      if (!destroyed && !ended) speak(line);
+    }
+  });
+  speak(line);
 
   const chipEls = new Map<string, HTMLButtonElement>();
   for (const chip of task.chips) {
@@ -196,6 +224,8 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
     destroy() {
       destroyed = true;
       ended = true;
+      unwatchSpeech();
+      stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       wrap.remove();
