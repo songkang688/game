@@ -405,7 +405,7 @@ button {
 .hero-bubble strong {
   font-size: clamp(18px, 4vw, 23px);
   font-weight: 900;
-  /* 渐变两端在白底上都 ≥4.5:1(#c73a80 4.8 / #8a4fc0 5.3) */
+  /* 渐变两端在白底上都 ≥4.5:1(--pink-deep 5.8 / #8a4fc0 5.3) */
   background: linear-gradient(120deg, var(--pink-deep), #8a4fc0);
   -webkit-background-clip: text;
   background-clip: text;
