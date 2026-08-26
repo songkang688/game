@@ -1307,18 +1307,18 @@ export function mount(api: GameApi): { destroy: () => void } {
     msgEl.textContent = "🎉 绿绿豆全被弹走啦!";
     const detail =
       left >= 2
-        ? `还省下 ${left} 只小鸟,真是神射手!`
+        ? `还省下 ${left} 只小鸟,每一发都打在了关键点上!`
         : left === 1
-          ? "还留了一只小鸟,好厉害!"
-          : `破坏率 ${Math.round(ratio * 100)}%,拆得真彻底!`;
+          ? "还留了一只小鸟备用,落点算得很准!"
+          : `破坏率 ${Math.round(ratio * 100)}%,结构被你拆得很干净!`;
     api.onWin(stars, `第 ${level.id} 关「${level.name}」通关!${detail}`);
   }
 
   function finishLose(): void {
     if (finishSent || !level) return;
     finishSent = true;
-    msgEl.textContent = "小鸟用完啦,再试一次!";
-    api.onLose(`还剩 ${beansAlive()} 颗绿绿豆,换个角度、试试技能,再来一次一定行!`);
+    msgEl.textContent = "小鸟用完啦,换个思路再来一次!";
+    api.onLose(`还剩 ${beansAlive()} 颗绿绿豆～先打最下面那根撑着的柱子,上面塌下来常常能一次带走一片!`);
   }
 
   function updateFlow(dt: number): void {

@@ -1122,7 +1122,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     const bonus = Math.min(6, Math.floor(score / 120));
     if (bonus > 0) api.addStars(bonus);
     api.play(record ? "win" : "oops");
-    const why = w.message || "心用完啦,这趟清洁马拉松先到这儿。";
+    const why = w.message || "这趟清洁马拉松先到这儿,近处的先清、远处的边跑边收,路线会顺很多。";
     field?.showVeil(
       record ? `新纪录 ${score} 分!` : `这趟拿了 ${score} 分`,
       `${why}${record ? "不过这已经是你跑得最远最干净的一趟了!" : `最好成绩 ${best} 分,再来一趟就能追上它。`}${
