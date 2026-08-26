@@ -32,6 +32,33 @@
    「最近玩过」4 → 6、第 6 步 `openCollection` 存在才显示的可选入口。
 5. `homeFilters.test.ts` ≥ 20 个用例；`npm test` 与 `npm run build` 全绿。
 
+## 收工记录（实测数据，供其它窗口直接引用）
+
+关数一律去 `levels.ts` / `logic.ts` 里数出来，不是照 blurb 抄的：
+
+| 关数 | 游戏 | 依据 |
+| --- | --- | --- |
+| 188 | adventure-king / alien-seek / balloon-pop / brave-path / brick-break / bubble-pop / clock-house / color-fun / find-diff / fruit-catch / kitty-care / lianliankan / match-stars / math-farm / memory-cards / music-stars / pinyin-train / poop-hero / red-blue-race / red-blue-tap / red-blue-tug / shape-kingdom / sling-birds / word-garden | `CHAPTERS` 各章 `size` 之和 |
+| 188 | fruit-slice / garden-guard / ocean-munch | `THEME_SIZES` 之和（`TOTAL_ROUNDS` / `TOTAL_LEVELS`） |
+| 99 | bubble-aim / candy-swing / sling-birds 以外的老框架：mole-pop / puzzle-tiles / snake-snack | `THEME_SIZES` / `CHAPTER_SIZES` / 6 章之和 |
+| 99 | rainbow-run / sprout-defense | 9 主题 × `LEVELS_PER_THEME` 11 |
+| 99 | gomoku | `puzzles.ts` 的 `PUZZLES` 长度 |
+| 无 | duo-arena / duo-rush / xiangqi | 没有闯关地图，`levels` 留空 |
+
+模式按 `index.ts` 里真实存在的入口填：无尽 9 款、对战 8 款、双人同屏 5 款、双人合作 1 款
+（`red-blue-*` 的对手是「小电脑」，算 `versus` 不算 `twoPlayer`）。
+
+`category` 只改了一处：`gomoku` 从 `casual` 改成 `party`——它的主玩法是自由对战
+（棋灵三档人机 + 朵朵 VS 星星双人），和已经是 `party` 的 `xiangqi` 同类。其余 37 款复核后维持原样。
+
+顺手记两笔给别的窗口：
+
+- `src/engine/loader.ts` 的 `extractMeta` 原来逐字段重建 meta，新字段会被它吃掉，已补上归一化透传。
+  这个文件不在我的独占清单里，改动只有「加字段」，没动任何既有逻辑。
+- 320px 上 `.recent-grid` 的 `repeat(2, 1fr)` 下限是 `min-content`，第二列卡片会顶出屏幕
+  （`origin/game-1.1` 基线用 worktree 对比后同样复现）。我在 home.ts 注入的样式里夹成
+  `minmax(0, 1fr)` 先修掉了，C 如果要收进 `styles.css`，把这条搬过去、删掉我这条即可。
+
 ## 硬约束
 
 - 存档 key 一个都不改：进度仍读 `yiduo-yixing.l99.<id>`，最近玩过仍是 `yiduo-yixing.recent.v1`。
