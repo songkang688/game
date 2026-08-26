@@ -68,7 +68,7 @@ const CSS = `
 .hp-over-s{font-size:16px;font-weight:700;color:#7C6350;line-height:1.6;max-width:300px;}
 .hp-tip{text-align:center;font-size:13px;font-weight:700;color:#9A8676;line-height:1.5;}
 .hp-duo{display:flex;flex-direction:column;gap:8px;}
-.hp-name{position:absolute;left:10px;bottom:8px;font-size:15px;font-weight:900;color:#8A5330;
+.hp-name{position:absolute;left:12px;bottom:36px;font-size:15px;font-weight:900;color:#8A5330;
   pointer-events:none;text-shadow:0 1px 0 #fff;}
 @media (max-width:420px){
   .hp-chip{font-size:16px;}
@@ -97,6 +97,8 @@ export interface Camera {
   /** 画面宽高(CSS 像素) */
   w: number;
   h: number;
+  /** 地平线落在画面高度的百分之多少(矮画布往上提一点,前面才看得见几座) */
+  horizon?: number;
   /** 落地时镜头往下沉一点(reduced-motion 下恒为 0) */
   shake: number;
 }
@@ -105,13 +107,22 @@ export interface Camera {
 export function project(cam: Camera, x: number, z: number, y = 0): { sx: number; sy: number } {
   return {
     sx: cam.w / 2 + (x - cam.x) * cam.scale,
-    sy: cam.h * 0.74 - (z - cam.z) * cam.scale * DEPTH_SQUASH - y * cam.scale + cam.shake,
+    sy:
+      cam.h * (cam.horizon ?? 0.74) -
+      (z - cam.z) * cam.scale * DEPTH_SQUASH -
+      y * cam.scale +
+      cam.shake,
   };
 }
 
-/** 画面能装下多少纵深:决定 scale。台面最远也要能看见前面两三座 */
+/** 画面能装下多少纵深:决定 scale。台面最远也要能看见前面三四座 */
 export function fitScale(w: number, h: number): number {
-  return Math.max(0.5, Math.min(w / 620, h / 560));
+  return Math.max(0.5, Math.min(w / 480, h / 450));
+}
+
+/** 矮画布(上下分屏)把地平线往上提,免得角色贴着蓄力条 */
+export function horizonFor(h: number): number {
+  return h < 280 ? 0.68 : 0.74;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +180,7 @@ function drawPad(ctx: Ctx, cam: Camera, pad: Pad, isTarget: boolean): void {
 
   if (pad.kind !== "steady") {
     ctx.fillStyle = "#7A5638";
-    ctx.font = `${Math.round(15 * cam.scale + 5)}px system-ui`;
+    ctx.font = `${Math.round(12 * cam.scale + 6)}px system-ui`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(KIND_ICONS[pad.kind], top.sx, top.sy + ry * 0.55);
@@ -185,7 +196,7 @@ function drawHero(
   color: string
 ): void {
   const p = project(cam, pos.x, pos.z, pos.y);
-  const base = 15 * cam.scale;
+  const base = 19 * cam.scale;
   const rx = base * (1 + squash * 0.42);
   const ry = base * (1 - squash * 0.46);
 
@@ -295,6 +306,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   root.className = "hp-stage";
   const canvas = document.createElement("canvas");
   canvas.className = "hp-canvas";
+  canvas.setAttribute("role", "img");
   const hud = document.createElement("div");
   hud.className = "hp-hud";
   const hudL = document.createElement("span");
@@ -319,6 +331,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   let clock = 0;
   let holdMs = 0;
   let paused = false;
+  /** 跳满目标座数后画面就定格等结算,和玩家自己按的暂停分开记 */
+  let frozen = false;
   let over = false;
   let goalHit = false;
   let dust = 0;
@@ -343,6 +357,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     cam.w = cssW;
     cam.h = cssH;
     cam.scale = fitScale(cssW, cssH);
+    cam.horizon = horizonFor(cssH);
   }
   resize();
 
@@ -358,7 +373,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
 
   // ---- 蓄力 / 起跳 ----
   function press(): void {
-    if (paused || over || phase !== "ready") return;
+    if (paused || frozen || over || phase !== "ready") return;
     phase = "charging";
     holdMs = 0;
   }
@@ -379,7 +394,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   }
 
   function release(forcedHold?: number): void {
-    if (paused || over || phase !== "charging") return;
+    if (paused || frozen || over || phase !== "charging") return;
     if (forcedHold !== undefined) holdMs = forcedHold;
     const p = power();
     run = { ...run, time: clock };
@@ -427,6 +442,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     opts.onHop?.(res, run);
     if (!goalHit && run.hops >= goal) {
       goalHit = true;
+      // 闯关 / 对战 / 双人都是跳满就收工,画面停在这一刻等结算
+      frozen = true;
       opts.sfx("win");
       opts.onGoal?.(run);
     }
@@ -496,11 +513,13 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, cam.w, cam.h);
 
-    // 远处的台子先画,近处的后画,自然叠出前后关系
+    // 远处的台子先画,近处的后画,自然叠出前后关系;顶出画面的直接不画
     const from = Math.max(0, run.index - 1);
     const to = Math.min(run.pads.length - 1, run.index + 4);
     for (let i = to; i >= from; i--) {
-      drawPad(ctx, cam, padTick(run.pads[i], clock), i === run.index + 1);
+      const snap = padTick(run.pads[i], clock);
+      if (project(cam, snap.x, snap.z).sy < -10) continue;
+      drawPad(ctx, cam, snap, i === run.index + 1);
     }
 
     // 训练关的落点辅助圆:告诉你现在松手会落在哪儿
@@ -540,6 +559,18 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       ctx.textBaseline = "middle";
       ctx.fillText(flashText, cam.w / 2, cam.h * 0.16);
     }
+
+    if (paused && !over) {
+      ctx.fillStyle = "rgba(255,248,242,.9)";
+      ctx.fillRect(0, 0, cam.w, cam.h);
+      ctx.fillStyle = "#9A5A2C";
+      ctx.font = `900 ${Math.round(18 + 3 * cam.scale)}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("⏸ 已暂停", cam.w / 2, cam.h / 2 - 14);
+      ctx.font = `700 ${Math.round(14 + 2 * cam.scale)}px system-ui`;
+      ctx.fillText("再按一次 Esc 继续", cam.w / 2, cam.h / 2 + 16);
+    }
   }
 
   /** 底部蓄力条:≥12px 高,360px 上也一眼看得清 */
@@ -552,10 +583,12 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     ctx2.fillRect(pad, y, w, h);
     ctx2.fillStyle = "#F2A268";
     ctx2.fillRect(pad, y, w * clamp01(power()), h);
-    // 刻度:正好够到下一座台心的那个力度
-    const need = clamp01(requiredPower({ ...run, time: clock }));
-    ctx2.fillStyle = "#B4437B";
-    ctx2.fillRect(pad + w * need - 2, y - 4, 4, h + 8);
+    // 训练关才给刻度:标出正好够到下一座台心的那个力度,别的关自己找手感
+    if (opts.assist) {
+      const need = clamp01(requiredPower({ ...run, time: clock }));
+      ctx2.fillStyle = "#B4437B";
+      ctx2.fillRect(pad + w * need - 2, y - 4, 4, h + 8);
+    }
   }
 
   // ---- HUD ----
@@ -563,6 +596,18 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     const goalText = Number.isFinite(goal) ? ` / ${goal}` : "";
     hudL.textContent = `⭕ ${run.hops}${goalText} 座 · ${run.score} 分`;
     hudR.textContent = opts.info ? opts.info() : run.combo > 1 ? `🔥 ${run.combo} 连` : "";
+    // 画布本身给读屏软件念一句现状,顺带让浏览器冒烟脚本读得到内部状态
+    canvas.setAttribute(
+      "aria-label",
+      `${opts.name ? `${opts.name},` : ""}站住 ${run.hops} 座,${run.score} 分,连击 ${run.combo}${
+        paused ? ",已暂停" : ""
+      }`
+    );
+    canvas.setAttribute("data-hops", String(run.hops));
+    canvas.setAttribute("data-score", String(run.score));
+    canvas.setAttribute("data-combo", String(run.combo));
+    canvas.setAttribute("data-phase", phase);
+    canvas.setAttribute("data-paused", paused ? "1" : "0");
   }
 
   // ---- 主循环 ----
@@ -573,7 +618,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     const now = typeof ts === "number" ? ts : 0;
     const dt = last === 0 ? 0.016 : Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (!paused) step(dt);
+    if (!paused && !frozen) step(dt);
     draw();
     refreshHud();
   }
@@ -589,6 +634,13 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   };
   const onKeyDown = (ev: { key?: string; repeat?: boolean; preventDefault?: () => void }): void => {
     const k = (ev.key ?? "").toLowerCase();
+    if (k === "escape") {
+      if (over || frozen) return;
+      ev.preventDefault?.();
+      paused = !paused;
+      if (paused && phase === "charging") phase = "ready";
+      return;
+    }
     if (!keys.includes(k)) return;
     ev.preventDefault?.();
     if (ev.repeat) return;
@@ -641,7 +693,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       let left = dt;
       while (left > 0) {
         const slice = Math.min(0.032, left);
-        if (!paused) step(slice);
+        if (!paused && !frozen) step(slice);
         left -= slice;
       }
       draw();
@@ -727,7 +779,7 @@ function playLevel(stageHost: HTMLElement, ctx: PlayCtx): PlayHandle {
   tip.textContent = `${lv.hint}${lv.assist ? " · 蓄力时会画出落点辅助圆" : ""}`;
   const say = document.createElement("div");
   say.className = "hp-say";
-  say.textContent = "按住屏幕(或空格 / F)蓄力,松手起跳。";
+  say.textContent = "按住屏幕(或空格 / F)蓄力,松手起跳;Esc 暂停。";
   box.append(tip, say);
   stageHost.appendChild(box);
 
@@ -763,22 +815,8 @@ function playLevel(stageHost: HTMLElement, ctx: PlayCtx): PlayHandle {
     },
   });
 
-  let paused = false;
-  const onEsc = (ev: { key?: string }): void => {
-    if ((ev.key ?? "").toLowerCase() !== "escape") return;
-    paused = !paused;
-    stage.setPaused(paused);
-    say.textContent = paused ? "已暂停,再按一次 Esc 继续。" : "继续跳!";
-  };
-  const win = globalThis as unknown as {
-    addEventListener: (t: string, f: unknown) => void;
-    removeEventListener: (t: string, f: unknown) => void;
-  };
-  win.addEventListener("keydown", onEsc);
-
   return {
     destroy() {
-      win.removeEventListener("keydown", onEsc);
       stage.destroy();
       box.remove();
     },

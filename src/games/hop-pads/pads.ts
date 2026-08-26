@@ -242,7 +242,8 @@ export function nextPad(
   }
   if (kind === "shrink") {
     pad.shrink = d.shrink;
-    pad.minR = Math.max(10, Math.round(r * d.minRRatio));
+    // 再怎么缩也要留得下脚:半径 16 对应 ±96 毫秒的蓄力余量
+    pad.minR = Math.max(16, Math.round(r * d.minRRatio));
   }
   return pad;
 }

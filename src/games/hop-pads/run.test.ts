@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { BASE_SCORE, flightTime, jumpDistance, powerForDistance } from "./physics";
 import { EASY, makePad, onPad, padTick, type Pad } from "./pads";
 import { createRun, currentPad, hop, requiredPower, type RunState } from "./run";
-import { levelDifficulty } from "./levels";
+import { buildLevel, levelDifficulty } from "./levels";
 
 /** 手搭一局:台序自己写死,不走生成器 */
 function handRun(pads: Pad[]): RunState {
@@ -211,6 +211,51 @@ describe("缩小台越拖越小", () => {
     expect(run.pads[2].bornAt).toBeCloseTo(run.time, 10);
     expect(padTick(run.pads[2], run.time).r).toBe(40);
     expect(padTick(run.pads[2], run.time + 1).r).toBe(30);
+  });
+});
+
+describe("等一等再跳:移动台永远有完美时机", () => {
+  /** 站着不动等 wait 秒再用理想力度起跳,看能不能踩中圆心 */
+  function tryWait(run: RunState, wait: number) {
+    const waited = { ...run, time: run.time + wait };
+    return hop(waited, requiredPower(waited));
+  }
+
+  it("移动台整章:每一座台都存在一个等得到的完美时机", () => {
+    const lv = buildLevel(84);
+    expect(lv.chapterIndex).toBe(3);
+    let run = createRun(lv.seed, lv.difficulty);
+    for (let i = 0; i < 12; i++) {
+      let best: ReturnType<typeof tryWait> | null = null;
+      for (let k = 0; k < 60; k++) {
+        const step = tryWait(run, k * 0.1);
+        if (step.result.verdict === "perfect") {
+          best = step;
+          break;
+        }
+      }
+      expect(best, `第 ${i + 1} 座台等不到完美时机`).not.toBeNull();
+      run = best!.state;
+    }
+    expect(run.perfects).toBeGreaterThanOrEqual(12);
+  });
+
+  it("跳跳杯的混合台面同样等得到完美时机", () => {
+    const lv = buildLevel(180);
+    expect(lv.chapterIndex).toBe(7);
+    let run = createRun(lv.seed, lv.difficulty);
+    for (let i = 0; i < 10; i++) {
+      let best: ReturnType<typeof tryWait> | null = null;
+      for (let k = 0; k < 60; k++) {
+        const step = tryWait(run, k * 0.1);
+        if (step.result.verdict === "perfect") {
+          best = step;
+          break;
+        }
+      }
+      expect(best, `第 ${i + 1} 座台等不到完美时机`).not.toBeNull();
+      run = best!.state;
+    }
   });
 });
 

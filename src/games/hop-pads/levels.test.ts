@@ -18,6 +18,7 @@ import {
   winLine,
 } from "./levels";
 import guide from "./guide";
+import { playGhost } from "./ai";
 
 describe("章节切分", () => {
   it("8 章的关数之和恒等 188", () => {
@@ -153,6 +154,38 @@ describe("过关与评星", () => {
     expect(winLine(l, res, 3)).toContain("满分");
     expect(winLine(l, { ...res, perfects: l.perfectFor2 }, 2)).toContain("三星");
     expect(winLine(l, { ...res, perfects: 0 }, 1)).toContain("过关");
+  });
+});
+
+describe("关卡真的过得去", () => {
+  it("抽查全部八章:高手档的手感(±5% 误差)就能站满目标座数", () => {
+    for (let lv = 0; lv < 188; lv += 13) {
+      const l = buildLevel(lv);
+      const g = playGhost(l.seed, l.difficulty, "expert", l.goal);
+      expect(g.cleared, `第 ${lv + 1} 关站不满 ${l.goal} 座`).toBeGreaterThanOrEqual(l.goal);
+    }
+  });
+
+  it("第 1 章连菜鸟档的手感(±25% 误差)都过得去 —— 新手不会一上来就卡死", () => {
+    for (let lv = 0; lv < 24; lv += 4) {
+      const l = buildLevel(lv);
+      const g = playGhost(l.seed, l.difficulty, "rookie", l.goal);
+      expect(g.cleared, `第 ${lv + 1} 关新手过不去`).toBeGreaterThanOrEqual(l.goal);
+    }
+  });
+
+  it("不带移动台的章节里,稳稳踩圆心就能拿三星 —— 三星线不是空头支票", () => {
+    for (const lv of [3, 30, 55, 100, 125, 150]) {
+      const l = buildLevel(lv);
+      const g = playGhost(l.seed, l.difficulty, "hell", l.goal);
+      const stars = levelStars(l, {
+        cleared: g.cleared,
+        perfects: g.perfects,
+        score: g.score,
+        bestCombo: g.bestCombo,
+      });
+      expect(stars, `第 ${lv + 1} 关拿不到三星`).toBe(3);
+    }
   });
 });
 

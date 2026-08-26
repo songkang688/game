@@ -188,6 +188,45 @@ describe("一块舞台跑起来", () => {
     stage.destroy();
   });
 
+  it("画布给读屏软件念得出当前进度", () => {
+    const { stage } = makeStage();
+    perfectJump(stage);
+    const canvas = dom.root.find((e) => e.className.includes("hp-canvas"))!;
+    expect(canvas.getAttribute("role")).toBe("img");
+    expect(canvas.getAttribute("aria-label")).toContain("站住 1 座");
+    expect(canvas.getAttribute("data-hops")).toBe("1");
+    stage.destroy();
+  });
+
+  it("Esc 暂停,再按一次继续,暂停期间时间不走", () => {
+    const { stage } = makeStage();
+    const canvas = dom.root.find((e) => e.className.includes("hp-canvas"))!;
+    perfectJump(stage);
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "Escape" });
+    stage.tick(20);
+    expect(canvas.getAttribute("data-paused")).toBe("1");
+    expect(canvas.getAttribute("aria-label")).toContain("已暂停");
+    const frozen = stage.state().time;
+    stage.tick(600);
+    expect(stage.state().time).toBe(frozen);
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "Escape" });
+    stage.tick(60);
+    expect(canvas.getAttribute("data-paused")).toBe("0");
+    expect(stage.state().time).toBeGreaterThan(frozen);
+    stage.destroy();
+  });
+
+  it("跳满目标座数后画面定格,再按也不会继续跳", () => {
+    const { stage } = makeStage();
+    for (let i = 0; i < 3; i++) perfectJump(stage);
+    expect(stage.state().hops).toBe(3);
+    stage.press();
+    stage.release(600);
+    stage.tick(2000);
+    expect(stage.state().hops).toBe(3);
+    stage.destroy();
+  });
+
   it("认自己的键、不认别人的键", () => {
     const { stage } = makeStage({ keys: ["l"] });
     for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "f" });
