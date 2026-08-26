@@ -174,8 +174,11 @@ const CSS = `
 
 const FRAME_MS = 1000 / 60;
 const CANVAS_W = STAGE_WIDTH;
-const CANVAS_H = 340;
-const GROUND_Y = 296;
+/** 宽屏用扁一点的画面，窄屏用方一点的画面（手机上才装得下放大后的两个人） */
+const CANVAS_H_WIDE = 380;
+const CANVAS_H_NARROW = 600;
+/** 低于这个 CSS 宽度就算窄屏 */
+const NARROW_PX = 520;
 
 function prefersReducedMotion(): boolean {
   try {
@@ -310,7 +313,23 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   const stage = el("div", "fk-stage");
   const canvas = el("canvas", "fk-canvas");
   canvas.width = CANVAS_W;
-  canvas.height = CANVAS_H;
+  canvas.height = CANVAS_H_WIDE;
+  let narrowLayout = false;
+
+  /** 地平线在画布里的高度（画布变方，地平线也跟着往下走） */
+  function groundY(): number {
+    return Math.round(canvas.height * 0.87);
+  }
+
+  /** 按容器宽度切换画布比例；只有真的变了才动 canvas.width，免得每帧清空画面 */
+  function syncLayout(): void {
+    const cssW = canvas.clientWidth || (globalThis as { innerWidth?: number }).innerWidth || 400;
+    const narrow = cssW > 0 && cssW < NARROW_PX;
+    if (narrow === narrowLayout) return;
+    narrowLayout = narrow;
+    canvas.height = narrow ? CANVAS_H_NARROW : CANVAS_H_WIDE;
+  }
+
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", "对打画面");
   stage.appendChild(canvas);
@@ -559,14 +578,16 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     return [p1, p2];
   }
 
+  /** `y` 是对局里"离地多高"，这里换成画布坐标（往下为正）再撒星星 */
   function spawnSparks(x: number, y: number, power: number): void {
+    const sy = groundY() - y;
     const n = sparkCount(power, reduced);
     for (let i = 0; i < n && sparks.length < 90; i++) {
       const a = (Math.PI * 2 * i) / n + Math.random() * 0.5;
       const sp = 1.6 + Math.random() * 3.4;
       sparks.push({
         x,
-        y,
+        y: sy,
         vx: Math.cos(a) * sp,
         vy: Math.sin(a) * sp - 1.2,
         life: 22 + Math.round(Math.random() * 12),
@@ -694,10 +715,11 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
   function drawFighter(ctx: CanvasRenderingContext2D, f: FighterState): void {
     const ch = charOf(f);
+    const line = groundY();
     const crouch = f.crouching && !f.airborne;
     const h = crouch ? ch.crouchHeight : ch.height;
     const hw = ch.halfWidth;
-    const feet = GROUND_Y - f.y;
+    const feet = line - f.y;
     const down = f.phase === "knockdown";
 
     // 影子
@@ -705,16 +727,16 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     ctx.fillStyle = "rgba(95,75,130,.15)";
     ctx.beginPath();
     const shrink = Math.max(0.45, 1 - f.y / 220);
-    ctx.ellipse(f.x, GROUND_Y + 5, hw * shrink, 6 * shrink, 0, 0, Math.PI * 2);
+    ctx.ellipse(f.x, line + 5, hw * shrink, 6 * shrink, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
     if (down) {
       // 被弹开躺一下：整个人转 70 度，脑袋朝外，纯卡通表现
-      ctx.translate(f.x, GROUND_Y - 14);
+      ctx.translate(f.x, line - 14);
       ctx.rotate((-f.facing * 70 * Math.PI) / 180);
-      ctx.translate(-f.x, -(GROUND_Y - 14));
+      ctx.translate(-f.x, -(line - 14));
     }
 
     const bodyTop = feet - h;
@@ -772,7 +794,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
       const t = reduced ? 0 : state.frame * 0.12;
       for (let i = 0; i < 3; i++) {
         const a = t + (i * Math.PI * 2) / 3;
-        ctx.fillText("⭐", f.x + Math.cos(a) * 18, GROUND_Y - h * 0.9 + Math.sin(a) * 6);
+        ctx.fillText("⭐", f.x + Math.cos(a) * 18, line - h * 0.9 + Math.sin(a) * 6);
       }
       ctx.restore();
     }
@@ -782,7 +804,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     if (mv && f.phase === "attack") {
       const ph = movePhase(mv, f.frame);
       const bx = f.facing === 1 ? f.x + mv.box.x : f.x - mv.box.x - mv.box.w;
-      const by = GROUND_Y - f.y - mv.box.y - mv.box.h;
+      const by = line - f.y - mv.box.y - mv.box.h;
       if (ph === "active") {
         ctx.save();
         ctx.globalAlpha = 0.72;
@@ -804,10 +826,34 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     }
   }
 
+  /**
+   * 镜头：跟着两个人走，贴身时拉近、拉开时推远。
+   * 不这么做的话，900 宽的场地铺满屏幕，两个小朋友会小得看不清脸。
+   * 缩放以地平线为轴，所以地面永远在同一条线上，不会上下乱跳。
+   */
+  function camera(): { scale: number; camX: number } {
+    const [a, b] = state.fighters;
+    const spread = Math.abs(a.x - b.x) + 300;
+    const wide = Math.max(CANVAS_W / 2.4, Math.min(CANVAS_W, spread));
+    // 有人跳起来就自动拉远一点，免得脑袋顶出画面外
+    const topNeeded = Math.max(
+      120,
+      ...state.fighters.map((f) => f.y + charOf(f).height + 26)
+    );
+    const scale = Math.min(CANVAS_W / wide, (groundY() - 14) / topNeeded, 2.4);
+    const viewW = CANVAS_W / scale;
+    const mid = (a.x + b.x) / 2;
+    const camX = Math.max(0, Math.min(Math.max(0, STAGE_WIDTH - viewW), mid - viewW / 2));
+    return { scale, camX };
+  }
+
   function draw(): void {
     if (!g) return;
+    syncLayout();
+    const H = canvas.height;
+    const line = groundY();
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    g.clearRect(0, 0, CANVAS_W, H);
 
     const shake = reduced ? 0 : state.shake;
     if (shake > 0) {
@@ -815,19 +861,25 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     }
 
     // 天空 + 地面
-    const sky = g.createLinearGradient(0, 0, 0, CANVAS_H);
+    const sky = g.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, STAGE_SKY[skyIndex]);
     sky.addColorStop(1, "#ffffff");
     g.fillStyle = sky;
-    g.fillRect(-20, -20, CANVAS_W + 40, CANVAS_H + 40);
+    g.fillRect(-20, -20, CANVAS_W + 40, H + 40);
     g.fillStyle = "#f2e6f7";
-    g.fillRect(-20, GROUND_Y, CANVAS_W + 40, CANVAS_H - GROUND_Y + 20);
+    g.fillRect(-20, line, CANVAS_W + 40, H - line + 20);
     g.strokeStyle = "#dcc9e8";
     g.lineWidth = 3;
     g.beginPath();
-    g.moveTo(-20, GROUND_Y);
-    g.lineTo(CANVAS_W + 20, GROUND_Y);
+    g.moveTo(-20, line);
+    g.lineTo(CANVAS_W + 20, line);
     g.stroke();
+
+    const cam = camera();
+    g.save();
+    g.translate(0, line);
+    g.scale(cam.scale, cam.scale);
+    g.translate(-cam.camX, -line);
 
     drawFighter(g, state.fighters[0]);
     drawFighter(g, state.fighters[1]);
@@ -841,6 +893,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
       g.fill();
       g.restore();
     }
+    g.restore();
 
     // 连段计数
     for (const f of state.fighters) {
