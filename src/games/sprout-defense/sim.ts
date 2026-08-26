@@ -119,8 +119,11 @@ export interface SimResult {
   trace: string[];
 }
 
-/** 两种流派 + 默认的中庸打法。 */
-export type SimStyle = "balanced" | "steady" | "rush";
+/**
+ * 打法流派。规格点名的两种是 steady(稳扎稳打先铺经济)与 rush(速攻先堆枪);
+ * 另外三套是给「这一关到底是不是死局」用的确定性备选,谁赢都算这关有解。
+ */
+export type SimStyle = "balanced" | "steady" | "rush" | "allin" | "thrift" | "hoard";
 
 export interface SimOptions {
   /** false = 什么都不种(用来验证 BOSS 关也能打输) */
@@ -132,13 +135,6 @@ export interface SimOptions {
   onlyPlants?: PlantKind[];
 }
 
-const CDS = Number(process.env.SPD_CD ?? 1);
-const CDONLY = process.env.SPD_CD_ONLY;
-const WANT4 = Number(process.env.SPD_W4 ?? 55);
-const WANT3 = Number(process.env.SPD_W3 ?? 28);
-const WANT2 = Number(process.env.SPD_W2 ?? 8);
-const cdOf = (k: PlantKind): number =>
-  CDONLY ? (CDONLY.split(",").includes(k) ? PLANT_SPEC[k].cooldown : 0) : PLANT_SPEC[k].cooldown * CDS;
 const DT = 1 / 30;
 const DECIDE_EVERY = 0.25;
 
@@ -149,12 +145,17 @@ interface Tuning {
   reserve: number;
   /** 火力升级的威胁门槛倍率(越小越早加枪) */
   gunEager: number;
+  /** 开局经济苗的卡还在冷却时,攒着钱等它,不顺手花在炮上 */
+  ecoHold: boolean;
 }
 
 const TUNING: Record<SimStyle, Tuning> = {
-  balanced: { ecoTarget: 5, reserve: 2, gunEager: 1 },
-  steady: { ecoTarget: 7, reserve: 3, gunEager: 1.25 },
-  rush: { ecoTarget: 2, reserve: 1, gunEager: 0.7 },
+  balanced: { ecoTarget: 5, reserve: 2, gunEager: 1, ecoHold: false },
+  steady: { ecoTarget: 7, reserve: 3, gunEager: 1.25, ecoHold: false },
+  rush: { ecoTarget: 2, reserve: 1, gunEager: 0.7, ecoHold: false },
+  allin: { ecoTarget: 1, reserve: 0, gunEager: 0.5, ecoHold: false },
+  thrift: { ecoTarget: 3, reserve: 2, gunEager: 1.4, ecoHold: true },
+  hoard: { ecoTarget: 7, reserve: 3, gunEager: 1.25, ecoHold: true },
 };
 
 interface SimSetup {
@@ -618,16 +619,31 @@ function runSim(setup: SimSetup, opts: SimOptions): SimResult {
     }
     // P6 经济:闪光芽 1 珠 4.5 秒回本,猛攒到目标棵数
     if (!puzzle && !conveyor && producerCount() < ecoTarget) {
+      const eco = moonBetter ? "moon" : "sparkle";
       const ecoLanes = [0, 1, 2, 3]
         .filter((l) => !setup.waterLanes.includes(l))
         .sort((a, b2) => laneUrgency(b2) - laneUrgency(a));
+      let freeCell = false;
       for (const lane of ecoLanes.length > 0 ? ecoLanes : [0, 1, 2, 3]) {
         for (const c of [0, 1]) {
           if (!plants.has(key(c, lane)) && cellSafe(c, lane)) {
-            if (buyBg(moonBetter ? "moon" : "sparkle", c, lane)) return true;
+            freeCell = true;
+            if (buyBg(eco, c, lane)) return true;
             break;
           }
         }
+      }
+      // 1.2 起苗卡有冷却:开局那几棵经济苗只能一株一株地种。
+      // 卡还在转的时候别顺手把钱花在炮上,不然经济永远只有一棵 —— 攒着等下一株。
+      if (
+        tuning.ecoHold &&
+        freeCell &&
+        !cardReady(eco) &&
+        time < 8 &&
+        producerCount() < Math.min(3, ecoTarget) &&
+        bugs.length === 0
+      ) {
+        return false;
       }
     }
     // P7 火力升级:炮数跟着车道剩余威胁走
@@ -1033,7 +1049,14 @@ function runSim(setup: SimSetup, opts: SimOptions): SimResult {
 }
 
 /** 固定策略的三副牌路;不指定流派时依次试,能赢一副就算这一关有解。 */
-export const SIM_STYLES: SimStyle[] = ["balanced", "steady", "rush"];
+export const SIM_STYLES: SimStyle[] = [
+  "balanced",
+  "steady",
+  "rush",
+  "allin",
+  "thrift",
+  "hoard",
+];
 
 /**
  * 打一关战役(0 起的关号)。
