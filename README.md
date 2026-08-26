@@ -183,6 +183,7 @@ npm run dist        # 构建 + 打 Linux AppImage,产物在 release/
 | Linux | `npm run dist` 或 `npm run dist:linux` | `release/yiduo-yixing-<版本>-linux-x86_64.AppImage` |
 | Windows 便携版 | `npm run dist:win` | `release/yiduo-yixing-<版本>-win-portable.exe` |
 | Windows 安装器（NSIS） | `npm run dist:win:nsis` | `release/yiduo-yixing-<版本>-win-setup.exe` |
+| macOS（需在 Mac 上执行） | `npm run dist:mac` | `release/yiduo-yixing-<版本>-mac-<架构>.dmg` / `.zip` |
 
 说明：
 
