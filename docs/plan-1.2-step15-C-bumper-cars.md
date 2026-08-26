@@ -1,4 +1,4 @@
-# 1.2 第 15 步 · C 档 —— `bumper-cars`「碰碰车大乱斗」先同步 1.1 再升级撞击物理
+# 1.2 第 15 步 · C 档 —— 1.1 遗留回迁二连：`bumper-cars`「碰碰车大乱斗」+ `bowling-lane`「保龄球小馆」
 
 请通过 Task 工具派生一或多个云端子代理执行本任务。
 指定模型 slug：`claude-opus-5-thinking-high-fast`。
@@ -8,8 +8,10 @@
 【读到这段话的你，就是被派发的那个云端子代理。上面那句「请通过 Task 派生」是写给派发方看的。你就是执行者，禁止再派生任何云端子代理，必须自己动手把活干完。只推 `game-1.2`，不要改 `main`，不要 force。】
 
 仓库 `https://github.com/songkang688/game`，产品「一朵一星」。
-这是 **1.2 第 15 步（共 29 步）· C 档**：升级已有游戏 `bumper-cars`「碰碰车大乱斗」。
-本步是派对乱斗三连：A `bomb-buddies`、B `snow-fight`、C `bumper-cars`。别人的目录你一个字都不许碰。
+这是 **1.2 第 15 步（共 29 步）· C 档**：升级 `bumper-cars`「碰碰车大乱斗」**与** `bowling-lane`「保龄球小馆」。
+本步是派对乱斗三连：A `bomb-buddies`、B `snow-fight`、C `bumper-cars` + `bowling-lane`。别人的目录你一个字都不许碰。
+
+**为什么这一档是两款**：1.1 收尾是 55 款，`game-1.2` 上只有 53 款——`bumper-cars` 与 `bowling-lane` 这两款 1.1 做完的游戏都没合进 1.2。升级档一共 18 步 × 3 = 54 格，装 55 款差一格；这两款要干的第一件事完全一样（从 `origin/game-1.1` 回迁 → 注册 → 再升级），所以合并成同一档派发。**两款都要做完，先把两款都回迁并跑绿，再分别升级。**
 
 ## 一、分支纪律
 
@@ -17,17 +19,30 @@
 - **动代码前先提交一条「C 档 + 本款升级计划」的 commit**。
 - 只在 `game-1.2` 线上干活；收尾 fetch → rebase → `npm test` 与 `npm run build` 全绿 → 普通 push。**禁止 force、不改 `main`、不用 `gh` 开 PR。**
 
-## 二、开工第一件事：确认目录在不在（本款特殊）
+## 二、开工第一件事：把两款从 1.1 回迁（本档特殊，必须先做完）
 
-`bumper-cars` 是 1.1 第 7 步 C 做的，**它在 `origin/game-1.1` 上，历史上一度不在 `game-1.2` 上**。
+这两款都在 `origin/game-1.1` 上，**都不在 `game-1.2` 上**。
 
-1. `git fetch origin game-1.1`，跑 `git diff --stat origin/game-1.2 origin/game-1.1 -- src/games/bumper-cars`。
-2. 如果 `game-1.2` 上没有这个目录或版本更旧，**先把 1.1 的整套搬过来对齐**（`git checkout origin/game-1.1 -- src/games/bumper-cars`），单独一条 commit「同步 1.1 的 bumper-cars」，跑通 `npm test` 与 `npm run build` 之后再做 1.2 升级。
-3. **不许重写**，1.1 的 `logic.ts` / `ai.ts` / `levels.ts` / `guide.ts` / `smoke.test.ts` 都是既有资产。
-4. 在回复里写清楚：本步是「同步 + 升级」还是「只升级」。
+1. `git fetch origin game-1.1`，分别跑
+   `git diff --stat origin/game-1.2 origin/game-1.1 -- src/games/bumper-cars`
+   `git diff --stat origin/game-1.2 origin/game-1.1 -- src/games/bowling-lane`
+2. 缺目录或版本更旧的，**先把 1.1 的整套搬过来对齐**：
+   `git checkout origin/game-1.1 -- src/games/bumper-cars src/games/bowling-lane`
+   走**一条单独的 commit**「回迁 1.1 的 bumper-cars 与 bowling-lane」。
+3. **回迁不等于能跑**：确认两款都被首页注册（`meta.ts` 被 eager 收集到、`index.ts` 能按需加载），必要时补齐注册；确认游戏总数从 53 变成 55，并把任何写死「53 款 / 54 款」的文案或断言一起改对。
+4. 这一步跑通 `npm test` 与 `npm run build` **全绿之后**再动 1.2 升级，别把回迁和升级混在一条 commit 里。
+5. **不许重写**，1.1 的 `logic.ts` / `ai.ts` / `scoring.ts` / `levels.ts` / `guide.ts` / `smoke.test.ts` 都是既有资产，回迁进来的测试一个都不许删。
+6. 在回复里写清楚：两款各自是「回迁 + 升级」还是「只升级」，以及回迁后总款数。
 
-1.1 的事实：`category: "party"`、`modes: ["campaign","versus","endless","twoPlayer"]`、`levels: 188`；目录 `ai.ts` `logic.ts` `levels.ts` `index.ts` `meta.ts` `guide.ts` + `smoke.test.ts` 等测试。
+1.1 的事实：
+- `bumper-cars`：`category: "party"`、`modes: ["campaign","versus","endless","twoPlayer"]`、`levels: 188`；目录 `ai.ts` `logic.ts` `levels.ts` `index.ts` `meta.ts` `guide.ts` + `smoke.test.ts` 等测试。
+- `bowling-lane`：`category: "casual"`、`modes: ["campaign","versus","endless","twoPlayer"]`、`levels: 188`（`levels.ts` 的 `CHAPTERS` 八章合计 188）；目录 `logic.ts` `scoring.ts` `levels.ts` `index.ts` `meta.ts` `guide.ts` + `logic.test.ts` / `levels.test.ts` / `scoring.test.ts` / `smoke.test.ts`。
+
 其余基线：188 框架、收藏册只读、家长门、`save.recordEndlessBest`；**不引入任何依赖**。
+
+---
+
+# 第一款：`bumper-cars`「碰碰车大乱斗」
 
 ## 三、现状审查（回复里逐条回答）
 
@@ -77,10 +92,48 @@
 
 只许改 `src/games/bumper-cars/**`。不要碰 `bomb-buddies` / `snow-fight` / `tank-battle`。CSS 类名 `bpc-` 前缀；两套键位 `destroy` 时全卸。
 
-## 十一、测试（新增 ≥ 18 个用例，同步进来的既有测试一个都不许删）
+## 十一、测试（新增 ≥ 18 个用例，回迁进来的既有测试一个都不许删）
 
 弹性碰撞动量守恒、恢复系数边界、蓄力冷却、三种机关、淘汰两段式、四档 AI 强度、无尽复活次数、双人输入不串、`destroy` 归零。
 
-## 十二、分级红线与回复
+---
 
-无伤害、无坠毁、无死亡；失败只鼓励；无商标（不许出现真实汽车品牌）。完成后回复：你是 C 档、`bumper-cars`；是否需要先同步 1.1；物理常量；AI 四档数据；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。
+# 第二款：`bowling-lane`「保龄球小馆」
+
+## 十二、现状审查（回复里逐条回答）
+
+1. 「蓄力 / 落点 / 旋转」三段式出球现在各是怎么输入的？三段之间能不能反悔重来？
+2. `logic.ts` 的球瓶连锁倒地是真的物理传播（球撞瓶、瓶撞瓶），还是查表判定？瓶间距与半径是常量吗？
+3. 旋转（勾球）对球路的影响怎么算的？有没有「侧旋进袋位」的手感？
+4. `scoring.ts` 的记分对不对——**全中（strike）加下两球、补中（spare）加下一球、第十格补投**，这套规则一条都不许错？
+5. 188 关的关卡差异是什么（瓶阵变化 / 障碍 / 目标分数）？会不会八章都长一样？
+6. 双人轮流投（`twoPlayer`）与对战（`versus`）的区别是什么？无尽格是怎么算的？
+7. 触屏出球是拖拽还是三次点击？在 360px 下球道看得全吗？
+
+## 十三、`bowling-lane` 的 1.2 升级
+
+| 项 | 规格 |
+| --- | --- |
+| **记分正确性（硬性）** | 十格记分规则写成纯函数 + 单测，必须覆盖：全场全中（满分 300）、全场补中 + 尾球全中、第十格三投、洗沟局（0 分）、连续两次全中的进位。**记分错了就是最刺眼的 bug。** |
+| **连锁倒瓶** | 球瓶用圆形刚体做真连锁：球撞瓶传冲量，瓶撞瓶继续传，瓶倒下才停止参与碰撞。常量（瓶半径、瓶间距 = 标准三角阵、质量比、恢复系数）全部集中定义并写单测（断言正面全中的球路真能推倒 10 瓶）。 |
+| **三段出球手感** | ①蓄力条（决定球速）②落点滑块（决定横向起点）③旋转旋钮（决定弯曲量）。每段都能在确认前反悔；三段确认后有一次短暂的「跟球」运镜。三段参数 → 球路轨迹写成纯函数 + 单测（同参数同轨迹，可回放）。 |
+| **口袋位教学** | 攻略与关内提示讲清「1-3 号瓶之间的口袋位」，后段章节给瞄准辅助线（前两章常驻，越往后越淡直到消失）。**提示只给方向，不许直接给必中参数。** |
+| **关卡差异** | 八章至少要有：标准阵 / 少瓶挑战（留 3-7 号分瓶）/ 移动瓶 / 有护栏 / 无护栏 / 油路影响弯曲 / 限球数达标 / 连续全中挑战。写单测断言每章的关卡配置字段确有差异，不是同一模板换数字。 |
+| **AI 三档** | 陪练机器人三档（新手常洗沟 / 稳定补中 / 常全中），落点与旋转带高斯噪声，噪声方差按档位定；固定 seed 下写胜率断言。 |
+| **无尽格** | 一直投，每十格提一次难度（球道变窄 / 分瓶更刁 / 油路更强），成绩走 `save.recordEndlessBest("bowling-lane", n)`。 |
+
+## 十四、`bowling-lane` 的模式 / 视觉 / 手机
+
+- **模式矩阵**：四模式全保留且都要能玩到结算；闯关 **前段关卡数据不改**。
+- **2.5D / 3D 决策**：球道用**伪 2.5D 透视**（近大远小的梯形球道 + 球随距离缩放），这是本款观感的关键；**不做真 3D、不引入 3D 库**。碰撞判定仍在 2D 俯视坐标系里算，透视只在渲染层做投影。
+- **视觉手感**：球滚动有旋转纹理；瓶倒下有翻滚与轻微弹跳；全中放彩纸 + `api.play("win")`；洗沟只是球滑进沟里配一句鼓励，**不做嘲讽动画、不做红色失败大字**。`prefers-reduced-motion`：关运镜与彩纸，瓶直接切到倒地姿态。
+- **手机 360px**：竖屏下球道纵向铺满，瓶阵在顶部**必须完整可见**；蓄力/落点/旋转三个控件热区 ≥ 44px 且不重叠；记分表横向可滑动，当前格高亮，字号 ≥ 14px。
+- **平台接线**：`openCampaignLevel(n)` / `initialLevel` / `?level=` 直开第 N 关；Skip 走 `requestSkip`；无尽走 `save.recordEndlessBest`；`meta.platform` 按实测填，`blurb` 与事实对齐。
+- **独占文件**：只许改 `src/games/bowling-lane/**`。CSS 类名 `bwl-` 前缀。
+- **测试（新增 ≥ 18 个用例，回迁进来的既有测试一个都不许删）**：十格记分六种边界（300 满分 / 全补中 / 第十格三投 / 洗沟 / 连续全中进位 / 空格）、瓶阵连锁倒地、三段参数 → 轨迹确定性可回放、八章配置确有差异、三档 AI 强度、无尽难度单调上升、`recordEndlessBest` 写入、透视投影与俯视坐标互转可逆、`destroy` 归零。
+
+---
+
+## 十五、分级红线与回复（两款共同）
+
+无伤害、无坠毁、无死亡；失败只鼓励；**无商标**（`bumper-cars` 不许出现真实汽车品牌，`bowling-lane` 不许出现真实保龄球馆/球具品牌）。完成后回复：你是 C 档、本档两款 `bumper-cars` + `bowling-lane`；**两款各自是回迁 + 升级还是只升级、回迁后游戏总款数是不是 55**；`bumper-cars` 的物理常量与 AI 四档数据；`bowling-lane` 的记分函数怎么验的、伪 2.5D 透视怎么做的、AI 三档数据；两款各自新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。
