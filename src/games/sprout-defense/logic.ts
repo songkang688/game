@@ -118,18 +118,19 @@ export const BUG_INFO: Record<BugKind, BugSpec> = {
   bossbug: { hp: 40, armor: 4, speed: 0.24, flying: false, jumps: false, name: "大虫王", boss: true },
   queen: { hp: 70, armor: 10, speed: 0.2, flying: false, jumps: false, name: "虫虫女王", boss: true },
   mole: { hp: 3, armor: 0, speed: 0.5, flying: false, jumps: false, name: "地地虫", boss: false, underground: true },
-  moth: { hp: 2, armor: 0, speed: 0.55, flying: true, jumps: false, name: "扑扑蛾", boss: false, nightMult: 1.6 },
+  moth: { hp: 1, armor: 0, speed: 0.55, flying: true, jumps: false, name: "扑扑蛾", boss: false, nightMult: 1.6 },
   mama: { hp: 5, armor: 2, speed: 0.4, flying: false, jumps: false, name: "分分虫", boss: false, splits: 2 },
   queenx: { hp: 95, armor: 12, speed: 0.2, flying: false, jumps: false, name: "虫虫女王进化体", boss: true },
 };
 
 /**
  * 虫子血量随关卡(0 起)缓慢加深。
- * 1.1:前 99 关公式一字不动;第 100 关起换更缓的坡(每 12 关 +1),
- * 在第 99/100 关交界处数值连续,避免新章一开场就打不动。
+ * 1.1:前 99 关公式一字不动;新章(第 100 关起)血量回落到温和档再慢慢爬坡——
+ * 新章的难度靠昼夜循环/地下虫/分裂/露珠上限这些新机制,而不是把血条堆到打不动
+ * (飞虫拦不了墙,血太厚会变成数学上的死局)。
  */
 export function bugHp(kind: BugKind, levelIdx: number): number {
-  const extra = levelIdx <= 98 ? Math.floor(levelIdx / 8) : 12 + Math.floor((levelIdx - 98) / 12);
+  const extra = levelIdx <= 98 ? Math.floor(levelIdx / 8) : 6 + Math.floor((levelIdx - 99) / 32);
   return BUG_INFO[kind].hp + extra;
 }
 
@@ -971,16 +972,16 @@ const moonfieldHand: LevelDef[] = [
     waves: [W(["walker", 5, 1.5]), W(["walker", 5, 1.2], ["speedy", 4, 1.1]), W(["walker", 6, 1.0], ["flyer", 4, 1.1])],
   },
   {
-    name: "扑扑蛾初见", scene: "moonfield", waterLanes: [], startDew: 15,
-    feature: "扑扑蛾登场", cycle: { day: 20, night: 12 },
+    name: "扑扑蛾初见", scene: "moonfield", waterLanes: [], startDew: 17,
+    feature: "扑扑蛾登场", cycle: { day: 24, night: 12 },
     hint: "扑扑蛾一到黑夜就加速!星星芽多种几排", flagWaves: [2],
-    waves: [W(["moth", 3, 1.8], ["walker", 4, 1.4]), W(["moth", 4, 1.4], ["speedy", 4, 1.0]), W(["walker", 6, 1.0], ["moth", 4, 1.2])],
+    waves: [W(["moth", 2, 1.8], ["walker", 4, 1.4]), W(["moth", 3, 1.4], ["speedy", 3, 1.0]), W(["walker", 6, 1.0], ["moth", 4, 1.2])],
   },
   {
-    name: "银辉水洼", scene: "moonfield", waterLanes: [2], startDew: 15,
+    name: "银辉水洼", scene: "moonfield", waterLanes: [2], startDew: 17,
     feature: "月光水洼战", cycle: { day: 22, night: 12 },
     hint: "月光下有一条水洼道,先铺荷叶垫!", flagWaves: [2],
-    waves: [W(["walker", 5, 1.3], ["flyer", 3, 1.4]), W(["speedy", 5, 1.0], ["moth", 3, 1.4]), W(["flyer", 5, 1.0], ["walker", 6, 1.0])],
+    waves: [W(["walker", 5, 1.3], ["flyer", 3, 1.4]), W(["speedy", 4, 1.0], ["moth", 3, 1.4]), W(["flyer", 5, 1.0], ["walker", 6, 1.0])],
   },
   {
     name: "月食断粮夜", scene: "moonfield", waterLanes: [], startDew: 8,
@@ -993,7 +994,7 @@ const moonfieldHand: LevelDef[] = [
     feature: "月光四波夜战", cycle: { day: 18, night: 12 },
     hint: "四波虫虫轮着叫,黑夜里别松劲!", flagWaves: [3],
     waves: [
-      W(["walker", 5, 1.3]), W(["moth", 4, 1.3], ["speedy", 4, 1.0]),
+      W(["walker", 5, 1.3]), W(["moth", 3, 1.3], ["speedy", 3, 1.0]),
       W(["flyer", 5, 1.0], ["walker", 5, 1.1]), W(["moth", 5, 1.1], ["speedy", 5, 0.9], ["walker", 5, 1.0]),
     ],
   },
@@ -1029,10 +1030,10 @@ const moonfieldHand: LevelDef[] = [
 /* ---- 第十一章 · 地底根须园:地地虫 + 望望草 ---- */
 const burrowHand: LevelDef[] = [
   {
-    name: "根须洞口", scene: "burrow", waterLanes: [], startDew: 16, unlockPlant: "scout",
+    name: "根须洞口", scene: "burrow", waterLanes: [], startDew: 18, unlockPlant: "scout",
     feature: "地底章开场+望望草",
     hint: "地地虫钻在土里打不到!快种望望草照出它", flagWaves: [2],
-    waves: [W(["mole", 3, 2.0], ["walker", 4, 1.5]), W(["mole", 4, 1.6], ["digger", 3, 1.5]), W(["walker", 6, 1.1], ["mole", 4, 1.4])],
+    waves: [W(["mole", 3, 2.0], ["walker", 4, 1.5]), W(["mole", 4, 1.6], ["digger", 2, 1.5]), W(["walker", 5, 1.1], ["mole", 3, 1.4])],
   },
   {
     name: "钻地小队", scene: "burrow", waterLanes: [], startDew: 16,
@@ -1047,7 +1048,7 @@ const burrowHand: LevelDef[] = [
     waves: [W(["armor", 4, 1.4], ["mole", 3, 1.5]), W(["armor", 5, 1.2], ["digger", 4, 1.3]), W(["mole", 5, 1.2], ["armor", 5, 1.1])],
   },
   {
-    name: "黑土断粮", scene: "burrow", waterLanes: [], startDew: 9,
+    name: "黑土断粮", scene: "burrow", waterLanes: [], startDew: 12,
     feature: "地底经济挑战",
     hint: "黑土里露珠难攒,望望草也不能省!", flagWaves: [2],
     waves: [W(["walker", 5, 1.5]), W(["mole", 4, 1.5], ["walker", 4, 1.3]), W(["digger", 4, 1.2], ["mole", 4, 1.3])],
@@ -1099,22 +1100,22 @@ const candyHand: LevelDef[] = [
     waves: [W(["mama", 2, 2.0], ["walker", 4, 1.4]), W(["mama", 3, 1.6], ["speedy", 4, 1.0]), W(["walker", 6, 1.0], ["mama", 3, 1.4])],
   },
   {
-    name: "分分小队", scene: "candy", waterLanes: [], startDew: 15, dewCap: 26,
+    name: "分分小队", scene: "candy", waterLanes: [], startDew: 17, dewCap: 26,
     feature: "分分虫小队",
     hint: "分分虫组团来袭,爆爆果一锅端最划算!", flagWaves: [2],
-    waves: [W(["mama", 3, 1.6], ["speedy", 3, 1.1]), W(["mama", 3, 1.4], ["flyer", 4, 1.0]), W(["mama", 4, 1.2], ["racer", 4, 0.9])],
+    waves: [W(["mama", 2, 1.6], ["speedy", 3, 1.1]), W(["mama", 3, 1.4], ["flyer", 3, 1.0]), W(["mama", 3, 1.2], ["racer", 3, 0.9])],
   },
   {
-    name: "蜜糖水渠", scene: "candy", waterLanes: [1], startDew: 16, dewCap: 28,
+    name: "蜜糖水渠", scene: "candy", waterLanes: [1], startDew: 18, dewCap: 28,
     feature: "糖霜水渠战",
     hint: "蜜糖渠是条水路,风风虫沿着岸边飙!", flagWaves: [2],
-    waves: [W(["walker", 5, 1.2], ["racer", 3, 1.0]), W(["speedy", 5, 0.95], ["mama", 3, 1.4]), W(["racer", 5, 0.85], ["flyer", 4, 0.95])],
+    waves: [W(["walker", 5, 1.2], ["racer", 2, 1.0]), W(["speedy", 4, 0.95], ["mama", 3, 1.4]), W(["racer", 3, 0.85], ["flyer", 3, 0.95])],
   },
   {
-    name: "小糖罐挑战", scene: "candy", waterLanes: [], startDew: 10, dewCap: 14,
+    name: "小糖罐挑战", scene: "candy", waterLanes: [], startDew: 12, dewCap: 16,
     feature: "糖霜上限挑战",
     hint: "罐子特别小,攒到就赶紧花掉!", flagWaves: [2],
-    waves: [W(["walker", 5, 1.4]), W(["speedy", 4, 1.05], ["mama", 2, 1.6]), W(["racer", 4, 0.9], ["walker", 5, 1.05])],
+    waves: [W(["walker", 5, 1.4]), W(["speedy", 4, 1.05], ["mama", 2, 1.6]), W(["racer", 3, 0.9], ["walker", 5, 1.05])],
   },
   {
     name: "果酱四连波", scene: "candy", waterLanes: [], startDew: 17, dewCap: 30,
@@ -1130,8 +1131,8 @@ const candyHand: LevelDef[] = [
     feature: "糖霜双旗",
     hint: "两面糖霜大旗,分分虫越打越多!", flagWaves: [1, 3],
     waves: [
-      W(["speedy", 5, 1.0], ["mama", 2, 1.5]), W(["racer", 5, 0.85], ["mama", 3, 1.3]),
-      W(["flyer", 5, 0.95], ["walker", 5, 1.0]), W(["mama", 4, 1.1], ["racer", 5, 0.8], ["speedy", 5, 0.85]),
+      W(["speedy", 3, 1.0], ["mama", 2, 1.5]), W(["racer", 3, 0.85], ["mama", 2, 1.3]),
+      W(["flyer", 5, 0.95], ["walker", 4, 1.0]), W(["mama", 2, 1.1], ["racer", 4, 0.8], ["speedy", 4, 0.85]),
     ],
   },
   {
@@ -1144,11 +1145,11 @@ const candyHand: LevelDef[] = [
     ],
   },
   {
-    name: "糖霜大虫王", scene: "candy", waterLanes: [], startDew: 22, dewCap: 34,
+    name: "糖霜大虫王", scene: "candy", waterLanes: [], startDew: 24, dewCap: 34,
     feature: "糖霜章BOSS",
     hint: "大虫王闻着糖香来啦,分分虫全程护驾!", flagWaves: [2],
     waves: [
-      W(["mama", 3, 1.3], ["speedy", 5, 0.95]), W(["racer", 5, 0.8], ["flyer", 5, 0.9]),
+      W(["mama", 3, 1.3], ["speedy", 5, 0.95]), W(["racer", 4, 0.8], ["flyer", 4, 0.9]),
       W(["bossbug", 1, 1], ["mama", 3, 1.2]),
     ],
   },
@@ -1163,10 +1164,10 @@ const hiveHand: LevelDef[] = [
     waves: [W(["walker", 5, 1.3], ["mole", 3, 1.4]), W(["moth", 4, 1.3], ["armor", 4, 1.2]), W(["mama", 3, 1.3], ["walker", 5, 1.0])],
   },
   {
-    name: "蛾群夜袭", scene: "hive", waterLanes: [], startDew: 20,
-    feature: "王庭蛾群夜战", cycle: { day: 14, night: 16 },
+    name: "蛾群夜袭", scene: "hive", waterLanes: [], startDew: 22,
+    feature: "王庭蛾群夜战", cycle: { day: 18, night: 16 },
     hint: "长夜漫漫,蛾群一波接一波扑过来!", flagWaves: [2],
-    waves: [W(["moth", 4, 1.4], ["walker", 4, 1.2]), W(["moth", 5, 1.2], ["mole", 4, 1.3]), W(["moth", 6, 1.0], ["mama", 3, 1.2])],
+    waves: [W(["moth", 2, 1.4], ["walker", 4, 1.2]), W(["moth", 4, 1.2], ["mole", 4, 1.3]), W(["moth", 6, 1.0], ["mama", 3, 1.2])],
   },
   {
     name: "王家钻地队", scene: "hive", waterLanes: [], startDew: 21,
@@ -1175,10 +1176,10 @@ const hiveHand: LevelDef[] = [
     waves: [W(["mole", 5, 1.3], ["bucket", 2, 2.2]), W(["mole", 5, 1.15], ["armor", 4, 1.1]), W(["bucket", 3, 1.8], ["mole", 5, 1.05])],
   },
   {
-    name: "王庭断粮日", scene: "hive", waterLanes: [], startDew: 11, dewCap: 18,
+    name: "王庭断粮日", scene: "hive", waterLanes: [], startDew: 15, dewCap: 20,
     feature: "王庭经济挑战",
     hint: "露珠罐又小攒得又慢,这是穷日子的硬仗!", flagWaves: [2],
-    waves: [W(["walker", 5, 1.4]), W(["mole", 4, 1.3], ["walker", 5, 1.15]), W(["mama", 3, 1.3], ["moth", 3, 1.2])],
+    waves: [W(["walker", 5, 1.4]), W(["mole", 4, 1.3], ["walker", 4, 1.15]), W(["mama", 3, 1.3], ["moth", 3, 1.2])],
   },
   {
     name: "亲卫四连阵", scene: "hive", waterLanes: [], startDew: 22,
@@ -1190,12 +1191,12 @@ const hiveHand: LevelDef[] = [
     ],
   },
   {
-    name: "王庭双旗", scene: "hive", waterLanes: [], startDew: 22, dewCap: 30,
+    name: "王庭双旗", scene: "hive", waterLanes: [], startDew: 24, dewCap: 32,
     feature: "王庭双旗",
     hint: "两面王旗压阵,罐子上限要靠产露植物撑大!", flagWaves: [1, 3],
     waves: [
-      W(["mole", 5, 1.15], ["walker", 5, 1.05]), W(["mama", 4, 1.1], ["moth", 4, 1.1]),
-      W(["bucket", 3, 1.7], ["armor", 4, 1.0]), W(["mama", 4, 1.0], ["moth", 5, 0.95], ["mole", 5, 0.95]),
+      W(["mole", 4, 1.15], ["walker", 4, 1.05]), W(["mama", 3, 1.1], ["moth", 4, 1.1]),
+      W(["bucket", 3, 1.7], ["armor", 3, 1.0]), W(["mama", 3, 1.0], ["moth", 5, 0.95], ["mole", 4, 0.95]),
     ],
   },
   {
@@ -1209,11 +1210,11 @@ const hiveHand: LevelDef[] = [
     ],
   },
   {
-    name: "女王进化体降临", scene: "hive", waterLanes: [], startDew: 30,
-    feature: "最终BOSS女王进化体", cycle: { day: 22, night: 12 },
+    name: "女王进化体降临", scene: "hive", waterLanes: [], startDew: 32,
+    feature: "最终BOSS女王进化体", cycle: { day: 26, night: 12 },
     hint: "最终决战!进化体血少一半会狂暴加速,冰冰花备好!", flagWaves: [3],
     waves: [
-      W(["mole", 5, 1.1], ["moth", 4, 1.1]), W(["mama", 3, 1.15], ["bucket", 3, 1.6]),
+      W(["mole", 4, 1.1], ["moth", 3, 1.1]), W(["mama", 3, 1.15], ["bucket", 3, 1.6]),
       W(["bossbug", 1, 1], ["moth", 4, 1.0]),
       W(["queenx", 1, 1], ["mama", 2, 1.2], ["mole", 4, 1.0]),
     ],
@@ -1230,15 +1231,21 @@ function genLevel2(sceneIdx: number, sub: number): LevelDef {
   const waves: WaveEntry[][] = [];
   for (let wi = 0; wi < waveCount; wi++) {
     const batches: WaveEntry[] = [];
-    const nBatches = 1 + ((wi + sub) % 2);
+    // 开场两波只派单路纵队探路,防线立起来之后才上双队混编
+    const nBatches = wi <= 1 ? 1 : 1 + ((wi + sub) % 2);
     for (let b = 0; b < nBatches; b++) {
       // sub ≥ 12 时轮换阵容错开一位,避免与 sub-12 的波次模板撞车
       let kind = pal[(wi + b * 2 + sub + Math.floor(sub / 12)) % pal.length];
-      // 第 1 波只派地面小虫探路(蛾群/地下虫从第 2 波起,望望草和星星芽来得及)
-      if (wi === 0 && (kind === "moth" || kind === "mole")) kind = "walker";
+      // 第 1 波只派慢速地面小虫探路(飞的/钻地的/狂飙的从第 2 波起,防线来得及立)
+      if (
+        wi === 0 &&
+        (BUG_INFO[kind].flying || BUG_INFO[kind].underground || BUG_INFO[kind].speed >= 1.1)
+      ) {
+        kind = "walker";
+      }
       let count = 2 + Math.min(wi, 2) + ((wi * 2 + b + sub + t2) % 3);
-      if (wi === 0) count = Math.min(count, 4);
-      if (wi === 1) count = Math.min(count, 5);
+      if (wi === 0) count = Math.min(count, 3);
+      if (wi === 1) count = Math.min(count, 4);
       // 重家伙与分裂虫打六折,夜蛾一批最多 4 只
       if (kind === "bucket" || kind === "mama") count = Math.ceil(count * 0.6);
       if (kind === "moth") count = Math.min(count, 4);
@@ -1344,6 +1351,17 @@ export function levelWaveSignature(def: LevelDef): string {
     .map((w) => w.map((e) => `${e.kind}x${e.count}`).join("+"))
     .join("|");
 }
+
+/* ---- 战斗节奏常量(运行时与模拟器共用,1.1 起集中在这里) ---- */
+export const BUBBLE_SPEED = 3.5;
+export const STAR_SPEED = 4.2;
+export const ICE_SPEED = 3.8;
+export const SHOOT_CD = 1.3;
+export const CHEW_INTERVAL = 0.9;
+export const BOSS_CHEW_INTERVAL = 0.35;
+export const SPARKLE_DEW_EVERY = 4.5;
+/** 虫子出生的 x 坐标(格)。 */
+export const BUG_SPAWN_X = PLANT_COLS + 0.7;
 
 /** 泡泡/星星打没打到虫(同车道,x 方向足够近,单位:格)。 */
 export function bubbleHitsBug(bubbleX: number, bugX: number, hitRange = 0.3): boolean {
