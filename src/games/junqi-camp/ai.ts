@@ -220,7 +220,7 @@ export function chooseMove(state: GameState, side: Side, tier: Tier, seed: numbe
   if (tier === "rookie") return moves[Math.floor(rand() * moves.length)];
 
   const know = knownInfo(side, state.history);
-  const danger = tier === "rookie" || tier === "normal" ? new Set<Pos>() : dangerCells(state.cells, other(side), know);
+  const danger = tier === "normal" ? new Set<Pos>() : dangerCells(state.cells, other(side), know);
 
   let best = moves[0];
   let bestScore = -Infinity;

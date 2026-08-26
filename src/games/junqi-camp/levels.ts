@@ -264,7 +264,7 @@ function chapter6(k: number): Made {
 /**
  * 第七章：一整套布阵，自己找路。
  *
- * 第 2 行被守备队堵死，工兵没法一口气顺着铁路摸到雷跟前：
+ * 第 2 行被守备队堵住，工兵没法一口气顺着铁路摸到雷跟前：
  * 要么绕行营（四手），要么先用炸弹把铁路口换开（三手）。
  */
 function chapter7(k: number): Made {
@@ -291,7 +291,7 @@ function chapter7(k: number): Made {
     return {
       cells: b.cells,
       budget: 5,
-      hint: "第 2 行被堵死了，工兵改走行营那条斜线。",
+      hint: "第 2 行被守备队堵住了，工兵改走行营那条斜线。",
     };
   }
   // 行营被占着（撞不得），只能先让炸弹把铁路口换开
