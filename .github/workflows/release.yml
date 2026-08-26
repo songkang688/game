@@ -6,9 +6,21 @@ on:
   push:
     tags:
       - "v*"
+  # 补包用:某个平台的包当时没打出来时,不用重新打 tag,
+  # 在 Actions 页面手动跑一次,产物会补挂到那个 tag 已有的 Release 上。
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要补包的已有 tag,例如 v1.1.0"
+        required: true
 
 permissions:
   contents: write
+
+env:
+  # tag 推上来时就是那个 tag;手动补包时用输入的 tag。两种情况都拿 tag 上的代码来打包。
+  BUILD_REF: ${{ inputs.tag || github.ref }}
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   test:
@@ -18,6 +30,8 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-node@v4
         with:
@@ -27,11 +41,11 @@ jobs:
       - name: 校验 tag 与 package.json 版本号一致
         id: ver
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${RELEASE_TAG#v}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           echo "tag=$TAG_VERSION  package.json=$PKG_VERSION"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::tag $GITHUB_REF_NAME 与 package.json 的 $PKG_VERSION 对不上,发行包文件名会和 tag 不一致。请先改版本号再打 tag。"
+            echo "::error::tag $RELEASE_TAG 与 package.json 的 $PKG_VERSION 对不上,发行包文件名会和 tag 不一致。请先改版本号再打 tag。"
             exit 1
           fi
           echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
@@ -51,6 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-node@v4
         with:
@@ -84,6 +100,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-node@v4
         with:
@@ -113,6 +131,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-node@v4
         with:
@@ -153,6 +173,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
 
       - uses: actions/setup-node@v4
         with:
@@ -162,7 +184,9 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          # Capacitor 8 的 capacitor-android 模块是按 Java 21 编的,
+          # 用 17 会在 :capacitor-android:compileDebugJavaWithJavac 报 invalid source release: 21。
+          java-version: 21
 
       - uses: android-actions/setup-android@v3
         with:
@@ -204,6 +228,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
 
       - name: 收集各平台产物
         uses: actions/download-artifact@v4
@@ -257,6 +283,7 @@ jobs:
       - name: 挂到 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           name: 一朵一星 ${{ needs.test.outputs.version }}
           body_path: RELEASE_BODY.md
           draft: false

@@ -53,13 +53,26 @@
   这个 job 挂了也不影响别的:便携版仍然由上面的 Linux job 产出。
 - **mac**(macos-latest):`npx electron-builder --mac dmg zip --x64 --arm64`,
   Intel 和 Apple 芯片各出一份 dmg + zip。
-- **android**(ubuntu-latest):JDK 17 + Android SDK(API 36),跑仓库自带的 `npm run android:apk`,
+- **android**(ubuntu-latest):JDK **21** + Android SDK(API 36),跑仓库自带的 `npm run android:apk`,
   出 **debug** 签名的 APK,再改名成 `yiduo-yixing-<版本>-android-debug.apk`。
 - **release**:把上面三个 job 的产物下下来,一次性挂到 Release。
   设了 `if: !cancelled()`,所以 **某个平台挂了,其它平台已经打好的包照样发出去**;
   只有 test 失败才整个不发。若 tag 那棵树上有演示视频(`docs/demos/*.mp4`),也会一并挂上去。
 
+  JDK 必须是 21:Capacitor 8 的 `capacitor-android` 是按 Java 21 编的,
+  用 17 会在 `:capacitor-android:compileDebugJavaWithJavac` 报 `invalid source release: 21`。
+
 产物同时用 `actions/upload-artifact` 存了一份,run 页面上可以单独下载,方便出问题时排查。
+
+## 某个平台的包没打出来怎么补(不用重新打 tag)
+
+`release.yml` 带了一个手动入口:仓库 → Actions → `Release` → **Run workflow**,
+在 `tag` 里填已经存在的 tag(比如 `v1.1.0`)。它会 **用那个 tag 上的代码** 重新走一遍打包,
+把产物补挂到那个 tag 已有的 Release 上(工作流本身用的是你所在分支的最新版本,
+所以修好的打包脚本能直接生效,不用为了修 CI 再发一个版本号)。
+
+已知的一次:`v1.1.0` 第一次跑时 android job 用的是 JDK 17,APK 没出来;
+JDK 改成 21 之后,用上面的手动入口补跑 android 即可把 APK 挂上去。
 
 ## 一个已知的小坑:测试超时
 
