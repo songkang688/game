@@ -1,417 +1,257 @@
 /**
- * 花园国际象棋 · 走法生成与胜负判定（自己写，不接任何走法库或引擎）。
+ * 花园国际象棋 · 对局状态机。
  *
- * 关键规则一条都没落下：兵首步两格、斜吃、吃过路兵（只在下一手有效）、
- * 长短易位的四种失败情形、升变四选一、将杀、逼和、50 回合、三次重复、子力不足。
+ * 走法本身在 moves.ts；这里只回答「这一局现在算什么」：
+ * 将杀 / 逼和 / 50 回合 / 三次重复 / 子力不足 / 认输 / 超时。
+ *
+ * 三次重复要看历史，所以多包了一层 `Game`：它拿着当前局面、走过的每一手，
+ * 以及每个局面哈希出现过几次。哈希来自 board.ts 的 `zobrist`，含轮走方、
+ * 易位权与过路格，所以「摆法一样但轮到对方走」不会被错算成重复。
  */
 import {
-  clonePosition,
-  fileOf,
-  findKing,
-  other,
-  rankOf,
-  squareName,
-  squareOf,
+  BISHOP,
+  BLACK,
+  KING,
+  KNIGHT,
+  PAWN,
+  QUEEN,
+  ROOK,
+  WHITE,
+  isLightSquare,
+  startPosition,
+  typeOf,
   zobrist,
+  fromFen,
   type Color,
-  type PieceType,
   type Position,
-  type Square,
 } from "./board";
+import {
+  CASTLE_SHAPES,
+  canCastleShape,
+  inCheck,
+  legalMoves,
+  makeMove,
+  toChinese,
+  toSan,
+  type Move,
+} from "./moves";
 
-export interface Move {
-  from: Square;
-  to: Square;
-  /** 升变成什么 */
-  promo?: Exclude<PieceType, "p" | "k">;
-  /** 这一手把谁请去休息了 */
-  capture?: PieceType;
-  /** 吃过路兵 */
-  ep?: boolean;
-  /** 王车易位：k 是短易位，q 是长易位 */
-  castle?: "k" | "q";
-  /** 兵首步走两格 */
-  double?: boolean;
+/** 50 回合规则：连续 50 个回合（= 100 个半回合）没吃子也没动兵 */
+export const FIFTY_MOVE_PLIES = 100;
+/** 同一个局面出现这么多次可以判和 */
+export const REPETITION_LIMIT = 3;
+
+export type StatusKind =
+  | "ongoing"
+  | "check"
+  | "checkmate"
+  | "stalemate"
+  | "fifty"
+  | "repetition"
+  | "material"
+  | "resign"
+  | "timeout";
+
+export interface Status {
+  kind: StatusKind;
+  /** 这一局结束了吗 */
+  over: boolean;
+  /** 1 白胜 / -1 黑胜 / 0 和棋 / null 还没完 */
+  winner: Color | 0 | null;
+  /** 给孩子看的一句话（只鼓励，不批评） */
+  text: string;
 }
 
-const KNIGHT_DELTAS: Array<[number, number]> = [
-  [1, 2],
-  [2, 1],
-  [2, -1],
-  [1, -2],
-  [-1, -2],
-  [-2, -1],
-  [-2, 1],
-  [-1, 2],
-];
-
-const KING_DELTAS: Array<[number, number]> = [
-  [0, 1],
-  [1, 1],
-  [1, 0],
-  [1, -1],
-  [0, -1],
-  [-1, -1],
-  [-1, 0],
-  [-1, 1],
-];
-
-const ROOK_DIRS: Array<[number, number]> = [
-  [0, 1],
-  [1, 0],
-  [0, -1],
-  [-1, 0],
-];
-
-const BISHOP_DIRS: Array<[number, number]> = [
-  [1, 1],
-  [1, -1],
-  [-1, -1],
-  [-1, 1],
-];
-
-/** 白兵往「上」走，也就是 rank 下标变小 */
-function pawnDir(color: Color): number {
-  return color === "w" ? -1 : 1;
-}
-
-function homeRank(color: Color): number {
-  return color === "w" ? 6 : 1;
-}
-
-function promoRank(color: Color): number {
-  return color === "w" ? 0 : 7;
-}
-
-const PROMO_CHOICES: Array<Exclude<PieceType, "p" | "k">> = ["q", "r", "b", "n"];
-
-/** 这一格有没有被某一方攻击到（易位与将军判断都用它） */
-export function attacked(pos: Position, sq: Square, by: Color): boolean {
-  const f = fileOf(sq);
-  const r = rankOf(sq);
-
-  // 兵：从 by 方的角度看，兵是往 pawnDir(by) 走的，所以攻击者在反方向
-  const pd = pawnDir(by);
-  for (const df of [-1, 1]) {
-    const af = f + df;
-    const ar = r - pd;
-    if (af < 0 || af > 7 || ar < 0 || ar > 7) continue;
-    const p = pos.board[squareOf(af, ar)];
-    if (p && p.color === by && p.type === "p") return true;
+/** 规格第六节的 `castlingRights(pos)`：现在还留着哪几种易位权 */
+export function castlingRights(pos: Position): Array<"wk" | "wq" | "bk" | "bq"> {
+  const out: Array<"wk" | "wq" | "bk" | "bq"> = [];
+  for (const key of ["wk", "wq", "bk", "bq"] as const) {
+    if (pos.castling & CASTLE_SHAPES[key].mask) out.push(key);
   }
+  return out;
+}
 
-  for (const [df, dr] of KNIGHT_DELTAS) {
-    const af = f + df;
-    const ar = r + dr;
-    if (af < 0 || af > 7 || ar < 0 || ar > 7) continue;
-    const p = pos.board[squareOf(af, ar)];
-    if (p && p.color === by && p.type === "n") return true;
+/** 规格第六节的 `canCastle(pos, side)`：轮走方现在能不能往这边易位 */
+export function canCastle(pos: Position, side: "king" | "queen"): boolean {
+  const key = pos.turn === WHITE ? (side === "king" ? "wk" : "wq") : side === "king" ? "bk" : "bq";
+  return canCastleShape(pos, CASTLE_SHAPES[key]);
+}
+
+/** 规格第六节的 `epSquare(pos)`：这一手可以吃过路兵的落点，没有就是 -1 */
+export function epSquare(pos: Position): number {
+  return pos.ep;
+}
+
+/** 规格第六节的 `halfmoveClock`：50 回合规则数到哪儿了 */
+export function halfmoveClock(pos: Position): number {
+  return pos.halfmove;
+}
+
+/**
+ * 子力不足判和：王对王、王象对王、王马对王。
+ * 另外把「双方各剩一个同色格的象」也算进来——那种局面谁都杀不掉谁。
+ */
+export function insufficientMaterial(pos: Position): boolean {
+  const minors: Array<{ color: Color; type: number; light: boolean }> = [];
+  for (let sq = 0; sq < 64; sq++) {
+    const p = pos.board[sq];
+    if (p === 0) continue;
+    const type = typeOf(p);
+    if (type === KING) continue;
+    if (type === PAWN || type === ROOK || type === QUEEN) return false;
+    minors.push({ color: p > 0 ? WHITE : BLACK, type, light: isLightSquare(sq) });
   }
-
-  for (const [df, dr] of KING_DELTAS) {
-    const af = f + df;
-    const ar = r + dr;
-    if (af < 0 || af > 7 || ar < 0 || ar > 7) continue;
-    const p = pos.board[squareOf(af, ar)];
-    if (p && p.color === by && p.type === "k") return true;
-  }
-
-  for (const dirs of [ROOK_DIRS, BISHOP_DIRS]) {
-    const sliding: PieceType = dirs === ROOK_DIRS ? "r" : "b";
-    for (const [df, dr] of dirs) {
-      let af = f + df;
-      let ar = r + dr;
-      while (af >= 0 && af < 8 && ar >= 0 && ar < 8) {
-        const p = pos.board[squareOf(af, ar)];
-        if (p) {
-          if (p.color === by && (p.type === sliding || p.type === "q")) return true;
-          break;
-        }
-        af += df;
-        ar += dr;
-      }
-    }
+  if (minors.length === 0) return true;
+  if (minors.length === 1) return true;
+  if (minors.length === 2) {
+    const [a, b] = minors;
+    if (a.type === BISHOP && b.type === BISHOP && a.color !== b.color && a.light === b.light) return true;
   }
   return false;
 }
 
-export function inCheck(pos: Position, color: Color = pos.turn): boolean {
-  const k = findKing(pos, color);
-  if (k < 0) return false;
-  return attacked(pos, k, other(color));
+/**
+ * 局面状态。三次重复要靠历史，所以重复次数从外面传进来（`Game` 会算好）。
+ * 判定顺序照 FIDE：先看有没有合法走法（将杀 / 逼和），再看和棋条款。
+ */
+export function status(pos: Position, repetitions = 1): Status {
+  const moves = legalMoves(pos);
+  const checked = inCheck(pos, pos.turn);
+  if (moves.length === 0) {
+    if (checked) {
+      const winner = (-pos.turn) as Color;
+      return {
+        kind: "checkmate",
+        over: true,
+        winner,
+        text: winner === WHITE ? "白方将杀，这一局赢下来了！" : "黑方将杀，这一局赢下来了！",
+      };
+    }
+    return { kind: "stalemate", over: true, winner: 0, text: "逼和：轮到走的一方一步都走不了，又没被将，算和棋。" };
+  }
+  if (insufficientMaterial(pos)) {
+    return { kind: "material", over: true, winner: 0, text: "子力不足：剩下的棋子谁也杀不掉谁，算和棋。" };
+  }
+  if (pos.halfmove >= FIFTY_MOVE_PLIES) {
+    return { kind: "fifty", over: true, winner: 0, text: "50 回合没吃子也没动兵，按规则算和棋。" };
+  }
+  if (repetitions >= REPETITION_LIMIT) {
+    return { kind: "repetition", over: true, winner: 0, text: "同一个局面出现三次，按规则算和棋。" };
+  }
+  if (checked) {
+    return { kind: "check", over: false, winner: null, text: "将军！先把王照顾好。" };
+  }
+  return { kind: "ongoing", over: false, winner: null, text: "轮到你了，慢慢想。" };
 }
 
-/** 某一格上的子的伪合法走法（还没过滤「走完自己被将」） */
-export function pseudoMoves(pos: Position, from: Square): Move[] {
-  const p = pos.board[from];
-  if (!p || p.color !== pos.turn) return [];
-  const out: Move[] = [];
-  const f = fileOf(from);
-  const r = rankOf(from);
-  const me = p.color;
+// ---------------------------------------------------------------------------
+// 一整局
+// ---------------------------------------------------------------------------
 
-  const push = (to: Square, extra: Partial<Move> = {}): void => {
-    const t = pos.board[to];
-    out.push({ from, to, ...(t ? { capture: t.type } : {}), ...extra });
-  };
-
-  if (p.type === "p") {
-    const d = pawnDir(me);
-    const one = squareOf(f, r + d);
-    if (r + d >= 0 && r + d < 8 && !pos.board[one]) {
-      if (r + d === promoRank(me)) {
-        for (const q of PROMO_CHOICES) out.push({ from, to: one, promo: q });
-      } else {
-        out.push({ from, to: one });
-        if (r === homeRank(me)) {
-          const two = squareOf(f, r + 2 * d);
-          if (!pos.board[two]) out.push({ from, to: two, double: true });
-        }
-      }
-    }
-    for (const df of [-1, 1]) {
-      const cf = f + df;
-      const cr = r + d;
-      if (cf < 0 || cf > 7 || cr < 0 || cr > 7) continue;
-      const to = squareOf(cf, cr);
-      const t = pos.board[to];
-      if (t && t.color !== me) {
-        if (cr === promoRank(me)) {
-          for (const q of PROMO_CHOICES) out.push({ from, to, promo: q, capture: t.type });
-        } else {
-          out.push({ from, to, capture: t.type });
-        }
-        continue;
-      }
-      // 吃过路兵：只有对方兵上一手刚走两格才有这一格
-      if (!t && pos.ep === to) out.push({ from, to, capture: "p", ep: true });
-    }
-    return out;
-  }
-
-  if (p.type === "n") {
-    for (const [df, dr] of KNIGHT_DELTAS) {
-      const af = f + df;
-      const ar = r + dr;
-      if (af < 0 || af > 7 || ar < 0 || ar > 7) continue;
-      const to = squareOf(af, ar);
-      const t = pos.board[to];
-      if (t && t.color === me) continue;
-      push(to);
-    }
-    return out;
-  }
-
-  if (p.type === "k") {
-    for (const [df, dr] of KING_DELTAS) {
-      const af = f + df;
-      const ar = r + dr;
-      if (af < 0 || af > 7 || ar < 0 || ar > 7) continue;
-      const to = squareOf(af, ar);
-      const t = pos.board[to];
-      if (t && t.color === me) continue;
-      push(to);
-    }
-    for (const side of ["k", "q"] as const) {
-      if (canCastle(pos, me, side)) {
-        const rank = me === "w" ? 7 : 0;
-        out.push({ from, to: squareOf(side === "k" ? 6 : 2, rank), castle: side });
-      }
-    }
-    return out;
-  }
-
-  const dirs = p.type === "r" ? ROOK_DIRS : p.type === "b" ? BISHOP_DIRS : [...ROOK_DIRS, ...BISHOP_DIRS];
-  for (const [df, dr] of dirs) {
-    let af = f + df;
-    let ar = r + dr;
-    while (af >= 0 && af < 8 && ar >= 0 && ar < 8) {
-      const to = squareOf(af, ar);
-      const t = pos.board[to];
-      if (t && t.color === me) break;
-      push(to);
-      if (t) break;
-      af += df;
-      ar += dr;
-    }
-  }
-  return out;
+export interface PlayedMove {
+  move: Move;
+  san: string;
+  cn: string;
+  /** 走完之后的局面哈希 */
+  hash: string;
 }
 
-/** 王车易位的四道关：王或车动过、中间有子、起点 / 经过格 / 落点被攻击 */
-export function canCastle(pos: Position, color: Color, side: "k" | "q"): boolean {
-  const rights = pos.castling;
-  const ok = color === "w" ? (side === "k" ? rights.wk : rights.wq) : side === "k" ? rights.bk : rights.bq;
-  if (!ok) return false;
-  const rank = color === "w" ? 7 : 0;
-  const kingSq = squareOf(4, rank);
-  const k = pos.board[kingSq];
-  if (!k || k.type !== "k" || k.color !== color) return false;
-  const rookSq = squareOf(side === "k" ? 7 : 0, rank);
-  const rook = pos.board[rookSq];
-  if (!rook || rook.type !== "r" || rook.color !== color) return false;
+export interface Game {
+  pos: Position;
+  history: PlayedMove[];
+  /** 局面哈希 → 出现过几次（含当前局面） */
+  counts: Map<string, number>;
+  /** 结算结果；没结束就是 null */
+  result: Status | null;
+  /** 起始局面，用于「重下这一局」 */
+  startFen: string;
+}
 
-  const emptyFiles = side === "k" ? [5, 6] : [1, 2, 3];
-  for (const f of emptyFiles) {
-    if (pos.board[squareOf(f, rank)]) return false;
-  }
-  const foe = other(color);
-  const walk = side === "k" ? [4, 5, 6] : [4, 3, 2];
-  for (const f of walk) {
-    if (attacked(pos, squareOf(f, rank), foe)) return false;
-  }
+export function createGame(fen?: string): Game {
+  const pos = fen ? fromFen(fen) : startPosition();
+  const counts = new Map<string, number>();
+  counts.set(zobrist(pos), 1);
+  return { pos, history: [], counts, result: null, startFen: fen ?? "" };
+}
+
+/** 当前局面重复了几次 */
+export function repetitionCount(game: Game): number {
+  return game.counts.get(zobrist(game.pos)) ?? 1;
+}
+
+/** 现在这一局算什么（会把结算缓存进 `game.result`） */
+export function gameStatus(game: Game): Status {
+  if (game.result) return game.result;
+  const st = status(game.pos, repetitionCount(game));
+  if (st.over) game.result = st;
+  return st;
+}
+
+/** 走一手；这一手不合法就原样返回 false，什么都不改 */
+export function playMove(game: Game, move: Move): boolean {
+  if (game.result) return false;
+  const legal = legalMoves(game.pos).find(
+    (m) => m.from === move.from && m.to === move.to && m.promo === move.promo
+  );
+  if (!legal) return false;
+  const san = toSan(legal, game.pos);
+  const cn = toChinese(legal, game.pos);
+  const next = makeMove(game.pos, legal);
+  const hash = zobrist(next);
+  game.pos = next;
+  game.counts.set(hash, (game.counts.get(hash) ?? 0) + 1);
+  game.history.push({ move: legal, san, cn, hash });
+  gameStatus(game);
   return true;
 }
 
-/** 走一手，返回新局面（不改原局面） */
-export function makeMove(pos: Position, m: Move): Position {
-  const next = clonePosition(pos);
-  const p = next.board[m.from];
-  if (!p) return next;
-  const me = p.color;
-
-  next.board[m.to] = m.promo ? { color: me, type: m.promo } : p;
-  next.board[m.from] = null;
-
-  if (m.ep) {
-    const capRank = rankOf(m.to) + (me === "w" ? 1 : -1);
-    next.board[squareOf(fileOf(m.to), capRank)] = null;
-  }
-
-  if (m.castle) {
-    const rank = me === "w" ? 7 : 0;
-    if (m.castle === "k") {
-      next.board[squareOf(5, rank)] = next.board[squareOf(7, rank)];
-      next.board[squareOf(7, rank)] = null;
-    } else {
-      next.board[squareOf(3, rank)] = next.board[squareOf(0, rank)];
-      next.board[squareOf(0, rank)] = null;
-    }
-  }
-
-  // 易位权：王动过、车动过、车被吃掉，三种都要收回
-  if (p.type === "k") {
-    if (me === "w") {
-      next.castling.wk = false;
-      next.castling.wq = false;
-    } else {
-      next.castling.bk = false;
-      next.castling.bq = false;
-    }
-  }
-  const clearRook = (sq: Square): void => {
-    if (sq === squareOf(7, 7)) next.castling.wk = false;
-    if (sq === squareOf(0, 7)) next.castling.wq = false;
-    if (sq === squareOf(7, 0)) next.castling.bk = false;
-    if (sq === squareOf(0, 0)) next.castling.bq = false;
+/** 认输 */
+export function resign(game: Game, side: Color): Status {
+  const winner = (-side) as Color;
+  game.result = {
+    kind: "resign",
+    over: true,
+    winner,
+    text: side === WHITE ? "白方认输，这一局先收着，下一局再来。" : "黑方认输，这一局先收着，下一局再来。",
   };
-  clearRook(m.from);
-  clearRook(m.to);
-
-  next.ep = m.double ? squareOf(fileOf(m.from), rankOf(m.from) + pawnDir(me)) : null;
-  next.halfmove = p.type === "p" || m.capture ? 0 : pos.halfmove + 1;
-  next.fullmove = me === "b" ? pos.fullmove + 1 : pos.fullmove;
-  next.turn = other(me);
-  return next;
+  return game.result;
 }
-
-/** 这一方所有真正能走的手（已经过滤掉走完自己被将的） */
-export function legalMoves(pos: Position): Move[] {
-  const out: Move[] = [];
-  const me = pos.turn;
-  for (let sq = 0; sq < 64; sq++) {
-    const p = pos.board[sq];
-    if (!p || p.color !== me) continue;
-    for (const m of pseudoMoves(pos, sq)) {
-      const next = makeMove(pos, m);
-      if (!inCheck(next, me)) out.push(m);
-    }
-  }
-  return out;
-}
-
-/** 只算某一格的合法走法（界面点子时用） */
-export function legalMovesFrom(pos: Position, from: Square): Move[] {
-  return legalMoves(pos).filter((m) => m.from === from);
-}
-
-/** 子力不足：王对王、王象对王、王马对王 */
-export function insufficientMaterial(pos: Position): boolean {
-  const men: Array<{ color: Color; type: PieceType }> = [];
-  for (const p of pos.board) {
-    if (p) men.push(p);
-  }
-  if (men.some((m) => m.type === "p" || m.type === "r" || m.type === "q")) return false;
-  const minor = men.filter((m) => m.type === "n" || m.type === "b");
-  return minor.length <= 1;
-}
-
-export type Status =
-  | { kind: "playing" }
-  | { kind: "checkmate"; winner: Color }
-  | { kind: "stalemate" }
-  | { kind: "draw"; why: "fifty" | "repetition" | "material" };
 
 /**
- * 局面状态。三次重复要看历史哈希，所以由调用方把走过的局面哈希传进来。
+ * 超时结算。对方的子力已经不够将杀了就判和（这是 FIDE 的处理），
+ * 否则超时那一方算负。
  */
-export function status(pos: Position, history: readonly number[] = []): Status {
-  const moves = legalMoves(pos);
-  if (moves.length === 0) {
-    if (inCheck(pos, pos.turn)) return { kind: "checkmate", winner: other(pos.turn) };
-    return { kind: "stalemate" };
-  }
-  if (pos.halfmove >= 100) return { kind: "draw", why: "fifty" };
-  if (insufficientMaterial(pos)) return { kind: "draw", why: "material" };
-  const h = zobrist(pos);
-  let seen = 0;
-  for (const x of history) {
-    if (x === h) seen += 1;
-  }
-  if (seen >= 3) return { kind: "draw", why: "repetition" };
-  return { kind: "playing" };
+export function flagFall(game: Game, side: Color): Status {
+  const winner = (-side) as Color;
+  const opponentCanMate = !onlyKingLike(game.pos, winner);
+  game.result = opponentCanMate
+    ? { kind: "timeout", over: true, winner, text: "时间用完啦，这一局先算对方的，下一局多留点时间。" }
+    : { kind: "material", over: true, winner: 0, text: "时间虽然用完了，但对方的子力也不够将杀，算和棋。" };
+  return game.result;
 }
 
-/** 记谱（够攻略和测试用的简化 SAN） */
-export function toSan(pos: Position, m: Move): string {
-  if (m.castle) return m.castle === "k" ? "O-O" : "O-O-O";
-  const p = pos.board[m.from];
-  if (!p) return "??";
-  const letter = p.type === "p" ? "" : p.type.toUpperCase();
-  const takes = m.capture ? "x" : "";
-  const fromFile = p.type === "p" && m.capture ? squareName(m.from)[0] : "";
-  // 同种类的另一枚子也能走到同一格时，补上出发格的列（够用了）
-  let disamb = "";
-  if (p.type !== "p") {
-    const rivals = legalMoves(pos).filter(
-      (x) => x.to === m.to && x.from !== m.from && pos.board[x.from]?.type === p.type
-    );
-    if (rivals.length > 0) disamb = squareName(m.from)[0];
+/** 这一方是不是只剩「王」或者「王 + 一个轻子」——那样连将杀都摆不出来 */
+function onlyKingLike(pos: Position, color: Color): boolean {
+  let minors = 0;
+  for (let sq = 0; sq < 64; sq++) {
+    const p = pos.board[sq];
+    if (p === 0 || (p > 0 ? WHITE : BLACK) !== color) continue;
+    const type = typeOf(p);
+    if (type === KING) continue;
+    if (type === KNIGHT || type === BISHOP) minors++;
+    else return false;
   }
-  const promo = m.promo ? `=${m.promo.toUpperCase()}` : "";
-  const next = makeMove(pos, m);
-  const suffix = inCheck(next, next.turn) ? (legalMoves(next).length === 0 ? "#" : "+") : "";
-  return `${letter}${disamb}${fromFile}${takes}${squareName(m.to)}${promo}${suffix}`;
+  return minors <= 1;
 }
 
-/** 从坐标找一手（界面与测试都方便） */
-export function findMove(pos: Position, from: string, to: string, promo?: Exclude<PieceType, "p" | "k">): Move | null {
-  const list = legalMoves(pos);
-  for (const m of list) {
-    if (squareName(m.from) !== from || squareName(m.to) !== to) continue;
-    if (promo && m.promo !== promo) continue;
-    if (!promo && m.promo && m.promo !== "q") continue;
-    return m;
+/** 记谱串：「1. e4 e5 2. Nf3」这种，记谱抽屉与攻略都用它 */
+export function moveList(game: Game): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < game.history.length; i += 2) {
+    const no = Math.floor(i / 2) + 1;
+    const white = game.history[i]?.san ?? "";
+    const black = game.history[i + 1]?.san ?? "";
+    out.push(`${no}. ${white}${black ? ` ${black}` : ""}`);
   }
-  return null;
-}
-
-/** perft：把走法生成从根上验一遍 */
-export function perft(pos: Position, depth: number): number {
-  if (depth <= 0) return 1;
-  const moves = legalMoves(pos);
-  if (depth === 1) return moves.length;
-  let n = 0;
-  for (const m of moves) n += perft(makeMove(pos, m), depth - 1);
-  return n;
+  return out;
 }

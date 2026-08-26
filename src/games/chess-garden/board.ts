@@ -1,52 +1,99 @@
 /**
- * 花园国际象棋 · 局面表示与 FEN。
+ * 花园国际象棋 · 局面表示与 FEN 读写。
  *
- * 棋盘用一个长度 64 的数组，下标 0 是 a8、下标 63 是 h1（和 FEN 的书写顺序一致）。
- * 这一层只管「局面长什么样、怎么读写」，走法和规则在 `rules.ts`。
+ * 棋盘是长度 64 的 Int8Array，下标 `sq = rank * 8 + file`：
+ * 0 = a1、7 = h1、56 = a8、63 = h8。白子取正、黑子取负，绝对值就是兵种。
+ * 这样「翻面」只要取负，评估函数与走法生成都能少写一半分支。
+ *
+ * 本文件只管数据，不生成走法（那是 moves.ts 的事），也不判胜负（rules.ts）。
  */
 
-export type Color = "w" | "b";
-export type PieceType = "p" | "n" | "b" | "r" | "q" | "k";
+/** 兵种编码（取绝对值后） */
+export const PAWN = 1;
+export const KNIGHT = 2;
+export const BISHOP = 3;
+export const ROOK = 4;
+export const QUEEN = 5;
+export const KING = 6;
 
-export interface Piece {
-  color: Color;
-  type: PieceType;
-}
+export type PieceType = 1 | 2 | 3 | 4 | 5 | 6;
+/** 1 = 白（朵朵），-1 = 黑（星星） */
+export type Color = 1 | -1;
 
-export type Square = number;
+export const WHITE: Color = 1;
+export const BLACK: Color = -1;
 
-export const FILES = "abcdefgh";
-export const RANKS = "87654321";
+/** 易位权掩码：白短、白长、黑短、黑长 */
+export const CASTLE_WK = 1;
+export const CASTLE_WQ = 2;
+export const CASTLE_BK = 4;
+export const CASTLE_BQ = 8;
 
-export interface Castling {
-  wk: boolean;
-  wq: boolean;
-  bk: boolean;
-  bq: boolean;
-}
+/** 六种棋子的中文名（界面与记谱都用它，六种一眼可区分） */
+export const PIECE_CN: Record<PieceType, string> = {
+  1: "兵",
+  2: "马",
+  3: "象",
+  4: "车",
+  5: "后",
+  6: "王",
+};
+
+/** 六种棋子的记谱字母（`toSan` 用；兵不写字母） */
+export const PIECE_SAN: Record<PieceType, string> = {
+  1: "",
+  2: "N",
+  3: "B",
+  4: "R",
+  5: "Q",
+  6: "K",
+};
+
+/** FEN 字符 → 兵种 */
+const FEN_TO_TYPE: Record<string, PieceType> = {
+  p: PAWN,
+  n: KNIGHT,
+  b: BISHOP,
+  r: ROOK,
+  q: QUEEN,
+  k: KING,
+};
+
+const TYPE_TO_FEN: Record<PieceType, string> = {
+  1: "p",
+  2: "n",
+  3: "b",
+  4: "r",
+  5: "q",
+  6: "k",
+};
 
 export interface Position {
-  board: Array<Piece | null>;
+  /** 64 格，0 表示空 */
+  board: Int8Array;
+  /** 轮到谁走 */
   turn: Color;
-  castling: Castling;
-  /** 过路兵的目标格（对方兵刚走两格越过的那一格），没有就是 null */
-  ep: Square | null;
+  /** 易位权掩码 */
+  castling: number;
+  /** 过路兵的目标格（可以落子的那一格），没有就是 -1 */
+  ep: number;
   /** 50 回合规则用的半回合计数 */
   halfmove: number;
+  /** 回合数，从 1 起 */
   fullmove: number;
 }
 
 export const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-export function fileOf(sq: Square): number {
-  return sq % 8;
+export function fileOf(sq: number): number {
+  return sq & 7;
 }
 
-export function rankOf(sq: Square): number {
-  return Math.floor(sq / 8);
+export function rankOf(sq: number): number {
+  return sq >> 3;
 }
 
-export function squareOf(file: number, rank: number): Square {
+export function squareAt(file: number, rank: number): number {
   return rank * 8 + file;
 }
 
@@ -54,173 +101,219 @@ export function onBoard(file: number, rank: number): boolean {
   return file >= 0 && file < 8 && rank >= 0 && rank < 8;
 }
 
-/** 「e4」这样的坐标 → 下标 */
-export function parseSquare(name: string): Square {
-  const f = FILES.indexOf(name[0]);
-  const r = RANKS.indexOf(name[1]);
-  if (f < 0 || r < 0) throw new Error(`看不懂的坐标：${name}`);
-  return squareOf(f, r);
+/** 格子名，例如 27 → "d4" */
+export function squareName(sq: number): string {
+  return `${"abcdefgh"[fileOf(sq)]}${rankOf(sq) + 1}`;
 }
 
-/** 下标 → 「e4」 */
-export function squareName(sq: Square): string {
-  return `${FILES[fileOf(sq)]}${RANKS[rankOf(sq)]}`;
+/** "d4" → 27；认不出来返回 -1 */
+export function parseSquare(name: string): number {
+  if (typeof name !== "string" || name.length < 2) return -1;
+  const f = "abcdefgh".indexOf(name[0].toLowerCase());
+  const r = Number(name[1]) - 1;
+  if (f < 0 || !Number.isInteger(r) || r < 0 || r > 7) return -1;
+  return squareAt(f, r);
 }
 
-export function other(c: Color): Color {
-  return c === "w" ? "b" : "w";
+/** 格子颜色：true 表示浅色格（a1 是深色格） */
+export function isLightSquare(sq: number): boolean {
+  return (fileOf(sq) + rankOf(sq)) % 2 === 1;
 }
 
-const FEN_PIECES: Record<string, Piece> = {
-  p: { color: "b", type: "p" },
-  n: { color: "b", type: "n" },
-  b: { color: "b", type: "b" },
-  r: { color: "b", type: "r" },
-  q: { color: "b", type: "q" },
-  k: { color: "b", type: "k" },
-  P: { color: "w", type: "p" },
-  N: { color: "w", type: "n" },
-  B: { color: "w", type: "b" },
-  R: { color: "w", type: "r" },
-  Q: { color: "w", type: "q" },
-  K: { color: "w", type: "k" },
-};
-
-export function pieceChar(p: Piece): string {
-  return p.color === "w" ? p.type.toUpperCase() : p.type;
+export function colorOf(piece: number): Color | 0 {
+  if (piece > 0) return WHITE;
+  if (piece < 0) return BLACK;
+  return 0;
 }
 
-export function parseFen(fen: string): Position {
-  const parts = fen.trim().split(/\s+/);
-  const board: Array<Piece | null> = new Array(64).fill(null);
-  let sq = 0;
-  for (const ch of parts[0]) {
-    if (ch === "/") continue;
-    if (ch >= "1" && ch <= "8") {
-      sq += Number(ch);
-      continue;
-    }
-    const p = FEN_PIECES[ch];
-    if (!p) throw new Error(`看不懂的 FEN 字符：${ch}`);
-    board[sq++] = { ...p };
-  }
-  const rights = parts[2] ?? "-";
+export function typeOf(piece: number): PieceType | 0 {
+  const t = Math.abs(piece);
+  return t === 0 ? 0 : (t as PieceType);
+}
+
+export function emptyPosition(): Position {
   return {
-    board,
-    turn: (parts[1] as Color) ?? "w",
-    castling: {
-      wk: rights.includes("K"),
-      wq: rights.includes("Q"),
-      bk: rights.includes("k"),
-      bq: rights.includes("q"),
-    },
-    ep: parts[3] && parts[3] !== "-" ? parseSquare(parts[3]) : null,
-    halfmove: Number(parts[4] ?? 0),
-    fullmove: Number(parts[5] ?? 1),
+    board: new Int8Array(64),
+    turn: WHITE,
+    castling: 0,
+    ep: -1,
+    halfmove: 0,
+    fullmove: 1,
   };
-}
-
-export function toFen(pos: Position): string {
-  let out = "";
-  for (let r = 0; r < 8; r++) {
-    let empty = 0;
-    for (let f = 0; f < 8; f++) {
-      const p = pos.board[squareOf(f, r)];
-      if (!p) {
-        empty += 1;
-        continue;
-      }
-      if (empty > 0) {
-        out += String(empty);
-        empty = 0;
-      }
-      out += pieceChar(p);
-    }
-    if (empty > 0) out += String(empty);
-    if (r < 7) out += "/";
-  }
-  const c = pos.castling;
-  const rights = `${c.wk ? "K" : ""}${c.wq ? "Q" : ""}${c.bk ? "k" : ""}${c.bq ? "q" : ""}` || "-";
-  return `${out} ${pos.turn} ${rights} ${pos.ep === null ? "-" : squareName(pos.ep)} ${pos.halfmove} ${pos.fullmove}`;
-}
-
-export function startPosition(): Position {
-  return parseFen(START_FEN);
 }
 
 export function clonePosition(pos: Position): Position {
   return {
-    board: pos.board.map((p) => (p ? { ...p } : null)),
+    board: Int8Array.from(pos.board),
     turn: pos.turn,
-    castling: { ...pos.castling },
+    castling: pos.castling,
     ep: pos.ep,
     halfmove: pos.halfmove,
     fullmove: pos.fullmove,
   };
 }
 
-export function findKing(pos: Position, color: Color): Square {
-  for (let i = 0; i < 64; i++) {
-    const p = pos.board[i];
-    if (p && p.type === "k" && p.color === color) return i;
+/**
+ * 读 FEN。字段不全时按常见缺省补：轮走方缺省白、易位权缺省无、过路格缺省无。
+ * FEN 本身写坏了会抛错，调用方（关卡数据）在单测里就会被拦下。
+ */
+export function fromFen(fen: string): Position {
+  const parts = fen.trim().split(/\s+/);
+  const rows = parts[0].split("/");
+  if (rows.length !== 8) throw new Error(`FEN 的棋盘应该有 8 行，实际 ${rows.length} 行：${fen}`);
+  const pos = emptyPosition();
+  for (let r = 0; r < 8; r++) {
+    // FEN 第一行是第 8 横线
+    const rank = 7 - r;
+    let file = 0;
+    for (const ch of rows[r]) {
+      if (ch >= "1" && ch <= "8") {
+        file += Number(ch);
+        continue;
+      }
+      const type = FEN_TO_TYPE[ch.toLowerCase()];
+      if (!type) throw new Error(`FEN 里出现了不认识的棋子「${ch}」：${fen}`);
+      if (file > 7) throw new Error(`FEN 第 ${r + 1} 行放不下这么多子：${fen}`);
+      pos.board[squareAt(file, rank)] = ch === ch.toUpperCase() ? type : -type;
+      file++;
+    }
+  }
+  pos.turn = parts[1] === "b" ? BLACK : WHITE;
+  const rights = parts[2] ?? "-";
+  if (rights.includes("K")) pos.castling |= CASTLE_WK;
+  if (rights.includes("Q")) pos.castling |= CASTLE_WQ;
+  if (rights.includes("k")) pos.castling |= CASTLE_BK;
+  if (rights.includes("q")) pos.castling |= CASTLE_BQ;
+  pos.ep = parts[3] && parts[3] !== "-" ? parseSquare(parts[3]) : -1;
+  pos.halfmove = Number.isFinite(Number(parts[4])) ? Math.max(0, Number(parts[4])) : 0;
+  pos.fullmove = Number.isFinite(Number(parts[5])) ? Math.max(1, Number(parts[5])) : 1;
+  return pos;
+}
+
+export function toFen(pos: Position): string {
+  const rows: string[] = [];
+  for (let rank = 7; rank >= 0; rank--) {
+    let row = "";
+    let gap = 0;
+    for (let file = 0; file < 8; file++) {
+      const p = pos.board[squareAt(file, rank)];
+      if (p === 0) {
+        gap++;
+        continue;
+      }
+      if (gap > 0) {
+        row += String(gap);
+        gap = 0;
+      }
+      const letter = TYPE_TO_FEN[typeOf(p) as PieceType];
+      row += p > 0 ? letter.toUpperCase() : letter;
+    }
+    if (gap > 0) row += String(gap);
+    rows.push(row);
+  }
+  let rights = "";
+  if (pos.castling & CASTLE_WK) rights += "K";
+  if (pos.castling & CASTLE_WQ) rights += "Q";
+  if (pos.castling & CASTLE_BK) rights += "k";
+  if (pos.castling & CASTLE_BQ) rights += "q";
+  return [
+    rows.join("/"),
+    pos.turn === WHITE ? "w" : "b",
+    rights === "" ? "-" : rights,
+    pos.ep >= 0 ? squareName(pos.ep) : "-",
+    String(pos.halfmove),
+    String(pos.fullmove),
+  ].join(" ");
+}
+
+export function startPosition(): Position {
+  return fromFen(START_FEN);
+}
+
+/** 找王；没有王返回 -1（残局题目里双方都必须有王，单测会查） */
+export function kingSquare(pos: Position, color: Color): number {
+  const want = color * KING;
+  for (let sq = 0; sq < 64; sq++) {
+    if (pos.board[sq] === want) return sq;
   }
   return -1;
 }
 
+/** 数某一方某个兵种还剩几个 */
+export function countPiece(pos: Position, color: Color, type: PieceType): number {
+  const want = color * type;
+  let n = 0;
+  for (let sq = 0; sq < 64; sq++) if (pos.board[sq] === want) n++;
+  return n;
+}
+
 // ---------------------------------------------------------------------------
-// Zobrist 哈希：三次重复局面要靠它，所以轮走方、易位权、过路格都要算进去
+// Zobrist 哈希（三次重复判和用）
 // ---------------------------------------------------------------------------
 
-function prng(seed: number): () => number {
-  let s = seed >>> 0;
+/** 和 level99 同款的确定性随机；这里只在模块加载时用一次，生成固定的哈希表 */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
   return () => {
-    s = (Math.imul(s ^ (s >>> 15), 0x2545f491) + 0x9e3779b9) >>> 0;
-    return s;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-const ZOB = (() => {
-  const rnd = prng(0x1a2b3c4d);
-  const pieces: number[][] = [];
-  for (let i = 0; i < 12; i++) {
-    const row: number[] = [];
-    for (let s = 0; s < 64; s++) row.push(rnd());
-    pieces.push(row);
-  }
-  const castling: number[] = [rnd(), rnd(), rnd(), rnd()];
-  const epFile: number[] = [];
-  for (let f = 0; f < 8; f++) epFile.push(rnd());
-  return { pieces, castling, epFile, turn: rnd() };
-})();
+/**
+ * 32 位一段、两段拼成 64 位。JS 的按位运算只有 32 位，
+ * 所以高低位各存一份，异或时两段分别异或。
+ */
+interface ZPair {
+  hi: number;
+  lo: number;
+}
 
-const PIECE_INDEX: Record<string, number> = {
-  wp: 0,
-  wn: 1,
-  wb: 2,
-  wr: 3,
-  wq: 4,
-  wk: 5,
-  bp: 6,
-  bn: 7,
-  bb: 8,
-  br: 9,
-  bq: 10,
-  bk: 11,
-};
-
-/** 局面哈希（32 位无符号）。同一个局面一定得到同一个值 */
-export function zobrist(pos: Position): number {
-  let h = 0;
-  for (let s = 0; s < 64; s++) {
-    const p = pos.board[s];
-    if (!p) continue;
-    h = (h ^ ZOB.pieces[PIECE_INDEX[`${p.color}${p.type}`]][s]) >>> 0;
+function buildTable(rand: () => number, n: number): ZPair[] {
+  const out: ZPair[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ hi: (rand() * 0x100000000) >>> 0, lo: (rand() * 0x100000000) >>> 0 });
   }
-  if (pos.castling.wk) h = (h ^ ZOB.castling[0]) >>> 0;
-  if (pos.castling.wq) h = (h ^ ZOB.castling[1]) >>> 0;
-  if (pos.castling.bk) h = (h ^ ZOB.castling[2]) >>> 0;
-  if (pos.castling.bq) h = (h ^ ZOB.castling[3]) >>> 0;
-  if (pos.ep !== null) h = (h ^ ZOB.epFile[fileOf(pos.ep)]) >>> 0;
-  if (pos.turn === "b") h = (h ^ ZOB.turn) >>> 0;
-  return h >>> 0;
+  return out;
+}
+
+const zrand = mulberry32(0x9e3779b9);
+/** [兵种 0..5][颜色 0 白 1 黑][格子 0..63] */
+const Z_PIECES: ZPair[] = buildTable(zrand, 6 * 2 * 64);
+const Z_CASTLING: ZPair[] = buildTable(zrand, 16);
+const Z_EP_FILE: ZPair[] = buildTable(zrand, 8);
+const Z_TURN: ZPair = buildTable(zrand, 1)[0];
+
+/**
+ * 局面哈希：**含轮走方、易位权与过路格**（规格明确要求），
+ * 所以「同样的子力摆放但轮到对方走」不会被误判成重复局面。
+ * 返回十六进制字符串，直接拿来当 Map 的 key。
+ */
+export function zobrist(pos: Position): string {
+  let hi = 0;
+  let lo = 0;
+  for (let sq = 0; sq < 64; sq++) {
+    const p = pos.board[sq];
+    if (p === 0) continue;
+    const type = Math.abs(p) - 1;
+    const side = p > 0 ? 0 : 1;
+    const z = Z_PIECES[(type * 2 + side) * 64 + sq];
+    hi ^= z.hi;
+    lo ^= z.lo;
+  }
+  const zc = Z_CASTLING[pos.castling & 15];
+  hi ^= zc.hi;
+  lo ^= zc.lo;
+  if (pos.ep >= 0) {
+    const ze = Z_EP_FILE[fileOf(pos.ep)];
+    hi ^= ze.hi;
+    lo ^= ze.lo;
+  }
+  if (pos.turn === BLACK) {
+    hi ^= Z_TURN.hi;
+    lo ^= Z_TURN.lo;
+  }
+  return `${(hi >>> 0).toString(16).padStart(8, "0")}${(lo >>> 0).toString(16).padStart(8, "0")}`;
 }
