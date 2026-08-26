@@ -141,11 +141,15 @@ export function shotPlan(levels: PowerLevels): ShotPlan {
   };
 }
 
-/** 单位时间的期望输出(平衡用:任何一条线单吃都不该碾压另外三条) */
+/**
+ * 单位时间的期望输出(平衡用:任何一条线单吃都不该碾压另外三条)。
+ * 追踪的价值不在弹多,而在**不落空**,所以它算成命中率的加成。
+ */
 export function planDps(levels: PowerLevels): number {
   const plan = shotPlan(levels);
   const perShot = plan.count * plan.pierce + plan.wingmen;
-  return Math.round((perShot / plan.cooldown) * 10) / 10;
+  const accuracy = 1 + plan.homing * 0.9;
+  return Math.round(((perShot * accuracy) / plan.cooldown) * 10) / 10;
 }
 
 /**

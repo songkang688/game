@@ -149,17 +149,8 @@ const REWARD_CYCLE: PowerTrack[] = ["spread", "wing", "homing", "pierce"];
  */
 export function legAt(seed: number, index: number): Leg {
   const i = Math.max(0, Math.floor(index));
-  const supply = i > 0 && i % SUPPLY_EVERY === SUPPLY_EVERY - 1;
-  const pickable = SEGMENTS.filter((s) => s.id !== "supply");
-  const rand = mulberry32((seed >>> 0) + i * 2654435761);
-  // 连着两段不重样:上一段抽中的从这一段的候选里剔掉
-  let pool = pickable;
-  if (i > 0) {
-    const prev = legSegmentId(seed, i - 1);
-    const trimmed = pickable.filter((s) => s.id !== prev);
-    if (trimmed.length > 0) pool = trimmed;
-  }
-  const segment = supply ? segmentById("supply") : pool[Math.floor(rand() * pool.length) % pool.length];
+  const supply = isSupplyLeg(i);
+  const segment = segmentById(segmentIdAt(seed, i));
   const difficulty = difficultyAt(i);
   return {
     index: i,
@@ -172,12 +163,31 @@ export function legAt(seed: number, index: number): Leg {
   };
 }
 
-/** 只算「第 i 段抽中哪个段落」,给「连着两段不重样」自己回溯一步用 */
-function legSegmentId(seed: number, index: number): SegmentId {
-  if (index > 0 && index % SUPPLY_EVERY === SUPPLY_EVERY - 1) return "supply";
+/** 第 i 段是不是补给云(固定节奏,不受随机影响) */
+export function isSupplyLeg(index: number): boolean {
+  return index > 0 && index % SUPPLY_EVERY === SUPPLY_EVERY - 1;
+}
+
+/**
+ * 第 i 段抽中哪个段落。「连着两段不重样」这条约束让第 i 段依赖第 i-1 段,
+ * 所以这里从头顺着推一遍 —— 段数是几十的量级,推一遍比缓存一张表省事得多,
+ * 而且保证了「同一颗种子 → 同一条航线」是可复现的。
+ */
+function segmentIdAt(seed: number, index: number): SegmentId {
   const pickable = SEGMENTS.filter((s) => s.id !== "supply");
-  const rand = mulberry32((seed >>> 0) + index * 2654435761);
-  return pickable[Math.floor(rand() * pickable.length) % pickable.length].id;
+  let prev: SegmentId | null = null;
+  for (let i = 0; i <= index; i++) {
+    if (isSupplyLeg(i)) {
+      prev = "supply";
+      continue;
+    }
+    const banned: SegmentId | null = prev;
+    const pool: SegmentDef[] = banned ? pickable.filter((s) => s.id !== banned) : pickable;
+    const use: SegmentDef[] = pool.length > 0 ? pool : pickable;
+    const rand = mulberry32((seed >>> 0) + i * 2654435761);
+    prev = use[Math.floor(rand() * use.length) % use.length].id;
+  }
+  return prev ?? pickable[0].id;
 }
 
 /** 一整条航线的前 n 段(纯函数,可复现) */

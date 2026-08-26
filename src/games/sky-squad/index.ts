@@ -66,7 +66,7 @@ import {
 // 样式(全部 sks- 前缀,局部 <style>,不碰 src/styles.css)
 // ---------------------------------------------------------------------------
 
-const CSS = `
+export const CSS = `
 .sks-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;position:relative;}
 .sks-hud{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:6px;
@@ -271,15 +271,42 @@ export interface SortieOptions {
   link?: boolean;
 }
 
-interface SortieHandle {
+/** 一局的运行时切片。只读,给测试看内部状态,玩法代码不依赖它 */
+export interface SortieSnapshot {
+  pilots: Array<{
+    x: number;
+    y: number;
+    power: number;
+    spare: number;
+    grazes: number;
+    touched: number;
+    spin: number;
+    grounded: boolean;
+  }>;
+  bullets: number;
+  shots: number;
+  /** 场上有几发合流波 */
+  merges: number;
+  puffs: number;
+  foes: number;
+  wave: number;
+  finished: boolean;
+  /** 三个池子一共占着多少对象(池不膨胀断言用) */
+  footprint: number;
+  created: { bullets: number; shots: number; puffs: number };
+  boss: { phase: number; hp: number; cueLeft: number; firing: boolean } | null;
+}
+
+export interface SortieHandle {
   destroy: () => void;
   veil: (title: string, sub: string, buttons: Array<{ label: string; ghost?: boolean; onClick: () => void }>) => void;
+  snapshot: () => SortieSnapshot;
 }
 
 /** 一发合流波的冷却(秒) */
 const LINK_CD = 0.5;
 
-function createSortie(opts: SortieOptions): SortieHandle {
+export function createSortie(opts: SortieOptions): SortieHandle {
   const reduce = reducedMotion();
   const wrap = el("div", "sks-wrap");
   const style = el("style");
@@ -1667,6 +1694,34 @@ function createSortie(opts: SortieOptions): SortieHandle {
       wrap.remove();
     },
     veil,
+    snapshot: () => ({
+      pilots: pilots.map((p) => ({
+        x: p.x,
+        y: p.y,
+        power: powerLevel(p.plane.levels),
+        spare: p.plane.spare,
+        grazes: p.grazes,
+        touched: p.touched,
+        spin: p.spin,
+        grounded: p.grounded,
+      })),
+      bullets: bullets.size,
+      shots: shots.size,
+      merges: shots.live.filter((s) => s.shape === "merge").length,
+      puffs: puffs.size,
+      foes: foes.length,
+      wave: waveIndex,
+      finished,
+      footprint: bullets.footprint + shots.footprint + puffs.footprint,
+      created: {
+        bullets: bullets.stats().created,
+        shots: shots.stats().created,
+        puffs: puffs.stats().created,
+      },
+      boss: boss
+        ? { phase: boss.phase, hp: boss.hp, cueLeft: boss.cueLeft, firing: boss.cueLeft <= 0 && boss.y >= 130 }
+        : null,
+    }),
   };
 }
 
@@ -2003,7 +2058,7 @@ function mountDuo(host: HTMLElement, api: GameApi, onExit: () => void): { destro
 // ---------------------------------------------------------------------------
 
 /** 壳层没传 `initialLevel` 时,也认地址栏上的 `?level=N`(1 基) */
-function levelFromQuery(): number | null {
+export function levelFromQuery(): number | null {
   try {
     const raw = new URLSearchParams(globalThis.location?.search ?? "").get("level");
     if (!raw) return null;
