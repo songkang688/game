@@ -134,33 +134,34 @@ git push origin HEAD:game-1.2
 | 6 | 新游戏 · 手感休闲 | `dot-maze` | `fruit-stack` | `pool-stars` | B |
 | 7 | 新游戏 · 棋类扩展 | `junqi-camp` | `chess-garden` | `dark-chess` | B |
 | 8 | 新游戏 · 轻量三款 | `hue-hand` | `hop-pads` | `tap-tiles` | B |
-| 9 | 升级 · 塔防与吞噬 | `garden-guard` | `sprout-defense` | `ocean-munch` | C |
-| 10 | 升级 · 跑酷与切切 | `rainbow-run` | `fruit-slice` | `poop-hero` | C |
-| 11 | 升级 · 弹射与瞄准 | `sling-birds` | `candy-swing` | `bubble-aim` | C |
-| 12 | 升级 · 射击三款 | `shoot-range` | `sky-squad` | `snow-fight` | C |
-| 13 | 升级 · 战场对抗 | `monster-crisis` | `bomb-buddies` | `tank-battle` | C |
-| 14 | 升级 · 格斗与单挑 | `fight-king` | `duo-vs-star` | `duo-arena` | C |
-| 15 | 升级 · 竞速与碰撞 | `duo-rush` | `bumper-cars` | `bowling-lane` | C |
-| 16 | 升级 · 双人平台闯关 | `ice-fire-forest` | `puff-bros` | `prince-princess` | C |
-| 17 | 升级 · 冒险线 | `brave-path` | `adventure-king` | `alien-seek` | C |
-| 18 | 升级 · 推箱与拼图 | `box-hamster` | `puzzle-tiles` | `lianliankan` | C |
-| 19 | 升级 · 消除一 | `balloon-pop` | `bubble-pop` | `match-stars` | C |
-| 20 | 升级 · 消除二与记忆 | `brick-break` | `memory-cards` | `mole-pop` | C |
-| 21 | 升级 · 休闲三款 | `fruit-catch` | `snake-snack` | `kitty-care` | C |
-| 22 | 升级 · 棋牌 | `xiangqi`（**只升级**） | `gomoku` | `landlord-cards` | C |
-| 23 | 升级 · 红蓝对战三款 | `red-blue-race` | `red-blue-tap` | `red-blue-tug` | C |
-| 24 | 升级 · 学习一 | `math-farm` | `clock-house` | `shape-kingdom` | C |
-| 25 | 升级 · 学习二 | `pinyin-train` | `word-garden` | `find-diff` | C |
-| 26 | 升级 · 动手与钩钓 | `color-fun` | `music-stars` | `gold-hook` + `fishing-star` | C |
+| 9–26 | 升级 · 55 款精细化，每步 3 款 | 见 4.1 | 见 4.1 | 见 4.1 | C |
 | 27 | 冲突 / 串味 / 首页接线 / 全局回归 | 存档与 root API 审计 | 首页接线：76 款 `platform` / `modes` 填准 | CSS / 快捷键 / `destroy` 泄漏审计 | C |
 | 28 | 验收三人组 第 1 轮 | 测试员 | 学习优化员 | 监督修复员 | C |
 | 29 | 验收三人组 第 2 轮 | 测试员 | 学习优化员 | 监督修复员 | C |
 | 30 | 验收三人组 第 3 轮（收官） | 测试员 | 学习优化员 | 监督修复员 | C |
 
 - 阶段切分：平台 **1** 步 + 新游戏 **7** 步（21 款）+ 升级 **18** 步（55 款）+ 收尾 **4** 步 = **30**。
-- 第 26 步 C 位是全项目**唯一**一个「一格两款」的位置（55 不是 3 的倍数，多出来的一款放在这里），
-  写这一格的提示词时要明确说明工作量翻倍、用例下限也翻倍。
 - 第 1 步与第 27 步都会碰 `src/ui/home.ts` 与 `src/styles.css`：两步天然相隔 25 步，**不会并发**。
+
+### 4.1 第 9–26 步的分配规则（主管定不变量，C 档定顺序）
+
+升级阶段的**结构由主管定死，顺序交给 C 档**——C 档在写正文时更清楚哪些游戏该排在前面（用户点名的先做）。
+不变量只有四条，违反就打回：
+
+1. **步号 9–26，正好 18 步**，一步 3 格（A/B/C），不许多开一步、不许跳号。
+2. 第五节 5.1 那 **55 款每一款出现且只出现一次**，不许漏、不许重。
+3. 一格一款；因为 55 不是 3 的倍数，允许**且只允许一格放两款**（建议放在第 26 步 C 位），
+   写那一格的提示词时要写明工作量翻倍、用例下限也翻倍。
+4. `xiangqi` **只升级，不新建**；`bumper-cars` 与 `bowling-lane` 要排在步 0 对齐基线之后（它们是 1.1 的成品）。
+
+建议的分组思路（不是命令）：用户点名过的老游戏排前面，同类玩法凑一步（塔防、射击、消除、学习各成一组），
+同一个共享模块的使用者尽量不同步（例如 `rainbow-run` 与 `duo-rush` 都要换用引擎版 `view25d`，分开两步做）。
+
+**校准动作：** C 档 90 份文档交齐后，主管照 C 的实际文件名把「步号 → 施工 id」抄回
+[`plan-1.2-tracker.md`](./plan-1.2-tracker.md) 的阶段三表格，并对着 5.1 的 55 款清单**逐个打勾**确认无漏无重，
+然后才允许派第 9 步。C 档已落地的部分（第 9 步 `gomoku` / `match-stars` / `rainbow-run`，
+第 10 步 `ocean-munch` / `xiangqi` / `fight-king`，第 11 步 `duo-rush` / `duo-arena` / `duo-vs-star`，
+第 12 步 `sling-birds` / `candy-swing` / `gold-hook` …）即按此规则收编，不必回炉重排。
 
 ---
 

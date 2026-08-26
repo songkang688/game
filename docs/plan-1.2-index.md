@@ -74,26 +74,10 @@ A **不写** step2 及以后；B **不写** step1 与 step9+；C **不写** step
 
 ### 阶段三 · 55 款老游戏精细化升级（第 9–26 步，C 档写）
 
-| 步 | A 位 | B 位 | C 位 |
-| --- | --- | --- | --- |
-| 9 | `garden-guard` | `sprout-defense` | `ocean-munch` |
-| 10 | `rainbow-run` | `fruit-slice` | `poop-hero` |
-| 11 | `sling-birds` | `candy-swing` | `bubble-aim` |
-| 12 | `shoot-range` | `sky-squad` | `snow-fight` |
-| 13 | `monster-crisis` | `bomb-buddies` | `tank-battle` |
-| 14 | `fight-king` | `duo-vs-star` | `duo-arena` |
-| 15 | `duo-rush` | `bumper-cars` | `bowling-lane` |
-| 16 | `ice-fire-forest` | `puff-bros` | `prince-princess` |
-| 17 | `brave-path` | `adventure-king` | `alien-seek` |
-| 18 | `box-hamster` | `puzzle-tiles` | `lianliankan` |
-| 19 | `balloon-pop` | `bubble-pop` | `match-stars` |
-| 20 | `brick-break` | `memory-cards` | `mole-pop` |
-| 21 | `fruit-catch` | `snake-snack` | `kitty-care` |
-| 22 | `xiangqi`（**只升级，不新建**） | `gomoku` | `landlord-cards` |
-| 23 | `red-blue-race` | `red-blue-tap` | `red-blue-tug` |
-| 24 | `math-farm` | `clock-house` | `shape-kingdom` |
-| 25 | `pinyin-train` | `word-garden` | `find-diff` |
-| 26 | `color-fun` | `music-stars` | `gold-hook` + `fishing-star`（唯一一个两款的位） |
+**18 步 × 3 格**，覆盖 [`plan-1.2-supervisor.md`](./plan-1.2-supervisor.md) 第 5.1 节的 55 款，每款出现且只出现一次；
+因为 55 不是 3 的倍数，允许且只允许一格放两款（建议第 26 步 C 位）。
+**具体哪一步做哪一款由 C 档在写正文时定**（用户点名过的排前面），主管在 C 交卷后把实际映射抄进登记表并逐个打勾。
+规则详见主管文档第 4.1 节。`xiangqi` **只升级，不新建**。
 
 ### 阶段四 · 收尾（第 27–30 步，C 档写）
 
