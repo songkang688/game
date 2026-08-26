@@ -697,6 +697,29 @@ export function endlessTier(round: number): AiTier {
   return 4;
 }
 
+/**
+ * 无尽模式的题面池：用的是题库里没排进 188 关的那些局面，
+ * 每一个都和闯关题同一批生成、同样验证过，白方都有强制赢法。
+ */
+const ENDLESS_POOL: Array<readonly [string, string]> = [
+  ...FAM.m2.slice(12),
+  ...FAM.m3.slice(18),
+  ...FAM.q2.slice(12),
+  ...FAM.n2.slice(12),
+  ...FAM.r2.slice(12),
+  ...FAM.p1.slice(12),
+  ...FAM.u1.slice(3),
+];
+
+/** 无尽模式第 round 局（1 起）的起手局面 */
+export function endlessStart(round: number): string {
+  const i = (Math.max(1, Math.round(round)) - 1) % ENDLESS_POOL.length;
+  return ENDLESS_POOL[i][0];
+}
+
+/** 无尽模式一共准备了几个不同的残局 */
+export const ENDLESS_COUNT = ENDLESS_POOL.length;
+
 /** 无尽模式第 round 局对手的思考时间上限（毫秒），越往后想得越久 */
 export function endlessThinkMs(round: number): number {
   return Math.min(240, 40 + round * 20);

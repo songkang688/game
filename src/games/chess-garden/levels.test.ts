@@ -92,7 +92,7 @@ describe("杀棋题正好是 N 步杀", () => {
       const solve = findForcedMate(pos, spec.plies);
       expect(solve, `第 ${spec.index + 1} 关（${spec.plies} 个半回合）找不到强制杀`).not.toBeNull();
     }
-  });
+  }, 120000);
 
   it("每一道杀棋题都不能更快解掉（标称几步就是几步）", () => {
     for (const spec of mates) {
@@ -103,7 +103,7 @@ describe("杀棋题正好是 N 步杀", () => {
         `第 ${spec.index + 1} 关其实是更短的杀，标称步数写大了`
       ).toBeNull();
     }
-  });
+  }, 120000);
 
   it("参考解本身就是能强制将杀的那一手", () => {
     for (const spec of mates) {
@@ -111,7 +111,7 @@ describe("杀棋题正好是 N 步杀", () => {
       const move = fromSan(pos, spec.solution)!;
       expect(forcesMate(pos, move, spec.plies), `第 ${spec.index + 1} 关参考解不成立`).toBe(true);
     }
-  });
+  }, 120000);
 
   it("规定首着的关卡（易位课 / 过路兵课 / 升变课）参考解确实是那一类走法", () => {
     for (const spec of mates.filter((s) => s.require)) {

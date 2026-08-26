@@ -1702,3 +1702,339 @@ html {
     opacity: 0.22;
   }
 }
+
+/* ==========================================================================
+   花园国际象棋 chess-garden（窗口 2 · 第 7 步 B）
+   只在本文件末尾追加，不动上面任何规则。
+   360px 宽下棋盘占满宽，一格 ≥ 40px，记谱折叠成抽屉。
+   ========================================================================== */
+
+.cg-wrap {
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 460px;
+  margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cg-banner {
+  font-size: 15px;
+  font-weight: 900;
+  color: #7a5f3c;
+}
+
+.cg-tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cg-tool {
+  border: none;
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 7px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #6e553a;
+  background: #fffaf2;
+  box-shadow: 0 3px 0 rgba(160, 130, 90, 0.28);
+  cursor: pointer;
+}
+
+.cg-tool:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(160, 130, 90, 0.28);
+}
+
+.cg-tool--warn {
+  color: #8a5a5a;
+  background: #fdf0ef;
+}
+
+.cg-tool[hidden] {
+  display: none;
+}
+
+.cg-seats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cg-seat {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #5d4a35;
+  opacity: 0.62;
+}
+
+.cg-seat--on {
+  opacity: 1;
+  box-shadow: 0 0 0 2px #ffffff, 0 2px 6px rgba(150, 120, 80, 0.3);
+}
+
+/* 棋盘：8 列等宽，占满容器；360px 宽时一格约 43px */
+.cg-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(150, 120, 80, 0.25);
+}
+
+.cg-sq {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 40px;
+  min-height: 40px;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cg-sq--light {
+  background: #f6e9d6;
+}
+
+.cg-sq--dark {
+  background: #d8bd9a;
+}
+
+.cg-sq--last {
+  box-shadow: inset 0 0 0 3px rgba(255, 214, 130, 0.85);
+}
+
+.cg-sq--sel {
+  box-shadow: inset 0 0 0 3px #e08fb4;
+}
+
+.cg-sq--cursor {
+  box-shadow: inset 0 0 0 3px #7fa7dd;
+}
+
+/* 被将时王格用柔和的杏色，不用血红 */
+.cg-sq--check {
+  background: #f7cfa8;
+  box-shadow: inset 0 0 0 3px #e6a663;
+}
+
+.cg-sq--hint::after {
+  content: "";
+  position: absolute;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: rgba(120, 150, 110, 0.5);
+  pointer-events: none;
+}
+
+.cg-sq--cap::after {
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 3px solid rgba(200, 120, 130, 0.55);
+  pointer-events: none;
+}
+
+.cg-sq:focus-visible {
+  outline: 3px solid #3c2a6b;
+  outline-offset: -3px;
+  z-index: 2;
+}
+
+.cg-piece {
+  position: relative;
+  width: 84%;
+  height: 84%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+
+.cg-piece--w {
+  background: radial-gradient(circle at 34% 30%, #ffffff, #f6dfe9);
+  box-shadow: 0 2px 4px rgba(120, 90, 70, 0.35);
+}
+
+.cg-piece--b {
+  background: radial-gradient(circle at 34% 30%, #6b6e86, #3b3f57);
+  box-shadow: 0 2px 4px rgba(60, 50, 70, 0.4);
+}
+
+.cg-piece-mark {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.cg-piece--w .cg-piece-mark {
+  color: #7a4d63;
+}
+
+.cg-piece--b .cg-piece-mark {
+  color: #f4f2fb;
+}
+
+/* 中文角标：六种兵种一眼可区分 */
+.cg-piece-tag {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 5px;
+  background: #fffaf2;
+  color: #6e553a;
+}
+
+.cg-piece--b .cg-piece-tag {
+  background: #2f3348;
+  color: #e7e4f5;
+}
+
+.cg-tip {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #5d4a35;
+  min-height: 20px;
+}
+
+.cg-log {
+  border-radius: 12px;
+  background: #fffaf2;
+  padding: 6px 10px;
+}
+
+.cg-log-sum {
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a5f3c;
+  cursor: pointer;
+}
+
+.cg-log-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding-top: 6px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.cg-log-row {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6e553a;
+}
+
+.cg-overlay {
+  position: relative;
+  border-radius: 14px;
+  background: rgba(255, 250, 242, 0.97);
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(150, 120, 80, 0.25);
+}
+
+.cg-overlay[hidden] {
+  display: none;
+}
+
+.cg-promo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.cg-promo-t {
+  font-size: 16px;
+  font-weight: 900;
+  color: #8a6a3f;
+}
+
+.cg-promo-s {
+  font-size: 13px;
+  font-weight: 700;
+  color: #5d4a35;
+  line-height: 1.5;
+}
+
+.cg-promo-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.cg-promo-b {
+  border: none;
+  border-radius: 14px;
+  min-height: 44px;
+  min-width: 64px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  color: #6e553a;
+  background: #ffffff;
+  box-shadow: 0 3px 0 rgba(160, 130, 90, 0.35);
+  cursor: pointer;
+}
+
+.cg-promo-b:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(160, 130, 90, 0.35);
+}
+
+.cg-promo-b:focus-visible {
+  outline: 3px solid #3c2a6b;
+  outline-offset: 2px;
+}
+
+@media (max-width: 420px) {
+  .cg-banner {
+    font-size: 14px;
+  }
+
+  .cg-piece-mark {
+    font-size: 21px;
+  }
+
+  .cg-tip,
+  .cg-log-row {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cg-piece {
+    transition-duration: 40ms !important;
+  }
+}

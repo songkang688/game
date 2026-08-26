@@ -1,492 +1,539 @@
 import { meta } from "./meta";
 export { meta };
 
-// 花园国际象棋:一整套 FIDE 关键规则都自己写,没有引擎、没有走法库、没有 wasm。
+// 花园国际象棋:8×8 的完整国际象棋,FIDE 关键规则一条不少
+// (六种走法 / 王车易位 / 吃过路兵 / 升变四选一 / 将杀 / 逼和 / 50 回合 / 三次重复 / 子力不足)。
 //
-// 四种玩法共用同一张棋盘 `createTable`:
-//  - 闯关 188:八章,从「兵怎么走」一路教到易位、吃过路兵、升变、将杀和完整对局;
-//  - 人机对战:四档搜索,地狱档是迭代加深 + alpha-beta + 置换表;
-//  - 无尽:连胜挑战,对手逐场加深,记最高连胜;
-//  - 双人同屏:朵朵执白、星星执黑,可以把棋盘翻过来。
+// 四种玩法共用同一块棋盘 `createBoard`:
+//  - 闯关:188 关八章,从兵的走法一路练到四步杀,最后一章还要学会怎么把局面走成和棋;
+//  - 人机对战:菜鸟 / 普通 / 高手 / 地狱四档,可以选执白还是执黑;
+//  - 无尽:一局接一局的残局连胜,对手逐场加深;
+//  - 双人同屏:朵朵执白、星星执黑,可以随时翻转棋盘。
+//
+// 走法、判胜负、AI 全部自己写,没有走法库、没有 wasm、没有外部引擎,断网照样下。
 import { save } from "../../engine/save";
-import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { parseFen, squareName, startPosition, zobrist, type Color, type Position } from "./board";
-import guide from "./guide";
-import { CHAPTERS, endlessPlan, goalText, planFor, positionFor, rateLevel, type Goal, type LevelPlan } from "./levels";
-import { legalMoves, makeMove, status, toSan, type Move } from "./rules";
-import { TIERS, TIER_LABELS, chooseMove, type Tier } from "./search";
-import { CSS as BOARD_CSS, createBoard, type BoardHandle } from "./view";
+import { mulberry32, mountLevelGame, type GameApi, type PlayCtx } from "../level99";
+import { BLACK, WHITE, type Color } from "./board";
+import GUIDE from "./guide";
+import {
+  CHAPTERS,
+  buildLevel,
+  endlessStart,
+  endlessThinkMs,
+  endlessTier,
+  loseLine,
+  rateLevel,
+  winLine,
+  type LevelSpec,
+} from "./levels";
+import { makeMove, toSan, type Move } from "./moves";
+import { insufficientMaterial, status, type Game, type Status } from "./rules";
+import { AI_BLURB, AI_LABEL, AI_TIERS, TIER_PLAN, chooseMove, forcesMate, type AiTier } from "./search";
+import { createBoard, type BoardHandle, type Judgement, type SeatPlan } from "./view";
+
+const DUO: SeatPlan = { name: "朵朵", emoji: "🌸", color: "#F7DCE8", ai: null };
+const XING: SeatPlan = { name: "星星", emoji: "⭐", color: "#DCE6F7", ai: null };
+
+function aiSeat(tier: AiTier): SeatPlan {
+  return { name: AI_LABEL[tier], emoji: "🤖", color: "#E4E0F2", ai: tier };
+}
 
 const SHELL_CSS = `
-.cg-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FBF3E6,#F4EEF8);
-  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
-.cg-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
-.cg-title{font-size:19px;font-weight:900;color:#7a5f3e;text-align:center;}
-.cg-sub{font-size:13px;font-weight:700;color:#7f684e;text-align:center;line-height:1.6;max-width:330px;}
-.cg-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
-.cg-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;
-  font-family:inherit;background:linear-gradient(180deg,#c39a63,#a8804c);box-shadow:0 4px 0 #8a6839;}
-.cg-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #8a6839;}
-.cg-mode.cg-b{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a;}
-.cg-mode.cg-c{background:linear-gradient(180deg,#4fa77c,#3d8c66);box-shadow:0 4px 0 #2e6d4f;}
-.cg-mode.cg-d{background:linear-gradient(180deg,#a765c0,#8d51a5);box-shadow:0 4px 0 #6f3f83;}
-.cg-tip{font-size:12px;font-weight:700;color:#93795a;text-align:center;line-height:1.6;max-width:330px;}
-.cg-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
+.cg-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
+  background:linear-gradient(180deg,#FBF3E8,#F3F0FA);display:flex;flex-direction:column;gap:8px;}
+.cg-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.cg-back{border:none;border-radius:999px;min-height:44px;padding:8px 14px;font-size:14px;font-weight:900;cursor:pointer;
+  font-family:inherit;background:#ffffffdd;color:#8a6a3f;box-shadow:0 3px 0 rgba(150,120,80,.28);}
+.cg-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(150,120,80,.28);}
+.cg-back:focus-visible,.cg-open:focus-visible,.cg-pick:focus-visible{outline:3px solid #d98c4a;outline-offset:2px;}
+.cg-chip{font-size:14px;font-weight:900;color:#7a5f3c;}
+.cg-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
+.cg-bar[hidden],.cg-picks[hidden]{display:none;}
+.cg-open{border:none;border-radius:999px;min-height:44px;padding:9px 15px;font-size:14px;font-weight:900;cursor:pointer;
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#d9a86a,#b8843f);box-shadow:0 4px 0 #97682c;}
+.cg-open:active{transform:translateY(2px);box-shadow:0 2px 0 #97682c;}
+.cg-open--duo{background:linear-gradient(180deg,#e7a0c0,#c9749c);box-shadow:0 4px 0 #a75b7f;}
+.cg-open--en{background:linear-gradient(180deg,#9aa8e0,#6f7fc4);box-shadow:0 4px 0 #56659f;}
+.cg-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
 .cg-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffe0;color:#6b5540;box-shadow:0 3px 0 rgba(150,125,95,.3);}
-.cg-pick[aria-pressed="true"]{background:linear-gradient(180deg,#c39a63,#a8804c);color:#fff;}
+  font-family:inherit;background:#ffffffe0;color:#6e553a;box-shadow:0 3px 0 rgba(160,130,90,.35);}
+.cg-pick[aria-pressed="true"]{background:linear-gradient(180deg,#d9a86a,#b8843f);color:#fff;box-shadow:0 3px 0 #97682c;}
+.cg-over{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:18px 12px;}
+.cg-over-t{font-size:20px;font-weight:900;color:#8a6a3f;}
+.cg-over-s{font-size:13.5px;font-weight:700;color:#5d4a35;line-height:1.6;max-width:340px;}
+.cg-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.cg-btn{border:none;border-radius:16px;min-height:44px;padding:10px 20px;font-size:15px;font-weight:900;cursor:pointer;
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#d9a86a,#b8843f);box-shadow:0 4px 0 #97682c;}
+.cg-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #97682c;}
 `;
 
-const AI_DELAY_MS = 420;
-
-export interface TableResult {
-  /** 白方（朵朵）赢了没有 */
-  won: boolean;
-  draw: boolean;
-  plies: number;
-  why: string;
+let shellCss = false;
+function ensureShellCss(host: HTMLElement): void {
+  if (shellCss && document.getElementById("cg-shell-style")) return;
+  const style = document.createElement("style");
+  style.id = "cg-shell-style";
+  style.textContent = SHELL_CSS;
+  (document.head ?? host).appendChild(style);
+  shellCss = true;
 }
 
-export interface TableOptions {
-  start: Position;
-  goal: Goal;
-  /** 黑方是电脑还是第二个人 */
-  rival: "ai" | "human";
-  tier: Tier;
-  showHints: boolean;
-  label: string;
-  budget: number;
-  onEnd: (r: TableResult) => void;
+function el(tag: string, cls?: string, text?: string): HTMLElement {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
 
-/** 一张能真正下完的棋盘 */
-export function createTable(host: HTMLElement, opts: TableOptions): { destroy: () => void } {
-  let pos = opts.start;
-  const history: number[] = [zobrist(pos)];
-  const sanLog: string[] = [];
-  let plies = 0;
-  let captures = 0;
-  let castled = false;
-  let promoted = false;
-  let tookEnPassant = false;
+function button(cls: string, text: string): HTMLButtonElement {
+  const b = document.createElement("button") as HTMLButtonElement;
+  b.type = "button";
+  b.className = cls;
+  b.textContent = text;
+  return b;
+}
 
-  const wrap = document.createElement("div");
-  wrap.className = "cg-wrap";
-  host.appendChild(wrap);
+function overBox(
+  host: HTMLElement,
+  title: string,
+  sub: string,
+  buttons: Array<{ label: string; onClick: () => void }>
+): void {
+  host.innerHTML = "";
+  const box = el("div", "cg-over");
+  box.append(el("div", "cg-over-t", title), el("div", "cg-over-s", sub));
+  const row = el("div", "cg-row");
+  for (const b of buttons) {
+    const btn = button("cg-btn", b.label);
+    btn.addEventListener("click", b.onClick);
+    row.appendChild(btn);
+  }
+  box.appendChild(row);
+  host.appendChild(box);
+}
 
-  const top = document.createElement("div");
-  top.className = "cg-top";
-  const turnChip = document.createElement("span");
-  turnChip.className = "cg-chip cg-turn";
-  const goalChip = document.createElement("span");
-  goalChip.className = "cg-chip";
-  goalChip.textContent = goalText({ goal: opts.goal } as LevelPlan);
-  const labelChip = document.createElement("span");
-  labelChip.className = "cg-chip";
-  labelChip.textContent = opts.label;
-  top.append(turnChip, goalChip, labelChip);
-  wrap.appendChild(top);
+// ---------------------------------------------------------------------------
+// 闯关:一关一道题
+// ---------------------------------------------------------------------------
 
-  const boardHost = document.createElement("div");
-  wrap.appendChild(boardHost);
+/**
+ * 这一手对不对。规则很简单：
+ *  - 规定首着的关卡（易位课 / 过路兵课 / 升变课）第一手必须走那一类；
+ *  - 杀棋题：走完之后**还得保得住**剩下步数内的强制杀；
+ *  - 和棋题：走完就要变成对应的那种和棋。
+ * 玩家想到的杀法和参考解不一样也算对，只要还是强制杀。
+ */
+export function judgeLevelMove(spec: LevelSpec, move: Move, game: Game): Judgement {
+  const pos = game.pos;
+  const played = game.history.length;
+  if (spec.require && played === 0 && toSan(move, pos) !== spec.solution) {
+    return { ok: false, msg: `这一关要用「${spec.title}」那一手开局，再看看提示。` };
+  }
+  if (spec.kind === "mate") {
+    const remaining = Math.max(1, spec.plies - played);
+    if (!forcesMate(pos, move, remaining)) return { ok: false, msg: loseLine(spec) };
+    return { ok: true };
+  }
+  if (spec.kind === "repetition") {
+    const want = spec.line[played % spec.line.length];
+    if (toSan(move, pos) !== want) return { ok: false, msg: "循环走岔了，回到同一个圈里再来一遍。" };
+    return { ok: true };
+  }
+  const next = makeMove(pos, move);
+  if (spec.kind === "stalemate") {
+    return status(next).kind === "stalemate" ? { ok: true } : { ok: false, msg: loseLine(spec) };
+  }
+  if (spec.kind === "material") {
+    return insufficientMaterial(next) ? { ok: true } : { ok: false, msg: loseLine(spec) };
+  }
+  // 50 回合：不许吃子、不许动兵，走完刚好数满
+  return status(next).kind === "fifty" ? { ok: true } : { ok: false, msg: loseLine(spec) };
+}
 
-  const note = document.createElement("div");
-  note.className = "cg-note";
-  wrap.appendChild(note);
+/** 这一关算不算过了 */
+export function levelCleared(spec: LevelSpec, st: Status): boolean {
+  if (spec.kind === "mate") return st.kind === "checkmate" && st.winner === WHITE;
+  if (spec.kind === "stalemate") return st.kind === "stalemate";
+  if (spec.kind === "material") return st.kind === "material";
+  if (spec.kind === "fifty") return st.kind === "fifty";
+  return st.kind === "repetition";
+}
 
-  const log = document.createElement("div");
-  log.className = "cg-log";
-  wrap.appendChild(log);
-
-  const row = document.createElement("div");
-  row.className = "cg-row";
-  const flipBtn = document.createElement("button");
-  flipBtn.type = "button";
-  flipBtn.className = "cg-btn";
-  flipBtn.textContent = "翻转棋盘";
-  const pauseBtn = document.createElement("button");
-  pauseBtn.type = "button";
-  pauseBtn.className = "cg-btn";
-  pauseBtn.textContent = "暂停";
-  row.append(flipBtn, pauseBtn);
-  wrap.appendChild(row);
-
-  let finished = false;
-  let paused = false;
-  let destroyed = false;
-  let flipped = false;
-  let aiTimer: ReturnType<typeof setTimeout> | null = null;
+function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
+  const spec = buildLevel(ctx.level);
+  const rand = mulberry32(spec.index * 7919 + 13);
+  let mistakes = 0;
+  let settled = false;
   let board: BoardHandle | null = null;
 
-  function setNote(t: string): void {
-    note.textContent = t;
-  }
+  const goalText =
+    spec.kind === "mate"
+      ? `${Math.ceil(spec.plies / 2)} 步之内将死对方`
+      : spec.kind === "stalemate"
+        ? "一步走成逼和"
+        : spec.kind === "material"
+          ? "一步走成子力不足和"
+          : spec.kind === "fifty"
+            ? "一步把 50 回合和棋定下来"
+            : "连将两个循环，走成三次重复和";
 
-  function renderHud(): void {
-    const who = pos.turn === "w" ? "朵朵（白）" : opts.rival === "ai" ? "小对手（黑）" : "星星（黑）";
-    turnChip.textContent = paused ? "已暂停" : `轮到${who}`;
-    turnChip.className = pos.turn === "w" ? "cg-chip cg-turn cg-hot" : "cg-chip cg-turn";
-    log.textContent = sanLog.slice(-8).join("  ");
-  }
-
-  function goalMet(): boolean {
-    switch (opts.goal.kind) {
-      case "capture":
-        return captures >= opts.goal.count;
-      case "castle":
-        return castled;
-      case "promote":
-        return promoted;
-      case "enpassant":
-        return tookEnPassant;
-      case "mate":
-      case "game":
-        return status(pos, history).kind === "checkmate" && pos.turn === "b";
-      case "draw":
-        return status(pos, history).kind !== "playing" && status(pos, history).kind !== "checkmate";
-      default:
-        return false;
-    }
-  }
-
-  function finish(won: boolean, draw: boolean, why: string): void {
-    if (finished) return;
-    finished = true;
-    if (aiTimer) clearTimeout(aiTimer);
-    aiTimer = null;
-    opts.onEnd({ won, draw, plies, why });
-  }
-
-  function checkEnd(): void {
-    if (finished) return;
-    if (goalMet()) {
-      finish(true, false, "任务完成，漂亮！");
-      return;
-    }
-    const st = status(pos, history);
-    if (st.kind === "checkmate") {
-      finish(st.winner === "w", false, st.winner === "w" ? "将杀！这一局是你的。" : "这一局对方先收官了，下一局早点让王回家。");
-      return;
-    }
-    if (st.kind === "stalemate") {
-      finish(false, true, "对方一步都走不了又没被将，这是逼和，算平局。");
-      return;
-    }
-    if (st.kind === "draw") {
-      const why =
-        st.why === "fifty" ? "五十回合没吃子也没动兵，判和。" : st.why === "repetition" ? "同一个局面出现三次，判和。" : "子力不够将杀啦，判和。";
-      finish(false, true, why);
-      return;
-    }
-    if (plies >= opts.budget) {
-      finish(false, true, "手数用完啦，这一关先算平局收场。");
-    }
-  }
-
-  function play(m: Move): void {
-    if (finished || paused) return;
-    const before = pos;
-    sanLog.push(`${Math.floor(plies / 2) + 1}${pos.turn === "w" ? "." : "…"}${toSan(before, m)}`);
-    if (before.turn === "w") {
-      if (m.capture) captures += 1;
-      if (m.castle) castled = true;
-      if (m.promo) promoted = true;
-      if (m.ep) tookEnPassant = true;
-    }
-    pos = makeMove(before, m);
-    history.push(zobrist(pos));
-    plies += 1;
-    board?.setLast(m);
-    setNote(`${before.turn === "w" ? "朵朵" : "对手"}走了 ${squareName(m.from)} → ${squareName(m.to)}。`);
-    renderHud();
-    checkEnd();
-    if (!finished) scheduleAi();
-  }
-
-  function scheduleAi(): void {
-    if (aiTimer) clearTimeout(aiTimer);
-    aiTimer = null;
-    if (finished || destroyed || paused) return;
-    if (opts.rival !== "ai" || pos.turn !== "b") return;
-    aiTimer = setTimeout(() => {
-      aiTimer = null;
-      if (finished || destroyed) return;
-      const m = chooseMove(pos, opts.tier, plies * 7 + 3);
-      if (!m) {
-        checkEnd();
-        return;
-      }
-      play(m);
-    }, AI_DELAY_MS);
-  }
-
-  const humans: Color[] = opts.rival === "human" ? ["w", "b"] : ["w"];
-  board = createBoard(boardHost, {
-    get: () => pos,
-    humans,
-    showHints: opts.showHints,
-    flipped,
-    onHumanMove: play,
-    onNote: setNote,
+  board = createBoard(stage, {
+    fen: spec.fen,
+    seats: [DUO, aiSeat(spec.tier)],
+    banner: `${CHAPTERS[spec.chapterIndex].emoji} 第 ${spec.index + 1} 关 · ${spec.title}`,
+    tip: `${goalText}。${spec.hint}`,
+    showHints: spec.chapterIndex <= 3,
+    allowFlip: false,
+    allowResign: false,
+    sfx: (n) => ctx.sfx(n),
+    aiDelayMs: 260,
+    judge: (move, _pos, game) => {
+      const verdict = judgeLevelMove(spec, move, game);
+      if (!verdict.ok) mistakes++;
+      return verdict;
+    },
+    think: (game) => chooseMove(game.pos, spec.tier, rand),
+    onOver: (st) => {
+      if (settled) return;
+      settled = true;
+      if (levelCleared(spec, st)) ctx.win(rateLevel(mistakes), winLine(spec, mistakes));
+      else ctx.lose("这一局走岔了，把棋子放回题面重来一次就好。");
+    },
   });
 
-  const onFlip = (): void => {
-    flipped = !flipped;
-    board?.destroy();
-    boardHost.innerHTML = "";
-    board = createBoard(boardHost, {
-      get: () => pos,
-      humans,
-      showHints: opts.showHints,
-      flipped,
-      onHumanMove: play,
-      onNote: setNote,
-    });
-  };
-  const onPause = (): void => {
-    paused = !paused;
-    pauseBtn.textContent = paused ? "继续" : "暂停";
-    renderHud();
-    if (!paused) scheduleAi();
-  };
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key.toLowerCase() === "escape") {
-      onPause();
-      e.preventDefault();
-    }
-  };
-  flipBtn.addEventListener("click", onFlip);
-  pauseBtn.addEventListener("click", onPause);
-  window.addEventListener("keydown", onKey);
-
-  setNote(`轮到白方，${legalMoves(pos).length} 手可走。`);
-  renderHud();
-  checkEnd();
-  if (!finished) scheduleAi();
+  const tools = el("div", "cg-row");
+  const again = button("cg-btn", "♻️ 重摆题面");
+  again.addEventListener("click", () => {
+    ctx.sfx("tap");
+    mistakes++;
+    board?.reset(spec.fen);
+  });
+  tools.appendChild(again);
+  stage.appendChild(tools);
 
   return {
     destroy() {
-      destroyed = true;
-      finished = true;
-      if (aiTimer) clearTimeout(aiTimer);
-      aiTimer = null;
-      flipBtn.removeEventListener("click", onFlip);
-      pauseBtn.removeEventListener("click", onPause);
-      window.removeEventListener("keydown", onKey);
+      settled = true;
       board?.destroy();
       board = null;
-      wrap.remove();
     },
   };
 }
 
-function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
-  const plan = planFor(ctx.level);
-  const handle = createTable(stage, {
-    start: positionFor(ctx.level),
-    goal: plan.goal,
-    rival: "ai",
-    tier: plan.tier,
-    showHints: plan.showHints,
-    label: `第 ${ctx.level + 1} 关 · ${plan.hint}`,
-    budget: plan.budget,
-    onEnd: ({ won, plies, why }) => {
-      if (won) ctx.win(rateLevel(plies, plan.budget), why);
-      else ctx.lose(why || "这一题差一点点，换个思路再来一次。");
-    },
-  });
-  return { destroy: () => handle.destroy() };
+// ---------------------------------------------------------------------------
+// 模式外壳
+// ---------------------------------------------------------------------------
+
+interface Shell {
+  stage: HTMLElement;
+  chip: HTMLElement;
+  destroy: () => void;
 }
 
-export function mount(api: GameApi): { destroy: () => void } {
-  let child: { destroy: () => void } | null = null;
-  const wrap = document.createElement("div");
-  const style = document.createElement("style");
-  style.textContent = `${BOARD_CSS}\n${SHELL_CSS}`;
-  wrap.appendChild(style);
-  const view = document.createElement("div");
-  wrap.appendChild(view);
-  api.root.appendChild(wrap);
+function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: string): Shell {
+  ensureShellCss(host);
+  const wrap = el("div", "cg-mode");
+  const head = el("div", "cg-mhead");
+  const back = button("cg-back", "◀ 回选关");
+  back.addEventListener("click", () => {
+    api.play("tap");
+    onBack();
+  });
+  const chip = el("span", "cg-chip", title);
+  head.append(back, chip);
+  const stage = el("div");
+  wrap.append(head, stage);
+  host.appendChild(wrap);
+  return { stage, chip, destroy: () => wrap.remove() };
+}
 
-  let tier: Tier = "normal";
+// ---------------------------------------------------------------------------
+// 对战:人机四档 / 双人同屏
+// ---------------------------------------------------------------------------
 
-  function clear(): void {
-    child?.destroy();
-    child = null;
-    view.innerHTML = "";
+interface VersusOptions {
+  tier: AiTier | null;
+  /** 人执哪一边（双人同屏忽略） */
+  side: Color;
+}
+
+function mountVersus(
+  host: HTMLElement,
+  api: GameApi,
+  onBack: () => void,
+  cfg: VersusOptions
+): { destroy: () => void } {
+  const label = cfg.tier ? `🤖 人机对战 · ${AI_LABEL[cfg.tier]}` : "👫 双人同屏";
+  const shell = makeShell(host, api, onBack, label);
+  let round = 1;
+  const score: [number, number] = [0, 0];
+  let board: BoardHandle | null = null;
+  const rand = mulberry32(20260807);
+
+  function seats(): [SeatPlan, SeatPlan] {
+    if (cfg.tier === null) return [DUO, XING];
+    return cfg.side === WHITE ? [DUO, aiSeat(cfg.tier)] : [aiSeat(cfg.tier), DUO];
   }
 
-  function backBar(label: string): HTMLElement {
-    const row = document.createElement("div");
-    row.className = "cg-row";
-    const back = document.createElement("button");
-    back.type = "button";
-    back.className = "cg-btn";
-    back.textContent = "◀ 换个玩法";
-    back.addEventListener("click", () => {
-      api.play("tap");
-      showMenu();
+  function start(): void {
+    board?.destroy();
+    board = null;
+    shell.stage.innerHTML = "";
+    shell.chip.textContent = `${label} · 第 ${round} 局 · ${score[0]}:${score[1]}`;
+    board = createBoard(shell.stage, {
+      seats: seats(),
+      banner: `第 ${round} 局`,
+      tip: cfg.tier
+        ? `你执${cfg.side === WHITE ? "白" : "黑"}。白方先走，点一个自己的棋子再点落点。`
+        : "朵朵执白先走，星星执黑。手机点选，键盘朵朵 WASD+F、星星 方向键+L。",
+      showHints: true,
+      allowFlip: true,
+      allowResign: true,
+      flipped: cfg.tier !== null && cfg.side === BLACK,
+      sfx: (n) => api.play(n),
+      think: (game, seat) => {
+        const tier = seats()[seat].ai;
+        if (tier === null) return null;
+        return chooseMove(game.pos, tier, rand);
+      },
+      onOver: (st) => {
+        if (st.winner === WHITE) score[0]++;
+        else if (st.winner === BLACK) score[1]++;
+        const humanWon = cfg.tier === null ? false : st.winner === cfg.side;
+        if (humanWon) {
+          api.play("win");
+          api.addStars(2);
+        }
+        const title =
+          st.winner === 0 ? "🤝 这一局和棋" : st.winner === WHITE ? "🌸 白方赢了这一局" : "⭐ 黑方赢了这一局";
+        const sub = `${st.text} 总比分 白 ${score[0]} : 黑 ${score[1]}。`;
+        overBox(shell.stage, title, sub, [
+          {
+            label: "▶ 再来一局",
+            onClick: () => {
+              api.play("tap");
+              round++;
+              start();
+            },
+          },
+          {
+            label: "◀ 回选关",
+            onClick: () => {
+              api.play("tap");
+              onBack();
+            },
+          },
+        ]);
+      },
     });
-    const tag = document.createElement("span");
-    tag.className = "cg-chip";
-    tag.textContent = label;
-    row.append(back, tag);
-    return row;
   }
 
-  function showMenu(): void {
-    clear();
-    const menu = document.createElement("div");
-    menu.className = "cg-menu";
-    const title = document.createElement("div");
-    title.className = "cg-title";
-    title.textContent = "♔ 花园国际象棋";
-    const sub = document.createElement("div");
-    sub.className = "cg-sub";
-    sub.textContent = "王、后、车、象、马、兵，各有各的走法。记得易位、吃过路兵和升变。";
-    menu.append(title, sub);
+  start();
 
-    const grid = document.createElement("div");
-    grid.className = "cg-modes";
-    const modes: Array<{ label: string; cls: string; run: () => void }> = [
-      { label: "🚩 闯关 188", cls: "", run: startCampaign },
-      { label: "♾️ 无尽连胜", cls: "cg-b", run: startEndless },
-      { label: "⚔️ 人机对战", cls: "cg-c", run: startVersus },
-      { label: "👫 双人同屏", cls: "cg-d", run: startTwoPlayer },
-    ];
-    for (const m of modes) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `cg-mode ${m.cls}`;
-      btn.textContent = m.label;
-      btn.addEventListener("click", () => {
-        api.play("tap");
-        m.run();
-      });
-      grid.appendChild(btn);
-    }
-    menu.appendChild(grid);
+  return {
+    destroy() {
+      board?.destroy();
+      board = null;
+      shell.destroy();
+    },
+  };
+}
 
-    const picks = document.createElement("div");
-    picks.className = "cg-picks";
-    for (const t of TIERS) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "cg-pick";
-      b.textContent = TIER_LABELS[t];
-      b.setAttribute("aria-pressed", String(t === tier));
-      b.addEventListener("click", () => {
-        tier = t;
-        api.play("tap");
-        showMenu();
-      });
-      picks.appendChild(b);
-    }
-    menu.appendChild(picks);
+// ---------------------------------------------------------------------------
+// 无尽:一局接一局的残局连胜
+// ---------------------------------------------------------------------------
 
-    const tip = document.createElement("div");
-    tip.className = "cg-tip";
-    tip.textContent = `朵朵执白：WASD 移光标，F 落子，G 取消｜星星执黑：方向键 + L / K｜Esc 暂停。无尽最高连胜 ${
-      save.getGameProgress(meta.id).endlessBest
-    } 场`;
-    menu.appendChild(tip);
-    view.appendChild(menu);
-  }
+function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
+  const shell = makeShell(host, api, onBack, "♾️ 残局连胜");
+  let round = 1;
+  let best = save.getGameProgress(meta.id).endlessBest;
+  let board: BoardHandle | null = null;
+  const rand = mulberry32(9931);
 
-  function startCampaign(): void {
-    clear();
-    view.appendChild(backBar("闯关 188"));
-    const host = document.createElement("div");
-    view.appendChild(host);
-    child = mountLevelGame(
-      { ...api, root: host },
-      {
-        id: meta.id,
-        chapters: CHAPTERS,
-        playLevel,
-        guide,
-        mapHint: "先想对方能怎么应，再决定自己走哪一手。",
-        grandMessage: "188 关全部走完，花园杯的奖杯归朵朵和星星啦！",
-      }
+  function finish(reason: string): void {
+    const reached = Math.max(0, round - 1);
+    best = save.recordEndlessBest(meta.id, reached);
+    board?.destroy();
+    board = null;
+    api.play("oops");
+    overBox(
+      shell.stage,
+      "♾️ 连胜到此为止",
+      `${reason}你连过了 ${reached} 局，最好成绩 ${best} 局。歇口气再来，棋感一会儿就回来了。`,
+      [
+        {
+          label: "🔁 从第 1 局再来",
+          onClick: () => {
+            api.play("tap");
+            round = 1;
+            start();
+          },
+        },
+        {
+          label: "◀ 回选关",
+          onClick: () => {
+            api.play("tap");
+            onBack();
+          },
+        },
+      ]
     );
   }
 
-  function startMatch(label: string, rival: "ai" | "human", t: Tier): void {
-    clear();
-    view.appendChild(backBar(label));
-    const host = document.createElement("div");
-    view.appendChild(host);
-    const runOne = (): void => {
-      child?.destroy();
-      host.innerHTML = "";
-      child = createTable(host, {
-        start: startPosition(),
-        goal: { kind: "game" },
-        rival,
-        tier: t,
-        showHints: true,
-        label,
-        budget: 300,
-        onEnd: ({ won, draw, why }) => {
-          api.play(won ? "win" : draw ? "pop" : "oops");
-          if (won) api.onWin(3, why);
-          else api.onLose(why);
-          runOne();
-        },
-      });
-    };
-    runOne();
+  function start(): void {
+    board?.destroy();
+    board = null;
+    shell.stage.innerHTML = "";
+    const tier = endlessTier(round);
+    const thinkMs = endlessThinkMs(round);
+    shell.chip.textContent = `♾️ 残局连胜 · 第 ${round} 局 · ${AI_LABEL[tier]} · 最好 ${best} 局`;
+    board = createBoard(shell.stage, {
+      fen: endlessStart(round),
+      seats: [DUO, aiSeat(tier)],
+      banner: `第 ${round} 局 · 对手 ${AI_LABEL[tier]}`,
+      tip: "白方有赢法，找出来把对方将死。和棋或者输掉，连胜就断了。",
+      showHints: round <= 3,
+      allowResign: true,
+      sfx: (n) => api.play(n),
+      think: (game) => chooseMove(game.pos, tier, rand, { timeMs: thinkMs }),
+      onOver: (st) => {
+        if (st.kind === "checkmate" && st.winner === WHITE) {
+          best = save.recordEndlessBest(meta.id, round);
+          api.addStars(1);
+          api.play("coin");
+          round++;
+          start();
+          return;
+        }
+        finish(st.winner === 0 ? "这一局走成和棋了。" : "这一局被对方翻过来了。");
+      },
+    });
   }
 
-  function startVersus(): void {
-    startMatch(`人机对战 · ${TIER_LABELS[tier]}`, "ai", tier);
-  }
-  function startTwoPlayer(): void {
-    startMatch("双人同屏", "human", "normal");
-  }
-
-  function startEndless(): void {
-    clear();
-    view.appendChild(backBar("无尽连胜"));
-    const host = document.createElement("div");
-    view.appendChild(host);
-    let streak = 0;
-    const runOne = (): void => {
-      child?.destroy();
-      host.innerHTML = "";
-      const p = endlessPlan(streak);
-      child = createTable(host, {
-        start: parseFen(p.fen),
-        goal: { kind: "game" },
-        rival: "ai",
-        tier: p.tier,
-        showHints: true,
-        label: `连胜 ${streak} · ${TIER_LABELS[p.tier]}`,
-        budget: 300,
-        onEnd: ({ won }) => {
-          if (won) {
-            streak += 1;
-            api.play("coin");
-            runOne();
-            return;
-          }
-          api.play("oops");
-          const best = save.recordEndlessBest(meta.id, streak);
-          api.onLose(`这一轮连胜 ${streak} 场，历史最好 ${best} 场。再来一轮准能更远。`);
-          streak = 0;
-          runOne();
-        },
-      });
-    };
-    runOne();
-  }
-
-  showMenu();
+  start();
 
   return {
     destroy() {
-      clear();
-      wrap.remove();
+      board?.destroy();
+      board = null;
+      shell.destroy();
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// 挂载:模式条 + 188 关地图
+// ---------------------------------------------------------------------------
+
+export function mount(api: GameApi): { destroy: () => void } {
+  ensureShellCss(api.root);
+  const root = el("div");
+  const bar = el("div", "cg-bar");
+  const picks = el("div", "cg-picks");
+  const levelHost = el("div");
+  const modeHost = el("div");
+  modeHost.hidden = true;
+  root.append(bar, picks, levelHost, modeHost);
+  api.root.appendChild(root);
+
+  let tier: AiTier = 2;
+  let side: Color = WHITE;
+
+  const aiBtn = button("cg-open", "🤖 人机对战");
+  const duoBtn = button("cg-open cg-open--duo", "👫 双人同屏");
+  const endlessBtn = button("cg-open cg-open--en", "♾️ 残局连胜");
+  bar.append(aiBtn, duoBtn, endlessBtn);
+
+  const pickBtns: HTMLButtonElement[] = [];
+  for (const t of AI_TIERS) {
+    const btn = button("cg-pick", `🤖 ${AI_LABEL[t]}`);
+    btn.setAttribute("aria-label", `电脑难度：${AI_LABEL[t]}，${AI_BLURB[t]}`);
+    btn.addEventListener("click", () => {
+      api.play("tap");
+      tier = t;
+      refreshBar();
+    });
+    pickBtns.push(btn);
+    picks.appendChild(btn);
+  }
+  const sideBtn = button("cg-pick", "🌸 我执白");
+  sideBtn.addEventListener("click", () => {
+    api.play("tap");
+    side = side === WHITE ? BLACK : WHITE;
+    refreshBar();
+  });
+  picks.appendChild(sideBtn);
+
+  function refreshBar(): void {
+    const b = save.getGameProgress(meta.id).endlessBest;
+    endlessBtn.textContent = b > 0 ? `♾️ 残局连胜 · 最好 ${b} 局` : "♾️ 残局连胜";
+    aiBtn.textContent = `🤖 人机对战 · ${AI_LABEL[tier]}`;
+    sideBtn.textContent = side === WHITE ? "🌸 我执白" : "⭐ 我执黑";
+    pickBtns.forEach((btn, i) => btn.setAttribute("aria-pressed", String(AI_TIERS[i] === tier)));
+  }
+
+  let mode: { destroy: () => void } | null = null;
+
+  function closeMode(): void {
+    mode?.destroy();
+    mode = null;
+    modeHost.hidden = true;
+    modeHost.innerHTML = "";
+    levelHost.hidden = false;
+    bar.hidden = false;
+    picks.hidden = false;
+    refreshBar();
+  }
+
+  function openMode(make: (host: HTMLElement, api: GameApi, back: () => void) => { destroy: () => void }): void {
+    if (mode) return;
+    api.play("tap");
+    levelHost.hidden = true;
+    bar.hidden = true;
+    picks.hidden = true;
+    modeHost.hidden = false;
+    mode = make(modeHost, api, closeMode);
+  }
+
+  aiBtn.addEventListener("click", () => openMode((h, a, b) => mountVersus(h, a, b, { tier, side })));
+  duoBtn.addEventListener("click", () => openMode((h, a, b) => mountVersus(h, a, b, { tier: null, side: WHITE })));
+  endlessBtn.addEventListener("click", () => openMode(mountEndless));
+  refreshBar();
+
+  const level = mountLevelGame(
+    { ...api, root: levelHost },
+    {
+      id: meta.id,
+      chapters: CHAPTERS,
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        picks.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy: () => {
+            if (!mode) {
+              bar.hidden = false;
+              picks.hidden = false;
+            }
+            handle.destroy();
+          },
+        };
+      },
+      guide: GUIDE,
+      mapHint: "先数对方的王有几个逃跑格，再决定这一手堵哪一格。",
+      grandMessage: "188 关全部通关，六种棋子和三条特殊规则你都拿下了！",
+      guideTitle: "花园国际象棋 · 走子手册",
+    }
+  );
+
+  return {
+    destroy() {
+      mode?.destroy();
+      mode = null;
+      level.destroy();
+      root.remove();
+    },
+  };
+}
+
+/** 四档 AI 的思考参数（模式面板与单测共用） */
+export const AI_PLANS = TIER_PLAN;

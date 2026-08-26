@@ -1,9 +1,9 @@
 /**
  * 花园国际象棋 · 单测用的极简 DOM 桩（只给 `*.test.ts` 用，不参与打包）。
  *
- * 仓库的测试环境是 node、没有 jsdom，也不打算为一款游戏引进新依赖，
+ * 仓库的测试环境是 node、没有 jsdom，也不为一款游戏引进新依赖，
  * 所以这里手写一份最小实现：只覆盖棋盘视图与 188 关框架真正会用到的那几个 API，
- * 顺便把监听器、rAF、样式标签都数出来——「destroy 之后不留东西」这条才有办法断言。
+ * 顺便把监听器、定时器、rAF 都数出来——「destroy 之后不留东西」这条才有办法断言。
  */
 
 export type Handler = (ev: unknown) => void;
@@ -17,28 +17,28 @@ export class El {
   disabled = false;
   type = "";
   title = "";
-  width = 0;
-  height = 0;
   style: Record<string, string> = {};
   children: El[] = [];
   parent: El | null = null;
   attrs: Record<string, string> = {};
   listeners = new Map<string, Set<Handler>>();
+  /** 假的排版：给 getBoundingClientRect 用，滑行动画才有非零位移 */
+  rect = { left: 0, top: 0, width: 40, height: 40 };
 
   constructor(tag: string) {
     this.tagName = tag;
   }
 
+  private rawHtml = "";
+
   set innerHTML(v: string) {
     for (const c of this.children) c.parent = null;
     this.children = [];
-    if (v !== "") this.rawHtml = v;
-    else this.rawHtml = "";
+    this.rawHtml = v === "" ? "" : v;
   }
   get innerHTML(): string {
     return this.rawHtml;
   }
-  private rawHtml = "";
 
   get childElementCount(): number {
     return this.children.length;
@@ -73,17 +73,18 @@ export class El {
   dispatch(t: string, ev: unknown = {}): void {
     for (const f of Array.from(this.listeners.get(t) ?? [])) f(ev);
   }
-  getBoundingClientRect(): { left: number; top: number; width: number; height: number } {
-    return { left: 0, top: 0, width: this.width, height: this.height };
+  /** 点一下（棋盘格子、按钮都用它） */
+  click(): void {
+    this.dispatch("click", {});
   }
-  getContext(): unknown {
-    return ctx2d;
+  getBoundingClientRect(): { left: number; top: number; width: number; height: number } {
+    return this.rect;
   }
   scrollIntoView(): void {
-    /* 桩：滚动不需要真做 */
+    /* 桩：滚动不用真做 */
   }
   focus(): void {
-    /* 桩：焦点不需要真做 */
+    /* 桩：焦点不用真做 */
   }
   /** 只支持 `.class` 这一种选择器，框架里用到的就这一种 */
   querySelector(sel: string): El | null {
@@ -109,23 +110,22 @@ export class El {
     for (const c of this.children) c.findAll(pred, out);
     return out;
   }
-}
-
-/** canvas 2d 上下文：任何方法都是空操作，任何属性都写得进去 */
-export const ctx2d: unknown = new Proxy(
-  {},
-  {
-    get: () => () => ctx2d,
-    set: () => true,
+  /** 带某个 class 的全部后代 */
+  byClass(cls: string): El[] {
+    return this.findAll((e) => e.className.split(/\s+/).includes(cls));
   }
-);
+  /** 整棵子树的文字，断言提示语用 */
+  text(): string {
+    return [this.textContent, ...this.children.map((c) => c.text())].join(" ").trim();
+  }
+}
 
 export interface Dom {
   root: El;
   head: El;
   winListeners: Map<string, Set<Handler>>;
+  timers: Map<number, () => void>;
   frames: Array<() => void>;
-  cancelled: number[];
   clock: { ms: number };
 }
 
@@ -136,10 +136,11 @@ export function installDom(width = 800): Dom {
   const head = new El("head");
   const root = new El("div");
   const winListeners = new Map<string, Set<Handler>>();
+  const timers = new Map<number, () => void>();
   const frames: Array<() => void> = [];
-  const cancelled: number[] = [];
   const clock = { ms: 1000 };
   const byId = new Map<string, El>();
+  let timerId = 1;
 
   const origAppend = head.appendChild.bind(head);
   head.appendChild = (c: El): El => {
@@ -147,12 +148,19 @@ export function installDom(width = 800): Dom {
     return origAppend(c);
   };
 
-  saved.document = (globalThis as Record<string, unknown>).document;
-  saved.window = (globalThis as Record<string, unknown>).window;
-  saved.raf = (globalThis as Record<string, unknown>).requestAnimationFrame;
-  saved.caf = (globalThis as Record<string, unknown>).cancelAnimationFrame;
-  saved.performance = (globalThis as Record<string, unknown>).performance;
-  saved.innerWidth = (globalThis as Record<string, unknown>).innerWidth;
+  for (const key of [
+    "document",
+    "window",
+    "requestAnimationFrame",
+    "cancelAnimationFrame",
+    "setTimeout",
+    "clearTimeout",
+    "performance",
+    "innerWidth",
+    "matchMedia",
+  ]) {
+    saved[key] = (globalThis as Record<string, unknown>)[key];
+  }
 
   const win = {
     innerWidth: width,
@@ -174,28 +182,32 @@ export function installDom(width = 800): Dom {
     window: win,
     innerWidth: width,
     performance: { now: () => clock.ms },
+    matchMedia: (q: string) => ({ matches: false, media: q }),
     requestAnimationFrame: (cb: () => void) => {
       frames.push(cb);
       return frames.length;
     },
-    cancelAnimationFrame: (h: number) => {
-      cancelled.push(h);
+    cancelAnimationFrame: () => {
+      /* 桩：只要不报错 */
+    },
+    setTimeout: (cb: () => void) => {
+      const id = timerId++;
+      timers.set(id, cb);
+      return id;
+    },
+    clearTimeout: (id: number) => {
+      timers.delete(id);
     },
   });
 
-  return { root, head, winListeners, frames, cancelled, clock };
+  return { root, head, winListeners, timers, frames, clock };
 }
 
 /** 卸掉 DOM 桩，把全局还回去 */
 export function restoreDom(): void {
-  Object.assign(globalThis as Record<string, unknown>, {
-    document: saved.document,
-    window: saved.window,
-    requestAnimationFrame: saved.raf,
-    cancelAnimationFrame: saved.caf,
-    performance: saved.performance,
-    innerWidth: saved.innerWidth,
-  });
+  for (const [key, value] of Object.entries(saved)) {
+    (globalThis as Record<string, unknown>)[key] = value;
+  }
 }
 
 /** window 上还挂着几个监听 */
@@ -205,17 +217,32 @@ export function windowListenerCount(dom: Dom): number {
   return n;
 }
 
-/** 触发一个 window 事件 */
+/** 触发一个 window 事件（键盘操作用） */
 export function fireWindow(dom: Dom, type: string, ev: unknown): void {
   for (const f of Array.from(dom.winListeners.get(type) ?? [])) f(ev);
 }
 
-/** 跑 n 帧动画，每帧推进 stepMs 毫秒 */
-export function flushFrames(dom: Dom, n: number, stepMs = 50): void {
+/** 把挂着的定时器一次跑完（AI 落子用），返回跑了几个 */
+export function flushTimers(dom: Dom, rounds = 12): number {
+  let n = 0;
+  for (let i = 0; i < rounds; i++) {
+    const entry = dom.timers.entries().next();
+    if (entry.done) break;
+    const [id, cb] = entry.value;
+    dom.timers.delete(id);
+    dom.clock.ms += 10;
+    cb();
+    n++;
+  }
+  return n;
+}
+
+/** 把排队的 rAF 回调跑完 */
+export function flushFrames(dom: Dom, n = 8): void {
   for (let i = 0; i < n; i++) {
     const cb = dom.frames.shift();
     if (!cb) return;
-    dom.clock.ms += stepMs;
+    dom.clock.ms += 16;
     cb();
   }
 }

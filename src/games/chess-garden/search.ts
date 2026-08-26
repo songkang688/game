@@ -448,12 +448,19 @@ function rookieMove(pos: Position, rand: () => number): Move {
   return pool[Math.floor(rand() * pool.length) % pool.length];
 }
 
+export interface ChooseOptions {
+  /** 可注入的时钟，测试里不用真等 */
+  now?: () => number;
+  /** 覆盖这一档的时间预算（无尽模式逐场加时用） */
+  timeMs?: number;
+}
+
 /** 按档位挑一手棋。`rand` 固定 seed 时结果可复现，单测靠这条。 */
 export function chooseMove(
   pos: Position,
   tier: AiTier,
   rand: () => number = Math.random,
-  now?: () => number
+  opts: ChooseOptions = {}
 ): Move | null {
   const moves = legalMoves(pos);
   if (moves.length === 0) return null;
@@ -461,10 +468,10 @@ export function chooseMove(
   const plan = TIER_PLAN[tier];
   const res = search(pos, {
     depth: plan.depth,
-    timeMs: plan.timeMs,
+    timeMs: opts.timeMs ?? plan.timeMs,
     usePst: plan.usePst,
     quiescence: plan.quiescence,
-    now,
+    now: opts.now,
     rand: tier === 2 ? rand : undefined,
   });
   return res.move ?? moves[0];
