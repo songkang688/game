@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { allText, findAll, findButton, findOne, install, type FakeEl, type Harness } from "./domStub";
 import { registerLevelExtras, resetLevelExtras } from "../../ui/level188Contract";
-import { PLAYER_ROW, SKY_W } from "./bullets";
+import { PLAYER_ROW, SKY_W, hitBoxRatio } from "./bullets";
 import { CANVAS_MAX_H, CANVAS_MIN_H, TOUCH_LIFT, canvasBoxHeight, skyFit } from "./logic";
 import { LINK_DIST } from "./power";
 import { BOSSES } from "./levels";
@@ -152,6 +152,29 @@ describe("sky-squad 1.2 运行时 · 拖着飞", () => {
     const fit = skyFit(box.getBoundingClientRect().width, cssH);
     expect(fit.offY).toBeGreaterThanOrEqual(0);
     expect(fit.offY + PLAYER_ROW * fit.scale).toBeLessThan(cssH);
+    sortie.destroy();
+  });
+
+  it("天空缩得再小,判定核心也得看得见:落到屏幕上不小于 5px 半径", async () => {
+    const h = (harness = install());
+    const stage = h.root as unknown as FakeEl;
+    stage.dataset.clip = "1";
+    // 挤到只剩 260px:campaign 在 375×667 上就是这种局面
+    stage.rect = { left: 0, top: 0, width: 340, height: 260 };
+    stage.clientWidth = 340;
+    const sortie = await openSortie(h);
+    const canvas = findOne(h.root, "sks-cv") as FakeEl;
+    const ctx = canvas.getContext("2d") as unknown as { ops: Array<{ op: string; args: number[] }> };
+    ctx.ops.length = 0;
+    h.flush(1);
+    const scale = ctx.ops.find((o) => o.op === "scale")?.args[0] ?? 0;
+    expect(scale).toBeGreaterThan(0);
+    // 玩家中心(0,0 —— 画的时候已经 translate 过去了)那几个同心圆里最大的就是白环
+    const core = ctx.ops.filter((o) => o.op === "arc" && o.args[0] === 0 && o.args[1] === 0).map((o) => o.args[2]);
+    expect(core.length).toBeGreaterThan(0);
+    expect(Math.max(...core) * scale).toBeGreaterThanOrEqual(5);
+    // 判定圈本身仍然比机身小得多:这是「看着挨到翅膀其实没事」的那条底线
+    expect(hitBoxRatio().width).toBeLessThan(0.3);
     sortie.destroy();
   });
 

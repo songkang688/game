@@ -38,7 +38,9 @@ export class FakeCtx {
   transform(): void {}
   translate(): void {}
   rotate(): void {}
-  scale(): void {}
+  scale(x: number, y: number): void {
+    this.ops.push({ op: "scale", args: [x, y] });
+  }
   clearRect(): void {}
   fillRect(): void {}
   strokeRect(): void {}
@@ -48,7 +50,11 @@ export class FakeCtx {
   lineTo(): void {}
   quadraticCurveTo(): void {}
   bezierCurveTo(): void {}
-  arc(): void {}
+  /** 只记 `scale` 和 `arc`:版面用例要算「判定核心落到屏幕上有几像素」 */
+  readonly ops: Array<{ op: "scale" | "arc"; args: number[] }> = [];
+  arc(x: number, y: number, r: number): void {
+    this.ops.push({ op: "arc", args: [x, y, r] });
+  }
   arcTo(): void {}
   ellipse(): void {}
   roundRect(): void {}

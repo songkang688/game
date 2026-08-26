@@ -97,9 +97,6 @@ export const CSS = `
   padding:5px 14px;font-size:14px;font-weight:800;color:#3F6BA8;box-shadow:0 3px 8px rgba(110,140,190,.28);
   pointer-events:none;opacity:0;transition:opacity .25s ease;max-width:92%;text-align:center;}
 .sks-toast.sks-on{opacity:1;}
-.sks-opts{display:flex;gap:6px;justify-content:safe center;flex-wrap:nowrap;overflow-x:auto;margin-top:6px;
-  scrollbar-width:none;}
-.sks-opts::-webkit-scrollbar{display:none;}
 .sks-opt{border:none;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#5A7BA8;box-shadow:0 2px 0 rgba(120,150,200,.3);
   white-space:nowrap;flex:none;}
@@ -138,6 +135,8 @@ export const CSS = `
 @media (max-width:420px){
   .sks-pads{--k:38px;gap:6px;}
   .sks-pads[data-players="2"]{--k:34px;}
+  /* 手机上是拖着飞的,键盘说明先让位给天空 */
+  .sks-legend{display:none;}
 }
 @media (prefers-reduced-motion:reduce){
   .sks-toast{transition:none;}
@@ -332,11 +331,10 @@ export function createSortie(opts: SortieOptions): SortieHandle {
   const canvas = el("canvas", "sks-cv");
   const toast = el("div", "sks-toast");
   box.append(canvas, toast);
-  const optRow = el("div", "sks-opts");
   const pads = el("div", "sks-pads");
   pads.dataset.players = String(opts.players);
   const tip = el("div", "sks-tip", opts.hint);
-  wrap.append(style, hud, box, optRow, pads, tip);
+  wrap.append(style, hud, box, pads, tip);
   opts.host.appendChild(wrap);
 
   const g = canvas.getContext("2d");
@@ -417,8 +415,9 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     liftBtn.setAttribute("aria-pressed", liftOn ? "true" : "false");
     opts.sfx("tap");
   });
-  // 键位说明跟着开关排在同一条横条上:纵版飞行最缺竖着的地方,能不多占一行就不多占
-  optRow.append(
+  // 两个开关和键位说明都塞进 HUD 那条横条:纵版飞行最缺的就是竖着的地方,
+  // 少占一行就等于天空高一行。窄屏放不下的部分横向滑一下就能够到。
+  hud.append(
     coreBtn,
     liftBtn,
     el(
@@ -1255,6 +1254,8 @@ export function createSortie(opts: SortieOptions): SortieHandle {
   }
 
   let layoutTick = 0;
+  /** 当前世界 → 画布像素的比例:判定核心按屏幕像素兜底时要用 */
+  let viewScale = 1;
 
   function resize(): void {
     const cssW = Math.max(240, box.clientWidth || wrap.clientWidth || 320);
@@ -1442,18 +1443,20 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     }
     ctx.restore();
 
-    // 判定核心:白环 + 亮心,默认就开着 —— 孩子必须看得见「只有这一点会被碰到」
+    // 判定核心:白环 + 亮心,默认就开着 —— 孩子必须看得见「只有这一点会被碰到」。
+    // 手机上天空会缩得很小,所以核心按**屏幕像素**兜底:再怎么缩也有 5px 半径。
     if (showCore) {
+      const r = Math.max(CORE_DOT_R, 5 / viewScale);
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.strokeStyle = "rgba(255,255,255,.95)";
-      ctx.lineWidth = 2.4;
+      ctx.lineWidth = Math.max(2.4, 2 / viewScale);
       ctx.beginPath();
-      ctx.arc(0, 0, CORE_DOT_R, 0, Math.PI * 2);
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = p.plane.invuln > 0 ? "#9FE3FF" : "#FF6FA8";
       ctx.beginPath();
-      ctx.arc(0, 0, CORE_DOT_R * 0.58, 0, Math.PI * 2);
+      ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -1592,6 +1595,7 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     // 1.1 是按宽度缩放的,画布一矮,玩家那一行(596)就被裁到下沿外面,拖着飞却看不见自己。
     const fit = skyFit(canvas.width, canvas.height);
     const s = fit.scale;
+    viewScale = s;
     const jitter = shake > 0 && !reduce ? Math.sin(clock * 70) * shake * 6 : 0;
     // 富余出来的两条边也铺同一片天,只压暗一点点当边界 —— 不留灰条
     if (fit.offX > 0.5 || fit.offY > 0.5) {
