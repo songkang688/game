@@ -19,11 +19,15 @@ afterEach(() => {
   harness = null;
 });
 
-async function mountGame(h: Harness, initialLevel?: number): Promise<{ destroy: () => void }> {
+async function mountGame(
+  h: Harness,
+  initialLevel?: number,
+  play: (n: string) => void = () => {},
+): Promise<{ destroy: () => void }> {
   const mod = await import("./index");
   return mod.mount({
     root: h.root as unknown as HTMLElement,
-    play: () => {},
+    play,
     addStars: (n: number) => n,
     ...(initialLevel === undefined ? {} : { initialLevel }),
   } as never);
@@ -96,5 +100,29 @@ describe("1.2 destroy 归零", () => {
     expect(countNodes(h.root)).toBe(1);
     expect(findOne(h.root, "mcr-canvas")).toBeNull();
     expect(findOne(h.root, "mcr-stick")).toBeNull();
+  });
+
+  it("退出后不再响一声:音效全走 api.play,destroy 之后这条线彻底哑掉", async () => {
+    const h = install();
+    harness = h;
+    const heard: string[] = [];
+    const game = await mountGame(h, 8, (n) => heard.push(n));
+    // 开局那张成长卡先挑掉,再按住技能钮甩一阵
+    h.flush(1);
+    for (let i = 0; i < 4 && findOne(h.root, "mcr-card"); i++) {
+      findOne(h.root, "mcr-card")?.fire("click");
+      h.flush(1);
+    }
+    findOne(h.root, "mcr-fire")?.fire("pointerdown");
+    h.flush(200, 48);
+    // 打了一小会儿,出手 / 命中 / 清怪总得响过
+    expect(heard.length).toBeGreaterThan(0);
+
+    game.destroy();
+    heard.length = 0;
+    h.flush(60, 48);
+    h.key("keydown", "f");
+    h.flush(20, 48);
+    expect(heard).toEqual([]);
   });
 });
