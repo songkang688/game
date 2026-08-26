@@ -312,19 +312,22 @@ describe("sky-squad 1.2 运行时 · Boss 与池子", () => {
     sortie.destroy();
   });
 
-  it("站着不动会被碰到:掉一级火力、打个转,但这一趟没结束(还有备用机)", async () => {
+  it("站着不动会被碰到:打个转换备用机接着飞,这一趟没结束(掉一级的算术在纯函数用例里)", async () => {
     const h = (harness = install());
     const sortie = await openSortie(h, { boss: BOSSES[3] });
-    // 先把火力吃到 2 级(散射 + 僚机),好看清「掉一级」
     const canvas = findOne(h.root, "sks-cv") as FakeEl;
     expect(canvas).toBeTruthy();
     h.flush(30);
     for (let i = 0; i < 900 && sortie.snapshot().pilots[0].touched === 0; i++) h.flush(1);
     const snap = sortie.snapshot();
     expect(snap.pilots[0].touched).toBeGreaterThan(0);
+    // 打个转 + 换一架备用机,人还在天上,这一趟也没结束
+    expect(snap.pilots[0].spin).toBeGreaterThan(0);
     expect(snap.pilots[0].spare).toBeLessThan(2);
     expect(snap.pilots[0].grounded).toBe(false);
     expect(snap.finished).toBe(false);
+    // 火力只会掉不会涨
+    expect(snap.pilots[0].power).toBe(0);
     sortie.destroy();
   });
 
