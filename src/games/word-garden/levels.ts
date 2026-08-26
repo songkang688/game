@@ -12,6 +12,7 @@ import {
   SYN_ANT_CARDS,
   WORD_LEVELS,
   lookalikeGroupOf,
+  realWordList,
   type WordCard,
 } from "./logic";
 import { hasStrokes } from "./strokes";
@@ -52,7 +53,7 @@ export const CHAPTER_THEMES: QuizTheme[] = [
 
 /** 第四章：汉字数字（数一数选汉字） */
 export const NUMBER_CARDS: WordCard[] = [
-  { char: "一", pinyin: "yī", word: "一个", emoji: "1️⃣", meaning: "最小的整数，一个" },
+  { char: "一", pinyin: "yī", word: "一个", emoji: "1️⃣", meaning: "数目里最小的那个正整数，单个儿" },
   { char: "二", pinyin: "èr", word: "二月", emoji: "2️⃣", meaning: "一加一得到的数" },
   { char: "三", pinyin: "sān", word: "三只", emoji: "3️⃣", meaning: "二再加一得到的数" },
   { char: "四", pinyin: "sì", word: "四个", emoji: "4️⃣", meaning: "三再加一得到的数" },
@@ -61,7 +62,7 @@ export const NUMBER_CARDS: WordCard[] = [
   { char: "七", pinyin: "qī", word: "七彩", emoji: "7️⃣", meaning: "六再加一得到的数" },
   { char: "八", pinyin: "bā", word: "八个", emoji: "8️⃣", meaning: "七再加一得到的数" },
   { char: "九", pinyin: "jiǔ", word: "九层", emoji: "9️⃣", meaning: "个位里最大的那个数" },
-  { char: "十", pinyin: "shí", word: "十分", emoji: "🔟", meaning: "九再加一，满一个十" },
+  { char: "十", pinyin: "shí", word: "十分", emoji: "🔟", meaning: "九再加一，正好满一个整数位" },
 ];
 const NUMBER_VALUE: Record<string, number> = {
   一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
@@ -69,42 +70,42 @@ const NUMBER_VALUE: Record<string, number> = {
 
 /** 第五章：家人与称呼 */
 export const FAMILY_CARDS: WordCard[] = [
-  { char: "爸", pinyin: "bà", word: "爸爸", emoji: "👨", meaning: "爸爸，家里的男性长辈" },
-  { char: "妈", pinyin: "mā", word: "妈妈", emoji: "👩", meaning: "妈妈，家里的女性长辈" },
-  { char: "爷", pinyin: "yé", word: "爷爷", emoji: "👴", meaning: "爷爷，爸爸的爸爸" },
-  { char: "奶", pinyin: "nǎi", word: "奶奶", emoji: "👵", meaning: "奶奶，爸爸的妈妈" },
-  { char: "哥", pinyin: "gē", word: "哥哥", emoji: "👦", meaning: "哥哥，比自己大的男孩" },
-  { char: "姐", pinyin: "jiě", word: "姐姐", emoji: "👧", meaning: "姐姐，比自己大的女孩" },
-  { char: "弟", pinyin: "dì", word: "弟弟", emoji: "🧒", meaning: "弟弟，比自己小的男孩" },
-  { char: "妹", pinyin: "mèi", word: "妹妹", emoji: "👶", meaning: "妹妹，比自己小的女孩" },
-  { char: "我", pinyin: "wǒ", word: "我们", emoji: "🙋", meaning: "说话的这个人自己" },
-  { char: "友", pinyin: "yǒu", word: "朋友", emoji: "🤝", meaning: "朋友，合得来的人" },
-  { char: "家", pinyin: "jiā", word: "家人", emoji: "🏠", meaning: "一家人住的地方" },
-  { char: "爱", pinyin: "ài", word: "爱心", emoji: "💖", meaning: "很喜欢，很在乎" },
-  { char: "笑", pinyin: "xiào", word: "笑脸", emoji: "😄", meaning: "高兴时脸上的样子" },
-  { char: "好", pinyin: "hǎo", word: "你好", emoji: "👍", meaning: "不错，让人满意" },
-  { char: "宝", pinyin: "bǎo", word: "宝贝", emoji: "🍼", meaning: "很珍贵的东西，也叫宝贝" },
-  { char: "亲", pinyin: "qīn", word: "亲人", emoji: "🥰", meaning: "关系很近，很贴心" },
+  { char: "爸", pinyin: "bà", word: "爸爸", emoji: "👨", meaning: "家里的男性长辈，孩子管他叫父亲" },
+  { char: "妈", pinyin: "mā", word: "妈妈", emoji: "👩", meaning: "家里的女性长辈，孩子管她叫母亲" },
+  { char: "爷", pinyin: "yé", word: "爷爷", emoji: "👴", meaning: "父亲的父亲，家里辈分最高的男长辈" },
+  { char: "奶", pinyin: "nǎi", word: "奶奶", emoji: "👵", meaning: "父亲的母亲，家里辈分高的女长辈" },
+  { char: "哥", pinyin: "gē", word: "哥哥", emoji: "👦", meaning: "同辈里比自己大的男孩" },
+  { char: "姐", pinyin: "jiě", word: "姐姐", emoji: "👧", meaning: "同辈里比自己大的女孩" },
+  { char: "弟", pinyin: "dì", word: "弟弟", emoji: "🧒", meaning: "同辈里比自己小的男孩" },
+  { char: "妹", pinyin: "mèi", word: "妹妹", emoji: "👶", meaning: "同辈里比自己小的女孩" },
+  { char: "我", pinyin: "wǒ", word: "我们", emoji: "🙋", meaning: "说话的那一位自称的时候用它" },
+  { char: "友", pinyin: "yǒu", word: "朋友", emoji: "🤝", meaning: "合得来、常在一起玩的伙伴" },
+  { char: "家", pinyin: "jiā", word: "家人", emoji: "🏠", meaning: "自己住的那个地方，回去就踏实" },
+  { char: "爱", pinyin: "ài", word: "爱心", emoji: "💖", meaning: "很喜欢、很在乎的那种心情" },
+  { char: "笑", pinyin: "xiào", word: "笑脸", emoji: "😄", meaning: "高兴的时候脸上的样子" },
+  { char: "好", pinyin: "hǎo", word: "你好", emoji: "👍", meaning: "不错，让大家满意" },
+  { char: "宝", pinyin: "bǎo", word: "宝贝", emoji: "🍼", meaning: "很珍贵、舍不得的东西" },
+  { char: "亲", pinyin: "qīn", word: "亲人", emoji: "🥰", meaning: "关系很近、很贴心" },
 ];
 
 /** 第六章：美味食物 */
 export const FOOD_CARDS: WordCard[] = [
-  { char: "瓜", pinyin: "guā", word: "西瓜", emoji: "🍉", meaning: "藤上结的大果实，像西瓜" },
-  { char: "豆", pinyin: "dòu", word: "豆子", emoji: "🫘", meaning: "一粒一粒的豆子" },
-  { char: "菜", pinyin: "cài", word: "青菜", emoji: "🥬", meaning: "能吃的青菜蔬菜" },
-  { char: "蛋", pinyin: "dàn", word: "鸡蛋", emoji: "🥚", meaning: "鸡鸭下的蛋" },
-  { char: "肉", pinyin: "ròu", word: "烤肉", emoji: "🍖", meaning: "能吃的动物的肉" },
-  { char: "茶", pinyin: "chá", word: "热茶", emoji: "🍵", meaning: "用茶叶泡出来的水" },
-  { char: "糖", pinyin: "táng", word: "糖果", emoji: "🍬", meaning: "甜甜的糖块" },
-  { char: "面", pinyin: "miàn", word: "面条", emoji: "🍜", meaning: "面粉做的面条，也指脸面" },
-  { char: "包", pinyin: "bāo", word: "面包", emoji: "🍞", meaning: "包起来的东西，像面包" },
-  { char: "桃", pinyin: "táo", word: "桃子", emoji: "🍑", meaning: "桃树结的桃子" },
-  { char: "梨", pinyin: "lí", word: "梨子", emoji: "🍐", meaning: "梨树结的梨" },
-  { char: "橙", pinyin: "chéng", word: "橙子", emoji: "🍊", meaning: "橙子，也指橙黄色" },
-  { char: "汤", pinyin: "tāng", word: "热汤", emoji: "🍲", meaning: "煮出来的带水的菜" },
-  { char: "虾", pinyin: "xiā", word: "大虾", emoji: "🦐", meaning: "水里游的虾" },
-  { char: "饼", pinyin: "bǐng", word: "饼干", emoji: "🍪", meaning: "面做的扁扁的饼" },
-  { char: "麦", pinyin: "mài", word: "麦子", emoji: "🌾", meaning: "磨成面粉的麦子" },
+  { char: "瓜", pinyin: "guā", word: "西瓜", emoji: "🍉", meaning: "藤上结的大果实，切开红瓤黑籽" },
+  { char: "豆", pinyin: "dòu", word: "豆子", emoji: "🫘", meaning: "一粒一粒圆圆的，能煮能磨" },
+  { char: "菜", pinyin: "cài", word: "青菜", emoji: "🥬", meaning: "能吃的绿叶植物，炒着吃" },
+  { char: "蛋", pinyin: "dàn", word: "鸡蛋", emoji: "🥚", meaning: "圆圆一个，敲开里面有黄有清" },
+  { char: "肉", pinyin: "ròu", word: "烤肉", emoji: "🍖", meaning: "能吃的那部分，红红的，有嚼头" },
+  { char: "茶", pinyin: "chá", word: "热茶", emoji: "🍵", meaning: "泡出来的褐色饮品，微苦回甘" },
+  { char: "糖", pinyin: "táng", word: "糖果", emoji: "🍬", meaning: "甜甜的一小块，含在嘴里会化" },
+  { char: "面", pinyin: "miàn", word: "面条", emoji: "🍜", meaning: "磨成粉做成的长条，煮着吃" },
+  { char: "包", pinyin: "bāo", word: "面包", emoji: "🍞", meaning: "外面一层裹住里面，也指裹好的那种食物" },
+  { char: "桃", pinyin: "táo", word: "桃子", emoji: "🍑", meaning: "夏季的果子，尖尖的，外皮毛茸茸" },
+  { char: "梨", pinyin: "lí", word: "梨子", emoji: "🍐", meaning: "秋季的果子，脆甜多汁" },
+  { char: "橙", pinyin: "chéng", word: "橙子", emoji: "🍊", meaning: "黄红色的圆果子，剥开一瓣一瓣" },
+  { char: "汤", pinyin: "tāng", word: "热汤", emoji: "🍲", meaning: "煮出来的一碗，稀稀的，能喝" },
+  { char: "虾", pinyin: "xiā", word: "大虾", emoji: "🦐", meaning: "河里海里游的小东西，煮熟变红" },
+  { char: "饼", pinyin: "bǐng", word: "饼干", emoji: "🍪", meaning: "扁扁圆圆、烙出来或烤出来的" },
+  { char: "麦", pinyin: "mài", word: "麦子", emoji: "🌾", meaning: "地里种的作物，磨成粉做馒头" },
 ];
 
 /** 每章的字卡池 */
@@ -494,6 +495,13 @@ export function traceCharCount(level: number): number {
 
 const ALL_CARDS: WordCard[] = CHAPTER_POOLS.flat();
 const stripTags = (html: string): string => html.replace(/<[^>]+>/g, "");
+
+/**
+ * 受控真词表：组词题的每一个选项都必须落在这张表里。
+ * 表里全是六张字卡表、形近字组、组字工坊、近反义卡上真实出现过的词 ——
+ * 一个生造出来凑数的词都没有，`bank.test.ts` 会逐题反查。
+ */
+export const REAL_WORDS: ReadonlySet<string> = new Set(realWordList(ALL_CARDS.map((c) => c.word)));
 
 /** 这道题在考哪个字（近反义与填空考的是词，就返回那个词） */
 export function questionFocus(q: WordQ): string {
