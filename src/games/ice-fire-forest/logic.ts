@@ -610,22 +610,39 @@ export function useElementPower(
 
 const LEVER_STATES = 1 << MAX_GROUPS;
 
-export interface SolveResult {
-  /** 两人能不能都走到自己的门上 */
-  solvable: boolean;
-  /** 最优联合步数(一次动一个人);无解时是 -1 */
+/** 解法里的一步:谁、往哪个方向 */
+export interface SolutionStep {
+  hero: Hero;
+  dir: number;
+}
+
+export interface SearchResult {
+  /** 有没有搜到目标 */
+  found: boolean;
+  /** 最优联合步数(一次动一个人);没搜到是 -1 */
   steps: number;
+  /** 搜到的那个状态 */
+  state: GameState | null;
   /** 凛凛能踏到的格子 */
   iceReach: Uint8Array;
   /** 焰焰能踏到的格子 */
   fireReach: Uint8Array;
   /** 搜过的状态数,给测试看规模 */
   explored: number;
+  /** 传了 trackPath 才有:从起点到目标的完整走法 */
+  path: SolutionStep[] | null;
+}
+
+export interface SolveResult extends SearchResult {
+  /** 两人能不能都走到自己的门上 */
+  solvable: boolean;
 }
 
 /** BFS 用的临时缓冲,按最大关卡尺寸复用,免得 188 关来回申请几百兆 */
 let scratchVisited: Uint8Array | null = null;
 let scratchQueue: Int32Array | null = null;
+let scratchFrom: Int32Array | null = null;
+let scratchMove: Uint8Array | null = null;
 
 function ensureScratch(size: number): { visited: Uint8Array; queue: Int32Array } {
   if (!scratchVisited || scratchVisited.length < size) {
@@ -637,18 +654,31 @@ function ensureScratch(size: number): { visited: Uint8Array; queue: Int32Array }
   return { visited: scratchVisited, queue: scratchQueue as Int32Array };
 }
 
+function ensureTrail(size: number): { from: Int32Array; move: Uint8Array } {
+  if (!scratchFrom || scratchFrom.length < size) {
+    scratchFrom = new Int32Array(size);
+    scratchMove = new Uint8Array(size);
+  }
+  return { from: scratchFrom, move: scratchMove as Uint8Array };
+}
+
 /**
- * 穷举 `(凛凛格号, 焰焰格号, 拉杆开关)` 这个状态空间,给出:
- * 两人能不能同时到门口、最短要多少步、各自到得了哪些格子。
+ * 从 `start` 出发穷举 `(凛凛格号, 焰焰格号, 拉杆开关)` 这个状态空间,
+ * 找第一个满足 `isGoal` 的状态,并顺带记下两人各自踏得到哪些格子。
  */
-export function solveLevel(level: ParsedLevel): SolveResult {
+export function searchFrom(
+  level: ParsedLevel,
+  start: GameState,
+  isGoal: (st: GameState) => boolean,
+  trackPath = false
+): SearchResult {
   const n = level.w * level.h;
   const size = n * n * LEVER_STATES;
   const { visited, queue } = ensureScratch(size);
+  const trail = trackPath ? ensureTrail(size) : null;
   const iceReach = new Uint8Array(n);
   const fireReach = new Uint8Array(n);
 
-  const start = initialState(level);
   const encode = (st: GameState): number =>
     (st.ice * n + st.fire) * LEVER_STATES + (st.levers & (LEVER_STATES - 1));
 
@@ -659,11 +689,18 @@ export function solveLevel(level: ParsedLevel): SolveResult {
   queue[tail++] = startId;
   iceReach[start.ice] = 1;
   fireReach[start.fire] = 1;
+  if (trail) trail.from[startId] = -1;
 
   let steps = -1;
+  let goalState: GameState | null = null;
+  let goalId = -1;
   let depth = 0;
   let explored = 0;
-  if (isWin(level, start)) steps = 0;
+  if (isGoal(start)) {
+    steps = 0;
+    goalState = { ...start };
+    goalId = startId;
+  }
 
   const heroes: Hero[] = ["ice", "fire"];
   while (head < tail && steps < 0) {
@@ -677,17 +714,23 @@ export function solveLevel(level: ParsedLevel): SolveResult {
       const fire = rest % n;
       const ice = (rest - fire) / n;
       const cur: GameState = { ice, fire, levers };
-      for (const hero of heroes) {
+      for (let hi = 0; hi < heroes.length; hi++) {
         for (let dir = 0; dir < 4; dir++) {
-          const out = moveHero(level, cur, hero, dir);
+          const out = moveHero(level, cur, heroes[hi], dir);
           if (out.kind !== "moved") continue;
           const nid = encode(out.state);
           if (visited[nid]) continue;
           visited[nid] = 1;
+          if (trail) {
+            trail.from[nid] = id;
+            trail.move[nid] = hi * 4 + dir;
+          }
           iceReach[out.state.ice] = 1;
           fireReach[out.state.fire] = 1;
-          if (isWin(level, out.state)) {
+          if (isGoal(out.state)) {
             steps = depth;
+            goalState = out.state;
+            goalId = nid;
             head = layerEnd;
             tail = layerEnd;
             break;
@@ -700,7 +743,25 @@ export function solveLevel(level: ParsedLevel): SolveResult {
     }
   }
 
-  return { solvable: steps >= 0, steps, iceReach, fireReach, explored };
+  let path: SolutionStep[] | null = null;
+  if (trail && goalId >= 0) {
+    path = [];
+    let cur = goalId;
+    while (cur !== startId && cur >= 0) {
+      const code = trail.move[cur];
+      path.push({ hero: heroes[(code / 4) | 0], dir: code % 4 });
+      cur = trail.from[cur];
+    }
+    path.reverse();
+  }
+
+  return { found: steps >= 0, steps, state: goalState, iceReach, fireReach, explored, path };
+}
+
+/** 两人能不能同时到门口、最短要多少步、各自到得了哪些格子 */
+export function solveLevel(level: ParsedLevel, trackPath = false): SolveResult {
+  const res = searchFrom(level, initialState(level), (st) => isWin(level, st), trackPath);
+  return { ...res, solvable: res.found };
 }
 
 /** 每颗宝石归谁捡 */
@@ -788,4 +849,60 @@ export function loseLine(reason: "time" | "hearts"): string {
   return reason === "time"
     ? "时间用完啦,不过路线你已经摸清一半了,再来一遍会顺很多。"
     : "两位小精灵有点累了,先歇一口气;记住哪几格不能碰,下一次就稳了。";
+}
+
+// ---------------------------------------------------------------------------
+// 键位与 HUD 文字(纯数据,运行时与测试共用)
+// ---------------------------------------------------------------------------
+
+export type HeroAction = "up" | "down" | "left" | "right" | "power" | "cheer";
+
+/** 朵朵那一套(W A S D + F + G)开凛凛,星星那一套(方向键 + L + K)开焰焰 */
+export const KEY_MAP: Record<string, { hero: Hero; action: HeroAction }> = {
+  KeyW: { hero: "ice", action: "up" },
+  KeyS: { hero: "ice", action: "down" },
+  KeyA: { hero: "ice", action: "left" },
+  KeyD: { hero: "ice", action: "right" },
+  KeyF: { hero: "ice", action: "power" },
+  KeyG: { hero: "ice", action: "cheer" },
+  ArrowUp: { hero: "fire", action: "up" },
+  ArrowDown: { hero: "fire", action: "down" },
+  ArrowLeft: { hero: "fire", action: "left" },
+  ArrowRight: { hero: "fire", action: "right" },
+  KeyL: { hero: "fire", action: "power" },
+  KeyK: { hero: "fire", action: "cheer" },
+};
+
+/** 方向类动作 → 方向号 */
+export const ACTION_DIR: Record<string, number> = {
+  up: DIR_UP,
+  down: DIR_DOWN,
+  left: DIR_LEFT,
+  right: DIR_RIGHT,
+};
+
+/** 两套键位有没有撞车 —— 同屏双人的底线,测试会一直盯着 */
+export function keySetsDisjoint(): boolean {
+  const ice = new Set<string>();
+  const fire = new Set<string>();
+  for (const [code, bind] of Object.entries(KEY_MAP)) {
+    (bind.hero === "ice" ? ice : fire).add(code);
+  }
+  for (const code of ice) if (fire.has(code)) return false;
+  return ice.size === fire.size && ice.size === 6;
+}
+
+/** HUD 上的时间显示 */
+export function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** 一个人先到门口时给的一句提示 */
+export function waitingLine(iceHome: boolean, fireHome: boolean): string {
+  if (iceHome && fireHome) return "两个人都到齐了!";
+  if (iceHome) return "凛凛已经站在冰门上,等焰焰过来。";
+  if (fireHome) return "焰焰已经站在火门上,等凛凛过来。";
+  return "";
 }

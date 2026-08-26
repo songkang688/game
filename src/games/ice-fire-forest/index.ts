@@ -4,17 +4,17 @@ export { meta };
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { CHAPTERS, GUIDE, analyzeLevel, type LevelAnalysis } from "./levels";
 import {
-  DIR_DOWN,
-  DIR_LEFT,
+  ACTION_DIR,
   DIR_RIGHT,
-  DIR_UP,
   HERO_SHORT,
+  KEY_MAP,
   MAX_HEARTS,
   POWER_CHARGES,
   POWER_CHARGES_MAX,
   TILE,
   computeLight,
   computePower,
+  formatClock,
   gemOwner,
   initialState,
   isAdjacent,
@@ -25,6 +25,7 @@ import {
   rateRun,
   traceBeam,
   useElementPower,
+  waitingLine,
   winLine,
   type GameState,
   type Gem,
@@ -138,55 +139,6 @@ function ensureCss(host: HTMLElement): void {
   style.textContent = CSS;
   (document.head ?? host).appendChild(style);
   cssInjected = true;
-}
-
-// ---------------------------------------------------------------------------
-// 键位
-// ---------------------------------------------------------------------------
-
-/** 朵朵那一套(W A S D + F + G)开凛凛,星星那一套(方向键 + L + K)开焰焰 */
-export const KEY_MAP: Record<string, { hero: Hero; action: "up" | "down" | "left" | "right" | "power" | "cheer" }> = {
-  KeyW: { hero: "ice", action: "up" },
-  KeyS: { hero: "ice", action: "down" },
-  KeyA: { hero: "ice", action: "left" },
-  KeyD: { hero: "ice", action: "right" },
-  KeyF: { hero: "ice", action: "power" },
-  KeyG: { hero: "ice", action: "cheer" },
-  ArrowUp: { hero: "fire", action: "up" },
-  ArrowDown: { hero: "fire", action: "down" },
-  ArrowLeft: { hero: "fire", action: "left" },
-  ArrowRight: { hero: "fire", action: "right" },
-  KeyL: { hero: "fire", action: "power" },
-  KeyK: { hero: "fire", action: "cheer" },
-};
-
-const ACTION_DIR: Record<string, number> = {
-  up: DIR_UP,
-  down: DIR_DOWN,
-  left: DIR_LEFT,
-  right: DIR_RIGHT,
-};
-
-/** 两套键位有没有撞车(测试会盯着这一条) */
-export function keySetsDisjoint(): boolean {
-  const ice = Object.entries(KEY_MAP).filter(([, v]) => v.hero === "ice").map(([k]) => k);
-  const fire = Object.entries(KEY_MAP).filter(([, v]) => v.hero === "fire").map(([k]) => k);
-  return ice.every((k) => !fire.includes(k));
-}
-
-/** HUD 上的时间显示 */
-export function formatClock(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds));
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
-}
-
-/** 门口等人时说的一句话 */
-export function waitingLine(iceHome: boolean, fireHome: boolean): string {
-  if (iceHome && fireHome) return "两个人都到齐了!";
-  if (iceHome) return "凛凛已经站在冰门上,等焰焰过来。";
-  if (fireHome) return "焰焰已经站在火门上,等凛凛过来。";
-  return "";
 }
 
 // ---------------------------------------------------------------------------

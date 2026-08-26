@@ -147,7 +147,7 @@ interface ChapterPlan {
   sections: [number, number];
   pocket: [number, number];
   height: [number, number];
-  /** 屏障上没用到的格子改成绿黏液(看着就危险,蹭一下掉一颗心) */
+  /** 屏障上空着的格子改成绿黏液(看着就危险,蹭一下掉一颗心) */
   slimeWalls: boolean;
 }
 
@@ -406,15 +406,15 @@ export function buildGrid(level: number, attempt = 0): LevelBlueprint | null {
         const [y1, y2] = pair;
         usedRows[s].add(y1);
         usedRows[s].add(y2);
+        // 竖着那一段光路要走 x0+2 这一列,**不能**放在紧挨屏障的 x1 列上:
+        // 那一列正是走向光门的必经之地,人一站上去就把光挡断,光门就永远开不了。
+        const beamCol = sec.x0 + 2;
         draft.set(sec.x0 + 1, y1, "e");
-        draft.set(sec.x0 + 2, y1, ".");
-        draft.set(sec.x1, y1, "\\");
-        draft.set(sec.x1, y2, "/");
-        draft.set(sec.x0 + 2, y2, ".");
+        draft.set(beamCol, y1, "\\");
+        draft.set(beamCol, y2, "/");
         draft.set(sec.x0 + 1, y2, "R");
-        // 竖着这一段是光的通道,该挖开的挖开(碰上开放行就保持原样)
         for (let y = y1 + 1; y < y2; y++) {
-          if (draft.get(sec.x1, y) === "#") draft.set(sec.x1, y, ".");
+          if (draft.get(beamCol, y) === "#") draft.set(beamCol, y, ".");
         }
         continue;
       }
