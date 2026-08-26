@@ -118,6 +118,11 @@ describe("八章各自的新机制真的落到了参数上", () => {
   it("第 1 章只投前三级,第 2 章开始往上放", () => {
     expect(ALL[0].maxDrop).toBe(2);
     expect(ALL[0].goal.value).toBe(3);
+    expect(ALL[24].maxDrop).toBeGreaterThan(ALL[0].maxDrop);
+    // 目标必须得靠合成才拿得到,不能一投下去就达成
+    for (const lv of ALL) {
+      if (lv.goal.kind === "level") expect(lv.goal.value).toBeGreaterThan(lv.maxDrop);
+    }
   });
 
   it("第 3 章的警戒线一路往下压", () => {
@@ -178,11 +183,12 @@ describe("目标判定与文案", () => {
 });
 
 describe("无尽与对战", () => {
-  it("无尽没有关底,盆也最大", () => {
+  it("无尽没有关底,盆比任何一关都宽敞", () => {
     const lv = buildEndless();
     expect(lv.drops).toBeGreaterThan(1000);
-    expect(lv.box.w).toBeGreaterThanOrEqual(300);
     expect(lv.maxDrop).toBe(4);
+    expect(lv.box.w).toBeGreaterThanOrEqual(Math.max(...ALL.map((l) => l.box.w)));
+    expect(lv.box.h).toBeGreaterThanOrEqual(Math.max(...ALL.map((l) => l.box.h)));
   });
 
   it("对战一局比一局窄、目标一局比一局高", () => {

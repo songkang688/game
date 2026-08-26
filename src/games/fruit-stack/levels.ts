@@ -9,7 +9,7 @@ import { DEFAULT_TUNING, clamp, type Box, type PhysicsTuning } from "./physics";
 
 export const CHAPTERS: Chapter[] = [
   { name: "小籽", emoji: "🌱", color: "#eef6e2", desc: "只投前三级的小果子,先把两颗一样的碰到一起", size: 24 },
-  { name: "浆果盆", emoji: "🍓", color: "#ffe6ee", desc: "链条放宽到第五级,学会给大果子留位置", size: 24 },
+  { name: "浆果盆", emoji: "🍓", color: "#ffe6ee", desc: "链条一路开到「苹」,学会给大果子留位置", size: 24 },
   { name: "警戒线", emoji: "📏", color: "#fff3d9", desc: "警戒线往下压,堆高之前先想清楚", size: 24 },
   { name: "连锁课", emoji: "🔗", color: "#e6f0ff", desc: "一次要连着合成三节,提前摆好同级果子", size: 24 },
   { name: "窄瓶", emoji: "🫙", color: "#e9f5f2", desc: "容器变窄,左右墙的反弹要算进去", size: 22 },
@@ -149,7 +149,7 @@ const PLANS: ChapterPlan[] = [
     drops: (t) => Math.round(32 + t * 14),
     goal: (t) => ({ kind: "level", value: t < 0.5 ? 4 : 5 }),
     split: false,
-    hint: "链条放宽到第五级了。大果子占地方,别把它堆在正中间挡路。",
+    hint: "现在能合出「梨」和「苹」了。大果子占地方,别把它堆在正中间挡路。",
   },
   {
     minDrop: 0,
@@ -260,13 +260,13 @@ export function buildLevel(index: number): StackLevel {
   };
 }
 
-/** 无尽:全链条开放,容器最大,唯一的敌人是自己堆的高度 */
+/** 无尽:全链条开放,盆比任何一关都宽敞,唯一的敌人是自己堆的高度 */
 export function buildEndless(): StackLevel {
   return {
     index: -1,
     chapter: 7,
-    box: { w: 312, h: 452 },
-    lineY: 100,
+    box: { w: 348, h: 470 },
+    lineY: 104,
     minDrop: 0,
     maxDrop: 4,
     goal: { kind: "level", value: TOP_LEVEL },

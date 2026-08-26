@@ -530,7 +530,6 @@ interface TableOptions {
 
 interface Table {
   destroy: () => void;
-  pause: () => void;
 }
 
 function createTable(host: HTMLElement, opts: TableOptions): Table {
@@ -752,8 +751,8 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     }
     if (bowls[0].won) settle({ ...base, winner: 0, cleared: true, reason: "goal" });
     else if (bowls[1].won) settle({ ...base, winner: 1, reason: "goal" });
-    else if (bowls[0].lost) settle({ ...base, winner: 1, reason: "over" });
-    else if (bowls[1].lost) settle({ ...base, winner: 0, cleared: true, reason: "over" });
+    else if (bowls[0].lost) settle({ ...base, winner: 1, reason: bowls[0].left <= 0 ? "empty" : "over" });
+    else if (bowls[1].lost) settle({ ...base, winner: 0, cleared: true, reason: "goal" });
   }
 
   const loop = runtime.loop((dtMs) => {
@@ -774,9 +773,6 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
   loop.start();
 
   return {
-    pause: () => {
-      if (!paused) togglePause();
-    },
     destroy() {
       finished = true;
       clearVeil();
