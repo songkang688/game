@@ -133,8 +133,8 @@ describe("poop-hero 188 关生成器", () => {
   it("要清理的脏东西全部落在实心地面上(不会掉在断口里够不着)", () => {
     for (const def of LEVELS) {
       for (const m of def.monsters) {
-        expect(groundSolidAt(def, m.minX), `第 ${def.index + 1} 关臭臭怪左端`).toBe(true);
-        expect(groundSolidAt(def, m.maxX), `第 ${def.index + 1} 关臭臭怪右端`).toBe(true);
+        expect(groundSolidAt(def, m.minX), `第 ${def.index + 1} 关豆豆怪左端`).toBe(true);
+        expect(groundSolidAt(def, m.maxX), `第 ${def.index + 1} 关豆豆怪右端`).toBe(true);
         expect(inAnyGap(def.gaps, m.x)).toBe(false);
       }
       for (const s of def.stains) expect(groundSolidAt(def, s.x)).toBe(true);
@@ -214,7 +214,7 @@ describe("poop-hero 188 关生成器", () => {
     }
   });
 
-  it("追逐段的臭味潮速度明显慢于跑步速度(追得上但不至于追死)", () => {
+  it("追逐段的尘土风速度明显慢于跑步速度(追得上但不至于追死)", () => {
     for (const def of LEVELS) {
       if (def.chaserSpeed === null) continue;
       expect(def.chaserSpeed).toBeGreaterThan(30);
@@ -250,7 +250,7 @@ describe("poop-hero 188 关生成器", () => {
 });
 
 describe("poop-hero 无尽与双人的关卡", () => {
-  it("无尽街区一段比一段长,臭味潮一段比一段快", () => {
+  it("无尽街区一段比一段长,尘土风一段比一段快", () => {
     const a = buildEndless(0);
     const b = buildEndless(5);
     const c = buildEndless(30);

@@ -852,7 +852,8 @@ export function buildCoop(round: number): LevelDef {
 
   const dirt = dirtCount(b);
   const haulGoal = b.litters.length > 0 ? Math.max(1, Math.ceil(b.litters.length * 0.75)) : 0;
-  const parSeconds = Math.round(len / 200 + dirt * 0.7 + haulGoal * 3.4 + 10);
+  // 搬运是一件一件跑的,给它比清扫更宽的时间;两个人分头做才压得进这个标准
+  const parSeconds = Math.round(len / 200 + dirt * 0.9 + haulGoal * 5.6 + 14);
 
   return {
     kind: "coop",
