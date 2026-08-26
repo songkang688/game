@@ -183,6 +183,15 @@ export const KEY_MAP: Readonly<Record<string, KeyBind>> = {
 /** 暂停键(两位玩家共用) */
 export const PAUSE_KEY = "Escape";
 
+/**
+ * 换弹丸的键(1.2 新增)。单独放一张表:
+ * `KEY_MAP` 里那六个动作是「一直按着」的,换弹是「按一下」的,混在一起两边都别扭。
+ */
+export const SHELL_KEY_MAP: Readonly<Record<string, 0 | 1>> = {
+  KeyR: 0,
+  KeyO: 1,
+};
+
 /** 方向动作 → 方向号 */
 export const ACTION_DIR: Readonly<Record<string, Dir>> = {
   up: 0,

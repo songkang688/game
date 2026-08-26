@@ -1,12 +1,30 @@
 import { meta } from "./meta";
 export { meta };
 
-// 铁皮坦克大战:俯视格子战场,守住底边的星星堡垒。
-// 砖墙打得碎、钢墙打不动、水面绕着走、草丛能藏人;敌人分快速 / 装甲 / 火力 / 会绕后四种。
-// 四种玩法:188 关战役(可随时拉第二个人进来合作)、双人对战、无尽敌潮。
-// 全程没有血量与淘汰:敌人挨够炮弹冒烟变成花,自己人被打中只是弹飞回出生点转两圈。
-import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+// 铁皮坦克大战:俯视格子战场,守住底边的星星老巢。
+// 地形五件套:积木砖(打得碎,一小角一小角地碎)、钢板(要彩纸穿甲弹)、水洼(弹丸飞得过)、
+// 草丛(半透明藏身)、冰面(会打滑)。弹丸三种:直线弹、弹力球(碰墙弹两次,有预测虚线)、彩纸穿甲弹。
+// 铁皮车分三档脾气:乱转 / 追人 / 绕后卡位。
+// 四种玩法:188 关战役(可随时拉第二个人进来合作)、双人对战(可选电脑陪练)、无尽守老巢。
+// 全程没有血量与淘汰:铁皮车挨够弹丸冒烟变成花,自己人被打中是零件散一地、3 秒后组装回来。
+import {
+  TOTAL_LEVELS,
+  chapterOf,
+  chapterStart,
+  loadStars,
+  markSkipped,
+  mountLevelGame,
+  rateBelow,
+  saveStar,
+  type Chapter,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+  type SoundName,
+} from "../level99";
+import { getLevelExtras } from "../../ui/level188Contract";
 import { save } from "../../engine/save";
+import { speak, stopSpeaking } from "../speech";
 import guide from "./guide";
 import {
   CHAPTERS,
@@ -17,15 +35,22 @@ import {
   chapterIndexOf,
   endlessRows,
   scaleForPlayers,
-  versusRows,
 } from "./levels";
+import { ARENAS, FROST_NEST_MAP, type ArenaMap, type NestMap } from "./maps12";
 import {
   ACTION_DIR,
   ENEMY_SPECS,
   KEY_MAP,
+  MUZZLE_WINDUP,
   PAUSE_KEY,
+  RECOIL_CELLS,
+  RECOIL_SECONDS,
+  REBUILD_SECONDS,
+  SCATTER_SECONDS,
+  SHELL_KEY_MAP,
   TANK_HALF,
   aliveEnemies,
+  blockedProbe,
   createWorld,
   endlessMaxAlive,
   endlessWave,
@@ -39,70 +64,86 @@ import {
   type EnemyKind,
   type PlayerInput,
   type Tank,
-  type TankMode,
   type World,
 } from "./logic";
+import { SHELLS, SHELL_ORDER, nextShell, previewPath, shotVelocity, type ShellKind } from "./ballistics12";
+import { AI_TIERS, TIER_SPECS, type AiTier } from "./ai12";
+import { BRICK_FULL, GRASS_ALPHA, Q_NE, Q_NW, Q_SE, Q_SW } from "./terrain12";
 import { mulberry32 } from "../level99";
 
 const P_NAME = ["朵朵", "星星"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
-const P_KEYS = ["WASD 走 · F 开炮 · G 补墙", "方向键 走 · L 开炮 · K 补墙"];
+const P_KEYS = ["WASD 走 · F 发射 · R 换弹 · G 补墙", "方向键 走 · L 发射 · O 换弹 · K 补墙"];
+
+/** 手指热区下限(px):摇杆和发射钮都不许比这个小 */
+export const TOUCH_MIN = 46;
+/** 双人同屏挤在 360px 里时的热区下限(px) */
+export const TOUCH_MIN_TWO = 44;
 
 const CSS = `
-.tb-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
-  -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;align-items:center;}
-.tb-hud{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;}
-.tb-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
+.tkb-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
+  -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;}
+.tkb-hud{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;}
+.tkb-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
   box-shadow:0 2px 6px rgba(150,140,180,.24);white-space:nowrap;}
-.tb-chip-warn{background:#ffe9ef;color:#b8436f;}
-.tb-chip-p0{color:#b8356e;background:#ffe6ef;}
-.tb-chip-p1{color:#2f5fa8;background:#e2eeff;}
-.tb-board{position:relative;line-height:0;}
-.tb-canvas{display:block;border-radius:14px;background:#5f5a52;touch-action:none;
+.tkb-chip-warn{background:#ffe9ef;color:#b8436f;}
+.tkb-board{position:relative;line-height:0;}
+.tkb-canvas{display:block;border-radius:14px;background:#5f5a52;touch-action:none;
   box-shadow:0 4px 14px rgba(90,80,110,.28);}
-.tb-over{position:absolute;inset:0;border-radius:14px;background:rgba(255,252,250,.94);display:flex;
+.tkb-mini{position:absolute;right:6px;bottom:6px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+.tkb-mini-btn{border:none;border-radius:999px;padding:4px 9px;font-size:11.5px;font-weight:900;cursor:pointer;
+  font-family:inherit;background:rgba(255,255,255,.88);color:#6a5b90;box-shadow:0 2px 5px rgba(70,60,90,.3);}
+.tkb-mini-cv{display:block;border-radius:8px;background:rgba(20,18,26,.55);box-shadow:0 2px 8px rgba(40,32,60,.4);}
+.tkb-over{position:absolute;inset:0;border-radius:14px;background:rgba(255,252,250,.94);display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:14px;}
-.tb-over-t{font-size:21px;font-weight:900;color:#7a4f9a;line-height:1.3;}
-.tb-over-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;max-width:280px;}
-.tb-tip{font-size:12.5px;font-weight:700;color:#6f6390;text-align:center;line-height:1.5;max-width:420px;}
-.tb-pads{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;width:100%;}
-.tb-pad{display:flex;flex-direction:column;align-items:center;gap:4px;}
-.tb-pad-t{font-size:12px;font-weight:900;}
-.tb-dpad{display:grid;grid-template-columns:repeat(3,auto);grid-template-rows:repeat(3,auto);gap:4px;}
-.tb-btn{border:none;border-radius:12px;min-width:42px;min-height:40px;padding:2px 6px;font-size:16px;
+.tkb-over-t{font-size:21px;font-weight:900;color:#7a4f9a;line-height:1.3;}
+.tkb-over-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;max-width:280px;}
+.tkb-tip{font-size:12.5px;font-weight:700;color:#6f6390;text-align:center;line-height:1.5;max-width:420px;}
+.tkb-pads{display:flex;gap:10px;justify-content:center;align-items:flex-start;flex-wrap:wrap;width:100%;}
+.tkb-pad{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.tkb-pad-t{font-size:12px;font-weight:900;text-align:center;}
+.tkb-sticks{display:flex;gap:6px;align-items:center;}
+.tkb-dpad{display:grid;grid-template-columns:repeat(3,auto);grid-template-rows:repeat(2,auto);gap:3px;}
+.tkb-dpad-top{grid-column:2;}
+.tkb-acts-col{display:flex;flex-direction:column;gap:3px;}
+.tkb-key{border:none;border-radius:12px;min-width:${TOUCH_MIN}px;min-height:${TOUCH_MIN}px;padding:0;font-size:17px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#54446f;background:#efe9ff;
   box-shadow:0 3px 0 rgba(140,120,190,.4);}
-.tb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.4);}
-.tb-btn:disabled{opacity:.45;cursor:default;}
-.tb-btn-fire{background:#ffdbe6;color:#a83a68;box-shadow:0 3px 0 rgba(200,110,150,.42);}
-.tb-btn-brick{background:#ffeed8;color:#a06a2c;box-shadow:0 3px 0 rgba(200,150,80,.42);}
-.tb-btn:focus-visible,.tb-act:focus-visible,.tb-open:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
-.tb-padacts{display:flex;gap:6px;}
-.tb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.tb-act{border:none;border-radius:999px;padding:7px 14px;font-size:13.5px;font-weight:800;cursor:pointer;
+.tkb-key:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.4);}
+.tkb-key:disabled{opacity:.45;cursor:default;}
+.tkb-fire{background:#ffdbe6;color:#a83a68;box-shadow:0 3px 0 rgba(200,110,150,.42);min-width:${TOUCH_MIN}px;min-height:${TOUCH_MIN}px;}
+.tkb-shell{background:#e4f0ff;color:#356098;font-size:15px;}
+.tkb-brick{background:#ffeed8;color:#a06a2c;}
+.tkb-key:focus-visible,.tkb-act:focus-visible,.tkb-open:focus-visible,.tkb-mini-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.tkb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.tkb-act{border:none;border-radius:999px;padding:7px 14px;font-size:13.5px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#67529c;box-shadow:0 3px 0 rgba(120,90,160,.26);white-space:nowrap;}
-.tb-act:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.26);}
-.tb-act-on{background:#e7dcff;color:#4d3a86;}
-.tb-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
-.tb-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
+.tkb-act:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.26);}
+.tkb-act-on{background:#e7dcff;color:#4d3a86;}
+.tkb-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
+.tkb-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7f9a5e,#65803f);box-shadow:0 4px 0 #4d6630;}
-.tb-open.tb-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
-.tb-open:active{transform:translateY(2px);box-shadow:0 2px 0 #4d6630;}
-.tb-mode{border-radius:18px;padding:10px;background:linear-gradient(180deg,#f2f6ea,#fff4f8);
+.tkb-open.tkb-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
+.tkb-open:active{transform:translateY(2px);box-shadow:0 2px 0 #4d6630;}
+.tkb-mode{border-radius:18px;padding:10px;background:linear-gradient(180deg,#f2f6ea,#fff4f8);
   display:flex;flex-direction:column;gap:8px;align-items:center;}
-.tb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;}
-.tb-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
+.tkb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;}
+.tkb-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a7a52;box-shadow:0 3px 0 rgba(110,130,80,.3);}
-.tb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,130,80,.3);}
+.tkb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,130,80,.3);}
 @media (max-width:420px){
-  .tb-btn{min-width:38px;min-height:36px;font-size:15px;}
-  .tb-pads{gap:6px;}
-  .tb-open{padding:7px 11px;font-size:13px;}
-  .tb-bar{gap:6px;margin-bottom:4px;}
-  .tb-tip{font-size:11.5px;}
-  .tb-chip{padding:4px 9px;font-size:12px;}
+  .tkb-pads{gap:4px;justify-content:space-between;}
+  .tkb-pads-two .tkb-key{min-width:${TOUCH_MIN_TWO}px;min-height:${TOUCH_MIN_TWO}px;font-size:15px;}
+  .tkb-pads-two .tkb-fire{min-width:${TOUCH_MIN_TWO}px;min-height:${TOUCH_MIN_TWO}px;}
+  .tkb-pads-two .tkb-sticks{gap:2px;}
+  .tkb-pads-two .tkb-dpad{gap:2px;}
+  .tkb-pad-t{font-size:10.5px;}
+  .tkb-open{padding:7px 11px;font-size:13px;}
+  .tkb-bar{gap:6px;margin-bottom:4px;}
+  .tkb-tip{font-size:11.5px;}
+  .tkb-chip{padding:4px 9px;font-size:12px;}
 }
-@media (prefers-reduced-motion:reduce){.tb-btn:active{transform:none;}}
+@media (prefers-reduced-motion:reduce){.tkb-key:active{transform:none;}}
 `;
 
 // ---------------------------------------------------------------------------
@@ -120,22 +161,27 @@ function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number,
   c.closePath();
 }
 
-function drawBrick(c: CanvasRenderingContext2D, x: number, y: number, s: number, hp: number): void {
-  c.fillStyle = hp >= 2 ? "#c1714a" : "#d79a78";
-  roundRect(c, x + 1, y + 1, s - 2, s - 2, 3);
-  c.fill();
-  c.strokeStyle = "rgba(255,255,255,.5)";
-  c.lineWidth = 1;
-  c.beginPath();
-  c.moveTo(x + 2, y + s / 2);
-  c.lineTo(x + s - 2, y + s / 2);
-  c.moveTo(x + s / 2, y + 2);
-  c.lineTo(x + s / 2, y + s / 2);
-  c.moveTo(x + s / 4, y + s / 2);
-  c.lineTo(x + s / 4, y + s - 2);
-  c.moveTo(x + (s * 3) / 4, y + s / 2);
-  c.lineTo(x + (s * 3) / 4, y + s - 2);
-  c.stroke();
+/** 积木砖:四个小块各画各的,被崩掉的那一角就是空的(缝里能钻弹丸) */
+function drawBrick(c: CanvasRenderingContext2D, x: number, y: number, s: number, mask: number): void {
+  const half = s / 2;
+  const bits: Array<[number, number, number]> = [
+    [Q_NW, 0, 0],
+    [Q_NE, half, 0],
+    [Q_SW, 0, half],
+    [Q_SE, half, half],
+  ];
+  for (const [bit, dx, dy] of bits) {
+    if (!(mask & bit)) continue;
+    c.fillStyle = mask === BRICK_FULL ? "#c1714a" : "#cf8358";
+    roundRect(c, x + dx + 0.8, y + dy + 0.8, half - 1.6, half - 1.6, 2);
+    c.fill();
+    c.strokeStyle = "rgba(255,255,255,.45)";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(x + dx + 1.5, y + dy + half / 2);
+    c.lineTo(x + dx + half - 1.5, y + dy + half / 2);
+    c.stroke();
+  }
 }
 
 function drawSteel(c: CanvasRenderingContext2D, x: number, y: number, s: number): void {
@@ -170,11 +216,27 @@ function drawWater(c: CanvasRenderingContext2D, x: number, y: number, s: number,
   }
 }
 
+/** 冰面:浅蓝的一格,加两道反光,一看就知道会滑 */
+function drawIce(c: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  c.fillStyle = "#cfe9f7";
+  c.fillRect(x, y, s, s);
+  c.strokeStyle = "rgba(255,255,255,.85)";
+  c.lineWidth = Math.max(1, s * 0.05);
+  c.beginPath();
+  c.moveTo(x + s * 0.18, y + s * 0.72);
+  c.lineTo(x + s * 0.5, y + s * 0.22);
+  c.moveTo(x + s * 0.56, y + s * 0.78);
+  c.lineTo(x + s * 0.82, y + s * 0.42);
+  c.stroke();
+}
+
+/** 草丛:半透明,躲进去只看得见影子,不至于完全瞎 */
 function drawGrass(c: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  c.fillStyle = "rgba(96,166,88,.92)";
+  c.globalAlpha = GRASS_ALPHA;
+  c.fillStyle = "#5fa658";
   roundRect(c, x, y, s, s, 3);
   c.fill();
-  c.fillStyle = "rgba(140,200,120,.85)";
+  c.fillStyle = "#8cc878";
   for (const [dx, dy] of [
     [0.25, 0.7],
     [0.5, 0.45],
@@ -184,6 +246,7 @@ function drawGrass(c: CanvasRenderingContext2D, x: number, y: number, s: number)
     c.ellipse(x + s * dx, y + s * dy, s * 0.16, s * 0.26, 0, 0, Math.PI * 2);
     c.fill();
   }
+  c.globalAlpha = 1;
 }
 
 function drawBase(c: CanvasRenderingContext2D, x: number, y: number, s: number, shielded: boolean, t: number): void {
@@ -221,16 +284,23 @@ const KIND_FACE: Record<string, string> = {
   smart: "🕵",
 };
 
+/** 一辆铁皮车。后坐、前摇的小顿、以及一点点斜投影的厚度感都在这儿 */
 function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, t: number): void {
-  const px = tk.x * s;
-  const py = tk.y * s;
+  if (tk.spin > 0) return; // 散架了:这一会儿画的是零件,不是车
+  const kick = tk.recoil > 0 ? (tk.recoil / RECOIL_SECONDS) * RECOIL_CELLS : 0;
+  const px = (tk.x - Math.sin((tk.dir * Math.PI) / 2) * 0) * s - [0, 1, 0, -1][tk.dir] * kick * s;
+  const py = tk.y * s - [-1, 0, 1, 0][tk.dir] * kick * s;
   const half = TANK_HALF * s;
   const body =
     tk.side === "player" ? P_COLOR[tk.player] ?? P_COLOR[0] : ENEMY_SPECS[tk.kind as EnemyKind]?.color ?? "#9a9fb5";
   c.save();
   c.translate(px, py);
   c.rotate((tk.dir * Math.PI) / 2);
-  // 履带
+  // 底下垫一层深色:俯视图里那一点点厚度感就靠它
+  c.fillStyle = "rgba(40,34,52,.25)";
+  roundRect(c, -half * 0.66, -half * 0.8, half * 1.32, half * 1.8, half * 0.35);
+  c.fill();
+  // 轮子
   c.fillStyle = "rgba(60,55,70,.85)";
   roundRect(c, -half, -half * 0.95, half * 0.42, half * 1.9, 2);
   c.fill();
@@ -238,15 +308,22 @@ function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, t: number): 
   c.fill();
   // 车身
   c.fillStyle = body;
-  roundRect(c, -half * 0.62, -half * 0.85, half * 1.24, half * 1.7, half * 0.35);
+  roundRect(c, -half * 0.62, -half * 0.9, half * 1.24, half * 1.7, half * 0.35);
   c.fill();
-  // 炮管
+  // 发射管
   c.fillStyle = "rgba(50,45,60,.9)";
   roundRect(c, -half * 0.14, -half * 1.25, half * 0.28, half * 0.62, 1.5);
   c.fill();
+  if (tk.windup > 0) {
+    // 前摇:管口先亮一下,然后弹丸才出膛
+    const k = 1 - tk.windup / MUZZLE_WINDUP;
+    c.fillStyle = `rgba(255,236,150,${0.35 + k * 0.5})`;
+    c.beginPath();
+    c.arc(0, -half * 1.3, half * (0.2 + k * 0.16), 0, Math.PI * 2);
+    c.fill();
+  }
   c.restore();
 
-  // 车顶标记:自己人画颗小星星,敌人画它的脾气
   c.textAlign = "center";
   c.textBaseline = "middle";
   c.font = `${Math.round(s * 0.34)}px system-ui`;
@@ -258,7 +335,6 @@ function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, t: number): 
   }
 
   if (tk.armorMax > 1 && tk.armor < tk.armorMax) {
-    // 装甲车挨过一发:冒一小股烟
     c.fillStyle = "rgba(230,230,240,.8)";
     c.beginPath();
     c.arc(px + half * 0.6, py - half * 0.7, s * 0.12, 0, Math.PI * 2);
@@ -271,32 +347,87 @@ function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, t: number): 
     c.arc(px, py, half * 1.15, 0, Math.PI * 2);
     c.stroke();
   }
-  if (tk.spin > 0) {
-    c.fillStyle = "#ffd166";
-    c.font = `${Math.round(s * 0.4)}px system-ui`;
-    c.fillText("💫", px, py - s * 0.5);
-  }
 }
 
-function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number): void {
+/** 散架的那 3 秒:零件先飞散,再在出生点一件一件装回来 */
+function drawRebuilding(c: CanvasRenderingContext2D, tk: Tank, s: number): void {
+  if (tk.spin <= 0) return;
+  const gone = REBUILD_SECONDS - tk.spin;
+  const parts = ["🔩", "⚙️", "🔧", "🛞", "🧰"];
+  if (gone < SCATTER_SECONDS) {
+    const k = gone / SCATTER_SECONDS;
+    c.font = `${Math.round(s * 0.34)}px system-ui`;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.globalAlpha = Math.max(0, 1 - k);
+    for (const [i, face] of parts.entries()) {
+      const a = (i / parts.length) * Math.PI * 2;
+      c.fillText(face, (tk.scatterX + Math.cos(a) * k * 1.1) * s, (tk.scatterY + Math.sin(a) * k * 1.1) * s);
+    }
+    c.globalAlpha = 1;
+    return;
+  }
+  // 组装:零件从四周收回出生点,收满就回场
+  const k = (gone - SCATTER_SECONDS) / Math.max(0.01, REBUILD_SECONDS - SCATTER_SECONDS);
+  c.font = `${Math.round(s * 0.3)}px system-ui`;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  for (const [i, face] of parts.entries()) {
+    const a = (i / parts.length) * Math.PI * 2;
+    const r = (1 - k) * 1.0;
+    c.fillText(face, (tk.x + Math.cos(a) * r) * s, (tk.y + Math.sin(a) * r) * s);
+  }
+  c.strokeStyle = "rgba(255,255,255,.75)";
+  c.lineWidth = Math.max(1.5, s * 0.07);
+  c.beginPath();
+  c.arc(tk.x * s, tk.y * s, s * 0.42, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+  c.stroke();
+}
+
+/** 弹力球的预测虚线:只画到第一次反射之后一小截 */
+function drawPreview(c: CanvasRenderingContext2D, w: World, tk: Tank, s: number): void {
+  if (tk.shell !== "bounce" || tk.spin > 0) return;
+  const v = shotVelocity(tk.dir, "bounce", tk.tilt);
+  const start = { x: tk.x + v.x * (TANK_HALF + 0.08), y: tk.y + v.y * (TANK_HALF + 0.08) };
+  const pts = previewPath(start, v, blockedProbe(w));
+  if (pts.length < 2) return;
+  c.save();
+  c.setLineDash([4, 4]);
+  c.strokeStyle = tk.player === 0 ? "rgba(255,150,190,.85)" : "rgba(140,190,255,.9)";
+  c.lineWidth = Math.max(1.4, s * 0.06);
+  c.beginPath();
+  c.moveTo(pts[0].x * s, pts[0].y * s);
+  for (const p of pts.slice(1)) c.lineTo(p.x * s, p.y * s);
+  c.stroke();
+  c.setLineDash([]);
+  // 拐点上点一颗小星星,告诉小朋友「会在这儿弹一下」
+  if (pts.length > 2) {
+    c.fillStyle = "rgba(255,255,255,.9)";
+    c.beginPath();
+    c.arc(pts[1].x * s, pts[1].y * s, Math.max(2, s * 0.09), 0, Math.PI * 2);
+    c.fill();
+  }
+  c.restore();
+}
+
+function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number, showPreview: boolean): void {
   const map = w.map;
   c.clearRect(0, 0, map.w * s, map.h * s);
   c.fillStyle = "#6b675e";
   c.fillRect(0, 0, map.w * s, map.h * s);
 
-  // 地面 + 除草丛以外的地形
   for (let cy = 0; cy < map.h; cy++) {
     for (let cx = 0; cx < map.w; cx++) {
       const i = cy * map.w + cx;
       const tile = map.tiles[i];
       const x = cx * s;
       const y = cy * s;
-      if (tile !== "~") {
+      if (tile !== "~" && tile !== "i") {
         c.fillStyle = (cx + cy) % 2 === 0 ? "#75705f" : "#6d6959";
         c.fillRect(x, y, s, s);
       }
       if (tile === "#") {
-        drawBrick(c, x, y, s, map.brickHp[i]);
+        drawBrick(c, x, y, s, map.brickMask[i] || BRICK_FULL);
         if (isFortBrick(map, cx, cy)) {
           c.strokeStyle = "rgba(255,208,90,.75)";
           c.lineWidth = 1.5;
@@ -306,22 +437,31 @@ function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number):
         drawSteel(c, x, y, s);
       } else if (tile === "~") {
         drawWater(c, x, y, s, t);
+      } else if (tile === "i") {
+        drawIce(c, x, y, s);
       } else if (tile === "B") {
         drawBase(c, x, y, s, w.baseShield, t);
       }
     }
   }
 
+  if (showPreview) {
+    for (const tk of w.tanks) {
+      if (tk.side === "player") drawPreview(c, w, tk, s);
+    }
+  }
+
   for (const b of w.bullets) {
-    c.fillStyle = b.side === "player" ? "#fff3c4" : "#ffd0d0";
+    c.fillStyle = SHELLS[b.kind ?? "plain"].color;
     c.beginPath();
     c.arc(b.x * s, b.y * s, Math.max(2, s * 0.1), 0, Math.PI * 2);
     c.fill();
   }
 
   for (const tk of w.tanks) drawTank(c, tk, s, t);
+  for (const tk of w.tanks) drawRebuilding(c, tk, s);
 
-  // 草丛画在坦克上面:开进去就看不见了
+  // 草丛画在车上面:开进去就只剩个影子
   for (let cy = 0; cy < map.h; cy++) {
     for (let cx = 0; cx < map.w; cx++) {
       if (map.tiles[cy * map.w + cx] === "*") drawGrass(c, cx * s, cy * s, s);
@@ -335,24 +475,64 @@ function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number):
     c.textBaseline = "middle";
     c.font = `${Math.round(s * (e.kind === "flower" ? 0.7 : 0.45))}px system-ui`;
     const face =
-      e.kind === "flower" ? "🌼" : e.kind === "smoke" ? "💨" : e.kind === "shield" ? "✨" : e.kind === "crumb" ? "🧱" : "✳️";
-    c.fillText(face, e.x * s, e.y * s - (1 - k) * s * 0.3);
+      e.kind === "flower"
+        ? "🌼"
+        : e.kind === "smoke"
+          ? "💨"
+          : e.kind === "shield"
+            ? "✨"
+            : e.kind === "crumb"
+              ? "🧱"
+              : e.kind === "parts" || e.kind === "build"
+                ? ""
+                : "✳️";
+    if (face) c.fillText(face, e.x * s, e.y * s - (1 - k) * s * 0.3);
     c.globalAlpha = 1;
   }
 }
 
+/** 角落里的小地图:默认折叠,展开也只有一小块,不遮战场 */
+function drawMinimap(c: CanvasRenderingContext2D, w: World, px: number): void {
+  const s = px / Math.max(w.map.w, w.map.h);
+  c.clearRect(0, 0, px, px);
+  for (let cy = 0; cy < w.map.h; cy++) {
+    for (let cx = 0; cx < w.map.w; cx++) {
+      const tile = w.map.tiles[cy * w.map.w + cx];
+      if (tile === ".") continue;
+      c.fillStyle =
+        tile === "#"
+          ? "#c1714a"
+          : tile === "S"
+            ? "#b9bfc9"
+            : tile === "~"
+              ? "#6fb6dd"
+              : tile === "*"
+                ? "#5fa658"
+                : tile === "i"
+                  ? "#cfe9f7"
+                  : "#ffb937";
+      c.fillRect(cx * s, cy * s, s, s);
+    }
+  }
+  for (const tk of w.tanks) {
+    c.fillStyle = tk.side === "player" ? P_COLOR[tk.player] ?? P_COLOR[0] : "#ff7a7a";
+    c.beginPath();
+    c.arc(tk.x * s, tk.y * s, Math.max(1.5, s * 0.42), 0, Math.PI * 2);
+    c.fill();
+  }
+}
+
 // ---------------------------------------------------------------------------
-// 一局的运行器:画布 + HUD + 键盘 + 触屏摇杆 + 暂停
+// 一局的运行器:画布 + HUD + 键盘 + 摇杆 + 小地图 + 暂停
 // ---------------------------------------------------------------------------
 
 interface RunOptions {
   world: World;
+  /** 真人有几位(电脑陪练不算) */
   players: 1 | 2;
   hint: string;
-  /** 顶部想额外显示的信息(无尽的波次等) */
   extraChips?: () => string[];
   onEnd: (w: World) => void;
-  /** 无尽模式:一波清完了要补下一波 */
   onWaveClear?: (w: World) => void;
 }
 
@@ -360,44 +540,75 @@ interface Runner {
   destroy: () => void;
 }
 
+function prefersReducedMotion(): boolean {
+  const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+  try {
+    return mm ? mm("(prefers-reduced-motion: reduce)").matches : false;
+  } catch {
+    return false;
+  }
+}
+
 function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptions): Runner {
   const w = opts.world;
   const wrap = document.createElement("div");
-  wrap.className = "tb-wrap";
+  wrap.className = "tkb-wrap";
 
   const hud = document.createElement("div");
-  hud.className = "tb-hud";
+  hud.className = "tkb-hud";
   const board = document.createElement("div");
-  board.className = "tb-board";
+  board.className = "tkb-board";
   const canvas = document.createElement("canvas");
-  canvas.className = "tb-canvas";
+  canvas.className = "tkb-canvas";
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", "铁皮坦克战场");
   board.appendChild(canvas);
+
+  const miniBox = document.createElement("div");
+  miniBox.className = "tkb-mini";
+  const miniBtn = document.createElement("button");
+  miniBtn.type = "button";
+  miniBtn.className = "tkb-mini-btn";
+  const miniCv = document.createElement("canvas");
+  miniCv.className = "tkb-mini-cv";
+  miniCv.hidden = true;
+  miniBox.append(miniBtn, miniCv);
+  board.appendChild(miniBox);
+
   const tip = document.createElement("div");
-  tip.className = "tb-tip";
+  tip.className = "tkb-tip";
   tip.textContent = opts.hint;
   const acts = document.createElement("div");
-  acts.className = "tb-acts";
+  acts.className = "tkb-acts";
   const pads = document.createElement("div");
-  pads.className = "tb-pads";
+  pads.className = `tkb-pads${opts.players === 2 ? " tkb-pads-two" : ""}`;
   wrap.append(hud, board, tip, acts, pads);
   host.appendChild(wrap);
 
   const held = new Set<string>();
   const tapped = new Set<string>();
+  const timers: number[] = [];
   let paused = false;
   let finished = false;
   let raf = 0;
   let last = 0;
   let clock = 0;
   let cell = 26;
+  let shake = 0;
+  let miniOpen = false;
+  const reduced = prefersReducedMotion();
 
   const pauseBtn = document.createElement("button");
   pauseBtn.type = "button";
-  pauseBtn.className = "tb-act";
+  pauseBtn.className = "tkb-act";
   pauseBtn.textContent = "⏸️ 暂停 (Esc)";
   acts.appendChild(pauseBtn);
+
+  function refreshMini(): void {
+    miniBtn.textContent = miniOpen ? "🗺️ 收起小地图" : "🗺️ 小地图";
+    miniBtn.setAttribute("aria-expanded", miniOpen ? "true" : "false");
+    miniCv.hidden = !miniOpen;
+  }
 
   function layout(): void {
     const availW = Math.max(220, (host.clientWidth || 340) - 8);
@@ -410,6 +621,13 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     canvas.style.height = `${MAP_H * cell}px`;
     const c = canvas.getContext("2d");
     if (c) c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const mini = Math.max(52, Math.round(MAP_W * cell * 0.28));
+    miniCv.width = Math.round(mini * dpr);
+    miniCv.height = Math.round(mini * dpr);
+    miniCv.style.width = `${mini}px`;
+    miniCv.style.height = `${mini}px`;
+    const mc = miniCv.getContext("2d");
+    if (mc) mc.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function refreshHud(): void {
@@ -417,23 +635,27 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const gaps = fortGaps(w).length;
     const chips: string[] = [];
     if (w.mode === "versus") {
-      chips.push(`🌸 朵朵 ${w.scores[0]}`, `⭐ 星星 ${w.scores[1]}`, `🎯 先弹飞 ${w.target} 次赢`);
+      chips.push(`🌸 朵朵 ${w.scores[0]}`, `⭐ 星星 ${w.scores[1]}`, `🎯 先打散 ${w.target} 次赢`);
     } else {
       chips.push(`🚜 还剩 ${left} 辆`, `🌼 已变花 ${w.defeated}`);
-      if (w.map.base) chips.push(w.baseShield ? "🛡️ 护罩还在" : "⚠️ 护罩没了");
+      if (w.map.base) {
+        chips.push(w.baseShield ? "🛡️ 护罩还在" : `⚠️ 护罩充能 ${Math.ceil(w.shieldTimer)} 秒`);
+      }
       if (gaps > 0) chips.push(`🧱 护墙缺 ${gaps} 块`);
     }
     chips.push(`⏱️ ${Math.max(0, Math.ceil(w.limit - w.time))} 秒`);
     for (const tk of w.tanks) {
       if (tk.side !== "player") continue;
-      chips.push(`${tk.player === 0 ? "🌸" : "⭐"} 砖 ${tk.bricks}`);
+      const who = tk.player === 0 ? "🌸" : "⭐";
+      const shell = SHELLS[tk.shell];
+      chips.push(`${who} ${shell.emoji}${shell.name} · 砖 ${tk.bricks}`);
     }
     for (const extra of opts.extraChips?.() ?? []) chips.push(extra);
     hud.innerHTML = "";
     for (const [i, text] of chips.entries()) {
       const el = document.createElement("span");
       const warn = text.includes("⚠️") || text.includes("护墙缺");
-      el.className = `tb-chip${warn ? " tb-chip-warn" : ""}`;
+      el.className = `tkb-chip${warn ? " tkb-chip-warn" : ""}`;
       el.textContent = text;
       el.setAttribute("aria-live", i === 0 ? "polite" : "off");
       hud.appendChild(el);
@@ -452,6 +674,18 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     };
   }
 
+  function swapShell(player: number): void {
+    const tk = w.tanks.find((t) => t.side === "player" && t.player === player);
+    if (!tk) return;
+    tk.shell = nextShell(tk.shell);
+    sfx("tap");
+    refreshHud();
+    const btn = shellBtns[player];
+    if (btn) btn.textContent = SHELLS[tk.shell].emoji;
+  }
+
+  const shellBtns: Array<HTMLButtonElement | null> = [null, null];
+
   function frame(now: number): void {
     raf = requestAnimationFrame(frame);
     if (last === 0) last = now;
@@ -463,18 +697,33 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
       stepWorld(w, dt, [inputFor(0), inputFor(1)]);
       tapped.clear();
       if (w.defeated > before.defeated) sfx("coin");
-      if (w.bounced > before.bounced) sfx("oops");
+      if (w.bounced > before.bounced) {
+        sfx("oops");
+        if (!reduced) shake = 0.22;
+      }
       if (before.shield && !w.baseShield) sfx("oops");
       if (w.status !== "playing") {
         finished = true;
-        window.setTimeout(() => opts.onEnd(w), 260);
+        timers.push(window.setTimeout(() => opts.onEnd(w), 260));
       } else if (opts.onWaveClear && w.queue.length === 0 && aliveEnemies(w).length === 0) {
         opts.onWaveClear(w);
       }
       refreshHud();
     }
+    shake = Math.max(0, shake - dt);
     const c = canvas.getContext("2d");
-    if (c) drawWorld(c, w, cell, clock);
+    if (c) {
+      const dx = shake > 0 ? (Math.random() - 0.5) * shake * 14 : 0;
+      const dy = shake > 0 ? (Math.random() - 0.5) * shake * 14 : 0;
+      c.save();
+      c.translate(dx, dy);
+      drawWorld(c, w, cell, clock, !paused);
+      c.restore();
+    }
+    if (miniOpen) {
+      const mc = miniCv.getContext("2d");
+      if (mc) drawMinimap(mc, w, Math.max(52, Math.round(MAP_W * cell * 0.28)));
+    }
   }
 
   // ---- 键盘 ---------------------------------------------------------------
@@ -482,6 +731,13 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     if (e.code === PAUSE_KEY) {
       e.preventDefault();
       setPaused(!paused);
+      return;
+    }
+    const swap = SHELL_KEY_MAP[e.code];
+    if (swap !== undefined) {
+      if (swap >= opts.players) return;
+      e.preventDefault();
+      swapShell(swap);
       return;
     }
     const bind = KEY_MAP[e.code];
@@ -507,7 +763,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     held.clear();
   }
 
-  // ---- 触屏摇杆(和键盘完全等价) ------------------------------------------
+  // ---- 摇杆(和键盘完全等价) ----------------------------------------------
   function bindHold(btn: HTMLButtonElement, key: string): void {
     const on = (e: Event): void => {
       e.preventDefault();
@@ -530,64 +786,69 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     btn.addEventListener("blur", off);
   }
 
+  function dirWord(a: string): string {
+    return a === "up" ? "上" : a === "down" ? "下" : a === "left" ? "左" : "右";
+  }
+
   function makePad(player: 0 | 1): HTMLElement {
     const box = document.createElement("div");
-    box.className = "tb-pad";
+    box.className = "tkb-pad";
     const name = document.createElement("div");
-    name.className = "tb-pad-t";
+    name.className = "tkb-pad-t";
     name.style.color = P_COLOR[player];
     name.textContent = `${player === 0 ? "🌸" : "⭐"} ${P_NAME[player]} · ${P_KEYS[player]}`;
+
+    const sticks = document.createElement("div");
+    sticks.className = "tkb-sticks";
+    // 摇杆:上面一颗、下面三颗,一共两排,横着只占三格,双人也塞得进 360px
     const grid = document.createElement("div");
-    grid.className = "tb-dpad";
-    const cells: Array<{ label: string; action: "up" | "down" | "left" | "right" | "" }> = [
-      { label: "", action: "" },
-      { label: "▲", action: "up" },
-      { label: "", action: "" },
-      { label: "◀", action: "left" },
-      { label: "", action: "" },
-      { label: "▶", action: "right" },
-      { label: "", action: "" },
-      { label: "▼", action: "down" },
-      { label: "", action: "" },
-    ];
-    for (const item of cells) {
-      if (!item.action) {
-        const gap = document.createElement("span");
-        grid.appendChild(gap);
-        continue;
-      }
+    grid.className = "tkb-dpad";
+    const up = document.createElement("button");
+    up.type = "button";
+    up.className = "tkb-key tkb-dpad-top";
+    up.textContent = "▲";
+    up.setAttribute("aria-label", `${P_NAME[player]}向上开`);
+    bindHold(up, `${player}:up`);
+    grid.appendChild(up);
+    for (const action of ["left", "down", "right"] as const) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "tb-btn";
-      b.textContent = item.label;
-      b.setAttribute("aria-label", `${P_NAME[player]}向${dirWord(item.action)}开`);
-      bindHold(b, `${player}:${item.action}`);
+      b.className = "tkb-key";
+      b.textContent = action === "left" ? "◀" : action === "down" ? "▼" : "▶";
+      b.setAttribute("aria-label", `${P_NAME[player]}向${dirWord(action)}开`);
+      bindHold(b, `${player}:${action}`);
       grid.appendChild(b);
     }
-    const row = document.createElement("div");
-    row.className = "tb-padacts";
+
+    // 动作键单独一列,和摇杆分开摆:手指再粗也不会互相压到
+    const col = document.createElement("div");
+    col.className = "tkb-acts-col";
     const fireBtn = document.createElement("button");
     fireBtn.type = "button";
-    fireBtn.className = "tb-btn tb-btn-fire";
-    fireBtn.textContent = "💥 开炮";
-    fireBtn.setAttribute("aria-label", `${P_NAME[player]}开炮`);
+    fireBtn.className = "tkb-key tkb-fire";
+    fireBtn.textContent = "💥";
+    fireBtn.setAttribute("aria-label", `${P_NAME[player]}发射`);
     bindHold(fireBtn, `${player}:fire`);
+    const shellBtn = document.createElement("button");
+    shellBtn.type = "button";
+    shellBtn.className = "tkb-key tkb-shell";
+    shellBtn.textContent = SHELLS["plain"].emoji;
+    shellBtn.setAttribute("aria-label", `${P_NAME[player]}换一种弹丸`);
+    shellBtn.addEventListener("click", () => swapShell(player));
+    shellBtns[player] = shellBtn;
     const brickBtn = document.createElement("button");
     brickBtn.type = "button";
-    brickBtn.className = "tb-btn tb-btn-brick";
-    brickBtn.textContent = "🧱 补墙";
+    brickBtn.className = "tkb-key tkb-brick";
+    brickBtn.textContent = "🧱";
     brickBtn.setAttribute("aria-label", `${P_NAME[player]}在车头前面补一块砖`);
     brickBtn.addEventListener("click", () => {
       tapped.add(`${player}:brick`);
       sfx("tap");
     });
-    row.append(fireBtn, brickBtn);
-    box.append(name, grid, row);
+    col.append(fireBtn, shellBtn, brickBtn);
+    sticks.append(grid, col);
+    box.append(name, sticks);
     return box;
-  }
-
-  function dirWord(a: string): string {
-    return a === "up" ? "上" : a === "down" ? "下" : a === "left" ? "左" : "右";
   }
 
   for (let p = 0; p < opts.players; p++) pads.appendChild(makePad(p as 0 | 1));
@@ -597,13 +858,13 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     paused = next;
     held.clear();
     pauseBtn.textContent = paused ? "▶️ 继续 (Esc)" : "⏸️ 暂停 (Esc)";
-    const old = board.querySelector(".tb-over");
+    const old = board.querySelector(".tkb-over");
     old?.remove();
     if (paused) {
       const ov = document.createElement("div");
-      ov.className = "tb-over";
-      ov.innerHTML = `<div class="tb-over-t">⏸️ 先歇一会儿</div>
-        <div class="tb-over-s">按 Esc 或点「继续」回到战场。<br>朵朵:WASD 走、F 开炮、G 补墙。<br>星星:方向键走、L 开炮、K 补墙。</div>`;
+      ov.className = "tkb-over";
+      ov.innerHTML = `<div class="tkb-over-t">⏸️ 先歇一会儿</div>
+        <div class="tkb-over-s">按 Esc 或点「继续」回到战场。<br>朵朵:WASD 走、F 发射、R 换弹、G 补墙。<br>星星:方向键走、L 发射、O 换弹、K 补墙。</div>`;
       board.appendChild(ov);
     }
   }
@@ -611,6 +872,11 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   pauseBtn.addEventListener("click", () => {
     sfx("tap");
     setPaused(!paused);
+  });
+  miniBtn.addEventListener("click", () => {
+    miniOpen = !miniOpen;
+    sfx("tap");
+    refreshMini();
   });
 
   const onResize = (): void => layout();
@@ -620,18 +886,25 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   window.addEventListener("resize", onResize);
 
   layout();
+  refreshMini();
   refreshHud();
   raf = requestAnimationFrame(frame);
 
   return {
     destroy() {
       finished = true;
+      paused = true;
       cancelAnimationFrame(raf);
+      raf = 0;
+      for (const id of timers) window.clearTimeout(id);
+      timers.length = 0;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("resize", onResize);
       held.clear();
+      tapped.clear();
+      stopSpeaking();
       wrap.remove();
     },
   };
@@ -659,12 +932,13 @@ function makePlayLevel(getPlayers: () => 1 | 2) {
     runner = mountRun(stage, ctx.sfx, {
       world,
       players,
-      hint: `${CHAPTER_NEW[ci] ?? ""} 一共 ${lv.waves.length} 辆铁皮车,守住底下的星星堡垒。`,
-      onEnd(w) {
-        if (w.status === "win") {
-          ctx.win(rateRun(w.time, w.limit, w.bounced), winLine(rateRun(w.time, w.limit, w.bounced), w.defeated, w.bounced));
+      hint: `${CHAPTER_NEW[ci] ?? ""} 一共 ${lv.waves.length} 辆铁皮车,守住底下的星星老巢。`,
+      onEnd(res) {
+        if (res.status === "win") {
+          const stars = rateRun(res.time, res.limit, res.bounced);
+          ctx.win(stars, winLine(stars, res.defeated, res.bounced));
         } else {
-          ctx.lose(loseLine(w.reason, w.defeated));
+          ctx.lose(loseLine(res.reason, res.defeated));
         }
       },
     });
@@ -678,29 +952,100 @@ function makePlayLevel(getPlayers: () => 1 | 2) {
 }
 
 // ---------------------------------------------------------------------------
-// 无尽敌潮
+// 模式外壳:标题 + 回选关
 // ---------------------------------------------------------------------------
 
-function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { destroy: () => void } {
+interface Shell {
+  box: HTMLElement;
+  stage: HTMLElement;
+  head: HTMLElement;
+  destroy: () => void;
+}
+
+function modeShell(host: HTMLElement, title: string, back: () => void, sfx: (n: SoundName) => void): Shell {
   const box = document.createElement("div");
-  box.className = "tb-mode";
+  box.className = "tkb-mode";
   const head = document.createElement("div");
-  head.className = "tb-mhead";
+  head.className = "tkb-mhead";
   const backBtn = document.createElement("button");
   backBtn.type = "button";
-  backBtn.className = "tb-back";
+  backBtn.className = "tkb-back";
   backBtn.textContent = "← 回选关";
-  const title = document.createElement("span");
-  title.className = "tb-chip";
-  title.textContent = "♾️ 无尽敌潮 · 一波比一波多";
-  head.append(backBtn, title);
+  backBtn.addEventListener("click", () => {
+    sfx("tap");
+    back();
+  });
+  const label = document.createElement("span");
+  label.className = "tkb-chip";
+  label.textContent = title;
+  head.append(backBtn, label);
   const stage = document.createElement("div");
   box.append(head, stage);
   host.appendChild(box);
+  return {
+    box,
+    stage,
+    head,
+    destroy() {
+      box.remove();
+    },
+  };
+}
+
+/** 一排「选一个」的小按钮(选场地、选陪练强度都用它) */
+function chooserRow<T>(
+  items: readonly T[],
+  labelOf: (item: T) => string,
+  isOn: (item: T) => boolean,
+  pick: (item: T) => void
+): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "tkb-acts";
+  for (const item of items) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `tkb-act${isOn(item) ? " tkb-act-on" : ""}`;
+    btn.textContent = labelOf(item);
+    btn.setAttribute("aria-pressed", isOn(item) ? "true" : "false");
+    btn.addEventListener("click", () => pick(item));
+    row.appendChild(btn);
+  }
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// 无尽:守老巢
+// ---------------------------------------------------------------------------
+
+const NESTS: readonly NestMap[] = [
+  { id: "classic", name: "老场地", emoji: "🏚️", desc: "通路多,方便长时间周旋。", rows: endlessRows() },
+  FROST_NEST_MAP,
+];
+
+function mountEndless(host: HTMLElement, api: GameApi, back: () => void, nestId = NESTS[0].id): { destroy: () => void } {
+  const nest = NESTS.find((n) => n.id === nestId) ?? NESTS[0];
+  const shell = modeShell(host, `♾️ 无尽守老巢 · ${nest.emoji}${nest.name}`, back, (n) => api.play(n));
+
+  let runner: Runner | null = null;
+  let over = false;
+
+  const picker = chooserRow(
+    NESTS,
+    (n) => `${n.emoji} ${n.name}`,
+    (n) => n.id === nest.id,
+    (n) => {
+      if (n.id === nest.id) return;
+      api.play("tap");
+      runner?.destroy();
+      shell.destroy();
+      mountEndless(host, api, back, n.id);
+    }
+  );
+  shell.box.insertBefore(picker, shell.stage);
 
   const rand = mulberry32(Date.now() % 100000);
   const world = createWorld({
-    rows: endlessRows(),
+    rows: [...nest.rows],
     mode: "endless",
     queue: endlessWave(1, rand),
     maxAlive: endlessMaxAlive(1),
@@ -710,175 +1055,211 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
   });
   world.wave = 1;
 
-  let runner: Runner | null = null;
-  let over = false;
-
-  function finish(w: World): void {
+  function finish(res: World): void {
     if (over) return;
     over = true;
-    const best = save.recordEndlessBest(meta.id, w.wave);
+    const best = save.recordEndlessBest(meta.id, res.wave);
     runner?.destroy();
     runner = null;
     const ov = document.createElement("div");
-    ov.className = "tb-mode";
-    ov.innerHTML = `<div class="tb-over-t">🌼 第 ${w.wave} 波结束</div>
-      <div class="tb-over-s">这一轮清掉 ${w.defeated} 辆铁皮车,拿到 ${w.score} 分。<br>
+    ov.className = "tkb-mode";
+    const line = `第 ${res.wave} 波结束。这一轮清掉 ${res.defeated} 辆铁皮车,拿到 ${res.score} 分。历史最好成绩:第 ${best} 波。`;
+    ov.innerHTML = `<div class="tkb-over-t">🌼 第 ${res.wave} 波结束</div>
+      <div class="tkb-over-s">这一轮清掉 ${res.defeated} 辆铁皮车,拿到 ${res.score} 分。<br>
       历史最好成绩:第 ${best} 波。下次记得先补护墙再出门。</div>`;
+    speak(line);
     const again = document.createElement("button");
     again.type = "button";
-    again.className = "tb-open";
+    again.className = "tkb-open";
     again.textContent = "🔁 再来一轮";
     again.addEventListener("click", () => {
       api.play("tap");
-      box.remove();
-      mountEndless(host, api, back);
+      shell.destroy();
+      mountEndless(host, api, back, nest.id);
     });
     const home = document.createElement("button");
     home.type = "button";
-    home.className = "tb-back";
+    home.className = "tkb-back";
     home.textContent = "← 回选关";
     home.addEventListener("click", () => {
       api.play("tap");
       back();
     });
     const row = document.createElement("div");
-    row.className = "tb-acts";
+    row.className = "tkb-acts";
     row.append(again, home);
     ov.appendChild(row);
-    stage.appendChild(ov);
+    shell.stage.appendChild(ov);
   }
 
-  runner = mountRun(stage, (n) => api.play(n), {
+  runner = mountRun(shell.stage, (n) => api.play(n), {
     world,
     players: 2,
-    hint: "堡垒被砸中这一轮就结束。两个人分头守,别都挤在一边。",
+    hint: "老巢被砸中这一轮就结束。两个人分头守,别都挤在一边;冰面上记得提前松手。",
     extraChips: () => [`🌊 第 ${world.wave} 波`, `🏅 ${world.score} 分`],
     onEnd: finish,
-    onWaveClear(w) {
-      w.wave += 1;
-      w.queue = endlessWave(w.wave, rand);
-      w.maxAlive = endlessMaxAlive(w.wave);
-      w.spawnTimer = 1.2;
+    onWaveClear(res) {
+      res.wave += 1;
+      res.queue = endlessWave(res.wave, rand);
+      res.maxAlive = endlessMaxAlive(res.wave);
+      res.spawnTimer = 1.2;
       api.play("win");
-      for (const tk of w.tanks) {
+      for (const tk of res.tanks) {
         if (tk.side === "player") tk.bricks += 1;
       }
     },
   });
 
-  backBtn.addEventListener("click", () => {
-    api.play("tap");
-    back();
-  });
-
   return {
     destroy() {
       runner?.destroy();
       runner = null;
-      box.remove();
+      stopSpeaking();
+      shell.destroy();
     },
   };
 }
 
 // ---------------------------------------------------------------------------
-// 双人对战
+// 双人对战(一个人来的时候可以叫电脑陪练)
 // ---------------------------------------------------------------------------
 
+interface VersusSetup {
+  arena: ArenaMap;
+  /** null = 两个人对着打 */
+  ai: AiTier | null;
+}
+
+let lastVersus: VersusSetup = { arena: ARENAS[0], ai: null };
+
 function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destroy: () => void } {
-  const box = document.createElement("div");
-  box.className = "tb-mode";
-  const head = document.createElement("div");
-  head.className = "tb-mhead";
-  const backBtn = document.createElement("button");
-  backBtn.type = "button";
-  backBtn.className = "tb-back";
-  backBtn.textContent = "← 回选关";
-  const title = document.createElement("span");
-  title.className = "tb-chip";
-  title.textContent = "⚔️ 双人对战 · 先弹飞对方 3 次";
-  head.append(backBtn, title);
-  const stage = document.createElement("div");
-  box.append(head, stage);
-  host.appendChild(box);
+  const setup: VersusSetup = { ...lastVersus };
+  const shell = modeShell(host, "⚔️ 双人对战 · 先把对手打散 3 次", back, (n) => api.play(n));
+
+  let runner: Runner | null = null;
+  let over = false;
+  let rebuilding = false;
+
+  function restart(next: Partial<VersusSetup>): void {
+    Object.assign(setup, next);
+    lastVersus = { ...setup };
+    api.play("tap");
+    rebuilding = true;
+    runner?.destroy();
+    shell.destroy();
+    mountVersus(host, api, back);
+  }
+
+  const arenaRow = chooserRow(
+    ARENAS,
+    (a) => `${a.emoji} ${a.name}`,
+    (a) => a.id === setup.arena.id,
+    (a) => {
+      if (a.id !== setup.arena.id) restart({ arena: a });
+    }
+  );
+  const aiRow = chooserRow<AiTier | null>(
+    [null, ...AI_TIERS],
+    (t) => (t === null ? "👫 两个人" : `${TIER_SPECS[t].emoji} 陪练·${TIER_SPECS[t].name}`),
+    (t) => t === setup.ai,
+    (t) => {
+      if (t !== setup.ai) restart({ ai: t });
+    }
+  );
+  shell.box.insertBefore(arenaRow, shell.stage);
+  shell.box.insertBefore(aiRow, shell.stage);
 
   const world = createWorld({
-    rows: versusRows(),
+    rows: [...setup.arena.rows],
     mode: "versus",
     players: 2,
     limit: 120,
     target: 3,
     bricks: 5,
+    aiTiers: [null, setup.ai],
   });
 
-  let runner: Runner | null = null;
-  let over = false;
-
-  function finish(w: World): void {
+  function finish(res: World): void {
     if (over) return;
     over = true;
     runner?.destroy();
     runner = null;
-    const who = w.winner < 0 ? "两个人打成平手" : `${P_NAME[w.winner]}赢啦`;
+    const who = res.winner < 0 ? "两个人打成平手" : `${P_NAME[res.winner]}赢啦`;
     const ov = document.createElement("div");
-    ov.className = "tb-mode";
-    ov.innerHTML = `<div class="tb-over-t">🎉 ${who}</div>
-      <div class="tb-over-s">朵朵 ${w.scores[0]} : ${w.scores[1]} 星星。<br>
-      被弹飞不疼,转两圈就能接着开。下一局换个方向包抄试试。</div>`;
+    ov.className = "tkb-mode";
+    ov.innerHTML = `<div class="tkb-over-t">🎉 ${who}</div>
+      <div class="tkb-over-s">朵朵 ${res.scores[0]} : ${res.scores[1]} 星星。<br>
+      被打散不疼,零件捡起来就好。下一局换张场地、换个包抄方向试试。</div>`;
+    speak(`${who}。朵朵 ${res.scores[0]} 比 ${res.scores[1]} 星星。`);
     const again = document.createElement("button");
     again.type = "button";
-    again.className = "tb-open tb-open-vs";
+    again.className = "tkb-open tkb-open-vs";
     again.textContent = "🔁 再来一局";
-    again.addEventListener("click", () => {
-      api.play("tap");
-      box.remove();
-      mountVersus(host, api, back);
-    });
+    again.addEventListener("click", () => restart({}));
     const home = document.createElement("button");
     home.type = "button";
-    home.className = "tb-back";
+    home.className = "tkb-back";
     home.textContent = "← 回选关";
     home.addEventListener("click", () => {
       api.play("tap");
       back();
     });
     const row = document.createElement("div");
-    row.className = "tb-acts";
+    row.className = "tkb-acts";
     row.append(again, home);
     ov.appendChild(row);
-    stage.appendChild(ov);
+    shell.stage.appendChild(ov);
   }
 
-  runner = mountRun(stage, (n) => api.play(n), {
+  runner = mountRun(shell.stage, (n) => api.play(n), {
     world,
-    players: 2,
-    hint: "地图左右对称,谁都不吃亏。躲在钢墙后面等对方露头最划算。",
+    // 陪练上场时只留一套摇杆:另一台车是电脑在开
+    players: setup.ai ? 1 : 2,
+    hint: setup.ai
+      ? `${setup.arena.desc} 电脑陪练:${TIER_SPECS[setup.ai].desc}`
+      : `${setup.arena.desc} 地图是对称的,谁都不吃亏。`,
     onEnd: finish,
-  });
-
-  backBtn.addEventListener("click", () => {
-    api.play("tap");
-    back();
   });
 
   return {
     destroy() {
+      if (rebuilding) return;
       runner?.destroy();
       runner = null;
-      box.remove();
+      stopSpeaking();
+      shell.destroy();
     },
   };
 }
 
 // ---------------------------------------------------------------------------
-// 挂载:模式条 + 188 关地图
+// 入口:模式条 + 188 关地图 + 直达第 N 关
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export interface TankBattleHandle {
+  /** 平台「直达第 N 关」(1 基),返回真正打开的那一关 */
+  openCampaignLevel: (n: number) => number;
+  destroy: () => void;
+}
+
+/** 地址栏上的 `?level=N`(壳层没给 `initialLevel` 时的兜底) */
+export function levelFromQuery(search: string | null): number | null {
+  if (!search) return null;
+  const raw = new URLSearchParams(search).get("level");
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.round(n) : null;
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+export function mount(api: GameApi): TankBattleHandle {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
   const bar = document.createElement("div");
-  bar.className = "tb-bar";
+  bar.className = "tkb-bar";
   const levelHost = document.createElement("div");
   const modeHost = document.createElement("div");
   modeHost.hidden = true;
@@ -886,16 +1267,18 @@ export function mount(api: GameApi): { destroy: () => void } {
   api.root.appendChild(root);
 
   let players: 1 | 2 = 1;
+  let mode: { destroy: () => void } | null = null;
+  let direct: { destroy: () => void } | null = null;
 
   const coopBtn = document.createElement("button");
   coopBtn.type = "button";
-  coopBtn.className = "tb-open";
+  coopBtn.className = "tkb-open";
   const endlessBtn = document.createElement("button");
   endlessBtn.type = "button";
-  endlessBtn.className = "tb-open";
+  endlessBtn.className = "tkb-open";
   const vsBtn = document.createElement("button");
   vsBtn.type = "button";
-  vsBtn.className = "tb-open tb-open-vs";
+  vsBtn.className = "tkb-open tkb-open-vs";
   vsBtn.textContent = "⚔️ 双人对战";
   bar.append(coopBtn, endlessBtn, vsBtn);
 
@@ -903,10 +1286,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     coopBtn.textContent = players === 2 ? "👫 双人合作:开(点我关)" : "👤 单人闯关(点我拉星星一起)";
     coopBtn.setAttribute("aria-pressed", players === 2 ? "true" : "false");
     const best = save.getGameProgress(meta.id).endlessBest;
-    endlessBtn.textContent = best > 0 ? `♾️ 无尽敌潮 · 最好 第 ${best} 波` : "♾️ 无尽敌潮 · 点我开始!";
+    endlessBtn.textContent = best > 0 ? `♾️ 无尽守老巢 · 最好 第 ${best} 波` : "♾️ 无尽守老巢 · 点我开始!";
   }
-
-  let mode: { destroy: () => void } | null = null;
 
   function closeMode(): void {
     mode?.destroy();
@@ -920,10 +1301,142 @@ export function mount(api: GameApi): { destroy: () => void } {
   function openMode(make: (host: HTMLElement, api: GameApi, back: () => void) => { destroy: () => void }): void {
     if (mode) return;
     api.play("tap");
+    closeDirect(false);
     levelHost.hidden = true;
     bar.hidden = true;
     modeHost.hidden = false;
     mode = make(modeHost, api, closeMode);
+  }
+
+  function closeDirect(showMap: boolean): void {
+    direct?.destroy();
+    direct = null;
+    if (showMap) {
+      modeHost.hidden = true;
+      levelHost.hidden = false;
+      bar.hidden = false;
+      refreshBar();
+    }
+  }
+
+  /**
+   * 直达第 N 关:188 关框架只吐一个 `destroy`,没有「从第 N 关开始」的口子,
+   * 所以自己开一条通道——星级照样存在框架那套 key 上,也回得去选关地图。
+   */
+  function openDirectLevel(index: number): void {
+    const i = clamp(Math.round(index), 0, TOTAL_LEVELS - 1);
+    closeDirect(false);
+    mode?.destroy();
+    mode = null;
+    levelHost.hidden = true;
+    bar.hidden = true;
+    modeHost.hidden = false;
+
+    const ci = chapterOf(CHAPTERS, i);
+    const ch: Chapter = CHAPTERS[ci];
+    const shell = modeShell(modeHost, `${ch.emoji} ${ch.name} · 第 ${i + 1} 关`, () => closeDirect(true), (n) =>
+      api.play(n)
+    );
+    let handle: PlayHandle | undefined;
+    let settled = false;
+
+    // 跳关走平台那道家长门:壳层没注册 requestSkip 就干脆不挂按钮(单测环境保持干净)。
+    // 放行 = 本关记 0 星、解锁下一关,战役星数一颗不送。
+    const request = getLevelExtras().requestSkip;
+    if (request && i < TOTAL_LEVELS - 1) {
+      const skipBtn = document.createElement("button");
+      skipBtn.type = "button";
+      skipBtn.className = "tkb-act";
+      skipBtn.textContent = `⏭️ 跳过 第 ${i + 1} 关`;
+      let asking = false;
+      skipBtn.addEventListener("click", () => {
+        if (asking || settled) return;
+        asking = true;
+        skipBtn.disabled = true;
+        api.play("tap");
+        void Promise.resolve(request(meta.id, i))
+          .then((ok) => {
+            if (!ok) return;
+            settled = true;
+            markSkipped(meta.id, i);
+            openDirectLevel(i + 1);
+          })
+          .finally(() => {
+            asking = false;
+            skipBtn.disabled = false;
+          });
+      });
+      shell.head.appendChild(skipBtn);
+    }
+
+    function settle(title: string, msg: string, buttons: Array<{ label: string; go: () => void }>): void {
+      handle?.destroy?.();
+      handle = undefined;
+      const over = document.createElement("div");
+      over.className = "tkb-mode";
+      over.innerHTML = `<div class="tkb-over-t">${title}</div><div class="tkb-over-s">${msg}</div>`;
+      const row = document.createElement("div");
+      row.className = "tkb-acts";
+      for (const b of buttons) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tkb-act";
+        btn.textContent = b.label;
+        btn.addEventListener("click", () => {
+          api.play("tap");
+          b.go();
+        });
+        row.appendChild(btn);
+      }
+      over.appendChild(row);
+      shell.stage.appendChild(over);
+    }
+
+    const ctx: PlayCtx = {
+      level: i,
+      chapter: ch,
+      chapterIndex: ci,
+      indexInChapter: i - chapterStart(CHAPTERS, ci),
+      win: (stars, msg) => {
+        if (settled) return;
+        settled = true;
+        const prev = loadStars(meta.id)[i] ?? 0;
+        saveStar(meta.id, i, stars);
+        if (stars > prev) api.addStars(stars - prev);
+        api.play("win");
+        const buttons: Array<{ label: string; go: () => void }> = [];
+        if (i + 1 < TOTAL_LEVELS) buttons.push({ label: "下一关 ▶", go: () => openDirectLevel(i + 1) });
+        buttons.push({ label: "🔁 再玩一次", go: () => openDirectLevel(i) });
+        buttons.push({ label: "🗺️ 选关地图", go: () => closeDirect(true) });
+        settle(`⭐ 第 ${i + 1} 关过关!`, msg ?? "守得漂亮!", buttons);
+      },
+      lose: (msg) => {
+        if (settled) return;
+        settled = true;
+        api.play("oops");
+        settle("💪 就差一点点", msg ?? "再来一次一定行!", [
+          { label: "🔁 再试一次", go: () => openDirectLevel(i) },
+          { label: "🗺️ 选关地图", go: () => closeDirect(true) },
+        ]);
+      },
+      sfx: (n) => api.play(n),
+      bonusStars: (n) => api.addStars(n),
+    };
+
+    handle = makePlayLevel(() => players)(shell.stage, ctx);
+    direct = {
+      destroy() {
+        handle?.destroy?.();
+        handle = undefined;
+        shell.destroy();
+      },
+    };
+  }
+
+  function openCampaignLevel(n: number): number {
+    const i = clamp(Math.round(n) - 1, 0, TOTAL_LEVELS - 1);
+    openDirectLevel(i);
+    return i + 1;
   }
 
   coopBtn.addEventListener("click", () => {
@@ -931,7 +1444,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     players = players === 2 ? 1 : 2;
     refreshBar();
   });
-  endlessBtn.addEventListener("click", () => openMode(mountEndless));
+  endlessBtn.addEventListener("click", () => openMode((h, a, b) => mountEndless(h, a, b)));
   vsBtn.addEventListener("click", () => openMode(mountVersus));
   refreshBar();
 
@@ -940,26 +1453,49 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel: makePlayLevel(() => players),
-      mapHint: "先补上堡垒周围的砖再出门;钢墙打不动,拿它当盾牌用。",
-      grandMessage: "188 关全部守住,星星堡垒一次都没被砸中,你就是铁皮战场的总指挥!",
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = makePlayLevel(() => players)(stage, ctx);
+        return {
+          destroy() {
+            handle.destroy?.();
+            if (!mode && !direct) bar.hidden = false;
+          },
+        };
+      },
+      mapHint: "先补上老巢周围的砖再出门;钢板要换彩纸穿甲弹才拆得动,弹力球能拐弯。",
+      grandMessage: "188 关全部守住,星星老巢一次都没被砸中,你就是铁皮战场的总指挥!",
       guide,
       guideTitle: "铁皮坦克大战 · 阵地手记",
     }
   );
 
+  const jumpTo =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" ? location.search : null);
+  if (jumpTo !== null && jumpTo !== undefined) openCampaignLevel(jumpTo);
+
   return {
+    openCampaignLevel,
     destroy() {
       mode?.destroy();
       mode = null;
+      direct?.destroy();
+      direct = null;
       level.destroy();
+      stopSpeaking();
       root.remove();
     },
   };
 }
 
 /** 给首页玩法说明用:这一款到底有哪几种玩法 */
-export const MODE_LABELS: readonly string[] = ["188 关战役", "双人合作", "双人对战", "无尽敌潮"];
+export const MODE_LABELS: readonly string[] = ["188 关战役", "双人合作", "双人对战", "无尽守老巢"];
+
+/** 三种弹丸的一句话说明,攻略与图鉴都用它 */
+export const SHELL_LEGEND: readonly string[] = SHELL_ORDER.map(
+  (k: ShellKind) => `${SHELLS[k].emoji} ${SHELLS[k].name}:${SHELLS[k].desc}`
+);
 
 /** 评一评无尽成绩(波次越高越好),给结算面板用 */
 export function rateEndless(wave: number): 1 | 2 | 3 {
