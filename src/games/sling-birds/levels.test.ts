@@ -3,6 +3,7 @@ import {
   CHAPTERS,
   CHAPTER_SIZES,
   GENERATED_LEVELS,
+  GENERATED_LEVELS_V2,
   LEVELS,
   SPECIAL_KINDS,
   chapterOfId,
@@ -16,19 +17,19 @@ import {
 import { GROUND_Y, WORLD_W } from "./physics";
 
 describe("sling-birds 关卡总量与章节", () => {
-  it("正好 99 关", () => {
-    expect(LEVELS.length).toBe(99);
+  it("正好 188 关(1.0 的 99 关 + 1.1 追加的 89 关)", () => {
+    expect(LEVELS.length).toBe(188);
   });
 
   it("id 从 1 开始连续且唯一", () => {
     LEVELS.forEach((l, i) => expect(l.id).toBe(i + 1));
   });
 
-  it("6 个主题章节,章节大小与 chapter 字段对应", () => {
-    expect(CHAPTERS.length).toBe(6);
-    expect(CHAPTER_SIZES.length).toBe(6);
-    expect(CHAPTER_SIZES.reduce((a, b) => a + b, 0)).toBe(99);
-    for (let c = 0; c < 6; c++) {
+  it("9 个主题章节,章节大小与 chapter 字段对应", () => {
+    expect(CHAPTERS.length).toBe(9);
+    expect(CHAPTER_SIZES.length).toBe(9);
+    expect(CHAPTER_SIZES.reduce((a, b) => a + b, 0)).toBe(188);
+    for (let c = 0; c < 9; c++) {
       expect(levelsOfChapter(c).length, `第 ${c + 1} 章`).toBe(CHAPTER_SIZES[c]);
       expect(chapterOfId(chapterStartId(c))).toBe(c);
     }
@@ -44,7 +45,16 @@ describe("sling-birds 关卡总量与章节", () => {
   it("所有关卡布局互不相同", () => {
     const sigs = new Set(
       LEVELS.map((l) =>
-        JSON.stringify([l.blocks, l.beans, l.slopes, l.boulders, l.platforms, l.balloons, l.winds])
+        JSON.stringify([
+          l.blocks,
+          l.beans,
+          l.slopes,
+          l.boulders,
+          l.platforms,
+          l.balloons,
+          l.winds,
+          l.portals
+        ])
       )
     );
     expect(sigs.size).toBe(LEVELS.length);
@@ -61,9 +71,9 @@ describe("sling-birds 小鸟与目标", () => {
     }
   });
 
-  it("四种小鸟技能都会用到", () => {
+  it("五种小鸟技能都会用到(1.1 新增卷卷·回旋)", () => {
     const kinds = new Set(LEVELS.flatMap((l) => l.birds));
-    expect(kinds).toEqual(new Set(["straight", "split", "slam", "drill"]));
+    expect(kinds).toEqual(new Set(["straight", "split", "slam", "drill", "boomerang"]));
   });
 });
 
@@ -178,6 +188,171 @@ describe("sling-birds 生成器确定性", () => {
     const byId = new Map(LEVELS.map((l) => [l.id, l] as [number, LevelDef]));
     for (const g of GENERATED_LEVELS) {
       expect(JSON.stringify(byId.get(g.id))).toBe(JSON.stringify(g));
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 1.1 新增用例:前 99 关冻结、新三章、新机制                            */
+/* ------------------------------------------------------------------ */
+
+/** FNV-1a 32 位哈希:给前 99 关的 JSON 拍一张「指纹照」 */
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+describe("sling-birds 1.1 前 99 关冻结(老玩家进度不受影响)", () => {
+  it("前 99 关内容与 1.0 完全一致(冻结哈希逐字节校验)", () => {
+    // 该哈希取自 1.0 代码(commit 47061c4)生成的 LEVELS,前 99 关谁都不许动
+    const json = JSON.stringify(LEVELS.slice(0, 99));
+    expect(json.length).toBe(48518);
+    expect(fnv1a(json)).toBe("2eb81054");
+  });
+
+  it("前 99 关不含任何 1.1 新机制(传送门 / 岩壳块 / 卷卷)", () => {
+    for (const l of LEVELS.slice(0, 99)) {
+      expect(l.portals ?? [], `第 ${l.id} 关不该有传送门`).toHaveLength(0);
+      expect(
+        l.blocks.some((b) => b.kind === "shell" || b.kind === "core"),
+        `第 ${l.id} 关不该有岩壳块`
+      ).toBe(false);
+      expect(l.birds.includes("boomerang"), `第 ${l.id} 关不该有卷卷`).toBe(false);
+    }
+  });
+
+  it("1.0 老存档(99 个星级键位)逐关仍然有效,第 100 关随之自然解锁", () => {
+    // 复刻 index.ts 的解锁规则:第 1 关免锁,其余看上一关有没有星
+    const legacyStars: Record<string, number> = {};
+    for (let id = 1; id <= 99; id++) legacyStars[String(id)] = (id % 3) + 1;
+    const starsOf = (id: number): number => legacyStars[String(id)] ?? 0;
+    const unlocked = (id: number): boolean => id === 1 || starsOf(id - 1) > 0;
+
+    for (let id = 1; id <= 99; id++) {
+      const lv = LEVELS[id - 1];
+      expect(lv.id, "键位与关卡一一对应").toBe(id);
+      expect(unlocked(id), `第 ${id} 关保持解锁`).toBe(true);
+    }
+    expect(unlocked(100), "打过第 99 关就能进新章").toBe(true);
+    expect(unlocked(101), "更后面的关卡仍需逐关解锁").toBe(false);
+  });
+});
+
+describe("sling-birds 1.1 新三章(风车高地 / 冰晶矿洞 / 熔岩工坊)", () => {
+  const windlands = levelsOfChapter(6);
+  const crystalMine = levelsOfChapter(7);
+  const lavaWorks = levelsOfChapter(8);
+
+  it("三个新章共 89 关:30 + 30 + 29,id 100~188 连续排布", () => {
+    expect(windlands.length).toBe(30);
+    expect(crystalMine.length).toBe(30);
+    expect(lavaWorks.length).toBe(29);
+    expect(chapterStartId(6)).toBe(100);
+    expect(chapterStartId(7)).toBe(130);
+    expect(chapterStartId(8)).toBe(160);
+    expect(LEVELS[187].id).toBe(188);
+  });
+
+  it("新章名字与图标正确", () => {
+    expect(CHAPTERS[6]).toEqual({ name: "风车高地", emoji: "🌬️" });
+    expect(CHAPTERS[7]).toEqual({ name: "冰晶矿洞", emoji: "💎" });
+    expect(CHAPTERS[8]).toEqual({ name: "熔岩工坊", emoji: "⚙️" });
+  });
+
+  it("每个新章都同时有手写关与生成关", () => {
+    for (const [c, list] of [[6, windlands], [7, crystalMine], [8, lavaWorks]] as const) {
+      expect(list.some((l) => l.handmade), `第 ${c + 1} 章要有手写关`).toBe(true);
+      expect(list.some((l) => !l.handmade), `第 ${c + 1} 章要有生成关`).toBe(true);
+    }
+  });
+
+  it("风车高地每一关都有风区(章节主题机制)", () => {
+    for (const l of windlands) {
+      expect(obstacleKinds(l).includes("wind"), `第 ${l.id} 关 ${l.name}`).toBe(true);
+    }
+  });
+
+  it("冰晶矿洞每一关都有冰晶或传送门,其中传送门关卡 ≥ 15", () => {
+    let portalCount = 0;
+    for (const l of crystalMine) {
+      const kinds = obstacleKinds(l);
+      expect(kinds.includes("ice") || kinds.includes("portal"), `第 ${l.id} 关 ${l.name}`).toBe(true);
+      if (kinds.includes("portal")) portalCount++;
+    }
+    expect(portalCount).toBeGreaterThanOrEqual(15);
+  });
+
+  it("熔岩工坊每一关都有岩壳块或 TNT,其中岩壳关卡 ≥ 15", () => {
+    let shellCount = 0;
+    for (const l of lavaWorks) {
+      const kinds = obstacleKinds(l);
+      expect(kinds.includes("shell") || kinds.includes("tnt"), `第 ${l.id} 关 ${l.name}`).toBe(true);
+      if (kinds.includes("shell")) shellCount++;
+    }
+    expect(shellCount).toBeGreaterThanOrEqual(15);
+  });
+
+  it("新小鸟卷卷只在新三章登场,且登场 ≥ 12 关", () => {
+    const withBoomer = LEVELS.filter((l) => l.birds.includes("boomerang"));
+    expect(withBoomer.length).toBeGreaterThanOrEqual(12);
+    for (const l of withBoomer) {
+      expect(l.chapter, `第 ${l.id} 关`).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it("三个新机制(传送门 / 岩壳块 / 卷卷)在新章全部登场", () => {
+    const newOnes = LEVELS.slice(99);
+    expect(newOnes.some((l) => (l.portals?.length ?? 0) > 0)).toBe(true);
+    expect(newOnes.some((l) => l.blocks.some((b) => b.kind === "shell"))).toBe(true);
+    expect(newOnes.some((l) => l.birds.includes("boomerang"))).toBe(true);
+  });
+
+  it("传送门定义合法:两口都悬在场内半空、相距足够远", () => {
+    for (const l of LEVELS) {
+      for (const p of l.portals ?? []) {
+        for (const [mx, my] of [
+          [p.ax, p.ay],
+          [p.bx, p.by]
+        ] as const) {
+          expect(mx - p.r, `第 ${l.id} 关传送门`).toBeGreaterThanOrEqual(150);
+          expect(mx + p.r).toBeLessThanOrEqual(WORLD_W - 10);
+          expect(my - p.r).toBeGreaterThan(20);
+          expect(my + p.r).toBeLessThan(GROUND_Y - 20);
+        }
+        expect(Math.hypot(p.ax - p.bx, p.ay - p.by), `第 ${l.id} 关两口太近`).toBeGreaterThan(60);
+      }
+    }
+  });
+
+  it("v2 生成关的障碍组合互不相同", () => {
+    const sigs = GENERATED_LEVELS_V2.map((l) => obstacleKinds(l).join("+"));
+    expect(new Set(sigs).size).toBe(GENERATED_LEVELS_V2.length);
+  });
+
+  it("冒烟锚点关(第 100 / 145 / 188 关)存在、章节正确且为手写布局", () => {
+    const l100 = LEVELS[99];
+    const l145 = LEVELS[144];
+    const l188 = LEVELS[187];
+    expect([l100.id, l100.chapter, l100.handmade]).toEqual([100, 6, true]);
+    expect([l145.id, l145.chapter, l145.handmade]).toEqual([145, 7, true]);
+    expect([l188.id, l188.chapter, l188.handmade]).toEqual([188, 8, true]);
+    // 决战关要用上全部三个新机制
+    expect(l188.portals?.length).toBeGreaterThanOrEqual(1);
+    expect(l188.blocks.some((b) => b.kind === "shell")).toBe(true);
+    expect(l188.birds.includes("boomerang")).toBe(true);
+  });
+
+  it("新章关卡同样保证布局合法(岩壳块不越界、不与其他方块重叠)", () => {
+    for (const l of LEVELS.slice(99)) {
+      for (const b of l.blocks.filter((k) => k.kind === "shell")) {
+        expect(b.x).toBeGreaterThanOrEqual(140);
+        expect(b.x + b.w).toBeLessThanOrEqual(WORLD_W - 10);
+        expect(b.y + b.h).toBeLessThanOrEqual(GROUND_Y + 0.01);
+      }
     }
   });
 });

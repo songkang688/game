@@ -1181,7 +1181,7 @@ const RECIPES_V2: Recipe2[] = [
   { id: 157, chapter: 7, name: "深蓝密室", seed: 825, feats: ["ice", "glass", "portal", "tnt"], beans: 3, birds: ["drill", "slam", "split", "straight"] },
   { id: 158, chapter: 7, name: "大水晶前厅", seed: 826, feats: ["ice", "stone", "portal", "platform", "balloon"], beans: 4, birds: ["drill", "split", "slam", "boomerang", "straight"] },
   // —— 熔岩工坊(第 9 章):每关都有岩壳块或 TNT ——
-  { id: 162, chapter: 8, name: "壳中豆豆", seed: 901, feats: ["shell", "tnt"], beans: 2, birds: ["slam", "straight", "split"] },
+  { id: 162, chapter: 8, name: "壳中豆豆", seed: 901, feats: ["shell", "stone", "tnt"], beans: 2, birds: ["slam", "straight", "split"] },
   { id: 163, chapter: 8, name: "铁匠的滚石", seed: 902, feats: ["stone", "boulder", "tnt"], beans: 2, birds: ["straight", "slam", "drill"] },
   { id: 164, chapter: 8, name: "岩壳双塔", seed: 903, feats: ["shell", "glass", "boulder"], beans: 3, birds: ["slam", "drill", "split", "straight"] },
   { id: 165, chapter: 8, name: "流水线平台", seed: 904, feats: ["shell", "platform", "tnt"], beans: 3, birds: ["slam", "split", "drill", "straight"] },
