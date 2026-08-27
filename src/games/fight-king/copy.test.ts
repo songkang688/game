@@ -304,6 +304,8 @@ describe("源码巡检", () => {
     expect(files.sort()).toEqual(
       [
         "ai.ts",
+        // 1.3 视觉资产库（行头 / 表情 / 火花 / 视差主题，全是纯函数）
+        "art.ts",
         "controls.ts",
         // 单测用的 DOM 桩，不参与打包
         "domStub.ts",
