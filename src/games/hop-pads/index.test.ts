@@ -11,7 +11,18 @@ import { El, flushFrames, installDom, restoreDom, windowListenerCount, type Dom 
 import { MAX_HOLD, powerForDistance } from "./physics";
 import { requiredPower } from "./run";
 import { levelDifficulty } from "./levels";
-import { CHARGE_BAR_H, FALL_TIME, createStage, fitScale, meta, mount, project, type Stage } from "./index";
+import {
+  CHARGE_BAR_H,
+  FALL_TIME,
+  IDLE_KEYS,
+  createStage,
+  fitScale,
+  meta,
+  mount,
+  project,
+  singleKeyHint,
+  type Stage,
+} from "./index";
 
 let dom: Dom;
 
@@ -324,6 +335,52 @@ describe("一块舞台跑起来", () => {
     expect(stage.cancel()).toBe(false);
     expect(stage.phase()).toBe("flying");
     stage.destroy();
+  });
+
+  it("方向键 / WASD 只指路不接语义:phase 一动不动,屏上闪一句「只用一个键」", () => {
+    const { stage } = makeStage();
+    const canvas = dom.root.find((e) => e.className.includes("hp-canvas"))!;
+    stage.tick(20);
+    for (const k of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "w", "a", "s", "D"]) {
+      for (const f of dom.winListeners.get("keydown") ?? []) f({ key: k });
+      // 一个都不进蓄力:这一款本来就没有方向可指
+      expect(stage.phase(), `按 ${k} 不该起跳`).toBe("ready");
+      expect(stage.flash()).toContain("只用一个键");
+      stage.tick(16);
+      expect(canvas.getAttribute("data-flash")).toContain("按住 F 或 空格 蓄力");
+    }
+    expect(stage.state().hops).toBe(0);
+    stage.destroy();
+  });
+
+  it("指路话按这一路真正认的键现编:星星那半屏写的是 L 和 K", () => {
+    expect(singleKeyHint(["f", " ", "spacebar"], ["g"])).toBe(
+      "这一款只用一个键:按住 F 或 空格 蓄力,松手就跳,蓄过头了按 G 收力"
+    );
+    expect(singleKeyHint(["l"], ["k"])).toBe("这一款只用一个键:按住 L 蓄力,松手就跳,蓄过头了按 K 收力");
+    // 双人同屏那两套键位一个字母都没被这条改动碰过
+    expect(IDLE_KEYS).not.toContain("f");
+    expect(IDLE_KEYS).not.toContain("l");
+    expect(IDLE_KEYS).not.toContain("g");
+    expect(IDLE_KEYS).not.toContain("k");
+  });
+
+  it("指路提示不改任何一跳的判定:同样的力度,座数与分数一字不差", () => {
+    const plain = makeStage().stage;
+    plain.tick(20);
+    perfectJump(plain);
+    const want = { hops: plain.state().hops, score: plain.state().score, combo: plain.state().combo };
+    plain.destroy();
+
+    const noisy = makeStage().stage;
+    noisy.tick(20);
+    for (const k of ["ArrowLeft", "w", "s", "d"]) {
+      for (const f of dom.winListeners.get("keydown") ?? []) f({ key: k });
+    }
+    perfectJump(noisy);
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "ArrowUp" });
+    expect({ hops: noisy.state().hops, score: noisy.state().score, combo: noisy.state().combo }).toEqual(want);
+    noisy.destroy();
   });
 
   it("双人各收各的力:朵朵按 G、星星按 K,谁也收不掉对方的", () => {

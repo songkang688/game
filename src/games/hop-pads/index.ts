@@ -277,6 +277,8 @@ export interface Stage {
   cancel: () => boolean;
   /** 力度是不是已经蓄满了(再按下去也不会更远) */
   full: () => boolean;
+  /** 屏幕上正闪着的那句话(没有就是空串) */
+  flash: () => string;
   phase: () => StagePhase;
   state: () => RunState;
   /** 暂停 / 继续 */
@@ -302,6 +304,31 @@ interface PointerLikeEvent {
   changedTouches?: ArrayLike<{ identifier?: number }>;
 }
 
+/**
+ * 方向键 / `WASD` 在这一款里本来就没有语义 —— 跳跳台是**单键蓄力**玩法,
+ * 一个键管按住与松手,四个方向没有任何东西可指。
+ *
+ * 硬给它们接一个动作比不接更糟(按左右会莫名其妙起跳),所以这里只做一件事:
+ * 按到了就指个路,告诉孩子真正该按的是哪个键,免得他以为键盘按坏了。
+ */
+export const IDLE_KEYS = ["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d"] as const;
+
+function keyFace(k: string): string {
+  if (k === " " || k === "spacebar") return "空格";
+  return k.toUpperCase();
+}
+
+/** 「这一款只用一个键」那句指路话。按这一路真正认的键现编,双人同屏左右两边各说各的 */
+export function singleKeyHint(keys: readonly string[], cancelKeys: readonly string[]): string {
+  const faces: string[] = [];
+  for (const k of keys) {
+    const face = keyFace(k);
+    if (!faces.includes(face)) faces.push(face);
+  }
+  const back = cancelKeys.length > 0 ? `,蓄过头了按 ${keyFace(cancelKeys[0])} 收力` : "";
+  return `这一款只用一个键:按住 ${faces.join(" 或 ")} 蓄力,松手就跳${back}`;
+}
+
 function prefersReducedMotion(): boolean {
   const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
   try {
@@ -315,6 +342,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   const reduced = prefersReducedMotion();
   const keys = (opts.keys ?? ["f", " ", "spacebar"]).map((k) => k.toLowerCase());
   const cancelKeys = (opts.cancelKeys ?? ["g"]).map((k) => k.toLowerCase());
+  const hintLine = singleKeyHint(keys, cancelKeys);
   const heroColor = opts.color ?? "#F2A268";
   const goal = opts.goal ?? Number.POSITIVE_INFINITY;
 
@@ -656,6 +684,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     canvas.setAttribute("data-phase", phase);
     canvas.setAttribute("data-paused", paused ? "1" : "0");
     canvas.setAttribute("data-full", isFull() ? "1" : "0");
+    // 画面上闪的那句话也挂成属性:不读画布像素也量得到(指路提示就靠它验)
+    canvas.setAttribute("data-flash", flashT > 0 ? flashText : "");
   }
 
   // ---- 主循环 ----
@@ -725,6 +755,13 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       cancelCharge();
       return;
     }
+    // 方向键 / WASD 只指路,不接语义:phase 一动不动,这一跳的判定也一点不受影响
+    if (!keys.includes(k) && (IDLE_KEYS as readonly string[]).includes(k)) {
+      if (ev.repeat || over || paused) return;
+      flashText = hintLine;
+      flashT = 1.4;
+      return;
+    }
     if (!keys.includes(k)) return;
     ev.preventDefault?.();
     if (ev.repeat) return;
@@ -768,6 +805,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     release,
     cancel: cancelCharge,
     full: isFull,
+    flash: () => (flashT > 0 ? flashText : ""),
     phase: () => phase,
     state: () => run,
     camera: () => cam,
