@@ -12,15 +12,20 @@ import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { TIER_FACES, TIER_NAMES, ghostLine, playGhost, type AiTier, type GhostRun } from "./ai";
 import {
+  drawCloudPuff,
   drawHeroSprite,
+  drawHills,
+  drawIsland,
   drawPadMotif,
+  drawParticles,
   drawSideStripes,
   drawSpringCoil,
+  drawStar,
   fogAlpha,
   padTopPattern,
+  skyTheme,
   spawnShards,
   stepParticles,
-  drawParticles,
   type HeroPose,
   type HeroVariant,
   type Particle,
@@ -705,11 +710,40 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (!ctx) return;
     const dpr = canvas.width / Math.max(1, cam.w);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // 天空跳台世界:时段查表(无尽每 20 跳白天→黄昏→星夜),三段渐变到地面色
+    const theme = skyTheme(run.hops, Boolean(opts.ramp));
+    const hy = cam.h * (cam.horizon ?? 0.74);
     const sky = ctx.createLinearGradient(0, 0, 0, cam.h);
-    sky.addColorStop(0, "#FFF3E4");
-    sky.addColorStop(1, "#EDE9FF");
+    sky.addColorStop(0, theme.top);
+    sky.addColorStop(Math.min(1, Math.max(0.05, hy / cam.h)), theme.horizon);
+    sky.addColorStop(1, theme.ground);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, cam.w, cam.h);
+
+    // 星夜:洒一把定在原地的小星星(不闪不飘,reduced 也不吵)
+    for (let i = 0; i < theme.stars; i++) {
+      const fx = ((i * 97 + 31) % 100) / 100;
+      const fy = ((i * 57 + 13) % 100) / 100;
+      drawStar(ctx, fx * cam.w, fy * hy * 0.8, 2.4, "#FFF2C0");
+    }
+
+    // 远景(视差 0.2):远山剪影一条 + 三朵大云
+    const drift = reduced ? 0 : (cam.z + cam.x * 0.5) * cam.scale * 0.2;
+    drawHills(ctx, cam.w, hy, theme.hill, drift);
+    const span = cam.w + 200;
+    for (let i = 0; i < 3; i++) {
+      const cx = (((((i * span) / 3 + 50 - drift) % span) + span) % span) - 100;
+      drawCloudPuff(ctx, cx, hy - (0.34 + 0.16 * (i % 2)) * hy, (15 + (i % 3) * 5) * Math.min(1.6, cam.scale + 0.4), theme.cloud);
+    }
+
+    // 中景(视差 0.5):两块漂浮小岛剪影
+    const drift2 = reduced ? 0 : (cam.z + cam.x * 0.5) * cam.scale * 0.5;
+    const span2 = cam.w + 260;
+    for (let i = 0; i < 2; i++) {
+      const cx = (((((i * span2) / 2 + 130 - drift2) % span2) + span2) % span2) - 130;
+      drawIsland(ctx, cx, hy - (0.14 + 0.1 * i) * hy, (20 + i * 8) * Math.min(1.5, cam.scale + 0.3), theme.island);
+    }
 
     // 远处的台子先画,近处的后画,自然叠出前后关系;顶出画面的直接不画
     const from = Math.max(0, run.index - 1);
@@ -721,7 +755,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       drawPad(ctx, cam, snap, {
         target: i === run.index + 1,
         fog: fogAlpha(snap.z - cam.z),
-        fogColor: "#FFF3D9",
+        fogColor: theme.horizon,
         entry: reduced ? 1 : clamp01((clock - (born.get(i) ?? clock)) / 0.45),
         glow: i === glowIdx ? glowT : 0,
         standing: i === run.index && (phase === "ready" || phase === "charging"),
@@ -779,7 +813,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     drawChargeBar(ctx);
 
     if (flashT > 0 && flashText) {
-      ctx.fillStyle = "#8A5330";
+      // 闪话的墨色跟着时段走:星夜换奶白,别让字沉进夜里
+      ctx.fillStyle = theme.ink;
       ctx.font = `900 ${Math.round(15 + 3 * cam.scale)}px system-ui`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
