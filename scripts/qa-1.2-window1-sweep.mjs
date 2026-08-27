@@ -199,13 +199,15 @@ async function overflowInfo(page) {
   return page.evaluate(() => {
     const doc = document.documentElement;
     const decorative = /^[\s★☆🔒✔✖◀▶▲▼♾️🏆🌟·|—-]+$/u;
+    // 纯 emoji（含变体选择符 / 零宽连接）也是装饰：地块上那朵 🌷 不是要读的正文
+    const emojiOnly = /^[\p{Extended_Pictographic}\uFE0F\u200D\s]+$/u;
     let minFont = Infinity;
     let worst = "";
     let minShell = Infinity;
     let worstShell = "";
     for (const el of document.querySelectorAll(".game-screen *")) {
       const t = (el.textContent ?? "").trim();
-      if (!t || el.children.length || decorative.test(t)) continue;
+      if (!t || el.children.length || decorative.test(t) || emojiOnly.test(t)) continue;
       const cs = getComputedStyle(el);
       if (cs.display === "none" || cs.visibility === "hidden") continue;
       const size = parseFloat(cs.fontSize);
@@ -224,22 +226,47 @@ async function overflowInfo(page) {
   });
 }
 
-/** Esc 只该弹一层：外壳暂停面板开着的时候，游戏自己不许另外记一套暂停 */
+/**
+ * Esc 只该弹一层。
+ *
+ * 本窗口 12 款都自己接管了 Esc，所以正确的样子是：**外壳那层面板一次都不该出现**
+ * （游戏 `e.preventDefault()` 把 Esc 接住了，`gameShell` 看到 `defaultPrevented` 就让路），
+ * 而游戏自己的暂停层跟着按键一下一下地开、关、开。
+ *
+ * 第 1 轮 W1-R1-01 修之前是反过来的：两层一起动还错开一拍。当时这里写的判据是
+ * 「两层同步」，那只在缺陷还在的时候成立；修好之后 `shell` 恒为 false，
+ * 拿它跟游戏自己的暂停比就必然对不上，是判据过期了，不是产品回退。
+ */
 async function escLayers(page) {
   const read = () =>
-    page.evaluate(() => ({
-      shell: !!document.querySelector(".dialog--pause"),
-      selfPaused: /暂停中/.test(document.body.innerText)
-    }));
-  const snaps = [];
+    page.evaluate(() => {
+      // 认最里层那个：外层容器的 textContent 会把注入的 CSS 和整屏文字都算进来
+      const hit = /先歇一会儿|暂停中|接着玩|继续下|回来接着/;
+      const stage = document.querySelector(".game-stage");
+      let selfPaused = false;
+      for (const el of stage ? stage.querySelectorAll("*") : []) {
+        if (el.tagName === "STYLE" || el.tagName === "SCRIPT") continue;
+        if (!hit.test(el.textContent ?? "")) continue;
+        if (Array.from(el.children).some((c) => hit.test(c.textContent ?? ""))) continue;
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") continue;
+        if (el.getBoundingClientRect().height < 4) continue;
+        selfPaused = true;
+        break;
+      }
+      return { shell: !!document.querySelector(".dialog--pause"), selfPaused };
+    });
+  const snaps = [await read()];
   for (let i = 0; i < 3; i++) {
     await page.keyboard.press("Escape");
     await sleep(320);
     snaps.push(await read());
   }
-  // 关掉可能还开着的面板，别影响后面的用例
-  await page.keyboard.press("Escape");
-  await sleep(250);
+  // 收干净，别影响后面的用例
+  if (snaps.at(-1).selfPaused) {
+    await page.keyboard.press("Escape");
+    await sleep(250);
+  }
   return snaps;
 }
 
@@ -280,11 +307,16 @@ async function main() {
     }, game.id);
     const extras = declared.filter((m) => m !== "campaign");
     const { labels, out } = await openEachMode(page);
+    // 只要求「声明了的都在」，不要求「界面上一个都不许多」：
+    // `combo-clash` 的「🎯 训练场」是不结算胜负的练习区（帧数据、输入历史都摊开给你看），
+    // 它不属于 playModes 里 campaign / versus / endless 那套口径，meta.modes 不该认领它。
     log(
       game.id,
-      labels.length === extras.length,
+      labels.length >= extras.length,
       `meta.modes 说的 ${extras.length} 个非战役入口界面上都在`,
-      labels.join(" / ")
+      labels.length > extras.length
+        ? `${labels.join(" / ")}（多出 ${labels.length - extras.length} 个不结算胜负的练习入口）`
+        : labels.join(" / ")
     );
     const deadEntries = out.filter((o) => !o.ok).map((o) => o.label);
     log(game.id, deadEntries.length === 0, "每个模式入口都点得开、真的挂出界面", deadEntries.join(", "));
@@ -304,12 +336,17 @@ async function main() {
 
     // 6. Esc 只弹一层
     const snaps = await escLayers(page);
-    const desync = snaps.filter((s) => s.shell !== s.selfPaused);
+    // 进关时不该是暂停的；此后三下 Esc 要一下一下地开、关、开；外壳那层一次都不许露头
+    const want = [false, true, false, true];
+    const ok =
+      snaps.length === 4 &&
+      !snaps.some((s) => s.shell) &&
+      snaps.every((s, i) => s.selfPaused === want[i]);
     log(
       game.id,
-      desync.length === 0,
-      "Esc 只弹一层暂停（外壳面板与游戏自己的暂停条同步）",
-      JSON.stringify(snaps)
+      ok,
+      "Esc 只弹一层暂停（外壳不叠面板，游戏自己那层一下一下地开关）",
+      JSON.stringify(snaps.map((s) => `${s.shell ? "S" : "-"}${s.selfPaused ? "P" : "-"}`))
     );
 
     // 7. destroy 无泄漏

@@ -88,7 +88,7 @@ const CSS = `
 .se-tile{position:relative;border:none;border-radius:6px;background:#fffdf8;padding:1px;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-family:inherit;
   overflow:hidden;min-width:0;min-height:0;}
-.se-tile-emoji{font-size:clamp(13px,2.2vw,15px);line-height:1;}
+.se-tile-emoji{font-size:clamp(14px,2.2vw,15px);line-height:1;}
 .se-tile-price{font-size:var(--mt-control,14px);font-weight:800;color:#8a6a44;line-height:1.1;}
 .se-tile-band{position:absolute;top:0;left:0;right:0;height:22%;border-radius:6px 6px 0 0;}
 .se-tile-own{position:absolute;bottom:0;left:0;right:0;height:16%;font-size:0;}
