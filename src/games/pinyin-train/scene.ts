@@ -86,9 +86,11 @@ const TICKET_CLIP = ticketZigzag(7, 4);
 
 /** 车票的两层背景：左侧圆孔（打孔的暗点）+ 类别色边条 */
 function ticketBg(band: string): string {
+  // B 档 TOP10（第 1 轮移交）：类别色边条 5px→8px（17–25px），360px 下三色类别更好认；
+  // 25px 仍在 padding-left 28/30px 文字起点之内，圆孔（11px±3.5）也碰不到，热区零改动
   return (
     `background-image:radial-gradient(circle 3.5px at 11px 50%,rgba(74,68,96,.28) 3.4px,transparent 3.6px),` +
-    `linear-gradient(90deg,transparent 0 17px,${band} 17px 22px,transparent 22px);`
+    `linear-gradient(90deg,transparent 0 17px,${band} 17px 25px,transparent 25px);`
   );
 }
 
