@@ -35,7 +35,6 @@ import {
   makeTower,
   nudgeToVertical,
   paddleBounce,
-  particleCount,
   popcornTargets,
   powerBarLabel,
   powerEffects,
@@ -58,8 +57,27 @@ import {
   type TowerState
 } from "./logic";
 
-import { paintCandyBrick } from "../../art/kit/candyBrick";
-import { crackLevel } from "./visual";
+import { candyDarken, candyLighten, paintCandyBrick } from "../../art/kit/candyBrick";
+import {
+  BK_PALETTE,
+  MAGNET_ARC_LINES,
+  PIERCE_ORBIT_STARS,
+  RIBBON_COLORS,
+  RIBBON_MIN_COMBO,
+  clearDebris,
+  crackLevel,
+  magnetArcPhase,
+  magnetArcWobble,
+  paddlePressOffset,
+  paintDebris,
+  pierceOrbitAngle,
+  pushDebris,
+  ribbonAlpha,
+  spawnBrickDebris,
+  stepDebris,
+  trailLayers,
+  type Debris
+} from "./visual";
 
 const BRICK_COLORS = ["#FF9EC8", "#FFD26E", "#9FE08D", "#8FCBFF", "#C9A0F0", "#FFB48A"];
 const PORTAL_COLOR = "#7B6CD9";
@@ -83,15 +101,6 @@ interface Capsule {
   x: number;
   y: number;
   kind: PowerKind;
-}
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
 }
 
 const CSS = `
@@ -225,30 +234,135 @@ function drawPortal(c2d: CanvasRenderingContext2D, cx: number, cy: number): void
   c2d.fill();
 }
 
-function drawPaddle(c2d: CanvasRenderingContext2D, x: number, w: number, magnet: boolean): void {
-  c2d.fillStyle = magnet ? "#4FAE8C" : "#8A6BD0";
+/**
+ * 挡板质感：三停线性渐变（顶亮→主体→底暗）+ 两端圆头高光点。
+ * 磁铁态换 bkPaddleMagnet 并加表面电弧微光与吸附点凹槽（色 + 电弧双通道）。
+ * 接球瞬间靠 paddlePressOffset 往下画 2px 再 80ms 弹回——
+ * 纯视觉偏移，PADDLE_Y / PADDLE_H 判定线一动不动。
+ */
+function drawPaddle(
+  c2d: CanvasRenderingContext2D,
+  x: number,
+  w: number,
+  magnet: boolean,
+  reduce: boolean,
+  nowMs: number,
+  catchMs: number
+): void {
+  const py = PADDLE_Y + paddlePressOffset(nowMs - catchMs, reduce);
+  const base = magnet ? BK_PALETTE.bkPaddleMagnet : BK_PALETTE.bkPaddle;
+  const grad = c2d.createLinearGradient(0, py, 0, py + PADDLE_H);
+  grad.addColorStop(0, candyLighten(base, 0.32));
+  grad.addColorStop(0.45, base);
+  grad.addColorStop(1, candyDarken(base, 0.2));
+  c2d.save();
   c2d.beginPath();
-  c2d.roundRect(x - w / 2, PADDLE_Y, w, PADDLE_H, 6);
+  c2d.roundRect(x - w / 2, py, w, PADDLE_H, 6);
+  c2d.fillStyle = grad;
   c2d.fill();
+  c2d.strokeStyle = candyDarken(base, 0.24);
+  c2d.lineWidth = 1;
+  c2d.stroke();
+  c2d.fillStyle = "rgba(255,255,255,.8)";
+  for (const sx of [-1, 1]) {
+    c2d.beginPath();
+    c2d.arc(x + sx * (w / 2 - 4.5), py + 3.6, 1.6, 0, Math.PI * 2);
+    c2d.fill();
+  }
+  if (magnet) {
+    // 吸附点提示凹槽：球会吸在板心，先把位置画出来
+    c2d.fillStyle = "rgba(74,58,88,.28)";
+    c2d.beginPath();
+    c2d.roundRect(x - 7, py + 1.6, 14, 2.6, 1.3);
+    c2d.fill();
+    // 表面电弧微光：两条抖动细线，每 90ms 换一次姿势；reduced 静止为常亮直线
+    const phase = magnetArcPhase(nowMs, reduce);
+    c2d.strokeStyle = "rgba(255,255,244,.9)";
+    c2d.lineWidth = 1;
+    for (let line = 0; line < MAGNET_ARC_LINES; line++) {
+      const yy = py - 1.6 - line * 2.2;
+      const x0 = x - w / 2 + 5;
+      const x1 = x + w / 2 - 5;
+      const segs = 4;
+      c2d.beginPath();
+      c2d.moveTo(x0, yy);
+      for (let s = 1; s <= segs; s++) {
+        const sx = x0 + ((x1 - x0) * s) / segs;
+        c2d.lineTo(sx, s === segs ? yy : yy + magnetArcWobble(phase, line * 5 + s) * 1.6);
+      }
+      c2d.stroke();
+    }
+  }
+  c2d.restore();
 }
 
-function drawBallWithTrail(c2d: CanvasRenderingContext2D, b: Ball, speed: number, pierce: boolean): void {
+/**
+ * 球与拖尾：拖尾方向沿历史位置采样（1.2 的做法原样保留），
+ * 升级成双层——外晕宽而淡、芯线细而亮；span 仍由 logic.trailLength 决定。
+ * 球本体三停径向渐变（高光左上 45°）；穿透态外圈加两颗星屑环绕。
+ */
+function drawBallWithTrail(
+  c2d: CanvasRenderingContext2D,
+  b: Ball,
+  speed: number,
+  pierce: boolean,
+  nowMs: number,
+  reduce: boolean
+): void {
   if (b.trail.length > 1) {
-    const span = trailLength(speed);
+    const layers = trailLayers(speed, BALL_R);
+    const tracePath = (): void => {
+      c2d.beginPath();
+      c2d.moveTo(b.trail[0][0], b.trail[0][1]);
+      for (let i = 1; i < b.trail.length; i++) c2d.lineTo(b.trail[i][0], b.trail[i][1]);
+    };
     c2d.save();
-    c2d.strokeStyle = pierce ? "rgba(140,220,255,.5)" : "rgba(255,107,158,.35)";
-    c2d.lineWidth = Math.max(3, Math.min(BALL_R * 1.6, span * 0.3));
     c2d.lineCap = "round";
-    c2d.beginPath();
-    c2d.moveTo(b.trail[0][0], b.trail[0][1]);
-    for (let i = 1; i < b.trail.length; i++) c2d.lineTo(b.trail[i][0], b.trail[i][1]);
+    c2d.strokeStyle = pierce ? "rgba(140,220,255,.4)" : BK_PALETTE.bkTrailGlow;
+    c2d.lineWidth = layers.glowWidth;
+    tracePath();
+    c2d.stroke();
+    c2d.globalAlpha = 0.65;
+    c2d.strokeStyle = BK_PALETTE.bkTrailCore;
+    c2d.lineWidth = layers.coreWidth;
+    tracePath();
     c2d.stroke();
     c2d.restore();
   }
-  c2d.fillStyle = pierce ? "#6FD0FF" : "#FF6B9E";
+  const base = pierce ? "#6FD0FF" : "#FF6B9E";
+  const g = c2d.createRadialGradient(b.x - BALL_R * 0.4, b.y - BALL_R * 0.4, BALL_R * 0.15, b.x, b.y, BALL_R);
+  g.addColorStop(0, "#FFFFFF");
+  g.addColorStop(0.35, candyLighten(base, 0.3));
+  g.addColorStop(1, candyDarken(base, 0.12));
+  c2d.fillStyle = g;
   c2d.beginPath();
   c2d.arc(b.x, b.y, BALL_R, 0, Math.PI * 2);
   c2d.fill();
+  if (pierce) {
+    c2d.fillStyle = "#FFF6DF";
+    for (let i = 0; i < PIERCE_ORBIT_STARS; i++) {
+      const a = pierceOrbitAngle(nowMs, i, reduce);
+      c2d.beginPath();
+      c2d.arc(b.x + Math.cos(a) * (BALL_R + 3.5), b.y + Math.sin(a) * (BALL_R + 3.5), 1.5, 0, Math.PI * 2);
+      c2d.fill();
+    }
+  }
+}
+
+/** 连击彩带：连击 ≥ 5 时画面边缘三色细带一闪（120ms；alpha 由 ribbonAlpha 算好传入） */
+function drawRibbon(c2d: CanvasRenderingContext2D, alpha: number): void {
+  if (alpha <= 0) return;
+  c2d.save();
+  c2d.globalAlpha = alpha;
+  RIBBON_COLORS.forEach((color, i) => {
+    const off = 1 + i * 2;
+    c2d.fillStyle = color;
+    c2d.fillRect(off, off, W - off * 2, 2);
+    c2d.fillRect(off, H - off - 2, W - off * 2, 2);
+    c2d.fillRect(off, off, 2, H - off * 2);
+    c2d.fillRect(W - off - 2, off, 2, H - off * 2);
+  });
+  c2d.restore();
 }
 
 function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule): void {
@@ -269,27 +383,6 @@ function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule): void {
   c2d.textBaseline = "middle";
   c2d.fillStyle = "#3A2E4A";
   c2d.fillText(look.emoji, cap.x, cap.y + 1);
-}
-
-function drawParticles(c2d: CanvasRenderingContext2D, list: Particle[]): void {
-  for (const p of list) {
-    c2d.globalAlpha = Math.max(0, Math.min(1, p.life * 2.2));
-    c2d.fillStyle = p.color;
-    c2d.beginPath();
-    c2d.arc(p.x, p.y, 2.6, 0, Math.PI * 2);
-    c2d.fill();
-  }
-  c2d.globalAlpha = 1;
-}
-
-function stepParticles(list: Particle[], dt: number): Particle[] {
-  for (const p of list) {
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += 380 * dt;
-    p.life -= dt;
-  }
-  return list.filter((p) => p.life > 0);
 }
 
 /** 拖板热区：手指在球台下半屏拖，板心与手指之间留一点偏移，别被手挡住 */
@@ -322,10 +415,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   let moveT = 0;
   let balls: Ball[] = [];
   let capsules: Capsule[] = [];
-  let particles: Particle[] = [];
+  let debris: Debris[] = [];
   let timers: PowerTimers = {};
   let combo = 0;
   let lastPop = 0;
+  /** 最近一次接球的时间戳（挡板下压回弹用，纯视觉） */
+  let catchAt = -1e9;
+  /** 最近一次触发连击彩带的时间戳与当时连击数 */
+  let ribbonAt = -1e9;
+  let ribbonCombo = 0;
   /** 击砖顿感剩余秒数 */
   let stopT = 0;
   let sinceHit = 0;
@@ -453,13 +551,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   function burst(r: number, c: number): void {
-    const n = particleCount(7, reduce);
     const cx = c * brickW + brickW / 2 + brickOffsetX();
     const cy = BRICK_TOP + r * BRICK_H + BRICK_H / 2;
     const color = faceOf(r, c).color;
-    for (let i = 0; i < n; i++) {
-      particles.push({ x: cx, y: cy, vx: (rand() - 0.5) * 190, vy: (rand() - 0.5) * 160 - 40, life: 0.45, color });
-    }
+    // 四角碎片 + 星屑，seed 按格子固定；reduced 一片不生成，总量有上限
+    debris = pushDebris(debris, spawnBrickDebris(r * 131 + c * 17 + 1, cx, cy, color, reduce));
   }
 
   function comboPop(): void {
@@ -534,6 +630,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     combo++;
     burst(r, c);
     comboPop();
+    if (combo >= RIBBON_MIN_COMBO) {
+      ribbonAt = lastTime;
+      ribbonCombo = combo;
+    }
     if (res.gift || rand() < DROP_CHANCE) dropCapsule(r, c);
     if (res.chain) {
       for (const [nr, nc] of popcornTargets(r, c, rows, COLS)) breakAt(nr, nc, true);
@@ -643,6 +743,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           b.y = PADDLE_Y - BALL_R - 1;
           ctx.sfx("tap");
         }
+        catchAt = lastTime;
         combo = 0;
       }
 
@@ -728,10 +829,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       }
     }
     for (const cap of capsules) drawCapsule(c2d, cap);
-    drawPaddle(c2d, paddleX, paddleW(), eff().magnet);
     const sp = speed();
-    for (const b of balls) drawBallWithTrail(c2d, b, sp, eff().pierce);
-    drawParticles(c2d, particles);
+    for (const b of balls) drawBallWithTrail(c2d, b, sp, eff().pierce, lastTime, reduce);
+    drawPaddle(c2d, paddleX, paddleW(), eff().magnet, reduce, lastTime, catchAt);
+    paintDebris(c2d, debris);
+    drawRibbon(c2d, ribbonAlpha(lastTime - ribbonAt, ribbonCombo, reduce));
     if (SMOKE) canvas.dataset.balls = balls.map((b) => `${Math.round(b.x)},${Math.round(b.y)}`).join(";");
   }
 
@@ -741,7 +843,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     lastTime = now;
     moveT += dt;
     timers = tickPowers(timers, dt);
-    particles = stepParticles(particles, dt);
+    debris = stepDebris(debris, dt * 1000);
     if (hintT > 0) {
       hintT -= dt;
       if (hintT <= 0) msgEl.textContent = "";
@@ -845,6 +947,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
+      clearDebris(debris);
       jan.destroy();
       wrap.remove();
     }
@@ -902,7 +1005,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   let dir = 0;
   let timers: PowerTimers = {};
   let capsules: Capsule[] = [];
-  let particles: Particle[] = [];
+  let debris: Debris[] = [];
   let running = false;
   let over = false;
   let lastTime = 0;
@@ -910,6 +1013,10 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   let combo = 0;
   let lastPop = 0;
   let paceT = 0;
+  /** 最近一次接球时间戳（挡板下压回弹）与彩带触发点（都是纯视觉） */
+  let catchAt = -1e9;
+  let ribbonAt = -1e9;
+  let ribbonCombo = 0;
   const brickW = W / TOWER_COLS;
 
   function eff() {
@@ -940,7 +1047,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     ball = { x: paddleX, y: PADDLE_Y - BALL_R - 1, vx: 0, vy: 0, portalCd: 0, stuck: 0, trail: [] };
     timers = {};
     capsules = [];
-    particles = [];
+    debris = [];
     running = false;
     over = false;
     combo = 0;
@@ -961,13 +1068,10 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   }
 
   function burst(r: number, c: number, kind: number): void {
-    const n = particleCount(6, reduce);
     const cx = c * brickW + brickW / 2;
     const cy = towerRowY(state, r) + BRICK_H / 2;
     const color = brickFace(kind, kind).color;
-    for (let i = 0; i < n; i++) {
-      particles.push({ x: cx, y: cy, vx: (rand() - 0.5) * 180, vy: (rand() - 0.5) * 150 - 30, life: 0.4, color });
-    }
+    debris = pushDebris(debris, spawnBrickDebris(r * 131 + c * 17 + state.bricksBroken * 7 + 1, cx, cy, color, reduce));
   }
 
   function comboPop(): void {
@@ -1031,6 +1135,10 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     if (res.broke.length > 0) {
       combo += res.broke.length;
       comboPop();
+      if (combo >= RIBBON_MIN_COMBO) {
+        ribbonAt = lastTime;
+        ribbonCombo = combo;
+      }
     } else {
       api.play("tap");
     }
@@ -1109,6 +1217,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
         ball.y = PADDLE_Y - BALL_R - 1;
         api.play("tap");
       }
+      catchAt = lastTime;
       combo = 0;
     }
 
@@ -1162,13 +1271,14 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
       }
     }
     for (const cap of capsules) drawCapsule(c2d, cap);
-    drawPaddle(c2d, paddleX, paddleW(), eff().magnet);
     if (ball.stuck !== null) {
       ball.x = Math.max(BALL_R, Math.min(W - BALL_R, paddleX + ball.stuck));
       ball.y = PADDLE_Y - BALL_R - 1;
     }
-    drawBallWithTrail(c2d, ball, speed(), eff().pierce);
-    drawParticles(c2d, particles);
+    drawBallWithTrail(c2d, ball, speed(), eff().pierce, lastTime, reduce);
+    drawPaddle(c2d, paddleX, paddleW(), eff().magnet, reduce, lastTime, catchAt);
+    paintDebris(c2d, debris);
+    drawRibbon(c2d, ribbonAlpha(lastTime - ribbonAt, ribbonCombo, reduce));
   }
 
   function tick(now: number): void {
@@ -1176,7 +1286,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     const dt = Math.min(0.03, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
     timers = tickPowers(timers, dt);
-    particles = stepParticles(particles, dt);
+    debris = stepDebris(debris, dt * 1000);
     if (hintT > 0) {
       hintT -= dt;
       if (hintT <= 0) msgEl.textContent = "";
@@ -1275,6 +1385,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
       disposed = true;
       over = true;
       cancelAnimationFrame(raf);
+      clearDebris(debris);
       jan.destroy();
       wrap.remove();
     }
