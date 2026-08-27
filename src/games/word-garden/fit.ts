@@ -24,10 +24,44 @@ export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]
 }
 
 /**
+ * 要把 `[top, bottom]` 这一段带进可视段，宿主的 `scrollTop` 该写多少。
+ *
+ * 滚**最小的那一段**：只要下沿进来就收手，题面尽量留在眼前。
+ * 这一段自己比可视段还高（描红卡那种）就从它的上沿开始露，先看得见头。
+ * 量不出可视段、或者根本没得滚，就返回 0——不平白往 DOM 上写一个 `scrollTop`。
+ */
+export function scrollToShowPx(top: number, bottom: number, client: number, max: number): number {
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return 0;
+  if (!(client > 0) || !(max > 0)) return 0;
+  const want = bottom - top > client ? top : bottom - client;
+  return Math.max(0, Math.min(max, Math.round(want)));
+}
+
+/** 把选项整排带进宿主的可视段（宿主已经是滚动容器了才叫得动） */
+function showChoices(host: HTMLElement): void {
+  const row = typeof host.querySelector === "function" ? host.querySelector(".qz-choices") : null;
+  if (!row || typeof row.getBoundingClientRect !== "function") return;
+  const hostTop = host.getBoundingClientRect().top;
+  const r = row.getBoundingClientRect();
+  const top = r.top - hostTop + host.scrollTop;
+  host.scrollTop = scrollToShowPx(
+    top,
+    top + r.height,
+    host.clientHeight,
+    host.scrollHeight - host.clientHeight
+  );
+}
+
+/**
  * 把答题屏钳进舞台看得见的那一段，钳不下就让宿主自己滚。
  *
  * 只在真的装不下时才写 `max-height` / `overflow-y`，装得下就把两样都还回去，
  * 高屏上不许凭空多出一个滚动容器。认字是慢动作，挂滚动条不伤手感。
+ *
+ * 钳出滚动条之后还要**顺手把选字那一排带进眼里**：光能滚不够，孩子看到的是
+ * 「只有两个字」，屏幕上没有任何东西提示底下还藏着第三个（真机实测 320×568
+ * 第 41 / 91 / 141 关分别差 39 / 3 / 33px，整颗在裁切线以下）。
+ *
  * `relayout` 换一题就叫一次：描红卡与选字卡的高矮差很多，量一次不够。
  */
 export function fitQuizHost(host: HTMLElement): { relayout: () => void; dispose: () => void } {
@@ -39,6 +73,7 @@ export function fitQuizHost(host: HTMLElement): { relayout: () => void; dispose:
     host.style.maxHeight = "";
     host.style.overflowY = "";
     host.style.overscrollBehavior = "";
+    host.scrollTop = 0;
     const bottoms: number[] = [];
     for (let p = host.parentElement; p; p = p.parentElement) {
       const oy = view.getComputedStyle(p).overflowY;
@@ -51,6 +86,7 @@ export function fitQuizHost(host: HTMLElement): { relayout: () => void; dispose:
     host.style.overflowY = "auto";
     // 滚到底之后不要把整页一起带走
     host.style.overscrollBehavior = "contain";
+    showChoices(host);
   };
   relayout();
   view?.addEventListener("resize", relayout);
