@@ -311,6 +311,79 @@ describe("关卡外围工具", () => {
     expect(endlessAtTop(20), "第 20 局早该封顶了").toBe(true);
   });
 
+  /* -- R2-PA-4 的护栏：题面池是「题库里没排进 188 关的余料」，
+        靠 `FAM.xx.slice(N)` 里那几个偏移量和 `PLAN` 对齐。
+        哪天有人调了 `PLAN` 某一段的 `count`，池子就会悄悄开始发已经玩过的关卡题，
+        甚至发到一个空槽。下面几条就是拦这个的。 -- */
+
+  it("题面池和 188 关不撞题：连胜里发的每一道都是没在闯关里出现过的", () => {
+    const inLevels = new Set(LEVELS.map((s) => s.fen));
+    for (let round = 1; round <= ENDLESS_COUNT; round++) {
+      const fen = endlessStart(round);
+      expect(fen, `第 ${round} 局取到了空题面`).toBeTruthy();
+      expect(inLevels.has(fen), `第 ${round} 局发的 ${fen} 已经排进 188 关了`).toBe(false);
+    }
+  });
+
+  it("每一道题面都摆得出来：FEN 转得回去、双方都有王、黑王没一开局就被将、白方有棋可走", () => {
+    for (let round = 1; round <= ENDLESS_COUNT; round++) {
+      const fen = endlessStart(round);
+      const pos = fromFen(fen);
+      expect(toFen(pos), `第 ${round} 局的 FEN 转回去不一致`).toBe(fen);
+      expect(pos.board.filter((p) => p === 6).length, `第 ${round} 局缺白王`).toBe(1);
+      expect(pos.board.filter((p) => p === -6).length, `第 ${round} 局缺黑王`).toBe(1);
+      expect(inCheck(pos, -1), `第 ${round} 局黑王一开局就被将`).toBe(false);
+      expect(legalMoves(pos).length, `第 ${round} 局白方无棋可走`).toBeGreaterThan(0);
+    }
+  });
+
+  it("扩池是往后追加：第 1–35 局的题面一格没挪，第 36 局起才是新收进来的 6 道", () => {
+    // 这两个是老池子的头和尾。挪了位就说明扩池插到中间去了，
+    // 已经连胜到一半的孩子下一局会突然换题。
+    expect(endlessStart(1)).toBe("k1K1R3/8/B4Q2/4n3/1p6/r7/8/8 w - - 0 1");
+    expect(endlessStart(35)).toBe("1K3k2/2P1ppp1/5R2/8/8/2p5/8/6n1 w - - 0 1");
+    const old35 = Array.from({ length: 35 }, (_, i) => endlessStart(i + 1));
+    const fresh = Array.from({ length: 6 }, (_, i) => endlessStart(36 + i));
+    expect(new Set(fresh).size, "新收进来的 6 道里有重样的").toBe(6);
+    for (const fen of fresh) {
+      expect(old35.includes(fen), `第 36 局起的 ${fen} 其实前 35 局已经出过`).toBe(false);
+    }
+    // 原来第 36 局就绕回第 1 题了，现在要到第 42 局
+    expect(endlessStart(36)).not.toBe(endlessStart(1));
+    expect(endlessStart(42)).toBe(endlessStart(1));
+  });
+
+  it("新收进来的 6 道正好是标称步数的强制杀，不是「随便有个杀就行」", () => {
+    // 前 4 道是两步杀（3 个半回合），后 2 道是一步杀
+    const want: Array<readonly [number, number]> = [
+      [36, 3],
+      [37, 3],
+      [38, 3],
+      [39, 3],
+      [40, 1],
+      [41, 1],
+    ];
+    for (const [round, plies] of want) {
+      const pos = fromFen(endlessStart(round));
+      expect(findForcedMate(pos, plies), `第 ${round} 局找不到 ${plies} 个半回合的强制杀`).not.toBeNull();
+      if (plies > 1) {
+        expect(findForcedMate(pos, plies - 2), `第 ${round} 局其实是更短的杀`).toBeNull();
+      }
+    }
+  }, 60000);
+
+  it("局号越界、0、负数、小数都兜得住，取到的还是池子里的题", () => {
+    const pool = new Set(Array.from({ length: ENDLESS_COUNT }, (_, i) => endlessStart(i + 1)));
+    for (const round of [0, -1, -99, 1.4, ENDLESS_COUNT * 7 + 3, 1000]) {
+      expect(pool.has(endlessStart(round)), `第 ${round} 局取到了池子外的题面`).toBe(true);
+    }
+    expect(endlessStart(0)).toBe(endlessStart(1));
+    expect(endlessStart(-99)).toBe(endlessStart(1));
+    expect(endlessLap(0)).toBe(1);
+    expect(endlessLap(-99)).toBe(1);
+    expect(endlessLap(ENDLESS_COUNT * 2)).toBe(2);
+  });
+
   it("每一关都写了标题与提示，提示里不直接给出答案着法", () => {
     for (const spec of LEVELS) {
       expect(spec.title.length).toBeGreaterThan(1);
