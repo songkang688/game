@@ -43,6 +43,7 @@ import {
   type ChartNote,
   type MoleKind,
 } from "./rhythm";
+import { holeInnerHtml } from "./visual";
 
 interface HoleState {
   kind: MoleKind | null;
@@ -58,8 +59,15 @@ interface HoleState {
   dropping: boolean;
 }
 
+// 1.3 视觉升级:样式表必须是纯字面量(360px 窄屏 QA 从源码抠 CSS),
+// 色值 / 时长 / z 序的唯一口径在 visual.ts,视觉单测负责两边对账。
+// 洞热区几何(aspect-ratio 1 / min 56px / grid gap 12px)与升降时序
+// (mpUp .18s / translateY 6px→22px)沿用 1.2 原文,一个字没动。
 const CSS = `
-.mp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EAF6D8, #F7EFD8); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.mp-wrap { --mp-grass: #B8E39B; --mp-soil-back: #A87B4F; --mp-soil-front: #C89B6C; --mp-hole: radial-gradient(ellipse at 50% 38%, #5A4636 0%, #3E3226 78%); --mp-mole: #D9A06B; --mp-board: #4A3B2E; --mp-torch: rgba(255,200,120,.4); --mp-peek-ms: 150ms; --mp-fly-ms: 260ms; --mp-bonk-ms: 180ms; --mp-sway-ms: 900ms; --mp-pop-ms: 120ms; --mp-flame-ms: 700ms; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #DFF3C0, var(--mp-grass)); border-radius: 16px; padding: 12px; user-select: none; position: relative; overflow: hidden; }
+.mp-scene { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.mp-scene svg { display: block; width: 100%; height: 100%; }
+.mp-wrap > :not(.mp-scene) { position: relative; z-index: 1; }
 .mp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
 .mp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #8A7A3E; box-shadow: 0 2px 6px rgba(170,150,90,.25); font-size: 14px; }
 .mp-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
@@ -71,11 +79,20 @@ const CSS = `
 .mp-combo.mp-combo-on .mp-combofill { background: linear-gradient(90deg, #FF9A3C, #E8452C); animation: mpBlaze .5s ease infinite alternate; }
 @keyframes mpBlaze { from { opacity: .7; } to { opacity: 1; } }
 .mp-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.mp-hole { aspect-ratio: 1; min-width: 56px; min-height: 56px; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: radial-gradient(circle at 50% 62%, #9A7B4F 0 42%, #C9A876 46% 60%, #E4D3AE 64%); display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
+.mp-hole { aspect-ratio: 1; min-width: 56px; min-height: 56px; border: none; border-radius: 50%; cursor: pointer; font-size: clamp(30px, 11vw, 52px); background: none; position: relative; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .08s, filter .3s; }
 .mp-hole:active { transform: scale(.93); }
 /* 命中不震屏,只让洞口轻轻下沉三帧 */
 .mp-hole.mp-sink { transform: translateY(3px) scale(.97); }
-.mp-hole .mp-face { transform: translateY(6px); animation: mpUp .18s ease; }
+/* 洞内六层装饰:全部 pointer-events:none,点击永远落在按钮本体上 */
+.mp-hole > span { position: absolute; pointer-events: none; }
+.mp-pit { left: 9%; right: 9%; top: 36%; bottom: 10%; border-radius: 50%; background: var(--mp-hole); z-index: 1; box-shadow: inset 0 4px 7px rgba(0,0,0,.38); }
+.mp-mound-back { left: 5%; right: 5%; top: 30%; height: 20%; border-radius: 50%; background: var(--mp-soil-back); z-index: 2; }
+.mp-lift { left: 13%; right: 13%; top: 0; bottom: 24%; overflow: hidden; z-index: 3; }
+.mp-gear { left: 16%; right: 16%; top: 0; height: 48%; z-index: 4; display: flex; align-items: flex-start; justify-content: center; }
+.mp-mound-front { left: 2%; right: 2%; bottom: 2%; height: 26%; border-radius: 50% 50% 44% 44% / 96% 96% 52% 52%; background: linear-gradient(180deg, var(--mp-soil-front), #B08355 92%); z-index: 5; box-shadow: 0 -2px 3px rgba(90,70,40,.25); }
+.mp-fx { inset: 0; z-index: 6; display: flex; align-items: flex-end; justify-content: center; }
+.mp-hole .mp-face { position: absolute; left: 4%; right: 4%; top: 6%; bottom: 0; display: flex; align-items: flex-end; justify-content: center; transform: translateY(6px); animation: mpUp .18s ease; }
+.mp-hole .mp-face svg { width: 92%; height: auto; }
 /* 缩回中:还能擦边打到,所以要看得见它在往下走 */
 .mp-hole .mp-face-drop { transform: translateY(22px); opacity: .55; }
 .mp-hole .mp-card { font-size: clamp(15px, 5.4vw, 24px); font-weight: 900; color: #4A4A7A; background: #FFF8E4; border-radius: 10px; padding: 3px 7px; box-shadow: 0 2px 5px rgba(90,80,50,.3); }
@@ -84,8 +101,8 @@ const CSS = `
 .mp-wrap.mp-night .mp-badge { background: #4B4A6B; color: #FFF0C0; }
 .mp-wrap.mp-night .mp-msg { color: #FFE9A8; }
 .mp-wrap.mp-night .mp-hole { filter: brightness(.32); }
-.mp-wrap.mp-night .mp-hole.mp-lit { filter: none; box-shadow: 0 0 16px 7px rgba(255,240,170,.8); }
-.mp-msg { text-align: center; min-height: 20px; color: #8A7A3E; font-weight: 700; margin-top: 10px; font-size: 14px; }
+.mp-wrap.mp-night .mp-hole.mp-lit { filter: none; box-shadow: 0 0 0 3px var(--mp-torch), 0 0 18px 8px var(--mp-torch); }
+.mp-msg { text-align: center; min-height: 20px; color: #6E6430; font-weight: 700; margin-top: 10px; font-size: 14px; }
 .mp-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
 .mp-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8FBB4E, #6F9C36); box-shadow: 0 4px 0 #567A28; }
 .mp-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #567A28; }
@@ -188,14 +205,23 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     }, ms);
   }
 
+  // 每个洞六层装饰(暗部→后沿土堆→地鼠层→装备层→前沿土堆→反馈层),
+  // 全部 pointer-events:none;按钮本体就是热区,几何与 1.2 完全一致。
   const holeEls: HTMLButtonElement[] = [];
+  const liftEls: HTMLElement[] = [];
+  const gearEls: HTMLElement[] = [];
+  const fxEls: HTMLElement[] = [];
   for (let i = 0; i < 9; i++) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "mp-hole";
+    btn.innerHTML = holeInnerHtml();
     btn.addEventListener("click", () => onHole(i));
     boardEl.appendChild(btn);
     holeEls.push(btn);
+    liftEls.push(btn.querySelector(".mp-lift") as HTMLElement);
+    gearEls.push(btn.querySelector(".mp-gear") as HTMLElement);
+    fxEls.push(btn.querySelector(".mp-fx") as HTMLElement);
   }
 
   function blazing(): boolean {
@@ -205,19 +231,21 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   function renderHole(i: number): void {
     const h = holes[i];
     if (!h.kind) {
-      holeEls[i].innerHTML = "";
+      liftEls[i].innerHTML = "";
+      gearEls[i].innerHTML = "";
       return;
     }
     const dropCls = h.dropping ? " mp-face-drop" : "";
     if (h.kind === "quiz" && h.card) {
-      holeEls[i].innerHTML = `<span class="mp-face mp-card${dropCls}">${h.card.expr}</span>`;
+      liftEls[i].innerHTML = `<span class="mp-face mp-card${dropCls}">${h.card.expr}</span>`;
       return;
     }
     if ((h.kind === "shield" || h.kind === "hat") && h.hits > 0) {
-      holeEls[i].innerHTML = `<span class="mp-face${dropCls}">🐹</span>`;
+      liftEls[i].innerHTML = `<span class="mp-face${dropCls}">${MOLE_SPECS.normal.emoji}</span>`;
+      gearEls[i].innerHTML = "";
       return;
     }
-    holeEls[i].innerHTML = `<span class="mp-face${dropCls}">${MOLE_SPECS[h.kind].emoji}</span>`;
+    liftEls[i].innerHTML = `<span class="mp-face${dropCls}">${MOLE_SPECS[h.kind].emoji}</span>`;
   }
 
   function renderTorch(): void {
