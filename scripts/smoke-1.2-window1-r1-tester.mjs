@@ -220,11 +220,19 @@ async function pickThrough(page, prefix, maxDepth = 4) {
   let picked = 0;
   for (let i = 0; i < maxDepth; i++) {
     const hit = await page.evaluate((p) => {
+      // 「← 回闯关」也顶着 .<前缀>-open 这个类,点下去会一路退回选关页,要躲开
+      const back = /回闯关|返回|选关|攻略|暂停|←/;
       const btns = [...document.querySelectorAll(`.${p}-open`)].filter(
-        (b) => !b.closest("[hidden]") && b.getClientRects().length > 0 && !b.disabled
+        (b) =>
+          !b.closest("[hidden]") &&
+          b.getClientRects().length > 0 &&
+          !b.disabled &&
+          !back.test(b.textContent ?? "")
       );
       if (btns.length === 0) return false;
-      btns[0].click();
+      // 有「开始 ▶」就直接开局,难度那一排通常已经有默认选中
+      const go = btns.find((b) => /开始|开局|▶/.test(b.textContent ?? ""));
+      (go ?? btns[0]).click();
       return true;
     }, prefix);
     if (!hit) break;
