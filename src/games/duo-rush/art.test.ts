@@ -266,6 +266,15 @@ describe("跑者是绘制的角色", () => {
     expect(new Set(all).size).toBe(5);
   });
 
+  it("r2 W4R1-03:呆毛比例钉在放大档——P2 星呆毛 ≥0.5 headR、P1 花瓣轨道 ≥0.24 headR", async () => {
+    // 16px 灰度量化曾测得 XOR 仅 4.3%:呆毛是双人剪影的主通道,不许再缩回去
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./art.ts", import.meta.url), "utf8");
+    const fn = src.slice(src.indexOf("export function drawRunnerSprite("), src.indexOf("\nexport ", src.indexOf("export function drawRunnerSprite(")));
+    expect(fn).toMatch(/starPath\(ctx, pose\.x, headCy - headR \* 1\.42, headR \* 0\.5\)/);
+    expect(fn).toMatch(/headR \* 0\.24/);
+  });
+
   it("被撞 = ×眼 + 三颗星绕头，全是笔画、无痛苦表现", () => {
     const rec = new RecCtx();
     drawDizzyStars(ctxOf(rec), 100, 80, 60, 2, false);

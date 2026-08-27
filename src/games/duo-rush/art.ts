@@ -473,22 +473,23 @@ export function drawRunnerSprite(ctx: CanvasRenderingContext2D, pose: RunnerPose
   ctx.ellipse(pose.x - headR * 0.34, headCy - headR * 0.4, headR * 0.26, headR * 0.16, -0.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // 呆毛：P1 花苞（茎 + 五瓣小花），P2 金色五角星——剪影层面就分得开
+  // 呆毛：P1 花苞（茎 + 五瓣小花），P2 金色五角星——剪影层面就分得开。
+  // r2 修复 W4R1-03:呆毛比例放大一档(星 0.32→0.5、花苞同步),16px 像素网格下不再消失
   if (pose.who === 0) {
     ctx.strokeStyle = "#7FBF6A";
-    ctx.lineWidth = Math.max(1, u * 0.035);
+    ctx.lineWidth = Math.max(1, u * 0.045);
     ctx.beginPath();
     ctx.moveTo(pose.x, headCy - headR * 0.95);
-    ctx.quadraticCurveTo(pose.x + u * 0.03, headCy - headR * 1.2, pose.x, headCy - headR * 1.38);
+    ctx.quadraticCurveTo(pose.x + u * 0.03, headCy - headR * 1.24, pose.x, headCy - headR * 1.46);
     ctx.stroke();
     for (let i = 0; i < 5; i++) {
       const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
       ctx.fillStyle = "#FF8FAB";
       ctx.beginPath();
       ctx.arc(
-        pose.x + Math.cos(a) * headR * 0.16,
-        headCy - headR * 1.42 + Math.sin(a) * headR * 0.16,
-        headR * 0.11,
+        pose.x + Math.cos(a) * headR * 0.24,
+        headCy - headR * 1.52 + Math.sin(a) * headR * 0.24,
+        headR * 0.16,
         0,
         Math.PI * 2,
       );
@@ -496,11 +497,11 @@ export function drawRunnerSprite(ctx: CanvasRenderingContext2D, pose: RunnerPose
     }
     ctx.fillStyle = "#FFE39B";
     ctx.beginPath();
-    ctx.arc(pose.x, headCy - headR * 1.42, headR * 0.09, 0, Math.PI * 2);
+    ctx.arc(pose.x, headCy - headR * 1.52, headR * 0.13, 0, Math.PI * 2);
     ctx.fill();
   } else {
     ctx.fillStyle = "#F5C542";
-    starPath(ctx, pose.x, headCy - headR * 1.28, headR * 0.32);
+    starPath(ctx, pose.x, headCy - headR * 1.42, headR * 0.5);
     ctx.fill();
   }
 
