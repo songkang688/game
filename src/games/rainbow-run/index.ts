@@ -2883,11 +2883,15 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(
-        `🎯 ${missionLabel(m)}${m.type === "noHit" ? (stats.heartsLost === 0 ? " ✓保持中" : " ✗") : ` ${prog}/${m.n}`}`,
-        w / 2,
-        rowY + 26,
-      );
+      // 任务小靶画制(visual-r3 修 N-R3-02):局内任务条第三处 🎯 也换 drawTargetBadge,
+      // 与无尽入口/结算任务行同一枚徽章,整行居中不变
+      const hudMissionLine = `${missionLabel(m)}${m.type === "noHit" ? (stats.heartsLost === 0 ? " ✓保持中" : " ✗") : ` ${prog}/${m.n}`}`;
+      const hudMissionW = ctx.measureText(hudMissionLine).width;
+      ctx.save();
+      ctx.translate(w / 2 - hudMissionW / 2 - 4, rowY + 26);
+      drawTargetBadge(ctx, 7);
+      ctx.restore();
+      ctx.fillText(hudMissionLine, w / 2 + 9, rowY + 26);
     }
 
     // 大王护甲条:接在任务条下面,窄屏也和任务条同宽,不会横着挤出去

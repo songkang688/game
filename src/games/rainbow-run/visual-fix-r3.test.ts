@@ -47,3 +47,19 @@ describe("fix(visual-r3) N-R3-01:画布字号全部 ≥14px", () => {
     }
   });
 });
+
+describe("fix(visual-r3) N-R3-02:局内任务条 🎯 前缀画制化", () => {
+  it("源码里不再有任何 🎯 直出(多行 fillText 写法也不许躲):三处任务行全走 drawTargetBadge", () => {
+    const codeOnly = src
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*"))
+      .join("\n");
+    expect(codeOnly.includes("🎯")).toBe(false);
+    expect((src.match(/drawTargetBadge\(/g) ?? []).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("局内任务条与另两处同款:量宽居中 + 徽章画在文字左侧", () => {
+    expect(src).toContain("const hudMissionLine =");
+    expect(src).toContain("ctx.translate(w / 2 - hudMissionW / 2 - 4, rowY + 26)");
+  });
+});
