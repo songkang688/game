@@ -194,6 +194,15 @@ export const CAMPAIGN_VISUAL_CSS = `
 .rbt-arena .rbt-dot { background: radial-gradient(ellipse 130% 58% at 50% -14%, rgba(255,255,255,.5) 0 40%, rgba(255,255,255,0) 41%), radial-gradient(circle at 50% 36%, #FFFFFF 0%, #F4F7FF 52%, ${shade("#F4F7FF", -12)} 100%); box-shadow: inset 0 0 0 2px rgba(70,90,150,.16), 0 3px 0 rgba(70,90,150,.2), 0 4px 10px rgba(100,120,180,.3); transition: transform var(--rbt-squash-ms) cubic-bezier(.34,1.56,.64,1); }
 .rbt-wrap .rbt-dot:active { transform: ${jellyPressTransform()}; }
 .rbt-arena { position: relative; }
+/* B 档 TOP9（第 1 轮移交）：闯关场地氛围底——5 个淡色圆点错落铺底，金蓝交替、
+   透明度 ≤ .12，纯静态零动效；写成 background-image 长手不碰底色与热区，
+   选择器带 .rbt-wrap 压过基础壳 background 简写里的 image:none */
+.rbt-wrap .rbt-arena { background-image:
+  radial-gradient(circle at 18% 22%, ${withAlpha(PASTEL.starGold, 0.1)} 0 3.5px, rgba(0,0,0,0) 4px),
+  radial-gradient(circle at 78% 16%, ${withAlpha(PASTEL.blue, 0.08)} 0 2.6px, rgba(0,0,0,0) 3.1px),
+  radial-gradient(circle at 62% 64%, ${withAlpha(PASTEL.starGold, 0.1)} 0 4px, rgba(0,0,0,0) 4.5px),
+  radial-gradient(circle at 30% 78%, ${withAlpha(PASTEL.blue, 0.08)} 0 2.8px, rgba(0,0,0,0) 3.3px),
+  radial-gradient(circle at 88% 82%, ${withAlpha(PASTEL.starGold, 0.1)} 0 3.2px, rgba(0,0,0,0) 3.7px); }
 /* 计分牌卡片化：me / ai 两枚徽章带红蓝立面，比分变化时轻弹一下 */
 .rbt-badge.rbt-me { box-shadow: 0 2px 6px rgba(120,140,200,.25), inset 0 -3px 0 var(--rbt-blue); }
 .rbt-badge.rbt-ai { box-shadow: 0 2px 6px rgba(120,140,200,.25), inset 0 -3px 0 var(--rbt-red); }
