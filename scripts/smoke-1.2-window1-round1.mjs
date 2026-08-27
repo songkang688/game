@@ -259,6 +259,17 @@ async function platformChecks(page, errors) {
     "A3-3 筛出来的不多于全部", JSON.stringify(counts));
 
   // A4 搜索:标题原文 + 拼音首字母
+  // 上面那个循环最后停在「端游」上,得先扳回「全部」再搜 ——
+  // 12 款原来清一色 platform:"both",端游筛选下也全在,所以这个漏子一直没露头;
+  // 芯片真能区分设备之后(7 款是手游独占),留着端游去搜手游款,搜不到才是对的。
+  await page.evaluate(() => {
+    const bar = document.querySelector('nav[aria-label="设备筛选"]');
+    [...bar.querySelectorAll("button")].find((b) => b.textContent.includes("全部"))?.click();
+  });
+  await sleep(350);
+  const allCount = await page.evaluate(() => document.querySelectorAll(".game-card").length);
+  log(allCount === counts["全部"], "A4-0 搜索前已经扳回「全部」芯片", `${allCount} 张卡`);
+
   for (const [id, title] of targets) {
     for (const kind of ["title", "pinyin"]) {
       const term = kind === "title" ? title : await page.evaluate(async (t) => {
