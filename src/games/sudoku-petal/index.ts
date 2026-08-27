@@ -82,6 +82,10 @@ export const WAVE_MS = 400;
 export const CHEER_STEP_MS = 30;
 /** 一小片庆祝花瓣从冒出到散掉的时长 */
 export const CHEER_MS = 420;
+/** 一行 / 一列刚好种齐时,沿线柔光的错峰间隔(r1 遗留 2 的轻反馈) */
+export const LINE_STEP_MS = 24;
+/** 一格柔光从亮起到散掉的时长 */
+export const LINE_MS = 420;
 /** 整题开满时顶上飘几片花瓣(一次建好一整池,反复用) */
 export const SHOWER_PETALS = 10;
 /** 花瓣雨从挂出到整块收走的时长 */
@@ -361,6 +365,12 @@ export const SP_CSS = `
   animation:sppetalup ${CHEER_MS}ms ease-out forwards;}
 @keyframes sppetalup{0%{opacity:.95;transform:translateY(3px) scale(.6) rotate(0)}
   100%{opacity:0;transform:translateY(-14px) scale(1.1) rotate(40deg)}}
+/* 种齐一整行 / 一整列:沿线依次亮一道杏色柔光扫过去(纯视觉轻反馈,不遮数字、不吃点击) */
+.sp-linefx{position:absolute;inset:8%;border-radius:10px;pointer-events:none;opacity:0;
+  background:radial-gradient(circle at 50% 50%,rgba(255,214,130,.55),rgba(255,214,130,0) 72%);
+  animation:splineglow ${LINE_MS}ms ease-out forwards;}
+@keyframes splineglow{0%{opacity:0;transform:scale(.7)}35%{opacity:1;transform:scale(1.06)}
+  100%{opacity:0;transform:scale(1.15)}}
 /* 整题开满:波纹经过的格子把数字翻成小花再翻回来 */
 .sp-cell.sp-wave .sp-digit{animation:spdigitflip ${WAVE_MS}ms ease-in-out;}
 .sp-cell.sp-wave .sp-petal{animation:sppetalpeek ${WAVE_MS}ms ease-in-out;}
@@ -433,7 +443,7 @@ export const SP_CSS = `
   .sp-cell.sp-hint::before{animation:none;opacity:1;}
   .sp-cell.sp-wave .sp-digit,.sp-cell.sp-wave .sp-petal{animation:none;}
   .sp-key{transition:none;}
-  .sp-budfx,.sp-petalfx{display:none;}
+  .sp-budfx,.sp-petalfx,.sp-linefx{display:none;}
   .sp-driftpetal{animation:none;opacity:0;}
 }
 `;
@@ -729,6 +739,31 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     return true;
   }
 
+  /** 这一组(行 / 列)是不是已经全部种对了 —— 只读检查,不碰任何玩法状态 */
+  function groupDone(g: number): boolean {
+    for (const i of variant.groups[g]) {
+      if (board.cells[i] !== solution[i]) return false;
+    }
+    return true;
+  }
+
+  /**
+   * 种齐一整行 / 一整列:沿线依次亮一道杏色柔光(r1 遗留 2 的轻反馈,纯视觉)。
+   * 错峰交给 CSS 的 animation-delay,一次建齐、各自到点自己散;弱动效直接不放。
+   */
+  function cheerLine(g: number): void {
+    if (reducedMotion()) return;
+    variant.groups[g].forEach((idx, k) => {
+      const fx = document.createElement("span");
+      fx.className = "sp-linefx";
+      fx.setAttribute("aria-hidden", "true");
+      fx.style.animationDelay = `${k * LINE_STEP_MS}ms`;
+      cells[idx].appendChild(fx);
+      const gone = setTimeout(() => fx.remove(), LINE_MS + n * LINE_STEP_MS);
+      timers.push(gone);
+    });
+  }
+
   /** 种齐一整朵九宫花:这九格从头到尾依次往上冒一小片花瓣(每格错峰 30ms) */
   function cheerRegion(r: number): void {
     if (reducedMotion()) return;
@@ -807,9 +842,14 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
       announce(doneSay(true, state().filled, errors));
       bloom();
       opts.onDone(state());
-    } else if (digit === solution[idx] && regionDone(variant.regions[idx])) {
+    } else if (digit === solution[idx]) {
       // 一整朵九宫花种齐了,先小小庆祝一下
-      cheerRegion(variant.regions[idx]);
+      if (regionDone(variant.regions[idx])) cheerRegion(variant.regions[idx]);
+      // 行 / 列刚好种齐的轻反馈:落子格此前必未填对,所以「组现在齐」就是「这一手刚种齐」,
+      // 不需要任何前后状态钩子。行列组固定排在 groups 的前 2n 位(宫归 cheerRegion,斜线不吵)
+      for (const g of variant.cellGroups[idx]) {
+        if (g < 2 * n && groupDone(g)) cheerLine(g);
+      }
     }
   }
 
@@ -1721,6 +1761,8 @@ export const SP_CONSTS = {
   WAVE_MS,
   CHEER_STEP_MS,
   CHEER_MS,
+  LINE_STEP_MS,
+  LINE_MS,
   SHOWER_PETALS,
   SHOWER_MS,
   CELL_MIN_PX,
