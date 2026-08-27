@@ -230,11 +230,33 @@ describe("红蓝跑道 · 收紧器怎么接进去的（源码巡检）", () => 
     expect(INDEX.slice(start, INDEX.indexOf("renderFoes();", start))).toContain("fit.relayout()");
   });
 
-  it("说到底不许给它挂滚动条：连点游戏能滚就会「想按却滑走了」", () => {
+  /*
+   * 【据实改判 · 第 3 轮档A W5R3-TA-01】
+   *
+   * 原来这里钉的是「一个字节都不许往 style 上写滚动条」。那条线**就是缺陷本身**：
+   * 真机复量（Chrome headless + CDP，`document.elementFromPoint` 定案）横屏两档上
+   *   640×360  `.rbr-step` 落地 0/2、`.rbr-jump-btn` 0/1，逐档滚动累计仍是 0，可滚祖先＝**无**；
+   *   844×390  同上（三颗只露 21px，中心点都在裁切线外）。
+   * 「想按却滑走了」难受，可「一颗都按不着」是跑都跑不动，两者不同价。
+   * 所以这条线从「一律不挂」挪到「**两档收紧全用尽之后才挂**」。
+   *
+   * 保护意图一个没丢，只是换了个说法钉：
+   *  - 滚动**永远排在两档收紧后面**，能让的高度先让干净；
+   *  - 收紧那两档的 CSS 自己仍旧一个 `overflow-y` 都不许写（那会绕过顺序）；
+   *  - 跑动键仍旧 `touch-action: manipulation`，停着不动的那一下照旧算点击。
+   */
+  it("说到底不许给它挂滚动条：连点游戏能滚就会「想按却滑走了」——改判为「两档用尽才挂,连点手感一分不受影响」", () => {
     const FIT = readFileSync(fileURLToPath(new URL("./fit.ts", import.meta.url)), "utf8");
-    // 读祖先的 overflowY 是找裁切线用的；自己一个字节都不许往 style 上写
-    expect(FIT).not.toMatch(/\.style\.(overflow|maxHeight|height)/);
+    // 顺序不许换：兜底那一档必须排在两档收紧之后
+    const wear = FIT.indexOf("pickTier(room, (tier) => {");
+    const scroll = FIT.indexOf("needsScroll(wrap.scrollHeight, room)");
+    expect(wear).toBeGreaterThan(-1);
+    expect(scroll).toBeGreaterThan(wear);
+    // 收紧那两档自己仍旧一个 overflow-y 都不许写
     expect(TIERS).not.toMatch(/overflow-y:\s*(auto|scroll)/);
+    // 连点手感靠的是跑动键自己的 touch-action，一分没动
+    expect(rule(".rbr-step")).toContain("touch-action: manipulation");
+    expect(rule(".rbr-jump-btn")).toContain("touch-action: manipulation");
   });
 });
 

@@ -25,6 +25,7 @@ import {
 import {
   HINT_MODE_NAMES,
   PASS_BUTTON_LABEL,
+  PASS_WORD,
   groupsSummary,
   nextHintMode,
   playableGroups,
@@ -293,6 +294,12 @@ const CSS = `
 .ldc-tighter .ldc-table{min-height:24px;padding:2px 7px;}
 .ldc-tighter .ld-say{font-size:11px;min-height:14px;}
 .ldc-tighter .ldc-hintline{font-size:10px;padding:2px 6px;}
+/* 第三档兜底（fit.ts 两档收紧全用尽之后才挂，W5R3-TA-01）：这一桌自己滚。
+   横屏 640×360 / 844×390 上叫地主那一排四颗 + 「⏸ 暂停」原本 5/5 全压在裁切线以下，
+   而且一个可滚祖先都没有——真手指慢拖一趟纹丝不动。
+   手牌扇自己写着 touch-action:none，落在牌上的手指只框选、不带着壳滚，
+   「横着划一道选好几张」那一手一分没变。天花板与 overflow 由 fit.ts 按实测像素写内联。 */
+.ldc-scroll{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 @media (prefers-reduced-motion:reduce){
   .ldc-card-move{transition:none;}
 }
@@ -391,12 +398,17 @@ function keySetOf(keys: 0 | 1): typeof KEYS_P1 {
   return keys === 0 ? KEYS_P1 : KEYS_P2;
 }
 
+/**
+ * 键位提示。最后那一格印的必须是牌桌底下那颗键上的字（`PASS_WORD`＝「不出」）——
+ * 这一行是**在教孩子这颗键叫什么**，写「不要」就等于教了一个屏幕上不存在的名字
+ * （W5R3-A-01 只改了 `hint.ts`，这里是补上的那一半，W5R3-TA-04）。
+ */
 function keyHint(seat: SeatCfg): string {
   const k = keySetOf(seat.keys);
   const dirs = seat.keys === 0 ? "A / D" : "← / →";
   const pick = seat.keys === 0 ? "W" : "↑";
   const clear = seat.keys === 0 ? "S" : "↓";
-  return `${seat.name}:${dirs} 挑牌 · ${pick} 选中 · ${clear} 清空 · ${k.play.toUpperCase()} 出牌 · ${k.pass.toUpperCase()} 不要`;
+  return `${seat.name}:${dirs} 挑牌 · ${pick} 选中 · ${clear} 清空 · ${k.play.toUpperCase()} 出牌 · ${k.pass.toUpperCase()} ${PASS_WORD}`;
 }
 
 function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void } {
@@ -619,7 +631,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       const b = bubbles[i];
       const bubbleHTML = b
         ? b.passed
-          ? `<span class="ld-bubble">不要～</span>`
+          ? `<span class="ld-bubble">${PASS_WORD}～</span>`
           : `<span class="ld-mini">${miniCardsHTML(b.cards)}</span>`
         : `<span class="ld-mini" aria-hidden="true"></span>`;
       box.innerHTML = `${face}
@@ -660,7 +672,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       if (tableShown) {
         const who = opts.seats[tableShown.seat].name;
         table.innerHTML = tableShown.passed
-          ? `<span class="ldc-table-who">${who}</span><span class="ldc-table-pass">不要～</span>`
+          ? `<span class="ldc-table-who">${who}</span><span class="ldc-table-pass">${PASS_WORD}～</span>`
           : `<span class="ldc-table-who">${who} 出</span><span class="ld-row">${miniCardsHTML(tableShown.cards)}</span>`;
       } else {
         table.innerHTML = `<span class="ldc-table-pass">牌桌空着,等这一手落下来…</span>`;

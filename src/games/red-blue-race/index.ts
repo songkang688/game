@@ -191,6 +191,12 @@ const CSS = `
 .rbr-tighter .rbr-msg, .rbr-tighter .rbe-msg { font-size: 11px; margin-top: 4px; min-height: 14px; line-height: 1.35; }
 .rbr-tighter .rbe-lane { height: 66px; }
 .rbr-tighter .rbe-face { width: 28px; height: 28px; }
+/* 第三档兜底（fit.ts 两档收紧全用尽之后才挂，W5R3-TA-01）：这一屏自己滚。
+   横屏 640×360 / 844×390 上「👟左脚 / 👟右脚 / 🦘跳」原本 3/3 全压在裁切线以下，
+   而且一个可滚祖先都没有——真手指慢拖一趟纹丝不动，纯触屏一步都跑不了。
+   跑动键写着 touch-action: manipulation，停着不动的那一下照旧算点击；
+   天花板与 overflow 由 fit.ts 按实测像素写内联。 */
+.rbr-scroll { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 @media (prefers-reduced-motion: reduce) {
   .rbr-lane-run .rbr-speed { animation: none; opacity: 0; }
   .rbr-runner-inner { animation: none; }

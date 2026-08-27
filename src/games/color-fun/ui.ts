@@ -165,6 +165,31 @@ export const CLF_CSS = `
   .clf-swatch.clf-fresh .clf-swatch-dot{animation:none;}
   .clf-flake{animation:none;display:none;}
 }
+/* 「再挤挤」这一档（W5R3-TA-02）——它治的不是「够不着」，是**来回滚**。
+   真机 320×568 第 181 关：这一屏 701px 塞进 282px 的窗口，每一颗按钮慢拖都够得着，
+   可画布 180px + 调色锅那一排 105px = 285px > 282px，canPinCanvas() 判「钉不住」，
+   于是画布不再跟着滚——孩子滚下去选色、滚上来涂、再滚下去，一块颜色两趟。
+   这一档只收调色锅那一排与几条装饰行的**留白、字号、色点直径**，
+   把最高那一排压回「钉得住」的高度；画布一钉住，选色→涂色就在同一屏里完成。
+   **热区一个都不动**：.clf-tool / .clf-swatch-dot / .clf-primary / .clf-zoom 的 44px
+   一条都不在这一档里，字号也不许收到基准样式自己的 12px 下限以下。
+   排在 reduced-motion 后面是为了让它稳稳盖住「挤一挤」那一档的同名声明。 */
+.clf-wrap.clf-tighter{gap:4px;padding:5px;}
+.clf-wrap.clf-tighter .clf-badge{font-size:12px;padding:3px 8px;}
+.clf-wrap.clf-tighter .clf-legend{gap:3px;}
+.clf-wrap.clf-tighter .clf-chip{font-size:12px;padding:3px 7px;gap:4px;line-height:1.3;}
+.clf-wrap.clf-tighter .clf-chip-dot{width:12px;height:12px;border-width:1px;}
+.clf-wrap.clf-tighter .clf-chips{max-height:48px;gap:3px;}
+.clf-wrap.clf-tighter .clf-mixer{padding:3px 7px;gap:5px;}
+.clf-wrap.clf-tighter .clf-mix-label{font-size:12px;}
+.clf-wrap.clf-tighter .clf-pot{width:46px;height:36px;font-size:12px;border-width:2px;}
+/* 只收看得见的那颗圆点和名字，按得着的那个盒子（.clf-primary 的 44×44）一分没动 */
+.clf-wrap.clf-tighter .clf-primary-dot{width:24px;height:24px;border-width:2px;}
+.clf-wrap.clf-tighter .clf-primary-name{font-size:12px;line-height:1.1;}
+.clf-wrap.clf-tighter .clf-preview{font-size:13px;padding:4px 10px;}
+.clf-wrap.clf-tighter .clf-palette{padding:2px 2px 3px;gap:6px;}
+.clf-wrap.clf-tighter .clf-swatch-name{font-size:12px;line-height:1.1;}
+.clf-wrap.clf-tighter .clf-msg{min-height:16px;font-size:13px;line-height:1.3;}
 `;
 
 /**
@@ -210,6 +235,37 @@ export function canvasBoxPx(room: number, otherPx: number, wanted: number): numb
 }
 
 /**
+ * 收完第一档、画布也退到底线了，**画布还是钉不住**吗——钉不住就得再收一档（W5R3-TA-02）。
+ *
+ * 「钉不住」的后果不是够不着（每一颗按钮慢拖都够得着），是**来回滚**：
+ * 画布不跟着滚，孩子滚下去选色、滚上来涂、再滚下去，一块颜色两趟。
+ * 320×568 第 181 关上我的通关机器人为此开锅 14 次一次没配出目标色。
+ *
+ * 判据就是 {@link canPinCanvas} 的反面，外加两道闸：量不出来不动、地方够就不动——
+ * 高屏上（360×640 / 390×844 实测 `canPin` 本来就成立）这一档一次都不会挂。
+ */
+export function needsTighter(portPx: number, canvasPx: number, tailPx: number): boolean {
+  if (!Number.isFinite(portPx) || portPx <= 0) return false;
+  if (!Number.isFinite(canvasPx) || canvasPx <= 0) return false;
+  if (!Number.isFinite(tailPx) || tailPx <= 0) return false;
+  return !canPinCanvas(portPx, canvasPx, tailPx);
+}
+
+/**
+ * 收完第二档之后，画布框还得再让一让才钉得住的话，让到哪儿为止。
+ *
+ * 上限是「滚动视口减掉后面最高那一排」，下限仍旧是 `CANVAS_MIN_PX`——
+ * 再往下收线稿里的小块就点不准了，那是拿一个毛病换另一个毛病。
+ * 本来就比这还矮就照原样返回，不平白把画放大。
+ */
+export function pinnableCanvasPx(portPx: number, tailPx: number, boxPx: number): number {
+  if (!Number.isFinite(portPx) || portPx <= 0) return boxPx;
+  if (!Number.isFinite(tailPx) || tailPx <= 0) return boxPx;
+  if (!Number.isFinite(boxPx) || boxPx <= 0) return boxPx;
+  return Math.max(CANVAS_MIN_PX, Math.min(boxPx, Math.floor(portPx - tailPx)));
+}
+
+/**
  * 把这一屏钳进「舞台看得见的那一段」：先收画布框，还装不下就让这一屏自己滚。
  *
  * 为什么必须在运行期量、不能写成媒体查询：舞台（`.game-stage`，平台文件，交窗口1）
@@ -235,6 +291,7 @@ export function fitColoringStage(
     if (!measurable || !view) return;
     // 先把上一次钳出来的都还原，不然量到的是钳完的高度，越量越小
     wrap.classList.remove("clf-tight");
+    wrap.classList.remove("clf-tighter");
     wrap.classList.remove("clf-scrolly");
     wrap.style.maxHeight = "";
     wrap.style.overflowY = "";
@@ -252,6 +309,25 @@ export function fitColoringStage(
     if (box < wanted) {
       stageBox.style.minHeight = "0";
       stageBox.style.height = `${box}px`;
+    }
+    // 收完第一档、画布也退到底线了，画布仍旧钉不住（320×568 与两档横屏就是这样）：
+    // 再收一档，把后面最高那一排压回「钉得住」的高度，选色 → 涂色才在同一屏里完成。
+    // 收完之后重量一次：那一排矮了，画布框能不能长回来由 canvasBoxPx 自己算，
+    // 但绝不许长到又把自己顶得钉不住（pinnableCanvasPx 那道上限）。W5R3-TA-02
+    if (needsTighter(room, stageBox.getBoundingClientRect().height, tallestTailPx(wrap, stageBox))) {
+      wrap.classList.add("clf-tighter");
+      stageBox.style.height = "";
+      stageBox.style.minHeight = "";
+      const wanted2 = stageBox.getBoundingClientRect().height;
+      const box2 = pinnableCanvasPx(
+        room,
+        tallestTailPx(wrap, stageBox),
+        canvasBoxPx(room, wrap.scrollHeight - wanted2, wanted2)
+      );
+      if (box2 < wanted2) {
+        stageBox.style.minHeight = "0";
+        stageBox.style.height = `${box2}px`;
+      }
     }
     if (wrap.scrollHeight > room + 1) {
       wrap.style.maxHeight = `${Math.floor(room)}px`;
@@ -295,7 +371,7 @@ export function canPinCanvas(portPx: number, canvasPx: number, tallestTailPx: nu
 }
 
 /** 这一屏里排在画布后面的那些排，最高的一排有多高；量不到就是 0（＝不拦着钉） */
-function tallestTailPx(wrap: HTMLElement, stage: HTMLElement): number {
+export function tallestTailPx(wrap: HTMLElement, stage: HTMLElement): number {
   const kids = wrap.children as unknown as ArrayLike<Element> | undefined;
   if (!kids || typeof kids.length !== "number") return 0;
   let seen = false;

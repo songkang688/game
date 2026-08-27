@@ -117,9 +117,12 @@ describe("识字小花园 · 组字工坊 · 钳位兜底（源码巡检）", ()
     );
   });
 
+  // 第 3 轮档A W5R3-TA-03 把这张名单从「选项排」扩成「该送进眼里的那一段」
+  // （多了描红台的 `.wgd-padwrap`），常量随之改名 CHOICE_ROWS → FOCUS_ROWS；
+  // 这一条的保护意图一个字没变：工坊自己的选项排必须在名单里，而且答题屏那条还在。
   it("「带进眼里」认得工坊自己的选项排，不只认答题屏的 .qz-choices", () => {
     expect(fitSrc).toContain(".bc-choices");
-    const at = fitSrc.indexOf("const CHOICE_ROWS");
+    const at = fitSrc.indexOf("const FOCUS_ROWS");
     expect(at).toBeGreaterThan(-1);
     expect(fitSrc.slice(at, at + 120)).toContain(".qz-choices");
   });
