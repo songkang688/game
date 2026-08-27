@@ -835,8 +835,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     v.appendChild(row);
     box.appendChild(v);
     veil = v;
+    // 焦点落到第一颗按钮上,键盘和读屏都能顺着往下走。
+    // 这里认「有没有 focus 这个方法」而不是 `instanceof HTMLElement`——
+    // 后者在没有 DOM 全局的运行环境里会直接抛 ReferenceError
     const first = v.querySelector("button");
-    if (first instanceof HTMLElement) first.focus();
+    if (typeof (first as { focus?: unknown } | null)?.focus === "function") {
+      (first as HTMLElement).focus();
+    }
   }
 
   function togglePause(): void {
