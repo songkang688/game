@@ -170,6 +170,9 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     if (aiTimer) clearTimeout(aiTimer);
     aiTimer = null;
     if (st.kind === "win") {
+      // 谢幕只有画面：输方鞠躬、赢方列队、金花瓣雨。onEnd 的时序一毫秒都不挪
+      const winColor = state.colors[st.side];
+      if (winColor) board?.flourish({ kind: "win", winner: winColor });
       opts.onEnd({
         won: st.side === "duo",
         draw: false,
@@ -179,9 +182,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       return;
     }
     if (st.kind === "draw") {
+      board?.flourish({ kind: "draw" });
       opts.onEnd({ won: false, draw: true, plies: state.plies, why: "连着二十手不吃不翻，这一盘算平局。" });
       return;
     }
+    board?.flourish({ kind: "draw" });
     opts.onEnd({ won: false, draw: true, plies: state.plies, why: "手数用完啦，这一盘算平局收场。" });
   }
 
@@ -196,13 +201,19 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     }
     const spot = a.type === "flip" ? a.at : a.to;
     setNote(res.message);
-    board?.animate(a.type === "flip" ? "flip" : wasCapture ? "capture" : "flip", spot, () => {
-      if (destroyed) return;
-      board?.refresh();
-      renderHud();
-      finish();
-      if (!finished) scheduleAi();
-    });
+    // 走子 / 吃子把出发格也交给动画层：棋子从哪来就从哪滑过去
+    board?.animate(
+      a.type === "flip" ? "flip" : wasCapture ? "capture" : "flip",
+      spot,
+      () => {
+        if (destroyed) return;
+        board?.refresh();
+        renderHud();
+        finish();
+        if (!finished) scheduleAi();
+      },
+      a.type === "move" ? a.from : undefined
+    );
   }
 
   function scheduleAi(): void {
