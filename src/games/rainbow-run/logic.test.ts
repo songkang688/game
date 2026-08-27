@@ -882,3 +882,48 @@ describe("rainbow-run 战役可通关性模拟", () => {
     }
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* R2C-R2 上屏文案的红线词                                             */
+/* ------------------------------------------------------------------ */
+
+describe("R2C-R2 · 上屏文案的红线词", () => {
+  /** 所有会被玩家读到的字：188 关的关名 / 特色 / 提示，加上攻略里的每一句 */
+  function visibleCopy(): string[] {
+    const out: string[] = [];
+    for (const lv of LEVELS) out.push(lv.name, lv.feature, lv.hint);
+    out.push(guide.title, ...guide.general);
+    for (const e of guide.entries) out.push(e.title, ...e.tips);
+    return out;
+  }
+
+  it("「血」一个字都不上屏 —— 大王那两条改成卸护甲的口径", () => {
+    expect(visibleCopy().filter((s) => s.includes("血"))).toEqual([]);
+    const boss = guide.entries.flatMap((e) => e.tips).filter((t) => t.includes("护甲"));
+    expect(boss.length).toBeGreaterThan(0);
+    expect(boss.join("")).toContain("铲碎彩纸箱卸一层");
+  });
+
+  it("「广告」一个字都不上屏 —— 第 9 章那一关改成霓虹招牌的布景名", () => {
+    expect(visibleCopy().filter((s) => s.includes("广告"))).toEqual([]);
+    const lv = LEVELS.find((l) => l.name === "霓虹招牌走廊");
+    expect(lv, "第 9 章第 12 关不见了").toBeTruthy();
+    expect(lv?.hint).toContain("霓虹招牌一块接一块");
+  });
+
+  it("换名字没有动到这一关的玩法：还是那两种障碍、还是收 5 颗星", () => {
+    const lv = LEVELS.find((l) => l.name === "霓虹招牌走廊");
+    expect(lv?.obstacleKinds).toEqual(["bar", "rock"]);
+    expect(lv?.mission).toEqual({ type: "stars", n: 5 });
+  });
+
+  it("188 个关名依旧两两不重样", () => {
+    expect(new Set(LEVELS.map((l) => l.name)).size).toBe(LEVELS.length);
+  });
+
+  it("死亡 / 内购 / 抽卡这些词也一并扫过，命中 0", () => {
+    const banned = ["死", "杀", "尸", "内购", "抽卡", "充值", "广告位", "氪"];
+    const hits = visibleCopy().filter((s) => banned.some((b) => s.includes(b)));
+    expect(hits).toEqual([]);
+  });
+});
