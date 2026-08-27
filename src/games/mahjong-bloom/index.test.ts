@@ -245,12 +245,27 @@ describe("窄屏与动效红线", () => {
     expect(ruleOf(narrow, ".mj-btn")).not.toContain("min-height");
   });
 
-  it("要读的字号一律 ≥ 13px", () => {
-    for (const sel of [".mj-badge", ".mj-goal", ".mj-msg", ".mj-btn", ".mj-fan", ".mj-foe-name"]) {
-      expect(pxOf(ruleOf(MJ_CSS, sel), "font-size")).toBeGreaterThanOrEqual(13);
-      const tight = ruleOf(narrow, sel);
-      if (tight.includes("font-size")) expect(pxOf(tight, "font-size")).toBeGreaterThanOrEqual(13);
+  // 第 1 轮 W1-R1-02:窄屏块原本把正文一路压到 13px,跟第 1 步 B 档的手机文字硬指标反着来。
+  // 现在正文交给 `--mt-body`(16px)兜底、牌面字交给 `--mt-control`(14px),窄屏只压内边距和宽度。
+  it("正文靠 --mt-body 兜底,窄屏不许再把它压下去", () => {
+    for (const sel of [".mj-badge", ".mj-goal", ".mj-msg", ".mj-fan", ".mj-foe-name"]) {
+      // 写死 16px 或走 var(--mt-body,16px) 都算,要的是结果不是写法
+      const rule = ruleOf(MJ_CSS, sel);
+      const ok = rule.includes("--mt-body") || pxOf(rule, "font-size") >= 16;
+      expect(ok, `${sel} 的正文没到 16px:${rule.slice(0, 60)}`).toBe(true);
+      expect(ruleOf(narrow, sel), `${sel} 在窄屏块里又写死了字号`).not.toContain("font-size");
     }
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-btn"), "font-size")).toBeGreaterThanOrEqual(14);
+  });
+
+  it("牌面上的花色走控件档,小牌也不再缩到 11px", () => {
+    expect(ruleOf(MJ_CSS, ".mj-t-s")).toContain("font-size:var(--mt-control,14px)");
+    expect(ruleOf(MJ_CSS, ".mj-tile.mj-small .mj-t-s")).toContain("font-size:var(--mt-control,14px)");
+    expect(ruleOf(MJ_CSS, ".mj-tile.mj-small .mj-t-n")).toContain("font-size:var(--mt-control,14px)");
+  });
+
+  it("窄屏把信息栏放宽,给 16px 的「牌墙 N 张」留下地方", () => {
+    expect(pxOf(ruleOf(narrow, ".mj-info"), "width")).toBeGreaterThanOrEqual(92);
   });
 
   it("番种表最多先露 6 条,再多就滚动看", () => {
@@ -891,6 +906,6 @@ describe("暂停层", () => {
 
   it("暂停层的字号在 360px 上也够大", () => {
     expect(MJ_CSS).toMatch(/\.mj-pause-t\{[^}]*font-size:20px/);
-    expect(MJ_CSS).toMatch(/\.mj-pause-k\{[^}]*font-size:15px/);
+    expect(MJ_CSS).toMatch(/\.mj-pause-k\{[^}]*font-size:var\(--mt-body,16px\)/);
   });
 });

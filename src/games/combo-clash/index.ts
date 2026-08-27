@@ -79,7 +79,7 @@ const CSS = `
 .cc-guard>i{background:linear-gradient(90deg,#A9D8F5,#5FA9DE);}
 .cc-mid{flex:0 0 auto;text-align:center;min-width:86px;}
 .cc-timer{font-size:22px;font-weight:900;color:#7a4a86;line-height:1.1;}
-.cc-dots{font-size:14px;letter-spacing:2px;color:#D8A8C4;}
+.cc-dots{font-size:var(--mt-control,14px);letter-spacing:2px;color:#D8A8C4;}
 .cc-dots b{color:#E0568F;}
 .cc-combo{font-size:16px;font-weight:800;color:#8a5aa8;min-height:18px;overflow-wrap:anywhere;}
 .cc-canvas{width:100%;height:auto;display:block;border-radius:14px;background:#FFF7FC;touch-action:none;}
@@ -115,8 +115,8 @@ const CSS = `
   align-items:center;gap:2px;}
 .cc-face.cc-on{outline:3px solid #E0568F;}
 .cc-face em{font-style:normal;font-size:22px;line-height:1;}
-.cc-face span{font-size:13px;font-weight:900;color:#7a4a86;}
-.cc-face i{font-style:normal;font-size:13px;color:#9a7ba8;}
+.cc-face span{font-size:var(--mt-control,14px);font-weight:900;color:#7a4a86;}
+.cc-face i{font-style:normal;font-size:var(--mt-control,14px);color:#9a7ba8;}
 .cc-note{text-align:center;font-size:16px;font-weight:700;color:#8a6a9a;line-height:1.6;overflow-wrap:anywhere;
   margin:6px auto;max-width:520px;}
 .cc-over{text-align:center;padding:22px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(190,150,190,.3);}

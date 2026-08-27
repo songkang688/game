@@ -108,7 +108,7 @@ export const CSS = `
 .fc-cell-air::after{content:"";position:absolute;inset:26%;border-radius:50%;background:rgba(255,255,255,.75);}
 .fc-cell-home{border-radius:26%;}
 .fc-pad{position:absolute;border-radius:50%;background:#FFF8DC;box-shadow:inset 0 0 0 2px #F3D98B;
-  display:flex;align-items:center;justify-content:center;font-size:13px;}
+  display:flex;align-items:center;justify-content:center;font-size:var(--mt-control,14px);}
 .fc-line{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
 .fc-token{position:absolute;display:flex;align-items:center;justify-content:center;border:none;padding:0;margin:0;
   background:transparent;font-family:inherit;line-height:1;cursor:pointer;z-index:5;

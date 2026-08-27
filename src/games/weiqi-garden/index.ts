@@ -257,13 +257,13 @@ export const WQ_CSS = `
 .wq-open.wq-ghost:active{box-shadow:0 2px 0 #4E5770;}
 .wq-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
 .wq-chip{background:#fff;border-radius:999px;padding:6px 11px;font-size:16px;font-weight:800;color:#6A5A42;
-  box-shadow:0 2px 6px rgba(150,130,90,.22);white-space:nowrap;}
+  box-shadow:0 2px 6px rgba(150,130,90,.22);overflow-wrap:anywhere;}
 .wq-chip b{color:#A8763A;}
 .wq-scroll{overflow:auto;-webkit-overflow-scrolling:touch;border-radius:14px;max-width:100%;}
 .wq-canvas{display:block;touch-action:manipulation;border-radius:14px;background:#E8D9B5;}
 .wq-lens{display:block;border-radius:12px;background:#E8D9B5;box-shadow:0 2px 8px rgba(120,100,60,.3);}
 .wq-lensbox{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:6px;flex-wrap:wrap;}
-.wq-lenstip{font-size:12px;font-weight:700;color:#7A6A50;}
+.wq-lenstip{font-size:var(--mt-body,16px);font-weight:700;color:#7A6A50;}
 .wq-tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
 .wq-btn{border:none;border-radius:14px;padding:9px 14px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#fff;color:#6A5A42;box-shadow:0 3px 0 rgba(150,130,90,.3);white-space:nowrap;}

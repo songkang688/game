@@ -74,7 +74,7 @@ export const MJ_CSS = `
   align-items:center;justify-content:center;text-align:center;padding:16px;
   background:rgba(255,244,248,.92);border-radius:16px;}
 .mj-pause-t{font-size:20px;font-weight:900;color:#8a4a70;line-height:1.4;}
-.mj-pause-k{font-size:15px;font-weight:800;color:#7a5a90;line-height:1.6;overflow-wrap:anywhere;}
+.mj-pause-k{font-size:var(--mt-body,16px);font-weight:800;color:#7a5a90;line-height:1.6;overflow-wrap:anywhere;}
 .mj-board{display:flex;flex-direction:column;gap:8px;}
 .mj-foe{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:34px;}
 .mj-foe-name{font-size:16px;font-weight:900;color:#6c5a8c;white-space:nowrap;}
@@ -99,7 +99,7 @@ export const MJ_CSS = `
 .mj-tile:active{transform:translateY(2px);box-shadow:0 1px 0 #CFC2AC;}
 .mj-tile:focus-visible{outline:3px solid #6b2a52;outline-offset:2px;}
 .mj-t-n{font-size:18px;font-weight:900;}
-.mj-t-s{font-size:13px;font-weight:800;}
+.mj-t-s{font-size:var(--mt-control,14px);font-weight:800;}
 .mj-t-m{color:#B4442F;}
 .mj-t-p{color:#2E5FA8;}
 .mj-t-s2{color:#28794C;}
@@ -108,8 +108,8 @@ export const MJ_CSS = `
 .mj-t-green{color:#218454;}
 /* 牌河与副露里的小牌只是让人认出打了什么,点数仍旧 13px 起,花色字是陪衬 */
 .mj-tile.mj-small{width:26px;height:34px;}
-.mj-tile.mj-small .mj-t-n{font-size:13px;}
-.mj-tile.mj-small .mj-t-s{font-size:11px;}
+.mj-tile.mj-small .mj-t-n{font-size:var(--mt-control,14px);}
+.mj-tile.mj-small .mj-t-s{font-size:var(--mt-control,14px);}
 .mj-tile.mj-cur{outline:3px solid #E0609B;outline-offset:1px;}
 .mj-tile.mj-hot{box-shadow:0 2px 0 #CFC2AC,0 0 0 3px #FFD46A;}
 .mj-tile.mj-drawn{background:linear-gradient(180deg,#FFF8E6,#F6E7C4);}
@@ -144,7 +144,7 @@ export const MJ_CSS = `
 .mj-fans{width:100%;max-width:340px;max-height:${FAN_VISIBLE * 34}px;overflow-y:auto;display:flex;
   flex-direction:column;gap:4px;padding:2px;}
 .mj-fan{display:flex;justify-content:space-between;gap:10px;background:#fff;border-radius:10px;padding:6px 12px;
-  font-size:14px;font-weight:800;color:#7c5a8e;box-shadow:0 2px 5px rgba(180,140,180,.2);
+  font-size:var(--mt-body,16px);font-weight:800;color:#7c5a8e;box-shadow:0 2px 5px rgba(180,140,180,.2);
   animation:mjpop 220ms cubic-bezier(.34,1.56,.64,1);}
 .mj-fan-p{color:#c8397a;white-space:nowrap;}
 .mj-fan-total{background:#FFEFF6;color:#a8407a;}
@@ -155,7 +155,8 @@ export const MJ_CSS = `
   .mj-tile{width:30px;height:42px;}
   .mj-t-n{font-size:16px;}
   .mj-badge{padding:4px 8px;}
-  .mj-info{width:78px;}
+  /* 16px 的「牌墙 N 张」要地方,78px 装不下 */
+  .mj-info{width:92px;}
   .mj-btn{min-width:50px;padding:0 10px;font-size:15px;}
   .mj-back{width:8px;height:17px;}
 }

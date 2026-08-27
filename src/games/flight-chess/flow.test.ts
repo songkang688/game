@@ -258,12 +258,19 @@ describe("界面纯函数", () => {
     expect(FLIGHT_CONSTS.SIX_STREAK_LIMIT).toBe(3);
   });
 
-  it("样式表:字号一律 ≥13px，能点的飞机有 ≥44px 热区，棋盘保持正方形", () => {
+  it("样式表:字号不低于控件档 14px，能点的飞机有 ≥44px 热区，棋盘保持正方形", () => {
+    // 第 1 轮 W1-R1-02:正文原本一路压到 13px。现在正文走 `--mt-body`(16px)、
+    // 棋盘格子与按钮走 `--mt-control`(14px),写死的数字只剩标题和骰子这类大字。
     const px = [...CSS.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]));
-    expect(px.length).toBeGreaterThan(8);
-    for (const n of px) expect(n).toBeGreaterThanOrEqual(13);
-    // clamp 的下限也要够大
-    for (const m of CSS.matchAll(/font-size:\s*clamp\((\d+)px/g)) expect(Number(m[1])).toBeGreaterThanOrEqual(13);
+    for (const n of px) expect(n).toBeGreaterThanOrEqual(14);
+    // 正文那一档(≥16px)由 window1-mobile-text.test.ts 统一守,写死 16px 或走 --mt-body 都算
+    expect(CSS).toContain("font-size:var(--mt-control,14px)");
+    // 窄屏块里不许再出现写死的字号(按钮那几档除外)
+    const at = CSS.indexOf("@media (max-width:360px)");
+    const narrow = at < 0 ? "" : CSS.slice(at, CSS.indexOf("\n}", at));
+    for (const m of narrow.matchAll(/([.#][\w-]+)[^{}]*\{[^{}]*font-size:\s*\d+px/g)) {
+      expect(/-btn|-dice|-open|-back|-pick/.test(m[1]), `${m[1]} 不是按钮却在窄屏块里写死了字号`).toBe(true);
+    }
     const hot = /\.fc-token-can::before\{[^}]*width:44px;height:44px/.exec(CSS);
     expect(hot).not.toBeNull();
     for (const cls of [".fc-btn", ".fc-pick", ".fc-open", ".fc-back"]) {

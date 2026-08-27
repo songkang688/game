@@ -275,12 +275,23 @@ describe("窄屏与动效红线", () => {
     expect(ruleOf(narrow, ".hc-btn")).not.toContain("min-height");
   });
 
-  it("要读的字号一律 ≥ 13px", () => {
-    for (const sel of [".hc-badge", ".hc-seat", ".hc-seat-line", ".hc-msg", ".hc-log", ".hc-card-name", ".hc-pile"]) {
-      expect(pxOf(ruleOf(HC_CSS, sel), "font-size")).toBeGreaterThanOrEqual(13);
-      const tight = ruleOf(narrow, sel);
-      if (tight.includes("font-size")) expect(pxOf(tight, "font-size")).toBeGreaterThanOrEqual(13);
+  // 第 1 轮 W1-R1-02:窄屏块原本把正文一路压到 13px,跟第 1 步 B 档的手机文字硬指标反着来。
+  // 现在正文交给 `--mt-body`(16px)兜底、牌面那种格子文字交给 `--mt-control`(14px),窄屏只压内边距。
+  it("正文靠 --mt-body 兜底,窄屏不许再把它压下去", () => {
+    for (const sel of [".hc-badge", ".hc-seat", ".hc-seat-line", ".hc-msg", ".hc-log", ".hc-pile"]) {
+      // 写死 16px 或走 var(--mt-body,16px) 都算,要的是结果不是写法
+      const rule = ruleOf(HC_CSS, sel);
+      const ok = rule.includes("--mt-body") || pxOf(rule, "font-size") >= 16;
+      expect(ok, `${sel} 的正文没到 16px:${rule.slice(0, 60)}`).toBe(true);
+      expect(ruleOf(narrow, sel), `${sel} 在窄屏块里又写死了字号`).not.toContain("font-size");
     }
+  });
+
+  it("牌面上的花色与牌名走控件档(14px),卡片只有 52px 宽", () => {
+    for (const sel of [".hc-card-suit", ".hc-card-name"]) {
+      expect(ruleOf(HC_CSS, sel), sel).toContain("font-size:var(--mt-control,14px)");
+    }
+    expect(pxOf(ruleOf(narrow, ".hc-card"), "width")).toBeGreaterThanOrEqual(52);
   });
 
   it("长名字会折行,不会把座位撑出屏幕", () => {

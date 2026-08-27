@@ -100,7 +100,7 @@ export const MG_CSS = `
   box-shadow:0 2px 6px rgba(190,165,110,.28);overflow-wrap:anywhere;min-width:0;}
 .mg-seats{display:flex;flex-direction:column;gap:12px;align-items:center;}
 .mg-seat{display:flex;flex-direction:column;gap:6px;align-items:center;max-width:100%;min-width:0;}
-.mg-name{font-size:14px;font-weight:900;color:#7a5f2e;overflow-wrap:anywhere;}
+.mg-name{font-size:var(--mt-body,16px);font-weight:900;color:#7a5f2e;overflow-wrap:anywhere;}
 .mg-board{position:relative;border-radius:14px;background:#F3E7CD;touch-action:none;flex:0 0 auto;}
 .mg-hole{position:absolute;border-radius:10px;background:#FBF3E2;}
 .mg-hole.mg-block{background:#F0B9C8;box-shadow:inset 0 0 0 3px #E08FA6;}

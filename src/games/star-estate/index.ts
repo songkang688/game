@@ -79,7 +79,7 @@ const CSS = `
   color:#7a5230;box-shadow:0 2px 6px rgba(200,170,120,.25);line-height:1.5;overflow-wrap:anywhere;}
 .se-seat-on{outline:3px solid #F0A85C;}
 .se-seat-out{opacity:.5;}
-.se-seat-name{font-size:14px;}
+.se-seat-name{font-size:var(--mt-body,16px);}
 .se-seat-tier{font-size:16px;font-weight:700;color:#9a7a52;}
 .se-seat-cash{color:#3f7d55;}
 .se-board-wrap{position:relative;width:100%;max-width:560px;margin:0 auto;}
@@ -89,7 +89,7 @@ const CSS = `
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-family:inherit;
   overflow:hidden;min-width:0;min-height:0;}
 .se-tile-emoji{font-size:clamp(13px,2.2vw,15px);line-height:1;}
-.se-tile-price{font-size:13px;font-weight:800;color:#8a6a44;line-height:1.1;}
+.se-tile-price{font-size:var(--mt-control,14px);font-weight:800;color:#8a6a44;line-height:1.1;}
 .se-tile-band{position:absolute;top:0;left:0;right:0;height:22%;border-radius:6px 6px 0 0;}
 .se-tile-own{position:absolute;bottom:0;left:0;right:0;height:16%;font-size:0;}
 /* 房子用色块点表示：格子只有 30px 宽时，任何字号都读不动，读数交给放大预览。 */
@@ -141,7 +141,7 @@ const CSS = `
 .se-over{text-align:center;padding:22px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(200,170,120,.3);}
 .se-over-t{font-size:21px;font-weight:900;color:#8a5a2a;margin-bottom:8px;}
 .se-over-s{font-size:16px;font-weight:700;color:#7a6a52;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
-.se-paper{position:absolute;font-size:14px;pointer-events:none;z-index:7;}
+.se-paper{position:absolute;font-size:var(--mt-body,16px);pointer-events:none;z-index:7;}
 .se-pause{position:absolute;inset:0;background:rgba(255,250,240,.95);border-radius:16px;z-index:9;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .se-pause-t{font-size:20px;font-weight:900;color:#8a5a2a;}

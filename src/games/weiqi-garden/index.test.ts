@@ -197,22 +197,39 @@ describe("weiqi-garden · 样式红线", () => {
     return at < 0 ? "" : WQ_CSS.slice(at, WQ_CSS.indexOf("\n}", at));
   })();
 
+  /** 取某条选择器的声明块(整份 CSS 里第一处) */
+  const ruleOf = (selector: string): string => {
+    const at = WQ_CSS.indexOf(`${selector}{`);
+    return at < 0 ? "" : WQ_CSS.slice(at + selector.length + 1, WQ_CSS.indexOf("}", at));
+  };
+
   it("有 360px 的窄屏段,也有 prefers-reduced-motion 段", () => {
     expect(narrow.length).toBeGreaterThan(40);
     expect(WQ_CSS).toContain("@media (prefers-reduced-motion:reduce)");
   });
 
-  it("窄屏上字号也不低于 13px", () => {
-    const sizes = [...narrow.matchAll(/font-size:(\d+)px/g)].map((m) => Number(m[1]));
-    expect(sizes.length).toBeGreaterThan(0);
-    for (const s of sizes) expect(s).toBeGreaterThanOrEqual(13);
+  // 第 1 轮 W1-R1-02:窄屏块原本把正文压到 13px。现在正文一律交给 `--mt-body`(16px)兜底,
+  // 窄屏只准压内边距;按钮那一档才允许落到 `--mt-control`(14px)。
+  it("窄屏块里只剩按钮档的字号,正文一个都不许再压", () => {
+    // 窄屏块里只准剩按钮那一档:写死也好、走变量也好,都不能低于 14px,且只能落在按钮身上
+    for (const m of narrow.matchAll(/([.#][\w-]+)[^{}]*\{[^{}]*font-size:\s*([^;}]+)/g)) {
+      expect(/-btn|-open|-back|-tool/.test(m[1]), `${m[1]} 不是按钮却在窄屏块里定了字号`).toBe(true);
+      const px = /^(\d+)px$/.exec(m[2].trim());
+      if (px) expect(Number(px[1]), `${m[1]}`).toBeGreaterThanOrEqual(14);
+    }
+  });
+
+  it("正文靠 --mt-body 兜底", () => {
+    for (const sel of [".wq-msg", ".wq-note", ".wq-rows", ".wq-chip", ".wq-lenstip", ".wq-label"]) {
+      // 写死 16px 或走 var(--mt-body,16px) 都算,要的是结果不是写法
+      const rule = ruleOf(sel);
+      const px = /font-size:\s*(\d+)px/.exec(rule);
+      const ok = rule.includes("--mt-body") || (px !== null && Number(px[1]) >= 16);
+      expect(ok, `${sel} 的正文没到 16px:${rule.slice(0, 60)}`).toBe(true);
+    }
   });
 
   it("按钮的点击区不小于 44px", () => {
-    const ruleOf = (selector: string): string => {
-      const at = WQ_CSS.indexOf(`${selector}{`);
-      return at < 0 ? "" : WQ_CSS.slice(at + selector.length + 1, WQ_CSS.indexOf("}", at));
-    };
     for (const sel of [".wq-btn", ".wq-open"]) {
       const m = /min-height:(\d+)px/.exec(ruleOf(sel));
       expect(m).not.toBeNull();

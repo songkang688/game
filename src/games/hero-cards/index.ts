@@ -88,8 +88,8 @@ export const HC_CSS = `
 .hc-seat-turn{background:#FFF1E2;}
 .hc-seat-pick{outline:3px dashed #D2603A;}
 .hc-seat-out{opacity:.45;}
-.hc-seat-name{font-size:14px;}
-.hc-seat-line{font-size:13px;color:#8a6a54;}
+.hc-seat-name{font-size:var(--mt-body,16px);}
+.hc-seat-line{font-size:var(--mt-body,16px);color:#8a6a54;}
 .hc-vigor{color:#C24A6A;letter-spacing:1px;}
 .hc-mid{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:8px 0;}
 .hc-pile{background:#fff;border-radius:12px;padding:6px 10px;font-size:16px;font-weight:800;color:#7a5a44;
@@ -101,9 +101,9 @@ export const HC_CSS = `
 .hc-card{flex:0 0 auto;width:56px;min-height:76px;border:none;border-radius:10px;background:#fff;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:inherit;
   box-shadow:0 2px 6px rgba(200,150,130,.3);padding:4px 2px;}
-.hc-card-suit{font-size:13px;font-weight:800;color:#8a6a54;line-height:1;}
+.hc-card-suit{font-size:var(--mt-control,14px);font-weight:800;color:#8a6a54;line-height:1;}
 .hc-card-emoji{font-size:20px;line-height:1;}
-.hc-card-name{font-size:13px;font-weight:800;color:#7a4a34;line-height:1.2;text-align:center;}
+.hc-card-name{font-size:var(--mt-control,14px);font-weight:800;color:#7a4a34;line-height:1.2;text-align:center;}
 .hc-card-red .hc-card-suit{color:#C2453A;}
 .hc-card-on{outline:3px solid #E0713F;transform:translateY(-6px);}
 .hc-card-dim{opacity:.42;}
@@ -125,7 +125,7 @@ export const HC_CSS = `
   box-shadow:0 4px 14px rgba(200,150,130,.3);}
 .hc-over-t{font-size:20px;font-weight:900;color:#9a5030;margin-bottom:6px;}
 .hc-over-s{font-size:16px;font-weight:700;color:#7a6252;line-height:1.6;margin-bottom:12px;overflow-wrap:anywhere;}
-.hc-reveal{font-size:14px;font-weight:800;color:#7a5238;line-height:1.7;margin-bottom:10px;}
+.hc-reveal{font-size:var(--mt-body,16px);font-weight:800;color:#7a5238;line-height:1.7;margin-bottom:10px;}
 .hc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .hc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#8a5238;text-align:center;overflow-wrap:anywhere;}
 .hc-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;
@@ -139,13 +139,14 @@ export const HC_CSS = `
 .hc-pause{position:absolute;inset:0;background:rgba(255,248,242,.96);border-radius:16px;z-index:9;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:18px;}
 .hc-pause-t{font-size:20px;font-weight:900;color:#9a5030;}
-.hc-keys{font-size:14px;font-weight:700;color:#7a6252;line-height:1.7;}
+.hc-keys{font-size:var(--mt-body,16px);font-weight:700;color:#7a6252;line-height:1.7;}
 @media (max-width:360px){
   .hc-wrap{padding:8px;}
   .hc-seat{flex:1 1 46%;padding:5px 6px;}
   .hc-badge{padding:4px 8px;}
-  .hc-card{width:48px;min-height:70px;}
-  .hc-card-name{font-size:13px;}
+  /* 牌名 14px 三个字就要 42px,48px 的牌面挤不下 */
+  .hc-card{width:52px;min-height:70px;}
+  .hc-card-name{font-size:var(--mt-control,14px);}
   .hc-btn{min-width:74px;font-size:15px;padding:0 8px;}
 }
 @media (prefers-reduced-motion:reduce){
