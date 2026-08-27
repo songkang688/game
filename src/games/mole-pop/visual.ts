@@ -147,3 +147,64 @@ export function gearSvgFor(gear: MoleGearKind, expr = ""): string {
 export function dropPose(kind: MoleKind): MolePose {
   return MOLE_SPECS[kind].hittable ? "yawn" : "up";
 }
+
+// ---------------------------------------------------------------------------
+// 五、场景氛围:白天草地果园 / 夜场自绘火把(互斥渲染,白天关不带火把节点)
+// ---------------------------------------------------------------------------
+
+/**
+ * 草地果园背景:远景两棵圆树 + 栅栏 + 三排错落草丛,纯装饰、点不到。
+ * viewBox 按 360×240 画,xMidYMax slice 贴住底部,窄屏只裁两侧。
+ */
+export function orchardSceneSvg(): string {
+  const tuft = (x: number, y: number, s: number, fill: string): string =>
+    `<path d="M${x} ${y}q${2 * s} ${-7 * s} ${4 * s} 0q${1 * s} ${-9 * s} ${3 * s} 0q${2 * s} ${-6 * s} ${4 * s} 0z" fill="${fill}"/>`;
+  const row = (y: number, fill: string, offset: number, mark: string): string => {
+    let out = `<g data-part="${mark}">`;
+    for (let x = offset; x < 372; x += 46) out += tuft(x, y, 1.15, fill);
+    return `${out}</g>`;
+  };
+  const tree = (x: number, y: number): string =>
+    `<rect x="${x - 3.4}" y="${y}" width="6.8" height="18" rx="2.4" fill="#A87B4F"/>` +
+    `<circle cx="${x}" cy="${y - 12}" r="20" fill="#7CBB5E"/>` +
+    `<circle cx="${x - 11}" cy="${y - 5}" r="12" fill="#8BC96D"/>` +
+    `<circle cx="${x + 11}" cy="${y - 5}" r="12" fill="#8BC96D"/>` +
+    `<circle cx="${x - 6}" cy="${y - 15}" r="2.6" fill="#F27D93"/>` +
+    `<circle cx="${x + 8}" cy="${y - 8}" r="2.6" fill="#F27D93"/>`;
+  let fence = `<g data-part="fence"><rect x="0" y="66" width="360" height="3.4" rx="1.7" fill="#D9B98C"/><rect x="0" y="76" width="360" height="3.4" rx="1.7" fill="#D9B98C"/>`;
+  for (let x = 12; x < 372; x += 44) {
+    fence += `<rect x="${x}" y="58" width="5.4" height="28" rx="2.6" fill="#C89B6C"/>`;
+  }
+  fence += `</g>`;
+  return (
+    `<svg viewBox="0 0 360 240" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" ` +
+    `aria-hidden="true" focusable="false">` +
+    `<g data-part="trees">${tree(52, 52)}${tree(310, 56)}</g>` +
+    fence +
+    row(108, "#ABD988", 6, "grass-far") +
+    row(164, "#9FCF7A", 28, "grass-mid") +
+    row(222, "#93C46C", 12, "grass-near") +
+    `</svg>`
+  );
+}
+
+/**
+ * 夜场火把:双层火苗(外橙内黄,错相摇曳)+ 杆子 + 洞口暖光底晕。
+ * 暖光用 var(--mp-torch),色值只在 token 里出现一次。
+ */
+export function torchFlameSvg(): string {
+  return (
+    `<svg viewBox="0 0 24 40" width="100%" height="100%" aria-hidden="true" focusable="false">` +
+    `<ellipse cx="12" cy="16" rx="11" ry="13" fill="var(--mp-torch)"/>` +
+    `<rect x="10" y="22" width="4" height="16" rx="2" fill="#8A6B4A"/>` +
+    `<g data-part="flame-outer"><path d="M12 2c6 7 8 12 8 16a8 8 0 0 1-16 0c0-4 2-9 8-16z" fill="#FFB347"/></g>` +
+    `<g data-part="flame-inner"><path d="M12 9c3 4 4.4 7 4.4 9.4a4.4 4.4 0 0 1-8.8 0c0-2.4 1.4-5.4 4.4-9.4z" fill="#FFE08A"/></g>` +
+    `</svg>`
+  );
+}
+
+/** 夜场左右各一支火把(只在 night 关渲染,白天关不引入这些节点) */
+export function torchFlamesHtml(): string {
+  const flame = torchFlameSvg();
+  return `<span class="mp-flame mp-flame-l">${flame}</span><span class="mp-flame mp-flame-r">${flame}</span>`;
+}

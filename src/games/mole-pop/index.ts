@@ -43,7 +43,16 @@ import {
   type ChartNote,
   type MoleKind,
 } from "./rhythm";
-import { MP_TIMING, dropPose, gearFor, gearSvgFor, holeInnerHtml, moleFaceSvg } from "./visual";
+import {
+  MP_TIMING,
+  dropPose,
+  gearFor,
+  gearSvgFor,
+  holeInnerHtml,
+  moleFaceSvg,
+  orchardSceneSvg,
+  torchFlamesHtml,
+} from "./visual";
 
 interface HoleState {
   kind: MoleKind | null;
@@ -72,8 +81,8 @@ const CSS = `
 .mp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #8A7A3E; box-shadow: 0 2px 6px rgba(170,150,90,.25); font-size: 14px; }
 .mp-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #C8E06E, #8FBB4E); border-radius: 8px; transition: width .3s; }
-.mp-quiz { text-align: center; font-weight: 900; font-size: 16px; color: #5B5EA6; background: #fff; border-radius: 14px; padding: 6px 10px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(120,120,200,.22); }
-.mp-quiz b { font-size: 21px; color: #C2456F; }
+.mp-quiz { text-align: center; font-weight: 900; font-size: 16px; color: #F5EAD1; background: var(--mp-board); border: 3px solid #C89B6C; border-radius: 14px; padding: 6px 10px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(90,80,50,.3); }
+.mp-quiz b { font-size: 21px; color: #FFD75E; font-family: "Comic Sans MS", "Chalkboard SE", "Segoe Print", cursive; }
 .mp-combo { height: 9px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mp-combofill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFC46B, #F0714A); border-radius: 8px; transition: width .2s; }
 .mp-combo.mp-combo-on .mp-combofill { background: linear-gradient(90deg, #FF9A3C, #E8452C); animation: mpBlaze .5s ease infinite alternate; }
@@ -100,6 +109,9 @@ const CSS = `
 .mp-gear-shield { top: 30%; height: 42%; }
 .mp-gear-hat { top: -2%; height: 36%; }
 .mp-gear-board { top: -8%; height: 58%; }
+/* 算术小黑板出题时轻摆 ±3° */
+.mp-gear-board svg { transform-box: fill-box; transform-origin: 50% 6%; animation: mpSway var(--mp-sway-ms) ease-in-out infinite alternate; }
+@keyframes mpSway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
 .mp-gear.mp-gear-fly { animation: mpGearFly var(--mp-fly-ms) ease-out forwards; }
 @keyframes mpGearFly { from { transform: translate(0, 0) rotate(0deg); opacity: 1; } 55% { transform: translate(30%, -55%) rotate(26deg); opacity: 1; } to { transform: translate(52%, -14%) rotate(52deg); opacity: 0; } }
 /* 冒头预告:出洞前 150ms,前沿土堆抖两下 + 洞口弹起两粒土 */
@@ -111,6 +123,13 @@ const CSS = `
 .mp-bonk { position: absolute; left: 13%; right: 13%; top: 0; bottom: 24%; display: flex; align-items: flex-end; justify-content: center; animation: mpBonkPop var(--mp-bonk-ms) cubic-bezier(.34,1.56,.64,1); }
 .mp-bonk svg { width: 92%; height: auto; }
 @keyframes mpBonkPop { from { transform: translateY(4px) scale(1.06, .8); } to { transform: translateY(0) scale(1, 1); } }
+/* 夜场火把:双层火苗错相摇曳,reduced 时静止 */
+.mp-scene .mp-flame { position: absolute; top: 6px; width: 24px; height: 40px; }
+.mp-flame-l { left: 10px; }
+.mp-flame-r { right: 10px; }
+.mp-flame [data-part="flame-outer"] { transform-box: fill-box; transform-origin: 50% 88%; animation: mpFlame var(--mp-flame-ms) ease-in-out infinite alternate; }
+.mp-flame [data-part="flame-inner"] { transform-box: fill-box; transform-origin: 50% 82%; animation: mpFlame var(--mp-flame-ms) ease-in-out infinite alternate-reverse; }
+@keyframes mpFlame { from { transform: rotate(-4deg) scaleY(.96); } to { transform: rotate(4deg) scaleY(1.04); } }
 .mp-wrap.mp-night { background: linear-gradient(180deg, #2B2C46, #3C3A55); }
 .mp-wrap.mp-night .mp-badge { background: #4B4A6B; color: #FFF0C0; }
 .mp-wrap.mp-night .mp-msg { color: #FFE9A8; }
@@ -137,6 +156,8 @@ const CSS = `
   .mp-hole.mp-peek .mp-fx::after { display: none; }
   .mp-gear.mp-gear-fly { animation: none; opacity: 0; }
   .mp-bonk { animation: none; }
+  .mp-gear-board svg { animation: none; }
+  .mp-flame [data-part="flame-outer"], .mp-flame [data-part="flame-inner"] { animation: none; }
 }
 `;
 
@@ -187,8 +208,10 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
 
   const wrap = document.createElement("div");
   wrap.className = `mp-wrap${cfg.night ? " mp-night" : ""}`;
+  // 场景层互斥:白天草地果园,夜场两支自绘火把;都点不到(pointer-events:none)
   wrap.innerHTML = `
     <style>${CSS}</style>
+    <div class="mp-scene">${cfg.night ? torchFlamesHtml() : orchardSceneSvg()}</div>
     <div class="mp-top">
       <span class="mp-badge mp-score">🔨 0 / ${cfg.target}</span>
       <span class="mp-badge mp-time">⏰ ${cfg.duration}s</span>
