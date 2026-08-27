@@ -120,8 +120,9 @@ export const CSS = `
 .jq-empty .jq-face{background:#ffffff8c;color:#9aa88c;font-size:13px;font-weight:700;}
 .jq-duo .jq-face{background:linear-gradient(180deg,#FFE7D5,#FBD3B6);color:#A9531F;
   box-shadow:0 2px 0 #d9a97f,inset 0 0 0 1px #c9853f66;}
-.jq-star .jq-face{background:linear-gradient(180deg,#DFEAFA,#C4D8F4);color:#25508F;
-  box-shadow:0 2px 0 #90afd8,inset 0 0 0 1px #4a72a866;}
+/* 星星方按 B 档规格压暗一档：与朵朵暖橙面的灰度差从 ≈2 拉开到 ≥20，双通道更稳 */
+.jq-star .jq-face{background:linear-gradient(180deg,#C4D8F4,#9FBCE4);color:#25508F;
+  box-shadow:0 2px 0 #7d9fce,inset 0 0 0 1px #4a72a866;}
 .jq-back .jq-face{background:linear-gradient(180deg,#EFE3F7,#DCCBEE);color:#7A5CA0;
   box-shadow:0 2px 0 #b39ccb,inset 0 0 0 1px #7a5ca066;}
 .jq-cell.jq-sel .jq-face{transform:scale(1.06);box-shadow:0 0 0 3px #F2A03C,0 0 0 5px #ffffffb3;}

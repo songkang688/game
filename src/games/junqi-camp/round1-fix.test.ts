@@ -53,6 +53,23 @@ describe("junqi-camp · 双方形状第二通道（A 档 3-1 严重修复）", (
     expect(rule).toContain("position:absolute");
     expect(rule).toContain("pointer-events:none");
   });
+
+  it("双方面板底渐变的灰度差拉开到 ≥20/255（B 档 #1② 规格）", () => {
+    const lum = (hex: string): number => {
+      const n = Number.parseInt(hex.slice(1), 16);
+      return 0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+    };
+    const stops = (sel: string): string[] => {
+      const rule = BOARD_CSS.match(new RegExp(`\\.${sel} \\.jq-face\\{[^}]*\\}`))?.[0] ?? "";
+      return rule.match(/#[0-9A-Fa-f]{6}(?=[,)])/g) ?? [];
+    };
+    const duo = stops("jq-duo");
+    const star = stops("jq-star");
+    expect(duo.length).toBeGreaterThanOrEqual(2);
+    expect(star.length).toBeGreaterThanOrEqual(2);
+    expect(Math.abs(lum(duo[0]) - lum(star[0]))).toBeGreaterThanOrEqual(20);
+    expect(Math.abs(lum(duo[1]) - lum(star[1]))).toBeGreaterThanOrEqual(20);
+  });
 });
 
 describe("junqi-camp · HUD 字号 ≥14px（A 档 5-4 修复）", () => {
