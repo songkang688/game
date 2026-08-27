@@ -14,10 +14,10 @@
 3. **打 annotated tag 并推上去:**
 
    ```bash
-   git fetch origin game-1.1
-   git checkout game-1.1 && git pull origin game-1.1
-   git tag -a v1.1.0 -m "一朵一星 1.1.0"
-   git push origin v1.1.0
+   git fetch origin game-1.2
+   git checkout game-1.2 && git pull origin game-1.2
+   git tag -a v1.2.0 -m "一朵一星 1.2.0"
+   git push origin v1.2.0
    ```
 
    > tag 一律用 `-a`(annotated,带作者和说明),不要用轻量 tag。
@@ -32,13 +32,32 @@
    ```
 
 5. 全绿之后,Release 页会出现在
-   `https://github.com/songkang688/game/releases/tag/v1.1.0`,资产就是各平台安装包。
+   `https://github.com/songkang688/game/releases/tag/v1.2.0`,资产就是各平台安装包。
+
+## 发版记录
+
+| 版本 | tag | 基线分支 | 内容 |
+| ---- | ---- | ---- | ---- |
+| 1.1.0 | `v1.1.0` | `game-1.1` | 55 款游戏、188 关战役、2.5D 跑酷、首页筛选与收藏册 |
+| 1.2.0 | `v1.2.0` | `game-1.2`(窗口 1–5 全部合入) | **76 款**游戏(新增 21 款)、55 款老游戏精细化升级、手游/端游筛选、闯关/对战/无尽兼容壳、root 高权限门 |
+
+### 1.2.0 这次是怎么发的
+
+- 版本号从 `1.1.0` 提到 `1.2.0` 的提交在分支 `cursor/1.2-release-tag-027e` 上,
+  它是从 `game-1.2` 的窗口 5 合入点(`2c02497`)开出来的;
+  annotated tag `v1.2.0` 打在这个「版本号已经是 1.2.0」的提交上。
+- 同一个提交里顺手把对外文案的「1.1 / 55 款」改成了「1.2 / 76 款」:
+  README 标题与清单、家长说明弹窗(`src/ui/parentGate.ts`)、
+  以及 `release.yml` 生成 Release 说明时那句介绍。
+  **发行页和 README 的数字要一致**,不然用户下载前后看到两个说法。
+- 76 = 1.1 的 55 款 + 1.2 新接入的 21 款,按 `src/games/*/meta.ts` 的实际数量数出来的,
+  不是拍脑袋写的;以后加了游戏记得同步这几处。
 
 ## 工作流里都有什么
 
 | 工作流 | 什么时候跑 | 干什么 |
 | ---- | ---- | ---- |
-| `.github/workflows/ci.yml` | push 到 `main` / `game-1.1`,以及所有 PR | Node 22 上 `npm ci && npm test && npm run build` |
+| `.github/workflows/ci.yml` | push 到 `main` / `game-1.1` / `game-1.2`,以及所有 PR | Node 22 上 `npm ci && npm test && npm run build` |
 | `.github/workflows/release.yml` | push `v*` tag | 校验版本号 → 跑测试 → 三个平台出包 → 建 Release 挂资产 |
 
 `release.yml` 的 job:
