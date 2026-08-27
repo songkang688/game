@@ -333,12 +333,31 @@ export function candidateMovesR(b: Board, radius: number): Array<[number, number
 }
 
 /**
- * 聪明档：两层搜索。
- * 先按"进攻分+防守分"初筛前 12 个点，然后对每个点假设落子，
- * 计算对手的最佳回应分值（含对手成五检查），
- * 总分 = 自身点分 + 0.95×防守分 − 0.6×对手最佳回应。
- * 这样活二/眠三/冲四的权重（见 evaluatePoint）在两层里都会生效，
- * 能提前一步看到"对手活三将变活四"之类的威胁。
+ * 聪明档的防守权重：与普通档（`bestMove` 里的 `defenseW`）对齐。
+ * 对齐这件事本身就是 1.2 的修正 —— 见 `smartMove` 的注释。
+ */
+const SMART_DEFENSE = 0.9;
+
+/**
+ * 聪明档多算的那一层里，「对手下一手的最高进攻分」占多少权重。
+ * 这一项只是用来分先后手节奏的，给大了它就变回那个只会拆家的怯懦档。
+ */
+const SMART_TEMPO = 0.1;
+
+/**
+ * 聪明档：在普通档那把尺（进攻 1.0 / 防守 0.9）之上多算一层。
+ *
+ * 它比普通档多会三件事，每一件都是「看得见下一手」：
+ * ① 自己手里已经有要害点（活四 / 双冲四 / 冲四活三 / 双活三）就直接拍下去；
+ * ② 对手有要害点时，不只会占那个交叉点，也会去**拆掉组成它的那条活三**
+ *    （落完子真的再查一遍对手还有没有要害点，破得掉才走）；
+ * ③ 平静局面下，把「我走这里之后对手会不会立刻多出一个要害点」当成硬扣分。
+ *
+ * 1.2 修正：老版本的总分是 `自家分 + 0.95×对手分 − 0.6×对手最佳回应`，
+ * 「占掉对手要点」被算了两遍（`0.95` 一遍、`−0.6×reply` 又一遍），
+ * 等效防守权重 ≈ 1.55 而进攻权重只有 1.0 —— 它比普通档更怕事，
+ * 只会拆家不会成家，长局反而下不过普通档。现在防守权重与普通档对齐，
+ * 多出来的那一层只用来看「对手的下一手」，不再重复给防守加码。
  */
 export function smartMove(
   b: Board,
@@ -354,27 +373,76 @@ export function smartMove(
   const oppWin = cands.find(([x, y]) => makesFive(b, x, y, opp));
   if (oppWin) return { x: oppWin[0], y: oppWin[1] };
 
+  // ① 自己就有要害点：一步定型的棋，抢在对手前面拍下去
+  //    （对手已经握着活四 / 双冲四时抢不过，那种局面交给下面的破杀分支）
+  const myHot = hotPoints(b, me);
+  if (myHot.length > 0 && killerPoints(b, opp).length === 0) return myHot[0];
+
+  // 三手之内的连续冲四杀（大师档看五手、地狱档看七手，聪明档只看三手）
+  const kill = findVcf(b, me, 3);
+  if (kill) return kill;
+
   const scored = cands.map(([x, y]) => ({
     x,
     y,
-    base: evaluatePoint(b, x, y, me) + 0.95 * evaluatePoint(b, x, y, opp),
+    base: evaluatePoint(b, x, y, me) + SMART_DEFENSE * evaluatePoint(b, x, y, opp),
   }));
   scored.sort((a, c) => c.base - a.base);
   const top = scored.slice(0, 12);
 
+  // ② 对手有要害点：占掉它、或者拆掉组成它的那条活三，破得掉才算数
+  const oppHot = hotPoints(b, opp);
+  if (oppHot.length > 0) {
+    const tries: Array<{ x: number; y: number }> = [
+      ...oppHot,
+      ...top.map((m) => ({ x: m.x, y: m.y })),
+    ];
+    for (const t of tries) {
+      if (getCell(b, t.x, t.y) !== 0) continue;
+      setCell(b, t.x, t.y, me);
+      const broken = hotPoints(b, opp).length === 0 && fiveSpotsOf(b, opp).length === 0;
+      setCell(b, t.x, t.y, 0);
+      if (broken) return t;
+    }
+    return oppHot[0];
+  }
+
+  // ③ 平静局面：多算一层 ——「我走这里，对手挡完之后，谁手上还有要害点」
   let best = top[0];
   let bestVal = -Infinity;
   for (const m of top) {
     setCell(b, m.x, m.y, me);
-    // 对手的最佳回应分（对手成五 = 天文数字，等价于必输警告）
-    let reply = 0;
-    for (const [ox, oy] of candidateMoves(b)) {
-      const v = evaluatePoint(b, ox, oy, opp);
-      if (v > reply) reply = v;
-      if (reply >= 10_000_000) break;
+    let val = m.base;
+    if (hotPoints(b, opp).length > 0) {
+      // 这一手等于把活四 / 双三送到对手手里
+      val -= 250_000;
+    } else {
+      // 对手用同一把尺挑他的最佳应手
+      let rx = -1;
+      let ry = -1;
+      let rv = -Infinity;
+      let atk = 0;
+      for (const [ox, oy] of candidateMoves(b)) {
+        const a = evaluatePoint(b, ox, oy, opp);
+        if (a > atk) atk = a;
+        const v = a + SMART_DEFENSE * evaluatePoint(b, ox, oy, me);
+        if (v > rv) {
+          rv = v;
+          rx = ox;
+          ry = oy;
+        }
+      }
+      val -= SMART_TEMPO * atk;
+      if (rx >= 0) {
+        setCell(b, rx, ry, opp);
+        // 他挡完我还有要害点 = 这一手做出了他一手挡不掉的双威胁
+        if (hotPoints(b, me).length > 0) val += 60_000;
+        if (hotPoints(b, opp).length > 0) val -= 120_000;
+        setCell(b, rx, ry, 0);
+      }
     }
     setCell(b, m.x, m.y, 0);
-    const val = m.base - 0.6 * reply + rng() * 4;
+    val += rng() * 4;
     if (val > bestVal) {
       bestVal = val;
       best = m;
@@ -382,6 +450,15 @@ export function smartMove(
   }
   return { x: best.x, y: best.y };
 }
+
+/**
+ * 大师档挑点时对手棋型的权重。
+ *
+ * 1.2 上调（0.95 → 1.15）：大师档手里有算杀（VCF 5 手 / VCT 3 手）和三层前瞻，
+ * 进攻这一头本来就够用；真正会输棋的是「对手在别处慢慢做形，它只顾自己长」。
+ * 把对手的形看得比自己重一点点，它才配得上比聪明档更强这句话。
+ */
+const MASTER_DEFENSE = 1.15;
 
 /* ---------------- 1.1 新增：大师档 ---------------- */
 // 大师档比聪明档多两件武器：
@@ -587,6 +664,92 @@ function unstoppable(b: Board, p: Player): boolean {
 }
 
 /**
+ * 对手握着杀招时，所有值得一试的解法。顺序就是「先看最直接的」：
+ * 对手的连续冲四点 / 连续威胁点 → 对手的要害点 → 拆掉组成要害点的那条线
+ * → 自己这边最想下的几个点（一边解杀一边落在要点上最划算）→ 自己的冲四。
+ * 同一个点只留一次。
+ */
+function defenseCandidates(
+  b: Board,
+  me: Player,
+  cands: Array<[number, number]>,
+  oppHot: Array<{ x: number; y: number }>,
+  oppVcf: { x: number; y: number } | null,
+  oppVct: { x: number; y: number } | null
+): Array<{ x: number; y: number }> {
+  const opp = other(me);
+  const raw: Array<{ x: number; y: number }> = [];
+  if (oppVcf) raw.push(oppVcf);
+  if (oppVct) raw.push(oppVct);
+  raw.push(...oppHot);
+  const breakers = cands
+    .map(([x, y]) => ({ x, y, v: evaluateMaster(b, x, y, opp) }))
+    .sort((a, c) => c.v - a.v)
+    .slice(0, 6);
+  for (const d of breakers) raw.push({ x: d.x, y: d.y });
+  const mine = cands
+    .map(([x, y]) => ({
+      x,
+      y,
+      v: evaluateMaster(b, x, y, me) + 0.9 * evaluateMaster(b, x, y, opp),
+    }))
+    .sort((a, c) => c.v - a.v)
+    .slice(0, 6);
+  for (const d of mine) raw.push({ x: d.x, y: d.y });
+  for (const f of forcingMoves(b, me).slice(0, 4)) raw.push({ x: f.x, y: f.y });
+
+  const seen = new Set<string>();
+  const out: Array<{ x: number; y: number }> = [];
+  for (const t of raw) {
+    const k = `${t.x},${t.y}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if (getCell(b, t.x, t.y) !== 0) continue;
+    out.push(t);
+    if (out.length >= 14) break;
+  }
+  return out;
+}
+
+/**
+ * 从解法候选里挑一个。
+ *
+ * 1.2 修正：老版本是「按固定顺序试，拿到第一个安全的就走」——
+ * 顺序是拍脑袋定的，于是常常解了杀却把自己的要点让了出去；
+ * 真的一个都不安全时又直接返回 `tries[0]`，等于随手一放。
+ * 现在改成两道筛子：先要「对手不再有必胜招」，再要「对手至少没有现成的要害点」，
+ * 同一道筛子里选自己这边分数最高的那个。
+ */
+function pickDefense(
+  b: Board,
+  me: Player,
+  tries: Array<{ x: number; y: number }>
+): { x: number; y: number } | null {
+  const opp = other(me);
+  let hard: { x: number; y: number } | null = null;
+  let hardV = -Infinity;
+  let soft: { x: number; y: number } | null = null;
+  let softV = -Infinity;
+  for (const t of tries) {
+    if (getCell(b, t.x, t.y) !== 0) continue;
+    const v = evaluateMaster(b, t.x, t.y, me) + 0.9 * evaluateMaster(b, t.x, t.y, opp);
+    setCell(b, t.x, t.y, me);
+    const quiet = fiveSpotsOf(b, opp).length === 0 && hotPoints(b, opp).length === 0;
+    const safe = quiet && !unstoppable(b, opp);
+    setCell(b, t.x, t.y, 0);
+    if (safe && v > hardV) {
+      hardV = v;
+      hard = t;
+    }
+    if (quiet && v > softV) {
+      softV = v;
+      soft = t;
+    }
+  }
+  return hard ?? soft;
+}
+
+/**
  * 大师档：先算杀，再算被杀，都没有才用三层前瞻挑点。
  * ① 自己能成五 / 必须挡对手成五；
  * ② 自己有连续冲四的杀棋（最多 5 手）→ 直接走；
@@ -619,33 +782,15 @@ export function masterMove(
     if (vct) return vct;
   }
   if (oppHot.length > 0 || oppVcf || oppVct) {
-    // 对手的要害点、我方自己的冲四，谁能真的把杀棋破掉就走谁
-    const tries: Array<{ x: number; y: number }> = [];
-    if (oppVcf) tries.push(oppVcf);
-    if (oppVct) tries.push(oppVct);
-    tries.push(...oppHot);
-    // 除了直接占掉要害点，拆掉组成双三的某一条活三同样是解法
-    const breakers = cands
-      .map(([x, y]) => ({ x, y, v: evaluateMaster(b, x, y, opp) }))
-      .sort((a, c) => c.v - a.v)
-      .slice(0, 6);
-    for (const d of breakers) tries.push({ x: d.x, y: d.y });
-    for (const f of forcingMoves(b, me).slice(0, 4)) tries.push({ x: f.x, y: f.y });
-    for (const t of tries) {
-      if (getCell(b, t.x, t.y) !== 0) continue;
-      setCell(b, t.x, t.y, me);
-      const safe = !unstoppable(b, opp);
-      setCell(b, t.x, t.y, 0);
-      if (safe) return t;
-    }
-    return tries[0];
+    const tries = defenseCandidates(b, me, cands, oppHot, oppVcf, oppVct);
+    return pickDefense(b, me, tries) ?? tries[0];
   }
 
   const scored = cands
     .map(([x, y]) => ({
       x,
       y,
-      base: evaluateMaster(b, x, y, me) + 0.95 * evaluateMaster(b, x, y, opp),
+      base: evaluateMaster(b, x, y, me) + MASTER_DEFENSE * evaluateMaster(b, x, y, opp),
     }))
     .sort((a, c) => c.base - a.base)
     .slice(0, 8);
