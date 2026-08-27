@@ -674,8 +674,8 @@ export function guideAlpha(chapter: number): number {
   const c = Math.max(0, Math.round(chapter));
   if (c <= 1) return 1;
   if (c >= 6) return 0;
-  // 第三章 0.75,一章淡一档,到第七章正好归零
-  return Math.max(0, 1 - (c - 1) * 0.25);
+  // 第三章 0.8,往后一章淡一档,到第七章正好归零
+  return Math.max(0, 1 - (c - 1) * 0.2);
 }
 
 // ---------------------------------------------------------------------------
