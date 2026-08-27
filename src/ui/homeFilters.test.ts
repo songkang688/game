@@ -191,9 +191,40 @@ describe("窗口 1 的 12 款新游戏也能用拼音搜", () => {
     expect(pinyinInitials("绿芽保卫战")).toBe("lybwz");
   });
 
+  // 补 12 款时顺手核了一遍全库,发现 1.1 还有 16 个标题一直缺字 ——
+  // 「金矿钩钩」四个字一个都没进表,「保龄球小馆」缺龄和馆。
+  // 这些字一并补进来,顺带把它们钉住,免得下次改字表又被搞回去。
+  const OLD_TITLES_FIXED: { title: string; initials: string }[] = [
+    { title: "泡泡炸弹人", initials: "ppzdr" },
+    { title: "保龄球小馆", initials: "blqxg" },
+    { title: "推箱小仓鼠", initials: "txxcs" },
+    { title: "碰碰车大乱斗", initials: "ppcdld" },
+    { title: "朵星格斗王", initials: "dxgdw" },
+    { title: "钓鱼小达人", initials: "dyxdr" },
+    { title: "金矿钩钩", initials: "jkgg" },
+    { title: "冰冰火火森林", initials: "bbhhsl" },
+    { title: "朵朵抢地主", initials: "ddqdz" },
+    { title: "小怪物危机", initials: "xgwwj" },
+    { title: "王子公主大冒险", initials: "wzgzdmx" },
+    { title: "噗噗兄弟", initials: "ppxd" },
+    { title: "星星射击场", initials: "xxsjc" },
+    { title: "飞机小队", initials: "fjxd" },
+    { title: "雪球大作战", initials: "xqdzz" },
+    { title: "铁皮坦克大战", initials: "tptkdz" }
+  ];
+
+  it("1.1 老标题里缺的字也补齐了,全库都能用拼音搜", () => {
+    for (const g of OLD_TITLES_FIXED) {
+      expect(pinyinInitials(g.title), g.title).toBe(g.initials);
+      expect(g.initials.length, g.title).toBe([...g.title].length);
+    }
+  });
+
   it("顺手把老标题里缺的字也补齐了,飞机小队与雪球大作战不再掉字", () => {
-    expect(pinyinInitials("飞机小队")).toContain("f");
-    expect(pinyinInitials("雪球大作战")).toBe("qdzz");
+    // 原来这两条钉的是「补了飞、还缺机队雪」的半截状态(fjxd 写成 f、xqdzz 写成 qdzz)。
+    // 字补齐之后就该是完整串了。
+    expect(pinyinInitials("飞机小队")).toBe("fjxd");
+    expect(pinyinInitials("雪球大作战")).toBe("xqdzz");
   });
 });
 
