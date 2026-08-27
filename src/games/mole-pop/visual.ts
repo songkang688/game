@@ -203,6 +203,32 @@ export function orchardSceneSvg(): string {
 }
 
 /**
+ * 夜场氛围层(B 档 TOP-7 落地):orchardSceneSvg 的夜姊妹件。
+ * 月牙 + 五粒星子 + 远景剪影树,全是纯装饰、点不到;
+ * 星子全部压在栅栏线(y=58)以上,不进洞区不抢玩法层。
+ * 火把(torchFlamesHtml)与洞口暖光一字不动,叠在本层之上。
+ */
+export function nightSceneSvg(): string {
+  const star = (x: number, y: number, r: number): string =>
+    `<circle cx="${x}" cy="${y}" r="${r}" fill="#FFF3C9" opacity=".8"/>`;
+  const treeShadow = (x: number, y: number): string =>
+    `<rect x="${x - 3.4}" y="${y}" width="6.8" height="18" rx="2.4" fill="#3C3A55"/>` +
+    `<circle cx="${x}" cy="${y - 12}" r="20" fill="#3C3A55"/>` +
+    `<circle cx="${x - 11}" cy="${y - 5}" r="12" fill="#3C3A55"/>` +
+    `<circle cx="${x + 11}" cy="${y - 5}" r="12" fill="#3C3A55"/>`;
+  return (
+    `<svg viewBox="0 0 360 240" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" ` +
+    `aria-hidden="true" focusable="false">` +
+    `<defs><mask id="mp-night-moon"><rect width="360" height="240" fill="#fff"/>` +
+    `<circle cx="265" cy="19" r="11.5" fill="#000"/></mask></defs>` +
+    `<g data-part="night-trees">${treeShadow(52, 52)}${treeShadow(310, 56)}</g>` +
+    `<g data-part="moon"><circle cx="259" cy="24" r="14" fill="#FFF3C9" mask="url(#mp-night-moon)"/></g>` +
+    `<g data-part="stars">${star(36, 30, 1.5)}${star(96, 18, 1.2)}${star(150, 42, 1.8)}${star(206, 22, 1.3)}${star(322, 48, 1.5)}</g>` +
+    `</svg>`
+  );
+}
+
+/**
  * 夜场火把:双层火苗(外橙内黄,错相摇曳)+ 杆子 + 洞口暖光底晕。
  * 暖光用 var(--mp-torch),色值只在 token 里出现一次。
  */

@@ -50,6 +50,7 @@ import {
   gearSvgFor,
   holeInnerHtml,
   moleFaceSvg,
+  nightSceneSvg,
   orchardSceneSvg,
   torchFlamesHtml,
 } from "./visual";
@@ -213,10 +214,10 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
 
   const wrap = document.createElement("div");
   wrap.className = `mp-wrap${cfg.night ? " mp-night" : ""}`;
-  // 场景层互斥:白天草地果园,夜场两支自绘火把;都点不到(pointer-events:none)
+  // 场景层互斥:白天草地果园,夜场月牙星子剪影 + 两支自绘火把;都点不到(pointer-events:none)
   wrap.innerHTML = `
     <style>${CSS}</style>
-    <div class="mp-scene">${cfg.night ? torchFlamesHtml() : orchardSceneSvg()}</div>
+    <div class="mp-scene">${cfg.night ? nightSceneSvg() + torchFlamesHtml() : orchardSceneSvg()}</div>
     <div class="mp-top">
       <span class="mp-badge mp-score">🔨 0 / ${cfg.target}</span>
       <span class="mp-badge mp-time">⏰ ${cfg.duration}s</span>

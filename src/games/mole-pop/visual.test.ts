@@ -283,8 +283,10 @@ describe("mole-pop 视觉 · 12) 场景氛围与玩法数值零漂移", () => {
     expect(torchFlamesHtml()).toContain("mp-flame-r");
   });
 
-  it("场景互斥:夜场只火把、白天只果园(源码分支断言)", () => {
-    expect(INDEX.text).toContain("cfg.night ? torchFlamesHtml() : orchardSceneSvg()");
+  it("场景互斥:夜场只夜色件(月牙星子剪影+火把)、白天只果园(源码分支断言)", () => {
+    // W6R1 fixer 落地 B 档 TOP-7 后,夜场氛围层排在火把前;互斥结构不变:
+    // 白天关不带任何夜场节点,夜场关不带果园节点
+    expect(INDEX.text).toContain("cfg.night ? nightSceneSvg() + torchFlamesHtml() : orchardSceneSvg()");
   });
 
   it("MOLE_SPECS 的行为数值(hits/base/stayScale/hittable)与 1.2 完全一致", () => {

@@ -7,6 +7,7 @@
  * 把 diffPct ≥3% 钉死,防回退。
  */
 import sharp from "sharp";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { moleSvg } from "../../art/kit/moleSvg";
 import {
@@ -92,5 +93,40 @@ describe("窗口6 r1 fixer · W6R1-05/06 地鼠一家 16px 灰度可分", () => 
   it("五种脸两两可分(SVG 串各不相同,含花花兔)", () => {
     const faces = [moleFaceSvg("normal"), moleFaceSvg("gold"), moleFaceSvg("sleepy"), moleFaceSvg("flash"), moleFaceSvg("bunny")];
     expect(new Set(faces).size).toBe(faces.length);
+  });
+});
+
+describe("窗口6 r1 fixer · B 档 TOP-7 夜场氛围补层(nightSceneSvg)", () => {
+  it("夜姊妹件齐活:月牙 + 五粒星子 + 两棵剪影树,全 #FFF3C9/#3C3A55 夜色板", async () => {
+    const { nightSceneSvg } = await import("./visual");
+    const svg = nightSceneSvg();
+    expect(svg).toContain('data-part="moon"');
+    expect(svg).toContain('mask="url(#mp-night-moon)"'); // 月牙靠遮罩抠出弯
+    expect(svg).toContain("#FFF3C9");
+    expect((svg.match(/data-part="stars"/g) ?? []).length).toBe(1);
+    expect((svg.match(/opacity="\.8"/g) ?? []).length).toBe(5); // 星子恰好 5 粒
+    expect((svg.match(/#3C3A55/g) ?? []).length).toBeGreaterThanOrEqual(8); // 两棵树 × 4 件剪影
+  });
+
+  it("星子全部压在栅栏线(y=58)以上,不进洞区不抢玩法层", async () => {
+    const { nightSceneSvg } = await import("./visual");
+    const stars = /<g data-part="stars">([\s\S]*?)<\/g>/.exec(nightSceneSvg())![1];
+    const ys = [...stars.matchAll(/cy="([\d.]+)"/g)].map((m) => Number(m[1]));
+    expect(ys).toHaveLength(5);
+    for (const y of ys) expect(y).toBeLessThan(58);
+  });
+
+  it("index 夜场把氛围层排在火把前面(火把与洞口暖光叠在其上,一字不动)", () => {
+    const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+    expect(src).toContain("nightSceneSvg() + torchFlamesHtml()");
+    expect(src).toContain("orchardSceneSvg()"); // 白天关照旧互斥渲染
+  });
+
+  it("氛围层是纯装饰:aria-hidden、无动画、无 emoji", async () => {
+    const { nightSceneSvg } = await import("./visual");
+    const svg = nightSceneSvg();
+    expect(svg).toContain('aria-hidden="true"');
+    expect(svg).not.toContain("animate");
+    expect(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(svg)).toBe(false);
   });
 });
