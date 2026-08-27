@@ -12,10 +12,12 @@ import {
   type PlayHandle,
 } from "../level99";
 import { playAdvancedLevel } from "./advanced";
+import { createFxLayer } from "./fx";
 import guide from "./guide";
 import { buildMelodies, CHAPTERS, LEVELS, type MusicLevel } from "./levels";
 import { clampSpeed, FULL_SPEED, rateWithSpeed, scaleMs, speedHint } from "./practice";
-import { openLevelOnMap, parseLevelParam, resolveInitialLevel } from "./runtime";
+import { openLevelOnMap, parseLevelParam, prefersReducedMotion, resolveInitialLevel } from "./runtime";
+import { noteColorByMidi } from "./starTheme";
 import { createSandbox, type SandboxHandle } from "./sandboxUi";
 import { resetClippedScroll } from "./stageScroll";
 import { StarSynth } from "./synth";
@@ -144,6 +146,14 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
   });
   wrap.appendChild(audioBar.el);
 
+  // 1.3 纯视觉：命中音波环 / 结算星空点亮的特效层（pointer-events:none，不挡按键）
+  const fx = createFxLayer({ reduced: prefersReducedMotion() });
+  wrap.appendChild(fx.el);
+  /** 第 i 颗星星在整排里的横向百分比位置（给音波环定位用） */
+  function keyXPct(i: number): number {
+    return ((i + 0.5) / Math.max(1, cfg.starCount)) * 100;
+  }
+
   function tone(i: number, ms: number): void {
     const midi = NOTE_MIDIS[i];
     if (midi === undefined) return;
@@ -178,9 +188,16 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
 
   function renderDots(): void {
     dotsEl.innerHTML = "";
-    seq.forEach((_, i) => {
+    seq.forEach((noteIdx, i) => {
       const dot = document.createElement("div");
-      dot.className = "mst-dot" + (i < inputPos ? " mst-dot-on" : "");
+      dot.className = "mst-dot" + (i < inputPos ? " mst-dot-on" : i === inputPos ? " mst-dot-cur" : "");
+      // 1.3 纯视觉：弹对的音符星按音高点亮彩虹色（只读映射，音高数据不动）；
+      // 还没弹到的一律暗金——颜色只在弹对之后亮出来，绝不提前泄旋律。
+      if (i < inputPos) {
+        dot.style.color = noteColorByMidi(NOTE_MIDIS[noteIdx] ?? NOTE_MIDIS[0]);
+      }
+      // 当前拍的星星随既有节拍时钟脉动（时长 = 一个音 + 一个间隙）
+      if (i === inputPos) dot.style.animationDuration = `${noteMs() + gapMs()}ms`;
       dotsEl.appendChild(dot);
     });
   }
@@ -228,6 +245,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
 
   function finish(): void {
     ended = true;
+    // 结算：整片星空点亮（纯装饰）
+    fx.brighten(true);
     const got = rateWithSpeed(misses, speed);
     const praise = misses === 0 ? "一个音都没弹错，听辨和记忆都很准！" : "整关旋律全部弹完，节奏稳住了！";
     ctx.win(got, `${praise}${speed >= FULL_SPEED ? "" : ` ${speedHint(speed)}`}`);
@@ -236,6 +255,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
   function onMiss(): void {
     misses++;
     ctx.sfx("oops");
+    // miss 只是让当前那颗星星轻轻眨一下眼（260ms 缩 0.9 回弹），不批评
+    (dotsEl.children[inputPos] as HTMLElement | undefined)?.classList.add("mst-dot-blink");
     updateHud();
     if (misses > cfg.maxMiss) {
       ended = true;
@@ -254,6 +275,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
       if (i === seq[inputPos]) {
         board.clearHints();
         lightStar(i, 550);
+        fx.ringAt(keyXPct(i), 62);
         inputPos++;
         renderDots();
         if (inputPos >= seq.length) {
@@ -273,6 +295,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
     if (phase !== "play") return;
     lightStar(i, Math.min(500, noteMs()));
     if (i === seq[inputPos]) {
+      fx.ringAt(keyXPct(i), 62);
       inputPos++;
       renderDots();
       if (inputPos >= seq.length) {
@@ -320,6 +343,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
       timeouts.clear();
       replayBtn.removeEventListener("click", onReplay);
       fit.dispose();
+      fx.destroy();
       audioBar.destroy();
       board.destroy();
       wrap.remove();
