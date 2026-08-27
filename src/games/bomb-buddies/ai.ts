@@ -439,7 +439,10 @@ export const AI_LABEL: Record<AiLevel, string> = {
 };
 
 export interface AiTuning {
-  /** 想一步要多久(毫秒):档位越低反应越慢,给孩子留出时间 */
+  /**
+   * 隔多久才重新想一步(毫秒):档位越低想得越慢,给孩子留出反应时间。
+   * 两次思考之间它照着上一步的方向继续走 —— 见 `pacedAiAction()`。
+   */
   thinkMs: number;
   /** 愿意为一件道具跑多远 */
   itemReach: number;
@@ -472,6 +475,71 @@ export interface AiAction {
 
 export function idleAction(why = "等一等"): AiAction {
   return { dir: DIR_NONE, drop: false, detonate: false, why };
+}
+
+// ---------------------------------------------------------------------------
+// 思考节奏
+// ---------------------------------------------------------------------------
+
+/**
+ * 这一档隔多久才重新想一步(毫秒);档号不认识就按普通档。
+ *
+ * **这是思考节奏唯一的出处。** 1.2 之前 `AI_TUNING.thinkMs` 全仓库没有一处生产代码读它,
+ * 同一组数字在 `index.ts` 里被手抄成了一句 `skill === 1 ? 260 : skill === 2 ? 150 : 70`。
+ * 抄出来的那份才是真上场的,表里那份只被单测断言单调 —— 调表不改游戏、改游戏不红单测。
+ */
+export function thinkMsFor(level: AiLevel): number {
+  return (AI_TUNING[level] ?? AI_TUNING[2]).thinkMs;
+}
+
+/** 一个电脑座位的思考节拍器(会被 `pacedAiAction` 就地改写) */
+export interface AiPacer {
+  /** 还有多少毫秒才轮到下一次重新想 */
+  cool: number;
+  /** 上一次想出来的方向:冷却期间照着它继续走 */
+  dir: number;
+  /** 这一帧是真想了(true),还是照着上一步走(false) */
+  fresh: boolean;
+}
+
+export function createPacer(): AiPacer {
+  return { cool: 0, dir: DIR_NONE, fresh: false };
+}
+
+/**
+ * 按档位节奏想一步 —— **游戏与单测共用的那一份**。
+ *
+ * `chooseAiAction()` 回答的是「这一刻最该干什么」,它不管节奏;
+ * 真正让三档拉开差距的是**多久问一次**:轻松档 260ms 才问一次,
+ * 中间那十几帧它照着旧主意闷头走,撞见新情况也得等下一拍才反应得过来。
+ *
+ * 这个节奏以前只长在 `index.ts` 的主循环里,单测够不着,于是
+ * `ai12.test.ts` 那条「固定 seed 的胜率」回归线是**每 20ms 重想一次**跑出来的——
+ * 等于把三档的思考节奏抹平,量的是一个不存在的电脑(实测:抹平之后
+ * 高手档打普通档 3 比 5,**倒输**;按真节奏跑是 4 比 1)。
+ * 挪进来之后两边跑的是同一份代码。
+ *
+ * 冷却期间只重复方向,**不重复放泡泡也不重复引爆**:那两件事按一次就够,
+ * 连按十几帧只会把手里的泡泡一次全撒出去。
+ */
+export function pacedAiAction(
+  pacer: AiPacer,
+  world: World,
+  who: number,
+  level: AiLevel,
+  dtMs: number,
+  tick = 0
+): AiAction {
+  pacer.cool -= Math.max(0, dtMs);
+  if (pacer.cool > 0) {
+    pacer.fresh = false;
+    return { dir: pacer.dir, drop: false, detonate: false, why: "照着上一步走" };
+  }
+  pacer.cool = thinkMsFor(level);
+  pacer.fresh = true;
+  const act = chooseAiAction(world, who, level, tick);
+  pacer.dir = act.dir;
+  return act;
 }
 
 /**

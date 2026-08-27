@@ -28,8 +28,9 @@ import { save } from "../../engine/save";
 import GUIDE from "./guide";
 import {
   AI_LABEL,
-  chooseAiAction,
+  createPacer,
   dangerTiming,
+  pacedAiAction,
   shrinkDelay,
   shrinkRing,
   type AiLevel,
@@ -1181,24 +1182,18 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   let raf = 0;
   let last = 0;
   let aiTick = 0;
-  const aiCooldown: number[] = fighters.map(() => 0);
-  const aiLastDir: number[] = fighters.map(() => DIR_NONE);
+  // 思考节奏(档位越低想得越慢)由 `ai.ts` 的节拍器统一管,那边的 `AI_TUNING.thinkMs`
+  // 是唯一出处 —— 这里以前手抄过一份 260/150/70,抄出来的那份才是真上场的。
+  const aiPace = fighters.map(() => createPacer());
 
   function intentsFor(now: number, dt: number): Intent[] {
     const out: Intent[] = [];
     for (let i = 0; i < seats; i++) {
       const f = fighters[i];
       if (f.ai) {
-        aiCooldown[i] -= dt;
         const skill = opts.ai?.find((a) => a.index === i)?.skill ?? 2;
-        if (aiCooldown[i] > 0) {
-          out.push({ dir: aiLastDir[i], drop: false, detonate: false, kick: false });
-          continue;
-        }
-        // 档位越低想得越慢,给孩子留出反应时间
-        aiCooldown[i] = skill === 1 ? 260 : skill === 2 ? 150 : 70;
-        const act = chooseAiAction(world, i, skill, aiTick++);
-        aiLastDir[i] = act.dir;
+        const act = pacedAiAction(aiPace[i], world, i, skill, dt, aiTick);
+        if (aiPace[i].fresh) aiTick++;
         out.push({ dir: act.dir, drop: act.drop, detonate: act.detonate, kick: false });
         continue;
       }
