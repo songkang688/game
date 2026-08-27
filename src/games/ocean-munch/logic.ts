@@ -222,7 +222,7 @@ export interface BossSpec {
   summons?: "jelly" | "urchin";
   /** 会把玩家往自己嘴边吸 */
   pulls?: boolean;
-  /** 血越少冲刺越快 */
+  /** 精神条越少冲刺越快 */
   enrages?: boolean;
   /** 1.1:会掀起洋流,把整片海的水推着换向 */
   drifts?: boolean;
@@ -876,6 +876,10 @@ export const DEX: DexEntry[] = [
   { id: "ray", name: "旋旋鳐", emoji: "🪁", desc: "海峡老大,翅膀一挥掀反洋流" },
   { id: "anemone", name: "荧荧海葵王", emoji: "🪸", desc: "藻湾老大,会吐一团团毒雾" },
   { id: "clam", name: "咔咔巨蚌", emoji: "🐚", desc: "压渊之主,合壳就加压" },
+  // ---- 1.2 新收录:深海马拉松里才见得到的三种 ----
+  { id: "elite", name: "闪闪精英鱼", emoji: "💫", desc: "游得飞快,吃到能顶住水压十秒" },
+  { id: "lantern", name: "提灯鱼", emoji: "🏮", desc: "第三层往下才有,尾巴挂着小灯" },
+  { id: "ribbon", name: "飘带鱼", emoji: "🎏", desc: "深层的大个子,身子长得像飘带" },
 ];
 
 export const DEX_KEY = "yiduo-yixing.ocean-munch.dex.v1";

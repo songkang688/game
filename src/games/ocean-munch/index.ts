@@ -4,6 +4,12 @@ export { meta };
 // 海底大胃王:188 关十二片海域战役!先选海域再选关,每片海域专属配色、障碍组合
 // 和区域 BOSS(共 12 位),吃过见过的生物都会记进生物图鉴!
 // 1.1 新机制:洋流(整片海周期换向)、毒藻鱼、共生小鱼、深渊压力(体型上限)。
+//
+// 1.2 加了两个和战役并列的入口(首屏三选一):
+//  · 无尽「深海马拉松」——一直往下潜,每 400 米或 45 秒进一层,成绩是潜到的米数;
+//  · 对战「限时谁更胖」——60 秒同池抢食的人机三档。
+// 两个新模式共用同一套竞技场循环(`updateArena` / `drawArena`),战役那一套
+// 一行都没动:前 99 关的参数、胜负公式、存档 key 全部原样。
 import {
   BOSS_INFO,
   BUDDY_MAX,
@@ -40,8 +46,6 @@ import {
   hazardTier,
   inBubbleGap,
   isDanger,
-  isLevelUnlocked,
-  isThemeUnlocked,
   numbFollowMult,
   parseDex,
   parseProgress,
@@ -60,6 +64,65 @@ import {
   totalStars,
   vortexPull,
 } from "./logic";
+import { DRIFT_SPEED } from "./logic";
+import {
+  DASH_CD,
+  DASH_TIME,
+  DEPTH_PER_BITE,
+  ELITE_BREAK,
+  ENDLESS_START_RADIUS,
+  SWALLOW_MS,
+  SpatialGrid,
+  TIER_MAX as ENDLESS_TIER_MAX,
+  biteLoss,
+  canSwallow,
+  dashReady,
+  dashSpeed,
+  depthForTier,
+  depthGain,
+  easeRadius,
+  endlessFailAt,
+  endlessFailCopy,
+  endlessRecordSay,
+  endlessSpeed,
+  growEndless,
+  isPredator,
+  makeRng,
+  pressureDrain,
+  pressureLine,
+  pressureState,
+  spawnEndlessFish,
+  startTierForLevel,
+  starveWarnLevel,
+  starveWarnLine,
+  swallowStretch,
+  tierAt,
+  tierSpec,
+} from "./endless";
+import type { EndlessFail, EndlessFish, Rng } from "./endless";
+import {
+  CAMPAIGN_TOTAL,
+  SKIP_KEY,
+  clampLevelIndex,
+  initialLevelIndex,
+  isUnlockedWith,
+  mergeSkip,
+  parseSkipList,
+  serializeSkipList,
+} from "./campaign";
+import {
+  RIVAL_LEVELS,
+  RIVAL_PROFILES,
+  VERSUS_SECONDS,
+  rivalSteer,
+  versusCopy,
+  versusOutcome,
+} from "./versus";
+import type { RivalLevel, RivalProfile, VersusOutcome } from "./versus";
+import { touchArea } from "./touch";
+import type { Rect } from "./touch";
+import { save } from "../../engine/save";
+import { getLevelExtras } from "../../ui/level188Contract";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -71,9 +134,32 @@ export interface GameAPI {
   getStars: () => number;
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
+  /** 平台可以指定直接开第几关(1 基);不给就读 `?level=`,再没有才停在首屏 */
+  initialLevel?: number;
 }
 
-type Phase = "themes" | "map" | "dex" | "intro" | "play" | "clear" | "retry";
+/** mount 返回的东西:除了 destroy,还得给平台一个「直开第 N 关」的入口。 */
+export interface OceanMunchHandle {
+  destroy: () => void;
+  /** 直接开第 n 关(1 基),越界夹到两端 */
+  openCampaignLevel: (n: number) => void;
+}
+
+type Phase =
+  | "home"
+  | "themes"
+  | "map"
+  | "dex"
+  | "intro"
+  | "play"
+  | "clear"
+  | "retry"
+  | "rivalPick"
+  | "arena"
+  | "arenaOver";
+
+/** 竞技场两种玩法:无尽深海马拉松 / 对战限时谁更胖。 */
+type ArenaMode = "endless" | "versus";
 type NpcKind = "fish" | "jelly" | "puffer" | "urchin" | "squid" | "toxin";
 
 interface Npc {
@@ -166,13 +252,6 @@ interface Floaty {
   big: boolean;
 }
 
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
 /** 水流带(位置用比例存,窗口大小变了也不乱) */
 interface CurrentBand {
   fy: number;
@@ -221,7 +300,76 @@ function loadDex(): Set<string> {
   }
 }
 
-export function mount(api: GameAPI): { destroy: () => void } {
+/** 隐私模式下 localStorage 一碰就抛,读写全都包一层,读不到就当没有。 */
+function readKey(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeKey(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 静默失败:这一局照样能玩,只是关掉页面不留痕
+  }
+}
+
+/** 地址栏的查询串;测试环境或者被沙箱掐掉时当没有。 */
+function safeSearch(): string {
+  try {
+    return window.location.search ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** 用户把系统动效关掉了:吞咽只留音效与半径插值,不再拉伸。 */
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches === true;
+  } catch {
+    return false;
+  }
+}
+
+/** 竞技场里的一条 NPC 鱼(无尽与对战共用)。 */
+interface ArenaFish {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  phase: number;
+  spec: EndlessFish;
+}
+
+/** 竞技场里会游的角色:玩家自己,或者对战里的那条人机鱼。 */
+interface Swimmer {
+  x: number;
+  y: number;
+  /** 逻辑半径 */
+  r: number;
+  /** 画面上的半径:追着逻辑半径插值,禁止一帧跳变 */
+  shown: number;
+  facing: 1 | -1;
+  dashLeft: number;
+  dashCd: number;
+  /** 被咬掉一块之后的闪烁无敌 */
+  inv: number;
+  /** 吞咽拉伸还剩多少毫秒 */
+  swallow: number;
+  /** 上一口猎物在哪个方向(拉伸朝着它) */
+  swx: number;
+  swy: number;
+}
+
+function makeSwimmer(x: number, y: number, r: number): Swimmer {
+  return { x, y, r, shown: r, facing: 1, dashLeft: 0, dashCd: 0, inv: 0, swallow: 0, swx: 1, swy: 0 };
+}
+
+export function mount(api: GameAPI): OceanMunchHandle {
   const { root } = api;
   const canvas = document.createElement("canvas");
   canvas.style.width = "100%";
@@ -249,11 +397,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   const progress = loadProgress();
   const dexSeen = loadDex();
+  let skips = parseSkipList(readKey(SKIP_KEY));
+  const reducedMotion = prefersReducedMotion();
 
   // ---- 局状态 ----
   let levelIdx = 0;
   let chapterIdx = 0;
-  let phase: Phase = "themes";
+  let phase: Phase = "home";
   let hearts = HEARTS_PER_LEVEL;
   let heartsLost = 0;
   let score = 0;
@@ -309,6 +459,38 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let btnRetry: Rect | null = null;
   let btnDex: Rect = { x: 0, y: 0, w: 0, h: 0 };
   let btnBack: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  let btnSkip: Rect | null = null;
+  const homeCards: Array<{ id: "campaign" | "endless" | "versus"; rect: Rect }> = [];
+  const rivalCards: Array<{ id: RivalLevel; rect: Rect }> = [];
+  let btnAgain: Rect | null = null;
+  let btnHome: Rect | null = null;
+
+  // ---- 竞技场(无尽 / 对战共用一套循环)----
+  let arenaMode: ArenaMode = "endless";
+  const me = makeSwimmer(320, 240, ENDLESS_START_RADIUS);
+  let rival: Swimmer | null = null;
+  let rivalProfile: RivalProfile = RIVAL_PROFILES.dodge;
+  const arenaFish: ArenaFish[] = [];
+  /** 邻域网格:鱼一多也不用两两比 */
+  const grid = new SpatialGrid<ArenaFish>(96);
+  let arenaRng: Rng = makeRng(1);
+  let depth = 0;
+  let arenaTime = 0;
+  let sinceEat = 0;
+  let eliteLeft = 0;
+  let arenaSpawn = 0;
+  let arenaEaten = 0;
+  let arenaTier = 1;
+  let startTier = 1;
+  let failKind: EndlessFail | null = null;
+  let versusResult: VersusOutcome = "draw";
+  let endlessBest = 0;
+  let newRecord = false;
+  /** 竞技场里按住的方向键(WASD / 方向键都认;Esc 一概不碰,留给壳层暂停) */
+  const keys = new Set<string>();
+  /** 触屏时手指压着的那一点;鱼浮在它上面一个身位,不许被手指盖住 */
+  let pointerTouch = false;
+  let skipPending = false;
 
   const SMALL_COLORS = ["#a8e6c9", "#ffe0a3", "#ffc4d6", "#c4e5ff"];
   const BIG_COLORS = ["#b8a9f5", "#8fc8e8", "#f5b8c9"];
@@ -450,6 +632,488 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
+  /* ================= 竞技场:无尽「深海马拉松」/ 对战「限时谁更胖」 ================= */
+
+  /** 触屏跟随时,鱼浮在手指上方这么多像素——不许被手指压住。 */
+  const FINGER_LIFT = 52;
+
+  function arenaZone(): ReturnType<typeof tierSpec> {
+    return tierSpec(arenaTier);
+  }
+
+  /** 这一帧整片海往哪推(层数越深洋流越强;第一层没有洋流)。 */
+  function arenaDrift(): { fx: number; fy: number } {
+    const strength = arenaZone().driftSpeed;
+    if (strength <= 0) return { fx: 0, fy: 0 };
+    const d = driftVector(arenaTime);
+    const k = strength / DRIFT_SPEED;
+    return { fx: d.fx * k, fy: d.fy * k };
+  }
+
+  function resetArena(mode: ArenaMode, tier: number, level?: RivalLevel): void {
+    arenaMode = mode;
+    startTier = Math.max(1, Math.min(ENDLESS_TIER_MAX, Math.round(tier)));
+    arenaTier = startTier;
+    depth = mode === "endless" ? depthForTier(startTier) : 0;
+    arenaTime = 0;
+    sinceEat = 0;
+    eliteLeft = 0;
+    arenaSpawn = 0;
+    arenaEaten = 0;
+    failKind = null;
+    newRecord = false;
+    score = 0;
+    streak = 0;
+    arenaFish.length = 0;
+    pops.length = 0;
+    floats.length = 0;
+    inks.length = 0;
+    grid.clear();
+    arenaRng = makeRng(Math.floor(Math.random() * 0xffffffff) || 1);
+    me.x = w / 2;
+    me.y = h / 2;
+    me.r = ENDLESS_START_RADIUS;
+    me.shown = ENDLESS_START_RADIUS;
+    me.dashLeft = 0;
+    me.dashCd = 0;
+    me.inv = 1.2;
+    me.swallow = 0;
+    targetX = me.x;
+    targetY = me.y;
+    if (mode === "versus") {
+      rivalProfile = RIVAL_PROFILES[level ?? "dodge"];
+      rival = makeSwimmer(w * 0.75, h * 0.4, ENDLESS_START_RADIUS);
+    } else {
+      rival = null;
+    }
+  }
+
+  function startEndless(tier: number): void {
+    resetArena("endless", tier);
+    endlessBest = readEndlessBest();
+    phase = "arena";
+    api.play("jump");
+  }
+
+  function startVersus(level: RivalLevel): void {
+    // 对战固定在第 2 层的鱼群密度上打:两条鱼抢食,再深就变成各躲各的了
+    resetArena("versus", 2, level);
+    phase = "arena";
+    api.play("jump");
+  }
+
+  function readEndlessBest(): number {
+    try {
+      return save.getGameProgress(meta.id).endlessBest;
+    } catch {
+      return endlessBest;
+    }
+  }
+
+  /** 竞技场的鱼从左右两边游进来,层数越深越挤。 */
+  function spawnArenaFish(): void {
+    const spec = arenaZone();
+    if (arenaFish.length >= spec.crowd) return;
+    const f = spawnEndlessFish(arenaTier, me.r, arenaRng);
+    const fromLeft = arenaRng() < 0.5;
+    const speed = (46 + arenaRng() * 38) * f.speedMul;
+    arenaFish.push({
+      x: fromLeft ? -f.r - 12 : w + f.r + 12,
+      y: 46 + arenaRng() * Math.max(40, h - 110),
+      vx: fromLeft ? speed : -speed,
+      vy: (arenaRng() - 0.5) * 26,
+      phase: arenaRng() * Math.PI * 2,
+      spec: f,
+    });
+  }
+
+  function swimmerSpeed(s: Swimmer, mul = 1): number {
+    return (s.dashLeft > 0 ? dashSpeed(s.r) : endlessSpeed(s.r)) * mul;
+  }
+
+  /** 点一下冲刺:有冷却,冲的时候留一串尾迹泡泡。 */
+  function tryDash(s: Swimmer, sound: boolean): void {
+    if (!dashReady(s.dashCd) || s.dashLeft > 0) return;
+    s.dashLeft = DASH_TIME;
+    s.dashCd = DASH_CD;
+    if (sound) api.play("pop");
+  }
+
+  /** 朝 (dx, dy) 游一帧,顺带被洋流推着走,最后夹回池子里。 */
+  function moveSwimmer(s: Swimmer, dx: number, dy: number, dt: number, mul = 1): void {
+    const len = Math.hypot(dx, dy);
+    if (len > 1e-3) {
+      const v = swimmerSpeed(s, mul) * dt;
+      s.x += (dx / len) * v;
+      s.y += (dy / len) * v;
+      if (Math.abs(dx) > 0.5) s.facing = dx > 0 ? 1 : -1;
+    }
+    const drift = arenaDrift();
+    s.x += drift.fx * dt;
+    s.y += drift.fy * dt;
+    s.x = Math.max(s.r, Math.min(w - s.r, s.x));
+    s.y = Math.max(s.r + 28, Math.min(h - s.r, s.y));
+  }
+
+  /**
+   * 被更大的鱼碰到:掉一块质量,身上炸开一串泡泡和彩纸,短暂闪烁无敌。
+   * 分级红线——这里只掉泡泡,没有血、没有伤、也没有「消失」。
+   */
+  function loseChunk(s: Swimmer, fromX: number, fromY: number, isPlayer: boolean): void {
+    if (s.inv > 0) return;
+    s.r = biteLoss(s.r);
+    s.inv = 1.5;
+    if (isPlayer) {
+      streak = 0;
+      shake = 0.35;
+      api.play("oops");
+      addFloat(s.x, s.y - s.r - 12, "掉了一串泡泡!", "#5a8ac9");
+    }
+    for (let i = 0; i < 4; i++) {
+      pops.push({
+        x: s.x + (Math.random() - 0.5) * s.r,
+        y: s.y + (Math.random() - 0.5) * s.r,
+        life: 0.45,
+        color: i % 2 === 0 ? "#bfe9ff" : "#ffd8ea",
+      });
+    }
+    const away = Math.hypot(s.x - fromX, s.y - fromY) || 1;
+    s.x += ((s.x - fromX) / away) * 18;
+    s.y += ((s.y - fromY) / away) * 18;
+  }
+
+  /** 吞下一条鱼:长大、拉伸、记图鉴、往下钻一点。 */
+  function swallowFish(s: Swimmer, f: ArenaFish, isPlayer: boolean): void {
+    s.r = growEndless(s.r, f.spec.r, arenaTier);
+    s.swallow = SWALLOW_MS;
+    s.swx = f.x - s.x;
+    s.swy = f.y - s.y;
+    if (f.spec.kind === "elite") eliteLeft = isPlayer ? ELITE_BREAK : eliteLeft;
+    if (!isPlayer) return;
+    arenaEaten++;
+    sinceEat = 0;
+    streak++;
+    streakTimer = 3;
+    const gain = eatScore(streak);
+    score += gain;
+    if (arenaMode === "endless") depth += DEPTH_PER_BITE;
+    markDex(f.spec.dexId);
+    pops.push({ x: f.x, y: f.y, life: 0.35, color: "#ffe0a3" });
+    if (f.spec.kind === "elite") {
+      addFloat(f.x, f.y - 14, `精英鱼!顶住水压 ${ELITE_BREAK} 秒`, "#c47a2a", true);
+      api.play("coin");
+    } else {
+      addFloat(f.x, f.y, streak >= 3 ? `连吃×${streak} +${gain}` : `+${gain}`, streak >= 3 ? "#b28ae8" : "#c47a2a", streak >= 3);
+      api.play(streak % 5 === 0 ? "coin" : "pop");
+    }
+  }
+
+  /** 吃到毒藻鱼:缩一圈 + 麻酥酥,不掉心也不结束,提醒一下就好。 */
+  function tasteToxin(f: ArenaFish): void {
+    me.r = Math.max(START_RADIUS + 0.5, me.r * 0.9);
+    numb = TOXIN_NUMB;
+    streak = 0;
+    markDex("toxin");
+    api.play("oops");
+    pops.push({ x: f.x, y: f.y, life: 0.5, color: "#c46ae8" });
+    addFloat(f.x, f.y - 16, "毒藻鱼!缩了一圈~", "#8a3a9a", true);
+  }
+
+  /** 玩家这一帧想往哪游:键盘优先,其次跟着手指/鼠标。 */
+  function playerAim(): { dx: number; dy: number } {
+    let kx = 0;
+    let ky = 0;
+    if (keys.has("left")) kx -= 1;
+    if (keys.has("right")) kx += 1;
+    if (keys.has("up")) ky -= 1;
+    if (keys.has("down")) ky += 1;
+    if (kx !== 0 || ky !== 0) return { dx: kx, dy: ky };
+    const aimY = targetY - (pointerTouch ? FINGER_LIFT : 0);
+    const dx = targetX - me.x;
+    const dy = aimY - me.y;
+    // 已经贴上手指了就别再抖
+    return Math.hypot(dx, dy) < 4 ? { dx: 0, dy: 0 } : { dx, dy };
+  }
+
+  /** 对手看到的这一池子鱼:最近能吃的、最近吃不下的。 */
+  function rivalView(r: Swimmer): { prey: ArenaFish | null; threat: ArenaFish | null } {
+    let prey: ArenaFish | null = null;
+    let threat: ArenaFish | null = null;
+    let bestPrey = Infinity;
+    let bestThreat = Infinity;
+    for (const f of arenaFish) {
+      const d = Math.hypot(f.x - r.x, f.y - r.y);
+      if (f.spec.kind === "toxin") continue;
+      if (canSwallow(r.r, f.spec.r)) {
+        if (d < bestPrey) {
+          bestPrey = d;
+          prey = f;
+        }
+      } else if (isPredator(r.r, f.spec.r) && d < bestThreat) {
+        bestThreat = d;
+        threat = f;
+      }
+    }
+    return { prey, threat };
+  }
+
+  function updateArena(dt: number): void {
+    arenaTime += dt;
+    numb = Math.max(0, numb - dt);
+    me.dashCd = Math.max(0, me.dashCd - dt);
+    me.dashLeft = Math.max(0, me.dashLeft - dt);
+    me.inv = Math.max(0, me.inv - dt);
+    me.swallow = Math.max(0, me.swallow - dt * 1000);
+    eliteLeft = Math.max(0, eliteLeft - dt);
+    if (streakTimer > 0) {
+      streakTimer -= dt;
+      if (streakTimer <= 0) streak = 0;
+    }
+
+    // 层数:每 400 米或每 45 秒进一层,快的那条说了算
+    if (arenaMode === "endless") {
+      const next = tierAt(depth, arenaTime);
+      if (next > arenaTier) {
+        arenaTier = next;
+        shake = 0.3;
+        api.play("jump");
+        addFloat(w / 2, 118, `第 ${arenaTier} 层 · ${arenaZone().name}`, arenaZone().accent, true);
+      }
+    }
+
+    // 玩家走位(麻酥酥期间反应变笨,但不掉体型)
+    const aim = playerAim();
+    moveSwimmer(me, aim.dx, aim.dy, dt, numbFollowMult(numb));
+
+    // 鱼群移动
+    arenaSpawn -= dt;
+    if (arenaSpawn <= 0) {
+      arenaSpawn = 0.42;
+      spawnArenaFish();
+    }
+    const drift = arenaDrift();
+    for (let i = arenaFish.length - 1; i >= 0; i--) {
+      const f = arenaFish[i];
+      f.phase += dt * 3;
+      f.x += (f.vx + drift.fx * 0.6) * dt;
+      f.y += (f.vy + drift.fy * 0.6) * dt + Math.sin(f.phase) * 10 * dt;
+      if (f.y < 30 || f.y > h - 20) f.vy = -f.vy;
+      if (f.x < -f.spec.r - 70 || f.x > w + f.spec.r + 70) arenaFish.splice(i, 1);
+    }
+
+    // 邻域网格:只和身边格子里的鱼比,鱼再多也不会掉帧
+    grid.clear();
+    for (const f of arenaFish) grid.insert(f);
+
+    const eatenNow = new Set<ArenaFish>();
+    for (const f of grid.near(me.x, me.y, me.r + 110)) {
+      if (eatenNow.has(f)) continue;
+      if (!circlesOverlap(me.x, me.y, me.r, f.x, f.y, f.spec.r)) continue;
+      if (f.spec.kind === "toxin") {
+        eatenNow.add(f);
+        tasteToxin(f);
+        continue;
+      }
+      if (canSwallow(me.r, f.spec.r)) {
+        eatenNow.add(f);
+        swallowFish(me, f, true);
+        continue;
+      }
+      if (isPredator(me.r, f.spec.r)) loseChunk(me, f.x, f.y, true);
+    }
+
+    // 对手:三档 AI 决策 → 同一套追逐与吞咽
+    if (rival) {
+      const r = rival;
+      r.dashCd = Math.max(0, r.dashCd - dt);
+      r.dashLeft = Math.max(0, r.dashLeft - dt);
+      r.inv = Math.max(0, r.inv - dt);
+      r.swallow = Math.max(0, r.swallow - dt * 1000);
+      const view = rivalView(r);
+      const move = rivalSteer(
+        rivalProfile,
+        {
+          self: { x: r.x, y: r.y, r: r.r },
+          player: { x: me.x, y: me.y, r: me.r },
+          prey: view.prey ? { x: view.prey.x, y: view.prey.y, r: view.prey.spec.r } : null,
+          threat: view.threat ? { x: view.threat.x, y: view.threat.y, r: view.threat.spec.r } : null,
+          width: w,
+          height: h,
+        },
+        arenaRng,
+      );
+      if (move.dash) tryDash(r, false);
+      moveSwimmer(r, move.dx, move.dy, dt, rivalProfile.speedMul);
+      for (const f of grid.near(r.x, r.y, r.r + 110)) {
+        if (eatenNow.has(f)) continue;
+        if (f.spec.kind === "toxin") continue;
+        if (!circlesOverlap(r.x, r.y, r.r, f.x, f.y, f.spec.r)) continue;
+        if (canSwallow(r.r, f.spec.r)) {
+          eatenNow.add(f);
+          swallowFish(r, f, false);
+        } else if (isPredator(r.r, f.spec.r)) {
+          loseChunk(r, f.x, f.y, false);
+        }
+      }
+      // 两条鱼撞上:谁明显更大谁占便宜,差不多大就只是撞一下
+      if (circlesOverlap(me.x, me.y, me.r, r.x, r.y, r.r, 0.72)) {
+        if (canSwallow(me.r, r.r)) {
+          loseChunk(r, me.x, me.y, false);
+          me.r = growEndless(me.r, r.r * 0.35, arenaTier);
+          me.swallow = SWALLOW_MS;
+          me.swx = r.x - me.x;
+          me.swy = r.y - me.y;
+          api.play("coin");
+        } else if (canSwallow(r.r, me.r)) {
+          loseChunk(me, r.x, r.y, true);
+        }
+      }
+    }
+
+    if (eatenNow.size > 0) {
+      for (let i = arenaFish.length - 1; i >= 0; i--) {
+        if (eatenNow.has(arenaFish[i])) arenaFish.splice(i, 1);
+      }
+    }
+
+    // 深渊压力:第 5 层起超过上限就慢慢缩,吃到精英鱼能顶住 10 秒
+    me.r = pressureDrain(me.r, arenaTier, dt, eliteLeft);
+    if (rival) rival.r = pressureDrain(rival.r, arenaTier, dt, 0);
+
+    me.shown = easeRadius(me.shown, me.r, dt);
+    if (rival) rival.shown = easeRadius(rival.shown, rival.r, dt);
+
+    if (arenaMode === "endless") {
+      depth += depthGain(dt, me.dashLeft > 0);
+      sinceEat += dt;
+      const fail = endlessFailAt(me.r, sinceEat);
+      if (fail) finishArena(fail);
+      return;
+    }
+
+    // 对战:60 秒到点比体型
+    if (arenaTime >= VERSUS_SECONDS) finishArena(null);
+  }
+
+  /** 这一趟结束:无尽先把成绩报给平台,对战直接比体型。 */
+  function finishArena(fail: EndlessFail | null): void {
+    failKind = fail;
+    phase = "arenaOver";
+    if (arenaMode === "endless") {
+      const scoreDepth = Math.max(0, Math.floor(depth));
+      const before = readEndlessBest();
+      try {
+        endlessBest = save.recordEndlessBest(meta.id, scoreDepth);
+      } catch {
+        endlessBest = Math.max(before, scoreDepth);
+      }
+      newRecord = scoreDepth > before;
+      api.play(newRecord ? "win" : "oops");
+      speak(
+        endlessFailCopy(fail ?? "starved", scoreDepth).line +
+          endlessRecordSay(scoreDepth, before, newRecord),
+      );
+      return;
+    }
+    versusResult = versusOutcome(me.r, rival ? rival.r : 0);
+    api.play(versusResult === "lose" ? "oops" : "win");
+    speak(versusCopy(versusResult, rivalProfile, me.r, rival ? rival.r : 0).line);
+  }
+
+  /* ---------------- 平台接线:直开第 N 关 / 家长跳关 ---------------- */
+
+  /**
+   * 直开第 n 关(1 基)。越界夹到 1..188,不合法的数字当第 1 关。
+   * 平台给了 `initialLevel`、地址栏带着 `?level=`,或者外面拿着 handle 调进来,走的都是这一条。
+   */
+  function openCampaignLevel(n: number): void {
+    if (destroyed) return;
+    stopSpeaking();
+    levelIdx = clampLevelIndex(n);
+    chapterIdx = themeIndexOf(levelIdx);
+    resetLevel();
+    phase = "intro";
+  }
+
+  /** 这一关能不能跳:战役里、不是最后一关、壳层注册过家长授权门。 */
+  function canSkip(): boolean {
+    return (
+      (phase === "intro" || phase === "retry") &&
+      levelIdx < CAMPAIGN_TOTAL - 1 &&
+      typeof getLevelExtras().requestSkip === "function"
+    );
+  }
+
+  /**
+   * 跳过这一关。授权是家长那道高权限门给的,这边只负责记账:
+   * 本关星级仍旧记 0(跳过去不是本事),但下一关照样解锁。
+   */
+  function askSkip(): void {
+    const request = getLevelExtras().requestSkip;
+    if (!request || skipPending || !canSkip()) return;
+    const target = levelIdx;
+    skipPending = true;
+    api.play("tap");
+    Promise.resolve(request(meta.id, target))
+      .then((ok) => {
+        if (destroyed || !ok) return;
+        skips = mergeSkip(readKey(SKIP_KEY), target);
+        writeKey(SKIP_KEY, serializeSkipList(skips));
+        if (progress[target] === undefined) progress[target] = 0;
+        api.play("win");
+        if (target < CAMPAIGN_TOTAL - 1) openCampaignLevel(target + 2);
+      })
+      .catch(() => {
+        // 授权那边出问题就当没点过,不打断这一关
+      })
+      .finally(() => {
+        skipPending = false;
+      });
+  }
+
+  /** 关卡解锁:上一关通关过,或者上一关被家长跳过。 */
+  function levelUnlocked(idx: number): boolean {
+    return isUnlockedWith(progress, skips, idx);
+  }
+
+  /** 章节解锁跟着同一个口径走。 */
+  function themeUnlocked(ci: number): boolean {
+    return levelUnlocked(themeStart(ci));
+  }
+
+  /** 战役打到第几关了(0 基):无尽默认从这一关对应的水层起步。 */
+  function furthestLevel(): number {
+    let last = 0;
+    for (let i = 0; i < progress.length; i++) if ((progress[i] ?? 0) > 0) last = i + 1;
+    return Math.min(CAMPAIGN_TOTAL - 1, last);
+  }
+
+  /** 键盘:WASD / 方向键游动,空格冲刺。Esc 一概不碰,留给壳层接管暂停。 */
+  function keyName(code: string, key: string): string | null {
+    if (code === "KeyA" || code === "ArrowLeft") return "left";
+    if (code === "KeyD" || code === "ArrowRight") return "right";
+    if (code === "KeyW" || code === "ArrowUp") return "up";
+    if (code === "KeyS" || code === "ArrowDown") return "down";
+    if (code === "Space" || key === " ") return "dash";
+    return null;
+  }
+
+  function onKeyDown(e: KeyboardEvent): void {
+    if (destroyed || phase !== "arena") return;
+    const name = keyName(e.code, e.key);
+    if (!name) return;
+    if (name === "dash") {
+      tryDash(me, true);
+      return;
+    }
+    keys.add(name);
+  }
+
+  function onKeyUp(e: KeyboardEvent): void {
+    const name = keyName(e.code, e.key);
+    if (name && name !== "dash") keys.delete(name);
+  }
+
   // ---- 输入 ----
   function inRect(x: number, y: number, r: Rect | null): boolean {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -459,6 +1123,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const rect = canvas.getBoundingClientRect();
     targetX = e.clientX - rect.left;
     targetY = e.clientY - rect.top;
+    pointerTouch = e.pointerType === "touch";
   }
 
   function onPointerDown(e: PointerEvent): void {
@@ -467,7 +1132,60 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
 
+    if (phase === "home") {
+      if (inRect(px, py, btnDex)) {
+        api.play("tap");
+        phase = "dex";
+        return;
+      }
+      for (const c of homeCards) {
+        if (!inRect(px, py, c.rect)) continue;
+        api.play("tap");
+        if (c.id === "campaign") phase = "themes";
+        else if (c.id === "versus") phase = "rivalPick";
+        else startEndless(startTierForLevel(furthestLevel() + 1));
+        return;
+      }
+      return;
+    }
+    if (phase === "rivalPick") {
+      if (inRect(px, py, btnBack)) {
+        api.play("tap");
+        phase = "home";
+        return;
+      }
+      for (const c of rivalCards) {
+        if (!inRect(px, py, c.rect)) continue;
+        startVersus(c.id);
+        return;
+      }
+      return;
+    }
+    if (phase === "arena") {
+      onPointerMove(e);
+      // 空白处按一下就是冲刺:窄屏上不另设按钮,免得挡住鱼
+      tryDash(me, true);
+      return;
+    }
+    if (phase === "arenaOver") {
+      if (inRect(px, py, btnAgain)) {
+        api.play("tap");
+        stopSpeaking();
+        if (arenaMode === "endless") startEndless(startTier);
+        else startVersus(rivalProfile.id);
+      } else if (inRect(px, py, btnHome)) {
+        api.play("tap");
+        stopSpeaking();
+        phase = "home";
+      }
+      return;
+    }
     if (phase === "themes") {
+      if (inRect(px, py, btnBack)) {
+        api.play("tap");
+        phase = "home";
+        return;
+      }
       if (inRect(px, py, btnDex)) {
         api.play("tap");
         phase = "dex";
@@ -475,7 +1193,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const c of themeCards) {
         if (inRect(px, py, c.rect)) {
-          if (isThemeUnlocked(progress, c.idx)) {
+          if (themeUnlocked(c.idx)) {
             api.play("tap");
             chapterIdx = c.idx;
             phase = "map";
@@ -495,7 +1213,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       for (const n of mapNodes) {
         if (Math.hypot(px - n.x, py - n.y) <= n.r + 8) {
-          if (isLevelUnlocked(progress, n.idx)) {
+          if (levelUnlocked(n.idx)) {
             api.play("tap");
             levelIdx = n.idx;
             resetLevel();
@@ -510,10 +1228,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
     if (phase === "dex") {
       api.play("tap");
-      phase = "themes";
+      phase = "home";
       return;
     }
     if (phase === "intro") {
+      if (inRect(px, py, btnSkip)) {
+        askSkip();
+        return;
+      }
       api.play("tap");
       phase = "play";
       invincible = 2;
@@ -535,6 +1257,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "retry") {
+      if (inRect(px, py, btnSkip)) {
+        askSkip();
+        return;
+      }
       if (inRect(px, py, btnRetry)) {
         api.play("tap");
         stopSpeaking();
@@ -744,6 +1470,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (hazes[i].life <= 0) hazes.splice(i, 1);
     }
 
+    if (phase === "arena") {
+      updateArena(dt);
+      return;
+    }
     if (phase !== "play") return;
 
     const def = level();
@@ -1364,6 +2094,449 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.beginPath();
       ctx.arc(bd.x - player.facing * (r * 1.6 + i * 8), bd.y + Math.sin(bd.phase + i) * 4, 2.5 + i, 0, Math.PI * 2);
       ctx.stroke();
+    }
+  }
+
+  /* ---------------- 竞技场的画法 ---------------- */
+
+  /**
+   * 会吞咽拉伸的角色。180ms 里朝着刚吃下的那条鱼拉长再回正,
+   * `prefers-reduced-motion` 下 `swallowStretch` 一路返回 1——只剩音效与半径插值。
+   */
+  function drawSwimmer(s: Swimmer, color: string, isPlayer: boolean): void {
+    const st = swallowStretch(SWALLOW_MS - s.swallow, reducedMotion);
+    const ang = Math.atan2(s.swy, s.swx);
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(ang);
+    ctx.scale(st.along, st.across);
+    ctx.rotate(-ang);
+    ctx.translate(-s.x, -s.y);
+    drawFish(s.x, s.y, s.shown, s.facing, color, isPlayer);
+    ctx.restore();
+    // 冲刺尾迹
+    if (s.dashLeft > 0) {
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 2;
+      for (let i = 1; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.arc(s.x - s.facing * (s.shown * 1.4 + i * 11), s.y + Math.sin(arenaTime * 12 + i) * 5, 3 + i, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /**
+   * 竞技场里的一条鱼。危险鱼与毒藻鱼**不靠颜色区分**:
+   * 危险鱼有锯齿背鳍加斜纹,毒藻鱼有荧光圈加 ☠——色觉不同的孩子也认得出来。
+   */
+  function drawArenaFish(f: ArenaFish): void {
+    const facing: 1 | -1 = f.vx >= 0 ? 1 : -1;
+    const r = f.spec.r;
+    if (f.spec.kind === "toxin") {
+      const glow = 0.45 + Math.sin(f.phase * 3) * 0.3;
+      ctx.strokeStyle = `rgba(220,140,255,${glow})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r * 1.35, 0, Math.PI * 2);
+      ctx.stroke();
+      drawFish(f.x, f.y, r, facing, "#c46ae8", false);
+      ctx.fillStyle = `rgba(255,240,255,${0.6 + glow * 0.35})`;
+      ctx.font = `${Math.max(11, Math.round(r * 0.8))}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("☠", f.x, f.y - r * 1.5);
+      return;
+    }
+    if (f.spec.kind === "elite") {
+      drawFish(f.x, f.y, r, facing, "#ffd868", false);
+      const glow = 0.5 + Math.sin(f.phase * 4) * 0.3;
+      ctx.strokeStyle = `rgba(255,240,170,${glow})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r * 1.3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,220,${glow})`;
+      ctx.font = `${Math.max(11, Math.round(r * 0.7))}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("💫", f.x, f.y - r * 1.5);
+      return;
+    }
+    const color = f.spec.danger ? "#8fa8d8" : f.spec.dexId === "lantern" ? "#ffe0a3" : "#a8e6c9";
+    drawFish(f.x, f.y, r, facing, color, false);
+    if (f.spec.danger) {
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.scale(facing, 1);
+      // 锯齿背鳍:一眼看出「这条惹不起」
+      ctx.fillStyle = "#5f7ab0";
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.55, -r * 0.6);
+      for (let i = 0; i < 3; i++) {
+        ctx.lineTo(-r * 0.55 + i * r * 0.38 + r * 0.19, -r * (1.05 - i * 0.06));
+        ctx.lineTo(-r * 0.55 + (i + 1) * r * 0.38, -r * 0.6);
+      }
+      ctx.closePath();
+      ctx.fill();
+      // 斜纹
+      ctx.strokeStyle = "rgba(45,70,120,0.55)";
+      ctx.lineWidth = Math.max(2, r * 0.1);
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * r * 0.4 - r * 0.12, -r * 0.55);
+        ctx.lineTo(i * r * 0.4 + r * 0.2, r * 0.55);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (f.spec.dexId === "lantern") {
+      const glow = 0.5 + Math.sin(f.phase * 3) * 0.3;
+      ctx.fillStyle = `rgba(255,220,120,${glow})`;
+      ctx.beginPath();
+      ctx.arc(f.x - facing * r * 1.6, f.y, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /**
+   * 竞技场背景:三层视差水层 + 光柱 + 远景鱼影,全是纯 Canvas 渐变。
+   * 保持 2D 俯视——真 3D 会挡住「谁比谁大」的阅读性,这一款读不出大小就没法玩。
+   */
+  function drawArenaBackground(): void {
+    const spec = arenaZone();
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, spec.top);
+    grad.addColorStop(1, spec.bottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(-20, -20, w + 40, h + 40);
+
+    // 第一层:慢慢横移的光柱
+    for (let i = 0; i < 3; i++) {
+      const x = ((arenaTime * 12 + i * w * 0.37) % (w + 220)) - 110;
+      const g = ctx.createLinearGradient(x, 0, x + 70, h);
+      g.addColorStop(0, "rgba(255,255,255,0.16)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(x - 24, 0);
+      ctx.lineTo(x + 44, 0);
+      ctx.lineTo(x + 96, h);
+      ctx.lineTo(x - 64, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // 第二层:远景鱼影,跟着洋流慢慢飘
+    const dir = arenaDrift().fx >= 0 ? 1 : -1;
+    ctx.fillStyle = "rgba(255,255,255,0.09)";
+    for (let i = 0; i < 6; i++) {
+      const x = ((arenaTime * 22 * dir + i * 137) % (w + 160) + w + 160) % (w + 160) - 80;
+      const y = h * (0.14 + ((i * 0.17) % 0.72));
+      ctx.beginPath();
+      ctx.ellipse(x, y, 22 + (i % 3) * 7, 9 + (i % 3) * 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 第三层:近景水纹,越深越暗
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const y = ((arenaTime * 26 + i * 120) % (h + 120)) - 60;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.quadraticCurveTo(w * 0.5, y + 14, w, y);
+      ctx.stroke();
+    }
+  }
+
+  /** 竞技场 HUD:分两行贴顶,360 宽也不横向溢出、不压着鱼。 */
+  function drawArenaHud(): void {
+    const spec = arenaZone();
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.font = "15px sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    if (arenaMode === "endless") {
+      ctx.fillText(`⬇ ${Math.floor(depth)} 米 · 第 ${arenaTier} 层 ${spec.name}`, 12, 20);
+    } else {
+      const left = Math.max(0, Math.ceil(VERSUS_SECONDS - arenaTime));
+      ctx.fillText(`⏱ ${left} 秒 · 对手 ${rivalProfile.emoji} ${rivalProfile.name}`, 12, 20);
+    }
+    ctx.textAlign = "right";
+    ctx.fillText(`体型 ${Math.round(me.r)}${rival ? ` · 它 ${Math.round(rival.r)}` : ""}`, w - 12, 20);
+
+    // 第二行:冲刺冷却条 + 图鉴 / 纪录
+    const barW = Math.min(150, w * 0.36);
+    const ready = dashReady(me.dashCd);
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.beginPath();
+    ctx.roundRect(12, 34, barW, 14, 7);
+    ctx.fill();
+    ctx.fillStyle = ready ? "#7fe0c8" : "rgba(255,255,255,0.62)";
+    ctx.beginPath();
+    ctx.roundRect(12, 34, Math.max(8, barW * (ready ? 1 : 1 - me.dashCd / DASH_CD)), 14, 7);
+    ctx.fill();
+    ctx.fillStyle = "#2a4a5e";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(ready ? "冲刺就绪" : "冲刺蓄力", 12 + barW / 2, 41);
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "13px sans-serif";
+    ctx.fillText(
+      arenaMode === "endless"
+        ? `📖 ${dexSeen.size}/${DEX.length} · 最好 ${endlessBest} 米`
+        : `📖 ${dexSeen.size}/${DEX.length}`,
+      w - 12,
+      41,
+    );
+
+    // 饿了就提醒:剩 20 秒开始跳字,最后 8 秒催得更急,别等到游不动才知道
+    if (arenaMode === "endless") {
+      const warn = starveWarnLevel(sinceEat);
+      if (warn !== "none") {
+        const blink = warn === "hard" ? 7 : 4;
+        ctx.textAlign = "center";
+        ctx.fillStyle = Math.floor(arenaTime * blink) % 2 === 0 ? "#ffd868" : "#ffffff";
+        ctx.font = `bold ${warn === "hard" ? 17 : 15}px sans-serif`;
+        ctx.fillText(starveWarnLine(sinceEat), w / 2, 62);
+      }
+      // 正在被压小的时候要说出来:不然孩子只看到「我一直在吃,鱼却越来越小」
+      const squeezed = pressureState(me.r, arenaTier, eliteLeft) === "squeezed";
+      const pressure = pressureLine(me.r, arenaTier, eliteLeft);
+      if (pressure) {
+        ctx.textAlign = "center";
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = squeezed
+          ? Math.floor(arenaTime * 4) % 2 === 0
+            ? "#ffb0b0"
+            : "#ffe6a8"
+          : eliteLeft > 0
+            ? "#ffe6a8"
+            : "rgba(255,255,255,0.82)";
+        ctx.fillText(pressure, w / 2, warn === "none" ? 62 : 82);
+      }
+    }
+  }
+
+  function drawArena(): void {
+    ctx.save();
+    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 12, (Math.random() - 0.5) * shake * 12);
+    drawArenaBackground();
+
+    for (const b of bubbles) {
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    for (const f of arenaFish) drawArenaFish(f);
+
+    if (rival) {
+      const blink = rival.inv > 0 && Math.floor(arenaTime * 8) % 2 === 0;
+      if (!blink) drawSwimmer(rival, "#b8a9f5", false);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${rivalProfile.emoji} ${rivalProfile.name}`, rival.x, rival.y - rival.shown - 16);
+    }
+
+    const blinkMe = me.inv > 0 && Math.floor(arenaTime * 8) % 2 === 0;
+    if (!blinkMe) drawSwimmer(me, "#ff9eb5", true);
+
+    // 无光水层:只看得清身边一圈
+    if (arenaZone().dark) {
+      const sight = me.shown * DARK_SIGHT;
+      const g = ctx.createRadialGradient(me.x, me.y, sight * 0.45, me.x, me.y, sight);
+      g.addColorStop(0, "rgba(8,10,26,0)");
+      g.addColorStop(1, "rgba(8,10,26,0.9)");
+      ctx.fillStyle = g;
+      ctx.fillRect(-20, -20, w + 40, h + 40);
+    }
+
+    for (const p of pops) {
+      ctx.globalAlpha = Math.max(0, p.life / 0.5);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, (0.5 - Math.min(0.5, p.life)) * 90 + 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    for (const f of floats) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.5));
+      ctx.fillStyle = f.color;
+      ctx.font = f.big ? "bold 20px sans-serif" : "bold 15px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+
+    drawArenaHud();
+    if (phase === "arenaOver") drawArenaOverPanel();
+  }
+
+  function drawArenaOverPanel(): void {
+    const copy =
+      arenaMode === "endless"
+        ? endlessFailCopy(failKind ?? "starved", depth)
+        : versusCopy(versusResult, rivalProfile, me.r, rival ? rival.r : 0);
+    const { y } = panelBox(Math.min(460, w - 32), 250);
+    ctx.fillStyle = "#8a5ac9";
+    ctx.font = "bold 23px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(copy.title, w / 2, y + 42);
+    ctx.font = "15px sans-serif";
+    ctx.fillStyle = "#5a5a6e";
+    ctx.fillText(copy.lines[0], w / 2, y + 82);
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "#6a6a7e";
+    ctx.fillText(copy.lines[1], w / 2, y + 108, Math.min(430, w - 60));
+    if (arenaMode === "endless") {
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillStyle = newRecord ? "#c47a2a" : "#8a8a9a";
+      ctx.fillText(
+        newRecord ? `🎉 破纪录!最深 ${endlessBest} 米` : `最好成绩 ${endlessBest} 米 · 吃了 ${arenaEaten} 条`,
+        w / 2,
+        y + 138,
+      );
+    }
+    const bw2 = 132;
+    btnHome = { x: w / 2 - bw2 - 10, y: y + 172, w: bw2, h: 46 };
+    btnAgain = { x: w / 2 + 10, y: y + 172, w: bw2, h: 46 };
+    drawButton(btnHome, "回首页", "#f0f0f5", "#5a5a6e");
+    drawButton(btnAgain, "再来一趟", "#ffd868", "#7a5a1a");
+  }
+
+  /** 首屏:战役 / 无尽 / 对战三选一,和图鉴入口并列。 */
+  function drawHome(): void {
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#cdefff");
+    grad.addColorStop(0.5, "#8fc4e8");
+    grad.addColorStop(1, "#3f6aa8");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = "#1f4a72";
+    ctx.font = "bold 24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🐟 海底大胃王", w / 2, 28);
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "#2a5a86";
+    ctx.fillText(`吃比自己小的鱼,越吃越大 · 最深 ${endlessBest} 米`, w / 2, 52);
+
+    // 副标题就在 y=52 那一行,按钮画高会压字 —— 画的照旧,能点的范围兜到 44px 高
+    const dexFace: Rect = { x: w - 120, y: 8, w: 112, h: 34 };
+    btnDex = touchArea(dexFace);
+    drawButton(dexFace, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
+
+    const cards: Array<{ id: "campaign" | "endless" | "versus"; emoji: string; title: string; blurb: string; bg: string; fg: string }> = [
+      {
+        id: "campaign",
+        emoji: "🌊",
+        title: `海域战役 · ${LEVELS.length} 关`,
+        blurb: `十二片海域 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3}`,
+        bg: "#ffffff",
+        fg: "#2a6a9a",
+      },
+      {
+        id: "endless",
+        emoji: "🏊",
+        title: "深海马拉松 · 无尽",
+        blurb: `一直往下潜,看能潜多深 · 最好 ${endlessBest} 米`,
+        bg: "#fff6e0",
+        fg: "#a05914",
+      },
+      {
+        id: "versus",
+        emoji: "⚖️",
+        title: "限时谁更胖 · 对战",
+        blurb: `${VERSUS_SECONDS} 秒同池抢食,人机三档`,
+        bg: "#ffe9f5",
+        fg: "#a03a72",
+      },
+    ];
+    homeCards.length = 0;
+    const pad = 12;
+    const x0 = Math.max(12, w * 0.06);
+    const cw = w - x0 * 2;
+    const y0 = 76;
+    const ch = Math.min(96, (h - y0 - 20 - pad * 2) / 3);
+    for (let i = 0; i < cards.length; i++) {
+      const c = cards[i];
+      const rect: Rect = { x: x0, y: y0 + i * (ch + pad), w: cw, h: ch };
+      homeCards.push({ id: c.id, rect });
+      ctx.fillStyle = c.bg;
+      ctx.strokeStyle = c.fg;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 16);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.font = `${Math.round(ch * 0.4)}px sans-serif`;
+      ctx.fillText(c.emoji, rect.x + 14, rect.y + ch * 0.5);
+      ctx.fillStyle = c.fg;
+      ctx.font = `bold ${Math.min(19, Math.round(ch * 0.24))}px sans-serif`;
+      ctx.fillText(c.title, rect.x + 16 + ch * 0.5, rect.y + ch * 0.38);
+      ctx.font = `${Math.max(13, Math.min(14, Math.round(ch * 0.17)))}px sans-serif`;
+      ctx.fillStyle = "#4a5a6e";
+      ctx.fillText(c.blurb, rect.x + 16 + ch * 0.5, rect.y + ch * 0.66, cw - ch * 0.5 - 30);
+    }
+  }
+
+  /** 对战选难度:三档人机,热区都做到 44px 以上。 */
+  function drawRivalPick(): void {
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#ffe9f5");
+    grad.addColorStop(1, "#b8a9f5");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    const backFace: Rect = { x: 8, y: 8, w: 76, h: 36 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 返回", "rgba(255,255,255,0.9)", "#5a5a6e");
+    ctx.fillStyle = "#a03a72";
+    ctx.font = "bold 22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⚖️ 限时谁更胖", w / 2, 30);
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "#6a4a6e";
+    ctx.fillText(`${VERSUS_SECONDS} 秒同池抢食,时间到谁更胖谁赢`, w / 2, 56);
+
+    rivalCards.length = 0;
+    const pad = 12;
+    const x0 = Math.max(12, w * 0.06);
+    const cw = w - x0 * 2;
+    const y0 = 80;
+    const ch = Math.min(92, (h - y0 - 20 - pad * 2) / 3);
+    for (let i = 0; i < RIVAL_LEVELS.length; i++) {
+      const p = RIVAL_PROFILES[RIVAL_LEVELS[i]];
+      const rect: Rect = { x: x0, y: y0 + i * (ch + pad), w: cw, h: Math.max(44, ch) };
+      rivalCards.push({ id: p.id, rect });
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#c96aa0";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 16);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.font = `${Math.round(rect.h * 0.4)}px sans-serif`;
+      ctx.fillText(p.emoji, rect.x + 14, rect.y + rect.h * 0.5);
+      ctx.fillStyle = "#a03a72";
+      ctx.font = `bold ${Math.min(19, Math.round(rect.h * 0.25))}px sans-serif`;
+      ctx.fillText(`第 ${i + 1} 档 · ${p.name}`, rect.x + 16 + rect.h * 0.5, rect.y + rect.h * 0.38);
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#5a5a6e";
+      ctx.fillText(p.blurb, rect.x + 16 + rect.h * 0.5, rect.y + rect.h * 0.68, cw - rect.h * 0.5 - 30);
     }
   }
 
@@ -2060,8 +3233,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
       52,
     );
 
-    btnDex = { x: w - 118, y: 8, w: 110, h: 30 };
-    drawButton(btnDex, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
+    const dexFace: Rect = { x: w - 118, y: 8, w: 110, h: 30 };
+    btnDex = touchArea(dexFace);
+    drawButton(dexFace, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
+    const backFace: Rect = { x: 8, y: 8, w: 74, h: 30 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 首页", "rgba(255,255,255,0.88)", "#5a5a6e");
 
     themeCards.length = 0;
     const cols = w > h * 1.15 ? 3 : 2;
@@ -2077,7 +3254,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const row = Math.floor(i / cols);
       const rect: Rect = { x: x0 + col * (cw + pad), y: y0 + row * (ch + pad), w: cw, h: ch };
       themeCards.push({ idx: i, rect });
-      const unlocked = isThemeUnlocked(progress, i);
+      const unlocked = themeUnlocked(i);
       const cleared = themeCleared(progress, i);
       ctx.fillStyle = unlocked ? st.top : "#e8e8ee";
       ctx.strokeStyle = unlocked ? st.accent : "#b8b8c2";
@@ -2114,8 +3291,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    btnBack = { x: 6, y: 7, w: 62, h: 30 };
-    drawButton(btnBack, "◀ 海域", "rgba(255,255,255,0.85)", "#5a5a6e");
+    const backFace: Rect = { x: 6, y: 7, w: 62, h: 30 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 海域", "rgba(255,255,255,0.85)", "#5a5a6e");
 
     ctx.fillStyle = st.accent;
     ctx.font = "bold 22px sans-serif";
@@ -2161,7 +3339,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.setLineDash([]);
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
-      const unlocked = isLevelUnlocked(progress, n.idx);
+      const unlocked = levelUnlocked(n.idx);
       const got = progress[n.idx] ?? 0;
       const isBoss = !!def.boss;
       const r = isBoss ? n.r * 1.22 : n.r;
@@ -2237,8 +3415,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fillText(d.desc, cx, cy + ch * 0.35);
       }
     }
-    btnBack = { x: 12, y: 12, w: 80, h: 34 };
-    drawButton(btnBack, "◀ 返回", "#fff", "#5a5a6e");
+    const backFace: Rect = { x: 12, y: 12, w: 80, h: 34 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 返回", "#fff", "#5a5a6e");
   }
 
   function drawClearPanel(): void {
@@ -2284,7 +3463,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function drawRetryPanel(): void {
     const hint = bossFailHint();
-    const { y } = panelBox(Math.min(450, w - 40), hint ? 240 : 210);
+    const skippable = canSkip();
+    const { y } = panelBox(Math.min(450, w - 40), (hint ? 240 : 210) + (skippable ? 56 : 0));
     // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
     ctx.fillStyle = "#8a5ac9";
     ctx.font = "bold 24px sans-serif";
@@ -2307,11 +3487,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     btnRetry = { x: w / 2 + 10, y: by, w: bw2, h: 44 };
     drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
     drawButton(btnRetry, "再游一次", "#ffd868", "#7a5a1a");
+    drawSkipButton(by + 56);
   }
 
   function drawIntroPanel(): void {
     const def = level();
-    const { y } = panelBox(Math.min(460, w - 40), 210);
+    const { y } = panelBox(Math.min(460, w - 40), canSkip() ? 240 : 210);
     ctx.fillStyle = "#e05a7a";
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
@@ -2327,9 +3508,36 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#a0a0b2";
     ctx.fillText(`${ZONE_STYLE[def.zone].name} · 点一下屏幕开始`, w / 2, y + 148);
+    drawSkipButton(y + 176);
+  }
+
+  /**
+   * 「跳过这一关」只在壳层注册过家长授权门时才画。
+   * 授权通过后本关记 0 星、下一关照样解锁——跳过去不是本事,不该冒出一颗星来。
+   */
+  function drawSkipButton(top: number): void {
+    if (!canSkip()) {
+      btnSkip = null;
+      return;
+    }
+    const bw = 150;
+    btnSkip = { x: w / 2 - bw / 2, y: top, w: bw, h: 44 };
+    drawButton(btnSkip, skipPending ? "问问大人中…" : "🔑 请大人跳过", "#efe6ff", "#5a3a9a");
   }
 
   function draw(): void {
+    if (phase === "home") {
+      drawHome();
+      return;
+    }
+    if (phase === "rivalPick") {
+      drawRivalPick();
+      return;
+    }
+    if (phase === "arena" || phase === "arenaOver") {
+      drawArena();
+      return;
+    }
     if (phase === "themes") {
       drawThemes();
       return;
@@ -2567,16 +3775,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
   resetLevel();
+  endlessBest = readEndlessBest();
   raf = requestAnimationFrame(frame);
 
+  // 平台给了 initialLevel、或者地址栏带着 ?level=N,就别停在首屏
+  const wanted = initialLevelIndex(api.initialLevel, safeSearch());
+  if (wanted !== null) openCampaignLevel(wanted + 1);
+
   return {
+    openCampaignLevel,
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
       stopSpeaking();
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
       canvas.remove();
     },
   };

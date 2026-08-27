@@ -65,6 +65,78 @@ describe("星星消消乐 · 1.0 前 99 关回归", () => {
       expect(lv.frost).toBeUndefined();
       expect(lv.frostLayers).toBeUndefined();
       expect(lv.boss).toBeUndefined();
+      // 1.2 的挡板同样不许往回渗
+      expect(lv.blockers).toBeUndefined();
+    }
+  });
+});
+
+describe("星星消消乐 · 1.2 挡板", () => {
+  it("挡板只长在末章尾段，前面 180 关一块都没有", () => {
+    const withBlockers = LEVELS.map((lv, i) => (lv.blockers ? i : -1)).filter((i) => i >= 0);
+    expect(withBlockers.length).toBeGreaterThan(0);
+    expect(Math.min(...withBlockers)).toBeGreaterThanOrEqual(180);
+    expect(Math.max(...withBlockers)).toBe(TOTAL_LEVELS - 1);
+    // 越往后挡板越多
+    const counts = withBlockers.map((i) => LEVELS[i].blockers ?? 0);
+    expect(counts[counts.length - 1]).toBeGreaterThan(counts[0]);
+  });
+
+  it("开局就把挡板摆上：挡板格是空的、点不动，数量对得上", () => {
+    const lv = LEVELS[TOTAL_LEVELS - 1];
+    const s = createState(lv, mulberry32(boardSeed(TOTAL_LEVELS - 1)));
+    const placed = s.solid.filter(Boolean).length;
+    expect(placed).toBe(lv.blockers);
+    expect(s.blockerLeft).toBe(placed);
+    for (let i = 0; i < s.solid.length; i++) if (s.solid[i]) expect(s.grid[i]).toBeLessThan(0);
+    expect(legalSwaps(s, lv).some(([a, b]) => s.solid[a] || s.solid[b])).toBe(false);
+  });
+
+  it("挡板挡住下落：它上面的星星落不下来，底下也补不进新块", () => {
+    const lv = LEVELS[TOTAL_LEVELS - 1];
+    const s = createState(lv, mulberry32(7));
+    s.solid.fill(false);
+    s.blockerLeft = 0;
+    // 第 4 行第 0 列摆一堵墙，把这一列切成上下两段
+    const wall = 4 * SIZE;
+    s.solid[wall] = true;
+    s.grid[wall] = -1;
+    const above = 2 * SIZE;
+    const mark = s.grid[above];
+    s.grid[3 * SIZE] = -1;
+    s.grid[5 * SIZE] = -1;
+    applyGravity(s, lv, mulberry32(3));
+    // 上半段的星星最多落到墙头那一格，绝不会穿墙掉到第 5 行
+    expect(s.grid[3 * SIZE]).toBe(mark);
+    expect(s.grid[wall]).toBeLessThan(0);
+    // 墙底下那一格空着——补块只从没被挡住的那一段顶上进来
+    expect(s.grid[5 * SIZE]).toBeLessThan(0);
+  });
+
+  it("在挡板旁边消一次就敲掉它，敲掉之后这一格才补得进新块", () => {
+    const lv = LEVELS[TOTAL_LEVELS - 1];
+    const s = createState(lv, mulberry32(11));
+    s.solid.fill(false);
+    s.ice.fill(false);
+    s.vine.fill(false);
+    s.fixed.fill(false);
+    const wall = 4 * SIZE + 3;
+    s.solid[wall] = true;
+    s.grid[wall] = -1;
+    s.blockerLeft = 1;
+    // 紧挨着墙的右边消掉一格
+    clearCells(s, lv, new Set([wall + 1]));
+    expect(s.solid[wall]).toBe(false);
+    expect(s.blockerLeft).toBe(0);
+    applyGravity(s, lv, mulberry32(5));
+    expect(s.grid[wall]).toBeGreaterThanOrEqual(0);
+  });
+
+  it("带挡板的末章关照样过得去（自动玩家能通关）", () => {
+    for (const lv of [181, 184, 187]) {
+      const res = simulateLevel(LEVELS[lv], boardSeed(lv));
+      expect(LEVELS[lv].blockers ?? 0).toBeGreaterThan(0);
+      expect(res.won, `第 ${lv + 1} 关带挡板之后过不去了`).toBe(true);
     }
   });
 });

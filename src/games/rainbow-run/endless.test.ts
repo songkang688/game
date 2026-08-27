@@ -9,8 +9,10 @@ import {
   CHASER_START_GAP,
   CHASER_WARN_GAP,
   ENDLESS_TIERS,
+  FAIR_WINDOW_ROWS,
   SEGMENT_TEMPLATES,
   buildSegment,
+  buildSegmentWith,
   chaserBoost,
   chaserCaught,
   chaserDrift,
@@ -18,22 +20,32 @@ import {
   chaserPress,
   chaserWarning,
   clearLanePath,
+  declaredPathHolds,
   emptyRecord,
+  endlessRecordSay,
   failCopy,
+  fairWindows,
+  forkMergeHolds,
   freeLanes,
+  laneActions,
   mergeRecord,
   parseRecord,
+  passableLanes,
   pathStepsAreReachable,
   recordBroken,
   recordLine,
   segmentClearPath,
   segmentIsFair,
+  segmentIsPassable,
+  segmentPassablePath,
   serializeRecord,
   templatesForLevel,
   tierForDistance,
+  usableTemplates,
 } from "./endless";
 import type { FailKind } from "./endless";
-import { rowIsSurvivable } from "./logic";
+import { PERFECT_STREAK_GOAL, rowIsSurvivable } from "./logic";
+import type { ObstacleKind, PatternRow } from "./logic";
 import { makeRng } from "../__tests__/campaignSim";
 
 describe("无尽彩虹跑 · 难度随距离升", () => {
@@ -172,14 +184,28 @@ describe("无尽彩虹跑 · 必过窗口", () => {
       expect(seg.clearPath[0]).toBe(lane);
       expect(pathStepsAreReachable(seg.clearPath), `第 ${i} 段的必过路线跨了两格`).toBe(true);
       for (let r = 0; r < seg.rows.length; r++) {
-        expect(
-          freeLanes(seg.rows[r]),
-          `第 ${i} 段第 ${r} 行的必过车道上居然摆了障碍`,
-        ).toContain(seg.clearPath[r]);
+        // 1.2 起,必过路线上允许出现「跳得过 / 滑得过」的障碍(三连节拍、低梁抢道就靠这个)。
+        // 平跑那一行的口径没放松,仍旧要求整条车道是空的;
+        // 要动作的那一行则改成断言那个动作真能过去,由 declaredPathHolds 逐行核对。
+        if (seg.pathActions[r] === "run") {
+          expect(
+            freeLanes(seg.rows[r]),
+            `第 ${i} 段第 ${r} 行的必过车道上居然摆了障碍`,
+          ).toContain(seg.clearPath[r]);
+        } else {
+          expect(
+            passableLanes(seg.rows[r]),
+            `第 ${i} 段第 ${r} 行的必过车道既跳不过也滑不过`,
+          ).toContain(seg.clearPath[r]);
+        }
       }
+      expect(declaredPathHolds(seg), `第 ${i} 段报的动作序列走不通`).toBe(true);
       // 3. 独立的校验器也能自己找出一条来
-      expect(segmentClearPath(seg.rows, lane), `第 ${i} 段「${seg.name}」找不到必过路线`).not.toBeNull();
-      expect(segmentIsFair(seg, lane)).toBe(true);
+      expect(
+        segmentPassablePath(seg.rows, lane),
+        `第 ${i} 段「${seg.name}」找不到必过路线`,
+      ).not.toBeNull();
+      expect(segmentIsPassable(seg, lane), `第 ${i} 段「${seg.name}」没过必过窗口校验`).toBe(true);
 
       lane = seg.clearPath[seg.clearPath.length - 1];
       dist += seg.rows.length * 250 * 0.02 + 3;
@@ -209,6 +235,199 @@ describe("无尽彩虹跑 · 必过窗口", () => {
           for (const o of row.obstacles) expect(allowed.has(o.kind), `${dist} 米出现了 ${o.kind}`).toBe(true);
         }
       }
+    }
+  });
+
+  it("必过窗口:任意连续 3 行都不会三条道全是既不可跳又不可滑", () => {
+    // 构造反例:三条道全摆软糖(只能换道躲),窗口立刻不成立
+    const deadRow: PatternRow = {
+      obstacles: [0, 1, 2].map((lane) => ({ lane, kind: "rock" as ObstacleKind })),
+      stars: [],
+      coins: [],
+    };
+    const openRow: PatternRow = { obstacles: [], stars: [], coins: [] };
+    expect(fairWindows([openRow, openRow, openRow])).toBe(true);
+    expect(fairWindows([openRow, deadRow, openRow])).toBe(false);
+    // 跳得过 / 滑得过的三行照样成立
+    const jumpRow: PatternRow = {
+      obstacles: [0, 1, 2].map((lane) => ({ lane, kind: "hurdle" as ObstacleKind })),
+      stars: [],
+      coins: [],
+    };
+    const slideRow: PatternRow = {
+      obstacles: [0, 1, 2].map((lane) => ({ lane, kind: "bar" as ObstacleKind })),
+      stars: [],
+      coins: [],
+    };
+    expect(fairWindows([jumpRow, slideRow, jumpRow])).toBe(true);
+    expect(FAIR_WINDOW_ROWS).toBe(3);
+  });
+
+  it("必过窗口也管「横移超过一格」:中间一行只剩对面那条道就不算过得去", () => {
+    const leftOnly: PatternRow = {
+      obstacles: [
+        { lane: 1, kind: "rock" },
+        { lane: 2, kind: "rock" },
+      ],
+      stars: [],
+      coins: [],
+    };
+    const rightOnly: PatternRow = {
+      obstacles: [
+        { lane: 0, kind: "rock" },
+        { lane: 1, kind: "rock" },
+      ],
+      stars: [],
+      coins: [],
+    };
+    // 只剩 0 道 → 只剩 2 道,一帧横移两格,过不去
+    expect(fairWindows([leftOnly, rightOnly], 2)).toBe(false);
+  });
+
+  it("四种 1.2 新模板各跑 2000 段,全都过必过窗口", () => {
+    const fresh = SEGMENT_TEMPLATES.filter((t) => typeof t.build === "function");
+    expect(fresh.map((t) => t.name)).toEqual(["三连节拍", "低梁抢道", "彩纸箱链", "分岔合流"]);
+    for (const template of fresh) {
+      const rng = makeRng(20260826);
+      // 从这个模板解锁的那一档往上取距离,保证它需要的障碍都齐了
+      const tier = ENDLESS_TIERS[template.minLevel - 1];
+      for (let i = 0; i < 2000; i++) {
+        const startLane = i % 3;
+        const dist = tier.fromMeters + (i % 900);
+        const seg = buildSegmentWith(template, dist, startLane, rng);
+        expect(seg.name).toBe(template.name);
+        expect(seg.startLane).toBe(startLane);
+        for (const row of seg.rows) {
+          expect(rowIsSurvivable(row), `「${template.name}」第 ${i} 段有一行被堵死了`).toBe(true);
+        }
+        expect(fairWindows(seg.rows), `「${template.name}」第 ${i} 段没过必过窗口`).toBe(true);
+        expect(
+          segmentIsPassable(seg, startLane),
+          `「${template.name}」第 ${i} 段从第 ${startLane} 道进来走不通`,
+        ).toBe(true);
+        expect(declaredPathHolds(seg), `「${template.name}」第 ${i} 段报的动作走不通`).toBe(true);
+        expect(seg.rows.length).toBeGreaterThanOrEqual(tier.rows);
+      }
+    }
+  });
+
+  it("三连节拍:连着三行同款障碍摆满三条道,只能一拍一跳", () => {
+    const template = SEGMENT_TEMPLATES.find((t) => t.name === "三连节拍");
+    expect(template).toBeDefined();
+    const rng = makeRng(4);
+    for (let i = 0; i < 200; i++) {
+      const seg = buildSegmentWith(template!, 2200, i % 3, rng);
+      const beats = seg.rows.filter((r) => r.beat === true);
+      expect(beats.length).toBe(PERFECT_STREAK_GOAL);
+      for (const row of beats) {
+        // 三条道全摆上,而且是同一种障碍——节奏段不该有「要不要换道」的干扰
+        expect(row.obstacles.length).toBe(3);
+        expect(new Set(row.obstacles.map((o) => o.kind)).size).toBe(1);
+        expect(new Set(row.obstacles.map((o) => o.lane))).toEqual(new Set([0, 1, 2]));
+      }
+      // 三拍都记成「跳」,而且必过车道一格没挪
+      const jumpRows = seg.pathActions.filter((a) => a === "jump");
+      expect(jumpRows.length).toBe(PERFECT_STREAK_GOAL);
+      expect(new Set(seg.clearPath).size).toBe(1);
+    }
+  });
+
+  it("低梁抢道:趴过低梁那一行的下一行原道被堵死,只能立刻换到旁边", () => {
+    const template = SEGMENT_TEMPLATES.find((t) => t.name === "低梁抢道");
+    const rng = makeRng(17);
+    for (let i = 0; i < 300; i++) {
+      const seg = buildSegmentWith(template!, 2400, i % 3, rng);
+      let cuts = 0;
+      for (let r = 0; r < seg.rows.length - 1; r++) {
+        if (seg.pathActions[r] !== "slide") continue;
+        cuts++;
+        const here = seg.clearPath[r];
+        const next = seg.clearPath[r + 1];
+        // 低梁压在自己这条道上,滑过去
+        expect(seg.rows[r].obstacles.some((o) => o.lane === here && o.kind === "bar")).toBe(true);
+        // 下一行原道被软糖封死,而且必须挪一格
+        expect(seg.rows[r + 1].obstacles.some((o) => o.lane === here && o.kind === "rock")).toBe(
+          true,
+        );
+        expect(Math.abs(next - here)).toBe(1);
+        expect(freeLanes(seg.rows[r + 1])).toContain(next);
+      }
+      expect(cuts).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("彩纸箱链:一整串箱子铺在同一条道上,一路滑过去挨个铲碎", () => {
+    const template = SEGMENT_TEMPLATES.find((t) => t.name === "彩纸箱链");
+    const rng = makeRng(23);
+    for (let i = 0; i < 300; i++) {
+      const seg = buildSegmentWith(template!, 2300, i % 3, rng);
+      const links = seg.pathActions.filter((a) => a === "slide").length;
+      expect(links).toBeGreaterThanOrEqual(3);
+      for (let r = 0; r < seg.rows.length; r++) {
+        if (seg.pathActions[r] !== "slide") continue;
+        const ob = seg.rows[r].obstacles.find((o) => o.lane === seg.clearPath[r]);
+        expect(ob?.kind).toBe("crate");
+        // 箱子是唯一「跳也行、滑也行」的障碍,手生的孩子也留了退路
+        expect(laneActions(seg.rows[r], seg.clearPath[r]).sort()).toEqual(["jump", "slide"]);
+      }
+      // 整条链子都在同一条道上
+      expect(new Set(seg.clearPath).size).toBe(1);
+    }
+  });
+
+  it("分岔合流:两条支线各自走得通,而且在同一行汇合", () => {
+    const template = SEGMENT_TEMPLATES.find((t) => t.name === "分岔合流");
+    const rng = makeRng(41);
+    for (let i = 0; i < 400; i++) {
+      const seg = buildSegmentWith(template!, 3200, i % 3, rng);
+      expect(seg.merge).toBeDefined();
+      const merge = seg.merge!;
+      // 中间道从岔路口一路被封到合流前一行
+      for (let r = 1; r < merge.row; r++) {
+        expect(seg.rows[r].obstacles.some((o) => o.lane === 1 && o.kind === "rock")).toBe(true);
+      }
+      // 合流那一行三条道同时放开——两边的人这一帧回到同一条路面上
+      expect(freeLanes(seg.rows[merge.row])).toEqual([0, 1, 2]);
+      expect(merge.lanes).toEqual([0, 2]);
+      expect(forkMergeHolds(seg)).toBe(true);
+      // 两条支线一样长:谁走哪边都不会被多堵一行
+      for (const lane of merge.lanes) {
+        const branch = segmentPassablePath(seg.rows.slice(0, merge.row + 1), lane);
+        expect(branch, `第 ${lane} 道的支线走不到合流点`).not.toBeNull();
+        expect(branch?.length).toBe(merge.row + 1);
+      }
+    }
+  });
+
+  it("不是分岔段就没有合流点,不会被当成「岔路坏了」", () => {
+    const rng = makeRng(3);
+    const plain = SEGMENT_TEMPLATES.find((t) => t.name === "糖果直道")!;
+    expect(forkMergeHolds(buildSegmentWith(plain, 0, 1, rng))).toBeNull();
+  });
+
+  it("模板得等它要的障碍都解锁了才抽得到,不会摆出一段没法生成的路", () => {
+    for (const tier of ENDLESS_TIERS) {
+      const kinds = new Set(tier.kinds);
+      const usable = usableTemplates(tier);
+      expect(usable.length).toBeGreaterThan(0);
+      for (const t of usable) {
+        expect(t.minLevel).toBeLessThanOrEqual(tier.level);
+        for (const need of t.needs ?? []) expect(kinds.has(need)).toBe(true);
+      }
+    }
+    // 最高档十二种模板一个不少
+    expect(usableTemplates(ENDLESS_TIERS[ENDLESS_TIERS.length - 1]).length).toBe(
+      SEGMENT_TEMPLATES.length,
+    );
+  });
+
+  it("必过路线上的动作只会是 run / jump / slide 这三种", () => {
+    const rng = makeRng(64);
+    let lane = 1;
+    for (let i = 0; i < 600; i++) {
+      const seg = buildSegment(i * 20, lane, rng);
+      for (const a of seg.pathActions) expect(["run", "jump", "slide"]).toContain(a);
+      lane = seg.clearPath[seg.clearPath.length - 1];
     }
   });
 
@@ -382,5 +601,36 @@ describe("无尽彩虹跑 · 最远距离与最高金币数", () => {
     expect(parseRecord("1500")).toEqual({ meters: 1500, coins: 0 });
     expect(parseRecord('{"meters":-3,"coins":"abc"}')).toEqual({ meters: 0, coins: 0 });
     expect(parseRecord('{"meters":12.9,"coins":7.2}')).toEqual({ meters: 12, coins: 7 });
+  });
+});
+
+describe("P3C-2 · 无尽收尾也把纪录说出来", () => {
+  it("破了纪录就明说远了多少,第一趟不硬扯「上次」", () => {
+    expect(endlessRecordSay(2928, 2000, true)).toBe("这是新纪录,比上次的 2000 米还远 928 米!");
+    expect(endlessRecordSay(2928, 0, true)).toBe("这是你的第一条纪录:2928 米!");
+  });
+
+  it("没破纪录就报还差多少,追平单说一句", () => {
+    expect(endlessRecordSay(2000, 2928, false)).toBe("你最远跑到过 2928 米,再多跑 928 米就追平啦。");
+    expect(endlessRecordSay(2928, 2928, false)).toBe("跟最好成绩打平,都是 2928 米!");
+  });
+
+  it("小数与负数都夹成整数", () => {
+    expect(endlessRecordSay(2928.8, 2000.4, true)).toContain("比上次的 2000 米还远 928 米");
+    expect(endlessRecordSay(-5, -9, false)).toBe("跟最好成绩打平,都是 0 米!");
+  });
+
+  it("接在失败文案后面仍旧只鼓励,面板那两行一个字没动", () => {
+    for (const kind of ["crash", "pit", "chaser"] as const) {
+      const copy = failCopy(kind, 2928);
+      // 面板排版的约束还在:两行拼起来仍旧等于 `line`,纪录那句不掺进去
+      expect(copy.lines.join("")).toBe(copy.line);
+      expect(copy.line).not.toContain("新纪录");
+    }
+    const say = endlessRecordSay(2928, 2000, true);
+    for (const bad of ["笨", "傻", "菜", "太差", "不行", "失败了", "输了", "血", "死"]) {
+      expect(say).not.toContain(bad);
+    }
+    expect(say).not.toMatch(/[A-Za-z]/);
   });
 });

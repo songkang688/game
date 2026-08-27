@@ -6,9 +6,11 @@ import { TOTAL_LEVELS, assertTotal, chapterOf } from "../level99";
 import { AI_LABELS } from "./ai";
 import { CHARACTERS, characterById } from "./frames";
 import {
+  BUFF_KNEE,
   CHAPTERS,
   STAGE_SKY,
   aiLevelOf,
+  buffProgress,
   bossIdOf,
   chapterIndexOf,
   chapterStartLevel,
@@ -79,7 +81,7 @@ describe("守擂者", () => {
     const last = towerStage(TOTAL_LEVELS - 1);
     expect(last.boss).toBe(true);
     expect(last.chapterIndex).toBe(CHAPTERS.length - 1);
-    expect(last.aiLevel).toBe(2);
+    expect(last.aiLevel).toBe(4);
   });
 });
 
@@ -100,11 +102,34 @@ describe("每关配置", () => {
     }
   });
 
+  // ---- QA 第 3 轮 · 包 B · R2B-11 复量：「对手跨章撞车」这条实测不成立，补三条守住 ----
+
+  it("八章的首关是八位不同的小伙伴，没有连着几章撞同一位（R2B-11）", () => {
+    const firsts = CHAPTERS.map((_, ci) => foeIdOf(chapterStartLevel(ci)));
+    expect(new Set(firsts).size, `八章首关的对手：${firsts.join(" ")}`).toBe(CHAPTERS.length);
+  });
+
+  it("每一章里八位小伙伴都上过场，谁都没被轮转表落下（R2B-11）", () => {
+    for (let ci = 0; ci < CHAPTERS.length; ci++) {
+      const start = chapterStartLevel(ci);
+      const seen = new Set<string>();
+      for (let i = 0; i < CHAPTERS[ci].size; i++) seen.add(foeIdOf(start + i));
+      expect(seen.size, `第 ${ci + 1} 章只出场了 ${seen.size} 位`).toBe(CHARACTERS.length);
+    }
+  });
+
+  it("章节交界那两关也不撞同一位（R2B-11）", () => {
+    for (let ci = 1; ci < CHAPTERS.length; ci++) {
+      const start = chapterStartLevel(ci);
+      expect(foeIdOf(start), `第 ${start} 关与第 ${start + 1} 关撞了同一位对手`).not.toBe(foeIdOf(start - 1));
+    }
+  });
+
   it("每关都有 AI 档、增益、回合数、时限和一句提示", () => {
     for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
       const s = towerStage(lv);
       expect(s.level).toBe(lv);
-      expect([0, 1, 2]).toContain(s.aiLevel);
+      expect([0, 1, 2, 3, 4]).toContain(s.aiLevel);
       expect(AI_LABELS[s.aiLevel].length).toBeGreaterThan(0);
       expect(s.roundsToWin).toBeGreaterThanOrEqual(1);
       expect(s.timeLimitSec).toBeGreaterThanOrEqual(60);
@@ -124,11 +149,23 @@ describe("每关配置", () => {
 });
 
 describe("难度曲线", () => {
-  it("AI 档位从轻松一路走到高手", () => {
+  it("AI 档位从轻松一路走到高手，五档全都用得上", () => {
     expect(aiLevelOf(0)).toBe(0);
-    expect(aiLevelOf(TOTAL_LEVELS - 1)).toBe(2);
+    expect(aiLevelOf(TOTAL_LEVELS - 1)).toBe(4);
     const levels = [0, 40, 90, 140, 187].map(aiLevelOf);
     for (let i = 1; i < levels.length; i++) expect(levels[i]).toBeGreaterThanOrEqual(levels[i - 1]);
+    // 188 层里五个档位一个都不能缺席
+    const used = new Set<number>();
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) used.add(aiLevelOf(lv));
+    expect([...used].sort()).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("后段靠新 AI 行为撑难度，不是靠堆元气：档位涨得比增益快", () => {
+    const early = towerStage(20);
+    const late = towerStage(170);
+    expect(late.aiLevel - early.aiLevel).toBeGreaterThanOrEqual(3);
+    // 元气增益从头到尾涨幅不到六成，撑难度的主力不是它
+    expect(late.foeBuff.vigorMul / early.foeBuff.vigorMul).toBeLessThan(1.6);
   });
 
   it("守擂者比同章的普通关更难", () => {
@@ -166,6 +203,47 @@ describe("难度曲线", () => {
     expect(towerStage(TOTAL_LEVELS - 1).roundsToWin).toBe(2);
   });
 
+  it("一章只上一级台阶:AI 档和回合数不在同一章一起往上跳", () => {
+    for (let ci = 1; ci < CHAPTERS.length; ci++) {
+      const here = towerStage(chapterStartLevel(ci));
+      // 拿上一章的普通关做对照(每章最后一关是守擂者,会额外加一档,不能当基准)
+      const prev = towerStage(chapterStartLevel(ci) - 2);
+      const aiUp = here.aiLevel > prev.aiLevel;
+      const roundsUp = here.roundsToWin > prev.roundsToWin;
+      expect(aiUp && roundsUp, `第 ${ci + 1} 章同时抬了 AI 档和回合数`).toBe(false);
+    }
+  });
+
+  it("两回合制排在 AI 换脑子的后一章:第 6 章只上档,第 7 章才上回合", () => {
+    const ch6 = towerStage(chapterStartLevel(5));
+    const ch7 = towerStage(chapterStartLevel(6));
+    expect(ch6.aiLevel).toBeGreaterThan(towerStage(chapterStartLevel(4)).aiLevel);
+    expect(ch6.roundsToWin).toBe(1);
+    expect(ch7.aiLevel).toBe(ch6.aiLevel);
+    expect(ch7.roundsToWin).toBe(2);
+  });
+
+  it("后段增益缓收:最高档的对手是更会打,不是更耐打", () => {
+    const round2 = (n: number): number => Math.round(n * 100) / 100;
+    expect(buffProgress(0)).toBe(0);
+    expect(buffProgress(BUFF_KNEE)).toBeCloseTo(BUFF_KNEE, 6);
+    // 缓收之后仍然单调,只是斜率降下来了
+    expect(buffProgress(1)).toBeGreaterThan(buffProgress(0.8));
+    expect(buffProgress(1)).toBeLessThan(1);
+    const slopeEarly = buffProgress(0.4) - buffProgress(0.3);
+    const slopeLate = buffProgress(0.95) - buffProgress(0.85);
+    expect(slopeLate).toBeLessThan(slopeEarly);
+
+    // 最后一层还是全塔最厚的一层,但厚度收在孩子够得着的范围里
+    const last = foeBuffOf(TOTAL_LEVELS - 1);
+    const mid = foeBuffOf(Math.floor(TOTAL_LEVELS / 2));
+    expect(last.vigorMul).toBeGreaterThan(mid.vigorMul);
+    expect(last.vigorMul).toBeLessThanOrEqual(1.3);
+    expect(last.powerMul).toBeLessThanOrEqual(1.2);
+    // 缓收之后,最后一层比原来的线性曲线薄一截(线性到顶是元气 ×1.34)
+    expect(last.vigorMul).toBeLessThan(round2(0.72 + 0.52 + 0.1));
+  });
+
   it("同一关每次读出来都一模一样（确定性）", () => {
     for (const lv of [0, 17, 88, 143, 187]) {
       expect(JSON.stringify(towerStage(lv))).toBe(JSON.stringify(towerStage(lv)));
@@ -179,8 +257,16 @@ describe("无尽连胜", () => {
       expect(CHARACTERS.some((c) => c.id === endlessFoeId(i))).toBe(true);
     }
     expect(endlessAiLevel(0)).toBe(0);
-    expect(endlessAiLevel(5)).toBe(1);
-    expect(endlessAiLevel(20)).toBe(2);
+    expect(endlessAiLevel(3)).toBe(1);
+    expect(endlessAiLevel(6)).toBe(2);
+    expect(endlessAiLevel(10)).toBe(3);
+    expect(endlessAiLevel(20)).toBe(4);
+    // 一路不降
+    let prev = -1;
+    for (let i = 0; i < 40; i++) {
+      expect(endlessAiLevel(i)).toBeGreaterThanOrEqual(prev);
+      prev = endlessAiLevel(i);
+    }
   });
 
   it("增益一路涨但有封顶，不会变成打不过", () => {

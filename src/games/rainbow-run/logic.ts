@@ -556,7 +556,7 @@ export function patternsForLevel(def: PatternPoolSpec): PatternRow[][] {
     for (let i = 0; i < extra; i++) pool.push(...beats);
   }
   // 大王把整条轨道都堆上了彩纸箱:带箱子的花样在大王关出现得更密,
-  // 不然八种障碍摊薄之后,打满血量的机会太少。
+  // 不然八种障碍摊薄之后,把护甲卸满的机会太少。
   if (def.boss) {
     const crates = pool.filter((pat) =>
       pat.some((row) => row.obstacles.some((o) => o.kind === "crate")),
@@ -1058,8 +1058,8 @@ const neonHand: LevelDef[] = [
     "五种障碍轮着来,保持节奏比抢速度重要"),
   N(9, 11, "站台风口", ["pit", "crate"], { type: "dodge", n: 13 }, "站台风口",
     "风口把地板吹出了缺口,看清坑沿再起跳"),
-  N(9, 12, "广告墙走廊", ["bar", "rock"], { type: "stars", n: 5 }, "广告墙走廊",
-    "广告牌一块接一块,趴着过时留意星星在哪条道"),
+  N(9, 12, "霓虹招牌走廊", ["bar", "rock"], { type: "stars", n: 5 }, "霓虹招牌走廊",
+    "霓虹招牌一块接一块,趴着过时留意星星在哪条道"),
   N(9, 13, "深夜滑轨", ["pit", "crate"], { type: "coins", n: 16 }, "深夜滑轨",
     "夜里滑轨最长的一段,加速时坑洞来得特别急", { rails: true }),
   N(9, 14, "三连跳月台", ["hurdle", "pit"], { type: "perfect", n: 3 }, "月台三连跳",

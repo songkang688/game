@@ -1,35 +1,94 @@
 import { meta } from "./meta";
 export { meta };
 
-// 朵朵星星象棋 —— 标准中国象棋：双人同屏（朵朵 vs 星星）+ 简单电脑。
-// 大棋子、点选或拖动、合法落点高亮、将军提示、悔棋一档、图文规则页。
+// 朵朵星星象棋 1.2：
+//  · 残局闯关 188 课 —— 走平台的 188 关框架（课号 / 星级 / 攻略 / 跳关全归框架管），
+//    8 章从「一车封路」一路练到「别走成和棋」，每课都有唯一主线解；
+//  · 自由对战 —— 人机六档（小象学步…星海棋神）+ 朵朵 VS 星星双人同屏；
+//  · 残局连胜 —— 一课接一课地解，错一次结束，最高连胜写平台 endlessBest。
+// 规则、记谱、AI、对局状态都在旁边的纯逻辑模块里，这个文件只做「装配 + 画面」。
 import {
   type Board,
   type Move,
   type Pos,
   type Side,
   PIECE_NAME,
-  aiMove,
-  applyMove,
-  describeMove,
   idx,
-  inCheck,
   initialBoard,
-  legalMoves,
   other,
   statusOf,
 } from "./logic";
+import {
+  type Difficulty,
+  DIFFICULTIES,
+  DIFFICULTY_BLURB,
+  DIFFICULTY_NAME,
+  PIECE_VALUE,
+  THINK_DELAY_MS,
+  TIER_SHORT,
+  chooseMove,
+  hintMove,
+} from "./ai";
+import { legalTargets, positionKey } from "./movegen";
+import {
+  type RecordEntry,
+  illegalReason,
+  judgeRecord,
+  pushRecord,
+  repeatWarning,
+} from "./rules";
+import { moveToChinese, recordLine } from "./notation";
+import {
+  type Endgame,
+  CHAPTERS,
+  PUZZLES,
+  failText,
+  goalText,
+  headline,
+  hintText,
+  openingTip,
+  puzzleAt,
+  puzzleBoard,
+  solvedText,
+  starsFor,
+} from "./endgames";
+import {
+  type AskState,
+  type PickState,
+  ENDLESS_REASON,
+  agreeAsk,
+  aiAgreesDraw,
+  confirmDefault,
+  difficultyForLevel,
+  drawRefusalLine,
+  emptyPick,
+  initialLevelOf,
+  newAsk,
+  newStreak,
+  streakPuzzle,
+  streakStep,
+  streakSummary,
+  tapPoint,
+  undoSteps,
+  type StreakState,
+} from "./session";
+import { CSS, createBoardView, type BoardView } from "./view";
+import {
+  TOTAL_LEVELS,
+  chapterOf,
+  chapterStart,
+  furthestPlayable,
+  loadSkips,
+  loadStars,
+  mountLevelGame,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+} from "../level99";
+import { save } from "../../engine/save";
+import guideBook from "./guide";
 
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
-
-interface GameApi {
-  root: HTMLElement;
-  play: (name: SoundName) => void;
-  addStars: (n: number) => number;
-  getStars: () => number;
-  onWin: (stars: 1 | 2 | 3, message?: string) => void;
-  onLose: (message?: string) => void;
-}
+export { CHAPTERS, difficultyForLevel };
 
 /* ---- 头像：PNG 到位后自动使用，暂时用可爱占位 ---- */
 const AVATAR_URLS = import.meta.glob("../../assets/avatars/*.png", {
@@ -40,7 +99,9 @@ const AVATAR_URLS = import.meta.glob("../../assets/avatars/*.png", {
 
 type Mascot = "duoduo" | "xingxing" | "robot";
 
-function avatarHTML(who: Mascot, size = 32): string {
+const MASCOT_NAME: Record<Mascot, string> = { duoduo: "朵朵", xingxing: "星星", robot: "棋灵象" };
+
+function avatarHTML(who: Mascot, size = 30): string {
   const file = who === "duoduo" ? "duoduo-q.png" : who === "xingxing" ? "xingxing-q.png" : "";
   const url = file ? AVATAR_URLS[`../../assets/avatars/${file}`] : undefined;
   if (url) {
@@ -48,684 +109,995 @@ function avatarHTML(who: Mascot, size = 32): string {
   }
   const emoji = who === "duoduo" ? "🌸" : who === "xingxing" ? "⭐" : "🐘";
   const bg = who === "duoduo" ? "#FFD9E8" : who === "xingxing" ? "#D9E6FF" : "#E4D9FF";
-  return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;background:${bg};align-items:center;justify-content:center;font-size:${Math.round(size * 0.58)}px;vertical-align:middle">${emoji}</span>`;
+  return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;background:${bg};align-items:center;justify-content:center;font-size:${Math.round(
+    size * 0.58,
+  )}px;vertical-align:middle">${emoji}</span>`;
 }
-
-const MASCOT_NAME: Record<Mascot, string> = { duoduo: "朵朵", xingxing: "星星", robot: "棋灵象" };
-
-/* ---- 画布几何 ---- */
-const M = 22; // 边距
-const C = 44; // 交叉点间距
-const W = M * 2 + C * 8; // 396
-const H = M * 2 + C * 9; // 440
-const R = 20; // 棋子半径
-
-function px(x: number): number {
-  return M + x * C;
-}
-function py(y: number): number {
-  return M + y * C;
-}
-
-type ModeKind = "pvp" | "ai";
 
 const RULES_HTML = `
   <h3>🎯 怎么赢</h3>
-  <p>把对方的<b>将 / 帅</b>抓住就赢啦！让对方的将帅<b>没地方逃、没人来救</b>（将死），或者对方<b>一步棋都走不了</b>（困毙），你就是大赢家！</p>
-  <h3>❌ 怎么输</h3>
-  <p>反过来，自己的将帅被将死、或者轮到自己却无棋可走，就输啦。别难过，点「再来一局」马上翻盘！</p>
-  <h3>🖐️ 怎么操作</h3>
-  <p>① 点一下<b>自己的棋子</b>，棋盘上会亮出<b>绿色小圆点</b>；<br>② 点绿点，棋子就走过去（也可以<b>按住棋子拖</b>过去）；<br>③ 走错了？每步之后可以按一次「↩️ 悔棋」。</p>
+  <p>让对方的<b>将 / 帅</b>没地方逃、没人来救（将死），或者对方<b>一步棋都走不了</b>（困毙），你就赢了。困毙也算赢，不是出错哦。</p>
+  <h3>🖐️ 怎么走</h3>
+  <p>① 点自己的棋子，棋盘上会亮出<b>绿色小圆点</b>；<br>② 点小圆点，会先出现一个<b>半透明的预览子</b>；<br>③ <b>再点一次</b>才真的落子（手机默认开着确认，桌面可以关掉）。</p>
+  <h3>🍵 吃子是什么意思</h3>
+  <p>走到对方棋子的位置上，那个子就下场了 —— 在这里我们说它<b>请回家休息</b>。棋子只是回家，没有谁受伤。</p>
   <h3>♟️ 每个棋子怎么走</h3>
-  <p>🤴 <b>帅 / 将</b>：只能待在九宫格里，每次直着走一格。两个将帅不能在同一条线上光着脸对望哦（飞将）！</p>
-  <p>🛡️ <b>仕 / 士</b>：在九宫里沿斜线走一格，是将帅的小保镖。</p>
-  <p>🐘 <b>相 / 象</b>：走「田」字（斜着跨两格），不能过河；田字中心有棋子就被「塞象眼」，走不动。</p>
-  <p>🐴 <b>马</b>：走「日」字。马脚边紧挨着一个棋子时会被「蹩马腿」，那个方向就跳不过去。</p>
-  <p>🚗 <b>车</b>：横冲直撞！直线随便走多远，但不能跳过棋子。</p>
-  <p>💥 <b>炮</b>：平时走法和车一样；<b>吃子必须隔一个「炮架」</b>，像跳山打靶——隔山打！</p>
-  <p>🐣 <b>兵 / 卒</b>：一次一步只能向前；<b>过了河</b>就能左右横走，但永远不能后退。</p>
-  <h3>⚠️ 特别规则</h3>
-  <p>👉 <b>将军</b>：你的棋子下一步能吃到对方将帅，就大喊「将军！」，对方必须马上想办法（逃跑、垫子或吃掉你）。<br>👉 <b>不能送将</b>：会让自己被将军的棋，棋盘不让你走，放心大胆试！</p>
+  <p>🤴 <b>帅 / 将</b>：九宫格内直走一格。两个将帅不能在同一条线上照面（飞将）。</p>
+  <p>🛡️ <b>仕 / 士</b>：九宫内斜走一格。</p>
+  <p>🐘 <b>相 / 象</b>：走「田」字，不能过河；田字中心有子叫「塞象眼」，走不了。</p>
+  <p>🐴 <b>马</b>：走「日」字；马脚边紧挨着子叫「蹩马腿」，那个方向跳不过去。</p>
+  <p>🚗 <b>车</b>：直线走多远都行，但不能越子。</p>
+  <p>💥 <b>炮</b>：走法同车；<b>吃子必须隔一个「炮架」</b>。</p>
+  <p>🌾 <b>兵 / 卒</b>：一次一步向前；<b>过河后</b>可以左右横走，永远不能后退。</p>
+  <h3>⚠️ 两条容易忘的规则</h3>
+  <p>👉 <b>将军要应</b>：垫一个子、吃掉将军的子，或者把将帅挪开，三选一。<br>
+  👉 <b>不许一直将军</b>：同一招将军把同一个局面走出三次，判走的人输 —— 换一条进攻路线才是本事。同一个局面来回走三次算和棋。</p>
+  <h3>📖 记谱怎么读</h3>
+  <p>棋盘下面那一条是<b>中文纵线记谱</b>：红方从自己右手边数「一~九」，黑方数「1~9」。「炮二平五」＝二线上的炮平移到五线；「马8进7」＝黑方 8 线的马向前跳到 7 线。</p>
 `;
 
-export function mount(api: GameApi): { destroy: () => void } {
-  let destroyed = false;
-  let raf = 0;
-  let aiTimer = 0;
-  let endTimer = 0;
+/* ------------------------------------------------------------------ */
+/* 一张棋桌：自由对战 / 残局 / 连胜共用                                 */
+/* ------------------------------------------------------------------ */
 
-  // 设置
-  let modeKind: ModeKind = "pvp";
-  let duoduoSide: Side = "red"; // 双人：朵朵执哪边
-  let humanSide: Side = "red"; // 打电脑：玩家执哪边
+export type EndReason =
+  | "checkmate"
+  | "stalemate"
+  | "resign"
+  | "draw"
+  | "repetition"
+  | "perpetual"
+  | "moves";
 
-  // 对局状态
-  let board: Board = initialBoard();
-  let current: Side = "red";
-  let selected: Pos | null = null;
-  let targets: Pos[] = [];
-  let lastMove: Move | null = null;
-  let gameOver = false;
-  let aiThinking = false;
-  let animTime = 0;
-  let checkFlashUntil = 0;
-  let undoSnap: { board: Board; current: Side; lastMove: Move | null } | null = null;
-  let captured: { red: string[]; black: string[] } = { red: [], black: [] };
-  let dragging: { from: Pos; x: number; y: number } | null = null;
+export interface TableResult {
+  /** 谁赢了；和棋是 null */
+  winner: Side | null;
+  reason: EndReason;
+}
 
+interface TableOpts {
+  api: GameApi;
+  board: Board;
+  /** 人执哪一方；"both" 是双人同屏 */
+  human: Side | "both";
+  ai: Difficulty | null;
+  /** 残局：红方最多还能走几步 */
+  movesLeft?: number;
+  puzzle?: Endgame;
+  headline: string;
+  opening: string;
+  extras?: Array<{ cls: string; label: string; onClick: () => void }>;
+  onEnd: (r: TableResult) => void;
+  onHint?: () => void;
+}
+
+interface Table {
+  destroy: () => void;
+  /** 单测用：直接点某个交叉点 */
+  tap: (x: number, y: number) => void;
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return !!(globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    )?.matches;
+  } catch {
+    return false;
+  }
+}
+
+function pointerEnv(): { coarsePointer?: boolean; maxTouchPoints?: number } {
+  const g = globalThis as {
+    matchMedia?: (q: string) => { matches: boolean };
+    navigator?: { maxTouchPoints?: number };
+  };
+  let coarse: boolean | undefined;
+  try {
+    coarse = g.matchMedia?.("(pointer: coarse)")?.matches;
+  } catch {
+    coarse = undefined;
+  }
+  return { coarsePointer: coarse, maxTouchPoints: g.navigator?.maxTouchPoints };
+}
+
+/** 子力差（求和判断用） */
+function materialDiff(board: Board): number {
+  let s = 0;
+  for (const p of board) {
+    if (!p) continue;
+    s += p.side === "red" ? PIECE_VALUE[p.type] : -PIECE_VALUE[p.type];
+  }
+  return s;
+}
+
+/** 盘上还剩多少子（求和门槛按这个放宽：残棋不必凑满 40 手） */
+function pieceCount(board: Board): number {
+  let n = 0;
+  for (const p of board) if (p) n++;
+  return n;
+}
+
+function mountTable(host: HTMLElement, o: TableOpts): Table {
   const wrap = document.createElement("div");
   wrap.className = "xq-wrap";
-  wrap.innerHTML = `
-    <style>
-      .xq-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF3E2, #FFE9F1); border-radius: 20px; padding: 12px; max-width: 440px; margin: 0 auto; user-select: none; }
-      .xq-panel { display: flex; flex-direction: column; gap: 14px; padding: 10px 6px; }
-      .xq-label { font-weight: 800; color: #A8743C; font-size: 15px; margin-bottom: 6px; }
-      .xq-seg { display: flex; gap: 8px; flex-wrap: wrap; }
-      .xq-seg button { flex: 1; min-width: 100px; border: 3px solid #EED9B8; background: #FFFDF8; border-radius: 16px; padding: 12px 8px; font-size: 15px; font-weight: 700; color: #8A6B45; cursor: pointer; font-family: inherit; }
-      .xq-seg button.on { border-color: #F2A0C0; background: #FFE4EF; color: #C2497E; }
-      .xq-start { border: none; border-radius: 18px; padding: 15px; font-size: 20px; font-weight: 800; background: #FFB3CD; color: #86285A; cursor: pointer; box-shadow: 0 5px 0 #E890B2; width: 100%; font-family: inherit; }
-      .xq-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #E890B2; }
-      .xq-rulesbtn { border: none; border-radius: 16px; padding: 12px; font-size: 16px; font-weight: 800; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 4px 0 #9CC5EE; width: 100%; font-family: inherit; }
-      .xq-rulesbtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #9CC5EE; }
-      .xq-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
-      .xq-player { display: flex; align-items: center; gap: 6px; background: #fff; border-radius: 16px; padding: 5px 10px; font-weight: 800; font-size: 14px; box-shadow: 0 2px 6px rgba(180,130,80,.2); border: 3px solid transparent; }
-      .xq-player.red { color: #C0392B; }
-      .xq-player.black { color: #3A3A55; }
-      .xq-player.turn { border-color: #FFC46B; background: #FFF6E0; }
-      .xq-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; box-shadow: 0 4px 14px rgba(190,140,90,.3); }
-      .xq-btns { display: flex; gap: 8px; margin-top: 10px; }
-      .xq-btns button { flex: 1; border: none; border-radius: 14px; padding: 11px 4px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); font-family: inherit; }
-      .xq-btns button:disabled { opacity: .45; cursor: default; }
-      .xq-undo { background: #CDE6FF; color: #2A6099; }
-      .xq-restart { background: #FFD9C4; color: #A0522D; }
-      .xq-help { background: #D9F2C4; color: #4A7A2A; }
-      .xq-back { background: #FFE0C2; color: #9A5A20; }
-      .xq-msg { text-align: center; min-height: 22px; color: #B06AB3; font-weight: 700; margin-top: 8px; font-size: 14px; }
-      .xq-cap { display: flex; gap: 3px; flex-wrap: wrap; min-height: 18px; font-size: 13px; margin: 2px 4px; opacity: .85; }
-      .xq-hidden { display: none; }
-      .xq-rules { position: absolute; inset: 0; background: #FFF9F0; border-radius: 20px; padding: 14px; overflow-y: auto; z-index: 5; }
-      .xq-rules h3 { color: #C2497E; margin: 12px 0 4px; font-size: 17px; }
-      .xq-rules p { color: #7A5A3A; font-size: 14.5px; line-height: 1.7; margin: 6px 0; }
-      .xq-rules-close { position: sticky; top: 0; float: right; border: none; border-radius: 14px; background: #FFB3CD; color: #86285A; font-size: 15px; font-weight: 800; padding: 9px 16px; cursor: pointer; box-shadow: 0 3px 0 #E890B2; font-family: inherit; }
-      .xq-wrap { position: relative; }
-    </style>
-    <div class="xq-panel xq-setup">
-      <div>
-        <div class="xq-label">🎮 和谁下棋</div>
-        <div class="xq-seg xq-mode">
-          <button type="button" data-v="pvp" class="on">👫 朵朵 VS 星星</button>
-          <button type="button" data-v="ai">🐘 挑战棋灵象</button>
-        </div>
-      </div>
-      <div class="xq-opt-pvp">
-        <div class="xq-label">🔴 谁拿红棋（红棋先走）</div>
-        <div class="xq-seg xq-pvpside">
-          <button type="button" data-v="red" class="on">🌸 朵朵拿红棋</button>
-          <button type="button" data-v="black">⭐ 星星拿红棋</button>
-        </div>
-      </div>
-      <div class="xq-opt-ai xq-hidden">
-        <div class="xq-label">🔴 你拿哪边（红棋先走）</div>
-        <div class="xq-seg xq-aiside">
-          <button type="button" data-v="red" class="on">🔴 我拿红棋先走</button>
-          <button type="button" data-v="black">⚫ 我拿黑棋后走</button>
-        </div>
-      </div>
-      <button class="xq-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
-      <button class="xq-start" type="button">开始下棋 ▶</button>
-    </div>
-    <div class="xq-game xq-hidden">
-      <div class="xq-top">
-        <span class="xq-player red xq-p-red"></span>
-        <span class="xq-player black xq-p-black"></span>
-      </div>
-      <div class="xq-cap xq-cap-top"></div>
-      <canvas class="xq-canvas" width="${W}" height="${H}"></canvas>
-      <div class="xq-cap xq-cap-bottom"></div>
-      <div class="xq-btns">
-        <button class="xq-undo" type="button">↩️ 悔棋</button>
-        <button class="xq-restart" type="button">🔄 重开</button>
-        <button class="xq-help" type="button">📖 规则</button>
-        <button class="xq-back" type="button">🔧 换玩法</button>
-      </div>
-      <div class="xq-msg">红棋先走，点自己的棋子试试！</div>
-    </div>
-    <div class="xq-rules xq-hidden">
-      <button class="xq-rules-close" type="button">✖ 关闭</button>
-      <h3 style="margin-top:2px">📖 朵朵星星象棋 · 规则</h3>
-      ${RULES_HTML}
-    </div>
-  `;
-  api.root.appendChild(wrap);
+  const top = document.createElement("div");
+  top.className = "xq-top";
+  const redEl = document.createElement("span");
+  redEl.className = "xq-player xq-red";
+  const blackEl = document.createElement("span");
+  blackEl.className = "xq-player xq-black";
+  const tagEl = document.createElement("span");
+  tagEl.className = "xq-player";
+  tagEl.textContent = o.headline;
+  top.append(redEl, blackEl, tagEl);
+  wrap.appendChild(top);
+  const boardHost = document.createElement("div");
+  wrap.appendChild(boardHost);
+  const recordEl = document.createElement("div");
+  recordEl.className = "xq-record";
+  wrap.appendChild(recordEl);
+  const btns = document.createElement("div");
+  btns.className = "xq-btns";
+  wrap.appendChild(btns);
+  const askEl = document.createElement("div");
+  askEl.className = "xq-btns xq-hidden";
+  wrap.appendChild(askEl);
+  const msgEl = document.createElement("div");
+  msgEl.className = "xq-msg";
+  msgEl.textContent = o.opening;
+  wrap.appendChild(msgEl);
+  host.appendChild(wrap);
 
-  const setupEl = wrap.querySelector(".xq-setup") as HTMLElement;
-  const gameEl = wrap.querySelector(".xq-game") as HTMLElement;
-  const rulesEl = wrap.querySelector(".xq-rules") as HTMLElement;
-  const optPvp = wrap.querySelector(".xq-opt-pvp") as HTMLElement;
-  const optAi = wrap.querySelector(".xq-opt-ai") as HTMLElement;
-  const canvas = wrap.querySelector(".xq-canvas") as HTMLCanvasElement;
-  const ctx = canvas.getContext("2d")!;
-  const pRedEl = wrap.querySelector(".xq-p-red") as HTMLElement;
-  const pBlackEl = wrap.querySelector(".xq-p-black") as HTMLElement;
-  const capTopEl = wrap.querySelector(".xq-cap-top") as HTMLElement;
-  const capBottomEl = wrap.querySelector(".xq-cap-bottom") as HTMLElement;
-  const msgEl = wrap.querySelector(".xq-msg") as HTMLElement;
-  const undoBtn = wrap.querySelector(".xq-undo") as HTMLButtonElement;
-  const restartBtn = wrap.querySelector(".xq-restart") as HTMLButtonElement;
-  const helpBtn = wrap.querySelector(".xq-help") as HTMLButtonElement;
-  const backBtn = wrap.querySelector(".xq-back") as HTMLButtonElement;
+  const twoPlayer = o.human === "both";
+  let board = o.board;
+  let current: Side = "red";
+  let pick: PickState = emptyPick();
+  let targets: Pos[] = [];
+  let history: Array<{ board: Board; current: Side; entries: RecordEntry[] }> = [];
+  let entries: RecordEntry[] = [];
+  const startKey = positionKey(board, "red");
+  let over = false;
+  let thinking = false;
+  let aiTimer = 0;
+  let dead = false;
+  let confirmOn = confirmDefault(pointerEnv());
+  let movesLeft = o.movesLeft ?? Number.POSITIVE_INFINITY;
+  let ask: AskState | null = null;
+  let hintLeft = o.puzzle ? 1 : 2;
 
-  function segInit(selector: string, onPick: (v: string) => void): void {
-    const seg = wrap.querySelector(selector) as HTMLElement;
-    seg.addEventListener("click", (e) => {
-      const btn = (e.target as HTMLElement).closest("button");
-      if (!btn) return;
-      for (const b of Array.from(seg.querySelectorAll("button"))) b.classList.remove("on");
-      btn.classList.add("on");
-      api.play("tap");
-      onPick(btn.dataset.v!);
-    });
-  }
-  segInit(".xq-mode", (v) => {
-    modeKind = v as ModeKind;
-    optPvp.classList.toggle("xq-hidden", modeKind !== "pvp");
-    optAi.classList.toggle("xq-hidden", modeKind !== "ai");
+  const view: BoardView = createBoardView(boardHost, board, {
+    reduceMotion: prefersReducedMotion(),
+    onTap: (p) => onTap(p.x, p.y),
   });
-  segInit(".xq-pvpside", (v) => { duoduoSide = v as Side; });
-  segInit(".xq-aiside", (v) => { humanSide = v as Side; });
 
-  /** 某一边由谁来扮演。 */
   function mascotOf(side: Side): Mascot {
-    if (modeKind === "pvp") {
-      return side === duoduoSide ? "duoduo" : "xingxing";
-    }
-    return side === humanSide ? "duoduo" : "robot";
-  }
-
-  function isHumanSide(side: Side): boolean {
-    return modeKind === "pvp" || side === humanSide;
-  }
-
-  function humanTurn(): boolean {
-    return !gameOver && !aiThinking && isHumanSide(current);
+    if (twoPlayer) return side === "red" ? "duoduo" : "xingxing";
+    return side === o.human ? "duoduo" : "robot";
   }
 
   function sideLabel(side: Side): string {
     return side === "red" ? "红方" : "黑方";
   }
 
-  function updateHud(): void {
+  function humansTurn(): boolean {
+    if (over || thinking || ask) return false;
+    if (twoPlayer) return true;
+    return current === o.human;
+  }
+
+  const undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.className = "xq-undo";
+  undoBtn.textContent = "↩️ 悔棋";
+  const confirmBtn = document.createElement("button");
+  confirmBtn.type = "button";
+  confirmBtn.className = "xq-confirm";
+  const hintBtn = document.createElement("button");
+  hintBtn.type = "button";
+  hintBtn.className = "xq-hint";
+  const resignBtn = document.createElement("button");
+  resignBtn.type = "button";
+  resignBtn.className = "xq-resign";
+  resignBtn.textContent = "🏳️ 认输";
+  const drawBtn = document.createElement("button");
+  drawBtn.type = "button";
+  drawBtn.className = "xq-draw";
+  drawBtn.textContent = "🤝 求和";
+  btns.append(undoBtn, confirmBtn, hintBtn);
+  if (!o.puzzle) btns.append(resignBtn, drawBtn);
+  for (const ex of o.extras ?? []) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = ex.cls;
+    b.textContent = ex.label;
+    b.addEventListener("click", ex.onClick);
+    btns.appendChild(b);
+  }
+
+  function refresh(): void {
+    if (dead) return;
     const redM = mascotOf("red");
     const blackM = mascotOf("black");
-    pRedEl.innerHTML = `${avatarHTML(redM, 30)} ${MASCOT_NAME[redM]} · 红`;
-    pBlackEl.innerHTML = `${avatarHTML(blackM, 30)} ${MASCOT_NAME[blackM]} · 黑`;
-    pRedEl.classList.toggle("turn", !gameOver && current === "red");
-    pBlackEl.classList.toggle("turn", !gameOver && current === "black");
-    undoBtn.disabled = !undoSnap || gameOver || aiThinking;
-    // 被吃的子：上排显示黑方损失，下排显示红方损失
-    capTopEl.textContent = captured.black.length ? `⚫ 被吃：${captured.black.join(" ")}` : "";
-    capBottomEl.textContent = captured.red.length ? `🔴 被吃：${captured.red.join(" ")}` : "";
-  }
-
-  function resetGame(): void {
-    board = initialBoard();
-    current = "red";
-    selected = null;
-    targets = [];
-    lastMove = null;
-    gameOver = false;
-    aiThinking = false;
-    undoSnap = null;
-    captured = { red: [], black: [] };
-    dragging = null;
-    clearTimeout(aiTimer);
-    clearTimeout(endTimer);
-    const redM = mascotOf("red");
-    msgEl.textContent = `${MASCOT_NAME[redM]}拿红棋先走！点棋子看看它能去哪`;
-    updateHud();
-    maybeAiTurn();
-  }
-
-  function startGame(): void {
-    setupEl.classList.add("xq-hidden");
-    gameEl.classList.remove("xq-hidden");
-    resetGame();
-  }
-
-  function backToSetup(): void {
-    clearTimeout(aiTimer);
-    clearTimeout(endTimer);
-    gameEl.classList.add("xq-hidden");
-    setupEl.classList.remove("xq-hidden");
-    api.play("tap");
-  }
-
-  function finishGame(loser: Side, how: "checkmate" | "stalemate"): void {
-    gameOver = true;
-    aiThinking = false;
-    selected = null;
-    targets = [];
-    updateHud();
-    const winner = other(loser);
-    const winM = mascotOf(winner);
-    const howText = how === "checkmate" ? "将死" : "困毙";
-    msgEl.textContent = `🎉 ${MASCOT_NAME[winM]}（${sideLabel(winner)}）${howText}了对手！`;
-    clearTimeout(endTimer);
-    endTimer = window.setTimeout(() => {
-      if (destroyed) return;
-      if (modeKind === "pvp") {
-        api.onWin(1, `🎉 ${MASCOT_NAME[winM]}赢啦！${sideLabel(loser)}被${howText}，再来一盘！`);
-      } else if (isHumanSide(winner)) {
-        api.onWin(3, `太厉害了！你${howText}了棋灵象，是真正的小棋王！`);
-      } else {
-        api.onLose(`棋灵象这盘赢了（${howText}）。记住：将帅要藏好，再来挑战！`);
-      }
-    }, 1400);
-    api.play(modeKind === "ai" && !isHumanSide(winner) ? "oops" : "win");
-  }
-
-  /** 走完一步后的公共处理。 */
-  function afterMove(move: Move): void {
-    const movedDesc = describeMove(board, move);
-    const capturedPiece = board[idx(move.to.x, move.to.y)];
-    if (capturedPiece) {
-      const name = PIECE_NAME[capturedPiece.side][capturedPiece.type];
-      captured[capturedPiece.side].push(name);
-      api.play("coin");
-    } else {
-      api.play("pop");
+    redEl.innerHTML = `${avatarHTML(redM)} ${MASCOT_NAME[redM]} · 红`;
+    blackEl.innerHTML = `${avatarHTML(blackM)} ${MASCOT_NAME[blackM]} · 黑`;
+    redEl.classList.toggle("xq-turn", !over && current === "red");
+    blackEl.classList.toggle("xq-turn", !over && current === "black");
+    if (o.puzzle) {
+      tagEl.textContent = over
+        ? o.headline
+        : `${o.headline} · 还能走 ${Number.isFinite(movesLeft) ? movesLeft : "∞"} 步`;
     }
-    board = applyMove(board, move);
-    lastMove = move;
-    selected = null;
+    undoBtn.disabled = history.length === 0 || over || thinking || !!ask;
+    confirmBtn.textContent = confirmOn ? "✋ 确认落子：开" : "✋ 确认落子：关";
+    hintBtn.textContent = `✨ 提示×${hintLeft}`;
+    hintBtn.disabled = hintLeft <= 0 || !humansTurn();
+    resignBtn.disabled = over || thinking;
+    drawBtn.disabled = over || thinking || !!ask;
+    view.update({
+      board,
+      selected: pick.from,
+      pending: pick.pending,
+      targets,
+      interactive: humansTurn(),
+    });
+  }
+
+  function renderRecord(): void {
+    recordEl.innerHTML = "";
+    const from = Math.max(0, entries.length - 24);
+    for (let i = from; i < entries.length; i++) {
+      const e = entries[i];
+      const chip = document.createElement("span");
+      chip.className = `xq-step ${e.side === "red" ? "xq-step-red" : "xq-step-black"}`;
+      chip.textContent = recordLine(i + 1, e.side, e.text);
+      recordEl.appendChild(chip);
+    }
+    recordEl.scrollLeft = recordEl.scrollWidth;
+  }
+
+  function finish(winner: Side | null, reason: EndReason, text: string): void {
+    if (over) return;
+    over = true;
+    thinking = false;
+    pick = emptyPick();
     targets = [];
+    clearTimeout(aiTimer);
+    msgEl.textContent = text;
+    view.update({
+      interactive: false,
+      pending: null,
+      selected: null,
+      targets: [],
+      dim: reason === "checkmate" || reason === "stalemate",
+    });
+    refresh();
+    o.onEnd({ winner, reason });
+  }
+
+  /** 走一步：记谱、判将军 / 将死 / 长将 / 重复局面，然后交给对方 */
+  function doMove(move: Move): void {
+    // 先存一份，悔棋才有得退
+    history.push({ board: board.slice(), current, entries: entries.slice() });
+    if (history.length > 40) history.shift();
+    const text = moveToChinese(board, move);
+    const captured = board[idx(move.to.x, move.to.y)];
+    entries = pushRecord(entries, board, move, current, text);
+    const next = board.slice();
+    next[idx(move.to.x, move.to.y)] = next[idx(move.from.x, move.from.y)];
+    next[idx(move.from.x, move.from.y)] = null;
+    board = next;
+    pick = emptyPick();
+    targets = [];
+    o.api.play(captured ? "coin" : "pop");
+    const mover = current;
     current = other(current);
+    renderRecord();
+
     const st = statusOf(board, current);
+    view.update({
+      board,
+      lastMove: move,
+      checkSide: st === "check" || st === "checkmate" ? current : null,
+    });
+
+    if (o.puzzle && mover === "red") movesLeft--;
+
     if (st === "checkmate" || st === "stalemate") {
-      finishGame(current, st);
+      const how = st === "checkmate" ? "将死" : "困毙";
+      const winner = mover;
+      const tip =
+        st === "stalemate"
+          ? `${sideLabel(current)}一步棋都走不了 —— 这叫困毙，同样算${sideLabel(winner)}赢，不是出错哦。`
+          : `${sideLabel(winner)}${how}了对手！`;
+      o.api.play("win");
+      finish(winner, st, tip);
       return;
     }
-    if (st === "check") {
-      checkFlashUntil = animTime + 2.2;
-      api.play("jump");
-      msgEl.textContent = `⚔️ 将军！${MASCOT_NAME[mascotOf(current)]}（${sideLabel(current)}）快保护将帅！`;
-    } else {
-      msgEl.textContent = movedDesc;
+
+    const verdict = judgeRecord(startKey, entries);
+    if (verdict.kind === "perpetual") {
+      o.api.play("oops");
+      finish(other(verdict.loser as Side), "perpetual", verdict.text);
+      return;
     }
-    updateHud();
-    maybeAiTurn();
+    if (verdict.kind === "repetition") {
+      o.api.play("meow");
+      finish(null, "repetition", verdict.text);
+      return;
+    }
+
+    if (o.puzzle && mover === "red" && movesLeft <= 0) {
+      o.api.play("oops");
+      finish("black", "moves", failText(o.puzzle));
+      return;
+    }
+
+    // 差一次就要收局：提前说一句，别等判负 / 判和了才知道自己在绕圈
+    const warning = repeatWarning(startKey, entries);
+
+    if (st === "check") {
+      o.api.play("jump");
+      view.flashCheck();
+      const who = twoPlayer ? MASCOT_NAME[mascotOf(current)] : sideLabel(current);
+      msgEl.textContent = warning.kind === "none"
+        ? `⚔️ 将军！${who}要马上应将：垫一个子、吃掉它，或者把将帅挪开。`
+        : `⚔️ 将军！${warning.text}`;
+    } else if (warning.kind !== "none") {
+      msgEl.textContent = `🔁 ${warning.text}`;
+    } else {
+      const capturedText = captured
+        ? `请${captured.side === "red" ? "红" : "黑"}${PIECE_NAME[captured.side][captured.type]}回家休息`
+        : "";
+      msgEl.textContent = `${sideLabel(mover)} ${text}${capturedText ? ` —— ${capturedText}` : ""}`;
+    }
+    refresh();
+    scheduleAi();
   }
 
-  function maybeAiTurn(): void {
-    if (gameOver || modeKind !== "ai" || isHumanSide(current)) return;
-    aiThinking = true;
-    updateHud();
-    msgEl.textContent = "🐘 棋灵象晃着鼻子思考中…";
+  function scheduleAi(): void {
+    if (over || dead) return;
+    if (o.puzzle) {
+      if (current !== "black") return;
+    } else if (!o.ai || twoPlayer || current === o.human) {
+      return;
+    }
+    const tier: Difficulty = o.puzzle ? "hard" : (o.ai as Difficulty);
+    thinking = true;
+    refresh();
+    msgEl.textContent = o.puzzle
+      ? "⚫ 黑方在找活路…"
+      : `${DIFFICULTY_NAME[tier]} 正在想…`;
     clearTimeout(aiTimer);
+    // 再快的档也要「看得见在想」：THINK_DELAY_MS 兜住最短思考时间
     aiTimer = window.setTimeout(() => {
-      if (destroyed || gameOver) return;
-      const mv = aiMove(board, current);
-      aiThinking = false;
+      if (dead || over) return;
+      const mv = chooseMove(board, current, tier);
+      thinking = false;
       if (!mv) {
-        finishGame(current, inCheck(board, current) ? "checkmate" : "stalemate");
+        const st = statusOf(board, current);
+        finish(other(current), st === "stalemate" ? "stalemate" : "checkmate", "这一局结束啦！");
         return;
       }
-      afterMove(mv);
-    }, 650);
+      doMove(mv);
+    }, THINK_DELAY_MS[tier]);
   }
 
-  function trySelect(x: number, y: number): boolean {
-    const p = board[idx(x, y)];
-    if (!p || p.side !== current || !humanTurn()) return false;
-    selected = { x, y };
-    targets = legalMoves(board, x, y);
-    api.play("tap");
-    if (targets.length === 0) {
-      msgEl.textContent = `这个${PIECE_NAME[p.side][p.type]}现在没有能走的地方，换一个试试`;
+  function onTap(x: number, y: number): void {
+    if (dead || over) return;
+    const at = { x, y };
+    const cell = board[idx(x, y)];
+    const res = tapPoint(pick, at, {
+      confirm: confirmOn,
+      myTurn: humansTurn(),
+      mine: !!cell && cell.side === current,
+      legalTarget: targets.some((t) => t.x === x && t.y === y),
+    });
+    pick = res.state;
+    switch (res.kind) {
+      case "select":
+      case "reselect": {
+        targets = legalTargets(board, x, y);
+        o.api.play("tap");
+        const p = board[idx(x, y)]!;
+        msgEl.textContent = targets.length
+          ? `选中了${PIECE_NAME[p.side][p.type]}，绿色小圆点都是它能去的地方。`
+          : `这个${PIECE_NAME[p.side][p.type]}暂时没地方走，换一个试试。`;
+        break;
+      }
+      case "clear":
+        targets = [];
+        break;
+      case "preview":
+      case "movePreview":
+        o.api.play("tap");
+        msgEl.textContent = "再点一次这个位置就落子，点别处可以换地方。";
+        break;
+      case "commit":
+        if (res.move) doMove({ from: res.move.from, to: res.move.to });
+        return;
+      case "illegal": {
+        const why = pick.from ? illegalReason(board, pick.from, at, current) : null;
+        o.api.play("oops");
+        msgEl.textContent = why ? why.text : "那里去不了，看看绿色小圆点。";
+        break;
+      }
+      default:
+        break;
+    }
+    refresh();
+  }
+
+  /* ---------------- 悔棋 / 认输 / 求和 ---------------- */
+
+  function applyUndo(): void {
+    const steps = undoSteps(twoPlayer, history.length);
+    for (let i = 0; i < steps; i++) {
+      const snap = history.pop();
+      if (!snap) break;
+      board = snap.board;
+      current = snap.current;
+      entries = snap.entries;
+    }
+    if (o.puzzle) movesLeft = Math.min(o.puzzle.mateIn, movesLeft + 1);
+    pick = emptyPick();
+    targets = [];
+    o.api.play("pop");
+    msgEl.textContent = "悔棋成功，这一步重新想一想。";
+    renderRecord();
+    view.update({ board, checkSide: null, lastMove: null });
+    refresh();
+  }
+
+  function showAsk(a: AskState): void {
+    ask = a;
+    askEl.innerHTML = "";
+    askEl.classList.remove("xq-hidden");
+    const label = document.createElement("span");
+    label.className = "xq-step";
+    const asker = MASCOT_NAME[mascotOf(a.from)];
+    label.textContent = a.kind === "undo" ? `${asker}想悔一步棋，对方同意吗？` : `${asker}想和棋，对方同意吗？`;
+    const yes = document.createElement("button");
+    yes.type = "button";
+    yes.className = "xq-undo";
+    yes.textContent = "👍 同意";
+    yes.addEventListener("click", () => {
+      const who = a.from === "red" ? "black" : "red";
+      const agreed = agreeAsk(a, who);
+      closeAsk();
+      if (!agreed.agreed) return;
+      if (a.kind === "undo") applyUndo();
+      else finish(null, "draw", "两边都同意，这一局握手言和。");
+    });
+    const no = document.createElement("button");
+    no.type = "button";
+    no.className = "xq-restart";
+    no.textContent = "🙅 不同意";
+    no.addEventListener("click", () => {
+      closeAsk();
+      msgEl.textContent = a.kind === "undo" ? "对方不同意悔棋，接着下吧。" : "对方想继续下，那就接着下。";
+    });
+    askEl.append(label, yes, no);
+    refresh();
+  }
+
+  function closeAsk(): void {
+    ask = null;
+    askEl.innerHTML = "";
+    askEl.classList.add("xq-hidden");
+    refresh();
+  }
+
+  undoBtn.addEventListener("click", () => {
+    if (history.length === 0 || over || thinking || ask) return;
+    o.api.play("tap");
+    if (twoPlayer) {
+      // 双人同屏：两边都点头才退回去
+      showAsk(newAsk("undo", current, true));
+      return;
+    }
+    applyUndo();
+  });
+
+  confirmBtn.addEventListener("click", () => {
+    confirmOn = !confirmOn;
+    pick = emptyPick();
+    o.api.play("tap");
+    msgEl.textContent = confirmOn
+      ? "确认落子开着：先点出预览子，再点一次才真的走。"
+      : "确认落子关掉了：点哪里就走哪里，小心手滑。";
+    refresh();
+  });
+
+  hintBtn.addEventListener("click", () => {
+    if (hintLeft <= 0 || !humansTurn()) return;
+    hintLeft--;
+    o.api.play("coin");
+    o.onHint?.();
+    if (o.puzzle) {
+      msgEl.textContent = hintText(o.puzzle);
     } else {
-      msgEl.textContent = "绿色圆点都是它能去的地方！";
+      const mv = hintMove(board, current);
+      msgEl.textContent = mv
+        ? `试试动一下${PIECE_NAME[current][board[idx(mv.from.x, mv.from.y)]!.type]}，它现在最有机会。`
+        : "现在没什么好主意，先把将帅护住。";
     }
-    return true;
-  }
+    refresh();
+  });
 
-  function tryMoveTo(x: number, y: number): boolean {
-    if (!selected || !humanTurn()) return false;
-    if (!targets.some((t) => t.x === x && t.y === y)) return false;
-    // 悔棋一档：记录走子前的局面
-    undoSnap = {
-      board: board.slice(),
-      current,
-      lastMove: lastMove ? { from: { ...lastMove.from }, to: { ...lastMove.to } } : null,
-    };
-    afterMove({ from: selected, to: { x, y } });
-    return true;
-  }
+  resignBtn.addEventListener("click", () => {
+    if (over || thinking) return;
+    o.api.play("tap");
+    const loser = twoPlayer ? current : (o.human as Side);
+    finish(other(loser), "resign", `${sideLabel(loser)}认输了。下一盘换个开局，说不定就赢回来。`);
+  });
 
-  function undo(): void {
-    if (!undoSnap || gameOver || aiThinking) return;
-    board = undoSnap.board;
-    current = undoSnap.current;
-    lastMove = undoSnap.lastMove;
-    undoSnap = null;
-    selected = null;
-    targets = [];
-    // 重算被吃列表
-    captured = { red: [], black: [] };
-    const now = new Map<string, number>();
-    for (const p of board) {
-      if (p) now.set(p.side + p.type, (now.get(p.side + p.type) ?? 0) + 1);
-    }
-    const full = initialBoard();
-    const start = new Map<string, number>();
-    for (const p of full) {
-      if (p) start.set(p.side + p.type, (start.get(p.side + p.type) ?? 0) + 1);
-    }
-    for (const [key, cnt] of start) {
-      const side = key.slice(0, key.length - 1) as Side;
-      const type = key.slice(-1) as keyof (typeof PIECE_NAME)["red"];
-      const missing = cnt - (now.get(key) ?? 0);
-      for (let i = 0; i < missing; i++) captured[side].push(PIECE_NAME[side][type]);
-    }
-    api.play("pop");
-    msgEl.textContent = "悔棋成功！这一步重新想一想～";
-    updateHud();
-  }
-
-  /* ---------------- 绘制 ---------------- */
-
-  function drawBoardBg(): void {
-    const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#F7E2BC");
-    g.addColorStop(1, "#F0D3A2");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.strokeStyle = "#B9854E";
-    ctx.lineWidth = 1.6;
-    // 横线 10 条
-    for (let y = 0; y < 10; y++) {
-      ctx.beginPath();
-      ctx.moveTo(px(0), py(y));
-      ctx.lineTo(px(8), py(y));
-      ctx.stroke();
-    }
-    // 竖线：两侧贯通，中间在楚河汉界断开
-    for (let x = 0; x < 9; x++) {
-      if (x === 0 || x === 8) {
-        ctx.beginPath();
-        ctx.moveTo(px(x), py(0));
-        ctx.lineTo(px(x), py(9));
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(px(x), py(0));
-        ctx.lineTo(px(x), py(4));
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(px(x), py(5));
-        ctx.lineTo(px(x), py(9));
-        ctx.stroke();
-      }
-    }
-    // 外框加粗
-    ctx.lineWidth = 3;
-    ctx.strokeRect(px(0) - 4, py(0) - 4, C * 8 + 8, C * 9 + 8);
-    ctx.lineWidth = 1.6;
-    // 九宫斜线
-    for (const top of [0, 7]) {
-      ctx.beginPath();
-      ctx.moveTo(px(3), py(top));
-      ctx.lineTo(px(5), py(top + 2));
-      ctx.moveTo(px(5), py(top));
-      ctx.lineTo(px(3), py(top + 2));
-      ctx.stroke();
-    }
-    // 楚河汉界
-    ctx.fillStyle = "#A8743C";
-    ctx.font = `700 ${Math.round(C * 0.5)}px "Kaiti SC", "STKaiti", serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const midY = (py(4) + py(5)) / 2;
-    ctx.fillText("楚 河", px(2), midY);
-    ctx.fillText("汉 界", px(6), midY);
-    // 炮位与兵位小标记
-    const marks: Array<[number, number]> = [
-      [1, 2], [7, 2], [1, 7], [7, 7],
-      [0, 3], [2, 3], [4, 3], [6, 3], [8, 3],
-      [0, 6], [2, 6], [4, 6], [6, 6], [8, 6],
-    ];
-    ctx.strokeStyle = "#C79A66";
-    ctx.lineWidth = 1.4;
-    for (const [mx, my] of marks) {
-      const cx = px(mx);
-      const cy = py(my);
-      const d = 5;
-      const gpx = 3;
-      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-        if ((mx === 0 && sx < 0) || (mx === 8 && sx > 0)) continue;
-        ctx.beginPath();
-        ctx.moveTo(cx + sx * gpx, cy + sy * (gpx + d));
-        ctx.lineTo(cx + sx * gpx, cy + sy * gpx);
-        ctx.lineTo(cx + sx * (gpx + d), cy + sy * gpx);
-        ctx.stroke();
-      }
-    }
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-  }
-
-  function drawPiece(cx: number, cy: number, side: Side, name: string, alpha = 1, lift = 0): void {
-    ctx.globalAlpha = alpha;
-    // 影子
-    ctx.beginPath();
-    ctx.arc(cx, cy + 3, R, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(120, 80, 40, .3)";
-    ctx.fill();
-    const yy = cy - lift;
-    // 木质圆饼
-    const g = ctx.createRadialGradient(cx - R * 0.35, yy - R * 0.4, R * 0.15, cx, yy, R);
-    g.addColorStop(0, "#FFF9EC");
-    g.addColorStop(1, side === "red" ? "#FFE3CE" : "#EDE7DA");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(cx, yy, R, 0, Math.PI * 2);
-    ctx.fill();
-    // 双圈
-    ctx.strokeStyle = side === "red" ? "#C0392B" : "#3A3A55";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(cx, yy, R - 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(cx, yy, R - 5, 0, Math.PI * 2);
-    ctx.stroke();
-    // 字
-    ctx.fillStyle = side === "red" ? "#C0392B" : "#3A3A55";
-    ctx.font = `800 ${Math.round(R * 1.05)}px "Kaiti SC", "STKaiti", "PingFang SC", serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(name, cx, yy + 1);
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.globalAlpha = 1;
-  }
-
-  function draw(): void {
-    drawBoardBg();
-    // 上一步标记
-    if (lastMove) {
-      for (const p of [lastMove.from, lastMove.to]) {
-        ctx.strokeStyle = "rgba(255, 150, 60, .9)";
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(px(p.x) - R - 2, py(p.y) - R - 2, (R + 2) * 2, (R + 2) * 2);
-      }
-    }
-    // 棋子
-    for (let y = 0; y < 10; y++) {
-      for (let x = 0; x < 9; x++) {
-        const p = board[idx(x, y)];
-        if (!p) continue;
-        if (dragging && dragging.from.x === x && dragging.from.y === y) continue;
-        const isSel = selected && selected.x === x && selected.y === y;
-        const lift = isSel ? 3 + Math.sin(animTime * 5) * 1.5 : 0;
-        drawPiece(px(x), py(y), p.side, PIECE_NAME[p.side][p.type], 1, lift);
-        if (isSel) {
-          ctx.strokeStyle = "#FF7EA8";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.arc(px(x), py(y) - lift, R + 3.5, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
-    }
-    // 合法落点
-    if (selected && !gameOver) {
-      for (const t of targets) {
-        const cx = px(t.x);
-        const cy = py(t.y);
-        const hasEnemy = !!board[idx(t.x, t.y)];
-        const pulse = 1 + Math.sin(animTime * 5) * 0.12;
-        if (hasEnemy) {
-          ctx.strokeStyle = "rgba(230, 90, 90, .95)";
-          ctx.lineWidth = 3.5;
-          ctx.beginPath();
-          ctx.arc(cx, cy, (R + 4) * pulse, 0, Math.PI * 2);
-          ctx.stroke();
-        } else {
-          ctx.fillStyle = "rgba(90, 190, 90, .85)";
-          ctx.beginPath();
-          ctx.arc(cx, cy, 8 * pulse, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = "rgba(255,255,255,.9)";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-      }
-    }
-    // 将军红光
-    if (!gameOver && animTime < checkFlashUntil) {
-      const king = ((): Pos | null => {
-        for (let y = 0; y < 10; y++) {
-          for (let x = 3; x <= 5; x++) {
-            const p = board[idx(x, y)];
-            if (p && p.type === "K" && p.side === current) return { x, y };
-          }
-        }
-        return null;
-      })();
-      if (king) {
-        const glow = 0.4 + Math.abs(Math.sin(animTime * 7)) * 0.5;
-        ctx.strokeStyle = `rgba(255, 60, 60, ${glow})`;
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.arc(px(king.x), py(king.y), R + 6, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-    // 拖动中的棋子跟随手指
-    if (dragging) {
-      const p = board[idx(dragging.from.x, dragging.from.y)];
-      if (p) drawPiece(dragging.x, dragging.y - 14, p.side, PIECE_NAME[p.side][p.type], 0.9, 0);
-    }
-  }
-
-  function tick(now: number): void {
-    if (destroyed) return;
-    animTime = now / 1000;
-    if (!gameEl.classList.contains("xq-hidden")) draw();
-    raf = requestAnimationFrame(tick);
-  }
-
-  /* ---------------- 输入 ---------------- */
-
-  function eventPoint(e: PointerEvent): { cx: number; cy: number; x: number; y: number } | null {
-    const rect = canvas.getBoundingClientRect();
-    const cx = ((e.clientX - rect.left) / rect.width) * W;
-    const cy = ((e.clientY - rect.top) / rect.height) * H;
-    const x = Math.round((cx - M) / C);
-    const y = Math.round((cy - M) / C);
-    if (x < 0 || x > 8 || y < 0 || y > 9) return null;
-    if (Math.hypot(cx - px(x), cy - py(y)) > C * 0.52) return null;
-    return { cx, cy, x, y };
-  }
-
-  const onPointerDown = (e: PointerEvent): void => {
-    e.preventDefault();
-    if (gameOver || !humanTurn()) return;
-    const pt = eventPoint(e);
-    if (!pt) return;
-    // 已选中且点到合法落点 → 直接走
-    if (selected && targets.some((t) => t.x === pt.x && t.y === pt.y)) {
-      tryMoveTo(pt.x, pt.y);
+  drawBtn.addEventListener("click", () => {
+    if (over || thinking || ask) return;
+    o.api.play("tap");
+    if (twoPlayer) {
+      showAsk(newAsk("draw", current, true));
       return;
     }
-    // 点到自己的子 → 选中并允许拖动
-    if (trySelect(pt.x, pt.y)) {
-      dragging = { from: { x: pt.x, y: pt.y }, x: pt.cx, y: pt.cy };
-      return;
+    // 人机：子力差不多、又下够了这个盘面该走的手数，电脑才点头。
+    // 门槛与说辞都走 session.ts 的纯函数,不再在这里抄第二份规则
+    const diff = materialDiff(board);
+    const pieces = pieceCount(board);
+    if (aiAgreesDraw(diff, entries.length, pieces)) {
+      finish(null, "draw", "对手同意和棋，这一局平分秋色。");
+    } else {
+      msgEl.textContent = drawRefusalLine(diff, entries.length, pieces);
     }
-    // 点到空处 → 取消选择
-    selected = null;
-    targets = [];
-  };
-  const onPointerMove = (e: PointerEvent): void => {
-    if (!dragging) return;
-    const rect = canvas.getBoundingClientRect();
-    dragging.x = ((e.clientX - rect.left) / rect.width) * W;
-    dragging.y = ((e.clientY - rect.top) / rect.height) * H;
-  };
-  const onPointerUp = (e: PointerEvent): void => {
-    if (!dragging) return;
-    const from = dragging.from;
-    dragging = null;
-    const pt = eventPoint(e);
-    // 拖到别的点：若合法就落子；拖回原地当作点选保留
-    if (pt && (pt.x !== from.x || pt.y !== from.y)) {
-      if (!tryMoveTo(pt.x, pt.y)) {
-        api.play("oops");
-        msgEl.textContent = "那里去不了哦，看看绿色圆点！";
-      }
-    }
-  };
+  });
 
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", () => { dragging = null; });
-
-  (wrap.querySelector(".xq-start") as HTMLButtonElement).addEventListener("click", () => {
-    api.play("jump");
-    startGame();
-  });
-  (wrap.querySelector(".xq-rulesbtn") as HTMLButtonElement).addEventListener("click", () => {
-    api.play("tap");
-    rulesEl.classList.remove("xq-hidden");
-  });
-  (wrap.querySelector(".xq-rules-close") as HTMLButtonElement).addEventListener("click", () => {
-    api.play("tap");
-    rulesEl.classList.add("xq-hidden");
-  });
-  helpBtn.addEventListener("click", () => {
-    api.play("tap");
-    rulesEl.classList.remove("xq-hidden");
-  });
-  undoBtn.addEventListener("click", undo);
-  restartBtn.addEventListener("click", () => {
-    api.play("tap");
-    resetGame();
-  });
-  backBtn.addEventListener("click", backToSetup);
-
-  raf = requestAnimationFrame(tick);
+  renderRecord();
+  refresh();
+  // 残局与人机都可能是电脑先手
+  scheduleAi();
 
   return {
     destroy() {
-      destroyed = true;
-      cancelAnimationFrame(raf);
+      dead = true;
       clearTimeout(aiTimer);
-      clearTimeout(endTimer);
+      view.destroy();
       wrap.remove();
+    },
+    tap: (x, y) => onTap(x, y),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* 残局闯关 188 课                                                     */
+/* ------------------------------------------------------------------ */
+
+function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
+  const p: Endgame = puzzleAt(ctx.level);
+  let table: Table | null = null;
+  let hintUsed = false;
+  let retries = 0;
+  let dead = false;
+  let settleTimer = 0;
+
+  const api: GameApi = {
+    root: host,
+    play: (n) => ctx.sfx(n),
+    addStars: (n) => {
+      ctx.bonusStars(n);
+      return n;
+    },
+    getStars: () => 0,
+    onWin: () => undefined,
+    onLose: () => undefined,
+  };
+
+  function start(): void {
+    table?.destroy();
+    host.innerHTML = "";
+    table = mountTable(host, {
+      api,
+      board: puzzleBoard(p),
+      human: "red",
+      ai: null,
+      movesLeft: p.mateIn,
+      puzzle: p,
+      headline: headline(p),
+      opening: openingTip(p),
+      onHint: () => {
+        hintUsed = true;
+      },
+      extras: [
+        {
+          cls: "xq-restart",
+          label: "🔄 重摆",
+          onClick: () => {
+            if (dead) return;
+            retries++;
+            ctx.sfx("tap");
+            start();
+          },
+        },
+      ],
+      onEnd: (r) => {
+        if (dead) return;
+        const solved = r.winner === "red" && (r.reason === "checkmate" || r.reason === "stalemate");
+        settleTimer = window.setTimeout(() => {
+          if (dead) return;
+          if (solved) ctx.win(starsFor(hintUsed, retries), solvedText(p, hintUsed));
+          else ctx.lose(failText(p));
+        }, 900);
+      },
+    });
+  }
+
+  start();
+  return {
+    destroy() {
+      dead = true;
+      clearTimeout(settleTimer);
+      table?.destroy();
+      table = null;
     },
   };
 }
+
+/** 在已经挂好的 188 课地图上，替玩家点开第 N 课（锁着就停在能玩的最远那一课） */
+export function openCampaignLevel(host: HTMLElement, level: number): boolean {
+  const stars = loadStars(meta.id);
+  const skips = loadSkips(meta.id);
+  const want = Math.max(0, Math.min(TOTAL_LEVELS - 1, Math.round(level)));
+  const target = Math.min(want, furthestPlayable(stars, skips, TOTAL_LEVELS));
+  const ci = chapterOf(CHAPTERS, target);
+  const tabs = host.querySelectorAll?.(".l99-tab");
+  const tab = tabs?.[ci] as HTMLButtonElement | undefined;
+  tab?.click?.();
+  const nodes = host.querySelectorAll?.(".l99-node");
+  const node = nodes?.[target - chapterStart(CHAPTERS, ci)] as HTMLButtonElement | undefined;
+  if (!node || node.disabled) return false;
+  node.click();
+  return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* 自由对战                                                            */
+/* ------------------------------------------------------------------ */
+
+function segment(
+  host: HTMLElement,
+  label: string,
+  items: Array<{ v: string; text: string }>,
+  initial: string,
+  onPick: (v: string) => void,
+): HTMLElement {
+  const box = document.createElement("div");
+  const cap = document.createElement("div");
+  cap.className = "xq-label";
+  cap.textContent = label;
+  const seg = document.createElement("div");
+  seg.className = "xq-seg";
+  for (const it of items) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = it.v === initial ? "xq-on" : "";
+    b.textContent = it.text;
+    b.setAttribute("data-v", it.v);
+    b.addEventListener("click", () => {
+      for (const sib of Array.from(seg.children)) (sib as HTMLElement).className = "";
+      b.className = "xq-on";
+      onPick(it.v);
+    });
+    seg.appendChild(b);
+  }
+  box.append(cap, seg);
+  host.appendChild(box);
+  return seg;
+}
+
+function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy: () => void } {
+  const root = document.createElement("div");
+  root.className = "xq-wrap";
+  host.appendChild(root);
+  let table: Table | null = null;
+  let tier: Difficulty | "pvp" = "normal";
+  let humanSide: Side = "red";
+
+  function showSetup(): void {
+    table?.destroy();
+    table = null;
+    root.innerHTML = "";
+    const panel = document.createElement("div");
+    panel.className = "xq-panel";
+    root.appendChild(panel);
+
+    const blurb = document.createElement("div");
+    blurb.className = "xq-tierblurb";
+    blurb.textContent = DIFFICULTY_BLURB[tier === "pvp" ? "normal" : tier];
+    segment(
+      panel,
+      "🤝 和谁下（六档，从小象学步到星海棋神）",
+      [
+        ...DIFFICULTIES.map((d) => ({ v: d, text: DIFFICULTY_NAME[d] })),
+        { v: "pvp", text: "👫 朵朵 VS 星星" },
+      ],
+      tier,
+      (v) => {
+        tier = v as Difficulty | "pvp";
+        blurb.textContent =
+          v === "pvp"
+            ? "两个人轮流点棋盘，红棋先走；悔棋和求和都要两边都点头。"
+            : DIFFICULTY_BLURB[v as Difficulty];
+        api.play("tap");
+      },
+    );
+    panel.appendChild(blurb);
+
+    segment(
+      panel,
+      "🔴 你拿哪边（红棋先走）",
+      [
+        { v: "red", text: "🔴 我拿红棋先走" },
+        { v: "black", text: "⚫ 我拿黑棋后走" },
+      ],
+      humanSide,
+      (v) => {
+        humanSide = v as Side;
+        api.play("tap");
+      },
+    );
+
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "xq-start";
+    go.textContent = "开始下棋 ▶";
+    go.addEventListener("click", () => {
+      api.play("jump");
+      startGame();
+    });
+    const leave = document.createElement("button");
+    leave.type = "button";
+    leave.className = "xq-start";
+    leave.style.background = "#FFE0C2";
+    leave.style.color = "#8A4E19";
+    leave.style.boxShadow = "0 5px 0 #E0B98C";
+    leave.textContent = "🧩 回残局学堂";
+    leave.addEventListener("click", back);
+    panel.append(go, leave);
+  }
+
+  function startGame(): void {
+    root.innerHTML = "";
+    const ai = tier === "pvp" ? null : tier;
+    table = mountTable(root, {
+      api,
+      board: initialBoard(),
+      human: ai ? humanSide : "both",
+      ai,
+      headline: ai ? DIFFICULTY_NAME[ai] : "👫 朵朵 VS 星星",
+      opening: ai
+        ? `${DIFFICULTY_BLURB[ai]}。红棋先走，点自己的子看看它能去哪。`
+        : "🌸 朵朵执红先走，⭐ 星星执黑。悔棋和求和都要两边都同意。",
+      extras: [{ cls: "xq-back", label: "🔧 换玩法", onClick: () => showSetup() }],
+      onEnd: (r) => {
+        if (r.winner === null) {
+          api.onWin(1, r.reason === "draw" ? "握手言和，这一局谁也没输。" : "同一个局面来回三次，判和。");
+          return;
+        }
+        if (!ai) {
+          const who = r.winner === "red" ? "朵朵（红）" : "星星（黑）";
+          api.onWin(1, `${who}赢下了这一局，再来一盘！`);
+          return;
+        }
+        if (r.winner === humanSide) {
+          const stars: 1 | 2 | 3 = ai === "novice" || ai === "easy" ? 2 : 3;
+          api.onWin(stars, `你赢了${TIER_SHORT[ai]}！往上挑一档试试。`);
+        } else {
+          api.onLose(`${TIER_SHORT[ai]}这一局占了上风。记住：先护住将帅，再找它没保护的子。`);
+        }
+      },
+    });
+  }
+
+  showSetup();
+  return {
+    destroy() {
+      table?.destroy();
+      table = null;
+      root.remove();
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* 残局连胜（替代真·无尽，理由见 session.ENDLESS_REASON）               */
+/* ------------------------------------------------------------------ */
+
+function mountStreak(host: HTMLElement, api: GameApi, back: () => void): { destroy: () => void } {
+  const root = document.createElement("div");
+  root.className = "xq-wrap";
+  host.appendChild(root);
+  let table: Table | null = null;
+  let streak: StreakState = newStreak(save.getGameProgress(meta.id).endlessBest);
+  let dead = false;
+
+  function overPanel(title: string, sub: string, label: string, onClick: () => void): void {
+    const ov = document.createElement("div");
+    ov.className = "xq-over";
+    const t = document.createElement("div");
+    t.className = "xq-over-title";
+    t.textContent = title;
+    const s = document.createElement("div");
+    s.className = "xq-over-sub";
+    s.textContent = sub;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "xq-over-btn";
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      ov.remove();
+      onClick();
+    });
+    const home = document.createElement("button");
+    home.type = "button";
+    home.className = "xq-over-btn";
+    home.textContent = "🧩 回残局学堂";
+    home.addEventListener("click", back);
+    ov.append(t, s, b, home);
+    root.appendChild(ov);
+  }
+
+  function startRound(): void {
+    table?.destroy();
+    root.innerHTML = "";
+    const p = puzzleAt(streakPuzzle(streak.wins, PUZZLES.length));
+    table = mountTable(root, {
+      api,
+      board: puzzleBoard(p),
+      human: "red",
+      ai: null,
+      movesLeft: p.mateIn,
+      puzzle: p,
+      headline: `🔥 连胜 ${streak.wins} · ${headline(p)}`,
+      opening: `${goalText(p)}。解错一课这一轮就结束，最高连胜会记下来。`,
+      onEnd: (r) => {
+        if (dead) return;
+        const solved = r.winner === "red" && (r.reason === "checkmate" || r.reason === "stalemate");
+        streak = streakStep(streak, solved);
+        if (!streak.over) {
+          api.addStars(1);
+          overPanel(
+            `🎉 连解 ${streak.wins} 课！`,
+            "下一课马上来，越往后越难。",
+            "继续挑战 ▶",
+            () => {
+              api.play("jump");
+              startRound();
+            },
+          );
+          return;
+        }
+        const best = save.recordEndlessBest(meta.id, streak.wins);
+        overPanel("🔥 这一轮结束", streakSummary(streak, best), "🔁 从头再来", () => {
+          api.play("jump");
+          streak = newStreak(best);
+          startRound();
+        });
+      },
+    });
+  }
+
+  startRound();
+  return {
+    destroy() {
+      dead = true;
+      table?.destroy();
+      table = null;
+      root.remove();
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* 挂载                                                                */
+/* ------------------------------------------------------------------ */
+
+export function mount(api: GameApi): { destroy: () => void } {
+  const root = document.createElement("div");
+  const style = document.createElement("style");
+  style.textContent = CSS;
+  const bar = document.createElement("div");
+  bar.className = "xq-modebar";
+  const levelHost = document.createElement("div");
+  const modeHost = document.createElement("div");
+  modeHost.hidden = true;
+  const rulesEl = document.createElement("div");
+  rulesEl.className = "xq-rules xq-hidden";
+  rulesEl.innerHTML = `<button class="xq-rules-close" type="button">✖ 关闭</button>
+    <h3 style="margin-top:2px">📖 朵朵星星象棋 · 规则</h3>${RULES_HTML}`;
+  root.append(style, bar, levelHost, modeHost, rulesEl);
+  api.root.appendChild(root);
+
+  const freeBtn = document.createElement("button");
+  freeBtn.type = "button";
+  freeBtn.className = "xq-mode";
+  freeBtn.textContent = "♟️ 自由对战 · 六档 + 双人";
+  const streakBtn = document.createElement("button");
+  streakBtn.type = "button";
+  streakBtn.className = "xq-mode xq-mode-streak";
+  const rulesBtn = document.createElement("button");
+  rulesBtn.type = "button";
+  rulesBtn.className = "xq-mode";
+  rulesBtn.textContent = "📖 规则";
+  bar.append(freeBtn, streakBtn, rulesBtn);
+
+  let mode: { destroy: () => void } | null = null;
+
+  function refreshBar(): void {
+    const b = save.getGameProgress(meta.id).endlessBest;
+    streakBtn.textContent = b > 0 ? `🔥 残局连胜 · 最好 ${b} 课` : "🔥 残局连胜 · 一课接一课";
+  }
+
+  function closeMode(): void {
+    mode?.destroy();
+    mode = null;
+    modeHost.hidden = true;
+    levelHost.hidden = false;
+    bar.hidden = false;
+    refreshBar();
+  }
+
+  function openMode(make: (h: HTMLElement, a: GameApi, back: () => void) => { destroy: () => void }): void {
+    if (mode) return;
+    api.play("tap");
+    levelHost.hidden = true;
+    bar.hidden = true;
+    modeHost.hidden = false;
+    mode = make(modeHost, api, closeMode);
+  }
+
+  freeBtn.addEventListener("click", () => openMode(mountFree));
+  streakBtn.addEventListener("click", () => openMode(mountStreak));
+  rulesBtn.addEventListener("click", () => {
+    api.play("tap");
+    rulesEl.classList.remove("xq-hidden");
+  });
+  (rulesEl.querySelector(".xq-rules-close") as HTMLButtonElement | null)?.addEventListener("click", () => {
+    api.play("tap");
+    rulesEl.classList.add("xq-hidden");
+  });
+  refreshBar();
+
+  const level = mountLevelGame(
+    { ...api, root: levelHost },
+    {
+      id: meta.id,
+      chapters: CHAPTERS,
+      playLevel,
+      mapHint: "每一课都能在规定步数内赢下来，不用提示解开才是 3 星。",
+      grandMessage: "188 课残局全部解开，你的算杀已经很有样子了！",
+      guide: guideBook,
+      guideTitle: "象棋 · 残局手记",
+    },
+  );
+
+  // 壳层给了 initialLevel（或者地址栏 / hash 带 level=N）就直接开第 N 课
+  const hint = (api as unknown as { initialLevel?: number }).initialLevel;
+  const loc = (globalThis as { location?: { search?: string; hash?: string } }).location;
+  const want = initialLevelOf(hint, loc?.search ?? "", loc?.hash ?? "");
+  if (want >= 0) openCampaignLevel(levelHost, want);
+
+  return {
+    destroy() {
+      mode?.destroy();
+      mode = null;
+      level.destroy();
+      root.remove();
+    },
+  };
+}
+
+/** 给壳层用：直接开打第 n 课（1 基），越界 clamp */
+export function openLevel(host: HTMLElement, n: number): boolean {
+  return openCampaignLevel(host, Math.max(0, Math.round(n) - 1));
+}
+
+/** 真·无尽为什么不做（导出便于测试与文档一致） */
+export { ENDLESS_REASON };

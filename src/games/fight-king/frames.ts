@@ -95,6 +95,18 @@ export interface Move {
   box: Box;
   /** 命中顿帧：命中瞬间双方定格几帧，手感的来源 */
   hitStop: number;
+  /**
+   * 突进位移：出这一招的人自己往前走多远（分摊在命中帧里）。
+   * 说明里写着「冲过去 / 滚过去 / 撞过去」的招必须有这个数，
+   * 否则看着是突进、打起来是原地挥空。0 就是站着出招。
+   */
+  advance: number;
+  /**
+   * 受击框往前伸出去多少：手脚伸出去了，这一截就得跟着挨打。
+   * 够得越远的招伸得越多 —— 长手不再是白嫖，敢戳就得担被戳回来的风险。
+   * 只在命中帧与收招帧生效（起手时手还没出去）。
+   */
+  hurtExtend: number;
   /** 命中直接把对手放倒（连段自然断在这里） */
   knockdown?: boolean;
   /** 只能在空中出 */
@@ -179,6 +191,8 @@ const NORMAL_TEMPLATES: Record<"5L" | "5H" | "2L" | "2H" | "jL" | "jH" | "throw"
     priority: 2,
     box: { x: 20, y: 44, w: 40, h: 24 },
     hitStop: 5,
+    advance: 0,
+    hurtExtend: 6,
     groundOnly: true
   },
   // 站立重击：慢一点，收招大，挡下来格挡槽掉得多
@@ -198,7 +212,9 @@ const NORMAL_TEMPLATES: Record<"5L" | "5H" | "2L" | "2H" | "jL" | "jH" | "throw"
     guardCost: 11,
     priority: 4,
     box: { x: 22, y: 36, w: 56, h: 30 },
-    hitStop: 8,
+    hitStop: 7,
+    advance: 6,
+    hurtExtend: 16,
     groundOnly: true
   },
   // 蹲轻击：更矮更快，但打不远
@@ -219,6 +235,8 @@ const NORMAL_TEMPLATES: Record<"5L" | "5H" | "2L" | "2H" | "jL" | "jH" | "throw"
     priority: 2,
     box: { x: 18, y: 14, w: 38, h: 24 },
     hitStop: 4,
+    advance: 0,
+    hurtExtend: 4,
     groundOnly: true
   },
   // 蹲重击（扫腿）：下段，必须蹲着挡，命中直接放倒
@@ -238,7 +256,9 @@ const NORMAL_TEMPLATES: Record<"5L" | "5H" | "2L" | "2H" | "jL" | "jH" | "throw"
     guardCost: 10,
     priority: 4,
     box: { x: 20, y: 2, w: 62, h: 24 },
-    hitStop: 8,
+    hitStop: 7,
+    advance: 10,
+    hurtExtend: 20,
     knockdown: true,
     groundOnly: true
   },
@@ -260,6 +280,8 @@ const NORMAL_TEMPLATES: Record<"5L" | "5H" | "2L" | "2H" | "jL" | "jH" | "throw"
     priority: 3,
     box: { x: 14, y: 30, w: 42, h: 28 },
     hitStop: 5,
+    advance: 0,
+    hurtExtend: 6,
     airOnly: true
   },
   // 跳重击：上段，跳进去的主力
@@ -280,6 +302,8 @@ const NORMAL_TEMPLATES: Record<"5L" | "5H" | "2L" | "2H" | "jL" | "jH" | "throw"
     priority: 4,
     box: { x: 16, y: 24, w: 48, h: 34 },
     hitStop: 7,
+    advance: 0,
+    hurtExtend: 10,
     airOnly: true
   },
   // 投技：挡不住，但要贴身，抓空收招巨大
@@ -299,7 +323,9 @@ const NORMAL_TEMPLATES: Record<"5L" | "5H" | "2L" | "2H" | "jL" | "jH" | "throw"
     guardCost: 0,
     priority: 9,
     box: { x: 10, y: 18, w: 34, h: 52 },
-    hitStop: 10,
+    hitStop: 8,
+    advance: 4,
+    hurtExtend: 0,
     knockdown: true,
     groundOnly: true
   }
@@ -367,6 +393,8 @@ function tuneNormal(slot: keyof typeof NORMAL_TEMPLATES, spec: CharSpec): Move {
     startup: roundUpAtLeast(t.startup * spec.startupMod, 3),
     recovery: roundUpAtLeast(t.recovery * spec.recoveryMod, 4),
     power: roundUpAtLeast(t.power * spec.powerMod, 2),
+    // 手伸得越长，露在外面挨打的那一截也越长
+    hurtExtend: isThrow ? 0 : Math.round(t.hurtExtend * spec.reach),
     // 投技范围不跟"攻击范围"走：谁都得贴身才抓得到
     box: isThrow
       ? { ...t.box }
@@ -418,10 +446,19 @@ function buildCharacter(spec: CharSpec): Character {
   };
 }
 
+/**
+ * 招式没写 `hurtExtend` 时的默认值：按判定框实际够得多远折算。
+ * 超必杀是全屏演出，不按这条走（放的时候人是缩在光里的，不留把柄）。
+ */
+export function defaultHurtExtend(box: Box, kind: MoveKind): number {
+  if (kind === "super" || kind === "throw") return 0;
+  return Math.round((box.x + box.w) * 0.2);
+}
+
 /** 写必杀技时的小帮手：把默认值填满，只写关心的字段 */
 function special(slot: "s1" | "s2" | "s3" | "super", m: Partial<Move> & { name: string; note: string }): Move {
   const isSuper = slot === "super";
-  return {
+  const merged: Move = {
     slot,
     kind: isSuper ? "super" : "special",
     height: "mid",
@@ -438,10 +475,14 @@ function special(slot: "s1" | "s2" | "s3" | "super", m: Partial<Move> & { name: 
     guardCost: 14,
     priority: isSuper ? 8 : 5,
     box: { x: 24, y: 26, w: 70, h: 40 },
-    hitStop: isSuper ? 16 : 10,
+    hitStop: 8,
+    advance: 0,
+    hurtExtend: 0,
     groundOnly: true,
     ...m
   };
+  if (m.hurtExtend === undefined) merged.hurtExtend = defaultHurtExtend(merged.box, merged.kind);
+  return merged;
 }
 
 // ---------------------------------------------------------------------------
@@ -456,7 +497,7 @@ const SPECS: CharSpec[] = [
     color: "#FFC7DC",
     ink: "#B24A78",
     blurb: "爱种花的小姑娘，出手干净利落。",
-    style: "全能型：速度、范围、威力都在中间，新手先选她准没错。",
+    style: "全能型：速度、范围、威力都在中间，招式好懂，最适合练手感。",
     vigor: 100,
     walk: 3.0,
     backWalk: 2.4,
@@ -482,7 +523,25 @@ const SPECS: CharSpec[] = [
         knockback: 6.4,
         box: { x: 22, y: 22, w: 76, h: 46 }
       }),
+      // 前 + 重 = 追风踢：突进招挂在"往前"那个键上。
+      // 第 3 轮 R3B-2 的根因就在这儿 —— 原来朵朵是反的（往后按才往前冲、往前按却是对空），
+      // 于是中距离每按一次「前 + 重」都在原地打空一记收招 26 帧的对空招。
+      // 八位小伙伴里另外五位的对空招本来就在「后 + 重」，这一改是把她接回同一套口径。
       special("s2", {
+        name: "追风踢",
+        note: "向前突进一大段，能把跑远的对手追回来",
+        startup: 13,
+        active: 5,
+        recovery: 22,
+        power: 13,
+        hitStun: 22,
+        knockback: 8.5,
+        knockdown: true,
+        advance: 52,
+        box: { x: 26, y: 24, w: 84, h: 36 }
+      }),
+      // 后 + 重 = 樱吹雪：对空招和大家一样挂在"往后"那个键上
+      special("s3", {
         name: "樱吹雪",
         note: "往上挑，专门收拾跳进来的人；起手无敌感很强",
         startup: 8,
@@ -494,18 +553,6 @@ const SPECS: CharSpec[] = [
         knockback: 3.2,
         priority: 7,
         box: { x: 12, y: 40, w: 52, h: 74 }
-      }),
-      special("s3", {
-        name: "追风踢",
-        note: "向前突进一大段，能把跑远的对手追回来",
-        startup: 13,
-        active: 5,
-        recovery: 22,
-        power: 13,
-        hitStun: 22,
-        knockback: 8.5,
-        knockdown: true,
-        box: { x: 26, y: 24, w: 84, h: 36 }
       }),
       special("super", {
         name: "漫天花雨",
@@ -530,7 +577,7 @@ const SPECS: CharSpec[] = [
     color: "#BFD8FF",
     ink: "#3A62A8",
     blurb: "夜里最亮的那颗，跑起来一闪一闪。",
-    style: "速度型：走得快、起手快，但每下轻飘飘的，要靠连段攒分。",
+    style: "速度型：走得快、起手快，每下轻飘飘的要靠连段攒分，格斗塔默认派她上场。",
     vigor: 92,
     walk: 3.8,
     backWalk: 3.0,
@@ -566,6 +613,7 @@ const SPECS: CharSpec[] = [
         hitStun: 22,
         height: "high",
         knockback: 4.2,
+        advance: 36,
         groundOnly: false,
         airOnly: true,
         box: { x: 16, y: 12, w: 54, h: 46 }
@@ -631,6 +679,7 @@ const SPECS: CharSpec[] = [
         hitStun: 24,
         knockback: 8.2,
         knockdown: true,
+        advance: 46,
         box: { x: 22, y: 4, w: 84, h: 46 }
       }),
       special("s2", {
@@ -781,6 +830,7 @@ const SPECS: CharSpec[] = [
         hitStun: 24,
         knockback: 10.5,
         knockdown: true,
+        advance: 40,
         priority: 6,
         box: { x: 24, y: 10, w: 90, h: 62 }
       }),
@@ -858,6 +908,7 @@ const SPECS: CharSpec[] = [
         power: 8,
         hitStun: 19,
         knockback: 4.6,
+        advance: 44,
         box: { x: 18, y: 22, w: 70, h: 44 }
       }),
       special("s2", {
@@ -1016,6 +1067,7 @@ const SPECS: CharSpec[] = [
         hitStun: 21,
         height: "high",
         knockback: 5.4,
+        advance: 54,
         groundOnly: false,
         airOnly: true,
         box: { x: 14, y: 16, w: 66, h: 40 }
@@ -1062,6 +1114,16 @@ export function characterById(id: string): Character {
   return CHAR_BY_ID.get(id) ?? CHARACTERS[0];
 }
 
+/**
+ * 名字太长就缩写（窄屏 HUD 用）。
+ * 「绿绿豆」这种三个字的在 360px 上会把元气条挤歪，缩成「绿绿…」正好。
+ */
+export function shortName(name: string, max = 3): string {
+  const chars = [...name];
+  if (chars.length <= max) return name;
+  return `${chars.slice(0, Math.max(1, max - 1)).join("")}…`;
+}
+
 /** 拿某个角色某个槽位的招式 */
 export function moveOf(charId: string, slot: MoveSlot): Move {
   return characterById(charId).moves[slot];
@@ -1070,6 +1132,33 @@ export function moveOf(charId: string, slot: MoveSlot): Move {
 /** 招式总帧数 */
 export function totalFrames(move: Move): number {
   return move.startup + move.active + move.recovery;
+}
+
+/**
+ * 判定框在 active 段里往前长多少的比例。
+ * 第一帧只有 (1 − 这个比例) 那么长，最后一帧才是数据表上的完整长度 ——
+ * 手是一点点伸出去的，所以「擦着边过去」不会在第一帧就算命中。
+ */
+export const BOX_GROWTH = 0.18;
+
+/**
+ * 这一帧判定框到底多大（按帧给，不是整段共用一个框）。
+ * 不在命中帧就原样返回数据表里的框，画面预告用得上。
+ */
+export function activeBoxAt(move: Move, frame: number): Box {
+  const i = frame - move.startup;
+  if (i < 0 || i >= move.active) return move.box;
+  const t = move.active <= 1 ? 1 : i / (move.active - 1);
+  const grown = move.box.w * (1 - BOX_GROWTH * (1 - t));
+  return { x: move.box.x, y: move.box.y, w: Math.max(4, Math.round(grown)), h: move.box.h };
+}
+
+/** 这一招这一帧该往前挪多少（突进位移平摊在命中帧上） */
+export function advanceAt(move: Move, frame: number): number {
+  if (move.advance <= 0 || move.active <= 0) return 0;
+  const i = frame - move.startup;
+  if (i < 0 || i >= move.active) return 0;
+  return move.advance / move.active;
 }
 
 // ---------------------------------------------------------------------------

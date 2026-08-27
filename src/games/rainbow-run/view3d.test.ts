@@ -33,6 +33,99 @@ import {
 const PHONE = makeCamera(375, 667);
 const TABLET = makeCamera(1280, 800);
 
+describe("彩虹跑跑 2.5D · 透视投影单调性", () => {
+  it("深度一路往远走,缩放严格越来越小,一次回头都没有", () => {
+    for (const cam of [PHONE, TABLET]) {
+      let prev = scaleAtDepth(cam, 0);
+      for (let d = 4; d <= cam.camDepth * 12; d += 4) {
+        const s = scaleAtDepth(cam, d);
+        expect(s, `深度 ${d} 的缩放没有继续变小`).toBeLessThanOrEqual(prev);
+        prev = s;
+      }
+      // 全程严格小于玩家脚下那一档,而且一直是正数
+      expect(prev).toBeLessThan(scaleAtDepth(cam, 0));
+      expect(prev).toBeGreaterThan(0);
+    }
+  });
+
+  it("深度一路往远走,屏幕 y 严格往地平线爬,永远不会翻过去", () => {
+    for (const cam of [PHONE, TABLET]) {
+      let prev = screenYAtDepth(cam, 0);
+      expect(prev).toBeCloseTo(cam.playerY, 6);
+      for (let d = 4; d <= cam.camDepth * 12; d += 4) {
+        const y = screenYAtDepth(cam, d);
+        expect(y, `深度 ${d} 的屏幕 y 反而往下走了`).toBeLessThanOrEqual(prev);
+        expect(y).toBeGreaterThan(cam.horizonY);
+        prev = y;
+      }
+    }
+  });
+
+  it("同一条车道:越远的东西画得越高越靠中间,顺序一次都不乱", () => {
+    for (const cam of [PHONE, TABLET]) {
+      for (const lane of [0, 1, 2]) {
+        let prev = projectTrack(cam, cam.playerY, lane);
+        // trackY 越小离得越远
+        for (let ty = cam.playerY - 20; ty >= SPAWN_TRACK_Y; ty -= 20) {
+          const cur = projectTrack(cam, ty, lane);
+          expect(cur.y).toBeLessThanOrEqual(prev.y);
+          expect(cur.scale).toBeLessThanOrEqual(prev.scale);
+          // 边道越远越贴近画面中线,中间道一直在中线上
+          const dNow = Math.abs(cur.x - cam.w / 2);
+          const dPrev = Math.abs(prev.x - cam.w / 2);
+          expect(dNow).toBeLessThanOrEqual(dPrev + 1e-9);
+          prev = cur;
+        }
+      }
+    }
+  });
+
+  it("两个东西谁在前谁在后,投影之后画面上的高低顺序不会颠倒", () => {
+    const cam = PHONE;
+    for (let a = SPAWN_TRACK_Y; a < cam.playerY; a += 37) {
+      const b = a + 31;
+      // b 比 a 近 → b 一定画得更低、更大
+      expect(screenYAtDepth(cam, depthOf(cam, b))).toBeGreaterThanOrEqual(
+        screenYAtDepth(cam, depthOf(cam, a)),
+      );
+      expect(scaleAtDepth(cam, depthOf(cam, b))).toBeGreaterThanOrEqual(
+        scaleAtDepth(cam, depthOf(cam, a)),
+      );
+    }
+  });
+
+  it("三条道之间的横向间距随深度严格收窄,远处收敛到同一个消失点", () => {
+    for (const cam of [PHONE, TABLET]) {
+      let prev = Infinity;
+      for (let d = 0; d <= cam.camDepth * 12; d += 8) {
+        const s = scaleAtDepth(cam, d);
+        const gap = Math.abs(
+          projectFlatX(cam, cam.w / 2 + laneOffset(cam.w, 2), s) -
+            projectFlatX(cam, cam.w / 2 + laneOffset(cam.w, 0), s),
+        );
+        expect(gap).toBeLessThanOrEqual(prev + 1e-9);
+        prev = gap;
+      }
+      // 远到看不见的地方,三条道已经挤成很窄的一条
+      expect(prev).toBeLessThan(cam.w * 0.2);
+    }
+  });
+
+  it("雾随深度单调变浓,近处一点雾都没有", () => {
+    const cam = TABLET;
+    let prev = 0;
+    for (let d = 0; d <= cam.camDepth * 12; d += 8) {
+      const a = fogAlpha(scaleAtDepth(cam, d));
+      expect(a).toBeGreaterThanOrEqual(prev - 1e-12);
+      expect(a).toBeGreaterThanOrEqual(0);
+      expect(a).toBeLessThanOrEqual(1);
+      prev = a;
+    }
+    expect(fogAlpha(scaleAtDepth(cam, 0))).toBe(0);
+    expect(prev).toBeGreaterThan(0);
+  });
+});
+
 describe("彩虹跑跑 2.5D · 透视投影", () => {
   it("相机的地平线在上三成,玩家线在下方,相机距离按两者之差算", () => {
     for (const [w, h] of [

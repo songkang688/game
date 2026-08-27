@@ -305,13 +305,17 @@ describe("源码巡检", () => {
       [
         "ai.ts",
         "controls.ts",
+        // 单测用的 DOM 桩，不参与打包
+        "domStub.ts",
         "engine.ts",
         "frames.ts",
         "guide.ts",
         "index.ts",
         "levels.ts",
         "meta.ts",
-        "rules.ts"
+        "progress.ts",
+        "rules.ts",
+        "training.ts"
       ].sort()
     );
   });

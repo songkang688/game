@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   BOSSES,
@@ -879,6 +881,100 @@ describe("rainbow-run 战役可通关性模拟", () => {
       expect(r.reason, LEVELS[idx].name).toBe("boss");
       expect(r.bossHits).toBeLessThan(r.bossHp);
       expect(r.note).toContain("大王");
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* R2C-R2 上屏文案的红线词                                             */
+/* ------------------------------------------------------------------ */
+
+describe("R2C-R2 · 上屏文案的红线词", () => {
+  /** 所有会被玩家读到的字：188 关的关名 / 特色 / 提示，加上攻略里的每一句 */
+  function visibleCopy(): string[] {
+    const out: string[] = [];
+    for (const lv of LEVELS) out.push(lv.name, lv.feature, lv.hint);
+    out.push(guide.title, ...guide.general);
+    for (const e of guide.entries) out.push(e.title, ...e.tips);
+    return out;
+  }
+
+  it("「血」一个字都不上屏 —— 大王那两条改成卸护甲的口径", () => {
+    expect(visibleCopy().filter((s) => s.includes("血"))).toEqual([]);
+    const boss = guide.entries.flatMap((e) => e.tips).filter((t) => t.includes("护甲"));
+    expect(boss.length).toBeGreaterThan(0);
+    expect(boss.join("")).toContain("铲碎彩纸箱卸一层");
+  });
+
+  it("「广告」一个字都不上屏 —— 第 9 章那一关改成霓虹招牌的布景名", () => {
+    expect(visibleCopy().filter((s) => s.includes("广告"))).toEqual([]);
+    const lv = LEVELS.find((l) => l.name === "霓虹招牌走廊");
+    expect(lv, "第 9 章第 12 关不见了").toBeTruthy();
+    expect(lv?.hint).toContain("霓虹招牌一块接一块");
+  });
+
+  it("换名字没有动到这一关的玩法：还是那两种障碍、还是收 5 颗星", () => {
+    const lv = LEVELS.find((l) => l.name === "霓虹招牌走廊");
+    expect(lv?.obstacleKinds).toEqual(["bar", "rock"]);
+    expect(lv?.mission).toEqual({ type: "stars", n: 5 });
+  });
+
+  it("188 个关名依旧两两不重样", () => {
+    expect(new Set(LEVELS.map((l) => l.name)).size).toBe(LEVELS.length);
+  });
+
+  it("死亡 / 内购 / 抽卡这些词也一并扫过，命中 0", () => {
+    const banned = ["死", "杀", "尸", "内购", "抽卡", "充值", "广告位", "氪"];
+    const hits = visibleCopy().filter((s) => banned.some((b) => s.includes(b)));
+    expect(hits).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* R2C-R2 接续复核：把筛子从「上屏文案」下沉到「源码字面量」            */
+/* ------------------------------------------------------------------ */
+
+// 上面那一组只看 `LEVELS` 与 `guide` 里的字符串，管得住玩家读到的每一句。
+// 但「血」这个词在这一款还剩一批注释里的用法（大王血条 / 打不打得死 / 掉血），
+// 词表扫描器一跑就报，下一轮走查还得再判一次「这是注释，不算」。
+// 既然上屏那两条已经改成「卸护甲」的口径，注释也一起对齐 —— 这一款从此源码级 0 命中。
+describe("R2C-R2 接续复核 · 源码级红线筛子", () => {
+  const dir = fileURLToPath(new URL(".", import.meta.url));
+  const sources = readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
+
+  it("扫得到这一款的源码，不是空跑一趟", () => {
+    expect(sources.length).toBeGreaterThan(8);
+    for (const must of ["index.ts", "logic.ts", "guide.ts", "sim.ts"]) {
+      expect(sources).toContain(must);
+    }
+  });
+
+  it("产品代码里连注释都不写「血」，广告 / 内购那一类也一个没有", () => {
+    // 「死」不进这张表：`endless.ts` 里「原道被堵死 / 封死」是路况的说法，
+    // 「无伤」更是十几个关名在用的褒义词（noHit 挑战），一刀切会误伤。
+    const banned = ["血", "尸", "广告", "内购", "抽卡", "充值", "氪金"];
+    for (const f of sources) {
+      const text = readFileSync(dir + f, "utf8");
+      for (const bad of banned) {
+        expect(text.includes(bad) ? `${f} 里出现了「${bad}」` : "干净").toBe("干净");
+      }
+    }
+  });
+
+  it("大王那一套改口之后仍旧讲得清：卸护甲、两条来源、独立的失败分支", () => {
+    const idx = readFileSync(dir + "index.ts", "utf8");
+    expect(idx).toContain("卸大王的护甲:铲箱 1 层,三连完美跳 2 层");
+    expect(idx).toContain("大王护甲条");
+    const sim = readFileSync(dir + "sim.ts", "utf8");
+    expect(sim).toContain("boss=终点前没卸完大王的护甲");
+  });
+
+  it("这一款仍旧不联网、不引 three.js", () => {
+    for (const f of sources) {
+      const text = readFileSync(dir + f, "utf8");
+      for (const bad of ["fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", 'from "three"']) {
+        expect(text.includes(bad) ? `${f} 里出现了 ${bad}` : "干净").toBe("干净");
+      }
     }
   });
 });

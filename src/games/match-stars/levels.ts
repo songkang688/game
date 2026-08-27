@@ -70,6 +70,11 @@ export interface MatchLevel {
   frostLayers?: number;
   /** 1.1 石巨人，前 99 关不带 */
   boss?: MatchBoss;
+  /**
+   * 1.2 挡板数量：挡板挡住下落，上面的星星落不下来、底下也补不进新块，
+   * 得先在它旁边消一次把它敲掉。只出现在末章尾段，前 99 关不带。
+   */
+  blockers?: number;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -84,7 +89,7 @@ export const CHAPTERS: Chapter[] = [
   { name: "订单甜品铺", emoji: "🧁", color: "#FFEFD6", desc: "客人点单啦：要一次消出四颗以上，还要连锁！", size: 23 },
   { name: "传送带工厂", emoji: "🏭", color: "#E1EEF7", desc: "每走一步，传送带那几行就整排平移一格。", size: 22 },
   { name: "双层糖霜", emoji: "🍥", color: "#FFE6F0", desc: "盖着糖霜的格子要在上面消两次才刮干净。", size: 22 },
-  { name: "云顶石巨人", emoji: "🗿", color: "#E4E9E0", desc: "石巨人披着护甲，消掉它怕的那种图案才砸得动。", size: 22 }
+  { name: "云顶石巨人", emoji: "🗿", color: "#E4E9E0", desc: "石巨人披着护甲，末尾还会搬挡板拦住下落，先敲挡板再砸护甲。", size: 22 }
 ];
 
 function stars(moves: number): { three: number; two: number } {
@@ -209,7 +214,7 @@ function buildLevel(ci: number, t: number, rand: () => number): MatchLevel {
       };
     }
     default: {
-      // 云顶石巨人：护甲越来越厚，咆哮越来越勤，末段把糖霜和传送带一起请回来
+      // 云顶石巨人：护甲越来越厚，咆哮越来越勤，末段把糖霜、传送带和挡板一起请回来
       const colors = 5;
       const moves = 26 + Math.floor(t / 3) * 2;
       const tokens = pickTokens(2, colors);
@@ -226,6 +231,8 @@ function buildLevel(ci: number, t: number, rand: () => number): MatchLevel {
         frost: t >= 11 ? 4 : undefined,
         frostLayers: t >= 11 ? 1 : undefined,
         belts: t >= 17 ? [{ row: 4, dir: 1 }] : undefined,
+        // 1.2 新机制：末尾八关放挡板，逼着孩子先想「怎么让上面的星星掉下来」
+        blockers: t >= 14 ? 2 + Math.floor((t - 14) / 4) : undefined,
         ...stars(moves)
       };
     }

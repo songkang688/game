@@ -398,7 +398,9 @@ describe("海底大胃王 · 1.1 新机制", () => {
       expect(ids.has(id)).toBe(true);
     }
     expect(ids.size).toBe(DEX.length);
-    expect(DEX.length).toBe(22);
+    // 1.1 收了 22 条;1.2 的深海马拉松又添了三种只在无尽里见得到的鱼
+    for (const id of ["elite", "lantern", "ribbon"]) expect(ids.has(id)).toBe(true);
+    expect(DEX.length).toBe(25);
     for (const z of ZONE_ORDER) expect(ids.has(ZONE_STYLE[z].boss)).toBe(true);
     for (const d of DEX) {
       expect(d.name).not.toMatch(/[A-Za-z]/);

@@ -1,0 +1,736 @@
+/**
+ * 豆豆迷宫 · 窗口 2 第 1 轮验收 · 测试员包 A 的复现测试。
+ *
+ * 只记录、不改玩法。既有的 index.test.ts 已经把「挂得上、拆得干净」测透了，
+ * 这一份补的是走查铁则里它没覆盖的三块：
+ *  - 铁则 1：在**界面上**真的赢一次、真的输一次，再退出、再进来；
+ *  - 铁则 3：四种玩法各自的键位归属（朵朵 WASD、星星 方向键、Esc 暂停，互不抢占）；
+ *  - 铁则 4 / 5：360px 的热区，以及 meta.blurb 与实现里的叫法对不对得上。
+ *
+ * 标了「【已知问题】」的用例断言的是**当前行为**，修好之后会红，那时候连断言一起翻面。
+ * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
+ *  - PA-DM-1（一般）：`.dmz-btn`（换个玩法 / 回选关）靠 padding 撑高度，只有 33px 出头；
+ *  - PA-DM-2（一般）：`meta.blurb` 把豆子叫「小星星」，可界面上「⭐ 小星命」才是小星星，
+ *    HUD 与攻略里一律叫「豆」，卡片和游戏里对不上；
+ *  - PA-DM-3（一般）：规格里朵朵的 F / G 与星星的 L / K 四个键都没接
+ *    —— 第 2 轮学习优化员已落地：G / K 撤回预输入的转向，F / L 在攻略里写明不用。
+ */
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { configFor } from "./levels";
+import { El, fireWindow, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
+import dmGuide from "./guide";
+import type { RunConfig } from "./logic";
+import type { Maze } from "./maze";
+import { meta } from "./meta";
+
+let dom: Dom;
+
+beforeEach(() => {
+  dom = installDom(360);
+});
+
+afterEach(() => {
+  restoreDom();
+});
+
+/**
+ * 一条七格长的走廊：`#` 是墙，第 1 行是通路。
+ * 用它把「真的赢一次 / 真的输一次」压进几十帧里跑完，
+ * 走的仍然是 index.ts → logic.ts 的同一套代码，不是把结果硬塞进回调。
+ */
+function corridor(opts: { dotsAt: number[]; homeX: number }): Maze {
+  const w = 7;
+  const h = 3;
+  const wall: boolean[] = [];
+  const dot: boolean[] = [];
+  const power: boolean[] = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const isWall = y !== 1 || x === 0 || x === w - 1;
+      wall.push(isWall);
+      dot.push(!isWall && opts.dotsAt.includes(x));
+      power.push(false);
+    }
+  }
+  return { w, h, wall, dot, power, tunnelRows: [], spawn: { x: 1, y: 1 }, home: { x: opts.homeX, y: 1 } };
+}
+
+function corridorCfg(over: Partial<RunConfig> = {}): RunConfig {
+  return {
+    maze: corridor({ dotsAt: [2, 3], homeX: 5 }),
+    tier: "rookie",
+    ghostCount: 0,
+    lives: 3,
+    stepMs: 120,
+    fruitAt: [],
+    fog: false,
+    ...over,
+  };
+}
+
+function fakeApi() {
+  const sounds: string[] = [];
+  const wins: string[] = [];
+  const loses: string[] = [];
+  return {
+    sounds,
+    wins,
+    loses,
+    api: {
+      root: dom.root as unknown as HTMLElement,
+      play: (n: string) => sounds.push(n),
+      addStars: () => 0,
+      getStars: () => 0,
+      onWin: (_s: number, m?: string) => wins.push(m ?? ""),
+      onLose: (m?: string) => loses.push(m ?? ""),
+    } as never,
+  };
+}
+
+function byText(part: string): El | null {
+  const hits = dom.root.findAll((e) => e.tagName === "button" && e.textContent.includes(part));
+  return hits[hits.length - 1] ?? null;
+}
+
+function key(k: string): void {
+  fireWindow(dom, "keydown", { key: k });
+}
+
+function css(): string {
+  const style = dom.root.find((e) => e.tagName === "style");
+  if (!style) throw new Error("样式没挂出来");
+  return style.textContent;
+}
+
+/** 一条 CSS 规则算下来能点多高（显式 height 优先，否则按 padding×2 + 字号×1.2 估） */
+function hitHeight(sheet: string, selector: string): number {
+  const m = new RegExp(`\\${selector}\\{([^}]*)\\}`).exec(sheet);
+  if (!m) return Number.NaN;
+  return bodyHeight(m[1]);
+}
+
+/** 同一个选择器写了好几遍时（媒体查询会覆盖前面的），最后那一条说了算 */
+function lastHitHeight(sheet: string, selector: string): number {
+  const re = new RegExp(`\\${selector}\\{([^}]*)\\}`, "g");
+  let height = Number.NaN;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(sheet)) !== null) {
+    const h = bodyHeight(m[1]);
+    if (!Number.isNaN(h)) height = h;
+  }
+  return height;
+}
+
+/** 一条规则体算下来能点多高（显式 height 优先，否则按 padding×2 + 字号×1.2 估） */
+function bodyHeight(body: string): number {
+  const explicit = /(?:^|;)\s*(?:min-)?height:\s*([\d.]+)px/.exec(body);
+  if (explicit) return Number(explicit[1]);
+  const pad = /(?:^|;)\s*padding:\s*([\d.]+)px/.exec(body);
+  const font = /(?:^|;)\s*font-size:\s*([\d.]+)px/.exec(body);
+  if (!pad || !font) return Number.NaN;
+  return Number(pad[1]) * 2 + Number(font[1]) * 1.2;
+}
+
+/* ------------------------------------------------------------------ */
+/* PA-DM · 铁则 1：界面上真的赢一次、真的输一次                          */
+/* ------------------------------------------------------------------ */
+
+describe("PA-DM · 一局迷宫的真实胜负", () => {
+  it("把豆子吃光就真的赢了：onEnd 报 won，HUD 也归零", async () => {
+    const { mountStage } = await import("./index");
+    const ends: Array<{ won: boolean; livesLeft: number }> = [];
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg(),
+      starRole: "none",
+      label: "走查",
+      onEnd: (r) => ends.push({ won: r.won, livesLeft: r.livesLeft }),
+    });
+    key("d");
+    for (let i = 0; i < 20 && ends.length === 0; i++) flushFrames(dom, 1, 130);
+    expect(ends, "走到底也没赢").toHaveLength(1);
+    expect(ends[0].won).toBe(true);
+    expect(ends[0].livesLeft).toBe(3);
+    expect(dom.root.querySelector(".dmz-left")!.textContent).toContain("剩 0");
+    handle.destroy();
+  });
+
+  it("小星命掉光就真的输了：onEnd 报 !won，播报是鼓励不是批评", async () => {
+    const { mountStage } = await import("./index");
+    const ends: Array<{ won: boolean }> = [];
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      // 只有一条命，小幽灵就守在朵朵右手边第一格，豆子还在它后面，绕不过去
+      cfg: corridorCfg({ ghostCount: 1, lives: 1, maze: corridor({ dotsAt: [4, 5], homeX: 2 }) }),
+      starRole: "none",
+      label: "走查",
+      onEnd: (r) => ends.push({ won: r.won }),
+    });
+    key("d");
+    for (let i = 0; i < 80 && ends.length === 0; i++) flushFrames(dom, 1, 130);
+    expect(ends, "撞了这么多回还没收场").toHaveLength(1);
+    expect(ends[0].won).toBe(false);
+    const note = dom.root.querySelector(".dmz-note")!.textContent;
+    for (const bad of ["笨", "废", "太差", "活该"]) expect(note.includes(bad)).toBe(false);
+    handle.destroy();
+  });
+
+  it("赢完拆掉再挂一局，照样能从头玩：状态没有串到下一局", async () => {
+    const { mountStage } = await import("./index");
+    for (let round = 0; round < 2; round++) {
+      const ends: boolean[] = [];
+      const handle = mountStage(dom.root as unknown as HTMLElement, {
+        cfg: corridorCfg(),
+        starRole: "none",
+        label: "走查",
+        onEnd: (r) => ends.push(r.won),
+      });
+      expect(dom.root.querySelector(".dmz-left")!.textContent, `第 ${round + 1} 局开局豆数不对`).toContain("剩 2");
+      key("d");
+      for (let i = 0; i < 20 && ends.length === 0; i++) flushFrames(dom, 1, 130);
+      expect(ends, `第 ${round + 1} 局没赢`).toEqual([true]);
+      handle.destroy();
+      expect(windowListenerCount(dom), `第 ${round + 1} 局拆完还留着监听`).toBe(0);
+      expect(dom.root.children).toHaveLength(0);
+    }
+  });
+
+  it("闯关第 1 / 100 / 188 关都摆得出舞台，档位与小幽灵数写在 HUD 上", async () => {
+    const { mountStage } = await import("./index");
+    for (const level of [0, 99, 187]) {
+      const cfg = configFor(level);
+      const handle = mountStage(dom.root as unknown as HTMLElement, {
+        cfg,
+        starRole: "none",
+        label: `第 ${level + 1} 关`,
+        extraChip: () => `第 ${level + 1} 关 · ${cfg.ghostCount} 只小幽灵`,
+        onEnd: () => undefined,
+      });
+      const canvas = dom.root.querySelector(".dmz-canvas")!;
+      expect(Number(canvas.getAttribute("data-cols")), `第 ${level + 1} 关列数不对`).toBe(cfg.maze.w);
+      // 360px 上每格还得有 14px，整张图才塞得进屏幕
+      expect(canvas.width / cfg.maze.w, `第 ${level + 1} 关格子太小`).toBeGreaterThanOrEqual(14);
+      expect(dom.root.querySelector(".dmz-extra")!.textContent).toContain(`第 ${level + 1} 关`);
+      flushFrames(dom, 6, 120);
+      handle.destroy();
+      expect(windowListenerCount(dom)).toBe(0);
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* PA-DM · 铁则 3：四种玩法的键位归属                                    */
+/* ------------------------------------------------------------------ */
+
+describe("PA-DM · 键位归属", () => {
+  it("单人玩时 WASD 与方向键等价，谁都能开朵朵", async () => {
+    const { mountStage } = await import("./index");
+    for (const k of ["d", "ArrowRight"]) {
+      const ends: boolean[] = [];
+      const handle = mountStage(dom.root as unknown as HTMLElement, {
+        cfg: corridorCfg(),
+        starRole: "none",
+        label: "走查",
+        onEnd: (r) => ends.push(r.won),
+      });
+      key(k);
+      for (let i = 0; i < 20 && ends.length === 0; i++) flushFrames(dom, 1, 130);
+      expect(ends, `按 ${k} 没能把朵朵开动`).toEqual([true]);
+      handle.destroy();
+    }
+  });
+
+  it("抢豆对战里两个人各管各的：一边的键改不动另一边的分数", async () => {
+    const { mountStage } = await import("./index");
+    // 朵朵和星星都会自己往前走，所以「谁抢占了谁」得跟一局都不按键的对照局比。
+    // 同一份 cfg、同一个内部种子，三局的推进完全可复现。
+    function run(keys: string[]): [number, number] {
+      const handle = mountStage(dom.root as unknown as HTMLElement, {
+        cfg: { ...configFor(60), ghostCount: 0 },
+        starRole: "eater",
+        label: "抢豆",
+        onEnd: () => undefined,
+      });
+      for (let i = 0; i < 10; i++) {
+        for (const k of keys) key(i % 2 === 0 ? k : k);
+        flushFrames(dom, 6, 60);
+      }
+      const m = /朵朵 (\d+) · 星星 (\d+)/.exec(dom.root.querySelector(".dmz-score")!.textContent)!;
+      const out: [number, number] = [Number(m[1]), Number(m[2])];
+      handle.destroy();
+      return out;
+    }
+    const [baseDuo, baseStar] = run([]);
+    // 两边都用「掉头」这个一定生效的动作：朵朵开局朝右，星星开局朝左
+    const [duoKeyed, starUntouched] = run(["a"]);
+    const [duoUntouched, starKeyed] = run(["ArrowRight"]);
+    expect(duoKeyed, "按了 WASD 朵朵的路线却一点没变").not.toBe(baseDuo);
+    expect(starUntouched, "朵朵按 WASD 把星星的分数也带偏了").toBe(baseStar);
+    expect(starKeyed, "按了方向键星星的路线却一点没变").not.toBe(baseStar);
+    expect(duoUntouched, "星星按方向键把朵朵的分数也带偏了").toBe(baseDuo);
+  });
+
+  it("双人追逃里方向键只喂给那只带光圈的小幽灵，朵朵的清豆节奏不受影响", async () => {
+    const { mountStage } = await import("./index");
+    function run(keys: string[]): string {
+      const handle = mountStage(dom.root as unknown as HTMLElement, {
+        cfg: corridorCfg({ ghostCount: 1, lives: 5, maze: corridor({ dotsAt: [3, 4, 5], homeX: 5 }) }),
+        starRole: "ghost",
+        label: "追逃",
+        onEnd: () => undefined,
+      });
+      for (let i = 0; i < 6; i++) {
+        for (const k of keys) key(k);
+        flushFrames(dom, 2, 60);
+      }
+      const out = dom.root.querySelector(".dmz-left")!.textContent;
+      handle.destroy();
+      return out;
+    }
+    const quiet = run([]);
+    // 只按方向键：朵朵照自己的节奏走，剩余豆数跟对照局一模一样
+    expect(run(["ArrowLeft"]), "方向键改动了朵朵的清豆节奏").toBe(quiet);
+    // 换成 WASD 掉个头，朵朵的路线就变了
+    expect(run(["a"]), "WASD 没能改动朵朵的走向").not.toBe(quiet);
+  });
+
+  it("Esc 暂停会冻住整局，虚拟方向键也推不动，再按一次继续", async () => {
+    const { mountStage } = await import("./index");
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg({ maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+      starRole: "none",
+      label: "走查",
+      onEnd: () => undefined,
+    });
+    const left = (): string => dom.root.querySelector(".dmz-left")!.textContent;
+    key("d");
+    flushFrames(dom, 2, 130);
+    key("Escape");
+    flushFrames(dom, 1, 130);
+    const frozen = left();
+    expect(dom.root.querySelector(".dmz-note")!.textContent).toContain("已暂停");
+    dom.root.querySelectorAll(".dmz-key[data-dir]").forEach((b) => b.dispatch("click"));
+    flushFrames(dom, 12, 130);
+    expect(left(), "暂停期间还在推进").toBe(frozen);
+    key("Escape");
+    flushFrames(dom, 6, 130);
+    expect(left(), "解除暂停之后没接着走").not.toBe(frozen);
+    handle.destroy();
+  });
+
+  /** 抢豆局跑一小段，返回比分条原文；keys 在每次推进前依次按下 */
+  function raceScore(keys: string[]): string {
+    const { mountStage } = raceMod;
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg({ maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+      starRole: "eater",
+      label: "抢豆",
+      onEnd: () => undefined,
+    });
+    for (let i = 0; i < 4; i++) {
+      for (const k of keys) key(k);
+      flushFrames(dom, 2, 130);
+    }
+    const out = dom.root.querySelector(".dmz-score")!.textContent;
+    handle.destroy();
+    return out;
+  }
+  let raceMod: typeof import("./index");
+  beforeEach(async () => {
+    raceMod = await import("./index");
+  });
+
+  it("取消键 G 把朵朵提前按下、还没到路口的那次转向撤回来", () => {
+    const quiet = raceScore([]);
+    // 先证明「按 A 掉头」确实改得动局面，取消键才有话可说
+    expect(raceScore(["a"]), "按了 A 朵朵却没掉头").not.toBe(quiet);
+    expect(raceScore(["a", "g"]), "按完 A 再按 G，掉头没被撤回来").toBe(quiet);
+  });
+
+  it("取消键 K 只撤星星自己那次转向，撤不到朵朵头上", () => {
+    const quiet = raceScore([]);
+    expect(raceScore(["ArrowRight"]), "按了方向键星星却没掉头").not.toBe(quiet);
+    expect(raceScore(["ArrowRight", "k"]), "按完方向键再按 K，星星的掉头没被撤回来").toBe(quiet);
+    // K 是星星的键：朵朵按下的转向不归它管，撤不掉
+    expect(raceScore(["a", "k"]), "星星的 K 把朵朵的转向也撤了").toBe(raceScore(["a"]));
+  });
+
+  it("迷宫里没有确认这一步，F / L 按下去不改变任何局面（攻略里已写明不用）", () => {
+    const quiet = raceScore([]);
+    expect(raceScore(["f", "l"]), "F / L 居然改动了局面").toBe(quiet);
+    const guide = dmGuide.general.join("\n");
+    expect(guide, "攻略没交代取消键").toContain("取消键");
+    expect(guide, "攻略没写明 F / L 不用").toMatch(/F\s*和\s*L\s*不用管/);
+  });
+
+  it("单人局里 G 和 K 都归朵朵，撤的是同一次转向", async () => {
+    const { mountStage } = await import("./index");
+    function solo(keys: string[]): string {
+      const handle = mountStage(dom.root as unknown as HTMLElement, {
+        cfg: corridorCfg({ maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+        starRole: "none",
+        label: "走查",
+        onEnd: () => undefined,
+      });
+      for (let i = 0; i < 4; i++) {
+        for (const k of keys) key(k);
+        flushFrames(dom, 2, 130);
+      }
+      const out = dom.root.querySelector(".dmz-left")!.textContent;
+      handle.destroy();
+      return out;
+    }
+    const quiet = solo([]);
+    expect(solo(["a"]), "单人局按 A 没掉头").not.toBe(quiet);
+    expect(solo(["a", "g"]), "单人局 G 没撤掉转向").toBe(quiet);
+    expect(solo(["a", "k"]), "单人局 K 该和 G 等价").toBe(quiet);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* L3A-1 · 暂停期间除 Esc 外一律不接                                     */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-1 · 遮住的这一段不该把输入攒下来", () => {
+  /**
+   * 同一局跑三遍：不按 / 暂停时按 / 没暂停时按。
+   * 「暂停时按」应该和「不按」一模一样，「没暂停时按」必须不一样 ——
+   * 后面这一半是防呆：万一这个键本来就改不动局面，前一半的相等就说明不了任何事。
+   */
+  async function corridorRun(opts: {
+    keys?: string[];
+    pad?: boolean;
+    swipe?: boolean;
+    whilePaused: boolean;
+  }): Promise<string> {
+    const { mountStage } = await import("./index");
+    // 上一局 destroy 之后，桩里那条已经排好队的 rAF 回调还占着位置（真浏览器里会被
+    // cancelAnimationFrame 摘掉，桩只记账）。三局要严丝合缝地对比，先把队列清干净。
+    dom.frames.length = 0;
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg({ lives: 5, maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+      starRole: "none",
+      label: "走查",
+      onEnd: () => undefined,
+    });
+    const left = (): string => dom.root.querySelector(".dmz-left")!.textContent;
+    key("d");
+    flushFrames(dom, 2, 130);
+    if (opts.whilePaused) {
+      key("Escape");
+      flushFrames(dom, 1, 130);
+    }
+    for (const k of opts.keys ?? []) key(k);
+    if (opts.pad) {
+      dom.root
+        .querySelectorAll(".dmz-key[data-dir]")
+        .find((b) => b.dataset.dir === "left")!
+        .dispatch("click");
+    }
+    if (opts.swipe) {
+      const canvas = dom.root.querySelector(".dmz-canvas")!;
+      canvas.dispatch("touchstart", { touches: [{ clientX: 90, clientY: 20 }] });
+      canvas.dispatch("touchend", { changedTouches: [{ clientX: 10, clientY: 22 }] });
+    }
+    if (opts.whilePaused) {
+      key("Escape");
+    }
+    flushFrames(dom, 8, 130);
+    const out = left();
+    handle.destroy();
+    return out;
+  }
+
+  it("暂停期间按下的转向不会攒到恢复那一刻集体生效", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    expect(await corridorRun({ keys: ["a"], whilePaused: false }), "不暂停按 A 也没掉头，这条测不出东西").not.toBe(
+      quiet
+    );
+    expect(await corridorRun({ keys: ["a"], whilePaused: true }), "暂停期间按的 A 被攒下来了").toBe(quiet);
+  });
+
+  it("暂停期间点虚拟方向键也不算数", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    expect(await corridorRun({ pad: true, whilePaused: false }), "点方向键本来就不改局面？").not.toBe(quiet);
+    expect(await corridorRun({ pad: true, whilePaused: true }), "暂停期间点的方向键被攒下来了").toBe(quiet);
+  });
+
+  it("暂停期间在画布上滑一下也不算数", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    expect(await corridorRun({ swipe: true, whilePaused: false }), "滑动本来就不改局面？").not.toBe(quiet);
+    expect(await corridorRun({ swipe: true, whilePaused: true }), "暂停期间的滑动被攒下来了").toBe(quiet);
+  });
+
+  it("暂停期间取消键 G / K 一样不接，Esc 仍然是唯一的开关", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    // 先按 A 攒一次转向、再按 G 撤回：不暂停时这一串等于什么都没按
+    expect(await corridorRun({ keys: ["a", "g"], whilePaused: false }), "G 没把 A 撤回来").toBe(
+      await corridorRun({ whilePaused: false })
+    );
+    // 暂停期间这一串一个都不该接，恢复后还是原样
+    expect(await corridorRun({ keys: ["a", "g", "k"], whilePaused: true })).toBe(quiet);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* L3A-2 / L3A-3 / L3A-10 · 触屏的暂停入口与读屏                          */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-2 · 手机上也停得下来", () => {
+  async function stage(): Promise<{ handle: { destroy: () => void }; left: () => string }> {
+    const { mountStage } = await import("./index");
+    dom.frames.length = 0;
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg({ lives: 5, maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+      starRole: "none",
+      label: "走查",
+      onEnd: () => undefined,
+    });
+    return { handle, left: () => dom.root.querySelector(".dmz-left")!.textContent };
+  }
+
+  function pauseKey(): El {
+    const btn = dom.root.querySelector('.dmz-key[data-act="pause"]');
+    if (!btn) throw new Error("方向键盘上没有暂停钮");
+    return btn;
+  }
+
+  it("方向键盘上有一个 ⏸ 钮，点一下真的停住、再点一下接着走", async () => {
+    const { handle, left } = await stage();
+    key("d");
+    flushFrames(dom, 3, 130);
+    pauseKey().dispatch("click");
+    flushFrames(dom, 1, 130);
+    expect(dom.root.querySelector(".dmz-note")!.textContent, "点 ⏸ 没有停住").toContain("已暂停");
+    const frozen = left();
+    flushFrames(dom, 12, 130);
+    expect(left(), "暂停期间还在推进").toBe(frozen);
+    pauseKey().dispatch("click");
+    flushFrames(dom, 8, 130);
+    expect(left(), "再点一次没接着走").not.toBe(frozen);
+    handle.destroy();
+  });
+
+  it("⏸ 钮和 Esc 是同一个开关：读屏文字与按钮状态一起翻面", async () => {
+    const { handle } = await stage();
+    const btn = pauseKey();
+    expect(btn.getAttribute("aria-label")).toBe("暂停");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    key("Escape");
+    flushFrames(dom, 1, 130);
+    expect(btn.textContent, "按 Esc 停住了，屏幕上的钮还写着暂停").toBe("▶");
+    expect(btn.getAttribute("aria-label")).toBe("继续");
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    btn.dispatch("click");
+    flushFrames(dom, 1, 130);
+    expect(btn.textContent).toBe("⏸");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    handle.destroy();
+  });
+
+  it("⏸ 钮和方向键一样是 .dmz-key，热区 ≥ 44px；拆完不留监听", async () => {
+    const { handle } = await stage();
+    expect(pauseKey().className).toContain("dmz-key");
+    expect(lastHitHeight(css(), ".dmz-key")).toBeGreaterThanOrEqual(44);
+    handle.destroy();
+    expect(windowListenerCount(dom)).toBe(0);
+    expect(dom.root.children).toHaveLength(0);
+  });
+
+  it("L3A-3：剩下那个占位格对读屏隐身，不会念出一个空按钮", async () => {
+    const { handle } = await stage();
+    const blanks = dom.root.querySelectorAll(".dmz-key-blank");
+    expect(blanks.length, "占位格数量变了").toBe(1);
+    for (const b of blanks) {
+      expect(b.getAttribute("aria-hidden"), "占位格没有对读屏隐身").toBe("true");
+      expect(b.textContent).toBe("");
+    }
+    handle.destroy();
+  });
+
+  it("L3A-10：三种玩法的说明与攻略都写明了暂停怎么按", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    expect(dom.root.find((e) => e.className.includes("dmz-tip"))!.textContent).toContain("⏸");
+    for (const label of ["无尽迷宫", "抢豆对战", "双人追逃"]) {
+      byText(label)!.dispatch("click");
+      flushFrames(dom, 2, 120);
+      const tips = dom.root.findAll((e) => e.className.includes("dmz-tip")).map((e) => e.textContent);
+      expect(tips.join("\n"), `${label} 的说明里没写暂停怎么按`).toContain("⏸");
+      byText("换个玩法")!.dispatch("click");
+    }
+    expect(dmGuide.general.join("\n"), "攻略里没写暂停钮").toContain("⏸");
+    handle.destroy();
+  });
+
+  it("暂停这一句是并进按键那一条的，通用心得没有因此超出平台的 3–6 条", () => {
+    // 平台侧 copy.test.ts 卡的是 3–6 条；本包自己也留一道，改文案时先在本款红
+    expect(dmGuide.general.length).toBeGreaterThanOrEqual(3);
+    expect(dmGuide.general.length, "多写一条心得就顶破平台上限了，并进相邻那一条去").toBeLessThanOrEqual(6);
+    const keyTip = dmGuide.general.find((t) => t.includes("取消键"));
+    expect(keyTip, "按键那一条不见了").toBeDefined();
+    expect(keyTip, "暂停口径该跟按键说明写在一起").toContain("⏸");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* PA-DM · 铁则 4 / 5：热区与文案                                        */
+/* ------------------------------------------------------------------ */
+
+describe("PA-DM · 360px 热区与卡片文案", () => {
+  it("虚拟方向键的热区达标：48px", async () => {
+    const { mountStage } = await import("./index");
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg(),
+      starRole: "none",
+      label: "走查",
+      onEnd: () => undefined,
+    });
+    expect(hitHeight(css(), ".dmz-key")).toBeGreaterThanOrEqual(44);
+    handle.destroy();
+  });
+
+  it("四个模式入口 .dmz-mode 的热区也够：47px", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    expect(hitHeight(css(), ".dmz-mode")).toBeGreaterThanOrEqual(44);
+    handle.destroy();
+  });
+
+  it("换个玩法 / 回选关用的 .dmz-btn 也够得到 44px", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    byText("无尽迷宫")!.dispatch("click");
+    expect(byText("换个玩法"), "退回菜单的按钮不见了").not.toBeNull();
+    expect(hitHeight(css(), ".dmz-btn"), "换个玩法钮的热区又缩回去了").toBeGreaterThanOrEqual(44);
+    handle.destroy();
+  });
+
+  it("三类热区按「后面的规则说了算」算出来都还是 ≥ 44px", async () => {
+    // 兜底：以后谁往 @media 里补一条把高度压小的规则，这一条会当场变红
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    const sheet = css();
+    for (const sel of [".dmz-key", ".dmz-mode", ".dmz-btn"]) {
+      expect(lastHitHeight(sheet, sel), `${sel} 最终生效的高度不到 44px`).toBeGreaterThanOrEqual(44);
+    }
+    handle.destroy();
+  });
+
+  it("360px 上四种玩法的入口都点得到，进去也不炸", async () => {
+    const { mount } = await import("./index");
+    const rec = fakeApi();
+    const handle = mount(rec.api);
+    const baseline = windowListenerCount(dom);
+    for (const label of ["无尽迷宫", "抢豆对战", "双人追逃"]) {
+      byText(label)!.dispatch("click");
+      flushFrames(dom, 4, 120);
+      const canvas = dom.root.querySelector(".dmz-canvas")!;
+      expect(canvas.width, `${label} 的画布在 360px 上撑破了`).toBeLessThanOrEqual(360 - 20);
+      byText("换个玩法")!.dispatch("click");
+      expect(windowListenerCount(dom), `${label} 退出后监听没回到原位`).toBe(baseline);
+    }
+    handle.destroy();
+    expect(windowListenerCount(dom)).toBe(0);
+  });
+
+  it("meta.blurb 与界面同一套叫法：地上捡的是豆，「小星命」才是命数", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    // 读屏文字与菜单里的叫法：剩 N 颗「豆」、能量「豆」
+    byText("无尽迷宫")!.dispatch("click");
+    flushFrames(dom, 2, 120);
+    expect(dom.root.querySelector(".dmz-canvas")!.getAttribute("aria-label")).toContain("颗豆");
+    byText("换个玩法")!.dispatch("click");
+    expect(dom.root.find((e) => e.className.includes("dmz-sub"))!.textContent).toContain("能量豆");
+    // 而界面上的「小星」是命数：⭐ 小星命
+    byText("无尽迷宫")!.dispatch("click");
+    flushFrames(dom, 2, 120);
+    expect(dom.root.querySelector(".dmz-canvas")!.getAttribute("aria-label")).toContain("小星命");
+    // 卡片这一句跟着界面走：吃的是豆子，「小星」不再拿去指豆子
+    expect(meta.blurb, "blurb 又把豆子叫回「小星星」了").not.toContain("小星星");
+    expect(meta.blurb).toContain("豆子");
+    expect(meta.blurb).toContain("能量豆");
+    handle.destroy();
+  });
+
+  it("meta 的模式、关数、平台与实现对得上", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    const modes = dom.root.findAll((e) => e.tagName === "button" && e.className.includes("dmz-mode"));
+    expect(modes).toHaveLength(meta.modes.length);
+    expect([...meta.modes].sort()).toEqual(["campaign", "endless", "twoPlayer", "versus"]);
+    expect(meta.levels).toBe(188);
+    expect(meta.platform).toBe("both");
+    handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* R3-PA-DM-1 · 无尽刚破纪录，收场话不该还劝你去破它                       */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-16 · 无尽结算分「破了 / 没破」两种说法", () => {
+  /** `before` 是投这一轮之前的纪录，`best` 是把本轮算进去之后的 */
+  async function line(score: number, before: number, best: number): Promise<string> {
+    const { endlessLine } = await import("./index");
+    return endlessLine(score, before, best);
+  }
+
+  it("第一次玩就是历史最好：说新纪录，不再催人去刷新它", async () => {
+    // recordEndlessBest 回来的 best 已经把本轮算进去了，所以第一次玩它和 score 一样
+    const first = await line(30, 0, 30);
+    expect(first, "刚破纪录还在催人刷新").not.toContain("再来一次就能刷新它");
+    expect(first, "破了纪录却一句「新纪录」都没有").toContain("新纪录");
+    expect(first).toContain("30 分");
+  });
+
+  it("超过旧纪录就报新纪录，哪怕只多一分", async () => {
+    expect(await line(121, 120, 121)).toContain("新纪录");
+  });
+
+  it("只追平没超过：按没破算，报差距、鼓励再来一次", async () => {
+    const tie = await line(120, 120, 120);
+    expect(tie, "追平也报了新纪录").not.toContain("新纪录");
+    expect(tie).toContain("历史最好 120 分");
+  });
+
+  it("没追上就报差距，照旧鼓励再来一次", async () => {
+    const behind = await line(40, 120, 120);
+    expect(behind, "没破纪录却报了新纪录").not.toContain("新纪录");
+    expect(behind).toContain("40 分");
+    expect(behind).toContain("历史最好 120 分");
+    expect(behind).toContain("再来一次");
+  });
+
+  it("0 分不许算新纪录：第一次就掉光命也不该被夸破了纪录", async () => {
+    const zero = await line(0, 0, 0);
+    expect(zero, "0 分被当成了新纪录").not.toContain("新纪录");
+    expect(zero.length).toBeGreaterThan(6);
+  });
+
+  it("两种说法都过红线筛子，也不出现朵朵星星以外的角色", async () => {
+    for (const [s, bf, b] of [
+      [30, 0, 30],
+      [40, 120, 120],
+      [0, 0, 0],
+    ] as Array<[number, number, number]>) {
+      const text = await line(s, bf, b);
+      for (const bad of ["死", "血", "尸", "笨", "废", "活该"]) {
+        expect(text.includes(bad) ? `「${text}」里有「${bad}」` : "干净").toBe("干净");
+      }
+    }
+  });
+
+  it("无尽真跑一次：掉光命之后播报走的就是这一套说法", async () => {
+    const { mount } = await import("./index");
+    const lost: string[] = [];
+    const api = fakeApi().api;
+    const handle = mount({ ...api, onLose: (t: string) => lost.push(t) } as never);
+    byText("无尽迷宫")!.dispatch("click");
+    flushFrames(dom, 2, 120);
+    // 一动不动等着被抓完，命掉光就会收场
+    for (let i = 0; i < 900 && lost.length === 0; i++) flushFrames(dom, 1, 130);
+    expect(lost.length, "无尽跑到底也没收场").toBeGreaterThan(0);
+    expect(/新纪录|历史最好/.test(lost[0]), `播报没走 endlessLine：${lost[0]}`).toBe(true);
+    handle.destroy();
+  });
+});

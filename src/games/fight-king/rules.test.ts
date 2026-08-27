@@ -335,9 +335,17 @@ describe("连段取消表", () => {
   it("取消表是单向的：轻能接重，重接不回轻", () => {
     expect(CANCEL_TABLE.light).toContain("heavy");
     expect(CANCEL_TABLE.heavy).not.toContain("light");
-    expect(CANCEL_TABLE.special).toEqual(["super"]);
+    expect(CANCEL_TABLE.special).not.toContain("light");
+    expect(CANCEL_TABLE.special).not.toContain("heavy");
+    expect(CANCEL_TABLE.special).toContain("super");
     expect(CANCEL_TABLE.super).toEqual([]);
     expect(CANCEL_TABLE.throw).toEqual([]);
+  });
+
+  it("同一类里可以再接一招（换个槽），六段连段就是这么来的", () => {
+    expect(CANCEL_TABLE.light).toContain("light");
+    expect(CANCEL_TABLE.heavy).toContain("heavy");
+    expect(CANCEL_TABLE.special).toContain("special");
   });
 
   it("轻 → 重 → 必杀 → 超必杀 一路接得上", () => {
@@ -346,9 +354,10 @@ describe("连段取消表", () => {
     expect(canCancelInto(duoduo.moves.s1, duoduo.moves.super)).toBe(true);
   });
 
-  it("接不回去：重接不了轻、必杀接不了必杀、超必杀之后什么都接不了", () => {
+  it("接不回去：重接不了轻、必杀接不了重、超必杀之后什么都接不了", () => {
     expect(canCancelInto(duoduo.moves["5H"], duoduo.moves["5L"])).toBe(false);
-    expect(canCancelInto(duoduo.moves.s1, duoduo.moves.s2)).toBe(false);
+    expect(canCancelInto(duoduo.moves.s1, duoduo.moves["5H"])).toBe(false);
+    expect(canCancelInto(duoduo.moves.s1, duoduo.moves["2L"])).toBe(false);
     expect(canCancelInto(duoduo.moves.super, duoduo.moves["5L"])).toBe(false);
   });
 

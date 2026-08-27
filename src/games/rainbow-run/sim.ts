@@ -3,7 +3,7 @@
 // 把 index.ts 里那套「每 ROW_GAP 刷一行花样 → 障碍向下滚 → 到玩家身位判定」的循环
 // 原样搬成不依赖 DOM 的纯计算,再配一个固定策略的自动玩家。
 // 它回答的是一个很实际的问题:第 100–188 关这批新关,按人类够得着的操作密度,
-// 到底跑不跑得完、大王打不打得死。
+// 到底跑不跑得完、大王的护甲卸不卸得完。
 //
 // 与渲染层的对齐点:JUMP_TIME / SLIDE_TIME / HIT_WINDOW / ROW_GAP 都从 logic.ts 取,
 // 玩家身位、刷新位置、道具节奏与 index.ts 的常量保持一致。
@@ -71,7 +71,7 @@ export type SimPolicy =
   | "play"
   /**
    * 只保命:换道躲、老远就起跳(所以一次完美跳都打不出来)、遇箱子跳过去不铲。
-   * 用来验证大王关真的有失败分支——活着跑到终点,但大王一点血都没掉。
+   * 用来验证大王关真的有失败分支——好好跑到终点,但大王一层护甲都没卸掉。
    */
   | "survive"
   /** 摆烂:一直往前跑,什么都不做 */
@@ -90,7 +90,7 @@ export interface SimOptions {
 
 export interface SimResult {
   win: boolean;
-  /** finish=跑到终点;hearts=心掉光;boss=终点前没打死大王;timeout=超时 */
+  /** finish=跑到终点;hearts=心掉光;boss=终点前没卸完大王的护甲;timeout=超时 */
   reason: "finish" | "hearts" | "boss" | "timeout";
   note: string;
   stats: RunStats;
@@ -334,7 +334,7 @@ export function simulateLevel(idx: number, opts: SimOptions = {}): SimResult {
       }
       return;
     }
-    // 彩纸箱:正常打就铲碎(顺便给大王掉血),只保命时跳过去更省事
+    // 彩纸箱:正常打就铲碎(顺便卸大王一层护甲),只保命时跳过去更省事
     if (policy === "survive") {
       if (next.t <= jumpLead) jump();
     } else if (action !== "slide" && next.t <= slideLead) {
