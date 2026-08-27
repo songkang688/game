@@ -2074,7 +2074,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
     const gap = ghostGap(dist, ghostPlayer.metersAt(runMs));
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = gap.state === "behind" ? "#a05a2f" : gap.state === "even" ? "#4a5a8a" : "#2f7a52";
-    ctx.font = "bold 13px sans-serif";
+    // 宪法下限 14px(visual-r3 修 N-R3-01):幽灵名牌原 13px
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(ghostGapLine(gap), gx, bodyY - r - 8);
@@ -2225,11 +2226,11 @@ export function mount(api: GameAPI): RainbowRunHandle {
       // 章节名、简介、进度这三行都量过宽:超出先降字号,降到底就掐尾巴。
       // 卡片在 360 宽的两列布局里只有 150 出头,不量就会横着捅出去。
       const titleX = rect.x + 10 + ch * 0.42;
-      ctx.font = `bold ${Math.max(13, Math.min(17, Math.round(ch * 0.22)))}px sans-serif`;
+      ctx.font = `bold ${Math.max(14, Math.min(17, Math.round(ch * 0.22)))}px sans-serif`;
       fitText(`第${i + 1}章 ${st.name}`, titleX, rect.y + ch * 0.3, rect.x + rect.w - 8 - titleX);
       ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
       const bodyW = rect.w - 18;
-      ctx.font = "13px sans-serif";
+      ctx.font = "14px sans-serif";
       fitText(unlocked ? st.blurb : "通关上一个世界解锁", rect.x + 10, rect.y + ch * 0.6, bodyW);
       const size = themeSize(i);
       if (unlocked) {
@@ -2494,7 +2495,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
         drawStar(x0 + (total - 1) * gap + 20, dotY, 7, "#e0a030");
       }
       ctx.fillStyle = "#5a5a6e";
-      ctx.font = "13px sans-serif";
+      ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       fitText(
@@ -2622,21 +2623,22 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let i = 0; i < lines.length; i++) {
-      ctx.font = "13px sans-serif";
+      ctx.font = "14px sans-serif";
       ctx.fillStyle = i === 0 && boostLine !== "" ? "#8a5ac9" : "#5a8ac9";
       fitText(lines[i], w / 2, baseY + i * 20, Math.min(440, w - 40));
     }
   }
 
   /**
-   * 一行放不下就先缩字号,缩到 13px(全站可读性下限)还是塞不进就掐尾巴加省略号。
+   * 一行放不下就先缩字号,缩到 14px(宪法可读性下限,visual-r3 修 N-R3-01 前是 13px)
+   * 还是塞不进就掐尾巴加省略号。
    * 窄屏上宁可少几个字,也不许把提示语顶出面板、把章节简介捅出卡片。
    */
   function fitText(text: string, cx: number, cy: number, maxW: number): void {
     const base = ctx.font;
     const size = Number(/(\d+)px/.exec(base)?.[1] ?? 16);
     let px = size;
-    while (px > 13 && ctx.measureText(text).width > maxW) {
+    while (px > 14 && ctx.measureText(text).width > maxW) {
       px -= 1;
       ctx.font = base.replace(/\d+px/, `${px}px`);
     }
@@ -2847,8 +2849,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.roundRect(bx, cy, Math.max(10, bw * frac), 18, 9);
       ctx.fill();
       ctx.fillStyle = "#4a4a5e";
-      // 13px 是全站可读性下限,追赶条这一行原来是 12px
-      ctx.font = "bold 13px sans-serif";
+      // 宪法下限 14px(visual-r3 修 N-R3-01):追赶条这一行 12px→13px→14px
+      ctx.font = "bold 14px sans-serif";
       ctx.fillText(
         `${CHASER_EMOJI} ${CHASER_NAME}${chaserWarning(chaserGap) ? " 快跑!" : " 在后面追"}`,
         w / 2,
@@ -2904,7 +2906,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.roundRect(bx, by0, Math.max(12, (bw * hits) / boss.hp), 22, 11);
       ctx.fill();
       ctx.fillStyle = "#4a4a5e";
-      ctx.font = "13px sans-serif";
+      // 宪法下限 14px(visual-r3 修 N-R3-01):大王护甲条原 13px
+      ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(
