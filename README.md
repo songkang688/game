@@ -161,17 +161,13 @@ npm run preview    # 本地预览构建产物
 
 ### ⬇️ 从 GitHub Release 下载（不用装开发环境，推荐给普通用户）
 
-每个正式版本的安装包都由 GitHub Actions 自动打好，挂在
+每个正式版本只挂 **三个包**，由 GitHub Actions 自动打好，挂在
 **[Releases 页面](https://github.com/songkang688/game/releases/latest)** 上，下载对应的文件即可：
 
 | 你的设备 | 下载这个 | 怎么用 |
 | ---- | ---- | ---- |
-| Windows 10/11 | `yiduo-yixing-<版本>-win-setup.exe` | **推荐**。双击安装，开始菜单里会有图标 |
-| Windows 10/11（免安装） | `yiduo-yixing-<版本>-win-portable.exe` | 双击直接玩，可以放 U 盘里带走 |
-| Mac（M1/M2/M3… Apple 芯片） | `yiduo-yixing-<版本>-mac-arm64.dmg` | 双击打开，把图标拖进「应用程序」 |
-| Mac（Intel 芯片） | `yiduo-yixing-<版本>-mac-x64.dmg` | 同上 |
-| Mac（不想用 dmg） | `yiduo-yixing-<版本>-mac-<架构>.zip` | 解压出来就是 App，拖进「应用程序」 |
-| Linux x64 | `yiduo-yixing-<版本>-linux-x86_64.AppImage` | `chmod +x` 后双击运行 |
+| Mac（Intel 与 Apple 芯片通用） | `yiduo-yixing-<版本>-mac.dmg` | 双击打开，把图标拖进「应用程序」 |
+| Windows 10/11 | `yiduo-yixing-<版本>-win-portable.exe` | 免安装，双击直接玩，可以放 U 盘里带走 |
 | 安卓手机 / 平板 | `yiduo-yixing-<版本>-android-debug.apk` | 传到手机点开安装（需允许「安装未知来源应用」） |
 
 第一次打开的提示：
@@ -186,24 +182,23 @@ npm run preview    # 本地预览构建产物
 ### 🔨 自己编译
 
 ```bash
-npm run dist        # 构建 + 打 Linux AppImage,产物在 release/
+npm run dist        # 构建 + 打 Windows 便携版,产物在 release/
 ```
 
-产物路径：
+正式发行的三个包：
 
 | 平台 | 命令 | 产物 |
 | ---- | ---- | ---- |
-| Linux | `npm run dist` 或 `npm run dist:linux` | `release/yiduo-yixing-<版本>-linux-x86_64.AppImage` |
+| macOS（需在 Mac 上执行） | `npm run dist:mac` | `release/yiduo-yixing-<版本>-mac.dmg`（Intel + Apple 芯片一份） |
 | Windows 便携版 | `npm run dist:win` | `release/yiduo-yixing-<版本>-win-portable.exe` |
-| Windows 安装器（NSIS） | `npm run dist:win:nsis` | `release/yiduo-yixing-<版本>-win-setup.exe` |
-| macOS（需在 Mac 上执行） | `npm run dist:mac` | `release/yiduo-yixing-<版本>-mac-<架构>.dmg` / `.zip` |
+| 安卓 APK | `npm run android:apk` | `android/app/build/outputs/apk/debug/app-debug.apk` |
 
 说明：
 
-- AppImage 下载后 `chmod +x` 即可双击运行。
-- Windows 便携版在 Linux 上也能交叉打包；**NSIS 安装器**在 Linux 上打包需要安装 wine，建议直接在 Windows 机器上执行 `npm run dist:win:nsis`。
+- Windows 便携版在 Linux 上也能交叉打包。
 - 安装包体积约 100–120 MB（内含 Chromium），因此 **不要把 release/ 提交进 git**（已在 `.gitignore` 中忽略）。
 - 开发时想直接跑桌面窗口：`npm run electron:dev`。
+- Linux AppImage / Windows NSIS 安装器不再进正式 Release；本地仍可用 `npm run dist:linux` / `npm run dist:win:nsis`。
 
 ## 🤖 安卓打包（Capacitor）
 

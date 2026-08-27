@@ -1,7 +1,7 @@
 name: Release
 
-# 打 tag 就出发行包:v1.1.0 这样的 tag 一 push,
-# 这里会把 Windows / macOS / Linux / 安卓的安装包全打出来,挂到 GitHub Release 上。
+# 打 tag 就出发行包:v1.2.2 这样的 tag 一 push,
+# 这里只打三件套:Mac 安装包(通用 dmg)、Windows 便携版、安卓 APK。
 on:
   push:
     tags:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "要补包的已有 tag,例如 v1.2.1"
+        description: "要补包的已有 tag,例如 v1.2.2"
         required: true
 
 permissions:
@@ -59,8 +59,8 @@ jobs:
       - name: 类型检查 + 构建
         run: npm run build
 
-  linux-windows:
-    name: 出包 · Linux AppImage + Windows
+  windows:
+    name: 出包 · Windows 便携版
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -78,55 +78,22 @@ jobs:
       - name: 构建 Web 产物
         run: npm run build
 
-      # Windows 便携版在 Linux 上交叉打没问题(exe 资源改写用的是纯 JS 的 resedit);
-      # NSIS 安装器则要 wine,单独放到下面的 windows-setup job 用原生 Windows 打。
-      - name: 打包 Linux AppImage 与 Windows portable
-        run: npx electron-builder --linux AppImage --win portable --publish never
+      # Windows 便携版在 Linux 上交叉打没问题(exe 资源改写用的是纯 JS 的 resedit)。
+      # 正式发行不再打 NSIS 安装器,也不打 Linux AppImage。
+      - name: 打包 Windows portable
+        run: npx electron-builder --win portable --publish never
 
       - name: 列出产物
         run: ls -lh release/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dist-linux-windows
+          name: dist-windows
           if-no-files-found: error
-          path: |
-            release/*.AppImage
-            release/*.exe
-
-  windows-setup:
-    name: 出包 · Windows 安装器 (NSIS)
-    needs: test
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.BUILD_REF }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      - name: 构建 Web 产物
-        run: npm run build
-
-      - name: 打包 Windows 安装器
-        run: npx electron-builder --win nsis --publish never
-
-      - name: 列出产物
-        run: dir release
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-windows-setup
-          if-no-files-found: error
-          path: release/*.exe
+          path: release/*-win-portable.exe
 
   mac:
-    name: 出包 · macOS dmg + zip
+    name: 出包 · macOS 安装包
     needs: test
     runs-on: macos-latest
     steps:
@@ -145,12 +112,12 @@ jobs:
         run: npm run build
 
       # 无签名分发:不去钥匙串找证书,也不写签名身份。
-      # mac 的目标/分类/图标都用命令行 --config 覆盖,不依赖 package.json 里有没有 mac 段。
-      - name: 打包 macOS(无签名,Intel + Apple 芯片)
+      # 一份 universal dmg,Intel 与 Apple 芯片都能装,Release 上只挂这一个 Mac 包。
+      - name: 打包 macOS 通用 dmg(无签名)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
-          npx electron-builder --mac dmg zip --x64 --arm64 \
+          npx electron-builder --mac dmg --universal \
             --config.mac.identity=null \
             --config.mac.category=public.app-category.games \
             --config.mac.icon=public/icons/icon-512.png \
@@ -163,9 +130,7 @@ jobs:
         with:
           name: dist-mac
           if-no-files-found: error
-          path: |
-            release/*.dmg
-            release/*.zip
+          path: release/*.dmg
 
   android:
     name: 出包 · 安卓 debug APK
@@ -222,7 +187,7 @@ jobs:
 
   release:
     name: 发布 Release
-    needs: [test, linux-windows, windows-setup, mac, android]
+    needs: [test, windows, mac, android]
     # 某个平台打包失败时,已经成功的那几个包照样发出去。
     if: ${{ !cancelled() && needs.test.result == 'success' }}
     runs-on: ubuntu-latest
@@ -251,6 +216,8 @@ jobs:
           给小朋友的 **76 款原创小游戏**合集:**188 关**战役地图,还有双人对战和无尽挑战。
           **没有广告、没有内购、不用注册、不联网、不收集任何数据。**
 
+          正式发行只挂 **三个包**:Mac 安装包、Windows 便携版、安卓 APK。
+
           ## 下载哪一个?
 
           | 文件 | 适用 | 怎么用 |
@@ -269,12 +236,8 @@ jobs:
             [ "$found" = 1 ] || missing="$missing $4"
           }
 
-          add "*-win-setup.exe"        "Windows 10/11"              "**推荐**。双击安装,开始菜单和桌面会有图标" "Windows 安装器"
+          add "*.dmg"                  "Mac(Intel 与 Apple 芯片通用)"  "双击打开,把图标拖进「应用程序」"          "Mac 安装包"
           add "*-win-portable.exe"     "Windows 10/11"              "免安装,双击直接玩,可放 U 盘"           "Windows 便携版"
-          add "*-mac-arm64.dmg"        "Apple 芯片 Mac(M1/M2/M3…)"  "双击打开,把图标拖进「应用程序」"          "Mac(Apple 芯片)"
-          add "*-mac-x64.dmg"          "Intel 芯片 Mac"             "双击打开,把图标拖进「应用程序」"          "Mac(Intel)"
-          add "*-mac-*.zip"            "Mac(不想用 dmg 就下这个)"   "解压出来就是 App,拖进「应用程序」"        "Mac zip"
-          add "*.AppImage"             "Linux x64"                  "\`chmod +x\` 之后双击运行"               "Linux AppImage"
           add "*-android-debug.apk"    "安卓手机/平板"              "传到手机点开安装(需允许「安装未知来源应用」)" "安卓 APK"
 
           if [ -n "$missing" ]; then
@@ -293,11 +256,6 @@ jobs:
           - **Windows**:SmartScreen 可能提示「不常见的应用」,点「更多信息 → 仍要运行」即可。
           - **安卓**:是 debug 版签名的 APK,安装时按提示允许即可;不会覆盖应用商店里的其它应用。
 
-          ## 也可以不装
-
-          手机上直接用浏览器打开网页版,再「添加到主屏幕」就能全屏离线玩(PWA),
-          做法见仓库 README 的「手机上安装」一节。
-
           ---
           源码与更新记录见仓库;安装包由 GitHub Actions 在打 tag 时自动构建。
           EOF
@@ -311,7 +269,7 @@ jobs:
           body_path: RELEASE_BODY.md
           draft: false
           prerelease: false
+          make_latest: true
           fail_on_unmatched_files: false
           files: |
             assets/*
-            docs/demos/*.mp4
