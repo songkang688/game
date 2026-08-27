@@ -740,16 +740,19 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
           c.lineWidth = 2;
           tracePill(c, x + w * 0.16 - 1.5, top - 1.5, w * 0.68 + 3, h + 3, w * 0.28);
           c.stroke();
-          // 星光流:流动亮带 + 两颗小星随流
-          const flow = (t / 6) % Math.max(1, h);
+          // 星光流:流动亮带 + 两颗小星随流;reduced 关流光,亮带定在底部不动
+          const reduced = reduceMotion();
+          const flow = reduced ? Math.min(22, h) : (t / 6) % Math.max(1, h);
           c.fillStyle = "rgba(255,255,255,.35)";
           tracePill(c, x + w * 0.28, top + h - flow, w * 0.44, Math.min(22, h), w * 0.18);
           c.fill();
-          c.fillStyle = "rgba(255,255,255,.85)";
-          traceStar(c, x + w * 0.5, top + Math.max(4, h - flow + 6), 5, 2.2, 5);
-          c.fill();
-          traceStar(c, x + w * 0.36, top + Math.max(4, ((h - flow + h * 0.66) % h) + 4), 3.5, 1.6, 5);
-          c.fill();
+          if (!reduced) {
+            c.fillStyle = "rgba(255,255,255,.85)";
+            traceStar(c, x + w * 0.5, top + Math.max(4, h - flow + 6), 5, 2.2, 5);
+            c.fill();
+            traceStar(c, x + w * 0.36, top + Math.max(4, ((h - flow + h * 0.66) % h) + 4), 3.5, 1.6, 5);
+            c.fill();
+          }
         }
         // 头部:星光琴键(长按款,带「按住」提示环)
         c.drawImage(noteSprite(note.lane, "hold"), x, headY - 13, w, 26);
