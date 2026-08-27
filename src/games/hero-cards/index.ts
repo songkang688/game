@@ -74,7 +74,10 @@ export const HC_CSS = `
 .hc-seats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
 .hc-seat{flex:1 1 128px;min-width:0;background:#fff;border-radius:14px;padding:6px 8px;text-align:left;
   border:none;font-family:inherit;font-size:13px;font-weight:800;color:#7a4a34;cursor:pointer;
-  box-shadow:0 2px 6px rgba(210,160,140,.28);line-height:1.5;overflow-wrap:anywhere;min-height:44px;}
+  box-shadow:0 2px 6px rgba(210,160,140,.28);line-height:1.5;overflow-wrap:anywhere;min-height:44px;
+  /* 座位那行是「元气 9/9 手牌 10 自己」这样一段段拼的,窄屏优先在空格处折,
+     别把「自己」「手牌」这种词从中间劈开 */
+  word-break:keep-all;}
 .hc-seat-on{outline:3px solid #F0975C;}
 .hc-seat-turn{background:#FFF1E2;}
 .hc-seat-pick{outline:3px dashed #D2603A;}
