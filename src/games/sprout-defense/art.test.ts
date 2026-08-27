@@ -312,7 +312,7 @@ describe("1.3 结算星是路径 + 渐变", () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
     const start = src.indexOf("for (const s of shots)");
-    const end = src.indexOf("for (const bug of bugs)");
+    const end = src.indexOf("for (const bug of bugs)", start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
     const shotSection = src.slice(start, end);
