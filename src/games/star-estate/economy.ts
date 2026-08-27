@@ -128,7 +128,8 @@ export function createState(seats: readonly SeatSpec[], startCash: number = STAR
     jailTurns: 0,
     outCards: 0,
     bankrupt: false,
-    doublesRun: 0
+    doublesRun: 0,
+    deedsBought: 0
   }));
   return { players, tiles: emptyTiles(), turn: 0, round: 1, over: false };
 }
@@ -164,6 +165,7 @@ export function buyTile(state: EstateState, playerId: number, pos: number): bool
   if (!st || !p || st.owner !== BANK || p.cash < price) return false;
   p.cash -= price;
   st.owner = playerId;
+  p.deedsBought += 1;
   return true;
 }
 
@@ -323,6 +325,7 @@ export function tryRaise(
       buyer.cash -= deal.price;
       p.cash += deal.price;
       grantTile(state, pos, deal.buyer);
+      buyer.deedsBought += 1;
       report.traded.push({ pos, to: deal.buyer, price: deal.price });
     }
   }
@@ -752,6 +755,7 @@ export function runAuction(
   if (result.winner >= 0) {
     state.players[result.winner].cash -= result.price;
     grantTile(state, pos, result.winner);
+    state.players[result.winner].deedsBought += 1;
   }
   events.push({ kind: "auction", pos, winner: result.winner, price: result.price });
   return result;

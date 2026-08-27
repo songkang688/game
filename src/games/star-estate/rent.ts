@@ -44,6 +44,12 @@ export interface PlayerState {
   bankrupt: boolean;
   /** 这一回合已经连着掷出几次双数 */
   doublesRun: number;
+  /**
+   * 本局自己**掏钱拿下**的产业处数（停在空地买、拍卖拍到、从别人手里接盘都算）。
+   * 开局赠地和对手收摊后转过来的地都不算 —— 战役的过关门槛按这个数看，
+   * 免得「一直点掷骰、什么都不买」也能过关。
+   */
+  deedsBought: number;
 }
 
 export interface EstateState {

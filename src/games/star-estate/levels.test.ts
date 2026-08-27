@@ -20,9 +20,8 @@ import {
   startingNetWorth,
   versusConfig
 } from "./levels";
-import { BANK, deedsOf, netWorth } from "./rent";
-import { tileAt } from "./board";
-import { advanceTurn, grantTile, playTurn, type Policy } from "./economy";
+import { deedsOf, netWorth } from "./rent";
+import { advanceTurn, buyTile, grantTile, playTurn, type Policy } from "./economy";
 import { buildContext, buildState } from "./ai";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -87,11 +86,12 @@ function passiveRun(level: number): { won: boolean; peak: number; bought: number
     wantBuy: () => false,
     bidLimit: () => 0,
     buildPlan: () => [],
-    financePlan: () => []
+    financePlan: () => [],
+    // 别人求救甩卖也一概不接：这个假人就是「只会点掷骰」的那种玩法
+    rescueOffer: () => 0
   };
   ctx.policyOf = (id) => (id === 0 ? lazy : inner(id));
 
-  const base = deedsOf(state, 0).length;
   let peak = netWorth(state, 0);
   let guard = 0;
   while (!state.over && state.round <= cfg.rounds && guard < cfg.rounds * cfg.seats + 8) {
@@ -101,7 +101,7 @@ function passiveRun(level: number): { won: boolean; peak: number; bought: number
     if (state.players[0].bankrupt || goalReached(cfg, state) || state.over) break;
     advanceTurn(state);
   }
-  return { won: goalReached(cfg, state), peak, bought: Math.max(0, deedsOf(state, 0).length - base) };
+  return { won: goalReached(cfg, state), peak, bought: state.players[0].deedsBought };
 }
 
 describe("star-estate · meta 与章节", () => {
@@ -193,17 +193,16 @@ describe("star-estate · meta 与章节", () => {
     expect(bad, `这些关没打通：\n${bad.slice(0, 12).join("\n")}`).toEqual([]);
   });
 
-  it("每一关都要求手里真的攥住地，而且比开局送的多", () => {
+  it("每一关都要求自己下场买地，1 ～ 2 处", () => {
     for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
       const cfg = levelConfig(lv);
-      const base = startingDeeds(cfg);
-      expect(cfg.goal.minDeeds, `第 ${lv + 1} 关没设产业门槛`).toBeGreaterThan(base);
-      expect(cfg.goal.minDeeds - base).toBeLessThanOrEqual(2);
-      expect(goalLine(cfg)).toContain(`攥住 ${cfg.goal.minDeeds} 处产业`);
+      expect(cfg.goal.minBuys, `第 ${lv + 1} 关没设买地门槛`).toBeGreaterThanOrEqual(1);
+      expect(cfg.goal.minBuys).toBeLessThanOrEqual(2);
+      expect(goalLine(cfg)).toContain(`自己买下 ${cfg.goal.minBuys} 处产业`);
     }
   });
 
-  it("钱到线但地不够不算过关；地够了才算", () => {
+  it("钱到线但没买地不算过关；买够了才算", () => {
     const cfg = levelConfig(11);
     const state = buildState({ seed: cfg.seed, tiers: cfg.tiers, cashes: cfg.cashes, preset: cfg.preset });
     const target = cfg.goal.kind === "netWorth" ? cfg.goal.target : 0;
@@ -211,14 +210,36 @@ describe("star-estate · meta 与章节", () => {
     expect(netWorth(state, 0)).toBeGreaterThanOrEqual(target);
     expect(goalReached(cfg, state)).toBe(false);
 
-    let free = 0;
-    for (let pos = 0; pos < state.tiles.length && deedsOf(state, 0).length < cfg.goal.minDeeds; pos++) {
-      if (state.tiles[pos].owner === BANK && (tileAt(pos).price ?? 0) > 0) {
+    let bought = 0;
+    for (let pos = 0; pos < state.tiles.length && bought < cfg.goal.minBuys; pos++) {
+      if (buyTile(state, 0, pos)) bought++;
+    }
+    expect(bought).toBe(cfg.goal.minBuys);
+    expect(goalReached(cfg, state)).toBe(true);
+  });
+
+  it("白拿的地不顶数：开局赠地和对手收摊转过来的地都不算自己买的", () => {
+    const cfg = levelConfig(170);
+    const state = buildState({ seed: cfg.seed, tiers: cfg.tiers, cashes: cfg.cashes, preset: cfg.preset });
+    expect(startingDeeds(cfg), "第 171 关本来就送了一手地").toBeGreaterThan(0);
+    expect(state.players[0].deedsBought).toBe(0);
+
+    // 把一批地白判给朵朵（对手收摊时就是这么整批转过来的），仍然不算数
+    const before = deedsOf(state, 0).length;
+    let handed = 0;
+    for (let pos = 0; pos < state.tiles.length && handed < 6; pos++) {
+      if (state.tiles[pos].owner !== 0) {
         grantTile(state, pos, 0);
-        free++;
+        handed++;
       }
     }
-    expect(free).toBeGreaterThan(0);
+    state.players[1].bankrupt = true;
+    expect(deedsOf(state, 0).length).toBeGreaterThan(before);
+    expect(goalReached(cfg, state)).toBe(false);
+
+    for (let pos = 0; pos < state.tiles.length && state.players[0].deedsBought < cfg.goal.minBuys; pos++) {
+      buyTile(state, 0, pos);
+    }
     expect(goalReached(cfg, state)).toBe(true);
   });
 

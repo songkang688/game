@@ -115,13 +115,18 @@ const PLANS = [
     loseLevel: 170,
     bot: "click",
     // 掷骰 → 能买就买 → 能建就建
-    priority: [/掷骰/, /购买|买下/, /建屋|盖房/, /结束回合|过/],
-    // 输局用：见地就买、拍卖一路跟到底。第 140 关（抵押周转章）开局只有几百星币，
-    // 这么买必然现金见底、付不出租金而收场 —— 孩子第一次玩这类棋最常见的输法。
+    // 两处坑：
+    // 「过」这个字不能单独拿来匹配 —— 地图上那颗「⏭️ 跳过 第 N 关」也带「过」，
+    //   一点下去这一关就被跳掉了，永远等不到结算；
+    // 进了小黑屋，掷骰那颗会改名叫「🎲 掷同点」，只认「掷骰」的假人会在里面坐到超时。
+    priority: [/掷骰|掷同点/, /购买|买下/, /建屋|盖房/, /用出门卡/, /结束回合/],
+    // 输局用：照样掷骰过回合，但一块地都不买 —— 孩子第一次玩最常见的打法。
     //
-    // 注意：这里**不能**用「只掷骰、什么都不买」当输法 —— 那样反而会赢。
-    // 光领工资就够得着净资产目标这件事是本轮记的 W1-R3-01，归修复员。
-    losePriority: [/掷骰/, /购买|买下/, /建屋|盖房/, /加价|跟(?!$)/, /结束回合|过/],
+    // 本轮之前这么打反而会赢（光领工资就够得着净资产目标，记为 W1-R3-01）。
+    // 修复员给过关加了「手里得攥住 N 处产业」这道门之后，这条路才真的收在「没过关」上。
+    losePriority: [/掷骰|掷同点/, /不买|不参与|不加价|不跟/, /用出门卡/, /结束回合/],
+    // 一局 27 个回合、四个座位轮着走，每个回合光动画就十来秒，90 秒远远收不住
+    loseBudgetMs: 420000,
     fallback: ".se-tile"
   }
 ];
@@ -623,9 +628,11 @@ async function playOne(page, plan, readErrors) {
       // 想拿真负证据只能真下场乱打：该摸就摸、该过就过，就是不和牌 / 不置产，
       // 让本地假人自己赢下去（第 1 轮 W1-R1-09 挂的账，在这里还上）。
       const loseWay = plan.losePriority ? "乱打一气真的会没过" : "放着不动真的会没过";
+      // 回合制的一局本来就长（每回合还有对手的动画），给它单独放宽预算
+      const budget = plan.loseBudgetMs ?? LOSE_BUDGET_MS;
       const s = plan.losePriority
-        ? await clickBot(page, { ...plan, priority: plan.losePriority }, LOSE_BUDGET_MS)
-        : await idleBot(page, LOSE_BUDGET_MS);
+        ? await clickBot(page, { ...plan, priority: plan.losePriority }, budget)
+        : await idleBot(page, budget);
       log(plan.id, !!s && !/过关/.test(s.title), `第 ${loseLevel} 关${loseWay}`, s ? s.title : "超时没结算");
       if (s) {
         const harsh = HARSH.filter((w) => s.body.includes(w));
