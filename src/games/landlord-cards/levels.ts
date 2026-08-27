@@ -10,7 +10,15 @@
 import { rateAbove, type Chapter } from "../level99";
 import type { AiLevel } from "./ai";
 import { dealCards, handStrength } from "./logic";
-import { findWinningLine, replayLine, type DealResult, type ProveInput, type WinningLine } from "./sim";
+import {
+  findWinningLine,
+  replayLine,
+  runTable,
+  type DealResult,
+  type ProveInput,
+  type SeatPolicy,
+  type WinningLine,
+} from "./sim";
 
 export const CHAPTERS: Chapter[] = [
   { name: "客厅小牌桌", emoji: "🛋️", color: "#ffe6ef", desc: "第一次摸牌:先认清单张、对子和三张", size: 24 },
@@ -184,6 +192,68 @@ export function dealForLevel(lv: TowerLevel): DealResult & { playerSeat: number;
   const playerSeat = lv.boost === 0 ? lv.seed % 3 : order[2 - lv.boost];
   const landlord = lv.playerIsLandlord ? playerSeat : (playerSeat + 1) % 3;
   return { ...d, playerSeat, landlord };
+}
+
+// ---------------------------------------------------------------------------
+// 输了重开:换一副牌,连输几次之后开始帮着挑
+// ---------------------------------------------------------------------------
+
+/** 每重开一次种子往前挪这么多,保证换一副全新的牌 */
+const REDEAL_STRIDE = 104729;
+
+/** 这一关第 `redeals` 次重开时用的发牌种子 */
+export function levelDealSeed(lv: TowerLevel, redeals: number): number {
+  const n = Number.isFinite(redeals) ? Math.max(0, Math.round(redeals)) : 0;
+  return lv.seed + n * REDEAL_STRIDE;
+}
+
+/**
+ * 连输几次之后开始帮着挑牌。
+ *
+ * 第 2 轮测试员 W5R2-A-08：让「完全照着 💡 教练提示打」的玩家把 188 关各打一局，
+ * 输了就换一副再打——187 关都在 2 次以内翻到能赢的牌，只有**第 188 关要连输 5 次**。
+ * 塔顶紧一点合理，但「第 6 次才过第一次」对孩子偏长。
+ */
+export const MERCY_AFTER_LOSSES = 2;
+
+/** 帮着挑牌时最多往后试几副；试不到就用原来那一副，绝不让孩子干等 */
+export const MERCY_SCAN = 10;
+
+/**
+ * 照着 💡 教练提示打，这一副牌赢不赢得下来。
+ *
+ * 用的就是牌桌上那套教练搜索（`sim.runTable` 的 `coach` 座位）和同一档小牌灵，
+ * 全程无随机源以外的输入，同一个 `redeals` 每次结论都一样。
+ */
+export function coachCanWin(lv: TowerLevel, redeals: number): boolean {
+  const cfg: TowerLevel = { ...lv, seed: levelDealSeed(lv, redeals) };
+  const d = dealForLevel(cfg);
+  const policies: SeatPolicy[] = ["ai", "ai", "ai"];
+  policies[d.playerSeat] = "coach";
+  const r = runTable(
+    { hands: d.hands.map((h) => h.slice()), bottom: d.bottom.slice(), landlord: d.landlord, base: cfg.base },
+    policies,
+    cfg.aiLevel
+  );
+  return d.playerSeat === d.landlord ? r.state.winner === d.landlord : r.state.winner !== d.landlord;
+}
+
+/**
+ * 连输 `redeals` 次之后，这一次该发第几副。
+ *
+ * 前 {@link MERCY_AFTER_LOSSES} 次原样换牌，全凭手气——摔两跤是塔的一部分。
+ * 从第三次起往后试最多 {@link MERCY_SCAN} 副，挑第一副「照着教练提示打能赢」的端上来。
+ *
+ * 为什么不是「抬发牌照顾力度」：`boost` 抬上去只是换一手更强的牌，
+ * 强不强和「这一局赢不赢」并不是一回事——实测把 `boost` 从 0 抬到 1 或 2，
+ * 第 188 关是好了，却把第 150 / 153 / 165 关顶到了连输 5–6 次，
+ * 尾巴只是换了个地方长。直接按「能不能赢」挑，才是对着问题本身下手。
+ */
+export function mercyRedeal(lv: TowerLevel, redeals: number): number {
+  const n = Number.isFinite(redeals) ? Math.max(0, Math.round(redeals)) : 0;
+  if (n < MERCY_AFTER_LOSSES) return n;
+  for (let k = n; k < n + MERCY_SCAN; k++) if (coachCanWin(lv, k)) return k;
+  return n;
 }
 
 /** 赢下这一关能拿几星:对手阵营手上剩的牌越多,赢得越漂亮 */

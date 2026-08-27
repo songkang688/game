@@ -54,6 +54,8 @@ import {
   goalLabel,
   goalMet,
   goalWinLine,
+  levelDealSeed,
+  mercyRedeal,
   towerLoseLine,
   towerStarsWithGoal,
   towerWinLine,
@@ -1358,7 +1360,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   function start(): void {
     table?.destroy();
     stage.innerHTML = "";
-    const cfg: TowerLevel = { ...lv, seed: lv.seed + bump * 104729 };
+    // 连输两次之后开始帮着挑牌:往后试几副,端一副「照着教练提示打能赢」的上来(W5R2-A-08)
+    const cfg: TowerLevel = { ...lv, seed: levelDealSeed(lv, mercyRedeal(lv, bump)) };
     const d = dealForLevel(cfg);
     const mySeat = d.playerSeat;
     table = createTable(stage, {
