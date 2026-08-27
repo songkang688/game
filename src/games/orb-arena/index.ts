@@ -12,6 +12,22 @@ import {
 } from "../../engine";
 import { save } from "../../engine/save";
 import { prefersReducedMotion } from "../../engine/view25d";
+import { makeCollectBurst, type CollectBurst } from "../../art/kit";
+import {
+  CREST_COLORS,
+  drawArenaBackground,
+  drawJellyOrb,
+  drawNameTag,
+  drawPellet,
+  drawResultArt,
+  drawSpikeBall,
+  drawSplitStretch,
+  drawSpore,
+  drawZone,
+  makePelletSprites,
+  pelletStyle,
+  themeFor
+} from "./art";
 import { aiSteer, AI_TIER_LABELS, type AiTier } from "./ai";
 import { CHAPTERS, endlessConfig, goalLine, levelConfig, starsFor, type OrbLevel } from "./levels";
 import {
@@ -79,6 +95,11 @@ export const OA_CSS = `
 .oa-board{position:absolute;top:44px;right:14px;background:#ffffffdb;border-radius:12px;padding:6px 9px;
   font-size:16px;font-weight:800;color:#5b4a86;line-height:1.5;max-width:44%;}
 .oa-board summary{cursor:pointer;font-size:16px;}
+.oa-row{display:flex;align-items:center;gap:5px;}
+.oa-row canvas{flex:0 0 auto;border-radius:50%;}
+.oa-rname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:8em;}
+.oa-rmass{margin-left:auto;padding-left:8px;color:#7a67ab;font-variant-numeric:tabular-nums;}
+.oa-over-art{display:block;margin:0 auto 10px;max-width:100%;}
 .oa-me{color:#a8347a;}
 .oa-msg{text-align:center;min-height:20px;color:#6b53a8;font-weight:800;margin-top:6px;font-size:16px;line-height:1.45;
   overflow-wrap:anywhere;}
@@ -118,6 +139,8 @@ export interface RunResult {
   rank: number;
   usedSec: number;
   reason: "target" | "time" | "spent" | "ally";
+  /** 本局质量成长采样(约每秒一点),给结算曲线小图用;纯展示字段 */
+  massCurve?: number[];
 }
 
 export interface RunOpts {
@@ -168,6 +191,29 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
 
   const rand = (): number => Math.random();
   const nextId = (p: string): string => `${p}${++seq}`;
+
+  // ---- 视觉层状态(只影响演出,不碰胜负数值) ----
+  const theme = themeFor(cfg.level);
+  const pelletSprites = makePelletSprites();
+  const ownerById = new Map(owners.map((o) => [o.id, o]));
+  /** 吞吃/被吞的表情窗口:ownerId → 截止秒 */
+  const eatFaceUntil = new Map<string, number>();
+  const oopsFaceUntil = new Map<string, number>();
+  /** 分身拉丝:分裂后 0.3s 内两球之间画果冻拉伸带 */
+  const stretches: Array<{ a: string; b: string; until: number }> = [];
+  const STRETCH_SEC = 0.3;
+  /** 吞吃爆星(kit 共享粒子;soft 时 kit 自动降级为淡出光圈) */
+  const bursts: CollectBurst[] = [];
+  /** 本局质量曲线采样(结算小图用) */
+  const massSamples: number[] = [30];
+  let sampleAt = 0;
+
+  /** 人类头饰:P1 金星 / P2 银月(形状 + 颜色双通道);AI 不戴 */
+  function crestOf(o?: Owner): { crest: "star" | "moon"; color: string } | null {
+    if (o?.human === "duo") return { crest: "star", color: CREST_COLORS.star };
+    if (o?.human === "star") return { crest: "moon", color: CREST_COLORS.moon };
+    return null;
+  }
 
   owners.forEach((o, i) => {
     const ang = (Math.PI * 2 * i) / owners.length;
@@ -248,6 +294,7 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     if (out.length < 2) return;
     const idx = cells.indexOf(biggest);
     cells.splice(idx, 1, out[0], out[1]);
+    if (!soft) stretches.push({ a: out[0].id, b: out[1].id, until: elapsed + STRETCH_SEC });
     opts.sfx("pop");
   }
 
@@ -383,6 +430,13 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
   function update(dt: number): void {
     elapsed += dt;
 
+    // 视觉:质量曲线约每秒采一点;过期的分身拉丝顺手收掉
+    if (humans[0] && elapsed - sampleAt >= 1 && massSamples.length < 300) {
+      sampleAt = elapsed;
+      massSamples.push(totalMass(cells, humans[0].id));
+    }
+    while (stretches.length && stretches[0].until <= elapsed) stretches.shift();
+
     // 人类:键盘方向优先,没按键就朝准星走
     for (const h of humans) {
       const dir = keyDir.get(h.id) ?? { x: 0, y: 0 };
@@ -408,7 +462,10 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
       aims.set(o.id, move.aim);
       if (move.split) {
         const out = splitCell(big, move.aim, mine.length, elapsed, nextId("s"));
-        if (out.length === 2) cells.splice(cells.indexOf(big), 1, out[0], out[1]);
+        if (out.length === 2) {
+          cells.splice(cells.indexOf(big), 1, out[0], out[1]);
+          if (!soft) stretches.push({ a: out[0].id, b: out[1].id, until: elapsed + STRETCH_SEC });
+        }
       }
       if (move.spit) {
         const out = ejectSpore(big, move.aim, nextId("sp"));
@@ -495,7 +552,10 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
         if (res.popped || res.cells[0].mass !== c.mass) {
           viruses.splice(i, 1);
           cells.splice(cells.indexOf(c), 1, ...res.cells);
-          if (res.popped) opts.sfx("pop");
+          if (res.popped) {
+            opts.sfx("pop");
+            if (bursts.length < 24) bursts.push(makeCollectBurst({ x: v.x, y: v.y, reduced: soft, color: "#8fd48f", count: 6 }));
+          }
           viruses.push({ id: nextId("v"), x: rand() * cfg.mapW, y: rand() * cfg.mapH, mass: VIRUS_MASS, fed: 0 });
         }
         break;
@@ -522,6 +582,13 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
           if (victim?.ally && eater?.human && ownCells(b.owner).length <= 1) {
             finish(false, "ally");
             return;
+          }
+          // 视觉:吞吃演出(弹走 + 星星,无血腥)——吃到 ≥ 自身 1/3 质量才爆星
+          const bigBite = b.mass * 3 >= a.mass;
+          eatFaceUntil.set(a.owner, elapsed + 0.25);
+          oopsFaceUntil.set(b.owner, elapsed + 0.2);
+          if (bigBite && bursts.length < 24) {
+            bursts.push(makeCollectBurst({ x: b.x, y: b.y, reduced: soft, color: victim?.color ?? "#f7c6de", count: 8 }));
           }
           a.mass += b.mass;
           cells.splice(j, 1);
@@ -559,118 +626,158 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     const w = canvas.width;
     const h = canvas.height;
     g.clearRect(0, 0, w, h);
-    g.fillStyle = "#F7F3FF";
-    g.fillRect(0, 0, w, h);
+
+    // 糖果竞技场:渐变底 + 6% 网格 + 视差圆斑 + 世界边缘条纹墙(主题按关卡分段换色)
+    drawArenaBackground(g, { w, h, camX: cam.x, camY: cam.y, zoom: cam.zoom, mapW: cfg.mapW, mapH: cfg.mapH, theme });
 
     const toX = (x: number): number => w / 2 + (x - cam.x) * cam.zoom;
     const toY = (y: number): number => h / 2 + (y - cam.y) * cam.zoom;
 
-    // 网格
-    g.strokeStyle = "#E7DEFA";
-    g.lineWidth = 1;
-    const step = 100 * cam.zoom;
-    if (step > 6) {
-      for (let x = ((-cam.x * cam.zoom + w / 2) % step + step) % step; x < w; x += step) {
-        g.beginPath();
-        g.moveTo(x, 0);
-        g.lineTo(x, h);
-        g.stroke();
-      }
-      for (let y = ((-cam.y * cam.zoom + h / 2) % step + step) % step; y < h; y += step) {
-        g.beginPath();
-        g.moveTo(0, y);
-        g.lineTo(w, y);
-        g.stroke();
-      }
-    }
-
-    // 安全区
+    // 安全区 → 风暴光环:双层描边 + 圈外罩 + 绕行光点(soft 关光点)
     if (zone) {
-      g.strokeStyle = "#9BD5DE";
-      g.lineWidth = 3;
-      g.beginPath();
-      g.arc(toX(zone.cx), toY(zone.cy), zone.radius * cam.zoom, 0, Math.PI * 2);
-      g.stroke();
+      drawZone(g, {
+        x: toX(zone.cx),
+        y: toY(zone.cy),
+        r: zone.radius * cam.zoom,
+        w,
+        h,
+        t: elapsed,
+        soft,
+        shrinking: cfg.shrink > 0
+      });
     }
 
-    // 彩豆
+    // 彩豆 → 星光糖:确定性哈希选型,预渲染贴图,矢量兜底
     for (const p of pellets) {
       const x = toX(p.x);
       const y = toY(p.y);
-      if (x < -8 || y < -8 || x > w + 8 || y > h + 8) continue;
-      g.fillStyle = "#F7C6DE";
-      g.beginPath();
-      g.arc(x, y, Math.max(2, 4 * cam.zoom), 0, Math.PI * 2);
-      g.fill();
+      if (x < -12 || y < -12 || x > w + 12 || y > h + 12) continue;
+      const st = pelletStyle(p.x, p.y);
+      drawPellet(g, pelletSprites, x, y, Math.max(2.4, 4 * cam.zoom), st.kind, st.phase, elapsed, soft);
     }
 
-    // 孢子
-    g.fillStyle = "#CDEFC0";
+    // 孢子:带高光的小水珠,颜色跟吐它的圆圆走
     for (const s of spores) {
-      g.beginPath();
-      g.arc(toX(s.x), toY(s.y), Math.max(2, massToRadius(s.mass) * cam.zoom), 0, Math.PI * 2);
-      g.fill();
+      drawSpore(g, toX(s.x), toY(s.y), Math.max(2, massToRadius(s.mass) * cam.zoom), ownerById.get(s.owner)?.color);
     }
 
-    // 刺球
+    // 刺球 → 危险仙人掌球:渐变内芯 + 逐根尖刺 + 凶脸 + 呼吸(soft 停呼吸)
     for (const v of viruses) {
       const x = toX(v.x);
       const y = toY(v.y);
       const r = massToRadius(v.mass) * cam.zoom;
-      g.fillStyle = "#BFE3B4";
-      g.beginPath();
-      for (let i = 0; i < 18; i++) {
-        const ang = (Math.PI * 2 * i) / 18;
-        const rr = i % 2 === 0 ? r : r * (soft ? 0.82 : 0.76);
-        const px = x + Math.cos(ang) * rr;
-        const py = y + Math.sin(ang) * rr;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
-      }
-      g.closePath();
-      g.fill();
+      if (x < -r * 1.5 || y < -r * 1.5 || x > w + r * 1.5 || y > h + r * 1.5) continue;
+      drawSpikeBall(g, x, y, r, elapsed + v.x * 0.013 + v.y * 0.007, soft);
     }
 
-    // 圆圆
+    // 分身拉丝:分裂后 0.3s 两球之间的果冻拉伸带
+    for (const st of stretches) {
+      const a = cells.find((c) => c.id === st.a);
+      const b = cells.find((c) => c.id === st.b);
+      if (!a || !b) continue;
+      drawSplitStretch(g, {
+        x1: toX(a.x),
+        y1: toY(a.y),
+        r1: massToRadius(a.mass) * cam.zoom,
+        x2: toX(b.x),
+        y2: toY(b.y),
+        r2: massToRadius(b.mass) * cam.zoom,
+        color: ownerById.get(a.owner)?.color ?? "#d9c6f5",
+        k: Math.max(0, Math.min(1, (st.until - elapsed) / STRETCH_SEC))
+      });
+    }
+
+    // 圆圆 → 有脸的果冻球:渐变 + rim + 高光三件套,瞳孔朝移动方向,人类戴头饰
     const sorted = [...cells].sort((a, b) => a.mass - b.mass);
     for (const c of sorted) {
-      const o = owners.find((ow) => ow.id === c.owner);
+      const o = ownerById.get(c.owner);
       const x = toX(c.x);
       const y = toY(c.y);
       const r = Math.max(3, massToRadius(c.mass) * cam.zoom);
-      g.fillStyle = o?.color ?? "#D9C6F5";
-      g.beginPath();
-      g.arc(x, y, r, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#ffffff88";
-      g.beginPath();
-      g.arc(x - r * 0.3, y - r * 0.32, r * 0.28, 0, Math.PI * 2);
-      g.fill();
-      if (r > 14 && o) {
-        g.fillStyle = "#4b3a75";
-        g.font = "600 12px system-ui, sans-serif";
-        g.textAlign = "center";
-        g.textBaseline = "middle";
-        g.fillText(o.name, x, y);
+      if (x < -r - 40 || y < -r - 40 || x > w + r + 40 || y > h + r + 40) continue;
+      const aim = aims.get(c.owner);
+      let lookX = 0;
+      let lookY = 0;
+      if (aim) {
+        const dx = aim.x - c.x;
+        const dy = aim.y - c.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 4) {
+          lookX = dx / len;
+          lookY = dy / len;
+        }
       }
+      const mouth =
+        (eatFaceUntil.get(c.owner) ?? 0) > elapsed ? "eat" : (oopsFaceUntil.get(c.owner) ?? 0) > elapsed ? "oops" : "smile";
+      const cr = crestOf(o);
+      drawJellyOrb(g, {
+        x,
+        y,
+        r,
+        color: o?.color ?? "#D9C6F5",
+        lookX,
+        lookY,
+        mouth,
+        crest: cr?.crest ?? null,
+        crestColor: cr?.color,
+        soft
+      });
+      if (r > 14 && o) drawNameTag(g, x, y + r + 11, o.name);
+    }
+
+    // 吞吃爆星:世界坐标 → 相机变换后统一画(soft 时 kit 降级为淡出光圈)
+    if (bursts.length > 0) {
+      g.save();
+      g.translate(w / 2 - cam.x * cam.zoom, h / 2 - cam.y * cam.zoom);
+      g.scale(cam.zoom, cam.zoom);
+      for (const b of bursts) b.draw(g);
+      g.restore();
     }
   }
 
+  /** 排行榜重建的节流状态:名单没变就每 0.25s 刷一次数字,别每帧重建 DOM */
+  let boardSig = "";
+  let boardAt = -1;
+
   function renderHud(): void {
     const me = humans[0];
-    if (me) {
-      massEl.textContent = `⚪ 质量 ${Math.round(totalMass(cells, me.id))} / ${cfg.targetMass}`;
-      if (timeEl) timeEl.textContent = `⏱️ ${Math.max(0, Math.ceil(cfg.timeSec - elapsed))}`;
-      const rows = leaderboard(cells, names, 10);
-      const myRank = rankOf(cells, names, me.id);
-      boardEl.innerHTML =
-        rows
-          .map(
-            (r, i) =>
-              `<div class="${r.id === me.id ? "oa-me" : ""}">${i + 1}. ${r.name} ${Math.round(r.mass)}</div>`
-          )
-          .join("") + (myRank > 10 ? `<div class="oa-me">第 ${myRank} 名 · 质量 ${Math.round(totalMass(cells, me.id))}</div>` : "");
-    }
+    if (!me) return;
+    massEl.textContent = `⚪ 质量 ${Math.round(totalMass(cells, me.id))} / ${cfg.targetMass}`;
+    if (timeEl) timeEl.textContent = `⏱️ ${Math.max(0, Math.ceil(cfg.timeSec - elapsed))}`;
+    const rows = leaderboard(cells, names, 10);
+    const myRank = rankOf(cells, names, me.id);
+    const sig = rows.map((r) => r.id).join("|") + (myRank > 10 ? `#${myRank}` : "");
+    if (boardAt >= 0 && sig === boardSig && elapsed - boardAt < 0.25) return;
+    boardSig = sig;
+    boardAt = elapsed;
+    boardEl.innerHTML =
+      rows
+        .map(
+          (r, i) =>
+            `<div class="oa-row${r.id === me.id ? " oa-me" : ""}"><canvas class="oa-ava" width="22" height="22" aria-hidden="true"></canvas><span class="oa-rname">${i + 1}. ${r.name}</span><span class="oa-rmass">${Math.round(r.mass)}</span></div>`
+        )
+        .join("") +
+      (myRank > 10 ? `<div class="oa-me">第 ${myRank} 名 · 质量 ${Math.round(totalMass(cells, me.id))}</div>` : "");
+    // 头像小圆:直接复用果冻球绘制函数的 22px 版
+    const avas = boardEl.querySelectorAll("canvas");
+    rows.forEach((r, i) => {
+      const cv = avas[i] as HTMLCanvasElement | undefined;
+      const ag = cv?.getContext?.("2d");
+      if (!ag) return;
+      ag.clearRect(0, 0, 22, 22);
+      const o = ownerById.get(r.id);
+      const cr = crestOf(o);
+      drawJellyOrb(ag, {
+        x: 11,
+        y: 13,
+        r: 6.5,
+        color: o?.color ?? "#d9c6f5",
+        avatar: true,
+        soft,
+        crest: cr?.crest ?? null,
+        crestColor: cr?.color
+      });
+    });
   }
 
   function finish(won: boolean, reason: RunResult["reason"]): void {
@@ -680,7 +787,14 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     const mass = me ? totalMass(cells, me.id) : 0;
     const rank = me ? Math.max(1, rankOf(cells, names, me.id)) : 1;
     opts.sfx(won ? "win" : "oops");
-    const result: RunResult = { won, mass, rank, usedSec: elapsed, reason };
+    const result: RunResult = {
+      won,
+      mass,
+      rank,
+      usedSec: elapsed,
+      reason,
+      massCurve: me ? [...massSamples, mass] : undefined
+    };
     later(() => opts.onDone(result), 320);
   }
 
@@ -689,6 +803,13 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     const dt = last === 0 ? 1 / 60 : Math.min(0.05, (ts - last) / 1000);
     last = ts;
     if (!ended && !paused) update(dt);
+    // 爆星粒子只是演出:暂停时冻结,结束后让它播完
+    if (!paused) {
+      for (let i = bursts.length - 1; i >= 0; i--) {
+        bursts[i].step(dt);
+        if (bursts[i].done()) bursts.splice(i, 1);
+      }
+    }
     canvases.forEach((c, i) => drawPane(c, humans[i]?.id ?? humans[0]?.id ?? owners[0].id));
     renderHud();
     raf = requestAnimationFrame(frame);
@@ -839,7 +960,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     }, WAVE_BREAK_MS) as unknown as number;
   }
 
-  function showOver(title: string, sub: string, again: string): void {
+  function showOver(title: string, sub: string, again: string, extra?: { rank: number; curve?: number[] }): void {
     clearWaveTimer();
     run?.destroy();
     run = null;
@@ -847,6 +968,16 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const box = document.createElement("div");
     box.className = "oa-over";
     box.innerHTML = `<div class="oa-over-t">${title}</div><div class="oa-over-s">${sub}</div>`;
+    // 名次奖杯(前三名金银铜,Canvas 画)+ 本局质量曲线小图
+    if (extra) {
+      const art = document.createElement("canvas");
+      art.className = "oa-over-art";
+      art.width = 260;
+      art.height = 96;
+      const ag = art.getContext("2d");
+      if (ag) drawResultArt(ag, 260, 96, extra.rank, extra.curve ?? []);
+      box.appendChild(art);
+    }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "oa-open";
@@ -878,7 +1009,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           best = save.recordEndlessBest(meta.id, Math.round(total));
           const step = afterWave(r.won, wave, total, best);
           if (step.kind === "over") {
-            showOver(step.title, step.sub, "🔁 再来一局");
+            showOver(step.title, step.sub, "🔁 再来一局", { rank: r.rank, curve: r.massCurve });
             return;
           }
           api.addStars(1);
@@ -900,7 +1031,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           showOver(
             r.won ? "混战赢下来啦！" : "这一局到此为止",
             `${runLine(r.won, r.rank, r.mass)} 用时 ${Math.round(r.usedSec)} 秒。`,
-            "🔁 再打一场"
+            "🔁 再打一场",
+            { rank: r.rank, curve: r.massCurve }
           );
         }
       });
@@ -917,8 +1049,11 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       banner: "👫 朵朵 WASD+F/G · 星星 方向键+L/K",
       split: true,
       sfx: (n) => api.play(n),
-      onDone: () => {
-        showOver("这一局结束啦", "两个人一起玩,谁的圆圆更大都算赢一半。再来一局吧！", "🔁 再来一局");
+      onDone: (r) => {
+        showOver("这一局结束啦", "两个人一起玩,谁的圆圆更大都算赢一半。再来一局吧！", "🔁 再来一局", {
+          rank: r.rank,
+          curve: r.massCurve
+        });
       }
     });
   }
