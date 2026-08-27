@@ -8,6 +8,46 @@ import { CHAIN } from "./collapse";
 import { BOLT, CHAMELEON_BASE, FROZEN_OFFSET, RAINBOW, STONE, isChameleon, isFrozen, isHidden } from "./logic";
 
 // ---------------------------------------------------------------------------
+// 水下氛围 token(四·补一,集中管理;样式表与测试共用)
+// ---------------------------------------------------------------------------
+
+export const BP_TOKENS = {
+  /** 水下背景渐变(上浅下深) */
+  "--bp-water-top": "#DFF4FF",
+  "--bp-water-bottom": "#C9E8F8",
+  /** 两道斜向光柱 */
+  "--bp-lightbeam": "rgba(255,255,255,.08)",
+  /** 底部水草剪影 */
+  "--bp-weed": "#9FD9B8",
+  /** 池壁圆角框 */
+  "--bp-pool": "rgba(255,255,255,.5)",
+  /** 破裂水珠 */
+  "--bp-splash": "rgba(190,230,255,.9)",
+} as const;
+
+/** 装饰气泡(3–5 颗,贴左右两边,避开盘面主体;负延迟让首屏就错落) */
+export const BP_DECOR = [
+  { left: "4%", sizePx: 10, delayMs: 0 },
+  { left: "10%", sizePx: 7, delayMs: -2600 },
+  { left: "88%", sizePx: 12, delayMs: -5200 },
+  { left: "94%", sizePx: 8, delayMs: -6800 },
+] as const;
+
+/** 底部水草剪影(程序化 SVG,颜色走 currentColor = --bp-weed) */
+export function bpWeedsSvg(): string {
+  const blades: string[] = [];
+  for (let i = 0; i < 9; i++) {
+    const x = 6 + i * 14;
+    const h = 7 + ((i * 5) % 9);
+    const sway = i % 2 === 0 ? 3 : -3;
+    blades.push(
+      `<path d="M${x} 20 Q${x + sway} ${20 - h} ${x + sway * 0.4} ${20 - h - 4}" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/>`
+    );
+  }
+  return `<svg viewBox="0 0 128 20" preserveAspectRatio="none" aria-hidden="true" focusable="false">${blades.join("")}</svg>`;
+}
+
+// ---------------------------------------------------------------------------
 // 基色与降级
 // ---------------------------------------------------------------------------
 
@@ -244,11 +284,17 @@ export function bpCellSkin(v: number): BpCellSkin {
 // 视觉样式表(体积层)
 // ---------------------------------------------------------------------------
 
-/** 追加在 1.2 布局样式之后的视觉升级样式(体积 / 纹样 / 旋转 / 破裂 / 降级) */
+/** 追加在 1.2 布局样式之后的视觉升级样式(体积 / 纹样 / 旋转 / 破裂 / 氛围 / 降级) */
 export function bpVisualCss(): string {
   const t = BP_TIMINGS;
+  const tokens = Object.entries(BP_TOKENS)
+    .map(([k, v]) => `${k}:${v};`)
+    .join(" ");
   return `
-.bp-wrap { --bp-spin-ms:${t.rainbowSpinMs}ms; --bp-swell-ms:${t.swellMs}ms; --bp-ring-ms:${t.ringMs}ms; --bp-drop-ms:${t.dropMs}ms; }
+.bp-wrap { ${tokens} --bp-spin-ms:${t.rainbowSpinMs}ms; --bp-swell-ms:${t.swellMs}ms; --bp-ring-ms:${t.ringMs}ms; --bp-drop-ms:${t.dropMs}ms; --bp-jelly-ms:${t.jellyMs}ms; --bp-float-ms:${t.decorFloatMs}ms; --bp-combo-ms:${t.comboMs}ms; }
+.bp-wrap { background: linear-gradient(180deg, var(--bp-water-top), var(--bp-water-bottom)); box-shadow: inset 0 0 0 3px var(--bp-pool); overflow: hidden; }
+.bp-top, .bp-msg, .bbp-line { position: relative; z-index: 1; }
+.bp-badge { background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 2px 6px rgba(100,170,210,.25), inset 0 -2px 0 rgba(150,205,235,.28); }
 .bp-cell { position: relative; }
 .bp-cell::before { content: ""; position: absolute; left: 18%; top: 18%; width: 22%; height: 12%; border-radius: 50%; background: rgba(255,255,255,.45); transform: rotate(-24deg); pointer-events: none; z-index: 1; }
 .bp-cell.bp-empty::before, .bp-tiny .bp-cell::before, .bp-cell.bp-rainbow::before { content: none; }
@@ -260,7 +306,7 @@ export function bpVisualCss(): string {
 .bp-cell.bp-rainbow { overflow: hidden; }
 .bp-rainbow::after { content: ""; position: absolute; inset: -22%; border-radius: 50%; background: ${BP_RAINBOW_CONIC}; animation: bpSpinRot var(--bp-spin-ms) linear infinite; z-index: 0; }
 @keyframes bpSpinRot { to { transform: rotate(360deg); } }
-.bp-board { position: relative; }
+.bp-board { position: relative; z-index: 1; }
 .bp-ghosted { opacity: 0 !important; }
 .bp-burst { position: absolute; pointer-events: none; z-index: 3; }
 .bp-burst-skin { position: absolute; inset: 0; border-radius: 50%; animation: bpBurstBody calc(var(--bp-swell-ms) + var(--bp-ring-ms)) ease-out var(--bp-wait, 0ms) forwards; }
@@ -270,9 +316,23 @@ export function bpVisualCss(): string {
 .bp-burst-drop { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: var(--bp-splash, rgba(190,230,255,.9)); opacity: 0; animation: bpBurstDrop var(--bp-drop-ms) ease-out calc(var(--bp-wait, 0ms) + var(--bp-swell-ms)) forwards; }
 .bp-dr1 { --dx: -14px; --dy: 15px; } .bp-dr2 { --dx: 13px; --dy: 17px; } .bp-dr3 { --dx: -9px; --dy: -15px; } .bp-dr4 { --dx: 11px; --dy: -13px; }
 @keyframes bpBurstDrop { 0% { opacity: .95; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.5); } }
+.bp-jelly { animation: bpJelly var(--bp-jelly-ms) ease-out; transform-origin: 50% 100%; }
+@keyframes bpJelly { 0% { transform: scaleY(.92); } 100% { transform: scaleY(1); } }
+.bp-beam { position: absolute; top: -12%; height: 150%; pointer-events: none; z-index: 0; background: linear-gradient(180deg, var(--bp-lightbeam), transparent 82%); transform: skewX(-16deg); display: block; }
+.bp-beam-a { left: 10%; width: 16%; }
+.bp-beam-b { left: 58%; width: 11%; }
+.bp-weeds { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; pointer-events: none; z-index: 0; color: var(--bp-weed); opacity: .6; display: block; }
+.bp-weeds svg { width: 100%; height: 100%; display: block; }
+.bp-decor { position: absolute; bottom: -26px; border-radius: 50%; pointer-events: none; z-index: 0; opacity: 0; display: block;
+  background: radial-gradient(circle at 30% 24%, rgba(255,255,255,.75), rgba(255,255,255,.12) 62%); box-shadow: inset 0 -1px 2px rgba(255,255,255,.35);
+  animation: bpFloat var(--bp-float-ms) linear infinite; }
+@keyframes bpFloat { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: .55; } 85% { opacity: .45; } 100% { transform: translateY(-560px); opacity: 0; } }
+.bp-combo { animation: bpCombo var(--bp-combo-ms) ease-out; text-shadow: 1px 0 0 #FF9EC8, -1px 0 0 #8FCBFF, 0 1px 0 #FFD26E, 0 -1px 0 #9FE08D; }
+@keyframes bpCombo { 0% { transform: scale(1); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   .bp-rainbow::after { animation: none; }
   .bp-burst-skin, .bp-burst-ring, .bp-burst-drop { animation: none; opacity: 0; }
+  .bp-decor, .bp-jelly, .bp-combo { animation: none; }
 }
 `;
 }

@@ -8,6 +8,7 @@ import {
   BIG_GROUP,
   BubbleBag,
   CHAIN,
+  type CollapsePlan,
   SEA_ROWS,
   blowShuffle,
   chainBlast,
@@ -42,14 +43,14 @@ import {
   revealHidden,
   STONE,
 } from "./logic";
-import { bpBurstDelayMs, bpBurstLifeMs, bpCellSkin, bpIsTiny, bpVisualCss } from "./visual";
+import { BP_DECOR, BP_TIMINGS, bpBurstDelayMs, bpBurstLifeMs, bpCellSkin, bpIsTiny, bpVisualCss, bpWeedsSvg } from "./visual";
 
 const COLS = 8;
 /** 一关里最多帮孩子「吹气重排」几次，之后才收局（重排不扣分） */
 const MAX_SHUFFLE = 3;
 
 const CSS = `
-.bp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E4F6FF, #F2EDFF); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
+.bp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .bp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
 .bp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #4FA3C7; box-shadow: 0 2px 6px rgba(100,170,210,.25); font-size: 14px; }
 .bp-board { display: grid; grid-template-columns: repeat(${COLS}, 1fr); gap: 4px; }
@@ -152,7 +153,7 @@ function copyInto(grid: number[][], next: readonly number[][]): void {
 function clearFx(cells: HTMLElement[]): void {
   for (const el of cells) {
     el.style.transform = "";
-    el.classList.remove("bbp-moving", "bbp-pop", "bp-ghosted");
+    el.classList.remove("bbp-moving", "bbp-pop", "bp-ghosted", "bp-jelly");
   }
 }
 
@@ -217,6 +218,58 @@ function spawnBursts(host: CollapseHost, popped: Array<[number, number]>, origin
 }
 
 /**
+ * 水下氛围装饰：两道斜向光柱 + 底部水草剪影 + 缓升装饰气泡。
+ * 全部 pointer-events:none、挂在 z-index 0，泡泡按钮热区一个像素不动；
+ * reduced 下装饰气泡（唯一带动画的）不加，随宿主一起被 remove，无需另清。
+ */
+function mountAmbience(wrap: HTMLElement): void {
+  for (const cls of ["bp-beam bp-beam-a", "bp-beam bp-beam-b"]) {
+    const beam = document.createElement("i");
+    beam.className = cls;
+    beam.setAttribute("aria-hidden", "true");
+    wrap.appendChild(beam);
+  }
+  const weeds = document.createElement("i");
+  weeds.className = "bp-weeds";
+  weeds.setAttribute("aria-hidden", "true");
+  weeds.innerHTML = bpWeedsSvg();
+  wrap.appendChild(weeds);
+  if (prefersReduced()) return;
+  for (const d of BP_DECOR) {
+    const b = document.createElement("i");
+    b.className = "bp-decor";
+    b.setAttribute("aria-hidden", "true");
+    b.style.left = d.left;
+    b.style.width = `${d.sizePx}px`;
+    b.style.height = `${d.sizePx}px`;
+    b.style.animationDelay = `${d.delayMs}ms`;
+    wrap.appendChild(b);
+  }
+}
+
+/**
+ * 补位果冻落定：塌陷播完、终态渲染之后，给刚落定的泡泡加一下 scaleY .92 → 1。
+ * 只加一个 90ms 的过渡类再摘掉——补位逻辑与 planCollapse 时序常量一个没动。
+ */
+function jellyLand(host: CollapseHost, plan: CollapsePlan): void {
+  if (prefersReduced() || plan.falls.length === 0) return;
+  const colTo = new Map<number, number>();
+  for (const s of plan.shifts) colTo.set(s.fromC, s.toC);
+  const landed: HTMLElement[] = [];
+  for (const f of plan.falls) {
+    const c = colTo.get(f.toC) ?? f.toC;
+    const el = host.cells[f.toR * COLS + c];
+    if (!el) continue;
+    el.classList.add("bp-jelly");
+    landed.push(el);
+  }
+  if (landed.length === 0) return;
+  host.after(() => {
+    for (const el of landed) el.classList.remove("bp-jelly");
+  }, BP_TIMINGS.jellyMs + 40);
+}
+
+/**
  * 播一整条塌陷时间线：消除 180ms → 同列下落（错峰）→ 空列左移 120ms → 落定判定。
  * 每一帧都按 visualRowAt / visualColAt 摆位置，所以中途的视觉坐标和逻辑坐标是错开的；
  * 全程只有这一条路径，没有「一次 render 直达终态」的旁路。
@@ -271,6 +324,7 @@ function runCollapse(host: CollapseHost, popped: Array<[number, number]>, origin
       clearFx(host.cells);
       copyInto(host.grid, plan.next);
       host.render();
+      jellyLand(host, plan);
       done();
       return;
     }
@@ -316,6 +370,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <div class="bp-msg"></div>
   `;
   stage.appendChild(wrap);
+  mountAmbience(wrap);
 
   const boardEl = wrap.querySelector(".bp-board") as HTMLElement;
   const leftEl = wrap.querySelector(".bp-left") as HTMLElement;
@@ -502,6 +557,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (popped.length >= BIG_GROUP && !prefersReduced()) {
       boardEl.classList.add("bbp-ripple");
       later(() => boardEl.classList.remove("bbp-ripple"), 460);
+    }
+    // 连消数字跳动(彩色描边),reduced 不加类
+    if (!prefersReduced()) {
+      scoreEl.classList.add("bp-combo");
+      later(() => scoreEl.classList.remove("bp-combo"), BP_TIMINGS.comboMs + 60);
     }
     runCollapse(host, popped, origin, () => {
       busy = false;
@@ -741,6 +801,10 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     const gained = groupScore(g.length);
     score += gained;
     api.play("pop");
+    if (!prefersReduced()) {
+      chip.classList.add("bp-combo");
+      later(() => chip.classList.remove("bp-combo"), BP_TIMINGS.comboMs + 60);
+    }
     if (msgEl) msgEl.textContent = g.length >= BIG_GROUP
       ? `好大一团！${g.length} 个进账 ${gained} 分！`
       : `消掉 ${g.length} 个，进账 ${gained} 分。`;
@@ -804,6 +868,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     msgEl.textContent = "海水会从下面一行一行涨上来，别让泡泡顶到虚线！先消最大的一团。";
     panel.append(line, boardEl, msgEl);
     stage.appendChild(panel);
+    mountAmbience(panel);
 
     const colors = seaColors(0);
     for (let r = 0; r < SEA_ROWS; r++) {
