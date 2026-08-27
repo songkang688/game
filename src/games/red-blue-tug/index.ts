@@ -145,8 +145,9 @@ export const RBG_CSS = `
 .rbg-pull.rbg-blue { background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; }
 .rbg-pull.rbg-blue:active, .rbg-pull.rbg-blue.rbg-down { box-shadow: 0 2px 0 #3B55C2; }
 .rbg-pull.rbg-ghost { background: linear-gradient(180deg, #DCD3E8, #C4B8D6); box-shadow: 0 5px 0 #A79ABB; cursor: default; }
-.rbg-sub { font-size: 13px; font-weight: 700; opacity: .92; }
-.rbg-pull .rbg-sub { display: inline-block; margin-top: 3px; background: rgba(255,255,255,.94); color: #7C5B63; border-radius: 8px; padding: 1px 8px; font-size: 12px; opacity: 1; box-shadow: inset 0 -2px 0 rgba(150,110,120,.4), 0 1px 2px rgba(120,80,90,.25); }
+.rbg-sub { font-size: 14px; font-weight: 700; opacity: .92; }
+/* W8R1-10：键帽提示 12px 太小，提到 14px（按钮盒子与热区零改动，文本原样） */
+.rbg-pull .rbg-sub { display: inline-block; margin-top: 3px; background: rgba(255,255,255,.94); color: #7C5B63; border-radius: 8px; padding: 1px 8px; font-size: 14px; opacity: 1; box-shadow: inset 0 -2px 0 rgba(150,110,120,.4), 0 1px 2px rgba(120,80,90,.25); }
 .rbg-msg { text-align: center; min-height: 22px; color: #B0555F; font-weight: 700; margin-top: 8px; font-size: 15px; }
 /* 拔河场退到底线 76px 还装不下时（320×640 实测差 37px）由 fitFieldIntoStage() 打上。
    只减空隙——外框内边距 12→6、四处块间距 8→4、提示行上边距 8→4，一共让出 32px；
