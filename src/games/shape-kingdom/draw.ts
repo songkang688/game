@@ -40,6 +40,8 @@ export const MIN_BOARD = 280;
 export const MIN_HIT = 44;
 /** 一行最多几格：再多热区就掉到 44px 以下了 */
 export const MAX_DRAW_COLS = 6;
+/** 「矮屏」的门槛：这以下作图台要自己收一档并允许在本款壳里滚 */
+export const SHORT_SCREEN_PX = 720;
 
 export interface DrawMetrics {
   /** 作图区边长 */
@@ -360,7 +362,7 @@ export function isDrawLevel(chapterIndex: number, indexInChapter: number, legacy
 // 界面：点阵作图台
 // ---------------------------------------------------------------------------
 
-const DRAW_CSS = `
+export const DRAW_CSS = `
 .shk-draw{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:16px;padding:12px;
   user-select:none;-webkit-user-select:none;display:flex;flex-direction:column;gap:8px;min-height:380px;}
 .shk-draw-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -402,6 +404,20 @@ const DRAW_CSS = `
   padding:6px 10px;min-height:0;}
 .shk-dot:focus-visible,.shk-cell:focus-visible,.shk-btn:focus-visible,.shk-piece:focus-visible{
   outline:3px solid #3c2a6b;outline-offset:3px;}
+@media (max-height:${SHORT_SCREEN_PX}px){
+  /* 舞台是定高 + overflow:hidden（平台的 styles.css，交给窗口1），作图台一高就被硬裁，
+     裁掉的那一截里正是交卷用的「✅ 我摆好了」——测试员 W5-B-01 在 360×720 上量到它
+     低于裁切线 37px、360×640 上低 117px，按不着就交不了卷。
+     本款自己能做的两件事：① 竖向逐项收一档；② 收完还高就在本款壳里自己滚。
+     按钮热区（.shk-btn 的 min-height:44px）一个都不动。 */
+  .shk-draw{min-height:0;max-height:100%;overflow-y:auto;gap:6px;padding:8px;}
+  .shk-castle{font-size:17px;min-height:20px;}
+  .shk-ask{font-size:15px;}
+  .shk-readout{min-height:18px;}
+  .shk-msg{min-height:18px;}
+  .shk-btn{padding:9px 14px;}
+  .shk-hint{padding:4px 8px;}
+}
 @media (prefers-reduced-motion:reduce){.shk-castle-grow{animation:none;}}
 `;
 

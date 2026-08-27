@@ -13,7 +13,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { MAX_DRAW_COLS, MIN_BOARD, MIN_HIT, dotBoardMetrics, drawMetrics } from "./draw";
+import { DRAW_CSS, MAX_DRAW_COLS, MIN_BOARD, MIN_HIT, SHORT_SCREEN_PX, dotBoardMetrics, drawMetrics } from "./draw";
 
 const dir = fileURLToPath(new URL(".", import.meta.url));
 const source = readFileSync(`${dir}draw.ts`, "utf8");
@@ -76,6 +76,22 @@ describe("形状王国 · 点阵作图台在手机上摆得下", () => {
     expect(dotBoardMetrics(360, MAX_DRAW_COLS, 5).width).toBeLessThanOrEqual(roomFor(360));
   });
 
+  it("矮屏上作图台自己收一档并允许自滚，交卷键不会被舞台裁掉", () => {
+    const at = DRAW_CSS.indexOf(`@media (max-height:${SHORT_SCREEN_PX}px)`);
+    expect(at, "没有矮屏分支").toBeGreaterThan(-1);
+    // 注释里会点名 .shk-btn 说明「热区不进这一档」，先剥掉注释再看真规则
+    const block = DRAW_CSS.slice(at, DRAW_CSS.indexOf("@media", at + 10)).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(block).toContain("max-height:100%");
+    expect(block).toContain("overflow-y:auto");
+    expect(block).toContain("min-height:0");
+    // 收的是留白，不是热区：这一档里不许出现 min-height 更小的按钮规则
+    expect(block).not.toMatch(/\.shk-btn\{[^}]*min-height/);
+    expect(block).not.toContain(".shk-piece");
+    expect(block).not.toContain(".shk-dot");
+    // 基准样式里 44px 的热区原样还在
+    expect(DRAW_CSS).toContain("min-height:44px");
+  });
+
   it("界面用的是新口径，板子也不许再被 flex 压扁", () => {
     const at = source.indexOf("function buildRectBoard");
     expect(at).toBeGreaterThan(-1);
@@ -83,7 +99,7 @@ describe("形状王国 · 点阵作图台在手机上摆得下", () => {
     expect(body).toContain("dotBoardMetrics(viewport()");
     expect(body).not.toContain("drawMetrics(viewport()");
     // 被压扁正是老毛病的一半：点按原像素摆，板子却缩了
-    const rule = source.slice(source.indexOf(".shk-board{"), source.indexOf("}", source.indexOf(".shk-board{")));
+    const rule = DRAW_CSS.slice(DRAW_CSS.indexOf(".shk-board{"), DRAW_CSS.indexOf("}", DRAW_CSS.indexOf(".shk-board{")));
     expect(rule).toContain("flex:none");
   });
 });
