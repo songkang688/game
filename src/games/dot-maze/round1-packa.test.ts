@@ -12,11 +12,13 @@
  *  - PA-DM-1（一般）：`.dmz-btn`（换个玩法 / 回选关）靠 padding 撑高度，只有 33px 出头；
  *  - PA-DM-2（一般）：`meta.blurb` 把豆子叫「小星星」，可界面上「⭐ 小星命」才是小星星，
  *    HUD 与攻略里一律叫「豆」，卡片和游戏里对不上；
- *  - PA-DM-3（一般）：规格里朵朵的 F / G 与星星的 L / K 四个键都没接。
+ *  - PA-DM-3（一般）：规格里朵朵的 F / G 与星星的 L / K 四个键都没接
+ *    —— 第 2 轮学习优化员已落地：G / K 撤回预输入的转向，F / L 在攻略里写明不用。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { configFor } from "./levels";
 import { El, fireWindow, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
+import dmGuide from "./guide";
 import type { RunConfig } from "./logic";
 import type { Maze } from "./maze";
 import { meta } from "./meta";
@@ -314,25 +316,72 @@ describe("PA-DM · 键位归属", () => {
     handle.destroy();
   });
 
-  it("【已知问题】规格里朵朵的 F / G 与星星的 L / K 都没接上", async () => {
+  /** 抢豆局跑一小段，返回比分条原文；keys 在每次推进前依次按下 */
+  function raceScore(keys: string[]): string {
+    const { mountStage } = raceMod;
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg({ maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+      starRole: "eater",
+      label: "抢豆",
+      onEnd: () => undefined,
+    });
+    for (let i = 0; i < 4; i++) {
+      for (const k of keys) key(k);
+      flushFrames(dom, 2, 130);
+    }
+    const out = dom.root.querySelector(".dmz-score")!.textContent;
+    handle.destroy();
+    return out;
+  }
+  let raceMod: typeof import("./index");
+  beforeEach(async () => {
+    raceMod = await import("./index");
+  });
+
+  it("取消键 G 把朵朵提前按下、还没到路口的那次转向撤回来", () => {
+    const quiet = raceScore([]);
+    // 先证明「按 A 掉头」确实改得动局面，取消键才有话可说
+    expect(raceScore(["a"]), "按了 A 朵朵却没掉头").not.toBe(quiet);
+    expect(raceScore(["a", "g"]), "按完 A 再按 G，掉头没被撤回来").toBe(quiet);
+  });
+
+  it("取消键 K 只撤星星自己那次转向，撤不到朵朵头上", () => {
+    const quiet = raceScore([]);
+    expect(raceScore(["ArrowRight"]), "按了方向键星星却没掉头").not.toBe(quiet);
+    expect(raceScore(["ArrowRight", "k"]), "按完方向键再按 K，星星的掉头没被撤回来").toBe(quiet);
+    // K 是星星的键：朵朵按下的转向不归它管，撤不掉
+    expect(raceScore(["a", "k"]), "星星的 K 把朵朵的转向也撤了").toBe(raceScore(["a"]));
+  });
+
+  it("迷宫里没有确认这一步，F / L 按下去不改变任何局面（攻略里已写明不用）", () => {
+    const quiet = raceScore([]);
+    expect(raceScore(["f", "l"]), "F / L 居然改动了局面").toBe(quiet);
+    const guide = dmGuide.general.join("\n");
+    expect(guide, "攻略没交代取消键").toContain("取消键");
+    expect(guide, "攻略没写明 F / L 不用").toMatch(/F\s*和\s*L\s*不用管/);
+  });
+
+  it("单人局里 G 和 K 都归朵朵，撤的是同一次转向", async () => {
     const { mountStage } = await import("./index");
-    function run(keys: string[]): string {
+    function solo(keys: string[]): string {
       const handle = mountStage(dom.root as unknown as HTMLElement, {
         cfg: corridorCfg({ maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
-        starRole: "eater",
-        label: "抢豆",
+        starRole: "none",
+        label: "走查",
         onEnd: () => undefined,
       });
       for (let i = 0; i < 4; i++) {
         for (const k of keys) key(k);
         flushFrames(dom, 2, 130);
       }
-      const out = dom.root.querySelector(".dmz-score")!.textContent;
+      const out = dom.root.querySelector(".dmz-left")!.textContent;
       handle.destroy();
       return out;
     }
-    // 应有行为：这四个键至少要有一个能落到某个动作上。现状：按不按结果一模一样。
-    expect(run(["f", "g", "l", "k"]), "F / G / L / K 里居然有键生效了").toBe(run([]));
+    const quiet = solo([]);
+    expect(solo(["a"]), "单人局按 A 没掉头").not.toBe(quiet);
+    expect(solo(["a", "g"]), "单人局 G 没撤掉转向").toBe(quiet);
+    expect(solo(["a", "k"]), "单人局 K 该和 G 等价").toBe(quiet);
   });
 });
 

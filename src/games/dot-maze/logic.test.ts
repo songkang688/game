@@ -3,6 +3,7 @@ import { PHASE_TABLES, TIER_FRIGHT_MS } from "./ghosts";
 import {
   FRUITS,
   RESPAWN_GRACE_MS,
+  clearTurn,
   createRun,
   inTunnel,
   remaining,
@@ -37,6 +38,40 @@ function cfg(over: Partial<RunConfig> = {}): RunConfig {
     ...over,
   };
 }
+
+describe("豆豆迷宫 · 撤回预输入的转向", () => {
+  it("clearTurn 把还没生效的转向清掉，并告诉调用方确实撤了一次", () => {
+    const state = createRun(cfg(), 1);
+    expect(clearTurn(state), "什么都没按也说撤掉了一次").toBe(false);
+    requestTurn(state, "right", state.elapsed);
+    expect(state.buffer.dir).toBe("right");
+    expect(clearTurn(state), "按过一次转向却说没得撤").toBe(true);
+    expect(state.buffer.dir).toBe(null);
+  });
+
+  it("撤回只清缓冲，脚下正走着的方向不动，不会原地停住", () => {
+    const state = createRun(cfg({ maze: ring() }), 1);
+    state.player = { x: 1, y: 1 };
+    state.dir = "right";
+    requestTurn(state, "down", state.elapsed);
+    clearTurn(state);
+    stepRun(state, 320);
+    expect(state.dir, "撤回之后方向被顺手改掉了").toBe("right");
+    expect(state.player.y, "撤回之后还是拐下去了").toBe(1);
+    expect(state.player.x, "撤回之后停在原地不走了").toBeGreaterThan(1);
+  });
+
+  it("撤回之后再按一次转向照样生效，不会把这一路的输入都封死", () => {
+    const state = createRun(cfg({ maze: ring() }), 1);
+    state.player = { x: 1, y: 1 };
+    state.dir = "right";
+    requestTurn(state, "down", state.elapsed);
+    clearTurn(state);
+    requestTurn(state, "down", state.elapsed);
+    stepRun(state, 120);
+    expect(state.dir, "撤回之后补按的转向没生效").toBe("down");
+  });
+});
 
 describe("豆豆迷宫 · 一局的推进", () => {
   it("吃豆加分，场上豆子随之减少", () => {

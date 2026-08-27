@@ -23,6 +23,7 @@ import {
 } from "./maze";
 import {
   FRUITS,
+  clearTurn,
   createRun,
   remaining,
   requestTurn,
@@ -486,7 +487,26 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       // 单人玩的时候方向键和 WASD 等价，两只手随便用哪一套
       else requestTurn(state, starDir, state.elapsed);
       e.preventDefault();
+      return;
     }
+    // 取消键：朵朵 G、星星 K，把提前按下、还没到路口的那次转向撤回来。
+    // 迷宫里没有「确认」这一步，所以 F / L 不接（攻略里已写明）。
+    if (key === "g") {
+      clearTurn(state);
+      e.preventDefault();
+      return;
+    }
+    if (key === "k") {
+      cancelStarTurn();
+      e.preventDefault();
+    }
+  }
+
+  /** 星星那一侧的「撤回转向」：抢豆的星星把待转方向收回当前方向，操纵小幽灵时同理，单人局归朵朵 */
+  function cancelStarTurn(): void {
+    if (star) star.next = star.dir;
+    else if (opts.starRole === "ghost") steerGhost(state, state.ghosts[state.controlled]?.dir ?? state.controlledDir);
+    else clearTurn(state);
   }
 
   const padButtons = Array.from(wrap.querySelectorAll<HTMLButtonElement>(".dmz-key[data-dir]"));

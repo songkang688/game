@@ -177,6 +177,17 @@ export function requestTurn(state: RunState, dir: Dir, now: number): void {
   state.buffer = { dir, at: now };
 }
 
+/**
+ * 撤掉还没到路口的那次转向请求（取消键用）。
+ * 只清缓冲，当前正走着的方向不动，所以按了不会原地停住。
+ * 返回真表示确实有一次没生效的请求被撤掉了。
+ */
+export function clearTurn(state: RunState): boolean {
+  const had = state.buffer.dir !== null;
+  state.buffer = emptyBuffer();
+  return had;
+}
+
 /** 立刻转向（合法才生效）。给自动演示与测试机器人用，真人输入一律走 requestTurn */
 export function setDir(state: RunState, dir: Dir): boolean {
   if (!canTurn(state.maze, state.player, dir)) return false;
