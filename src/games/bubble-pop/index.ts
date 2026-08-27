@@ -222,7 +222,7 @@ function spawnBursts(host: CollapseHost, popped: Array<[number, number]>, origin
  * 全部 pointer-events:none、挂在 z-index 0，泡泡按钮热区一个像素不动；
  * reduced 下装饰气泡（唯一带动画的）不加，随宿主一起被 remove，无需另清。
  */
-function mountAmbience(wrap: HTMLElement): void {
+function paintAmbience(wrap: HTMLElement): void {
   for (const cls of ["bp-beam bp-beam-a", "bp-beam bp-beam-b"]) {
     const beam = document.createElement("i");
     beam.className = cls;
@@ -370,7 +370,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <div class="bp-msg"></div>
   `;
   stage.appendChild(wrap);
-  mountAmbience(wrap);
+  paintAmbience(wrap);
 
   const boardEl = wrap.querySelector(".bp-board") as HTMLElement;
   const leftEl = wrap.querySelector(".bp-left") as HTMLElement;
@@ -868,7 +868,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     msgEl.textContent = "海水会从下面一行一行涨上来，别让泡泡顶到虚线！先消最大的一团。";
     panel.append(line, boardEl, msgEl);
     stage.appendChild(panel);
-    mountAmbience(panel);
+    paintAmbience(panel);
 
     const colors = seaColors(0);
     for (let r = 0; r < SEA_ROWS; r++) {
