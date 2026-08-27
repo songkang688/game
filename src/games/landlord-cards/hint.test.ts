@@ -246,4 +246,34 @@ describe("提示里点名的按钮和牌桌上那颗是同一个字", () => {
       .join("\n");
     expect(code).not.toContain("「不要」");
   });
+
+  /*
+   * W5R3-A-01 只改了 `hint.ts`，守门也只盯 `hint.ts`——第 3 轮测试员 A13 在
+   * `index.ts` 里又找出三处**给孩子看的**「不要」（`W5R3-TA-04`）：
+   *   :399 键位提示「G 不要」（牌桌底下那颗键印的是「🙅 不出」）
+   *   :622 对家气泡「不要～」   :663 牌桌流水「不要～」
+   * 第一处最要紧——它是在**教孩子这颗键叫什么**。扫描范围一并扩到 `index.ts`。
+   */
+  it("index.ts 里给孩子看的字也一句「不要」都不剩（W5R3-TA-04）", () => {
+    // 只看会被渲染出来的那些：注释里解释缘由的那几句不算
+    const code = SRC.split("\n")
+      .filter((l) => {
+        const t = l.trimStart();
+        return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*") && !l.includes("/**");
+      })
+      .join("\n");
+    expect(code).not.toContain("不要");
+    // 三处都改成了由常量拼，以后 PASS_WORD 一改这三处跟着走
+    expect(SRC).toContain("${k.pass.toUpperCase()} ${PASS_WORD}");
+    expect(SRC).toContain('<span class="ld-bubble">${PASS_WORD}～</span>');
+    expect(SRC).toContain('<span class="ldc-table-pass">${PASS_WORD}～</span>');
+  });
+
+  it("键位提示上印的就是牌桌底下那颗键上的字", () => {
+    const at = SRC.indexOf("function keyHint(seat: SeatCfg): string {");
+    expect(at).toBeGreaterThan(-1);
+    const body = SRC.slice(at, SRC.indexOf("\n}", at));
+    expect(body).toContain("PASS_WORD");
+    expect(PASS_BUTTON_LABEL).toContain(PASS_WORD);
+  });
 });
