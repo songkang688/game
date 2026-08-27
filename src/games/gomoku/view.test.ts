@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeBoard, setCell } from "./ai";
 import { installDom, restoreDom, windowListenerCount, type Dom, type El } from "./domStub";
-import { VIEW_W, createBoardView } from "./view";
+import { CSS, MIN_HIT_PX, VIEW_W, createBoardView } from "./view";
 
 let dom: Dom;
 
@@ -29,6 +29,31 @@ function mountView(size: number) {
 function at(size: number, x: number, y: number): { clientX: number; clientY: number; preventDefault: () => void } {
   const cs = VIEW_W / (size + 1);
   return { clientX: cs + x * cs, clientY: cs + y * cs, preventDefault: () => undefined };
+}
+
+/** 取某个选择器最后一次出现的规则体（后面的媒体查询会盖掉前面的） */
+function ruleBody(selector: string): string {
+  const re = new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "g");
+  let body = "";
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(CSS)) !== null) body = m[1];
+  if (!body) throw new Error(`CSS 里没有 ${selector}`);
+  return body;
+}
+
+/**
+ * 一条 CSS 规则能点多高（px）。`min-height` / `height` 优先；
+ * 都没写就按「上下 padding + 上下边框 + 字号 × 1.2」估 —— 行高取的是最小那一档，
+ * 估出来的是**下限**，所以 ≥ 44 的结论只会更保守。
+ */
+function hitHeight(body: string): number {
+  const explicit = /(?:^|;)\s*(?:min-)?height:\s*([\d.]+)px/.exec(body);
+  if (explicit) return Number(explicit[1]);
+  const pad = /(?:^|;)\s*padding:\s*([\d.]+)px/.exec(body);
+  const font = /(?:^|;)\s*font-size:\s*([\d.]+)px/.exec(body);
+  const border = /(?:^|;)\s*border:\s*([\d.]+)px/.exec(body);
+  if (!pad || !font) return Number.NaN;
+  return Number(pad[1]) * 2 + (border ? Number(border[1]) * 2 : 0) + Number(font[1]) * 1.2;
 }
 
 describe("棋盘视图 · 挂载", () => {
@@ -226,5 +251,17 @@ describe("棋盘视图 · 动画与清理", () => {
     expect(taps).toEqual([{ x: 8, y: 8 }]);
     expect(view.cellPx()).toBeCloseTo(VIEW_W / 10, 5);
     view.destroy();
+  });
+});
+
+describe("360px 上的热区", () => {
+  it("热区下限就是无障碍要的 44px", () => {
+    expect(MIN_HIT_PX).toBe(44);
+  });
+
+  it("R2C-G1 · 局内那排按钮（悔棋 / 提示 / 确认落子 / 重摆 / 换玩法）够得到 44px", () => {
+    expect(hitHeight(ruleBody(".gmk-btns button")), "局内按钮的热区又缩回去了").toBeGreaterThanOrEqual(
+      MIN_HIT_PX,
+    );
   });
 });

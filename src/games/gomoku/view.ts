@@ -17,6 +17,13 @@ export const WIN_SWEEP_MS = 620;
 /** 禁手红叉停留时长（毫秒） */
 export const FORBID_MS = 1400;
 
+/**
+ * 手指至少要有多大的靶子：44 CSS px（无障碍下限）。
+ * 全局 `* { box-sizing:border-box }`，所以 `min-height` 把 padding 与边框都算了进去，
+ * 360px 上量到的就是这个数。
+ */
+export const MIN_HIT_PX = 44;
+
 export const CSS = `
 .gmk-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;max-width:420px;margin:0 auto;
   user-select:none;-webkit-user-select:none;position:relative;}
@@ -28,8 +35,8 @@ export const CSS = `
 .gmk-canvas{width:100%;border-radius:16px;display:block;touch-action:none;box-shadow:0 4px 14px rgba(190,140,90,.25);}
 .gmk-canvas:focus-visible{outline:3px solid #C2497E;outline-offset:3px;}
 .gmk-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
-.gmk-btns button{flex:1;min-width:88px;border:none;border-radius:14px;padding:10px 6px;font-size:14px;font-weight:800;
-  cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.12);font-family:inherit;}
+.gmk-btns button{flex:1;min-width:88px;min-height:${MIN_HIT_PX}px;border:none;border-radius:14px;padding:10px 6px;
+  font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.12);font-family:inherit;}
 .gmk-btns button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.12);}
 .gmk-btns button:disabled{opacity:.45;cursor:default;transform:none;}
 .gmk-undo{background:#CDE6FF;color:#2A6099;}
