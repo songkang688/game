@@ -47,6 +47,7 @@ import {
   pinchZoom,
   resolveInitialLevel,
   shouldSuggestZoom,
+  viewportRoomPx,
   TOOL_MIN_H,
   type CellCenter,
 } from "./runtime";
@@ -108,7 +109,8 @@ const CSS = `
 .fdf-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
 .fdf-badge{font-size:14px;font-weight:800;background:#ffffffd9;border-radius:999px;padding:5px 11px;
   box-shadow:0 2px 6px rgba(120,120,160,.2);white-space:nowrap;}
-.fdf-viewport{position:relative;overflow:hidden;width:100%;border-radius:14px;touch-action:none;}
+.fdf-viewport{position:relative;overflow:hidden;width:100%;border-radius:14px;touch-action:none;
+  overscroll-behavior:contain;}
 .fdf-zoom{transform-origin:center center;will-change:transform;}
 .fdf-panels{display:flex;flex-direction:column;gap:8px;width:100%;align-items:center;}
 .fdf-row{display:flex;gap:6px;flex-wrap:nowrap;justify-content:center;}
@@ -387,6 +389,25 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       panY = 0;
     }
     applyTransform();
+    syncTouchAction();
+  }
+
+  /**
+   * 1× 时 `clampPan()` 的行程本来就是 0，拖也拖不动——把这一档让给滚动，
+   * 手指才推得动上面钳出来的那条滚动条；一旦放大，平移又比滚动要紧，收回来。
+   */
+  function syncTouchAction(): void {
+    viewport.style.touchAction = zoom <= ZOOM_MIN + 1e-9 ? "pan-y" : "none";
+  }
+
+  /** 舞台矮到工具条掉出裁切线时，把两张图那一块钳矮、让它自己挂滚动条 */
+  function fitViewport(): void {
+    viewport.style.maxHeight = "";
+    viewport.style.overflowY = "";
+    const next = viewportRoomPx(root.scrollHeight, viewport.offsetHeight, stageRoomPx(root));
+    if (next === null) return;
+    viewport.style.maxHeight = `${next}px`;
+    viewport.style.overflowY = "auto";
   }
 
   const pointers = new Map<number, { x: number; y: number }>();
@@ -574,10 +595,14 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   paintAll(false);
   applyTransform();
+  syncTouchAction();
   refreshHintBtn();
   msgEl.textContent = shouldSuggestZoom(playPx, zoom)
     ? "格子有点小，可以两根手指放大，两张图会一起放大～"
     : "";
+  fitViewport();
+  const win = root.ownerDocument?.defaultView ?? null;
+  win?.addEventListener("resize", fitViewport);
 
   return {
     root,
@@ -604,6 +629,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       viewport.removeEventListener("pointercancel", onPointerCancel);
       viewport.removeEventListener("wheel", onWheel);
       zoomer.removeEventListener("input", onZoomer);
+      win?.removeEventListener("resize", fitViewport);
       pointers.clear();
       zoom = ZOOM_MIN;
       panX = 0;

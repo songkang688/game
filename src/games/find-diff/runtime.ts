@@ -161,6 +161,36 @@ export function stageRoomPx(el: HTMLElement): number {
   return visibleRoomPx(el.getBoundingClientRect().top, bottoms);
 }
 
+/**
+ * 两张图那一块最少要留多高才值得钳——比这还矮就整块让给滚动，钳只会压成一条缝。
+ * 两行 26px 的格子加上格间距与标题，正好 96px。
+ */
+export const VIEWPORT_MIN_ROOM = 96;
+
+/**
+ * 算「两张图那一块」该被钳到多高，才能让它下面的提示行与工具条留在裁切线以内。
+ *
+ * `panelCellForRoom()` 已经把格子摊到 26px 的下限了，可 360×640 上整块玩法仍有 504px，
+ * 而舞台只给 404px——`.l99-stagebar` 自己就吃掉 116px，工具条那行「🔎 圈出大致区域」
+ * 202px 宽放不下滑杆，又换了一行多占 52px。差的这 100px 没地方再省，
+ * 于是提示键与放大滑杆整个掉到裁切线以下，四档视口里 ≤640 的两档一个都点不着。
+ *
+ * 这里只动两张图那一块：把超出的部分从它身上扣掉，工具条就顶回屏幕里。
+ * 返回 null 表示装得下（或矮到不值得钳），照原样别管。
+ */
+export function viewportRoomPx(
+  wrapHeight: number,
+  viewportHeight: number,
+  roomPx: number,
+  minRoom = VIEWPORT_MIN_ROOM,
+): number | null {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  if (!Number.isFinite(wrapHeight) || !Number.isFinite(viewportHeight) || viewportHeight <= 0) return null;
+  const over = wrapHeight - roomPx;
+  if (over <= 1) return null;
+  return Math.max(minRoom, Math.floor(viewportHeight - over));
+}
+
 /** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */
 export function miniCellPx(cols: number, viewportWidth: number): number {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;
