@@ -115,7 +115,7 @@ function lcg(seed: number): () => number {
 }
 
 /** 一枝小花藤:一条茎 + 两片叶 + 一朵五瓣小花,笔数 ≤ 12,画在边框角上 */
-function paintCornerVine(ctx: ArtCtx, s: number): void {
+export function paintCornerVine(ctx: ArtCtx, s: number): void {
   const stemCol = "#6f8f4a";
   ctx.save();
   // 茎:一条弧线
