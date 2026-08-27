@@ -81,3 +81,30 @@ describe("窗口4 第2轮学习优化员:C 档修复出的手绘亮点讲进了�
     });
   }
 });
+
+/**
+ * 第 3 轮(终验)追加:C 档第 2 轮补出来的三条剪影通道也讲给玩家
+ * (garden-guard BOSS 家族配饰 b8ca36c / monster-crisis 双英雄帽形 3a4872d /
+ * sprout-defense 飞虫翅膀出轮廓 a60ffc4),关键词与绘制代码逐一对过。
+ * 报告:docs/qa/1.3-window4-round3-learner.md 第五节。
+ */
+const R3_FIX_CUES: ReadonlyArray<{ id: string; cues: string[] }> = [
+  // bossTrimOf 四原型配饰:plate 肩甲铆钉护板 / feather 后掠速度羽 / cloud 身下云座 / ring 双色虚线分裂环
+  { id: "garden-guard", cues: ["铆钉护板", "速度羽", "小云朵座", "双色虚线环"] },
+  // HERO_SKINS + drawHero:P1 歪戴扁贝雷+花徽+圆摆 / P2 尖顶画家帽+帽尖星揪揪+锯齿摆
+  { id: "monster-crisis", cues: ["粉贝雷", "尖顶画家帽", "星星揪揪"] },
+  // drawBugBody:飞虫翅膀锚点 1.15r 出轮廓、身体悬空影子留在 groundY,地面虫走四只小短腿
+  { id: "sprout-defense", cues: ["翅膀翘在身子上头", "影子留在地上"] },
+];
+
+describe("窗口4 第3轮学习优化员:C 档 r2 补的剪影通道讲进了攻略", () => {
+  for (const { id, cues } of R3_FIX_CUES) {
+    it(`${id} 的攻略里能找到 r2 剪影亮点关键词`, async () => {
+      const mod = (await import(`../${id}/guide.ts`)) as { default: GuideBook };
+      const text = flat(mod.default);
+      for (const cue of cues) {
+        expect(text, `${id} 攻略缺关键词「${cue}」`).toContain(cue);
+      }
+    });
+  }
+});
