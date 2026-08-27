@@ -67,6 +67,7 @@ import {
   unwarnedSpawns,
 } from "./sprout12";
 import { SIM_STYLES, simulateEndless, simulateLevel } from "./sim";
+import { kidWording } from "./wording";
 import { meta } from "./meta";
 import guide from "./guide";
 
@@ -504,6 +505,37 @@ describe("1.2 新写的文案一律不说「血」", () => {
     expect(fresh.length).toBeGreaterThan(80);
     for (const line of fresh) {
       expect(line, `这句里还留着「血」:${line}`).not.toMatch(/血/);
+    }
+  });
+});
+
+/**
+ * 1.2 监督修复员第 3 轮:把「前 99 关那句还说血」这条遗留收口。
+ *
+ * 第 13 关的提示「壳壳虫有硬壳,要先敲碎再掉血!」在 1.1 冻结区里,
+ * `logic.test.ts` 拿指纹钉着关卡数据,改一个字就红。
+ * 收口办法是**数据不动,渲染时换措辞**(`wording.ts` 的 `kidWording`)。
+ */
+describe("sprout-defense · 前 99 关的提示按元气念给孩子听", () => {
+  it("第 13 关那句换过之后不再有「血」,而数据本身没被动过", () => {
+    const raw = LEVELS[12].hint;
+    expect(raw, "第 13 关的原文应该还带着「血」(数据没被动过)").toMatch(/血/);
+    expect(kidWording(raw)).toBe("壳壳虫有硬壳,要先敲碎再掉元气!");
+  });
+
+  it("「半血」要排在「血」前面换,不然会剩个「半」字", () => {
+    expect(kidWording("半血")).toBe("元气掉一半");
+  });
+
+  it("不带「血」的句子原样返回,不会被顺手改坏", () => {
+    for (const s of ["先摆一排豆芽", "露珠攒够再放", ""]) {
+      expect(kidWording(s)).toBe(s);
+    }
+  });
+
+  it("全 188 关的提示念出来一句都没有「血」", () => {
+    for (let i = 0; i < LEVELS.length; i++) {
+      expect(kidWording(LEVELS[i].hint), `第 ${i + 1} 关念出来还带着「血」`).not.toMatch(/血/);
     }
   });
 });

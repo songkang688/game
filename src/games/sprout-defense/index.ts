@@ -99,6 +99,7 @@ import {
   shovelStep,
   sunInterval,
 } from "./sprout12";
+import { kidWording } from "./wording";
 import { getLevelExtras } from "../../ui/level188Contract";
 import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
@@ -2106,7 +2107,9 @@ export function mount(api: GameAPI): SproutDefenseHandle {
     ctx.fillText(`${levelLabel()} · ${def.name}`, w / 2, y + 44);
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
-    ctx.fillText(def.hint, w / 2, y + 88, Math.min(420, w - 60));
+    // 1.1 冻结的第 13 关那句还写着「掉血」——数据带回归指纹不能动,
+    // 所以在这儿按元气的说法念给孩子听。详见 `wording.ts`。
+    ctx.fillText(kidWording(def.hint), w / 2, y + 88, Math.min(420, w - 60));
     // 1.1 新机制角标:昼夜循环 / 露珠罐上限;1.2 再加特殊关与本关会出的机制
     const badges: string[] = [];
     if (def.special?.kind === "puzzle") badges.push("🧩 解谜关:苗是发好的,想清楚摆哪儿");

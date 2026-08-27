@@ -107,6 +107,7 @@ import {
   towerBarLayout,
   towerCardX,
 } from "./hud12";
+import { kidWording } from "./wording";
 import {
   CLEAR_PETALS,
   HIT_STARS,
@@ -2017,7 +2018,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     );
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
-    ctx.fillText(run.hint, w / 2, y + 90, Math.min(420, w - 60));
+    // 1.1 冻结的前 99 关里还有几句写着「回血 / 半血 / 奶血」——数据带回归指纹不能动,
+    // 所以在这儿按元气的说法念给孩子听。详见 `wording.ts`。
+    ctx.fillText(kidWording(run.hint), w / 2, y + 90, Math.min(420, w - 60));
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#8a8a9a";
     const wSpec = run.weather && run.weather !== "clear" ? WEATHER_INFO[run.weather] : null;

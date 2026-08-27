@@ -91,6 +91,7 @@ import {
   towerBarLayout,
   towerCardX,
 } from "./hud12";
+import { kidWording } from "./wording";
 import {
   CLEAR_PETALS,
   HIT_STARS,
@@ -798,6 +799,54 @@ describe("1.2 新写的文案一律不说「血」", () => {
     }
     for (const a of CORE_ARCHETYPES) {
       expect(ARCHETYPE_LABEL[a], `原型「${a}」的名字里有血腥字眼`).not.toMatch(/血|尸|杀|死亡/);
+    }
+  });
+});
+
+/**
+ * 1.2 监督修复员第 3 轮:把「前 99 关那几句还说血」这条遗留收口。
+ *
+ * 前 99 关的关卡数据是 1.1 冻结的,`logic.test.ts` 拿指纹钉着,一个字都不许动。
+ * 但那里面有四句玩家看得见的提示还写着「回血 / 奶血 / 半血」
+ * (第 15 / 55 / 66 / 88 关)。两条约束原本是打架的:
+ * 改数据 → 指纹红;不改 → 孩子看见「血」。
+ *
+ * 收口办法是**数据不动,渲染时换措辞**(`wording.ts` 的 `kidWording`)。
+ * 这里两头都钉住:换出来的话干净,而且数据确实没被动过。
+ */
+describe("garden-guard · 前 99 关的提示按元气念给孩子听", () => {
+  it("四句 1.1 老提示换过之后都不再有「血」", () => {
+    for (const n of [15, 55, 66, 88]) {
+      const raw = LEVELS[n - 1].hint;
+      expect(raw, `第 ${n} 关的原文应该还带着「血」(数据没被动过)`).toMatch(/血/);
+      expect(kidWording(raw), `第 ${n} 关念出来还带着「血」`).not.toMatch(/血/);
+    }
+  });
+
+  it("换的是说法不是意思:回血→补元气,半血→元气掉一半", () => {
+    expect(kidWording("奶油怪会给附近的怪回血,先打它!")).toBe("奶油怪会给附近的怪补元气,先打它!");
+    expect(kidWording("雪雪大王半血后会暴走加速,留好减速塔!")).toBe(
+      "雪雪大王元气掉一半后会暴走加速,留好减速塔!"
+    );
+    expect(kidWording("泥泥大王一边走一边给全军奶血,快拆奶源!")).toBe(
+      "泥泥大王一边走一边给全军补元气,快拆奶源!"
+    );
+  });
+
+  it("「半血」要排在「血」前面换,不然会剩个「半」字", () => {
+    expect(kidWording("半血")).toBe("元气掉一半");
+    expect(kidWording("半血还会暴走")).toBe("元气掉一半还会暴走");
+  });
+
+  it("不带「血」的句子原样返回,不会被顺手改坏", () => {
+    for (const s of ["先打奶源!", "留好减速塔", "", "元气掉一半后会暴走"]) {
+      expect(kidWording(s)).toBe(s);
+    }
+  });
+
+  it("全 188 关的提示念出来一句都没有「血」", () => {
+    for (let i = 0; i < LEVELS.length; i++) {
+      expect(kidWording(LEVELS[i].hint), `第 ${i + 1} 关念出来还带着「血」`).not.toMatch(/血/);
     }
   });
 });
