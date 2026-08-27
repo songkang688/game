@@ -95,7 +95,7 @@ export class El {
     for (const f of Array.from(this.listeners.get(t) ?? [])) f(full);
   }
   getContext(): unknown {
-    return ctx2d;
+    return activeCtx ?? ctx2d;
   }
   getBoundingClientRect(): { left: number; top: number; width: number; height: number } {
     return { left: 0, top: 0, width: this.width, height: this.height };
@@ -147,6 +147,48 @@ export const ctx2d: unknown = new Proxy(
   }
 );
 
+/** 装了录制上下文就把它发给所有画布;null 表示照旧用哑上下文 */
+let activeCtx: unknown = null;
+
+/**
+ * 让之后创建的画布都拿到这个 2d 上下文(视觉契约测试用)。
+ * 传 null 还原;`installDom` / `restoreDom` 也会自动还原。
+ */
+export function useRecordingCtx(ctx: unknown): void {
+  activeCtx = ctx;
+}
+
+export interface CtxRecorder {
+  /** 每一次方法调用 / 属性赋值记一行,如 `ellipse(10,20,5,3,0,0,6.28)`、`fillStyle=#FFD9B4` */
+  ops: string[];
+  ctx: CanvasRenderingContext2D;
+}
+
+function fmtArg(v: unknown): string {
+  if (typeof v === "number") return String(Math.round(v * 100) / 100);
+  if (typeof v === "string") return v;
+  return typeof v;
+}
+
+/** 录制型 2d 上下文:把绘制序列记成字符串数组,断言「画了什么、画得不一样」 */
+export function makeRecordingCtx(): CtxRecorder {
+  const ops: string[] = [];
+  const proxy: unknown = new Proxy({} as Record<string, unknown>, {
+    get: (_t, prop) => {
+      if (typeof prop !== "string") return undefined;
+      return (...args: unknown[]) => {
+        ops.push(`${prop}(${args.map(fmtArg).join(",")})`);
+        return proxy;
+      };
+    },
+    set: (_t, prop, v) => {
+      if (typeof prop === "string") ops.push(`${prop}=${fmtArg(v)}`);
+      return true;
+    },
+  });
+  return { ops, ctx: proxy as CanvasRenderingContext2D };
+}
+
 export interface Dom {
   root: El;
   head: El;
@@ -172,6 +214,7 @@ const SWAPPED = [
 
 /** 装上 DOM 桩;`width` 是屏宽,`reduced` 控制 prefers-reduced-motion */
 export function installDom(width = 800, reduced = false): Dom {
+  activeCtx = null;
   const head = new El("head");
   const root = new El("div");
   root.clientWidth = width;
@@ -234,6 +277,7 @@ export function installDom(width = 800, reduced = false): Dom {
 
 /** 卸掉 DOM 桩,把全局还回去 */
 export function restoreDom(): void {
+  activeCtx = null;
   for (const k of SWAPPED) (globalThis as Record<string, unknown>)[k] = saved[k];
 }
 
