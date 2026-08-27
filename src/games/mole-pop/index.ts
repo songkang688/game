@@ -78,7 +78,11 @@ const CSS = `
 .mp-scene svg { display: block; width: 100%; height: 100%; }
 .mp-wrap > :not(.mp-scene) { position: relative; z-index: 1; }
 .mp-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.mp-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #8A7A3E; box-shadow: 0 2px 6px rgba(170,150,90,.25); font-size: 14px; }
+.mp-badge { background: #fff; border: 1px solid rgba(150,130,70,.2); border-radius: 12px; padding: 5px 10px; font-weight: 700; color: #8A7A3E; box-shadow: 0 2px 0 rgba(150,130,70,.18); font-size: 14px; white-space: nowrap; }
+/* 连击倍率升档:数字跳一下(scale 1.2 → 1) */
+.mp-badge .mp-mult { color: #E8763B; font-weight: 900; display: inline-block; }
+.mp-badge .mp-mult.mp-pop { animation: mpPop var(--mp-pop-ms) ease-out; }
+@keyframes mpPop { from { transform: scale(1.2); } to { transform: scale(1); } }
 .mp-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 10px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .mp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #C8E06E, #8FBB4E); border-radius: 8px; transition: width .3s; }
 .mp-quiz { text-align: center; font-weight: 900; font-size: 16px; color: #F5EAD1; background: var(--mp-board); border: 3px solid #C89B6C; border-radius: 14px; padding: 6px 10px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(90,80,50,.3); }
@@ -158,6 +162,7 @@ const CSS = `
   .mp-bonk { animation: none; }
   .mp-gear-board svg { animation: none; }
   .mp-flame [data-part="flame-outer"], .mp-flame [data-part="flame-inner"] { animation: none; }
+  .mp-badge .mp-mult.mp-pop { animation: none; }
 }
 `;
 
@@ -331,10 +336,14 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     holeEls.forEach((el, i) => el.classList.toggle("mp-lit", lit.has(i)));
   }
 
+  let lastMult = 1;
   function renderTop(): void {
     scoreEl.textContent = `🔨 ${score} / ${cfg.target}`;
     timeEl.textContent = `⏰ ${timeLeft}s`;
-    styleEl.textContent = `✨ 手感 ${styleScore} · ×${comboMultiplier(streak)}`;
+    // 倍率升档那一次给 mp-pop:元素新插入时动画自动播一遍,120ms 跳完即收
+    const mult = comboMultiplier(streak);
+    styleEl.innerHTML = `✨ 手感 ${styleScore} · <b class="mp-mult${mult > lastMult ? " mp-pop" : ""}">×${mult}</b>`;
+    lastMult = mult;
     if (heartEl) heartEl.textContent = "💗".repeat(Math.max(0, 3 - mistakes)) + "🤍".repeat(Math.min(3, mistakes));
     fillEl.style.width = `${Math.min(100, (score / cfg.target) * 100)}%`;
     if (quizNumEl) quizNumEl.textContent = String(quizNow);
