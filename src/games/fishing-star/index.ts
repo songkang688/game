@@ -126,6 +126,25 @@ import {
   type FightParams,
   type FightState,
 } from "./logic";
+// 1.3 视觉层:共享美术套件的参数化矢量鱼(只 import,kit 已有文件不修改)
+import { drawKitFish, facingOf, fishColor, specForFish, depthFade } from "../../art/kit/fishArt";
+import { SparklePool } from "../../art/kit/sparkle";
+import {
+  FSH_TIMING,
+  FSH_TOKENS,
+  FishingFx,
+  bobberDipPx,
+  bubbleAt,
+  goldFlashAlpha,
+  leapPoint,
+  lineSplit,
+  rippleGapMs,
+  rippleRing,
+  rodBendOf,
+  splashDropAt,
+  wagOf,
+  waveShift,
+} from "./visual";
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -146,8 +165,9 @@ const CSS = `
    没钳位的那几档列向没有负空间，这一条是空转的。 */
 .fs-wrap>*{flex-shrink:0;}
 .fs-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
-.fs-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:800;white-space:nowrap;
-  box-shadow:0 2px 5px rgba(90,130,160,.18);}
+.fs-chip{background:linear-gradient(180deg,#ffffff,#f2f9ff);border-radius:999px;padding:4px 10px;font-size:12.5px;
+  font-weight:800;white-space:nowrap;border:1px solid rgba(120,160,190,.28);
+  box-shadow:0 2px 5px rgba(90,130,160,.18),inset 0 1px 0 #ffffff;}
 .fs-chip b{font-weight:900;color:#1f6f9c;}
 .fs-chip--goal{background:#e6f5ff;color:#1f6f9c;}
 .fs-chip--warn{background:#ffe8ee;color:#b23a63;}
@@ -167,7 +187,7 @@ const CSS = `
 .fs-sea canvas{display:block;}
 .fs-bars{width:100%;max-width:620px;display:flex;flex-direction:column;gap:4px;}
 .fs-barrow{display:flex;align-items:center;gap:7px;}
-.fs-barlabel{font-size:11.5px;font-weight:900;white-space:nowrap;width:44px;text-align:right;color:#5b7a92;}
+.fs-barlabel{font-size:14px;font-weight:900;white-space:nowrap;width:44px;text-align:right;color:#5b7a92;}
 .fs-track{position:relative;flex:1;height:16px;border-radius:999px;background:#e8eff5;overflow:hidden;
   box-shadow:inset 0 1px 3px rgba(70,110,150,.25);}
 .fs-zone{position:absolute;top:0;bottom:0;}
@@ -256,7 +276,7 @@ const CSS = `
 .fss-phase{background:#fff5e6;color:#a3641f;}
 .fss-zone--red{position:absolute;top:0;bottom:0;background:#ffb3c2;}
 .fss-warn{position:absolute;top:-3px;bottom:-3px;width:3px;background:#b23a63;border-radius:2px;}
-.fss-mark{font-size:12px;font-weight:900;width:34px;text-align:center;letter-spacing:-1px;color:#5b7a92;}
+.fss-mark{font-size:14px;font-weight:900;width:40px;text-align:center;letter-spacing:-1px;color:#5b7a92;}
 .fss-mark--green{color:#3f9c68;}
 .fss-mark--yellow{color:#d8901f;}
 .fss-mark--red{color:#d33a5f;}
@@ -334,6 +354,13 @@ const CSS = `
   .fss-shake{animation:none;}
   .fss-let:active,.fss-gbuy:active:not(:disabled){transform:none;}
 }
+
+/* ---------------------------------------------------------------------------
+   1.3 视觉升级追加(第 22 步 B 档;仍旧只追加,选择器一律 fss- 前缀)
+   上鱼那一行「水桶」做成木牌展示卡,配画布里的收获仪式
+--------------------------------------------------------------------------- */
+.fss-show{background:linear-gradient(180deg,#f2d6a4,#dfb87c);border:2px solid #a97a44;color:#5f3f1e;
+  box-shadow:0 3px 10px rgba(120,80,30,.30),inset 0 1px 0 #f8e6c4;}
 `;
 
 let cssInjected = false;
@@ -511,6 +538,12 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   }
 
   const swimmers = makeSwimmers(mulberry(opts.level ? opts.level.seed : 20260826), 9);
+
+  // ---- 1.3 视觉状态(纯皮:涟漪 / 水花 / 鱼跃 / 星屑;destroy 一把清) ----------
+  const fx = new FishingFx();
+  const stars = new SparklePool();
+  /** 上一帧的相位:只用来触发入水涟漪与收获仪式,不写任何玩法状态 */
+  let fxPhase: Phase = "aim";
 
   // ---- DOM ----------------------------------------------------------------
   const wrap = el("div", "fs-wrap");
@@ -787,50 +820,173 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
 
   // ---- 绘制 ---------------------------------------------------------------
 
+  /** ① 天空 + 远山 + 云两朵(视差两档;reduced 静止) */
+  function drawBackdrop(): void {
+    if (!g) return;
+    const sy = surfaceY();
+    const info = opts.daylight ? PHASE_INFO[dayPhase()] : null;
+    const sky = g.createLinearGradient(0, 0, 0, sy);
+    sky.addColorStop(0, info ? info.sky : FSH_TOKENS.fshSkyTop);
+    sky.addColorStop(1, info ? info.sky : "#f2fbff");
+    g.fillStyle = sky;
+    g.fillRect(0, 0, W, sy);
+
+    // 远景山影两座(坐在水平线上)
+    g.fillStyle = "rgba(110,150,185,.28)";
+    g.beginPath();
+    g.moveTo(W * 0.4, sy);
+    g.quadraticCurveTo(W * 0.58, sy - H * 0.1, W * 0.78, sy);
+    g.closePath();
+    g.fill();
+    g.fillStyle = "rgba(110,150,185,.18)";
+    g.beginPath();
+    g.moveTo(W * 0.62, sy);
+    g.quadraticCurveTo(W * 0.82, sy - H * 0.14, W * 1.04, sy);
+    g.closePath();
+    g.fill();
+
+    // 云两朵:一快一慢的视差,reduced 静止
+    const reduced = reduceMotion();
+    const drift1 = waveShift(ambient, 90_000, reduced);
+    const drift2 = waveShift(ambient, 140_000, reduced);
+    drawCloud(((drift1 + 0.22) % 1) * (W + 70) - 35, sy * 0.36, W * 0.05, 0.85);
+    drawCloud(((drift2 + 0.62) % 1) * (W + 70) - 35, sy * 0.62, W * 0.038, 0.6);
+  }
+
+  function drawCloud(cx: number, cy: number, r: number, alpha: number): void {
+    if (!g) return;
+    g.fillStyle = `rgba(255,255,255,${alpha})`;
+    g.beginPath();
+    g.ellipse(cx, cy, r * 1.6, r * 0.72, 0, 0, Math.PI * 2);
+    g.ellipse(cx - r, cy + r * 0.18, r, r * 0.55, 0, 0, Math.PI * 2);
+    g.ellipse(cx + r, cy + r * 0.2, r * 0.9, r * 0.5, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  /** ③ 深水渐变 + ④ 光柱两道 + 气泡(≤6 颗;reduced 静止) */
   function drawWater(): void {
     if (!g) return;
+    const sy = surfaceY();
     const info = opts.daylight ? PHASE_INFO[dayPhase()] : null;
-    const sky = g.createLinearGradient(0, 0, 0, surfaceY());
-    sky.addColorStop(0, info ? info.sky : "#fdf3e6");
-    sky.addColorStop(1, info ? info.sky : "#ffe9d2");
-    g.fillStyle = sky;
-    g.fillRect(0, 0, W, surfaceY());
 
-    for (let i = 0; i < LAYERS.length; i++) {
-      const y0 = yOfDepth(LAYERS[i].from);
-      const y1 = yOfDepth(i === LAYERS.length - 1 ? MAX_DEPTH : LAYERS[i].to);
-      g.fillStyle = LAYERS[i].color;
-      g.fillRect(0, y0, W, y1 - y0 + 1);
+    // ③ 深水渐变:水面亮 → 深水暗(替代原先五条纯色横带)
+    const water = g.createLinearGradient(0, sy, 0, H);
+    water.addColorStop(0, FSH_TOKENS.fshWaterHi);
+    water.addColorStop(1, FSH_TOKENS.fshWaterLo);
+    g.fillStyle = water;
+    g.fillRect(0, sy, W, H - sy);
+
+    // 岸下的浅水沙坡:近岸浅、越远越深的体感
+    g.fillStyle = "rgba(232,213,168,.4)";
+    g.beginPath();
+    g.moveTo(0, sy);
+    g.lineTo(W * 0.26, sy);
+    g.quadraticCurveTo(W * 0.1, sy + (H - sy) * 0.34, 0, sy + (H - sy) * 0.5);
+    g.closePath();
+    g.fill();
+
+    // 水层分界只留淡淡一线(位置照旧吃 yOfDepth,只读)
+    g.strokeStyle = "rgba(255,255,255,.09)";
+    g.lineWidth = 1;
+    for (let i = 1; i < LAYERS.length; i++) {
+      const y = yOfDepth(LAYERS[i].from);
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(W, y);
+      g.stroke();
     }
 
     // 天色压在水上:清晨暖、夜里深蓝,始终是 2D 侧视的剖面图,不做真 3D
     if (info) {
       g.fillStyle = info.tint;
-      g.fillRect(0, surfaceY(), W, H - surfaceY());
-      if (dayPhase() === "night") {
-        // 夜里的水下光柱:一条淡淡的月光
-        g.fillStyle = "rgba(220,235,255,0.10)";
-        g.beginPath();
-        g.moveTo(W * 0.58, surfaceY());
-        g.lineTo(W * 0.7, surfaceY());
-        g.lineTo(W * 0.88, H);
-        g.lineTo(W * 0.5, H);
-        g.closePath();
-        g.fill();
-      }
+      g.fillRect(0, sy, W, H - sy);
     }
 
-    // 水面的小波纹
+    // ④ 光柱两道:斜向白 6%(左上光源);夜里再加一条月光
+    for (const [x0, wd, slant] of [
+      [W * 0.46, W * 0.055, W * 0.07],
+      [W * 0.7, W * 0.04, W * 0.055],
+    ] as const) {
+      g.fillStyle = "rgba(255,255,255,.06)";
+      g.beginPath();
+      g.moveTo(x0, sy);
+      g.lineTo(x0 + wd, sy);
+      g.lineTo(x0 + wd + slant, H);
+      g.lineTo(x0 + slant, H);
+      g.closePath();
+      g.fill();
+    }
+    if (info && dayPhase() === "night") {
+      g.fillStyle = "rgba(220,235,255,0.10)";
+      g.beginPath();
+      g.moveTo(W * 0.58, sy);
+      g.lineTo(W * 0.7, sy);
+      g.lineTo(W * 0.88, H);
+      g.lineTo(W * 0.5, H);
+      g.closePath();
+      g.fill();
+    }
+
+    // 小气泡上浮(纯函数推位置;reduced 定格成静止层次)
+    const reduced = reduceMotion();
+    g.strokeStyle = "rgba(255,255,255,.35)";
+    g.lineWidth = 1;
+    for (let i = 0; i < FSH_TIMING.bubbleMax; i++) {
+      const b = bubbleAt(i, ambient, reduced);
+      const bx = W * 0.3 + b.fx * (W * 0.66);
+      const by = H - 8 - b.rise * (H - 8 - (sy + 10));
+      g.beginPath();
+      g.arc(bx, by, b.r, 0, Math.PI * 2);
+      g.stroke();
+    }
+  }
+
+  /** ⑦ 水面:波光带两条(5200/6800ms 平移) + 浪花白边 + 水面细波 */
+  function drawSurface(): void {
+    if (!g) return;
+    const sy = surfaceY();
+    const reduced = reduceMotion();
+
+    // 波光高光带两条:相位相反、周期不同,缓慢平移;reduced 静止
+    for (const [periodMs, yOff, dir, width] of [
+      [FSH_TIMING.waveMsA, 5, 1, 2.6],
+      [FSH_TIMING.waveMsB, 10, -1, 2],
+    ] as const) {
+      const shift = waveShift(ambient, periodMs, reduced) * 52 * dir;
+      g.strokeStyle = FSH_TOKENS.fshWave;
+      g.lineWidth = width;
+      g.beginPath();
+      for (let x = 0; x <= W; x += 7) {
+        const y = sy + yOff + Math.sin((x + shift) / 17) * 1.6;
+        if (x === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+
+    // 水面的小波纹(1.2 原有的那条白线,提到波光带上面)
     g.strokeStyle = "#ffffffb0";
     g.lineWidth = 2;
     g.beginPath();
-    const sy = surfaceY();
     for (let x = 0; x <= W; x += 8) {
-      const y = sy + Math.sin((x / 26) + ambient / 420) * 2.2;
+      const y = sy + Math.sin((x / 26) + (reduced ? 0 : ambient / 420)) * 2.2;
       if (x === 0) g.moveTo(x, y);
       else g.lineTo(x, y);
     }
     g.stroke();
+
+    // 浪花白边:水面与岸交界处一排小泡
+    const edge = W * 0.28;
+    g.fillStyle = "rgba(255,255,255,.7)";
+    for (const [dx, r] of [
+      [-2, 2.6],
+      [4, 1.8],
+      [9, 1.2],
+    ] as const) {
+      g.beginPath();
+      g.arc(edge + dx, sy + 1, r, 0, Math.PI * 2);
+      g.fill();
+    }
   }
 
   function drawBand(): void {
@@ -849,72 +1005,191 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g.lineTo(W, y1);
     g.stroke();
     g.setLineDash([]);
-    g.fillStyle = "#2f6f9e";
+    // 标签垫一块圆角小牌,不再是裸文本
+    g.fillStyle = "rgba(47,111,158,.8)";
+    const label = `鱼群带 ${opts.band.from}–${opts.band.to} 米`;
+    g.beginPath();
+    g.moveTo(4, y0 + 3);
+    g.lineTo(4 + label.length * 11 + 10, y0 + 3);
+    g.quadraticCurveTo(4 + label.length * 11 + 16, y0 + 3, 4 + label.length * 11 + 16, y0 + 10);
+    g.quadraticCurveTo(4 + label.length * 11 + 16, y0 + 17, 4 + label.length * 11 + 10, y0 + 17);
+    g.lineTo(4, y0 + 17);
+    g.closePath();
+    g.fill();
+    g.fillStyle = "#ffffff";
     g.font = "600 11px system-ui,sans-serif";
     g.textAlign = "left";
-    g.fillText(`鱼群带 ${opts.band.from}–${opts.band.to} 米`, 6, y0 + 13);
+    g.fillText(label, 8, y0 + 13);
   }
 
+  /** ⑩ 深度刻度:做成一根木尺(刻度位置照旧吃 yOfDepth,只读) */
   function drawRuler(): void {
     if (!g) return;
+    const sy = surfaceY();
+    // 木尺条:右缘一根窄木条,上下顶到水域
+    const wood = g.createLinearGradient(W - 30, 0, W - 2, 0);
+    wood.addColorStop(0, "#e6c48c");
+    wood.addColorStop(1, "#cfa468");
+    g.fillStyle = wood;
+    g.fillRect(W - 30, sy + 2, 28, H - sy - 4);
+    g.strokeStyle = "#a97a44";
+    g.lineWidth = 1;
+    g.strokeRect(W - 30, sy + 2, 28, H - sy - 4);
     g.textAlign = "right";
-    g.font = "600 10px system-ui,sans-serif";
+    g.font = "700 10px system-ui,sans-serif";
     for (let d = 10; d <= MAX_DEPTH; d += 10) {
       const y = yOfDepth(d);
-      g.strokeStyle = "#ffffff70";
-      g.lineWidth = 1;
+      g.strokeStyle = "#8a6234";
       g.beginPath();
-      g.moveTo(W - 34, y);
-      g.lineTo(W - 4, y);
+      g.moveTo(W - 30, y);
+      g.lineTo(W - 18, y);
       g.stroke();
-      g.fillStyle = "#ffffffdd";
-      g.fillText(`${d}m`, W - 5, y - 3);
+      g.fillStyle = "#5f3f1e";
+      g.fillText(`${d}m`, W - 4, y - 3);
     }
     g.textAlign = "left";
   }
 
+  /** ⑤ 鱼群自绘:深水先画、浅水后画;游动坐标演算三行原样保留 */
   function drawSwimmers(): void {
     if (!g) return;
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    for (const s of swimmers) {
+    const reduced = reduceMotion();
+    const size = Math.round(clamp(W / 22, 13, 22));
+    // 只排绘制次序,不动任何演算数据
+    const order = [...swimmers].sort((a, b) => b.depth - a.depth);
+    for (const s of order) {
       const x = ((s.x + (ambient / 1000) * s.speed) % 1 + 1) % 1;
       const px = 12 + x * (W - 46);
       const py = yOfDepth(s.depth) + Math.sin(ambient / 600 + s.x * 9) * 3;
-      g.globalAlpha = 0.55;
-      g.font = `${Math.round(clamp(W / 22, 13, 22))}px system-ui,sans-serif`;
-      g.fillText(s.fish.emoji, px, py);
-      g.globalAlpha = 1;
+      // 深水映射:饱和度 -30%、轮廓 alpha 0.7(读 depth 只做映射)
+      const fade = depthFade(s.depth, MAX_DEPTH);
+      // 水下落影一小片
+      g.fillStyle = FSH_TOKENS.fshShadow;
+      g.beginPath();
+      g.ellipse(px, py + size * 0.42, size * 0.42, size * 0.12, 0, 0, Math.PI * 2);
+      g.fill();
+      drawKitFish(g, px, py, size, specForFish(s.fish.id, s.fish.rarity), {
+        wagPhase: wagOf(px, s.speed, reduced),
+        facing: facingOf(s.speed),
+        satScale: fade.sat,
+        alpha: 0.8 * fade.alpha,
+      });
     }
-    g.textBaseline = "alphabetic";
   }
 
   function rodTip(): { x: number; y: number } {
     return { x: W * 0.34, y: surfaceY() - 10 };
   }
 
-  /** 岸在左边:人站在岸上往右边的水面抛,不是坐在船里 */
+  /** ② 岸在左边:沙岸 + 草丛 + Q 版小人(草帽背影,拉杆时后仰 8°)+ 小桶 + 弯得动的鱼竿 */
   function drawShore(): void {
     if (!g) return;
     const sy = surfaceY();
     const shoreW = W * 0.28;
-    g.fillStyle = "#e6d3ae";
-    g.fillRect(0, sy - 2, shoreW, H - sy + 2);
+    const s = clamp(W / 360, 0.8, 1.5);
+
+    // 沙岸台面:右缘圆润地探进水里
+    g.fillStyle = FSH_TOKENS.fshShore;
+    g.beginPath();
+    g.moveTo(0, sy - 10);
+    g.lineTo(shoreW - 12, sy - 10);
+    g.quadraticCurveTo(shoreW + 4, sy - 8, shoreW + 2, sy + 3);
+    g.lineTo(0, sy + 3);
+    g.closePath();
+    g.fill();
+    // 台面草皮一条
     g.fillStyle = "#bcd9a4";
-    g.fillRect(0, sy - 9, shoreW, 8);
-    g.textAlign = "center";
-    g.textBaseline = "alphabetic";
-    g.font = "18px system-ui,sans-serif";
-    g.fillText("🧒", W * 0.13, sy - 11);
-    g.font = "14px system-ui,sans-serif";
-    g.fillText("🪣", W * 0.22, sy - 11);
-    // 鱼竿:从岸上斜指向水面
+    g.fillRect(0, sy - 13, shoreW - 14, 4);
+    // 草丛几撮
+    g.strokeStyle = "#8fbf72";
+    g.lineWidth = Math.max(1, 1.4 * s);
+    for (const gx of [W * 0.035, W * 0.185, W * 0.255]) {
+      for (const [dx, lift] of [
+        [-3, 7],
+        [0, 10],
+        [3, 7],
+      ] as const) {
+        g.beginPath();
+        g.moveTo(gx, sy - 12);
+        g.quadraticCurveTo(gx + dx * s, sy - 12 - lift * s * 0.6, gx + dx * 1.6 * s, sy - 12 - lift * s);
+        g.stroke();
+      }
+    }
+
+    // Q 版钓鱼小人(背影):拉杆(蓄力 / 收线)时后仰 8°
+    const kidX = W * 0.13;
+    const feetY = sy - 12;
+    const pulling = phase === "charge" || phase === "fight";
+    g.save();
+    g.translate(kidX, feetY);
+    if (pulling) g.rotate((-8 * Math.PI) / 180);
+    // 腿
+    g.fillStyle = "#4a6f8f";
+    g.fillRect(-4.6 * s, -8 * s, 3.4 * s, 8 * s);
+    g.fillRect(1.2 * s, -8 * s, 3.4 * s, 8 * s);
+    // 上衣(背影圆背)
+    g.fillStyle = "#7fb9dd";
+    g.beginPath();
+    g.ellipse(0, -14 * s, 6.6 * s, 8 * s, 0, 0, Math.PI * 2);
+    g.fill();
+    // 握竿的小手
+    g.fillStyle = "#f8d6b0";
+    g.beginPath();
+    g.arc(6.4 * s, -16 * s, 1.8 * s, 0, Math.PI * 2);
+    g.fill();
+    // 头 + 草帽(帽檐椭圆 + 帽顶,光源左上)
+    g.beginPath();
+    g.arc(0, -25 * s, 5 * s, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#ecc878";
+    g.beginPath();
+    g.ellipse(0, -28 * s, 8.2 * s, 2.6 * s, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#e0b860";
+    g.beginPath();
+    g.arc(0, -28.4 * s, 4.6 * s, Math.PI, Math.PI * 2);
+    g.closePath();
+    g.fill();
+    g.restore();
+
+    // 小桶(钓到的鱼进桶,桶口露条尾巴)
+    const bx = W * 0.225;
+    g.fillStyle = "#8fb3cf";
+    g.beginPath();
+    g.moveTo(bx - 7 * s, feetY - 12 * s);
+    g.lineTo(bx + 7 * s, feetY - 12 * s);
+    g.lineTo(bx + 5.4 * s, feetY);
+    g.lineTo(bx - 5.4 * s, feetY);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = "#5f87a8";
+    g.lineWidth = Math.max(1, 1.2 * s);
+    g.beginPath();
+    g.ellipse(bx, feetY - 12 * s, 7 * s, 2.2 * s, 0, 0, Math.PI * 2);
+    g.stroke();
+    if (inBucket) {
+      // 桶口露出的鱼尾:用这条鱼自己的配色(「搬家做客」语义,全程开心)
+      const spec = specForFish(inBucket.fish.id, inBucket.fish.rarity);
+      g.fillStyle = fishColor(spec, 1, -6);
+      g.beginPath();
+      g.moveTo(bx, feetY - 12 * s);
+      g.lineTo(bx - 4.4 * s, feetY - 19 * s);
+      g.quadraticCurveTo(bx, feetY - 15 * s, bx + 4.4 * s, feetY - 19 * s);
+      g.closePath();
+      g.fill();
+    }
+
+    // 鱼竿:蓄力 / 拉扯时按弯曲量弓起来(映射 = 既有力度/张力的线性搬运,逐点一致)
     const tipPos = rodTip();
+    const gripX = W * 0.15;
+    const gripY = sy - 24;
+    const bendK = phase === "charge" ? rodBendOf(power) : phase === "fight" ? rodBendOf(clamp(fight.tension, 0, 1)) : 0;
+    const rodLen = Math.hypot(tipPos.x - gripX, tipPos.y - gripY);
     g.strokeStyle = "#8a5a33";
     g.lineWidth = 2.5;
     g.beginPath();
-    g.moveTo(W * 0.15, sy - 22);
-    g.lineTo(tipPos.x, tipPos.y);
+    g.moveTo(gripX, gripY);
+    g.quadraticCurveTo((gripX + tipPos.x) / 2, (gripY + tipPos.y) / 2 + bendK * rodLen, tipPos.x, tipPos.y);
     g.stroke();
   }
 
@@ -939,7 +1214,95 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     return left + (right - left) * t;
   }
 
-  function drawLine(): void {
+  /** 钩子在不在水里(空中段 / 水下段 / 浮标共用的判断,只读 phase) */
+  function hookInWater(): boolean {
+    return phase === "sink" || phase === "wait" || phase === "bite" || phase === "fight";
+  }
+
+  /** 张力配色(空中段 / 水下段共用;不在拉扯时是安静的白) */
+  function lineStroke(): { color: string; width: number } {
+    const band = phase === "fight" && params ? tensionBand(fight.tension, params.redAt) : "green";
+    return {
+      color: band === "yellow" ? "#e8a02f" : band === "red" ? "#e04f74" : "#ffffffd8",
+      width: band === "yellow" ? 2.4 : band === "red" ? 3 : 1.6,
+    };
+  }
+
+  /** 小挂钩自绘:一段小 J 弯 */
+  function drawHook(hx: number, hy: number): void {
+    if (!g) return;
+    g.strokeStyle = "#e8eef4";
+    g.lineWidth = 1.6;
+    g.beginPath();
+    g.arc(hx, hy, 3.2, -Math.PI * 0.2, Math.PI * 0.9);
+    g.stroke();
+  }
+
+  /** ⑥ 水下段钓线:入水点折射错位 2px 起笔、颜色变淡;鱼 / 钩画在末端 */
+  function drawLineUnder(): void {
+    if (!g || !hookInWater()) return;
+    const hy = yOfDepth(hookDepth());
+    const hx = hookX();
+    const split = lineSplit(hx, surfaceY());
+    const pen = lineStroke();
+    g.save();
+    g.globalAlpha = 0.55;
+    g.strokeStyle = pen.color;
+    g.lineWidth = pen.width;
+    g.beginPath();
+    g.moveTo(split.underX, split.entryY);
+    g.quadraticCurveTo((split.underX + hx) / 2 + 3, (split.entryY + hy) / 2, hx, hy);
+    g.stroke();
+    g.restore();
+
+    if (phase === "fight" && hooked) {
+      const fsize = Math.round(clamp(W / 13, 22, 40));
+      const shake = reduceMotion() ? 0 : Math.sin(ambient / 55) * (2 + fight.tension * 4);
+      drawKitFish(g, hx + shake, hy, fsize, specForFish(hooked.id, hooked.rarity), {
+        wagPhase: reduceMotion() ? 0 : ambient / 90,
+        facing: -1,
+      });
+    } else if (phase === "bite" && hooked) {
+      // 咬钩瞬间:它已经凑过来了——给一眼剪影,收线的决心更足
+      drawHook(hx, hy);
+      drawKitFish(g, hx + 9, hy + 2, Math.round(clamp(W / 16, 16, 28)), specForFish(hooked.id, hooked.rarity), {
+        wagPhase: reduceMotion() ? 0 : ambient / 120,
+        facing: -1,
+        alpha: 0.6,
+      });
+    } else {
+      drawHook(hx, hy);
+    }
+  }
+
+  /** 红白双色浮标自绘:上钩时点头下沉 3px(160ms;功能提示,reduced 保留) */
+  function drawBobber(bx: number, by: number): void {
+    if (!g) return;
+    const r = clamp(W / 70, 4, 6);
+    g.fillStyle = FSH_TOKENS.fshBobberA;
+    g.beginPath();
+    g.arc(bx, by, r, Math.PI, Math.PI * 2);
+    g.closePath();
+    g.fill();
+    g.fillStyle = FSH_TOKENS.fshBobberB;
+    g.beginPath();
+    g.arc(bx, by, r, 0, Math.PI);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = "#c04058";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.arc(bx, by, r, 0, Math.PI * 2);
+    g.stroke();
+    // 顶上的小天线
+    g.beginPath();
+    g.moveTo(bx, by - r);
+    g.lineTo(bx, by - r - 3);
+    g.stroke();
+  }
+
+  /** ⑧ 空中段钓线:贝塞尔垂坠(拉扯时绷直)+ 浮标 */
+  function drawLineAir(): void {
     if (!g) return;
     const tipPos = rodTip();
     if (phase === "aim" || phase === "show") {
@@ -951,33 +1314,23 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
       g.stroke();
       return;
     }
-    const hy = yOfDepth(hookDepth());
     const hx = hookX();
-    const band = phase === "fight" && params ? tensionBand(fight.tension, params.redAt) : "green";
-    g.strokeStyle = band === "yellow" ? "#e8a02f" : band === "red" ? "#e04f74" : "#ffffffd8";
-    g.lineWidth = band === "yellow" ? 2.4 : band === "red" ? 3 : 1.6;
+    const split = lineSplit(hx, surfaceY());
+    const pen = lineStroke();
+    g.strokeStyle = pen.color;
+    g.lineWidth = pen.width;
+    // 垂坠:控制点往下坠一点;拉扯时张力越高越绷直
+    const sag = phase === "fight" ? (1 - fight.tension) * 10 : 14;
     g.beginPath();
     g.moveTo(tipPos.x, tipPos.y);
-    // 拉扯时线绷成一条直线,平时垂一点弧度
-    const bend = phase === "fight" ? (1 - fight.tension) * 16 : 12;
-    g.quadraticCurveTo((tipPos.x + hx) / 2 - bend, (tipPos.y + hy) / 2, hx, hy);
+    g.quadraticCurveTo((tipPos.x + split.entryX) / 2, (tipPos.y + split.entryY) / 2 + sag, split.entryX, split.entryY);
     g.stroke();
 
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    if (phase === "fight" && hooked) {
-      g.font = `${Math.round(clamp(W / 13, 22, 40))}px system-ui,sans-serif`;
-      const shake = reduceMotion() ? 0 : Math.sin(ambient / 55) * (2 + fight.tension * 4);
-      g.fillText(hooked.emoji, hx + shake, hy);
-    } else if (phase === "bite") {
-      // 咬钩瞬间:浮标一沉,这一下就是给你的反应窗口
-      g.font = "17px system-ui,sans-serif";
-      g.fillText("🎈", hx, hy + 4);
-    } else {
-      g.font = "15px system-ui,sans-serif";
-      g.fillText("🪝", hx, hy);
+    if (hookInWater()) {
+      const inBite = phase === "bite";
+      const dip = bobberDipPx(inBite ? phaseMs : 0, inBite, reduceMotion());
+      drawBobber(split.entryX, split.entryY - 2 + dip);
     }
-    g.textBaseline = "alphabetic";
   }
 
   /** 蓄力时的落点预览:横线是深度,竖线是距离,箭头是风 */
@@ -1007,15 +1360,108 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g.fillText(windArrow(wind), x, surfaceY() - 8);
   }
 
+  /**
+   * 相位观察哨:只读 phase / inBucket,把「入水 / 上钩窗口 / 钓起」翻译成
+   * 涟漪 / 水花 / 鱼跃 / 星屑这些纯视觉粒子。不写任何玩法状态。
+   */
+  function observeFx(): void {
+    const now = ambient;
+    const reduced = reduceMotion();
+    const sy = surfaceY();
+    if (phase !== fxPhase) {
+      const prev = fxPhase;
+      fxPhase = phase;
+      // 抛出去落水的那一下 / 上钩窗口开启的那一下:都值一圈涟漪
+      if (phase === "sink" || phase === "bite") fx.spawnRipple(hookX(), sy, now);
+      if (phase === "show" && prev === "fight" && inBucket) {
+        // 收获仪式:鱼跃出水面沿弧线进桶 + 水花皇冠 + 星屑;稀有(▲/★)再加金光
+        const rare = tierIndexOf(inBucket.fish.rarity) >= 2;
+        fx.startLeap(hookX(), sy, W * 0.225, sy - 34, now, rare, inBucket.fish.id, inBucket.fish.rarity);
+        if (!reduced) fx.spawnSplash(hookX(), sy, now);
+        stars.spawn(W * 0.225, sy - 40, reduced, 10);
+        stars.spawn(W * 0.19, sy - 26, reduced, 7);
+        stars.spawn(W * 0.26, sy - 22, reduced, 6);
+      }
+    }
+    // 钩在水里就按间隔冒圈;上钩窗口内加密 2 倍(只读窗口,不改判定)
+    if (!reduced && (phase === "wait" || phase === "bite")) {
+      if (now - fx.lastRippleAt >= rippleGapMs(phase === "bite")) fx.spawnRipple(hookX(), sy, now);
+    }
+  }
+
+  /** ⑨ 涟漪 / 水花皇冠 / 鱼跃弧线 / 星屑 / 稀有金光 */
+  function drawFx(): void {
+    if (!g) return;
+    const now = ambient;
+    const reduced = reduceMotion();
+    fx.prune(now);
+
+    // 涟漪:ease-out 扩散圆环;reduced 只在上钩窗口画一枚静态圆环(提示保留)
+    if (reduced) {
+      if (phase === "bite") {
+        const sy = surfaceY();
+        g.strokeStyle = "rgba(255,255,255,.6)";
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.ellipse(hookX(), sy, 12, 4, 0, 0, Math.PI * 2);
+        g.stroke();
+      }
+    } else {
+      for (const rp of fx.ripples) {
+        const ring = rippleRing((now - rp.bornAt) / FSH_TIMING.rippleMs);
+        const rr = 16 * ring.k;
+        g.strokeStyle = `rgba(255,255,255,${ring.alpha.toFixed(3)})`;
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.ellipse(rp.x, rp.y, rr, rr * 0.32, 0, 0, Math.PI * 2);
+        g.stroke();
+      }
+    }
+
+    // 水花皇冠 5 瓣(reduced 根本不会生成)
+    for (const sp of fx.splashes) {
+      const t = (now - sp.bornAt) / FSH_TIMING.splashMs;
+      const reach = clamp(W / 16, 16, 26);
+      g.fillStyle = "rgba(255,255,255,.85)";
+      for (let i = 0; i < FSH_TIMING.splashDrops; i++) {
+        const d = splashDropAt(i, t);
+        g.beginPath();
+        g.ellipse(sp.x + d.dx * reach, sp.y + d.dy * reach, d.r * 8, d.r * 11, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+
+    // 鱼跃弧线进桶(240ms ease-out;reduced 瞬移展示);稀有金光 260ms 一闪
+    if (fx.leap && inBucket) {
+      const lp = fx.leap;
+      const t = (now - lp.bornAt) / FSH_TIMING.leapMs;
+      const p = leapPoint(lp.fromX, lp.fromY, lp.toX, lp.toY, t, reduced);
+      const gold = lp.rare ? goldFlashAlpha(now - lp.bornAt, reduced) : 0;
+      drawKitFish(g, p.x, p.y, Math.round(clamp(W / 15, 20, 32)), specForFish(lp.fishId, lp.rarity), {
+        wagPhase: reduced ? 0 : ambient / 70,
+        facing: -1,
+        goldEdge: gold,
+      });
+    }
+
+    // 星屑(kit 的白闪星花:reduced 自动只留 1 帧功能反馈)
+    stars.draw(g);
+  }
+
   function render(): void {
     if (!g) return;
+    observeFx();
     g.clearRect(0, 0, W, H);
-    drawWater();
-    drawBand();
-    drawSwimmers();
-    drawRuler();
+    drawBackdrop();
     drawShore();
-    drawLine();
+    drawWater();
+    drawSwimmers();
+    drawLineUnder();
+    drawSurface();
+    drawLineAir();
+    drawFx();
+    drawBand();
+    drawRuler();
     drawAim();
   }
 
@@ -1383,6 +1829,9 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
       holding = false;
       // rAF、定时器、全部监听都登记在册,这一句把它们一次性还清(还完计数归零)
       ledger.releaseAll();
+      // 1.3 视觉粒子(涟漪 / 水花 / 鱼跃 / 星屑)同步归零
+      fx.reset();
+      stars.clear();
       veil?.remove();
       veil = null;
       wrap.remove();
