@@ -102,6 +102,29 @@ describe("每关配置", () => {
     }
   });
 
+  // ---- QA 第 3 轮 · 包 B · R2B-11 复量：「对手跨章撞车」这条实测不成立，补三条守住 ----
+
+  it("八章的首关是八位不同的小伙伴，没有连着几章撞同一位（R2B-11）", () => {
+    const firsts = CHAPTERS.map((_, ci) => foeIdOf(chapterStartLevel(ci)));
+    expect(new Set(firsts).size, `八章首关的对手：${firsts.join(" ")}`).toBe(CHAPTERS.length);
+  });
+
+  it("每一章里八位小伙伴都上过场，谁都没被轮转表落下（R2B-11）", () => {
+    for (let ci = 0; ci < CHAPTERS.length; ci++) {
+      const start = chapterStartLevel(ci);
+      const seen = new Set<string>();
+      for (let i = 0; i < CHAPTERS[ci].size; i++) seen.add(foeIdOf(start + i));
+      expect(seen.size, `第 ${ci + 1} 章只出场了 ${seen.size} 位`).toBe(CHARACTERS.length);
+    }
+  });
+
+  it("章节交界那两关也不撞同一位（R2B-11）", () => {
+    for (let ci = 1; ci < CHAPTERS.length; ci++) {
+      const start = chapterStartLevel(ci);
+      expect(foeIdOf(start), `第 ${start} 关与第 ${start + 1} 关撞了同一位对手`).not.toBe(foeIdOf(start - 1));
+    }
+  });
+
   it("每关都有 AI 档、增益、回合数、时限和一句提示", () => {
     for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
       const s = towerStage(lv);
