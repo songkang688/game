@@ -48,6 +48,8 @@ import {
   difficultyForLevel,
   emptyConfirm,
   hintArea,
+  hintButtonHint,
+  hintSpentLine,
   initialLevelOf,
   migrateLegacyCampaign,
   newHints,
@@ -56,12 +58,14 @@ import {
   puzzleStars,
   spendHint,
   streakDifficulty,
-  streakLine,
+  streakOpening,
   streakStep,
+  streakWinTitle,
   tapCell,
   type Cell,
   type ConfirmState,
   type HintState,
+  type PlayKind,
   type StreakState,
 } from "./session";
 import { CSS, createBoardView, type BoardView } from "./view";
@@ -224,6 +228,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   const board = o.board;
   let current: Player = 1;
   let hints = o.hints;
+  const playKind: PlayKind = o.puzzle ? "puzzle" : "free";
   let confirmState: ConfirmState = emptyConfirm();
   let confirmOn = false;
   let history: Array<{ x: number; y: number; p: Player }> = [];
@@ -271,6 +276,9 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     undoBtn.disabled = history.length === 0 || over || thinking || claim !== null;
     hintBtn.textContent = `✨ 提示×${hints.left}`;
     hintBtn.disabled = hints.left <= 0 || !humansTurn();
+    // 解局用提示要掉一颗星,这个代价点下去之前就得说清楚
+    hintBtn.title = hintButtonHint(hints, playKind);
+    hintBtn.setAttribute("aria-label", `${hintBtn.textContent}。${hintBtn.title}`);
     confirmBtn.textContent = confirmOn ? "✋ 确认落子：开" : "✋ 确认落子：关";
     view.update({ turn: current, interactive: humansTurn(), pending: confirmState.pending });
   }
@@ -472,7 +480,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     const area = hintArea(mv, o.size);
     view.update({ hint: area });
     o.api.play("coin");
-    msgEl.textContent = area.text;
+    msgEl.textContent = hintSpentLine(area, hints, playKind);
     refresh();
   }
 
@@ -874,17 +882,18 @@ function mountStreak(host: HTMLElement, api: GameApi, back: () => void): { destr
       forbidden: false,
       hints: newHints("free"),
       headline: `🔥 连胜 ${streak.wins} · ${DIFFICULTY_NAME[tier]}`,
-      opening: streakLine(streak),
+      opening: streakOpening(streak),
       extras: [{ cls: "gmk-back", label: "🧩 回解局学堂", onClick: back }],
       onEnd: (r) => {
         if (dead) return;
         const outcome = r.winner === 1 ? "win" : r.winner === 0 ? "draw" : "loss";
+        const prevBest = streak.best;
         streak = streakStep(streak, outcome);
         if (!streak.over) {
           const nextTier = streakDifficulty(streak.wins);
           api.addStars(1);
           overPanel(
-            `🎉 连赢 ${streak.wins} 盘！`,
+            streakWinTitle(prevBest, streak),
             `下一位是${DIFFICULTY_NAME[nextTier]}。${DIFFICULTY_BLURB[nextTier]}。`,
             "继续挑战 ▶",
             () => {

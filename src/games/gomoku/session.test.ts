@@ -11,9 +11,12 @@ import {
   TIER_SHORT,
   areaContains,
   areaWords,
+  brokeRecord,
   difficultyForLevel,
   emptyConfirm,
   hintArea,
+  hintButtonHint,
+  hintSpentLine,
   initialLevelOf,
   migrateLegacyCampaign,
   newHints,
@@ -25,7 +28,10 @@ import {
   spendHint,
   streakDifficulty,
   streakLine,
+  streakOpening,
+  streakRecordLine,
   streakStep,
+  streakWinTitle,
   tapCell,
 } from "./session";
 
@@ -141,6 +147,53 @@ describe("提示限次", () => {
   });
 });
 
+describe("提示文案分级", () => {
+  it("解局在点下去之前就说清「用了最多 2 星」", () => {
+    const fresh = newHints("puzzle");
+    expect(hintButtonHint(fresh, "puzzle")).toContain("2 星");
+    // 自由对战不掉星，就别吓唬人
+    expect(hintButtonHint(newHints("free"), "free")).not.toContain("星");
+  });
+
+  it("自由对战剩最后一次会单独说一句", () => {
+    let s = newHints("free");
+    expect(hintButtonHint(s, "free")).toContain("3 次");
+    s = spendHint(s).state;
+    s = spendHint(s).state;
+    expect(s.left).toBe(1);
+    expect(hintButtonHint(s, "free")).toContain("最后 1 次");
+  });
+
+  it("用完了也有话说，不只剩一个灰按钮", () => {
+    const empty = { left: 0, used: 3 };
+    expect(hintButtonHint(empty, "free")).toContain("用完");
+    expect(hintButtonHint({ left: 0, used: 1 }, "puzzle")).toContain("用完");
+  });
+
+  it("真的用掉一次之后，区域文案后面接上还剩几次", () => {
+    const area = hintArea({ x: 4, y: 4 }, 9, 1, () => 0);
+    const twoLeft = hintSpentLine(area, { left: 2, used: 1 }, "free");
+    expect(twoLeft.startsWith(area.text)).toBe(true);
+    expect(twoLeft).toContain("还剩 2 次");
+    const last = hintSpentLine(area, { left: 0, used: 3 }, "free");
+    expect(last).toContain("最后一次");
+    const puzzle = hintSpentLine(area, { left: 0, used: 1 }, "puzzle");
+    expect(puzzle).toContain("2 星");
+  });
+
+  it("补出来的这几句仍旧一个行列号都不报", () => {
+    const area = hintArea({ x: 1, y: 7 }, 15, 1, () => 0);
+    // 只允许出现「次数 / 星数」这类计数，不许出现坐标形式的 (x, y)
+    for (const line of [
+      hintSpentLine(area, { left: 2, used: 1 }, "free"),
+      hintSpentLine(area, { left: 0, used: 1 }, "puzzle"),
+    ]) {
+      expect(line).not.toMatch(/[（(]\s*\d+\s*[,，]\s*\d+\s*[)）]/);
+      expect(line.startsWith(area.text)).toBe(true);
+    }
+  });
+});
+
 describe("提示只给区域，不报坐标", () => {
   it("圈出的是 3×3 一片，而且一定包含正解", () => {
     for (let x = 0; x < 9; x++) {
@@ -241,6 +294,69 @@ describe("连胜挑战", () => {
 
   it("六档短名齐全", () => {
     for (const d of DIFFICULTIES) expect(TIER_SHORT[d].length).toBeGreaterThan(0);
+  });
+});
+
+describe("连胜 · 破纪录反馈", () => {
+  it("第一次玩没有纪录，就不多说一句纪录的话", () => {
+    let s = newStreak(0);
+    expect(streakRecordLine(s)).toBe("");
+    expect(streakOpening(s)).toBe(streakLine(s));
+    s = streakStep(s, "win");
+    expect(streakRecordLine(s)).toContain("最高纪录 1 盘");
+  });
+
+  it("整轮都看得见离纪录还差几盘", () => {
+    let s = newStreak(5);
+    expect(streakRecordLine(s)).toContain("还差 5 盘");
+    s = streakStep(s, "win");
+    s = streakStep(s, "win");
+    s = streakStep(s, "win");
+    expect(streakRecordLine(s)).toContain("还差 2 盘");
+    s = streakStep(s, "win");
+    // 只差一盘时换一句更催人的说法，不再报「还差 1 盘」
+    expect(streakRecordLine(s)).toContain("再赢 1 盘");
+    expect(streakRecordLine(s)).not.toContain("还差");
+    s = streakStep(s, "win");
+    expect(s.wins).toBe(5);
+    expect(streakRecordLine(s)).toContain("已经是最高纪录");
+  });
+
+  it("开局播报 = 连胜播报 + 纪录播报", () => {
+    const s = streakStep(newStreak(4), "win");
+    const opening = streakOpening(s);
+    expect(opening.startsWith(streakLine(s))).toBe(true);
+    expect(opening).toContain(streakRecordLine(s));
+  });
+
+  it("超过旧纪录那一盘才算刷新纪录，追平不算", () => {
+    let s = newStreak(2);
+    let prev = s.best;
+    s = streakStep(s, "win");
+    expect(brokeRecord(prev, s)).toBe(false);
+    prev = s.best;
+    s = streakStep(s, "win");
+    // 第 2 盘只是追平旧纪录 2 盘
+    expect(s.wins).toBe(2);
+    expect(brokeRecord(prev, s)).toBe(false);
+    prev = s.best;
+    s = streakStep(s, "win");
+    expect(brokeRecord(prev, s)).toBe(true);
+  });
+
+  it("第一次玩不报「新纪录」，破了纪录的标题才换样子", () => {
+    const first = streakStep(newStreak(0), "win");
+    expect(brokeRecord(0, first)).toBe(false);
+    expect(streakWinTitle(0, first)).toContain("连赢 1 盘");
+    const s = streakStep(streakStep(streakStep(newStreak(2), "win"), "win"), "win");
+    expect(streakWinTitle(2, s)).toContain("新纪录 3 盘");
+    expect(streakWinTitle(9, s)).toContain("连赢 3 盘");
+  });
+
+  it("坏数字当没有纪录处理", () => {
+    const s = streakStep(newStreak(0), "win");
+    expect(brokeRecord(Number.NaN, s)).toBe(false);
+    expect(brokeRecord(-4, s)).toBe(false);
   });
 });
 

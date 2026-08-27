@@ -167,6 +167,29 @@ export function areaContains(a: HintArea, x: number, y: number): boolean {
   return x >= a.x0 && x <= a.x1 && y >= a.y0 && y <= a.y1;
 }
 
+/**
+ * 提示按钮上的说明：解局里用掉提示这题就封顶两星，这个代价得在**点下去之前**说清楚，
+ * 不能等结算时才告诉孩子「用了提示只有 2 星」。用完了也要有一句话，
+ * 而不是只剩一个灰掉的按钮。
+ */
+export function hintButtonHint(s: HintState, kind: PlayKind): string {
+  if (s.left <= 0) {
+    return kind === "puzzle" ? "这一题的提示用完啦，自己再看看棋形～" : "这一局的提示用完啦，自己找找看～";
+  }
+  if (kind === "puzzle") return `提示还有 ${s.left} 次；用了这一题最多拿 2 星哦。`;
+  return s.left === 1 ? "提示只剩最后 1 次啦，想清楚再点～" : `提示还有 ${s.left} 次，只圈一片区域。`;
+}
+
+/**
+ * 真的用掉一次提示之后说的话：在区域文案后面接一句「还剩几次」。
+ * `spent` 是**花完之后**的状态，`left === 0` 就是刚刚用掉了最后一次。
+ */
+export function hintSpentLine(area: HintArea, spent: HintState, kind: PlayKind): string {
+  if (kind === "puzzle") return `${area.text}（这一题用过提示，最多 2 星）`;
+  if (spent.left <= 0) return `${area.text}（这是最后一次提示啦）`;
+  return `${area.text}（提示还剩 ${spent.left} 次）`;
+}
+
 /* ---------------- 连胜挑战 ---------------- */
 
 /** 从菜鸟起，赢一盘升一档，到地狱封顶 */
@@ -218,6 +241,41 @@ export function streakLine(s: StreakState): string {
   return s.wins === 0
     ? "这一轮到此为止，再来一次就从头开始，别急～"
     : `这一轮连赢 ${s.wins} 盘，最高纪录 ${s.best} 盘。`;
+}
+
+/**
+ * 这一盘赢下来算不算「刷新了纪录」。`prevBest` 是**这一盘之前**的历史最高
+ * （`streakStep` 会把 `best` 抬到 `wins`，所以事后再比 `s.best` 是比不出来的）。
+ * 第一次玩（还没有纪录）不算破纪录，那时候每一盘都是纪录，说了也没意思。
+ */
+export function brokeRecord(prevBest: number, s: StreakState): boolean {
+  const b = Number.isFinite(prevBest) ? Math.max(0, Math.round(prevBest)) : 0;
+  return b > 0 && s.wins > b;
+}
+
+/**
+ * 连胜进行时的纪录播报：一整轮里都看得见自己离最高纪录还差几盘。
+ * 以前只有这一轮结束后的 `streakSummary` 提纪录，打到一半的孩子完全不知道自己的位置。
+ * 还没有纪录（第一次玩）就不说，免得平白多一句话。
+ */
+export function streakRecordLine(s: StreakState): string {
+  if (s.best <= 0) return "";
+  if (s.wins >= s.best) return `这一轮已经是最高纪录 ${s.best} 盘，再赢一盘就再往上刷一格！`;
+  const gap = s.best - s.wins;
+  return gap === 1
+    ? `再赢 1 盘就追平最高纪录 ${s.best} 盘！`
+    : `最高纪录 ${s.best} 盘，还差 ${gap} 盘追平。`;
+}
+
+/** 开局播报：进行时的连胜播报 + 纪录播报，拼成一句话。 */
+export function streakOpening(s: StreakState): string {
+  const rec = streakRecordLine(s);
+  return rec ? `${streakLine(s)}${rec}` : streakLine(s);
+}
+
+/** 赢下一盘之后的标题：刷新纪录那一盘要看得出来和平常不一样。 */
+export function streakWinTitle(prevBest: number, s: StreakState): string {
+  return brokeRecord(prevBest, s) ? `🏆 新纪录 ${s.wins} 盘！` : `🎉 连赢 ${s.wins} 盘！`;
 }
 
 /** 连胜播报里用的短名（不带 emoji，读起来顺） */
