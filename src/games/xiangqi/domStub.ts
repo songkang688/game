@@ -137,10 +137,15 @@ export class El {
     for (const c of this.children) c.findAll(pred, out);
     return out;
   }
-  /** 界面上的文字拼起来（跳过 style 与隐藏的部分），用来做文案红线检查 */
+  /**
+   * 界面上的文字拼起来（跳过 style 与隐藏的部分），用来做文案红线检查。
+   * innerHTML 写进来的那一块也要算：规则面板整段都是 innerHTML，
+   * 漏掉它红线就等于没查。
+   */
   allText(): string {
     if (this.tagName === "style" || this.hidden) return "";
     let s = this.textContent;
+    if (this.innerHTML) s += "\n" + this.innerHTML.replace(/<[^>]*>/g, " ");
     for (const c of this.children) s += "\n" + c.allText();
     return s;
   }
@@ -166,6 +171,18 @@ export interface Dom {
 }
 
 const saved: Record<string, unknown> = {};
+
+/**
+ * 往 globalThis 上装东西。
+ * node 把 `navigator` 定义成只读的 getter，直接赋值会抛
+ * 「Cannot set property navigator of #<Object> which has only a getter」，
+ * 所以一律走 defineProperty，并且留成 configurable，测试跑完才还得回去。
+ */
+function setGlobals(values: Record<string, unknown>): void {
+  for (const [k, v] of Object.entries(values)) {
+    Object.defineProperty(globalThis, k, { value: v, writable: true, configurable: true });
+  }
+}
 
 /** 装上 DOM 桩，返回可以观察的句柄 */
 export function installDom(width = 800, coarsePointer = false): Dom {
@@ -222,7 +239,7 @@ export function installDom(width = 800, coarsePointer = false): Dom {
     clearInterval: (h: unknown) => timers.clearInterval(h),
   };
 
-  Object.assign(globalThis as Record<string, unknown>, {
+  setGlobals({
     document: {
       head,
       createElement: (tag: string) => new El(tag),
@@ -252,7 +269,7 @@ export function installDom(width = 800, coarsePointer = false): Dom {
 
 /** 卸掉 DOM 桩，把全局还回去 */
 export function restoreDom(): void {
-  Object.assign(globalThis as Record<string, unknown>, {
+  setGlobals({
     document: saved.document,
     window: saved.window,
     requestAnimationFrame: saved.requestAnimationFrame,
