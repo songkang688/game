@@ -116,9 +116,16 @@ export interface FieldBgOpts {
 export const DECOR_CELL = 176;
 /** 装饰层视差(比主镜头慢一点,原野才有远近) */
 export const DECOR_PARALLAX = 0.85;
+/** 远景色岛的世界格边长(约每 900 世界 px 一枚;1.3 r1 · learner P6) */
+export const ISLAND_CELL = 900;
+/** 色岛层视差:0.6,与贴片层 0.85 合计两档,不出现第三档 */
+export const ISLAND_PARALLAX = 0.6;
+/** 贴片屏幕尺寸下限(2.4 → 3.2,低 zoom 不退化成噪点;1.3 r1 · learner P6) */
+export const DECOR_MIN_SIZE = 3.2;
 
 /**
- * 糖果原野三层背景:线性渐变底 → 8% 透明网格 → 确定性哈希装饰贴片(视差 0.85)。
+ * 糖果原野四层背景:线性渐变底 → 8% 透明网格 → 远景色岛(视差 0.6)
+ * → 确定性哈希装饰贴片(视差 0.85)。全场恰两档视差,不出现第三档。
  */
 export function drawFieldBackground(g: Ctx, o: FieldBgOpts): void {
   if (!fin(o.w) || !fin(o.h) || !fin(o.zoom) || o.w <= 0 || o.h <= 0 || o.zoom <= 0) return;
@@ -156,6 +163,41 @@ export function drawFieldBackground(g: Ctx, o: FieldBgOpts): void {
     g.restore();
   }
 
+  // 2.5) 远景「原野色岛」(1.3 r1 · learner P6):直径 300–500 世界 px 的
+  // 大椭圆色斑,视差 0.6,画在贴片层之下,给原野第二档远近。
+  const ipx = camX * ISLAND_PARALLAX;
+  const ipy = camY * ISLAND_PARALLAX;
+  const ihw = w / 2 / zoom + 260;
+  const ihh = h / 2 / zoom + 260;
+  const jx0 = Math.floor((ipx - ihw) / ISLAND_CELL);
+  const jx1 = Math.ceil((ipx + ihw) / ISLAND_CELL);
+  const jy0 = Math.floor((ipy - ihh) / ISLAND_CELL);
+  const jy1 = Math.ceil((ipy + ihh) / ISLAND_CELL);
+  let islandBudget = 48;
+  for (let jy = jy0; jy <= jy1 && islandBudget > 0; jy++) {
+    for (let jx = jx0; jx <= jx1 && islandBudget > 0; jx++) {
+      islandBudget--;
+      const hsh = hash2(jx + 7919, jy - 4409);
+      // 每格恰一枚,格心 ±0.35 格抖动:既不成棋盘,也不留多屏空档
+      const wx = (jx + 0.5 + ((hsh % 83) / 83 - 0.5) * 0.7) * ISLAND_CELL;
+      const wy = (jy + 0.5 + (((hsh >>> 6) % 79) / 79 - 0.5) * 0.7) * ISLAND_CELL;
+      const rx = (150 + ((hsh >>> 9) % 101)) * zoom; // 直径 300–500 世界 px
+      const ry = rx * (0.55 + ((hsh >>> 13) % 21) / 100);
+      const sx = w / 2 + (wx - ipx) * zoom;
+      const sy = h / 2 + (wy - ipy) * zoom;
+      if (sx + rx < 0 || sy + ry < 0 || sx - rx > w || sy - ry > h) continue;
+      g.save();
+      g.globalAlpha = 0.08 + ((hsh >>> 3) % 5) / 100; // 0.08–0.12
+      g.fillStyle = theme.decoB;
+      g.translate(sx, sy);
+      g.scale(Math.max(0.1, rx), Math.max(0.1, ry));
+      g.beginPath();
+      g.arc(0, 0, 1, 0, TAU); // 单位圆 + scale 模拟椭圆(兼容线:不用 ellipse)
+      g.fill();
+      g.restore();
+    }
+  }
+
   // 3) 装饰贴片:视差坐标系里按格撒点,同一格永远同一朵
   const px = camX * DECOR_PARALLAX;
   const py = camY * DECOR_PARALLAX;
@@ -178,7 +220,7 @@ export function drawFieldBackground(g: Ctx, o: FieldBgOpts): void {
       const sx = w / 2 + (wx - px) * zoom;
       const sy = h / 2 + (wy - py) * zoom;
       if (sx < -14 || sy < -14 || sx > w + 14 || sy > h + 14) continue;
-      const s = Math.max(2.4, 5 * zoom);
+      const s = Math.max(DECOR_MIN_SIZE, 5 * zoom);
       drawDecorPatch(g, sx, sy, s, hsh % 3, theme);
     }
   }

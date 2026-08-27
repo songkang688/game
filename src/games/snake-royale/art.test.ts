@@ -5,10 +5,13 @@ import {
   BEAN_TOP,
   BOW_COLOR,
   CAP_COLOR,
+  DECOR_MIN_SIZE,
   DECOR_PARALLAX,
   FENCE_WARN_PX,
   FIELD_THEMES,
   GEM_POP_SEC,
+  ISLAND_CELL,
+  ISLAND_PARALLAX,
   GEM_TIERS,
   STARDUST_LIFE,
   STARDUST_MAX,
@@ -339,6 +342,68 @@ describe("糖果原野背景", () => {
   it("哈希撒点确定可复现", () => {
     expect(hash2(3, 7)).toBe(hash2(3, 7));
     expect(hash2(3, 7)).not.toBe(hash2(7, 3));
+  });
+
+  it("远景色岛:900 世界格布点、椭圆走 scale+单位圆、alpha 0.08–0.12(1.3 r1 P6)", () => {
+    expect(ISLAND_CELL).toBe(900);
+    const s = makeStubCtx();
+    drawFieldBackground(s.ctx, { w: 640, h: 372, camX: 0, camY: 300, zoom: 1, theme: FIELD_THEMES.day });
+    // 背景里只有色岛用 translate+scale 模拟椭圆(兼容线:不用 ellipse)
+    const scaleIdx = s.calls.map((c, i) => (c.method === "scale" ? i : -1)).filter((i) => i >= 0);
+    expect(scaleIdx.length).toBeGreaterThanOrEqual(1);
+    expect(scaleIdx.length).toBeLessThanOrEqual(48);
+    expect(s.count("ellipse")).toBe(0);
+    for (const i of scaleIdx) {
+      // 结构逐笔:save → alpha → decoB → translate → scale → beginPath → 单位圆 arc → fill → restore
+      expect(s.calls[i - 3].method).toBe("set:globalAlpha");
+      const alpha = s.calls[i - 3].args[0] as number;
+      expect(alpha).toBeGreaterThanOrEqual(0.08);
+      expect(alpha).toBeLessThanOrEqual(0.12);
+      expect(s.calls[i - 2].method).toBe("set:fillStyle");
+      expect(s.calls[i - 2].args[0]).toBe(FIELD_THEMES.day.decoB);
+      expect(s.calls[i + 2].method).toBe("arc");
+      expect(s.calls[i + 2].args.slice(0, 3)).toEqual([0, 0, 1]);
+      // 直径 300–500 世界 px → 半径 150–250(zoom=1),纵轴 0.55–0.75 压扁
+      const rx = s.calls[i].args[0] as number;
+      const ry = s.calls[i].args[1] as number;
+      expect(rx).toBeGreaterThanOrEqual(150);
+      expect(rx).toBeLessThanOrEqual(250);
+      expect(ry).toBeGreaterThan(0);
+      expect(ry).toBeLessThan(rx);
+    }
+  });
+
+  it("色岛视差 0.6 慢于贴片 0.85,全场恰两档且镜头平移可复现(1.3 r1 P6)", () => {
+    expect(ISLAND_PARALLAX).toBeCloseTo(0.6, 5);
+    expect(DECOR_PARALLAX).toBeCloseTo(0.85, 5);
+    expect(ISLAND_PARALLAX).toBeLessThan(DECOR_PARALLAX);
+    const a = makeStubCtx();
+    drawFieldBackground(a.ctx, { w: 640, h: 372, camX: 0, camY: 300, zoom: 1, theme: FIELD_THEMES.day });
+    const b = makeStubCtx();
+    drawFieldBackground(b.ctx, { w: 640, h: 372, camX: 10, camY: 300, zoom: 1, theme: FIELD_THEMES.day });
+    // 背景里 translate 只有色岛在用:camX +10 → 同格色岛屏幕坐标整体 -6(视差 0.6)
+    const tOf = (st: ReturnType<typeof makeStubCtx>): number[][] =>
+      st.calls.filter((c) => c.method === "translate").map((c) => c.args as number[]);
+    const ta = tOf(a);
+    const tb = tOf(b);
+    expect(ta.length).toBeGreaterThanOrEqual(1);
+    const moved = ta.filter((p) => tb.some((q) => Math.abs(q[0] - (p[0] - 6)) < 1e-6 && Math.abs(q[1] - p[1]) < 1e-6));
+    expect(moved.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("贴片尺寸下限 2.4 → 3.2:低 zoom 贴片不再退化成噪点(1.3 r1 P6)", () => {
+    expect(DECOR_MIN_SIZE).toBeCloseTo(3.2, 5);
+    const s = makeStubCtx();
+    drawFieldBackground(s.ctx, { w: 640, h: 372, camX: 0, camY: 0, zoom: 0.4, theme: FIELD_THEMES.day });
+    // zoom 0.4 时 5*zoom=2 < 3.2,贴片一律按 3.2 起画:
+    // 排除色岛的单位圆 arc(0,0,1) 后,最小 arc 半径 ≥ 3.2*0.3
+    const decorArcs = s.calls.filter(
+      (c) => c.method === "arc" && !(c.args[0] === 0 && c.args[1] === 0 && c.args[2] === 1)
+    );
+    expect(decorArcs.length).toBeGreaterThanOrEqual(1);
+    for (const c of decorArcs) {
+      expect(c.args[2] as number).toBeGreaterThanOrEqual(DECOR_MIN_SIZE * 0.3 - 1e-9);
+    }
   });
 });
 
