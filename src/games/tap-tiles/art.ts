@@ -389,3 +389,30 @@ export function countdownStep(tMs: number, leadMs: number): number {
   const left = leadMs - tMs;
   return Math.max(1, Math.min(COUNTDOWN_DOTS, Math.ceil((left / leadMs) * COUNTDOWN_DOTS)));
 }
+
+// ---------------------------------------------------------------------------
+// 暂停层的内联 SVG 小图标(round2 遗留 #6:DOM 按钮/遮罩标题的 ⏸▶️ emoji 换画制)
+// ---------------------------------------------------------------------------
+
+/**
+ * 暂停图标:两根圆角竖条。`fill=currentColor` 跟随所在按钮 / 标题的文字色,
+ * 同一份图标在浅紫按钮(#5b4a7a)与遮罩标题(#6b4fa0)上都不用重配色。
+ */
+export function pauseIconSVG(size = 13): string {
+  return (
+    `<svg viewBox="0 0 14 14" width="${size}" height="${size}" aria-hidden="true" style="vertical-align:-1px">` +
+    `<rect x="2.6" y="1.5" width="3.3" height="11" rx="1.65" fill="currentColor"/>` +
+    `<rect x="8.1" y="1.5" width="3.3" height="11" rx="1.65" fill="currentColor"/>` +
+    `</svg>`
+  );
+}
+
+/** 继续图标:圆角小三角(与暂停图标同尺寸同色,同一颗按钮上来回切换不跳动) */
+export function playIconSVG(size = 13): string {
+  return (
+    `<svg viewBox="0 0 14 14" width="${size}" height="${size}" aria-hidden="true" style="vertical-align:-1px">` +
+    `<path d="M5 3.2 L11 6.6 Q11.7 7 11 7.4 L5 10.8 Q4.3 11.2 4.3 10.4 L4.3 3.6 Q4.3 2.8 5 3.2 Z"` +
+    ` fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `</svg>`
+  );
+}

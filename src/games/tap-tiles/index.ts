@@ -32,6 +32,8 @@ import {
   themeForChapter,
   traceLaneSymbol,
   tracePill,
+  pauseIconSVG,
+  playIconSVG,
   traceStar,
   type BurstGrade,
 } from "./art";
@@ -397,7 +399,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   const pauseBtn = document.createElement("button");
   pauseBtn.type = "button";
   pauseBtn.className = "tt-btn tt-btn-pause";
-  pauseBtn.textContent = "⏸";
+  pauseBtn.innerHTML = pauseIconSVG();
   pauseBtn.setAttribute("aria-label", "暂停");
   pauseBtn.addEventListener("click", () => togglePause());
   hud.appendChild(pauseBtn);
@@ -601,11 +603,16 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     paused = !paused;
     if (paused) {
       pauseWall = wall;
-      pauseBtn.textContent = "▶️ 继续";
-      showCover("⏸ 先歇一会儿", "谱面停在这里等你,回来接着弹。", "▶️ 继续玩", () => togglePause());
+      pauseBtn.innerHTML = `${playIconSVG()}<span> 继续</span>`;
+      showCover(
+        `${pauseIconSVG(17)}<span> 先歇一会儿</span>`,
+        "谱面停在这里等你,回来接着弹。",
+        `${playIconSVG()}<span> 继续玩</span>`,
+        () => togglePause()
+      );
     } else {
       pausedTotal += wall - pauseWall;
-      pauseBtn.textContent = "⏸ 暂停";
+      pauseBtn.innerHTML = `${pauseIconSVG()}<span> 暂停</span>`;
       hideCover();
     }
     opts.sfx("tap");
@@ -619,7 +626,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "tt-btn tt-btn-go";
-    btn.textContent = label;
+    // 标题与按钮文案都可能带内联 SVG 小图标(暂停/继续),所以走 innerHTML
+    btn.innerHTML = label;
     btn.addEventListener("click", onClick);
     cover.appendChild(btn);
     wrap.appendChild(cover);
