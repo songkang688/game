@@ -226,6 +226,37 @@ export function badgePulse(msSince: number, reduced: boolean): { scale: number; 
   return { scale: 1 + 0.22 * k, glow: 0.6 * k };
 }
 
+/**
+ * 自绘五瓣花:五片渐变花瓣 + 径向渐变花心,顶替原来的 emoji `FLOWERS[]`。
+ * 展开动画的帧 → 尺寸缩放由调用方拿 `bloomFrame` 算好再传 r。
+ */
+export function drawFlower(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, styleIdx: number): void {
+  const n = FLOWER_STYLES.length;
+  const st = FLOWER_STYLES[((styleIdx % n) + n) % n];
+  ctx.save();
+  ctx.translate(x, y);
+  for (let k = 0; k < 5; k++) {
+    ctx.save();
+    ctx.rotate(-Math.PI / 2 + (k * 2 * Math.PI) / 5);
+    const grad = ctx.createLinearGradient(0, 0, r, 0);
+    grad.addColorStop(0, st.petal);
+    grad.addColorStop(1, st.petalDeep);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(r * 0.58, 0, r * 0.46, r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  const heart = ctx.createRadialGradient(-r * 0.12, -r * 0.12, r * 0.05, 0, 0, r * 0.4);
+  heart.addColorStop(0, st.heart0);
+  heart.addColorStop(1, st.heart1);
+  ctx.fillStyle = heart;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.38, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 // ---------------------------------------------------------------------------
 // 章节主题场景:街道 / 公园 / 星空屋顶 轮换
 // ---------------------------------------------------------------------------
