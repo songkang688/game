@@ -350,6 +350,25 @@ const KIND_NAME: Record<BallKind, string> = {
   black: "黑星球",
 };
 
+/**
+ * 瞄准键：`[归哪一位, 拨几个细调步长]`。
+ * 朵朵一套 `WASD`、星星一套方向键；上下是「大步」，左右是「小步」。
+ */
+const AIM_KEYS: Record<string, ["duo" | "star", number]> = {
+  a: ["duo", -1],
+  A: ["duo", -1],
+  d: ["duo", 1],
+  D: ["duo", 1],
+  w: ["duo", -3],
+  W: ["duo", -3],
+  s: ["duo", 3],
+  S: ["duo", 3],
+  ArrowLeft: ["star", -1],
+  ArrowRight: ["star", 1],
+  ArrowUp: ["star", -3],
+  ArrowDown: ["star", 3],
+};
+
 export function createTable(host: HTMLElement, opts: TableOptions): TableHandle {
   const releaseCss = acquireCss(host);
   const soft = reducedMotion();
@@ -756,6 +775,17 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     refresh();
   }
 
+  /**
+   * 这一套瞄准键归哪个座位。
+   * 双人同屏（两个座位都是真人）时朵朵一套、星星一套；
+   * 单人局里两套都归那位真人 —— 老键位一条不丢。
+   */
+  function aimSeat(owner: "duo" | "star"): number {
+    const humans = opts.seats.map((s, i) => (s.ai === null ? i : -1)).filter((i) => i >= 0);
+    const duo = humans[0] ?? 0;
+    return owner === "duo" ? duo : (humans[1] ?? duo);
+  }
+
   const onKeyDown = (e: KeyboardEvent): void => {
     const k = e.key;
     if (k === "Escape") {
@@ -769,24 +799,12 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     // 暂停就是暂停：除了 Esc，瞄准 / 蓄力 / 出杆一个都不接
     if (paused) return;
     const fine = e.shiftKey ? 0.008 : 0.03;
-    if (k === "ArrowLeft" || k === "a" || k === "A") {
-      nudge(-fine);
+    const aim = AIM_KEYS[k];
+    if (aim) {
       e.preventDefault();
-      return;
-    }
-    if (k === "ArrowRight" || k === "d" || k === "D") {
-      nudge(fine);
-      e.preventDefault();
-      return;
-    }
-    if (k === "ArrowUp" || k === "w" || k === "W") {
-      nudge(-fine * 3);
-      e.preventDefault();
-      return;
-    }
-    if (k === "ArrowDown" || k === "s" || k === "S") {
-      nudge(fine * 3);
-      e.preventDefault();
+      // 瞄准键也按座位分：朵朵 WASD、星星 方向键，谁也拨不动对方那一杆
+      if (aimSeat(aim[0]) !== turn) return;
+      nudge(fine * aim[1]);
       return;
     }
     if (e.repeat) return;

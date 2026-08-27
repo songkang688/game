@@ -8,7 +8,8 @@
  * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
  *  - PA-PS-1（严重）：Esc 暂停只挡住了 rAF 与台面指针，键盘瞄准 / 蓄力 / 出杆与按钮照样生效。
  *    第 1 轮修复员已修，下面 `PA-PS-1` 那一组断言已经翻成修好后的行为；
- *  - PA-PS-2（一般）：双人同屏里方向键与 WASD 都改「当前出杆方」的角度，两人互相够得着（仍留后面几轮）；
+ *  - PA-PS-2（一般）：双人同屏里方向键与 WASD 都改「当前出杆方」的角度，两人互相够得着。
+ *    第 2 轮学习优化员已把瞄准键也按座位分开，下面 `PA-PS-2` 那一组断言已经翻成修好后的行为；
  *  - PA-PS-3（一般）：`mount` 的 destroy 不回收注入到 document.head 的 `ps-shell-style`。
  *    第 2 轮学习优化员已改成「注一次 + 引用计数」，下面 `PA-PS-3` 那一组断言已经翻成修好后的行为。
  *
@@ -247,24 +248,50 @@ describe("PA-PS-2 · 双人同屏键位互不抢占", () => {
     handle.destroy();
   });
 
-  it("【已知问题】瞄准键不分座位：轮到星星时朵朵的 D 照样拨得动角度", () => {
+  it("瞄准键也分座位：轮到星星时朵朵的 D 拨不动角度", () => {
     const { handle, settled } = mountTable({ seats: DUO_SEATS, turn: 1 });
     for (let i = 0; i < 10; i++) fireWin("keydown", "d");
     shoot("l", 200);
     runUntilSettled(settled);
     expect(settled).toHaveLength(1);
-    // 应有行为：轮到星星时朵朵的 D 被忽略，角度还是 0。现状：被拨到了 0.3。
-    expect(settled[0].angle, "朵朵的 D 改动了星星的瞄准角").toBeCloseTo(0.3, 5);
+    expect(settled[0].angle, "朵朵的 D 改动了星星的瞄准角").toBeCloseTo(0, 5);
     handle.destroy();
   });
 
-  it("【已知问题】反过来轮到朵朵时星星的方向键也够得着", () => {
+  it("反过来轮到朵朵时星星的方向键也够不着", () => {
     const { handle, settled } = mountTable({ seats: DUO_SEATS, turn: 0 });
     for (let i = 0; i < 10; i++) fireWin("keydown", "ArrowRight");
     shoot("f", 200);
     runUntilSettled(settled);
     expect(settled).toHaveLength(1);
-    expect(settled[0].angle, "星星的方向键改动了朵朵的瞄准角").toBeCloseTo(0.3, 5);
+    expect(settled[0].angle, "星星的方向键改动了朵朵的瞄准角").toBeCloseTo(0, 5);
+    handle.destroy();
+  });
+
+  it("各自那一套照旧管用：朵朵的 D 与星星的方向键都拨得动自己那一杆", () => {
+    const duo = mountTable({ seats: DUO_SEATS, turn: 0 });
+    for (let i = 0; i < 10; i++) fireWin("keydown", "d");
+    shoot("f", 200);
+    runUntilSettled(duo.settled);
+    expect(duo.settled[0].angle, "朵朵自己的 D 也拨不动了").toBeCloseTo(0.3, 5);
+    duo.handle.destroy();
+
+    const star = mountTable({ seats: DUO_SEATS, turn: 1 });
+    for (let i = 0; i < 10; i++) fireWin("keydown", "ArrowRight");
+    shoot("l", 200);
+    runUntilSettled(star.settled);
+    expect(star.settled[0].angle, "星星自己的方向键也拨不动了").toBeCloseTo(0.3, 5);
+    star.handle.destroy();
+  });
+
+  it("单人局里两套瞄准键都归那位真人，老键位一条不丢", () => {
+    const { handle, settled } = mountTable({ turn: 0 });
+    for (let i = 0; i < 5; i++) fireWin("keydown", "d");
+    for (let i = 0; i < 5; i++) fireWin("keydown", "ArrowRight");
+    shoot("f", 200);
+    runUntilSettled(settled);
+    expect(settled).toHaveLength(1);
+    expect(settled[0].angle, "单人局里 WASD 与方向键该都算数").toBeCloseTo(0.3, 5);
     handle.destroy();
   });
 
