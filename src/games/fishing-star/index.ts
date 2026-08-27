@@ -55,6 +55,7 @@ import {
   type GearBonus,
   type GearSet,
 } from "./gear";
+import { resetClippedScroll, seaHeightPx, stageRoomPx } from "./fit";
 import { createLedger } from "./runtime";
 import {
   BAND_LUCK,
@@ -152,7 +153,10 @@ const CSS = `
 .fs-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .fs-btn--ghost{background:linear-gradient(180deg,#a9c4d8,#87a7bf);box-shadow:0 3px 0 #6b8aa1;}
 .fs-btn--ghost:active{box-shadow:0 1px 0 #6b8aa1;}
-.fs-sea{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(70,110,150,.22);line-height:0;}
+/* position:relative 是给上鱼那一行「水桶」当画布用的：它浮在水面上，不占常规流高度。
+   为什么非这么摆不可，见下面 .fss-show 那一段。 */
+.fs-sea{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(70,110,150,.22);line-height:0;
+  position:relative;}
 .fs-sea canvas{display:block;}
 .fs-bars{width:100%;max-width:620px;display:flex;flex-direction:column;gap:4px;}
 .fs-barrow{display:flex;align-items:center;gap:7px;}
@@ -253,12 +257,22 @@ const CSS = `
 @keyframes fssShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
 /* 手机上蓄力与收线共用这一颗大按钮:热区必须够 64px */
 .fss-act{min-height:64px;min-width:min(88vw,220px);}
-.fss-show{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;background:#ffffffdd;
-  border-radius:14px;padding:6px 10px;font-size:12.5px;font-weight:800;color:#3f6f92;max-width:620px;}
+/* 上鱼之后的「水桶」那一行：**浮在水面上，绝对定位，不占常规文档流高度**。
+   原来它是 .fs-wrap 的一个常规子节点,钓上第一条鱼才显形——一显形就把整屏顶高
+   48–73px（实测桶行 48/73px、整屏长高 55/77/78px）,而 .game-stage 是定高 +
+   overflow:hidden（平台文件,交窗口1）,顶出去的那一截既不滚也没提示。
+   顶出去的正是「🎣 按住抛竿」那颗唯一的操作键:四档视口 × 三关 12 组全中,
+   elementFromPoint 拿回舞台祖先甚至 null,而每关要钓 4–6 条,于是永远卡在 1 条
+   ——测试员 W5-B-08(阻断)。改成浮层之后,钓第几条鱼都不会再改变这一屏的高度。
+   放生键跟着抬到 44px 触屏底线(原来 36px)。 */
+.fss-show{position:absolute;left:6px;right:6px;bottom:6px;z-index:3;line-height:1.4;
+  display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;background:#ffffffee;
+  border-radius:14px;padding:6px 10px;font-size:12.5px;font-weight:800;color:#3f6f92;
+  box-shadow:0 3px 10px rgba(70,110,150,.22);}
 .fss-show[hidden]{display:none;}
 .fss-let{border:none;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7fc8e0,#4f9cc4);box-shadow:0 3px 0 #3b7c9e;
-  min-height:36px;}
+  min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;}
 .fss-let:active{transform:translateY(2px);box-shadow:0 1px 0 #3b7c9e;}
 .fss-let:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .fss-open--gear{background:linear-gradient(180deg,#f0c05c,#d99a2e);box-shadow:0 4px 0 #a97516;}
@@ -347,6 +361,9 @@ const BITE_WINDOW_MS = 400;
 const SHOW_MS = 900;
 /** 演出至少放这么久才允许按掉,免得手快的人根本没看见鱼 */
 const SHOW_SKIP_MS = 220;
+
+/** 隔多久重新量一次舞台可视高(量到的和现在一样就什么都不写) */
+export const REFIT_MS = 300;
 
 export interface CatchInfo {
   fish: Fish;
@@ -494,6 +511,15 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   const seaBox = el("div", "fs-sea");
   const canvas = document.createElement("canvas");
   seaBox.appendChild(canvas);
+  // 上鱼小演出那一行「水桶」:浮在水面上(见 CSS 里 .fss-show 那一段)。
+  // 挂在水面盒子里而不是挂在 wrap 上,是为了让它彻底退出常规文档流——
+  // 钓上第几条鱼都不会再改变这一屏的高度,抛竿键也就不会被顶出舞台。
+  const showRow = el("div", "fss-show");
+  showRow.hidden = true;
+  const showLabel = el("span", "", "");
+  const letBtn = button("fss-let", "💧 放生");
+  showRow.append(showLabel, letBtn);
+  seaBox.appendChild(showRow);
 
   // 风向 / 天色那一行:抛竿之前就能看清这一竿会被吹偏多少
   const infoRow = el("div", "fss-row");
@@ -537,20 +563,17 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
 
   const tip = el("div", "fs-tip", opts.hint);
 
-  // 上鱼小演出那一行:水桶里这一条可以放生
-  const showRow = el("div", "fss-show");
-  showRow.hidden = true;
-  const showLabel = el("span", "", "");
-  const letBtn = button("fss-let", "💧 放生");
-  showRow.append(showLabel, letBtn);
-
   const actBtn = button("fs-act fss-act", "🎣 按住抛竿");
   const live = el("div", "fs-sr");
   live.setAttribute("role", "status");
   live.setAttribute("aria-live", "polite");
 
-  wrap.append(hud, seaBox, infoRow, bars, tip, showRow, actBtn, live);
+  wrap.append(hud, seaBox, infoRow, bars, tip, actBtn, live);
   host.appendChild(wrap);
+  // 地图上「🎯 跳到当前关」(以及点节点时浏览器自带的聚焦滚动)会给舞台留下一个非 0 的
+  // scrollTop,进关之后没有任何东西会还原它,而舞台是 overflow:hidden——关内顶部就被
+  // 永久裁掉一截(测试员 W5-B-09)。进关这一刻把这条链上的位移归 0。
+  resetClippedScroll(wrap);
 
   const g = canvas.getContext("2d");
 
@@ -626,14 +649,37 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   let W = 320;
   let H = 260;
 
-  function layout(): void {
+  /** 这一屏现在应该多宽多高（纯测量，不写任何东西） */
+  function wantedSize(): { w: number; h: number } {
     const avail = clamp(host.clientWidth || 340, 240, 620);
     const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
     // 手机竖屏一共 667 像素,水面上面还压着平台标题栏和 level99 的选关条。
     // 水面必须让位,否则那颗「按住抛竿」的大按钮会被挤到首屏外面去。
     const share = viewH <= 560 ? 0.33 : viewH <= 720 ? 0.36 : 0.42;
-    W = Math.round(avail);
-    H = Math.round(clamp(viewH * share, 180, 380));
+    let want = clamp(viewH * share, 180, 380);
+    // 上面这个比例是拿整块屏幕猜的,可子游戏拿到的从来不是整块屏幕:平台壳顶栏 +
+    // l99 抬头 + 关卡 HUD 在矮屏上要吃掉两百多像素,而多出来的部分被 .game-stage
+    // (定高 + overflow:hidden,平台文件,交窗口1)直接裁掉。这里量一次真实可视高
+    // 再倒推水面——水面以外那几行(HUD / 风向 / 张力条 / 提示 / 大按钮)就是 chrome。
+    const room = stageRoomPx(wrap);
+    if (Number.isFinite(room) && typeof wrap.getBoundingClientRect === "function") {
+      const chrome = Math.max(0, wrap.getBoundingClientRect().height - seaBox.getBoundingClientRect().height);
+      want = seaHeightPx(want, room, chrome);
+    }
+    return { w: Math.round(avail), h: Math.round(want) };
+  }
+
+  /**
+   * 排一次版。**幂等**:算出来和现在一样就一个字节都不写。
+   * 幂等这一点是必需的——挂进 DOM 的那一瞬间壳层还没落位(选关地图还在上面),
+   * 那时候量到的可视高偏小,水面会被收得过头。所以主循环每隔一会儿会再量一次,
+   * 壳层落位之后水面自己长回来;不幂等的话就是每帧清一次画布。
+   */
+  function layout(): void {
+    const next = wantedSize();
+    if (next.w === W && next.h === H && canvas.width > 0) return;
+    W = next.w;
+    H = next.h;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
@@ -1103,6 +1149,8 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
 
   let raf = 0;
   let last = 0;
+  /** 距上一次重新量可视高过了多久(毫秒) */
+  let sinceFit = 0;
 
   function tick(dt: number): void {
     ambient += dt;
@@ -1169,6 +1217,12 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     raf = ledger.raf(requestAnimationFrame(frame));
     const dt = last === 0 ? 16 : clamp(now - last, 0, 120);
     last = now;
+    // 壳层落位、转屏、字体加载都会改变可视高。隔一会儿量一次,变了才重排(layout 幂等)。
+    sinceFit += dt;
+    if (sinceFit >= REFIT_MS) {
+      sinceFit = 0;
+      layout();
+    }
     if (!paused && !finished) tick(dt);
     render();
     refreshHud();
