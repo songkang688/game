@@ -484,6 +484,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
   let speed = 250;
   let scrollPhase = 0;
   let shake = 0;
+  /** 撞了一下:接下来 0.3 秒换 × 眼(只影响表情,不影响判定) */
+  let hurtFlash = 0;
   let magnetTimer = 0;
   let jetTimer = 0;
   let boardTimer = 0;
@@ -835,6 +837,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     jumpFeel = initJumpFeel();
     jumpBody = groundedBody();
     slideElapsed = 0;
+    hurtFlash = 0;
     perfectStreak = 0;
     forkSign = null;
     forkTimer = level().fork ? 5 : Infinity;
@@ -917,6 +920,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     stats.heartsLost++;
     invincible = 1.5;
     shake = 0.4;
+    hurtFlash = 0.3;
     api.play("oops");
     for (let k = 0; k < particleCount(8, qualityTier); k++) {
       puffs.push({
@@ -1159,6 +1163,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
   function update(dt: number): void {
     time += dt;
     shake = Math.max(0, shake - dt);
+    hurtFlash = Math.max(0, hurtFlash - dt);
     invincible = Math.max(0, invincible - dt);
     magnetTimer = Math.max(0, magnetTimer - dt);
     jetTimer = Math.max(0, jetTimer - dt);
@@ -2033,8 +2038,6 @@ export function mount(api: GameAPI): RainbowRunHandle {
   function drawPlayer(): void {
     const pxx = laneX(laneFloat);
     const py = playerY();
-    const blink = invincible > 0 && Math.floor(invincible * 8) % 2 === 0;
-    if (blink) return;
     const jumping = action === "jump";
     const sliding = action === "slide";
     const flying = jetTimer > 0;
@@ -2063,60 +2066,36 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.rotate(tilt);
       ctx.translate(-pxx, -bodyY);
     }
-    if (boardTimer > 0) {
-      // 小滑板
-      ctx.fillStyle = "#c9a6f2";
-      ctx.beginPath();
-      ctx.roundRect(pxx - r * 1.1, bodyY + r * 0.85, r * 2.2, 8, 4);
-      ctx.fill();
-      ctx.fillStyle = "#8a5ac9";
-      ctx.beginPath();
-      ctx.arc(pxx - r * 0.6, bodyY + r * 0.85 + 10, 5, 0, Math.PI * 2);
-      ctx.arc(pxx + r * 0.6, bodyY + r * 0.85 + 10, 5, 0, Math.PI * 2);
-      ctx.fill();
+    ctx.translate(pxx, bodyY);
+    // 无敌闪烁降到 3Hz(光敏红线),隐帧改画两帧金色残影,不再整个人消失
+    if (blinkHidden(invincible)) {
+      drawRunnerAfterimage(ctx, r, sx, sy);
+      ctx.restore();
+      return;
     }
-    if (flying) {
-      // 喷气火花
-      ctx.fillStyle = "#ffd868";
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(pxx - 10 + i * 10, bodyY + r * 1.1 + Math.random() * 12, 4 + Math.random() * 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.fillStyle = "#ffb3c8";
-    ctx.beginPath();
-    ctx.ellipse(pxx, bodyY, r * sx, r * sy, 0, 0, Math.PI * 2);
-    ctx.fill();
-    if (!jumping && !sliding && !flying) {
-      const step = Math.sin(scrollPhase * 0.05) * 8;
-      ctx.fillStyle = "#e88aa5";
-      ctx.beginPath();
-      ctx.arc(pxx - 12, bodyY + r * 0.8 + step * 0.4, 7, 0, Math.PI * 2);
-      ctx.arc(pxx + 12, bodyY + r * 0.8 - step * 0.4, 7, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#3a3a4a";
-    ctx.beginPath();
-    ctx.arc(pxx - 10, bodyY - 5 * sy, 3.5, 0, Math.PI * 2);
-    ctx.arc(pxx + 10, bodyY - 5 * sy, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#3a3a4a";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(pxx, bodyY + 5 * sy, 9, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255,120,150,0.4)";
-    ctx.beginPath();
-    ctx.arc(pxx - 18, bodyY + 2, 5, 0, Math.PI * 2);
-    ctx.arc(pxx + 18, bodyY + 2, 5, 0, Math.PI * 2);
-    ctx.fill();
+    // 小滑板:板身 + 双轮 + 会转的轮辐线
+    if (boardTimer > 0) drawBoardArt(ctx, r, scrollPhase * 0.09);
+    // 喷气鞋:锥形三层尾焰(芯白 / 中黄 / 外橙),轻微抖动,reduced 静止
+    if (flying) drawJetFlame(ctx, r, time, reducedMotion);
+    const pose: RunnerPose =
+      hurtFlash > 0 ? "hurt" : flying ? "fly" : jumping ? "jump" : sliding ? "slide" : "run";
+    drawRunner(ctx, {
+      pose,
+      r,
+      // 双脚交替沿用老公式;双臂在 art 里按反相位摆
+      step: Math.sin(scrollPhase * 0.05) * 8,
+      t: time,
+      squashX: sx,
+      squashY: sy,
+      reduced: reducedMotion,
+      band: HEADBAND_P1,
+    });
     if (magnetTimer > 0) {
       ctx.strokeStyle = "rgba(178,138,232,0.5)";
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 7]);
       ctx.beginPath();
-      ctx.arc(pxx, bodyY, r * 2.2 + Math.sin(time * 5) * 5, 0, Math.PI * 2);
+      ctx.arc(0, 0, r * 2.2 + Math.sin(time * 5) * 5, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
