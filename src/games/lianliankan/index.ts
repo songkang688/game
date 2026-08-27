@@ -548,14 +548,33 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     rerollMasks();
     ctx.sfx("meow");
     msgEl.textContent = auto
-      ? cfg.autoShuffleFree
-        ? "连不动啦，这一关会自动帮你重排，接着找！"
-        : `连不动啦，自动洗牌一次（还剩 ${shufflesLeft} 次）`
+      ? free
+        ? "这盘走进死胡同啦，不算你的——帮你重排一次，接着连！"
+        : cfg.autoShuffleFree
+          ? "连不动啦，这一关会自动帮你重排，接着找！"
+          : `连不动啦，自动洗牌一次（还剩 ${shufflesLeft} 次）`
       : rep.constructed
         ? "洗好啦！这一把是特意摆出来的，保证有得连～"
         : `洗好啦，重新找找看（还剩 ${shufflesLeft} 次）`;
     view.clearSelection();
     renderTop();
+  }
+
+  /**
+   * 死局救场：没得连了，而且洗牌次数也用光了。
+   *
+   * 原来这里直接判这一关没过，还捎一句「下一局多留一次洗牌就够翻盘啦」。
+   * 可孩子并没有乱花洗牌——是这一手消除顺序刚好把自己堵死了，
+   * 这是**没犯错却输了**，还挨了一句不该挨的提点。
+   * （全量扫 188 关 × 60 种子：第 36 / 51 / 64 / 86 / 89 / 95 / 98 关都撞得上，
+   * 第 89 关连它发出去的那个固定种子都会死。见 W4A-18。）
+   *
+   * 开局撞上死盘时本来就免费救一次（这个函数下面那句 `rescue()` 就是）；
+   * 中途的死局是同一回事，没有理由区别对待。`fairShuffle` 保证重排完一定还走得动，
+   * 所以救完接着玩就行，输赢仍旧只由时间决定。
+   */
+  function rescue(): void {
+    doShuffle(true, true);
   }
 
   function afterPair(): void {
@@ -566,7 +585,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
     if (!anyMove(board, maxTurns)) {
       if (cfg.autoShuffleFree || shufflesLeft > 0) doShuffle(true);
-      else fail("场上没有可连的了～洗牌是应急用的，下一局多留一次就够翻盘啦！");
+      else rescue();
     }
   }
 
@@ -582,7 +601,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     msgEl.textContent = "🌀 棋盘转了 90°，先花一秒重新定位再动手！";
     if (!anyMove(board, maxTurns) && tilesLeft(board) > 0) {
       if (cfg.autoShuffleFree || shufflesLeft > 0) doShuffle(true);
-      else fail("转完之后没有可连的了～洗牌留给真正的死局，再来一局就顺了！");
+      else rescue();
     }
   }
 
@@ -613,7 +632,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     doShuffle(false);
   });
 
-  if (!anyMove(board, maxTurns)) doShuffle(true, true);
+  if (!anyMove(board, maxTurns)) rescue();
   rerollMasks();
   view.render();
   renderTop();

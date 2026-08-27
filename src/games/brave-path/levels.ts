@@ -497,45 +497,91 @@ function easeElitePileup(steps: PathNode[][], level: number): void {
   }
 }
 
-/** 收尾那只精英少带这么一成的血量与气势（前面已经打过架时） */
+/** 同一段里还夹着一场架时，这只精英少带一成的星芒上限与气势 */
 export const CLIMAX_EASE = 0.9;
 
+/** 夹着两场以上时松得多一点——那是一条真正的车轮路 */
+export const DEEP_EASE = 0.85;
+
 /**
- * 收尾那一场是精英、而且到它跟前时星芒已经用掉过一截——这只精英松一成。
+ * 一段路里除了这只精英还有别的架要打——这只精英松一成。
  *
- * 精英的数值是照「满状态迎战」配的（首领关索性在门口摆整装石，就是这个道理）。
- * 可普通关没有整装石，一路打过来的消耗全带进最后一场。第八章那几关
- * （第 135 / 138 / 139 / 153 / 155 关）就卡在这儿：达标勇者六局里输一局，
- * 会以为是自己练得不够，其实是这一关的收尾比邻居们多背了一路的消耗。
+ * 精英的数值是照「满状态迎战、打完就歇」配的（首领关索性在门口摆整装石，
+ * 就是这个道理）。可普通关没有整装石，同一段歇脚石之间往往还塞着别的架，
+ * 那些消耗全要算在这只精英头上——不管它排在前面还是后面。
  *
- * 「疲劳」按上一处歇脚石之后打了几架算，精英算两架。一架都没打过（比如
- * 一路全是宝箱，或者刚在歇脚石上坐过）就不松——那种情况本来就是满状态迎战。
+ * 第 2 轮先只管了「收尾那只」（第 135 / 138 / 139 / 153 / 155 关卡在那儿）。
+ * 第 3 轮把尺子从 6 个种子加长到 40 个之后，露出了另一种形状：
+ * 精英排在半路，后面还接着一两场小怪，中间没有歇脚石——
+ * 第 121 关是「小怪 → 精英 → 小怪」，第 124 / 140 / 185 关是「精英 → 小怪 → 小怪」。
+ * 这类关的通关率停在 93%~98%，见 W4A-17。
+ *
+ * 两种形状其实是同一件事：**这只精英不是单独打的**。所以判据统一成
+ * 「同一段歇脚石之间还有没有别的架」，前后都算，松的幅度还是那一成。
+ * 单独打的精英（一路全是宝箱，或者刚在歇脚石上坐过、打完又是歇脚石）不松——
+ * 那种情况本来就是照满状态配的。
  */
-function easeClimaxElite(steps: PathNode[][]): void {
+function easeWornElite(steps: PathNode[][]): void {
+  const isRest = (opts: PathNode[]): boolean => opts.length > 0 && opts.every((o) => o.kind === "rest");
+  const isFight = (opts: PathNode[]): boolean =>
+    opts.some((o) => o.kind === "foe" || o.kind === "elite" || o.kind === "boss");
+
   const last = steps.length - 1;
-  if (last < 0) return;
-  let wear = 0;
-  for (let i = 0; i < last; i++) {
-    const opts = steps[i];
-    if (opts.length > 0 && opts.every((o) => o.kind === "rest")) {
-      wear = 0;
-      continue;
+  for (let i = 0; i <= last; i++) {
+    if (!steps[i].some((o) => o.kind === "elite")) continue;
+
+    // 这一段（上一处歇脚石之后到下一处歇脚石之前）里，除了它还有几场架
+    let others = 0;
+    for (let j = i - 1; j >= 0 && !isRest(steps[j]); j--) if (isFight(steps[j])) others++;
+    for (let j = i + 1; j <= last && !isRest(steps[j]); j++) if (isFight(steps[j])) others++;
+    if (others < 1) continue;
+    const ease = others >= 2 ? DEEP_EASE : CLIMAX_EASE;
+
+    for (let k = 0; k < steps[i].length; k++) {
+      const n = steps[i][k];
+      if (n.kind !== "elite" || !n.foe) continue;
+      steps[i][k] = {
+        ...n,
+        foe: {
+          ...n.foe,
+          maxHp: Math.round(n.foe.maxHp * ease),
+          atk: Math.round(n.foe.atk * ease)
+        }
+      };
     }
-    const fight = opts.some((o) => o.kind === "foe" || o.kind === "elite" || o.kind === "boss");
-    if (fight) wear += opts.some((o) => o.kind === "elite") ? 2 : 1;
   }
-  if (wear < 1) return;
-  for (let k = 0; k < steps[last].length; k++) {
-    const n = steps[last][k];
-    if (n.kind !== "elite" || !n.foe) continue;
-    steps[last][k] = {
-      ...n,
-      foe: {
-        ...n.foe,
-        maxHp: Math.round(n.foe.maxHp * CLIMAX_EASE),
-        atk: Math.round(n.foe.atk * CLIMAX_EASE)
-      }
-    };
+}
+
+/**
+ * 整关一处歇脚都没有、却要连打三场以上——在岔路上摆一块歇脚石。
+ *
+ * 第 140 / 177 关就是这个形状：三四场架一路打到底，中间没有任何补给。
+ * 三组各 100 个种子的走查里，第 140 关是唯一一关在三组里全都掉到 95% 以下的
+ * （92%~95%），它的路是「精英 → 小怪 → 小怪」，而且小怪的气势（90）
+ * 比松过一档的精英（85）还高——一路硬扛没有任何回气的机会。
+ *
+ * 这里不再往下削数值（削到最后精英就不是精英了），而是**给一个选择**：
+ * 把岔路里的一条支线换成歇脚石。要打的那一条一场没少，孩子可以硬闯拿全程，
+ * 也可以先坐下来回口气。「什么时候该歇」本来就是这一关最该学会的事。
+ *
+ * 歇脚石摆在岔路的最后一条，前面那条仍旧是架——所以「一路硬闯」这条最难的
+ * 走法还在，走查量的仍是下限。整关只补这一块，跟「一关最多一个休息点」不冲突。
+ */
+function offerBreather(steps: PathNode[][]): void {
+  const isFight = (o: PathNode): boolean => o.kind === "foe" || o.kind === "elite" || o.kind === "boss";
+  if (steps.some((opts) => opts.some((o) => o.kind === "rest"))) return;
+  if (steps.filter((opts) => opts.some(isFight)).length < 3) return;
+
+  for (let i = 1; i < steps.length - 1; i++) {
+    const opts = steps[i];
+    if (opts.length < 2) continue;
+    // 从后往前找一条普通小怪的支线换掉，且换完至少还留着一条要打的
+    for (let k = opts.length - 1; k >= 1; k--) {
+      if (opts[k].kind !== "foe") continue;
+      if (!opts.some((o, j) => j !== k && isFight(o))) continue;
+      opts[k] = restNode();
+      return;
+    }
   }
 }
 
@@ -594,7 +640,10 @@ export function buildLevel(level: number): LevelPlan {
     }
   }
   easeElitePileup(steps, lv);
-  if (!boss) easeClimaxElite(steps);
+  if (!boss) {
+    easeWornElite(steps);
+    offerBreather(steps);
+  }
 
   // Boss 关：门口固定摆一块整装石。首领的数值本来就是照「满状态迎战」配的，
   // 不能让前面几步的消耗把这场硬仗变成硬撑。

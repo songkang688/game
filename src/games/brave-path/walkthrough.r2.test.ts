@@ -222,11 +222,14 @@ describe("勇者小路 · R2 · 难度曲线", () => {
     expect(restsOf(154)).toBe(0);
     expect(foesOf(153)).toBeLessThan(3);
     expect(foesOf(156)).toBeLessThan(3);
-    // 最后一场是精英，血量明显高过前面的小怪
+    // 最后一场是精英，星芒上限明显高过前面的小怪。
+    // （门槛从 1.3 调到 1.2：第 3 轮修 W4A-17 时，「同一段里夹着两场以上」的
+    // 车轮路松到了 DEEP_EASE，这一关正是那个形状。松完仍有小怪的 1.25 倍，
+    // 它还是那只一眼看得出更难缠的精英。）
     const steps = buildLevel(154).steps;
     const elite = steps[steps.length - 1][0];
     expect(elite.kind).toBe("elite");
-    expect(elite.foe!.maxHp).toBeGreaterThan(steps[0][0].foe!.maxHp * 1.3);
+    expect(elite.foe!.maxHp).toBeGreaterThan(steps[0][0].foe!.maxHp * 1.2);
   });
 
   it("差一截等级还有救：低 12 级的勇者绝大多数关照样走得通", () => {

@@ -117,11 +117,12 @@ describe("连连看 · R3 · 188 关一关不漏", () => {
    * 最扎眼的是**第 89 关**：它发出去的那个固定种子就是会死。也就是说，
    * 每个走到第 89 关的孩子，都可能被同一个盘面按同一种方式堵一次。
    *
-   * 好在 `fairShuffle` 本来就保证「重排完一定还走得动」，而且开局那一次
-   * 死盘救场（index.ts 第 608 行的 `doShuffle(true, true)`）已经是免费的——
-   * 把同样的待遇给到中途的死局就能了结。留给本轮修复员。
+   * **本轮修复员已修**：中途的死局跟开局的死盘是同一回事，
+   * 现在统一走 `rescue()`——免费重排一次，接着连。棋盘死胡同还是会出现
+   * （那是这一手消除顺序的自然结果，躲不掉），但它不再让孩子输掉这一关：
+   * 输赢重新只由时间决定，正如 1.1 新章的设计本意。前 99 关的关表一个字节没动。
    */
-  it("W4A-18（本轮新发现）：照发出去的洗牌次数玩，第六章那几关会走进死胡同", () => {
+  it("W4A-18 已修：死胡同还是会出现，但不再让孩子输掉这一关", () => {
     const stuck: number[] = [];
     for (let lv = 0; lv < LEVELS.length; lv++) {
       for (let s = 0; s < 60; s++) {
@@ -147,8 +148,18 @@ describe("连连看 · R3 · 188 关一关不漏", () => {
     const board = createBoard(specOf(88), mulberry32(boardSeed(88)));
     expect(fairShuffle(board, mulberry32(11), 2).ok).toBe(true);
     expect(anyMove(board, 2)).not.toBeNull();
-    // 开局那次死盘救场已经是免费的，中途却不是——差的就是这一处
-    expect(SRC).toContain("doShuffle(true, true)");
+
+    // 修好之后：开局的死盘和中途的死局走同一条路，都是免费救场
+    expect(SRC).toContain("function rescue()");
+    // 三处叫它：消完一对、转完棋盘、开局
+    expect([...SRC.matchAll(/^\s+(?:else )?rescue\(\);$/gm)].length).toBe(2);
+    expect(SRC).toContain("if (!anyMove(board, maxTurns)) rescue();");
+    // 那两句「怪孩子没留洗牌」的判负词已经拆干净了
+    expect(SRC).not.toContain("洗牌是应急用的");
+    expect(SRC).not.toContain("洗牌留给真正的死局");
+    // 现在只剩「时间到」这一个输法——正是 1.1 新章的设计本意
+    expect([...SRC.matchAll(/\bfail\(/g)].length).toBe(2);
+    expect(SRC).toContain("if (timeLeft <= 0) fail(timeUpWord())");
   });
 
   it("前 99 关一个字节都没被这三轮碰过（1.0 内容冻结）", () => {
