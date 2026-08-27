@@ -1,0 +1,442 @@
+{
+  "round": 3,
+  "role": "tester",
+  "viewport": [
+    "360x640 dpr2 touch",
+    "320x568 dpr2 touch",
+    "360x640 reduced"
+  ],
+  "smoke": {
+    "/": 200,
+    "/sw.js": 200,
+    "/manifest.webmanifest": 200
+  },
+  "soak30s": {
+    "picked": [
+      "hop-pads",
+      "gomoku",
+      "rainbow-run",
+      "ocean-munch",
+      "fight-king"
+    ],
+    "errors": 0
+  },
+  "fps4x": {
+    "hue-hand": {
+      "where": "无尽连胜局内",
+      "fps": 60.1
+    },
+    "hop-pads": {
+      "where": "无尽跳蓄力起跳",
+      "fps": 60.2
+    },
+    "tap-tiles": {
+      "where": "无尽加速点轨",
+      "fps": 60.1
+    },
+    "gomoku": {
+      "where": "自由对战连续落子",
+      "fps": 60.6
+    },
+    "match-stars": {
+      "where": "无尽订单消除",
+      "fps": 60.2
+    },
+    "rainbow-run": {
+      "where": "无尽跑换道",
+      "fps": 60.3
+    },
+    "ocean-munch": {
+      "where": "深海马拉松下潜(72→349 米)",
+      "fps": 53.9
+    },
+    "xiangqi": {
+      "where": "自由对战走子",
+      "fps": 60.5
+    },
+    "fight-king": {
+      "where": "双人对战键盘连招",
+      "fps": 60.6
+    }
+  },
+  "layout": {
+    "hue-hand": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "♾️ 无尽连胜 · 点我开始!",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "hop-pads": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "♾️ 无尽跳 · 点我开始!",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "tap-tiles": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "♾️ 无尽加速 · 点我开始!",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "gomoku": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "♟️ 自由对战 · 六档 + 双人",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "match-stars": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "♾️ 无尽订单 · 点我开始！",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "rainbow-run": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "endless",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "ocean-munch": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "endless",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "xiangqi": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "♟️ 自由对战 · 六档 + 双人",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    },
+    "fight-king": {
+      "m360": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "entered": "无尽连胜一场接一场，最长连胜会记进你的成绩单",
+        "errors": 0
+      },
+      "m320": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      },
+      "m360reduced": {
+        "menu": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "errors": 0
+      }
+    }
+  }
+}
