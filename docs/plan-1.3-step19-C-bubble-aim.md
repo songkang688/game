@@ -150,6 +150,9 @@
 5. `feat(bubble-aim-visual): 瞄准点串/场景氛围/HUD + reduced 接线`；
 6. `test(bubble-aim-visual): 12 个视觉用例`。
 
+每个 commit 单独可回滚：任何一条被 revert 后其余仍编译通过、测试全绿（提交前自验一次）。
+`film.ts` 输入（ctx, x, y, r, base）输出无副作用，色相偏移 12° 的换算入单测。
+
 ## 十二、分级红线与回复
 
 炸弹泡是可爱造型、爆炸是星花；失败只鼓励；无商标。完成后回复：你是 1.3 第 19 步 C 档、`bubble-aim`；第三节每个函数的现状结论；薄膜升级与炮台剧场化的实现说明；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。
