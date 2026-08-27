@@ -290,6 +290,13 @@ describe("index.html 的语义与文案", () => {
     expect(desc).toContain("一朵一星");
     expect(desc).toContain("无广告");
     expect(desc).toMatch(/读屏|键盘/);
+    expect(desc).toContain("1.2");
+    expect(desc).toContain("76");
+    expect(desc).not.toMatch(/1\.1|55款|55 款/);
+  });
+
+  it("窗口标题是 1.2 · 76 款,不再写 1.1 · 55 款", () => {
+    expect(HTML).toMatch(/<title>一朵一星 1\.2 · 76 款原创小游戏合集<\/title>/);
   });
 
   it("有独立的 aria-live 播报区,而不是整个 #app 都在播报", () => {

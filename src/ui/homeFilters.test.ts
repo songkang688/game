@@ -11,6 +11,7 @@ import {
   favoriteGames,
   filterGames,
   heroSubtitle,
+  windowTitle,
   isFav,
   isFiltering,
   levelTotalOf,
@@ -665,6 +666,12 @@ describe("首页气泡的数量跟着实际收录走", () => {
     expect(heroSubtitle(67, 188)).toContain("67 款原创小游戏");
     expect(heroSubtitle(67, 188)).not.toContain("55");
     expect(heroSubtitle(120, 188)).toContain("120 款");
+  });
+
+  it("窗口标题也跟着款数走,不再写死 1.1 · 55 款", () => {
+    expect(windowTitle(76)).toBe("一朵一星 1.2 · 76 款原创小游戏合集");
+    expect(windowTitle(76)).not.toMatch(/1\.1/);
+    expect(windowTitle(0)).toBe("一朵一星 1.2 · 原创小游戏合集");
   });
 
   it("闯关关数也跟着最长的那一款走", () => {

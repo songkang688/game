@@ -19,6 +19,7 @@ import {
   favoriteGames,
   filterGames,
   heroSubtitle,
+  windowTitle,
   isFav,
   isFiltering,
   levelTotalOf,
@@ -302,6 +303,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     games.length,
     games.reduce((m, g) => Math.max(m, levelTotalOf(g.meta)), 0)
   );
+  document.title = windowTitle(games.length);
   heroBubble.append(heroStrong, heroSpan);
   const heroXingxing = createAvatarImg("xingxingRun", {
     round: false,
