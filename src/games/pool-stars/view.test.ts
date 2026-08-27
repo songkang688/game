@@ -9,9 +9,11 @@ import {
   fireWindow,
   flushFrames,
   installDom,
+  makeRecordingCtx,
   restoreDom,
   windowListenerCount,
   type Dom,
+  type RecCtx,
 } from "./domStub";
 import {
   MIN_BALL_PX,
@@ -415,5 +417,161 @@ describe("撞库抖一下", () => {
     expect(box.style.transform ?? "").toContain("translate");
     handle.destroy();
     expect(box.style.transform).toBe("");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 1.3 视觉契约（球体 sprite / 台呢渐变 / 球杆 / 进袋星光）                 */
+/* ------------------------------------------------------------------ */
+
+describe("1.3 视觉契约", () => {
+  /** 把桌面 canvas 的上下文换成录制版，之后每一帧的绘制序列都可断言 */
+  function patchCanvas(): RecCtx {
+    const rec = makeRecordingCtx();
+    const canvas = dom.root.find((e) => e.tagName === "canvas")! as unknown as {
+      getContext: () => unknown;
+    };
+    canvas.getContext = () => rec.ctx;
+    return rec;
+  }
+
+  it("球画的是预渲染 sprite（drawImage），朵/星/黑/母四类底层与压印共 8 张互不相同", () => {
+    const { handle } = mountTable({
+      balls: [
+        makeBall(0, "cue", 40, 50),
+        makeBall(1, "warm", 90, 40),
+        makeBall(2, "cool", 120, 60),
+        makeBall(3, "black", 150, 50),
+      ],
+    });
+    const rec = patchCanvas();
+    flush(1);
+    const draws = rec.ops.filter((o) => o.name === "drawImage");
+    // 4 颗球 × (底层光影 + 阵营压印)
+    expect(draws).toHaveLength(8);
+    expect(new Set(draws.map((o) => o.args[0])).size).toBe(8);
+    handle.destroy();
+  });
+
+  it("一帧 render 绘制非空，台呢走径向渐变，整幅 fillRect 只有一次（冗余双平涂已删）", () => {
+    const { handle } = mountTable();
+    const rec = patchCanvas();
+    flush(1);
+    expect(rec.ops.length).toBeGreaterThan(0);
+    expect(rec.names()).toContain("createRadialGradient");
+    const lay = tableLayout(800);
+    const full = rec.ops.filter(
+      (o) =>
+        o.name === "fillRect" &&
+        o.args[0] === 0 &&
+        o.args[1] === 0 &&
+        o.args[2] === lay.cssW &&
+        o.args[3] === lay.cssH
+    );
+    expect(full).toHaveLength(1);
+    handle.destroy();
+  });
+
+  it("瞄准辅助开与关画出不同的序列：开有虚线辅助线，关只剩方向短线", () => {
+    const { handle } = mountTable();
+    const rec = patchCanvas();
+    flush(1);
+    const onSeq = rec.names().join(",");
+    expect(onSeq).toContain("setLineDash");
+    rec.clear();
+    // update 里 refresh → render 是同步的，这一段就是关辅助后的一帧
+    handle.update({ showAim: false });
+    const offSeq = rec.names().join(",");
+    expect(offSeq).not.toContain("setLineDash");
+    expect(offSeq).toContain("moveTo");
+    expect(offSeq).not.toBe(onSeq);
+    handle.destroy();
+  });
+
+  it("进袋后星光迸出又回收，动画结束进袋的球不再绘制", () => {
+    const { handle, settled } = mountTable({
+      balls: [makeBall(0, "cue", 150, 50), makeBall(1, "warm", 175, 75)],
+    });
+    const canvas = dom.root.find((e) => e.tagName === "canvas")!;
+    const lay = tableLayout(800);
+    // 朝右下角袋的方向拖一杆：母球正撞暖球，暖球顺着 45° 滚进角袋
+    const p = toScreen({ x: 175, y: 75 }, lay);
+    canvas.dispatch("pointerdown", { clientX: p.x, clientY: p.y });
+    canvas.dispatch("pointerup", {});
+    expect(handle.rolling()).toBe(true);
+    for (let i = 0; i < 400 && settled.length === 0; i++) flush(1);
+    expect(settled).toHaveLength(1);
+    expect(settled[0].potted).toContain(1);
+    // 星光已迸出
+    expect(handle.fx()).toBeGreaterThan(0);
+    // 让下沉动画与星光寿命全部走完：粒子回收干净
+    flush(40);
+    expect(handle.fx()).toBe(0);
+    const rec = patchCanvas();
+    flush(1);
+    // 只剩母球（底层 + 压印），进袋的暖球不再绘制
+    expect(rec.ops.filter((o) => o.name === "drawImage")).toHaveLength(2);
+    handle.destroy();
+  });
+
+  it("球杆只在瞄准/蓄力阶段画，rolling 阶段绝不出现（杆尾 bezier 是唯一记号）", () => {
+    const { handle, settled } = mountTable();
+    const rec = patchCanvas();
+    flush(1);
+    expect(rec.names()).toContain("bezierCurveTo");
+    fireWin("keydown", { key: "f", preventDefault: () => undefined });
+    dom.clock.ms += 300;
+    fireWin("keyup", { key: "f" });
+    expect(handle.rolling()).toBe(true);
+    rec.clear();
+    flush(1);
+    expect(handle.rolling()).toBe(true);
+    expect(rec.names()).not.toContain("bezierCurveTo");
+    for (let i = 0; i < 400 && settled.length === 0; i++) flush(1);
+    rec.clear();
+    flush(1);
+    // 停杆回到瞄准，球杆又回来了
+    expect(rec.names()).toContain("bezierCurveTo");
+    handle.destroy();
+  });
+
+  it("prefers-reduced-motion 下进袋不生成星光粒子（弱动效接入新增动画）", () => {
+    (globalThis as Record<string, unknown>).matchMedia = () => ({ matches: true });
+    try {
+      const { handle, settled } = mountTable({
+        balls: [makeBall(0, "cue", 150, 50), makeBall(1, "warm", 175, 75)],
+      });
+      const canvas = dom.root.find((e) => e.tagName === "canvas")!;
+      const lay = tableLayout(800);
+      const p = toScreen({ x: 175, y: 75 }, lay);
+      canvas.dispatch("pointerdown", { clientX: p.x, clientY: p.y });
+      canvas.dispatch("pointerup", {});
+      for (let i = 0; i < 400 && settled.length === 0; i++) {
+        flush(1);
+        expect(handle.fx()).toBe(0);
+      }
+      expect(settled).toHaveLength(1);
+      expect(settled[0].potted).toContain(1);
+      handle.destroy();
+    } finally {
+      delete (globalThis as Record<string, unknown>).matchMedia;
+    }
+  });
+
+  it("HUD 用球图标缩略排显示双方剩余球，带上「还剩几颗」的读法", () => {
+    const { handle } = mountTable({
+      balls: [
+        makeBall(0, "cue", 40, 50),
+        makeBall(1, "warm", 90, 40),
+        makeBall(2, "warm", 100, 60),
+        makeBall(3, "cool", 120, 50),
+      ],
+    });
+    const rows = dom.root.findAll((e) => e.className.includes("ps-ballrow"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].getAttribute("aria-label")).toContain("2 颗");
+    expect(rows[0].innerHTML).toContain("<svg");
+    expect(rows[1].getAttribute("aria-label")).toContain("1 颗");
+    handle.destroy();
   });
 });
