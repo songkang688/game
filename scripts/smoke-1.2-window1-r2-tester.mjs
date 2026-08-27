@@ -1527,6 +1527,55 @@ async function partI(browser) {
 }
 
 // ---------------------------------------------------------------------------
+// M. 长蛇争霸:一根手指都不动,到底会不会过关
+// ---------------------------------------------------------------------------
+
+/**
+ * `scripts/qa-1.2-window1-winlose.mjs` 拿「高关号放着不动」当**必输**的对照组,
+ * 结果第 160 关放着不动反而弹出「第 160 关过关!第 1 名 · 长度 28」。
+ * 这里换我自己的口径复现一遍,并顺着关号扫一段,看它是这一关的偶然还是一片都这样。
+ */
+async function partM(browser) {
+  const levels = (process.env.IDLE_LEVELS ?? "2,50,150,160").split(",").map(Number);
+  const runs = Number(process.env.IDLE_RUNS ?? 2);
+  const budget = Number(process.env.IDLE_MS ?? 90000);
+  console.log(`\n===== M. 长蛇争霸「不操作」对照(关号 ${levels.join("/")} × ${runs} 次 × ${Math.round(budget / 1000)}s) =====`);
+  const g = GAMES.find((x) => x.id === "snake-royale");
+  let idleWins = 0;
+  let total = 0;
+  for (const lv of levels) {
+    const got = [];
+    for (let i = 0; i < runs; i++) {
+      const page = await newPage(browser, NARROW);
+      await page.goto(BASE, { waitUntil: "networkidle0" });
+      if (!(await openLevel(page, g.id, lv))) {
+        got.push("开不起来");
+        await page.close();
+        continue;
+      }
+      const t0 = Date.now();
+      let v = "";
+      // 一根手指都不动,只等结算浮层自己冒出来
+      while (Date.now() - t0 < budget && !v) {
+        await sleep(1500);
+        v = await verdict(page, g.p);
+      }
+      got.push(v || "超时没结算");
+      total += 1;
+      if (/过关/.test(v)) idleWins += 1;
+      await page.close();
+    }
+    const win = got.filter((x) => /过关/.test(x)).length;
+    log(
+      win === 0,
+      `长蛇争霸 第 ${lv} 关:放着不动不该过关`,
+      `${runs} 次里过关 ${win} 次 — ${got.map((x) => x.replace(/\s+/g, " ").slice(0, 34)).join(" | ")}`
+    );
+  }
+  note(`合计:不操作 ${total} 局,过关 ${idleWins} 局`);
+}
+
+// ---------------------------------------------------------------------------
 // L. 暂停屏 / 结算屏的 360px 字号(模式入口那一遍走不到这两层)
 // ---------------------------------------------------------------------------
 
@@ -1743,6 +1792,7 @@ async function main() {
     if (PARTS.includes("J")) await partJ(browser);
     if (PARTS.includes("K")) await partK(browser);
     if (PARTS.includes("L")) await partL(browser);
+    if (PARTS.includes("M")) await partM(browser);
   } finally {
     await browser.close();
   }
