@@ -410,7 +410,7 @@ export const PT_CSS = `
 @keyframes pzvConf { to { transform: translateY(560px) rotate(var(--pt-cspin, 180deg)); opacity: .4; } }
 /* reduced:抬升 / 回弹 / 摇头 / 旋转过渡 / 滑动拉伸 / 装裱全停;齿边层次与接缝白光保留 */
 @media (prefers-reduced-motion: reduce) {
-  .pzt-drag.pzv-cut { animation: none; outline: 2px solid var(--pt-seam); }
+  .pzt-drag.pzv-cut { animation: none; outline: 2px solid var(--pt-seam); transform: translate(-50%, -50%); }
   .pzv-snap, .pzv-shake, .pzv-star { animation: none; }
   .pzv-slidein { animation-name: pzvSlideInFlat; }
   .pzv-rotor { transition: none; }
