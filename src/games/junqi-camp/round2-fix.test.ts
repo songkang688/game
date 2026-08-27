@@ -10,7 +10,8 @@ import { CSS } from "./view";
 
 describe("junqi-camp · 空位点位字 ≥14px（r2-6）", () => {
   it(".jq-empty .jq-face 字号提到 14px，与全款 HUD 同口径", () => {
-    const rule = CSS.match(/\.jq-empty \.jq-face\{[^}]*\}/)?.[0] ?? "";
+    // 行首锚定：别误中 .jq-cell.jq-camp.jq-empty .jq-face 那条只有 box-shadow 的规则
+    const rule = CSS.match(/^\.jq-empty \.jq-face\{[^}]*\}/m)?.[0] ?? "";
     expect(rule, ".jq-empty .jq-face 规则丢了").not.toBe("");
     const m = /font-size:([\d.]+)px/.exec(rule);
     expect(m).not.toBeNull();
