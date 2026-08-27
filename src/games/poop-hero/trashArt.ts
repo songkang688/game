@@ -528,3 +528,102 @@ export function drawTrashItem(ctx: CanvasRenderingContext2D, id: string, x: numb
   }
   ctx.restore();
 }
+
+// ---------------------------------------------------------------------------
+// 三色分类桶的功能图标:顶替裸 info.emoji(♻️/🥬/🗑️)
+// ---------------------------------------------------------------------------
+
+/**
+ * 桶面功能图标(白色图形 + 桶色深描边,像交通标识一样一眼可辨):
+ *  - recycle 可回收:三段追逐箭头围成的循环环;
+ *  - kitchen 厨余:一片带叶脉的小菜叶;
+ *  - other 其他:一只扎好口的小垃圾袋。
+ * r 是图标外接半径,baseColor 传桶身色,内部细节用它的深阶,保证同桶同色系。
+ */
+export function drawBinIcon(
+  ctx: CanvasRenderingContext2D,
+  kind: "recycle" | "kitchen" | "other",
+  x: number,
+  y: number,
+  r: number,
+  baseColor: string
+): void {
+  const deep = shade(baseColor, -42);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (kind === "recycle") {
+    // 三段追逐箭头:弧 + 箭头小三角,120° 一组转三组
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.lineWidth = Math.max(1.5, r * 0.3);
+    for (let k = 0; k < 3; k++) {
+      ctx.save();
+      ctx.rotate((k * 2 * Math.PI) / 3);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.68, -Math.PI * 0.42, Math.PI * 0.18);
+      ctx.stroke();
+      // 弧末端的箭头
+      const ea = Math.PI * 0.18;
+      const ex = Math.cos(ea) * r * 0.68;
+      const ey = Math.sin(ea) * r * 0.68;
+      ctx.beginPath();
+      ctx.moveTo(ex + r * 0.3, ey - r * 0.02);
+      ctx.lineTo(ex - r * 0.26, ey + r * 0.3);
+      ctx.lineTo(ex - r * 0.26, ey - r * 0.34);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  } else if (kind === "kitchen") {
+    // 小菜叶:白叶身 + 深绿叶脉
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.quadraticCurveTo(r * 0.95, -r * 0.4, r * 0.6, r * 0.5);
+    ctx.quadraticCurveTo(r * 0.34, r, 0, r);
+    ctx.quadraticCurveTo(-r * 0.34, r, -r * 0.6, r * 0.5);
+    ctx.quadraticCurveTo(-r * 0.95, -r * 0.4, 0, -r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = deep;
+    ctx.lineWidth = Math.max(1.2, r * 0.14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.7);
+    ctx.lineTo(0, r * 0.85);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-r * 0.36, r * 0.34);
+    ctx.moveTo(0, -r * 0.3);
+    ctx.lineTo(r * 0.36, 0);
+    ctx.stroke();
+  } else {
+    // 小垃圾袋:袋身 + 扎口双耳
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.24, -r * 0.42);
+    ctx.quadraticCurveTo(-r * 0.95, -r * 0.05, -r * 0.78, r * 0.55);
+    ctx.quadraticCurveTo(-r * 0.6, r, 0, r);
+    ctx.quadraticCurveTo(r * 0.6, r, r * 0.78, r * 0.55);
+    ctx.quadraticCurveTo(r * 0.95, -r * 0.05, r * 0.24, -r * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = deep;
+    ctx.lineWidth = Math.max(1.2, r * 0.14);
+    ctx.stroke();
+    // 扎口的两只小耳朵
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.24, -r * 0.42);
+    ctx.quadraticCurveTo(-r * 0.5, -r, -r * 0.12, -r * 0.66);
+    ctx.moveTo(r * 0.24, -r * 0.42);
+    ctx.quadraticCurveTo(r * 0.5, -r, r * 0.12, -r * 0.66);
+    ctx.stroke();
+    // 袋身一道褶
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.3, r * 0.2);
+    ctx.quadraticCurveTo(0, r * 0.42, r * 0.3, r * 0.2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}

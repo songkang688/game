@@ -8,8 +8,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { TRASH_ITEMS } from "./trash";
-import { drawScentStar, drawTrashItem } from "./trashArt";
+import { BINS, TRASH_ITEMS } from "./trash";
+import { drawBinIcon, drawScentStar, drawTrashItem } from "./trashArt";
 
 const SRC = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
 
@@ -86,5 +86,30 @@ describe("窗口7 R1 修复 · A-3 地面垃圾 / 携带件:裸 item.emoji 清�
       expect(stats.strokes, `${item.id} 缺描边`).toBeGreaterThanOrEqual(1);
       expect(stats.fillTexts, `${item.id} 不许 fillText`).toBe(0);
     }
+  });
+});
+
+describe("窗口7 R1 修复 · A-5/A-11 分类桶:功能图标自绘 + 桶签图形化", () => {
+  it("index.ts 不再 emoji(info.emoji),桶面走 drawBinIcon,8–9px 桶签清场", () => {
+    expect(/emoji\([^)]*info\.emoji/.test(SRC)).toBe(false);
+    expect(SRC).toContain("drawBinIcon(");
+    // 9px 桶签 fillText(info.short) 已从画布清场
+    expect(SRC).not.toContain("fillText(info.short");
+    expect(SRC).not.toMatch(/9 \* Math\.max\(0\.9, scale\)/);
+  });
+
+  it("三色桶图标逐一实测:白色图形 + 描边 + 零 fillText,互相形状不同", () => {
+    for (const bin of BINS) {
+      const { ctx, stats } = stubCtx();
+      drawBinIcon(ctx, bin.kind, 0, 0, 11, bin.color);
+      expect(stats.fills + stats.strokes, `${bin.kind} 空图标`).toBeGreaterThanOrEqual(2);
+      expect(stats.fillTexts, `${bin.kind} 不许 fillText`).toBe(0);
+    }
+  });
+
+  it("门帘进度与队友箭头这类功能小字保底 14px(A-11)", () => {
+    expect(SRC).toContain("Math.max(14, Math.round(11 * Math.max(0.85, scale)))");
+    expect(SRC).toContain('"900 14px system-ui,sans-serif"');
+    expect(SRC).not.toContain('"900 12px system-ui,sans-serif"');
   });
 });

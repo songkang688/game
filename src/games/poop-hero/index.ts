@@ -70,7 +70,7 @@ import { SWEEP_TIME } from "./tuning";
 import { blendCape, capeMode, type CapeMode } from "../../art/kit/cape";
 import { traceStar } from "../../art/kit/sparkle";
 // 自绘道具小画坊(R1 修复):香香星 / 18 款垃圾条目 / 分类桶图标,全部顶替裸 emoji
-import { drawScentStar, drawTrashItem } from "./trashArt";
+import { drawBinIcon, drawScentStar, drawTrashItem } from "./trashArt";
 import {
   BEAN_COLORS,
   FLOWER_STYLES,
@@ -1559,12 +1559,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       roundRect(g, x - 19 * scale, groundY - 46 * scale - lift, 38 * scale, 8 * scale, 4 * scale);
       g.fill();
       g.globalAlpha = 1;
-      emoji(g, info.emoji, x, groundY - 24 * scale - lift, 17 * scale);
-      g.fillStyle = "#3C3348";
-      g.font = `900 ${Math.round(9 * Math.max(0.9, scale))}px system-ui,sans-serif`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(info.short, x, groundY - 9 * scale - lift);
+      // 桶面功能图标自绘(专项①:裸 info.emoji 清场);8–9px 桶签一并图形化,
+      // 桶的身份 = 桶色 + 图标,全名走 HUD 图例(A-11)
+      drawBinIcon(g, bin.kind, x, groundY - 20 * scale - lift, 11 * scale, info.color);
       if (bin.flash > 0) {
         emoji(g, bin.lastOk ? "⭐" : "🤔", x, groundY - 58 * scale, 16 * scale);
       }
@@ -1611,7 +1608,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fill();
       emoji(g, open ? "🧼" : "🔒", doorX, groundY - 52 * scale, 24 * scale);
       g.fillStyle = "#6B4A32";
-      g.font = `900 ${Math.round(11 * Math.max(0.85, scale))}px system-ui,sans-serif`;
+      // 门帘进度是功能文案,360px 档也不许低于 14px(A-11)
+      g.font = `900 ${Math.max(14, Math.round(11 * Math.max(0.85, scale)))}px system-ui,sans-serif`;
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText(open ? "香喷喷!" : `还差 ${remainingForDoor(world)} 处`, doorX, groundY - 22 * scale);
@@ -1677,7 +1675,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
           g.arc(edge, groundY - 60, 11, 0, Math.PI * 2);
           g.fill();
           g.fillStyle = "#FFFFFF";
-          g.font = "900 12px system-ui,sans-serif";
+          // 队友方位箭头是功能提示,提到 14px(A-11)
+          g.font = "900 14px system-ui,sans-serif";
           g.textAlign = "center";
           g.textBaseline = "middle";
           g.fillText(x < 0 ? "◀" : "▶", edge, groundY - 60);
