@@ -45,7 +45,11 @@ export const SS_SCENE = {
   tileGlow: "rgba(255,214,120,0.55)",
 } as const;
 
-/** 绿虫是主角;双身位关的第二条粉虫,主色/交替色全套不同,一眼可分 */
+/**
+ * 绿虫是主角;双身位关的第二条粉虫,主色/交替色全套不同。
+ * 窗口 7 R1 修复(B 档建议 10):两虫头部灰度只差 Δ12,16px 灰度下色相通道塌缩,
+ * 给粉虫加剪影级蝴蝶结(深梅色,对头色灰阶差 ≥40)——形状 + 亮度两条通道认虫。
+ */
 export const SS_WORM_GREEN: CatLook = {
   head: SS_COLORS.ssHead,
   bodyA: SS_COLORS.ssBodyA,
@@ -57,6 +61,7 @@ export const SS_WORM_PINK: CatLook = {
   bodyA: "#E9A6C9",
   bodyB: "#F3C3DB",
   shadow: SS_COLORS.ssShadow,
+  bow: "#9B4E86",
 };
 
 /**

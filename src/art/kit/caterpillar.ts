@@ -141,6 +141,11 @@ export interface CatLook {
   bodyB: string;
   /** 统一落影色(半透明) */
   shadow: string;
+  /**
+   * 剪影级蝴蝶结(窗口 7 R1 修复,B 档建议 10):双身位关的第二条虫戴它认人。
+   * 是认人轮廓,不吃 showAntenna 的 12px 门槛——多小都画;不传 = 不戴。
+   */
+  bow?: string;
 }
 
 export interface CaterpillarOpts {
@@ -328,5 +333,26 @@ function drawFace(ctx: Chain2D, o: CaterpillarOpts, r: number): void {
     ctx.beginPath();
     ctx.arc(hx + dx * r * 0.38, hy + dy * r * 0.38, r * 0.26, a - 0.55, a + 0.55);
     ctx.stroke();
+  }
+
+  // ⑦ 剪影级蝴蝶结(look.bow):头顶正上方一枚,左右两瓣三角 + 中结。
+  // 认人轮廓不走 showAntenna 的 12px 门槛,16px 缩略时仍是「头顶多一坨」的几何差。
+  if (o.look.bow) {
+    const bw = r * 1.1;
+    const bh = r * 0.55;
+    const bx = hx;
+    const by = hy - r * 0.95;
+    ctx.fillStyle = o.look.bow;
+    for (const side of [1, -1]) {
+      ctx.beginPath();
+      ctx.moveTo(bx + side * bw * 0.12, by);
+      ctx.lineTo(bx + side * bw * 0.55, by - bh * 0.5);
+      ctx.lineTo(bx + side * bw * 0.55, by + bh * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(bx, by, bw * 0.16, 0, TAU);
+    ctx.fill();
   }
 }
