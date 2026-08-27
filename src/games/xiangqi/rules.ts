@@ -60,8 +60,21 @@ export const REPEAT_LIMIT = 3;
  * 这段连将里同一个局面指纹出现 `REPEAT_LIMIT` 次，走方负。
  */
 export function perpetualCheckLoser(entries: readonly RecordEntry[], startKey = ""): Side | null {
+  const { side, times } = perpetualCheckCount(entries, startKey);
+  return side && times >= REPEAT_LIMIT ? side : null;
+}
+
+/**
+ * 这一段连将里，当前局面已经出现了几次（不到 `REPEAT_LIMIT` 也照实数）。
+ * 判负用的是它的上界，预警用的是它的中间值 —— 两处必须数同一把尺，
+ * 不然「提醒了却不判」或者「没提醒就判了」都会发生。
+ */
+export function perpetualCheckCount(
+  entries: readonly RecordEntry[],
+  startKey = "",
+): { side: Side | null; times: number } {
   const last = entries[entries.length - 1];
-  if (!last || !last.check) return null;
+  if (!last || !last.check) return { side: null, times: 0 };
   const side = last.side;
   // 开局那个局面也算一次：不然「走回起点」的循环会比实际慢一圈才判出来
   let seen = startKey === last.key ? 1 : 0;
@@ -72,7 +85,7 @@ export function perpetualCheckLoser(entries: readonly RecordEntry[], startKey = 
     if (!e.check) break;
     if (e.key === last.key) seen++;
   }
-  return seen >= REPEAT_LIMIT ? side : null;
+  return { side, times: seen };
 }
 
 /** 同一个局面（含轮到谁走）出现了几次：开局局面也算一次 */
@@ -105,6 +118,45 @@ export function judgeRecord(startKey: string, entries: readonly RecordEntry[]): 
     };
   }
   return NO_VERDICT;
+}
+
+export interface RepeatWarning {
+  /** 再来一次会变成什么：`perpetual` 判连将方负，`repetition` 判和 */
+  kind: Exclude<VerdictKind, "none"> | "none";
+  /** 长将预警时是提醒哪一方（判和的预警没有单一责任方） */
+  side: Side | null;
+  text: string;
+}
+
+export const NO_WARNING: RepeatWarning = { kind: "none", side: null, text: "" };
+
+/**
+ * 差一次就要收局时先给一句预警。
+ *
+ * `judgeRecord` 要等同一局面第 `REPEAT_LIMIT`（3）次才出声，而出声就是终局：
+ * 孩子在第 2 次重复的时候完全不知道自己正往长将判负上撞。这里把那一步提前说出来，
+ * 并且分清两种后果 —— 一直将军的是**判负**，双方来回走的只是**判和**。
+ *
+ * 已经该收局了就返回 `none`：那时候 `judgeRecord` 会自己说话，不用再预警一遍。
+ */
+export function repeatWarning(startKey: string, entries: readonly RecordEntry[]): RepeatWarning {
+  if (judgeRecord(startKey, entries).kind !== "none") return NO_WARNING;
+  const { side, times } = perpetualCheckCount(entries, startKey);
+  if (side && times === REPEAT_LIMIT - 1) {
+    return {
+      kind: "perpetual",
+      side,
+      text: `${side === "red" ? "红方" : "黑方"}同一招将军已经走出两次啦 —— 再来一次就是长将判负，换一条进攻路线吧。`,
+    };
+  }
+  if (repetitionCount(startKey, entries) === REPEAT_LIMIT - 1) {
+    return {
+      kind: "repetition",
+      side: null,
+      text: "这个局面已经来回走了两次啦 —— 再走回来就要算和棋，换个走法试试。",
+    };
+  }
+  return NO_WARNING;
 }
 
 /** 走一步之后，这一步是不是将了对方的军 */

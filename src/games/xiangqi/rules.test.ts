@@ -18,8 +18,10 @@ import {
   illegalReason,
   judgeRecord,
   moveGivesCheck,
+  perpetualCheckCount,
   perpetualCheckLoser,
   pushRecord,
+  repeatWarning,
   repetitionCount,
 } from "./rules";
 
@@ -146,6 +148,70 @@ describe("重复局面判和", () => {
     put(b, 4, 0, { side: "black", type: "K" });
     put(b, 3, 9, { side: "red", type: "K" });
     expect(repetitionCount(positionKey(b, "red"), [])).toBe(1);
+  });
+});
+
+describe("差一次就收局：提前预警", () => {
+  /** 双方来回走、谁也不将军的那盘棋 */
+  function quietBoard(): Board {
+    const b = makeEmptyBoard();
+    put(b, 4, 0, { side: "black", type: "K" });
+    put(b, 3, 9, { side: "red", type: "K" });
+    put(b, 0, 5, { side: "red", type: "R" });
+    put(b, 8, 4, { side: "black", type: "R" });
+    return b;
+  }
+
+  it("连将走到第二次就提醒「再来一次判负」，并点名是哪一方", () => {
+    const board = perpetualBoard();
+    const startKey = positionKey(board, "black");
+    const cycle = [K(4, 0, 4, 1), K(8, 0, 8, 1), K(4, 1, 4, 0), K(8, 1, 8, 0)];
+    const { entries } = replay(board, "black", cycle);
+    // 这时候还判不了，正是该预警的那一刻
+    expect(judgeRecord(startKey, entries).kind).toBe("none");
+    expect(perpetualCheckCount(entries, startKey)).toEqual({ side: "red", times: REPEAT_LIMIT - 1 });
+    const warn = repeatWarning(startKey, entries);
+    expect(warn.kind).toBe("perpetual");
+    expect(warn.side).toBe("red");
+    expect(warn.text).toContain("长将判负");
+  });
+
+  it("已经该判负了就不再预警：那时候终局文案自己会说话", () => {
+    const board = perpetualBoard();
+    const startKey = positionKey(board, "black");
+    const cycle = [K(4, 0, 4, 1), K(8, 0, 8, 1), K(4, 1, 4, 0), K(8, 1, 8, 0)];
+    const { entries } = replay(board, "black", [...cycle, ...cycle]);
+    expect(judgeRecord(startKey, entries).kind).toBe("perpetual");
+    expect(repeatWarning(startKey, entries).kind).toBe("none");
+  });
+
+  it("双方来回走的预警说的是判和，不是判负", () => {
+    const b = quietBoard();
+    const startKey = positionKey(b, "red");
+    const { entries } = replay(b, "red", [K(0, 5, 0, 6), K(8, 4, 8, 3), K(0, 6, 0, 5), K(8, 3, 8, 4)]);
+    const warn = repeatWarning(startKey, entries);
+    expect(warn.kind).toBe("repetition");
+    expect(warn.side).toBeNull();
+    expect(warn.text).toContain("和棋");
+    expect(warn.text).not.toContain("判负");
+  });
+
+  it("刚开始绕圈还没到第二次就什么都不说", () => {
+    const b = quietBoard();
+    const startKey = positionKey(b, "red");
+    const { entries } = replay(b, "red", [K(0, 5, 0, 6), K(8, 4, 8, 3)]);
+    expect(repeatWarning(startKey, entries)).toEqual({ kind: "none", side: null, text: "" });
+    expect(repeatWarning(startKey, [])).toEqual({ kind: "none", side: null, text: "" });
+  });
+
+  it("预警与判负数的是同一把尺：预警之后再走一轮一定判得出来", () => {
+    const board = perpetualBoard();
+    const startKey = positionKey(board, "black");
+    const cycle = [K(4, 0, 4, 1), K(8, 0, 8, 1), K(4, 1, 4, 0), K(8, 1, 8, 0)];
+    const warned = replay(board, "black", cycle);
+    expect(repeatWarning(startKey, warned.entries).side).toBe("red");
+    const done = replay(board, "black", [...cycle, ...cycle]);
+    expect(perpetualCheckLoser(done.entries, startKey)).toBe("red");
   });
 });
 

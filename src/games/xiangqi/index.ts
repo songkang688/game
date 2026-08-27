@@ -35,6 +35,7 @@ import {
   illegalReason,
   judgeRecord,
   pushRecord,
+  repeatWarning,
 } from "./rules";
 import { moveToChinese, recordLine } from "./notation";
 import {
@@ -423,11 +424,18 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
       return;
     }
 
+    // 差一次就要收局：提前说一句，别等判负 / 判和了才知道自己在绕圈
+    const warning = repeatWarning(startKey, entries);
+
     if (st === "check") {
       o.api.play("jump");
       view.flashCheck();
       const who = twoPlayer ? MASCOT_NAME[mascotOf(current)] : sideLabel(current);
-      msgEl.textContent = `⚔️ 将军！${who}要马上应将：垫一个子、吃掉它，或者把将帅挪开。`;
+      msgEl.textContent = warning.kind === "none"
+        ? `⚔️ 将军！${who}要马上应将：垫一个子、吃掉它，或者把将帅挪开。`
+        : `⚔️ 将军！${warning.text}`;
+    } else if (warning.kind !== "none") {
+      msgEl.textContent = `🔁 ${warning.text}`;
     } else {
       const capturedText = captured
         ? `请${captured.side === "red" ? "红" : "黑"}${PIECE_NAME[captured.side][captured.type]}回家休息`
