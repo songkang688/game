@@ -861,3 +861,407 @@ export function drawPadlockBadge(ctx: CanvasRenderingContext2D, cx: number, cy: 
   ctx.fill();
   ctx.fillRect(cx - Math.max(0.5, s * 0.09), top + bh * 0.44, Math.max(1, s * 0.18), bh * 0.3);
 }
+
+/**
+ * 小剑徽章(替换克制提示与 BOSS 弱点的剑 emoji):剑尖朝上,
+ * 两停剑刃 + 白脊线 + 金护手 + 木柄 + 金圆首;s 是半高。
+ */
+export function drawSwordBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  if (!badgeOk(cx, cy, s)) return;
+  // 剑刃:上尖下方的六边形,顶亮底沉
+  const blade = ctx.createLinearGradient(cx, cy - s, cx, cy + s * 0.2);
+  blade.addColorStop(0, "#F4F9FF");
+  blade.addColorStop(1, "#C9D8EC");
+  ctx.fillStyle = blade;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - s);
+  ctx.lineTo(cx + s * 0.18, cy - s * 0.66);
+  ctx.lineTo(cx + s * 0.18, cy + s * 0.2);
+  ctx.lineTo(cx - s * 0.18, cy + s * 0.2);
+  ctx.lineTo(cx - s * 0.18, cy - s * 0.66);
+  ctx.closePath();
+  ctx.fill();
+  strokeOutline(ctx, "#C9D8EC", 1.2);
+  // 脊线高光
+  ctx.strokeStyle = "rgba(255,255,255,.85)";
+  ctx.lineWidth = Math.max(0.6, s * 0.07);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - s * 0.82);
+  ctx.lineTo(cx, cy + s * 0.1);
+  ctx.stroke();
+  // 金护手
+  ctx.fillStyle = PP_COLORS.ppGold;
+  badgeRect(ctx, cx - s * 0.42, cy + s * 0.2, s * 0.84, Math.max(1, s * 0.18), s * 0.09);
+  ctx.fill();
+  strokeOutline(ctx, PP_COLORS.ppGold, 1.2);
+  // 木柄 + 金圆首
+  ctx.fillStyle = "#8A5A2B";
+  ctx.fillRect(cx - Math.max(0.5, s * 0.09), cy + s * 0.38, Math.max(1, s * 0.18), s * 0.4);
+  ctx.fillStyle = PP_COLORS.ppGold;
+  ctx.beginPath();
+  ctx.arc(cx, cy + s * 0.88, Math.max(0.8, s * 0.14), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 小护盾徽章(替换护盾 emoji 与受伤事件飘图):
+ * 上方下尖的盾形两停渐变 + 中央白色小星;s 是半高。
+ */
+export function drawShieldBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  if (!badgeOk(cx, cy, s)) return;
+  const body = ctx.createLinearGradient(cx, cy - s * 0.7, cx, cy + s * 0.85);
+  body.addColorStop(0, shade("#7FC7F2", 16));
+  body.addColorStop(1, "#7FC7F2");
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.7, cy - s * 0.7);
+  ctx.lineTo(cx + s * 0.7, cy - s * 0.7);
+  ctx.quadraticCurveTo(cx + s * 0.7, cy + s * 0.15, cx, cy + s * 0.85);
+  ctx.quadraticCurveTo(cx - s * 0.7, cy + s * 0.15, cx - s * 0.7, cy - s * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  strokeOutline(ctx, "#7FC7F2", 1.4);
+  // 中央小星(白,微透)
+  ctx.fillStyle = "rgba(255,255,255,.92)";
+  traceStar(ctx, cx, cy - s * 0.02, Math.max(1, s * 0.36));
+  ctx.fill();
+}
+
+/**
+ * 小翅膀徽章(替换二段跳的翅 emoji 与事件飘图):
+ * 三片羽瓣叠成的云朵翼,粉白内衬色;s 是半宽,透明度由调用方的 globalAlpha 说了算。
+ */
+export function drawWingBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  if (!badgeOk(cx, cy, s)) return;
+  ctx.fillStyle = PP_COLORS.ppLining;
+  ctx.beginPath();
+  ctx.ellipse(cx + s * 0.3, cy - s * 0.2, s * 0.66, s * 0.34, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(cx - s * 0.15, cy + s * 0.05, s * 0.5, s * 0.26, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(cx - s * 0.5, cy + s * 0.3, s * 0.34, s * 0.18, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  strokeOutline(ctx, "#D9E4EE", 1.2);
+}
+
+/**
+ * 小风纹徽章(替换移动平台与落地扑腾的风 emoji):
+ * 三道圆头风弧,中间一道最长最粗,尾端一粒小圆点;s 是半宽。
+ */
+export function drawGustBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  if (!badgeOk(cx, cy, s)) return;
+  ctx.strokeStyle = withAlpha("#9FBEDD", 0.9);
+  ctx.lineCap = "round";
+  for (const [row, len, wide] of [
+    [-0.55, 0.72, 0.16],
+    [0, 1, 0.22],
+    [0.55, 0.62, 0.16],
+  ] as Array<[number, number, number]>) {
+    ctx.lineWidth = Math.max(1, s * wide);
+    ctx.beginPath();
+    ctx.moveTo(cx - s * len, cy + row * s * 0.7);
+    ctx.quadraticCurveTo(cx, cy + row * s * 0.7 - s * 0.28, cx + s * len, cy + row * s * 0.7);
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  ctx.fillStyle = withAlpha("#9FBEDD", 0.8);
+  ctx.beginPath();
+  ctx.arc(cx + s * 1.12, cy, Math.max(0.6, s * 0.12), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 小羽毛徽章(替换公主滑翔的羽 emoji):斜置的粉白羽身 + 羽脊 + 羽根;s 是半高。
+ */
+export function drawFeatherBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  if (!badgeOk(cx, cy, s)) return;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.6);
+  ctx.fillStyle = PP_COLORS.ppLining;
+  ctx.beginPath();
+  ctx.ellipse(0, -s * 0.1, s * 0.42, s * 0.85, 0, 0, Math.PI * 2);
+  ctx.fill();
+  strokeOutline(ctx, "#E9B7C6", 1.2);
+  // 羽脊 + 羽根
+  ctx.strokeStyle = "#D791A8";
+  ctx.lineWidth = Math.max(0.7, s * 0.1);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(0, -s * 0.85);
+  ctx.lineTo(0, s * 0.95);
+  ctx.stroke();
+  ctx.lineCap = "butt";
+  ctx.restore();
+}
+
+/**
+ * 小木箱徽章(替换王子推箱的箱 emoji):
+ * 规范表 push 同款木色圆角方 + 十字扎带;s 是半边长。
+ */
+export function drawCrateBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
+  if (!badgeOk(cx, cy, s)) return;
+  const side = s * 1.8;
+  const x0 = cx - side / 2;
+  const y0 = cy - side / 2;
+  const wood = ctx.createLinearGradient(cx, y0, cx, y0 + side);
+  wood.addColorStop(0, shade("#D9A566", 12));
+  wood.addColorStop(1, "#D9A566");
+  ctx.fillStyle = wood;
+  badgeRect(ctx, x0, y0, side, side, s * 0.22);
+  ctx.fill();
+  strokeOutline(ctx, "#D9A566", 1.3);
+  // 十字扎带(深一档,像捆好的包裹)
+  ctx.fillStyle = withAlpha(shade("#D9A566", -26), 0.9);
+  ctx.fillRect(x0, cy - Math.max(0.6, s * 0.14), side, Math.max(1.2, s * 0.28));
+  ctx.fillRect(cx - Math.max(0.6, s * 0.14), y0, Math.max(1.2, s * 0.28), side);
+}
+
+/**
+ * 指路小徽章(替换掉队指路的王子 / 公主 emoji):白圆牌打底,
+ * 王子 = 金三齿大皇冠(复用 crownPath 折点),公主 = 粉蝶结(复用 bowShape 双翼);
+ * 靠剪影分人,与主角识别件同一套形状语言;s 是圆牌半径。
+ */
+export function drawRoyalBadge(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  s: number,
+  kind: "prince" | "princess"
+): void {
+  if (!badgeOk(cx, cy, s)) return;
+  // 白圆牌:掉队指路要压在任何背景上都读得清
+  ctx.fillStyle = "rgba(255,255,255,.94)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, s, 0, Math.PI * 2);
+  ctx.fill();
+  strokeOutline(ctx, "#E8DCEE", 1.4);
+  if (kind === "prince") {
+    // 金三齿大皇冠:crownPath 单位折点 × headR,再整体下沉进圆牌
+    const headR = s * 1.05;
+    const oy = cy + s * 1.16;
+    const pts = crownPath();
+    const gold = ctx.createLinearGradient(cx, oy - headR * 1.46, cx, oy - headR * 0.74);
+    gold.addColorStop(0, shade(PP_COLORS.ppGold, 18));
+    gold.addColorStop(1, PP_COLORS.ppGold);
+    ctx.fillStyle = gold;
+    ctx.beginPath();
+    ctx.moveTo(cx + pts[0][0] * headR, oy + pts[0][1] * headR);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(cx + pts[i][0] * headR, oy + pts[i][1] * headR);
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, PP_COLORS.ppGold, 1.3);
+    ctx.fillStyle = PP_COLORS.ppRuby;
+    ctx.beginPath();
+    ctx.ellipse(cx + CROWN_RUBY.x * headR, oy + CROWN_RUBY.y * headR, CROWN_RUBY.rx * headR, CROWN_RUBY.ry * headR, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  // 粉蝶结:bowShape 双翼 + 中心结,居中到圆牌(原坐标是头侧偏置,先减掉结心)
+  const bow = bowShape();
+  const k = s * 1.7;
+  ctx.fillStyle = PP_COLORS.ppPrincess;
+  for (const wing of bow.wings) {
+    ctx.beginPath();
+    ctx.moveTo(cx + (wing[0][0] - bow.knot.x) * k, cy + (wing[0][1] - bow.knot.y) * k);
+    for (let i = 1; i < wing.length; i++) {
+      ctx.lineTo(cx + (wing[i][0] - bow.knot.x) * k, cy + (wing[i][1] - bow.knot.y) * k);
+    }
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, PP_COLORS.ppPrincess, 1.3);
+  }
+  ctx.fillStyle = shade(PP_COLORS.ppPrincess, 14);
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.max(1, bow.knot.r * k), 0, Math.PI * 2);
+  ctx.fill();
+  strokeOutline(ctx, PP_COLORS.ppPrincess, 1.2);
+}
+
+/** 事件飘图的矢量小图谱(替换粒子飘字 emoji,一个事件一个形) */
+export type EventBadge =
+  | "sparkle"
+  | "gem"
+  | "shield"
+  | "cloud"
+  | "flag"
+  | "bridge"
+  | "dizzy"
+  | "block"
+  | "burst"
+  | "party"
+  | "gust"
+  | "wing";
+
+/** 十二种事件飘图(测试逐个点名用) */
+export const EVENT_BADGE_KINDS: readonly EventBadge[] = [
+  "sparkle",
+  "gem",
+  "shield",
+  "cloud",
+  "flag",
+  "bridge",
+  "dizzy",
+  "block",
+  "burst",
+  "party",
+  "gust",
+  "wing",
+];
+
+/**
+ * 事件飘图分发(替换旧的粒子飘字 emoji 画法):s 是徽章半径,
+ * 淡出交给调用方的 globalAlpha(与原飘字同一条 life 通道),这里只管形状。
+ */
+export function drawEventBadge(ctx: CanvasRenderingContext2D, kind: EventBadge, x: number, y: number, s: number): void {
+  if (!badgeOk(x, y, s)) return;
+  switch (kind) {
+    case "sparkle": {
+      // 四角星光 + 一粒小伴星(敌人心服口服地退场)
+      ctx.fillStyle = "#FFDF8E";
+      traceStar(ctx, x, y, s, { points: 4, inner: 0.36 });
+      ctx.fill();
+      strokeOutline(ctx, "#FFDF8E", 1.2);
+      ctx.fillStyle = "rgba(255,255,255,.9)";
+      ctx.beginPath();
+      ctx.arc(x + s * 0.7, y - s * 0.6, Math.max(0.6, s * 0.14), 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    case "gem": {
+      // 迷你切面宝石:规范表 reward 同款金黄,上切面 + 下尖
+      ctx.fillStyle = "#FFD35C";
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.62, y - s * 0.25);
+      ctx.lineTo(x - s * 0.3, y - s * 0.62);
+      ctx.lineTo(x + s * 0.3, y - s * 0.62);
+      ctx.lineTo(x + s * 0.62, y - s * 0.25);
+      ctx.lineTo(x, y + s * 0.72);
+      ctx.closePath();
+      ctx.fill();
+      strokeOutline(ctx, "#FFD35C", 1.2);
+      ctx.strokeStyle = withAlpha("#C98A17", 0.7);
+      ctx.lineWidth = Math.max(0.6, s * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.62, y - s * 0.25);
+      ctx.lineTo(x + s * 0.62, y - s * 0.25);
+      ctx.stroke();
+      return;
+    }
+    case "shield":
+      drawShieldBadge(ctx, x, y, s);
+      return;
+    case "cloud": {
+      // 小云朵:三圆一朵,白身浅灰蓝描边(托底救人的那朵)
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.beginPath();
+      ctx.arc(x - s * 0.5, y + s * 0.12, s * 0.42, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.05, y - s * 0.12, s * 0.56, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.58, y + s * 0.16, s * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha("#C9D6E4", 0.9);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      return;
+    }
+    case "flag": {
+      // 迷你检查点小旗:规范表 checkpoint 同款蓝
+      ctx.strokeStyle = "#2A5F92";
+      ctx.lineWidth = Math.max(1, s * 0.16);
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.3, y + s);
+      ctx.lineTo(x - s * 0.3, y - s);
+      ctx.stroke();
+      ctx.fillStyle = "#8FC6F0";
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.3, y - s);
+      ctx.lineTo(x + s * 0.75, y - s * 0.55);
+      ctx.lineTo(x - s * 0.3, y - s * 0.1);
+      ctx.closePath();
+      ctx.fill();
+      strokeOutline(ctx, "#8FC6F0", 1.2);
+      return;
+    }
+    case "bridge": {
+      // 架桥成功:一块搭稳的木板 + 两只短腿(push 规范表同款木色)
+      ctx.fillStyle = shade("#D9A566", -18);
+      ctx.fillRect(x - s * 0.62, y + s * 0.1, Math.max(1, s * 0.2), s * 0.5);
+      ctx.fillRect(x + s * 0.42, y + s * 0.1, Math.max(1, s * 0.2), s * 0.5);
+      ctx.fillStyle = "#D9A566";
+      badgeRect(ctx, x - s, y - s * 0.22, s * 2, Math.max(1.4, s * 0.4), s * 0.12);
+      ctx.fill();
+      strokeOutline(ctx, "#D9A566", 1.2);
+      return;
+    }
+    case "dizzy": {
+      // 转圈圈:斜置轨道环 + 一颗小金星在环上
+      ctx.strokeStyle = withAlpha("#B9A8E8", 0.95);
+      ctx.lineWidth = Math.max(1, s * 0.16);
+      ctx.beginPath();
+      ctx.ellipse(x, y, s, s * 0.4, -0.35, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = PP_COLORS.ppGold;
+      traceStar(ctx, x - s * 0.72, y - s * 0.28, Math.max(1, s * 0.38));
+      ctx.fill();
+      strokeOutline(ctx, PP_COLORS.ppGold, 1.1);
+      return;
+    }
+    case "block": {
+      // 此路不通:圈 + 斜杠(软红,不狰狞)
+      ctx.strokeStyle = "#E4635F";
+      ctx.lineWidth = Math.max(1.2, s * 0.24);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(x, y, s * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.52, y - s * 0.52);
+      ctx.lineTo(x + s * 0.52, y + s * 0.52);
+      ctx.stroke();
+      ctx.lineCap = "butt";
+      return;
+    }
+    case "burst": {
+      // 命中爆花:八角星 + 白心(无火无烟,只是「啪」的一朵)
+      ctx.fillStyle = "#FFB36B";
+      traceStar(ctx, x, y, s, { points: 8, inner: 0.52 });
+      ctx.fill();
+      strokeOutline(ctx, "#FFB36B", 1.2);
+      ctx.fillStyle = "rgba(255,255,255,.92)";
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(0.8, s * 0.3), 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    case "party": {
+      // 庆祝拉花:斜置小礼花筒 + 三粒彩点
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(0.5);
+      const cone = ctx.createLinearGradient(0, -s * 0.5, 0, s * 0.8);
+      cone.addColorStop(0, shade(PP_COLORS.ppGold, 16));
+      cone.addColorStop(1, PP_COLORS.ppGold);
+      ctx.fillStyle = cone;
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.85);
+      ctx.lineTo(-s * 0.42, -s * 0.5);
+      ctx.lineTo(s * 0.42, -s * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      strokeOutline(ctx, PP_COLORS.ppGold, 1.2);
+      ctx.restore();
+      const confetti = [PP_COLORS.ppPrincess, "#8FC6F0", "#BFE3B4"];
+      for (let i = 0; i < confetti.length; i++) {
+        ctx.fillStyle = confetti[i];
+        ctx.beginPath();
+        ctx.arc(x - s * 0.5 + i * s * 0.5, y - s * (0.75 + (i % 2) * 0.25), Math.max(0.7, s * 0.16), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+    case "gust":
+      drawGustBadge(ctx, x, y, s);
+      return;
+    case "wing":
+      drawWingBadge(ctx, x, y, s);
+      return;
+  }
+}

@@ -94,9 +94,17 @@ import {
   crownPath,
   crownTeethTips,
   drawBossFigure,
+  drawCrateBadge,
   drawEnemy,
+  drawEventBadge,
+  drawFeatherBadge,
   drawGuardHalo,
+  drawGustBadge,
   drawPadlockBadge,
+  drawRoyalBadge,
+  drawShieldBadge,
+  drawSwordBadge,
+  drawWingBadge,
   flagWavePhase,
   gemGlowAlpha,
   headwearDetail,
@@ -107,6 +115,7 @@ import {
   shawlPath,
   skirtLiningArcs,
   skirtStars,
+  type EventBadge,
 } from "./visual13";
 
 // ---------------------------------------------------------------------------
@@ -307,12 +316,9 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
   g.closePath();
 }
 
-function emoji(g: CanvasRenderingContext2D, ch: string, x: number, y: number, size: number): void {
-  g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText(ch, x, y);
-}
+// 修复员 R2(G4/L-1 + N4 画布部分):emoji() 画布字形助手退休 ——
+// 门锁 / 状态小 icon / 指路 / 事件飘图全部换成 visual13 的矢量小徽章;
+// DOM 出场卡与 HUD chips 的 emoji 属功能文字口径,不在画布字形之列(登记遗留)。
 
 /** 两人都得留在画面里,边上还要给这么宽的余量 */
 export const CAM_MARGIN = 52;
@@ -657,7 +663,8 @@ interface Particle {
   y: number;
   vy: number;
   life: number;
-  text: string;
+  /** 画哪种矢量事件飘图(修复员 R2:原来是 emoji 字符串) */
+  art: EventBadge;
   size: number;
 }
 
@@ -710,25 +717,25 @@ const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
 };
 
 /**
- * 事件飘出来的小图。
+ * 事件飘出来的小图(修复员 R2:emoji 字符串 → visual13 矢量事件飘图)。
  *
- * 受伤是 `shield`(🛡️ 小护盾闪一下),掉下去是 `cloud`(☁️ 小云朵托回小旗),
+ * 受伤是 `shield`(小护盾闪一下),掉下去是 `cloud`(小云朵托回小旗),
  * **画面上不出现任何受伤 / 摔坏的描写**。
  * `push` 和 `glide` 每帧都在发,不走飘字,由画布上的常驻标记表示。
  */
-const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
-  defeat: "✨",
-  gem: SPEC.reward.icon,
-  shield: "🛡️",
-  cloud: "☁️",
-  flag: SPEC.checkpoint.icon,
-  bridge: "🌉",
-  hurt: "💫",
-  block: "🚫",
-  bossHit: "💥",
-  bossDown: "🎉",
-  slam: "💨",
-  double: "🪽",
+const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], EventBadge>> = {
+  defeat: "sparkle",
+  gem: "gem",
+  shield: "shield",
+  cloud: "cloud",
+  flag: "flag",
+  bridge: "bridge",
+  hurt: "dizzy",
+  block: "block",
+  bossHit: "burst",
+  bossDown: "party",
+  slam: "gust",
+  double: "wing",
 };
 
 function createField(host: HTMLElement, opts: FieldOpts): Field {
@@ -1010,7 +1017,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (sound) playThrottled(sound, now);
       const art = PARTICLE_FOR_EVENT[ev.kind];
       if (art && !calm) {
-        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, text: art, size: 18 });
+        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, art, size: 18 });
         if (particles.length > 42) particles.shift();
       }
       // 公主挥杖(带 hero 下标的 shoot):杖头甩出 5 颗星尘轨迹(reduced 不生成)
@@ -1365,12 +1372,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       ctx.arc(sx, sy - hh * 0.52, hh * 0.62, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
-      emoji(ctx, "🛡️", sx, sy - hh * 1.18, 13 * Math.max(0.7, scale));
+      drawShieldBadge(ctx, sx, sy - hh * 1.18, 6.5 * Math.max(0.7, scale));
     }
 
     // 公主正在滑翔:头顶一片小羽毛 + 一根额度条
     if (h.glide.active) {
-      emoji(ctx, ABILITIES.princess.icon, sx - h.facing * hw * 0.8, sy - hh * 0.5, 14 * Math.max(0.7, scale));
+      drawFeatherBadge(ctx, sx - h.facing * hw * 0.8, sy - hh * 0.5, 7 * Math.max(0.7, scale));
       const gw = hw * 1.1;
       ctx.fillStyle = "#ffffffcc";
       roundRect(ctx, sx - gw / 2, sy - hh - 8 * scale, gw, 4 * scale, 2 * scale);
@@ -1381,12 +1388,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     }
 
     // 王子正在推箱子
-    if (h.pushing) emoji(ctx, ABILITIES.prince.icon, sx + h.facing * hw * 0.9, sy - hh * 0.75, 13 * Math.max(0.7, scale));
+    if (h.pushing) drawCrateBadge(ctx, sx + h.facing * hw * 0.9, sy - hh * 0.75, 6.5 * Math.max(0.7, scale));
 
     // 二段跳的小翅膀
     if (h.kind === "princess" && !h.onGround && h.airJumps === 0 && !h.glide.active) {
       ctx.globalAlpha = 0.6;
-      emoji(ctx, "🪽", sx - h.facing * hw * 0.7, sy - hh * 0.55, 13 * Math.max(0.7, scale));
+      drawWingBadge(ctx, sx - h.facing * hw * 0.7, sy - hh * 0.55, 6.5 * Math.max(0.7, scale));
       ctx.globalAlpha = 1;
     }
 
@@ -1498,7 +1505,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       const x0 = sx(pl.x);
       if (x0 > cssW + 40 || x0 + pl.w * scale < -40) continue;
       drawStandSlab(g, x0, sy(pl.y), pl.w * scale, 13 * scale, scale, pl.moving ? "#F7DFC0" : undefined);
-      if (pl.moving) emoji(g, "💨", x0 + pl.w * scale * 0.5, sy(pl.y) - 12 * scale, 11 * scale);
+      if (pl.moving) drawGustBadge(g, x0 + pl.w * scale * 0.5, sy(pl.y) - 12 * scale, 5.5 * scale);
     }
 
     // 可推 · 重箱子(架成桥的那一块顶上多一条亮边,表示现在踩得住)
@@ -1534,7 +1541,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (!e.alive) {
         if (e.fade > 0) {
           g.globalAlpha = e.fade;
-          emoji(g, "✨", x0, sy(e.y) - stat.h * 0.5 * scale, 20 * scale);
+          drawEventBadge(g, "sparkle", x0, sy(e.y) - stat.h * 0.5 * scale, 10 * scale);
           g.globalAlpha = 1;
         }
         continue;
@@ -1548,7 +1555,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.globalAlpha = 1;
       // 只吃某一种攻击的怪,头顶挂一个小提示(星星是自绘的,不再贴 emoji)
       const counter = counterFor(e.kind);
-      if (counter === "prince") emoji(g, "⚔️", x0, cy - stat.h * 0.78 * scale, 12 * scale);
+      if (counter === "prince") drawSwordBadge(g, x0, cy - stat.h * 0.78 * scale, 6 * scale);
       else if (counter) drawStarIcon(g, x0, cy - stat.h * 0.78 * scale, 6 * scale);
       // 元气条(本作没有血,掉光只是坐下歇口气)
       if (e.hp < e.maxHp) {
@@ -1590,7 +1597,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       drawBossFigure(g, bx, by, BOSS_W * scale, BOSS_H * scale, boss.kind % BOSSES.length, info.color);
       g.restore();
       g.globalAlpha = 1;
-      if (boss.guard === "melee") emoji(g, "⚔️", bx, by - (BOSS_H + 22) * scale, 20 * scale);
+      if (boss.guard === "melee") drawSwordBadge(g, bx, by - (BOSS_H + 22) * scale, 10 * scale);
       else drawStarIcon(g, bx, by - (BOSS_H + 22) * scale, 10 * scale);
     }
 
@@ -1623,13 +1630,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.lineTo(left ? mx + 6 * scale : mx - 6 * scale, my + 11 * scale);
       g.closePath();
       g.fill();
-      emoji(g, h.kind === "prince" ? "🤴" : "👸", mx, my - 24 * scale, 17 * scale);
+      drawRoyalBadge(g, mx, my - 24 * scale, 8.5 * scale, h.kind);
     }
 
     // ⑦ 特效:飘字小图 + 星尘轨迹 / 击掌彩纸(世界坐标 → 屏幕坐标)
     for (const p of particles) {
       g.globalAlpha = Math.max(0, Math.min(1, p.life));
-      emoji(g, p.text, sx(p.x), sy(p.y), p.size * scale);
+      drawEventBadge(g, p.art, sx(p.x), sy(p.y), p.size * scale * 0.5);
     }
     g.globalAlpha = 1;
     if (fx.count > 0) {
