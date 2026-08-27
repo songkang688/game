@@ -10,6 +10,9 @@
  * 动物福利红线一并在这里守：这三条改的都是**反馈**，不许因此多出任何失败出口
  * 或伤害词。
  */
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Arena, type TaskSpec } from "./arena";
@@ -296,5 +299,34 @@ describe("萌猫小屋 · 通关掉了收藏就得让计数当场跟上（W5C-K0
     const store = new AlbumStore(fakeWallet(0), memoryStorage());
     expect(() => claimDrop(store, 3)).not.toThrow();
     expect(store.count()).toBe(1);
+  });
+});
+
+describe("萌猫小屋 · 改完反馈之后动物福利红线原样还在", () => {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  const sources = readdirSync(dir)
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && f !== "domStub.ts")
+    .map((f) => ({ file: f, src: readFileSync(join(dir, f), "utf8") }));
+
+  it("全目录仍然一处 ctx.lose 都没有——四条路都走不到「照顾失败」", () => {
+    expect(sources.length).toBeGreaterThan(8);
+    for (const { file, src } of sources) {
+      expect(src.includes("ctx.lose"), `${file} 里冒出了 ctx.lose`).toBe(false);
+      expect(src.includes("onLose("), `${file} 里冒出了 onLose`).toBe(false);
+    }
+  });
+
+  it("本轮新写的每一句话都不含伤害词、不判负、不催命", () => {
+    const round = buildCureRound(SPEC.seed, 3, 5);
+    const state = cureStart(round);
+    const lines = [
+      cureMessage(curePick(state, "带去看兽医").note, cureHint(state), true),
+      cureMessage(curePick(state, round.steps[0].answer.name).note, cureHint(state), false),
+      cureMessage(undefined, cureHint(state))
+    ];
+    for (const line of lines) {
+      expect(line.trim().length).toBeGreaterThan(0);
+      expect(line).not.toMatch(/打针|喂药|伤口|手术|流血|受伤|死|失败|输了|笨|快点/);
+    }
   });
 });
