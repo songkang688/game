@@ -45,6 +45,39 @@ export function seaHeightPx(want: number, room: number, chrome: number, min = MI
   return Math.max(min, Math.min(want, fits));
 }
 
+/**
+ * 排完之后底边掉到裁切线以下多少像素（≤0 = 还在里面）。
+ *
+ * `sea + chrome` 就是这一屏的总高，`room` 是「我头顶到裁切线」还剩多少。
+ * 没有裁切祖先（`room` 是 `Infinity`）时永远算 0——高屏上没有裁切线可掉。
+ */
+export function overshootPx(seaPx: number, chromePx: number, roomPx: number): number {
+  if (!Number.isFinite(roomPx)) return 0;
+  return seaPx + chromePx - roomPx;
+}
+
+/**
+ * 这一帧要不要**立刻**重排（1.2 窗口5 · 第 2 轮 · 档B 监督修复员）。
+ *
+ * 只按 `REFIT_MS` 周期性重量是不够的：上鱼那一下，提示行换成一长串
+ * 「🐟 名字 · 12.3 厘米 · 0.45 千克 · +30 分」，HUD 那排小药丸在 320px 宽上再多折一行，
+ * 这一屏当场长高 40px 上下。而 `.game-stage` 是定高 + `overflow:hidden`
+ * （平台文件，交窗口1），长出去的那一截**既不滚也没提示**——真机 320×640 上量到的是
+ * 「🎣 按住抛竿」的中心落到 y=642、裁切线在 626，`elementFromPoint` 返回 `null`，
+ * 而 `.fs-wrap` 只能滚 3px，等于滚不动。300ms 之后周期性重量才把它收回来。
+ *
+ * 缺的不是算法（`seaHeightPx` 重量一次就正好收回裁切线以内），是「什么时候算」。
+ * 所以主循环每帧量一次这一屏的高度，**变了就当帧重排**，周期性那条留着当兜底
+ * （转屏、字体加载这些不改文字也会改高度的事）。
+ *
+ * 亚像素抖动（≤1px）不算变——不然一个小数点就能让它每帧强制回流一次。
+ */
+export function needsImmediateRefit(prevHeightPx: number, nowHeightPx: number): boolean {
+  if (!Number.isFinite(nowHeightPx) || nowHeightPx <= 0) return false;
+  if (!Number.isFinite(prevHeightPx) || prevHeightPx <= 0) return true;
+  return Math.abs(nowHeightPx - prevHeightPx) > 1;
+}
+
 interface ViewLike {
   getComputedStyle: (el: Element) => { overflowY: string; overflowX?: string };
 }

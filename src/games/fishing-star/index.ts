@@ -55,7 +55,7 @@ import {
   type GearBonus,
   type GearSet,
 } from "./gear";
-import { resetClippedScroll, seaHeightPx, stageRoomPx } from "./fit";
+import { needsImmediateRefit, resetClippedScroll, seaHeightPx, stageRoomPx } from "./fit";
 import { createLedger } from "./runtime";
 import {
   BAND_LUCK,
@@ -694,6 +694,8 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g?.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   layout();
+  /** 上一帧量到的这一屏总高:变了就当帧重排(见 frame() 里那一段) */
+  let lastWrapH = 0;
   const onResize = (): void => {
     layout();
     render();
@@ -1232,6 +1234,20 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     if (!paused && !finished) tick(dt);
     render();
     refreshHud();
+    // 上鱼那一下这一屏会当场长高:提示行换成一长串「🐟 名字 · 12.3 厘米 · +30 分」,
+    // HUD 那排小药丸在 320px 宽上再多折一行 —— 真机 320×640 上量到 chrome 182→224。
+    // 长出去的那一截被 .game-stage(定高 + overflow:hidden,平台文件,交窗口1)硬裁,
+    // 「🎣 按住抛竿」的中心落到 y=642、裁切线在 626,elementFromPoint 返回 null,
+    // 而 .fs-wrap 只能滚 3px 等于滚不动。上面那条 REFIT_MS 要 300ms 才收回来,
+    // 那 300ms 里孩子按不着唯一的操作键。所以高度一变就当帧重排,周期性那条留着兜底。
+    const nowWrapH = wrap.getBoundingClientRect?.().height ?? 0;
+    if (needsImmediateRefit(lastWrapH, nowWrapH)) {
+      sinceFit = 0;
+      layout();
+      // layout() 会重设画布尺寸,等于把画面擦了,得补画一次
+      render();
+      lastWrapH = wrap.getBoundingClientRect?.().height ?? nowWrapH;
+    }
     if (finished) ledger.dropRaf(raf);
   }
   raf = ledger.raf(requestAnimationFrame(frame));
