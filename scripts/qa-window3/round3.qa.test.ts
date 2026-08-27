@@ -168,3 +168,32 @@ describe("prince-princess · 单人模式下「玩家一个键都不按」", () 
     expect(won).toBe(0);
   });
 });
+
+describe("duo-vs-star · 摆烂 72 关的根因", () => {
+  it("拆开看:哪些是靠 AI 队友赢的,哪些是玩家孤身也赢", async () => {
+    const { levelAt } = await import("../../src/games/duo-vs-star/levels");
+    const idle = JSON.parse(
+      (await import("node:fs")).readFileSync("docs/qa/_evidence/window3-round3-idle.json", "utf8")
+    ) as { scans: { id: string; autoWin: number[] }[] };
+    const win = idle.scans.find((s) => s.id === "duo-vs-star")?.autoWin ?? [];
+    const withAlly: number[] = [];
+    const solo: number[] = [];
+    for (const n of win) (levelAt(n - 1).allies.length > 0 ? withAlly : solo).push(n);
+    // 全 188 关里带队友的有多少关,做个分母
+    let allyLevels = 0;
+    for (let i = 0; i < 188; i++) if (levelAt(i).allies.length > 0) allyLevels++;
+    report.duoVsStarIdle = {
+      autoWin: win.length,
+      byAlly: withAlly.length,
+      bySolo: solo.length,
+      soloLevels: solo,
+      allyLevelsInCampaign: allyLevels,
+    };
+    console.log(
+      `\nduo-vs-star 摆烂 ${win.length} 关:带 AI 队友的 ${withAlly.length} 关、玩家孤身一人也赢的 ${solo.length} 关` +
+        `(全战役带队友的共 ${allyLevels} 关)`
+    );
+    if (solo.length) console.log(`   → 孤身也赢的关号:${solo.join(",")}`);
+    expect(win.length).toBeGreaterThan(0);
+  });
+});

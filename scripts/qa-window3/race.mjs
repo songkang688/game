@@ -137,8 +137,9 @@ const main = async () => {
 
   await browser.close();
   mkdirSync("docs/qa/_evidence", { recursive: true });
-  writeFileSync("docs/qa/_evidence/window3-round2-race.json", JSON.stringify({ games: out, cross }, null, 2));
-  console.log("\n证据落盘:docs/qa/_evidence/window3-round2-race.json");
+  const dest = `docs/qa/_evidence/window3-round${process.env.QA_ROUND ?? "2"}-race.json`;
+  writeFileSync(dest, JSON.stringify({ games: out, cross }, null, 2));
+  console.log(`\n证据落盘:${dest}`);
 };
 
 main().catch((e) => {

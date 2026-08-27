@@ -24,7 +24,10 @@ const row = (id: string, topic: string): Row => {
 
 afterAll(() => {
   mkdirSync("docs/qa/_evidence", { recursive: true });
-  writeFileSync("docs/qa/_evidence/window3-round2-curve.json", JSON.stringify({ rows }, null, 2));
+  writeFileSync(
+    `docs/qa/_evidence/window3-round${process.env.QA_ROUND ?? "2"}-curve.json`,
+    JSON.stringify({ rows }, null, 2)
+  );
   for (const r of rows) {
     console.log(`\n【${r.id}】${r.topic}\n  判定:${r.verdict}`);
     for (const n of r.notes) console.log(`  · ${n}`);
