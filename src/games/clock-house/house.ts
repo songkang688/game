@@ -338,7 +338,10 @@ export const HOUSE_CSS = `
 @keyframes clkTickPop { 0% { transform: rotate(0deg); } 45% { transform: rotate(2.2deg); } 100% { transform: rotate(0deg); } }
 .clk-precise .clk-t1 { stroke: #7048e8; stroke-width: 1.2; }
 .clk-precise .clk-ring { stroke: ${CLK_TOKENS.minuteTeal}; }
-.clk-fx { position: absolute; top: 2px; right: 8px; width: 64px; height: 54px; pointer-events: none; z-index: 6;
+/* W8R2-02：小鸟反馈层从右上角挪进顶栏两枚徽章（进度 / 连对）中间的空档——
+   连对徽章「🔥 连对 nn」约 108px 宽贴右缘，right 留 120px 它就永远盖不住计数；
+   320px 窄屏下进度徽章约 104px 收左缘，64px 的 fx 层照样落在空档里。 */
+.clk-fx { position: absolute; top: 2px; right: 120px; width: 64px; height: 54px; pointer-events: none; z-index: 6;
   text-align: center; }
 .clk-fx .clk-bird { width: 44px; height: 40px; display: inline-block; }
 .clk-bird-body { transform-box: fill-box; transform-origin: 50% 90%; }
