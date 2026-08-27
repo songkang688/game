@@ -9,6 +9,7 @@
  * `scripts/smoke188.mjs` 靠它们在浏览器里替真人点画布，而 `scripts/` 不在本步的可改范围内。
  */
 import { PIGMENT_HEX, PIGMENT_SYMBOL, lightness } from "./mix";
+import { blobLayers } from "../../art/kit/paintBlob";
 import type { Picture } from "./levels";
 
 /** 颜料漫开的时长：不是瞬间变色，看得见颜色从笔尖化开 */
@@ -410,6 +411,8 @@ export function makeSwatch(doc: Document, name: string, opts: SwatchOptions = {}
   const dot = doc.createElement("span");
   dot.className = "clf-swatch-dot";
   dot.style.background = PIGMENT_HEX[name] ?? "#ffffff";
+  // 颜料坨质感（1.3 视觉）：底色那行照旧是纯 hex，凸起感全靠叠上去的三层渐变
+  dot.style.backgroundImage = blobLayers(PIGMENT_HEX[name] ?? "#ffffff");
   if (opts.mark) {
     dot.textContent = opts.mark;
     dot.style.color = inkOn(name);
@@ -432,6 +435,8 @@ export function makePrimary(doc: Document, name: string): HTMLButtonElement {
   const dot = doc.createElement("span");
   dot.className = "clf-primary-dot";
   dot.style.background = PIGMENT_HEX[name] ?? "#ffffff";
+  // 原料按钮也是一坨颜料（1.3 视觉）：同样只叠不换底
+  dot.style.backgroundImage = blobLayers(PIGMENT_HEX[name] ?? "#ffffff");
   const label = doc.createElement("span");
   label.className = "clf-primary-name";
   label.textContent = name;
