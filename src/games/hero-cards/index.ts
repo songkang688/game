@@ -1019,6 +1019,7 @@ function mountExtra(host: HTMLElement, api: GameApi, kind: ExtraMode, onBack: ()
       sfx: (n) => api.play(n),
       onOver: (r) => {
         if (r.myWin) api.addStars(2);
+        api.play(r.myWin ? "win" : "oops");
         over(
           r.myWin ? "这一局赢下来啦!" : "这一局到此为止",
           outcomeLine(r.winner, campOf(table?.state().players[HUMAN].role ?? "lord")),
@@ -1047,6 +1048,7 @@ function mountExtra(host: HTMLElement, api: GameApi, kind: ExtraMode, onBack: ()
           api.play("win");
           over(`连胜 ${streak} 场!`, `最高连胜 ${best}。下一桌的对手会更难缠。`, "▶ 下一桌");
         } else {
+          api.play("oops");
           over("连胜到这里啦", `这一轮连胜 ${streak} 场,最高纪录还是 ${best}。歇一会儿,下一局重新开。`, "🔁 重新开始");
           streak = 0;
         }
