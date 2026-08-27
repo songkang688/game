@@ -430,7 +430,7 @@ describe("档B R1 · 泡泡噗噗 · 硬约束自查", () => {
   it("destroy 巡检:全局监听加了都摘、rAF 有取消、每个 mountXxx 都还 destroy", () => {
     const balance = globalListenerBalance(INDEX);
     expect(balance.leaked, `这些全局监听没摘:${balance.leaked.join("/")}`).toEqual([]);
-    expect(rafBalanced(INDEX)).toBe(true);
+    expect(rafBalanced(INDEX, SOURCES)).toBe(true);
     expect(mountFunctionsReturnDestroy(INDEX)).toEqual([]);
   });
 

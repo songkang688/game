@@ -16,6 +16,12 @@ import { endlessBoard } from "./levels";
 
 /** 吸附阈值 = 格宽 × 这个比例 */
 export const SNAP_RATIO = 0.35;
+/**
+ * 吸附阈值的下限(像素)。
+ * 360px 窄屏上 6 列的格宽只剩 ~54px,按 35% 算吸附半径不到 19px,
+ * 小朋友的指尖落点误差比这个大;给一个不随格宽缩水的地板,窄屏也吸得住。
+ */
+export const SNAP_MIN = 18;
 /** 磁性滑入用多久(毫秒) */
 export const SNAP_MS = 120;
 /** 放错了弹回原处用多久 */
@@ -25,7 +31,9 @@ export const REDUCED_MS = 16;
 
 export function snapThreshold(cell: number): number {
   const c = Number.isFinite(cell) && cell > 0 ? cell : 0;
-  return c * SNAP_RATIO;
+  if (c <= 0) return 0;
+  // 吸附半径再小也不能小过半格,否则两格之间会出现「谁也吸不住」的死带
+  return Math.min(c / 2, Math.max(SNAP_MIN, c * SNAP_RATIO));
 }
 
 /** 磁性动画时长:孩子的系统关了动效就压到一帧 */

@@ -281,11 +281,34 @@ export function globalListenerBalance(source: GameSource): ListenerBalance {
   return { added, removed, leaked };
 }
 
-/** rAF 有没有配套的取消 */
-export function rafBalanced(source: GameSource): boolean {
+/**
+ * 更严的一档:每一条 `window.addEventListener` 的下一行就得把「怎么摘」登记进口袋。
+ * 返回没登记的那些行号。
+ */
+export function globalListenersRegisteredInBag(source: GameSource, bagName = "bag"): string[] {
+  const lines = source.text.split("\n");
+  const bad: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /\b(?:window|document|globalThis)\.addEventListener\(\s*["'`]([\w-]+)/.exec(lines[i]);
+    if (!m) continue;
+    const next = lines[i + 1] ?? "";
+    const ok = next.includes(`${bagName}.add(`) && next.includes("removeEventListener");
+    if (!ok) bad.push(`${source.name}:${i + 1} → ${m[1]}`);
+  }
+  return bad;
+}
+
+/**
+ * rAF 有没有配套的取消。
+ * 取消可以写在本文件,也可以把帧号交给收尾口袋(`bag.onRaf(...)`)——
+ * 后一种要求同一款游戏里确实有个文件负责 `cancelAnimationFrame`。
+ */
+export function rafBalanced(source: GameSource, siblings: readonly GameSource[] = []): boolean {
   const req = (source.text.match(/requestAnimationFrame\s*\(/g) ?? []).length;
-  const cancel = (source.text.match(/cancelAnimationFrame\s*\(/g) ?? []).length;
-  return req === 0 || cancel > 0;
+  if (req === 0) return true;
+  if (/cancelAnimationFrame\s*\(/.test(source.text)) return true;
+  const handed = /\bonRaf\s*\(/.test(source.text);
+  return handed && siblings.some((s) => s !== source && /cancelAnimationFrame\s*\(/.test(s.text));
 }
 
 /** 每个 `mountXxx` 都得把 destroy 还回来 */

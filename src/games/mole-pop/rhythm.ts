@@ -271,6 +271,9 @@ export function capConcurrency(chart: readonly ChartNote[], max: number): ChartN
   return kept;
 }
 
+/** 一次「群鼠」同刻冒几只 */
+export const SWARM_SIZE = 3;
+
 /**
  * 把「群鼠」展开成同一时刻的三只（洞位互不重叠）。
  * 分开写是为了让谱面本身保持简洁，也方便单测直接验展开结果。
@@ -282,7 +285,7 @@ export function expandSwarms(chart: readonly ChartNote[]): ChartNote[] {
       out.push(note);
       continue;
     }
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < SWARM_SIZE; k++) {
       out.push({ ...note, kind: "normal", hole: (note.hole + k * 3) % 9 });
     }
   }
@@ -337,7 +340,12 @@ export function nightMarketStall(wave: number): string {
 export function nightMarketChart(cfg: MoleLevel, wave: number, seed: number): ChartNote[] {
   const n = Math.max(1, Math.round(wave) || 1);
   const chart = buildChart(cfg, seed >>> 0, 40 + n * 6);
-  return withSwarms(chart, Math.max(3, 10 - Math.floor(n / 2)));
+  // 群鼠是同刻三只：台面预算不到三只的早期波次先不塞，
+  // 否则生成出来也会被运行时按 maxConcurrent 丢掉，等于白排。
+  const swarmed =
+    cfg.maxConcurrent >= SWARM_SIZE ? withSwarms(chart, Math.max(3, 10 - Math.floor(n / 2))) : chart;
+  // 展开完再限一次流：谱面写成什么样，台上就演什么样；同一个洞也不会挤两只。
+  return capConcurrency(swarmed, cfg.maxConcurrent);
 }
 
 /** 夜市收摊时的一句话（只鼓励） */

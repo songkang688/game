@@ -683,8 +683,15 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   bHook.addEventListener("click", () => (pending.hook = true));
   bPause.addEventListener("click", () => togglePause());
 
+  // 走廊这条路原来是手写三行 remove,和探索层的 Disposer 各走各的;
+  // 现在两条路都从同一个口袋出,少一个「新加了监听忘了摘」的口子。
+  const bag = new Disposer();
   window.addEventListener("keydown", onKeyDown);
+  bag.add(() => window.removeEventListener("keydown", onKeyDown));
   window.addEventListener("keyup", onKeyUp);
+  bag.add(() => window.removeEventListener("keyup", onKeyUp));
+  bag.add(() => cancelAnimationFrame(raf));
+  bag.add(() => wrap.remove());
 
   syncSize();
   last = performance.now();
@@ -694,10 +701,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     destroy() {
       destroyed = true;
       finished = true;
-      cancelAnimationFrame(raf);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      wrap.remove();
+      bag.dispose();
     },
   };
 }

@@ -6,6 +6,7 @@ import { save } from "../../engine/save";
 import { CHAPTERS, LEVELS, type BubbleLevel } from "./levels";
 import {
   BIG_GROUP,
+  BubbleBag,
   CHAIN,
   SEA_ROWS,
   blowShuffle,
@@ -262,12 +263,10 @@ function runCollapse(host: CollapseHost, popped: Array<[number, number]>, done: 
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg: BubbleLevel = LEVELS[ctx.level];
-  const timeouts = new Set<ReturnType<typeof setTimeout>>();
-  let destroyed = false;
+  const bag = new BubbleBag();
   let levelDone = false;
   /** 塌陷动画进行中：这段时间不吃点击，免得半空中又消掉一组 */
   let busy = false;
-  let raf = 0;
   let score = 0;
   let shuffles = 0;
   const rows = cfg.rows;
@@ -303,11 +302,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const msgEl = wrap.querySelector(".bp-msg") as HTMLElement;
 
   function later(fn: () => void, ms: number): void {
-    const t = setTimeout(() => {
-      timeouts.delete(t);
-      if (!destroyed) fn();
-    }, ms);
-    timeouts.add(t);
+    bag.after(fn, ms);
   }
 
   const host: CollapseHost = {
@@ -316,10 +311,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     grid,
     gravityUp,
     render: () => render(),
-    alive: () => !destroyed,
-    onRaf: (id) => {
-      raf = id;
-    },
+    alive: () => bag.alive,
+    onRaf: (id) => bag.onRaf(id),
   };
 
   function setup(): void {
@@ -584,12 +577,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   return {
     destroy() {
-      destroyed = true;
       levelDone = true;
-      if (raf) cancelAnimationFrame(raf);
-      raf = 0;
-      timeouts.forEach((t) => clearTimeout(t));
-      timeouts.clear();
+      bag.close();
       wrap.remove();
     },
   };
@@ -616,9 +605,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
   wrap.append(head, stage);
   host.appendChild(wrap);
 
-  const timeouts = new Set<ReturnType<typeof setTimeout>>();
-  let destroyed = false;
-  let raf = 0;
+  const bag = new BubbleBag();
   let best = save.getGameProgress(meta.id).endlessBest;
   let over = false;
   let busy = false;
@@ -630,13 +617,8 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
   let boardEl: HTMLElement | null = null;
   let msgEl: HTMLElement | null = null;
 
-  function later(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
-    const t = setTimeout(() => {
-      timeouts.delete(t);
-      if (!destroyed) fn();
-    }, ms);
-    timeouts.add(t);
-    return t;
+  function later(fn: () => void, ms: number): void {
+    bag.after(fn, ms);
   }
 
   const view: CollapseHost = {
@@ -645,10 +627,8 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     grid,
     gravityUp: false,
     render: () => render(),
-    alive: () => !destroyed && !over,
-    onRaf: (id) => {
-      raf = id;
-    },
+    alive: () => bag.alive && !over,
+    onRaf: (id) => bag.onRaf(id),
   };
 
   function render(): void {
@@ -676,12 +656,12 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
   }
 
   function scheduleTide(): void {
-    if (over || destroyed) return;
+    if (over || !bag.alive) return;
     later(tide, seaPushMs(pushes));
   }
 
   function tide(): void {
-    if (over || destroyed) return;
+    if (over || !bag.alive) return;
     if (busy) {
       // 塌陷还在半空，等这一下播完再涨潮，别让画面打架
       later(tide, 120);
@@ -730,8 +710,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
 
   function finish(): void {
     over = true;
-    if (raf) cancelAnimationFrame(raf);
-    raf = 0;
+    bag.clearPending();
     best = save.recordEndlessBest(meta.id, score);
     if (score > 0) api.addStars(1);
     stage.innerHTML = "";
@@ -759,8 +738,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     preview = [];
     grid.length = 0;
     cells.length = 0;
-    timeouts.forEach((t) => clearTimeout(t));
-    timeouts.clear();
+    bag.clearPending();
     stage.innerHTML = "";
 
     const panel = document.createElement("div");
@@ -811,12 +789,8 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
 
   return {
     destroy() {
-      destroyed = true;
       over = true;
-      if (raf) cancelAnimationFrame(raf);
-      raf = 0;
-      timeouts.forEach((t) => clearTimeout(t));
-      timeouts.clear();
+      bag.close();
       wrap.remove();
     },
   };

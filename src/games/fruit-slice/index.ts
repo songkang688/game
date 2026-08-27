@@ -48,6 +48,7 @@ import {
   kingDown,
   kingShowMult,
   makeLaunch,
+  mapLayout,
   mirrorOn,
   mirrorX,
   parseBest,
@@ -2300,22 +2301,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     mapNodes.length = 0;
     const base = themeStart(chapterIdx);
-    // 1.1 的新果园一章 29~30 回合,列数加到 5 才排得下
-    const cols = size > 16 ? 5 : 4;
-    const rows = Math.ceil(size / cols);
-    const mx0 = w * 0.12;
-    const mx1 = w * 0.88;
-    const my0 = 96;
-    // 最后一行的星星也要留得下:375×667 上原来会被切掉一截
-    const my1 = h - 62;
-    const nr = Math.max(13, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < size; i++) {
-      const row = Math.floor(i / cols);
-      const colRaw = i % cols;
-      const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
-      const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
-      mapNodes.push({ idx: base + i, x, y, r: nr });
+    const layout = mapLayout(w, h, size);
+    const nr = layout.r;
+    for (const spot of layout.spots) {
+      mapNodes.push({ idx: base + spot.i, x: spot.x, y: spot.y, r: spot.r });
     }
     ctx.strokeStyle = "rgba(255,255,255,0.75)";
     ctx.lineWidth = 5;

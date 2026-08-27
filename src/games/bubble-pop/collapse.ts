@@ -374,6 +374,80 @@ export function seaLine(score: number, best: number): string {
   return `这趟拿到 ${score} 分,最好纪录是 ${best} 分。留意底下涨上来的新行,先消下面收益最高。`;
 }
 
+// ---------------------------------------------------------------------------
+// 收摊清理:定时器 + rAF 统一记账,destroy 一把倒干净
+// ---------------------------------------------------------------------------
+
+/** 定时器与 rAF 的宿主;单测传一个假的进来就能数「还剩几个没清」 */
+export interface BubbleBagHost {
+  setTimeout: (fn: () => void, ms: number) => number;
+  clearTimeout: (id: number) => void;
+  cancelRaf: (id: number) => void;
+}
+
+export function globalBubbleBagHost(): BubbleBagHost {
+  return {
+    setTimeout: (fn, ms) => setTimeout(fn, ms) as unknown as number,
+    clearTimeout: (id) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>),
+    cancelRaf: (id) => cancelAnimationFrame(id),
+  };
+}
+
+/**
+ * 闯关与无尽两条路原本各手抄了一份「timeouts Set + destroyed 标记 + raf」,
+ * 这里收成一个口袋:延时都从 `after` 过一手,rAF 交给 `onRaf` 记住最新的一帧,
+ * `close()` 之后既不会再回调,也不会留下任何没清的东西。
+ */
+export class BubbleBag {
+  private timeouts = new Set<number>();
+  private raf = 0;
+  private closed = false;
+
+  constructor(private host: BubbleBagHost = globalBubbleBagHost()) {}
+
+  /** 还活着(没收摊)才继续跑动画与回调 */
+  get alive(): boolean {
+    return !this.closed;
+  }
+
+  /** 还挂着几件东西(close 后必须是 0) */
+  get size(): number {
+    return this.timeouts.size + (this.raf ? 1 : 0);
+  }
+
+  /** 延时回调:收摊之后到点也不会再执行 */
+  after(fn: () => void, ms: number): void {
+    if (this.closed) return;
+    const id = this.host.setTimeout(() => {
+      this.timeouts.delete(id);
+      if (!this.closed) fn();
+    }, ms);
+    this.timeouts.add(id);
+  }
+
+  /** 记住最新的一帧;收摊之后再来的一帧直接取消 */
+  onRaf(id: number): void {
+    if (this.closed) {
+      this.host.cancelRaf(id);
+      return;
+    }
+    this.raf = id;
+  }
+
+  /** 把手上排着的活全清掉,但口袋还能接着用(无尽「再涨一次潮」就走这条) */
+  clearPending(): void {
+    if (this.raf) this.host.cancelRaf(this.raf);
+    this.raf = 0;
+    for (const id of this.timeouts) this.host.clearTimeout(id);
+    this.timeouts.clear();
+  }
+
+  close(): void {
+    this.clearPending();
+    this.closed = true;
+  }
+}
+
 /** 按住时给的预览提示:高亮整群 + 预计得分 */
 export function previewLabel(n: number): string {
   if (n < 2) return "单颗消不掉～找挨在一起的同色泡泡";
