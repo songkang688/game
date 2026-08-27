@@ -90,6 +90,18 @@ export function lowestColumnX(w: World, cols = 9): number {
   return step * (best + 0.5);
 }
 
+/**
+ * 这一摞已经堆到警戒线跟前了吗:再往上压一颗就要顶出去的那种。
+ * `pad` 是留给这一颗自己的余量(默认按它的直径算)。
+ */
+export function columnCrowded(w: World, x: number, level: number, cols = 9): boolean {
+  const map = heightMap(w, cols);
+  const step = w.box.w / map.length;
+  const i = clamp(Math.floor(x / step), 0, map.length - 1);
+  // y 轴朝下:数值越小表示堆得越高，小于「警戒线 + 一颗的直径」就别再往上摞了
+  return map[i] < w.lineY + radiusOf(level) * 2;
+}
+
 /** 场上和这一级一样、而且头顶没被压住的果子里最靠上的那颗 */
 export function bestMatchX(w: World, level: number): number | null {
   let pick: { x: number; y: number } | null = null;
@@ -202,7 +214,10 @@ export function chooseDropX(w: World, level: number, skill: AiLevel, tick = 0, n
 
   if (skill === 2) {
     const match = bestMatchX(w, level);
-    const x = match ?? lo + hash(tick + 7, w.seed) * (hi - lo);
+    // 同级果子那一摞要是已经顶到警戒线跟前，再往上压这一盆就该越线了：
+    // 改往最低洼的那一段放，等那边长起来了自然还有得合。
+    const usable = match !== null && !columnCrowded(w, match, level) ? match : null;
+    const x = usable ?? (match !== null ? lowestColumnX(w, 9) : lo + hash(tick + 7, w.seed) * (hi - lo));
     return clampDropX(w.box.w, level, x);
   }
 

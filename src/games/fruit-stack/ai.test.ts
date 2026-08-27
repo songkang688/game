@@ -5,6 +5,7 @@ import {
   bestMatchX,
   chooseDropX,
   cloneWorld,
+  columnCrowded,
   evaluateBowl,
   lowestColumnX,
   runHeadless,
@@ -77,6 +78,29 @@ describe("四档假人", () => {
     addFruit(w, { level: 4, x: 210, y: 400, r: radiusOf(4), graceMs: 0 });
     addFruit(w, { level: 1, x: 60, y: 410, r: radiusOf(1), graceMs: 0 });
     expect(bestMatchX(w, 4)).toBe(210);
+    expect(chooseDropX(w, 4, 2, 0)).toBeCloseTo(210, 3);
+  });
+
+  it("普通档不往已经顶到警戒线的那一摞上压", () => {
+    const w = bowl();
+    // 左边那一摞已经顶到警戒线跟前,顶上正好是一颗四级果子;右下角还躺着一颗同级的
+    addFruit(w, { level: 6, x: 40, y: 380, r: radiusOf(6), graceMs: 0 });
+    addFruit(w, { level: 5, x: 40, y: 260, r: radiusOf(5), graceMs: 0 });
+    addFruit(w, { level: 4, x: 40, y: 130, r: radiusOf(4), graceMs: 0 });
+    addFruit(w, { level: 4, x: 250, y: 400, r: radiusOf(4), graceMs: 0 });
+    const match = bestMatchX(w, 4)!;
+    expect(match).toBe(40);
+    expect(columnCrowded(w, match, 4)).toBe(true);
+    // 认出来这一摞压不得,就改往低洼处放
+    const x = chooseDropX(w, 4, 2, 0);
+    expect(Math.abs(x - match)).toBeGreaterThan(radiusOf(4));
+    expect(columnCrowded(w, x, 4)).toBe(false);
+  });
+
+  it("那一摞还没到警戒线的时候，普通档照旧对准同级的那颗", () => {
+    const w = bowl();
+    addFruit(w, { level: 4, x: 210, y: 400, r: radiusOf(4), graceMs: 0 });
+    expect(columnCrowded(w, 210, 4)).toBe(false);
     expect(chooseDropX(w, 4, 2, 0)).toBeCloseTo(210, 3);
   });
 
