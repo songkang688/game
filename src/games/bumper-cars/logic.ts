@@ -872,10 +872,13 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
       // 只剩「往场内死命打方向」这一件事能做。
       const lip = boundaryHit(world.field, car.x, car.y, world.inset);
       const crawl = teeterCrawl(dir.x * lip.nx + dir.y * lip.ny);
+      // 往外滑也有个限度:光靠自己滑不会整台车悬空——那得是被人再撞一下才有的事。
+      const room = Math.max(0, DEEP_MARGIN - 0.05 - lip.depth);
+      const move = crawl < 0 ? -Math.min(room, -crawl * s) : crawl * s;
       car.vx = lip.nx * crawl;
       car.vy = lip.ny * crawl;
-      car.x += car.vx * s;
-      car.y += car.vy * s;
+      car.x += lip.nx * move;
+      car.y += lip.ny * move;
       car.charge = 0;
       return;
     }

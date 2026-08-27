@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🚗",
   category: "party" as const,
   color: "#ffe6ef",
-  blurb: "俯视撞人擂台!把对手顶下场地就得分,188 关八大主题闯关,还能双人同屏、人机三档和无尽车海。",
+  blurb: "俯视撞人擂台!蓄力强撞把对手顶到台沿,它先打转两秒才下场,188 关八大主题闯关,还能双人同屏、人机四档和无尽车海。",
   // levels.ts 的 CHAPTERS 八章合计 188 关;index.ts 的模式条另有对战 / 人机 / 无尽
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
