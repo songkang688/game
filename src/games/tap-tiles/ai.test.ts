@@ -1,7 +1,7 @@
 /**
  * 音符下落 · 四档假人(规格第十一节)。
  *
- * 噪声取值按规格钉死;固定谱面下地狱档要显著高于菜鸟档——这条是硬断言。
+ * 噪声取值按规格钉死;固定谱面下大师档要显著高于新手档——这条是硬断言。
  */
 import { describe, expect, it } from "vitest";
 import { chartFromSeed } from "./chart";
@@ -39,10 +39,18 @@ describe("档位参数", () => {
     expect(AI_TIERS).toEqual(["rookie", "normal", "expert", "hell"]);
   });
 
-  it("档位名干净好懂,地狱档不会手滑漏音符", () => {
-    expect(Object.values(TIER_NAMES)).toEqual(["菜鸟", "普通", "高手", "地狱"]);
+  it("档位名干净好懂,大师档不会手滑漏音符", () => {
+    expect(Object.values(TIER_NAMES)).toEqual(["新手", "普通", "高手", "大师"]);
     expect(TIER_SLIP_RATE.hell).toBe(0);
     expect(TIER_SLIP_RATE.rookie).toBeGreaterThan(TIER_SLIP_RATE.expert);
+  });
+
+  it("档名换了字,档位 id 一个字母没动 —— 存档里的 tier 键不受影响", () => {
+    expect(Object.keys(TIER_NAMES)).toEqual(["rookie", "normal", "expert", "hell"]);
+    for (const name of Object.values(TIER_NAMES)) {
+      expect(name).not.toContain("菜鸟");
+      expect(name).not.toContain("地狱");
+    }
   });
 
   it("每一档的介绍都只讲手感,不损人", () => {
@@ -60,25 +68,25 @@ describe("假人打谱", () => {
     expect(aiRun(CHART, "normal", 42).score).not.toBe(aiRun(CHART, "normal", 4242).score);
   });
 
-  it("地狱档一下不差:全部完美、零 miss", () => {
+  it("大师档一下不差:全部完美、零 miss", () => {
     const hell = aiRun(CHART, "hell", 3);
     expect(hell.miss).toBe(0);
     expect(hell.perfect).toBe(CHART.notes.length);
   });
 
-  it("菜鸟档会打出一堆良好,手感明显更抖", () => {
+  it("新手档会打出一堆良好,手感明显更抖", () => {
     const rookie = aiRun(CHART, "rookie", 3);
     expect(rookie.good).toBeGreaterThan(0);
     expect(rookie.perfect).toBeLessThan(CHART.notes.length);
   });
 
-  it("固定谱面下,地狱档得分显著高于菜鸟档", () => {
+  it("固定谱面下,大师档得分显著高于新手档", () => {
     const hell = meanScore("hell");
     const rookie = meanScore("rookie");
     expect(hell).toBeGreaterThan(rookie * 1.3);
   });
 
-  it("四档从菜鸟到地狱一档比一档强", () => {
+  it("四档从新手到大师一档比一档强", () => {
     const scores = AI_TIERS.map((t) => meanScore(t));
     for (let i = 1; i < scores.length; i++) {
       expect(scores[i], `${TIER_NAMES[AI_TIERS[i]]} 应该不弱于 ${TIER_NAMES[AI_TIERS[i - 1]]}`).toBeGreaterThan(

@@ -53,7 +53,7 @@
 | `run.ts` | 一次演奏的状态机：`tap` / `release` / `advanceTo` / `hitEmpty` |
 | `audio.ts` | Web Audio 振荡器现场合成音高，`close()` 关上下文 |
 | `levels.ts` | 8 章 188 关关卡数据与评星 |
-| `ai.ts` | 四档假人：菜鸟 ±80 / 普通 ±40 / 高手 ±15 / 地狱 ±5 毫秒 |
+| `ai.ts` | 四档假人：新手 ±80 / 普通 ±40 / 高手 ±15 / 大师 ±5 毫秒；前三档另有确定性的「良好」失手（每 3 / 5 / 9 个音符偏一个），短谱上四档才分得开 |
 | `guide.ts` | 攻略 |
 | `index.ts` | Canvas 四列视图 + 四种模式接线 |
 | `domStub.ts` | 单测用的极简 DOM / Canvas / AudioContext 桩 |
