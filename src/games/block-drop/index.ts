@@ -72,6 +72,17 @@ export const CLEAR_ANIM_SEC = 0.22;
 /** 硬降压扁动画时长 */
 export const SLAM_ANIM_SEC = 0.12;
 
+/**
+ * 按住不放时系统会一秒发三十来个 `keydown`。挪左挪右、软降本来就该跟着连发,
+ * 但硬降、旋转、暂存是「按一下算一下」—— 手指在硬降键上多停半秒,
+ * 一关的方块预算就白白倒掉好几块。这里只放行该连发的那几个键。
+ */
+const REPEATABLE_KEYS = new Set(["a", "d", "s", "ArrowLeft", "ArrowRight", "ArrowDown"]);
+
+export function acceptsRepeat(key: string): boolean {
+  return REPEATABLE_KEYS.has(key.length === 1 ? key.toLowerCase() : key);
+}
+
 const CSS = `
 .bd-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EEF4FF,#F9FBFF);
   border-radius:16px;padding:10px;user-select:none;}
@@ -715,6 +726,10 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
       return;
     }
     if (paused) return;
+    if (e.repeat && !acceptsRepeat(e.key)) {
+      e.preventDefault();
+      return;
+    }
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (duo) {
       const s = seats[duo.i];

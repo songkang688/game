@@ -43,6 +43,12 @@ const PLANS = [
     bot: "pointer",
     // 彩豆画成 #F7C6DE 的小圆点
     food: [0xf7, 0xc6, 0xde],
+    // 朵朵自己是 #F5A9C8，第 1 关那只对手（糯糯）是 BOT_COLORS[0] = #F6B8D0。
+    // 三种粉都很近，容差得收到 6 才分得开
+    self: [0xf5, 0xa9, 0xc8],
+    prey: [[0xf6, 0xb8, 0xd0]],
+    tol: 6,
+    eatRatio: 1.5,
     skipR: 60,
     overshoot: 1.35,
     hold: 150
@@ -125,12 +131,21 @@ async function openLevel(page, id, n) {
   return true;
 }
 
+/**
+ * 结算浮层读回来了没有。
+ *
+ * 轮询期间页面随时可能自己跳一次（过关之后 188 关外壳会重挂），
+ * 这时正在飞的 `evaluate` 会抛「Execution context was destroyed」。
+ * 那不是产品出错，是这一拍没读到 —— 当成「还没结算」继续轮询。
+ */
 const settle = (page) =>
-  page.evaluate(() => {
-    const t = document.querySelector(".l99-ov-title");
-    if (!t) return null;
-    return { title: t.textContent ?? "", body: t.parentElement?.textContent ?? "" };
-  });
+  page
+    .evaluate(() => {
+      const t = document.querySelector(".l99-ov-title");
+      if (!t) return null;
+      return { title: t.textContent ?? "", body: t.parentElement?.textContent ?? "" };
+    })
+    .catch(() => null);
 
 /**
  * 镜头跟着自己的 canvas 游戏：把画布读回来，找离正中最近的那颗食物。
@@ -168,6 +183,57 @@ const FIND_FOOD = (rgb, skipR) => {
   return { dx: (bx - cx) / (w / 2), dy: (by - cy) / (h / 2) };
 };
 
+/**
+ * 圆圆这种「吃小的、躲大的」游戏，光捡豆子长不到目标：
+ * 起步 30 质量、目标 90，掉质量的速度（`DECAY`）比捡豆子的进账还快，
+ * **必须把对手吃掉一次**才过得去。这一段就是找猎物：
+ *
+ * 数一数正中那一坨（自己）有多少像素、最近那只对手有多少像素，
+ * 自己明显更大才去追；否则原样去捡豆子。
+ */
+const FIND_PREY = (selfRgb, preyRgbs, skipR, tol) => {
+  const canvas = document.querySelector("canvas");
+  if (!canvas) return null;
+  const g = canvas.getContext("2d");
+  if (!g) return null;
+  const w = canvas.width;
+  const h = canvas.height;
+  const img = g.getImageData(0, 0, w, h).data;
+  const cx = w / 2;
+  const cy = h / 2;
+  const skip2 = skipR * skipR;
+  const near = (i, rgb) =>
+    Math.abs(img[i] - rgb[0]) <= tol && Math.abs(img[i + 1] - rgb[1]) <= tol && Math.abs(img[i + 2] - rgb[2]) <= tol;
+  let selfPx = 0;
+  let preyPx = 0;
+  let bestD = Infinity;
+  let bx = 0;
+  let by = 0;
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      const i = (y * w + x) * 4;
+      const d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+      if (near(i, selfRgb)) {
+        selfPx++;
+        continue;
+      }
+      if (d < skip2) continue;
+      for (const rgb of preyRgbs) {
+        if (!near(i, rgb)) continue;
+        preyPx++;
+        if (d < bestD) {
+          bestD = d;
+          bx = x;
+          by = y;
+        }
+        break;
+      }
+    }
+  }
+  if (bestD === Infinity || preyPx === 0) return null;
+  return { dx: (bx - cx) / (w / 2), dy: (by - cy) / (h / 2), selfPx, preyPx };
+};
+
 /** HUD 上那个「已经长到多少」的数，用来判断假人是不是卡住了 */
 const READ_SCORE = () => {
   const t = document.querySelector(".game-stage")?.innerText ?? "";
@@ -197,7 +263,17 @@ async function pointerBot(page, plan, budgetMs) {
     while (Date.now() - t0 < budgetMs) {
       const s = await settle(page);
       if (s) return s;
-      const dir = await page.evaluate(FIND_FOOD, plan.food, plan.skipR ?? 55).catch(() => null);
+      // 先看有没有吃得下的对手：吃一口顶几十颗豆子
+      let dir = null;
+      let hunting = false;
+      if (plan.prey) {
+        const p = await page.evaluate(FIND_PREY, plan.self, plan.prey, plan.skipR ?? 55, plan.tol ?? 8).catch(() => null);
+        if (p && p.selfPx > p.preyPx * (plan.eatRatio ?? 1.6)) {
+          dir = { dx: p.dx, dy: p.dy };
+          hunting = true;
+        }
+      }
+      if (!dir) dir = await page.evaluate(FIND_FOOD, plan.food, plan.skipR ?? 55).catch(() => null);
       let tx;
       let ty;
       if (dir) {
@@ -213,7 +289,7 @@ async function pointerBot(page, plan, budgetMs) {
       await page.mouse.move(tx, ty);
       if (VERBOSE && spin % 10 === 0) {
         const sc = await page.evaluate(READ_SCORE).catch(() => -1);
-        console.log(`       · ${plan.id} 进度 ${sc} 目标点 ${dir ? "食物" : "绕圈"}`);
+        console.log(`       · ${plan.id} 进度 ${sc} 目标点 ${hunting ? "对手" : dir ? "食物" : "绕圈"}`);
       }
       spin++;
       await sleep(plan.hold);
@@ -354,6 +430,27 @@ async function main() {
 
   for (const plan of TARGETS) {
     errors = [];
+    try {
+      await playOne(page, plan, () => errors);
+    } catch (e) {
+      // 一款炸了不该把后面几款一起带走：记一条红，继续下一款
+      log(plan.id, false, "这一款的取证跑完了", String(e).slice(0, 140));
+    }
+  }
+
+  await browser.close();
+  const bad = rows.filter((r) => !r.ok);
+  console.log(`\n${rows.length - bad.length}/${rows.length} 通过`);
+  if (bad.length) {
+    console.log("未通过：");
+    for (const b of bad) console.log(`  - [${b.id}] ${b.what}`);
+    process.exitCode = 1;
+  }
+}
+
+async function playOne(page, plan, readErrors) {
+  {
+    const errors = readErrors();
     const winLevel = Number(process.env.QA_WIN_LEVEL ?? plan.winLevel);
     // 假人没有孩子的直觉，同一关未必一把就过；给它几条命，
     // 只要真有一把打通就算数（孩子重开一局也是这么玩的）
@@ -382,15 +479,6 @@ async function main() {
     }
 
     log(plan.id, errors.length === 0, "真打这两局全程无报错", errors[0]?.slice(0, 100) ?? "");
-  }
-
-  await browser.close();
-  const bad = rows.filter((r) => !r.ok);
-  console.log(`\n${rows.length - bad.length}/${rows.length} 通过`);
-  if (bad.length) {
-    console.log("未通过：");
-    for (const b of bad) console.log(`  - [${b.id}] ${b.what}`);
-    process.exitCode = 1;
   }
 }
 

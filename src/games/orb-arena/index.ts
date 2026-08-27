@@ -51,6 +51,17 @@ import {
 const BOT_NAMES = ["糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾", "团团", "圆圆 3 号", "圆圆 7 号", "泡泡", "咕咕"];
 const BOT_COLORS = ["#F6B8D0", "#B8D8F6", "#CDEFC0", "#F8DFA8", "#D9C6F5", "#A9E5DE", "#F5C2A8", "#C9D6F7", "#EEC9E8", "#BFE7B0", "#F2D6B8"];
 
+/**
+ * 按住不放时系统会一秒发三十来个 `keydown`。方向键该跟着连发(松手才停),
+ * 但分裂和吐球是「按一下算一下」—— 手指在分裂键上多停半秒,
+ * 一整颗圆圆会当场炸成 16 瓣,谁都来不及合回去。这里只放行方向键。
+ */
+const REPEATABLE_KEYS = new Set(["w", "a", "s", "d", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+
+export function acceptsRepeat(key: string): boolean {
+  return REPEATABLE_KEYS.has(key.length === 1 ? key.toLowerCase() : key);
+}
+
 export const OA_CSS = `
 .oa-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#F3EEFF,#FBF6FF);
   border-radius:16px;padding:10px;user-select:none;position:relative;}
@@ -320,6 +331,10 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
       msgEl.textContent = paused ? "⏸️ 暂停中,再按 Esc 继续。" : "继续!";
       // 这一下归自己了:不拦住,游戏壳还会再弹一次统一暂停面板,
       // 之后的 Esc 只关面板,场上却一直停着
+      e.preventDefault();
+      return;
+    }
+    if (e.repeat && !acceptsRepeat(e.key)) {
       e.preventDefault();
       return;
     }
@@ -740,6 +755,40 @@ const MODE_TITLE: Record<ExtraMode, string> = {
   duo: "👫 双人同屏"
 };
 
+/** 无尽两波之间的过场停顿(毫秒) */
+export const WAVE_BREAK_MS = 1400;
+
+/**
+ * 一波打完之后该干什么。
+ *
+ * 原先赢下一波是 `wave++; start();` 一气呵成:场面「唰」地重置,孩子只看见
+ * 角上的波次数字从 1 变成 2,不知道自己刚才过了。抽成纯函数之后,过场那句话
+ * 和「下一波是第几波」都能单独钉住,DOM 那边只负责照着做。
+ */
+export function afterWave(
+  won: boolean,
+  wave: number,
+  total: number,
+  best: number
+): { kind: "next" | "over"; nextWave: number; title: string; sub: string } {
+  const mass = Math.round(Math.max(0, Number.isFinite(total) ? total : 0));
+  const w = Math.max(1, Math.round(Number.isFinite(wave) ? wave : 1));
+  if (won) {
+    return {
+      kind: "next",
+      nextWave: w + 1,
+      title: `🎉 第 ${w} 波达成！`,
+      sub: `累计长到 ${mass} 质量,第 ${w + 1} 波马上来。`
+    };
+  }
+  return {
+    kind: "over",
+    nextWave: 1,
+    title: "圆圆先去休息啦",
+    sub: `一共长到 ${mass} 质量,最好成绩 ${Math.round(Math.max(0, Number.isFinite(best) ? best : 0))}。下一次早点往圈里挪！`
+  };
+}
+
 function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: () => void): { destroy: () => void } {
   const wrap = document.createElement("div");
   wrap.className = "oa-mode";
@@ -762,13 +811,36 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   let wave = 1;
   let total = 0;
   let best = save.getGameProgress(meta.id).endlessBest;
+  let waveTimer = 0;
+
+  function clearWaveTimer(): void {
+    if (waveTimer) clearTimeout(waveTimer);
+    waveTimer = 0;
+  }
 
   back.addEventListener("click", () => {
     api.play("tap");
     onBack();
   });
 
+  /** 过场:把上一波收干净,亮一句「第 N 波达成」,停一下再开下一波 */
+  function showWaveBreak(title: string, sub: string): void {
+    run?.destroy();
+    run = null;
+    stage.innerHTML = "";
+    const box = document.createElement("div");
+    box.className = "oa-over";
+    box.innerHTML = `<div class="oa-over-t">${title}</div><div class="oa-over-s">${sub}</div>`;
+    stage.appendChild(box);
+    clearWaveTimer();
+    waveTimer = setTimeout(() => {
+      waveTimer = 0;
+      start();
+    }, WAVE_BREAK_MS) as unknown as number;
+  }
+
   function showOver(title: string, sub: string, again: string): void {
+    clearWaveTimer();
     run?.destroy();
     run = null;
     stage.innerHTML = "";
@@ -790,6 +862,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   }
 
   function start(): void {
+    clearWaveTimer();
     run?.destroy();
     stage.innerHTML = "";
     if (mode === "endless") {
@@ -803,13 +876,14 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         onDone: (r) => {
           total += r.mass;
           best = save.recordEndlessBest(meta.id, Math.round(total));
-          if (r.won) {
-            api.addStars(1);
-            wave++;
-            start();
-          } else {
-            showOver("圆圆先去休息啦", `一共长到 ${Math.round(total)} 质量,最好成绩 ${best}。下一次早点往圈里挪！`, "🔁 再来一局");
+          const step = afterWave(r.won, wave, total, best);
+          if (step.kind === "over") {
+            showOver(step.title, step.sub, "🔁 再来一局");
+            return;
           }
+          api.addStars(1);
+          wave = step.nextWave;
+          showWaveBreak(step.title, step.sub);
         }
       });
       return;
@@ -853,6 +927,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   return {
     destroy() {
+      clearWaveTimer();
       run?.destroy();
       run = null;
       wrap.remove();

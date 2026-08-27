@@ -929,6 +929,40 @@ const MODE_TITLE: Record<ExtraMode, string> = {
   duo: "👫 双人同屏"
 };
 
+/** 无尽两波之间的过场停顿(毫秒) */
+export const WAVE_BREAK_MS = 1400;
+
+/**
+ * 一波打完之后该干什么。
+ *
+ * 原先赢下一波是 `wave += 1; start();` 一气呵成:原野「唰」地重置,孩子只看见
+ * 角上的波次数字加了一,不知道自己刚才过了。抽成纯函数之后,过场那句话
+ * 和「下一波是第几波」都能单独钉住,DOM 那边只负责照着做。
+ */
+export function afterWave(
+  won: boolean,
+  wave: number,
+  length: number,
+  bestLen: number
+): { kind: "next" | "over"; nextWave: number; title: string; sub: string } {
+  const len = Math.round(Math.max(0, Number.isFinite(length) ? length : 0));
+  const w = Math.max(1, Math.round(Number.isFinite(wave) ? wave : 1));
+  if (won) {
+    return {
+      kind: "next",
+      nextWave: w + 1,
+      title: `🎉 第 ${w} 波达成！`,
+      sub: `这一波长到 ${len},第 ${w + 1} 波马上来。`
+    };
+  }
+  return {
+    kind: "over",
+    nextWave: 1,
+    title: "长蛇打了个盹",
+    sub: `第 ${w} 波结束,这一局长到 ${len},最长纪录 ${Math.round(Math.max(0, Number.isFinite(bestLen) ? bestLen : 0))}。下一次早点往圈里挪！`
+  };
+}
+
 function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: () => void): { destroy: () => void } {
   const wrap = document.createElement("div");
   wrap.className = "sr-mode";
@@ -950,13 +984,36 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   let run: { destroy: () => void } | null = null;
   let wave = 1;
   let bestLen = save.getGameProgress(meta.id).endlessBest;
+  let waveTimer = 0;
+
+  function clearWaveTimer(): void {
+    if (waveTimer) clearTimeout(waveTimer);
+    waveTimer = 0;
+  }
 
   back.addEventListener("click", () => {
     api.play("tap");
     onBack();
   });
 
+  /** 过场:把上一波收干净,亮一句「第 N 波达成」,停一下再开下一波 */
+  function showWaveBreak(title: string, sub: string): void {
+    run?.destroy();
+    run = null;
+    stage.innerHTML = "";
+    const box = document.createElement("div");
+    box.className = "sr-over";
+    box.innerHTML = `<div class="sr-over-t">${title}</div><div class="sr-over-s">${sub}</div>`;
+    stage.appendChild(box);
+    clearWaveTimer();
+    waveTimer = setTimeout(() => {
+      waveTimer = 0;
+      start();
+    }, WAVE_BREAK_MS) as unknown as number;
+  }
+
   function showOver(title: string, sub: string, again: string): void {
+    clearWaveTimer();
     run?.destroy();
     run = null;
     stage.innerHTML = "";
@@ -977,6 +1034,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   }
 
   function start(): void {
+    clearWaveTimer();
     run?.destroy();
     stage.innerHTML = "";
     const skin = currentSkin();
@@ -990,17 +1048,14 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         sfx: (n) => api.play(n),
         onDone: (r) => {
           bestLen = save.recordEndlessBest(meta.id, Math.round(r.length));
-          if (r.won) {
-            api.addStars(1);
-            wave += 1;
-            start();
-          } else {
-            showOver(
-              "长蛇打了个盹",
-              `第 ${wave} 波结束,这一局长到 ${Math.round(r.length)},最长纪录 ${bestLen}。下一次早点往圈里挪！`,
-              "🔁 再来一局"
-            );
+          const step = afterWave(r.won, wave, r.length, bestLen);
+          if (step.kind === "over") {
+            showOver(step.title, step.sub, "🔁 再来一局");
+            return;
           }
+          api.addStars(1);
+          wave = step.nextWave;
+          showWaveBreak(step.title, step.sub);
         }
       });
       return;
@@ -1044,6 +1099,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   return {
     destroy() {
+      clearWaveTimer();
       run?.destroy();
       run = null;
       wrap.remove();
