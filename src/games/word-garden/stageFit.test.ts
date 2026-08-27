@@ -37,7 +37,12 @@ class FakeView {
 }
 
 class FakeEl {
-  readonly style: Record<string, string> = { maxHeight: "", overflowY: "", overscrollBehavior: "" };
+  readonly style: Record<string, string> = {
+    maxHeight: "",
+    minHeight: "",
+    overflowY: "",
+    overscrollBehavior: "",
+  };
   parentElement: FakeEl | null = null;
   overflowY = "visible";
   top = 0;
@@ -107,6 +112,16 @@ describe("识字小花园 · 答题屏钳位器", () => {
     expect(host.style.maxHeight).toBe("342px");
     expect(host.style.overflowY).toBe("auto");
     expect(host.style.overscrollBehavior).toBe("contain");
+  });
+
+  it("钳住的同时把高度下限一起松开——min-height 赢 max-height，不松等于没钳（W5R3-A-02）", () => {
+    const { stage, host } = makeChain({ stageTop: 88, stageBottom: 554, selfTop: 212, selfContent: 455 });
+    const fit = fitQuizHost(host.asEl());
+    expect(host.style.minHeight, "组字工坊的 .bc-wrap 写着 min-height:380px，不松开钳位整条空转").toBe("0");
+    // 松回去的那一路要成对还原，不然高屏上被永久按成 0
+    stage.content = 830 - 88;
+    fit.relayout();
+    expect(host.style.minHeight).toBe("");
   });
 
   it("钳完之后第三个选项真的进得来（这条钉的是缺陷本身）", () => {
@@ -182,9 +197,10 @@ describe("识字小花园 · 钳位器怎么接进去的（源码巡检）", () 
     expect(runnerSource).toContain("host.remove()");
   });
 
-  it("描红台与组字工坊不走这条路（它们本来就不是 quiz99 答题屏）", () => {
+  it("描红台与组字工坊不走 .wgd-quizhost 这条路（它们不是 quiz99 答题屏）", () => {
     expect(runnerSource).toContain("runTracing({ stage,");
     expect(runnerSource).toContain("runBuildChar({ stage,");
+    // 但工坊自己在本款壳里叫了同一个钳位器（W5R3-A-02），守门在 buildCharFit.test.ts
   });
 
   it("qz- 前缀的既有规则一条都没动（那是公共资产）", () => {

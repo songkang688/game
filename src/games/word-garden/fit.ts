@@ -37,9 +37,15 @@ export function scrollToShowPx(top: number, bottom: number, client: number, max:
   return Math.max(0, Math.min(max, Math.round(want)));
 }
 
+/**
+ * 选项整排的选择器：答题屏是 `quiz99.ts` 的 `.qz-choices`，组字工坊是本款自己的
+ * `.bc-choices`（W5R3-A-02 把工坊也接上了这套钳位，两屏共用同一条「带进眼里」的规则）。
+ */
+const CHOICE_ROWS = ".qz-choices,.bc-choices";
+
 /** 把选项整排带进宿主的可视段（宿主已经是滚动容器了才叫得动） */
 function showChoices(host: HTMLElement): void {
-  const row = typeof host.querySelector === "function" ? host.querySelector(".qz-choices") : null;
+  const row = typeof host.querySelector === "function" ? host.querySelector(CHOICE_ROWS) : null;
   if (!row || typeof row.getBoundingClientRect !== "function") return;
   const hostTop = host.getBoundingClientRect().top;
   const r = row.getBoundingClientRect();
@@ -71,6 +77,7 @@ export function fitQuizHost(host: HTMLElement): { relayout: () => void; dispose:
     if (!measurable || !view) return;
     // 先把上一次钳出来的值还原，不然量到的是钳完的高度，越量越小
     host.style.maxHeight = "";
+    host.style.minHeight = "";
     host.style.overflowY = "";
     host.style.overscrollBehavior = "";
     host.scrollTop = 0;
@@ -83,6 +90,11 @@ export function fitQuizHost(host: HTMLElement): { relayout: () => void; dispose:
     if (!Number.isFinite(room) || room <= 0) return;
     if (host.scrollHeight <= room + 1) return;
     host.style.maxHeight = `${Math.floor(room)}px`;
+    // `min-height` 赢 `max-height`：组字工坊的 `.bc-wrap` 写着 `min-height:380px`，
+    // 可视段比它矮时钳位整条空转——真机 320×568 第 188 关量到 maxHeight 已经写成 301px，
+    // 盒子却还是 380px 高，`.bc-msg` 那行反馈照样落在裁切线以下（W5R3-A-02 复测）。
+    // 钳住的这一次把下限一起松开；松回去的那一路上面已经清空了，两边成对。
+    host.style.minHeight = "0";
     host.style.overflowY = "auto";
     // 滚到底之后不要把整页一起带走
     host.style.overscrollBehavior = "contain";
