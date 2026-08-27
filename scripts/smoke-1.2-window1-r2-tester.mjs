@@ -1527,6 +1527,60 @@ async function partI(browser) {
 }
 
 // ---------------------------------------------------------------------------
+// L. 暂停屏 / 结算屏的 360px 字号(模式入口那一遍走不到这两层)
+// ---------------------------------------------------------------------------
+
+/**
+ * PART=C 走的是「首页 → 闯关 / 对战 / 无尽 / 双人」四层入口,按一次 Esc 才出来的暂停屏、
+ * 打完才出来的结算屏都没量到。仓库自己的 `window1-mobile-text.test.ts` 也扫不到这两层:
+ * 它匹配的是 `font-size:<数字>px`,`font-size:clamp(13px,…)` 这种下界写法直接漏过去。
+ */
+async function partL(browser) {
+  console.log("\n===== L. 暂停屏 / 结算屏 360px 字号(样本关 2) =====");
+  // 先把源码里 clamp()/max()/min() 的下界扫一遍,和真浏览器读数互相印证
+  const floors = await (async () => {
+    const fs = await import("node:fs/promises");
+    const out = [];
+    for (const g of GAMES) {
+      const src = await fs.readFile(`src/games/${g.id}/index.ts`, "utf8");
+      for (const m of src.matchAll(/\.([\w-]+)\s*\{[^{}]*font-size:\s*(?:clamp|max|min)\(\s*([0-9.]+)px/g)) {
+        if (Number(m[2]) < MIN_CONTROL_PX) out.push(`${g.id} .${m[1]}=${m[2]}px`);
+      }
+    }
+    return out;
+  })();
+  log(
+    floors.length === 0,
+    "源码里 clamp()/max() 的字号下界不该低于 14px",
+    floors.length ? `${floors.length} 处:${floors.join(" · ")}` : "0 处"
+  );
+
+  for (const g of GAMES) {
+    const page = await newPage(browser, NARROW);
+    await page.goto(BASE, { waitUntil: "networkidle0" });
+    const opened = await openLevel(page, g.id, 2);
+    if (!opened) {
+      log(false, `${g.title}:第 2 关开不起来,暂停屏量不到`);
+      await page.close();
+      continue;
+    }
+    await sleep(900);
+    await page.keyboard.press("Escape").catch(() => {});
+    await sleep(700);
+    const paused = await page.evaluate(() =>
+      /暂停|继续|歇一会儿|先歇/.test(document.querySelector(".game-stage")?.textContent ?? "")
+    );
+    const t = await tinyText(page, MIN_CONTROL_PX);
+    log(
+      t.count === 0,
+      `${g.title} 暂停屏:360px 字号下限 14px`,
+      `${paused ? "暂停层已出现" : "没量到暂停层(按 Esc 无浮层)"} · 最小 ${t.smallest}px${t.count ? ` · ${t.count} 处偏小:${t.bad.join(" ")}` : ""}`
+    );
+    await page.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // K. 围子花园双人同屏:两套键位到底分不分人
 // ---------------------------------------------------------------------------
 
@@ -1688,6 +1742,7 @@ async function main() {
     if (PARTS.includes("I")) await partI(browser);
     if (PARTS.includes("J")) await partJ(browser);
     if (PARTS.includes("K")) await partK(browser);
+    if (PARTS.includes("L")) await partL(browser);
   } finally {
     await browser.close();
   }
