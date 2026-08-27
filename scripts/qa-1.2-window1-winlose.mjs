@@ -25,6 +25,7 @@
  *   SMOKE_BASE=http://127.0.0.1:5185 node scripts/qa-1.2-window1-winlose.mjs
  *   QA_ONLY=orb-arena 只跑一款；QA_WIN_LEVEL / QA_LOSE_LEVEL 换关号
  */
+import { readFileSync } from "node:fs";
 import puppeteer from "puppeteer-core";
 
 const BASE = process.env.SMOKE_BASE ?? "http://127.0.0.1:5185";
@@ -66,10 +67,12 @@ const PLANS = [
     id: "block-drop",
     winLevel: 1,
     loseLevel: 170,
-    bot: "press",
-    // 左右铺平再硬降：把一行填满就算数，不追求漂亮
-    keys: ["KeyA", "KeyA", "KeyG", "KeyD", "KeyG", "KeyA", "KeyG", "KeyD", "KeyD", "KeyG", "KeyF", "KeyG"],
-    tick: 120
+    // 固定按键循环两轮都消不掉一行（第 1 轮 W1-R1-10）。改成照离线算好的剧本按：
+    // 剧本在 `.qa-tmp/block-drop-plan.json`，由 `src/qa-probe.test.ts` 用仓库自带的
+    // 落点枚举 + 打分算出来，所以这是「真按得出来的一条通关路线」，不是绕过玩法。
+    bot: "plan",
+    planFile: ".qa-tmp/block-drop-plan.json",
+    tick: 300
   },
   {
     id: "combo-clash",
@@ -85,9 +88,13 @@ const PLANS = [
     winLevel: 1,
     loseLevel: 170,
     bot: "click",
-    // 能和就和，能摸就摸，否则打最右边那张
-    priority: [/和牌/, /接着摸牌|摸牌/, /碰|吃|杠/, /过/],
-    fallback: ".mj-hand .mj-tile, .mj-tile"
+    // 和牌之后还有一道「收下这些番 ▶」的结算闸，不点它就一直停在那一屏
+    priority: [/收下/, /和牌/, /接着摸牌|摸牌/, /碰|吃|杠/, /过/],
+    // 输局用：照样摸牌出牌，就是一次都不和 —— 让本地假人先和出来
+    losePriority: [/收下/, /接着摸牌|摸牌/, /过/],
+    // 只认自己手里那一排：`.mj-tile` 连牌河里打出去的牌也算，点那些是无效点击
+    fallback: ".mj-hand .mj-tile",
+    tileStrategy: "hint"
   },
   {
     id: "star-estate",
@@ -96,6 +103,8 @@ const PLANS = [
     bot: "click",
     // 掷骰 → 能买就买 → 能建就建
     priority: [/掷骰/, /购买|买下/, /建屋|盖房/, /结束回合|过/],
+    // 输局用：只掷骰、只过回合，一块地都不置 —— 让本地假人把地占满
+    losePriority: [/掷骰/, /结束回合|过/],
     fallback: ".se-tile"
   }
 ];
@@ -371,7 +380,7 @@ async function clickBot(page, plan, budgetMs) {
     const s = await settle(page);
     if (s) return s;
     const did = await page.evaluate(
-      (sources, fallback, n) => {
+      (sources, fallback, n, tileStrategy) => {
         const stage = document.querySelector(".game-stage");
         if (!stage) return "no-stage";
         const buttons = [...stage.querySelectorAll("button")].filter(
@@ -386,16 +395,37 @@ async function clickBot(page, plan, budgetMs) {
           }
         }
         const tiles = [...stage.querySelectorAll(fallback)].filter((t) => t.offsetParent !== null);
-        if (tiles.length) {
-          const t = tiles[n % tiles.length];
-          t.click();
-          return `tile:${t.textContent?.trim().slice(0, 4) ?? ""}`;
+        if (!tiles.length) return null;
+        // 麻将不能瞎打:开局本来就是听牌,随手拆一张就再也和不了。
+        // 游戏自己在提示区写着「……会摸到 3 张闲牌（像 六条），打掉它们别动手里的牌」,
+        // 照它说的打 —— 这正是孩子看着提示会做的事。
+        if (tileStrategy === "hint") {
+          const tip = [...stage.querySelectorAll(".mj-tip, .mj-msg, .mj-status")]
+            .map((e) => e.textContent ?? "")
+            .join(" ");
+          const idle = [...tip.matchAll(/像\s*([^\s，,、（）()]+)/g)].map((m) => m[1]);
+          const CN = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+          const norm = (s) => s.replace(/[一二三四五六七八九]/g, (c) => String(CN[c]));
+          for (const want of idle.map(norm)) {
+            const hit = tiles.find((t) => norm((t.textContent ?? "").trim()) === want);
+            if (hit) {
+              hit.click();
+              return `tile:${hit.textContent?.trim() ?? ""}`;
+            }
+          }
+          // 提示没点名就打最后摸进来的那一张,别动手里已经成型的牌
+          const last = tiles[tiles.length - 1];
+          last.click();
+          return `tile:${last.textContent?.trim() ?? ""}`;
         }
-        return null;
+        const t = tiles[n % tiles.length];
+        t.click();
+        return `tile:${t.textContent?.trim().slice(0, 4) ?? ""}`;
       },
       plan.priority.map((r) => r.source),
       plan.fallback,
-      nth++
+      nth++,
+      plan.tileStrategy ?? "cycle"
     );
     await sleep(did ? 260 : 500);
   }
@@ -413,7 +443,46 @@ async function idleBot(page, budgetMs) {
   return settle(page);
 }
 
-const BOTS = { pixel: pixelBot, pointer: pointerBot, press: pressBot, click: clickBot };
+/**
+ * 照着离线算好的剧本一步一步按（`block-drop` 专用）。
+ *
+ * 战役关的出块顺序由 seed 定死，落点又能用仓库里现成的 `enumeratePlacements` /
+ * `scorePlacement` 离线挑出来，所以这一关「该往哪挪、转几下」是可以先算完再按的。
+ * 剧本只收「转好再直落」的落点，落地之后再转身那一手假人按不出来。
+ * 每一步：先转到位 → 左右挪到位 → 硬降。
+ */
+async function planBot(page, plan, budgetMs) {
+  const t0 = Date.now();
+  const steps = plan.steps ?? [];
+  for (const st of steps) {
+    if (Date.now() - t0 > budgetMs) break;
+    const s = await settle(page);
+    if (s) return s;
+    for (let i = 0; i < st.rot; i++) {
+      await page.keyboard.press("KeyF");
+      await sleep(55);
+    }
+    const key = st.dx < 0 ? "KeyA" : "KeyD";
+    for (let i = 0; i < Math.abs(st.dx); i++) {
+      await page.keyboard.press(key);
+      await sleep(55);
+    }
+    // 硬降之后要等锁定 + 下一块出场：催太急，下一步的按键会打在还没生成的块上，
+    // 整份剧本从这里开始就对不上了
+    await page.keyboard.press("KeyW");
+    await sleep(plan.tick ?? 300);
+  }
+  // 剧本走完还没结算就继续软降催一催，别干等着重力
+  while (Date.now() - t0 < budgetMs) {
+    const s = await settle(page);
+    if (s) return s;
+    await page.keyboard.press("KeyS");
+    await sleep(120);
+  }
+  return settle(page);
+}
+
+const BOTS = { pixel: pixelBot, pointer: pointerBot, press: pressBot, click: clickBot, plan: planBot };
 
 async function main() {
   const browser = await puppeteer.launch({
@@ -457,11 +526,21 @@ async function playOne(page, plan, readErrors) {
     let won = null;
     let tries = 0;
     let okIn = false;
+    // 剧本驱动的那一款：按关号取这一关的走法
+    let steps = null;
+    if (plan.planFile) {
+      try {
+        steps = JSON.parse(readFileSync(plan.planFile, "utf8"))[String(winLevel)]?.steps ?? null;
+      } catch {
+        steps = null;
+      }
+      if (!steps) log(plan.id, false, `第 ${winLevel} 关的按键剧本没算出来`, `跑一遍 npx vitest run src/qa-probe.test.ts`);
+    }
     while (tries < WIN_TRIES && !won) {
       tries++;
       okIn = await openLevel(page, plan.id, winLevel);
       if (!okIn) break;
-      const s = await BOTS[plan.bot](page, plan, WIN_BUDGET_MS);
+      const s = await BOTS[plan.bot](page, { ...plan, steps }, WIN_BUDGET_MS);
       if (s && /过关/.test(s.title)) won = s;
       else if (VERBOSE) console.log(`       · 第 ${tries} 把没过：${s?.title ?? "超时"}`);
     }
@@ -470,8 +549,14 @@ async function playOne(page, plan, readErrors) {
 
     const loseLevel = Number(process.env.QA_LOSE_LEVEL ?? plan.loseLevel);
     if (await openLevel(page, plan.id, loseLevel)) {
-      const s = await idleBot(page, LOSE_BUDGET_MS);
-      log(plan.id, !!s && !/过关/.test(s.title), `第 ${loseLevel} 关放着不动真的会没过`, s ? s.title : "超时没结算");
+      // 回合制那两款放着不动**永远**不会结算 —— 轮到谁就等谁，这是回合制的常理，不是缺陷。
+      // 想拿真负证据只能真下场乱打：该摸就摸、该过就过，就是不和牌 / 不置产，
+      // 让本地假人自己赢下去（第 1 轮 W1-R1-09 挂的账，在这里还上）。
+      const loseWay = plan.losePriority ? "乱打一气真的会没过" : "放着不动真的会没过";
+      const s = plan.losePriority
+        ? await clickBot(page, { ...plan, priority: plan.losePriority }, LOSE_BUDGET_MS)
+        : await idleBot(page, LOSE_BUDGET_MS);
+      log(plan.id, !!s && !/过关/.test(s.title), `第 ${loseLevel} 关${loseWay}`, s ? s.title : "超时没结算");
       if (s) {
         const harsh = HARSH.filter((w) => s.body.includes(w));
         log(plan.id, harsh.length === 0, "没过的文案只鼓励、不打击", harsh.join(",") || s.body.replace(/\s+/g, " ").slice(0, 36));
