@@ -441,8 +441,8 @@ async function main() {
         总数: games.length,
         对战手游: pick({ mode: "versus", platform: "mobile" }).length,
         休闲端游双人: pick({ tab: "casual", platform: "desktop", mode: "duo" }).length,
-        搜索加平台: pick({ query: "sdht", platform: "mobile" }),
-        分类加玩法加平台加搜索: pick({ tab: "party", mode: "versus", platform: "desktop", query: "mj" })
+        搜索加平台: pick({ query: "数独", platform: "mobile" }),
+        分类加玩法加平台加搜索: pick({ tab: "party", mode: "versus", platform: "desktop", query: "麻将" })
       };
     });
     log(
@@ -451,9 +451,26 @@ async function main() {
       JSON.stringify({ 对战手游: combo.对战手游, 休闲端游双人: combo.休闲端游双人 })
     );
     log(
-      combo.搜索加平台.includes("sudoku-petal"),
-      "平台芯片可与搜索叠加(拼音首字母 sdht → 数独花田)",
-      combo.搜索加平台.join(",")
+      combo.搜索加平台.includes("sudoku-petal") && combo.分类加玩法加平台加搜索.includes("mahjong-bloom"),
+      "平台芯片可与搜索叠加,四条件一起也对得上",
+      `${combo.搜索加平台.join(",")} / ${combo.分类加玩法加平台加搜索.join(",")}`
+    );
+
+    // 拼音首字母搜索:1.1 就有的能力,新游戏的标题用字要补进 PINYIN_INITIALS 才搜得到
+    const pinyin = await page.evaluate(async (list) => {
+      const F = await import("/src/ui/homeFilters.ts");
+      return list.map(([id, title]) => ({
+        id,
+        title,
+        initials: F.pinyinInitials(title),
+        keys: F.searchKeys({ id, title })
+      }));
+    }, GAMES.map((g) => [g.id, g.title]));
+    const broken = pinyin.filter((x) => x.initials.length < [...x.title].filter((c) => /[\u4e00-\u9fa5]/.test(c)).length);
+    log(
+      broken.length === 0,
+      "12 款新游戏都能用拼音首字母搜到(标题用字都补进了 PINYIN_INITIALS)",
+      broken.map((x) => `${x.title}→"${x.initials}"`).join(" ")
     );
 
     // 真点一遍:分类 party + 玩法 对战 + 平台 手游 + 搜索,页面上真的收窄
@@ -465,7 +482,7 @@ async function main() {
     });
     await sleep(350);
     const narrowed = await page.$$eval(".card-title", (e) => e.map((x) => x.textContent));
-    await page.type(".home-search-input", "hkmj");
+    await page.type(".home-search-input", "麻将");
     await sleep(400);
     const searched = await page.$$eval(".card-title", (e) => e.map((x) => x.textContent));
     log(
@@ -636,14 +653,28 @@ async function main() {
     // 家长算术门原样保留
     const parent = await page.evaluate(async () => {
       const P = await import("/src/ui/parentAuth.ts");
-      const q = P.makeParentQuestion(() => 0.42);
-      const keys = Object.keys(P);
-      return { prompt: q.prompt, answer: q.answer, keys };
+      const basic = P.makeQuestion("basic", () => 0.42);
+      const high = P.makeQuestion("high", () => 0.42);
+      return {
+        basic: basic.text,
+        high: high.text,
+        rightAnswerPasses: P.checkAnswer(basic, String(basic.answer)),
+        wrongAnswerFails: !P.checkAnswer(basic, String(basic.answer + 1)),
+        ttl: P.AUTH_TTL_MS,
+        maxWrong: P.MAX_WRONG,
+        lock: P.LOCK_MS,
+        highNeed: P.HIGH_NEED_CORRECT
+      };
     });
     log(
-      typeof parent.prompt === "string" && /\d/.test(parent.prompt) && typeof parent.answer === "number",
-      "1.1 的家长算术门原样保留(还是出算术题)",
-      `${parent.prompt} = ${parent.answer}`
+      /\d/.test(parent.basic) && parent.rightAnswerPasses && parent.wrongAnswerFails,
+      "1.1 的家长算术门原样保留:还是出算术题,答对放行答错拦下",
+      `${parent.basic} / ${parent.high}`
+    );
+    log(
+      parent.ttl === 5 * 60000 && parent.maxWrong === 2 && parent.lock === 90000 && parent.highNeed === 2,
+      "家长门的参数一个没动(5 分钟有效 / 错 2 次 / 锁 90 秒 / 高权限连答 2 题)",
+      JSON.stringify(parent)
     );
 
     // 开门 → 直达 1 / 100 / 188
@@ -726,22 +757,28 @@ async function main() {
     const v25 = await page.evaluate(async () => {
       const V = await import("/src/engine/view25d.ts");
       const cam = V.defaultCamera("perspective");
-      const near = V.project({ x: 0, y: 0, z: 1 }, cam, 360, 640);
-      const far = V.project({ x: 0, y: 0, z: 40 }, cam, 360, 640);
+      const near = V.project(cam, 0, 0, 1, 360, 640);
+      const far = V.project(cam, 0, 0, 40, 360, 640);
+      const flat = V.project(V.defaultCamera("flat"), 10, 0, 40, 360, 640);
       const nasty = [
-        V.project({ x: 0, y: 0, z: NaN }, cam, 360, 640),
-        V.project({ x: 0, y: 0, z: -999 }, cam, 360, 640),
-        V.project({ x: 0, y: 0, z: 5 }, { ...cam, fov: 0 }, 0, 0)
+        V.project(cam, 0, 0, NaN, 360, 640),
+        V.project(cam, 0, 0, -999, 360, 640),
+        V.project({ ...cam, fov: 0 }, 0, 0, 5, 0, 0),
+        V.project({ ...cam, fov: 180, cameraZ: 0 }, NaN, NaN, NaN, NaN, NaN)
       ];
       return {
         nearScale: near.scale,
         farScale: far.scale,
         shrinks: near.scale > far.scale,
+        behind: V.project(cam, 0, 0, -999, 360, 640).visible,
+        flatScale: flat.scale,
         finite: nasty.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.scale)),
-        horizon: V.DEFAULT_HORIZON
+        horizon: V.horizonY(cam, 640)
       };
     });
     log(v25.shrinks, "自写透视:越远缩得越小", `z=1 → ${v25.nearScale.toFixed(3)},z=40 → ${v25.farScale.toFixed(3)}`);
+    log(v25.flatScale === 1 && !v25.behind, "flat 档降级成正交(缩放恒 1),相机背后的点标成不可见");
+    log(v25.horizon > 0 && v25.horizon < 640, "地平线落在画面里", `y=${v25.horizon}`);
     log(v25.finite, "极端输入(NaN / 负 z / 视场角 0 / 视口 0)一律给有限数,不炸不出 NaN");
   }
 
