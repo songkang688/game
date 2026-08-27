@@ -5,6 +5,7 @@ export { meta };
 // 所有「其他玩家」都是本机 AI,全程离线,不开任何网络连接。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
+import { prefersReducedMotion } from "../../engine/view25d";
 import { aiSteer, AI_TIER_LABELS, type AiTier } from "./ai";
 import { CHAPTERS, endlessConfig, goalLine, levelConfig, starsFor, type OrbLevel } from "./levels";
 import {
@@ -111,23 +112,13 @@ interface RunOpts {
   split?: boolean;
 }
 
-function reducedMotion(): boolean {
-  try {
-    return Boolean((globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia?.(
-      "(prefers-reduced-motion: reduce)"
-    )?.matches);
-  } catch {
-    return false;
-  }
-}
-
 function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   const cfg = opts.cfg;
   const owners = opts.owners;
   const humans = owners.filter((o) => o.human);
   const names: Record<string, string> = {};
   for (const o of owners) names[o.id] = o.name;
-  const soft = reducedMotion();
+  const soft = prefersReducedMotion();
 
   let destroyed = false;
   let ended = false;

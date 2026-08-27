@@ -10,11 +10,14 @@ import {
   groundGridDepths,
   horizonY,
   installView25dCss,
+  prefersReducedMotion,
   project,
+  REDUCED_MOTION_QUERY,
   respectReducedMotion,
   roadQuad,
   sanitizeCamera,
-  scaleAtDepth
+  scaleAtDepth,
+  type MediaQueryLike
 } from "./view25d";
 
 const W = 400;
@@ -204,5 +207,68 @@ describe("雾化与地面网格", () => {
 
   it("没有浏览器环境时注入 CSS 不抛异常", () => {
     expect(() => installView25dCss()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 减弱动效:几款游戏原来各抄一份 matchMedia 的 try/catch,收到这里统一一份
+// ---------------------------------------------------------------------------
+
+describe("prefersReducedMotion", () => {
+  it("系统说要减弱就返回 true,问的是标准那条查询", () => {
+    const asked: string[] = [];
+    const mm = (q: string) => {
+      asked.push(q);
+      return { matches: true };
+    };
+    expect(prefersReducedMotion(mm)).toBe(true);
+    expect(asked).toEqual([REDUCED_MOTION_QUERY]);
+    expect(REDUCED_MOTION_QUERY).toBe("(prefers-reduced-motion: reduce)");
+  });
+
+  it("系统说不用减弱就返回 false", () => {
+    expect(prefersReducedMotion(() => ({ matches: false }))).toBe(false);
+  });
+
+  it("五种坏情况一律当「不用减弱」,绝不抛异常也绝不把画面静掉", () => {
+    // 压根没有 matchMedia
+    expect(prefersReducedMotion(null)).toBe(false);
+    expect(prefersReducedMotion(undefined)).toBe(false);
+    // matchMedia 存在但返回空
+    expect(prefersReducedMotion(() => null)).toBe(false);
+    expect(prefersReducedMotion(() => undefined)).toBe(false);
+    // 返回的对象没有 matches 字段
+    expect(prefersReducedMotion(() => ({}))).toBe(false);
+    // 调用直接抛异常(有些内嵌浏览器就是这样)
+    expect(
+      prefersReducedMotion(() => {
+        throw new Error("no media");
+      })
+    ).toBe(false);
+  });
+
+  it("matches 是「像 true 的值」而不是 true 时不算数,免得字符串把动效关掉", () => {
+    const truthy = (() => ({ matches: "yes" })) as unknown as MediaQueryLike;
+    expect(prefersReducedMotion(truthy)).toBe(false);
+  });
+
+  it("不传参数时读 globalThis.matchMedia,读不到就是 false", () => {
+    const g = globalThis as { matchMedia?: MediaQueryLike };
+    const saved = g.matchMedia;
+    try {
+      delete g.matchMedia;
+      expect(prefersReducedMotion()).toBe(false);
+      g.matchMedia = () => ({ matches: true });
+      expect(prefersReducedMotion()).toBe(true);
+    } finally {
+      if (saved === undefined) delete g.matchMedia;
+      else g.matchMedia = saved;
+    }
+  });
+
+  it("算出来的布尔值能直接喂给 respectReducedMotion", () => {
+    const cam = defaultCamera();
+    expect(respectReducedMotion(cam, prefersReducedMotion(() => ({ matches: true }))).kind).toBe("flat");
+    expect(respectReducedMotion(cam, prefersReducedMotion(() => ({ matches: false }))).kind).toBe("perspective");
   });
 });

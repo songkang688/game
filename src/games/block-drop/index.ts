@@ -5,6 +5,7 @@ export { meta };
 // 188 关战役 + 对战发垃圾行 + 马拉松/竞速无尽 + 同屏双人,对手是本机 AI,全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
+import { prefersReducedMotion } from "../../engine/view25d";
 import {
   COLS,
   GARBAGE_CELL,
@@ -126,18 +127,6 @@ const INDEX_COLOR: string[] = [
 ];
 const INDEX_MARK: string[] = ["", PIECE_MARKS.I, PIECE_MARKS.O, PIECE_MARKS.T, PIECE_MARKS.S, PIECE_MARKS.Z, PIECE_MARKS.J, PIECE_MARKS.L, ""];
 
-function reducedMotion(): boolean {
-  try {
-    return Boolean(
-      (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia?.(
-        "(prefers-reduced-motion: reduce)"
-      )?.matches
-    );
-  } catch {
-    return false;
-  }
-}
-
 export interface SeatResult {
   lines: number;
   score: number;
@@ -189,7 +178,7 @@ interface Seat {
 }
 
 function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
-  const soft = reducedMotion();
+  const soft = prefersReducedMotion();
   const rand = rng(opts.seed);
   const queue = new PieceQueue(rand, opts.bag);
   let board = cloneBoard(opts.start);

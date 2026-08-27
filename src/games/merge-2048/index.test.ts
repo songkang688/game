@@ -724,6 +724,33 @@ describe("读屏播报", () => {
       t.destroy();
     });
 
+    it("系统要求减弱动效时真的不弹跳了(走的是共享的 prefersReducedMotion)", () => {
+      const g = globalThis as { matchMedia?: (q: string) => { matches: boolean } };
+      const saved = g.matchMedia;
+      try {
+        g.matchMedia = (q: string) => ({ matches: q === "(prefers-reduced-motion: reduce)" });
+        const { host, t } = table([seatOpts()]);
+        pressKey("a");
+        tick(10);
+        expect(host.byClass("mg-tile").map((e) => e.textContent)).toContain("4");
+        // 合并放大与新块淡入这两个动画都不挂上去
+        expect(host.byClass("mg-pop")).toHaveLength(0);
+        expect(host.byClass("mg-born")).toHaveLength(0);
+        t.destroy();
+      } finally {
+        if (saved === undefined) delete g.matchMedia;
+        else g.matchMedia = saved;
+      }
+    });
+
+    it("没要求减弱时照旧弹跳", () => {
+      const { host, t } = table([seatOpts()]);
+      pressKey("a");
+      tick(10);
+      expect(host.byClass("mg-pop").length + host.byClass("mg-born").length).toBeGreaterThan(0);
+      t.destroy();
+    });
+
     it("暂停这类提示还是写在看得见的那一行,播报行不抢词", () => {
       const { host, t } = table([seatOpts()]);
       pressKey("Escape");

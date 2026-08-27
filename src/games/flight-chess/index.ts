@@ -5,6 +5,7 @@ export { meta };
 // 叠机堡垒挡路、终点通道必须正好走到。188 关残局 + 四人对战 + 连胜无尽 + 朵朵星星双人，全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { save } from "../../engine/save";
+import { prefersReducedMotion } from "../../engine/view25d";
 import {
   BASE,
   COLORS,
@@ -77,18 +78,6 @@ export const BEAT_MS = 320;
 export const SPIN_MS = 70;
 
 const CELL = 100 / GRID;
-
-function reducedMotion(): boolean {
-  try {
-    return Boolean(
-      (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia?.(
-        "(prefers-reduced-motion: reduce)"
-      )?.matches
-    );
-  } catch {
-    return false;
-  }
-}
 
 /** 样式表也要能被测试盯住:字号下限与手指热区都写在这里 */
 export const CSS = `
@@ -277,7 +266,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     for (let c = 0; c < 4; c++) place(state, c as Color, opts.setup[c] ?? []);
   }
 
-  const reduced = reducedMotion();
+  const reduced = prefersReducedMotion();
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let destroyed = false;
   let phase: Phase = "idle";

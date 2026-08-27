@@ -397,7 +397,10 @@ describe("block-drop · 产品红线", () => {
 
   it("尊重 prefers-reduced-motion:关掉抖动但保留塌落顺序", () => {
     const index = src("index.ts");
-    expect(index).toContain("prefers-reduced-motion");
+    // 这一款是纯画布,减弱动效判定在 JS 里,走共享的 prefersReducedMotion(不再各抄一份 matchMedia)
+    expect(index).toContain('import { prefersReducedMotion } from "../../engine/view25d"');
+    expect(index).toContain("const soft = prefersReducedMotion()");
+    expect(index).not.toContain("matchMedia");
     expect(index).toContain("CLEAR_ANIM_SEC");
   });
 

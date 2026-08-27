@@ -185,6 +185,30 @@ export function respectReducedMotion(cam: View25dCamera, reduced: boolean): View
   return reduced ? { ...c, kind: "flat" } : c;
 }
 
+/** `matchMedia` 的最小形状:只要能问一句、能读 matches 就够了 */
+export type MediaQueryLike = (query: string) => { matches?: boolean } | null | undefined;
+
+/** 减弱动效的那条媒体查询,写成常量免得各家抄错空格 */
+export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+/**
+ * 系统有没有要求「减弱动效」。
+ *
+ * `respectReducedMotion` 只负责把相机降级,谁来算这个布尔值一直没人管,
+ * 于是几款游戏各抄了一份 `matchMedia` 的 try/catch。收到这里统一一份:
+ * 拿不到 `matchMedia`、调用抛异常、返回 null、返回的对象没有 `matches`,
+ * 一律当「没要求减弱」返回 false —— 宁可动效照旧,也不要因为读不到偏好就把画面全静了。
+ */
+export function prefersReducedMotion(mm?: MediaQueryLike | null): boolean {
+  const query = mm ?? (globalThis as { matchMedia?: MediaQueryLike }).matchMedia;
+  if (typeof query !== "function") return false;
+  try {
+    return query(REDUCED_MOTION_QUERY)?.matches === true;
+  } catch {
+    return false;
+  }
+}
+
 const STYLE_ID = "view25d-vars";
 
 /** 可选:注入一次 CSS 变量(带固定 id,重复调用不重复插入) */

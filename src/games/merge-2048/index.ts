@@ -5,6 +5,7 @@ export { meta };
 // 188 关战役 + 同一发牌序列的对战竞速 + 马拉松无尽 + 左右两块盘的同屏双人,对手是本机假人,全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { save } from "../../engine/save";
+import { prefersReducedMotion } from "../../engine/view25d";
 import {
   DIRS,
   EMPTY,
@@ -142,18 +143,6 @@ export const MG_CSS = `
 }
 `;
 
-function reducedMotion(): boolean {
-  try {
-    return Boolean(
-      (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia?.(
-        "(prefers-reduced-motion: reduce)"
-      )?.matches
-    );
-  } catch {
-    return false;
-  }
-}
-
 /** 键盘按下的这个键对应哪个方向;`who` 决定认哪一套键位 */
 export function keyToDir(key: string, who: "duo" | "star"): Dir | null {
   const k = key.length === 1 ? key.toLowerCase() : key;
@@ -263,7 +252,7 @@ interface Seat {
 }
 
 function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
-  const soft = reducedMotion();
+  const soft = prefersReducedMotion();
   const rand = rng(opts.seed);
   const size = opts.start.length;
   const cell = Math.max(34, Math.round(opts.cell));
