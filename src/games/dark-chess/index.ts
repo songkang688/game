@@ -130,6 +130,9 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     turnChip.textContent = paused ? "已暂停" : `轮到${who}`;
     turnChip.className = state.turn === "duo" ? "dc-chip dc-turn dc-hot" : "dc-chip dc-turn";
     plyChip.textContent = `第 ${state.plies + 1} 手`;
+    // 双人同屏时两个人的取消键不一样,按钮上写轮到的那位那一套
+    cancelBtn.textContent =
+      opts.rival === "human" && state.turn === "star" ? "取消选择 (K)" : "取消选择 (G)";
     // 连着 QUIET_LIMIT 手不吃不翻就判和。快到线了才把倒数摆出来 ——
     // 一上来就挂个计数会喧宾夺主,可到了跟前不说一声,孩子只会觉得「怎么突然就结束了」。
     const left = QUIET_LIMIT - state.quiet;
@@ -211,7 +214,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   });
 
   const onCancel = (): void => {
-    board?.refresh();
+    board?.cancel();
     setNote("取消选择啦，重新点一枚。");
   };
   const onPause = (): void => {

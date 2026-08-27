@@ -2,7 +2,8 @@
  * 翻翻暗棋 · 棋盘视图。
  *
  * 32 个格子就是 32 个按钮，点一下翻子，再点一下走子；
- * 键盘用 WASD / 方向键挪光标，F 确认、G 取消。
+ * 键盘朵朵用 WASD + F / G，星星用方向键 + L / K，各管各的一个光标。
+ * 单人局里方向键与 L / K 是朵朵的别名，老键位一条都不丢。
  * 翻子和吃子都有动画，不许瞬变。
  */
 import { COLS, ROWS, colOf, indexOf, labelOf, rowOf, type Color } from "./board";
@@ -74,9 +75,11 @@ export interface BoardHandle {
   refresh: () => void;
   /** 播一段翻子 / 吃子动画，结束后回调 */
   animate: (kind: "flip" | "capture", at: number, done: () => void) => void;
+  /** 收回当前这一方选中的子（取消键 / 取消按钮共用） */
+  cancel: (side?: Side) => void;
   destroy: () => void;
-  /** 单测用：当前光标在哪一格 */
-  cursor: () => number;
+  /** 单测用：某一方的光标在哪一格（不传就是屏幕上画着的那一个） */
+  cursor: (side?: Side) => number;
   /** 单测用：当前选中的是哪一格（没选是 -1） */
   selected: () => number;
 }
@@ -95,18 +98,29 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
 
   const cells: HTMLButtonElement[] = [];
   let selected = -1;
-  let cursor = 0;
+  /** 一人一个光标：朵朵从左上角起，星星从右下角起，谁也拨不走谁的 */
+  const cursors: Record<Side, number> = { duo: 0, star: ROWS * COLS - 1 };
   let targets: number[] = [];
   const timers: Array<ReturnType<typeof setTimeout>> = [];
   let destroyed = false;
+
+  /** 单人局里星星那一套键（方向键 + L / K）也归朵朵，老键位一条都不丢 */
+  const starSeat: Side = opts.humans.includes("star") ? "star" : "duo";
 
   function humanTurn(): boolean {
     return opts.humans.includes(state.turn);
   }
 
-  function clickCell(i: number): void {
+  /** 屏幕上只画一个光标：轮到谁就画谁的；电脑回合里画留在原地的那位真人的 */
+  function activeSeat(): Side {
+    return humanTurn() ? state.turn : (opts.humans[0] ?? "duo");
+  }
+
+  function clickCell(i: number, side: Side = activeSeat()): void {
     if (destroyed || status(state).kind !== "playing" || !humanTurn()) return;
-    cursor = i;
+    // 双人同屏：不是你的回合，你的确认键连光标都挪不动，更别说替对方落子
+    if (side !== state.turn) return;
+    cursors[side] = i;
     const c = state.cells[i];
     if (selected >= 0 && targets.includes(i)) {
       const from = selected;
@@ -148,29 +162,49 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     cells.push(b);
   }
 
-  function moveCursor(dr: number, dc: number): void {
-    const r = Math.max(0, Math.min(ROWS - 1, rowOf(cursor) + dr));
-    const c = Math.max(0, Math.min(COLS - 1, colOf(cursor) + dc));
-    cursor = indexOf(r, c);
+  function moveCursor(dr: number, dc: number, side: Side = activeSeat()): void {
+    if (destroyed) return;
+    const from = cursors[side];
+    const r = Math.max(0, Math.min(ROWS - 1, rowOf(from) + dr));
+    const c = Math.max(0, Math.min(COLS - 1, colOf(from) + dc));
+    cursors[side] = indexOf(r, c);
     refresh();
   }
+
+  function cancel(side: Side = activeSeat()): void {
+    if (destroyed) return;
+    // 选中的那一枚归当前该走的那一方，别人的取消键碰不着
+    if (side !== activeSeat()) return;
+    selected = -1;
+    targets = [];
+    refresh();
+  }
+
+  // 两套键位各管各的座位：朵朵 WASD + F / G，星星 方向键 + L / K
+  const DUO_MOVE: Record<string, [number, number]> = {
+    w: [-1, 0],
+    s: [1, 0],
+    a: [0, -1],
+    d: [0, 1],
+  };
+  const STAR_MOVE: Record<string, [number, number]> = {
+    arrowup: [-1, 0],
+    arrowdown: [1, 0],
+    arrowleft: [0, -1],
+    arrowright: [0, 1],
+  };
 
   function onKey(e: KeyboardEvent): void {
     if (destroyed) return;
     const k = e.key.toLowerCase();
-    const starTurn = state.turn === "star" && opts.humans.includes("star");
-    const useArrows = starTurn || opts.humans.length === 1;
     let handled = true;
-    if (k === "w" || (useArrows && k === "arrowup")) moveCursor(-1, 0);
-    else if (k === "s" || (useArrows && k === "arrowdown")) moveCursor(1, 0);
-    else if (k === "a" || (useArrows && k === "arrowleft")) moveCursor(0, -1);
-    else if (k === "d" || (useArrows && k === "arrowright")) moveCursor(0, 1);
-    else if (k === "f" || (starTurn && k === "l")) clickCell(cursor);
-    else if (k === "g" || (starTurn && k === "k")) {
-      selected = -1;
-      targets = [];
-      refresh();
-    } else handled = false;
+    if (DUO_MOVE[k]) moveCursor(DUO_MOVE[k][0], DUO_MOVE[k][1], "duo");
+    else if (STAR_MOVE[k]) moveCursor(STAR_MOVE[k][0], STAR_MOVE[k][1], starSeat);
+    else if (k === "f") clickCell(cursors.duo, "duo");
+    else if (k === "l") clickCell(cursors[starSeat], starSeat);
+    else if (k === "g") cancel("duo");
+    else if (k === "k") cancel(starSeat);
+    else handled = false;
     if (handled) e.preventDefault();
   }
 
@@ -202,7 +236,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       }
       if (i === selected) classes.push("dc-sel");
       if (targets.includes(i)) classes.push("dc-can");
-      if (i === cursor) classes.push("dc-cursor");
+      if (i === cursors[activeSeat()]) classes.push("dc-cursor");
       b.className = classes.join(" ");
     }
     if (opts.showCounter) {
@@ -238,7 +272,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   return {
     refresh,
     animate,
-    cursor: () => cursor,
+    cancel,
+    cursor: (side: Side = activeSeat()) => cursors[side],
     selected: () => selected,
     destroy() {
       destroyed = true;
