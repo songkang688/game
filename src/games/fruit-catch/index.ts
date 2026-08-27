@@ -49,6 +49,7 @@ import {
   rainMiss,
   rainPlan,
   rainWord,
+  scoreFor,
   starsFor,
   steadyMul,
   windOffset,
@@ -58,6 +59,19 @@ import {
   type Player,
   type RainState
 } from "./logic";
+import {
+  FcFx,
+  drawFcBasket,
+  drawFcBeltArrow,
+  drawFcFlower,
+  drawFcItemBody,
+  drawFcScene,
+  drawFcStarBadge,
+  fcSpinAngle,
+  fruitColorOf,
+  fruitKindOf
+} from "./visual";
+import type { FruitKitKind } from "../../art/kit/fruit";
 
 /** 1.1 传送果道：传送带的高度与停留时长 */
 const BELT_Y = 140;
@@ -77,7 +91,7 @@ function reducedMotion(): boolean {
 const CSS = `
 .frc-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF9E8, #FFEFEF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
 .frc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
-.frc-badge { background: #fff; border-radius: 14px; padding: 5px 9px; font-weight: 700; color: #D08A3E; box-shadow: 0 2px 6px rgba(220,170,100,.25); font-size: 14px; white-space: nowrap; }
+.frc-badge { background: #fff; border: 1px solid rgba(220,170,100,.35); border-radius: 14px; padding: 5px 9px; font-weight: 700; color: #D08A3E; box-shadow: 0 2px 6px rgba(220,170,100,.25); font-size: 14px; white-space: nowrap; }
 .frc-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .frc-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFD26E, #FF9E5E); border-radius: 8px; transition: width .3s; }
 .frc-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; }
@@ -108,7 +122,7 @@ function el<T extends HTMLElement = HTMLElement>(tag: string, cls?: string, text
 }
 
 // ---------------------------------------------------------------------------
-// 画水果：手绘感的托底 + 一眼能分辨的道具样式
+// 画水果：全部自绘（六剪影 + 三停渐变），emoji 只当「主题选果」的钥匙用
 // ---------------------------------------------------------------------------
 
 interface Drawable {
@@ -117,24 +131,15 @@ interface Drawable {
   kind: FruitKind;
   emoji: string;
   bonus: boolean;
+  /** 风摆方向，顺带当慢旋相位用（纯视觉） */
+  swing?: number;
 }
 
 function drawItem(c2d: CanvasRenderingContext2D, it: Drawable, t: number, calm: boolean): void {
-  const info = FRUITS[it.kind];
   c2d.save();
   c2d.translate(it.x, it.y);
 
-  if (info.warn) {
-    // 碰不得的东西：红圈 + 轻微脉动，离得老远就看得出来
-    const pulse = calm ? 1 : 1 + Math.sin(t * 6) * 0.08;
-    c2d.strokeStyle = "rgba(226,86,86,.85)";
-    c2d.lineWidth = 3;
-    c2d.setLineDash([5, 4]);
-    c2d.beginPath();
-    c2d.arc(0, -8, 21 * pulse, 0, Math.PI * 2);
-    c2d.stroke();
-    c2d.setLineDash([]);
-  } else if (it.kind === "freeze") {
+  if (it.kind === "freeze") {
     c2d.fillStyle = "rgba(150,215,255,.5)";
     c2d.beginPath();
     c2d.roundRect(-19, -27, 38, 38, 10);
@@ -145,12 +150,7 @@ function drawItem(c2d: CanvasRenderingContext2D, it: Drawable, t: number, calm: 
     c2d.beginPath();
     c2d.arc(0, -8, 20, 0, Math.PI * 2);
     c2d.stroke();
-  } else if (it.kind === "gold") {
-    c2d.fillStyle = "rgba(255,214,120,.55)";
-    c2d.beginPath();
-    c2d.arc(0, -8, 20, 0, Math.PI * 2);
-    c2d.fill();
-  } else if (it.bonus) {
+  } else if (it.bonus && !FRUITS[it.kind].warn) {
     // 奖励果：淡淡一圈，告诉孩子「接到算白赚，漏了不扣爱心」
     c2d.strokeStyle = "rgba(120,190,140,.6)";
     c2d.lineWidth = 2;
@@ -161,56 +161,49 @@ function drawItem(c2d: CanvasRenderingContext2D, it: Drawable, t: number, calm: 
     c2d.setLineDash([]);
   }
 
-  c2d.font = "30px serif";
-  c2d.textAlign = "center";
-  c2d.fillText(it.emoji, 0, 0);
+  // 下落慢旋只给会滚的果子（±8°，reduced 停）；警告物的红圈在火花层上面单独画
+  const rot = it.kind === "fruit" || it.kind === "heavy" ? fcSpinAngle(t, (it.swing ?? 1) * 1.7, calm) : 0;
+  drawFcItemBody(c2d, it.kind, it.emoji, 15, rot);
   c2d.restore();
 }
 
-function drawBasket(c2d: CanvasRenderingContext2D, x: number, press: number, tint?: string): void {
+/**
+ * 警告红圈（功能件，图层序 ⑦）：脉动参数与 1.2 一字不差——
+ * sin(t*6)*0.08、半径 21、线宽 3、虚线 [5,4]；reduced 下停脉动但圈保留。
+ */
+function drawWarnRing(c2d: CanvasRenderingContext2D, x: number, y: number, t: number, calm: boolean): void {
+  const pulse = calm ? 1 : 1 + Math.sin(t * 6) * 0.08;
   c2d.save();
-  if (tint) {
-    c2d.fillStyle = tint;
-    c2d.beginPath();
-    c2d.ellipse(x, H - 12 + press, 30, 9, 0, 0, Math.PI * 2);
-    c2d.fill();
-  }
-  c2d.font = "44px serif";
-  c2d.textAlign = "center";
-  c2d.fillText("🧺", x, H - 18 + press);
+  c2d.translate(x, y);
+  c2d.strokeStyle = "rgba(226,86,86,.85)";
+  c2d.lineWidth = 3;
+  c2d.setLineDash([5, 4]);
+  c2d.beginPath();
+  c2d.arc(0, -8, 21 * pulse, 0, Math.PI * 2);
+  c2d.stroke();
+  c2d.setLineDash([]);
   c2d.restore();
 }
 
-/** 接住时溅出来的小亮点 */
-interface Spark {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
+interface BasketFx {
+  magnet?: boolean;
+  frozen?: boolean;
+  recent?: readonly FruitKitKind[];
+  calm?: boolean;
 }
 
-function stepSparks(list: Spark[], dt: number): void {
-  for (let i = list.length - 1; i >= 0; i--) {
-    const s = list[i];
-    s.x += s.vx * dt;
-    s.y += s.vy * dt;
-    s.vy += 520 * dt;
-    s.life -= dt;
-    if (s.life <= 0) list.splice(i, 1);
-  }
-}
-
-function drawSparks(c2d: CanvasRenderingContext2D, list: readonly Spark[]): void {
-  for (const s of list) {
-    c2d.globalAlpha = Math.max(0, Math.min(1, s.life * 3));
-    c2d.fillStyle = s.color;
-    c2d.beginPath();
-    c2d.arc(s.x, s.y, 3, 0, Math.PI * 2);
-    c2d.fill();
-  }
-  c2d.globalAlpha = 1;
+/** 自绘编织藤篮：篮身压扁回弹沿用 press 变量，道具状态只读映射 */
+function drawBasket(c2d: CanvasRenderingContext2D, x: number, press: number, tint?: string, fx?: BasketFx): void {
+  drawFcBasket(c2d, {
+    x,
+    h: H,
+    press,
+    reduced: fx?.calm ?? false,
+    tint,
+    magnet: fx?.magnet,
+    frozen: fx?.frozen,
+    recent: fx?.recent
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +296,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   let magnetLeft = 0;
   let press = 0;
   const items: Live[] = [];
-  const sparks: Spark[] = [];
+  /** 纯视觉：星屑 / 飘分 / 彩虹 / 落空弹地的粒子池（destroy 时 clear 归零） */
+  const fx = new FcFx(calm);
+  /** 纯视觉：最近接住的果子，摆进篮口裁剪层（最多显示 3 个） */
+  const recentCatch: FruitKitKind[] = [];
 
   const wrap = el("div", "frc-wrap");
   wrap.innerHTML = `
@@ -341,7 +337,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   if ((cfg.heavyChance ?? 0) > 0) tips.push("沉水果顶两颗但会压慢篮子");
   if (conveyor !== 0) tips.push("水果会先在传送带上滑一段");
   if (cfg.combo) tips.push(`连续接住攒连击，满 ${COMBO_EVERY} 连多算一颗`);
-  if (cfg.badChance > 0) tips.push(`别接 ${theme.bad}`);
+  if (cfg.badChance > 0) tips.push("皱眉的小捣蛋云别接，看到红圈就绕开");
   if ((cfg.chiliChance ?? 0) > 0) tips.push("红圈里的小辣椒掉得最慢，绕开它");
   if ((cfg.freezeChance ?? 0) > 0) tips.push("冰冻果一接，全场定住 2 秒");
   if ((cfg.magnetChance ?? 0) > 0) tips.push("磁铁果一接，3 秒里篮口变大");
@@ -367,54 +363,18 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     powerEl.textContent = bits.join(" ");
   }
 
-  function burst(x: number, y: number, color: string): void {
-    if (calm) return;
-    for (let i = 0; i < 7; i++) {
-      const a = Math.random() * Math.PI * 2;
-      sparks.push({
-        x,
-        y,
-        vx: Math.cos(a) * 110,
-        vy: Math.sin(a) * 110 - 70,
-        life: 0.28 + Math.random() * 0.18,
-        color
-      });
-    }
-  }
-
   function draw(): void {
     if (!c2d) return;
     c2d.clearRect(0, 0, W, H);
-    c2d.font = "26px serif";
-    c2d.textAlign = "left";
-    if (cfg.theme === 9) {
-      c2d.fillText("🌠", 40, 50);
-      c2d.fillText("⭐", 250, 90);
-    } else if (cfg.theme >= 6) {
-      c2d.fillText("☁️", 40, 50);
-      c2d.fillText("🌤️", 250, 90);
-    } else if (cfg.theme === 5) {
-      c2d.fillText("🌙", 40, 50);
-      c2d.fillText("⭐", 250, 90);
-    } else if (cfg.theme === 4) {
-      c2d.fillText("🌧️", 40, 50);
-      c2d.fillText("☁️", 250, 90);
-    } else if (cfg.theme === 3) {
-      c2d.fillText("🍃", 40, 50);
-      c2d.fillText("🌬️", 250, 90);
-    } else {
-      c2d.fillText("☁️", 40, 50);
-      c2d.fillText("🌈", 250, 90);
-    }
+    // 图层序（FC_LAYERS）：① 天空日月 ② 程序云 ③ 果树枝草地
+    drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
     if (conveyor !== 0) {
       c2d.fillStyle = "rgba(140,120,160,.35)";
       c2d.beginPath();
       c2d.roundRect(16, BELT_Y + 8, W - 32, 8, 4);
       c2d.fill();
-      c2d.font = "14px serif";
       c2d.fillStyle = "rgba(90,70,120,.75)";
-      const arrow = conveyor > 0 ? "▶" : "◀";
-      for (let x = 40; x < W - 30; x += 60) c2d.fillText(arrow, x, BELT_Y + 4);
+      for (let x = 40; x < W - 30; x += 60) drawFcBeltArrow(c2d, x, BELT_Y, conveyor > 0 ? 1 : -1);
     }
     if (magnetLeft > 0) {
       c2d.strokeStyle = "rgba(150,110,220,.35)";
@@ -425,9 +385,18 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         c2d.stroke();
       }
     }
+    // ④ 下落物 → ⑤ 篮子（含篮内裁剪层）→ ⑥ 火花/彩虹/飘分 → ⑦ 警告红圈
     for (const it of items) if (!it.gone) drawItem(c2d, { ...it, kind: it.plan.kind, bonus: it.plan.bonus }, clock, calm);
-    drawSparks(c2d, sparks);
-    for (const bx of basketXs()) drawBasket(c2d, bx, press);
+    for (const bx of basketXs())
+      drawBasket(c2d, bx, press, undefined, {
+        magnet: magnetLeft > 0,
+        frozen: freezeLeft > 0,
+        recent: recentCatch,
+        calm
+      });
+    fx.draw(c2d, H - 10);
+    for (const it of items)
+      if (!it.gone && FRUITS[it.plan.kind].warn) drawWarnRing(c2d, it.x, it.y, clock, calm);
     if (freezeLeft > 0) {
       c2d.fillStyle = "rgba(170,225,255,.18)";
       c2d.fillRect(0, 0, W, H);
@@ -461,6 +430,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   function onGoodCatch(gain: number, note?: string): void {
     caught += gain;
     combo++;
+    // 连接 5 个不落地：篮上方小彩虹一闪（纯视觉，reduced 关闭）
+    if (combo % COMBO_EVERY === 0) fx.flashRainbow(basketX);
     if (cfg.combo && combo > 0 && combo % COMBO_EVERY === 0) {
       caught += 1;
       ctx.sfx("coin");
@@ -499,16 +470,23 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       missed++;
       combo = 0;
       ctx.sfx("oops");
+      fx.hazardPuff(it.x, CATCH_Y - 10);
       msgEl.textContent =
         p.kind === "chili"
           ? "🌶️ 小辣椒不能接～它掉得最慢，看到红圈就提前让开！"
-          : `${theme.bad} 不能接～先规划一条避开它的路线再考虑接水果！`;
+          : "小捣蛋云不能接～先规划一条避开它的路线再考虑接水果！";
       updateTop();
       if (missed >= MAX_MISS) finish(false);
       return;
     }
     press = PRESS_PX;
-    burst(it.x, CATCH_Y, p.kind === "gold" ? "#FFC94D" : "#FF9E5E");
+    fx.catchBurst(it.x, CATCH_Y - 6, p.kind === "gold" ? "#FFC94D" : "#FF9E5E");
+    const gainShown = p.kind === "gold" ? (cfg.theme === 5 ? 3 : 2) : p.kind === "heavy" ? 2 : 1;
+    fx.scoreFloat(it.x, CATCH_Y - 30, `+${gainShown}`);
+    if (p.kind === "fruit" || p.kind === "heavy") {
+      recentCatch.push(fruitKindOf(it.emoji));
+      if (recentCatch.length > 6) recentCatch.shift();
+    }
     if (p.kind === "gold") {
       ctx.sfx("coin");
       onGoodCatch(cfg.theme === 5 ? 3 : 2, cfg.theme === 5 ? "✨ 萤火虫一只顶三个！" : "🌟 亮的一颗顶两颗！");
@@ -539,7 +517,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     slowLeft = Math.max(0, slowLeft - dt);
     basketX = clampBasket(basketX + dir * basketSpeedNow(slowLeft) * dt);
     press = Math.max(0, press - dt * 24);
-    stepSparks(sparks, dt);
+    fx.step(dt);
 
     const wasFrozen = freezeLeft > 0;
     freezeLeft = Math.max(0, freezeLeft - dt);
@@ -560,6 +538,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (ended) return;
       } else if (it.y > CATCH_Y + 16) {
         items.splice(i, 1);
+        // 落空的果子在草地上弹一下渐隐（纯视觉，不改扣分逻辑）
+        if (!isHazard(it.plan.kind)) fx.missFade(it.x, fruitKindOf(it.emoji), fruitColorOf(it.emoji));
         if (!it.plan.bonus && missCostsLife(it.plan.kind)) {
           missed++;
           combo = 0;
@@ -650,6 +630,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
+      // 粒子与篮内小果全清零，离场一件不剩
+      fx.clear();
+      items.length = 0;
+      recentCatch.length = 0;
       jan.destroy();
       wrap.remove();
     }
@@ -691,7 +675,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
   let over = false;
   let st: DuoState = duoInit();
   const items: Live[] = [];
-  const sparks: Spark[] = [];
+  const fx = new FcFx(calm);
 
   const pos: Record<Player, number> = { doudou: W * 0.25, star: W * 0.75 };
   const dirs: Record<Player, number> = { doudou: 0, star: 0 };
@@ -717,7 +701,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
     </div>
     <div class="frc-msg">朵朵按 A / D，星星按 ← / →；手机就按下面四个大按钮，或者各按住自己那半边屏幕拖。</div>
     <div class="frc-legend">
-      <span>🍎 一颗算一个</span><span>🌟 一颗顶两个</span><span>🌶️💣 别接</span>
+      <span>🍎 一颗算一个</span><span>🌟 一颗顶两个</span><span>🌶️ 和小捣蛋云别接</span>
     </div>
   `;
   host.appendChild(wrap);
@@ -743,6 +727,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
   function draw(): void {
     if (!c2d) return;
     c2d.clearRect(0, 0, W, H);
+    drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
     c2d.strokeStyle = "rgba(140,140,170,.35)";
     c2d.setLineDash([6, 6]);
     c2d.beginPath();
@@ -750,16 +735,21 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
     c2d.lineTo(W / 2, H);
     c2d.stroke();
     c2d.setLineDash([]);
-    c2d.font = "13px sans-serif";
+    // 半屏名牌：自绘小花 / 小星标 + 名字文字（不再用 emoji 直出）
+    c2d.font = "bold 13px sans-serif";
     c2d.textAlign = "center";
+    drawFcFlower(c2d, W * 0.25 - 22, 46, 7, PLAYERS.doudou.color);
     c2d.fillStyle = PLAYERS.doudou.color;
-    c2d.fillText(`${PLAYERS.doudou.emoji} ${PLAYERS.doudou.name}`, W * 0.25, 20);
+    c2d.fillText(PLAYERS.doudou.name, W * 0.25 + 6, 50);
+    drawFcStarBadge(c2d, W * 0.75 - 22, 46, 8, PLAYERS.star.color);
     c2d.fillStyle = PLAYERS.star.color;
-    c2d.fillText(`${PLAYERS.star.emoji} ${PLAYERS.star.name}`, W * 0.75, 20);
+    c2d.fillText(PLAYERS.star.name, W * 0.75 + 6, 50);
     for (const it of items) if (!it.gone) drawItem(c2d, { ...it, kind: it.plan.kind, bonus: false }, clock, calm);
-    drawSparks(c2d, sparks);
-    drawBasket(c2d, pos.doudou, press.doudou, PLAYERS.doudou.color);
-    drawBasket(c2d, pos.star, press.star, PLAYERS.star.color);
+    drawBasket(c2d, pos.doudou, press.doudou, PLAYERS.doudou.color, { calm });
+    drawBasket(c2d, pos.star, press.star, PLAYERS.star.color, { calm });
+    fx.draw(c2d, H - 10);
+    for (const it of items)
+      if (!it.gone && FRUITS[it.plan.kind].warn) drawWarnRing(c2d, it.x, it.y, clock, calm);
     c2d.textAlign = "left";
   }
 
@@ -782,7 +772,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
       box.remove();
       st = duoInit();
       items.length = 0;
-      sparks.length = 0;
+      fx.clear();
       plan = duoPlan();
       planAt = 0;
       clock = 0;
@@ -798,16 +788,13 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
     if (isHazard(it.plan.kind)) {
       st = duoMiss(st, who);
       api.play("oops");
+      fx.hazardPuff(it.x, CATCH_Y - 10);
       msgEl.textContent = `${PLAYERS[who].name}接到${FRUITS[it.plan.kind].name}啦，没关系，下一颗躲开就好～`;
       return;
     }
     press[who] = PRESS_PX;
-    if (!calm) {
-      for (let i = 0; i < 6; i++) {
-        const a = Math.random() * Math.PI * 2;
-        sparks.push({ x: it.x, y: CATCH_Y, vx: Math.cos(a) * 100, vy: Math.sin(a) * 100 - 60, life: 0.3, color: PLAYERS[who].color });
-      }
-    }
+    fx.catchBurst(it.x, CATCH_Y - 6, PLAYERS[who].color);
+    fx.scoreFloat(it.x, CATCH_Y - 30, `+${FRUITS[it.plan.kind].gain}`, PLAYERS[who].color);
     st = duoCatch(st, who, FRUITS[it.plan.kind].gain);
     api.play(it.plan.kind === "gold" ? "coin" : "pop");
     updateTop();
@@ -823,7 +810,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
       pos[who] = limit(who, pos[who] + dirs[who] * BASKET_SPEED * dt);
       press[who] = Math.max(0, press[who] - dt * 24);
     }
-    stepSparks(sparks, dt);
+    fx.step(dt);
 
     while (planAt < plan.length && plan[planAt].at <= clock) {
       const p = plan[planAt++];
@@ -852,6 +839,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
         if (over) return;
       } else if (it.y > CATCH_Y + 16) {
         items.splice(i, 1);
+        if (!isHazard(it.plan.kind)) fx.missFade(it.x, fruitKindOf(it.emoji), fruitColorOf(it.emoji));
       }
     }
 
@@ -935,6 +923,8 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
     destroy() {
       over = true;
       cancelAnimationFrame(raf);
+      fx.clear();
+      items.length = 0;
       jan.destroy();
       wrap.remove();
     }
@@ -963,7 +953,8 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
   let freezeLeft = 0;
   let press = 0;
   const items: Live[] = [];
-  const sparks: Spark[] = [];
+  const fx = new FcFx(calm);
+  const recentCatch: FruitKitKind[] = [];
 
   const wrap = el("div", "frc-wrap");
   wrap.innerHTML = `
@@ -1014,7 +1005,8 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
   function reset(): void {
     st = rainInit();
     items.length = 0;
-    sparks.length = 0;
+    fx.clear();
+    recentCatch.length = 0;
     planAt = 0;
     clock = 0;
     basketX = W / 2;
@@ -1036,6 +1028,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
   function draw(): void {
     if (!c2d) return;
     c2d.clearRect(0, 0, W, H);
+    drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
     if (magnetLeft > 0) {
       c2d.strokeStyle = "rgba(150,110,220,.35)";
       c2d.lineWidth = 2;
@@ -1044,8 +1037,15 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
       c2d.stroke();
     }
     for (const it of items) if (!it.gone) drawItem(c2d, { ...it, kind: it.plan.kind, bonus: it.plan.bonus }, clock, calm);
-    drawSparks(c2d, sparks);
-    drawBasket(c2d, basketX, press);
+    drawBasket(c2d, basketX, press, undefined, {
+      magnet: magnetLeft > 0,
+      frozen: freezeLeft > 0,
+      recent: recentCatch,
+      calm
+    });
+    fx.draw(c2d, H - 10);
+    for (const it of items)
+      if (!it.gone && FRUITS[it.plan.kind].warn) drawWarnRing(c2d, it.x, it.y, clock, calm);
     if (freezeLeft > 0) {
       c2d.fillStyle = "rgba(170,225,255,.18)";
       c2d.fillRect(0, 0, W, H);
@@ -1084,7 +1084,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
     lastTime = now;
     basketX = clampBasket(basketX + dir * BASKET_SPEED * dt);
     press = Math.max(0, press - dt * 24);
-    stepSparks(sparks, dt);
+    fx.step(dt);
     const wasFrozen = freezeLeft > 0;
     freezeLeft = Math.max(0, freezeLeft - dt);
     magnetLeft = Math.max(0, magnetLeft - dt);
@@ -1117,15 +1117,17 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
         st = rainCatch(st, kind);
         if (isHazard(kind)) {
           api.play("oops");
+          fx.hazardPuff(it.x, CATCH_Y - 10);
           msgEl.textContent = `接到${FRUITS[kind].name}啦，断了一次连接～看到红圈就绕开！`;
         } else {
           press = PRESS_PX;
-          if (!calm) {
-            for (let k = 0; k < 6; k++) {
-              const a = Math.random() * Math.PI * 2;
-              sparks.push({ x: it.x, y: CATCH_Y, vx: Math.cos(a) * 110, vy: Math.sin(a) * 110 - 70, life: 0.3, color: "#FF9E5E" });
-            }
+          fx.catchBurst(it.x, CATCH_Y - 6, kind === "gold" ? "#FFC94D" : "#FF9E5E");
+          fx.scoreFloat(it.x, CATCH_Y - 30, `+${scoreFor(kind, st.combo - 1)}`);
+          if (kind === "fruit" || kind === "heavy") {
+            recentCatch.push(fruitKindOf(it.emoji));
+            if (recentCatch.length > 6) recentCatch.shift();
           }
+          if (st.combo > 0 && st.combo % COMBO_EVERY === 0) fx.flashRainbow(basketX);
           if (kind === "freeze") freezeLeft = FREEZE_SECONDS;
           if (kind === "magnet") magnetLeft = MAGNET_SECONDS;
           api.play(kind === "gold" ? "coin" : "pop");
@@ -1137,6 +1139,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
         }
       } else if (it.y > CATCH_Y + 16) {
         items.splice(i, 1);
+        if (!isHazard(it.plan.kind)) fx.missFade(it.x, fruitKindOf(it.emoji), fruitColorOf(it.emoji));
         st = rainMiss(st, it.plan.kind, it.plan.bonus);
         if (!it.plan.bonus && missCostsLife(it.plan.kind)) {
           api.play("oops");
@@ -1221,6 +1224,9 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
     destroy() {
       over = true;
       cancelAnimationFrame(raf);
+      fx.clear();
+      items.length = 0;
+      recentCatch.length = 0;
       jan.destroy();
       wrap.remove();
     }
