@@ -712,7 +712,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   function drawIceCracks(inset: number, slabH: number): void {
     if (!g) return;
     const f = lv.field;
-    g.strokeStyle = withAlpha(shade(BC_COLORS.bcIceEdge, -22), 0.9);
+    // 修复员 G10:线色透明度 0.9 → 0.96(加深一档),线宽与根数不动,冰面不画花
+    g.strokeStyle = withAlpha(shade(BC_COLORS.bcIceEdge, -22), 0.96);
     g.lineWidth = 0.35;
     g.lineCap = "round";
     const crack = (x: number, y: number): void => {
@@ -815,12 +816,14 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     g.fillStyle = CH_COLOR;
     g.fill();
     g.restore();
-    // 地板反射斑两块(裁进地面里)
+    // 地板反射斑三块(裁进地面里)。修复员 G10:第 1 关观感近平涂,
+    // 按 learner 备选方案补第三块小斑(0.18×min)错开放置,半径与前两块不动
     g.save();
     traceField(inset);
     g.clip();
     drawFloorGlow(g, f.w * 0.36, f.h * 0.32, Math.min(f.w, f.h) * 0.3);
     drawFloorGlow(g, f.w * 0.66, f.h * 0.64, Math.min(f.w, f.h) * 0.22);
+    drawFloorGlow(g, f.w * 0.24, f.h * 0.74, Math.min(f.w, f.h) * 0.18);
     g.restore();
     drawIceCracks(inset, slabH);
 
