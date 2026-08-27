@@ -11,7 +11,7 @@
 import { TOTAL_LEVELS, type Chapter } from "../level99";
 import { COLOR_GROUPS, GROUP_TILES, START_CASH, STATION_TILES, type ColorGroup } from "./board";
 import { advanceTurn, playTurn, type MatchRules } from "./economy";
-import { netWorth } from "./rent";
+import { deedsOf, netWorth, type EstateState } from "./rent";
 import { buildContext, buildState, type AiTier } from "./ai";
 
 export const CHAPTERS: Chapter[] = [
@@ -43,8 +43,8 @@ export function chapterStartOf(ci: number): number {
 }
 
 export type LevelGoal =
-  | { kind: "netWorth"; target: number }
-  | { kind: "bankrupt"; who: number };
+  | { kind: "netWorth"; target: number; minDeeds: number }
+  | { kind: "bankrupt"; who: number; minDeeds: number };
 
 export interface PresetDeed {
   tile: number;
@@ -186,35 +186,62 @@ const GROWTH_RAMP = [0.05, 0.06, 0.07, 0.06, 0.06, 0.12, 0.07, 0];
 const ROUNDS_BY_CHAPTER = [14, 14, 16, 16, 18, 18, 18, 26];
 
 /**
+ * 本关至少要新拿下几处产业（在开局赠地之外）。
+ *
+ * 只看净资产的话，绕圈领工资就能把线蹭过去：棋盘 40 格、过起点白拿 200 星币，
+ * 而各章的涨幅只有 5% ～ 22%，一圈工资往往就够了。加这道门是要孩子
+ * 至少真的下场买两块地，本章教的东西才用得上。
+ * 第 6 章「抵押周转」开局只有 320 星币，买第二块地会直接把自己压破产，所以只要 1 处。
+ * 188 关都能在回合预算内买够，由 `levels.test.ts` 的逐关回放兜底。
+ */
+const BUYS_BY_CHAPTER = [2, 2, 2, 2, 2, 1, 2, 2];
+
+/**
+ * 第 8 章残局给对手的起始现金底数。
+ *
+ * 原来是 150：对手常常第 1 ～ 2 个回合就把自己付破产了，朵朵还没轮到第二次掷骰，
+ * 这一章要教的「算准租金、一点点收干净」根本来不及发生。抬到这个数之后，
+ * 对手至少扛得住几脚租金，残局才有得算。
+ */
+const CH8_RIVAL_CASH = 320;
+
+/**
  * 少数关卡按公式生成后跑不通（骰运太差 / 对手开局就抢走关键地），
  * 这里给它们换一个 seed。数值由 `levels.test.ts` 的回放测试反查出来。
  */
 const SEED_FIX: Readonly<Record<number, number>> = {
+  59: 1,
+  60: 2,
   62: 1,
   63: 1,
-  76: 1,
+  76: 4,
   79: 2,
   81: 5,
   82: 1,
-  84: 1,
+  84: 4,
   86: 1,
   88: 2,
   90: 1,
+  92: 3,
   93: 1,
   95: 2,
+  100: 2,
   101: 2,
   116: 1,
-  118: 2,
+  118: 4,
   122: 1,
   123: 1,
   124: 3,
   126: 2,
   127: 2,
-  131: 2,
+  129: 4,
+  131: 3,
   132: 1,
+  134: 5,
   135: 4,
   136: 1,
   137: 2,
+  138: 3,
   139: 3,
   182: 1
 };
@@ -234,23 +261,42 @@ export function levelConfig(level: number): EstateLevel {
   const myCash = Math.round(START_CASH_BY_CHAPTER[ci] * (1 - ramp * 0.15));
   const cashes = [myCash];
   for (let i = 1; i < seats; i++) {
-    cashes.push(ci === 7 ? Math.round(150 + inCh * 6 + i * 40) : Math.round(START_CASH * (0.9 + ramp * 0.25)));
+    cashes.push(ci === 7 ? Math.round(CH8_RIVAL_CASH + inCh * 6 + i * 40) : Math.round(START_CASH * (0.9 + ramp * 0.25)));
   }
 
   const seed = 9300 + lv * 137 + (SEED_FIX[lv] ?? 0);
   const goal: LevelGoal =
     ci === 7
-      ? { kind: "bankrupt", who: 1 }
-      : { kind: "netWorth", target: 0 };
+      ? { kind: "bankrupt", who: 1, minDeeds: 0 }
+      : { kind: "netWorth", target: 0, minDeeds: 0 };
 
   const cfg: EstateLevel = { level: lv, chapter: ci, seed, seats, cashes, tiers, preset, rules, goal, rounds };
 
+  goal.minDeeds = startingDeeds(cfg) + BUYS_BY_CHAPTER[ci];
   if (goal.kind === "netWorth") {
     const start = startingNetWorth(cfg);
     const growth = GROWTH_BASE[ci] + ramp * GROWTH_RAMP[ci];
     goal.target = Math.round(start * (1 + growth));
   }
   return cfg;
+}
+
+/** 开局摆在朵朵名下的产业有几处 */
+export function startingDeeds(cfg: EstateLevel): number {
+  return cfg.preset.filter((d) => d.owner === 0).length;
+}
+
+/**
+ * 达标判定：钱到线**而且**手里的地够数。
+ *
+ * 只看净资产的话，一直点「掷骰」绕圈领工资就能把线蹭过去 ——
+ * 这一款教的买地 / 建屋 / 抵押 / 拍卖一次都用不上。所以每关都另外要求
+ * 朵朵在本关**真的把地攥到手里**（`goal.minDeeds` 是含开局赠地的绝对处数）。
+ */
+export function goalReached(cfg: EstateLevel, state: EstateState): boolean {
+  if (deedsOf(state, 0).length < cfg.goal.minDeeds) return false;
+  if (cfg.goal.kind === "bankrupt") return Boolean(state.players[cfg.goal.who]?.bankrupt);
+  return netWorth(state, 0) >= cfg.goal.target;
 }
 
 /** 开局时朵朵的净资产（目标线以它为基准） */
@@ -295,10 +341,7 @@ export function solveLevel(level: number): LevelRun {
   });
 
   let peak = netWorth(state, 0);
-  const reached = (): boolean => {
-    if (cfg.goal.kind === "bankrupt") return Boolean(state.players[cfg.goal.who]?.bankrupt);
-    return netWorth(state, 0) >= cfg.goal.target;
-  };
+  const reached = (): boolean => goalReached(cfg, state);
 
   let guard = 0;
   const maxSteps = cfg.rounds * cfg.seats + 8;
@@ -317,6 +360,7 @@ export function solveLevel(level: number): LevelRun {
   }
 
   const nw = netWorth(state, 0);
+  const short = Math.max(0, cfg.goal.minDeeds - deedsOf(state, 0).length);
   return {
     win: reached(),
     rounds: state.round,
@@ -324,17 +368,18 @@ export function solveLevel(level: number): LevelRun {
     peak,
     note:
       cfg.goal.kind === "bankrupt"
-        ? `${cfg.rounds} 回合内没能把对手清空`
-        : `净资产 ${nw}，差目标 ${Math.max(0, cfg.goal.target - peak)}`
+        ? `${cfg.rounds} 回合内没能把对手清空（还差 ${short} 处产业）`
+        : `净资产 ${nw}，差目标 ${Math.max(0, cfg.goal.target - peak)}，还差 ${short} 处产业`
   };
 }
 
 /** 关卡目标写成一句话 */
 export function goalLine(cfg: EstateLevel): string {
+  const deeds = `手里攥住 ${cfg.goal.minDeeds} 处产业`;
   if (cfg.goal.kind === "bankrupt") {
-    return `${cfg.rounds} 回合内让对手的钱包见底`;
+    return `${cfg.rounds} 回合内让对手的钱包见底，同时${deeds}`;
   }
-  return `${cfg.rounds} 回合内把净资产做到 ${cfg.goal.target} 星币`;
+  return `${cfg.rounds} 回合内把净资产做到 ${cfg.goal.target} 星币，同时${deeds}`;
 }
 
 /** 本关开放了哪些机制，写成一行小字 */

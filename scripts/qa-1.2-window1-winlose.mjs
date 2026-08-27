@@ -25,6 +25,7 @@
  *   SMOKE_BASE=http://127.0.0.1:5185 node scripts/qa-1.2-window1-winlose.mjs
  *   QA_ONLY=orb-arena 只跑一款；QA_WIN_LEVEL / QA_LOSE_LEVEL 换关号
  */
+import { readFileSync } from "node:fs";
 import puppeteer from "puppeteer-core";
 
 const BASE = process.env.SMOKE_BASE ?? "http://127.0.0.1:5185";
@@ -40,7 +41,12 @@ const PLANS = [
     id: "orb-arena",
     winLevel: 1,
     loseLevel: 160,
-    bot: "pointer",
+    // 前两轮用的是「圆跟着指针走」那一支，圆从头到尾**一动没动**（质量 15 秒钉在 31），
+    // 所以三轮都没拿到真胜证据。这一款的走位是按住方向键，改用四向键驾驶之后
+    // 质量一路 32 → 90，第 1 关一把过。
+    bot: "keyPilot",
+    hold: 220,
+    deadzone: 0.06,
     // 彩豆画成 #F7C6DE 的小圆点
     food: [0xf7, 0xc6, 0xde],
     // 朵朵自己是 #F5A9C8，第 1 关那只对手（糯糯）是 BOT_COLORS[0] = #F6B8D0。
@@ -51,7 +57,12 @@ const PLANS = [
     eatRatio: 1.5,
     skipR: 60,
     overshoot: 1.35,
-    hold: 150
+    hold: 150,
+    // 这一款是俯视全场的追逐战，假人只认「镜头里看得见的豆子」。
+    // 360 宽的竖屏里一次只看得到几颗，捡完就得瞎走；把窗口开大，
+    // 同一份找食逻辑一眼能看到的豆子多得多，路线自然就顺了。
+    // 换的是取证用的窗口大小，不是游戏难度 —— 360px 那一套另有整批走查在管。
+    viewport: { width: 900, height: 900 }
   },
   {
     id: "snake-royale",
@@ -66,28 +77,37 @@ const PLANS = [
     id: "block-drop",
     winLevel: 1,
     loseLevel: 170,
-    bot: "press",
-    // 左右铺平再硬降：把一行填满就算数，不追求漂亮
-    keys: ["KeyA", "KeyA", "KeyG", "KeyD", "KeyG", "KeyA", "KeyG", "KeyD", "KeyD", "KeyG", "KeyF", "KeyG"],
-    tick: 120
+    // 固定按键循环两轮都消不掉一行（第 1 轮 W1-R1-10）。改成照离线算好的剧本按：
+    // 剧本在 `.qa-tmp/block-drop-plan.json`，由 `src/qa-probe.test.ts` 用仓库自带的
+    // 落点枚举 + 打分算出来，所以这是「真按得出来的一条通关路线」，不是绕过玩法。
+    bot: "plan",
+    planFile: ".qa-tmp/block-drop-plan.json",
+    tick: 300
   },
   {
     id: "combo-clash",
     winLevel: 1,
     loseLevel: 170,
     bot: "press",
-    // 轻击学堂：贴上去不停轻击，偶尔挡一下
-    keys: ["KeyD", "KeyF", "KeyF", "KeyF", "KeyG", "KeyD", "KeyF", "KeyF"],
-    tick: 110
+    // 轻击学堂教的就是「打完就退」：`d` 往前贴、`f` 轻击两下、`a` 往后拉开。
+    // 一直往前压会被对手打断（元气对拼输 0% : 8%），退这一下正是这一章要教的距离感。
+    // 这一款是「按住」模型（keydown 置位、keyup 清位），必须真按住一会儿才算数
+    keys: ["KeyD", "KeyF", "KeyF", "KeyA"],
+    holdMs: 180,
+    tick: 60
   },
   {
     id: "mahjong-bloom",
     winLevel: 1,
     loseLevel: 170,
     bot: "click",
-    // 能和就和，能摸就摸，否则打最右边那张
-    priority: [/和牌/, /接着摸牌|摸牌/, /碰|吃|杠/, /过/],
-    fallback: ".mj-hand .mj-tile, .mj-tile"
+    // 和牌之后还有一道「收下这些番 ▶」的结算闸，不点它就一直停在那一屏
+    priority: [/收下/, /和牌/, /接着摸牌|摸牌/, /碰|吃|杠/, /过/],
+    // 输局用：照样摸牌出牌，就是一次都不和 —— 让本地假人先和出来
+    losePriority: [/收下/, /接着摸牌|摸牌/, /过/],
+    // 只认自己手里那一排：`.mj-tile` 连牌河里打出去的牌也算，点那些是无效点击
+    fallback: ".mj-hand .mj-tile",
+    tileStrategy: "hint"
   },
   {
     id: "star-estate",
@@ -96,6 +116,12 @@ const PLANS = [
     bot: "click",
     // 掷骰 → 能买就买 → 能建就建
     priority: [/掷骰/, /购买|买下/, /建屋|盖房/, /结束回合|过/],
+    // 输局用：见地就买、拍卖一路跟到底。第 140 关（抵押周转章）开局只有几百星币，
+    // 这么买必然现金见底、付不出租金而收场 —— 孩子第一次玩这类棋最常见的输法。
+    //
+    // 注意：这里**不能**用「只掷骰、什么都不买」当输法 —— 那样反而会赢。
+    // 光领工资就够得着净资产目标这件事是本轮记的 W1-R3-01，归修复员。
+    losePriority: [/掷骰/, /购买|买下/, /建屋|盖房/, /加价|跟(?!$)/, /结束回合|过/],
     fallback: ".se-tile"
   }
 ];
@@ -242,6 +268,44 @@ const READ_SCORE = () => {
 };
 
 /**
+ * 用四向键把圆开到最近那颗彩豆上（`orb-arena` 用这一支）。
+ *
+ * 这一款的键是「按住」模型：`keydown` 置位、`keyup` 清位，游戏每帧读这个位。
+ * 所以必须 `down` → 停一会儿 → 需要换向了才 `up`，
+ * 而不是一下一下地 `press`（那样一帧都占不到，圆根本不动）。
+ */
+async function keyPilotBot(page, plan, budgetMs) {
+  const t0 = Date.now();
+  let held = [];
+  const release = async () => {
+    for (const k of held) await page.keyboard.up(k).catch(() => {});
+    held = [];
+  };
+  try {
+    while (Date.now() - t0 < budgetMs) {
+      const s = await settle(page);
+      if (s) return s;
+      const dir = await page.evaluate(FIND_FOOD, plan.food, plan.skipR ?? 55).catch(() => null);
+      const want = [];
+      if (dir) {
+        const dead = plan.deadzone ?? 0.06;
+        if (dir.dx < -dead) want.push("KeyA");
+        if (dir.dx > dead) want.push("KeyD");
+        if (dir.dy < -dead) want.push("KeyW");
+        if (dir.dy > dead) want.push("KeyS");
+      }
+      for (const k of held) if (!want.includes(k)) await page.keyboard.up(k).catch(() => {});
+      for (const k of want) if (!held.includes(k)) await page.keyboard.down(k).catch(() => {});
+      held = want;
+      await sleep(plan.hold ?? 220);
+    }
+  } finally {
+    await release();
+  }
+  return settle(page);
+}
+
+/**
  * 圆圆这种「圆跟着手指走」的游戏：按住不放，把指针停在那颗彩豆上，
  * 圆就一路走过去。比四向按键准得多，也正是手机上孩子真实的玩法。
  */
@@ -358,7 +422,16 @@ async function pressBot(page, plan, budgetMs) {
   while (Date.now() - t0 < budgetMs) {
     const s = await settle(page);
     if (s) return s;
-    await page.keyboard.press(plan.keys[i++ % plan.keys.length]);
+    const key = plan.keys[i++ % plan.keys.length];
+    if (plan.holdMs) {
+      // 有些款是「按住」模型：keydown 置位、keyup 清位，游戏每帧读这个位。
+      // `keyboard.press` 的按下和抬起之间几乎没有时间，一帧都占不到，等于没按。
+      await page.keyboard.down(key);
+      await sleep(plan.holdMs);
+      await page.keyboard.up(key);
+    } else {
+      await page.keyboard.press(key);
+    }
     await sleep(plan.tick);
   }
   return settle(page);
@@ -371,7 +444,7 @@ async function clickBot(page, plan, budgetMs) {
     const s = await settle(page);
     if (s) return s;
     const did = await page.evaluate(
-      (sources, fallback, n) => {
+      (sources, fallback, n, tileStrategy) => {
         const stage = document.querySelector(".game-stage");
         if (!stage) return "no-stage";
         const buttons = [...stage.querySelectorAll("button")].filter(
@@ -386,16 +459,37 @@ async function clickBot(page, plan, budgetMs) {
           }
         }
         const tiles = [...stage.querySelectorAll(fallback)].filter((t) => t.offsetParent !== null);
-        if (tiles.length) {
-          const t = tiles[n % tiles.length];
-          t.click();
-          return `tile:${t.textContent?.trim().slice(0, 4) ?? ""}`;
+        if (!tiles.length) return null;
+        // 麻将不能瞎打:开局本来就是听牌,随手拆一张就再也和不了。
+        // 游戏自己在提示区写着「……会摸到 3 张闲牌（像 六条），打掉它们别动手里的牌」,
+        // 照它说的打 —— 这正是孩子看着提示会做的事。
+        if (tileStrategy === "hint") {
+          const tip = [...stage.querySelectorAll(".mj-tip, .mj-msg, .mj-status")]
+            .map((e) => e.textContent ?? "")
+            .join(" ");
+          const idle = [...tip.matchAll(/像\s*([^\s，,、（）()]+)/g)].map((m) => m[1]);
+          const CN = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+          const norm = (s) => s.replace(/[一二三四五六七八九]/g, (c) => String(CN[c]));
+          for (const want of idle.map(norm)) {
+            const hit = tiles.find((t) => norm((t.textContent ?? "").trim()) === want);
+            if (hit) {
+              hit.click();
+              return `tile:${hit.textContent?.trim() ?? ""}`;
+            }
+          }
+          // 提示没点名就打最后摸进来的那一张,别动手里已经成型的牌
+          const last = tiles[tiles.length - 1];
+          last.click();
+          return `tile:${last.textContent?.trim() ?? ""}`;
         }
-        return null;
+        const t = tiles[n % tiles.length];
+        t.click();
+        return `tile:${t.textContent?.trim().slice(0, 4) ?? ""}`;
       },
       plan.priority.map((r) => r.source),
       plan.fallback,
-      nth++
+      nth++,
+      plan.tileStrategy ?? "cycle"
     );
     await sleep(did ? 260 : 500);
   }
@@ -413,7 +507,46 @@ async function idleBot(page, budgetMs) {
   return settle(page);
 }
 
-const BOTS = { pixel: pixelBot, pointer: pointerBot, press: pressBot, click: clickBot };
+/**
+ * 照着离线算好的剧本一步一步按（`block-drop` 专用）。
+ *
+ * 战役关的出块顺序由 seed 定死，落点又能用仓库里现成的 `enumeratePlacements` /
+ * `scorePlacement` 离线挑出来，所以这一关「该往哪挪、转几下」是可以先算完再按的。
+ * 剧本只收「转好再直落」的落点，落地之后再转身那一手假人按不出来。
+ * 每一步：先转到位 → 左右挪到位 → 硬降。
+ */
+async function planBot(page, plan, budgetMs) {
+  const t0 = Date.now();
+  const steps = plan.steps ?? [];
+  for (const st of steps) {
+    if (Date.now() - t0 > budgetMs) break;
+    const s = await settle(page);
+    if (s) return s;
+    for (let i = 0; i < st.rot; i++) {
+      await page.keyboard.press("KeyF");
+      await sleep(55);
+    }
+    const key = st.dx < 0 ? "KeyA" : "KeyD";
+    for (let i = 0; i < Math.abs(st.dx); i++) {
+      await page.keyboard.press(key);
+      await sleep(55);
+    }
+    // 硬降之后要等锁定 + 下一块出场：催太急，下一步的按键会打在还没生成的块上，
+    // 整份剧本从这里开始就对不上了
+    await page.keyboard.press("KeyW");
+    await sleep(plan.tick ?? 300);
+  }
+  // 剧本走完还没结算就继续软降催一催，别干等着重力
+  while (Date.now() - t0 < budgetMs) {
+    const s = await settle(page);
+    if (s) return s;
+    await page.keyboard.press("KeyS");
+    await sleep(120);
+  }
+  return settle(page);
+}
+
+const BOTS = { pixel: pixelBot, pointer: pointerBot, press: pressBot, click: clickBot, plan: planBot, keyPilot: keyPilotBot };
 
 async function main() {
   const browser = await puppeteer.launch({
@@ -422,6 +555,11 @@ async function main() {
   });
   const page = await browser.newPage();
   await page.setViewport(VIEWPORT);
+  const useViewport = async (plan) => {
+    const v = plan.viewport ?? VIEWPORT;
+    const cur = page.viewport();
+    if (cur?.width !== v.width || cur?.height !== v.height) await page.setViewport(v);
+  };
   let errors = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
@@ -431,6 +569,7 @@ async function main() {
   for (const plan of TARGETS) {
     errors = [];
     try {
+      await useViewport(plan);
       await playOne(page, plan, () => errors);
     } catch (e) {
       // 一款炸了不该把后面几款一起带走：记一条红，继续下一款
@@ -457,11 +596,21 @@ async function playOne(page, plan, readErrors) {
     let won = null;
     let tries = 0;
     let okIn = false;
+    // 剧本驱动的那一款：按关号取这一关的走法
+    let steps = null;
+    if (plan.planFile) {
+      try {
+        steps = JSON.parse(readFileSync(plan.planFile, "utf8"))[String(winLevel)]?.steps ?? null;
+      } catch {
+        steps = null;
+      }
+      if (!steps) log(plan.id, false, `第 ${winLevel} 关的按键剧本没算出来`, `跑一遍 npx vitest run src/qa-probe.test.ts`);
+    }
     while (tries < WIN_TRIES && !won) {
       tries++;
       okIn = await openLevel(page, plan.id, winLevel);
       if (!okIn) break;
-      const s = await BOTS[plan.bot](page, plan, WIN_BUDGET_MS);
+      const s = await BOTS[plan.bot](page, { ...plan, steps }, WIN_BUDGET_MS);
       if (s && /过关/.test(s.title)) won = s;
       else if (VERBOSE) console.log(`       · 第 ${tries} 把没过：${s?.title ?? "超时"}`);
     }
@@ -470,8 +619,14 @@ async function playOne(page, plan, readErrors) {
 
     const loseLevel = Number(process.env.QA_LOSE_LEVEL ?? plan.loseLevel);
     if (await openLevel(page, plan.id, loseLevel)) {
-      const s = await idleBot(page, LOSE_BUDGET_MS);
-      log(plan.id, !!s && !/过关/.test(s.title), `第 ${loseLevel} 关放着不动真的会没过`, s ? s.title : "超时没结算");
+      // 回合制那两款放着不动**永远**不会结算 —— 轮到谁就等谁，这是回合制的常理，不是缺陷。
+      // 想拿真负证据只能真下场乱打：该摸就摸、该过就过，就是不和牌 / 不置产，
+      // 让本地假人自己赢下去（第 1 轮 W1-R1-09 挂的账，在这里还上）。
+      const loseWay = plan.losePriority ? "乱打一气真的会没过" : "放着不动真的会没过";
+      const s = plan.losePriority
+        ? await clickBot(page, { ...plan, priority: plan.losePriority }, LOSE_BUDGET_MS)
+        : await idleBot(page, LOSE_BUDGET_MS);
+      log(plan.id, !!s && !/过关/.test(s.title), `第 ${loseLevel} 关${loseWay}`, s ? s.title : "超时没结算");
       if (s) {
         const harsh = HARSH.filter((w) => s.body.includes(w));
         log(plan.id, harsh.length === 0, "没过的文案只鼓励、不打击", harsh.join(",") || s.body.replace(/\s+/g, " ").slice(0, 36));

@@ -11,15 +11,19 @@ import {
   chapterStartOf,
   endlessConfig,
   goalLine,
+  goalReached,
   levelConfig,
   rulesLine,
   solveLevel,
   starsFor,
+  startingDeeds,
   startingNetWorth,
   versusConfig
 } from "./levels";
-import { netWorth } from "./rent";
-import { buildState } from "./ai";
+import { BANK, deedsOf, netWorth } from "./rent";
+import { tileAt } from "./board";
+import { advanceTurn, grantTile, playTurn, type Policy } from "./economy";
+import { buildContext, buildState } from "./ai";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FILES = [
@@ -63,6 +67,42 @@ const ESTATE_BRANDS = [
   "梅菲尔",
   "帕克兄弟"
 ];
+
+/**
+ * 「懒人」回放：照样掷骰过回合，但一块地都不买、拍卖一律不跟。
+ * 用来钉住 W1-R3-01：只领工资绕圈不能算过关。
+ */
+function passiveRun(level: number): { won: boolean; peak: number; bought: number } {
+  const cfg = levelConfig(level);
+  const state = buildState({ seed: cfg.seed, tiers: cfg.tiers, cashes: cfg.cashes, preset: cfg.preset });
+  const ctx = buildContext(state, {
+    seed: cfg.seed,
+    tiers: cfg.tiers,
+    rules: cfg.rules,
+    scriptedDice: cfg.scriptedDice
+  });
+  const inner = ctx.policyOf;
+  const lazy: Policy = {
+    ...inner(0),
+    wantBuy: () => false,
+    bidLimit: () => 0,
+    buildPlan: () => [],
+    financePlan: () => []
+  };
+  ctx.policyOf = (id) => (id === 0 ? lazy : inner(id));
+
+  const base = deedsOf(state, 0).length;
+  let peak = netWorth(state, 0);
+  let guard = 0;
+  while (!state.over && state.round <= cfg.rounds && guard < cfg.rounds * cfg.seats + 8) {
+    guard++;
+    playTurn(state, state.turn, ctx);
+    peak = Math.max(peak, netWorth(state, 0));
+    if (state.players[0].bankrupt || goalReached(cfg, state) || state.over) break;
+    advanceTurn(state);
+  }
+  return { won: goalReached(cfg, state), peak, bought: Math.max(0, deedsOf(state, 0).length - base) };
+}
 
 describe("star-estate · meta 与章节", () => {
   it("meta 按规格落地", () => {
@@ -151,6 +191,58 @@ describe("star-estate · meta 与章节", () => {
       if (!run.win) bad.push(`第 ${lv + 1} 关（第 ${chapterIndexOf(lv) + 1} 章）：${run.note}`);
     }
     expect(bad, `这些关没打通：\n${bad.slice(0, 12).join("\n")}`).toEqual([]);
+  });
+
+  it("每一关都要求手里真的攥住地，而且比开局送的多", () => {
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const cfg = levelConfig(lv);
+      const base = startingDeeds(cfg);
+      expect(cfg.goal.minDeeds, `第 ${lv + 1} 关没设产业门槛`).toBeGreaterThan(base);
+      expect(cfg.goal.minDeeds - base).toBeLessThanOrEqual(2);
+      expect(goalLine(cfg)).toContain(`攥住 ${cfg.goal.minDeeds} 处产业`);
+    }
+  });
+
+  it("钱到线但地不够不算过关；地够了才算", () => {
+    const cfg = levelConfig(11);
+    const state = buildState({ seed: cfg.seed, tiers: cfg.tiers, cashes: cfg.cashes, preset: cfg.preset });
+    const target = cfg.goal.kind === "netWorth" ? cfg.goal.target : 0;
+    state.players[0].cash = target * 3;
+    expect(netWorth(state, 0)).toBeGreaterThanOrEqual(target);
+    expect(goalReached(cfg, state)).toBe(false);
+
+    let free = 0;
+    for (let pos = 0; pos < state.tiles.length && deedsOf(state, 0).length < cfg.goal.minDeeds; pos++) {
+      if (state.tiles[pos].owner === BANK && (tileAt(pos).price ?? 0) > 0) {
+        grantTile(state, pos, 0);
+        free++;
+      }
+    }
+    expect(free).toBeGreaterThan(0);
+    expect(goalReached(cfg, state)).toBe(true);
+  });
+
+  it("只掷骰不买地：钱能蹭到线，但过不了关（W1-R3-01）", () => {
+    // 棋盘 40 格、过起点白拿 200 星币，光绕圈就能把净资产目标蹭过去。
+    // 这一款教的是买地，所以「钱够了」不能单独算赢。
+    let moneyEnough = 0;
+    for (const lv of [11, 30, 59, 108]) {
+      const cfg = levelConfig(lv);
+      const r = passiveRun(lv);
+      expect(r.bought, `第 ${lv + 1} 关的懒人竟然买了地`).toBe(0);
+      expect(r.won, `第 ${lv + 1} 关只掷骰就过关了`).toBe(false);
+      if (cfg.goal.kind === "netWorth" && r.peak >= cfg.goal.target) moneyEnough++;
+    }
+    expect(moneyEnough, "样本里应当有关卡是「钱够了但地不够」").toBeGreaterThan(0);
+  });
+
+  it("第 8 章残局：对手不再一两个回合就把自己付破产", () => {
+    for (let lv = 164; lv < TOTAL_LEVELS; lv++) {
+      const cfg = levelConfig(lv);
+      expect(cfg.goal.kind).toBe("bankrupt");
+      for (let i = 1; i < cfg.seats; i++) expect(cfg.cashes[i]).toBeGreaterThanOrEqual(320);
+      expect(solveLevel(lv).rounds).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it("回放是确定性的：同一关跑两次结果一致", () => {
