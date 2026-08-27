@@ -14,7 +14,8 @@
  *  - PA-JQ-2（一般，与 PA-JQ-1 同根）：星星那套 L / K 一个都没接，第二个人只能借朵朵的 F / G。
  *    这两条第 1 轮修复员已一起修（每个座位各一个光标、键位按座位派发），
  *    「双人同屏键位」那一组断言已经翻成修好后的行为；
- *  - PA-JQ-3（一般）：暂停时按「确认」不落子，但已经选好的落点被悄悄丢掉了（留第 2 轮）。
+ *  - PA-JQ-3（一般）：暂停时按「确认」不落子，但已经选好的落点被悄悄丢掉了。
+ *    第 2 轮学习优化员已修（`createBoard` 加 `isPaused` 通路），对应断言已翻成修好后的行为。
  *
  * `mount` / `createTable` 必须走顶部静态 import 并在文件里真的用到：这样
  * level99 → dialogs → audio 那条链会在装 DOM 桩之前求值完，
@@ -469,7 +470,7 @@ describe("PA-JQ · 双人同屏键位", () => {
     table.destroy();
   });
 
-  it("【已知问题】暂停时按确认不落子，但选好的落点被悄悄丢掉了", () => {
+  it("暂停时按确认既不落子，也不会把选好的落点丢掉", () => {
     const { state, table } = duelTable();
     const cs = cellsOnScreen();
     cs[DUEL_START].dispatch("click", {});
@@ -478,12 +479,48 @@ describe("PA-JQ · 双人同屏键位", () => {
     key("Escape");
     tap("确认");
     expect(state.plies, "暂停时按确认真把子走了").toBe(0);
-    // 应有行为：暂停时按确认要么无视、要么留着落点。现状：落点被清掉了，恢复后要重选。
     expect(
       cellsOnScreen()[DUEL_SIDESTEP].className.includes("jq-pending"),
-      "落点还留着，这条可以翻面"
-    ).toBe(false);
-    expect(selectedAt(), "连选中都一起没了").toBe(-1);
+      "暂停时按确认把选好的落点丢掉了"
+    ).toBe(true);
+    expect(selectedAt(), "暂停时按确认连选中也一起丢了").toBe(DUEL_START);
+    table.destroy();
+  });
+
+  it("暂停期间点格子、挪光标、取消键一概不接，恢复之后接着走那一步", async () => {
+    const { state, table } = duelTable();
+    const cs = cellsOnScreen();
+    cs[DUEL_START].dispatch("click", {});
+    cs[DUEL_SIDESTEP].dispatch("click", {});
+    const cursorBefore = cursorAt();
+    key("Escape");
+    // 暂停期间的四种输入
+    cellsOnScreen()[DUEL_START].dispatch("click", {});
+    key("ArrowUp");
+    key("w");
+    key("g");
+    expect(cursorAt(), "暂停期间光标被挪走了").toBe(cursorBefore);
+    expect(selectedAt(), "暂停期间选中被拨掉了").toBe(DUEL_START);
+    expect(cellsOnScreen()[DUEL_SIDESTEP].className, "暂停期间落点被拨掉了").toContain("jq-pending");
+    expect(state.plies, "暂停期间把子走了").toBe(0);
+    // 恢复之后原来那一步照样按得下去
+    key("Escape");
+    key("f");
+    await waitFor(() => state.plies > 0);
+    expect(state.plies, "恢复之后原来选好的那一步走不出去").toBe(1);
+    table.destroy();
+  });
+
+  it("恢复之后取消键照旧管用，不会被暂停那道闸卡死", () => {
+    const { table } = duelTable();
+    const cs = cellsOnScreen();
+    cs[DUEL_START].dispatch("click", {});
+    key("Escape");
+    key("g");
+    expect(selectedAt(), "暂停期间取消键还生效").toBe(DUEL_START);
+    key("Escape");
+    key("g");
+    expect(selectedAt(), "恢复之后取消键失灵了").toBe(-1);
     table.destroy();
   });
 });

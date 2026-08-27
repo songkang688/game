@@ -225,6 +225,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     viewer: opts.viewer,
     onMove: commit,
     onNote: setNote,
+    isPaused: () => paused,
   });
 
   function togglePause(): void {

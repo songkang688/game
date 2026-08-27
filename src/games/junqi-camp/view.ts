@@ -107,6 +107,8 @@ export interface BoardOptions {
   viewer: Side | "all";
   onMove: (m: Move) => void;
   onNote: (text: string) => void;
+  /** 外面是不是暂停了：暂停期间点格子、挪光标、确认、取消一概不接 */
+  isPaused?: () => boolean;
 }
 
 export interface CombatShow {
@@ -346,7 +348,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   }
 
   function activate(at?: Pos, side: Side = activeSeat()): void {
-    if (destroyed || frozen) return;
+    if (destroyed || frozen || opts.isPaused?.()) return;
     const to = at ?? cursors[side];
     cursors[side] = to;
     if (status(state).kind !== "playing" || !humanTurn() || side !== state.turn) {
@@ -396,7 +398,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   }
 
   function cancel(side: Side = activeSeat()): void {
-    if (destroyed) return;
+    if (destroyed || opts.isPaused?.()) return;
     // 选中的那一枚归当前该走的那一方，别人的取消键碰不着
     if (side !== activeSeat()) return;
     clearPick();
@@ -405,7 +407,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   }
 
   function moveCursor(dr: number, dc: number, side: Side = activeSeat()): void {
-    if (destroyed) return;
+    if (destroyed || opts.isPaused?.()) return;
     const from = cursors[side];
     const r = Math.min(ROWS - 1, Math.max(0, rowOf(from) + dr));
     const c = Math.min(COLS - 1, Math.max(0, colOf(from) + dc));
