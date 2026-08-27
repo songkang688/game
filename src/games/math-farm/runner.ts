@@ -25,6 +25,7 @@ import { methodHint, stepHint } from "./hints";
 import type { MathKind } from "./kinds";
 import { buildQuestions, makeReviewQuestions, typesOfKinds, CHAPTER_THEMES } from "./levels";
 import { practiceLine, recordMistakes, type StorageLike } from "./mistakes";
+import { fitIntoStage } from "./fit";
 import { resetClippedScroll } from "./stageScroll";
 
 /** 连错几次给方法提示（和 `quiz99.shouldHint` 的门槛保持一致，两边同时发生） */
@@ -63,6 +64,11 @@ export const MTF_CSS = `
 .mtf-step { font-size: 16px; line-height: 1.5; font-weight: 900; animation: mtfHintIn .3s ease-out; }
 .mtf-review { text-align: center; font-size: 16px; font-weight: 800; color: #5c4a7d; line-height: 1.5;
   background: #ffffffcc; border-radius: 14px; padding: 8px 12px; margin-bottom: 6px; }
+/* 答题壳自己的那一层宿主。本档五款里只有这一款原来把答题壳直接渲染进舞台,
+   于是横过来拿的时候三颗选项整排掉在裁切线以下,而舞台是定高 + overflow hidden
+   (平台文件,交窗口1),既不滚也没提示。宿主由 fitIntoStage() 钳进看得见的那一段,
+   内容一高就在这儿滚。min-width 0 是给 flex 子项松绑,免得长题面把宿主撑出舞台。 */
+.mtf-quizhost { min-width: 0; width: 100%; }
 .mtf-cheer { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 34px;
   pointer-events: none; animation: mtfCheer .9s ease-out; }
 @keyframes mtfHintIn { from { opacity: .2; } to { opacity: 1; } }
@@ -218,6 +224,14 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
   // 以上（W5-B-09）。进关这一刻归 0。
   resetClippedScroll(stage);
 
+  // 答题壳挂在本款自己的宿主里,宿主再钳进舞台看得见的那一段:内容一高就在这里滚,
+  // 而不是被舞台默默裁掉(真机 844×390 上三颗选项整排掉在线外,一处都滚不动)。
+  // 回顾横幅留在宿主外面不跟着滚,孩子滑题面时那句话一直看得见。
+  const quizHost = stage.ownerDocument.createElement("div");
+  quizHost.className = "mtf-quizhost";
+  stage.appendChild(quizHost);
+  const fit = fitIntoStage(quizHost);
+
   let quiz: PlayHandle | null = null;
   let helper: HelperHandle | null = null;
   let banner: HTMLElement | null = null;
@@ -257,14 +271,14 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
     banner = stage.ownerDocument.createElement("div");
     banner.className = "mtf-review";
     banner.textContent = `${REVIEW_NOTE} ${practiceLine(typesOfKinds(wrongKinds))}`;
-    stage.appendChild(banner);
+    stage.insertBefore(banner, quizHost);
     const finish = (): void => {
       if (destroyed) return;
       ctx.win(stars, `${msg ?? ""} ${REVIEW_DONE}`.trim());
     };
     const reviewCtx: PlayCtx = { ...ctx, skipped: false, win: finish, lose: finish };
     quiz = runRound({
-      stage,
+      stage: quizHost,
       ctx: reviewCtx,
       questions,
       theme,
@@ -274,6 +288,8 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
       bigChoices: true,
     });
     helper = attachFarmHelper(stage, questions, () => {});
+    // 横幅一挂上来这一屏就长高一截,钳位跟着重算
+    fit.relayout();
     speak(REVIEW_NOTE);
   }
 
@@ -292,13 +308,33 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
   };
 
   const mainQuestions = buildQuestions(ctx.level);
-  quiz = runRound({ stage, ctx: mainCtx, questions: mainQuestions, theme, bigChoices: true });
+  quiz = runRound({
+    stage: quizHost,
+    ctx: mainCtx,
+    questions: mainQuestions,
+    theme,
+    bigChoices: true,
+  });
   helper = attachFarmHelper(stage, mainQuestions, noteWrong);
+  fit.relayout();
+
+  // 换一道题题面高度就变(竖式 38px 三行 vs 一行文字题差着 60 多像素),钳位得跟着走。
+  // 盯宿主的子树就够:quiz99 换题是重建 .qz-prompt / .qz-choices 的孩子。
+  // 没有 MutationObserver 的环境(测试桩)什么都不做——那儿也量不出高度。
+  let watcher: MutationObserver | null = null;
+  if (typeof MutationObserver === "function") {
+    watcher = new MutationObserver(() => fit.relayout());
+    watcher.observe(quizHost, { childList: true, subtree: true, characterData: true });
+  }
 
   return {
     destroy() {
       destroyed = true;
+      watcher?.disconnect();
+      watcher = null;
+      fit.dispose();
       dropRound();
+      quizHost.remove();
       style.remove();
     },
   };
