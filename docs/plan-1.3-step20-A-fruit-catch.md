@@ -148,6 +148,10 @@
 5. `feat(fruit-catch-visual): 场景三层/接住反馈/HUD + reduced 接线`；
 6. `test(fruit-catch-visual): 12 个视觉用例`。
 
+每个 commit 单独可回滚：任何一条被 revert 后其余仍编译通过、测试全绿（提交前自验一次）。
+`fruit.ts` 是 B 档 `fruit-slice` 的对齐基准：六种剪影路径函数签名（输入 ctx/x/y/r/kind）定了就不改，B 档只 import 不修改。
+昼夜切换只跟关卡序号映射，不新增状态存储。
+
 ## 十二、分级红线与回复
 
 无惊吓（警告物是皱眉小云）；失败只鼓励；无商标。完成后回复：你是 1.3 第 20 步 A 档、`fruit-catch`；第三节的现状结论；水果 / 藤篮自绘的实现说明；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。

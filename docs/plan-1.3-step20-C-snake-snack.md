@@ -148,6 +148,10 @@
 5. `feat(snake-snack-visual): 场地质感/HUD + reduced 接线`；
 6. `test(snake-snack-visual): 12 个视觉用例`。
 
+每个 commit 单独可回滚：任何一条被 revert 后其余仍编译通过、测试全绿（提交前自验一次）。
+`caterpillar.ts` 输入蛇身格数组 + 插值进度，输出无副作用绘制调用，逻辑层零依赖。
+奖励星可复用 `star.ts`（若 prince-princess 档已落）而不自造轮子。
+
 ## 十二、分级红线与回复
 
 撞墙 / 撞刺猬是「哎呀弹回」无受伤表达；失败只鼓励；无商标。完成后回复：你是 1.3 第 20 步 C 档、`snake-snack`；第三节的现状结论；圆节毛毛虫与九种元素自绘的实现说明；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。
