@@ -91,27 +91,68 @@ describe("戳戳小气球 · R2 · 换关卡再打一遍", () => {
 
 describe("戳戳小气球 · R2 · 难度曲线", () => {
   /**
-   * W4A-14（轻微）· 战役难度是锯齿不是斜坡。
+   * W4A-14（轻微）· 本轮监督修复员的结论：一半是量错了，一半是真的，真的那半已经改掉。
    *
-   * 用「最慢能允许多久点一下」量每一关的松紧：
-   * 前四章确实一章比一章紧（1.71 → 1.34 → 1.15 秒），可最后一章又松回 1.34 秒；
-   * 更扎眼的是同一章里相邻两关能差三倍——第 140 关允许两秒点一下，第 141 关只给 0.6 秒。
-   * 孩子的体感是「忽松忽紧」，不是「一关比一关难一点点」。
-   * 记录在案，交给学习优化员。
+   * 「相邻两关差三倍」这一半量错了。第 8 / 10 章是**两种玩法轮着来**的
+   * （`t % 3 === 2 ? "color" : "free"` / `t % 2 === 0 ? "free" : "color"`）：
+   * 自由关要戳掉飘上来的每一个球，指定色关一屏里该戳的只占五分之一。
+   * 拿同一把「几秒点一下」的尺子量这两种关，差三倍是必然的，那不是难度锯齿，
+   * 是两件不一样的事——就像不能拿跑步的配速去量跳绳。第 140 / 141 关正是
+   * 一关指定色、一关自由。按玩法分开量，每一档自己都是干净的下坡（见下一条）。
+   *
+   * 「最后一章反而比中间几章松」这一半是真的。只比自由关：
+   * 第 7 章紧到 0.8 秒、第 8 章 0.6 秒，第 10 章原来只紧到 0.8 秒——
+   * 收尾这一章成了喘气的地方。已把第 10 章的坡压陡（`riseSpeed` / `spawnMs`），
+   * 现在也紧到 0.6 秒，且仍在 `levels188.test.ts` 定的可玩上下界之内。
    */
-  it("W4A-14 特征化：相邻两关的松紧能差三倍", () => {
-    const a = tapTolerance(140);
-    const b = tapTolerance(141);
-    expect(a).toBeGreaterThanOrEqual(1.6);
-    expect(b).toBeLessThanOrEqual(0.8);
-    expect(a / b).toBeGreaterThanOrEqual(2);
+  it("W4A-14 已修：按玩法分开量，同一章里每一档自己都是干净的下坡", () => {
+    let at = 0;
+    for (let ci = 0; ci < CHAPTERS.length; ci++) {
+      const size = CHAPTERS[ci].size;
+      const byMode = new Map<string, number[]>();
+      for (let t = 0; t < size; t++) {
+        const cfg = LEVELS[at + t];
+        // 护礼物关是每三关插一关的特别关，自成一档
+        const key = `${cfg.mode}${cfg.protect ? "+护" : ""}`;
+        const list = byMode.get(key) ?? [];
+        list.push(tapTolerance(at + t + 1));
+        byMode.set(key, list);
+      }
+      for (const [key, list] of byMode) {
+        if (list.length < 4) continue;
+        const head = list.slice(0, Math.ceil(list.length / 2));
+        const tail = list.slice(Math.ceil(list.length / 2));
+        const avg = (l: number[]) => l.reduce((s, v) => s + v, 0) / l.length;
+        expect(avg(tail), `第 ${ci + 1} 章 ${key} 后半段该比前半段紧`).toBeLessThanOrEqual(avg(head));
+      }
+      at += size;
+    }
   });
 
-  it("W4A-14 特征化：最后一章反而比中间几章松", () => {
-    const avg = (ls: number[]) => ls.reduce((s, lv) => s + tapTolerance(lv), 0) / ls.length;
-    const mid = avg([102, 108, 115, 120, 128, 133]);
-    const last = avg([145, 150, 160, 168, 176, 182]);
-    expect(last).toBeGreaterThan(mid);
+  it("W4A-14 已修：第 140 / 141 关的三倍差是玩法不同，不是难度跳变", () => {
+    expect(LEVELS[139].mode).toBe("color");
+    expect(LEVELS[140].mode).toBe("free");
+    // 同为自由关的相邻样本，松紧就贴得很近
+    for (const [a, b] of [[123, 124], [126, 127], [129, 130]] as const) {
+      expect(LEVELS[a - 1].mode).toBe("free");
+      expect(LEVELS[b - 1].mode).toBe("free");
+      const r = tapTolerance(a) / tapTolerance(b);
+      expect(Math.max(r, 1 / r), `第 ${a} / ${b} 关`).toBeLessThanOrEqual(1.5);
+    }
+  });
+
+  it("W4A-14 已修：只比自由关，末章现在紧过第 7 章、追平第 8 章", () => {
+    const freeTol = (ci: number): number[] => {
+      const at = CHAPTERS.slice(0, ci).reduce((s, c) => s + c.size, 0);
+      const out: number[] = [];
+      for (let t = 0; t < CHAPTERS[ci].size; t++) {
+        if (LEVELS[at + t].mode === "free") out.push(tapTolerance(at + t + 1));
+      }
+      return out;
+    };
+    const tight = (ci: number) => Math.min(...freeTol(ci));
+    expect(tight(9)).toBeLessThan(tight(6));
+    expect(tight(9)).toBeLessThanOrEqual(tight(7));
   });
 
   it("章节开头会松一口气：新章第 1 关不比上一章最后一关更凶", () => {

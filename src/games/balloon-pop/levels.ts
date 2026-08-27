@@ -129,9 +129,11 @@ function buildLevel(ci: number, t: number): BalloonLevel {
     default:
       // 镜风山口：风向定期翻面 + 前面机关轮番客串；
       // 1.2 起每三关来一关「保护关」：礼物气球一个都不许被风吹跑
+      // 收尾这一章的坡要压得比第 8 章更陡：末章的自由关原来只紧到 0.8 秒一下，
+      // 比第 8 章的 0.6 秒还松，末章反而成了喘气的地方（W4A-14）。
       return {
         target: 13 + Math.floor(t / 2), escapes: 5,
-        riseSpeed: 62 + t * 2, spawnMs: 780 - t * 8,
+        riseSpeed: 62 + Math.round(t * 2.6), spawnMs: 780 - t * 10,
         mode: t % 2 === 0 ? "free" : "color", cloudChance: 0.1, rainbowChance: 0.04,
         night: t >= 11,
         wind: 6 + t * 0.5, windFlipMs: 4200 - t * 80,
