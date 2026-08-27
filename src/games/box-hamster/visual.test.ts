@@ -282,6 +282,11 @@ describe("章节主题 / 庆祝 / HUD", () => {
     expect(svg).toContain("bxh-undo-hands");
   });
 
+  it("HUD 字号兜底 ≥14px(排在 360px 媒体查询之后,小屏也不缩到 12px)", () => {
+    const at = CSS.indexOf(".bh-chip,.bh-btn{font-size:14px;}");
+    expect(at).toBeGreaterThan(-1);
+  });
+
   it("传送门进出口反色:样式表里进紫出金各一段,出口反向旋转", () => {
     expect(CSS).toContain("var(--bh-portal-in)");
     expect(CSS).toContain("var(--bh-portal-out)");

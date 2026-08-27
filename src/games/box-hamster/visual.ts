@@ -406,6 +406,8 @@ export function bhVisualCss(): string {
 .bxh-theme svg{display:block;width:100%;height:100%;}
 .bh-hud{background:#ffffffc9;border-radius:14px;padding:6px 8px;
   box-shadow:0 3px 8px rgba(170,140,100,.16);}
+/* 360px 上媒体查询会把字压到 12px,这里兜底 HUD 字号 ≥14px(排在媒体查询之后生效) */
+.bh-chip,.bh-btn{font-size:14px;}
 .bxh-undo{display:inline-flex;align-items:center;gap:4px;}
 .bxh-undo-icon{width:15px;height:15px;flex:none;}
 @keyframes bxhdust{0%{opacity:.9;transform:translate(0,0) scale(1);}
