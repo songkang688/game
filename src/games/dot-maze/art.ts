@@ -7,6 +7,7 @@
  * 不引位图、不引 emoji 字形，离线可用也不膨胀包体。
  * 这里只有「怎么画」，胜负与数值一个字都不碰。
  */
+import type { Dir } from "./maze";
 
 /* ------------------------------------------------------------------ */
 /* 墙面主题                                                            */
@@ -249,4 +250,110 @@ export function versusStarSprite(): HTMLCanvasElement {
     g.fill();
   });
   return versusStarCache;
+}
+
+/* ------------------------------------------------------------------ */
+/* 玩家：原创豆豆勇士                                                  */
+/* ------------------------------------------------------------------ */
+
+/** 四个朝向的脸面向哪个角度 */
+export const FACE_ANGLE: Record<Dir, number> = {
+  right: 0,
+  down: Math.PI / 2,
+  left: Math.PI,
+  up: -Math.PI / 2,
+};
+
+export interface PlayerFigureOpts {
+  x: number;
+  y: number;
+  /** 身体半径（≈ 格子的 0.4 倍） */
+  r: number;
+  dir: Dir;
+  /** 张嘴半幅（弧度）；委屈脸时忽略 */
+  mouth: number;
+  /** 无敌期间的亮色帧（闪烁节奏由调用方掌握） */
+  flash: boolean;
+  /** 淡金护盾光环（减弱动效时调用方不要开） */
+  shield: boolean;
+  /** 被抓之后的委屈脸：嘴闭上、眼睛耷下来，0.4s 后照常重来 */
+  sad: boolean;
+}
+
+/**
+ * 豆豆勇士：保持「原创小圆脸」的口径——朝向那侧一只大眼睛、
+ * 头顶一根小呆毛、身体是带底部暗晕的径向渐变，和任何街机角色都不同。
+ */
+export function drawPlayerFigure(g: CanvasRenderingContext2D, o: PlayerFigureOpts): void {
+  const { x, y, r } = o;
+  const a = FACE_ANGLE[o.dir];
+  if (o.shield) {
+    g.strokeStyle = "rgba(255,214,110,0.6)";
+    g.lineWidth = 2.4;
+    g.beginPath();
+    g.arc(x, y, r * 1.32, 0, Math.PI * 2);
+    g.stroke();
+  }
+  // 身体：径向渐变重心略偏左上，底部自然压出一圈暗晕
+  const body = g.createRadialGradient(x - r * 0.24, y - r * 0.3, r * 0.15, x, y, r * 1.02);
+  if (o.flash) {
+    body.addColorStop(0, "#FFFBE2");
+    body.addColorStop(0.72, "#FFF6C9");
+    body.addColorStop(1, "#EFD98F");
+  } else {
+    body.addColorStop(0, "#FFE27A");
+    body.addColorStop(0.72, "#F7C24E");
+    body.addColorStop(1, "#E19E2B");
+  }
+  g.fillStyle = body;
+  const mouth = o.sad ? 0.02 : Math.max(0.02, o.mouth);
+  g.beginPath();
+  g.moveTo(x, y);
+  g.arc(x, y, r, a + mouth, a - mouth + Math.PI * 2);
+  g.closePath();
+  g.fill();
+  // 头顶一根小呆毛
+  g.strokeStyle = "#D99B2B";
+  g.lineWidth = 2;
+  g.lineCap = "round";
+  g.beginPath();
+  g.moveTo(x + r * 0.06, y - r * 0.92);
+  g.quadraticCurveTo(x - r * 0.16, y - r * 1.3, x + r * 0.22, y - r * 1.36);
+  g.stroke();
+  // 朝向那侧的一只眼睛：白底 + 深瞳 + 高光点
+  const ea = a - Math.PI * 0.46;
+  const ex = x + Math.cos(ea) * r * 0.46;
+  const ey = y + Math.sin(ea) * r * 0.46;
+  const droop = o.sad ? r * 0.1 : 0;
+  g.fillStyle = "#FFFFFF";
+  g.beginPath();
+  g.arc(ex, ey + droop * 0.5, r * 0.24, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#3A2F1B";
+  g.beginPath();
+  g.arc(
+    ex + (o.sad ? 0 : Math.cos(a) * r * 0.07),
+    ey + droop + (o.sad ? 0 : Math.sin(a) * r * 0.07),
+    r * 0.12,
+    0,
+    Math.PI * 2
+  );
+  g.fill();
+  g.fillStyle = "#FFFFFF";
+  g.beginPath();
+  g.arc(ex + r * 0.03, ey + droop - r * 0.06, r * 0.05, 0, Math.PI * 2);
+  g.fill();
+  if (o.sad) {
+    // 委屈：眉毛一垂、嘴角一撇，仅此而已，下一口气就重新出发
+    g.strokeStyle = "#8A6B3A";
+    g.lineWidth = Math.max(1.2, r * 0.09);
+    g.lineCap = "round";
+    g.beginPath();
+    g.arc(ex, ey - r * 0.34, r * 0.22, Math.PI * 0.2, Math.PI * 0.8);
+    g.stroke();
+    g.strokeStyle = "#3A2F1B";
+    g.beginPath();
+    g.arc(x + Math.cos(a) * r * 0.52, y + Math.sin(a) * r * 0.52 + r * 0.3, r * 0.2, Math.PI * 1.2, Math.PI * 1.8);
+    g.stroke();
+  }
 }

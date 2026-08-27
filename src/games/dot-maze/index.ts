@@ -6,6 +6,7 @@ import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../
 import {
   WALL_THEMES,
   drawBackdrop,
+  drawPlayerFigure,
   drawWalls,
   dotSprite,
   powerSprite,
@@ -50,6 +51,9 @@ const POP_MS = 180;
 
 /** 小幽灵变蓝 / 变回来的过渡时长 */
 const BLUE_FADE_MS = 220;
+
+/** 被抓之后委屈脸持续多久（纯表现，重生节奏在 logic 里没变） */
+const SAD_MS = 400;
 
 /** 惊吓时的「昏昏蓝」 */
 const FRIGHT_BLUE = "#7FA9FF";
@@ -240,6 +244,8 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const pops: Array<{ cell: Cell; leftMs: number }> = [];
   /** 每只小幽灵的「蓝度」0–1，用来把变蓝和变回来做成过渡而不是硬切 */
   const blue: number[] = state.ghosts.map(() => 0);
+  /** 被抓后的委屈脸还要摆多少毫秒（纯表现） */
+  let sadMs = 0;
 
   function notePop(cell: Cell): void {
     if (soft) return;
@@ -370,17 +376,21 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
         ctx.restore();
       }
     }
-    // 玩家：原创小圆脸，张嘴幅度跟着步进走
+    // 玩家：原创小圆脸（一只大眼睛 + 小呆毛，和任何街机角色都不同），张嘴幅度跟着步进走。
+    // 无敌换色沿用 120ms 的闪烁节奏；soft 下不闪，只换成常亮的浅色。
     const mouth = soft ? 0.28 : 0.1 + Math.abs(Math.sin(state.elapsed / 90)) * 0.35;
     const cx = state.player.x * cell + cell / 2;
     const cy = state.player.y * cell + cell / 2;
-    const base: Record<Dir, number> = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
-    ctx.fillStyle = state.graceMs > 0 && !soft && Math.floor(state.elapsed / 120) % 2 === 0 ? "#FFF6C9" : "#FFD84D";
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, cell * 0.4, base[state.dir] + mouth, base[state.dir] - mouth + Math.PI * 2);
-    ctx.closePath();
-    ctx.fill();
+    drawPlayerFigure(ctx, {
+      x: cx,
+      y: cy,
+      r: cell * 0.4,
+      dir: state.dir,
+      mouth,
+      flash: state.graceMs > 0 && (soft || Math.floor(state.elapsed / 120) % 2 === 0),
+      shield: state.graceMs > 0 && !soft,
+      sad: sadMs > 0,
+    });
     // 迷雾
     if (opts.cfg.fog) {
       const grad = ctx.createRadialGradient(cx, cy, cell * 2.2, cx, cy, cell * 5.4);
@@ -479,8 +489,12 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       return;
     }
     const dotsBefore = remaining(state);
+    const livesBefore = state.lives;
     stepRun(state, dt);
     if (remaining(state) < dotsBefore) notePop(state.player);
+    // 被抓只是委屈 0.4 秒再出发：静态表情，soft 下也照常摆
+    if (state.lives < livesBefore) sadMs = SAD_MS;
+    else if (sadMs > 0) sadMs = Math.max(0, sadMs - dt);
     moveStarEater(dt);
     agePops(dt);
     easeBlue(dt);
