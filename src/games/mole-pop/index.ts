@@ -33,6 +33,7 @@ import {
   buildChart,
   bunnyPenalty,
   comboMultiplier,
+  freezeAll,
   hitPoints,
   hitScore,
   judgeHit,
@@ -40,6 +41,7 @@ import {
   nightMarketChart,
   nightMarketLine,
   nightMarketStall,
+  thawAll,
   type ChartNote,
   type MoleKind,
 } from "./rhythm";
@@ -541,7 +543,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -597,6 +599,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：地鼠与整场倒计时一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边看时间走完
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       mode?.destroy();
       mode = null;

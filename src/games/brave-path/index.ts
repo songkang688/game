@@ -95,7 +95,7 @@ import {
   mountLevelGame,
   type GameApi
 } from "../level99";
-import { Cleanup } from "./cleanup";
+import { Cleanup, freezeAll, thawAll } from "./cleanup";
 import {
   REST_EVERY,
   applySupply,
@@ -965,7 +965,7 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
 
 type Screen = "menu" | "campaign" | "endless" | "arena" | "prep";
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const outer = new Cleanup();
   const root = el("div", "bvp-root");
   const style = el("style");
@@ -1953,6 +1953,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   render();
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：走格子、对战回合、无尽计时一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边丢星芒
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       outer.destroy();
       dropCurrent();

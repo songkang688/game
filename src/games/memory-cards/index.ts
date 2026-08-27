@@ -5,6 +5,7 @@ import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type Sound
 import { save } from "../../engine/save";
 import { CHAPTERS, LEVELS, type MemoryLevel } from "./levels";
 import { THEME_PACKS, drawIcon, packForTheme, type Icon, type IconCtx } from "./art";
+import { freezeAll, registerGate, thawAll } from "./pauseGate";
 import {
   BACK_PATTERNS,
   ENDLESS_MAX_MISS,
@@ -169,6 +170,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   let beat: ReturnType<typeof setInterval> | null = null;
   let destroyed = false;
   let done = false;
+  /** 外壳暂停面板按下去了：倒计时不走，换位机关也别趁这会儿动手 */
+  let frozen = false;
   let misses = 0;
   let missSinceImp = 0;
   let matched = 0;
@@ -534,7 +537,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
 
   if (cfg.timeLimit > 0) {
     ticker = setInterval(() => {
-      if (destroyed || done) return;
+      if (destroyed || done || frozen) return;
       timeLeft--;
       renderTop();
       if (timeLeft <= 0) finish(false, true);
@@ -544,7 +547,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
   if (swapEvery > 0) {
     const BEAT = 250;
     beat = setInterval(() => {
-      if (destroyed || done) return;
+      if (destroyed || done || frozen) return;
       sinceSwap += BEAT;
       renderTop();
       if (sinceSwap >= swapEvery) {
@@ -560,10 +563,20 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     }, BEAT);
   }
 
+  const dropGate = registerGate({
+    freeze: () => {
+      frozen = true;
+    },
+    thaw: () => {
+      frozen = false;
+    },
+  });
+
   return {
     destroy() {
       destroyed = true;
       done = true;
+      dropGate();
       if (ticker) clearInterval(ticker);
       ticker = null;
       if (beat) clearInterval(beat);
@@ -770,7 +783,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -873,6 +886,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：限时关的倒计时与换位机关一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边被判超时
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       mode?.destroy();
       mode = null;

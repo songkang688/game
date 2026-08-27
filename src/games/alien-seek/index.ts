@@ -56,6 +56,7 @@ import {
   type View,
   type Viewport,
 } from "./seek12";
+import { freezeAll, registerGate, thawAll } from "./pauseGate";
 
 /** 两位玩家的光标颜色:朵朵粉、星星蓝 */
 const P_COLOR = ["#e8558f", "#3f7fd6"];
@@ -494,6 +495,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   let left = lv.seconds;
   let misses = 0;
   let paused = false;
+  /** 这次的暂停是外壳面板按下去的（孩子自己按的那次不归它管） */
+  let shellHeld = false;
   let finished = false;
   let destroyed = false;
   let raf = 0;
@@ -1060,6 +1063,19 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
 
+  // 外壳的暂停面板走这条线：它停的是同一个 paused，和自家 Esc / ⏸ 按钮一个开关
+  const dropGate = registerGate({
+    freeze: () => {
+      shellHeld = !paused;
+      if (shellHeld) paused = true;
+    },
+    thaw: () => {
+      // 面板弹出来之前孩子自己就按过暂停的，关掉面板不要替他恢复
+      if (shellHeld) paused = false;
+      shellHeld = false;
+    },
+  });
+
   syncSize();
   last = performance.now();
   raf = requestAnimationFrame(frame);
@@ -1068,6 +1084,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     destroy() {
       destroyed = true;
       finished = true;
+      dropGate();
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
@@ -1298,7 +1315,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
 // 挂载:模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -1361,6 +1378,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：找物倒计时与双人抢答一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边看时间走完
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       mode?.destroy();
       mode = null;

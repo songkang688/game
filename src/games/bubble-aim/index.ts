@@ -151,8 +151,10 @@ interface CrackFx {
   t: number;
 }
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   let destroyed = false;
+  /** 外壳暂停面板按下去了：帧照排，但飞在半路的泡泡一动不动 */
+  let frozen = false;
   let raf = 0;
   let lastTime = 0;
   let animTime = 0;
@@ -1200,6 +1202,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     raf = requestAnimationFrame(tick);
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
+    // 冻住时只把时间基准往前挪：暂停多久就欠多久，关掉面板泡泡接着飞
+    if (frozen) return;
     animTime += dt;
     phaseTime += dt;
     if (bannerTime > 0) bannerTime -= dt;
@@ -1323,6 +1327,14 @@ export function mount(api: GameApi): { destroy: () => void } {
   });
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：飞在半路的泡泡与顶板下压一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边被顶到线
+    pause: () => {
+      frozen = true;
+    },
+    resume: () => {
+      frozen = false;
+    },
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);

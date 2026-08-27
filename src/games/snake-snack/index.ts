@@ -65,6 +65,7 @@ import {
   takeTurn,
   tickMsAt,
 } from "./snake12";
+import { freezeAll, registerGate, thawAll } from "./pauseGate";
 
 const CELL = 26;
 const SIZE = GRID * CELL;
@@ -151,6 +152,8 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   const cfg = opts.cfg;
   let destroyed = false;
   let ended = false;
+  /** 外壳暂停面板按下去了：帧照排，但一拍都不走 */
+  let frozen = false;
   let raf = 0;
   let lastFrame = 0;
   /** 距离下一拍还差多少毫秒（顺带给画面当插值进度） */
@@ -652,6 +655,9 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(120, now - lastFrame || 16);
     lastFrame = now;
+    // 冻住时只把时间基准往前挪，不推进也不重画：暂停多久就欠多久，
+    // 关掉面板接着走的还是原来那一拍
+    if (frozen) return;
     if (!ended) {
       elapsedMs += dt;
       acc += dt;
@@ -664,6 +670,15 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
     }
     draw(ended ? 1 : moveT(acc, stepMs, REDUCED));
   }
+
+  const dropGate = registerGate({
+    freeze: () => {
+      frozen = true;
+    },
+    thaw: () => {
+      frozen = false;
+    },
+  });
 
   refreshSpeed();
   placeSnack();
@@ -678,6 +693,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
     destroy() {
       destroyed = true;
       ended = true;
+      dropGate();
       cancelAnimationFrame(raf);
       clearTimeout(doneTimer);
       window.removeEventListener("keydown", onKeyDown);
@@ -804,7 +820,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -895,6 +911,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：毛毛虫停在原地，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边撞上墙
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       mode?.destroy();
       mode = null;

@@ -16,12 +16,14 @@ import {
   phaseAt,
   planCollapse,
   previewLabel,
+  freezeAll,
   pushUpRow,
   seaColors,
   seaFrozen,
   seaTideRows,
   seaLine,
   seaPushMs,
+  thawAll,
   visualColAt,
   visualRowAt,
 } from "./collapse";
@@ -194,7 +196,7 @@ interface CollapseHost {
   gravityUp: boolean;
   render: () => void;
   alive: () => boolean;
-  onRaf: (id: number) => void;
+  onRaf: (id: number, fn?: () => void) => void;
 }
 
 /**
@@ -253,10 +255,10 @@ function runCollapse(host: CollapseHost, popped: Array<[number, number]>, done: 
       done();
       return;
     }
-    host.onRaf(requestAnimationFrame(frame));
+    host.onRaf(requestAnimationFrame(frame), frame);
   };
 
-  host.onRaf(requestAnimationFrame(frame));
+  host.onRaf(requestAnimationFrame(frame), frame);
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +316,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     gravityUp,
     render: () => render(),
     alive: () => bag.alive,
-    onRaf: (id) => bag.onRaf(id),
+    onRaf: (id, fn) => bag.onRaf(id, fn),
   };
 
   function setup(): void {
@@ -630,7 +632,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     gravityUp: false,
     render: () => render(),
     alive: () => bag.alive && !over,
-    onRaf: (id) => bag.onRaf(id),
+    onRaf: (id, fn) => bag.onRaf(id, fn),
   };
 
   function render(): void {
@@ -823,7 +825,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -878,6 +880,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：涨潮与塌陷动画一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边被泡泡顶到线
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       mode?.destroy();
       mode = null;

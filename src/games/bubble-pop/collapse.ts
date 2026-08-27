@@ -446,6 +446,8 @@ export interface BubbleBagHost {
   setTimeout: (fn: () => void, ms: number) => number;
   clearTimeout: (id: number) => void;
   cancelRaf: (id: number) => void;
+  /** 化冻时把停在半路的那一帧重新排上；单测不给就当没有 rAF 可用 */
+  requestRaf?: (fn: () => void) => number;
 }
 
 export function globalBubbleBagHost(): BubbleBagHost {
@@ -453,6 +455,7 @@ export function globalBubbleBagHost(): BubbleBagHost {
     setTimeout: (fn, ms) => setTimeout(fn, ms) as unknown as number,
     clearTimeout: (id) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>),
     cancelRaf: (id) => cancelAnimationFrame(id),
+    requestRaf: (fn) => requestAnimationFrame(fn),
   };
 }
 
@@ -462,11 +465,17 @@ export function globalBubbleBagHost(): BubbleBagHost {
  * `close()` 之后既不会再回调,也不会留下任何没清的东西。
  */
 export class BubbleBag {
-  private timeouts = new Set<number>();
+  private timeouts = new Map<number, { fn: () => void; dueAt: number }>();
   private raf = 0;
+  private rafFn: (() => void) | null = null;
+  private heldTimers: Array<{ fn: () => void; restMs: number }> = [];
+  private heldFrame: (() => void) | null = null;
   private closed = false;
+  frozen = false;
 
-  constructor(private host: BubbleBagHost = globalBubbleBagHost()) {}
+  constructor(private host: BubbleBagHost = globalBubbleBagHost()) {
+    LIVE.add(this);
+  }
 
   /** 还活着(没收摊)才继续跑动画与回调 */
   get alive(): boolean {
@@ -475,40 +484,107 @@ export class BubbleBag {
 
   /** 还挂着几件东西(close 后必须是 0) */
   get size(): number {
-    return this.timeouts.size + (this.raf ? 1 : 0);
+    return this.timeouts.size + (this.raf ? 1 : 0) + this.heldTimers.length + (this.heldFrame ? 1 : 0);
   }
 
   /** 延时回调:收摊之后到点也不会再执行 */
   after(fn: () => void, ms: number): void {
     if (this.closed) return;
+    if (this.frozen) {
+      this.heldTimers.push({ fn, restMs: Math.max(0, ms) });
+      return;
+    }
     const id = this.host.setTimeout(() => {
       this.timeouts.delete(id);
       if (!this.closed) fn();
     }, ms);
-    this.timeouts.add(id);
+    this.timeouts.set(id, { fn, dueAt: Date.now() + Math.max(0, ms) });
   }
 
-  /** 记住最新的一帧;收摊之后再来的一帧直接取消 */
-  onRaf(id: number): void {
+  /**
+   * 记住最新的一帧；收摊之后再来的一帧直接取消。
+   *
+   * 带上 `fn` 才能在化冻时把这一帧重新排上——塌陷动画是靠帧自己递归排下一帧的，
+   * 冻的时候只取消不记回调，化冻之后盘面就永远停在半路了。
+   */
+  onRaf(id: number, fn?: () => void): void {
     if (this.closed) {
       this.host.cancelRaf(id);
       return;
     }
+    if (this.frozen) {
+      this.host.cancelRaf(id);
+      if (fn) this.heldFrame = fn;
+      return;
+    }
     this.raf = id;
+    this.rafFn = fn ?? null;
+  }
+
+  /** 冻住：在飞的延时按剩余毫秒收起，排队的那一帧取消掉但记住回调 */
+  freeze(): void {
+    if (this.frozen || this.closed) return;
+    this.frozen = true;
+    const now = Date.now();
+    for (const [id, t] of this.timeouts) {
+      this.host.clearTimeout(id);
+      this.heldTimers.push({ fn: t.fn, restMs: Math.max(0, t.dueAt - now) });
+    }
+    this.timeouts.clear();
+    if (this.raf) this.host.cancelRaf(this.raf);
+    if (this.rafFn) this.heldFrame = this.rafFn;
+    this.raf = 0;
+    this.rafFn = null;
+  }
+
+  /** 化冻：欠多少毫秒补多少，停在半路的那一帧重新排上 */
+  thaw(): void {
+    if (!this.frozen || this.closed) return;
+    this.frozen = false;
+    for (const t of this.heldTimers.splice(0)) this.after(t.fn, t.restMs);
+    const fn = this.heldFrame;
+    this.heldFrame = null;
+    if (fn && this.host.requestRaf) this.onRaf(this.host.requestRaf(fn), fn);
   }
 
   /** 把手上排着的活全清掉,但口袋还能接着用(无尽「再涨一次潮」就走这条) */
   clearPending(): void {
     if (this.raf) this.host.cancelRaf(this.raf);
     this.raf = 0;
-    for (const id of this.timeouts) this.host.clearTimeout(id);
+    this.rafFn = null;
+    this.heldFrame = null;
+    this.heldTimers.length = 0;
+    for (const id of this.timeouts.keys()) this.host.clearTimeout(id);
     this.timeouts.clear();
   }
 
   close(): void {
     this.clearPending();
     this.closed = true;
+    this.frozen = false;
+    LIVE.delete(this);
   }
+}
+
+/**
+ * 还活着的口袋。闯关、无尽各建各的，外壳只认 `mount()` 返回的那一对
+ * `pause` / `resume`，所以留一份名册，暂停时不用管孩子当下在哪个屏。
+ */
+const LIVE = new Set<BubbleBag>();
+
+/** 外壳弹「先歇一会儿」时调：这一款所有还活着的口袋一起冻住 */
+export function freezeAll(): void {
+  for (const b of [...LIVE]) b.freeze();
+}
+
+/** 关掉面板时调：原样接上 */
+export function thawAll(): void {
+  for (const b of [...LIVE]) b.thaw();
+}
+
+/** 用例用：当前还有几个口袋活着（close 之后必须归零） */
+export function liveBags(): number {
+  return LIVE.size;
 }
 
 /** 按住时给的预览提示:高亮整群 + 预计得分 */

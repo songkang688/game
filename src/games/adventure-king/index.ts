@@ -78,6 +78,7 @@ import {
   type Dir,
   type RoomState,
 } from "./explore";
+import { freezeAll, registerGate, thawAll } from "./pauseGate";
 
 const CSS = `
 .ak-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
@@ -212,6 +213,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   // 这里只负责把按键喂进去、把返回的事件变成音效和提示。
   const run: RunState = createRun(lv);
   let paused = false;
+  /** 这次的暂停是外壳面板按下去的（孩子自己按的那次不归它管） */
+  let shellHeld = false;
   let finished = false;
   let doorFlash = 0;
   let message = "";
@@ -692,6 +695,20 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   bag.add(() => window.removeEventListener("keyup", onKeyUp));
   bag.add(() => cancelAnimationFrame(raf));
   bag.add(() => wrap.remove());
+  // 外壳的暂停面板走这条线：它停的是同一个 paused，和自家 Esc / ⏸ 按钮一个开关
+  bag.add(
+    registerGate({
+      freeze: () => {
+        shellHeld = !paused;
+        if (shellHeld) paused = true;
+      },
+      thaw: () => {
+        // 面板弹出来之前孩子自己就按过暂停的，关掉面板不要替他恢复
+        if (shellHeld) paused = false;
+        shellHeld = false;
+      },
+    })
+  );
 
   syncSize();
   last = performance.now();
@@ -1301,7 +1318,7 @@ function mountSpeedrun(host: HTMLElement, api: GameApi, onBack: () => void): { d
 // 挂载:模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -1369,6 +1386,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：跑跳层的物理与计时一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边被推下平台
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       mode?.destroy();
       mode = null;

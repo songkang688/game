@@ -378,35 +378,101 @@ export function globalTimerHost(): TimerHost {
 
 /** 所有 setTimeout / setInterval 都从这里过一手，destroy 时一次收干净 */
 export class TimerBag {
-  private timeouts = new Set<number>();
-  private intervals = new Set<number>();
+  private timeouts = new Map<number, { fn: () => void; dueAt: number }>();
+  private intervals = new Map<number, { fn: () => void; ms: number }>();
+  private heldTimeouts: Array<{ fn: () => void; restMs: number }> = [];
+  private heldIntervals: Array<{ fn: () => void; ms: number }> = [];
+  frozen = false;
 
-  constructor(private host: TimerHost = globalTimerHost()) {}
+  constructor(private host: TimerHost = globalTimerHost()) {
+    LIVE.add(this);
+  }
 
   after(fn: () => void, ms: number): number {
+    if (this.frozen) {
+      this.heldTimeouts.push({ fn, restMs: Math.max(0, ms) });
+      return 0;
+    }
     const id = this.host.setTimeout(() => {
       this.timeouts.delete(id);
       fn();
     }, ms);
-    this.timeouts.add(id);
+    this.timeouts.set(id, { fn, dueAt: Date.now() + Math.max(0, ms) });
     return id;
   }
 
   every(fn: () => void, ms: number): number {
+    if (this.frozen) {
+      this.heldIntervals.push({ fn, ms });
+      return 0;
+    }
     const id = this.host.setInterval(fn, ms);
-    this.intervals.add(id);
+    this.intervals.set(id, { fn, ms });
     return id;
   }
 
   /** 还挂着几个定时器（destroy 后必须是 0） */
   get size(): number {
-    return this.timeouts.size + this.intervals.size;
+    return this.timeouts.size + this.intervals.size + this.heldTimeouts.length + this.heldIntervals.length;
+  }
+
+  /**
+   * 冻住：地鼠的冒头、缩头、整场倒计时全按**剩余毫秒**收起来。
+   * 外壳弹「先歇一会儿」时不冻，面板只是挡在前面，地鼠照样一只只缩回去。
+   */
+  freeze(): void {
+    if (this.frozen) return;
+    this.frozen = true;
+    const now = Date.now();
+    for (const [id, t] of this.timeouts) {
+      this.host.clearTimeout(id);
+      this.heldTimeouts.push({ fn: t.fn, restMs: Math.max(0, t.dueAt - now) });
+    }
+    this.timeouts.clear();
+    for (const [id, t] of this.intervals) {
+      this.host.clearInterval(id);
+      this.heldIntervals.push(t);
+    }
+    this.intervals.clear();
+  }
+
+  /** 化冻：欠多少毫秒补多少，心跳原样接上 */
+  thaw(): void {
+    if (!this.frozen) return;
+    this.frozen = false;
+    for (const t of this.heldTimeouts.splice(0)) this.after(t.fn, t.restMs);
+    for (const t of this.heldIntervals.splice(0)) this.every(t.fn, t.ms);
   }
 
   clearAll(): void {
-    for (const id of this.timeouts) this.host.clearTimeout(id);
-    for (const id of this.intervals) this.host.clearInterval(id);
+    for (const id of this.timeouts.keys()) this.host.clearTimeout(id);
+    for (const id of this.intervals.keys()) this.host.clearInterval(id);
     this.timeouts.clear();
     this.intervals.clear();
+    this.heldTimeouts.length = 0;
+    this.heldIntervals.length = 0;
+    this.frozen = false;
+    LIVE.delete(this);
   }
+}
+
+/**
+ * 还活着的口袋。闯关一关一个、无尽一摊一个，外壳只认 `mount()` 返回的那一对
+ * `pause` / `resume`，所以留一份名册，暂停时不用管孩子当下在哪个屏。
+ */
+const LIVE = new Set<TimerBag>();
+
+/** 外壳弹「先歇一会儿」时调：这一款所有还活着的口袋一起冻住 */
+export function freezeAll(): void {
+  for (const b of [...LIVE]) b.freeze();
+}
+
+/** 关掉面板时调：原样接上 */
+export function thawAll(): void {
+  for (const b of [...LIVE]) b.thaw();
+}
+
+/** 用例用：当前还有几个口袋活着（clearAll 之后必须归零） */
+export function liveBags(): number {
+  return LIVE.size;
 }

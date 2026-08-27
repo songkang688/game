@@ -56,6 +56,7 @@ import {
   type ResumeState,
   type RotateStep,
 } from "./snap";
+import { freezeAll, registerGate, thawAll } from "./pauseGate";
 
 const SMOKE = typeof location !== "undefined" && /[?&]smoke=1/.test(location.search);
 
@@ -178,6 +179,8 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   const bag = new TileBag();
   let raf = 0;
   let destroyed = false;
+  /** 外壳暂停面板按下去了：倒计时不走，图案也别趁这会儿藏起来 */
+  let frozen = false;
   let levelDone = false;
   let moves = 0;
   let hintsLeft = cfg.hints;
@@ -821,16 +824,29 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     ? `📌 上次这幅画拼到第 ${moves} 步，接着来！`
     : openingLine(cfg);
   if (kind === "slide" && cfg.hidePreview) {
-    later(() => {
+    // 记忆关的 5 秒观察时间：暂停面板开着时不算数，不然孩子回来图已经没了
+    const hideAt = Date.now() + 5000;
+    const hide = (): void => {
+      if (destroyed || levelDone) return;
+      if (frozen) {
+        later(hide, 200);
+        return;
+      }
+      const rest = hideAt - Date.now();
+      if (rest > 0) {
+        later(hide, rest);
+        return;
+      }
       memoryHidden = true;
       applyPreview();
       msgEl.textContent = "图案藏起来了，先把记住的那几块归位当参照（提示能再看一眼）！";
-    }, 5000);
+    };
+    later(hide, 5000);
   }
 
   if (cfg.timeLimit) {
     const clock = setInterval(() => {
-      if (levelDone || destroyed) return;
+      if (levelDone || destroyed || frozen) return;
       timeLeft--;
       renderTop();
       if (timeLeft <= 0) finishLose("time");
@@ -838,10 +854,20 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     intervals.add(clock);
   }
 
+  const dropGate = registerGate({
+    freeze: () => {
+      frozen = true;
+    },
+    thaw: () => {
+      frozen = false;
+    },
+  });
+
   return {
     destroy() {
       destroyed = true;
       levelDone = true;
+      dropGate();
       intervals.forEach((t) => clearInterval(t));
       intervals.clear();
       timeouts.forEach((t) => clearTimeout(t));
@@ -955,7 +981,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -1011,6 +1037,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：限时关的倒计时与记忆关的观察秒数一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边被判超时
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       mode?.destroy();
       mode = null;

@@ -37,47 +37,73 @@ function defaultHost(): TimerHost {
 }
 
 export class Cleanup {
-  private timers = new Set<number>();
-  private intervals = new Set<number>();
-  private frames = new Set<number>();
+  private timers = new Map<number, { fn: () => void; dueAt: number }>();
+  private intervals = new Map<number, { fn: () => void; ms: number }>();
+  private frames = new Map<number, (t: number) => void>();
+  private heldTimers: Array<{ fn: () => void; restMs: number }> = [];
+  private heldIntervals: Array<{ fn: () => void; ms: number }> = [];
+  private heldFrames: Array<(t: number) => void> = [];
   private offs: Array<() => void> = [];
   private readonly host: TimerHost;
   dead = false;
+  frozen = false;
 
   constructor(host?: TimerHost) {
     this.host = host ?? defaultHost();
+    LIVE.add(this);
   }
 
   /** 还有多少条没清掉的资源；`destroy()` 之后必须是 0 */
   pending(): number {
-    return this.timers.size + this.intervals.size + this.frames.size + this.offs.length;
+    return (
+      this.timers.size +
+      this.intervals.size +
+      this.frames.size +
+      this.heldTimers.length +
+      this.heldIntervals.length +
+      this.heldFrames.length +
+      this.offs.length
+    );
   }
 
   after(ms: number, fn: () => void): number {
+    if (this.dead) return 0;
+    if (this.frozen) {
+      this.heldTimers.push({ fn, restMs: Math.max(0, ms) });
+      return 0;
+    }
     const id = this.host.setTimeout(() => {
       this.timers.delete(id);
       if (!this.dead) fn();
     }, ms);
-    this.timers.add(id);
+    this.timers.set(id, { fn, dueAt: Date.now() + Math.max(0, ms) });
     return id;
   }
 
   every(ms: number, fn: () => void): number {
-    if (!this.host.setInterval) return 0;
+    if (this.dead || !this.host.setInterval) return 0;
+    if (this.frozen) {
+      this.heldIntervals.push({ fn, ms });
+      return 0;
+    }
     const id = this.host.setInterval(() => {
       if (!this.dead) fn();
     }, ms);
-    this.intervals.add(id);
+    this.intervals.set(id, { fn, ms });
     return id;
   }
 
   frame(fn: (t: number) => void): number {
-    if (!this.host.requestAnimationFrame) return 0;
+    if (this.dead || !this.host.requestAnimationFrame) return 0;
+    if (this.frozen) {
+      this.heldFrames.push(fn);
+      return 0;
+    }
     const id = this.host.requestAnimationFrame((t) => {
       this.frames.delete(id);
       if (!this.dead) fn(t);
     });
-    this.frames.add(id);
+    this.frames.set(id, fn);
     return id;
   }
 
@@ -91,21 +117,57 @@ export class Cleanup {
     this.offs.push(off);
   }
 
-  killTimers(): void {
-    for (const id of this.timers) this.host.clearTimeout(id);
+  /** 冻住：在飞的定时器按剩余毫秒收起，心跳与帧一并收走；监听留着 */
+  freeze(): void {
+    if (this.frozen || this.dead) return;
+    this.frozen = true;
+    const now = Date.now();
+    for (const [id, t] of this.timers) {
+      this.host.clearTimeout(id);
+      this.heldTimers.push({ fn: t.fn, restMs: Math.max(0, t.dueAt - now) });
+    }
     this.timers.clear();
-    if (this.host.clearInterval) {
-      for (const id of this.intervals) this.host.clearInterval(id);
+    for (const [id, t] of this.intervals) {
+      this.host.clearInterval?.(id);
+      this.heldIntervals.push(t);
     }
     this.intervals.clear();
-    if (this.host.cancelAnimationFrame) {
-      for (const id of this.frames) this.host.cancelAnimationFrame(id);
+    for (const [id, fn] of this.frames) {
+      this.host.cancelAnimationFrame?.(id);
+      this.heldFrames.push(fn);
     }
     this.frames.clear();
   }
 
+  /** 化冻：欠多少毫秒补多少，心跳与帧原样接上 */
+  thaw(): void {
+    if (!this.frozen || this.dead) return;
+    this.frozen = false;
+    for (const t of this.heldTimers.splice(0)) this.after(t.restMs, t.fn);
+    for (const t of this.heldIntervals.splice(0)) this.every(t.ms, t.fn);
+    for (const fn of this.heldFrames.splice(0)) this.frame(fn);
+  }
+
+  killTimers(): void {
+    for (const id of this.timers.keys()) this.host.clearTimeout(id);
+    this.timers.clear();
+    if (this.host.clearInterval) {
+      for (const id of this.intervals.keys()) this.host.clearInterval(id);
+    }
+    this.intervals.clear();
+    if (this.host.cancelAnimationFrame) {
+      for (const id of this.frames.keys()) this.host.cancelAnimationFrame(id);
+    }
+    this.frames.clear();
+    this.heldTimers.length = 0;
+    this.heldIntervals.length = 0;
+    this.heldFrames.length = 0;
+    this.frozen = false;
+  }
+
   destroy(): void {
     this.dead = true;
+    LIVE.delete(this);
     this.killTimers();
     while (this.offs.length) {
       try {
@@ -115,4 +177,25 @@ export class Cleanup {
       }
     }
   }
+}
+
+/**
+ * 还活着的清洁工。闯关、无尽、对战各建各的，外壳只认 `mount()` 返回的那一对
+ * `pause` / `resume`，所以留一份名册，暂停时不用管孩子当下在哪个屏。
+ */
+const LIVE = new Set<Cleanup>();
+
+/** 外壳弹「先歇一会儿」时调：这一款所有还活着的清洁工一起冻住 */
+export function freezeAll(): void {
+  for (const c of [...LIVE]) c.freeze();
+}
+
+/** 关掉面板时调：原样接上 */
+export function thawAll(): void {
+  for (const c of [...LIVE]) c.thaw();
+}
+
+/** 用例用：当前还有几个清洁工活着（destroy 之后必须归零） */
+export function liveCleanups(): number {
+  return LIVE.size;
 }

@@ -289,7 +289,7 @@ function saveBest(best: BestScores): void {
   }
 }
 
-export function mount(api: GameAPI): { destroy: () => void } {
+export function mount(api: GameAPI): { pause: () => void; resume: () => void; destroy: () => void } {
   const { root } = api;
   const canvas = document.createElement("canvas");
   canvas.style.width = "100%";
@@ -2786,9 +2786,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   let raf = 0;
   let last = performance.now();
+  /** 外壳暂停面板按下去了：帧照排，但水果一动不动 */
+  let frozen = false;
   function frame(now: number): void {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    // 冻住时只把时间基准往前挪：暂停多久就欠多久，关掉面板接着切原来那一刀
+    if (frozen) {
+      raf = requestAnimationFrame(frame);
+      return;
+    }
     syncSize();
     update(dt);
     draw();
@@ -2809,6 +2816,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
   bag.add(() => canvas.remove());
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：飞在半空的水果与回合计时一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边漏刀
+    pause: () => {
+      frozen = true;
+    },
+    resume: () => {
+      frozen = false;
+    },
     destroy(): void {
       destroyed = true;
       bag.clear();
