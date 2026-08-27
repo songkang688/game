@@ -88,6 +88,40 @@ export function alienBackdropGap(tint: string): number {
   return luma(tint) - bg;
 }
 
+/**
+ * 藏匿点内腔(B 档第 1 轮建议级,窗口 6 第 2 轮 C 档清偿):
+ * 八种藏身处的「里面」统一用这支夜靛色,不再按藏身处主色各调各的——
+ * 「里面都是同一个夜晚」,孩子扫一眼就知道哪里是能藏东西的开口。
+ */
+export const AS_CAVITY_CORE = "#3E3A66";
+/** 内腔边缘停 = 中心往黑方向压 18%(掀开后内腔不再近乎平涂) */
+export const AS_CAVITY_EDGE = mixHex(AS_CAVITY_CORE, "#000000", 0.18);
+
+/** 内腔渐变只需要 ctx 会造径向渐变;结构化收窄类型,测试拿桩就能验 */
+export interface RadialGradFactory {
+  createRadialGradient(
+    x0: number,
+    y0: number,
+    r0: number,
+    x1: number,
+    y1: number,
+    r1: number
+  ): CanvasGradient;
+}
+
+/** 内腔 2 停径向渐变:中心 AS_CAVITY_CORE → 边缘 -18%,由调用方给开口圆心与半径 */
+export function cavityGrad(
+  c2d: RadialGradFactory,
+  cx: number,
+  cy: number,
+  rad: number
+): CanvasGradient {
+  const g = c2d.createRadialGradient(cx, cy, Math.max(1, rad * 0.12), cx, cy, Math.max(2, rad));
+  g.addColorStop(0, AS_CAVITY_CORE);
+  g.addColorStop(1, AS_CAVITY_EDGE);
+  return g;
+}
+
 // ---------------------------------------------------------------------------
 // 三、六只外星朋友的规格(剪影级差异,不是换色)
 // ---------------------------------------------------------------------------

@@ -67,6 +67,7 @@ import {
   UNCOVER_MS,
   alienPose,
   alienSilhouette,
+  cavityGrad,
   ceremonyAt,
   featureParts,
   lightenHex,
@@ -303,11 +304,14 @@ function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number, open =
   c2d.fill(path);
   c2d.stroke(path);
 
-  // 「能藏东西」的内腔:每种藏身点一个更深的开口,掀开(open)时越张越大
-  const deep = shade(fill, 0.42);
+  // 「能藏东西」的内腔:每种藏身点一个更深的开口,掀开(open)时越张越大。
+  // 内腔统一走 2 停径向渐变(中心 #3E3A66 → 边缘 -18%),掀开后不再平涂
+  const cavity = (cx: number, cy: number, rad: number): void => {
+    c2d.fillStyle = cavityGrad(c2d, cx, cy, rad);
+  };
   const gapGlow = up.gap > 0.12;
-  c2d.fillStyle = deep;
   if (s.kind === "树洞") {
+    cavity(0, r * 0.15, r * 0.55);
     c2d.beginPath();
     c2d.ellipse(0, r * 0.15, r * (0.34 + 0.12 * up.gap), r * (0.44 + 0.12 * up.gap), 0, 0, Math.PI * 2);
     c2d.fill();
@@ -319,6 +323,7 @@ function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number, open =
     c2d.stroke();
   } else if (s.kind === "木箱") {
     // 盖缝:找到时盖子抬起,缝里透光
+    cavity(0, -r * 0.04, r * 0.9);
     c2d.fillRect(-r * 0.85, -r * 0.12, r * 1.7, r * 0.16);
     if (open > 0) {
       c2d.save();
@@ -340,12 +345,13 @@ function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number, open =
     c2d.arc(-r * 0.34, -r * 0.12, r * 0.34, 0, Math.PI * 2);
     c2d.arc(r * 0.36, -r * 0.1, r * 0.3, 0, Math.PI * 2);
     c2d.fill();
-    c2d.fillStyle = deep;
+    cavity(0, r * 0.04, r * 0.4);
     c2d.beginPath();
     c2d.arc(0, r * 0.04, r * (0.26 + 0.1 * up.gap), 0, Math.PI * 2);
     c2d.fill();
   } else if (s.kind === "水缸") {
     // 缸口:一圈深色的「里面」,水光在口沿
+    cavity(0, -r * 0.68, r * 0.56);
     c2d.beginPath();
     c2d.ellipse(0, -r * 0.68, r * (0.5 + 0.06 * up.gap), r * 0.16, 0, 0, Math.PI * 2);
     c2d.fill();
@@ -357,6 +363,7 @@ function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number, open =
     c2d.stroke();
   } else if (s.kind === "帐篷") {
     // 门帘:深色门洞,掀开时门帘往边上翻
+    cavity(0, r * 0.3, r * 0.75);
     c2d.beginPath();
     c2d.moveTo(0, -r * 0.4);
     c2d.lineTo(r * (0.3 + 0.08 * up.gap), r * 0.7);
@@ -377,9 +384,11 @@ function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number, open =
       c2d.restore();
     }
   } else if (s.kind === "信箱") {
+    cavity(0, -r * 0.35, r * 0.55);
     c2d.fillRect(-r * 0.4, -r * 0.45, r * 0.8, r * (0.12 + 0.14 * up.gap));
   } else if (s.kind === "石头") {
     // 影子后的石缝:右下一道能塞进小朋友的缝
+    cavity(r * 0.25, r * 0.27, r * 0.5);
     c2d.beginPath();
     c2d.moveTo(r * 0.2, -r * 0.1);
     c2d.lineTo(r * (0.5 + 0.1 * up.gap), r * 0.5);
@@ -392,6 +401,7 @@ function drawSpotShape(c2d: CanvasRenderingContext2D, s: Spot, i: number, open =
     c2d.fill();
   } else if (s.kind === "云朵") {
     // 云肚子的阴影层:下缘一条软软的暗带
+    cavity(0, r * 0.36, r * 0.62);
     c2d.beginPath();
     c2d.ellipse(0, r * (0.36 - 0.08 * up.gap), r * 0.62, r * 0.2, 0, 0, Math.PI * 2);
     c2d.fill();
@@ -894,11 +904,24 @@ function drawQuestionCloud(
   c2d.arc(r * 0.28, 0.02 * r, r * 0.24, 0, Math.PI * 2);
   c2d.fill();
   c2d.stroke();
-  c2d.fillStyle = "#7a68b0";
-  c2d.font = `bold ${Math.max(10, Math.round(r * 0.42))}px sans-serif`;
-  c2d.textAlign = "center";
-  c2d.textBaseline = "middle";
-  c2d.fillText("?", 0, -r * 0.06);
+  // 问号换 2.2px 描边白路径 + 薰衣草落影(B 档第 1 轮建议级,第 2 轮清偿):
+  // 钩 = 上半圆弧顺到下垂小竖,点 = 实心小圆;先画偏移的落影再画白芯,
+  // 白纸云上白问号靠落影浮起来。文本字形一个不留。
+  const qStroke = (dx: number, dy: number, color: string, width: number): void => {
+    c2d.strokeStyle = color;
+    c2d.lineWidth = width;
+    c2d.lineCap = "round";
+    c2d.beginPath();
+    c2d.arc(dx, dy - r * 0.16, r * 0.14, Math.PI, Math.PI * 2.25);
+    c2d.quadraticCurveTo(dx + r * 0.1, dy + r * 0.02, dx, dy + r * 0.04);
+    c2d.stroke();
+    c2d.beginPath();
+    c2d.arc(dx, dy + r * 0.16, r * 0.05, 0, Math.PI * 2);
+    c2d.fillStyle = color;
+    c2d.fill();
+  };
+  qStroke(r * 0.035, r * 0.05 - r * 0.06, "rgba(122,104,176,.8)", 3.4);
+  qStroke(0, -r * 0.06, "#ffffff", 2.2);
   c2d.restore();
 }
 
