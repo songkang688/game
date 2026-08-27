@@ -25,7 +25,19 @@ import {
   layoutFits,
 } from "./runtime";
 import { DUET_MIN_GAP_PX } from "./touch";
-import { MST_CSS, SKY_MAX_PX, WRAP_PADDING_X, boardWidth, createStarBoard } from "./ui";
+import {
+  BASE_SIZES,
+  MST_CSS,
+  SCORE_LEVEL_CONTENT_PX,
+  SHORT_SCREEN_PX,
+  SHORT_SIZES,
+  SKY_MAX_PX,
+  STAGE_VISIBLE_AT_720_PX,
+  WRAP_PADDING_X,
+  boardWidth,
+  createStarBoard,
+  shortScreenSavingPx,
+} from "./ui";
 
 /** 五声 / 七声两套音阶实际用的键数 */
 const PENTATONIC = [60, 62, 64, 67, 69];
@@ -152,6 +164,35 @@ describe("音乐星星 · 摆不下就挂横向滚动，键一颗都不许被切
       expect(Number.parseFloat(btn.style.width)).toBeGreaterThanOrEqual(KEY_TOUCH_MIN_PX);
     }
     b.destroy();
+  });
+
+  it("矮屏上竖向逐项收一档，省下的高度盖得住 360×720 上被裁掉的那一截", () => {
+    // 测试员在 360×720 上量到：内容 741px、可视 618px，多出来的 123px 被硬裁
+    const cut = SCORE_LEVEL_CONTENT_PX - STAGE_VISIBLE_AT_720_PX;
+    expect(cut).toBe(123);
+    expect(shortScreenSavingPx(), "压完还是盖不住被裁掉的那一截").toBeGreaterThanOrEqual(cut);
+    // 每一项都必须真的变小，不许拿一个没动的数来凑
+    for (const key of Object.keys(BASE_SIZES) as Array<keyof typeof BASE_SIZES>) {
+      expect(SHORT_SIZES[key], `${key} 没有真的收一档`).toBeLessThan(BASE_SIZES[key]);
+    }
+  });
+
+  it("矮屏那一档只收尺寸，热区一个都没动，而且压完还高就自己滚", () => {
+    const at = MST_CSS.indexOf(`@media (max-height:${SHORT_SCREEN_PX}px)`);
+    expect(at, "没有矮屏分支").toBeGreaterThan(-1);
+    // 注释里会点名 .mst-btn 说明「热区不进这一档」，先剥掉注释再看真规则
+    const block = MST_CSS.slice(at, MST_CSS.indexOf("@media", at + 10)).replace(/\/\*[\s\S]*?\*\//g, "");
+    // 平台那一半（.game-stage 的 overflow:hidden）交给窗口1，本款先在自己壳里兜底
+    expect(block).toContain("overflow-y:auto");
+    expect(block).toContain("touch-action:pan-y");
+    expect(block).toContain(`min-height:${SHORT_SIZES.sky}px`);
+    // 按钮热区不许进这一档
+    expect(block).not.toContain(".mst-btn");
+    expect(block).not.toContain(".mst-chip");
+    expect(block).not.toContain(".mst-choice");
+    expect(block).not.toContain(".mst-drum");
+    // 基准样式里 44px 的按钮热区原样还在
+    expect(MST_CSS).toContain(".mst-btn{min-height:44px");
   });
 
   it("滚动那条样式真的能滚、而且不会顺手把按键的手势也抢走", () => {

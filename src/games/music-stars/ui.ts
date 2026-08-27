@@ -18,17 +18,93 @@ import { TIMBRES, VOLUME_MAX, type StarSynth } from "./synth";
 import { pitchOffsetPx } from "./tuning";
 import { DUET_MIN_GAP_PX } from "./touch";
 
+/** `.mst-wrap` 左右内边距合计 */
+export const WRAP_PADDING_X = 20;
+/** `.mst-sky` 的最大宽度（再宽星星就散得看不出高低了） */
+export const SKY_MAX_PX = 360;
+
+/**
+ * 星星键盘的可用宽度。老写法把 360 直接写死在 `createStarBoard` 里、从不问真实屏宽，
+ * 于是 320px 的老机器上算出来的键排比屏幕还宽，两端的键整个滑出去
+ * （测试员 W5-B-03）。这里按真实屏宽减掉 `.mst-wrap` 的左右内边距，再按 `.mst-sky`
+ * 的上限夹一次。写成纯函数，单测直接喂屏宽。
+ */
+export function boardWidth(viewportWidth?: number): number {
+  const raw =
+    typeof viewportWidth === "number" && viewportWidth > 0
+      ? viewportWidth
+      : (globalThis as { innerWidth?: number }).innerWidth;
+  const vw = typeof raw === "number" && raw > 0 ? raw : SKY_MAX_PX + WRAP_PADDING_X;
+  return Math.max(200, Math.min(SKY_MAX_PX, Math.floor(vw - WRAP_PADDING_X)));
+}
+
+/**
+ * 简谱视奏关在 360×720 上实测的内容高度，以及舞台真正看得见的那一段
+ * （测试员 W5-B-01：多出来的 123px 被 `.game-stage{overflow:hidden}` 直接切掉，
+ * 「哆」键的键心正好压在裁切线上，点不着）。
+ */
+export const SCORE_LEVEL_CONTENT_PX = 741;
+export const STAGE_VISIBLE_AT_720_PX = 618;
+
+/** 「矮屏」的门槛 */
+export const SHORT_SCREEN_PX = 720;
+
+/** 各处竖向尺寸的常规值（基准样式与矮屏样式共用这一份，不许各写各的） */
+export const BASE_SIZES = {
+  wrapPad: 14,
+  wrapGap: 10,
+  msg: 26,
+  dots: 16,
+  sky: 150,
+  face: 44,
+  bar: 56,
+  scorePad: 12,
+} as const;
+
+/** 矮屏上逐项收一档之后的值 */
+export const SHORT_SIZES = {
+  wrapPad: 8,
+  wrapGap: 5,
+  msg: 20,
+  dots: 12,
+  sky: 104,
+  face: 30,
+  bar: 44,
+  scorePad: 8,
+} as const;
+
+/** 每一项在一屏里出现几次（实测简谱关的行数） */
+const TRIM_TIMES: Record<keyof typeof BASE_SIZES, number> = {
+  wrapPad: 2,
+  wrapGap: 6,
+  msg: 1,
+  dots: 1,
+  sky: 1,
+  face: 1,
+  bar: 1,
+  scorePad: 2,
+};
+
+/** 矮屏样式一共替这一屏省下多少竖向像素 */
+export function shortScreenSavingPx(): number {
+  let sum = 0;
+  for (const k of Object.keys(BASE_SIZES) as Array<keyof typeof BASE_SIZES>) {
+    sum += (BASE_SIZES[k] - SHORT_SIZES[k]) * TRIM_TIMES[k];
+  }
+  return sum;
+}
+
 export const MST_CSS = `
-.mst-wrap{min-height:420px;display:flex;flex-direction:column;align-items:center;gap:10px;
-  padding:14px 10px;box-sizing:border-box;border-radius:16px;width:100%;
+.mst-wrap{min-height:420px;display:flex;flex-direction:column;align-items:center;gap:${BASE_SIZES.wrapGap}px;
+  padding:${BASE_SIZES.wrapPad}px 10px;box-sizing:border-box;border-radius:16px;width:100%;
   font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
   user-select:none;-webkit-user-select:none;touch-action:none;}
 .mst-top{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .mst-badge{font-size:14px;font-weight:800;color:#fff;background:#ffffff2b;border-radius:999px;padding:5px 12px;}
 .mst-badge-listen{background:#ffe066;color:#3b2a00;animation:mst-listen 1s ease-in-out infinite;}
 @keyframes mst-listen{0%,100%{opacity:1}50%{opacity:.55}}
-.mst-msg{min-height:26px;font-size:17px;font-weight:800;color:#ffe066;text-align:center;line-height:1.4;}
-.mst-dots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;min-height:16px;}
+.mst-msg{min-height:${BASE_SIZES.msg}px;font-size:17px;font-weight:800;color:#ffe066;text-align:center;line-height:1.4;}
+.mst-dots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;min-height:${BASE_SIZES.dots}px;}
 .mst-dot{width:14px;height:14px;border-radius:50%;background:#ffffff33;transition:background .2s,transform .2s;}
 .mst-dot-on{background:#ffe066;transform:scale(1.25);}
 .mst-dot-long{width:26px;border-radius:8px;}
@@ -37,12 +113,12 @@ export const MST_CSS = `
 .mst-dot-ok{background:#ffa94d;}
 .mst-dot-miss{background:#ffffff55;}
 
-.mst-sky{position:relative;width:100%;max-width:360px;min-height:150px;}
+.mst-sky{position:relative;width:100%;max-width:${SKY_MAX_PX}px;min-height:${BASE_SIZES.sky}px;}
 .mst-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;
   transition:opacity .5s ease;}
 .mst-lines-on{opacity:1;}
 .mst-keys{position:relative;display:flex;justify-content:center;align-items:flex-end;
-  min-height:150px;width:100%;}
+  min-height:${BASE_SIZES.sky}px;width:100%;}
 /* 键排比可用宽度还宽时（七声音阶 8 个键就是）改成横向可滚：
    键上挂着 touch-action:none 保证按下去出声，滑动从键与键之间、星空那一片起手 */
 .mst-keys-scroll{overflow-x:auto;justify-content:flex-start;touch-action:pan-x;
@@ -51,7 +127,7 @@ export const MST_CSS = `
 .mst-star{border:none;background:transparent;padding:0;cursor:pointer;font-family:inherit;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
   transition:transform .12s ease,filter .12s ease;touch-action:none;}
-.mst-face{font-size:44px;line-height:1;filter:grayscale(.55) brightness(.75);
+.mst-face{font-size:${BASE_SIZES.face}px;line-height:1;filter:grayscale(.55) brightness(.75);
   transition:filter .12s ease,transform .12s ease,text-shadow .12s ease;}
 .mst-name{font-size:18px;font-weight:800;color:#c5cff3;}
 .mst-star.mst-lit .mst-face{filter:none;transform:scale(1.2);text-shadow:0 0 22px #fff59b;}
@@ -62,7 +138,7 @@ export const MST_CSS = `
 .mst-star[disabled]{cursor:default;}
 @keyframes mst-twinkle{0%,100%{transform:scale(1)}50%{transform:scale(1.16);text-shadow:0 0 20px #fff59b}}
 
-.mst-bar{position:relative;width:100%;max-width:360px;height:56px;border-radius:14px;
+.mst-bar{position:relative;width:100%;max-width:${SKY_MAX_PX}px;height:${BASE_SIZES.bar}px;border-radius:14px;
   background:#00000033;overflow:hidden;}
 .mst-bar-track{position:absolute;top:0;left:0;height:100%;will-change:transform;}
 .mst-bar-tick{position:absolute;top:12px;height:32px;border-radius:8px;background:#ffffff55;}
@@ -73,7 +149,7 @@ export const MST_CSS = `
   box-shadow:0 0 12px #ffe06699;}
 
 .mst-score{font-size:${SCORE_MIN_FONT_PX + 4}px;font-weight:900;color:#fff;background:#ffffff1f;
-  border-radius:14px;padding:12px 14px;text-align:center;line-height:1;
+  border-radius:14px;padding:${BASE_SIZES.scorePad}px 14px;text-align:center;line-height:1;
   display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .mst-glyph{position:relative;display:inline-flex;flex-direction:column;align-items:center;
   min-width:${SCORE_MIN_FONT_PX}px;}
@@ -104,6 +180,24 @@ export const MST_CSS = `
 .mst-choice.mst-bad{opacity:.45;}
 .mst-star:focus-visible,.mst-btn:focus-visible,.mst-chip:focus-visible,
 .mst-drum:focus-visible,.mst-choice:focus-visible{outline:3px solid #fff;outline-offset:3px;}
+@media (max-height:${SHORT_SCREEN_PX}px){
+  /* 舞台是定高 + overflow:hidden（平台的 styles.css，交给窗口1），
+     内容一高就被硬裁掉，而裁掉的那一截里正是过关必须按的键
+     ——测试员 W5-B-01 在 360×720 上量到内容 ${SCORE_LEVEL_CONTENT_PX}px、可视只有 ${STAGE_VISIBLE_AT_720_PX}px。
+     本款自己能做的两件事这里都做了：① 竖向逐项收一档；② 收完还高就在本款壳里自己滚。
+     热区一个都不动：.mst-btn 的 44px、星星键盘的边长（按 keyLayout 内联）都不在这一档里。 */
+  .mst-wrap{min-height:0;max-height:100%;overflow-y:auto;touch-action:pan-y;
+    gap:${SHORT_SIZES.wrapGap}px;padding:${SHORT_SIZES.wrapPad}px 10px;}
+  .mst-msg{min-height:${SHORT_SIZES.msg}px;font-size:16px;}
+  .mst-dots{min-height:${SHORT_SIZES.dots}px;}
+  .mst-sky{min-height:${SHORT_SIZES.sky}px;}
+  .mst-keys{min-height:${SHORT_SIZES.sky}px;}
+  .mst-face{font-size:${SHORT_SIZES.face}px;}
+  .mst-name{font-size:15px;}
+  .mst-bar{height:${SHORT_SIZES.bar}px;}
+  .mst-bar-tick{top:8px;height:28px;}
+  .mst-score{padding:${SHORT_SIZES.scorePad}px 12px;gap:8px;}
+}
 @media (prefers-reduced-motion:reduce){
   .mst-lines{transition:none;}
   .mst-badge-listen{animation:none;}
@@ -138,26 +232,6 @@ export interface StarBoardOptions {
   width?: number;
   onDown: (index: number, pointerId: number) => void;
   onUp?: (index: number, pointerId: number) => void;
-}
-
-/** `.mst-wrap` 左右内边距合计 */
-export const WRAP_PADDING_X = 20;
-/** `.mst-sky` 的最大宽度（再宽星星就散得看不出高低了） */
-export const SKY_MAX_PX = 360;
-
-/**
- * 星星键盘的可用宽度。老写法把 360 直接写死在 `createStarBoard` 里、从不问真实屏宽，
- * 于是 320px 的老机器上算出来的键排比屏幕还宽，两端的键整个滑出去
- * （测试员 W5-B-03）。这里按真实屏宽减掉 `.mst-wrap` 的左右内边距，再按 `.mst-sky`
- * 的上限夹一次。写成纯函数，单测直接喂屏宽。
- */
-export function boardWidth(viewportWidth?: number): number {
-  const raw =
-    typeof viewportWidth === "number" && viewportWidth > 0
-      ? viewportWidth
-      : (globalThis as { innerWidth?: number }).innerWidth;
-  const vw = typeof raw === "number" && raw > 0 ? raw : SKY_MAX_PX + WRAP_PADDING_X;
-  return Math.max(200, Math.min(SKY_MAX_PX, Math.floor(vw - WRAP_PADDING_X)));
 }
 
 export interface StarBoardHandle {
