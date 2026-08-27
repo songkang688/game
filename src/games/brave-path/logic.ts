@@ -681,10 +681,10 @@ function healsUp(b: Blessing): boolean {
 }
 
 /**
- * 抽两个不一样的祝福让玩家二选一（同 depth + 同血量结果固定）。
+ * 抽两个不一样的祝福让玩家二选一（同 depth + 同星芒比例结果固定）。
  *
  * `hpFrac` 是现在的星芒比例。快见底的时候还只给「攻击 + 暴击」两个选项，
- * 等于逼孩子带着 20% 的血继续下潜，下一层多半就被送回城了——
+ * 等于逼孩子带着 20% 的星芒继续下潜，下一层多半就被送回城了——
  * 这种时候一定留一个回复位，让「稳一手」始终是个能选的选择。
  */
 export function rollBlessings(depth: number, hpFrac = 1): Blessing[] {

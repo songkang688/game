@@ -27,6 +27,7 @@ import {
   festPop,
   festRiseSpeed,
   floatAt,
+  giftGuarded,
   goalFailure,
   goalReached,
   isTargetBalloon,
@@ -586,8 +587,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         balloons.splice(i, 1);
         twinOf.delete(b.id);
         if (wasGift) {
-          giftLost++;
-          if (goal === "protect") {
+          // 只有护礼物那类关卡才记账。别的关卡从没让孩子护过它，
+          // 结算时按 giftLost × 2 暗扣星，孩子只会看到「明明一个没漏却只有一星」。
+          if (giftGuarded(goal)) {
+            giftLost++;
             msgEl.textContent = "🎁 礼物飘走啦……没关系，下次早一点把它摇下来！";
           }
         } else if (wasTarget) {

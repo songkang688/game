@@ -380,8 +380,17 @@ export interface GoalState {
   escaped: number;
   escapes: number;
   mistakes: number;
-  /** 被放跑的礼物气球数 */
+  /**
+   * 「该护住却没护住」的礼物气球数。
+   * 只有护礼物那类关卡才往上加——别的关卡里礼物是个不能戳的路人，
+   * HUD 一个字都没提过它，飘走了就不该在结算时算账。
+   */
   giftLost: number;
+}
+
+/** 这一关会不会因为礼物飘走而扣星：只有「护住礼物气球」那类关卡会 */
+export function giftGuarded(kind: GoalKind): boolean {
+  return kind === "protect";
 }
 
 export function goalReached(kind: GoalKind, st: GoalState): boolean {
@@ -410,7 +419,10 @@ export function isTargetBalloon(
   return true;
 }
 
-/** 三星：一次不错、一个不漏 */
+/**
+ * 三星：一次不错、一个不漏。
+ * `giftLost` 只该填「该护住却没护住」的数量——见 `giftGuarded`。
+ */
 export function starsFor(mistakes: number, escaped: number, giftLost = 0): 1 | 2 | 3 {
   const bad = mistakes + Math.max(0, escaped - 1) + giftLost * 2;
   return bad === 0 ? 3 : bad <= 2 ? 2 : 1;
@@ -639,7 +651,7 @@ export function simulateLevel(cfg: BalloonLevel, opts: SimOptions = {}): SimResu
       if (b.y >= ESCAPE_Y) continue;
       live.splice(i, 1);
       if (b.kind === "gift") {
-        giftLost++;
+        if (giftGuarded(goal)) giftLost++;
       } else if (isTarget(b)) {
         escaped++;
       }
