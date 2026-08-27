@@ -339,6 +339,11 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     const starSeat = opts.humans.length > 1 && activeSeat() === "star";
     okBtn.textContent = starSeat ? "✅ 确认 (L)" : "✅ 确认 (F)";
     noBtn.textContent = starSeat ? "↩️ 取消 (K)" : "↩️ 取消 (G)";
+    // 暂停期间这两个钮本来就点不动，那就别让它们看起来还能点
+    const off = opts.isPaused?.() === true;
+    okBtn.className = `jq-btn jq-go${off ? " jq-off" : ""}`;
+    noBtn.className = `jq-btn${off ? " jq-off" : ""}`;
+    for (const b of [okBtn, noBtn]) b.setAttribute("aria-disabled", String(off));
   }
 
   function clearPick(): void {
@@ -523,20 +528,24 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   noBtn.className = "jq-btn";
   noBtn.textContent = "↩️ 取消 (G)";
   noBtn.addEventListener("click", () => cancel());
+  // 这三个钮上只有符号，读屏念「减号」「加号」听不出是干什么的，得配一句人话
   const outBtn = document.createElement("button");
   outBtn.type = "button";
   outBtn.className = "jq-btn";
   outBtn.textContent = "➖";
+  outBtn.setAttribute("aria-label", "把棋盘缩小一点");
   outBtn.addEventListener("click", () => zoom(-0.15));
   const inBtn = document.createElement("button");
   inBtn.type = "button";
   inBtn.className = "jq-btn";
   inBtn.textContent = "➕";
+  inBtn.setAttribute("aria-label", "把棋盘放大一点");
   inBtn.addEventListener("click", () => zoom(0.15));
   const homeBtn = document.createElement("button");
   homeBtn.type = "button";
   homeBtn.className = "jq-btn";
   homeBtn.textContent = "🏠 回自己这边";
+  homeBtn.setAttribute("aria-label", "把画面移回自己这半边");
   homeBtn.addEventListener("click", focusHome);
   tools.append(okBtn, noBtn, outBtn, inBtn, homeBtn);
   wrap.appendChild(tools);

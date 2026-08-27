@@ -526,6 +526,84 @@ describe("PA-JQ · 双人同屏键位", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* L3A-7 / L3A-8 · 暂停时看得出为什么点不动；工具钮读屏听得懂             */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-7 · 暂停时确认 / 取消要看得出是停用的", () => {
+  function toolBtn(text: string): El {
+    const hit = dom.root.find((e) => e.tagName === "button" && e.textContent.includes(text));
+    if (!hit) throw new Error(`工具条上找不到「${text}」`);
+    return hit;
+  }
+
+  it("没暂停的时候两个钮是常态：不带 jq-off，aria-disabled 是 false", () => {
+    const { table } = duelTable();
+    for (const t of ["确认", "取消"]) {
+      expect(toolBtn(t).className, `${t} 一开局就是灰的`).not.toContain("jq-off");
+      expect(toolBtn(t).getAttribute("aria-disabled")).toBe("false");
+    }
+    table.destroy();
+  });
+
+  it("按下暂停两个钮一起变灰，恢复之后又亮回来", () => {
+    const { table } = duelTable();
+    key("Escape");
+    for (const t of ["确认", "取消"]) {
+      expect(toolBtn(t).className, `暂停了 ${t} 还是亮的`).toContain("jq-off");
+      expect(toolBtn(t).getAttribute("aria-disabled"), `${t} 没告诉读屏它停用了`).toBe("true");
+    }
+    key("Escape");
+    for (const t of ["确认", "取消"]) {
+      expect(toolBtn(t).className, `恢复之后 ${t} 还灰着`).not.toContain("jq-off");
+      expect(toolBtn(t).getAttribute("aria-disabled")).toBe("false");
+    }
+    table.destroy();
+  });
+
+  it("点屏幕上的暂停钮也一样，钮自己的 aria-pressed 跟着翻面", () => {
+    const { table } = duelTable();
+    const pause = toolBtn("暂停");
+    expect(pause.getAttribute("aria-pressed")).toBe("false");
+    pause.dispatch("click", {});
+    expect(pause.getAttribute("aria-pressed")).toBe("true");
+    expect(toolBtn("确认").className, "点钮暂停之后确认还是亮的").toContain("jq-off");
+    toolBtn("继续").dispatch("click", {});
+    expect(toolBtn("确认").className).not.toContain("jq-off");
+    table.destroy();
+  });
+
+  it("变灰只是外观：暂停照旧不落子，恢复之后选好的那一步照样走得出去", async () => {
+    const { state, table } = duelTable();
+    const cs = cellsOnScreen();
+    cs[DUEL_START].dispatch("click", {});
+    cs[DUEL_SIDESTEP].dispatch("click", {});
+    key("Escape");
+    tap("确认");
+    expect(state.plies, "变灰了却还是把子走了").toBe(0);
+    expect(cellsOnScreen()[DUEL_SIDESTEP].className, "变灰的同时把落点也丢了").toContain("jq-pending");
+    key("Escape");
+    key("f");
+    await waitFor(() => state.plies > 0);
+    expect(state.plies, "恢复之后原来那一步走不出去").toBe(1);
+    table.destroy();
+  });
+
+  it("L3A-8：缩放与回家三个钮都配了读屏说明，不再只念符号", () => {
+    const { table } = duelTable();
+    const labels = ["把棋盘缩小一点", "把棋盘放大一点", "把画面移回自己这半边"];
+    for (const label of labels) {
+      expect(
+        dom.root.find((e) => e.getAttribute("aria-label") === label),
+        `工具条上没有「${label}」这句读屏说明`
+      ).not.toBeNull();
+    }
+    expect(toolBtn("➖").getAttribute("aria-label")).toBe("把棋盘缩小一点");
+    expect(toolBtn("➕").getAttribute("aria-label")).toBe("把棋盘放大一点");
+    table.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* PA-JQ · 铁则 4：360px 宽                                             */
 /* ------------------------------------------------------------------ */
 

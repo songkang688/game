@@ -117,6 +117,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   pauseBtn.type = "button";
   pauseBtn.className = "jq-btn";
   pauseBtn.textContent = "⏸️ 暂停 (Esc)";
+  pauseBtn.setAttribute("aria-pressed", "false");
   row.appendChild(pauseBtn);
   wrap.appendChild(row);
 
@@ -231,7 +232,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   function togglePause(): void {
     paused = !paused;
     pauseBtn.textContent = paused ? "▶️ 继续 (Esc)" : "⏸️ 暂停 (Esc)";
+    pauseBtn.setAttribute("aria-pressed", String(paused));
     renderHud();
+    // 让棋盘把「确认 / 取消」也一起翻面：点不动的钮不该看起来还能点
+    board?.refresh();
     if (!paused) scheduleAi();
   }
 
