@@ -745,6 +745,13 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       const cx = (((((i * span) / 3 + 50 - drift) % span) + span) % span) - 100;
       drawCloudPuff(ctx, cx, hy - (0.34 + 0.16 * (i % 2)) * hy, (15 + (i % 3) * 5) * Math.min(1.6, cam.scale + 0.4), theme.cloud);
     }
+    // 再添两团半透明高云,高度与相位都错开,长局上半屏不显空(不成排)
+    for (let i = 0; i < 2; i++) {
+      const cx = ((((((i + 0.5) * span) / 2 + 130 - drift) % span) + span) % span) - 100;
+      ctx.globalAlpha = 0.5 + i * 0.1;
+      drawCloudPuff(ctx, cx, hy - (0.26 + 0.32 * i) * hy, (17 + i * 5) * Math.min(1.6, cam.scale + 0.4), theme.cloud);
+      ctx.globalAlpha = 1;
+    }
 
     // 中景(视差 0.5):两块漂浮小岛剪影
     const drift2 = reduced ? 0 : (cam.z + cam.x * 0.5) * cam.scale * 0.5;
