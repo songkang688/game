@@ -15,11 +15,14 @@ import {
   hitPoint,
   keyAction,
   levelSeconds,
+  matchSay,
   meta,
   minHitSize,
   mount,
   mountPuzzle,
-  reducedMotion
+  puzzleSay,
+  reducedMotion,
+  saySentence
 } from "./index";
 
 let dom: DomStub | null = null;
@@ -28,6 +31,21 @@ afterEach(() => {
   dom?.restore();
   dom = null;
 });
+
+/** 记下这一行被写了几次:live 区看的是「写了几句」,不是「最后一句是什么」 */
+function spyWrites(el: { textContent: string }): string[] {
+  const writes: string[] = [];
+  let value = el.textContent;
+  Object.defineProperty(el, "textContent", {
+    configurable: true,
+    get: () => value,
+    set: (v: string) => {
+      value = v;
+      writes.push(v);
+    }
+  });
+  return writes;
+}
 
 function fakeApi(root: unknown): Parameters<typeof mount>[0] {
   return {
@@ -320,5 +338,117 @@ describe("weiqi-garden · 挂载与 destroy", () => {
     dom.press("Escape");
     expect(pauseBtn?.textContent).toContain("暂停");
     handle.destroy?.();
+  });
+});
+
+describe("weiqi-garden · 读屏听得见盘面在变", () => {
+  it("saySentence 只留有字的那几段,提示接在后面", () => {
+    expect(saySentence(["第 3 手", "轮到朵朵（黑）"])).toBe("第 3 手,轮到朵朵（黑）。");
+    expect(saySentence(["第 3 手", "  "], "成劫啦!")).toBe("第 3 手。成劫啦!");
+    expect(saySentence([], "停了一手。")).toBe("停了一手。");
+    expect(saySentence([], "   ")).toBe("");
+  });
+
+  it("对局那一句把手数、该谁下、两边提子都说全", () => {
+    const line = matchSay(7, BLACK, { black: 2, white: 5 });
+    expect(line).toContain("第 7 手");
+    expect(line).toContain("轮到朵朵");
+    expect(line).toContain("朵朵提了 2 颗");
+    expect(line).toContain("星星提了 5 颗");
+  });
+
+  it("数一数阶段改播标死了几颗,不再报手数", () => {
+    const line = matchSay(7, WHITE, { black: 0, white: 0 }, { counting: true, dead: 4 });
+    expect(line).toContain("数一数");
+    expect(line).toContain("已标死 4 颗");
+    expect(line).not.toContain("第 7 手");
+  });
+
+  it("闯关那一句关心的是还剩几手", () => {
+    expect(puzzleSay("battle", 2, 5, 0)).toBe("第 2 手,还剩 3 手。");
+    expect(puzzleSay("markDead", 0, 5, 3, "点一下就能标上")).toBe("已标 3 颗。点一下就能标上");
+    expect(puzzleSay("battle", 9, 5, 0)).toContain("还剩 0 手");
+  });
+
+  it("看不见的那一行靠 1px 收起来,不是 display:none", () => {
+    expect(WQ_CSS).toContain(".wq-say{");
+    const rule = WQ_CSS.slice(WQ_CSS.indexOf(".wq-say{"), WQ_CSS.indexOf("}", WQ_CSS.indexOf(".wq-say{")));
+    expect(rule).toContain("width:1px");
+    expect(rule).not.toContain("display:none");
+  });
+
+  it("闯关盘上真有这一行,提示行也是 status", () => {
+    dom = installDom();
+    const sched = makeScheduler();
+    const handle = mountPuzzle(dom.root as unknown as HTMLElement, {
+      level: levelAt(0),
+      sfx: () => undefined,
+      win: () => undefined,
+      lose: () => undefined,
+      schedule: sched.schedule,
+      unschedule: sched.unschedule,
+      timed: false
+    });
+    const say = dom.root.byClass("wq-say")[0];
+    expect(say).toBeDefined();
+    expect(say.getAttribute("role")).toBe("status");
+    expect(say.getAttribute("aria-live")).toBe("polite");
+    expect(say.getAttribute("aria-atomic")).toBe("true");
+    const msg = dom.root.byClass("wq-msg")[0];
+    expect(msg.getAttribute("role")).toBe("status");
+    expect(msg.getAttribute("aria-live")).toBe("polite");
+    handle.destroy?.();
+  });
+
+  it("停一手之后读屏那一行跟着变,而且不重复念同一句", () => {
+    dom = installDom();
+    const sched = makeScheduler();
+    const level = levelAt(0);
+    const handle = mountPuzzle(dom.root as unknown as HTMLElement, {
+      level,
+      sfx: () => undefined,
+      win: () => undefined,
+      lose: () => undefined,
+      schedule: sched.schedule,
+      unschedule: sched.unschedule,
+      timed: false
+    });
+    const say = dom.root.byClass("wq-say")[0];
+    const first = say.textContent;
+    expect(first).toContain("第 0 手");
+    dom.press("g");
+    sched.flush();
+    expect(say.textContent).toContain("第 1 手");
+    expect(say.textContent).toContain("停了一手");
+    dom.press("Escape");
+    expect(say.textContent).toContain("先歇一会儿");
+    handle.destroy?.();
+  });
+
+  it("倒计时每秒重画一次界面,读屏那一句不跟着重复念", () => {
+    dom = installDom();
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const sched = makeScheduler();
+      const handle = mountPuzzle(dom.root as unknown as HTMLElement, {
+        level: levelAt(0),
+        sfx: () => undefined,
+        win: () => undefined,
+        lose: () => undefined,
+        schedule: sched.schedule,
+        unschedule: sched.unschedule
+      });
+      const say = dom.root.byClass("wq-say")[0];
+      const writes = spyWrites(say);
+      const time = dom.root.byClass("wq-chip").find((c) => c.textContent.includes("秒"));
+      expect(time).toBeDefined();
+      vi.advanceTimersByTime(3000);
+      // 秒数在走(界面确实重画了),但盘面没变,live 区一个字都不该重写
+      expect(time?.textContent).toContain("117");
+      expect(writes).toEqual([]);
+      handle.destroy?.();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

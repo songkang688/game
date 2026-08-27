@@ -169,6 +169,42 @@ export function captureLine(n: number, color: Color): string {
   return `请${colorName(color)}这 ${n} 颗子回篮子里。`;
 }
 
+/**
+ * 读屏那一句。
+ *
+ * 棋盘是一张画布,读屏只能听到「十九路棋盘」这一句静态 `aria-label`,
+ * 之后落哪儿、提了几颗、该谁下,全靠看芯片。这里把芯片上那几个数
+ * 与这一步的提示合成一句短话,写进看不见的 live 区。
+ */
+export function saySentence(head: readonly string[], note?: string): string {
+  const body = head.map((s) => s.trim()).filter((s) => s.length > 0).join(",");
+  const tail = (note ?? "").trim();
+  if (!body) return tail;
+  return tail ? `${body}。${tail}` : `${body}。`;
+}
+
+/** 自由对局 / 双人同屏的那一句 */
+export function matchSay(
+  moves: number,
+  turn: Color,
+  captures: { black: number; white: number },
+  opts: { counting?: boolean; dead?: number; note?: string } = {}
+): string {
+  if (opts.counting) {
+    return saySentence(["数一数阶段", `已标死 ${opts.dead ?? 0} 颗`], opts.note);
+  }
+  return saySentence(
+    [`第 ${moves} 手`, `轮到${colorName(turn)}`, `朵朵提了 ${captures.black} 颗`, `星星提了 ${captures.white} 颗`],
+    opts.note
+  );
+}
+
+/** 闯关的那一句:关心的是还剩几手,不是提子数 */
+export function puzzleSay(kind: string, used: number, budget: number, marked: number, note?: string): string {
+  const head = kind === "markDead" ? [`已标 ${marked} 颗`] : [`第 ${used} 手`, `还剩 ${Math.max(0, budget - used)} 手`];
+  return saySentence(head, note);
+}
+
 // ---------------------------------------------------------------------------
 // 无尽:连胜越多对手越强
 // ---------------------------------------------------------------------------
@@ -232,6 +268,9 @@ export const WQ_CSS = `
   overflow-wrap:anywhere;}
 .wq-note{text-align:center;font-size:16px;font-weight:700;color:#8A7A5E;line-height:1.6;margin:6px auto 0;max-width:520px;
   overflow-wrap:anywhere;}
+/* 只给读屏听的一行:看不见也不占位,盘面一变就把变化念出来 */
+.wq-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .wq-rows{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:700;color:#6A5A42;
   line-height:1.7;margin:8px auto 0;max-width:520px;overflow-wrap:anywhere;}
 .wq-over{position:absolute;inset:0;background:rgba(251,247,238,.96);border-radius:16px;display:flex;
@@ -560,6 +599,15 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
 
   const msg = document.createElement("div");
   msg.className = "wq-msg";
+  msg.setAttribute("role", "status");
+  msg.setAttribute("aria-live", "polite");
+  msg.setAttribute("aria-atomic", "true");
+  const say = document.createElement("div");
+  say.className = "wq-say";
+  say.setAttribute("role", "status");
+  say.setAttribute("aria-live", "polite");
+  say.setAttribute("aria-atomic", "true");
+  let said = "";
 
   let state = createGame({ size: opts.size, handicap: opts.handicap, rule: opts.rule });
   let dead: number[] = [];
@@ -593,7 +641,7 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
       })
     );
   }
-  stage.append(tools, msg);
+  stage.append(tools, msg, say);
 
   const rows = document.createElement("div");
   rows.className = "wq-rows";
@@ -609,6 +657,17 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
     capChip.textContent = `提子 朵朵 ${state.captures[BLACK]} · 星星 ${state.captures[WHITE]}`;
     infoChip.textContent = `${SIZE_LABELS[opts.size]} · ${RULE_LABELS[opts.rule]} · 第 ${state.moves.length} 手`;
     if (note !== undefined) msg.textContent = note;
+    // 同一句不重写:读屏对 live 区是「变了才念」,重复写会让它把没变的话再念一遍
+    const line = matchSay(
+      state.moves.length,
+      state.turn,
+      { black: state.captures[BLACK], white: state.captures[WHITE] },
+      { counting, dead: dead.length, note: note ?? undefined }
+    );
+    if (line !== said) {
+      said = line;
+      say.textContent = line;
+    }
   }
 
   function humanTurn(): boolean {
@@ -887,7 +946,16 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
 
   const msg = document.createElement("div");
   msg.className = "wq-msg";
+  msg.setAttribute("role", "status");
+  msg.setAttribute("aria-live", "polite");
+  msg.setAttribute("aria-atomic", "true");
   msg.textContent = level.task;
+  const say = document.createElement("div");
+  say.className = "wq-say";
+  say.setAttribute("role", "status");
+  say.setAttribute("aria-live", "polite");
+  say.setAttribute("aria-atomic", "true");
+  let said = "";
 
   let state = createGame({ size: level.size, board: levelBoard(level), turn: level.turn, rule: level.rule });
   let capturedTotal = 0;
@@ -920,7 +988,7 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
       button("➕", () => view.setZoom((zoom = Math.min(2.6, zoom + 0.3))))
     );
   }
-  stage.append(tools, msg);
+  stage.append(tools, msg, say);
 
   const note = document.createElement("div");
   note.className = "wq-note";
@@ -934,6 +1002,11 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
       level.kind === "markDead" ? `已标 ${marked.length} 颗` : `第 ${used} / ${level.moveBudget} 手`;
     timeChip.textContent = opts.timed === false ? level.task : `⏳ ${Math.max(0, left)} 秒`;
     if (text !== undefined) msg.textContent = text;
+    const line = puzzleSay(level.kind, used, level.moveBudget, marked.length, text ?? undefined);
+    if (line !== said) {
+      said = line;
+      say.textContent = line;
+    }
   }
 
   function finishWin(): void {
