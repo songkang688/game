@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🧺",
   category: "casual" as const,
   color: "#FFF4D6",
-  blurb: "188 关十条果道 + 双人抢果 + 无尽水果雨!冰冻果定住全场、磁铁果放大篮口,每一颗都保证跑得到。",
+  blurb: "188 关十条果道 + 双人抢果 + 无尽水果雨!手绘渐变小水果掉进编织藤篮,冰冻果定住全场、磁铁果放大篮口,每一颗都保证跑得到。",
   // 10 章合计 188 关,外加左右半屏的双人抢果与越下越密的无尽水果雨
   modes: ["campaign", "twoPlayer", "endless"] as const,
   levels: 188,
