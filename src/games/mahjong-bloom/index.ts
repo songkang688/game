@@ -47,9 +47,15 @@ import {
   type TableState
 } from "./table";
 import { isDragon, isHonor, sortTiles, suitOf, tileFace, tileName } from "./tiles";
+import { KIT_PALETTE } from "../../art/kit";
+import { backArtSVG, bloomFlowerSVG, compassSVG, leafSVG, petalSVG, tileArtSVG } from "./tileart";
 
 /** 出牌飞到牌河的时长(毫秒);规格要求 ~200ms,不许瞬变 */
 export const FLY_MS = 200;
+/** 胡牌樱花绽放的时长:开完花再弹番种表 */
+export const BLOOM_MS = 800;
+/** 开花时飘落的花瓣数 */
+export const BLOOM_PETALS = 12;
 /** 副露滑入的时长 */
 export const MELD_MS = 220;
 /** 番种一条一条弹出来的间隔 */
@@ -65,9 +71,24 @@ export const MATCH_HANDS = 4;
 export const MJ_CSS = `
 .mj-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF4F8,#F3F8FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;overflow:hidden;}
-.mj-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.mj-wrap::before,.mj-wrap::after{content:"";position:absolute;width:110px;height:110px;pointer-events:none;opacity:.42;
+  background:radial-gradient(circle at 50% 24%,#ffc9dd 0 9px,transparent 10px),
+  radial-gradient(circle at 74% 42%,#ffc9dd 0 9px,transparent 10px),
+  radial-gradient(circle at 65% 70%,#ffd7e6 0 9px,transparent 10px),
+  radial-gradient(circle at 35% 70%,#ffd7e6 0 9px,transparent 10px),
+  radial-gradient(circle at 26% 42%,#ffc9dd 0 9px,transparent 10px),
+  radial-gradient(circle at 50% 46%,#ffe9b8 0 5px,transparent 6px);}
+.mj-wrap::before{top:-30px;right:-30px;}
+.mj-wrap::after{bottom:-30px;left:-30px;transform:rotate(24deg);}
+.mj-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:8px;position:relative;}
 .mj-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#8a4a70;
   box-shadow:0 2px 6px rgba(190,140,180,.25);overflow-wrap:anywhere;line-height:1.4;}
+.mj-compass{display:inline-flex;flex-direction:row-reverse;align-items:center;gap:5px;}
+.mj-dial{width:20px;height:20px;flex:0 0 auto;}
+.mj-dial svg{display:block;width:100%;height:100%;}
+.mj-badge.mj-floor-bud{background:#eaf7ee;color:#1b7a65;}
+.mj-badge.mj-floor-rose{background:#ffeff6;color:#c8397a;}
+.mj-badge.mj-floor-gold{background:linear-gradient(180deg,#fff3d6,#ffe6a8);color:#96660f;}
 .mj-goal{flex:1 1 100%;font-size:16px;font-weight:800;color:#8a4a70;text-align:center;line-height:1.5;
   overflow-wrap:anywhere;}
 .mj-pause{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;gap:6px;
@@ -75,29 +96,46 @@ export const MJ_CSS = `
   background:rgba(255,244,248,.92);border-radius:16px;}
 .mj-pause-t{font-size:20px;font-weight:900;color:#8a4a70;line-height:1.4;}
 .mj-pause-k{font-size:var(--mt-body,16px);font-weight:800;color:#7a5a90;line-height:1.6;overflow-wrap:anywhere;}
-.mj-board{display:flex;flex-direction:column;gap:8px;}
+/* 牌桌:深绿毛毡径向渐变(中心亮边缘暗)+ 8px 木纹条纹边框 */
+.mj-board{display:flex;flex-direction:column;gap:8px;position:relative;border-radius:16px;padding:8px;
+  border:8px solid transparent;
+  background:radial-gradient(130% 95% at 50% 30%,#3f9e72 0%,#2c7c57 55%,#1e5f43 100%) padding-box,
+  linear-gradient(135deg,#a87a4c,#6e4a26 28%,#9c7042 50%,#5f3d1f 76%,#8a5f36) border-box;
+  box-shadow:0 6px 16px rgba(70,50,70,.28),inset 0 0 24px rgba(0,20,10,.18);}
 .mj-foe{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:34px;}
-.mj-foe-name{font-size:16px;font-weight:900;color:#6c5a8c;white-space:nowrap;}
-.mj-foe-name.mj-turn{color:#c8397a;}
-.mj-backs{display:flex;gap:2px;flex-wrap:wrap;}
-.mj-back{width:10px;height:20px;border-radius:3px;background:linear-gradient(180deg,#B9A7D8,#9B86C4);
-  box-shadow:inset 0 -2px 0 rgba(0,0,0,.12);}
+.mj-foe-name{font-size:16px;font-weight:900;color:#e9f6ec;white-space:nowrap;text-shadow:0 1px 2px rgba(15,55,35,.5);}
+.mj-foe-name.mj-turn{color:#ffd46a;}
+.mj-backs{display:flex;gap:2px;flex-wrap:wrap;align-items:center;}
+/* 牌背:真实 3:4 比例,绿渐变 + 四瓣花压纹 */
+.mj-back{width:15px;height:20px;border-radius:4px;position:relative;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(165deg,#4aa87d,#2e7d5b 55%,#226349);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(0,0,0,.24),0 1px 2px rgba(20,60,40,.4);}
+.mj-back-fl{display:block;width:9px;height:9px;opacity:.85;}
+.mj-back-fl svg{display:block;width:100%;height:100%;}
 .mj-mid{display:flex;gap:8px;align-items:flex-start;}
-.mj-river{flex:1;min-width:0;background:#ffffffa8;border-radius:12px;padding:6px;min-height:64px;
-  display:flex;flex-wrap:wrap;gap:3px;align-content:flex-start;}
+.mj-river{flex:1;min-width:0;background:rgba(14,66,45,.5);border-radius:12px;padding:6px;min-height:64px;
+  display:flex;flex-wrap:wrap;gap:3px;align-content:flex-start;position:relative;
+  box-shadow:inset 0 2px 8px rgba(0,25,12,.35);}
+.mj-river.mj-dim{filter:grayscale(.85) opacity(.82);}
 .mj-info{width:96px;flex:0 0 auto;display:flex;flex-direction:column;gap:4px;}
 .mj-info .mj-badge{font-size:16px;padding:4px 8px;text-align:center;}
 .mj-melds{display:flex;gap:6px;flex-wrap:wrap;min-height:4px;}
 .mj-meldgrp{display:flex;gap:1px;padding:2px;border-radius:8px;background:#ffffffb0;}
-.mj-hand{display:flex;gap:3px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:thin;}
+.mj-hand{display:flex;gap:3px;overflow-x:auto;padding:6px 2px 10px;scrollbar-width:thin;}
 .mj-hand::-webkit-scrollbar{height:5px;}
-.mj-hand::-webkit-scrollbar-thumb{background:#e0cfe4;border-radius:4px;}
+.mj-hand::-webkit-scrollbar-thumb{background:#9ec9ae;border-radius:4px;}
 .mj-gap{width:10px;flex:0 0 auto;}
-.mj-tile{flex:0 0 auto;width:34px;height:46px;border-radius:7px;border:none;padding:0;cursor:pointer;
-  background:linear-gradient(180deg,#FFFDF8,#F1E9DC);box-shadow:0 2px 0 #CFC2AC,0 3px 6px rgba(150,120,140,.25);
+/* 牌体三层:象牙渐变顶面 + 右/下 2px 米黄侧墙(inset)+ 2px 传统绿底座 */
+.mj-tile{flex:0 0 auto;width:34px;height:46px;border-radius:7px;border:none;padding:0;cursor:pointer;position:relative;
+  background:linear-gradient(180deg,#FFFEF9,#F4EDDD);
+  box-shadow:inset -2px -2px 0 #D8CBAE,0 2px 0 #2E8B6A,0 4px 7px rgba(30,70,50,.35);
   display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;font-family:inherit;}
-.mj-tile:active{transform:translateY(2px);box-shadow:0 1px 0 #CFC2AC;}
+.mj-tile:active{transform:translateY(2px);box-shadow:inset -2px -2px 0 #D8CBAE,0 1px 0 #2E8B6A,0 2px 3px rgba(30,70,50,.3);}
 .mj-tile:focus-visible{outline:3px solid #6b2a52;outline-offset:2px;}
+.mj-t-art{position:absolute;inset:2px 3px 4px;pointer-events:none;display:block;}
+.mj-t-art svg{display:block;width:100%;height:100%;}
+/* 文字层平时藏起,超小屏(<340px)退化成大号文字;读屏走 aria-label */
+.mj-t-txt{display:none;flex-direction:column;align-items:center;justify-content:center;}
 .mj-t-n{font-size:18px;font-weight:900;}
 .mj-t-s{font-size:var(--mt-control,14px);font-weight:800;}
 .mj-t-m{color:#B4442F;}
@@ -110,14 +148,42 @@ export const MJ_CSS = `
 .mj-tile.mj-small{width:26px;height:34px;}
 .mj-tile.mj-small .mj-t-n{font-size:var(--mt-control,14px);}
 .mj-tile.mj-small .mj-t-s{font-size:var(--mt-control,14px);}
-.mj-tile.mj-cur{outline:3px solid #E0609B;outline-offset:1px;}
-.mj-tile.mj-hot{box-shadow:0 2px 0 #CFC2AC,0 0 0 3px #FFD46A;}
+.mj-tile.mj-cur{outline:3px solid #E0609B;outline-offset:1px;transform:translateY(-4px);
+  box-shadow:inset -2px -2px 0 #D8CBAE,0 6px 0 #2E8B6A,0 10px 10px rgba(30,70,50,.4);}
+.mj-tile.mj-hot{box-shadow:inset -2px -2px 0 #D8CBAE,0 2px 0 #2E8B6A,0 0 0 3px ${KIT_PALETTE.starGold},0 4px 8px rgba(30,70,50,.35);
+  animation:mjhot 1.3s ease-in-out infinite alternate;}
 .mj-tile.mj-drawn{background:linear-gradient(180deg,#FFF8E6,#F6E7C4);}
 .mj-tile[disabled]{cursor:default;}
-.mj-fly{animation:mjfly ${FLY_MS}ms ease-out;}
-@keyframes mjfly{from{transform:translateY(-26px) scale(1.12);opacity:.25}to{transform:none;opacity:1}}
+.mj-drawin{animation:mjdraw 240ms cubic-bezier(.34,1.56,.64,1);}
+.mj-fly{animation:mjfly ${FLY_MS}ms cubic-bezier(.3,.6,.4,1);}
 .mj-slide{animation:mjslide ${MELD_MS}ms cubic-bezier(.22,1,.36,1);}
+@keyframes mjhot{from{box-shadow:inset -2px -2px 0 #D8CBAE,0 2px 0 #2E8B6A,0 0 0 3px ${KIT_PALETTE.starGold},0 4px 8px rgba(30,70,50,.35);}
+  to{box-shadow:inset -2px -2px 0 #D8CBAE,0 2px 0 #2E8B6A,0 0 0 5px #ffe8ab,0 4px 12px rgba(255,211,78,.55);}}
+@keyframes mjdraw{from{transform:translateX(22px) translateY(-6px) rotate(4deg);opacity:0;}
+  60%{transform:translateX(-2px) translateY(2px);opacity:1;}to{transform:none;opacity:1;}}
+@keyframes mjfly{0%{transform:translate(-12px,-30px) rotate(-8deg) scale(1.12);opacity:.2;}
+  55%{transform:translate(-3px,-10px) rotate(3deg) scale(1.1);opacity:1;}
+  100%{transform:none;opacity:1;}}
 @keyframes mjslide{from{transform:translateX(26px);opacity:0}to{transform:none;opacity:1}}
+/* 胡牌开花:中心一朵五瓣樱花 + 12 片花瓣飘落;soft 只闪金光一次(不加动画类) */
+.mj-bloom{position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;}
+.mj-bloom-core{width:96px;height:96px;display:block;filter:drop-shadow(0 2px 6px rgba(200,57,122,.35));}
+.mj-bloom-core svg{display:block;width:100%;height:100%;}
+.mj-bloom-open{animation:mjbloom ${BLOOM_MS}ms cubic-bezier(.34,1.56,.64,1) both;}
+.mj-bloom-flash{filter:drop-shadow(0 0 16px ${KIT_PALETTE.starGold}) drop-shadow(0 0 4px ${KIT_PALETTE.starGold});}
+.mj-petal{position:absolute;top:-16px;width:14px;height:14px;display:block;}
+.mj-petal svg{display:block;width:100%;height:100%;}
+.mj-petal-fall{animation:mjpetal ${BLOOM_MS}ms ease-in both;}
+@keyframes mjbloom{from{transform:scale(.12) rotate(-42deg);opacity:0;}55%{transform:scale(1.12) rotate(6deg);opacity:1;}
+  to{transform:scale(1) rotate(0deg);opacity:1;}}
+@keyframes mjpetal{from{transform:translateY(0) rotate(0deg);opacity:1;}to{transform:translateY(340px) rotate(170deg);opacity:0;}}
+/* 流局:牌河灰化 + 一片落叶 */
+.mj-leaf{width:18px;height:18px;display:block;margin:2px auto;}
+.mj-leaf svg{display:block;width:100%;height:100%;}
+.mj-leaf-fall{animation:mjleaf 900ms ease-in-out both;}
+@keyframes mjleaf{from{transform:translateY(-36px) rotate(-40deg);opacity:0;}60%{transform:translateY(4px) rotate(10deg);opacity:1;}
+  to{transform:none;opacity:1;}}
 .mj-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:4px;}
 .mj-btn{min-height:44px;min-width:56px;border:none;border-radius:14px;padding:0 14px;font-family:inherit;
   font-size:16px;font-weight:900;cursor:pointer;background:#F6D3E2;color:#8a2f5c;box-shadow:0 3px 0 #DFAFC6;}
@@ -127,6 +193,9 @@ export const MJ_CSS = `
 .mj-btn.mj-ghost{background:#E4E1F2;color:#54487a;box-shadow:0 3px 0 #C6C0DE;}
 .mj-msg{text-align:center;min-height:20px;font-size:16px;font-weight:800;color:#7c5a8e;margin-top:6px;
   line-height:1.5;overflow-wrap:anywhere;}
+/* 毛毡上的提示字换成浅色,保证对比度(基础 .mj-msg 规则在上面,别挪顺序) */
+.mj-board .mj-msg{color:#e2f2e6;}
+.mj-river .mj-msg{color:#d9eddc;}
 .mj-modebar,.mj-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .mj-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7c5a8e;text-align:center;overflow-wrap:anywhere;}
 .mj-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
@@ -158,12 +227,22 @@ export const MJ_CSS = `
   /* 16px 的「牌墙 N 张」要地方,78px 装不下 */
   .mj-info{width:92px;}
   .mj-btn{min-width:50px;padding:0 10px;font-size:15px;}
-  .mj-back{width:8px;height:17px;}
+  .mj-back{width:14px;height:19px;}
+}
+@media (max-width:340px){
+  /* 超小屏退化:图案层藏起,换回大号文字层,30px 宽也认得清 */
+  .mj-t-art{display:none;}
+  .mj-t-txt{display:flex;}
 }
 @media (prefers-reduced-motion:reduce){
   .mj-fly{animation-duration:60ms;}
   .mj-slide{animation-duration:60ms;}
   .mj-fan{animation-duration:60ms;}
+  .mj-drawin{animation-duration:60ms;}
+  .mj-tile.mj-hot{animation-duration:60ms;animation-iteration-count:1;}
+  .mj-bloom-open{animation-duration:60ms;}
+  .mj-petal-fall{animation-duration:60ms;}
+  .mj-leaf-fall{animation-duration:60ms;}
 }
 `;
 
@@ -189,10 +268,15 @@ export interface TileOpts {
   /** 刚摸到的那张,和手牌错开一点 */
   drawn?: boolean;
   fly?: boolean;
+  /** 刚从牌墙摸进来:从右侧滑入 + 轻微弹跳 */
+  slide?: boolean;
   onClick?: () => void;
 }
 
-/** 一张牌的 DOM:纯 CSS + 文字,不引用任何图片或字体 */
+/**
+ * 一张牌的 DOM:图案层(内联 SVG,筒饼 / 竹节 / 万字 / 传统字牌配色)+
+ * 文字退化层(<340px 显示)。读屏念的是 aria-label 里的中文牌名。
+ */
 export function tileEl(id: number, opts: TileOpts = {}): HTMLElement {
   const face = tileFace(id);
   const el = document.createElement(opts.onClick ? "button" : "div");
@@ -203,31 +287,115 @@ export function tileEl(id: number, opts: TileOpts = {}): HTMLElement {
   if (opts.hot) el.classList.add("mj-hot");
   if (opts.drawn) el.classList.add("mj-drawn");
   if (opts.fly) el.classList.add("mj-fly");
+  if (opts.slide) el.classList.add("mj-drawin");
+  const art = document.createElement("span");
+  art.className = "mj-t-art";
+  art.setAttribute("aria-hidden", "true");
+  art.innerHTML = tileArtSVG(id);
+  el.appendChild(art);
+  const txt = document.createElement("span");
+  txt.className = "mj-t-txt";
+  txt.setAttribute("aria-hidden", "true");
   const top = document.createElement("span");
   top.className = "mj-t-n";
   top.textContent = face.top;
-  el.appendChild(top);
+  txt.appendChild(top);
   if (face.bottom) {
     const bottom = document.createElement("span");
     bottom.className = "mj-t-s";
     bottom.textContent = face.bottom;
-    el.appendChild(bottom);
+    txt.appendChild(bottom);
   }
+  el.appendChild(txt);
   el.setAttribute("aria-label", tileName(id));
   if (opts.onClick) el.addEventListener("click", opts.onClick);
   return el;
 }
 
-/** 一列牌背(对家手牌) */
-function backsEl(n: number): HTMLElement {
+/** 一列牌背(对家手牌):绿渐变 + 四瓣花压纹,整排排成 1.5° 一档的微弧 */
+export function backsEl(n: number): HTMLElement {
   const box = document.createElement("div");
   box.className = "mj-backs";
-  for (let i = 0; i < Math.max(0, n); i++) {
+  const total = Math.max(0, n);
+  for (let i = 0; i < total; i++) {
     const b = document.createElement("div");
     b.className = "mj-back";
+    b.style.transform = `rotate(${((i - (total - 1) / 2) * 1.5).toFixed(2)}deg)`;
+    const fl = document.createElement("span");
+    fl.className = "mj-back-fl";
+    fl.setAttribute("aria-hidden", "true");
+    fl.innerHTML = backArtSVG();
+    b.appendChild(fl);
     box.appendChild(b);
   }
   return box;
+}
+
+/**
+ * 弱动效开关:尊重系统的 prefers-reduced-motion。
+ * 拿不到 matchMedia(单测的 node 环境)就当没开,绝不抛异常。
+ */
+export function prefersSoft(): boolean {
+  const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+  return mm ? mm("(prefers-reduced-motion: reduce)").matches === true : false;
+}
+
+/**
+ * 胡牌的樱花绽放:中心一朵五瓣花 + 12 片花瓣飘落,约 0.8s 收场。
+ * `soft` 时不加任何动画类,只留一朵带金光的静态花闪一下就撤。
+ */
+export function bloomBurst(host: HTMLElement, soft: boolean, timers: Scheduler): HTMLElement {
+  const stage = document.createElement("div");
+  stage.className = "mj-bloom";
+  stage.setAttribute("aria-hidden", "true");
+  const core = document.createElement("span");
+  core.className = `mj-bloom-core ${soft ? "mj-bloom-flash" : "mj-bloom-open"}`;
+  core.innerHTML = bloomFlowerSVG();
+  stage.appendChild(core);
+  if (!soft) {
+    for (let i = 0; i < BLOOM_PETALS; i++) {
+      const p = document.createElement("span");
+      p.className = "mj-petal mj-petal-fall";
+      p.setAttribute("aria-hidden", "true");
+      p.style.left = `${6 + ((i * 29) % 88)}%`;
+      p.style.animationDelay = `${(i % 4) * 70}ms`;
+      p.style.animationDuration = `${BLOOM_MS - 200 + (i % 3) * 120}ms`;
+      p.innerHTML = petalSVG(i);
+      stage.appendChild(p);
+    }
+  }
+  host.appendChild(stage);
+  timers.after(soft ? 420 : BLOOM_MS + 260, () => stage.remove());
+  return stage;
+}
+
+/** 流局(或差一张没和)时飘在牌河上的那片落叶 */
+function leafEl(): HTMLElement {
+  const leaf = document.createElement("span");
+  leaf.className = `mj-leaf${prefersSoft() ? "" : " mj-leaf-fall"}`;
+  leaf.setAttribute("aria-hidden", "true");
+  leaf.innerHTML = leafSVG();
+  return leaf;
+}
+
+/** 圈风徽章升级成小罗盘:东南西北四个方位点,点亮当前圈风 */
+export function windCompassEl(active: number, label: string): HTMLElement {
+  const badge = document.createElement("span");
+  badge.className = "mj-badge mj-compass";
+  badge.textContent = label;
+  const dial = document.createElement("span");
+  dial.className = "mj-dial";
+  dial.setAttribute("aria-hidden", "true");
+  dial.innerHTML = compassSVG(active);
+  badge.appendChild(dial);
+  return badge;
+}
+
+/** 「N 番起和」按门槛分花苞等级色:低=花苞绿,中=花开粉,高=金 */
+export function floorBadgeClass(floor: number): string {
+  if (floor <= 2) return "mj-floor-bud";
+  if (floor <= 8) return "mj-floor-rose";
+  return "mj-floor-gold";
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +595,10 @@ export function mountPuzzle(
   let wasted = 0;
   let flyRiver = false;
   let paused = false;
+  /** 刚摸进来那张要滑入弹跳一下,画完一帧就清 */
+  let drawnFresh = false;
+  /** 牌墙摸空没和:牌河灰化 + 落叶 */
+  let lostVeil = false;
 
   const wrap = document.createElement("div");
   wrap.className = "mj-wrap";
@@ -479,6 +651,7 @@ export function mountPuzzle(
     }
     drawn = t;
     cursor = hand.length;
+    drawnFresh = true;
     ctx.sfx("tap");
     render();
   }
@@ -513,6 +686,7 @@ export function mountPuzzle(
     if (settled) return;
     settled = true;
     if (!won) {
+      lostVeil = true;
       render();
       ctx.lose("这局差一点点,把闲牌打掉、留住要凑的番种,下一次一定行。");
       return;
@@ -528,27 +702,32 @@ export function mountPuzzle(
   }
 
   function showFanSheet(fans: FanHit[], total: number, onNext: () => void): void {
-    const sheet = document.createElement("div");
-    sheet.className = "mj-sheet";
-    const t = document.createElement("div");
-    t.className = "mj-sheet-t";
-    t.textContent = "🌸 开花啦!";
-    const list = document.createElement("div");
-    list.className = "mj-fans";
-    const btns = document.createElement("div");
-    btns.className = "mj-sheet-btns";
-    const ok = document.createElement("button");
-    ok.type = "button";
-    ok.className = "mj-open";
-    ok.textContent = "收下这些番 ▶";
-    ok.addEventListener("click", () => {
-      sheet.remove();
-      onNext();
+    // 名副其实的「开花」:先在牌面区绽放樱花,再弹番种表
+    const soft = prefersSoft();
+    bloomBurst(wrap, soft, timers);
+    timers.after(soft ? 220 : BLOOM_MS, () => {
+      const sheet = document.createElement("div");
+      sheet.className = "mj-sheet";
+      const t = document.createElement("div");
+      t.className = "mj-sheet-t";
+      t.textContent = "🌸 开花啦!";
+      const list = document.createElement("div");
+      list.className = "mj-fans";
+      const btns = document.createElement("div");
+      btns.className = "mj-sheet-btns";
+      const ok = document.createElement("button");
+      ok.type = "button";
+      ok.className = "mj-open";
+      ok.textContent = "收下这些番 ▶";
+      ok.addEventListener("click", () => {
+        sheet.remove();
+        onNext();
+      });
+      btns.appendChild(ok);
+      sheet.append(t, list, btns);
+      wrap.appendChild(sheet);
+      popFans(list, fans, total, timers);
     });
-    btns.appendChild(ok);
-    sheet.append(t, list, btns);
-    wrap.appendChild(sheet);
-    popFans(list, fans, total, timers);
   }
 
   function render(): void {
@@ -560,11 +739,9 @@ export function mountPuzzle(
     const left = document.createElement("span");
     left.className = "mj-badge";
     left.textContent = `牌墙 ${wall.length} 张`;
-    const wind = document.createElement("span");
-    wind.className = "mj-badge";
-    wind.textContent = `${windName(cfg.roundWind)}圈 · ${windName(cfg.seatWind)}位`;
+    const wind = windCompassEl(cfg.roundWind, `${windName(cfg.roundWind)}圈 · ${windName(cfg.seatWind)}位`);
     const floor = document.createElement("span");
-    floor.className = "mj-badge";
+    floor.className = `mj-badge ${floorBadgeClass(cfg.floor)}`;
     floor.textContent = `${cfg.floor} 番起和`;
     const pause = document.createElement("button");
     pause.type = "button";
@@ -586,6 +763,10 @@ export function mountPuzzle(
       hint.style.margin = "0";
       hint.textContent = "打出去的牌会摆在这里";
       riverBox.appendChild(hint);
+    }
+    if (lostVeil) {
+      riverBox.classList.add("mj-dim");
+      riverBox.appendChild(leafEl());
     }
     flyRiver = false;
     board.appendChild(riverBox);
@@ -617,12 +798,14 @@ export function mountPuzzle(
       handBox.appendChild(
         tileEl(drawn, {
           drawn: true,
+          slide: drawnFresh,
           cursor: !settled && cursor >= hand.length,
           hot: canHuNow(),
           onClick: settled ? undefined : () => play(drawn)
         })
       );
     }
+    drawnFresh = false;
     board.appendChild(handBox);
 
     const acts = document.createElement("div");
@@ -777,6 +960,9 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
   const cursors: Record<number, number> = {};
   let animDiscard = -1;
   let animMeldSeat = -1;
+  /** 牌墙张数一变说明有人刚摸了牌,给当前行动位的新牌一个滑入弹跳 */
+  let lastWallLen = -1;
+  let drawSlideSeat = -1;
 
   const wrap = document.createElement("div");
   wrap.className = "mj-wrap";
@@ -938,30 +1124,35 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
   }
 
   function showFanSheet(fans: FanHit[], total: number, line: string, onNext: () => void): void {
-    const sheet = document.createElement("div");
-    sheet.className = "mj-sheet";
-    const t = document.createElement("div");
-    t.className = "mj-sheet-t";
-    t.textContent = "🌸 这一手开花了";
-    const s = document.createElement("div");
-    s.className = "mj-sheet-s";
-    s.textContent = line;
-    const list = document.createElement("div");
-    list.className = "mj-fans";
-    const btns = document.createElement("div");
-    btns.className = "mj-sheet-btns";
-    const ok = document.createElement("button");
-    ok.type = "button";
-    ok.className = "mj-open";
-    ok.textContent = "看结果 ▶";
-    ok.addEventListener("click", () => {
-      sheet.remove();
-      onNext();
+    // 先在牌桌上开一朵樱花,花瓣落定再弹番种表
+    const soft = prefersSoft();
+    bloomBurst(wrap, soft, timers);
+    timers.after(soft ? 220 : BLOOM_MS, () => {
+      const sheet = document.createElement("div");
+      sheet.className = "mj-sheet";
+      const t = document.createElement("div");
+      t.className = "mj-sheet-t";
+      t.textContent = "🌸 这一手开花了";
+      const s = document.createElement("div");
+      s.className = "mj-sheet-s";
+      s.textContent = line;
+      const list = document.createElement("div");
+      list.className = "mj-fans";
+      const btns = document.createElement("div");
+      btns.className = "mj-sheet-btns";
+      const ok = document.createElement("button");
+      ok.type = "button";
+      ok.className = "mj-open";
+      ok.textContent = "看结果 ▶";
+      ok.addEventListener("click", () => {
+        sheet.remove();
+        onNext();
+      });
+      btns.appendChild(ok);
+      sheet.append(t, s, list, btns);
+      wrap.appendChild(sheet);
+      popFans(list, fans, total, timers);
     });
-    btns.appendChild(ok);
-    sheet.append(t, s, list, btns);
-    wrap.appendChild(sheet);
-    popFans(list, fans, total, timers);
   }
 
   // -- 人类操作 --------------------------------------------------------------
@@ -1023,17 +1214,17 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
   function render(): void {
     if (destroyed) return;
     const me = mySeat();
+    drawSlideSeat = state.wall.length !== lastWallLen ? state.turn : -1;
+    lastWallLen = state.wall.length;
 
     top.innerHTML = "";
     const wall = document.createElement("span");
     wall.className = "mj-badge";
     wall.textContent = `牌墙 ${state.wall.length}`;
     const floor = document.createElement("span");
-    floor.className = "mj-badge";
+    floor.className = `mj-badge ${floorBadgeClass(state.floor)}`;
     floor.textContent = `${state.floor} 番起和`;
-    const round = document.createElement("span");
-    round.className = "mj-badge";
-    round.textContent = `${windName(state.roundWind)}圈`;
+    const round = windCompassEl(state.roundWind, `${windName(state.roundWind)}圈`);
     const hint = document.createElement("button");
     hint.type = "button";
     hint.className = "mj-btn mj-ghost";
@@ -1084,6 +1275,11 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
       hint.style.margin = "0";
       hint.textContent = "大家打出去的牌都摆这儿";
       river.appendChild(hint);
+    }
+    if (finished && state.result?.kind === "draw") {
+      // 流局:牌河整体灰化,飘下一片落叶
+      river.classList.add("mj-dim");
+      river.appendChild(leafEl());
     }
     const info = document.createElement("div");
     info.className = "mj-info";
@@ -1171,6 +1367,7 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
       handBox.appendChild(
         tileEl(s.drawn, {
           drawn: true,
+          slide: drawSlideSeat === seat,
           cursor: myTurn && cur >= s.hand.length,
           hot: hints && isHu(fullHand(s), null, s.melds),
           onClick: myTurn ? () => humanPlay(seat, s.drawn) : undefined
@@ -1724,7 +1921,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 }
 
 /** 给测试钉住的关键常量与工具 */
-export const MJ_CONSTS = { FLY_MS, MELD_MS, FAN_STEP_MS, FAN_VISIBLE, AI_THINK_MS };
+export const MJ_CONSTS = { FLY_MS, MELD_MS, FAN_STEP_MS, FAN_VISIBLE, AI_THINK_MS, BLOOM_MS, BLOOM_PETALS };
 
 /** 测试用:一关残局按既定路线能不能过 */
 export function levelSolvable(level: number): boolean {
