@@ -12,11 +12,16 @@ import {
   CAR_R,
   CHARGE_MS,
   CHARGE_THRUST,
+  DAMP_PER_SEC,
+  FALL_MARGIN,
   MAX_SPEED,
+  SKID_THRUST,
   boundaryHit,
   carActive,
   fieldCenter,
   hypot,
+  openEdgeAt,
+  slickKeepAt,
   worldEdge,
   type Car,
   type Intent,
@@ -225,6 +230,119 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
+// ---------------------------------------------------------------------------
+// 自保:电脑车不许自己开下悬崖
+// ---------------------------------------------------------------------------
+
+/**
+ * 松开油门之后车还会往前滑几秒。
+ *
+ * 满速 32 的车一边点刹车一边把方向掰回场内,大约 0.45 秒、6 个单位才收得住;
+ * 这里取 0.34 秒当「探出去的距离」,再加上 `CLIFF_MARGIN` 的余量,合起来比实际刹车距离宽,
+ * 所以电脑总能在台沿前面站住。
+ */
+export const CLIFF_COAST = 0.55;
+/**
+ * 车心离悬崖至少要留出这么宽的余量,不然就该往回打方向了。
+ *
+ * 判的是车心不是车头:`FALL_MARGIN` 那条线也是按车心算的,
+ * 车身探出去半截还稳稳站着,正是碰碰车该有的样子——留太宽电脑就只会缩在场地中间。
+ */
+export const CLIFF_MARGIN = CAR_R * 0.6;
+/** 打滑 / 冰面 / 油渍上收车更慢,余量最多按这个倍数放大 */
+export const CLIFF_COAST_MAX = 3;
+/** 顶着对手往悬崖推时,自己往外的速度不许超过这个数(再快就收不住了) */
+export const BLOCK_SPEED = MAX_SPEED * 0.4;
+
+/**
+ * 此刻收一次车得留出几秒的滑行时间。
+ *
+ * 刚挨完一记重撞的那半秒油门只剩 `SKID_THRUST` 三成,冰面和油渍上连刹车都咬不住——
+ * 这两种时候都要比平地多留出不少距离,不然「等到边上再掰方向」就已经晚了。
+ */
+export function cliffCoast(world: World, me: Car): number {
+  const oily = slickKeepAt(world.slicks, me.x, me.y, world.keep);
+  const slip = Math.max(1, oily / DAMP_PER_SEC);
+  const grip = me.skid > 0 ? SKID_THRUST : 1;
+  return CLIFF_COAST * Math.min(CLIFF_COAST_MAX, slip / grip);
+}
+
+/**
+ * 我和悬崖之间是不是正顶着一台**已经挂在台沿上的对手车**。
+ *
+ * 车穿不过车:这种时候我这一脚油门推的是它,自己反倒被它挡着掉不下去,
+ * 自保那一层该让开,不然电脑永远差最后一下、谁也推不下去。
+ *
+ * 三条都要成立才算数,少一条这条豁免就会被拿去自杀:
+ *  1. 它几乎贴上了(连心距一个车身出头),而且就在我的正外侧;
+ *  2. 是对面队伍的车——推队友下去没有意义;
+ *  3. 它自己已经贴着悬崖了,再推一把就是出局。
+ * 第 3 条最要紧:场地中间随便撞上一台车就把自保关掉,等于给自己开了条冲下悬崖的路。
+ */
+export function cliffBlocker(world: World, me: Car, ox: number, oy: number): boolean {
+  for (const c of world.cars) {
+    if (c.id === me.id || c.team === me.team || !carActive(c)) continue;
+    const dx = c.x - me.x;
+    const dy = c.y - me.y;
+    const along = dx * ox + dy * oy;
+    if (along <= 0 || along > (me.r + c.r) * 1.15) continue;
+    // 垂直于「往外推」那条线的偏移:偏太多就不是挡在正外侧,顶不到
+    if (Math.abs(-dx * oy + dy * ox) > (me.r + c.r) * 0.7) continue;
+    const his = openEdgeAt(world.field, c.x, c.y, world.inset);
+    if (his && his.dist <= c.r) return true;
+  }
+  return false;
+}
+
+/**
+ * 自保护栏:**电脑车再想赢也不许自己开下悬崖**。
+ *
+ * 这不是难度,是常识——没有哪个档位的车手会一脚油门把自己送下台。
+ * 第 3 轮测试员抓到的「31 关摆烂通关」正是这么来的:新手档 `edgeCare` 只有 3、
+ * 方向抖动却有 0.45 弧度,一路歪着开出场外,玩家一个键都不用按就清场了。
+ *
+ * 所以在所有档位的决策最后加这一层:算出「现在松油门还会往悬崖那边探多远」,
+ * 只要余量不够就先把朝悬崖的那份油门抹掉,余量越负、方向掰回场内的比重越大,
+ * 同时点刹车、收掉这一下冲刺。四档之间的差别照旧留在瞄人、绕位、蓄力和
+ * 挂在台沿上能不能自己爬回来(`lipSave`)——那些才是本事。
+ *
+ * 注意这一层只管**自己踩出来的油门**:被玩家顶出去、被滚桶弹出去、
+ * 被加速带推出去仍然照样掉下场,撞飞的手感一点没变。
+ */
+export function cliffGuard(world: World, me: Car, want: Intent): Intent {
+  const cliff = openEdgeAt(world.field, me.x, me.y, world.inset);
+  if (!cliff) return want;
+  const speedOut = me.vx * cliff.ox + me.vy * cliff.oy;
+  // 已经顶上一台挂在台沿的对手:它就是我的挡墙,这一下推完是把它送下去,自保这时候得让开。
+  // 但只在「顶着推」的时候让——飙着 `BLOCK_SPEED` 以上的速度撞过去不叫推人,
+  // 那是拿自己的车当炮弹,对手一让开就是我下场。
+  if (speedOut < BLOCK_SPEED && cliffBlocker(world, me, cliff.ox, cliff.oy)) return want;
+  const room = cliff.dist - Math.max(0, speedOut) * cliffCoast(world, me);
+  if (room >= CLIFF_MARGIN) return want;
+  // 0 = 刚进警戒带,1 = 已经越过「再打方向也没用」那条线,得整个车头掰回场内
+  const urge = clamp01((CLIFF_MARGIN - room) / (CLIFF_MARGIN + FALL_MARGIN));
+  const outward = want.dx * cliff.ox + want.dy * cliff.oy;
+  let dx = want.dx * (1 - urge) - cliff.ox * urge;
+  let dy = want.dy * (1 - urge) - cliff.oy * urge;
+  const n = hypot(dx, dy);
+  if (n > 0.001) {
+    dx /= n;
+    dy /= n;
+  } else {
+    dx = -cliff.ox;
+    dy = -cliff.oy;
+  }
+  return {
+    dx,
+    dy,
+    // 冲刺是沿着**当前速度**踹一脚的:已经收不住了还按,等于给自己加一脚油门下场
+    dash: want.dash && (outward <= 0 || urge < 0.35),
+    brake: want.brake || (speedOut > 0 && urge > 0.5),
+    // 蓄力期间只剩半个油门,收不住车;真到了那一步就先松手
+    charge: want.charge === true && urge < 0.5,
+  };
+}
+
 /**
  * 闯关时谁上场开打:对手不会一拥而上围殴玩家,
  * 每隔几秒轮换一次「出战名额」,其余的车在外圈绕着等下一轮。
@@ -288,7 +406,7 @@ export function chooseCarAction(
   const me = world.cars[index];
   if (!me || !carActive(me)) return { dx: 0, dy: 0, dash: false, brake: false };
   const trait = TRAITS[skill];
-  if (mode === "patrol") return patrolIntent(world, me, tick);
+  if (mode === "patrol") return cliffGuard(world, me, patrolIntent(world, me, tick));
   const center = fieldCenter(world.field);
 
   const myEdge = worldEdge(world, me.x, me.y);
@@ -316,7 +434,7 @@ export function chooseCarAction(
   const foe = pickTarget(world, me, trait.flank, trait.corner);
   if (!foe) {
     // 场上没人可撞就回中间待命,别停在悬崖边上等着挨撞
-    return { dx: inX * 0.6, dy: inY * 0.6, dash: false, brake: backLen < me.r };
+    return cliffGuard(world, me, { dx: inX * 0.6, dy: inY * 0.6, dash: false, brake: backLen < me.r });
   }
 
   // 1. 站到对手的内侧:从这里撞过去,推力正好指着最近的悬崖。
@@ -392,5 +510,6 @@ export function chooseCarAction(
   //    蓄满或者贴上脸就立刻松手,把这一下打出去。判定见 `wantCharge`。
   const charge = wantCharge(trait, me, gap, touch, danger, goodAngle && isKillShot(world, foe));
 
-  return { dx: rx, dy: ry, dash, brake, charge };
+  // 8. 自保:上面算出来的这一脚要是会把自己送下悬崖,先收回来(所有档位一视同仁)
+  return cliffGuard(world, me, { dx: rx, dy: ry, dash, brake, charge });
 }

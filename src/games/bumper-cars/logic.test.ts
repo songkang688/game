@@ -42,6 +42,7 @@ import {
   makeHazard,
   matchWinner,
   NO_SHRINK,
+  openEdgeAt,
   overlapping,
   playerDown,
   rateLevel,
@@ -444,20 +445,65 @@ describe("stepWorld:开车", () => {
 });
 
 describe("stepWorld:掉出场地", () => {
-  it("越过开放边就算掉下去,功劳记给最后撞它的人", () => {
+  it("越过开放边就算掉下去,功劳记给最后把它往悬崖顶的人", () => {
     // 1.2 起是两段式:先在台沿上打转,松着手不管,两秒到了才真的下去。
     const a = hero(50, 35);
     const b = foe(50, 35, 1);
     const world = createWorld({ field: rect(), cars: [a, b] });
     b.x = 99;
     b.y = 35;
-    b.lastHitBy = a.id;
-    b.lastHitAt = world.time;
+    b.lastPushBy = a.id;
+    b.lastPushAt = world.time;
     b.vx = 40;
     for (let i = 0; i < 100 && !b.gone; i++) stepWorld(world, 32, [NO_INPUT, NO_INPUT]);
     expect(b.gone).toBe(true);
     expect(a.score).toBe(1);
     expect(levelCleared(world)).toBe(true);
+  });
+
+  it("对手一头撞在停着不动的车上、再自己开下悬崖:这一台不算停着那位撞飞的", () => {
+    // 第 3 轮 S5:玩家零输入,结算却写「撞飞 1 台对手车」。
+    // 右边是悬崖,玩家停在场地中间不动,对手从左边一头撞上来再自己冲出去。
+    const a = hero(60, 35);
+    const b = foe(60 - CAR_R * 2, 35, 1);
+    b.vx = MAX_SPEED;
+    const world = createWorld({ field: rect(100, 70, ["top", "bottom"]), cars: [a, b] });
+    stepWorld(world, 16, [NO_INPUT, NO_INPUT]);
+    expect(b.lastPushBy, "撞上来的那一下不该给停着的车记功").toBe(-1);
+    // 撞完之后把它挪到台沿上,松手让它自己滑下去
+    b.x = 100 - FALL_MARGIN * 0.5;
+    b.y = 35;
+    for (let i = 0; i < 200 && !b.gone; i++) stepWorld(world, 32, [NO_INPUT, NO_INPUT]);
+    expect(b.gone).toBe(true);
+    expect(a.score, "对手自己下的场,却记在玩家头上").toBe(0);
+    expect(world.events.some((e) => e.kind === "out" && e.by === 0)).toBe(false);
+  });
+
+  it("把它顶回场地里侧的那一撞是帮忙,不是功劳", () => {
+    // 对手贴着右侧悬崖,玩家从外侧往场内顶它——这一下不该记成撞飞
+    const a = hero(96, 35);
+    const b = foe(96 - CAR_R * 2, 35, 1);
+    a.vx = -MAX_SPEED;
+    const world = createWorld({ field: rect(100, 70, ["top", "bottom"]), cars: [a, b] });
+    stepWorld(world, 16, [{ dx: -1, dy: 0, dash: false, brake: false }, NO_INPUT]);
+    expect(b.lastPushBy).toBe(-1);
+  });
+
+  it("被撞得满场飞、恰好撞到别人身上,也不算自己的战绩", () => {
+    // 玩家这一帧一个键都没按,只是带着速度滑过去
+    const a = hero(60 - CAR_R * 2, 35);
+    const b = foe(60, 35, 1);
+    a.vx = MAX_SPEED;
+    const world = createWorld({ field: rect(100, 70, ["top", "bottom"]), cars: [a, b] });
+    stepWorld(world, 16, [NO_INPUT, NO_INPUT]);
+    expect(b.lastPushBy).toBe(-1);
+    // 换成踩着油门顶上去,同样的一撞就算数了
+    const c = hero(60 - CAR_R * 2, 35);
+    const d = foe(60, 35, 1);
+    c.vx = MAX_SPEED;
+    const w2 = createWorld({ field: rect(100, 70, ["top", "bottom"]), cars: [c, d] });
+    stepWorld(w2, 16, [{ dx: 1, dy: 0, dash: false, brake: false }, NO_INPUT]);
+    expect(d.lastPushBy).toBe(c.id);
   });
 
   it("自己冲下去不给对手加分", () => {
@@ -469,6 +515,19 @@ describe("stepWorld:掉出场地", () => {
     expect(a.out).toBe(true);
     expect(b.score).toBe(0);
     expect(a.falls).toBe(1);
+  });
+
+  it("openEdgeAt 只认没装护栏的那几条边", () => {
+    // 左右有护栏,上下是悬崖:站在最靠近左护栏的地方,最近的悬崖仍是上边
+    const only = openEdgeAt(rect(100, 70, ["left", "right"]), 2, 20);
+    expect(only?.oy).toBe(-1);
+    expect(only?.dist).toBe(20);
+    // 四面都是护栏就没有悬崖
+    expect(openEdgeAt(rect(100, 70, ["left", "right", "top", "bottom"]), 2, 2)).toBe(null);
+    // 圆台:车所在的方位角落在护栏弧段上就不算悬崖
+    const round: Field = { shape: "round", w: 100, h: 100, springs: [], arcs: [{ from: 0.9, to: 0.1 }] };
+    expect(openEdgeAt(round, 90, 50)).toBe(null);
+    expect(openEdgeAt(round, 10, 50)?.ox).toBeCloseTo(-1, 6);
   });
 
   it("弹簧护栏那一边只会把车弹回来", () => {
@@ -569,10 +628,15 @@ describe("赛制与评分", () => {
   });
 
   it("评星:又快又稳三星,掉过一次两星,勉强过关一星", () => {
-    expect(rateLevel(60, 100, 0)).toBe(3);
-    expect(rateLevel(20, 100, 1)).toBe(2);
-    expect(rateLevel(2, 100, 3)).toBe(1);
-    expect(rateLevel(90, 100, 2)).toBe(1);
+    expect(rateLevel(60, 100, 0, 2)).toBe(3);
+    expect(rateLevel(20, 100, 1, 2)).toBe(2);
+    expect(rateLevel(2, 100, 3, 2)).toBe(1);
+    expect(rateLevel(90, 100, 2, 2)).toBe(1);
+  });
+
+  it("一台都没撞飞的那一关最多一星:星星不能是坐在旁边等来的", () => {
+    expect(rateLevel(90, 100, 0, 0)).toBe(1);
+    expect(rateLevel(90, 100, 0, 1)).toBe(3);
   });
 });
 
@@ -580,6 +644,18 @@ describe("文案", () => {
   it("过关的话会把成绩说清楚", () => {
     expect(winLine(30, 0, 3)).toContain("3");
     expect(winLine(10, 2, 4)).toContain("2");
+  });
+
+  it("一台都没撞飞就不写「撞飞 N 台」,更不夸走位和刹车", () => {
+    for (const line of [winLine(65, 0, 0), winLine(20, 2, 0)]) {
+      expect(line).not.toMatch(/撞飞 \d+ 台/);
+      expect(line).not.toContain("走位和刹车");
+      expect(line).toContain("对手自己开下了悬崖");
+      expect(line).toContain("一台都没撞飞");
+    }
+    // 真撞飞了才发那句表扬
+    expect(winLine(65, 0, 1)).toContain("撞飞 1 台");
+    expect(winLine(65, 0, 1)).toContain("走位和刹车");
   });
 
   it("失败文案只鼓励,不批评", () => {

@@ -1094,7 +1094,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
     sfx: ctx.sfx,
     onDone: (res) => {
       if (res.cleared) {
-        ctx.win(rateLevel(res.secondsLeft, lv.seconds, res.falls), winLine(res.secondsLeft, res.falls, res.knocked));
+        ctx.win(
+          rateLevel(res.secondsLeft, lv.seconds, res.falls, res.knocked),
+          winLine(res.secondsLeft, res.falls, res.knocked)
+        );
       } else {
         ctx.lose(loseLine(res.reason === "fall" ? "fall" : "time"));
       }

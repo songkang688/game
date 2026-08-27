@@ -73,6 +73,8 @@ function foe(x: number, y: number, lives = 1, id = 1) {
 const NO_INPUT: Intent = { dx: 0, dy: 0, dash: false, brake: false };
 /** 往场内(左)推满舵 */
 const PUSH_IN: Intent = { dx: -1, dy: 0, dash: false, brake: false };
+/** 往场外(右)推满舵:顶人下场的那一下 */
+const PUSH_OUT: Intent = { dx: 1, dy: 0, dash: false, brake: false };
 
 function body(x: number, y: number, vx: number, vy: number, mass = 1): Body {
   return { x, y, vx, vy, r: 4.2, inv: 1 / mass };
@@ -365,11 +367,11 @@ describe("1.2 · 出界两段式:先打转两秒", () => {
     a.x = 100 + FALL_MARGIN + 0.2;
     stepWorld(world, 16, [NO_INPUT, NO_INPUT]);
     expect(a.teeter).toBeGreaterThan(0);
-    // 队友从场内一记重撞:方向朝外,冲击远超门槛
+    // 对手从场内踩着油门一记重撞:方向朝外,冲击远超门槛
     b.x = a.x - (a.r + b.r) * 0.95;
     b.y = a.y;
     b.vx = 40;
-    stepWorld(world, 16, [NO_INPUT, NO_INPUT]);
+    stepWorld(world, 16, [NO_INPUT, PUSH_OUT]);
     expect(a.out).toBe(true);
     expect(b.score).toBe(1);
   });

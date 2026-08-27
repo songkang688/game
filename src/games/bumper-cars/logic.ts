@@ -101,8 +101,12 @@ export function teeterCrawl(inward: number): number {
 export const ENDLESS_REVIVES = 3;
 /** 掉出去后多久回到场上 */
 export const RESPAWN_MS = 1200;
-/** 撞人后多久之内对方掉下去都算这一撞的功劳 */
+/** 把人往悬崖顶了一下之后,多久之内对方掉下去都算这一下的功劳 */
 export const CREDIT_MS = 2600;
+/** 这一撞给对方加了多少「朝悬崖去」的速度才算「顶了一把」(单位/秒) */
+export const SHOVE_MIN = 3;
+/** 撞上去的那一刻,自己得朝对方开出这个速度,这一下才算是我出的力(单位/秒) */
+export const SHOVE_DRIVE_MIN = 4;
 /** 认定为「一次有感觉的碰撞」的最小冲击 */
 export const BUMP_MIN = 4;
 /** 挨了这么重的一撞就会打滑 */
@@ -360,6 +364,48 @@ export function edgeDistance(field: Field, x: number, y: number, inset = 0): num
   return -boundaryHit(field, x, y, inset).depth;
 }
 
+/** 最近的那条「开放边」:朝场外的单位法线 + 还有多远(负数表示已经越过去了) */
+export interface OpenEdge {
+  /** 指向场外(悬崖那边)的单位法线 */
+  ox: number;
+  oy: number;
+  /** 到这条开放边还有多远 */
+  dist: number;
+}
+
+/**
+ * 离这一点最近的**悬崖**在哪个方向、还有多远;四面都是护栏就返回 null。
+ *
+ * 和 `boundaryHit` 的区别是这里只认没装护栏的那几条边——护栏会把车弹回来,
+ * 贴着护栏开一点都不危险,把它算进「危险距离」里只会让车缩在场地中间不敢动。
+ * 圆台按车此刻的方位角判断:落在护栏弧段上就不算悬崖,因为车真要掉也是从这个方位掉下去。
+ */
+export function openEdgeAt(field: Field, x: number, y: number, inset = 0): OpenEdge | null {
+  const cut = Math.max(0, inset);
+  if (field.shape === "round") {
+    const c = fieldCenter(field);
+    const dx = x - c.x;
+    const dy = y - c.y;
+    const dist = hypot(dx, dy);
+    const turn = turnOf(Math.atan2(dy, dx));
+    if (field.arcs.some((a) => inArc(a, turn))) return null;
+    const R = Math.max(1, fieldRadius(field) - cut);
+    if (dist < 0.001) return { ox: 1, oy: 0, dist: R };
+    return { ox: dx / dist, oy: dy / dist, dist: R - dist };
+  }
+  const edges: Array<{ ox: number; oy: number; dist: number; edge: EdgeName }> = [
+    { ox: -1, oy: 0, dist: x - cut, edge: "left" },
+    { ox: 1, oy: 0, dist: field.w - cut - x, edge: "right" },
+    { ox: 0, oy: -1, dist: y - cut, edge: "top" },
+    { ox: 0, oy: 1, dist: field.h - cut - y, edge: "bottom" },
+  ];
+  const cand = edges.filter((e) => !field.springs.includes(e.edge));
+  if (cand.length === 0) return null;
+  let best = cand[0];
+  for (const e of cand) if (e.dist < best.dist) best = e;
+  return { ox: best.ox, oy: best.oy, dist: best.dist };
+}
+
 // ---------------------------------------------------------------------------
 // 加速带与障碍
 // ---------------------------------------------------------------------------
@@ -555,9 +601,16 @@ export interface Car {
   teeter: number;
   /** 这一局一共打转过几次 */
   teeters: number;
-  /** 最近被谁撞过,用来判定「是谁把它撞下去的」 */
-  lastHitBy: number;
-  lastHitAt: number;
+  /**
+   * 最近**把这台车往悬崖那边顶**的是谁,用来判定「是谁把它撞下去的」。
+   *
+   * 记的不是「最后碰过我的人」:对手一头撞在停着不动的车上、自己弹开之后
+   * 一路开下悬崖,这一下不该算在被撞的人头上。只有那次碰撞真的给我加了
+   * 一份朝悬崖去的速度(≥ `SHOVE_MIN`)才留名,超过 `CREDIT_MS` 或者
+   * 中途被台沿救回来都作废。
+   */
+  lastPushBy: number;
+  lastPushAt: number;
   ai: boolean;
   /** 出生点(复活时优先回到这里) */
   homeX: number;
@@ -607,8 +660,8 @@ export function makeCar(spec: CarSpec): Car {
     chargeCd: 0,
     teeter: 0,
     teeters: 0,
-    lastHitBy: -1,
-    lastHitAt: -99999,
+    lastPushBy: -1,
+    lastPushAt: -99999,
     ai: spec.ai ?? false,
     homeX: spec.x,
     homeY: spec.y,
@@ -833,6 +886,10 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
 
   for (const h of world.hazards) updateHazard(h, world.time);
 
+  // 这一帧谁真的在开车(踩着方向 / 还在冲刺 / 攒着蓄力)。
+  // 「撞飞」记谁头上要看这个:被人撞得满场飞、恰好撞到别人身上,那不是你的战绩。
+  const driving: boolean[] = world.cars.map(() => false);
+
   // ---- 油门 / 刹车 / 冲刺 / 蓄力 ----
   world.cars.forEach((car, i) => {
     if (car.gone) return;
@@ -860,7 +917,7 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
         car.spinRate = 0;
         car.charge = 0;
         car.teeter = 0;
-        car.lastHitBy = -1;
+        car.lastPushBy = -1;
         world.events.push({ kind: "respawn", who: i });
       }
       return;
@@ -883,6 +940,7 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
       return;
     }
     const before = hypot(car.vx, car.vy);
+    driving[i] = dir.x !== 0 || dir.y !== 0 || want.dash === true || car.dashT > 0 || car.charge > 0;
     // 蓄力:按住的时候车明显慢下来(这就是给对手看的前摇),松手才放出去
     const charging = want.charge === true && car.chargeCd <= 0 && car.spin <= 0;
     if (charging) car.charge = Math.min(CHARGE_MS, car.charge + dt);
@@ -970,6 +1028,8 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
       const bb = bodyOf(b);
       if (!overlapping(ba, bb)) continue;
       const bounce = clampRestitution(a.dashT > 0 || b.dashT > 0 ? DASH_BOUNCE : CAR_BOUNCE);
+      const beforeA = { vx: a.vx, vy: a.vy };
+      const beforeB = { vx: b.vx, vy: b.vy };
       const impact = resolveCollision(ba, bb, bounce);
       separate(ba, bb);
       writeBack(a, ba);
@@ -977,10 +1037,8 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
       if (impact <= 0) continue;
       ramPush(a, b);
       ramPush(b, a);
-      a.lastHitBy = b.id;
-      a.lastHitAt = world.time;
-      b.lastHitBy = a.id;
-      b.lastHitAt = world.time;
+      if (driving[j]) creditShove(world, a, b, beforeA, beforeB);
+      if (driving[i]) creditShove(world, b, a, beforeB, beforeA);
       if (impact >= SKID_MIN) {
         // 挨重撞的一方会打滑一小会儿,还要失控旋转 0.3 秒,这正是把对手顶出场的窗口
         a.skid = Math.max(a.skid, SKID_MS);
@@ -1024,6 +1082,8 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
         car.teeter = 0;
         car.spin = 0;
         car.spinRate = 0;
+        // 这一下算它自己救回来了:刚才那记推撞就此结清,之后再掉下去是另一回事
+        car.lastPushBy = -1;
         world.events.push({ kind: "rescue", who: i });
       }
       return;
@@ -1044,6 +1104,7 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
         car.teeter = 0;
         car.spin = 0;
         car.spinRate = 0;
+        car.lastPushBy = -1;
         world.events.push({ kind: "rescue", who: i });
       }
       return;
@@ -1061,7 +1122,9 @@ export function stepWorld(world: World, dtMs: number, intents: readonly Intent[]
     }
     // 车轮压线但重心还在台上:还没到打转那一步
     if (hit.depth < FALL_MARGIN) return;
-    // 第一段:越过边缘不直接出局,先在台沿上打转两秒,这两秒里往场内打方向还救得回来
+    // 第一段:越过边缘不直接出局,先在台沿上打转两秒,这两秒里往场内打方向还救得回来。
+    // 把它顶上台沿的那一下算到这里为止:打转这两秒不该把功劳的有效期耗光。
+    if (car.lastPushBy >= 0) car.lastPushAt = world.time;
     car.teeter = TEETER_MS;
     car.teeters += 1;
     car.spin = TEETER_MS;
@@ -1107,6 +1170,40 @@ export function pushedOutward(world: World, car: Car): boolean {
 }
 
 /**
+ * 记一笔「谁把谁往悬崖顶了一下」——这就是「撞飞」的唯一入账口。
+ *
+ * 两件事要同时成立才留名(调用方还会先确认我这一帧真的在开车,不是被撞得满场飞):
+ *  1. **这一下是我出的力**:撞上的那一刻我确实在朝它开(`SHOVE_DRIVE_MIN`)。
+ *     停在原地被人一头撞上不算——那是它自己撞过来的。
+ *  2. **真的把它往悬崖那边送了**:这一撞给它加的「朝最近那道悬崖去」的速度够 `SHOVE_MIN`。
+ *     把它顶回场地里侧的那一撞是帮忙,不是功劳。
+ *
+ * 第 3 轮测试员抓到的「玩家一个键都没按,结算却写撞飞 1 台」正是这两条都不成立的局:
+ * 车停在那儿一动不动,对手自己冲下了悬崖。
+ */
+export function creditShove(
+  world: World,
+  victim: Car,
+  hitter: Car,
+  before: { vx: number; vy: number },
+  hitterBefore: { vx: number; vy: number }
+): void {
+  if (hitter.team === victim.team) return;
+  const dx = victim.x - hitter.x;
+  const dy = victim.y - hitter.y;
+  const d = hypot(dx, dy);
+  if (d < 0.001) return;
+  const drive = (hitterBefore.vx * dx + hitterBefore.vy * dy) / d;
+  if (drive < SHOVE_DRIVE_MIN) return;
+  const cliff = openEdgeAt(world.field, victim.x, victim.y, world.inset);
+  if (!cliff) return;
+  const gain = (victim.vx - before.vx) * cliff.ox + (victim.vy - before.vy) * cliff.oy;
+  if (gain < SHOVE_MIN) return;
+  victim.lastPushBy = hitter.id;
+  victim.lastPushAt = world.time;
+}
+
+/**
  * 「顶一把」:正在冲刺 / 蓄力的一方沿连心线额外推对方一下。
  * 推力按质量比缩放,重车顶不太动;不在冲刺状态就什么也不做。
  */
@@ -1142,13 +1239,14 @@ export function dropCar(world: World, index: number): void {
   car.spinRate = 0;
   car.charge = 0;
   let by = -1;
-  if (car.lastHitBy >= 0 && world.time - car.lastHitAt <= CREDIT_MS) {
-    const hitter = world.cars.find((c) => c.id === car.lastHitBy);
+  if (car.lastPushBy >= 0 && world.time - car.lastPushAt <= CREDIT_MS) {
+    const hitter = world.cars.find((c) => c.id === car.lastPushBy);
     if (hitter && hitter.team !== car.team) {
       hitter.score += 1;
       by = hitter.id;
     }
   }
+  car.lastPushBy = -1;
   car.lives -= 1;
   world.events.push({ kind: "out", who: index, by });
   if (car.lives <= 0) {
@@ -1182,9 +1280,14 @@ export function leader(scores: readonly number[]): number {
 /**
  * 闯关评星:一次没掉下去且时间宽裕给 3 星,掉过一次给 2 星,再往下 1 星。
  * 「越快越好」和「越稳越好」各占一半,鼓励孩子先站稳再冲。
+ *
+ * 还有一条底线:`knocked`(玩家亲手顶下去的台数)是 0 的那一局最多 1 星。
+ * 对手全是自己开下悬崖的,这一关孩子什么都没做,星星就不能满上——
+ * 星星是努力的凭证,不是坐在旁边等来的。
  */
-export function rateLevel(secondsLeft: number, total: number, falls: number): 1 | 2 | 3 {
+export function rateLevel(secondsLeft: number, total: number, falls: number, knocked: number): 1 | 2 | 3 {
   const ratio = total > 0 ? secondsLeft / total : 0;
+  if (knocked <= 0) return 1;
   if (falls === 0 && ratio >= 0.4) return 3;
   if (falls <= 1 && ratio >= 0.15) return 2;
   return 1;
@@ -1194,7 +1297,20 @@ export function rateLevel(secondsLeft: number, total: number, falls: number): 1 
 // 文案(小学六年级读得懂;失败只鼓励,不批评)
 // ---------------------------------------------------------------------------
 
+/**
+ * 闯关过关的播报。
+ *
+ * `knocked` 是**玩家亲手顶下去的台数**(`Car.score`),对手自己开下悬崖不算在里面。
+ * 所以一台都没撞飞的时候不能写「撞飞 0 台」,更不能夸「走位和刹车配合得很好」——
+ * 那是在表扬一件孩子根本没做过的事。这种局如实说是对手自己下的场,再给一句下次怎么做。
+ */
 export function winLine(secondsLeft: number, falls: number, knocked: number): string {
+  if (knocked <= 0) {
+    if (falls === 0) {
+      return `对手自己开下了悬崖,你一台都没撞飞,还剩 ${secondsLeft} 秒。下一关主动迎上去,亲手把他们顶出场才算本事。`;
+    }
+    return `对手自己开下了悬崖,你一台都没撞飞,自己还掉下去 ${falls} 次。下一关先在场地中间站稳,再找机会顶人。`;
+  }
   if (falls === 0) {
     return `撞飞 ${knocked} 台对手车,自己一次都没掉下去,还剩 ${secondsLeft} 秒。走位和刹车配合得很好,继续保持。`;
   }
