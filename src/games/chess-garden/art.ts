@@ -102,12 +102,27 @@ function plinth(t: PieceTone): string {
   );
 }
 
+/**
+ * 主体的两停层叠明暗（渐变等效，免 defs/id——这些 SVG 会内联很多份）：
+ * 同一条路径叠三层：本色描边整形 → 半透明暗纱 → 向顶部左上内缩的本色亮层。
+ * 效果是「顶亮、底与右缘留一圈暗」，光源左上 45° 的约定不变。
+ */
+function duoTone(d: string, col: string, t: PieceTone, topY: number, s = 0.92): string {
+  const tx = (15 * (1 - s)).toFixed(2);
+  const ty = (topY * (1 - s)).toFixed(2);
+  return (
+    `<path d="${d}" fill="${col}" stroke="${t.line}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="rgba(56,34,16,0.14)"/>` +
+    `<path d="${d}" fill="${col}" transform="matrix(${s} 0 0 ${s} ${tx} ${ty})"/>`
+  );
+}
+
 /** 兵 · 小蘑菇：圆帽 + 三颗帽点，个头最矮 */
 function pawnInner(t: PieceTone): string {
   return (
     plinth(t) +
     `<path d="M11.6 17.6 L11.2 29.4 Q16 31.4 20.8 29.4 L20.4 17.6 Z" fill="${t.body}" stroke="${t.line}" stroke-width="1.2"/>` +
-    `<path d="M5 17.2 Q5 6.2 16 6.2 Q27 6.2 27 17.2 Q21.6 19.4 16 19.4 Q10.4 19.4 5 17.2 Z" fill="${t.cap}" stroke="${t.line}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    duoTone("M5 17.2 Q5 6.2 16 6.2 Q27 6.2 27 17.2 Q21.6 19.4 16 19.4 Q10.4 19.4 5 17.2 Z", t.cap, t, 6.2) +
     `<circle cx="11" cy="11.6" r="1.7" fill="${t.dot}"/>` +
     `<circle cx="17.6" cy="9.4" r="1.4" fill="${t.dot}"/>` +
     `<circle cx="21.8" cy="13.4" r="1.2" fill="${t.dot}"/>` +
@@ -119,7 +134,7 @@ function pawnInner(t: PieceTone): string {
 function knightInner(t: PieceTone): string {
   return (
     plinth(t) +
-    `<path d="M12.4 30 L12.4 20.4 Q12.4 18.4 10.6 17.6 L7.6 16.2 Q5.6 15.3 6.4 13.2 Q8.2 8.6 13.6 7.8 L16.8 4.6 L18.4 8.4 Q21.6 11 21.6 16 L21.6 30 Z" fill="${t.body}" stroke="${t.line}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    duoTone("M12.4 30 L12.4 20.4 Q12.4 18.4 10.6 17.6 L7.6 16.2 Q5.6 15.3 6.4 13.2 Q8.2 8.6 13.6 7.8 L16.8 4.6 L18.4 8.4 Q21.6 11 21.6 16 L21.6 30 Z", t.body, t, 4.6) +
     `<path d="M21.6 22 Q25.4 21 24 17.6 Q27 17 25.4 13.8 Q27.8 12.6 25.6 9.6 Q23.2 7.6 18.4 8.4 Q21.6 11 21.6 16 Z" fill="${t.cap}" stroke="${t.line}" stroke-width="1.1" stroke-linejoin="round"/>` +
     `<circle cx="12.2" cy="12.6" r="1.3" fill="${t.line}"/>` +
     `<circle cx="8.2" cy="14" r="0.8" fill="${t.line}"/>` +
@@ -132,7 +147,7 @@ function bishopInner(t: PieceTone): string {
   return (
     plinth(t) +
     `<path d="M13.8 25 L13.4 30.4 L18.6 30.4 L18.2 25 Z" fill="${t.trunk}" stroke="${t.line}" stroke-width="1.1"/>` +
-    `<path d="M16 2.6 L21.4 10.4 L18.8 10.4 L24 17.8 L20.8 17.8 L26.4 25.6 L5.6 25.6 L11.2 17.8 L8 17.8 L13.2 10.4 L10.6 10.4 Z" fill="${t.body}" stroke="${t.line}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    duoTone("M16 2.6 L21.4 10.4 L18.8 10.4 L24 17.8 L20.8 17.8 L26.4 25.6 L5.6 25.6 L11.2 17.8 L8 17.8 L13.2 10.4 L10.6 10.4 Z", t.body, t, 2.6) +
     `<circle cx="13" cy="15" r="1.3" fill="${t.gem}"/>` +
     `<circle cx="19.4" cy="21.6" r="1.3" fill="${t.gem}"/>` +
     `<ellipse cx="13" cy="8.4" rx="2" ry="1.1" fill="${t.hi}" transform="rotate(-34 13 8.4)"/>`
@@ -143,7 +158,7 @@ function bishopInner(t: PieceTone): string {
 function rookInner(t: PieceTone): string {
   return (
     plinth(t) +
-    `<path d="M9.6 12 L8.8 29.6 Q16 31.6 23.2 29.6 L22.4 12 Z" fill="${t.body}" stroke="${t.line}" stroke-width="1.2"/>` +
+    duoTone("M9.6 12 L8.8 29.6 Q16 31.6 23.2 29.6 L22.4 12 Z", t.body, t, 12) +
     `<path d="M8 5 L11.4 5 L11.4 8.2 L14 8.2 L14 5 L18 5 L18 8.2 L20.6 8.2 L20.6 5 L24 5 L24 12 L8 12 Z" fill="${t.body}" stroke="${t.line}" stroke-width="1.2" stroke-linejoin="round"/>` +
     `<path d="M13.4 29.8 L13.4 23.6 Q16 21.2 18.6 23.6 L18.6 29.8 Z" fill="${t.door}"/>` +
     `<path d="M10 16 L22 16 M10.4 19.8 L21.6 19.8" stroke="${t.line}" stroke-width="0.9" opacity="0.45" fill="none"/>` +
@@ -159,7 +174,7 @@ function queenInner(t: PieceTone): string {
   }
   return (
     plinth(t) +
-    `<path d="M11.4 30.2 L13 18.8 L19 18.8 L20.6 30.2 Q16 31.8 11.4 30.2 Z" fill="${t.body}" stroke="${t.line}" stroke-width="1.2"/>` +
+    duoTone("M11.4 30.2 L13 18.8 L19 18.8 L20.6 30.2 Q16 31.8 11.4 30.2 Z", t.body, t, 18.8) +
     petals +
     `<circle cx="16" cy="11" r="3" fill="${t.gem}" stroke="${t.goldLine}" stroke-width="1"/>` +
     `<circle cx="15" cy="10" r="0.9" fill="rgba(255,255,255,0.85)"/>` +
@@ -177,7 +192,7 @@ function kingInner(t: PieceTone): string {
   }
   return (
     plinth(t) +
-    `<path d="M10.8 30.4 L12.6 16.4 L19.4 16.4 L21.2 30.4 Q16 32.2 10.8 30.4 Z" fill="${t.body}" stroke="${t.line}" stroke-width="1.2"/>` +
+    duoTone("M10.8 30.4 L12.6 16.4 L19.4 16.4 L21.2 30.4 Q16 32.2 10.8 30.4 Z", t.body, t, 16.4) +
     petals +
     `<circle cx="16" cy="14" r="3.4" fill="${t.gold}" stroke="${t.goldLine}" stroke-width="1"/>` +
     `<path d="M12.6 6.6 L12.6 3.4 L14.4 4.9 L16 2.6 L17.6 4.9 L19.4 3.4 L19.4 6.6 Z" fill="${t.gold}" stroke="${t.goldLine}" stroke-width="1" stroke-linejoin="round"/>` +
