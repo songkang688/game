@@ -52,6 +52,25 @@ import {
   TOOL_MIN_H,
   type CellCenter,
 } from "./runtime";
+import {
+  BUBBLE_MS,
+  CONFETTI_TINTS,
+  FDF_ART,
+  HIT_SPARK_MS,
+  MAG_MS,
+  MISS_BUBBLE_TEXT,
+  RING_MS,
+  STAGE_CSS,
+  badgeRowHTML,
+  confettiSpecs,
+  deskDoodleHTML,
+  hitRingEndRadius,
+  hitSparkSpecs,
+  hudTimeHTML,
+  magnifierFxHTML,
+  seamHTML,
+  seamMode,
+} from "./stage13";
 
 /** 主棋盘一格的边长上限：配合 22px 的命中半径下限，热区直径稳稳 ≥ 44px */
 export const PLAY_CELL_PX = 44;
@@ -123,7 +142,7 @@ const CSS = `
   display:block;font-family:inherit;}
 .fdf-cell-play{cursor:pointer;}
 .fdf-glyph{position:absolute;left:50%;top:50%;line-height:1;pointer-events:none;}
-.fdf-cell.fdf-found::after{content:"";position:absolute;inset:6%;border:3px solid #f06595;border-radius:50%;
+.fdf-cell.fdf-found::after{content:"";position:absolute;inset:6%;border:3px solid #f4b942;border-radius:50%;
   box-shadow:0 0 0 2px #ffffffc0 inset;}
 .fdf-cell.fdf-hintarea{background:#fff3bf;}
 .fdf-cell.fdf-hintspot{background:#ffe066;animation:fdfBlink .7s 3;}
@@ -131,7 +150,7 @@ const CSS = `
 .fdf-cell.fdf-slide{animation:fdfSlide .45s;}
 @keyframes fdfSlide{from{transform:translateX(-10px);opacity:.35}to{transform:translateX(0);opacity:1}}
 .fdf-ripple{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;pointer-events:none;
-  border:3px solid #91a7ff;animation:fdfRipple .6s ease-out forwards;}
+  border:3px solid rgba(140,140,150,.6);animation:fdfRipple .6s ease-out forwards;}
 @keyframes fdfRipple{from{transform:scale(.35);opacity:.9}to{transform:scale(1.15);opacity:0}}
 .fdf-confetti{font-size:20px;letter-spacing:6px;animation:fdfPop .6s ease-out;}
 @keyframes fdfPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
@@ -249,10 +268,12 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   }
 
   const root = document.createElement("div");
-  root.className = "fdf-wrap";
+  root.className = "fdf-wrap fdf-desk";
   root.innerHTML = `
+    <div class="fdf-deco">${deskDoodleHTML()}</div>
     <div class="fdf-top">
       <span class="fdf-badge fdf-count">🔍 0/${scene.diffIdx.length}</span>
+      <span class="fdf-badges" aria-hidden="true"></span>
       <span class="fdf-badge fdf-hud"></span>
     </div>
     <div class="fdf-viewport"><div class="fdf-zoom"><div class="fdf-panels"></div></div></div>
@@ -270,6 +291,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   const countEl = root.querySelector(".fdf-count") as HTMLElement;
   const hudEl = root.querySelector(".fdf-hud") as HTMLElement;
+  const badgesEl = root.querySelector(".fdf-badges") as HTMLElement;
   const viewport = root.querySelector(".fdf-viewport") as HTMLElement;
   const zoomBox = root.querySelector(".fdf-zoom") as HTMLElement;
   const panelsEl = root.querySelector(".fdf-panels") as HTMLElement;
@@ -278,6 +300,18 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const zoomer = root.querySelector(".fdf-zoomer") as HTMLInputElement;
   const zoomVal = root.querySelector(".fdf-zoomval") as HTMLElement;
   hudEl.hidden = true;
+
+  // 暖色滤镜层与命中动画层：都盖在两张图上方、都不吃点击（视觉层不许挡玩法）
+  const warmth = document.createElement("div");
+  warmth.className = "fdf-warmth";
+  const fxLayer = document.createElement("div");
+  fxLayer.className = "fdf-fxlayer";
+  viewport.append(warmth, fxLayer);
+
+  /** 侦探徽章排：点亮数 = 已找到数，总数 = 该关差异总数（只读题目数据） */
+  function renderBadges(flashNewest: boolean): void {
+    badgesEl.innerHTML = badgeRowHTML(foundSet.size, scene.diffIdx.length, flashNewest && !reduced);
+  }
 
   // --- 棋盘 -----------------------------------------------------------------
 
@@ -291,9 +325,10 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   function makePanel(label: string, px: number): { panel: HTMLElement; grid: HTMLElement } {
     const panel = document.createElement("div");
-    panel.className = "fdf-panel";
+    // 木质画框只是相框皮肤：格子网格的坐标与尺寸一个像素不动
+    panel.className = "fdf-panel fdf-framed";
     const cap = document.createElement("div");
-    cap.className = "fdf-label";
+    cap.className = "fdf-label fdf-plaque";
     cap.textContent = label;
     const grid = makeGrid(px);
     panel.append(cap, grid);
@@ -319,6 +354,10 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   }
   const split = document.createElement("div");
   split.className = "fdf-split";
+  // 中缝装饰：窄屏（上下排布）顶部麻绳横挂，宽屏麻绳短段 + 两个别针连框
+  const seam = seamMode(view.innerWidth ?? 360);
+  split.classList.add("fdf-seam", `fdf-seam-${seam}`);
+  split.innerHTML = seamHTML(seam);
   panelsEl.appendChild(split);
   const play = makePanel(opts.playLabel, playPx);
   panelsEl.appendChild(play.panel);
@@ -503,14 +542,77 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
 
   const missTimes: number[] = [];
 
-  function ripple(clientX?: number, clientY?: number): void {
-    if (reduced || clientX === undefined || clientY === undefined) return;
+  /** 视口内某个屏幕坐标换算到命中动画层里（层随内容滚动，得补上滚动量） */
+  function fxPoint(clientX: number, clientY: number): { x: number; y: number } {
     const box = viewport.getBoundingClientRect();
+    return { x: clientX - box.left + viewport.scrollLeft, y: clientY - box.top + viewport.scrollTop };
+  }
+
+  /**
+   * 命中仪式（纯装饰层）：放大镜从画框外滑到差异点（260ms）→ 虚线圈从 28px
+   * 收紧到**命中判定半径**并转一圈定格（300ms）→ 星屑 3 颗。
+   * reduced：全部跳过，靠 markFound 的金圈直接显示。
+   */
+  function hitFx(src: number): void {
+    if (reduced) return;
+    const btn = playCells[src];
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    if (!(r.width > 0)) return;
+    const { x, y } = fxPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const mag = document.createElement("div");
+    mag.className = "fdf-mag";
+    mag.style.left = `${x.toFixed(1)}px`;
+    mag.style.top = `${y.toFixed(1)}px`;
+    mag.innerHTML = `${magnifierFxHTML()}<span class="fdf-maglens"></span>`;
+    const ring = document.createElement("div");
+    ring.className = "fdf-hitring";
+    ring.style.left = `${x.toFixed(1)}px`;
+    ring.style.top = `${y.toFixed(1)}px`;
+    // 收圈终态直径 = 判定半径 × 2：画出来的圈就是判定的圈（乘上当下的实际格宽）
+    ring.style.setProperty("--fdf-ring-d", `${(hitRingEndRadius(r.width) * 2).toFixed(1)}px`);
+    const stars = document.createElement("div");
+    stars.className = "fdf-fxstar";
+    stars.style.left = `${x.toFixed(1)}px`;
+    stars.style.top = `${y.toFixed(1)}px`;
+    for (const s of hitSparkSpecs(Math.random)) {
+      const sp = document.createElement("span");
+      sp.className = "fdf-spark";
+      sp.textContent = "✦";
+      sp.style.color = FDF_ART.foundGold;
+      sp.style.fontSize = `${s.sizePx}px`;
+      sp.style.animationDelay = `${MAG_MS + s.delayMs}ms`;
+      sp.style.setProperty("--fdf-spark-dx", `${s.dx}px`);
+      sp.style.setProperty("--fdf-spark-dy", `${s.dy}px`);
+      stars.appendChild(sp);
+    }
+    fxLayer.append(mag, ring, stars);
+    later(() => ring.classList.add("fdf-hitring-done"), MAG_MS + RING_MS);
+    later(() => mag.remove(), MAG_MS + RING_MS + 160);
+    later(() => ring.remove(), MAG_MS + RING_MS + 420);
+    later(() => stars.remove(), MAG_MS + HIT_SPARK_MS + 220);
+  }
+
+  /**
+   * 点错反馈（不吓人版）：小问号气泡 + 一圈灰色涟漪。不闪红、不扣分，
+   * 冷却与文案逻辑照旧。reduced：只显一帧静态气泡，涟漪不画。
+   */
+  function missFx(clientX?: number, clientY?: number): void {
+    if (clientX === undefined || clientY === undefined) return;
+    const { x, y } = fxPoint(clientX, clientY);
+    const bubble = document.createElement("div");
+    bubble.className = "fdf-bubble";
+    bubble.textContent = MISS_BUBBLE_TEXT;
+    bubble.style.left = `${x.toFixed(1)}px`;
+    bubble.style.top = `${y.toFixed(1)}px`;
+    fxLayer.appendChild(bubble);
+    later(() => bubble.remove(), reduced ? 420 : BUBBLE_MS + 380);
+    if (reduced) return;
     const dot = document.createElement("div");
     dot.className = "fdf-ripple";
-    dot.style.left = `${clientX - box.left}px`;
-    dot.style.top = `${clientY - box.top}px`;
-    viewport.appendChild(dot);
+    dot.style.left = `${x.toFixed(1)}px`;
+    dot.style.top = `${y.toFixed(1)}px`;
+    fxLayer.appendChild(dot);
     later(() => dot.remove(), 650);
   }
 
@@ -519,6 +621,8 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     if (answers.has(index)) {
       foundSet.add(index);
       markFound(index);
+      hitFx(index);
+      renderBadges(true);
       opts.sfx("coin");
       countEl.textContent = `🔍 ${foundSet.size}/${scene.diffIdx.length}`;
       msgEl.textContent = "找到一处！👀 同一片区域常常还藏着第二处～";
@@ -540,7 +644,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       cooling = false;
     }, cool);
     opts.sfx("tap");
-    ripple(clientX, clientY);
+    missFx(clientX, clientY);
     msgEl.textContent =
       cool > 600
         ? "慢一点点～停半秒，挑一行从左往右仔细比，比乱扫快得多。"
@@ -551,13 +655,27 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
             : "这一格上下一致，换成一列一列竖着比试试～";
   }
 
+  /** 全部找到：中缝贴「完全一致!」缎带 + 彩纸 16 粒；reduced 只留静态缎带 */
   function celebrate(): void {
+    const ribbon = document.createElement("div");
+    ribbon.className = "fdf-ribbon";
+    ribbon.textContent = "完全一致!";
+    split.replaceWith(ribbon);
+    later(() => ribbon.replaceWith(split), 1500);
     if (reduced) return;
-    const party = document.createElement("div");
-    party.className = "fdf-confetti";
-    party.textContent = "🎉 ✨ 🎊";
-    split.replaceWith(party);
-    later(() => party.replaceWith(split), 1500);
+    const cx = (viewport.clientWidth || 320) / 2;
+    for (const c of confettiSpecs(Math.random)) {
+      const paper = document.createElement("span");
+      paper.className = "fdf-paper";
+      paper.style.left = `${cx.toFixed(1)}px`;
+      paper.style.background = CONFETTI_TINTS[c.tint];
+      paper.style.animationDelay = `${c.delayMs}ms`;
+      paper.style.setProperty("--fdf-paper-dx", `${c.dx}px`);
+      paper.style.setProperty("--fdf-paper-fall", `${c.fall}px`);
+      paper.style.setProperty("--fdf-paper-spin", `${c.spin}deg`);
+      fxLayer.appendChild(paper);
+      later(() => paper.remove(), c.delayMs + 900);
+    }
   }
 
   // --- 两级提示 -------------------------------------------------------------
@@ -603,6 +721,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   applyTransform();
   syncTouchAction();
   refreshHintBtn();
+  renderBadges(false);
   msgEl.textContent = shouldSuggestZoom(playPx, zoom)
     ? "格子有点小，可以两根手指放大，两张图会一起放大～"
     : "";
@@ -637,6 +756,9 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       zoomer.removeEventListener("input", onZoomer);
       win?.removeEventListener("resize", fitViewport);
       pointers.clear();
+      // 放大镜、收圈、气泡、彩纸全在这一层里；它们的收尸计时也都挂在 timeouts 上，
+      // 上面已经清空，这里再把节点清干净，离场即归零
+      fxLayer.textContent = "";
       zoom = ZOOM_MIN;
       panX = 0;
       panY = 0;
@@ -691,8 +813,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     if (!runner) return;
     const bits: string[] = [];
     if (rounds > 1) bits.push(`🎬 第 ${roundIndex + 1}/${rounds} 轮`);
-    if (cfg.timeSec > 0) bits.push(`⏰ ${Math.max(0, timeLeft)}s`);
-    runner.hud.textContent = bits.join("　");
+    // 计时逻辑原封不动，这里只把剩余时间画成沙漏（流沙比例 = 剩余 / 总时长）
+    if (cfg.timeSec > 0) bits.push(hudTimeHTML(timeLeft, cfg.timeSec));
+    runner.hud.innerHTML = bits.join("　");
     runner.hud.hidden = bits.length === 0;
   }
 
@@ -881,12 +1004,12 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
       },
     });
     runner.hud.hidden = false;
-    runner.hud.textContent = `⏰ ${timeLeft}s`;
+    runner.hud.innerHTML = hudTimeHTML(timeLeft, scene.timeSec);
     runner.setMessage("每轮 3 处不同，找齐就进下一轮；网格会越来越大，双胞胎图案也会越来越多。");
     timerId = setInterval(() => {
       if (dead) return;
       timeLeft--;
-      if (runner) runner.hud.textContent = `⏰ ${Math.max(0, timeLeft)}s`;
+      if (runner) runner.hud.innerHTML = hudTimeHTML(timeLeft, scene.timeSec);
       if (timeLeft <= 0) showOver();
     }, 1000);
   }
@@ -931,7 +1054,7 @@ export function openCampaignLevel(level: number): boolean {
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = CSS + STAGE_CSS;
   const bar = document.createElement("div");
   bar.className = "fdf-tools";
   bar.style.margin = "0 0 8px";
