@@ -1,26 +1,30 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { GAME_MODES } from "../../engine/types";
-import { OPEN, indexOf } from "./board";
+import { GUESS, OPEN, indexOf } from "./board";
 import { AI_TIER_HINTS, AI_TIER_LABELS, AI_TIERS } from "./ai";
 import guide from "./guide";
 import { allLevels, levelAt, loseLine, winLine } from "./levels";
 import { installDom, type DomStub, type FakeEl } from "./testkit";
+import { cloverSVG, flagSVG, flowerSVG, signSVG, wateringCanSVG, wreathSVG } from "./art";
 import {
   AI_TICK_MS,
   LONG_PRESS_CHOICES,
   LONG_PRESS_MS,
   MAX_CELL,
   MG_CONSTS,
+  MINI_COLORS,
   MN_CSS,
   MIN_CELL,
   MODE_LABELS,
   PRESETS,
+  RIPPLE_STEP_MS,
   bloomStepMs,
   cellPx,
   clockText,
   endlessLine,
   endlessMines,
   flipMs,
+  flowerStage,
   hintColor,
   keyAction,
   levelNote,
@@ -33,6 +37,7 @@ import {
   nextLongPress,
   percentText,
   reducedMotion,
+  seedSpec,
   viewportWidth
 } from "./index";
 
@@ -637,5 +642,445 @@ describe("mine-garden · 分级红线自审", () => {
     for (let i = 1; i < guide.entries.length; i++) {
       expect(guide.entries[i].from).toBe(guide.entries[i - 1].to + 1);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉升级契约:格子/旗/花全部换成画的,波纹连开,鸟瞰小地图
+// ---------------------------------------------------------------------------
+
+describe("mine-garden · 1.3 视觉契约", () => {
+  /** 格子里第一棵 `<svg>`（DOM 替身没有 createElementNS,退回 createElement 也长成 tag=svg） */
+  function svgOf(cell: FakeEl): FakeEl | undefined {
+    return cell.children.find((ch) => ch.tag === "svg");
+  }
+
+  function plainField(w = 6, h = 6, mines = 5, seed = 8): ReturnType<typeof mountField> {
+    return mountField((dom as DomStub).root as unknown as HTMLElement, {
+      w,
+      h,
+      mines,
+      seed,
+      sfx: () => undefined,
+      autoSettle: false
+    });
+  }
+
+  it("旗格里是 SVG 木杆小旗,emoji 只活在 <title> 里", () => {
+    dom = installDom();
+    const field = plainField();
+    const cells = dom.root.byClass("mn-cell");
+    tap(cells[indexOf(6, 3, 3)]);
+    const spike = field.run.board.mine.indexOf(1);
+    cells[spike].fire("contextmenu");
+    const svg = svgOf(cells[spike]);
+    expect(svg).toBeTruthy();
+    expect(svg?.getAttribute("class")).toBe("mn-i-flag");
+    expect(svg?.getAttribute("aria-hidden")).toBe("true");
+    expect(svg?.children.some((ch) => ch.tag === "title")).toBe(true);
+    // 兼容口径:textContent 仍是「🚩」(来自 <title>),但已不是纯文本节点
+    expect(cells[spike].textContent).toBe("🚩");
+    expect(cells[spike].children.length).toBeGreaterThan(0);
+    field.destroy();
+  });
+
+  it("输局揭开后,每颗刺种格里都是 SVG 花朵节点,不是 emoji 文本", () => {
+    dom = installDom();
+    const field = plainField(6, 6, 6, 12);
+    const cells = dom.root.byClass("mn-cell");
+    tap(cells[indexOf(6, 3, 3)]);
+    tap(cells[field.run.board.mine.indexOf(1)]);
+    dom.flush();
+    const blooms = dom.root.byClass("mn-bloom");
+    expect(blooms.length).toBeGreaterThan(1);
+    for (const b of blooms) {
+      const svg = svgOf(b);
+      expect(svg?.getAttribute("class")).toBe("mn-i-flower");
+      expect(b.children.length).toBeGreaterThan(0);
+    }
+    field.destroy();
+  });
+
+  it("问号是木牌 SVG,结算时插错的旗换成四叶草 SVG", () => {
+    dom = installDom();
+    const field = mountField(dom.root as unknown as HTMLElement, {
+      w: 6,
+      h: 6,
+      mines: 5,
+      seed: 17,
+      useGuess: true,
+      sfx: () => undefined,
+      autoSettle: false
+    });
+    const cells = dom.root.byClass("mn-cell");
+    tap(cells[indexOf(6, 3, 3)]);
+    const b = field.run.board;
+    // 键盘 g 两下 → 问号(绕开右键双发去重窗)
+    let hidden = -1;
+    for (let i = 0; i < 36; i++) {
+      if (b.state[i] === 0) {
+        hidden = i;
+        break;
+      }
+    }
+    field.run.cursor = hidden;
+    dom.press("g");
+    dom.press("g");
+    expect(b.state[hidden]).toBe(GUESS);
+    expect(svgOf(cells[hidden])?.getAttribute("class")).toBe("mn-i-guess");
+    // 插错一面旗再踩雷:结算后错旗换四叶草
+    let wrong = -1;
+    for (let i = 0; i < 36; i++) {
+      if (b.state[i] === 0 && !b.mine[i]) {
+        wrong = i;
+        break;
+      }
+    }
+    cells[wrong].fire("contextmenu");
+    tap(cells[b.mine.indexOf(1)]);
+    expect(field.run.phase).toBe("lost");
+    expect(svgOf(cells[wrong])?.getAttribute("class")).toBe("mn-i-clover");
+    expect(cells[wrong].className).toContain("mn-wrong");
+    field.destroy();
+  });
+
+  it("凸/凹双态:未开格带草皮纹理与棋盘两档草色,翻开格是内凹泥土", () => {
+    dom = installDom();
+    const field = plainField();
+    const cells = dom.root.byClass("mn-cell");
+    tap(cells[indexOf(6, 3, 3)]);
+    dom.flush();
+    const lit = cells.filter((c) => c.className.includes("mn-lit"));
+    const turf = cells.filter((c) => /\bmn-t[0-2]\b/.test(c.className));
+    expect(lit.length).toBeGreaterThan(0);
+    expect(turf.length).toBeGreaterThan(0);
+    expect(turf.some((c) => c.className.includes("mn-g0"))).toBe(true);
+    expect(turf.some((c) => c.className.includes("mn-g1"))).toBe(true);
+    // 凸:未开格顶部 1px 高光;凹:翻开格内凹阴影
+    expect(MN_CSS).toContain("inset 0 1px 0 rgba(255,255,255");
+    expect(MN_CSS).toMatch(/\.mn-cell\.mn-lit\{[^}]*inset 0 2px 3px/);
+    field.destroy();
+  });
+
+  it("大片连开走波纹队列:起点先亮,其余按圈排队,destroy 一并清空", () => {
+    dom = installDom();
+    const field = mountField(dom.root as unknown as HTMLElement, {
+      w: 9,
+      h: 9,
+      mines: 10,
+      seed: 9,
+      sfx: () => undefined,
+      autoSettle: false
+    });
+    const cells = dom.root.byClass("mn-cell");
+    const b = field.run.board;
+    const countOpen = (): number => {
+      let n = 0;
+      for (let i = 0; i < 81; i++) if (b.state[i] === OPEN) n++;
+      return n;
+    };
+    tap(cells[indexOf(9, 4, 4)]);
+    if (countOpen() <= 2) {
+      for (let i = 0; i < 81; i++) {
+        if (!b.mine[i] && b.state[i] !== OPEN && b.hint[i] === 0) {
+          tap(cells[i]);
+          break;
+        }
+      }
+    }
+    const logical = countOpen();
+    expect(logical).toBeGreaterThan(2);
+    // 视觉上只有起点即时翻开,其余还排着队
+    expect(dom.root.byClass("mn-lit").length).toBeLessThan(logical);
+    expect(dom.timerCount()).toBeGreaterThan(1);
+    dom.flush();
+    expect(dom.root.byClass("mn-lit").length).toBe(logical);
+    // 再连开一片就 destroy:队列挂在 timers 篮子里,一并清空
+    for (let i = 0; i < 81; i++) {
+      if (!b.mine[i] && b.state[i] !== OPEN && b.hint[i] === 0) {
+        tap(cells[i]);
+        break;
+      }
+    }
+    field.destroy();
+    expect(dom.timerCount()).toBe(0);
+    expect(RIPPLE_STEP_MS).toBeGreaterThan(0);
+    expect(MG_CONSTS.ripple).toBe(RIPPLE_STEP_MS);
+  });
+
+  it("弱动效下连开一次到位,不排视觉队列", () => {
+    dom = installDom();
+    const g = globalThis as { matchMedia?: (q: string) => { matches: boolean } };
+    g.matchMedia = () => ({ matches: true });
+    try {
+      const field = mountField(dom.root as unknown as HTMLElement, {
+        w: 9,
+        h: 9,
+        mines: 10,
+        seed: 9,
+        sfx: () => undefined,
+        autoSettle: false
+      });
+      const cells = dom.root.byClass("mn-cell");
+      const b = field.run.board;
+      tap(cells[indexOf(9, 4, 4)]);
+      for (let i = 0; i < 81; i++) {
+        if (!b.mine[i] && b.state[i] !== OPEN && b.hint[i] === 0) {
+          tap(cells[i]);
+          break;
+        }
+      }
+      let logical = 0;
+      for (let i = 0; i < 81; i++) if (b.state[i] === OPEN) logical++;
+      expect(logical).toBeGreaterThan(2);
+      expect(dom.root.byClass("mn-lit").length).toBe(logical);
+      field.destroy();
+    } finally {
+      delete g.matchMedia;
+    }
+  });
+
+  it("aria-label 逐格保留,文案口径一字不变", () => {
+    dom = installDom();
+    const field = plainField();
+    const cells = dom.root.byClass("mn-cell");
+    expect(cells[0].getAttribute("aria-label")).toBe("第 1 行第 1 列，还没翻开");
+    tap(cells[indexOf(6, 3, 3)]);
+    const b = field.run.board;
+    const spike = b.mine.indexOf(1);
+    cells[spike].fire("contextmenu");
+    expect(cells[spike].getAttribute("aria-label")).toBe(
+      `第 ${Math.floor(spike / 6) + 1} 行第 ${(spike % 6) + 1} 列，插着小旗`
+    );
+    let numIdx = -1;
+    for (let i = 0; i < 36; i++) {
+      if (b.state[i] === OPEN && b.hint[i] > 0 && !b.mine[i]) {
+        numIdx = i;
+        break;
+      }
+    }
+    expect(numIdx).toBeGreaterThanOrEqual(0);
+    expect(cells[numIdx].getAttribute("aria-label")).toBe(
+      `第 ${Math.floor(numIdx / 6) + 1} 行第 ${(numIdx % 6) + 1} 列，${b.hint[numIdx]} 颗刺种`
+    );
+    field.destroy();
+  });
+
+  it("小地图鸟瞰三种状态三种颜色(canvas 替身钉 fillStyle 序列)", () => {
+    dom = installDom();
+    const field = mountField(dom.root as unknown as HTMLElement, {
+      w: 30,
+      h: 16,
+      mines: 99,
+      seed: 4,
+      sfx: () => undefined,
+      autoSettle: false
+    });
+    const cells = dom.root.byClass("mn-cell");
+    const mini = dom.root.byClass("mn-mini")[0];
+    const fills: string[] = [];
+    const stub = {
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 0,
+      clearRect: () => undefined,
+      strokeRect: () => undefined,
+      fillRect(): void {
+        fills.push(String(this.fillStyle));
+      }
+    };
+    (mini as unknown as { getContext: () => typeof stub }).getContext = () => stub;
+    tap(cells[indexOf(30, 5, 5)]);
+    const b = field.run.board;
+    let flagIdx = -1;
+    for (let i = 0; i < b.state.length; i++) {
+      if (b.state[i] === 0) {
+        flagIdx = i;
+        break;
+      }
+    }
+    fills.length = 0;
+    cells[flagIdx].fire("contextmenu");
+    expect(fills).toContain(MINI_COLORS.turf);
+    expect(fills).toContain(MINI_COLORS.soil);
+    expect(fills).toContain(MINI_COLORS.flag);
+    expect(new Set(fills).size).toBeGreaterThanOrEqual(3);
+    expect(dom.root.byClass("mn-minitip")[0].textContent).toContain("花园鸟瞰");
+    field.destroy();
+  });
+
+  it("数字格底部有种子点:数量×形状双通道,1–8 档互不重复", () => {
+    const combos = new Set<string>();
+    for (let n = 1; n <= 8; n++) {
+      const s = seedSpec(n);
+      expect(s.count).toBeGreaterThanOrEqual(1);
+      expect(s.count).toBeLessThanOrEqual(3);
+      expect(s.shape).toBeGreaterThanOrEqual(0);
+      expect(s.shape).toBeLessThanOrEqual(2);
+      combos.add(`${s.shape}:${s.count}`);
+    }
+    expect(combos.size).toBe(8);
+
+    dom = installDom();
+    const field = plainField();
+    const cells = dom.root.byClass("mn-cell");
+    tap(cells[indexOf(6, 3, 3)]);
+    dom.flush();
+    const b = field.run.board;
+    let numIdx = -1;
+    for (let i = 0; i < 36; i++) {
+      if (b.state[i] === OPEN && b.hint[i] > 0) {
+        numIdx = i;
+        break;
+      }
+    }
+    expect(numIdx).toBeGreaterThanOrEqual(0);
+    const seeds = cells[numIdx].byClass("mn-seeds")[0];
+    expect(seeds).toBeTruthy();
+    const spec = seedSpec(b.hint[numIdx]);
+    expect(seeds.children).toHaveLength(spec.count);
+    expect(seeds.className).toContain(`mn-sh${spec.shape}`);
+    field.destroy();
+  });
+
+  /** 打到只剩最后一颗安全格,返回它的下标(用来钉「胜利那一下」前后的定时器数) */
+  function openUntilOneLeft(field: ReturnType<typeof mountField>, cells: FakeEl[]): number {
+    const b = field.run.board;
+    const remaining = (): number[] => {
+      const out: number[] = [];
+      for (let i = 0; i < b.state.length; i++) if (!b.mine[i] && b.state[i] !== OPEN) out.push(i);
+      return out;
+    };
+    tap(cells[indexOf(6, 3, 3)]);
+    let rest = remaining();
+    while (rest.length > 1 && field.run.phase === "playing") {
+      tap(cells[rest[0]]);
+      rest = remaining();
+    }
+    expect(field.run.phase).toBe("playing");
+    expect(rest).toHaveLength(1);
+    return rest[0];
+  }
+
+  it("胜利排出花开波(弱动效整波关掉),结算面板配大花环", () => {
+    dom = installDom();
+    const field = mountField(dom.root as unknown as HTMLElement, {
+      w: 6,
+      h: 6,
+      mines: 5,
+      seed: 31,
+      noGuess: true,
+      sfx: () => undefined
+    });
+    const cells = dom.root.byClass("mn-cell");
+    const last = openUntilOneLeft(field, cells);
+    const before = dom.timerCount();
+    tap(cells[last]);
+    expect(field.run.phase).toBe("won");
+    expect(dom.timerCount()).toBeGreaterThan(before);
+    const art = dom.root.byClass("mn-over-art")[0];
+    expect(art).toBeTruthy();
+    expect(art.children[0].textContent).toBe(wreathSVG().title);
+    field.destroy();
+    expect(dom.timerCount()).toBe(0);
+
+    // 弱动效:同一套流程一朵花都不排
+    dom.restore();
+    dom = installDom();
+    const g = globalThis as { matchMedia?: (q: string) => { matches: boolean } };
+    g.matchMedia = () => ({ matches: true });
+    try {
+      const f2 = mountField(dom.root as unknown as HTMLElement, {
+        w: 6,
+        h: 6,
+        mines: 5,
+        seed: 31,
+        noGuess: true,
+        sfx: () => undefined
+      });
+      const cs = dom.root.byClass("mn-cell");
+      const l2 = openUntilOneLeft(f2, cs);
+      const before2 = dom.timerCount();
+      tap(cs[l2]);
+      expect(f2.run.phase).toBe("won");
+      expect(dom.timerCount()).toBe(before2);
+      f2.destroy();
+    } finally {
+      delete g.matchMedia;
+    }
+  });
+
+  it("失败结算面板配浇水壶插画,口径依旧温柔", () => {
+    dom = installDom();
+    const field = mountField(dom.root as unknown as HTMLElement, {
+      w: 6,
+      h: 6,
+      mines: 6,
+      seed: 12,
+      sfx: () => undefined
+    });
+    const cells = dom.root.byClass("mn-cell");
+    tap(cells[indexOf(6, 3, 3)]);
+    tap(cells[field.run.board.mine.indexOf(1)]);
+    const art = dom.root.byClass("mn-over-art")[0];
+    expect(art).toBeTruthy();
+    expect(art.children[0].textContent).toBe(wateringCanSVG().title);
+    expect(dom.root.findText("没扫完")).not.toBeNull();
+    field.destroy();
+  });
+
+  it("迷雾格不带草皮/石子纹理类,内容清空,质感不泄露", () => {
+    dom = installDom();
+    const field = mountField(dom.root as unknown as HTMLElement, {
+      w: 6,
+      h: 6,
+      mines: 4,
+      seed: 23,
+      fog: true,
+      sfx: () => undefined,
+      autoSettle: false
+    });
+    const cells = dom.root.byClass("mn-cell");
+    tap(cells[0]);
+    dom.flush();
+    const darks = cells.filter((c) => c.className.includes("mn-dark"));
+    expect(darks.length).toBeGreaterThan(0);
+    for (const d of darks) {
+      expect(d.className).not.toMatch(/mn-[gts]\d/);
+      if (!d.className.includes("mn-flag")) {
+        expect(d.textContent).toBe("");
+        expect(d.children).toHaveLength(0);
+      }
+    }
+    field.destroy();
+  });
+
+  it("art.ts 全是纯函数:同参同出,浇水壶 ≤15 笔,盛开的花有五片花瓣", () => {
+    expect(JSON.stringify(flowerSVG(2))).toBe(JSON.stringify(flowerSVG(2)));
+    expect(JSON.stringify(flagSVG())).toBe(JSON.stringify(flagSVG()));
+    expect(flowerSVG(2).shapes.filter((s) => s.attrs["data-part"] === "petal")).toHaveLength(5);
+    expect(cloverSVG().shapes.filter((s) => s.attrs["data-part"] === "leaf")).toHaveLength(4);
+    expect(wateringCanSVG().shapes.length).toBeLessThanOrEqual(15);
+    for (const icon of [flowerSVG(0), flowerSVG(1), flowerSVG(2), flagSVG(), cloverSVG(), signSVG(), wreathSVG(), wateringCanSVG()]) {
+      expect(icon.shapes.length).toBeGreaterThan(0);
+      expect(icon.title.length).toBeGreaterThan(0);
+      expect(icon.viewBox).toBe("0 0 24 24");
+    }
+    expect(flowerStage(0)).toBe(0);
+    expect(flowerStage(0.5)).toBe(1);
+    expect(flowerStage(1)).toBe(2);
+  });
+
+  it("新增动画全部接入弱动效开关,样式表带草皮/种子/花开波声明", () => {
+    expect(MN_CSS).toContain("@keyframes mnturn");
+    expect(MN_CSS).toContain("@keyframes mnplant");
+    expect(MN_CSS).toContain("@keyframes mnpop");
+    expect(MN_CSS).toContain(".mn-seeds");
+    expect(MN_CSS).toContain(".mn-cell.mn-g1");
+    expect(MN_CSS).toContain(".mn-cell.mn-t0");
+    const reducedBlock = MN_CSS.slice(MN_CSS.indexOf("prefers-reduced-motion"));
+    expect(reducedBlock).toContain(".mn-cell.mn-turn{animation:none;}");
+    expect(reducedBlock).toContain(".mn-cell.mn-flag svg{animation:none;}");
+    expect(reducedBlock).toContain(".mn-cell .mn-pop{animation:none;");
   });
 });
