@@ -25,6 +25,7 @@ import {
   mount,
   stickDir,
 } from "./index";
+import { registerLevelExtras, resetLevelExtras } from "../../ui/level188Contract";
 import { MAX_COLS, MIN_CELL_PX, NARROW_PX } from "./levels";
 import { DIR_DOWN, DIR_LEFT, DIR_NONE, DIR_RIGHT, DIR_UP, makeFighter } from "./logic";
 import { meta } from "./meta";
@@ -425,6 +426,52 @@ describe("平台接线", () => {
     m.h.flush(2);
     expect(findButton(m.root, "泡泡塔")?.hidden).not.toBe(true);
     m.handle.destroy();
+  });
+
+  it("跳关走平台的 requestSkip:壳层没注册就不挂这颗按钮", () => {
+    resetLevelExtras();
+    const m = boot();
+    m.handle.openCampaignLevel(20);
+    m.h.flush(2);
+    expect(findButton(m.root, "跳过")).toBe(null);
+    m.handle.destroy();
+  });
+
+  it("注册了 requestSkip:家长放行之后直接进下一关,关号是 0 基的", async () => {
+    const asked: [string, number][] = [];
+    registerLevelExtras({
+      requestSkip: (id, level) => {
+        asked.push([id, level]);
+        return Promise.resolve(true);
+      },
+    });
+    const m = boot();
+    m.handle.openCampaignLevel(20);
+    m.h.flush(2);
+    const skip = findButton(m.root, "跳过这一关");
+    expect(skip, "注册了 requestSkip 却没有跳关按钮").not.toBe(null);
+    skip?.fire("click");
+    await Promise.resolve();
+    await Promise.resolve();
+    m.h.flush(2);
+    expect(asked).toEqual([["bomb-buddies", 19]]);
+    expect(allText(m.root)).toContain("第 21 关");
+    m.handle.destroy();
+    resetLevelExtras();
+  });
+
+  it("家长没放行就留在原地,一关都不跳", async () => {
+    registerLevelExtras({ requestSkip: () => Promise.resolve(false) });
+    const m = boot();
+    m.handle.openCampaignLevel(20);
+    m.h.flush(2);
+    findButton(m.root, "跳过这一关")?.fire("click");
+    await Promise.resolve();
+    await Promise.resolve();
+    m.h.flush(2);
+    expect(allText(m.root)).toContain("第 20 关");
+    m.handle.destroy();
+    resetLevelExtras();
   });
 });
 

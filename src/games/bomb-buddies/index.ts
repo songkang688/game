@@ -15,12 +15,14 @@ export { meta };
 import {
   TOTAL_LEVELS,
   loadStars,
+  markSkipped,
   mountLevelGame,
   saveStar,
   type GameApi,
   type PlayCtx,
   type SoundName,
 } from "../level99";
+import { getLevelExtras } from "../../ui/level188Contract";
 import { stopSpeaking } from "../speech";
 import { save } from "../../engine/save";
 import GUIDE from "./guide";
@@ -968,6 +970,19 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   }
 
   /**
+   * 亮/灭救援条,顺手重排一次。
+   *
+   * 这一条会给 HUD 多撑出一行。竖屏手机上那一行是从棋盘身上借的:不重排的话,
+   * 下面的摇杆整块往下挪 30px,第三颗动作钮就被舞台裁掉了——偏偏「有人被困」
+   * 正是最需要按钮的时候。
+   */
+  function showRescueChip(on: boolean): void {
+    if (chipRescue.hidden !== !on) return;
+    chipRescue.hidden = !on;
+    layout();
+  }
+
+  /**
    * 救援提示条。
    *
    * 合作模式下队友被罩住时,另一个人常常根本没注意到——屏幕上两个小人都在动,
@@ -975,16 +990,12 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
    * 已经贴上去了就换成「拍拍拍」,让人知道按住不动就行、不用乱跑。
    */
   function refreshRescueChip(): void {
-    if (!world.rescue) {
-      chipRescue.hidden = true;
-      return;
-    }
-    const stuck = fighters.find((f) => f.bubbleT > 0);
+    const stuck = world.rescue ? fighters.find((f) => f.bubbleT > 0) : undefined;
     if (!stuck) {
-      chipRescue.hidden = true;
+      showRescueChip(false);
       return;
     }
-    chipRescue.hidden = false;
+    showRescueChip(true);
     const left = Math.max(1, Math.ceil(stuck.bubbleT / 1000));
     chipRescue.textContent =
       rescuerFor(world, stuck.index) >= 0
@@ -1789,6 +1800,37 @@ export function mount(api: GameApi): BombBuddiesHandle {
     const shell = makeShell(modeHost, api, closeDirect, `${ch.emoji} ${ch.name} · 第 ${i + 1} 关`);
     let handle: { destroy: () => void } | null = null;
     let settled = false;
+
+    // 跳关走平台那道家长门。选关地图上本来就有一颗(188 框架自带),
+    // 直达进来的这条路以前没有——卡在某一关的孩子从家长发的链接点进来就出不去了。
+    // 壳层没注册 requestSkip 就干脆不挂按钮,单测环境保持干净。
+    const askSkip = getLevelExtras().requestSkip;
+    if (askSkip && i < TOTAL_LEVELS - 1) {
+      const skipBtn = document.createElement("button");
+      skipBtn.type = "button";
+      skipBtn.className = "bmb-btn bmb-btn--ghost";
+      skipBtn.textContent = "⏭️ 跳过这一关";
+      let asking = false;
+      skipBtn.addEventListener("click", () => {
+        if (asking || settled) return;
+        asking = true;
+        skipBtn.disabled = true;
+        api.play("tap");
+        void Promise.resolve(askSkip(meta.id, i))
+          .then((pass) => {
+            if (!pass) return;
+            settled = true;
+            // 放行 = 这一关记 0 星、解锁下一关,战役星数一颗不送
+            markSkipped(meta.id, i);
+            openDirectLevel(i + 1);
+          })
+          .finally(() => {
+            asking = false;
+            skipBtn.disabled = false;
+          });
+      });
+      shell.head.appendChild(skipBtn);
+    }
 
     function finish(title: string, msg: string, buttons: { label: string; ghost?: boolean; go: () => void }[]): void {
       handle?.destroy();
