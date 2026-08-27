@@ -287,14 +287,30 @@ function farCandy(g: Ctx, o: StageOpts, th: StageTheme): void {
   }
 }
 
-/** 近景土丘(三主题共用形状,只换颜色) */
+/**
+ * 近景土丘(三主题共用形状,只换颜色)。
+ * 1.3 r1 · learner P5:五层里唯一的一阶平涂补成三阶——
+ * 每座加顶部亮弧(tint 0.3、半径 0.7 倍上半弧)+ 底缘暗带(shade 0.2、高 4px),
+ * 静态两笔,零动效成本。
+ */
 function nearMounds(g: Ctx, o: StageOpts, th: StageTheme): void {
-  g.fillStyle = rgba(th.near, 0.9);
+  const lite = rgba(tint(th.near, 0.3), 0.9);
+  const dark = rgba(shade(th.near, 0.2), 0.9);
   for (let i = -1; i < 8; i++) {
     const x = wrap(i * 112 - o.shift * 0.6, o.w + 224) - 112;
+    g.fillStyle = rgba(th.near, 0.9);
     g.beginPath();
     g.arc(x, o.groundY + 4, 40, Math.PI, 0);
     g.fill();
+    // 底缘暗带:贴地 4px,给土丘一个"坐进地里"的重量
+    g.fillStyle = dark;
+    g.fillRect(x - 39, o.groundY, 78, 4);
+    // 顶部亮弧:0.7 倍半径的上半弧描亮,光源沿用左上约定
+    g.strokeStyle = lite;
+    g.lineWidth = 3.5;
+    g.beginPath();
+    g.arc(x, o.groundY + 4, 28, Math.PI, Math.PI * 1.72);
+    g.stroke();
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hexToRgb, makeStubCtx } from "../../art/kit";
+import { hexToRgb, makeStubCtx, shade, tint } from "../../art/kit";
 import { CHARACTERS, characterById } from "./frames";
 import { chapterStartOf } from "./levels";
 import {
@@ -324,6 +324,23 @@ describe("combo-clash · 主题舞台(按 levels 章节查表)", () => {
       return stub.snapshot();
     });
     expect(new Set(snaps).size).toBe(3);
+  });
+
+  it("近景土丘三阶光影(1.3 r1 P5):基色 + 顶部亮弧 + 底缘暗带,三主题都齐", () => {
+    const asRgba = (hex: string, a: number): string => {
+      const c = hexToRgb(hex);
+      return c ? `rgba(${c.r},${c.g},${c.b},${a})` : hex;
+    };
+    for (const theme of ["sakura", "night", "candy"] as const) {
+      const stub = makeStubCtx();
+      drawStage(stub.ctx, { w: 640, h: 250, groundY: 214, shift: 320, theme, t: 1.2, soft: true });
+      const near = STAGE_THEMES[theme].near;
+      const fills = stub.calls.filter((c) => c.method === "set:fillStyle").map((c) => String(c.args[0]));
+      const strokes = stub.calls.filter((c) => c.method === "set:strokeStyle").map((c) => String(c.args[0]));
+      expect(fills, `${theme} 土丘缺基色`).toContain(asRgba(near, 0.9));
+      expect(fills, `${theme} 土丘缺底缘暗带`).toContain(asRgba(shade(near, 0.2), 0.9));
+      expect(strokes, `${theme} 土丘缺顶部亮弧`).toContain(asRgba(tint(near, 0.3), 0.9));
+    }
   });
 
   it("樱花花瓣 ≤ 12 粒;soft 模式不飘花瓣、不放流星", () => {
