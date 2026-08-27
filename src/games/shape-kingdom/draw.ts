@@ -28,6 +28,7 @@ import { mulberry32, pick, randInt, type PlayCtx, type PlayHandle } from "../lev
 import type { QuizTheme } from "../quiz99";
 import { HINT_LABELS, safeHints, trio, type HintTrio } from "./hints";
 import { resetClippedScroll } from "./stageScroll";
+import { applyTightDock, TIGHT_DOCK_CSS } from "./dockTight";
 
 // ---------------------------------------------------------------------------
 // 尺寸与吸附（纯函数，360px 下限靠它守住）
@@ -541,7 +542,7 @@ export const DRAW_CSS = `
   .shk-hint{padding:4px 8px;}
 }
 @media (prefers-reduced-motion:reduce){.shk-castle-grow{animation:none;}}
-`;
+${TIGHT_DOCK_CSS}`;
 
 export interface DrawRoundOptions {
   stage: HTMLElement;
@@ -662,6 +663,14 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   resetClippedScroll(wrap);
   // 进 DOM 之后立刻钳一次：矮屏上作图台比舞台看得见的那一段高，钳完才滚得到交卷键
   const fit = fitIntoStage(wrap);
+  // 钳完再量一次常驻那一摞：它盖住图形就收薄一档（W5R3-B-01）。
+  // 顺序不能反——收薄看的是钳完的可视段，拿没钳的高度量出来的结论是错的。
+  const tighten = (): void => {
+    applyTightDock(wrap);
+  };
+  const winRef = wrap.ownerDocument?.defaultView ?? null;
+  // fitIntoStage 自己也挂了一条 resize；这条后挂，于是总在它重算完之后才跑
+  winRef?.addEventListener("resize", tighten);
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -1044,6 +1053,7 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
     paintHeader();
     // 换一道题内容就换一批，高度跟着变，钳位重算一次
     fit.relayout();
+    tighten();
   }
 
   function finish(): void {
@@ -1105,6 +1115,7 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       destroyed = true;
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      winRef?.removeEventListener("resize", tighten);
       fit.dispose();
       wrap.remove();
     },
