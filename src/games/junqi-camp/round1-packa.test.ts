@@ -11,8 +11,10 @@
  * 标了「【已知问题】」的用例断言的是**当前行为**，修好之后会红，那时候连断言一起翻面。
  * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
  *  - PA-JQ-1（严重）：双人同屏只有一个共用光标，星星的方向键在朵朵回合照样拨得动它；
- *  - PA-JQ-2（严重）：星星那套 L / K 一个都没接，第二个人只能借朵朵的 F / G；
- *  - PA-JQ-3（一般）：暂停时按「确认」不落子，但已经选好的落点被悄悄丢掉了。
+ *  - PA-JQ-2（一般，与 PA-JQ-1 同根）：星星那套 L / K 一个都没接，第二个人只能借朵朵的 F / G。
+ *    这两条第 1 轮修复员已一起修（每个座位各一个光标、键位按座位派发），
+ *    「双人同屏键位」那一组断言已经翻成修好后的行为；
+ *  - PA-JQ-3（一般）：暂停时按「确认」不落子，但已经选好的落点被悄悄丢掉了（留第 2 轮）。
  *
  * `mount` / `createTable` 必须走顶部静态 import 并在文件里真的用到：这样
  * level99 → dialogs → audio 那条链会在装 DOM 桩之前求值完，
@@ -325,19 +327,54 @@ describe("PA-JQ · 双人同屏键位", () => {
     table.destroy();
   });
 
-  it("【已知问题】方向键和 WASD 共用同一个光标，朵朵回合星星也拨得动", () => {
+  it("两套键位各管各的光标：朵朵回合里星星的方向键拨不走朵朵的光标", () => {
     const { state, table } = duelTable();
     expect(state.turn).toBe("duo");
     const home = cursorAt();
     key("ArrowUp");
-    // 应有行为：朵朵回合星星的方向键被忽略，光标不动。现状：跟 W 是同一个光标。
-    expect(cursorAt(), "方向键在朵朵回合没被挡住").toBe(home - 5);
+    key("ArrowUp");
+    expect(cursorAt(), "星星的方向键把朵朵的光标拨走了").toBe(home);
+    key("w");
+    expect(cursorAt(), "朵朵自己的 W 反而不管用了").toBe(home - 5);
     key("s");
-    expect(cursorAt(), "W/S 与方向键不是同一个光标").toBe(home);
+    expect(cursorAt()).toBe(home);
     table.destroy();
   });
 
-  it("【已知问题】星星那套 L / K 一个都没接，第二个人只能借朵朵的 F / G", async () => {
+  it("轮到星星时反过来也一样：朵朵的 WASD 拨不走星星的光标", async () => {
+    const { state, ends, table } = duelTable();
+    clickMove(DUEL_START, DUEL_SIDESTEP);
+    await waitFor(() => state.turn === "star");
+    await sleep(120);
+    expect(ends, "第一手就收场了，后面验不了").toHaveLength(0);
+
+    const here = cursorAt();
+    key("w");
+    key("w");
+    expect(cursorAt(), "朵朵的 WASD 把星星的光标拨走了").toBe(here);
+    key("ArrowDown");
+    expect(cursorAt(), "星星自己的方向键不管用了").toBe(here + 5);
+    table.destroy();
+  });
+
+  it("朵朵回合里星星先挪好自己的光标，换手之后那一格还在", async () => {
+    const { state, ends, table } = duelTable();
+    // 朵朵回合：星星先把自己的光标往下挪两格，朵朵这边看不出任何变化
+    const duoHome = cursorAt();
+    key("ArrowDown");
+    key("ArrowDown");
+    expect(cursorAt(), "星星的方向键串到朵朵的光标上了").toBe(duoHome);
+
+    clickMove(DUEL_START, DUEL_SIDESTEP);
+    await waitFor(() => state.turn === "star");
+    await sleep(120);
+    expect(ends, "第一手就收场了，后面验不了").toHaveLength(0);
+    // 换手之后画面上换成星星那一个光标，刚才挪的两格记着
+    expect(cursorAt(), "星星换手之后光标没接上刚才挪的两格").toBe(idx(4, 2));
+    table.destroy();
+  });
+
+  it("星星那套 L / K 接上了：L 确认、K 取消，都只管星星自己", async () => {
     const { state, ends, table } = duelTable();
     clickMove(DUEL_START, DUEL_SIDESTEP);
     await waitFor(() => state.turn === "star");
@@ -345,17 +382,30 @@ describe("PA-JQ · 双人同屏键位", () => {
     expect(ends, "第一手就收场了，后面验不了").toHaveLength(0);
 
     driveCursorTo(STAR_START, ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
-    expect(cursorAt(), "方向键没把光标挪到星星的连长上").toBe(STAR_START);
-    key("l");
-    // 应有行为：L 就是星星的确认键。现状：完全没接，什么都没选中。
-    expect(selectedAt(), "L 已经能选子了，这条可以翻面").toBe(-1);
+    expect(cursorAt(), "方向键没把星星的光标挪到自己的连长上").toBe(STAR_START);
     key("f");
-    expect(selectedAt(), "星星只能借朵朵的 F").toBe(STAR_START);
-    key("k");
-    // 应有行为：K 是星星的取消键。现状：没接，选中还在。
-    expect(selectedAt(), "K 已经能取消了，这条可以翻面").toBe(STAR_START);
+    expect(selectedAt(), "轮到星星，朵朵的 F 却选中了子").toBe(-1);
+    key("l");
+    expect(selectedAt(), "L 没选中星星的连长").toBe(STAR_START);
     key("g");
-    expect(selectedAt(), "只有朵朵的 G 取消得掉").toBe(-1);
+    expect(selectedAt(), "轮到星星，朵朵的 G 却取消掉了").toBe(STAR_START);
+    key("k");
+    expect(selectedAt(), "K 没把星星的选中取消掉").toBe(-1);
+    table.destroy();
+  });
+
+  it("朵朵回合里星星按 L / K 一概不生效", () => {
+    const { state, table } = duelTable();
+    expect(state.turn).toBe("duo");
+    driveCursorTo(DUEL_START, ["w", "s", "a", "d"]);
+    key("l");
+    expect(selectedAt(), "星星的 L 替朵朵选了子").toBe(-1);
+    key("f");
+    expect(selectedAt()).toBe(DUEL_START);
+    key("k");
+    expect(selectedAt(), "星星的 K 取消掉了朵朵的选中").toBe(DUEL_START);
+    key("g");
+    expect(selectedAt()).toBe(-1);
     table.destroy();
   });
 
@@ -373,6 +423,33 @@ describe("PA-JQ · 双人同屏键位", () => {
     expect(ends[0].won).toBe(false);
     expect(ends[0].draw).toBe(false);
     expect(state.outcome?.winner).toBe("star");
+    table.destroy();
+  });
+
+  it("单人局里两套键位都归朵朵，方向键与 L / K 老路不断", () => {
+    const state = duelState();
+    const ends: TableResult[] = [];
+    const table = createTable(dom.root as unknown as HTMLElement, {
+      state,
+      rival: "garrison",
+      tier: "rookie",
+      viewer: "all",
+      label: "单人 · 守备队",
+      maxPlies: 400,
+      timeoutIsLoss: false,
+      seed: 61,
+      onEnd: (r) => ends.push(r),
+    });
+    const home = cursorAt();
+    key("ArrowUp");
+    expect(cursorAt(), "单人局里方向键失灵了").toBe(home - 5);
+    key("s");
+    expect(cursorAt(), "单人局里 WASD 与方向键不是同一个光标").toBe(home);
+    driveCursorTo(DUEL_START, ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+    key("l");
+    expect(selectedAt(), "单人局里 L 也该管用").toBe(DUEL_START);
+    key("k");
+    expect(selectedAt(), "单人局里 K 也该管用").toBe(-1);
     table.destroy();
   });
 

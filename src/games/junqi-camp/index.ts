@@ -215,9 +215,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     }, AI_DELAY_MS);
   }
 
+  const twoHumans = opts.rival === "human";
+  /** 单人局里方向键与 L / K 也归朵朵，老键位一条都不丢 */
+  const starSeat: Side = twoHumans ? "star" : "duo";
+
   board = createBoard(boardHost, {
     state,
-    humans: opts.rival === "human" ? ["duo", "star"] : ["duo"],
+    humans: twoHumans ? ["duo", "star"] : ["duo"],
     viewer: opts.viewer,
     onMove: commit,
     onNote: setNote,
@@ -230,31 +234,40 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     if (!paused) scheduleAi();
   }
 
+  // 两套键位各管各的座位：朵朵 WASD + F / G，星星 方向键 + L / K
+  const DUO_MOVE: Record<string, [number, number]> = {
+    w: [-1, 0],
+    s: [1, 0],
+    a: [0, -1],
+    d: [0, 1],
+  };
+  const STAR_MOVE: Record<string, [number, number]> = {
+    arrowup: [-1, 0],
+    arrowdown: [1, 0],
+    arrowleft: [0, -1],
+    arrowright: [0, 1],
+  };
+
   const onKey = (e: KeyboardEvent): void => {
     if (destroyed || finished) return;
     const key = (e.key || "").toLowerCase();
-    const map: Record<string, [number, number]> = {
-      w: [-1, 0],
-      s: [1, 0],
-      a: [0, -1],
-      d: [0, 1],
-      arrowup: [-1, 0],
-      arrowdown: [1, 0],
-      arrowleft: [0, -1],
-      arrowright: [0, 1],
-    };
-    if (map[key]) {
-      board?.moveCursor(map[key][0], map[key][1]);
+    if (DUO_MOVE[key]) {
+      board?.moveCursor(DUO_MOVE[key][0], DUO_MOVE[key][1], "duo");
       e.preventDefault?.();
       return;
     }
-    if (key === "f") {
-      board?.activate();
+    if (STAR_MOVE[key]) {
+      board?.moveCursor(STAR_MOVE[key][0], STAR_MOVE[key][1], starSeat);
       e.preventDefault?.();
       return;
     }
-    if (key === "g") {
-      board?.cancel();
+    if (key === "f" || key === "l") {
+      board?.activate(undefined, key === "f" ? "duo" : starSeat);
+      e.preventDefault?.();
+      return;
+    }
+    if (key === "g" || key === "k") {
+      board?.cancel(key === "g" ? "duo" : starSeat);
       e.preventDefault?.();
       return;
     }

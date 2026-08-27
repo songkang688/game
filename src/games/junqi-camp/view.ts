@@ -2,8 +2,10 @@
  * 军旗对决 · 棋盘视图。
  *
  * 铁路画粗线、公路画细线、行营画圆、大本营画方，一眼能看懂。
- * 点一枚自己的子选中，再点一个亮着的落点，最后按「确认」走（键盘 F 确认、G 取消，
- * WASD / 方向键挪光标）。对撞一定有动画：两子翻开 → 停一下 → 回营的那一方淡出。
+ * 点一枚自己的子选中，再点一个亮着的落点，最后按「确认」走。
+ * 键盘按座位分：朵朵 WASD 挪光标、F 确认、G 取消；星星 方向键 + L / K。
+ * 两个座位各有各的光标（双人同屏时谁也拨不走对方那一个），画面上只画该走的那一位。
+ * 对撞一定有动画：两子翻开 → 停一下 → 回营的那一方淡出。
  * 12 行的棋盘在 360px 上放不下，所以整块棋盘可以缩放，也能拖着看。
  */
 import {
@@ -119,12 +121,13 @@ export interface BoardHandle {
   refresh: () => void;
   /** 走子动画：对撞的话先把两子翻开，停一下，再让回营的那一方淡出 */
   animateMove: (before: readonly Cell[], move: Move, show: CombatShow | null, done: () => void) => void;
-  moveCursor: (dr: number, dc: number) => void;
-  activate: (at?: Pos) => void;
-  cancel: () => void;
+  /** `side` 省略时算在「当前该走的那位真人」头上 */
+  moveCursor: (dr: number, dc: number, side?: Side) => void;
+  activate: (at?: Pos, side?: Side) => void;
+  cancel: (side?: Side) => void;
   zoom: (delta: number) => void;
   destroy: () => void;
-  cursor: () => Pos;
+  cursor: (side?: Side) => Pos;
   selected: () => Pos;
   pending: () => Pos;
   scale: () => number;
@@ -220,7 +223,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
 
   let selected = -1;
   let pending = -1;
-  let cursor = idx(9, 2);
+  /** 一人一个光标：朵朵从自己家门口起，星星从对面家门口起，谁也拨不走谁的 */
+  const cursors: Record<Side, Pos> = { duo: idx(9, 2), star: idx(2, 2) };
   let targets: Pos[] = [];
   let destroyed = false;
   let frozen = false;
@@ -275,6 +279,11 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     return opts.humans.includes(state.turn);
   }
 
+  /** 画面上只画一个光标：轮到谁就画谁的；电脑回合里画留在原地的那位真人的 */
+  function activeSeat(): Side {
+    return humanTurn() ? state.turn : (opts.humans[0] ?? "duo");
+  }
+
   function shownCells(): readonly Cell[] {
     return overrideCells ?? state.cells;
   }
@@ -309,7 +318,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       if (p === selected) classes.push("jq-sel");
       if (targets.includes(p)) classes.push("jq-target");
       if (p === pending) classes.push("jq-pending");
-      if (p === cursor) classes.push("jq-cursor");
+      if (p === cursors[activeSeat()]) classes.push("jq-cursor");
       if (openAt.includes(p)) classes.push("jq-open");
       if (goneAt.includes(p)) classes.push("jq-gone");
       cells[p].className = classes.join(" ");
@@ -324,6 +333,10 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
             : "";
       cells[p].setAttribute("aria-label", describe(p, kind, piece));
     }
+    // 双人同屏时两个人的确认 / 取消键不一样，工具条上写轮到的那位那一套
+    const starSeat = opts.humans.length > 1 && activeSeat() === "star";
+    okBtn.textContent = starSeat ? "✅ 确认 (L)" : "✅ 确认 (F)";
+    noBtn.textContent = starSeat ? "↩️ 取消 (K)" : "↩️ 取消 (G)";
   }
 
   function clearPick(): void {
@@ -332,40 +345,45 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     targets = [];
   }
 
-  function activate(at: Pos = cursor): void {
+  function activate(at?: Pos, side: Side = activeSeat()): void {
     if (destroyed || frozen) return;
-    cursor = at;
-    if (status(state).kind !== "playing" || !humanTurn()) {
+    const to = at ?? cursors[side];
+    cursors[side] = to;
+    if (status(state).kind !== "playing" || !humanTurn() || side !== state.turn) {
       render();
       return;
     }
-    if (pending >= 0 && at === pending) {
+    if (pending >= 0 && to === pending) {
       const move = { from: selected, to: pending };
       clearPick();
       render();
       opts.onMove(move);
       return;
     }
-    if (selected >= 0 && targets.includes(at)) {
-      pending = at;
+    if (selected >= 0 && targets.includes(to)) {
+      pending = to;
       render();
-      opts.onNote("选好落点啦，按「确认」或者 F 键走这一步。");
+      opts.onNote(
+        side === "duo"
+          ? "选好落点啦，按「确认」或者 F 键走这一步。"
+          : "选好落点啦，按「确认」或者 L 键走这一步。"
+      );
       return;
     }
-    const piece = state.cells[at];
+    const piece = state.cells[to];
     if (piece && piece.side === state.turn) {
-      const moves = movesFrom(state.cells, at);
+      const moves = movesFrom(state.cells, to);
       if (moves.length === 0) {
         clearPick();
         render();
         opts.onNote(
-          inHQ(at)
+          inHQ(to)
             ? "进了大本营的棋子就地休息，不能再动啦。"
             : "这一枚走不动，换一枚试试。"
         );
         return;
       }
-      selected = at;
+      selected = to;
       pending = -1;
       targets = moves;
       render();
@@ -377,18 +395,21 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     opts.onNote("先点一枚自己的棋子。");
   }
 
-  function cancel(): void {
+  function cancel(side: Side = activeSeat()): void {
     if (destroyed) return;
+    // 选中的那一枚归当前该走的那一方，别人的取消键碰不着
+    if (side !== activeSeat()) return;
     clearPick();
     render();
     opts.onNote("取消啦，重新点一枚。");
   }
 
-  function moveCursor(dr: number, dc: number): void {
+  function moveCursor(dr: number, dc: number, side: Side = activeSeat()): void {
     if (destroyed) return;
-    const r = Math.min(ROWS - 1, Math.max(0, rowOf(cursor) + dr));
-    const c = Math.min(COLS - 1, Math.max(0, colOf(cursor) + dc));
-    cursor = idx(r, c);
+    const from = cursors[side];
+    const r = Math.min(ROWS - 1, Math.max(0, rowOf(from) + dr));
+    const c = Math.min(COLS - 1, Math.max(0, colOf(from) + dc));
+    cursors[side] = idx(r, c);
     render();
   }
 
@@ -494,12 +515,12 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   okBtn.type = "button";
   okBtn.className = "jq-btn jq-go";
   okBtn.textContent = "✅ 确认 (F)";
-  okBtn.addEventListener("click", () => activate(pending >= 0 ? pending : cursor));
+  okBtn.addEventListener("click", () => activate(pending >= 0 ? pending : undefined));
   const noBtn = document.createElement("button");
   noBtn.type = "button";
   noBtn.className = "jq-btn";
   noBtn.textContent = "↩️ 取消 (G)";
-  noBtn.addEventListener("click", cancel);
+  noBtn.addEventListener("click", () => cancel());
   const outBtn = document.createElement("button");
   outBtn.type = "button";
   outBtn.className = "jq-btn";
@@ -537,7 +558,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     activate,
     cancel,
     zoom,
-    cursor: () => cursor,
+    cursor: (side: Side = activeSeat()) => cursors[side],
     selected: () => selected,
     pending: () => pending,
     scale: () => scale,
