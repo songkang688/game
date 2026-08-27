@@ -188,6 +188,20 @@ export function padOverlaps(m: PadMetrics): boolean {
 export const MIN_CANVAS_H = 130;
 
 /**
+ * 一盘手柄整块有多高:说明行 + 两行键 + 两道空隙。
+ *
+ * 说明行 `.ph-pad-name` 在触屏窄屏上是 `display:none`,`nameHeight` 传 0。
+ * 它原先归 `grid-auto-rows:var(--k)` 管,藏起来也照样占一整颗键那么高——
+ * 360×640 的分类关就是被这白留的 56px 顶得三色桶图例与提示行整块掉出屏幕
+ * (画布那时已经在 `MIN_CANVAS_H` 的底线上,一个像素都让不出来了)。
+ * 现在第一行写成 `auto`,这个函数就是那条算式的可测版本。
+ */
+export function padGridHeight(m: PadMetrics, nameHeight: number): number {
+  const name = Number.isFinite(nameHeight) && nameHeight > 0 ? nameHeight : 0;
+  return name + m.gap * 2 + m.key * 2;
+}
+
+/**
  * 舞台矮到摇杆掉出屏幕时,画布该收到多高。
  *
  * 为什么不能继续靠 `@media (max-height:…)`:媒体查询问的是**屏高**,

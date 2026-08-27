@@ -155,7 +155,11 @@ export const PH_CSS = `
 .ph-toast.ph-on{opacity:1;}
 .ph-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;--cols:4;}
 .ph-pads[data-players="2"]{--cols:3;}
-.ph-pad{display:grid;grid-template-columns:repeat(var(--cols),var(--k));grid-auto-rows:var(--k);gap:4px;
+/* 第一行是键盘说明,触屏上 display:none——归 grid-auto-rows 管的话它藏起来也照样占
+   一整颗键(44–56px),分类关的三色桶图例和提示行就是被这一行顶出屏幕的。
+   写成 auto:显示时照样撑开,藏起来就是 0。键仍旧在第 2、3 行。 */
+.ph-pad{display:grid;grid-template-columns:repeat(var(--cols),var(--k));
+  grid-template-rows:auto var(--k) var(--k);grid-auto-rows:var(--k);gap:4px;
   justify-content:center;}
 .ph-pad-name{grid-column:1/-1;font-size:11px;font-weight:800;color:#8A5A3C;text-align:center;
   height:auto;line-height:1.3;}
