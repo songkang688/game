@@ -85,6 +85,10 @@ const CSS = `
 
 const ENDLESS_CSS = `
 .rte-bar { display: flex; justify-content: center; margin: 0 0 10px; }
+/* display:flex 的优先级高过浏览器自带的 [hidden]{display:none}，
+   不补这一条 bar.hidden = true 就是写了等于没写：真机上关卡在跑时这一条
+   照旧 60px 高、两颗入口 elementFromPoint 全命中（W5R2-FB-03）。 */
+.rte-bar[hidden] { display: none; }
 .rte-open { border: none; border-radius: 999px; padding: 10px 20px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 4px 0 #3B55C2; }
 .rte-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3B55C2; }
 .rte-open:focus-visible { outline: 3px solid #263E7A; outline-offset: 3px; }
@@ -652,6 +656,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   bar.append(versusBtn, openBtn);
 
   let side: { destroy: () => void } | null = null;
+  /** 关卡正在跑没有：两颗侧模式入口靠它挡住，别把关卡层只藏不销毁（W5R2-FB-03） */
+  let inLevel = false;
 
   function refreshBtn(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
@@ -663,12 +669,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     side = null;
     sideHost.hidden = true;
     levelHost.hidden = false;
-    bar.hidden = false;
+    bar.hidden = inLevel;
     refreshBtn();
   }
 
   function openSide(mountFn: (host: HTMLElement, api: GameApi, onExit: () => void) => { destroy: () => void }): void {
-    if (side) return;
+    // 关卡正在跑就不许再开一层。`bar.hidden` 只是让手指够不着,焦点残留、
+    // 壳层补发的 click、自动化脚本照样能把它点响 —— 点响了关卡层就只被 hidden 藏起来,
+    // 秒表、小电脑的 AI、点的生灭全都不停:真机上关内分数在对战屏后面 2.5 秒走了一分。
+    if (side || inLevel) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -683,7 +692,22 @@ export function mount(api: GameApi): { destroy: () => void } {
   const level = mountLevelGame({ ...api, root: levelHost }, {
     id: meta.id,
     chapters: CHAPTERS,
-    playLevel,
+    // 关卡在跑时把模式条收起来:一来它本来就不该在关卡上面(点一下就两套一起跑),
+    // 二来横过来拿的时候这一整条 50px 正是竞技场缺的那一截 —— 收要排在
+    // playLevel() 之前,竞技场是在里面按可视高收的,量早了这 50px 没人认领。
+    playLevel: (stage, ctx) => {
+      bar.hidden = true;
+      inLevel = true;
+      const handle = playLevel(stage, ctx);
+      return {
+        destroy: () => {
+          inLevel = false;
+          handle?.destroy?.();
+          // 侧模式开着的时候这一条本来就该收着,别替它放回来
+          if (!side) bar.hidden = false;
+        },
+      };
+    },
     mapHint: "让小电脑得分越少，星星越多！",
     grandMessage: "188 场抢点大战全部获胜，又准又稳，了不起！",
   });
