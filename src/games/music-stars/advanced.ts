@@ -27,6 +27,7 @@ import {
 import { toScore } from "./logic";
 import { glyphLine, rhythmValue, type NoteValue } from "./notation";
 import { clampSpeed, FULL_SPEED, rateWithSpeed, scaleMs, speedHint } from "./practice";
+import { resetClippedScroll } from "./stageScroll";
 import { ChordPad, sameChord } from "./touch";
 import { midiToFreq, pentatonicIntervalPhrase } from "./tuning";
 import {
@@ -144,6 +145,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   `;
   wrap.appendChild(head);
   stage.appendChild(wrap);
+  // 同 index.ts：进阶那几关也是从地图直接进来的，位移一样会带进来（W5R2-FBS-03）
+  resetClippedScroll(wrap);
 
   const roundEl = wrap.querySelector(".mst-round") as HTMLElement;
   const kindEl = wrap.querySelector(".mst-kind") as HTMLElement;

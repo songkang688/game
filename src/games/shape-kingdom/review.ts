@@ -18,6 +18,7 @@ import { runQuiz, type QuizOptions, type QuizTheme } from "../quiz99";
 import { buildReviewQuestions, type ShapeQ, type ShapeQKind } from "./levels";
 import { HINT_LABELS, safeHints, type HintTrio } from "./hints";
 import { fitIntoStage } from "./draw";
+import { resetClippedScroll } from "./stageScroll";
 
 // ---------------------------------------------------------------------------
 // 错题本（纯函数 + 本地存档）
@@ -228,6 +229,8 @@ export function runQuizWithReview(opts: ReviewOptions, deps: ReviewDeps = {}): P
   hintBar.append(hintBtn, hintText);
   wrap.appendChild(hintBar);
   stage.appendChild(wrap);
+  // 先把地图带进来的滚动位移归零，再钳宿主（钳位量的是位置，带着位移量出来的可视段是错的）
+  resetClippedScroll(wrap);
   panel = wrap;
 
   // 答题器挂在本款自己的宿主里，宿主再钳进舞台看得见的那一段：内容一高就在这里滚，

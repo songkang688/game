@@ -27,6 +27,7 @@ import {
 import { mulberry32, pick, randInt, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { HINT_LABELS, safeHints, trio, type HintTrio } from "./hints";
+import { resetClippedScroll } from "./stageScroll";
 
 // ---------------------------------------------------------------------------
 // 尺寸与吸附（纯函数，360px 下限靠它守住）
@@ -656,6 +657,9 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   dock.appendChild(msg);
 
   stage.appendChild(wrap);
+  // 先把地图带进来的滚动位移归零，再钳：钳位量的是「我头顶到裁切线还剩多少」，
+  // 带着位移量出来的那个可视段是错的（W5R2-FBS-03）。
+  resetClippedScroll(wrap);
   // 进 DOM 之后立刻钳一次：矮屏上作图台比舞台看得见的那一段高，钳完才滚得到交卷键
   const fit = fitIntoStage(wrap);
 
