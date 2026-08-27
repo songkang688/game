@@ -69,6 +69,28 @@ import {
   type StickyState as BubbleStickyState,
 } from "./swing12";
 import { makeTowerLevel, towerTitle } from "./endless";
+import {
+  BUBBLE_RAINBOW,
+  CANDY_BODY_DEEP,
+  CANDY_BODY_LIGHT,
+  CANDY_WRAP,
+  CANDY_WRAP_FOLD,
+  MID_PARALLAX,
+  MONSTER_DARK,
+  MONSTER_EAR_INNER,
+  MONSTER_LIGHT,
+  PORTAL_IN_COLOR,
+  PORTAL_OUT_COLOR,
+  RESULT_STAR_POP,
+  SNIP_FRAY_SEC,
+  STAR_CORE,
+  candySpiralPoints,
+  drawGoldStar,
+  drawHeart,
+  fluffOutline,
+  monsterPose,
+  starPath,
+} from "./art";
 import { needsMigration, readProgress, writeProgress, type Progress } from "./progress";
 import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
@@ -113,6 +135,18 @@ const CANDY_GHOST_MS = 300;
 const EAT_SHOW_MS = 700;
 /** 1.2 连击提示停留时长 */
 const COMBO_SHOW = 1.1;
+
+/* ---- 1.3 视觉素材（确定性数据在模块级算一次，逐帧只描不算） ---- */
+
+/** 糖体螺旋纹：阿基米德螺线 2.5 圈的折线点列 */
+const CANDY_SPIRAL = candySpiralPoints(CANDY_R * 0.82);
+/** 小怪物绒毛轮廓：32×30 椭圆切 14 段微锯齿 */
+const MONSTER_FLUFF = fluffOutline(32, 30, 14);
+/** 中景层（视差系数 MID_PARALLAX；本款无镜头，除云层外静态） */
+const MEADOW_FLOWERS = [[46, 421], [104, 434], [168, 425], [246, 431], [316, 419]] as const;
+const NIGHT_RIDGE = [[0, 436], [58, 396], [120, 420], [188, 384], [252, 416], [312, 394], [360, 428]] as const;
+const FACTORY_PIPES = [{ y: 336, h: 12 }, { y: 406, h: 9 }] as const;
+const SKY_HAZE = [[40, 322, 64], [180, 252, 80], [312, 356, 56]] as const;
 
 const localStore: Storage | null = (() => {
   try {
@@ -348,6 +382,8 @@ export function mount(api: GameApi): CandySwingHandle {
   let comboText = "";
   let comboT = 0;
   let bestComboThisLevel = 0;
+  /** 1.3 失败演出：糖果出事的位置，短暂画一张哭脸 */
+  let sadCandyAt: { x: number; y: number } | null = null;
   const lessMotion = reducedMotion();
 
   const trail: TrailPoint[] = [];
@@ -617,6 +653,7 @@ export function mount(api: GameApi): CandySwingHandle {
     comboText = "";
     comboT = 0;
     bestComboThisLevel = 0;
+    sadCandyAt = null;
     timeLeft = level.timeLimit ?? Infinity;
     trail.length = 0;
     ghosts.length = 0;
@@ -710,6 +747,12 @@ export function mount(api: GameApi): CandySwingHandle {
     phase = "failed";
     phaseTime = 0;
     failReason = reason;
+    // 记下出事位置（夹回画面内），drawCandy 在那儿画一张哭脸
+    const c0 = candy();
+    sadCandyAt = {
+      x: Math.max(24, Math.min(W - 24, c0.x)),
+      y: Math.max(28, Math.min(H - 46, c0.y)),
+    };
     api.play("oops");
     if (mode === "endless") {
       towerBest = save.recordEndlessBest("candy-swing", towerScore);
@@ -1192,6 +1235,24 @@ export function mount(api: GameApi): CandySwingHandle {
         ctx.arc(bx, by, 20 + (i % 3) * 8, 0, Math.PI * 2);
         ctx.fill();
       }
+      // 中景：远丘两座 + 小花点（无镜头 → 静态）
+      ctx.fillStyle = "rgba(150, 205, 130, 0.18)";
+      ctx.beginPath();
+      ctx.ellipse(90, H + 6, 170, 70, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(305, H + 12, 190, 84, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      for (const [fx, fy] of MEADOW_FLOWERS) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+        ctx.beginPath();
+        ctx.arc(fx, fy, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 190, 215, 0.9)";
+        ctx.beginPath();
+        ctx.arc(fx, fy, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.fillStyle = "rgba(150, 210, 130, 0.35)";
       ctx.beginPath();
       ctx.ellipse(70, H + 30, 180, 90, 0, Math.PI, Math.PI * 2);
@@ -1209,6 +1270,14 @@ export function mount(api: GameApi): CandySwingHandle {
         ctx.arc(sx, sy, 1.2 + (i % 3) * 0.7, 0, Math.PI * 2);
         ctx.fill();
       }
+      // 中景：远山剪影
+      ctx.fillStyle = "rgba(28, 30, 68, 0.6)";
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (const [rx, ry] of NIGHT_RIDGE) ctx.lineTo(rx, ry);
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      ctx.fill();
       // 月亮
       ctx.fillStyle = "#FFF3C2";
       ctx.beginPath();
@@ -1230,6 +1299,19 @@ export function mount(api: GameApi): CandySwingHandle {
         ctx.stroke();
       }
       ctx.restore();
+      // 中景：糖浆管道剪影（横贯画面 + 接头卡箍）
+      for (const pi of FACTORY_PIPES) {
+        ctx.fillStyle = "rgba(214, 92, 139, 0.14)";
+        ctx.beginPath();
+        ctx.roundRect(-6, pi.y, W + 12, pi.h, 5);
+        ctx.fill();
+        ctx.fillStyle = "rgba(214, 92, 139, 0.22)";
+        for (const jx of [70, 200, 320]) {
+          ctx.beginPath();
+          ctx.roundRect(jx, pi.y - 2, 10, pi.h + 4, 3);
+          ctx.fill();
+        }
+      }
       for (const [gx, gy, gr] of [[40, 70, 24], [326, 250, 18]] as const) {
         ctx.strokeStyle = "rgba(240, 111, 165, 0.35)";
         ctx.lineWidth = 6;
@@ -1245,6 +1327,15 @@ export function mount(api: GameApi): CandySwingHandle {
         }
       }
     } else if (theme.deco === "sky") {
+      // 中景：远层淡云，漂移速度按视差系数打折（lessMotion 静止）
+      const hazeDrift = lessMotion ? 0 : simTime * 8 * MID_PARALLAX;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+      for (const [hx, hy, hr] of SKY_HAZE) {
+        const hxNow = ((hx + hazeDrift) % (W + 160)) - 80;
+        ctx.beginPath();
+        ctx.ellipse(hxNow, hy, hr, hr * 0.38, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       // 云朵乐园：飘动的大朵白云 + 远处小鸟
       for (let i = 0; i < 4; i++) {
         const drift = ((simTime * 8 + i * 110) % (W + 140)) - 70;
@@ -1464,6 +1555,18 @@ export function mount(api: GameApi): CandySwingHandle {
       const spin = on ? simTime * 9 : simTime * 0.6;
       ctx.save();
       ctx.translate(bx + dx * 8, by + dy * 8);
+      // 扇叶运动模糊弧：转得快才有，弧长随转速（lessMotion 不画）
+      if (on && !lessMotion) {
+        const blur = 0.9;
+        ctx.strokeStyle = "rgba(95, 198, 216, 0.4)";
+        ctx.lineWidth = 3.2;
+        for (let i = 0; i < 3; i++) {
+          const a0 = spin + (Math.PI * 2 * i) / 3 - Math.PI / 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 8.2, a0 - blur, a0);
+          ctx.stroke();
+        }
+      }
       ctx.fillStyle = on ? "#5FC6D8" : "#AEB8C2";
       for (let i = 0; i < 3; i++) {
         ctx.save();
@@ -1484,7 +1587,6 @@ export function mount(api: GameApi): CandySwingHandle {
   function drawMagnets(): void {
     for (const mg of level.magnets ?? []) {
       const pull = mg.strength >= 0;
-      const main = pull ? "#F05B7A" : "#4F84E8";
       // 作用范围
       ctx.strokeStyle = pull ? "rgba(240, 91, 122, 0.25)" : "rgba(79, 132, 232, 0.25)";
       ctx.setLineDash([4, 9]);
@@ -1506,10 +1608,13 @@ export function mount(api: GameApi): CandySwingHandle {
         ctx.arc(mg.x, mg.y, Math.max(6, r), 0, Math.PI * 2);
         ctx.stroke();
       }
-      // 马蹄形磁铁本体
+      // 马蹄形磁铁本体：金属渐变涂装 + 白端头 + 蹄铁高光
       ctx.save();
       ctx.translate(mg.x, mg.y);
-      ctx.strokeStyle = main;
+      const mgG = ctx.createLinearGradient(-12, -12, 12, 10);
+      mgG.addColorStop(0, pull ? "#FF8AA0" : "#8FB3F5");
+      mgG.addColorStop(1, pull ? "#D8375C" : "#2F63C9");
+      ctx.strokeStyle = mgG;
       ctx.lineWidth = 9;
       ctx.lineCap = "butt";
       ctx.beginPath();
@@ -1528,6 +1633,11 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.lineTo(-11, 14);
       ctx.moveTo(11, 9);
       ctx.lineTo(11, 14);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, -1, 12.5, Math.PI * 1.15, Math.PI * 1.5);
       ctx.stroke();
       ctx.restore();
     }
@@ -1681,10 +1791,19 @@ export function mount(api: GameApi): CandySwingHandle {
       const dir = next >= scale ? 1 : -1;
       ctx.save();
       ctx.translate(r.x, r.y);
-      ctx.fillStyle = "#C9A96A";
+      // 发条盘：金属渐变盘面 + 齿圈光泽
+      const wg = ctx.createLinearGradient(-11, -11, 11, 11);
+      wg.addColorStop(0, "#E8CE96");
+      wg.addColorStop(1, "#B08F4F");
+      ctx.fillStyle = wg;
       ctx.beginPath();
       ctx.arc(0, 0, 11, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, -2.2, -0.9);
+      ctx.stroke();
       ctx.strokeStyle = "#9A7B42";
       ctx.lineWidth = 3;
       for (let k = 0; k < 8; k++) {
@@ -1713,8 +1832,17 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.beginPath();
       ctx.roundRect(sp.x, sp.y, sp.w, sp.h, 4);
       ctx.fill();
-      ctx.fillStyle = "#FF7E9A";
+      // 齿面金属渐变：根部浅 → 尖端深（保住粉色的危险语义）
+      const tipG =
+        sp.dir === "up" ? ctx.createLinearGradient(0, sp.y, 0, sp.y - 9)
+        : sp.dir === "down" ? ctx.createLinearGradient(0, sp.y + sp.h, 0, sp.y + sp.h + 9)
+        : sp.dir === "left" ? ctx.createLinearGradient(sp.x, 0, sp.x - 9, 0)
+        : ctx.createLinearGradient(sp.x + sp.w, 0, sp.x + sp.w + 9, 0);
+      tipG.addColorStop(0, "#FF9AB2");
+      tipG.addColorStop(1, "#E8476F");
+      ctx.fillStyle = tipG;
       const tooth = 12;
+      const tips: Array<[number, number]> = [];
       ctx.beginPath();
       if (sp.dir === "up" || sp.dir === "down") {
         const n = Math.floor(sp.w / tooth);
@@ -1725,6 +1853,7 @@ export function mount(api: GameApi): CandySwingHandle {
           ctx.moveTo(x0, yBase);
           ctx.lineTo(x0 + tooth / 2, yTip);
           ctx.lineTo(x0 + tooth, yBase);
+          tips.push([x0 + tooth / 2, yTip + (sp.dir === "up" ? 2.4 : -2.4)]);
         }
       } else {
         const n = Math.floor(sp.h / tooth);
@@ -1735,17 +1864,35 @@ export function mount(api: GameApi): CandySwingHandle {
           ctx.moveTo(xBase, y0);
           ctx.lineTo(xTip, y0 + tooth / 2);
           ctx.lineTo(xBase, y0 + tooth);
+          tips.push([xTip + (sp.dir === "left" ? 2.4 : -2.4), y0 + tooth / 2]);
         }
       }
       ctx.fill();
+      // 尖端高光点
+      ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+      for (const [hx, hy] of tips) {
+        ctx.beginPath();
+        ctx.arc(hx, hy, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
   function drawBoards(): void {
     for (const b of boards) {
+      // 底下的落影（体积感）
+      ctx.fillStyle = "rgba(120, 80, 40, 0.16)";
+      ctx.beginPath();
+      ctx.ellipse(b.x + b.def.w / 2, b.y + b.def.h + 4, b.def.w * 0.42, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = "#D8A268";
       ctx.beginPath();
       ctx.roundRect(b.x, b.y, b.def.w, b.def.h, 6);
+      ctx.fill();
+      // 顶面受光条
+      ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.beginPath();
+      ctx.roundRect(b.x + 2, b.y + 1.5, b.def.w - 4, 3, 2);
       ctx.fill();
       ctx.strokeStyle = "#B9834C";
       ctx.lineWidth = 1.5;
@@ -1760,46 +1907,48 @@ export function mount(api: GameApi): CandySwingHandle {
   }
 
   function drawPortals(): void {
+    // 双层旋转漩涡：外环虚线转 + 内盘径向渐变 + 漩涡臂；
+    // 入口紫 / 出口青两色可分辨，转向相反；lessMotion 静止。
     for (const p of level.portals ?? []) {
-      // 入口：紫色漩涡
-      ctx.save();
-      ctx.translate(p.ax, p.ay);
-      ctx.rotate(simTime * 2);
-      ctx.strokeStyle = "#B06AF0";
-      ctx.lineWidth = 4;
-      ctx.setLineDash([10, 7]);
-      ctx.beginPath();
-      ctx.arc(0, 0, PORTAL_R, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.strokeStyle = "rgba(176, 106, 240, 0.65)";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      for (let a = 0; a < Math.PI * 4; a += 0.25) {
-        const r = (a / (Math.PI * 4)) * (PORTAL_R - 5);
-        const px = Math.cos(a) * r;
-        const py = Math.sin(a) * r;
-        if (a === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+      const spin = lessMotion ? 0 : simTime * 2;
+      const gates = [
+        { x: p.ax, y: p.ay, ring: PORTAL_IN_COLOR, glow: "rgba(176, 106, 240, ", dir: 1 },
+        { x: p.bx, y: p.by, ring: PORTAL_OUT_COLOR, glow: "rgba(63, 195, 232, ", dir: -1 },
+      ];
+      for (const gate of gates) {
+        ctx.save();
+        ctx.translate(gate.x, gate.y);
+        // 内盘：中心亮的能量面
+        const disk = ctx.createRadialGradient(0, 0, 2, 0, 0, PORTAL_R - 3);
+        disk.addColorStop(0, "rgba(255, 255, 255, 0.75)");
+        disk.addColorStop(1, `${gate.glow}0.28)`);
+        ctx.fillStyle = disk;
+        ctx.beginPath();
+        ctx.arc(0, 0, PORTAL_R - 3, 0, Math.PI * 2);
+        ctx.fill();
+        // 漩涡臂（入口顺时针 / 出口逆时针）
+        ctx.rotate(spin * gate.dir);
+        ctx.strokeStyle = `${gate.glow}0.75)`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let a = 0; a < Math.PI * 4; a += 0.25) {
+          const r = (a / (Math.PI * 4)) * (PORTAL_R - 5);
+          const px = Math.cos(a) * r;
+          const py = Math.sin(a) * r;
+          if (a === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        // 外环虚线
+        ctx.strokeStyle = gate.ring;
+        ctx.lineWidth = 4;
+        ctx.setLineDash([10, 7]);
+        ctx.beginPath();
+        ctx.arc(0, 0, PORTAL_R, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
       }
-      ctx.stroke();
-      ctx.restore();
-      // 出口：青色圆环
-      ctx.save();
-      ctx.translate(p.bx, p.by);
-      ctx.rotate(-simTime * 2);
-      ctx.strokeStyle = "#4FC7E8";
-      ctx.lineWidth = 4;
-      ctx.setLineDash([10, 7]);
-      ctx.beginPath();
-      ctx.arc(0, 0, PORTAL_R, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-      ctx.fillStyle = "rgba(79, 199, 232, 0.25)";
-      ctx.beginPath();
-      ctx.arc(p.bx, p.by, PORTAL_R - 6, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
@@ -1864,23 +2013,65 @@ export function mount(api: GameApi): CandySwingHandle {
       let next = offset;
       while (next <= simTime) next += period;
       const until = next - simTime;
-      const justSnipped = simTime - s.lastSnipAt < 0.18;
+      const sinceSnip = simTime - s.lastSnipAt;
+      const justSnipped = sinceSnip < 0.18;
       const open = justSnipped ? 0.06 : Math.min(0.55, 0.15 + (1 - Math.min(1, until / period)) * 0.5);
       ctx.save();
       ctx.translate(x, y);
-      for (const side of [-1, 1]) {
-        ctx.rotate(0);
-        ctx.strokeStyle = "#9AA7C4";
-        ctx.lineWidth = 4;
-        ctx.lineCap = "round";
+      // 金属渐变刃面 + 红圈手柄
+      const bladeG = ctx.createLinearGradient(-6, -16, 8, 6);
+      bladeG.addColorStop(0, "#F4F8FE");
+      bladeG.addColorStop(0.55, "#B9C4DC");
+      bladeG.addColorStop(1, "#7E8BAD");
+      for (const side of [-1, 1] as const) {
+        const bx = Math.cos(side * open) * 19;
+        const by = Math.sin(side * open) * 19 - 7;
+        const blen = Math.hypot(bx, by) || 1;
+        const plx = (-by / blen) * 2;
+        const ply = (bx / blen) * 2;
+        ctx.fillStyle = bladeG;
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(side * open) * 17, Math.sin(side * open) * 17 - 6);
-        ctx.stroke();
-        ctx.fillStyle = "#F08282";
-        ctx.beginPath();
-        ctx.arc(-Math.cos(side * open) * 8, -Math.sin(side * open) * 8 + 7, 4.5, 0, Math.PI * 2);
+        ctx.moveTo(plx, ply);
+        ctx.lineTo(bx, by);
+        ctx.lineTo(-plx, -ply);
+        ctx.closePath();
         ctx.fill();
+        ctx.strokeStyle = "#F08282";
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.arc(-Math.cos(side * open) * 9, -Math.sin(side * open) * 9 + 8, 4.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // 轴心铆钉 + 高光
+      ctx.fillStyle = "#5E6A88";
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.beginPath();
+      ctx.arc(-0.7, -0.7, 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      // 剪断瞬间：白闪一帧 + 三根断口散丝卷曲消失（lessMotion 不闪不散）
+      if (!lessMotion && sinceSnip >= 0 && sinceSnip < 0.1) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.85 * (1 - sinceSnip / 0.1)})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10 + sinceSnip * 140, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (!lessMotion && sinceSnip >= 0 && sinceSnip < SNIP_FRAY_SEC) {
+        const k = sinceSnip / SNIP_FRAY_SEC;
+        ctx.strokeStyle = `rgba(197, 138, 79, ${0.85 * (1 - k)})`;
+        ctx.lineWidth = 1.6;
+        for (let f = 0; f < 3; f++) {
+          const fa = -0.7 + f * 0.7;
+          ctx.beginPath();
+          ctx.moveTo(0, 3);
+          ctx.quadraticCurveTo(
+            Math.cos(fa) * 9, 3 + Math.sin(fa) * 9 - k * 5,
+            Math.cos(fa) * (13 - k * 5), 3 + Math.sin(fa) * (13 - k * 4) - k * 9
+          );
+          ctx.stroke();
+        }
       }
       ctx.restore();
     }
@@ -1930,18 +2121,9 @@ export function mount(api: GameApi): CandySwingHandle {
     }
   }
 
+  /** 全产品标准的金星：金渐变 + 2px 深金描边 + 中心小高光星（三层） */
   function drawStar(x: number, y: number, r: number, rot = 0): void {
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const ang = rot - Math.PI / 2 + (Math.PI * i) / 5;
-      const rr = i % 2 === 0 ? r : r * 0.45;
-      const px = x + Math.cos(ang) * rr;
-      const py = y + Math.sin(ang) * rr;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
+    drawGoldStar(ctx, x, y, r, rot);
   }
 
   function drawStars(): void {
@@ -1954,16 +2136,25 @@ export function mount(api: GameApi): CandySwingHandle {
           const ty = candyGone ? s.y - 20 : c.y;
           const ix = s.x + (tx - s.x) * s.suck;
           const iy = s.y + (ty - s.y) * s.suck;
-          ctx.fillStyle = "rgba(255, 205, 80, " + (1 - s.suck) + ")";
+          // 3 粒星屑尾迹跟在后面（lessMotion 只留主星淡出）
+          if (!lessMotion) {
+            ctx.fillStyle = STAR_CORE;
+            for (let k = 1; k <= 3; k++) {
+              const tt = Math.max(0, s.suck - k * 0.1);
+              ctx.globalAlpha = (1 - s.suck) * (0.6 - k * 0.15);
+              ctx.beginPath();
+              ctx.arc(s.x + (tx - s.x) * tt, s.y + (ty - s.y) * tt, 3.6 - k * 0.8, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          ctx.globalAlpha = 1 - s.suck;
           drawStar(ix, iy, 14 * (1 - s.suck * 0.8), s.suck * 3);
+          ctx.globalAlpha = 1;
         }
         continue;
       }
       const pulse = 1 + Math.sin(simTime * 4 + s.x) * 0.08;
-      ctx.fillStyle = "#FFD75E";
       drawStar(s.x, s.y, 13 * pulse);
-      ctx.fillStyle = "#FFF2C4";
-      drawStar(s.x, s.y, 6 * pulse);
     }
   }
 
@@ -2020,6 +2211,38 @@ export function mount(api: GameApi): CandySwingHandle {
   }
 
   function drawCandy(): void {
+    // 1.3 失败一瞬：糖果丢了（掉落/被扎/被抢）就在出事的位置画一帧哭脸再重来
+    if (phase === "failed" && candyGone && !candyEaten && sadCandyAt !== null && phaseTime < 0.6) {
+      ctx.save();
+      ctx.translate(sadCandyAt.x, sadCandyAt.y);
+      const sg = ctx.createRadialGradient(-5, -6, 2, 0, 0, CANDY_R);
+      sg.addColorStop(0, CANDY_BODY_LIGHT);
+      sg.addColorStop(1, CANDY_BODY_DEEP);
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.arc(0, 0, CANDY_R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#8E2F55";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(-6, -5, 3.4, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(6, -5, 3.4, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+      ctx.fillStyle = "#8E2F55";
+      ctx.beginPath();
+      ctx.ellipse(0, 6, 4.5, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#9AD4FF";
+      ctx.beginPath();
+      ctx.arc(-9, 1, 2.1, 0, Math.PI * 2);
+      ctx.arc(9, 2, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
     if (candyGone && !candyEaten) return;
     if (candyEaten) return;
     const c = candy();
@@ -2034,37 +2257,70 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.beginPath();
       ctx.arc(c.x, c.y, 27 + wob, 0, Math.PI * 2);
       ctx.stroke();
+      // 彩虹泡膜：细分色弧沿泡壁慢慢转（lessMotion 静止）
+      const rainbowSpin = lessMotion ? 0 : simTime * 0.9;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.7;
+      for (let i = 0; i < BUBBLE_RAINBOW.length; i++) {
+        const a0 = rainbowSpin + (Math.PI * 2 * i) / BUBBLE_RAINBOW.length;
+        ctx.strokeStyle = BUBBLE_RAINBOW[i];
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 25 + wob, a0, a0 + (Math.PI * 2) / BUBBLE_RAINBOW.length - 0.25);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
     const rot = (c.x - c.px) * 0.08;
     ctx.save();
     ctx.translate(c.x, c.y);
     ctx.rotate(rot);
-    ctx.fillStyle = "#FF6FA5";
+    // 糖纸：比糖体深一档 + 端部圆角 + 一条折线褶
+    ctx.fillStyle = CANDY_WRAP;
+    for (const side of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.moveTo(side * (CANDY_R - 2), 0);
+      ctx.lineTo(side * (CANDY_R + 8), -7);
+      ctx.quadraticCurveTo(side * (CANDY_R + 11), -3, side * (CANDY_R + 11), 0);
+      ctx.quadraticCurveTo(side * (CANDY_R + 11), 3, side * (CANDY_R + 8), 7);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = CANDY_WRAP_FOLD;
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.moveTo(-CANDY_R - 9, -7);
-    ctx.lineTo(-CANDY_R + 2, 0);
-    ctx.lineTo(-CANDY_R - 9, 7);
-    ctx.closePath();
-    ctx.moveTo(CANDY_R + 9, -7);
-    ctx.lineTo(CANDY_R - 2, 0);
-    ctx.lineTo(CANDY_R + 9, 7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#FF8FB1";
+    ctx.moveTo(-(CANDY_R + 8), -5);
+    ctx.lineTo(-(CANDY_R + 3), 0);
+    ctx.lineTo(-(CANDY_R + 8), 5);
+    ctx.moveTo(CANDY_R + 8, -5);
+    ctx.lineTo(CANDY_R + 3, 0);
+    ctx.lineTo(CANDY_R + 8, 5);
+    ctx.stroke();
+    // 糖光泽之一：径向渐变底（左上亮 → 边缘深）
+    const bodyG = ctx.createRadialGradient(-6, -7, 3, 0, 0, CANDY_R + 1);
+    bodyG.addColorStop(0, CANDY_BODY_LIGHT);
+    bodyG.addColorStop(1, CANDY_BODY_DEEP);
+    ctx.fillStyle = bodyG;
     ctx.beginPath();
     ctx.arc(0, 0, CANDY_R, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 3;
+    // 糖光泽之二：阿基米德螺线 2.5 圈的真螺旋纹
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.arc(0, 0, CANDY_R * 0.62, 0.3, Math.PI * 1.2);
+    ctx.moveTo(CANDY_SPIRAL[0].x, CANDY_SPIRAL[0].y);
+    for (let i = 1; i < CANDY_SPIRAL.length; i++) {
+      ctx.lineTo(CANDY_SPIRAL[i].x, CANDY_SPIRAL[i].y);
+    }
     ctx.stroke();
+    ctx.lineCap = "butt";
+    // 糖光泽之三：左上高光点组（大 1 小 1）
+    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
     ctx.beginPath();
-    ctx.arc(0, 0, CANDY_R * 0.3, Math.PI, Math.PI * 2.1);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.arc(-5, -7, 3.4, 0, Math.PI * 2);
+    ctx.fill();
     ctx.beginPath();
-    ctx.arc(-5, -6, 3.5, 0, Math.PI * 2);
+    ctx.arc(-1, -10, 1.7, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -2086,30 +2342,77 @@ export function mount(api: GameApi): CandySwingHandle {
     const mx = level.monster.x;
     const my = level.monster.y;
     const stage = eatStage();
-    // 接住那一下往下沉，咀嚼时小幅上下晃，满足时轻轻弹两下
-    let bounce = 0;
-    if (stage === "catch") bounce = -4 * (1 - eatShowT / 0.22);
-    else if (stage === "chew") bounce = Math.sin(eatShowT * 34) * 3;
-    else if (stage === "happy") bounce = Math.abs(Math.sin(phaseTime * 8)) * 6;
+    // 接住往下沉 / 咀嚼小幅晃 / 满足轻轻弹：编排全在 monsterPose（公式原样）
+    const pose = monsterPose(stage, eatShowT, phaseTime);
+    const bounce = pose.bounce;
     const y = my - bounce;
     ctx.save();
-    ctx.fillStyle = "#B48CE8";
+    // 地面环境阴影：跳得越高影子越小越淡
+    ctx.fillStyle = `rgba(96, 64, 140, ${Math.max(0.06, 0.16 - bounce * 0.01)})`;
     ctx.beginPath();
-    ctx.arc(mx - 20, y - 26, 9, 0, Math.PI * 2);
-    ctx.arc(mx + 20, y - 26, 9, 0, Math.PI * 2);
+    ctx.ellipse(mx, my + 30, Math.max(18, 30 - bounce), 6.5, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#C7A6F2";
+    // 耳朵：外耳 + 内耳双层，随呼吸微摆（lessMotion 静止）
+    const sway = lessMotion ? 0 : Math.sin(simTime * 2.3) * 0.08;
+    for (const side of [-1, 1] as const) {
+      ctx.save();
+      ctx.translate(mx + side * 20, y - 28);
+      ctx.rotate(side * sway);
+      ctx.fillStyle = "#B48CE8";
+      ctx.beginPath();
+      ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = MONSTER_EAR_INNER;
+      ctx.beginPath();
+      ctx.arc(-side, -2.4, 4.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // 头顶呆毛 2 根
+    ctx.strokeStyle = "#A87BDD";
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.ellipse(mx, y, 32, 30, 0, 0, Math.PI * 2);
+    ctx.moveTo(mx - 3, y - 27);
+    ctx.quadraticCurveTo(mx - 7, y - 38, mx - 13, y - 40);
+    ctx.moveTo(mx + 3, y - 27);
+    ctx.quadraticCurveTo(mx + 6, y - 40, mx + 13, y - 43);
+    ctx.stroke();
+    ctx.lineCap = "butt";
+    // 身体：径向渐变（左上亮 → 右下深）+ 一次 path 的绒毛锯齿边
+    const bodyG = ctx.createRadialGradient(mx - 12, y - 14, 4, mx, y, 42);
+    bodyG.addColorStop(0, MONSTER_LIGHT);
+    bodyG.addColorStop(1, MONSTER_DARK);
+    ctx.fillStyle = bodyG;
+    ctx.beginPath();
+    ctx.moveTo(mx + 32, y);
+    for (const seg of MONSTER_FLUFF) {
+      ctx.quadraticCurveTo(mx + seg.cx, y + seg.cy, mx + seg.x, y + seg.y);
+    }
+    ctx.closePath();
     ctx.fill();
+    // 肚皮 + 2 条浅色肚纹
     ctx.fillStyle = "#DCC6FA";
     ctx.beginPath();
     ctx.ellipse(mx, y + 12, 20, 14, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(mx, y + 6, 13, Math.PI * 0.25, Math.PI * 0.75);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mx, y + 10, 15, Math.PI * 0.3, Math.PI * 0.7);
+    ctx.stroke();
+    // 身体下缘环境阴影弧
+    ctx.fillStyle = "rgba(106, 74, 154, 0.16)";
+    ctx.beginPath();
+    ctx.ellipse(mx, y + 17, 26, 12, 0, Math.PI * 0.14, Math.PI * 0.86);
+    ctx.fill();
     const c = candy();
     const lookX = candyGone ? 0 : Math.max(-3, Math.min(3, (c.x - mx) * 0.03));
     const lookY = candyGone ? 0 : Math.max(-3, Math.min(3, (c.y - y) * 0.03));
-    if (stage === "happy") {
+    if (pose.eyes === "smile") {
       // 满足：眯成两道弯弯的笑眼
       ctx.strokeStyle = "#3A2B52";
       ctx.lineWidth = 3;
@@ -2130,10 +2433,7 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.arc(mx + 11 + lookX, y - 10 + lookY, 3.4, 0, Math.PI * 2);
       ctx.fill();
     }
-    let open = mouthOpenAmount;
-    if (stage === "catch") open = 1;
-    else if (stage === "chew") open = 0.35 + Math.abs(Math.sin(eatShowT * 30)) * 0.4;
-    else if (stage === "happy") open = 0;
+    const open = pose.open ?? mouthOpenAmount;
     if (open > 0.15) {
       ctx.fillStyle = "#5A3A6E";
       ctx.beginPath();
@@ -2151,27 +2451,28 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.stroke();
     }
     // 咀嚼时腮帮子鼓一鼓
-    const cheek = stage === "chew" ? 5 + Math.abs(Math.sin(eatShowT * 30)) * 3 : 5;
     ctx.fillStyle = "rgba(255, 150, 180, 0.5)";
     ctx.beginPath();
-    ctx.arc(mx - 22, y + 2, cheek, 0, Math.PI * 2);
-    ctx.arc(mx + 22, y + 2, cheek, 0, Math.PI * 2);
+    ctx.arc(mx - 22, y + 2, pose.cheek, 0, Math.PI * 2);
+    ctx.arc(mx + 22, y + 2, pose.cheek, 0, Math.PI * 2);
     ctx.fill();
-    if (stage === "catch" && !lessMotion) {
+    if (pose.halo !== null && !lessMotion) {
       // 接住：一圈扩散开的小光环
-      const k = eatShowT / 0.22;
+      const k = pose.halo;
       ctx.strokeStyle = `rgba(255, 180, 205, ${1 - k})`;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(mx, y + 6, 20 + k * 26, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (stage === "happy" && phaseTime < 1.2) {
-      ctx.fillStyle = "rgba(255, 110, 150, " + (1 - phaseTime / 1.2) + ")";
-      ctx.font = "20px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("💜", mx + 30, y - 34 - phaseTime * 30);
-      ctx.textAlign = "left";
+    if (pose.heart !== null) {
+      // 满足：绘制的心形上飘 + 缩放弹跳（lessMotion 原地只淡出）
+      const hk = pose.heart;
+      const rise = lessMotion ? 0 : hk * 32;
+      const pop = lessMotion ? 1 : 1 + Math.sin(Math.min(1, hk * 2.2) * Math.PI) * 0.3;
+      ctx.globalAlpha = 1 - hk;
+      drawHeart(ctx, mx + 30, y - 36 - rise, 8 * pop);
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   }
@@ -2238,8 +2539,11 @@ export function mount(api: GameApi): CandySwingHandle {
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
-      // 伞盖
-      ctx.fillStyle = "#FF8FB5";
+      // 伞盖（顶亮底深的渐变）
+      const capG = ctx.createLinearGradient(0, -r * 0.72, 0, 2);
+      capG.addColorStop(0, "#FFB9D2");
+      capG.addColorStop(1, "#F2679C");
+      ctx.fillStyle = capG;
       ctx.beginPath();
       ctx.ellipse(0, 0, r, r * 0.72 * (1 - squash * 0.3), 0, Math.PI, Math.PI * 2);
       ctx.fill();
@@ -2280,7 +2584,10 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.moveTo(0, 0);
       ctx.lineTo(0, 14 * (1 - squash * 0.5));
       ctx.stroke();
-      ctx.fillStyle = "#FFB25C";
+      const capG = ctx.createLinearGradient(0, -r * 0.7, 0, 2);
+      capG.addColorStop(0, "#FFC98B");
+      capG.addColorStop(1, "#F09B3F");
+      ctx.fillStyle = capG;
       ctx.beginPath();
       ctx.ellipse(0, 0, r, r * 0.7 * (1 - squash * 0.3), 0, Math.PI, Math.PI * 2);
       ctx.fill();
@@ -2318,6 +2625,11 @@ export function mount(api: GameApi): CandySwingHandle {
       ctx.fillStyle = "#FF7FA8";
       ctx.beginPath();
       ctx.arc(g.x, g.y, CANDY_R * (0.45 + a * 0.4), 0, Math.PI * 2);
+      ctx.fill();
+      // 残影里的一点光核，拖尾更像糖光划过
+      ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+      ctx.beginPath();
+      ctx.arc(g.x - 1.5, g.y - 1.5, CANDY_R * (0.45 + a * 0.4) * 0.4, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -2382,10 +2694,24 @@ export function mount(api: GameApi): CandySwingHandle {
     ctx.beginPath();
     ctx.roundRect(x + 1.5, 11.5, Math.max(0, (barW - 3) * frac), 9, 4.5);
     ctx.fill();
+    // 小闹钟图标是画的，不用 emoji 字符
+    const ccx = W / 2 - 30;
+    const ccy = 33;
+    ctx.strokeStyle = hot ? "#B02B26" : "#3E7A66";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ccx, ccy, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ccx, ccy);
+    ctx.lineTo(ccx, ccy - 3.6);
+    ctx.moveTo(ccx, ccy);
+    ctx.lineTo(ccx + 2.8, ccy + 1);
+    ctx.stroke();
     ctx.fillStyle = hot ? "#B02B26" : "#3E7A66";
     ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`⏱ ${Math.ceil(Math.max(0, timeLeft))} 秒`, W / 2, 38);
+    ctx.fillText(`${Math.ceil(Math.max(0, timeLeft))} 秒`, W / 2 + 8, 38);
     ctx.textAlign = "left";
   }
 
@@ -2443,9 +2769,43 @@ export function mount(api: GameApi): CandySwingHandle {
         ctx.fillText("继续往上爬…", W / 2, 274);
       } else {
         ctx.fillText("过关啦！", W / 2, 210);
-        ctx.font = "26px sans-serif";
-        const got = stars.filter((s) => s.collected).length;
-        ctx.fillText("⭐".repeat(Math.max(1, got)) + "☆".repeat(3 - Math.max(1, got)), W / 2, 248);
+        // 三星逐颗点亮：每颗 RESULT_STAR_POP 秒缩放弹入 + 星屑 4 粒（lessMotion 直接全亮）
+        const got = Math.max(1, stars.filter((s) => s.collected).length);
+        const resultT = eatShowSkipped ? phaseTime : Math.max(0, phaseTime - EAT_SHOW_MS / 1000);
+        for (let i = 0; i < 3; i++) {
+          const sx = W / 2 + (i - 1) * 44;
+          const sy = 240;
+          if (i >= got) {
+            // 没拿到的星：灰底描边占位
+            starPath(ctx, sx, sy, 15);
+            ctx.fillStyle = "#EFE9F6";
+            ctx.fill();
+            ctx.strokeStyle = "#CBBFDC";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            continue;
+          }
+          const k = lessMotion
+            ? 1
+            : Math.max(0, Math.min(1, (resultT - i * RESULT_STAR_POP) / RESULT_STAR_POP));
+          if (k <= 0) {
+            // 还没轮到这颗：先画未点亮底座
+            starPath(ctx, sx, sy, 15);
+            ctx.fillStyle = "#EFE9F6";
+            ctx.fill();
+            continue;
+          }
+          drawStar(sx, sy, 15 * (0.5 + 0.5 * k) * (1 + 0.3 * Math.sin(Math.PI * k)));
+          if (k < 1) {
+            ctx.fillStyle = `rgba(240, 180, 41, ${1 - k})`;
+            for (let d = 0; d < 4; d++) {
+              const ang = Math.PI / 4 + (Math.PI / 2) * d;
+              ctx.beginPath();
+              ctx.arc(sx + Math.cos(ang) * (14 + k * 12), sy + Math.sin(ang) * (14 + k * 12), 2.2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
         // 14px 深紫：小字对比 5.5:1（原 13px #9B7BC8 只有 3.5:1，不达 AA）
         ctx.font = "14px sans-serif";
         ctx.fillStyle = "#7a5aa8";
