@@ -201,6 +201,57 @@ export function drawStarPickup(ctx: Ctx, r: number, twinkle: number): void {
   ctx.fill();
 }
 
+/**
+ * HUD 心心(画在原点,半径 r;visual-r1 修 A 档 P-07):
+ * 实心=粉系径向渐变 + 深粉描边 + 左上高光点;空心=灰白面 + 浅描边。
+ * 掉几颗心从形色两个通道都读得出来,替掉 💗🤍 emoji 直出。
+ */
+export function drawHeartPip(ctx: Ctx, r: number, filled: boolean): void {
+  ctx.beginPath();
+  ctx.moveTo(0, r * 0.9);
+  ctx.bezierCurveTo(-r * 1.15, r * 0.15, -r * 0.85, -r * 0.85, 0, -r * 0.25);
+  ctx.bezierCurveTo(r * 0.85, -r * 0.85, r * 1.15, r * 0.15, 0, r * 0.9);
+  ctx.closePath();
+  if (filled) {
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.15, 0, 0, r * 1.15);
+    g.addColorStop(0, "#ffd3e2");
+    g.addColorStop(0.55, "#ff8fb4");
+    g.addColorStop(1, "#f0608e");
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+  }
+  ctx.fill();
+  ctx.strokeStyle = filled ? "#d84a7c" : "#c9b8c4";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  if (filled) {
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.32, -r * 0.36, r * 0.2, r * 0.14, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** HUD 节奏音符小图标(画在原点,半径 r):实心符头 + 符干 + 小旗,配节奏关连击计数。 */
+export function drawNoteChip(ctx: Ctx, r: number): void {
+  ctx.fillStyle = "#8a5ac9";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.28, r * 0.5, r * 0.44, r * 0.32, -0.35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#8a5ac9";
+  ctx.lineWidth = Math.max(1.5, r * 0.2);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(r * 0.1, r * 0.42);
+  ctx.lineTo(r * 0.1, -r * 0.7);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(r * 0.1, -r * 0.7);
+  ctx.quadraticCurveTo(r * 0.6, -r * 0.55, r * 0.66, -r * 0.05);
+  ctx.stroke();
+}
+
 /** 道具的泡泡球底:渐变球体 + 描边 + 左上高光弧,替掉原来的白圈。 */
 export function drawBubble(ctx: Ctx, r: number): void {
   const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.2, 0, 0, r);

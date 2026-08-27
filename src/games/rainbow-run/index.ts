@@ -205,11 +205,14 @@ import {
   drawBoltIcon,
   drawCoin,
   drawCoinDot,
+  drawCoinFrame,
   drawCoinSweep,
   drawContactShadow,
+  drawHeartPip,
   drawJetFlame,
   drawJetIcon,
   drawMagnetIcon,
+  drawNoteChip,
   drawObstacleArt,
   drawPowerIcon,
   drawRunner,
@@ -2831,13 +2834,41 @@ export function mount(api: GameAPI): RainbowRunHandle {
       );
     }
 
+    // 计数图标换绘制小图标(visual-r1 修 P-07):星币/星星用场上同款画法,
+    // 节奏音符画制,数字与原来同字号同基线
     ctx.font = "15px sans-serif";
     ctx.textAlign = "left";
     ctx.fillStyle = "#5a5a6e";
-    const comboTxt = !endless && level().rhythm ? ` 🎵${perfectStreak}/${PERFECT_STREAK_GOAL}` : "";
-    ctx.fillText(`🍬${stats.coins} ⭐${stats.stars}${comboTxt}`, 76, 20);
-    ctx.textAlign = "right";
-    ctx.fillText("💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, MAX_HEARTS - hearts)), w - 10, 20);
+    let hudX = 76;
+    ctx.save();
+    ctx.translate(hudX + 8, 20);
+    drawCoinFrame(ctx, 7.5, 0);
+    ctx.restore();
+    hudX += 19;
+    ctx.fillText(String(stats.coins), hudX, 20);
+    hudX += ctx.measureText(String(stats.coins)).width + 11;
+    ctx.save();
+    ctx.translate(hudX + 6, 20);
+    drawStarPickup(ctx, 6, 0);
+    ctx.restore();
+    hudX += 15;
+    ctx.fillText(String(stats.stars), hudX, 20);
+    if (!endless && level().rhythm) {
+      hudX += ctx.measureText(String(stats.stars)).width + 12;
+      ctx.save();
+      ctx.translate(hudX + 5, 20);
+      drawNoteChip(ctx, 6.5);
+      ctx.restore();
+      hudX += 13;
+      ctx.fillText(`${perfectStreak}/${PERFECT_STREAK_GOAL}`, hudX, 20);
+    }
+    // 心心换画制心片(💗🤍 → drawHeartPip),掉心从右往左灰下去,排布与原 emoji 串一致
+    for (let i = 0; i < MAX_HEARTS; i++) {
+      ctx.save();
+      ctx.translate(w - 18 - 19 * (MAX_HEARTS - 1 - i), 20);
+      drawHeartPip(ctx, 8, i < hearts);
+      ctx.restore();
+    }
     // 道具倒计时:移到任务条下方,不再和第二行进度条打架;13→14px
     // 图标从 emoji 换成绘制小图标(与场上的道具泡泡同一套形状,认得出对应关系)
     let px2 = w - 10;
