@@ -103,4 +103,4 @@ B / C 写每一格时必须包含宪法第十节要求的「深度审美评测 +
 3. 看 [`plan-1.3-tracker.md`](./plan-1.3-tracker.md) 确认那一格没人在做，**先登记再派**。
 4. 全部工作在分支 `game-1.2-kk`，不 push 到 `game-1.2`、不改 `main`、禁止 force。
 5. 执行子代理的模型 slug 一律 `claude-fable-5-thinking-xhigh`（不带方括号）。
-6. 步 0（从 `origin/game-1.2` 砍出 `game-1.2-kk`）**已做完**：76 款、674 测试文件 / 14809 用例全绿。
+6. 步 0（从 `origin/game-1.2` 砍出 `game-1.2-kk`）**已做完**：76 款、698 测试文件 / 14994 用例全绿（基线 `fe8e382`）。

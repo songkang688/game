@@ -100,7 +100,7 @@ git push origin HEAD:game-1.2-kk   # 被拒就再 fetch+rebase 重来
 
 - `game-1.2-kk` 由本档从 `origin/game-1.2` 砍出：`git checkout -B game-1.2-kk origin/game-1.2`，随本批文档一起推送。
 - 基线即 1.2 收官态：**76 款游戏**（`src/games/` 下 76 个游戏目录）、`src/engine/view25d.ts` / `playModes.ts` 等 1.2 基建齐备。
-- 用例水位（本档在基线上实跑 `npx vitest run`）：**674 测试文件 / 14809 用例全绿**；此后每格只升不降。
+- 用例水位（本档在基线 `fe8e382` 上实跑 `npx vitest run`）：**698 测试文件 / 14994 用例全绿**；此后每格只升不降。
 - 再次强调：`origin/1.2-kk` 是**另一摊**（品牌改名），与本分支无关。
 
 ---
