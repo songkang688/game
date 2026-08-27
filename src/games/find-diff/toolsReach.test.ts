@@ -125,6 +125,16 @@ describe("接线与样式", () => {
     expect(SRC).toContain('win?.addEventListener("resize", fitViewport)');
   });
 
+  it("下一帧还得再量一次——顶栏折行之前量到的是「装得下」，兜底就整个不触发", () => {
+    const at = SRC.indexOf("  fitViewport();\n  const win");
+    expect(at).toBeGreaterThan(-1);
+    const body = SRC.slice(at, SRC.indexOf("  return {", at));
+    expect(body).toContain("requestAnimationFrame");
+    expect(body).toContain("if (liveFit) fitViewport()");
+    // 拆掉舞台之后那一帧不许再回来动 DOM
+    expect(SRC.slice(SRC.indexOf("destroy() {", at))).toContain("liveFit = false");
+  });
+
   it("一个像素都没往热区上要：滑杆仍旧 44px 高，提示键仍旧 44px", () => {
     expect(SRC).toContain(".fdf-zoomrow input{width:110px;height:${TOOL_MIN_H}px;}");
     expect(SRC).toContain("min-height:44px");

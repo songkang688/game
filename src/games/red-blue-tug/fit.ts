@@ -165,16 +165,26 @@ export function scrollToShowPx(top: number, bottom: number, client: number, max:
  * 滚**最小的那一段**：按钮的下沿一进来就收手，上面的拔河场尽量留在眼里，
  * 孩子按住的时候仍看得见绳子偏向哪一边。
  *
- * 按钮下面还剩一条 `.rbg-msg`，这里**故意不把它一起算进去**：
- * 提示行再往下滚一点就有，可按钮一旦被顶出去这一关就没法玩了，两者不同价。
+ * 按钮下面还压着一条 `.rbg-msg`——「看到 🟢 才按住拉」那句规则说明（W5R3-C-05）。
+ * 它跟按钮**一起**能装进滚动口时就连它一块儿送进来（多滚十几像素而已）；
+ * 装不下才只保按钮：提示行再往下滚一点就有，可按钮一旦被顶出去这一关就没法玩了。
  */
 export function showPull(wrap: HTMLElement): number {
   if (typeof wrap.querySelector !== "function" || typeof wrap.getBoundingClientRect !== "function") return 0;
   const pull = wrap.querySelector(".rbg-ctrl") ?? wrap.querySelector(".rbg-pull");
   if (!pull || typeof pull.getBoundingClientRect !== "function") return 0;
+  const client = wrap.clientHeight;
+  const hostTop = wrap.getBoundingClientRect().top;
   const r = pull.getBoundingClientRect();
-  const top = r.top - wrap.getBoundingClientRect().top + wrap.scrollTop;
-  const next = scrollToShowPx(top, top + r.height, wrap.clientHeight, wrap.scrollHeight - wrap.clientHeight);
+  const top = r.top - hostTop + wrap.scrollTop;
+  let bottom = top + r.height;
+  const msg = wrap.querySelector(".rbg-msg");
+  if (msg && typeof msg.getBoundingClientRect === "function") {
+    const m = msg.getBoundingClientRect();
+    const msgBottom = m.top - hostTop + wrap.scrollTop + m.height;
+    if (msgBottom > bottom && msgBottom - top <= client) bottom = msgBottom;
+  }
+  const next = scrollToShowPx(top, bottom, client, wrap.scrollHeight - client);
   wrap.scrollTop = next;
   return next;
 }

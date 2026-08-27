@@ -145,6 +145,29 @@ describe("showPull", () => {
     expect(275 - wrap.scrollTop, "滚完按钮下沿还在口子外面").toBeLessThanOrEqual(wrap.clientHeight);
   });
 
+  it("提示行跟按钮一起装得下就连它一块儿送进来（W5R3-C-05）", () => {
+    const wrap = new FakeWrap();
+    wrap.put(".rbg-ctrl", new FakeRow(377, 56));
+    // 提示行紧跟在按钮下面：内容 279..295，和按钮一共 76px ≤ 口子 190
+    wrap.put(".rbg-msg", new FakeRow(437, 16));
+    const moved = showPull(as(wrap));
+    expect(295 - moved, "提示行还在口子外面——「这一关要干什么」就是看不见").toBeLessThanOrEqual(
+      wrap.clientHeight,
+    );
+    // 按钮当然也还在眼里
+    expect(275 - moved).toBeLessThanOrEqual(wrap.clientHeight);
+  });
+
+  it("提示行跟按钮一起装不下就只保按钮——按不着这一关就没法玩", () => {
+    const wrap = new FakeWrap();
+    wrap.put(".rbg-ctrl", new FakeRow(377, 56));
+    // 提示行离按钮很远（折了好几行），两者跨度 200 > 口子 190
+    wrap.put(".rbg-msg", new FakeRow(521, 100));
+    const moved = showPull(as(wrap));
+    expect(275 - moved).toBeLessThanOrEqual(wrap.clientHeight);
+    expect(moved).toBe(85);
+  });
+
   it("没有 .rbg-ctrl 就退到 .rbg-pull 自己身上", () => {
     const wrap = new FakeWrap();
     wrap.put(".rbg-pull", new FakeRow(377, 56));

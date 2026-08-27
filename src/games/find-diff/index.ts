@@ -629,6 +629,17 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     : "";
   fitViewport();
   const win = root.ownerDocument?.defaultView ?? null;
+  // 平台顶栏 `.l99-stagebar` 在窄屏上会折行，折之前和折之后这一屏的起点差好几像素。
+  // 量在折行之前就会以为「装得下」而整屏不钳——320×568 上实测正是这一幕：
+  // `.fdf-wrap` 382px、可视段 330px，兜底却一次都没触发（W5R3-C-04）。
+  // 下一帧再量一次才准；拿不到 rAF（测试桩 / SSR）就安静跳过。
+  let liveFit = true;
+  const raf = win?.requestAnimationFrame;
+  if (typeof raf === "function") {
+    raf.call(win, () => {
+      if (liveFit) fitViewport();
+    });
+  }
   win?.addEventListener("resize", fitViewport);
 
   return {
@@ -648,6 +659,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     },
     destroy() {
       frozen = true;
+      liveFit = false;
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       viewport.removeEventListener("pointerdown", onPointerDown);
