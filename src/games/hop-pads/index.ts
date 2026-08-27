@@ -11,6 +11,7 @@ export { meta };
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { TIER_FACES, TIER_NAMES, ghostLine, playGhost, type AiTier, type GhostRun } from "./ai";
+import { drawHeroSprite, type HeroPose, type HeroVariant } from "./art";
 import guideBook from "./guide";
 import {
   CATCH_LINE,
@@ -189,13 +190,29 @@ function drawPad(ctx: Ctx, cam: Camera, pad: Pad, isTarget: boolean): void {
   }
 }
 
-/** 角色:一个圆滚滚的小家伙,蓄力压扁、起跳拉伸 */
-function drawHero(
+/** drawHero 的视觉选项:全是造型层,判定一个数都不掺 */
+export interface HeroDrawOpts {
+  /** 朵朵(花苞呆毛 + 粉裙边)还是星星(星星呆毛 + 黄披风) */
+  variant?: HeroVariant;
+  /** 姿态决定表情与小手:蓄力眯眼 / 飞行圆睁 / 落地笑 / 坠落 >< 眼 */
+  pose?: HeroPose;
+  /** 连击 ≥ 3 头顶冒小皇冠(reduced 只发光) */
+  crown?: boolean;
+  reduced?: boolean;
+  /** 局内时间(秒):待机呼吸与眨眼 */
+  t?: number;
+  /** 飞行中的历史位置(世界坐标),星星的披风拖着它飘 */
+  trail?: ReadonlyArray<{ x: number; z: number; y: number }>;
+}
+
+/** 角色:圆滚滚的跳跳员,蓄力压扁、起跳拉伸(squash/stretch 公式一字未动) */
+export function drawHero(
   ctx: Ctx,
   cam: Camera,
   pos: { x: number; z: number; y: number },
   squash: number,
-  color: string
+  color: string,
+  o: HeroDrawOpts = {}
 ): void {
   const p = project(cam, pos.x, pos.z, pos.y);
   const base = 19 * cam.scale;
@@ -208,14 +225,23 @@ function drawHero(
   ellipse(ctx, ground.sx, ground.sy, rx * 0.9, rx * 0.42);
   ctx.fill();
 
-  ctx.fillStyle = color;
-  ellipse(ctx, p.sx, p.sy - ry, rx, ry * 1.25);
-  ctx.fill();
-  ctx.fillStyle = "#40332B";
-  ellipse(ctx, p.sx - rx * 0.34, p.sy - ry * 1.35, rx * 0.14, ry * 0.2);
-  ctx.fill();
-  ellipse(ctx, p.sx + rx * 0.34, p.sy - ry * 1.35, rx * 0.14, ry * 0.2);
-  ctx.fill();
+  const trail = (o.trail ?? []).map((q) => {
+    const s = project(cam, q.x, q.z, q.y);
+    return { sx: s.sx, sy: s.sy };
+  });
+  drawHeroSprite(ctx, {
+    x: p.sx,
+    y: p.sy,
+    rx,
+    ry,
+    color,
+    variant: o.variant ?? "duo",
+    pose: o.pose ?? "idle",
+    crown: o.crown ?? false,
+    reduced: o.reduced ?? false,
+    t: o.t ?? 0,
+    trail,
+  });
 }
 
 /** 接住人的那朵云 */
@@ -253,6 +279,8 @@ export interface StageOpts {
   name?: string;
   /** 角色颜色 */
   color?: string;
+  /** 角色造型:朵朵还是星星(纯视觉,判定不认它) */
+  variant?: HeroVariant;
   /** 画布高度(CSS 像素),不给就按宽度自适应 */
   height?: number;
   /** 无尽模式:每跳一座重算一次难度 */
@@ -344,6 +372,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   const cancelKeys = (opts.cancelKeys ?? ["g"]).map((k) => k.toLowerCase());
   const hintLine = singleKeyHint(keys, cancelKeys);
   const heroColor = opts.color ?? "#F2A268";
+  const heroVariant: HeroVariant = opts.variant ?? "duo";
   const goal = opts.goal ?? Number.POSITIVE_INFINITY;
 
   const root = document.createElement("div");
@@ -388,6 +417,10 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   let heroPos = { x: 0, z: 0, y: 0 };
   let flashText = "";
   let flashT = 0;
+  /** 落台后的笑脸 / 平展小手还剩多少秒 */
+  let landT = 0;
+  /** 星星的披风要拖着最近几帧的位置飘 */
+  let trail: Array<{ x: number; z: number; y: number }> = [];
   const cam: Camera = { x: 0, z: 0, scale: 1, w: 360, h: 400, shake: 0 };
 
   // ---- 画布尺寸 ----
@@ -491,6 +524,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
 
     phase = "ready";
     dust = 1;
+    landT = 0.2;
     if (!reduced) cam.shake = 5;
     if (res.verdict === "perfect") {
       opts.sfx("coin");
@@ -567,6 +601,13 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
 
     if (dust > 0) dust = Math.max(0, dust - dt * 2.4);
     if (flashT > 0) flashT = Math.max(0, flashT - dt);
+    if (landT > 0) landT = Math.max(0, landT - dt);
+    if (phase === "flying" && !reduced) {
+      trail.unshift({ ...heroPos });
+      if (trail.length > 7) trail.pop();
+    } else if (phase === "ready" && trail.length > 0) {
+      trail = [];
+    }
     cam.shake = reduced ? 0 : cam.shake * 0.86;
 
     // 镜头平滑跟到角色身上
@@ -616,7 +657,24 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
 
     if (phase !== "over") {
       const squash = phase === "charging" && !reduced ? power() * 0.85 : 0;
-      drawHero(ctx, cam, heroAt(), squash, heroColor);
+      const pose: HeroPose =
+        phase === "charging"
+          ? "charge"
+          : phase === "flying"
+            ? "fly"
+            : phase === "falling"
+              ? "fall"
+              : landT > 0
+                ? "land"
+                : "idle";
+      drawHero(ctx, cam, heroAt(), squash, heroColor, {
+        variant: heroVariant,
+        pose,
+        crown: run.combo >= 3,
+        reduced,
+        t: clock,
+        trail,
+      });
     }
 
     if (phase === "falling" || phase === "over") {
@@ -1168,9 +1226,9 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     wrap.className = "hp-duo";
     shell.body.appendChild(wrap);
 
-    const seats: Array<{ name: string; keys: string[]; cancelKeys: string[]; color: string }> = [
-      { name: "🌸 朵朵 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268" },
-      { name: "⭐ 星星 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA" },
+    const seats: Array<{ name: string; keys: string[]; cancelKeys: string[]; color: string; variant: HeroVariant }> = [
+      { name: "🌸 朵朵 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268", variant: "duo" },
+      { name: "⭐ 星星 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA", variant: "star" },
     ];
     seats.forEach((seat, i) => {
       const st = createStage(wrap, {
@@ -1181,6 +1239,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
         cancelKeys: seat.cancelKeys,
         name: seat.name,
         color: seat.color,
+        variant: seat.variant,
         height: 236,
         sfx: (n) => api.play(n),
         onGoal: (run) => {
