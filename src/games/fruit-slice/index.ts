@@ -2464,12 +2464,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
       ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
-      ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
+      // blurb 12px 封顶提为 14px 地板(1.2 遗留清零),配套 fitLine 测宽截断:
+      // 360px 双列卡 cw≈153px 装不下整句,截到卡内宽并补省略号,不再溢出压邻卡
+      ctx.font = `${Math.max(14, Math.round(ch * 0.16))}px sans-serif`;
       ctx.fillStyle = unlocked ? (isDarkOrchard(i) ? "#f0e8da" : "#5a5a6e") : "#a8a8b4";
-      ctx.fillText(unlocked ? st.blurb : "通关上一个果园解锁", rect.x + 10, rect.y + ch * 0.6);
+      const innerW = cw - 20;
+      ctx.fillText(
+        fitLine(unlocked ? st.blurb : "通关上一个果园解锁", innerW),
+        rect.x + 10,
+        rect.y + ch * 0.6,
+      );
       const size = themeSize(i);
       ctx.fillText(
-        unlocked ? `${cleared}/${size} 回合 · ⭐${themeStars(progress, i)}/${size * 3}` : "",
+        unlocked
+          ? fitLine(`${cleared}/${size} 回合 · ⭐${themeStars(progress, i)}/${size * 3}`, innerW)
+          : "",
         rect.x + 10,
         rect.y + ch * 0.82,
       );
@@ -2579,6 +2588,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
       y += lh;
     }
     return y;
+  }
+
+  /** 单行测宽截断:装不下 maxW 就截短补省略号(章节卡等窄容器防溢出)。 */
+  function fitLine(text: string, maxW: number): string {
+    if (ctx.measureText(text).width <= maxW) return text;
+    let out = text;
+    while (out.length > 1 && ctx.measureText(`${out}…`).width > maxW) {
+      out = out.slice(0, -1);
+    }
+    return `${out}…`;
   }
 
   function drawIntroPanel(): void {

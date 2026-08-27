@@ -6,7 +6,8 @@
  *     一条不许 skip——终验口径「被删或被跳过按阻断处理」由本组用例自动执行;
  *  2. 九款画布字号聚合终态:canvas font 字面量 <14px 全窗清零(R1 A-10~A-13 +
  *     R2 N-2/N-5 修复面的九款聚合防回退);表达式低封顶(Math.min(≤13,…))
- *     全窗只允许已登记的 1 处(fruit-slice 章节卡 blurb,1.2 遗留),新增即红;
+ *     全窗清零(原登记的 fruit-slice 章节卡 blurb 1 处已在 R3 由 C 档清掉,
+ *     断言按本文件原注释预授权收紧为 0),新增即红;
  *  3. 商标红线源码级:九款绘制源码 + kit 全量过品牌词黑名单
  *     (copyW7r1 只查新增文案句子,这里查全部源码,扫描面不同);
  *  4. 体积感底线:九款每款绘制源码至少保有 2 处渐变调用
@@ -75,7 +76,7 @@ describe("W7R3 终验 · 九款画布字号聚合终态(360px 功能小字 ≥14
     }
   });
 
-  it("表达式低封顶 Math.min(≤13,…) 全窗只有已登记的 fruit-slice 章节卡 1 处", () => {
+  it("表达式低封顶 Math.min(≤13,…) 全窗清零(R2 遗留 b 已清,新增即红)", () => {
     const hits: string[] = [];
     for (const game of GAMES) {
       for (const { file, src } of gameSources(game)) {
@@ -84,9 +85,9 @@ describe("W7R3 终验 · 九款画布字号聚合终态(360px 功能小字 ≥14
         }
       }
     }
-    // 1.2 遗留登记项(R2 C 档遗留清单 b),清掉后把这条断言改成 0
-    expect(hits.length, hits.join(" | ")).toBe(1);
-    expect(hits[0]).toContain("fruit-slice/index.ts");
+    // 原登记的 fruit-slice 章节卡 blurb(1.2 遗留,R2 C 档遗留清单 b)已在 R3
+    // 清掉(提 ≥14px 地板 + fitLine 测宽省略号排版),按原注释预授权收紧为 0
+    expect(hits, hits.join(" | ")).toEqual([]);
   });
 });
 
