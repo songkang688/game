@@ -1277,3 +1277,86 @@ export function drawConfetti(ctx: Ctx, W: number, H: number, tick: number, reduc
   }
   ctx.restore();
 }
+
+/* ------------------------------------------------------------------ */
+/* 九、菜单模式卡图标(visual-r2 修遗留 #5)                            */
+/* ------------------------------------------------------------------ */
+
+/** 五种玩法入口。 */
+export type MenuMode = "versus" | "cpu" | "tower" | "endless" | "training";
+
+/**
+ * 菜单模式卡的画制 SVG 图标(替掉 🥊🤖🏯🔥🎓 emoji):
+ * 与选人页画制头像同屏零代差——每枚都有体积面、1.5~2px 档描边与左上高光,
+ * 双人对垒用 P1 粉 / P2 蓝双通道色(RING_COLORS 同源)。纯矢量字符串,零位图。
+ */
+export function modeIconSVG(mode: MenuMode, size = 26): string {
+  const open = `<svg width="${size}" height="${size}" viewBox="0 0 32 32" aria-hidden="true">`;
+  const close = "</svg>";
+  if (mode === "versus") {
+    // 一粉一蓝两只圆拳套相抵 + 接触点星光
+    return (
+      open +
+      `<circle cx="11" cy="18" r="8" fill="#f29dbf" stroke="#c8497f" stroke-width="2"/>` +
+      `<circle cx="21" cy="18" r="8" fill="#9db8ee" stroke="#41539c" stroke-width="2"/>` +
+      `<ellipse cx="8.6" cy="15" rx="2.2" ry="1.4" fill="#ffffff" opacity="0.75" transform="rotate(-24 8.6 15)"/>` +
+      `<ellipse cx="18.6" cy="15" rx="2.2" ry="1.4" fill="#ffffff" opacity="0.75" transform="rotate(-24 18.6 15)"/>` +
+      `<path d="M16 3 L17.2 6 L20 7 L17.2 8 L16 11 L14.8 8 L12 7 L14.8 6 Z" fill="#ffd45e" stroke="#c9a516" stroke-width="1"/>` +
+      close
+    );
+  }
+  if (mode === "cpu") {
+    // 圆角机器人脑袋:天线 + 双眼 + 小嘴
+    return (
+      open +
+      `<line x1="16" y1="4" x2="16" y2="8" stroke="#5b4890" stroke-width="2" stroke-linecap="round"/>` +
+      `<circle cx="16" cy="4" r="2.2" fill="#ffd45e" stroke="#c9a516" stroke-width="1"/>` +
+      `<rect x="7" y="8" width="18" height="16" rx="5" fill="#d9d3f2" stroke="#5b4890" stroke-width="2"/>` +
+      `<rect x="4.4" y="13" width="2.6" height="6" rx="1.3" fill="#8271ab"/>` +
+      `<rect x="25" y="13" width="2.6" height="6" rx="1.3" fill="#8271ab"/>` +
+      `<circle cx="12.5" cy="15" r="2.2" fill="#5b4890"/>` +
+      `<circle cx="19.5" cy="15" r="2.2" fill="#5b4890"/>` +
+      `<rect x="12" y="19.5" width="8" height="2.2" rx="1.1" fill="#8271ab"/>` +
+      `<ellipse cx="10.5" cy="10.6" rx="2.4" ry="1.2" fill="#ffffff" opacity="0.7" transform="rotate(-20 10.5 10.6)"/>` +
+      close
+    );
+  }
+  if (mode === "tower") {
+    // 两层翘檐小塔 + 顶旗
+    return (
+      open +
+      `<line x1="16" y1="2" x2="16" y2="6" stroke="#a34063" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<path d="M16 2 L21 3.4 L16 4.8 Z" fill="#ffd45e" stroke="#c9a516" stroke-width="0.8"/>` +
+      `<path d="M8 11 Q9 10.4 10 8.6 L22 8.6 Q23 10.4 24 11 Q20 9.8 16 9.8 Q12 9.8 8 11 Z" fill="#d16289" stroke="#a34063" stroke-width="1.6"/>` +
+      `<rect x="12" y="10.5" width="8" height="5" fill="#fff4e6" stroke="#c98a4a" stroke-width="1.4"/>` +
+      `<path d="M5 19 Q6.4 18.2 8 15.8 L24 15.8 Q25.6 18.2 27 19 Q21.5 17.6 16 17.6 Q10.5 17.6 5 19 Z" fill="#d16289" stroke="#a34063" stroke-width="1.6"/>` +
+      `<rect x="9.5" y="18.5" width="13" height="8" fill="#fff4e6" stroke="#c98a4a" stroke-width="1.4"/>` +
+      `<rect x="14" y="21.5" width="4" height="5" rx="1.6" fill="#c98a4a"/>` +
+      `<rect x="6" y="26.5" width="20" height="3" rx="1.5" fill="#e8d8c4" stroke="#c98a4a" stroke-width="1.2"/>` +
+      close
+    );
+  }
+  if (mode === "endless") {
+    // 双层小火苗(暖橙渐变 + 内焰 + 高光点),只作「连胜不断」的热度隐喻
+    return (
+      open +
+      `<defs><linearGradient id="fkFlameG" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" stop-color="#ffb27a"/><stop offset="1" stop-color="#ef8149"/>` +
+      `</linearGradient></defs>` +
+      `<path d="M16 3 C21 9 25 12.5 25 19 A 9 8.6 0 0 1 7 19 C7 12.5 11 9 16 3 Z" fill="url(#fkFlameG)" stroke="#c05b2a" stroke-width="2"/>` +
+      `<path d="M16 11 C19 14.5 21 16.4 21 20 A 5 4.8 0 0 1 11 20 C11 16.4 13 14.5 16 11 Z" fill="#ffe08a"/>` +
+      `<circle cx="12.4" cy="12.6" r="1.4" fill="#ffffff" opacity="0.85"/>` +
+      close
+    );
+  }
+  // training:学士帽 + 金穗
+  return (
+    open +
+    `<path d="M16 6 L29 12 L16 18 L3 12 Z" fill="#5b4890" stroke="#3c2a6b" stroke-width="1.8"/>` +
+    `<path d="M10 15.5 V21 A 6 4.6 0 0 0 22 21 V15.5 L16 18.3 Z" fill="#6b56a0" stroke="#3c2a6b" stroke-width="1.6"/>` +
+    `<line x1="26" y1="13.4" x2="26" y2="21" stroke="#c9a516" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<circle cx="26" cy="22.6" r="2" fill="#ffd45e" stroke="#c9a516" stroke-width="1"/>` +
+    `<line x1="8" y1="10.6" x2="14.5" y2="7.6" stroke="#ffffff" stroke-width="1.4" opacity="0.55" stroke-linecap="round"/>` +
+    close
+  );
+}

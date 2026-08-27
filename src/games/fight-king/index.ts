@@ -101,6 +101,7 @@ import {
   stageThemeOf,
   superCutDuration,
   superFlashAlpha,
+  modeIconSVG,
   type FighterFrame,
   type SparkGrade
 } from "./art";
@@ -163,7 +164,9 @@ const CSS = `
 .fk-mode{border:none;border-radius:18px;padding:14px;text-align:left;cursor:pointer;font-family:inherit;
   background:#fff;box-shadow:0 4px 0 rgba(130,105,180,.22);display:flex;gap:10px;align-items:flex-start;}
 .fk-mode:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(130,105,180,.22);}
-.fk-mode-emoji{font-size:26px;line-height:1;}
+.fk-mode-emoji{font-size:26px;line-height:1;flex:0 0 auto;}
+.fk-mode-emoji svg{display:block;}
+.fk-h svg{vertical-align:-4px;}
 .fk-mode-t{font-size:16px;font-weight:900;color:#5b4890;}
 .fk-mode-d{font-size:14px;font-weight:700;color:#8271ab;line-height:1.55;margin-top:3px;}
 .fk-btn{border:none;border-radius:14px;padding:9px 15px;font-size:15px;font-weight:800;cursor:pointer;
@@ -721,7 +724,9 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   const trainLive = el("div", "fk-live");
   const dummyHint = el("div", "fk-train-hint");
   if (o.training) {
-    const h = el("div", "fk-h", "🎓 训练场");
+    // 标题图标画制(visual-r2 修遗留#5):与菜单模式卡同一枚学士帽 SVG
+    const h = el("div", "fk-h");
+    h.innerHTML = `${modeIconSVG("training", 20)}<span> 训练场</span>`;
 
     // 假人三选一：站立 / 蹲防 / 随机反击
     const modeRow = el("div", "fk-train-modes");
@@ -1720,7 +1725,8 @@ export function mount(api: GameApi): { destroy: () => void } {
         if (m.mode === "tower") showTower();
         else showSelect(m.mode);
       });
-      b.innerHTML = `<span class="fk-mode-emoji">${m.emoji}</span>
+      // 模式图标画制(visual-r2 修遗留#5):emoji 换 SVG 小图标,与画制头像同屏零代差
+      b.innerHTML = `<span class="fk-mode-emoji">${modeIconSVG(m.mode)}</span>
         <span><span class="fk-mode-t">${m.title}</span><span class="fk-mode-d">${m.desc}</span></span>`;
       modes.appendChild(b);
     }
@@ -1755,7 +1761,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       })
     );
     const modeCard = MODE_CARDS.find((m) => m.mode === mode);
-    bar.appendChild(el("span", "fk-h", `${modeCard?.emoji ?? ""} ${modeCard?.title ?? ""}`));
+    // 标题图标画制(visual-r2 修遗留#5):与模式卡同一枚 SVG,不再 emoji 前缀
+    const modeH = el("span", "fk-h");
+    modeH.innerHTML = `${modeIconSVG(mode, 20)}<span> ${escapeHtml(modeCard?.title ?? "")}</span>`;
+    bar.appendChild(modeH);
     card.appendChild(bar);
 
     const picks = el("div", "fk-picks");
