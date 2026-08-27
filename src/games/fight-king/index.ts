@@ -182,7 +182,7 @@ const CSS = `
   display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
 .fk-ch:active{transform:translateY(1px);}
 .fk-ch-a{width:28px;height:28px;flex:0 0 auto;}
-.fk-ch-n{font-size:12px;font-weight:900;color:#5b4890;}
+.fk-ch-n{font-size:14px;font-weight:900;color:#5b4890;}
 .fk-ch-on{outline:3px solid #e0679f;background:#fff;}
 /* 连着几场没赢下来才写字,平时是空的,所以不占地方 */
 .fk-swap{font-size:14px;font-weight:800;color:#a3568a;line-height:1.6;margin-top:8px;}
@@ -199,7 +199,7 @@ const CSS = `
 .fk-side-r .fk-nrow{flex-direction:row-reverse;}
 .fk-ava{width:24px;height:24px;border-radius:50%;flex:0 0 auto;
   box-shadow:0 1px 3px rgba(90,70,120,.3);background:#fff;}
-.fk-name{font-size:12.5px;font-weight:900;color:#4a3a68;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+.fk-name{font-size:14px;font-weight:900;color:#4a3a68;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   text-shadow:0 1px 0 rgba(255,255,255,.9);min-width:0;}
 .fk-vig{height:13px;border-radius:999px;background:#ffffffcc;overflow:hidden;box-shadow:inset 0 1px 3px rgba(90,70,120,.25);}
 .fk-vig-in{height:100%;border-radius:999px;background:linear-gradient(180deg,#7fd6a0,#48b57c);
@@ -215,7 +215,7 @@ const CSS = `
 .fk-side-r .fk-pips{margin-left:auto;}
 .fk-clock{width:74px;text-align:center;flex:0 0 auto;}
 .fk-clock-t{font-size:21px;font-weight:900;color:#4a3a68;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.9);}
-.fk-clock-r{font-size:12px;font-weight:800;color:#7b6aa0;}
+.fk-clock-r{font-size:14px;font-weight:800;color:#7b6aa0;}
 .fk-banner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:6px;pointer-events:none;text-align:center;padding:14px;}
 .fk-banner-big{font-size:30px;font-weight:900;color:#c8497f;text-shadow:0 2px 0 #fff,0 4px 10px rgba(200,73,127,.3);}
@@ -244,7 +244,7 @@ const CSS = `
 .fk-padbtn-g{background:#d8f2e4;color:#2f7a56;box-shadow:0 3px 0 rgba(80,160,120,.35);}
 .fk-padbtn-g:active{box-shadow:0 1px 0 rgba(80,160,120,.35);}
 .fk-padbtn-ready{outline:3px solid #e0679f;}
-.fk-pad-name{font-size:12px;font-weight:900;color:#7b6aa0;text-align:center;}
+.fk-pad-name{font-size:14px;font-weight:900;color:#7b6aa0;text-align:center;}
 /* 连段计数是 HUD 里的独立一行 DOM，永远不会被元气条压住 */
 .fk-comborow{display:flex;justify-content:space-between;gap:8px;margin-top:4px;height:20px;}
 .fk-combo{font-size:15px;font-weight:900;color:#c8497f;text-shadow:0 1px 0 #fff,0 0 4px #fff;min-width:0;
@@ -254,7 +254,7 @@ const CSS = `
 .fk-train-hint{font-size:14px;font-weight:700;color:#8271ab;line-height:1.6;margin-bottom:4px;}
 .fk-live b{color:#c8497f;}
 .fk-hidden{display:none !important;}
-.fk-fd{width:100%;border-collapse:collapse;font-size:12px;}
+.fk-fd{width:100%;border-collapse:collapse;font-size:14px;}
 .fk-fd th,.fk-fd td{padding:4px 5px;text-align:center;border-bottom:1px solid #efe9fa;}
 .fk-fd th{color:#8271ab;font-weight:800;}
 .fk-fd td{font-weight:800;color:#5b4890;}
@@ -277,9 +277,8 @@ const CSS = `
   .fk-clock-t{font-size:18px;}
   .fk-combo{font-size:14px;}
 }
-/* 360px：名字缩到两个字 + 省略号，HUD 说什么也不许被顶出屏幕 */
+/* 360px：名字由 JS 缩到 3 字 + 省略号兜底，字号守住宪法 14px 下限，HUD 说什么也不许被顶出屏幕 */
 @media (max-width:380px){
-  .fk-name{font-size:12px;}
   .fk-hud{padding:6px 6px 0;}
   .fk-stick{width:66px;height:66px;}
 }
