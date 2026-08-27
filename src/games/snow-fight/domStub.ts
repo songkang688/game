@@ -308,7 +308,7 @@ export interface Harness {
   restore: () => void;
 }
 
-export function install(opts: { innerWidth?: number; search?: string } = {}): Harness {
+export function install(opts: { innerWidth?: number; innerHeight?: number; search?: string } = {}): Harness {
   const g = globalThis as Record<string, unknown>;
   const saved = {
     document: g.document,
@@ -333,7 +333,7 @@ export function install(opts: { innerWidth?: number; search?: string } = {}): Ha
   const media = (): { matches: boolean } => ({ matches: false });
   const win = {
     innerWidth: opts.innerWidth ?? 360,
-    innerHeight: 720,
+    innerHeight: opts.innerHeight ?? 720,
     navigator: { hardwareConcurrency: 8 },
     devicePixelRatio: 2,
     addEventListener(type: string, fn: Handler): void {

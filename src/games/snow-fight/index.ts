@@ -83,6 +83,18 @@ const VIEW_H = 14;
 const GROUND_PAD = 18;
 /** 手机上画面矮得看不清抛物线,至少给它这么多像素高 */
 const MIN_BOARD_H = 156;
+/**
+ * 竖向最多拉伸几倍。
+ *
+ * 场地是 60 个单位宽、14 个单位高的一条横带,按原比例画在手机上只有八九十像素高,
+ * 抛物线整个挤成一条线。竖向单独拉一把,雪球该落在哪儿一点没变(判定始终按世界坐标),
+ * 只是把这条弧线撑开到看得清。拉过 2.6 倍人就开始变竹竿了,到此为止。
+ */
+const MAX_STRETCH = 2.6;
+/** 画布底下那几行之间的缝隙(量高度量不到 flex 的 gap,按样式表折算) */
+const BELOW_PAD = 26;
+/** 旁白按两行预留:出事的时候它会从一行涨到两行,不预留就会把按钮顶下去 */
+const SAY_RESERVE = 42;
 /** 一帧最多推进多少秒(切后台回来别一口气跳过半局) */
 const MAX_DT = 0.05;
 
@@ -99,6 +111,8 @@ const CSS = `
 .snf-chip-p0{background:#fff0f6;color:#b8436f;}
 .snf-chip-p1{background:#e6f0ff;color:#2f5fa8;}
 .snf-chip-warn{background:#fff3e2;color:#a4642a;}
+/* 模式标题会长到一行放不下(人机那三档还带一句介绍),这一类得让它换行 */
+.snf-chip-wide{white-space:normal;max-width:100%;line-height:1.45;text-align:center;}
 .snf-board{position:relative;line-height:0;width:100%;display:flex;justify-content:center;}
 .snf-canvas{display:block;border-radius:14px;background:#dceaf8;touch-action:none;
   box-shadow:0 4px 14px rgba(110,140,180,.3);}
@@ -122,11 +136,18 @@ const CSS = `
 .snf-btn-throw{background:#ffdbe6;color:#a83a68;box-shadow:0 3px 0 rgba(200,110,150,.42);min-width:104px;}
 .snf-btn-scoop{background:#eef6ff;color:#3a6ba8;box-shadow:0 3px 0 rgba(110,150,200,.42);min-width:88px;}
 .snf-btn:focus-visible,.snf-act:focus-visible,.snf-open:focus-visible,.snf-back:focus-visible{outline:3px solid #2a3f6b;outline-offset:3px;}
+.snf-pausefab{position:absolute;top:6px;right:6px;z-index:2;border:none;border-radius:999px;
+  min-width:44px;min-height:44px;font-size:18px;line-height:1;cursor:pointer;font-family:inherit;
+  background:#ffffffdd;color:#4f6a9c;box-shadow:0 2px 6px rgba(110,140,180,.4);}
+.snf-pausefab:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,180,.3);}
+.snf-pausefab:focus-visible{outline:3px solid #2a3f6b;outline-offset:3px;}
 .snf-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .snf-act{border:none;border-radius:999px;padding:11px 16px;min-height:44px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#4f6a9c;box-shadow:0 3px 0 rgba(110,140,180,.26);white-space:nowrap;}
 .snf-act:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,180,.26);}
 .snf-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
+/* display:flex 会盖掉浏览器给 [hidden] 的 display:none,收起来就得自己补这一条 */
+.snf-bar[hidden]{display:none;}
 .snf-open{border:none;border-radius:999px;padding:11px 16px;min-height:44px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7fb2e0,#5b8ec4);box-shadow:0 4px 0 #43709e;}
 .snf-open.snf-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
@@ -139,11 +160,13 @@ const CSS = `
   font-family:inherit;background:#ffffffdd;color:#52698c;box-shadow:0 3px 0 rgba(110,140,180,.3);}
 .snf-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,180,.3);}
 @media (max-width:420px){
+  .snf-wrap{gap:6px;}
   .snf-btn{min-width:44px;min-height:44px;font-size:15px;padding:2px 6px;}
   .snf-btn-throw{min-width:92px;}
   .snf-btn-scoop{min-width:80px;}
   .snf-pads{gap:6px;}
-  .snf-pad{padding:4px 6px;}
+  .snf-pad{padding:4px 6px;gap:4px;}
+  .snf-tip{line-height:1.4;}
   .snf-open{padding:10px 12px;font-size:14px;}
   .snf-bar{gap:6px;margin-bottom:4px;}
   .snf-chip{padding:4px 9px;font-size:14px;}
@@ -703,17 +726,16 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   const tip = document.createElement("div");
   tip.className = "snf-tip";
   tip.textContent = opts.hint;
-  const acts = document.createElement("div");
-  acts.className = "snf-acts";
   const pads = document.createElement("div");
   pads.className = "snf-pads";
-  wrap.append(hud, board, say, tip, acts, pads);
+  wrap.append(hud, board, say, tip, pads);
   host.appendChild(wrap);
 
   const held: Held[] = [noHold(), noHold()];
   const puffs: Puff[] = [];
   let paused = false;
   let finished = false;
+  let settled = false;
   let raf = 0;
   let last = 0;
   let clock = 0;
@@ -721,18 +743,54 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   let cam: Camera = { s: 8, ys: 1, h: 128 };
   let cssW = 320;
 
+  // 暂停贴在画布右上角:手机上一横排按钮就得吃掉五十多像素,那点高度留给雪原
   const pauseBtn = document.createElement("button");
   pauseBtn.type = "button";
-  pauseBtn.className = "snf-act";
-  pauseBtn.textContent = "⏸️ 暂停 (Esc)";
-  acts.appendChild(pauseBtn);
+  pauseBtn.className = "snf-pausefab";
+  pauseBtn.textContent = "⏸️";
+  pauseBtn.title = "暂停 (Esc)";
+  pauseBtn.setAttribute("aria-label", "暂停 (Esc)");
+  board.appendChild(pauseBtn);
 
+  /** 这一屏有多高。手机地址栏会吃掉一截,`visualViewport` 量的才是真正看得见的那块 */
+  function screenH(): number {
+    const vv = (window as { visualViewport?: { height?: number } }).visualViewport;
+    return Math.round(vv?.height ?? window.innerHeight ?? 0);
+  }
+
+  function boxOf(el: HTMLElement): { top: number; height: number } {
+    const r = el.getBoundingClientRect?.();
+    if (!r) return { top: 0, height: el.offsetHeight || 0 };
+    return { top: r.top, height: r.height || el.offsetHeight || 0 };
+  }
+
+  /** 画布还能占这一屏的多少像素(量不到就给 null,让排版退回「按比例画」) */
+  function boardRoom(): number | null {
+    const screen = screenH();
+    const top = boxOf(board).top;
+    if (screen <= 0 || top <= 0 || top >= screen) return null;
+    const below =
+      Math.max(boxOf(say).height, SAY_RESERVE) + boxOf(tip).height + boxOf(pads).height + BELOW_PAD;
+    return screen - top - below;
+  }
+
+  /**
+   * 排版。
+   *
+   * 横向好办:有多宽画多宽。麻烦的是竖向——手机上画布上面顶着平台的标题栏和选关条,
+   * 下面还得放旁白与两排按钮,不量一量就会把按钮挤到屏幕外面(挤出去的按钮点都点不到,
+   * 这一关就直接没法玩了)。所以先问「这一屏从画布顶上到底下还剩多少」,
+   * 减掉下面那几行的实测高度,剩下的全给雪原,再按 `MAX_STRETCH` 封顶。
+   */
   function layout(): void {
     const availW = Math.max(240, (host.clientWidth || 340) - 8);
     const maxW = Math.min(availW, 880);
     const s = maxW / opts.viewW;
-    const ys = Math.max(1, Math.min(2, MIN_BOARD_H / (VIEW_H * s)));
-    cam = { s, ys, h: Math.round(VIEW_H * s * ys) };
+    const flat = VIEW_H * s;
+    const room = boardRoom();
+    const want = room === null ? Math.max(MIN_BOARD_H, flat * 2) : Math.max(MIN_BOARD_H, room - GROUND_PAD);
+    const ys = Math.max(1, Math.min(MAX_STRETCH, want / flat));
+    cam = { s, ys, h: Math.round(flat * ys) };
     cssW = Math.round(opts.viewW * s);
     const cssH = cam.h + GROUND_PAD;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
@@ -833,6 +891,11 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
 
   function frame(now: number): void {
     raf = requestAnimationFrame(frame);
+    // 头一帧再量一次:挂上去的那一瞬间浏览器还没排完版,量到的高度不作数
+    if (!settled) {
+      settled = true;
+      layout();
+    }
     if (last === 0) last = now;
     const dt = Math.min(MAX_DT, Math.max(0, (now - last) / 1000));
     last = now;
@@ -1022,7 +1085,11 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const th = makeBtn("❄️ 按住蓄力", `${P_NAME[seat]}按住蓄力,松手扔出去`, "snf-btn-throw");
     bindHold(th, seat, "charge");
     row2.append(sc, th);
-    box.append(name, row1, row2);
+    // 一个人玩的时候不写名字那一行:HUD 上本来就有 🌸,键位在提示行里,
+    // 省下来的二十几像素全给画布——手机上这一行的有无就是「按钮进不进得了屏幕」
+    if (opts.humans === 2) box.append(name, row1, row2);
+    else box.append(row1, row2);
+    box.title = `${P_NAME[seat]}:${P_KEYS[seat]}`;
     return box;
   }
 
@@ -1063,8 +1130,10 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   window.addEventListener("blur", releaseAll);
   window.addEventListener("resize", onResize);
 
-  layout();
+  // HUD 先填上再排版:HUD 是空的时候画布会误以为自己头顶还空着一片,
+  // 量出来的高度就会大一圈,把下面那两排按钮顶出屏幕
   refreshHud();
+  layout();
   raf = requestAnimationFrame(frame);
 
   return {
@@ -1177,7 +1246,7 @@ function mountDuel(host: HTMLElement, api: GameApi, back: () => void, ai: AiLeve
   backBtn.className = "snf-back";
   backBtn.textContent = "← 回选关";
   const title = document.createElement("span");
-  title.className = "snf-chip";
+  title.className = "snf-chip snf-chip-wide";
   title.textContent = ai ? `🤖 人机对战 · ${aiTitle(ai)}` : "⚔️ 双人对战 · 先砸化对面三盏雪灯笼";
   head.append(backBtn, title);
   const stage = document.createElement("div");
@@ -1262,7 +1331,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
   backBtn.className = "snf-back";
   backBtn.textContent = "← 回选关";
   const title = document.createElement("span");
-  title.className = "snf-chip";
+  title.className = "snf-chip snf-chip-wide";
   title.textContent = "♾️ 无尽雪季 · 一波比一波准";
   head.append(backBtn, title);
   const stage = document.createElement("div");
@@ -1420,12 +1489,29 @@ export function mount(api: GameApi): SnowFightHandle {
   }
   refreshBar();
 
+  /**
+   * 玩关卡的时候把模式条收起来。
+   *
+   * 那五个入口在手机上占两行九十多像素,而它们只有在选关地图上才用得着。
+   * 关卡打开时收起、退回地图时放回来——这九十像素直接变成雪原的高度。
+   */
+  function playLevelHere(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
+    bar.hidden = true;
+    const inner = playLevel(stage, ctx);
+    return {
+      destroy() {
+        if (!mode && !direct) bar.hidden = false;
+        inner.destroy?.();
+      },
+    };
+  }
+
   const level = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      playLevel: playLevelHere,
       mapHint: "落点圈套住靶子再松手。手里最多三颗,蹲下搓 0.6 秒一颗——蹲着最安全,但蹲着扔不出去。",
       grandMessage: `${LEVEL_TOTAL} 关全部打完,躲、搓、投三拍子你都拿捏住了,你就是雪原上的投手!`,
       guide,
@@ -1463,7 +1549,7 @@ export function mount(api: GameApi): SnowFightHandle {
       closeMode();
     });
     const label = document.createElement("span");
-    label.className = "snf-chip";
+    label.className = "snf-chip snf-chip-wide";
     label.textContent = `${ch.emoji} ${ch.name} · 第 ${i + 1} 关`;
     topbar.append(backBtn, label);
     // 跳关:壳层没注册 requestSkip 就不挂按钮,单测环境保持干净

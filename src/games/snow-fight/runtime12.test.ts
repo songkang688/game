@@ -265,12 +265,57 @@ describe("snow-fight 1.2 运行时 · 手机 360px", () => {
     const taps: number[] = [];
     for (const rule of css.split("}")) {
       const head = rule.split("{")[0] ?? "";
-      if (!/snf-(btn|act|open|back)/.test(head)) continue;
+      if (!/snf-(btn|act|open|back|pausefab)/.test(head)) continue;
       for (const m of rule.matchAll(/min-(?:width|height):(\d+(?:\.\d+)?)px/g)) taps.push(Number(m[1]));
     }
     expect(taps.length).toBeGreaterThan(4);
     expect(Math.min(...taps)).toBeGreaterThanOrEqual(44);
     bout.destroy();
+  });
+
+  /**
+   * 手机上真正会要命的一条:画布上面顶着平台标题栏和选关条,下面还得放旁白与两排按钮。
+   * 谁也不让谁的话,按钮就被挤到屏幕外面——点都点不到,这一局直接没法玩。
+   * 所以画布高度必须是量出来的:这一屏还剩多少,就画多高。
+   */
+  /** 真机量出来的样子:画布顶在 282px(平台头 88 + 选关条 116 + HUD 62 与缝隙) */
+  const BELOW = { say: 21, tip: 42, pads: 102 };
+
+  async function boardHeightOn(innerHeight: number, top = 282): Promise<number> {
+    const h = (harness = install({ innerWidth: 375, innerHeight }));
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    findOne(h.root, "snf-board")!.rect = { left: 0, top, width: 360, height: 0 };
+    findOne(h.root, "snf-say")!.rect = { left: 0, top: 0, width: 360, height: BELOW.say };
+    findOne(h.root, "snf-tip")!.rect = { left: 0, top: 0, width: 360, height: BELOW.tip };
+    findOne(h.root, "snf-pads")!.rect = { left: 0, top: 0, width: 360, height: BELOW.pads };
+    h.fireWindow("resize");
+    h.flush(1);
+    const got = Number.parseFloat(canvasOf(h).style.height);
+    bout.destroy();
+    h.restore();
+    harness = null;
+    return got;
+  }
+
+  it("按钮不许被挤出屏幕:画布下面那几行加起来还在这一屏里", async () => {
+    for (const screen of [667, 720, 812]) {
+      const boardH = await boardHeightOn(screen);
+      const bottom = 282 + boardH + BELOW.say + BELOW.tip + BELOW.pads;
+      expect(bottom, `${screen} 高的屏上排到了 ${bottom}`).toBeLessThanOrEqual(screen);
+    }
+  });
+
+  it("屏幕越高雪原画得越高,再挤也不低于最小高度、再宽松也不会拉成竹竿", async () => {
+    const squashed = await boardHeightOn(600);
+    const short = await boardHeightOn(700);
+    const tall = await boardHeightOn(880);
+    expect(tall).toBeGreaterThan(short);
+    expect(short).toBeGreaterThan(squashed);
+    // 再挤也得看得清抛物线
+    expect(squashed).toBeGreaterThanOrEqual(156);
+    // 拉得再高也有个谱:竖向不会拉到人变竹竿
+    expect(tall).toBeLessThan(14 * (352 / VIEW_W) * 2.7 + 20);
   });
 });
 
@@ -375,6 +420,22 @@ describe("snow-fight 1.2 · 平台接线", () => {
     expect(text).toContain("会算风");
     expect(text).toContain("无尽雪季");
     expect(findAll(h.root, "snf-open").length).toBe(5);
+  });
+
+  it("开打就把模式条收起来:那两行按钮只有在选关地图上才用得着", async () => {
+    const h = (harness = install());
+    const { game } = await mountGame(h);
+    h.flush(2);
+    const bar = findOne(h.root, "snf-bar");
+    expect(bar!.hidden).toBe(false);
+    game.openCampaignLevel(7);
+    h.flush(2);
+    expect(bar!.hidden).toBe(true);
+    // 退回地图它就回来
+    findButton(h.root, "选关地图")!.fire("click");
+    h.flush(2);
+    expect(bar!.hidden).toBe(false);
+    game.destroy();
   });
 
   it("openCampaignLevel(n) 直达第 N 关,越界夹回 1..188", async () => {
