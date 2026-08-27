@@ -56,7 +56,10 @@ export function collectErrors(page) {
 export async function seedProgress(page, ids, levels = 188) {
   await page.evaluate(
     (gameIds, total) => {
+      // 最后一关故意留成 0 星:这样 furthestPlayable 停在第 188 关(点得开、不上锁),
+      // 又不会触发「全 188 关通关」的平台大结算弹窗——那个弹窗一冒出来就会盖住后面几轮走查。
       const full = new Array(total).fill(3);
+      full[total - 1] = 0;
       for (const id of gameIds) {
         localStorage.setItem(`yiduo-yixing.l99.${id}`, JSON.stringify(full));
       }
@@ -113,11 +116,19 @@ export async function openFromHome(page, { id, title }) {
   return { entry: stage === "ok" ? "ok" : stage, hash };
 }
 
+/**
+ * 重新挂载某一款。注意必须先回首页再进去:hash 没变化就不会触发 hashchange,
+ * 游戏根本不会重挂,上一局残留的弹窗会一直盖在那儿(第 1 轮踩过这个坑)。
+ */
 export async function gotoGame(page, id) {
+  await page.evaluate(() => {
+    location.hash = "";
+  });
+  await sleep(420);
   await page.evaluate((gid) => {
     location.hash = `#/game/${gid}`;
   }, id);
-  await sleep(1200);
+  await sleep(1250);
   return stageState(page);
 }
 
@@ -181,8 +192,9 @@ export async function clickButtonByText(page, text, { exact = false } = {}) {
  *  2. 188 关框架 level99.ts -> `.l99-overlay`,标题「第 N 关过关！」/「就差一点点！」;
  *  3. 各游戏自己的模式结算面板 -> 舞台内 class 里带 overlay/result/settle/over 的块。
  */
-export const WIN_WORDS = ["过关", "获胜", "赢", "胜出", "通关", "冠军", "成功", "达标", "守住", "全部消灭"];
-export const LOSE_WORDS = ["就差一点点", "失败", "输", "再试", "没守住", "被追上", "时间到", "没能"];
+// 只留「只可能出现在结算面板上」的词:像「达标」「守住」这种 HUD 里也会写,不能当胜负信号。
+export const WIN_WORDS = ["过关", "获胜", "赢了", "胜出", "通关", "冠军", "你赢", "全部清空"];
+export const LOSE_WORDS = ["就差一点点", "失败", "输了", "没守住", "被追上", "时间到了", "没能守住", "下次一定"];
 
 export async function readResult(page) {
   return page.evaluate(
@@ -219,21 +231,28 @@ export async function readResult(page) {
         if (winWords.some((w) => s.includes(w))) return { kind: "win", src: "game", text: s };
         if (loseWords.some((w) => s.includes(w))) return { kind: "lose", src: "game", text: s };
       }
-      // 4. 兜底:任何带「再玩 / 下一关 / 回地图 / 再试 / 换一局」按钮的可见面板,
-      //    就是这一局的结算面板 —— 各游戏 class 名不统一,只能按语义认。
-      const replayRe = /再玩一次|再来一局|再打一局|下一关|回地图|再试|换一局|返回选择|回模式|重开/;
+      // 4. 兜底:结算面板才有的「再玩一次 / 再来一局 / 下一关 / 再试」按钮。
+      //    注意不能用「回地图」这类常驻返回键当信号 —— 它在关卡里一直都在,
+      //    会把没结算的局面误判成结算(第 1 轮调脚本时真的踩过这个坑)。
+      const replayRe = /再玩一次|再来一局|再打一局|下一关|再试一次|再试本关|换一局|重开一局/;
       for (const btn of stage.querySelectorAll("button")) {
+        if (btn.closest(".l99-stagebar") || btn.closest(".l99-tools") || btn.closest(".l99-map")) continue;
         const bt = clean(btn.textContent);
         if (!bt || !replayRe.test(bt)) continue;
         const r = btn.getBoundingClientRect();
         if (r.width < 8 || r.height < 8) continue;
+        // 必须挂在一块「浮在上面」的面板里(绝对/固定定位),否则就是常驻工具条
         let panel = btn.parentElement;
-        for (let i = 0; i < 4 && panel; i++) {
+        let floating = false;
+        for (let i = 0; i < 5 && panel; i++) {
+          const pos = getComputedStyle(panel).position;
+          if (pos === "absolute" || pos === "fixed") floating = true;
           const pr = panel.getBoundingClientRect();
-          if (pr.width > 120 && pr.height > 80) break;
+          if (floating && pr.width > 120 && pr.height > 80) break;
           panel = panel.parentElement;
         }
-        const s = clean(panel?.textContent);
+        if (!floating || !panel) continue;
+        const s = clean(panel.textContent);
         if (!s) continue;
         if (loseWords.some((w) => s.includes(w))) return { kind: "lose", src: "panel", text: s };
         if (winWords.some((w) => s.includes(w))) return { kind: "win", src: "panel", text: s };
@@ -246,7 +265,7 @@ export async function readResult(page) {
   );
 }
 
-/** 关掉结算面板:l99 有 700ms 冷静期,所以先等再点「回地图」;别的用 Esc */
+/** 关掉结算面板:l99 有 700ms 冷静期,所以先等再点「回地图」;平台弹窗点它自己的按钮 */
 export async function dismissResult(page) {
   const hasL99 = await page.$(".l99-overlay");
   if (hasL99) {
@@ -258,13 +277,22 @@ export async function dismissResult(page) {
       hit.click();
       return true;
     });
-    if (back) {
-      await sleep(500);
-      return;
-    }
+    if (back) await sleep(500);
   }
-  await page.keyboard.press("Escape").catch(() => {});
-  await sleep(300);
+  // 平台结算弹窗:Esc 关不掉的话点它自己的按钮
+  for (let i = 0; i < 3; i++) {
+    const still = await page.$(".result-content");
+    if (!still) break;
+    await page.keyboard.press("Escape").catch(() => {});
+    await sleep(250);
+    await page.evaluate(() => {
+      const btn = [...document.querySelectorAll(".overlay button, .result-content button")].find((b) =>
+        /回首页|回大厅|关闭|好的|收下/.test(b.textContent ?? "")
+      );
+      if (btn instanceof HTMLElement) btn.click();
+    });
+    await sleep(300);
+  }
 }
 
 /** l99 结算后点「下一关」,拿来连打好几关 */

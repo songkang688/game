@@ -787,6 +787,67 @@ describe("tank-battle", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 交叉复核:浏览器层「第 1 关摆烂也弹了胜利面板」的几款,拿逻辑层再验一次
+// ---------------------------------------------------------------------------
+describe("第 1 关摆烂对照", () => {
+  it("一个输入都不给,第 1 关到底会不会自己赢", async () => {
+    const r = row("(摆烂对照·第1关)");
+    const out: string[] = [];
+
+    {
+      const { buildLevel } = await import("../../src/games/prince-princess/levels");
+      const { createWorld, stepWorld } = await import("../../src/games/prince-princess/logic");
+      const w = createWorld(buildLevel(0), 2);
+      let steps = 0;
+      while (w.status === "playing" && steps < 60 * 240) {
+        stepWorld(w, 1 / 60, w.heroes.map(() => ({}) as never));
+        steps++;
+      }
+      out.push(`prince-princess 第1关不动 ${steps} 步 → ${w.status}`);
+    }
+    {
+      const { buildLevel } = await import("../../src/games/puff-bros/arena");
+      const { createWorld, stepWorld } = await import("../../src/games/puff-bros/logic");
+      const def = buildLevel(0);
+      const w = createWorld(def, { players: 1 });
+      let steps = 0;
+      while (w.status === "playing" && steps < Math.ceil((def.timeLimit + 5) * 60)) {
+        stepWorld(w, 1 / 60, w.players.map(() => ({}) as never));
+        steps++;
+      }
+      out.push(`puff-bros 第1关不动 ${steps} 步 → ${w.status}`);
+    }
+    {
+      const { buildLevel } = await import("../../src/games/bumper-cars/levels");
+      const logic = await import("../../src/games/bumper-cars/logic");
+      const lv = buildLevel(0);
+      const cars = [
+        logic.makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
+        ...lv.foes.map((foe, i) => {
+          const spot = lv.foeSpawns[i] ?? lv.foeSpawns[0] ?? lv.spawn;
+          return logic.makeCar({ id: i + 1, name: foe.name, emoji: foe.emoji, color: foe.color, team: 1, x: spot.x, y: spot.y, lives: foe.lives, mass: foe.mass, r: foe.r, ai: true });
+        }),
+      ];
+      const w = logic.createWorld({
+        field: lv.field, cars, pads: lv.pads, hazards: lv.hazards, spinners: lv.spinners,
+        slicks: lv.slicks, limit: lv.seconds > 0 ? lv.seconds * 1000 : 0, keep: lv.keep, seed: lv.seed,
+      });
+      for (let t = 0; t < lv.seconds * 1000; t += 16) {
+        if (logic.levelCleared(w) || logic.playerDown(w)) break;
+        logic.stepWorld(w, 16, w.cars.map(() => logic.IDLE));
+        w.events.length = 0;
+      }
+      out.push(`bumper-cars 第1关全体不动 → 清场=${logic.levelCleared(w)}、玩家出局=${logic.playerDown(w)}`);
+    }
+    r.notes.push(out.join(" | "));
+    r.win = false;
+    r.lose = out.some((s) => /lost|出局=true/.test(s));
+    r.endless = "-";
+    expect(rows.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 15-A 泡泡炸弹人
 // ---------------------------------------------------------------------------
 describe("bomb-buddies", () => {
