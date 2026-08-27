@@ -32,7 +32,9 @@ import {
   type Dom,
   type El,
 } from "./domStub";
+import GUIDE from "./guide";
 import { buildLevel, loseLine, winLine } from "./levels";
+import { meta } from "./meta";
 import { fromSan } from "./moves";
 import { boardOrder, createBoard } from "./view";
 
@@ -438,6 +440,65 @@ describe("R2-PA-5 · 残局连胜的收场话", () => {
       expect(line.includes(bad), `收场话里出现了「${bad}」`).toBe(false);
     }
     handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 第 2 轮测试员 PA-CG-4 · 上屏文案里的「死」                             */
+/* ------------------------------------------------------------------ */
+
+describe("第 2 轮 PA-CG-4 · 上屏文案不出现死亡说法", () => {
+  /** 上屏禁用词。「将杀」是这一款一直在用的术语，所以拦的是「死」不是「杀」 */
+  const BANNED = ["死", "血", "尸", "阵亡", "牺牲", "残忍"];
+
+  function clean(where: string, text: string): void {
+    for (const bad of BANNED) {
+      expect(text.includes(bad) ? `${where} 里出现了「${bad}」：${text}` : "干净").toBe("干净");
+    }
+  }
+
+  it("卡片与整本攻略都干净，「死角」不许再回来", () => {
+    clean("meta.title", meta.title);
+    clean("meta.blurb", meta.blurb);
+    expect(meta.blurb).not.toContain("死角");
+    const lines = [GUIDE.title, ...GUIDE.general, ...GUIDE.entries.flatMap((e) => [e.title, ...e.tips])];
+    expect(lines.length).toBeGreaterThan(20);
+    for (const [i, text] of lines.entries()) clean(`攻略第 ${i + 1} 句`, text);
+  });
+
+  it("188 关的标题、提示、过关语、鼓励语一句一句扫过去", () => {
+    for (let i = 0; i < 188; i++) {
+      const spec = buildLevel(i);
+      clean(`第 ${i + 1} 关标题`, spec.title);
+      clean(`第 ${i + 1} 关提示`, spec.hint);
+      for (const stars of [1, 2, 3]) clean(`第 ${i + 1} 关过关语`, winLine(spec, stars));
+      clean(`第 ${i + 1} 关鼓励语`, loseLine(spec));
+    }
+  });
+
+  it("源码里的中文字面量也扫一遍：注释放过，会上屏的字符串一个都不放过", () => {
+    const dir = fileURLToPath(new URL(".", import.meta.url));
+    const files = ["index.ts", "view.ts", "levels.ts", "rules.ts", "moves.ts", "guide.ts", "meta.ts", "search.ts"];
+    let scanned = 0;
+    for (const f of files) {
+      const src = readFileSync(dir + f, "utf8")
+        // 先把注释整段抹掉：注释里的「锁死」「写死」是写代码的说法，不上屏
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:"'`])\/\/[^\n]*/g, "$1");
+      for (const m of src.matchAll(/"([^"\n]*)"|`([^`]*)`/g)) {
+        const text = m[1] ?? m[2] ?? "";
+        if (!/[\u4e00-\u9fa5]/.test(text)) continue;
+        scanned++;
+        clean(`${f} 的字面量`, text);
+      }
+    }
+    expect(scanned, "一条中文字面量都没扫到，筛子空转了").toBeGreaterThan(80);
+  });
+
+  it("闯关的目标句与残局连胜的提示语都改成了「将杀」", () => {
+    const src = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    expect(src).toContain("步之内将杀对方");
+    expect(src).toContain("找出来把对方将杀");
   });
 });
 

@@ -179,7 +179,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
 
   const goalText =
     spec.kind === "mate"
-      ? `${Math.ceil(spec.plies / 2)} 步之内将死对方`
+      ? `${Math.ceil(spec.plies / 2)} 步之内将杀对方`
       : spec.kind === "stalemate"
         ? "一步走成逼和"
         : spec.kind === "material"
@@ -409,7 +409,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
       fen: endlessStart(round),
       seats: [DUO, aiSeat(tier)],
       banner: `第 ${round} 局 · 对手 ${AI_LABEL[tier]}`,
-      tip: "白方有赢法，找出来把对方将死。和棋或者输掉，连胜就断了。",
+      tip: "白方有赢法，找出来把对方将杀。和棋或者输掉，连胜就断了。",
       showHints: round <= 3,
       allowResign: true,
       sfx: (n) => api.play(n),

@@ -8,7 +8,7 @@ export const meta = {
   emoji: "♔",
   category: "party" as const,
   color: "#F0E6D8",
-  blurb: "王、后、车、象、马、兵，各有各的走法。记得易位、吃过路兵和升变，把对方的王请进死角。",
+  blurb: "王、后、车、象、马、兵，各有各的走法。记得易位、吃过路兵和升变，把对方的王请进包围圈。",
   // levels.ts 的 CHAPTERS 八章合计 188 关;index.ts 另有人机四档、无尽连胜与双人同屏
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
