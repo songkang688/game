@@ -121,3 +121,16 @@ describe("prince-princess · 修复员 R2 · G4/L-1 + N4 画布 emoji 全量矢�
     expect((drawSrc.match(/fillText\(/g) ?? []).length).toBeLessThanOrEqual(3);
   });
 });
+
+describe("prince-princess · 修复员 R2 · C-1 光照方向归位(B 档一致性点名)", () => {
+  it("visual13 的线性体渐变全部拉斜到左上 45°:不再有『两端同 x』的纵向渐变", () => {
+    const vis = read("visual13.ts");
+    // B 档点名的三处(小怪体 / 铠甲盾 / BOSS 大王冠)+ 本轮新增徽章,一个不许竖回去
+    expect(vis).toContain("createLinearGradient(cx - w * 0.18, top, cx + w * 0.18, bottom)");
+    expect(vis).toContain("createLinearGradient(sx - sw * 0.18, cy - sh * 0.6, sx + sw * 0.18, cy + sh * 0.6)");
+    expect(vis).toContain("createLinearGradient(bx - cw * 0.18, baseY - ch * 1.15, bx + cw * 0.18, baseY)");
+    // 通用防线:createLinearGradient(A, y1, A, y2) 形式(首尾 x 完全相同的字面量)清零
+    const vertical = vis.match(/createLinearGradient\(\s*([^,]+),[^,]+,\s*\1,/g) ?? [];
+    expect(vertical.length).toBe(0);
+  });
+});

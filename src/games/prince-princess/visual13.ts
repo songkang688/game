@@ -405,14 +405,20 @@ function enemyEyes(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
   }
 }
 
-/** 2 停体渐变:顶亮 +16 → 底 -10(左上光源的纵向近似) */
+/**
+ * 2 停体渐变:顶亮 +16 → 底 -10。
+ * 修复员 R2 · C-1(B 档一致性点名):纵向近似拉斜成左上 45° 家规光照 ——
+ * 起点在左上 (cx − w×0.18, top)、终点在右下 (cx + w×0.18, bottom),停点幅度不变。
+ */
 function enemyBodyGrad(
   ctx: CanvasRenderingContext2D,
   color: string,
+  cx: number,
+  w: number,
   top: number,
   bottom: number
 ): CanvasGradient {
-  const grad = ctx.createLinearGradient(0, top, 0, bottom);
+  const grad = ctx.createLinearGradient(cx - w * 0.18, top, cx + w * 0.18, bottom);
   grad.addColorStop(0, shade(color, 16));
   grad.addColorStop(1, shade(color, -10));
   return grad;
@@ -443,7 +449,7 @@ export function drawEnemy(
   ctx.beginPath();
   ctx.ellipse(cx, cy + hh * 0.98, hw * 0.72, hh * 0.16, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = enemyBodyGrad(ctx, color, cy - hh, cy + hh);
+  ctx.fillStyle = enemyBodyGrad(ctx, color, cx, w, cy - hh, cy + hh);
   if (kind === "slime") {
     // 半圆水滴体:圆顶拱 + 底压暗带 + 顶部高光弧
     ctx.beginPath();
@@ -499,7 +505,8 @@ export function drawEnemy(
     const sx = cx + dir * hw * 0.56;
     const sw = hw * 0.52;
     const sh = hh * 0.78;
-    const shieldGrad = ctx.createLinearGradient(0, cy - sh * 0.6, 0, cy + sh * 0.6);
+    // C-1:盾面渐变同样拉斜到左上 45°(起左上、终右下)
+    const shieldGrad = ctx.createLinearGradient(sx - sw * 0.18, cy - sh * 0.6, sx + sw * 0.18, cy + sh * 0.6);
     shieldGrad.addColorStop(0, shade("#C8D4E4", 12));
     shieldGrad.addColorStop(1, shade("#C8D4E4", -10));
     ctx.fillStyle = shieldGrad;
@@ -773,7 +780,8 @@ export function drawBossFigure(
     const cw = rx * 0.5;
     const baseY = cy - ry * 0.92;
     const ch = ry * 0.42;
-    const gold = ctx.createLinearGradient(0, baseY - ch * 1.15, 0, baseY);
+    // C-1:大王冠金渐变拉斜到左上 45°(起左上、终右下)
+    const gold = ctx.createLinearGradient(bx - cw * 0.18, baseY - ch * 1.15, bx + cw * 0.18, baseY);
     gold.addColorStop(0, shade(PP_COLORS.ppGold, 18));
     gold.addColorStop(1, PP_COLORS.ppGold);
     ctx.fillStyle = gold;
@@ -846,8 +854,8 @@ export function drawPadlockBadge(ctx: CanvasRenderingContext2D, cx: number, cy: 
   }
   ctx.stroke();
   ctx.lineCap = "butt";
-  // 锁体:金 2 停(顶亮底沉)圆角方 + 描边
-  const gold = ctx.createLinearGradient(cx, top, cx, top + bh);
+  // 锁体:金 2 停(顶亮底沉)圆角方 + 描边;渐变按 C-1 家规拉斜到左上 45°
+  const gold = ctx.createLinearGradient(cx - bw * 0.18, top, cx + bw * 0.18, top + bh);
   gold.addColorStop(0, shade(PP_COLORS.ppGold, 16));
   gold.addColorStop(1, shade(PP_COLORS.ppGold, -8));
   badgeRect(ctx, cx - bw / 2, top, bw, bh, s * 0.3);
@@ -869,7 +877,7 @@ export function drawPadlockBadge(ctx: CanvasRenderingContext2D, cx: number, cy: 
 export function drawSwordBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
   if (!badgeOk(cx, cy, s)) return;
   // 剑刃:上尖下方的六边形,顶亮底沉
-  const blade = ctx.createLinearGradient(cx, cy - s, cx, cy + s * 0.2);
+  const blade = ctx.createLinearGradient(cx - s * 0.12, cy - s, cx + s * 0.12, cy + s * 0.2);
   blade.addColorStop(0, "#F4F9FF");
   blade.addColorStop(1, "#C9D8EC");
   ctx.fillStyle = blade;
@@ -909,7 +917,7 @@ export function drawSwordBadge(ctx: CanvasRenderingContext2D, cx: number, cy: nu
  */
 export function drawShieldBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number): void {
   if (!badgeOk(cx, cy, s)) return;
-  const body = ctx.createLinearGradient(cx, cy - s * 0.7, cx, cy + s * 0.85);
+  const body = ctx.createLinearGradient(cx - s * 0.25, cy - s * 0.7, cx + s * 0.25, cy + s * 0.85);
   body.addColorStop(0, shade("#7FC7F2", 16));
   body.addColorStop(1, "#7FC7F2");
   ctx.fillStyle = body;
@@ -1002,7 +1010,7 @@ export function drawCrateBadge(ctx: CanvasRenderingContext2D, cx: number, cy: nu
   const side = s * 1.8;
   const x0 = cx - side / 2;
   const y0 = cy - side / 2;
-  const wood = ctx.createLinearGradient(cx, y0, cx, y0 + side);
+  const wood = ctx.createLinearGradient(cx - side * 0.18, y0, cx + side * 0.18, y0 + side);
   wood.addColorStop(0, shade("#D9A566", 12));
   wood.addColorStop(1, "#D9A566");
   ctx.fillStyle = wood;
@@ -1039,7 +1047,7 @@ export function drawRoyalBadge(
     const headR = s * 1.05;
     const oy = cy + s * 1.16;
     const pts = crownPath();
-    const gold = ctx.createLinearGradient(cx, oy - headR * 1.46, cx, oy - headR * 0.74);
+    const gold = ctx.createLinearGradient(cx - headR * 0.26, oy - headR * 1.46, cx + headR * 0.26, oy - headR * 0.74);
     gold.addColorStop(0, shade(PP_COLORS.ppGold, 18));
     gold.addColorStop(1, PP_COLORS.ppGold);
     ctx.fillStyle = gold;
@@ -1236,7 +1244,7 @@ export function drawEventBadge(ctx: CanvasRenderingContext2D, kind: EventBadge, 
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(0.5);
-      const cone = ctx.createLinearGradient(0, -s * 0.5, 0, s * 0.8);
+      const cone = ctx.createLinearGradient(-s * 0.15, -s * 0.5, s * 0.15, s * 0.8);
       cone.addColorStop(0, shade(PP_COLORS.ppGold, 16));
       cone.addColorStop(1, PP_COLORS.ppGold);
       ctx.fillStyle = cone;
