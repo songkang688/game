@@ -42,7 +42,7 @@ import {
   revealHidden,
   STONE,
 } from "./logic";
-import { bpCellSkin, bpIsTiny, bpVisualCss } from "./visual";
+import { bpBurstDelayMs, bpBurstLifeMs, bpCellSkin, bpIsTiny, bpVisualCss } from "./visual";
 
 const COLS = 8;
 /** 一关里最多帮孩子「吹气重排」几次，之后才收局（重排不扣分） */
@@ -152,7 +152,7 @@ function copyInto(grid: number[][], next: readonly number[][]): void {
 function clearFx(cells: HTMLElement[]): void {
   for (const el of cells) {
     el.style.transform = "";
-    el.classList.remove("bbp-moving", "bbp-pop");
+    el.classList.remove("bbp-moving", "bbp-pop", "bp-ghosted");
   }
 }
 
@@ -164,6 +164,56 @@ interface CollapseHost {
   render: () => void;
   alive: () => boolean;
   onRaf: (id: number) => void;
+  /** 破裂幽灵层挂在哪(纯装饰;拿不到就退回 1.2 的整批淡出) */
+  board: () => HTMLElement | null;
+  /** 装饰清场用的延时(走 BubbleBag,destroy 一把倒干净) */
+  after: (fn: () => void, ms: number) => void;
+}
+
+/**
+ * 破裂三阶段幽灵层:每颗被消的泡泡原位克隆一枚「幽灵」,按曼哈顿距离分波
+ * (每波 40ms、上限 6 波、0–12ms 抖动)播「鼓 1.12 倍 → 薄膜白环 → 水珠溅落」。
+ * 纯装饰:消除集合、得分、塌陷时间线一概不碰;reduced 或量不出格子位置就不放,
+ * 返回 false 让调用方退回 1.2 的 .bbp-pop 淡出。
+ */
+function spawnBursts(host: CollapseHost, popped: Array<[number, number]>, origin: [number, number]): boolean {
+  if (prefersReduced()) return false;
+  const board = host.board();
+  if (!board || typeof board.getBoundingClientRect !== "function") return false;
+  const bRect = board.getBoundingClientRect();
+  if (!bRect || bRect.width <= 0) return false;
+  let made = false;
+  for (const [r, c] of popped) {
+    const el = host.cells[r * COLS + c];
+    if (!el || typeof el.getBoundingClientRect !== "function") continue;
+    const rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 0) continue;
+    const delay = bpBurstDelayMs(Math.abs(r - origin[0]) + Math.abs(c - origin[1]), Math.random());
+    const ghost = document.createElement("span");
+    ghost.className = "bp-burst";
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.style.left = `${rect.left - bRect.left}px`;
+    ghost.style.top = `${rect.top - bRect.top}px`;
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    ghost.style.setProperty("--bp-wait", `${delay}ms`);
+    const skin = document.createElement("i");
+    skin.className = "bp-burst-skin";
+    skin.style.background = el.style.background;
+    ghost.appendChild(skin);
+    const ring = document.createElement("i");
+    ring.className = "bp-burst-ring";
+    ghost.appendChild(ring);
+    for (let d = 1; d <= 4; d++) {
+      const dropEl = document.createElement("i");
+      dropEl.className = `bp-burst-drop bp-dr${d}`;
+      ghost.appendChild(dropEl);
+    }
+    board.appendChild(ghost);
+    host.after(() => ghost.remove(), bpBurstLifeMs(delay));
+    made = true;
+  }
+  return made;
 }
 
 /**
@@ -171,10 +221,12 @@ interface CollapseHost {
  * 每一帧都按 visualRowAt / visualColAt 摆位置，所以中途的视觉坐标和逻辑坐标是错开的；
  * 全程只有这一条路径，没有「一次 render 直达终态」的旁路。
  */
-function runCollapse(host: CollapseHost, popped: Array<[number, number]>, done: () => void): void {
+function runCollapse(host: CollapseHost, popped: Array<[number, number]>, origin: [number, number], done: () => void): void {
   const plan = planCollapse(host.grid, COLS, host.gravityUp, { reduced: prefersReduced() });
   const step = pitchOf(host.cells);
-  for (const [r, c] of popped) host.cells[r * COLS + c]?.classList.add("bbp-pop");
+  // 幽灵放出去了本体就立刻隐身(破裂交给幽灵演);放不出去退回 1.2 的整批淡出
+  const ghosted = spawnBursts(host, popped, origin);
+  for (const [r, c] of popped) host.cells[r * COLS + c]?.classList.add(ghosted ? "bp-ghosted" : "bbp-pop");
 
   let seen: "pop" | "fall" | "shift" = "pop";
   const t0 = nowMs();
@@ -284,6 +336,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     render: () => render(),
     alive: () => bag.alive,
     onRaf: (id) => bag.onRaf(id),
+    board: () => boardEl,
+    after: (fn, ms) => bag.after(fn, ms),
   };
 
   function setup(): void {
@@ -438,7 +492,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   /** 每成功消一步之后的收尾：变色泡泡换色、重力方向结算、塌陷动画、落定判定 */
-  function afterPop(popped: Array<[number, number]>, gained: number): void {
+  function afterPop(popped: Array<[number, number]>, gained: number, origin: [number, number]): void {
     score += gained;
     busy = true;
     if (cfg.moveLimit) movesLeft = Math.max(0, movesLeft - 1);
@@ -449,7 +503,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       boardEl.classList.add("bbp-ripple");
       later(() => boardEl.classList.remove("bbp-ripple"), 460);
     }
-    runCollapse(host, popped, () => {
+    runCollapse(host, popped, origin, () => {
       busy = false;
       checkEnd();
     });
@@ -485,7 +539,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (isFrozen(grid[rr][cc])) grid[rr][cc] -= FROZEN_OFFSET;
       }
       popCells(list);
-      afterPop(list, groupScore(list.length));
+      afterPop(list, groupScore(list.length), [r, c]);
       return;
     }
     if (v === RAINBOW) {
@@ -504,7 +558,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ctx.sfx("coin");
       msgEl.textContent = `🌈 彩虹泡泡消掉了 ${list.length - 1} 个泡泡！`;
       popCells(list);
-      afterPop(list, groupScore(list.length));
+      afterPop(list, groupScore(list.length), [r, c]);
       return;
     }
     if (v === BOLT) {
@@ -524,7 +578,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (isFrozen(grid[rr][cc])) grid[rr][cc] -= FROZEN_OFFSET;
       }
       popCells(list);
-      afterPop(list, groupScore(list.length));
+      afterPop(list, groupScore(list.length), [r, c]);
       return;
     }
     const g = groupAt(grid, COLS, r, c, cfg.colors);
@@ -542,7 +596,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       msgEl.textContent = `消掉 ${g.length} 个，进账 ${gained} 分～再攒大一点收益更高！`;
     }
     popCells(g);
-    afterPop(g, gained);
+    afterPop(g, gained, [r, c]);
   }
 
   setup();
@@ -602,6 +656,8 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     render: () => render(),
     alive: () => bag.alive && !over,
     onRaf: (id) => bag.onRaf(id),
+    board: () => boardEl,
+    after: (fn, ms) => bag.after(fn, ms),
   };
 
   function render(): void {
@@ -697,7 +753,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
       }
     }
     busy = true;
-    runCollapse(view, g, () => {
+    runCollapse(view, g, [r, c], () => {
       busy = false;
       render();
     });

@@ -63,6 +63,27 @@ export function bpIsTiny(cellPx: number): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// 连消波次(只算展示延迟;消除集合 / 得分 / 结算时机全部沿用既有逻辑)
+// ---------------------------------------------------------------------------
+
+/** 以点击格为圆心,曼哈顿距离 d 落在第几波(0 起,上限 waveMax-1) */
+export function bpWaveOf(manhattan: number): number {
+  const d = Number.isFinite(manhattan) ? Math.max(0, Math.floor(manhattan)) : 0;
+  return Math.min(BP_TIMINGS.waveMax - 1, d);
+}
+
+/** 这颗泡泡破裂动画的展示延迟:波次 × 40ms + 0–12ms 抖动(抖动只作用于展示) */
+export function bpBurstDelayMs(manhattan: number, rand01: number): number {
+  const j = Math.max(0, Math.min(1, Number.isFinite(rand01) ? rand01 : 0));
+  return bpWaveOf(manhattan) * BP_TIMINGS.waveStepMs + Math.round(j * BP_TIMINGS.waveJitterMs);
+}
+
+/** 一颗破裂幽灵从出生到散尽要挂多久(清场定时用,含少量余量) */
+export function bpBurstLifeMs(delayMs: number): number {
+  return delayMs + BP_TIMINGS.swellMs + BP_TIMINGS.dropMs + 80;
+}
+
+// ---------------------------------------------------------------------------
 // 特殊泡本体纹样(SVG 程序化绘制,不再 emoji 直出;灰度下也一眼可分)
 // ---------------------------------------------------------------------------
 
@@ -223,11 +244,11 @@ export function bpCellSkin(v: number): BpCellSkin {
 // 视觉样式表(体积层)
 // ---------------------------------------------------------------------------
 
-/** 追加在 1.2 布局样式之后的视觉升级样式(体积 / 纹样 / 旋转 / 降级) */
+/** 追加在 1.2 布局样式之后的视觉升级样式(体积 / 纹样 / 旋转 / 破裂 / 降级) */
 export function bpVisualCss(): string {
   const t = BP_TIMINGS;
   return `
-.bp-wrap { --bp-spin-ms:${t.rainbowSpinMs}ms; }
+.bp-wrap { --bp-spin-ms:${t.rainbowSpinMs}ms; --bp-swell-ms:${t.swellMs}ms; --bp-ring-ms:${t.ringMs}ms; --bp-drop-ms:${t.dropMs}ms; }
 .bp-cell { position: relative; }
 .bp-cell::before { content: ""; position: absolute; left: 18%; top: 18%; width: 22%; height: 12%; border-radius: 50%; background: rgba(255,255,255,.45); transform: rotate(-24deg); pointer-events: none; z-index: 1; }
 .bp-cell.bp-empty::before, .bp-tiny .bp-cell::before, .bp-cell.bp-rainbow::before { content: none; }
@@ -239,8 +260,19 @@ export function bpVisualCss(): string {
 .bp-cell.bp-rainbow { overflow: hidden; }
 .bp-rainbow::after { content: ""; position: absolute; inset: -22%; border-radius: 50%; background: ${BP_RAINBOW_CONIC}; animation: bpSpinRot var(--bp-spin-ms) linear infinite; z-index: 0; }
 @keyframes bpSpinRot { to { transform: rotate(360deg); } }
+.bp-board { position: relative; }
+.bp-ghosted { opacity: 0 !important; }
+.bp-burst { position: absolute; pointer-events: none; z-index: 3; }
+.bp-burst-skin { position: absolute; inset: 0; border-radius: 50%; animation: bpBurstBody calc(var(--bp-swell-ms) + var(--bp-ring-ms)) ease-out var(--bp-wait, 0ms) forwards; }
+@keyframes bpBurstBody { 0% { transform: scale(1); opacity: 1; } 30% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1.18); opacity: 0; } }
+.bp-burst-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); opacity: 0; animation: bpBurstRing var(--bp-ring-ms) ease-out calc(var(--bp-wait, 0ms) + var(--bp-swell-ms)) forwards; }
+@keyframes bpBurstRing { 0% { opacity: .9; transform: scale(.7); } 100% { opacity: 0; transform: scale(1.7); } }
+.bp-burst-drop { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; border-radius: 50%; background: var(--bp-splash, rgba(190,230,255,.9)); opacity: 0; animation: bpBurstDrop var(--bp-drop-ms) ease-out calc(var(--bp-wait, 0ms) + var(--bp-swell-ms)) forwards; }
+.bp-dr1 { --dx: -14px; --dy: 15px; } .bp-dr2 { --dx: 13px; --dy: 17px; } .bp-dr3 { --dx: -9px; --dy: -15px; } .bp-dr4 { --dx: 11px; --dy: -13px; }
+@keyframes bpBurstDrop { 0% { opacity: .95; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.5); } }
 @media (prefers-reduced-motion: reduce) {
   .bp-rainbow::after { animation: none; }
+  .bp-burst-skin, .bp-burst-ring, .bp-burst-drop { animation: none; opacity: 0; }
 }
 `;
 }
