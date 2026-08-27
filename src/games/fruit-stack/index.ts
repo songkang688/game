@@ -15,6 +15,7 @@ export { meta };
 import { save } from "../../engine/save";
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type SoundName } from "../level99";
 import { AI_LABEL, chooseDropX, type AiLevel } from "./ai";
+import { SPRITE_PAD, blinkAlpha, createFx, fruitSprite } from "./art";
 import GUIDE from "./guide";
 import {
   CHAPTERS,
@@ -79,7 +80,19 @@ const CSS = `
   box-shadow:0 5px 14px rgba(150,120,160,.2);}
 .fs-canvaswrap canvas{display:block;touch-action:none;}
 .fs-next{display:flex;gap:5px;align-items:center;font-size:12.5px;font-weight:800;color:#7a6288;}
-.fs-dot{display:inline-block;border-radius:50%;border:2px solid #ffffff;box-shadow:0 1px 3px rgba(120,90,140,.3);}
+.fs-basket{display:inline-flex;gap:5px;padding:4px 5px;border-radius:11px;background:linear-gradient(180deg,#e2a968,#c8894a);
+  box-shadow:inset 0 0 0 2px #a97140,inset 0 2px 3px rgba(255,235,200,.55),0 2px 5px rgba(130,85,45,.3);}
+.fs-basket-cell{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+  border-radius:8px;background:linear-gradient(180deg,#fffdf6,#fdeede);box-shadow:inset 0 0 0 1px rgba(170,115,65,.35);}
+.fs-basket-cell--next{opacity:.55;}
+.fs-stamp{display:inline-block;flex:none;}
+.fs-result{display:flex;gap:16px;justify-content:center;align-items:flex-end;flex-wrap:wrap;}
+.fs-result-slot{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12.5px;font-weight:800;color:#7a6288;}
+.fs-result-big{display:inline-flex;align-items:center;justify-content:center;width:76px;height:76px;border-radius:50%;
+  background:radial-gradient(circle at 50% 42%,#fff6f9,#ffe7f0);box-shadow:0 3px 8px rgba(170,110,150,.25);}
+.fs-tree{display:flex;gap:4px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:6px;}
+.fs-tree-dot{width:11px;height:11px;border-radius:50%;background:#eadfe8;box-shadow:inset 0 0 0 1.5px rgba(140,105,130,.28);}
+.fs-tree-dot--on{box-shadow:inset 0 0 0 1.5px rgba(90,70,90,.35),0 1px 3px rgba(150,100,140,.4);}
 .fs-tip{font-size:13px;font-weight:700;line-height:1.55;text-align:center;max-width:620px;color:#6f5f88;
   background:#ffffffcc;border-radius:12px;padding:5px 10px;}
 .fs-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
@@ -166,6 +179,35 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+/**
+ * 把果卡贴图盖成一枚 DOM 图章:span + dataURL 背景。
+ * 用 span 而不是再造一个 canvas,是因为盆的画布靠 `tagName === "canvas"` 被冒烟脚本点名,
+ * 预览与结算不许混进去。测试桩没有 toDataURL 时退化为主色圆点。
+ */
+function fruitStamp(level: number, sizePx: number, cls = "fs-stamp"): HTMLElement {
+  const lvl = clamp(Math.round(level), 0, TOP_LEVEL);
+  const kind = CHAIN[lvl];
+  const node = el("span", cls);
+  node.style.width = `${sizePx}px`;
+  node.style.height = `${sizePx}px`;
+  node.title = kind.name;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  // 贴图含叶梗留白(SPRITE_PAD),让果身正好塞满图章
+  const show = (sizePx / 2 / SPRITE_PAD) * 0.96;
+  const sp = fruitSprite(lvl, (show / kind.r) * dpr, "smile");
+  const url = typeof sp.canvas.toDataURL === "function" ? sp.canvas.toDataURL() : "";
+  if (url) {
+    node.style.backgroundImage = `url(${url})`;
+    node.style.backgroundSize = "contain";
+    node.style.backgroundRepeat = "no-repeat";
+    node.style.backgroundPosition = "center";
+  } else {
+    node.style.background = kind.color;
+    node.style.borderRadius = "50%";
+  }
+  return node;
+}
+
 // ---------------------------------------------------------------------------
 // 一个容器(盆)
 // ---------------------------------------------------------------------------
@@ -231,6 +273,8 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
 
   const g = canvas.getContext("2d");
   let scale = 1;
+  /** 世界单位 → 设备像素的比例,果卡贴图按它预渲染才不糊 */
+  let renderScale = 1;
   let dropIndex = 0;
   let aimX = lv.box.w / 2;
   let cooldown = 0;
@@ -238,6 +282,8 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
   let won = false;
   let lost = false;
   let warnT = 0;
+  // 合并演出(果汁 / 扩散环 / 金星 / 飘字 / 顶级震屏);reduced 时一颗粒子都不出
+  const fx = createFx(opts.reduced, opts.seed + opts.seat * 97);
 
   function currentLevel(): number {
     return nextFruit(opts.seed, dropIndex, lv.maxDrop, lv.minDrop);
@@ -247,20 +293,19 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     return opts.limited ? Math.max(0, lv.drops - world.drops) : Infinity;
   }
 
+  // 果篮窗口:木篮框里两格,左格是当前要投的,右格半透明是再下一颗,用的都是同一套果卡贴图
   function refreshNext(): void {
     nextRow.innerHTML = "";
     nextRow.appendChild(el("span", undefined, "下一个"));
+    const basket = el("span", "fs-basket");
     const preview = previewFruits(opts.seed, dropIndex, 2, lv.maxDrop, lv.minDrop);
     preview.forEach((lvl, i) => {
-      const kind = CHAIN[lvl];
-      const dot = el("span", "fs-dot");
-      const size = Math.round(clamp(kind.r * 0.7, 12, 26)) * (i === 0 ? 1 : 0.78);
-      dot.style.width = `${Math.round(size)}px`;
-      dot.style.height = `${Math.round(size)}px`;
-      dot.style.background = kind.color;
-      dot.title = kind.name;
-      nextRow.appendChild(dot);
+      const cell = el("span", `fs-basket-cell${i === 1 ? " fs-basket-cell--next" : ""}`);
+      const size = Math.round(clamp(CHAIN[lvl].r * 0.7, 14, 28) * (i === 0 ? 1 : 0.82));
+      cell.appendChild(fruitStamp(lvl, size));
+      basket.appendChild(cell);
     });
+    nextRow.appendChild(basket);
     if (opts.limited) nextRow.appendChild(el("span", undefined, `· 还剩 ${left()} 颗`));
   }
 
@@ -274,6 +319,7 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     canvas.style.height = `${chh}px`;
     canvas.width = Math.round(cw * dpr);
     canvas.height = Math.round(chh * dpr);
+    renderScale = scale * dpr;
     g?.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
   }
 
@@ -360,13 +406,19 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
 
   function consumeEvents(): void {
     for (const ev of world.events) {
-      if (ev.kind === "merge") opts.sfx(ev.level >= 6 ? "coin" : "pop");
-      else if (ev.kind === "top") opts.sfx("win");
+      if (ev.kind === "merge") {
+        opts.sfx(ev.level >= 6 ? "coin" : "pop");
+        fx.burst(ev.x, ev.y, ev.level, ev.score, false);
+      } else if (ev.kind === "top") {
+        opts.sfx("win");
+        fx.burst(ev.x, ev.y, ev.level, ev.score, true);
+      }
     }
     world.events.length = 0;
   }
 
   function update(dtMs: number): void {
+    fx.update(dtMs);
     if (done) return;
     cooldown = Math.max(0, cooldown - dtMs);
     warnT += dtMs;
@@ -395,60 +447,101 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
 
   // ---- 画面 ----------------------------------------------------------------
 
-  function drawFruit(x: number, y: number, r: number, level: number, alpha = 1, scaleK = 1): void {
+  // 一颗果子 = 一次 drawImage:11 级果卡(纹理 + 脸)都在 art.ts 里预渲染成贴图,
+  // 这里只按目标半径缩放贴图;合并动画的 scaleK、担忧脸都走同一条路。
+  function drawFruit(x: number, y: number, r: number, level: number, alpha = 1, scaleK = 1, worried = false): void {
     if (!g) return;
-    const kind = CHAIN[clamp(level, 0, TOP_LEVEL)];
-    const rr = Math.max(1, r * scaleK);
+    const sp = fruitSprite(level, renderScale, worried ? "worry" : "smile");
+    const half = Math.max(1, r * scaleK) * SPRITE_PAD;
     g.globalAlpha = alpha;
-    g.fillStyle = kind.color;
-    g.beginPath();
-    g.arc(x, y, rr, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = kind.edge;
-    g.lineWidth = Math.max(1, rr * 0.09);
-    g.stroke();
-    // 高光
-    g.fillStyle = "rgba(255,255,255,.55)";
-    g.beginPath();
-    g.arc(x - rr * 0.3, y - rr * 0.34, rr * 0.28, 0, Math.PI * 2);
-    g.fill();
-    // 小叶子:全部原创造型,一片叶子加一根短梗
-    g.strokeStyle = "#6ea86b";
-    g.lineWidth = Math.max(1, rr * 0.1);
-    g.beginPath();
-    g.moveTo(x, y - rr);
-    g.lineTo(x, y - rr * 1.24);
-    g.stroke();
-    g.fillStyle = "#8fc98a";
-    g.beginPath();
-    g.ellipse(x + rr * 0.24, y - rr * 1.18, rr * 0.26, rr * 0.14, -0.5, 0, Math.PI * 2);
-    g.fill();
+    g.drawImage(sp.canvas, x - half, y - half, half * 2, half * 2);
     g.globalAlpha = 1;
+  }
+
+  /** 一朵软绵绵的白云:三个椭圆叠一起,当盆上方的中景装饰 */
+  function drawCloud(cx: number, cy: number, s: number): void {
+    if (!g) return;
+    g.fillStyle = "rgba(255,255,255,.6)";
+    g.beginPath();
+    g.ellipse(cx, cy, s * 2.1, s, 0, 0, Math.PI * 2);
+    g.ellipse(cx - s * 1.5, cy + s * 0.35, s * 1.25, s * 0.65, 0, 0, Math.PI * 2);
+    g.ellipse(cx + s * 1.5, cy + s * 0.4, s * 1.15, s * 0.6, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  /** 陶瓷盆沿:6px 厚边最后画在最上层,果子贴墙时看起来是收在盆里的 */
+  function drawRim(): void {
+    if (!g) return;
+    const b = lv.box;
+    const RIM = 6;
+    const rimGrad = g.createLinearGradient(0, 0, 0, b.h);
+    rimGrad.addColorStop(0, "#f8c7da");
+    rimGrad.addColorStop(1, "#e19ab8");
+    g.fillStyle = rimGrad;
+    g.fillRect(0, 0, RIM, b.h);
+    g.fillRect(b.w - RIM, 0, RIM, b.h);
+    g.fillRect(0, b.h - RIM, b.w, RIM);
+    // 盆沿顶面:圆头 + 亮粉高光条
+    g.fillStyle = "#ffd9e8";
+    g.beginPath();
+    g.arc(RIM * 0.9, 4, RIM * 0.75, 0, Math.PI * 2);
+    g.arc(b.w - RIM * 0.9, 4, RIM * 0.75, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "rgba(255,240,247,.9)";
+    g.fillRect(0, 0, RIM, 3);
+    g.fillRect(b.w - RIM, 0, RIM, 3);
+    // 内壁描一道薄边,厚度才读得出来
+    g.strokeStyle = "rgba(201,120,158,.55)";
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.moveTo(RIM, 0);
+    g.lineTo(RIM, b.h - RIM);
+    g.lineTo(b.w - RIM, b.h - RIM);
+    g.lineTo(b.w - RIM, 0);
+    g.stroke();
   }
 
   function render(): void {
     if (!g) return;
     const b = lv.box;
     g.clearRect(0, 0, b.w, b.h);
+    g.save();
+    const shake = fx.shakeOffset();
+    g.translate(shake.x, shake.y);
 
-    // 盆底与盆壁
+    // 盆底背景:粉白渐变保留,顶上加两朵淡云
     const grad = g.createLinearGradient(0, 0, 0, b.h);
     grad.addColorStop(0, "#fffafc");
     grad.addColorStop(1, "#ffeef4");
     g.fillStyle = grad;
     g.fillRect(0, 0, b.w, b.h);
-    g.strokeStyle = "#f0c6d6";
-    g.lineWidth = 3;
-    g.beginPath();
-    g.moveTo(1.5, 0);
-    g.lineTo(1.5, b.h - 1.5);
-    g.lineTo(b.w - 1.5, b.h - 1.5);
-    g.lineTo(b.w - 1.5, 0);
-    g.stroke();
+    drawCloud(b.w * 0.24, 24, 7);
+    drawCloud(b.w * 0.72, 40, 5.5);
 
-    // 警戒线:快碰到的时候先闪一闪
+    // 内壁两侧的渐变阴影:盆是有深度的,不是三根线
+    const wallW = 10;
+    const shadeL = g.createLinearGradient(0, 0, wallW, 0);
+    shadeL.addColorStop(0, "rgba(190,120,160,.2)");
+    shadeL.addColorStop(1, "rgba(190,120,160,0)");
+    g.fillStyle = shadeL;
+    g.fillRect(0, 0, wallW, b.h);
+    const shadeR = g.createLinearGradient(b.w - wallW, 0, b.w, 0);
+    shadeR.addColorStop(0, "rgba(190,120,160,0)");
+    shadeR.addColorStop(1, "rgba(190,120,160,.2)");
+    g.fillStyle = shadeR;
+    g.fillRect(b.w - wallW, 0, wallW, b.h);
+
+    // 盆底内凹弧线:底部一弯浅影
+    g.fillStyle = "rgba(214,150,180,.2)";
+    g.beginPath();
+    g.moveTo(0, b.h);
+    g.quadraticCurveTo(b.w / 2, b.h - 15, b.w, b.h);
+    g.closePath();
+    g.fill();
+
+    // 警戒线:快碰到的时候先闪一闪(reduced 恒定不闪)
     const danger = nearLine(world, lv.lineY, 20);
-    const blink = opts.reduced ? 1 : 0.45 + 0.55 * Math.abs(Math.sin(warnT / 260));
+    const blink = blinkAlpha(warnT, opts.reduced);
     g.strokeStyle = danger ? `rgba(226,86,110,${blink.toFixed(3)})` : "rgba(200,150,175,.75)";
     g.lineWidth = danger ? 3 : 2;
     g.setLineDash([8, 6]);
@@ -457,11 +550,21 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     g.lineTo(b.w, lv.lineY);
     g.stroke();
     g.setLineDash([]);
+    // 左端小警示灯:红点 + 光晕,危险时跟着呼吸
+    const lampA = danger ? blink : 0.5;
+    g.fillStyle = `rgba(226,86,110,${(lampA * 0.3).toFixed(3)})`;
+    g.beginPath();
+    g.arc(11, lv.lineY, 7, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = danger ? `rgba(226,86,110,${lampA.toFixed(3)})` : "rgba(196,140,168,.9)";
+    g.beginPath();
+    g.arc(11, lv.lineY, 3.2, 0, Math.PI * 2);
+    g.fill();
     g.fillStyle = danger ? "#d2426a" : "#b48aa0";
     g.font = "600 12px system-ui,sans-serif";
     g.textAlign = "left";
     g.textBaseline = "bottom";
-    g.fillText("警戒线", 6, lv.lineY - 4);
+    g.fillText("警戒线", 20, lv.lineY - 4);
 
     // 瞄准线与影子
     if (!done) {
@@ -487,8 +590,9 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
       drawFruit(x, Math.max(DROP_Y, r + 4), r, lvl, 0.85);
     }
 
+    // 堆到警戒线附近时,全体果子换成睁眼担忧脸:警戒反馈做到角色身上
     for (const f of world.fruits) {
-      drawFruit(f.x, f.y, f.r, f.level, 1, popScale(f.popMs, world.popMs));
+      drawFruit(f.x, f.y, f.r, f.level, 1, popScale(f.popMs, world.popMs), danger);
     }
 
     // 吸合动画:两颗一边靠拢一边缩小
@@ -499,6 +603,13 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
       drawFruit(anim.ax + (anim.x - anim.ax) * p, anim.ay + (anim.y - anim.ay) * p, r, anim.fromLevel, 1 - 0.15 * p, k);
       drawFruit(anim.bx + (anim.x - anim.bx) * p, anim.by + (anim.y - anim.by) * p, r, anim.fromLevel, 1 - 0.15 * p, k);
     }
+
+    // 合并演出:果汁 / 扩散环 / 金星 / 飘字
+    fx.draw(g);
+
+    // 陶瓷盆沿压最上层
+    drawRim();
+    g.restore();
   }
 
   // 画布上的果子读屏读不出来,所以把这一盆的状态写成一句话挂上去;
@@ -563,6 +674,8 @@ export interface TableResult {
   bestChain: number;
   dropsUsed: number;
   reason: "goal" | "over" | "empty";
+  /** 每个座位盆里出现过的最高等级(纯展示字段,结算画最大果对比用,不参与判定) */
+  bestLevels?: number[];
 }
 
 /** 判一局输赢只要知道每一座「达标了没 / 收摊了没 / 还剩几颗」 */
@@ -838,6 +951,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
       bestLevel: w0.bestLevel,
       bestChain: w0.bestChain,
       dropsUsed: w0.drops,
+      bestLevels: bowls.map((b) => b.world.bestLevel),
     });
   }
 
@@ -964,16 +1078,50 @@ function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: s
   };
 }
 
+/**
+ * 结算插画:每一盆的最大果画成大号果卡(同一套贴图),下面一条 11 级合成树,
+ * 点亮到本局到过的最高级。双人 / 对战给两个格,一眼比出谁的果更大。
+ */
+function resultArt(bestLevels: number[], names: string[]): HTMLElement {
+  const box = el("div");
+  const row = el("div", "fs-result");
+  bestLevels.forEach((lvl, i) => {
+    const safe = clamp(Math.round(lvl), 0, TOP_LEVEL);
+    const kind = CHAIN[safe];
+    const slot = el("div", "fs-result-slot");
+    const big = el("span", "fs-result-big");
+    big.appendChild(fruitStamp(safe, 62));
+    slot.appendChild(big);
+    slot.appendChild(el("span", undefined, `${names[i] ?? ""}最大「${kind.name}」`));
+    row.appendChild(slot);
+  });
+  box.appendChild(row);
+  const top = clamp(Math.round(Math.max(0, ...bestLevels)), 0, TOP_LEVEL);
+  const tree = el("div", "fs-tree");
+  tree.setAttribute("aria-label", `合成树:${CHAIN.length} 级点亮到第 ${top + 1} 级「${CHAIN[top].name}」`);
+  CHAIN.forEach((kind, i) => {
+    const dot = el("span", `fs-tree-dot${i <= top ? " fs-tree-dot--on" : ""}`);
+    if (i <= top) dot.style.background = kind.color;
+    dot.title = kind.name;
+    tree.appendChild(dot);
+  });
+  box.appendChild(tree);
+  return box;
+}
+
 function overBox(
   stage: HTMLElement,
   title: string,
   sub: string,
-  buttons: Array<{ label: string; ghost?: boolean; onClick: () => void }>
+  buttons: Array<{ label: string; ghost?: boolean; onClick: () => void }>,
+  art?: HTMLElement
 ): void {
   stage.innerHTML = "";
   const box = el("div", "fs-veil");
   box.style.position = "static";
-  box.append(el("div", "fs-veil-t", title), el("div", "fs-veil-s", sub));
+  box.append(el("div", "fs-veil-t", title));
+  if (art) box.appendChild(art);
+  box.append(el("div", "fs-veil-s", sub));
   const row = el("div", "fs-veil-btns");
   for (const b of buttons) {
     const btn = document.createElement("button");
@@ -999,6 +1147,9 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
   let table: Table | null = null;
   let round = 1;
   const scores = [0, 0];
+  /** 最近一局两盆各自的最大果等级(结算插画用) */
+  let lastBest: number[] = [0, 0];
+  const duelNames = [P_NAME[0], aiSkill ? "电脑" : P_NAME[1]];
 
   function refreshChip(): void {
     shell.chip.textContent = `${label} · ${versusLine(scores)} · 先赢 ${WIN_TARGET} 局`;
@@ -1021,7 +1172,7 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
         },
       },
       { label: "◀ 回选关", ghost: true, onClick: () => { api.play("tap"); onBack(); } },
-    ]);
+    ], resultArt(lastBest, duelNames));
   }
 
   function roundOver(winner: number): void {
@@ -1044,7 +1195,7 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
         },
       },
       { label: "◀ 回选关", ghost: true, onClick: () => { api.play("tap"); onBack(); } },
-    ]);
+    ], resultArt(lastBest, duelNames));
   }
 
   function startRound(): void {
@@ -1062,7 +1213,10 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
         ? `${lv.hint} 朵朵:A / D 移动,F 放下,G 落点归位;手机直接在盆上拖。`
         : `${lv.hint} 朵朵:A / D + F,G 归位;星星:方向键 + L,K 归位。`,
       sfx: (n) => api.play(n),
-      onDone: (res) => roundOver(res.winner),
+      onDone: (res) => {
+        lastBest = res.bestLevels ?? [res.bestLevel, res.bestLevel];
+        roundOver(res.winner);
+      },
     });
   }
 
@@ -1108,7 +1262,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
         overBox(shell.stage, "🍑 盆装满啦", endlessLine(res.score, best, res.bestLevel), [
           { label: "🔁 再来一盆", onClick: () => { api.play("tap"); start(); } },
           { label: "◀ 回选关", ghost: true, onClick: () => { api.play("tap"); onBack(); } },
-        ]);
+        ], resultArt([res.bestLevel], [P_NAME[0]]));
       },
     });
   }
