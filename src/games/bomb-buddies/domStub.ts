@@ -60,6 +60,7 @@ export class FakeCtx {
   quadraticCurveTo(): void {}
   bezierCurveTo(): void {}
   arc(): void {}
+  arcTo(): void {}
   ellipse(): void {}
   roundRect(): void {}
   rect(): void {}
