@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { buildQuestions, isBuildCharLevel } from "./levels";
-import { IDIOM_CARDS, RADICAL_CARDS, radicalTargets } from "./logic";
+import { IDIOM_CARDS, LOOKALIKE_SETS, RADICAL_CARDS, radicalTargets } from "./logic";
 
 const LEVELS = Array.from({ length: 188 }, (_, i) => i);
 
@@ -55,5 +55,60 @@ describe("识字小花园 · 题干不许把答案写出来", () => {
       }
     }
     expect(checked).toBeGreaterThan(150);
+  });
+});
+
+/**
+ * 上面那一组只看 `ask`。监督复审时把 `promptHTML` 一起扫了一遍，又掉出两处
+ * （窗口5 第1轮监督修复员 W5-F-02 / W5-F-03）：
+ *  - 成语「百发百中」挖的是第二个「百」，露在外面的「百发□中」里第一个「百」还在，
+ *    孩子照着抄就行——释义干净没用，题面自己把答案摆出来了；
+ *  - 形近字「操 / 操场」的提示写着「学校里跑步做操的地方」，那个「操」就是答案。
+ * 这两条走的是同一条规矩：**题干渲染出来的任何文本都不许含答案**，只是一个在题面、
+ * 一个在提示句。下面按题型收口，`promptHTML` 与 `ask` 一起看。
+ */
+describe("识字小花园 · 题面渲染出来的字也不许是答案", () => {
+  /** 挖空以后还露在外面的那几个字 */
+  const shownOf = (idiom: string, blank: number): string =>
+    Array.from(idiom).filter((_, i) => i !== blank).join("");
+
+  it("成语卡：挖空以后露在外面的那几个字里也不许再出现答案字", () => {
+    for (const card of IDIOM_CARDS) {
+      const blanked = Array.from(card.idiom)[card.blank];
+      expect(
+        shownOf(card.idiom, card.blank).includes(blanked),
+        `「${card.idiom}」挖第 ${card.blank} 位，题面「${shownOf(card.idiom, card.blank)}」里还留着答案字「${blanked}」`
+      ).toBe(false);
+    }
+  });
+
+  it("形近字卡：提示句里不许写着要填的那个字", () => {
+    for (const item of LOOKALIKE_SETS.flat()) {
+      expect(
+        item.hint.includes(item.char),
+        `「${item.word}」的提示「${item.hint}」写着答案字「${item.char}」`
+      ).toBe(false);
+    }
+    // 同一条规矩字卡那边早就有（bank.test.ts 的「不把答案字或示例词直接抄进去」），
+    // 形近字这批是 1.1 后加的，一直没人钉
+    expect(LOOKALIKE_SETS.flat().length).toBeGreaterThan(50);
+  });
+
+  it("188 关的成语题 / 偏旁题 / 形近字题，题面与题干都读不出答案", () => {
+    const strip = (html: string): string => html.replace(/<[^>]+>/g, "");
+    let checked = 0;
+    for (const lv of LEVELS) {
+      if (isBuildCharLevel(lv)) continue;
+      for (const q of buildQuestions(lv)) {
+        if (q.kind !== "idiom" && q.kind !== "radical" && q.kind !== "lookalike") continue;
+        const text = `${strip(q.promptHTML ?? "")} ${q.ask}`;
+        expect(
+          text.includes(q.answer),
+          `第 ${lv + 1} 关 ${q.kind} 的题面读得出答案：${text.trim()} → ${q.answer}`
+        ).toBe(false);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(300);
   });
 });

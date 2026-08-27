@@ -169,7 +169,11 @@ export interface LookalikeItem {
   char: string;
   /** 只有这个字才组得成的词 */
   word: string;
-  /** 一句话说清它的意思 */
+  /**
+   * 一句话说清它的意思。**一个字都不许和 `char` 重复**——提示里带上答案字，
+   * 孩子不认得这一组形近字也能照着抄回去（1.2 窗口5 修的 W5-F-03）。
+   * 和字卡那边「释义不抄答案字」是同一条规矩，`noSpoiler.test.ts` 钉着。
+   */
   hint: string;
   /** 拆得出的部件；形近全靠某一笔时写那一笔的名字 */
   parts: string[];
@@ -221,7 +225,7 @@ export const LOOKALIKE_SETS: LookalikeItem[][] = [
   [
     { char: "燥", word: "干燥", hint: "一点水分都没有", parts: ["火", "喿"], strokes: 17 },
     { char: "躁", word: "急躁", hint: "心里静不下来", parts: ["足", "喿"], strokes: 20 },
-    { char: "操", word: "操场", hint: "学校里跑步做操的地方", parts: ["扌", "喿"], strokes: 16 },
+    { char: "操", word: "操场", hint: "学校里上体育课的空地", parts: ["扌", "喿"], strokes: 16 },
   ],
   [
     { char: "键", word: "键盘", hint: "一个一个按下去", parts: ["钅", "建"], strokes: 13 },
@@ -300,7 +304,10 @@ export function lookalikeGroupOf(char: string): LookalikeItem[] {
 /** 成语补全：挖掉一个字，靠意思把它填回去 */
 export interface IdiomCard {
   idiom: string;
-  /** 挖空的位置（0 基） */
+  /**
+   * 挖空的位置（0 基）。成语里有重复字时要挑那个**只出现一次**的位置挖，
+   * 挖了重复字等于把答案留在题面上（1.2 窗口5 修的 W5-F-02）。
+   */
   blank: number;
   /**
    * 释义句。**一个字都不许和被挖掉的那个字重复**——释义里带上答案字，
@@ -333,7 +340,9 @@ export const IDIOM_CARDS: IdiomCard[] = [
   { idiom: "万紫千红", blank: 2, meaning: "花开得又多又艳" },
   { idiom: "鸟语花香", blank: 1, meaning: "又有鸟叫又有花香" },
   { idiom: "春暖花开", blank: 1, meaning: "天气回温，花都开了" },
-  { idiom: "百发百中", blank: 2, meaning: "每一次都正中目标" },
+  // 挖第 1 位而不是第 2 位：这条成语里「百」出现两次，挖掉后面那个，前面那个
+  // 还明晃晃摆在题面上（窗口5 第1轮 W5-F-02）
+  { idiom: "百发百中", blank: 1, meaning: "每一次都正中目标" },
   { idiom: "五颜六色", blank: 2, meaning: "颜色多得数不过来" },
 ];
 
