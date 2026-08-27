@@ -27,6 +27,7 @@ import { buildQuestions, makeReviewQuestions, typesOfKinds, CHAPTER_THEMES } fro
 import { practiceLine, recordMistakes, type StorageLike } from "./mistakes";
 import { fitIntoStage } from "./fit";
 import { resetClippedScroll } from "./stageScroll";
+import { createFarmLayer, type FarmLayer, type FarmVisualHooks } from "./farmLayer";
 
 /** 连错几次给方法提示（和 `quiz99.shouldHint` 的门槛保持一致，两边同时发生） */
 export const HINT_AFTER_WRONG = 2;
@@ -103,11 +104,14 @@ export interface FarmDeps {
 /**
  * 关卡辅助层：数错次数给两级提示、答对放一只欢呼的小动物。
  * 全程只读 `quiz99` 渲染出来的 DOM，不改它的判分，也不拦它的点击。
+ * 1.3 起多一个可选的 `visual` 口子：换题 / 答对 / 答错时喊农场视觉层一声，
+ * 视觉层只画不判，这里的计数、提示、朗读一行没变。
  */
 export function attachFarmHelper(
   stage: HTMLElement,
   questions: readonly MathQ[],
-  onFirstWrong: (q: MathQ) => void
+  onFirstWrong: (q: MathQ) => void,
+  visual?: FarmVisualHooks
 ): HelperHandle {
   const prompt = stage.querySelector(".qz-prompt");
   const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -140,6 +144,7 @@ export function attachFarmHelper(
     const msg = stage.querySelector(".qz-msg");
     if (msg instanceof HTMLElement) msg.classList.remove("mtf-hint", "mtf-step");
     dropCheer();
+    visual?.onQuestion(index);
   }
 
   /** 答对了：让一只农场小动物冒出来欢呼一下（答错什么都不加，绝不打红叉） */
@@ -167,11 +172,13 @@ export function attachFarmHelper(
     if (!q || at < 0) return;
     if (at === q.correct) {
       cheerUp();
+      visual?.onCorrect(index);
       // 没有 MutationObserver 的环境靠这条自己跟上题号（壳答对 850ms 后才换题）
       if (!observer) later(advance, 900);
       return;
     }
     wrongHere++;
+    visual?.onWrong(index);
     if (!reported) {
       reported = true;
       onFirstWrong(q);
@@ -234,6 +241,7 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
 
   let quiz: PlayHandle | null = null;
   let helper: HelperHandle | null = null;
+  let farm: FarmLayer | null = null;
   let banner: HTMLElement | null = null;
   let destroyed = false;
   let reviewing = false;
@@ -242,6 +250,8 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
   function dropRound(): void {
     helper?.destroy();
     helper = null;
+    farm?.destroy();
+    farm = null;
     try {
       quiz?.destroy?.();
     } catch (err) {
@@ -287,7 +297,8 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
       skipped: false,
       bigChoices: true,
     });
-    helper = attachFarmHelper(stage, questions, () => {});
+    farm = createFarmLayer(stage, questions);
+    helper = attachFarmHelper(stage, questions, () => {}, farm);
     // 横幅一挂上来这一屏就长高一截,钳位跟着重算
     fit.relayout();
     speak(REVIEW_NOTE);
@@ -315,7 +326,8 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
     theme,
     bigChoices: true,
   });
-  helper = attachFarmHelper(stage, mainQuestions, noteWrong);
+  farm = createFarmLayer(stage, mainQuestions);
+  helper = attachFarmHelper(stage, mainQuestions, noteWrong, farm);
   fit.relayout();
 
   // 换一道题题面高度就变(竖式 38px 三行 vs 一行文字题差着 60 多像素),钳位得跟着走。
