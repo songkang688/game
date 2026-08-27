@@ -6,6 +6,7 @@ import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../
 import {
   WALL_THEMES,
   drawBackdrop,
+  drawGhostFigure,
   drawPlayerFigure,
   drawWalls,
   dotSprite,
@@ -24,6 +25,7 @@ import {
 import { MAX_CELL_PX, cellPxFor, maxCanvasWidth } from "./layout";
 import { CHAPTERS, configFor, endlessConfig, planFor, rateLevel } from "./levels";
 import {
+  DELTA,
   canTurn,
   cellIndex,
   stepCell,
@@ -405,46 +407,37 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     if (!ctx) return;
     const gx = g.cell.x * cell + cell / 2;
     const gy = g.cell.y * cell + cell / 2;
+    // 瞳孔顺着移动方向偏 1.2px
+    const d = DELTA[g.dir];
+    const pupil = { dx: d.dx * 1.2, dy: d.dy * 1.2 };
     if (g.mood === "eyes") {
-      ctx.fillStyle = "#EAF2FF";
-      ctx.beginPath();
-      ctx.arc(gx - 3, gy - 1, 2.6, 0, Math.PI * 2);
-      ctx.arc(gx + 3, gy - 1, 2.6, 0, Math.PI * 2);
-      ctx.fill();
+      drawGhostFigure(ctx, {
+        x: gx,
+        y: gy,
+        r: cell * 0.38,
+        color: "#EAF2FF",
+        mood: "eyes",
+        pupil,
+        starMark: false,
+        warnRing: false,
+      });
       return;
     }
-    // 变蓝和变回来都走过渡，不硬切颜色
+    // 变蓝和变回来都走过渡，不硬切颜色；白闪预警沿用 150ms 节奏
     let color = mixColor(GHOST_COLORS[g.kind], FRIGHT_BLUE, blueness);
     if (g.mood === "fright" && frightWarning(g) && !soft && Math.floor(state.elapsed / 150) % 2 === 0) {
       color = "#FFFFFF";
     }
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(gx, gy - 1, cell * 0.38, Math.PI, 0);
-    ctx.lineTo(gx + cell * 0.38, gy + cell * 0.3);
-    ctx.lineTo(gx, gy + cell * 0.16);
-    ctx.lineTo(gx - cell * 0.38, gy + cell * 0.3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#2f2a45";
-    ctx.beginPath();
-    ctx.arc(gx - 3.4, gy - 2, 1.8, 0, Math.PI * 2);
-    ctx.arc(gx + 3.4, gy - 2, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    if (isStar) {
-      ctx.strokeStyle = "#FFF3B0";
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.arc(gx, gy, cell * 0.46, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (frightWarning(g) && soft) {
-      ctx.strokeStyle = "#FFFFFF";
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.arc(gx, gy, cell * 0.44, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    drawGhostFigure(ctx, {
+      x: gx,
+      y: gy,
+      r: cell * 0.38,
+      color,
+      mood: g.mood === "fright" ? "fright" : "normal",
+      pupil,
+      starMark: isStar,
+      warnRing: frightWarning(g) && soft,
+    });
   }
 
   function renderHud(): void {

@@ -253,6 +253,117 @@ export function versusStarSprite(): HTMLCanvasElement {
 }
 
 /* ------------------------------------------------------------------ */
+/* 小幽灵                                                              */
+/* ------------------------------------------------------------------ */
+
+export type GhostFigureMood = "normal" | "fright" | "eyes";
+
+export interface GhostFigureOpts {
+  x: number;
+  y: number;
+  /** 身体半径（≈ 格子的 0.38 倍） */
+  r: number;
+  /** 身体色（变蓝过渡、白闪帧都由调用方混好再传进来） */
+  color: string;
+  mood: GhostFigureMood;
+  /** 瞳孔顺着移动方向的偏移（像素） */
+  pupil: { dx: number; dy: number };
+  /** 星星操纵的那只：头顶一颗小金星 */
+  starMark: boolean;
+  /** 减弱动效下的白描边预警（替代白闪帧） */
+  warnRing: boolean;
+}
+
+/**
+ * 圆头圆脑小幽灵：上半圆 + 四尖波浪裙边 + 顶部高光。
+ * 三种状态画法互不相同——normal 是白底深瞳（瞳孔随移动方向偏），
+ * fright 是缩成小点的眼睛加一条抖抖的锯齿嘴，eyes 只剩一对眼睛飘回巢。
+ */
+export function drawGhostFigure(g: CanvasRenderingContext2D, o: GhostFigureOpts): void {
+  const { x, y, r } = o;
+  if (o.mood === "eyes") {
+    g.fillStyle = "#EAF2FF";
+    g.beginPath();
+    g.arc(x - r * 0.4, y - r * 0.1, r * 0.34, 0, Math.PI * 2);
+    g.arc(x + r * 0.4, y - r * 0.1, r * 0.34, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#5B79D9";
+    g.beginPath();
+    g.arc(x - r * 0.4 + o.pupil.dx, y - r * 0.1 + o.pupil.dy, r * 0.16, 0, Math.PI * 2);
+    g.arc(x + r * 0.4 + o.pupil.dx, y - r * 0.1 + o.pupil.dy, r * 0.16, 0, Math.PI * 2);
+    g.fill();
+    return;
+  }
+  // 身体：上半圆 + 四尖波浪裙边
+  const hem = y + r * 0.82;
+  const valley = y + r * 0.5;
+  const tooth = r / 2;
+  g.fillStyle = o.color;
+  g.beginPath();
+  g.arc(x, y - r * 0.08, r, Math.PI, 0);
+  g.lineTo(x + r, valley);
+  for (let k = 0; k < 4; k++) {
+    g.lineTo(x + r - tooth * (k + 0.5), hem);
+    g.lineTo(x + r - tooth * (k + 1), valley);
+  }
+  g.closePath();
+  g.fill();
+  // 顶部约两成高度的高光
+  g.fillStyle = "rgba(255,255,255,0.32)";
+  g.beginPath();
+  g.arc(x - r * 0.3, y - r * 0.48, r * 0.32, 0, Math.PI * 2);
+  g.fill();
+  if (o.mood === "fright") {
+    // 吓到了：眼睛缩成小点，嘴抖成锯齿
+    g.fillStyle = "#FFFFFF";
+    g.beginPath();
+    g.arc(x - r * 0.36, y - r * 0.24, r * 0.15, 0, Math.PI * 2);
+    g.arc(x + r * 0.36, y - r * 0.24, r * 0.15, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "#FFFFFF";
+    g.lineWidth = Math.max(1.2, r * 0.1);
+    g.lineCap = "round";
+    g.lineJoin = "round";
+    g.beginPath();
+    const mx = x - r * 0.48;
+    const seg = (r * 0.96) / 6;
+    g.moveTo(mx, y + r * 0.3);
+    for (let k = 1; k <= 6; k++) {
+      g.lineTo(mx + seg * k, y + r * (k % 2 === 1 ? 0.16 : 0.3));
+    }
+    g.stroke();
+  } else {
+    // 白底 + 深瞳，瞳孔顺着走向偏一点，跑起来就有「看路」的神气
+    g.fillStyle = "#FFFFFF";
+    g.beginPath();
+    g.arc(x - r * 0.36, y - r * 0.18, r * 0.3, 0, Math.PI * 2);
+    g.arc(x + r * 0.36, y - r * 0.18, r * 0.3, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#2f2a45";
+    g.beginPath();
+    g.arc(x - r * 0.36 + o.pupil.dx, y - r * 0.18 + o.pupil.dy, r * 0.15, 0, Math.PI * 2);
+    g.arc(x + r * 0.36 + o.pupil.dx, y - r * 0.18 + o.pupil.dy, r * 0.15, 0, Math.PI * 2);
+    g.fill();
+  }
+  if (o.starMark) {
+    // 星星操纵的那只：头顶一颗小金星，比原来的描边圈醒目也不挡脸
+    g.fillStyle = "#FFE27A";
+    starPath(g, x, y - r * 1.42, 5, r * 0.4, r * 0.17);
+    g.fill();
+    g.strokeStyle = "#C98A2E";
+    g.lineWidth = 1;
+    g.stroke();
+  }
+  if (o.warnRing) {
+    g.strokeStyle = "#FFFFFF";
+    g.lineWidth = 2.4;
+    g.beginPath();
+    g.arc(x, y, r * 1.18, 0, Math.PI * 2);
+    g.stroke();
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* 玩家：原创豆豆勇士                                                  */
 /* ------------------------------------------------------------------ */
 
