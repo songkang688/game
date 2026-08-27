@@ -460,8 +460,10 @@ export const ORE_SKIN: Record<Ore["kind"], { fill: string; lit: string; edge: st
   goldSmall: { fill: "#FFC441", lit: "#FFE79A", edge: "#C1880F" },
   goldBig: { fill: "#FFB22C", lit: "#FFDD8C", edge: "#AE7305" },
   goldHuge: { fill: "#FF9F14", lit: "#FFD07A", edge: "#9C6100" },
-  pebble: { fill: "#C6BFB4", lit: "#E6E1D9", edge: "#8F887E" },
-  boulder: { fill: "#A9A299", lit: "#CFC9C1", edge: "#77716A" },
+  // r2 修复 W4R2-07:石头系整体压暗一档(fill 明度 ≤ 金块最深亮停 ÷1.25),
+  // 色弱/16px 灰度下金石不再靠猜;石头仍是无彩度的灰褐,金块仍是暖黄
+  pebble: { fill: "#A69E8F", lit: "#CCC4B6", edge: "#6E675C" },
+  boulder: { fill: "#857E72", lit: "#A9A296", edge: "#57524A" },
   gem: { fill: "#7DDDF0", lit: "#D6F7FF", edge: "#2F97AF" },
   chest: { fill: "#C98C58", lit: "#E7B98C", edge: "#8A5A31" },
   mole: { fill: "#D8A87A", lit: "#F0CFAC", edge: "#A57A4E" },

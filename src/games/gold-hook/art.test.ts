@@ -337,6 +337,20 @@ describe("1.3 矿石精修", () => {
     const rock = rec((c) => drawOre(c, oreOf("boulder"), 230));
     expect(rock).toContain(`fill@${ORE_SKIN.boulder.edge}`);
   });
+
+  it("r2 W4R2-07:金石明度差拉开——每种金块的亮停 ≥ 每种石头体色明度 ×1.25,色弱 16px 不再靠猜", () => {
+    const lum = (hex: string): number => {
+      const n = parseInt(hex.slice(1), 16);
+      return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 0xff) + 0.114 * (n & 0xff);
+    };
+    for (const g of ["nugget", "goldSmall", "goldBig", "goldHuge"] as const) {
+      for (const s of ["pebble", "boulder"] as const) {
+        expect(lum(ORE_SKIN[g].lit), `${g}.lit 明度不足 ${s}.fill 的 1.25 倍`).toBeGreaterThanOrEqual(
+          lum(ORE_SKIN[s].fill) * 1.25,
+        );
+      }
+    }
+  });
 });
 
 /* ---------------- 四、矿洞场景 ---------------- */
