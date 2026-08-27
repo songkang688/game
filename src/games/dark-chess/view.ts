@@ -103,7 +103,7 @@ export const CSS = `
 .dc-chip.dc-cap::before{background:url("${CAP_HOURGLASS}") center/contain no-repeat;}
 .dc-note{text-align:center;min-height:20px;font-size:14px;font-weight:700;color:#795b3a;margin-top:8px;line-height:1.5;}
 .dc-count{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
-.dc-count span{font-size:12px;font-weight:800;border-radius:999px;padding:3px 8px;background:#fff8ec;color:#8a6a40;
+.dc-count span{font-size:14px;font-weight:800;border-radius:999px;padding:3px 8px;background:#fff8ec;color:#8a6a40;
   display:inline-flex;align-items:center;gap:3px;}
 .dc-count .dc-ct{font-weight:900;margin-right:2px;}
 .dc-count .dc-ck{position:relative;display:inline-flex;align-items:center;gap:1px;}

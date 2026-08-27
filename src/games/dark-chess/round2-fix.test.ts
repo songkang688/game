@@ -49,6 +49,16 @@ describe("dark-chess · 格互叠回归修复（r2-1）", () => {
   });
 });
 
+describe("dark-chess · 记牌面板文本 ≥14px（r2-5）", () => {
+  it(".dc-count span 字号提到 14px，随行的兵种存量数字一起可读", () => {
+    const rule = BOARD_CSS.match(/\.dc-count span\{[^}]*\}/)?.[0] ?? "";
+    expect(rule, ".dc-count span 规则丢了").not.toBe("");
+    const m = /font-size:([\d.]+)px/.exec(rule);
+    expect(m).not.toBeNull();
+    expect(Number.parseFloat((m as RegExpExecArray)[1])).toBeGreaterThanOrEqual(14);
+  });
+});
+
 describe("dark-chess · 局外屏字号 ≥14px（r2-4，r1 5-4 尾巴②）", () => {
   it("dc-sub / dc-tip / dc-pick 的每条规则字号都 ≥14", () => {
     for (const cls of ["dc-sub", "dc-tip", "dc-pick"]) {
