@@ -26,6 +26,16 @@ interface Row {
   notes: string[];
 }
 
+/**
+ * 每轮换一批关卡走(下标 0 基)。
+ * 第 1 轮 = 第 1/50/100/150/188 关(默认);第 2 轮 QA_LVS=6,44,131,187 → 第 7/45/132/188 关。
+ */
+const CAMPAIGN_LVS = (process.env.QA_LVS ?? "0,49,99,149,187").split(",").map(Number);
+/** 摆烂对照走哪一关(0 基),第 2 轮换到第 7 关 */
+const IDLE_LV = Number(process.env.QA_IDLE_LV ?? "0");
+const QA_ROUND = process.env.QA_ROUND ?? "";
+const OUT = `docs/qa/_evidence/window3-sim${QA_ROUND ? `-r${QA_ROUND}` : ""}.json`;
+
 const rows: Row[] = [];
 const row = (id: string): Row => {
   const r: Row = { id, win: false, lose: false, endless: "-", notes: [] };
@@ -35,7 +45,7 @@ const row = (id: string): Row => {
 
 afterAll(() => {
   mkdirSync("docs/qa/_evidence", { recursive: true });
-  writeFileSync("docs/qa/_evidence/window3-sim.json", JSON.stringify({ rows }, null, 2));
+  writeFileSync(OUT, JSON.stringify({ rows }, null, 2));
   const pad = (s: string, n: number) => s + " ".repeat(Math.max(0, n - s.length));
   console.log("\n===== 窗口 3 · 独立模拟走查汇总 =====");
   for (const r of rows) {
@@ -51,12 +61,12 @@ describe("garden-guard", () => {
     const { simulateLevel, simulateEndless } = await import("../../src/games/garden-guard/sim");
     const r = row("garden-guard");
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const out = simulateLevel(lv);
       if (out.win) wins.push(`第${lv + 1}关剩${out.heartsLeft}心/${Math.round(out.timeUsed)}秒/建${out.towersBuilt}塔`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`闯关 ${wins.length}/5 关通过:${wins.join("、")}`);
+    r.notes.push(`闯关 ${wins.length}/${CAMPAIGN_LVS.length} 关通过:${wins.join("、")}`);
 
     const bad = simulateLevel(99, { noTowers: true });
     r.lose = !bad.win;
@@ -77,12 +87,12 @@ describe("sprout-defense", () => {
     const { simulateLevel, simulateEndless } = await import("../../src/games/sprout-defense/sim");
     const r = row("sprout-defense");
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const out = simulateLevel(lv);
       if (out.win) wins.push(`第${lv + 1}关 ${Math.round(out.time)}秒/种${out.plantsBuilt}苗/清${out.bugsKilled}虫`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`闯关 ${wins.length}/5 关通过:${wins.join("、")}`);
+    r.notes.push(`闯关 ${wins.length}/${CAMPAIGN_LVS.length} 关通过:${wins.join("、")}`);
 
     const bad = simulateLevel(99, { build: false });
     r.lose = !bad.win;
@@ -103,12 +113,12 @@ describe("monster-crisis", () => {
     const { simulateLevel, simulateEndless } = await import("../../src/games/monster-crisis/sim");
     const r = row("monster-crisis");
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const out = simulateLevel(lv);
       if (out.win) wins.push(`第${lv + 1}关 ${out.waveReached}/${out.waveTotal}波、老巢${out.homeHp}血`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`闯关 ${wins.length}/5 关通过:${wins.join("、")}`);
+    r.notes.push(`闯关 ${wins.length}/${CAMPAIGN_LVS.length} 关通过:${wins.join("、")}`);
 
     const bad = simulateLevel(99, { build: false, shoot: false });
     r.lose = !bad.win;
@@ -131,13 +141,13 @@ describe("gold-hook", () => {
     const { simulateRun } = await import("../../src/games/gold-hook/logic");
     const r = row("gold-hook");
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const def = levelAt(lv);
       const out = simulateRun(def.field);
       if (out.coins >= def.target) wins.push(`第${lv + 1}关 ${out.coins}/${def.target} 元`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`闯关 ${wins.length}/5 关达标:${wins.join("、")}`);
+    r.notes.push(`闯关 ${wins.length}/${CAMPAIGN_LVS.length} 关达标:${wins.join("、")}`);
 
     const def = levelAt(99);
     const lazy = simulateRun(def.field, { takeTreasure: false, takeRocks: true });
@@ -163,13 +173,13 @@ describe("puff-bros", () => {
     const { createWorld, autoPlay, stepWorld } = await import("../../src/games/puff-bros/logic");
     const r = row("puff-bros");
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const def = buildLevel(lv);
       const out = autoPlay(createWorld(def, { players: 1 }), { maxSeconds: def.timeLimit });
       if (!out.lost && !out.timedOut) wins.push(`第${lv + 1}关 ${out.steps} 步`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`合作战役 ${wins.length}/5 关通过:${wins.join("、")}`);
+    r.notes.push(`合作战役 ${wins.length}/${CAMPAIGN_LVS.length} 关通过:${wins.join("、")}`);
 
     // 摆烂:一个输入都不给,看时间到会不会判负
     const def = buildLevel(99);
@@ -203,12 +213,12 @@ describe("prince-princess", () => {
     const { createWorld, autoPlay, stepWorld } = await import("../../src/games/prince-princess/logic");
     const r = row("prince-princess");
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const out = autoPlay(createWorld(buildLevel(lv), 2), { maxSeconds: 240 });
       if (!out.lost && !out.timedOut) wins.push(`第${lv + 1}关 ${out.steps} 步`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`战役 ${wins.length}/5 关通过:${wins.join("、")}`);
+    r.notes.push(`战役 ${wins.length}/${CAMPAIGN_LVS.length} 关通过:${wins.join("、")}`);
 
     const w = createWorld(buildLevel(99), 2);
     let steps = 0;
@@ -281,7 +291,7 @@ describe("ice-fire-forest", () => {
     const r = row("ice-fire-forest");
     const ok: string[] = [];
     const fail: number[] = [];
-    for (const lv of [0, 24, 49, 99, 133, 160, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const a = analyzeLevel(lv);
       const parsed = parseLevel(a.grid);
       const res = solveLevel(parsed, true);
@@ -318,7 +328,8 @@ describe("bowling-lane", () => {
     const r = row("bowling-lane");
 
     // 用某一档球手的手法把 10 格真打完,再用官方计分器算总分
-    const playGame = (skill: 0 | 1 | 2): { pins: number; score: number } => {
+    // 这一款的 AiLevel 是 1/2/3(新手球童 / 熟练球手 / 冠军球手),没有 0 档
+    const playGame = (skill: 1 | 2 | 3): { pins: number; score: number } => {
       const rolls: number[] = [];
       for (let frame = 0; frame < 10; frame++) {
         let standing = new Array<boolean>(10).fill(true);
@@ -343,8 +354,8 @@ describe("bowling-lane", () => {
     const totalOf = (g: unknown): number | undefined =>
       Array.isArray(g) ? (g[g.length - 1] as { running?: number })?.running : undefined;
 
-    const champ = playGame(2);
-    const rookie = playGame(0);
+    const champ = playGame(3);
+    const rookie = playGame(1);
     const lv1 = buildLevel(0);
     r.win = champ.pins >= (lv1.target ?? 0);
     r.notes.push(
@@ -377,7 +388,7 @@ describe("sling-birds", () => {
     const r = row("sling-birds");
     const solved: string[] = [];
     const unsolved: number[] = [];
-    for (const lv of [0, 40, 90, 140, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       let ok = false;
       let note = "";
       try {
@@ -506,13 +517,13 @@ describe("bumper-cars", () => {
     };
 
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const def = buildLevel(lv);
       const w = boot(def, 3, true);
       if (logic.levelCleared(w)) wins.push(`第${lv + 1}关 ${Math.round(w.time / 1000)}秒`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`闯关 ${wins.length}/5 关清场:${wins.join("、")}`);
+    r.notes.push(`闯关 ${wins.length}/${CAMPAIGN_LVS.length} 关清场:${wins.join("、")}`);
 
     const idleWorld = boot(buildLevel(99), 3, false);
     r.lose = !logic.levelCleared(idleWorld);
@@ -770,7 +781,7 @@ describe("tank-battle", () => {
 
     const results: string[] = [];
     let anyWin = false;
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const { lv: def, w } = worldFor(lv, 2);
       const t = drive(w, def.limit + 2);
       results.push(`第${lv + 1}关 ${w.status}/${Math.round(t)}秒`);
@@ -801,38 +812,38 @@ describe("tank-battle", () => {
 // ---------------------------------------------------------------------------
 // 交叉复核:浏览器层「第 1 关摆烂也弹了胜利面板」的几款,拿逻辑层再验一次
 // ---------------------------------------------------------------------------
-describe("第 1 关摆烂对照", () => {
-  it("一个输入都不给,第 1 关到底会不会自己赢", async () => {
-    const r = row("(摆烂对照·第1关)");
+describe(`第 ${IDLE_LV + 1} 关摆烂对照`, () => {
+  it(`一个输入都不给,第 ${IDLE_LV + 1} 关到底会不会自己赢`, async () => {
+    const r = row(`(摆烂对照·第${IDLE_LV + 1}关)`);
     const out: string[] = [];
 
     {
       const { buildLevel } = await import("../../src/games/prince-princess/levels");
       const { createWorld, stepWorld } = await import("../../src/games/prince-princess/logic");
-      const w = createWorld(buildLevel(0), 2);
+      const w = createWorld(buildLevel(IDLE_LV), 2);
       let steps = 0;
       while (w.status === "playing" && steps < 60 * 240) {
         stepWorld(w, 1 / 60, w.heroes.map(() => ({}) as never));
         steps++;
       }
-      out.push(`prince-princess 第1关不动 ${steps} 步 → ${w.status}`);
+      out.push(`prince-princess 第${IDLE_LV + 1}关不动 ${steps} 步 → ${w.status}`);
     }
     {
       const { buildLevel } = await import("../../src/games/puff-bros/arena");
       const { createWorld, stepWorld } = await import("../../src/games/puff-bros/logic");
-      const def = buildLevel(0);
+      const def = buildLevel(IDLE_LV);
       const w = createWorld(def, { players: 1 });
       let steps = 0;
       while (w.status === "playing" && steps < Math.ceil((def.timeLimit + 5) * 60)) {
         stepWorld(w, 1 / 60, w.players.map(() => ({}) as never));
         steps++;
       }
-      out.push(`puff-bros 第1关不动 ${steps} 步 → ${w.status}`);
+      out.push(`puff-bros 第${IDLE_LV + 1}关不动 ${steps} 步 → ${w.status}`);
     }
     {
       const { buildLevel } = await import("../../src/games/bumper-cars/levels");
       const logic = await import("../../src/games/bumper-cars/logic");
-      const lv = buildLevel(0);
+      const lv = buildLevel(IDLE_LV);
       const cars = [
         logic.makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
         ...lv.foes.map((foe, i) => {
@@ -849,7 +860,7 @@ describe("第 1 关摆烂对照", () => {
         logic.stepWorld(w, 16, w.cars.map(() => logic.IDLE));
         w.events.length = 0;
       }
-      out.push(`bumper-cars 第1关全体不动 → 清场=${logic.levelCleared(w)}、玩家出局=${logic.playerDown(w)}`);
+      out.push(`bumper-cars 第${IDLE_LV + 1}关全体不动 → 清场=${logic.levelCleared(w)}、玩家出局=${logic.playerDown(w)}`);
     }
     r.notes.push(out.join(" | "));
     r.win = false;
@@ -897,12 +908,12 @@ describe("bomb-buddies", () => {
     };
 
     const wins: string[] = [];
-    for (const lv of [0, 49, 99, 149, 187]) {
+    for (const lv of CAMPAIGN_LVS) {
       const w = boot(buildLevel(lv), true);
       if (logic.levelCleared(w)) wins.push(`第${lv + 1}关 ${Math.round(w.time / 1000)}秒`);
     }
     r.win = wins.length > 0;
-    r.notes.push(`闯关 ${wins.length}/5 关清场:${wins.join("、")}`);
+    r.notes.push(`闯关 ${wins.length}/${CAMPAIGN_LVS.length} 关清场:${wins.join("、")}`);
 
     const idle = boot(buildLevel(99), false);
     r.lose = !logic.levelCleared(idle);
