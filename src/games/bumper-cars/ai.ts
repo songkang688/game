@@ -10,6 +10,8 @@
 //  - 4 会卡边角逼出界:专挑离悬崖最近的对手,提前攒好蓄力,盯着正在打转的车补最后一下。
 import {
   CAR_R,
+  CHARGE_MS,
+  CHARGE_THRUST,
   MAX_SPEED,
   boundaryHit,
   carActive,
@@ -48,7 +50,14 @@ export interface Trait {
   lead: number;
   /** 会不会攒蓄力去打强撞 */
   chargeUp: boolean;
-  /** 会不会专挑「已经被逼到角落 / 正在打转」的对手下手 */
+  /**
+   * 会不会专挑「已经被逼到角落 / 正在打转」的对手下手。
+   *
+   * 打开之后有两层意思:挑目标时优先赶去补刀(`pickTarget`),
+   * 以及**把冲刺和蓄力留到那一下再用**(`isKillShot`)。
+   * 冲刺 1.4 秒才好一次,场中央随手按掉的那一下换不来什么;
+   * 留着它,等对手挂上台沿再推出去,同样一次冷却换的是一条命。
+   */
   corner: boolean;
   /**
    * 自己挂在台沿上打转时,往场内使出几成劲(0..1)。
@@ -121,6 +130,81 @@ export function pickTarget(world: World, me: Car, edgeMinded: boolean, cornerMin
 export function leadPoint(foe: Car, lead: number): { x: number; y: number } {
   if (lead <= 0) return { x: foe.x, y: foe.y };
   return { x: foe.x + foe.vx * lead, y: foe.y + foe.vy * lead };
+}
+
+/**
+ * 危险感该打几折(0..1):**对手卡在我和悬崖之间的时候,这条边没那么可怕**。
+ *
+ * 原本的算法只看「我离边缘多远」,于是把对手一路顶到台沿的那一刻,
+ * 电脑自己也进了危险区,方向立刻掰回场心——好不容易占到的内侧位置就这么让了出去,
+ * 对手转头就爬回来了。可那一刻真正会掉下去的是它不是我:它的车身就是我的挡墙。
+ *
+ * 所以只要对手比我更靠近同一条边、而且就在我的外侧,危险感就打折,让电脑敢把这一下推完。
+ *
+ * 这一层只有卡角档(`corner`)懂——它本来就是「敢在台沿上跟你贴身」的那一档。
+ * 冠军档会绕位会预判,但一到边上还是先顾自己;这正是四档比三档强在哪儿的地方。
+ */
+export function pinBonus(world: World, me: Car, foe: Car, corner: boolean): number {
+  if (!corner) return 1;
+  const myEdge = worldEdge(world, me.x, me.y);
+  const foeEdge = worldEdge(world, foe.x, foe.y);
+  if (foeEdge >= myEdge) return 1;
+  // 对手得真的在我的外侧才挡得住:连心线要和「往场外」的方向大致同向
+  const dx = foe.x - me.x;
+  const dy = foe.y - me.y;
+  const d = hypot(dx, dy);
+  if (d < 0.001 || d > (me.r + foe.r) * 3) return 1;
+  const out = outwardDir(world, me.x, me.y);
+  const facing = (dx / d) * out.x + (dy / d) * out.y;
+  if (facing < 0.4) return 1;
+  return 0.45;
+}
+
+/**
+ * 这一下推出去够不够直接收人头。
+ *
+ * 两种情况算数:对手已经挂在台沿上打转(再往外顶一记结实的就是出局),
+ * 或者它离悬崖已经不到一个半车身——推过去它就站不住了。
+ * 其余时候撞它只是把它推开,冲刺那 1.4 秒冷却花得不值。
+ */
+export function isKillShot(world: World, foe: Car): boolean {
+  if (foe.teeter > 0) return true;
+  return worldEdge(world, foe.x, foe.y) < (foe.r + CAR_R) * 1.5;
+}
+
+/**
+ * 蓄满一发之前车能往前挪多远。
+ *
+ * 蓄力期间只剩半个油门(`CHARGE_THRUST`),按住 `CHARGE_MS` 才蓄满,
+ * 所以「从这里开始按住、蓄满时刚好撞上」的距离上限就是这个数。
+ * 比这还远就开始按,等于抱着半个油门在场上爬——这正是四档以前打不过三档的原因。
+ */
+export const CHARGE_REACH = MAX_SPEED * CHARGE_THRUST * (CHARGE_MS / 1000);
+
+/**
+ * 这一帧要不要按住蓄力。
+ *
+ * 蓄力是「用速度换一发重拳」的交易,只有三件事同时成立才划算:
+ *  1. 冷却好了、角度对着悬崖、自己不在危险区(危险区里最不该慢下来);
+ *  2. 对手还没贴脸(贴上了就该松手把这拳打出去),但也在一发蓄力够得着的范围内;
+ *  3. **还没蓄满**——蓄满之后再按住只有坏处:拳头不会更重,车却还拖着半个油门。
+ *
+ * 第 3 条是纯函数能读到的状态(`me.charge`),所以「蓄满即出手」是可断言的,
+ * 不用靠调参去凑。
+ */
+export function wantCharge(
+  trait: Trait,
+  me: Car,
+  gap: number,
+  touch: number,
+  danger: number,
+  goodAngle: boolean
+): boolean {
+  if (!trait.chargeUp || me.chargeCd > 0 || !goodAngle) return false;
+  if (danger >= 0.35) return false;
+  // 蓄满了就放手,别抱着一发满蓄在场上慢慢爬
+  if (me.charge >= CHARGE_MS) return false;
+  return gap > touch * 0.92 && gap < touch + CHARGE_REACH;
 }
 
 /**
@@ -261,7 +345,7 @@ export function chooseCarAction(
   // 2. 危险权重:越靠边、被推得越狠,往回打方向的比重就越大。
   //    留出的余量按外飘速度算——开得越快,越要提前掉头。
   const need = trait.edgeCare + Math.max(0, speedOut) * trait.react + me.r;
-  let danger = clamp01((need - myEdge) / Math.max(1, need));
+  let danger = clamp01((need - myEdge) / Math.max(1, need)) * pinBonus(world, me, foe, trait.corner);
   if (danger > 0) {
     dx = dx * (1 - danger) + inX * danger;
     dy = dy * (1 - danger) + inY * danger;
@@ -304,11 +388,9 @@ export function chooseCarAction(
   // 6. 被顶向悬崖时点一脚刹车,把外飘的速度先吃掉
   const brake = speedOut > MAX_SPEED * 0.2 && myEdge < need;
 
-  // 7. 蓄力冲撞(只有卡角档会用):对手还有一段距离时先按住攒力,
-  //    等真的贴上去、角度也对了再松手,那一下正好把它顶下台。
-  //    自己还在危险区就别攒了——蓄力期间车会慢下来,那正是最不该慢的时候。
-  const chargeWindow = trait.chargeUp && me.chargeCd <= 0 && danger < 0.35 && goodAngle;
-  const charge = chargeWindow && gap > touch * 0.92 && gap < trait.dashRange * 2.2;
+  // 7. 蓄力冲撞(只有卡角档会用):对手进到「一发蓄力够得着」的圈里才按住攒力,
+  //    蓄满或者贴上脸就立刻松手,把这一下打出去。判定见 `wantCharge`。
+  const charge = wantCharge(trait, me, gap, touch, danger, goodAngle && isKillShot(world, foe));
 
   return { dx: rx, dy: ry, dash, brake, charge };
 }
