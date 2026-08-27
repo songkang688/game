@@ -27,6 +27,7 @@ import {
 import { AI_TIERS, aiController, type AiTier, type Controller } from "./ai";
 import { AI_POWER_SCALE, PLAYER_POWER_SCALE, endlessSetup, levelSetup } from "./duel";
 import { boundKeys, createDisposer, keySideOf, sideLayout } from "./runtime";
+import { fitFieldIntoStage } from "./fit";
 
 export const RBG_CSS = `
 .rbg-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0E4, #FFE4EC); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
@@ -620,7 +621,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, settings: { comeback: boole
     },
   });
   stage.appendChild(run.root);
-  return { destroy: () => run.destroy() };
+  // 360×640 上这一屏比舞台看得见的那一段高 63px、320×640 上高 95px，
+  // 掉在裁切线以下的正是 `.rbg-msg`——红绿灯章唯一那句规则说明（W5R2-FC-03）
+  const fit = fitFieldIntoStage(run.root);
+  return {
+    destroy: () => {
+      fit.dispose();
+      run.destroy();
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -674,6 +683,7 @@ function mountVersus(
 ): { destroy: () => void } {
   const gone = createDisposer();
   let run: TugRun | null = null;
+  let fit: { dispose: () => void } | null = null;
   let seed = 101;
   let redWins = 0;
   let blueWins = 0;
@@ -697,6 +707,8 @@ function mountVersus(
   }
 
   function showPicker(): void {
+    fit?.dispose();
+    fit = null;
     run?.destroy();
     run = null;
     stageEl.innerHTML = "";
@@ -728,6 +740,8 @@ function mountVersus(
   }
 
   function startRound(pick: VersusPick): void {
+    fit?.dispose();
+    fit = null;
     run?.destroy();
     stageEl.innerHTML = "";
     seed += 13;
@@ -778,6 +792,7 @@ function mountVersus(
       },
     });
     stageEl.appendChild(run.root);
+    fit = fitFieldIntoStage(run.root);
     paintScore();
   }
 
@@ -789,6 +804,8 @@ function mountVersus(
 
   return {
     destroy() {
+      fit?.dispose();
+      fit = null;
       run?.destroy();
       run = null;
       gone.dispose();
@@ -832,6 +849,7 @@ function mountEndless(
   const gone = createDisposer();
   let streak = 0;
   let run: TugRun | null = null;
+  let fit: { dispose: () => void } | null = null;
   let best = save.getGameProgress(meta.id).endlessBest;
 
   const wrap = document.createElement("div");
@@ -904,6 +922,8 @@ function mountEndless(
   }
 
   function startRound(): void {
+    fit?.dispose();
+    fit = null;
     run?.destroy();
     stageEl.innerHTML = "";
     paintHead();
@@ -922,6 +942,7 @@ function mountEndless(
       },
     });
     stageEl.appendChild(run.root);
+    fit = fitFieldIntoStage(run.root);
   }
 
   gone.listen(wrap.querySelector(".rbg-back") as HTMLButtonElement, "click", () => {
@@ -932,6 +953,8 @@ function mountEndless(
 
   return {
     destroy() {
+      fit?.dispose();
+      fit = null;
       run?.destroy();
       run = null;
       gone.dispose();
