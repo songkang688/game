@@ -26,6 +26,7 @@ import {
   edgeDistance,
   endlessLine,
   fieldRadius,
+  foesGone,
   formatClock,
   hypot,
   inArc,
@@ -37,6 +38,7 @@ import {
   lastTeamStanding,
   leader,
   levelCleared,
+  levelForfeit,
   loseLine,
   makeCar,
   makeHazard,
@@ -45,6 +47,7 @@ import {
   openEdgeAt,
   overlapping,
   playerDown,
+  playerKnocks,
   rateLevel,
   resolveCollision,
   respawnSpot,
@@ -573,16 +576,39 @@ describe("stepWorld:掉出场地", () => {
 });
 
 describe("胜负与计时", () => {
-  it("对手全退场算通关,自己全退场算失败", () => {
+  it("对手全退场又是玩家顶下去的才算通关,自己全退场算失败", () => {
     const a = hero(50, 35);
     const b = foe(50, 35);
     const world = createWorld({ field: rect(), cars: [a, b] });
     expect(levelCleared(world)).toBe(false);
     expect(playerDown(world)).toBe(false);
+    // 这一下记在玩家名下:场面清空 = 通关
+    b.lastPushBy = a.id;
+    b.lastPushAt = world.time;
     dropCar(world, 1);
+    expect(a.score).toBe(1);
+    expect(foesGone(world)).toBe(true);
     expect(levelCleared(world)).toBe(true);
+    expect(levelForfeit(world)).toBe(false);
     dropCar(world, 0);
     expect(playerDown(world)).toBe(true);
+  });
+
+  it("对手自己开下去、把场面清空了也不算玩家赢", () => {
+    // 附录 C 点名的那条口子:电脑车互相顶,一台被另一台顶下去就等于替玩家清场。
+    const a = hero(50, 35);
+    const b = foe(50, 35);
+    const c = makeCar({ id: 2, name: "云云", emoji: "☁️", color: "#8fb8e8", team: 1, x: 70, y: 35 });
+    const world = createWorld({ field: rect(), cars: [a, b, c] });
+    // 一台自己开下去,另一台被队友顶下去:两次出局都不该记到玩家头上
+    dropCar(world, 1);
+    c.lastPushBy = b.id;
+    c.lastPushAt = world.time;
+    dropCar(world, 2);
+    expect(playerKnocks(world)).toBe(0);
+    expect(foesGone(world), "场面确实清空了").toBe(true);
+    expect(levelCleared(world), "一台都没撞飞却判了通关").toBe(false);
+    expect(levelForfeit(world)).toBe(true);
   });
 
   it("对战里只剩一队还有车时分出胜负", () => {
@@ -659,10 +685,18 @@ describe("文案", () => {
   });
 
   it("失败文案只鼓励,不批评", () => {
-    for (const line of [loseLine("fall"), loseLine("time")]) {
+    for (const line of [loseLine("fall"), loseLine("time"), loseLine("empty")]) {
       expect(line.length).toBeGreaterThan(10);
       for (const bad of ["笨", "不行", "太差", "又输"]) expect(line).not.toContain(bad);
     }
+  });
+
+  it("对手自己下场的那一关:如实说清楚,不夸没做过的事", () => {
+    const line = loseLine("empty");
+    expect(line).toContain("自己开下悬崖");
+    expect(line).toContain("一台都没顶出场");
+    expect(line).not.toMatch(/撞飞 \d+ 台/);
+    expect(line).not.toContain("走位和刹车");
   });
 
   it("对战与无尽的成绩播报都带上数字", () => {

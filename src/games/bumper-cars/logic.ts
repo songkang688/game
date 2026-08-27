@@ -824,9 +824,44 @@ export function teamAlive(world: World, team: number): number {
   return world.cars.filter((c) => c.team === team && !c.gone).length;
 }
 
-/** 闯关通过:对手全部退场 */
-export function levelCleared(world: World): boolean {
+/** 场面上的对手是不是都退场了(只问场面,不问是谁的功劳) */
+export function foesGone(world: World): boolean {
   return world.cars.some((c) => c.team !== 0) && world.cars.every((c) => c.team === 0 || c.gone);
+}
+
+/** 这一局玩家这一队亲手顶下去了几台(= 玩家席位的 `score` 之和) */
+export function playerKnocks(world: World): number {
+  let n = 0;
+  for (const c of world.cars) if (c.team === 0) n += c.score;
+  return n;
+}
+
+/**
+ * 闯关通过:对手全部退场,**而且至少有一台是玩家亲手顶下去的**。
+ *
+ * 后半句是第 3 轮附录 C 点名的那条口子。电脑车之间也会互相顶,
+ * 一台把另一台顶下悬崖就等于替玩家清了场——第 3 / 8 / 54 / 78 / 152 / 153 关
+ * 正是这么白送的:玩家一个键都不按,十几秒就「过关」并解锁下一关,
+ * 而这六关每一次对手出局的功劳都记着 `-1`(谁都不算)。
+ *
+ * 所以清场这件事和评星用同一把尺子:`rateLevel` 判「一台都没撞飞最多 1 星」,
+ * 这里判「一台都没撞飞就不算赢」。判据取 `Car.score`,而 `score` 只有
+ * `creditShove` 认过的那一下才加得上——对手自己开下去、被队友顶下去都不算数。
+ *
+ * 注意这一条只管闯关。无尽车海考的是「在车海里撑住」,那边用 `foesGone`。
+ */
+export function levelCleared(world: World): boolean {
+  return foesGone(world) && playerKnocks(world) > 0;
+}
+
+/**
+ * 对手全退场了,可一台都不是玩家顶下去的:这一关不算玩家赢。
+ *
+ * 场上已经没人可撞了,再让孩子对着空场地耗到时间到没有意义,
+ * 所以这也是一种结束条件——不给星、不解锁,如实说一句「他们是自己开下去的」再来一次。
+ */
+export function levelForfeit(world: World): boolean {
+  return foesGone(world) && playerKnocks(world) <= 0;
 }
 
 /** 玩家这一队全军覆没 */
@@ -1317,9 +1352,19 @@ export function winLine(secondsLeft: number, falls: number, knocked: number): st
   return `撞飞 ${knocked} 台对手车,自己掉下去 ${falls} 次。下一关记得贴着场地中间打,边缘留给对手。`;
 }
 
-export function loseLine(reason: "fall" | "time"): string {
+/**
+ * 没过关的播报。
+ *
+ * `empty` 是「对手全自己开下去了,你一台都没顶出场」那一种:
+ * 场面上确实清空了,但这一关不是玩家赢的,所以既不发星也不解锁。
+ * 这句话只说事实加下一步怎么做,不夸一件孩子没做过的事,也不说他不行。
+ */
+export function loseLine(reason: "fall" | "time" | "empty"): string {
   if (reason === "fall") {
     return "这一次被顶出了场地。别急,下一把先用刹车稳住车头,再借冲刺撞回去,主动权就回来了。";
+  }
+  if (reason === "empty") {
+    return "对手全是自己开下悬崖的,你一台都没顶出场,这一关就先不算过。再来一次,亲手把他们顶下去,星星才是你的。";
   }
   return "时间到啦。下一次试着把对手往最近的悬崖边赶,不用满场追,省下的时间够多撞两台。";
 }

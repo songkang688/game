@@ -25,6 +25,7 @@ import {
   endlessLine,
   fieldCenter,
   fieldRadius,
+  foesGone,
   formatClock,
   hypot,
   inArc,
@@ -32,6 +33,7 @@ import {
   keyToAction,
   lastTeamStanding,
   levelCleared,
+  levelForfeit,
   loseLine,
   makeCar,
   matchWinner,
@@ -260,7 +262,8 @@ function makeStick(player: 0 | 1): Stick {
 
 export interface MatchResult {
   cleared: boolean;
-  reason: "clear" | "fall" | "time";
+  /** empty = 对手全自己开下去了,一台都不是玩家顶的:场面清空了,但这一关不算赢 */
+  reason: "clear" | "fall" | "time" | "empty";
   secondsLeft: number;
   totalSeconds: number;
   /** 玩家掉下去几次 */
@@ -1022,8 +1025,14 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       if (timeUp(world)) settle({ ...baseResult(), reason: "time", winner: -1 });
       return;
     }
-    if (levelCleared(world)) {
+    // 无尽车海考的是「在越来越多的车里撑住」,场面清空就算这一波过了;
+    // 闯关还要问一句「这一场是不是玩家自己打下来的」,见 levelCleared / levelForfeit。
+    if (opts.mode === "endless" ? foesGone(world) : levelCleared(world)) {
       settle({ ...baseResult(), cleared: true, reason: "clear" });
+      return;
+    }
+    if (levelForfeit(world)) {
+      settle({ ...baseResult(), reason: "empty" });
       return;
     }
     if (playerDown(world)) {
@@ -1099,7 +1108,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
           winLine(res.secondsLeft, res.falls, res.knocked)
         );
       } else {
-        ctx.lose(loseLine(res.reason === "fall" ? "fall" : "time"));
+        ctx.lose(loseLine(res.reason === "fall" || res.reason === "empty" ? res.reason : "time"));
       }
     },
   });
