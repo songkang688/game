@@ -17,6 +17,7 @@
  */
 import { brushSvg, brushWidths, resamplePoints, strokeKindOf } from "../../art/kit/brush";
 import { BLOOM_FRAMES, FLOWER_TRIO, flowerSvg } from "../../art/kit/flower";
+import { shadeFlower } from "./flowerShade";
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
@@ -296,7 +297,10 @@ export function runTracing(opts: TraceOptions): PlayHandle {
           `<button type="button" class="wgd-garden-flower${fall}" data-char="${f.char}" data-pinyin="${f.pinyin}"` +
           ` title="${label}" aria-label="花园里的字：${label}">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true">` +
-          flowerSvg({ cx: 12, cy: 12, r: 10, petal: FLOWER_TRIO[f.colorIndex] }) +
+          // W8R1-06：花瓣挂 2 停径向渐变（瓣根深→瓣尖亮），kit 件只读所以在消费端装饰
+          shadeFlower(flowerSvg({ cx: 12, cy: 12, r: 10, petal: FLOWER_TRIO[f.colorIndex] }), {
+            cx: 12, cy: 12, r: 10, petal: FLOWER_TRIO[f.colorIndex], idPrefix: `wgdgf${i}`,
+          }) +
           `</svg></button>`
         );
       })
@@ -328,7 +332,10 @@ export function runTracing(opts: TraceOptions): PlayHandle {
     const list = gardenFlowers(chars, bloomed);
     const petal = FLOWER_TRIO[list[list.length - 1]?.colorIndex ?? 0];
     const frameSvg = (frame: number): string =>
-      flowerSvg({ cx: GRID / 2, cy: 24, r: 13, petal, frame, className: "wgd-bloom" });
+      // W8R1-06：展开动画的每一帧同样挂花瓣渐变，帧序与几何一字不动
+      shadeFlower(flowerSvg({ cx: GRID / 2, cy: 24, r: 13, petal, frame, className: "wgd-bloom" }), {
+        cx: GRID / 2, cy: 24, r: 13, petal, idPrefix: "wgdbloom",
+      });
     if (reduced || !layer) {
       if (layer) layer.innerHTML = frameSvg(BLOOM_FRAMES.length - 1);
       renderGarden(false);
