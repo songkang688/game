@@ -80,10 +80,10 @@ const CSS = `
 .dmz-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFFBEA,#F4F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
 .dmz-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
-.dmz-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#8a6a2f;
+.dmz-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;color:#8a6a2f;
   box-shadow:0 2px 6px rgba(180,160,90,.25);white-space:nowrap;}
 .dmz-canvas{display:block;width:100%;height:auto;border-radius:14px;background:#241f3a;touch-action:none;}
-.dmz-note{text-align:center;min-height:20px;font-size:13px;font-weight:700;color:#7a6aa0;margin-top:8px;}
+.dmz-note{text-align:center;min-height:20px;font-size:14px;font-weight:700;color:#7a6aa0;margin-top:8px;}
 .dmz-pad{display:grid;grid-template-columns:repeat(3,minmax(48px,1fr));gap:6px;justify-content:center;margin:10px auto 0;max-width:220px;}
 .dmz-key{border:none;border-radius:14px;min-height:48px;font-size:20px;font-weight:900;color:#6b5a90;cursor:pointer;
   background:#ffffffd9;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;}
@@ -92,7 +92,7 @@ const CSS = `
 .dmz-pause{background:#fff3d6;color:#8a6a2f;font-size:17px;}
 .dmz-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
 .dmz-title{font-size:19px;font-weight:900;color:#7a5da8;text-align:center;}
-.dmz-sub{font-size:13px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
+.dmz-sub{font-size:14px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
 .dmz-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;width:100%;max-width:420px;}
 .dmz-mode{border:none;border-radius:16px;padding:14px 10px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#c88a43,#ad6f2f);box-shadow:0 4px 0 #8d581f;}
@@ -106,9 +106,9 @@ const CSS = `
   font-family:inherit;background:#ffffffd9;color:#6b5a90;box-shadow:0 3px 0 rgba(120,90,160,.22);}
 .dmz-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .dmz-btn[aria-pressed="true"]{background:#ffe6b8;color:#7a5520;}
-.dmz-tip{font-size:12px;font-weight:700;color:#9a8bb8;text-align:center;line-height:1.6;}
+.dmz-tip{font-size:14px;font-weight:700;color:#9a8bb8;text-align:center;line-height:1.6;}
 @media (max-width:420px){
-  .dmz-chip{font-size:13px;padding:4px 9px;}
+  .dmz-chip{font-size:14px;padding:4px 9px;}
   .dmz-title{font-size:17px;}
 }
 @media (prefers-reduced-motion:reduce){
