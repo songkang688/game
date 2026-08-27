@@ -1,8 +1,8 @@
 {
   "name": "yiduo-yixing",
   "private": true,
-  "version": "1.1.0",
-  "description": "一朵一星 1.1 —— 55 款原创小游戏合集(188 关战役 / 双人 / 无尽)",
+  "version": "1.2.2",
+  "description": "一朵一星 1.2 —— 76 款原创小游戏合集(188 关战役 / 双人 / 无尽)",
   "author": "yiduo-yixing",
   "license": "MIT",
   "type": "module",
@@ -20,7 +20,7 @@
     "dist:win": "npm run build && electron-builder --win portable",
     "dist:win:nsis": "npm run build && electron-builder --win nsis",
     "dist:win:all": "bash scripts/dist-win.sh",
-    "dist:mac": "npm run build && electron-builder --mac dmg zip",
+    "dist:mac": "npm run build && electron-builder --mac dmg --universal",
     "android:sync": "npm run build && NODE_OPTIONS=--experimental-strip-types cap sync android",
     "android:apk": "bash scripts/build-android.sh"
   },
@@ -54,15 +54,7 @@
         {
           "target": "dmg",
           "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
+            "universal"
           ]
         }
       ],
@@ -71,16 +63,13 @@
       "identity": null,
       "notarize": false
     },
+    "dmg": {
+      "artifactName": "yiduo-yixing-${version}-mac.${ext}"
+    },
     "win": {
       "target": [
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "nsis",
           "arch": [
             "x64"
           ]

@@ -17,7 +17,7 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: "#fff5fa",
     autoHideMenuBar: true,
-    title: "一朵一星",
+    title: "一朵一星 1.2 · 76 款原创小游戏合集",
     ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
