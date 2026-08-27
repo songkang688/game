@@ -43,7 +43,7 @@ import {
   type ChartNote,
   type MoleKind,
 } from "./rhythm";
-import { holeInnerHtml } from "./visual";
+import { MP_TIMING, dropPose, gearFor, gearSvgFor, holeInnerHtml, moleFaceSvg } from "./visual";
 
 interface HoleState {
   kind: MoleKind | null;
@@ -95,8 +95,22 @@ const CSS = `
 .mp-hole .mp-face svg { width: 92%; height: auto; }
 /* 缩回中:还能擦边打到,所以要看得见它在往下走 */
 .mp-hole .mp-face-drop { transform: translateY(22px); opacity: .55; }
-.mp-hole .mp-card { font-size: clamp(15px, 5.4vw, 24px); font-weight: 900; color: #4A4A7A; background: #FFF8E4; border-radius: 10px; padding: 3px 7px; box-shadow: 0 2px 5px rgba(90,80,50,.3); }
 @keyframes mpUp { from { transform: translateY(26px); opacity: .4; } to { transform: translateY(6px); opacity: 1; } }
+/* 装备层:盾抱胸前、安全帽扣头顶、小黑板举过头;第一下敲中装备抛物线飞走 */
+.mp-gear-shield { top: 30%; height: 42%; }
+.mp-gear-hat { top: -2%; height: 36%; }
+.mp-gear-board { top: -8%; height: 58%; }
+.mp-gear.mp-gear-fly { animation: mpGearFly var(--mp-fly-ms) ease-out forwards; }
+@keyframes mpGearFly { from { transform: translate(0, 0) rotate(0deg); opacity: 1; } 55% { transform: translate(30%, -55%) rotate(26deg); opacity: 1; } to { transform: translate(52%, -14%) rotate(52deg); opacity: 0; } }
+/* 冒头预告:出洞前 150ms,前沿土堆抖两下 + 洞口弹起两粒土 */
+.mp-hole.mp-peek .mp-mound-front { animation: mpPeek var(--mp-peek-ms) steps(4) 1; }
+@keyframes mpPeek { 0%, 50%, 100% { transform: translateX(0); } 25%, 75% { transform: translateX(2px); } }
+.mp-hole.mp-peek .mp-fx::after { content: ""; position: absolute; bottom: 30%; left: 48%; width: 4px; height: 4px; border-radius: 50%; background: var(--mp-soil-back); box-shadow: -9px -3px 0 -1px var(--mp-soil-front), 9px -5px 0 -1px var(--mp-soil-front); animation: mpDust var(--mp-peek-ms) ease-out 1; }
+@keyframes mpDust { from { transform: translateY(3px); opacity: 0; } 40% { opacity: 1; } to { transform: translateY(-5px); opacity: 0; } }
+/* 被敲反馈帧:压扁 0.8 倍回弹(ease-out-back)+ 星星圈,画在反馈层,热区不动 */
+.mp-bonk { position: absolute; left: 13%; right: 13%; top: 0; bottom: 24%; display: flex; align-items: flex-end; justify-content: center; animation: mpBonkPop var(--mp-bonk-ms) cubic-bezier(.34,1.56,.64,1); }
+.mp-bonk svg { width: 92%; height: auto; }
+@keyframes mpBonkPop { from { transform: translateY(4px) scale(1.06, .8); } to { transform: translateY(0) scale(1, 1); } }
 .mp-wrap.mp-night { background: linear-gradient(180deg, #2B2C46, #3C3A55); }
 .mp-wrap.mp-night .mp-badge { background: #4B4A6B; color: #FFF0C0; }
 .mp-wrap.mp-night .mp-msg { color: #FFE9A8; }
@@ -119,6 +133,10 @@ const CSS = `
   .mp-hole .mp-face { animation: none; }
   .mp-hole.mp-sink { transform: none; }
   .mp-combo.mp-combo-on .mp-combofill { animation: none; }
+  .mp-hole.mp-peek .mp-mound-front { animation: none; }
+  .mp-hole.mp-peek .mp-fx::after { display: none; }
+  .mp-gear.mp-gear-fly { animation: none; opacity: 0; }
+  .mp-bonk { animation: none; }
 }
 `;
 
@@ -228,24 +246,60 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
     return blazeUntil > Date.now();
   }
 
+  /** 装备层正在播「飞走」动画的洞:动画播完前 renderGear 不许覆盖它 */
+  const gearFlying = Array.from({ length: 9 }, () => false);
+
+  function renderGear(i: number): void {
+    if (gearFlying[i]) return;
+    const h = holes[i];
+    const gear = h.kind && !h.dropping ? gearFor(h.kind, h.hits) : null;
+    gearEls[i].className = `mp-gear${gear ? ` mp-gear-${gear}` : ""}`;
+    gearEls[i].innerHTML = gear ? gearSvgFor(gear, h.card?.expr ?? "") : "";
+  }
+
   function renderHole(i: number): void {
     const h = holes[i];
     if (!h.kind) {
       liftEls[i].innerHTML = "";
-      gearEls[i].innerHTML = "";
+      renderGear(i);
       return;
     }
     const dropCls = h.dropping ? " mp-face-drop" : "";
-    if (h.kind === "quiz" && h.card) {
-      liftEls[i].innerHTML = `<span class="mp-face mp-card${dropCls}">${h.card.expr}</span>`;
-      return;
+    const pose = h.dropping ? dropPose(h.kind) : "up";
+    liftEls[i].innerHTML = `<span class="mp-face${dropCls}">${moleFaceSvg(h.kind, pose)}</span>`;
+    renderGear(i);
+  }
+
+  /** 第一下敲中护盾/帽子:装备抛物线飞走——只动装备层,地鼠层一根毛不动 */
+  function flyGear(i: number): void {
+    gearFlying[i] = true;
+    gearEls[i].classList.add("mp-gear-fly");
+    later(() => {
+      gearFlying[i] = false;
+      gearEls[i].classList.remove("mp-gear-fly");
+      renderGear(i);
+    }, MP_TIMING.gearFlyMs);
+  }
+
+  /** 被敲反馈帧:压扁 0.8 倍 + 吐舌笑 + 星星圈,画在反馈层,一小会儿就收 */
+  function bonkFx(i: number, kind: MoleKind): void {
+    fxEls[i].innerHTML = `<span class="mp-bonk">${moleFaceSvg(kind, "bonked")}</span>`;
+    later(() => {
+      fxEls[i].innerHTML = "";
+    }, MP_TIMING.bonkHoldMs);
+  }
+
+  /** 冒头预告:谱面里 150ms 内要上场的洞,土粒先抖两下(只加视觉类,不动谱面) */
+  let peekCursor = 0;
+  function scanPeek(): void {
+    while (peekCursor < chart.length && chart[peekCursor].at <= clockMs + MP_TIMING.peekMs) {
+      const note = chart[peekCursor++];
+      if (note.at > clockMs && holes[note.hole].kind === null) {
+        const el = holeEls[note.hole];
+        el.classList.add("mp-peek");
+        later(() => el.classList.remove("mp-peek"), MP_TIMING.peekMs + 40);
+      }
     }
-    if ((h.kind === "shield" || h.kind === "hat") && h.hits > 0) {
-      liftEls[i].innerHTML = `<span class="mp-face${dropCls}">${MOLE_SPECS.normal.emoji}</span>`;
-      gearEls[i].innerHTML = "";
-      return;
-    }
-    liftEls[i].innerHTML = `<span class="mp-face${dropCls}">${MOLE_SPECS[h.kind].emoji}</span>`;
   }
 
   function renderTorch(): void {
@@ -311,6 +365,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
   function tick(): void {
     if (ended || destroyed) return;
     clockMs += TICK_MS;
+    scanPeek();
     while (cursor < chart.length && chart[cursor].at <= clockMs) spawnNote(chart[cursor++]);
     holes.forEach((h, i) => {
       if (!h.kind) return;
@@ -386,8 +441,10 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
 
     if (h.kind === "quiz") {
       const card = h.card;
+      const wasCorrect = card?.correct === true;
+      if (wasCorrect) bonkFx(i, "quiz");
       hideMole(i);
-      if (card?.correct) {
+      if (wasCorrect && card) {
         opts.sfx("pop");
         msgEl.textContent = `🧮 ${card.expr} = ${quizNow}，算得真准！`;
         award(judge, 1);
@@ -403,6 +460,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
       h.hits = 1;
       opts.sfx("tap");
       msgEl.textContent = h.kind === "hat" ? "🎩 帽子飞啦，再补一下！" : "🪖 头盔掀掉啦，再补一下！";
+      flyGear(i);
       renderHole(i);
       return;
     }
@@ -420,6 +478,7 @@ function createRound(stage: HTMLElement, opts: RoundOpts): { destroy: () => void
               : "";
     msgEl.textContent = `${kindLine}${kindLine ? " · " : ""}${JUDGE_LABEL[judge]}`;
     sink(i);
+    bonkFx(i, h.kind);
     hideMole(i);
     award(judge, spec.base);
   }

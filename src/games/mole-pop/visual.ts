@@ -1,12 +1,22 @@
 // 地鼠嘭嘭 · 1.3 视觉层(B 档视觉升级)。
 //
 // 这里放的全是「怎么画」:七个 --mp- 配色 token、动效时序表、洞口三层土堆的
-// DOM 层级序、洞内结构模板与整张样式表——全部纯数据与纯字符串,不碰 DOM,
-// index.ts 只负责把这里的字符串挂上去。
+// DOM 层级序、洞内结构模板、种类 → SVG 的映射与装备显隐——全部纯数据与
+// 纯函数,不碰 DOM,index.ts 只负责把这里算出来的字符串挂上去。
 //
 // 红线:这一层绝不读写出洞节奏 / hits 判定 / quiz 出题 / 存档;
+// MOLE_SPECS 只读(按剩余敲击次数决定装备显隐,判定本身一个字不动);
 // 洞按钮(热区)的几何(aspect-ratio 1、min 56px、grid gap 12px)与
 // 升降的 translateY 时序(mpUp .18s / 6px / 22px / 26px)沿用 1.2,一个字不改。
+import {
+  MOLE_FUR_GOLD,
+  bunnySvg,
+  moleGearSvg,
+  moleSvg,
+  type MoleGear,
+  type MolePose,
+} from "../../art/kit/moleSvg";
+import { MOLE_SPECS, type MoleKind } from "./rhythm";
 
 // ---------------------------------------------------------------------------
 // 一、配色 token(1.3 规格表原样落成常量,动一个色值单测就红)
@@ -96,3 +106,44 @@ export function holeInnerHtml(): string {
 // 样式表本体留在 index.ts 的模板字面量里(既有 360px 窄屏 QA 直接从那边源码
 // 抠 CSS,搬走会把老用例弄红)。这里的常量是唯一口径,视觉单测负责把
 // index.ts 里的 CSS 与这里的 token / 时序 / z 序逐一对账,漂移就红。
+
+// ---------------------------------------------------------------------------
+// 四、种类 → 画什么(纯映射;emoji 从此退休,九种角色全走自绘 SVG)
+// ---------------------------------------------------------------------------
+
+/** 洞里能出现的装备(独立 DOM 装备层) */
+export type MoleGearKind = Exclude<MoleGear, "none">;
+
+/**
+ * 这一只现在该不该亮装备。只读 MOLE_SPECS[kind].hits(总共要敲几下)与
+ * 已经吃了几下(hitsTaken):剩余 ≥ 2 下才带着装备——护盾鼠 / 帽子鼠
+ * 第一下装备飞走,第二下才倒。算式鼠全程举小黑板。
+ */
+export function gearFor(kind: MoleKind, hitsTaken: number): MoleGearKind | null {
+  if (kind === "quiz") return "board";
+  if (kind === "shield" || kind === "hat") {
+    const remaining = MOLE_SPECS[kind].hits - Math.max(0, hitsTaken);
+    if (remaining < 2) return null;
+    return kind === "shield" ? "shield" : "hat";
+  }
+  return null;
+}
+
+/** 一只地鼠(或花花兔)的主体 SVG:种类差异靠皮毛色 / 瞌睡眼 / 星芒 / 剪影 */
+export function moleFaceSvg(kind: MoleKind, pose: MolePose = "up"): string {
+  if (kind === "bunny") return bunnySvg();
+  if (kind === "gold") return moleSvg({ pose, fur: MOLE_FUR_GOLD });
+  if (kind === "sleepy") return moleSvg({ pose, sleepy: true });
+  if (kind === "flash") return moleSvg({ pose, sparkle: true });
+  return moleSvg({ pose });
+}
+
+/** 装备层 SVG(黑板要把手写算式带上) */
+export function gearSvgFor(gear: MoleGearKind, expr = ""): string {
+  return moleGearSvg(gear, expr);
+}
+
+/** 缩回时的姿态:没被敲到的可敲角色打个哈欠再降;花花兔照旧 */
+export function dropPose(kind: MoleKind): MolePose {
+  return MOLE_SPECS[kind].hittable ? "yawn" : "up";
+}
