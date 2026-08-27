@@ -55,6 +55,11 @@ export const PAD_TIGHT_GAP_PX = 6;
 /** 「矮屏」的门槛：640 高的老安卓机上，一竖排四颗 72px 的键塞不进去 */
 export const SHORT_SCREEN_PX = 700;
 /**
+ * 「横过来拿」的门槛：640×360 / 740×360 / 844×390 全在线内，
+ * 360×640 / 320×568 全在线外——竖屏那几档本来就装得下，一个字节都不该动。
+ */
+export const SHORT_LANDSCAPE_PX = 420;
+/**
  * 对战面板里键盘上面那一截（返回条 + 比分 + 回合说明 + 分工名）实测占的高度。
  * 测试员在 320×640 上量到第 4 颗键的盒子是 top 607 / bottom 677，
  * 一竖排的前三颗键占 3×(72+8)=240，倒推出上面这一截约 367px。
@@ -70,11 +75,25 @@ export interface PadLayout {
 /**
  * 一侧键盘怎么排。宽屏与窄高屏维持原样（键不缩水），
  * 只有**又窄又矮**的机器收回 2×2 并把键降一档——那种机器上竖排根本摆不下四颗，
- * 而且全链路没有可滚容器，够不着就是真的够不着（测试员 W5-B-02，判阻断）。
+ * 而且全链路没有可滚容器，够不着就是真的够不着（测试员 `W5-B-02`，判阻断）。
+ *
+ * **横过来拿是同一件事的第三种形状**，`W5-B-02` 那一手没盖到：`vw > 420` 先命中，
+ * 直接给 2 列 72px，两行 152px。真机 640×360 / 740×360 / 844×390 × 两个侧模式
+ * 六格全中，每格 8 颗键坏 4 颗——第 2 行整行落在 348–420，舞台裁切线在 348，
+ * `elementFromPoint` 拿回 `null`，而 `.rbt-vs` 与 `.game-stage` 都不滚，划也划不出来。
+ *
+ * 横过来拿的时候屏幕**宽得很**（640…844）而矮得要命（360…390），
+ * 所以把一侧的键从 2×2 摊成**一排 4 列**并降到 `KEY_TIGHT_PX`：
+ * 键排 152px → 56px，一次让出 96px，比缺的那 72px 还宽裕，
+ * 不用去抠标题栏和脚注那几像素。边长 56px 仍高出 44px 的触屏底线，
+ * 中间那条 `SIDE_GUTTER_PX` 隔离带一分不动。
  */
 export function padLayout(viewportWidth: number, viewportHeight: number): PadLayout {
   const vw = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;
   const vh = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 720;
+  if (vh <= SHORT_LANDSCAPE_PX && vw > 420) {
+    return { columns: SLOT_COUNT, keyPx: KEY_TIGHT_PX, gap: PAD_TIGHT_GAP_PX };
+  }
   if (vw > 420) return { columns: 2, keyPx: KEY_MIN_PX, gap: PAD_GAP_PX };
   if (vh > SHORT_SCREEN_PX) return { columns: 1, keyPx: KEY_MIN_PX, gap: PAD_GAP_PX };
   return { columns: 2, keyPx: KEY_TIGHT_PX, gap: PAD_TIGHT_GAP_PX };
@@ -157,6 +176,25 @@ export const ARENA_CSS = `
   .rbt-vs { padding: 8px 6px; }
   .rbt-vs-brief { min-height: 38px; font-size: 15px; }
   .rbt-vs-foot { margin-top: 6px; }
+}
+/* 横过来拿（640×360 / 740×360 / 844×390）：一侧 2×2 的键排有 152px 高，
+   .rbt-vs 整块面板 405px，而舞台看得见的那一段只有 264px（84…348）——
+   第 2 行键整行落在 348–420，elementFromPoint 拿回 null，
+   .rbt-vs 与 .game-stage 都不滚，真手指也划不出来。六格实测每格 8 颗坏 4 颗。
+   横屏宽得很（640…844）而矮得要命，所以把一侧摊成一排 ${SLOT_COUNT} 列并降到 ${KEY_TIGHT_PX}px：
+   键排 152 → ${KEY_TIGHT_PX}px，一次让出 96px。边长仍高出 ${TOUCH_MIN_PX}px 的触屏底线，
+   中间那条 ${SIDE_GUTTER_PX}px 的隔离带一分不动。和 padLayout() 走同一组常量。 */
+@media (max-height: ${SHORT_LANDSCAPE_PX}px) {
+  .rbt-vs { padding: 8px 10px; }
+  .rbt-pad { grid-template-columns: repeat(${SLOT_COUNT}, 1fr); gap: ${PAD_TIGHT_GAP_PX}px; }
+  .rbt-key { min-width: ${KEY_TIGHT_PX}px; min-height: ${KEY_TIGHT_PX}px; font-size: 24px; }
+  .rbt-vs-brief { min-height: 30px; margin-bottom: 4px; }
+  .rbt-vs-score { margin-bottom: 4px; }
+  .rbt-vs-head { margin-bottom: 4px; }
+  .rbt-vs-side { padding: 6px; }
+  /* 脚注也得整行留在裁切线里：摊成一排之后它落在 336–357，还差 9px。
+     收的是字号与留白，不是内容——那句「两边的题目是镜像的」照旧说完。 */
+  .rbt-vs-foot { margin-top: 2px; font-size: 12px; line-height: 1.4; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rbt-key { transition: background .3s linear, color .3s linear; }
