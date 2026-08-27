@@ -823,7 +823,11 @@ describe("涂色小屋 1.2 · 外壳与红线", () => {
     expect(CLF_CSS).toMatch(/\.clf-chip\{[^}]*word-break:break-word/);
     expect(CLF_CSS).not.toContain("text-overflow:ellipsis");
     // 窄屏那一套字号仍然 ≥ 14px
-    const narrow = CLF_CSS.slice(CLF_CSS.indexOf("@media (max-width:400px)"));
+    // 切片必须在这一段的右花括号处收住：`@media (max-width:400px)` 后面现在还跟着
+    // 「挤一挤」那一档（`.clf-tight`，运行期才挂），一路切到文件尾会把它一起扫进来
+    const narrowFrom = CLF_CSS.indexOf("@media (max-width:400px)");
+    const narrow = CLF_CSS.slice(narrowFrom, CLF_CSS.indexOf("\n}", narrowFrom));
+    expect(narrow).toContain(".clf-gallery");
     for (const m of narrow.matchAll(/font-size:(\d+)px/g)) {
       expect(Number(m[1]), "360px 下字号掉到 14px 以下了").toBeGreaterThanOrEqual(14);
     }

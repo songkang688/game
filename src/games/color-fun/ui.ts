@@ -20,13 +20,23 @@ export const STIR_MS = 640;
 /** 手机上色块的最小热区 */
 export const SWATCH_MIN_PX = 44;
 
-/** 画布至少占屏高的比例 */
+/** 画布至少占屏高的比例（够高的机器上照旧留这么大一块给画） */
 export const CANVAS_MIN_VH = 55;
+
+/**
+ * 画布框最矮收到这个像素高度。
+ * 再往下收线稿里的小块就点不准了，宁可让整块自己滚，也不把画压成一条缝。
+ */
+export const CANVAS_MIN_PX = 180;
 
 export const CLF_CSS = `
 .clf-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px;box-sizing:border-box;
   border-radius:16px;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
   user-select:none;-webkit-user-select:none;touch-action:manipulation;position:relative;width:100%;}
+/* 这一屏也是竖着的弹性盒：一旦被 fitColoringStage 钳出一个天花板，子项就会被压扁
+   （实测调色板整排从 81px 压成 6px，画布框直接归零）——一律不许收缩，装不下就让整屏自己滚。
+   跟画室那条 .clf-sheet>* 是同一条规矩。没有天花板时这一行不改变任何布局。 */
+.clf-wrap>*{flex:0 0 auto;}
 .clf-top{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .clf-badge{font-size:14px;font-weight:800;color:#7a5a20;background:#ffffffd9;border-radius:999px;padding:5px 12px;
   box-shadow:0 2px 6px rgba(150,130,80,.2);white-space:nowrap;}
@@ -124,6 +134,23 @@ export const CLF_CSS = `
   .clf-msg{font-size:14px;}
   .clf-gallery{grid-template-columns:repeat(3,1fr);}
 }
+/* 「挤一挤」这一档不是媒体查询能判的：真机上舞台（平台那层 game-stage）比视口矮一大截——
+   390×844 的机器上舞台只看得见 730px，而这一屏的内容能长到 1093px。
+   按 vh 判会得出「屏幕很高，不用收」的错误结论，所以这一档由 fitColoringStage()
+   在运行期量完舞台真实可视高之后挂上来。
+   **热区一个都不动**：.clf-tool / .clf-swatch / .clf-primary / .clf-zoom 的 44px
+   全部不在这一档里，收的只有留白、字号和几条装饰行的高度。 */
+.clf-wrap.clf-tight{gap:6px;padding:6px;}
+.clf-wrap.clf-tight .clf-badge{font-size:13px;padding:4px 10px;}
+.clf-wrap.clf-tight .clf-chips{max-height:62px;gap:4px;}
+.clf-wrap.clf-tight .clf-chip{padding:4px 8px;line-height:1.3;}
+.clf-wrap.clf-tight .clf-legend{gap:4px;}
+.clf-wrap.clf-tight .clf-mixer{padding:4px 8px;gap:6px;}
+.clf-wrap.clf-tight .clf-primary-dot{width:28px;height:28px;}
+.clf-wrap.clf-tight .clf-palette{padding:2px 2px 4px;gap:6px;}
+.clf-wrap.clf-tight .clf-swatch-name{font-size:12px;}
+.clf-wrap.clf-tight .clf-msg{min-height:18px;font-size:13px;line-height:1.35;}
+.clf-wrap.clf-tight .clf-preview{padding:4px 10px;font-size:14px;}
 @media (prefers-reduced-motion:reduce){
   .clf-canvas .clf-region{transition:none;}
   .clf-canvas{transition:none;}
@@ -152,6 +179,90 @@ function clippersOf(el: HTMLElement): HTMLElement[] {
 }
 
 /**
+ * 从 `selfTop` 往下，舞台真正看得见的还剩多少像素。
+ *
+ * `clipperBottoms` 是所有会裁掉内容的祖先的下沿——取最小的那个，
+ * 只要有一层裁，再往下就看不见了。一层都没有（用例里的裸节点）返回 `Infinity`，表示不用钳。
+ */
+export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]): number {
+  if (clipperBottoms.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(...clipperBottoms) - selfTop;
+}
+
+/**
+ * 画布框到底给多高。
+ *
+ * `room` 是舞台看得见的那一段，`otherPx` 是这一屏上除了画布框以外所有东西的高度，
+ * `wanted` 是 CSS 本来想要的那么高（`55vh`）。地方够就照旧给 `wanted`，
+ * 不够就把剩下的都给画布，但不许收到 `CANVAS_MIN_PX` 以下——
+ * 再收下去线稿里的小块点不准，那是拿一个毛病换另一个毛病。
+ */
+export function canvasBoxPx(room: number, otherPx: number, wanted: number): number {
+  if (!Number.isFinite(room) || room <= 0) return wanted;
+  const left = Math.floor(room - Math.max(0, otherPx));
+  return Math.max(CANVAS_MIN_PX, Math.min(wanted, left));
+}
+
+/**
+ * 把这一屏钳进「舞台看得见的那一段」：先收画布框，还装不下就让这一屏自己滚。
+ *
+ * 为什么必须在运行期量、不能写成媒体查询：舞台（`.game-stage`，平台文件，交窗口1）
+ * 比视口矮一大截——390×844 的机器上舞台只看得见 730px，而这一屏能长到 1093px。
+ * 按 `vh` 判会得出「屏幕很高，不用收」的错误结论，正是第 2 轮测试员 W5R2-A-01 里
+ * 「390×844 起调色板整排点不着」的直接原因。
+ *
+ * 也不能只写 `max-height:100%`：百分比要有定高父级，而壳层这条链上
+ * `.l99-stage` / `.l99-stage-wrap` 都是内容撑出来的 auto 高，那行钳不住任何东西
+ * （档B 第 1 轮监督修复员真机复核过，`scrollHeight === clientHeight`，滚动条一次都没出现）。
+ * 这里写的是**像素值**，所以真的钳得住，用户也真的滑得动。
+ *
+ * 顺序：① 挂 `clf-tight` 收留白与字号（热区一个不动）；② 收画布框；③ 还高就自己滚。
+ * 装得下就把三样一起还回去，高屏上不会凭空多出一个滚动容器。
+ */
+export function fitColoringStage(
+  wrap: HTMLElement,
+  stageBox: HTMLElement
+): { relayout: () => void; dispose: () => void } {
+  const view = wrap.ownerDocument?.defaultView ?? null;
+  const measurable = typeof wrap.getBoundingClientRect === "function" && !!view;
+  const relayout = (): void => {
+    if (!measurable || !view) return;
+    // 先把上一次钳出来的都还原，不然量到的是钳完的高度，越量越小
+    wrap.classList.remove("clf-tight");
+    wrap.style.maxHeight = "";
+    wrap.style.overflowY = "";
+    wrap.style.overscrollBehavior = "";
+    stageBox.style.height = "";
+    stageBox.style.minHeight = "";
+    const bottoms: number[] = [];
+    for (const p of clippersOf(wrap)) bottoms.push(p.getBoundingClientRect().bottom);
+    const room = visibleRoomPx(wrap.getBoundingClientRect().top, bottoms);
+    if (!Number.isFinite(room) || room <= 0) return;
+    if (wrap.scrollHeight <= room + 1) return;
+    wrap.classList.add("clf-tight");
+    const wanted = stageBox.getBoundingClientRect().height;
+    const box = canvasBoxPx(room, wrap.scrollHeight - wanted, wanted);
+    if (box < wanted) {
+      stageBox.style.minHeight = "0";
+      stageBox.style.height = `${box}px`;
+    }
+    if (wrap.scrollHeight > room + 1) {
+      wrap.style.maxHeight = `${Math.floor(room)}px`;
+      wrap.style.overflowY = "auto";
+      wrap.style.overscrollBehavior = "contain";
+    }
+  };
+  relayout();
+  view?.addEventListener("resize", relayout);
+  return {
+    relayout,
+    dispose(): void {
+      view?.removeEventListener("resize", relayout);
+    },
+  };
+}
+
+/**
  * 把画布钉在滚动区顶上，滑到下面选颜色时它也不会被顶出屏幕。
  *
  * 手机上光标题栏加关卡条就吃掉三成屏高，画布再占 55% 就一屏装不下，
@@ -165,8 +276,10 @@ function clippersOf(el: HTMLElement): HTMLElement[] {
  */
 export function pinCanvas(wrap: HTMLElement, stage: HTMLElement): () => void {
   const view = wrap.ownerDocument.defaultView;
-  const ports = clippersOf(wrap);
-  if (!view || ports.length === 0) return () => {};
+  // `fitColoringStage` 会在装不下时把 wrap 自己变成滚动容器——那才是矮机器上
+  // 用户真的滑得动的那一层，所以它必须也在监听名单里，否则画布不会跟着挪。
+  const ports = [wrap, ...clippersOf(wrap)];
+  if (!view) return () => {};
   let shift = 0;
   const relayout = (): void => {
     // getBoundingClientRect 带着已经挪过的量，先减回去还原成原本的位置

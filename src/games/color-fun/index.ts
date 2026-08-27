@@ -35,6 +35,7 @@ import {
   makeChip,
   makePrimary,
   makeSwatch,
+  fitColoringStage,
   pictureSvgBody,
   pinCanvas,
   prefersReducedMotion,
@@ -127,6 +128,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }, ms);
     timeouts.add(t);
   }
+
+  /** 重钳一次（`fitColoringStage` 装好之前先是个空壳，渲染顺序决定了它必须晚绑） */
+  let refit: () => void = () => {};
 
   const wrap = doc.createElement("div");
   wrap.className = "clf-wrap";
@@ -274,6 +278,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       if (ok) chip.classList.add("clf-chip-done");
       chipsEl.appendChild(chip);
     }
+    refit();
   }
 
   function renderPalette(): void {
@@ -290,6 +295,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       });
       paletteEl.appendChild(btn);
     }
+    refit();
   }
 
   function finish(): void {
@@ -572,12 +578,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   renderChips();
   renderPalette();
   applyZoom(1);
+  // 先钳进舞台看得见的那一段，再钉画布：pinCanvas 要把钳出来的滚动容器也算进监听名单
+  const fit = fitColoringStage(wrap, stageBox);
   const unpin = pinCanvas(wrap, stageBox);
+  // 指令条与调色盘会随着涂色变高变矮（做完一条划掉、开出新颜色多一颗），每次都重钳
+  refit = () => fit.relayout();
 
   return {
     destroy() {
       destroyed = true;
       ended = true;
+      fit.dispose();
       unpin();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
