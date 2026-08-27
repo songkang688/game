@@ -8,6 +8,7 @@
 import { ballGradient, softShadow } from "../../art/kit/volume";
 import { strokeOutline } from "../../art/kit/outline";
 import { shade, withAlpha } from "../../art/kit/palette";
+import { traceStar } from "../../art/kit/star";
 import {
   CHARGE_FULL_AT,
   HAT_BODY_SHADE,
@@ -891,4 +892,84 @@ export function paintFeedbackPuff(
     c.fill();
   }
   c.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 修复员 R2 · N1(= R1 G3 座位标半项):头顶座位标与暖手火苗自绘
+// ---------------------------------------------------------------------------
+
+/** 座位标星的金色(与雪灯笼暖黄同族,雪地上一眼能挑出来) */
+export const SEAT_STAR_GOLD = "#FFD66E";
+/** 暖手火苗两停:顶部暖黄 → 底部深橙(渐变方向朝下,火根更实) */
+export const WARM_FLAME_STOPS: readonly [string, string] = ["#FFC46A", "#F2793F"];
+/** 暖手火苗内焰奶黄 */
+export const WARM_FLAME_CORE = "#FFEBB0";
+
+/**
+ * 头顶座位标(替换 fillText emoji 字形):seat 0 = 朵朵五瓣小花,seat 1 = 星星五角金星。
+ * 与原字形一样是纯静态识别件,reduced 无需分支;s 是徽记半径,位置由调用方给,判定不沾。
+ * 花瓣受光面在左上(顶瓣与左上瓣提亮一档),描边统一走 kit strokeOutline(深 20%)。
+ */
+export function paintSeatMark(c: CanvasRenderingContext2D, x: number, y: number, s: number, seat: 0 | 1): void {
+  if (!(s > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return;
+  if (seat === 1) {
+    // 星星队:五角金星,三停渐变 + 描边(kit star 只 import,几何不自造)
+    traceStar(c, x, y, s);
+    c.fillStyle = ballGradient(c, x, y, s, SEAT_STAR_GOLD);
+    c.fill();
+    strokeOutline(c, SEAT_STAR_GOLD, 1.4);
+    return;
+  }
+  // 朵朵队:五瓣小花 —— 顶瓣朝上,左上两瓣受光提亮
+  const orbit = s * 0.55;
+  const petal = Math.max(1.2, s * 0.46);
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
+    c.fillStyle = i === 0 || i === 4 ? shade(P.sfPink, 14) : P.sfPink;
+    c.beginPath();
+    c.arc(x + Math.cos(a) * orbit, y + Math.sin(a) * orbit, petal, 0, Math.PI * 2);
+    c.fill();
+    strokeOutline(c, P.sfPink, 1.2);
+  }
+  // 花心:奶黄圆 + 左上高光点
+  c.fillStyle = WARM_FLAME_CORE;
+  c.beginPath();
+  c.arc(x, y, Math.max(1, s * 0.34), 0, Math.PI * 2);
+  c.fill();
+  strokeOutline(c, WARM_FLAME_CORE, 1.2);
+  c.fillStyle = "rgba(255,255,255,.85)";
+  c.beginPath();
+  c.arc(x - s * 0.1, y - s * 0.1, Math.max(0.6, s * 0.1), 0, Math.PI * 2);
+  c.fill();
+}
+
+/**
+ * 暖手火苗(替换 fillText 的火 emoji 字形):上尖下圆的外焰两停渐变 + 奶黄内焰。
+ * 与原字形一样静止不动(暖手时长与灰身画法仍由玩法层说了算),reduced 无需分支。
+ */
+export function paintWarmFlame(c: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  if (!(s > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return;
+  const grad = c.createLinearGradient(x, y - s, x, y + s * 0.8);
+  grad.addColorStop(0, WARM_FLAME_STOPS[0]);
+  grad.addColorStop(1, WARM_FLAME_STOPS[1]);
+  c.fillStyle = grad;
+  c.beginPath();
+  c.moveTo(x, y - s);
+  c.quadraticCurveTo(x + s * 0.72, y - s * 0.2, x + s * 0.52, y + s * 0.34);
+  c.quadraticCurveTo(x + s * 0.36, y + s * 0.8, x, y + s * 0.8);
+  c.quadraticCurveTo(x - s * 0.36, y + s * 0.8, x - s * 0.52, y + s * 0.34);
+  c.quadraticCurveTo(x - s * 0.72, y - s * 0.2, x, y - s);
+  c.closePath();
+  c.fill();
+  strokeOutline(c, WARM_FLAME_STOPS[1], 1.4);
+  // 内焰:奶黄亮核,微微偏左上(光源方向一致)
+  c.fillStyle = WARM_FLAME_CORE;
+  c.beginPath();
+  c.moveTo(x - s * 0.06, y - s * 0.34);
+  c.quadraticCurveTo(x + s * 0.3, y + s * 0.08, x + s * 0.2, y + s * 0.44);
+  c.quadraticCurveTo(x + s * 0.12, y + s * 0.62, x - s * 0.02, y + s * 0.62);
+  c.quadraticCurveTo(x - s * 0.26, y + s * 0.58, x - s * 0.24, y + s * 0.24);
+  c.quadraticCurveTo(x - s * 0.22, y - s * 0.04, x - s * 0.06, y - s * 0.34);
+  c.closePath();
+  c.fill();
 }

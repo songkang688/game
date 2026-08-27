@@ -90,6 +90,7 @@ import {
   paintFortKeep,
   paintLanding,
   paintPineRow,
+  paintSeatMark,
   paintSlope,
   paintSnowFoe,
   paintFeedbackPuff,
@@ -98,6 +99,7 @@ import {
   paintSnowball,
   paintSnowman,
   paintStanceRing,
+  paintWarmFlame,
   paintWindFlag,
   teamColor,
   type FighterPose,
@@ -546,13 +548,13 @@ function drawFighter(
     wink: look.wink,
   };
   paintFighterBody(c, pose);
-  c.textAlign = "center";
-  c.textBaseline = "bottom";
-  c.font = `${Math.max(12, Math.round(full * 1.1))}px system-ui`;
+  // 修复员 R2 · N1:头顶座位标与暖手从 emoji 字形换成自绘徽记
+  // (原字形底线在 base - r*3.2、字号约 full*1.1,徽记半径取 full*0.55、圆心上移半径,占位同处)
+  const ms = Math.max(5.5, full * 0.55);
   if (f.hit.phase === "warming") {
-    c.fillText("🔥", x, base - r * 3.2);
+    paintWarmFlame(c, x, base - r * 3.2 - ms, ms);
   } else {
-    c.fillText(P_MARK[f.seat] ?? "🌸", x, base - r * 3.2);
+    paintSeatMark(c, x, base - r * 3.2 - ms, ms, f.seat);
   }
   // 手里攥着几颗:头顶上一排小白点,不用低头看 HUD
   c.fillStyle = "#ffffff";
