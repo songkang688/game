@@ -351,6 +351,103 @@ export function paintSqueezeDot(ctx: PaintCtx, ax: number, ay: number, bx: numbe
 }
 
 // ---------------------------------------------------------------------------
+// 六·补:场景氛围(藤蔓吊灯带 / 远处光斑 / 反弹星花)
+// ---------------------------------------------------------------------------
+
+/**
+ * 顶部藤蔓与吊灯装饰带:泡泡从「藤架」上垂下的语义。
+ * shadowAlpha 由 vineShadowAlpha 给 —— 顶板压得越多,藤架阴影越深。
+ */
+export function paintVineLampBand(ctx: PaintCtx, w: number, shadowAlpha: number): void {
+  ctx.save();
+  // 藤架阴影(顶板下压时加深)
+  const sh = ctx.createLinearGradient(0, 0, 0, 26);
+  sh.addColorStop(0, `rgba(93,84,110,${Math.max(0, Math.min(1, shadowAlpha))})`);
+  sh.addColorStop(1, "rgba(93,84,110,0)");
+  ctx.fillStyle = sh;
+  ctx.fillRect(0, 0, w, 26);
+  // 藤蔓主蔓:一条波浪线
+  ctx.strokeStyle = BA_COLORS.baVine;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  const amp = 3;
+  ctx.moveTo(-4, 7);
+  for (let x = 0; x <= w + 8; x += 8) {
+    ctx.lineTo(x, 7 + Math.sin(x * 0.09) * amp);
+  }
+  ctx.stroke();
+  // 叶子一串(上下交替的小椭圆)
+  ctx.fillStyle = shade(BA_COLORS.baVine, -12);
+  for (let k = 0; k < Math.ceil(w / 36); k++) {
+    const lx = 14 + k * 36;
+    const ly = 7 + Math.sin(lx * 0.09) * amp + (k % 2 === 0 ? 4 : -3);
+    ctx.beginPath();
+    ctx.ellipse(lx, ly, 5, 2.6, k % 2 === 0 ? 0.7 : -0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 吊灯两盏:细绳 + 暖光罩 + 光晕
+  for (const fx of [0.22, 0.78]) {
+    const lx = w * fx;
+    const ropeY = 7 + Math.sin(lx * 0.09) * amp;
+    ctx.strokeStyle = shade(BA_COLORS.baWood, -10);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(lx, ropeY);
+    ctx.lineTo(lx, ropeY + 9);
+    ctx.stroke();
+    const glow = ctx.createRadialGradient(lx, ropeY + 13, 1, lx, ropeY + 13, 12);
+    glow.addColorStop(0, "rgba(255,226,184,0.85)");
+    glow.addColorStop(1, "rgba(255,226,184,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(lx, ropeY + 13, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = BA_COLORS.baLamp;
+    ctx.beginPath();
+    ctx.arc(lx, ropeY + 13, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = shade(BA_COLORS.baLamp, -24);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(lx, ropeY + 13, 4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** 远处光斑两粒:很淡的暖光圆,给背景一点纵深(静态,reduced 保留) */
+export function paintLightBlobs(ctx: PaintCtx, w: number, h: number): void {
+  ctx.save();
+  const spots: Array<[number, number, number]> = [
+    [w * 0.28, h * 0.34, 64],
+    [w * 0.78, h * 0.52, 84],
+  ];
+  for (const [x, y, r] of spots) {
+    const g = ctx.createRadialGradient(x, y, 2, x, y, r);
+    g.addColorStop(0, "rgba(255,226,184,0.16)");
+    g.addColorStop(1, "rgba(255,226,184,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** 瞄准线反弹点的小星花标记(静态,功能件的一部分,reduced 保留) */
+export function paintBounceStar(ctx: PaintCtx, x: number, y: number): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(255,244,200,0.95)";
+  starPath(ctx, x, y, 7, 3, 4);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(240,190,90,0.9)";
+  ctx.lineWidth = 1.5;
+  starPath(ctx, x, y, 7, 3, 4);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // 七·补:发射器炮台六道工序(四·补二;每道一个纯 painter,index 按序调用)
 // ---------------------------------------------------------------------------
 

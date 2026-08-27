@@ -83,14 +83,21 @@ import {
   type Loader,
 } from "./aim12";
 import {
+  BA_COLORS,
   BA_TIMINGS,
+  aimDotRadius,
+  aimDots,
   barrelAngle,
   bounceOffset,
+  bounceStars,
+  floatPopScale,
   fuseSparkPhase,
   isSquashy,
   paintBarrel,
   paintBombCat,
+  paintBounceStar,
   paintBubble,
+  paintLightBlobs,
   paintLoadSlot,
   paintRainbowOrb,
   paintShooterBase,
@@ -98,10 +105,13 @@ import {
   paintSqueezeDot,
   paintStarBadge,
   paintStoneRock,
+  paintVineLampBand,
   rainbowSpinAngle,
   stoneCracked,
   swapPositions,
   swapProgress,
+  trailFrames,
+  vineShadowAlpha,
 } from "./visual";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -176,7 +186,7 @@ interface CrackFx {
   t: number;
 }
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { destroy: () => void; fxCount: () => number } {
   let destroyed = false;
   let raf = 0;
   let lastTime = 0;
@@ -239,6 +249,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   const pops: PopAnim[] = [];
   /** 失联的泡泡真的带着重力往下掉,不是原地消失 */
   const falls: Faller[] = [];
+  /** 掉落串的拖尾残影(3 帧渐隐;reduced 不生成) */
+  const trails: Array<{ x: number; y: number; color: string; life: number }> = [];
   const cracks: CrackFx[] = [];
   /** 掉落用的序号,同一批散得不一样 */
   let fallSeed = 0;
@@ -248,9 +260,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.innerHTML = `
     <style>
       .ba-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F4FF, #FFEFF7); border-radius: 20px; padding: 12px; max-width: 400px; margin: 0 auto; user-select: none; touch-action: none; }
-      .ba-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
-      .ba-badge { background: #fff; border-radius: 14px; padding: 6px 8px; font-weight: 700; color: #3E7CB8; box-shadow: 0 2px 6px rgba(90,140,200,.2); font-size: 12px; white-space: nowrap; }
-      .ba-btn { border: none; border-radius: 14px; padding: 6px 10px; font-size: 12px; font-weight: 700; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 3px 0 #A9CCEE; }
+      .ba-top { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 8px; }
+      .ba-badge { background: linear-gradient(180deg, #ffffff, #F4F9FF); border: 1px solid rgba(90,140,200,.16); border-radius: 12px; padding: 5px 7px; font-weight: 700; color: #3E7CB8; box-shadow: 0 2px 5px rgba(93,84,110,.16); font-size: 14px; white-space: nowrap; }
+      .ba-level { flex: 0 1 auto; min-width: 40px; overflow: hidden; text-overflow: ellipsis; }
+      .ba-btn { border: none; border-radius: 12px; padding: 5px 9px; font-size: 14px; font-weight: 700; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 3px 0 #A9CCEE; }
       .ba-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #A9CCEE; }
       .ba-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
@@ -275,7 +288,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
     </style>
     <div class="ba-top">
-      <button class="ba-btn ba-back" type="button">🗺️ 地图</button>
+      <button class="ba-btn ba-back" type="button" title="回地图" aria-label="回地图">🗺️</button>
       <span class="ba-badge ba-level">第 1 关</span>
       <span class="ba-badge ba-count">🫧 0</span>
       <span class="ba-badge ba-shots">🎯 0</span>
@@ -766,11 +779,24 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawBackground(): void {
     const th = THEMES[themeOfLevel(levelIndex)];
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, th.skyTop);
-    g.addColorStop(1, th.skyBottom);
+    if (endless) {
+      // 无尽墙不属于任何主题世界:用本档自己的双色渐变
+      g.addColorStop(0, BA_COLORS.baBgTop);
+      g.addColorStop(1, BA_COLORS.baBgBottom);
+    } else {
+      g.addColorStop(0, th.skyTop);
+      g.addColorStop(1, th.skyBottom);
+    }
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    if (th.dark) {
+    // 远处光斑两粒(静态纵深,reduced 保留)
+    paintLightBlobs(ctx, W, H);
+    // 顶部藤蔓吊灯装饰带:泡泡从藤架上垂下;顶板/墙压得越多藤影越深
+    const pressed = endless
+      ? rowsPushed
+      : pressEvery > 0 ? Math.max(0, (LEVELS[levelIndex].pressMax ?? 0) - pressLeft) : 0;
+    paintVineLampBand(ctx, W, vineShadowAlpha(pressed));
+    if (!endless && th.dark) {
       // 夜空主题:一闪一闪的小星星
       for (let k = 0; k < 26; k++) {
         const sx = (k * 73.7 + 11) % W;
@@ -876,18 +902,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     // 剩下的留给小朋友自己判断,不把整条解直接送到眼前。
     const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy, obstacles);
     const shown = previewPath(result.path);
-    ctx.strokeStyle = result.swallowed ? "rgba(120, 90, 200, 0.75)" : "rgba(90, 150, 220, 0.75)";
-    ctx.lineWidth = 3;
-    ctx.setLineDash([7, 9]);
-    ctx.lineDashOffset = -animTime * 40;
-    ctx.beginPath();
-    shown.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
+    // 渐隐圆点串(功能件,reduced 保留):点径沿路径 4→2px 递减;
+    // 每个点都沿既有物理折线取样,一个物理坐标都不自己算。
+    const tone = result.swallowed ? "120, 90, 200" : "90, 150, 220";
+    for (const d of aimDots(shown)) {
+      ctx.fillStyle = `rgba(${tone}, ${(0.85 - d.t * 0.4).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, aimDotRadius(d.t), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 反弹点小星花:就是物理反射点本身,原样标出来
+    for (const s of bounceStars(shown)) paintBounceStar(ctx, s.x, s.y);
     // 预览线断掉的地方画个淡淡的箭头,提示「还会继续往那边飞」
     const tip = shown[shown.length - 1];
     const prev = shown[shown.length - 2];
@@ -962,11 +987,13 @@ export function mount(api: GameApi): { destroy: () => void } {
     paintStarBadge(ctx, SHOOTER_X, SHOOTER_Y + R * 1.05, R);
   }
 
-  /** 连锁飘字:掉得越多字越大,从发射台上方慢慢升起来 */
+  /** 连锁飘字:白描边 + 轻弹入场(reduced 直接满尺寸),掉得越多字越大,慢慢升起 */
   function drawFloatText(dt: number): void {
     if (floatTime <= 0 || !floatText) return;
     floatTime -= dt;
     const k = Math.max(0, Math.min(1, floatTime / 1.2));
+    const pop = softMotion ? 1 : floatPopScale(k);
+    ctx.save();
     ctx.globalAlpha = k;
     ctx.fillStyle = "#F0872F";
     ctx.strokeStyle = "rgba(255,255,255,0.9)";
@@ -974,10 +1001,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.font = `bold ${floatSize}px sans-serif`;
     ctx.textAlign = "center";
     const y = SHOOTER_Y - 70 - (1 - k) * 40;
-    ctx.strokeText(floatText, W / 2, y);
-    ctx.fillText(floatText, W / 2, y);
-    ctx.textAlign = "left";
-    ctx.globalAlpha = 1;
+    ctx.translate(W / 2, y);
+    ctx.scale(pop, pop);
+    ctx.strokeText(floatText, 0, 0);
+    ctx.fillText(floatText, 0, 0);
+    ctx.restore();
   }
 
   function drawFlight(): void {
@@ -998,6 +1026,40 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawBubbleAt(x, y, flight.color, radius);
   }
 
+  /**
+   * 掉落串(图层④):先画拖尾残影(3 帧渐隐,reduced 不生成),再推重力画本体。
+   * 掉落仍走 aim12 的重力:一帧一帧经过中间位置,关掉动效也只是掉得更快。
+   */
+  function drawFalls(dt: number): void {
+    for (let i = trails.length - 1; i >= 0; i--) {
+      const tr = trails[i];
+      tr.life -= 1;
+      if (tr.life <= 0) {
+        trails.splice(i, 1);
+        continue;
+      }
+      const k = tr.life / BA_TIMINGS.trailFrames;
+      ctx.globalAlpha = 0.28 * k;
+      ctx.fillStyle = (COLOR_FILL[tr.color] ?? COLOR_FILL.R)[1];
+      ctx.beginPath();
+      ctx.arc(tr.x, tr.y, R * (0.7 + 0.2 * k), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    const trailLife = trailFrames(softMotion);
+    for (let i = falls.length - 1; i >= 0; i--) {
+      const before = falls[i];
+      if (trailLife > 0) trails.push({ x: before.x, y: before.y, color: before.color, life: trailLife });
+      const stepped = stepFaller(before, dt, fallGravity(softMotion));
+      falls[i] = stepped;
+      if (fallenOut(stepped)) {
+        falls.splice(i, 1);
+        continue;
+      }
+      drawBubbleAt(stepped.x, stepped.y, stepped.color, R, Math.max(0.3, 1 - stepped.age * 0.6));
+    }
+  }
+
   function drawAnims(dt: number): void {
     for (let i = pops.length - 1; i >= 0; i--) {
       const p = pops[i];
@@ -1013,16 +1075,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.beginPath();
       ctx.arc(p.x, p.y, R * (1 + k), 0, Math.PI * 2);
       ctx.stroke();
-    }
-    // 掉落走 aim12 的重力:一帧一帧经过中间位置,关掉动效也只是掉得更快
-    for (let i = falls.length - 1; i >= 0; i--) {
-      const stepped = stepFaller(falls[i], dt, fallGravity(softMotion));
-      falls[i] = stepped;
-      if (fallenOut(stepped)) {
-        falls.splice(i, 1);
-        continue;
-      }
-      drawBubbleAt(stepped.x, stepped.y, stepped.color, R, Math.max(0.3, 1 - stepped.age * 0.6));
     }
     for (let i = cracks.length - 1; i >= 0; i--) {
       const cfx = cracks[i];
@@ -1122,12 +1174,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  /** 图层序(四·补一):①背景+光斑 ②藤蔓吊灯(都在 drawBackground)→ 机关 → ③网格串
+   *  → ④掉落拖尾 → ⑤飞行泡 → ⑥瞄准点串(功能件) → ⑦炮台 → ⑧星花/飘分 → ⑨HUD */
   function draw(dt: number): void {
     drawBackground();
     drawObstacles();
     drawGrid();
-    drawAim();
+    drawFalls(dt);
     drawFlight();
+    drawAim();
     drawShooter();
     drawAnims(dt);
     drawFloatText(dt);
@@ -1273,12 +1328,25 @@ export function mount(api: GameApi): { destroy: () => void } {
       destroyed = true;
       cancelAnimationFrame(raf);
       stopSpeaking();
+      // 粒子与计时当场归零,不留尾巴
+      pops.length = 0;
+      falls.length = 0;
+      trails.length = 0;
+      cracks.length = 0;
+      floatText = "";
+      floatTime = 0;
+      swapFx = 0;
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onKeyDown);
       wrap.remove();
+    },
+    /** 测试探针:还挂着多少视觉粒子 / 计时(destroy 后必须是 0) */
+    fxCount() {
+      return pops.length + falls.length + trails.length + cracks.length +
+        (floatTime > 0 ? 1 : 0) + (swapFx > 0 ? 1 : 0);
     },
   };
 }
