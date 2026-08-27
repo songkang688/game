@@ -429,7 +429,24 @@ export class Arena {
   private renderTask(): void {
     this.paintTask();
     // 每件事摆出来的东西不一样高，钳一次再交给手指
+    this.refit();
+  }
+
+  /**
+   * 重排版之后钳一次。`renderTask()` 走这条路，**点击回调里自己重画的那几条也必须走**——
+   * 搭配任务挑完三件会翻出 5 行评分面板，看病每按一步也换一屏，这些都不经过 `renderTask()`。
+   * 少钳这一次，长出来的那一截就落在舞台裁切线以下，交卷钮真手指再也够不着（W5R2-C-01 阻断）。
+   *
+   * `reveal` 为真时再把小屋滚到底：钳完只是「有得滚」，交卷钮仍在折线以下，
+   * 孩子不会知道要往下滑；评分面板本来就是「看完就交卷」，滚到底正好把结论和出口一起摆到眼前。
+   * 用的是最朴素的 `scrollTop` 赋值，不碰 `scrollIntoView`（那玩意儿连 `overflow:hidden` 都推得动，
+   * 量出来的绿是假绿）。
+   */
+  private refit(reveal = false): void {
     this.fit?.relayout();
+    if (!reveal) return;
+    const root = this.root;
+    if (root.scrollHeight - root.clientHeight > 1) root.scrollTop = root.scrollHeight;
   }
 
   private paintTask(): void {
@@ -815,6 +832,8 @@ export class Arena {
       const tools = el("div", "ktc-tools");
       tools.appendChild(back);
       this.playEl.appendChild(tools);
+      // 看病每按一步都换一屏，步骤行数不一样多
+      this.refit();
     };
     draw();
   }
@@ -847,6 +866,8 @@ export class Arena {
         row.appendChild(b);
       }
       this.playEl.appendChild(row);
+      // 每一件的候选数不一样多，这一排的行数会变
+      this.refit();
     };
 
     const drawScore = (): void => {
@@ -890,6 +911,8 @@ export class Arena {
       });
       tools.append(again, go);
       this.playEl.appendChild(tools);
+      // 面板一撑高就得重新钳，再把交卷钮送到眼前
+      this.refit(true);
     };
 
     drawSlot();
