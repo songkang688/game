@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY, cellsFromString, regionMapFor } from "./solver";
 import { PUZZLE_BANK, bankAt, boardFromBank, solutionOfBank } from "./puzzles";
-import { levelSpec } from "./levels";
+import { endlessConfig, endlessPick, levelSpec } from "./levels";
 import { AI_PROFILES, AI_TIERS, AI_TIER_LABELS, estimateMs, nextMove, profileOf, tierStrength } from "./ai";
 import guide from "./guide";
 import {
@@ -790,6 +790,72 @@ describe("整款游戏挂载", () => {
     const score = root.byClass("sp-msg").find((e) => e.textContent.includes("连解"));
     expect(score?.textContent).toContain("错 0/3 题");
     handle.destroy();
+  });
+
+  /** 照答案把无尽当前这一题种满,逼出「这一题过了」的换题定时器 */
+  function solveEndlessPuzzle(root: FakeEl, lv: number): void {
+    const entry = bankAt(lv);
+    const puzzle = cellsFromString(entry.p);
+    const solution = solutionOfBank(entry);
+    const cells = root.byClass("sp-cell");
+    const digitKeys = root.byClass("sp-key");
+    expect(cells.length).toBe(puzzle.length);
+    for (let i = 0; i < puzzle.length; i++) {
+      if (puzzle[i] !== EMPTY) continue;
+      cells[i].fire("click");
+      digitKeys[solution[i] - 1].fire("click");
+    }
+  }
+
+  it("无尽换题是延时的:这一秒里退出去,定时器不许再把新盘面开出来", () => {
+    vi.useFakeTimers();
+    try {
+      const root = new FakeEl("div");
+      const { api } = fakeApi(root);
+      const base = keyListenerCount();
+      const handle = mount(api);
+      root.byClass("sp-open")[1].fire("click");
+      solveEndlessPuzzle(root, endlessPick(endlessConfig("mixed"), 0, 7));
+
+      // 这一题确实收桌了,换题的定时器已经排上
+      expect(root.byClass("sp-msg").some((e) => e.textContent.includes("连解 1 题"))).toBe(true);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      // 开花动画还没放完就退出去
+      handle.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+
+      // 再把时间推过换题点:不许冒出新盘面,更不许留下一个没人摘的 window 键盘监听
+      vi.advanceTimersByTime(SP_CONSTS.BLOOM_STEP_MS * 9 + SP_CONSTS.BLOOM_MS + 500);
+      expect(root.byClass("sp-cell")).toHaveLength(0);
+      expect(root.children).toHaveLength(0);
+      expect(keyListenerCount()).toBe(base);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("无尽正常玩下去还是会自己换下一题", () => {
+    vi.useFakeTimers();
+    try {
+      const root = new FakeEl("div");
+      const { api } = fakeApi(root);
+      const handle = mount(api);
+      root.byClass("sp-open")[1].fire("click");
+      solveEndlessPuzzle(root, endlessPick(endlessConfig("mixed"), 0, 7));
+
+      vi.advanceTimersByTime(SP_CONSTS.BLOOM_STEP_MS * 9 + SP_CONSTS.BLOOM_MS + 50);
+      // 第二题开出来了,而且还是一块能玩的盘
+      expect(root.byClass("sp-grid")).toHaveLength(1);
+      expect(root.byClass("sp-cell").length).toBeGreaterThan(0);
+
+      handle.destroy();
+      vi.advanceTimersByTime(5000);
+      expect(root.children).toHaveLength(0);
+      expect(keyListenerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("双人同屏直接给两块盘,朵朵和星星各一片", () => {

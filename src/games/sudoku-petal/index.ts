@@ -953,6 +953,20 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   host.appendChild(wrap);
 
   let table: { destroy: () => void; elapsedMs: () => number } | null = null;
+  /** 关掉之后不许再开新盘:无尽的换题是延时的,玩家可能在这一秒里就退出去了 */
+  let closed = false;
+  const laters = new Set<ReturnType<typeof setTimeout>>();
+
+  /** 托管的延时:destroy 会把还没到点的一起撤掉 */
+  function later(fn: () => void, ms: number): void {
+    const id = setTimeout(() => {
+      laters.delete(id);
+      if (closed) return;
+      fn();
+    }, ms);
+    laters.add(id);
+  }
+
   back.addEventListener("click", () => {
     api.play("tap");
     onBack();
@@ -1046,6 +1060,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     };
 
     const nextPuzzle = (): void => {
+      if (closed) return;
       table?.destroy();
       arena.innerHTML = "";
       if (wrongPuzzles >= cfg.errorLimit) {
@@ -1086,7 +1101,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           index += 1;
           paint();
           // 让开花动画放完再换下一题
-          setTimeout(nextPuzzle, BLOOM_STEP_MS * 9 + BLOOM_MS);
+          later(nextPuzzle, BLOOM_STEP_MS * 9 + BLOOM_MS);
         }
       });
     };
@@ -1204,6 +1219,9 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   return {
     destroy() {
+      closed = true;
+      for (const id of laters) clearTimeout(id);
+      laters.clear();
       drop();
       wrap.remove();
     }
