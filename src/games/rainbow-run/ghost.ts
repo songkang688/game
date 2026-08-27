@@ -260,9 +260,39 @@ export function ghostStateAt(run: GhostRun, tMs: number, stepMs = 16): GhostStat
   return out;
 }
 
-/** 这一趟有没有跑赢上一趟的幽灵。 */
+/**
+ * 这一趟对上一趟的自己是什么结果:赢 / 追平 / 没追上。
+ * 没有幽灵(第一趟)就是 `null`——那不是「输了」,是根本没得比。
+ *
+ * 比的是整米,和名牌上的 `ghostGap` 同一把尺:
+ * 名牌一路写着「并排跑着呢」,收场却判成「没赢」,那是两套口径。
+ */
+export function ghostOutcome(meters: number, ghost: GhostRun | null): GhostGapState | null {
+  if (!ghost) return null;
+  return ghostGap(Math.floor(Number.isFinite(meters) ? meters : 0), ghost.meters).state;
+}
+
+/** 这一趟有没有跑赢上一趟的幽灵(追平不算赢,口径与 1.2 第 9 步一致)。 */
 export function beatsGhost(meters: number, ghost: GhostRun | null): boolean {
-  return !!ghost && Math.floor(meters) > ghost.meters;
+  return ghostOutcome(meters, ghost) === "ahead";
+}
+
+/**
+ * 结算面板上的幽灵战报。没有幽灵就返回空串,由调用方决定这一行画不画。
+ *
+ * 以前这一行**根本不存在**:一趟跑完只报米数和糖果,
+ * 「跟上一趟的自己比赢了没有」孩子只能自己拿两个数字相减,追平更是无从说起。
+ */
+export function ghostResultLine(meters: number, ghost: GhostRun | null): string {
+  const outcome = ghostOutcome(meters, ghost);
+  if (!outcome || !ghost) return "";
+  const gap = ghostGap(Math.floor(Number.isFinite(meters) ? meters : 0), ghost.meters);
+  // 坏数字一律当 0,面板上永远不出现 NaN
+  const theirs = safeMeters(ghost.meters);
+  if (outcome === "even") return `👻 和上一趟的自己跑成平手,都是 ${theirs} 米!`;
+  return outcome === "ahead"
+    ? `👻 比上一趟的自己多跑了 ${gap.meters} 米,幽灵换成这一趟啦!`
+    : `👻 上一趟跑到 ${theirs} 米,这次差 ${gap.meters} 米就追上了。`;
 }
 
 /** 幽灵跑到这一刻大概在第几米(按上一趟的平均速度铺开,只用来画名牌)。 */

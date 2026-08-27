@@ -13,6 +13,8 @@ import {
   ghostGap,
   ghostGapLine,
   ghostMetersAt,
+  ghostOutcome,
+  ghostResultLine,
   ghostStateAt,
   parseGhost,
   serializeGhost,
@@ -243,5 +245,58 @@ describe("彩虹跑跑 · 幽灵名牌的领先 / 落后", () => {
     const run: GhostRun = { meters: 400, events: [{ t: 2000, input: "jump" }] };
     expect(ghostGapLine(ghostGap(250, ghostMetersAt(run, 1000)))).toBe("👻 领先 50 米");
     expect(ghostGapLine(ghostGap(150, ghostMetersAt(run, 1000)))).toBe("👻 落后 50 米");
+  });
+});
+
+describe("彩虹跑跑 · 收场时的幽灵战报", () => {
+  const ghost: GhostRun = { meters: 300, events: [] };
+
+  it("三态分得清:赢了、打平、没追上", () => {
+    expect(ghostOutcome(320, ghost)).toBe("ahead");
+    expect(ghostOutcome(300, ghost)).toBe("even");
+    expect(ghostOutcome(280, ghost)).toBe("behind");
+  });
+
+  it("第一趟没有幽灵,那不是「输了」而是根本没得比", () => {
+    expect(ghostOutcome(999, null)).toBeNull();
+    expect(ghostResultLine(999, null)).toBe("");
+  });
+
+  it("打平有自己的一句话,不跟「没追上」共用", () => {
+    const even = ghostResultLine(300, ghost);
+    const behind = ghostResultLine(280, ghost);
+    expect(even).not.toBe(behind);
+    expect(even).toContain("平手");
+    expect(behind).toContain("差 20 米");
+  });
+
+  it("赢了报的是「多跑了几米」,数字和名牌同一把尺", () => {
+    expect(ghostResultLine(320, ghost)).toContain("多跑了 20 米");
+    expect(ghostGap(320, ghost.meters).meters).toBe(20);
+  });
+
+  it("beatsGhost 就是三态里的「赢」,老口径一字不变", () => {
+    for (const m of [299, 299.9, 300, 300.4, 300.6, 301, 9999]) {
+      expect(beatsGhost(m, ghost)).toBe(ghostOutcome(m, ghost) === "ahead");
+    }
+    expect(beatsGhost(301, ghost)).toBe(true);
+    expect(beatsGhost(300, ghost)).toBe(false);
+  });
+
+  it("坏数字不会把 NaN 印到结算面板上", () => {
+    for (const line of [
+      ghostResultLine(Number.NaN, ghost),
+      ghostResultLine(Number.POSITIVE_INFINITY, ghost),
+      ghostResultLine(120, { meters: Number.NaN, events: [] }),
+    ]) {
+      expect(line).not.toContain("NaN");
+    }
+  });
+
+  it("战报里不带输赢批评的字眼", () => {
+    for (const m of [280, 300, 320]) {
+      const line = ghostResultLine(m, ghost);
+      for (const bad of ["输", "失败", "笨", "死"]) expect(line).not.toContain(bad);
+    }
   });
 });

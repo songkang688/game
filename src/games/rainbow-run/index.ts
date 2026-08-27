@@ -169,6 +169,7 @@ import {
   GhostRecorder,
   ghostGap,
   ghostGapLine,
+  ghostResultLine,
   parseGhost,
   serializeGhost,
 } from "./ghost";
@@ -496,6 +497,10 @@ export function mount(api: GameAPI): RainbowRunHandle {
   let ghostAction: PlayerAction = "run";
   let ghostBody: JumpBody = groundedBody();
   let ghostAlive = false;
+  /** 这一趟同场跑的是哪一份快照(结算时要拿它比一比;`ghostBest` 结算里会被换掉) */
+  let ghostRaced: GhostRun | null = null;
+  /** 结算面板上那一行幽灵战报(没有幽灵就是空串,那一行不画) */
+  let ghostReport = "";
   /** 这一趟从起跑算起过了多少毫秒(幽灵回放与录制共用同一条时间线) */
   let runMs = 0;
 
@@ -725,6 +730,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
     saveEndlessRecord(endlessRecord);
     // 无尽成绩统一上报平台(老 key 在这里顺带被读一次并入最大值)
     syncEndlessBest(endlessRecord);
+    // 战报要在换幽灵之前算:换完 ghostBest 就是这一趟自己了,再比就没意义
+    ghostReport = ghostResultLine(meters, ghostRaced);
     // 跑赢了上一趟才换幽灵:留着的永远是自己最好的那一趟
     if (ghostRec && (brokeMeters || !ghostBest)) {
       ghostBest = ghostRec.finish(meters);
@@ -818,6 +825,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ghostPlayer = endless && ghostBest && ghostBest.events.length > 0 ? new GhostPlayer(ghostBest) : null;
     ghostPlayer?.reset();
     ghostAlive = ghostPlayer !== null;
+    ghostRaced = ghostPlayer ? ghostBest : null;
+    ghostReport = "";
     ghostLane = 1;
     ghostLaneFloat = 1;
     ghostAction = "run";
@@ -2357,10 +2366,16 @@ export function mount(api: GameAPI): RainbowRunHandle {
     const bossLose = !endless && loseReason === "boss";
     const canRevive = !reviveUsed && !bossLose && api.getStars() >= REVIVE_COST;
     const skippable = canSkip();
+    // 跟上一趟的自己比赢了没有:第一趟没有幽灵,这一行就整行不画
+    const ghostRow = endless ? ghostReport : "";
     // 无尽模式多一行「跑了多少米」的鼓励语,能跳关时多一行按钮,面板都要跟着高一点
     const { y } = panelBox(
       Math.min(450, w - 40),
-      (canRevive ? 260 : 210) + (bossLose ? 28 : 0) + (endless ? 16 : 0) + (skippable ? 56 : 0),
+      (canRevive ? 260 : 210) +
+        (bossLose ? 28 : 0) +
+        (endless ? 16 : 0) +
+        (ghostRow ? 22 : 0) +
+        (skippable ? 56 : 0),
     );
     // 深紫替代浅紫:白底大字对比 4.8:1(原 #b28ae8 只有 2.7:1,不达 AA)
     ctx.fillStyle = "#8a5ac9";
@@ -2409,7 +2424,13 @@ export function mount(api: GameAPI): RainbowRunHandle {
       y + (endless ? 114 : loseReason === "boss" ? 108 : 84),
       Math.min(440, w - 50),
     );
-    let by = y + (endless ? 146 : loseReason === "boss" ? 138 : 116);
+    if (ghostRow) {
+      ctx.fillStyle = "#7a6ab8";
+      ctx.font = "14px sans-serif";
+      fitText(ghostRow, w / 2, y + 136, Math.min(440, w - 50));
+      ctx.font = "15px sans-serif";
+    }
+    let by = y + (endless ? 146 : loseReason === "boss" ? 138 : 116) + (ghostRow ? 22 : 0);
     btnRevive = null;
     if (canRevive) {
       btnRevive = { x: w / 2 - 110, y: by, w: 220, h: 44 };
