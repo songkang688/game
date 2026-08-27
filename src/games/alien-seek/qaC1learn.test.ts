@@ -16,7 +16,13 @@ import {
   cluesAreTight,
   layoutSpots,
 } from "./levels";
-import { endlessSeconds, endlessSpotCount, endlessTargetCount, solveDeduction } from "./logic";
+import {
+  ENDLESS_MAX_TARGETS,
+  endlessSeconds,
+  endlessSpotCount,
+  endlessTargetCount,
+  solveDeduction,
+} from "./logic";
 import { mulberry32 } from "../level99";
 
 describe("档C R1 学习优化 · L1-01 无尽曲线只剩一个出处", () => {
@@ -46,7 +52,8 @@ describe("档C R1 学习优化 · L1-01 无尽曲线只剩一个出处", () => {
     for (let r = 1; r <= 200; r++) {
       expect(endlessSeconds(r)).toBeGreaterThanOrEqual(14);
       expect(endlessSpotCount(r)).toBeLessThanOrEqual(16);
-      expect(endlessTargetCount(r)).toBeLessThanOrEqual(5);
+      // 第 2 轮 L2-01 把目标数的天花板从 5 提到 8(前 12 轮的节奏一个都没动)
+      expect(endlessTargetCount(r)).toBeLessThanOrEqual(ENDLESS_MAX_TARGETS);
     }
   });
 });

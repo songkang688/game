@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { chapterOf, totalSize, TOTAL_LEVELS } from "../level99";
 import {
   CHAPTERS,
+  ENDLESS_MAX_TARGET,
   endlessGarden,
   endlessGardenName,
   endlessLine,
@@ -265,7 +266,7 @@ describe("贪吃毛毛虫 · 无尽花园", () => {
       seen.add(cfg.twin ? "twin" : cfg.portals ? "portal" : cfg.movers ? "mover" : cfg.gate ? "gate" : "plain");
       expect(cfg.tickMs).toBeGreaterThanOrEqual(180);
       expect(cfg.target).toBeGreaterThanOrEqual(6);
-      expect(cfg.target).toBeLessThanOrEqual(14);
+      expect(cfg.target).toBeLessThanOrEqual(ENDLESS_MAX_TARGET);
       expect(cfg.walls.length).toBeLessThan(GRID * GRID * 0.3);
       for (const [x, y] of cfg.walls) {
         expect(y === MID && x >= 1 && x <= 7).toBe(false);

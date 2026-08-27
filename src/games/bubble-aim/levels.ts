@@ -63,6 +63,44 @@ export function isTightShots(def: BubbleLevelDef): boolean {
   return shotBudget(def) < TIGHT_BUDGET;
 }
 
+/** 偏紧线:够得着但不宽裕。第 1 主题(糖果果园)整章都在这条线下面 */
+export const SNUG_BUDGET = 0.78;
+/** 宽松线:这条线以上基本是「随便打都够」 */
+export const LOOSE_BUDGET = 1;
+
+export type BudgetBand = "限弹" | "偏紧" | "适中" | "宽松";
+
+/**
+ * 这一关的子弹算宽还是算紧。
+ *
+ * 为什么要有这个:按主题算平均预算,第 1 主题是 0.71,全场第二紧,
+ * 只有最后一个「星尘试炼」比它更紧;第 2 主题反倒是最松的 1.25
+ * (石泡每颗白送 2 发)。也就是说曲线是「先紧 → 松一大截 → 再慢慢紧」,
+ * 新手一进门打的就是仅次于终极章的紧度,却没人跟他说一声。
+ *
+ * 1.0 的前 99 关被 `logic.test.ts` 的哈希锁焊住,`shots` 一个数都不能改,
+ * 所以改不了紧度,那就至少把紧度**说出来**——选关和开局都挂个牌子。
+ */
+export function budgetBand(def: BubbleLevelDef): BudgetBand {
+  const b = shotBudget(def);
+  if (b < TIGHT_BUDGET) return "限弹";
+  if (b < SNUG_BUDGET) return "偏紧";
+  if (b < LOOSE_BUDGET) return "适中";
+  return "宽松";
+}
+
+/** 开局那句提醒;子弹宽裕就不啰嗦,返回空串 */
+export function budgetNote(def: BubbleLevelDef): string {
+  switch (budgetBand(def)) {
+    case "限弹":
+      return "🎯 子弹卡得很紧,每一发都要打出连锁掉落。";
+    case "偏紧":
+      return "🧮 子弹不算宽裕,先看好哪一串最长再撒手。";
+    default:
+      return "";
+  }
+}
+
 /** 一关里用到的机关种类 */
 export function levelMechanisms(def: BubbleLevelDef): MechKind[] {
   const out: MechKind[] = [];
@@ -106,7 +144,7 @@ export interface ThemeDef {
 }
 
 export const THEMES: ThemeDef[] = [
-  { name: "糖果果园", icon: "🍬", blurb: "纯颜色热身,瞄得准就爆得多!", skyTop: "#FFF4E0", skyBottom: "#FFE9F2", tint: "#FFF1DE", ink: "#A46A2A" },
+  { name: "糖果果园", icon: "🍬", blurb: "纯颜色热身;子弹不算宽裕,瞄准了再打!", skyTop: "#FFF4E0", skyBottom: "#FFE9F2", tint: "#FFF1DE", ink: "#A46A2A" },
   { name: "石头城堡", icon: "🪨", blurb: "石泡要连打两下才碎,先找别的路!", skyTop: "#EEF1F6", skyBottom: "#E0E6EF", tint: "#E9EDF3", ink: "#4E5B75" },
   { name: "彩虹峡谷", icon: "🌈", blurb: "彩虹泡百搭,连出超长一串!", skyTop: "#F3ECFF", skyBottom: "#E2F6EC", tint: "#F0E8FC", ink: "#7B4FA8" },
   { name: "白云天空", icon: "☁️", blurb: "云挡板会弹开泡泡,学会借墙反弹!", skyTop: "#E4F3FF", skyBottom: "#FBFEFF", tint: "#E2F1FD", ink: "#2A6099" },

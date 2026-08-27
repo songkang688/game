@@ -245,20 +245,76 @@ export function versusLine(a: number, b: number): string {
   return `${who}赢啦!比分 ${Math.max(a, b)} 比 ${Math.min(a, b)}。`;
 }
 
-/** 无尽模式第 round 轮:限时越来越短 */
+/** 无尽第 1 轮给多少秒;难度分拿它当基准线 */
+export const ENDLESS_BASE_SECONDS = 38;
+
+/**
+ * 无尽模式第 round 轮:限时越来越短,压到 14 秒为止。
+ *
+ * 14 秒这条地板不是随便定的:目标数封顶是 8 个,
+ * `sim.ts` 按「键盘一格一格挪光标」这种最慢的玩法算,8 个目标要花 8 秒上下,
+ * 再往下压就会出现「怎么点都来不及」的轮次。往后的难度改走目标数和罚时。
+ */
 export function endlessSeconds(round: number): number {
-  return Math.max(14, 38 - Math.floor(Math.max(1, round) * 1.2));
+  return Math.max(14, ENDLESS_BASE_SECONDS - Math.floor(Math.max(1, round) * 1.2));
 }
 
-/** 无尽模式第 round 轮:藏身点越来越多 */
+/** 无尽模式第 round 轮:藏身点越来越多(16 个是 layoutSpots 的摆放上限) */
 export function endlessSpotCount(round: number): number {
   return Math.min(16, 7 + Math.floor(Math.max(1, round) / 2));
 }
 
-/** 无尽模式第 round 轮:要找出来的目标数 */
+/** 目标数最多几个:场上一共 16 个藏身点,一半已经是很紧的一屏 */
+export const ENDLESS_MAX_TARGETS = 8;
+
+/**
+ * 无尽模式第 round 轮:要找出来的目标数。
+ *
+ * 前 12 轮每 4 轮加一个,加到 5 个;再往后放慢成每 8 轮加一个,加到 8 个封顶。
+ * 分两段是因为限时已经压到地板了,前段那个速度再加下去就不公平。
+ */
 export function endlessTargetCount(round: number): number {
-  return Math.min(5, 2 + Math.floor(Math.max(1, round) / 4));
+  const r = Math.max(1, round);
+  const early = 2 + Math.floor(r / 4);
+  if (early <= 5) return early;
+  return Math.min(ENDLESS_MAX_TARGETS, 5 + Math.floor((r - 12) / 8));
 }
+
+/**
+ * 无尽模式第 round 轮点错一次扣几秒。
+ *
+ * 战役关按章走 `missPenalty`,无尽轮不能照抄:无尽的 chapter 是
+ * `(round - 1) % 8` 循环出来的,照抄会让罚时在 2→5→2 之间来回跳,
+ * 第 9 轮反而比第 8 轮轻——同一条曲线上出现回头路。
+ *
+ * 这里改成只跟这一轮的限时走:大约咬掉八分之一,再夹在 2~4 秒之间。
+ * 不做成「越往后罚得越狠」是有意的:限时最后要压到 14 秒,再罚 6 秒等于
+ * 一次点错就没了四成时间,对小朋友太重。罚时这一项管公平,
+ * 难度交给目标数那条曲线去涨。
+ */
+export function endlessMissPenalty(round: number): number {
+  return Math.max(2, Math.min(4, Math.round(endlessSeconds(round) / 8)));
+}
+
+/**
+ * 无尽第 round 轮的难度分:把三条曲线合成一个数(和 memory-cards 的
+ * `endlessDifficulty` 一个口径),单测拿它一句话钉住「曲线一路不掉头」。
+ *
+ * 罚时不算在里面——它是公平项不是难度项,见 `endlessMissPenalty`。
+ * 到第 36 轮三条曲线全部到顶,再往后是同一个分数:
+ * 这是 16 个藏身点 + 14 秒地板算出来的天花板,不是忘了继续加。
+ */
+export function endlessDifficulty(round: number): number {
+  const r = Math.max(1, Math.round(round));
+  return (
+    endlessSpotCount(r) * 2 +
+    endlessTargetCount(r) * 8 +
+    (ENDLESS_BASE_SECONDS - endlessSeconds(r))
+  );
+}
+
+/** 难度分到顶的那一轮;再往后的轮次规模一样,只换场景 */
+export const ENDLESS_PEAK_ROUND = 36;
 
 /** 无尽模式结束时的一句话 */
 export function endlessLine(round: number, best: number): string {

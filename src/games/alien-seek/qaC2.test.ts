@@ -7,6 +7,9 @@ import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, chapterOf, loadStars, mulberry32, saveStar, type StorageLike } from "../level99";
 import { CHAPTERS, LEVELS, buildEndlessRound, buildVersusRound } from "./levels";
 import {
+  ENDLESS_PEAK_ROUND,
+  endlessDifficulty,
+  endlessMissPenalty,
   endlessSeconds,
   endlessSpotCount,
   endlessTargetCount,
@@ -75,7 +78,7 @@ function pick(r: Round, lv: SeekLevel, player: 0 | 1, sx: number, sy: number): v
     } else {
       r.crossed.add(i);
       r.misses++;
-      r.left = Math.max(0, r.left - missPenalty(lv.chapter));
+      r.left = Math.max(0, r.left - (lv.penalty ?? missPenalty(lv.chapter)));
       r.log.push("wrong");
       if (r.misses >= 3) {
         r.finished = true;
@@ -91,7 +94,7 @@ function pick(r: Round, lv: SeekLevel, player: 0 | 1, sx: number, sy: number): v
   const hit = lv.targets.find((t) => t.spot === i);
   if (!hit) {
     r.misses++;
-    r.left = Math.max(0, r.left - missPenalty(lv.chapter));
+    r.left = Math.max(0, r.left - (lv.penalty ?? missPenalty(lv.chapter)));
     r.log.push("miss");
     return;
   }
@@ -214,7 +217,7 @@ describe("档C R2 · alien-seek · 竞态", () => {
     const s = lv.spots[wrong];
     for (let k = 0; k < 20; k++) pick(r, lv, 0, s.x, s.y);
     expect(r.misses).toBe(1);
-    expect(r.left).toBe(lv.seconds - missPenalty(lv.chapter));
+    expect(r.left).toBe(lv.seconds - (lv.penalty ?? missPenalty(lv.chapter)));
     expect(r.finished).toBe(false);
   });
 
@@ -315,13 +318,17 @@ describe("档C R2 · alien-seek · 无尽连打 120 轮", () => {
     }
   });
 
-  it("【C2-01 一般】第 20 轮之后题目规模一模一样,只有场景换皮", () => {
-    // C1-03 的续查:换了样本再确认一次,规模确实从第 20 轮起就冻住了。
+  it("【C2-01 已修】规模一路涨到第 36 轮,不再是第 20 轮就冻住", () => {
+    // 原状:藏身点 / 目标数 / 限时三条曲线在第 20 轮同时到顶,shape(20)===shape(120)。
+    // L2-01 之后目标数分两段涨到 8 个、罚时改成按轮次单调,难度分撑到第 36 轮。
     const shape = (r: number): string =>
-      `${endlessSpotCount(r)}/${endlessTargetCount(r)}/${endlessSeconds(r)}`;
-    expect(shape(20)).toBe(shape(40));
-    expect(shape(20)).toBe(shape(120));
-    // 但场景种子每轮都换,推理轮的线索条数也还在往上走,所以换皮感有限
+      `${endlessSpotCount(r)}/${endlessTargetCount(r)}/${endlessSeconds(r)}/${endlessMissPenalty(r)}`;
+    expect(shape(20)).not.toBe(shape(28));
+    expect(shape(28)).not.toBe(shape(36));
+    expect(endlessDifficulty(36)).toBeGreaterThan(endlessDifficulty(20));
+    // 到顶那一轮之后规模才不动(16 个藏身点是摆放上限,14 秒是 sim 算出来的公平地板)
+    expect(shape(ENDLESS_PEAK_ROUND)).toBe(shape(120));
+    // 场景种子照旧每轮都换
     const a = buildEndlessRound(40);
     const b = buildEndlessRound(41);
     expect(JSON.stringify(a.spots)).not.toBe(JSON.stringify(b.spots));

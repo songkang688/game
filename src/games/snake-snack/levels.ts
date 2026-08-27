@@ -371,6 +371,37 @@ export function endlessGardenName(garden: number): string {
   return ENDLESS_GARDENS[(n - 1) % ENDLESS_GARDENS.length];
 }
 
+/** 无尽第一段爬坡爬到第几座封顶（1 基）：速度、墙量、机关都在这里到顶 */
+export const ENDLESS_RAMP_GARDENS = 16;
+/** 清一座园最多要吃几口 */
+export const ENDLESS_MAX_TARGET = 18;
+
+/**
+ * 第 garden 座（1 基）要吃几口才算清园。
+ *
+ * 前 16 座跟着 `k` 每两座多一口，吃到 13 口；再往后每 4 座多一口，到 18 口封顶。
+ * 分第二段是给「休闲无尽」用的：经典档还能靠 `endlessTickMs` 按累计口数继续加速，
+ * 休闲档速度恒定，第 16 座之后要是连目标口数都不动，后面就纯粹是换风景。
+ */
+export function endlessTarget(garden: number): number {
+  const n = Math.max(1, Math.round(garden) || 1);
+  const base = 6 + Math.floor(Math.min(n - 1, 15) / 2);
+  return Math.min(ENDLESS_MAX_TARGET, base + Math.floor(Math.max(0, n - ENDLESS_RAMP_GARDENS) / 4));
+}
+
+/**
+ * 无尽第 garden 座的难度分：速度和目标口数合成一个数（和另外四款一个口径），
+ * 单测拿它钉住「休闲档的曲线也一路不掉头」。第 36 座到顶。
+ */
+export function endlessDifficulty(garden: number): number {
+  const n = Math.max(1, Math.round(garden) || 1);
+  const k = Math.min(n - 1, 15);
+  return endlessTarget(n) * 10 + (300 - Math.max(180, 300 - k * 8));
+}
+
+/** 难度分到顶的那一座；再往后只换风景 */
+export const ENDLESS_PEAK_GARDEN = 36;
+
 /**
  * 无尽花园第 garden 座（1 基）：四种新机制轮着上，越往后越快，
  * 但速度、墙量与目标口数都有封顶。
@@ -381,7 +412,7 @@ export function endlessGarden(garden: number): SnakeLevel {
   const rand = mulberry32(60000 + n * 197);
   const mid = Math.floor(GRID / 2);
   const tickMs = Math.max(180, 300 - k * 8);
-  const target = 6 + Math.floor(k / 2);
+  const target = endlessTarget(n);
   switch ((n - 1) % 5) {
     case 1: {
       const walls: Array<[number, number]> = [];

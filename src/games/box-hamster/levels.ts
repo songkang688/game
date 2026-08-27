@@ -484,22 +484,74 @@ export function getLevel(index: number): LevelDef {
   return made;
 }
 
+/** 无尽第一段爬坡爬到第几仓(0 基):仓库尺寸、箱子数、墙密度都在这里到顶 */
+export const ENDLESS_RAMP_ROUNDS = 14;
+/** 第二段每几仓再加一档机关 */
+export const ENDLESS_LATE_STEP = 4;
+/** 无尽仓的机关上限(和战役章节里已经验证过的上限一样) */
+export const ENDLESS_MAX_ICE = 4;
+export const ENDLESS_MAX_PORTALS = 2;
+
+/** 第二段爬了几档(第 15 仓起才开始算) */
+function endlessLateStep(round: number): number {
+  return Math.max(0, Math.floor((Math.max(0, round) - ENDLESS_RAMP_ROUNDS) / ENDLESS_LATE_STEP));
+}
+
+/** 第 round 仓有几段冰面 */
+export function endlessIceRuns(round: number): number {
+  const r = Math.max(0, Math.round(round));
+  if (r < 6) return 0;
+  return Math.min(ENDLESS_MAX_ICE, 2 + Math.floor(endlessLateStep(r) / 2));
+}
+
+/** 第 round 仓有几对漩涡 */
+export function endlessPortalPairs(round: number): number {
+  const r = Math.max(0, Math.round(round));
+  if (r < 10) return 0;
+  return Math.min(ENDLESS_MAX_PORTALS, 1 + Math.floor(endlessLateStep(r) / 3));
+}
+
+/**
+ * 无尽第 round 仓的难度分:尺寸、箱子、墙、冰、漩涡合成一个数,
+ * 和另外四款的 `endlessDifficulty` 一个口径,单测拿它钉住「曲线一路不掉头」。
+ * 第 31 仓五条曲线全部到顶,再往后是同一个分数。
+ */
+export function endlessDifficulty(round: number): number {
+  const r = Math.max(0, Math.round(round));
+  const ramp = Math.min(1, r / ENDLESS_RAMP_ROUNDS);
+  return (
+    lerpInt(7, 8, ramp) * 2 +
+    lerpInt(1, 3, ramp) * 20 +
+    Math.round(lerp(0.12, 0.26, ramp) * 100) +
+    endlessIceRuns(r) * 6 +
+    endlessPortalPairs(r) * 10
+  );
+}
+
+/** 难度分到顶的那一仓(0 基);再往后只换名字和布局 */
+export const ENDLESS_PEAK_ROUND = 30;
+
 /**
  * 无尽模式「仓库大挑战」的第 round 仓(0 基)。
  * 一仓比一仓大、箱子一仓比一仓多,机关也逐步加进来。
+ *
+ * 前 14 仓把尺寸、箱子数、墙密度一次爬满;第 15 仓起换成慢档,
+ * 每 4 仓多一段冰或多一对漩涡——这两样在战役里已经验证过能到 4 段 / 2 对,
+ * 是这套生成器手上还没用完的余量。墙密度不再往上加:0.26 以上没验证过,
+ * 密到一定程度求解器会一路退回兜底关,反而更简单。
  */
 export function buildEndless(round: number): LevelDef {
   const r = Math.max(0, Math.round(round));
   const ci = Math.min(CHAPTERS.length - 1, Math.floor(r / 3));
-  const ramp = Math.min(1, r / 14);
+  const ramp = Math.min(1, r / ENDLESS_RAMP_ROUNDS);
   const recipe: Recipe = {
     w: lerpInt(7, 8, ramp),
     h: 7,
     boxesPerRoom: lerpInt(1, 3, ramp),
     wallDensity: lerp(0.12, 0.26, ramp),
     divided: false,
-    iceRuns: r >= 6 ? 2 : 0,
-    portalPairs: r >= 10 ? 1 : 0,
+    iceRuns: endlessIceRuns(r),
+    portalPairs: endlessPortalPairs(r),
     feature: "仓库大挑战",
     hint: "一仓接一仓,推完就换下一仓!步数用完这趟就结束。",
   };

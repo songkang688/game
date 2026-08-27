@@ -13,6 +13,7 @@ import {
   SCENE_W,
   ZONES,
   clueHolds,
+  endlessMissPenalty,
   endlessSeconds,
   endlessSpotCount,
   endlessTargetCount,
@@ -61,6 +62,11 @@ interface BaseLevel {
   /** 限时(秒) */
   seconds: number;
   hint: string;
+  /**
+   * 点错一次扣几秒。战役关不写这一项,按 `missPenalty(chapter)` 算;
+   * 无尽轮的 chapter 是循环出来的,必须自带罚时才不会忽轻忽重。
+   */
+  penalty?: number;
 }
 
 export interface FindLevel extends BaseLevel {
@@ -451,7 +457,7 @@ export function buildEndlessRound(round: number): SeekLevel {
     clueWant: Math.min(MAX_CLUES, MIN_CLUES + Math.floor(r / 12)),
     hint: deduce ? "推理时间!读完线索再点。" : "越来越多啦,眼睛要快!",
   };
-  return generate(opts, 880000 + r * 5171, -1);
+  return { ...generate(opts, 880000 + r * 5171, -1), penalty: endlessMissPenalty(r) };
 }
 
 /** 双人对战第 round 局(1 基):同一张场景,两个人抢着点 */

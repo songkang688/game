@@ -42,6 +42,7 @@ import {
   MECH_INFO,
   THEMES,
   THEME_SIZES,
+  budgetNote,
   levelMechanisms,
   parseStars,
   themeOfLevel,
@@ -1105,9 +1106,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       const def = LEVELS[levelIndex];
       const th = THEMES[themeOfLevel(levelIndex)];
       const mechs = levelMechanisms(def);
+      const note = budgetNote(def);
+      const extraLines = (mechs.length > 0 ? 1 : 0) + (note ? 1 : 0);
       ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * a})`;
       ctx.beginPath();
-      ctx.roundRect(30, 168, 300, mechs.length > 0 ? 120 : 100, 18);
+      ctx.roundRect(30, 168, 300, 100 + extraLines * 20, 18);
       ctx.fill();
       ctx.fillStyle = `rgba(62, 124, 184, ${a})`;
       ctx.font = "13px sans-serif";
@@ -1116,12 +1119,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.font = "bold 21px sans-serif";
       ctx.fillText(`第 ${levelIndex + 1} 关 · ${def.name}`, W / 2, 220);
       ctx.font = "12px sans-serif";
-      ctx.fillText(def.tip, W / 2, 248);
+      let y = 248;
+      ctx.fillText(def.tip, W / 2, y);
       if (mechs.length > 0) {
-        ctx.fillText(
-          "机关：" + mechs.map((m) => MECH_INFO[m].icon + MECH_INFO[m].name).join(" "),
-          W / 2, 272
-        );
+        y += 24;
+        ctx.fillText("机关：" + mechs.map((m) => MECH_INFO[m].icon + MECH_INFO[m].name).join(" "), W / 2, y);
+      }
+      if (note) {
+        y += 24;
+        ctx.fillText(note, W / 2, y);
       }
       ctx.textAlign = "left";
     }

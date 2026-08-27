@@ -431,6 +431,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   const deduce = lv.mode === "deduce";
   const targets = lv.mode === "find" ? lv.targets : [];
   const need = deduce ? 1 : targets.length;
+  // 无尽轮自带罚时(它的 chapter 是循环的,照章算会忽轻忽重);战役关照旧按章
+  const penalty = lv.penalty ?? missPenalty(lv.chapter);
 
   const wrap = document.createElement("div");
   wrap.className = "as-wrap";
@@ -580,7 +582,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       } else {
         crossed.add(i);
         misses++;
-        left = Math.max(0, left - missPenalty(lv.chapter));
+        left = Math.max(0, left - penalty);
         opts.sfx("oops");
         say("这个地方和线索对不上,再读一遍线索～");
         if (misses >= 3) settle(false);
@@ -592,7 +594,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     const hit = targets.find((t) => t.spot === i);
     if (!hit) {
       misses++;
-      left = Math.max(0, left - missPenalty(lv.chapter));
+      left = Math.max(0, left - penalty);
       opts.sfx("oops");
       say("这里没人躲着,再找找!");
       return;
