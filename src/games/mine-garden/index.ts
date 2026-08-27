@@ -264,77 +264,77 @@ export const DOUBLE_FLAG_GUARD_MS = 400;
 // 样式
 // ---------------------------------------------------------------------------
 
-export const MG_CSS = `
-.mg-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#F4FBEC,#E9F5E0);
+export const MN_CSS = `
+.mn-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#F4FBEC,#E9F5E0);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
-.mg-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
-.mg-open{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
+.mn-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.mn-open,.mn-back{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#6FA85A,#568844);box-shadow:0 4px 0 #416832;}
-.mg-open:active{transform:translateY(2px);box-shadow:0 2px 0 #416832;}
-.mg-open.mg-ghost{background:linear-gradient(180deg,#7E97C0,#65799C);box-shadow:0 4px 0 #4E5E7C;}
-.mg-open.mg-ghost:active{box-shadow:0 2px 0 #4E5E7C;}
-.mg-field{position:relative;}
-.mg-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
-.mg-chip{background:#fff;border-radius:999px;padding:6px 11px;font-size:13px;font-weight:800;color:#3F6033;
+.mn-open:active,.mn-back:active{transform:translateY(2px);box-shadow:0 2px 0 #416832;}
+.mn-back{background:linear-gradient(180deg,#7E97C0,#65799C);box-shadow:0 4px 0 #4E5E7C;}
+.mn-back:active{box-shadow:0 2px 0 #4E5E7C;}
+.mn-field{position:relative;}
+.mn-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
+.mn-chip{background:#fff;border-radius:999px;padding:6px 11px;font-size:13px;font-weight:800;color:#3F6033;
   box-shadow:0 2px 6px rgba(110,150,90,.24);white-space:nowrap;}
-.mg-chip b{color:#B0563E;}
-.mg-chip.mg-warn{background:#FFF0E4;color:#A85A28;}
-.mg-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-radius:12px;max-width:100%;
+.mn-chip b{color:#B0563E;}
+.mn-chip.mn-warn{background:#FFF0E4;color:#A85A28;}
+.mn-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-radius:12px;max-width:100%;
   padding:3px;background:#DCEBCF;}
-.mg-grid{display:grid;gap:2px;margin:0 auto;width:max-content;}
-.mg-cell{border:none;padding:0;margin:0;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:900;
+.mn-grid{display:grid;gap:2px;margin:0 auto;width:max-content;}
+.mn-cell{border:none;padding:0;margin:0;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:900;
   background:linear-gradient(180deg,#BEE0A8,#A8D08C);box-shadow:inset 0 -2px 0 rgba(90,130,70,.35);
   display:flex;align-items:center;justify-content:center;line-height:1;touch-action:none;position:relative;}
-.mg-cell:active{transform:scale(.94);}
-.mg-cell.mg-open{background:#F3F7EA;box-shadow:inset 0 0 0 1px rgba(150,175,130,.5);cursor:default;
-  animation:mgflip 110ms ease-out;}
-.mg-cell.mg-chordable{box-shadow:inset 0 0 0 2px #E0A94A;cursor:pointer;}
-.mg-cell.mg-flag{background:linear-gradient(180deg,#F6D9A8,#EFC684);}
-.mg-cell.mg-guess{background:linear-gradient(180deg,#DCD8EE,#C7C1E2);}
-.mg-cell.mg-bloom{background:#FDEFF5;animation:mgbloom 260ms cubic-bezier(.34,1.56,.64,1);}
-.mg-cell.mg-wrong{background:#EFE7DA;}
-.mg-cell.mg-cursor{outline:3px solid #E2705A;outline-offset:-2px;z-index:2;}
-.mg-cell.mg-dark{background:linear-gradient(180deg,#9FB3A0,#8CA18E);color:transparent;}
-.mg-cell.mg-dark.mg-open{background:#C6CFC1;}
-.mg-cell.mg-pressing::after{content:"";position:absolute;inset:2px;border-radius:5px;
-  border:2px solid #E0A94A;opacity:var(--mg-press,0);}
-@keyframes mgflip{from{transform:rotateX(70deg);opacity:.3}to{transform:none;opacity:1}}
-@keyframes mgbloom{from{transform:scale(.4)}to{transform:scale(1)}}
-.mg-mini{display:block;margin:6px auto 0;border-radius:8px;background:#DCEBCF;
+.mn-cell:active{transform:scale(.94);}
+.mn-cell.mn-lit{background:#F3F7EA;box-shadow:inset 0 0 0 1px rgba(150,175,130,.5);cursor:default;
+  animation:mnflip 110ms ease-out;}
+.mn-cell.mn-chordable{box-shadow:inset 0 0 0 2px #E0A94A;cursor:pointer;}
+.mn-cell.mn-flag{background:linear-gradient(180deg,#F6D9A8,#EFC684);}
+.mn-cell.mn-guess{background:linear-gradient(180deg,#DCD8EE,#C7C1E2);}
+.mn-cell.mn-bloom{background:#FDEFF5;animation:mnbloom 260ms cubic-bezier(.34,1.56,.64,1);}
+.mn-cell.mn-wrong{background:#EFE7DA;}
+.mn-cell.mn-cursor{outline:3px solid #E2705A;outline-offset:-2px;z-index:2;}
+.mn-cell.mn-dark{background:linear-gradient(180deg,#9FB3A0,#8CA18E);color:transparent;}
+.mn-cell.mn-dark.mn-lit{background:#C6CFC1;}
+.mn-cell.mn-pressing::after{content:"";position:absolute;inset:2px;border-radius:5px;
+  border:2px solid #E0A94A;opacity:var(--mn-press,0);}
+@keyframes mnflip{from{transform:rotateX(70deg);opacity:.3}to{transform:none;opacity:1}}
+@keyframes mnbloom{from{transform:scale(.4)}to{transform:scale(1)}}
+.mn-mini{display:block;margin:6px auto 0;border-radius:8px;background:#DCEBCF;
   box-shadow:0 2px 6px rgba(110,150,90,.3);}
-.mg-minitip{text-align:center;font-size:12px;font-weight:700;color:#5B7A4C;margin-top:2px;}
-.mg-tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
-.mg-btn{border:none;border-radius:12px;padding:9px 13px;min-height:40px;font-size:14px;font-weight:900;cursor:pointer;
+.mn-minitip{text-align:center;font-size:12px;font-weight:700;color:#5B7A4C;margin-top:2px;}
+.mn-tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
+.mn-btn{border:none;border-radius:12px;padding:9px 13px;min-height:40px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#fff;color:#3F6033;box-shadow:0 3px 0 rgba(110,150,90,.32);white-space:nowrap;}
-.mg-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,150,90,.32);}
-.mg-btn.mg-on{background:#DCEFC9;color:#37642A;}
-.mg-btn:disabled{opacity:.5;cursor:default;}
-.mg-btn:focus-visible,.mg-open:focus-visible,.mg-cell:focus-visible{outline:3px solid #274C1C;outline-offset:2px;}
-.mg-msg{text-align:center;font-size:16px;font-weight:800;color:#41633A;min-height:22px;line-height:1.6;margin-top:8px;
+.mn-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,150,90,.32);}
+.mn-btn.mn-on{background:#DCEFC9;color:#37642A;}
+.mn-btn:disabled{opacity:.5;cursor:default;}
+.mn-btn:focus-visible,.mn-open:focus-visible,.mn-back:focus-visible,.mn-cell:focus-visible{outline:3px solid #274C1C;outline-offset:2px;}
+.mn-msg{text-align:center;font-size:16px;font-weight:800;color:#41633A;min-height:22px;line-height:1.6;margin-top:8px;
   overflow-wrap:anywhere;}
-.mg-note{text-align:center;font-size:16px;font-weight:700;color:#5B7A4C;line-height:1.6;margin:6px auto 0;
+.mn-note{text-align:center;font-size:16px;font-weight:700;color:#5B7A4C;line-height:1.6;margin:6px auto 0;
   max-width:520px;overflow-wrap:anywhere;}
-.mg-setup{display:flex;flex-direction:column;gap:8px;align-items:center;}
-.mg-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;}
-.mg-label{font-size:13px;font-weight:800;color:#4B6B3E;}
-.mg-duo{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:flex-start;}
-.mg-duo>div{flex:1 1 300px;min-width:280px;}
-.mg-side{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:800;color:#41633A;
+.mn-setup{display:flex;flex-direction:column;gap:8px;align-items:center;}
+.mn-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;}
+.mn-label{font-size:13px;font-weight:800;color:#4B6B3E;}
+.mn-duo{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:flex-start;}
+.mn-duo>div{flex:1 1 300px;min-width:280px;}
+.mn-side{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:800;color:#41633A;
   line-height:1.7;margin:8px auto 0;max-width:520px;}
-.mg-bar{height:10px;border-radius:999px;background:#D6E6C6;overflow:hidden;margin-top:4px;}
-.mg-bar>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#8CC46C,#5E9B45);}
-.mg-over{position:absolute;inset:0;background:rgba(244,251,236,.96);border-radius:16px;display:flex;
+.mn-bar{height:10px;border-radius:999px;background:#D6E6C6;overflow:hidden;margin-top:4px;}
+.mn-bar>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#8CC46C,#5E9B45);}
+.mn-over{position:absolute;inset:0;background:rgba(244,251,236,.96);border-radius:16px;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:18px;z-index:6;}
-.mg-over-t{font-size:21px;font-weight:900;color:#3F7D3A;}
-.mg-over-s{font-size:15px;font-weight:700;color:#4B6B3E;line-height:1.6;max-width:340px;overflow-wrap:anywhere;}
+.mn-over-t{font-size:21px;font-weight:900;color:#3F7D3A;}
+.mn-over-s{font-size:15px;font-weight:700;color:#4B6B3E;line-height:1.6;max-width:340px;overflow-wrap:anywhere;}
 @media (max-width:420px){
-  .mg-wrap{padding:8px;}
-  .mg-chip{font-size:13px;padding:5px 9px;}
-  .mg-duo>div{min-width:0;flex:1 1 100%;}
+  .mn-wrap{padding:8px;}
+  .mn-chip{font-size:13px;padding:5px 9px;}
+  .mn-duo>div{min-width:0;flex:1 1 100%;}
 }
 @media (prefers-reduced-motion:reduce){
-  .mg-cell.mg-open{animation:none;}
-  .mg-cell.mg-bloom{animation:none;}
+  .mn-cell.mn-lit{animation:none;}
+  .mn-cell.mn-bloom{animation:none;}
 }
 `;
 
@@ -350,13 +350,13 @@ function el(tag: string, cls = "", text = ""): HTMLElement {
 }
 
 function chip(text: string): HTMLElement {
-  return el("span", "mg-chip", text);
+  return el("span", "mn-chip", text);
 }
 
 function button(text: string, onClick: () => void, on = false): HTMLElement {
   const b = document.createElement("button");
   b.type = "button";
-  b.className = `mg-btn${on ? " mg-on" : ""}`;
+  b.className = `mn-btn${on ? " mn-on" : ""}`;
   b.textContent = text;
   b.addEventListener("click", onClick);
   return b;
@@ -476,8 +476,8 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   let dead = false;
   let bloomed: number[] = [];
 
-  const wrap = el("div", "mg-field");
-  const hud = el("div", "mg-hud");
+  const wrap = el("div", "mn-field");
+  const hud = el("div", "mn-hud");
   const flagChip = chip("🚩 0");
   const clockChip = chip("⏱ 00:00");
   const doneChip = chip("🌼 0%");
@@ -485,20 +485,20 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   if (opts.title) hud.appendChild(chip(opts.title));
   wrap.appendChild(hud);
 
-  const scroll = el("div", "mg-scroll");
-  const grid = el("div", "mg-grid");
+  const scroll = el("div", "mn-scroll");
+  const grid = el("div", "mn-grid");
   scroll.appendChild(grid);
   wrap.appendChild(scroll);
 
   const mini = document.createElement("canvas");
-  mini.className = "mg-mini";
-  const miniTip = el("div", "mg-minitip", "地图放不下，可以横着拖；下面这张小地图是全景。");
+  mini.className = "mn-mini";
+  const miniTip = el("div", "mn-minitip", "地图放不下，可以横着拖；下面这张小地图是全景。");
   wrap.append(mini, miniTip);
 
-  const msg = el("div", "mg-msg", opts.fog ? "雾里只照亮光标周围，数字要记住。" : "第一下一定安全，放心点。");
+  const msg = el("div", "mn-msg", opts.fog ? "雾里只照亮光标周围，数字要记住。" : "第一下一定安全，放心点。");
   wrap.appendChild(msg);
 
-  const tools = el("div", "mg-tools");
+  const tools = el("div", "mn-tools");
   const pressBtn = button(`🖐 长按 ${longPress}ms`, () => {
     longPress = nextLongPress(longPress);
     pressBtn.textContent = `🖐 长按 ${longPress}ms`;
@@ -514,7 +514,7 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   for (let i = 0; i < total; i++) {
     const c = document.createElement("button");
     c.type = "button";
-    c.className = "mg-cell";
+    c.className = "mn-cell";
     c.setAttribute("aria-label", cellLabel(i));
     bindCell(c, i);
     cells[i] = c;
@@ -570,31 +570,31 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     const c = cells[i];
     const st = run.board.state[i];
     const dark = Boolean(opts.fog) && !fogVisible(run.opts.w, run.opts.h, run.cursor, i);
-    let cls = "mg-cell";
+    let cls = "mn-cell";
     let text = "";
     let color = "";
     if (st === OPEN) {
       if (run.board.mine[i]) {
-        cls += " mg-bloom";
+        cls += " mn-bloom";
         text = "🌼";
       } else {
-        cls += " mg-open";
+        cls += " mn-lit";
         const n = run.board.hint[i];
         if (n > 0) {
           text = String(n);
           color = hintColor(n);
         }
-        if (!finished && canChord(run.board, i)) cls += " mg-chordable";
+        if (!finished && canChord(run.board, i)) cls += " mn-chordable";
       }
     } else if (st === FLAG) {
-      cls += finished && !run.board.mine[i] ? " mg-flag mg-wrong" : " mg-flag";
+      cls += finished && !run.board.mine[i] ? " mn-flag mn-wrong" : " mn-flag";
       text = finished && !run.board.mine[i] ? "🍀" : "🚩";
     } else if (st === GUESS) {
-      cls += " mg-guess";
+      cls += " mn-guess";
       text = "❓";
     }
-    if (dark) cls += " mg-dark";
-    if (i === run.cursor && scheme !== "none") cls += " mg-cursor";
+    if (dark) cls += " mn-dark";
+    if (i === run.cursor && scheme !== "none") cls += " mn-cursor";
     c.className = cls;
     c.textContent = dark && st !== FLAG ? "" : text;
     c.style.color = color;
@@ -617,12 +617,12 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     flagChip.textContent = Number.isFinite(budget)
       ? `🚩 ${budget} / ${run.opts.flagLimit}`
       : `🚩 ${flagsLeft(run.board)}`;
-    flagChip.className = Number.isFinite(budget) && budget <= 0 ? "mg-chip mg-warn" : "mg-chip";
+    flagChip.className = Number.isFinite(budget) && budget <= 0 ? "mn-chip mn-warn" : "mn-chip";
     const limit = run.opts.timeLimitMs;
     if (typeof limit === "number") {
       const left = timeLeftMs(run, clock());
       clockChip.textContent = `⏳ ${clockText(left)}`;
-      clockChip.className = left <= 20000 ? "mg-chip mg-warn" : "mg-chip";
+      clockChip.className = left <= 20000 ? "mn-chip mn-warn" : "mn-chip";
     } else {
       clockChip.textContent = `⏱ ${clockText(elapsedMs(run, clock()))}`;
     }
@@ -658,15 +658,15 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   }
 
   function showOver(win: boolean, ms: number): void {
-    const ov = el("div", "mg-over");
-    ov.appendChild(el("div", "mg-over-t", win ? "🌼 扫种完成！" : "🌱 这一片没扫完"));
+    const ov = el("div", "mn-over");
+    ov.appendChild(el("div", "mn-over-t", win ? "🌼 扫种完成！" : "🌱 这一片没扫完"));
     ov.appendChild(
-      el("div", "mg-over-s", win ? `用时 ${clockText(ms)}，${run.board.mines} 颗刺种都绕开了。` : loseLine("hit"))
+      el("div", "mn-over-s", win ? `用时 ${clockText(ms)}，${run.board.mines} 颗刺种都绕开了。` : loseLine("hit"))
     );
     if (opts.onReplay) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "mg-open";
+      b.className = "mn-open";
       b.textContent = "🔁 再来一盘";
       b.addEventListener("click", () => {
         opts.sfx("tap");
@@ -735,14 +735,14 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     const stopRing = (): void => {
       if (raf) timers.cancel(raf);
       raf = 0;
-      c.style.removeProperty?.("--mg-press");
-      c.className = c.className.replace(" mg-pressing", "");
+      c.style.removeProperty?.("--mn-press");
+      c.className = c.className.replace(" mn-pressing", "");
     };
 
     const ring = (): void => {
       if (dead || longFired || pressAt === 0) return;
       const p = longPressProgress(nowMs() - pressAt, longPress);
-      c.style.setProperty?.("--mg-press", String(p));
+      c.style.setProperty?.("--mn-press", String(p));
       if (p >= 1) {
         longFired = true;
         stopRing();
@@ -762,7 +762,7 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
       }
       pressAt = nowMs();
       longFired = false;
-      c.className += " mg-pressing";
+      c.className += " mn-pressing";
       raf = timers.frame(ring);
     });
     c.addEventListener("pointerup", () => {
@@ -891,7 +891,7 @@ export function levelNote(level: MineLevel): string {
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const level = levelAt(ctx.level);
-  const note = el("div", "mg-note", `${level.task} ${levelNote(level)}`);
+  const note = el("div", "mn-note", `${level.task} ${levelNote(level)}`);
   stage.appendChild(note);
   const field = mountField(stage, {
     ...levelRunOptions(level),
@@ -940,9 +940,9 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
 
   function setup(): void {
     clear();
-    const wrap = el("div", "mg-setup");
-    const r1 = el("div", "mg-row");
-    r1.appendChild(el("span", "mg-label", "地块"));
+    const wrap = el("div", "mn-setup");
+    const r1 = el("div", "mn-row");
+    r1.appendChild(el("span", "mn-label", "地块"));
     for (const p of PRESETS) {
       r1.appendChild(
         button(p.label, () => {
@@ -952,8 +952,8 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
         }, preset.key === p.key)
       );
     }
-    const r2 = el("div", "mg-row");
-    r2.appendChild(el("span", "mg-label", "对手"));
+    const r2 = el("div", "mn-row");
+    r2.appendChild(el("span", "mn-label", "对手"));
     for (const t of AI_TIERS) {
       r2.appendChild(
         button(AI_TIER_LABELS[t], () => {
@@ -963,10 +963,10 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
         }, tier === t)
       );
     }
-    const note = el("div", "mg-note", `${AI_TIER_HINTS[tier]} 同一张图，比谁先扫完。`);
+    const note = el("div", "mn-note", `${AI_TIER_HINTS[tier]} 同一张图，比谁先扫完。`);
     const go = document.createElement("button");
     go.type = "button";
-    go.className = "mg-open";
+    go.className = "mn-open";
     go.textContent = "开始竞速 ▶";
     go.addEventListener("click", () => {
       api.play("tap");
@@ -979,8 +979,8 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
   function start(): void {
     clear();
     seed = (seed + 0x9e3779b9) >>> 0;
-    const side = el("div", "mg-side", `🤖 ${AI_TIER_LABELS[tier]}还在等你点第一下。`);
-    const bar = el("div", "mg-bar");
+    const side = el("div", "mn-side", `🤖 ${AI_TIER_LABELS[tier]}还在等你点第一下。`);
+    const bar = el("div", "mn-bar");
     const fill = el("i");
     bar.appendChild(fill);
     side.appendChild(bar);
@@ -1026,12 +1026,12 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
     box.appendChild(side);
 
     function finishRace(playerWon: boolean): void {
-      const ov = el("div", "mg-over");
-      ov.appendChild(el("div", "mg-over-t", playerWon ? "🏆 你先扫完！" : "🌱 这一局对手快一点"));
+      const ov = el("div", "mn-over");
+      ov.appendChild(el("div", "mn-over-t", playerWon ? "🏆 你先扫完！" : "🌱 这一局对手快一点"));
       ov.appendChild(
         el(
           "div",
-          "mg-over-s",
+          "mn-over-s",
           playerWon
             ? `${AI_TIER_LABELS[tier]}还在慢慢数呢，这片花园是你的了。`
             : `${AI_TIER_LABELS[tier]}先扫完了，换一张图再来。`
@@ -1039,7 +1039,7 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
       );
       const again = document.createElement("button");
       again.type = "button";
-      again.className = "mg-open";
+      again.className = "mn-open";
       again.textContent = "🔁 再来一局";
       again.addEventListener("click", () => {
         api.play("tap");
@@ -1047,7 +1047,7 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
       });
       const backBtn = document.createElement("button");
       backBtn.type = "button";
-      backBtn.className = "mg-open mg-ghost";
+      backBtn.className = "mn-back";
       backBtn.textContent = "← 换难度";
       backBtn.addEventListener("click", () => {
         api.play("tap");
@@ -1096,9 +1096,9 @@ function mountEndless(host: HTMLElement, api: GameApi): { destroy: () => void } 
 
   function setup(): void {
     clear();
-    const wrap = el("div", "mg-setup");
-    const r1 = el("div", "mg-row");
-    r1.appendChild(el("span", "mg-label", "起手地块"));
+    const wrap = el("div", "mn-setup");
+    const r1 = el("div", "mn-row");
+    r1.appendChild(el("span", "mn-label", "起手地块"));
     for (const p of PRESETS) {
       r1.appendChild(
         button(p.label, () => {
@@ -1109,10 +1109,10 @@ function mountEndless(host: HTMLElement, api: GameApi): { destroy: () => void } 
         }, preset.key === p.key)
       );
     }
-    const note = el("div", "mg-note", endlessLine(streak, best, endlessMines(streak, preset)));
+    const note = el("div", "mn-note", endlessLine(streak, best, endlessMines(streak, preset)));
     const go = document.createElement("button");
     go.type = "button";
-    go.className = "mg-open";
+    go.className = "mn-open";
     go.textContent = streak > 0 ? "接着清 ▶" : "开始连清 ▶";
     go.addEventListener("click", () => {
       api.play("tap");
@@ -1146,7 +1146,7 @@ function mountEndless(host: HTMLElement, api: GameApi): { destroy: () => void } 
         setup();
       }
     });
-    const side = el("div", "mg-side", endlessLine(streak, best, mines));
+    const side = el("div", "mn-side", endlessLine(streak, best, mines));
     box.appendChild(side);
   }
 
@@ -1177,9 +1177,9 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
 
   function setup(): void {
     clear();
-    const wrap = el("div", "mg-setup");
-    const r1 = el("div", "mg-row");
-    r1.appendChild(el("span", "mg-label", "地块"));
+    const wrap = el("div", "mn-setup");
+    const r1 = el("div", "mn-row");
+    r1.appendChild(el("span", "mn-label", "地块"));
     for (const p of PRESETS) {
       r1.appendChild(
         button(p.label, () => {
@@ -1191,12 +1191,12 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
     }
     const note = el(
       "div",
-      "mg-note",
+      "mn-note",
       "两张一模一样的图，左边朵朵（WASD 挪、F 翻开、G 插旗），右边星星（方向键挪、L 翻开、K 插旗）。谁先扫完谁赢。"
     );
     const go = document.createElement("button");
     go.type = "button";
-    go.className = "mg-open";
+    go.className = "mn-open";
     go.textContent = "开始 ▶";
     go.addEventListener("click", () => {
       api.play("tap");
@@ -1209,7 +1209,7 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
   function start(): void {
     clear();
     seed = (seed + 0xc2b2ae35) >>> 0;
-    const row = el("div", "mg-duo");
+    const row = el("div", "mn-duo");
     const lHost = el("div");
     const rHost = el("div");
     row.append(lHost, rHost);
@@ -1220,12 +1220,12 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
       if (over) return;
       over = true;
       api.play("win");
-      const ov = el("div", "mg-over");
-      ov.appendChild(el("div", "mg-over-t", `🌼 ${who}先扫完！`));
-      ov.appendChild(el("div", "mg-over-s", "同一张图，另一边也把剩下的看完再走吧。"));
+      const ov = el("div", "mn-over");
+      ov.appendChild(el("div", "mn-over-t", `🌼 ${who}先扫完！`));
+      ov.appendChild(el("div", "mn-over-s", "同一张图，另一边也把剩下的看完再走吧。"));
       const again = document.createElement("button");
       again.type = "button";
-      again.className = "mg-open";
+      again.className = "mn-open";
       again.textContent = "🔁 再来一局";
       again.addEventListener("click", () => {
         api.play("tap");
@@ -1277,10 +1277,10 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
 // ---------------------------------------------------------------------------
 
 export function mount(api: GameApi): { destroy: () => void } {
-  const root = el("div", "mg-wrap");
+  const root = el("div", "mn-wrap");
   const style = document.createElement("style");
-  style.textContent = MG_CSS;
-  const bar = el("div", "mg-modebar");
+  style.textContent = MN_CSS;
+  const bar = el("div", "mn-modebar");
   const levelHost = el("div");
   const modeHost = el("div");
   modeHost.hidden = true;
@@ -1301,7 +1301,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   (Object.keys(MODE_LABELS) as ExtraMode[]).forEach((key) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "mg-open";
+    btn.className = "mn-open";
     btn.textContent = MODE_LABELS[key];
     btn.addEventListener("click", () => {
       if (extra) return;
@@ -1311,7 +1311,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       modeHost.hidden = false;
       const backBtn = document.createElement("button");
       backBtn.type = "button";
-      backBtn.className = "mg-open mg-ghost";
+      backBtn.className = "mn-back";
       backBtn.textContent = "← 回闯关";
       backBtn.addEventListener("click", () => {
         api.play("tap");

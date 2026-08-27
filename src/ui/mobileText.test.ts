@@ -212,7 +212,7 @@ describe("360×640 走查回落:说明文字不许小过正文下限", () => {
     ["weiqi-garden", [".wq-msg", ".wq-note"]],
     ["flight-chess", [".fc-msg"]],
     ["merge-2048", [".mg-msg"]],
-    ["mine-garden", [".mg-msg", ".mg-note"]],
+    ["mine-garden", [".mn-msg", ".mn-note"]],
     ["sudoku-petal", [".sp-msg"]]
   ];
 

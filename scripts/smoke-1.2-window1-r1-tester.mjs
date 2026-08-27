@@ -141,10 +141,10 @@ const GAMES = [
   {
     id: "mine-garden",
     title: "扫雷花园",
-    p: "mg",
+    p: "mn",
     modes: ["🤖 竞速对战", "🔥 连续清盘", "👫 双人同屏"],
     keys: ["KeyD", "KeyS", "KeyF"],
-    clicks: [".mg-cell"],
+    clicks: [".mn-cell"],
     tier: true
   },
   {
@@ -1105,20 +1105,20 @@ async function main() {
 
     // ---- R3 mine-garden 双人:分边看光标与翻开数,不再靠整屏指纹 ----
     await page.goto(`${BASE}/?t=${Date.now()}#/game/mine-garden`, { waitUntil: "networkidle0" });
-    await page.waitForSelector(".mg-modebar .mg-open", { timeout: 15000 });
+    await page.waitForSelector(".mn-modebar .mn-open", { timeout: 15000 });
     await page.evaluate(() => {
-      [...document.querySelectorAll(".mg-modebar .mg-open")].find((b) => (b.textContent ?? "").includes("双人"))?.click();
+      [...document.querySelectorAll(".mn-modebar .mn-open")].find((b) => (b.textContent ?? "").includes("双人"))?.click();
     });
     await sleep(700);
-    await pickThrough(page, "mg");
+    await pickThrough(page, "mn");
     await sleep(900);
     const sides = async () =>
       page.evaluate(() =>
-        [...document.querySelectorAll(".mg-duo > div")].map((side) => {
-          const cells = [...side.querySelectorAll("[class*='mg-cell']")];
+        [...document.querySelectorAll(".mn-duo > div")].map((side) => {
+          const cells = [...side.querySelectorAll("[class*='mn-cell']")];
           return {
-            cursor: cells.findIndex((c) => c.className.includes("mg-cursor")),
-            opened: cells.filter((c) => /\bmg-open\b/.test(c.className)).length,
+            cursor: cells.findIndex((c) => c.className.includes("mn-cursor")),
+            opened: cells.filter((c) => /\bmn-lit\b/.test(c.className)).length,
             flags: side.textContent?.split("🚩").length ?? 0
           };
         })

@@ -69,21 +69,21 @@ async function planLevel(page, index, first) {
   );
 }
 
-/** 每一格现在是不是已经翻开了（迷雾只是加了 mg-dark，翻开与否照样看得出来） */
+/** 每一格现在是不是已经翻开了（迷雾只是加了 mn-dark，翻开与否照样看得出来） */
 async function openMap(page) {
   return page.evaluate(() =>
-    [...document.querySelectorAll(".mg-cell")].map((el) =>
-      el.classList.contains("mg-open") || el.classList.contains("mg-bloom") ? 1 : 0
+    [...document.querySelectorAll(".mn-cell")].map((el) =>
+      el.classList.contains("mn-lit") || el.classList.contains("mn-bloom") ? 1 : 0
     )
   );
 }
 
 async function cellBox(page, i) {
   return page.evaluate((k) => {
-    const cells = document.querySelectorAll(".mg-cell");
+    const cells = document.querySelectorAll(".mn-cell");
     const el = cells[k];
     if (!el) return null;
-    const box = el.closest(".mg-scroll");
+    const box = el.closest(".mn-scroll");
     if (box && box.scrollWidth > box.clientWidth) {
       const r0 = el.getBoundingClientRect();
       box.scrollLeft += r0.left - box.getBoundingClientRect().left - box.clientWidth / 2;
@@ -107,8 +107,8 @@ async function overflowX(page) {
     const wide = [...document.querySelectorAll("body *")].filter(
       (el) => el.getBoundingClientRect().right > d.clientWidth + 1 && getComputedStyle(el).position !== "fixed"
     );
-    // 网格允许比屏幕宽（外层 .mg-scroll 负责横向滚动），别的都不许探头
-    const bad = wide.filter((el) => !el.closest(".mg-scroll"));
+    // 网格允许比屏幕宽（外层 .mn-scroll 负责横向滚动），别的都不许探头
+    const bad = wide.filter((el) => !el.closest(".mn-scroll"));
     return { doc: d.scrollWidth - d.clientWidth, bad: bad.slice(0, 3).map((el) => el.className || el.tagName) };
   });
 }
@@ -126,7 +126,7 @@ async function openLevel(page, target) {
   await page.goto(`${BASE}/?t=${Date.now()}#/game/mine-garden`, { waitUntil: "networkidle0" });
   await page.waitForSelector(".l99-continue", { timeout: 15000 });
   await page.click(".l99-continue");
-  await page.waitForSelector(".mg-cell", { timeout: 10000 });
+  await page.waitForSelector(".mn-cell", { timeout: 10000 });
   await sleep(220);
   return page.$eval(".l99-stagetitle", (el) => el.textContent ?? "").catch(() => "");
 }
@@ -158,7 +158,7 @@ async function wonOverlay(page) {
 }
 
 const cursorAt = (page) =>
-  page.evaluate(() => [...document.querySelectorAll(".mg-cell")].findIndex((el) => el.classList.contains("mg-cursor")));
+  page.evaluate(() => [...document.querySelectorAll(".mn-cell")].findIndex((el) => el.classList.contains("mn-cursor")));
 
 /** 只用方向键把光标走到第 target 格（不碰鼠标，专门验键位） */
 async function walkCursorTo(page, target, w) {
@@ -178,12 +178,12 @@ async function walkCursorTo(page, target, w) {
 /** 现在还没翻开、也没插旗的第一格（键盘插旗得挑这种格子，不然按了也没反应） */
 async function firstHiddenCell(page) {
   return page.evaluate(() =>
-    [...document.querySelectorAll(".mg-cell")].findIndex(
+    [...document.querySelectorAll(".mn-cell")].findIndex(
       (el) =>
-        !el.classList.contains("mg-open") &&
-        !el.classList.contains("mg-bloom") &&
-        !el.classList.contains("mg-flag") &&
-        !el.classList.contains("mg-guess")
+        !el.classList.contains("mn-lit") &&
+        !el.classList.contains("mn-bloom") &&
+        !el.classList.contains("mn-flag") &&
+        !el.classList.contains("mn-guess")
     )
   );
 }
@@ -262,7 +262,7 @@ async function main() {
   for (const n of LEVELS) {
     errors = [];
     const title = await openLevel(page, n);
-    const cells = await page.$$eval(".mg-cell", (list) => list.length);
+    const cells = await page.$$eval(".mn-cell", (list) => list.length);
     const plan = await planLevel(page, n, 0).catch((e) => ({ error: String(e) }));
     if (plan.error) {
       log(false, `第 ${n} 关`, plan.error);
@@ -302,9 +302,9 @@ async function main() {
   errors = [];
   await openLevel(page, 164);
   const bigInfo = await page.evaluate(() => {
-    const grid = document.querySelector(".mg-grid");
-    const mini = document.querySelector(".mg-mini");
-    const scroll = document.querySelector(".mg-scroll");
+    const grid = document.querySelector(".mn-grid");
+    const mini = document.querySelector(".mn-mini");
+    const scroll = document.querySelector(".mn-scroll");
     return {
       gridWidth: grid?.getBoundingClientRect().width ?? 0,
       scrollable: scroll ? scroll.scrollWidth > scroll.clientWidth : false,
@@ -328,9 +328,9 @@ async function main() {
     const spike = plan.mine.findIndex((v) => v === 1);
     await clickCell(page, spike);
     await sleep(200);
-    const said = await page.$eval(".mg-msg", (el) => el.textContent ?? "").catch(() => "");
+    const said = await page.$eval(".mn-msg", (el) => el.textContent ?? "").catch(() => "");
     const flagged = await page.evaluate(
-      (i) => document.querySelectorAll(".mg-cell")[i].classList.contains("mg-flag"),
+      (i) => document.querySelectorAll(".mn-cell")[i].classList.contains("mn-flag"),
       spike
     );
     const alive = await page.evaluate(() => !document.querySelector(".l99-ov-title"));
@@ -353,15 +353,15 @@ async function main() {
     const spike = plan.mine.findIndex((v) => v === 1);
     await clickCell(page, spike);
     await sleep(120);
-    const early = await page.$$eval(".mg-bloom", (l) => l.length);
+    const early = await page.$$eval(".mn-bloom", (l) => l.length);
     const lostPanel = await page.evaluate(
       () => document.querySelector(".l99-ov-title")?.textContent?.includes("就差一点点") ?? false
     );
     // 每颗之间隔 90ms，等它全开完再数
     await sleep(total * 90 + 900);
-    const late = await page.$$eval(".mg-bloom", (l) => l.length);
+    const late = await page.$$eval(".mn-bloom", (l) => l.length);
     const gentle = await page.evaluate(() =>
-      [...document.querySelectorAll(".mg-msg,.l99-ov-sub")].map((el) => el.textContent ?? "").join(" ")
+      [...document.querySelectorAll(".mn-msg,.l99-ov-sub")].map((el) => el.textContent ?? "").join(" ")
     );
     const noScary = !/地雷|爆炸|炸|战争|伤亡/.test(gentle);
     log(
@@ -381,23 +381,23 @@ async function main() {
     const moved = await cursorAt(page);
     await page.keyboard.press("KeyF");
     await sleep(200);
-    const opened = await page.$$eval(".mg-open", (l) => l.length);
+    const opened = await page.$$eval(".mn-lit", (l) => l.length);
     // 插旗只对还盖着的格子有效，先用方向键走到一格没翻开的地方再按 G
-    const flagsBefore = await page.$$eval(".mg-flag", (l) => l.length);
+    const flagsBefore = await page.$$eval(".mn-flag", (l) => l.length);
     const hidden = await firstHiddenCell(page);
     const walked = hidden >= 0 && (await walkCursorTo(page, hidden, plan1.w));
     await page.keyboard.press("KeyG");
     await sleep(120);
-    const flags = (await page.$$eval(".mg-flag", (l) => l.length)) - flagsBefore;
+    const flags = (await page.$$eval(".mn-flag", (l) => l.length)) - flagsBefore;
     await page.keyboard.press("Escape");
     await sleep(120);
-    const pausedText = await page.$eval(".mg-msg", (el) => el.textContent ?? "");
+    const pausedText = await page.$eval(".mn-msg", (el) => el.textContent ?? "");
     const openedWhilePaused = await (async () => {
-      const wasOpen = await page.$$eval(".mg-open", (l) => l.length);
+      const wasOpen = await page.$$eval(".mn-lit", (l) => l.length);
       await page.keyboard.press("ArrowDown");
       await page.keyboard.press("KeyF");
       await sleep(150);
-      return (await page.$$eval(".mg-open", (l) => l.length)) - wasOpen;
+      return (await page.$$eval(".mn-lit", (l) => l.length)) - wasOpen;
     })();
     log(
       moved === before + 1 &&
@@ -428,7 +428,7 @@ async function main() {
     await page.mouse.up();
     await sleep(120);
     const longOk = await page.evaluate(
-      (i) => document.querySelectorAll(".mg-cell")[i].classList.contains("mg-flag"),
+      (i) => document.querySelectorAll(".mn-cell")[i].classList.contains("mn-flag"),
       spikes[0]
     );
 
@@ -437,16 +437,16 @@ async function main() {
     await page.mouse.click(box2.x, box2.y, { button: "right" });
     await sleep(120);
     const rightOk = await page.evaluate(
-      (i) => document.querySelectorAll(".mg-cell")[i].classList.contains("mg-flag"),
+      (i) => document.querySelectorAll(".mn-cell")[i].classList.contains("mn-flag"),
       spikes[1]
     );
 
     // 和弦：把某个数字格周围的刺种全插上旗，再点它
     const target = await page.evaluate(
       ([mine, w]) => {
-        const cells = [...document.querySelectorAll(".mg-cell")];
+        const cells = [...document.querySelectorAll(".mn-cell")];
         for (let i = 0; i < cells.length; i++) {
-          if (!cells[i].classList.contains("mg-open")) continue;
+          if (!cells[i].classList.contains("mn-lit")) continue;
           const n = Number(cells[i].textContent);
           if (!n) continue;
           const nbs = [];
@@ -462,7 +462,7 @@ async function main() {
             }
           }
           const need = nbs.filter((k) => mine[k]);
-          const hidden = nbs.filter((k) => !mine[k] && !cells[k].classList.contains("mg-open"));
+          const hidden = nbs.filter((k) => !mine[k] && !cells[k].classList.contains("mn-lit"));
           if (need.length === n && hidden.length > 0) return { at: i, flags: need, gain: hidden.length };
         }
         return null;
@@ -474,7 +474,7 @@ async function main() {
       for (const f of target.flags) {
         // 前面长按 / 右键已经插上的就别再点了，再点一下等于把旗拔了
         const already = await page.evaluate(
-          (i) => document.querySelectorAll(".mg-cell")[i].classList.contains("mg-flag"),
+          (i) => document.querySelectorAll(".mn-cell")[i].classList.contains("mn-flag"),
           f
         );
         if (already) continue;
@@ -482,10 +482,10 @@ async function main() {
         await page.mouse.click(b.x, b.y, { button: "right" });
         await sleep(120);
       }
-      const openedBefore = await page.$$eval(".mg-open", (l) => l.length);
+      const openedBefore = await page.$$eval(".mn-lit", (l) => l.length);
       await clickCell(page, target.at);
       await sleep(200);
-      const openedAfter = await page.$$eval(".mg-open", (l) => l.length);
+      const openedAfter = await page.$$eval(".mn-lit", (l) => l.length);
       chordOk = openedAfter >= openedBefore + target.gain;
     }
     log(longOk && rightOk && chordOk, "长按插旗 / 右键插旗 / 旗插齐之后点数字真的和弦", `长按=${longOk} 右键=${rightOk} 和弦=${chordOk}`);
@@ -494,11 +494,11 @@ async function main() {
   // 7. 三个额外模式
   errors = [];
   await page.goto(`${BASE}/?t=${Date.now()}#/game/mine-garden`, { waitUntil: "networkidle0" });
-  await page.waitForSelector(".mg-modebar", { timeout: 10000 });
+  await page.waitForSelector(".mn-modebar", { timeout: 10000 });
   {
     const enter = async (label) => {
       await page.evaluate((t) => {
-        const btn = [...document.querySelectorAll(".mg-modebar button")].find((el) => el.textContent?.includes(t));
+        const btn = [...document.querySelectorAll(".mn-modebar button")].find((el) => el.textContent?.includes(t));
         btn?.click();
       }, label);
       await sleep(260);
@@ -520,7 +520,7 @@ async function main() {
     await clickCell(page, 40);
     await sleep(1600);
     const aiWidth = await page.evaluate(() => {
-      const bar = document.querySelector(".mg-bar > i");
+      const bar = document.querySelector(".mn-bar > i");
       return bar ? parseFloat(bar.style.width || "0") : -1;
     });
     log(aiWidth > 0, "竞速对战：同一张图开局，假人的进度条真的在走", `进度=${aiWidth}%`);
@@ -528,7 +528,7 @@ async function main() {
 
     await enter("连续清盘");
     const endlessOk = await page.evaluate(() =>
-      [...document.querySelectorAll(".mg-note")].some((el) => (el.textContent ?? "").includes("连清"))
+      [...document.querySelectorAll(".mn-note")].some((el) => (el.textContent ?? "").includes("连清"))
     );
     log(endlessOk, "连续清盘：入口开得起来，连清计数在界面上");
     await leave();
@@ -539,9 +539,9 @@ async function main() {
       btn?.click();
     });
     await sleep(300);
-    const duo = await page.$$eval(".mg-field", (l) => l.length);
+    const duo = await page.$$eval(".mn-field", (l) => l.length);
     const duoNames = await page.evaluate(() =>
-      [...document.querySelectorAll(".mg-field .mg-chip")].map((el) => el.textContent ?? "").join(" ")
+      [...document.querySelectorAll(".mn-field .mn-chip")].map((el) => el.textContent ?? "").join(" ")
     );
     log(
       duo === 2 && duoNames.includes("朵朵") && duoNames.includes("星星"),
@@ -555,7 +555,7 @@ async function main() {
   await page.goto(`${BASE}/?t=${Date.now()}#/game/mine-garden`, { waitUntil: "networkidle0" });
   await page.waitForSelector(".l99-continue", { timeout: 15000 });
   await page.click(".l99-continue");
-  await page.waitForSelector(".mg-cell", { timeout: 10000 });
+  await page.waitForSelector(".mn-cell", { timeout: 10000 });
   await clickCell(page, 12);
   await sleep(500);
   await page.goto(`${BASE}/?t=${Date.now()}`, { waitUntil: "networkidle0" });

@@ -11,7 +11,7 @@ import {
   LONG_PRESS_MS,
   MAX_CELL,
   MG_CONSTS,
-  MG_CSS,
+  MN_CSS,
   MIN_CELL,
   MODE_LABELS,
   PRESETS,
@@ -61,7 +61,7 @@ function tap(cell: FakeEl): void {
 }
 
 /**
- * 额外模式挂在 `mg-wrap` 的第 4 个孩子里（style / 模式条 / 闯关 / 额外模式）。
+ * 额外模式挂在 `mn-wrap` 的第 4 个孩子里（style / 模式条 / 闯关 / 额外模式）。
  * 闯关那一份只是 hidden，并没有从树上摘掉，所以找按钮必须缩到这一块里找。
  */
 function modeHost(stub: DomStub): FakeEl {
@@ -207,8 +207,25 @@ describe("mine-garden · 显示小工具", () => {
   });
 
   it("样式表里写了 360px 的窄屏规则和省电模式规则", () => {
-    expect(MG_CSS).toContain("max-width:420px");
-    expect(MG_CSS).toContain("prefers-reduced-motion");
+    expect(MN_CSS).toContain("max-width:420px");
+    expect(MN_CSS).toContain("prefers-reduced-motion");
+  });
+
+  // W1-05:这一款以前和 `merge-2048` 共用 `mg-` 前缀,`.mg-open` 在两边含义还相反。
+  // 眼下样式各自塞在根节点里所以不会真串味,但只要谁把样式提到 styles.css 就会互相改样子。
+  it("类名一律走自己的 mn- 前缀,一个 mg- 都不剩", () => {
+    expect(MN_CSS).not.toContain("mg-");
+    expect(MN_CSS).not.toContain("mgflip");
+    expect(MN_CSS).not.toContain("mgbloom");
+    expect(MN_CSS).toContain(".mn-cell");
+  });
+
+  // W1-06:「← 回闯关 / ← 换难度」以前也顶着 .mg-open,按类名找入口的自动化会被带回选关页
+  it("返回键有自己的 mn-back,不和模式入口 mn-open 混在一起", () => {
+    expect(MN_CSS).toContain(".mn-back");
+    // 「翻开的格子」也从 -open 里挪走,免得一个类名同时是按钮又是格子状态
+    expect(MN_CSS).toContain(".mn-cell.mn-lit");
+    expect(MN_CSS).not.toContain(".mn-cell.mn-open");
   });
 });
 
@@ -237,8 +254,8 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       seed: 5,
       sfx: () => undefined
     });
-    expect(dom.root.byClass("mg-cell")).toHaveLength(30);
-    const chips = dom.root.byClass("mg-chip").map((c) => c.textContent);
+    expect(dom.root.byClass("mn-cell")).toHaveLength(30);
+    const chips = dom.root.byClass("mn-chip").map((c) => c.textContent);
     expect(chips.some((t) => t.includes("🚩"))).toBe(true);
     expect(chips.some((t) => t.includes("⏱"))).toBe(true);
     expect(chips.some((t) => t.includes("🌼"))).toBe(true);
@@ -260,7 +277,7 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
         ended = info;
       }
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[indexOf(6, 3, 3)]);
     expect(field.run.started).toBe(true);
     expect(field.run.board.mines).toBe(5);
@@ -287,16 +304,16 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
         ended = info;
       }
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[indexOf(6, 3, 3)]);
     const spike = field.run.board.mine.indexOf(1);
     tap(cells[spike]);
     expect(field.run.phase).toBe("lost");
     expect((ended as unknown as { reason: string }).reason).toBe("hit");
     // 其余刺种还排着队，flush 之后才全部开花
-    const bloomBefore = dom.root.byClass("mg-bloom").length;
+    const bloomBefore = dom.root.byClass("mn-bloom").length;
     dom.flush();
-    expect(dom.root.byClass("mg-bloom").length).toBeGreaterThan(bloomBefore);
+    expect(dom.root.byClass("mn-bloom").length).toBeGreaterThan(bloomBefore);
     field.destroy();
   });
 
@@ -310,7 +327,7 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       sfx: () => undefined,
       autoSettle: false
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[indexOf(6, 3, 3)]);
     const spike = field.run.board.mine.indexOf(1);
     cells[spike].fire("contextmenu");
@@ -331,7 +348,7 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       sfx: () => undefined,
       autoSettle: false
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[indexOf(6, 3, 3)]);
     const spike = field.run.board.mine.indexOf(1);
     cells[spike].fire("pointerdown", { button: 0 });
@@ -377,7 +394,7 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       sfx: () => undefined,
       autoSettle: false
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[indexOf(6, 3, 3)]);
     dom.press("Escape");
     const paused = dom.root.findText("计时停住");
@@ -405,7 +422,7 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       sfx: () => undefined,
       autoSettle: false
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[indexOf(6, 3, 3)]);
     const hidden: number[] = [];
     for (let i = 0; i < 36; i++) if (field.run.board.state[i] === 0) hidden.push(i);
@@ -413,7 +430,7 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
     cells[hidden[1]].fire("contextmenu");
     expect(cells[hidden[1]].textContent).not.toBe("🚩");
     expect(dom.root.findText("小旗用完")).not.toBeNull();
-    expect(dom.root.byClass("mg-warn").length).toBeGreaterThan(0);
+    expect(dom.root.byClass("mn-warn").length).toBeGreaterThan(0);
     field.destroy();
   });
 
@@ -428,9 +445,9 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       sfx: () => undefined,
       autoSettle: false
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[0]);
-    expect(dom.root.byClass("mg-dark").length).toBeGreaterThan(0);
+    expect(dom.root.byClass("mn-dark").length).toBeGreaterThan(0);
     for (let i = 0; i < 36; i++) {
       if (!field.run.board.mine[i] && field.run.board.state[i] !== OPEN) tap(cells[i]);
     }
@@ -448,9 +465,9 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       sfx: () => undefined,
       autoSettle: false
     });
-    const tip = dom.root.byClass("mg-minitip")[0];
+    const tip = dom.root.byClass("mn-minitip")[0];
     expect(tip.hidden).toBe(false);
-    expect(dom.root.byClass("mg-mini")[0].hidden).toBe(false);
+    expect(dom.root.byClass("mn-mini")[0].hidden).toBe(false);
     field.destroy();
   });
 
@@ -465,14 +482,14 @@ describe("mine-garden · 一片花园（真点、真赢、真输）", () => {
       sfx: () => undefined,
       autoSettle: false
     });
-    const cells = dom.root.byClass("mg-cell");
+    const cells = dom.root.byClass("mn-cell");
     tap(cells[indexOf(9, 4, 4)]);
     expect(dom.globalCount()).toBeGreaterThan(before);
     expect(dom.timerCount()).toBeGreaterThan(0);
     field.destroy();
     expect(dom.globalCount()).toBe(before);
     expect(dom.timerCount()).toBe(0);
-    expect(dom.root.byClass("mg-cell")).toHaveLength(0);
+    expect(dom.root.byClass("mn-cell")).toHaveLength(0);
   });
 });
 
@@ -515,7 +532,7 @@ describe("mine-garden · 闯关接线", () => {
     const start = dom.root.button("开始冒险");
     expect(start).not.toBeNull();
     start?.fire("click");
-    expect(dom.root.byClass("mg-cell").length).toBe(levelAt(0).w * levelAt(0).h);
+    expect(dom.root.byClass("mn-cell").length).toBe(levelAt(0).w * levelAt(0).h);
     expect(dom.root.findText("小苗床")).not.toBeNull();
     handle.destroy();
     expect(dom.timerCount()).toBe(0);
@@ -543,10 +560,10 @@ describe("mine-garden · 闯关接线", () => {
     const handle = mount(fakeApi(dom.root));
     dom.root.button(MODE_LABELS.versus)?.fire("click");
     modeHost(dom).button("开始竞速")?.fire("click");
-    const cells = modeHost(dom).byClass("mg-cell");
+    const cells = modeHost(dom).byClass("mn-cell");
     expect(cells.length).toBe(81);
     tap(cells[indexOf(9, 4, 4)]);
-    const bar = dom.root.byClass("mg-bar")[0];
+    const bar = dom.root.byClass("mn-bar")[0];
     expect(bar).toBeTruthy();
     expect(dom.timerCount()).toBeGreaterThan(0);
     handle.destroy();
@@ -558,14 +575,16 @@ describe("mine-garden · 闯关接线", () => {
     const handle = mount(fakeApi(dom.root));
     dom.root.button(MODE_LABELS.duo)?.fire("click");
     modeHost(dom).button("开始 ▶")?.fire("click");
-    const fields = modeHost(dom).byClass("mg-field");
+    const fields = modeHost(dom).byClass("mn-field");
     expect(fields).toHaveLength(2);
     expect(fields[0].findText("朵朵")).not.toBeNull();
     expect(fields[1].findText("星星")).not.toBeNull();
     // 朵朵按 D 只挪左边，星星按方向键只挪右边
-    const leftCells = fields[0].byClass("mg-cell");
+    const leftCells = fields[0].byClass("mn-cell");
     tap(leftCells[indexOf(9, 4, 4)]);
-    expect(fields[1].byClass("mg-open")).toHaveLength(0);
+    // 翻开的格子挂的是 mn-lit(不再和「模式入口按钮」共用 mn-open)
+    expect(fields[0].byClass("mn-lit").length).toBeGreaterThan(0);
+    expect(fields[1].byClass("mn-lit")).toHaveLength(0);
     handle.destroy();
     expect(dom.timerCount()).toBe(0);
   });
