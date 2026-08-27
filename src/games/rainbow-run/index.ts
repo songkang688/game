@@ -555,6 +555,10 @@ export function mount(api: GameAPI): RainbowRunHandle {
   const pickups: Pickup[] = [];
   const puffs: Puff[] = [];
   const floats: Floaty[] = [];
+  /** 里程碑横幅一共停留多久(秒)。 */
+  const BANNER_TIME = 0.8;
+  /** 换世界时的里程碑横幅(无尽专用,纯演出)。 */
+  let banner: { title: string; world: Theme; accent: string; t: number } | null = null;
   // 画之前按深度排一次序,远的先画;复用同一对数组,不每帧新建
   const drawOrder: Obstacle[] = [];
   const pickOrder: Pickup[] = [];
@@ -796,7 +800,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     if (state.finished) ghostAlive = false;
   }
 
-  /** 无尽跑:根据当前距离切换主题世界(换世界时广播一下)。 */
+  /** 无尽跑:根据当前距离切换主题世界(换世界时拉一条里程碑横幅)。 */
   function syncEndlessTheme(): void {
     const stage = Math.floor(dist / ENDLESS_STAGE_LEN) % THEME_ORDER.length;
     const world = THEME_ORDER[stage];
@@ -807,7 +811,13 @@ export function mount(api: GameAPI): RainbowRunHandle {
       // 换世界只换皮:待刷的那一段留着不动,免得把必过窗口从中间切断
       if (dist > 50) {
         const st = THEME_STYLE[world];
-        addFloat(w / 2, h * 0.35, `${st.emoji} 进入${st.name}!`, st.accent, true);
+        // 里程碑横幅:「第 N 世界」+ 世界图标从横幅左端飞到右端,0.8 秒收场
+        banner = {
+          title: `第 ${Math.floor(dist / ENDLESS_STAGE_LEN) + 1} 世界 · ${st.name}`,
+          world,
+          accent: st.accent,
+          t: BANNER_TIME,
+        };
         api.play("win");
       }
     }
@@ -840,6 +850,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     hurtFlash = 0;
     perfectStreak = 0;
     forkSign = null;
+    banner = null;
     forkTimer = level().fork ? 5 : Infinity;
     bossBeaten = false;
     reviveUsed = false;
@@ -1178,6 +1189,10 @@ export function mount(api: GameAPI): RainbowRunHandle {
       floats[i].life -= dt;
       floats[i].y -= dt * 34;
       if (floats[i].life <= 0) floats.splice(i, 1);
+    }
+    if (banner) {
+      banner.t -= dt;
+      if (banner.t <= 0) banner = null;
     }
 
     if (phase !== "run") return;
@@ -1529,32 +1544,30 @@ export function mount(api: GameAPI): RainbowRunHandle {
   }
 
   /**
-   * 远景视差:两三层圆润的小丘挂在地平线上,越远的层跑得越慢、颜色越淡。
-   * 掉帧时从最近那层开始砍,地平线的轮廓不会一下子空掉。
+   * 远景视差:两三层剪影挂在地平线上,越远的层跑得越慢、颜色越淡。
+   * 1.3 起剪影按世界换形状(棒棒糖树 / 棕榈 / 雪杉 / 极光带……),
+   * 层参数、横移与配色公式全部沿用 view3d 的老口径;
+   * 掉帧时仍从最近那层开始砍,地平线的轮廓不会一下子空掉。
    */
-  function drawParallax(theme: ThemeStyle): void {
+  function drawParallax(theme: ThemeStyle, def: LevelDef): void {
     const hy = cam.horizonY;
     const layers = Math.min(PARALLAX_LAYERS.length, QUALITY_TIERS[qualityTier].parallax);
+    const shapes = PARALLAX_THEMES[def.world];
+    const kinds = [shapes.far, shapes.mid, shapes.near] as const;
     for (let i = 0; i < layers; i++) {
       const layer = PARALLAX_LAYERS[i];
       const span = Math.max(48, layer.span * w);
       const shift = parallaxShift(scrollPhase, layer.factor, span);
-      const top = hy - hy * layer.height * 0.55;
+      const topH = hy * layer.height * 0.55;
       // 远景层跟着天色走色温:黄昏偏橘、夜里偏靛,近处的层调得轻一点
       const base = mixHex(theme.skyBottom, theme.accent, 0.2 + i * 0.22);
       ctx.fillStyle = withAlpha(
         mixHex(base, light.tint, light.layerMix * (1 - i * 0.18)),
         layer.alpha,
       );
-      ctx.beginPath();
-      ctx.moveTo(-span * 2, hy + 4);
       for (let x = -span * 2 + shift; x < w + span; x += span) {
-        ctx.lineTo(x, hy + 4);
-        ctx.quadraticCurveTo(x + span * 0.5, top, x + span, hy + 4);
+        drawSilhouetteUnit(ctx, kinds[i], x, span, hy + 4, topH);
       }
-      ctx.lineTo(w + span * 2, hy + 4);
-      ctx.closePath();
-      ctx.fill();
     }
   }
 
@@ -1625,6 +1638,24 @@ export function mount(api: GameAPI): RainbowRunHandle {
       }
     }
 
+    // 彩虹渐变路肩:跑道两侧各一条,顺着透视收向消失点(1.3 新增,纯装饰)
+    const shoulder = ctx.createLinearGradient(0, farY, 0, nearY);
+    const shoulderBands = ["#ff9eb5", "#ffd868", "#8fd8c8", "#9adcf0", "#c9a6f2"];
+    for (let i = 0; i < shoulderBands.length; i++) {
+      shoulder.addColorStop(i / (shoulderBands.length - 1), withAlpha(shoulderBands[i], 0.5));
+    }
+    ctx.fillStyle = shoulder;
+    for (const j of [0, 3]) {
+      const dir = j === 0 ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(edgeX(j, farS) + dir * 3 * farS, farY);
+      ctx.lineTo(edgeX(j, farS) + dir * 9 * farS, farY);
+      ctx.lineTo(edgeX(j, nearS) + dir * 9 * nearS, nearY);
+      ctx.lineTo(edgeX(j, nearS) + dir * 3 * nearS, nearY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
     // 车道分隔线:四条都指向同一个消失点,中间两条画成一段段的虚线
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
     for (let j = 0; j <= 3; j++) {
@@ -1686,15 +1717,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
         ctx.translate(w / 2 + side * off * s, y);
         ctx.scale(s, s);
         ctx.globalAlpha = Math.max(0, 1 - fogAlpha(s));
-        drawDecoShape(theme, def, d);
+        drawDecoShape(theme, def.world, d);
         ctx.restore();
       }
     }
   }
 
-  /** 一个装饰物,画在原点上,缩放交给画布变换。 */
-  function drawDecoShape(theme: ThemeStyle, def: LevelDef, seed: number): void {
-    const world = def.world;
+  /** 一个装饰物,画在原点上,缩放交给画布变换(里程碑横幅也拿它当世界图标)。 */
+  function drawDecoShape(theme: ThemeStyle, world: Theme, seed: number): void {
     if (world === "grass") {
       ctx.fillStyle = theme.deco;
       for (let p = 0; p < 5; p++) {
@@ -1900,6 +1930,16 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.arc(-9, -10, 3.5, 0, Math.PI * 2);
     ctx.arc(9, -10, 3.5, 0, Math.PI * 2);
     ctx.fill();
+    // 卷云眉毛:外高内低,压出一张生气脸(追近的红晕警告仍在下面)
+    ctx.strokeStyle = "#3a3a4a";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-15, -19);
+    ctx.lineTo(-5, -15);
+    ctx.moveTo(15, -19);
+    ctx.lineTo(5, -15);
+    ctx.stroke();
     ctx.restore();
     if (chaserWarning(chaserGap)) {
       ctx.fillStyle = `rgba(255,138,168,${0.16 + 0.14 * Math.abs(Math.sin(time * 7))})`;
@@ -2491,7 +2531,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 12, (Math.random() - 0.5) * shake * 12);
 
     drawSky(theme, def);
-    drawParallax(theme);
+    drawParallax(theme, def);
     drawGround(theme, def);
     drawSideDeco(theme, def);
     const laneW = w * LANE_SPREAD;
@@ -2588,6 +2628,35 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.textBaseline = "middle";
       ctx.fillText(f.text, f.x, f.y);
       ctx.globalAlpha = 1;
+    }
+
+    // 里程碑横幅:「第 N 世界」缎带 + 世界图标从左端飞到右端(reduced 静在左端)
+    if (banner && phase === "run") {
+      const k = Math.max(0, banner.t / BANNER_TIME);
+      const ease = reducedMotion ? 1 : Math.min(1, (1 - k) * 6);
+      const bw2 = Math.min(320, w - 60) * ease;
+      const by2 = h * 0.3;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k * 3);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.roundRect(w / 2 - bw2 / 2, by2 - 24, bw2, 48, 16);
+      ctx.fill();
+      ctx.strokeStyle = banner.accent;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = banner.accent;
+      ctx.font = "bold 18px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      fitText(banner.title, w / 2 + 14, by2, Math.max(40, bw2 - 88));
+      const iconX =
+        w / 2 - bw2 / 2 + 26 + (reducedMotion ? 0 : (1 - k) * Math.max(0, bw2 - 52));
+      ctx.save();
+      ctx.translate(iconX, by2);
+      drawDecoShape(THEME_STYLE[banner.world], banner.world, 1);
+      ctx.restore();
+      ctx.restore();
     }
 
     ctx.restore();
