@@ -51,26 +51,35 @@ function log(id, ok, what, extra = "") {
   console.log(`${ok ? "  ok  " : " FAIL "} [${id}] ${what}${extra ? ` — ${extra}` : ""}`);
 }
 
-/** 舞台现在长什么样:canvas 取像素指纹，没有 canvas 就取文本指纹 */
+/**
+ * 舞台现在长什么样，同时取两份指纹：
+ *
+ * - `px`：画布抽稀采样的像素指纹（画布款只能这么看）；
+ * - `dom`：**结构**指纹 —— 取标签、`class`、`aria-label` 和内联 `style`，
+ *   故意不取文字。挪光标换 class、角色走位换 `left/top`（都看得见），
+ *   而秒表 `⏱ 00:01` 只动文字（看不见），这样自走的计时器不会把判据糊掉。
+ */
 const shot = (page) =>
   page.evaluate(() => {
     const stage = document.querySelector(".game-stage");
-    if (!stage) return "no-stage";
-    const canvases = [...stage.querySelectorAll("canvas")].filter((c) => c.offsetParent !== null && c.width > 0);
-    if (canvases.length) {
-      let sig = "";
-      for (const c of canvases) {
-        const g = c.getContext("2d");
-        if (!g) continue;
-        // 抽稀采样：整张读回来太慢，隔 9 个像素取一个就够看出「动没动」
-        const d = g.getImageData(0, 0, c.width, c.height).data;
-        let h = 0;
-        for (let i = 0; i < d.length; i += 4 * 9) h = (h * 31 + d[i] + d[i + 1] * 3 + d[i + 2] * 7) >>> 0;
-        sig += `${h},`;
-      }
-      return `px:${sig}`;
+    if (!stage) return { px: "no-stage", dom: "no-stage" };
+    let px = "";
+    for (const c of stage.querySelectorAll("canvas")) {
+      if (c.offsetParent === null || c.width <= 0) continue;
+      const g = c.getContext("2d");
+      if (!g) continue;
+      // 抽稀采样：整张读回来太慢，隔 9 个像素取一个就够看出「动没动」
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let h = 0;
+      for (let i = 0; i < d.length; i += 4 * 9) h = (h * 31 + d[i] + d[i + 1] * 3 + d[i + 2] * 7) >>> 0;
+      px += `${h},`;
     }
-    return `tx:${(stage.textContent ?? "").replace(/\s+/g, " ")}`;
+    let dom = "";
+    for (const el of stage.querySelectorAll("*")) {
+      if (el.tagName === "STYLE") continue;
+      dom += `${el.tagName}.${el.getAttribute("class") ?? ""}[${el.getAttribute("aria-label") ?? ""}]{${el.getAttribute("style") ?? ""}}|`;
+    }
+    return { px, dom };
   });
 
 async function hold(page, keys) {
@@ -94,7 +103,22 @@ async function openTwoPlayer(page, game) {
     return true;
   });
   if (!opened) return false;
-  await sleep(1200);
+  await sleep(900);
+  // 有几款的双人是「先选路数 / 选地块 / 选角色，再开打」，不按这一下场上根本没人
+  for (let i = 0; i < 2; i++) {
+    const started = await page.evaluate(() => {
+      const stage = document.querySelector(".game-stage");
+      const b = [...(stage?.querySelectorAll("button") ?? [])].find((x) =>
+        /^(开始|▶ ?开局|开局|星星用)/.test((x.textContent ?? "").trim())
+      );
+      if (!b) return false;
+      b.click();
+      return true;
+    });
+    if (!started) break;
+    await sleep(900);
+  }
+  await sleep(600);
   return true;
 }
 
@@ -124,24 +148,33 @@ async function main() {
       const a0 = await shot(page);
       await sleep(DUO.length * (HOLD + 40));
       const a1 = await shot(page);
-      const selfMoving = a0 !== a1;
+      const domSelf = a0.dom !== a1.dom;
+      const pxSelf = a0.px !== a1.px;
+      // 画布款把棋子 / 角色画在 canvas 上，按键根本不动 DOM；而画布又在每帧重绘，
+      // 像素变了也证明不了是这一下按出来的。这类只能记「不可判」，交给各自的单测去钉。
+      const field = a0.px && pxSelf ? null : !domSelf ? "dom" : !pxSelf ? "px" : null;
 
-      const b0 = await shot(page);
-      await hold(page, DUO);
-      const b1 = await shot(page);
-      const duoMoved = b0 !== b1;
+      // 回合制的款只有轮到的那一位才认键，所以每套键位最多试三轮再判死
+      const tryKeys = async (keys) => {
+        if (!field) return false;
+        for (let i = 0; i < 3; i++) {
+          const before = await shot(page);
+          await hold(page, keys);
+          const after = await shot(page);
+          if (before[field] !== after[field]) return true;
+          await sleep(1200);
+        }
+        return false;
+      };
+      const duoMoved = await tryKeys(DUO);
+      const starMoved = await tryKeys(STAR);
 
-      const c0 = await shot(page);
-      await hold(page, STAR);
-      const c1 = await shot(page);
-      const starMoved = c0 !== c1;
-
-      // 自己就一直在动的款（canvas 每帧重绘），画面变了说明不了什么，只能记成「不可判」
-      if (selfMoving) {
+      // 两份指纹自己就一直在变的款（canvas 每帧重绘），画面变了说明不了什么，只能记成「不可判」
+      if (!field) {
         log(game.id, true, "画面本来就一直在动，两套键位靠画面分不出来（改看不报错 + 入口在）", "自走款");
       } else {
-        log(game.id, duoMoved, "朵朵那套 WASD+F+G 推得动画面");
-        log(game.id, starMoved, "星星那套 方向键+L+K 推得动画面");
+        log(game.id, duoMoved, `朵朵那套 WASD+F+G 推得动画面（看 ${field}）`);
+        log(game.id, starMoved, `星星那套 方向键+L+K 推得动画面（看 ${field}）`);
       }
 
       log(game.id, errors.length === before, "双人这一段全程无报错", errors[before]?.slice(0, 90) ?? "");
