@@ -1005,21 +1005,21 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g.lineTo(W, y1);
     g.stroke();
     g.setLineDash([]);
-    // 标签垫一块圆角小牌,不再是裸文本
+    // 标签垫一块圆角小牌,不再是裸文本(窗口 7 R1 修复 A-10:功能小字 ≥14px,牌随字加高)
     g.fillStyle = "rgba(47,111,158,.8)";
     const label = `鱼群带 ${opts.band.from}–${opts.band.to} 米`;
     g.beginPath();
     g.moveTo(4, y0 + 3);
-    g.lineTo(4 + label.length * 11 + 10, y0 + 3);
-    g.quadraticCurveTo(4 + label.length * 11 + 16, y0 + 3, 4 + label.length * 11 + 16, y0 + 10);
-    g.quadraticCurveTo(4 + label.length * 11 + 16, y0 + 17, 4 + label.length * 11 + 10, y0 + 17);
-    g.lineTo(4, y0 + 17);
+    g.lineTo(4 + label.length * 14 + 10, y0 + 3);
+    g.quadraticCurveTo(4 + label.length * 14 + 16, y0 + 3, 4 + label.length * 14 + 16, y0 + 12);
+    g.quadraticCurveTo(4 + label.length * 14 + 16, y0 + 21, 4 + label.length * 14 + 10, y0 + 21);
+    g.lineTo(4, y0 + 21);
     g.closePath();
     g.fill();
     g.fillStyle = "#ffffff";
-    g.font = "600 11px system-ui,sans-serif";
+    g.font = "600 14px system-ui,sans-serif";
     g.textAlign = "left";
-    g.fillText(label, 8, y0 + 13);
+    g.fillText(label, 8, y0 + 16);
   }
 
   /** ⑩ 深度刻度:做成一根木尺(刻度位置照旧吃 yOfDepth,只读) */
@@ -1035,8 +1035,9 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g.strokeStyle = "#a97a44";
     g.lineWidth = 1;
     g.strokeRect(W - 30, sy + 2, 28, H - sy - 4);
+    // 窗口 7 R1 修复 A-10:刻度数字提到 14px(功能小字底线)
     g.textAlign = "right";
-    g.font = "700 10px system-ui,sans-serif";
+    g.font = "700 14px system-ui,sans-serif";
     for (let d = 10; d <= MAX_DEPTH; d += 10) {
       const y = yOfDepth(d);
       g.strokeStyle = "#8a6234";
@@ -1350,12 +1351,13 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g.lineTo(x, y);
     g.stroke();
     g.setLineDash([]);
+    // 窗口 7 R1 修复 A-10:瞄准提示与风向标都是功能小字,统一 ≥14px
     g.fillStyle = "#b23a63";
-    g.font = "700 12px system-ui,sans-serif";
+    g.font = "700 14px system-ui,sans-serif";
     g.textAlign = "left";
     g.fillText(`松手 → ${aimDist.toFixed(1)} 米远 · ${aimDepth.toFixed(1)} 米深`, 8, y - 5);
     g.textAlign = "center";
-    g.font = "700 13px system-ui,sans-serif";
+    g.font = "700 14px system-ui,sans-serif";
     g.fillStyle = "#3f6f92";
     g.fillText(windArrow(wind), x, surfaceY() - 8);
   }
