@@ -356,7 +356,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       return;
     }
     b.textContent = labelOf(c.color, c.kind);
-    b.innerHTML = `<span class="dc-face">${pieceFaceSVG(c.color, c.kind)}</span>`;
+    // 渐变 id 拼上格号：同兵种开出多枚时，同文档内联也不会重复 id
+    b.innerHTML = `<span class="dc-face">${pieceFaceSVG(c.color, c.kind, i)}</span>`;
   }
 
   /** 选中炮时把每条跳吃路径画成虚线弧；没选炮或没得跳就整层收起 */

@@ -20,7 +20,8 @@ export const FACTION = {
 } as const;
 
 /**
- * 牌背：深棕木底渐变 + 双线描边 + 中央「暗」字印章 + 底部厚度阴影。
+ * 牌背：深棕木底（三停层叠实心，免 defs/id——32 份内联不撞车）+ 双线描边 +
+ * 中央「暗」字印章 + 底部厚度阴影。
  *
  * `seedIdx` 只决定两道极淡木纹（class="dcg"）的走向相位——32 张牌背不会死板到一模一样，
  * 但除了这两条纹以外的每一个字节都相同，也绝不掺进任何棋子信息。
@@ -32,10 +33,10 @@ export function backSVG(seedIdx: number): string {
   const g2 = `M8 ${44 - p2} Q32 ${38 + p1} 56 ${46 + p2}`;
   return (
     `<svg viewBox="0 0 64 64" aria-hidden="true">` +
-    `<defs><linearGradient id="dcWood" x1="0" y1="0" x2="0" y2="1">` +
-    `<stop offset="0" stop-color="#8a5a30"/><stop offset="1" stop-color="#5f3a1c"/></linearGradient></defs>` +
     `<rect x="4" y="6" width="56" height="55" rx="11" fill="#3e2712"/>` +
-    `<rect x="4" y="4" width="56" height="55" rx="11" fill="url(#dcWood)"/>` +
+    `<rect x="4" y="4" width="56" height="55" rx="11" fill="#5f3a1c"/>` +
+    `<rect x="4" y="4" width="56" height="44" rx="11" fill="#744a26"/>` +
+    `<rect x="4" y="4" width="56" height="27" rx="11" fill="#8a5a30"/>` +
     `<path class="dcg" d="${g1}" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="2"/>` +
     `<path class="dcg" d="${g2}" fill="none" stroke="#2c1a0b" stroke-opacity=".18" stroke-width="2"/>` +
     `<rect x="7.5" y="7.5" width="49" height="48" rx="8" fill="none" stroke="#e6c48d" stroke-width="1.6"/>` +
@@ -55,9 +56,13 @@ export function backSVG(seedIdx: number): string {
  *  - 汉字下方一排战力点（class="dcp"，帅 7 点 → 兵 1 点，直读 `RANK`）——
  *    记不住相克表的孩子按点数比大小就行；
  *  - 炮多一道虚线小弧（class="dcarc"），提示它是「隔一个才吃得着」的那一枚。
+ *
+ * `uid` 拼进渐变 id：同一兵种会在棋盘上开出好几枚，视图把格号传进来，
+ * 同文档内联多份也不会出现重复 id（无参调用只用于单测与单份渲染）。
  */
-export function pieceFaceSVG(color: Color, kind: Kind): string {
+export function pieceFaceSVG(color: Color, kind: Kind, uid: string | number = "x"): string {
   const f = FACTION[color];
+  const gid = `dcIvory-${color}-${kind}-${uid}`;
   const n = RANK[kind];
   let dots = "";
   for (let i = 0; i < n; i++) {
@@ -70,10 +75,10 @@ export function pieceFaceSVG(color: Color, kind: Kind): string {
       : "";
   return (
     `<svg viewBox="0 0 64 64" aria-hidden="true">` +
-    `<defs><radialGradient id="dcIvory" cx=".38" cy=".3" r=".9">` +
+    `<defs><radialGradient id="${gid}" cx=".38" cy=".3" r=".9">` +
     `<stop offset="0" stop-color="#fffdf2"/><stop offset="1" stop-color="#efe0bd"/></radialGradient></defs>` +
     `<ellipse cx="32" cy="34.5" rx="26.5" ry="26" fill="#b09468"/>` +
-    `<circle cx="32" cy="31.5" r="26.5" fill="url(#dcIvory)"/>` +
+    `<circle cx="32" cy="31.5" r="26.5" fill="url(#${gid})"/>` +
     `<circle cx="32" cy="31.5" r="24.2" fill="none" stroke="${f.ring}" stroke-width="3.4"/>` +
     `<circle cx="32" cy="31.5" r="20.9" fill="none" stroke="${f.ring}" stroke-opacity=".35" stroke-width="1"/>` +
     arc +

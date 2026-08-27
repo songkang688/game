@@ -7,6 +7,7 @@
  * 44px 触控高度保留，列宽允许收进容器（收缩后仍是 ≥31×44 的可点面积）。
  */
 import { describe, expect, it } from "vitest";
+import { backSVG, pieceFaceSVG } from "./art";
 import { CSS as BOARD_CSS } from "./view";
 
 describe("dark-chess · 360/320 列宽收缩（A 档 5-2 阻断）", () => {
@@ -16,5 +17,28 @@ describe("dark-chess · 360/320 列宽收缩（A 档 5-2 阻断）", () => {
     expect(cellRule).toContain("min-width:0");
     // 触控高度红线不回退：44px 仍钉死在格子上
     expect(cellRule).toContain("min-height:44px");
+  });
+});
+
+describe("dark-chess · defs 固定 id 撞车修复（A 档 2-2 一般）", () => {
+  it("牌背改三停层叠实心:零 defs/url(#/id=,且 32 张除木纹外仍逐字节相同", () => {
+    const strip = (svg: string): string => svg.replace(/<path class="dcg" d="[^"]*"/g, '<path class="dcg"');
+    const norm = strip(backSVG(0));
+    for (let i = 0; i < 32; i++) {
+      const svg = backSVG(i);
+      expect(svg, `第 ${i} 张混进 defs`).not.toContain("<defs");
+      expect(svg, `第 ${i} 张混进 url(#`).not.toContain("url(#");
+      expect(svg, `第 ${i} 张混进 id=`).not.toContain(" id=");
+      expect(strip(svg), `第 ${i} 张结构走样`).toBe(norm);
+    }
+    // 三停木色齐全（顶亮 → 中 → 底暗），渐变等效不缩水
+    for (const c of ["#8a5a30", "#744a26", "#5f3a1c"]) expect(backSVG(0)).toContain(c);
+  });
+
+  it("棋面渐变 id 拼格号:不同格位互异,同参调用保持确定性", () => {
+    const a = pieceFaceSVG("red", "shuai", 3);
+    expect(a).toContain('id="dcIvory-red-shuai-3"');
+    expect(a).not.toBe(pieceFaceSVG("red", "shuai", 5));
+    expect(pieceFaceSVG("blue", "ju")).toBe(pieceFaceSVG("blue", "ju"));
   });
 });
