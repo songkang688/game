@@ -20,6 +20,7 @@ import { speak } from "../speech";
 import { mountDial, type DialHandle } from "./dial";
 import { fitQuizHost } from "./fit";
 import { methodHint } from "./hints";
+import { mountFaceLift, type FaceLiftHandle } from "./faceLift";
 import { HOUSE_CSS, mountClockFx, type ClockFxHandle } from "./house";
 import { typeOfKind, type ClockKind } from "./kinds";
 import { buildQuestions, makeReviewQuestions, CHAPTER_THEMES, type ClockQ } from "./levels";
@@ -284,11 +285,15 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const mainQuestions = buildQuestions(ctx.level);
   quiz = runQuiz({ stage: host, ctx: mainCtx, questions: mainQuestions, theme });
   helper = attachHelper(host, mainQuestions, noteWrong, fit.relayout);
+  // 1.3 视觉（W8R1-07）：前 99 关旧题面钟渲染后就地换新工序指针——
+  // 题库字符串零改动，正题与错题回顾共用这一个观察器
+  const lift: FaceLiftHandle = mountFaceLift(host);
   fit.relayout();
 
   return {
     destroy() {
       destroyed = true;
+      lift.destroy();
       dropRound();
       fit.dispose();
       host.remove();
