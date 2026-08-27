@@ -20,6 +20,8 @@ import {
   PADDLE_Y,
   TOWER_COLS,
   TOWER_FLOOR,
+  TOWER_SPEED_BASE,
+  TOWER_SPEED_MAX,
   TOWER_START_ROWS,
   TOWER_TOP,
   W,
@@ -30,6 +32,7 @@ import {
   makeTower,
   paddleBounce,
   powerEffects,
+  rowSettled,
   simulateLevel,
   stepBall,
   tickPowers,
@@ -49,7 +52,7 @@ function towerRun(bricksPerSec: number, seed: number): { seconds: number; rowsCl
   let t = 0;
   let credit = 0;
   const dt = 1 / 60;
-  while (!st.over && t < 600) {
+  while (!st.over && t < 400) {
     st = towerTick(st, dt, rand);
     t += dt;
     credit += bricksPerSec * dt;
@@ -58,7 +61,7 @@ function towerRun(bricksPerSec: number, seed: number): { seconds: number; rowsCl
       let hit = false;
       for (let r = st.rows.length - 1; r >= 0 && !hit; r--) {
         for (let c = 0; c < TOWER_COLS; c++) {
-          if (st.rows[r][c] !== KIND.EMPTY) {
+          if (st.rows[r][c] !== KIND.EMPTY && st.rows[r][c] !== KIND.STEEL) {
             st = towerBreak(st, r, c, false).state;
             hit = true;
             break;
@@ -190,34 +193,64 @@ describe("碰碰砖块 · R2 · 竞态：一帧里撞好几下", () => {
   });
 });
 
-describe("碰碰砖块 · R2 · W4A-07 无尽砖塔撑不住", () => {
-  it("砖塔一开局就要 3 砖/秒才打平，清到第 8 行要 7.4 砖/秒", () => {
-    const need = (rowsCleared: number): number => TOWER_COLS / (BRICK_H / towerSpeed(rowsCleared));
-    expect(need(0)).toBeGreaterThan(3);
-    expect(need(8)).toBeGreaterThan(7);
-    expect(need(16)).toBeGreaterThan(11);
-    // 加速有上限，但上限本身已经超出一颗球给得出的速率
-    expect(towerSpeed(16)).toBe(26);
-    expect(towerSpeed(999)).toBe(26);
+describe("碰碰砖块 · R2 · W4A-07 无尽砖塔已经撑得住了", () => {
+  it("下压速度只跟「玩了多久」有关，清行不再是自己给自己加速", () => {
+    expect(towerSpeed(0)).toBe(TOWER_SPEED_BASE);
+    expect(towerSpeed(0)).toBeLessThan(towerSpeed(30));
+    expect(towerSpeed(30)).toBeLessThan(towerSpeed(90));
+    expect(towerSpeed(200)).toBe(TOWER_SPEED_MAX);
+    expect(towerSpeed(9999)).toBe(TOWER_SPEED_MAX);
+    // 封顶那一档，一秒要清掉不到一排——一颗球给得出这个速率
+    expect(TOWER_SPEED_MAX / BRICK_H).toBeLessThan(1);
   });
 
-  it("每秒 2 / 3 / 4 / 6 砖的四种手速，都撑不过 40 秒", () => {
-    const runs = [2, 3, 4, 6].map((bps) => ({ bps, ...towerRun(bps, 20250101) }));
-    for (const r of runs) {
-      expect(r.seconds, `每秒 ${r.bps} 砖只撑了 ${r.seconds.toFixed(1)} 秒`).toBeLessThan(40);
+  it("方向掰回来了：打得越快，活得越久、分越高", () => {
+    const runs = [1.5, 2, 3, 4, 6].map((bps) => ({ bps, ...towerRun(bps, 20250101) }));
+    for (let i = 1; i < runs.length; i++) {
+      expect(runs[i].seconds, `每秒 ${runs[i].bps} 砖`).toBeGreaterThan(runs[i - 1].seconds);
+      expect(runs[i].score, `每秒 ${runs[i].bps} 砖`).toBeGreaterThan(runs[i - 1].score);
     }
-    expect(runs[0].seconds).toBeGreaterThan(15);
+    // 手熟一倍，分数远不止翻一倍
+    expect(runs[4].score).toBeGreaterThan(runs[0].score * 10);
   });
 
-  it("方向反了：打得越快，反而死得越早（清行只加速、不回本）", () => {
-    const slow = towerRun(2, 20250101);
-    const fast = towerRun(6, 20250101);
-    expect(fast.seconds).toBeLessThan(slow.seconds);
-    // 而且分数在一定手速之上就不动了，多打的那些砖换不来更长的一局
-    expect(towerRun(4, 20250101).score).toBe(towerRun(6, 20250101).score);
+  it("最慢的手也能玩上 45 秒，用点心就能过 2 分钟", () => {
+    for (const seed of [11, 222, 3333]) {
+      expect(towerRun(1.5, seed).seconds, `seed ${seed}`).toBeGreaterThan(40);
+      expect(towerRun(6, seed).seconds, `seed ${seed}`).toBeGreaterThan(120);
+    }
   });
 
-  it("砖塔从 4 排起步，要压 216px 才触底——不清行也只有 30 秒", () => {
+  it("清掉一整排真的换来一排的喘息：中间那一排也算数", () => {
+    const rand = mulberry32(7);
+    let st = makeTower(rand);
+    // 把中间某一排打空（不是最底下那排）
+    const mid = Math.max(0, st.rows.length - 2);
+    for (let c = 0; c < TOWER_COLS; c++) {
+      let guard = 0;
+      while (st.rows[mid][c] !== KIND.EMPTY && guard++ < 6) st = towerBreak(st, mid, c).state;
+    }
+    expect(st.rowsCleared).toBe(1);
+    const before = towerBottomY(st);
+    // 下一帧开头把空排收走，下面那半截整体往上提一格
+    const after = towerTick(st, 0, rand);
+    expect(after.rows.length).toBe(st.rows.length - 1);
+    expect(towerBottomY(after)).toBe(before - BRICK_H);
+  });
+
+  it("同伴全打光了，剩下的钢砖自己塌——不会堆出一堵拆不开的墙", () => {
+    const E = KIND.EMPTY;
+    const st: TowerState = {
+      rows: [[KIND.NORMAL, KIND.STEEL, E, E, E, E, E, E]],
+      drop: 0, spawned: 1, rowsCleared: 0, bricksBroken: 0, score: 0, elapsed: 0, over: false
+    };
+    expect(rowSettled(st.rows[0])).toBe(false);
+    const res = towerBreak(st, 0, 0);
+    expect(res.clearedRows).toBe(1);
+    expect(res.state.rows.length).toBe(0);
+  });
+
+  it("砖塔从 4 排起步，要压 216px 才触底——一动不动也有 30 秒", () => {
     const st0 = makeTower(mulberry32(1));
     expect(st0.rows).toHaveLength(TOWER_START_ROWS);
     const start = towerBottomY(st0);

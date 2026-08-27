@@ -630,12 +630,51 @@ export interface TowerState {
   rowsCleared: number;
   bricksBroken: number;
   score: number;
+  /** 这一趟玩了多少秒——下压速度只跟它有关 */
+  elapsed: number;
   over: boolean;
 }
 
-/** 下移速度（像素/秒）：清得越多越快，但有上限，不会突然变得吓人 */
-export function towerSpeed(rowsCleared: number): number {
-  return Math.min(26, 7 + rowsCleared * 1.2);
+/** 开局的下压速度（像素/秒） */
+export const TOWER_SPEED_BASE = 7;
+/** 每玩一秒，下压速度加这么多 */
+export const TOWER_SPEED_RAMP = 0.075;
+/** 下压速度的天花板：到了这一档就不再快了，剩下的全看手熟 */
+export const TOWER_SPEED_MAX = 17;
+
+/**
+ * 下移速度（像素/秒）：只跟「这一趟玩了多久」有关。
+ *
+ * 原来它是 `min(26, 7 + rowsCleared × 1.2)`——按清掉的行数加速。
+ * 那等于「打得越好，墙压得越快」：清一行换来 18 像素的喘息，
+ * 却把往后每一秒的下压都抬高 1.2 像素，十几秒就回本亏光。
+ * 走查里 2 / 3 / 4 / 6 砖每秒四种手速全都活不过 40 秒，而且手越快死得越早。
+ * 改成按时间加速之后，清行是纯赚的，孩子打得好就真的能多玩一会儿。
+ */
+export function towerSpeed(elapsed: number): number {
+  return Math.min(TOWER_SPEED_MAX, TOWER_SPEED_BASE + Math.max(0, elapsed) * TOWER_SPEED_RAMP);
+}
+
+/**
+ * 把已经打空的排收掉，下面那半截整体往上提一格。
+ *
+ * 原来空排是原地留着的（怕行号变了砖墙看起来「跳一下」），
+ * 于是「清掉中间一行」对底线一点帮助都没有——只有把最底下那排清光才换得到 18 像素。
+ * 现在清哪一行都算数：跳的那一下是往上跳，是奖励，孩子看得懂。
+ *
+ * 只在 `towerTick` 里调用（每帧开头一次），这样一帧之内的碰撞扫描看到的行号是稳的。
+ */
+export function squeezeTower(rows: readonly number[][]): number[][] {
+  return rows.filter((row) => row.some((v) => v !== KIND.EMPTY)).map((row) => row.slice());
+}
+
+/**
+ * 这一排算不算「打通了」：所有格子非空即钢。
+ * 钢砖球打不动，所以「只剩钢砖」就是孩子能做到的极限——
+ * 到了这一步就该算他赢，剩下的钢砖跟着一起塌。
+ */
+export function rowSettled(row: readonly number[]): boolean {
+  return row.every((v) => v === KIND.EMPTY || v === KIND.STEEL);
 }
 
 /** 第 wave 排砖长什么样（越往后越硬，但永远留得下缝） */
@@ -664,7 +703,7 @@ export function makeTowerRow(rand: () => number, wave: number): number[] {
 export function makeTower(rand: () => number): TowerState {
   const rows: number[][] = [];
   for (let i = 0; i < TOWER_START_ROWS; i++) rows.unshift(makeTowerRow(rand, i));
-  return { rows, drop: 0, spawned: TOWER_START_ROWS, rowsCleared: 0, bricksBroken: 0, score: 0, over: false };
+  return { rows, drop: 0, spawned: TOWER_START_ROWS, rowsCleared: 0, bricksBroken: 0, score: 0, elapsed: 0, over: false };
 }
 
 /** 砖墙最下面那一块砖的底边 y */
@@ -684,8 +723,12 @@ export function towerRowY(state: TowerState, r: number): number {
 /** 推进 dt 秒：砖墙下移，够一行就从顶上补一排，压到底线就结束 */
 export function towerTick(state: TowerState, dt: number, rand: () => number): TowerState {
   if (state.over) return state;
-  let drop = state.drop + towerSpeed(state.rowsCleared) * dt;
-  let rows = state.rows;
+  const elapsed = state.elapsed + Math.max(0, dt);
+  let drop = state.drop + towerSpeed(state.elapsed) * dt;
+  // 上一帧打空的排在这里统一收走：帧内的碰撞扫描看到的行号才是稳的
+  let rows: number[][] = state.rows.some((row) => row.every((v) => v === KIND.EMPTY))
+    ? squeezeTower(state.rows)
+    : state.rows;
   let spawned = state.spawned;
   let guard = 0;
   while (drop >= BRICK_H && guard++ < 16) {
@@ -693,7 +736,7 @@ export function towerTick(state: TowerState, dt: number, rand: () => number): To
     rows = [makeTowerRow(rand, spawned), ...rows];
     spawned++;
   }
-  const next: TowerState = { ...state, rows, drop, spawned };
+  const next: TowerState = { ...state, rows, drop, spawned, elapsed };
   next.over = towerBottomY(next) >= TOWER_FLOOR;
   return next;
 }
@@ -755,14 +798,16 @@ export function towerBreak(
     }
   }
 
-  // 这一下刚好清空的整排 → 额外加分。空排原地留着不抽走，
-  // 不然下面几排的行号会跟着变，砖墙看起来会「跳一下」。
+  // 这一下刚好打通的整排 → 额外加分。空排原地留着不抽走，
+  // 由下一帧开头的 squeezeTower 统一收走：帧内的碰撞扫描看到的行号才是稳的。
   let rowsCleared = state.rowsCleared;
   let clearedRows = 0;
   for (let i = 0; i < rows.length; i++) {
-    const wasEmpty = state.rows[i].every((v) => v === KIND.EMPTY);
-    const nowEmpty = rows[i].every((v) => v === KIND.EMPTY);
-    if (wasEmpty || !nowEmpty) continue;
+    if (rowSettled(state.rows[i]) || !rowSettled(rows[i])) continue;
+    // 同伴全被打光了，剩下的钢砖自己塌下来。
+    // 不给它这条出路的话，凡是带钢砖的排都永远打不通，
+    // 砖塔玩上一两分钟就被一堵拆不开的墙压到底线。
+    for (let c = 0; c < TOWER_COLS; c++) if (rows[i][c] === KIND.STEEL) rows[i][c] = KIND.EMPTY;
     clearedRows++;
     score += towerRowScore(rowsCleared);
     rowsCleared++;

@@ -449,7 +449,7 @@ describe("碰碰砖块 · 道具平衡", () => {
 // ---------------------------------------------------------------------------
 
 describe("碰碰砖块 · 无尽砖塔", () => {
-  it("下移速度随清行递增，但有上限，不会突然变吓人", () => {
+  it("下移速度随「玩了多久」递增，但有上限，不会突然变吓人", () => {
     expect(towerSpeed(0)).toBeLessThan(towerSpeed(5));
     expect(towerSpeed(5)).toBeLessThan(towerSpeed(12));
     expect(towerSpeed(999)).toBeLessThanOrEqual(26);
@@ -460,10 +460,11 @@ describe("碰碰砖块 · 无尽砖塔", () => {
     const rand = mulberry32(11);
     let st = makeTower(rand);
     const rows0 = st.rows.length;
-    const perRow = BRICK_H / towerSpeed(0);
-    for (let t = 0; t < perRow - 0.05; t += 0.05) st = towerTick(st, 0.05, rand);
+    // 一行高还没压满就一直不补排（速度会随时间慢慢加，所以按实际 drop 走，不按开局速度估）
+    let guard = 0;
+    while (st.drop + towerSpeed(st.elapsed) * 0.05 < BRICK_H && guard++ < 400) st = towerTick(st, 0.05, rand);
     expect(st.rows.length).toBe(rows0);
-    st = towerTick(st, 0.1, rand);
+    st = towerTick(st, 0.05, rand);
     expect(st.rows.length).toBe(rows0 + 1);
     expect(st.spawned).toBe(rows0 + 1);
   });
@@ -478,6 +479,7 @@ describe("碰碰砖块 · 无尽砖塔", () => {
       rowsCleared: 0,
       bricksBroken: 0,
       score: 0,
+      elapsed: 0,
       over: false
     };
     expect(towerBottomY(st)).toBeGreaterThanOrEqual(TOWER_FLOOR);
@@ -497,6 +499,7 @@ describe("碰碰砖块 · 无尽砖塔", () => {
       rowsCleared: 0,
       bricksBroken: 0,
       score: 0,
+      elapsed: 0,
       over: false
     };
     const res = towerBreak(st, 0, 0);
@@ -518,6 +521,7 @@ describe("碰碰砖块 · 无尽砖塔", () => {
       rowsCleared: 0,
       bricksBroken: 0,
       score: 0,
+      elapsed: 0,
       over: false
     };
     const before = towerBottomY(st);
@@ -538,6 +542,7 @@ describe("碰碰砖块 · 无尽砖塔", () => {
       rowsCleared: 0,
       bricksBroken: 0,
       score: 0,
+      elapsed: 0,
       over: false
     };
     const res = towerBreak(st, 1, 2);
@@ -553,6 +558,7 @@ describe("碰碰砖块 · 无尽砖塔", () => {
       rowsCleared: 0,
       bricksBroken: 0,
       score: 0,
+      elapsed: 0,
       over: false
     };
     const plain = towerBreak(st, 0, 0);

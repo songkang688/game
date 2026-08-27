@@ -22,7 +22,7 @@ import {
 } from "./logic";
 
 function tower(rows: number[][]): TowerState {
-  return { rows, drop: 0, spawned: rows.length, rowsCleared: 0, bricksBroken: 0, score: 0, over: false };
+  return { rows, drop: 0, spawned: rows.length, rowsCleared: 0, bricksBroken: 0, score: 0, elapsed: 0, over: false };
 }
 
 const E = KIND.EMPTY;
