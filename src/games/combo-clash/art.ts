@@ -11,7 +11,7 @@
  * 月牙与绳索用采样折线画,不用 ellipse / quadraticCurveTo / arcTo / strokeText。
  */
 
-import { KIT_PALETTE, drawSparkle, drawStar, hexToRgb, shade, tint } from "../../art/kit";
+import { KIT_PALETTE, drawSparkle, hexToRgb, shade, tint } from "../../art/kit";
 import { chapterIndexOf } from "./levels";
 import type { CharLook } from "./frames";
 
@@ -59,6 +59,27 @@ function pathStar(g: Ctx, cx: number, cy: number, rOut: number, rIn: number, rot
     else g.lineTo(px, py);
   }
   g.closePath();
+}
+
+/**
+ * 三阶小金星(底影 + 主体圆角 + 高光斑):kit `drawStar` 的同款语汇,
+ * 但只用采样路径与「变换 + 单位圆」,替身环境没有 ellipse 也能画。
+ */
+function starBadge(g: Ctx, cx: number, cy: number, r: number, color: string): void {
+  g.fillStyle = shade(color, 0.35);
+  pathStar(g, cx, cy + r * 0.12, r, r * 0.45);
+  g.fill();
+  g.fillStyle = color;
+  pathStar(g, cx, cy, r, r * 0.45);
+  g.fill();
+  g.strokeStyle = color;
+  g.lineWidth = Math.max(r * 0.16, 0.6);
+  g.lineJoin = "round";
+  g.lineCap = "round";
+  g.stroke();
+  g.fillStyle = tint(color, 0.65);
+  pathOval(g, cx - r * 0.28, cy - r * 0.3, r * 0.16, r * 0.09, -0.6);
+  g.fill();
 }
 
 /** 圆帽单段小短肢(手臂 / 小腿) */
@@ -1399,7 +1420,7 @@ export function drawKoBanner(g: Ctx, o: KoBannerOpts): void {
   g.fillStyle = "#e0568f";
   g.fillText(o.text, o.w / 2, y);
   for (const side of [-1, 1]) {
-    drawStar(g, { x: o.w / 2 + side * 96, y: y - 10, r: 10, t: o.t, color: KIT_PALETTE.starGold });
+    starBadge(g, o.w / 2 + side * 96, y - 10, 10, KIT_PALETTE.starGold);
   }
   g.restore();
 }
@@ -1495,7 +1516,7 @@ export interface WinBadgeOpts {
   h: number;
 }
 
-/** 元气星徽:画的星星徽章替代 ♥ 文字(亮星用 kit drawStar,空槽淡星) */
+/** 元气星徽:画的星星徽章替代 ♥ 文字(亮星三阶光影,空槽淡星) */
 export function drawWinBadges(g: Ctx, o: WinBadgeOpts): void {
   if (!fin(o.w) || !fin(o.h) || o.w <= 0 || o.h <= 0 || o.total <= 0) return;
   for (let i = 0; i < o.total; i++) {
@@ -1503,7 +1524,7 @@ export function drawWinBadges(g: Ctx, o: WinBadgeOpts): void {
     const cy = o.h / 2;
     const r = o.h * 0.34;
     if (i < o.n) {
-      drawStar(g, { x: cx, y: cy, r, t: 0, color: KIT_PALETTE.starGold });
+      starBadge(g, cx, cy, r, KIT_PALETTE.starGold);
     } else {
       g.fillStyle = rgba(KIT_PALETTE.ink, 0.15);
       pathStar(g, cx, cy, r, r * 0.45);
