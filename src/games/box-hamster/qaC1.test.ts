@@ -30,8 +30,10 @@ import {
 import { solve, verifySolution } from "./solver";
 import {
   assistSummary,
+  boardWidth,
   canUndo,
   deadlockReason,
+  fitCell,
   deadlockTip,
   difficultyBadge,
   newUndoStack,
@@ -310,17 +312,20 @@ describe("档C R1 · box-hamster · 360px 窄屏", () => {
     }
   });
 
-  it("【C1-01 严重 · 待修】双鼠宽仓在 360px 上会被 overflow:hidden 直接切掉右边几列", () => {
+  it("【C1-01 严重 · 本轮修复员已清零】188 关一关都不会被切掉右边几列", () => {
+    // 改之前:格子边长是媒体查询写死的 34px,和列数无关,36 关溢出,最宽 13 列要 466px。
+    // 改之后:边长按「还剩多宽」倒着算(assist.fitCell),棋盘宽度永远不超预算。
     const over: Array<{ level: number; w: number; px: number }> = [];
+    let widest = 0;
     for (let i = 0; i < TOTAL; i++) {
       const def = getLevel(i);
-      const px = gridPx(def.w);
+      const px = boardWidth(def.w, fitCell(def.w, BOARD_BUDGET_360));
+      widest = Math.max(widest, def.w);
       if (px > BOARD_BUDGET_360) over.push({ level: i + 1, w: def.w, px });
     }
-    // 现状快照:36 关溢出,最宽的 13 列要 466px,比 332px 的预算多出 134px。
-    // 这条断言在第 1 轮监督修复员改成「over 必须为空」之前先钉住现状,防止继续恶化。
-    expect(over.length).toBe(36);
-    expect(Math.max(...over.map((o) => o.px))).toBe(gridPx(13));
-    expect(Math.max(...over.map((o) => o.w))).toBe(13);
+    expect(over).toEqual([]);
+    // 最宽的那一档确实还是 13 列 —— 是摆法变了,不是把关卡改窄糊弄过去
+    expect(widest).toBe(13);
+    expect(gridPx(13)).toBeGreaterThan(BOARD_BUDGET_360);
   });
 });

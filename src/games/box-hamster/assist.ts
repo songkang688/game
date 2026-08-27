@@ -423,6 +423,44 @@ export function facingLabel(dir: 0 | 1 | 2 | 3): string {
   return DIR_LABELS[dir];
 }
 
+// ---------------------------------------------------------------------------
+// 八、棋盘要占多宽:窄屏上一列都不许被切掉
+// ---------------------------------------------------------------------------
+
+/** 格子之间的缝,和 CSS 里 `.bh-grid` 的 `gap` 是同一个数 */
+export const CELL_GAP = 2;
+/** 宽屏上格子最大就这么大,再大反而一眼看不全整张棋盘 */
+export const CELL_MAX = 42;
+/**
+ * 格子最小边长。
+ *
+ * 棋盘格子只负责「看」——走位靠方向键和触屏方向盘，没有一个格子是点得动的，
+ * 所以这里不受 44px 触摸下限管；18px 上 26px 的箱子表情还认得出，
+ * 而 360px 上最宽的 13 列棋盘只需要 23px 就摆得下，实际远用不到这个下限。
+ */
+export const CELL_MIN = 18;
+
+/** cols 列、每格 cell 像素的棋盘一共要占多宽 */
+export function boardWidth(cols: number, cell: number, gap: number = CELL_GAP): number {
+  const n = Math.max(1, Math.round(cols));
+  return n * cell + (n - 1) * gap;
+}
+
+/**
+ * 在 avail 像素宽的地方摆 cols 列，每格该多大。
+ *
+ * 改之前格子边长是媒体查询写死的（42 / 34 / 28），跟列数没关系：
+ * 13 列 × 34px = 466px，而 360px 手机留给棋盘的只有 332px，
+ * 右边 4 列直接被 `.game-stage` 的 `overflow:hidden` 吃掉——看不见也点不到。
+ * 现在按「有多少地方」倒着算格子边长，夹在上下限之间取整。
+ */
+export function fitCell(cols: number, avail: number, gap: number = CELL_GAP): number {
+  const n = Math.max(1, Math.round(cols));
+  if (!Number.isFinite(avail) || avail <= 0) return CELL_MAX;
+  const raw = Math.floor((avail - (n - 1) * gap) / n);
+  return Math.max(CELL_MIN, Math.min(CELL_MAX, raw));
+}
+
 /** 四方向里哪些是这一步走得动的(触屏方向键按它变灰) */
 export function usableDirs(p: Puzzle, s: State, who: number): boolean[] {
   return ALL_DIRS.map((dir) => {

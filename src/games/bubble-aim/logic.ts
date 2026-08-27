@@ -213,7 +213,7 @@ export interface ShotResult {
   path: Array<{ x: number; y: number }>;
   /** 吸附落位；打不到/被吞/命中石泡则为 null */
   landing: { r: number; c: number } | null;
-  /** 第一个直接碰到的格子（命中石泡时用来扣血） */
+  /** 第一个直接碰到的格子（命中石泡时用来敲裂它） */
   hitCell: { r: number; c: number } | null;
   /** 被黑洞吞掉 */
   swallowed: boolean;
@@ -311,7 +311,7 @@ export function simulateShot(
     }
     if (hitTop || hitCell) {
       path.push({ x, y });
-      // 直接命中石泡：不吸附，弹开消失（游戏里扣石泡血）
+      // 直接命中石泡：不吸附，弹开消失（游戏里把石泡敲裂一层）
       if (hitCell && isStone(g.rows[hitCell.r][hitCell.c])) {
         return { path, landing: null, hitCell, swallowed: false };
       }

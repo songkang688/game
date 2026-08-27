@@ -20,6 +20,7 @@ import {
   deadlockTip,
   difficultyBadge,
   facingAngle,
+  fitCell,
   hintsLeft,
   makeEndlessRoom,
   moveDuration,
@@ -275,6 +276,21 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
 
   let cells: HTMLElement[] = [];
 
+  /**
+   * 按「这会儿还剩多宽」定格子边长。
+   *
+   * 以前边长是媒体查询写死的,和列数无关,13 列的双鼠宽仓在 360px 上要 466px,
+   * 而 `.game-stage` 是 `overflow:hidden` —— 超出去的列不是能滑出来,是直接没了。
+   */
+  function fitBoard(): void {
+    const style = typeof getComputedStyle === "function" ? getComputedStyle(box) : null;
+    const pad = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0;
+    const avail = (box.clientWidth || 0) - pad;
+    // 还没上屏就量不出宽度;先留着 CSS 里那一档,等下一帧再量
+    if (avail <= 0) return;
+    grid.style.setProperty("--cell", `${fitCell(def.w, avail)}px`);
+  }
+
   function buildGrid(): void {
     grid.innerHTML = "";
     grid.style.gridTemplateColumns = `repeat(${def.w}, var(--cell))`;
@@ -284,6 +300,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       grid.appendChild(cell);
       cells.push(cell);
     }
+    fitBoard();
   }
 
   function currentPuzzle(): Puzzle {
@@ -558,13 +575,23 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   };
   window.addEventListener("keydown", onKeyDown);
 
+  // 转屏 / 分屏改变可用宽度时重新量一次,免得棋盘又被切掉右边几列
+  const onResize = (): void => fitBoard();
+  window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", onResize);
+
   buildGrid();
   refreshTags();
   render();
+  // 挂载那一刻可能还没上屏,量不出宽度;下一帧补量一次
+  const fitRaf = requestAnimationFrame(fitBoard);
 
   return {
     destroy() {
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      cancelAnimationFrame(fitRaf);
       if (toastTimer) clearTimeout(toastTimer);
       clearVeil();
       wrap.remove();
