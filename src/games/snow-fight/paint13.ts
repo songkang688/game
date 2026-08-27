@@ -10,6 +10,7 @@ import { strokeOutline } from "../../art/kit/outline";
 import { shade, withAlpha } from "../../art/kit/palette";
 import {
   CHARGE_FULL_AT,
+  HAT_BODY_SHADE,
   HAT_CROUCH_DROP,
   FIGHTER_SHADOW_RX,
   FIGHTER_SHADOW_RY,
@@ -18,6 +19,8 @@ import {
   SNF_PALETTE,
   SNF_SHADOW_ALPHA,
   SNF_SHADOW_RGB,
+  SNOWFOE_BODY_STOPS,
+  SNOWFOE_HAT,
   WINDUP_ARM_DEG,
   chargeBallRadius,
   landingStyle,
@@ -283,11 +286,11 @@ function paintScarf(
   c.lineCap = "butt";
 }
 
-/** 针织帽:seat 0 圆顶绒线帽,seat 1 尖顶睡帽(帽形是第二条辨认通道) */
+/** 针织帽:seat 0 圆顶绒线帽,seat 1 尖顶睡帽(帽形是第二条辨认通道;帽体色深浅是第三条) */
 function paintHat(c: CanvasRenderingContext2D, r: number, seat: 0 | 1, drop: number, color: string): void {
   const top = -r * 2;
   const y = top + r * drop;
-  c.fillStyle = shade(color, -6);
+  c.fillStyle = shade(color, HAT_BODY_SHADE[seat] ?? -6);
   if (seat === 0) {
     c.beginPath();
     c.arc(0, y + r * 0.28, r * 0.66, Math.PI, Math.PI * 2);
@@ -445,6 +448,78 @@ export function paintSnowman(
     c.arc(x + full * 0.4, base - full * 2.6 - Math.sin(time * 5) * 1.5, Math.max(1, full * 0.09), 0, Math.PI * 2);
     c.fill();
   }
+}
+
+/**
+ * 无尽模式雪怪(修复员 S5):双雪球三停渐变 + 冷蓝底影 + 歪戴深青毛线帽 +
+ * 竖椭圆眼白高光。两颗球的圆心 / 半径与 1.2 完全同位
+ * (身球 y+0.5r · 0.95r,头球 y-0.55r · 0.68r),行为、判定半径一个数不动;
+ * 纯静态件,reduced 无需分支。帽子是第三帽形,与两队圆绒帽 / 尖睡帽都分得开。
+ */
+export function paintSnowFoe(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  // 底影:冷蓝椭圆(禁黑影)
+  softShadow(c, x, y + r * 1.42, r * 0.95, r * 0.2, SNF_SHADOW_ALPHA, 1, SNF_SHADOW_RGB);
+  // 双球:高光 (-0.35r, -0.35r) 白 → 本体雪白 → 底部冷蓝
+  for (const [cy, rr] of [
+    [y + r * 0.5, r * 0.95],
+    [y - r * 0.55, r * 0.68],
+  ] as Array<[number, number]>) {
+    const grad = c.createRadialGradient(x - rr * 0.35, cy - rr * 0.35, rr * 0.12, x, cy, rr);
+    grad.addColorStop(0, SNOWFOE_BODY_STOPS[0]);
+    grad.addColorStop(0.55, SNOWFOE_BODY_STOPS[1]);
+    grad.addColorStop(1, SNOWFOE_BODY_STOPS[2]);
+    c.fillStyle = grad;
+    c.beginPath();
+    c.arc(x, cy, rr, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = "rgba(150,185,220,.85)";
+    c.lineWidth = 1.5;
+    c.stroke();
+  }
+  // 身球下缘再压一抹冷蓝,体积立起来
+  c.fillStyle = P.sfShadow;
+  c.beginPath();
+  c.ellipse(x, y + r * 1.05, r * 0.6, r * 0.22, 0, 0, Math.PI * 2);
+  c.fill();
+  // 识别件:歪戴的深青毛线帽(帽体 2 停 + 白绒边 + 侧绒球)
+  const hy = y - r * 0.55;
+  c.save();
+  c.translate(x, hy);
+  c.rotate(-0.24);
+  const hat = c.createLinearGradient(0, -r * 0.95, 0, -r * 0.3);
+  hat.addColorStop(0, shade(SNOWFOE_HAT, 14));
+  hat.addColorStop(1, SNOWFOE_HAT);
+  c.fillStyle = hat;
+  c.beginPath();
+  c.arc(0, -r * 0.38, r * 0.52, Math.PI, Math.PI * 2);
+  c.closePath();
+  c.fill();
+  strokeOutline(c, SNOWFOE_HAT, 1.5);
+  c.fillStyle = P.sfSnowLit;
+  roundRectPath(c, -r * 0.56, -r * 0.48, r * 1.12, r * 0.18, r * 0.09);
+  c.fill();
+  c.beginPath();
+  c.arc(r * 0.34, -r * 0.92, r * 0.14, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+  // 眼睛:竖椭圆 + 白高光点(从「两点眼」升级)
+  c.fillStyle = "#5B6885";
+  for (const side of [-1, 1] as const) {
+    c.beginPath();
+    c.ellipse(x + side * r * 0.25, y - r * 0.6, Math.max(1, r * 0.09), Math.max(1.4, r * 0.14), 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.fillStyle = "rgba(255,255,255,.9)";
+  for (const side of [-1, 1] as const) {
+    c.beginPath();
+    c.arc(x + side * r * 0.25 - r * 0.03, y - r * 0.64, Math.max(0.6, r * 0.035), 0, Math.PI * 2);
+    c.fill();
+  }
+  // 嘴保持小弧
+  c.fillStyle = "#F0A2B8";
+  c.beginPath();
+  c.arc(x, y - r * 0.32, Math.max(1, r * 0.14), 0, Math.PI);
+  c.fill();
 }
 
 // ---------------------------------------------------------------------------

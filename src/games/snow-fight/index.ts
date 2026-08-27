@@ -91,6 +91,7 @@ import {
   paintLanding,
   paintPineRow,
   paintSlope,
+  paintSnowFoe,
   paintSnowMounds,
   paintSnowWall,
   paintSnowball,
@@ -477,25 +478,8 @@ function drawFoe(c: CanvasRenderingContext2D, cam: Camera, f: Foe, time: number)
   const r = Math.max(6, f.r * cam.s * k);
   c.globalAlpha = f.row === 1 ? 0.85 : 1;
   if (f.kind === "snowfoe") {
-    c.fillStyle = "#ffffff";
-    c.beginPath();
-    c.arc(x, y + r * 0.5, r * 0.95, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(x, y - r * 0.55, r * 0.68, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = "rgba(150,185,220,.85)";
-    c.lineWidth = 1.3;
-    c.stroke();
-    c.fillStyle = "#5b6885";
-    c.beginPath();
-    c.arc(x - r * 0.25, y - r * 0.62, Math.max(1, r * 0.1), 0, Math.PI * 2);
-    c.arc(x + r * 0.25, y - r * 0.62, Math.max(1, r * 0.1), 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = "#f0a2b8";
-    c.beginPath();
-    c.arc(x, y - r * 0.32, Math.max(1, r * 0.14), 0, Math.PI);
-    c.fill();
+    // 1.3 修复员 S5:纯白双圆 + 两点眼 → 三停渐变双球 + 深青歪毛线帽(paint13)
+    paintSnowFoe(c, x, y, r);
     c.globalAlpha = 1;
     return;
   }

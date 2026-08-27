@@ -184,6 +184,20 @@ export const FIGHTER_SHADOW_RX = 0.8;
 export const FIGHTER_SHADOW_RY = 0.22;
 /** 下蹲时帽子往下压两成 */
 export const HAT_CROUCH_DROP = 0.2;
+/**
+ * 帽体加深档(修复员 B2):seat0 圆绒帽 -6 不动,seat1 尖睡帽加深到 -18,
+ * 两帽灰度亮度差从 2.6 拉到 ≥15/255 —— 色弱场景不再只靠帽形一条通道。
+ */
+export const HAT_BODY_SHADE: readonly [number, number] = [-6, -18];
+
+// ---------------------------------------------------------------------------
+// 九、无尽雪怪(修复员 S5:双球三停渐变 + 第三帽形,判定不动)
+// ---------------------------------------------------------------------------
+
+/** 雪怪毛线帽主色:深青 —— 与两队「粉圆绒帽 / 蓝尖睡帽」都不同的第三帽形 */
+export const SNOWFOE_HAT = "#4E8D8A";
+/** 雪怪双球渐变三停:高光白 → 本体雪白 → 底部冷蓝 */
+export const SNOWFOE_BODY_STOPS = ["#FFFFFF", "#F6FAFF", "#DFE8F2"] as const;
 /** 围巾出手时往出手反方向甩多少度 */
 export const SCARF_SWING_DEG = 25;
 
