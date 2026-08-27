@@ -129,14 +129,26 @@ const CSS = `
 }
 `;
 
-let cssInjected = false;
-function ensureCss(host: HTMLElement): void {
-  if (cssInjected && document.getElementById("fs-style")) return;
-  const style = document.createElement("style");
-  style.id = "fs-style";
-  style.textContent = CSS;
-  (document.head ?? host).appendChild(style);
-  cssInjected = true;
+const STYLE_ID = "fs-style";
+/** 现在有几处正用着这份样式:进出多少次都只注一份,最后一个走的人负责带走 */
+let cssUsers = 0;
+
+/** 注一次样式并占一份引用,返回「这一份用完了」的回调（重复调用无害） */
+function acquireCss(host: HTMLElement): () => void {
+  cssUsers++;
+  if (!document.getElementById(STYLE_ID)) {
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = CSS;
+    (document.head ?? host).appendChild(style);
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    cssUsers = Math.max(0, cssUsers - 1);
+    if (cssUsers === 0) document.getElementById(STYLE_ID)?.remove();
+  };
 }
 
 function el(tag: string, cls?: string, text?: string): HTMLElement {
@@ -556,7 +568,7 @@ interface Table {
 }
 
 function createTable(host: HTMLElement, opts: TableOptions): Table {
-  ensureCss(host);
+  const releaseCss = acquireCss(host);
   const runtime = createRuntime();
   const reduced = prefersReducedMotion();
   const lv = opts.lv;
@@ -804,6 +816,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
       for (const b of bowls) b.destroy();
       runtime.destroy();
       wrap.remove();
+      releaseCss();
     },
   };
 }
@@ -874,7 +887,7 @@ interface Shell {
 }
 
 function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: string): Shell {
-  ensureCss(host);
+  const releaseCss = acquireCss(host);
   const wrap = el("div", "fs-mode");
   const head = el("div", "fs-mhead");
   const back = document.createElement("button");
@@ -890,7 +903,14 @@ function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: s
   const stage = el("div");
   wrap.append(head, stage);
   host.appendChild(wrap);
-  return { stage, chip, destroy: () => wrap.remove() };
+  return {
+    stage,
+    chip,
+    destroy: () => {
+      wrap.remove();
+      releaseCss();
+    },
+  };
 }
 
 function overBox(
@@ -1058,7 +1078,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 // ---------------------------------------------------------------------------
 
 export function mount(api: GameApi): { destroy: () => void } {
-  ensureCss(api.root);
+  const releaseCss = acquireCss(api.root);
   const root = el("div");
   const bar = el("div", "fs-bar");
   const picks = el("div", "fs-picks");
@@ -1165,6 +1185,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       mode = null;
       level.destroy();
       root.remove();
+      releaseCss();
     },
   };
 }

@@ -12,6 +12,8 @@
  *  - PA-CG-1（一般）：Esc 只能进暂停，再按一次不恢复，得用鼠标点「继续下棋」；
  *  - PA-CG-2（一般）：规格里朵朵的 G 与星星的 K（取消选中）没接；
  *  - PA-CG-3（一般）：`mount` 的 destroy 不回收注入到 document.head 的 `cg-shell-style`。
+ *
+ * 第 2 轮学习优化员已把 PA-CG-1 / PA-CG-2 / PA-CG-3 三条落地，对应的断言都已翻成修好后的行为。
  */
 // `mount` 必须走顶部静态 import 并在文件里被真正用到：这样 level99 → dialogs → audio
 // 那条链会在装 DOM 桩之前、`document` 还是 undefined 的时候求值完，
@@ -297,14 +299,44 @@ describe("PA-CG · 退出再进", () => {
     }
   });
 
-  it("【已知问题】destroy 不回收注入 document.head 的 cg-shell-style", () => {
+  it("destroy 会把注入 document.head 的 cg-shell-style 一起带走", () => {
     const handle = mount(fakeApi().api as never);
     expect(dom.head.children.some((c) => c.id === "cg-shell-style")).toBe(true);
     handle.destroy();
-    // 应有行为：拆干净应当连注入的样式一起带走。现状：留在 head 里。
     expect(
       dom.head.children.some((c) => c.id === "cg-shell-style"),
       "destroy 之后样式标签仍留在 document.head"
+    ).toBe(false);
+  });
+
+  it("来回进出 5 次，head 里始终最多一份样式，最后一次拆完归零", () => {
+    for (let i = 0; i < 5; i++) {
+      const handle = mount(fakeApi().api as never);
+      expect(
+        dom.head.children.filter((c) => c.id === "cg-shell-style"),
+        `第 ${i + 1} 次进来 head 里的样式不是一份`
+      ).toHaveLength(1);
+      handle.destroy();
+      expect(
+        dom.head.children.filter((c) => c.id === "cg-shell-style"),
+        `第 ${i + 1} 次退出没把样式带走`
+      ).toHaveLength(0);
+    }
+  });
+
+  it("进到某个模式里再退出来，样式还在；整款拆掉才带走", () => {
+    const handle = mount(fakeApi().api as never);
+    const open = (label: string): void => {
+      dom.root.findAll((e) => e.tagName === "button" && e.textContent.includes(label)).pop()!.click();
+    };
+    open("残局连胜");
+    expect(dom.head.children.filter((c) => c.id === "cg-shell-style"), "进模式又多注了一份").toHaveLength(1);
+    dom.root.findAll((e) => e.tagName === "button" && e.textContent.includes("回选关")).pop()!.click();
+    expect(
+      dom.head.children.some((c) => c.id === "cg-shell-style"),
+      "只是退出模式，整款还开着，样式不该被带走"
     ).toBe(true);
+    handle.destroy();
+    expect(dom.head.children.some((c) => c.id === "cg-shell-style")).toBe(false);
   });
 });

@@ -225,14 +225,26 @@ const CSS = `
 }
 `;
 
-let cssInjected = false;
-function ensureCss(host: HTMLElement): void {
-  if (cssInjected && document.getElementById("ps-style")) return;
-  const style = document.createElement("style");
-  style.id = "ps-style";
-  style.textContent = CSS;
-  (document.head ?? host).appendChild(style);
-  cssInjected = true;
+const STYLE_ID = "ps-style";
+/** 现在有几张球桌正用着这份样式:进出多少次都只注一份,最后一张桌子拆掉时带走 */
+let cssUsers = 0;
+
+/** 注一次样式并占一份引用,返回「这一份用完了」的回调（重复调用无害） */
+function acquireCss(host: HTMLElement): () => void {
+  cssUsers++;
+  if (!document.getElementById(STYLE_ID)) {
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = CSS;
+    (document.head ?? host).appendChild(style);
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    cssUsers = Math.max(0, cssUsers - 1);
+    if (cssUsers === 0) document.getElementById(STYLE_ID)?.remove();
+  };
 }
 
 function el(tag: string, cls?: string, text?: string): HTMLElement {
@@ -339,7 +351,7 @@ const KIND_NAME: Record<BallKind, string> = {
 };
 
 export function createTable(host: HTMLElement, opts: TableOptions): TableHandle {
-  ensureCss(host);
+  const releaseCss = acquireCss(host);
   const soft = reducedMotion();
 
   let balls = cloneBalls(opts.balls);
@@ -964,6 +976,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       shakeAmp = 0;
       tableBox.style.transform = "";
       wrap.remove();
+      releaseCss();
     },
     update,
     rolling: () => phase === "rolling",

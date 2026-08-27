@@ -304,4 +304,50 @@ describe("PA-FS-3 · 退出再进", () => {
       expect(windowListenerCount(dom)).toBe(0);
     }
   });
+
+  // R2-PA-1（第 2 轮测试员新记）：destroy 之后 `fs-style` 留在 document.head 里不回收
+  it("destroy 会把注入 document.head 的 fs-style 一起带走", () => {
+    const handle = mount(fakeApi().api);
+    expect(dom.head.children.some((c) => c.id === "fs-style")).toBe(true);
+    handle.destroy();
+    expect(
+      dom.head.children.some((c) => c.id === "fs-style"),
+      "destroy 之后样式标签仍留在 document.head"
+    ).toBe(false);
+  });
+
+  it("来回进出 5 次，head 里始终最多一份样式，最后一次拆完归零", () => {
+    for (let i = 0; i < 5; i++) {
+      const handle = mount(fakeApi().api);
+      expect(
+        dom.head.children.filter((c) => c.id === "fs-style"),
+        `第 ${i + 1} 次进来 head 里的样式不是一份`
+      ).toHaveLength(1);
+      handle.destroy();
+      expect(
+        dom.head.children.filter((c) => c.id === "fs-style"),
+        `第 ${i + 1} 次退出没把样式带走`
+      ).toHaveLength(0);
+    }
+  });
+
+  it("进模式 → 退模式的过程中样式一直在，只有整款拆掉才带走", () => {
+    const handle = mount(fakeApi().api);
+    for (const label of ["无尽果盆", "双人同屏"]) {
+      byText(label)!.dispatch("click");
+      flushFrames(dom, 3);
+      expect(
+        dom.head.children.filter((c) => c.id === "fs-style"),
+        `进「${label}」又多注了一份样式`
+      ).toHaveLength(1);
+      byText("回选关")!.dispatch("click");
+      flushFrames(dom, 2);
+      expect(
+        dom.head.children.some((c) => c.id === "fs-style"),
+        `退出「${label}」就把还在用的样式带走了`
+      ).toBe(true);
+    }
+    handle.destroy();
+    expect(dom.head.children.some((c) => c.id === "fs-style")).toBe(false);
+  });
 });

@@ -8,8 +8,9 @@
  * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
  *  - PA-PS-1（严重）：Esc 暂停只挡住了 rAF 与台面指针，键盘瞄准 / 蓄力 / 出杆与按钮照样生效。
  *    第 1 轮修复员已修，下面 `PA-PS-1` 那一组断言已经翻成修好后的行为；
- *  - PA-PS-2（一般）：双人同屏里方向键与 WASD 都改「当前出杆方」的角度，两人互相够得着（留第 2 轮）；
- *  - PA-PS-3（一般）：`mount` 的 destroy 不回收注入到 document.head 的 `ps-shell-style`（留第 2 轮）。
+ *  - PA-PS-2（一般）：双人同屏里方向键与 WASD 都改「当前出杆方」的角度，两人互相够得着（仍留后面几轮）；
+ *  - PA-PS-3（一般）：`mount` 的 destroy 不回收注入到 document.head 的 `ps-shell-style`。
+ *    第 2 轮学习优化员已改成「注一次 + 引用计数」，下面 `PA-PS-3` 那一组断言已经翻成修好后的行为。
  *
  * 顶部先静态 import 一次 index：让 level99 / audio 那条链在真 node 环境下加载完，
  * 之后再装 DOM 桩，免得 audio.ts 的 `document.addEventListener` 撞上没有该方法的桩。
@@ -314,14 +315,40 @@ describe("PA-PS-3 · 退出再进", () => {
     }
   });
 
-  it("【已知问题】destroy 不回收注入 document.head 的 ps-shell-style", () => {
+  it("destroy 会把注入 document.head 的 ps-shell-style 一起带走", () => {
     const handle = mount(fakeApi() as never);
     expect(dom.head.children.some((c) => c.id === "ps-shell-style")).toBe(true);
     handle.destroy();
-    // 应有行为：拆干净应当连注入的样式一起带走。现状：留在 head 里。
     expect(
       dom.head.children.some((c) => c.id === "ps-shell-style"),
       "destroy 之后样式标签仍留在 document.head"
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("来回进出 5 次，head 里始终最多一份样式，最后一次拆完归零", () => {
+    for (let i = 0; i < 5; i++) {
+      const handle = mount(fakeApi() as never);
+      expect(
+        dom.head.children.filter((c) => c.id === "ps-shell-style"),
+        `第 ${i + 1} 次进来 head 里的样式不是一份`
+      ).toHaveLength(1);
+      handle.destroy();
+      expect(
+        dom.head.children.filter((c) => c.id === "ps-shell-style"),
+        `第 ${i + 1} 次退出没把样式带走`
+      ).toHaveLength(0);
+    }
+  });
+
+  it("两处同时用着样式时不许提前回收，最后一个走的人才带走", () => {
+    const outer = mount(fakeApi() as never);
+    const { handle: table } = mountTable();
+    expect(dom.head.children.some((c) => c.id === "ps-style"), "球桌样式没注入").toBe(true);
+    table.destroy();
+    // 球桌自己的 ps-style 是另一份，外壳那份不受影响
+    expect(dom.head.children.some((c) => c.id === "ps-shell-style"), "球桌拆掉就把外壳样式带走了").toBe(true);
+    outer.destroy();
+    expect(dom.head.children.some((c) => c.id === "ps-shell-style")).toBe(false);
+    expect(dom.head.children.some((c) => c.id === "ps-style"), "球桌样式也该带走").toBe(false);
   });
 });

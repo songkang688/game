@@ -177,7 +177,11 @@ export function installDom(width = 800): Dom {
     document: {
       head,
       createElement: (tag: string) => new El(tag),
-      getElementById: (id: string) => byId.get(id) ?? null,
+      // 和真 DOM 一样：已经从 head 里摘掉的节点就查不到了
+      getElementById: (id: string) => {
+        const hit = byId.get(id);
+        return hit && hit.parent ? hit : null;
+      },
     },
     window: win,
     innerWidth: width,

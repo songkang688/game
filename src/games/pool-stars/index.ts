@@ -68,14 +68,26 @@ const SHELL_CSS = `
 .ps-over-s{font-size:13.5px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
 `;
 
-let shellCss = false;
-function ensureShellCss(host: HTMLElement): void {
-  if (shellCss && document.getElementById("ps-shell-style")) return;
-  const style = document.createElement("style");
-  style.id = "ps-shell-style";
-  style.textContent = SHELL_CSS;
-  (document.head ?? host).appendChild(style);
-  shellCss = true;
+const SHELL_STYLE_ID = "ps-shell-style";
+/** 现在有几处正用着这份样式:进出多少次都只注一份,最后一个走的人负责带走 */
+let shellCssUsers = 0;
+
+/** 注一次样式并占一份引用,返回「这一份用完了」的回调（重复调用无害） */
+function acquireShellCss(host: HTMLElement): () => void {
+  shellCssUsers++;
+  if (!document.getElementById(SHELL_STYLE_ID)) {
+    const style = document.createElement("style");
+    style.id = SHELL_STYLE_ID;
+    style.textContent = SHELL_CSS;
+    (document.head ?? host).appendChild(style);
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    shellCssUsers = Math.max(0, shellCssUsers - 1);
+    if (shellCssUsers === 0) document.getElementById(SHELL_STYLE_ID)?.remove();
+  };
 }
 
 function el(tag: string, cls?: string, text?: string): HTMLElement {
@@ -352,7 +364,7 @@ interface Shell {
 }
 
 function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: string): Shell {
-  ensureShellCss(host);
+  const releaseCss = acquireShellCss(host);
   const wrap = el("div", "ps-mode");
   const head = el("div", "ps-mhead");
   const back = button("ps-back", "◀ 回选关");
@@ -365,7 +377,14 @@ function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: s
   const stage = el("div");
   wrap.append(head, stage);
   host.appendChild(wrap);
-  return { stage, chip, destroy: () => wrap.remove() };
+  return {
+    stage,
+    chip,
+    destroy: () => {
+      wrap.remove();
+      releaseCss();
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -537,7 +556,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 // ---------------------------------------------------------------------------
 
 export function mount(api: GameApi): { destroy: () => void } {
-  ensureShellCss(api.root);
+  const releaseCss = acquireShellCss(api.root);
   const root = el("div");
   const bar = el("div", "ps-bar");
   const picks = el("div", "ps-picks");
@@ -634,6 +653,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       mode = null;
       level.destroy();
       root.remove();
+      releaseCss();
     },
   };
 }
