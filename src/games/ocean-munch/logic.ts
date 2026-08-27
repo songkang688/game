@@ -222,7 +222,7 @@ export interface BossSpec {
   summons?: "jelly" | "urchin";
   /** 会把玩家往自己嘴边吸 */
   pulls?: boolean;
-  /** 血越少冲刺越快 */
+  /** 精神条越少冲刺越快 */
   enrages?: boolean;
   /** 1.1:会掀起洋流,把整片海的水推着换向 */
   drifts?: boolean;
