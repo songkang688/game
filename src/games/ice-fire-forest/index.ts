@@ -178,8 +178,6 @@ const ICE_DARK = "#4FA8D8";
 const FIRE_DARK = "#E8763C";
 const WATER_FILL = "#B9E4F7";
 const WATER_DEEP = "#7FC9EC";
-const LAVA_FILL = "#FFC08A";
-const LAVA_DEEP = "#F2894A";
 const SLIME_FILL = "#B9E08A";
 const SLIME_DEEP = "#87BF52";
 const BEAM_COLOR = "#FFD34D";
@@ -197,9 +195,11 @@ const CSS = `
   gap:8px;align-items:center;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
   color:var(--iff-ink);user-select:none;-webkit-user-select:none;touch-action:manipulation;}
 .iff-hud{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;width:100%;}
-.iff-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;
+.iff-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;
   box-shadow:0 2px 5px rgba(120,110,170,.18);white-space:nowrap;}
 .iff-chip b{font-weight:900;}
+.iff-duo{display:inline-flex;gap:4px;align-items:center;padding:4px 9px;}
+.iff-duo-face{width:24px;height:24px;display:block;}
 .iff-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7E6BC4,#6857AE);box-shadow:0 3px 0 #52458C;}
 .iff-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #52458C;}
@@ -237,7 +237,8 @@ const CSS = `
 .iff-over{display:flex;flex-direction:column;gap:10px;align-items:center;padding:18px 12px;
   font-weight:900;color:#5B5182;text-align:center;}
 @media (max-width:420px){
-  .iff-chip{font-size:11.5px;padding:3px 8px;}
+  .iff-chip{font-size:12px;padding:3px 8px;}
+  .iff-duo-face{width:20px;height:20px;}
   .iff-btn{font-size:11.5px;padding:5px 10px;}
   .iff-wrap{gap:5px;}
   .iff-tip{font-size:11.5px;padding:4px 8px;}
@@ -315,6 +316,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   let liftDown = true;
   let toastUntil = 0;
   let reduced = prefersReducedMotion();
+  /** 开门尘土账本(纯视觉,destroy 一笔不剩) */
+  const dustFx = new IffDustFx();
 
   const views: Record<Hero, HeroView> = {
     ice: makeView(level, st.ice),
@@ -343,6 +346,19 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
 
   const hud = document.createElement("div");
   hud.className = "iff-hud";
+  // 双人头像卡片:两张迷你脸画一次就够,不进帧循环
+  const chipDuo = document.createElement("span");
+  chipDuo.className = "iff-chip iff-duo";
+  chipDuo.setAttribute("aria-hidden", "true");
+  for (const kind of ["ice", "fire"] as const) {
+    const face = document.createElement("canvas");
+    face.width = 48;
+    face.height = 48;
+    face.className = "iff-duo-face";
+    const fc = face.getContext("2d");
+    if (fc) drawMiniHero(fc, kind, 48);
+    chipDuo.appendChild(face);
+  }
   const chipTime = chip("⏱ 0:00");
   const chipGems = chip(`💎 0/${totalGems}`);
   const chipClouds = chip("💗 ❤❤❤");
@@ -352,7 +368,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   resetBtn.type = "button";
   resetBtn.className = "iff-btn iff-btn--ghost";
   resetBtn.textContent = "↺ 重摆";
-  hud.append(chipTime, chipGems, chipClouds, chipFlag, chipPower, resetBtn);
+  hud.append(chipDuo, chipTime, chipGems, chipClouds, chipFlag, chipPower, resetBtn);
 
   // 单人换人按钮固定在棋盘正上方的中间 —— 手机上两只手都在屏幕下缘,
   // 中间上方是唯一一块不会被拇指挡住、又一眼能看见的地方
@@ -1012,8 +1028,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   }
 
   /**
-   * 冰水潭:**圆角池子 + 三道横波纹 + 一枚六角雪花**。
-   * 岩浆池:**尖角池子 + 气泡**。
+   * 冰水潭:**圆角池子 + 三道横波纹 + 一枚六角雪花**,1.3 加镜面反光斜带与池沿霜花。
+   * 岩浆池:**尖角池子 + 流动高光 + 上浮气泡**。
    * 两者形状与纹理都不一样,不靠颜色也分得开(色觉友好)。
    */
   function drawIcePool(c: CanvasRenderingContext2D, x: number, y: number, cell: number): void {
@@ -1021,6 +1037,26 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     c.fillStyle = WATER_FILL;
     roundRect(c, x + pad, y + pad, cell - pad * 2, cell - pad * 2, cell * 0.3);
     c.fill();
+    c.strokeStyle = WATER_DEEP;
+    c.lineWidth = Math.max(1.2, cell * 0.05);
+    c.stroke();
+    // 镜面反光斜带(静态渐变系,reduced 保留)
+    c.save();
+    roundRect(c, x + pad, y + pad, cell - pad * 2, cell - pad * 2, cell * 0.3);
+    c.clip();
+    c.strokeStyle = withAlpha("#FFFFFF", 0.5);
+    c.lineCap = "round";
+    for (const [w0, off] of [
+      [0.12, 0],
+      [0.05, 0.22],
+    ]) {
+      c.lineWidth = cell * w0;
+      c.beginPath();
+      c.moveTo(x + cell * (0.14 + off), y + cell * 0.86);
+      c.lineTo(x + cell * (0.6 + off), y + cell * 0.14);
+      c.stroke();
+    }
+    c.restore();
     c.strokeStyle = WATER_DEEP;
     c.lineWidth = Math.max(1.2, cell * 0.05);
     for (let i = 0; i < 3; i++) {
@@ -1041,15 +1077,16 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       c.lineTo(x + cell / 2 + Math.cos(ang) * r, y + cell * 0.5 + Math.sin(ang) * r);
     }
     c.stroke();
+    // 池沿霜花:顶边三粒小白点
+    c.fillStyle = withAlpha("#FFFFFF", 0.85);
+    for (const fx of [0.24, 0.5, 0.76]) {
+      dot(c, x + cell * fx, y + pad + cell * 0.03, Math.max(0.8, cell * 0.035));
+    }
   }
 
-  function drawLavaPool(c: CanvasRenderingContext2D, x: number, y: number, cell: number): void {
-    const pad = Math.max(1, cell * 0.08);
-    const cx = x + cell / 2;
-    const cy = y + cell / 2;
-    const outer = cell / 2 - pad;
+  /** 岩浆池的 16 齿尖角轮廓(和 1.2 同形,只是拆出来好做裁剪) */
+  function lavaPath(c: CanvasRenderingContext2D, cx: number, cy: number, outer: number): void {
     const inner = outer * 0.66;
-    c.fillStyle = LAVA_FILL;
     c.beginPath();
     for (let i = 0; i < 16; i++) {
       const ang = (Math.PI * 2 * i) / 16 - Math.PI / 2;
@@ -1060,13 +1097,54 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       else c.lineTo(px, py);
     }
     c.closePath();
+  }
+
+  function drawLavaPool(
+    c: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    cell: number,
+    pos: number,
+    now: number
+  ): void {
+    const pad = Math.max(1, cell * 0.08);
+    const cx = x + cell / 2;
+    const cy = y + cell / 2;
+    const outer = cell / 2 - pad;
+    lavaPath(c, cx, cy, outer);
+    c.fillStyle = IFF_COLORS.iffLava;
     c.fill();
-    c.strokeStyle = LAVA_DEEP;
+    // 池沿焦糖色描边
+    c.strokeStyle = shade(IFF_COLORS.iffLava, -32);
     c.lineWidth = Math.max(1.2, cell * 0.05);
     c.stroke();
-    c.fillStyle = LAVA_DEEP;
-    dot(c, cx - cell * 0.14, cy + cell * 0.06, cell * 0.07);
-    dot(c, cx + cell * 0.12, cy - cell * 0.08, cell * 0.05);
+    // 流动高光条:3200ms 平移循环(linear);reduced 是一根静止条
+    c.save();
+    lavaPath(c, cx, cy, outer);
+    c.clip();
+    const ph = lavaSheenPhase(now, reduced);
+    const sx = x + (ph * 1.7 - 0.35) * cell;
+    c.strokeStyle = withAlpha("#FFE28A", 0.7);
+    c.lineWidth = cell * 0.1;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(sx, y + cell * 0.92);
+    c.lineTo(sx + cell * 0.34, y + cell * 0.08);
+    c.stroke();
+    c.restore();
+    // 上浮气泡:2s 循环(easeOutSine);reduced 一粒不生成
+    for (const b of lavaBubbles(pos, now, reduced)) {
+      c.save();
+      c.globalAlpha = Math.max(0, Math.min(1, b.alpha)) * 0.85;
+      c.fillStyle = shade(IFF_COLORS.iffLava, 30);
+      dot(c, x + b.u * cell, y + b.v * cell, b.r * cell);
+      c.strokeStyle = shade(IFF_COLORS.iffLava, -18);
+      c.lineWidth = Math.max(0.8, cell * 0.03);
+      c.beginPath();
+      c.arc(x + b.u * cell, y + b.v * cell, b.r * cell, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
   }
 
   function drawSlime(c: CanvasRenderingContext2D, x: number, y: number, cell: number): void {
@@ -1074,8 +1152,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     c.fillStyle = SLIME_FILL;
     roundRect(c, x + pad, y + pad, cell - pad * 2, cell - pad * 2, cell * 0.42);
     c.fill();
+    // 果冻顶部一弯高光(左上 45° 光源)
+    c.fillStyle = withAlpha("#FFFFFF", 0.3);
+    roundRect(c, x + pad * 2, y + pad * 2, (cell - pad * 4) * 0.6, (cell - pad * 4) * 0.32, cell * 0.2);
+    c.fill();
     c.strokeStyle = SLIME_DEEP;
     c.lineWidth = Math.max(1.2, cell * 0.06);
+    roundRect(c, x + pad, y + pad, cell - pad * 2, cell - pad * 2, cell * 0.42);
     c.stroke();
     c.fillStyle = "#6FA53E";
     dot(c, x + cell * 0.35, y + cell * 0.4, cell * 0.07);
@@ -1090,6 +1173,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     c.fillText(String(group + 1), x + cell * 0.1, y + cell * 0.06);
   }
 
+  /** 机关门:关门是石框立面 + 栅条,开门保留 1.2 的虚线框(识别语言不变) */
   function drawGate(
     c: CanvasRenderingContext2D,
     x: number,
@@ -1101,6 +1185,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   ): void {
     const base = tone ?? (seesaw ? "#D7A8C4" : "#A79AD0");
     if (open) {
+      // 门柱残端:开着也看得出「这里有一扇门」
+      c.fillStyle = shade(base, -12);
+      c.fillRect(x + cell * 0.08, y + cell * 0.74, cell * 0.14, cell * 0.18);
+      c.fillRect(x + cell * 0.78, y + cell * 0.74, cell * 0.14, cell * 0.18);
       c.strokeStyle = base;
       c.lineWidth = Math.max(2, cell * 0.08);
       c.setLineDash([cell * 0.12, cell * 0.1]);
@@ -1111,18 +1199,34 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     c.fillStyle = base;
     roundRect(c, x + 1, y + 1, cell - 2, cell - 2, cell * 0.18);
     c.fill();
+    // 石框立面:顶梁受光、右柱与底沿背光(左上 45° 光源)
+    c.fillStyle = shade(base, 22);
+    roundRect(c, x + 1, y + 1, cell - 2, cell * 0.2, cell * 0.12);
+    c.fill();
+    c.fillStyle = shade(base, -18);
+    c.fillRect(x + cell * 0.84, y + cell * 0.16, cell * 0.1, cell * 0.76);
+    c.fillRect(x + cell * 0.06, y + cell * 0.86, cell * 0.88, cell * 0.08);
     c.strokeStyle = "#ffffff88";
     c.lineWidth = Math.max(2, cell * 0.07);
     for (let i = 1; i <= 3; i++) {
       const gx = x + (cell * i) / 4;
       c.beginPath();
-      c.moveTo(gx, y + cell * 0.12);
-      c.lineTo(gx, y + cell * 0.88);
+      c.moveTo(gx, y + cell * 0.24);
+      c.lineTo(gx, y + cell * 0.84);
       c.stroke();
     }
   }
 
-  function drawGem(c: CanvasRenderingContext2D, x: number, y: number, cell: number, gem: Gem): void {
+  /** 宝石切面化:菱形主体 + 三角切面高光 + 旋转闪点(1800ms/圈,reduced 静止高光) */
+  function drawGem(
+    c: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    cell: number,
+    gem: Gem,
+    pos: number,
+    now: number
+  ): void {
     const colors: Record<string, [string, string]> = {
       blue: ["#8FD3F4", "#3E8FC0"],
       red: ["#FFA98F", "#D9552F"],
@@ -1143,9 +1247,47 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     c.closePath();
     c.fill();
     c.stroke();
+    // 切面:左上受光三角亮、下半三角沉(静止高光,reduced 保留)
+    c.fillStyle = withAlpha("#FFFFFF", 0.55);
+    c.beginPath();
+    c.moveTo(cx, cy - r);
+    c.lineTo(cx - r * 0.86, cy);
+    c.lineTo(cx, cy);
+    c.closePath();
+    c.fill();
+    c.fillStyle = withAlpha(shade(fill, -30), 0.35);
+    c.beginPath();
+    c.moveTo(cx - r * 0.86, cy);
+    c.lineTo(cx + r * 0.86, cy);
+    c.lineTo(cx, cy + r);
+    c.closePath();
+    c.fill();
+    c.fillStyle = "#FFFFFF";
+    dot(c, cx - r * 0.28, cy - r * 0.42, Math.max(0.8, r * 0.14));
+    // 旋转闪点:reduced 一粒不生成
+    for (const s of gemSparks(now, pos, reduced)) {
+      const px = cx + Math.cos(s.angle) * r * s.dist;
+      const py = cy + Math.sin(s.angle) * r * 0.85 * s.dist;
+      const sr = Math.max(1, r * 0.22);
+      c.fillStyle = withAlpha("#FFFFFF", 0.9);
+      c.beginPath();
+      c.moveTo(px, py - sr);
+      c.lineTo(px + sr * 0.32, py);
+      c.lineTo(px, py + sr);
+      c.lineTo(px - sr * 0.32, py);
+      c.closePath();
+      c.fill();
+    }
   }
 
-  function drawTile(c: CanvasRenderingContext2D, pos: number, cell: number, power: number, light: boolean): void {
+  function drawTile(
+    c: CanvasRenderingContext2D,
+    pos: number,
+    cell: number,
+    power: number,
+    light: boolean,
+    now: number
+  ): void {
     const x = (pos % level.w) * cell;
     const y = ((pos / level.w) | 0) * cell;
     const t = level.tiles[pos];
@@ -1163,6 +1305,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
 
     if (isDoorCell) {
       const open = memoryDoorOpen(kit, coop);
+      dustFx.noteGate(pos, open, pos % level.w, (pos / level.w) | 0, now, reduced);
       drawGate(c, x, y, cell, open, false, "#8FB7D6");
       c.fillStyle = open ? "#3E8FC0" : "#6A5F8C";
       c.font = `${Math.round(cell * 0.34)}px system-ui`;
@@ -1186,7 +1329,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
         drawIcePool(c, x, y, cell);
         break;
       case TILE.LAVA:
-        drawLavaPool(c, x, y, cell);
+        drawLavaPool(c, x, y, cell, pos, now);
         break;
       case TILE.SLIME:
         drawSlime(c, x, y, cell);
@@ -1236,11 +1379,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       case TILE.SEESAW: {
         const powered = ((power >> a) & 1) === 1;
         const open = t === TILE.GATE ? powered : !powered;
+        dustFx.noteGate(pos, open, pos % level.w, (pos / level.w) | 0, now, reduced);
         drawGate(c, x, y, cell, open, t === TILE.SEESAW);
         groupMark(c, x, y, cell, a, open);
         break;
       }
       case TILE.LIGHT_GATE:
+        dustFx.noteGate(pos, light, pos % level.w, (pos / level.w) | 0, now, reduced);
         drawGate(c, x, y, cell, light, false, BEAM_COLOR);
         break;
       case TILE.BELT: {
@@ -1334,7 +1479,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     }
 
     const gem = gemAt.get(pos);
-    if (gem && !collected.has(pos)) drawGem(c, x, y, cell, gem);
+    if (gem && !collected.has(pos)) drawGem(c, x, y, cell, gem, pos, now);
   }
 
   /** 合作机关的摆件:按钮、传送门、升降台、木箱 */
@@ -1442,7 +1587,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     c.restore();
   }
 
-  function drawCheckpoints(c: CanvasRenderingContext2D, cell: number): void {
+  /** 双人集合点:竖光带 + 程序化飘动小旗(900ms sin;reduced 静止旗) */
+  function drawCheckpoints(c: CanvasRenderingContext2D, cell: number, now: number): void {
     for (let i = 0; i < cps.columns.length; i++) {
       const x = cps.columns[i] * cell;
       const lit = i <= reached;
@@ -1451,11 +1597,33 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       c.fillStyle = lit ? "#FFD98A" : "#C4BBDD";
       c.fillRect(x + cell * 0.42, 0, cell * 0.16, level.h * cell);
       c.restore();
-      c.fillStyle = lit ? "#E4A828" : "#B5A9CE";
-      c.font = `${Math.round(cell * 0.4)}px system-ui`;
-      c.textAlign = "center";
-      c.textBaseline = "middle";
-      c.fillText("🚩", x + cell / 2, cell * 0.5);
+      // 旗杆
+      const px = x + cell * 0.4;
+      const top = cell * 0.18;
+      c.strokeStyle = lit ? "#B98A2C" : "#9C93BC";
+      c.lineWidth = Math.max(1.5, cell * 0.05);
+      c.lineCap = "round";
+      c.beginPath();
+      c.moveTo(px, top);
+      c.lineTo(px, top + cell * 0.62);
+      c.stroke();
+      // 三角旗:随 flagWave 上下摆尾
+      const w = flagWave(now, reduced);
+      c.fillStyle = lit ? "#FFD98A" : "#C4BBDD";
+      c.beginPath();
+      c.moveTo(px, top);
+      c.quadraticCurveTo(
+        px + cell * 0.2,
+        top + cell * (0.02 + 0.05 * w),
+        px + cell * 0.4,
+        top + cell * (0.1 + 0.07 * w)
+      );
+      c.quadraticCurveTo(px + cell * 0.2, top + cell * (0.18 + 0.04 * w), px, top + cell * 0.26);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = lit ? "#E4A828" : "#B5A9CE";
+      c.lineWidth = Math.max(1, cell * 0.035);
+      c.stroke();
     }
   }
 
@@ -1519,19 +1687,30 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       c.save();
       c.translate(px, py);
       c.rotate(Math.atan2(arrow.dy, arrow.dx));
-      c.fillStyle = tone;
       c.beginPath();
       c.moveTo(11, 0);
       c.lineTo(-8, -8);
       c.lineTo(-8, 8);
       c.closePath();
+      // 白色衬边:装饰层再密,功能箭头也糊不掉(只精修描边,不动逻辑)
+      c.strokeStyle = "#ffffffd9";
+      c.lineWidth = 3;
+      c.lineJoin = "round";
+      c.stroke();
+      c.fillStyle = tone;
       c.fill();
       c.restore();
-      c.fillStyle = tone;
       c.font = "900 11px system-ui";
       c.textAlign = "center";
       c.textBaseline = "middle";
-      c.fillText(arrowLabel(arrow.hero), Math.max(46, Math.min(viewW - 46, px)), Math.max(12, Math.min(viewH - 10, py + 16)));
+      const lx = Math.max(46, Math.min(viewW - 46, px));
+      const ly = Math.max(12, Math.min(viewH - 10, py + 16));
+      c.strokeStyle = "#ffffffd9";
+      c.lineWidth = 3;
+      c.lineJoin = "round";
+      c.strokeText(arrowLabel(arrow.hero), lx, ly);
+      c.fillStyle = tone;
+      c.fillText(arrowLabel(arrow.hero), lx, ly);
     }
   }
 
@@ -1587,10 +1766,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     const y0 = Math.max(0, Math.floor(-offY / cell) - 1);
     const y1 = Math.min(level.h - 1, Math.ceil((viewH - offY) / cell) + 1);
     for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) drawTile(c, y * level.w + x, cell, power, light);
+      for (let x = x0; x <= x1; x++) drawTile(c, y * level.w + x, cell, power, light, now);
     }
 
-    drawCheckpoints(c, cell);
+    drawCheckpoints(c, cell, now);
     drawLinks(c, cell, power);
     drawKit(c, cell);
 
@@ -1609,6 +1788,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
 
     drawHero(c, "ice", cell, now);
     drawHero(c, "fire", cell, now);
+
+    // 粒子层(图层序 ⑧):开门尘土,压在主角之上、功能件之下
+    dustFx.step(now);
+    dustFx.draw(c, cell, now);
     c.restore();
 
     drawArrows(c);
@@ -1683,6 +1866,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       views.ice.glide.queue.length = 0;
       views.fire.glide.queue.length = 0;
       lastArrows = [];
+      dustFx.reset();
       wrap.remove();
     },
   };
