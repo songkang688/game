@@ -223,6 +223,13 @@ import {
   pickupFloat,
   titleFitPx,
   worldDotsLit,
+  drawMiniStar,
+  drawPadlock,
+  drawFinishFlag,
+  drawStopwatchBadge,
+  drawInfinityBadge,
+  drawTargetBadge,
+  drawForkArrow,
 } from "./art";
 import { touchArea } from "./touch";
 import type { Rect } from "./touch";
@@ -2204,8 +2211,16 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.stroke();
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
-      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      if (unlocked) {
+        ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+        ctx.fillText(st.emoji, rect.x + 10, rect.y + ch * 0.3);
+      } else {
+        // 挂锁画制(visual-r2 修遗留#2):替掉 🔒 字符,落在原 emoji 的图标位
+        ctx.save();
+        ctx.translate(rect.x + 10 + ch * 0.16, rect.y + ch * 0.3);
+        drawPadlock(ctx, ch * 0.15);
+        ctx.restore();
+      }
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       // 章节名、简介、进度这三行都量过宽:超出先降字号,降到底就掐尾巴。
       // 卡片在 360 宽的两列布局里只有 150 出头,不量就会横着捅出去。
@@ -2246,11 +2261,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
     fitTitle(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, 28, 22, 76, w - 8);
     const size = themeSize(chapterIdx);
     ctx.font = "14px sans-serif";
-    ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${size * 3} · 通关解锁下一关,回放可刷 3 星`,
-      w / 2,
-      54,
-    );
+    // 星标画制(visual-r2 修遗留#2):行首 ⭐ 换 drawMiniStar,文字整体居中不变
+    const starLine = `${themeStars(progress, chapterIdx)}/${size * 3} · 通关解锁下一关,回放可刷 3 星`;
+    const starLineW = ctx.measureText(starLine).width;
+    ctx.save();
+    ctx.translate(w / 2 - starLineW / 2 - 3, 54);
+    drawMiniStar(ctx, 7, true);
+    ctx.restore();
+    ctx.fillText(starLine, w / 2 + 7, 54);
 
     mapNodes.length = 0;
     const base = themeOffset(chapterIdx);
@@ -2297,8 +2315,11 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       if (!unlocked) {
-        ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
-        ctx.fillText("🔒", n.x, n.y);
+        // 挂锁画制(visual-r2 修遗留#2):替掉 🔒 字符
+        ctx.save();
+        ctx.translate(n.x, n.y);
+        drawPadlock(ctx, r * 0.52);
+        ctx.restore();
       } else {
         ctx.fillStyle = st.accent;
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
@@ -2307,16 +2328,25 @@ export function mount(api: GameAPI): RainbowRunHandle {
           ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
           ctx.fillText(BOSSES[def.boss].emoji, n.x, n.y - r * 0.95);
         } else if (isFinal) {
-          ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
-          ctx.fillText("🏁", n.x, n.y - r * 0.95);
+          // 终点旗画制(visual-r2 修遗留#2):替掉 🏁 字符
+          ctx.save();
+          ctx.translate(n.x, n.y - r * 0.95);
+          drawFinishFlag(ctx, r * 0.32);
+          ctx.restore();
         } else if (def.gen) {
-          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-          ctx.fillText("⏱", n.x, n.y - r * 0.95);
+          // 限时表画制(visual-r2 修遗留#2):替掉 ⏱ 字符
+          ctx.save();
+          ctx.translate(n.x, n.y - r * 0.95);
+          drawStopwatchBadge(ctx, r * 0.28);
+          ctx.restore();
         }
-        ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-        let starTxt = "";
-        for (let s = 0; s < 3; s++) starTxt += s < got ? "⭐" : "▫";
-        ctx.fillText(starTxt, n.x, n.y + r * 1.45);
+        // 节点星级画制(visual-r2 修遗留#2):拿到=金星、空位=灰白描边星,替掉 ⭐▫ 字符
+        for (let s = 0; s < 3; s++) {
+          ctx.save();
+          ctx.translate(n.x + (s - 1) * r * 0.62, n.y + r * 1.45);
+          drawMiniStar(ctx, r * 0.26, s < got);
+          ctx.restore();
+        }
       }
     }
   }
@@ -2329,10 +2359,13 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${def.name} 跑完啦!`, w / 2, y + 40);
-    ctx.font = "34px sans-serif";
-    let starTxt = "";
-    for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
-    ctx.fillText(starTxt, w / 2, y + 86);
+    // 结算三星画制(visual-r2 修遗留#2):拿到=金星、空位=灰白描边星,替掉 ⭐☆ 字符
+    for (let s = 0; s < 3; s++) {
+      ctx.save();
+      ctx.translate(w / 2 + (s - 1) * 42, y + 86);
+      drawMiniStar(ctx, 16, s < earnedStars);
+      ctx.restore();
+    }
     ctx.font = "15px sans-serif";
     // 深绿/深灰:15px 小字要 4.5:1(原 #4a9a5a/#9a9aa8 只有 3.5/2.8:1)
     ctx.fillStyle = missionOk ? "#357a42" : "#62626f";
@@ -2342,7 +2375,25 @@ export function mount(api: GameAPI): RainbowRunHandle {
       y + 124,
     );
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText(`🍬${stats.coins} ⭐${stats.stars} · 掉心 ${stats.heartsLost} · 分 ${score}`, w / 2, y + 148);
+    // 统计行图标画制(visual-r2 修遗留#2):🍬⭐ 换静态星币/迷你星,量宽后整行居中
+    const coinsTxt = String(stats.coins);
+    const starsTxt = `${stats.stars} · 掉心 ${stats.heartsLost} · 分 ${score}`;
+    const rowW = 16 + ctx.measureText(coinsTxt).width + 20 + ctx.measureText(starsTxt).width;
+    let rx = w / 2 - rowW / 2;
+    ctx.textAlign = "left";
+    ctx.save();
+    ctx.translate(rx + 7, y + 148);
+    drawCoinFrame(ctx, 7, 0);
+    ctx.restore();
+    ctx.fillText(coinsTxt, rx + 16, y + 148);
+    rx += 16 + ctx.measureText(coinsTxt).width + 6;
+    ctx.save();
+    ctx.translate(rx + 7, y + 148);
+    drawMiniStar(ctx, 7, true);
+    ctx.restore();
+    ctx.fillStyle = "#5a5a6e";
+    ctx.fillText(starsTxt, rx + 16, y + 148);
+    ctx.textAlign = "center";
     const bw2 = 132;
     btnMap = { x: w / 2 - bw2 - 10, y: y + 178, w: bw2, h: 44 };
     drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
@@ -2487,19 +2538,30 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     if (endless) {
-      ctx.fillText("♾️ 无尽彩虹跑", w / 2, y + 42);
+      // 无尽 ∞ 徽记画制(visual-r2 修遗留#2):替掉 ♾️ 字符,双环画在标题左侧
+      const endlessTitle = "无尽彩虹跑";
+      const endlessTitleW = ctx.measureText(endlessTitle).width;
+      ctx.save();
+      ctx.translate(w / 2 - endlessTitleW / 2 - 4, y + 42);
+      drawInfinityBadge(ctx, 11);
+      ctx.restore();
+      ctx.fillText(endlessTitle, w / 2 + 13, y + 42);
       ctx.fillStyle = "#5a5a6e";
       ctx.font = "16px sans-serif";
       ctx.fillText(def.hint, w / 2, y + 84);
       ctx.fillStyle = "#c47a2a";
       ctx.font = "bold 16px sans-serif";
-      ctx.fillText(
+      // 任务小靶画制(visual-r2 修遗留#2):替掉 🎯 字符,🍬 纪录换文字「糖果」已含
+      const goalLine =
         endlessRecord.meters > 0
-          ? `🎯 目标:超过 ${endlessRecord.meters} 米 · 糖果纪录 🍬${endlessRecord.coins}`
-          : "🎯 目标:跑得越远越厉害!",
-        w / 2,
-        y + 122,
-      );
+          ? `目标:超过 ${endlessRecord.meters} 米 · 糖果纪录 ${endlessRecord.coins}`
+          : "目标:跑得越远越厉害!";
+      const goalLineW = ctx.measureText(goalLine).width;
+      ctx.save();
+      ctx.translate(w / 2 - goalLineW / 2 - 4, y + 122);
+      drawTargetBadge(ctx, 8);
+      ctx.restore();
+      ctx.fillText(goalLine, w / 2 + 9, y + 122);
       ctx.font = "14px sans-serif";
       ctx.fillStyle = "#a0a0b2";
       fitText(
@@ -2522,7 +2584,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
     fitText(def.hint, w / 2, y + 84, Math.min(430, w - 60));
     ctx.fillStyle = "#c47a2a";
     ctx.font = "bold 16px sans-serif";
-    ctx.fillText(`🎯 任务:${missionLabel(def.mission)}`, w / 2, y + 122);
+    // 任务小靶画制(visual-r2 修遗留#2):替掉 🎯 字符,整行居中不变
+    const missionLine = `任务:${missionLabel(def.mission)}`;
+    const missionLineW = ctx.measureText(missionLine).width;
+    ctx.save();
+    ctx.translate(w / 2 - missionLineW / 2 - 4, y + 122);
+    drawTargetBadge(ctx, 8);
+    ctx.restore();
+    ctx.fillText(missionLine, w / 2 + 9, y + 122);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#a0a0b2";
     const tips: string[] = [];
@@ -2660,7 +2729,18 @@ export function mount(api: GameAPI): RainbowRunHandle {
         ctx.font = "bold 14px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(`◀ 岔路口 · ${forkSign.gate.name} ▶`, 0, 0);
+        // 路牌箭头画制(visual-r2 修遗留#2):◀▶ 字符换圆角实心三角,指向左右两道
+        const forkLabel = `岔路口 · ${forkSign.gate.name}`;
+        const forkLabelW = ctx.measureText(forkLabel).width;
+        ctx.fillText(forkLabel, 0, 0);
+        ctx.save();
+        ctx.translate(-forkLabelW / 2 - 12, 0);
+        drawForkArrow(ctx, 6, -1);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(forkLabelW / 2 + 12, 0);
+        drawForkArrow(ctx, 6, 1);
+        ctx.restore();
         ctx.restore();
       }
     }
