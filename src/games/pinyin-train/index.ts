@@ -27,6 +27,7 @@ import { runQuizWithReview } from "./review";
 import { runSpell } from "./spell";
 import { runTimed } from "./timed";
 import { openLevelOnMap, parseLevelParam, resolveInitialLevel } from "./runtime";
+import { fitQuizHost } from "./fit";
 
 /** 壳层给的 `initialLevel`（1 基），没有就看地址栏的 `?level=N` */
 function wantedLevel(api: GameApi): unknown {
@@ -57,13 +58,28 @@ export function mount(api: GameApi): { destroy: () => void } {
           if (isSpellLevel(innerCtx.level)) {
             return runSpell({ stage: inner, ctx: innerCtx, tasks: buildSpell(innerCtx.level), theme });
           }
-          return runQuizWithReview({
-            stage: inner,
+          // 答题屏归 `quiz99.ts` 渲（平台共享模块，禁改），但渲进哪个盒子是本款说了算。
+          // 直接渲进舞台的话，矮屏上 `.qz-msg` 那一行整句掉在裁切线以下、又没有任何
+          // 可滚祖先——孩子答完一题屏幕上什么都不会发生（W5R2-FC-01）。
+          const host = document.createElement("div");
+          // 网格 / flex 子项默认 min-width:auto，长题面会把宿主撑破，钳高之前先把这一格按住
+          host.style.minWidth = "0";
+          inner.appendChild(host);
+          const fit = fitQuizHost(host);
+          const handle = runQuizWithReview({
+            stage: host,
             ctx: innerCtx,
             questions: buildQuestions(innerCtx.level),
             theme,
             level: innerCtx.level,
           });
+          return {
+            destroy() {
+              fit.dispose();
+              handle?.destroy?.();
+              host.remove();
+            },
+          };
         };
         return runTimed({ stage, ctx, limitMs: levelTimeLimitMs(ctx.level), accent: theme.accent, run });
       },
