@@ -191,7 +191,7 @@ const CSS = `
   display:flex;flex-direction:column;gap:7px;align-items:center;width:100%;position:relative;
   user-select:none;-webkit-user-select:none;touch-action:none;}
 .ps-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
-.ps-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:800;white-space:nowrap;
+.ps-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(90,130,110,.18);}
 .ps-chip-p0{color:#a8306a;background:#ffeaf3;}
 .ps-chip-p1{color:#28568f;background:#e6f0ff;}
@@ -204,8 +204,8 @@ const CSS = `
 .ps-power-fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:0 999px 999px 0;
   background:linear-gradient(90deg,#5c3a22 0%,#8a5a34 18%,#a06a3c 46%,#dcae72 82%,#f6f2e8 93%,#4a76a8 100%);
   box-shadow:inset 0 3px 0 rgba(255,255,255,.28),inset 0 -3px 0 rgba(60,30,10,.3);}
-.ps-power-tag{position:absolute;left:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:13px;font-weight:900;color:#3d6152;}
-.ps-power-val{position:absolute;right:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:13px;font-weight:900;color:#3d6152;}
+.ps-power-tag{position:absolute;left:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:14px;font-weight:900;color:#3d6152;}
+.ps-power-val{position:absolute;right:12px;top:0;line-height:${MIN_TOUCH_PX}px;font-size:14px;font-weight:900;color:#3d6152;}
 .ps-row{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;align-items:center;}
 .ps-btn{border:none;border-radius:14px;min-height:${MIN_TOUCH_PX}px;padding:10px 16px;font-size:14px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#2f4a3c;background:#ffffffe0;box-shadow:0 3px 0 rgba(110,150,130,.35);}
@@ -218,7 +218,7 @@ const CSS = `
 .ps-shoot:active{transform:translateY(2px);box-shadow:0 2px 0 #bf3a70;}
 .ps-shoot:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .ps-shoot[disabled]{opacity:.5;cursor:default;transform:none;}
-.ps-tip{font-size:13px;font-weight:700;line-height:1.55;text-align:center;max-width:620px;color:#43604f;
+.ps-tip{font-size:14px;font-weight:700;line-height:1.55;text-align:center;max-width:620px;color:#43604f;
   background:#ffffffcc;border-radius:12px;padding:6px 11px;word-break:break-word;}
 .ps-tip-foul{background:#ffe1e1;color:#a03030;animation:psTipShake .3s ease 1;}
 @keyframes psTipShake{0%{transform:translateX(0)}30%{transform:translateX(-4px)}60%{transform:translateX(4px)}100%{transform:translateX(0)}}
@@ -228,11 +228,11 @@ const CSS = `
 .ps-veil{position:absolute;inset:0;background:rgba(250,255,252,.95);border-radius:16px;z-index:6;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:16px;}
 .ps-veil-t{font-size:20px;font-weight:900;color:#3f8f68;}
-.ps-veil-s{font-size:13.5px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
+.ps-veil-s{font-size:14px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
 @media (max-width:420px){
-  .ps-chip{font-size:13px;padding:4px 8px;}
+  .ps-chip{font-size:14px;padding:4px 8px;}
   .ps-shoot{min-width:150px;padding:12px 20px;font-size:16px;}
-  .ps-tip{font-size:13px;}
+  .ps-tip{font-size:14px;}
 }
 @media (prefers-reduced-motion:reduce){
   .ps-btn:active,.ps-shoot:active{transform:none;}

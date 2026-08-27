@@ -60,17 +60,17 @@ const SHELL_CSS = `
 .ps-open--ai{background:linear-gradient(180deg,#8fb8e8,#5f8fd0);box-shadow:0 4px 0 #4a72a8;}
 .ps-open--en{background:linear-gradient(180deg,#b39ae8,#8a6fd0);box-shadow:0 4px 0 #6b53a8;}
 .ps-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
-.ps-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:13.5px;font-weight:900;cursor:pointer;
+.ps-pick{border:none;border-radius:14px;min-height:44px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#3d6152;box-shadow:0 3px 0 rgba(120,160,140,.35);}
 .ps-pick[aria-pressed="true"]{background:linear-gradient(180deg,#7fc9a2,#4fa87f);color:#fff;box-shadow:0 3px 0 #3b8062;}
 .ps-pick:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .ps-over{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:18px 12px;}
 .ps-over-t{font-size:20px;font-weight:900;color:#3f8f68;}
-.ps-over-s{font-size:13.5px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
+.ps-over-s{font-size:14px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
 .ps-over-ball{line-height:0;filter:drop-shadow(0 4px 6px rgba(70,110,90,.35));}
 .ps-recap{display:flex;gap:3px;align-items:center;flex-wrap:wrap;justify-content:center;
   background:#ffffffcc;border-radius:10px;padding:5px 10px;line-height:0;}
-.ps-recap-t{font-size:13px;font-weight:800;color:#43604f;margin-right:3px;line-height:1.4;}
+.ps-recap-t{font-size:14px;font-weight:800;color:#43604f;margin-right:3px;line-height:1.4;}
 `;
 
 const SHELL_STYLE_ID = "ps-shell-style";
