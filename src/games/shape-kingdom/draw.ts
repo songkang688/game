@@ -42,6 +42,8 @@ export const MIN_HIT = 44;
 export const MAX_DRAW_COLS = 6;
 /** 「矮屏」的门槛：这以下作图台要自己收一档并允许在本款壳里滚 */
 export const SHORT_SCREEN_PX = 720;
+/** `fitIntoStage` 真钳住时挂在宿主上的记号，CSS 认它来放行竖向手势 */
+export const FIT_SCROLL_CLASS = "shk-fit-scroll";
 
 export interface DrawMetrics {
   /** 作图区边长 */
@@ -115,16 +117,25 @@ export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]
  *
  * 只在真的装不下时才写 `max-height` / `overflow-y`，装得下就把两样都还回去，
  * 免得高屏上凭空多出一个滚动容器（那会把 `.shk-board` 的投影裁掉）。
+ * 真钳住的那一次同时挂上 `FIT_SCROLL_CLASS`：CSS 认这个记号才让作图板放行竖向手势，
+ * 因为「滚得起来」看的是舞台看得见多少，不是屏幕高不高（见 DRAW_CSS 里那一段）。
  * 返回拆监听的函数，`destroy` 时叫一声。
  */
 export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: () => void } {
   const view = el.ownerDocument?.defaultView ?? null;
   const measurable = typeof el.getBoundingClientRect === "function" && !!view;
+  const mark = (on: boolean): void => {
+    const list = (el as { classList?: DOMTokenList }).classList;
+    if (!list) return;
+    if (on) list.add(FIT_SCROLL_CLASS);
+    else list.remove(FIT_SCROLL_CLASS);
+  };
   const relayout = (): void => {
     if (!measurable || !view) return;
     // 先把上一次钳出来的值还原，不然量到的是钳完的高度，越量越小
     el.style.maxHeight = "";
     el.style.overflowY = "";
+    mark(false);
     const bottoms: number[] = [];
     for (let p = el.parentElement; p; p = p.parentElement) {
       const oy = view.getComputedStyle(p).overflowY;
@@ -135,6 +146,7 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     if (el.scrollHeight <= room + 1) return;
     el.style.maxHeight = `${Math.floor(room)}px`;
     el.style.overflowY = "auto";
+    mark(true);
   };
   relayout();
   view?.addEventListener("resize", relayout);
@@ -429,6 +441,14 @@ export const DRAW_CSS = `
 .shk-boardwrap{display:flex;justify-content:center;}
 .shk-board{position:relative;background:#fff;border-radius:14px;box-shadow:0 3px 10px rgba(120,120,160,.18);
   touch-action:none;flex:none;}
+/* 壳一旦真的滚起来，板子就得让出竖这一个方向，不然手指落在板子上一步都划不动，
+   而要够着的正是被常驻 .shk-dock 压住的最后一两行。判据不能拿屏高猜：让壳滚起来的是
+   fitIntoStage() 的运行期钳位，它只看舞台看得见多少。七巧板那一小题轮廓要 ≥280px，
+   加上 dock 之后 390×844 这种主流高屏照样钳得住——真机实测那一档可滚 90px、板子却还是
+   touch-action:none，轮廓最后一行 4 格在任何滚动位置都够不着（W5R2 复测 8c70a3d）。
+   所以认 fitIntoStage 挂上来的记号：钳住才让，钳位退回去记号也摘掉，装得下的题手感不变。
+   代价同矮屏那一档：竖着「按住拖」会变成滚动，点两个点这条主路和横着拖都没动。 */
+.shk-fit-scroll .shk-board{touch-action:pan-y;}
 .shk-dot{position:absolute;border:none;background:transparent;padding:0;margin:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;font-family:inherit;}
 .shk-dot::before{content:"";width:10px;height:10px;border-radius:50%;background:#adb5bd;}
