@@ -17,6 +17,19 @@ import { SCORE_MIN_FONT_PX, type ScoreGlyph } from "./notation";
 import { TIMBRES, VOLUME_MAX, type StarSynth } from "./synth";
 import { pitchOffsetPx } from "./tuning";
 import { DUET_MIN_GAP_PX } from "./touch";
+import { HALO_RATIO, haloBackground, starClipPolygon, starSvg } from "../../art/kit/glowStar";
+import { METEOR_MS, RING_MS } from "./fx";
+import {
+  METEOR_TAIL,
+  NIGHT_BOTTOM,
+  NIGHT_TOP,
+  WAVE_RING,
+  choiceStarGapPx,
+  jellyKeyStyle,
+  noteColorByMidi,
+  parseIntervalChoice,
+  skyStageUri,
+} from "./starTheme";
 
 /** `.mst-wrap` 左右内边距合计 */
 export const WRAP_PADDING_X = 20;
@@ -180,34 +193,57 @@ export function shortScreenSavingPx(): number {
 }
 
 export const MST_CSS = `
-.mst-wrap{min-height:420px;display:flex;flex-direction:column;align-items:center;gap:${BASE_SIZES.wrapGap}px;
+.mst-wrap{min-height:420px;position:relative;display:flex;flex-direction:column;align-items:center;gap:${BASE_SIZES.wrapGap}px;
   padding:${BASE_SIZES.wrapPad}px 10px;box-sizing:border-box;border-radius:16px;width:100%;
   font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
   user-select:none;-webkit-user-select:none;touch-action:none;}
 .mst-top{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.mst-badge{font-size:14px;font-weight:800;color:#fff;background:#ffffff2b;border-radius:999px;padding:5px 12px;}
+/* 1.3：分数 / 连击徽章卡片化——夜空色小卡 + 星轨色内描边（文本与热区一字不动） */
+.mst-badge{font-size:14px;font-weight:800;color:#fff;border-radius:999px;padding:5px 12px;
+  background:linear-gradient(180deg,#2c3c72,#22305c);
+  box-shadow:inset 0 0 0 1px rgba(180,200,255,.28),0 2px 6px rgba(10,16,40,.35);}
 .mst-badge-listen{background:#ffe066;color:#3b2a00;animation:mst-listen 1s ease-in-out infinite;}
 @keyframes mst-listen{0%,100%{opacity:1}50%{opacity:.55}}
 .mst-msg{min-height:${BASE_SIZES.msg}px;font-size:17px;font-weight:800;color:#ffe066;text-align:center;line-height:1.4;}
 .mst-dots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;min-height:${BASE_SIZES.dots}px;}
-.mst-dot{width:14px;height:14px;border-radius:50%;background:#ffffff33;transition:background .2s,transform .2s;}
-.mst-dot-on{background:#ffe066;transform:scale(1.25);}
-.mst-dot-long{width:26px;border-radius:8px;}
-.mst-dot-perfect{background:#8ce99a;}
-.mst-dot-good{background:#ffe066;}
-.mst-dot-ok{background:#ffa94d;}
-.mst-dot-miss{background:#ffffff55;}
+/* 1.3：音符点升级成发光五角星——盒子仍是 14px（360px 上最小可辨），
+   星形走 clip-path（几何来自 art-kit 的 glowStar），发光走 drop-shadow（跟着剪影走）。
+   颜色走 currentColor：弹对的音由渲染层按音高写彩虹色，没弹到的一律暗金，不泄旋律。 */
+.mst-dot{width:14px;height:14px;color:#ffe066;background:currentColor;opacity:.32;
+  clip-path:${starClipPolygon()};filter:drop-shadow(0 0 3px currentColor);
+  transition:opacity .2s,transform .2s;}
+.mst-dot-on{opacity:1;transform:scale(1.25);filter:drop-shadow(0 0 6px currentColor);}
+/* 当前拍脉动放大 1.15（时长由渲染层按既有节拍时钟内联；reduced 档改常亮加描边） */
+.mst-dot-cur{opacity:.9;animation:mst-dot-pulse .6s ease-in-out infinite alternate;}
+@keyframes mst-dot-pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
+/* miss 只是轻轻眨眼（缩 0.9 回弹），不批评 */
+.mst-dot-blink{animation:mst-dot-blink 260ms ease-out;}
+@keyframes mst-dot-blink{0%{transform:scale(1)}45%{transform:scale(.9)}100%{transform:scale(1)}}
+.mst-dot-long{width:26px;border-radius:8px;clip-path:none;}
+.mst-dot-perfect{background:#8ce99a;color:#8ce99a;opacity:1;}
+.mst-dot-good{background:#ffe066;color:#ffe066;opacity:1;}
+.mst-dot-ok{background:#ffa94d;color:#ffa94d;opacity:1;}
+.mst-dot-miss{background:#ffffff55;color:#fff;opacity:.7;}
 
 /* max-width 要跟容器一起夹：沙盒把键盘装在一个 shrink-to-fit 的空 div 里，
    那种盒子的宽度取自内容的 max-content——键排有多宽它就有多宽，一路撑到
    ${SKY_MAX_PX}px 为止，320px 的机器上整块星空于是探到舞台外面去，
    横向滚动再怎么滚也把两端的键滚不回可视区（测试员 W5-B-03 复现 B）。 */
 .mst-sky{position:relative;width:100%;max-width:min(${SKY_MAX_PX}px,100%);min-height:${BASE_SIZES.sky}px;}
+/* 1.3：星空舞台——夜空纵向渐变垫底，五线谱星轨 + 星座谱号 + 背景细星是一张程序化
+   SVG data-URI（starTheme.skyStageUri，无位图）。走 ::before 伪元素：DOM 一个节点
+   不加（星座 SVG 仍是 .mst-sky 的第一个孩子），也天生接不到指针。 */
+.mst-sky::before{content:"";position:absolute;inset:0;border-radius:14px;
+  background:${skyStageUri()},linear-gradient(${NIGHT_TOP},${NIGHT_BOTTOM});
+  background-size:100% 100%;pointer-events:none;}
 /* 沙盒的键盘宿主：撑满可用宽度，不许 shrink-to-fit 到内容的 max-content */
 .mst-sb-keys{width:100%;min-width:0;display:flex;justify-content:center;}
 .mst-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;
-  transition:opacity .5s ease;}
+  transition:opacity .5s ease;filter:drop-shadow(0 0 4px #fff59b88);}
 .mst-lines-on{opacity:1;}
+/* 结算星座连线逐段点亮（每段 320ms、错峰 160ms ≈ 整条 1.2s；reduced 一次性全亮） */
+.mst-lines-seg{stroke-dasharray:1;stroke-dashoffset:1;animation:mst-seg .32s ease-in-out forwards;}
+@keyframes mst-seg{to{stroke-dashoffset:0}}
 .mst-keys{position:relative;display:flex;justify-content:center;align-items:flex-end;
   min-height:${BASE_SIZES.sky}px;width:100%;}
 /* 键排比可用宽度还宽时（七声音阶 8 个键就是）改成横向可滚 */
@@ -218,19 +254,30 @@ export const MST_CSS = `
    「哆」和「高哆」等于还是按不到。按下去出声照旧走 pointerdown，
    手指真的横着划走时浏览器补一个 pointercancel，音会正常停。 */
 .mst-keys-scroll .mst-star{flex:0 0 auto;touch-action:pan-x;}
+/* 1.3 果冻键：音色渐变 + 顶光 + 2px 描边全按键内联（jellyKeyStyle，inset box-shadow
+   不占盒子）；这里只写共有的圆角与过渡——键的宽高仍由 keyLayout 内联，热区零改动。 */
 .mst-star{border:none;background:transparent;padding:0;cursor:pointer;font-family:inherit;
+  position:relative;border-radius:16px;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
   transition:transform .12s ease,filter .12s ease;touch-action:none;}
 .mst-face{font-size:${BASE_SIZES.face}px;line-height:1;filter:grayscale(.55) brightness(.75);
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
   transition:filter .12s ease,transform .12s ease,text-shadow .12s ease;}
-.mst-name{font-size:18px;font-weight:800;color:#c5cff3;}
-.mst-star.mst-lit .mst-face{filter:none;transform:scale(1.2);text-shadow:0 0 22px #fff59b;}
+/* 星底的径向光晕：直径 2.2em 随字号缩放，颜色按音色内联；纯装饰不接指针 */
+.mst-halo{position:absolute;left:50%;top:50%;width:${HALO_RATIO}em;height:${HALO_RATIO}em;
+  transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;}
+.mst-name{font-size:18px;font-weight:800;color:#c5cff3;text-shadow:0 1px 2px rgba(16,22,54,.6);}
+.mst-star.mst-lit .mst-face{filter:drop-shadow(0 0 10px #fff59b);transform:scale(1.2);}
 .mst-star.mst-lit .mst-name{color:#fff;}
-.mst-star.mst-down{transform:translateY(4px);}
-.mst-star.mst-down .mst-face{filter:none;text-shadow:0 0 26px #fff59b;}
+.mst-star.mst-down{transform:translateY(3px);}
+.mst-star.mst-down .mst-face{filter:drop-shadow(0 0 12px #fff9d6);}
 .mst-star.mst-hint .mst-face{filter:none;animation:mst-twinkle 1s infinite;}
 .mst-star[disabled]{cursor:default;}
-@keyframes mst-twinkle{0%,100%{transform:scale(1)}50%{transform:scale(1.16);text-shadow:0 0 20px #fff59b}}
+@keyframes mst-twinkle{0%,100%{transform:scale(1)}50%{transform:scale(1.16);filter:drop-shadow(0 0 8px #fff59b)}}
+/* 按下从键顶升起的小音符星：400ms 渐隐，纯装饰不接指针（reduced 档整个不生成） */
+.mst-rise{position:absolute;left:50%;top:-4px;transform:translate(-50%,0);line-height:0;
+  filter:drop-shadow(0 0 6px currentColor);animation:mst-rise .4s ease-out forwards;pointer-events:none;}
+@keyframes mst-rise{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-20px)}}
 
 .mst-bar{position:relative;width:100%;max-width:${SKY_MAX_PX}px;height:${BASE_SIZES.bar}px;border-radius:14px;
   background:#00000033;overflow:hidden;}
@@ -242,7 +289,11 @@ export const MST_CSS = `
 .mst-bar-line{position:absolute;top:4px;bottom:4px;width:4px;border-radius:2px;background:#ffe066;
   box-shadow:0 0 12px #ffe06699;}
 
-.mst-score{font-size:${SCORE_MIN_FONT_PX + 4}px;font-weight:900;color:#fff;background:#ffffff1f;
+/* 1.3：简谱区搬上星空舞台——夜空渐变垫底 + 同一张星轨/谱号 SVG 当背景；
+   字形结构（数字/八度点/时值线）与字号一字不动，乐理零改动。 */
+.mst-score{font-size:${SCORE_MIN_FONT_PX + 4}px;font-weight:900;color:#fff;
+  background:${skyStageUri()},linear-gradient(180deg,${NIGHT_TOP},${NIGHT_BOTTOM});
+  background-size:100% 100%;box-shadow:inset 0 0 0 1px rgba(180,200,255,.3);
   border-radius:14px;padding:${BASE_SIZES.scorePad}px 14px;text-align:center;line-height:1;
   display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .mst-glyph{position:relative;display:inline-flex;flex-direction:column;align-items:center;
@@ -265,17 +316,55 @@ export const MST_CSS = `
   border-radius:999px;background:#ffffff2b;color:#fff;font-family:inherit;
   display:inline-flex;align-items:center;justify-content:center;}
 .mst-chip.mst-chip-on{background:#fff;color:#1b2a5e;}
+/* 1.3 果冻鼓：三停渐变 + 顶光 + inset 描边——盒子几何与热区零改动 */
 .mst-drum{min-width:120px;min-height:88px;border:none;border-radius:20px;cursor:pointer;font-family:inherit;
-  font-size:18px;font-weight:900;color:#3b2a00;background:#ffe066;box-shadow:0 5px 0 #d9b800;
+  font-size:18px;font-weight:900;color:#3b2a00;
+  background:linear-gradient(180deg,rgba(255,255,255,.35) 0%,rgba(255,255,255,0) 35%),
+    linear-gradient(180deg,#fff0a8 0%,#ffe066 55%,#eec53d 100%);
+  box-shadow:0 5px 0 #d9b800,inset 0 0 0 2px #e3bd25,inset 0 -2px 0 #d9b800;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:none;}
-.mst-drum:active{transform:translateY(3px);box-shadow:0 2px 0 #d9b800;}
+.mst-drum:active{transform:translateY(3px);
+  box-shadow:0 2px 0 #d9b800,inset 0 0 0 2px #e3bd25,inset 0 -2px 0 #d9b800;}
 .mst-drum-face{font-size:32px;}
-.mst-drum.mst-lit{background:#fff3bf;}
+.mst-drum.mst-lit{background:#fff3bf;box-shadow:0 5px 0 #d9b800,0 0 18px #ffe06699,
+  inset 0 0 0 2px #e3bd25,inset 0 -2px 0 #d9b800;}
 .mst-choices{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+/* 1.3 音程选项做成琴键小卡：迷你琴键底 + 上下两颗小星按音程距离摆位（距离由题目
+   文案映射，乐理与选项文本零改动）；热区 56px 与字号只增不减。 */
 .mst-choice{min-width:108px;min-height:56px;border:none;border-radius:18px;cursor:pointer;font-family:inherit;
-  font-size:18px;font-weight:900;color:#1b2a5e;background:#fff;box-shadow:0 4px 0 #ffffff5c;}
+  font-size:18px;font-weight:900;color:#1b2a5e;
+  background:linear-gradient(180deg,#ffffff 0%,#eef2ff 70%,#dde4fb 100%);
+  box-shadow:0 4px 0 #ffffff5c;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:5px 12px;}
 .mst-choice:active{transform:translateY(3px);box-shadow:0 1px 0 #ffffff5c;}
 .mst-choice.mst-bad{opacity:.45;}
+.mst-choice-stars{position:relative;width:22px;height:44px;flex:0 0 auto;border-radius:6px;
+  background:linear-gradient(180deg,#f4f7ff,#dfe6ff);box-shadow:inset 0 0 0 1px #b9c6f2;
+  pointer-events:none;}
+.mst-choice-star{position:absolute;width:10px;height:10px;margin-left:-5px;
+  background:#f7b733;clip-path:${starClipPolygon()};filter:drop-shadow(0 0 3px #ffd93d);}
+.mst-choice-label{font-size:16px;font-weight:900;}
+/* 1.3 节奏特效层：命中音波环两圈（240ms 扩散、第二圈错 80ms）、连击流星（800ms
+   一次性）、连击/结算星空渐亮。整层 pointer-events:none，绝不挡按键。 */
+.mst-fx{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:16px;
+  transition:background .8s ease;}
+.mst-fx-bright{background:radial-gradient(circle at 50% 28%,rgba(255,246,214,.16),rgba(255,246,214,0) 72%);}
+.mst-ring{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border:2px solid ${WAVE_RING};
+  border-radius:50%;opacity:.5;animation:mst-ring ${RING_MS}ms ease-out forwards;}
+@keyframes mst-ring{from{transform:scale(1);opacity:.5}to{transform:scale(1.8);opacity:0}}
+.mst-meteor{position:absolute;top:14%;left:-24%;width:64px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(255,246,214,0),${METEOR_TAIL});
+  animation:mst-meteor ${METEOR_MS}ms linear forwards;}
+@keyframes mst-meteor{from{transform:translate(0,0) rotate(-16deg);opacity:1}
+  to{transform:translate(620px,180px) rotate(-16deg);opacity:0}}
+/* 1.3 录音片段的音符胶带条：夜空色小条 + 波形微缩（从片段音符只读推导）+ 圆钮播放；
+   数据结构与按钮行为一字不动，胶带条只是壳。 */
+.mst-clip{background:linear-gradient(180deg,#2c3c72,#233158);border-radius:12px;padding:6px 10px;
+  box-shadow:inset 0 0 0 1px rgba(180,200,255,.25);}
+.mst-clip-wave{display:inline-flex;align-items:flex-end;gap:2px;height:16px;padding:0 4px;
+  pointer-events:none;}
+.mst-clip-bar{width:3px;border-radius:2px;background:rgba(180,200,255,.8);}
+.mst-clip-play{border-radius:999px;background:#ffe066;color:#3b2a00;box-shadow:0 2px 0 #d9b800;}
 .mst-star:focus-visible,.mst-btn:focus-visible,.mst-chip:focus-visible,
 .mst-drum:focus-visible,.mst-choice:focus-visible{outline:3px solid #fff;outline-offset:3px;}
 @media (max-height:${SHORT_SCREEN_PX}px){
@@ -313,8 +402,16 @@ export const MST_CSS = `
 @media (prefers-reduced-motion:reduce){
   .mst-lines{transition:none;}
   .mst-badge-listen{animation:none;}
-  .mst-star.mst-hint .mst-face{animation:none;text-shadow:0 0 20px #fff59b;}
+  .mst-star.mst-hint .mst-face{animation:none;filter:drop-shadow(0 0 8px #fff59b);}
   .mst-bar-track{transition:none;}
+  /* 1.3：脉动 / 眨眼 / 音波环 / 流星 / 星座逐段动画全停；
+     静态发光（drop-shadow）与彩虹映射原样保留。 */
+  .mst-dot-cur{animation:none;opacity:1;
+    filter:drop-shadow(0 0 5px currentColor) drop-shadow(0 0 1px #fff);}
+  .mst-dot-blink{animation:none;}
+  .mst-ring,.mst-meteor{display:none;}
+  .mst-lines-seg{animation:none;stroke-dashoffset:0;}
+  .mst-fx{transition:none;}
 }
 `;
 
@@ -413,6 +510,8 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
   let enabled = true;
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const cleanups: Array<() => void> = [];
+  // 减少动效：按下不生成升起的小音符星，只保留键顶发光
+  const reduced = prefersReducedMotion();
 
   const buttons: HTMLButtonElement[] = opts.midis.map((midi, i) => {
     const note = opts.notes[i] ?? { name: `${i + 1}`, color: "#fff" };
@@ -424,9 +523,21 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
     // 音越高摆得越上：让孩子看得见「高低」
     btn.style.marginBottom = `${pitchOffsetPx(midi, lowMidi, highMidi, rise)}px`;
     btn.setAttribute("aria-label", note.name);
-    btn.innerHTML = `<span class="mst-face">⭐</span><span class="mst-name">${note.name}</span>`;
+    // 1.3：键色与音阶彩虹一致（颜色 + 位置双通道），果冻质感全按键内联——
+    // 描边走 inset box-shadow，键的宽高（热区）仍由上面 keyLayout 内联，一个像素不动。
+    const glow = noteColorByMidi(midi);
+    const jelly = jellyKeyStyle(glow);
+    btn.style.background = jelly.background;
+    btn.style.boxShadow = jelly.boxShadow;
+    // emoji ⭐ 升级成发光五角星：星形 SVG（1em 随字号缩放）+ 径向光晕垫底
+    btn.innerHTML =
+      `<span class="mst-face"><span class="mst-halo"></span>` +
+      `${starSvg(BASE_SIZES.face, glow, { cssSize: "1em", className: "mst-face-star" })}</span>` +
+      `<span class="mst-name">${note.name}</span>`;
     const nameEl = btn.querySelector(".mst-name") as HTMLElement | null;
     if (nameEl) nameEl.style.color = note.color;
+    const haloEl = btn.querySelector(".mst-halo") as HTMLElement | null;
+    if (haloEl) haloEl.style.background = haloBackground(glow);
 
     const down = (ev: Event): void => {
       const pe = ev as PointerEvent;
@@ -434,6 +545,15 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
       if (!enabled) return;
       // 发声与视觉同一帧：先落下去再回调，回调里立刻出声
       btn.classList.add("mst-down", "mst-lit");
+      if (!reduced) {
+        // 从键顶升起一颗小音符星，400ms 渐隐（纯装饰，不接指针；计时进 timers 统一清）
+        const riseStar = document.createElement("span");
+        riseStar.className = "mst-rise";
+        riseStar.style.color = glow;
+        riseStar.innerHTML = starSvg(14, glow, { className: "mst-rise-star" });
+        btn.appendChild(riseStar);
+        later(() => riseStar.remove(), 400);
+      }
       try {
         btn.setPointerCapture?.(pe.pointerId);
       } catch {
@@ -512,6 +632,10 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
         line.setAttribute("stroke", "#fff59b");
         line.setAttribute("stroke-width", "0.8");
         line.setAttribute("stroke-linecap", "round");
+        // 1.3：结算星座逐段点亮成一笔画（每段 320ms、错峰 160ms；reduced 一次性全亮）
+        line.setAttribute("class", "mst-lines-seg");
+        line.setAttribute("pathLength", "1");
+        (line as unknown as HTMLElement).style.animationDelay = `${(k - 1) * 160}ms`;
         lines.appendChild(line as unknown as Node);
       }
       lines.setAttribute("class", "mst-lines mst-lines-on");
@@ -623,6 +747,41 @@ export function createAudioBar(opts: AudioBarOptions): AudioBarHandle {
       bar.remove();
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// 音程选项卡（1.3 视觉升级）：琴键小卡 + 上下两星示意距离
+// ---------------------------------------------------------------------------
+
+/** 音程卡示意区的高度与小星边长（`.mst-choice-stars` / `.mst-choice-star` 的同一份数） */
+export const CHOICE_DIAGRAM_H = 44;
+export const CHOICE_STAR_PX = 10;
+
+/**
+ * 把一颗音程选项按钮装成琴键小卡：迷你琴键底上摆两颗小星，
+ * 纵向距离由选项文案（题目数据）经 `parseIntervalChoice` → `choiceStarGapPx`
+ * 只读映射——选项文本原样进 `.mst-choice-label`，乐理与判定零改动。
+ * 先弹的音画在左边（35%），后弹的在右边（65%）；往上/往下决定谁高谁低。
+ */
+export function buildIntervalChoiceCard(btn: HTMLElement, label: string): void {
+  const shape = parseIntervalChoice(label);
+  const gap = shape.dir === 0 ? 0 : choiceStarGapPx(shape.steps);
+  const mid = CHOICE_DIAGRAM_H / 2 - CHOICE_STAR_PX / 2;
+  const stars = document.createElement("span");
+  stars.className = "mst-choice-stars";
+  const first = document.createElement("span");
+  first.className = "mst-choice-star mst-choice-star-a";
+  first.style.left = "35%";
+  first.style.top = `${mid + (shape.dir * gap) / 2}px`;
+  const second = document.createElement("span");
+  second.className = "mst-choice-star mst-choice-star-b";
+  second.style.left = "65%";
+  second.style.top = `${mid - (shape.dir * gap) / 2}px`;
+  stars.append(first, second);
+  const text = document.createElement("span");
+  text.className = "mst-choice-label";
+  text.textContent = label;
+  btn.append(stars, text);
 }
 
 // ---------------------------------------------------------------------------
