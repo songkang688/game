@@ -27,6 +27,7 @@ import {
   TENT_STRIPE_W,
   WOOD_FRAME_PHASE,
   WOOD_FRAME_SEGMENTS,
+  LEAVE_FLASH_HZ,
   breathScale,
   clawOpenAngle,
   leaveBreathScale,
@@ -582,9 +583,9 @@ function skinFlower(ctx: CanvasRenderingContext2D, t: Target): void {
 }
 
 /**
- * 七道工序的总装线:① 落影 → ②③④⑤⑥ 由各靶种按需领取 → ⑦ 离场倒计时
- * （保留 1.2 的 `globalAlpha` 闪烁频率,叠 0.9→1.0 呼吸缩放;reduced 只留闪烁不缩放——
- * 而 1.2 的闪烁在 reduced 下本来就不动,口径原样）。
+ * 七道工序的总装线:① 落影 → ②③④⑤⑥ 由各靶种按需领取 → ⑦ 离场倒计时。
+ * 闪烁是「它要走了」的功能性提示,频率沿用 1.2 的 `LEAVE_FLASH_HZ`,
+ * reduced 下也保留;呼吸缩放是纯装饰,reduced 下关掉(leaveBreathScale 返回 1)。
  */
 export function drawTargetSkin(
   ctx: CanvasRenderingContext2D,
@@ -597,7 +598,7 @@ export function drawTargetSkin(
   ctx.translate(t.x, t.y);
   stepShadow(ctx, t.r);
   if (leavingSoon) {
-    if (!reduce) ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(nowS * 8));
+    ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(nowS * LEAVE_FLASH_HZ));
     const s = leaveBreathScale(nowS, reduce);
     ctx.scale(s, s);
   }
