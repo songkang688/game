@@ -15,9 +15,36 @@ import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../l
 import { AI_LABEL, AI_LEVELS, chooseCarAction, huntersFor, type AiLevel } from "./ai";
 import GUIDE from "./guide";
 import { CHAPTERS, buildArena, buildLevel, buildWave, type CarLevel } from "./levels";
+import { shade, withAlpha } from "../../art/kit/palette";
+import { drawParticles, spawnSparkles, stepParticles, type Particle } from "../../art/kit/sparkle";
+import {
+  BC_COLORS,
+  BC_GOLD,
+  BUMP_STAR_COUNT,
+  BUMP_STAR_LIFE_MS,
+  BUMP_STAR_LIFE_REDUCED_MS,
+  drawBarrel,
+  drawBulb,
+  drawBumperCar,
+  drawChargeTrack,
+  drawDizzyStars,
+  drawFloorGlow,
+  drawLampPost,
+  drawParachuteCar,
+  drawSoapSlick,
+  drawSweat,
+  drawTurntable,
+  flagSwing,
+  flowPhase,
+  lampOn,
+  padFlow,
+  parachuteProgress,
+  squashAmount,
+} from "./visual13";
 import {
   CHARGE_MIN_MS,
   CHARGE_MS,
+  SKID_MS,
   TEETER_MS,
   axisFromHeld,
   chargeRatio,
@@ -66,8 +93,8 @@ const CSS = `
 .bc-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
 /* 比分与剩余车数走这个芯片。规格第八节要求字号 ≥ 14px:这是比赛里唯一
    要用余光扫的数字,再小就得低头找,所以下面两个 @media 只收内边距,不动字号。 */
-.bc-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
-  box-shadow:0 2px 5px rgba(120,110,170,.18);}
+.bc-chip{background:#fff;border:1px solid rgba(120,110,170,.14);border-radius:999px;padding:4px 10px;font-size:14px;
+  font-weight:800;white-space:nowrap;box-shadow:0 2px 5px rgba(120,110,170,.18);}
 .bc-chip-p0{color:#a8306a;background:#ffeaf3;}
 .bc-chip-p1{color:#28568f;background:#e6f0ff;}
 .bc-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
@@ -570,21 +597,43 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     }
   }
 
+  /** 弹簧护栏:几何采样沿用 1.2(弧 / 边一模一样),画法升级成「立面 + 顶面 + 支柱」的双色栏板 */
   function drawSprings(inset: number): void {
     if (!g) return;
     const f = lv.field;
     g.lineCap = "round";
-    g.strokeStyle = "#f5a7c6";
-    g.lineWidth = 2.4;
+    const railH = Math.min(f.w, f.h) * 0.024;
+    // 两遍:先立面(往下错开半个栏板高),再顶面 —— 俯视图里就有了厚度
+    const passes: Array<{ dy: number; color: string; w: number }> = [
+      { dy: railH * 0.55, color: BC_COLORS.bcRailSide, w: railH * 1.2 },
+      { dy: 0, color: BC_COLORS.bcRail, w: railH },
+    ];
     if (f.shape === "round") {
       const c = fieldCenter(f);
       const rad = Math.max(2, fieldRadius(f) - inset);
+      for (const pass of passes) {
+        g.strokeStyle = pass.color;
+        g.lineWidth = pass.w;
+        for (const arc of f.arcs) {
+          g.beginPath();
+          const from = arc.from * Math.PI * 2;
+          const to = (arc.from <= arc.to ? arc.to : arc.to + 1) * Math.PI * 2;
+          g.arc(c.x, c.y + pass.dy, rad, from, to);
+          g.stroke();
+        }
+      }
+      // 支柱:沿弧隔一小段点一根
+      g.fillStyle = shade(BC_COLORS.bcRailSide, -14);
       for (const arc of f.arcs) {
-        g.beginPath();
-        const from = arc.from * Math.PI * 2;
-        const to = (arc.from <= arc.to ? arc.to : arc.to + 1) * Math.PI * 2;
-        g.arc(c.x, c.y, rad, from, to);
-        g.stroke();
+        const from = arc.from;
+        const to = arc.from <= arc.to ? arc.to : arc.to + 1;
+        const posts = Math.max(2, Math.round((to - from) * 10));
+        for (let i = 0; i <= posts; i++) {
+          const a = (from + ((to - from) * i) / posts) * Math.PI * 2;
+          g.beginPath();
+          g.arc(c.x + Math.cos(a) * rad, c.y + Math.sin(a) * rad, railH * 0.34, 0, Math.PI * 2);
+          g.fill();
+        }
       }
       return;
     }
@@ -592,20 +641,42 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const y0 = inset;
     const x1 = f.w - inset;
     const y1 = f.h - inset;
+    const lines: Record<string, [number, number, number, number]> = {
+      top: [x0, y0, x1, y0],
+      bottom: [x0, y1, x1, y1],
+      left: [x0, y0, x0, y1],
+      right: [x1, y0, x1, y1],
+    };
+    for (const pass of passes) {
+      g.strokeStyle = pass.color;
+      g.lineWidth = pass.w;
+      for (const edge of f.springs) {
+        const [ax, ay, bx, by] = lines[edge];
+        g.beginPath();
+        g.moveTo(ax, ay + pass.dy);
+        g.lineTo(bx, by + pass.dy);
+        g.stroke();
+      }
+    }
+    g.fillStyle = shade(BC_COLORS.bcRailSide, -14);
     for (const edge of f.springs) {
-      g.beginPath();
-      if (edge === "top") g.moveTo(x0, y0), g.lineTo(x1, y0);
-      else if (edge === "bottom") g.moveTo(x0, y1), g.lineTo(x1, y1);
-      else if (edge === "left") g.moveTo(x0, y0), g.lineTo(x0, y1);
-      else g.moveTo(x1, y0), g.lineTo(x1, y1);
-      g.stroke();
+      const [ax, ay, bx, by] = lines[edge];
+      const len = hypot(bx - ax, by - ay);
+      const posts = Math.max(2, Math.round(len / 12));
+      for (let i = 0; i <= posts; i++) {
+        const t = i / posts;
+        g.beginPath();
+        g.arc(ax + (bx - ax) * t, ay + (by - ay) * t, railH * 0.34, 0, Math.PI * 2);
+        g.fill();
+      }
     }
   }
 
+  /** 悬崖引导虚线:跳段逻辑沿用 1.2,颜色换成冰断面同族的深一档(断面立面才是主讲) */
   function drawCliffs(inset: number): void {
     if (!g) return;
     const f = lv.field;
-    g.strokeStyle = "#c9bde0";
+    g.strokeStyle = withAlpha(shade(BC_COLORS.bcIceEdge, -30), 0.85);
     g.lineWidth = 1.1;
     g.setLineDash([2.2, 2.2]);
     if (f.shape === "round") {
@@ -637,13 +708,80 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     g.setLineDash([]);
   }
 
-  function emojiAt(text: string, x: number, y: number, size: number): void {
+  /** 融冰断面上的裂纹:只画在立面看得见的那一侧(下半圈 / 下边) */
+  function drawIceCracks(inset: number, slabH: number): void {
     if (!g) return;
-    g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji",system-ui,sans-serif`;
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(text, x, y);
+    const f = lv.field;
+    g.strokeStyle = withAlpha(shade(BC_COLORS.bcIceEdge, -22), 0.9);
+    g.lineWidth = 0.35;
+    g.lineCap = "round";
+    const crack = (x: number, y: number): void => {
+      if (!g) return;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x - slabH * 0.18, y + slabH * 0.5);
+      g.lineTo(x + slabH * 0.14, y + slabH * 0.95);
+      g.stroke();
+    };
+    if (f.shape === "round") {
+      const c = fieldCenter(f);
+      const rad = Math.max(2, fieldRadius(f) - inset);
+      for (let i = 0; i < 7; i++) {
+        const a = Math.PI * (0.12 + (i / 6) * 0.76);
+        crack(c.x + Math.cos(a) * rad, c.y + Math.sin(a) * rad);
+      }
+    } else {
+      const y = f.h - inset;
+      for (let i = 0; i < 7; i++) crack(inset + ((f.w - inset * 2) * (i + 0.5)) / 7, y);
+    }
   }
+
+  /** 四角灯柱 + 灯串:灯泡 900ms 交替亮(reduced 常亮),把「场馆」的氛围点出来 */
+  function drawLamps(): void {
+    if (!g) return;
+    const f = lv.field;
+    const s = Math.min(f.w, f.h) * 0.024;
+    const c = fieldCenter(f);
+    const rad = Math.min(f.w, f.h) / 2 - s * 1.3;
+    const t = world.time;
+    const posts: Array<{ x: number; y: number }> = [];
+    for (const k of [-3, -1, 1, 3]) {
+      const a = (k * Math.PI) / 4;
+      posts.push({ x: c.x + Math.cos(a) * rad * 1.16, y: c.y + Math.sin(a) * rad * 1.16 });
+    }
+    // 灯串:相邻灯柱之间一条微垂的线,挂 7 颗小灯泡
+    let bulbIdx = 0;
+    g.strokeStyle = withAlpha(BC_COLORS.bcBumper, 0.35);
+    g.lineWidth = s * 0.1;
+    for (let i = 0; i < posts.length; i++) {
+      const a = posts[i];
+      const b = posts[(i + 1) % posts.length];
+      const ax = a.x;
+      const ay = a.y - s * 2;
+      const bx = b.x;
+      const by = b.y - s * 2;
+      const sag = s * 1.1;
+      g.beginPath();
+      g.moveTo(ax, ay);
+      g.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + sag * 2, bx, by);
+      g.stroke();
+      for (let j = 1; j <= 7; j++) {
+        const k = j / 8;
+        // 二次贝塞尔在 k 处的点(和上面那条线同一条)
+        const qx = (1 - k) * (1 - k) * ax + 2 * (1 - k) * k * ((ax + bx) / 2) + k * k * bx;
+        const qy = (1 - k) * (1 - k) * ay + 2 * (1 - k) * k * ((ay + by) / 2 + sag * 2) + k * k * by;
+        drawBulb(g, qx, qy, s * 0.22, lampOn(bulbIdx++, t, !spinArt));
+      }
+    }
+    for (let i = 0; i < posts.length; i++) {
+      drawLampPost(g, posts[i].x, posts[i].y, s, lampOn(i, t, !spinArt));
+    }
+  }
+
+  // 星花 / 彩纸(纯视觉粒子,destroy 时清空)
+  let fx: Particle[] = [];
+  // 上一帧的车头朝向:算集电杆小旗的摆动量(只在渲染侧记账,不写回 Car)
+  const faceMemo = new Map<number, number>();
 
   function render(): void {
     if (!g) return;
@@ -651,19 +789,42 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const inset = world.inset;
     g.clearRect(0, 0, f.w, f.h);
 
-    // 场外的雾面底色 + 已经化掉的那一圈
-    g.fillStyle = "#efe8f6";
+    // ① 场外看台(深一档)+ 原始场地的冰面残影:化掉多少一眼看得见
+    g.fillStyle = shade(BC_COLORS.bcFloor, -26);
     g.fillRect(0, 0, f.w, f.h);
     traceField(0);
-    g.fillStyle = "#ffd9e7";
+    g.fillStyle = withAlpha(BC_COLORS.bcIceEdge, 0.2);
     g.fill();
 
-    // 当前还能站人的地面
+    // ② 融冰断面:当前地面往下错一小截的浅蓝立面 + 裂纹 ——「掉下去就出局」的空间关系
+    const slabH = Math.min(f.w, f.h) * 0.024;
+    g.save();
+    g.translate(0, slabH);
+    traceField(inset);
+    g.fillStyle = BC_COLORS.bcIceEdge;
+    g.fill();
+    g.restore();
+
+    // 当前还能站人的地面:地板 token 打底,章节色只做淡罩染(章节辨识不丢)
+    traceField(inset);
+    g.fillStyle = BC_COLORS.bcFloor;
+    g.fill();
+    g.save();
+    g.globalAlpha = 0.3;
     traceField(inset);
     g.fillStyle = CH_COLOR;
     g.fill();
+    g.restore();
+    // 地板反射斑两块(裁进地面里)
+    g.save();
+    traceField(inset);
+    g.clip();
+    drawFloorGlow(g, f.w * 0.36, f.h * 0.32, Math.min(f.w, f.h) * 0.3);
+    drawFloorGlow(g, f.w * 0.66, f.h * 0.64, Math.min(f.w, f.h) * 0.22);
+    g.restore();
+    drawIceCracks(inset, slabH);
 
-    // 加速带
+    // ③ 道具:加速带(流光箭头)
     for (const pad of world.pads) {
       g.save();
       g.translate(pad.x + pad.w / 2, pad.y + pad.h / 2);
@@ -682,119 +843,67 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         g.lineTo(cx - pad.w * 0.07, pad.h * 0.22);
         g.stroke();
       }
+      // 流光:一条亮斑顺着加速方向推进(reduced 冻结在起点)
+      const flow = padFlow(world.time, !spinArt);
+      const fw = pad.w * 0.16;
+      g.fillStyle = withAlpha("#FFFFFF", 0.35);
+      g.fillRect(-pad.w / 2 + flow * (pad.w - fw), -pad.h / 2, fw, pad.h);
       g.restore();
     }
 
-    // 油渍:一摊深色的油,踩上去就刹不住
-    for (const sl of world.slicks) {
-      g.save();
-      g.globalAlpha = 0.55;
-      g.fillStyle = "#b9a8d8";
-      g.beginPath();
-      g.arc(sl.x, sl.y, sl.r, 0, Math.PI * 2);
-      g.fill();
-      g.globalAlpha = 0.9;
-      g.strokeStyle = "#8b78b5";
-      g.lineWidth = 0.7;
-      g.stroke();
-      g.restore();
-      emojiAt("💧", sl.x, sl.y, sl.r * 0.7);
-    }
+    // 油渍 → 彩虹肥皂渍
+    for (const sl of world.slicks) drawSoapSlick(g, sl.x, sl.y, sl.r);
 
-    // 旋转盘:一圈箭头指出它往哪边转
+    // 旋转盘 → 唱片机转盘(reduced 下相位恒 0,静态)
     for (const sp of world.spinners) {
-      g.save();
-      g.fillStyle = "#cfe7ff";
-      g.beginPath();
-      g.arc(sp.x, sp.y, sp.r, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = "#7fa8d8";
-      g.lineWidth = 0.9;
-      g.stroke();
       const turn = spinArt ? (world.time / 1000) * sp.rate * Math.PI * 2 : 0;
-      for (let k = 0; k < 4; k++) {
-        const a = turn + (k / 4) * Math.PI * 2;
-        g.beginPath();
-        g.moveTo(sp.x + Math.cos(a) * sp.r * 0.35, sp.y + Math.sin(a) * sp.r * 0.35);
-        g.lineTo(sp.x + Math.cos(a) * sp.r * 0.86, sp.y + Math.sin(a) * sp.r * 0.86);
-        g.stroke();
-      }
-      g.restore();
+      drawTurntable(g, sp.x, sp.y, sp.r, turn);
     }
 
-    // 滚桶
-    for (const h of world.hazards) {
-      g.fillStyle = "#cfc3ae";
-      g.beginPath();
-      g.arc(h.x, h.y, h.r, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = "#a8977f";
-      g.lineWidth = 0.8;
-      g.beginPath();
-      g.arc(h.x, h.y, h.r * 0.62, 0, Math.PI * 2);
-      g.stroke();
-      emojiAt("🛢️", h.x, h.y, h.r * 1.15);
-    }
+    // 滚桶 → 木纹滚筒
+    for (const h of world.hazards) drawBarrel(g, h.x, h.y, h.r);
 
-    drawSprings(inset);
-    drawCliffs(inset);
-
-    // 车
+    // ④ 车:三层自绘 + 集电杆,squash / 蓄力流光只动绘制
     for (const car of world.cars) {
       if (car.gone) continue;
       if (car.out) {
-        // 等复活:在出生点画一个淡淡的影子,孩子知道它待会儿从哪儿回来
-        g.globalAlpha = 0.28;
-        emojiAt(car.emoji, car.homeX, car.homeY, car.r * 1.5);
-        g.globalAlpha = 1;
+        // 等复活:降落伞顺着既有复活倒计时飘回出生点(reduced 直接淡显)
+        drawParachuteCar(g, car.homeX, car.homeY, car.r, car.color, car.team, parachuteProgress(car.respawn), !spinArt);
         continue;
       }
       if (car.dashT > 0) {
-        g.globalAlpha = 0.35;
-        g.fillStyle = "#ffd166";
-        g.beginPath();
-        g.arc(car.x - Math.cos(car.face) * car.r, car.y - Math.sin(car.face) * car.r, car.r * 0.9, 0, Math.PI * 2);
-        g.fill();
+        // 冲刺残影:两枚沿车尾渐隐的拖影
+        for (const [k, a] of [
+          [1.0, 0.3],
+          [1.8, 0.16],
+        ] as Array<[number, number]>) {
+          g.globalAlpha = a;
+          g.fillStyle = BC_GOLD;
+          g.beginPath();
+          g.arc(car.x - Math.cos(car.face) * car.r * k, car.y - Math.sin(car.face) * car.r * k, car.r * (1 - k * 0.18), 0, Math.PI * 2);
+          g.fill();
+        }
         g.globalAlpha = 1;
       }
-      // 蓄力环:按住越久圈越满,对手一眼看得见「它在攒大的」,这就是躲避窗口
+      // 蓄力流光跑道:进度映射与 1.2 蓄力环逐点一致,对手照样一眼看见躲避窗口
       if (car.charge > 0) {
-        const ratio = chargeRatio(car.charge);
-        g.save();
-        g.strokeStyle = ratio >= 1 ? "#ff8a3d" : "#ffc663";
-        g.lineWidth = 1.1;
-        g.beginPath();
-        g.arc(car.x, car.y, car.r * 1.45, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
-        g.stroke();
-        g.restore();
+        drawChargeTrack(g, car.x, car.y, car.r, chargeRatio(car.charge), flowPhase(world.time, !spinArt), !spinArt);
       }
-      g.save();
-      g.translate(car.x, car.y);
-      // 撞击形变:挨撞那一小会儿沿着车头方向压扁 8%
-      if (spinArt && car.skid > 0) {
-        g.rotate(car.face);
-        g.scale(1 - 0.08, 1 + 0.08);
-        g.rotate(-car.face);
-      }
-      g.fillStyle = car.color;
-      g.beginPath();
-      g.arc(0, 0, car.r, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#ffffffcc";
-      g.beginPath();
-      g.arc(-car.r * 0.25, -car.r * 0.28, car.r * 0.34, 0, Math.PI * 2);
-      g.fill();
-      // 车头小箭头:一眼看出这台车正朝哪边
-      g.strokeStyle = "#ffffff";
-      g.lineWidth = 0.9;
-      g.beginPath();
-      g.moveTo(0, 0);
-      g.lineTo(Math.cos(car.face) * car.r * 1.35, Math.sin(car.face) * car.r * 1.35);
-      g.stroke();
-      g.restore();
-      emojiAt(car.emoji, car.x, car.y, car.r * 1.05);
+      const prevFace = faceMemo.get(car.id);
+      faceMemo.set(car.id, car.face);
+      drawBumperCar(g, {
+        x: car.x,
+        y: car.y,
+        r: car.r,
+        face: car.face,
+        color: car.color,
+        team: car.team,
+        charge: chargeRatio(car.charge),
+        squash: car.skid > 0 ? squashAmount(SKID_MS - car.skid, !spinArt) : 0,
+        swing: flagSwing(prevFace === undefined ? 0 : car.face - prevFace, !spinArt),
+      });
       if (car.teeter > 0) {
-        // 打转两秒:场边一圈倒计时,外加一个推车的小人
+        // 打转两秒:场边一圈倒计时(功能表达,reduced 保留)+ 汗珠
         const left = car.teeter / TEETER_MS;
         g.save();
         g.strokeStyle = "#ff7ba8";
@@ -803,11 +912,19 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         g.arc(car.x, car.y, car.r * 1.7, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2);
         g.stroke();
         g.restore();
-        emojiAt("🧹", car.x - car.r * 1.4, car.y - car.r * 1.4, car.r * 0.9);
+        drawSweat(g, car.x, car.y, car.r);
       } else if (car.spin > 0) {
-        emojiAt("💫", car.x + car.r, car.y - car.r, car.r * 0.8);
+        drawDizzyStars(g, car.x, car.y, car.r, world.time, !spinArt);
       }
     }
+
+    // ⑤ 星花 / 彩纸
+    drawParticles(g, fx);
+
+    // ⑥ 围栏与灯柱(压在车上面,车永远「在场馆里」)
+    drawSprings(inset);
+    drawCliffs(inset);
+    drawLamps();
   }
 
   // ---- HUD -------------------------------------------------------------------
@@ -890,10 +1007,25 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
 
   // ---- 事件 → 音效与提示 ------------------------------------------------------
   let lastBump = 0;
+  let lastStars = 0;
   let toast = "";
   let toastUntil = 0;
   /** 顿帧:重要的一撞之后停 3–5 帧,撞击才有分量 */
   let hitStop = 0;
+
+  /** 接触点星花:碰撞永远是「弹开 + 星花」,reduced 只出 1 帧 */
+  function bumpStars(x: number, y: number, tint: string): void {
+    fx = fx.concat(
+      spawnSparkles(x, y, {
+        count: BUMP_STAR_COUNT,
+        lifeMs: spinArt ? BUMP_STAR_LIFE_MS : BUMP_STAR_LIFE_REDUCED_MS,
+        speed: 22,
+        gravity: 46,
+        size: 1.5,
+        colors: [BC_GOLD, "#FFFFFF", tint],
+      })
+    );
+  }
 
   function consumeEvents(now: number): void {
     for (const e of world.events) {
@@ -902,6 +1034,12 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
           if (now - lastBump > 110) {
             opts.sfx("pop");
             lastBump = now;
+          }
+          if (e.impact >= 12 && now - lastStars > 110) {
+            const a = world.cars[e.who];
+            const b = world.cars[e.other];
+            if (a && b) bumpStars((a.x + b.x) / 2, (a.y + b.y) / 2, a.color);
+            lastStars = now;
           }
           if (spinArt && e.impact >= 26) hitStop = Math.max(hitStop, 3);
           break;
@@ -948,9 +1086,10 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         case "out": {
           const who = world.cars[e.who];
           const by = e.by >= 0 ? world.cars.find((c) => c.id === e.by) : undefined;
+          bumpStars(who.x, who.y, who.color);
           if (who.team === 0) {
             opts.sfx("oops");
-            toast = `${who.name}被顶出场地啦,转一圈就回来。`;
+            toast = `${who.name}被顶出场地啦,坐降落伞回来。`;
           } else {
             opts.sfx("coin");
             toast = by ? `${by.name}把${who.name}撞下去了!` : `${who.name}自己开下去了。`;
@@ -1053,10 +1192,12 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     }
     if (hitStop > 0) {
       hitStop--;
+      fx = stepParticles(fx, dt / 1000);
       render();
       return;
     }
     tick++;
+    fx = stepParticles(fx, dt / 1000);
     stepWorld(world, dt, intentsFor());
     consumeEvents(now);
     refreshHud();
@@ -1082,6 +1223,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       window.removeEventListener("pointerup", onGlobalUp);
       for (const s of sticks) s?.destroy();
       hitBtns.length = 0;
+      // 新加的纯视觉状态一并归零:星花粒子与小旗摆动记账
+      fx = [];
+      faceMemo.clear();
       clearVeil();
       wrap.remove();
     },
