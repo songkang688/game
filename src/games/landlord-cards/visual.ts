@@ -174,6 +174,55 @@ export function roleBadgeSvg(role: "landlord" | "farmer", size = 16): string {
   return `<svg class="ldv-strawhat" width="${size}" height="${size}" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10q0-6 5-6t5 6Z" fill="#EBC97E"/><rect x="4.4" y="9" width="11.2" height="1.8" rx=".9" fill="#C89B6C"/><ellipse cx="10" cy="12" rx="8.6" ry="2.4" fill="#F2D592"/></svg>`;
 }
 
+// ---------------------------------------------------------------------------
+// 三·补(窗口 7 R1 修复 A-2):AI 对手自绘头像,替掉裸 emoji 🐰🐼
+// ---------------------------------------------------------------------------
+
+/** 两位小牌灵的头像键:团团 = 长耳小兔,圆圆 = 圆耳熊猫(原创造型,不像任何官方形象) */
+export type BotFaceKind = "tuantuan" | "yuanyuan";
+
+/** 头像统一描边色(与 kit 图标 1.5px 描边同规格) */
+export const BOT_FACE_STROKE = "rgba(90,74,110,.4)";
+
+/**
+ * AI 头像 SVG(24×24 视窗),与朵朵 / 星星立绘同一套工序:
+ * 2 停线性渐变(左上亮)+ 1.5px 描边 + 左上高光小椭圆。
+ * 16px 灰度可分靠**耳形几何差**:团团双长耳(耳长 ≈ 脸径 0.7)/ 圆圆双圆耳 + 眼周深色椭圆。
+ */
+export function botFaceSvg(kind: BotFaceKind): string {
+  if (kind === "tuantuan") {
+    // 团团:暖白圆脸 + 双长耳(内耳粉),剪影上是「两根天线」
+    return `<svg class="ldv-botsvg ldv-bot-tuantuan" viewBox="0 0 24 24" aria-hidden="true">
+  <defs><linearGradient id="ldvg-tt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFDF8"/><stop offset="1" stop-color="#F3E7DA"/></linearGradient></defs>
+  <ellipse cx="8.6" cy="7.2" rx="2.5" ry="5.6" transform="rotate(-9 8.6 7.2)" fill="url(#ldvg-tt)" stroke="${BOT_FACE_STROKE}" stroke-width="1.5"/>
+  <ellipse cx="15.4" cy="7.2" rx="2.5" ry="5.6" transform="rotate(9 15.4 7.2)" fill="url(#ldvg-tt)" stroke="${BOT_FACE_STROKE}" stroke-width="1.5"/>
+  <ellipse cx="8.7" cy="7.6" rx="1.1" ry="3.4" transform="rotate(-9 8.7 7.6)" fill="#F7C6D4"/>
+  <ellipse cx="15.3" cy="7.6" rx="1.1" ry="3.4" transform="rotate(9 15.3 7.6)" fill="#F7C6D4"/>
+  <circle cx="12" cy="15.4" r="7.1" fill="url(#ldvg-tt)" stroke="${BOT_FACE_STROKE}" stroke-width="1.5"/>
+  <ellipse cx="9.4" cy="12.6" rx="2" ry="1.3" fill="#FFFFFF" opacity=".55"/>
+  <circle cx="9.5" cy="15.2" r=".95" fill="#4A3B55"/>
+  <circle cx="14.5" cy="15.2" r=".95" fill="#4A3B55"/>
+  <circle cx="7.7" cy="17.3" r="1.1" fill="#FFC1CC" opacity=".85"/>
+  <circle cx="16.3" cy="17.3" r="1.1" fill="#FFC1CC" opacity=".85"/>
+  <path d="M11 17.7q1 1 2 0" stroke="#C2557F" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+</svg>`;
+  }
+  // 圆圆:白脸 + 双圆小耳 + 眼周深色椭圆两块——耳小且低、深色块认脸,与团团的长耳剪影一眼分开
+  return `<svg class="ldv-botsvg ldv-bot-yuanyuan" viewBox="0 0 24 24" aria-hidden="true">
+  <defs><linearGradient id="ldvg-yy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#ECEAF2"/></linearGradient></defs>
+  <circle cx="6" cy="7.8" r="3" fill="#4A4A55" stroke="${BOT_FACE_STROKE}" stroke-width="1.5"/>
+  <circle cx="18" cy="7.8" r="3" fill="#4A4A55" stroke="${BOT_FACE_STROKE}" stroke-width="1.5"/>
+  <circle cx="12" cy="14.2" r="8" fill="url(#ldvg-yy)" stroke="${BOT_FACE_STROKE}" stroke-width="1.5"/>
+  <ellipse cx="8.6" cy="9.6" rx="2.1" ry="1.4" fill="#FFFFFF" opacity=".5"/>
+  <ellipse cx="9" cy="13.6" rx="2.2" ry="2.9" transform="rotate(-18 9 13.6)" fill="#4A4A55"/>
+  <ellipse cx="15" cy="13.6" rx="2.2" ry="2.9" transform="rotate(18 15 13.6)" fill="#4A4A55"/>
+  <circle cx="9.4" cy="13.4" r=".8" fill="#FFFFFF"/>
+  <circle cx="14.6" cy="13.4" r=".8" fill="#FFFFFF"/>
+  <ellipse cx="12" cy="16.6" rx="1.1" ry=".8" fill="#4A4A55"/>
+  <path d="M11 18.4q1 .9 2 0" stroke="#6E6E7C" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+</svg>`;
+}
+
 /**
  * 炸弹 / 王炸的桌面反馈计划:
  * 正常档震一下(±2px、160ms)+ 星屑环;reduced 不震,只出星屑环静态。
@@ -220,6 +269,9 @@ export const LDV_CSS = `
 .ld-mehead .ld-foe-name{color:#fff;}
 .ld-mehead .ld-count{color:#e8e2f4;}
 .ldv-avatar{position:relative;display:inline-flex;}
+/* AI 自绘头像:SVG 跟着 .ld-face 圆框(38/28/24/20px)等比缩放,不参与热区 */
+.ldv-botface{overflow:hidden;}
+.ldv-botface .ldv-botsvg{width:100%;height:100%;display:block;pointer-events:none;}
 .ldv-badge{position:absolute;right:-7px;top:-9px;line-height:0;pointer-events:none;
   filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));}
 /* 牌面:内圈双细线框(主题色随牌色,间距 2px) */

@@ -83,11 +83,13 @@ import {
   LD_LAYERS,
   LD_TIMING,
   bombFxPlan,
+  botFaceSvg,
   canLiftIds,
   cardFaceArtHTML,
   curtainDecorHtml,
   roleBadgeSvg,
   starRingHtml,
+  type BotFaceKind,
 } from "./visual";
 
 // ---------------------------------------------------------------------------
@@ -97,7 +99,7 @@ import {
 interface SeatCfg {
   kind: "human" | "ai";
   name: string;
-  /** 头像:人类用 PNG,小牌灵用表情 */
+  /** 头像:人类用 PNG 路径,小牌灵用自绘头像键(BotFaceKind,渲染走 botFaceSvg) */
   avatar: string;
   isImg: boolean;
   level: AiLevel;
@@ -105,10 +107,10 @@ interface SeatCfg {
   keys: 0 | 1;
 }
 
-/** 两位电脑对手:原创角色,不用任何现成形象 */
-const BOT_FACES = [
-  { name: "团团", avatar: "🐰" },
-  { name: "圆圆", avatar: "🐼" },
+/** 两位电脑对手:原创角色,不用任何现成形象;头像由 visual.ts botFaceSvg 自绘 */
+const BOT_FACES: readonly { name: string; face: BotFaceKind }[] = [
+  { name: "团团", face: "tuantuan" },
+  { name: "圆圆", face: "yuanyuan" },
 ];
 
 function humanSeat(name: "朵朵" | "星星", keys: 0 | 1): SeatCfg {
@@ -124,7 +126,7 @@ function humanSeat(name: "朵朵" | "星星", keys: 0 | 1): SeatCfg {
 
 function botSeat(i: number, level: AiLevel): SeatCfg {
   const f = BOT_FACES[i % BOT_FACES.length];
-  return { kind: "ai", name: f.name, avatar: f.avatar, isImg: false, level, keys: 0 };
+  return { kind: "ai", name: f.name, avatar: f.face, isImg: false, level, keys: 0 };
 }
 
 /** 一个人类 + 两个小牌灵:人类坐 playerSeat */
@@ -661,7 +663,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     const s = opts.seats[seat];
     const img = s.isImg
       ? `<img class="ld-face" src="${s.avatar}" alt="${s.name}">`
-      : `<span class="ld-face">${s.avatar}</span>`;
+      : `<span class="ld-face ldv-botface" role="img" aria-label="${s.name}">${botFaceSvg(s.avatar as BotFaceKind)}</span>`;
     const badge =
       phase !== "bid" && state
         ? `<span class="ldv-badge">${roleBadgeSvg(state.landlord === seat ? "landlord" : "farmer")}</span>`
