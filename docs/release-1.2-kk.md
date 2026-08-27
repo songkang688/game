@@ -50,15 +50,21 @@
 
 | 步骤 | 命令 | 结果 |
 | --- | --- | --- |
-| 单元测试 | `npm test -- --testTimeout=30000` | ✅ **673 个测试文件 / 14803 条用例全部通过**，耗时 177.10s |
-| 类型检查 + 构建 | `npm run build`（= `tsc --noEmit && vite build`） | ✅ 通过，`built in 635ms`，无类型错误 |
-| PWA 产物 | 同上（`vite-plugin-pwa` generateSW） | ✅ 预缓存 **188 项 / 约 5088 KiB**，生成 `dist/sw.js`、`dist/workbox-*.js` |
-| 产物体积 | `du -sh dist` | 5.4 MB |
+| 单元测试 | `npm test -- --testTimeout=30000` | ✅ **674 个测试文件 / 14817 条用例全部通过**，耗时 180.69s |
+| 类型检查 + 构建 | `npm run build`（= `tsc --noEmit && vite build`） | ✅ 通过，`built in 629ms`，无类型错误 |
+| PWA 产物 | 同上（`vite-plugin-pwa` generateSW） | ✅ 预缓存 **188 项 / 约 5203 KiB**，生成 `dist/sw.js`、`dist/workbox-*.js` |
+| 产物体积 | `du -sh dist` | 5.5 MB |
 
-- 构建基线提交：`69d6c31`（`origin/game-1.2` 当时的 HEAD，本分支从这里切出）。
+- **验证的提交：`f91d08c`**（三个档 A / B / C 全部合到一起之后的分支尖端）。
+  分叉起点是 `69d6c31`，即 `origin/game-1.2` 当时的 HEAD。
 - 构建产物落在 `dist/`：`index.html`、`assets/`、`icons/`、`manifest.webmanifest`、
   `sw.js`、`workbox-<hash>.js`。`dist/` 不进 git。
 - 生成的 `dist/manifest.webmanifest` 已确认写着 `"name":"鸭梨康康"`。
+- 中途有一次红：档 B 改完游戏标题后，`src/ui/homeFilters.test.ts` 里写死的拼音首字母
+  期望值还停在 `朵朵星星象棋` / `朵星地产`，3 条用例失败；档 B 随即用 `f91d08c` 补齐，
+  上面这次全绿的记录就是在那之后跑的。
+- 清单一致性另跑了一遍对拍：README 的 76 行游戏清单与 `src/games/*/meta.ts` 的 `title`
+  逐条对上，不多不少。
 - `npm test` 直接跑（不带 `--testTimeout`）在慢机器上可能因
   `src/games/bomb-buddies/ai.test.ts` 的长时模拟用例假失败，CI 一律带
   `--testTimeout=30000`，见 [`docs/RELEASE.md`](./RELEASE.md)。
@@ -76,8 +82,8 @@
 git fetch origin 1.2-kk
 git checkout 1.2-kk
 npm install
-npm test -- --testTimeout=30000
-npm run build          # 先出 dist/,下面各端都基于它
+npm test -- --testTimeout=30000   # 674 个测试文件 / 14817 条用例
+npm run build                     # 先出 dist/,下面各端都基于它
 ```
 
 ### 📱 PWA（手机上安装，最省事）

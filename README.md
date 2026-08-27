@@ -202,7 +202,7 @@ npm run preview    # 本地预览构建产物
 git fetch origin 1.2-kk
 git checkout 1.2-kk
 npm install
-npm test -- --testTimeout=30000   # 673 个测试文件 / 14803 条用例
+npm test -- --testTimeout=30000   # 674 个测试文件 / 14817 条用例
 npm run build                     # tsc --noEmit + vite build,产物在 dist/
 ```
 
