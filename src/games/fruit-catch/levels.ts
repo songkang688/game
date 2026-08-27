@@ -41,6 +41,33 @@ export interface CatchLevel {
   freezeChance?: number;
   /** 1.2 磁铁果概率（接住 3 秒里篮口变大），前 99 关不带 */
   magnetChance?: number;
+  /**
+   * 1.2 手速门槛（0..1）：这一关的链会用掉多少「篮子够得着的范围」。
+   *
+   * 不填就是用满——那样每一关都顶着篮子的极速排链，第 1 关和第 188 关
+   * 要的手速一模一样，「跑多快」这一维等于没参与难度。填上之后，
+   * 章内一路加宽、换章再松一口气，孩子才感觉得到自己在变快。
+   */
+  reach?: number;
+}
+
+/**
+ * 第 ci 章第 t 关用掉多少「够得着的范围」（`undefined` = 用满）。
+ *
+ * 每一章都从「跑一半多一点就够」起步，章内一路加宽到接近满格；
+ * 章号越大起点越高，所以整体是一段一段往上抬的缓坡，而不是一条直线。
+ *
+ * 前 99 关（1.0 的六种天气）是冻结的，一个参数都不加——那 99 关的手感
+ * 从 1.0 起就没变过，`levels188.test.ts` 有指纹守着。手速曲线只铺在
+ * 1.1 之后新加的四条果道上。
+ */
+export function reachOf(ci: number, t: number, size: number): number | undefined {
+  if (ci < LEGACY_CHAPTER_SIZES.length) return undefined;
+  const step = ci - LEGACY_CHAPTER_SIZES.length;
+  const floor = Math.min(0.78, 0.52 + step * 0.07);
+  const span = 0.98 - floor;
+  const k = size <= 1 ? 1 : Math.max(0, Math.min(1, t / (size - 1)));
+  return Math.round((floor + span * k) * 100) / 100;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -152,7 +179,10 @@ function buildLevel(ci: number, t: number): CatchLevel {
 export const LEVELS: CatchLevel[] = (() => {
   const out: CatchLevel[] = [];
   CHAPTERS.forEach((ch, ci) => {
-    for (let t = 0; t < ch.size; t++) out.push(buildLevel(ci, t));
+    for (let t = 0; t < ch.size; t++) {
+      const reach = reachOf(ci, t, ch.size);
+      out.push(reach === undefined ? buildLevel(ci, t) : { ...buildLevel(ci, t), reach });
+    }
   });
   return out;
 })();

@@ -1816,7 +1816,9 @@ export function mount(api: GameApi): { destroy: () => void } {
             button(on ? "下阵" : "上阵", `bvp-btn bvp-btn-sm${on ? " bvp-btn-on" : ""}`, () => {
               const next = toggleLoadout(save, u.id);
               if (next === save || next.loadout.length === save.loadout.length) {
-                note = `上阵位置只有 ${LOADOUT_SLOTS} 个，先把一个换下来。`;
+                note = on
+                  ? "身上至少留一招呀，空着手上擂台可打不过星星。"
+                  : `上阵位置只有 ${LOADOUT_SLOTS} 个，先把一个换下来。`;
                 sfx("oops");
                 draw();
                 return;

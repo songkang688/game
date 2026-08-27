@@ -48,6 +48,8 @@ export const MAX_MISS = 3;
 export const MIN_FRUIT_D = 32;
 /** 可达性余量：只用篮子 85% 的极限速度 */
 export const REACH_MARGIN = 0.15;
+/** 链最窄也要用掉这么多「够得着的范围」——再窄水果就全挤在一条竖线上了 */
+export const MIN_REACH_USE = 0.3;
 /** 捣蛋物 / 辣椒离「预测中的篮子」至少这么远 */
 export const HAZARD_CLEAR = 80;
 /** 同时落地的奖励果离主果至少这么远（远到明摆着二选一） */
@@ -243,6 +245,15 @@ export interface PlanOptions {
   twinChance?: number;
   /** 第一颗落地的时刻（传送带关要多留一个滑行时长） */
   firstLand?: number;
+  /**
+   * 这一关真正用掉多少「够得着的范围」（0..1，不填就是用满）。
+   *
+   * 生成器排链时，下一颗的落点是在「篮子跑得到的那一段」里随机挑的。
+   * 用满这一段，就等于每一关都顶着篮子的极速排——第 1 关和第 188 关
+   * 要的手速一样快。乘上一个小于 1 的系数，链就收窄，
+   * 「这一关最少要跑多快」这一维才真的参与难度曲线。
+   */
+  reachUse?: number;
 }
 
 interface Slot {
@@ -335,6 +346,7 @@ function layoutPlan(slots: readonly Slot[], rand: () => number, opts: PlanOption
   const maxX = opts.maxX ?? BASKET_MAX_X;
   const startX = clampBasket(opts.startX ?? W / 2);
   const twinChance = opts.twinChance ?? TWIN_CHANCE;
+  const use = Math.max(MIN_REACH_USE, Math.min(1, opts.reachUse ?? 1));
 
   // 好果连成一条「篮子跑得过来」的链
   const xs = new Array<number>(slots.length).fill(0);
@@ -343,7 +355,7 @@ function layoutPlan(slots: readonly Slot[], rand: () => number, opts: PlanOption
   let prevT = 0;
   for (let i = 0; i < slots.length; i++) {
     if (isHazard(slots[i].kind)) continue;
-    const span = reachSpan(slots[i].landAt - prevT, speed);
+    const span = reachSpan(slots[i].landAt - prevT, speed) * use;
     const lo = Math.max(minX, prevX - span);
     const hi = Math.min(maxX, prevX + span);
     const x = lo + rand() * Math.max(0, hi - lo);
@@ -383,7 +395,7 @@ export function planDrops(cfg: CatchLevel, seed: number, opts: PlanOptions = {})
     const kind = pickKind(cfg, rand());
     slots.push({ landAt: land, kind, vy: (90 + rand() * 60 + i * 3) * cfg.speed * FRUITS[kind].fallMul });
   }
-  return layoutPlan(slots, rand, opts);
+  return layoutPlan(slots, rand, { reachUse: cfg.reach, ...opts });
 }
 
 /**

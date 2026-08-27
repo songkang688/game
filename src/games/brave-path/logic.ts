@@ -411,10 +411,25 @@ export function learnSkill(save: HeroSave, skillId: string): LearnResult {
   return { ok: true, save: { ...save, skillPoints: save.skillPoints - cost, ranks, loadout } };
 }
 
-/** 上阵 / 下阵一个技能（最多 4 个），返回新存档 */
+/**
+ * 学会一招之后，身上至少留一招。
+ *
+ * 技能栏本来能一个一个卸干净。卸干净之后星星那边照样带三个随等级涨阶的技能，
+ * 朵朵只剩平砍——20 级的擂台胜率从 20/20 掉到 4/20，而孩子从界面上看不出
+ * 是自己把招式卸光了，只会觉得「这游戏突然打不赢了」。
+ */
+export const MIN_LOADOUT = 1;
+
+/** 现在还能不能再卸一招下来（身上只剩一招时不行） */
+export function canUnequip(save: HeroSave): boolean {
+  return save.loadout.length > MIN_LOADOUT;
+}
+
+/** 上阵 / 下阵一个技能（最多 4 个，至少留 1 个），返回新存档 */
 export function toggleLoadout(save: HeroSave, skillId: string): HeroSave {
   if (!(save.ranks[skillId] > 0)) return save;
   if (save.loadout.includes(skillId)) {
+    if (!canUnequip(save)) return save;
     return { ...save, loadout: save.loadout.filter((id) => id !== skillId) };
   }
   if (save.loadout.length >= LOADOUT_SLOTS) return save;

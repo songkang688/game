@@ -83,25 +83,48 @@ describe("接住小水果 · R2 · 难度曲线", () => {
   });
 
   /**
-   * W4A-09（轻微）· 手速门槛全程一条直线。
+   * W4A-09（轻微）· 手速门槛原本全程是一条直线，本轮学习优化员铺出了坡。
    *
    * `needSpeed` 是「照着链走一趟，篮子最少要跑多快才一颗都不漏」。
-   * 生成器排链时按 BASKET_SPEED 加 15% 余量顶格排，所以不管第几关，
-   * 这个门槛都稳稳压在 210~230 像素/秒——第 1 关和第 188 关要的手速一模一样。
-   * 变难的只有「要接几颗」和「间隔多密」，「跑多快」这一维从头到尾没参与难度。
-   * 记录在案，交给学习优化员：第 1 章该把门槛调低，让四岁的孩子先赢下来。
+   * 原先生成器排链一律顶着篮子极速排，所以第 1 关和第 188 关都稳稳压在
+   * 210~230 像素/秒——「跑多快」这一维根本没参与难度。
+   *
+   * 改法是给关卡加一个 `reach`（这一关用掉多少「够得着的范围」），
+   * 章内一路加宽、换章再松一口气。前 99 关是 1.0 冻结的，一个参数都没动
+   * （`levels188.test.ts` 有指纹守着），所以坡只铺在 1.1 之后的四条果道上。
    */
-  it("W4A-09 特征化：第 1 关和第 188 关的手速门槛一样高", () => {
+  it("W4A-09 已修：新四章的手速门槛从四成一路爬到八成", () => {
     const need = (lv: number) => simulateLevel(LEVELS[lv - 1], { seed: 4200 + lv }).needSpeed;
-    const all = [1, 10, 25, 40, 60, 80, 99, 110, 130, 150, 170, 188].map(need);
-    const lo = Math.min(...all);
-    const hi = Math.max(...all);
-    // 全程压在同一档：最高最低差不到 15 像素/秒
-    expect(hi - lo).toBeLessThan(15);
-    // 而且这一档就顶在篮子极速上（260 像素/秒）：第 1 关就要跑到八成速
-    expect(lo / BASKET_SPEED).toBeGreaterThan(0.8);
-    // 第 1 关不比第 188 关轻松
-    expect(need(1)).toBeGreaterThan(need(188) - 15);
+    // 每一章开头都松：只要四到六成的篮子极速
+    for (const lv of [100, 123, 145, 167]) {
+      expect(need(lv) / BASKET_SPEED, `第 ${lv} 关`).toBeLessThan(0.66);
+    }
+    // 每一章结尾都紧：逼近八成
+    for (const lv of [122, 144, 166, 188]) {
+      expect(need(lv) / BASKET_SPEED, `第 ${lv} 关`).toBeGreaterThan(0.75);
+    }
+    // 章内是往上爬的
+    expect(need(122)).toBeGreaterThan(need(100));
+    expect(need(188)).toBeGreaterThan(need(167));
+    // 换章一定松一口气：新章开头不比上一章结尾更紧
+    expect(need(123)).toBeLessThan(need(122));
+    expect(need(145)).toBeLessThan(need(144));
+    expect(need(167)).toBeLessThan(need(166));
+  });
+
+  it("W4A-09 已修：一章比一章的起点更高，坡是往上抬的", () => {
+    const reach = (lv: number) => LEVELS[lv - 1].reach!;
+    const starts = [100, 123, 145, 167].map(reach);
+    for (let i = 1; i < starts.length; i++) expect(starts[i]).toBeGreaterThan(starts[i - 1]);
+    // 每一章都收在同一个顶格，不会有哪一章偷偷更凶
+    for (const lv of [122, 144, 166, 188]) expect(reach(lv)).toBe(0.98);
+  });
+
+  it("前 99 关是 1.0 冻结的：一个 reach 都没加，门槛还是原来那条直线", () => {
+    const need = (lv: number) => simulateLevel(LEVELS[lv - 1], { seed: 4200 + lv }).needSpeed;
+    for (let lv = 1; lv <= 99; lv++) expect(LEVELS[lv - 1].reach, `第 ${lv} 关`).toBeUndefined();
+    const legacy = [1, 25, 50, 75, 99].map(need);
+    expect(Math.max(...legacy) - Math.min(...legacy)).toBeLessThan(15);
   });
 
   it("手慢一点还有余量：只跑六成速也能把抽查的关都接下来", () => {

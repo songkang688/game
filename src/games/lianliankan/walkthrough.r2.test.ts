@@ -26,6 +26,7 @@ import {
   endlessPair,
   endlessSeconds,
   endlessSpec,
+  endlessStepChanges,
   endlessStepWord,
   endlessTimeUp,
   fitsPhone,
@@ -162,28 +163,35 @@ describe("连连看 · R2 · 竞态：动画没放完就乱点", () => {
 });
 
 describe("连连看 · R2 · W4A-08 无尽第 13 盘四个旋钮一起拧", () => {
-  it("第 13 盘一次改了四样，而屏幕上只报得出一样", () => {
+  it("W4A-08 已修：第 13 盘一次改了四样，四样都报出来了", () => {
     const knobs = knobsTurned(13);
     expect(knobs).toEqual(["图案种类", "拐弯上限", "收拢方向", "限时"]);
     const word = endlessStepWord(13);
     expect(word).toContain("拐一次弯");
-    // 另外三样一个字都没提
-    expect(word).not.toContain("图案");
-    expect(word).not.toContain("收拢");
-    expect(word).not.toContain("秒");
+    expect(word).toContain("图案");
+    expect(word).toContain("收拢");
+    expect(word).toContain("秒");
   });
 
-  it("同一盘拧三个以上旋钮的一共三盘：第 7 / 10 / 13，而每盘只报得出一条", () => {
+  it("W4A-08 已修：拧三个以上旋钮的第 7 / 10 / 13 盘，一条都不落下", () => {
     const heavy: number[] = [];
     for (let r = 2; r <= 60; r++) if (knobsTurned(r).length >= 3) heavy.push(r);
     expect(heavy).toEqual([7, 10, 13]);
     for (const r of heavy) {
+      expect(endlessStepChanges(r).length, `第 ${r} 盘`).toBe(knobsTurned(r).length);
       const word = endlessStepWord(r);
-      // 一句话只能讲一件事，另外两三件孩子只能自己撞出来
       const mentions = ["图案", "收拢", "拐一次弯", "秒"].filter((k) => word.includes(k));
-      expect(mentions.length, `第 ${r} 盘的提示语「${word}」`).toBeLessThanOrEqual(1);
-      expect(knobsTurned(r).length).toBeGreaterThan(mentions.length);
+      expect(mentions.length, `第 ${r} 盘的提示语「${word}」`).toBe(knobsTurned(r).length);
     }
+  });
+
+  it("只拧一个旋钮的盘还是只说一句，没变的盘就说「接着连」", () => {
+    for (let r = 2; r <= 60; r++) {
+      const n = knobsTurned(r).length;
+      expect(endlessStepChanges(r).length, `第 ${r} 盘`).toBe(n);
+      if (n === 0) expect(endlessStepWord(r)).toContain("接着连");
+    }
+    expect(endlessStepWord(1)).toContain("热热身");
   });
 
   it("从第 13 盘起棋盘频繁走死，要靠自动重排救场", () => {

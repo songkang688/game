@@ -572,6 +572,29 @@ export function rollPower(roll: number): PowerKind {
   return "wide";
 }
 
+/**
+ * 一颗胶囊该画成什么样。
+ *
+ * 原来好道具和「别接的那个」只差一点点粉（`#FFFFFF` 对 `#FFE1E9`），
+ * 两者都是实心圆、都印一个表情。色弱的孩子分不出这点色差，
+ * 四岁还不识字的孩子更是只能靠颜色猜——猜错就白丢五秒板宽。
+ * 改成「好的是实心、别接的是空心圈」之后，形状本身就把话说清楚了，
+ * 颜色只是锦上添花。
+ */
+export interface CapsuleLook {
+  fill: string;
+  /** 空心圈：只描边、中间留空。形状本身就是「别接我」 */
+  hollow: boolean;
+  emoji: string;
+}
+
+export function capsuleLook(kind: PowerKind): CapsuleLook {
+  const info = POWERS[kind];
+  return info.good
+    ? { fill: "#FFFFFF", hollow: false, emoji: info.emoji }
+    : { fill: "#FFE1E9", hollow: true, emoji: info.emoji };
+}
+
 /** 掉落胶囊的下落速度（像素/秒） */
 export const CAPSULE_SPEED = 130;
 /** 闯关里打碎一块普通砖掉道具的概率（道具砖是必掉） */

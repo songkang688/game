@@ -78,6 +78,11 @@ interface Balloon {
   push: number;
   /** 远层气球（小一点、分高一点） */
   far: boolean;
+  /**
+   * 出场时是第几个（气球节专用）。上升速度按它算，不按「现在已经出到第几个」算：
+   * 后者会让天上所有气球在每次出新球时整体往上跳一截。
+   */
+  wave: number;
   gone: boolean;
 }
 
@@ -532,6 +537,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         taps: 0,
         push: 0,
         far: false,
+        wave: 0,
         gone: false
       };
       paintBalloon(b, cfg.mode, Math.random);
@@ -845,6 +851,7 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
 
   function spawnFromPlan(): void {
     while (planAt < plan.length && plan[planAt].at <= clock) {
+      const wave = planAt;
       const p = plan[planAt++];
       const kind = p.kind === "gift" && !canSpawnGift(balloons.filter((b) => !b.gone && b.kind === "gift").length)
         ? "normal"
@@ -867,6 +874,7 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
           taps: 0,
           push: 0,
           far: p.far,
+          wave,
           gone: false
         };
         paintBalloon(b, "free", Math.random);
@@ -902,8 +910,9 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
         twinOf.delete(b.id);
         continue;
       }
-      const wave = Math.max(0, planAt - 1);
-      const rise = festRiseSpeed(wave) * (b.far ? 0.78 : 1) * (b.kind === "gift" ? GIFT_RISE_MUL : 1);
+      // 用气球自己的出场波次，不用「现在已经出到第几个」：
+      // 后者一变，floatAt 就会拿新速度乘老气球的全部年龄，天上整片球会往上跳一截。
+      const rise = festRiseSpeed(b.wave) * (b.far ? 0.78 : 1) * (b.kind === "gift" ? GIFT_RISE_MUL : 1);
       const pos = floatAt({ x0: b.x0, y0: b.y0 + b.push, born: b.born, phase: b.phase }, { riseSpeed: rise }, clock);
       b.x = pos.x;
       b.y = pos.y;

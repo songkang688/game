@@ -22,7 +22,7 @@ import {
   applyBlessing, buildHero, defaultSave, endlessCoins, endlessExp, endlessEndText, endlessFoeSpec,
   endlessStarReward, endlessTier, isBlessingFloor, isEndlessGuardian, rollBlessings, runArena,
   arenaScale, gearFactor, heroStats, powerScore, learnSkill, toggleLoadout, SKILL_UNLOCKS,
-  LOADOUT_SLOTS, BLESSING_EVERY, BLESSING_RESCUE_FRAC, ENDLESS_GROWTH, type HeroSave
+  LOADOUT_SLOTS, MIN_LOADOUT, canUnequip, BLESSING_EVERY, BLESSING_RESCUE_FRAC, ENDLESS_GROWTH, type HeroSave
 } from "./logic";
 import { REST_EVERY, fullRoute, ghostPace, ghostTotalMs, isRestFloor, judgeRace, roadMaze, rollSupplies, validateMaze } from "./maze";
 
@@ -408,28 +408,38 @@ describe("勇者小路 · R2 · 擂台与竞速玩到结算", () => {
   });
 
   /**
-   * W4A-16（轻微）· 技能栏可以清空，清空之后擂台几乎必输。
+   * W4A-16（轻微）· 技能栏原本能卸空，卸空之后擂台几乎必输；本轮已经堵住。
    *
-   * `toggleLoadout` 不设下限，四个技能能一个一个卸干净。
-   * 卸干净之后 20 级的朵朵在擂台上从 20/20 掉到 4/20——
-   * 星星那边永远带三个随等级涨阶的技能，光靠平砍追不上。
-   * 收场话里确实提了「调调上阵技能」，但界面不拦、也不预警。
-   * 记录在案，交给学习优化员：至少留一个技能，或者出发前提醒一句。
+   * `toggleLoadout` 原来不设下限，四个技能能一个一个卸干净。卸干净之后
+   * 20 级的朵朵在擂台上从 20/20 掉到 4/20——星星那边永远带三个随等级涨阶
+   * 的技能，光靠平砍追不上。现在最后一招卸不下来了，界面也换了一句专门的话。
    */
-  it("W4A-16 特征化：技能栏能一个不剩，空栏出战胜率掉到两成上下", () => {
+  it("W4A-16 已修：卸到只剩一招就卸不动了", () => {
     const save = grownSave(20);
+    expect(LOADOUT_SLOTS).toBe(4);
+    expect(save.loadout.length).toBe(LOADOUT_SLOTS);
     let bare = save;
     for (const id of save.loadout.slice()) bare = toggleLoadout(bare, id);
-    expect(bare.loadout).toEqual([]);
-    expect(LOADOUT_SLOTS).toBe(4);
-    let full = 0;
+    expect(bare.loadout.length).toBe(MIN_LOADOUT);
+    expect(canUnequip(bare)).toBe(false);
+    // 再点最后那一招，存档原样返回（界面据此换提示语）
+    expect(toggleLoadout(bare, bare.loadout[0])).toBe(bare);
+    // 还剩两招时照样卸得动
+    expect(canUnequip(save)).toBe(true);
+  });
+
+  it("W4A-16 已修：身上留着一招，擂台就还打得赢——这正是那条下限守住的东西", () => {
+    const save = grownSave(20);
+    let one = save;
+    for (const id of save.loadout.slice()) one = toggleLoadout(one, id);
+    expect(one.loadout.length).toBe(1);
+    let win = 0;
+    for (let s = 0; s < 20; s++) if (runArena(one, s * 131 + 7).win) win++;
+    expect(win).toBeGreaterThanOrEqual(10);
+    // 而真把技能栏搬空（只能靠手改存档做到）就是另一回事了
     let empty = 0;
-    for (let s = 0; s < 20; s++) {
-      if (runArena(save, s * 131 + 7).win) full++;
-      if (runArena(bare, s * 131 + 7).win) empty++;
-    }
-    expect(full).toBeGreaterThanOrEqual(15);
-    expect(empty).toBeLessThanOrEqual(8);
+    for (let s = 0; s < 20; s++) if (runArena({ ...save, loadout: [] }, s * 131 + 7).win) empty++;
+    expect(empty).toBeLessThan(win);
   });
 
   it("擂台越赢越难，但难度爬得慢、封得住顶——永远留着翻盘的余地", () => {

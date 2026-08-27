@@ -25,6 +25,7 @@ import {
   TOWER_TOP,
   W,
   brickFace,
+  capsuleLook,
   comboGapMs,
   damageBrick,
   grantPower,
@@ -225,15 +226,23 @@ function drawBallWithTrail(c2d: CanvasRenderingContext2D, b: Ball, speed: number
 }
 
 function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule): void {
-  const info = POWERS[cap.kind];
-  c2d.fillStyle = info.good ? "#FFFFFF" : "#FFE1E9";
+  const look = capsuleLook(cap.kind);
   c2d.beginPath();
   c2d.arc(cap.x, cap.y, 11, 0, Math.PI * 2);
-  c2d.fill();
+  if (look.hollow) {
+    // 空心圈：形状本身就在说「别接我」，不指望孩子分得出那点粉色
+    c2d.lineWidth = 3;
+    c2d.strokeStyle = "#E0709A";
+    c2d.stroke();
+  } else {
+    c2d.fillStyle = look.fill;
+    c2d.fill();
+  }
   c2d.font = "14px serif";
   c2d.textAlign = "center";
   c2d.textBaseline = "middle";
-  c2d.fillText(info.emoji, cap.x, cap.y + 1);
+  c2d.fillStyle = "#3A2E4A";
+  c2d.fillText(look.emoji, cap.x, cap.y + 1);
 }
 
 function drawParticles(c2d: CanvasRenderingContext2D, list: Particle[]): void {

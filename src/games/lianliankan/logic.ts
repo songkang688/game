@@ -337,15 +337,32 @@ export function endlessSpec(round: number): BoardSpec {
   };
 }
 
-/** 这一盘比上一盘难在哪，用来在屏幕上说一句人话 */
+/**
+ * 这一盘比上一盘拧动了哪几个旋钮，按「先说最要命的」排好。
+ *
+ * 第 7 / 10 / 13 盘是一次拧三四个的大台阶（图案又多一种、收拢方向又换、
+ * 线还只准拐一次）。只报其中一条的话，孩子照着上一盘的打法下手，
+ * 撞几次墙才慢慢明白规矩已经变了——变的还不止一条。
+ */
+export function endlessStepChanges(round: number): string[] {
+  const r = Math.max(1, round);
+  if (r <= 1) return [];
+  const out: string[] = [];
+  if (endlessSpec(r).maxTurns < endlessSpec(r - 1).maxTurns) out.push("线只准拐一次弯");
+  if (endlessSeconds(r - 1) === 0 && endlessSeconds(r) > 0) out.push(`要看表啦，${endlessSeconds(r)} 秒`);
+  else if (endlessSeconds(r) > 0 && endlessSeconds(r) < endlessSeconds(r - 1)) out.push(`时间收到 ${endlessSeconds(r)} 秒`);
+  if (endlessSpec(r).gravity !== endlessSpec(r - 1).gravity) out.push("换收拢方向啦");
+  if (endlessKinds(r) > endlessKinds(r - 1)) out.push(`图案多了一种（${endlessKinds(r)} 种）`);
+  return out;
+}
+
+/** 这一盘比上一盘难在哪，用来在屏幕上说一句人话——变了几样就说几样 */
 export function endlessStepWord(round: number): string {
   const r = Math.max(1, round);
   if (r === 1) return "第 1 盘，先热热身，不限时～";
-  if (endlessSpec(r).maxTurns < endlessSpec(r - 1).maxTurns) return `第 ${r} 盘起，线只准拐一次弯！`;
-  if (endlessSeconds(r - 1) === 0 && endlessSeconds(r) > 0) return `第 ${r} 盘开始要看表啦，${endlessSeconds(r)} 秒！`;
-  if (endlessSpec(r).gravity !== endlessSpec(r - 1).gravity) return `第 ${r} 盘换收拢方向啦！`;
-  if (endlessKinds(r) > endlessKinds(r - 1)) return `第 ${r} 盘，图案多了一种（${endlessKinds(r)} 种）！`;
-  return `第 ${r} 盘，接着连！`;
+  const changes = endlessStepChanges(r);
+  if (changes.length === 0) return `第 ${r} 盘，接着连！`;
+  return `第 ${r} 盘：${changes.join("，")}！`;
 }
 
 export interface EndlessState {
