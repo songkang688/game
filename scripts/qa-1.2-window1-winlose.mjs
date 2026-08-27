@@ -41,7 +41,12 @@ const PLANS = [
     id: "orb-arena",
     winLevel: 1,
     loseLevel: 160,
-    bot: "pointer",
+    // 前两轮用的是「圆跟着指针走」那一支，圆从头到尾**一动没动**（质量 15 秒钉在 31），
+    // 所以三轮都没拿到真胜证据。这一款的走位是按住方向键，改用四向键驾驶之后
+    // 质量一路 32 → 90，第 1 关一把过。
+    bot: "keyPilot",
+    hold: 220,
+    deadzone: 0.06,
     // 彩豆画成 #F7C6DE 的小圆点
     food: [0xf7, 0xc6, 0xde],
     // 朵朵自己是 #F5A9C8，第 1 关那只对手（糯糯）是 BOT_COLORS[0] = #F6B8D0。
@@ -52,7 +57,12 @@ const PLANS = [
     eatRatio: 1.5,
     skipR: 60,
     overshoot: 1.35,
-    hold: 150
+    hold: 150,
+    // 这一款是俯视全场的追逐战，假人只认「镜头里看得见的豆子」。
+    // 360 宽的竖屏里一次只看得到几颗，捡完就得瞎走；把窗口开大，
+    // 同一份找食逻辑一眼能看到的豆子多得多，路线自然就顺了。
+    // 换的是取证用的窗口大小，不是游戏难度 —— 360px 那一套另有整批走查在管。
+    viewport: { width: 900, height: 900 }
   },
   {
     id: "snake-royale",
@@ -106,8 +116,12 @@ const PLANS = [
     bot: "click",
     // 掷骰 → 能买就买 → 能建就建
     priority: [/掷骰/, /购买|买下/, /建屋|盖房/, /结束回合|过/],
-    // 输局用：只掷骰，一块地都不置（碰到地就「不买，上拍卖」）—— 让本地假人把地占满
-    losePriority: [/掷骰/, /不买|不参与|放弃|不加价/, /不跟/, /结束回合|过/],
+    // 输局用：见地就买、拍卖一路跟到底。第 140 关（抵押周转章）开局只有几百星币，
+    // 这么买必然现金见底、付不出租金而收场 —— 孩子第一次玩这类棋最常见的输法。
+    //
+    // 注意：这里**不能**用「只掷骰、什么都不买」当输法 —— 那样反而会赢。
+    // 光领工资就够得着净资产目标这件事是本轮记的 W1-R3-01，归修复员。
+    losePriority: [/掷骰/, /购买|买下/, /建屋|盖房/, /加价|跟(?!$)/, /结束回合|过/],
     fallback: ".se-tile"
   }
 ];
@@ -252,6 +266,44 @@ const READ_SCORE = () => {
   const m = /(\d+)\s*\/\s*(\d+)/.exec(t);
   return m ? Number(m[1]) : -1;
 };
+
+/**
+ * 用四向键把圆开到最近那颗彩豆上（`orb-arena` 用这一支）。
+ *
+ * 这一款的键是「按住」模型：`keydown` 置位、`keyup` 清位，游戏每帧读这个位。
+ * 所以必须 `down` → 停一会儿 → 需要换向了才 `up`，
+ * 而不是一下一下地 `press`（那样一帧都占不到，圆根本不动）。
+ */
+async function keyPilotBot(page, plan, budgetMs) {
+  const t0 = Date.now();
+  let held = [];
+  const release = async () => {
+    for (const k of held) await page.keyboard.up(k).catch(() => {});
+    held = [];
+  };
+  try {
+    while (Date.now() - t0 < budgetMs) {
+      const s = await settle(page);
+      if (s) return s;
+      const dir = await page.evaluate(FIND_FOOD, plan.food, plan.skipR ?? 55).catch(() => null);
+      const want = [];
+      if (dir) {
+        const dead = plan.deadzone ?? 0.06;
+        if (dir.dx < -dead) want.push("KeyA");
+        if (dir.dx > dead) want.push("KeyD");
+        if (dir.dy < -dead) want.push("KeyW");
+        if (dir.dy > dead) want.push("KeyS");
+      }
+      for (const k of held) if (!want.includes(k)) await page.keyboard.up(k).catch(() => {});
+      for (const k of want) if (!held.includes(k)) await page.keyboard.down(k).catch(() => {});
+      held = want;
+      await sleep(plan.hold ?? 220);
+    }
+  } finally {
+    await release();
+  }
+  return settle(page);
+}
 
 /**
  * 圆圆这种「圆跟着手指走」的游戏：按住不放，把指针停在那颗彩豆上，
@@ -494,7 +546,7 @@ async function planBot(page, plan, budgetMs) {
   return settle(page);
 }
 
-const BOTS = { pixel: pixelBot, pointer: pointerBot, press: pressBot, click: clickBot, plan: planBot };
+const BOTS = { pixel: pixelBot, pointer: pointerBot, press: pressBot, click: clickBot, plan: planBot, keyPilot: keyPilotBot };
 
 async function main() {
   const browser = await puppeteer.launch({
@@ -503,6 +555,11 @@ async function main() {
   });
   const page = await browser.newPage();
   await page.setViewport(VIEWPORT);
+  const useViewport = async (plan) => {
+    const v = plan.viewport ?? VIEWPORT;
+    const cur = page.viewport();
+    if (cur?.width !== v.width || cur?.height !== v.height) await page.setViewport(v);
+  };
   let errors = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
@@ -512,6 +569,7 @@ async function main() {
   for (const plan of TARGETS) {
     errors = [];
     try {
+      await useViewport(plan);
       await playOne(page, plan, () => errors);
     } catch (e) {
       // 一款炸了不该把后面几款一起带走：记一条红，继续下一款
