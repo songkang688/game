@@ -55,6 +55,38 @@
 - 色板走 `src/art/kit/palette.ts` token；渐变写成共享 CSS 自定义属性方便三款泡泡 / 气球游戏对齐。
 - `prefers-reduced-motion`：摆动、云移、裂片全停，保留静态渐变体积。
 
+### 四·补一：气球皮肤规格（`balloonSkin.ts`，主管点名的核心整改）
+
+`balloonSkin(base: string): string` 输出三层叠加的 `background` 字符串，从上到下：
+
+1. `radial-gradient(circle at 28% 22%, rgba(255,255,255,.85), rgba(255,255,255,0) 38%)` —— 左上主高光；
+2. `radial-gradient(circle at 72% 78%, rgba(255,255,255,.18), rgba(255,255,255,0) 30%)` —— 右下弱反光；
+3. `radial-gradient(circle at 45% 40%, shade(base,+8), shade(base,-12) 92%)` —— 主体明暗。
+
+附加件：`::before` 光泽条（白 35%、blur 1px、rotate -20°、宽 18% 高 42%）；气球结用 `clip-path` 三角（宽 10px 高 6px）贴在底缘中点；气球线换成内联 SVG 二次贝塞尔（控制点 x 偏移 = 风向常量 × 6px）。
+
+| token | 色值 | 用途 |
+| --- | --- | --- |
+| `--blp-sky-top` / `--blp-sky-bottom` | `#DFF2FF` / `#FFF4FA` | 天空渐变 |
+| `--blp-cloud` | `rgba(255,255,255,.65)` | 两层软云 |
+| `--blp-night-sky` | `#2E2A55` | 夜间关底色 |
+| `--blp-moon` | `#FFF3C9` | 夜关月亮 |
+| `--blp-shard` | 同气球主色 | 橡皮裂片 |
+
+### 四·补二：动效时序表（CSS 动画时长写成自定义属性）
+
+| 动效 | 触发 | 时长 | 缓动 | reduced 行为 |
+| --- | --- | --- | --- | --- |
+| 爆炸鼓胀 | 戳破 | 1.15 倍、60ms | ease-out | 直接进入消失 |
+| 白闪 | 戳破 | 1 帧 | step | 保留（功能反馈） |
+| 橡皮裂片 5 片 | 戳破 | 320ms 放射旋转 | ease-out | 不生成 |
+| 礼盒缓落 | 礼物气球爆 | 500ms | ease-in | 立即落定 |
+| 礼盒摆动 | 常驻 | ±3°、1100ms 周期 | sin | 静止 |
+| 软云平移 | 常驻 | 0.1× / 0.2× 视差 | linear | 静止 |
+| 远景轻摆 | 常驻 | 幅度 = 近景 60% | sin | 静止 |
+
+爆炸三阶段总时长 ≤ 400ms，不许拖慢连点节奏；上升与风力逻辑值（`AirCfg`）只读不改。
+
 ## 五、共享美术套件 src/art/kit/
 
 - 先看 `src/art/kit/` 是否已有别人落的文件；**已有的只 import 不修改**。
@@ -77,15 +109,43 @@
 
 只许改 `src/games/balloon-pop/**` 与新增 `src/art/kit/` 文件。不要碰 `bubble-pop` / `bubble-aim`。CSS 类名沿用 `blp-` 前缀；`destroy` 清干净裂片节点与计时（沿用 `Janitor`）。
 
-## 九、测试（只增不减，新增 ≥ 10 个视觉用例）
+## 九、测试（只增不减，新增 ≥ 12 个视觉用例）
 
-- `balloonSkin`（或等价函数）输出包含至少两层 `radial-gradient`（平涂检查的机器化断言）；
-- 每种颜色气球的 background 都不是单一纯色（遍历 `BALLOON_COLORS` 断言含 `gradient`）；
-- 特殊气球三种本体差异层存在性断言（条纹 / 丝带 / 礼盒）；
-- `dataset` 镜像与 `aria-label` 在换肤后原样（回归断言）；
-- 裂片粒子数量与寿命上限一测、reduced 下为 0；
-- `Janitor` 清理后无残留节点；既有玩法测试断言一个不许改。
+1. `balloonSkin` 输出恰好三层背景、含两处以上 `radial-gradient`（平涂机器化断言）；
+2. 遍历 `BALLOON_COLORS`：每种气球 background 都不是单一纯色（断言含 `gradient`）；
+3. 明暗换算（+8 / -12）与高光位置（28%,22%）常量一测；
+4. 气球线 SVG 控制点偏移 = 风向常量 × 6px（读 `AirCfg` 不改，断言常量不变）；
+5. 特殊气球三种本体差异层存在性断言（条纹 / 丝带 / 礼盒）；
+6. 铁壳 / 双子 / 礼物的 `box-shadow` 光圈保留（色觉双通道回归）；
+7. `dataset` 状态镜像与 `aria-label` 在换肤后原样（自动冒烟脚本依赖，回归断言）；
+8. 爆炸三阶段总时长 ≤ 400ms（分段常量求和断言）；
+9. 裂片 5 片、寿命 320ms、reduced 下为 0；
+10. far 气球缩放沿用旧值、热区 56×68 不变（几何断言）；
+11. `Janitor` 清理后无残留裂片节点与计时；
+12. 既有玩法测试断言一个不许改（diff 不出现玩法测试文件）。
 
-## 十、分级红线与回复
+## 十、提交前自查清单（逐项打勾写进回复）
+
+- [ ] 随机截一屏：无任何一只平涂气球（主管点名项，逐色核对）；
+- [ ] 特殊气球「颜色 + 图案」双通道在灰度下仍可分；
+- [ ] 气球热区一个像素不动（调试对照）；
+- [ ] 数字 / 算式文字不被高光斑压字（排版复查）；
+- [ ] 360×640：far 尺寸下体积感仍成立、HUD 字号 ≥ 14px；
+- [ ] reduced：静态渐变体积保留、白闪反馈保留；
+- [ ] 夜间关月亮星子不与目标提示冲突；
+- [ ] 新 token 集中管理；`Janitor` 清理复查；
+- [ ] 竞品截图未进仓库，报告只有文字结论；
+- [ ] `npm test` / `npm run build` 全绿，用例数只增不减。
+
+## 十一、建议提交切分（每条一个 commit，方便回滚）
+
+1. `feat(art-kit): balloonSkin.ts 三层渐变皮肤 + 单测`；
+2. `feat(balloon-pop-visual): 气球体积/气球结/贝塞尔线`；
+3. `feat(balloon-pop-visual): 特殊气球本体差异（条纹/丝带/礼盒）`；
+4. `feat(balloon-pop-visual): 爆炸三阶段 + 裂片粒子`；
+5. `feat(balloon-pop-visual): 远近纵深/天空云层/夜关 + reduced 接线`；
+6. `test(balloon-pop-visual): 12 个视觉用例`。
+
+## 十二、分级红线与回复
 
 无惊吓、无伤害；失败只鼓励；无商标。完成后回复：你是 1.3 第 19 步 A 档、`balloon-pop`；第三节的现状结论；三层渐变体积与爆炸三阶段的实现说明；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。

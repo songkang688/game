@@ -151,6 +151,8 @@ DOM 层级（z-index 从低到高）：① 迷宫格底 → ② 格内徽章 →
 5. `feat(brave-path-visual): 背包/装备/技能三面板 + reduced 接线`；
 6. `test(brave-path-visual): 12 个视觉用例`。
 
+每个 commit 单独可回滚：任何一条被 revert 后其余仍编译通过、测试全绿（提交前自验一次）。
+
 ## 十二、分级红线与回复
 
 无伤害、无血、无死亡描写；失败只鼓励；无商标。完成后回复：你是 1.3 第 17 步 A 档、`brave-path`；第三节每个渲染函数的现状结论；2.5D 格子与徽章系统的实现说明；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。

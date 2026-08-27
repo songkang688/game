@@ -150,6 +150,9 @@
 5. `feat(brick-break-visual): 胶囊/传送门/背景/HUD + reduced 接线`；
 6. `test(brick-break-visual): 12 个视觉用例`。
 
+每个 commit 单独可回滚：任何一条被 revert 后其余仍编译通过、测试全绿（提交前自验一次）。
+`candyBrick.ts` 是后续 `puzzle-tiles` 等款的公共依赖，接口签名（输入 ctx/x/y/w/h/base，无副作用）定了就不改。
+
 ## 十二、分级红线与回复
 
 无伤害表达（砖块碎成糖果渣与星星）；失败只鼓励；无商标。完成后回复：你是 1.3 第 18 步 A 档、`brick-break`；第三节每个函数的现状结论；果冻砖与挡板质感的实现说明；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。

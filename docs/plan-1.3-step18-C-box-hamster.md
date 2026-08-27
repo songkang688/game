@@ -151,6 +151,9 @@
 5. `feat(box-hamster-visual): 章节主题/庆祝/HUD + reduced 接线`；
 6. `test(box-hamster-visual): 12 个视觉用例`。
 
+每个 commit 单独可回滚：任何一条被 revert 后其余仍编译通过、测试全绿（提交前自验一次）。
+`hamsterSvg.ts` 输出纯字符串、无 DOM 依赖，四朝向 × 双款共 8 份快照全部入测。
+
 ## 十二、分级红线与回复
 
 无失败惩罚观感（推错只提示「再想想」）；失败只鼓励；无商标。完成后回复：你是 1.3 第 18 步 C 档、`box-hamster`；第三节的现状结论；仓鼠 / 木箱 SVG 与三种移动语义的实现说明；新增用例数与 `npm test`、`npm run build` 结果；提交 SHA；**实际使用的模型 slug**。
