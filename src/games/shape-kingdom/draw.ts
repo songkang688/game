@@ -445,7 +445,17 @@ export const DRAW_CSS = `
 .shk-cell-p3{background:#99e9f2;border-color:#0b7285;}
 .shk-preview{position:absolute;border:3px dashed #e64980;border-radius:4px;pointer-events:none;background:#ffdeeb55;}
 .shk-readout{text-align:center;font-size:14px;font-weight:800;min-height:20px;}
-.shk-dock{display:flex;flex-direction:column;gap:8px;}
+/* 图形以下的那一摞（骨牌架 / 读数 / 提示 / 按钮排 / 反馈）合成一块，贴住作图台底边常驻。
+   七巧板那一小题在矮屏上就是装不下：轮廓要 ≥280px（再小格子热区就掉到 44px 以下，
+   那是换一种点不着），加上骨牌架 + 按钮排怎么摆都超。测试员 W5-B-10 量到的表现是
+   「没有任何一个滚动位置能同时够着所有控件」——滚到顶才摆得了第一块，滚到底才交得了卷，
+   一道题要来回滚两趟。钉住之后要滚的只剩上面的图形，「摆哪一块」「🔄 转一下」
+   「✅ 我摆好了」在任何滚动位置都够得着。
+   position:sticky 只在真的滚起来时才起作用，所以这里不按屏高开关：作图台什么时候
+   装不下就什么时候钉住，比拿一个高度阈值去猜准。背景色由 JS 按本关主题写成内联样式，
+   图形从它底下滚过去不会透出来。热区一个都不动。 */
+.shk-dock{display:flex;flex-direction:column;gap:8px;position:sticky;bottom:0;z-index:2;
+  box-shadow:0 -8px 12px -10px rgba(60,42,107,.45);}
 .shk-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .shk-btn{border:none;border-radius:14px;padding:11px 18px;min-height:44px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;background:#ffffffe6;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.28);}
@@ -471,16 +481,9 @@ export const DRAW_CSS = `
      fitIntoStage() 量出来的像素值（内联样式，优先级更高）；这行留着是等平台
      哪天给舞台链定了高就自动接上，两边不打架。 */
   .shk-draw{min-height:0;max-height:100%;overflow-y:auto;gap:6px;padding:8px;}
-  /* 七巧板那一小题在 ≤640 高的屏上就是装不下：轮廓要 ≥280px（再小格子热区就掉到
-     44px 以下，那是换一种点不着），加上骨牌架 + 按钮排，怎么摆都超。测试员 W5-B-10
-     量到的表现是「没有任何一个滚动位置能同时够着所有控件」——滚到顶摆第 1 行，
-     滚到底才交得了卷，一道题要来回滚两趟。
-     这里让图形以下的那一摞整块贴住作图台底边常驻：要滚的只剩上面的图形，
-     「摆哪一块」「🔄 转一下」「✅ 我摆好了」在任何滚动位置都够得着。
-     背景色由 JS 按本关主题写成内联样式，图形从它底下滚过去不会透出来。
-     热区一个都不动（.shk-btn / .shk-piece 的 44px 在这一档里没被碰过）。 */
-  .shk-dock{position:sticky;bottom:0;z-index:2;gap:6px;padding-top:4px;
-    box-shadow:0 -8px 12px -10px rgba(60,42,107,.45);}
+  /* 常驻那一摞在矮屏上把行距再收一档（钉住本身写在上面的通用规则里，不分屏高）。
+     热区一个都不动：.shk-btn / .shk-piece 的 44px 在这一档里没被碰过。 */
+  .shk-dock{gap:6px;padding-top:4px;}
   .shk-castle{font-size:17px;min-height:20px;}
   .shk-ask{font-size:15px;}
   .shk-readout{min-height:18px;}

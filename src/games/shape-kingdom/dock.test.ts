@@ -127,18 +127,27 @@ describe("形状王国 · 控件合成一摞常驻在底边（W5-B-10）", () =>
 });
 
 describe("形状王国 · 矮屏那一档的样式（W5-B-10）", () => {
-  it(`≤${SHORT_SCREEN_PX} 高才钉住，高屏上还是普通一摞`, () => {
-    expect(rule(".shk-dock")).not.toContain("position:sticky");
-    const short = rule(".shk-dock", shortScreenBlock());
-    expect(short, "矮屏那一档里没给 dock 钉住").toContain("position:sticky");
-    expect(short).toContain("bottom:0");
+  it("钉住不按屏高开关：sticky 本来就只在真滚起来时才起作用", () => {
+    const base = rule(".shk-dock");
+    expect(base, "dock 没钉住").toContain("position:sticky");
+    expect(base).toContain("bottom:0");
+    // 拿屏高阈值去猜「这一屏装不装得下」总会漏（390×844 的七巧板照样装不下），
+    // 交给 sticky 自己判就不会漏
+    expect(rule(".shk-dock", shortScreenBlock()), "又把钉住塞回某一档屏高里了").not.toContain(
+      "position:sticky"
+    );
   });
 
   it("钉住的那一层要压在图形上面，不然图形会盖过按钮", () => {
-    const short = rule(".shk-dock", shortScreenBlock());
-    const z = /z-index:(\d+)/.exec(short);
+    const z = /z-index:(\d+)/.exec(rule(".shk-dock"));
     expect(z, "dock 没写 z-index").not.toBeNull();
     expect(Number(z![1])).toBeGreaterThanOrEqual(1);
+  });
+
+  it(`矮屏（≤${SHORT_SCREEN_PX}）那一档只再收行距，不碰钉住也不碰热区`, () => {
+    const short = rule(".shk-dock", shortScreenBlock());
+    expect(short).toContain("gap:6px");
+    expect(short).not.toContain("position:");
   });
 
   it("要滚的那一层还在（第 1 轮的运行期钳位没被这次改动顶掉）", () => {
