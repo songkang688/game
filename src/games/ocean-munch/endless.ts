@@ -339,7 +339,11 @@ export function spawnEndlessFish(tier: number, playerR: number, rng: Rng): Endle
 
   const smallShare = Math.max(0.42, 0.7 - spec.bigFishBias);
   if (roll < smallShare) {
-    const t = (roll - spec.toxinRate - spec.eliteRate) / Math.max(1e-6, smallShare);
+    // 毒藻鱼和精英鱼占掉的是 roll 区间的前一段,小鱼真正的区间是 [lo, smallShare)。
+    // 归一化必须按这一段的宽度来:拿整个 smallShare 当分母的话,层数越深(lo 越大)
+    // t 的上界压得越低,第 7 层起就再也长不出中号的条纹鱼,深层只剩最小的一档。
+    const lo = spec.toxinRate + spec.eliteRate;
+    const t = (roll - lo) / Math.max(1e-6, smallShare - lo);
     const r = Math.max(7, base * (0.3 + 0.44 * Math.min(1, Math.max(0, t))));
     const stripey = r >= base * 0.5;
     return {
@@ -411,6 +415,40 @@ export const STARVE_WARN = 20;
 
 export function isStarved(sinceLastEat: number): boolean {
   return sinceLastEat >= STARVE_SECONDS;
+}
+
+/** 还有多少秒就饿到游不动了(已经饿倒就是 0)。 */
+export function starveLeft(sinceLastEat: number): number {
+  const t = Number.isFinite(sinceLastEat) ? Math.max(0, sinceLastEat) : 0;
+  return Math.max(0, STARVE_SECONDS - t);
+}
+
+/**
+ * 饥饿预警分三档:`none` 不提醒 / `soft` 最后 20 秒开始提醒 /
+ * `hard` 最后 8 秒催得紧一点。`STARVE_WARN` 这条线以前只有常量没人用,这里把它接出来。
+ */
+export type StarveWarn = "none" | "soft" | "hard";
+
+/** 催得紧的那一档从还剩这么多秒起。 */
+export const STARVE_HURRY = 8;
+
+export function starveWarnLevel(sinceLastEat: number): StarveWarn {
+  const left = starveLeft(sinceLastEat);
+  if (left > STARVE_WARN) return "none";
+  return left <= STARVE_HURRY ? "hard" : "soft";
+}
+
+/**
+ * 预警文案:只提醒去吃东西,不吓唬人（分级红线同失败文案，无血伤死字眼）。
+ * `none` 档返回空串,调用方照常什么都不显示。
+ */
+export function starveWarnLine(sinceLastEat: number): string {
+  const level = starveWarnLevel(sinceLastEat);
+  if (level === "none") return "";
+  const left = Math.ceil(starveLeft(sinceLastEat));
+  return level === "hard"
+    ? `快去吃两口!还有 ${left} 秒就游不动啦`
+    : `肚子开始咕咕叫了,${left} 秒内找条小鱼吃掉吧`;
 }
 
 /** 被啃到起始体型(或更小)就结束这一趟。 */

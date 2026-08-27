@@ -10,7 +10,9 @@ import {
   GROWTH_K_MIN,
   MAX_RADIUS,
   PRESSURE_FROM_TIER,
+  STARVE_HURRY,
   STARVE_SECONDS,
+  STARVE_WARN,
   SWALLOW_MS,
   SWALLOW_RATIO,
   SpatialGrid,
@@ -38,6 +40,9 @@ import {
   simulateEndless,
   spawnEndlessFish,
   startTierForLevel,
+  starveLeft,
+  starveWarnLevel,
+  starveWarnLine,
   swallowStretch,
   tierAt,
   tierSpec,
@@ -291,6 +296,51 @@ describe("鱼群抽样:同种子同一局", () => {
     // 精英鱼从第一层就有,不然破上限那条路一开始就断了
     expect(t1.has("elite")).toBe(true);
   });
+
+  it("每一层都还长得出中号的条纹鱼,深层不会只剩最小的一档", () => {
+    // 回归:小鱼段的归一化分母曾经拿的是整个 smallShare,
+    // 毒藻鱼 + 精英鱼吃掉前一段之后,第 7 层起 t 再也到不了「条纹鱼」的门槛。
+    for (let tier = 1; tier <= TIER_MAX; tier++) {
+      const rng = makeRng(2026 + tier);
+      const kinds = new Set<string>();
+      let maxSmall = 0;
+      for (let i = 0; i < 4000; i++) {
+        const f = spawnEndlessFish(tier, 30, rng);
+        if (f.kind === "minnow" || f.kind === "stripey") {
+          kinds.add(f.kind);
+          maxSmall = Math.max(maxSmall, f.r);
+        }
+      }
+      expect(kinds.has("minnow")).toBe(true);
+      expect(kinds.has("stripey")).toBe(true);
+      // 最大的那条小鱼要摸得到这一段的上界(0.74 × 体型),各层口径一致
+      expect(maxSmall).toBeGreaterThan(30 * 0.7);
+    }
+  });
+
+  it("四段出现概率一个都没动:毒藻 / 精英 / 小鱼 / 大鱼的占比仍按档位表走", () => {
+    for (const tier of [1, 5, 9]) {
+      const spec = tierSpec(tier);
+      const rng = makeRng(4242);
+      const n = 20000;
+      let toxin = 0;
+      let elite = 0;
+      let small = 0;
+      let big = 0;
+      for (let i = 0; i < n; i++) {
+        const f = spawnEndlessFish(tier, 30, rng);
+        if (f.kind === "toxin") toxin++;
+        else if (f.kind === "elite") elite++;
+        else if (f.kind === "bigblue") big++;
+        else small++;
+      }
+      const smallShare = Math.max(0.42, 0.7 - spec.bigFishBias);
+      expect(toxin / n).toBeCloseTo(spec.toxinRate, 1);
+      expect(elite / n).toBeCloseTo(spec.eliteRate, 1);
+      expect(small / n).toBeCloseTo(smallShare - spec.toxinRate - spec.eliteRate, 1);
+      expect(big / n).toBeCloseTo(1 - smallShare, 1);
+    }
+  });
 });
 
 describe("吞咽手感", () => {
@@ -348,6 +398,38 @@ describe("失败判定与文案", () => {
       }
     }
     expect(endlessFailCopy("nibbled", 0).title).toContain("回岸上休息");
+  });
+});
+
+describe("饥饿预警", () => {
+  it("还剩多少秒算得准,饿倒之后就是 0", () => {
+    expect(starveLeft(0)).toBe(STARVE_SECONDS);
+    expect(starveLeft(STARVE_SECONDS - 5)).toBe(5);
+    expect(starveLeft(STARVE_SECONDS)).toBe(0);
+    expect(starveLeft(STARVE_SECONDS + 30)).toBe(0);
+    expect(starveLeft(Number.NaN)).toBe(STARVE_SECONDS);
+  });
+
+  it("三档预警按 STARVE_WARN / STARVE_HURRY 切,边界不含糊", () => {
+    expect(starveWarnLevel(0)).toBe("none");
+    expect(starveWarnLevel(STARVE_SECONDS - STARVE_WARN - 0.01)).toBe("none");
+    expect(starveWarnLevel(STARVE_SECONDS - STARVE_WARN)).toBe("soft");
+    expect(starveWarnLevel(STARVE_SECONDS - STARVE_HURRY - 0.01)).toBe("soft");
+    expect(starveWarnLevel(STARVE_SECONDS - STARVE_HURRY)).toBe("hard");
+    expect(starveWarnLevel(STARVE_SECONDS)).toBe("hard");
+  });
+
+  it("不到预警线一个字都不说,催起来只说去吃东西", () => {
+    expect(starveWarnLine(0)).toBe("");
+    const soft = starveWarnLine(STARVE_SECONDS - STARVE_WARN);
+    const hard = starveWarnLine(STARVE_SECONDS - STARVE_HURRY);
+    expect(soft).toContain(`${STARVE_WARN}`);
+    expect(hard).toContain(`${STARVE_HURRY}`);
+    expect(hard).not.toBe(soft);
+    // 分级红线:预警文案也不许出现血伤死那一类字眼
+    for (const bad of ["血", "伤", "死", "杀", "输了", "失败"]) {
+      expect(soft + hard).not.toContain(bad);
+    }
   });
 });
 

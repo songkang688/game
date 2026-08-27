@@ -72,8 +72,6 @@ import {
   ELITE_BREAK,
   ENDLESS_START_RADIUS,
   PRESSURE_FROM_TIER,
-  STARVE_SECONDS,
-  STARVE_WARN,
   SWALLOW_MS,
   SpatialGrid,
   TIER_MAX as ENDLESS_TIER_MAX,
@@ -94,6 +92,8 @@ import {
   radiusCapAt,
   spawnEndlessFish,
   startTierForLevel,
+  starveWarnLevel,
+  starveWarnLine,
   swallowStretch,
   tierAt,
   tierSpec,
@@ -2292,14 +2292,15 @@ export function mount(api: GameAPI): OceanMunchHandle {
       41,
     );
 
-    // 饿了就提醒:剩 20 秒开始跳字,别等到游不动才知道
+    // 饿了就提醒:剩 20 秒开始跳字,最后 8 秒催得更急,别等到游不动才知道
     if (arenaMode === "endless") {
-      const left = STARVE_SECONDS - sinceEat;
-      if (left <= STARVE_WARN) {
+      const warn = starveWarnLevel(sinceEat);
+      if (warn !== "none") {
+        const blink = warn === "hard" ? 7 : 4;
         ctx.textAlign = "center";
-        ctx.fillStyle = Math.floor(arenaTime * 4) % 2 === 0 ? "#ffd868" : "#ffffff";
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillText(`肚子饿啦!${Math.max(0, Math.ceil(left))} 秒内吃一口`, w / 2, 62);
+        ctx.fillStyle = Math.floor(arenaTime * blink) % 2 === 0 ? "#ffd868" : "#ffffff";
+        ctx.font = `bold ${warn === "hard" ? 17 : 15}px sans-serif`;
+        ctx.fillText(starveWarnLine(sinceEat), w / 2, 62);
       }
       if (arenaTier >= PRESSURE_FROM_TIER) {
         ctx.textAlign = "center";
@@ -2310,7 +2311,7 @@ export function mount(api: GameAPI): OceanMunchHandle {
             ? `💫 顶住水压 ${Math.ceil(eliteLeft)} 秒(上限 ${Math.round(radiusCapAt(arenaTier, eliteLeft))})`
             : `🕳 水压上限 ${Math.round(radiusCapAt(arenaTier, 0))}`,
           w / 2,
-          left <= STARVE_WARN ? 82 : 62,
+          warn === "none" ? 62 : 82,
         );
       }
     }
