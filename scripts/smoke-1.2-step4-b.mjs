@@ -98,9 +98,21 @@ async function clickPoint(page, size, pt) {
       if (box && box.scrollWidth > box.clientWidth) {
         box.scrollLeft = pad + (p % s) * cell - box.clientWidth / 2;
       }
-      const wantY = c.getBoundingClientRect().top + window.scrollY + pad + Math.floor(p / s) * cell;
-      if (wantY - window.scrollY < 8 || wantY - window.scrollY > vh - 8) {
-        window.scrollTo(0, Math.max(0, wantY - vh / 2));
+      // 纵向:整页并不滚 —— html / body 正好一屏,`window.scrollTo` 是空操作。
+      // 真正在滚、并且把棋盘下半截裁掉的是外壳 .game-stage,它的下边缘(624)
+      // 还比视口(640)高一截。所以判据得按这个容器的可视框来,不能按视口:
+      // 九路第 5 行落在 y=624,坐标看着「在屏内」,`elementFromPoint` 却已经是容器本身,
+      // 第 6 行更是直接出屏。原先按视口判,这两行一手都点不下去,报成「won=false」。
+      let sc = c.parentElement;
+      while (sc && sc.scrollHeight <= sc.clientHeight + 2) sc = sc.parentElement;
+      const view = sc ? sc.getBoundingClientRect() : { top: 0, bottom: vh };
+      const top = Math.max(view.top, 0) + cell * 0.6;
+      const bot = Math.min(view.bottom, vh) - cell * 0.6;
+      const wantY = c.getBoundingClientRect().top + pad + Math.floor(p / s) * cell;
+      if (wantY < top || wantY > bot) {
+        const delta = wantY - (top + bot) / 2;
+        if (sc) sc.scrollTop += delta;
+        else window.scrollBy(0, delta);
       }
     },
     [size, pt, VIEWPORT.height]
@@ -108,7 +120,13 @@ async function clickPoint(page, size, pt) {
   await sleep(80);
   const now = await pointXY(page, size, pt);
   if (!now) return false;
-  if (now.x < 0 || now.x > VIEWPORT.width || now.y < 0 || now.y > VIEWPORT.height) return false;
+  // 摆正之后再确认一次这个坐标上最顶的确实是棋盘:光看「在不在视口里」不够,
+  // 被滚动容器裁掉的那一条坐标合法、命中的却是容器。
+  const onCanvas = await page.evaluate(
+    ([x, y]) => document.elementFromPoint(x, y)?.classList.contains("wq-canvas") ?? false,
+    [now.x, now.y]
+  );
+  if (!onCanvas) return false;
   await page.mouse.click(now.x, now.y);
   return true;
 }
