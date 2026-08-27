@@ -287,7 +287,7 @@ describe("index.html 的语义与文案", () => {
     const desc = (m as RegExpExecArray)[1].replace(/\s+/g, "");
     expect(desc.length).toBeGreaterThanOrEqual(40);
     expect(desc.length).toBeLessThanOrEqual(200);
-    expect(desc).toContain("一朵一星");
+    expect(desc).toContain("鸭梨康康");
     expect(desc).toContain("无广告");
     expect(desc).toMatch(/读屏|键盘/);
   });

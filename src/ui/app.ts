@@ -6,7 +6,7 @@ import { renderHome } from "./home";
 import { mountGameScreen } from "./gameShell";
 
 const DECOR_ITEMS: { emoji: string; cls: string }[] = [
-  { emoji: "🌸", cls: "decor-item decor-1" },
+  { emoji: "🍐", cls: "decor-item decor-1" },
   { emoji: "⭐", cls: "decor-item decor-2" },
   { emoji: "🌷", cls: "decor-item decor-3" },
   { emoji: "✨", cls: "decor-item decor-4" },

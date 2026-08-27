@@ -43,7 +43,7 @@ export const PANEL_TITLE = "🏡 小屋 · 收藏";
 /** 已经认识的调用方;认不出的 scope 一律按「这一身到哪儿都能穿」处理 */
 export const SCOPE_LABELS: Record<string, string> = {
   "rainbow-run": "彩虹跑跑",
-  "duo-rush": "朵星双人冲刺"
+  "duo-rush": "梨康双人冲刺"
 };
 
 /** 顶上那句说明:这一身现在给谁用 */

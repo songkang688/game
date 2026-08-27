@@ -183,7 +183,7 @@ export function mountGameScreen(
   const unsubscribe = save.onChange(renderStars);
 
   const duoPair = createDuoPair(38);
-  duoPair.title = "朵朵和星星陪你一起玩";
+  duoPair.title = "鸭梨和康康陪你一起玩";
   duoPair.setAttribute("aria-hidden", "true");
 
   // 游戏内也能开关背景音乐(与首页共用同一个 BGM 实例)
@@ -267,7 +267,7 @@ export function mountGameScreen(
     try {
       (fn as () => void).call(mounted);
     } catch (err) {
-      console.warn(`[一朵一星] 游戏 ${game.meta.id} ${method} 时出错:`, err);
+      console.warn(`[鸭梨康康] 游戏 ${game.meta.id} ${method} 时出错:`, err);
     }
   }
 
@@ -394,14 +394,14 @@ export function mountGameScreen(
     try {
       mounted?.destroy();
     } catch (err) {
-      console.warn(`[一朵一星] 游戏 ${game.meta.id} destroy 时出错:`, err);
+      console.warn(`[鸭梨康康] 游戏 ${game.meta.id} destroy 时出错:`, err);
     }
     mounted = null;
     stage.innerHTML = "";
   }
 
   function showLoading(): void {
-    stage.innerHTML = `<div class="game-loading" role="status"><span class="game-loading-flower" aria-hidden="true">🌸</span><p class="game-loading-text">马上就好～</p></div>`;
+    stage.innerHTML = `<div class="game-loading" role="status"><span class="game-loading-flower" aria-hidden="true">🍐</span><p class="game-loading-text">马上就好～</p></div>`;
   }
 
   function showError(): void {
@@ -469,13 +469,13 @@ export function mountGameScreen(
         try {
           mounted = mount(api);
         } catch (err) {
-          console.error(`[一朵一星] 游戏 ${game.meta.id} 启动失败:`, err);
+          console.error(`[鸭梨康康] 游戏 ${game.meta.id} 启动失败:`, err);
           showError();
         }
       })
       .catch((err: unknown) => {
         if (stale()) return;
-        console.error(`[一朵一星] 游戏 ${game.meta.id} 加载失败:`, err);
+        console.error(`[鸭梨康康] 游戏 ${game.meta.id} 加载失败:`, err);
         showError();
       });
   }

@@ -1,4 +1,4 @@
-/* ============ 一朵一星 · 粉彩萌系主题(一年级小朋友版) ============ */
+/* ============ 鸭梨康康 · 粉彩萌系主题(一年级小朋友版) ============ */
 
 :root {
   --bg-1: #fff1f7;
@@ -224,7 +224,7 @@ button {
   white-space: nowrap;
 }
 
-/* ---------- 朵朵 & 星星头像 ---------- */
+/* ---------- 鸭梨 & 康康头像 ---------- */
 .avatar-img {
   display: block;
   object-fit: contain;
@@ -350,7 +350,7 @@ button {
   color: var(--ink-soft);
 }
 
-/* 朵朵和星星的欢迎区 */
+/* 鸭梨和康康的欢迎区 */
 .home-hero {
   display: flex;
   align-items: flex-end;
@@ -856,7 +856,7 @@ button {
     linear-gradient(180deg, #f4f8ff 0%, #ffffff 52%);
 }
 
-/* 结算弹窗里的朵朵和星星 */
+/* 结算弹窗里的鸭梨和康康 */
 .result-buddies {
   display: flex;
   justify-content: center;

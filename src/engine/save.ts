@@ -119,7 +119,7 @@ function sanitize(raw: unknown): SaveData {
 // 导出 / 导入:带版本号与校验和的 Base64 文本,换设备或清缓存前备份用
 // ---------------------------------------------------------------------------
 
-/** 导出文本的版本头,一眼能认出是「一朵一星」的备份 */
+/** 导出文本的版本头,一眼能认出是「鸭梨康康」的备份;沿用 YDYX1. 前缀,老备份照样导得进来 */
 const EXPORT_HEADER = "YDYX1.";
 const EXPORT_VERSION = 1;
 
@@ -301,7 +301,7 @@ export class SaveStore {
     const trimmed = (text ?? "").trim();
     if (!trimmed) return { ok: false, error: "先把备份文本粘贴进来哦" };
     if (!trimmed.startsWith(EXPORT_HEADER)) {
-      return { ok: false, error: `这段文字不是「一朵一星」的进度备份,${failKeep}` };
+      return { ok: false, error: `这段文字不是「鸭梨康康」的进度备份,${failKeep}` };
     }
     let payload: unknown;
     try {

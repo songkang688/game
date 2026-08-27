@@ -422,7 +422,7 @@ describe("试穿预览", () => {
     expect(line).toContain("啾啾(宠物)");
     expect(line).toContain("云朵跑鞋");
     expect(line).toContain("草编凉帽");
-    expect(outfitLine(loadoutOf("duoduo", null, []))).toBe("朵朵");
+    expect(outfitLine(loadoutOf("duoduo", null, []))).toBe("鸭梨");
   });
 
   it("加成清单没有加成时也有一句兜底", () => {
@@ -557,7 +557,7 @@ describe("面板里的解锁与试穿", () => {
     buttonWith(cardOf(panel, "yunyun")!, "解锁")!.fire("click");
     buttonWith(cardOf(panel, "duoduo")!, "试穿")!.fire("click");
     expect(store.equippedId("hero")).toBe("duoduo");
-    expect(findOne(panel, "collection-outfit")?.textContent).toContain("朵朵");
+    expect(findOne(panel, "collection-outfit")?.textContent).toContain("鸭梨");
   });
 
   it("宠物可以换下来,人物卡上没有换下按钮", () => {

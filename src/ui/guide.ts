@@ -45,7 +45,7 @@ export function stripAnswerLeaks(tips: readonly string[]): string[] {
     const text = typeof tip === "string" ? tip.trim() : "";
     if (!text) continue;
     if (isAnswerLeak(text)) {
-      console.warn(`[一朵一星] 攻略里出现了现成答案,已隐藏:${text}`);
+      console.warn(`[鸭梨康康] 攻略里出现了现成答案,已隐藏:${text}`);
       continue;
     }
     out.push(text);
@@ -173,7 +173,7 @@ export async function loadGuideBook(gameId: string): Promise<GuideBook | null> {
   try {
     return pickGuideBook(await loader());
   } catch (err) {
-    console.warn(`[一朵一星] ${gameId} 的攻略加载失败,先不显示攻略按钮:`, err);
+    console.warn(`[鸭梨康康] ${gameId} 的攻略加载失败,先不显示攻略按钮:`, err);
     return null;
   }
 }
