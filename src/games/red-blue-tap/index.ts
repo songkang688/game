@@ -83,17 +83,21 @@ const CSS = `
 }
 `;
 
-const ENDLESS_CSS = `
+export const ENDLESS_CSS = `
 .rte-bar { display: flex; justify-content: center; margin: 0 0 10px; }
 /* display:flex 的优先级高过浏览器自带的 [hidden]{display:none}，
    不补这一条 bar.hidden = true 就是写了等于没写：真机上关卡在跑时这一条
    照旧 60px 高、两颗入口 elementFromPoint 全命中（W5R2-FB-03）。 */
 .rte-bar[hidden] { display: none; }
-.rte-open { border: none; border-radius: 999px; padding: 10px 20px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 4px 0 #3B55C2; }
+/* min-height 是钉着的，不是靠 padding 凑的：竖屏上这两颗的文字折成两行，量出来 ≥44px，
+   看着达标；横过来拿一行就排得下，高度当场掉回 10+20+10=40px（真机全量扫 1901 颗键，
+   全场只有这两颗破底线，出现在横屏三档的地图 / 关内 / 侧模式共 9 处）。
+   而它们是双人与无尽两个模式仅有的入口。 */
+.rte-open { border: none; border-radius: 999px; padding: 10px 20px; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 4px 0 #3B55C2; }
 .rte-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3B55C2; }
 .rte-open:focus-visible { outline: 3px solid #263E7A; outline-offset: 3px; }
 .rte-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.rte-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #3F5C9A; box-shadow: 0 3px 0 rgba(90,110,170,.28); }
+.rte-back { border: none; border-radius: 999px; padding: 7px 13px; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #3F5C9A; box-shadow: 0 3px 0 rgba(90,110,170,.28); }
 .rte-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(90,110,170,.28); }
 .rte-over { position: absolute; inset: 0; border-radius: 16px; background: rgba(248,251,255,.96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px; }
 .rte-over-title { font-size: 22px; font-weight: 900; color: #3F5C9A; }
