@@ -181,6 +181,8 @@ interface BowlOptions {
   sfx: (name: SoundName) => void;
   runtime: Runtime;
   reduced: boolean;
+  /** 外面是不是暂停了：暂停期间拖盆、挪落点、投果、归位一概不接 */
+  isPaused?: () => boolean;
 }
 
 interface Bowl {
@@ -276,6 +278,7 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
   }
 
   function canDrop(): boolean {
+    if (opts.isPaused?.()) return false;
     return !done && cooldown <= 0 && left() > 0 && world.merges.length === 0;
   }
 
@@ -290,16 +293,19 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
   }
 
   function moveAim(dx: number): void {
+    if (opts.isPaused?.()) return;
     const lvl = currentLevel();
     aimX = clampDropX(lv.box.w, lvl, aimX + dx);
   }
 
   /** 取消键:把落点收回盆正中央,不用一路按着 A / D 挪回来 */
   function centerAim(): void {
+    if (opts.isPaused?.()) return;
     aimX = clampDropX(lv.box.w, currentLevel(), lv.box.w / 2);
   }
 
   function aimTo(clientX: number): void {
+    if (opts.isPaused?.()) return;
     const box = canvas.getBoundingClientRect();
     const x = (clientX - box.left) / Math.max(1, scale);
     const lvl = currentLevel();
@@ -309,7 +315,7 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
   // 触屏:在盆上拖动瞄准,松手投下
   let pointerId = -1;
   opts.runtime.on<PointerEvent>(canvas, "pointerdown", (ev) => {
-    if (opts.ai) return;
+    if (opts.ai || opts.isPaused?.()) return;
     pointerId = ev.pointerId;
     canvas.setPointerCapture?.(ev.pointerId);
     aimTo(ev.clientX);
@@ -638,6 +644,10 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
   // 触屏「◀ ▶」按住不放时每帧再挪一点
   const holdChecks: Array<() => void> = [];
 
+  // 遮罩挡得住手指，挡不住程序：这两个状态得先立起来，果盆自己也要问一句「现在是不是暂停」
+  let paused = false;
+  let finished = false;
+
   const bowls: Bowl[] = [];
   for (let i = 0; i < opts.seats; i++) {
     bowls.push(
@@ -651,6 +661,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
         sfx: opts.sfx,
         runtime,
         reduced,
+        isPaused: () => paused,
       })
     );
   }
@@ -749,8 +760,6 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
 
   // ---- 遮罩 ------------------------------------------------------------------
   let veil: HTMLElement | null = null;
-  let paused = false;
-  let finished = false;
 
   function clearVeil(): void {
     veil?.remove();
@@ -1050,7 +1059,7 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       limited: false,
       banner: `第 ${round} 局`,
       tip: aiSkill
-        ? `${lv.hint} 朵朵:A / D 移动,F 放下;手机直接在盆上拖。`
+        ? `${lv.hint} 朵朵:A / D 移动,F 放下,G 落点归位;手机直接在盆上拖。`
         : `${lv.hint} 朵朵:A / D + F,G 归位;星星:方向键 + L,K 归位。`,
       sfx: (n) => api.play(n),
       onDone: (res) => roundOver(res.winner),

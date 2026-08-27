@@ -336,6 +336,102 @@ describe("PA-FS-2 · 双人同屏键位互不抢占", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* L3A-5 / L3A-6 · 暂停闸补到指针那一条通路上                             */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-5 · 遮罩挡得住手指，程序上也得挡住", () => {
+  function openDuo(): { handle: { destroy: () => void }; canvases: El[] } {
+    const handle = mount(fakeApi().api);
+    byText("双人同屏")!.dispatch("click");
+    flushFrames(dom, 3);
+    return { handle, canvases: dom.root.findAll((e) => e.tagName === "canvas") };
+  }
+
+  /** 屏幕上那一组「◀ ▶ 放下」按 aria-label 认人：朵朵▶、朵朵放下…… */
+  function padKey(label: string): El {
+    const btn = dom.root.find((e) => e.getAttribute("aria-label") === label);
+    if (!btn) throw new Error(`屏幕上找不到「${label}」钮`);
+    return btn;
+  }
+
+  function esc(): void {
+    fireWindow(dom, "keydown", { code: "Escape" });
+  }
+
+  /**
+   * 读屏文字只在没暂停的那几帧里刷新，所以「暂停期间按了什么」一律要**恢复之后再看**，
+   * 不然断言相等只是因为屏幕本来就没刷新，测不出闸有没有装上。
+   */
+  function resumeAndSettle(): void {
+    esc();
+    flushFrames(dom, 3);
+  }
+
+  it("暂停期间点屏幕上的「放下」也投不出果子，恢复之后照旧管用", () => {
+    const { handle, canvases } = openDuo();
+    esc();
+    expect(dom.root.find((e) => e.className.includes("fs-veil")), "没盖上遮罩").not.toBeNull();
+    const drop = padKey("朵朵放下");
+    drop.dispatch("click", {});
+    resumeAndSettle();
+    expect(canvases[0].getAttribute("data-drops"), "遮罩盖着的时候「放下」把果子投下去了").toBe("0");
+    drop.dispatch("click", {});
+    flushFrames(dom, 4);
+    expect(canvases[0].getAttribute("data-drops"), "恢复之后「放下」反而不管用了").toBe("1");
+    handle.destroy();
+  });
+
+  it("暂停期间按屏幕上的「◀ ▶」也挪不动落点", () => {
+    const { handle, canvases } = openDuo();
+    const aim = (): number => Number(canvases[0].getAttribute("data-aim"));
+    const before = aim();
+    const right = padKey("朵朵▶");
+    esc();
+    for (let i = 0; i < 6; i++) {
+      right.dispatch("pointerdown", {});
+      right.dispatch("pointerup", {});
+      flushFrames(dom, 2);
+    }
+    resumeAndSettle();
+    expect(aim(), "遮罩盖着的时候「▶」把落点挪走了").toBeCloseTo(before, 1);
+    for (let i = 0; i < 6; i++) {
+      right.dispatch("pointerdown", {});
+      right.dispatch("pointerup", {});
+      flushFrames(dom, 2);
+    }
+    expect(aim(), "恢复之后「▶」反而不管用了").toBeGreaterThan(before);
+    handle.destroy();
+  });
+
+  it("暂停期间在盆上拖动 + 松手，果子也不会偷偷落下去", () => {
+    const { handle, canvases } = openDuo();
+    const before = Number(canvases[0].getAttribute("data-aim"));
+    esc();
+    canvases[0].dispatch("pointerdown", { pointerId: 1, clientX: 40 });
+    canvases[0].dispatch("pointermove", { pointerId: 1, clientX: 120 });
+    canvases[0].dispatch("pointerup", { pointerId: 1, clientX: 120 });
+    resumeAndSettle();
+    expect(canvases[0].getAttribute("data-drops"), "遮罩盖着的时候拖一下就落果了").toBe("0");
+    expect(Number(canvases[0].getAttribute("data-aim")), "遮罩盖着的时候拖动改了落点").toBeCloseTo(before, 1);
+    canvases[0].dispatch("pointerdown", { pointerId: 2, clientX: 40 });
+    canvases[0].dispatch("pointerup", { pointerId: 2, clientX: 40 });
+    flushFrames(dom, 4);
+    expect(canvases[0].getAttribute("data-drops"), "恢复之后拖动反而不管用了").toBe("1");
+    handle.destroy();
+  });
+
+  it("L3A-6：人机对战那一行提示也把朵朵的归位键写全了", () => {
+    const handle = mount(fakeApi().api);
+    byText("人机对战")!.dispatch("click");
+    flushFrames(dom, 3);
+    const tip = dom.root.find((e) => e.className.includes("fs-tip"))!.textContent;
+    expect(tip, "人机对战的提示里漏了归位键").toContain("G");
+    expect(tip).toContain("F 放下");
+    handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* PA-FS-3 首页进入 → 退出 → 再进                                       */
 /* ------------------------------------------------------------------ */
 
