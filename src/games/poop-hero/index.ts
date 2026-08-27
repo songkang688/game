@@ -30,6 +30,7 @@ import {
   padMetrics,
   canvasRoomPx,
   stageRoomPx,
+  wrapRoomPx,
   parseLevelParam,
   resolveInitialLevel,
 } from "./runtime";
@@ -513,12 +514,23 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   wrap.appendChild(tip);
   host.appendChild(wrap);
 
-  /** 舞台矮到摇杆掉出裁切线时,把超出的那一截从画布身上扣掉 */
+  /**
+   * 舞台矮到摇杆掉出裁切线时,先把超出的那一截从画布身上扣掉;
+   * 画布已经趴在底线上还是装不下,就让 `.ph-wrap` 自己滚——
+   * 不然三色桶图例与提示行会永远停在裁切线以下(W5R3-C-01)。
+   */
   function fitCanvas(): void {
     canvas.style.height = "";
-    const next = canvasRoomPx(wrap.scrollHeight, canvas.offsetHeight, stageRoomPx(wrap));
-    if (next === null) return;
-    canvas.style.height = `${next}px`;
+    wrap.style.maxHeight = "";
+    wrap.style.overflowY = "";
+    const room = stageRoomPx(wrap);
+    const next = canvasRoomPx(wrap.scrollHeight, canvas.offsetHeight, room);
+    if (next !== null) canvas.style.height = `${next}px`;
+    // 扣完再量一次:还超就交给滚动，一行都不许留在裁切线以下
+    const clamp = wrapRoomPx(wrap.scrollHeight, room);
+    if (clamp === null) return;
+    wrap.style.maxHeight = `${clamp}px`;
+    wrap.style.overflowY = "auto";
   }
   fitCanvas();
   bag.listen(window, "resize", fitCanvas);

@@ -227,6 +227,36 @@ export function canvasRoomPx(
 }
 
 /**
+ * 整块玩法那一层最少要留多高才值得钳——比这还矮就别钳了,钳只会压成一条缝。
+ * 画布底线 + 一盘手柄,正好 240px。
+ */
+export const WRAP_MIN_ROOM = 240;
+
+/**
+ * 画布已经收到底线、整块玩法**仍然**装不下时,`.ph-wrap` 自己该钳到多高。
+ *
+ * `canvasRoomPx()` 只从画布身上扣,可它有 `MIN_CANVAS_H` 这条底线——底线一到就再也让不出
+ * 一个像素。320×568 上量到的就是这一幕:舞台看得见 332px,整块玩法 392px,画布早已趴在
+ * 底线上,多出来的 60px 全砸在最后两行——三色桶图例(557–589)与提示行(593–610)
+ * **整块掉在裁切线以下,而且一个可滚祖先都没有**,任何滚动位置都露不出来。
+ * 分类关正是靠那三只桶的颜色与表情认「哪样投哪只」,看不见等于这一关的规则没写在屏幕上
+ * (W5R3-C-01)。
+ *
+ * 这里不再跟画布较劲,直接让 `.ph-wrap` 自己滚:手柄仍在第一屏,图例与提示往下一划就有。
+ * 返回 null 表示装得下(或矮到不值得钳),照原样别管——高屏上绝不凭空多出一个滚动容器。
+ */
+export function wrapRoomPx(
+  wrapHeight: number,
+  roomPx: number,
+  minRoom = WRAP_MIN_ROOM,
+): number | null {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  if (!Number.isFinite(wrapHeight) || wrapHeight <= 0) return null;
+  if (wrapHeight - roomPx <= 1) return null;
+  return Math.max(minRoom, Math.floor(roomPx));
+}
+
+/**
  * 一层裁切祖先真正的那条裁切线。
  *
  * 滚动口是 **padding box**,下边框那几像素照不进内容;
