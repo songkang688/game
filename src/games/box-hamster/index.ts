@@ -19,7 +19,6 @@ import {
   canUseHint,
   deadlockTip,
   difficultyBadge,
-  facingAngle,
   fitCell,
   hintsLeft,
   makeEndlessRoom,
@@ -43,6 +42,22 @@ import {
   type Puzzle,
   type State,
 } from "./logic";
+import {
+  BH_TIMINGS,
+  bhHamsterSvg,
+  bhVisualCss,
+  boxPieceSvg,
+  classifyMove,
+  confettiHtml,
+  dustHtml,
+  poseForKind,
+  scratchHtml,
+  shouldShowDust,
+  teleportInHtml,
+  themeOf,
+  undoIconSvg,
+  type BhMoveKind,
+} from "./visual";
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -123,7 +138,7 @@ const CSS = `
 }
 @media (max-width:340px){ .bh-grid{--cell:28px;} }
 @media (prefers-reduced-motion:reduce){ .bh-hint{animation:none;box-shadow:inset 0 0 0 3px #F2A93B;} }
-`;
+${bhVisualCss()}`;
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -140,18 +155,11 @@ function el<K extends keyof HTMLElementTagNameMap>(
 // 棋盘
 // ---------------------------------------------------------------------------
 
-/** 两只仓鼠的名字与配色 */
+/** 两只仓鼠的名字与选中描边(皮肤画法在 visual.ts / kit 的 hamsterSvg 里) */
 const HAMSTERS = [
-  { name: "豆豆", face: "🐹", cls: "bh-hero" },
-  { name: "团团", face: "🐹", cls: "bh-hero bh-hero-b" },
+  { name: "豆豆", cls: "bh-hero" },
+  { name: "团团", cls: "bh-hero bh-hero-b" },
 ];
-
-/** 仓鼠的转身:左右靠翻面,上下靠一点点仰头低头,看得出朝哪边又不会歪成一团 */
-function faceStyle(dir: Dir): string {
-  const angle = facingAngle(dir);
-  const tilt = angle === 0 ? -8 : angle === 180 ? 8 : 0;
-  return `rotate(${tilt}deg)${angle === 270 ? " scaleX(-1)" : ""}`;
-}
 
 /** 方向键盘映射 */
 const KEY_DIRS: Record<string, Dir> = {
@@ -186,9 +194,12 @@ interface BoardHandle {
   ) => void;
   toast: (text: string) => void;
   moves: () => number;
+  /** 还挂着几个特效计时器(视觉测试用:destroy 后必须归零) */
+  pendingFx: () => number;
 }
 
-function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
+/** 导出仅供视觉冒烟测试挂桩用;运行时入口仍是 mount */
+export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   let def = opts.def;
   let state: State = initialState(def);
   /** 无限撤销:一步一帧压进去,只有内存上限这一条保护 */
@@ -202,8 +213,19 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
   /** 每只仓鼠面朝哪边 */
   let facings: Dir[] = [2, 2];
-  /** 这一步要播的格间插值(播完就清掉,不会每帧重放) */
-  let slide: { cell: number; dx: number; dy: number; ms: number } | null = null;
+  /** 这一步要播的格间插值(仓鼠一条、被推的箱子一条;播完就清掉) */
+  let slides: Array<{ cell: number; dx: number; dy: number; ms: number }> = [];
+  /** 传送落点:这一格的棋子播「放大旋出」而不是平移 */
+  let spinCell = -1;
+  /** 上一步的移动语义(推 / 滑 / 传 / 走)与是谁走的,决定仓鼠姿态 */
+  let lastKind: BhMoveKind = "walk";
+  let lastMover = -1;
+  /** 当前格子边长(fitBoard 量出来的),28px 以下省略尘土只留姿态 */
+  let cellPx = 42;
+  /** 上一帧已经躺在目标点上的箱子格:新到位的那格才放金光脉冲 */
+  let doneCells = new Set<number>();
+  /** 尘土 / 擦痕 / 旋入这类临时特效的清场计时器 */
+  const fxTimers = new Set<ReturnType<typeof setTimeout>>();
   /** 上一次提醒过的死局局面,同一个局面不重复唠叨 */
   let stuckSaid = "";
   const softMotion = (() => {
@@ -222,8 +244,11 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   const hud = el("div", "bh-hud");
   const boxChip = el("span", "bh-chip");
   const moveChip = el("span", "bh-chip");
-  const undoBtn = el("button", "bh-btn", "↩️ 撤销");
+  // 撤销画成小时钟回转图标,文案保留给读屏
+  const undoBtn = el("button", "bh-btn bxh-undo");
   undoBtn.type = "button";
+  undoBtn.innerHTML = `${undoIconSvg()}<span>撤销</span>`;
+  undoBtn.setAttribute("aria-label", "撤销一步");
   const resetBtn = el("button", "bh-btn", "🔄 重来");
   resetBtn.type = "button";
   const hintBtn = el("button", "bh-btn", "💡 提示");
@@ -247,8 +272,18 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   const grid = el("div", "bh-grid");
   grid.setAttribute("role", "img");
   const toastEl = el("div", "bh-toast");
-  box.append(grid, toastEl);
+  // 章节主题角标(木屋 / 冰窖 / 花园轮换),纯装饰
+  const themeDeco = el("span", "bxh-theme");
+  themeDeco.setAttribute("aria-hidden", "true");
+  box.append(grid, themeDeco, toastEl);
   wrap.appendChild(box);
+
+  function applyTheme(): void {
+    const theme = themeOf(def.chapterIndex);
+    box.style.background = theme.tint;
+    themeDeco.innerHTML = theme.deco;
+  }
+  applyTheme();
 
   const pad = el("div", "bh-pad");
   const padDefs: Array<{ dir: Dir; label: string; col: number; row: number }> = [
@@ -288,7 +323,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     const avail = (box.clientWidth || 0) - pad;
     // 还没上屏就量不出宽度;先留着 CSS 里那一档,等下一帧再量
     if (avail <= 0) return;
-    grid.style.setProperty("--cell", `${fitCell(def.w, avail)}px`);
+    cellPx = fitCell(def.w, avail);
+    grid.style.setProperty("--cell", `${cellPx}px`);
   }
 
   function buildGrid(): void {
@@ -308,56 +344,66 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   }
 
   function render(): void {
+    const nextDone = new Set<number>();
     for (let c = 0; c < cells.length; c++) {
       const cell = cells[c];
       let cls = "bh-cell";
-      let text = "";
       if (def.wall[c]) {
         cls += " bh-wall";
       } else {
         if (def.ice[c]) cls += " bh-ice";
         if (def.target[c]) cls += " bh-goal";
-        if (def.portal[c] >= 0) cls += " bh-portal";
+        if (def.portal[c] >= 0) {
+          // 传送门成对反色:下标小的算进口(紫),大的算出口(金)
+          cls += ` bh-portal${c > def.portal[c] ? " bxh-portal-out" : ""}`;
+        }
       }
 
       const bi = state.boxes.indexOf(c);
       const hi = state.hamsters.indexOf(c);
       let piece: HTMLElement | null = null;
       if (bi >= 0) {
-        text = "📦";
-        if (def.target[c]) cls += " bh-done";
+        const done = !!def.target[c];
+        if (done) {
+          cls += " bh-done";
+          nextDone.add(c);
+        }
+        // 木箱自绘;推到目标点变礼物盒,刚归位那一下放一圈金光脉冲
+        piece = el("span", "bxh-piece bxh-box");
+        piece.innerHTML = boxPieceSvg(done, done && !doneCells.has(c) && !softMotion);
       } else if (hi >= 0) {
-        // 仓鼠按朝向转身,不许瞬间换脸
-        piece = el("span", "bxh-face", HAMSTERS[hi % HAMSTERS.length].face);
-        piece.style.transform = faceStyle(facings[hi] ?? 2);
+        // 仓鼠 SVG:四朝向各自姿态,刚推完 / 滑完的那只摆对应姿态
+        const pose = hi === lastMover ? poseForKind(lastKind) : "idle";
+        piece = el("span", "bxh-piece bxh-hamster");
+        piece.innerHTML = bhHamsterSvg(hi, facings[hi] ?? 2, pose);
         if (state.hamsters.length === 1 || hi === active) cls += ` ${HAMSTERS[hi % HAMSTERS.length].cls}`;
-      } else if (def.portal[c] >= 0) {
-        text = "🌀";
-      } else if (def.target[c]) {
-        text = "🐾";
-      } else if (def.ice[c]) {
-        text = "";
       }
       if (c === hintCell) cls += " bh-hint";
       cell.className = cls;
       if (piece) {
         cell.replaceChildren(piece);
       } else {
-        cell.textContent = text;
+        cell.textContent = "";
       }
-      // 格间插值:从上一格「滑」到这一格,推箱比走路慢一点
-      const mover = piece ?? (text === "📦" ? cell : null);
-      if (slide && slide.cell === c && mover) {
-        mover.style.setProperty("--bxh-dx", `${slide.dx * 100}%`);
-        mover.style.setProperty("--bxh-dy", `${slide.dy * 100}%`);
-        mover.style.setProperty("--bxh-dur", `${slide.ms}ms`);
-        mover.classList.add("bxh-slide");
+      // 格间插值:从上一格「滑」到这一格,推箱比走路慢一点;箱子也一起滑
+      if (piece) {
+        for (const s of slides) {
+          if (s.cell !== c) continue;
+          piece.style.setProperty("--bxh-dx", `${s.dx * 100}%`);
+          piece.style.setProperty("--bxh-dy", `${s.dy * 100}%`);
+          piece.style.setProperty("--bxh-dur", `${s.ms}ms`);
+          piece.classList.add("bxh-slide");
+        }
+        // 传送落点:平移换成放大旋出(200ms;reduced 时不加类,瞬移)
+        if (spinCell === c) piece.classList.add("bxh-tp-out");
       }
     }
-    slide = null;
+    slides = [];
+    spinCell = -1;
+    doneCells = nextDone;
 
     const left = remainingBoxes(def, state);
-    boxChip.textContent = left === 0 ? "📦 全部归位!" : `📦 还差 ${left} 个`;
+    boxChip.textContent = left === 0 ? "🎁 全部归位!" : `🎁 还差 ${left} 个`;
     if (opts.moveLimit && opts.moveLimit > 0) {
       const rest = Math.max(0, opts.moveLimit - moves);
       moveChip.textContent = `👣 还剩 ${rest} 步`;
@@ -426,12 +472,33 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
   /** 从 from 滑到 to 的格子偏移(动画从「上一格」的位置起步) */
   function slideFrom(from: number, to: number, kind: "walk" | "push", undoing: boolean): void {
     if (from < 0 || to < 0) return;
-    slide = {
+    slides.push({
       cell: to,
       dx: (from % def.w) - (to % def.w),
       dy: Math.floor(from / def.w) - Math.floor(to / def.w),
       ms: moveDuration(kind, softMotion, undoing),
-    };
+    });
+  }
+
+  /** 在某格上放一段临时特效(尘土 / 擦痕 / 旋入 / 彩带),到点自己收走 */
+  function spawnFx(cell: number, html: string, ms: number): void {
+    const host = cells[cell];
+    if (!host) return;
+    const node = el("span", "bxh-fxwrap");
+    node.setAttribute("aria-hidden", "true");
+    node.innerHTML = html;
+    host.appendChild(node);
+    const timer = setTimeout(() => {
+      node.remove();
+      fxTimers.delete(timer);
+    }, ms);
+    fxTimers.add(timer);
+  }
+
+  /** 过关仪式:所有礼物盒同时放彩带,仓鼠抱腮转圈(reduced 静止合影 + 静态彩带) */
+  function celebrate(): void {
+    grid.classList.add("bxh-win");
+    for (const c of state.boxes) spawnFx(c, confettiHtml(), BH_TIMINGS.winSpinMs + 400);
   }
 
   /** 这一步之后局面还救得回来吗:先过死局规则,推了箱子再让求解器复核一遍 */
@@ -463,13 +530,40 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     facings[active] = dir;
     moves++;
     hintCell = -1;
-    slideFrom(out.from, out.pushed ? out.to : out.to, out.pushed ? "push" : "walk", false);
+    // 三种移动三种画法:推(尘土+推箱姿态)/ 滑(擦痕+张爪)/ 传(旋入旋出)
+    const kind = classifyMove(def, out);
+    lastKind = kind;
+    lastMover = active;
+    if (kind === "teleport") {
+      if (out.pushed) {
+        // 箱子被传走:仓鼠正常跟半步,箱子在出口旋出、入口放旋入小闪
+        slideFrom(out.from, out.to, "push", false);
+        if (!softMotion) spinCell = out.boxTo;
+      } else if (!softMotion) {
+        // 仓鼠自己传送:不做跨场长平移,入口旋入、出口旋出(reduced 瞬移)
+        spinCell = out.to;
+      }
+    } else {
+      slideFrom(out.from, out.to, kind === "push" ? "push" : "walk", false);
+      if (kind === "push") slideFrom(out.boxFrom, out.boxTo, "push", false);
+    }
     opts.sfx(out.pushed ? "pop" : "tap");
     if (out.teleported) opts.sfx("coin");
     render();
+    // 特效在重绘之后落格,免得被 replaceChildren 一把清掉
+    if (kind === "push" && shouldShowDust(cellPx, softMotion)) {
+      spawnFx(out.boxFrom, dustHtml(dir), BH_TIMINGS.dustMs + 120);
+    } else if (kind === "slide" && !softMotion) {
+      spawnFx(out.from, scratchHtml(dir), BH_TIMINGS.scratchMs + 60);
+    } else if (kind === "teleport" && !softMotion) {
+      const path = out.pushed ? out.boxPath : out.path;
+      const entry = path.length >= 2 ? path[path.length - 2] : -1;
+      if (entry >= 0) spawnFx(entry, teleportInHtml(), BH_TIMINGS.teleportMs + 60);
+    }
 
     if (isSolved(def, state)) {
       finished = true;
+      celebrate();
       opts.sfx("win");
       opts.onWin(moves, undos, hintsUsed);
       return;
@@ -492,6 +586,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     undos++;
     hintCell = -1;
     stuckSaid = "";
+    lastKind = "walk";
+    lastMover = -1;
     // 撤销把刚才那一步反着播,速度快一倍
     slideFrom(wasAt, state.hamsters[active], "walk", true);
     opts.sfx("tap");
@@ -507,6 +603,10 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     hintCell = -1;
     stuckSaid = "";
     facings = [2, 2];
+    lastKind = "walk";
+    lastMover = -1;
+    doneCells = new Set();
+    grid.classList.remove("bxh-win");
     clearVeil();
     opts.sfx("tap");
     render();
@@ -593,6 +693,8 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       window.removeEventListener("orientationchange", onResize);
       cancelAnimationFrame(fitRaf);
       if (toastTimer) clearTimeout(toastTimer);
+      for (const timer of fxTimers) clearTimeout(timer);
+      fxTimers.clear();
       clearVeil();
       wrap.remove();
     },
@@ -608,6 +710,11 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
       hintCell = -1;
       stuckSaid = "";
       facings = [2, 2];
+      lastKind = "walk";
+      lastMover = -1;
+      doneCells = new Set();
+      grid.classList.remove("bxh-win");
+      applyTheme();
       clearVeil();
       if (def.hamsters.length > 1 && !swapBtn.isConnected) hud.appendChild(swapBtn);
       if (def.hamsters.length <= 1 && swapBtn.isConnected) swapBtn.remove();
@@ -618,6 +725,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
     showVeil,
     toast,
     moves: () => moves,
+    pendingFx: () => fxTimers.size,
   };
 }
 
