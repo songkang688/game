@@ -689,17 +689,31 @@ export function buildLevel(index: number): LevelSpec {
   return LEVELS[i];
 }
 
+/** 无尽模式对手的最高档；第 10 局起就一直是这一档，不会再往上 */
+export const ENDLESS_TOP_TIER: AiTier = 4;
+
 /** 无尽模式第 round 局的对手档位与起手局面（越往后越难） */
 export function endlessTier(round: number): AiTier {
   if (round <= 2) return 1;
   if (round <= 5) return 2;
   if (round <= 9) return 3;
-  return 4;
+  return ENDLESS_TOP_TIER;
+}
+
+/** 对手是不是已经到最高档：到顶之后再连胜也不会更难，界面上要说清楚 */
+export function endlessAtTop(round: number): boolean {
+  return endlessTier(round) >= ENDLESS_TOP_TIER && endlessThinkMs(round) >= ENDLESS_TOP_THINK_MS;
 }
 
 /**
  * 无尽模式的题面池：用的是题库里没排进 188 关的那些局面，
  * 每一个都和闯关题同一批生成、同样验证过，白方都有强制赢法。
+ *
+ * 后半段（`p2` / `c2` / `e1` / `un` 的余料）是第 2 轮补进来的：
+ * 对手档位第 10 局就封顶了，题面至少得多换几轮才不至于原地打转。
+ * 这几道也都是 3 半回合以内的强制杀，和前面一批同一个难度量级，
+ * 不改 `endlessTier` / `endlessThinkMs`，所以难度标定没动。
+ * `levels.test.ts` 会逐个用搜索证明「白方真有强制杀」。
  */
 const ENDLESS_POOL: Array<readonly [string, string]> = [
   ...FAM.m2.slice(12),
@@ -709,6 +723,10 @@ const ENDLESS_POOL: Array<readonly [string, string]> = [
   ...FAM.r2.slice(12),
   ...FAM.p1.slice(12),
   ...FAM.u1.slice(3),
+  ...FAM.p2.slice(12),
+  ...FAM.c2.slice(16),
+  ...FAM.e1.slice(8),
+  ...FAM.un.slice(5),
 ];
 
 /** 无尽模式第 round 局（1 起）的起手局面 */
@@ -720,9 +738,17 @@ export function endlessStart(round: number): string {
 /** 无尽模式一共准备了几个不同的残局 */
 export const ENDLESS_COUNT = ENDLESS_POOL.length;
 
+/** 第 round 局用的是题面池的第几轮（1 起）：一轮跑完就从头再来一遍 */
+export function endlessLap(round: number): number {
+  return Math.floor((Math.max(1, Math.round(round)) - 1) / ENDLESS_POOL.length) + 1;
+}
+
+/** 对手思考时间的上限（毫秒）；到顶之后再连胜也不会想得更久 */
+export const ENDLESS_TOP_THINK_MS = 240;
+
 /** 无尽模式第 round 局对手的思考时间上限（毫秒），越往后想得越久 */
 export function endlessThinkMs(round: number): number {
-  return Math.min(240, 40 + round * 20);
+  return Math.min(ENDLESS_TOP_THINK_MS, 40 + round * 20);
 }
 
 /** 过关评星：一次做对 3 星，错一次 2 星，再多就 1 星 */

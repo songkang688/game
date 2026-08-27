@@ -7,7 +7,22 @@
 import { describe, expect, it } from "vitest";
 import { assertTotal } from "../level99";
 import { fromFen, toFen, WHITE } from "./board";
-import { CHAPTERS, LEVELS, buildLevel, endlessThinkMs, endlessTier, loseLine, rateLevel, winLine } from "./levels";
+import {
+  CHAPTERS,
+  ENDLESS_COUNT,
+  ENDLESS_TOP_THINK_MS,
+  ENDLESS_TOP_TIER,
+  LEVELS,
+  buildLevel,
+  endlessAtTop,
+  endlessLap,
+  endlessStart,
+  endlessThinkMs,
+  endlessTier,
+  loseLine,
+  rateLevel,
+  winLine,
+} from "./levels";
 import { fromSan, inCheck, legalMoves, makeMove, toSan } from "./moves";
 import { createGame, gameStatus, insufficientMaterial, playMove, status } from "./rules";
 import { findForcedMate, forcesMate } from "./search";
@@ -258,6 +273,42 @@ describe("关卡外围工具", () => {
     }
     expect(endlessTier(1)).toBe(1);
     expect(endlessTier(20)).toBe(4);
+  });
+
+  /* -- R2-PA-4：对手第 10 局封顶、题面池太小，后段既不更难也不更新鲜 -- */
+
+  it("题面池扩到了 41 个，一局一个不重样地转完一整轮", () => {
+    expect(ENDLESS_COUNT).toBe(41);
+    const lap = new Set<string>();
+    for (let round = 1; round <= ENDLESS_COUNT; round++) lap.add(endlessStart(round));
+    expect(lap.size, "同一轮里有两局撞了同一个题面").toBe(ENDLESS_COUNT);
+  });
+
+  it("扩进来的题面一样是「白方有强制杀」，难度量级和原来那批齐平", () => {
+    for (let round = 1; round <= ENDLESS_COUNT; round++) {
+      const pos = fromFen(endlessStart(round));
+      expect(pos.turn, `第 ${round} 局不是白方先走`).toBe(WHITE);
+      const found = [1, 3, 5].some((plies) => findForcedMate(pos, plies) !== null);
+      expect(found, `第 ${round} 局的题面白方没有 3 手以内的强制杀`).toBe(true);
+    }
+  });
+
+  it("跑满一轮之后题面从头再来，界面能说出这是第几轮", () => {
+    expect(endlessLap(1)).toBe(1);
+    expect(endlessLap(ENDLESS_COUNT)).toBe(1);
+    expect(endlessLap(ENDLESS_COUNT + 1)).toBe(2);
+    expect(endlessStart(ENDLESS_COUNT + 1)).toBe(endlessStart(1));
+    expect(endlessLap(ENDLESS_COUNT * 2 + 1)).toBe(3);
+  });
+
+  it("对手封顶那一刻说得清楚：到顶之前不报，到顶之后一直报", () => {
+    expect(endlessTier(9)).toBeLessThan(ENDLESS_TOP_TIER);
+    expect(endlessAtTop(9), "还没到顶就说到顶了").toBe(false);
+    for (let round = 1; round <= 40; round++) {
+      const capped = endlessTier(round) >= ENDLESS_TOP_TIER && endlessThinkMs(round) >= ENDLESS_TOP_THINK_MS;
+      expect(endlessAtTop(round), `第 ${round} 局的封顶判断对不上`).toBe(capped);
+    }
+    expect(endlessAtTop(20), "第 20 局早该封顶了").toBe(true);
   });
 
   it("每一关都写了标题与提示，提示里不直接给出答案着法", () => {

@@ -21,7 +21,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mount } from "./index";
+import { endlessChip, mount } from "./index";
 import { BLACK, WHITE, parseSquare } from "./board";
 import {
   fireWindow,
@@ -33,7 +33,7 @@ import {
   type El,
 } from "./domStub";
 import GUIDE from "./guide";
-import { buildLevel, loseLine, winLine } from "./levels";
+import { ENDLESS_COUNT, buildLevel, endlessAtTop, endlessLap, loseLine, winLine } from "./levels";
 import { meta } from "./meta";
 import { fromSan } from "./moves";
 import { boardOrder, createBoard } from "./view";
@@ -531,6 +531,55 @@ describe("R2-PA-5 · 残局连胜的收场话", () => {
       expect(line.includes(bad), `收场话里出现了「${bad}」`).toBe(false);
     }
     handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* R2-PA-4 · 残局连胜后段：封顶与题面循环都写在 chip 上                   */
+/* ------------------------------------------------------------------ */
+
+describe("R2-PA-4 · 残局连胜的 chip", () => {
+  it("界面上挂的就是 endlessChip 拼出来的那一串", () => {
+    const handle = mount(fakeApi().api as never);
+    dom.root.find((e) => e.className.includes("cg-open") && e.textContent.includes("残局连胜"))!.click();
+    flushTimers(dom, 4);
+    expect(dom.root.find((e) => e.className.includes("cg-chip"))!.textContent).toBe(endlessChip(1, 0));
+    handle.destroy();
+  });
+
+  it("还没封顶的时候不啰嗦：不写「已到最高档」，也不写题面轮次", () => {
+    const chip = endlessChip(1, 0);
+    expect(chip).toContain("第 1 局");
+    expect(chip, "才第 1 局就说到顶了").not.toContain("已到最高档");
+    expect(chip, "第一轮不该标轮次").not.toContain("题面第");
+    expect(endlessAtTop(1)).toBe(false);
+  });
+
+  it("对手封顶之后 chip 上明说「已到最高档」，从第 10 局起一直挂着", () => {
+    expect(endlessAtTop(9)).toBe(false);
+    expect(endlessChip(9, 3)).not.toContain("已到最高档");
+    for (const round of [10, 15, 30, 100]) {
+      expect(endlessAtTop(round), `第 ${round} 局早该封顶了`).toBe(true);
+      expect(endlessChip(round, 3), `第 ${round} 局的 chip 没说封顶`).toContain("已到最高档");
+    }
+  });
+
+  it("题面池 41 个转完一轮才重样，转到第二轮 chip 上就写出来", () => {
+    expect(ENDLESS_COUNT).toBe(41);
+    expect(endlessChip(ENDLESS_COUNT, 3), "第一轮不该标轮次").not.toContain("题面第");
+    expect(endlessChip(ENDLESS_COUNT + 1, 3)).toContain("题面第 2 轮");
+    expect(endlessChip(ENDLESS_COUNT * 2 + 1, 3)).toContain("题面第 3 轮");
+    expect(endlessLap(ENDLESS_COUNT)).toBe(1);
+    expect(endlessLap(ENDLESS_COUNT + 1)).toBe(2);
+  });
+
+  it("chip 这一句本身也过红线筛子，最好成绩照旧写在末尾", () => {
+    for (const round of [1, 10, 45]) {
+      const chip = endlessChip(round, 25);
+      expect(chip).toContain(`第 ${round} 局`);
+      expect(chip.endsWith("最好 25 局")).toBe(true);
+      for (const bad of ["死", "血", "笨", "废物"]) expect(chip.includes(bad)).toBe(false);
+    }
   });
 });
 

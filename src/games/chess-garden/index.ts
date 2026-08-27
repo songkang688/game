@@ -18,6 +18,8 @@ import GUIDE from "./guide";
 import {
   CHAPTERS,
   buildLevel,
+  endlessAtTop,
+  endlessLap,
   endlessStart,
   endlessThinkMs,
   endlessTier,
@@ -361,6 +363,19 @@ function mountVersus(
 // 无尽:一局接一局的残局连胜
 // ---------------------------------------------------------------------------
 
+/**
+ * 残局连胜那条 chip 上的字。
+ * 对手第 10 局起就封顶了、题面池跑满一轮也会从头再来——
+ * 后段不会更难、也不会更新鲜，那就在这里说明白，别让人以为还在加码。
+ */
+export function endlessChip(round: number, best: number): string {
+  const label = AI_LABEL[endlessTier(round)];
+  const lap = endlessLap(round);
+  const top = endlessAtTop(round) ? " · 已到最高档" : "";
+  const laps = lap > 1 ? ` · 题面第 ${lap} 轮` : "";
+  return `♾️ 残局连胜 · 第 ${round} 局 · ${label}${top}${laps} · 最好 ${best} 局`;
+}
+
 function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
   const shell = makeShell(host, api, onBack, "♾️ 残局连胜");
   let round = 1;
@@ -404,11 +419,12 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     shell.stage.innerHTML = "";
     const tier = endlessTier(round);
     const thinkMs = endlessThinkMs(round);
-    shell.chip.textContent = `♾️ 残局连胜 · 第 ${round} 局 · ${AI_LABEL[tier]} · 最好 ${best} 局`;
+    const atTop = endlessAtTop(round);
+    shell.chip.textContent = endlessChip(round, best);
     board = createBoard(shell.stage, {
       fen: endlessStart(round),
       seats: [DUO, aiSeat(tier)],
-      banner: `第 ${round} 局 · 对手 ${AI_LABEL[tier]}`,
+      banner: `第 ${round} 局 · 对手 ${AI_LABEL[tier]}${atTop ? "（已到最高档）" : ""}`,
       tip: "白方有赢法，找出来把对方将杀。和棋或者输掉，连胜就断了。",
       showHints: round <= 3,
       allowResign: true,
