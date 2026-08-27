@@ -62,7 +62,7 @@ import {
   dropFxClasses,
   ghostTarget,
   modeTagHtml,
-  mountOverlayHtml,
+  framingOverlayHtml,
   pieceSkinSvg,
   stepAngle,
 } from "./visual";
@@ -532,7 +532,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     if (!prefersReduced()) {
       const mount = document.createElement("div");
       mount.className = "pzv-mount";
-      mount.innerHTML = mountOverlayHtml(galleryCaption());
+      mount.innerHTML = framingOverlayHtml(galleryCaption());
       wrap.appendChild(mount);
     }
     let fired = false;

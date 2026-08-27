@@ -236,7 +236,7 @@ export function confettiHtml(n = 12): string {
 }
 
 /** 完成装裱浮层的内容:四条木框边合拢 + 画廊语义标牌 + 彩纸 */
-export function mountOverlayHtml(caption: string): string {
+export function framingOverlayHtml(caption: string): string {
   return (
     `<i class="pzv-mbar pzv-mt"></i><i class="pzv-mbar pzv-mb"></i>` +
     `<i class="pzv-mbar pzv-ml"></i><i class="pzv-mbar pzv-mr"></i>` +

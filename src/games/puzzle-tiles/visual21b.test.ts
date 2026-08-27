@@ -16,7 +16,7 @@ import {
   dropFxClasses,
   ghostTarget,
   modeTagHtml,
-  mountOverlayHtml,
+  framingOverlayHtml,
   pieceSkinSvg,
   stepAngle,
 } from "./visual";
@@ -168,7 +168,7 @@ describe("拼图乐园 · 1.3 视觉 · 顶栏 / 装裱 / FX 清理", () => {
   });
 
   it("装裱浮层:四条木框边 + 画廊标牌 + 确定性彩纸(两次生成一个样)", () => {
-    const html = mountOverlayHtml("第 3 幅作品装裱完成！");
+    const html = framingOverlayHtml("第 3 幅作品装裱完成！");
     expect((html.match(/pzv-mbar/g) ?? []).length).toBe(4);
     expect(html).toContain("pzv-mt");
     expect(html).toContain("pzv-mb");
