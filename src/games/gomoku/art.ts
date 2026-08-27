@@ -301,6 +301,109 @@ export function stoneIconSVG(p: 1 | 2, size: number): string {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 六档棋灵的画制头像（round2 N-01:座位条不再用 emoji 前缀认对手）
+// ---------------------------------------------------------------------------
+
+/** spiritAvatarSVG 支持的六档(与 ai.ts 的 Difficulty 同名,只取字面量不引玩法模块) */
+export type SpiritTier = "novice" | "easy" | "normal" | "smart" | "master" | "hell";
+
+/** 棋灵的一对墨点眼(带高光),渊档换成闭目弯月 */
+function spiritEyes(ink: string, closed: boolean): string {
+  if (closed) {
+    return (
+      `<path d="M16.6 25.6 q2.3 -2.8 4.6 0" fill="none" stroke="${ink}" stroke-width="1.8" stroke-linecap="round"/>` +
+      `<path d="M26.8 25.6 q2.3 -2.8 4.6 0" fill="none" stroke="${ink}" stroke-width="1.8" stroke-linecap="round"/>`
+    );
+  }
+  return (
+    `<circle cx="19" cy="25.2" r="1.7" fill="${ink}"/>` +
+    `<circle cx="29" cy="25.2" r="1.7" fill="${ink}"/>` +
+    `<circle cx="18.4" cy="24.6" r=".6" fill="#fff"/>` +
+    `<circle cx="28.4" cy="24.6" r=".6" fill="#fff"/>`
+  );
+}
+
+/** 微笑一弯(嘴角上翘,失败也只会鼓励的脸) */
+function spiritSmile(ink: string): string {
+  return `<path d="M21.4 30.4 q2.6 2.4 5.2 0" fill="none" stroke="${ink}" stroke-width="1.6" stroke-linecap="round"/>`;
+}
+
+/**
+ * 六档棋灵头像:与座位条迷你棋子**同一套玉石材质**——投影 + 三档径向渐变圆面 +
+ * 左上椭圆高光(-32°,同 stoneIconSVG),特征全部用深木墨色(FRAME_DARK)两三笔勾出:
+ * 苗=顶芽两叶 / 喵=立耳粉窝 / 狐=尖耳白吻 / 龙=金角短须 / 象=大耳卷鼻 / 渊=墨玉面星点闭目。
+ * 渊档整面换黑玉渐变,呼应「深渊」;全部原创造型,不近似任何棋院徽记 / 商标形象。
+ * 纯 SVG 字符串,座位条直接 innerHTML 内联;渐变 id 按档位隔离不串色。
+ */
+export function spiritAvatarSVG(tier: SpiritTier, size: number): string {
+  const dark = tier === "hell";
+  const [hi, mid, lo] = dark ? STONE_BLACK : STONE_WHITE;
+  const ink = dark ? "#E8DDF2" : FRAME_DARK;
+  const blush = dark ? "rgba(232,221,242,.28)" : "rgba(205,125,70,.30)";
+  const gid = `gmk-sp-${tier}`;
+  const feats: Record<SpiritTier, string> = {
+    // 苗:头顶一茎两片嫩芽(绿),刚发芽的新手
+    novice:
+      `<path d="M24 13 C23.7 11 23.9 9.2 24.5 7.6" fill="none" stroke="#5E8C4A" stroke-width="2" stroke-linecap="round"/>` +
+      `<path d="M23.9 9.8 C21.6 10 19.9 9 19.1 7 C21.4 6.4 23.3 7.3 23.9 9.8 Z" fill="#7FB069" stroke="#5E8C4A" stroke-width="1.3" stroke-linejoin="round"/>` +
+      `<path d="M24.4 8.6 C26.3 9.2 28.3 8.5 29.3 6.6 C27.2 5.6 25.2 6.3 24.4 8.6 Z" fill="#9CC97F" stroke="#5E8C4A" stroke-width="1.3" stroke-linejoin="round"/>` +
+      spiritEyes(ink, false) +
+      spiritSmile(ink),
+    // 喵:两只立耳(耳窝一抹粉) + w 形猫嘴
+    easy:
+      `<path d="M13.6 19 L14.9 8.9 Q15.1 7.6 16.2 8.4 L21.8 12.4 Z" fill="${mid}" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M34.4 19 L33.1 8.9 Q32.9 7.6 31.8 8.4 L26.2 12.4 Z" fill="${mid}" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M15.7 16.4 L16.4 11.2 L19.6 13.5 Z" fill="${blush}"/>` +
+      `<path d="M32.3 16.4 L31.6 11.2 L28.4 13.5 Z" fill="${blush}"/>` +
+      spiritEyes(ink, false) +
+      `<path d="M21.2 30 Q22.6 31.9 24 30 Q25.4 31.9 26.8 30" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linecap="round"/>`,
+    // 狐:更高更尖的双耳 + 奶白小吻端
+    normal:
+      `<path d="M14.4 20 L14.7 7 Q14.8 5.7 16 6.7 L21.9 12.3 Z" fill="${mid}" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M33.6 20 L33.3 7 Q33.2 5.7 32 6.7 L26.1 12.3 Z" fill="${mid}" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>` +
+      `<ellipse cx="24" cy="31" rx="6.2" ry="4.4" fill="#FFF9EE" stroke="${ink}" stroke-width="1.4"/>` +
+      `<circle cx="24" cy="29.4" r="1.4" fill="${ink}"/>` +
+      spiritEyes(ink, false),
+    // 龙:一对金角 + 腮边短须
+    smart:
+      `<path d="M17.2 12.8 C15.6 10 16 7.2 18 5.2 C19.3 7.8 19.1 10.5 18.3 12.6 Z" fill="${FRAME_GOLD}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>` +
+      `<path d="M30.8 12.8 C32.4 10 32 7.2 30 5.2 C28.7 7.8 28.9 10.5 29.7 12.6 Z" fill="${FRAME_GOLD}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>` +
+      `<path d="M13.6 28.4 q-2.8 .3 -3.8 2.5" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linecap="round"/>` +
+      `<path d="M34.4 28.4 q2.8 .3 3.8 2.5" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linecap="round"/>` +
+      spiritEyes(ink, false) +
+      spiritSmile(ink),
+    // 象:两扇大耳 + 一管卷鼻(与 xiangqi 小象同族但玉石材质)
+    master:
+      `<ellipse cx="12.4" cy="24.6" rx="5.2" ry="6.8" fill="${mid}" stroke="${ink}" stroke-width="2"/>` +
+      `<ellipse cx="35.6" cy="24.6" rx="5.2" ry="6.8" fill="${mid}" stroke="${ink}" stroke-width="2"/>` +
+      `<path d="M22.8 29 C22 32 22.4 34.4 24 35.8 C25.4 37 27.2 37.1 28.6 36.2 L27.8 34.6 C26.7 35.2 25.6 35 24.9 34.2 C23.9 33 24 31 24.9 29.2 Z" fill="${mid}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>` +
+      spiritEyes(ink, false),
+    // 渊:墨玉面 + 三粒星光 + 闭目浅笑(星环徽记样式刻意避开)
+    hell:
+      `<path d="M15 13.6 l.9 2 2 .9 -2 .9 -.9 2 -.9 -2 -2 -.9 2 -.9 Z" fill="#CBB8E8"/>` +
+      `<path d="M31.6 11.8 l.7 1.6 1.6 .7 -1.6 .7 -.7 1.6 -.7 -1.6 -1.6 -.7 1.6 -.7 Z" fill="#B7A3DB"/>` +
+      `<path d="M31 33.4 l.6 1.3 1.3 .6 -1.3 .6 -.6 1.3 -.6 -1.3 -1.3 -.6 1.3 -.6 Z" fill="#CBB8E8"/>` +
+      spiritEyes(ink, true) +
+      spiritSmile(ink),
+  };
+  return (
+    `<svg class="gmk-spirit" viewBox="0 0 48 48" width="${size}" height="${size}"` +
+    ` style="vertical-align:middle" aria-hidden="true">` +
+    `<ellipse cx="25.4" cy="30" rx="16.4" ry="15.4" fill="rgba(120,80,40,.28)"/>` +
+    `<defs><radialGradient id="${gid}" cx="0.36" cy="0.32" r="0.95">` +
+    `<stop offset="0" stop-color="${hi}"/><stop offset="0.55" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/>` +
+    `</radialGradient></defs>` +
+    `<circle cx="24" cy="27" r="16.5" fill="url(#${gid})"/>` +
+    `<circle cx="24" cy="27" r="16.5" fill="none" stroke="${dark ? "rgba(46,40,55,.9)" : "rgba(150,110,70,.8)"}" stroke-width="2"/>` +
+    `<ellipse cx="18.6" cy="20.6" rx="5.4" ry="3.1" transform="rotate(-32 18.6 20.6)" fill="rgba(255,255,255,${dark ? ".35" : ".9"})"/>` +
+    `<ellipse cx="15.6" cy="29.4" rx="2.3" ry="1.4" fill="${blush}"/>` +
+    `<ellipse cx="32.4" cy="29.4" rx="2.3" ry="1.4" fill="${blush}"/>` +
+    feats[tier] +
+    `</svg>`
+  );
+}
+
 /** AI 思考时棋盘右上角的小沙漏（旋转交给 CSS，reduced 下静止） */
 export function hourglassSVG(size: number): string {
   return (

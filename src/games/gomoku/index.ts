@@ -70,7 +70,7 @@ import {
   type StreakState,
 } from "./session";
 import { CSS, WIN_JUMP_GAP_MS, WIN_JUMP_MS, WIN_SWEEP_MS, createBoardView, type BoardView } from "./view";
-import { hourglassSVG, stoneIconSVG } from "./art";
+import { hourglassSVG, spiritAvatarSVG, stoneIconSVG } from "./art";
 import { prefersReducedMotion } from "../../engine/view25d";
 import {
   TOTAL_LEVELS,
@@ -204,6 +204,8 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   const seats = document.createElement("div");
   seats.className = "gmk-seats";
   const seatEls: Array<{ box: HTMLElement; time: HTMLElement }> = [];
+  // AI 落座的那一侧加一枚画制棋灵头像,名字里的 emoji 前缀改由头像承担(round2 N-01)
+  const aiSeat = o.ai && !o.puzzle ? (o.human === 2 ? 1 : 2) : 0;
   for (const p of [1, 2] as const) {
     const box = document.createElement("div");
     box.className = "gmk-seat";
@@ -216,7 +218,16 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     const time = document.createElement("span");
     time.className = "gmk-seat-time";
     time.textContent = fmtClock(0);
-    box.append(ico, name, time);
+    if (p === aiSeat && o.ai) {
+      const spirit = document.createElement("span");
+      spirit.className = "gmk-seat-spirit";
+      spirit.setAttribute("aria-hidden", "true");
+      spirit.innerHTML = spiritAvatarSVG(o.ai, 20);
+      name.textContent = names[p - 1].replace(/^\S+\s+/, "");
+      box.append(ico, spirit, name, time);
+    } else {
+      box.append(ico, name, time);
+    }
     seats.appendChild(box);
     seatEls.push({ box, time });
   }

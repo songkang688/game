@@ -101,6 +101,7 @@ export const CSS = `
   border-radius:14px;padding:5px 10px;min-width:0;}
 .gmk-seat.gmk-seat-on{border-color:#E8C57C;box-shadow:0 0 0 2px rgba(232,197,124,.5),0 2px 6px rgba(180,130,80,.25);}
 .gmk-seat-ico{display:inline-flex;line-height:0;flex:none;}
+.gmk-seat-spirit{display:inline-flex;line-height:0;flex:none;}
 .gmk-seat.gmk-seat-on .gmk-seat-ico{animation:gmk-breath 1.6s ease-in-out infinite;}
 @keyframes gmk-breath{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
 .gmk-seat-name{font-weight:800;color:#8A6B45;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;
