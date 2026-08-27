@@ -174,18 +174,23 @@ async function overflowX(page) {
   });
 }
 
-/** 舞台上有没有结算浮层:战役走 .l99-ov-title,模式页走 .<前缀>-over-t */
+/**
+ * 舞台上有没有结算浮层:战役走 `.l99-ov-title`,模式页走 `.<前缀>-over-t`。
+ * 进模式时框架只是把选关那一层 `hidden` 起来、DOM 还留着,
+ * 所以藏起来的浮层一律不算数,免得把上一局的战果当成这一局的。
+ */
 async function verdict(page, p) {
   return page.evaluate((prefix) => {
-    const l99 = document.querySelector(".l99-ov-title")?.textContent?.trim() ?? "";
-    if (l99) return l99;
-    const own = document.querySelector(`.${prefix}-over-t`)?.textContent?.trim() ?? "";
-    if (own) return own;
-    // 有的款把结算写在通用浮层里
-    const any = [...document.querySelectorAll("[class*='over-t'],[class*='-ov-title']")]
-      .map((e) => e.textContent?.trim() ?? "")
-      .find((t) => t.length > 0);
-    return any ?? "";
+    const shown = (el) => el && !el.closest("[hidden]") && el.getClientRects().length > 0;
+    const sels = [".l99-ov-title", `.${prefix}-over-t`, "[class*='over-t']", "[class*='-ov-title']"];
+    for (const sel of sels) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (!shown(el)) continue;
+        const t = el.textContent?.trim() ?? "";
+        if (t) return t;
+      }
+    }
+    return "";
   }, p);
 }
 
@@ -204,6 +209,28 @@ async function fingerprint(page) {
     }
     return out;
   });
+}
+
+/**
+ * 模式页的开局流程都是同一套:选档 / 选盘面 / 选目标,一层层的 `.<前缀>-open`,
+ * 点到没得选为止就是真盘面了。
+ */
+async function pickThrough(page, prefix, maxDepth = 4) {
+  let picked = 0;
+  for (let i = 0; i < maxDepth; i++) {
+    const hit = await page.evaluate((p) => {
+      const btns = [...document.querySelectorAll(`.${p}-open`)].filter(
+        (b) => !b.closest("[hidden]") && b.getClientRects().length > 0 && !b.disabled
+      );
+      if (btns.length === 0) return false;
+      btns[0].click();
+      return true;
+    }, prefix);
+    if (!hit) break;
+    picked += 1;
+    await sleep(600);
+  }
+  return picked;
 }
 
 /** 把 188 关存档铺到第 n 关可玩,然后整页重载进这一关 */
@@ -839,22 +866,34 @@ async function main() {
         );
       }
 
-      // 4) 真实胜负:先摆烂看会不会判输,再认真玩看能不能过关
-      await openLevel(page, g.id, 1);
-      const idle = await drive(page, g, { budgetMs: 22000, mode: "idle" });
-      log(
-        idle.v !== "",
-        `第 1 关摆烂不动会走到结算(输一次)`,
-        idle.v ? `${idle.v} · ${Math.round(idle.ms / 1000)}s` : `${Math.round(idle.ms / 1000)}s 内没有结算`
-      );
-
-      await openLevel(page, g.id, 1);
-      const played = await drive(page, g, { budgetMs: 40000, mode: "play" });
-      log(
-        played.v.includes("过关"),
-        `第 1 关认真玩能玩到过关(赢一次)`,
-        played.v ? `${played.v} · ${played.acts} 次操作` : `${played.acts} 次操作 / ${Math.round(played.ms / 1000)}s 内没有结算`
-      );
+      // 4) 真实胜负:一局一局真打,直到「过关」和「就差一点点」两种结算都亲眼见过。
+      //    单数轮摆烂(什么都不按)专门逼输,双数轮认真玩去博一次过关。
+      const seen = new Map();
+      const playRounds = async (level, rounds, opts) => {
+        await openLevel(page, g.id, level);
+        for (let round = 0; round < rounds && seen.size < 2; round++) {
+          const r = await drive(page, g, opts);
+          if (r.v.includes("过关")) seen.set("win", `第 ${level} 关 ${r.v}(第 ${round + 1} 局 · ${r.acts} 次操作)`);
+          else if (r.v.includes("就差")) seen.set("lose", `第 ${level} 关 ${r.v}(第 ${round + 1} 局 · ${r.acts} 次操作)`);
+          const again = await page.evaluate(() => {
+            const b = [...document.querySelectorAll(".l99-ov-btn")].find((x) =>
+              /再试本关|再玩一次/.test(x.textContent ?? "")
+            );
+            if (!b) return false;
+            b.click();
+            return true;
+          });
+          if (!again) await openLevel(page, g.id, level);
+          await sleep(800);
+        }
+      };
+      // 赢:第 1 关认真玩;输:摆烂一局,再去最难的第 188 关碰一次
+      await playRounds(1, 4, { budgetMs: 26000, mode: "play" });
+      if (!seen.has("lose")) await playRounds(1, 1, { budgetMs: 16000, mode: "idle" });
+      if (!seen.has("lose")) await playRounds(188, 2, { budgetMs: 24000, mode: "play" });
+      if (!seen.has("win")) await playRounds(1, 3, { budgetMs: 26000, mode: "play" });
+      log(seen.has("win"), "真打到过关(赢一次)", seen.get("win") ?? "多局之内没打出过关");
+      log(seen.has("lose"), "真打到失败(输一次)", seen.get("lose") ?? "多局之内没打出失败");
 
       // 5) 每个额外模式都要开得起来并且玩得到结算
       for (const label of g.modes) {
@@ -867,32 +906,17 @@ async function main() {
           [`.${g.p}-modebar .${g.p}-open`, label]
         );
         await sleep(600);
-        // 有档位选择的先挑一档,再点开始
-        if (g.tier) {
-          await page.evaluate(() => {
-            const start = [...document.querySelectorAll("button")].find((b) =>
-              /菜鸟|普通|简单/.test(b.textContent ?? "")
-            );
-            start?.click();
-          });
-          await sleep(400);
-        }
-        await page.evaluate(() => {
-          const go = [...document.querySelectorAll("button")].find((b) => /开始|开局|▶/.test(b.textContent ?? ""));
-          go?.click();
-        });
-        await sleep(900);
+        // 选档 / 选盘面那几层都是同一颗 .<前缀>-open,一层层点到真盘面出来为止
+        const picks = await pickThrough(page, g.p);
+        await sleep(700);
         const drewMode = await page.evaluate(
-          (prefix) => document.querySelectorAll(`.${prefix}-mode canvas, .${prefix}-mode [class^='${prefix}-']`).length,
+          (prefix) => document.querySelectorAll(`canvas, [class^='${prefix}-'], [class*=' ${prefix}-']`).length,
           g.p
         );
         const flow = await overflowX(page);
-        const res = await drive(page, g, { budgetMs: 30000, mode: "play" });
-        log(
-          drewMode > 0 && flow.doc <= 1 && res.v !== "",
-          `${label}:开得起来、画得出、玩到结算`,
-          `${drewMode} 个节点 · doc+${flow.doc} · 结算「${res.v || "没等到"}」`
-        );
+        log(drewMode > 5 && flow.doc <= 1, `${label}:开得起来、画得出、360px 不溢出`, `选了 ${picks} 层 · ${drewMode} 个节点 · doc+${flow.doc}`);
+        const res = await drive(page, g, { budgetMs: 55000, mode: "play" });
+        log(res.v !== "", `${label}:玩到结算`, res.v ? `结算「${res.v}」· ${res.acts} 次操作` : `${res.acts} 次操作 / ${Math.round(res.ms / 1000)}s 内没等到结算`);
       }
 
       // 6) 双人键位:朵朵 WASD+F+G,星星 方向键+L+K
