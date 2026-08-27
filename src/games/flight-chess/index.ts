@@ -84,13 +84,13 @@ export const CSS = `
 .fc-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#EAF6FF,#FFF2F7);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
 .fc-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:6px;}
-.fc-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:13px;color:#2f6b96;
+.fc-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#2f6b96;
   box-shadow:0 2px 6px rgba(120,170,210,.3);line-height:1.5;overflow-wrap:anywhere;}
 .fc-seats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
-.fc-seat{flex:1 1 96px;min-width:0;background:#fff;border-radius:12px;padding:5px 8px;font-size:13px;font-weight:800;
+.fc-seat{flex:1 1 96px;min-width:0;background:#fff;border-radius:12px;padding:5px 8px;font-size:16px;font-weight:800;
   color:#4a5a70;box-shadow:0 2px 6px rgba(120,160,200,.25);line-height:1.5;overflow-wrap:anywhere;}
 .fc-seat-on{outline:3px solid #59A9DC;}
-.fc-seat-tier{font-size:13px;font-weight:700;color:#7d8ba0;}
+.fc-seat-tier{font-size:16px;font-weight:700;color:#7d8ba0;}
 .fc-boardwrap{position:relative;width:100%;max-width:440px;margin:0 auto;}
 .fc-board{position:relative;width:100%;aspect-ratio:1;background:#F4FAFF;border-radius:14px;overflow:hidden;
   box-shadow:inset 0 0 0 2px #DCEBF6;}
@@ -138,7 +138,7 @@ export const CSS = `
 .fc-pick:disabled{opacity:.4;cursor:default;}
 .fc-msg{text-align:center;min-height:2.8em;color:#3a5a72;font-weight:800;margin-top:6px;font-size:16px;
   line-height:1.5;overflow-wrap:anywhere;}
-.fc-goal{text-align:center;font-size:13px;font-weight:800;color:#2f6b96;line-height:1.5;margin-bottom:6px;
+.fc-goal{text-align:center;font-size:16px;font-weight:800;color:#2f6b96;line-height:1.5;margin-bottom:6px;
   overflow-wrap:anywhere;}
 .fc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .fc-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
@@ -150,17 +150,17 @@ export const CSS = `
   font-family:inherit;background:#ffffffd9;color:#2F6D9B;box-shadow:0 3px 0 rgba(90,140,180,.35);}
 .fc-over{text-align:center;padding:20px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(120,160,200,.3);}
 .fc-over-t{font-size:20px;font-weight:900;color:#2f6b96;margin-bottom:8px;}
-.fc-over-s{font-size:14px;font-weight:700;color:#5b6f80;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
+.fc-over-s{font-size:16px;font-weight:700;color:#5b6f80;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 .fc-pause{position:absolute;inset:0;background:rgba(240,250,255,.96);border-radius:16px;z-index:9;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .fc-pause-t{font-size:19px;font-weight:900;color:#2f6b96;}
-.fc-keys{font-size:13px;font-weight:700;color:#5b7386;line-height:1.6;text-align:center;margin-top:6px;
+.fc-keys{font-size:16px;font-weight:700;color:#5b7386;line-height:1.6;text-align:center;margin-top:6px;
   overflow-wrap:anywhere;}
 .fc-btn:focus-visible,.fc-pick:focus-visible,.fc-token:focus-visible,.fc-open:focus-visible,.fc-back:focus-visible{
   outline:3px solid #123f5e;outline-offset:2px;}
 @media (max-width:380px){
   .fc-wrap{padding:6px;}
-  .fc-seat{flex:1 1 45%;font-size:13px;padding:4px 6px;}
+  .fc-seat{flex:1 1 45%;padding:4px 6px;}
   .fc-btn{min-width:84px;font-size:15px;padding:0 10px;}
   .fc-dice{min-width:48px;min-height:48px;font-size:28px;}
 }

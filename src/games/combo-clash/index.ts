@@ -64,7 +64,7 @@ const CSS = `
 .cc-hud{display:flex;gap:8px;align-items:stretch;margin-bottom:6px;}
 .cc-side{flex:1 1 0;min-width:0;}
 .cc-side.cc-right{text-align:right;}
-.cc-name{font-size:14px;font-weight:900;color:#8a4a76;overflow-wrap:anywhere;line-height:1.4;}
+.cc-name{font-size:16px;font-weight:900;color:#8a4a76;overflow-wrap:anywhere;line-height:1.4;}
 .cc-bar{height:12px;border-radius:8px;background:#F0E4EE;overflow:hidden;margin-top:3px;}
 .cc-bar>i{display:block;height:100%;border-radius:8px;transition:width .12s linear;}
 .cc-bar.cc-thin{height:7px;}
@@ -75,7 +75,7 @@ const CSS = `
 .cc-timer{font-size:22px;font-weight:900;color:#7a4a86;line-height:1.1;}
 .cc-dots{font-size:14px;letter-spacing:2px;color:#D8A8C4;}
 .cc-dots b{color:#E0568F;}
-.cc-combo{font-size:13px;font-weight:800;color:#8a5aa8;min-height:18px;overflow-wrap:anywhere;}
+.cc-combo{font-size:16px;font-weight:800;color:#8a5aa8;min-height:18px;overflow-wrap:anywhere;}
 .cc-canvas{width:100%;height:auto;display:block;border-radius:14px;background:#FFF7FC;touch-action:none;}
 .cc-msg{text-align:center;min-height:20px;color:#7a4a86;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
@@ -100,7 +100,7 @@ const CSS = `
 .cc-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;}
 .cc-back{border:none;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:900;cursor:pointer;
   min-height:44px;font-family:inherit;background:#ffffffd9;color:#a4548a;box-shadow:0 3px 0 rgba(180,120,160,.35);}
-.cc-badge{background:#fff;border-radius:14px;padding:6px 10px;font-weight:800;font-size:14px;color:#8a4a76;
+.cc-badge{background:#fff;border-radius:14px;padding:6px 10px;font-weight:800;font-size:16px;color:#8a4a76;
   box-shadow:0 2px 6px rgba(190,150,190,.3);overflow-wrap:anywhere;}
 .cc-pick{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;}
 .cc-face{min-width:74px;min-height:74px;border:none;border-radius:16px;font-family:inherit;cursor:pointer;
@@ -114,13 +114,12 @@ const CSS = `
   margin:6px auto;max-width:520px;}
 .cc-over{text-align:center;padding:22px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(190,150,190,.3);}
 .cc-over-t{font-size:21px;font-weight:900;color:#8a4a76;margin-bottom:8px;}
-.cc-over-s{font-size:15px;font-weight:700;color:#7a5a8a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
+.cc-over-s{font-size:16px;font-weight:700;color:#7a5a8a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 .cc-train{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
-.cc-info{background:#ffffffd0;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:700;color:#6a4a7a;
+.cc-info{background:#ffffffd0;border-radius:12px;padding:8px 10px;font-size:16px;font-weight:700;color:#6a4a7a;
   line-height:1.6;overflow-wrap:anywhere;max-width:520px;margin:8px auto 0;text-align:left;}
 .cc-info b{color:#a4548a;}
 @media (max-width:360px){
-  .cc-name{font-size:13px;}
   .cc-timer{font-size:19px;}
   .cc-stick{width:96px;height:96px;}
   .cc-btn{min-width:56px;min-height:56px;font-size:15px;}

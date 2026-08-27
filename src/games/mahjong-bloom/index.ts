@@ -60,13 +60,13 @@ export const MJ_CSS = `
 .mj-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF4F8,#F3F8FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;overflow:hidden;}
 .mj-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.mj-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:14px;color:#8a4a70;
+.mj-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#8a4a70;
   box-shadow:0 2px 6px rgba(190,140,180,.25);overflow-wrap:anywhere;line-height:1.4;}
-.mj-goal{flex:1 1 100%;font-size:14px;font-weight:800;color:#8a4a70;text-align:center;line-height:1.5;
+.mj-goal{flex:1 1 100%;font-size:16px;font-weight:800;color:#8a4a70;text-align:center;line-height:1.5;
   overflow-wrap:anywhere;}
 .mj-board{display:flex;flex-direction:column;gap:8px;}
 .mj-foe{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:34px;}
-.mj-foe-name{font-size:13px;font-weight:900;color:#6c5a8c;white-space:nowrap;}
+.mj-foe-name{font-size:16px;font-weight:900;color:#6c5a8c;white-space:nowrap;}
 .mj-foe-name.mj-turn{color:#c8397a;}
 .mj-backs{display:flex;gap:2px;flex-wrap:wrap;}
 .mj-back{width:10px;height:20px;border-radius:3px;background:linear-gradient(180deg,#B9A7D8,#9B86C4);
@@ -75,7 +75,7 @@ export const MJ_CSS = `
 .mj-river{flex:1;min-width:0;background:#ffffffa8;border-radius:12px;padding:6px;min-height:64px;
   display:flex;flex-wrap:wrap;gap:3px;align-content:flex-start;}
 .mj-info{width:96px;flex:0 0 auto;display:flex;flex-direction:column;gap:4px;}
-.mj-info .mj-badge{font-size:13px;padding:4px 8px;text-align:center;}
+.mj-info .mj-badge{font-size:16px;padding:4px 8px;text-align:center;}
 .mj-melds{display:flex;gap:6px;flex-wrap:wrap;min-height:4px;}
 .mj-meldgrp{display:flex;gap:1px;padding:2px;border-radius:8px;background:#ffffffb0;}
 .mj-hand{display:flex;gap:3px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:thin;}
@@ -128,7 +128,7 @@ export const MJ_CSS = `
 .mj-sheet{position:absolute;inset:0;background:rgba(255,248,252,.97);border-radius:16px;z-index:9;padding:16px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;}
 .mj-sheet-t{font-size:21px;font-weight:900;color:#a8407a;}
-.mj-sheet-s{font-size:15px;font-weight:700;color:#7c5a8e;line-height:1.6;max-width:340px;overflow-wrap:anywhere;}
+.mj-sheet-s{font-size:16px;font-weight:700;color:#7c5a8e;line-height:1.6;max-width:340px;overflow-wrap:anywhere;}
 .mj-fans{width:100%;max-width:340px;max-height:${FAN_VISIBLE * 34}px;overflow-y:auto;display:flex;
   flex-direction:column;gap:4px;padding:2px;}
 .mj-fan{display:flex;justify-content:space-between;gap:10px;background:#fff;border-radius:10px;padding:6px 12px;
@@ -142,8 +142,7 @@ export const MJ_CSS = `
   .mj-wrap{padding:8px;}
   .mj-tile{width:30px;height:42px;}
   .mj-t-n{font-size:16px;}
-  .mj-badge{font-size:13px;padding:4px 8px;}
-  .mj-goal{font-size:13px;}
+  .mj-badge{padding:4px 8px;}
   .mj-info{width:78px;}
   .mj-btn{min-width:50px;padding:0 10px;font-size:15px;}
   .mj-back{width:8px;height:17px;}

@@ -232,6 +232,89 @@ describe("360×640 走查回落:说明文字不许小过正文下限", () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// 1.2 窗口 1 · 第 2 轮:二级界面(对战 / 无尽 / 双人同屏 + 结算面板)
+//
+// 第 1 轮的字号取证只覆盖到每款的**入口屏**那一行 `.xx-msg`。真正让人眯眼的是
+// 进了模式之后那些一直在变的读数:HUD 徽章、排行榜、席位行、战报、目标行,
+// 以及每一局打完弹出来的结算副标题。它们全是「讲给孩子听的话」,按正文下限走。
+// 好几款还在 `@media (max-width:360px)` 里把这些字**再调小一档** —— 360×640 正是
+// 验收视口,越窄越小是反的,那些覆盖一律删掉(不是抬一点,是删掉)。
+// ---------------------------------------------------------------------------
+
+describe("360×640 走查回落:二级界面的状态行与结算副标题", () => {
+  /** 每款在对战 / 无尽 / 双人同屏里会变的读数,以及结算面板的副标题 */
+  const SECONDARY_BODY_CLASSES: [string, string[]][] = [
+    ["orb-arena", [".oa-badge", ".oa-board", ".oa-board summary", ".oa-over-s"]],
+    ["snake-royale", [".sr-badge", ".sr-board", ".sr-board summary", ".sr-over-s"]],
+    ["block-drop", [".bd-badge", ".bd-mini", ".bd-over-s"]],
+    ["combo-clash", [".cc-badge", ".cc-name", ".cc-combo", ".cc-info", ".cc-over-s"]],
+    ["mahjong-bloom", [".mj-badge", ".mj-goal", ".mj-sheet-s", ".mj-foe-name"]],
+    ["star-estate", [".se-badge", ".se-seat", ".se-over-s"]],
+    ["hero-cards", [".hc-badge", ".hc-seat", ".hc-log", ".hc-over-s"]],
+    ["weiqi-garden", [".wq-chip", ".wq-label", ".wq-over-s"]],
+    ["flight-chess", [".fc-badge", ".fc-seat", ".fc-seat-tier", ".fc-goal", ".fc-keys", ".fc-over-s"]],
+    ["merge-2048", [".mg-badge", ".mg-over-s"]],
+    ["mine-garden", [".mn-chip", ".mn-over-s"]],
+    ["sudoku-petal", [".sp-badge", ".sp-name", ".sp-hintbox", ".sp-pause"]]
+  ];
+
+  for (const [id, classes] of SECONDARY_BODY_CLASSES) {
+    it(`${id} 的二级界面读数在窄屏也不小过 ${MIN_BODY_PX}px`, () => {
+      const src = readFileSync(new URL(`../games/${id}/index.ts`, import.meta.url), "utf8");
+      for (const cls of classes) {
+        const px = fontSizeOf(src, cls);
+        expect(px, `${id} 里找不到 ${cls}`).not.toBeNull();
+        expect(px, `${id} 的 ${cls} 是二级界面的说明文字,360px 上不能小过 ${MIN_BODY_PX}px`).toBeGreaterThanOrEqual(
+          MIN_BODY_PX
+        );
+      }
+    });
+  }
+
+  it("窄屏媒体查询里不许再把这些读数调小(要么不写,要么写得更大)", () => {
+    const bad: string[] = [];
+    for (const [id, classes] of SECONDARY_BODY_CLASSES) {
+      const src = readFileSync(new URL(`../games/${id}/index.ts`, import.meta.url), "utf8");
+      // 各款的窄屏断点不完全一致(360 / 380 / 420),从第一个 max-width 段起往后都算
+      const at = src.search(/@media\s*\(max-width:\s*\d+px\)/);
+      if (at < 0) continue;
+      const narrow = src.slice(at);
+      for (const cls of classes) {
+        const px = fontSizeOf(narrow, cls);
+        if (px !== null && px < MIN_BODY_PX) bad.push(`${id} 的 ${cls} 在窄屏被调到 ${px}px`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("按钮文字窄屏也不小过控件下限 14px", () => {
+    const CONTROLS: [string, string[]][] = [
+      ["orb-arena", [".oa-btn"]],
+      ["snake-royale", [".sr-btn", ".sr-skin"]],
+      ["block-drop", [".bd-btn"]],
+      ["combo-clash", [".cc-btn", ".cc-open"]],
+      ["mahjong-bloom", [".mj-btn"]],
+      ["star-estate", [".se-btn", ".se-deed"]],
+      ["hero-cards", [".hc-btn"]],
+      ["weiqi-garden", [".wq-btn", ".wq-open"]],
+      ["flight-chess", [".fc-btn"]],
+      ["mine-garden", [".mn-btn"]],
+      ["sudoku-petal", [".sp-tool"]]
+    ];
+    const bad: string[] = [];
+    for (const [id, classes] of CONTROLS) {
+      const src = readFileSync(new URL(`../games/${id}/index.ts`, import.meta.url), "utf8");
+      for (const cls of classes) {
+        const px = fontSizeOf(src, cls);
+        if (px === null) bad.push(`${id} 里找不到 ${cls}`);
+        else if (px < MIN_CONTROL_PX) bad.push(`${id} 的 ${cls} 只有 ${px}px`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+});
+
 describe("360×640 走查回落:首页搜索框不许顶出屏幕", () => {
   // 实测:360px 视口下 .home-search 被自动最小尺寸撑到 370px,
   // 「清空搜索」的 ✕ 右边缘落在 375px,被屏幕裁掉一半点不着。

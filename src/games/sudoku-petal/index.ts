@@ -234,11 +234,11 @@ export const SP_CSS = `
 .sp-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#F7F2FF,#FFF6FB);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .sp-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;}
-.sp-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:14px;color:#5f4a8a;
+.sp-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#5f4a8a;
   box-shadow:0 2px 6px rgba(150,130,200,.25);overflow-wrap:anywhere;min-width:0;}
 .sp-seats{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;justify-content:center;}
 .sp-seat{display:flex;flex-direction:column;gap:6px;align-items:center;max-width:100%;min-width:0;}
-.sp-name{font-size:14px;font-weight:900;color:#5f4a8a;overflow-wrap:anywhere;text-align:center;}
+.sp-name{font-size:16px;font-weight:900;color:#5f4a8a;overflow-wrap:anywhere;text-align:center;}
 .sp-grid{display:grid;gap:1px;background:#CFC1EC;border-radius:12px;padding:3px;flex:0 0 auto;}
 .sp-cell{position:relative;display:flex;align-items:center;justify-content:center;border:none;padding:0;margin:0;
   font-family:inherit;font-weight:900;line-height:1;cursor:pointer;color:#3f7f9c;background:#fff;}
@@ -272,7 +272,7 @@ export const SP_CSS = `
 .sp-key:focus-visible,.sp-tool:focus-visible,.sp-open:focus-visible,.sp-back:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .sp-msg{text-align:center;min-height:20px;color:#5f4a8a;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;max-width:340px;}
-.sp-hintbox{background:#FFFBEA;border-radius:12px;padding:8px 10px;font-size:14px;font-weight:700;color:#7a5f1e;
+.sp-hintbox{background:#FFFBEA;border-radius:12px;padding:8px 10px;font-size:16px;font-weight:700;color:#7a5f1e;
   line-height:1.6;max-width:340px;text-align:left;}
 /* 只给读屏听的一行:看不见、不占位,落子成没成靠它 */
 .sp-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
@@ -286,7 +286,7 @@ export const SP_CSS = `
 .sp-back{border:none;border-radius:999px;padding:8px 14px;min-height:44px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffd9;color:#6b4f9c;box-shadow:0 3px 0 rgba(120,90,160,.25);}
 .sp-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
-.sp-pause{margin-top:10px;text-align:center;font-size:15px;font-weight:900;color:#6b4f9c;}
+.sp-pause{margin-top:10px;text-align:center;font-size:16px;font-weight:900;color:#6b4f9c;}
 @media (max-width:420px){
   .sp-wrap{padding:7px;}
   .sp-seats{gap:10px;}

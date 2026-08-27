@@ -49,7 +49,7 @@ export const OA_CSS = `
 .oa-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#F3EEFF,#FBF6FF);
   border-radius:16px;padding:10px;user-select:none;position:relative;}
 .oa-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;margin-bottom:6px;}
-.oa-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:14px;color:#6b53a8;
+.oa-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#6b53a8;
   box-shadow:0 2px 6px rgba(150,130,200,.25);}
 .oa-canvas{width:100%;border-radius:14px;display:block;background:#F7F3FF;touch-action:none;}
 .oa-panes{display:flex;flex-direction:column;gap:6px;}
@@ -60,8 +60,8 @@ export const OA_CSS = `
 .oa-btn.oa-star{background:#CFE3FA;color:#2f4a75;box-shadow:0 3px 0 #A6C4E8;}
 .oa-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .oa-board{position:absolute;top:44px;right:14px;background:#ffffffdb;border-radius:12px;padding:6px 9px;
-  font-size:13px;font-weight:800;color:#5b4a86;line-height:1.5;max-width:44%;}
-.oa-board summary{cursor:pointer;font-size:13px;}
+  font-size:16px;font-weight:800;color:#5b4a86;line-height:1.5;max-width:44%;}
+.oa-board summary{cursor:pointer;font-size:16px;}
 .oa-me{color:#a8347a;}
 .oa-msg{text-align:center;min-height:20px;color:#6b53a8;font-weight:800;margin-top:6px;font-size:16px;line-height:1.45;
   overflow-wrap:anywhere;}
@@ -75,10 +75,10 @@ export const OA_CSS = `
   font-family:inherit;background:#ffffffd9;color:#7b5cc4;box-shadow:0 3px 0 rgba(120,90,180,.3);}
 .oa-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(150,130,200,.25);}
 .oa-over-t{font-size:21px;font-weight:900;color:#6b53a8;margin-bottom:8px;}
-.oa-over-s{font-size:15px;font-weight:700;color:#7a67ab;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
+.oa-over-s{font-size:16px;font-weight:700;color:#7a67ab;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 @media (max-width:360px){
-  .oa-badge{font-size:13px;padding:4px 8px;}
-  .oa-board{font-size:12px;max-width:52%;}
+  .oa-badge{padding:4px 8px;}
+  .oa-board{max-width:52%;}
   .oa-btn{min-width:72px;font-size:14px;}
 }
 `;

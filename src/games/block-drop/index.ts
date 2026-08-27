@@ -70,14 +70,14 @@ const CSS = `
 .bd-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EEF4FF,#F9FBFF);
   border-radius:16px;padding:10px;user-select:none;}
 .bd-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;margin-bottom:6px;}
-.bd-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:14px;color:#3f5b8a;
+.bd-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#3f5b8a;
   box-shadow:0 2px 6px rgba(130,150,200,.25);overflow-wrap:anywhere;}
 .bd-seats{display:flex;flex-direction:column;gap:10px;align-items:center;}
 .bd-seats.bd-split{flex-direction:column;}
 .bd-seat{display:flex;gap:8px;align-items:flex-start;justify-content:center;max-width:100%;}
 .bd-canvas{border-radius:12px;background:#F4F7FF;touch-action:none;display:block;max-width:100%;height:auto;}
 .bd-side{display:flex;flex-direction:column;gap:6px;min-width:64px;}
-.bd-mini{background:#ffffffcc;border-radius:10px;padding:4px 6px;font-size:13px;font-weight:800;color:#3f5b8a;
+.bd-mini{background:#ffffffcc;border-radius:10px;padding:4px 6px;font-size:16px;font-weight:800;color:#3f5b8a;
   text-align:center;overflow-wrap:anywhere;line-height:1.4;}
 .bd-pad{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
 .bd-btn{min-width:56px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:15px;
@@ -97,18 +97,18 @@ const CSS = `
   font-family:inherit;background:#ffffffd9;color:#5c83c4;box-shadow:0 3px 0 rgba(100,130,190,.3);}
 .bd-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(130,150,200,.25);}
 .bd-over-t{font-size:21px;font-weight:900;color:#3f5b8a;margin-bottom:8px;}
-.bd-over-s{font-size:15px;font-weight:700;color:#54709b;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
+.bd-over-s{font-size:16px;font-weight:700;color:#54709b;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 @media (min-width:760px){
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
 }
 @media (max-width:360px){
-  .bd-badge{font-size:13px;padding:4px 8px;}
+  .bd-badge{padding:4px 8px;}
   .bd-btn{min-width:48px;font-size:14px;padding:0 6px;}
   /* 窄屏把预览与暂存收成顶上一行,场地才占得满宽 */
   .bd-seat{flex-direction:column-reverse;align-items:stretch;gap:6px;}
   .bd-side{flex-direction:row;min-width:0;gap:4px;}
   .bd-side .bd-mini{flex:1 1 0;min-width:0;}
-  .bd-mini{font-size:13px;padding:3px 4px;}
+  .bd-mini{padding:3px 4px;}
 }
 `;
 

@@ -62,14 +62,14 @@ export const SR_CSS = `
 .sr-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EAF7E4,#F7FCF3);
   border-radius:16px;padding:10px;user-select:none;position:relative;}
 .sr-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;margin-bottom:6px;}
-.sr-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:14px;color:#3f7a52;
+.sr-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#3f7a52;
   box-shadow:0 2px 6px rgba(120,170,130,.25);overflow-wrap:anywhere;}
 .sr-panes{display:flex;flex-direction:column;gap:6px;}
 .sr-panes.sr-split{flex-direction:column;}
 .sr-canvas{width:100%;border-radius:14px;display:block;background:#F1FAEC;touch-action:none;}
 .sr-board{position:absolute;top:46px;right:14px;background:#ffffffdb;border-radius:12px;padding:6px 9px;
-  font-size:13px;font-weight:800;color:#3f7a52;line-height:1.5;max-width:44%;}
-.sr-board summary{cursor:pointer;font-size:13px;}
+  font-size:16px;font-weight:800;color:#3f7a52;line-height:1.5;max-width:44%;}
+.sr-board summary{cursor:pointer;font-size:16px;}
 .sr-me{color:#b85a2a;}
 .sr-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px;}
 .sr-btn{min-width:88px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:15px;
@@ -89,7 +89,7 @@ export const SR_CSS = `
   font-family:inherit;background:#ffffffd9;color:#4f9e6b;box-shadow:0 3px 0 rgba(90,150,110,.3);}
 .sr-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(120,170,130,.25);}
 .sr-over-t{font-size:21px;font-weight:900;color:#3f7a52;margin-bottom:8px;}
-.sr-over-s{font-size:15px;font-weight:700;color:#54886a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
+.sr-over-s{font-size:16px;font-weight:700;color:#54886a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 .sr-skins{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0 0;}
 .sr-skin{border:2px solid transparent;border-radius:12px;padding:5px 9px;font-size:14px;font-weight:800;
   font-family:inherit;cursor:pointer;background:#ffffffd9;color:#3f7a52;min-height:36px;}
@@ -100,8 +100,8 @@ export const SR_CSS = `
   .sr-panes.sr-split .sr-canvas{width:50%;}
 }
 @media (max-width:360px){
-  .sr-badge{font-size:13px;padding:4px 8px;}
-  .sr-board{font-size:12px;max-width:54%;top:60px;}
+  .sr-badge{padding:4px 8px;}
+  .sr-board{max-width:54%;top:60px;}
   .sr-btn{min-width:74px;font-size:14px;padding:0 10px;}
 }
 `;

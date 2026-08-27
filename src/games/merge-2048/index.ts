@@ -90,7 +90,7 @@ export const MG_CSS = `
 .mg-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFFBEC,#FFF6FA);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .mg-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;}
-.mg-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:14px;color:#7a5f2e;
+.mg-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;font-size:16px;color:#7a5f2e;
   box-shadow:0 2px 6px rgba(190,165,110,.28);overflow-wrap:anywhere;min-width:0;}
 .mg-seats{display:flex;flex-direction:column;gap:12px;align-items:center;}
 .mg-seat{display:flex;flex-direction:column;gap:6px;align-items:center;max-width:100%;min-width:0;}
@@ -126,13 +126,13 @@ export const MG_CSS = `
   font-family:inherit;background:#ffffffd9;color:#a9762a;box-shadow:0 3px 0 rgba(180,140,70,.32);}
 .mg-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(190,165,110,.3);}
 .mg-over-t{font-size:21px;font-weight:900;color:#7a5f2e;margin-bottom:8px;}
-.mg-over-s{font-size:15px;font-weight:700;color:#8a6f3e;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
+.mg-over-s{font-size:16px;font-weight:700;color:#8a6f3e;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 @media (min-width:720px){
   .mg-seats.mg-split{flex-direction:row;align-items:flex-start;justify-content:center;}
 }
 @media (max-width:360px){
   .mg-wrap{padding:6px;}
-  .mg-badge{font-size:13px;padding:4px 8px;}
+  .mg-badge{padding:4px 8px;}
   .mg-btn{min-width:48px;padding:0 6px;}
 }
 @media (prefers-reduced-motion:reduce){

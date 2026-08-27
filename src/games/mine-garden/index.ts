@@ -275,7 +275,7 @@ export const MN_CSS = `
 .mn-back:active{box-shadow:0 2px 0 #4E5E7C;}
 .mn-field{position:relative;}
 .mn-hud{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
-.mn-chip{background:#fff;border-radius:999px;padding:6px 11px;font-size:13px;font-weight:800;color:#3F6033;
+.mn-chip{background:#fff;border-radius:999px;padding:6px 11px;font-size:16px;font-weight:800;color:#3F6033;
   box-shadow:0 2px 6px rgba(110,150,90,.24);white-space:nowrap;}
 .mn-chip b{color:#B0563E;}
 .mn-chip.mn-warn{background:#FFF0E4;color:#A85A28;}
@@ -326,10 +326,10 @@ export const MN_CSS = `
 .mn-over{position:absolute;inset:0;background:rgba(244,251,236,.96);border-radius:16px;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:18px;z-index:6;}
 .mn-over-t{font-size:21px;font-weight:900;color:#3F7D3A;}
-.mn-over-s{font-size:15px;font-weight:700;color:#4B6B3E;line-height:1.6;max-width:340px;overflow-wrap:anywhere;}
+.mn-over-s{font-size:16px;font-weight:700;color:#4B6B3E;line-height:1.6;max-width:340px;overflow-wrap:anywhere;}
 @media (max-width:420px){
   .mn-wrap{padding:8px;}
-  .mn-chip{font-size:13px;padding:5px 9px;}
+  .mn-chip{padding:5px 9px;}
   .mn-duo>div{min-width:0;flex:1 1 100%;}
 }
 @media (prefers-reduced-motion:reduce){

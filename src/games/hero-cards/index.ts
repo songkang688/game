@@ -69,11 +69,11 @@ export const HC_CSS = `
   background:linear-gradient(180deg,#FFF6F0,#FFF0F6);border-radius:16px;padding:10px;
   user-select:none;-webkit-user-select:none;}
 .hc-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.hc-badge{background:#fff;border-radius:14px;padding:5px 10px;font-size:14px;font-weight:800;color:#9a5a3a;
+.hc-badge{background:#fff;border-radius:14px;padding:5px 10px;font-size:16px;font-weight:800;color:#9a5a3a;
   box-shadow:0 2px 6px rgba(210,160,140,.3);line-height:1.5;overflow-wrap:anywhere;}
 .hc-seats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
 .hc-seat{flex:1 1 128px;min-width:0;background:#fff;border-radius:14px;padding:6px 8px;text-align:left;
-  border:none;font-family:inherit;font-size:13px;font-weight:800;color:#7a4a34;cursor:pointer;
+  border:none;font-family:inherit;font-size:16px;font-weight:800;color:#7a4a34;cursor:pointer;
   box-shadow:0 2px 6px rgba(210,160,140,.28);line-height:1.5;overflow-wrap:anywhere;min-height:44px;
   /* 座位那行是「元气 9/9 手牌 10 自己」这样一段段拼的,窄屏优先在空格处折,
      别把「自己」「手牌」这种词从中间劈开 */
@@ -88,7 +88,7 @@ export const HC_CSS = `
 .hc-mid{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:8px 0;}
 .hc-pile{background:#fff;border-radius:12px;padding:6px 10px;font-size:13px;font-weight:800;color:#7a5a44;
   box-shadow:0 2px 6px rgba(210,160,140,.25);}
-.hc-log{background:#FFFDFA;border-radius:12px;padding:8px;font-size:13px;font-weight:700;color:#6b5a4a;
+.hc-log{background:#FFFDFA;border-radius:12px;padding:8px;font-size:16px;font-weight:700;color:#6b5a4a;
   line-height:1.6;min-height:4.8em;max-height:8em;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line;}
 .hc-hand{display:flex;gap:6px;overflow-x:auto;padding:6px 2px;scrollbar-width:none;}
 .hc-hand::-webkit-scrollbar{display:none;}
@@ -118,7 +118,7 @@ export const HC_CSS = `
 .hc-over{text-align:center;padding:20px 14px;background:#fff;border-radius:16px;
   box-shadow:0 4px 14px rgba(200,150,130,.3);}
 .hc-over-t{font-size:20px;font-weight:900;color:#9a5030;margin-bottom:6px;}
-.hc-over-s{font-size:14px;font-weight:700;color:#7a6252;line-height:1.6;margin-bottom:12px;overflow-wrap:anywhere;}
+.hc-over-s{font-size:16px;font-weight:700;color:#7a6252;line-height:1.6;margin-bottom:12px;overflow-wrap:anywhere;}
 .hc-reveal{font-size:14px;font-weight:800;color:#7a5238;line-height:1.7;margin-bottom:10px;}
 .hc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .hc-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;
@@ -135,12 +135,11 @@ export const HC_CSS = `
 .hc-keys{font-size:14px;font-weight:700;color:#7a6252;line-height:1.7;}
 @media (max-width:360px){
   .hc-wrap{padding:8px;}
-  .hc-seat{flex:1 1 46%;font-size:13px;padding:5px 6px;}
-  .hc-badge{font-size:13px;padding:4px 8px;}
+  .hc-seat{flex:1 1 46%;padding:5px 6px;}
+  .hc-badge{padding:4px 8px;}
   .hc-card{width:48px;min-height:70px;}
   .hc-card-name{font-size:13px;}
   .hc-btn{min-width:74px;font-size:15px;padding:0 8px;}
-  .hc-log{font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
