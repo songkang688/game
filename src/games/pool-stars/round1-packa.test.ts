@@ -16,8 +16,11 @@
  * 顶部先静态 import 一次 index：让 level99 / audio 那条链在真 node 环境下加载完，
  * 之后再装 DOM 桩，免得 audio.ts 的 `document.addEventListener` 撞上没有该方法的桩。
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "./index";
+import { loseLine } from "./levels";
 import { El, fireWindow, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
 import { makeBall } from "./physics";
 import { createTable, type SeatPlan, type ShotIntent, type TableOptions } from "./view";
@@ -472,5 +475,71 @@ describe("PA-PS-3 · 退出再进", () => {
     outer.destroy();
     expect(dom.head.children.some((c) => c.id === "ps-shell-style")).toBe(false);
     expect(dom.head.children.some((c) => c.id === "ps-style"), "球桌样式也该带走").toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* R3-PA-PS-1 · 结算浮层不许把同一句鼓励语说两遍                          */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-15 · loseLine 不再和 reason 撞车", () => {
+  const LEVELS_SRC = readFileSync(fileURLToPath(new URL("./levels.ts", import.meta.url)), "utf8");
+
+  /**
+   * `levelSuccess` 能给出来的全部失败 reason，直接从源码里扫。
+   * 这么扫是为了以后有人加一条新 reason，这一组用例自动就把它管上，不用记得回来补。
+   */
+  function failReasons(): string[] {
+    const body = /export function levelSuccess\([\s\S]*?\n}/.exec(LEVELS_SRC)?.[0] ?? "";
+    expect(body, "levels.ts 里找不到 levelSuccess，这条扫描要跟着改").not.toBe("");
+    const out: string[] = [];
+    for (const m of body.matchAll(/ok:\s*false,\s*reason:\s*"([^"]+)"/g)) out.push(m[1]);
+    return out;
+  }
+
+  /** 一句话里有没有长度 ≥ 5 的片段出现了两次 */
+  function repeatedChunk(line: string): string | null {
+    for (let i = 0; i + 5 <= line.length; i++) {
+      const chunk = line.slice(i, i + 5);
+      if (line.indexOf(chunk, i + 1) >= 0) return chunk;
+    }
+    return null;
+  }
+
+  it("扫得到 levelSuccess 的全部失败说法（至少 5 条）", () => {
+    expect(failReasons().length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("每一条 reason 套进 loseLine 都不再有重复的片段", () => {
+    for (const reason of failReasons()) {
+      const line = loseLine(reason);
+      expect(repeatedChunk(line) ?? "没有重复", `「${line}」里「${repeatedChunk(line)}」说了两遍`).toBe("没有重复");
+    }
+  });
+
+  it("空杆那条一字不差就是要补的那句，所以原样用、不再接一遍", () => {
+    const empty = "这一杆差一点点，换个角度再来。";
+    expect(failReasons(), "空杆那条 reason 的写法变了").toContain(empty);
+    expect(loseLine(empty)).toBe(empty);
+  });
+
+  it("自己没说完的那几条照旧补上鼓励语，一句都不许变成光秃秃的判词", () => {
+    const bare = "这一关要先吃一次库，直接打过去不算数。";
+    expect(loseLine(bare)).toBe(`${bare}这一杆差一点点，换个角度再来。`);
+    for (const reason of failReasons()) {
+      const line = loseLine(reason);
+      expect(
+        /差一点点|再来|再瞄一次/.test(line),
+        `「${line}」没给孩子一句「再来一次」`
+      ).toBe(true);
+      for (const bad of ["死", "血", "笨", "废"]) expect(line.includes(bad)).toBe(false);
+    }
+  });
+
+  it("界面上真打空一杆，浮层里那句不再重复", () => {
+    const handle = mount(fakeApi() as never);
+    const line = loseLine("这一杆差一点点，换个角度再来。");
+    expect(line.split("换个角度再来").length - 1, "「换个角度再来」出现了不止一次").toBe(1);
+    handle.destroy();
   });
 });

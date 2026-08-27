@@ -600,8 +600,17 @@ export function winLine(shotsUsed: number): string {
 /** 结算浮层上补的那句鼓励语；`reason` 自己已经把话说全了就不再重复 */
 export const ENCOURAGE = "这一杆差一点点，换个角度再来。";
 
+/**
+ * reason 自己就已经把「再试一次」说完了的收尾说法。
+ *
+ * 监督修复员那一版只拦住了「这一杆差一点点」，可另外两条 reason 也自带收尾：
+ * 「母球掉袋了，这一杆不算数，换个角度再来。」再接一遍会把**「换个角度再来」**说两次，
+ * 「进了，可惜不是指定的那个袋，再瞄一次。」接上之后也是催两遍再来一次。
+ * 三条一起拦，不是回滚那一版，是把同一条闸拉宽。
+ */
+const SELF_CLOSING = ["这一杆差一点点", "换个角度再来", "再瞄一次"];
+
 export function loseLine(reason: string): string {
-  // 最常见的那条 reason 本身就是这句话，硬接一遍会连着说两遍
-  if (reason.includes("这一杆差一点点")) return reason.endsWith("。") ? reason : `${reason}。`;
+  if (SELF_CLOSING.some((s) => reason.includes(s))) return reason.endsWith("。") ? reason : `${reason}。`;
   return `${reason}${ENCOURAGE}`;
 }
