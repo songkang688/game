@@ -973,7 +973,7 @@ function stepMonsters(state: ArenaState, dt: number): void {
       const lane = laneOfPoint(state, m);
       state.leaks[lane] = (state.leaks[lane] ?? 0) + 1;
       state.jars[m.side] = Math.max(0, state.jars[m.side] - 1);
-      addParticle(state, m.x, m.y, "cloud", "☁️");
+      addParticle(state, m.x, m.y, "cloud");
       state.events.push({
         type: "steal",
         side: m.side,
@@ -1031,7 +1031,7 @@ function killMonster(state: ArenaState, i: number, pop: boolean): void {
   if (!m) return;
   if (pop) {
     state.popped++;
-    addParticle(state, m.x, m.y, "cloud", "☁️");
+    addParticle(state, m.x, m.y, "cloud");
     addParticle(state, m.x, m.y, "spark");
     const drops = m.boss ? 4 : 1;
     for (let k = 0; k < drops; k++) addCrumb(state, m.x, m.y, m.side);
