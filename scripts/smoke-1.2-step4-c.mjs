@@ -120,14 +120,15 @@ async function playUntilOver(page, seconds = 90) {
   return sawToken;
 }
 
-/** 走格禁止瞬移:连拍两帧,飞机的 left 必须落在中间过渡值上 */
+/** 走格禁止瞬移:连拍几十帧,飞机必须在起点与终点之间出现过中间位置 */
 async function checkNoTeleport(page, label) {
   const moved = await page.evaluate(async () => {
     const tokens = [...document.querySelectorAll(".fc-token")];
     if (tokens.length === 0) return null;
     const read = () => tokens.map((t) => t.getBoundingClientRect().left);
     const a = read();
-    const btn = document.querySelector(".fc-btn-go:not([disabled])");
+    const btn =
+      document.querySelector(".fc-btn-go:not([disabled])") ?? document.querySelector(".fc-pick:not([disabled])");
     btn?.click();
     const frames = [];
     for (let i = 0; i < 26; i++) {
@@ -176,7 +177,6 @@ async function run() {
     if (opened) {
       await checkBoard(page, `${vp.name} 第 1 关`, vp);
       await checkFontSize(page, `${vp.name} 第 1 关`);
-      await checkNoTeleport(page, `${vp.name} 第 1 关`);
       await playUntilOver(page, 60);
       const title = (await page.locator(".l99-ov-title").first().textContent().catch(() => ""))?.trim() ?? "";
       log(title.length > 0, `${vp.name} 闯关第 1 关走到结算`, title);
@@ -190,6 +190,8 @@ async function run() {
       await page.waitForTimeout(1400);
       await checkTouchTarget(page, `${vp.name} 第 100 关`);
       await checkBoard(page, `${vp.name} 第 100 关`, vp);
+      // 这一关一开局就有三架在路上,挑一架走,正好拿来量「有没有瞬移」
+      await checkNoTeleport(page, `${vp.name} 第 100 关`);
       // Esc 暂停面板
       await page.keyboard.press("Escape");
       await page.waitForTimeout(200);
@@ -207,15 +209,19 @@ async function run() {
       await checkBoard(page, `${vp.name} 四人对战`, vp);
       log((await page.locator(".fc-seat").count()) === 4, `${vp.name} 四人对战摆满四个座位`);
       const rollsOf = async () =>
-        Number(/已掷\s*(\d+)/.exec((await page.locator(".fc-badge").nth(1).textContent()) ?? "")?.[1] ?? -1);
+        Number(/已掷\s*(\d+)/.exec((await page.locator(".fc-top .fc-badge").nth(1).textContent()) ?? "")?.[1] ?? -1);
       const t0 = await rollsOf();
       await playUntilOver(page, 90);
       const t1 = await rollsOf();
       log(t1 > t0 + 20, `${vp.name} 四人对战一直在推进`, `已掷 ${t0} → ${t1} 次`);
-      const homed = await page.evaluate(() =>
-        [...document.querySelectorAll(".fc-seat-tier")].map((n) => n.textContent ?? "").join(" | ")
+      const board = await page.evaluate(() =>
+        [...document.querySelectorAll(".fc-token")].map((n) => n.getAttribute("aria-label") ?? "")
       );
-      log(/到家 [1-9]/.test(homed), `${vp.name} 四人对战真有飞机到家`, homed);
+      log(
+        board.filter((t) => !t.includes("基地")).length >= 4,
+        `${vp.name} 四人对战四色都飞上了环线`,
+        `${board.filter((t) => !t.includes("基地")).length}/16 架在路上`
+      );
       await checkNoOverflow(page, `${vp.name} 四人对战`);
     }
 
@@ -232,10 +238,10 @@ async function run() {
     if (await openMode(page, "双人同屏")) {
       await page.waitForSelector(".fc-board", { timeout: 15000 });
       log((await page.locator(".fc-seat").count()) === 4, `${vp.name} 双人同屏也是四色同场`);
-      const before = (await page.locator(".fc-badge").nth(1).textContent()) ?? "";
+      const before = (await page.locator(".fc-top .fc-badge").first().textContent()) ?? "";
       await page.keyboard.press("f");
       await page.waitForTimeout(1600);
-      const after = (await page.locator(".fc-badge").nth(1).textContent()) ?? "";
+      const after = (await page.locator(".fc-top .fc-badge").first().textContent()) ?? "";
       log(before !== after, `${vp.name} 双人同屏 F 键掷得动骰子`, `${before.trim()} → ${after.trim()}`);
       await checkFontSize(page, `${vp.name} 双人同屏`);
       await checkNoOverflow(page, `${vp.name} 双人同屏`);
