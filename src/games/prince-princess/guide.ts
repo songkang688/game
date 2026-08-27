@@ -92,14 +92,12 @@ function build(): GuideBook {
     gameId: meta.id,
     title: "冒险小攻略",
     general: [
-      "王子近战、公主远程,遇到打不动的怪就换人,别硬碰。",
-      "怪头顶的小图标已经写明了该谁上:写着「剑」的找王子,写着「星」的找公主。",
-      `${ABILITIES.prince.icon} 王子会${ABILITIES.prince.name}:${ABILITIES.prince.howto}。`,
-      `${ABILITIES.princess.icon} 公主会${ABILITIES.princess.name}:${ABILITIES.princess.howto}。`,
-      "两个人共用一条心条,替对方挡一下是划算的。",
+      "王子近战、公主远程:怪头顶写着「剑」的找王子,写着「星」的找公主,别硬碰。",
+      `${ABILITIES.prince.icon} 王子会${ABILITIES.prince.name}:${ABILITIES.prince.howto},推进断口就架成一座桥。`,
+      `${ABILITIES.princess.icon} 公主会${ABILITIES.princess.name}:${ABILITIES.princess.howto},只有她够得到最高那颗宝石。`,
       "路上的小旗走过就点亮,摔下去会被小云朵托回最近那面旗,宝石都还在。",
+      "两个人共用一条心条;一个人玩就按 Tab 换人,没被操作的那位会自己跟上来帮忙。",
       "三颗星看的是清怪、用时、宝石三样,先求过关,再回头刷成绩。",
-      "一个人玩就按 Tab 换人,没被操作的那位会自己跟上来帮忙。",
     ],
     entries: [
       {
