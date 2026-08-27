@@ -43,6 +43,7 @@ import {
   drawPlatformBase,
   drawSparkle,
   drawSprings,
+  drawMidgroundBand,
   drawStageDecor,
   drawSyrupBubbles,
   drawTeamRing,
@@ -690,6 +691,8 @@ function mountArena(opts: ArenaOptions): Arena {
     ctx.fillStyle = sky;
     ctx.fillRect(-30, -30, WORLD_W + 60, WORLD_H + 60);
 
+    // 中景剪影带(r2 · B档TOP4):平台不再悬在「一张纸」前面
+    drawMidgroundBand(ctx, stage.id, WORLD_W, WORLD_H, stage.sky[1]);
     // 场地主题装饰层（云朵 / 齿轮 / 风车 / 月牙……soft 时全部定格）
     drawStageDecor(ctx, stage.id, WORLD_W, WORLD_H, animT(state.t, soft), stage.sky[0]);
 

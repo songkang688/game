@@ -1044,6 +1044,176 @@ function drawWindmill(ctx: CanvasRenderingContext2D, x: number, y: number, s: nu
 }
 
 /**
+ * 中景剪影带(r2 · B档TOP4):画在天空渐变与装饰层之间,给每张场地补一层纵深。
+ * 单色(sky[1] 加深 12%)、静态、基线贴 worldH×0.78、高度约 worldH×0.12,
+ * 只留剪影不抢平台层的对比;soft 模式无动画诉求,本来就是静态。
+ */
+export function drawMidgroundBand(
+  ctx: CanvasRenderingContext2D,
+  stageId: string,
+  worldW: number,
+  worldH: number,
+  sky1: string
+): void {
+  const base = worldH * 0.78;
+  const bh = worldH * 0.12;
+  ctx.save();
+  ctx.fillStyle = shade(sky1, -0.12);
+  ctx.beginPath();
+  switch (stageId) {
+    case "cloud-square":
+      // 三座圆顶云丘
+      ctx.moveTo(0, base);
+      for (const [cx, r] of [
+        [worldW * 0.18, bh * 0.9],
+        [worldW * 0.5, bh * 1.15],
+        [worldW * 0.84, bh * 0.8],
+      ] as const) {
+        ctx.lineTo(cx - r, base);
+        ctx.arc(cx, base, r, Math.PI, 0);
+      }
+      ctx.lineTo(worldW, base);
+      break;
+    case "wobble-isles":
+      // 两座远岛 + 水平线
+      ctx.moveTo(0, base);
+      ctx.lineTo(worldW, base);
+      ctx.lineTo(worldW, base - 2.5);
+      ctx.lineTo(0, base - 2.5);
+      ctx.closePath();
+      for (const [cx, r] of [
+        [worldW * 0.28, bh * 0.9],
+        [worldW * 0.72, bh * 0.65],
+      ] as const) {
+        ctx.moveTo(cx - r, base);
+        ctx.quadraticCurveTo(cx, base - r * 1.3, cx + r, base);
+      }
+      break;
+    case "belt-works":
+      // 厂房锯齿屋顶 + 两根烟囱
+      ctx.moveTo(0, base);
+      ctx.lineTo(0, base - bh * 0.55);
+      for (let i = 0; i < 5; i++) {
+        const x0 = (worldW / 5) * i;
+        ctx.lineTo(x0 + worldW * 0.1, base - bh * 1.05);
+        ctx.lineTo(x0 + worldW * 0.1, base - bh * 0.55);
+      }
+      ctx.lineTo(worldW, base);
+      ctx.closePath();
+      for (const cx of [worldW * 0.3, worldW * 0.62]) {
+        ctx.rect(cx, base - bh * 1.7, worldW * 0.022, bh * 0.9);
+      }
+      break;
+    case "spring-candy":
+      // 三支远处的棒棒糖圆头
+      for (const [cx, r] of [
+        [worldW * 0.22, bh * 0.62],
+        [worldW * 0.5, bh * 0.8],
+        [worldW * 0.78, bh * 0.55],
+      ] as const) {
+        ctx.rect(cx - r * 0.14, base - r * 1.6, r * 0.28, r * 1.6);
+        ctx.moveTo(cx + r, base - r * 1.9);
+        ctx.arc(cx, base - r * 1.9, r, 0, Math.PI * 2);
+      }
+      ctx.moveTo(0, base);
+      ctx.lineTo(worldW, base);
+      ctx.lineTo(worldW, base - 2);
+      ctx.lineTo(0, base - 2);
+      break;
+    case "syrup-pool":
+      // 一座糖山大圆弧
+      ctx.moveTo(0, base);
+      ctx.quadraticCurveTo(worldW * 0.5, base - bh * 1.6, worldW, base);
+      break;
+    case "windmill-field":
+      // 矮丘 + 远处一架静态风车
+      ctx.moveTo(0, base);
+      ctx.quadraticCurveTo(worldW * 0.3, base - bh * 0.9, worldW * 0.62, base);
+      ctx.lineTo(worldW, base);
+      ctx.rect(worldW * 0.8 - worldW * 0.008, base - bh * 1.5, worldW * 0.016, bh * 1.5);
+      for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+        const hx = worldW * 0.8;
+        const hy = base - bh * 1.5;
+        const len = bh * 0.62;
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx + Math.cos(a + 0.16) * len, hy + Math.sin(a + 0.16) * len);
+        ctx.lineTo(hx + Math.cos(a - 0.16) * len, hy + Math.sin(a - 0.16) * len);
+        ctx.closePath();
+      }
+      break;
+    case "ice-lake":
+      // 冰脊折线
+      ctx.moveTo(0, base);
+      for (const [k, ph] of [
+        [0.12, 0.7],
+        [0.3, 1.15],
+        [0.46, 0.6],
+        [0.64, 1.0],
+        [0.82, 0.75],
+      ] as const) {
+        ctx.lineTo(worldW * k, base - bh * ph);
+        ctx.lineTo(worldW * (k + 0.09), base);
+      }
+      ctx.lineTo(worldW, base);
+      break;
+    case "star-lift":
+      // 两座尖顶远塔
+      ctx.moveTo(0, base);
+      ctx.lineTo(worldW, base);
+      ctx.lineTo(worldW, base - 2);
+      ctx.lineTo(0, base - 2);
+      for (const [cx, tw, th] of [
+        [worldW * 0.24, worldW * 0.05, bh * 1.5],
+        [worldW * 0.76, worldW * 0.04, bh * 1.15],
+      ] as const) {
+        ctx.moveTo(cx - tw / 2, base);
+        ctx.lineTo(cx - tw / 2, base - th);
+        ctx.lineTo(cx, base - th - bh * 0.45);
+        ctx.lineTo(cx + tw / 2, base - th);
+        ctx.lineTo(cx + tw / 2, base);
+      }
+      break;
+    case "night-hops":
+      // 两座夜色矮丘
+      ctx.moveTo(0, base);
+      ctx.quadraticCurveTo(worldW * 0.22, base - bh * 0.85, worldW * 0.46, base);
+      ctx.quadraticCurveTo(worldW * 0.7, base - bh * 0.6, worldW, base);
+      break;
+    case "allstar-arena": {
+      // 终章城堡剪影:中央主楼 + 两侧塔 + 城齿
+      const cx = worldW * 0.5;
+      const kw = worldW * 0.1;
+      ctx.moveTo(0, base);
+      ctx.lineTo(cx - kw * 1.9, base);
+      ctx.lineTo(cx - kw * 1.9, base - bh * 0.9);
+      ctx.lineTo(cx - kw * 1.5, base - bh * 1.35);
+      ctx.lineTo(cx - kw * 1.1, base - bh * 0.9);
+      ctx.lineTo(cx - kw * 0.7, base - bh * 0.9);
+      for (let i = 0; i < 4; i++) {
+        const bx = cx - kw * 0.7 + (kw * 1.4 * i) / 4;
+        ctx.lineTo(bx, base - bh * 1.15);
+        ctx.lineTo(bx + kw * 0.18, base - bh * 1.15);
+        ctx.lineTo(bx + kw * 0.18, base - bh * 0.95);
+      }
+      ctx.lineTo(cx + kw * 0.7, base - bh * 0.9);
+      ctx.lineTo(cx + kw * 1.1, base - bh * 0.9);
+      ctx.lineTo(cx + kw * 1.5, base - bh * 1.35);
+      ctx.lineTo(cx + kw * 1.9, base - bh * 0.9);
+      ctx.lineTo(cx + kw * 1.9, base);
+      ctx.lineTo(worldW, base);
+      break;
+    }
+    default:
+      // 名单外新场地兜底:一道矮丘,保证纵深层永不缺席
+      ctx.moveTo(0, base);
+      ctx.quadraticCurveTo(worldW * 0.5, base - bh * 0.7, worldW, base);
+      break;
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
  * 10 张场地的主题装饰（每张 ≤3 个元素，画在天空之后、平台之前）。
  * `t` 已经过 {@link animT}：soft 时传 0，全部装饰静止在一帧好看的位置。
  */

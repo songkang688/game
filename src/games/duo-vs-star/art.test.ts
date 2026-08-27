@@ -30,6 +30,7 @@ import {
   drawPlatformBase,
   drawSparkle,
   drawSprings,
+  drawMidgroundBand,
   drawStageDecor,
   drawSyrupBubbles,
   drawTeamRing,
@@ -290,6 +291,23 @@ describe("星星粒子与平台", () => {
       drawStageDecor(b.ctx, s.id, WORLD_W, WORLD_H, 0, s.sky[0]);
       expect(JSON.stringify(a.calls)).toBe(JSON.stringify(b.calls));
     }
+  });
+
+  it("r2 B档TOP4:10 张场地的中景剪影带非空且两两不同(静态确定,一次填充)", () => {
+    const seen = new Set<string>();
+    for (const s of STAGES) {
+      const rec = recorder();
+      drawMidgroundBand(rec.ctx, s.id, WORLD_W, WORLD_H, s.sky[1]);
+      expect(painted(rec.calls), `${s.id} 的剪影带是空的`).toBe(true);
+      expect(names(rec.calls)).not.toContain("fillText");
+      const key = JSON.stringify(rec.calls.filter((c) => c.fn !== "set fillStyle"));
+      seen.add(key);
+      // 静态确定性:同参两次一致
+      const again = recorder();
+      drawMidgroundBand(again.ctx, s.id, WORLD_W, WORLD_H, s.sky[1]);
+      expect(JSON.stringify(again.calls)).toBe(JSON.stringify(rec.calls));
+    }
+    expect(seen.size, "有场地的剪影带撞形了").toBe(STAGES.length);
   });
 });
 
