@@ -13,10 +13,22 @@
  * 样式全部 `rbt-` 前缀(拔河那款用的是 rbg 前缀,不会撞),只追加不改老规则。
  */
 import { save } from "../../engine/save";
+import { jellyStyle } from "../../art/kit/jellyBtn";
 import { AVATAR_URLS } from "../../ui/avatars";
 import type { GameApi } from "../level99";
+import {
+  countdown,
+  flipScore,
+  flowPulse,
+  markLead,
+  setSignal,
+  showBubble,
+  sparkleBurst,
+  spawnRipple
+} from "./fx";
 import { isNewRecord } from "./logic";
 import { meta } from "./meta";
+import { STREAK_FLOW_NEED, VISUAL_CSS, reactionMsOf, signalFace } from "./skin";
 import {
   AI_TIERS,
   COLOR_FACE,
@@ -200,13 +212,20 @@ function buildPad(side: Side, caps: string[], showCaps: boolean): PadHandle {
 
 /** 把一份计划画到某一侧的按钮上:位序 → 逻辑格子走 `logicalSlot`,镜像就在这里成立 */
 function paintPad(pad: PadHandle, plan: RoundPlan, lit: boolean): void {
+  // 上一轮的连对流光翻篇（reduced 下的静态亮边也在这里收）
+  pad.root.classList.remove("rbt-pad-flow");
   for (let pos = 0; pos < pad.keys.length; pos++) {
     const side = (pad.keys[pos].dataset.side ?? "left") as Side;
     const slot = logicalSlot(side, pos, plan.slots.length);
     const face = COLOR_FACE[plan.slots[slot]];
     const b = pad.keys[pos];
     b.className = `rbt-key${lit ? " rbt-key-lit" : ""}`;
-    b.style.background = lit ? face.hex : "#E7EBF3";
+    // 1.3 果冻按垫：同一批颜色换成「径向渐变 + 高光带 + 深描边 + 立面」四件套，
+    // 全走 CSS 自定义属性,按钮的宽高 / 内边距 / 边框宽一个像素不动
+    const jelly = jellyStyle(lit ? face.hex : "#E7EBF3");
+    b.style.setProperty("--rbt-key-bg", jelly.background);
+    b.style.setProperty("--rbt-key-line", jelly.borderColor);
+    b.style.setProperty("--rbt-key-face", lit ? jelly.faceColor : "rgba(90,110,170,.22)");
     b.style.color = lit ? "#fff" : "#9AA6BE";
     b.textContent = "";
     const glyph = document.createElement("span");
@@ -257,7 +276,7 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
   const wrap = document.createElement("div");
   wrap.className = "rbt-vs";
   wrap.innerHTML = `
-    <style>${ARENA_CSS}</style>
+    <style>${ARENA_CSS}${VISUAL_CSS}</style>
     <div class="rbt-vs-head">
       <button class="rbt-vs-back" type="button">🗺️ 回关卡</button>
       <button class="rbt-vs-mode" type="button"></button>
@@ -265,9 +284,11 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     </div>
     <div class="rbt-vs-score">
       <img class="rbt-vs-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />
-      <span class="rbt-vs-left">0</span>
+      <span class="rbt-flag rbt-flag-l" aria-hidden="true"></span>
+      <span class="rbt-vs-left rbt-scorecard rbt-card-l">0</span>
       <span>:</span>
-      <span class="rbt-vs-right">0</span>
+      <span class="rbt-vs-right rbt-scorecard rbt-card-r">0</span>
+      <span class="rbt-flag rbt-flag-r" aria-hidden="true"></span>
       <img class="rbt-vs-ava" src="${AVATAR_URLS.xingxing}" alt="星星" />
     </div>
     <div class="rbt-vs-brief"></div>
@@ -275,6 +296,7 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       <div class="rbt-vs-side rbt-vs-side-left"><div class="rbt-vs-name">朵朵 · A S D F</div></div>
       <div class="rbt-vs-gap" aria-hidden="true"></div>
       <div class="rbt-vs-side rbt-vs-side-right"><div class="rbt-vs-name rbt-vs-name-right">星星 · J K L ;</div></div>
+      <div class="rbt-signal" aria-hidden="true">🚦</div>
     </div>
     <div class="rbt-vs-cloud"></div>
     <div class="rbt-vs-foot">两边的题目是镜像的：同样的颜色、同样的号码，只是左右翻过来，谁也不吃亏。</div>
@@ -290,6 +312,11 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
   const modeBtn = wrap.querySelector(".rbt-vs-mode") as HTMLButtonElement;
   const rightNameEl = wrap.querySelector(".rbt-vs-name-right") as HTMLElement;
   const bodyEl = wrap.querySelector(".rbt-vs-body") as HTMLElement;
+  const signalEl = wrap.querySelector(".rbt-signal") as HTMLElement;
+
+  // 纯视觉账本：连对次数与上一次反应耗时。只喂流光与气泡，判分一个字不碰。
+  const hotStreak: Record<Side, number> = { left: 0, right: 0 };
+  const lastReactMs: Record<Side, number | null> = { left: null, right: null };
 
   const pads: Record<Side, PadHandle> = {
     left: buildPad("left", KEYS_LEFT, true),
@@ -312,8 +339,11 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
   }
 
   function renderScore(): void {
-    leftScoreEl.textContent = String(score.left);
-    rightScoreEl.textContent = String(score.right);
+    // 翻页计分：fx 先落 textContent 再放 120ms 的翻转皮（reduced 瞬换），
+    // 领先方那一侧亮 4% 也只在这里由比分**读**出来
+    flipScore(leftScoreEl, String(score.left));
+    flipScore(rightScoreEl, String(score.right));
+    markLead(bodyEl, score.left, score.right);
     modeBtn.textContent = mode === "duo" ? "👫 两个人玩" : `🤖 挑战星星 · ${AI_TIERS[aiLevel].name}`;
     rightNameEl.textContent = mode === "duo" ? "星星 · J K L ;" : `小电脑 · ${AI_TIERS[aiLevel].name}`;
   }
@@ -323,7 +353,7 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
   }
 
-  function tapFrom(side: Side, pos: number): void {
+  function tapFrom(side: Side, pos: number, ev?: PointerEvent | null): void {
     if (!duel || over) return;
     if (mode === "solo" && side === "right") return;
     const d = duel;
@@ -332,6 +362,7 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     const pad = pads[side];
     if (res.outcome === "debounce") return;
     if (res.outcome === "palm") {
+      hotStreak[side] = 0;
       for (const k of pad.keys) k.classList.remove("rbt-key-hit");
       cloudEl.textContent = "☁️ 一整只手拍上去啦，小云朵把这一轮收走了——一个一个点才算数";
       api.play("oops");
@@ -339,6 +370,8 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       return;
     }
     if (res.outcome === "early") {
+      hotStreak[side] = 0;
+      spawnRipple(pad.keys[pos], false, ev);
       markKey(pad, pos, "rbt-key-bad");
       cloudEl.textContent = "☁️ 亮之前先点啦，小云朵挡了一下，下一轮等一等";
       api.play("oops");
@@ -346,6 +379,8 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       return;
     }
     if (res.outcome === "wrong") {
+      hotStreak[side] = 0;
+      spawnRipple(pad.keys[pos], false, ev);
       markKey(pad, pos, "rbt-key-bad");
       cloudEl.textContent = "这一个不该点，下一轮再来～";
       api.play("oops");
@@ -353,6 +388,14 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       return;
     }
     if (res.outcome === "good" || res.outcome === "win") {
+      // 点对：金色星环波纹 + 反应耗时气泡（读对局自己盖的时间戳）+ 连对流光
+      spawnRipple(pad.keys[pos], true, ev);
+      const ms = reactionMsOf(res.t, d.lightAt);
+      const last = lastReactMs[side];
+      showBubble(pad.keys[pos], ms, last !== null && ms < last);
+      lastReactMs[side] = ms;
+      hotStreak[side]++;
+      if (hotStreak[side] % STREAK_FLOW_NEED === 0) flowPulse(pad.root);
       markKey(pad, pos, "rbt-key-hit");
       api.play("pop");
       if (res.outcome !== "win") return;
@@ -378,6 +421,7 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     const r = duel.finish();
     duel = null;
     bodyEl.classList.remove("rbt-ready");
+    setSignal(signalEl, "idle");
     // 这一轮翻篇了就把「亮啦！」收掉，免得下一轮的预备还挂着上一轮的招牌
     briefEl.textContent = "这一轮结束，下一轮马上来……";
     score = {
@@ -385,6 +429,9 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       right: Math.max(0, score.right + r.delta.right)
     };
     renderScore();
+    // 得分方按垫放星屑 5 颗（只读这一轮的 delta，reduced 不生成）
+    if (r.delta.left > 0) sparkleBurst(leftSide);
+    if (r.delta.right > 0) sparkleBurst(rightSide);
     if (r.winner) cloudEl.textContent = r.winner === "left" ? "朵朵这轮又快又准！" : "星星这轮拿下！";
     else if (r.delta.left > 0 || r.delta.right > 0) cloudEl.textContent = "点得刚刚好，两边都有分！";
     if (score.left >= VERSUS_TARGET || score.right >= VERSUS_TARGET) {
@@ -428,6 +475,8 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     paintPad(pads.left, plan, false);
     paintPad(pads.right, plan, false);
     bodyEl.classList.add("rbt-ready");
+    // 信号灯进「预备黄呼吸」：跟的就是上面这行 rbt-ready 的时机，不另设钟
+    setSignal(signalEl, "ready", signalFace(plan));
     cloudEl.textContent = "";
 
     const d = createDuel(plan, now, ["left", "right"]);
@@ -438,6 +487,8 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       bodyEl.classList.remove("rbt-ready");
       paintPad(pads.left, plan, true);
       paintPad(pads.right, plan, true);
+      // 出题瞬间：信号灯对应色爆亮 + 光环一闪，用的还是这同一个 later 回调
+      setSignal(signalEl, "live", signalFace(plan));
       briefEl.innerHTML = `${brief.icon} ${brief.text}<span class="rbt-vs-brief-hint">亮啦！${brief.hint}</span>`;
       api.play("tap");
     }, plan.readyMs);
@@ -501,10 +552,17 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     round = 0;
     score = { left: 0, right: 0 };
     duel = null;
+    hotStreak.left = 0;
+    hotStreak.right = 0;
+    lastReactMs.left = null;
+    lastReactMs.right = null;
     clearTimers();
     renderScore();
+    setSignal(signalEl, "idle");
     briefEl.textContent = "预备……看清楚这一轮要做什么再出手";
     cloudEl.textContent = "";
+    // 3-2-1 倒计时浮层压进下面这 700ms 既有间隙里，出题一毫秒不推迟
+    countdown(wrap);
     later(nextRound, 700);
   }
 
@@ -532,7 +590,8 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     for (const b of pads[side].keys) {
       const handler = (e: Event) => {
         e.preventDefault();
-        tapFrom(side, Number(b.dataset.pos ?? 0));
+        // 指针事件只借给波纹当触点坐标用，判定入参照旧是 side + pos
+        tapFrom(side, Number(b.dataset.pos ?? 0), e as PointerEvent);
       };
       b.addEventListener("pointerdown", handler);
       offs.push(() => b.removeEventListener("pointerdown", handler));
@@ -590,7 +649,7 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
   const wrap = document.createElement("div");
   wrap.className = "rbt-vs";
   wrap.innerHTML = `
-    <style>${ARENA_CSS}</style>
+    <style>${ARENA_CSS}${VISUAL_CSS}</style>
     <div class="rbt-vs-head">
       <button class="rbt-vs-back" type="button">🗺️ 回关卡</button>
       <span class="rbt-vs-tag rbt-e-round">第 1 轮</span>
@@ -600,6 +659,7 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     <div class="rbt-vs-brief"></div>
     <div class="rbt-vs-body">
       <div class="rbt-vs-side rbt-e-side"><div class="rbt-vs-name">朵朵 · A S D F</div></div>
+      <div class="rbt-signal" aria-hidden="true">🚦</div>
     </div>
     <div class="rbt-vs-cloud"></div>
     <div class="rbt-vs-foot">四种回合轮着来，节奏一轮比一轮快。失误三次就收工，撑过的轮数就是成绩。</div>
@@ -613,6 +673,11 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
   const lifeEl = wrap.querySelector(".rbt-e-life") as HTMLElement;
   const bestEl = wrap.querySelector(".rbt-e-best") as HTMLElement;
   const bodyEl = wrap.querySelector(".rbt-vs-body") as HTMLElement;
+  const signalEl = wrap.querySelector(".rbt-signal") as HTMLElement;
+
+  // 纯视觉账本（同对战场）：连对与上次反应耗时，只喂流光与气泡
+  let hotStreak = 0;
+  let lastReactMs: number | null = null;
 
   const pad = buildPad("left", KEYS_LEFT, true);
   sideEl.appendChild(pad.root);
@@ -641,26 +706,37 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     bestEl.textContent = best > 0 ? `🏅 最好 ${best} 轮` : "🏅 还没有纪录";
   }
 
-  function tapAt(pos: number): void {
+  function tapAt(pos: number, ev?: PointerEvent | null): void {
     if (!duel || over) return;
-    const res = duel.tap("left", pos);
+    const d = duel;
+    const res = d.tap("left", pos);
     if (res.outcome === "debounce") return;
     if (res.outcome === "palm") {
+      hotStreak = 0;
       for (const k of pad.keys) k.classList.remove("rbt-key-hit");
       api.play("oops");
       endRound("☁️ 一整只手拍上去不算分哦，一个一个点");
       return;
     }
     if (res.outcome === "early" || res.outcome === "wrong") {
+      hotStreak = 0;
+      spawnRipple(pad.keys[pos], false, ev);
       markKey(pad, pos, "rbt-key-bad");
       api.play("oops");
       endRound(res.outcome === "early" ? "☁️ 亮之前就点啦，等一等更稳" : "这一个不该点，下一轮看清楚～");
       return;
     }
     if (res.outcome === "good" || res.outcome === "win") {
+      // 点对：金色星环 + 反应耗时气泡 + 连对流光（全是皮，判分照旧在上面那行 tap 里）
+      spawnRipple(pad.keys[pos], true, ev);
+      const ms = reactionMsOf(res.t, d.lightAt);
+      showBubble(pad.keys[pos], ms, lastReactMs !== null && ms < lastReactMs);
+      lastReactMs = ms;
+      hotStreak++;
+      if (hotStreak % STREAK_FLOW_NEED === 0) flowPulse(pad.root);
       markKey(pad, pos, "rbt-key-hit");
       api.play("pop");
-      if (duel.settled()) endRound();
+      if (d.settled()) endRound();
     }
   }
 
@@ -669,9 +745,11 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     const r = duel.finish();
     duel = null;
     bodyEl.classList.remove("rbt-ready");
+    setSignal(signalEl, "idle");
     briefEl.textContent = "这一轮结束，下一轮马上来……";
     if (r.delta.left > 0) {
       cleared++;
+      sparkleBurst(sideEl);
       cloudEl.textContent = note ?? "漂亮，这一轮过啦！";
       api.play("coin");
     } else {
@@ -695,6 +773,8 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     briefEl.innerHTML = `${brief.icon} ${brief.text}<span class="rbt-vs-brief-hint">预备……${brief.hint}</span>`;
     paintPad(pad, plan, false);
     bodyEl.classList.add("rbt-ready");
+    // 信号灯预备黄呼吸：时机就是上面这行 rbt-ready
+    setSignal(signalEl, "ready", signalFace(plan));
     renderTop();
 
     const d = createDuel(plan, now, ["left"]);
@@ -704,6 +784,8 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
       if (over || duel !== d) return;
       bodyEl.classList.remove("rbt-ready");
       paintPad(pad, plan, true);
+      // 出题爆亮：还是这同一个 later 回调，一毫秒不挪
+      setSignal(signalEl, "live", signalFace(plan));
       briefEl.innerHTML = `${brief.icon} ${brief.text}<span class="rbt-vs-brief-hint">亮啦！${brief.hint}</span>`;
       api.play("tap");
     }, plan.readyMs);
@@ -769,10 +851,15 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     cleared = 0;
     misses = 0;
     duel = null;
+    hotStreak = 0;
+    lastReactMs = null;
     clearTimers();
     renderTop();
+    setSignal(signalEl, "idle");
     cloudEl.textContent = "";
     briefEl.textContent = "预备……四种回合轮着来，看清指令再出手";
+    // 3-2-1 倒计时浮层压进下面这 700ms 既有间隙里，出题一毫秒不推迟
+    countdown(wrap);
     later(nextRound, 700);
   }
 
@@ -789,7 +876,8 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
   for (const b of pad.keys) {
     const handler = (e: Event) => {
       e.preventDefault();
-      tapAt(Number(b.dataset.pos ?? 0));
+      // 指针事件只借给波纹当触点坐标，判定入参照旧
+      tapAt(Number(b.dataset.pos ?? 0), e as PointerEvent);
     };
     b.addEventListener("pointerdown", handler);
     offs.push(() => b.removeEventListener("pointerdown", handler));
