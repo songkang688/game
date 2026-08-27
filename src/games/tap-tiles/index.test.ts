@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GameApi } from "../level99";
-import { buildLevel, levelChart } from "./levels";
+import { buildLevel, levelChart, matchChart } from "./levels";
 import {
   El,
   fireWindow,
@@ -17,6 +17,7 @@ import {
   type Dom,
 } from "./domStub";
 import {
+  ALIAS_DUO,
   JUDGE_LINE_RATIO,
   KEYS_DUO,
   KEYS_SOLO,
@@ -236,6 +237,19 @@ describe("键位与点位", () => {
     expect(laneForKey("z", false)).toBe(-1);
   });
 
+  it("双人分轨另认朵朵的 D 与星星的方向键,主键一个都没换", () => {
+    // 主键原样保留
+    expect(KEYS_DUO).toEqual(["a", "s", "k", "l"]);
+    // 别名和主键落在同一条轨上
+    expect(laneForKey("d", true)).toBe(laneForKey("s", true));
+    expect(laneForKey("ArrowLeft", true)).toBe(laneForKey("k", true));
+    expect(laneForKey("ArrowRight", true)).toBe(laneForKey("l", true));
+    expect(ALIAS_DUO).toEqual({ d: 1, arrowleft: 2, arrowright: 3 });
+    // 单人四轨不认这些别名,免得 D 抢走 F 的轨
+    expect(laneForKey("ArrowLeft", false)).toBe(-1);
+    expect(laneForKey("d", false)).toBe(0); // 单人的 D 本来就是第 1 轨
+  });
+
   it("触屏点在哪一列就算哪一列", () => {
     expect(laneForX(10, 400)).toBe(0);
     expect(laneForX(150, 400)).toBe(1);
@@ -396,6 +410,71 @@ describe("另外三种模式", () => {
     byText("开始")?.click();
     expect(hudText()).toContain("地狱");
     expect(hudText()).toMatch(/\d+ 分/);
+    handle.destroy();
+  });
+
+  it("双人分轨:别名键和主键当一个键使,长条不会被换手按断", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("双人同屏")?.click();
+    flushFrames(dom, 1, 0);
+    const start = dom.clock.ms;
+    // 第 1 局的谱和 matchChart(41) 一模一样,挑一个落在朵朵第 2 轨(键 S / D)的音符
+    const note = matchChart(41).notes.find((n) => n.lane === 1);
+    expect(note, "谱面里得有一个落在第 2 轨的音符").toBeTruthy();
+
+    dom.clock.ms = start + note!.time;
+    fireWindow(dom, "keydown", { key: "s" });
+    expect(hudText()).toContain("1 连");
+    // 按着 S 再按同轨的 D:不该被当成又点了一次(不然连击立刻掉回 0)
+    dom.clock.ms += 30;
+    fireWindow(dom, "keydown", { key: "d" });
+    expect(hudText()).toContain("1 连");
+    // 抬起 D 也不算抬手,S 还按着
+    fireWindow(dom, "keyup", { key: "d" });
+    expect(hudText()).toContain("1 连");
+    fireWindow(dom, "keyup", { key: "s" });
+    handle.destroy();
+  });
+
+  it("双人分轨:开头这一串只用别名键(D 与方向键)也是一路完美", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("双人同屏")?.click();
+    flushFrames(dom, 1, 0);
+    const start = dom.clock.ms;
+    // 朵朵第 1 轨没有别名,仍旧按 A;别的三条轨全走别名键
+    const keyFor = ["a", "d", "ArrowLeft", "ArrowRight"];
+    const notes = [...matchChart(41).notes].sort((a, b) => a.time - b.time);
+    // 取开头够长的一段:要把三个别名键都用上
+    const need = new Set([1, 2, 3]);
+    let take = 0;
+    while (take < notes.length && need.size > 0) need.delete(notes[take++].lane);
+    expect(need.size, "谱面开头得把三条有别名的轨都用上").toBe(0);
+
+    // 按谱面时间轴把 keydown / keyup 排好序再依次落手:长按条要按住到尾
+    const beats = notes
+      .slice(0, take)
+      .flatMap((n) => [
+        { t: n.time, down: true, hold: n.hold, key: keyFor[n.lane] },
+        { t: n.time + n.hold, down: false, hold: n.hold, key: keyFor[n.lane] },
+      ])
+      .sort((a, b) => a.t - b.t || Number(a.down) - Number(b.down));
+    let combo = 0;
+    for (const b of beats) {
+      dom.clock.ms = start + b.t;
+      fireWindow(dom, b.down ? "keydown" : "keyup", { key: b.key });
+      if (!b.down) continue;
+      // 普通块按下去就报「完美」并涨一连;长按条要按到尾端才结算
+      if (b.hold > 0) {
+        expect(sayText()).toContain("按住别松");
+        continue;
+      }
+      combo += 1;
+      expect(sayText(), `第 ${combo} 个音符`).toContain("完美");
+      expect(hudText()).toContain(`${combo} 连`);
+    }
+    expect(combo).toBeGreaterThanOrEqual(take - 1);
     handle.destroy();
   });
 

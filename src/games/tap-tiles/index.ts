@@ -123,10 +123,23 @@ export const KEYS_SOLO = ["d", "f", "j", "k"];
 /** 双人分轨:朵朵 A S 管左两轨,星星 K L 管右两轨 */
 export const KEYS_DUO = ["a", "s", "k", "l"];
 
+/**
+ * 双人分轨的备用键(主键 A / S / K / L 一个都没换,这里只是多认几个):
+ * 朵朵的 D 和 S 同轨,这样她左右手就是 A / D;星星的 ← → 和 K / L 同轨,
+ * 向「星星用方向键」的统一口径靠拢。
+ */
+export const ALIAS_DUO: Readonly<Record<string, number>> = {
+  d: 1,
+  arrowleft: 2,
+  arrowright: 3,
+};
+
 /** 一个键对应哪条轨;不是本款的键返回 -1 */
 export function laneForKey(key: string, split: boolean): number {
   const k = (key ?? "").toLowerCase();
-  return (split ? KEYS_DUO : KEYS_SOLO).indexOf(k);
+  const main = (split ? KEYS_DUO : KEYS_SOLO).indexOf(k);
+  if (main >= 0) return main;
+  return split ? (ALIAS_DUO[k] ?? -1) : -1;
 }
 
 /** 点在画布上的横坐标落在第几列 */
@@ -324,7 +337,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   hud.appendChild(pauseBtn);
 
   keys.innerHTML = split
-    ? "朵朵 A S 管左两轨 · 星星 K L 管右两轨 · Esc 暂停"
+    ? "朵朵 A S 管左两轨(S 也可以按 D) · 星星 K L 管右两轨(也可以按 ← →) · Esc 暂停"
     : "键盘 D F J K 对四条轨 · 也能直接点 · Esc 暂停";
 
   function judgeY(): number {
@@ -437,8 +450,17 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     if (lane < 0) return;
     ev.preventDefault();
     if (pressedKeys.has(key)) return;
+    // 一条轨的两个键当一个键使:S 按着的时候再按 D,不算又点了一次
+    const already = laneHeldByKey(lane);
     pressedKeys.add(key);
+    if (already) return;
     pressLane(lane);
+  }
+
+  /** 这条轨上还有键按着吗(别名键让一条轨可能对两个键) */
+  function laneHeldByKey(lane: number): boolean {
+    for (const k of pressedKeys) if (laneForKey(k, split) === lane) return true;
+    return false;
   }
 
   function onKeyUp(ev: KeyboardEvent): void {
@@ -447,6 +469,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     const lane = laneForKey(key, split);
     if (lane < 0) return;
     pressedKeys.delete(key);
+    // 还有别的键按着同一条轨就不算抬手,不然长条按到一半换个手指会被判成提前松开
+    if (laneHeldByKey(lane)) return;
     liftLane(lane);
   }
 
@@ -967,7 +991,8 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, tones: ToneKit, onBack:
     stage = createStage(shell.stage, {
       chart: matchChart(round + 40),
       rules: { emptyRule: "combo", maxMiss: 5 },
-      banner: "👫 一张谱两个人打<br>朵朵管左边两轨(A / S),星星管右边两轨(K / L)",
+      banner:
+        "👫 一张谱两个人打<br>朵朵管左边两轨(A / S,S 也可以用 D),星星管右边两轨(K / L,也可以用 ← / →)",
       split: true,
       sfx: (n) => api.play(n),
       tones,
