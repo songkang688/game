@@ -86,13 +86,21 @@ export function drawHeart(
   y: number,
   r: number,
   color = "#FF7EA8",
+  filled = true,
 ): void {
-  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(x, y + r * 0.9);
   ctx.bezierCurveTo(x - r * 1.3, y, x - r * 0.7, y - r * 0.9, x, y - r * 0.25);
   ctx.bezierCurveTo(x + r * 0.7, y - r * 0.9, x + r * 1.3, y, x, y + r * 0.9);
   ctx.closePath();
+  if (!filled) {
+    // 空心版:掉了的命只描边不填充(r2 · HUD 手绘化,替代 🤍 字符)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1.2, r * 0.2);
+    ctx.stroke();
+    return;
+  }
+  ctx.fillStyle = color;
   ctx.fill();
   // 一点高光，别是个死色块
   ctx.fillStyle = "rgba(255,255,255,.55)";

@@ -11,13 +11,16 @@ import { AI_HINTS, AI_LABELS, AI_LEVELS, type AiLevel } from "./ai";
 import {
   boostArrowPhase,
   coinFrames,
+  coinFrameSpec,
   drawAvatarBody,
   drawBoostPad,
   drawCelestial,
   drawCheerHeart,
   drawCloudPuff,
   drawCoin,
+  drawCoinFrame,
   drawCrown,
+  drawHeart,
   drawDecorSilhouette,
   drawDizzyStars,
   drawGhostWisp,
@@ -55,6 +58,7 @@ import {
   JUMP_SECONDS,
   SLIDE_SECONDS,
   type Entity,
+  type PowerKind,
   type RaceMode,
   parseGhostRecord,
 } from "./logic";
@@ -1101,53 +1105,123 @@ export function mount(api: GameApi): { destroy: () => void } {
     void theme;
   }
 
-  /** 身上还挂着的道具效果，画成一串小图标（没有就返回空串） */
-  function activeIcons(r: Runner): string {
-    let out = "";
-    if (r.powers.speedCloud > 0) out += POWERUPS.speedCloud.emoji;
-    if (r.powers.shield > 0) out += POWERUPS.shieldBubble.emoji.repeat(r.powers.shield);
-    if (r.powers.magnetStar > 0) out += POWERUPS.magnetStar.emoji;
-    if (r.powers.confetti > 0) out += POWERUPS.confetti.emoji;
-    return out;
+  // ---- HUD 手绘化(r2 · B 档 TOP1):emoji 字符不再上画布 ----
+  // 1.2 的 hudText 把 r.emoji/❤️🤍/🪙/✋+道具 emoji 拼成一整串 fillText,
+  // 与 gold-hook「HUD 图标全手绘」口径不齐。现在拆成 token:文字照旧,
+  // 图标全部走 art.ts 的现成资产(drawMiniFace/drawHeart/drawCoinFrame/drawPowerIcon)。
+  type HudToken =
+    | { kind: "text"; text: string }
+    | { kind: "face" }
+    | { kind: "wisp" }
+    | { kind: "heart"; filled: boolean }
+    | { kind: "coin" }
+    | { kind: "slot"; power: PowerKind | null }
+    | { kind: "power"; power: PowerKind };
+
+  /** 身上还挂着的道具效果，画成一串手绘小图标（没有就返回空数组） */
+  function activePowerIcons(r: Runner): PowerKind[] {
+    const on: PowerKind[] = [];
+    if (r.powers.speedCloud > 0) on.push("speedCloud");
+    for (let i = 0; i < r.powers.shield; i++) on.push("shieldBubble");
+    if (r.powers.magnetStar > 0) on.push("magnetStar");
+    if (r.powers.confetti > 0) on.push("confetti");
+    return on;
   }
 
-  /** 正走在哪条支路：左路 / 右路，加一个「稳」或「快」的小标记 */
+  /** 正走在哪条支路：左路 / 右路，加一个「稳」或「快」的小标记（纯文字，不再配 emoji） */
   function branchTag(s: MatchState, r: Runner): string {
     const fork: ForkSection | undefined = s.forks.find((f) => f.at === r.branchAt);
     if (!fork || r.branch === null) return "";
+    const side = fork.branches[r.branch].side === "left" ? "左路" : "右路";
     const mine = fork.branches[r.branch];
     const other = fork.branches[r.branch === 0 ? 1 : 0];
-    const side = mine.side === "left" ? "🌿 左路" : "🌈 右路";
     return `${side}${mine.difficulty <= other.difficulty ? "·稳" : "·快"}`;
   }
 
-  /** HUD 压成一行：名字 + 里程 + 金币 + 心 + 道具槽 + 身上的效果 + 让分标注 */
-  function hudText(s: MatchState, r: Runner, seat: Seat): string {
+  /** HUD 压成一行：小脸 + 名字 + 里程 + 金币 + 心 + 道具槽 + 身上的效果 + 让分标注 */
+  function hudTokens(s: MatchState, r: Runner, seat: Seat): HudToken[] {
     const lives = livesLeft(s, seat);
-    const hearts = r.ghost
-      ? r.emoji
-      : "❤️".repeat(lives) + "🤍".repeat(Math.max(0, CRASH_LIMIT - lives));
-    const parts = [`${r.emoji} ${r.name}`, `${Math.floor(r.dist)} 米`, `🪙 ${r.coins}`, hearts];
-    if (s.usePowerups && !r.ghost) {
-      parts.push(r.held ? `✋${POWERUPS[r.held].emoji}` : "✋—");
-      const on = activeIcons(r);
-      if (on) parts.push(on);
+    const out: HudToken[] = [r.ghost ? { kind: "wisp" } : { kind: "face" }];
+    out.push({ kind: "text", text: `${r.name}　${Math.floor(r.dist)} 米　` });
+    out.push({ kind: "coin" });
+    out.push({ kind: "text", text: ` ${r.coins}` });
+    if (!r.ghost) {
+      out.push({ kind: "text", text: "　" });
+      for (let i = 0; i < CRASH_LIMIT; i++) out.push({ kind: "heart", filled: i < lives });
     }
-    if (r.branch !== null) parts.push(branchTag(s, r));
+    if (s.usePowerups && !r.ghost) {
+      out.push({ kind: "text", text: "　" });
+      out.push({ kind: "slot", power: r.held });
+      for (const p of activePowerIcons(r)) out.push({ kind: "power", power: p });
+    }
+    if (r.branch !== null) {
+      const tag = branchTag(s, r);
+      if (tag) out.push({ kind: "text", text: `　${tag}` });
+    }
     const other = s.runners[seat === 0 ? 1 : 0];
     const boost = r.ghost ? 1 : handicapMult(s.handicap, r.dist, other.dist);
-    if (boost > 1) parts.push(`🤝 让分 +${Math.round((boost - 1) * 100)}%`);
-    return parts.join("　");
+    if (boost > 1) out.push({ kind: "text", text: `　让分 +${Math.round((boost - 1) * 100)}%` });
+    return out;
+  }
+
+  /** 一枚 HUD token 画在槽位中心（文字除外，文字从槽位左缘起笔）。 */
+  function drawHudToken(tk: HudToken, x: number, slotW: number, fs: number, seat: Seat, theme: Theme): void {
+    const cx = x + slotW / 2;
+    switch (tk.kind) {
+      case "text":
+        ctx.fillStyle = theme.ink;
+        ctx.fillText(tk.text, x, 0);
+        break;
+      case "face":
+        drawMiniFace(ctx, cx, fs * 0.08, fs * 0.38, seat);
+        break;
+      case "wisp":
+        drawGhostWisp(ctx, cx, fs * 0.62, fs * 1.7, 0, true);
+        break;
+      case "heart":
+        drawHeart(ctx, cx, 0, fs * 0.42, "#FF7EA8", tk.filled);
+        break;
+      case "coin":
+        drawCoinFrame(ctx, cx, 0, fs * 0.42, coinFrameSpec(0));
+        break;
+      case "slot": {
+        // 手里的道具槽:白圆底板,有货画图标,空槽画一道小横杠(替代旧的小手+道具字符)
+        ctx.fillStyle = "rgba(255,255,255,.78)";
+        ctx.strokeStyle = "rgba(90,90,110,.35)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(cx, 0, fs * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (tk.power) drawPowerIcon(ctx, tk.power, cx, 0, fs * 0.32);
+        else {
+          ctx.strokeStyle = "rgba(90,90,110,.6)";
+          ctx.lineWidth = Math.max(1.2, fs * 0.1);
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(cx - fs * 0.2, 0);
+          ctx.lineTo(cx + fs * 0.2, 0);
+          ctx.stroke();
+        }
+        break;
+      }
+      case "power":
+        drawPowerIcon(ctx, tk.power, cx, 0, fs * 0.34);
+        break;
+    }
   }
 
   function drawHud(pane: Rect, s: MatchState, r: Runner, seat: Seat, theme: Theme): void {
     const fs = Math.max(10, Math.min(17, Math.round(pane.height * 0.085)));
     const pad = Math.round(fs * 0.5);
-    const text = hudText(s, r, seat);
+    const tokens = hudTokens(s, r, seat);
     ctx.save();
     ctx.font = `800 ${fs}px "PingFang SC", "Microsoft YaHei", sans-serif`;
-    // 窄屏上一行放不下就整条压扁横向缩放，绝不换行、绝不溢出自己那一格
-    const raw = ctx.measureText(text).width;
+    // 1.2 的挤压逻辑保留：先量「图标槽 + 文字」总宽，窄屏放不下就整条横向缩放，
+    // 绝不换行、绝不溢出自己那一格
+    const slotW = fs * 1.16;
+    const widths = tokens.map((tk) => (tk.kind === "text" ? ctx.measureText(tk.text).width : slotW));
+    const raw = widths.reduce((a, b) => a + b, 0);
     const room = pane.width - pad * 3;
     const squeeze = raw > room ? room / raw : 1;
     const w = Math.min(raw, room) + pad * 2;
@@ -1155,11 +1229,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.beginPath();
     ctx.roundRect(pane.x + pad, pane.y + pad, w, fs + pad * 1.4, 10);
     ctx.fill();
-    ctx.fillStyle = theme.ink;
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.translate(pane.x + pad * 2, pane.y + pad + (fs + pad * 1.4) / 2);
     ctx.scale(squeeze, 1);
-    ctx.fillText(text, 0, 0);
+    let tx = 0;
+    for (let i = 0; i < tokens.length; i++) {
+      drawHudToken(tokens[i], tx, slotW, fs, seat, theme);
+      tx += widths[i];
+    }
     ctx.restore();
     ctx.textBaseline = "alphabetic";
   }

@@ -500,3 +500,36 @@ describe("场景装饰资产", () => {
     );
   });
 });
+
+/* ---------------- r2 · B 档 TOP1:画布 HUD 手绘化 ---------------- */
+
+describe("r2 · 画布 HUD 手绘化(emoji 字符不再进 fillText)", () => {
+  it("空心心(filled=false)只描边不填充,与实心序列不同", () => {
+    const filled = new RecCtx();
+    drawHeart(ctxOf(filled), 0, 0, 10);
+    const hollow = new RecCtx();
+    drawHeart(ctxOf(hollow), 0, 0, 10, "#FF7EA8", false);
+    expect(hollow.ops.join("|")).not.toBe(filled.ops.join("|"));
+    expect(count(hollow, "stroke")).toBeGreaterThanOrEqual(1);
+    expect(count(hollow, "fill")).toBe(0);
+    expect(count(filled, "fill")).toBeGreaterThanOrEqual(2); // 心体 + 高光
+  });
+
+  it("index.ts 的 HUD 区段零 emoji:token 渲染走手绘资产", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+    // 抠出 HUD 构建与渲染区段(hudTokens 起,到 drawPane 止)
+    const start = src.indexOf("function hudTokens(");
+    const end = src.indexOf("function drawPane(");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const hudSection = src.slice(start, end);
+    expect(/\p{Extended_Pictographic}/u.test(hudSection), "HUD 区段还有 emoji 字符").toBe(false);
+    // 图标 token 全部落到 art.ts 的手绘函数
+    for (const fn of ["drawMiniFace", "drawGhostWisp", "drawHeart", "drawCoinFrame", "drawPowerIcon"]) {
+      expect(hudSection.includes(`${fn}(`), `HUD 没接 ${fn}`).toBe(true);
+    }
+    // 旧写法不许回潮:❤️/🤍/🪙/✋ 与 POWERUPS[...].emoji 不再进 HUD 拼串
+    expect(hudSection.includes(".emoji")).toBe(false);
+  });
+});
