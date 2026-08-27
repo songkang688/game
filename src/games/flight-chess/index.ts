@@ -61,6 +61,21 @@ import {
   type Move
 } from "./rules";
 import { AI_TIER_LABELS, chooseMove, type AiTier } from "./ai";
+import { KIT_PALETTE, makeCollectBurst } from "../../art/kit";
+import {
+  contrailSVG,
+  dieSVG,
+  hangarSVG,
+  headingDeg,
+  parachuteSVG,
+  planeSVG,
+  rankStripHTML,
+  seatProgressHTML,
+  stackMarkSVG,
+  towerSVG,
+  cloudSVG,
+  type PlanePose
+} from "./art";
 import {
   CHAPTERS,
   achievementOf,
@@ -82,6 +97,16 @@ export const ARC_MS = 420;
 export const BEAT_MS = 320;
 /** 骰子每转一帧的时长 */
 export const SPIN_MS = 70;
+/** 被撞飞机「打转」的时长（随后降落伞返航） */
+export const SHOT_MS = 500;
+/** 基地伞花绽放的时长（放完就把节点收干净） */
+export const CHUTE_MS = 420;
+/** 起飞拉烟尾迹的时长 */
+export const TRAIL_MS = 400;
+/** 掷出 6 的金边闪光 / 攻击方金边的时长 */
+export const FLASH_MS = 620;
+/** 终局塔台烟花总时长（3 波星星粒子，播完才交结算） */
+export const FIREWORK_MS = 1400;
 
 const CELL = 100 / GRID;
 
@@ -97,39 +122,82 @@ export const CSS = `
   color:#4a5a70;box-shadow:0 2px 6px rgba(120,160,200,.25);line-height:1.5;overflow-wrap:anywhere;}
 .fc-seat-on{outline:3px solid #59A9DC;}
 .fc-seat-tier{font-size:16px;font-weight:700;color:#7d8ba0;}
+.fc-seat-head{display:flex;align-items:center;gap:4px;min-width:0;}
+.fc-seat-ava{width:22px;height:22px;flex:0 0 auto;}
+.fc-seat-ava svg{width:100%;height:100%;display:block;}
+.fc-slots{display:inline-flex;gap:3px;vertical-align:middle;}
+.fc-slot{width:9px;height:9px;border-radius:50%;background:#fff;display:inline-block;
+  box-shadow:inset 0 0 0 1.5px rgba(120,160,200,.55);}
+.fc-slot-on{box-shadow:none;}
 .fc-boardwrap{position:relative;width:100%;max-width:440px;margin:0 auto;}
-.fc-board{position:relative;width:100%;aspect-ratio:1;background:#F4FAFF;border-radius:14px;overflow:hidden;
-  box-shadow:inset 0 0 0 2px #DCEBF6;}
+.fc-board{position:relative;width:100%;aspect-ratio:1;background:linear-gradient(180deg,#EAF7E3,#D8EFD0);
+  border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 2px #CBE6C0;}
+.fc-ground{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
 .fc-base{position:absolute;border-radius:12px;}
+.fc-base svg{width:100%;height:100%;display:block;}
 .fc-cell{position:absolute;box-sizing:border-box;border-radius:22%;background:#FFFFFF;
   box-shadow:inset 0 0 0 1px rgba(120,160,200,.28);}
 .fc-cell-own{box-shadow:inset 0 0 0 1px rgba(255,255,255,.9);}
 .fc-cell-start{box-shadow:inset 0 0 0 2px #6FB3E0;}
-.fc-cell-air::after{content:"";position:absolute;inset:26%;border-radius:50%;background:rgba(255,255,255,.75);}
 .fc-cell-home{border-radius:26%;}
-.fc-pad{position:absolute;border-radius:50%;background:#FFF8DC;box-shadow:inset 0 0 0 2px #F3D98B;
-  display:flex;align-items:center;justify-content:center;font-size:var(--mt-control,14px);}
+.fc-pad{position:absolute;display:flex;align-items:center;justify-content:center;font-size:var(--mt-control,14px);}
+.fc-pad svg{width:100%;height:100%;display:block;}
 .fc-line{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
 .fc-token{position:absolute;display:flex;align-items:center;justify-content:center;border:none;padding:0;margin:0;
   background:transparent;font-family:inherit;font-size:inherit;line-height:1;cursor:pointer;z-index:5;
   transition:left ${HOP_MS}ms linear,top ${HOP_MS}ms linear;}
-.fc-token-face{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;
-  font-size:clamp(14px,2.6vw,17px);box-shadow:0 2px 4px rgba(80,120,160,.35);}
+.fc-token-shadow{position:absolute;left:22%;top:64%;width:56%;height:22%;border-radius:50%;
+  background:rgba(70,110,80,.3);transition:transform .3s ease,opacity .3s ease;}
+.fc-shadow-off{transform:scale(.55);opacity:.45;}
+.fc-token-face{position:absolute;inset:2%;display:flex;align-items:center;justify-content:center;
+  font-size:clamp(14px,2.6vw,17px);}
+.fc-token-rot{position:absolute;inset:0;transition:transform ${HOP_MS}ms linear;}
+.fc-plane{width:100%;height:100%;display:block;}
 .fc-token-pick{outline:3px solid #2E80BC;outline-offset:1px;border-radius:50%;animation:fcpulse 1.2s ease infinite;}
-.fc-token-can .fc-token-face{box-shadow:0 0 0 3px rgba(255,255,255,.95),0 3px 6px rgba(80,120,160,.4);}
+.fc-token-can .fc-token-face{filter:drop-shadow(0 0 2px rgba(255,255,255,.95)) drop-shadow(0 3px 5px rgba(46,128,188,.5));}
 /* 360px 屏上一格才 24px 见方，给能点的飞机垫一圈看不见的手指热区 */
 .fc-token-can::before{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;
   transform:translate(-50%,-50%);border-radius:50%;}
 .fc-token:disabled{pointer-events:none;}
 .fc-token-arc{transition:left ${ARC_MS}ms cubic-bezier(.3,-0.4,.5,1.4),top ${ARC_MS}ms cubic-bezier(.3,1.4,.6,1);}
-.fc-token-stack::after{content:"";position:absolute;right:-2px;bottom:-2px;width:38%;height:38%;border-radius:50%;
-  background:#fff;box-shadow:0 1px 3px rgba(80,120,160,.5);}
+.fc-stackwrap{position:absolute;right:-9%;bottom:-9%;width:46%;height:46%;pointer-events:none;z-index:2;}
+.fc-stackwrap svg{width:100%;height:100%;display:block;}
+.fc-stackwrap[hidden]{display:none;}
 @keyframes fcpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+/* 逐格小跳:上抛 4px。两个名字轮流用,同一架连跳时动画才会重新触发 */
+.fc-hop-a{animation:fchopa ${HOP_MS}ms ease;}
+.fc-hop-b{animation:fchopb ${HOP_MS}ms ease;}
+@keyframes fchopa{50%{transform:translateY(-4px)}}
+@keyframes fchopb{50%{transform:translateY(-4px)}}
+/* 走子中的螺旋桨提转速(transform-box 让 SVG 内的组绕自己转) */
+.fc-token-move .fc-prop{animation:fcprop .24s linear infinite;transform-box:fill-box;transform-origin:center;}
+@keyframes fcprop{to{transform:rotate(360deg)}}
+/* 起飞:弧线爬升 + 放大一拍 */
+.fc-token-rise{animation:fcrise ${ARC_MS}ms ease;}
+@keyframes fcrise{40%{transform:translateY(-18%) scale(1.15)}}
+.fc-trail{position:absolute;inset:0;pointer-events:none;animation:fctrail ${TRAIL_MS}ms ease-out forwards;}
+.fc-trail svg{width:100%;height:100%;display:block;}
+@keyframes fctrail{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(55%)}}
+/* 跳格/航线:飞机拉高、影子留在地面缩小 —— 低成本 2.5D 高度感 */
+.fc-token-lift{transform:translateY(-16%) scale(1.12);transition:transform ${ARC_MS}ms ease;}
+/* 击落:打转 720° 缩小(降落伞安全返航,无爆炸) */
+.fc-token-shot{animation:fcshot ${SHOT_MS}ms ease-in forwards;}
+@keyframes fcshot{to{transform:rotate(720deg) scale(.4)}}
+.fc-chute{position:absolute;left:14%;top:-52%;width:72%;height:72%;pointer-events:none;}
+.fc-chute svg{width:100%;height:100%;display:block;}
+.fc-chute-bloom{animation:fcbloom ${CHUTE_MS}ms ease-out forwards;}
+@keyframes fcbloom{from{transform:scale(.85);opacity:1}to{transform:scale(1.3);opacity:0}}
+/* 攻击方机身闪金边 */
+.fc-token-gold{filter:drop-shadow(0 0 5px ${KIT_PALETTE.starGold}) drop-shadow(0 0 2px rgba(255,255,255,.9));}
+.fc-fireworks{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:8;}
 .fc-hud{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin:8px 0 6px;}
 .fc-dice{min-width:56px;min-height:56px;border-radius:16px;background:#fff;box-shadow:0 3px 8px rgba(120,160,200,.35);
   display:flex;align-items:center;justify-content:center;font-size:34px;line-height:1;color:#2f6b96;}
+.fc-dice .fc-die{width:76%;height:auto;display:block;}
 .fc-dice-spin{animation:fcroll .32s linear infinite;}
-@keyframes fcroll{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes fcroll{0%{transform:rotate(0)}25%{transform:rotate(-13deg)}75%{transform:rotate(13deg)}100%{transform:rotate(0)}}
+.fc-dice-six{animation:fcsix ${FLASH_MS}ms ease;}
+@keyframes fcsix{30%{box-shadow:0 0 0 4px ${KIT_PALETTE.starGold},0 3px 8px rgba(120,160,200,.35);transform:scale(1.08)}}
 .fc-btn{min-width:96px;min-height:48px;border:none;border-radius:16px;font-family:inherit;font-size:16px;font-weight:900;
   cursor:pointer;background:#BFE3FA;color:#1F5C87;box-shadow:0 3px 0 #8CC4E8;padding:0 14px;}
 .fc-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #8CC4E8;}
@@ -139,9 +207,18 @@ export const CSS = `
 .fc-btn-sm{min-width:64px;min-height:44px;font-size:14px;padding:0 10px;}
 .fc-picker{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:4px 0;}
 .fc-pick{min-width:66px;min-height:44px;border:none;border-radius:14px;font-family:inherit;font-size:14px;font-weight:800;
-  cursor:pointer;background:#fff;color:#37627f;box-shadow:0 2px 6px rgba(120,160,200,.3);padding:0 8px;line-height:1.3;}
+  cursor:pointer;background:#fff;color:#37627f;box-shadow:0 2px 6px rgba(120,160,200,.3);padding:0 8px;line-height:1.3;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;}
+.fc-pick-thumb{width:18px;height:18px;flex:0 0 auto;}
+.fc-pick-thumb svg{width:100%;height:100%;display:block;}
 .fc-pick-on{outline:3px solid #2E80BC;}
 .fc-pick:disabled{opacity:.4;cursor:default;}
+.fc-ranks{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:8px 0 12px;}
+.fc-rank{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.fc-rank-no{color:#5b6f80;}
+.fc-rank-plane{width:32px;height:32px;}
+.fc-rank-plane svg{width:100%;height:100%;display:block;}
+.fc-rank-star{width:16px;height:16px;}
 .fc-msg{text-align:center;min-height:2.8em;color:#3a5a72;font-weight:800;margin-top:6px;font-size:16px;
   line-height:1.5;overflow-wrap:anywhere;}
 .fc-goal{text-align:center;font-size:16px;font-weight:800;color:#2f6b96;line-height:1.5;margin-bottom:6px;
@@ -175,6 +252,9 @@ export const CSS = `
   .fc-token,.fc-token-arc{transition:none;}
   .fc-token-pick{animation:none;}
   .fc-dice-spin{animation:none;}
+  .fc-hop-a,.fc-hop-b,.fc-token-rise,.fc-token-shot,.fc-dice-six,.fc-trail,.fc-chute-bloom{animation:none;}
+  .fc-token-move .fc-prop{animation:none;}
+  .fc-token-rot,.fc-token-face,.fc-token-shadow,.fc-token-lift{transition:none;}
 }
 `;
 
@@ -195,6 +275,62 @@ export function tokenXY(color: Color, p: number, slot: number): XY {
 /** 骰子面 */
 export function diceFace(n: number): string {
   return n >= 1 && n <= 6 ? DICE_FACES[n] : "🎲";
+}
+
+/** 草地底图:十字淡跑道 + 虚线中线 + 四片草影(viewBox 是 GRID×GRID) */
+export function groundArt(): string {
+  let grassPatches = "";
+  for (const [gx, gy] of [
+    [3, 3],
+    [12, 3],
+    [12, 12],
+    [3, 12]
+  ]) {
+    grassPatches += `<ellipse cx="${gx}" cy="${gy}" rx="2.6" ry="1.9" fill="#C4E6B6" opacity=".55"/>`;
+  }
+  return (
+    grassPatches +
+    `<rect x="0.2" y="6.35" width="14.6" height="2.3" rx="1.15" fill="#FFFFFF" opacity=".3"/>` +
+    `<rect x="6.35" y="0.2" width="2.3" height="14.6" rx="1.15" fill="#FFFFFF" opacity=".3"/>` +
+    `<path d="M 0.6 7.5 H 14.4" stroke="#FFFFFF" stroke-width=".14" stroke-dasharray=".55 .5" opacity=".55"/>` +
+    `<path d="M 7.5 0.6 V 14.4" stroke="#FFFFFF" stroke-width=".14" stroke-dasharray=".55 .5" opacity=".55"/>`
+  );
+}
+
+/**
+ * 盖在格子上的一层(viewBox 是 GRID×GRID):
+ * - 外环每 3 格一枚该格归属色的行进小箭头(按当前格 → 下一格的向量转角);
+ * - 四条云朵航线:起点格一朵云 + 虚线弧线飞向对角(替代旧的直虚线)。
+ */
+export function overlayArt(): string {
+  let out = "";
+  for (let ring = 0; ring < RING_LEN; ring += 3) {
+    const a = RING_XY[ring];
+    const b = RING_XY[(ring + 1) % RING_LEN];
+    const cx = a.x + 0.5;
+    const cy = a.y + 0.5;
+    const deg = Math.round((Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI);
+    out +=
+      `<polygon points="${cx - 0.16},${cy - 0.19} ${cx + 0.27},${cy} ${cx - 0.16},${cy + 0.19} ${cx - 0.05},${cy}"` +
+      ` fill="${COLOR_INFO[ringColor(ring)].ink}" opacity=".8" transform="rotate(${deg} ${cx} ${cy})"/>`;
+  }
+  for (const c of COLORS) {
+    const from = cellXY(c, 16);
+    const to = cellXY(c, 28);
+    const fx = from.x + 0.5;
+    const fy = from.y + 0.5;
+    const tx = to.x + 0.5;
+    const ty = to.y + 0.5;
+    // 控制点往棋盘中心拉,虚线弧线才有「绕过塔台飞对角」的味道
+    const mx = (fx + tx) / 2 + (7.5 - (fx + tx) / 2) * 0.55;
+    const my = (fy + ty) / 2 + (7.5 - (fy + ty) / 2) * 0.55;
+    out +=
+      `<path d="M ${fx} ${fy} Q ${mx} ${my} ${tx} ${ty}" fill="none" stroke="${COLOR_INFO[c].ink}"` +
+      ` stroke-width="0.16" stroke-dasharray="0.42 0.38" stroke-linecap="round" opacity=".65"/>` +
+      `<g transform="translate(${fx} ${fy - 0.06}) scale(0.1)">${cloudSVG()}</g>` +
+      `<g transform="translate(${tx} ${ty}) scale(0.07)">${cloudSVG()}</g>`;
+  }
+  return out;
 }
 
 /** 提示这一手能干什么（无障碍标签与提示条共用） */
@@ -334,7 +470,17 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   board.className = "fc-board";
   boardWrap.appendChild(board);
 
-  // 四角基地
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  // 草地底上的四条淡跑道纹(十字交汇于中央塔台)
+  const ground = document.createElementNS(svgNS, "svg");
+  ground.setAttribute("class", "fc-ground");
+  ground.setAttribute("viewBox", `0 0 ${GRID} ${GRID}`);
+  ground.setAttribute("aria-hidden", "true");
+  ground.innerHTML = groundArt();
+  board.appendChild(ground);
+
+  // 四角机库(色块圆角区 + 机库门弧线 + 停机坪 4 个圆位)
   for (const c of COLORS) {
     const rect = baseRect(c);
     const el = document.createElement("div");
@@ -344,6 +490,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     el.style.width = `${rect.w * CELL}%`;
     el.style.height = `${rect.h * CELL}%`;
     el.style.background = COLOR_INFO[c].soft;
+    el.innerHTML = hangarSVG(c);
     board.appendChild(el);
   }
 
@@ -378,40 +525,31 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     });
   }
 
-  // 中央彩虹停机坪
+  // 中央塔台:四色风车跑道汇聚 + 大星星塔台(替代旧的 🌈 emoji 占位)
   const pad = document.createElement("div");
   pad.className = "fc-pad";
   pad.style.left = `${6 * CELL}%`;
   pad.style.top = `${6 * CELL}%`;
   pad.style.width = `${3 * CELL}%`;
   pad.style.height = `${3 * CELL}%`;
-  pad.textContent = "🌈";
+  pad.innerHTML = towerSVG();
   board.appendChild(pad);
 
-  // 四条虚线航线
-  const svgNS = "http://www.w3.org/2000/svg";
+  // 盖在格子上的一层:行进方向小箭头(每 3 格一枚)+ 云朵航线弧
   const svg = document.createElementNS(svgNS, "svg");
   svg.setAttribute("class", "fc-line");
   svg.setAttribute("viewBox", `0 0 ${GRID} ${GRID}`);
-  for (const c of COLORS) {
-    const from = cellXY(c, 16);
-    const to = cellXY(c, 28);
-    const line = document.createElementNS(svgNS, "line");
-    line.setAttribute("x1", String(from.x + 0.5));
-    line.setAttribute("y1", String(from.y + 0.5));
-    line.setAttribute("x2", String(to.x + 0.5));
-    line.setAttribute("y2", String(to.y + 0.5));
-    line.setAttribute("stroke", COLOR_INFO[c].ink);
-    line.setAttribute("stroke-width", "0.18");
-    line.setAttribute("stroke-dasharray", "0.5 0.45");
-    line.setAttribute("stroke-linecap", "round");
-    line.setAttribute("opacity", "0.75");
-    svg.appendChild(line);
-  }
+  svg.innerHTML = overlayArt();
   board.appendChild(svg);
 
-  // 棋子
+  // 棋子:影子(2.5D 高度感用) + 旋转层(机头朝向) + SVG 小飞机 + ×2 迭子徽章。
+  // emoji 不再上棋盘,只留在 aria-label(describePos)与座位卡文案里。
   const tokens = new Map<string, HTMLButtonElement>();
+  const faces = new Map<string, HTMLElement>();
+  const rots = new Map<string, HTMLElement>();
+  const shadows = new Map<string, HTMLElement>();
+  const marks = new Map<string, HTMLElement>();
+  const poses = new Map<string, PlanePose>();
   for (const c of order) {
     for (let i = 0; i < PLANES_PER_COLOR; i++) {
       const btn = document.createElement("button");
@@ -419,14 +557,31 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       btn.className = "fc-token";
       btn.style.width = `${CELL}%`;
       btn.style.height = `${CELL}%`;
+      const shadow = document.createElement("span");
+      shadow.className = "fc-token-shadow";
+      shadow.setAttribute("aria-hidden", "true");
       const face = document.createElement("span");
       face.className = "fc-token-face";
-      face.textContent = COLOR_INFO[c].token;
-      face.style.background = COLOR_INFO[c].soft;
-      btn.appendChild(face);
+      face.setAttribute("aria-hidden", "true");
+      const rot = document.createElement("span");
+      rot.className = "fc-token-rot";
+      rot.innerHTML = planeSVG(c, "park");
+      face.appendChild(rot);
+      const mark = document.createElement("span");
+      mark.className = "fc-stackwrap";
+      mark.setAttribute("aria-hidden", "true");
+      mark.hidden = true;
+      mark.innerHTML = stackMarkSVG(c);
+      btn.append(shadow, face, mark);
       btn.addEventListener("click", () => onTokenTap(c, i));
       board.appendChild(btn);
-      tokens.set(key(c, i), btn);
+      const k = key(c, i);
+      tokens.set(k, btn);
+      faces.set(k, face);
+      rots.set(k, rot);
+      shadows.set(k, shadow);
+      marks.set(k, mark);
+      poses.set(k, "park");
     }
   }
 
@@ -434,8 +589,9 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   hud.className = "fc-hud";
   const diceBox = document.createElement("div");
   diceBox.className = "fc-dice";
-  diceBox.textContent = "🎲";
+  diceBox.innerHTML = dieSVG(6);
   diceBox.setAttribute("role", "status");
+  diceBox.setAttribute("aria-label", "骰子");
   const rollBtn = document.createElement("button");
   rollBtn.type = "button";
   rollBtn.className = "fc-btn fc-btn-go";
@@ -455,7 +611,6 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "fc-pick";
-    btn.textContent = `第 ${i + 1} 架`;
     btn.addEventListener("click", () => {
       const color = currentColor(state);
       onTokenTap(color, i);
@@ -492,6 +647,18 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     return n >= 2;
   }
 
+  /** 同格迭子里排第几(0 是底、1 是错位 45° 叠上去的那架) */
+  function stackRank(color: Color, idx: number, p: number): number {
+    if (p < 0 || p >= RING_LEN) return 0;
+    let n = 0;
+    for (let i = 0; i < idx; i++) if (state.planes[color][i] === p) n++;
+    return n;
+  }
+
+  /** innerHTML 只在内容真变了才重赋,走子动画每帧 render 不重建 SVG */
+  const seatHtmlCache = new Map<Color, string>();
+  const pickHtmlCache: string[] = [];
+
   function render(): void {
     const cur = currentColor(state);
     badge.textContent = `${COLOR_INFO[cur].token} 轮到 ${COLOR_INFO[cur].name}`;
@@ -509,27 +676,49 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
           ? "这一关在补给，不动"
           : AI_TIER_LABELS[seat.tier];
       el.className = `fc-seat${seat.color === cur ? " fc-seat-on" : ""}`;
-      el.innerHTML = `<div>${who.token} ${who.name}</div><div class="fc-seat-tier">${label} · 到家 ${homeCount(
-        state,
-        seat.color
-      )}/4</div>`;
+      const html =
+        `<div class="fc-seat-head"><span class="fc-seat-ava">${planeSVG(seat.color, "park")}</span>` +
+        `<span>${who.token} ${who.name}</span></div>` +
+        `<div class="fc-seat-tier">${label} · ${seatProgressHTML(homeCount(state, seat.color), seat.color)}</div>`;
+      if (seatHtmlCache.get(seat.color) !== html) {
+        seatHtmlCache.set(seat.color, html);
+        el.innerHTML = html;
+      }
     }
 
     for (const c of order) {
       for (let i = 0; i < PLANES_PER_COLOR; i++) {
-        const btn = tokens.get(key(c, i));
+        const k = key(c, i);
+        const btn = tokens.get(k);
         if (!btn) continue;
-        const p = visual.get(key(c, i)) ?? BASE;
+        const p = visual.get(k) ?? BASE;
         const pos = pctOf(tokenXY(c, p, i));
         btn.style.left = `${pos.left - CELL / 2}%`;
         btn.style.top = `${pos.top - CELL / 2}%`;
+        // 姿态:基地停机 / 环线与通道飞行 / 终点着陆收翼戴花环
+        const pose: PlanePose = p === BASE ? "park" : p >= GOAL ? "land" : "fly";
+        const rot = rots.get(k);
+        if (rot && poses.get(k) !== pose) {
+          poses.set(k, pose);
+          rot.innerHTML = planeSVG(c, pose);
+        }
+        const statP = state.planes[c][i];
+        const stacked = stackedAt(c, statP);
+        const rank = stackRank(c, i, statP);
+        if (rot) {
+          const deg = headingDeg(c, p);
+          rot.style.transform =
+            stacked && rank > 0 ? `translate(9%,-9%) rotate(${deg + 45}deg)` : `rotate(${deg}deg)`;
+        }
+        const mark = marks.get(k);
+        if (mark) mark.hidden = !(stacked && rank === 0);
         const movable =
           phase === "choosing" && c === cur && moves.some((m) => m.plane.idx === i && m.plane.color === c);
         btn.classList.toggle("fc-token-can", movable);
         btn.classList.toggle("fc-token-pick", movable && moves[picked]?.plane.idx === i);
-        btn.classList.toggle("fc-token-stack", stackedAt(c, state.planes[c][i]));
+        btn.classList.toggle("fc-token-stack", stacked);
         btn.style.zIndex = String(movable ? 8 : p === GOAL ? 7 : 5);
-        btn.setAttribute("aria-label", describePos(c, state.planes[c][i]));
+        btn.setAttribute("aria-label", describePos(c, statP));
         btn.disabled = !movable;
       }
     }
@@ -539,7 +728,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       const on = phase === "choosing" && Boolean(m);
       btn.disabled = !on;
       btn.classList.toggle("fc-pick-on", on && moves[picked]?.plane.idx === i);
-      btn.textContent = on ? `第 ${i + 1} 架 ▶` : `第 ${i + 1} 架`;
+      const html =
+        `<span class="fc-pick-thumb">${planeSVG(cur, "fly")}</span>` +
+        `<span>第 ${i + 1} 架${on ? " ▶" : ""}</span>`;
+      if (pickHtmlCache[i] !== html) {
+        pickHtmlCache[i] = html;
+        btn.innerHTML = html;
+      }
     });
 
     rollBtn.disabled = phase !== "idle" || !humanTurn();
@@ -572,19 +767,27 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     render();
     opts.sfx("tap");
     const value = nextDice();
-    // 电脑的骰子也要转，只是少转几圈——绝不直接跳出数字
+    // 电脑的骰子也要转，只是少转几圈——绝不直接跳出数字。
+    // 帧序列节奏不变，每帧换一面立体骰的点数(微旋转交给 .fc-dice-spin)。
     const frames = spinFrames(opts.seed, rolls, reduced || !humanTurn());
     let f = 0;
     diceBox.classList.add("fc-dice-spin");
     const tick = (): void => {
       if (f < frames.length - 1) {
-        diceBox.textContent = diceFace(frames[f]);
+        diceBox.innerHTML = dieSVG(frames[f]);
         f++;
         after(SPIN_MS, tick);
         return;
       }
       diceBox.classList.remove("fc-dice-spin");
-      diceBox.textContent = diceFace(value);
+      // 掷出 6 金边闪一次(对应「再掷一次」规则);reduced 时金边只亮不闪
+      diceBox.innerHTML = dieSVG(value, value === 6);
+      diceBox.setAttribute("data-value", String(value));
+      diceBox.setAttribute("aria-label", `骰子掷出 ${value} 点`);
+      if (value === 6 && !reduced) {
+        diceBox.classList.add("fc-dice-six");
+        after(FLASH_MS, () => diceBox.classList.remove("fc-dice-six"));
+      }
       settleRoll(value);
     };
     tick();
@@ -689,11 +892,32 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   function animate(move: Move, res: Landing, hops: number[], done: () => void): void {
     const tokenKey = key(move.plane.color, move.plane.idx);
     const btn = tokens.get(tokenKey);
+    const face = faces.get(tokenKey);
+    const shadow = shadows.get(tokenKey);
+    const takeoff = move.kind === "takeOff";
+    // 走子全程螺旋桨提转速;reduced 一律不加动画类,退回直线滑
+    if (!reduced) face?.classList.add("fc-token-move");
+    if (takeoff && !reduced && btn) {
+      // 起飞:弧线爬升 + 两条尾迹白线 0.4s,放完就收
+      face?.classList.add("fc-token-rise");
+      const trail = document.createElement("span");
+      trail.className = "fc-trail";
+      trail.setAttribute("aria-hidden", "true");
+      trail.innerHTML = contrailSVG();
+      btn.appendChild(trail);
+      after(TRAIL_MS, () => {
+        trail.remove();
+        face?.classList.remove("fc-token-rise");
+      });
+    }
     let i = 0;
+    let hopFlip = false;
     const stepOnce = (): void => {
       if (destroyed) return;
       if (i >= hops.length) {
         btn?.classList.remove("fc-token-arc");
+        face?.classList.remove("fc-token-move", "fc-token-lift", "fc-hop-a", "fc-hop-b");
+        shadow?.classList.remove("fc-shadow-off");
         flyBackCaptured(move, res, done);
         return;
       }
@@ -701,6 +925,23 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       const target = hops[i];
       const leap = Math.abs(target - prev) > 1;
       if (btn) btn.classList.toggle("fc-token-arc", leap && !reduced);
+      if (!reduced && face) {
+        if (leap) {
+          // 跳格/航线:飞机拉高、影子留在地面缩小(落地时影子合并)
+          face.classList.remove("fc-hop-a", "fc-hop-b");
+          face.classList.add("fc-token-lift");
+          shadow?.classList.add("fc-shadow-off");
+        } else {
+          face.classList.remove("fc-token-lift");
+          shadow?.classList.remove("fc-shadow-off");
+          if (!takeoff) {
+            // 逐格小跳:a/b 两个类轮流用,连跳时动画每格都重新触发
+            face.classList.remove(hopFlip ? "fc-hop-b" : "fc-hop-a");
+            face.classList.add(hopFlip ? "fc-hop-a" : "fc-hop-b");
+            hopFlip = !hopFlip;
+          }
+        }
+      }
       visual.set(tokenKey, target);
       render();
       i++;
@@ -716,15 +957,53 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       done();
       return;
     }
-    // 绕回基地也走一段弧线，不许瞬间闪回去
-    for (const foe of back) {
-      tokens.get(key(foe.color, foe.idx))?.classList.add("fc-token-arc");
-      visual.set(key(foe.color, foe.idx), BASE);
+    // 撞回对方:攻击方机身闪金边(自己撞上堡垒一起回家就不闪了)
+    if (res.captured.length > 0 && !res.selfBack && !reduced) {
+      const hero = faces.get(key(move.plane.color, move.plane.idx));
+      hero?.classList.add("fc-token-gold");
+      after(FLASH_MS, () => hero?.classList.remove("fc-token-gold"));
     }
-    render();
-    after(reduced ? 80 : ARC_MS, () => {
-      for (const foe of back) tokens.get(key(foe.color, foe.idx))?.classList.remove("fc-token-arc");
-      done();
+    // 绕回基地也走一段弧线，不许瞬间闪回去;非 reduced 时打开降落伞安全返航
+    const sendHome = (): void => {
+      const chutes: HTMLElement[] = [];
+      for (const foe of back) {
+        const k = key(foe.color, foe.idx);
+        const btn = tokens.get(k);
+        btn?.classList.add("fc-token-arc");
+        if (!reduced && btn) {
+          const chute = document.createElement("span");
+          chute.className = "fc-chute";
+          chute.setAttribute("aria-hidden", "true");
+          chute.innerHTML = parachuteSVG(foe.color);
+          btn.appendChild(chute);
+          chutes.push(chute);
+        }
+        visual.set(k, BASE);
+      }
+      render();
+      after(reduced ? 80 : ARC_MS, () => {
+        for (const foe of back) tokens.get(key(foe.color, foe.idx))?.classList.remove("fc-token-arc");
+        if (chutes.length === 0) {
+          done();
+          return;
+        }
+        // 到家后伞花在基地绽放一下,放完把节点收干净
+        for (const chute of chutes) chute.classList.add("fc-chute-bloom");
+        after(CHUTE_MS, () => {
+          for (const chute of chutes) chute.remove();
+          done();
+        });
+      });
+    };
+    if (reduced) {
+      sendHome();
+      return;
+    }
+    // 被撞的飞机先打个转(0.5s),再开伞返航 —— 无爆炸碎片
+    for (const foe of back) faces.get(key(foe.color, foe.idx))?.classList.add("fc-token-shot");
+    after(SHOT_MS, () => {
+      for (const foe of back) faces.get(key(foe.color, foe.idx))?.classList.remove("fc-token-shot");
+      sendHome();
     });
   }
 
@@ -756,6 +1035,54 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     }
   }
 
+  /**
+   * 终局烟花:中央塔台上空放 3 波 12 粒星星粒子(共享 art kit 的 makeCollectBurst)。
+   * 画在盖住棋盘的 canvas 上,播完整个节点移除再交结算;测试桩没有 canvas 2D 时
+   * 只走节奏与清理,不画。
+   */
+  function celebrate(done: () => void): void {
+    const canvas = document.createElement("canvas");
+    canvas.className = "fc-fireworks";
+    const size = board.clientWidth || 440;
+    canvas.width = size;
+    canvas.height = size;
+    canvas.setAttribute("aria-hidden", "true");
+    board.appendChild(canvas);
+    const ctx = typeof canvas.getContext === "function" ? canvas.getContext("2d") : null;
+    const bursts: ReturnType<typeof makeCollectBurst>[] = [];
+    const waveColors = [KIT_PALETTE.starGold, KIT_PALETTE.candyDeep, KIT_PALETTE.gem];
+    waveColors.forEach((colorHex, w) => {
+      after(w * 260, () => {
+        bursts.push(
+          makeCollectBurst({
+            x: size / 2 + (w - 1) * size * 0.12,
+            y: size / 2 - w * size * 0.05,
+            count: 12,
+            color: colorHex
+          })
+        );
+      });
+    });
+    let t = 0;
+    const tick = (): void => {
+      t += 40;
+      if (ctx) {
+        ctx.clearRect(0, 0, size, size);
+        for (const b of bursts) {
+          b.step(0.04);
+          b.draw(ctx);
+        }
+      }
+      if (t >= FIREWORK_MS) {
+        canvas.remove();
+        done();
+        return;
+      }
+      after(40, tick);
+    };
+    after(40, tick);
+  }
+
   function finish(reason: OverResult["reason"], won: boolean): void {
     if (phase === "over") return;
     phase = "over";
@@ -764,7 +1091,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     const champ = winnerOf(state);
     const humanColors = opts.seats.filter((s) => s.human).map((s) => s.color);
     const humanWon = won && (champ === null || humanColors.includes(champ));
-    opts.onOver({ winner: champ, ranks: rankOf(state), rolls, state, reason, humanWon });
+    const emit = (): void =>
+      opts.onOver({ winner: champ, ranks: rankOf(state), rolls, state, reason, humanWon });
+    // 赢下这一局才放烟花;弱动效直接交结算
+    if (won && !reduced) celebrate(emit);
+    else emit();
   }
 
   /* --------------------------- 暂停与键盘 --------------------------- */
@@ -932,11 +1263,13 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   let streak = 0;
   let best = save.getGameProgress(meta.id).endlessBest;
 
-  function showOver(title: string, sub: string, again: string): void {
+  function showOver(title: string, sub: string, again: string, ranks?: readonly Color[]): void {
     stage.innerHTML = "";
     const box = document.createElement("div");
     box.className = "fc-over";
-    box.innerHTML = `<div class="fc-over-t">${title}</div><div class="fc-over-s">${sub}</div>`;
+    box.innerHTML =
+      `<div class="fc-over-t">${title}</div><div class="fc-over-s">${sub}</div>` +
+      (ranks && ranks.length > 0 ? rankStripHTML(ranks) : "");
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "fc-btn fc-btn-go";
@@ -988,8 +1321,9 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         if (r.humanWon && allHome(r.state, 0)) api.addStars(2);
         showOver(
           allHome(r.state, 0) ? "朵朵这一局到齐啦！" : "这一局到此为止",
-          `${overLine(allHome(r.state, 0), mine)} 名次:${r.ranks.map((c) => COLOR_INFO[c].name).join(" > ")}。`,
-          "🔁 再来一局"
+          `${overLine(allHome(r.state, 0), mine)}`,
+          "🔁 再来一局",
+          r.ranks
         );
       }
     });
@@ -1012,12 +1346,18 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           streak++;
           best = save.recordEndlessBest(meta.id, streak);
           api.play("win");
-          showOver(`连胜 ${streak} 场！`, `最高连胜 ${best}。对手会越来越难缠，接着来一局吧。`, "▶ 下一局");
+          showOver(
+            `连胜 ${streak} 场！`,
+            `最高连胜 ${best}。对手会越来越难缠，接着来一局吧。`,
+            "▶ 下一局",
+            r.ranks
+          );
         } else {
           showOver(
             "连胜到这里啦",
             `这一轮连胜 ${streak} 场，最高纪录 ${best}。${overLine(false, homeCount(r.state, 0))}`,
-            "🔁 重新开始"
+            "🔁 重新开始",
+            r.ranks
           );
           streak = 0;
         }
@@ -1047,7 +1387,12 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         const starHome = homeCount(r.state, 1);
         const title =
           duoHome === starHome ? "打成平手！" : duoHome > starHome ? "朵朵这一局更快" : "星星这一局更快";
-        showOver(title, `朵朵到家 ${duoHome} 架，星星到家 ${starHome} 架。换个开局顺序再来一次吧。`, "🔁 再来一局");
+        showOver(
+          title,
+          `朵朵到家 ${duoHome} 架，星星到家 ${starHome} 架。换个开局顺序再来一次吧。`,
+          "🔁 再来一局",
+          r.ranks
+        );
       }
     });
   }
@@ -1165,7 +1510,20 @@ export function mount(api: GameApi): { destroy: () => void } {
 }
 
 /** 给测试钉住的节奏常量 */
-export const FLIGHT_CONSTS = { HOP_MS, ARC_MS, BEAT_MS, SPIN_MS, RING_LEN, GOAL, SIX_STREAK_LIMIT };
+export const FLIGHT_CONSTS = {
+  HOP_MS,
+  ARC_MS,
+  BEAT_MS,
+  SPIN_MS,
+  SHOT_MS,
+  CHUTE_MS,
+  TRAIL_MS,
+  FLASH_MS,
+  FIREWORK_MS,
+  RING_LEN,
+  GOAL,
+  SIX_STREAK_LIMIT
+};
 
 /** 界面上「这一格是什么格」的一句话，无障碍标签与攻略共用 */
 export function cellSummary(color: Color, p: number): string {
