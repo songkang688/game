@@ -10,6 +10,8 @@ import {
   drawPlayerFigure,
   drawWalls,
   dotSprite,
+  fruitSprite,
+  lifeBadgeSVG,
   powerSprite,
   versusStarSprite,
   wallThemeIndex,
@@ -19,6 +21,7 @@ import {
   GHOST_COLORS,
   GHOST_NAMES,
   TIER_LABELS,
+  frightScore,
   frightWarning,
   type Ghost,
 } from "./ghosts";
@@ -34,7 +37,6 @@ import {
   type Maze,
 } from "./maze";
 import {
-  FRUITS,
   clearTurn,
   createRun,
   remaining,
@@ -56,6 +58,9 @@ const BLUE_FADE_MS = 220;
 
 /** 被抓之后委屈脸持续多久（纯表现，重生节奏在 logic 里没变） */
 const SAD_MS = 400;
+
+/** 连击分数飘字飘多久（纯表现） */
+const FLOAT_MS = 700;
 
 /** 惊吓时的「昏昏蓝」 */
 const FRIGHT_BLUE = "#7FA9FF";
@@ -248,6 +253,10 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const blue: number[] = state.ghosts.map(() => 0);
   /** 被抓后的委屈脸还要摆多少毫秒（纯表现） */
   let sadMs = 0;
+  /** 连吃小幽灵的分数飘字（200/400/800/1600 的翻倍感），减弱动效时不记 */
+  const floats: Array<{ x: number; y: number; text: string; leftMs: number }> = [];
+  /** 开局共有多少颗豆，结算进度环按它算吃豆率 */
+  const totalDots = remaining(state);
 
   function notePop(cell: Cell): void {
     if (soft) return;
@@ -352,12 +361,17 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    // 果子
+    // 果子：画出来的贴图（emoji 只留在 HUD 播报文案里），soft 之外轻轻上下浮
     if (state.fruit) {
-      ctx.font = `${cell - 4}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(FRUITS[state.fruit.kind].emoji, state.fruit.cell.x * cell + cell / 2, state.fruit.cell.y * cell + cell / 2);
+      const s = cell - 4;
+      const bob = soft ? 0 : Math.sin(state.elapsed / 320) * cell * 0.06;
+      ctx.drawImage(
+        fruitSprite(state.fruit.kind),
+        state.fruit.cell.x * cell + (cell - s) / 2,
+        state.fruit.cell.y * cell + (cell - s) / 2 + bob,
+        s,
+        s
+      );
     }
     // 小幽灵
     state.ghosts.forEach((g, i) => {
@@ -401,6 +415,48 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    // 连击分数飘字（画在迷雾之上，soft 下根本不会入列）
+    for (const f of floats) {
+      const k = Math.max(0, f.leftMs / FLOAT_MS);
+      ctx.globalAlpha = Math.min(1, k * 1.5);
+      ctx.fillStyle = "#FFE27A";
+      ctx.font = `900 ${Math.max(11, Math.round(cell * 0.62))}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(f.text, f.x * cell + cell / 2, f.y * cell + cell / 2 - (1 - k) * cell * 0.9);
+      ctx.globalAlpha = 1;
+    }
+    // 一局收场：吃豆率进度环
+    if (state.over) drawEndRing();
+  }
+
+  /** 结算的吃豆率进度环（纯展示，画在最后一帧上） */
+  function drawEndRing(): void {
+    if (!ctx) return;
+    const eaten = Math.max(0, totalDots - remaining(state));
+    const rate = totalDots > 0 ? eaten / totalDots : 0;
+    const rx = canvas.width / 2;
+    const ry = canvas.height / 2;
+    const rr = Math.min(canvas.width, canvas.height) * 0.18;
+    ctx.fillStyle = "rgba(36,31,58,0.74)";
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr * 1.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = Math.max(3, rr * 0.16);
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "#FFD84D";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr, -Math.PI / 2, -Math.PI / 2 + rate * Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#FFF6C9";
+    ctx.font = `900 ${Math.max(12, Math.round(rr * 0.52))}px system-ui`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${Math.round(rate * 100)}%`, rx, ry);
   }
 
   function drawGhost(g: Ghost, isStar: boolean, blueness: number): void {
@@ -440,9 +496,20 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     });
   }
 
+  // 生命数画成一排小豆豆脸；innerHTML 只在数目变化那一帧重建
+  let livesShown = -1;
+
+  function renderLives(): void {
+    if (state.lives === livesShown) return;
+    livesShown = state.lives;
+    const n = Math.max(0, state.lives);
+    livesEl.innerHTML = `⭐ ${lifeBadgeSVG().repeat(n)}`;
+    livesEl.setAttribute("aria-label", `剩 ${n} 颗小星命`);
+  }
+
   function renderHud(): void {
     scoreEl.textContent = star ? `🍬 朵朵 ${state.score} · 星星 ${star.score}` : `🍬 ${state.score}`;
-    livesEl.textContent = `⭐ ${"●".repeat(Math.max(0, state.lives))}`;
+    renderLives();
     leftEl.textContent = `🫐 剩 ${remaining(state)}`;
     extraEl.textContent = opts.extraChip ? opts.extraChip() : opts.label;
     noteEl.textContent = paused ? "已暂停，按 Esc 继续。" : state.notice;
@@ -483,11 +550,25 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
     const dotsBefore = remaining(state);
     const livesBefore = state.lives;
+    const chainBefore = state.chain;
     stepRun(state, dt);
     if (remaining(state) < dotsBefore) notePop(state.player);
     // 被抓只是委屈 0.4 秒再出发：静态表情，soft 下也照常摆
     if (state.lives < livesBefore) sadMs = SAD_MS;
     else if (sadMs > 0) sadMs = Math.max(0, sadMs - dt);
+    // 连吃小幽灵的分数飘字（soft 下不加新动效）
+    if (state.chain > chainBefore && !soft) {
+      floats.push({
+        x: state.player.x,
+        y: state.player.y,
+        text: `+${frightScore(state.chain - 1)}`,
+        leftMs: FLOAT_MS,
+      });
+    }
+    for (let i = floats.length - 1; i >= 0; i--) {
+      floats[i].leftMs -= dt;
+      if (floats[i].leftMs <= 0) floats.splice(i, 1);
+    }
     moveStarEater(dt);
     agePops(dt);
     easeBlue(dt);

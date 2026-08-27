@@ -253,6 +253,128 @@ export function versusStarSprite(): HTMLCanvasElement {
 }
 
 /* ------------------------------------------------------------------ */
+/* 奖励果子：画出来的，不再是系统 emoji                                 */
+/* ------------------------------------------------------------------ */
+
+const fruitCache: Array<HTMLCanvasElement | null> = [null, null, null];
+
+/**
+ * 三种原创果子的贴图（0 星果 / 1 糖梨 / 2 蜜柑），每种十来笔路径，
+ * 预渲染一张 32×32 全场复用；HUD 文案里的 emoji 照旧，画面上不再用字形。
+ */
+export function fruitSprite(kind: number): HTMLCanvasElement {
+  const k = Math.max(0, Math.min(fruitCache.length - 1, Math.floor(kind)));
+  fruitCache[k] ??= makeSprite(32, (g) => {
+    if (k === 0) {
+      // 星果：一颗圆润的金色星星，顶上一小截梗
+      g.strokeStyle = "#8A6B3A";
+      g.lineWidth = 2;
+      g.lineCap = "round";
+      g.beginPath();
+      g.moveTo(16, 6);
+      g.quadraticCurveTo(18, 3.4, 20.4, 3);
+      g.stroke();
+      const body = g.createLinearGradient(16, 5, 16, 29);
+      body.addColorStop(0, "#FFE896");
+      body.addColorStop(1, "#F2AE3C");
+      g.fillStyle = body;
+      starPath(g, 16, 18, 5, 12, 5.2);
+      g.fill();
+      g.strokeStyle = "#C98A2E";
+      g.lineWidth = 1.4;
+      g.lineJoin = "round";
+      g.stroke();
+      g.fillStyle = "rgba(255,255,255,0.85)";
+      g.beginPath();
+      g.arc(12.4, 13.2, 1.7, 0, Math.PI * 2);
+      g.fill();
+      return;
+    }
+    if (k === 1) {
+      // 糖梨：上小下大的两节果身 + 梗 + 叶 + 高光
+      g.strokeStyle = "#8A6B3A";
+      g.lineWidth = 2.2;
+      g.lineCap = "round";
+      g.beginPath();
+      g.moveTo(16, 7.5);
+      g.quadraticCurveTo(15.4, 4.4, 17.6, 2.6);
+      g.stroke();
+      g.fillStyle = "#7CC168";
+      g.beginPath();
+      g.ellipse(21, 6.4, 4, 2.1, Math.PI / 7, 0, Math.PI * 2);
+      g.fill();
+      const body = g.createRadialGradient(13.5, 15, 2, 16, 18, 13);
+      body.addColorStop(0, "#F2F0A0");
+      body.addColorStop(0.7, "#DCE06E");
+      body.addColorStop(1, "#B8C24E");
+      g.fillStyle = body;
+      g.beginPath();
+      g.arc(16, 12.4, 5.4, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.arc(16, 21, 8.6, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "rgba(255,255,255,0.75)";
+      g.beginPath();
+      g.arc(12.2, 17.4, 2, 0, Math.PI * 2);
+      g.fill();
+      return;
+    }
+    // 蜜柑：橙圆 + 底部暗晕 + 叶 + 高光弧
+    g.strokeStyle = "#8A6B3A";
+    g.lineWidth = 2.2;
+    g.lineCap = "round";
+    g.beginPath();
+    g.moveTo(16, 8);
+    g.lineTo(16, 4.6);
+    g.stroke();
+    g.fillStyle = "#6FBE63";
+    g.beginPath();
+    g.ellipse(20.6, 6.6, 4.4, 2.2, Math.PI / 8, 0, Math.PI * 2);
+    g.fill();
+    const body = g.createRadialGradient(12.5, 14, 2, 16, 18, 12.5);
+    body.addColorStop(0, "#FFC673");
+    body.addColorStop(0.65, "#FFA84E");
+    body.addColorStop(1, "#E8842E");
+    g.fillStyle = body;
+    g.beginPath();
+    g.arc(16, 18.6, 10.4, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "rgba(255,255,255,0.7)";
+    g.lineWidth = 1.8;
+    g.lineCap = "round";
+    g.beginPath();
+    g.arc(16, 18.6, 7.2, Math.PI * 1.12, Math.PI * 1.55);
+    g.stroke();
+    g.fillStyle = "rgba(200,96,30,0.5)";
+    g.beginPath();
+    g.arc(13.4, 21.6, 0.9, 0, Math.PI * 2);
+    g.arc(18.8, 23.2, 0.9, 0, Math.PI * 2);
+    g.fill();
+  });
+  return fruitCache[k];
+}
+
+/* ------------------------------------------------------------------ */
+/* HUD 小件                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * HUD 生命图标：一张小豆豆脸（内联 SVG，对读屏隐身，数量代表剩余小星命）。
+ * 和画布上的豆豆勇士同一套配色，眼睛 + 微笑 + 高光三层。
+ */
+export function lifeBadgeSVG(size = 15): string {
+  return (
+    `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false" style="vertical-align:-2px">` +
+    `<circle cx="8" cy="8" r="6.6" fill="#FFD84D" stroke="#D99B2B" stroke-width="1.2"/>` +
+    `<circle cx="10.4" cy="6" r="1.5" fill="#3A2F1B"/>` +
+    `<circle cx="10.9" cy="5.4" r="0.55" fill="#FFFFFF"/>` +
+    `<path d="M5 9.6 Q 8 12.4 11.4 9.9" stroke="#3A2F1B" stroke-width="1.3" fill="none" stroke-linecap="round"/>` +
+    `</svg>`
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* 小幽灵                                                              */
 /* ------------------------------------------------------------------ */
 
