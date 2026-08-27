@@ -3,7 +3,8 @@
  *
  * `ai12.ts` 的 `TIER_SPECS` 一直写着三档的 `fireRange`(5 / 9 / 10 格),
  * 可闯关那一侧的 `enemyIntent` 与 `stepEnemies` 都写死了 `lineOfFire(w, t, 9)` ——
- * 这一列数据只在**对战陪练**里被读过,闯关里从来没生效:
+ * 也就是说这一列数据**全仓库没有一行代码读过**(第 2 轮复核修正:
+ * 这里原先写的「只在对战陪练里被读过」是错的,`versus` 是两个真人对打,那一侧根本没有电脑车):
  *  - 「乱转」档隔着 9 格就点射(规格是 5 格,远了八成),第一章就在远距离招呼人;
  *  - 「绕后卡位」档反而被砍到 9 格,比规格的 10 格还短。
  *
@@ -173,6 +174,9 @@ describe("闯关敌人 · 重想间隔为什么不按档位走", () => {
    * 第 51 / 90 / 98 关无头机器人都打不过去;给绕后档压 0.3 秒下限、
    * 给乱转档封到 0.4 秒之后第 164 关照样守不住。
    * 也就是说这套关卡是围着 0.3 秒这个**整体节奏**配出来的,要动得连波次一起重配。
+   *
+   * 第 2 轮补:守不住的只有**闯关**。无尽的波次是 `endlessWave` 现生成的,
+   * 没有手配好的布局要守,所以那一侧现在真的按档位走了 —— 见 `rethinkFor` 与 `endless12` 那一组用例。
    */
   it("闯关的重想间隔是一个统一常数,不是三档各走各的", () => {
     expect(ENEMY_RETHINK).toBe(0.3);
@@ -182,7 +186,7 @@ describe("闯关敌人 · 重想间隔为什么不按档位走", () => {
     expect(ENEMY_RETHINK).toBeLessThanOrEqual(Math.max(...thinks));
   });
 
-  it("三档的 think 仍然是从慢到快排好的(对战陪练那一侧照旧按它走)", () => {
+  it("三档的 think 仍然是从慢到快排好的(无尽那一侧现在真的按它走)", () => {
     expect(TIER_SPECS.wander.think).toBeGreaterThan(TIER_SPECS.chase.think);
     expect(TIER_SPECS.chase.think).toBeGreaterThan(TIER_SPECS.flank.think);
   });

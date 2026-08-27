@@ -1090,10 +1090,9 @@ export function worldGrid(w: World, brickCost = 5): Grid {
 /**
  * 闯关里敌人「重新拿一次主意」的间隔(秒)。
  *
- * 这个数**故意不按脾气档走**。`TIER_SPECS.think`(0.55 / 0.3 / 0.26)是给
- * 对战陪练用的节奏,一对一的时候对面只有一辆车,快慢都无所谓;
- * 闯关是一群车围着一座堡垒,整体节奏一动,188 关的可通过性就跟着塌:
- * 实测把这里换成按档位走,第 51 / 90 / 98 关连无头机器人都打不过去(堡垒被砸 / 超时),
+ * 这个数在闯关里**故意不按脾气档走**。闯关是一群车围着一座堡垒,
+ * 整体节奏一动,188 关的可通过性就跟着塌:实测把这里换成按档位走,
+ * 第 51 / 90 / 98 关连无头机器人都打不过去(堡垒被砸 / 超时),
  * 就算给绕后档压一条 0.3 秒的下限、再给乱转档封到 0.4 秒,第 164 关照样守不住。
  *
  * 也就是说这一套关卡是**围着 0.3 秒这个整体节奏配出来的**。要动它得连着 188 关的
@@ -1102,9 +1101,24 @@ export function worldGrid(w: World, brickCost = 5): Grid {
 export const ENEMY_RETHINK = 0.3;
 
 /**
+ * 这一辆敌人这一次要隔多久再拿主意(秒)。
+ *
+ * 闯关 / 合作走上面那条统一的 `ENEMY_RETHINK`,理由见它自己的注释。
+ * **无尽不一样**:那边的波次是 `endlessWave` 现生成的,没有手配好的关卡布局要守,
+ * 所以脾气档的 `think`(0.55 / 0.3 / 0.26)在这里可以真的落地——
+ * 乱转档慢半拍,绕后卡位档想得比闯关还勤,一波比一波紧的压迫感才出得来。
+ *
+ * 在此之前 `TIER_SPECS.think` 是一个**谁都没读过的字段**:三档规格表里写着它,
+ * 单测也断言着它从慢到快排好,可全仓库没有一行代码按它跑过。
+ */
+export function rethinkFor(mode: TankMode, tier: AiTier): number {
+  return mode === "endless" ? TIER_SPECS[tier].think : ENEMY_RETHINK;
+}
+
+/**
  * 这一档的敌人隔多远就敢开火(格)。
  *
- * 1.2 之前这里写死 9,于是 `TIER_SPECS.fireRange`(5 / 9 / 10)在闯关里**从来没生效过**:
+ * 1.2 之前这里写死 9,于是 `TIER_SPECS.fireRange`(5 / 9 / 10)**全仓库没有一行代码读过**:
  * 「乱转」档隔着 9 格就点射,比自己规格里的 5 格远了八成,第一章就在远距离招呼人;
  * 「绕后卡位」档反而被砍到 9 格,比规格的 10 格还短。这一条改完,
  * 三档的「看得多远」才真的分得开。
@@ -1537,7 +1551,7 @@ function stepEnemies(w: World, dt: number): void {
       const intent = enemyIntent(w, t);
       t.aiDir = intent.dir;
       t.aiFire = intent.fire;
-      t.aiTimer = ENEMY_RETHINK;
+      t.aiTimer = rethinkFor(w.mode, t.tier);
     }
     if (t.aiDir >= 0) {
       const ok = driveTank(w, t, t.aiDir as Dir, dt);
