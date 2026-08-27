@@ -287,7 +287,8 @@ const CSS = `
 .bvp-mz-ghost{background-color:#e3ecfb;}
 .bvp-mz-badge{position:relative;z-index:var(--bvp-z-badge);width:82%;height:82%;display:block;pointer-events:none;}
 .bvp-mz-badge svg{width:100%;height:100%;display:block;}
-.bvp-mz-it{position:relative;z-index:var(--bvp-z-badge);}
+.bvp-mz-it{position:relative;z-index:var(--bvp-z-badge);width:80%;height:80%;display:block;pointer-events:none;}
+.bvp-mz-it svg{width:100%;height:100%;display:block;}
 .bvp-mz-fog .bvp-mz-it{filter:brightness(0) opacity(.45);}
 .bvp-pads{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,52px);
   gap:8px;justify-content:center;margin-top:8px;}

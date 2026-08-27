@@ -216,16 +216,103 @@ export interface MazeCellState {
   item: "" | "key" | "door" | "lock" | "exit";
 }
 
-const ITEM_GLYPH: Record<Exclude<MazeCellState["item"], "">, string> = {
-  key: "🔑",
-  door: "🚪",
-  lock: "🔒",
-  exit: "🏁"
+/* ------------------------------------------------------------------ */
+/* 迷宫拾取物：与勇者/影子徽章同族的参数化 SVG（W6R1-03 修复）            */
+/* 约定同 badge 套件：墨色描边 1.5px、底部落影椭圆、左上高光、粉彩色板。   */
+/* 迷雾剪影仍走 .bvp-mz-fog 的 brightness(0) 滤镜，SVG 同样只露轮廓。    */
+/* ------------------------------------------------------------------ */
+
+const ITEM_INK = "#4B3A6E";
+const ITEM_SHADOW = "rgba(0,0,0,.12)";
+const ITEM_GOLD = "#F0C25A";
+const ITEM_WOOD = "#C89B6C";
+
+function itemWrap(kind: string, inner: string): string {
+  return (
+    `<svg class="bvp-it bvp-it-${kind}" viewBox="0 0 64 64" width="100%" height="100%" ` +
+    `aria-hidden="true" focusable="false">` +
+    `<ellipse cx="32" cy="56" rx="14" ry="3.2" fill="${ITEM_SHADOW}"/>` +
+    inner +
+    `</svg>`
+  );
+}
+
+/** 钥匙：金色圆环头 + 键身双齿，环上左上高光弧 */
+function keyItemSvg(): string {
+  return itemWrap(
+    "key",
+    `<circle cx="32" cy="19" r="9.5" fill="${ITEM_GOLD}" stroke="${ITEM_INK}" stroke-width="1.5"/>` +
+      `<circle cx="32" cy="19" r="4" fill="#FFF7EC" stroke="${ITEM_INK}" stroke-width="1.2"/>` +
+      `<path d="M29 28.5h6v18.5l-3 4-3-4z" fill="${ITEM_GOLD}" stroke="${ITEM_INK}" stroke-width="1.5" stroke-linejoin="round"/>` +
+      `<path d="M35 36.5h5.6v3.6H35zM35 43h4.4v3.6H35z" fill="${ITEM_GOLD}" stroke="${ITEM_INK}" stroke-width="1.3" stroke-linejoin="round"/>` +
+      `<path d="M25.6 14.4a8 8 0 0 1 5.4-3.4" stroke="rgba(255,255,255,.85)" stroke-width="2" fill="none" stroke-linecap="round"/>`
+  );
+}
+
+/** 门：拱顶木门 + 板缝 + 金门把 + 门槛石，左上一道受光弧 */
+function doorItemSvg(): string {
+  return itemWrap(
+    "door",
+    `<path d="M18.5 51.5v-22a13.5 13.5 0 0 1 27 0v22z" fill="${ITEM_WOOD}" stroke="${ITEM_INK}" stroke-width="1.5" stroke-linejoin="round"/>` +
+      `<path d="M40.5 51.5v-28a13.5 13.5 0 0 1 5 6v22z" fill="rgba(90,60,30,.22)"/>` +
+      `<path d="M27 51.5V18.8M36 51.5v-33.6" stroke="rgba(90,60,30,.35)" stroke-width="1.2"/>` +
+      `<path d="M21.5 28.5a11 11 0 0 1 6.5-8.8" stroke="rgba(255,255,255,.7)" stroke-width="2" fill="none" stroke-linecap="round"/>` +
+      `<circle cx="38.5" cy="38" r="2.4" fill="${ITEM_GOLD}" stroke="${ITEM_INK}" stroke-width="1"/>` +
+      `<rect x="15" y="50.5" width="34" height="4.4" rx="2.2" fill="#D9C9A8" stroke="${ITEM_INK}" stroke-width="1.2"/>`
+  );
+}
+
+/** 锁：银色锁梁 + 金色锁身（顶部受光带）+ 墨色锁孔 */
+function lockItemSvg(): string {
+  return itemWrap(
+    "lock",
+    `<path d="M23.5 30v-6.5a8.5 8.5 0 0 1 17 0V30" stroke="${ITEM_INK}" stroke-width="6.4" fill="none" stroke-linecap="round"/>` +
+      `<path d="M23.5 30v-6.5a8.5 8.5 0 0 1 17 0V30" stroke="#AEB6CC" stroke-width="4" fill="none" stroke-linecap="round"/>` +
+      `<path d="M25.5 22a6.5 6.5 0 0 1 4.4-5.4" stroke="rgba(255,255,255,.8)" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+      `<rect x="18" y="29" width="28" height="22.5" rx="6" fill="${ITEM_GOLD}" stroke="${ITEM_INK}" stroke-width="1.5"/>` +
+      `<path d="M18 35.5c0-3.6 2.9-6.5 6.5-6.5h15c3.6 0 6.5 2.9 6.5 6.5z" fill="rgba(255,255,255,.4)"/>` +
+      `<circle cx="32" cy="39.5" r="2.8" fill="${ITEM_INK}"/>` +
+      `<path d="M30.8 40.5h2.4v6h-2.4z" fill="${ITEM_INK}"/>`
+  );
+}
+
+/** 终点：木旗杆 + 黑白棋盘小旗（3×3 交错），杆顶圆头 */
+function exitItemSvg(): string {
+  const cw = 7;
+  const ch = 5.4;
+  let checks = "";
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      if ((r + c) % 2 === 0) {
+        checks += `<rect x="${(24 + c * cw).toFixed(1)}" y="${(14 + r * ch).toFixed(1)}" width="${cw}" height="${ch}" fill="${ITEM_INK}"/>`;
+      }
+    }
+  }
+  return itemWrap(
+    "exit",
+    `<rect x="19.6" y="12" width="3.4" height="42" rx="1.6" fill="${ITEM_WOOD}" stroke="${ITEM_INK}" stroke-width="1"/>` +
+      `<circle cx="21.3" cy="11" r="2.4" fill="${ITEM_GOLD}" stroke="${ITEM_INK}" stroke-width="1"/>` +
+      `<rect x="24" y="14" width="21" height="16.2" fill="#FFF7EC" stroke="${ITEM_INK}" stroke-width="1.5"/>` +
+      checks +
+      `<path d="M25 15.6a4 4 0 0 1 3-1.2" stroke="rgba(255,255,255,.85)" stroke-width="1.6" fill="none" stroke-linecap="round"/>`
+  );
+}
+
+const ITEM_SVG: Record<Exclude<MazeCellState["item"], "">, () => string> = {
+  key: keyItemSvg,
+  door: doorItemSvg,
+  lock: lockItemSvg,
+  exit: exitItemSvg
 };
+
+/** 迷宫拾取物 SVG（导出供视觉用例咬字符串） */
+export function mazeItemSvg(item: Exclude<MazeCellState["item"], "">): string {
+  return ITEM_SVG[item]();
+}
 
 /**
  * 一格迷宫的皮：勇者 = 朵朵五瓣花徽章（SVG），影子 = 星星徽章（SVG），
- * 钥匙 / 门 / 出口保留表意符号但套在剪影层里（迷雾下只露轮廓）。
+ * 钥匙 / 门 / 锁 / 出口 = 同族拾取物 SVG（迷雾下经 brightness(0) 只露轮廓）。
  * 功能类名 `bvp-mz-ghost` / `bvp-mz-me` 原样保留，只换皮不换判定。
  */
 export function mazeCellView(s: MazeCellState): { cls: string; html: string } {
@@ -236,7 +323,7 @@ export function mazeCellView(s: MazeCellState): { cls: string; html: string } {
   if (s.been) cls += " bvp-mz-been";
   if (s.nearMe && !s.isMe) cls += " bvp-mz-near";
   if (!s.seen) cls += " bvp-mz-fog";
-  let html = s.item === "" ? "" : `<span class="bvp-mz-it">${ITEM_GLYPH[s.item]}</span>`;
+  let html = s.item === "" ? "" : `<span class="bvp-mz-it">${mazeItemSvg(s.item)}</span>`;
   if (s.isGhost && !s.isMe) {
     cls += " bvp-mz-ghost";
     html = `<span class="bvp-mz-badge">${badge("star", { camp: "foe" })}</span>`;
