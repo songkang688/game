@@ -153,8 +153,9 @@ const CSS = `
   overflow:hidden;box-shadow:inset 0 1px 3px rgba(100,130,165,.28);}
 .pfb-bar-fill{height:100%;width:0%;border-radius:999px;transition:width .16s linear;
   background:linear-gradient(90deg,#9BD9F5,#F7A8CC);}
+/* 一行放不下就横着裁掉,绝不折成两行 —— 20px 高的条子折两行会糊成一团 */
 .pfb-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:14px;font-weight:900;color:#33526E;}
+  font-size:14px;font-weight:900;color:#33526E;white-space:nowrap;overflow:hidden;}
 .pfb-btn{border:none;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.32);}
 .pfb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.32);}
@@ -649,7 +650,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         "div",
         "pfb-pad-name",
         padCount === 1
-          ? "WASD / 方向键移动 · 空中再按一下跳是二段跳 · F 或 L 吹泡泡 · G 或 K 噗一口"
+          ? "WASD / 方向键移动 · F 或 L 吹泡泡 · G 或 K 噗一口"
           : pi === 0
             ? "朵朵 · W A S D · F 吹 · G 噗"
             : "星星 · ↑←↓→ · L 吹 · K 噗"
@@ -1239,7 +1240,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       const target = Math.max(1, world.def.roundTarget);
       const lead = Math.max(world.players[0]?.pops ?? 0, world.players[1]?.pops ?? 0);
       barFill.style.width = `${Math.min(100, (lead / target) * 100)}%`;
-      barTxt.textContent = `先到 ${target} 分赢下这一局`;
+      // 条子只有一小截宽,写短的:「先到 N 分赢下这一局」那句话搁在下面的提示行里
+      barTxt.textContent = `🏆 ${lead}/${target} 分`;
     } else {
       leftChip.className = "pfb-chip";
       leftChip.textContent = `❤️ ${"♥".repeat(Math.max(0, world.hearts))}`;
