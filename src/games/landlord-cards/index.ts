@@ -196,8 +196,11 @@ const CSS = `
 .ld-shake{animation:ldshake .3s;}
 @keyframes ldshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .ld-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;}
+/* 模式入口原来只有 38px 高,360px 手机上最容易点歪(窗口5 第1轮 W5-A-04);
+   撑到 44px 并居中,视觉上还是同一颗圆角胶囊 */
 .ld-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .ld-open.ld-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
 .ld-open:active{transform:translateY(2px);box-shadow:0 2px 0 #57429f;}
 .ld-open:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}

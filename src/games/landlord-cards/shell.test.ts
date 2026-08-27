@@ -118,6 +118,15 @@ describe("手机 360px", () => {
     expect(shell).toContain(".ldc-subbar .ld-btn{min-height:44px");
   });
 
+  it("♾️ 无尽连胜 / ⚔️ 双人对战 两个模式入口也不小于 44px", () => {
+    // W5-A-04:这两颗原来只有 38px 高,是本款 360px 下唯一够不到触屏口径的热区
+    const rule = shell.slice(shell.indexOf(".ld-open{"), shell.indexOf(".ld-open.ld-open-vs"));
+    const min = Number(rule.match(/min-height:(\d+)px/)?.[1] ?? 0);
+    expect(min).toBeGreaterThanOrEqual(44);
+    // 撑高了还得让字居中,不然胶囊上下留白不对称
+    expect(rule).toContain("align-items:center");
+  });
+
   it("1.2 新加的样式一律用 ldc- 前缀,不去动别人的类名", () => {
     const newBlock = shell.slice(shell.indexOf("/* --- 1.2 新增"));
     const selectors = [...newBlock.matchAll(/^\.([a-z0-9-]+)/gm)].map((m) => m[1]);

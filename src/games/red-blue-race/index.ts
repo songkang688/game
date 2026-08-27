@@ -103,7 +103,8 @@ const CSS = `
 .rbr-hill { position: absolute; top: 0; bottom: 0; background: rgba(160,130,80,.18); border-radius: 8px; }
 .rbr-gear { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; min-height: 22px; }
 .rbr-chip { display: inline-flex; align-items: center; gap: 5px; background: #ffffffd9; border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 800; color: #3F6B33; box-shadow: 0 2px 5px rgba(110,150,90,.2); }
-.rbr-chip-btn { border: none; cursor: pointer; font-family: inherit; min-height: 30px; }
+/* 让分开关原来只有 30px 高,偏偏是攻略点名推荐、大人最常点的那一颗(窗口5 第1轮 W5-A-03) */
+.rbr-chip-btn { border: none; cursor: pointer; font-family: inherit; min-height: 44px; }
 .rbr-chip-btn:active { transform: translateY(1px); }
 .rbr-chip-btn:focus-visible { outline: 3px solid #2A5B3C; outline-offset: 3px; }
 .rbr-chip-on { background: #FFEFC4; color: #7A4E0E; }
@@ -148,7 +149,8 @@ const CSS = `
 
 const ENDLESS_CSS = `
 .rbe-bar { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
-.rbe-open { border: none; border-radius: 999px; padding: 10px 20px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FC98A, #33845A); box-shadow: 0 4px 0 #276A47; }
+/* 对战场 / 无尽两个入口原来 40px 高,差 4px 够不到触屏口径(窗口5 第1轮 W5-A-04) */
+.rbe-open { border: none; border-radius: 999px; padding: 10px 20px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FC98A, #33845A); box-shadow: 0 4px 0 #276A47; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 .rbe-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #276A47; }
 .rbe-open:focus-visible { outline: 3px solid #21402F; outline-offset: 3px; }
 .rbe-open-versus { background: linear-gradient(180deg, #F09A9A, #BE4245); box-shadow: 0 4px 0 #953336; }
