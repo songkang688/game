@@ -121,12 +121,19 @@ export function nextMove(board: SudokuBoard, roll = 1, profile: AiProfile = AI_P
     by = "nakedSingle";
   }
 
-  // 档位失误:先种一个别的合法数字,下一步再被自己的唯余推翻改回来
+  // 档位失误:先种错一朵,下一步自己发现再改回来。
+  // 优先挑一个「看着也说得通」的数字(不跟已有的撞),实在没有就随便挑一个别的,
+  // 那一格会亮成冲突色 —— 和小朋友手快点错是一个样子。
   if (profile.missRate > 0 && roll < profile.missRate) {
-    const others = maskToDigits(grid[idx]).filter((d) => d !== digit);
-    if (others.length > 0) {
-      const wrong = others[Math.floor(roll * 997) % others.length];
-      if (isValidPlacement(board, idx, wrong)) return { idx, digit: wrong, by, slip: true };
+    const n = board.variant.n;
+    const all: number[] = [];
+    for (let d = 1; d <= n; d++) {
+      if (d !== digit) all.push(d);
+    }
+    const plausible = all.filter((d) => isValidPlacement(board, idx, d));
+    const pool = plausible.length > 0 ? plausible : all;
+    if (pool.length > 0) {
+      return { idx, digit: pool[Math.floor(roll * 997) % pool.length], by, slip: true };
     }
   }
   return { idx, digit, by, slip: false };
