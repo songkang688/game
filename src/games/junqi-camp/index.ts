@@ -13,6 +13,7 @@ export { meta };
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { TIERS, TIER_LABELS, TIER_SETUP, TIER_TIPS, chooseMove, type Tier } from "./ai";
+import { crestSVG } from "./art";
 import guide from "./guide";
 import {
   CHAPTERS,
@@ -52,6 +53,9 @@ const SHELL_CSS = `
 .jq-chip.jq-hot{background:#FFF0DE;color:#A9531F;}
 .jq-note{text-align:center;min-height:20px;font-size:13px;font-weight:700;color:#61704b;margin-top:8px;line-height:1.5;}
 .jq-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;}
+.jq-crest{display:inline-flex;align-items:center;gap:4px;background:#fff;border-radius:999px;padding:5px 10px;
+  font-size:13px;font-weight:800;color:#5f6b4b;box-shadow:0 2px 6px rgba(120,130,100,.22);white-space:nowrap;}
+.jq-crest svg{display:block;}
 `;
 
 const AI_DELAY_MS = 560;
@@ -101,7 +105,12 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   labelChip.textContent = opts.label;
   const plyChip = document.createElement("span");
   plyChip.className = "jq-chip";
-  top.append(turnChip, labelChip, plyChip);
+  // 双方军旗徽标 + 各自还剩几枚棋子（小旗 SVG 见 art.ts）
+  const duoCrest = document.createElement("span");
+  duoCrest.className = "jq-crest";
+  const starCrest = document.createElement("span");
+  starCrest.className = "jq-crest";
+  top.append(turnChip, labelChip, plyChip, duoCrest, starCrest);
   wrap.appendChild(top);
 
   const boardHost = document.createElement("div");
@@ -138,6 +147,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     turnChip.className = state.turn === "duo" ? "jq-chip jq-hot" : "jq-chip";
     const left = Math.max(0, opts.maxPlies - state.plies);
     plyChip.textContent = `还剩 ${left} 手`;
+    const countOf = (side: Side): number =>
+      state.cells.reduce((n, c) => n + (c && c.side === side ? 1 : 0), 0);
+    const starName = opts.rival === "human" ? "星星" : "小对手";
+    duoCrest.innerHTML = `${crestSVG("duo")}<b>${countOf("duo")}</b>`;
+    duoCrest.setAttribute("aria-label", `朵朵还有 ${countOf("duo")} 枚棋子`);
+    starCrest.innerHTML = `${crestSVG("star")}<b>${countOf("star")}</b>`;
+    starCrest.setAttribute("aria-label", `${starName}还有 ${countOf("star")} 枚棋子`);
   }
 
   function finish(): void {
@@ -187,6 +203,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
           attacker: res.combat.attacker.kind,
           defender: res.combat.defender.kind,
           outcome: res.combat.outcome,
+          flagTaken: res.combat.flagTaken,
         }
       : null;
     setNote(res.message);
