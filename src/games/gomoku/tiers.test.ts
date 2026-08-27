@@ -69,7 +69,8 @@ function series(
   weak: Difficulty,
   size: number,
   n: number,
-  opts: HellOptions = {}
+  opts: HellOptions = {},
+  seed0 = 1000
 ): { strongWins: number; weakWins: number; draws: number } {
   let strongWins = 0;
   let weakWins = 0;
@@ -80,7 +81,7 @@ function series(
       strongIsBlack ? strong : weak,
       strongIsBlack ? weak : strong,
       size,
-      1000 + i,
+      seed0 + i,
       opts
     );
     if (r === "draw") draws++;
@@ -348,6 +349,20 @@ describe("实战单调：相邻档五对全覆盖（强档执黑执白各一半�
   it("地狱 → 大师：地狱档必须是大师档的严格加强", () => {
     const r = series("hell", "master", 15, 8, FROZEN_HELL);
     expect(r.strongWins).toBeGreaterThan(r.weakWins);
+  }, 300_000);
+
+  // 测试员当初就是怀疑「12 局是 seed 噪声」才加跑到 120 局的。倒挂过的那两对
+  // 因此不能只钉一个 seed 基点 —— 换两个基点重跑，高档还得赢，才排除了对种子过拟合。
+  it("换 seed 基点复核：倒挂过的那两对仍旧高档赢", () => {
+    for (const seed0 of [3000, 7000]) {
+      const smart = series("smart", "normal", 15, 8, {}, seed0);
+      expect(smart.strongWins).toBeGreaterThan(smart.weakWins);
+      expect(smart.weakWins).toBeLessThanOrEqual(2);
+
+      const hell = series("hell", "master", 15, 8, FROZEN_HELL, seed0);
+      expect(hell.strongWins).toBeGreaterThan(hell.weakWins);
+      expect(hell.weakWins).toBeLessThanOrEqual(3);
+    }
   }, 300_000);
 });
 
