@@ -68,6 +68,25 @@ describe("chess-garden · 320px h 列裁切修复（r2-2 阻断）", () => {
   });
 });
 
+describe("chess-garden · 草绿壳卡（B 档 r2 一致性③）", () => {
+  it("cg-wrap 带上家族壳卡，且按 B 档要求排在 r2-2 解除规则之后", () => {
+    const card = SHEET.match(/\.cg-wrap \{\n  background: linear-gradient\(180deg, #f2f7ea, #eaf3e4\);[^}]*\}/)?.[0] ?? "";
+    expect(card, "壳卡规则丢了").not.toBe("");
+    expect(card).toContain("border-radius: 16px");
+    expect(card).toContain("padding: 10px 6px");
+    expect(SHEET.indexOf("background: linear-gradient(180deg, #f2f7ea, #eaf3e4)")).toBeGreaterThan(
+      SHEET.indexOf(".cg-wrap .cg-sq {")
+    );
+  });
+
+  it("≤420px 侧内衬必须归零：窄屏格宽实测值（36.5@320 / 41.4@360）一像素都不让", () => {
+    const at = SHEET.lastIndexOf("@media (max-width: 420px)");
+    expect(at).toBeGreaterThan(SHEET.indexOf("background: linear-gradient(180deg, #f2f7ea, #eaf3e4)"));
+    const block = SHEET.slice(at);
+    expect(block).toMatch(/\.cg-wrap \{\n    padding: 10px 0;/);
+  });
+});
+
 describe("chess-garden · 记谱行字号 ≥14px（r2-7）", () => {
   it("cg-log-sum / cg-log-row 提级到 14px，追加段排在 420px 回降规则之后", () => {
     const rule = SHEET.match(/\.cg-wrap \.cg-log-sum,\n\.cg-wrap \.cg-log-row \{[^}]*\}/)?.[0] ?? "";

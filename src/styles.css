@@ -2654,3 +2654,21 @@ html {
 .cg-wrap .cg-log-row {
   font-size: 14px;
 }
+
+/* B 档 r2 一致性③：cg-wrap 无壳卡，闯关模式下石板棋盘裸坐白底（对战/无尽另有 .cg-mode 卡）。
+   草绿壳卡与盘面石板草地同族，按 B 档要求排在 r2-2 修复之后落地。
+   ≤420px 侧内衬收敛为 0：窄屏棋盘靠负外边距全幅出血（R2-PA-3 热区例外），
+   任何侧内衬都会缩小格宽、动摇 r2-2 登记的 ≈36.5px@320 / ≈41.4px@360 实测值——
+   上下留卡即可，棋盘允许比卡幅宽一线（盘框自带 8px 木边，压卡不露白）。 */
+.cg-wrap {
+  background: linear-gradient(180deg, #f2f7ea, #eaf3e4);
+  border-radius: 16px;
+  padding: 10px 6px;
+}
+
+@media (max-width: 420px) {
+  .cg-wrap {
+    padding: 10px 0;
+    border-radius: 12px;
+  }
+}
