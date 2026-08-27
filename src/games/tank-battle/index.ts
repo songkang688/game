@@ -788,7 +788,7 @@ function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number, 
     }
   }
 
-  // ⑥ 粒子:全部自绘矢量,没有一个字走 fillText
+  // ⑥ 粒子:全部自绘矢量,canvas 上没有一笔是贴字
   for (const e of w.effects) {
     const k = 1 - e.t / e.life;
     const alpha = Math.max(0, Math.min(1, k));
