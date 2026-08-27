@@ -11,15 +11,16 @@
  *  · 组队赛(28 / 104 / 123 / 161)—— 队友包场,第 28 关玩家已经被撞出局 3 次,
  *    队伍还是判赢、星星照发、下一关照解锁。
  *
- * 这里守六件事:
+ * 这里守七件事:
  * 1. 小电脑不会一开局就自己掉下去(第 1 / 134 / 157 关开局 3 秒内零出场);
  * 2. **照闯关模式的原样(设了主角)跑,全 188 关零输入一关都过不了**;
  * 3. 无论如何,玩家零输入拿不到三星 —— 星星要玩家自己撞出去才算数;
  * 4. 撇开主角这条规则、只看底层对局,「对手自己送」的水位也要压住:
  *    尤其不许再出现「打到分出胜负、玩家白捡一个 ko 真胜」;
- * 5. 时间到判胜负比的是「上场机会还剩几成」,不是「还剩几条」——
+ * 5. 反过来也要守:会打的玩家照样过得去,别为了堵摆烂把关卡堵死;
+ * 6. 时间到判胜负比的是「上场机会还剩几成」,不是「还剩几条」——
  *    战役关给玩家 3 条命、对手 1 条,照条数比的话摆烂也稳赢;
- * 6. 主角这条规则只管战役关,双人同乐那种没有主角的局判法一点不变。
+ * 7. 主角这条规则只管战役关,双人同乐那种没有主角的局判法一点不变。
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -39,7 +40,7 @@ import { stageById } from "./stages";
  * `lead` 就是闯关模式那条「0 号槽是主角」的设定;
  * 传 false 可以把它摘掉,用来单看底层对局判成什么样。
  */
-function idleMatch(level0: number, withLead = true): MatchState {
+function idleMatch(level0: number, withLead = true, seed = (level0 + 1) * 7919): MatchState {
   const lv = levelAt(level0);
   const slots: unknown[] = [{ charId: "duoduo", team: 0, control: "p1", stocks: lv.playerStocks }];
   for (const ally of lv.allies) {
@@ -69,7 +70,7 @@ function idleMatch(level0: number, withLead = true): MatchState {
     timeLimit: lv.timeLimit,
     itemEvery: lv.itemEvery,
     itemPool: lv.itemPool,
-    seed: (level0 + 1) * 7919,
+    seed,
     ...(withLead ? { lead: 0 } : {}),
   } as never);
 }
@@ -137,13 +138,18 @@ describe("duo-vs-star · 摆烂扫描(B3 回归)", () => {
 
   it("全 188 关摆烂:一关都不判过,更别说三星", () => {
     const won: number[] = [];
+    const starred: number[] = [];
     for (let i = 0; i < 188; i++) {
       const m = idleRun(i);
       const me = m.actors[0];
       expect(me.hits, `第 ${i + 1} 关:玩家没按键却打中了人`).toBe(0);
-      if (m.winnerTeam === 0) won.push(i + 1);
+      if (m.winnerTeam !== 0) continue;
+      won.push(i + 1);
+      // 照 index.ts 结算那一行原样算星,别在测试里另写一套评级
+      if (rateLevel(me.outs, me.hits) >= 3) starred.push(i + 1);
     }
     expect(won, `摆烂还能过的关:${won.join("、")}`).toEqual([]);
+    expect(starred, `摆烂还能拿三星的关:${starred.join("、")}`).toEqual([]);
   }, 90000);
 
   it("摘掉主角规则只看底层对局:对手不该再自己把胜负送出去", () => {
@@ -193,6 +199,26 @@ describe("duo-vs-star · 摆烂扫描(B3 回归)", () => {
     // 全 188 关加起来,对手「自己走下台」的总次数。修前同口径是 28 次。
     expect(selfFalls, `对手自掉 ${selfFalls} 次`).toBeLessThanOrEqual(20);
   }, 90000);
+
+  it("会打的玩家照样过得去:主角规则砍掉的只有「零输入」和「已出局」两种胜", () => {
+    // 上面那些用例只证明了「摆烂过不了」。这一条守另一头:别为了堵摆烂
+    // 把关卡也一并堵死。0 号槽换成高手档小电脑代打(levels.test.ts 里
+    // 「高手档玩家」用的也是这个替身),再认定他确实上过手。
+    for (const level of [1, 28, 104]) {
+      const lv = levelAt(level - 1);
+      let wins = 0;
+      const runs = 8;
+      for (let i = 0; i < runs; i++) {
+        const m = idleMatch(level - 1, true, 1000 + i * 7919);
+        m.actors[0].slot.control = "ai";
+        m.actors[0].slot.aiTier = "hard";
+        m.actors[0].acted = true;
+        runMatch(m, lv.timeLimit > 0 ? lv.timeLimit + 5 : NO_LIMIT_CAP);
+        if (m.winnerTeam === 0) wins++;
+      }
+      expect(wins, `第 ${level} 关会打也只赢了 ${wins}/${runs} 局,难度被堵崩了`).toBeGreaterThanOrEqual(6);
+    }
+  }, 30000);
 
   it("时间到比的是「剩几成上场机会」,不是「剩几条」", () => {
     // 战役关给玩家 3 条命、对手只给 1 条。照条数比,玩家一个键不按也是 3:1 稳赢。
