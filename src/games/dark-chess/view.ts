@@ -21,7 +21,7 @@ import {
 
 export const CSS = `
 .dc-board{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;width:100%;max-width:520px;margin:0 auto;}
-.dc-cell{position:relative;aspect-ratio:1/1;min-height:40px;border:none;border-radius:10px;cursor:pointer;padding:0;
+.dc-cell{position:relative;aspect-ratio:1/1;min-height:44px;border:none;border-radius:10px;cursor:pointer;padding:0;
   font-family:inherit;font-size:20px;font-weight:900;line-height:1;background:#EBD9BD;color:#7a5a34;
   box-shadow:0 2px 0 rgba(150,120,80,.35);transition:transform .16s ease,opacity .18s ease;}
 .dc-cell:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -44,7 +44,8 @@ export const CSS = `
 .dc-btn{border:none;border-radius:999px;padding:9px 15px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7a5a34;box-shadow:0 3px 0 rgba(160,130,90,.3);min-height:44px;}
 .dc-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(160,130,90,.3);}
-@media (max-width:400px){ .dc-cell{font-size:18px;} }
+/* 窄屏把格间距收一点:8 列摊在 360px 上,每省 1px 间距就还给格子 0.875px 宽 */
+@media (max-width:400px){ .dc-cell{font-size:18px;} .dc-board{gap:3px;} }
 @media (prefers-reduced-motion:reduce){ .dc-cell{transition-duration:.06s;} .dc-btn:active{transform:none;} }
 `;
 

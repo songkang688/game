@@ -129,10 +129,20 @@ describe("翻翻暗棋 · index 契约", () => {
   });
 
   it("360px 上棋盘一行八格，格子与按钮都够手指点", () => {
-    // 8 列 × 4px 间隔，360px 宽下每格约 41px；CSS 里也写死了 min-height
+    // 8 列 1fr，格子与按钮的 min-height 都写死到 44px
     expect(BOARD_CSS).toContain("grid-template-columns:repeat(8,1fr)");
-    expect(BOARD_CSS).toContain("min-height:40px");
-    expect(BOARD_CSS).toContain("min-height:44px");
+    expect(BOARD_CSS).toContain(".dc-cell{position:relative;aspect-ratio:1/1;min-height:44px;");
+    expect(BOARD_CSS).toContain("min-height:44px;}");
+    expect(BOARD_CSS).not.toContain("min-height:40px");
+  });
+
+  it("窄屏把格间距收到 3px，把宽度还给棋格", () => {
+    expect(BOARD_CSS).toContain("@media (max-width:400px)");
+    expect(BOARD_CSS).toContain(".dc-board{gap:3px;}");
+    // 360px 视口下 8 列 + 7 道 3px 间距，单格宽度比 4px 间距时多回来将近 1px
+    const cell = (gap: number): number => (360 - gap * 7) / 8;
+    expect(cell(3)).toBeGreaterThan(cell(4));
+    expect(cell(3)).toBeGreaterThan(42);
   });
 });
 
