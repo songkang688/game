@@ -280,8 +280,9 @@ describe("拼图乐园 · 无尽画廊", () => {
       kinds.add(boardKind(cfg));
       expect(cfg.rows).toBeGreaterThanOrEqual(3);
       expect(cfg.rows).toBeLessThanOrEqual(6);
-      expect(cfg.theme).toBeGreaterThanOrEqual(6);
-      expect(cfg.theme).toBeLessThanOrEqual(9);
+      // 画廊现在按板子大小挑图库：装得下就 10 套轮着来，装不下才只用后 4 套大图库
+      expect(cfg.theme).toBeGreaterThanOrEqual(0);
+      expect(cfg.theme).toBeLessThan(THEME_TILES.length);
       expect(cfg.two).toBeGreaterThan(cfg.three);
       expect(cfg.moveLimit).toBeGreaterThan(cfg.two);
       expect(cfg.hints).toBeGreaterThanOrEqual(3);

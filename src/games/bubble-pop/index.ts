@@ -18,6 +18,7 @@ import {
   previewLabel,
   pushUpRow,
   seaColors,
+  seaFrozen,
   seaTideRows,
   seaLine,
   seaPushMs,
@@ -646,6 +647,10 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     if (over || busy) return;
     clearPreview();
     if (grid[r][c] < 0) return;
+    if (isFrozen(grid[r][c])) {
+      if (msgEl) msgEl.textContent = "🧊 这颗冻住啦，在它旁边消一组就能化开～";
+      return;
+    }
     const list = groupAt(grid, COLS, r, c, seaColors(pushes));
     if (list.length < 2) {
       if (msgEl) msgEl.textContent = previewLabel(list.length);
@@ -671,7 +676,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
     // 后段会来「大潮」，一次涨两行；每一行都各自看一眼有没有顶穿
     let next: number[][] = grid;
     for (let i = 0; i < seaTideRows(pushes); i++) {
-      const result = pushUpRow(next, COLS, seaColors(pushes), Math.random);
+      const result = pushUpRow(next, COLS, seaColors(pushes), Math.random, seaFrozen(pushes));
       if (result.overflow) {
         finish();
         return;
@@ -693,6 +698,11 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
   function onCell(r: number, c: number): void {
     if (over || busy) return;
     clearPreview();
+    if (isFrozen(grid[r][c])) {
+      api.play("oops");
+      if (msgEl) msgEl.textContent = "🧊 冰壳点不开～在它旁边消一组，冰就化了！";
+      return;
+    }
     const colors = seaColors(pushes);
     const g = groupAt(grid, COLS, r, c, colors);
     if (g.length < 2) {
@@ -707,6 +717,13 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
       ? `好大一团！${g.length} 个进账 ${gained} 分！`
       : `消掉 ${g.length} 个，进账 ${gained} 分。`;
     for (const [rr, cc] of g) grid[rr][cc] = -1;
+    // 消掉的一圈邻居里有冰冻的,顺手化开(跟战役同一套规矩)
+    for (const [rr, cc] of g) {
+      for (const [nr, nc] of [[rr + 1, cc], [rr - 1, cc], [rr, cc + 1], [rr, cc - 1]] as const) {
+        if (nr < 0 || nr >= SEA_ROWS || nc < 0 || nc >= COLS) continue;
+        if (isFrozen(grid[nr][nc])) grid[nr][nc] -= FROZEN_OFFSET;
+      }
+    }
     busy = true;
     runCollapse(view, g, () => {
       busy = false;

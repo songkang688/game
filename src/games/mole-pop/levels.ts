@@ -297,6 +297,57 @@ export function endlessWave(wave: number): MoleLevel {
   };
 }
 
+/** 夜市第一个「算式摊」摆在第几摊 */
+export const ENDLESS_QUIZ_FROM = 14;
+
+/** 之后每隔几摊再来一个算式摊 */
+export const ENDLESS_QUIZ_EVERY = 7;
+
+/** 算式摊再赶,一只地鼠也得露头这么久——不然来不及在心里算完 */
+export const QUIZ_UP_FLOOR_MS = 900;
+
+/** 算式摊两只之间至少隔这么久 */
+export const QUIZ_GAP_FLOOR_MS = 520;
+
+/** 第 wave 摊是不是算式摊 */
+export function isQuizStall(wave: number): boolean {
+  const n = Math.max(1, Math.round(wave) || 1);
+  return n >= ENDLESS_QUIZ_FROM && (n - ENDLESS_QUIZ_FROM) % ENDLESS_QUIZ_EVERY === 0;
+}
+
+/**
+ * 夜市实际摆出来的那一摊。
+ *
+ * 战役第 6 章有一整章「算术地洞」（举算式牌的地鼠），夜市却一摊都没有——
+ * `endlessWave` 从头到尾不带 `quizChance`，越守越只剩「看见就拍」这一件事。
+ * 这里每隔 7 摊摆一个算式摊：牌子照战役那章的规矩放慢节奏、把目标分压下来，
+ * 让人来得及在心里算一遍。
+ *
+ * 难度曲线本身仍然由 `endlessWave` 说了算（那条曲线上有一串单调性用例），
+ * 算式摊只是盖在它上面的一层皮，不动底下那条曲线。
+ */
+export function stallConfig(wave: number): MoleLevel {
+  const base = endlessWave(wave);
+  if (!isQuizStall(wave)) return base;
+  return {
+    ...base,
+    // 心算要时间：停留和间隔都放慢，跟战役第 6 章一个量级，而且各有地板
+    upMsMin: Math.max(QUIZ_UP_FLOOR_MS, Math.round(base.upMsMin * 1.9)),
+    upMsMax: Math.max(QUIZ_UP_FLOOR_MS + 400, Math.round(base.upMsMax * 1.9)),
+    gapMs: Math.max(QUIZ_GAP_FLOOR_MS, Math.round(base.gapMs * 1.7)),
+    // 每一只都得先算再拍，目标分按四成算，别让人只顾着抢手速
+    target: Math.max(6, Math.round(base.target * 0.4)),
+    maxConcurrent: Math.max(2, Math.min(3, base.maxConcurrent)),
+    // 算式摊只考心算：金鼠/兔子/盾牌这一摊都不来凑热闹（跟战役那章一致）
+    goldChance: 0,
+    bunnyChance: 0,
+    sleepyChance: 0,
+    shieldChance: 0,
+    night: false,
+    quizChance: 1
+  };
+}
+
 /** 无尽地鼠场收摊时的一句话（只鼓励，不批评） */
 export function endlessLine(wave: number, best: number): string {
   if (wave <= 0) return "第一波还没站稳，热热身再来一次，手速马上就跟上了！";

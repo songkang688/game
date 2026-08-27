@@ -9,7 +9,7 @@
  * 本文件是纯函数 + 纯数据：计划怎么落、落到一半视觉坐标在哪、死局怎么重排、
  * 连锁泡炸哪一圈、分数怎么算、无尽「泡泡海」怎么上推。index.ts 与单测共用。
  */
-import { EMPTY, STONE, colorOf, hasMovesOn, isFrozen } from "./logic";
+import { EMPTY, FROZEN_OFFSET, STONE, colorOf, hasMovesOn, isFrozen } from "./logic";
 
 // ---------------------------------------------------------------------------
 // 时间线常量
@@ -377,6 +377,28 @@ export function seaColors(pushes: number): number {
   return Math.min(5, 3 + Math.floor(n / 6));
 }
 
+/** 从第几推开始,涨上来的新行里会夹冰冻泡泡 */
+export const SEA_FROZEN_FROM = 12;
+
+/** 一行最多夹几颗冰冻:留够能下手的地方,不能整行都是冰 */
+export const SEA_FROZEN_MAX = 2;
+
+/**
+ * 第 n 次上推的新行里夹几颗冰冻泡泡。
+ *
+ * 战役里有石头/冰冻/彩虹/闪电四种花样,泡泡海却从头到尾只涨纯色——
+ * 越玩越只剩「点最大的一团」这一件事。这里给深海加一味:
+ * 冰冻泡泡自己不成组,得在它旁边消一组才化得开。
+ *
+ * 挑冰冻而不挑石头,是因为石头永远消不掉:它会跟着涨潮一路顶到警戒线,
+ * 攒够十来颗就成了「必死」,那不是加压是断路。冰冻随时化得开,只是让人多绕一步。
+ */
+export function seaFrozen(pushes: number): number {
+  const n = Math.max(0, Math.round(pushes) || 0);
+  if (n < SEA_FROZEN_FROM) return 0;
+  return Math.min(SEA_FROZEN_MAX, 1 + Math.floor((n - SEA_FROZEN_FROM) / 40));
+}
+
 /**
  * 底部推上来一行:整片往上挪一格,最底下补一行新的。
  * 返回新盘面与「有没有顶到线」。原盘不动。
@@ -385,7 +407,8 @@ export function pushUpRow(
   grid: readonly number[][],
   cols: number,
   colors: number,
-  rand: () => number
+  rand: () => number,
+  frozen = 0
 ): { grid: number[][]; overflow: boolean } {
   const rows = grid.length;
   const overflow = grid[0].some((v) => v >= 0);
@@ -393,6 +416,16 @@ export function pushUpRow(
   for (let r = 1; r < rows; r++) out.push(grid[r].slice());
   const fresh: number[] = [];
   for (let c = 0; c < cols; c++) fresh.push(Math.floor(rand() * colors) % Math.max(1, colors));
+  // 冰冻只挑不重样的列,而且最多冻半行——整行冻住就没地方下手了
+  const chill = Math.max(0, Math.min(Math.floor(frozen), Math.floor(cols / 2), SEA_FROZEN_MAX));
+  const picked = new Set<number>();
+  for (let i = 0; i < chill; i++) {
+    let c = Math.floor(rand() * cols) % Math.max(1, cols);
+    for (let tries = 0; picked.has(c) && tries < cols; tries++) c = (c + 1) % cols;
+    if (picked.has(c)) break;
+    picked.add(c);
+    fresh[c] += FROZEN_OFFSET;
+  }
   out.push(fresh);
   return { grid: out, overflow };
 }

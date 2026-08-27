@@ -8,9 +8,10 @@ import { save } from "../../engine/save";
 import {
   buildQuizCard,
   CHAPTERS,
-  endlessWave,
+  isQuizStall,
   LEVELS,
   quizTarget,
+  stallConfig,
   type MoleLevel,
   type QuizCard,
 } from "./levels";
@@ -504,10 +505,10 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     round?.destroy();
     stage.innerHTML = "";
     chip.textContent = `🏮 ${nightMarketStall(wave)} · 第 ${wave} 摊 · 最好 ${best} 摊`;
-    const cfg = endlessWave(wave);
+    const cfg = stallConfig(wave);
     round = createRound(stage, {
       cfg,
-      banner: `🏮 第 ${wave} 摊`,
+      banner: isQuizStall(wave) ? `🧮 第 ${wave} 摊 · 算式摊` : `🏮 第 ${wave} 摊`,
       chart: nightMarketChart(cfg, wave, Math.floor(Math.random() * 1e6) + 1),
       sfx: (n) => api.play(n),
       onDone: (result) => {

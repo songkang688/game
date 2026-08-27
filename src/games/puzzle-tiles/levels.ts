@@ -150,6 +150,33 @@ export const THEME_TILES: Tile[][] = [
   GALA_POOL
 ];
 
+/**
+ * 一块板子要用掉几张图。
+ * 推格子要空出一格好挪动，所以比格子数少一张。
+ */
+export function tilesNeeded(rows: number, cols: number, mode?: string): number {
+  const total = Math.max(1, Math.round(rows) * Math.round(cols));
+  return mode === "rotate" || mode === "fill" ? total : total - 1;
+}
+
+/**
+ * 无尽画廊第 n 幅用哪套图。
+ *
+ * 原来写死 `6 + (n % 4)`：一共 10 套图，画廊从头到尾只翻得到最后 4 套，
+ * 1.0 那 6 套（15 张的小图库）一次都不露面。
+ * 之所以写死，是因为 6×6 的板子要 35 张图，小图库只有 15 张——**这个限制是真的**。
+ * 所以这里按板子大小挑：装得下的时候 10 套轮着来，装不下就还只用大图库。
+ */
+export function galleryTheme(round: number, need: number): number {
+  const n = Math.max(1, Math.round(round) || 1);
+  const fit: number[] = [];
+  for (let i = 0; i < THEME_TILES.length; i++) {
+    if (THEME_TILES[i].length >= need) fit.push(i);
+  }
+  if (fit.length === 0) return 6;
+  return fit[(n - 1) % fit.length];
+}
+
 // ---------------------------------------------------------------------------
 // 1.1 旋转块 / 缺块补齐的确定性生成（纯函数，可测试）
 // ---------------------------------------------------------------------------
@@ -381,11 +408,11 @@ export function galleryPressure(round: number, baseHints: number): GalleryPressu
 export function endlessBoard(round: number): PuzzleLevel {
   const n = Math.max(1, Math.round(round) || 1);
   const k = Math.min(n - 1, GALLERY_CAP_ROUND - 1);
-  const theme = 6 + (n % 4);
   const seed = 90000 + n * 173;
   const kind = n % 3;
   if (kind === 1) {
     const side = k < 6 ? 3 : k < 12 ? 4 : 5;
+    const theme = galleryTheme(n, tilesNeeded(side, side, "rotate"));
     const wrong = Math.min(side * side, 4 + k);
     const need = minRotateClicks(buildRotations(side, side, wrong, seed));
     const two = need + Math.max(3, Math.ceil(need * 0.4));
@@ -401,6 +428,7 @@ export function endlessBoard(round: number): PuzzleLevel {
   }
   if (kind === 2) {
     const side = k < 8 ? 4 : 5;
+    const theme = galleryTheme(n, tilesNeeded(side, side, "fill"));
     const missing = Math.min(side * side - 1, 3 + Math.floor(k / 2));
     const extra = 2 + Math.floor(k / 5);
     const press = galleryPressure(n, 3);
@@ -414,6 +442,7 @@ export function endlessBoard(round: number): PuzzleLevel {
     };
   }
   const side = k < 5 ? 3 : k < 11 ? 4 : k < 16 ? 5 : 6;
+  const theme = galleryTheme(n, tilesNeeded(side, side, "slide"));
   const shuffleSteps = 16 + k * 4;
   const press = galleryPressure(n, 4);
   const star = stars(shuffleSteps);
