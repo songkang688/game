@@ -1,22 +1,53 @@
 // 棋盘视图 —— 木纹棋盘 + 楷体棋子，**保持 2D**（立体棋子会挡住后面的子和九宫线）。
 //
 // 这一层只画画和收点击，规则一概不管：
+//   · 棋子走 art.ts 预渲染的 14 种 sprite（影 / 侧壁 / 面 / 阴刻字），满盘只做 drawImage；
 //   · 选中的子亮一圈，合法落点用小圆点 / 红圈标出来；
 //   · 确认落子开着的时候，先画一个半透明的预览子，再点一次才真的走；
-//   · 将军飞出「将！」徽章 400ms，被将一方的帅 / 将脉冲描边，应将成功后消失；
-//   · 将死时棋盘轻微变暗；
-//   · `prefers-reduced-motion`：徽章静帧、不脉冲。
-import { type Board, type Move, type Pos, type Side, PIECE_NAME, idx } from "./logic";
+//   · 走子「拿起—滑动 160ms—落定回弹 + 波纹」三段；吃子被吃方缩小旋出 + 3 片花瓣，大子加金环；
+//   · 将军飞出「将军！」徽章 400ms，被将一方的帅 / 将红光呼吸 2 次后转静态描边，应将成功后消失；
+//   · 将死时棋盘轻微变暗，胜方将帅跳起两下 + 印章盖「胜」（残局解开盖「妙手」）；
+//   · `prefers-reduced-motion`：徽章静帧、不呼吸、不滑动、不出花瓣波纹，直接落定。
+import { type Board, type Move, type Piece, type PieceType, type Pos, type Side, idx } from "./logic";
 import { type BoardGeom, MIN_HIT_PX, hitRadius, pickPoint, pointAt } from "./session";
+import {
+  ANIM_TOTAL_MS,
+  BLACK_INK,
+  CAPTURE_MS,
+  LAND_MS,
+  MOVE_MS,
+  PETAL_MS,
+  PIECE_FACE,
+  RED_INK,
+  RIPPLE_MS,
+  SEAL_MS,
+  captureScale,
+  captureSpin,
+  checkGlowAlpha,
+  landScaleAt,
+  paintBoardFrame,
+  paintCompassMark,
+  paintGoldRing,
+  paintPetal,
+  paintPieceBody,
+  paintPieceShadow,
+  paintPositionMark,
+  paintRipple,
+  paintRiverWaves,
+  paintSeal,
+  petalOffset,
+  pieceSprite,
+  slideEase,
+  winJumpOffset,
+} from "./art";
 
 /** 画布几何：9 列 10 行，交叉点间距 44 */
 export const GEOM: BoardGeom = { margin: 24, cell: 44, width: 24 * 2 + 44 * 8, height: 24 * 2 + 44 * 9 };
 
 const R = 20; // 棋子半径
 
-export const RED_INK = "#B3261E";
-export const BLACK_INK = "#2F3350";
-export const PIECE_FACE = "#FFF7E6";
+// 调色板挪进了 art.ts（1.3 视觉资产库），这里原样转出去，老引用一个不断
+export { BLACK_INK, PIECE_FACE, RED_INK };
 
 export interface ViewState {
   board: Board;
@@ -25,10 +56,12 @@ export interface ViewState {
   /** 半透明预览的落点（确认落子用） */
   pending: Pos | null;
   lastMove: Move | null;
-  /** 正在被将军的一方（脉冲描边），应将成功后置 null */
+  /** 正在被将军的一方（红光呼吸描边），应将成功后置 null */
   checkSide: Side | null;
   /** 棋盘变暗（将死 / 困毙的结算画面） */
   dim: boolean;
+  /** 结算画面上跳起庆祝的胜方（将帅跳两下），非将死结算是 null */
+  winSide: Side | null;
   /** 还能不能点 */
   interactive: boolean;
 }
@@ -36,8 +69,12 @@ export interface ViewState {
 export interface BoardView {
   canvas: HTMLCanvasElement;
   update: (patch: Partial<ViewState>) => void;
-  /** 飞出「将！」徽章 400ms */
+  /** 飞出「将军！」徽章 400ms */
   flashCheck: (text?: string) => void;
+  /** 走子演出：滑动 + 落定回弹 + 波纹；带 captured 时被吃方缩小旋出 + 花瓣（reduce 直接落定） */
+  animateMove: (move: Move, piece: Piece, captured: Piece | null) => void;
+  /** 结算印章：「胜」/「妙手」盖到棋盘中央（reduce 静态盖好） */
+  stampSeal: (text: string) => void;
   destroy: () => void;
 }
 
@@ -57,6 +94,7 @@ export const CSS = `
 .xq-badge{position:absolute;left:50%;top:32%;transform:translate(-50%,-50%);pointer-events:none;
   font-size:34px;font-weight:900;color:#fff;background:linear-gradient(180deg,#E4573D,#C0392B);
   border-radius:18px;padding:6px 20px;letter-spacing:4px;box-shadow:0 6px 16px rgba(160,50,30,.45);
+  font-family:"Kaiti SC","STKaiti","PingFang SC",serif;
   animation:xq-badge-fly ${CHECK_BADGE_MS}ms ease-out forwards;}
 @keyframes xq-badge-fly{
   0%{opacity:0;transform:translate(-50%,-30%) scale(.6);}
@@ -88,6 +126,13 @@ export const CSS = `
   color:#6B5A45;box-shadow:0 2px 5px rgba(150,120,80,.18);white-space:nowrap;}
 .xq-step-red{color:${RED_INK};}
 .xq-step-black{color:${BLACK_INK};}
+.xq-step-last{background:#FFF0BF;box-shadow:0 2px 5px rgba(200,150,60,.4);}
+.xq-capsbar{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.xq-capline{display:flex;align-items:center;gap:3px;flex-wrap:wrap;background:#FFF9EE;border-radius:12px;
+  padding:4px 10px;font-size:12px;font-weight:800;color:#8A5A2C;box-shadow:0 2px 5px rgba(150,120,80,.14);}
+.xq-capline .xq-picon{display:block;}
+.xq-capwho{margin-right:2px;}
+.xq-player .xq-picon{vertical-align:middle;}
 .xq-panel{display:flex;flex-direction:column;gap:12px;padding:10px 4px;}
 .xq-label{font-weight:800;color:#8A5A2C;font-size:15px;margin-bottom:6px;}
 .xq-seg{display:flex;gap:8px;flex-wrap:wrap;}
@@ -135,8 +180,25 @@ function emptyState(board: Board): ViewState {
     lastMove: null,
     checkSide: null,
     dim: false,
+    winSide: null,
     interactive: true,
   };
+}
+
+/** 当前时刻（ms）：动画公式全用它，测试桩的 performance.now 也接得住 */
+function nowMs(): number {
+  const p = (globalThis as { performance?: { now?: () => number } }).performance;
+  return p?.now ? p.now() : Date.now();
+}
+
+/** 走子演出的进行时状态（reduce 下永远不建） */
+interface MoveAnim {
+  from: Pos;
+  to: Pos;
+  side: Side;
+  type: PieceType;
+  captured: Piece | null;
+  start: number;
 }
 
 /** 找某一方的将帅（画脉冲描边用） */
@@ -169,6 +231,12 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
   let dead = false;
   const reduce = !!opts.reduceMotion;
 
+  // 演出状态：走子动画 / 将军红光起点 / 胜方跳子起点 / 结算印章
+  let anim: MoveAnim | null = null;
+  let checkStart = 0;
+  let winStart = 0;
+  let seal: { text: string; start: number } | null = null;
+
   const px = (x: number): number => pointAt(GEOM, x, 0).cx;
   const py = (y: number): number => pointAt(GEOM, 0, y).cy;
 
@@ -188,6 +256,8 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
       ctx.lineTo(GEOM.width, i * 52 + 26);
       ctx.stroke();
     }
+    // 河界水意：楚河汉界底下两道极淡水波（静态）
+    paintRiverWaves(ctx, px(0), px(8), (py(4) + py(5)) / 2);
 
     ctx.strokeStyle = "#A9762F";
     ctx.lineWidth = 1.6;
@@ -225,6 +295,15 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
       ctx.lineTo(px(3), py(top + 2));
       ctx.stroke();
     }
+    // 兵位 / 炮位的传统十字角标（0 路只画右半、8 路只画左半）
+    for (const [mx, my] of [[1, 2], [7, 2], [1, 7], [7, 7]] as const) {
+      paintPositionMark(ctx, px(mx), py(my));
+    }
+    for (const my of [3, 6]) {
+      for (let mx = 0; mx <= 8; mx += 2) {
+        paintPositionMark(ctx, px(mx), py(my), mx !== 0, mx !== 8);
+      }
+    }
     ctx.fillStyle = "#8A5A20";
     ctx.font = `700 ${Math.round(GEOM.cell * 0.48)}px "Kaiti SC","STKaiti",serif`;
     ctx.textAlign = "center";
@@ -234,64 +313,58 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
     ctx.fillText("汉 界", px(6), midY);
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
+    // 双层木框：外 8px 深木 + 内 1px 金线 + 四角如意云头（盖在木纹边缘上）
+    paintBoardFrame(ctx, GEOM.width, GEOM.height);
   }
 
-  function drawPiece(cx: number, cy: number, side: Side, name: string, alpha = 1, lift = 0): void {
+  /**
+   * 画一颗棋子：投影贴在盘上，本体走 art.ts 的 sprite（drawImage）；
+   * 离屏渲染不可用时退回逐层直绘。lift 是拿起的抬升，scale 给落定回弹用。
+   */
+  function drawPiece(cx: number, cy: number, side: Side, type: PieceType, alpha = 1, lift = 0, scale = 1): void {
     if (!ctx) return;
     ctx.globalAlpha = alpha;
-    // 极轻的投影：保持 2D，不做立体
-    ctx.beginPath();
-    ctx.arc(cx, cy + 2.5, R, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(110,75,35,.26)";
-    ctx.fill();
+    paintPieceShadow(ctx, cx, cy, R, lift);
     const yy = cy - lift;
-    const grad = ctx.createRadialGradient(cx - R * 0.35, yy - R * 0.4, R * 0.15, cx, yy, R);
-    grad.addColorStop(0, "#FFFDF6");
-    grad.addColorStop(1, PIECE_FACE);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, yy, R, 0, Math.PI * 2);
-    ctx.fill();
-    const ink = side === "red" ? RED_INK : BLACK_INK;
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(cx, yy, R - 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(cx, yy, R - 5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = ink;
-    ctx.font = `800 ${Math.round(R * 1.08)}px "Kaiti SC","STKaiti","PingFang SC",serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(name, cx, yy + 1);
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
+    const spr = pieceSprite(document, side, type, R);
+    if (spr) {
+      const w = spr.span * scale;
+      ctx.drawImage(spr.canvas, cx - w / 2, yy - w / 2, w, w);
+    } else {
+      paintPieceBody(ctx, cx, yy, R * scale, side, type);
+    }
     ctx.globalAlpha = 1;
   }
 
   function draw(): void {
     if (!ctx || dead) return;
     drawBoard();
+    const now = nowMs();
     const pulse = reduce ? 1 : 1 + Math.sin(time * 5) * 0.1;
+    if (anim && now - anim.start >= ANIM_TOTAL_MS) anim = null; // 演出散场即回收
+    const a = anim;
+    const at = a ? now - a.start : 0;
+    const sliding = !!a && at < MOVE_MS;
 
     if (state.lastMove) {
-      ctx.strokeStyle = "rgba(226,140,60,.9)";
-      ctx.lineWidth = 2.5;
-      for (const p of [state.lastMove.from, state.lastMove.to]) {
-        ctx.strokeRect(px(p.x) - R - 2, py(p.y) - R - 2, (R + 2) * 2, (R + 2) * 2);
-      }
+      // 罗盘印记替掉了 1.2 的橙色方框：起点小印、落点整印，与圆棋子同族
+      paintCompassMark(ctx, px(state.lastMove.from.x), py(state.lastMove.from.y), R * 0.45, 0.5);
+      paintCompassMark(ctx, px(state.lastMove.to.x), py(state.lastMove.to.y), R + 4, 0.9);
     }
 
     for (let y = 0; y < 10; y++) {
       for (let x = 0; x < 9; x++) {
         const p = state.board[idx(x, y)];
         if (!p) continue;
+        if (a && x === a.to.x && y === a.to.y) {
+          if (sliding) continue; // 还在滑动：这颗子稍后画在最上层
+          drawPiece(px(x), py(y), p.side, p.type, 1, 0, landScaleAt((at - MOVE_MS) / LAND_MS));
+          continue;
+        }
+        if (state.dim && state.winSide === p.side && p.type === "K") continue; // 胜方将帅画在结算层
         const sel = state.selected && state.selected.x === x && state.selected.y === y;
         const lift = sel && !reduce ? 3 + Math.sin(time * 5) * 1.5 : sel ? 3 : 0;
-        drawPiece(px(x), py(y), p.side, PIECE_NAME[p.side][p.type], 1, lift);
+        drawPiece(px(x), py(y), p.side, p.type, 1, lift);
         if (sel) {
           ctx.strokeStyle = "#E4573D";
           ctx.lineWidth = 3;
@@ -300,6 +373,52 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
           ctx.stroke();
         }
       }
+    }
+
+    // 吃子退场：被吃方缩小旋出，大子（车马炮）加一圈金环，3 片花瓣飘散
+    if (a && a.captured) {
+      const tx = px(a.to.x);
+      const ty = py(a.to.y);
+      const kc = at / CAPTURE_MS;
+      if (kc < 1) {
+        const spr = pieceSprite(document, a.captured.side, a.captured.type, R);
+        const sc = captureScale(kc);
+        ctx.save();
+        ctx.translate(tx, ty);
+        ctx.rotate(captureSpin(kc));
+        ctx.globalAlpha = Math.max(0, 1 - kc);
+        if (spr) {
+          const w = spr.span * sc;
+          ctx.drawImage(spr.canvas, -w / 2, -w / 2, w, w);
+        } else if (sc > 0) {
+          paintPieceBody(ctx, 0, 0, R * sc, a.captured.side, a.captured.type, false);
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        if (a.captured.type === "R" || a.captured.type === "H" || a.captured.type === "C") {
+          paintGoldRing(ctx, tx, ty, R + 2, kc);
+        }
+      }
+      const kp = at / PETAL_MS;
+      if (kp < 1) {
+        for (let i = 0; i < 3; i++) {
+          const o = petalOffset(i, kp);
+          paintPetal(ctx, tx + o.x, ty + o.y, 7, o.rot, 1 - kp);
+        }
+      }
+    }
+
+    // 走子滑行：「拿起—移动—放下」的中段，微抬 + 微放大
+    if (a && sliding) {
+      const k = slideEase(at / MOVE_MS);
+      const cx = px(a.from.x) + (px(a.to.x) - px(a.from.x)) * k;
+      const cy = py(a.from.y) + (py(a.to.y) - py(a.from.y)) * k;
+      drawPiece(cx, cy, a.side, a.type, 1, 2 + (1 - k) * 2, 1.04);
+    }
+
+    // 落定波纹（reduce 下 anim 根本不建，这里自然走不到）
+    if (a && !sliding && at < MOVE_MS + RIPPLE_MS) {
+      paintRipple(ctx, px(a.to.x), py(a.to.y), R, (at - MOVE_MS) / RIPPLE_MS);
     }
 
     // 合法落点：空点画小圆点，能吃的子画红圈
@@ -329,7 +448,7 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
     if (state.pending && state.selected) {
       const p = state.board[idx(state.selected.x, state.selected.y)];
       if (p) {
-        drawPiece(px(state.pending.x), py(state.pending.y), p.side, PIECE_NAME[p.side][p.type], 0.55);
+        drawPiece(px(state.pending.x), py(state.pending.y), p.side, p.type, 0.55);
         ctx.strokeStyle = "#B23A86";
         ctx.setLineDash([5, 4]);
         ctx.lineWidth = 3;
@@ -340,15 +459,21 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
       }
     }
 
-    // 被将一方的将帅：脉冲描边（应将成功后 checkSide 置 null，描边就没了）
+    // 被将一方的将帅：红光呼吸 2 次后转静态描边（应将成功后 checkSide 置 null，描边就没了）
+    // reduce 一直是静态描边——警告不消失，配合徽章与提示文字，不只靠红光
     if (state.checkSide) {
       const k = kingOf(state.board, state.checkSide);
       if (k) {
-        const glow = reduce ? 0.85 : 0.4 + Math.abs(Math.sin(time * 7)) * 0.5;
+        const glow = checkGlowAlpha(now - checkStart, reduce);
         ctx.strokeStyle = `rgba(226,60,45,${glow})`;
         ctx.lineWidth = 5;
         ctx.beginPath();
         ctx.arc(px(k.x), py(k.y), R + 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(226,60,45,${glow * 0.35})`;
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.arc(px(k.x), py(k.y), R + 12, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -357,11 +482,23 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
       ctx.fillStyle = "rgba(40,25,10,.28)";
       ctx.fillRect(0, 0, GEOM.width, GEOM.height);
     }
+
+    // 结算层：胜方将帅跳起两下（画在变暗层之上），印章随后盖下
+    if (state.dim && state.winSide) {
+      const k = kingOf(state.board, state.winSide);
+      if (k) {
+        drawPiece(px(k.x), py(k.y), state.winSide, "K", 1, winJumpOffset(now - winStart, reduce));
+      }
+    }
+    if (seal) {
+      const k = reduce ? 1 : Math.min(1, (now - seal.start) / SEAL_MS);
+      paintSeal(ctx, GEOM.width / 2, GEOM.height * 0.46, 84, k, seal.text);
+    }
   }
 
-  function tick(now: number): void {
+  function tick(): void {
     if (dead) return;
-    time = now / 1000;
+    time = nowMs() / 1000;
     draw();
     raf = requestAnimationFrame(tick);
   }
@@ -384,10 +521,24 @@ export function createBoardView(host: HTMLElement, board: Board, opts: ViewOptio
   return {
     canvas,
     update(patch) {
+      // 将军红光与胜方跳子都从「状态翻上来的那一刻」起计时
+      if (patch.checkSide && patch.checkSide !== state.checkSide) checkStart = nowMs();
+      if (patch.winSide && patch.winSide !== state.winSide) winStart = nowMs();
+      if (patch.lastMove === null) anim = null; // 悔棋 / 重摆：演出立刻收
       state = { ...state, ...patch };
       draw();
     },
-    flashCheck(text = "将！") {
+    animateMove(move, piece, captured) {
+      if (dead || reduce) return; // reduce：直接落定，不滑不旋不出花瓣
+      anim = { from: move.from, to: move.to, side: piece.side, type: piece.type, captured, start: nowMs() };
+      draw();
+    },
+    stampSeal(text) {
+      if (dead) return;
+      seal = { text, start: nowMs() };
+      draw();
+    },
+    flashCheck(text = "将军！") {
       if (dead) return;
       badge?.remove();
       badge = document.createElement("div");

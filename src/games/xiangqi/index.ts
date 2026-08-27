@@ -10,6 +10,7 @@ export { meta };
 import {
   type Board,
   type Move,
+  type Piece,
   type Pos,
   type Side,
   PIECE_NAME,
@@ -18,6 +19,7 @@ import {
   other,
   statusOf,
 } from "./logic";
+import { pieceIconSVG } from "./art";
 import {
   type Difficulty,
   DIFFICULTIES,
@@ -232,6 +234,10 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   tagEl.textContent = o.headline;
   top.append(redEl, blackEl, tagEl);
   wrap.appendChild(top);
+  // 吃子槽：被请回家休息的子按序排成小图标，双方各一排，形势一眼可读
+  const capsEl = document.createElement("div");
+  capsEl.className = "xq-capsbar xq-hidden";
+  wrap.appendChild(capsEl);
   const boardHost = document.createElement("div");
   wrap.appendChild(boardHost);
   const recordEl = document.createElement("div");
@@ -254,8 +260,15 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   let current: Side = "red";
   let pick: PickState = emptyPick();
   let targets: Pos[] = [];
-  let history: Array<{ board: Board; current: Side; entries: RecordEntry[] }> = [];
+  let history: Array<{
+    board: Board;
+    current: Side;
+    entries: RecordEntry[];
+    caps: { red: Piece[]; black: Piece[] };
+  }> = [];
   let entries: RecordEntry[] = [];
+  // 各方请回家休息的对方棋子（按被吃顺序），悔棋跟着退回去
+  let caps: { red: Piece[]; black: Piece[] } = { red: [], black: [] };
   const startKey = positionKey(board, "red");
   let over = false;
   let thinking = false;
@@ -319,8 +332,9 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     if (dead) return;
     const redM = mascotOf("red");
     const blackM = mascotOf("black");
-    redEl.innerHTML = `${avatarHTML(redM)} ${MASCOT_NAME[redM]} · 红`;
-    blackEl.innerHTML = `${avatarHTML(blackM)} ${MASCOT_NAME[blackM]} · 黑`;
+    // 座位条：吉祥物 + 名字 + 将/帅小棋子图标（与画布同一套配色）
+    redEl.innerHTML = `${avatarHTML(redM)} ${MASCOT_NAME[redM]} · 红 ${pieceIconSVG("red", "K", 18)}`;
+    blackEl.innerHTML = `${avatarHTML(blackM)} ${MASCOT_NAME[blackM]} · 黑 ${pieceIconSVG("black", "K", 18)}`;
     redEl.classList.toggle("xq-turn", !over && current === "red");
     blackEl.classList.toggle("xq-turn", !over && current === "black");
     if (o.puzzle) {
@@ -348,12 +362,27 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     const from = Math.max(0, entries.length - 24);
     for (let i = from; i < entries.length; i++) {
       const e = entries[i];
+      const last = i === entries.length - 1 ? " xq-step-last" : "";
       const chip = document.createElement("span");
-      chip.className = `xq-step ${e.side === "red" ? "xq-step-red" : "xq-step-black"}`;
+      chip.className = `xq-step ${e.side === "red" ? "xq-step-red" : "xq-step-black"}${last}`;
       chip.textContent = recordLine(i + 1, e.side, e.text);
       recordEl.appendChild(chip);
     }
     recordEl.scrollLeft = recordEl.scrollWidth;
+  }
+
+  /** 吃子槽：谁请回家的子排在谁那一排（一颗都没有时整条藏起来） */
+  function renderCaps(): void {
+    const line = (side: Side): string => {
+      const got = caps[side];
+      if (got.length === 0) return "";
+      const who = side === "red" ? "红方请回家" : "黑方请回家";
+      const icons = got.map((p) => pieceIconSVG(p.side, p.type, 15)).join("");
+      return `<span class="xq-capline xq-capline-${side}"><span class="xq-capwho">${who}</span>${icons}</span>`;
+    };
+    const html = line("red") + line("black");
+    capsEl.classList.toggle("xq-hidden", html === "");
+    capsEl.innerHTML = html;
   }
 
   function finish(winner: Side | null, reason: EndReason, text: string): void {
@@ -364,23 +393,33 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     targets = [];
     clearTimeout(aiTimer);
     msgEl.textContent = text;
+    const mated = reason === "checkmate" || reason === "stalemate";
     view.update({
       interactive: false,
       pending: null,
       selected: null,
       targets: [],
-      dim: reason === "checkmate" || reason === "stalemate",
+      dim: mated,
+      winSide: mated ? winner : null,
     });
+    // 将杀结算仪式：胜方将帅跳两下 + 印章盖下（残局解开盖「妙手」）
+    if (mated && winner) view.stampSeal(o.puzzle && winner === "red" ? "妙手" : "胜");
     refresh();
     o.onEnd({ winner, reason });
   }
 
   /** 走一步：记谱、判将军 / 将死 / 长将 / 重复局面，然后交给对方 */
   function doMove(move: Move): void {
-    // 先存一份，悔棋才有得退
-    history.push({ board: board.slice(), current, entries: entries.slice() });
+    // 先存一份，悔棋才有得退（吃子槽也跟着退）
+    history.push({
+      board: board.slice(),
+      current,
+      entries: entries.slice(),
+      caps: { red: caps.red.slice(), black: caps.black.slice() },
+    });
     if (history.length > 40) history.shift();
     const text = moveToChinese(board, move);
+    const moved = board[idx(move.from.x, move.from.y)];
     const captured = board[idx(move.to.x, move.to.y)];
     entries = pushRecord(entries, board, move, current, text);
     const next = board.slice();
@@ -391,8 +430,10 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     targets = [];
     o.api.play(captured ? "coin" : "pop");
     const mover = current;
+    if (captured) caps[mover].push(captured);
     current = other(current);
     renderRecord();
+    renderCaps();
 
     const st = statusOf(board, current);
     view.update({
@@ -400,6 +441,8 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
       lastMove: move,
       checkSide: st === "check" || st === "checkmate" ? current : null,
     });
+    // 声画同步的走子演出：滑动 + 落定回弹 + 波纹；吃子加缩旋花瓣（reduce 直接落定）
+    if (moved) view.animateMove(move, moved, captured);
 
     if (o.puzzle && mover === "red") movesLeft--;
 
@@ -538,6 +581,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
       board = snap.board;
       current = snap.current;
       entries = snap.entries;
+      caps = snap.caps;
     }
     if (o.puzzle) movesLeft = Math.min(o.puzzle.mateIn, movesLeft + 1);
     pick = emptyPick();
@@ -545,6 +589,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     o.api.play("pop");
     msgEl.textContent = "悔棋成功，这一步重新想一想。";
     renderRecord();
+    renderCaps();
     view.update({ board, checkSide: null, lastMove: null });
     refresh();
   }
@@ -651,6 +696,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   });
 
   renderRecord();
+  renderCaps();
   refresh();
   // 残局与人机都可能是电脑先手
   scheduleAi();
