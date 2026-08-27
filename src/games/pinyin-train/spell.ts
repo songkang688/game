@@ -13,6 +13,7 @@ import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
 import type { SpellTask } from "./levels";
 import { markTone, plainSyllable, spell } from "./pinyin";
+import { TICKET_CSS, buildScene } from "./scene";
 
 // ---------------------------------------------------------------------------
 // 纯逻辑（不碰 DOM，单测直接调）
@@ -239,7 +240,8 @@ export function runSpell(opts: SpellOptions): PlayHandle {
   wrap.style.background = theme.bg;
 
   const styleEl = doc.createElement("style");
-  styleEl.textContent = CSS;
+  // 车票皮肤排在本款样式之后：同特异度下车票的锯齿与类别色边条要压过白底
+  styleEl.textContent = CSS + TICKET_CSS;
   wrap.appendChild(styleEl);
 
   const top = doc.createElement("div");
@@ -262,6 +264,10 @@ export function runSpell(opts: SpellOptions): PlayHandle {
   locoWord.style.color = theme.accent;
   loco.append(locoEmoji, locoWord);
   wrap.appendChild(loco);
+
+  // 火车舞台（纯视觉）：拼对一节挂一节，列车本身就是进度条
+  const scene = buildScene({ target: tasks.length });
+  wrap.appendChild(scene.el);
 
   const slotsEl = doc.createElement("div");
   slotsEl.className = "pyt-slots";
@@ -298,9 +304,10 @@ export function runSpell(opts: SpellOptions): PlayHandle {
   sayRow.className = "pyt-say-row";
   const sayBtn = doc.createElement("button");
   sayBtn.type = "button";
-  sayBtn.className = "pyt-say";
+  // 站台广播喇叭皮肤（pyt-horn 只换背景，不动任何接线）
+  sayBtn.className = "pyt-say pyt-horn";
   sayBtn.style.color = theme.accent;
-  sayBtn.textContent = "🔈 再听一遍";
+  sayBtn.textContent = "📢 再听一遍";
   sayBtn.hidden = true;
   sayRow.appendChild(sayBtn);
   wrap.appendChild(sayRow);
@@ -484,7 +491,8 @@ export function runSpell(opts: SpellOptions): PlayHandle {
       for (const v of values) {
         const btn = doc.createElement("button");
         btn.type = "button";
-        btn.className = "pyt-chip";
+        // 车票三色助记：声母橙 / 韵母青 / 声调红——颜色即语法，题面与判定不动
+        btn.className = `pyt-chip pyt-ticket pyt-tk-${kind}`;
         btn.textContent = v.text;
         if (v.sub) {
           const small = doc.createElement("small");
@@ -537,6 +545,9 @@ export function runSpell(opts: SpellOptions): PlayHandle {
     }
     if (judgeSpell(pick, task)) {
       ctx.sfx("win");
+      // 纯视觉：一节写着这个音节的车厢滑入挂上；整列挂满就鸣笛发车
+      scene.hook(task.target);
+      if (index + 1 >= tasks.length) later(() => scene.depart(), 420);
       loco.classList.add("pyt-loco-go");
       msgEl.textContent = `拼对啦！${task.word} 读 ${task.target}`;
       speak(`${task.word}，${task.target}`);
@@ -557,6 +568,8 @@ export function runSpell(opts: SpellOptions): PlayHandle {
     ctx.sfx("oops");
     updateHud();
     wobble();
+    // 纯视觉：车厢轻晃不脱钩 + 站牌「再听一遍」
+    scene.wobble();
     if (wrong > maxWrong) {
       ended = true;
       msgEl.textContent = "这几节车厢有点难挂～";
@@ -588,6 +601,7 @@ export function runSpell(opts: SpellOptions): PlayHandle {
       doc.removeEventListener("pointercancel", onPointerUp);
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      scene.destroy();
       wrap.remove();
     },
   };
