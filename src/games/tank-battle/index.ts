@@ -43,8 +43,6 @@ import {
   KEY_MAP,
   MUZZLE_WINDUP,
   PAUSE_KEY,
-  RECOIL_CELLS,
-  RECOIL_SECONDS,
   REBUILD_SECONDS,
   SCATTER_SECONDS,
   SHELL_KEY_MAP,
@@ -58,6 +56,7 @@ import {
   isFortBrick,
   loseLine,
   rateRun,
+  recoilPixels,
   stepWorld,
   winLine,
   type Dir,
@@ -327,9 +326,9 @@ const KIND_FACE: Record<string, string> = {
 /** 一辆铁皮车。后坐、前摇的小顿、以及一点点斜投影的厚度感都在这儿 */
 function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, t: number): void {
   if (tk.spin > 0) return; // 散架了:这一会儿画的是零件,不是车
-  const kick = tk.recoil > 0 ? (tk.recoil / RECOIL_SECONDS) * RECOIL_CELLS : 0;
-  const px = (tk.x - Math.sin((tk.dir * Math.PI) / 2) * 0) * s - [0, 1, 0, -1][tk.dir] * kick * s;
-  const py = tk.y * s - [-1, 0, 1, 0][tk.dir] * kick * s;
+  const kick = recoilPixels(tk.recoil, s);
+  const px = tk.x * s - [0, 1, 0, -1][tk.dir] * kick;
+  const py = tk.y * s - [-1, 0, 1, 0][tk.dir] * kick;
   const half = TANK_HALF * s;
   const body =
     tk.side === "player" ? P_COLOR[tk.player] ?? P_COLOR[0] : ENEMY_SPECS[tk.kind as EnemyKind]?.color ?? "#9a9fb5";

@@ -74,10 +74,25 @@ export const SCATTER_SECONDS = 1.1;
 export const SHIELD_SECONDS = 2.2;
 /** 炮口前摇(秒):按下到弹丸出膛之间的一小顿,手感就靠它 */
 export const MUZZLE_WINDUP = 0.09;
-/** 后坐位移(格):渲染时折算成 4–6px */
-export const RECOIL_CELLS = 0.16;
+/** 后坐位移(格) */
+export const RECOIL_CELLS = 0.2;
 /** 后坐弹回来要多久(秒) */
 export const RECOIL_SECONDS = 0.18;
+/**
+ * 后坐峰值折算成屏幕像素之后的上下限。
+ *
+ * 光按格数给不行:格子在 14–34px 之间随屏幕浮动,手机上一格才二十出头,
+ * 0.16 格连 4px 都不到,那一下就顶不出来了。所以按格数算完再夹进这个区间。
+ */
+export const RECOIL_PX_MIN = 4;
+export const RECOIL_PX_MAX = 6;
+
+/** 这一帧的后坐要往后退多少像素(`s` = 一格多少像素) */
+export function recoilPixels(recoil: number, s: number): number {
+  if (recoil <= 0) return 0;
+  const peak = Math.min(RECOIL_PX_MAX, Math.max(RECOIL_PX_MIN, RECOIL_CELLS * s));
+  return (Math.min(recoil, RECOIL_SECONDS) / RECOIL_SECONDS) * peak;
+}
 
 export const PLAYER_SPEED = 3.6;
 export const PLAYER_COOL = 0.42;

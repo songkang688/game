@@ -9,7 +9,10 @@ import {
   IDLE_INPUT,
   MUZZLE_WINDUP,
   RECOIL_CELLS,
+  RECOIL_PX_MAX,
+  RECOIL_PX_MIN,
   RECOIL_SECONDS,
+  recoilPixels,
   REBUILD_SECONDS,
   SAFE_SPAWN_DIST,
   SHELL_KEY_MAP,
@@ -219,16 +222,36 @@ describe("炮口前摇与后坐", () => {
     expect(me.windup).toBe(0);
   });
 
-  it("出膛那一下有后坐,而且是 4–6px 那个量级(按 26px 一格算)", () => {
+  it("出膛那一下有后坐,弹完就归零", () => {
     const w = room(["........", "........", "1......."]);
     const me = w.tanks[0];
     launch(w, me, "plain");
     expect(me.recoil).toBeCloseTo(RECOIL_SECONDS, 6);
-    const px = RECOIL_CELLS * 26;
-    expect(px).toBeGreaterThanOrEqual(4);
-    expect(px).toBeLessThanOrEqual(6);
+    expect(recoilPixels(me.recoil, 26)).toBeGreaterThan(0);
     run(w, RECOIL_SECONDS + 0.05);
     expect(me.recoil).toBe(0);
+    expect(recoilPixels(me.recoil, 26)).toBe(0);
+  });
+
+  it("后坐峰值在任何屏幕上都是 4–6px:格子小的时候不许缩没", () => {
+    // 一格能有多大,`layout()` 夹在 14–34px 之间
+    for (let s = 14; s <= 34; s++) {
+      const px = recoilPixels(RECOIL_SECONDS, s);
+      expect(px, `一格 ${s}px 时后坐只有 ${px}px`).toBeGreaterThanOrEqual(RECOIL_PX_MIN);
+      expect(px, `一格 ${s}px 时后坐冲到 ${px}px`).toBeLessThanOrEqual(RECOIL_PX_MAX);
+    }
+    // 光按格数折算的老算法在最小的格子上会掉到 4px 以下,这条就是钉住那个坑
+    expect(RECOIL_CELLS * 14).toBeLessThan(RECOIL_PX_MIN);
+    expect(recoilPixels(RECOIL_SECONDS, 14)).toBe(RECOIL_PX_MIN);
+    // 格子大的时候也不会顶过头
+    expect(RECOIL_CELLS * 34).toBeGreaterThan(RECOIL_PX_MAX);
+    expect(recoilPixels(RECOIL_SECONDS, 34)).toBe(RECOIL_PX_MAX);
+  });
+
+  it("后坐是弹回来的:一半时间过去,位移也剩一半", () => {
+    expect(recoilPixels(RECOIL_SECONDS / 2, 30)).toBeCloseTo(recoilPixels(RECOIL_SECONDS, 30) / 2, 6);
+    expect(recoilPixels(0, 30)).toBe(0);
+    expect(recoilPixels(-1, 30)).toBe(0);
   });
 
   it("弹力球每打一发换一边斜,预测线才会跟着翻", () => {
