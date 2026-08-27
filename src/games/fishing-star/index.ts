@@ -55,7 +55,7 @@ import {
   type GearBonus,
   type GearSet,
 } from "./gear";
-import { createClipWatch, needsImmediateRefit, resetClippedScroll, seaHeightPx } from "./fit";
+import { createClipWatch, needsImmediateRefit, resetClippedScroll, seaHeightPx, wrapCapPx } from "./fit";
 import { createLedger } from "./runtime";
 import {
   BAND_LUCK,
@@ -138,6 +138,13 @@ const CSS = `
 .fs-wrap{--fs-ink:#3f5670;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--fs-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
   touch-action:manipulation;position:relative;}
+/* 横过来拿的时候 capWrap() 会给 .fs-wrap 钳一个像素高度（水面收到 MIN_SEA_PX 还是装不下）。
+   光钳高度不够：列向 flex 的孩子默认 flex-shrink:1，一钳就抢着自己压扁。真机 740×360 上
+   量到 .fs-sea 被压成 10px（它是 overflow:hidden，min-height:auto 解析成 0），
+   132px 的画布整个被裁掉，而 wrap 的 scrollHeight 等于 clientHeight，滚动条压根不出现——
+   抛竿键是够得着了，可水面、鱼群带、深度尺一起没了。不许压扁，超出的交给 wrap 自己滚。
+   没钳位的那几档列向没有负空间，这一条是空转的。 */
+.fs-wrap>*{flex-shrink:0;}
 .fs-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
 .fs-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(90,130,160,.18);}
@@ -603,8 +610,18 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   };
   actBtn.addEventListener("pointerdown", onPointerDown);
   ledger.listener(() => actBtn.removeEventListener("pointerdown", onPointerDown));
+  /** 这一刻这一屏真滚得起来吗（横过来拿被 capWrap() 钳过位的那几档） */
+  function wrapScrolls(): boolean {
+    return wrap.scrollHeight - wrap.clientHeight > 4;
+  }
   const onCanvasDown = (e: PointerEvent): void => {
-    e.preventDefault();
+    // 钳过位那几档,抛竿键就在滚出去的那 94px 里,手指落在水面上必须划得动。
+    // 而 preventDefault() 会把这一指的默认行为(滚动)连同双击缩放一起吃掉——
+    // 真机 844×390 上从水面正中上划两次 150px,scrollTop 纹丝不动 0 → 0。
+    // 所以只在滚不动的那几档拦(竖屏四档,点水面抛竿是原来的手感);
+    // 滚得起来就放行,「按住蓄力」照旧生效——手指真滑起来时浏览器发 pointercancel,
+    // 上面那条 window pointercancel → release() 会把这一次蓄力收干净。
+    if (!wrapScrolls()) e.preventDefault();
     press();
   };
   canvas.addEventListener("pointerdown", onCanvasDown);
@@ -699,6 +716,29 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     g?.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   /**
+   * 水面收到下限还是装不下时,这一屏自己钳出一条滚动条。
+   *
+   * `seaHeightPx()` 收的只有水面,而水面有下限(`MIN_SEA_PX`)。横过来拿的时候
+   * 舞台看得见的那一段只剩两百出头,光是水面以外那几行就要 182px,
+   * 于是水面一路收到底仍旧超出 90px——整颗「🎣 按住抛竿」掉在裁切线以下,
+   * 而这一屏当时连一处能起手滚的地方都没有(`scrollHeight − clientHeight` 是 0)。
+   * CSS 里那句 `.fs-wrap{max-height:100%}` 指望不上:壳层那条祖先链是 auto 高的,
+   * 百分比没有可解析的参照。只能量出真实像素写死。
+   *
+   * 收得动的那几档 `wrapCapPx()` 返回 `null`,一个字节都不写,手感一分不变。
+   */
+  function capWrap(): void {
+    const cap = wrapCapPx(clipWatch.roomPx(wrap), wrap.scrollHeight);
+    if (cap === null) {
+      wrap.style.maxHeight = "";
+      wrap.style.overflowY = "";
+      return;
+    }
+    wrap.style.maxHeight = `${cap}px`;
+    wrap.style.overflowY = "auto";
+  }
+
+  /**
    * 重排到不动为止。
    *
    * 一趟只收水面,可 chrome(HUD / 提示行那几排)会跟着这一趟变——320px 宽上
@@ -706,17 +746,31 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
    * `layout()` 幂等,所以「不变了」就是 0 成本的一次空跑;三趟封顶,不给它机会来回荡。
    */
   function refitNow(): void {
+    // 量之前先摘掉上一次钳出来的高度。钳过的 wrap 其 rect 高度**就是钳位本身**,
+    // 拿它去倒推 chrome 会一趟比一趟小,水面越收越窄,最后收成一条线。
+    //
+    // 可摘掉的那一瞬间这一屏不再滚得起来,浏览器当场把 scrollTop 夹回 0。
+    // 而这个函数每 REFIT_MS(300ms)跑一次:真机 844×390 上把 scrollTop 拨到满行程 94、
+    // 600ms 后回来量是 0 —— 孩子刚滑到抛竿键,0.3 秒后又被弹回水面。所以先记下来。
+    const keepScroll = wrap.scrollTop;
+    wrap.style.maxHeight = "";
+    wrap.style.overflowY = "";
     for (let i = 0; i < 3; i++) {
       const before = H;
       layout();
       if (H === before) break;
     }
+    capWrap();
+    // 还回去。滚不动的那几档 scrollTop 恒 0,这一句是空转的;钳位变小了浏览器自己夹。
+    if (keepScroll > 0 && wrap.scrollTop !== keepScroll) wrap.scrollTop = keepScroll;
   }
   layout();
   /** 上一帧量到的这一屏总高:变了就当帧重排(见 frame() 里那一段) */
   let lastWrapH = 0;
   const onResize = (): void => {
-    layout();
+    // 转屏是「收无可收」那一档唯一的入口,只 layout() 一次收不住(水面到下限就不动了,
+    // 钳位那一手压根不会跑)。走收敛版。
+    refitNow();
     render();
   };
   window.addEventListener("resize", onResize);
