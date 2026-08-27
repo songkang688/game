@@ -2647,3 +2647,10 @@ html {
   min-width: 0;
   min-height: 0;
 }
+
+/* r2-7（建议 · 1.2 存量）：记谱行与记谱折叠钮 13px 低于正文下限——与 cg-tip 同口径提级，
+   特异性压得住 420px 断点里的 13px 回降 */
+.cg-wrap .cg-log-sum,
+.cg-wrap .cg-log-row {
+  font-size: 14px;
+}

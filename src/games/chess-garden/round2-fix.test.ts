@@ -67,3 +67,17 @@ describe("chess-garden · 320px h 列裁切修复（r2-2 阻断）", () => {
     expect(cell).toBeGreaterThanOrEqual(34);
   });
 });
+
+describe("chess-garden · 记谱行字号 ≥14px（r2-7）", () => {
+  it("cg-log-sum / cg-log-row 提级到 14px，追加段排在 420px 回降规则之后", () => {
+    const rule = SHEET.match(/\.cg-wrap \.cg-log-sum,\n\.cg-wrap \.cg-log-row \{[^}]*\}/)?.[0] ?? "";
+    expect(rule, "记谱行提级规则丢了").not.toBe("");
+    const m = /font-size:\s*([\d.]+)px/.exec(rule);
+    expect(m).not.toBeNull();
+    expect(Number.parseFloat((m as RegExpExecArray)[1])).toBeGreaterThanOrEqual(14);
+    // 层叠顺序：与 r2 tester 钉的 cg- 提级段同口径，必须压得住窄屏 13px 回降
+    const demote = SHEET.indexOf(".cg-tip,\n  .cg-log-row {\n    font-size: 13px;\n  }");
+    expect(demote).toBeGreaterThan(-1);
+    expect(SHEET.indexOf(".cg-wrap .cg-log-sum")).toBeGreaterThan(demote);
+  });
+});
