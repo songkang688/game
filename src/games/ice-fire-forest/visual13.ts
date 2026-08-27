@@ -792,3 +792,117 @@ export class IffDustFx {
     this.lastOpen.clear();
   }
 }
+
+// ---------------------------------------------------------------------------
+// 修复员 G2:三组功能 icon 矢量化(门锁挂锁 / 元素门徽记 / 顶举双弧)
+// 全是静态小件,reduced 无关;底座(门板 / 虚线圈)由调用方照旧画。
+// ---------------------------------------------------------------------------
+
+/**
+ * 挂锁(替换锁 emoji 字形):圆环锁弓 + 圆角方体 2 停 + 锁孔。
+ * open 时锁弓向右上抬起(开口朝下),一眼分「开 / 锁」;s 是锁体半高。
+ */
+export function drawPadlock(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  s: number,
+  open: boolean,
+  color: string
+): void {
+  const bw = s * 1.3;
+  const bh = s * 1.05;
+  const bodyTop = cy - s * 0.1;
+  // 锁弓:锁上是完整倒 U;开锁时右脚抬起、整体右移上提
+  ctx.strokeStyle = shade(color, -14);
+  ctx.lineWidth = Math.max(1.5, s * 0.24);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  if (open) {
+    ctx.arc(cx + s * 0.42, bodyTop - s * 0.5, s * 0.52, Math.PI, Math.PI * 1.9);
+  } else {
+    ctx.arc(cx, bodyTop - s * 0.28, s * 0.5, Math.PI, Math.PI * 2);
+  }
+  ctx.stroke();
+  ctx.lineCap = "butt";
+  // 锁体:圆角方体 2 停(顶亮 +14)
+  const grad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bh);
+  grad.addColorStop(0, shade(color, 14));
+  grad.addColorStop(1, color);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(cx - bw / 2 + s * 0.2, bodyTop);
+  ctx.lineTo(cx + bw / 2 - s * 0.2, bodyTop);
+  ctx.quadraticCurveTo(cx + bw / 2, bodyTop, cx + bw / 2, bodyTop + s * 0.2);
+  ctx.lineTo(cx + bw / 2, bodyTop + bh - s * 0.2);
+  ctx.quadraticCurveTo(cx + bw / 2, bodyTop + bh, cx + bw / 2 - s * 0.2, bodyTop + bh);
+  ctx.lineTo(cx - bw / 2 + s * 0.2, bodyTop + bh);
+  ctx.quadraticCurveTo(cx - bw / 2, bodyTop + bh, cx - bw / 2, bodyTop + bh - s * 0.2);
+  ctx.lineTo(cx - bw / 2, bodyTop + s * 0.2);
+  ctx.quadraticCurveTo(cx - bw / 2, bodyTop, cx - bw / 2 + s * 0.2, bodyTop);
+  ctx.closePath();
+  ctx.fill();
+  strokeOutline(ctx, color, 1.5);
+  // 锁孔:小圆 + 短槽(白,醒目)
+  ctx.fillStyle = "rgba(255,255,255,.92)";
+  ctx.beginPath();
+  ctx.arc(cx, bodyTop + bh * 0.42, Math.max(1, s * 0.18), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(cx - Math.max(0.75, s * 0.08), bodyTop + bh * 0.46, Math.max(1.5, s * 0.16), bh * 0.3);
+}
+
+/**
+ * 元素门徽记(替换雪花 / 火焰字形):直接把两位主角的水滴 / 火苗剪影
+ * 缩成小徽记复用几何 —— 门面与「谁能进」用同一套形状语言。
+ */
+export function drawDoorBadge(
+  ctx: CanvasRenderingContext2D,
+  kind: HeroKind,
+  cx: number,
+  cy: number,
+  r: number,
+  color: string
+): void {
+  heroSilhouette(ctx, kind, cx, cy, r);
+  ctx.fillStyle = color;
+  ctx.fill();
+  strokeOutline(ctx, color, 1.5);
+  // 左上小高光点(与主角同源的光语言)
+  ctx.fillStyle = "rgba(255,255,255,.8)";
+  ctx.beginPath();
+  ctx.arc(cx - r * 0.28, cy - r * 0.3, Math.max(0.8, r * 0.16), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 顶举符号(替换双手 emoji 字形):两条圆头「托举弧」+ 弧上小圆
+ * (被托起的那颗),s 是符号半宽。
+ */
+export function drawLiftIcon(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  s: number,
+  color: string
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, s * 0.22);
+  ctx.lineCap = "round";
+  for (const [oy, rr] of [
+    [s * 0.5, s * 0.95],
+    [s * 0.78, s * 0.6],
+  ] as Array<[number, number]>) {
+    ctx.beginPath();
+    ctx.arc(cx, cy + oy - rr, rr, Math.PI * 0.25, Math.PI * 0.75);
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy - s * 0.45, Math.max(1.5, s * 0.28), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  ctx.beginPath();
+  ctx.arc(cx - s * 0.09, cy - s * 0.54, Math.max(0.6, s * 0.09), 0, Math.PI * 2);
+  ctx.fill();
+}

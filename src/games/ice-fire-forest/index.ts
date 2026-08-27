@@ -120,11 +120,14 @@ import {
   IffDustFx,
   drawCloudBuddy,
   drawControlRing,
+  drawDoorBadge,
   drawForestFar,
   drawForestMid,
   drawForestNear,
   drawHeroFigure,
+  drawLiftIcon,
   drawMiniHero,
+  drawPadlock,
   flagWave,
   gemSparks,
   lavaBubbles,
@@ -1307,11 +1310,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       const open = memoryDoorOpen(kit, coop);
       dustFx.noteGate(pos, open, pos % level.w, (pos / level.w) | 0, now, reduced);
       drawGate(c, x, y, cell, open, false, "#8FB7D6");
-      c.fillStyle = open ? "#3E8FC0" : "#6A5F8C";
-      c.font = `${Math.round(cell * 0.34)}px system-ui`;
-      c.textAlign = "center";
-      c.textBaseline = "middle";
-      c.fillText(open ? "🔓" : "🔒", x + cell / 2, y + cell * 0.54);
+      // 修复员 G2:锁 emoji 字形 → 自绘挂锁(开锁时锁弓抬起)
+      drawPadlock(c, x + cell / 2, y + cell * 0.54, cell * 0.16, open, open ? "#3E8FC0" : "#6A5F8C");
       return;
     }
 
@@ -1343,11 +1343,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
         c.strokeStyle = ice ? ICE_DARK : FIRE_DARK;
         c.lineWidth = Math.max(2, cell * 0.09);
         c.stroke();
-        c.fillStyle = ice ? ICE_DARK : FIRE_DARK;
-        c.font = `${Math.round(cell * 0.46)}px system-ui`;
-        c.textAlign = "center";
-        c.textBaseline = "middle";
-        c.fillText(ice ? "❄" : "🔥", x + cell / 2, y + cell * 0.54);
+        // 修复员 G2:雪花/火焰字形 → 主角水滴/火苗剪影缩成门面徽记(同一套形状语言)
+        drawDoorBadge(c, ice ? "ice" : "fire", x + cell / 2, y + cell * 0.55, cell * 0.2, ice ? ICE_DARK : FIRE_DARK);
         break;
       }
       case TILE.PLATE: {
@@ -1419,11 +1416,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
         c.arc(x + cell / 2, y + cell / 2, cell * 0.3, 0, Math.PI * 2);
         c.stroke();
         c.setLineDash([]);
-        c.fillStyle = "#8C6FB8";
-        c.font = `${Math.round(cell * 0.36)}px system-ui`;
-        c.textAlign = "center";
-        c.textBaseline = "middle";
-        c.fillText("🤲", x + cell / 2, y + cell * 0.56);
+        // 修复员 G2:双手 emoji 字形 → 双弧托举符号(两条圆头弧 + 被托起的小圆)
+        drawLiftIcon(c, x + cell / 2, y + cell * 0.56, cell * 0.19, "#8C6FB8");
         break;
       }
       case TILE.LEDGE: {
