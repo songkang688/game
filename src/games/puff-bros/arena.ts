@@ -879,37 +879,42 @@ export function buildVersusArena(index: number): ArenaDef {
     mirrorPair(2, w2, mid2, [0, 1]);
   }
 
-  const spans = surfaceSpans(platforms);
-  // 糖果也要镜像成对:场地中线那颗正好落在坑上,所以地板这一层拆成左右两颗
+  /**
+   * 成对地摆:算一次左边的 x,右边直接取 ARENA_W - x。
+   * 关键是**不能**各算各的 —— 浮台的 x 是取整过的,左右两块的中点可能差半格,
+   * 各算各的就会让道具刷新点差出 1、2 个像素,对战场就不再是「谁都不吃亏」了。
+   */
+  function mirrorX(leftX: number): [number, number] {
+    const x = Math.round(leftX);
+    return [x, ARENA_W - x];
+  }
+
   const candies: CandyDef[] = [];
-  for (const s of spans) {
-    if (s.x1 - s.x0 < 80) continue;
-    const mid = (s.x0 + s.x1) / 2;
-    if (s.id === -1) {
-      candies.push({ x: Math.round(mid - VERSUS_PIT_HALF_W - 46), surface: -1 });
-      candies.push({ x: Math.round(mid + VERSUS_PIT_HALF_W + 46), surface: -1 });
-      continue;
-    }
-    candies.push({ x: Math.round(mid), surface: s.id });
+  // 地板中线那颗正好落在坑上,所以地板这一层拆成左右两颗
+  for (const x of mirrorX(ARENA_W / 2 - VERSUS_PIT_HALF_W - 46)) candies.push({ x, surface: -1 });
+  // 浮台是成对生成的(0/1 一对、2/3 一对),照左边那块算,右边镜像过去
+  for (let i = 0; i + 1 < platforms.length; i += 2) {
+    const left = platforms[i];
+    if (left.w < 80) continue;
+    const [lx, rx] = mirrorX(left.x + left.w / 2);
+    candies.push({ x: lx, surface: i });
+    candies.push({ x: rx, surface: i + 1 });
   }
 
   // 机关也成对镜像:左边有什么,右边同一个位置就有什么
   const gadgets: GadgetDef[] = [];
   const deckY = rowSurface(1);
-  for (const side of [-1, 1] as const) {
-    const at = ARENA_W / 2 + side * (VERSUS_PIT_HALF_W + 74);
-    gadgets.push(gadget("spring", Math.round(at), FLOOR_Y, { under: -1 }));
-  }
-  for (const side of [-1, 1] as const) {
-    const sup = platforms[side < 0 ? 0 : 1];
-    if (!sup) continue;
-    const at = sup.x + sup.w / 2 + side * -1 * Math.min(38, sup.w / 2 - 18);
-    gadgets.push(gadget("crate", Math.round(at), deckY, { under: side < 0 ? 0 : 1 }));
+  const springs = mirrorX(ARENA_W / 2 - VERSUS_PIT_HALF_W - 74);
+  for (const x of springs) gadgets.push(gadget("spring", x, FLOOR_Y, { under: -1 }));
+  if (platforms.length >= 2) {
+    const left = platforms[0];
+    const [lx, rx] = mirrorX(left.x + left.w / 2 - Math.min(38, left.w / 2 - 18));
+    gadgets.push(gadget("crate", lx, deckY, { under: 0 }));
+    gadgets.push(gadget("crate", rx, deckY, { under: 1 }));
   }
   // 场地中央那道坑的两侧各一根气流管:掉下去还能被托一把
-  for (const side of [-1, 1] as const) {
-    const at = ARENA_W / 2 + side * (VERSUS_PIT_HALF_W + 18);
-    gadgets.push(gadget("updraft", Math.round(at), FLOOR_Y, { under: -1 }));
+  for (const x of mirrorX(ARENA_W / 2 - VERSUS_PIT_HALF_W - 18)) {
+    gadgets.push(gadget("updraft", x, FLOOR_Y, { under: -1 }));
   }
 
   return {

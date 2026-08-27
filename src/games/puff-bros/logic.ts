@@ -1132,7 +1132,9 @@ function applyVertical(w: World, p: PlayerState, dt: number): void {
   // 弹簧云与脆弱地板也当单向平台使:落到上面才算数,走过去踩不动
   if (!p.onGround && p.vy >= 0) landOnGadgets(w, p, prevFeet, wasGround);
 
-  if (!p.onGround && p.y >= FLOOR_Y && onSolidGround(w.def.pits, p.x)) {
+  // prevFeet 这一道跟浮台那边同一个道理:已经掉到地板线以下的人正在坑里往下落,
+  // 横着飘回坑沿上方不该把他「吸」回地面上
+  if (!p.onGround && prevFeet <= FLOOR_Y + 6 && p.y >= FLOOR_Y && onSolidGround(w.def.pits, p.x)) {
     p.y = FLOOR_Y;
     p.vy = 0;
     p.onGround = true;
@@ -1156,7 +1158,8 @@ function landOnGadgets(w: World, p: PlayerState, prevFeet: number, wasGround: bo
     if (kind === "spring") {
       // 走过去只是站在云上,想弹起来得先跳一下再落下来
       if (!wasGround && springReady(g, p.vy)) {
-        p.y = top;
+        // 抬高一丁点再弹:云正好铺在地面上,不抬的话这一帧又会被地板接住
+        p.y = top - 2;
         p.vy = bounceOffSpring(g);
         p.onGround = false;
         pushEvent(w, "spring", g.def.x, top, p.index);

@@ -2,22 +2,29 @@ import { describe, expect, it } from "vitest";
 import { assertTotal, totalSize, TOTAL_LEVELS } from "../level99";
 import {
   ARENA_W,
+  CAMPAIGN_99_FINGERPRINT,
   CHAPTERS,
   FLOOR_Y,
+  GADGET_CLEAR,
+  GADGET_FROM_LEVEL,
   MAX_PLATFORM_W,
   MIN_PLATFORM_W,
   PATROL_INSET,
   ROW_GAP,
   SUPPORT_INSET,
   TOTAL,
+  VERSUS_PIT_HALF_W,
   VERSUS_ROUND_SECONDS,
   VERSUS_ROUND_TARGET,
   WALL,
   allLevels,
+  arenaFingerprint,
   buildLevel,
   buildVersusArena,
   buildWave,
+  campaignFingerprint,
   chapterIndexOf,
+  gadgetKindsFor,
   indexInChapterOf,
   rowSurface,
   supportChain,
@@ -26,7 +33,8 @@ import {
   surfaceY,
   type ArenaDef,
 } from "./arena";
-import { autoPlay, createWorld } from "./logic";
+import { GADGET_KINDS, gadget } from "./gadgets";
+import { PLAYER_W, autoPlay, createWorld, jumpRange } from "./logic";
 
 const LEVELS = allLevels();
 const WAVES = Array.from({ length: 12 }, (_, i) => buildWave(i));
@@ -242,6 +250,95 @@ describe("puff-bros 支撑树", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// 1.2 新增:机关与前 99 关的指纹
+// ---------------------------------------------------------------------------
+
+describe("puff-bros 前 99 关一格没动", () => {
+  it("前 99 关的老字段指纹跟 1.1 收尾时一模一样", () => {
+    expect(campaignFingerprint(99)).toBe(CAMPAIGN_99_FINGERPRINT);
+  });
+
+  it("前 99 关一件机关都没有,也没有坑", () => {
+    for (let lv = 0; lv < GADGET_FROM_LEVEL; lv++) {
+      const def = LEVELS[lv];
+      expect(def.gadgets, `第 ${lv + 1} 关`).toEqual([]);
+      expect(def.pits, `第 ${lv + 1} 关`).toEqual([]);
+      expect(def.climbRow).toBe(0);
+      expect(gadgetKindsFor(lv)).toEqual([]);
+    }
+  });
+
+  it("换一句话说:指纹是逐关算的,任意一关的老数据变了都会被抓出来", () => {
+    const a = arenaFingerprint(buildLevel(42));
+    expect(a).toBe(arenaFingerprint(buildLevel(42)));
+    expect(a).not.toBe(arenaFingerprint(buildLevel(43)));
+    // 只加新字段不会动指纹 —— 这正是「老关卡钉得住、新机关加得进」的前提
+    const bumped = { ...buildLevel(42), gadgets: [gadget("spring", 300, 340)] };
+    expect(arenaFingerprint(bumped)).toBe(a);
+  });
+});
+
+describe("puff-bros 后 89 关的机关", () => {
+  const LATE = LEVELS.slice(GADGET_FROM_LEVEL);
+
+  it("第 100 关起开始出现机关,而且五种都轮得到", () => {
+    const seen = new Set(LATE.flatMap((d) => d.gadgets.map((g) => g.kind)));
+    for (const kind of GADGET_KINDS) expect(seen, `没见过 ${kind}`).toContain(kind);
+    expect(LATE.filter((d) => d.gadgets.length > 0).length).toBeGreaterThan(30);
+  });
+
+  it("机关是一种一种解锁的,不会在教之前先冒出来", () => {
+    for (const def of LATE) {
+      const allowed = new Set(gadgetKindsFor(def.index));
+      for (const g of def.gadgets) {
+        expect(allowed.has(g.kind), `第 ${def.index + 1} 关提前放了 ${g.kind}`).toBe(true);
+      }
+    }
+  });
+
+  it("机关都摆在某块地面的范围里,传送泡永远成对", () => {
+    for (const def of LATE) {
+      def.gadgets.forEach((g, i) => {
+        const span = surfaceSpan(def.platforms, g.under);
+        expect(g.x, `${def.name} 的 ${g.kind} 摆到地面外面了`).toBeGreaterThanOrEqual(span.x0);
+        expect(g.x).toBeLessThanOrEqual(span.x1);
+        expect(g.y).toBeLessThanOrEqual(surfaceY(def.platforms, g.under));
+        if (g.kind !== "warp") return;
+        expect(def.gadgets[g.link]?.kind).toBe("warp");
+        expect(def.gadgets[g.link].link).toBe(i);
+      });
+    }
+  });
+
+  it("机关绕开了机器人的赶路通道:浮台中点、出生角落都空着", () => {
+    for (const def of LATE) {
+      for (const g of def.gadgets) {
+        for (const spawn of def.spawns) {
+          if (spawn.surface !== g.under) continue;
+          expect(Math.abs(spawn.x - g.x), `${def.name} 的 ${g.kind} 堵在出生点上`).toBeGreaterThanOrEqual(
+            GADGET_CLEAR - 1
+          );
+        }
+        if (g.under < 0) continue;
+        const span = surfaceSpan(def.platforms, g.under);
+        const mid = (span.x0 + span.x1) / 2;
+        expect(Math.abs(mid - g.x), `${def.name} 的 ${g.kind} 压在浮台中点上`).toBeGreaterThanOrEqual(
+          GADGET_CLEAR - 1
+        );
+      }
+    }
+  });
+
+  it("提示语会把这一关的机关说清楚,而且照样干净", () => {
+    for (const def of LATE) {
+      if (def.gadgets.length === 0) continue;
+      expect(def.hint.length).toBeGreaterThanOrEqual(14);
+      checkCopy(def);
+    }
+  });
+});
+
 describe("puff-bros 无尽与对战的场地", () => {
   it("无尽一波比一波难,而且不限时", () => {
     expect(WAVES[0].kind).toBe("endless");
@@ -269,6 +366,51 @@ describe("puff-bros 无尽与对战的场地", () => {
         const right = mids[mids.length - 1 - i];
         expect(Math.abs(left + right - ARENA_W), `${def.name} 不对称`).toBeLessThanOrEqual(1);
       }
+    }
+  });
+
+  it("对战场的道具刷新点也镜像对称:糖果一颗不多一颗不少", () => {
+    for (const def of DUELS) {
+      expect(def.candies.length % 2).toBe(0);
+      const xs = def.candies.map((c) => c.x).sort((a, b) => a - b);
+      for (let i = 0; i < xs.length / 2; i++) {
+        expect(Math.abs(xs[i] + xs[xs.length - 1 - i] - ARENA_W), `${def.name} 糖果不对称`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("对战场的机关也镜像对称:左边有什么,右边同一个位置就有什么", () => {
+    for (const def of DUELS) {
+      expect(def.gadgets.length).toBeGreaterThanOrEqual(4);
+      const byKind = new Map<string, number[]>();
+      for (const g of def.gadgets) {
+        const list = byKind.get(g.kind) ?? [];
+        list.push(g.x);
+        byKind.set(g.kind, list);
+      }
+      for (const [kind, xs] of byKind) {
+        expect(xs.length % 2, `${def.name} 的 ${kind} 落了单`).toBe(0);
+        xs.sort((a, b) => a - b);
+        for (let i = 0; i < xs.length / 2; i++) {
+          expect(
+            Math.abs(xs[i] + xs[xs.length - 1 - i] - ARENA_W),
+            `${def.name} 的 ${kind} 不对称`
+          ).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  it("对战场正中间那道口子关于中线对称,而且窄到一次起跳跨得过去", () => {
+    for (const def of DUELS) {
+      expect(def.pits).toHaveLength(1);
+      const pit = def.pits[0];
+      expect(pit.x0 + pit.x1).toBe(ARENA_W);
+      expect(pit.x1 - pit.x0).toBe(VERSUS_PIT_HALF_W * 2);
+      // 一次起跳能跨 jumpRange();坑再加上半个身位也得比它窄
+      expect(pit.x1 - pit.x0 + PLAYER_W).toBeLessThan(jumpRange() * 0.9);
+      // 出生点在坑外面,一开局不会掉下去
+      for (const s of def.spawns) expect(s.x < pit.x0 || s.x > pit.x1).toBe(true);
     }
   });
 });
