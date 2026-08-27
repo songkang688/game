@@ -118,6 +118,8 @@ import {
   versusOutcome,
 } from "./versus";
 import type { RivalLevel, RivalProfile, VersusOutcome } from "./versus";
+import { touchArea } from "./touch";
+import type { Rect } from "./touch";
 import { save } from "../../engine/save";
 import { getLevelExtras } from "../../ui/level188Contract";
 import { speak, stopSpeaking } from "../speech";
@@ -247,13 +249,6 @@ interface Floaty {
   color: string;
   life: number;
   big: boolean;
-}
-
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
 }
 
 /** 水流带(位置用比例存,窗口大小变了也不乱) */
@@ -2433,8 +2428,10 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.fillStyle = "#2a5a86";
     ctx.fillText(`吃比自己小的鱼,越吃越大 · 最深 ${endlessBest} 米`, w / 2, 52);
 
-    btnDex = { x: w - 120, y: 8, w: 112, h: 34 };
-    drawButton(btnDex, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
+    // 副标题就在 y=52 那一行,按钮画高会压字 —— 画的照旧,能点的范围兜到 44px 高
+    const dexFace: Rect = { x: w - 120, y: 8, w: 112, h: 34 };
+    btnDex = touchArea(dexFace);
+    drawButton(dexFace, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
 
     const cards: Array<{ id: "campaign" | "endless" | "versus"; emoji: string; title: string; blurb: string; bg: string; fg: string }> = [
       {
@@ -2498,8 +2495,9 @@ export function mount(api: GameAPI): OceanMunchHandle {
     grad.addColorStop(1, "#b8a9f5");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
-    btnBack = { x: 8, y: 8, w: 76, h: 36 };
-    drawButton(btnBack, "◀ 返回", "rgba(255,255,255,0.9)", "#5a5a6e");
+    const backFace: Rect = { x: 8, y: 8, w: 76, h: 36 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 返回", "rgba(255,255,255,0.9)", "#5a5a6e");
     ctx.fillStyle = "#a03a72";
     ctx.font = "bold 22px sans-serif";
     ctx.textAlign = "center";
@@ -3231,10 +3229,12 @@ export function mount(api: GameAPI): OceanMunchHandle {
       52,
     );
 
-    btnDex = { x: w - 118, y: 8, w: 110, h: 30 };
-    drawButton(btnDex, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
-    btnBack = { x: 8, y: 8, w: 74, h: 30 };
-    drawButton(btnBack, "◀ 首页", "rgba(255,255,255,0.88)", "#5a5a6e");
+    const dexFace: Rect = { x: w - 118, y: 8, w: 110, h: 30 };
+    btnDex = touchArea(dexFace);
+    drawButton(dexFace, `📖 图鉴 ${dexSeen.size}/${DEX.length}`, "#fff1c9", "#7a5a1a");
+    const backFace: Rect = { x: 8, y: 8, w: 74, h: 30 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 首页", "rgba(255,255,255,0.88)", "#5a5a6e");
 
     themeCards.length = 0;
     const cols = w > h * 1.15 ? 3 : 2;
@@ -3287,8 +3287,9 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    btnBack = { x: 6, y: 7, w: 62, h: 30 };
-    drawButton(btnBack, "◀ 海域", "rgba(255,255,255,0.85)", "#5a5a6e");
+    const backFace: Rect = { x: 6, y: 7, w: 62, h: 30 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 海域", "rgba(255,255,255,0.85)", "#5a5a6e");
 
     ctx.fillStyle = st.accent;
     ctx.font = "bold 22px sans-serif";
@@ -3410,8 +3411,9 @@ export function mount(api: GameAPI): OceanMunchHandle {
         ctx.fillText(d.desc, cx, cy + ch * 0.35);
       }
     }
-    btnBack = { x: 12, y: 12, w: 80, h: 34 };
-    drawButton(btnBack, "◀ 返回", "#fff", "#5a5a6e");
+    const backFace: Rect = { x: 12, y: 12, w: 80, h: 34 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 返回", "#fff", "#5a5a6e");
   }
 
   function drawClearPanel(): void {
