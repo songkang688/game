@@ -17,6 +17,7 @@ import type { PlayCtx, PlayHandle } from "../level99";
 import { runQuiz } from "../quiz99";
 import { speak } from "../speech";
 import { runBuildChar } from "./buildChar";
+import { fitQuizHost } from "./fit";
 import {
   buildCharTask,
   buildQuestions,
@@ -39,8 +40,15 @@ export const REVIEW_NOTE = "📒 错题本翻一翻：刚才不太有把握的�
 /** 复查轮做完时补在结算语后面的一句 */
 export const REVIEW_DONE = "错题也都回头看过啦！";
 
-/** 复查轮的提示条样式（`wgd-` 前缀，只往后贴） */
+/**
+ * 复查轮的提示条样式（`wgd-` 前缀，只往后贴）。
+ *
+ * `.wgd-quizhost` 是答题器的宿主：真正钳住它高度的是 `fitQuizHost()` 量出来的
+ * 像素 `max-height`（内联样式）。这里一个高度都不写死——写 `max-height:100%`
+ * 在壳层这条 auto 高的链上钳不住任何东西，那正是 W5R2-F-A-02 的成因。
+ */
 export const REVIEW_CSS = `
+.wgd-quizhost{min-width:0;}
 .wgd-review{text-align:center;font-size:16px;font-weight:800;color:#5c4a7d;line-height:1.5;
   background:#ffffffcc;border-radius:14px;padding:8px 12px;margin-bottom:6px;
   font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;}
@@ -57,7 +65,8 @@ interface WatcherHandle {
 function watchWrong(
   stage: HTMLElement,
   questions: readonly WordQ[],
-  onWrong: (focus: string, kind: WordKind) => void
+  onWrong: (focus: string, kind: WordKind) => void,
+  onQuestionChanged: () => void = () => {}
 ): WatcherHandle {
   const prompt = stage.querySelector(".qz-prompt");
   const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -78,6 +87,8 @@ function watchWrong(
     if (dead) return;
     index = Math.min(index + 1, Math.max(0, questions.length - 1));
     reported = false;
+    // 每道题的题面高矮差很多（带图的比纯文字高一大截），换一题就得重量一次
+    onQuestionChanged();
   }
 
   const onClick = (ev: Event): void => {
@@ -125,6 +136,14 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
   style.textContent = REVIEW_CSS;
   stage.appendChild(style);
 
+  // 答题屏是 `quiz99` 渲染的（公共资产，禁改），但它挂在哪儿是本款说了算：
+  // 给它一个本款自己的宿主，再由 fitQuizHost 按舞台下沿钳住。
+  // 不这么做的话 320×568 上第三个选项整颗掉在裁切线以下，谁都够不着（W5R2-F-A-02，阻断）。
+  const host = stage.ownerDocument.createElement("div");
+  host.className = "wgd-quizhost";
+  stage.appendChild(host);
+  const fit = fitQuizHost(host);
+
   let quiz: PlayHandle | null = null;
   let watcher: WatcherHandle | null = null;
   let banner: HTMLElement | null = null;
@@ -161,14 +180,14 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
     banner = stage.ownerDocument.createElement("div");
     banner.className = "wgd-review";
     banner.textContent = REVIEW_NOTE;
-    stage.appendChild(banner);
+    host.appendChild(banner);
     const finish = (): void => {
       if (destroyed) return;
       ctx.win(stars, `${msg ?? ""} ${REVIEW_DONE}`.trim());
     };
     const reviewCtx: PlayCtx = { ...ctx, skipped: false, win: finish, lose: finish };
     quiz = runQuiz({
-      stage,
+      stage: host,
       ctx: reviewCtx,
       questions,
       theme,
@@ -177,7 +196,8 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
       bigChoices: true,
       skipped: false,
     });
-    watcher = watchWrong(stage, questions, () => {});
+    watcher = watchWrong(host, questions, () => {}, fit.relayout);
+    fit.relayout();
     speak(REVIEW_NOTE);
   }
 
@@ -196,13 +216,16 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
   };
 
   const questions = buildQuestions(ctx.level);
-  quiz = runQuiz({ stage, ctx: mainCtx, questions, theme, bigChoices: true });
-  watcher = watchWrong(stage, questions, noteWrong);
+  quiz = runQuiz({ stage: host, ctx: mainCtx, questions, theme, bigChoices: true });
+  watcher = watchWrong(host, questions, noteWrong, fit.relayout);
+  fit.relayout();
 
   return {
     destroy() {
       destroyed = true;
       dropRound();
+      fit.dispose();
+      host.remove();
       style.remove();
     },
   };

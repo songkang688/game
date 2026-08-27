@@ -18,6 +18,7 @@ import type { PlayCtx, PlayHandle } from "../level99";
 import { runQuiz } from "../quiz99";
 import { speak } from "../speech";
 import { mountDial, type DialHandle } from "./dial";
+import { fitQuizHost } from "./fit";
 import { methodHint } from "./hints";
 import { typeOfKind, type ClockKind } from "./kinds";
 import { buildQuestions, makeReviewQuestions, CHAPTER_THEMES, type ClockQ } from "./levels";
@@ -37,8 +38,13 @@ export const MIN_FACE_PX = 200;
 
 /**
  * 本款追加的样式，一律 `clk-` 前缀，只往后贴，不动 `qz-` / `l99-` 任何既有规则。
+ *
+ * `.clk-quizhost` 是答题器的宿主：真正钳住它高度的是 `fitQuizHost()` 量出来的
+ * 像素 `max-height`（内联样式）。这里一个高度都不写死——写 `max-height:100%`
+ * 在壳层这条 auto 高的链上钳不住任何东西，那正是 W5R2-F-A-01 的成因。
  */
 export const CLK_CSS = `
+.clk-quizhost { min-width: 0; }
 .clk-dial-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .clk-dial-title { font-size: 18px; font-weight: 900; line-height: 1.5; word-break: keep-all; }
 .clk-dial-read { font-size: 16px; font-weight: 800; color: #5c4a7d; }
@@ -75,7 +81,8 @@ interface HelperHandle {
 function attachHelper(
   stage: HTMLElement,
   questions: readonly ClockQ[],
-  onFirstWrong: (kind: ClockKind) => void
+  onFirstWrong: (kind: ClockKind) => void,
+  onQuestionChanged: () => void = () => {}
 ): HelperHandle {
   const prompt = stage.querySelector(".qz-prompt");
   const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -110,6 +117,8 @@ function attachHelper(
     const msg = stage.querySelector(".qz-msg");
     if (msg instanceof HTMLElement) msg.classList.remove("clk-hint");
     wireDial();
+    // 每道题的题面高矮差很多（钟面题比纯文字题高一大截），换一题就得重量一次
+    onQuestionChanged();
   }
 
   const onClick = (ev: Event): void => {
@@ -176,6 +185,14 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   style.textContent = CLK_CSS;
   stage.appendChild(style);
 
+  // 答题屏是 `quiz99` 渲染的（公共资产，禁改），但它挂在哪儿是本款说了算：
+  // 给它一个本款自己的宿主，再由 fitQuizHost 按舞台下沿钳住。
+  // 不这么做的话 320×568 上第三个选项整颗掉在裁切线以下，谁都够不着（W5R2-F-A-01，阻断）。
+  const host = stage.ownerDocument.createElement("div");
+  host.className = "clk-quizhost";
+  stage.appendChild(host);
+  const fit = fitQuizHost(host);
+
   let quiz: PlayHandle | null = null;
   let helper: HelperHandle | null = null;
   let banner: HTMLElement | null = null;
@@ -210,14 +227,14 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     banner = stage.ownerDocument.createElement("div");
     banner.className = "clk-review";
     banner.textContent = REVIEW_NOTE;
-    stage.appendChild(banner);
+    host.appendChild(banner);
     const finish = (): void => {
       if (destroyed) return;
       ctx.win(stars, `${msg ?? ""} ${REVIEW_DONE}`.trim());
     };
     const reviewCtx: PlayCtx = { ...ctx, skipped: false, win: finish, lose: finish };
     quiz = runQuiz({
-      stage,
+      stage: host,
       ctx: reviewCtx,
       questions,
       theme,
@@ -225,7 +242,8 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       maxWrong: questions.length * 20 + 20,
       skipped: false,
     });
-    helper = attachHelper(stage, questions, () => {});
+    helper = attachHelper(host, questions, () => {}, fit.relayout);
+    fit.relayout();
     speak(REVIEW_NOTE);
   }
 
@@ -244,13 +262,16 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   };
 
   const mainQuestions = buildQuestions(ctx.level);
-  quiz = runQuiz({ stage, ctx: mainCtx, questions: mainQuestions, theme });
-  helper = attachHelper(stage, mainQuestions, noteWrong);
+  quiz = runQuiz({ stage: host, ctx: mainCtx, questions: mainQuestions, theme });
+  helper = attachHelper(host, mainQuestions, noteWrong, fit.relayout);
+  fit.relayout();
 
   return {
     destroy() {
       destroyed = true;
       dropRound();
+      fit.dispose();
+      host.remove();
       style.remove();
     },
   };
