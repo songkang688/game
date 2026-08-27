@@ -97,7 +97,7 @@ const CSS = `
 .cc-btn.cc-burst{background:#D9D2FB;color:#4f3f96;box-shadow:0 4px 0 #B4A8E8;}
 .cc-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #E7A9C6;}
 .cc-btn:focus-visible,.cc-open:focus-visible,.cc-back:focus-visible{outline:3px solid #46246b;outline-offset:3px;}
-.cc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.cc-modebar,.cc-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .cc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a4a86;text-align:center;overflow-wrap:anywhere;}
 .cc-open{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#E27BAE,#C55A91);box-shadow:0 4px 0 #A44576;}
@@ -829,7 +829,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
     if (mode === "versus") {
       const row = document.createElement("div");
-      row.className = "cc-modebar";
+      row.className = "cc-optbar";
       for (const t of AI_TIERS) {
         const b = document.createElement("button");
         b.type = "button";
@@ -852,7 +852,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     }
     if (mode === "endless") {
       const row = document.createElement("div");
-      row.className = "cc-modebar";
+      row.className = "cc-optbar";
       const b = document.createElement("button");
       b.type = "button";
       b.className = "cc-open";
@@ -872,7 +872,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     }
     if (mode === "duo") {
       const row = document.createElement("div");
-      row.className = "cc-modebar";
+      row.className = "cc-optbar";
       for (const c of CHARACTERS) {
         const b = document.createElement("button");
         b.type = "button";
@@ -889,7 +889,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       return;
     }
     const row = document.createElement("div");
-    row.className = "cc-modebar";
+    row.className = "cc-optbar";
     const b = document.createElement("button");
     b.type = "button";
     b.className = "cc-open";

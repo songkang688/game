@@ -72,6 +72,17 @@ export const CLEAR_ANIM_SEC = 0.22;
 /** 硬降压扁动画时长 */
 export const SLAM_ANIM_SEC = 0.12;
 
+/**
+ * 按住不放时系统会一秒发三十来个 `keydown`。挪左挪右、软降本来就该跟着连发,
+ * 但硬降、旋转、暂存是「按一下算一下」—— 手指在硬降键上多停半秒,
+ * 一关的方块预算就白白倒掉好几块。这里只放行该连发的那几个键。
+ */
+const REPEATABLE_KEYS = new Set(["a", "d", "s", "ArrowLeft", "ArrowRight", "ArrowDown"]);
+
+export function acceptsRepeat(key: string): boolean {
+  return REPEATABLE_KEYS.has(key.length === 1 ? key.toLowerCase() : key);
+}
+
 const CSS = `
 .bd-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EEF4FF,#F9FBFF);
   border-radius:16px;padding:10px;user-select:none;}
@@ -93,7 +104,7 @@ const CSS = `
 .bd-btn:focus-visible{outline:3px solid #24406b;outline-offset:3px;}
 .bd-msg{text-align:center;min-height:20px;color:#3f5b8a;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
-.bd-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.bd-modebar,.bd-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .bd-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f5b8a;text-align:center;overflow-wrap:anywhere;}
 .bd-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#7fa5e0,#5c83c4);box-shadow:0 4px 0 #47679f;}
@@ -715,6 +726,10 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
       return;
     }
     if (paused) return;
+    if (e.repeat && !acceptsRepeat(e.key)) {
+      e.preventDefault();
+      return;
+    }
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (duo) {
       const s = seats[duo.i];
@@ -901,7 +916,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function picker(labels: string[], onPick: (i: number) => void): HTMLElement {
     const row = document.createElement("div");
-    row.className = "bd-modebar";
+    row.className = "bd-optbar";
     labels.forEach((label, i) => {
       const b = document.createElement("button");
       b.type = "button";

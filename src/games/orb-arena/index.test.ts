@@ -2,7 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeCanvas, FakeEl, installCanvasDom, type DomHarness } from "../__tests__/canvasDom";
 import guide from "./guide";
 import { endlessConfig, levelConfig, type OrbLevel } from "./levels";
-import { ARENA_CONSTS, OA_CSS, createRun, meta, mount, type Owner, type RunResult } from "./index";
+import {
+  ARENA_CONSTS,
+  OA_CSS,
+  WAVE_BREAK_MS,
+  acceptsRepeat,
+  afterWave,
+  createRun,
+  meta,
+  mount,
+  type Owner,
+  type RunResult
+} from "./index";
 
 // ---------------------------------------------------------------------------
 // 这一款是纯画布游戏,以前没有 index.test.ts:node 环境里 `getContext("2d")` 拿不到东西,
@@ -138,6 +149,95 @@ describe("一局真的跑起来", () => {
     expect(dom.pressKey("Escape")).toBe(true);
     expect(stage.byClass("oa-msg")[0].textContent).toContain("继续");
     handle.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 第 2 轮 learner:按住不放时系统的按键连发
+// ---------------------------------------------------------------------------
+
+describe("按住不放的时候", () => {
+  beforeEach(() => {
+    dom = installCanvasDom();
+  });
+  afterEach(() => dom.restore());
+
+  it("方向键该跟着连发,分裂 / 吐球是一下算一下", () => {
+    for (const k of ["w", "a", "s", "d", "W", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+      expect(acceptsRepeat(k)).toBe(true);
+    }
+    for (const k of ["f", "g", "F", "l", "k", "Escape", "Enter", " "]) {
+      expect(acceptsRepeat(k)).toBe(false);
+    }
+  });
+
+  it("按住吐球键,只吐第一下那一颗", () => {
+    const { handle, sounds } = run();
+    // 第一下是真按,后面九下是系统连发
+    dom.pressKey("g");
+    for (let i = 0; i < 9; i++) dom.pressKey("g", { repeat: true });
+    // 起始质量 30,吐一颗掉 6 到 24;不拦连发的话第二下会接着吐到 18
+    expect(sounds.filter((s) => s === "tap")).toHaveLength(1);
+    handle.destroy();
+  });
+
+  it("连发的分裂键当场吃掉,不留给后面的分支", () => {
+    const { handle } = run();
+    // 真按一下:分裂键这条路不 preventDefault,交给页面
+    expect(dom.pressKey("f")).toBe(false);
+    // 连发的那些被拦下来
+    expect(dom.pressKey("f", { repeat: true })).toBe(true);
+    handle.destroy();
+  });
+
+  it("方向键连发照旧生效,松手才停", () => {
+    const { handle } = run();
+    expect(dom.pressKey("d")).toBe(true);
+    expect(dom.pressKey("d", { repeat: true })).toBe(true);
+    dom.releaseKey("d");
+    dom.tick(2);
+    handle.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 第 2 轮 learner:无尽两波之间的过场
+// ---------------------------------------------------------------------------
+
+describe("无尽一波打完之后", () => {
+  it("赢了就报一句「第 N 波达成」,并把下一波号算好", () => {
+    const step = afterWave(true, 3, 812.4, 900);
+    expect(step.kind).toBe("next");
+    expect(step.nextWave).toBe(4);
+    expect(step.title).toBe("🎉 第 3 波达成！");
+    expect(step.sub).toContain("812");
+    expect(step.sub).toContain("第 4 波");
+  });
+
+  it("没赢就收场,波次归 1,纪录照写", () => {
+    const step = afterWave(false, 7, 1234.6, 1500);
+    expect(step.kind).toBe("over");
+    expect(step.nextWave).toBe(1);
+    expect(step.sub).toContain("1235");
+    expect(step.sub).toContain("1500");
+  });
+
+  it("收场那句只鼓励,不打击", () => {
+    const step = afterWave(false, 2, 100, 100);
+    expect(step.title).not.toMatch(/输|失败|死|笨/);
+    expect(step.sub).toContain("下一次");
+  });
+
+  it("坏数据进来也算得出来,不会冒出 NaN", () => {
+    const step = afterWave(true, Number.NaN, Number.POSITIVE_INFINITY, Number.NaN);
+    expect(step.nextWave).toBe(2);
+    expect(step.title).not.toContain("NaN");
+    expect(step.sub).not.toContain("NaN");
+  });
+
+  it("过场停顿是看得清但不磨叽的一段", () => {
+    expect(WAVE_BREAK_MS).toBeGreaterThanOrEqual(800);
+    expect(WAVE_BREAK_MS).toBeLessThanOrEqual(2500);
   });
 });
 

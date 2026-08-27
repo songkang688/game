@@ -127,7 +127,7 @@ export const MJ_CSS = `
 .mj-btn.mj-ghost{background:#E4E1F2;color:#54487a;box-shadow:0 3px 0 #C6C0DE;}
 .mj-msg{text-align:center;min-height:20px;font-size:16px;font-weight:800;color:#7c5a8e;margin-top:6px;
   line-height:1.5;overflow-wrap:anywhere;}
-.mj-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.mj-modebar,.mj-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .mj-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7c5a8e;text-align:center;overflow-wrap:anywhere;}
 .mj-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#D9538F,#BC3D75);box-shadow:0 4px 0 #972E5C;}
@@ -1408,7 +1408,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     t.className = "mj-goal";
     t.textContent = title;
     const row = document.createElement("div");
-    row.className = "mj-modebar";
+    row.className = "mj-optbar";
     labels.forEach((label, i) => {
       const b = document.createElement("button");
       b.type = "button";

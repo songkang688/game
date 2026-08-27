@@ -129,7 +129,7 @@ const CSS = `
 .se-deed{flex:1 1 150px;min-width:0;border:none;border-radius:10px;padding:6px 8px;text-align:left;cursor:pointer;
   font-family:inherit;font-size:16px;font-weight:800;color:#6b4a24;background:#FFF6E6;line-height:1.5;overflow-wrap:anywhere;}
 .se-deed-mort{background:#EFEDF4;color:#6a6478;}
-.se-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.se-modebar,.se-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .se-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a5230;text-align:center;overflow-wrap:anywhere;}
 .se-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E9A05C,#CE7F3B);box-shadow:0 4px 0 #A96227;}
@@ -1232,7 +1232,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function picker(labels: string[], onPick: (i: number) => void): HTMLElement {
     const row = document.createElement("div");
-    row.className = "se-modebar";
+    row.className = "se-optbar";
     labels.forEach((label, i) => {
       const b = document.createElement("button");
       b.type = "button";

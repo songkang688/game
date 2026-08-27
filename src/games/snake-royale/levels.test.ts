@@ -5,6 +5,8 @@ import { meta } from "./meta";
 import guide from "./guide";
 import {
   CHAPTERS,
+  ENDLESS_MAX_FOOD,
+  ENDLESS_MAX_SHRINK,
   chapterIndexOf,
   endlessConfig,
   goalLine,
@@ -195,6 +197,41 @@ describe("snake-royale · 关卡配置", () => {
     expect(w9.shrink).toBeGreaterThan(w1.shrink);
     expect(w9.botTier).toBe("hell");
     expect(endlessConfig(-3).food).toBe(endlessConfig(1).food);
+  });
+
+  // -------------------------------------------------------------------------
+  // 第 2 轮 W1-R2-01:无尽的三个旋钮里只有 bots 封了顶
+  // -------------------------------------------------------------------------
+
+  it("收圈速度有上限,再往后走也不会一眨眼收到底", () => {
+    for (const w of [1, 15, 20, 50, 100, 5000, 1e6]) {
+      expect(endlessConfig(w).shrink, `第 ${w} 波`).toBeLessThanOrEqual(ENDLESS_MAX_SHRINK);
+    }
+    // 起圈 mapR*0.96 = 1440,收到 180 就不再收:收圈窗口不许短过 50 秒
+    const span = 1500 * 0.96 - 180;
+    for (const w of [20, 100, 5000]) {
+      expect(span / endlessConfig(w).shrink, `第 ${w} 波的收圈窗口`).toBeGreaterThan(50);
+    }
+  });
+
+  it("食物数有上限,不会为了「更难」把每帧要遍历的数组撑爆", () => {
+    for (const w of [1, 20, 100, 500, 5000, 1e6]) {
+      expect(endlessConfig(w).food, `第 ${w} 波`).toBeLessThanOrEqual(ENDLESS_MAX_FOOD);
+    }
+    expect(endlessConfig(1e6).food).toBe(ENDLESS_MAX_FOOD);
+  });
+
+  it("封顶只在后面才生效:孩子玩得到的前十四波一个数字都没变", () => {
+    for (let w = 1; w <= 14; w++) {
+      expect(endlessConfig(w).shrink, `第 ${w} 波收圈`).toBeCloseTo(3 + w * 1.3, 6);
+      expect(endlessConfig(w).food, `第 ${w} 波食物`).toBe(170 + w * 8);
+    }
+  });
+
+  it("难度照旧一波一波在涨,只是涨在「要长多长」上", () => {
+    for (const w of [20, 50, 100]) {
+      expect(endlessConfig(w + 1).targetLen).toBeGreaterThan(endlessConfig(w).targetLen);
+    }
   });
 });
 
