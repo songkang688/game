@@ -273,7 +273,19 @@ export interface BhTheme {
   tint: string;
   /** 角标 SVG */
   deco: string;
+  /**
+   * 舞台底纹(B 档 TOP-9):整幅 background 值,tint 收底。
+   * 峰值透明度 ≤8%,只给毯面一层材质层次,不与棋盘/HUD 争眼。
+   */
+  mat: string;
 }
+
+/** 花园底纹:三瓣小花 data-URI,96px 平铺,6% 透明度(纯装饰) */
+const GARDEN_MAT_TILE =
+  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E` +
+  `%3Cg fill='%23F4859F' fill-opacity='.06'%3E` +
+  `%3Ccircle cx='48' cy='40' r='5'/%3E%3Ccircle cx='41' cy='51' r='5'/%3E%3Ccircle cx='55' cy='51' r='5'/%3E` +
+  `%3C/g%3E%3C/svg%3E") 0 0 / 96px 96px repeat`;
 
 const CABIN_DECO =
   `<svg viewBox="0 0 32 32" aria-hidden="true">` +
@@ -298,9 +310,32 @@ const GARDEN_DECO =
   `<circle cx="16" cy="14" r="3" fill="#FFE9A8"/></svg>`;
 
 export const BH_THEMES: readonly BhTheme[] = [
-  { id: "cabin", label: "木屋", tint: "#FFF6E6", deco: CABIN_DECO },
-  { id: "cellar", label: "冰窖", tint: "#EAF5FD", deco: CELLAR_DECO },
-  { id: "garden", label: "花园", tint: "#EDF6E4", deco: GARDEN_DECO },
+  {
+    id: "cabin",
+    label: "木屋",
+    tint: "#FFF6E6",
+    deco: CABIN_DECO,
+    // 45° 木纹:亮暗 ±4% 两段 12px 条,24px 一个周期
+    mat:
+      "repeating-linear-gradient(45deg, rgba(143,91,51,.04) 0 12px, rgba(255,255,255,.04) 12px 24px), #FFF6E6",
+  },
+  {
+    id: "cellar",
+    label: "冰窖",
+    tint: "#EAF5FD",
+    deco: CELLAR_DECO,
+    // 两粒白光斑,峰值 .08,像冰面反着天光
+    mat:
+      "radial-gradient(circle at 26% 30%, rgba(255,255,255,.08), rgba(255,255,255,0) 32%), " +
+      "radial-gradient(circle at 64% 58%, rgba(255,255,255,.08), rgba(255,255,255,0) 36%), #EAF5FD",
+  },
+  {
+    id: "garden",
+    label: "花园",
+    tint: "#EDF6E4",
+    deco: GARDEN_DECO,
+    mat: `${GARDEN_MAT_TILE}, #EDF6E4`,
+  },
 ];
 
 /** 章节 → 主题:七章按 木屋 / 冰窖 / 花园 轮换 */

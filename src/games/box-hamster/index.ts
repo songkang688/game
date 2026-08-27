@@ -280,7 +280,8 @@ export function createBoard(host: HTMLElement, opts: BoardOpts): BoardHandle {
 
   function applyTheme(): void {
     const theme = themeOf(def.chapterIndex);
-    box.style.background = theme.tint;
+    // 底纹是「tint 收底 + ≤8% 材质层」的整幅 background(B 档 TOP-9)
+    box.style.background = theme.mat;
     themeDeco.innerHTML = theme.deco;
   }
   applyTheme();
