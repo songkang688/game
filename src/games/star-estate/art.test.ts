@@ -7,8 +7,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { KIT_PALETTE } from "../../art/kit";
+import { BOARD } from "./board";
 import {
   DIE_PIPS,
+  TILE_ICONS,
   coinSVG,
   coinTagSVG,
   dieSVG,
@@ -22,6 +24,7 @@ import {
   rippleTexSVG,
   roofSVG,
   stampSVG,
+  tileIconSVG,
   tokenKindOf,
   tokenSVG,
   trophySVG,
@@ -222,5 +225,99 @@ describe("广场 / 奖杯 / 印章 / 结算条形图", () => {
       { name: "b", color: "#5B8FD6", worth: 0 }
     ]);
     expect(html).not.toContain("NaN");
+  });
+});
+
+describe("地格主题图标（1.3 r1 G-6 修复）：矢量小图标替代裸 emoji", () => {
+  const KEYS = Object.keys(TILE_ICONS);
+  const EMOJI_RE = /\p{Extended_Pictographic}/u;
+
+  it("board.ts 40 格的地格 emoji 全部有专属图标，无一落兜底", () => {
+    for (const tile of BOARD) {
+      expect(TILE_ICONS[tile.emoji], `${tile.name}（${tile.emoji}）没有专属图标`).toBeTruthy();
+    }
+  });
+
+  it("外层 svg：viewBox 0 0 20 20 + aria-hidden + focusable=false + se-tileicon 类", () => {
+    for (const key of KEYS) {
+      const svg = tileIconSVG(key);
+      expect(svg).toContain('viewBox="0 0 20 20"');
+      expect(svg).toContain('aria-hidden="true"');
+      expect(svg).toContain('focusable="false"');
+      expect(svg).toContain('class="se-tileicon"');
+    }
+  });
+
+  it("图标图形体内不携带任何 emoji 码位（矢量化彻底）", () => {
+    for (const key of KEYS) {
+      expect(EMOJI_RE.test(TILE_ICONS[key]), `${key} 的图标里混进了 emoji`).toBe(false);
+    }
+  });
+
+  it("全部图标两两互异（不是一款换色糊弄）", () => {
+    for (let a = 0; a < KEYS.length; a++) {
+      for (let b = a + 1; b < KEYS.length; b++) {
+        expect(TILE_ICONS[KEYS[a]], `${KEYS[a]} 和 ${KEYS[b]} 画重了`).not.toBe(TILE_ICONS[KEYS[b]]);
+      }
+    }
+  });
+
+  it("双色阶：每款至少两种不同颜色（主色 + shade/tint 派生）", () => {
+    for (const key of KEYS) {
+      const colors = new Set(
+        [...TILE_ICONS[key].matchAll(/(?:fill|stroke)="(#[0-9a-f]{6})"/g)].map((m) => m[1])
+      );
+      expect(colors.size, `${key} 只有一种颜色，缺双色阶`).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("色值全部是小写 #rrggbb（kit 调色板派生，无随手色）", () => {
+    for (const key of KEYS) {
+      const raw = [...TILE_ICONS[key].matchAll(/(?:fill|stroke)="([^"]+)"/g)]
+        .map((m) => m[1])
+        .filter((v) => v !== "none");
+      for (const v of raw) {
+        expect(v, `${key} 出现非法色值 ${v}`).toMatch(/^#[0-9a-f]{6}$/);
+      }
+    }
+  });
+
+  it("每款图标 2–8 个图元（克制构图，缩到 15px 不糊）", () => {
+    for (const key of KEYS) {
+      const n = (TILE_ICONS[key].match(/</g) ?? []).length;
+      expect(n, `${key} 图元数 ${n} 超出 2–8`).toBeGreaterThanOrEqual(2);
+      expect(n, `${key} 图元数 ${n} 超出 2–8`).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it("同一 emoji 的图标输出确定（多次调用逐字节一致，可放心 innerHTML 重绘）", () => {
+    expect(tileIconSVG("🌷")).toBe(tileIconSVG("🌷"));
+    expect(tileIconSVG("🚉")).toBe(tileIconSVG("🚉"));
+  });
+
+  it("四个车站共用同一款列车图标（同类同画法）", () => {
+    const stations = BOARD.filter((t) => t.kind === "station");
+    expect(stations.length).toBe(4);
+    const svgs = new Set(stations.map((t) => tileIconSVG(t.emoji)));
+    expect(svgs.size).toBe(1);
+  });
+
+  it("未登记 emoji 落金色四芒星兜底，不抛、不空白", () => {
+    const svg = tileIconSVG("🛸");
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).toContain(KIT_PALETTE.starGold);
+    expect(svg).toContain("<polygon");
+  });
+
+  it("图标风格与既有地格件同族：至少一款用到 starGold、一款用到 grass 系", () => {
+    const all = KEYS.map((k) => TILE_ICONS[k]).join("");
+    expect(all).toContain(KIT_PALETTE.starGold);
+    expect(all).toContain(KIT_PALETTE.grass);
+    expect(all).toContain(KIT_PALETTE.lilac);
+  });
+
+  it("图标覆盖数 ≥ board 去重 emoji 数（33 款上下，只多不少）", () => {
+    const distinct = new Set(BOARD.map((t) => t.emoji));
+    expect(KEYS.length).toBeGreaterThanOrEqual(distinct.size);
   });
 });

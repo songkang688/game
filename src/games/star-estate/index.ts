@@ -73,6 +73,7 @@ import {
   rippleTexSVG,
   roofSVG,
   stampSVG,
+  tileIconSVG,
   tokenKindOf,
   tokenSVG
 } from "./art";
@@ -133,7 +134,9 @@ const CSS = `
 .se-tile{position:relative;border:none;border-radius:6px;background:#fffdf8;padding:1px;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-family:inherit;
   overflow:hidden;min-width:0;min-height:0;}
-.se-tile-emoji{font-size:clamp(14px,2.2vw,15px);line-height:1;position:relative;z-index:1;}
+/* 地格主题图标（1.3 r1 G-6 修复）：kit 风格矢量小图标替代裸 emoji，字形不随系统漂移 */
+.se-tile-icon{width:clamp(15px,2.6vw,17px);line-height:0;position:relative;z-index:1;}
+.se-tile-icon svg{width:100%;height:auto;display:block;}
 .se-tile-price{display:flex;align-items:center;gap:2px;font-size:var(--mt-control,14px);font-weight:800;
   color:#8a6a44;line-height:1.1;position:relative;z-index:1;}
 .se-tile-price .se-cointag{width:9px;height:9px;flex:none;}
@@ -700,7 +703,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): Table {
       const drop = dropFx !== null && dropFx.pos === tile.pos;
       el.innerHTML = `${band ? `<span class="se-tile-roof">${roofSVG(band)}</span>` : ""}
         ${tile.kind === "station" ? `<span class="se-tile-tex">${railTexSVG()}</span>` : tile.kind === "util" ? `<span class="se-tile-tex">${rippleTexSVG()}</span>` : ""}
-        <span class="se-tile-emoji">${tile.emoji}</span>
+        <span class="se-tile-icon">${tileIconSVG(tile.emoji)}</span>
         ${price ? `<span class="se-tile-price">${coinTagSVG()}<b>${price}</b></span>` : ""}
         ${
           st.houses > 0
@@ -716,7 +719,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): Table {
       el.classList.toggle("se-tile-sel", tile.pos === selected);
       el.setAttribute(
         "aria-label",
-        `${tile.name}${tile.price ? `，售价 ${tile.price} 星币` : ""}${owner !== BANK ? `，主人是${state.players[owner].name}` : ""}${
+        `${tile.emoji} ${tile.name}${tile.price ? `，售价 ${tile.price} 星币` : ""}${owner !== BANK ? `，主人是${state.players[owner].name}` : ""}${
           st.houses > 0 ? `，${housesLabel(st.houses)}` : ""
         }${st.mortgaged ? "，抵押中" : ""}`
       );

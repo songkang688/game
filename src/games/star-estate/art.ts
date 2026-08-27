@@ -395,6 +395,265 @@ export function stampSVG(): string {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 地格主题图标（1.3 r1 修复 G-6 / learner P1）：
+// 棋盘格上的裸 emoji 改为 kit 风格矢量小图标，与 houseSVG / coinSVG 同族。
+// 统一规格：viewBox 0 0 20 20、四周留白 ≥ 2px、线宽 ~1.6、每款 ≤ 8 个图元、
+// 双色阶（主色 + shade / tint 派生），色板只用 KIT_PALETTE 推导。
+// emoji 字符本身转入按钮 aria-label，不再直接渲染（字形不再随系统漂移）。
+// ---------------------------------------------------------------------------
+
+const P = KIT_PALETTE;
+
+/** 图标图形体（不含外层 <svg>）；键 = board.ts 用到的全部地格 emoji */
+export const TILE_ICONS: Readonly<Record<string, string>> = {
+  // 出发花园 · 郁金香
+  "🌷":
+    `<path d="M 10 10.6 L 10 17" stroke="${P.grassDeep}" stroke-width="1.6" stroke-linecap="round" fill="none"/>` +
+    `<path d="M 10 14.4 Q 6.4 13.6 5.2 10.6" stroke="${P.grassDeep}" stroke-width="1.6" stroke-linecap="round" fill="none"/>` +
+    `<path d="M 6 3.8 Q 6 9.6 10 10.2 Q 14 9.6 14 3.8 Q 12 6 10 3.6 Q 8 6 6 3.8 Z" fill="${P.candyDeep}"/>` +
+    `<path d="M 6 3.8 Q 6 9.6 10 10.2 L 10 3.6 Q 8 6 6 3.8 Z" fill="${shade(P.candyDeep, 0.22)}" opacity=".4"/>`,
+  // 棉花巷·软软角 · 毛线团
+  "🧶":
+    `<circle cx="9.4" cy="10.4" r="6.4" fill="${P.lilac}"/>` +
+    `<path d="M 3.6 8.4 Q 9.4 5.4 15.2 8.4" stroke="${shade(P.lilac, 0.3)}" stroke-width="1.4" fill="none" stroke-linecap="round"/>` +
+    `<path d="M 3.4 11.6 Q 9.4 9 15.4 11.6" stroke="${shade(P.lilac, 0.3)}" stroke-width="1.4" fill="none" stroke-linecap="round"/>` +
+    `<path d="M 6 15.2 Q 9.4 12.6 13 15.4" stroke="${shade(P.lilac, 0.3)}" stroke-width="1.4" fill="none" stroke-linecap="round"/>` +
+    `<path d="M 14.8 13 Q 17.2 14.2 17.4 16.6" stroke="${shade(P.lilac, 0.3)}" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+    `<ellipse cx="6.8" cy="7" rx="2" ry="1.1" fill="${tint(P.lilac, 0.5)}" transform="rotate(-28 6.8 7)"/>`,
+  // 命运信箱 · 爱心信封
+  "💌":
+    `<rect x="3" y="5.4" width="14" height="10" rx="1.6" fill="${tint(P.peach, 0.45)}" stroke="${shade(P.peach, 0.3)}" stroke-width="1"/>` +
+    `<path d="M 3.6 6.4 L 10 11.2 L 16.4 6.4" fill="none" stroke="${shade(P.peach, 0.3)}" stroke-width="1.4" stroke-linecap="round"/>` +
+    `<circle cx="8.9" cy="11.9" r="1.2" fill="${P.candyDeep}"/>` +
+    `<circle cx="11.1" cy="11.9" r="1.2" fill="${P.candyDeep}"/>` +
+    `<path d="M 7.8 12.5 L 10 14.9 L 12.2 12.5 Z" fill="${P.candyDeep}"/>`,
+  // 棉花巷·晒被场 · 洗衣篮
+  "🧺":
+    `<path d="M 6 6.4 Q 10 2.8 14 6.4" fill="none" stroke="${shade(P.woodLight, 0.3)}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<path d="M 3.4 7 L 16.6 7 L 15 16.2 Q 10 17.4 5 16.2 Z" fill="${P.woodLight}"/>` +
+    `<path d="M 3.4 7 L 16.6 7 L 16.2 9.4 L 3.8 9.4 Z" fill="${shade(P.woodLight, 0.25)}"/>` +
+    `<path d="M 7 9.8 L 7.6 15.8 M 10 10 L 10 16.2 M 13 9.8 L 12.4 15.8" stroke="${shade(P.woodLight, 0.25)}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`,
+  // 星币税亭 · 单据
+  "🧾":
+    `<path d="M 5.4 2.8 L 14.6 2.8 L 14.6 16 L 13 14.8 L 11.4 16.2 L 10 14.8 L 8.6 16.2 L 7 14.8 L 5.4 16 Z" fill="${P.cloud}" stroke="${P.stone}" stroke-width="1"/>` +
+    `<path d="M 7.4 6 L 12.6 6 M 7.4 8.6 L 12.6 8.6 M 7.4 11.2 L 10.6 11.2" stroke="${shade(P.stone, 0.3)}" stroke-width="1.4" stroke-linecap="round" fill="none"/>` +
+    `<circle cx="12.6" cy="11.6" r="1.5" fill="${P.starGold}"/>`,
+  // 车站 · Q 版列车头
+  "🚉":
+    `<rect x="4" y="3.4" width="12" height="11" rx="2.6" fill="${P.gem}"/>` +
+    `<rect x="4" y="10.6" width="12" height="3.8" rx="1.6" fill="${shade(P.gem, 0.25)}"/>` +
+    `<rect x="6.2" y="5.4" width="7.6" height="4" rx="1.4" fill="${tint(P.sky, 0.55)}"/>` +
+    `<circle cx="7" cy="16.2" r="1.6" fill="${P.ink}"/>` +
+    `<circle cx="13" cy="16.2" r="1.6" fill="${P.ink}"/>` +
+    `<circle cx="10" cy="12.6" r="1" fill="${P.lemon}"/>`,
+  // 汽水街·气泡口 · 汽水杯
+  "🥤":
+    `<line x1="12.6" y1="2.6" x2="10.8" y2="6.4" stroke="${P.coral}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<path d="M 5.6 6.4 L 14.4 6.4 L 13.2 17 L 6.8 17 Z" fill="${P.mint}"/>` +
+    `<path d="M 5.6 6.4 L 14.4 6.4 L 14.1 9 L 5.9 9 Z" fill="${shade(P.mint, 0.22)}"/>` +
+    `<path d="M 8 10.6 L 7.8 15.2" stroke="${tint(P.mint, 0.6)}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`,
+  // 机会转盘 · 摩天轮
+  "🎡":
+    `<circle cx="10" cy="9" r="6" fill="none" stroke="${shade(P.lilac, 0.25)}" stroke-width="1.6"/>` +
+    `<path d="M 10 3 L 10 15 M 4 9 L 16 9 M 5.8 4.8 L 14.2 13.2 M 14.2 4.8 L 5.8 13.2" stroke="${shade(P.lilac, 0.25)}" stroke-width="1" fill="none"/>` +
+    `<circle cx="10" cy="9" r="1.4" fill="${P.coral}"/>` +
+    `<circle cx="10" cy="3" r="1.5" fill="${P.candy}"/>` +
+    `<circle cx="16" cy="9" r="1.5" fill="${P.lemon}"/>` +
+    `<circle cx="10" cy="15" r="1.5" fill="${P.mint}"/>` +
+    `<circle cx="4" cy="9" r="1.5" fill="${P.sky}"/>` +
+    `<path d="M 7 17.4 L 10 13.6 L 13 17.4" fill="none" stroke="${shade(P.lilac, 0.35)}" stroke-width="1.6" stroke-linecap="round"/>`,
+  // 汽水街·冰块铺 · 冰块
+  "🧊":
+    `<rect x="3.6" y="4.6" width="12.8" height="12" rx="2.4" fill="${tint(P.sky, 0.35)}" stroke="${shade(P.sky, 0.25)}" stroke-width="1.2"/>` +
+    `<path d="M 6.4 13.6 L 10.4 7 M 12.6 13.4 L 9.8 9" stroke="${P.cloud}" stroke-width="1.6" stroke-linecap="round" fill="none" opacity=".9"/>` +
+    `<ellipse cx="7" cy="7" rx="2.2" ry="1.2" fill="${P.cloud}" opacity=".8" transform="rotate(-24 7 7)"/>`,
+  // 汽水街·柠檬摊 · 柠檬
+  "🍋":
+    `<ellipse cx="10" cy="11" rx="6.4" ry="4.6" fill="${P.lemon}" transform="rotate(-18 10 11)"/>` +
+    `<circle cx="4.6" cy="13" r="1.2" fill="${shade(P.lemon, 0.18)}"/>` +
+    `<circle cx="15.4" cy="9" r="1.2" fill="${shade(P.lemon, 0.18)}"/>` +
+    `<ellipse cx="7.4" cy="9.2" rx="2.2" ry="1.1" fill="${tint(P.lemon, 0.55)}" transform="rotate(-22 7.4 9.2)"/>` +
+    `<path d="M 13.4 5.2 Q 15.8 3.2 17 4.6 Q 15.6 6.4 13.4 5.2 Z" fill="${P.grass}"/>`,
+  // 休息亭 · 遮阳伞
+  "⛱️":
+    `<path d="M 3.4 9.4 Q 10 2.4 16.6 9.4 Z" fill="${P.coral}"/>` +
+    `<path d="M 6.4 9.4 Q 8.4 4.6 10 4.2 Q 11.6 4.6 13.6 9.4 Z" fill="${P.cloud}"/>` +
+    `<path d="M 3.4 9.4 Q 10 2.4 16.6 9.4" fill="none" stroke="${shade(P.coral, 0.3)}" stroke-width="1"/>` +
+    `<line x1="10" y1="9.4" x2="10" y2="16.6" stroke="${P.cocoa}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<path d="M 4.4 17 Q 10 15.4 15.6 17" stroke="${P.peach}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,
+  // 彩虹滨·贝壳滩 · 贝壳
+  "🐚":
+    `<path d="M 10 16.4 L 4.2 7.4 Q 7 3.2 10 3.2 Q 13 3.2 15.8 7.4 Z" fill="${P.peach}"/>` +
+    `<path d="M 10 16.4 L 6.2 5.2 M 10 16.4 L 10 3.6 M 10 16.4 L 13.8 5.2" stroke="${shade(P.peach, 0.28)}" stroke-width="1.2" fill="none" stroke-linecap="round"/>` +
+    `<ellipse cx="8" cy="6.6" rx="1.6" ry=".9" fill="${tint(P.peach, 0.55)}" transform="rotate(-30 8 6.6)"/>`,
+  // 喷泉站 · 喷泉
+  "⛲":
+    `<path d="M 4 13 L 16 13 L 15 16.6 L 5 16.6 Z" fill="${P.stone}"/>` +
+    `<path d="M 4 13 L 16 13 L 15.7 14.2 L 4.3 14.2 Z" fill="${shade(P.stone, 0.22)}"/>` +
+    `<rect x="8.8" y="8.4" width="2.4" height="4.6" rx="1" fill="${shade(P.stone, 0.15)}"/>` +
+    `<circle cx="10" cy="7.4" r="1.3" fill="${tint(P.gem, 0.4)}"/>` +
+    `<path d="M 10 7 Q 5.6 8.4 5.4 12.6 M 10 7 Q 14.4 8.4 14.6 12.6" fill="none" stroke="${P.gem}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<circle cx="6.2" cy="6.2" r=".8" fill="${tint(P.gem, 0.5)}"/>` +
+    `<circle cx="13.8" cy="6.2" r=".8" fill="${tint(P.gem, 0.5)}"/>`,
+  // 彩虹滨·浪花道 · 卷浪
+  "🌊":
+    `<path d="M 3.2 16 Q 3.2 6.6 10.4 5 Q 15.8 4 16.8 8.2 Q 13.4 7.6 12.4 10 Q 16.2 10.4 16.6 13.6 L 16.6 16 Z" fill="${P.gem}"/>` +
+    `<path d="M 4.8 16 Q 5.4 9.6 10.6 7.6" fill="none" stroke="${tint(P.gem, 0.5)}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<circle cx="15" cy="5" r="1.1" fill="${tint(P.gem, 0.55)}"/>` +
+    `<circle cx="17" cy="7" r=".8" fill="${tint(P.gem, 0.55)}"/>` +
+    `<path d="M 3.2 16 L 16.6 16" stroke="${shade(P.gem, 0.25)}" stroke-width="1.4" stroke-linecap="round"/>`,
+  // 彩虹滨·灯塔角 · 灯塔
+  "🗼":
+    `<path d="M 7.6 7 L 12.4 7 L 14 16.6 L 6 16.6 Z" fill="${P.cloud}"/>` +
+    `<path d="M 7.2 9.6 L 12.8 9.6 L 13.3 12 L 6.9 12 Z" fill="${P.coral}"/>` +
+    `<path d="M 6.4 14.2 L 13.6 14.2 L 14 16.6 L 6 16.6 Z" fill="${P.coral}"/>` +
+    `<rect x="7.6" y="4.2" width="4.8" height="2.8" rx=".8" fill="${shade(P.coral, 0.3)}"/>` +
+    `<circle cx="10" cy="5.6" r="1" fill="${P.lemon}"/>` +
+    `<path d="M 5 3.4 L 6.8 4.8 M 15 3.4 L 13.2 4.8" stroke="${P.lemon}" stroke-width="1.4" stroke-linecap="round" fill="none"/>`,
+  // 风车坡·麦浪弯 · 麦穗
+  "🌾":
+    `<path d="M 10 17 L 10 5" stroke="${shade(P.starGold, 0.3)}" stroke-width="1.4" stroke-linecap="round" fill="none"/>` +
+    `<ellipse cx="7.8" cy="6.8" rx="2.4" ry="1.2" fill="${P.starGold}" transform="rotate(-38 7.8 6.8)"/>` +
+    `<ellipse cx="12.2" cy="6.8" rx="2.4" ry="1.2" fill="${P.starGold}" transform="rotate(38 12.2 6.8)"/>` +
+    `<ellipse cx="7.6" cy="9.8" rx="2.4" ry="1.2" fill="${shade(P.starGold, 0.15)}" transform="rotate(-38 7.6 9.8)"/>` +
+    `<ellipse cx="12.4" cy="9.8" rx="2.4" ry="1.2" fill="${shade(P.starGold, 0.15)}" transform="rotate(38 12.4 9.8)"/>` +
+    `<ellipse cx="10" cy="4.4" rx="1.3" ry="2" fill="${tint(P.starGold, 0.3)}"/>`,
+  // 风车坡·转叶台 · 纸风车
+  "🌀":
+    `<path d="M 10 10 Q 9 4.4 13.6 3.6 Q 13.8 8.2 10 10 Z" fill="${P.sky}" transform="rotate(0 10 10)"/>` +
+    `<path d="M 10 10 Q 9 4.4 13.6 3.6 Q 13.8 8.2 10 10 Z" fill="${shade(P.sky, 0.2)}" transform="rotate(90 10 10)"/>` +
+    `<path d="M 10 10 Q 9 4.4 13.6 3.6 Q 13.8 8.2 10 10 Z" fill="${P.sky}" transform="rotate(180 10 10)"/>` +
+    `<path d="M 10 10 Q 9 4.4 13.6 3.6 Q 13.8 8.2 10 10 Z" fill="${shade(P.sky, 0.2)}" transform="rotate(270 10 10)"/>` +
+    `<circle cx="10" cy="10" r="1.6" fill="${P.coral}"/>`,
+  // 风车坡·面粉坊 · 面包
+  "🍞":
+    `<path d="M 3.6 9 Q 3.6 4.6 10 4.6 Q 16.4 4.6 16.4 9 L 16.4 14.2 Q 16.4 15.6 15 15.6 L 5 15.6 Q 3.6 15.6 3.6 14.2 Z" fill="${P.woodLight}"/>` +
+    `<path d="M 5.4 9.6 Q 5.4 7 10 7 Q 14.6 7 14.6 9.6 L 14.6 15.6 L 5.4 15.6 Z" fill="${tint(P.peach, 0.5)}"/>` +
+    `<ellipse cx="6.6" cy="6.2" rx="1.6" ry=".8" fill="${tint(P.woodLight, 0.45)}" transform="rotate(-20 6.6 6.2)"/>` +
+    `<circle cx="9" cy="11.4" r=".8" fill="${shade(P.peach, 0.2)}"/>` +
+    `<circle cx="12" cy="13" r=".7" fill="${shade(P.peach, 0.2)}"/>`,
+  // 朵朵公园 · 山丘与太阳
+  "🏞️":
+    `<circle cx="14" cy="6.4" r="2.4" fill="${P.lemon}"/>` +
+    `<path d="M 3 14.6 L 8 7.4 L 12.4 14.6 Z" fill="${P.grassDeep}"/>` +
+    `<path d="M 9.4 14.6 L 13.2 9.4 L 17 14.6 Z" fill="${P.grass}"/>` +
+    `<path d="M 3 15.8 Q 10 14 17 15.8" stroke="${P.grass}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`,
+  // 星糖路·棉花糖摊 · 糖果
+  "🍬":
+    `<ellipse cx="10" cy="9.8" rx="4.2" ry="3.6" fill="${P.candy}"/>` +
+    `<path d="M 6 9 L 2.8 6.6 L 3.4 12.4 Z" fill="${shade(P.candy, 0.15)}"/>` +
+    `<path d="M 14 9 L 17.2 6.6 L 16.6 12.4 Z" fill="${shade(P.candy, 0.15)}"/>` +
+    `<path d="M 8.4 7.8 Q 10 7 11.6 7.8 M 8.4 11.8 Q 10 12.6 11.6 11.8" stroke="${shade(P.candy, 0.25)}" stroke-width="1.1" fill="none" stroke-linecap="round"/>` +
+    `<ellipse cx="8.4" cy="8.6" rx="1.4" ry=".8" fill="${tint(P.candy, 0.6)}" transform="rotate(-24 8.4 8.6)"/>`,
+  // 星糖路·焦糖角 · 布丁
+  "🍮":
+    `<ellipse cx="10" cy="15" rx="7" ry="1.8" fill="${tint(P.stone, 0.35)}"/>` +
+    `<path d="M 4.8 14.8 Q 5.2 7 10 7 Q 14.8 7 15.2 14.8 Z" fill="${P.lemon}"/>` +
+    `<path d="M 5.5 10 Q 7 11.6 8.4 10.6 Q 10 12.4 11.6 10.6 Q 13 11.6 14.5 10 Q 14.4 7.4 10 7 Q 5.6 7.4 5.5 10 Z" fill="${shade(P.woodLight, 0.1)}"/>` +
+    `<ellipse cx="8" cy="8.6" rx="1.4" ry=".7" fill="${tint(P.lemon, 0.6)}"/>`,
+  // 星糖路·糖霜坊 · 纸杯蛋糕
+  "🧁":
+    `<path d="M 5 11 L 15 11 L 13.6 16.8 L 6.4 16.8 Z" fill="${P.coral}"/>` +
+    `<path d="M 7.4 11.2 L 8 16.6 M 10 11.2 L 10 16.8 M 12.6 11.2 L 12 16.6" stroke="${shade(P.coral, 0.25)}" stroke-width="1.1" fill="none"/>` +
+    `<circle cx="7" cy="9.2" r="2.6" fill="${P.cloud}"/>` +
+    `<circle cx="13" cy="9.2" r="2.6" fill="${P.cloud}"/>` +
+    `<circle cx="10" cy="7.6" r="3" fill="${P.cloud}"/>` +
+    `<rect x="4.6" y="9" width="10.8" height="2.2" fill="${P.cloud}"/>` +
+    `<circle cx="10" cy="3.5" r="1.3" fill="${P.candyDeep}"/>`,
+  // 图书馆大街·绘本厅 · 一摞书
+  "📚":
+    `<rect x="4" y="4" width="12" height="3.6" rx="1" fill="${P.coral}"/>` +
+    `<rect x="4" y="4" width="2" height="3.6" rx="1" fill="${shade(P.coral, 0.25)}"/>` +
+    `<rect x="3.4" y="7.6" width="13.2" height="3.6" rx="1" fill="${P.gem}"/>` +
+    `<rect x="3.4" y="7.6" width="2" height="3.6" rx="1" fill="${shade(P.gem, 0.25)}"/>` +
+    `<rect x="4.4" y="11.2" width="12.4" height="3.6" rx="1" fill="${P.grass}"/>` +
+    `<rect x="4.4" y="11.2" width="2" height="3.6" rx="1" fill="${shade(P.grass, 0.25)}"/>`,
+  // 图书馆大街·手抄室 · 钢笔尖
+  "✒️":
+    `<path d="M 10 3.4 Q 14.6 7.6 13.6 12 Q 12.6 15 10 16.4 Q 7.4 15 6.4 12 Q 5.4 7.6 10 3.4 Z" fill="${P.stone}"/>` +
+    `<path d="M 10 16.4 L 10 9.4" stroke="${shade(P.stone, 0.35)}" stroke-width="1.2" stroke-linecap="round" fill="none"/>` +
+    `<circle cx="10" cy="9" r="1.3" fill="${shade(P.stone, 0.35)}"/>` +
+    `<path d="M 8 5.6 Q 6.8 8 7 10.4" stroke="${tint(P.stone, 0.5)}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`,
+  // 风车站 · 三缕轻风
+  "🌬️":
+    `<path d="M 3.4 6.6 L 12 6.6 Q 15 6.6 15 4.4 Q 15 2.8 13.2 2.8" fill="none" stroke="${P.sky}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<path d="M 3.4 10.6 L 15.2 10.6 Q 17.6 10.6 17.6 12.8 Q 17.6 14.6 15.4 14.6" fill="none" stroke="${shade(P.sky, 0.2)}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<path d="M 3.4 14.8 L 10.4 14.8 Q 12.6 14.8 12.6 16.6" fill="none" stroke="${P.sky}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<circle cx="16.4" cy="5" r=".9" fill="${tint(P.sky, 0.4)}"/>`,
+  // 图书馆大街·朗读廊 · 朗读气泡
+  "🗣️":
+    `<path d="M 3.4 4.6 Q 3.4 3 5 3 L 15 3 Q 16.6 3 16.6 4.6 L 16.6 10.4 Q 16.6 12 15 12 L 9 12 L 5.6 15.4 L 6.2 12 L 5 12 Q 3.4 12 3.4 10.4 Z" fill="${P.lilac}"/>` +
+    `<path d="M 6.4 6 L 13.6 6 M 6.4 8.8 L 11.6 8.8" stroke="${shade(P.lilac, 0.35)}" stroke-width="1.4" stroke-linecap="round" fill="none"/>` +
+    `<path d="M 9.4 15.8 Q 13 17.6 16.6 15.8" stroke="${shade(P.lilac, 0.2)}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`,
+  // 反思角 · 小椅子
+  "🪑":
+    `<rect x="5.6" y="3.2" width="8.8" height="6.4" rx="1.6" fill="${P.woodLight}"/>` +
+    `<rect x="6.6" y="4.4" width="6.8" height="4" rx="1" fill="${tint(P.woodLight, 0.35)}"/>` +
+    `<rect x="4.8" y="9.8" width="10.4" height="2.6" rx="1.2" fill="${shade(P.woodLight, 0.2)}"/>` +
+    `<path d="M 6.2 12.6 L 5.8 16.8 M 13.8 12.6 L 14.2 16.8" stroke="${shade(P.woodLight, 0.3)}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`,
+  // 天文台坡·望远镜台 · 望远镜
+  "🔭":
+    `<rect x="3.4" y="7.8" width="11.4" height="3.6" rx="1.8" fill="${P.lilac}" transform="rotate(-24 9 9.6)"/>` +
+    `<rect x="13.6" y="9.4" width="3" height="2.6" rx="1" fill="${shade(P.lilac, 0.3)}" transform="rotate(-24 15 10.6)"/>` +
+    `<path d="M 9.6 12.4 L 6.8 17 M 9.6 12.4 L 12.6 17" stroke="${P.cocoa}" stroke-width="1.5" stroke-linecap="round" fill="none"/>` +
+    `<polygon points="${starPts(15.8, 3.8, 1.8, 0.8, 4)}" fill="${P.starGold}"/>`,
+  // 天文台坡·星图室 · 地图
+  "🗺️":
+    `<path d="M 3.4 5.2 L 8 3.8 L 12 5.2 L 16.6 3.8 L 16.6 14.8 L 12 16.2 L 8 14.8 L 3.4 16.2 Z" fill="${P.mint}"/>` +
+    `<path d="M 8 3.8 L 8 14.8 M 12 5.2 L 12 16.2" stroke="${shade(P.mint, 0.22)}" stroke-width="1" fill="none"/>` +
+    `<path d="M 5.4 12.6 Q 8 8.4 11 10.4 Q 13.6 12 14.8 7" fill="none" stroke="${P.coral}" stroke-width="1.3" stroke-dasharray="2 1.6" stroke-linecap="round"/>` +
+    `<circle cx="14.8" cy="6.6" r="1.2" fill="${P.coral}"/>`,
+  // 天文台坡·流星坪 · 流星
+  "☄️":
+    `<path d="M 16.6 3.4 L 6.8 9.4 L 9.4 11.4 Z" fill="${tint(P.starGold, 0.5)}" opacity=".8"/>` +
+    `<path d="M 17 6.4 L 9.8 11.6 L 11.6 13 Z" fill="${tint(P.starGold, 0.65)}" opacity=".7"/>` +
+    `<circle cx="7.8" cy="12.2" r="4.2" fill="${P.starGold}"/>` +
+    `<circle cx="6.4" cy="10.8" r="1.4" fill="${tint(P.starGold, 0.6)}"/>` +
+    `<circle cx="9.2" cy="13.6" r=".9" fill="${shade(P.starGold, 0.22)}"/>`,
+  // 月亮广场·银河阶 · 旋臂星河
+  "🌌":
+    `<path d="M 10 4.2 Q 15.8 4.6 16 9.6 Q 16.2 14 11.4 14.4 Q 8 14.6 7.8 11.8 Q 7.6 9.4 10 9.2 Q 12 9 12.2 10.8" fill="none" stroke="${P.lilac}" stroke-width="1.8" stroke-linecap="round"/>` +
+    `<path d="M 10 4.2 Q 4.4 4.8 4 9.8 Q 3.8 13 6 15" fill="none" stroke="${shade(P.lilac, 0.22)}" stroke-width="1.8" stroke-linecap="round"/>` +
+    `<polygon points="${starPts(15.4, 15.2, 1.9, 0.85, 4)}" fill="${P.starGold}"/>` +
+    `<circle cx="4.6" cy="15.6" r=".9" fill="${P.starGold}"/>` +
+    `<circle cx="16.2" cy="3.6" r=".8" fill="${tint(P.lilac, 0.4)}"/>`,
+  // 图书捐箱 · 爱心纸箱
+  "📦":
+    `<rect x="3.6" y="6.4" width="12.8" height="10.2" rx="1.4" fill="${P.woodLight}"/>` +
+    `<rect x="3.6" y="6.4" width="12.8" height="3" rx="1.4" fill="${shade(P.woodLight, 0.2)}"/>` +
+    `<rect x="9.1" y="6.4" width="1.8" height="10.2" fill="${tint(P.woodLight, 0.45)}"/>` +
+    `<circle cx="5.9" cy="12.3" r="1" fill="${P.candyDeep}"/>` +
+    `<circle cx="7.5" cy="12.3" r="1" fill="${P.candyDeep}"/>` +
+    `<path d="M 5 12.9 L 6.7 14.9 L 8.4 12.9 Z" fill="${P.candyDeep}"/>`,
+  // 月亮广场·满月顶 · 满月
+  "🌕":
+    `<circle cx="10" cy="10" r="7" fill="${P.lemon}"/>` +
+    `<circle cx="10" cy="10" r="7" fill="none" stroke="${shade(P.lemon, 0.25)}" stroke-width="1"/>` +
+    `<circle cx="7.2" cy="8" r="1.7" fill="${shade(P.lemon, 0.14)}"/>` +
+    `<circle cx="12.6" cy="12.6" r="2.3" fill="${shade(P.lemon, 0.14)}"/>` +
+    `<circle cx="12" cy="6.8" r="1" fill="${shade(P.lemon, 0.14)}"/>` +
+    `<ellipse cx="6.8" cy="6" rx="2" ry="1" fill="${tint(P.lemon, 0.6)}" transform="rotate(-30 6.8 6)"/>`
+};
+
+/** 未登记 emoji 的兜底图标：金色四芒星（不抛、不空白） */
+const TILE_ICON_FALLBACK =
+  `<polygon points="${starPts(10, 10, 6.6, 2.6, 4)}" fill="${P.starGold}"/>` +
+  `<polygon points="${starPts(10, 9.4, 3.6, 1.5, 4)}" fill="${tint(P.starGold, 0.5)}"/>`;
+
+/**
+ * 地格主题图标：给 board.ts 的地格 emoji 返回同义的 kit 风格矢量小图标。
+ * 未知 emoji 落到金色四芒星兜底，绝不返回空串。
+ */
+export function tileIconSVG(emoji: string): string {
+  const body = TILE_ICONS[emoji] ?? TILE_ICON_FALLBACK;
+  return (
+    `<svg viewBox="0 0 20 20" class="se-tileicon" aria-hidden="true" focusable="false">` +
+    body +
+    `</svg>`
+  );
+}
+
 export interface ResultBarRow {
   name: string;
   color: string;

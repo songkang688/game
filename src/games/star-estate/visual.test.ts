@@ -101,6 +101,25 @@ describe("视觉契约 2 · 骰子", () => {
   });
 });
 
+describe("视觉契约 2.5 · 地格图标（G-6 修复）", () => {
+  it("棋盘格渲染 kit 风格矢量图标而非裸 emoji，emoji 转入 aria-label", () => {
+    const h = setup();
+    const table = mount(h, []);
+    cleanup.push(() => table.destroy());
+    const tiles = byClass(h.root, "se-tile");
+    expect(tiles.length).toBe(40);
+    for (const tile of tiles) {
+      expect(tile.innerHTML).toContain("se-tileicon");
+      expect(tile.innerHTML).not.toContain("se-tile-emoji");
+    }
+    // 出发花园（0 号格）：图标是 SVG，郁金香 emoji 只活在 aria-label 里
+    expect(tiles[0].innerHTML).toContain("<svg");
+    expect(tiles[0].innerHTML).not.toContain("🌷");
+    expect(tiles[0].getAttribute("aria-label")).toContain("🌷");
+    expect(tiles[0].getAttribute("aria-label")).toContain("出发花园");
+  });
+});
+
 describe("视觉契约 3 · 房屋", () => {
   it("houses=3 渲染 3 个小房子，满级渲染酒店节点", () => {
     const h = setup();
