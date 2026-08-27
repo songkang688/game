@@ -18,6 +18,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mount } from "./index";
 import { El, fireWindow, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
+import GUIDE from "./guide";
 
 let dom: Dom;
 
@@ -47,6 +48,13 @@ function fakeApi() {
 function byText(part: string): El | null {
   const hits = dom.root.findAll((e) => e.tagName === "button" && e.textContent.includes(part));
   return hits[hits.length - 1] ?? null;
+}
+
+/** 按住某个键跑几帧再松手 */
+function hold(code: string, frames: number): void {
+  fireWindow(dom, "keydown", { code });
+  flushFrames(dom, frames);
+  fireWindow(dom, "keyup", { code });
 }
 
 function css(): string {
@@ -230,16 +238,71 @@ describe("PA-FS-2 · 双人同屏键位互不抢占", () => {
     handle.destroy();
   });
 
-  it("【已知问题】规格里的 W / S 与 G / K 四个键都没接上", () => {
+  it("朵朵的 G 与星星的 K 把跑偏的落点收回盆正中央", () => {
+    const { handle, canvases } = openDuo();
+    const aim = (i: number): number => Number(canvases[i].getAttribute("data-aim"));
+    const center = [aim(0), aim(1)];
+    // 两个人各自把落点推到一边
+    hold("KeyD", 6);
+    hold("ArrowLeft", 6);
+    expect(aim(0), "朵朵的落点没挪动").toBeGreaterThan(center[0]);
+    expect(aim(1), "星星的落点没挪动").toBeLessThan(center[1]);
+
+    fireWindow(dom, "keydown", { code: "KeyG" });
+    flushFrames(dom, 2);
+    expect(aim(0), "G 没把朵朵的落点收回中间").toBeCloseTo(center[0], 1);
+    expect(aim(1), "G 顺手把星星的落点也拨了").toBeLessThan(center[1]);
+
+    fireWindow(dom, "keydown", { code: "KeyK" });
+    flushFrames(dom, 2);
+    expect(aim(1), "K 没把星星的落点收回中间").toBeCloseTo(center[1], 1);
+    handle.destroy();
+  });
+
+  it("归位键不投果子，只是把落点放回去", () => {
     const { handle, canvases } = openDuo();
     const before = canvases.map((c) => c.getAttribute("data-drops"));
-    for (const code of ["KeyW", "KeyS", "KeyG", "KeyK"]) {
+    for (const code of ["KeyG", "KeyK"]) {
       fireWindow(dom, "keydown", { code });
       flushFrames(dom, 3);
       fireWindow(dom, "keyup", { code });
     }
-    // 应有行为：至少 G / K 该是「收回这一次投放」之类的动作。现状：四个键都是空的。
-    expect(canvases.map((c) => c.getAttribute("data-drops"))).toEqual(before);
+    expect(canvases.map((c) => c.getAttribute("data-drops")), "归位键把果子投下去了").toEqual(before);
+    handle.destroy();
+  });
+
+  it("这一款只有左右：W / S 与上下方向键按了不动，攻略里也写明了不用记", () => {
+    const { handle, canvases } = openDuo();
+    const snap = (): string[] =>
+      canvases.map((c) => `${c.getAttribute("data-drops")}|${c.getAttribute("data-aim")}`);
+    const before = snap();
+    for (const code of ["KeyW", "KeyS", "ArrowUp", "ArrowDown"]) hold(code, 3);
+    expect(snap(), "上下键居然改动了盘面").toEqual(before);
+    const tips = GUIDE.general.concat(GUIDE.entries.flatMap((e) => e.tips)).join(" ");
+    expect(tips, "攻略里没写清这一款用不上上下键").toContain("W / S");
+    expect(tips, "攻略里没写清归位键").toMatch(/朵朵按 G、星星按 K/);
+    handle.destroy();
+  });
+
+  it("暂停期间投放键与归位键一概不接，恢复之后照旧管用", () => {
+    const { handle, canvases } = openDuo();
+    hold("KeyD", 6);
+    const aimBefore = canvases[0].getAttribute("data-aim");
+    fireWindow(dom, "keydown", { code: "Escape" });
+    expect(dom.root.find((e) => e.className.includes("fs-veil"))).not.toBeNull();
+    for (const code of ["KeyF", "KeyL", "KeyG", "KeyK"]) {
+      fireWindow(dom, "keydown", { code });
+      flushFrames(dom, 3);
+      fireWindow(dom, "keyup", { code });
+    }
+    fireWindow(dom, "keydown", { code: "Escape" });
+    flushFrames(dom, 3);
+    expect(canvases.map((c) => c.getAttribute("data-drops")), "暂停期间偷偷投下去了").toEqual(["0", "0"]);
+    expect(canvases[0].getAttribute("data-aim"), "暂停期间落点被归位键拨走了").toBe(aimBefore);
+    // 恢复之后一切照旧
+    fireWindow(dom, "keydown", { code: "KeyF" });
+    flushFrames(dom, 3);
+    expect(canvases[0].getAttribute("data-drops"), "恢复之后 F 不管用了").toBe("1");
     handle.destroy();
   });
 

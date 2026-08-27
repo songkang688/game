@@ -195,6 +195,8 @@ interface Bowl {
   render: () => void;
   layout: (widthPx: number) => void;
   moveAim: (dx: number) => void;
+  /** 取消这一次瞄准:落点收回盆正中央 */
+  centerAim: () => void;
   requestDrop: () => void;
   aimTo: (clientX: number) => void;
   /** 把这一盆的状态写成读屏文字挂到画布上 */
@@ -290,6 +292,11 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
   function moveAim(dx: number): void {
     const lvl = currentLevel();
     aimX = clampDropX(lv.box.w, lvl, aimX + dx);
+  }
+
+  /** 取消键:把落点收回盆正中央,不用一路按着 A / D 挪回来 */
+  function centerAim(): void {
+    aimX = clampDropX(lv.box.w, currentLevel(), lv.box.w / 2);
   }
 
   function aimTo(clientX: number): void {
@@ -496,6 +503,7 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     const big = CHAIN[clamp(world.bestLevel, 0, TOP_LEVEL)].name;
     const rest = opts.limited ? `剩${left()}颗` : "不限";
     const text = `${who}的果盆，${world.score}分，最大「${big}」，盆里${world.fruits.length}颗，${rest}${paused ? "，已暂停" : ""}`;
+    canvas.setAttribute("data-aim", aimX.toFixed(1));
     if (text === lastLabel) return;
     lastLabel = text;
     canvas.setAttribute("aria-label", text);
@@ -526,6 +534,7 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     render,
     layout,
     moveAim,
+    centerAim,
     requestDrop,
     aimTo,
     describe,
@@ -660,9 +669,14 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     }
     if (!KEY_CODES.has(ev.code)) return;
     ev.preventDefault();
+    // 暂停期间除了 Esc 一个键都不接:遮罩盖着的时候果子不该偷偷掉下去
+    if (paused || finished) return;
     held.add(ev.code);
     if (ev.code === "KeyF") bowls[0]?.requestDrop();
     if (ev.code === "KeyL" && opts.seats > 1 && !opts.ai) bowls[1]?.requestDrop();
+    // 取消键:朵朵 G、星星 K,把落点收回盆正中央(单盆时两个键都归朵朵)
+    if (ev.code === "KeyG") bowls[0]?.centerAim();
+    if (ev.code === "KeyK") bowls[opts.seats > 1 && !opts.ai ? 1 : 0]?.centerAim();
   });
   runtime.on<KeyboardEvent>(window, "keyup", (ev) => held.delete(ev.code));
   runtime.on(window, "blur", () => held.clear());
@@ -735,7 +749,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     pauseBtn.textContent = paused ? "▶ 继续" : "⏸ 暂停";
     if (paused) {
       held.clear();
-      showVeil("⏸ 歇一会儿", "按 Esc 或点「继续」接着摆。朵朵:A / D 移动,F 放下;星星:方向键移动,L 放下;手机直接在盆上拖动,松手就落。", [
+      showVeil("⏸ 歇一会儿", "按 Esc 或点「继续」接着摆。朵朵:A / D 移动,F 放下,G 落点归位;星星:方向键 + L / K;手机直接在盆上拖动,松手就落。", [
         { label: "▶ 继续", onClick: () => togglePause() },
       ]);
     } else {
@@ -821,7 +835,9 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
   };
 }
 
-const KEY_CODES = new Set(["KeyA", "KeyD", "KeyF", "KeyL", "ArrowLeft", "ArrowRight"]);
+// 这一款只有左右:朵朵 A / D 移动、F 放下、G 落点归位;星星 方向键 + L / K。
+// 上下(W / S 与 ↑ / ↓)在这一款里没有对应动作,攻略里写明了不用记。
+const KEY_CODES = new Set(["KeyA", "KeyD", "KeyF", "KeyG", "KeyK", "KeyL", "ArrowLeft", "ArrowRight"]);
 
 // ---------------------------------------------------------------------------
 // 文案
@@ -1009,7 +1025,7 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       banner: `第 ${round} 局`,
       tip: aiSkill
         ? `${lv.hint} 朵朵:A / D 移动,F 放下;手机直接在盆上拖。`
-        : `${lv.hint} 朵朵:A / D + F;星星:方向键 + L。`,
+        : `${lv.hint} 朵朵:A / D + F,G 归位;星星:方向键 + L,K 归位。`,
       sfx: (n) => api.play(n),
       onDone: (res) => roundOver(res.winner),
     });
