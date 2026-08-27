@@ -891,7 +891,14 @@ function mountVersus(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: ()
   let tier: AiTier = "normal";
   let round = 1;
   const wins = [0, 0];
+  /** 同分是平局:高档假人一下不差,孩子打满分也只能追平,这一格不能算在谁头上 */
+  let draws = 0;
   let stage: { destroy: () => void } | null = null;
+
+  function scoreLine(): string {
+    const drawPart = draws > 0 ? ` · 平 ${draws}` : "";
+    return `你 ${wins[0]} : ${wins[1]} ${TIER_NAMES[tier]}${drawPart}`;
+  }
 
   function pickPanel(): void {
     stage?.destroy();
@@ -931,7 +938,7 @@ function mountVersus(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: ()
   function startRound(): void {
     stage?.destroy();
     shell.stage.innerHTML = "";
-    shell.chip.textContent = `⚔️ 第 ${round} 局 · 你 ${wins[0]} : ${wins[1]} ${TIER_NAMES[tier]}`;
+    shell.chip.textContent = `⚔️ 第 ${round} 局 · ${scoreLine()}`;
     stage = createStage(shell.stage, {
       chart: matchChart(round),
       rules: { emptyRule: "combo", maxMiss: CAMPAIGN_MAX_MISS },
@@ -940,19 +947,32 @@ function mountVersus(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: ()
       sfx: (n) => api.play(n),
       tones,
       onDone: ({ state, rivalScore }) => {
-        const youWin = state.score > rivalScore;
-        if (youWin) {
+        // 赢仍旧是严格大于;分一样多就是平局,记在自己那一格里,不许说成「对手分高」
+        if (state.score > rivalScore) {
           wins[0]++;
           api.addStars(1);
-        } else {
+        } else if (state.score < rivalScore) {
           wins[1]++;
+        } else {
+          draws++;
+          api.addStars(1);
         }
+        const title =
+          state.score > rivalScore
+            ? "🏆 你赢下这一局!"
+            : state.score < rivalScore
+              ? "🤖 这局对手分高一点"
+              : "🤝 打成平手!";
+        const tail =
+          state.score > rivalScore
+            ? "手感正好,趁热再来一局。"
+            : state.score < rivalScore
+              ? "再稳一点连击就追回来了。"
+              : "一分不差地追平了,再来一局看谁先多出一个连击。";
         overPanel(
           shell.stage,
-          youWin ? "🏆 你赢下这一局!" : "🤖 这局对手分高一点",
-          `你 ${state.score} 分 · 对手 ${rivalScore} 分。最高 ${state.maxCombo} 连,${
-            youWin ? "手感正好,趁热再来一局。" : "再稳一点连击就追回来了。"
-          }`,
+          title,
+          `你 ${state.score} 分 · 对手 ${rivalScore} 分。最高 ${state.maxCombo} 连,${tail}`,
           "🔁 再来一局",
           () => {
             api.play("tap");
