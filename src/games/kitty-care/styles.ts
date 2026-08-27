@@ -188,7 +188,10 @@ export const KTC_CSS = `
 /* 相册与小屋摆设：360px 上两列，缩略图 ≥ 100px */
 .ktc-album{padding:8px;}
 .ktc-albumhead{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
-.ktc-grid{display:grid;grid-template-columns:repeat(2,minmax(100px,1fr));gap:10px;}
+/* 矮屏上由 scrollIntoStage() 逐档写 max-height / overflow-y；
+   这里先把「翻起来别把整页也带着走」和「手指竖划归它」定下来 */
+.ktc-grid{display:grid;grid-template-columns:repeat(2,minmax(100px,1fr));gap:10px;
+  overscroll-behavior:contain;touch-action:pan-y;}
 @media (min-width:520px){.ktc-grid{grid-template-columns:repeat(3,minmax(100px,1fr));}}
 .ktc-card{background:#fff;border-radius:16px;padding:8px;box-shadow:0 3px 8px rgba(160,110,40,.18);
   display:flex;flex-direction:column;align-items:center;gap:4px;min-height:132px;text-align:center;}

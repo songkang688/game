@@ -37,6 +37,7 @@ import {
   parseLevelParam,
   prefersReducedMotion,
   resolveInitialLevel,
+  scrollIntoStage,
   type Loop,
   type TimerHost
 } from "./runtime";
@@ -294,6 +295,8 @@ function mountAlbum(host: HTMLElement, api: GameApi, onBack: () => void): { dest
   const wrap = document.createElement("div");
   wrap.className = "ktc-album";
   host.appendChild(wrap);
+  /** 卡片那一格自己的滚动条；每次重画都换一块新的 grid，所以要跟着换 */
+  let gridFit: { relayout: () => void; dispose: () => void } | null = null;
 
   const draw = (): void => {
     wrap.textContent = "";
@@ -343,6 +346,11 @@ function mountAlbum(host: HTMLElement, api: GameApi, onBack: () => void): { dest
       grid.appendChild(card(piece));
     }
     wrap.appendChild(grid);
+    // 24 件一共 2809px，舞台只给 530–730px，而这一层原先没有任何可滚祖先，
+    // 后面 20–22 颗「⭐N 换回来」永远点不着（W5R2-C-03）。
+    // 只钳这一格：上面的「◀ 回选关」、四个位置、说明行钉着不动，翻的只有卡片。
+    gridFit?.dispose();
+    gridFit = scrollIntoStage(grid);
   };
 
   const card = (piece: AlbumPiece): HTMLElement => {
@@ -393,6 +401,8 @@ function mountAlbum(host: HTMLElement, api: GameApi, onBack: () => void): { dest
 
   return {
     destroy() {
+      gridFit?.dispose();
+      gridFit = null;
       life.destroy();
       wrap.remove();
     }

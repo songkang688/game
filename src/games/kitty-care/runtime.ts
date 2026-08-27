@@ -273,6 +273,57 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
   };
 }
 
+/** 长列表钳到这个高度以下就不值得再钳了——再矮连一张卡片都露不全 */
+export const LIST_MIN_ROOM = 160;
+
+/**
+ * 把一块**本来就该翻着看**的长列表钳进舞台看得见的那一段，并给它自己挂一条滚动条。
+ *
+ * 与 `fitIntoStage()` 的分工：那一份是「先收猫、收不下才滚」，为的是让整关不用滚
+ * （拖食物的手指一动就连带滚屏，比小一点的猫难用得多）；这一份**只做钳位与挂滚动条**，
+ * 给相册这种一屏本来就装不下的清单用。
+ *
+ * 为什么非做不可：小屋相册 24 件收藏一共 2809px 高，`.game-stage` 只给 530–730px，
+ * 裁掉 2183–2383px，而 `.ktc-album` 是 `overflow:visible / max-height:none`，
+ * **一个可滚祖先都没有**——真手指往上甩三次 `scrollTop` 一格没动，
+ * 24 颗 `⭐N 换回来` 里 20–22 颗永远点不着。星星兑换是相册唯一的主动玩法（W5R2-C-03 阻断）。
+ *
+ * 装得下就把值原样还回去，免得高屏上凭空多出一个滚动容器。
+ */
+export function scrollIntoStage(el: HTMLElement, minRoom = LIST_MIN_ROOM): { relayout: () => void; dispose: () => void } {
+  const view = el.ownerDocument?.defaultView ?? null;
+  const measurable = typeof el.getBoundingClientRect === "function" && !!view;
+  const reset = (): void => {
+    if (!measurable) return;
+    el.style.maxHeight = "";
+    el.style.overflowY = "";
+  };
+  const relayout = (): void => {
+    if (!measurable || !view) return;
+    reset();
+    const bottoms: number[] = [];
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = view.getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+    }
+    const room = visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+    // 量不到裁切线（高屏）或已经整块在裁切线以下（这时候钳只会把它压成一条缝）就不管
+    if (!Number.isFinite(room) || room < minRoom) return;
+    if (el.scrollHeight <= room + 1) return;
+    el.style.maxHeight = `${Math.floor(room)}px`;
+    el.style.overflowY = "auto";
+  };
+  relayout();
+  view?.addEventListener("resize", relayout);
+  return {
+    relayout,
+    dispose(): void {
+      view?.removeEventListener("resize", relayout);
+      reset();
+    }
+  };
+}
+
 /** 这台设备想要静一点的动画吗（呼吸、尾巴、飘心都听它的） */
 export function prefersReducedMotion(): boolean {
   const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
