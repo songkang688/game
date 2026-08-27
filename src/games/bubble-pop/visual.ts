@@ -26,6 +26,30 @@ export const BP_SPECIAL_BASE = {
 /** 彩虹泡的 conic 五色圈(保留 1.2 的顺序) */
 export const BP_RAINBOW_CONIC = "conic-gradient(#FF9EC8, #FFD26E, #9FE08D, #8FCBFF, #C9A0F0, #FF9EC8)";
 
+/** 动效时序表(四·补二):CSS 里写成自定义属性,测试盯这份常量 */
+export const BP_TIMINGS = {
+  /** 破裂第一阶段:鼓到 1.12 倍 */
+  swellMs: 50,
+  /** 破裂第二阶段:薄膜白环扩散 */
+  ringMs: 120,
+  /** 破裂第三阶段:水珠 4 滴溅落渐隐 */
+  dropMs: 240,
+  /** 连消波次:每波延迟 */
+  waveStepMs: 40,
+  /** 连消波次上限(低端机不掉帧) */
+  waveMax: 6,
+  /** 同波内随机抖动上限(只作用于展示) */
+  waveJitterMs: 12,
+  /** 彩虹泡旋转一圈 */
+  rainbowSpinMs: 3000,
+  /** 补位果冻落定 scaleY .92 → 1 */
+  jellyMs: 90,
+  /** 装饰气泡缓升一轮 */
+  decorFloatMs: 8000,
+  /** 连消数字跳动 */
+  comboMs: 120,
+} as const;
+
 /** 冰冻圈 / 变色圈:1.2 的色觉双通道,颜色宽度原样保留 */
 export const BP_FROZEN_RING = "inset 0 0 0 3px #9FD6FF";
 export const BP_CHAMELEON_RING = "inset 0 0 0 3px #7FCF95";
@@ -36,6 +60,47 @@ export const BP_STONE_RING = "inset 0 0 0 2px rgba(255,255,255,.4)";
 export const BP_TINY_PX = 32;
 export function bpIsTiny(cellPx: number): boolean {
   return cellPx > 0 && cellPx < BP_TINY_PX;
+}
+
+// ---------------------------------------------------------------------------
+// 特殊泡本体纹样(SVG 程序化绘制,不再 emoji 直出;灰度下也一眼可分)
+// ---------------------------------------------------------------------------
+
+const SVG_OPEN = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">`;
+
+/** 彩虹泡中心白星:五角,直径约 40% 泡径(尺寸由 .bp-pat-star 控制) */
+export function bpStarSvg(): string {
+  return `${SVG_OPEN}<polygon class="bp-star" points="12,2.5 14.6,8.9 21.5,9.4 16.2,13.9 17.9,20.6 12,16.9 6.1,20.6 7.8,13.9 2.5,9.4 9.4,8.9" fill="rgba(255,255,255,.92)"/></svg>`;
+}
+
+/** 连锁泡闪电纹:两段折线、白 65%、宽 2(触发连锁时由高亮类点亮一帧) */
+export function bpChainZigzagSvg(): string {
+  return `${SVG_OPEN}<polyline class="bp-zigzag" points="9.5,4 14.5,11.5 9.5,12.5 14.5,20" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/** 铁泡铆钉两点(点缀,bp-tiny 时省略;金属纵纹在 background 里,纹样保留) */
+export function bpStoneRivetsSvg(): string {
+  return `${SVG_OPEN}<circle class="bp-rivet" cx="8" cy="9" r="1.6" fill="rgba(255,255,255,.75)"/><circle class="bp-rivet" cx="16" cy="15" r="1.6" fill="rgba(255,255,255,.75)"/></svg>`;
+}
+
+/** 闪电泡:实心白闪电(和连锁泡的细折线区分开) */
+export function bpBoltSvg(): string {
+  return `${SVG_OPEN}<polygon class="bp-boltfill" points="13.5,3 6.5,13.5 11,13.5 9.5,21 17.5,10.5 12.8,10.5" fill="rgba(255,255,255,.9)"/></svg>`;
+}
+
+/** 冰冻泡:六臂冰晶纹(冰圈之外的第二识别通道) */
+export function bpFrostSvg(): string {
+  return `${SVG_OPEN}<g class="bp-frost" stroke="rgba(255,255,255,.85)" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5.9" y1="8.5" x2="18.1" y2="15.5"/><line x1="5.9" y1="15.5" x2="18.1" y2="8.5"/></g></svg>`;
+}
+
+/** 隐藏泡:小灯笼剪影(白 45%),「先点亮再消」的语义 */
+export function bpLanternSvg(): string {
+  return `${SVG_OPEN}<g class="bp-lantern" fill="rgba(255,255,255,.45)"><rect x="10" y="4" width="4" height="2" rx="1"/><ellipse cx="12" cy="12" rx="5" ry="6"/><rect x="10" y="18" width="4" height="2.4" rx="1"/></g></svg>`;
+}
+
+/** 变色泡:循环箭头(「每步换一种颜色」的语义) */
+export function bpCycleSvg(): string {
+  return `${SVG_OPEN}<g class="bp-cycle" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 12a6 6 0 1 1-2.2-4.6"/><polyline points="18.6,4.6 18.6,8 15.2,8"/></g></svg>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,9 +134,9 @@ export function bpCellSkin(v: number): BpCellSkin {
     return {
       background: BP_RAINBOW_CONIC,
       boxShadow: `${BUBBLE_INNER_ARC}, 0 2px 8px rgba(150,120,220,.5)`,
-      pattern: "",
-      patternClass: "",
-      mark: "🌈",
+      pattern: bpStarSvg(),
+      patternClass: "bp-pat-star",
+      mark: "",
       rainbow: true,
     };
   }
@@ -80,9 +145,9 @@ export function bpCellSkin(v: number): BpCellSkin {
     return {
       background: s.background,
       boxShadow: `${s.boxShadow}, 0 2px 8px rgba(230,140,60,.5)`,
-      pattern: "",
+      pattern: bpChainZigzagSvg(),
       patternClass: "",
-      mark: "🎇",
+      mark: "",
       rainbow: false,
     };
   }
@@ -91,9 +156,9 @@ export function bpCellSkin(v: number): BpCellSkin {
     return {
       background: `${bubbleHighlight()}, repeating-linear-gradient(90deg, rgba(255,255,255,.22) 0 3px, rgba(70,64,58,.18) 3px 6px), radial-gradient(circle at 50% 46%, #C6C1B4, #8F897D 94%)`,
       boxShadow: `${BP_STONE_RING}, ${BUBBLE_INNER_ARC}, 0 2px 5px rgba(120,110,100,.4)`,
-      pattern: "",
+      pattern: bpStoneRivetsSvg(),
       patternClass: "",
-      mark: "🪨",
+      mark: "",
       rainbow: false,
     };
   }
@@ -102,9 +167,9 @@ export function bpCellSkin(v: number): BpCellSkin {
     return {
       background: s.background,
       boxShadow: `${s.boxShadow}, 0 2px 8px rgba(230,180,40,.5)`,
-      pattern: "",
+      pattern: bpBoltSvg(),
       patternClass: "",
-      mark: "⚡",
+      mark: "",
       rainbow: false,
     };
   }
@@ -113,9 +178,9 @@ export function bpCellSkin(v: number): BpCellSkin {
     return {
       background: s.background,
       boxShadow: `${BP_FROZEN_RING}, ${s.boxShadow}, 0 2px 5px rgba(120,180,230,.4)`,
-      pattern: "",
+      pattern: bpFrostSvg(),
       patternClass: "",
-      mark: "🧊",
+      mark: "",
       rainbow: false,
     };
   }
@@ -124,9 +189,9 @@ export function bpCellSkin(v: number): BpCellSkin {
     return {
       background: s.background,
       boxShadow: `${s.boxShadow}, 0 2px 6px rgba(60,50,80,.5)`,
-      pattern: "",
+      pattern: bpLanternSvg(),
       patternClass: "",
-      mark: "🏮",
+      mark: "",
       rainbow: false,
     };
   }
@@ -136,9 +201,9 @@ export function bpCellSkin(v: number): BpCellSkin {
     return {
       background: s.background,
       boxShadow: `${BP_CHAMELEON_RING}, ${s.boxShadow}, ${drop(base)}`,
-      pattern: "",
+      pattern: bpCycleSvg(),
       patternClass: "",
-      mark: "🦎",
+      mark: "",
       rainbow: false,
     };
   }
@@ -158,12 +223,24 @@ export function bpCellSkin(v: number): BpCellSkin {
 // 视觉样式表(体积层)
 // ---------------------------------------------------------------------------
 
-/** 追加在 1.2 布局样式之后的视觉升级样式(体积 / 降级) */
+/** 追加在 1.2 布局样式之后的视觉升级样式(体积 / 纹样 / 旋转 / 降级) */
 export function bpVisualCss(): string {
+  const t = BP_TIMINGS;
   return `
+.bp-wrap { --bp-spin-ms:${t.rainbowSpinMs}ms; }
 .bp-cell { position: relative; }
 .bp-cell::before { content: ""; position: absolute; left: 18%; top: 18%; width: 22%; height: 12%; border-radius: 50%; background: rgba(255,255,255,.45); transform: rotate(-24deg); pointer-events: none; z-index: 1; }
 .bp-cell.bp-empty::before, .bp-tiny .bp-cell::before, .bp-cell.bp-rainbow::before { content: none; }
 .bbp-mark { position: relative; z-index: 1; }
+.bp-pat { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1; }
+.bp-pat svg { width: 52%; height: 52%; display: block; }
+.bp-pat.bp-pat-star svg { width: 40%; height: 40%; }
+.bp-tiny .bp-rivet { display: none; }
+.bp-cell.bp-rainbow { overflow: hidden; }
+.bp-rainbow::after { content: ""; position: absolute; inset: -22%; border-radius: 50%; background: ${BP_RAINBOW_CONIC}; animation: bpSpinRot var(--bp-spin-ms) linear infinite; z-index: 0; }
+@keyframes bpSpinRot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .bp-rainbow::after { animation: none; }
+}
 `;
 }

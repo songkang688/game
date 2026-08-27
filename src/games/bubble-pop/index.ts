@@ -55,8 +55,6 @@ const CSS = `
 .bp-board { display: grid; grid-template-columns: repeat(${COLS}, 1fr); gap: 4px; }
 .bp-cell { aspect-ratio: 1; border: none; border-radius: 50%; cursor: pointer; transition: opacity .2s; padding: 0; font-size: clamp(12px, 3.6vw, 20px); display: flex; align-items: center; justify-content: center; min-width: 36px; }
 .bp-cell.bp-empty { background: transparent !important; box-shadow: none !important; cursor: default; }
-.bp-cell.bp-rainbow { animation: bpSpin 2.5s linear infinite; }
-@keyframes bpSpin { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
 .bp-msg { text-align: center; min-height: 22px; color: #4FA3C7; font-weight: 700; margin-top: 10px; font-size: 15px; line-height: 1.5; }
 
 /* 1.2 塌陷时间线 / 预览高亮 / 泡泡海（bbp- 前缀） */
@@ -82,7 +80,6 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) {
   .bbp-pop { animation-duration: 16ms; }
   .bbp-ripple { animation: none; }
-  .bp-cell.bp-rainbow { animation: none; }
 }
 ` + bpVisualCss();
 
