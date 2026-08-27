@@ -11,6 +11,8 @@
  * 修后实测:idle 四朝向 7.03 / 5.08 / 4.69 / 5.08,push 侧向 5.86 / 5.08,
  * 全部 ≥3% 线。本文件把这条线与组合结构一起钉死。
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
@@ -139,5 +141,15 @@ describe("bhHamsterSvg · 组合接线与冻结件不动", () => {
   it("冻结 kit hamsterSvg 本体不含任何叠加层(证明是组合注入,不是改老文件)", () => {
     const raw = hamsterSvg({ style: BH_HAMSTER_STYLES[1], facing: 0 as HamsterFacing });
     expect(raw).not.toContain("data-part=");
+  });
+});
+
+describe("W6R1-13 · 描边宽度分级约定先在新 kit 文件立约(老文件冻结待解冻)", () => {
+  it("hamsterAccents.ts 头注写明三档:64px 件 1.2–1.5 / 128px 件 2–3.5 / 16px 关键件 ≥2", () => {
+    const kit = readFileSync(join(__dirname, "../../art/kit/hamsterAccents.ts"), "utf8");
+    expect(kit).toContain("描边宽度分级约定");
+    expect(kit).toContain("64px 渲染的常驻小件:1.2–1.5px");
+    expect(kit).toContain("128px 渲染的特写大件:2–3.5px");
+    expect(kit).toContain("16px 下必须认得出的关键差异件:≥2px");
   });
 });
