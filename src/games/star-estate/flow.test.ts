@@ -5,6 +5,8 @@ import {
   FULL_RULES,
   createState,
   grantTile,
+  payCtxFor,
+  payDebt,
   runAuction,
   type EstateEvent,
   type Policy,
@@ -74,6 +76,53 @@ describe("拍卖不背着玩家掏钱", () => {
     expect(r.winner).toBe(-1);
     expect(s.tiles[1].owner).toBe(BANK);
     expect(s.players.every((p) => p.cash === START_CASH)).toBe(true);
+  });
+});
+
+describe("别人求救甩卖也不背着玩家掏钱（W1-R3-02）", () => {
+  /** 一个「见地就接」的策略，用来把「谁会出价」这件事看清楚 */
+  function ctxEager(humans?: Set<number>): TurnContext {
+    const rand = mulberry32(9);
+    const policy: Policy = {
+      wantBuy: () => false,
+      bidLimit: () => 0,
+      buildPlan: () => [],
+      jailChoice: () => "roll",
+      rescueOffer: () => 300,
+      redeemOnTake: () => false,
+      redeemPlan: () => [],
+      financePlan: () => []
+    };
+    return {
+      rand,
+      policyOf: () => policy,
+      decks: { chance: makeDeck("chance", rand), fate: makeDeck("fate", rand) },
+      rules: FULL_RULES,
+      diceCursor: { i: 0 },
+      humans
+    };
+  }
+
+  it("人类座位不参与接盘，钱和地都不动", () => {
+    const s = table(2, 1000);
+    grantTile(s, 39, 1);
+    s.players[1].cash = 0;
+    const events: EstateEvent[] = [];
+    // 星星欠 800 星币，手上只有一块地：抵押完还不够，就会挨个问别人要不要接
+    payDebt(s, 1, BANK, 800, payCtxFor(s, ctxEager(new Set([0])), events));
+    expect(s.tiles[39].owner, "朵朵是人类座位，不该替他接").not.toBe(0);
+    expect(s.players[0].cash).toBe(1000);
+    expect(s.players[0].deedsBought).toBe(0);
+  });
+
+  it("同一局面里，AI 座位照样会接盘（不是把这条路整个堵死）", () => {
+    const s = table(3, 1000);
+    grantTile(s, 39, 1);
+    s.players[1].cash = 0;
+    const events: EstateEvent[] = [];
+    payDebt(s, 1, BANK, 800, payCtxFor(s, ctxEager(new Set([0])), events));
+    expect(s.tiles[39].owner).toBe(2);
+    expect(s.players[2].deedsBought).toBe(1);
   });
 });
 

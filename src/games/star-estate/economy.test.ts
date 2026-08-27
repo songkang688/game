@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GO_SALARY, GROUP_TILES, JAIL_TILE, START_CASH, mortgageValue, transferFee, unmortgageCost } from "./board";
 import {
   BANK,
+  deedsOf,
   liquidCeiling,
   fullSetActive,
   moveBy,
@@ -31,11 +32,13 @@ import {
   passedGoSalary,
   payDebt,
   playTurn,
+  runAuction,
   runMatch,
   sellHouse,
   sendToJail,
   tryRaise,
   unmortgage,
+  type EstateEvent,
   type Policy,
   type TurnContext
 } from "./economy";
@@ -443,6 +446,47 @@ describe("破产两条路径", () => {
     expect(payDebt(s, 0, 1, 500)).toBe(false);
     expect(s.players[0].bankrupt).toBe(true);
     expect(s.players[1].cash).toBe(200);
+  });
+});
+
+describe("自己买下的地要单独记账（战役过关门槛按它算）", () => {
+  it("停在空地买下来记一笔；地不是无主地、或者钱不够都不记", () => {
+    const s = seats(2, 500);
+    expect(s.players[0].deedsBought).toBe(0);
+    expect(buyTile(s, 0, 1)).toBe(true);
+    expect(s.players[0].deedsBought).toBe(1);
+    // 已经是自己的地，再买一次不成立，也不许再记一笔
+    expect(buyTile(s, 0, 1)).toBe(false);
+    expect(s.players[0].deedsBought).toBe(1);
+    s.players[0].cash = 0;
+    expect(buyTile(s, 0, 3)).toBe(false);
+    expect(s.players[0].deedsBought).toBe(1);
+  });
+
+  it("拍卖拍到的算自己买的；接盘别人甩卖的也算", () => {
+    const s = seats(2, 800);
+    const events: EstateEvent[] = [];
+    runAuction(s, 39, -1, ctxFor(dummyPolicy()), events, new Map([[0, 400]]));
+    expect(s.tiles[39].owner).toBe(0);
+    expect(s.players[0].deedsBought).toBe(1);
+
+    grantTile(s, 1, 1);
+    s.players[1].cash = 0;
+    tryRaise(s, 1, 300, (pos) => ({ buyer: 0, price: 300, tile: pos }));
+    expect(s.tiles[1].owner).toBe(0);
+    expect(s.players[0].deedsBought).toBe(2);
+  });
+
+  it("对手收摊整批转过来的地不算自己买的（W1-R3-01）", () => {
+    const s = seats(2, 500);
+    grantTile(s, 39, 1);
+    grantTile(s, 1, 1);
+    s.players[1].cash = 0;
+    declareBankrupt(s, 1, 0, () => false);
+    expect(s.tiles[39].owner).toBe(0);
+    expect(s.tiles[1].owner).toBe(0);
+    expect(deedsOf(s, 0).length).toBe(2);
+    expect(s.players[0].deedsBought, "白接过来的地不许顶数").toBe(0);
   });
 });
 

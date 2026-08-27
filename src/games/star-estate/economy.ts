@@ -705,13 +705,18 @@ function nextDice(ctx: TurnContext): [number, number] {
   return rollDice(ctx.rand);
 }
 
-function payCtxFor(state: EstateState, ctx: TurnContext, events: EstateEvent[]): PayContext {
+/** 把「谁来接盘 / 要不要赎回 / 谁去拍卖」这几件事接到各座位的策略上 */
+export function payCtxFor(state: EstateState, ctx: TurnContext, events: EstateEvent[]): PayContext {
   return {
     events,
     rescue: (debtorId, pos) => {
       let best: { buyer: number; price: number } | null = null;
       for (const id of alivePlayers(state)) {
         if (id === debtorId) continue;
+        // 人类座位一律不出价：和拍卖、买地一个口径，绝不背着玩家掏钱。
+        // 少了这一句，别人快破产时游戏会拿孩子的钱替他把地买下来 ——
+        // 孩子既没被问过，战役「自己买下 N 处产业」那道门也会被白送过去。
+        if (ctx.humans?.has(id)) continue;
         const offer = Math.round(ctx.policyOf(id).rescueOffer(state, id, pos));
         if (offer > 0 && offer <= state.players[id].cash && (!best || offer > best.price)) {
           best = { buyer: id, price: offer };
