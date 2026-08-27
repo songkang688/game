@@ -898,8 +898,23 @@ function ttKey(hi: number, lo: number, depth: number, turn: Player): number {
 /** 五连的分值上限；再减去层数，保证「早一步杀」优于「晚一步杀」 */
 const WIN_SCORE = 1_000_000;
 
-/** 深搜要推翻大师档给的那一手，至少得多出这么多分（约等于一个活二的价值） */
-const SEARCH_OVERRIDE_MARGIN = 4000;
+/**
+ * 深搜要推翻大师档给的那一手，至少得多出这么多分。
+ *
+ * 1.2 下调（4000 → 200）：4000 约等于一个活二的价值，实测在真实中盘局面里
+ * **一次都没跨过去** —— 地狱档每一步都在原样交回大师档的答案，深搜白算，
+ * 两档因此 100% 同步。200 是「一个五格窗口里多一颗子」的量级，
+ * 深搜确实说得上话，同时仍然要求它**严格更好**才改着；
+ * 改着之后还要过一遍「不许把杀招送给对手」的保险（见 `hellMove`）。
+ */
+const SEARCH_OVERRIDE_MARGIN = 200;
+
+/**
+ * 深搜要推翻大师档的着法，至少得完整跑完这么多层。
+ * 预算被压得很紧（比如测试里的 12ms）时迭代加深只来得及跑两三层，
+ * 那种半成品的分数不配改写一手已经过了算杀复核的棋 —— 这时老老实实用大师档的答案。
+ */
+const SEARCH_OVERRIDE_MIN_DEPTH = 4;
 
 /** 一个 5 格窗口里 n 颗己方子（其余是空）值多少分 */
 const WINDOW_SCORE = [0, 1, 14, 160, 1_800, 200_000];
@@ -1207,6 +1222,72 @@ export function findForbiddenTrap(b: Board, me: Player): { x: number; y: number 
 }
 
 /**
+ * 地狱档的破杀。
+ *
+ * 1.2 修正：老版本在这里直接 `return masterMove(...)` —— 21% 的中盘局面
+ * 地狱档压根不搜索，原样把答案交回大师档，这是「地狱与大师 100% 同一步」的第一道口子。
+ * 现在解法候选仍旧是大师档那一批（一个都不少），但多了两道地狱档专属的关：
+ * ① 复核用的算杀更深：大师看 `findVcf(opp, 4)`，这里看到 6 手，还要求对手没有连续威胁杀；
+ * ② 幸存下来的解法不是「按顺序拿第一个」，而是交给限时深搜逐个打分，挑分最高的。
+ * 一个都活不下来时仍旧退回大师档的答案，所以它不可能比大师档弱。
+ */
+function hellDefend(
+  b: Board,
+  me: Player,
+  rng: () => number,
+  opts: HellOptions,
+  cands: Array<[number, number]>,
+  oppHot: Array<{ x: number; y: number }>,
+  oppVcf: { x: number; y: number } | null,
+  oppVct: { x: number; y: number } | null
+): { x: number; y: number } | null {
+  const opp = other(me);
+  const fallback = masterMove(b, me, rng);
+  const tries = defenseCandidates(b, me, cands, oppHot, oppVcf, oppVct);
+  if (fallback && !tries.some((t) => t.x === fallback.x && t.y === fallback.y)) {
+    tries.push(fallback);
+  }
+
+  // 第一道关：对手在更深的算杀里也找不到必胜
+  const survivors: Array<{ x: number; y: number }> = [];
+  for (const t of tries) {
+    if (getCell(b, t.x, t.y) !== 0) continue;
+    setCell(b, t.x, t.y, me);
+    const quiet = fiveSpotsOf(b, opp).length === 0 && hotPoints(b, opp).length === 0;
+    const safe =
+      quiet && findVcf(b, opp, 6) === null && findVct(b, opp, 2) === null;
+    setCell(b, t.x, t.y, 0);
+    if (safe) survivors.push(t);
+  }
+  if (survivors.length === 0) return fallback;
+  if (survivors.length === 1) return survivors[0];
+
+  // 第二道关：幸存者交给搜索排座次
+  const budget = opts.timeMs ?? 350;
+  const share = Math.max(8, Math.round(budget / Math.min(6, survivors.length)));
+  let best: { x: number; y: number } | null = null;
+  let bestScore = -Infinity;
+  for (const t of survivors.slice(0, 6)) {
+    setCell(b, t.x, t.y, me);
+    const r = hellSearch(b, opp, { ...opts, timeMs: share });
+    setCell(b, t.x, t.y, 0);
+    // r 是对手视角的分，取负就是我这边的分
+    if (!r || r.depth <= 0) continue;
+    const score = -r.score;
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+  if (best) return best;
+  // 预算太紧、搜索一层都没算完：不猜，仍旧用大师档的答案（只要它过了第一道关）
+  if (fallback && survivors.some((s) => s.x === fallback.x && s.y === fallback.y)) {
+    return fallback;
+  }
+  return survivors[0];
+}
+
+/**
  * 地狱档 = 大师档的全部战术判断 + 三件加料：
  * ① 算杀更深（VCF 7 手 / VCT 4 手，大师是 5 手 / 3 手）；
  * ② 禁手规则打开时会主动抓杀（对手唯一的挡点是禁手）；
@@ -1239,16 +1320,21 @@ export function hellMove(
   const oppVcf = findVcf(b, opp, 5);
   const oppVct = oppHot.length === 0 && !oppVcf ? findVct(b, opp, 2) : null;
   if (oppHot.length > 0 || oppVcf || oppVct) {
-    // 对手手里有活四 / 双三 / 连续冲四：先解掉，交给大师档的破杀逻辑
-    return masterMove(b, me, rng);
+    // 对手手里有活四 / 双三 / 连续冲四：解法候选与大师档同一批，
+    // 但每一个解法都要多过一道「更深的算杀」复核，再由搜索在幸存者里挑分最高的那个。
+    return hellDefend(b, me, rng, opts, cands, oppHot, oppVcf, oppVct);
   }
   const vct = findVct(b, me, 4);
   if (vct) return vct;
 
-  // 平静局面：大师档先给一手，深搜只有「明显更好」时才敢改（否则搜索的粗评估会把好棋换成软棋）
+  // 平静局面：大师档先给一手，深搜算够层数、而且确实更好时才改着
   const fallback = masterMove(b, me, rng);
   const found = hellSearch(b, me, { ...opts, prefer: fallback });
-  if (found && found.depth > 0 && (found.x !== fallback?.x || found.y !== fallback?.y)) {
+  if (
+    found &&
+    found.depth >= SEARCH_OVERRIDE_MIN_DEPTH &&
+    (found.x !== fallback?.x || found.y !== fallback?.y)
+  ) {
     const beats =
       found.preferScore === null || found.score >= found.preferScore + SEARCH_OVERRIDE_MARGIN;
     if (beats) {
