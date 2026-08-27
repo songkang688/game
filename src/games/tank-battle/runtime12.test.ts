@@ -426,3 +426,66 @@ describe("destroy 归零", () => {
     expect(heard).toEqual([]);
   });
 });
+
+/**
+ * 分级红线:这是给小孩玩的铁皮玩具,发射的是弹力球和彩纸弹。
+ * 打不过只鼓励,被打中是「零件散一地,修好再来」,没有任何一个字提到伤亡。
+ * 下面这张词表盯的是屏幕上真会出现的文字 —— 代码注释里的「写死」「死胡同」不算。
+ */
+describe("分级红线", () => {
+  /** 屏幕上真会出现的字:界面 + 攻略 + 卡片文案 */
+  async function everyWord(): Promise<string> {
+    const h = (harness = install());
+    const game = await mountGame(h);
+    h.flush(2);
+    let out = allText(h.root);
+    // 三个模式入口各进去看一眼,结算面板的文案也捞出来
+    for (const label of ["无尽守老巢", "双人对战"]) {
+      findButton(h.root, label)?.fire("click");
+      h.flush(4);
+      out += ` ${allText(h.root)}`;
+      findButton(h.root, "回选关")?.fire("click");
+      h.flush(2);
+    }
+    game.destroy();
+    const guide = (await import("./guide")).default;
+    const { meta } = await import("./meta");
+    out += ` ${meta.title} ${meta.blurb} ${guide.title} ${guide.general.join(" ")}`;
+    for (const e of guide.entries) out += ` ${e.title} ${e.tips.join(" ")}`;
+    return out;
+  }
+
+  it("没有伤亡、没有爆炸伤人、没有履带碾压", async () => {
+    const text = await everyWord();
+    for (const bad of ["死", "亡", "杀", "血", "伤", "尸", "碾", "轰炸", "牺牲", "阵亡", "歼灭", "摧毁"]) {
+      expect(text, `界面上出现了红线词「${bad}」`).not.toContain(bad);
+    }
+  });
+
+  it("没有战争写实的词,车是铁皮玩具、弹是弹力球和彩纸弹", async () => {
+    const text = await everyWord();
+    for (const bad of ["战争", "军队", "敌军", "士兵", "武器", "弹药", "导弹", "手榴弹"]) {
+      expect(text, `界面上出现了打仗词「${bad}」`).not.toContain(bad);
+    }
+    expect(text).toContain("铁皮");
+    expect(text).toContain("弹力球");
+    expect(text).toContain("彩纸");
+  });
+
+  it("不蹭同类经典坦克商业作品的名字", async () => {
+    const text = (await everyWord()).toLowerCase();
+    for (const bad of ["battle city", "tank 1990", "1990", "nintendo", "namco", "任天堂", "红白机", "fc 坦克"]) {
+      expect(text, `蹭到商标「${bad}」了`).not.toContain(bad);
+    }
+  });
+
+  it("输了只鼓励:失败面板说的是零件捡起来再来", async () => {
+    const h = (harness = install());
+    const game = await mountGame(h, { initialLevel: 0 });
+    h.flush(2);
+    const text = allText(h.root);
+    // 直达关卡这一屏至少不能出现责备的话
+    for (const bad of ["笨", "菜", "废", "失败了", "你输了"]) expect(text).not.toContain(bad);
+    game.destroy();
+  });
+});

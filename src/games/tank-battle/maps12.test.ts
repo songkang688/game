@@ -18,6 +18,7 @@ import {
   swapSides,
 } from "./maps12";
 import { createWorld, parseMap, reachable, tileAt } from "./logic";
+import { buildLevel } from "./levels";
 import { TILE_CHARS } from "./terrain12";
 
 function countChar(rows: readonly string[], ch: string): number {
@@ -149,5 +150,65 @@ describe("冰原老巢(无尽场)", () => {
     expect(FROST_NEST_MAP.id).toBe("frost");
     expect(FROST_NEST_MAP.rows).toBe(FROST_NEST);
     expect(FROST_NEST_MAP.desc.length).toBeGreaterThan(6);
+  });
+});
+
+/**
+ * 1.2 加了冰面和四分之一格砖,但这些只准出现在新地图上。
+ * 已经通关的小朋友回头再打前 99 关,看到的必须还是当初那张图 ——
+ * 差一格砖,星星就可能拿不回来了。这里把指纹钉死,谁动了谁自己解释。
+ */
+describe("前 99 关地图一格都不许动", () => {
+  const fp = (rows: readonly string[]): string => {
+    // 不引依赖,自己搓一个够用的 32 位滚动哈希
+    let a = 0x811c9dc5;
+    const s = rows.join("|");
+    for (let i = 0; i < s.length; i++) {
+      a ^= s.charCodeAt(i);
+      a = Math.imul(a, 0x01000193) >>> 0;
+    }
+    return a.toString(16).padStart(8, "0");
+  };
+
+  it("整整 99 关合起来一个指纹", () => {
+    const rows: string[] = [];
+    for (let i = 0; i < 99; i++) rows.push(buildLevel(i).rows.join("|"));
+    expect(fp(rows)).toBe("6a7b3f08");
+  });
+
+  it.each([
+    [0, "a6a41da5"],
+    [9, "0461d746"],
+    [24, "41241b9d"],
+    [49, "98fd75f4"],
+    [74, "dab84414"],
+    [98, "b1a12d7b"],
+  ])("第 %i 关(0 起数)还是原来那张", (i, want) => {
+    expect(fp(buildLevel(i).rows)).toBe(want);
+  });
+
+  it("前 99 关里没有冰,也没有半块砖 —— 1.2 的新地形只走新图", () => {
+    for (let i = 0; i < 99; i++) {
+      const joined = buildLevel(i).rows.join("");
+      expect(joined, `第 ${i + 1} 关混进了新地形`).not.toMatch(/[ib]/);
+    }
+  });
+
+  it("第 1 关就是那张认得出来的开局图", () => {
+    expect(buildLevel(0).rows).toEqual([
+      "e.....e.....e",
+      ".....#....##.",
+      ".....##...##.",
+      ".............",
+      "....###..###.",
+      "....###...#..",
+      "....###...#..",
+      "....##..###..",
+      "........##...",
+      "........##...",
+      ".....###.....",
+      ".....###.....",
+      "...1##B##2...",
+    ]);
   });
 });
