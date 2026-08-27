@@ -258,6 +258,16 @@ async function openLevel(page, id, n) {
   return page.$eval(".l99-stagetitle", (el) => el.textContent ?? "").catch(() => "");
 }
 
+/** 回合制的款开局本来就静止:按几下方向键,看盘面动不动,用来代替「画面在不在动」 */
+async function pokeMoves(page, g) {
+  const before = await fingerprint(page);
+  for (const k of g.keys.slice(0, 4)) {
+    await page.keyboard.press(k).catch(() => {});
+    await sleep(180);
+  }
+  return (await fingerprint(page)) !== before;
+}
+
 /**
  * 「玩一会儿」:按配方按键 + 点舞台里能点的东西,直到结算浮层出现或预算用完。
  * mode="idle" 时一根手指都不动,专门用来看这一关会不会自己判输。
@@ -1018,6 +1028,120 @@ async function main() {
         await sleep(700);
       }
       log(got !== "", `${g.title}:第 1 关真打到过关`, got || `${rounds} 局都没打出过关`);
+    }
+  }
+
+  // =========================================================================
+  // R. rebase 后复核:修复员 / 学习优化员落地的三件事,加上双人键位分边重测
+  // =========================================================================
+  if (PARTS.includes("R")) {
+    console.log("\n===== R. rebase 后复核 =====");
+
+    // ---- R1 W1-01:五款按两次 Esc 能不能接着玩 ----
+    const escIds = ["orb-arena", "snake-royale", "block-drop", "combo-clash", "merge-2048"];
+    for (const g of GAMES.filter((x) => escIds.includes(x.id))) {
+      await openLevel(page, g.id, 1);
+      await page.keyboard.press("KeyD").catch(() => {});
+      await sleep(900);
+      const a1 = await fingerprint(page);
+      await sleep(900);
+      const a2 = await fingerprint(page);
+      // 回合制的款开局本来就是静止的,用「按方向键盘面会不会变」代替「画面会不会动」
+      const liveBefore = a1 !== a2 || (await pokeMoves(page, g));
+      await page.keyboard.press("Escape");
+      await sleep(700);
+      const shellPause = await page.evaluate(
+        () => document.querySelectorAll(".dialog, .dlg, [class*='pause']").length > 0
+      );
+      const paused = await page.evaluate(() => {
+        const t = document.querySelector(".game-stage")?.textContent ?? "";
+        return /暂停|先歇/.test(t);
+      });
+      await page.keyboard.press("Escape");
+      await sleep(900);
+      const b1 = await fingerprint(page);
+      await sleep(900);
+      const b2 = await fingerprint(page);
+      const liveAfter = b1 !== b2 || (await pokeMoves(page, g));
+      log(
+        liveBefore && paused && liveAfter,
+        `W1-01 复核 · ${g.title}:Esc 暂停后再按一次能接着玩`,
+        `开局在动=${liveBefore} · 暂停有提示=${paused}(壳层面板 ${shellPause ? "还在" : "没弹"}) · 恢复后在动=${liveAfter}`
+      );
+    }
+
+    // ---- R2 W1-02:12 款的拼音首字母搜得到吗 ----
+    const PINYIN = [
+      ["orb-arena", "圆圆大作战", "yydzz"],
+      ["snake-royale", "长蛇争霸", "cszb"],
+      ["block-drop", "方块叠叠乐", "fkddl"],
+      ["combo-clash", "连招对决", "lzdj"],
+      ["mahjong-bloom", "花开麻将", "hkmj"],
+      ["star-estate", "朵星地产", "dxdc"],
+      ["hero-cards", "英杰令", "yjl"],
+      ["weiqi-garden", "围子花园", "wzhy"],
+      ["flight-chess", "飞行棋乐园", "fxqly"],
+      ["merge-2048", "星星合成", "xxhc"],
+      ["mine-garden", "扫雷花园", "slhy"],
+      ["sudoku-petal", "数独花田", "sdht"]
+    ];
+    await page.goto(`${BASE}/?t=${Date.now()}`, { waitUntil: "networkidle0" });
+    await sleep(1000);
+    for (const [, title, initials] of PINYIN) {
+      const hit = await page.evaluate(
+        async ([q, want]) => {
+          const box = document.querySelector(".home-search-input");
+          if (!box) return "没有搜索框";
+          box.value = q;
+          box.dispatchEvent(new Event("input", { bubbles: true }));
+          await new Promise((r) => setTimeout(r, 260));
+          const titles = [...document.querySelectorAll(".card-title")].map((e) => e.textContent?.trim() ?? "");
+          return titles.includes(want) ? `${titles.length} 张里有它` : `${titles.length} 张里没有它`;
+        },
+        [initials, title]
+      );
+      log(hit.includes("有它"), `W1-02 复核 · 搜「${initials}」找得到「${title}」`, hit);
+    }
+
+    // ---- R3 mine-garden 双人:分边看光标与翻开数,不再靠整屏指纹 ----
+    await page.goto(`${BASE}/?t=${Date.now()}#/game/mine-garden`, { waitUntil: "networkidle0" });
+    await page.waitForSelector(".mg-modebar .mg-open", { timeout: 15000 });
+    await page.evaluate(() => {
+      [...document.querySelectorAll(".mg-modebar .mg-open")].find((b) => (b.textContent ?? "").includes("双人"))?.click();
+    });
+    await sleep(700);
+    await pickThrough(page, "mg");
+    await sleep(900);
+    const sides = async () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll(".mg-duo > div")].map((side) => {
+          const cells = [...side.querySelectorAll("[class*='mg-cell']")];
+          return {
+            cursor: cells.findIndex((c) => c.className.includes("mg-cursor")),
+            opened: cells.filter((c) => /\bmg-open\b/.test(c.className)).length,
+            flags: side.textContent?.split("🚩").length ?? 0
+          };
+        })
+      );
+    const s0 = await sides();
+    for (const k of ["KeyD", "KeyD", "KeyS", "KeyF", "KeyA", "KeyG"]) {
+      await page.keyboard.press(k);
+      await sleep(140);
+    }
+    const s1 = await sides();
+    for (const k of ["ArrowRight", "ArrowRight", "ArrowDown", "KeyL", "ArrowLeft", "KeyK"]) {
+      await page.keyboard.press(k);
+      await sleep(140);
+    }
+    const s2 = await sides();
+    const moved = (a, b) => a.cursor !== b.cursor || a.opened !== b.opened || a.flags !== b.flags;
+    if (s0.length === 2) {
+      log(moved(s0[0], s1[0]), "mine-garden 双人:朵朵 WASD+F+G 只动左边", JSON.stringify([s0[0], s1[0]]));
+      log(!moved(s0[1], s1[1]), "mine-garden 双人:朵朵按键不会串到星星那边", JSON.stringify([s0[1], s1[1]]));
+      log(moved(s1[1], s2[1]), "mine-garden 双人:星星 方向键+L+K 只动右边", JSON.stringify([s1[1], s2[1]]));
+      log(!moved(s1[0], s2[0]), "mine-garden 双人:星星按键不会串到朵朵那边", JSON.stringify([s1[0], s2[0]]));
+    } else {
+      log(false, "mine-garden 双人:两块盘面都在", `找到 ${s0.length} 块`);
     }
   }
 
