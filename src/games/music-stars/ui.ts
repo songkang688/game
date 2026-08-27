@@ -76,10 +76,19 @@ export const SHORT_SIZES = {
   scorePad: 8,
 } as const;
 
-/** 每一项在一屏里出现几次（实测简谱关的行数） */
+/**
+ * 每一项在一屏里出现几次。
+ *
+ * `wrapGap` 原来写的是 6，复审时按真实 DOM 数下来是**最多 3**——`.mst-wrap` 的
+ * `gap` 只作用在它自己的直接子节点之间，而 360×720 上各关实测只有 3~4 个可见直接子节点
+ * （第 1/100/122/150 关 4 个 = 3 条缝，第 188 关 3 个 = 2 条缝）。多算的那 3 条缝
+ * 把这一档的账面收益从 117px 抬到了 132px，正好越过「盖得住 123px」那条线。
+ * 按实测数改回 3，这一档就是盖不住——真正兜住的是 `fitIntoStage()` 的运行期钳位。
+ * 两边分工写清楚，别再靠一个虚高的数字自我安慰。
+ */
 const TRIM_TIMES: Record<keyof typeof BASE_SIZES, number> = {
   wrapPad: 2,
-  wrapGap: 6,
+  wrapGap: 3,
   msg: 1,
   dots: 1,
   sky: 1,

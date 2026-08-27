@@ -166,11 +166,18 @@ describe("音乐星星 · 摆不下就挂横向滚动，键一颗都不许被切
     b.destroy();
   });
 
-  it("矮屏上竖向逐项收一档，省下的高度盖得住 360×720 上被裁掉的那一截", () => {
+  it("矮屏上竖向逐项收一档，但收不满——差的那一截由运行期钳位兜住", () => {
     // 测试员在 360×720 上量到：内容 741px、可视 618px，多出来的 123px 被硬裁
     const cut = SCORE_LEVEL_CONTENT_PX - STAGE_VISIBLE_AT_720_PX;
     expect(cut).toBe(123);
-    expect(shortScreenSavingPx(), "压完还是盖不住被裁掉的那一截").toBeGreaterThanOrEqual(cut);
+    // 这个数原来记的是 132px，看着刚好盖过 123px。复审时按真实 DOM 数下来，
+    // .mst-wrap 各关只有 3~4 个可见直接子节点（3 条缝、第 188 关 2 条），
+    // 而 TRIM_TIMES 里按 6 条缝算，多记了 15px。改回实测值之后账面是 117px——
+    // CSS 这一档**盖不住**，这是事实，不许再靠虚高的数字自我安慰。
+    expect(shortScreenSavingPx()).toBe(117);
+    expect(shortScreenSavingPx(), "CSS 这一档从来没真盖住过，别把它记成盖住了").toBeLessThan(cut);
+    // 真正兜住的是 fitIntoStage()：量舞台裁切线，把像素数写成 max-height
+    expect(MST_CSS).toContain("fitIntoStage");
     // 每一项都必须真的变小，不许拿一个没动的数来凑
     for (const key of Object.keys(BASE_SIZES) as Array<keyof typeof BASE_SIZES>) {
       expect(SHORT_SIZES[key], `${key} 没有真的收一档`).toBeLessThan(BASE_SIZES[key]);
