@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { shade as kitShade } from "../art/kit/fruit";
+import { shadeColor as fsShadeColor } from "./fruit-slice/visual";
 import { shade as mcShade } from "./memory-cards/visual";
 import { shade as phShade } from "./poop-hero/visual";
 
@@ -50,6 +51,27 @@ describe("W7R2 修复 · N-4 shade 混色引擎收敛 kit 单源", () => {
       const src = readFileSync(new URL(rel, import.meta.url), "utf8");
       expect(src, rel).toContain('shade as kitShade } from "../../art/kit/fruit"');
       expect(src, rel).not.toContain("parseInt(hex");
+    }
+  });
+});
+
+describe("W7R2 修复 · B 档修订 #1:fruit-slice 第 4、5 份 shade 量纲钉死(实现收编顺延下轮)", () => {
+  it("fruit-slice shadeColor:amt 是 ±255 通道加法、输出 rgb() 字符串——与 kit 比例混合不等价,照抄参数必翻车", () => {
+    expect(fsShadeColor("#808080", -46)).toBe("rgb(82,82,82)");
+    expect(fsShadeColor("#ffc46b", -46)).toBe("rgb(209,150,61)");
+    // 加法平移保持通道间距不变;kit 比例混合会按比例缩——同参数两家结果不同
+    expect(fsShadeColor("#ffc46b", -46)).not.toBe(kitShade("#ffc46b", -46 / 255));
+    // 越界钳到 0/255,不环绕
+    expect(fsShadeColor("#101010", -46)).toBe("rgb(0,0,0)");
+    expect(fsShadeColor("#f0f0f0", 46)).toBe("rgb(255,255,255)");
+  });
+
+  it("index.ts 局部 shade 与 visual.shadeColor 同一加法规则(源码级对照,防两份各自漂移)", () => {
+    const idx = readFileSync(new URL("./fruit-slice/index.ts", import.meta.url), "utf8");
+    const vis = readFileSync(new URL("./fruit-slice/visual.ts", import.meta.url), "utf8");
+    for (const src of [idx, vis]) {
+      expect(src).toContain("Math.max(0, Math.min(255, (n >> 16) + amt))");
+      expect(src).toContain("return `rgb(${r},${g},${b})`;");
     }
   });
 });
