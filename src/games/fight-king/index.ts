@@ -86,6 +86,25 @@ import {
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
 
 /* ------------------------------------------------------------------ */
+/* 格斗塔的出战默认值                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 格斗塔默认派谁上场。
+ *
+ * 以前这里固定是 `CHARACTERS[0]`（朵朵）。第 2 轮验收拿仓库自带那把尺量下来
+ * （`curve.test.ts` 的做法：玩家一侧交给 lv4 的手、对手照配表取档位与增益、固定 seed），
+ * 朵朵在第 125 关往后一路 0/8，换个小伙伴立刻 4~6/8 —— **关卡表不是墙，默认主角才是**（R2B-3）。
+ * 所以默认改成实测能一路推到塔顶的星星；朵朵仍旧排在选人格第一位，想用她随时点。
+ */
+export const TOWER_HERO_ID = "xingxing";
+
+/** 同一关连着输这么多场，就在选人格下面提一句「换个小伙伴试试」 */
+export const SWAP_HINT_AFTER = 3;
+
+export const SWAP_HINT_TEXT = "连着几场没赢下来啦，上面那排换个小伙伴试试，换完还从这一关继续。";
+
+/* ------------------------------------------------------------------ */
 /* 样式                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -123,6 +142,9 @@ const CSS = `
 .fk-ch-e{font-size:21px;line-height:1;}
 .fk-ch-n{font-size:12px;font-weight:900;color:#5b4890;}
 .fk-ch-on{outline:3px solid #e0679f;background:#fff;}
+/* 连着几场没赢下来才写字,平时是空的,所以不占地方 */
+.fk-swap{font-size:13px;font-weight:800;color:#a3568a;line-height:1.6;margin-top:8px;}
+.fk-swap:empty{display:none;}
 .fk-info{margin-top:8px;font-size:12.5px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
   box-shadow:0 4px 14px rgba(140,120,190,.2);}
@@ -1814,10 +1836,13 @@ export function mount(api: GameApi): { destroy: () => void } {
     const towerHost = el("div");
     view.appendChild(towerHost);
 
-    // 塔里固定用朵朵登场；想换角色就去双人 / 人机模式挑
-    let heroId = CHARACTERS[0].id;
+    // 塔里默认派 TOWER_HERO_ID 上场（见那条常量的注释）；上面这一排随时能换人
+    let heroId: string = TOWER_HERO_ID;
     const heroRow = el("div", "fk-card");
-    heroRow.appendChild(el("div", "fk-pick-t", "🌸 出战角色（随时可以换，换完从当前关继续）"));
+    const heroDefault = characterById(TOWER_HERO_ID);
+    heroRow.appendChild(
+      el("div", "fk-pick-t", `${heroDefault.emoji} 出战角色（随时可以换，换完从当前关继续）`)
+    );
     const grid = el("div", "fk-grid");
     const heroBtns: HTMLButtonElement[] = [];
     CHARACTERS.forEach((ch, i) => {
@@ -1829,15 +1854,22 @@ export function mount(api: GameApi): { destroy: () => void } {
         heroId = ch.id;
         sfx("pop");
         heroBtns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
+        swapTip.textContent = "";
       });
       heroBtns.push(b);
       grid.appendChild(b);
     });
-    heroBtns[0].classList.add("fk-ch-on");
+    heroBtns[Math.max(0, CHARACTERS.findIndex((c) => c.id === TOWER_HERO_ID))].classList.add("fk-ch-on");
     heroRow.appendChild(grid);
+    // 连着几场没赢下来就在这儿提一句「换个小伙伴试试」，平时是空的
+    const swapTip = el("div", "fk-swap");
+    heroRow.appendChild(swapTip);
     view.insertBefore(heroRow, towerHost);
 
     let currentFight: FightHandle | null = null;
+    /** 同一关连着几场没赢下来 */
+    let lossStreak = 0;
+    let streakAt = -1;
 
     const tower = mountLevelGame(
       { ...api, root: towerHost },
@@ -1868,8 +1900,23 @@ export function mount(api: GameApi): { destroy: () => void } {
             title: `🏯 第 ${ctx.level + 1} 关${stage.boss ? " · 守擂者" : ""}`,
             sfx: (n) => ctx.sfx(n),
             onEnd: (winner, info) => {
-              if (winner === 0) ctx.win(rateByVigor(info.vigorLeft, info.maxVigor));
-              else ctx.lose("这一层的对手挺有一套，换个节奏再来！");
+              if (winner === 0) {
+                lossStreak = 0;
+                swapTip.textContent = "";
+                ctx.win(rateByVigor(info.vigorLeft, info.maxVigor));
+                return;
+              }
+              if (streakAt !== ctx.level) {
+                streakAt = ctx.level;
+                lossStreak = 0;
+              }
+              lossStreak += 1;
+              if (lossStreak >= SWAP_HINT_AFTER) {
+                swapTip.textContent = SWAP_HINT_TEXT;
+                ctx.lose(SWAP_HINT_TEXT);
+                return;
+              }
+              ctx.lose("这一层的对手挺有一套，换个节奏再来！");
             }
           });
           return {
