@@ -8,7 +8,10 @@ export const meta = {
   emoji: "🥊",
   category: "party" as const,
   color: "#FFE3D0",
-  blurb: "上下半场同时开抢！三回合点点大战，金币礼物加炸弹，先赢两回合称王！",
-  // 没有闯关地图,只有一局定胜负的双人同屏擂台,所以不填 levels
-  modes: ["versus", "twoPlayer"] as const,
+  blurb: "上下半场同时开抢!走位收元气,三局两胜,四张擂台轮换,人机四档还能无尽守擂。",
+  // 没有 188 关战役:这是纯对战玩法,硬凑 188 关只会变成同一个回合重复 188 遍(注水),
+  // 所以不填 levels。平台的 ?level=N 直达仍然接住,映射成「人机档 + 场地」,见 match.ts 的 levelToSetup。
+  modes: ["versus", "twoPlayer", "endless"] as const,
+  // 键盘双人同屏与手机摇杆两套控件都做了,手游端游都能玩
+  platform: "both" as const,
 };

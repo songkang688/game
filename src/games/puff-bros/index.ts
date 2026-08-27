@@ -1,7 +1,20 @@
 import { meta } from "./meta";
 export { meta };
 
-import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+import {
+  TOTAL_LEVELS,
+  chapterOf,
+  chapterStart,
+  loadStars,
+  mountLevelGame,
+  saveStar,
+  type Chapter,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+  type SoundName,
+} from "../level99";
+import { getLevelExtras } from "../../ui/level188Contract";
 import { save } from "../../engine/save";
 import GUIDE from "./guide";
 import {
@@ -18,6 +31,31 @@ import {
   buildWave,
   type ArenaDef,
 } from "./arena";
+import {
+  BRITTLE_REGROW,
+  SPRING_RECHARGE,
+  UPDRAFT_MAX_UP,
+  WARP_R,
+  brittlePhase,
+  gadgetRect,
+  type GadgetState,
+} from "./gadgets";
+import { SQUASH_TIME, squashScale as landingSquash } from "./feel";
+import { PUFF_WINDUP, puffRing, squishScale as pushSquish, windupProgress } from "./push";
+import { TUMBLE_TIME, tumbleProgress } from "./bounds";
+import {
+  CLIMB_BEST_KEY,
+  SECTION_METERS,
+  bottomLine,
+  buildClimbSection,
+  climbHeight,
+  climbMessage,
+  heightLine,
+  lineY,
+  parseClimbBest,
+  rowOfSurface,
+  serializeClimbBest,
+} from "./updraft";
 import {
   BOT_LEVELS,
   BOT_PROFILES,
@@ -97,98 +135,120 @@ const CANDY_ART = ["🍬", "🍭", "🧁", "🍡"];
 // 样式
 // ---------------------------------------------------------------------------
 
+/**
+ * 触屏按键的最小热区(px)。
+ *
+ * 1.1 的双人并排会把按键缩到 36px,360px 的手机上小朋友按十次错三次。
+ * 1.2 把每一套控件从 4 列改成 3 列(⬆ 🫧 💨 / ◀ ⬇ ▶),
+ * 于是 360px 上两套并排也还剩得下 44px —— 这个数字是下限,不是目标值。
+ */
+export const TOUCH_MIN = 44;
+
 const CSS = `
-.pb-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
+.pfb-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;position:relative;}
-.pb-hud{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
-.pb-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:800;color:#3F5C77;
+.pfb-hud{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+.pfb-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;color:#3F5C77;
   box-shadow:0 2px 6px rgba(110,140,175,.24);white-space:nowrap;}
-.pb-chip-a{background:#FFE4EF;color:#A33C6C;}
-.pb-chip-b{background:#DEEBFC;color:#2F5A8C;}
-.pb-bar{position:relative;flex:1;min-width:104px;height:20px;border-radius:999px;background:#ffffffcc;
+.pfb-chip-a{background:#FFE4EF;color:#A33C6C;}
+.pfb-chip-b{background:#DEEBFC;color:#2F5A8C;}
+.pfb-bar{position:relative;flex:1;min-width:104px;height:20px;border-radius:999px;background:#ffffffcc;
   overflow:hidden;box-shadow:inset 0 1px 3px rgba(100,130,165,.28);}
-.pb-bar-fill{height:100%;width:0%;border-radius:999px;transition:width .16s linear;
+.pfb-bar-fill{height:100%;width:0%;border-radius:999px;transition:width .16s linear;
   background:linear-gradient(90deg,#9BD9F5,#F7A8CC);}
-.pb-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:900;color:#33526E;}
-.pb-btn{border:none;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:900;cursor:pointer;
+/* 一行放不下就横着裁掉,绝不折成两行 —— 20px 高的条子折两行会糊成一团 */
+.pfb-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:900;color:#33526E;white-space:nowrap;overflow:hidden;}
+.pfb-btn{border:none;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.32);}
-.pb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.32);}
-.pb-btn:focus-visible,.pb-key:focus-visible,.pb-mode:focus-visible,.pb-veil-btn:focus-visible,
-.pb-pick:focus-visible{outline:3px solid #274766;outline-offset:2px;}
-.pb-stagebox{position:relative;border-radius:16px;overflow:hidden;background:#EEF7FF;margin:0 auto;
+.pfb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.32);}
+.pfb-btn:focus-visible,.pfb-key:focus-visible,.pfb-mode:focus-visible,.pfb-veil-btn:focus-visible,
+.pfb-pick:focus-visible{outline:3px solid #274766;outline-offset:2px;}
+.pfb-stagebox{position:relative;border-radius:16px;overflow:hidden;background:#EEF7FF;margin:0 auto;
   box-shadow:0 4px 12px rgba(110,140,175,.26);}
 /* 这个高度只是脚本量出真正剩余空间之前的垫底值,量完会被行内样式盖掉 */
-.pb-cv{display:block;width:100%;height:300px;}
-.pb-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+.pfb-cv{display:block;width:100%;height:300px;}
+.pfb-veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:8px;text-align:center;padding:16px;background:rgba(246,252,255,.94);}
-.pb-veil-title{font-size:20px;font-weight:900;color:#2F5A8C;}
-.pb-veil-sub{font-size:14px;font-weight:700;color:#4E7295;line-height:1.6;max-width:340px;}
-.pb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.pb-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
+.pfb-veil-title{font-size:20px;font-weight:900;color:#2F5A8C;}
+.pfb-veil-sub{font-size:14px;font-weight:700;color:#4E7295;line-height:1.6;max-width:340px;}
+.pfb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.pfb-veil-btn{border:none;border-radius:16px;padding:10px 20px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
-.pb-veil-btn.pb-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
-.pb-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #B95278;}
-.pb-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
+.pfb-veil-btn.pfb-ghost{background:linear-gradient(180deg,#8FBEE8,#6A97CC);box-shadow:0 4px 0 #4F79A8;}
+.pfb-veil-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #B95278;}
+.pfb-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#ffffffee;border-radius:999px;
   padding:5px 14px;font-size:13px;font-weight:800;color:#2F5A8C;box-shadow:0 3px 8px rgba(110,140,175,.3);
   pointer-events:none;opacity:0;transition:opacity .25s ease;max-width:90%;text-align:center;}
-.pb-toast.pb-on{opacity:1;}
-.pb-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;}
-.pb-pads[data-pads="1"]{justify-content:center;}
-.pb-pads[data-pads="2"]{--k:40px;}
+.pfb-toast.pfb-on{opacity:1;}
+/* 两个人各占半边屏:space-between 把两套控件顶到左右两头,中间那条空档
+   既是「这半边是你的」的分界,也保证两个人的拇指不会在中线上打架 */
+.pfb-pads{display:flex;justify-content:space-between;gap:10px;margin-top:8px;--k:58px;}
+.pfb-pads[data-pads="1"]{justify-content:center;}
+.pfb-pads[data-pads="2"]{--k:52px;}
 /* 第一行是键位说明,按字数占多高就多高:按钮的行号是写死的,
    要是让它跟按钮一样高,说明藏起来之后会在这儿留一个空行 */
-.pb-pad{display:grid;grid-template-columns:repeat(4,var(--k));grid-template-rows:auto var(--k) var(--k);
-  grid-auto-rows:var(--k);gap:4px;justify-content:center;}
-.pb-pad-name{grid-column:1/-1;font-size:11px;font-weight:800;color:#3F5C77;text-align:center;line-height:1.3;}
-.pb-key{border:none;border-radius:14px;font-size:19px;font-weight:900;cursor:pointer;font-family:inherit;
-  background:#ffffffe0;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.34);touch-action:none;padding:0;}
-.pb-key:active,.pb-key.pb-down{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.34);
+.pfb-pad{display:grid;grid-template-columns:repeat(3,var(--k));grid-template-rows:auto var(--k) var(--k);
+  grid-auto-rows:var(--k);gap:5px;justify-content:center;}
+.pfb-pad-name{grid-column:1/-1;font-size:11px;font-weight:800;color:#3F5C77;text-align:center;line-height:1.3;}
+.pfb-key{border:none;border-radius:14px;font-size:20px;font-weight:900;cursor:pointer;font-family:inherit;
+  background:#ffffffe0;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.34);touch-action:none;padding:0;
+  min-width:${TOUCH_MIN}px;min-height:${TOUCH_MIN}px;}
+.pfb-key:active,.pfb-key.pfb-down{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.34);
   background:#DCEEFB;}
-.pb-key-act{background:#FFE0EC;color:#A33C6C;}
-.pb-key-sub{background:#E2F3E0;color:#3B7A46;}
-.pb-tip{margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.5;}
-.pb-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.pfb-key-act{background:#FFE0EC;color:#A33C6C;}
+.pfb-key-sub{background:#E2F3E0;color:#3B7A46;}
+.pfb-tip{margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.5;}
+.pfb-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 /* display:flex 会盖掉 hidden 属性自带的 display:none,进了某个模式就得把这排按钮收起来 */
-.pb-modebar[hidden]{display:none;}
-.pb-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
+.pfb-modebar[hidden]{display:none;}
+.pfb-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
-.pb-mode.pb-mode-duel{background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
-.pb-mode.pb-mode-bot{background:linear-gradient(180deg,#B79AE6,#9375CD);box-shadow:0 4px 0 #7256A6;}
-.pb-mode.pb-mode-coop{background:linear-gradient(180deg,#9AD07C,#78B45B);box-shadow:0 4px 0 #5E9146;}
-.pb-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #46809F;}
-.pb-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
-.pb-head-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#2F5A8C;}
-.pb-picker{display:flex;flex-direction:column;gap:10px;align-items:center;padding:14px 10px;}
-.pb-picker[hidden]{display:none;}
-.pb-picker-title{font-size:17px;font-weight:900;color:#2F5A8C;}
-.pb-picks{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
-.pb-pick{border:none;border-radius:18px;padding:12px 16px;min-width:132px;cursor:pointer;font-family:inherit;
+.pfb-mode.pfb-mode-duel{background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
+.pfb-mode.pfb-mode-bot{background:linear-gradient(180deg,#B79AE6,#9375CD);box-shadow:0 4px 0 #7256A6;}
+.pfb-mode.pfb-mode-coop{background:linear-gradient(180deg,#9AD07C,#78B45B);box-shadow:0 4px 0 #5E9146;}
+.pfb-mode.pfb-mode-climb{background:linear-gradient(180deg,#7FD8CE,#4FAFA6);box-shadow:0 4px 0 #3C8B84;}
+.pfb-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #46809F;}
+.pfb-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.pfb-head-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#2F5A8C;}
+.pfb-picker{display:flex;flex-direction:column;gap:10px;align-items:center;padding:14px 10px;}
+.pfb-picker[hidden]{display:none;}
+.pfb-picker-title{font-size:17px;font-weight:900;color:#2F5A8C;}
+.pfb-picks{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.pfb-pick{border:none;border-radius:18px;padding:12px 16px;min-width:132px;cursor:pointer;font-family:inherit;
   background:#ffffffee;box-shadow:0 4px 0 rgba(110,140,175,.3);text-align:center;}
-.pb-pick:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(110,140,175,.3);}
-.pb-pick-name{font-size:16px;font-weight:900;color:#2F5A8C;}
-.pb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
+.pfb-pick:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(110,140,175,.3);}
+.pfb-pick-name{font-size:16px;font-weight:900;color:#2F5A8C;}
+.pfb-pick-sub{margin-top:4px;font-size:12px;font-weight:700;color:#5B7C9C;line-height:1.4;}
+.pfb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.pfb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
+.pfb-open{border:none;border-radius:16px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
+.pfb-done{text-align:center;padding:18px 12px;font-size:16px;font-weight:800;color:#2F5A8C;line-height:1.7;}
 @media (max-width:420px){
-  .pb-cv{height:210px;}
-  .pb-pads{--k:46px;margin-top:6px;}
-  .pb-pads[data-pads="2"]{--k:36px;}
-  .pb-chip{font-size:12px;padding:3px 7px;}
-  .pb-hud{gap:4px;margin-bottom:4px;}
-  .pb-bar{min-width:74px;height:18px;}
-  .pb-btn{padding:5px 9px;}
-  .pb-lbl{display:none;}
-  .pb-tip{font-size:11px;margin-top:4px;}
-  .pb-pad-name{font-size:10px;}
+  .pfb-cv{height:210px;}
+  /* 360px 上两套并排:3 列 × 44 + 两道 5px 缝 = 142,两套加中间 10px 缝共 294,
+     余下的宽度留给外壳的内边距。热区一格都不许低于 TOUCH_MIN */
+  .pfb-pads{--k:50px;margin-top:6px;}
+  .pfb-pads[data-pads="2"]{--k:${TOUCH_MIN}px;gap:10px;}
+  /* HUD 挤成一行也不许把字缩小:看不清心还剩几颗,这一行就白摆了 */
+  .pfb-hud{gap:4px;margin-bottom:4px;flex-wrap:nowrap;}
+  .pfb-chip{font-size:14px;padding:3px 7px;}
+  .pfb-bar{min-width:56px;height:20px;}
+  .pfb-btn{padding:5px 9px;}
+  .pfb-lbl{display:none;}
+  .pfb-tip{font-size:11px;margin-top:4px;}
+  .pfb-pad-name{font-size:10px;}
 }
 /* 触屏设备用不上键盘提示,省下的高度留给画面 */
-@media (hover:none) and (max-width:420px){ .pb-pad-name{display:none;} }
+@media (hover:none) and (max-width:420px){ .pfb-pad-name{display:none;} }
 @media (max-height:620px){
-  .pb-cv{height:170px;}
-  .pb-pads{--k:42px;margin-top:4px;}
-  .pb-pads[data-pads="2"]{--k:34px;}
-  .pb-tip{margin-top:4px;font-size:11px;}
+  .pfb-cv{height:170px;}
+  .pfb-pads{--k:46px;margin-top:4px;}
+  .pfb-pads[data-pads="2"]{--k:${TOUCH_MIN}px;}
+  .pfb-tip{margin-top:4px;font-size:11px;}
 }
-@media (prefers-reduced-motion:reduce){ .pb-toast{transition:none;} }
+@media (prefers-reduced-motion:reduce){ .pfb-toast{transition:none;} }
 `;
 
 // ---------------------------------------------------------------------------
@@ -228,6 +288,198 @@ function emojiAt(g: CanvasRenderingContext2D, ch: string, x: number, y: number, 
   g.fillText(ch, x, y);
 }
 
+/**
+ * 系统里勾了「减弱动效」没有。
+ *
+ * 勾了的话压扁、旋转、气泡上浮这些**形变与动画**一律按静止画,
+ * 但位移、判定、玩法一个字不改 —— 关掉的是花哨,不是游戏。
+ */
+function reducedMotion(): boolean {
+  try {
+    return typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 机关的画法:五种机关各画各的,一眼要能认出「这是干什么用的」
+// ---------------------------------------------------------------------------
+
+const GADGET_ART = {
+  updraft: { wall: "rgba(126,216,206,.85)", glow: "rgba(168,238,231,.42)" },
+  crate: { body: "#F8DCB0", edge: "#D8A96C", tie: "#F19BB6" },
+  brittle: { body: "#E9F0F8", edge: "#B5C8DE", crack: "#7C92AA" },
+  spring: { body: "#FFF6FA", edge: "#F3B4CE" },
+  warp: { ring: "#8FBEF5", core: "rgba(214,236,255,.7)" },
+};
+
+/** 气流管:一根半透明的管子,里面几颗小气泡一路往上飘 */
+function drawUpdraft(g: CanvasRenderingContext2D, gs: GadgetState, t: number): void {
+  const r = gadgetRect(gs);
+  const w = r.x1 - r.x0;
+  const h = r.y1 - r.y0;
+  g.save();
+  const grad = g.createLinearGradient(0, r.y1, 0, r.y0);
+  grad.addColorStop(0, "rgba(168,238,231,.10)");
+  grad.addColorStop(1, GADGET_ART.updraft.glow);
+  g.fillStyle = grad;
+  roundRect(g, r.x0, r.y0, w, h, 10);
+  g.fill();
+  g.strokeStyle = GADGET_ART.updraft.wall;
+  g.lineWidth = 2;
+  g.setLineDash([7, 6]);
+  g.beginPath();
+  g.moveTo(r.x0 + 1, r.y1);
+  g.lineTo(r.x0 + 1, r.y0);
+  g.moveTo(r.x1 - 1, r.y1);
+  g.lineTo(r.x1 - 1, r.y0);
+  g.stroke();
+  g.setLineDash([]);
+  // 往上飘的小气泡:管子里的气是往上走的,这一点得看得见
+  g.fillStyle = "rgba(255,255,255,.8)";
+  for (let i = 0; i < 4; i++) {
+    const phase = ((t * (UPDRAFT_MAX_UP / 120) + i * 0.25) % 1 + 1) % 1;
+    const by = r.y1 - phase * h;
+    const bx = r.x0 + w * (0.28 + 0.44 * ((i * 7) % 3) * 0.5);
+    g.beginPath();
+    g.arc(bx, by, 3 + (i % 2), 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+}
+
+/** 可推箱:一只系着丝带的糖果盒,推得动、也能垫脚 */
+function drawCrate(g: CanvasRenderingContext2D, gs: GadgetState): void {
+  const r = gadgetRect(gs);
+  const w = r.x1 - r.x0;
+  const h = r.y1 - r.y0;
+  g.save();
+  g.fillStyle = GADGET_ART.crate.body;
+  roundRect(g, r.x0, r.y0, w, h, 6);
+  g.fill();
+  g.strokeStyle = GADGET_ART.crate.edge;
+  g.lineWidth = 2;
+  g.stroke();
+  g.strokeStyle = GADGET_ART.crate.tie;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(r.x0 + w / 2, r.y0);
+  g.lineTo(r.x0 + w / 2, r.y1);
+  g.moveTo(r.x0, r.y0 + h / 2);
+  g.lineTo(r.x1, r.y0 + h / 2);
+  g.stroke();
+  g.restore();
+}
+
+/**
+ * 脆弱地板:完好时是一块干净的云板,踩一下裂出纹路(**预警**),再踩就碎。
+ * 碎掉之后留一圈虚线,好让小朋友知道「这儿等会儿还会长回来」。
+ */
+function drawBrittle(g: CanvasRenderingContext2D, gs: GadgetState): void {
+  const r = gadgetRect(gs);
+  const w = r.x1 - r.x0;
+  const h = r.y1 - r.y0;
+  const phase = brittlePhase(gs);
+  g.save();
+  if (phase === "gone") {
+    g.globalAlpha = 0.35 + 0.4 * (1 - gs.regrow / BRITTLE_REGROW);
+    g.strokeStyle = GADGET_ART.brittle.edge;
+    g.lineWidth = 2;
+    g.setLineDash([5, 5]);
+    roundRect(g, r.x0, r.y0, w, h, 4);
+    g.stroke();
+    g.setLineDash([]);
+    g.restore();
+    return;
+  }
+  g.fillStyle = GADGET_ART.brittle.body;
+  roundRect(g, r.x0, r.y0, w, h, 4);
+  g.fill();
+  g.strokeStyle = GADGET_ART.brittle.edge;
+  g.lineWidth = 2;
+  g.stroke();
+  if (phase === "cracked") {
+    g.strokeStyle = GADGET_ART.brittle.crack;
+    g.lineWidth = 1.6;
+    g.beginPath();
+    for (let i = 1; i <= 3; i++) {
+      const cx = r.x0 + (w * i) / 4;
+      g.moveTo(cx - 5, r.y0);
+      g.lineTo(cx, r.y0 + h / 2);
+      g.lineTo(cx + 4, r.y1);
+    }
+    g.stroke();
+  }
+  g.restore();
+}
+
+/** 弹簧云:软软的一朵,刚弹过的那一下会扁一点点 */
+function drawSpring(g: CanvasRenderingContext2D, gs: GadgetState, motion: boolean): void {
+  const r = gadgetRect(gs);
+  const w = r.x1 - r.x0;
+  const squash = motion && gs.recharge > 0 ? (gs.recharge / SPRING_RECHARGE) * 0.4 : 0;
+  const h = (r.y1 - r.y0) * (1 - squash);
+  g.save();
+  g.fillStyle = GADGET_ART.spring.body;
+  g.strokeStyle = GADGET_ART.spring.edge;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.ellipse(r.x0 + w * 0.26, r.y0 + h * 0.4, w * 0.26, h * 1.5, 0, 0, Math.PI * 2);
+  g.ellipse(r.x0 + w * 0.5, r.y0 + h * 0.2, w * 0.3, h * 1.9, 0, 0, Math.PI * 2);
+  g.ellipse(r.x0 + w * 0.75, r.y0 + h * 0.4, w * 0.26, h * 1.5, 0, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+  g.restore();
+}
+
+/** 传送泡:一颗泡泡,里面有一圈打转的光。刚用过的那阵子它是暗的 */
+function drawWarp(g: CanvasRenderingContext2D, gs: GadgetState, t: number, motion: boolean): void {
+  const cx = gs.def.x;
+  const cy = gs.def.y - WARP_R;
+  const cooling = gs.warpCd.some((c) => c > 0);
+  g.save();
+  g.globalAlpha = cooling ? 0.4 : 1;
+  const grad = g.createRadialGradient(cx - WARP_R * 0.3, cy - WARP_R * 0.3, WARP_R * 0.2, cx, cy, WARP_R);
+  grad.addColorStop(0, "rgba(255,255,255,.95)");
+  grad.addColorStop(1, GADGET_ART.warp.core);
+  g.fillStyle = grad;
+  g.beginPath();
+  g.arc(cx, cy, WARP_R, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = GADGET_ART.warp.ring;
+  g.lineWidth = 2.5;
+  g.stroke();
+  const spin = motion ? t * 2.2 : 0;
+  g.strokeStyle = "rgba(255,255,255,.9)";
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(cx, cy, WARP_R * 0.55, spin, spin + Math.PI * 1.2);
+  g.stroke();
+  g.restore();
+}
+
+function drawGadget(g: CanvasRenderingContext2D, gs: GadgetState, t: number, motion: boolean): void {
+  switch (gs.def.kind) {
+    case "updraft":
+      drawUpdraft(g, gs, motion ? t : 0);
+      return;
+    case "crate":
+      drawCrate(g, gs);
+      return;
+    case "brittle":
+      drawBrittle(g, gs);
+      return;
+    case "spring":
+      drawSpring(g, gs, motion);
+      return;
+    default:
+      drawWarp(g, gs, t, motion);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 场地:一块画布 + 一套操作 + 一个世界
 // ---------------------------------------------------------------------------
@@ -260,6 +512,10 @@ interface FieldOpts {
   tip: string;
   showTimer: boolean;
   extraChip?: (w: World) => string;
+  /** 盖掉 HUD 那条进度条的内容(上升气流量的是高度,不是清了几只怪) */
+  progress?: (w: World) => { fill: number; text: string };
+  /** 每一帧推进完世界之后叫一次(上升气流靠它记「爬到过第几层」) */
+  onTick?: (w: World) => void;
   onEnd: (w: World) => void;
   onQuit?: () => void;
 }
@@ -275,6 +531,12 @@ interface Field {
 
 const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
   jump: "jump",
+  double: "jump",
+  puff: "pop",
+  spring: "jump",
+  crack: "tap",
+  warp: "coin",
+  tumble: "oops",
   blow: "pop",
   catch: "coin",
   pop: "pop",
@@ -288,6 +550,12 @@ const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
 };
 
 const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
+  double: "🫧",
+  puff: "💨",
+  spring: "☁️",
+  crack: "✨",
+  warp: "🌀",
+  tumble: "💫",
   catch: "🫧",
   pop: "✨",
   burst: "💨",
@@ -297,13 +565,32 @@ const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
   combo: "🌟",
 };
 
+/**
+ * 一套控件六颗键,排成 3 列 × 2 行:
+ *
+ * ```
+ *  ⬆   🫧   💨
+ *  ◀   ⬇   ▶
+ * ```
+ *
+ * 下面一排是走路(左 / 蹲 / 右),拇指自然落在那儿;上面一排是跳和两口气。
+ * 1.1 排的是 4 列,双人并排时每颗只剩 36px;砍掉一列之后 360px 上也还有
+ * `TOUCH_MIN` 那么大。
+ */
 const PAD_KEYS: Array<{ act: InputName; label: string; cls?: string; aria: string; col: number; row: number }> = [
-  { act: "up", label: "⬆", aria: "跳", col: 2, row: 2 },
-  { act: "act", label: "💨", cls: "pb-key-act", aria: "吹泡泡糖气流", col: 4, row: 2 },
+  { act: "up", label: "⬆", aria: "跳(空中再按一下是二段跳)", col: 1, row: 2 },
+  { act: "act", label: "🫧", cls: "pfb-key-act", aria: "吹一个泡泡糖气泡", col: 2, row: 2 },
+  {
+    act: "sub",
+    label: "💨",
+    cls: "pfb-key-sub",
+    aria: "噗一口气:戳破泡泡、吹开对手、推动箱子;空中没打着东西就把自己推出去",
+    col: 3,
+    row: 2,
+  },
   { act: "left", label: "◀", aria: "往左", col: 1, row: 3 },
-  { act: "down", label: "⬇", aria: "蹲下(配合跳可以穿过浮台)", col: 2, row: 3 },
+  { act: "down", label: "⬇", aria: "蹲下(配合跳可以穿过浮台;站在传送泡上按它就传送)", col: 2, row: 3 },
   { act: "right", label: "▶", aria: "往右", col: 3, row: 3 },
-  { act: "sub", label: "👉", cls: "pb-key-sub", aria: "噗一下戳破泡泡", col: 4, row: 3 },
 ];
 
 function createField(host: HTMLElement, opts: FieldOpts): Field {
@@ -318,26 +605,27 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const inputs: Input[] = [emptyInput(), emptyInput()];
   const sfxAt = new Map<SoundName, number>();
   const padCount = opts.humans;
+  const motion = !reducedMotion();
 
-  const wrap = el("div", "pb-wrap");
+  const wrap = el("div", "pfb-wrap");
   wrap.dataset.pads = String(padCount);
   const style = el("style");
   style.textContent = CSS;
   wrap.appendChild(style);
 
   // ---- HUD ----
-  const hud = el("div", "pb-hud");
-  const leftChip = el("span", "pb-chip");
-  const bar = el("div", "pb-bar");
-  const barFill = el("div", "pb-bar-fill");
-  const barTxt = el("span", "pb-bar-txt");
+  const hud = el("div", "pfb-hud");
+  const leftChip = el("span", "pfb-chip");
+  const bar = el("div", "pfb-bar");
+  const barFill = el("div", "pfb-bar-fill");
+  const barTxt = el("span", "pfb-bar-txt");
   bar.append(barFill, barTxt);
-  const rightChip = el("span", "pb-chip");
-  const timerChip = el("span", "pb-chip");
-  const extraChip = el("span", "pb-chip");
-  const pauseBtn = el("button", "pb-btn");
+  const rightChip = el("span", "pfb-chip");
+  const timerChip = el("span", "pfb-chip");
+  const extraChip = el("span", "pfb-chip");
+  const pauseBtn = el("button", "pfb-btn");
   pauseBtn.type = "button";
-  pauseBtn.innerHTML = `⏸<span class="pb-lbl"> 暂停</span>`;
+  pauseBtn.innerHTML = `⏸<span class="pfb-lbl"> 暂停</span>`;
   pauseBtn.setAttribute("aria-label", "暂停(也可以按 Esc)");
   hud.append(leftChip, bar, rightChip);
   if (opts.showTimer) hud.appendChild(timerChip);
@@ -346,33 +634,33 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   wrap.appendChild(hud);
 
   // ---- 画布 ----
-  const box = el("div", "pb-stagebox");
-  const canvas = el("canvas", "pb-cv");
+  const box = el("div", "pfb-stagebox");
+  const canvas = el("canvas", "pfb-cv");
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", `${opts.title}:噗噗兄弟正在吹泡泡糖气流`);
-  const toastEl = el("div", "pb-toast");
+  const toastEl = el("div", "pfb-toast");
   box.append(canvas, toastEl);
   wrap.appendChild(box);
 
   // ---- 触屏按键 ----
-  const pads = el("div", "pb-pads");
+  const pads = el("div", "pfb-pads");
   pads.dataset.pads = String(padCount);
   const padButtons: Array<{ btn: HTMLButtonElement; player: number; act: InputName }> = [];
   for (let pi = 0; pi < padCount; pi++) {
-    const pad = el("div", "pb-pad");
+    const pad = el("div", "pfb-pad");
     pad.appendChild(
       el(
         "div",
-        "pb-pad-name",
+        "pfb-pad-name",
         padCount === 1
-          ? "WASD / 方向键移动 · F 或 L 吹气流 · G 或 K 噗一下"
+          ? "WASD / 方向键移动 · F 或 L 吹泡泡 · G 或 K 噗一口"
           : pi === 0
             ? "朵朵 · W A S D · F 吹 · G 噗"
             : "星星 · ↑←↓→ · L 吹 · K 噗"
       )
     );
     for (const k of PAD_KEYS) {
-      const btn = el("button", `pb-key${k.cls ? ` ${k.cls}` : ""}`, k.label);
+      const btn = el("button", `pfb-key${k.cls ? ` ${k.cls}` : ""}`, k.label);
       btn.type = "button";
       btn.style.gridColumn = String(k.col);
       btn.style.gridRow = String(k.row);
@@ -384,7 +672,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   }
   wrap.appendChild(pads);
 
-  const tip = el("div", "pb-tip", opts.tip);
+  const tip = el("div", "pfb-tip", opts.tip);
   wrap.appendChild(tip);
   host.appendChild(wrap);
 
@@ -465,29 +753,46 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     slot[act] = down;
   }
 
-  for (const { btn, player, act } of padButtons) {
+  /**
+   * 这颗键是被哪根手指按住的。
+   *
+   * 1.1 在 window 上挂了一条「抬手就全松」:两个人同屏时,朵朵抬一下手会把
+   * 星星正按着的键也一起清掉,人当场定在原地。这里记住按下时的 `pointerId`,
+   * window 上那条只松掉**同一根手指**按着的键,另一个人按着的原样留着。
+   */
+  const heldBy = new Map<HTMLButtonElement, number>();
+
+  function release(entry: { btn: HTMLButtonElement; player: number; act: InputName }): void {
+    heldBy.delete(entry.btn);
+    entry.btn.classList.remove("pfb-down");
+    setKey(entry.player, entry.act, false);
+  }
+
+  for (const entry of padButtons) {
+    const { btn, player, act } = entry;
     btn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
-      btn.classList.add("pb-down");
+      heldBy.set(btn, e.pointerId ?? -1);
+      btn.classList.add("pfb-down");
       setKey(player, act, true);
     });
-    const up = (): void => {
-      btn.classList.remove("pb-down");
-      setKey(player, act, false);
-    };
+    const up = (): void => release(entry);
     btn.addEventListener("pointerup", up);
     btn.addEventListener("pointercancel", up);
     btn.addEventListener("pointerleave", up);
   }
 
-  const releaseAll = (): void => {
-    for (const { btn, player, act } of padButtons) {
-      btn.classList.remove("pb-down");
-      setKey(player, act, false);
+  /** 松掉这根手指按着的键;不给 id(失焦、退出)就一颗不留全松掉 */
+  const releaseAll = (pointerId?: number): void => {
+    for (const entry of padButtons) {
+      if (pointerId !== undefined && heldBy.get(entry.btn) !== pointerId) continue;
+      release(entry);
     }
   };
-  window.addEventListener("pointerup", releaseAll);
-  window.addEventListener("blur", releaseAll);
+  const onWindowPointerUp = (e: PointerEvent): void => releaseAll(e.pointerId ?? -1);
+  const onWindowBlur = (): void => releaseAll();
+  window.addEventListener("pointerup", onWindowPointerUp);
+  window.addEventListener("blur", onWindowBlur);
 
   const onKeyDown = (e: KeyboardEvent): void => {
     if (isPauseKey(e.code)) {
@@ -519,11 +824,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
   function showVeil(title: string, sub: string, buttons: VeilButton[]): void {
     clearVeil();
-    const v = el("div", "pb-veil");
-    v.append(el("div", "pb-veil-title", title), el("div", "pb-veil-sub", sub));
-    const row = el("div", "pb-veil-btns");
+    const v = el("div", "pfb-veil");
+    v.append(el("div", "pfb-veil-title", title), el("div", "pfb-veil-sub", sub));
+    const row = el("div", "pfb-veil-btns");
     for (const b of buttons) {
-      const btn = el("button", `pb-veil-btn${b.ghost ? " pb-ghost" : ""}`, b.label);
+      const btn = el("button", `pfb-veil-btn${b.ghost ? " pfb-ghost" : ""}`, b.label);
       btn.type = "button";
       btn.addEventListener("click", () => {
         opts.sfx("tap");
@@ -534,8 +839,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     v.appendChild(row);
     box.appendChild(v);
     veil = v;
+    // 焦点落到第一颗按钮上,键盘和读屏都能顺着往下走。
+    // 这里认「有没有 focus 这个方法」而不是 `instanceof HTMLElement`——
+    // 后者在没有 DOM 全局的运行环境里会直接抛 ReferenceError
     const first = v.querySelector("button");
-    if (first instanceof HTMLElement) first.focus();
+    if (typeof (first as { focus?: unknown } | null)?.focus === "function") {
+      (first as HTMLElement).focus();
+    }
   }
 
   function togglePause(): void {
@@ -559,7 +869,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
   function toast(text: string): void {
     toastEl.textContent = text;
-    toastEl.classList.add("pb-on");
+    toastEl.classList.add("pfb-on");
     toastT = 2.2;
   }
 
@@ -592,6 +902,19 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx.save();
     ctx.globalAlpha = blink ? 0.45 : 1;
     ctx.translate(p.x, p.y);
+
+    // 形变三件套:落地压扁、被别人吹扁、掉出去打转。
+    // 三样都只动外形,判定盒还是那个方方正正的 PLAYER_W × PLAYER_H;
+    // 系统勾了「减弱动效」就一样都不做,人照走照跳,只是不再拉伸打转。
+    if (motion) {
+      if (p.bounds.phase === "tumble") {
+        ctx.translate(0, -h * 0.5);
+        ctx.rotate(p.bounds.spin);
+        ctx.translate(0, h * 0.5);
+      }
+      const squash = landingSquash(p.feel) + pushSquish(p.puff);
+      if (squash > 0.001) ctx.scale(1 + squash, 1 - squash);
+    }
 
     // 小脚
     ctx.fillStyle = c.dark;
@@ -627,11 +950,16 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx.ellipse(w * 0.32, -h * 0.5, 3.4, 2.4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 正在吹气流:嘴边鼓一个小泡
+    // 嘴:正在吹泡泡就鼓一个小泡,正在攒那一口气就把腮帮子鼓起来
     if (p.blowCd > 0.24) {
       ctx.fillStyle = "rgba(255,255,255,.85)";
       ctx.beginPath();
       ctx.arc(p.facing * (w * 0.55), -h * 0.5, 5 + (p.blowCd - 0.24) * 14, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (p.puff.pending) {
+      ctx.fillStyle = c.dark;
+      ctx.beginPath();
+      ctx.ellipse(p.facing * 4, -h * 0.46, 3.4 + windupProgress(p.puff) * 1.6, 3, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
       ctx.fillStyle = c.eye;
@@ -639,6 +967,43 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       ctx.ellipse(p.facing * 3, -h * 0.46, 2.6, 2, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
+  }
+
+  /**
+   * 「噗」的前摇:嘴边那个气流环从小画到大,`PUFF_WINDUP` 走完就喷出去。
+   *
+   * 这一圈是给对手看的 —— 看见它在攒就来得及躲开;也是给自己看的,
+   * 免得小朋友按了半天不知道到底有没有按上。
+   */
+  function drawPuffRing(ctx: CanvasRenderingContext2D, p: World["players"][number]): void {
+    if (!p.puff.pending) return;
+    const ring = puffRing(p.x, p.y, PLAYER_H, PLAYER_W / 2, p.facing);
+    const t = windupProgress(p.puff);
+    ctx.save();
+    ctx.globalAlpha = 0.3 + 0.55 * t;
+    ctx.strokeStyle = "rgba(150,214,242,.95)";
+    ctx.lineWidth = 2 + t * 1.5;
+    ctx.beginPath();
+    ctx.ellipse(ring.cx, ring.cy, ((ring.x1 - ring.x0) / 2) * (0.35 + 0.65 * t), (ring.y1 - ring.y0) / 2 * (0.35 + 0.65 * t), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * 掉出底线的人在打转:身边画一圈越缩越小的提示环。
+   * 环还在就说明还救得回来 —— 左右挪一挪、空中噗一口,都能飘回场上。
+   */
+  function drawTumbleRing(ctx: CanvasRenderingContext2D, p: World["players"][number]): void {
+    if (p.bounds.phase !== "tumble") return;
+    const left = tumbleProgress(p.bounds);
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = left > 0.4 ? "rgba(255,196,224,.95)" : "rgba(242,150,120,.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - PLAYER_H * 0.5, PLAYER_W * 0.9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -720,6 +1085,44 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx.restore();
   }
 
+  /** 地板上还实心的那几段(坑之间的部分),从左往右排好 */
+  function floorSpans(): Array<{ x0: number; x1: number }> {
+    const pits = [...world.def.pits].sort((a, b) => a.x0 - b.x0);
+    const out: Array<{ x0: number; x1: number }> = [];
+    let cursor = 0;
+    for (const pit of pits) {
+      if (pit.x0 > cursor) out.push({ x0: cursor, x1: pit.x0 });
+      cursor = Math.max(cursor, pit.x1);
+    }
+    if (cursor < ARENA_W) out.push({ x0: cursor, x1: ARENA_W });
+    return out;
+  }
+
+  /**
+   * 上升气流的那条气流线:它一路往上追,被追上就开始打转。
+   * 画成一条半透明的浪,越靠近它颜色越紧张 —— 这是「快跑」的唯一提示。
+   */
+  function drawClimbLine(ctx: CanvasRenderingContext2D): void {
+    if (world.def.climbRow <= 0) return;
+    const y = Math.min(bottomLine(), lineY(world.def.index, world.time));
+    if (y > ARENA_H + 20) return;
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "rgba(126,216,206,.75)";
+    ctx.fillRect(WALL, y, ARENA_W - WALL * 2, ARENA_H - y);
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = "rgba(79,175,166,.95)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let x = WALL; x <= ARENA_W - WALL; x += 8) {
+      const wave = motion ? Math.sin(x * 0.09 + world.time * 4) * 3 : 0;
+      if (x === WALL) ctx.moveTo(x, y + wave);
+      else ctx.lineTo(x, y + wave);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function render(now: number): void {
     if (!g) return;
     const rect = canvas.getBoundingClientRect();
@@ -765,11 +1168,14 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     g.fillStyle = pal.deck;
     g.fillRect(0, CEILING_Y - 3, ARENA_W, 3);
 
-    // 地板
-    g.fillStyle = pal.deckSoft;
-    g.fillRect(0, FLOOR_Y, ARENA_W, FLOOR_H);
-    g.fillStyle = pal.deck;
-    g.fillRect(0, FLOOR_Y, ARENA_W, 5);
+    // 地板。1.2 的对战场和上升气流里有真的坑,坑那一段不画地板 ——
+    // 底下透出来的就是天,小朋友一眼看得出「这儿是空的,别走过去」
+    for (const span of floorSpans()) {
+      g.fillStyle = pal.deckSoft;
+      g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, FLOOR_H);
+      g.fillStyle = pal.deck;
+      g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, 5);
+    }
 
     // 浮台
     for (const pl of world.def.platforms) {
@@ -780,6 +1186,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       roundRect(g, pl.x, pl.y, pl.w, 5, 3);
       g.fill();
     }
+
+    // 机关画在浮台之后、人之前:人踩在机关上,不该被机关盖住
+    for (const gs of world.gadgets) drawGadget(g, gs, world.time, motion);
+
+    // 上升气流:脚底下那条一直往上追的气流线
+    drawClimbLine(g);
 
     for (let i = 0; i < world.candies.length; i++) {
       const c = world.candies[i];
@@ -797,6 +1209,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (p.respawnT > 0) continue;
       if (p.trapped) continue;
       drawBro(g, p, i);
+      drawPuffRing(g, p);
+      drawTumbleRing(g, p);
     }
 
     // 泡泡最后画,裹着的东西画在里面
@@ -822,22 +1236,28 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
   function refreshHud(): void {
     if (world.rivalry) {
-      leftChip.className = "pb-chip pb-chip-a";
+      leftChip.className = "pfb-chip pfb-chip-a";
       leftChip.textContent = `🌸 朵朵 ${world.players[0]?.pops ?? 0}`;
-      rightChip.className = "pb-chip pb-chip-b";
+      rightChip.className = "pfb-chip pfb-chip-b";
       rightChip.textContent = `⭐ 星星 ${world.players[1]?.pops ?? 0}`;
       const target = Math.max(1, world.def.roundTarget);
       const lead = Math.max(world.players[0]?.pops ?? 0, world.players[1]?.pops ?? 0);
       barFill.style.width = `${Math.min(100, (lead / target) * 100)}%`;
-      barTxt.textContent = `先到 ${target} 分赢下这一局`;
+      // 条子只有一小截宽,写短的:「先到 N 分赢下这一局」那句话搁在下面的提示行里
+      barTxt.textContent = `🏆 ${lead}/${target} 分`;
     } else {
-      leftChip.className = "pb-chip";
+      leftChip.className = "pfb-chip";
       leftChip.textContent = `❤️ ${"♥".repeat(Math.max(0, world.hearts))}`;
-      rightChip.className = "pb-chip";
+      rightChip.className = "pfb-chip";
       rightChip.textContent = `🍬 ${world.candiesTaken}`;
       const done = world.monsterTotal > 0 ? world.cleared / world.monsterTotal : 1;
       barFill.style.width = `${Math.round(done * 100)}%`;
       barTxt.textContent = `咕噜怪 ${world.cleared}/${world.monsterTotal}`;
+    }
+    if (opts.progress) {
+      const p = opts.progress(world);
+      barFill.style.width = `${Math.round(Math.max(0, Math.min(1, p.fill)) * 100)}%`;
+      barTxt.textContent = p.text;
     }
     if (opts.showTimer) {
       const left = world.def.timeLimit > 0 ? Math.max(0, world.def.timeLimit - world.time) : world.time;
@@ -857,6 +1277,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         list.push(i < opts.humans ? inputs[i] : versusBotInput(world, i, opts.botLevel ?? "normal"));
       }
       stepWorld(world, dt, list);
+      opts.onTick?.(world);
       consumeEvents(ts);
       for (const pt of particles) {
         pt.y += pt.vy * dt;
@@ -865,7 +1286,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       for (let i = particles.length - 1; i >= 0; i--) if (particles[i].life <= 0) particles.splice(i, 1);
       if (toastT > 0) {
         toastT -= dt;
-        if (toastT <= 0) toastEl.classList.remove("pb-on");
+        if (toastT <= 0) toastEl.classList.remove("pfb-on");
       }
       if (world.status !== "playing") {
         ended = true;
@@ -886,8 +1307,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("pointerup", releaseAll);
-      window.removeEventListener("blur", releaseAll);
+      window.removeEventListener("pointerup", onWindowPointerUp);
+      window.removeEventListener("blur", onWindowBlur);
       window.removeEventListener("resize", fitCanvas);
       ro?.disconnect();
       wrap.remove();
@@ -941,11 +1362,11 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
   const root = el("div");
   const style = el("style");
   style.textContent = CSS;
-  const head = el("div", "pb-head");
-  const back = el("button", "pb-btn", "🗺️ 回关卡");
+  const head = el("div", "pfb-head");
+  const back = el("button", "pfb-btn", "🗺️ 回关卡");
   back.type = "button";
-  const title = el("div", "pb-head-title", "♾️ 噗噗不停");
-  const bestChip = el("span", "pb-chip");
+  const title = el("div", "pfb-head-title", "♾️ 噗噗不停");
+  const bestChip = el("span", "pfb-chip");
   head.append(back, title, bestChip);
   const fieldHost = el("div");
   root.append(style, head, fieldHost);
@@ -1026,6 +1447,145 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 }
 
 // ---------------------------------------------------------------------------
+// 无尽模式:上升气流
+// ---------------------------------------------------------------------------
+
+/**
+ * 一股越吹越急的上升气流把整座泡泡糖塔往上顶,噗噗兄弟只能一层一层往上爬。
+ *
+ * 一段是一屏,底下整条都是坑,爬到最高那一层就换下一段,高度一路累加。
+ * 脚底下那条气流线一直在往上追,被追上、或者掉出屏底,都先**打转**——
+ * 那一段时间里还能左右挪、还能噗一口自救,救不回来才结束这一趟。
+ *
+ * 高度按米记,存在本款自己的 `CLIMB_BEST_KEY` 里 —— 平台那一格无尽成绩留给
+ * 「噗噗不停」。两种无尽的单位不一样(那边记分、这边记米),挤一格会让米数
+ * 永远刷不过分数,详见 `updraft.ts` 里 `CLIMB_BEST_KEY` 上面那段。
+ */
+/** 读上升气流的最好高度。存储被禁用(无痕窗口)时安静地当作还没有纪录。 */
+function readClimbBest(): number {
+  try {
+    return parseClimbBest(globalThis.localStorage?.getItem(CLIMB_BEST_KEY));
+  } catch {
+    return 0;
+  }
+}
+
+/** 写回上升气流的最好高度;写不进去也不能把这一趟的结算流程搞崩。 */
+function writeClimbBest(meters: number): number {
+  const next = Math.max(0, Math.round(Number.isFinite(meters) ? meters : 0));
+  try {
+    globalThis.localStorage?.setItem(CLIMB_BEST_KEY, serializeClimbBest(next));
+  } catch {
+    /* 存不下就只在这一趟里生效,不打扰玩家 */
+  }
+  return next;
+}
+
+function mountClimb(host: HTMLElement, api: GameApi, onExit: () => void): { destroy: () => void } {
+  const root = el("div");
+  const style = el("style");
+  style.textContent = CSS;
+  const head = el("div", "pfb-head");
+  const back = el("button", "pfb-btn", "🗺️ 回关卡");
+  back.type = "button";
+  const title = el("div", "pfb-head-title", "🎈 上升气流");
+  const bestChip = el("span", "pfb-chip");
+  head.append(back, title, bestChip);
+  const fieldHost = el("div");
+  root.append(style, head, fieldHost);
+  host.appendChild(root);
+
+  /** 已经爬完几段 */
+  let section = 0;
+  /** 这一段里踩到过的最高一层 —— 高度只涨不跌,掉下来一点读数不会跟着缩回去 */
+  let peak = 0;
+  let best = readClimbBest();
+  let settled = false;
+  bestChip.textContent = best > 0 ? `🏅 最好 ${heightLine(best)}` : "🏅 还没有纪录";
+
+  /** 人这会儿踩在第几层(不在地上就算 0) */
+  function standingRow(w: World): number {
+    const p = w.players[0];
+    if (!p || !p.onGround || p.respawnT > 0) return 0;
+    return rowOfSurface(w.def, p.surface);
+  }
+
+  const height = (): number => climbHeight(section, peak);
+
+  let field: Field | null = null;
+
+  function restart(): void {
+    section = 0;
+    peak = 0;
+    settled = false;
+    field?.swap(buildClimbSection(0));
+  }
+
+  function finish(w: World): void {
+    if (settled) return;
+    settled = true;
+    const meters = height();
+    const record = meters > best;
+    if (record) best = writeClimbBest(meters);
+    bestChip.textContent = `🏅 最好 ${heightLine(best)}`;
+    const bonus = Math.min(6, Math.floor(meters / 25));
+    if (bonus > 0) api.addStars(bonus);
+    api.play(record ? "win" : "oops");
+    field?.showVeil(
+      record && meters > 0 ? `新纪录 ${heightLine(meters)}!` : `这一趟爬到 ${heightLine(meters)}`,
+      `${climbMessage(meters, best)}${bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""}`,
+      [
+        { label: "🔁 再来一趟", onClick: restart },
+        { label: "🗺️ 回关卡", ghost: true, onClick: onExit },
+      ]
+    );
+  }
+
+  field = createField(fieldHost, {
+    def: buildClimbSection(0),
+    players: 1,
+    humans: 1,
+    sfx: (n) => api.play(n),
+    title: "上升气流",
+    tip: "脚底下的气流线一直在往上追!踩浮台、钻气流管、跳弹簧云,爬到最高那一层就过了这一段。",
+    showTimer: false,
+    extraChip: () => `🎈 ${heightLine(height())}`,
+    progress: () => ({
+      fill: (height() % SECTION_METERS) / SECTION_METERS,
+      text: `第 ${section + 1} 段 · ${heightLine(height())}`,
+    }),
+    onTick: (w) => {
+      peak = Math.max(peak, standingRow(w));
+    },
+    onQuit: onExit,
+    onEnd: (w) => {
+      if (w.status === "won") {
+        section++;
+        peak = 0;
+        field?.swap(buildClimbSection(section));
+        field?.toast(`爬上第 ${section} 段啦!已经 ${heightLine(height())},气流会更急一点。`);
+        api.play("win");
+        return;
+      }
+      finish(w);
+    },
+  });
+
+  back.addEventListener("click", () => {
+    api.play("tap");
+    onExit();
+  });
+
+  return {
+    destroy() {
+      field?.destroy();
+      field = null;
+      root.remove();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 对战:三局两胜(双人 / 人机三档)
 // ---------------------------------------------------------------------------
 
@@ -1038,16 +1598,16 @@ function mountVersus(
   const root = el("div");
   const style = el("style");
   style.textContent = CSS;
-  const head = el("div", "pb-head");
-  const back = el("button", "pb-btn", "🗺️ 回关卡");
+  const head = el("div", "pfb-head");
+  const back = el("button", "pfb-btn", "🗺️ 回关卡");
   back.type = "button";
   const rivalName = botLevel ? BOT_PROFILES[botLevel].name : BROS[1].name;
   const title = el(
     "div",
-    "pb-head-title",
+    "pfb-head-title",
     botLevel ? `🤖 人机对战 · ${rivalName}` : "⚔️ 双人对战 · 三局两胜"
   );
-  const scoreChip = el("span", "pb-chip");
+  const scoreChip = el("span", "pfb-chip");
   head.append(back, title, scoreChip);
   const fieldHost = el("div");
   root.append(style, head, fieldHost);
@@ -1150,16 +1710,16 @@ function mountBotPicker(host: HTMLElement, api: GameApi, onExit: () => void): { 
   const root = el("div");
   const style = el("style");
   style.textContent = CSS;
-  const head = el("div", "pb-head");
-  const back = el("button", "pb-btn", "🗺️ 回关卡");
+  const head = el("div", "pfb-head");
+  const back = el("button", "pfb-btn", "🗺️ 回关卡");
   back.type = "button";
-  head.append(back, el("div", "pb-head-title", "🤖 人机对战 · 挑一个对手"));
-  const picker = el("div", "pb-picker");
-  picker.appendChild(el("div", "pb-picker-title", "想跟谁打三局两胜?"));
-  const picks = el("div", "pb-picks");
+  head.append(back, el("div", "pfb-head-title", "🤖 人机对战 · 挑一个对手"));
+  const picker = el("div", "pfb-picker");
+  picker.appendChild(el("div", "pfb-picker-title", "想跟谁打三局两胜?"));
+  const picks = el("div", "pfb-picks");
   picker.appendChild(picks);
   picker.appendChild(
-    el("div", "pb-tip", "你用 W A S D 移动、F 吹气流、G 噗一下;方向键那一套交给电脑。")
+    el("div", "pfb-tip", "你用 W A S D 移动、F 吹气流、G 噗一下;方向键那一套交给电脑。")
   );
   // 选完对手整块面板(连同它自己那行标题)一起收起来,免得和对局的标题栏叠成两层
   const panel = el("div");
@@ -1172,11 +1732,11 @@ function mountBotPicker(host: HTMLElement, api: GameApi, onExit: () => void): { 
 
   for (const key of BOT_LEVELS) {
     const prof = BOT_PROFILES[key];
-    const btn = el("button", "pb-pick");
+    const btn = el("button", "pfb-pick");
     btn.type = "button";
     btn.append(
-      el("div", "pb-pick-name", `${key === "easy" ? "🌱" : key === "normal" ? "🫧" : "👑"} ${prof.name}`),
-      el("div", "pb-pick-sub", prof.blurb)
+      el("div", "pfb-pick-name", `${key === "easy" ? "🌱" : key === "normal" ? "🫧" : "👑"} ${prof.name}`),
+      el("div", "pfb-pick-sub", prof.blurb)
     );
     btn.addEventListener("click", () => {
       if (inner) return;
@@ -1205,32 +1765,58 @@ function mountBotPicker(host: HTMLElement, api: GameApi, onExit: () => void): { 
 // 入口:模式选择 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export interface PuffBrosHandle {
+  destroy: () => void;
+  /**
+   * 平台「直达第 N 关」(1 基),返回真正打开的那一关。
+   *
+   * 188 关的选关地图走的是平台的 `mountLevelGame`,而它只吐一个 `destroy`,
+   * 没有「从第 N 关开始」的入口,所以这儿自己开一条直达通道。越界会夹到 1..188。
+   */
+  openCampaignLevel: (n: number) => number;
+}
+
+/** 壳层没给 `initialLevel` 时,也认地址栏上的 `?level=N`(1 基) */
+export function levelFromQuery(search: string | null): number | null {
+  if (!search) return null;
+  const raw = new URLSearchParams(search).get("level");
+  if (raw === null) return null;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function mount(api: GameApi): PuffBrosHandle {
   const root = el("div");
   const style = el("style");
   style.textContent = CSS;
-  const bar = el("div", "pb-modebar");
+  const bar = el("div", "pfb-modebar");
   const levelHost = el("div");
   const modeHost = el("div");
   modeHost.hidden = true;
   root.append(style, bar, levelHost, modeHost);
   api.root.appendChild(root);
 
-  const coopBtn = el("button", "pb-mode pb-mode-coop");
+  const coopBtn = el("button", "pfb-mode pfb-mode-coop");
   coopBtn.type = "button";
-  const duelBtn = el("button", "pb-mode pb-mode-duel", "⚔️ 双人对战");
+  const duelBtn = el("button", "pfb-mode pfb-mode-duel", "⚔️ 双人对战");
   duelBtn.type = "button";
-  const botBtn = el("button", "pb-mode pb-mode-bot", "🤖 人机三档");
+  const botBtn = el("button", "pfb-mode pfb-mode-bot", "🤖 人机三档");
   botBtn.type = "button";
-  const endlessBtn = el("button", "pb-mode");
+  const endlessBtn = el("button", "pfb-mode");
   endlessBtn.type = "button";
-  bar.append(coopBtn, duelBtn, botBtn, endlessBtn);
+  const climbBtn = el("button", "pfb-mode pfb-mode-climb");
+  climbBtn.type = "button";
+  bar.append(coopBtn, duelBtn, botBtn, endlessBtn, climbBtn);
 
   let current: { destroy: () => void } | null = null;
+  let direct: { destroy: () => void } | null = null;
 
   function refreshBar(): void {
-    const best = save.getGameProgress(meta.id).endlessBest;
-    endlessBtn.textContent = best > 0 ? `♾️ 噗噗不停 · 最好 ${best} 分` : "♾️ 噗噗不停 · 来一趟!";
+    // 两种无尽各记各的:噗噗不停用平台那一格记分,上升气流用本款自己那一格记米
+    const waveBest = save.getGameProgress(meta.id).endlessBest;
+    const climbBest = readClimbBest();
+    endlessBtn.textContent = waveBest > 0 ? `♾️ 噗噗不停 · 最好 ${waveBest} 分` : "♾️ 噗噗不停 · 来一趟!";
+    climbBtn.textContent = climbBest > 0 ? `🎈 上升气流 · 最好 ${heightLine(climbBest)}` : "🎈 上升气流 · 往上爬!";
     coopBtn.textContent = coopPlayers === 1 ? "👤 闯关:一个人" : "👫 闯关:两个人";
     coopBtn.setAttribute("aria-label", `188 关闯关目前是${coopPlayers === 1 ? "一个人" : "两个人一起"}玩,点一下切换`);
   }
@@ -1238,6 +1824,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   function closeMode(): void {
     current?.destroy();
     current = null;
+    direct?.destroy();
+    direct = null;
     modeHost.hidden = true;
     levelHost.hidden = false;
     bar.hidden = false;
@@ -1247,6 +1835,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   function openMode(make: (host: HTMLElement, api: GameApi, onExit: () => void) => { destroy: () => void }): void {
     if (current) return;
     api.play("tap");
+    direct?.destroy();
+    direct = null;
     levelHost.hidden = true;
     bar.hidden = true;
     modeHost.hidden = false;
@@ -1261,6 +1851,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   duelBtn.addEventListener("click", () => openMode((h, a, x) => mountVersus(h, a, x, null)));
   botBtn.addEventListener("click", () => openMode(mountBotPicker));
   endlessBtn.addEventListener("click", () => openMode(mountEndless));
+  climbBtn.addEventListener("click", () => openMode(mountClimb));
   refreshBar();
 
   const level = mountLevelGame(
@@ -1287,10 +1878,141 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   );
 
+  /**
+   * 不经过选关地图,直接把第 index 关(0 基)摆上来。
+   *
+   * 星级照旧写平台那份 `l99` 存档,小星星也只补「比历史最好成绩多出来的那几颗」——
+   * 直达通道跟从地图点进去是同一份进度,不是刷星的后门。
+   */
+  function openDirectLevel(index: number): void {
+    const i = Math.max(0, Math.min(TOTAL_LEVELS - 1, Math.round(index)));
+    current?.destroy();
+    current = null;
+    direct?.destroy();
+    direct = null;
+    levelHost.hidden = true;
+    bar.hidden = true;
+    modeHost.hidden = false;
+
+    const ci = chapterOf(CHAPTERS, i);
+    const ch = CHAPTERS[ci] as Chapter;
+    const topbar = el("div", "pfb-mhead");
+    const backBtn = el("button", "pfb-btn", "🗺️ 选关地图");
+    backBtn.type = "button";
+    backBtn.addEventListener("click", () => {
+      api.play("tap");
+      closeMode();
+    });
+    const label = el("span", "pfb-chip", `${ch.emoji} ${ch.name} · 第 ${i + 1} 关`);
+    topbar.append(backBtn, label);
+
+    // 跳关走平台的家长门:壳层没注册 requestSkip 就压根不挂这颗按钮
+    const request = getLevelExtras().requestSkip;
+    if (request && i + 1 < TOTAL_LEVELS) {
+      const skip = el("button", "pfb-btn pfb-skip", `⏭️ 跳过 第 ${i + 1} 关`);
+      skip.type = "button";
+      skip.title = "需要家长确认才能跳过这一关";
+      skip.addEventListener("click", () => {
+        api.play("tap");
+        skip.disabled = true;
+        Promise.resolve(request(meta.id, i))
+          .then((ok) => {
+            skip.disabled = false;
+            if (ok) openDirectLevel(i + 1);
+          })
+          .catch(() => {
+            skip.disabled = false;
+          });
+      });
+      topbar.appendChild(skip);
+    }
+
+    const stage = el("div");
+    modeHost.append(topbar, stage);
+
+    let handle: PlayHandle | undefined;
+    let settled = false;
+
+    function settle(title: string, msg: string, buttons: Array<{ label: string; go: () => void }>): void {
+      handle?.destroy?.();
+      handle = undefined;
+      stage.textContent = "";
+      const panel = el("div", "pfb-done");
+      panel.append(el("div", "pfb-veil-title", title), el("div", "pfb-veil-sub", msg));
+      const row = el("div", "pfb-acts");
+      for (const b of buttons) {
+        const btn = el("button", "pfb-open", b.label);
+        btn.type = "button";
+        btn.addEventListener("click", () => {
+          api.play("tap");
+          b.go();
+        });
+        row.appendChild(btn);
+      }
+      panel.appendChild(row);
+      stage.appendChild(panel);
+    }
+
+    const ctx: PlayCtx = {
+      level: i,
+      chapter: ch,
+      chapterIndex: ci,
+      indexInChapter: i - chapterStart(CHAPTERS, ci),
+      win: (stars, msg) => {
+        if (settled) return;
+        settled = true;
+        const prev = loadStars(meta.id)[i] ?? 0;
+        saveStar(meta.id, i, stars);
+        if (stars > prev) api.addStars(stars - prev);
+        api.play("win");
+        const buttons: Array<{ label: string; go: () => void }> = [];
+        if (i + 1 < TOTAL_LEVELS) buttons.push({ label: "下一关 ▶", go: () => openDirectLevel(i + 1) });
+        buttons.push({ label: "🔁 再玩一次", go: () => openDirectLevel(i) });
+        buttons.push({ label: "🗺️ 选关地图", go: () => closeMode() });
+        settle(`⭐ 第 ${i + 1} 关过关!`, msg ?? "噗得漂亮!", buttons);
+      },
+      lose: (msg) => {
+        if (settled) return;
+        settled = true;
+        api.play("oops");
+        settle("🫧 就差一点点", msg ?? "再来一次一定行!", [
+          { label: "🔁 再试一次", go: () => openDirectLevel(i) },
+          { label: "🗺️ 选关地图", go: () => closeMode() },
+        ]);
+      },
+      sfx: (n) => api.play(n),
+      bonusStars: (n) => api.addStars(n),
+    };
+
+    handle = playLevel(stage, ctx);
+    direct = {
+      destroy() {
+        handle?.destroy?.();
+        handle = undefined;
+        topbar.remove();
+        stage.remove();
+      },
+    };
+  }
+
+  function openCampaignLevel(n: number): number {
+    const i = Math.max(0, Math.min(TOTAL_LEVELS - 1, Math.round(n) - 1));
+    openDirectLevel(i);
+    return i + 1;
+  }
+
+  const jumpTo =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" && location ? location.search : null);
+  if (jumpTo !== null && jumpTo !== undefined && jumpTo >= 1) openCampaignLevel(jumpTo);
+
   return {
+    openCampaignLevel,
     destroy() {
       current?.destroy();
       current = null;
+      direct?.destroy();
+      direct = null;
       level.destroy();
       root.remove();
     },

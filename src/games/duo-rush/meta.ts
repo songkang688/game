@@ -8,7 +8,12 @@ export const meta = {
   emoji: "🏃",
   category: "party" as const,
   color: "#CDE9FF",
-  blurb: "2.5D 分屏竞速!朵朵星星各控三车道,无尽、抢金币、幽灵配速和人机三档都能跑。",
-  // index.ts:2.5D 分屏无尽竞速 / 抢金币 / 幽灵对战 / 人机三档,没有闯关地图
+  blurb: "2.5D 分屏竞速!朵朵星星各控三车道,道具、中途分岔、幽灵配速和人机四档都能跑。",
+  // index.ts:2.5D 分屏无尽竞速 / 道具竞速 / 抢金币 / 幽灵对战 / 人机四档,没有闯关地图。
+  // 1.2 结论:双人竞速做 188 关会退化成刷图,跑酷闯关归 rainbow-run,本款明确不做 campaign;
+  // 平台的「直达第 N 关」由 rush12.ts 的 levelToSetup() 映射成「赛道难度档 + 人机档」。
   modes: ["versus", "endless", "twoPlayer"] as const,
+  // 实测:键盘双人最顺手,但上下分屏 + 每半屏两颗 44px 触屏按钮,手机上两个人也完整可玩 → both。
+  // 字段是 1.2 第 1 步 B 档给 GameMeta 加的可选项,缺省当 both,先填这里不影响老平台。
+  platform: "both" as const,
 };

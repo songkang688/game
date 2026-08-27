@@ -8,8 +8,12 @@ export const meta = {
   emoji: "👾",
   category: "action" as const,
   color: "#e6dcff",
-  blurb: "188 关守家大作战!摆路障、架炮台、亲手甩颜料弹,把小怪物变成小花花。",
-  // levels.ts 是 8 个章节共 188 关;index.ts 另有无尽、双人合作、非对称对战
+  blurb: "188 关动作守家!自己上场跑位甩颜料弹,每 3 波挑一张成长卡,把小怪物涂成小云朵。",
+  // levels.ts 是 8 个章节共 188 关;index.ts 另有无尽、双人合作、各守一半的对战。
+  // 四种模式都真能打到结算(`arena.test.ts` 里各跑一次),所以四种都留着。
   modes: ["campaign", "endless", "coop", "versus"] as const,
   levels: 188,
+  // 实测:电脑上 W A S D 走位 + F 甩(双人再加 ↑←↓→ / L),手机上左下摇杆 + 右下技能钮;
+  // 360×720 与 375×667 两个视口都跑通了主链路,热区 ≥ 44px、字号 ≥ 14px → both。
+  platform: "both" as const,
 };

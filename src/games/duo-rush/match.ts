@@ -22,6 +22,7 @@ import {
   type Entity,
   type GhostRecord,
   type RaceMode,
+  type TrackDifficulty,
   type TrackGen,
   createTrackGen,
   endlessWinner,
@@ -31,13 +32,48 @@ import {
   speedAt,
   survivesMove,
 } from "./logic";
+import {
+  FORK_LENGTH,
+  FORK_MIN_SPACING,
+  POWERUP_KINDS,
+  type ForkSection,
+  type GhostSource,
+  type PowerupKind,
+  type PowerupState,
+  absorbCrash,
+  applyPowerup,
+  createPowerupState,
+  handicapMult,
+  magnetRadius,
+  pickPowerup,
+  planForks,
+  powerupSpeedMult,
+  tickPowerups,
+} from "./rush12";
+import { laneLerpRate } from "./view25d";
 
-export type MatchEvent = "coin" | "boost" | "jump" | "slide" | "lane" | "crash" | "out" | "over";
+export type MatchEvent =
+  | "coin"
+  | "boost"
+  | "jump"
+  | "slide"
+  | "lane"
+  | "crash"
+  | "out"
+  | "over"
+  /* 1.2 第 11 步 A 新增 */
+  | "power" // 捡到一件道具
+  | "use" // 把道具用出去
+  | "shield" // 护盾泡替你挡了一下
+  | "confetti" // 被对手撒了一把彩纸
+  | "cheer" // 给对手加油
+  | "fork" // 进了分岔口
+  | "merge"; // 两条支路合流
 
 /** 撞一下之后踉跄多久（抢金币赛不掉心，改成绊倒） */
 export const STUMBLE_SECONDS = 1;
-/** 换道动画的跟随速度 */
-export const LANE_LERP = 14;
+/** 换道动画的跟随速度：按 `view25d.LANE_TWEEN_SECONDS`（100ms）换算 */
+export const LANE_LERP = laneLerpRate();
 /** 模拟切片上限：再大的 dt 也切成这么小一片一片推，保证手感与结果稳定 */
 export const FIXED_STEP = 1 / 120;
 /** 每帧最多推进多少秒（切后台回来不要一口气冲出去） */
@@ -69,7 +105,23 @@ export interface Runner {
   bump: number;
   /** 这是一条录像回放出来的幽灵，不参与碰撞 */
   ghost: boolean;
+  /* ---- 1.2 第 11 步 A 新增 ---- */
+  /** 身上挂着的道具效果（加速云 / 彩纸 / 磁力星的剩余秒数与护盾层数） */
+  powers: PowerupState;
+  /** 手上还没用出去的那一件（最多一件，按 F / L 才用） */
+  held: PowerupKind | null;
+  /** 正走在分岔的哪条支路上（null = 在主赛道） */
+  branch: 0 | 1 | null;
+  /** 走的是哪个分岔口（按分岔口的米数记） */
+  branchAt: number;
+  /** 支路实体表读到哪儿了 */
+  branchResolved: number;
+  /** 加油动作的余韵到什么时候（纯表现，不动成绩） */
+  cheerUntil: number;
 }
+
+/** 加油那一下在画面上留多久 */
+export const CHEER_SECONDS = 1.1;
 
 export interface MatchOptions {
   mode: RaceMode;
@@ -80,6 +132,17 @@ export interface MatchOptions {
   ghost?: GhostRecord | null;
   names?: [string, string];
   emojis?: [string, string];
+  /** 让分：给落后一方最多 8% 的温和追赶助推，默认关闭 */
+  handicap?: boolean;
+  /* ---- 1.2 第 11 步 A 新增，不传就是 1.1 的老赛道 ---- */
+  /** 赛道难度档（默认 1 = 1.1 原参数） */
+  difficulty?: TrackDifficulty;
+  /** 中途分岔（`items` 赛制默认开，其余默认关） */
+  forks?: boolean;
+  /** 赛道上撒道具（`items` 赛制默认开，其余默认关） */
+  powerups?: boolean;
+  /** 幽灵是「自己上次」还是「对手上一局」 */
+  ghostSource?: GhostSource;
 }
 
 export interface MatchState {
@@ -91,6 +154,18 @@ export interface MatchState {
   ai: AiBrain | null;
   aiLevel: AiLevel | null;
   ghost: GhostRecord | null;
+  /** 让分开关（HUD 要显示） */
+  handicap: boolean;
+  /* ---- 1.2 第 11 步 A 新增 ---- */
+  difficulty: TrackDifficulty;
+  /** 中途分岔开着吗 */
+  useForks: boolean;
+  /** 赛道上撒道具吗 */
+  usePowerups: boolean;
+  /** 已经排好的分岔口（两个人共用同一份，位置只看种子） */
+  forks: ForkSection[];
+  /** 幽灵录像来自谁 */
+  ghostSource: GhostSource;
   over: boolean;
   /** 0 = 朵朵赢，1 = 星星（或电脑 / 幽灵）赢，-1 = 平局，null = 还没打完 */
   winner: 0 | 1 | -1 | null;
@@ -117,7 +192,47 @@ function makeRunner(seat: Seat, name: string, emoji: string, ghost: boolean): Ru
     out: false,
     bump: 0,
     ghost,
+    powers: createPowerupState(),
+    held: null,
+    branch: null,
+    branchAt: -1,
+    branchResolved: 0,
+    cheerUntil: -1,
   };
+}
+
+/**
+ * 分岔段占住的主赛道区间：排布规则和 `rush12.planForks` 完全一致
+ * （每 `FORK_MIN_SPACING` 米一个，长 `FORK_LENGTH` 米），
+ * 主赛道在这一段留白，改由支路铺。
+ */
+export function forkSpanBetween(
+  from: number,
+  to: number,
+): { start: number; end: number } | null {
+  const firstK = Math.max(1, Math.floor(from / FORK_MIN_SPACING));
+  for (let k = firstK; k * FORK_MIN_SPACING <= to; k++) {
+    const start = k * FORK_MIN_SPACING;
+    const end = start + FORK_LENGTH;
+    if (from < end && to > start) return { start, end };
+  }
+  return null;
+}
+
+/** 正好落在哪个分岔段里（不在任何分岔里就是 null）。 */
+export function forkAt(forks: readonly ForkSection[], dist: number): ForkSection | null {
+  for (const f of forks) {
+    if (dist >= f.at && dist < f.mergeAt) return f;
+  }
+  return null;
+}
+
+/**
+ * 进分岔口那一刻在第几道，就走哪条支路：右道（2）走右边那条，左道与中道走左边那条。
+ * 哪一条更难由 `buildFork` 按种子决定（不固定在某一边），所以孩子不会养成盲选的习惯。
+ */
+export function branchForLane(lane: number): 0 | 1 {
+  return lane >= 2 ? 1 : 0;
 }
 
 export function createMatch(opts: MatchOptions): MatchState {
@@ -125,25 +240,55 @@ export function createMatch(opts: MatchOptions): MatchState {
   const emojis = opts.emojis ?? ["🌸", "⭐"];
   const isGhostRace = opts.mode === "ghost";
   const aiLevel = isGhostRace ? null : (opts.aiLevel ?? null);
-  const rival = isGhostRace ? "上次的自己" : names[1];
-  const rivalEmoji = isGhostRace ? "👻" : emojis[1];
+  const ghostSource: GhostSource = opts.ghostSource ?? "self";
+  const rival = isGhostRace ? (ghostSource === "rival" ? "上一局的对手" : "上次的自己") : names[1];
+  const rivalEmoji = isGhostRace ? (ghostSource === "rival" ? "🫥" : "👻") : emojis[1];
+  const seed = opts.seed >>> 0;
+  const difficulty = opts.difficulty ?? 1;
+  // 道具竞速这一档默认就把道具与分岔打开，其余赛制不传就是 1.1 的老赛道
+  const isItemRace = opts.mode === "items";
+  const useForks = opts.forks ?? isItemRace;
+  const usePowerups = opts.powerups ?? isItemRace;
   return {
     mode: opts.mode,
-    seed: opts.seed >>> 0,
+    seed,
     time: 0,
     // 一个生成器，两个人读同一份 —— 对称性从这里来
-    gen: createTrackGen(opts.seed >>> 0),
+    gen: createTrackGen(seed, {
+      difficulty,
+      powerups: usePowerups ? POWERUP_KINDS : [],
+      holeAt: useForks ? forkSpanBetween : undefined,
+    }),
     runners: [
       makeRunner(0, names[0], emojis[0], false),
       makeRunner(1, rival, rivalEmoji, isGhostRace),
     ],
-    ai: aiLevel === null ? null : createBrain(aiLevel, (opts.seed >>> 0) ^ 0x5bd1e995),
+    ai: aiLevel === null ? null : createBrain(aiLevel, seed ^ 0x5bd1e995),
     aiLevel,
     ghost: isGhostRace ? (opts.ghost ?? null) : null,
+    handicap: opts.handicap === true,
+    difficulty,
+    useForks,
+    usePowerups,
+    forks: useForks ? planForks(0, FORK_PLAN_AHEAD, seed) : [],
+    ghostSource,
     over: false,
     winner: null,
     events: [],
   };
+}
+
+/** 一上来先把这么远的分岔口排出来，不够了再往后续（纯算术，很便宜） */
+export const FORK_PLAN_AHEAD = 4000;
+
+/** 保证分岔计划表覆盖到 upTo 米。 */
+export function ensureForks(state: MatchState, upTo: number): ForkSection[] {
+  if (!state.useForks) return state.forks;
+  const last = state.forks[state.forks.length - 1];
+  if (!last || last.mergeAt < upTo) {
+    state.forks = planForks(0, upTo + FORK_PLAN_AHEAD, state.seed);
+  }
+  return state.forks;
 }
 
 /** 两个人看到的赛道（同一个数组，所以永远一模一样）。 */
@@ -168,6 +313,23 @@ export function livesLeft(state: MatchState, seat: Seat): number {
   return Math.max(0, CRASH_LIMIT - r.crashes);
 }
 
+/** 差距小于这么多就算持平，免得小皇冠一路来回跳 */
+export const CROWN_MIN_GAP = 4;
+
+/**
+ * 此刻谁领先（-1 = 不分上下）。抢金币赛比金币，其余赛制比距离。
+ * 只用来在领先者头上画一顶小皇冠——落后的一方界面上不会出现任何评价文字。
+ */
+export function leaderSeat(state: MatchState): 0 | 1 | -1 {
+  const [a, b] = state.runners;
+  if (state.mode === "coins") {
+    if (a.coins === b.coins) return -1;
+    return a.coins > b.coins ? 0 : 1;
+  }
+  if (Math.abs(a.dist - b.dist) < CROWN_MIN_GAP) return -1;
+  return a.dist > b.dist ? 0 : 1;
+}
+
 /* ---------------- 输入 ---------------- */
 
 export function isJumping(state: MatchState, r: Runner): boolean {
@@ -184,6 +346,26 @@ export function applyAction(state: MatchState, seat: Seat, action: Action): bool
   const r = state.runners[seat];
   if (r.out || r.ghost) return false;
   if (state.time < r.stunUntil) return false;
+  if (action === "cheer") {
+    // 纯打气：只在画面上冒一个小爱心，成绩一个数都不动
+    r.cheerUntil = state.time + CHEER_SECONDS;
+    state.events.push("cheer");
+    return true;
+  }
+  if (action === "use") {
+    if (!r.held) return false; // 空手按，什么都不发生
+    const used = pickPowerup(r.powers, r.held);
+    r.held = null;
+    r.powers = used.self;
+    state.events.push("use");
+    if (used.toOpponent) {
+      const rival = state.runners[seat === 0 ? 1 : 0];
+      // 幽灵是一段录像，撒它没用；撒到人身上也只是慢一点点，不掉心、不打断动作
+      if (!rival.ghost) rival.powers = applyPowerup(rival.powers, used.toOpponent);
+      state.events.push("confetti");
+    }
+    return true;
+  }
   if (action === "left" || action === "right") {
     const next = Math.max(0, Math.min(2, r.lane + (action === "left" ? -1 : 1))) as 0 | 1 | 2;
     if (next === r.lane) return false;
@@ -205,11 +387,24 @@ export function applyAction(state: MatchState, seat: Seat, action: Action): bool
 
 /* ---------------- 推进 ---------------- */
 
+/** 磁力星开着的时候，隔壁一条道、`MAGNET_RADIUS` 米以内的金币会自己飘过来。 */
+export function magnetPulls(r: Runner, laneGap: number): boolean {
+  return magnetRadius(r.powers) > 0 && Math.abs(laneGap) <= 1;
+}
+
 function resolveEntity(state: MatchState, r: Runner, e: Entity): void {
-  if (e.lane !== r.lane) return;
+  const laneGap = e.lane - r.lane;
   if (e.kind === "coin") {
+    if (laneGap !== 0 && !magnetPulls(r, laneGap)) return;
     r.coins++;
     state.events.push("coin");
+    return;
+  }
+  if (laneGap !== 0) return;
+  if (e.kind === "power") {
+    // 捡起来先揣着，按 F / L 才用出去
+    r.held = e.power ?? "speedCloud";
+    state.events.push("power");
     return;
   }
   if (e.kind === "boost") {
@@ -221,6 +416,14 @@ function resolveEntity(state: MatchState, r: Runner, e: Entity): void {
   if (!isObstacle(e.kind)) return;
   if (survivesMove(e.kind, { jumping: isJumping(state, r), sliding: isSliding(state, r) })) return;
   if (state.time < r.safeUntil) return;
+  const guard = absorbCrash(r.powers);
+  if (guard.blocked) {
+    // 护盾泡替你挡了一下：泡泡破掉，人一点事没有，也不算撞车
+    r.powers = guard.state;
+    r.safeUntil = state.time + HIT_SAFE_SECONDS;
+    state.events.push("shield");
+    return;
+  }
   r.crashes++;
   r.bump = 1;
   r.safeUntil = state.time + HIT_SAFE_SECONDS;
@@ -243,12 +446,46 @@ function resolveEntity(state: MatchState, r: Runner, e: Entity): void {
   }
 }
 
+/**
+ * 走到分岔口就按当前车道选一条支路，走到合流点再回主赛道。
+ * 两条支路等长，所以不管选哪条，**回到主赛道的那一米完全一样**。
+ */
+function updateFork(state: MatchState, r: Runner): void {
+  if (!state.useForks || r.ghost) return;
+  const here = forkAt(ensureForks(state, r.dist + LOOKAHEAD_METERS), r.dist);
+  if (here) {
+    if (r.branch === null || r.branchAt !== here.at) {
+      r.branch = branchForLane(r.lane);
+      r.branchAt = here.at;
+      r.branchResolved = 0;
+      state.events.push("fork");
+    }
+    const list = here.branches[r.branch].entities;
+    while (r.branchResolved < list.length && list[r.branchResolved].at <= r.dist) {
+      const e = list[r.branchResolved];
+      r.branchResolved++;
+      resolveEntity(state, r, e);
+    }
+    return;
+  }
+  if (r.branch !== null) {
+    r.branch = null;
+    r.branchResolved = 0;
+    state.events.push("merge");
+  }
+}
+
 function advance(state: MatchState, r: Runner, h: number): void {
   if (r.out) return;
   r.bump = Math.max(0, r.bump - h * 3);
+  r.powers = tickPowerups(r.powers, h);
   if (state.time < r.stunUntil) return;
   let speed = speedAt(r.dist);
   if (state.time < r.boostUntil) speed *= BOOST_MULT;
+  // 道具：加速云推一把、彩纸慢一点点，两个同时挂着就互相抵一部分
+  speed *= powerupSpeedMult(r.powers);
+  // 让分：默认关，开了也只给落后的一方最多 8%
+  speed *= handicapMult(state.handicap, r.dist, state.runners[r.seat === 0 ? 1 : 0].dist);
   r.dist += speed * h;
   r.laneFloat += (r.lane - r.laneFloat) * Math.min(1, h * LANE_LERP);
   const entities = state.gen.ensure(r.dist + LOOKAHEAD_METERS);
@@ -257,6 +494,7 @@ function advance(state: MatchState, r: Runner, h: number): void {
     r.resolved++;
     resolveEntity(state, r, e);
   }
+  updateFork(state, r);
 }
 
 function advanceGhost(state: MatchState, r: Runner): void {
@@ -318,12 +556,27 @@ function finish(state: MatchState, winner: 0 | 1 | -1): void {
   state.events.push("over");
 }
 
+/**
+ * 这个座位此刻该看哪一份实体表：在分岔支路上就看支路的，否则看共用的主赛道。
+ * 电脑与画面都用它，所以电脑看到的和玩家看到的是同一份东西。
+ */
+export function entitiesFor(state: MatchState, seat: Seat): { entities: Entity[]; from: number } {
+  const r = state.runners[seat];
+  if (r.branch !== null) {
+    const fork = state.forks.find((f) => f.at === r.branchAt);
+    if (fork) return { entities: fork.branches[r.branch].entities, from: r.branchResolved };
+  }
+  return { entities: state.gen.ensure(r.dist + LOOKAHEAD_METERS), from: r.resolved };
+}
+
 function runAi(state: MatchState): void {
   const brain = state.ai;
   if (!brain) return;
   const r = state.runners[1];
   if (r.out || r.ghost) return;
   if (state.time < r.stunUntil) return;
+  const thinking = state.time >= brain.nextThinkAt;
+  const view = entitiesFor(state, 1);
   const action = decide(
     brain,
     {
@@ -332,12 +585,16 @@ function runAi(state: MatchState): void {
       speed: speedAt(r.dist),
       jumping: isJumping(state, r),
       sliding: isSliding(state, r),
-      entities: state.gen.ensure(r.dist + LOOKAHEAD_METERS),
-      from: r.resolved,
+      entities: view.entities,
+      from: view.from,
+      rivalLane: state.runners[0].lane,
     },
     state.time,
   );
   if (action) applyAction(state, 1, action);
+  // 手上有道具就用掉：新手档想不起来用，其余档一想到就用。
+  // 这里不摇随机数，免得动到老对局的随机序列。
+  if (thinking && brain.level >= 1 && r.held) applyAction(state, 1, "use");
 }
 
 /**

@@ -7,11 +7,33 @@
  *
  * 状态机不碰 DOM：同一份 `stepMatch` 既给 canvas 渲染用，也给单测跑完整对局。
  */
-import { AI_TIERS, decideAi, emptyInput, type AiTier, type AiIntent, type Input } from "./ai";
+import {
+  AI_TIERS,
+  canLandBeyond,
+  decideAi,
+  emptyInput,
+  perilous,
+  type AiStyle,
+  type AiTier,
+  type AiIntent,
+  type Input,
+} from "./ai";
+import {
+  CATCH_COOLDOWN,
+  LIFT_COOLDOWN,
+  LIFT_RANGE,
+  LIFT_RELIEF,
+  canCatch,
+  canLift,
+  catchVelocity,
+  liftVelocity,
+  type CoopActorView,
+} from "./coop";
 import {
   emptyBuffs,
   extraAirJumps,
   fallMul,
+  itemSpawnX,
   jumpMul,
   powerMul,
   rollItem,
@@ -23,12 +45,15 @@ import {
 } from "./items";
 import {
   SHIELD_MAX,
+  STRUGGLE_WINDOW,
   addBump,
+  canStruggle,
   clampBump,
   coolBump,
   outOfBoundsSide,
   resolveHit,
   stepFlight,
+  struggleVelocity,
   type HitKind,
 } from "./knockback";
 import { fighterById, type Fighter } from "./roster";
@@ -50,6 +75,10 @@ export const JUMP_V = -520;
 export const GRAVITY = 1250;
 /** 被撞出去后等多久回场 */
 export const RESPAWN_DELAY = 1.5;
+/** 小电脑快掉出场时的思考间隔（保命不吃档位的反应延迟） */
+export const PERIL_THINK = 0.06;
+/** 挨打之后多少秒内不给这份「保命提速」：被撞飞的那一下还是得靠反应 */
+export const PERIL_GRACE = 1.4;
 /** 回场后的无敌时间（免得刚回来又被堵着打） */
 export const SAFE_TIME = 1.2;
 
@@ -84,6 +113,8 @@ export interface FighterSlot {
   team: number;
   control: ControlKind;
   aiTier?: AiTier;
+  /** 小电脑的打法（会绕后 / 抢道具 / 等你出招），不给就是正面来 */
+  aiStyle?: AiStyle;
   /** 关卡给对手的力度加成 */
   powerBonus?: number;
   /** 单独指定这一位的上场机会（不给就用全局 stocks） */
@@ -102,6 +133,17 @@ export interface MatchConfig {
   /** 限定道具池（不给就是全都有） */
   itemPool?: string[];
   seed: number;
+  /**
+   * 战役关的「主角」槽位下标（那位真人玩家）。给了就多两条判定：
+   *
+   *  · 主角自己的上场机会用完 —— 这一关当场结束、算他输。队友再能打也不能替他过关；
+   *  · 主角整局一个键都没按 —— 不给他这一队判胜。
+   *
+   * 星星是发给「你做到了」的凭证。组队赛让队友帮着赢没问题，
+   * 但「手柄放在一边、真人早被撞出局，星星照发、下一关照解锁」不行。
+   * 双人同乐、沙盒练习、无尽车轮战都不设主角，判法跟以前一模一样。
+   */
+  lead?: number;
 }
 
 export interface Actor {
@@ -133,6 +175,8 @@ export interface Actor {
   outs: number;
   /** 把别人撞出去几次 */
   kos: number;
+  /** 自己出招打中对手几次（道具引发的推挤不算，那不是玩家操作） */
+  hits: number;
   /** 上场机会用完了 */
   retired: boolean;
   /** 在场上（没在等回场、也没退场） */
@@ -146,6 +190,23 @@ export interface Actor {
   /** 刚吃到的道具（给 UI 弹字用） */
   lastItem: string | null;
   lastItemT: number;
+  /** 低元气挨拍后的挣扎窗口（秒），朝场地里按方向键就能挣一下 */
+  struggle: number;
+  /** 顶举 / 接应的冷却 */
+  coopCd: number;
+  /**
+   * 正踩在哪位队友的头顶上（队友的下标，-1 = 没踩着）。
+   * 队友的脑袋对同队的人来说就是一小块软平台——站得住，才有工夫喊他「顶我一下」。
+   */
+  ride: number;
+  /** 顶举成功几次 */
+  lifts: number;
+  /** 接应成功几次 */
+  catches: number;
+  /** 被队友顶举 / 拉回来几次（给合作特训数进度） */
+  helped: number;
+  /** 这一位真人这一局按过键没有（小电脑的槽位不看这个） */
+  acted: boolean;
 }
 
 export interface ItemDrop {
@@ -169,6 +230,9 @@ export type MatchEvent =
   | { kind: "respawn"; actor: number; x: number; y: number }
   | { kind: "retire"; actor: number }
   | { kind: "syrup"; actor: number; x: number; y: number }
+  | { kind: "struggle"; actor: number; x: number; y: number }
+  | { kind: "lift"; actor: number; rider: number; x: number; y: number }
+  | { kind: "catch"; actor: number; flyer: number; x: number; y: number }
   | { kind: "collapse"; plat: number }
   | { kind: "end"; winnerTeam: number | null };
 
@@ -251,6 +315,7 @@ function makeActor(slot: FighterSlot, index: number, stage: Stage): Actor {
     stocks: 1,
     outs: 0,
     kos: 0,
+    hits: 0,
     retired: false,
     onStage: true,
     prev: emptyInput(),
@@ -259,7 +324,19 @@ function makeActor(slot: FighterSlot, index: number, stage: Stage): Actor {
     aiIntent: "wait",
     lastItem: null,
     lastItemT: 0,
+    struggle: 0,
+    coopCd: 0,
+    ride: -1,
+    lifts: 0,
+    catches: 0,
+    helped: 0,
+    acted: false,
   };
+}
+
+/** 把角色削成 `coop.ts` 认得的那点信息 */
+function coopView(a: Actor): CoopActorView {
+  return { x: a.x, y: a.y, team: a.team, onStage: a.onStage, onGround: a.onGround, cooldown: a.coopCd };
 }
 
 export function createMatch(cfg: MatchConfig): MatchState {
@@ -313,6 +390,29 @@ export function safeZone(stage: Stage): { min: number; max: number; top: number 
   return { min: best.x, max: best.x + best.w, top: best.y };
 }
 
+/**
+ * 整张场地「脚下还有东西」的横向范围：所有台子的并集，平移台按它跑到的两头算。
+ *
+ * 主平台只是其中最大的一块。像「星光升降台」「夜空跳台」这种主平台只有 140–200px、
+ * 出生点却在两侧台子上的图，光看主平台会得出「一出生就掉出场了」的错觉——
+ * 小电脑因此一开局就狂按回场键，把二段跳全耗在半空，然后直直掉下去。
+ * 判断「是不是真的掉出场了」要看这个并集，不是主平台。
+ */
+export function standSpan(stage: Stage): { min: number; max: number } {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const p of stage.platforms) {
+    const swing = Math.abs(p.moveX ?? 0);
+    min = Math.min(min, p.x - swing);
+    max = Math.max(max, p.x + p.w + swing);
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    const zone = safeZone(stage);
+    return { min: zone.min, max: zone.max };
+  }
+  return { min, max };
+}
+
 function actorWeight(a: Actor): number {
   return a.char.weight * weightMul(a.buffs);
 }
@@ -328,8 +428,10 @@ function actorRadius(a: Actor): number {
 function spawnItem(s: MatchState): void {
   const def = rollItem(s.rand(), s.cfg.itemPool);
   const zone = safeZone(s.stage);
-  const x = zone.min + 30 + s.rand() * Math.max(20, zone.max - zone.min - 60);
-  s.items.push({ id: s.nextItemId++, def, x, y: -30, vy: 90, landed: false, life: 0 });
+  // 左右轮流、镜像对称：第几件道具决定落在中线的哪一边，两边的机会长期完全一样
+  const id = s.nextItemId++;
+  const x = itemSpawnX(zone.min, zone.max, id - 1, s.rand());
+  s.items.push({ id, def, x, y: -30, vy: 90, landed: false, life: 0 });
 }
 
 function nearestOpponent(s: MatchState, a: Actor): Actor | null {
@@ -352,6 +454,8 @@ function applyItem(s: MatchState, a: Actor, def: ItemDef): void {
   switch (def.id) {
     case "hammer":
       a.buffs.hammer = def.duration;
+      // 强道具要先举满：这段时间里锤子还是软的，对手来得及躲
+      a.buffs.hammerCharge = def.charge ?? 0;
       break;
     case "springshoe":
       a.buffs.spring = def.duration;
@@ -478,6 +582,40 @@ function updatePlatforms(s: MatchState, dt: number): void {
   });
 }
 
+/** 队友脑袋顶那条线（世界 y） */
+function headTop(a: Actor): number {
+  return a.y - actorRadius(a);
+}
+
+/**
+ * 这一位队友的脑袋现在还站得住吗。
+ * 他自己得在场上、站稳了，而且踩着的人没歪出去太远。
+ */
+function headHolds(rider: Actor, lifter: Actor): boolean {
+  if (!lifter.onStage || !lifter.onGround) return false;
+  if (lifter.team !== rider.team) return false;
+  return Math.abs(rider.x - lifter.x) <= LIFT_RANGE + 8;
+}
+
+/**
+ * 这一帧有没有落到某位队友的头顶上；没有就返回 -1。
+ *
+ * 同队的人本来就打不到彼此，1.1 里连站都站不到一起去；
+ * 1.2 让队友的脑袋变成一小块软平台——踩上去站得住，才谈得上「顶我一下」。
+ * 对手的头顶一律踩不住，所以这条路只通向配合。
+ */
+function landingHead(s: MatchState, a: Actor, prevFeet: number, feet: number): number {
+  if (a.vy < 0) return -1;
+  for (const o of s.actors) {
+    if (o === a || !headHolds(a, o)) continue;
+    const top = headTop(o);
+    if (prevFeet > top + 6) continue;
+    if (feet < top) continue;
+    return o.index;
+  }
+  return -1;
+}
+
 /** 找脚下这一帧踩到的平台；没踩到返回 -1 */
 function landingPlatform(s: MatchState, a: Actor, prevFeet: number, feet: number): number {
   if (a.vy < 0) return -1;
@@ -487,7 +625,10 @@ function landingPlatform(s: MatchState, a: Actor, prevFeet: number, feet: number
     const st = s.plats[i];
     if (st.hidden) continue;
     const top = st.y;
-    if (prevFeet > top + 1) continue;
+    // 「上一帧还在台面上方」比的要是上一帧的台面：升降台正往上走的时候，
+    // 台面这一帧能抬起两三个像素，拿新台面去判旧脚位，等于台子自己把落脚窗口吃掉了 ——
+    // 人明明是从台子正上方落下来的，却被判成「早就在台子下面」，直接穿过去掉下场。
+    if (prevFeet > st.prevY + 1) continue;
     if (feet < top) continue;
     if (a.x + r * 0.55 < st.x || a.x - r * 0.55 > st.x + p.w) continue;
     return i;
@@ -543,10 +684,14 @@ function tryHit(s: MatchState, a: Actor): void {
     o.vy = hit.vy;
     o.onGround = false;
     o.platIndex = -1;
+    o.ride = -1;
     o.attack = null;
     // 被弹飞的人重新拿满空中跳跃次数：救场的机会永远留着，不至于一下就没戏
     o.jumpsLeft = o.char.airJumps + extraAirJumps(o.buffs);
+    // 元气见底的时候给 0.4 秒挣扎窗口：朝场地里按方向键就能把这一下挣回来大半
+    o.struggle = canStruggle(o.bump) ? STRUGGLE_WINDOW : 0;
     o.stun = Math.min(0.7, 0.14 + hit.speed / 2600);
+    a.hits++;
     s.lastHitBy[o.index] = a.index;
     s.lastHitT[o.index] = s.t;
     s.shake = Math.min(1, s.shake + (a.attack.kind === "heavy" ? 0.6 : 0.28));
@@ -560,6 +705,62 @@ function tryHit(s: MatchState, a: Actor): void {
     });
     if (popped) s.events.push({ kind: "pop", actor: o.index, x: o.x, y: o.y });
   }
+}
+
+// ---------------------------------------------------------------------------
+// 配合：顶举与接应
+// ---------------------------------------------------------------------------
+
+/**
+ * 顶举：头顶上正踩着队友就把他送上去，自己不跳。
+ * 成功返回 true，调用方据此跳过这一帧的普通跳跃。
+ */
+function tryLift(s: MatchState, a: Actor): boolean {
+  if (a.coopCd > 0 || !a.onGround) return false;
+  const me = coopView(a);
+  for (const rider of s.actors) {
+    if (rider === a || !canLift(me, coopView(rider))) continue;
+    rider.vy = liftVelocity(a.char.power, actorWeight(rider));
+    rider.vx += (rider.x - a.x) * 1.6;
+    rider.onGround = false;
+    rider.platIndex = -1;
+    rider.ride = -1;
+    rider.stun = 0;
+    rider.jumpsLeft = rider.char.airJumps + extraAirJumps(rider.buffs);
+    // 互相打气：顶的那一下两个人都松快一点
+    rider.bump = clampBump(rider.bump - LIFT_RELIEF);
+    a.bump = clampBump(a.bump - LIFT_RELIEF);
+    a.coopCd = LIFT_COOLDOWN;
+    a.lifts++;
+    rider.helped++;
+    s.events.push({ kind: "lift", actor: a.index, rider: rider.index, x: rider.x, y: rider.y });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 接应：甩一条星星绳，把飘在场边外面的队友往场地里拽一把。
+ * 成功返回 true，调用方据此不再把这一下当成重击。
+ */
+function tryCatch(s: MatchState, a: Actor): boolean {
+  if (a.coopCd > 0) return false;
+  const zone = safeZone(s.stage);
+  const me = coopView(a);
+  for (const flyer of s.actors) {
+    if (flyer === a || !canCatch(me, coopView(flyer), zone)) continue;
+    const v = catchVelocity(flyer.x, flyer.vx, flyer.vy, zone);
+    flyer.vx = v.vx;
+    flyer.vy = v.vy;
+    flyer.stun = 0;
+    flyer.jumpsLeft = flyer.char.airJumps + extraAirJumps(flyer.buffs);
+    a.coopCd = CATCH_COOLDOWN;
+    a.catches++;
+    flyer.helped++;
+    s.events.push({ kind: "catch", actor: a.index, flyer: flyer.index, x: flyer.x, y: flyer.y });
+    return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -587,11 +788,63 @@ function buildAiView(s: MatchState, a: Actor) {
       bump: a.bump,
       jumpsLeft: a.jumpsLeft,
     },
-    target: target ? { x: target.x, y: target.y, bump: target.bump, onGround: target.onGround } : null,
+    target: target
+      ? {
+          x: target.x,
+          y: target.y,
+          bump: target.bump,
+          onGround: target.onGround,
+          attacking: attackPhase(target) === "windup" || attackPhase(target) === "active",
+          recovering: attackPhase(target) === "recover",
+        }
+      : null,
     item,
     safe: safeZone(s.stage),
+    ground: standSpan(s.stage),
+    stand: standingOn(s, a),
+    pads: livePads(s),
     bounds: s.stage.bounds,
   };
+}
+
+/** 场上还在的台子，按此刻的位置给（升降 / 平移台会动） */
+function livePads(s: MatchState): Array<{ min: number; max: number; top: number }> {
+  const out: Array<{ min: number; max: number; top: number }> = [];
+  for (let i = 0; i < s.stage.platforms.length; i++) {
+    const st = s.plats[i];
+    if (st.hidden) continue;
+    out.push({ min: st.x, max: st.x + s.stage.platforms[i].w, top: st.y });
+  }
+  return out;
+}
+
+/**
+ * 每一帧都过一道台沿保险：脚下这块台子到头了、那边又没有接得住的台子，
+ * 就把那个方向的按键松开（顺手把跳也收了）。
+ *
+ * 只在 `decideAi` 里看边缘是拦不住的：轻松档 0.46 秒才想一次，
+ * 按着方向键这段时间能跑一百三十多像素，想明白的时候人已经在场外了。
+ */
+function ledgeSafeInput(s: MatchState, a: Actor, input: Input): Input {
+  if (!a.onGround) return input;
+  const dir = input.right ? 1 : input.left ? -1 : 0;
+  if (dir === 0) return input;
+  const stand = standingOn(s, a);
+  if (!stand) return input;
+  const look = actorRadius(a) + Math.max(18, Math.abs(a.vx) * 0.12);
+  const nextX = a.x + dir * look;
+  if (nextX <= stand.max && nextX >= stand.min) return input;
+  if (canLandBeyond(livePads(s), stand, a, dir)) return input;
+  return { ...input, left: false, right: false, up: false };
+}
+
+/** 脚下这块台子现在的横向范围；悬空（或踩在队友头上）时是 null */
+function standingOn(s: MatchState, a: Actor): { min: number; max: number } | null {
+  if (!a.onGround || a.platIndex < 0) return null;
+  const p = s.stage.platforms[a.platIndex];
+  const st = s.plats[a.platIndex];
+  if (!p || !st || st.hidden) return null;
+  return { min: st.x, max: st.x + p.w };
 }
 
 function respawnActor(s: MatchState, a: Actor): void {
@@ -610,7 +863,19 @@ function respawnActor(s: MatchState, a: Actor): void {
   a.platIndex = -1;
   a.jumpsLeft = a.char.airJumps;
   a.onStage = true;
+  a.struggle = 0;
+  a.coopCd = 0;
+  a.ride = -1;
   s.events.push({ kind: "respawn", actor: a.index, x: a.x, y: a.y });
+}
+
+/**
+ * 开局时一共有几支队伍。
+ * 只有一支（沙盒练习、合作特训的双人同队）就没有「谁把谁请出场」这回事，
+ * 这一局要么打到时间到，要么由外面的过关条件说了算。
+ */
+export function startingTeams(s: MatchState): number {
+  return new Set(s.actors.map((a) => a.team)).size;
 }
 
 /** 还站在场上的队伍（有上场机会或正在场上的） */
@@ -629,7 +894,16 @@ export interface TeamStat {
   outs: number;
 }
 
-/** 每队现在的战况，按「剩余上场机会多 → 撞飞别人多 → 自己被撞飞少」排 */
+/**
+ * 「上场机会还剩几成」。战役关经常给玩家 3 条命、对手只给 1 条（照顾小朋友），
+ * 时间到的时候直接比剩几条，玩家躺着不动也稳赢 —— 得比剩下的**比例**。
+ */
+function stockShare(t: TeamStat): number {
+  const started = t.stocks + t.outs;
+  return started > 0 ? t.stocks / started : 0;
+}
+
+/** 每队现在的战况，按「上场机会剩得多 → 撞飞别人多 → 自己被撞飞少」排 */
 export function teamStats(s: MatchState): TeamStat[] {
   const map = new Map<number, TeamStat>();
   for (const a of s.actors) {
@@ -640,8 +914,20 @@ export function teamStats(s: MatchState): TeamStat[] {
     map.set(a.team, cur);
   }
   return Array.from(map.values()).sort(
-    (x, y) => y.stocks - x.stocks || y.kos - x.kos || x.outs - y.outs
+    (x, y) => stockShare(y) - stockShare(x) || y.kos - x.kos || x.outs - y.outs
   );
+}
+
+/** 一整队做成了多少次配合动作（合作特训按它算过关） */
+export function coopTally(s: MatchState, team: number): { lifts: number; catches: number } {
+  let lifts = 0;
+  let catches = 0;
+  for (const a of s.actors) {
+    if (a.team !== team) continue;
+    lifts += a.lifts;
+    catches += a.catches;
+  }
+  return { lifts, catches };
 }
 
 /** 时间到的时候按战况判胜负；并列就是平局（返回 null） */
@@ -651,15 +937,41 @@ export function timeoutWinner(s: MatchState): number | null {
   if (stats.length === 1) return stats[0].team;
   const a = stats[0];
   const b = stats[1];
-  if (a.stocks === b.stocks && a.kos === b.kos && a.outs === b.outs) return null;
+  if (stockShare(a) === stockShare(b) && a.kos === b.kos && a.outs === b.outs) return null;
   return a.team;
 }
 
+/** 战役关的主角；这一局没设主角就是 null */
+export function leadActor(s: MatchState): Actor | null {
+  const i = s.cfg.lead;
+  if (i === undefined || !Number.isInteger(i)) return null;
+  return s.actors[i] ?? null;
+}
+
+/** 除了 `team` 以外战况最好的那一队；场上只有这一队就返回 null */
+function rivalWinner(s: MatchState, team: number): number | null {
+  const other = teamStats(s).find((t) => t.team !== team);
+  return other ? other.team : null;
+}
+
+/**
+ * 主角这一局是不是一个键都没按过。
+ * 结算文案要靠它区分「打输了」和「压根没上手」。
+ */
+export function leadIdle(s: MatchState): boolean {
+  const lead = leadActor(s);
+  return lead !== null && !lead.acted;
+}
+
 function endMatch(s: MatchState, winner: number | null, reason: "ko" | "time"): void {
+  // 判给主角那一队之前的最后一道关：他自己一个键都没按，这一局就不作数。
+  // 队友替你打赢可以，但「手柄放在一边」不该解锁下一关。
+  const lead = leadActor(s);
+  const credited = lead !== null && winner === lead.team && !lead.acted ? null : winner;
   s.over = true;
-  s.winnerTeam = winner;
+  s.winnerTeam = credited;
   s.endReason = reason;
-  s.events.push({ kind: "end", winnerTeam: winner });
+  s.events.push({ kind: "end", winnerTeam: credited });
 }
 
 /**
@@ -678,6 +990,8 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
 
   const gravity = GRAVITY * (s.stage.gravityScale ?? 1);
   const syrupY = syrupLevel(s.stage, s.t);
+  const stageSafe = safeZone(s.stage);
+  const stageGround = standSpan(s.stage);
 
   // ---- 道具掉落 ----
   if (s.cfg.itemEvery > 0 && s.t >= s.nextItemT && s.items.length < 4) {
@@ -697,6 +1011,8 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
 
     a.safe = Math.max(0, a.safe - step);
     a.stun = Math.max(0, a.stun - step);
+    a.struggle = Math.max(0, a.struggle - step);
+    a.coopCd = Math.max(0, a.coopCd - step);
     a.buffs = tickBuffs(a.buffs, step);
     a.lastItemT = Math.max(0, a.lastItemT - step);
     if (a.onGround && a.stun <= 0) a.bump = coolBump(a.bump, step, 2.4);
@@ -704,10 +1020,27 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
     // ---- 取本帧操作 ----
     let input: Input;
     if (a.slot.control === "ai") {
+      // 快掉出场了就别再等反应间隔：空中跳跃只有一次、只抬得起一百来像素，
+      // 轻松档 0.46 秒才想一次，等它想明白人已经低到跳不回来了 ——
+      // 「对手自己掉下台、玩家白拿三星」大半就是这么来的。
+      //
+      // 只对「自己走下去的」提速。刚被打飞的那一下照旧要吃反应延迟，
+      // 不然谁都救得回来，对局就再也打不出胜负了。
+      //
+      // 「空中跳跃用光了还没落地」跟真的飘出场外一样急：这段滞空里落点只剩横着挪
+      // 这一个变量，0.46 秒想一次的话，等它发现自己会从台子边上擦过去，
+      // 刹车加转向早就来不及了。云朵广场那次「对手飘到主平台左边 43 像素处掉下去」
+      // 就是这么来的 —— 它一直按着左，两百多的横速一直到出界都没收回来。
+      const selfInflicted = s.t - s.lastHitT[a.index] > PERIL_GRACE;
+      const stranded = !a.onGround && a.jumpsLeft <= 0;
+      const urgent = perilous(a, stageSafe, stageGround, livePads(s)) || stranded;
+      if (selfInflicted && urgent && a.aiT > PERIL_THINK) {
+        a.aiT = PERIL_THINK;
+      }
       a.aiT -= step;
       if (a.aiT <= 0) {
         const tier: AiTier = a.slot.aiTier ?? "normal";
-        const d = decideAi(buildAiView(s, a), tier, s.rand());
+        const d = decideAi(buildAiView(s, a), tier, s.rand(), a.slot.aiStyle ?? "plain");
         a.aiInput = d.input;
         a.aiIntent = d.intent;
         a.aiT = AI_TIERS[tier].think;
@@ -715,11 +1048,37 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
         // 小电脑只会在第一帧出招，之后再也不动手
         a.prev = { ...a.prev, light: false, heavy: false, up: false };
       }
-      input = a.aiInput;
+      input = ledgeSafeInput(s, a, a.aiInput);
     } else {
       input = inputs[a.index] ?? emptyInput();
+      // 「这一局真人有没有上手」只认真按下去的那一下：僵直会把操作清空，
+      // 所以要在清空之前记，不然被打懵的那几帧会被当成没按。
+      if (!a.acted && (input.left || input.right || input.up || input.down || input.light || input.heavy)) {
+        a.acted = true;
+      }
+    }
+    // 挣扎窗口：僵直里唯一还能按的东西，所以要在「僵直清空操作」之前读
+    const raw = input;
+    if (a.struggle > 0 && (raw.left || raw.right)) {
+      const zone = safeZone(s.stage);
+      const inward: 1 | -1 = a.x < (zone.min + zone.max) / 2 ? 1 : -1;
+      const pushing = inward === 1 ? raw.right : raw.left;
+      if (pushing) {
+        const v = struggleVelocity(a.vx, a.vy, inward);
+        a.vx = v.vx;
+        a.vy = v.vy;
+        a.stun = Math.min(a.stun, 0.12);
+        a.struggle = 0;
+        s.events.push({ kind: "struggle", actor: a.index, x: a.x, y: a.y });
+      }
     }
     if (a.stun > 0 || a.buffs.dizzy > 0) input = emptyInput();
+
+    // ---- 配合：接应（按下 + 副动作，把飘在外面的队友拉回来） ----
+    const caught =
+      input.down && input.heavy && !a.prev.heavy && a.stun <= 0 && a.buffs.dizzy <= 0
+        ? tryCatch(s, a)
+        : false;
 
     // ---- 出招 ----
     if (a.attack) {
@@ -727,7 +1086,7 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       a.attack.t += step;
       if (attackPhase(a) === "active") tryHit(s, a);
       if (a.attack.t >= spec.windup + spec.active + spec.recover) a.attack = null;
-    } else if (a.stun <= 0 && a.buffs.dizzy <= 0) {
+    } else if (!caught && a.stun <= 0 && a.buffs.dizzy <= 0) {
       if (input.heavy && !a.prev.heavy) a.attack = { kind: "heavy", t: 0, hit: [] };
       else if (input.light && !a.prev.light) a.attack = { kind: "light", t: 0, hit: [] };
     }
@@ -748,17 +1107,27 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       }
       if (plat?.drift) a.vx += plat.drift;
     } else if (canMove && dir !== 0) {
-      a.vx += dir * AIR_ACCEL * step;
-      if (Math.abs(a.vx) > run) a.vx = Math.sign(a.vx) * Math.max(run, Math.abs(a.vx) * 0.985);
+      // 空中推方向最多把人推到跑动速度。
+      // 之前是「先加速、超了再乘 0.985」，那不是封顶而是慢一点的加速：
+      // 一直朝一个方向按下去会收敛到一千六百多、半秒横穿全场，
+      // 小电脑追道具追着追着就把自己射出了场外。
+      // 比跑动速度更快的横向速度只可能来自被撞飞，那一份照旧慢慢衰减、手感不变。
+      const pushed = a.vx + dir * AIR_ACCEL * step;
+      a.vx =
+        Math.abs(pushed) > run
+          ? Math.sign(pushed) * Math.max(run, Math.abs(a.vx) * 0.985)
+          : pushed;
     }
 
-    // ---- 跳 ----
-    if (canMove && input.up && !a.prev.up) {
+    // ---- 跳（先看看头顶上是不是站着队友：那就改成顶举） ----
+    const lifted = canMove && input.up && !a.prev.up ? tryLift(s, a) : false;
+    if (canMove && input.up && !a.prev.up && !lifted) {
       const maxJumps = a.char.airJumps + extraAirJumps(a.buffs);
       if (a.onGround) {
         a.vy = JUMP_V * a.char.jump * jumpMul(a.buffs);
         a.onGround = false;
         a.platIndex = -1;
+        a.ride = -1;
         a.jumpsLeft = maxJumps;
       } else if (a.jumpsLeft > 0) {
         a.jumpsLeft--;
@@ -777,8 +1146,11 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
     const prevFeet = a.y + actorRadius(a);
     if (a.onGround) {
       a.vy = 0;
-      // 平台自己在动（升降台 / 平移台）：站在上面的人跟着一起走
-      if (a.platIndex >= 0) {
+      // 踩在队友头顶上：他往哪走，脑袋就跟到哪，站着的人也跟着挪
+      if (a.ride >= 0) {
+        const lifter = s.actors[a.ride];
+        a.y = headTop(lifter) - actorRadius(a);
+      } else if (a.platIndex >= 0) {
         const st = s.plats[a.platIndex];
         if (st.hidden) {
           a.onGround = false;
@@ -810,8 +1182,17 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
     // ---- 落地 ----
     if (!a.onGround) {
       const feet = a.y + actorRadius(a);
-      const pi = landingPlatform(s, a, prevFeet, feet);
-      if (pi >= 0) {
+      // 先看看有没有落到队友头顶上——那是这一款唯一「站得住的人」
+      const hi = landingHead(s, a, prevFeet, feet);
+      const pi = hi >= 0 ? -1 : landingPlatform(s, a, prevFeet, feet);
+      if (hi >= 0) {
+        a.onGround = true;
+        a.ride = hi;
+        a.platIndex = -1;
+        a.y = headTop(s.actors[hi]) - actorRadius(a);
+        a.vy = 0;
+        a.jumpsLeft = a.char.airJumps + extraAirJumps(a.buffs);
+      } else if (pi >= 0) {
         const p = s.stage.platforms[pi];
         const st = s.plats[pi];
         if (p.bounce) {
@@ -824,6 +1205,12 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
           a.vy = 0;
           a.jumpsLeft = a.char.airJumps + extraAirJumps(a.buffs);
         }
+      }
+    } else if (a.ride >= 0) {
+      // 踩着的队友走开了、跳走了或者被撞飞了，脚下自然就空了
+      if (!headHolds(a, s.actors[a.ride])) {
+        a.onGround = false;
+        a.ride = -1;
       }
     } else {
       // 走出平台边缘就自然掉下去
@@ -915,10 +1302,21 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
   }
 
   // ---- 胜负 ----
-  // 只有一个人在场（练习 / 测试用的沙盒局）就不判胜负，让他自己玩
+  // 开局就只有一队（一个人的沙盒局、两个人的合作特训）不判胜负，让他们自己练
   const teams = livingTeams(s);
-  if (s.actors.length > 1 && teams.length <= 1) {
+  if (teams.length === 0 && s.actors.length > 0) {
+    endMatch(s, null, "ko");
+    return s;
+  }
+  if (startingTeams(s) > 1 && teams.length <= 1) {
     endMatch(s, teams.length === 1 ? teams[0] : null, "ko");
+    return s;
+  }
+  // 战役关的主角自己出局了：这一关到此为止。
+  // 组队赛的队友还站着也不算过关 —— 玩家已经在场边加油区了，星星不该发给他。
+  const lead = leadActor(s);
+  if (lead && lead.retired && startingTeams(s) > 1) {
+    endMatch(s, rivalWinner(s, lead.team), "ko");
     return s;
   }
   if (s.cfg.timeLimit > 0 && s.t >= s.cfg.timeLimit) {

@@ -2,11 +2,25 @@
 // 决策是纯函数,所以「危险时会不会掉头」「冲刺按得聪明不聪明」这些
 // 都能一条一条钉住,不用把整局跑完。
 import { describe, expect, it } from "vitest";
-import { AI_LABEL, TRAITS, chooseCarAction, huntersFor, nearestFoe, outwardDir, pickTarget, wobble, type AiLevel } from "./ai";
-import { createWorld, dropCar, hypot, makeCar, type Field } from "./logic";
+import {
+  AI_LABEL,
+  CLIFF_MARGIN,
+  TRAITS,
+  chooseCarAction,
+  cliffBlocker,
+  cliffCoast,
+  cliffGuard,
+  huntersFor,
+  nearestFoe,
+  outwardDir,
+  pickTarget,
+  wobble,
+  type AiLevel,
+} from "./ai";
+import { CAR_R, MAX_SPEED, createWorld, dropCar, hypot, makeCar, type Field, type Intent } from "./logic";
 
-function rect(w = 100, h = 70): Field {
-  return { shape: "rect", w, h, springs: [], arcs: [] };
+function rect(w = 100, h = 70, springs: Field["springs"] = []): Field {
+  return { shape: "rect", w, h, springs, arcs: [] };
 }
 
 function hero(x: number, y: number) {
@@ -154,6 +168,99 @@ describe("开车决策", () => {
     const act = chooseCarAction(world, 1, 3, 5, "patrol");
     expect(act.dash).toBe(false);
     expect(hypot(act.dx, act.dy)).toBeCloseTo(1, 3);
+  });
+});
+
+describe("自保:电脑车不许自己开下悬崖", () => {
+  /** 满油门朝右(= 朝开放边)冲 */
+  const FLOOR_IT: Intent = { dx: 1, dy: 0, dash: true, brake: false, charge: true };
+
+  it("离悬崖还远的时候一个字节都不改", () => {
+    const me = hero(50, 35);
+    const world = createWorld({ field: rect(), cars: [me] });
+    expect(cliffGuard(world, me, FLOOR_IT)).toEqual(FLOOR_IT);
+  });
+
+  it("贴到台沿就把朝悬崖的那脚油门收回来,还点上刹车", () => {
+    const me = hero(98, 35);
+    me.vx = MAX_SPEED;
+    const world = createWorld({ field: rect(), cars: [me] });
+    const act = cliffGuard(world, me, FLOOR_IT);
+    expect(act.dx, "还在往悬崖那边踩油门").toBeLessThan(0);
+    expect(act.brake).toBe(true);
+    expect(act.dash, "已经在往外飘了还按冲刺,等于给自己加一脚").toBe(false);
+    expect(act.charge).toBe(false);
+  });
+
+  it("护栏那一边不算悬崖:四面都是护栏时压根不管", () => {
+    const me = hero(99, 35);
+    me.vx = MAX_SPEED;
+    const railed = createWorld({ field: rect(100, 70, ["left", "right", "top", "bottom"]), cars: [me] });
+    expect(cliffGuard(railed, me, FLOOR_IT)).toEqual(FLOOR_IT);
+    // 只有右边装了护栏,危险的就只剩上下两条开放边
+    const half = createWorld({ field: rect(100, 70, ["right"]), cars: [me] });
+    expect(cliffGuard(half, me, FLOOR_IT)).toEqual(FLOOR_IT);
+  });
+
+  it("开得越快越早收:同一个位置,静止的还敢往外踩,飙起来就掰回来了", () => {
+    const slow = hero(88, 35);
+    const fast = hero(88, 35);
+    fast.vx = MAX_SPEED;
+    const w1 = createWorld({ field: rect(), cars: [slow] });
+    const w2 = createWorld({ field: rect(), cars: [fast] });
+    expect(cliffGuard(w1, slow, FLOOR_IT).dx).toBeGreaterThan(cliffGuard(w2, fast, FLOOR_IT).dx);
+  });
+
+  it("打滑和油渍上收车更慢,留出的距离要更宽", () => {
+    const plain = hero(50, 35);
+    const skidding = hero(50, 35);
+    skidding.skid = 200;
+    const world = createWorld({ field: rect(), cars: [plain, skidding] });
+    expect(cliffCoast(world, skidding)).toBeGreaterThan(cliffCoast(world, plain));
+    const icy = createWorld({ field: rect(), cars: [plain], keep: 0.86 });
+    expect(cliffCoast(icy, plain)).toBeGreaterThan(cliffCoast(world, plain));
+  });
+
+  it("顶着一台已经挂在台沿的对手时让开,好把这一下推完", () => {
+    // 对手贴在我的正外侧,而且它自己已经在台沿上了
+    const me = hero(100 - CAR_R * 2 - 1, 35);
+    const victim = foe(1, 100 - 1, 35);
+    const world = createWorld({ field: rect(), cars: [me, victim] });
+    expect(cliffBlocker(world, me, 1, 0)).toBe(true);
+    expect(cliffGuard(world, me, FLOOR_IT)).toEqual(FLOOR_IT);
+    // 同一台车挪回场地中间就不是挡墙了:再往外顶只会把自己送下去
+    victim.x = 60;
+    expect(cliffBlocker(world, me, 1, 0)).toBe(false);
+  });
+
+  it("飙着速度撞过去不算「顶着推」:自保照旧生效", () => {
+    const me = hero(100 - CAR_R * 2 - 1, 35);
+    me.vx = MAX_SPEED;
+    const victim = foe(1, 100 - 1, 35);
+    const world = createWorld({ field: rect(), cars: [me, victim] });
+    expect(cliffGuard(world, me, FLOOR_IT).dx).toBeLessThan(FLOOR_IT.dx);
+  });
+
+  it("四个档位都不会自己开出场:满油门朝悬崖冲两秒也停得住", () => {
+    for (const skill of [1, 2, 3, 4] as AiLevel[]) {
+      const me = hero(50, 35);
+      const world = createWorld({ field: rect(), cars: [me, foe(1, 50, 2)] });
+      for (let tick = 0; tick < 240; tick++) {
+        const act = chooseCarAction(world, 0, skill, tick);
+        // 手动推进油门与位移,只验决策层:确认它不会一路踩到出界
+        me.vx += act.dx * 52 * 0.016;
+        me.vy += act.dy * 52 * 0.016;
+        if (act.brake) {
+          me.vx *= 0.98;
+          me.vy *= 0.98;
+        }
+        me.vx *= 0.989;
+        me.vy *= 0.989;
+        me.x += me.vx * 0.016;
+        me.y += me.vy * 0.016;
+      }
+      expect(me.y, `${skill} 档自己开出了场地上沿`).toBeGreaterThan(-CLIFF_MARGIN);
+    }
   });
 });
 

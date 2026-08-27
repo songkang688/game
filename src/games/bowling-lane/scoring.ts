@@ -207,6 +207,55 @@ export function maxRemaining(rolls: readonly number[], frameCount: number = FRAM
 }
 
 // ---------------------------------------------------------------------------
+// 关卡目标:限球数 / 连续全中
+// ---------------------------------------------------------------------------
+
+/** 这一局到现在一共投了几个球(第十格的加投也算) */
+export function ballsUsed(rolls: readonly number[]): number {
+  return rolls.length;
+}
+
+/**
+ * 这一局最长的一串连续全中有多长。
+ *
+ * 只认「一球打光整架」的那种全中:第十格里前两球都是 X 也算连着两次。
+ * 「连续全中挑战」那一章就是拿这个数当目标。
+ */
+export function longestStrikeRun(rolls: readonly number[], frameCount: number = FRAMES): number {
+  const sheet = scoreGame(rolls, frameCount);
+  let best = 0;
+  let run = 0;
+  const last = sheet.frames.length - 1;
+  sheet.frames.forEach((frame, i) => {
+    if (i < last) {
+      if (frame.kind === "strike") {
+        run++;
+        best = Math.max(best, run);
+      } else if (frame.rolls.length > 0) {
+        run = 0;
+      }
+      return;
+    }
+    // 第十格:一球一球数。只有面对「刚摆满的一架」把十个瓶全打光才算全中,
+    // 补中之后的那记加投打光一架不算(那一架本来就是新摆的,可它跟在补中后面)。
+    const [a, b, c] = frame.rolls;
+    const balls: Array<{ v: number; fresh: boolean }> = [];
+    if (a !== undefined) balls.push({ v: a, fresh: true });
+    if (b !== undefined) balls.push({ v: b, fresh: a === PINS });
+    if (c !== undefined) balls.push({ v: c, fresh: a === PINS && b === PINS });
+    for (const ball of balls) {
+      if (ball.fresh && ball.v === PINS) {
+        run++;
+        best = Math.max(best, run);
+      } else {
+        run = 0;
+      }
+    }
+  });
+  return best;
+}
+
+// ---------------------------------------------------------------------------
 // 文案
 // ---------------------------------------------------------------------------
 

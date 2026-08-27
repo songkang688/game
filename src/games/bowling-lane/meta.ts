@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🎳",
   category: "casual" as const,
   color: "#e8f1ff",
-  blurb: "蓄力、落点、旋转三下定一球,十个瓶真的会连锁着倒。188 关八大主题练口袋位,还有双人轮流投和无尽格。",
+  blurb: "蓄力、落点、旋转三下定一球,每一段都能反悔重来。球道是近大远小的斜视角,十个瓶真的会连锁着倒。188 关八章各有花样:护栏、移动瓶、分瓶、限球数,另有双人轮流投和一档比一档难的无尽格。",
   // levels.ts 的 CHAPTERS 八章合计 188 关;index.ts 的模式条另有双人对战 / 无尽
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,

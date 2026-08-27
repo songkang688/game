@@ -37,6 +37,30 @@ export const POWER_LAUNCH = 28;
 /** 弹飞初速上限，防止一拍飞到天外 */
 export const MAX_LAUNCH = 1700;
 
+/**
+ * 「从场地正中间被送出弹飞线」所需的初速，实测出来的参考值。
+ * 平衡台与封顶表都拿它当尺子：低于这个数就飞不出去。
+ */
+export const KO_SPEED = 900;
+
+/**
+ * 元气 → 弹飞初速封顶表（元气从满到空）。
+ *
+ * 这张表是本款最重要的一条平衡线：**元气满着的人，一击绝对送不出场**。
+ * 不管谁挥、拿没拿软软锤子，第一下最多只有 `800` 的初速，比 `KO_SPEED` 还小一截，
+ * 所以「一上来一记重击直接结束」的支配打法在这一款里不存在。
+ *
+ * 封顶只管前半段：元气掉到一半以下就完全放开到 `MAX_LAUNCH`，
+ * 该飞出去的还是飞得出去——这一条不是给对局降速的，只是掐掉「一击必出界」。
+ */
+export const LAUNCH_CAP_TABLE: ReadonlyArray<readonly [number, number]> = [
+  [100, 800],
+  [85, 1000],
+  [70, 1400],
+  [50, MAX_LAUNCH],
+  [0, MAX_LAUNCH],
+];
+
 /** 常用出招方向对应的弹飞角度（朝右打时的度数） */
 export const ANGLE_BY_KIND: Record<HitKind, number> = {
   light: 38,
@@ -183,6 +207,28 @@ export function bumpLabel(bump: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// 元气：击退值的正向说法
+// ---------------------------------------------------------------------------
+
+/**
+ * 元气（100 = 精神饱满，0 = 站不住了），就是击退值反过来讲。
+ * HUD 上颜色与数字两条通道都用它，色觉不敏感的小朋友只看数字也不会误判。
+ */
+export function vigorOf(bump: number): number {
+  return 100 - (clampBump(bump) / BUMP_MAX) * 100;
+}
+
+/** 元气换回击退值，测试与关卡预演里方便直接指定「元气还剩几成」 */
+export function bumpFromVigor(vigor: number): number {
+  return clampBump(((100 - clamp(vigor, 0, 100)) / 100) * BUMP_MAX);
+}
+
+/** 元气分档的中文说法，和 `bumpLabel` 是同一套档位，只是换个说法 */
+export function vigorLabel(vigor: number): string {
+  return bumpLabel(bumpFromVigor(vigor));
+}
+
+// ---------------------------------------------------------------------------
 // 弹飞初速与角度
 // ---------------------------------------------------------------------------
 
@@ -197,6 +243,38 @@ export function launchSpeed(bump: number, power: number, weight: number = WEIGHT
   const w = clamp(weight, 30, 300);
   const raw = (BASE_LAUNCH + p * POWER_LAUNCH) * (1 + b / 100) * (WEIGHT_REF / w);
   return clamp(raw, 0, MAX_LAUNCH);
+}
+
+/**
+ * 这一下最多能给多少初速：按挨拍那位**挨拍之前**的元气查 `LAUNCH_CAP_TABLE`，
+ * 表里两档之间线性插值。元气越足封得越紧，元气见底才放开到 `MAX_LAUNCH`。
+ */
+export function launchCap(vigor: number): number {
+  const v = clamp(vigor, 0, 100);
+  const table = LAUNCH_CAP_TABLE;
+  for (let i = 0; i < table.length - 1; i++) {
+    const [hiV, hiCap] = table[i];
+    const [loV, loCap] = table[i + 1];
+    if (v <= hiV && v >= loV) {
+      const k = hiV === loV ? 0 : (hiV - v) / (hiV - loV);
+      return hiCap + (loCap - hiCap) * k;
+    }
+  }
+  return table[table.length - 1][1];
+}
+
+/**
+ * 封过顶的弹飞初速：先按公式算，再让 `launchCap` 收一道。
+ * `bumpBefore` 是挨拍那位**挨这一下之前**的击退值，`bumpAfter` 是挨完之后的。
+ */
+export function cappedLaunchSpeed(
+  bumpBefore: number,
+  bumpAfter: number,
+  power: number,
+  weight: number = WEIGHT_REF
+): number {
+  const raw = launchSpeed(bumpAfter, power, weight);
+  return Math.min(raw, launchCap(vigorOf(bumpBefore)));
 }
 
 /**
@@ -255,9 +333,71 @@ export function resolveHit(input: {
     };
   }
   const bump = addBump(input.bump, shield.through);
-  const speed = launchSpeed(bump, shield.through, input.weight);
+  const speed = cappedLaunchSpeed(input.bump, bump, shield.through, input.weight);
   const vec = launchVector(speed, angleDeg);
   return { bump, speed, angleDeg, vx: vec.vx, vy: vec.vy, shield, fullyBlocked: false };
+}
+
+// ---------------------------------------------------------------------------
+// 命中顿帧
+// ---------------------------------------------------------------------------
+
+/**
+ * 命中顿帧的上限。
+ *
+ * 顿帧是「打中的那一下画面卡住几帧」，卡得越久手感越重；但卡过头就变成掉帧了，
+ * 所以这里钉了 6 帧（60fps 下 0.1 秒）的天花板，再重的一下也不会更久。
+ * 开了「减少动态效果」的小朋友一帧都不卡。
+ */
+export const HIT_STOP_MAX = 6;
+
+/** 顿帧换算成秒（渲染层直接拿这个数扣时间） */
+export function hitStopSeconds(frames: number, fps = 60): number {
+  const f = clamp(Number.isFinite(frames) ? frames : 0, 0, HIT_STOP_MAX);
+  return f / Math.max(1, fps);
+}
+
+/**
+ * 这一下该卡几帧：轻击垫一帧，重击垫三帧，再按弹飞初速加最多三帧。
+ * `reducedMotion` 为真时恒为 0——这条比什么手感都要紧。
+ */
+export function hitStopFrames(speed: number, heavy: boolean, reducedMotion = false): number {
+  if (reducedMotion) return 0;
+  const s = clamp(Number.isFinite(speed) ? speed : 0, 0, MAX_LAUNCH);
+  const base = heavy ? 3 : 1;
+  const extra = Math.round((s / MAX_LAUNCH) * 3);
+  return Math.min(HIT_STOP_MAX, base + extra);
+}
+
+// ---------------------------------------------------------------------------
+// 低元气的挣扎窗口
+// ---------------------------------------------------------------------------
+
+/** 元气跌破这个数才给挣扎窗口（对应击退值 192） */
+export const STRUGGLE_VIGOR = 40;
+
+/** 挣扎窗口有多久：被拍飞之后的 0.4 秒里朝场地里按方向键就能挣一下 */
+export const STRUGGLE_WINDOW = 0.4;
+
+/** 挣扎一次能把弹飞速度削掉多少（0.45 = 只剩四成五） */
+export const STRUGGLE_DAMP = 0.45;
+
+/** 挣扎顺带往场地里推的一点点速度，让「挣回来」真的有希望 */
+export const STRUGGLE_PUSH = 90;
+
+/** 元气低到该给挣扎窗口了吗 */
+export function canStruggle(bump: number): boolean {
+  return vigorOf(bump) <= STRUGGLE_VIGOR;
+}
+
+/**
+ * 挣扎一下：把弹飞速度削掉一大截，再朝 `inward`（场地中心那一侧）推一点点。
+ * 一次弹飞只许挣一次，所以调用方要自己把窗口清掉。
+ */
+export function struggleVelocity(vx: number, vy: number, inward: 1 | -1): { vx: number; vy: number } {
+  const sx = (Number.isFinite(vx) ? vx : 0) * STRUGGLE_DAMP + inward * STRUGGLE_PUSH;
+  const sy = (Number.isFinite(vy) ? vy : 0) * STRUGGLE_DAMP;
+  return { vx: sx, vy: sy };
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +533,49 @@ export function simulateLaunch(
     minMargin = Math.min(minMargin, distanceToBlast(m.x, m.y, bounds));
   }
   return { out: false, side: null, landed: false, steps: limit, time: limit * dt, end: m, minMargin };
+}
+
+// ---------------------------------------------------------------------------
+// 「元气 → 击退距离」分档表
+// ---------------------------------------------------------------------------
+
+/** 画曲线时看多久的飞行（秒）：差不多就是一次弹飞看得见的那一段 */
+export const KNOCK_SPAN = 0.7;
+
+/** 分档表用的元气档位，从满到空 */
+export const KNOCK_VIGOR_STEPS: readonly number[] = [100, 80, 60, 40, 20, 0];
+
+export interface KnockRow {
+  /** 挨拍之前还剩多少元气 */
+  vigor: number;
+  /** 封过顶之后的弹飞初速 */
+  speed: number;
+  /** `KNOCK_SPAN` 秒里横着飞出去多远（世界单位，场地宽 960） */
+  distance: number;
+  /** 这一下够不够把站在场地中间的人送出去 */
+  knocksOut: boolean;
+}
+
+/**
+ * 「元气 → 击退距离」的分档表：这一款调手感时最常看的一张表。
+ * 距离用真正的飞行积分算出来，所以能直接和场地宽度对着读。
+ */
+export function knockbackCurve(
+  power: number,
+  weight: number = WEIGHT_REF,
+  kind: HitKind = "heavy",
+  steps: readonly number[] = KNOCK_VIGOR_STEPS
+): KnockRow[] {
+  return steps.map((vigor) => {
+    const before = bumpFromVigor(vigor);
+    const after = addBump(before, power);
+    const speed = cappedLaunchSpeed(before, after, power, weight);
+    const vec = launchVector(speed, launchAngleDeg(kind, 1));
+    let m: Motion = { x: 0, y: 0, vx: vec.vx, vy: vec.vy };
+    const dt = 1 / 60;
+    for (let t = 0; t < KNOCK_SPAN - 1e-9; t += dt) m = stepFlight(m, dt);
+    return { vigor, speed, distance: Math.abs(m.x), knocksOut: speed >= KO_SPEED };
+  });
 }
 
 export interface KnockOutQuery {

@@ -23,13 +23,22 @@ export type ObstacleKind =
   | "pit" // 泥坑：跳过去
   | "gate"; // 横杆：只能下滑钻过去（1.1 第 6 步新增）
 
-export type EntityKind = ObstacleKind | "coin" | "boost";
+export type EntityKind = ObstacleKind | "coin" | "boost" | "power";
+
+/**
+ * 四件温和道具的名字。详细规格（时长、倍率、文案）在 `rush12.ts`，
+ * 类型放这里只是为了让赛道实体带得上它，`rush12` 反过来 import 这个别名，
+ * 免得两边循环依赖。
+ */
+export type PowerKind = "speedCloud" | "shieldBubble" | "confetti" | "magnetStar";
 
 export interface Entity {
   kind: EntityKind;
   lane: 0 | 1 | 2;
   /** 距离起点的位置（米） */
   at: number;
+  /** `kind === "power"` 时才有：这是哪一件道具（1.2 第 11 步 A 新增） */
+  power?: PowerKind;
 }
 
 /** 一个障碍要靠什么动作过去：跳、下滑，或者只能换道。 */
@@ -244,16 +253,55 @@ export interface TrackGen {
   ensure: (upTo: number) => Entity[];
 }
 
-export function createTrackGen(seed: number): TrackGen {
+/* ---------------- 难度档与选项（1.2 第 11 步 A 新增） ---------------- */
+
+/**
+ * 赛道难度档：**1 档就是 1.1 的原参数**，一个字节都没动，
+ * 所以不传选项时生成出来的赛道和 1.1 完全一致（老用例照旧全绿）。
+ * 0 档给刚上手的小朋友放宽段间空隙，2 / 3 档收紧。
+ */
+export type TrackDifficulty = 0 | 1 | 2 | 3;
+
+/** 各档的段间空隙倍率（1 档 = 1，也就是原样） */
+export const DIFFICULTY_GAP_MULT: Record<TrackDifficulty, number> = {
+  0: 1.28,
+  1: 1,
+  2: 0.86,
+  3: 0.74,
+};
+
+export interface TrackOptions {
+  /** 难度档，默认 1（= 1.1 原参数） */
+  difficulty?: TrackDifficulty;
+  /**
+   * 要在赛道上撒哪几种道具（按顺序轮着放）。不传或空数组 = 不撒。
+   * 名单由 `rush12.POWERUP_KINDS` 传进来，这里不重复写一份。
+   */
+  powerups?: readonly PowerKind[];
+  /**
+   * 这一节花样会不会压到「别人管的路段」（比如分岔段）上：压到就整节让开。
+   * 由 `match.ts` 按 `rush12` 的分岔间距算好传进来，logic 不反向依赖 rush12。
+   */
+  holeAt?: (from: number, to: number) => { start: number; end: number } | null;
+}
+
+/** 撒道具时，每隔几节花样放一件 */
+export const POWER_EVERY_PATTERNS = 2;
+
+export function createTrackGen(seed: number, opts: TrackOptions = {}): TrackGen {
+  const gapMult = DIFFICULTY_GAP_MULT[opts.difficulty ?? 1] ?? 1;
+  const powers = opts.powerups ?? [];
+  const holeAt = opts.holeAt;
   const rng = makeRng(seed);
   const entities: Entity[] = [];
   let cursor = 0;
   let started = false;
   let lastPattern = -1;
+  let placed = 0;
 
   function gapAt(dist: number): number {
     // 段间空隙：起步 26 米，随距离缩到最少 10 米
-    return Math.max(10, 26 - dist * 0.01);
+    return Math.max(10, 26 - dist * 0.01) * gapMult;
   }
 
   return {
@@ -270,8 +318,23 @@ export function createTrackGen(seed: number): TrackGen {
         if (pick === lastPattern) pick = (pick + 1) % PATTERNS.length; // 不连续重复
         lastPattern = pick;
         const pat = PATTERNS[pick];
+        const clash = holeAt?.(cursor, cursor + pat.len) ?? null;
+        if (clash) {
+          cursor = clash.end + gapAt(clash.end);
+          continue;
+        }
         for (const e of pat.entities) {
           entities.push({ kind: e.kind, lane: e.lane, at: cursor + e.off });
+        }
+        placed++;
+        if (powers.length > 0 && placed % POWER_EVERY_PATTERNS === 0) {
+          // 摆在这一节的末尾（花样里的偏移都小于 len），实体表才一直是升序的
+          entities.push({
+            kind: "power",
+            lane: L(Math.floor(rng() * 3)),
+            at: cursor + pat.len - 2,
+            power: powers[(placed / POWER_EVERY_PATTERNS - 1) % powers.length],
+          });
         }
         cursor += pat.len + gapAt(cursor);
       }
@@ -389,11 +452,13 @@ export function trackHasRoute(entities: Entity[], speed: number = MAX_SPEED): bo
  *  - `endless` 无尽对战：都撞完比谁远（1.0 就有）
  *  - `coins`   抢金币赛：先到目标枚数（1.0 就有）
  *  - `rush`    无尽竞速：两人一直跑，先撞满 3 次的人输（1.1 新增）
- *  - `ghost`   幽灵对战：和自己上一次的最好成绩赛跑（1.1 新增）
+ *  - `ghost`   幽灵对战：和自己上一次（或对手上一局）的成绩赛跑（1.1 新增，1.2 加了对手影子）
+ *  - `items`   道具竞速：撒道具 + 中途分岔的加深赛制（1.2 第 11 步 A 新增），
+ *              胜负规矩和 `rush` 一样，先撞满 3 次的人输
  */
-export type RaceMode = "endless" | "coins" | "rush" | "ghost";
+export type RaceMode = "endless" | "coins" | "rush" | "ghost" | "items";
 
-export const RACE_MODES: readonly RaceMode[] = ["rush", "ghost", "endless", "coins"];
+export const RACE_MODES: readonly RaceMode[] = ["rush", "items", "ghost", "endless", "coins"];
 
 export const COIN_RACE_TARGET = 30;
 

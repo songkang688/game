@@ -12,11 +12,13 @@ export { meta };
  *  · 无尽车轮战：赢一场换一个更强的对手
  *  · 闯关 188 关：走 level99 通用框架，十个主题章节
  */
-import { AI_TIERS, emptyInput, type AiTier, type Input } from "./ai";
+import { AI_TIERS, STYLE_LABELS, emptyInput, type AiTier, type Input } from "./ai";
 import { isPauseKey, isWatchedKey, readKeys } from "./keys";
 import {
   ACTOR_R,
+  coopTally,
   createMatch,
+  leadIdle,
   safeZone,
   stepMatch,
   teamStats,
@@ -25,7 +27,20 @@ import {
   type MatchConfig,
   type MatchState,
 } from "./battle";
-import { bumpLabel, bumpTier, BUMP_MAX } from "./knockback";
+import {
+  bumpTier,
+  hitStopFrames,
+  hitStopSeconds,
+  vigorLabel,
+  vigorOf,
+} from "./knockback";
+import {
+  COOP_LESSONS,
+  lessonCleared,
+  lessonProgress,
+  rateLesson,
+  type CoopLesson,
+} from "./coop";
 import { itemById } from "./items";
 import {
   CHAPTERS,
@@ -36,7 +51,7 @@ import {
   levelAt,
   rateLevel,
 } from "./levels";
-import { ROSTER, TEAM_COLORS, TEAM_NAMES, fighterById } from "./roster";
+import { ROSTER, TEAM_COLORS, TEAM_NAMES, fighterById, shortName } from "./roster";
 import { STAGES, WORLD_H, WORLD_W, platformAt, stageById, syrupLevel } from "./stages";
 import GUIDE from "./guide";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
@@ -98,6 +113,34 @@ function roundRect(
 let pickP1 = "duoduo";
 let pickP2 = "xingxing";
 
+/**
+ * 合作特训通过了哪几课。1.2 新增的 key，老存档没有它读出来就是空集合，
+ * 既有的 key 一个都没动。
+ */
+export const COOP_DONE_KEY = "yiduo-yixing.duo-vs-star.coop.v1";
+
+function readCoopDone(): Set<string> {
+  try {
+    const raw = globalThis.localStorage?.getItem(COOP_DONE_KEY);
+    if (!raw) return new Set();
+    const list: unknown = JSON.parse(raw);
+    return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markCoopDone(id: string): void {
+  try {
+    const done = readCoopDone();
+    if (done.has(id)) return;
+    done.add(id);
+    globalThis.localStorage?.setItem(COOP_DONE_KEY, JSON.stringify(Array.from(done)));
+  } catch {
+    // 隐私模式下写不进去就算了，课程照样能上
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* 样式                                                                */
 /* ------------------------------------------------------------------ */
@@ -143,7 +186,9 @@ const CSS = `
 .dvs-card-head .who{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dvs-meter{height:8px;border-radius:99px;background:#eee6f5;overflow:hidden;margin:5px 0 3px;}
 .dvs-meter i{display:block;height:100%;width:0;border-radius:99px;background:#8fd6a4;transition:width .12s linear;}
-.dvs-card-foot{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:#8a7aa6;}
+.dvs-card-foot{display:flex;justify-content:space-between;gap:4px;font-size:11.5px;font-weight:800;color:#8a7aa6;}
+.dvs-card-foot .vg{white-space:nowrap;}
+.dvs-card-foot .vg b{font-variant-numeric:tabular-nums;}
 .dvs-hint{text-align:center;font-size:12.5px;font-weight:700;color:#8a7aa6;padding:0 8px 8px;min-height:18px;}
 
 .dvs-pads{display:flex;justify-content:space-between;gap:8px;padding:0 8px 10px;}
@@ -154,7 +199,14 @@ const CSS = `
 .dvs-pad button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .dvs-pad .hit{background:#ffd9e8;color:#b0538c;}
 .dvs-pad .big{background:#ffc7dd;color:#95356d;}
+.dvs-pad .duo{background:#d8f0dd;color:#3f7a55;}
 .dvs-padname{font-size:11.5px;font-weight:900;color:#8a7aa6;width:100%;text-align:center;}
+.dvs-lesson{display:grid;gap:8px;margin-top:6px;}
+.dvs-lessonbtn{border:none;border-radius:16px;padding:11px 12px;cursor:pointer;font-family:inherit;text-align:left;
+  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);}
+.dvs-lessonbtn b{display:block;font-size:15px;color:#6b4a94;margin-bottom:3px;}
+.dvs-lessonbtn span{display:block;font-size:12.5px;color:#8a7aa6;line-height:1.5;}
+.dvs-lessonbtn:active{transform:translateY(2px);}
 
 .dvs-over{position:absolute;inset:0;background:rgba(255,250,253,.95);border-radius:20px;z-index:9;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;text-align:center;padding:18px;}
@@ -171,6 +223,20 @@ const CSS = `
   .dvs-title{font-size:17px;}
   .dvs-card{min-width:96px;padding:6px;}
   .dvs-pad button{min-width:42px;min-height:42px;font-size:16px;}
+}
+/* 360px 的小屏：HUD 折成两行、两个人的触屏键上下摞着放，一个像素都不许溢出 */
+@media (max-width:380px){
+  .dvs-wrap{max-width:100%;}
+  .dvs-menu{padding:10px;}
+  .dvs-sub{font-size:12.5px;}
+  .dvs-modes{grid-template-columns:1fr;}
+  .dvs-card{flex:1 1 calc(50% - 6px);min-width:0;}
+  .dvs-card-head{font-size:12px;}
+  .dvs-card-foot{font-size:10.5px;}
+  .dvs-pads{flex-direction:column;gap:6px;padding:0 6px 8px;}
+  .dvs-pad{justify-content:center;}
+  .dvs-pad button{min-width:38px;min-height:40px;font-size:15px;border-radius:12px;}
+  .dvs-pick{padding:5px 9px;font-size:12px;}
 }
 @media (prefers-reduced-motion:reduce){
   .dvs-meter i{transition:none;}
@@ -194,6 +260,13 @@ interface ArenaOptions {
   onEnd: (state: MatchState) => void;
   /** 顶部返回按钮；不给就不显示 */
   onExit?: () => void;
+  /**
+   * 额外的过关条件（合作特训用）：返回 true 就当这一局圆满结束。
+   * 不给就只按「把对手请出场 / 时间到」判。
+   */
+  goal?: (state: MatchState) => boolean;
+  /** 每帧刷新的一句话进度（合作特训显示「顶举 1/3」） */
+  progress?: (state: MatchState) => string;
 }
 
 interface Burst {
@@ -203,6 +276,20 @@ interface Burst {
   text: string;
   color: string;
 }
+
+/** 出界演出的小星星：从出界那一点朝四周飞散开 */
+interface Spark {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  t: number;
+}
+
+/** 出界演出撒几颗小星星 */
+const STARBURST_COUNT = 9;
+/** 小星星飞多久（秒） */
+const STARBURST_LIFE = 0.75;
 
 interface Arena {
   root: HTMLElement;
@@ -218,7 +305,11 @@ function mountArena(opts: ArenaOptions): Arena {
   let destroyed = false;
   let paused = false;
   let ended = false;
+  let cleared = false;
+  /** 命中顿帧还剩多少秒（弱化动效下永远是 0） */
+  let hitStop = 0;
   const bursts: Burst[] = [];
+  const sparks: Spark[] = [];
   const timers = new Set<number>();
 
   function later(fn: () => void, ms: number): void {
@@ -251,18 +342,23 @@ function mountArena(opts: ArenaOptions): Arena {
     const head = el("div", "dvs-card-head");
     const dot = el("span", "dot");
     dot.style.background = TEAM_COLORS[a.team % TEAM_COLORS.length];
-    const who = el("span", "who", `${a.char.emoji} ${a.char.name}`);
+    // 360px 上四张名牌要并排放得下，长名字先缩写
+    const who = el("span", "who", `${a.char.emoji} ${shortName(a.char.name)}`);
+    who.title = a.char.name;
     head.append(dot, who);
     const meter = el("div", "dvs-meter");
     const fill = el("i");
     meter.appendChild(fill);
     const foot = el("div", "dvs-card-foot");
-    const left = el("span", undefined, "");
+    const left = el("span", "vg");
+    const num = el("b");
+    const word = el("span");
+    left.append(num, word);
     const right = el("span", undefined, "");
     foot.append(left, right);
     card.append(head, meter, foot);
     cards.appendChild(card);
-    return { fill, left, right, who };
+    return { fill, num, word, right, who };
   });
 
   /* ---- 输入 ---- */
@@ -313,26 +409,43 @@ function mountArena(opts: ArenaOptions): Arena {
     const label = el("div", "dvs-padname", name);
     pad.appendChild(label);
     const target = which === "p1" ? padP1 : padP2;
-    const keys: Array<[string, keyof Input, string]> = [
-      ["◀", "left", ""],
-      ["▲", "up", ""],
-      ["▶", "right", ""],
-      ["✋", "light", "hit"],
-      ["💥", "heavy", "big"],
+    // 每个按键管住哪几个方向：🤝 一个键同时按下「下 + 重击」，
+    // 手机上就不用两根手指去凑接应那一下了
+    const keys: Array<{ face: string; keys: Array<keyof Input>; cls?: string; label: string }> = [
+      { face: "◀", keys: ["left"], label: "往左走" },
+      { face: "▲", keys: ["up"], label: "跳（头顶有队友就是顶举）" },
+      { face: "▼", keys: ["down"], label: "蹲下 / 从软平台落下去" },
+      { face: "▶", keys: ["right"], label: "往右走" },
+      { face: "✋", keys: ["light"], cls: "hit", label: "挥击" },
+      { face: "💥", keys: ["heavy"], cls: "big", label: "重击" },
+      { face: "🤝", keys: ["down", "heavy"], cls: "duo", label: "接应队友" },
     ];
-    for (const [label2, key, extra] of keys) {
-      const b = el("button", extra || undefined, label2);
+    // 🤝 和 ▼ / 💥 共用按键位，按住数记个数，松开一个不会把另一个也松掉
+    const held = new Map<keyof Input, number>();
+    const sync = (k: keyof Input): void => {
+      target[k] = (held.get(k) ?? 0) > 0;
+    };
+    for (const spec of keys) {
+      const b = el("button", spec.cls, spec.face);
       b.type = "button";
-      b.setAttribute(
-        "aria-label",
-        key === "light" ? `${name} 挥击` : key === "heavy" ? `${name} 重击` : `${name} ${label2}`
-      );
+      b.setAttribute("aria-label", `${name} ${spec.label}`);
+      let down = false;
       const on = (e: Event): void => {
         e.preventDefault();
-        target[key] = true;
+        if (down) return;
+        down = true;
+        for (const k of spec.keys) {
+          held.set(k, (held.get(k) ?? 0) + 1);
+          sync(k);
+        }
       };
       const off = (): void => {
-        target[key] = false;
+        if (!down) return;
+        down = false;
+        for (const k of spec.keys) {
+          held.set(k, Math.max(0, (held.get(k) ?? 0) - 1));
+          sync(k);
+        }
       };
       b.addEventListener("pointerdown", on);
       b.addEventListener("pointerup", off);
@@ -398,10 +511,23 @@ function mountArena(opts: ArenaOptions): Arena {
     clearOverlay();
     paused = false;
     ended = false;
+    cleared = false;
+    hitStop = 0;
     bursts.length = 0;
+    sparks.length = 0;
     state = createMatch({ ...opts.config, seed: (opts.config.seed + 1013) >>> 0 });
     last = 0;
     opts.sfx("jump");
+  }
+
+  /** 出界演出：从出界那一点撒一圈小星星飞走 */
+  function starburst(x: number, y: number): void {
+    if (soft) return;
+    for (let i = 0; i < STARBURST_COUNT; i++) {
+      const angle = (Math.PI * 2 * i) / STARBURST_COUNT;
+      const speed = 180 + (i % 3) * 45;
+      sparks.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, t: 0 });
+    }
   }
 
   /* ---- 事件转成看得见的反馈 ---- */
@@ -409,14 +535,27 @@ function mountArena(opts: ArenaOptions): Arena {
     for (const e of state.events) {
       if (e.kind === "hit") {
         bursts.push({ x: e.x, y: e.y, t: 0, text: e.heavy ? "💥" : "✨", color: "#ffb937" });
+        // 打中那一下卡几帧，重击更沉手；弱化动效时 hitStopFrames 恒返回 0
+        const speed = Math.hypot(state.actors[e.actor].vx, state.actors[e.actor].vy);
+        hitStop = Math.max(hitStop, hitStopSeconds(hitStopFrames(speed, e.heavy, soft)));
         opts.sfx(e.heavy ? "pop" : "tap");
       } else if (e.kind === "block") {
         bursts.push({ x: e.x, y: e.y, t: 0, text: "🫧", color: "#7fb2ff" });
       } else if (e.kind === "pop") {
         opts.sfx("oops");
+      } else if (e.kind === "struggle") {
+        bursts.push({ x: e.x, y: e.y, t: 0, text: "💪", color: "#8fd6a4" });
+        opts.sfx("jump");
+      } else if (e.kind === "lift") {
+        bursts.push({ x: e.x, y: e.y, t: 0, text: "🙌", color: "#8fd6a4" });
+        opts.sfx("coin");
+      } else if (e.kind === "catch") {
+        bursts.push({ x: e.x, y: e.y, t: 0, text: "🤝", color: "#8fd6a4" });
+        opts.sfx("coin");
       } else if (e.kind === "ko") {
         const who = state.actors[e.actor];
         bursts.push({ x: e.x, y: e.y, t: 0, text: `${who.char.emoji}💫`, color: "#ff8fbe" });
+        starburst(e.x, e.y);
         opts.sfx("oops");
       } else if (e.kind === "item") {
         const def = itemById(e.item);
@@ -438,17 +577,37 @@ function mountArena(opts: ArenaOptions): Arena {
     later(() => opts.onEnd(state), 700);
   }
 
+  /** 合作特训：配合动作做够了就当这一局圆满结束 */
+  function checkGoal(): void {
+    if (cleared || ended || !opts.goal) return;
+    if (!opts.goal(state)) return;
+    cleared = true;
+    state.over = true;
+    state.winnerTeam = 0;
+    state.endReason = "ko";
+    opts.sfx("win");
+    onMatchEnd();
+  }
+
   /* ---- HUD ---- */
   function paintCards(): void {
     state.actors.forEach((a, i) => {
       const c = cardEls[i];
-      const pct = Math.round((a.bump / BUMP_MAX) * 100);
-      c.fill.style.width = `${Math.min(100, pct)}%`;
+      // 元气一条数据两条通道：进度条的长度与颜色给一眼看，数字给看得准
+      const vigor = Math.round(vigorOf(a.bump));
+      c.fill.style.width = `${Math.max(0, Math.min(100, vigor))}%`;
       const tier = bumpTier(a.bump);
       c.fill.style.background = tier === 0 ? "#8fd6a4" : tier === 1 ? "#ffd166" : "#ff8fbe";
-      c.left.textContent = a.retired ? "场边加油中" : `${bumpLabel(a.bump)} ${Math.round(a.bump)}`;
+      if (a.retired) {
+        c.num.textContent = "";
+        c.word.textContent = "场边加油中";
+      } else {
+        c.num.textContent = `元气 ${vigor}`;
+        c.word.textContent = ` ${vigorLabel(vigor)}`;
+      }
       const chances = a.retired ? "" : "☁️".repeat(Math.min(4, a.stocks));
-      c.right.textContent = `${chances}${a.shield > 0 ? " 🫧" : ""}${a.buffs.hammer > 0 ? " 🔨" : ""}`;
+      const hammer = a.buffs.hammer > 0 ? (a.buffs.hammerCharge > 0 ? " 🔨…" : " 🔨") : "";
+      c.right.textContent = `${chances}${a.shield > 0 ? " 🫧" : ""}${hammer}`;
     });
   }
 
@@ -568,6 +727,16 @@ function mountArena(opts: ArenaOptions): Arena {
       drawActor(ctx, a);
     }
 
+    // 出界演出：一圈小星星飞走
+    for (const p of sparks) {
+      const k = 1 - p.t / STARBURST_LIFE;
+      if (k <= 0) continue;
+      ctx.globalAlpha = k;
+      ctx.font = `${Math.round(10 + k * 12)}px system-ui`;
+      ctx.fillText("⭐", p.x, p.y);
+      ctx.globalAlpha = 1;
+    }
+
     // 特效
     for (const b of bursts) {
       const k = 1 - b.t / 0.7;
@@ -636,11 +805,17 @@ function mountArena(opts: ArenaOptions): Arena {
       c.arc(a.x, a.y, r + 9, 0, Math.PI * 2);
       c.stroke();
     }
-    // 击退值
+    // 挣扎窗口：低元气挨拍的那 0.4 秒，头顶亮个提示让人来得及按方向键
+    if (a.struggle > 0) {
+      c.font = "bold 15px system-ui";
+      c.fillStyle = "#3f7a55";
+      c.fillText("←→", a.x, a.y - r - 28);
+    }
+    // 元气：颜色 + 数字两条通道，只看数字也不会误判
     const tier = bumpTier(a.bump);
     c.font = "bold 13px system-ui";
     c.fillStyle = tier === 0 ? "#4b7a5c" : tier === 1 ? "#9a7020" : "#c2497e";
-    c.fillText(`${Math.round(a.bump)}`, a.x, a.y - r - 12);
+    c.fillText(`${Math.round(vigorOf(a.bump))}`, a.x, a.y - r - 12);
     c.restore();
   }
 
@@ -649,12 +824,24 @@ function mountArena(opts: ArenaOptions): Arena {
     if (destroyed) return;
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
     last = now;
-    if (!paused && !state.over) {
+    if (hitStop > 0) {
+      // 顿帧期间只冻结物理，特效和 HUD 照常走，画面不会看起来像卡住了
+      hitStop = Math.max(0, hitStop - dt);
+    } else if (!paused && !state.over) {
       stepMatch(state, dt, collectInputs());
       drainEvents();
+      checkGoal();
+      if (opts.progress) hint.textContent = opts.progress(state);
     }
     for (const b of bursts) b.t += dt;
     while (bursts.length && bursts[0].t > 0.7) bursts.shift();
+    for (const p of sparks) {
+      p.t += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 320 * dt;
+    }
+    while (sparks.length && sparks[0].t > STARBURST_LIFE) sparks.shift();
     paintCards();
     draw();
     raf = requestAnimationFrame(frame);
@@ -824,6 +1011,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       ["👫 双人对战", "同屏两套键位，朵朵 WASD+F/G，星星 方向键+L/K", () => showVersus()],
       ["🤖 人机混战", "最多 4 人一起打，小电脑有轻松 / 正常 / 高手三档", () => showBrawl()],
       ["🤝 团队赛 2v2", "你和队友一队，配合把对面两位请出场", () => showTeam()],
+      ["🙌 合作特训 3 课", "顶举和接应，两个人一起才做得到，一个人怎么按都过不了", () => showCoop()],
       ["♾️ 无尽车轮战", "赢一场换一个更强的对手，看你能连胜几场", () => showEndless()],
       ["🗺️ 闯关 188 关", "十个主题章节，每关有指定场地、对手和特别规则", () => showCampaign()],
     ];
@@ -843,8 +1031,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     keys.innerHTML =
       "<b>键盘</b>：朵朵 <b>W A S D</b> 走动 + <b>F</b> 挥击 + <b>G</b> 重击；" +
       "星星 <b>↑ ← ↓ →</b> 走动 + <b>L</b> 挥击 + <b>K</b> 重击；<b>Esc</b> 暂停。<br>" +
-      "<b>手机 / 平板</b>：屏幕下方每人一组按键，和键盘完全一样。<br>" +
-      "<b>小技巧</b>：轻击攒击退值，等对方的数字变红了再来一记重击，一下就能送出场外。";
+      "<b>手机 / 平板</b>：屏幕下方每人一组按键，和键盘完全一样，<b>🤝</b> 一个键就是接应。<br>" +
+      "<b>配合</b>：队友踩在你头顶时按「上」把他<b>顶举</b>上去；队友飘到场边外面，按「下 + 重击」<b>接应</b>他回来。<br>" +
+      "<b>小技巧</b>：轻击把对方的元气磨下去，等数字变红了再来一记重击；" +
+      "自己元气见底被打飞时，头顶会亮起 ←→，这 0.4 秒里朝场地里按方向键就能挣回来大半。";
     menu.appendChild(keys);
     view.appendChild(menu);
   }
@@ -1102,6 +1292,128 @@ export function mount(api: GameApi): { destroy: () => void } {
     );
   }
 
+  /* ---------------- 合作特训 3 课 ---------------- */
+
+  function showCoop(): void {
+    clearView();
+    const done = readCoopDone();
+    const menu = el("div", "dvs-menu");
+    menu.appendChild(el("div", "dvs-title", "🙌 合作特训 · 两个人才做得到"));
+    menu.appendChild(
+      el(
+        "div",
+        "dvs-sub",
+        "这三课教的两个动作都要两个人：顶举是队友踩上你头顶时你按「上」，把他送到高处；" +
+          "接应是队友飘到场边外面时你按「下 + 重击」，甩一条星星绳把他拉回来。" +
+          "过关只数这两个动作的次数，所以一个人怎么按都过不去——去叫上一个小伙伴吧！"
+      )
+    );
+    menu.appendChild(pickerRow("1P 选谁（键盘 WASD）", () => pickP1, (id) => (pickP1 = id), sfx));
+    menu.appendChild(pickerRow("2P 选谁（方向键）", () => pickP2, (id) => (pickP2 = id), sfx));
+
+    const list = el("div", "dvs-lesson");
+    COOP_LESSONS.forEach((lesson, i) => {
+      const b = el("button", "dvs-lessonbtn");
+      b.type = "button";
+      b.append(
+        el("b", undefined, `第 ${i + 1} 课 ${lesson.emoji} ${lesson.name}${done.has(lesson.id) ? " ✅" : ""}`),
+        el("span", undefined, `${lesson.brief}${lesson.howto}`)
+      );
+      b.addEventListener("click", () => {
+        sfx("jump");
+        startLesson(i);
+      });
+      list.appendChild(b);
+    });
+    menu.appendChild(list);
+
+    const back = el("div", "dvs-pickrow");
+    back.appendChild(button("dvs-back", "◀ 回模式选择", () => showMenu()));
+    menu.appendChild(back);
+    view.appendChild(menu);
+  }
+
+  function startLesson(index: number): void {
+    const lesson = COOP_LESSONS[Math.max(0, Math.min(COOP_LESSONS.length - 1, index))];
+    const used = new Set([pickP1, pickP2]);
+    const slots: FighterSlot[] = [
+      { charId: pickP1, team: 0, control: "p1", stocks: 4 },
+      { charId: pickP2, team: 0, control: "p2", stocks: 4 },
+    ];
+    if (lesson.sparring > 0) {
+      const rest = ROSTER.filter((f) => !used.has(f.id));
+      for (let i = 0; i < lesson.sparring; i++) {
+        slots.push({
+          charId: rest[(i * 3) % rest.length].id,
+          team: 1,
+          control: "ai",
+          aiTier: "easy",
+          aiStyle: "patient",
+          stocks: 99,
+        });
+      }
+    }
+    const config: MatchConfig = {
+      stageId: lesson.stageId,
+      slots,
+      stocks: 4,
+      timeLimit: lesson.timeLimit,
+      itemEvery: lesson.itemEvery,
+      seed: 4649 + index * 131,
+    };
+    clearView();
+    const a = mountArena({
+      config,
+      title: `${lesson.emoji} ${lesson.name}`,
+      hint: lesson.howto,
+      human: { p1: 0, p2: 1 },
+      sfx,
+      onExit: showCoop,
+      goal: (s) => lessonCleared(coopTally(s, 0), lesson),
+      progress: (s) => `${lessonProgress(coopTally(s, 0), lesson)} · ${lesson.howto}`,
+      onEnd: (s) => {
+        const tally = coopTally(s, 0);
+        const ok = lessonCleared(tally, lesson);
+        if (ok) {
+          markCoopDone(lesson.id);
+          const outs = s.actors.filter((x) => x.team === 0).reduce((n, x) => n + x.outs, 0);
+          api.addStars(rateLesson(outs));
+        }
+        sfx(ok ? "win" : "oops");
+        const ov = el("div", "dvs-over");
+        ov.append(
+          el("div", "big", ok ? "🎉" : "🌱"),
+          el("div", "ttl", ok ? "配合成功！" : "再配合一次就成了"),
+          el(
+            "div",
+            "sub",
+            ok
+              ? `${lessonProgress(tally, lesson)}，这一课学会啦——两个人一起才做得到的动作，你们做到了！`
+              : `已经做到 ${lessonProgress(tally, lesson)}。${lesson.howto}慢慢来，多试两次就顺了。`
+          )
+        );
+        const row = el("div", "row");
+        row.append(
+          button("", "🔁 再来一次", () => {
+            sfx("tap");
+            ov.remove();
+            startLesson(index);
+          }),
+          button("ghost", "📚 回课程表", () => {
+            sfx("tap");
+            ov.remove();
+            showCoop();
+          })
+        );
+        ov.appendChild(row);
+        wrap.appendChild(ov);
+        ov.querySelector("button")?.focus?.();
+      },
+    });
+    arena = a;
+    view.appendChild(a.root);
+  }
+
   /* ---------------- 无尽车轮战 ---------------- */
 
   function showEndless(): void {
@@ -1142,6 +1454,7 @@ export function mount(api: GameApi): { destroy: () => void } {
           team: 1,
           control: "ai",
           aiTier: foe.tier,
+          aiStyle: foe.style,
           powerBonus: foe.powerBonus,
           stocks: 1,
         },
@@ -1153,7 +1466,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     };
     playMatch(
       config,
-      `第 ${round + 1} 场 · 对手 ${fighterById(foe.charId).name}（${AI_TIERS[foe.tier].label}）`,
+      `第 ${round + 1} 场 · 对手 ${fighterById(foe.charId).name}（${AI_TIERS[foe.tier].label}·${
+        STYLE_LABELS[foe.style ?? "plain"]
+      }）`,
       { p1: 0 },
       round === 0 ? "只有 1 次上场机会，稳一点！" : `已经连胜 ${round} 场，越往后对手越厉害。`,
       (state) => {
@@ -1258,6 +1573,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         team: lv.allies.length > 0 ? 1 : 1 + i,
         control: "ai",
         aiTier: foe.tier,
+        aiStyle: foe.style,
         powerBonus: foe.powerBonus,
         stocks: foe.stocks,
       });
@@ -1271,13 +1587,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       itemEvery: lv.itemEvery,
       itemPool: lv.itemPool,
       seed: (ctx.level + 1) * 7919,
+      // 闯关的主角就是 0 号槽：他出局这一关就结束，他一个键都没按就不给判胜
+      lead: 0,
     };
 
     const box = el("div");
+    // 后段的难度是「打法变了」，不是「力气变大了」，所以把对手的打法直接写出来
+    const styles = Array.from(new Set(lv.foes.map((f) => f.style ?? "plain"))).filter(
+      (s) => s !== "plain"
+    );
+    const styleTip = styles.length > 0 ? ` · 对手${styles.map((s) => STYLE_LABELS[s]).join("、")}` : "";
     const head = el(
       "div",
       "dvs-hint",
-      `${stageById(lv.stageId).emoji} ${stageById(lv.stageId).name} · ${lv.ruleTag}：${lv.rule}`
+      `${stageById(lv.stageId).emoji} ${stageById(lv.stageId).name} · ${lv.ruleTag}：${lv.rule}${styleTip}`
     );
     box.appendChild(head);
     const a = mountArena({
@@ -1289,7 +1612,19 @@ export function mount(api: GameApi): { destroy: () => void } {
       onEnd: (state) => {
         const me = state.actors[0];
         if (state.winnerTeam === 0) {
-          ctx.win(rateLevel(me.outs), me.outs === 0 ? "一次都没被撞出去，太稳啦！" : undefined);
+          // 结算只夸玩家自己做到的事：一下都没打中过的话，那一局是对手自己
+          // 掉下去、或者时间到按上场机会判的，别写成「你太稳啦」
+          const note =
+            me.hits === 0
+              ? "这一局你一下都没出手，对手是自己站不住掉下去的。下次主动迎上去，把他撞出场外试试！"
+              : me.outs === 0
+                ? "一次都没被撞出去，太稳啦！"
+                : undefined;
+          ctx.win(rateLevel(me.outs, me.hits), note);
+        } else if (leadIdle(state)) {
+          ctx.lose("这一局你一个键都没按呀。星星要自己动手才拿得到，来试试跳一下、挥一拳！");
+        } else if (me.retired) {
+          ctx.lose(`你被撞出去 ${me.outs} 次，上场机会用完啦。少往场边站一点，再来一次！`);
         } else {
           ctx.lose("对手站得更稳一点点，换个节奏再来一次！");
         }

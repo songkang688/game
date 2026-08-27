@@ -66,10 +66,13 @@ export function dangerTiming(board: Board, bombs: readonly Bomb[], pierce = fals
   return out;
 }
 
-/** 现在就危险的格子(正在烧的爆风 + 迟早要着火的格子) */
-export function dangerCells(world: World): Set<number> {
+/**
+ * 现在就危险的格子(正在散的彩虹波 + 迟早要被扫到的格子)。
+ * 时刻表可以外面算好传进来 —— 一帧里要问好几次,不必每次都重算一遍连锁。
+ */
+export function dangerCells(world: World, timing?: Map<number, number>): Set<number> {
   const s = new Set<number>(world.flames.keys());
-  for (const cell of dangerTiming(world.board, world.bombs, world.pierce).keys()) s.add(cell);
+  for (const cell of (timing ?? dangerTiming(world.board, world.bombs, world.pierce)).keys()) s.add(cell);
   return s;
 }
 
@@ -92,8 +95,15 @@ export interface EscapeOpts {
   stepMs: number;
   /** 能不能钻软砖 */
   ghost?: boolean;
-  /** 额外加进来的炸弹(试算「假如我在这里放一颗」) */
+  /** 额外加进来的泡泡(试算「假如我在这里放一颗」) */
   extraBombs?: readonly Bomb[];
+  /**
+   * 迈出第一步之前还要等多少毫秒(走格冷却没走完的那一截)。
+   * 1.2 起必须算上它:泡泡 2 秒就破,少算这半步就是「以为跑得掉,其实差一格」。
+   */
+  startDelay?: number;
+  /** 逃命时把小怪站的格子当墙绕开(默认开;绕不开时上层会关掉再算一次) */
+  avoidCritters?: boolean;
   /** 搜索上限,防止大图上跑太久 */
   maxNodes?: number;
 }
@@ -122,7 +132,11 @@ export function findEscape(world: World, from: number, opts: EscapeOpts): Escape
   const timing = dangerTiming(board, bombs, world.pierce);
   const blocked = new Set<number>();
   for (const b of bombs) blocked.add(b.pos);
+  // 逃命路上一头撞进小怪怀里,一样会被罩住 —— 它们站的格子当墙绕开。
+  // 真的一格都绕不开时(`avoidCritters` 关掉重来一次),再退回「至少先躲开彩虹波」。
+  if (opts.avoidCritters !== false) for (const c of world.critters) blocked.add(c.pos);
   const stepMs = Math.max(40, opts.stepMs);
+  const startDelay = Math.max(0, opts.startDelay ?? 0);
   const maxNodes = opts.maxNodes ?? 900;
 
   // 站在原地就已经安全了:不用走
@@ -145,8 +159,8 @@ export function findEscape(world: World, from: number, opts: EscapeOpts): Escape
     //  - `earliest` 少算一格,因为冷却也可能刚好归零、这一步立刻就迈出去。
     // 判「会不会被将来的爆风炸到」用 latest(算得晚一点更保守),
     // 判「现在烧着的火灭没灭」用 earliest(算得早一点更保守),两头都不踩线。
-    const latest = (depth + 1) * stepMs;
-    const earliest = (depth - 1) * stepMs;
+    const latest = startDelay + (depth + 1) * stepMs;
+    const earliest = Math.max(0, startDelay + (depth - 1) * stepMs);
     for (const cell of queue) {
       visited++;
       for (let dir = 0; dir < 4; dir++) {
@@ -169,7 +183,7 @@ export function findEscape(world: World, from: number, opts: EscapeOpts): Escape
             cur = prev.get(cur) as number;
           }
           path.reverse();
-          return { path, goal: nb, cost: path.length * stepMs };
+          return { path, goal: nb, cost: startDelay + path.length * stepMs };
         }
         next.push(nb);
       }
@@ -180,8 +194,11 @@ export function findEscape(world: World, from: number, opts: EscapeOpts): Escape
 }
 
 /**
- * 「假如我现在在脚下放一颗炸弹,还跑得掉吗?」——跑得掉就返回逃生方案。
- * 这就是 AI 不会自炸的那道闸门。
+ * 「假如我现在在脚下放一颗泡泡,还跑得掉吗?」——跑得掉就返回逃生方案。
+ * 这就是 AI 不会把自己关进泡泡的那道闸门:**三档都要过这一关**。
+ *
+ * 手上那半步冷却(`moveT`)一起算进去:泡泡只有 2 秒,
+ * 不算这半步的话,算出来的「跑得掉」在真跑的时候会差一格。
  */
 export function escapeAfterBomb(world: World, f: Fighter): EscapePlan | null {
   const fake: Bomb = {
@@ -189,13 +206,18 @@ export function escapeAfterBomb(world: World, f: Fighter): EscapePlan | null {
     pos: f.pos,
     owner: f.index,
     power: f.power,
-    // 遥控弹也按普通引信试算:留够真炸得掉的余地才敢放
+    // 遥控泡泡也按普通引信试算:留够真跑得掉的余地才敢放
     fuse: FUSE_MS,
     remote: false,
     slide: DIR_NONE,
     slideT: 0,
   };
-  return findEscape(world, f.pos, { stepMs: stepMsFor(f.speed), ghost: f.ghost, extraBombs: [fake] });
+  return findEscape(world, f.pos, {
+    stepMs: stepMsFor(f.speed),
+    ghost: f.ghost,
+    extraBombs: [fake],
+    startDelay: Math.max(0, f.moveT),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +304,7 @@ export function dirBetween(board: Board, from: number, to: number): number {
   return DIR_NONE;
 }
 
-/** 脚下放一颗炸弹能炸到几块软砖 */
+/** 脚下放一颗泡泡能拍开几块软砖 */
 export function bricksHit(world: World, pos: number, power: number): number {
   let n = 0;
   for (const cell of blastCells(world.board, pos, power, world.pierce)) {
@@ -291,23 +313,156 @@ export function bricksHit(world: World, pos: number, power: number): number {
   return n;
 }
 
-/** 脚下放一颗炸弹能不能盖到某个对手现在站的位置 */
+/** 脚下放一颗泡泡能不能盖到某个对手现在站的位置 */
 export function wouldCatch(world: World, pos: number, power: number, targets: readonly number[]): boolean {
   const cells = new Set(blastCells(world.board, pos, power, world.pierce));
   return targets.some((t) => cells.has(t));
+}
+
+/**
+ * 「假如我走到 `cell` 再放一颗泡泡,还跑得掉吗?」——**踩点用的快筛**。
+ *
+ * 和 `escapeAfterBomb` 分工明确:那一个是真要放泡泡之前的精算闸门(会算连锁、算到达时刻),
+ * 这一个是找位置时一格一格试的粗筛,只问「引信烧完之前,能不能走到一个完全干净的格子」。
+ * 判定比精算更严(要求落脚点当下就绝对安全),所以筛过的位置精算一定也过得去,
+ * 而代价只有一次小范围 BFS —— 一帧里试六七个位置也不卡。
+ */
+export function canEscapeFrom(world: World, f: Fighter, cell: number, timing?: Map<number, number>): boolean {
+  const board = world.board;
+  const stepMs = stepMsFor(f.speed);
+  const danger = timing ?? dangerTiming(board, world.bombs, world.pierce);
+  const blast = new Set(blastCells(board, cell, f.power, world.pierce));
+  const blocked = new Set<number>([...bombCells(world), cell]);
+  // 引信烧完之前迈得出几步(起步那半格冷却也算上)
+  const startDelay = cell === f.pos ? Math.max(0, f.moveT) : stepMs;
+  const budget = Math.min(6, Math.floor((FUSE_MS - SAFETY_MS - startDelay) / stepMs));
+  if (budget <= 0) return false;
+
+  const seen = new Set<number>([cell]);
+  let ring = [cell];
+  for (let step = 0; step < budget; step++) {
+    const next: number[] = [];
+    for (const from of ring) {
+      for (let dir = 0; dir < 4; dir++) {
+        const nb = stepCell(board, from, dir);
+        if (nb < 0 || seen.has(nb)) continue;
+        if (!canStand(board, nb, { ghost: f.ghost, bombs: blocked, from: cell })) continue;
+        if (world.flames.has(nb)) continue;
+        seen.add(nb);
+        if (!blast.has(nb) && !danger.has(nb)) return true;
+        next.push(nb);
+      }
+    }
+    ring = next;
+  }
+  return false;
+}
+
+/**
+ * 预判(高手档专用):对手接下来 `steps` 步之内可能站到哪些格。
+ *
+ * 不猜他想去哪,只算他**够得着**哪儿——够得着的格子越少,说明他越憋屈。
+ * 高手档就朝这片格子的中间放泡泡,而不是朝他现在站的那一格放(等泡泡破的时候他早走了)。
+ */
+export function predictFoeCells(world: World, foePos: number, steps: number, ghost = false): number[] {
+  const board = world.board;
+  const blocked = bombCells(world);
+  const seen = new Set<number>([foePos]);
+  let ring = [foePos];
+  for (let s = 0; s < Math.max(0, steps); s++) {
+    const next: number[] = [];
+    for (const cell of ring) {
+      for (let dir = 0; dir < 4; dir++) {
+        const nb = stepCell(board, cell, dir);
+        if (nb < 0 || seen.has(nb)) continue;
+        if (!canStand(board, nb, { ghost, bombs: blocked, from: foePos })) continue;
+        seen.add(nb);
+        next.push(nb);
+      }
+    }
+    ring = next;
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/**
+ * 封路(高手档专用):我在 `at` 放一颗泡泡以后,站在 `foePos` 的人还剩几个安全落脚点。
+ *
+ * 数字越小,说明这一颗把他的退路封得越狠;数到 0 就是「他只能等着被罩住」。
+ */
+export function foeEscapeCount(world: World, at: number, power: number, foePos: number, ghost = false): number {
+  const board = world.board;
+  const fake: Bomb = {
+    id: -997,
+    pos: at,
+    owner: -1,
+    power,
+    fuse: FUSE_MS,
+    remote: false,
+    slide: DIR_NONE,
+    slideT: 0,
+  };
+  const timing = dangerTiming(board, [...world.bombs, fake], world.pierce);
+  const blocked = new Set<number>([...bombCells(world), at]);
+  const seen = new Set<number>([foePos]);
+  let ring = [foePos];
+  let safe = timing.has(foePos) ? 0 : 1;
+  // 只看三步以内:再远就不是「这一颗泡泡封不封得住」的问题了
+  for (let s = 0; s < 3; s++) {
+    const next: number[] = [];
+    for (const cell of ring) {
+      for (let dir = 0; dir < 4; dir++) {
+        const nb = stepCell(board, cell, dir);
+        if (nb < 0 || seen.has(nb)) continue;
+        if (!canStand(board, nb, { ghost, bombs: blocked, from: foePos })) continue;
+        seen.add(nb);
+        next.push(nb);
+        if (!timing.has(nb) && !world.flames.has(nb)) safe++;
+      }
+    }
+    ring = next;
+  }
+  return safe;
 }
 
 // ---------------------------------------------------------------------------
 // 电脑玩家
 // ---------------------------------------------------------------------------
 
-/** 1=轻松(新手友好) 2=普通 3=高手(会算爆风与逃生) */
+/** 1=轻松(新手友好) 2=普通 3=高手(会预判落点、会封退路) */
 export type AiLevel = 1 | 2 | 3;
 
 export const AI_LABEL: Record<AiLevel, string> = {
   1: "轻松",
   2: "普通",
   3: "高手",
+};
+
+export interface AiTuning {
+  /**
+   * 隔多久才重新想一步(毫秒):档位越低想得越慢,给孩子留出反应时间。
+   * 两次思考之间它照着上一步的方向继续走 —— 见 `pacedAiAction()`。
+   */
+  thinkMs: number;
+  /** 愿意为一件道具跑多远 */
+  itemReach: number;
+  /** 会不会主动埋伏人 */
+  hunt: boolean;
+  /** 会不会预判对手的落点(不朝他现在站的地方放,朝他要去的地方放) */
+  predict: boolean;
+  /** 会不会挑「能把对手退路封死」的那一格 */
+  cutoff: boolean;
+  /** 走到远处一个「放完跑得掉」的位置去放泡泡(轻松档只在脚下就位时才放) */
+  reposition: boolean;
+}
+
+/** 三档的全部差别都摊在这张表上,便于单测逐项断言 */
+export const AI_TUNING: Record<AiLevel, AiTuning> = {
+  // 轻松档也会挪位置再放泡泡 —— 这不是「强」,是「玩得下去」:
+  // 泡泡只有 2 秒,不许挪位置的电脑会站在原地一颗都放不出来,那不叫简单,叫坏了。
+  1: { thinkMs: 260, itemReach: 4, hunt: false, predict: false, cutoff: false, reposition: true },
+  2: { thinkMs: 150, itemReach: 8, hunt: false, predict: false, cutoff: false, reposition: true },
+  3: { thinkMs: 70, itemReach: 14, hunt: true, predict: true, cutoff: true, reposition: true },
 };
 
 export interface AiAction {
@@ -320,6 +475,71 @@ export interface AiAction {
 
 export function idleAction(why = "等一等"): AiAction {
   return { dir: DIR_NONE, drop: false, detonate: false, why };
+}
+
+// ---------------------------------------------------------------------------
+// 思考节奏
+// ---------------------------------------------------------------------------
+
+/**
+ * 这一档隔多久才重新想一步(毫秒);档号不认识就按普通档。
+ *
+ * **这是思考节奏唯一的出处。** 1.2 之前 `AI_TUNING.thinkMs` 全仓库没有一处生产代码读它,
+ * 同一组数字在 `index.ts` 里被手抄成了一句 `skill === 1 ? 260 : skill === 2 ? 150 : 70`。
+ * 抄出来的那份才是真上场的,表里那份只被单测断言单调 —— 调表不改游戏、改游戏不红单测。
+ */
+export function thinkMsFor(level: AiLevel): number {
+  return (AI_TUNING[level] ?? AI_TUNING[2]).thinkMs;
+}
+
+/** 一个电脑座位的思考节拍器(会被 `pacedAiAction` 就地改写) */
+export interface AiPacer {
+  /** 还有多少毫秒才轮到下一次重新想 */
+  cool: number;
+  /** 上一次想出来的方向:冷却期间照着它继续走 */
+  dir: number;
+  /** 这一帧是真想了(true),还是照着上一步走(false) */
+  fresh: boolean;
+}
+
+export function createPacer(): AiPacer {
+  return { cool: 0, dir: DIR_NONE, fresh: false };
+}
+
+/**
+ * 按档位节奏想一步 —— **游戏与单测共用的那一份**。
+ *
+ * `chooseAiAction()` 回答的是「这一刻最该干什么」,它不管节奏;
+ * 真正让三档拉开差距的是**多久问一次**:轻松档 260ms 才问一次,
+ * 中间那十几帧它照着旧主意闷头走,撞见新情况也得等下一拍才反应得过来。
+ *
+ * 这个节奏以前只长在 `index.ts` 的主循环里,单测够不着,于是
+ * `ai12.test.ts` 那条「固定 seed 的胜率」回归线是**每 20ms 重想一次**跑出来的——
+ * 等于把三档的思考节奏抹平,量的是一个不存在的电脑(实测:抹平之后
+ * 高手档打普通档 3 比 5,**倒输**;按真节奏跑是 4 比 1)。
+ * 挪进来之后两边跑的是同一份代码。
+ *
+ * 冷却期间只重复方向,**不重复放泡泡也不重复引爆**:那两件事按一次就够,
+ * 连按十几帧只会把手里的泡泡一次全撒出去。
+ */
+export function pacedAiAction(
+  pacer: AiPacer,
+  world: World,
+  who: number,
+  level: AiLevel,
+  dtMs: number,
+  tick = 0
+): AiAction {
+  pacer.cool -= Math.max(0, dtMs);
+  if (pacer.cool > 0) {
+    pacer.fresh = false;
+    return { dir: pacer.dir, drop: false, detonate: false, why: "照着上一步走" };
+  }
+  pacer.cool = thinkMsFor(level);
+  pacer.fresh = true;
+  const act = chooseAiAction(world, who, level, tick);
+  pacer.dir = act.dir;
+  return act;
 }
 
 /**
@@ -347,7 +567,11 @@ export function chooseAiAction(world: World, who: number, level: AiLevel, tick =
 
   // 1) 先保命
   if (inDanger) {
-    const plan = findEscape(world, me.pos, { stepMs, ghost: me.ghost });
+    const startDelay = Math.max(0, me.moveT);
+    const plan =
+      findEscape(world, me.pos, { stepMs, ghost: me.ghost, startDelay }) ??
+      // 小怪把每条退路都堵上了:那就先躲开彩虹波,被小怪抱一下总比两头都挨上强
+      findEscape(world, me.pos, { stepMs, ghost: me.ghost, startDelay, avoidCritters: false });
     if (plan && plan.path.length > 0) {
       return { dir: dirBetween(world.board, me.pos, plan.path[0]), drop: false, detonate: false, why: "躲爆风" };
     }
@@ -362,8 +586,8 @@ export function chooseAiAction(world: World, who: number, level: AiLevel, tick =
     .filter((f) => f.index !== who && f.team !== me.team && f.bubbleT <= 0)
     .map((f) => f.pos);
   const critters = world.critters.map((c) => c.pos);
-  // 撞上小怪一样会被泡泡包住,所以走位时把小怪站的格子也当成要绕开的地方
-  const avoid = dangerCells(world);
+  // 撞上小怪一样会被罩进泡泡,所以走位时把小怪站的格子也当成要绕开的地方
+  const avoid = dangerCells(world, timing);
   for (const cell of critters) avoid.add(cell);
 
   // 2) 出口关:小怪清干净、出口也炸开了,就直奔出口
@@ -388,12 +612,20 @@ export function chooseAiAction(world: World, who: number, level: AiLevel, tick =
   }
 
   const canBomb = world.bombs.filter((b) => b.owner === who).length < me.bombs && !hasBombHere(world, me.pos);
+  const tune = AI_TUNING[level];
 
-  // 4) 站在能一发困住对手 / 小怪的位置就放弹(轻松档不埋伏人,但照样会打小怪)
-  const prey = level === 3 ? [...foes, ...critters] : critters;
-  if (canBomb && prey.length > 0 && wouldCatch(world, me.pos, me.power, prey)) {
-    if (escapeAfterBomb(world, me)) {
-      return { dir: DIR_NONE, drop: true, detonate: false, why: "堵住对手" };
+  // 4) 站在能一发罩住对手 / 小怪的位置就放泡泡(轻松档不埋伏人,但照样会打小怪)
+  const prey = tune.hunt ? [...foes, ...critters] : critters;
+  if (canBomb && prey.length > 0) {
+    // 高手档不只看「他现在站哪」,还看「他两步之内能去哪」:等泡泡破的时候人早挪窝了
+    const aimed = tune.predict
+      ? [...prey, ...foes.flatMap((p) => predictFoeCells(world, p, 2))]
+      : prey;
+    const hit = wouldCatch(world, me.pos, me.power, aimed);
+    // 封路:这一颗放下去,对手还剩几个安全落脚点?剩得越少越值得放
+    const cuts = tune.cutoff && foes.length > 0 && foes.some((p) => foeEscapeCount(world, me.pos, me.power, p, me.ghost) <= 1);
+    if ((hit || cuts) && escapeAfterBomb(world, me)) {
+      return { dir: DIR_NONE, drop: true, detonate: false, why: cuts && !hit ? "封住对手的退路" : "堵住对手" };
     }
   }
 
@@ -401,28 +633,42 @@ export function chooseAiAction(world: World, who: number, level: AiLevel, tick =
   const lazy = level === 1 && tick % 3 === 0;
   if (!lazy) {
     const item = seek(world, me.pos, (cell) => world.items.has(cell), { stepMs, ghost: me.ghost, avoid });
-    if (item && item.steps <= (level === 1 ? 4 : level === 2 ? 8 : 14)) {
+    if (item && item.steps <= tune.itemReach) {
       return { dir: item.dir, drop: false, detonate: false, why: "去捡道具" };
     }
   }
 
-  // 6) 去打小怪:走到「放一颗就能盖到它」的位置,而不是直接往它身上撞
-  if (critters.length > 0) {
-    const spot = seek(world, me.pos, (cell) => !avoid.has(cell) && wouldCatch(world, cell, me.power, critters), {
-      stepMs,
-      ghost: me.ghost,
+  // 6) 去打小怪:走到「放一颗就能盖到它、而且放完自己跑得掉」的位置,而不是直接往它身上撞
+  if (critters.length > 0 && canBomb) {
+    if (wouldCatch(world, me.pos, me.power, critters) && escapeAfterBomb(world, me)) {
+      return { dir: DIR_NONE, drop: true, detonate: false, why: "放一颗把小怪包起来" };
+    }
+    const spot = safeBombSpot(
+      world,
+      me,
       avoid,
-    });
+      // 先用「同行同列且够得着」这个 O(1) 的粗筛挡一道,真去算爆风覆盖的只剩几格
+      (cell) => inLineWithin(world.board, cell, critters, me.power) && wouldCatch(world, cell, me.power, critters),
+      tune,
+      timing
+    );
     if (spot && spot.dir >= 0) {
       return { dir: spot.dir, drop: false, detonate: false, why: "绕到能打到小怪的位置" };
     }
   }
 
-  // 7) 炸砖开路
-  if (canBomb) {
+  // 7) 拍开挡路的砖。
+  // 手上已经有一颗在场上就先不放第二颗:多摆一颗只是给自己多画一条危险线,
+  // 而清砖这件事本来就不急 —— 打人和打小怪(第 4、6 步)才享受「摆满」的权利。
+  if (canBomb && world.bombs.every((b) => b.owner !== who)) {
     const hits = bricksHit(world, me.pos, me.power);
     if (hits >= 1 && escapeAfterBomb(world, me)) {
-      return { dir: DIR_NONE, drop: true, detonate: false, why: "炸开挡路的砖" };
+      return { dir: DIR_NONE, drop: true, detonate: false, why: "拍开挡路的砖" };
+    }
+    // 脚下这一格放完跑不掉(或者压根拍不到砖):换一格站,而不是傻站着等
+    const spot = safeBombSpot(world, me, avoid, (cell) => brickBeside(world.board, cell), tune, timing);
+    if (spot && spot.dir >= 0) {
+      return { dir: spot.dir, drop: false, detonate: false, why: "挪到能安全放泡泡的位置" };
     }
     const brick = seek(world, me.pos, (cell) => tileOf(world.board, cell) === TILE_SOFT, {
       stepMs,
@@ -443,6 +689,59 @@ export function chooseAiAction(world: World, who: number, level: AiLevel, tick =
   }
   const stroll = wanderDir(world, me, tick);
   return { dir: stroll, drop: false, detonate: false, why: "四处走走" };
+}
+
+/** 一次决策里最多试算几个「放完跑得掉吗」——BFS 套 BFS,得给它封个顶 */
+const SPOT_TRIES = 6;
+
+/** 四邻有没有软砖(站上去放一颗必定能拍开砖):踩点时的 O(1) 粗筛 */
+function brickBeside(board: Board, cell: number): boolean {
+  for (let dir = 0; dir < 4; dir++) {
+    const nb = stepCell(board, cell, dir);
+    if (nb >= 0 && tileOf(board, nb) === TILE_SOFT) return true;
+  }
+  return false;
+}
+
+/** 和任一目标同行或同列、而且在射程内(不查墙,只做粗筛) */
+function inLineWithin(board: Board, cell: number, targets: readonly number[], power: number): boolean {
+  const x = xOf(board, cell);
+  const y = yOf(board, cell);
+  for (const t of targets) {
+    const tx = xOf(board, t);
+    const ty = yOf(board, t);
+    if (x === tx && Math.abs(y - ty) <= power) return true;
+    if (y === ty && Math.abs(x - tx) <= power) return true;
+  }
+  return false;
+}
+
+/**
+ * 找一个「站上去能打到目标、放完自己还跑得掉」的落脚点,返回走过去的第一步。
+ *
+ * 这是 1.2 补上的那块拼图:老版本只会在脚下试一次,试不过就傻站着,
+ * 泡泡缩到 2 秒以后这种站桩会直接卡死一整关。轻松档不做这件事(它本来就笨手笨脚)。
+ */
+function safeBombSpot(
+  world: World,
+  me: Fighter,
+  avoid: ReadonlySet<number>,
+  want: (cell: number) => boolean,
+  tune: AiTuning,
+  timing: Map<number, number>
+): Quest | null {
+  if (!tune.reposition) return null;
+  let tries = 0;
+  return seek(
+    world,
+    me.pos,
+    (cell) => {
+      if (avoid.has(cell) || !want(cell)) return false;
+      if (tries++ >= SPOT_TRIES) return false;
+      return canEscapeFrom(world, me, cell, timing);
+    },
+    { stepMs: stepMsFor(me.speed), ghost: me.ghost, avoid, maxNodes: 240 }
+  );
 }
 
 function hasBombHere(world: World, cell: number): boolean {

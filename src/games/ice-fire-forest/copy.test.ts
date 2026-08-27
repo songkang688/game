@@ -106,10 +106,24 @@ describe("商标红线", () => {
     }
   });
 
-  // 1.1 第 12 步:攻略统一走 src/games/<id>/guide.ts 的懒加载约定,这里多了一层转发文件
-  it("目录里真的有该有的五个实现文件", () => {
+  // 1.1 第 12 步:攻略统一走 src/games/<id>/guide.ts 的懒加载约定,这里多了一层转发文件。
+  // 1.2 第 16 步:手感、合作机关、检查点、摄像机、单人切换各自独立成文件,
+  // 另加一份只给用例用的 DOM 桩(不带 .test. 后缀,所以也会被这条扫到)。
+  it("目录里真的有该有的实现文件", () => {
     const names = sourceFiles().map((f) => f.name).sort();
-    expect(names).toEqual(["guide.ts", "index.ts", "levels.ts", "logic.ts", "meta.ts"]);
+    expect(names).toEqual([
+      "camera.ts",
+      "checkpoint.ts",
+      "coop.ts",
+      "domStub.ts",
+      "feel.ts",
+      "guide.ts",
+      "index.ts",
+      "levels.ts",
+      "logic.ts",
+      "meta.ts",
+      "solo.ts",
+    ]);
   });
 });
 

@@ -15,24 +15,26 @@
  * 坐标约定:x 向右增长,y 向下增长,地面上表面 y = 0,空中的东西 y 是负数。
  */
 import { mulberry32, randInt, type Chapter } from "../level99";
+import { BLOCK_H, BLOCK_W } from "./abilities";
+import {
+  ARENA_LEN,
+  GOAL_INSET,
+  MAX_GAP,
+  MAX_PLATFORM_RISE,
+  MIN_GAP,
+  START_PAD,
+} from "./geometry";
+import { buildTowerFloor } from "./tower";
 
 // ---------------------------------------------------------------------------
 // 几何红线:比 logic.ts 里那套跳跃物理算出来的极限更保守,留足容错
 // logic.test.ts 会断言这些值确实小于王子(跳得最矮的那个)的物理极限
+//
+// 1.2 起这几个常量的正身搬到了 `geometry.ts`(无尽城堡塔的校验器也要照同一套红线),
+// 这里原样 re-export,老的 `import { MAX_GAP } from "./levels"` 一个字都不用改。
 // ---------------------------------------------------------------------------
 
-/** 地面断口最窄(太窄反而看不清) */
-export const MIN_GAP = 56;
-/** 地面断口最宽:必须明显小于王子一次跳跃的水平距离 */
-export const MAX_GAP = 118;
-/** 空中平台最高:必须明显小于王子一次跳跃的最高点 */
-export const MAX_PLATFORM_RISE = 86;
-/** 关卡最左边这一段永远是干净平地,给玩家看清楚状况 */
-export const START_PAD = 230;
-/** 城门离关卡末端的距离 */
-export const GOAL_INSET = 130;
-/** 首领擂台的宽度 */
-export const ARENA_LEN = 1500;
+export { ARENA_LEN, GOAL_INSET, MAX_GAP, MAX_PLATFORM_RISE, MIN_GAP, START_PAD };
 
 // ---------------------------------------------------------------------------
 // 章节
@@ -149,6 +151,19 @@ export interface GemDef {
   ground: boolean;
 }
 
+/**
+ * 重箱子(1.2 新增):**只有王子推得动**的可推元素。
+ *
+ * 摆在一块实心台子上,底下压着一颗宝石 —— 王子把它推下台,宝石才露出来。
+ * 公主推不动,但箱子只有 `BLOCK_H` 那么高,她跳上去、跳过去都行,**卡不死人**。
+ * 前 99 关一个都不摆(碰撞数据冻结),第 100 关起的「交替关」才出场。
+ */
+export interface BlockDef {
+  x: number;
+  /** 箱子底面 y(踩在台面上就是台面的 y,地面上是 0) */
+  y: number;
+}
+
 export interface BossDef {
   /** 首领编号,对应 BOSSES 表 */
   kind: number;
@@ -212,6 +227,14 @@ export interface LevelDef {
   hearts: number;
   /** 需要两个人都站到城门前 */
   goalNeedsAll: boolean;
+  /** 重箱子(只有王子推得动);1.2 起第 100 关开始出现,前 99 关恒为空 */
+  blocks: BlockDef[];
+  /** 每章第 1 关:无风险教学关 */
+  teach: boolean;
+  /** 无风险:碰到什么都只闪一下小护盾,不掉心 */
+  noRisk: boolean;
+  /** 交替关:既有王子才推得动的重箱子,又有公主才够得着的高空宝石 */
+  alternating: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -589,6 +612,105 @@ function buildBossLevel(lv: number, ci: number, mini: boolean, rand: () => numbe
     timeLimit: mini ? 190 : 240,
     hearts: 6,
     goalNeedsAll: false,
+    blocks: [],
+    teach: false,
+    noRisk: false,
+    alternating: false,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 1.2 非碰撞层:教学关与交替龛
+// ---------------------------------------------------------------------------
+
+/**
+ * 从这一关起才允许往关卡里加新元素。
+ *
+ * 前 99 关的**碰撞数据一个字节都不许改**(地形、平台、怪、尖刺、宝石、首领),
+ * 所以重箱子和高空宝石只从第 100 关(0 基第 99 关)开始出现;
+ * 教学关的「无风险」是规则层的开关,不动任何坐标。
+ * `levels.test.ts` 拿一枚冻结校验和盯着前 99 关,改到就红。
+ */
+export const FIRST_UPGRADED_LEVEL = 99;
+
+/** 每隔这么多关排一个交替龛 */
+const ALTERNATE_EVERY = 3;
+
+/** 交替龛那块台子的高度与尺寸 */
+const NICHE_Y = -80;
+const NICHE_W = 150;
+/** 高空宝石比台面高多少:王子够不着,公主的二段跳 + 滑翔够得着 */
+const SKY_GEM_RISE = 200;
+
+/** 这一关(0 基)是不是每章第 1 关 —— 也就是无风险教学关 */
+export function isTeachLevelIndex(level: number): boolean {
+  return indexInChapterOf(level) === 0;
+}
+
+/** 这一关该不该排交替龛 */
+export function isAlternatingIndex(level: number): boolean {
+  if (level < FIRST_UPGRADED_LEVEL) return false;
+  if (bossSlotOf(level) !== null) return false;
+  if (isTeachLevelIndex(level)) return false;
+  return level % ALTERNATE_EVERY === 0;
+}
+
+/**
+ * 找一段干净的实地摆交替龛:整块台子下面都踩得实,附近没尖刺、没地面怪,也不压别的台子。
+ *
+ * 找不到就不摆 —— 宁可这一关不当交替关,也不硬塞一个会挡路的台子。
+ */
+function findNicheSpot(def: LevelDef): number | null {
+  const pad = 40;
+  const from = START_PAD + 80;
+  const to = def.goalX - NICHE_W - 120;
+  for (let x = from; x <= to; x += 10) {
+    let ok = true;
+    for (let p = x - pad; p <= x + NICHE_W + pad && ok; p += 10) {
+      if (!groundSolidAt(def, p)) ok = false;
+    }
+    if (ok && def.spikes.some((s) => s.x + s.w > x - pad && s.x < x + NICHE_W + pad)) ok = false;
+    if (ok && def.platforms.some((p) => p.x + p.w > x - 30 && p.x < x + NICHE_W + 30)) ok = false;
+    if (ok && def.enemies.some((e) => e.y >= 0 && e.maxX > x - 30 && e.minX < x + NICHE_W + 30)) ok = false;
+    if (ok) return x;
+  }
+  return null;
+}
+
+/**
+ * 给一关加上 1.2 的非碰撞层 / 新元素。
+ *
+ * - 每章第 1 关:标成教学关,无风险 + 不限时(坐标一个都不动);
+ * - 第 100 关起每隔几关:加一个交替龛(台子 + 重箱子 + 箱子底下压着的宝石 + 高空宝石),
+ *   两颗宝石一个只有王子拿得到、一个只有公主拿得到,收齐才是三星。
+ */
+function decorate(def: LevelDef): LevelDef {
+  const lv = def.index;
+  if (isTeachLevelIndex(lv)) {
+    return { ...def, teach: true, noRisk: true, timeLimit: 0 };
+  }
+  if (!isAlternatingIndex(lv)) return def;
+  const spot = findNicheSpot(def);
+  if (spot === null) return def;
+  const platforms = [...def.platforms, { x: spot, y: NICHE_Y, w: NICHE_W, kind: "solid" as PlatformKind }];
+  const blocks: BlockDef[] = [{ x: spot + BLOCK_W, y: NICHE_Y }];
+  const gems: GemDef[] = [
+    ...def.gems,
+    // 压在箱子底下那一颗:王子把箱子推下台才露出来
+    { x: spot + BLOCK_W, y: NICHE_Y - BLOCK_H * 0.5, ground: false },
+    // 高空那一颗:只有公主够得着
+    { x: spot + NICHE_W * 0.78, y: NICHE_Y - SKY_GEM_RISE, ground: false },
+  ];
+  return {
+    ...def,
+    platforms,
+    blocks,
+    gems,
+    alternating: true,
+    // 交替关的三星要求收齐所有宝石 —— 逼着两位轮流上一次
+    gemGoal: gems.length,
+    feature: `${def.feature} · 交替`,
+    hint: `${def.hint} 箱子只有王子推得动,高处那颗只有公主够得着,换人试试。`,
   };
 }
 
@@ -608,7 +730,7 @@ export function buildLevel(index: number): LevelDef {
   const t = TOTAL > 1 ? lv / (TOTAL - 1) : 0;
 
   const slot = bossSlotOf(lv);
-  if (slot) return buildBossLevel(lv, ci, slot === "mini", rand, t);
+  if (slot) return decorate(buildBossLevel(lv, ci, slot === "mini", rand, t));
 
   const len = Math.round(1780 + ci * 190 + pos * 20);
   const b = emptyBuilder();
@@ -626,7 +748,7 @@ export function buildLevel(index: number): LevelDef {
   const foes = b.enemies.length;
   const parSeconds = Math.round(len / 175 + foes * 1.9 + 8);
 
-  return {
+  return decorate({
     kind: "campaign",
     index: lv,
     chapterIndex: ci,
@@ -648,7 +770,11 @@ export function buildLevel(index: number): LevelDef {
     timeLimit: Math.round(parSeconds * 2.6 + 30),
     hearts: 6,
     goalNeedsAll: false,
-  };
+    blocks: [],
+    teach: false,
+    noRisk: false,
+    alternating: false,
+  });
 }
 
 /** 战役全 188 关(按需生成一次并缓存) */
@@ -662,68 +788,64 @@ export function allLevels(): LevelDef[] {
 }
 
 // ---------------------------------------------------------------------------
-// 无尽模式:王国远征
+// 无尽模式:城堡塔
 // ---------------------------------------------------------------------------
 
 /**
- * 无尽模式第 round 段路(0 基)。段落一段接一段地往前接,越往后越长、越挤;
- * 每第 5 段安排一场首领,打赢了补一颗心。
+ * 无尽模式第 round 层(0 基)。一层接一层往上爬,越往上越长、越挤;
+ * 每第 5 层守着一位首领,打赢了补一颗心。
+ *
+ * 1.2 起地形不再是「换个种子再撒一遍点」,而是走 `tower.ts` 的**模板 + 必过窗口**:
+ * 每一层都是七张模板拼出来的,每一段自带一条走得通的明路,拼完静态校验一遍。
+ * 层数(不是分数)记进 `save.recordEndlessBest("prince-princess", n)`。
  */
 export function buildEndless(round: number): LevelDef {
   const r = Math.max(0, Math.round(round));
-  const rand = mulberry32(0x5ee700 + r * 104729 + 11);
   const ci = r % KITS.length;
-  const kit = KITS[ci];
   const isBoss = r > 0 && r % 5 === 4;
 
   if (isBoss) {
+    const rand = mulberry32(0x5ee700 + r * 104729 + 11);
     const def = buildBossLevel(r, ci, true, rand, Math.min(1, r / 20));
     return {
       ...def,
       kind: "endless",
       index: r,
-      name: `远征首领 · ${BOSSES[ci].name}`,
-      hint: "远征路上的首领!打倒它就能补一颗心,继续往前。",
+      name: `第 ${r + 1} 层 · ${BOSSES[ci].name}`,
+      hint: "塔里的守门首领!打倒它就能补一颗心,继续往上爬。",
       timeLimit: 0,
       hearts: def.hearts,
     };
   }
 
-  const len = 2200 + Math.min(1700, r * 165);
-  const b = emptyBuilder();
-  walk(b, rand, kit, {
-    from: START_PAD,
-    to: len - GOAL_INSET - 170,
-    density: Math.min(1, 0.32 + r * 0.075),
-    enemySpeed: 44 + Math.min(46, r * 5),
-    gapMax: Math.min(MAX_GAP, 78 + r * 4),
-  });
-  trimSpikes(b);
-  trimEnemies(b, len);
-  ensureMinimums(b, len, 44 + Math.min(46, r * 5));
-
+  const floor = buildTowerFloor(r);
+  const groundGems = floor.gems.filter((g) => g.ground).length;
   return {
     kind: "endless",
     index: r,
     chapterIndex: ci,
-    name: `第 ${r + 1} 段 · ${CHAPTERS[ci].name}`,
-    feature: kit.feature,
-    hint: "一路向前!打倒的怪越多、宝石捡得越多,分数越高。",
-    len,
-    goalX: len - GOAL_INSET,
-    gaps: b.gaps,
-    platforms: b.platforms,
-    enemies: b.enemies,
-    spikes: b.spikes,
-    gems: b.gems,
+    name: `第 ${r + 1} 层 · ${CHAPTERS[ci].name}`,
+    feature: `🏰 ${floor.pieces[0] ?? "城堡塔"}`,
+    hint: "一层一层往上爬!打倒的怪越多、宝石捡得越多,爬得越高。",
+    len: floor.len,
+    goalX: floor.goalX,
+    gaps: floor.gaps,
+    platforms: floor.platforms,
+    enemies: floor.enemies,
+    spikes: floor.spikes,
+    gems: floor.gems,
     boss: null,
-    slippery: kit.slippery,
-    // 远征段要清掉六成怪才通往下一段,不然「无尽」就只剩埋头跑
+    slippery: false,
+    // 一层要清掉六成怪才开门通往上一层,不然「无尽」就只剩埋头跑
     requiredRatio: 0.6,
-    parSeconds: Math.round(len / 175 + 10),
-    gemGoal: Math.max(1, b.groundGems),
+    parSeconds: Math.round(floor.len / 175 + 10),
+    gemGoal: Math.max(1, groundGems),
     timeLimit: 0,
     hearts: 6,
     goalNeedsAll: false,
+    blocks: [],
+    teach: false,
+    noRisk: false,
+    alternating: false,
   };
 }

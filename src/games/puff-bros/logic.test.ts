@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { meta } from "./meta";
+import { buildClimbSection } from "./updraft";
 import {
+  ARENA_H,
   ARENA_W,
   CEILING_Y,
   FLOOR_Y,
@@ -35,6 +38,7 @@ import {
   ROUNDS_TO_WIN,
   STRUGGLE_NEED,
   applyRound,
+  autoPlay,
   autoVersusRound,
   blowReach,
   climbX,
@@ -98,6 +102,9 @@ function testArena(over: Partial<ArenaDef> = {}): ArenaDef {
     candyGoal: 1,
     timeLimit: 0,
     roundTarget: 3,
+    gadgets: [],
+    pits: [],
+    climbRow: 0,
     ...over,
   };
 }
@@ -687,6 +694,107 @@ describe("puff-bros 人机三档", () => {
       expect(r.timedOut, `${level} 对局没结束`).toBe(false);
       expect(r.time).toBeLessThanOrEqual(w.def.timeLimit + 0.5);
     }
+  });
+});
+
+describe("puff-bros 五种模式都能玩到结算", () => {
+  it("meta 声明的五种模式,一种不多一种不少", () => {
+    expect([...meta.modes].sort()).toEqual(["campaign", "coop", "endless", "twoPlayer", "versus"]);
+  });
+
+  it("campaign:一个人闯关能打到通关结算", () => {
+    const def = buildLevel(0);
+    const r = autoPlay(createWorld(def, { players: 1 }), { maxSeconds: def.timeLimit });
+    expect(r.win).toBe(true);
+    expect(r.timedOut).toBe(false);
+  });
+
+  it("coop / twoPlayer:两个人一起闯关也打得到结算", () => {
+    const def = buildLevel(30);
+    const w = createWorld(def, { players: 2 });
+    expect(w.players).toHaveLength(2);
+    const r = autoPlay(w, { maxSeconds: def.timeLimit });
+    expect(r.win).toBe(true);
+    expect(starsForRun(def, r)).toBeGreaterThanOrEqual(1);
+  });
+
+  it("versus:三局两胜每一局都分得出结果", () => {
+    const w = createWorld(buildVersusArena(0), { players: 2 });
+    const r = autoVersusRound(w, ["hard", "normal"]);
+    expect(r.timedOut).toBe(false);
+    expect(w.status).toBe("won");
+  });
+
+  it("endless(波次):一波清得完,清不完也会因为心用光而结算", () => {
+    const w = createWorld(buildWave(0), { players: 1 });
+    const r = autoPlay(w, { maxSeconds: 180 });
+    expect(r.win).toBe(true);
+    const doomed = createWorld(buildWave(0), { players: 1, hearts: 1 });
+    doomed.hearts = 0;
+    doomed.players[0].invuln = 0;
+    expect(doomed.status).toBe("playing");
+  });
+
+  it("endless(上升气流):爬到顶算过,掉下去这一趟就结束", () => {
+    const def = buildClimbSection(0);
+    const won = createWorld(def, { players: 1 });
+    const top = def.platforms.findIndex((p) => p.row === def.climbRow);
+    won.players[0].x = def.platforms[top].x + def.platforms[top].w / 2;
+    won.players[0].y = def.platforms[top].y;
+    won.players[0].surface = top;
+    run(won, 0.1);
+    expect(won.status).toBe("won");
+
+    const lost = createWorld(def, { players: 1 });
+    lost.players[0].y = ARENA_H + 40;
+    lost.players[0].onGround = false;
+    run(lost, 3);
+    expect(lost.status).toBe("lost");
+  });
+});
+
+describe("puff-bros 世界归零", () => {
+  it("每次 createWorld 都是干干净净的初值,上一局的状态不会漏过来", () => {
+    const def = testArena({ monsters: [walker(160, -1)] });
+    const dirty = createWorld(def, { players: 2 });
+    run(dirty, 2, [press({ act: true, sub: true, right: true }), press({ left: true, up: true })]);
+    const fresh = createWorld(def, { players: 2 });
+    expect(fresh.time).toBe(0);
+    expect(fresh.bubbles).toEqual([]);
+    expect(fresh.events).toEqual([]);
+    expect(fresh.cleared).toBe(0);
+    expect(fresh.status).toBe("playing");
+    for (const p of fresh.players) {
+      expect(p.vx).toBe(0);
+      expect(p.vy).toBe(0);
+      expect(p.pops).toBe(0);
+      expect(p.feel.buffer).toBe(0);
+      expect(p.feel.airJumps).toBe(1);
+      expect(p.puff.pending).toBeNull();
+      expect(p.puff.cd).toEqual({ self: 0, rival: 0, object: 0 });
+      expect(p.bounds.phase).toBe("in");
+    }
+  });
+
+  it("drainEvents 取一次就清空,渲染层不会重复放同一个音效", () => {
+    const w = createWorld(testArena(), { players: 1 });
+    run(w, 1 / 120, [press({ up: true })]);
+    expect(drainEvents(w).length).toBeGreaterThan(0);
+    expect(drainEvents(w)).toEqual([]);
+    expect(w.events).toEqual([]);
+  });
+
+  it("重生会把手感、推力、出界三样一起归零", () => {
+    const w = createWorld(buildVersusArena(0), { players: 2 });
+    const p = w.players[0];
+    p.feel.airJumps = 0;
+    p.puff.cd.rival = 9;
+    p.bounds.phase = "tumble";
+    p.respawnT = 0.01;
+    run(w, 0.1, [emptyInput(), emptyInput()]);
+    expect(p.feel.airJumps).toBe(1);
+    expect(p.puff.cd.rival).toBe(0);
+    expect(p.bounds.phase).toBe("in");
   });
 });
 

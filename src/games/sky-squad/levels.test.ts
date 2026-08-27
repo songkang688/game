@@ -33,7 +33,8 @@ describe("sky-squad 188 关战役", () => {
       expect(boss.phases[0].until).toBeGreaterThan(boss.phases[1].until);
       for (const ph of boss.phases) {
         expect(ph.patterns.length).toBeGreaterThanOrEqual(1);
-        expect(ph.patterns.length).toBeLessThanOrEqual(2);
+        // 1.2 起后几章的收尾阶段允许三套弹幕叠着来(仍然逐段验过可躲避性)
+        expect(ph.patterns.length).toBeLessThanOrEqual(3);
         expect(ph.shout.length).toBeGreaterThan(4);
       }
       if (i > 0) expect(boss.hp).toBeGreaterThan(BOSSES[i - 1].hp);

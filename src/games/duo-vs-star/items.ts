@@ -19,7 +19,21 @@ export interface ItemDef {
   weight: number;
   /** 一句话说明 */
   tip: string;
+  /**
+   * 强道具的蓄力时间（秒）：捡到之后要举这么久才真的生效。
+   * 不填就是捡到即生效。
+   */
+  charge?: number;
 }
+
+/**
+ * 软软锤子要举多久才真的变沉手。
+ *
+ * 1.1 时它是唯一「捡到即定胜负」的道具——力度直接翻倍，谁先摸到谁赢。
+ * 1.2 给它加了一段蓄力：这段时间里锤子还是软的，对手看得见你在举，
+ * 来得及躲、也来得及抢回场面，运气就不会一把定输赢了。
+ */
+export const HAMMER_CHARGE = 1.4;
 
 export const ITEMS: ItemDef[] = [
   {
@@ -29,7 +43,8 @@ export const ITEMS: ItemDef[] = [
     target: "self",
     duration: 8,
     weight: 10,
-    tip: "海绵做的大锤子，挥击力度差不多翻倍。",
+    charge: HAMMER_CHARGE,
+    tip: "海绵做的大锤子，举满一会儿之后挥击力度差不多翻倍。",
   },
   {
     id: "springshoe",
@@ -172,6 +187,31 @@ export function rollItem(roll: number, allowed?: readonly string[]): ItemDef {
   return list[list.length - 1];
 }
 
+// ---------------------------------------------------------------------------
+// 掉落点：左右轮流、镜像对称
+// ---------------------------------------------------------------------------
+
+/** 掉落点离场地边缘至少留这么宽，免得道具刚落地就滚出去 */
+export const ITEM_EDGE_MARGIN = 40;
+
+/**
+ * 第 `index` 件道具落在哪（世界 x）。
+ *
+ * 1.1 是「在主平台上随便挑一点」，连着几次偏一边就是白送。
+ * 1.2 改成**左右轮流 + 镜像对称**：偶数号落在中线左边，奇数号落在右边，
+ * 同一个 `roll` 抽出来的左右两点关于中线严格对称，
+ * 所以不管随机数怎么跑，两边拿到的机会长期完全一样。
+ */
+export function itemSpawnX(min: number, max: number, index: number, roll: number): number {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  const mid = (lo + hi) / 2;
+  const half = Math.max(0, (hi - lo) / 2 - ITEM_EDGE_MARGIN);
+  const r = Math.min(1, Math.max(0, Number.isFinite(roll) ? roll : 0.5));
+  const side = Math.abs(Math.trunc(index)) % 2 === 0 ? -1 : 1;
+  return mid + side * r * half;
+}
+
 /** 角色身上的增益状态（秒），battle.ts 每帧递减 */
 export interface Buffs {
   /** 挥击力度加成剩余时间 */
@@ -192,6 +232,8 @@ export interface Buffs {
   float: number;
   /** 吸铁石剩余时间 */
   magnet: number;
+  /** 软软锤子还要举多久才沉手（倒计时，0 表示已经举满） */
+  hammerCharge: number;
 }
 
 export function emptyBuffs(): Buffs {
@@ -205,6 +247,7 @@ export function emptyBuffs(): Buffs {
     dizzy: 0,
     float: 0,
     magnet: 0,
+    hammerCharge: 0,
   };
 }
 
@@ -218,9 +261,14 @@ export function tickBuffs(b: Buffs, dt: number): Buffs {
   return out;
 }
 
-/** 综合增益后的挥击力度倍率 */
+/** 软软锤子举满了吗（拿着、而且蓄力已经走完） */
+export function hammerReady(b: Buffs): boolean {
+  return b.hammer > 0 && b.hammerCharge <= 0;
+}
+
+/** 综合增益后的挥击力度倍率：锤子没举满之前一点加成都没有 */
 export function powerMul(b: Buffs): number {
-  return b.hammer > 0 ? 1.9 : 1;
+  return hammerReady(b) ? 1.9 : 1;
 }
 
 /** 综合增益后的跑动速度倍率 */

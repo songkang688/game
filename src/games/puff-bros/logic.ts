@@ -26,16 +26,95 @@ import {
   type MonsterKind,
   type PlatformDef,
 } from "./arena";
+import {
+  AIR_CONTROL,
+  COYOTE_TIME,
+  DOUBLE_JUMP_V,
+  GRAVITY,
+  JUMP_BUFFER,
+  JUMP_V,
+  MAX_SUBSTEP,
+  MOVE_SPEED,
+  consumeBuffer,
+  doubleJumpApex,
+  jumpApex,
+  jumpRange,
+  jumpSpeed,
+  newJumpFeel,
+  noteJumpKey,
+  noteLanding,
+  peekJump,
+  substeps,
+  takeJump,
+  tickJumpFeel,
+  type JumpFeel,
+} from "./feel";
+import {
+  beginPuff,
+  choosePuffUse,
+  newPuffState,
+  noteSquish,
+  objectImpulse,
+  puffRing,
+  releasePuff,
+  rivalImpulse,
+  ringOverlaps,
+  selfBoost,
+  tickPuff,
+  type PuffState,
+  type PushUse,
+} from "./push";
+import {
+  SPRING_MIN_VY,
+  brittleSolid,
+  bounceOffSpring,
+  gadgetRect,
+  inUpdraft,
+  newGadget,
+  noteWarp,
+  onWarp,
+  shoveCrate,
+  springReady,
+  stepCrate,
+  stepOnBrittle,
+  tickGadget,
+  updraftVy,
+  warpPartner,
+  CRATE_W,
+  type GadgetState,
+} from "./gadgets";
+import {
+  beginTumble,
+  newBounds,
+  onSolidGround,
+  pitAt,
+  recover,
+  resetBounds,
+  stepTumble,
+  tumbleGravity,
+  TUMBLE_MOVE,
+  type BoundsState,
+} from "./bounds";
+import { bottomLine, lineY } from "./updraft";
 
 // ---------------------------------------------------------------------------
 // 物理常量
 // ---------------------------------------------------------------------------
 
-export const GRAVITY = 1750;
-export const MOVE_SPEED = 195;
-export const JUMP_V = 690;
-/** 空中左右微调的跟随速度 */
-export const AIR_CONTROL = 7;
+export {
+  AIR_CONTROL,
+  COYOTE_TIME,
+  DOUBLE_JUMP_V,
+  GRAVITY,
+  JUMP_BUFFER,
+  JUMP_V,
+  MAX_SUBSTEP,
+  MOVE_SPEED,
+  doubleJumpApex,
+  jumpApex,
+  jumpRange,
+};
+
 export const PLAYER_W = 26;
 export const PLAYER_H = 34;
 export const MONSTER_W = 30;
@@ -100,18 +179,6 @@ export const RESPAWN_TIME = 1.4;
 export const STRUGGLE_NEED = 5;
 /** 蹲着按跳穿过浮台以后,这段时间内不再踩住浮台 */
 export const DROP_TIME = 0.3;
-/** 物理最大子步长:再大的 dt 会被切开,保证快慢机上手感一致 */
-export const MAX_SUBSTEP = 1 / 120;
-
-/** 一次起跳能上升的最高点(px) */
-export function jumpApex(): number {
-  return (JUMP_V * JUMP_V) / (2 * GRAVITY);
-}
-
-/** 一次起跳能跨过的水平距离(px) */
-export function jumpRange(): number {
-  return ((2 * JUMP_V) / GRAVITY) * MOVE_SPEED;
-}
 
 /** 一口气流从吹出到停住,泡泡中心一共飞多远(px) */
 export function blowReach(): number {
@@ -211,6 +278,14 @@ export interface PlayerState {
   /** 正在从哪块浮台穿下去(只让这一块失效,免得连穿两层) */
   dropFrom: number;
   prevUp: boolean;
+  /** 上一帧有没有按着蹲(传送泡认按下沿) */
+  prevDown: boolean;
+  /** 跳跃手感:土狼时间 / 跳跃缓冲 / 二段跳 / 落地压扁 */
+  feel: JumpFeel;
+  /** 「噗」的推力状态:三种用途各自的冷却与前摇 */
+  puff: PuffState;
+  /** 出界两段式:先打转,救不回来才出局 */
+  bounds: BoundsState;
   hurtFlash: number;
   /** 被裹进泡泡里了(对战限定) */
   trapped: boolean;
@@ -276,6 +351,12 @@ export interface CandyState {
 
 export type EventKind =
   | "jump"
+  | "double"
+  | "puff"
+  | "spring"
+  | "crack"
+  | "warp"
+  | "tumble"
   | "blow"
   | "catch"
   | "pop"
@@ -304,6 +385,8 @@ export interface World {
   monsters: MonsterState[];
   bubbles: BubbleState[];
   candies: CandyState[];
+  /** 1.2 的五种机关(气流管 / 可推箱 / 脆弱地板 / 弹簧云 / 传送泡) */
+  gadgets: GadgetState[];
   time: number;
   hearts: number;
   startHearts: number;
@@ -337,6 +420,10 @@ function makePlayer(index: number, x: number, y: number, surface: number): Playe
     dropT: 0,
     dropFrom: -1,
     prevUp: false,
+    prevDown: false,
+    feel: newJumpFeel(),
+    puff: newPuffState(),
+    bounds: newBounds(),
     hurtFlash: 0,
     trapped: false,
     struggle: 0,
@@ -384,6 +471,7 @@ export function createWorld(def: ArenaDef, opts: WorldOpts = {}): World {
       hopT: 0,
     })),
     bubbles: [],
+    gadgets: (def.gadgets ?? []).map((g) => newGadget(g)),
     candies: def.candies.map((c) => ({
       x: c.x,
       y: surfaceY(def.platforms, c.surface) - 14,
@@ -812,6 +900,9 @@ function respawn(w: World, p: PlayerState): void {
   p.dropFrom = -1;
   p.trapped = false;
   p.struggle = 0;
+  p.feel = newJumpFeel();
+  p.puff = newPuffState();
+  resetBounds(p.bounds);
 }
 
 /** 被裹住时的挣扎:每按一下方向键攒一次,攒够就自己钻出来 */
@@ -822,6 +913,85 @@ function stepTrapped(w: World, p: PlayerState, input: Input): void {
   if (p.struggle < STRUGGLE_NEED) return;
   const holder = w.bubbles.find((b) => !b.popped && b.hold?.kind === "player" && b.hold.id === p.index);
   if (holder) burstBubble(w, holder);
+}
+
+/** 站在传送泡上按 ⬇:咻地一下飞到配对的那一颗。传送成功返回 true */
+function tryWarp(w: World, p: PlayerState): boolean {
+  for (let i = 0; i < w.gadgets.length; i++) {
+    const g = w.gadgets[i];
+    if (!onWarp(g, p.x, p.y) || (g.warpCd[p.index] ?? 0) > 0) continue;
+    const other = warpPartner(w.gadgets, i);
+    if (!other) continue;
+    noteWarp(g, other, p.index);
+    p.x = other.def.x;
+    p.y = other.def.y;
+    p.vx = 0;
+    p.vy = 0;
+    p.surface = other.def.under;
+    p.onGround = true;
+    recover(p.bounds);
+    pushEvent(w, "warp", p.x, p.y - PLAYER_H / 2, p.index);
+    return true;
+  }
+  return false;
+}
+
+/** 「噗」这一口的气流环扫到什么了 */
+function puffTargets(w: World, p: PlayerState): { rival: boolean; object: boolean } {
+  const ring = puffRing(p.x, p.y, PLAYER_H, PLAYER_W / 2, p.facing);
+  let rival = false;
+  let object = false;
+  if (w.rivalry) {
+    for (const o of w.players) {
+      if (o.index === p.index || o.trapped || o.respawnT > 0) continue;
+      const b = playerBox(o);
+      if (ringOverlaps(ring, b.x0, b.x1, b.y0, b.y1)) rival = true;
+    }
+  }
+  for (const g of w.gadgets) {
+    if (g.def.kind !== "crate") continue;
+    const r = gadgetRect(g);
+    if (ringOverlaps(ring, r.x0, r.x1, r.y0, r.y1)) object = true;
+  }
+  return { rival, object };
+}
+
+/** 前摇走完,把这一口气真的喷出去 */
+function firePuff(w: World, p: PlayerState, use: PushUse): void {
+  const ring = puffRing(p.x, p.y, PLAYER_H, PLAYER_W / 2, p.facing);
+  pushEvent(w, "puff", ring.cx, ring.cy, p.index);
+
+  if (use === "self") {
+    // 朝面朝的反方向喷气,人被自己这口气推着往前冲
+    const boost = selfBoost(p.facing);
+    p.vx = boost.vx;
+    p.vy = Math.min(p.vy, boost.vy);
+    return;
+  }
+
+  if (use === "rival") {
+    for (const o of w.players) {
+      if (o.index === p.index || o.trapped || o.respawnT > 0) continue;
+      const b = playerBox(o);
+      if (!ringOverlaps(ring, b.x0, b.x1, b.y0, b.y1)) continue;
+      const dir: 1 | -1 = o.x >= p.x ? 1 : -1;
+      const hit = rivalImpulse(Math.abs(o.x - ring.cx), dir);
+      // 被吹得往后翻一下,但不掉血、不受伤 —— 只是身体扁一下再弹回来
+      o.vx = hit.vx;
+      o.vy = Math.min(o.vy, hit.vy);
+      o.onGround = false;
+      noteSquish(o.puff, dir);
+    }
+    return;
+  }
+
+  for (const g of w.gadgets) {
+    if (g.def.kind !== "crate") continue;
+    const r = gadgetRect(g);
+    if (!ringOverlaps(ring, r.x0, r.x1, r.y0, r.y1)) continue;
+    const dir: 1 | -1 = g.x >= p.x ? 1 : -1;
+    g.vx = objectImpulse(Math.abs(g.x - ring.cx), dir);
+  }
 }
 
 function applyActions(w: World, p: PlayerState, input: Input, dt: number): void {
@@ -838,24 +1008,40 @@ function applyActions(w: World, p: PlayerState, input: Input, dt: number): void 
     if (p.comboT === 0) p.combo = 0;
   }
 
-  if (input.up && !p.prevUp && p.onGround) {
-    if (input.down && p.surface >= 0) {
+  tickJumpFeel(p.feel, dt, p.onGround);
+  tickPuff(p.puff, dt, p.onGround);
+  noteJumpKey(p.feel, input.up);
+
+  // 站在传送泡上按 ⬇ 优先:传完就不再走「蹲跳穿台」那条路
+  const warped = input.down && !p.prevDown && p.onGround ? tryWarp(w, p) : false;
+  p.prevDown = input.down;
+
+  if (!warped && peekJump(p.feel, p.onGround) !== null) {
+    if (input.down && p.onGround && p.surface >= 0) {
       // 蹲着按跳:从脚下这块浮台穿下去(只让这一块失效,不会一路穿到底)
+      consumeBuffer(p.feel);
       p.onGround = false;
       p.dropT = DROP_TIME;
       p.dropFrom = p.surface;
       p.y += 4;
       p.vy = 60;
     } else {
-      p.vy = -JUMP_V;
-      p.onGround = false;
-      pushEvent(w, "jump", p.x, p.y, p.index);
+      // 土狼时间与跳跃缓冲都在 takeJump 里结算:走出台沿那一下、
+      // 落地前那一下,按下去的跳都不会被吞掉
+      const kind = takeJump(p.feel, p.onGround);
+      if (kind) {
+        p.vy = -jumpSpeed(kind);
+        p.onGround = false;
+        pushEvent(w, kind === "ground" ? "jump" : "double", p.x, p.y, p.index);
+      }
     }
   }
   p.prevUp = input.up;
 
   if (input.act && p.blowCd <= 0) blow(w, p);
 
+  // 「噗」:先戳破够得着的泡泡(1.1 就有的用法,188 关的可解性靠它),
+  // 同一下按键再按气流环扫到的东西挑一种推力用途,鼓一口气之后才喷出去
   if (input.sub && p.popCd <= 0) {
     p.popCd = POP_CD;
     const box = playerBox(p);
@@ -865,6 +1051,15 @@ function applyActions(w: World, p: PlayerState, input: Input, dt: number): void 
       if (distToBox(b.x, b.y, box) <= BUBBLE_R + POP_RANGE) popBubble(w, b, p);
     }
   }
+  if (input.sub && !p.puff.prevSub && !p.puff.pending) {
+    const t = puffTargets(w, p);
+    const use = choosePuffUse(p.puff, { ...t, onGround: p.onGround });
+    if (use) beginPuff(p.puff, use);
+  }
+  p.puff.prevSub = input.sub;
+
+  const fired = releasePuff(p.puff);
+  if (fired) firePuff(w, p, fired);
 }
 
 function applyHorizontal(p: PlayerState, input: Input, dt: number): void {
@@ -873,7 +1068,9 @@ function applyHorizontal(p: PlayerState, input: Input, dt: number): void {
   if (input.right) dir += 1;
   if (dir !== 0) p.facing = dir > 0 ? 1 : -1;
 
-  const target = MOVE_SPEED * dir;
+  // 打转的时候横向反而更跟手 —— 这一段是留给孩子自救的,不是走过场
+  const speed = p.bounds.phase === "tumble" ? TUMBLE_MOVE : MOVE_SPEED;
+  const target = speed * dir;
   if (p.onGround) p.vx = target;
   else p.vx += (target - p.vx) * Math.min(1, AIR_CONTROL * dt);
 
@@ -891,12 +1088,27 @@ function applyHorizontal(p: PlayerState, input: Input, dt: number): void {
 
 function applyVertical(w: World, p: PlayerState, dt: number): void {
   const prevFeet = p.y;
-  p.vy += GRAVITY * dt;
+  const wasGround = p.onGround;
+
+  // 气流管:人在半空钻进管子里就被托着往上飘,飘到 UPDRAFT_MAX_UP 封顶,
+  // 所以最高只浮到管口附近,不会一路怼上天花板下不来。站在地上的人不受影响。
+  let lifted = false;
+  if (!wasGround) {
+    for (const g of w.gadgets) {
+      if (!inUpdraft(g, p.x, p.y - PLAYER_H * 0.5)) continue;
+      p.vy = updraftVy(p.vy, dt);
+      lifted = true;
+      break;
+    }
+  }
+  if (!lifted) p.vy += (p.bounds.phase === "tumble" ? tumbleGravity(GRAVITY) : GRAVITY) * dt;
   p.y += p.vy * dt;
+  // 落地压扁看的是「撞上去那一刻」的速度,后面几行会把 vy 抹成 0,先留一份
+  const impactVy = p.vy;
   p.onGround = false;
 
-  // 头顶天花板
-  if (p.y - PLAYER_H < CEILING_Y) {
+  // 头顶天花板(打转的时候人已经在场外了,别再顶回来)
+  if (p.bounds.phase === "in" && p.y - PLAYER_H < CEILING_Y) {
     p.y = CEILING_Y + PLAYER_H;
     if (p.vy < 0) p.vy = 0;
   }
@@ -917,16 +1129,112 @@ function applyVertical(w: World, p: PlayerState, dt: number): void {
     }
   }
 
-  if (!p.onGround && p.y >= FLOOR_Y) {
+  // 弹簧云与脆弱地板也当单向平台使:落到上面才算数,走过去踩不动
+  if (!p.onGround && p.vy >= 0) landOnGadgets(w, p, prevFeet, wasGround);
+
+  // prevFeet 这一道跟浮台那边同一个道理:已经掉到地板线以下的人正在坑里往下落,
+  // 横着飘回坑沿上方不该把他「吸」回地面上
+  if (!p.onGround && prevFeet <= FLOOR_Y + 6 && p.y >= FLOOR_Y && onSolidGround(w.def.pits, p.x)) {
     p.y = FLOOR_Y;
     p.vy = 0;
     p.onGround = true;
     p.surface = -1;
   }
+
+  if (p.onGround && !wasGround) noteLanding(p.feel, impactVy);
+}
+
+/** 落到弹簧云 / 脆弱地板上 */
+function landOnGadgets(w: World, p: PlayerState, prevFeet: number, wasGround: boolean): void {
+  for (const g of w.gadgets) {
+    const kind = g.def.kind;
+    if (kind !== "spring" && kind !== "brittle") continue;
+    if (kind === "brittle" && !brittleSolid(g)) continue;
+    const half = g.def.w / 2 + PLAYER_W * 0.3;
+    if (p.x < g.def.x - half || p.x > g.def.x + half) continue;
+    const top = g.def.y;
+    if (prevFeet > top + 6 || p.y < top) continue;
+
+    if (kind === "spring") {
+      // 走过去只是站在云上,想弹起来得先跳一下再落下来
+      if (!wasGround && springReady(g, p.vy)) {
+        // 抬高一丁点再弹:云正好铺在地面上,不抬的话这一帧又会被地板接住
+        p.y = top - 2;
+        p.vy = bounceOffSpring(g);
+        p.onGround = false;
+        pushEvent(w, "spring", g.def.x, top, p.index);
+        return;
+      }
+      p.y = top;
+      p.vy = 0;
+      p.onGround = true;
+      p.surface = g.def.under;
+      return;
+    }
+
+    p.y = top;
+    p.vy = 0;
+    p.onGround = true;
+    p.surface = g.def.under;
+    if (!wasGround && stepOnBrittle(g)) {
+      // 第二下把它踩碎了:人接着往下掉,落到它底下那块地面上
+      p.onGround = false;
+      p.vy = 40;
+      pushEvent(w, "crack", g.def.x, top, p.index);
+    } else if (!wasGround) {
+      pushEvent(w, "crack", g.def.x, top, p.index);
+    }
+    return;
+  }
+}
+
+/**
+ * 出界两段式。
+ * 掉出底线先打转 —— 这段时间里还能左右挪、还能噗一口自救,飘回来就当没事;
+ * 撑不到就出局。上升气流里出局就是这一趟结束,对战里出局是回出生点重来。
+ */
+function applyBounds(w: World, p: PlayerState, dt: number): void {
+  const danger =
+    w.def.climbRow > 0 ? Math.min(bottomLine(), lineY(w.def.index, w.time)) : bottomLine();
+
+  if (p.bounds.phase === "in") {
+    if (p.y <= danger) return;
+    beginTumble(p.bounds, danger);
+    pushEvent(w, "tumble", p.x, p.y, p.index);
+    return;
+  }
+
+  if (p.bounds.phase === "tumble" && p.y <= danger - 6) {
+    recover(p.bounds);
+    return;
+  }
+
+  if (!stepTumble(p.bounds, dt, p.y)) return;
+
+  // 真的出局了
+  resetBounds(p.bounds);
+  if (w.def.climbRow > 0) {
+    w.status = "lost";
+    w.message = "气流把你送下来啦!下一趟早点往上爬,弹簧云和气流管都能帮忙。";
+    pushEvent(w, "lose", p.x, ARENA_H);
+    return;
+  }
+  p.respawnT = RESPAWN_TIME;
+  p.vx = 0;
+  p.vy = 0;
+  pushEvent(w, "escape", p.x, ARENA_H, p.index);
 }
 
 function playerInteractions(w: World, p: PlayerState): void {
   const box = playerBox(p);
+
+  // 走过去顶箱子:箱子不挡路,只是被慢慢推着挪
+  for (const g of w.gadgets) {
+    if (g.def.kind !== "crate") continue;
+    const r = gadgetRect(g);
+    if (!overlaps(box, { x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1 })) continue;
+    shoveCrate(g, p.x <= g.x ? 1 : -1);
+  }
 
   for (const c of w.candies) {
     if (c.taken) continue;
@@ -966,6 +1274,42 @@ function playerInteractions(w: World, p: PlayerState): void {
   }
 }
 
+/**
+ * 机关自己走一步:扣计时器,箱子照物理滑与落。
+ * 箱子撞上咕噜怪会把它顶得发懵 —— 这是「推物件」这条推力用途的收益之一。
+ */
+function stepGadgets(w: World, dt: number): void {
+  const lo = WALL + CRATE_W / 2;
+  const hi = ARENA_W - WALL - CRATE_W / 2;
+  for (const g of w.gadgets) {
+    tickGadget(g, dt);
+    if (g.def.kind !== "crate") continue;
+
+    const below = surfaceBelow(w.def.platforms, g.x, g.y);
+    const floorless = below < 0 && !onSolidGround(w.def.pits, g.x);
+    stepCrate(g, dt, floorless ? ARENA_H + 600 : surfaceY(w.def.platforms, below), lo, hi);
+    if (g.y > ARENA_H + 400) {
+      // 掉出场外的箱子回到它原来的位置,免得场上少一件道具就再也补不回来
+      g.x = g.def.x;
+      g.y = g.def.y;
+      g.vx = 0;
+      g.vy = 0;
+    }
+
+    if (Math.abs(g.vx) < 40) continue;
+    const r = gadgetRect(g);
+    for (const m of w.monsters) {
+      if (m.state !== "free" || m.dizzy > 0) continue;
+      const mb = monsterBox(m);
+      if (r.x0 >= mb.x1 || r.x1 <= mb.x0 || r.y0 >= mb.y1 || r.y1 <= mb.y0) continue;
+      m.dizzy = DIZZY_TIME;
+      m.dir = g.vx > 0 ? 1 : -1;
+      m.x = Math.min(Math.max(m.x + Math.sign(g.vx) * PUFF_PUSH, m.minX), m.maxX);
+      pushEvent(w, "escape", m.x, m.y - MONSTER_H);
+    }
+  }
+}
+
 function stepCandies(w: World, dt: number): void {
   for (const c of w.candies) {
     if (c.taken || c.landed) continue;
@@ -987,6 +1331,9 @@ function stepCandies(w: World, dt: number): void {
 
 function checkCoopGoal(w: World): void {
   if (w.status !== "playing") return;
+  // 上升气流是跑酷,过关的唯一条件是爬到最高那一层。
+  // 顺手把路上那一两只咕噜怪清了不该直接算过段 —— 那一段还没爬完呢
+  if (w.def.climbRow > 0) return;
   if (w.monsterTotal > 0 && w.cleared >= w.monsterTotal) {
     w.status = "won";
     w.message = "";
@@ -1014,6 +1361,20 @@ function checkVersusGoal(w: World): void {
   }
 }
 
+/** 爬到终点那一层就算过了这一段(上升气流专用) */
+function checkClimbGoal(w: World): void {
+  if (w.status !== "playing" || w.def.climbRow <= 0) return;
+  for (const p of w.players) {
+    if (p.respawnT > 0 || !p.onGround || p.surface < 0) continue;
+    const pl = w.def.platforms[p.surface];
+    if (!pl || pl.row < w.def.climbRow) continue;
+    w.status = "won";
+    w.message = "";
+    pushEvent(w, "win", p.x, p.y - PLAYER_H);
+    return;
+  }
+}
+
 function stepOnce(w: World, dt: number, inputs: Input[]): void {
   if (w.status !== "playing") return;
   w.time += dt;
@@ -1021,6 +1382,7 @@ function stepOnce(w: World, dt: number, inputs: Input[]): void {
   stepBubbles(w, dt);
   stepMonsters(w, dt);
   stepCandies(w, dt);
+  stepGadgets(w, dt);
 
   for (let i = 0; i < w.players.length; i++) {
     const p = w.players[i];
@@ -1039,11 +1401,15 @@ function stepOnce(w: World, dt: number, inputs: Input[]): void {
     applyActions(w, p, input, dt);
     applyHorizontal(p, input, dt);
     applyVertical(w, p, dt);
-    playerInteractions(w, p);
+    applyBounds(w, p, dt);
+    if (w.status !== "playing") return;
+    if (p.bounds.phase === "in") playerInteractions(w, p);
     if (w.status !== "playing") return;
   }
 
   bubbleCatches(w);
+  checkClimbGoal(w);
+  if (w.status !== "playing") return;
 
   if (w.rivalry) {
     checkVersusGoal(w);
@@ -1058,14 +1424,14 @@ function stepOnce(w: World, dt: number, inputs: Input[]): void {
   checkCoopGoal(w);
 }
 
-/** 推进世界。任意 dt 都会被切成不超过 MAX_SUBSTEP 的小步,保证物理稳定 */
+/**
+ * 推进世界。任意 dt 都会被 `feel.ts` 的 `substeps()` 切成不超过 MAX_SUBSTEP 的小步,
+ * 所以 30fps 与 60fps 推进同一段模拟时间得到的位移几乎一样(用例卡在 2% 以内)。
+ */
 export function stepWorld(w: World, dt: number, inputs: Input[]): void {
-  let left = Math.max(0, Math.min(0.25, dt));
-  let guard = 0;
-  while (left > 1e-6 && w.status === "playing" && guard++ < 64) {
-    const step = Math.min(MAX_SUBSTEP, left);
+  for (const step of substeps(dt)) {
+    if (w.status !== "playing") return;
     stepOnce(w, step, inputs);
-    left -= step;
   }
 }
 
@@ -1356,11 +1722,43 @@ function backOff(w: World, p: PlayerState, input: Input, dx: number): void {
 }
 
 /**
+ * 机器人不认识坑,所以在它按完键之后统一过一道。
+ *
+ * 站在地上、下一步就要迈进坑里:对面够得着就起跳跨过去(一次起跳能跨
+ * `jumpRange()` 那么远,对战场那道口子比它窄得多);跨不过去才掉头。
+ * 坑只出现在对战场和上升气流里,战役与波次无尽的 `pits` 是空的,这一道形同虚设。
+ */
+function avoidPit(w: World, p: PlayerState, input: Input): void {
+  const pits = w.def.pits;
+  if (pits.length === 0 || !p.onGround) return;
+  const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  if (dir === 0) return;
+  const ahead = p.x + dir * (PLAYER_W / 2 + 18);
+  const pit = pitAt(pits, ahead);
+  if (!pit) return;
+  const far = dir > 0 ? pit.x1 : pit.x0;
+  const need = Math.abs(far - p.x) + PLAYER_W / 2 + 8;
+  if (need <= jumpRange() * 0.95) {
+    input.up = true;
+    return;
+  }
+  input.right = dir < 0;
+  input.left = dir > 0;
+}
+
+/**
  * 合作 / 闯关模式下机器人这一帧要按什么键。
  * 顺序很重要:先处理贴脸的咕噜怪(不然一边赶路一边被撞,五颗心撑不过十秒),
  * 再去戳破已经裹住的泡泡,最后才是裹新的、捡糖。
  */
 export function coopBotInput(w: World, playerIndex = 0): Input {
+  const input = coopBotInputRaw(w, playerIndex);
+  const p = w.players[playerIndex];
+  if (p) avoidPit(w, p, input);
+  return input;
+}
+
+function coopBotInputRaw(w: World, playerIndex: number): Input {
   const input = emptyInput();
   const p = w.players[playerIndex];
   if (!p || w.status !== "playing" || p.trapped || p.respawnT > 0) return input;
@@ -1518,6 +1916,13 @@ function incomingBubble(w: World, p: PlayerState): BubbleState | null {
  * 所以单测可以整场跑完再看谁赢。
  */
 export function versusBotInput(w: World, playerIndex: number, level: BotLevel = "normal"): Input {
+  const input = versusBotInputRaw(w, playerIndex, level);
+  const p = w.players[playerIndex];
+  if (p) avoidPit(w, p, input);
+  return input;
+}
+
+function versusBotInputRaw(w: World, playerIndex: number, level: BotLevel): Input {
   const input = emptyInput();
   const prof = BOT_PROFILES[level] ?? BOT_PROFILES.normal;
   const p = w.players[playerIndex];

@@ -47,8 +47,9 @@ describe("双人键位", () => {
     expect(resolveKey("ArrowRight")).toEqual({ seat: 1, action: "right" });
   });
 
+  // KeyL 从 1.2 起是星星的道具键,所以这里换一个真的没人要的键来守这条规矩
   it("不相干的键一律不接管,留给页面自己用", () => {
-    for (const code of ["KeyQ", "Space", "Enter", "Tab", "KeyL"]) {
+    for (const code of ["KeyQ", "Space", "Enter", "Tab", "KeyZ"]) {
       expect(resolveKey(code)).toBeNull();
       expect(isWatchedKey(code)).toBe(false);
     }

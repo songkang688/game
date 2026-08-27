@@ -633,6 +633,199 @@ export function patrolPosition(
   return { x: x1 + (x2 - x1) * s, y: y1 + (y2 - y1) * s };
 }
 
+/* ================= 1.2 新增：切绳手感 / 连击 / 两个新机关 ================= */
+
+/**
+ * 把手指从 (x0,y0) 到 (x1,y1) 这一段位移细分成若干子线段的折点。
+ * 浏览器的 pointermove 是稀疏采样，快划一下可能跨过大半个屏幕；
+ * 逐段判交就不会「从绳子上空跳过去」（tunneling）。
+ * 返回的点数至少 2（首尾），相邻点间距不超过 maxStep。
+ */
+export function swipeSubSegments(
+  x0: number, y0: number, x1: number, y1: number,
+  maxStep: number
+): Array<{ x: number; y: number }> {
+  const dist = Math.hypot(x1 - x0, y1 - y0);
+  const step = maxStep > 0 ? maxStep : 1;
+  const n = Math.max(1, Math.ceil(dist / step));
+  const pts: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    pts.push({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t });
+  }
+  return pts;
+}
+
+/**
+ * 手指从 (x0,y0) 划到 (x1,y1) 这一段会切中哪些绳段（只查不改）。
+ * 内部按 maxStep 细分，逐子段用「线段间距 ≤ halfWidth」的胖判定带判交。
+ */
+export function linksCrossedBySwipe(
+  ps: Particle[],
+  links: Link[],
+  x0: number, y0: number, x1: number, y1: number,
+  halfWidth: number,
+  maxStep = 14
+): number[] {
+  const pts = swipeSubSegments(x0, y0, x1, y1, maxStep);
+  const hit: number[] = [];
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    if (!link.active) continue;
+    const pa = ps[link.a];
+    const pb = ps[link.b];
+    for (let k = 1; k < pts.length; k++) {
+      const s0 = pts[k - 1];
+      const s1 = pts[k];
+      if (segmentsWithinDistance(s0.x, s0.y, s1.x, s1.y, pa.x, pa.y, pb.x, pb.y, halfWidth)) {
+        hit.push(i);
+        break;
+      }
+    }
+  }
+  return hit;
+}
+
+/**
+ * 切断瞬间绳头「甩一下」的速度：沿划线方向给一记，划得越快甩得越开，但封顶。
+ * 不封顶的话小朋友一个大力划拉能把绳子甩出屏幕。
+ */
+export function whipImpulse(
+  dirX: number, dirY: number,
+  speed: number,
+  gain = 0.28,
+  cap = 240
+): { vx: number; vy: number } {
+  const len = Math.hypot(dirX, dirY);
+  if (len < 1e-6 || !(speed > 0)) return { vx: 0, vy: 0 };
+  const mag = Math.min(speed * gain, cap);
+  return { vx: (dirX / len) * mag, vy: (dirY / len) * mag };
+}
+
+/**
+ * 一次划线切断了几「根」绳：同一根绳上连切好几段只算一根。
+ * ranges[i] 是第 i 根绳占用的 link 下标区间 [from, to)。
+ */
+export function countRopesCut(
+  cutLinks: number[],
+  ranges: Array<[number, number]>
+): number {
+  const ropes = new Set<number>();
+  for (const li of cutLinks) {
+    for (let r = 0; r < ranges.length; r++) {
+      if (li >= ranges[r][0] && li < ranges[r][1]) {
+        ropes.add(r);
+        break;
+      }
+    }
+  }
+  return ropes.size;
+}
+
+/** 一刀切断多根绳的奖励文案；只切一根没有奖励，返回空串。 */
+export function comboLabel(n: number): string {
+  if (n >= 4) return "一刀四断！好厉害！";
+  if (n === 3) return "一刀三断！";
+  if (n === 2) return "一刀两断！";
+  return "";
+}
+
+/** 残影 / 碎屑的淡出透明度：刚出生是 1，活到 life 秒变 0。 */
+export function fadeAlpha(age: number, life: number): number {
+  if (life <= 0) return 0;
+  return Math.max(0, Math.min(1, 1 - age / life));
+}
+
+/** 1.2 新机关①「黏黏泡」的状态：还要黏住几秒 + 是否已经用过 */
+export interface StickyGrip {
+  /** 剩余黏住秒数，> 0 表示正黏着 */
+  left: number;
+  /** 一次性机关：放开之后就不再黏第二次 */
+  used: boolean;
+}
+
+export interface StickyStepResult {
+  grip: StickyGrip;
+  /** 本帧结束后是否还黏着 */
+  gripped: boolean;
+  /** 本帧刚黏上（演出与音效用） */
+  grabbed: boolean;
+  /** 本帧刚放开 */
+  released: boolean;
+}
+
+/**
+ * 新机关①「黏黏泡」：糖果撞进来就被黏住 hold 秒，时间一到自己放开。
+ * 黏着期间调用方要把糖果钉在泡泡中心（速度归零），孩子可以趁这几秒看清后半程路线。
+ * 纯函数：不改传进来的 grip，返回一份新的。
+ */
+export function stickyGripStep(
+  grip: StickyGrip,
+  hold: number,
+  candyX: number, candyY: number, candyR: number,
+  bx: number, by: number, br: number,
+  dt: number
+): StickyStepResult {
+  if (grip.left > 0) {
+    const left = grip.left - dt;
+    if (left > 0) {
+      return { grip: { left, used: grip.used }, gripped: true, grabbed: false, released: false };
+    }
+    return { grip: { left: 0, used: true }, gripped: false, grabbed: false, released: true };
+  }
+  if (grip.used || hold <= 0) {
+    return { grip: { left: 0, used: grip.used }, gripped: false, grabbed: false, released: false };
+  }
+  if (circlesOverlap(candyX, candyY, candyR, bx, by, br)) {
+    return { grip: { left: hold, used: false }, gripped: true, grabbed: true, released: false };
+  }
+  return { grip: { left: 0, used: false }, gripped: false, grabbed: false, released: false };
+}
+
+/**
+ * 新机关②「弹簧蘑菇」：把入射速度沿蘑菇朝向弹出去，**换个方向**继续飞。
+ * - 法向（蘑菇朝向）：撞进来的分量取反再乘 bounce，并保底 minOut，所以踩一下一定弹得动。
+ * - 切向：保留 keep 比例，糖果不会原路返回，而是斜着飞走。
+ */
+export function springBounce(
+  vx: number, vy: number,
+  dirX: number, dirY: number,
+  bounce: number,
+  minOut: number,
+  keep = 0.6
+): { vx: number; vy: number } {
+  const len = Math.hypot(dirX, dirY);
+  if (len < 1e-6) return { vx, vy };
+  const nx = dirX / len;
+  const ny = dirY / len;
+  const vn = vx * nx + vy * ny;
+  const tx = vx - vn * nx;
+  const ty = vy - vn * ny;
+  const outN = Math.max(minOut, vn < 0 ? -vn * bounce : vn);
+  return { vx: tx * keep + nx * outN, vy: ty * keep + ny * outN };
+}
+
+/** 弹簧蘑菇的朝向单位向量（画法与弹出方向共用一份）。 */
+export function springNormal(dir: "up" | "down" | "left" | "right"): { nx: number; ny: number } {
+  if (dir === "up") return { nx: 0, ny: -1 };
+  if (dir === "down") return { nx: 0, ny: 1 };
+  if (dir === "left") return { nx: -1, ny: 0 };
+  return { nx: 1, ny: 0 };
+}
+
+/** 直接把粒子的速度设成 (vx, vy)（Verlet：改上一帧位置）。 */
+export function setVelocity(p: Particle, vx: number, vy: number, dt: number): void {
+  if (p.pinned) return;
+  p.px = p.x - vx * dt;
+  p.py = p.y - vy * dt;
+}
+
+/** 读粒子当前速度（px/s）。 */
+export function velocityOf(p: Particle, dt: number): { vx: number; vy: number } {
+  if (dt <= 0) return { vx: 0, vy: 0 };
+  return { vx: (p.x - p.px) / dt, vy: (p.y - p.py) / dt };
+}
+
 /** 总星数换最终评级。 */
 export function starsForCollected(collected: number, total: number): 1 | 2 | 3 {
   if (total <= 0) return 1;

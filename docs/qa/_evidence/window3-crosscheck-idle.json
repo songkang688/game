@@ -1,0 +1,186 @@
+{
+  "what": "窗口3 补派测试员用独立驱动 scripts/w3qa-crosscheck/idlewin.mjs 做的摆烂复核",
+  "how": "从首页 .game-card 点进游戏 -> 预置存档解锁到目标关 -> 点地图「继续 第 N 关」-> 进关后一个键都不按、一下都不点，只每 400ms 轮询结算浮层",
+  "base": "origin/game-1.2-window3 @ 600819b",
+  "viewport": { "width": 900, "height": 1200 },
+  "note": "本文件是对 window3-round3-idle.json 的独立交叉验证，两套驱动无共享代码",
+  "results": [
+    {
+      "id": "sky-squad",
+      "level": 1,
+      "stageTitle": "☁️ 晴空起飞 · 第 1 关",
+      "idleSeconds": 9.7,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 1 关过关！ 0 架全部请回机库,一下都没被碰到,漂亮的满分航线!擦弹 1 次,胆子很稳!",
+      "agreesWithRound3": true,
+      "round3Reported": "11 秒过、3 星"
+    },
+    {
+      "id": "sky-squad",
+      "level": 60,
+      "stageTitle": "⚙️ 齿轮天空 · 第 60 关",
+      "idleSeconds": 7.3,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 60 关过关！ 1 架全部请回机库,一下都没被碰到,漂亮的满分航线!",
+      "agreesWithRound3": true,
+      "round3Reported": "8 秒过、3 星"
+    },
+    {
+      "id": "sky-squad",
+      "level": 133,
+      "stageTitle": "🏜️ 沙海古港 · 第 133 关",
+      "idleSeconds": 18.5,
+      "verdict": "lose",
+      "stars": 0,
+      "settleText": "就差一点点！ 小飞机都去检修啦。",
+      "agreesWithRound3": true,
+      "round3Reported": "19 秒输"
+    },
+    {
+      "id": "sky-squad",
+      "level": 188,
+      "stageTitle": "🌙 月亮总站 · 第 188 关",
+      "idleSeconds": 21.0,
+      "verdict": "lose",
+      "stars": 0,
+      "settleText": "就差一点点！ 月亮大灯笼还剩一口气。",
+      "agreesWithRound3": true,
+      "round3Reported": "22 秒输（Boss 关另判）"
+    },
+    {
+      "id": "prince-princess",
+      "level": 1,
+      "stageTitle": "🌸 樱花城堡 · 第 1 关",
+      "idleSeconds": 12.1,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 1 关过关！ 路上的怪一只不剩、只用了 12 秒、宝石收了 5 颗,真棒!",
+      "agreesWithRound3": true,
+      "round3Reported": "13 秒过、3 星"
+    },
+    {
+      "id": "prince-princess",
+      "level": 60,
+      "stageTitle": "💎 水晶洞窟 · 第 60 关",
+      "idleSeconds": 19.0,
+      "verdict": "lose",
+      "stars": 0,
+      "settleText": "就差一点点！ 被打中啦!炮弹是直线飞的,跳一下就躲开了。",
+      "agreesWithRound3": true,
+      "round3Reported": "20 秒输"
+    },
+    {
+      "id": "prince-princess",
+      "level": 133,
+      "stageTitle": "🌋 熔岩火山 · 第 133 关",
+      "idleSeconds": 21.3,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 133 关过关！ 路上的怪一只不剩、只用了 21 秒,真棒!下次试试:宝石差 2 颗。",
+      "agreesWithRound3": "worse",
+      "round3Reported": "22 秒过、2 星",
+      "delta": "本次实测是 ★★★ 三星，比第 3 轮报的 2 星更严重"
+    },
+    {
+      "id": "prince-princess",
+      "level": 188,
+      "stageTitle": "👑 暗影王座 · 第 188 关",
+      "idleSeconds": 28.2,
+      "verdict": "lose",
+      "stars": 0,
+      "settleText": "就差一点点！ 被打中啦!",
+      "agreesWithRound3": true,
+      "round3Reported": "29 秒输"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 1,
+      "stageTitle": "☁️ 云朵广场 · 第 1 关",
+      "idleSeconds": 8.1,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 1 关过关！ 一次都没被撞出去，太稳啦！",
+      "agreesWithRound3": true,
+      "round3Reported": "9 秒过、3 星"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 134,
+      "stageTitle": "🛗 星光升降台 · 第 134 关",
+      "idleSeconds": 15.3,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 134 关过关！ 一次都没被撞出去，太稳啦！",
+      "agreesWithRound3": true,
+      "round3Reported": "9 秒过、3 星"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 145,
+      "stageTitle": "🛗 星光升降台 · 第 145 关",
+      "idleSeconds": 68.5,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 145 关过关！ 一次都没被撞出去，太稳啦！",
+      "agreesWithRound3": "worse",
+      "round3Reported": "浏览器 165 秒没结算（第 3 轮浏览器复现不出来，只有逻辑层 65.2 秒过）",
+      "delta": "本次浏览器 68.5 秒摆烂三星过关，把第 3 轮那条「浏览器复现不出」的缺口补上了，逻辑层与真机在这一关是一致的"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 157,
+      "stageTitle": "🌙 夜空跳台 · 第 157 关",
+      "idleSeconds": 0.4,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 157 关过关！ 一次都没被撞出去，太稳啦！",
+      "agreesWithRound3": true,
+      "round3Reported": "1 秒过、3 星"
+    },
+    {
+      "id": "bumper-cars",
+      "level": 1,
+      "stageTitle": "🚗 新手车场 · 第 1 关",
+      "idleSeconds": 9.3,
+      "verdict": "win",
+      "stars": 3,
+      "settleText": "★★★ 第 1 关过关！ 撞飞 1 台对手车,自己一次都没掉下去,还剩 65 秒。走位和刹车配合得很好,继续保持。",
+      "agreesWithRound3": true,
+      "round3Reported": "10 秒过、3 星，含错误归因的表扬词",
+      "delta": "结算文案「撞飞 1 台对手车」「走位和刹车配合得很好」一字不差地复现，玩家全程没有任何输入"
+    },
+    {
+      "id": "tank-battle",
+      "level": 1,
+      "stageTitle": "🚜 铁皮训练场 · 第 1 关",
+      "idleSeconds": 70.1,
+      "verdict": "none",
+      "stars": 0,
+      "settleText": "",
+      "agreesWithRound3": true,
+      "round3Reported": "干净（摆烂过关 0 关）",
+      "delta": "70 秒摆烂既不判胜也不判负，与第 3 轮「干净」一致"
+    },
+    {
+      "id": "gold-hook",
+      "level": 1,
+      "stageTitle": "🪨 浅层矿洞 · 第 1 关",
+      "idleSeconds": 52.3,
+      "verdict": "lose",
+      "stars": 0,
+      "settleText": "就差一点点！ 这一趟只挖到 25 金币,离 140 还差 115。",
+      "agreesWithRound3": true,
+      "round3Reported": "干净（摆烂过关 0 关）",
+      "delta": "摆烂正确判负，与第 3 轮「干净」一致"
+    }
+  ],
+  "summary": {
+    "checked": 15,
+    "agree": 12,
+    "worseThanRound3": 3,
+    "contradict": 0,
+    "conclusion": "两套独立驱动在 B1 / B2 / B3 / S5 上结论完全一致，且有 3 处本次实测比第 3 轮报的更严重。第 3 轮的三条阻断成立，不是工具误报。"
+  }
+}

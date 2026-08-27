@@ -37,6 +37,19 @@ export interface HookDef {
 export interface BubbleDef {
   x: number;
   y: number;
+  /**
+   * 1.2 新增：粘性泡泡。挂住糖果这么多秒后自己松手，
+   * 松手时把挂住之前的速度按 STICKY_KEEP 还回去（见 swing12.ts）。
+   * 不填就是 1.1 的普通泡泡（接住后一直慢慢上浮）。
+   */
+  sticky?: number;
+}
+
+/** 1.2 新增：弹簧蘑菇。糖果压上伞面就沿 dir 弹开，有增益也有封顶。 */
+export interface MushroomDef {
+  x: number;
+  y: number;
+  dir: "up" | "down" | "left" | "right";
 }
 
 export interface SpikeDef {
@@ -144,6 +157,30 @@ export interface GremlinDef {
   delay?: number;
 }
 
+/** 1.2 新增机关①：黏黏泡。糖果撞进来被黏住 hold 秒，到点自己放开（一次性）。 */
+export interface StickyDef {
+  x: number;
+  y: number;
+  /** 黏住判定半径 */
+  radius: number;
+  /** 黏住几秒 */
+  hold: number;
+}
+
+/** 1.2 新增机关②：弹簧蘑菇。踩到就朝 dir 方向弹走，换个方向继续飞。 */
+export interface SpringDef {
+  x: number;
+  y: number;
+  /** 蘑菇伞盖半径（碰撞判定用） */
+  radius: number;
+  /** 弹出方向 */
+  dir: "up" | "down" | "left" | "right";
+  /** 法向速度放大倍数 */
+  bounce: number;
+  /** 保底弹出速度 px/s：轻轻蹭一下也弹得动 */
+  minOut: number;
+}
+
 /**
  * 通关配方：测试用它逐帧仿真验证每一关都能赢。
  * dir 为 1 表示往右、-1 表示往左；镜像变换会自动翻转。
@@ -190,6 +227,15 @@ export interface LevelDef {
   fans?: FanDef[];
   magnets?: MagnetDef[];
   gremlins?: GremlinDef[];
+  /** 1.2 新增机关 */
+  mushrooms?: MushroomDef[];
+  stickies?: StickyDef[];
+  springs?: SpringDef[];
+  /**
+   * 1.2 无尽「甜甜塔」用：本层必须在这么多秒内把糖果送进嘴里。
+   * 闯关模式不填（不限时）。
+   */
+  timeLimit?: number;
   /** 通关配方（测试仿真用） */
   solve: SolveRecipe;
 }
@@ -272,6 +318,9 @@ export function mechanismKinds(lv: LevelDef): string[] {
   if ((lv.fans ?? []).length > 0) kinds.push("fan");
   if ((lv.magnets ?? []).length > 0) kinds.push("magnet");
   if ((lv.gremlins ?? []).length > 0) kinds.push("gremlin");
+  // ---- 1.2 新机关 ----
+  if ((lv.stickies ?? []).length > 0) kinds.push("sticky");
+  if ((lv.springs ?? []).length > 0) kinds.push("spring");
   return kinds;
 }
 
@@ -324,6 +373,10 @@ function mirrorLevel(lv: LevelDef): LevelDef {
       x1: CANVAS_W - g.x1,
       x2: CANVAS_W - g.x2,
     }));
+  }
+  if (lv.stickies) m.stickies = lv.stickies.map((s) => ({ ...s, x: CANVAS_W - s.x }));
+  if (lv.springs) {
+    m.springs = lv.springs.map((s) => ({ ...s, x: CANVAS_W - s.x, dir: flipDir(s.dir) }));
   }
   m.solve = mirrorSolve(lv.solve);
   return m;
@@ -1844,10 +1897,61 @@ const C10: LevelDef[] = [
   }),
 ];
 
-export const LEVELS: LevelDef[] = [
+/**
+ * 1.2 三星补位表。
+ *
+ * 这些关的星星原来是按「锚点到怪物的直线」机械插值摆的，
+ * 而糖果真正飞过去的那条弧线离直线很远，于是无论怎么剪都收不满三颗
+ * ——「存在通关解」成立，「存在三星解」不成立。
+ *
+ * 表里的坐标是用 sim.ts 逐帧跑出一条真实的通关轨迹，
+ * 再在**脱钩之后的自由飞行段**上按弧长取 3 个点得到的，所以每一颗都真的顺路可取。
+ * 星星只是收集品、不参与物理，改这里不会影响任何一关的可解性。
+ *
+ * 键是关卡下标（0 基）。**只允许 ≥ 99**：前 99 关是 1.0 的冻结数据，一个字节都不许动。
+ */
+const STAR_FIX_1_2: Record<number, Array<{ x: number; y: number }>> = {
+  122: [{ x: 71, y: 207 }, { x: 136, y: 298 }, { x: 208, y: 376 }], // 第 123 关 顺风滑翔
+  127: [{ x: 289, y: 207 }, { x: 224, y: 298 }, { x: 152, y: 376 }], // 第 128 关 逆风滑翔
+  131: [{ x: 67, y: 207 }, { x: 116, y: 316 }, { x: 179, y: 420 }], // 第 132 关 微风滑翔
+  132: [{ x: 73, y: 207 }, { x: 148, y: 298 }, { x: 254, y: 398 }], // 第 133 关 强风滑翔
+  139: [{ x: 71, y: 207 }, { x: 136, y: 298 }, { x: 208, y: 376 }], // 第 140 关 浮岛刺风
+  141: [{ x: 287, y: 207 }, { x: 212, y: 298 }, { x: 106, y: 398 }], // 第 142 关 强风倒吹
+  146: [{ x: 108, y: 221 }, { x: 151, y: 294 }, { x: 235, y: 372 }], // 第 147 关 磁铁走廊
+  148: [{ x: 119, y: 217 }, { x: 169, y: 314 }, { x: 219, y: 394 }], // 第 149 关 抢糖大作战
+  152: [{ x: 252, y: 221 }, { x: 209, y: 294 }, { x: 125, y: 372 }], // 第 153 关 镜像走廊
+  153: [{ x: 241, y: 217 }, { x: 191, y: 314 }, { x: 141, y: 394 }], // 第 154 关 反向抢糖
+  160: [{ x: 119, y: 217 }, { x: 169, y: 314 }, { x: 219, y: 394 }], // 第 161 关 磁铁夹道
+  161: [{ x: 108, y: 221 }, { x: 151, y: 294 }, { x: 235, y: 372 }], // 第 162 关 磁铁与星门
+  170: [{ x: 70, y: 207 }, { x: 130, y: 298 }, { x: 220, y: 400 }], // 第 171 关 月色顺风
+  // 第 182 关是挂钩接力：糖果先横着被钩过去、再几乎笔直落下，
+  // 自动取点会把两颗星挤在拐点上，这一关手工按下落段摆开
+  181: [{ x: 283, y: 240 }, { x: 287, y: 295 }, { x: 289, y: 370 }], // 第 182 关 月钩接力
+  182: [{ x: 119, y: 217 }, { x: 169, y: 314 }, { x: 219, y: 394 }], // 第 183 关 月夜抢糖
+  183: [{ x: 241, y: 217 }, { x: 191, y: 314 }, { x: 141, y: 394 }], // 第 184 关 镜像抢糖
+  186: [{ x: 108, y: 221 }, { x: 161, y: 306 }, { x: 252, y: 384 }], // 第 187 关 巡游走廊
+};
+
+/** 前 99 关的冻结下标上界：补位表里出现 < 99 的键就是事故 */
+export const FROZEN_LEVEL_COUNT = 99;
+
+/** 补位表覆盖到的关卡下标（测试拿它做「只动 100 关之后」的守门） */
+export const STAR_FIX_INDICES: readonly number[] = Object.keys(STAR_FIX_1_2)
+  .map((k) => Number(k))
+  .sort((a, b) => a - b);
+
+function applyStarFix(list: LevelDef[]): LevelDef[] {
+  return list.map((lv, i) => {
+    const fix = STAR_FIX_1_2[i];
+    if (!fix || i < FROZEN_LEVEL_COUNT) return lv;
+    return { ...lv, stars: fix.map((s) => ({ ...s })) };
+  });
+}
+
+export const LEVELS: LevelDef[] = applyStarFix([
   ...C1, ...C2, ...C3, ...C4, ...C5, ...C6,
   ...C7, ...C8, ...C9, ...C10,
-];
+]);
 
 /** 全部关卡的星星总数（评级用）。 */
 export function totalStars(): number {

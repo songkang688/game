@@ -106,7 +106,9 @@ describe("sky-squad 护盾 / 备用小飞机 / 炸弹", () => {
     // 换机会掉一级火力、散掉一架僚机
     expect(second.plane.power).toBe(2);
     expect(second.plane.wingmen).toBe(1);
-    expect(second.line).toContain("迫降");
+    // 1.2 改口径:玩家被碰到是「打个转」+ 短无敌 + 掉一级火力,连迫降都不写
+    expect(second.line).toContain("打了个转");
+    expect(second.spin).toBeGreaterThan(0);
     for (const line of [first.line, second.line]) {
       expect(line).not.toMatch(/血|伤|死|爆炸/);
     }

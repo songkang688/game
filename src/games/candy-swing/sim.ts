@@ -24,12 +24,28 @@ import {
   nearestAnchoredLink,
   patrolPosition,
   retuneLinks,
+  setVelocity,
   snipOccurred,
   solveLinks,
+  springBounce,
+  springNormal,
+  stickyGripStep,
   teleport,
+  velocityOf,
   winchScale,
+  type StickyGrip,
 } from "./physics";
 import { LEVELS, type LevelDef } from "./levels";
+import {
+  MUSHROOM_R,
+  createSticky,
+  mushroomBounce,
+  mushroomTriggers,
+  stickyCatch,
+  stickyRelease,
+  tickSticky,
+  type StickyState,
+} from "./swing12";
 
 export const CANDY_R = 16;
 export const GRAVITY = 900;
@@ -75,8 +91,16 @@ export interface SimWorld {
   gremlins: Array<{ def: NonNullable<LevelDef["gremlins"]>[number]; x: number; y: number }>;
   winches: WinchState[];
   bubblesUsed: boolean[];
+  /** 1.2 粘性泡泡：挂住糖果的那一段时间 */
+  sticky: StickyState;
   hooksUsed: boolean[];
   puffsLeft: number[];
+  /** 1.2 黏黏泡：每个泡泡一份黏住状态 */
+  grips: StickyGrip[];
+  /** 1.2 弹簧蘑菇：每个蘑菇被踩了几次（诊断与用例断言用） */
+  springHits: number[];
+  /** 全程被黏住的总秒数（用例断言用） */
+  stuckT: number;
   portalCooldown: number;
   ropeLinkRanges: Array<[number, number]>;
   cutAll: () => void;
@@ -146,8 +170,12 @@ export function makeSimFor(lv: LevelDef): SimWorld {
     }),
     winches,
     bubblesUsed: (lv.bubbles ?? []).map(() => false),
+    sticky: createSticky(),
     hooksUsed: (lv.hooks ?? []).map(() => false),
     puffsLeft: (lv.balloons ?? []).map((b) => b.puffs),
+    grips: (lv.stickies ?? []).map(() => ({ left: 0, used: false })),
+    springHits: (lv.springs ?? []).map(() => 0),
+    stuckT: 0,
     portalCooldown: 0,
     ropeLinkRanges,
     cutAll: () => {
@@ -243,6 +271,17 @@ export function stepSim(w: SimWorld): void {
     const upSpeed = (c.py - c.y) / DT;
     if (upSpeed > 95) c.py = c.y + 95 * DT;
   }
+  if (w.sticky.held) {
+    // 挂住期间原地不动，到点把攒下的速度还回去
+    teleport(c, c.px, c.py);
+    const before = w.sticky;
+    w.sticky = tickSticky(w.sticky, DT);
+    if (!w.sticky.held) {
+      const out = stickyRelease(before);
+      c.px = c.x - out.vx * DT;
+      c.py = c.y - out.vy * DT;
+    }
+  }
   for (const f of w.lv.fans ?? []) {
     if (!fanOn(f.period, f.duty ?? 0.5, f.offset ?? 0, w.t)) continue;
     const force = fanForceAt(f.x, f.y, f.w, f.h, f.dir, f.power, c.x, c.y);
@@ -259,6 +298,32 @@ export function stepSim(w: SimWorld): void {
   }
 
   if (!playing) return;
+
+  // 1.2 黏黏泡：黏住期间把糖果钉在泡泡中心，速度归零
+  (w.lv.stickies ?? []).forEach((st, i) => {
+    const r = stickyGripStep(w.grips[i], st.hold, c.x, c.y, CANDY_R, st.x, st.y, st.radius, DT);
+    w.grips[i] = r.grip;
+    if (r.gripped) {
+      w.stuckT += DT;
+      c.x = st.x;
+      c.y = st.y;
+      setVelocity(c, 0, 0, DT);
+    }
+  });
+
+  // 1.2 弹簧蘑菇：踩到就换个方向弹走
+  (w.lv.springs ?? []).forEach((sp, i) => {
+    if (!circlesOverlap(c.x, c.y, CANDY_R, sp.x, sp.y, sp.radius)) return;
+    const n = springNormal(sp.dir);
+    const v = velocityOf(c, DT);
+    const out = springBounce(v.vx, v.vy, n.nx, n.ny, sp.bounce, sp.minOut);
+    // 先推出伞盖再给速度，免得下一帧又判一次
+    const push = sp.radius + CANDY_R + 1;
+    c.x = sp.x + n.nx * push;
+    c.y = sp.y + n.ny * push;
+    setVelocity(c, out.vx, out.vy, DT);
+    w.springHits[i]++;
+  });
 
   // 传送门（单向）
   if (w.portalCooldown <= 0 && !attachedToAnchor(w.ps, w.links)) {
@@ -285,16 +350,32 @@ export function stepSim(w: SimWorld): void {
     }
   });
 
-  // 泡泡（接住时吸收大部分冲量，软着陆）
+  // 泡泡（接住时吸收大部分冲量，软着陆）；带 sticky 的是 1.2 的粘性泡泡
   (w.lv.bubbles ?? []).forEach((b, i) => {
     if (w.bubblesUsed[i]) return;
     if (circlesOverlap(c.x, c.y, CANDY_R, b.x, b.y, BUBBLE_CATCH_R - CANDY_R)) {
       w.bubblesUsed[i] = true;
-      w.inBubble = true;
-      c.px = c.x - (c.x - c.px) * 0.25;
-      c.py = c.y - (c.y - c.py) * 0.25;
+      if (b.sticky && b.sticky > 0) {
+        w.sticky = stickyCatch(w.sticky, (c.x - c.px) / DT, (c.y - c.py) / DT, b.sticky);
+        teleport(c, b.x, b.y);
+      } else {
+        w.inBubble = true;
+        c.px = c.x - (c.x - c.px) * 0.25;
+        c.py = c.y - (c.y - c.py) * 0.25;
+      }
     }
   });
+
+  // 弹簧蘑菇：压上伞面就沿朝向弹开
+  for (const m of w.lv.mushrooms ?? []) {
+    if (!circlesOverlap(c.x, c.y, CANDY_R, m.x, m.y, MUSHROOM_R)) continue;
+    const vx = (c.x - c.px) / DT;
+    const vy = (c.y - c.py) / DT;
+    if (!mushroomTriggers(vx, vy, m.dir)) continue;
+    const out = mushroomBounce(vx, vy, m.dir);
+    c.px = c.x - out.vx * DT;
+    c.py = c.y - out.vy * DT;
+  }
 
   // 星星
   w.lv.stars.forEach((s, i) => {
@@ -329,6 +410,12 @@ export function stepSim(w: SimWorld): void {
 
   if (c.y > 480 + 60 || c.x < -60 || c.x > 360 + 60 || c.y < -80) {
     w.failed = "out";
+    return;
+  }
+
+  // 无尽「甜甜塔」的限时（闯关模式不填 timeLimit，永远不会走到这里）
+  if (w.lv.timeLimit !== undefined && w.t > w.lv.timeLimit) {
+    w.failed = "time";
   }
 }
 
@@ -363,6 +450,86 @@ export function searchCutTimeFor(lv: LevelDef, tMax: number, step = 0.1): number
     if (w.ate) return tc;
   }
   return null;
+}
+
+/* ---------------- 1.2：三星解搜索 ---------------- */
+
+export interface StarSearchResult {
+  /** 搜到过至少一条通关路线 */
+  win: boolean;
+  /** 所有通关路线里收到最多的星数 */
+  bestStars: number;
+  /** 一共试了多少条路线（找到满星就提前收工） */
+  tries: number;
+}
+
+/** 固定种子的伪随机，保证「三星解存在」这个结论每次跑都一样 */
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 随机化搜索一条「既能通关、又能把星星收满」的操作路线。
+ * 一条路线 = 每根绳各自的剪断时刻 + 可选的戳泡泡 / 点气球时刻。
+ * 先拿关卡自带的配方打底（那条一定能通关），再撒随机路线找收得更多的。
+ * 找到满星立刻收工，所以简单关几乎不花时间。
+ */
+export function searchStarSolution(
+  lv: LevelDef,
+  opts: { tMax?: number; tries?: number; seed?: number } = {}
+): StarSearchResult {
+  const tMax = opts.tMax ?? 3;
+  const tries = opts.tries ?? 220;
+  const rand = rng(opts.seed ?? 0x5eed);
+  const want = lv.stars.length;
+
+  // 打底：关卡自带配方
+  const baseline = playRecipeFor(lv);
+  let win = baseline.ate;
+  let bestStars = baseline.ate ? baseline.collected.size : 0;
+  if (win && bestStars >= want) return { win, bestStars, tries: 1 };
+
+  const nRopes = lv.ropes.length;
+  const nBalloons = (lv.balloons ?? []).length;
+  const hasBubble = (lv.bubbles ?? []).length > 0;
+
+  let n = 1;
+  for (; n <= tries; n++) {
+    const acts: Array<{ at: number; run: (w: SimWorld) => void }> = [];
+    // 每根绳一个剪断时刻；三分之一的路线让所有绳同时断（最常见的玩法）
+    const together = rand() < 0.34 ? +(rand() * tMax).toFixed(2) : NaN;
+    for (let r = 0; r < nRopes; r++) {
+      const at = Number.isNaN(together) ? +(rand() * tMax).toFixed(2) : together;
+      acts.push({ at, run: (w) => w.cutRope(r) });
+    }
+    if (hasBubble && rand() < 0.7) {
+      acts.push({ at: +(rand() * (tMax + 3)).toFixed(2), run: (w) => w.pop() });
+    }
+    for (let b = 0; b < nBalloons; b++) {
+      if (rand() < 0.7) {
+        acts.push({ at: +(rand() * (tMax + 3)).toFixed(2), run: (w) => w.puff(b) });
+      }
+    }
+    acts.sort((a, b) => a.at - b.at);
+
+    const w = makeSimFor(lv);
+    let k = 0;
+    runSim(w, tMax + 9, (world) => {
+      while (k < acts.length && world.t >= acts[k].at) acts[k++].run(world);
+    });
+    if (!w.ate) continue;
+    win = true;
+    if (w.collected.size > bestStars) bestStars = w.collected.size;
+    if (bestStars >= want) break;
+  }
+  return { win, bestStars, tries: n };
 }
 
 const DEFAULT_TIME: Record<string, number> = {

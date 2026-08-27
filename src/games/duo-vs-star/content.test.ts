@@ -11,8 +11,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { AI_TIERS, AI_ORDER, aiPowerBonus, decideAi } from "./ai";
+import { AI_TIERS, AI_ORDER, AI_STYLES, STYLE_LABELS, aiPowerBonus, decideAi } from "./ai";
 import { ATTACKS } from "./battle";
+import { COOP_LESSONS } from "./coop";
+import { P1_KEYS, P2_KEYS } from "./keys";
 import {
   ITEMS,
   emptyBuffs,
@@ -28,7 +30,7 @@ import {
 } from "./items";
 import { CHAPTERS, LEVELS } from "./levels";
 import { meta } from "./meta";
-import { ROSTER, TEAM_NAMES, fighterAt, fighterById } from "./roster";
+import { ROSTER, TEAM_NAMES, fighterAt, fighterById, shortName } from "./roster";
 import { STAGES, WORLD_H, WORLD_W, platformAt, stageAt, stageById, syrupLevel } from "./stages";
 
 /* ------------------------------------------------------------------ */
@@ -480,5 +482,54 @@ describe("文案红线", () => {
         expect(`${file}｜${text}`).not.toContain(bad);
       }
     }
+  });
+
+  it("合作特训三课的文案、打法标签都过筛子", () => {
+    for (const lesson of COOP_LESSONS) {
+      checkCopy(`合作课 ${lesson.name}`, lesson.name);
+      checkCopy(`合作课 ${lesson.name} 说明`, lesson.brief);
+      checkCopy(`合作课 ${lesson.name} 操作`, lesson.howto);
+    }
+    for (const style of AI_STYLES) checkCopy(`打法 ${style}`, STYLE_LABELS[style]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 6. meta 与事实对齐                                                   */
+/* ------------------------------------------------------------------ */
+
+describe("meta 填得准不准", () => {
+  it("五种模式一个不多一个不少，和实际做出来的对得上", () => {
+    expect([...meta.modes].sort()).toEqual(
+      ["campaign", "coop", "endless", "twoPlayer", "versus"].sort()
+    );
+  });
+
+  it("platform 填 both：键盘两套键位齐全，触屏也每人一组按键", () => {
+    expect(meta.platform).toBe("both");
+    expect(Object.keys(P1_KEYS)).toHaveLength(6);
+    expect(Object.keys(P2_KEYS)).toHaveLength(6);
+  });
+
+  it("关卡数和 188 关的表对得上", () => {
+    expect(meta.levels).toBe(LEVELS.length);
+  });
+
+  it("blurb 说到的东西都真的有：双人、人机、2v2 合作、无尽、188 关", () => {
+    for (const word of ["双人", "合作", "无尽", "188"]) {
+      expect(meta.blurb).toContain(word);
+    }
+    // 「元气」是 1.2 改的说法，卡片上也要跟着改口
+    expect(meta.blurb).toContain("元气");
+  });
+
+  it("窄屏的短名字：三个字以内原样留着，更长的才截断", () => {
+    for (const f of ROSTER) {
+      expect(shortName(f.name).length).toBeLessThanOrEqual(4);
+    }
+    expect(shortName("绿绿豆")).toBe("绿绿豆");
+    expect(shortName("一二三四五")).toBe("一二三…");
+    expect(shortName("一二三四五", 2)).toBe("一二…");
+    expect(shortName("")).toBe("");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_ORDER, type Input } from "./ai";
+import { AI_ORDER, AI_STYLES, type Input } from "./ai";
 import { createMatch, runMatch, stepMatch } from "./battle";
 import {
   CHAPTERS,
@@ -9,6 +9,7 @@ import {
   endlessStage,
   levelAt,
   rateLevel,
+  styleFor,
 } from "./levels";
 import GUIDE from "./guide";
 import { ITEMS } from "./items";
@@ -411,5 +412,63 @@ describe("新手也打得动开头几关", () => {
     const first = masherWinRate(0, 16);
     const boss = masherWinRate(CHAPTERS[0].size - 1, 16);
     expect(first).toBeGreaterThan(boss + 0.3);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 1.2：后段的难度靠打法，不靠数值堆                                   */
+/* ------------------------------------------------------------------ */
+
+describe("对手的打法", () => {
+  it("每一位对手都带着打法标签，而且是四种里的一种", () => {
+    for (const lv of LEVELS) {
+      for (const f of [...lv.foes, ...lv.allies]) {
+        expect(f.style).toBeDefined();
+        expect(AI_STYLES).toContain(f.style);
+      }
+    }
+  });
+
+  it("前五章老老实实正面来，别一上手就被绕后", () => {
+    let cursor = 0;
+    CHAPTERS.forEach((ch, ci) => {
+      for (let t = 0; t < ch.size; t++) {
+        const lv = LEVELS[cursor++];
+        if (ci < 5) {
+          for (const f of lv.foes) expect(f.style).toBe("plain");
+        }
+      }
+    });
+    expect(styleFor(0, 0)).toBe("plain");
+    expect(styleFor(4, 18)).toBe("plain");
+  });
+
+  it("第六章起打法轮着换，四种一种不落", () => {
+    const late = new Set<string>();
+    let cursor = 0;
+    CHAPTERS.forEach((ch, ci) => {
+      for (let t = 0; t < ch.size; t++) {
+        const lv = LEVELS[cursor++];
+        if (ci >= 5) for (const f of lv.foes) late.add(f.style ?? "plain");
+      }
+    });
+    expect(Array.from(late).sort()).toEqual([...AI_STYLES].sort());
+  });
+
+  it("难度不再靠力气堆：最后一关的力度加成也没比第一关多出一半", () => {
+    const first = LEVELS[0].foes[0].powerBonus ?? 1;
+    const last = LEVELS[LEVELS.length - 1].foes[0].powerBonus ?? 1;
+    expect(last).toBeGreaterThan(first);
+    expect(last).toBeLessThan(1.2);
+    for (const lv of LEVELS) {
+      for (const f of lv.foes) expect(f.powerBonus ?? 1).toBeLessThanOrEqual(1.2);
+    }
+  });
+
+  it("无尽车轮战也一样：越往后主要是打法越刁，力气只慢慢加一点点", () => {
+    expect(endlessFoe(0).style).toBe("plain");
+    const styles = new Set(Array.from({ length: 12 }, (_, i) => endlessFoe(i + 3).style));
+    expect(styles.size).toBeGreaterThan(1);
+    expect(endlessFoe(30).powerBonus ?? 1).toBeLessThan(1.6);
   });
 });

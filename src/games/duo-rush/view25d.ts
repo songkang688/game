@@ -182,3 +182,46 @@ export function slideSquash(t: number): number {
   if (t <= 0 || t >= 1) return 1;
   return 1 - 0.45 * Math.sin(Math.PI * t);
 }
+
+/* ---------------- 换道手感与领先反馈（1.2 第 11 步 A 新增） ---------------- */
+
+/**
+ * 换一次道横着滑多久：100ms，正落在 80–120ms 这个「跟手但不生硬」的区间里。
+ * `match.ts` 的 `LANE_LERP` 就是按它换算出来的。
+ */
+export const LANE_TWEEN_SECONDS = 0.1;
+
+/** 指数插值的速率：跑 `LANE_TWEEN_SECONDS` 秒走完约 95% 的距离。 */
+export function laneLerpRate(seconds: number = LANE_TWEEN_SECONDS): number {
+  const s = seconds > 0 ? seconds : LANE_TWEEN_SECONDS;
+  return 3 / s;
+}
+
+/** 换道时最多歪多少度（只是可爱的小侧倾，不是翻车） */
+export const LANE_TILT_DEG = 9;
+
+/**
+ * 横移中的轻侧倾：还差多少道就歪多少，正在往右挪就往右歪。
+ * `reduced` 为真（`prefers-reduced-motion`）时一律返回 0——位移保留，晃动关掉。
+ */
+export function laneTiltDeg(
+  lane: number,
+  laneFloat: number,
+  reduced = false,
+  maxDeg: number = LANE_TILT_DEG,
+): number {
+  if (reduced) return 0;
+  const diff = Math.max(-1, Math.min(1, lane - laneFloat));
+  return diff * maxDeg;
+}
+
+/** 撞击后的打晃幅度（`reduced` 下同样归零）。 */
+export function bumpShake(bump: number, time: number, unit: number, reduced = false): number {
+  if (reduced || bump <= 0) return 0;
+  return Math.sin(time * 42) * unit * 0.12 * bump;
+}
+
+/** 领先者头顶的小皇冠画在哪儿（在跑者中心正上方一点点）。 */
+export function crownOffset(unit: number): number {
+  return unit * 0.72;
+}

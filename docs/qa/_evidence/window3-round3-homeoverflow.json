@@ -1,0 +1,82 @@
+{
+  "before": {
+    "docOverflow": 24,
+    "htmlOverflowX": "hidden",
+    "searchBoxW": 370,
+    "toolbarW": 331,
+    "clearBtnHiddenProp": true,
+    "clearBtnComputedDisplay": "grid",
+    "clearBtnW": 44,
+    "clearBtnRight": 375,
+    "searchQuery": ""
+  },
+  "after": {
+    "docOverflow": 0,
+    "searchBoxW": 331
+  },
+  "escaping": [
+    {
+      "past": 24,
+      "left": 14,
+      "w": 370,
+      "cls": "home-search"
+    },
+    {
+      "past": 15,
+      "left": 331,
+      "w": 44,
+      "cls": "home-search-clear"
+    }
+  ],
+  "caught": [
+    {
+      "past": 389,
+      "left": 638,
+      "w": 111,
+      "cls": "tab"
+    },
+    {
+      "past": 368,
+      "left": 694,
+      "w": 34,
+      "cls": "SPAN"
+    },
+    {
+      "past": 326,
+      "left": 659,
+      "w": 27,
+      "cls": "tab-emoji"
+    },
+    {
+      "past": 266,
+      "left": 514,
+      "w": 111,
+      "cls": "tab"
+    },
+    {
+      "past": 245,
+      "left": 571,
+      "w": 34,
+      "cls": "SPAN"
+    },
+    {
+      "past": 239,
+      "left": 491,
+      "w": 108,
+      "cls": "tab"
+    },
+    {
+      "past": 218,
+      "left": 544,
+      "w": 34,
+      "cls": "SPAN"
+    },
+    {
+      "past": 203,
+      "left": 535,
+      "w": 27,
+      "cls": "tab-emoji"
+    }
+  ],
+  "consoleErrors": 0
+}

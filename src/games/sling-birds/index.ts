@@ -2,23 +2,24 @@
  * 弹弹小鸟 —— 拉开大弹弓,把捣蛋的绿绿豆全都弹走!
  *
  * - 188 关、9 个主题世界选关地图,通关解锁,可回放刷 3 星
+ * - 1.2 补做无尽「打靶塔」:一轮比一轮高,塔倒得越多分越高
  * - 5 种原创小鸟技能:糯糯(直球)/ 云云(分裂)/ 墩墩(下砸)/ 闪闪(加速钻)/ 卷卷(回旋)
- * - 1.1 新机制:传送门(钻进去从另一口飞出)、岩壳块(要连敲两次才碎)
+ * - 1.1 机制:传送门(钻进去从另一口飞出)、岩壳块(要连敲两次才碎)
  * - 自写 2D 弹弓 + 重力 + 方块破坏物理,不用任何物理引擎
+ *
+ * 1.2 起物理与实体都在 world.ts(纯模块、固定步长),这里只管渲染 / 输入 / HUD,
+ * 单测和关卡可解性模拟跑的是同一套物理。
  */
 import { meta } from "./meta";
 export { meta };
 
 import {
-  BALLOON_ROPE,
   CHAPTERS,
   LEVELS,
   chapterStartId,
   levelsOfChapter,
   type BirdKind,
-  type BlockKind,
   type LevelDef,
-  type PlatformDef,
   type PortalDef,
   type SlopeDef,
   type WindDef
@@ -31,23 +32,50 @@ import {
   SLING_Y,
   WORLD_H,
   WORLD_W,
-  boomerangVelocity,
   calcStars,
   canvasBufferHeight,
-  circleRectHit,
-  circleSlopeHit,
   clamp,
-  impactDamage,
   launchVelocity,
-  padSplit,
-  portalHop,
-  shellBreak,
-  simulateTrajectory,
-  slopeSurfaceY
+  padSplit
 } from "./physics";
+import { BIRD_INFO, SKILL_WINDOW_END, canTriggerSkill } from "./birds";
+import { MAT } from "./materials";
+import {
+  FINGER_GAP,
+  MIN_DRAG,
+  bandTension,
+  dragFromPointer,
+  grabOffset,
+  previewDotCount,
+  previewDots,
+  releaseStretch,
+  type GrabOffset
+} from "./aim";
+import {
+  ENDLESS_BIRDS,
+  endlessLine,
+  roundScore,
+  towerRound,
+  type EndlessRound
+} from "./endless";
+import {
+  advance,
+  allBirdsDone,
+  beansAlive as worldBeansAlive,
+  createWorld,
+  launchBird,
+  makeBird,
+  triggerSkill as worldTriggerSkill,
+  worldCalm,
+  type RtBird,
+  type World,
+  type WorldSound,
+  type WorldSource
+} from "./world";
+import { save } from "../../engine/save";
 import { speak, stopSpeaking, whenSpeechReady } from "../speech";
 
-type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
+type SoundName = WorldSound;
 
 interface GameApi {
   root: HTMLElement;
@@ -57,101 +85,6 @@ interface GameApi {
   onWin: (stars: 1 | 2 | 3, message?: string) => void;
   onLose: (message?: string) => void;
 }
-
-/* ---------------- 小鸟资料(原创角色) ---------------- */
-
-interface BirdInfo {
-  name: string;
-  skill: string;
-  color: string;
-  belly: string;
-  dark: string;
-  r: number;
-  power: number;
-  gfactor: number;
-  hint: string;
-}
-
-const BIRD_INFO: Record<BirdKind, BirdInfo> = {
-  straight: {
-    name: "糯糯",
-    skill: "直球",
-    color: "#FFD9E6",
-    belly: "#FFF1F6",
-    dark: "#B36B85",
-    r: 10,
-    power: 1.25,
-    gfactor: 0.75,
-    hint: "糯糯又稳又结实:瞄准了直接弹出去!"
-  },
-  split: {
-    name: "云云",
-    skill: "分裂",
-    color: "#D9CCF7",
-    belly: "#F0EAFD",
-    dark: "#7B68A8",
-    r: 9,
-    power: 0.95,
-    gfactor: 1,
-    hint: "飞行时点一下屏幕,云云会分裂成三朵小云!"
-  },
-  slam: {
-    name: "墩墩",
-    skill: "下砸",
-    color: "#B5DDF9",
-    belly: "#E3F3FE",
-    dark: "#4E7FA6",
-    r: 10,
-    power: 1.05,
-    gfactor: 1,
-    hint: "飞行时点一下屏幕,墩墩会咚——地砸下来!"
-  },
-  drill: {
-    name: "闪闪",
-    skill: "加速钻",
-    color: "#FFE0B0",
-    belly: "#FFF2DC",
-    dark: "#A87840",
-    r: 8,
-    power: 0.95,
-    gfactor: 1,
-    hint: "飞行时点一下屏幕,闪闪会加速往前钻!"
-  },
-  boomerang: {
-    name: "卷卷",
-    skill: "回旋",
-    color: "#C3E8CF",
-    belly: "#E9F8EE",
-    dark: "#4F8A66",
-    r: 9,
-    power: 1.1,
-    gfactor: 1,
-    hint: "飞行时点一下屏幕,卷卷会掉头往回冲,专打堡垒的背面!"
-  }
-};
-
-/* ---------------- 方块材质 ---------------- */
-
-interface MatInfo {
-  hp: number;
-  vuln: number;
-  push: number;
-  fill: string;
-  edge: string;
-}
-
-const MAT: Record<BlockKind, MatInfo> = {
-  wood: { hp: 40, vuln: 1, push: 0.55, fill: "#E8C08E", edge: "#C79A66" },
-  stone: { hp: 90, vuln: 0.5, push: 0.28, fill: "#CDD2DC", edge: "#A6ADBC" },
-  ice: { hp: 26, vuln: 1.5, push: 0.6, fill: "rgba(190,230,255,0.88)", edge: "#8FC6E8" },
-  glass: { hp: 14, vuln: 2.6, push: 0.7, fill: "rgba(226,245,255,0.72)", edge: "#A5D8F0" },
-  tnt: { hp: 10, vuln: 2.2, push: 0.5, fill: "#FFB3B9", edge: "#E2848D" },
-  // 1.1 岩壳块:外壳厚实,碎一层后露出脆脆的晶核(两段连锁)
-  shell: { hp: 62, vuln: 0.7, push: 0.3, fill: "#B49A85", edge: "#846852" },
-  core: { hp: 16, vuln: 2.2, push: 0.6, fill: "#FFD98E", edge: "#E0A452" }
-};
-
-const EXPLODE_R = 88;
 
 /* ---------------- 本地进度(独立存档,不动平台存档) ---------------- */
 
@@ -197,77 +130,7 @@ function saveProgress(p: Progress): void {
   }
 }
 
-/* ---------------- 运行时实体 ---------------- */
-
-interface RtBird {
-  kind: BirdKind;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  r: number;
-  power: number;
-  gfactor: number;
-  flying: boolean;
-  dead: boolean;
-  skillUsed: boolean;
-  pierce: boolean;
-  restT: number;
-  age: number;
-  /** 传送冷却:刚从门里出来的一小会儿不再触发传送 */
-  portalCd: number;
-}
-
-interface RtBlock {
-  kind: BlockKind;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  vx: number;
-  vy: number;
-  hp: number;
-  maxHp: number;
-  dead: boolean;
-  supported: boolean;
-}
-
-interface RtBalloon {
-  x: number;
-  y: number;
-  baseY: number;
-  r: number;
-  phase: number;
-  popped: boolean;
-  bean: RtBean;
-}
-
-interface RtBean {
-  x: number;
-  y: number;
-  r: number;
-  vx: number;
-  vy: number;
-  dead: boolean;
-  held: RtBalloon | null;
-}
-
-interface RtBoulder {
-  x: number;
-  y: number;
-  r: number;
-  vx: number;
-  vy: number;
-  rot: number;
-}
-
-interface RtPlatform {
-  def: PlatformDef;
-  x: number;
-  y: number;
-  dxm: number;
-  dym: number;
-}
+/* ---------------- 运行时实体(小鸟/方块/豆子等都在 world.ts) ---------------- */
 
 interface Particle {
   x: number;
@@ -284,6 +147,7 @@ interface Particle {
 export function mount(api: GameApi): { destroy: () => void } {
   let destroyed = false;
   let raf = 0;
+  let nextTowerTimer = 0;
   let lastTime = 0;
 
   const progress = loadProgress();
@@ -329,6 +193,9 @@ export function mount(api: GameApi): { destroy: () => void } {
       .slb-cell.slb-lock { background: #E9EDF5; color: #A9B4C8; cursor: not-allowed; }
       .slb-cell.slb-next { background: linear-gradient(135deg, #FFE9A8, #FFC9DC); color: #6E4523; }
       .slb-cell .slb-stars { font-size: 9px; letter-spacing: -1px; line-height: 1; }
+      /* 无尽打靶塔入口:整行大按钮,热区远超 44px,360px 上也不会挤成两行 */
+      .slb-endless { display: block; width: 100%; min-height: 48px; border: none; border-radius: 16px; margin-bottom: 12px; padding: 12px 10px; font-size: 16px; font-weight: 900; color: #6E4523; background: linear-gradient(135deg, #FFE9A8, #FFC9DC); box-shadow: 0 4px 0 #E9B9C9; cursor: pointer; font-family: inherit; touch-action: manipulation; }
+      .slb-endless:active { transform: translateY(3px); box-shadow: 0 1px 0 #E9B9C9; }
       .slb-map-tip { text-align: center; color: #5E6880; font-weight: 700; font-size: 14px; margin-top: 12px; }
       .slb-crew { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
       .slb-crew span { background: #fff; border-radius: 12px; padding: 5px 9px; font-size: 12px; font-weight: 700; color: #56637F; box-shadow: 0 2px 5px rgba(120,160,220,.2); }
@@ -338,6 +205,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         <span class="slb-map-title">🐦 弹弹小鸟</span>
         <span class="slb-badge slb-total">⭐ 0/564</span>
       </div>
+      <button class="slb-endless" type="button">♾️ 无尽打靶塔</button>
       <div class="slb-tabs"></div>
       <div class="slb-grid"></div>
       <div class="slb-map-tip">打赢一关就解锁下一关,集满 3 星可以随时回来再挑战!</div>
@@ -391,6 +259,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   const sayBtn = wrap.querySelector(".slb-say") as HTMLButtonElement;
   const retryBtn = wrap.querySelector(".slb-retry") as HTMLButtonElement;
   const backBtn = wrap.querySelector(".slb-back") as HTMLButtonElement;
+  const endlessBtn = wrap.querySelector(".slb-endless") as HTMLButtonElement;
 
   /* ---------------- 画布竖屏自适应(R2 遗留:下方留白偏大) ----------------
    * 宽度固定映射 WORLD_W;竖屏时缓冲高度按舞台比例延展,
@@ -469,6 +338,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   function renderMap(): void {
     const total = LEVELS.reduce((s, l) => s + starsOf(l.id), 0);
     totalEl.textContent = `⭐ ${total}/${LEVELS.length * 3}`;
+    const best = save.getGameProgress(meta.id).endlessBest;
+    endlessBtn.textContent = best > 0 ? `♾️ 无尽打靶塔 · 最好 ${best} 分` : "♾️ 无尽打靶塔";
 
     tabsEl.innerHTML = "";
     for (let c = 0; c < CHAPTERS.length; c++) {
@@ -514,6 +385,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     progress.resume = null;
     saveProgress(progress);
     level = null;
+    endlessRound = null;
+    mode = "campaign";
     playView.style.display = "none";
     mapView.style.display = "";
     renderMap();
@@ -521,63 +394,86 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 关卡运行时状态 ---------------- */
 
+  /** 当前是闯关还是无尽打靶塔 */
+  let mode: "campaign" | "endless" = "campaign";
+  /** 闯关关卡(无尽时为 null),chapter 决定画面配色 */
   let level: LevelDef | null = null;
-  let blocks: RtBlock[] = [];
-  let beans: RtBean[] = [];
-  let boulders: RtBoulder[] = [];
-  let balloons: RtBalloon[] = [];
-  let platforms: RtPlatform[] = [];
-  let slopes: SlopeDef[] = [];
-  let winds: WindDef[] = [];
-  let portals: PortalDef[] = [];
+  let endlessRound: EndlessRound | null = null;
+  let endlessScore = 0;
+  let endlessBest = 0;
+
+  let world: World = createWorld({ blocks: [], beans: [] });
   let particles: Particle[] = [];
   let queue: BirdKind[] = [];
   let loadedBird: RtBird | null = null;
-  let activeBirds: RtBird[] = [];
-  let pendingBooms: Array<{ x: number; y: number }> = [];
 
   let phase: "aim" | "fly" | "won" | "lost" = "aim";
-  let simT = 0;
   let shake = 0;
   let introT = 0;
   let endT = 0;
   let nextBirdT = 0;
   let loseWaitT = 0;
   let finishSent = false;
-  let totalDestructible = 0;
-  let destroyedCount = 0;
+  let launchT = 99;
   let lastSound: Record<string, number> = {};
 
   let aiming = false;
   let aimPointer = -1;
   let dragX = 0;
   let dragY = 0;
+  let grabOff: GrabOffset = { ox: 0, oy: FINGER_GAP };
+  let fingerX = 0;
+  let fingerY = 0;
+
+  // 画质:开了「减少动态效果」就少放粒子(结果照旧,只是不闪)
+  const reduceMotion =
+    typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const quality = reduceMotion ? 0.35 : 1;
 
   function playThrottled(name: SoundName, gap = 0.07): void {
-    if (simT - (lastSound[name] ?? -1) < gap) return;
-    lastSound[name] = simT;
+    if (world.simT - (lastSound[name] ?? -1) < gap) return;
+    lastSound[name] = world.simT;
     api.play(name);
   }
 
-  function makeBird(kind: BirdKind): RtBird {
-    const info = BIRD_INFO[kind];
-    return {
-      kind,
-      x: SLING_X,
-      y: SLING_Y,
-      vx: 0,
-      vy: 0,
-      r: info.r,
-      power: info.power,
-      gfactor: info.gfactor,
-      flying: false,
-      dead: false,
-      skillUsed: false,
-      pierce: false,
-      restT: 0,
-      age: 0,
-      portalCd: 0
-    };
+  /** 世界给渲染层的钩子:粒子、音效、震屏、HUD 刷新 */
+  const worldFx = {
+    burst: (x: number, y: number, colors: string[], count: number, speed: number, square: boolean) =>
+      burst(x, y, colors, count, speed, square),
+    sound: (name: SoundName, gap: number) => playThrottled(name, gap),
+    shake: (amount: number) => {
+      shake = Math.max(shake, reduceMotion ? amount * 0.3 : amount);
+    },
+    changed: () => updateHud()
+  };
+
+  /** 场景通用的开局:建世界、清粒子、把小鸟排上队 */
+  function startScene(src: WorldSource & { birds: BirdKind[] }): void {
+    // 新开一幕就作废上一座塔排队中的自动续关,免得退出再进时凭空跳一轮
+    window.clearTimeout(nextTowerTimer);
+    nextTowerTimer = 0;
+    world = createWorld(src, worldFx, quality);
+    particles = [];
+    queue = [...src.birds];
+    loadedBird = null;
+    phase = "aim";
+    shake = 0;
+    introT = 2;
+    endT = 0;
+    nextBirdT = 0;
+    loseWaitT = 0;
+    launchT = 99;
+    finishSent = false;
+    lastSound = {};
+    aiming = false;
+    dragX = 0;
+    dragY = 0;
+
+    mapView.style.display = "none";
+    playView.style.display = "";
+    measureCanvas();
+    loadNextBird(false);
+    updateHud();
   }
 
   function openLevel(id: number): void {
@@ -588,61 +484,36 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
     // 换到别的关才重置朗读记忆:同一关反复重试不重复念口诀(想再听点 🔈)
     if (!level || level.id !== def.id) lastSpokenKind = null;
+    mode = "campaign";
     level = def;
+    endlessRound = null;
     progress.resume = id;
     progress.chapter = def.chapter;
     saveProgress(progress);
+    startScene(def);
+  }
 
-    blocks = def.blocks.map((b) => ({
-      kind: b.kind,
-      x: b.x,
-      y: b.y,
-      w: b.w,
-      h: b.h,
-      vx: 0,
-      vy: 0,
-      hp: MAT[b.kind].hp,
-      maxHp: MAT[b.kind].hp,
-      dead: false,
-      supported: false
-    }));
-    beans = def.beans.map((b) => ({ x: b.x, y: b.y, r: 10, vx: 0, vy: 0, dead: false, held: null }));
-    balloons = (def.balloons ?? []).map((b, i) => {
-      const bean: RtBean = { x: b.x, y: b.y + BALLOON_ROPE, r: 10, vx: 0, vy: 0, dead: false, held: null };
-      const bal: RtBalloon = { x: b.x, y: b.y, baseY: b.y, r: 13, phase: i * 1.7, popped: false, bean };
-      bean.held = bal;
-      beans.push(bean);
-      return bal;
-    });
-    boulders = (def.boulders ?? []).map((b) => ({ x: b.x, y: b.y, r: b.r, vx: 0, vy: 0, rot: 0 }));
-    platforms = (def.platforms ?? []).map((p) => ({ def: p, x: p.x, y: p.y, dxm: 0, dym: 0 }));
-    slopes = def.slopes ?? [];
-    winds = def.winds ?? [];
-    portals = def.portals ?? [];
-    particles = [];
-    pendingBooms = [];
-    queue = [...def.birds];
-    activeBirds = [];
-    loadedBird = null;
+  /** 平台「直达第 N 关」的入口:自建地图的游戏按第 9 节要求提供这个 */
+  function openCampaignLevel(n: number): boolean {
+    const target = LEVELS.find((l) => l.id === n);
+    if (!target) return false;
+    openLevel(target.id);
+    return true;
+  }
 
-    phase = "aim";
-    simT = 0;
-    shake = 0;
-    introT = 2;
-    endT = 0;
-    nextBirdT = 0;
-    loseWaitT = 0;
-    finishSent = false;
-    destroyedCount = 0;
-    totalDestructible = blocks.length + balloons.length;
-    lastSound = {};
-    aiming = false;
+  /** 无尽「打靶塔」:开第 round 座塔 */
+  function openEndlessRound(round: number): void {
+    mode = "endless";
+    level = null;
+    lastSpokenKind = null;
+    endlessRound = towerRound(round);
+    startScene(endlessRound);
+  }
 
-    mapView.style.display = "none";
-    playView.style.display = "";
-    measureCanvas();
-    loadNextBird(false);
-    updateHud();
+  function startEndless(): void {
+    endlessScore = 0;
+    endlessBest = save.getGameProgress(meta.id).endlessBest;
+    openEndlessRound(1);
   }
 
   function loadNextBird(chirp: boolean): void {
@@ -652,6 +523,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       return;
     }
     loadedBird = makeBird(kind);
+    loadedBird.x = SLING_X;
+    loadedBird.y = SLING_Y;
     phase = "aim";
     if (chirp) playThrottled("meow", 0.3);
     setCoach(kind);
@@ -661,12 +534,23 @@ export function mount(api: GameApi): { destroy: () => void } {
   /* ---------------- HUD ---------------- */
 
   function beansAlive(): number {
-    return beans.filter((b) => !b.dead).length;
+    return worldBeansAlive(world);
+  }
+
+  /** 当前场景的章节配色(无尽轮换着换风景) */
+  function sceneChapter(): number {
+    return level ? level.chapter : (endlessRound?.chapter ?? 0);
   }
 
   function updateHud(): void {
-    if (!level) return;
-    lvlEl.textContent = `${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`;
+    if (mode === "endless") {
+      const r = endlessRound?.round ?? 1;
+      lvlEl.textContent = `♾️ ${CHAPTERS[sceneChapter()].emoji} 第 ${r} 座打靶塔`;
+    } else if (level) {
+      lvlEl.textContent = `${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`;
+    } else {
+      return;
+    }
     const kinds: BirdKind[] = [];
     if (loadedBird && !loadedBird.flying) kinds.push(loadedBird.kind);
     kinds.push(...queue);
@@ -675,12 +559,14 @@ export function mount(api: GameApi): { destroy: () => void } {
       (kinds.length === 0
         ? "—"
         : kinds.map((k) => `<i class="slb-dot" style="background:${BIRD_INFO[k].color}"></i>`).join(""));
-    beansEl.textContent = `🟢 剩 ${beansAlive()} 颗`;
+    beansEl.textContent =
+      mode === "endless" ? `🟢 剩 ${beansAlive()} · 🏆 ${endlessScore}` : `🟢 剩 ${beansAlive()} 颗`;
   }
 
   /* ---------------- 粒子与特效 ---------------- */
 
   function burst(x: number, y: number, colors: string[], count: number, speed: number, square: boolean): void {
+    if (particles.length > 260) return;
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const s = speed * (0.35 + Math.random() * 0.75);
@@ -698,606 +584,41 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
-  function popBean(bean: RtBean): void {
-    if (bean.dead) return;
-    bean.dead = true;
-    if (bean.held) bean.held.bean = bean;
-    burst(bean.x, bean.y, ["#A5D96C", "#7FBF4D", "#D3F0A8", "#FFFFFF"], 14, 150, false);
-    playThrottled("coin", 0.03);
-    updateHud();
-  }
-
-  function popBalloon(bal: RtBalloon): void {
-    if (bal.popped) return;
-    bal.popped = true;
-    destroyedCount++;
-    if (!bal.bean.dead && bal.bean.held === bal) bal.bean.held = null;
-    burst(bal.x, bal.y, ["#FFC1D8", "#FFE3A9", "#C9E8FF"], 12, 130, false);
-    playThrottled("pop", 0.03);
-  }
-
-  function destroyBlock(block: RtBlock): void {
-    if (block.dead) return;
-    // 1.1 岩壳块两段连锁:外壳碎掉不算拆除,露出更脆的晶核,再打一次才倒
-    const inner = shellBreak(block.kind);
-    if (inner) {
-      const shellMat = MAT[block.kind];
-      burst(block.x + block.w / 2, block.y + block.h / 2, [shellMat.fill, shellMat.edge, "#FFFFFF"], 14, 150, true);
-      block.kind = inner;
-      block.hp = MAT[inner].hp;
-      block.maxHp = MAT[inner].hp;
-      playThrottled("pop", 0.05);
-      return;
-    }
-    block.dead = true;
-    destroyedCount++;
-    const m = MAT[block.kind];
-    burst(block.x + block.w / 2, block.y + block.h / 2, [m.fill, m.edge, "#FFFFFF"], 12, 140, true);
-    if (block.kind === "tnt") {
-      pendingBooms.push({ x: block.x + block.w / 2, y: block.y + block.h / 2 });
-    } else {
-      playThrottled("pop", 0.05);
-    }
-  }
-
-  function explode(cx: number, cy: number): void {
-    shake = Math.max(shake, 0.5);
-    burst(cx, cy, ["#FFB864", "#FF8FA0", "#FFE9A8", "#FFFFFF"], 26, 260, false);
-    playThrottled("pop", 0);
-    playThrottled("oops", 0.02);
-    for (const bl of blocks) {
-      if (bl.dead) continue;
-      const bx = bl.x + bl.w / 2;
-      const by = bl.y + bl.h / 2;
-      const d = Math.hypot(bx - cx, by - cy);
-      if (d > EXPLODE_R + Math.max(bl.w, bl.h) / 2) continue;
-      const fall = 1 - clamp(d / (EXPLODE_R + 20), 0, 1);
-      bl.hp -= 110 * fall * (0.6 + MAT[bl.kind].vuln * 0.4);
-      const dn = Math.max(d, 8);
-      bl.vx += ((bx - cx) / dn) * 340 * fall;
-      bl.vy += ((by - cy) / dn) * 300 * fall - 90 * fall;
-      if (bl.hp <= 0) destroyBlock(bl);
-    }
-    for (const bean of beans) {
-      if (!bean.dead && Math.hypot(bean.x - cx, bean.y - cy) < EXPLODE_R + bean.r) popBean(bean);
-    }
-    for (const bal of balloons) {
-      if (!bal.popped && Math.hypot(bal.x - cx, bal.y - cy) < EXPLODE_R + bal.r) popBalloon(bal);
-    }
-    for (const bo of boulders) {
-      const d = Math.hypot(bo.x - cx, bo.y - cy);
-      if (d < EXPLODE_R + bo.r) {
-        const dn = Math.max(d, 8);
-        bo.vx += ((bo.x - cx) / dn) * 240;
-        bo.vy += ((bo.y - cy) / dn) * 200 - 60;
-      }
-    }
-    for (const bird of activeBirds) {
-      if (bird.dead) continue;
-      const d = Math.hypot(bird.x - cx, bird.y - cy);
-      if (d < EXPLODE_R + bird.r) {
-        const dn = Math.max(d, 8);
-        bird.vx += ((bird.x - cx) / dn) * 180;
-        bird.vy += ((bird.y - cy) / dn) * 160 - 40;
-      }
-    }
-  }
-
-  /* ---------------- 技能 ---------------- */
-
-  function triggerSkill(): void {
-    const bird = activeBirds.find((b) => !b.dead && b.flying && !b.skillUsed && b.kind !== "straight");
-    if (!bird) return;
-    bird.skillUsed = true;
-    if (bird.kind === "split") {
-      bird.r = 7;
-      bird.power = 0.6;
-      const sp = Math.hypot(bird.vx, bird.vy);
-      const a = Math.atan2(bird.vy, bird.vx);
-      for (const off of [-0.3, 0.3]) {
-        const clone = makeBird("split");
-        clone.flying = true;
-        clone.skillUsed = true;
-        clone.r = 7;
-        clone.power = 0.6;
-        clone.x = bird.x;
-        clone.y = bird.y + (off < 0 ? -6 : 6);
-        clone.vx = Math.cos(a + off) * sp;
-        clone.vy = Math.sin(a + off) * sp;
-        activeBirds.push(clone);
-      }
-      burst(bird.x, bird.y, ["#D9CCF7", "#FFFFFF", "#B9A8ED"], 12, 120, false);
-      msgEl.textContent = "云云分裂!三朵小云一起冲!";
-    } else if (bird.kind === "slam") {
-      bird.vx *= 0.2;
-      bird.vy = Math.max(bird.vy, 0) + 520;
-      bird.power *= 1.75;
-      burst(bird.x, bird.y, ["#B5DDF9", "#FFFFFF"], 10, 110, false);
-      msgEl.textContent = "墩墩下砸!咚——!";
-    } else if (bird.kind === "drill") {
-      const sp = Math.max(Math.hypot(bird.vx, bird.vy), 60);
-      const scale = Math.min(900, sp * 1.75) / sp;
-      bird.vx *= scale;
-      bird.vy *= scale;
-      bird.pierce = true;
-      bird.power *= 1.45;
-      burst(bird.x, bird.y, ["#FFE0B0", "#FFC978", "#FFFFFF"], 10, 110, false);
-      msgEl.textContent = "闪闪加速钻!嗖——!";
-    } else if (bird.kind === "boomerang") {
-      const v = boomerangVelocity(bird.vx, bird.vy);
-      bird.vx = v.vx;
-      bird.vy = v.vy;
-      bird.power *= 1.3;
-      burst(bird.x, bird.y, ["#C3E8CF", "#8FD1A8", "#FFFFFF"], 12, 120, false);
-      msgEl.textContent = "卷卷回旋!掉头咚——!";
-    }
-    playThrottled("tap", 0);
-  }
-
-  /* ---------------- 物理 ---------------- */
-
-  function stepPlatforms(h: number): void {
-    for (const p of platforms) {
-      const t = (simT * Math.PI * 2) / p.def.period;
-      const nx = p.def.x + p.def.dx * Math.sin(t);
-      const ny = p.def.y + p.def.dy * Math.sin(t);
-      p.dxm = nx - p.x;
-      p.dym = ny - p.y;
-      p.x = nx;
-      p.y = ny;
-    }
-    void h;
-  }
-
-  function stepBlocks(h: number): void {
-    for (const bl of blocks) {
-      if (bl.dead) continue;
-      bl.vy += GRAVITY * h;
-      bl.x += bl.vx * h;
-      bl.y += bl.vy * h;
-      bl.supported = false;
-
-      // 地面(摩擦按时间衰减,与子步频率无关)
-      if (bl.y + bl.h > GROUND_Y) {
-        const impact = bl.vy;
-        bl.y = GROUND_Y - bl.h;
-        bl.vy = 0;
-        bl.vx *= Math.exp((bl.kind === "ice" ? -0.9 : -6) * h);
-        bl.supported = true;
-        if (impact > 240) {
-          bl.hp -= (impact - 240) * 0.18 * MAT[bl.kind].vuln;
-          if (bl.hp <= 0) destroyBlock(bl);
-        }
-      }
-      // 斜坡(近似:块底中心贴着坡面)
-      for (const s of slopes) {
-        const cx = bl.x + bl.w / 2;
-        if (cx < s.x || cx > s.x + s.w) continue;
-        const sy = slopeSurfaceY(s, cx);
-        if (bl.y + bl.h > sy && bl.y + bl.h < sy + 26) {
-          bl.y = sy - bl.h;
-          bl.vy = 0;
-          bl.vx += (s.dir === "up-right" ? -1 : 1) * 60 * h;
-          bl.supported = true;
-        }
-      }
-      // 移动平台:站上去就跟着走
-      for (const p of platforms) {
-        if (bl.vy >= -1 && bl.x + bl.w > p.x + 4 && bl.x < p.x + p.def.w - 4) {
-          const bottom = bl.y + bl.h;
-          if (bottom > p.y - 2 && bottom < p.y + p.def.h + 8) {
-            bl.y = p.y - bl.h;
-            bl.vy = 0;
-            bl.x += p.dxm;
-            bl.supported = true;
-          }
-        }
-      }
-    }
-
-    // 方块互相堆叠(两轮迭代,轴向最小分离)
-    for (let iter = 0; iter < 2; iter++) {
-      for (let i = 0; i < blocks.length; i++) {
-        const a = blocks[i];
-        if (a.dead) continue;
-        for (let j = i + 1; j < blocks.length; j++) {
-          const b = blocks[j];
-          if (b.dead) continue;
-          const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-          const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-          if (ox <= 0 || oy <= 0) continue;
-          const relV = Math.hypot(a.vx - b.vx, a.vy - b.vy);
-          if (relV > 260) {
-            const dmg = (relV - 260) * 0.12;
-            a.hp -= dmg * MAT[a.kind].vuln;
-            b.hp -= dmg * MAT[b.kind].vuln;
-            if (a.hp <= 0) destroyBlock(a);
-            if (b.hp <= 0) destroyBlock(b);
-            if (a.dead || b.dead) continue;
-          }
-          if (oy <= ox) {
-            const top = a.y < b.y ? a : b;
-            const bot = top === a ? b : a;
-            if (bot.supported || bot.vy === 0) {
-              top.y -= oy;
-              top.vy = Math.min(top.vy, 0);
-              top.vy = 0;
-              top.supported = true;
-              top.vx = top.vx * 0.6 + bot.vx * 0.4;
-            } else {
-              top.y -= oy / 2;
-              bot.y += oy / 2;
-              const avg = (top.vy + bot.vy) / 2;
-              top.vy = avg;
-              bot.vy = avg;
-            }
-          } else {
-            const push = ox / 2;
-            if (a.x < b.x) {
-              a.x -= push;
-              b.x += push;
-            } else {
-              a.x += push;
-              b.x -= push;
-            }
-            const avg = (a.vx + b.vx) / 2;
-            a.vx = avg;
-            b.vx = avg;
-          }
-        }
-      }
-    }
-  }
-
-  function stepBoulders(h: number): void {
-    for (const bo of boulders) {
-      bo.vy += GRAVITY * h;
-      bo.x += bo.vx * h;
-      bo.y += bo.vy * h;
-      bo.rot += (bo.vx / bo.r) * h;
-
-      if (bo.y + bo.r > GROUND_Y) {
-        bo.y = GROUND_Y - bo.r;
-        bo.vy = bo.vy > 90 ? -bo.vy * 0.2 : 0;
-        bo.vx *= Math.exp(-0.5 * h);
-      }
-      if (bo.x < bo.r + 4) {
-        bo.x = bo.r + 4;
-        bo.vx = Math.abs(bo.vx) * 0.4;
-      }
-      if (bo.x > WORLD_W - bo.r - 4) {
-        bo.x = WORLD_W - bo.r - 4;
-        bo.vx = -Math.abs(bo.vx) * 0.4;
-      }
-      for (const s of slopes) {
-        const hit = circleSlopeHit(bo.x, bo.y, bo.r, s);
-        if (hit) {
-          bo.x += hit.nx * hit.depth;
-          bo.y += hit.ny * hit.depth;
-          const vn = bo.vx * hit.nx + bo.vy * hit.ny;
-          if (vn < 0) {
-            bo.vx -= hit.nx * vn;
-            bo.vy -= hit.ny * vn;
-          }
-        }
-      }
-      for (const bl of blocks) {
-        if (bl.dead) continue;
-        const hit = circleRectHit(bo.x, bo.y, bo.r, bl.x, bl.y, bl.w, bl.h);
-        if (!hit) continue;
-        const relVx = bo.vx - bl.vx;
-        const relVy = bo.vy - bl.vy;
-        const rel = relVx * hit.nx + relVy * hit.ny;
-        bo.x += hit.nx * hit.depth;
-        bo.y += hit.ny * hit.depth;
-        if (rel < 0) {
-          const speed = -rel;
-          if (speed > 110) {
-            bl.hp -= impactDamage(speed, 1.5, MAT[bl.kind].vuln);
-            bl.vx -= hit.nx * speed * 0.6;
-            bl.vy -= hit.ny * speed * 0.4;
-            if (bl.hp <= 0) destroyBlock(bl);
-            playThrottled("tap", 0.1);
-          }
-          bo.vx -= hit.nx * rel * 1.25;
-          bo.vy -= hit.ny * rel * 1.25;
-          bo.vx *= 0.9;
-          bo.vy *= 0.9;
-        }
-      }
-      for (const bean of beans) {
-        if (bean.dead || bean.held) continue;
-        if (Math.hypot(bean.x - bo.x, bean.y - bo.y) < bean.r + bo.r) {
-          const rel = Math.hypot(bo.vx - bean.vx, bo.vy - bean.vy);
-          if (rel > 55) popBean(bean);
-        }
-      }
-    }
-  }
-
-  function stepBalloons(): void {
-    for (const bal of balloons) {
-      if (bal.popped) continue;
-      bal.y = bal.baseY + Math.sin(simT * 2 + bal.phase) * 3;
-      if (!bal.bean.dead && bal.bean.held === bal) {
-        bal.bean.x = bal.x + Math.sin(simT * 1.6 + bal.phase) * 2;
-        bal.bean.y = bal.y + BALLOON_ROPE;
-      }
-      for (const bird of activeBirds) {
-        if (!bird.dead && bird.flying && Math.hypot(bird.x - bal.x, bird.y - bal.y) < bird.r + bal.r) {
-          popBalloon(bal);
-          break;
-        }
-      }
-      if (bal.popped) continue;
-      for (const bl of blocks) {
-        if (bl.dead) continue;
-        if (
-          Math.hypot(bl.vx, bl.vy) > 90 &&
-          circleRectHit(bal.x, bal.y, bal.r, bl.x, bl.y, bl.w, bl.h)
-        ) {
-          popBalloon(bal);
-          break;
-        }
-      }
-    }
-  }
-
-  function stepBeans(h: number): void {
-    for (const bean of beans) {
-      if (bean.dead || bean.held) continue;
-      bean.vy += GRAVITY * h;
-      bean.x += bean.vx * h;
-      bean.y += bean.vy * h;
-
-      if (bean.x < -20 || bean.x > WORLD_W + 20 || bean.y > WORLD_H + 30) {
-        popBean(bean);
-        continue;
-      }
-      if (bean.y + bean.r > GROUND_Y) {
-        if (bean.vy > 300) {
-          popBean(bean);
-          continue;
-        }
-        bean.y = GROUND_Y - bean.r;
-        bean.vy = bean.vy > 70 ? -bean.vy * 0.25 : 0;
-        bean.vx *= Math.exp(-4 * h);
-      }
-      for (const s of slopes) {
-        const hit = circleSlopeHit(bean.x, bean.y, bean.r, s);
-        if (hit) {
-          bean.x += hit.nx * hit.depth;
-          bean.y += hit.ny * hit.depth;
-          const vn = bean.vx * hit.nx + bean.vy * hit.ny;
-          if (vn < 0) {
-            bean.vx -= hit.nx * vn;
-            bean.vy -= hit.ny * vn;
-          }
-        }
-      }
-      for (const p of platforms) {
-        const hit = circleRectHit(bean.x, bean.y, bean.r, p.x, p.y, p.def.w, p.def.h);
-        if (hit && hit.ny < -0.5 && bean.vy >= 0) {
-          bean.y = p.y - bean.r;
-          bean.vy = 0;
-          bean.x += p.dxm;
-          if (p.dym > 0) bean.y += p.dym;
-        }
-      }
-      for (const bl of blocks) {
-        if (bl.dead) continue;
-        const hit = circleRectHit(bean.x, bean.y, bean.r, bl.x, bl.y, bl.w, bl.h);
-        if (!hit) continue;
-        const rel = Math.hypot(bean.vx - bl.vx, bean.vy - bl.vy);
-        if (rel > 95 || hit.depth > 7) {
-          popBean(bean);
-          break;
-        }
-        bean.x += hit.nx * hit.depth;
-        bean.y += hit.ny * hit.depth;
-        const vn = (bean.vx - bl.vx) * hit.nx + (bean.vy - bl.vy) * hit.ny;
-        if (vn < 0) {
-          bean.vx -= hit.nx * vn;
-          bean.vy -= hit.ny * vn;
-        }
-      }
-    }
-  }
-
-  function stepBirds(h: number): void {
-    for (const bird of activeBirds) {
-      if (bird.dead || !bird.flying) continue;
-      bird.age += h;
-
-      for (const w of winds) {
-        if (bird.x > w.x && bird.x < w.x + w.w && bird.y > w.y && bird.y < w.y + w.h) {
-          bird.vx += w.fx * h;
-          bird.vy += w.fy * h;
-        }
-      }
-      bird.vy += GRAVITY * bird.gfactor * h;
-      bird.x += bird.vx * h;
-      bird.y += bird.vy * h;
-
-      // 1.1 传送门:钻进任意一口就从另一口飞出,速度不变;出门后有短冷却
-      if (bird.portalCd > 0) {
-        bird.portalCd -= h;
-      } else {
-        for (const p of portals) {
-          const hop = portalHop(bird.x, bird.y, bird.vx, bird.vy, p);
-          if (hop) {
-            burst(bird.x, bird.y, ["#B8A6F2", "#7FD8E8", "#FFFFFF"], 10, 110, false);
-            bird.x = hop.x;
-            bird.y = hop.y;
-            bird.portalCd = 0.3;
-            burst(bird.x, bird.y, ["#B8A6F2", "#7FD8E8", "#FFFFFF"], 10, 110, false);
-            playThrottled("jump", 0.15);
-            break;
-          }
-        }
-      }
-
-      if (bird.pierce && Math.hypot(bird.vx, bird.vy) < 150) bird.pierce = false;
-
-      // 地面
-      let onGround = false;
-      if (bird.y + bird.r > GROUND_Y) {
-        bird.y = GROUND_Y - bird.r;
-        if (bird.vy > 70) {
-          bird.vy = -bird.vy * 0.36;
-          bird.vx *= 0.82;
-          playThrottled("tap", 0.12);
-          burst(bird.x, GROUND_Y, ["#FFFFFF", "#EFE6D8"], 4, 60, false);
-        } else {
-          bird.vy = 0;
-          // 落地后继续往前滚,慢慢停下
-          bird.vx *= Math.exp(-1.9 * h);
-        }
-        onGround = true;
-      }
-      if (bird.x < bird.r && bird.vx < 0) {
-        bird.x = bird.r;
-        bird.vx = Math.abs(bird.vx) * 0.4;
-      }
-      // 斜坡
-      for (const s of slopes) {
-        const hit = circleSlopeHit(bird.x, bird.y, bird.r, s);
-        if (hit) {
-          bird.x += hit.nx * hit.depth;
-          bird.y += hit.ny * hit.depth;
-          const vn = bird.vx * hit.nx + bird.vy * hit.ny;
-          if (vn < 0) {
-            bird.vx -= hit.nx * vn * 1.3;
-            bird.vy -= hit.ny * vn * 1.3;
-            bird.vx *= 0.94;
-            bird.vy *= 0.94;
-          }
-          onGround = true;
-        }
-      }
-      // 移动平台
-      for (const p of platforms) {
-        const hit = circleRectHit(bird.x, bird.y, bird.r, p.x, p.y, p.def.w, p.def.h);
-        if (hit) {
-          bird.x += hit.nx * hit.depth;
-          bird.y += hit.ny * hit.depth;
-          const vn = bird.vx * hit.nx + bird.vy * hit.ny;
-          if (vn < 0) {
-            bird.vx -= hit.nx * vn * 1.4;
-            bird.vy -= hit.ny * vn * 1.4;
-            playThrottled("tap", 0.12);
-          }
-        }
-      }
-      // 方块
-      for (const bl of blocks) {
-        if (bl.dead) continue;
-        const hit = circleRectHit(bird.x, bird.y, bird.r, bl.x, bl.y, bl.w, bl.h);
-        if (!hit) continue;
-        const relVx = bird.vx - bl.vx;
-        const relVy = bird.vy - bl.vy;
-        const rel = relVx * hit.nx + relVy * hit.ny;
-        bird.x += hit.nx * hit.depth;
-        bird.y += hit.ny * hit.depth;
-        if (rel < 0) {
-          const speed = -rel;
-          const m = MAT[bl.kind];
-          bl.hp -= impactDamage(speed, bird.power, m.vuln);
-          bl.vx -= hit.nx * speed * m.push;
-          bl.vy -= hit.ny * speed * m.push * 0.7;
-          const died = bl.hp <= 0;
-          if (died) destroyBlock(bl);
-          if (died) {
-            // 打碎方块:损失一点速度,继续往前冲(钻头模式几乎不减速)
-            const keep = bird.pierce ? 0.9 : 0.72;
-            bird.vx *= keep;
-            bird.vy *= keep;
-          } else {
-            bird.vx -= hit.nx * rel * 1.34;
-            bird.vy -= hit.ny * rel * 1.34;
-            bird.vx *= 0.94;
-            bird.vy *= 0.94;
-          }
-          if (speed > 60) playThrottled(bl.kind === "glass" || bl.kind === "ice" ? "pop" : "tap", 0.08);
-        }
-      }
-      // 滚石
-      for (const bo of boulders) {
-        const d = Math.hypot(bird.x - bo.x, bird.y - bo.y);
-        if (d < bird.r + bo.r && d > 0.01) {
-          const nx = (bird.x - bo.x) / d;
-          const ny = (bird.y - bo.y) / d;
-          const depth = bird.r + bo.r - d;
-          bird.x += nx * depth;
-          bird.y += ny * depth;
-          const rel = (bird.vx - bo.vx) * nx + (bird.vy - bo.vy) * ny;
-          if (rel < 0) {
-            bo.vx += nx * rel * 0.7;
-            bo.vy += ny * rel * 0.4;
-            bird.vx -= nx * rel * 1.2;
-            bird.vy -= ny * rel * 1.2;
-            playThrottled("tap", 0.1);
-          }
-        }
-      }
-      // 绿绿豆
-      for (const bean of beans) {
-        if (bean.dead) continue;
-        if (Math.hypot(bird.x - bean.x, bird.y - bean.y) < bird.r + bean.r) {
-          if (Math.hypot(bird.vx, bird.vy) > 26) popBean(bean);
-        }
-      }
-
-      // 停下 / 出界 → 这只小鸟退场
-      const sp = Math.hypot(bird.vx, bird.vy);
-      if (onGround && sp < 26) bird.restT += h;
-      else bird.restT = 0;
-      if (bird.restT > 0.85 || bird.age > 12 || bird.x > WORLD_W + 40 || bird.y > WORLD_H + 60) {
-        bird.dead = true;
-        if (bird.x < WORLD_W + 20 && bird.y < WORLD_H + 20) {
-          burst(bird.x, bird.y, ["#FFFFFF", BIRD_INFO[bird.kind].color], 8, 90, false);
-        }
-      }
-    }
-  }
-
-  function stepWorld(h: number): void {
-    simT += h;
-    stepPlatforms(h);
-    stepBlocks(h);
-    stepBoulders(h);
-    stepBalloons();
-    stepBeans(h);
-    stepBirds(h);
-    while (pendingBooms.length > 0) {
-      const boom = pendingBooms.shift();
-      if (boom) explode(boom.x, boom.y);
-    }
-  }
-
-  function worldCalm(): boolean {
-    for (const bl of blocks) {
-      if (!bl.dead && Math.hypot(bl.vx, bl.vy) > 26) return false;
-    }
-    for (const bean of beans) {
-      if (!bean.dead && !bean.held && Math.hypot(bean.vx, bean.vy) > 26) return false;
-    }
-    // 滚石还在滚就可能撞倒方块/压到豆子,先别急着判负
-    for (const bo of boulders) {
-      if (Math.hypot(bo.vx, bo.vy) > 26) return false;
-    }
-    return true;
-  }
-
   function birdsRemaining(): number {
     return queue.length + (loadedBird && !loadedBird.flying ? 1 : 0);
   }
 
+  /** 这一轮打靶塔的得分(塔倒得越多分越高) */
+  function tallyEndless(cleared: boolean): number {
+    return roundScore({
+      round: endlessRound?.round ?? 1,
+      destroyed: world.destroyed,
+      popped: world.beans.filter((b) => b.dead).length,
+      birdsLeft: birdsRemaining(),
+      cleared
+    });
+  }
+
   function finishWin(): void {
-    if (finishSent || !level) return;
+    if (finishSent) return;
+    if (mode === "endless") {
+      // 无尽:清台就加分进下一座塔,不弹结算面板
+      finishSent = true;
+      endlessScore += tallyEndless(true);
+      const next = (endlessRound?.round ?? 1) + 1;
+      msgEl.textContent = `这座塔全倒啦!当前 ${endlessScore} 分,下一座更高!`;
+      playThrottled("win", 0);
+      window.clearTimeout(nextTowerTimer);
+      nextTowerTimer = window.setTimeout(() => {
+        nextTowerTimer = 0;
+        if (!destroyed && mode === "endless") openEndlessRound(next);
+      }, 700);
+      return;
+    }
+    if (!level) return;
     finishSent = true;
     const left = birdsRemaining();
-    const ratio = totalDestructible > 0 ? destroyedCount / totalDestructible : 1;
+    const ratio = world.totalDestructible > 0 ? world.destroyed / world.totalDestructible : 1;
     const stars = calcStars(left, ratio);
     const key = String(level.id);
     progress.stars[key] = Math.max(progress.stars[key] ?? 0, stars);
@@ -1315,23 +636,37 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function finishLose(): void {
-    if (finishSent || !level) return;
+    if (finishSent) return;
+    if (mode === "endless") {
+      finishSent = true;
+      endlessScore += tallyEndless(false);
+      const round = endlessRound?.round ?? 1;
+      const prevBest = endlessBest;
+      endlessBest = save.recordEndlessBest(meta.id, endlessScore);
+      const isNewBest = endlessScore > prevBest;
+      const line = endlessLine(round, endlessScore, endlessBest, isNewBest);
+      msgEl.textContent = line;
+      api.onLose(line);
+      return;
+    }
+    if (!level) return;
     finishSent = true;
     msgEl.textContent = "小鸟用完啦,换个思路再来一次!";
     api.onLose(`还剩 ${beansAlive()} 颗绿绿豆～先打最下面那根撑着的柱子,上面塌下来常常能一次带走一片!`);
   }
 
   function updateFlow(dt: number): void {
-    if (!level || finishSent) return;
+    if ((!level && !endlessRound) || finishSent) return;
 
     if (phase !== "won" && phase !== "lost" && beansAlive() === 0) {
       phase = "won";
       endT = 0;
-      shake = Math.max(shake, 0.25);
+      shake = Math.max(shake, reduceMotion ? 0.08 : 0.25);
     }
 
     if (phase === "won") {
       endT += dt;
+      // 命中 → 变形倒塌 → 结算三段之间留出时间,不瞬变
       if (endT > 0.8) finishWin();
       return;
     }
@@ -1342,7 +677,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
 
     if (phase === "fly") {
-      const allDone = activeBirds.every((b) => b.dead);
+      const allDone = allBirdsDone(world);
       if (!allDone) {
         nextBirdT = 0;
         loseWaitT = 0;
@@ -1357,7 +692,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       } else {
         // 小鸟用完但场上还在动:等一切静止再判负(至少缓冲 0.6s,最长 3s 超时)
         loseWaitT += dt;
-        if ((loseWaitT > 0.6 && worldCalm()) || loseWaitT > 3) {
+        if ((loseWaitT > 0.6 && worldCalm(world)) || loseWaitT > 3) {
           phase = "lost";
           endT = 0;
           playThrottled("oops", 0);
@@ -1377,8 +712,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     };
   }
 
+  /** 空中点按:给窗口内的小鸟放技能,并把口诀写到教练卡上 */
+  function fireSkill(): void {
+    const bird = worldTriggerSkill(world);
+    if (!bird) return;
+    msgEl.textContent =
+      bird.kind === "split"
+        ? "云云分裂!三朵小云一起冲!"
+        : bird.kind === "slam"
+          ? "墩墩下砸!咚——!"
+          : bird.kind === "drill"
+            ? "闪闪加速钻!嗖——!"
+            : "卷卷回旋!掉头咚——!";
+  }
+
   function onPointerDown(e: PointerEvent): void {
-    if (!level || finishSent) return;
+    if ((!level && !endlessRound) || finishSent) return;
     e.preventDefault();
     if (phase === "aim" && loadedBird && !loadedBird.flying && !aiming) {
       aiming = true;
@@ -1390,25 +739,24 @@ export function mount(api: GameApi): { destroy: () => void } {
         // 部分旧浏览器不支持,拖出画布时靠 window 监听兜底
       }
       const p = canvasPos(e);
+      // 1.2 拖动锚点偏移:按下那一点就是锚点,小鸟不会跳到手指底下,
+      // 手指与小鸟之间恒定隔着 FINGER_GAP,弹弓永远露在外面看得见。
+      grabOff = grabOffset(p.x, p.y);
       setDrag(p.x, p.y);
     } else if (phase === "fly") {
-      triggerSkill();
+      fireSkill();
     }
   }
 
   function setDrag(px: number, py: number): void {
-    let dx = px - SLING_X;
-    let dy = py - SLING_Y;
-    const d = Math.hypot(dx, dy);
-    if (d > MAX_DRAG) {
-      dx = (dx / d) * MAX_DRAG;
-      dy = (dy / d) * MAX_DRAG;
-    }
-    dragX = dx;
-    dragY = dy;
+    fingerX = px;
+    fingerY = py;
+    const d = dragFromPointer(px, py, grabOff);
+    dragX = d.dx;
+    dragY = d.dy;
     if (loadedBird) {
-      loadedBird.x = SLING_X + dx;
-      loadedBird.y = SLING_Y + dy;
+      loadedBird.x = SLING_X + dragX;
+      loadedBird.y = SLING_Y + dragY;
     }
   }
 
@@ -1423,23 +771,21 @@ export function mount(api: GameApi): { destroy: () => void } {
     aiming = false;
     aimPointer = -1;
     if (!loadedBird || finishSent) return;
-    if (Math.hypot(dragX, dragY) < 13) {
+    if (Math.hypot(dragX, dragY) < MIN_DRAG) {
       loadedBird.x = SLING_X;
       loadedBird.y = SLING_Y;
       return;
     }
     const v = launchVelocity(dragX, dragY);
-    loadedBird.vx = v.vx;
-    loadedBird.vy = v.vy;
-    loadedBird.flying = true;
-    activeBirds.push(loadedBird);
+    const bird = loadedBird;
+    launchBird(world, bird, v.vx, v.vy);
     loadedBird = null;
     phase = "fly";
+    launchT = 0;
     api.play("jump");
+    api.play("pop");
     msgEl.textContent =
-      activeBirds[activeBirds.length - 1].kind === "straight"
-        ? "糯糯出发!笔直冲——"
-        : "小鸟出发!飞行中点一下屏幕发动技能!";
+      bird.kind === "straight" ? "糯糯出发!笔直冲——" : "小鸟出发!飞行中点一下屏幕发动技能!";
     dragX = 0;
     dragY = 0;
     updateHud();
@@ -1461,7 +807,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key === " " || e.key === "Enter") {
       if (phase === "fly" && !finishSent) {
-        triggerSkill();
+        fireSkill();
         e.preventDefault();
       }
     }
@@ -1474,14 +820,22 @@ export function mount(api: GameApi): { destroy: () => void } {
   window.addEventListener("keydown", onKeyDown);
 
   retryBtn.addEventListener("click", () => {
-    if (!level) return;
     api.play("tap");
     stopSpeaking();
-    openLevel(level.id);
+    if (mode === "endless") {
+      startEndless();
+    } else if (level) {
+      openLevel(level.id);
+    }
   });
   backBtn.addEventListener("click", () => {
     api.play("tap");
     showMap();
+  });
+  endlessBtn.addEventListener("click", () => {
+    api.play("tap");
+    stopSpeaking();
+    startEndless();
   });
 
   /* ---------------- 渲染 ---------------- */
@@ -1521,7 +875,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (skyPad > 40) {
       c.fillStyle = "rgba(255,255,255,.55)";
       for (let i = 0; i < 5; i++) {
-        const drift = ((simT * (7 + i * 2) + i * 210) % (WORLD_W + 160)) - 80;
+        const drift = ((world.simT * (7 + i * 2) + i * 210) % (WORLD_W + 160)) - 80;
         const cy = -skyPad + 26 + ((i * 97) % Math.max(skyPad - 46, 1));
         c.beginPath();
         c.arc(drift, cy, 14, 0, Math.PI * 2);
@@ -1564,8 +918,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.fill();
       c.fillStyle = "rgba(255,255,255,.9)";
       for (let i = 0; i < 22; i++) {
-        const sx = ((i * 97) % WORLD_W) + Math.sin(simT * 0.7 + i) * 8;
-        const sy = ((i * 53 + simT * 26) % (GROUND_Y + 20));
+        const sx = ((i * 97) % WORLD_W) + Math.sin(world.simT * 0.7 + i) * 8;
+        const sy = ((i * 53 + world.simT * 26) % (GROUND_Y + 20));
         c.beginPath();
         c.arc(sx, sy, i % 3 === 0 ? 2.4 : 1.6, 0, Math.PI * 2);
         c.fill();
@@ -1581,7 +935,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.fill();
       c.fillStyle = "rgba(255,255,240,.9)";
       for (let i = 0; i < 26; i++) {
-        const tw = 0.5 + 0.5 * Math.sin(simT * 2 + i * 1.3);
+        const tw = 0.5 + 0.5 * Math.sin(world.simT * 2 + i * 1.3);
         c.globalAlpha = 0.35 + tw * 0.6;
         c.beginPath();
         c.arc(((i * 83) % WORLD_W), (i * 37) % 190, i % 4 === 0 ? 2 : 1.3, 0, Math.PI * 2);
@@ -1604,8 +958,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.fill();
       c.fillStyle = "rgba(255,150,70,.85)";
       for (let i = 0; i < 12; i++) {
-        const t = (simT * 30 + i * 47) % 140;
-        const ex = 454 + Math.sin(simT * 1.4 + i * 2.1) * (10 + i * 3);
+        const t = (world.simT * 30 + i * 47) % 140;
+        const ex = 454 + Math.sin(world.simT * 1.4 + i * 2.1) * (10 + i * 3);
         c.globalAlpha = 0.75 - (t / 140) * 0.7;
         c.beginPath();
         c.arc(ex, 86 - t, i % 3 === 0 ? 3 : 2, 0, Math.PI * 2);
@@ -1626,7 +980,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.globalAlpha = 1;
       c.fillStyle = "rgba(255,255,255,.9)";
       for (let i = 0; i < 4; i++) {
-        const drift = ((simT * 9 + i * 150) % (WORLD_W + 120)) - 60;
+        const drift = ((world.simT * 9 + i * 150) % (WORLD_W + 120)) - 60;
         const cy = 46 + i * 58;
         c.beginPath();
         c.arc(drift, cy, 16, 0, Math.PI * 2);
@@ -1656,7 +1010,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.stroke();
       c.save();
       c.translate(wx, wy);
-      c.rotate(simT * 0.7);
+      c.rotate(world.simT * 0.7);
       c.fillStyle = "rgba(255,255,255,.92)";
       c.strokeStyle = "#B9CFE8";
       c.lineWidth = 1.6;
@@ -1676,7 +1030,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.strokeStyle = "rgba(140,190,130,.7)";
       c.lineWidth = 1.6;
       for (let i = 0; i < 8; i++) {
-        const t = (simT * 60 + i * 71) % (WORLD_W + 80);
+        const t = (world.simT * 60 + i * 71) % (WORLD_W + 80);
         const ly = 60 + ((i * 47) % 170);
         c.beginPath();
         c.moveTo(t - 40, ly);
@@ -1697,7 +1051,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.fill();
       }
       for (let i = 0; i < 10; i++) {
-        const tw = 0.4 + 0.6 * Math.abs(Math.sin(simT * 1.6 + i * 1.1));
+        const tw = 0.4 + 0.6 * Math.abs(Math.sin(world.simT * 1.6 + i * 1.1));
         const cx2 = ((i * 103 + 30) % WORLD_W);
         const cy2 = 70 + ((i * 61) % 160);
         c.globalAlpha = 0.35 + tw * 0.5;
@@ -1720,7 +1074,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       const gearAt = (gx: number, gy: number, gr: number, dir: number): void => {
         c.save();
         c.translate(gx, gy);
-        c.rotate(simT * 0.5 * dir);
+        c.rotate(world.simT * 0.5 * dir);
         c.fillStyle = "rgba(120,86,70,.55)";
         for (let i = 0; i < 8; i++) {
           c.rotate(Math.PI / 4);
@@ -1752,8 +1106,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       // 熔炉里飘起的火星
       c.fillStyle = "rgba(255,170,90,.85)";
       for (let i = 0; i < 10; i++) {
-        const t = (simT * 34 + i * 53) % 150;
-        const ex = 130 + Math.sin(simT * 1.2 + i * 1.9) * (8 + i * 2.5);
+        const t = (world.simT * 34 + i * 53) % 150;
+        const ex = 130 + Math.sin(world.simT * 1.2 + i * 1.9) * (8 + i * 2.5);
         c.globalAlpha = 0.7 - (t / 150) * 0.65;
         c.beginPath();
         c.arc(ex, 146 - t, i % 3 === 0 ? 2.8 : 2, 0, Math.PI * 2);
@@ -1784,7 +1138,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawWinds(c: CanvasRenderingContext2D): void {
-    for (const w of winds) {
+    for (const w of world.winds) {
       c.fillStyle = "rgba(180,225,255,0.20)";
       c.beginPath();
       c.roundRect(w.x, w.y, w.w, w.h, 14);
@@ -1794,7 +1148,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       const ang = Math.atan2(w.fy, w.fx);
       const speed = 42;
       for (let i = 0; i < 7; i++) {
-        const t = (simT * speed + i * 31) % 60;
+        const t = (world.simT * speed + i * 31) % 60;
         const bx = w.x + ((i * 67) % Math.max(w.w - 20, 10)) + 10;
         const by = w.y + ((i * 41) % Math.max(w.h - 20, 10)) + 10;
         const px = bx + Math.cos(ang) * t;
@@ -1811,7 +1165,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawSlopes(c: CanvasRenderingContext2D, chapter: number): void {
     const st = CH_STYLE[chapter];
-    for (const s of slopes) {
+    for (const s of world.slopes) {
       c.fillStyle = st.ground;
       c.beginPath();
       if (s.dir === "up-right") {
@@ -1840,8 +1194,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawPortals(c: CanvasRenderingContext2D): void {
-    for (let i = 0; i < portals.length; i++) {
-      const p = portals[i];
+    for (let i = 0; i < world.portals.length; i++) {
+      const p = world.portals[i];
       // 同一对门用同一组颜色,两口各偏一点色相好区分进出
       const colA = i % 2 === 0 ? "#8F7BE0" : "#5FBF8F";
       const colB = i % 2 === 0 ? "#5FC4DC" : "#E0A45F";
@@ -1849,10 +1203,10 @@ export function mount(api: GameApi): { destroy: () => void } {
         [p.ax, p.ay, colA],
         [p.bx, p.by, colB]
       ] as Array<[number, number, string]>) {
-        const wob = Math.sin(simT * 3 + mx * 0.05) * 1.5;
+        const wob = Math.sin(world.simT * 3 + mx * 0.05) * 1.5;
         c.save();
         c.translate(mx, my);
-        c.rotate(simT * 1.4);
+        c.rotate(world.simT * 1.4);
         c.strokeStyle = col;
         c.globalAlpha = 0.9;
         c.lineWidth = 3;
@@ -1872,7 +1226,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.fill();
         c.globalAlpha = 1;
         // 小星星在门口打转,提示这是能钻进去的洞
-        const sa = simT * 2.2 + (mx + my) * 0.01;
+        const sa = world.simT * 2.2 + (mx + my) * 0.01;
         c.fillStyle = "#FFFFFF";
         c.beginPath();
         c.arc(mx + Math.cos(sa) * (p.r + 4), my + Math.sin(sa) * (p.r + 4) * 0.62, 1.8, 0, Math.PI * 2);
@@ -1891,7 +1245,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawPlatforms(c: CanvasRenderingContext2D): void {
-    for (const p of platforms) {
+    for (const p of world.platforms) {
       c.strokeStyle = "rgba(150,160,220,0.5)";
       c.lineWidth = 2;
       c.setLineDash([4, 5]);
@@ -1911,9 +1265,19 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawBlocks(c: CanvasRenderingContext2D): void {
-    for (const bl of blocks) {
+    for (const bl of world.blocks) {
       if (bl.dead) continue;
       const m = MAT[bl.kind];
+      // 命中反馈第一段「变形」:刚挨过打的块会歪一下、抖一抖,再倒、再结算
+      const stress = reduceMotion ? Math.min(bl.stress, 0.25) : bl.stress;
+      const shaky = stress > 0.02;
+      if (shaky) {
+        c.save();
+        c.translate(bl.x + bl.w / 2, bl.y + bl.h / 2);
+        c.rotate(Math.sin(world.simT * 26 + bl.x) * 0.05 * stress);
+        c.scale(1 + 0.05 * stress, 1 - 0.05 * stress);
+        c.translate(-(bl.x + bl.w / 2), -(bl.y + bl.h / 2));
+      }
       if (bl.kind === "wood") {
         const g = c.createLinearGradient(bl.x, bl.y, bl.w >= bl.h ? bl.x : bl.x + bl.w, bl.w >= bl.h ? bl.y + bl.h : bl.y);
         g.addColorStop(0, "#F2CFA0");
@@ -2079,11 +1443,12 @@ export function mount(api: GameApi): { destroy: () => void } {
         c.lineTo(bl.x + bl.w - 4, bl.y + bl.h * 0.8);
         c.stroke();
       }
+      if (shaky) c.restore();
     }
   }
 
   function drawBoulders(c: CanvasRenderingContext2D): void {
-    for (const bo of boulders) {
+    for (const bo of world.boulders) {
       const g = c.createRadialGradient(bo.x - bo.r * 0.35, bo.y - bo.r * 0.4, bo.r * 0.2, bo.x, bo.y, bo.r * 1.1);
       g.addColorStop(0, "#D2CCC3");
       g.addColorStop(1, "#A29B91");
@@ -2107,7 +1472,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawBalloons(c: CanvasRenderingContext2D): void {
-    for (const bal of balloons) {
+    for (const bal of world.balloons) {
       if (bal.popped) continue;
       if (!bal.bean.dead) {
         c.strokeStyle = "rgba(150,140,120,0.8)";
@@ -2143,9 +1508,9 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawBeans(c: CanvasRenderingContext2D): void {
-    for (const bean of beans) {
+    for (const bean of world.beans) {
       if (bean.dead) continue;
-      const wob = Math.sin(simT * 4 + bean.x * 0.13) * 1.2;
+      const wob = Math.sin(world.simT * 4 + bean.x * 0.13) * 1.2;
       const g = c.createRadialGradient(bean.x - bean.r * 0.35, bean.y - bean.r * 0.4, bean.r * 0.2, bean.x, bean.y, bean.r * 1.15);
       g.addColorStop(0, "#C4EA92");
       g.addColorStop(1, "#8FC957");
@@ -2183,7 +1548,21 @@ export function mount(api: GameApi): { destroy: () => void } {
   function drawBird(c: CanvasRenderingContext2D, bird: RtBird): void {
     const info = BIRD_INFO[bird.kind];
     const ang = bird.flying ? Math.atan2(bird.vy, bird.vx) * 0.25 : 0;
-    const flap = bird.flying ? Math.sin(bird.age * 18) * 0.35 : Math.sin(simT * 3 + bird.x) * 0.08;
+    const flap = bird.flying ? Math.sin(bird.age * 18) * 0.35 : Math.sin(world.simT * 3 + bird.x) * 0.08;
+    // 技能触发窗口:窗口开着就套一圈光环,窗口越到后面圈越淡(告诉孩子「现在可以点」)
+    if (canTriggerSkill(bird)) {
+      const left = clamp(1 - bird.age / SKILL_WINDOW_END, 0, 1);
+      c.save();
+      c.globalAlpha = 0.25 + left * 0.45;
+      c.strokeStyle = info.dark;
+      c.lineWidth = 2;
+      c.setLineDash([4, 4]);
+      c.beginPath();
+      c.arc(bird.x, bird.y, bird.r + 5 + Math.sin(world.simT * 8) * 1.2, 0, Math.PI * 2);
+      c.stroke();
+      c.setLineDash([]);
+      c.restore();
+    }
     c.save();
     c.translate(bird.x, bird.y);
     c.rotate(ang);
@@ -2348,9 +1727,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.stroke();
     }
 
-    // 皮筋
-    c.strokeStyle = "#E2698A";
-    c.lineWidth = 4;
+    // 皮筋:拉得越满绷得越紧(越细、颜色越深),松开时回弹成一条软弧
+    const tension = bandTension(Math.hypot(dragX, dragY));
+    c.strokeStyle = tension > 0.66 ? "#C9455F" : tension > 0.33 ? "#D75674" : "#E2698A";
+    c.lineWidth = 4 - tension * 1.4;
     if (loadedBird && !loadedBird.flying) {
       c.beginPath();
       c.moveTo(SLING_X - 15, SLING_Y - 12);
@@ -2358,6 +1738,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       c.lineTo(SLING_X + 15, SLING_Y - 12);
       c.stroke();
     } else {
+      c.lineWidth = 4;
       c.beginPath();
       c.moveTo(SLING_X - 15, SLING_Y - 12);
       c.quadraticCurveTo(SLING_X, SLING_Y - 2, SLING_X + 15, SLING_Y - 12);
@@ -2365,21 +1746,47 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  /**
+   * 弹道预测:8–12 个衰减小点,前 60% 精确、后 40% 淡出。
+   * 故意不画完整落点圈——最后那一段留给孩子自己估。
+   */
   function drawTrajectory(c: CanvasRenderingContext2D): void {
-    if (!aiming || !loadedBird || Math.hypot(dragX, dragY) < 13) return;
+    if (!aiming || !loadedBird) return;
+    const len = Math.hypot(dragX, dragY);
+    if (len < MIN_DRAG) return;
     const v = launchVelocity(dragX, dragY);
-    // 与 stepBirds 同一套积分(含风区与小鸟重力系数),预览即实弹
-    const pts = simulateTrajectory(loadedBird.x, loadedBird.y, v.vx, v.vy, loadedBird.gfactor, winds, 13, 0.07);
-    for (let i = 0; i < pts.length; i++) {
-      c.globalAlpha = 0.85 - (i / pts.length) * 0.7;
+    const dots = previewDots(
+      loadedBird.x,
+      loadedBird.y,
+      v.vx,
+      v.vy,
+      loadedBird.gfactor,
+      world.winds,
+      previewDotCount(len)
+    );
+    for (const dot of dots) {
+      c.globalAlpha = dot.alpha;
       c.fillStyle = "#FFFFFF";
-      c.strokeStyle = "rgba(120,140,190,0.6)";
-      c.lineWidth = 1;
       c.beginPath();
-      c.arc(pts[i].x, pts[i].y, i % 2 === 0 ? 3.4 : 2.4, 0, Math.PI * 2);
+      c.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2);
       c.fill();
-      c.stroke();
+      if (dot.precise) {
+        c.strokeStyle = "rgba(120,140,190,0.6)";
+        c.lineWidth = 1;
+        c.stroke();
+      }
     }
+    c.globalAlpha = 1;
+    // 手指与小鸟之间的牵引线:让孩子看懂「我按的地方」和「小鸟在哪」是分开的
+    c.globalAlpha = 0.28;
+    c.strokeStyle = "#4C7DB3";
+    c.lineWidth = 1.5;
+    c.setLineDash([4, 5]);
+    c.beginPath();
+    c.moveTo(loadedBird.x, loadedBird.y);
+    c.lineTo(fingerX, fingerY);
+    c.stroke();
+    c.setLineDash([]);
     c.globalAlpha = 1;
   }
 
@@ -2427,7 +1834,13 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawBanner(c: CanvasRenderingContext2D): void {
-    if (!level || introT <= 0) return;
+    if (introT <= 0) return;
+    const title = level
+      ? `${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`
+      : endlessRound
+        ? `♾️ ${endlessRound.name} · 共 ${ENDLESS_BIRDS} 只小鸟`
+        : "";
+    if (!title) return;
     const a = clamp(introT > 1.6 ? (2 - introT) * 2.5 : introT / 0.5, 0, 1);
     // 钉在画布顶部(天空延展时不跟着世界坐标掉到屏幕中间)
     const by = 24 - skyPad;
@@ -2439,23 +1852,31 @@ export function mount(api: GameApi): { destroy: () => void } {
     c.fillStyle = "#3E6D9E";
     c.font = "bold 17px sans-serif";
     c.textAlign = "center";
-    c.fillText(`${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`, WORLD_W / 2, by + 29);
+    c.fillText(title, WORLD_W / 2, by + 29);
     c.textAlign = "left";
     c.globalAlpha = 1;
   }
 
   function draw(): void {
-    if (!ctx || !level) return;
+    if (!ctx || (!level && !endlessRound)) return;
+    const chapter = sceneChapter();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     if (shake > 0.01) {
       ctx.translate((Math.random() - 0.5) * shake * 14, (Math.random() - 0.5) * shake * 14);
     }
+    // 松手瞬间轻轻把镜头拉一下,给弹射一点力量感(reduced-motion 下自动归零)
+    const stretch = releaseStretch(launchT, 1, reduceMotion ? 0 : 1);
+    if (stretch !== 1) {
+      ctx.translate(SLING_X, SLING_Y + skyPad);
+      ctx.scale(stretch, stretch);
+      ctx.translate(-SLING_X, -(SLING_Y + skyPad));
+    }
     // 世界坐标整体下移天空高度:上方是延展天空,下方是延展泥土
     ctx.translate(0, skyPad);
-    drawBg(ctx, level.chapter);
+    drawBg(ctx, chapter);
     drawWinds(ctx);
-    drawSlopes(ctx, level.chapter);
+    drawSlopes(ctx, chapter);
     drawPortals(ctx);
     drawPlatforms(ctx);
     drawBlocks(ctx);
@@ -2464,7 +1885,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawBeans(ctx);
     drawQueue(ctx);
     drawSlingshot(ctx);
-    for (const bird of activeBirds) {
+    for (const bird of world.birds) {
       if (!bird.dead) drawBird(ctx, bird);
     }
     if (loadedBird) drawBird(ctx, loadedBird);
@@ -2478,17 +1899,18 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function tick(now: number): void {
     if (destroyed) return;
-    const dt = Math.min(0.033, (now - lastTime) / 1000 || 0.016);
+    const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
 
-    if (level) {
+    if (level || endlessRound) {
       if (!finishSent) {
-        const sub = 3;
-        for (let i = 0; i < sub; i++) stepWorld(dt / sub);
+        // 固定步长:advance 内部按 1/180 秒补步,60fps 与 30fps 落点一致
+        advance(world, dt);
         updateFlow(dt);
       }
       shake = Math.max(0, shake - dt * 1.6);
       introT = Math.max(0, introT - dt);
+      launchT += dt;
       for (const p of particles) {
         p.life -= dt;
         p.vy += GRAVITY * 0.5 * dt;
@@ -2503,8 +1925,21 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 启动 ---------------- */
 
+  /** 平台「直达第 N 关」:壳层传 initialLevel,或地址栏 ?level=N */
+  function levelFromQuery(search: string | null): number | null {
+    if (!search) return null;
+    const raw = new URLSearchParams(search).get("level");
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) && n >= 1 ? Math.round(n) : null;
+  }
+
+  const jumpTo =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" ? location.search : null);
   const resume = progress.resume;
-  if (resume !== null && LEVELS.some((l) => l.id === resume) && isUnlocked(resume)) {
+  if (jumpTo !== null && jumpTo !== undefined && openCampaignLevel(jumpTo)) {
+    // 直达关号优先(家长门/root 门放行的直通车),不受解锁进度限制
+  } else if (resume !== null && LEVELS.some((l) => l.id === resume) && isUnlocked(resume)) {
     openLevel(resume);
   } else {
     showMap();
@@ -2519,6 +1954,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(raf);
+      window.clearTimeout(nextTowerTimer);
       stopSpeaking();
       unwatchSpeech();
       resizeObserver?.disconnect();

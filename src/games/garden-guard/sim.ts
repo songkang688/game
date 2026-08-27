@@ -23,7 +23,10 @@ import {
   SNEAK_VISIBLE,
   SUMMON_INTERVAL,
   TOWER_INFO,
+  TOWER_KINDS,
   TowerKind,
+  WaveEntry,
+  WeatherKind,
   applyHit,
   boomSplash,
   buildWaypoints,
@@ -41,7 +44,6 @@ import {
   pointAlongPath,
   sunnyInterval,
   towerCanHitAir,
-  towerCooldown,
   towerDamage,
   towersUnlockedAt,
   upgradeCost,
@@ -49,10 +51,27 @@ import {
   weatherRangeMult,
   weatherSpeedMult,
 } from "./logic";
+import {
+  ENDLESS_HEARTS,
+  ENDLESS_PATH,
+  ENDLESS_START_PETALS,
+  endlessClearReward,
+  endlessKillReward,
+  endlessLevelIndex,
+  endlessWave,
+} from "./endless";
+import { chimeLevelsAt, supportedCooldown, supportedRange } from "./towers12";
+import { SPEED_MODES, SpeedMode, accumulateSteps } from "./wave12";
 
 export interface SimOptions {
   /** true = 一座塔都不种(用来验证 BOSS 关也能打输)。 */
   noTowers?: boolean;
+  /** 这几种塔本局不许用(1.2「去一留全」证明无支配塔用)。 */
+  ban?: ReadonlyArray<TowerKind>;
+  /** 播放速度:1× / 2×。逻辑一律按固定步长积分,只是每帧走的步数不同。 */
+  speed?: SpeedMode;
+  /** 这一局最多模拟多少秒(无尽要跑几十波,默认的闯关上限不够用)。 */
+  timeCap?: number;
   /** 调试:每条事件推入此数组。 */
   trace?: string[];
 }
@@ -65,6 +84,50 @@ export interface SimResult {
   towersUpgraded: number;
   petalsLeft: number;
   monstersLeaked: number;
+  /** 打完了几波(无尽用这个当成绩;闯关赢了就等于总波数) */
+  wavesCleared: number;
+}
+
+/**
+ * 一局的场景描述。闯关是「一关 = 一个场景」,无尽是「一整轮 = 一个场景」——
+ * 塔、花瓣、心都在波与波之间留着,所以两种模式能共用同一台模拟器。
+ */
+export interface SimScenario {
+  name: string;
+  paths: ReadonlyArray<ReadonlyArray<readonly [number, number]>>;
+  waves: WaveEntry[][];
+  startPetals: number;
+  hearts: number;
+  weather?: WeatherKind;
+  barricades?: ReadonlyArray<BarricadeDef>;
+  speedMult?: number;
+  /** 本场景能用的塔 */
+  unlocked: ReadonlyArray<TowerKind>;
+  /** 第 waveIdx 波(0 起)按第几关的数值出怪 */
+  hpLevel: (waveIdx: number) => number;
+  /** 打完第 waveIdx 波给几片花瓣 */
+  waveReward: (waveIdx: number) => number;
+  /** 第 waveIdx 波打倒一只 kind 给几片花瓣 */
+  killReward: (kind: MonsterKind, waveIdx: number) => number;
+}
+
+/** 闯关第 levelIdx 关的场景。 */
+export function levelScenario(levelIdx: number): SimScenario {
+  const def = LEVELS[levelIdx];
+  return {
+    name: def.name,
+    paths: def.paths,
+    waves: def.waves,
+    startPetals: def.startPetals,
+    hearts: HEARTS_PER_LEVEL,
+    weather: def.weather,
+    barricades: def.barricades,
+    speedMult: def.speedMult,
+    unlocked: towersUnlockedAt(levelIdx, LEVELS),
+    hpLevel: () => levelIdx,
+    waveReward: () => 3,
+    killReward: (kind) => monsterReward(kind, levelIdx),
+  };
 }
 
 interface SimMonster {
@@ -102,12 +165,14 @@ interface SimTower {
 const SIM_DT = 0.05;
 const SIM_CD_PENALTY = 1.15;
 const SIM_TIME_CAP = 900;
+/** 模拟按 60fps 逐帧驱动,再由 accumulateSteps 换算成固定步长。 */
+const SIM_FRAME_DT = 1 / 60;
+/** 一帧最多补几步(模拟里帧长恒定,这个值只是兜底)。 */
+const SIM_MAX_STEPS_PER_FRAME = 64;
 
 /** 固定建造清单:按解锁情况生成,兼顾经济 / 对空 / 减速 / 溅射。 */
-function buildPlan(levelIdx: number): TowerKind[] {
-  const def = LEVELS[levelIdx];
-  const unlocked = towersUnlockedAt(levelIdx, LEVELS);
-  const has = (k: TowerKind) => unlocked.includes(k);
+function buildPlan(def: SimScenario): TowerKind[] {
+  const has = (k: TowerKind) => def.unlocked.includes(k);
   let airCount = 0;
   let groundCount = 0;
   let armoredCount = 0;
@@ -130,8 +195,9 @@ function buildPlan(levelIdx: number): TowerKind[] {
   const rush = minLen < 9 || fastRushCount >= 5 || (def.speedMult ?? 1) >= 1.15 || def.paths.length > 1;
   const plan: TowerKind[] = [];
   if (poor && !rush) {
-    // 穷开局先立一座便宜的泡泡塔顶住,再攒经济。
-    plan.push("bubble");
+    // 穷开局先立两座便宜的泡泡塔顶住第一波,再攒经济。
+    // 1.2 泡泡塔改成「慢吞吞的重击手」之后,一座已经拖不住开局,得两座接力。
+    plan.push("bubble", "bubble");
     if (has("sunny")) plan.push("sunny", "sunny");
     plan.push("needle");
   } else if (rush) {
@@ -141,6 +207,7 @@ function buildPlan(levelIdx: number): TowerKind[] {
     if (has("sunny")) plan.push("sunny");
     plan.push("needle", "bubble");
     if (has("sunny")) plan.push("sunny");
+    plan.push("bubble");
   }
   // 重甲局毒雾优先:毒雾无视护甲,是硬壳军团的克星
   if (has("mist") && armorHeavy) plan.push("mist", "mist");
@@ -149,10 +216,13 @@ function buildPlan(levelIdx: number): TowerKind[] {
   if (has("mist") && !airHeavy && !armorHeavy) plan.push("mist");
   if (has("boom") && !airHeavy) plan.push("boom");
   plan.push("needle", "bubble");
+  // 已经有一小片塔了,这时候补一座铃兰铃比再铺一座输出更划算
+  if (has("chime")) plan.push("chime");
   if (has("frost")) plan.push("frost");
   if (has("boom") && groundCount > 0) plan.push("boom");
   plan.push("needle", "dew", "bubble");
   if (has("mist") && groundCount > 0) plan.push("mist");
+  if (has("chime")) plan.push("chime");
   plan.push("needle", "bubble", "needle", "bubble", "needle", "bubble");
   return plan;
 }
@@ -165,8 +235,7 @@ interface SimSpot {
 }
 
 /** 所有可种格,按"罩住多少段小路"从好到差排序(结果确定),并记每条路的覆盖量。 */
-function rankedSpots(levelIdx: number): SimSpot[] {
-  const def = LEVELS[levelIdx];
+function rankedSpots(def: SimScenario): SimSpot[] {
   const blocked = pathsCellSet(def.paths);
   const samplesByPath: Array<Array<{ x: number; y: number }>> = def.paths.map((path) => {
     const wp = buildWaypoints(path);
@@ -200,14 +269,23 @@ function rankedSpots(levelIdx: number): SimSpot[] {
 
 /** 用固定策略把第 levelIdx 关(0 起)从头打到尾。 */
 export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResult {
-  const def = LEVELS[levelIdx];
+  return simulateScenario(levelScenario(levelIdx), opts);
+}
+
+/** 用固定策略把一个场景从头打到尾(闯关和无尽共用)。 */
+export function simulateScenario(def: SimScenario, opts: SimOptions = {}): SimResult {
   const wpList = def.paths.map((p) => buildWaypoints(p));
   const lenList = wpList.map((wp) => pathLength(wp));
   const weather = def.weather;
   const wSpeed = weatherSpeedMult(weather);
 
-  const spots = rankedSpots(levelIdx);
-  const plan = buildPlan(levelIdx);
+  const banned = new Set<TowerKind>(opts.ban ?? []);
+  const allowed = (k: TowerKind) => !banned.has(k);
+  const speed: SpeedMode = opts.speed ?? 1;
+  const timeCap = opts.timeCap ?? SIM_TIME_CAP;
+
+  const spots = rankedSpots(def);
+  const plan = buildPlan(def).filter(allowed);
   const barricades = new Map<string, number>();
   for (const [c, r, hp] of (def.barricades ?? []) as ReadonlyArray<BarricadeDef>) {
     barricades.set(`${c},${r}`, hp);
@@ -218,7 +296,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
   const monsters: SimMonster[] = [];
 
   let petals = def.startPetals;
-  let hearts = HEARTS_PER_LEVEL;
+  let hearts = def.hearts;
   let leaked = 0;
   let towersBuilt = 0;
   let towersUpgraded = 0;
@@ -226,6 +304,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
   const builtCovByPath: number[] = def.paths.map(() => 0);
 
   let waveIdx = 0;
+  let wavesCleared = 0;
   let phase: "prewave" | "wave" = "prewave";
   let phaseTimer = 1.6;
   let spawnList = waveSpawnTimes(def.waves[0]);
@@ -238,14 +317,15 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
   function spawnMonster(kind: MonsterKind, pathIdx: number, dist = 0): void {
     const spec = MONSTER_INFO[kind];
     const p = pointAlongPath(wpList[pathIdx], dist);
+    const hpLevel = def.hpLevel(waveIdx);
     monsters.push({
       kind,
       pathIdx,
       dist,
       baseSpeed: spec.speed * (def.speedMult ?? 1) * wSpeed,
-      hp: monsterHp(kind, levelIdx),
-      maxHp: monsterHp(kind, levelIdx),
-      armor: monsterArmor(kind, levelIdx),
+      hp: monsterHp(kind, hpLevel),
+      maxHp: monsterHp(kind, hpLevel),
+      armor: monsterArmor(kind, hpLevel),
       x: p.x,
       y: p.y,
       hidden: false,
@@ -263,7 +343,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
   }
 
   function onKilled(m: SimMonster): void {
-    petals += monsterReward(m.kind, levelIdx);
+    petals += def.killReward(m.kind, waveIdx);
     const spec = MONSTER_INFO[m.kind];
     if (spec.splits) {
       spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.2));
@@ -294,6 +374,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
 
   /** 把 kind 种到最合适的空位:输出塔盯着"火力最薄"的那条路,经济塔缩在角落。 */
   function placeTower(kind: TowerKind): boolean {
+    if (!allowed(kind)) return false;
     const cost = TOWER_INFO[kind].cost;
     if (petals < cost) return false;
     const free = (s: SimSpot) => {
@@ -303,6 +384,18 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
     let spot: SimSpot | undefined;
     if (kind === "sunny") {
       spot = [...spots].reverse().find(free);
+    } else if (kind === "chime") {
+      // 支援塔要罩住尽量多的输出塔,不是罩住小路
+      const shooters = towers.filter((t) => t.kind !== "sunny" && t.kind !== "chime");
+      const reach = effectiveRange("chime", 1, weather);
+      spot = [...spots]
+        .sort(
+          (a, b) =>
+            shooters.filter((t) => Math.hypot(t.col - b.col, t.row - b.row) <= reach).length -
+              shooters.filter((t) => Math.hypot(t.col - a.col, t.row - a.row) <= reach).length ||
+            b.coverage - a.coverage,
+        )
+        .find(free);
     } else if (def.paths.length > 1) {
       // 双路图:优先补火力最薄的那条路
       let weakest = 0;
@@ -327,7 +420,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
       prodTimer: sunnyInterval(1),
       coverage: spot.coverage,
     });
-    if (kind !== "sunny") {
+    if (kind !== "sunny" && kind !== "chime") {
       for (let p = 0; p < builtCovByPath.length; p++) builtCovByPath[p] += spot.covByPath[p];
     }
     petals -= cost;
@@ -337,7 +430,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
 
   function tryUpgrade(): boolean {
     const candidates = towers
-      .filter((t) => t.level < 3 && t.kind !== "sunny")
+      .filter((t) => t.level < 3 && t.kind !== "sunny" && t.kind !== "chime")
       .sort((a, b) => b.coverage - a.coverage || a.level - b.level);
     for (const t of candidates) {
       const cost = upgradeCost(t.kind, t.level);
@@ -372,20 +465,32 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
     // 2. 险情应对:有怪快到出口时,立刻补一座打得到它的塔
     const danger = monsters.some((m) => m.dist / lenList[m.pathIdx] > 0.55);
     if (danger) {
-      const emergency: TowerKind = monsters.some(
-        (m) => m.flying && m.dist / lenList[m.pathIdx] > 0.55,
-      )
-        ? "needle"
-        : "bubble";
-      if (petals >= TOWER_INFO[emergency].cost + 3 && placeTower(emergency)) return;
+      const airDanger = monsters.some((m) => m.flying && m.dist / lenList[m.pathIdx] > 0.55);
+      // 塔被禁用时换一座打得到同一类怪的顶上,不然「去一留全」测的就是「少造一座塔」
+      const picks: TowerKind[] = airDanger
+        ? ["needle", "bubble", "frost"]
+        : ["bubble", "needle", "boom", "mist"];
+      for (const emergency of picks) {
+        if (!allowed(emergency)) continue;
+        if (petals >= TOWER_INFO[emergency].cost + 3 && placeTower(emergency)) return;
+        break;
+      }
     }
-    // 2.5 飞怪在场而对空火力不足:立刻补针塔
+    // 2.5 飞怪在场而对空火力不足:立刻补对空塔
     if (monsters.some((m) => m.flying)) {
       const airTowers = towers.filter((t) => towerCanHitAir(t.kind)).length;
-      if (airTowers < 4 && petals >= TOWER_INFO.needle.cost && placeTower("needle")) return;
+      if (airTowers < 4) {
+        for (const air of ["needle", "bubble", "frost"] as TowerKind[]) {
+          if (!allowed(air)) continue;
+          if (petals >= TOWER_INFO[air].cost && placeTower(air)) return;
+          break;
+        }
+      }
     }
     // 3. 输出塔够 5 座后,升级比铺新塔划算(升级 = 原价+2 换一倍伤害)
-    const attackCount = towers.filter((t) => t.kind !== "sunny" && t.kind !== "dew").length;
+    const attackCount = towers.filter(
+      (t) => t.kind !== "sunny" && t.kind !== "dew" && t.kind !== "chime",
+    ).length;
     if (attackCount >= 5 && tryUpgrade()) return;
     // 4. 按清单建造;当前一项买不起就看看后面有没有买得起的先换上
     if (planIdx < plan.length) {
@@ -403,12 +508,17 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
       }
       return;
     }
-    // 5. 清单造完:先升级,全升满还有余钱就继续铺针塔
+    // 5. 清单造完:先升级,全升满还有余钱就继续铺输出塔
     if (tryUpgrade()) return;
-    if (petals >= 16) placeTower("needle");
+    if (petals >= 16) {
+      for (const extra of ["needle", "bubble", "boom", "mist", "frost"] as TowerKind[]) {
+        if (allowed(extra) && placeTower(extra)) return;
+      }
+    }
   }
 
-  while (time < SIM_TIME_CAP) {
+  /** 走一个固定步长。返回非 null 表示这一局分出胜负了。 */
+  function step(): SimResult | null {
     time += SIM_DT;
     decisionTimer -= SIM_DT;
     if (decisionTimer <= 0) {
@@ -431,7 +541,8 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
         spawnMonster(s.kind, spawnCounter++ % wpList.length);
       }
       if (spawnIdx >= spawnList.length && monsters.length === 0) {
-        petals += 3;
+        petals += def.waveReward(waveIdx);
+        wavesCleared = waveIdx + 1;
         if (waveIdx >= def.waves.length - 1) {
           return {
             win: true,
@@ -441,12 +552,13 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
             towersUpgraded,
             petalsLeft: petals,
             monstersLeaked: leaked,
+            wavesCleared,
           };
         }
         waveIdx++;
         phase = "prewave";
         phaseTimer = 2.4;
-        continue;
+        return null;
       }
     }
 
@@ -520,6 +632,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
             towersUpgraded,
             petalsLeft: petals,
             monstersLeaked: leaked,
+            wavesCleared,
           };
         }
       }
@@ -527,7 +640,7 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
 
     // ---- 塔行为 ----
     for (const t of towers) {
-      if (t.kind === "dew") continue;
+      if (t.kind === "dew" || t.kind === "chime") continue;
       if (t.kind === "sunny") {
         t.prodTimer -= SIM_DT;
         if (t.prodTimer <= 0) {
@@ -538,7 +651,9 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
       }
       t.cd -= SIM_DT;
       if (t.cd > 0) continue;
-      const range = effectiveRange(t.kind, t.level, weather);
+      const chimes = chimeLevelsAt(t.col, t.row, towers, weather);
+      const range = supportedRange(t.kind, t.level, weather, chimes);
+      const fireCd = supportedCooldown(t.kind, t.level, chimes) * SIM_CD_PENALTY;
       if (t.kind === "mist") {
         let hitAny = false;
         for (let mi = monsters.length - 1; mi >= 0; mi--) {
@@ -549,12 +664,12 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
             hitAny = true;
           }
         }
-        if (hitAny) t.cd = towerCooldown("mist", t.level) * SIM_CD_PENALTY;
+        if (hitAny) t.cd = fireCd;
         continue;
       }
       const idx = pickTarget(monsters, t.col + 0.5, t.row + 0.5, range, towerCanHitAir(t.kind));
       if (idx < 0) continue;
-      t.cd = towerCooldown(t.kind, t.level) * SIM_CD_PENALTY;
+      t.cd = fireCd;
       const target = monsters[idx];
       const dmg = towerDamage(t.kind, t.level);
       if (t.kind === "boom") {
@@ -573,6 +688,20 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
         damage(target, dmg);
       }
     }
+    return null;
+  }
+
+  // 逐帧驱动:每帧按播放速度换算成若干个固定步长。
+  // 2× 只是「同样一帧里多走几步」,步长本身不变,所以和 1× 走到的是同一个结果。
+  let carry = 0;
+  while (time < timeCap) {
+    const plan = accumulateSteps(carry, SIM_FRAME_DT, speed, SIM_DT, SIM_MAX_STEPS_PER_FRAME);
+    carry = plan.carry;
+    for (let s = 0; s < plan.steps; s++) {
+      const done = step();
+      if (done) return done;
+      if (time >= timeCap) break;
+    }
   }
 
   return {
@@ -583,5 +712,137 @@ export function simulateLevel(levelIdx: number, opts: SimOptions = {}): SimResul
     towersUpgraded,
     petalsLeft: petals,
     monstersLeaked: leaked,
+    wavesCleared,
   };
+}
+
+/* ---------------- 1.2:无尽「守到底」模拟 ---------------- */
+
+/** 前 maxWaves 波的无尽场景:塔和花瓣一路留着,心掉完就结束。 */
+export function endlessScenario(maxWaves: number): SimScenario {
+  const waves: WaveEntry[][] = [];
+  for (let n = 1; n <= maxWaves; n++) waves.push(endlessWave(n));
+  return {
+    name: "无尽 · 守到底",
+    paths: [ENDLESS_PATH],
+    waves,
+    startPetals: ENDLESS_START_PETALS,
+    hearts: ENDLESS_HEARTS,
+    unlocked: TOWER_KINDS,
+    hpLevel: (waveIdx) => endlessLevelIndex(waveIdx + 1),
+    waveReward: (waveIdx) => endlessClearReward(waveIdx + 1),
+    killReward: (kind, waveIdx) => endlessKillReward(kind, waveIdx + 1),
+  };
+}
+
+/** 固定策略在无尽里能守到第几波。 */
+export function simulateEndless(maxWaves = 40, opts: SimOptions = {}): SimResult {
+  return simulateScenario(endlessScenario(maxWaves), opts);
+}
+
+/* ---------------- 1.2:无支配塔的「去一留全」证明 ---------------- */
+
+/** 参与「去一留全」的塔(经济塔不参与:它不打人,禁掉只是变穷)。 */
+export const DOMINANCE_CANDIDATES: TowerKind[] = ["bubble", "needle", "dew", "boom", "frost", "mist", "chime"];
+
+export interface TowerMargin {
+  kind: TowerKind;
+  /** 禁掉这座塔之后还剩几颗心 */
+  heartsLeft: number;
+  win: boolean;
+  /** 边际价值 = 全塔可用的心数 - 禁掉它之后的心数。越大越不可替代。 */
+  margin: number;
+}
+
+export interface LevelDominance {
+  levelIdx: number;
+  baseHearts: number;
+  baseWin: boolean;
+  margins: TowerMargin[];
+  /** 本关边际价值并列最高的塔(可能不止一座) */
+  topKinds: TowerKind[];
+  /** 禁掉之后依然满心通关的塔 —— 有几座就说明本关至少有几套等价最优解 */
+  droppable: TowerKind[];
+}
+
+/** 单关的「去一留全」报告:只测这关已经解锁的塔。 */
+export function levelDominance(levelIdx: number): LevelDominance {
+  const unlocked = towersUnlockedAt(levelIdx, LEVELS);
+  const base = simulateLevel(levelIdx);
+  const margins: TowerMargin[] = [];
+  for (const kind of DOMINANCE_CANDIDATES) {
+    if (!unlocked.includes(kind)) continue;
+    const r = simulateLevel(levelIdx, { ban: [kind] });
+    margins.push({
+      kind,
+      heartsLeft: r.win ? r.heartsLeft : 0,
+      win: r.win,
+      margin: (base.win ? base.heartsLeft : 0) - (r.win ? r.heartsLeft : 0),
+    });
+  }
+  const best = margins.reduce((m, x) => Math.max(m, x.margin), -Infinity);
+  return {
+    levelIdx,
+    baseHearts: base.heartsLeft,
+    baseWin: base.win,
+    margins,
+    topKinds: margins.filter((m) => m.margin === best).map((m) => m.kind),
+    droppable: margins.filter((m) => m.win && m.heartsLeft >= base.heartsLeft).map((m) => m.kind),
+  };
+}
+
+/** 一组关卡的报告。 */
+export function dominanceReport(levelIdxs: ReadonlyArray<number>): LevelDominance[] {
+  return levelIdxs.map(levelDominance);
+}
+
+/**
+ * 有没有「支配塔」:在报告里的每一关都独占边际价值第一的那座塔。
+ * 返回 null = 没有支配塔,这正是我们要的结论。
+ */
+export function dominantTower(report: ReadonlyArray<LevelDominance>): TowerKind | null {
+  if (report.length === 0) return null;
+  for (const kind of DOMINANCE_CANDIDATES) {
+    const rules = report.every((r) => r.topKinds.length === 1 && r.topKinds[0] === kind);
+    if (rules) return kind;
+  }
+  return null;
+}
+
+/** 报告里当过「本关最不可替代」的塔一共有几种。种类越多,越说明各有各的舞台。 */
+export function dominanceSpread(report: ReadonlyArray<LevelDominance>): TowerKind[] {
+  const seen = new Set<TowerKind>();
+  for (const r of report) for (const k of r.topKinds) seen.add(k);
+  return [...seen];
+}
+
+/** 只留一种输出塔(外加经济塔)时还能不能守住。 */
+export const SOLO_CANDIDATES: TowerKind[] = ["bubble", "needle", "boom", "frost", "mist"];
+
+export interface SoloResult {
+  kind: TowerKind;
+  win: boolean;
+  heartsLeft: number;
+}
+
+/**
+ * 「只用这一种输出塔」的对照实验:每座塔各有各的舞台,
+ * 有的关只有对空塔守得住,有的关只有无视护甲的毒雾磨得动。
+ */
+export function soloReport(levelIdx: number): SoloResult[] {
+  const unlocked = towersUnlockedAt(levelIdx, LEVELS);
+  const out: SoloResult[] = [];
+  for (const kind of SOLO_CANDIDATES) {
+    if (!unlocked.includes(kind)) continue;
+    const ban = SOLO_CANDIDATES.filter((k) => k !== kind);
+    const r = simulateLevel(levelIdx, { ban });
+    out.push({ kind, win: r.win, heartsLeft: r.win ? r.heartsLeft : 0 });
+  }
+  return out;
+}
+
+/** 1× 与 2× 必须给出同一个结果——固定步长的核心断言。 */
+export function speedsAgree(levelIdx: number): boolean {
+  const [a, b] = SPEED_MODES.map((s) => simulateLevel(levelIdx, { speed: s }));
+  return JSON.stringify(a) === JSON.stringify(b);
 }
