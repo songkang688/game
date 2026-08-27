@@ -134,7 +134,7 @@ describe("翻翻暗棋 · 电脑对手", () => {
     expect(chooseAction(state, "star", "hell", 1)).toBe(null);
   });
 
-  it("固定 seed 下地狱档对菜鸟档，胜场明显更多", () => {
+  it("固定 seed 下大师档对新手档，胜场明显更多", () => {
     let hellWins = 0;
     let rookieWins = 0;
     for (let i = 0; i < 20; i++) {

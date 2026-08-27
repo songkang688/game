@@ -1,8 +1,11 @@
 /**
  * 翻翻暗棋 · 四档电脑对手。
  *
- * 菜鸟随便点；普通能吃就吃；高手会躲开会被吃的位置、会留着炮；
- * 地狱额外算「翻这一格的期望收益」——盖着的子还剩什么，它是记着的。
+ * 新手随便点；普通能吃就吃；高手会躲开会被吃的位置、会留着炮；
+ * 大师额外算「翻这一格的期望收益」——盖着的子还剩什么，它是记着的。
+ *
+ * 屏幕上的四个字是 `TIER_LABELS`，存档与配表用的一直是 `Tier` 的 id
+ * （`rookie` / `normal` / `pro` / `hell`），两者分开，改字不动存档。
  */
 import { RANK, rand01, type Color, type Kind } from "./board";
 import {
@@ -25,10 +28,10 @@ export type Tier = "rookie" | "normal" | "pro" | "hell";
 export const TIERS: readonly Tier[] = ["rookie", "normal", "pro", "hell"];
 
 export const TIER_LABELS: Record<Tier, string> = {
-  rookie: "菜鸟",
+  rookie: "新手",
   normal: "普通",
   pro: "高手",
-  hell: "地狱",
+  hell: "大师",
 };
 
 /** 兵种价值：兵便宜、将最贵，但兵能请将休息所以也不算太便宜 */
@@ -95,7 +98,7 @@ export function scoreAction(state: GameState, side: Side, a: Action, tier: Tier)
   if (tier === "rookie") return base;
   if (tier === "normal") return base;
 
-  // 高手起：看看落点会不会被反吃，顺便别把炮随便挪到没有炮架的地方
+  // 高手档起：看看落点会不会被反吃，顺便别把炮随便挪到没有炮架的地方
   const risk = hangsAt(next, a.to, side);
   let score = base - risk * 1.1;
   const moved = next.cells[a.to];

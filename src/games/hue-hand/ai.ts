@@ -3,12 +3,13 @@
  *
  * | 档位 | 打法 |
  * | --- | --- |
- * | 菜鸟 | 有什么出什么,从来记不住按「就一张」 |
+ * | 新手 | 有什么出什么,从来记不住按「就一张」 |
  * | 普通 | 留着功能牌,优先出手上最多的那个颜色 |
  * | 高手 | 记别人缺什么色、会质疑加四、会看下家还剩几张 |
- * | 地狱 | 会堵下家(专挑下家缺的颜色)、会卡叠加链、会点破你忘喊 |
+ * | 大师 | 会堵下家(专挑下家缺的颜色)、会卡叠加链、会点破你忘喊 |
  *
  * AI 只用公开信息:台面、各家手牌张数、谁抽过什么颜色的牌。不偷看别人的手。
+ * 屏幕上的四个字是 `TIER_NAMES`,配表与存档用的一直是 `AiTier` 的 id,两者分开。
  */
 import { COLORS, isDrawCard, isWild, type Card, type Color } from "./deck";
 import {
@@ -23,10 +24,10 @@ import {
 export type AiTier = "rookie" | "normal" | "expert" | "hell";
 
 export const TIER_NAMES: Record<AiTier, string> = {
-  rookie: "菜鸟",
+  rookie: "新手",
   normal: "普通",
   expert: "高手",
-  hell: "地狱",
+  hell: "大师",
 };
 
 export type AiAction =
@@ -74,7 +75,7 @@ export function aiShouldChallenge(state: HueState, tier: AiTier): boolean {
 export function aiPickColor(state: HueState, tier: AiTier, hand: readonly Card[]): Color {
   const mine = bestColor(hand, state.color);
   if (TIER_RANK[tier] < 3) return mine;
-  // 地狱档:先想着堵下家。下家明显缺的颜色里,挑自己也拿得出手的那一个
+  // 大师档:先想着堵下家。下家明显缺的颜色里,挑自己也拿得出手的那一个
   const foe = state.players[nextSeat(state)];
   const blocked = COLORS.filter((c) => foe?.lacks.includes(c));
   if (blocked.length > 0) {
@@ -130,7 +131,7 @@ export function aiPlay(state: HueState, tier: AiTier): AiAction {
     if (mustTakeChain(state, me)) return { type: "take" };
     const stacks = legalPlays(state, me);
     if (stacks.length === 0) return { type: "take" };
-    // 地狱档会卡链:能续就续,把整摞塞给下家
+    // 大师档会卡链:能续就续,把整摞塞给下家
     if (TIER_RANK[tier] >= 1 && stacks.length > 1) {
       const sorted = stacks.slice().sort((a, b) => rate(state, tier, b, hand) - rate(state, tier, a, hand));
       const pick = tier === "hell" ? stacks[0] : sorted[0];

@@ -209,6 +209,16 @@ describe("翻翻暗棋 · 文案红线", () => {
     }
   });
 
+  it("四个档名对低龄用户不带刺，换字没动档位 id", () => {
+    expect(TIERS.map((t) => TIER_LABELS[t])).toEqual(["新手", "普通", "高手", "大师"]);
+    expect(TIERS).toEqual(["rookie", "normal", "pro", "hell"]);
+    for (const line of allText()) {
+      for (const w of ["菜鸟", "地狱"]) {
+        expect(line.includes(w), `「${w}」出现在：${line}`).toBe(false);
+      }
+    }
+  });
+
   it("攻略结构完整：八章条目覆盖第 1 关到第 188 关", () => {
     expect(GUIDE.gameId).toBe(meta.id);
     expect(GUIDE.general.length).toBeGreaterThanOrEqual(3);

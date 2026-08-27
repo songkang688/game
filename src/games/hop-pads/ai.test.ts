@@ -2,7 +2,7 @@
  * 跳跳台 · 幽灵对手的回归。
  *
  * 规格第十节要:四档噪声分别是 ±25% / ±12% / ±5% / ±1.5%,
- * 而且固定 seed 下地狱幽灵的得分要显著高于菜鸟 —— 写成断言。
+ * 而且固定 seed 下大师幽灵的得分要显著高于新手 —— 写成断言。
  */
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "../level99";
@@ -35,6 +35,15 @@ describe("档位设定", () => {
   it("四档都有中文名", () => {
     expect(AI_TIERS).toEqual(["rookie", "normal", "expert", "hell"]);
     for (const t of AI_TIERS) expect(TIER_NAMES[t].length).toBeGreaterThan(1);
+  });
+
+  it("档名对低龄用户不带刺,而且换字没动档位 id", () => {
+    expect(Object.values(TIER_NAMES)).toEqual(["新手", "普通", "高手", "大师"]);
+    expect(Object.keys(TIER_NAMES)).toEqual(["rookie", "normal", "expert", "hell"]);
+    for (const t of AI_TIERS) {
+      expect(TIER_NAMES[t]).not.toContain("菜鸟");
+      expect(TIER_NAMES[t]).not.toContain("地狱");
+    }
   });
 
   it("加噪声之后力度还是合法的 0–1,而且档位越高越贴着理想值", () => {
@@ -73,7 +82,7 @@ function totalScore(tier: AiTier, seeds: number[]): number {
 }
 
 describe("幽灵重放", () => {
-  it("固定 seed 下,地狱幽灵的得分显著高过菜鸟", () => {
+  it("固定 seed 下,大师幽灵的得分显著高过新手", () => {
     const seeds = [11, 22, 33, 44, 55, 66, 77, 88];
     const rookie = totalScore("rookie", seeds);
     const hell = totalScore("hell", seeds);
@@ -90,7 +99,7 @@ describe("幽灵重放", () => {
     }
   });
 
-  it("地狱档几乎跳跳完美,菜鸟经常掉下去", () => {
+  it("大师档几乎跳跳完美,新手经常掉下去", () => {
     const seeds = [11, 22, 33, 44, 55, 66, 77, 88];
     const hellFalls = seeds.filter((s) => playGhost(s, DIFF, "hell", 30).fell).length;
     const rookieFalls = seeds.filter((s) => playGhost(s, DIFF, "rookie", 30).fell).length;
@@ -120,7 +129,7 @@ describe("幽灵重放", () => {
     expect(ghostLine("hell", g, g.score + 10)).toContain("你赢了");
     expect(ghostLine("hell", g, g.score)).toContain("平手");
     const lost = ghostLine("hell", g, 0);
-    expect(lost).toContain("地狱");
+    expect(lost).toContain("大师");
     for (const bad of ["笨", "太差", "菜死"]) expect(lost).not.toContain(bad);
   });
 });

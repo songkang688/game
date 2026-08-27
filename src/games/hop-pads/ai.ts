@@ -3,7 +3,10 @@
  *
  * 做法就两步:先把这条台序的**理想力度序列**录下来(每一跳正好踩中台心需要多大力),
  * 再按档位往上加一层噪声重放。档位只改噪声幅度,不改任何别的能力 ——
- * 所以「地狱几乎跳跳完美、菜鸟经常掉下去」是同一套手感自然长出来的差距,不是硬调分数。
+ * 所以「大师几乎跳跳完美、新手经常掉下去」是同一套手感自然长出来的差距,不是硬调分数。
+ *
+ * 屏幕上的四个字是 `TIER_NAMES`,存档与配表用的一直是 `AiTier` 的 id
+ * (`rookie` / `normal` / `expert` / `hell`),两者分开,改字不动存档。
  */
 import { mulberry32 } from "../level99";
 import { clamp01 } from "./physics";
@@ -15,10 +18,10 @@ export type AiTier = "rookie" | "normal" | "expert" | "hell";
 export const AI_TIERS: readonly AiTier[] = ["rookie", "normal", "expert", "hell"];
 
 export const TIER_NAMES: Record<AiTier, string> = {
-  rookie: "菜鸟",
+  rookie: "新手",
   normal: "普通",
   expert: "高手",
-  hell: "地狱",
+  hell: "大师",
 };
 
 /** 各档的力度误差幅度(相对理想力度的百分比) */

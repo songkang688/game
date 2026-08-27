@@ -17,7 +17,7 @@ export const CHAPTERS: Chapter[] = [
   { name: "记牌", emoji: "🧠", color: "#E6F2F0", desc: "算一算还有哪些子没翻，心里就有底。", size: 22 },
   { name: "残局明棋", emoji: "🀄️", color: "#F2E7F7", desc: "全部翻开的残局，一步一步算清楚。", size: 22 },
   { name: "逼到无棋", emoji: "🚧", color: "#FFF0CE", desc: "让对方既没子可动也没盖子可翻。", size: 24 },
-  { name: "暗棋杯", emoji: "🏆", color: "#DCEFE2", desc: "地狱档全规则，翻子看运气也看脑子。", size: 24 },
+  { name: "暗棋杯", emoji: "🏆", color: "#DCEFE2", desc: "大师档全规则，翻子看运气也看脑子。", size: 24 },
 ];
 
 export const TOTAL = 188;

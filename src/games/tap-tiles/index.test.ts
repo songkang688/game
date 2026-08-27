@@ -406,9 +406,9 @@ describe("另外三种模式", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
     byText("同谱对战")?.click();
-    byText("地狱")?.click();
+    byText("大师")?.click();
     byText("开始")?.click();
-    expect(hudText()).toContain("地狱");
+    expect(hudText()).toContain("大师");
     expect(hudText()).toMatch(/\d+ 分/);
     handle.destroy();
   });

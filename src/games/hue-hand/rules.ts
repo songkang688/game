@@ -151,7 +151,7 @@ export interface HuePlayer {
   hand: Card[];
   /** 这一轮已经按过「就一张」 */
   called: boolean;
-  /** 别人看在眼里的「他缺这些颜色」(抽牌时暴露的信息,高手与地狱 AI 会用) */
+  /** 别人看在眼里的「他缺这些颜色」(抽牌时暴露的信息,高手与大师 AI 会用) */
   lacks: Color[];
 }
 

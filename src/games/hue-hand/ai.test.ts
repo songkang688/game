@@ -10,7 +10,12 @@ function card(kind: Card["kind"], color: Color | null, num?: number): Card {
 }
 
 describe("AI 档位的性格", () => {
-  it("菜鸟有什么出什么:手上第一张能出的就打", () => {
+  it("四档的中文名不带刺,档位 id 一个字母没动", () => {
+    expect(Object.values(TIER_NAMES)).toEqual(["新手", "普通", "高手", "大师"]);
+    expect(Object.keys(TIER_NAMES)).toEqual(["rookie", "normal", "expert", "hell"]);
+  });
+
+  it("新手有什么出什么:手上第一张能出的就打", () => {
     const state = createGame({
       players: 2,
       seed: 1,
@@ -60,7 +65,7 @@ describe("AI 档位的性格", () => {
     expect(aiPlay(state, "normal").type).toBe("take");
   });
 
-  it("高手会质疑可疑的加四,菜鸟从来不质疑", () => {
+  it("高手会质疑可疑的加四,新手从来不质疑", () => {
     const state = createGame({
       players: 2,
       seed: 1,
@@ -102,7 +107,7 @@ describe("AI 档位的性格", () => {
     expect(aiShouldChallenge(state, "expert")).toBe(false);
   });
 
-  it("地狱档换色专挑下家缺的颜色", () => {
+  it("大师档换色专挑下家缺的颜色", () => {
     const state = createGame({
       players: 2,
       seed: 1,
@@ -119,7 +124,7 @@ describe("AI 档位的性格", () => {
     );
   });
 
-  it("只有高手和地狱会点破别人忘喊,菜鸟自己也记不住喊", () => {
+  it("只有高手和大师会点破别人忘喊,新手自己也记不住喊", () => {
     expect(aiCallsOneCard("rookie")).toBe(false);
     expect(aiCallsOneCard("normal")).toBe(true);
     expect(aiCatchesOneCard("normal")).toBe(false);
@@ -130,11 +135,11 @@ describe("AI 档位的性格", () => {
 });
 
 describe("档位强弱", () => {
-  it("固定种子下,地狱档打菜鸟档 30 局的胜率明显更高", () => {
+  it("固定种子下,大师档打新手档 30 局的胜率明显更高", () => {
     const report = duel("hell", "rookie", 30);
     expect(report.games).toBe(30);
     expect(report.wins[0] + report.wins[1]).toBe(30);
-    expect(report.wins[0], `地狱 ${report.wins[0]} : ${report.wins[1]} 菜鸟`).toBeGreaterThanOrEqual(21);
+    expect(report.wins[0], `大师 ${report.wins[0]} : ${report.wins[1]} 新手`).toBeGreaterThanOrEqual(21);
     expect(report.wins[0]).toBeGreaterThan(report.wins[1] * 2);
   });
 

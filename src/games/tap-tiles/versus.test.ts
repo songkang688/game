@@ -1,7 +1,7 @@
 /**
  * 音符下落 · 同谱对战的胜负判定回归（QA 第 1 轮 · 包 B · B-2）。
  *
- * 测试员实测：地狱档假人在同一张谱上就是满分，孩子每一个音符都踩正点拿到的也是同一个满分，
+ * 测试员实测：大师档假人在同一张谱上就是满分，孩子每一个音符都踩正点拿到的也是同一个满分，
  * 旧的 `state.score > rivalScore` 把这局判给对手，结算却写着「你 7800 分 · 对手 7800 分」。
  * 这里守住三件事：赢仍旧要严格大于、平分就是平局、平局既不算玩家赢也不算对手赢。
  */
@@ -83,7 +83,7 @@ afterEach(() => {
 });
 
 describe("同谱对战的胜负判定", () => {
-  it("地狱档假人在第 1 局这张谱上确实是满分（平局这件事真会发生）", () => {
+  it("大师档假人在第 1 局这张谱上确实是满分（平局这件事真会发生）", () => {
     const chart = matchChart(1);
     // 对战里假人用的种子就是 chart.seed + 5
     expect(aiRun(chart, "hell", chart.seed + 5).score).toBe(aiRun(chart, "hell", chart.seed + 5).score);
@@ -93,7 +93,7 @@ describe("同谱对战的胜负判定", () => {
   it("打平不算输：两边同分时说的是平局，比分不记给任何一方", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
-    const chart = openVersus(rec, "地狱");
+    const chart = openVersus(rec, "大师");
     playPerfect(chart);
 
     const rival = aiRun(chart, "hell", chart.seed + 5).score;
@@ -110,10 +110,10 @@ describe("同谱对战的胜负判定", () => {
     handle.destroy();
   });
 
-  it("赢仍旧是严格大于：菜鸟档打满分就是玩家赢，比分记给玩家", () => {
+  it("赢仍旧是严格大于：新手档打满分就是玩家赢，比分记给玩家", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
-    const chart = openVersus(rec, "菜鸟");
+    const chart = openVersus(rec, "新手");
     const rival = aiRun(chart, "rookie", chart.seed + 5).score;
     playPerfect(chart);
 
@@ -129,7 +129,7 @@ describe("同谱对战的胜负判定", () => {
   it("一下不点就是真输：对手分高才记给对手", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
-    openVersus(rec, "菜鸟");
+    openVersus(rec, "新手");
     flushFrames(dom, 30, 900);
 
     const panel = overText();

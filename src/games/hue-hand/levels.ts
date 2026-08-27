@@ -8,7 +8,7 @@
  * `levels.test.ts` 会把 188 关整个回放一遍来兜底。
  */
 import { TOTAL_LEVELS, chapterOf, chapterStart, rateBelow, type Chapter } from "../level99";
-import type { AiTier } from "./ai";
+import { TIER_NAMES, type AiTier } from "./ai";
 import { buildDeck, shuffle, type Card, type CardKind } from "./deck";
 import { firstLeadScore, simulateGame, simulateMatch } from "./sim";
 
@@ -288,7 +288,7 @@ export function buildEndlessRound(streak: number): RoundConfig {
     kinds: ALL_KINDS,
     handSize: 7,
     seed: 640000 + n * 2711,
-    hint: `第 ${n} 局 · 对手是「${tier === "rookie" ? "菜鸟" : tier === "normal" ? "普通" : tier === "expert" ? "高手" : "地狱"}」档 · 输一局就从头再来`,
+    hint: `第 ${n} 局 · 对手是「${TIER_NAMES[tier]}」档 · 输一局就从头再来`,
   };
 }
 

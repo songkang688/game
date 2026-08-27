@@ -394,7 +394,7 @@ describe("四种模式都开得出来", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
     byText("幽灵对战")!.dispatch("click");
-    expect(dom.root.textContent).toContain("地狱");
+    expect(dom.root.textContent).toContain("大师");
     expect(dom.root.findAll((e) => e.className.includes("hp-canvas"))).toHaveLength(0);
     byText("开跳")!.dispatch("click");
     expect(dom.root.findAll((e) => e.className.includes("hp-canvas"))).toHaveLength(1);

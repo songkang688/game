@@ -166,7 +166,7 @@ describe("关卡真的过得去", () => {
     }
   });
 
-  it("第 1 章连菜鸟档的手感(±25% 误差)都过得去 —— 新手不会一上来就卡死", () => {
+  it("第 1 章连新手档的手感(±25% 误差)都过得去 —— 新手不会一上来就卡死", () => {
     for (let lv = 0; lv < 24; lv += 4) {
       const l = buildLevel(lv);
       const g = playGhost(l.seed, l.difficulty, "rookie", l.goal);
