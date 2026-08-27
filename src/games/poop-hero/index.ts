@@ -119,10 +119,10 @@ const PALETTES: Palette[] = [
   { sky0: "#F0EBFC", sky1: "#F9F5FF", far: "#D8CEF2", ground: "#B79CE8", groundDark: "#E2D7F6", deco: "#9B7ADC" },
 ];
 
-/** 两位小主角的配色:朵朵粉披风,星星蓝披风 */
+/** 两位小主角的配色:朵朵粉披风,星星蓝披风(星星披风与 HERO_VIS 同步加深,A-9) */
 const HERO_COLORS = [
   { body: "#FFD9A8", cape: "#FF8FB8", capeDark: "#E4699A", mask: "#7B4DA8", name: "朵朵" },
-  { body: "#FFE2BE", cape: "#7FB2FF", capeDark: "#5A8ADD", mask: "#2F6BAE", name: "星星" },
+  { body: "#FFE2BE", cape: "#6690E0", capeDark: "#4E74C2", mask: "#2F6BAE", name: "星星" },
 ];
 
 // 1.3 视觉升级:变花全部改为自绘五瓣花(FLOWER_STYLES),豆豆怪糖果色原值搬去 visual.ts,
@@ -1014,6 +1014,18 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx2.beginPath();
     ctx2.arc(headR * 0.06, headCY + headR * 0.34, headR * 0.24, 0.1 * Math.PI, 0.9 * Math.PI);
     ctx2.stroke();
+
+    // 剪影级附件(A-9 双人灰度可分):星星头顶一枚星星发卡,伸出头圆改变轮廓,
+    // 16px 缩略下也能靠外形认人——所以它**不走 showDetail 门槛**,多小都画
+    if (pi % HERO_VIS.length === 1) {
+      const pinR = Math.max(2, headR * 0.55);
+      ctx2.fillStyle = "#F5C542";
+      traceStar(ctx2, headR * 0.55, headCY - headR * 0.98, pinR);
+      ctx2.fill();
+      ctx2.strokeStyle = "#B4831E";
+      ctx2.lineWidth = 1;
+      ctx2.stroke();
+    }
 
     // ── 工序⑧ 手套 / 靴子色块收边 + 跑动 4 帧腿摆(reduced 2 帧)
     const swings = gentle ? [-1, 1] : [-1, 0, 1, 0];

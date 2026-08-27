@@ -54,6 +54,10 @@ export const PH_TOKENS = {
 /**
  * 两位小主角的 1.3 视觉套装:朵朵粉披风蓝衣、星星蓝披风粉衣。
  * 粉彩原创撞色,和超人 / 蝙蝠侠 / 奥特曼的标志配色组合零相似(无 S 徽章、无红蓝撞色)。
+ *
+ * R1 修复(A-9 双人 16px 灰度可分):星星披风从 #7FA9F0 加深到 #6690E0,
+ * 两人披风的 Rec.601 灰阶差从 Δ4 拉开到 Δ≈29(≥25 可辨阈值);
+ * 再配 drawHero 里星星的剪影级星星发卡,灰度下有「亮度 + 轮廓」两条可靠通道。
  */
 export const HERO_VIS = [
   {
@@ -73,14 +77,14 @@ export const HERO_VIS = [
     name: "星星",
     skin: "#FFE2BE",
     hair: "#8A6A4A",
-    capeOut0: "#7FA9F0",
-    capeOut1: shade("#7FA9F0", -18),
+    capeOut0: "#6690E0",
+    capeOut1: shade("#6690E0", -18),
     capeIn: "#E9F2FF",
     suit: "#F490AC",
     suitHi: shade("#F490AC", 25),
     mask: "#2F6BAE",
     glove: "#FFF4E0",
-    boot: shade("#7FA9F0", -10),
+    boot: shade("#6690E0", -10),
   },
 ] as const;
 

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { BINS, TRASH_ITEMS } from "./trash";
 import { drawBinIcon, drawScentStar, drawTrashItem } from "./trashArt";
+import { HERO_VIS } from "./visual";
 
 const SRC = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
 
@@ -111,5 +112,34 @@ describe("窗口7 R1 修复 · A-5/A-11 分类桶:功能图标自绘 + 桶签图
     expect(SRC).toContain("Math.max(14, Math.round(11 * Math.max(0.85, scale)))");
     expect(SRC).toContain('"900 14px system-ui,sans-serif"');
     expect(SRC).not.toContain('"900 12px system-ui,sans-serif"');
+  });
+});
+
+/** Rec.601 灰度(0–255):16px 缩略可辨性按这个亮度算 */
+function luma601(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.299 * ((n >> 16) & 0xff) + 0.587 * ((n >> 8) & 0xff) + 0.114 * (n & 0xff);
+}
+
+describe("窗口7 R1 修复 · A-9 双人 16px 灰度可分", () => {
+  it("两人披风的 Rec.601 灰阶差 ≥25(修前 Δ4)", () => {
+    const delta = Math.abs(luma601(HERO_VIS[0].capeOut0) - luma601(HERO_VIS[1].capeOut0));
+    expect(delta).toBeGreaterThanOrEqual(25);
+  });
+
+  it("星星戴剪影级星星发卡,且不走 showDetail 降级门槛", () => {
+    const at = SRC.indexOf("剪影级附件");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const block = SRC.slice(at, SRC.indexOf("工序⑧", at));
+    expect(block).toContain("traceStar(");
+    // 发卡是认人轮廓,多小都画:块内不许出现 showDetail 门槛
+    expect(block).not.toContain("showDetail(");
+    // 只给星星(pi 1)戴,朵朵不戴,两人轮廓才有差异
+    expect(block).toContain("pi % HERO_VIS.length === 1");
+  });
+
+  it("边缘方位标 HERO_COLORS 星星披风与 HERO_VIS 同步加深", () => {
+    expect(SRC).toContain('cape: "#6690E0"');
+    expect(SRC).not.toContain('"#7FB2FF"');
   });
 });
