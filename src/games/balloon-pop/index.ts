@@ -20,6 +20,9 @@ import {
   chainDelays,
   chainGroup,
   chainScore,
+  FEST_CHUNK,
+  FEST_LOOKAHEAD,
+  festExtend,
   festInit,
   festGift,
   festMiss,
@@ -646,7 +649,8 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
   let disposed = false;
   let clock = 0;
   let lastTime = 0;
-  let plan = festPlan((Date.now() ^ 0x9e3779b9) >>> 0, 900);
+  let festSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+  let plan = festPlan(festSeed, FEST_CHUNK);
   let planAt = 0;
   let st: FestState = festInit();
   let nextId = 1;
@@ -849,7 +853,15 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
     score(b.kind, n, b.far);
   }
 
+  /** 出场表快见底就再续一段——气球节没有「出完」这回事，只有三个漏掉 */
+  function topUpPlan(): void {
+    if (planAt < plan.length - FEST_LOOKAHEAD) return;
+    festSeed = (festSeed * 1664525 + 1013904223) >>> 0;
+    plan = plan.concat(festExtend(plan, festSeed, FEST_CHUNK));
+  }
+
   function spawnFromPlan(): void {
+    topUpPlan();
     while (planAt < plan.length && plan[planAt].at <= clock) {
       const wave = planAt;
       const p = plan[planAt++];
@@ -942,7 +954,8 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
     for (const b of balloons) b.el.remove();
     balloons.length = 0;
     twinOf.clear();
-    plan = festPlan((Date.now() ^ (nextId * 2654435761)) >>> 0, 900);
+    festSeed = (Date.now() ^ (nextId * 2654435761)) >>> 0;
+    plan = festPlan(festSeed, FEST_CHUNK);
     planAt = 0;
     clock = 0;
     st = festInit();

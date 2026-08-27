@@ -470,14 +470,26 @@ export function festGiftFlightS(wave: number): number {
   return (SKY_H + 40 - ESCAPE_Y) / (festRiseSpeed(wave) * GIFT_RISE_MUL);
 }
 
-/** 一整场气球节的出场表：同一个种子永远是同一场（可复现） */
-export function festPlan(seed: number, count: number, colors = 5): FestSpawn[] {
+/** 气球节一次排这么多个，出完再续一段——所以天空不会空掉 */
+export const FEST_CHUNK = 900;
+
+/** 出场表只剩这么多个没出场时就提前续段，别等真的见底 */
+export const FEST_LOOKAHEAD = 60;
+
+/**
+ * 气球节的一段出场表：同一个种子永远是同一段（可复现）。
+ *
+ * `fromWave` 是这一段的第一个在整场里排第几，`startAt` 是它的出场时刻。
+ * 间隔与上升速度都按绝对波次算，所以续出来的那一段接着变密变快。
+ */
+export function festPlan(seed: number, count: number, colors = 5, fromWave = 0, startAt = 0.6): FestSpawn[] {
   const rand = mulberry32(seed >>> 0);
   const out: FestSpawn[] = [];
-  let at = 0.6;
+  let at = startAt;
   // 上一个礼物气球飘到顶的时刻：在这之前再排一个礼物就会撞上限，降级成普通球
   let giftFreeAt = 0;
   for (let i = 0; i < count; i++) {
+    const wave = fromWave + i;
     const r = rand();
     let kind: BalloonKind = "normal";
     if (r < 0.06) kind = "cloud";
@@ -488,7 +500,7 @@ export function festPlan(seed: number, count: number, colors = 5): FestSpawn[] {
     else if (r < 0.43) kind = "twin";
     if (kind === "gift") {
       if (at < giftFreeAt) kind = "normal";
-      else giftFreeAt = at + festGiftFlightS(i);
+      else giftFreeAt = at + festGiftFlightS(wave);
     }
     out.push({
       at,
@@ -498,9 +510,17 @@ export function festPlan(seed: number, count: number, colors = 5): FestSpawn[] {
       x: 8 + rand() * 76,
       far: rand() < 0.22
     });
-    at += festSpawnMs(i) / 1000;
+    at += festSpawnMs(wave) / 1000;
   }
   return out;
+}
+
+/** 接着 `prev` 这一段往下续一段：波次与时刻都接得上，礼物上限也接着守 */
+export function festExtend(prev: readonly FestSpawn[], seed: number, count = FEST_CHUNK, colors = 5): FestSpawn[] {
+  const fromWave = prev.length;
+  if (fromWave === 0) return festPlan(seed, count, colors);
+  const last = prev[fromWave - 1];
+  return festPlan(seed, count, colors, fromWave, last.at + festSpawnMs(fromWave - 1) / 1000);
 }
 
 /** 戳破一颗气球在气球节里值多少分 */

@@ -15,8 +15,13 @@ import {
   festPlan, festSpawnMs, festRiseSpeed, festInit, festPop, festMiss, festGift,
   FEST_MISS_LIMIT, festScoreFor, festGiftFlightS, floatAt, isHit,
   SKY_H, ESCAPE_Y, BALLOON_W, BALLOON_H, HIT_PAD, MIN_BALLOON_D, GIFT_RISE_MUL,
+  festExtend, FEST_CHUNK,
   type ChainNode
 } from "./logic";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const SRC = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
 
 /** 这一轮抽查的关卡：四类目标都覆盖到，一个第 1 关都不带 */
 const SPOTS = [12, 27, 41, 55, 68, 83, 96, 108, 121, 137, 152, 166, 181];
@@ -289,23 +294,54 @@ describe("戳戳小气球 · R2 · 气球节能不能一直戳下去", () => {
   });
 
   /**
-   * W4A-12（中等）· 气球节其实只有五分四十秒。
+   * W4A-12（中等）· 已由本轮监督修复员修掉。
    *
-   * `reset()` 排的是一张 900 个球的固定表，`spawnFromPlan` 走完就不再出球；
+   * 原状：`reset()` 排一张 900 个球的固定表，`spawnFromPlan` 走完就不再出球，
    * 而 `tick` 里没有任何「表用完了」的分支——`st.over` 只会被「放跑三个」点亮。
-   * 所以孩子要是一个都没放跑，第 341 秒之后天空会彻底空掉：
-   * 不再出球、不结算、不给分，画面就那样一直挂着，只能按退出。
-   * 比「无尽提前收工」更难受的是它连收工都没有。
-   * 记录在案，交给学习优化员：表走完要接着排，别让天空空掉。
+   * 孩子要是一个都没放跑，第 341 秒之后天空彻底空掉：不出球、不结算、不给分。
+   *
+   * 现状：900 个改成「一段」（`FEST_CHUNK`）。`spawnFromPlan` 每帧先 `topUpPlan()`，
+   * 只剩 `FEST_LOOKAHEAD` 个没出场就用 `festExtend` 续下一段。
    */
-  it("W4A-12 特征化：900 个球的表 341 秒就走完，之后天空是空的", () => {
-    const plan = festPlan(7, 900);
-    const total = plan[plan.length - 1].at;
-    expect(total).toBeGreaterThan(300);
-    expect(total).toBeLessThan(400);
-    expect(plan.every((p) => p.at <= total)).toBe(true);
-    // 表本身是有限的：不存在「排到第 900 个之后还有」
-    expect(plan.length).toBe(900);
+  it("W4A-12 已修：一段接一段续得下去，续到一小时以后天上还有球", () => {
+    let plan = festPlan(7, FEST_CHUNK);
+    expect(plan[plan.length - 1].at).toBeLessThan(400);
+
+    let seed = 7;
+    for (let seg = 0; seg < 10; seg++) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      plan = plan.concat(festExtend(plan, seed, FEST_CHUNK));
+    }
+    expect(plan.length).toBe(FEST_CHUNK * 11);
+    expect(plan[plan.length - 1].at).toBeGreaterThan(55 * 60);
+  });
+
+  it("W4A-12 已修：接缝处的间隔就是封顶的 360ms，不会突然静场也不会挤成一堆", () => {
+    const head = festPlan(31, FEST_CHUNK);
+    const tail = festExtend(head, 32, FEST_CHUNK);
+    const seam = tail[0].at - head[head.length - 1].at;
+    expect(seam).toBeCloseTo(festSpawnMs(FEST_CHUNK - 1) / 1000, 6);
+    expect(seam).toBeCloseTo(0.36, 6);
+    // 续段内部的时刻严格递增，一个都不会往回排
+    for (let i = 1; i < tail.length; i++) expect(tail[i].at).toBeGreaterThan(tail[i - 1].at);
+  });
+
+  it("W4A-12 已修：续段里礼物球照样不撞上限——两个礼物之间隔得够飘完", () => {
+    const head = festPlan(88, FEST_CHUNK);
+    const tail = festExtend(head, 89, FEST_CHUNK);
+    const gifts = tail.filter((p) => p.kind === "gift");
+    expect(gifts.length).toBeGreaterThan(0);
+    for (let i = 1; i < gifts.length; i++) {
+      expect(gifts[i].at - gifts[i - 1].at).toBeGreaterThanOrEqual(festGiftFlightS(999) - 1e-9);
+    }
+  });
+
+  it("W4A-12 已修：index.ts 每帧都先续表，天空不会空掉", () => {
+    expect(SRC).toMatch(/function topUpPlan/);
+    expect(SRC).toMatch(/festExtend\(plan, festSeed, FEST_CHUNK\)/);
+    expect(SRC).toMatch(/function spawnFromPlan\(\): void \{\s*topUpPlan\(\);/);
+    // 不再有写死的 900
+    expect(SRC).not.toMatch(/festPlan\([^)]*,\s*900\)/);
   });
 
   it("真戳一场：连击一直加分，加成封顶在每颗 +20", () => {
