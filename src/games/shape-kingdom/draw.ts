@@ -2,7 +2,7 @@
  * 形状王国 · 作图题（1.2 新增，第 100–188 关里的动手关）。
  *
  * 三类动手题，判定**全部**走纯函数，界面只负责收集孩子摆出来的格子：
- *  ① `rect`   —— 在点阵上拖两个点画长方形，按给定的周长或面积判定；
+ *  ① `rect`   —— 在点阵上点两个点（或者按住拖）画长方形，按给定的周长或面积判定；
  *  ② `symfill`—— 图形沿竖直对称轴补全另一半，判定是「格子集合相等」；
  *  ③ `tiling` —— 几块多联骨牌拼满目标轮廓，判定是「并集等于轮廓且互不重叠」。
  *
@@ -353,8 +353,8 @@ function makeRectTask(rand: () => number, hard: boolean): RectTask {
   const target = goal === "area" ? got.area : got.perimeter;
   const ask =
     goal === "area"
-      ? `拖两个点，画一个面积是 ${target} 平方厘米的长方形`
-      : `拖两个点，画一个周长是 ${target} 厘米的长方形`;
+      ? `点两个点（或者按住拖），画一个面积是 ${target} 平方厘米的长方形`
+      : `点两个点（或者按住拖），画一个周长是 ${target} 厘米的长方形`;
   const hints =
     goal === "area"
       ? trio(
