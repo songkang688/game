@@ -42,6 +42,7 @@ import {
   normBox,
   type FanSlot,
 } from "./fan";
+import { fitTableStage } from "./fit";
 import {
   CHAPTERS,
   LEVELS,
@@ -256,6 +257,37 @@ const CSS = `
   .ldc-subbar .ld-btn{min-height:44px;font-size:12px;padding:5px 8px;}
   .ldc-hintline{font-size:11px;}
 }
+/* --- 舞台矮到装不下这一桌时逐档收紧(fit.ts 实测祖先裁切线后挂上来,窗口5 第2轮 W5R2-A-05) ---
+   收的是留白、字号与对家面板上的装饰;出牌那一排 48px、底下那一排 44px、
+   以及手牌本身一分不动——为了装得下把热区收到 44 以下,等于换一种点不着。 */
+.ldc-tight{padding:7px;gap:4px;}
+.ldc-tight .ld-banner{font-size:11px;line-height:1.35;}
+.ldc-tight .ld-foe{padding:3px 5px;gap:3px;}
+.ldc-tight .ld-face{width:24px;height:24px;font-size:14px;border-width:1px;}
+.ldc-tight .ld-foe-name{font-size:10px;}
+.ldc-tight .ld-role{font-size:10px;padding:0 6px;}
+.ldc-tight .ld-count{font-size:11px;}
+.ldc-tight .ld-mini{min-height:16px;gap:1px;}
+.ldc-tight .ld-mini-c{width:12px;height:16px;font-size:8px;border-radius:3px;}
+.ldc-tight .ld-bubble{font-size:11px;padding:1px 7px;}
+.ldc-tight .ld-center{min-height:28px;gap:2px;}
+.ldc-tight .ldc-table{min-height:28px;padding:3px 8px;gap:4px;}
+.ldc-tight .ld-chip{font-size:11px;padding:2px 8px;}
+.ldc-tight .ld-say{font-size:12px;min-height:16px;line-height:1.35;}
+.ldc-tight .ld-mehead{gap:5px;}
+.ldc-tight .ldc-hintline{font-size:10px;padding:3px 7px;line-height:1.35;}
+/* 键盘那一行对触屏没用,而它正压在底下那一排按钮下面 */
+.ldc-tight .ld-keys{display:none;}
+.ldc-tighter{padding:6px;gap:3px;}
+.ldc-tighter .ld-banner{font-size:10px;line-height:1.3;}
+/* 小牌背只是好看,「还剩几张」那行字说的是同一件事 */
+.ldc-tighter .ld-mini{display:none;}
+.ldc-tighter .ld-face{width:20px;height:20px;font-size:12px;}
+.ldc-tighter .ld-foe{padding:2px 4px;}
+.ldc-tighter .ld-center{min-height:22px;}
+.ldc-tighter .ldc-table{min-height:24px;padding:2px 7px;}
+.ldc-tighter .ld-say{font-size:11px;min-height:14px;}
+.ldc-tighter .ldc-hintline{font-size:10px;padding:2px 6px;}
 @media (prefers-reduced-motion:reduce){
   .ldc-card-move{transition:none;}
 }
@@ -428,6 +460,9 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
   flyLayer.className = "ldc-fly-layer";
   wrap.append(style, banner, foesEl, centerEl, meHead, fanBox, hintEl, btnsEl, subEl, keysEl, flyLayer);
   host.appendChild(wrap);
+
+  /** 舞台太矮时的收紧器,整桌摆完才装得上(render 里会回头叫它重量) */
+  let fit: { relayout: () => void; dispose: () => void } | null = null;
 
   /** 手牌里每张牌对应的那个 div:留着复用才有「重排滑动」,每次重建就只会瞬移 */
   const cardEls = new Map<number, HTMLElement>();
@@ -804,6 +839,8 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     renderButtons();
     renderKeys();
     renderCover();
+    // 叫分那一排换成出牌那一排、对家喊话冒出来,这一桌就长高一截,得重新量
+    fit?.relayout();
   }
 
   /** 只有一个人玩就永远摊他的牌;两个人玩就靠遮挡幕换人 */
@@ -1234,11 +1271,16 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
   say = "先叫分抢地主:手上大牌多就多叫几分!";
   hintLine = HINT_MODE_NAMES[hintMode];
   render();
+  // 整桌都摆好了才量:量早了对家面板和手牌扇都还是空的,会量出一个假的矮个子
+  fit = fitTableStage(wrap, () => {
+    if (!destroyed) renderHand();
+  });
   bidStep();
 
   return {
     destroy() {
       destroyed = true;
+      fit?.dispose();
       clearTimers();
       clearFlights();
       dropAllCardEls();
