@@ -42,7 +42,7 @@ describe("fix(visual-r3) N-R3-01:画布字号全部 ≥14px", () => {
   });
 
   it("模板插值字号里不再有 <14 的 Math.max 地板", () => {
-    for (const m of src.matchAll(/\$\{Math\.max\((\d+(?:\.\d+)?),/g)) {
+    for (const m of src.matchAll(/font\s*=\s*`[^`]*\$\{Math\.max\((\d+(?:\.\d+)?),/g)) {
       expect(Number(m[1]), "模板字号地板应 ≥14").toBeGreaterThanOrEqual(14);
     }
   });

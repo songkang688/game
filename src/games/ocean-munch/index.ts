@@ -2502,13 +2502,14 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.roundRect(12, 34, Math.max(8, barW * (ready ? 1 : 1 - me.dashCd / DASH_CD)), 14, 7);
     ctx.fill();
     ctx.fillStyle = "#2a4a5e";
-    ctx.font = "12px sans-serif";
+    // 宪法下限 14px(visual-r3 修 N-R3-01):冲刺条标签原 12px
+    ctx.font = "14px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(ready ? "冲刺就绪" : "冲刺蓄力", 12 + barW / 2, 41);
 
     ctx.textAlign = "right";
     ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "13px sans-serif";
+    ctx.font = "14px sans-serif";
     // 图鉴小书画制(visual-r2 修遗留#3):替掉 📖 字符,书画在文字左侧
     const dexLine =
       arenaMode === "endless"
@@ -2532,7 +2533,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
       const pressure = pressureLine(me.r, arenaTier, eliteLeft);
       if (pressure) {
         ctx.textAlign = "center";
-        ctx.font = "12px sans-serif";
+        // 宪法下限 14px(visual-r3 修 N-R3-01):压制提示原 12px
+        ctx.font = "14px sans-serif";
         ctx.fillStyle = squeezed
           ? Math.floor(arenaTime * 4) % 2 === 0
             ? "#ffb0b0"
@@ -2560,7 +2562,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
       const blink = rival.inv > 0 && Math.floor(arenaTime * 8) % 2 === 0;
       if (!blink) drawSwimmer(rival, "#b8a9f5", "star");
       ctx.fillStyle = "rgba(255,255,255,0.92)";
-      ctx.font = "12px sans-serif";
+      // 宪法下限 14px(visual-r3 修 N-R3-01):对手名牌原 12px
+      ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       // 名牌小头像画制(visual-r2 修 N-03):emoji 换成与场上同款的迷你对手鱼
@@ -2722,7 +2725,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
       ctx.fillStyle = c.fg;
       ctx.font = `bold ${Math.min(19, Math.round(ch * 0.24))}px sans-serif`;
       ctx.fillText(c.title, rect.x + 16 + ch * 0.5, rect.y + ch * 0.38);
-      ctx.font = `${Math.max(13, Math.min(14, Math.round(ch * 0.17)))}px sans-serif`;
+      // 宪法下限 14px(visual-r3 修 N-R3-01):模式卡简介地板 13→14,即恒 14px,maxWidth 兜底不变
+      ctx.font = "14px sans-serif";
       ctx.fillStyle = "#4a5a6e";
       ctx.fillText(c.blurb, rect.x + 16 + ch * 0.5, rect.y + ch * 0.66, cw - ch * 0.5 - 30);
     }
@@ -3185,7 +3189,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
     }
     // 名字
     ctx.fillStyle = "#5a5a6e";
-    ctx.font = "bold 13px sans-serif";
+    // 宪法下限 14px(visual-r3 修 N-R3-01):BOSS 名牌原 13px
+    ctx.font = "bold 14px sans-serif";
     ctx.fillText(spec.name, b.x, b.y - b.r - 42);
   }
 
@@ -3307,7 +3312,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
         drawBubble(ctx, wall.x + wob, y, 13, 0.9);
       }
       ctx.fillStyle = "#5a8ac9";
-      ctx.font = "bold 13px sans-serif";
+      // 宪法下限 14px(visual-r3 修 N-R3-01):气泡墙提示原 13px
+      ctx.font = "bold 14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("从这钻!", wall.x, wall.gapY);
@@ -3796,9 +3802,11 @@ export function mount(api: GameAPI): OceanMunchHandle {
     const dexTitleW = ctx.measureText(dexTitle).width;
     drawBookBadge(ctx, w / 2 - dexTitleW / 2 - 4, 32, 12);
     ctx.fillText(dexTitle, w / 2 + 13, 32);
-    ctx.font = "13px sans-serif";
+    // 宪法下限 14px(visual-r3 修 N-R3-01):图鉴副题原 13px;320 宽整句 ~315px,
+    // 给 fillText 一个 maxWidth 兜底,窄一档也只是轻微压字不外溢
+    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#9a8a6e";
-    ctx.fillText("吃过、见过的海洋生物都会记在这里!点任意处返回", w / 2, 58);
+    ctx.fillText("吃过、见过的海洋生物都会记在这里!点任意处返回", w / 2, 58, w - 12);
 
     const cols = w > 560 ? 4 : 3;
     const rows = Math.ceil(DEX.length / cols);
@@ -3822,13 +3830,15 @@ export function mount(api: GameAPI): OceanMunchHandle {
         // 未收录问号牌画制(visual-r2 修遗留#3):替掉 ❓ 字符
         drawQuestBadge(ctx, cx, cy - ch * 0.15, ch * 0.18);
       }
-      ctx.font = `bold ${Math.max(11, Math.round(ch * 0.15))}px sans-serif`;
+      // 宪法下限 14px(visual-r3 修 N-R3-01):图鉴名地板 11→14、小注 10→14;
+      // 窄屏格子 ~97px 宽,fillText maxWidth 兜底防捅出卡片
+      ctx.font = `bold ${Math.max(14, Math.round(ch * 0.15))}px sans-serif`;
       ctx.fillStyle = seen ? "#5a5a6e" : "#b8b8c2";
-      ctx.fillText(seen ? d.name : "???", cx, cy + ch * 0.18);
+      ctx.fillText(seen ? d.name : "???", cx, cy + ch * 0.18, cw - 16);
       if (seen && ch > 70) {
-        ctx.font = "10px sans-serif";
+        ctx.font = "14px sans-serif";
         ctx.fillStyle = "#9a9aa8";
-        ctx.fillText(d.desc, cx, cy + ch * 0.35);
+        ctx.fillText(d.desc, cx, cy + ch * 0.35, cw - 16);
       }
     }
     const backFace: Rect = { x: 12, y: 12, w: 80, h: 34 };
@@ -3839,7 +3849,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
   /** 结算里的一排吞吃链:这一局吃过的最大三条(按体型),鱼是画的不是字符。 */
   function drawEatChain(log: Array<{ r: number; color: string }>, cy: number): void {
     if (log.length === 0) return;
-    ctx.font = "13px sans-serif";
+    // 宪法下限 14px(visual-r3 修 N-R3-01):吞吃链标题与分隔号原 13px
+    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#8a8a9a";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -3852,7 +3863,7 @@ export function mount(api: GameAPI): OceanMunchHandle {
       drawFish(x0 + i * gap, cy, rr, 1, it.color, "none", i * 0.7);
       if (i < log.length - 1) {
         ctx.fillStyle = "#b8b8c2";
-        ctx.font = "13px sans-serif";
+        ctx.font = "14px sans-serif";
         ctx.fillText("›", x0 + i * gap + gap / 2, cy);
       }
     }
@@ -3872,7 +3883,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.roundRect(bx, cy, bw2 * p, 14, 7);
     ctx.fill();
     ctx.fillStyle = "#8a7a4a";
-    ctx.font = "12px sans-serif";
+    // 宪法下限 14px(visual-r3 修 N-R3-01):体型成长条注脚原 12px
+    ctx.font = "14px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(`体型 ${Math.round(from)} → ${Math.round(nowR)}`, w / 2, cy + 30);
   }
@@ -4216,7 +4228,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
     if (numb > 0) badges.push("😵 麻");
     if (badges.length > 0) {
       ctx.textAlign = "left";
-      ctx.font = "13px sans-serif";
+      // 宪法下限 14px(visual-r3 修 N-R3-01):机制徽标行原 13px,maxWidth 兜底不变
+      ctx.font = "14px sans-serif";
       ctx.fillStyle = "#3a4a5e";
       ctx.fillText(badges.join(" · "), 12, 70, Math.max(60, w - (shield > 0 ? 90 : 24)));
     }
