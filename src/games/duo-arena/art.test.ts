@@ -15,6 +15,8 @@
  * reduced-motion 降级分支可达(公转星 / 火花 / 盾面旋转全部静止)。
  * 录音式 ctx:把每一次方法调用与属性赋值记成序列,直接对序列做断言。
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ART,
@@ -332,5 +334,28 @@ describe("drawCourt 全挂载契约", () => {
     const calls = recordBout(h);
     expect(calls.length).toBeGreaterThan(0);
     game.destroy();
+  });
+});
+
+/* ---------------- r1 监督修复:画布浮字与人机徽章 emoji 清零 ---------------- */
+
+describe("1.3 r1 · 画布浮字与人机徽章 emoji 清零", () => {
+  const indexSrc = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+
+  it("技能浮字不再拼接 spec.emoji,改传技能 id 画手绘图标", () => {
+    expect(indexSrc).not.toMatch(/pushFloat\([^;]*emoji/);
+    // 浮字绘制分支真的接上了 drawSkillIcon(不是画了没人用)
+    expect(indexSrc).toMatch(/fl\.icon[\s\S]{0,400}drawSkillIcon/);
+  });
+
+  it("人机徽章不再贴 AI_SPECS 的 emoji,难度改画 1–4 颗小星阶", () => {
+    expect(indexSrc).not.toMatch(/AI_SPECS\[f\.aiLevel\]\.emoji/);
+    expect(indexSrc).toMatch(/AI_PIPS/);
+    expect(indexSrc).toMatch(/drawMiniStar\(/);
+  });
+
+  it("让分徽章的画布标签不再以 🤝 开头,改画手绘小花(DOM 按钮文案不在此列)", () => {
+    expect(indexSrc, "画布 hLabel 还在贴 🤝").not.toMatch(/hLabel = `🤝/);
+    expect(indexSrc).toMatch(/drawMicroFlower\(/);
   });
 });

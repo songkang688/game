@@ -55,6 +55,7 @@ import {
   GRAB_BASE_RADIUS,
   GRAB_WINDUP,
   SKILLS,
+  type SkillId,
   type SkillState,
   WAVE_SPIN_SECONDS,
   canGrab,
@@ -80,6 +81,8 @@ import {
   drawJellyPad,
   drawKitCoin,
   drawMascotFace,
+  drawMicroFlower,
+  drawMiniStar,
   drawShieldHex,
   drawSkillIcon,
   drawSparkStar,
@@ -99,6 +102,9 @@ import {
   resolveKey,
 } from "./keys";
 import { type Stage, blockRect, clampToArena, placeTarget, spawnPoints, stageAt } from "./stages";
+
+/** 人机难度的小星阶(画布徽章用):档位越高星越多,替代 AI_SPECS 里的 emoji。 */
+const AI_PIPS: Readonly<Record<AiLevel, number>> = { rookie: 1, normal: 2, pro: 3, master: 4 };
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -162,6 +168,8 @@ interface FloatText {
   x: number;
   y: number;
   until: number;
+  /** 带上技能 id 时,浮字左侧画对应的手绘技能图标(替代 spec.emoji 字符)。 */
+  icon?: SkillId;
 }
 
 /** 收下目标那 0.25 秒的星屑爆点(纯演出,不进任何判定) */
@@ -516,7 +524,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (!res.started) return;
     f.skills = res.state;
     const spec = SKILLS[res.id];
-    pushFloat(f, `${spec.emoji} ${spec.name}!`, "#8A5AA8");
+    pushFloat(f, `${spec.name}!`, "#8A5AA8", res.id);
     api.play(res.id === "wave" ? "jump" : "meow");
   }
 
@@ -764,8 +772,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     });
   }
 
-  function pushFloat(f: Fighter, text: string, color: string): void {
-    f.floats.push({ text, color, x: f.x, y: f.y, until: roundTime + 0.8 });
+  function pushFloat(f: Fighter, text: string, color: string, icon?: SkillId): void {
+    f.floats.push({ text, color, x: f.x, y: f.y, until: roundTime + 0.8, icon });
     if (f.floats.length > 6) f.floats.shift();
   }
 
@@ -904,7 +912,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     const res = castSkill(f.skills, roundTime);
     if (!res.started) return;
     f.skills = res.state;
-    pushFloat(f, `${SKILLS[res.id].emoji} ${SKILLS[res.id].name}`, "#5A6AA8");
+    pushFloat(f, SKILLS[res.id].name, "#5A6AA8", res.id);
   }
 
   function grabForAi(f: Fighter): void {
@@ -1223,8 +1231,26 @@ export function mount(api: GameApi): { destroy: () => void } {
       const life = Math.max(0, fl.until - roundTime) / 0.8;
       ctx.globalAlpha = life;
       ctx.fillStyle = fl.color;
-      ctx.font = `900 ${Math.max(12, Math.round(w * 0.042))}px system-ui`;
-      ctx.fillText(fl.text, fl.x * w, fl.y * h - br * 1.6 - (1 - life) * 18);
+      const fs = Math.max(12, Math.round(w * 0.042));
+      ctx.font = `900 ${fs}px system-ui`;
+      const fy = fl.y * h - br * 1.6 - (1 - life) * 18;
+      if (fl.icon) {
+        // 技能浮字:左侧一枚白底手绘技能图标(替代 1.2 直接贴 spec.emoji)
+        const ir = fs * 0.5;
+        const tw = ctx.measureText(fl.text).width;
+        const sx = fl.x * w - (ir * 2 + 4 + tw) / 2;
+        ctx.beginPath();
+        ctx.arc(sx + ir, fy, ir, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,.85)";
+        ctx.fill();
+        drawSkillIcon(ctx, sx + ir, fy, ir * 0.55, fl.icon);
+        ctx.textAlign = "left";
+        ctx.fillStyle = fl.color;
+        ctx.fillText(fl.text, sx + ir * 2 + 4, fy);
+        ctx.textAlign = "center";
+      } else {
+        ctx.fillText(fl.text, fl.x * w, fy);
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -1259,24 +1285,32 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.fillText(label, 34, 17);
     // AI 标识与让分:文字加半透明白圆角底板
     if (f.aiLevel) {
-      const aiLabel = `${AI_SPECS[f.aiLevel].emoji} ${AI_SPECS[f.aiLevel].label}人机`;
-      const aw = ctx.measureText(aiLabel).width;
+      // 难度改画小星阶(1–4 颗),替代 AI_SPECS 里的 emoji——emoji 换台设备就变脸
+      const pips = AI_PIPS[f.aiLevel];
+      const pipW = pips * 9 + 2;
+      const aiLabel = `${AI_SPECS[f.aiLevel].label}人机`;
+      const aw = ctx.measureText(aiLabel).width + pipW;
       pathRoundRect(ctx, w - aw - 22, 5, aw + 16, 22, 11);
       ctx.fillStyle = "rgba(255,255,255,.72)";
       ctx.fill();
+      for (let p = 0; p < pips; p++) {
+        drawMiniStar(ctx, w - aw - 14 + 4 + p * 9, 16, 3.6, "#E8B84A");
+      }
       ctx.textAlign = "right";
       ctx.fillStyle = "rgba(90,80,130,.9)";
       ctx.fillText(aiLabel, w - 14, 16);
     }
     if (f.boost > 0) {
-      const hLabel = `🤝 让分 +${Math.round(f.boost * 100)}%`;
+      // 让分徽章:手绘小花替代帮手 emoji 字符(DOM 文案里的可以留,画布上不行)
+      const hLabel = `让分 +${Math.round(f.boost * 100)}%`;
       ctx.textAlign = "left";
-      const hw = ctx.measureText(hLabel).width;
+      const hw = ctx.measureText(hLabel).width + 14;
       pathRoundRect(ctx, 5, 33, hw + 16, 22, 11);
       ctx.fillStyle = "rgba(255,255,255,.72)";
       ctx.fill();
+      drawMicroFlower(ctx, 18, 44, 5, "#E88AB0");
       ctx.fillStyle = "#B07A20";
-      ctx.fillText(hLabel, 13, 44);
+      ctx.fillText(hLabel, 27, 44);
     }
     ctx.textAlign = "center";
 
