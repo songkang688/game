@@ -389,7 +389,7 @@ export function autoFlagRest(b: Board): number[] {
 
 /**
  * 输了之后温柔揭开剩下的刺种：按「离踩中那一格由近到远」排好序，
- * 界面一颗一颗慢慢开出花，绝不做一下子全炸开的表现。
+ * 界面一颗一颗慢慢开出花，绝不一下子全部掀开。
  */
 export function revealOrder(b: Board, from: number): number[] {
   const fx = xOf(b.w, from);

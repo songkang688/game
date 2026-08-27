@@ -253,6 +253,13 @@ export type ExtraMode = keyof typeof MODE_LABELS;
 /** 竞速对战里假人那根进度条的刷新间隔（毫秒） */
 export const AI_TICK_MS = 120;
 
+/**
+ * 一次插旗动作的去重窗口（毫秒）。
+ * 右键会连着发 pointerdown(button=2) 和 contextmenu，安卓长按也会补一发 contextmenu，
+ * 两发都翻旗的话等于没插。这个窗口内只认头一发。
+ */
+export const DOUBLE_FLAG_GUARD_MS = 400;
+
 // ---------------------------------------------------------------------------
 // 样式
 // ---------------------------------------------------------------------------
@@ -715,6 +722,15 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     let pressAt = 0;
     let longFired = false;
     let raf = 0;
+    // 右键会连着发 pointerdown(button=2) 和 contextmenu，长按在有些浏览器上也会补一发 contextmenu。
+    // 插旗只认第一发，后面这一小会儿的重复事件一律吞掉，免得刚插上又被自己拔掉。
+    let flaggedAt = -1e9;
+    const flagOnce = (): void => {
+      const t = nowMs();
+      if (t - flaggedAt < DOUBLE_FLAG_GUARD_MS) return;
+      flaggedAt = t;
+      doFlag(i);
+    };
 
     const stopRing = (): void => {
       if (raf) timers.cancel(raf);
@@ -730,7 +746,7 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
       if (p >= 1) {
         longFired = true;
         stopRing();
-        doFlag(i);
+        flagOnce();
         return;
       }
       raf = timers.frame(ring);
@@ -740,7 +756,7 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
       const e = ev as PointerEvent;
       if (e.button === 2) {
         e.preventDefault?.();
-        doFlag(i);
+        flagOnce();
         longFired = true;
         return;
       }
@@ -767,7 +783,7 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     });
     c.addEventListener("contextmenu", (ev) => {
       (ev as Event).preventDefault?.();
-      doFlag(i);
+      flagOnce();
       longFired = true;
     });
   }
