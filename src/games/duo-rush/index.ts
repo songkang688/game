@@ -1230,7 +1230,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.save();
       ctx.globalAlpha = 1 - age;
       ctx.fillStyle = "#C2861A";
-      ctx.font = `800 ${Math.max(12, Math.round(base * 0.3))}px "PingFang SC", sans-serif`;
+      ctx.font = `800 ${Math.max(14, Math.round(base * 0.3))}px "PingFang SC", sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(`+${f.amount}`, p.x, p.y - base * 1.5 - rise);
