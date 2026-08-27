@@ -191,7 +191,10 @@ export function aimPreview(cue: Vec, angle: number, balls: readonly Ball[], maxL
 const CSS = `
 .ps-wrap{--ps-ink:#2f4a3c;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--ps-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;width:100%;position:relative;
-  user-select:none;-webkit-user-select:none;touch-action:none;}
+  user-select:none;-webkit-user-select:none;touch-action:none;
+  /* B 档 r2 一致性①:淡草绿壳卡(与台呢同色相、高明度),深台面被浅卡包住——家族卡片语汇归队。
+     侧内衬 6px 是 320px 实测值:竖版台面 cssW 封顶 280px,恰好放进 320-2×14(屏)-2×6(卡) */
+  background:linear-gradient(180deg,#EFF7F0,#E7F1EA);border-radius:16px;padding:10px 6px;box-sizing:border-box;}
 .ps-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
 .ps-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(90,130,110,.18);}
