@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   BALANCE_MAX,
   BALANCE_MIN,
@@ -32,7 +33,10 @@ import {
   tickCharge,
   worstCaseLaunch,
 } from "./balance12";
-import { BUMP_MAX, launchSpeed } from "./knockback";
+import { BUMP_MAX, STRUGGLE_WINDOW, launchSpeed } from "./knockback";
+import { AI_STYLES } from "./ai";
+import { COOP_LESSONS } from "./coop";
+import { HAMMER_CHARGE } from "./items";
 import { ROSTER, fighterById } from "./roster";
 
 /* ---------------- 平衡矩阵 ---------------- */
@@ -294,5 +298,69 @@ describe("1.2 旧纪录读一次迁移", () => {
   it("旧 key 不存在或是坏数据时返回 0，不会把纪录清零", () => {
     expect(readLegacyBest(() => null)).toBe(0);
     expect(readLegacyBest(() => "不是数字")).toBe(0);
+  });
+});
+
+/* ---------------- 监督修复员补的守门用例 ---------------- */
+
+/**
+ * 1.2 监督修复员：钉住「本文件里哪些东西真的进了游戏」。
+ *
+ * `balance12.ts` 写在 1.2 早期，一口气把五件事的**规格**都定了下来。
+ * 后来这五件事各自落到了专门的文件里，本文件就只剩第一节还在干活：
+ *
+ * | 规格（balance12.ts）      | 真正接线的实现        | 谁在用                |
+ * | ------------------------- | --------------------- | --------------------- |
+ * | 一、循环赛胜率矩阵        | 就是本文件            | 本测试(校验 roster)   |
+ * | 二、挣扎窗口              | `knockback.ts`        | `battle.ts` → index   |
+ * | 三、强道具蓄力            | `items.ts` 的 `charge`| `battle.ts` → index   |
+ * | 四、合作关配合点          | `coop.ts`             | `battle.ts` / index   |
+ * | 五、后段行为化难度        | `ai.ts` + `levels.ts` | `battle.ts` → index   |
+ *
+ * 也就是说二~六节是**没接线的第二份真相**,而且数值和接线的那份并不一致
+ * (挣扎门槛:本文件 0.72×320=230.4,`knockback.ts` 是元气≤40 即 192)。
+ * 玩家现在不会因此出错——跑的一直是 `knockback.ts` 那份。但下一个人很可能
+ * 来调本文件的常量,调完发现游戏里毫无反应。
+ *
+ * 这里把「谁接线」写成断言,并把两份都认的那个数(0.4 秒窗口)锁在一起,
+ * 免得哪天两份悄悄分家。删哪一份要主管拍板,已列进 R2 报告的清理项。
+ */
+describe("这份平衡规格里,哪几节真的进了游戏", () => {
+  const read = (f: string) => readFileSync(new URL(`./${f}`, import.meta.url), "utf8");
+
+  it("玩法代码一律不 import 本文件——只有本测试用它跑循环赛", () => {
+    const product = [
+      "index.ts", "battle.ts", "knockback.ts", "items.ts",
+      "coop.ts", "ai.ts", "levels.ts", "roster.ts", "stages.ts", "meta.ts", "keys.ts",
+    ];
+    for (const f of product) {
+      expect(read(f), `${f} 不该 import balance12`).not.toMatch(/from\s+"\.\/balance12"/);
+    }
+  });
+
+  it("接线的挣扎窗口是 knockback.ts 那份,battle.ts 用的也是它", () => {
+    const battle = read("battle.ts");
+    expect(battle).toContain("canStruggle");
+    expect(battle).toContain("struggleVelocity");
+    // 本文件这两个同名规格函数没有任何玩法代码在用
+    expect(battle, "battle.ts 不该用规格版的挣扎函数").not.toMatch(/struggleWindow|struggleReduce/);
+  });
+
+  it("两份都写了 0.4 秒窗口——这个玩家看得见的数必须一致", () => {
+    expect(STRUGGLE_WINDOW_SECONDS).toBe(STRUGGLE_WINDOW);
+    expect(STRUGGLE_WINDOW).toBe(0.4);
+  });
+
+  it("蓄力 / 合作 / 后段行为都各有接线的实现,不是只写在规格里", () => {
+    // 强道具蓄力落在 items.ts 的 charge 字段
+    expect(read("items.ts")).toMatch(/charge\??:/);
+    expect(HAMMER_CHARGE).toBeGreaterThan(0);
+    // 合作关落在 coop.ts,并且 index / battle 都接了
+    expect(COOP_LESSONS.length).toBeGreaterThan(0);
+    expect(read("index.ts")).toMatch(/from\s+"\.\/coop"/);
+    // 后段行为化难度落在 ai.ts 的打法风格
+    expect(AI_STYLES).toContain("flank");
+    expect(AI_STYLES).toContain("greedy");
+    expect(AI_STYLES).toContain("patient");
   });
 });
