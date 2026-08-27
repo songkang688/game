@@ -222,6 +222,21 @@ describe("1.3 虫子家族可分辨与动作帧", () => {
     expect(strokes(walker)).toBeGreaterThan(strokes(flyer) - 2);
   });
 
+  it("r2 W4R2-06:飞虫翅膀锚出身体轮廓——calm 静态帧上翅翅尖高过体顶,16px 剪影有翅膀通道", () => {
+    const flyingKinds = BUG_KINDS.filter((k) => BUG_INFO[k].flying);
+    expect(flyingKinds.length).toBeGreaterThan(0);
+    for (const k of flyingKinds) {
+      const ops = bug(k, { calm: true });
+      // 翅膀是最先画的两枚椭圆(气浪是 arc、影子在翅膀之后)
+      const wings = ops.filter((o) => o.startsWith("ellipse:")).slice(0, 2);
+      expect(wings, `${k} 没画出一对翅膀`).toHaveLength(2);
+      const r = 44 * (BUG_INFO[k].boss ? 0.42 : 0.26);
+      const upper = wings[0].slice("ellipse:".length).split(",").map(Number);
+      // 上翅中心 y 减纵半径 = 翅尖,必须伸到身体顶(y - r = 120 - r)之上
+      expect(upper[1] - upper[3], `${k} 翅尖没伸出轮廓`).toBeLessThan(120 - r);
+    }
+  });
+
   it("十四种虫两两画得不一样(护甲件/触角/爪子/王冠各有身份)", () => {
     const seqs = BUG_KINDS.map((kind) => seq(bug(kind)));
     for (let i = 0; i < seqs.length; i++) {

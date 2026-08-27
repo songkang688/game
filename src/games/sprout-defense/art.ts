@@ -887,11 +887,13 @@ export function drawBugBody(ctx: Ctx, o: BugArt): void {
     ctx.fill();
   }
   if (flying) {
+    // r2 修复 W4R2-06:翅膀锚点上移出身体轮廓+张角放大一档(0.9→1.15、0.55→0.8、
+    // calm 静态张角 0.5→0.8),16px 剪影多出翅膀通道,不再只靠悬浮影子分离兜底
     ctx.fillStyle = "rgba(255,255,255,0.75)";
-    const flap = (o.calm ? 0.5 : Math.sin(wob * 4)) * r * 0.4;
+    const flap = (o.calm ? 0.8 : Math.sin(wob * 4)) * r * 0.55;
     ctx.beginPath();
-    ctx.ellipse(x + r * 0.2, y - r * 0.9 - flap, r * 0.55, r * 0.25, -0.4, 0, Math.PI * 2);
-    ctx.ellipse(x + r * 0.2, y - r * 0.9 + flap, r * 0.55, r * 0.25, 0.4, 0, Math.PI * 2);
+    ctx.ellipse(x + r * 0.2, y - r * 1.15 - flap, r * 0.8, r * 0.32, -0.45, 0, Math.PI * 2);
+    ctx.ellipse(x + r * 0.2, y - r * 1.15 + flap, r * 0.8, r * 0.32, 0.45, 0, Math.PI * 2);
     ctx.fill();
   }
   // 脚下软阴影
