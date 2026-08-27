@@ -181,9 +181,10 @@ const CSS = `
 .se-dice-land .se-die{animation:seland 240ms ease-out;}
 .se-goal{font-size:clamp(13px,2.4vw,14px);font-weight:800;color:#9a6a3a;line-height:1.5;overflow-wrap:anywhere;}
 .se-preview{font-size:clamp(16px,2.8vw,17px);font-weight:900;color:#7a5230;line-height:1.5;overflow-wrap:anywhere;}
-.se-log{display:flex;flex-direction:column;gap:3px;align-items:center;max-height:5.2em;overflow:hidden;max-width:100%;}
+.se-log{display:flex;flex-direction:column;gap:3px;align-items:center;max-height:5.2em;overflow:hidden;max-width:100%;
+  font-size:clamp(16px,2.3vw,17px);font-weight:700;color:#6b6152;line-height:1.4;}
 .se-log-line{position:relative;max-width:100%;background:rgba(255,255,255,.88);border-radius:10px;padding:1px 8px;
-  font-size:clamp(14px,2.3vw,16px);font-weight:700;color:#6b6152;line-height:1.4;overflow-wrap:anywhere;animation:sebubble 300ms ease;}
+  overflow-wrap:anywhere;animation:sebubble 300ms ease;}
 .se-log-line::after{content:"";position:absolute;left:10px;bottom:-4px;border:4px solid transparent;
   border-top-color:rgba(255,255,255,.88);border-bottom:none;}
 .se-log-line:nth-last-child(2){opacity:.72;}
