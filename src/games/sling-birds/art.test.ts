@@ -20,6 +20,10 @@ import { describe, expect, it } from "vitest";
 import {
   SHARD_COLORS,
   SHARD_SHAPE,
+  WIN_LEAP_DELAY,
+  WIN_LEAP_DUR,
+  WIN_LEAP_H,
+  WIN_LEAP_STAGGER,
   beanVariant,
   crackColor,
   drawBannerBadge,
@@ -32,9 +36,11 @@ import {
   drawShockRing,
   drawSlingshotArt,
   drawSparklePoint,
+  drawWinSparkle,
   pathStar,
   shade,
   shardShapeFor,
+  winLeapPhase,
   type BeanVariant,
   type BirdMood
 } from "./art";
@@ -343,6 +349,61 @@ describe("弹弓 / 弹道 / 场景资产", () => {
     pathStar(ctx, 5, 10, 4.5);
     expect(count(calls, "lineTo")).toBe(9);
     expect(count(calls, "closePath")).toBe(1);
+  });
+});
+
+/* ---------------- r3 监督修复:胜利结算仪式(R2-TOP10 绘制层子集) ---------------- */
+
+describe("1.3 r3 · 胜利结算仪式(排队小鸟逐只腾跃 + 金星屑)", () => {
+  it("节奏对齐 B 档规格:0.25s 间隔逐只起跳;可画的两只都在 0.8s 结算窗口内落地(冻结帧安全)", () => {
+    expect(WIN_LEAP_STAGGER).toBeCloseTo(0.25, 5);
+    expect(WIN_LEAP_H).toBeGreaterThan(0);
+    // drawQueue 的排队最多画两只(qx<14 截断);finishWin 在 endT>0.8 冻结画面,
+    // 起跳与落地都必须落在 (0, 0.8) 窗口里,否则会留半空定格帧
+    for (const qi of [0, 1]) {
+      const start = WIN_LEAP_DELAY + qi * WIN_LEAP_STAGGER;
+      expect(start).toBeGreaterThan(0);
+      expect(start + WIN_LEAP_DUR, `第 ${qi} 只的落地时刻`).toBeLessThan(0.8);
+    }
+  });
+
+  it("winLeapPhase:起跳前 0、弧中 0..1、落地后 0;两只真错峰不同时起跳", () => {
+    expect(winLeapPhase(0, 0)).toBe(0);
+    const mid0 = WIN_LEAP_DELAY + WIN_LEAP_DUR / 2;
+    expect(winLeapPhase(mid0, 0)).toBeCloseTo(0.5, 5);
+    expect(winLeapPhase(0.79, 0)).toBe(0);
+    expect(winLeapPhase(0.79, 1)).toBe(0);
+    // 第一只弧中时第二只还没动(0.25s 间隔的「逐只」不是齐跳)
+    expect(winLeapPhase(mid0, 1)).toBe(0);
+  });
+
+  it("drawWinSparkle:金色四角星 + 白芯、零字符、save/restore 配平;alpha≤0 一笔不画", () => {
+    const { ctx, calls } = makeCtx();
+    drawWinSparkle(ctx, 40, 260, 2.4, 0.8);
+    expect(count(calls, "lineTo"), "四角星至少 7 段折线").toBeGreaterThanOrEqual(7);
+    expect(
+      calls.some((c) => c.fn === "set:fillStyle" && c.args[0] === "#FFD86B"),
+      "金色必须与胜利星屑撒场同族(#FFD86B)"
+    ).toBe(true);
+    expect(count(calls, "arc"), "白芯圆点").toBeGreaterThanOrEqual(1);
+    expect(texts(calls)).toEqual([]);
+    expect(count(calls, "restore")).toBe(count(calls, "save"));
+    const idle = makeCtx();
+    drawWinSparkle(idle.ctx, 40, 260, 2.4, 0);
+    expect(idle.calls.length, "alpha=0 不许画").toBe(0);
+  });
+
+  it("drawQueue 接线:胜利态用 winLeapPhase 腾跃并画金星屑,弱动效门控仍在", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const indexSrc = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    const from = indexSrc.indexOf("function drawQueue");
+    expect(from, "drawQueue 还在").toBeGreaterThan(-1);
+    const body = indexSrc.slice(from, indexSrc.indexOf("\n  }", from));
+    expect(body, "腾跃相位必须由 endT 驱动").toMatch(/winLeapPhase\(endT, qi\)/);
+    expect(body, "弧上要有金星屑").toMatch(/drawWinSparkle/);
+    expect(body, "仪式只在胜利态").toMatch(/phase === "won"/);
+    expect(body, "弱动效必须维持静止").toMatch(/!reduceMotion/);
   });
 });
 

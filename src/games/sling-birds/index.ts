@@ -27,6 +27,7 @@ import {
 } from "./levels";
 import {
   SHARD_COLORS,
+  WIN_LEAP_H,
   beanVariant,
   drawBannerBadge,
   drawBeanArt,
@@ -38,7 +39,9 @@ import {
   drawShockRing,
   drawSlingshotArt,
   drawSparklePoint,
+  drawWinSparkle,
   shardShapeFor,
+  winLeapPhase,
   type BeanVariant,
   type BirdMood,
   type ShardShape
@@ -1588,23 +1591,42 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawQueue(c: CanvasRenderingContext2D): void {
     // 排队等候的小鸟站在弹弓后面;第一只原地小跳,胜利结算时全员跳(弱动效静止)
+    // 1.3 r3 · R2-TOP10 结算仪式(绘制层子集):省下的小鸟按 0.25s 间隔逐只腾一个
+    // 小弧、弧上绕三粒金色星屑——纯 endT 驱动的演出,queue/物理/计分零改动;
+    // 全部动作在 0.69s 内落地(finishWin 后画面冻结,不留半空定格帧);弱动效维持静止。
     let qx = SLING_X - 34;
     for (let qi = 0; qi < queue.length; qi++) {
       const kind = queue[qi];
       const r = BIRD_INFO[kind].r * 0.82;
+      const leap = phase === "won" && !reduceMotion ? winLeapPhase(endT, qi) : 0;
+      const lift = Math.sin(Math.PI * leap) * WIN_LEAP_H;
       const hop =
         !reduceMotion && (qi === 0 || phase === "won")
           ? Math.abs(Math.sin(world.simT * 5 + qi * 1.7)) * 3.5
           : 0;
+      const by = GROUND_Y - r - hop - lift;
       drawBirdArt(c, {
         kind,
         x: qx,
-        y: GROUND_Y - r - hop,
+        y: by,
         r,
-        flap: reduceMotion ? 0 : Math.sin(world.simT * 3 + qx) * 0.08,
-        mood: "idle",
+        flap: reduceMotion ? 0 : Math.sin(world.simT * (leap > 0 ? 14 : 3) + qx) * (leap > 0 ? 0.4 : 0.08),
+        mood: leap > 0 ? "fly" : "idle",
         blink: blinkPhase(qx * 0.13)
       });
+      if (leap > 0) {
+        // 弧顶三粒金星屑绕小鸟转小半圈,随腾跃进度淡入淡出
+        for (let s = 0; s < 3; s++) {
+          const sa = leap * Math.PI * 1.6 + (s * Math.PI * 2) / 3;
+          drawWinSparkle(
+            c,
+            qx + Math.cos(sa) * (r + 7),
+            by + Math.sin(sa) * (r + 7) * 0.7,
+            2.4,
+            Math.sin(Math.PI * leap)
+          );
+        }
+      }
       qx -= 24;
       if (qx < 14) break;
     }

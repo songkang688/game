@@ -948,6 +948,44 @@ export function drawSparklePoint(c: Ctx, x: number, y: number, r: number, precis
 }
 
 /* ------------------------------------------------------------------ */
+/* 胜利结算仪式(1.3 r3 · R2-TOP10 绘制层子集)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 仪式节奏:胜利后省下的排队小鸟按 0.25s 间隔逐只腾一个小弧(B 档规格的间隔口径)。
+ * 硬约束:`finishWin` 在 endT>0.8 触发后 simT/endT 全部冻结,所以最后一跳必须在
+ * 0.8s 结算窗口内落地——排队最多画 2 只(qx<14 截断),第 2 只 0.08+0.25+0.36=0.69s
+ * 落地,不留半空定格帧。这里只算演出相位,queue / 物理 / 计分零改动。
+ */
+export const WIN_LEAP_DELAY = 0.08;
+export const WIN_LEAP_STAGGER = 0.25;
+export const WIN_LEAP_DUR = 0.36;
+export const WIN_LEAP_H = 22;
+
+/** 第 qi 只排队小鸟在胜利后 endT 秒的腾跃进度(起跳前与落地后都是 0,弧中 0..1) */
+export function winLeapPhase(endT: number, qi: number): number {
+  const p = (endT - WIN_LEAP_DELAY - qi * WIN_LEAP_STAGGER) / WIN_LEAP_DUR;
+  return p <= 0 || p >= 1 ? 0 : p;
+}
+
+/** 仪式金星屑:腾跃小鸟身边的金色四角星 + 白芯(配色与胜利星屑撒场同族) */
+export function drawWinSparkle(c: Ctx, x: number, y: number, r: number, alpha: number): void {
+  const a = clamp01(alpha);
+  if (a <= 0) return;
+  c.save();
+  c.globalAlpha = a;
+  c.translate(x, y);
+  c.fillStyle = "#FFD86B";
+  pathStar(c, 4, r * 1.5, r * 0.55);
+  c.fill();
+  c.fillStyle = "rgba(255,255,255,0.85)";
+  c.beginPath();
+  c.arc(0, 0, r * 0.4, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+/* ------------------------------------------------------------------ */
 /* 场景:中景剪影层 + 地面草丛带                                        */
 /* ------------------------------------------------------------------ */
 
