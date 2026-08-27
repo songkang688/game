@@ -18,7 +18,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mount } from "./index";
+import { decideRound, mount, type BowlEnd } from "./index";
 import { El, fireWindow, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
 import GUIDE from "./guide";
 
@@ -543,5 +543,88 @@ describe("第 2 轮 PA-FS-3 · 全目录不出现血腥与死亡说法", () => {
     const src = readFileSync(dir + "merge.ts", "utf8");
     expect(src).toContain("合一次腾回来的地方很有限");
     expect(src).toContain("小果子一直往里投盆迟早会满");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* R3-PA-FS-3 · 对战判平那条路要走得到，也别把对家堆爆记成自己过关         */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-17 · 双盆一局的收场判定（`decideRound`）", () => {
+  // 监督修复员已把这一处抽成 decideRound（`R3-PA-FS-3`）。
+  // 这一组不改它的实现，只把「同帧撞在一起」的那几种组合补成回归网 ——
+  // 界面上撞不出同一帧，只有纯函数这一层量得到。
+  const IDLE: BowlEnd = { won: false, lost: false, left: 9 };
+  const bowl = (over: Partial<BowlEnd>): BowlEnd => ({ ...IDLE, ...over });
+
+  it("谁都还没收场就返回 null，一局不会提前收掉", () => {
+    expect(decideRound([IDLE, IDLE])).toBeNull();
+    expect(decideRound([bowl({ left: 0 }), bowl({ left: 0 })]), "只是果子用完了、还没判输不算收场").toBeNull();
+    expect(decideRound([]), "一个盆都没有也不该收场").toBeNull();
+  });
+
+  it("同一帧两边都达标就是打平：给得出 -1，「这一局打平」不再是死文案", () => {
+    const out = decideRound([bowl({ won: true }), bowl({ won: true })]);
+    expect(out?.winner, "两人节奏一样、同帧都达标，还判 0 号赢").toBe(-1);
+    expect(out?.reason).toBe("goal");
+  });
+
+  it("同一帧两边都收摊也是打平，收场理由跟着朵朵那一边说", () => {
+    expect(decideRound([bowl({ lost: true }), bowl({ lost: true })])?.winner).toBe(-1);
+    expect(decideRound([bowl({ lost: true }), bowl({ lost: true })])?.reason).toBe("over");
+    const bothEmpty = decideRound([bowl({ lost: true, left: 0 }), bowl({ lost: true, left: 0 })]);
+    expect(bothEmpty?.reason, "两边都是果子用完，收场理由该是 empty").toBe("empty");
+  });
+
+  it("一边达标另一边没有：判达标那一边赢，理由是 goal", () => {
+    expect(decideRound([bowl({ won: true }), IDLE])).toEqual({ winner: 0, cleared: true, reason: "goal" });
+    expect(decideRound([IDLE, bowl({ won: true })])).toEqual({ winner: 1, cleared: false, reason: "goal" });
+  });
+
+  it("达标压过堆爆：同帧一边达标一边收摊，算达标那边赢", () => {
+    expect(decideRound([bowl({ won: true }), bowl({ lost: true })])?.winner).toBe(0);
+    expect(decideRound([bowl({ lost: true }), bowl({ won: true })])?.winner).toBe(1);
+  });
+
+  it("星星把盆堆过线：判朵朵赢，但不再记成朵朵「达标过关」", () => {
+    const out = decideRound([IDLE, bowl({ lost: true })]);
+    expect(out?.winner, "对家收摊了，赢的还是该判给朵朵").toBe(0);
+    expect(out?.cleared, "对家收摊被记成了朵朵达标过关").toBe(false);
+    expect(out?.reason, "对家收摊的收场理由被记成了 goal").toBe("over");
+    expect(decideRound([IDLE, bowl({ lost: true, left: 0 })])?.reason).toBe("empty");
+  });
+
+  it("朵朵那边堆过线 / 果子用完，收场理由分得开", () => {
+    expect(decideRound([bowl({ lost: true }), IDLE])).toEqual({ winner: 1, cleared: false, reason: "over" });
+    expect(decideRound([bowl({ lost: true, left: 0 }), IDLE])).toEqual({
+      winner: 1,
+      cleared: false,
+      reason: "empty",
+    });
+  });
+
+  it("cleared 只在 0 号盆自己达标时才为真", () => {
+    expect(decideRound([bowl({ won: true }), bowl({ won: true })])?.cleared).toBe(true);
+    for (const out of [
+      decideRound([IDLE, bowl({ won: true })]),
+      decideRound([bowl({ lost: true }), IDLE]),
+      decideRound([IDLE, bowl({ lost: true })]),
+      decideRound([bowl({ lost: true }), bowl({ lost: true })]),
+    ]) {
+      expect(out?.cleared, "0 号盆没达标却报了 cleared").toBe(false);
+    }
+  });
+
+  it("单盆那一路照旧：达标算过关，收摊按剩几颗分 empty / over", () => {
+    expect(decideRound([bowl({ won: true })])).toEqual({ winner: 0, cleared: true, reason: "goal" });
+    expect(decideRound([bowl({ lost: true })])).toEqual({ winner: -1, cleared: false, reason: "over" });
+    expect(decideRound([bowl({ lost: true, left: 0 })])?.reason).toBe("empty");
+    expect(decideRound([IDLE])).toBeNull();
+  });
+
+  it("「这一局打平」那句文案还在源码里等着，判平之后就走得到了", () => {
+    const src = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    expect(src, "判平的文案被顺手删了").toContain("这一局打平");
+    expect(src, "roundOver 不再按 winner < 0 分岔，判平就没人接了").toMatch(/winner\s*<\s*0\s*\?\s*"这一局打平"/);
   });
 });
