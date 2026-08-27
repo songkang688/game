@@ -139,7 +139,7 @@ const CSS = `
   overflow-wrap:anywhere;line-height:1.5;}
 .bd-modebar,.bd-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .bd-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f5b8a;text-align:center;overflow-wrap:anywhere;}
-.bd-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
+.bd-open{border:none;border-radius:999px;padding:9px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#7fa5e0,#5c83c4);box-shadow:0 4px 0 #47679f;}
 .bd-open:active{transform:translateY(2px);box-shadow:0 2px 0 #47679f;}
 .bd-mode{max-width:820px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}

@@ -120,7 +120,7 @@ export const SR_CSS = `
   overflow-wrap:anywhere;line-height:1.5;}
 .sr-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .sr-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f7a52;text-align:center;overflow-wrap:anywhere;}
-.sr-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
+.sr-open{border:none;border-radius:999px;padding:9px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#6fc48b,#4f9e6b);box-shadow:0 4px 0 #3d7d54;}
 .sr-open:active{transform:translateY(2px);box-shadow:0 2px 0 #3d7d54;}
 .sr-mode{max-width:760px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}
@@ -133,7 +133,7 @@ export const SR_CSS = `
 .sr-sumcv{display:block;width:min(320px,94%);margin:0 auto 12px;}
 .sr-skins{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0 0;}
 .sr-skin{border:2px solid transparent;border-radius:12px;padding:5px 9px;font-size:14px;font-weight:800;
-  font-family:inherit;cursor:pointer;background:#ffffffd9;color:#3f7a52;min-height:36px;}
+  font-family:inherit;cursor:pointer;background:#ffffffd9;color:#3f7a52;min-height:44px;}
 .sr-skin[aria-pressed="true"]{border-color:#4f9e6b;}
 .sr-skin[disabled]{opacity:.5;cursor:default;}
 @media (min-width:720px){
