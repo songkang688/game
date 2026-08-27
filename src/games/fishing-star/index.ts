@@ -282,6 +282,21 @@ const CSS = `
   .fss-act{min-width:min(92vw,200px);}
   .fss-wind{font-size:11.5px;padding:3px 8px;}
 }
+/* 640 高的机器再收一档。舞台是定高 + overflow:hidden（平台的 styles.css，交给窗口1），
+   超出的部分既不滚也没提示：测试员 W5-B-01 在 360×640 上量到第 100 关的
+   「🎣 按住抛竿」中心落到裁切线以下 8px，按不着就开不了局——1.2 追加的风向条与
+   红区预警正好又给这一屏加了两行。这里把那两行连同 HUD 一起收一档，
+   并给 .fs-wrap 一个自滚兜底：收完还高也不至于点不着。
+   那颗大按钮只收内边距、不动 44px 热区。 */
+@media (max-height:660px){
+  .fs-wrap{gap:4px;max-height:100%;overflow-y:auto;}
+  .fs-chip{font-size:10.5px;padding:2px 6px;}
+  .fs-tip{font-size:11px;line-height:1.3;padding:2px 8px;min-height:16px;}
+  .fs-track{height:12px;}
+  .fs-act{padding:10px 18px;min-height:44px;box-sizing:border-box;}
+  .fss-wind{font-size:11px;padding:2px 7px;}
+  .fss-row{gap:4px;}
+}
 @media (prefers-reduced-motion:reduce){
   .fss-shake{animation:none;}
   .fss-let:active,.fss-gbuy:active:not(:disabled){transform:none;}

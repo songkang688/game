@@ -121,6 +121,19 @@ describe("手机 360px", () => {
     expect(narrow).not.toMatch(/\.fss-act\{[^}]*min-height/);
   });
 
+  it("640 高的机器再收一档,收完还高就自己滚,那颗大按钮不许被收到 44px 以下", () => {
+    // 测试员 W5-B-01：360×640 上第 100 关的「🎣 按住抛竿」中心落到舞台裁切线以下 8px。
+    // 舞台那一半（定高 + overflow:hidden）是平台文件,交给窗口1;本款先自己兜住。
+    const at = css.indexOf("@media (max-height:660px)");
+    expect(at, "没有 640 高那一档").toBeGreaterThan(-1);
+    const short = css.slice(at, css.indexOf("@media", at + 10));
+    expect(short).toContain("overflow-y:auto");
+    expect(short).toContain("max-height:100%");
+    expect(short).toMatch(/\.fs-act\{[^}]*min-height:44px/);
+    // 这一档必须排在既有的 720 那一档后面,否则被它盖回去
+    expect(css.indexOf("@media (max-height:720px)")).toBeLessThan(at);
+  });
+
   it("图鉴卡片不窄于 88px,窄屏那一档也一样", () => {
     const widths = [...css.matchAll(/\.fs-dex\{[^}]*minmax\((\d+)px/g)].map((m) => Number(m[1]));
     const narrow = [...css.matchAll(/\.fs-dex\{grid-template-columns:repeat\(auto-fill,minmax\((\d+)px/g)].map((m) =>
