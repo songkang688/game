@@ -19,6 +19,7 @@ import {
   drawIsland,
   drawPadMotif,
   drawParticles,
+  drawPauseBars,
   drawProgressRing,
   drawRescueCloud,
   drawSideStripes,
@@ -859,11 +860,14 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (paused && !over) {
       ctx.fillStyle = "rgba(255,248,242,.9)";
       ctx.fillRect(0, 0, cam.w, cam.h);
+      const titlePx = Math.round(18 + 3 * cam.scale);
+      // 暂停 emoji 换画制:标题上方一枚双圆角竖条暂停牌(round2 遗留 #6)
+      drawPauseBars(ctx, cam.w / 2, cam.h / 2 - 14 - titlePx * 1.5, titlePx * 0.9);
       ctx.fillStyle = "#9A5A2C";
-      ctx.font = `900 ${Math.round(18 + 3 * cam.scale)}px system-ui`;
+      ctx.font = `900 ${titlePx}px system-ui`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("⏸ 已暂停", cam.w / 2, cam.h / 2 - 14);
+      ctx.fillText("已暂停", cam.w / 2, cam.h / 2 - 14);
       ctx.font = `700 ${Math.round(14 + 2 * cam.scale)}px system-ui`;
       ctx.fillText("再按一次 Esc 继续", cam.w / 2, cam.h / 2 + 16);
     }

@@ -728,6 +728,26 @@ export function drawChargeRing(ctx: Ctx, x: number, y: number, r: number, p: num
   ctx.stroke();
 }
 
+/**
+ * 暂停牌:两根圆头粗竖条(经典暂停符),取代画布上的「⏸」emoji(round2 遗留 #6)。
+ * 以 (x,y) 为中心、h 为竖条高度;圆头线帽自带圆角,颜色跟随调用方(默认暂停层的赭墨)。
+ */
+export function drawPauseBars(ctx: Ctx, x: number, y: number, h: number, color = "#9A5A2C"): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(3, h * 0.32);
+  ctx.lineCap = "round";
+  const half = h / 2;
+  const dx = h * 0.3;
+  ctx.beginPath();
+  ctx.moveTo(x - dx, y - half);
+  ctx.lineTo(x - dx, y + half);
+  ctx.moveTo(x + dx, y - half);
+  ctx.lineTo(x + dx, y + half);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** 结算面板的完美率进度环 */
 export function drawProgressRing(ctx: Ctx, x: number, y: number, r: number, ratio: number, color: string, track = "rgba(190,150,120,.25)"): void {
   ctx.lineWidth = Math.max(3, r * 0.22);
