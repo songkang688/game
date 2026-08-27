@@ -32,7 +32,7 @@
  */
 import puppeteer from "puppeteer-core";
 
-const BASE = process.env.SMOKE_BASE ?? "http://127.0.0.1:5186";
+const BASE = process.env.SMOKE_BASE ?? "http://localhost:5186";
 const CHROME = process.env.CHROME_PATH ?? "/usr/local/bin/google-chrome";
 const NARROW = { width: 360, height: 640 };
 const WIDE = { width: 1280, height: 800 };
@@ -64,6 +64,7 @@ function note(what, extra = "") {
 const GAMES = [
   {
     id: "orb-arena",
+    duoKind: "realtime",
     title: "圆圆大作战",
     p: "oa",
     modes: { versus: "🤝 圆圆混战", endless: "♾️ 缩圈无尽", twoPlayer: "👫 双人同屏" },
@@ -73,6 +74,7 @@ const GAMES = [
   },
   {
     id: "snake-royale",
+    duoKind: "realtime",
     title: "长蛇争霸",
     p: "sr",
     modes: { versus: "🤝 原野混战", endless: "♾️ 缩圈无尽", twoPlayer: "👫 双人同屏" },
@@ -82,6 +84,7 @@ const GAMES = [
   },
   {
     id: "block-drop",
+    duoKind: "split",
     title: "方块叠叠乐",
     p: "bd",
     modes: { versus: "🤝 对战发行", endless: "♾️ 马拉松 / 竞速", twoPlayer: "👫 双人同屏" },
@@ -91,6 +94,7 @@ const GAMES = [
   },
   {
     id: "combo-clash",
+    duoKind: "realtime",
     title: "连招对决",
     p: "cc",
     modes: { versus: "🤝 人机对战", endless: "♾️ 连胜无尽", twoPlayer: "👫 双人同屏" },
@@ -100,6 +104,7 @@ const GAMES = [
   },
   {
     id: "mahjong-bloom",
+    duoKind: "turn",
     title: "花开麻将",
     p: "mj",
     modes: { versus: "🀄 对战一桌", endless: "♾️ 快棋无尽", twoPlayer: "👫 双人同桌" },
@@ -108,6 +113,7 @@ const GAMES = [
   },
   {
     id: "star-estate",
+    duoKind: "turn",
     title: "朵星地产",
     p: "se",
     modes: { versus: "🤝 对战 1v3", endless: "♾️ 短盘连胜", twoPlayer: "👫 双人同屏" },
@@ -116,6 +122,7 @@ const GAMES = [
   },
   {
     id: "hero-cards",
+    duoKind: "none",
     title: "英杰令",
     p: "hc",
     modes: { versus: "🤝 身份场 1v4", endless: "♾️ 连胜无尽" },
@@ -124,6 +131,7 @@ const GAMES = [
   },
   {
     id: "weiqi-garden",
+    duoKind: "turn",
     title: "围子花园",
     p: "wq",
     modes: { versus: "🤖 自由对战", endless: "🔥 连胜无尽", twoPlayer: "👫 双人同屏" },
@@ -133,6 +141,7 @@ const GAMES = [
   },
   {
     id: "flight-chess",
+    duoKind: "turn",
     title: "飞行棋乐园",
     p: "fc",
     modes: { versus: "🤝 四人对战", endless: "♾️ 连胜无尽", twoPlayer: "👫 双人同屏" },
@@ -141,6 +150,7 @@ const GAMES = [
   },
   {
     id: "merge-2048",
+    duoKind: "split",
     title: "星星合成",
     p: "mg",
     modes: { versus: "🤝 对战竞速", endless: "♾️ 马拉松", twoPlayer: "👫 双人同屏" },
@@ -150,6 +160,7 @@ const GAMES = [
   },
   {
     id: "mine-garden",
+    duoKind: "split",
     title: "扫雷花园",
     p: "mg",
     modes: { versus: "🤖 竞速对战", endless: "🔥 连续清盘", twoPlayer: "👫 双人同屏" },
@@ -158,6 +169,7 @@ const GAMES = [
   },
   {
     id: "sudoku-petal",
+    duoKind: "split",
     title: "数独花田",
     p: "sp",
     modes: { versus: "🤝 对战竞速", endless: "♾️ 花田马拉松", twoPlayer: "👫 双人同屏" },
@@ -224,84 +236,207 @@ async function verdict(page, p) {
 
 /**
  * 分边探针:一次采样返回一组「区域 → 摘要」,后面靠比对哪些区域变了来判断谁在动。
- *   canvas<i>.L / .R / .T / .B  画布左右半、上下半的像素摘要
- *   dom.L / dom.R               舞台左右半的叶子节点(类名 + 坐标 + 文字)
- *   hud.朵朵 / hud.星星          带这两个名字的那一行读数
- * 整屏指纹一概不用 —— 第 1 轮 mine-garden 就是栽在这上头。
+ *
+ * 分边的切法**按各款自己的结构来**,不按屏幕几何瞎切:先找游戏自己的分边容器
+ * (`.oa-panes` / `.sr-panes` / `.mg-seats` / `.sp-seats` / `.mg-duo` / `.cc-side` …),
+ * 它的每个直接子节点就是一「座」,一座一个区域;找不到才退回几何四分。
+ * 整屏指纹一概不用 —— 第 1 轮 `mine-garden` 就是栽在整屏指纹上误报的。
+ *
+ * 区域命名:
+ *   座<i>.dom / 座<i>.canvas<j>   第 i 座的 DOM 叶子摘要 / 画布像素摘要
+ *   外.dom                          分边容器之外的公共 HUD(两个人共用,不作为分边证据)
+ *   几何.L/.R/.T/.B                找不到分边容器时的退路
  */
+const SPLIT_CLASS_RE = "(seats|panes|duo|split|sides)";
+
 async function sideProbe(page) {
-  return page.evaluate(() => {
+  return page.evaluate((splitRe) => {
+    const RE = new RegExp(splitRe);
     const hash = (s) => {
       let a = 5381;
       for (let i = 0; i < s.length; i++) a = ((a * 33) ^ s.charCodeAt(i)) >>> 0;
       return a.toString(36);
     };
-    const out = {};
-    const root = document.querySelector(".game-stage") ?? document.querySelector("#app") ?? document.body;
-
-    // 1) 画布:左右半 + 上下半各自的像素摘要
-    let ci = 0;
-    for (const c of document.querySelectorAll("canvas")) {
-      if (!c.width || !c.height) continue;
+    const pix = (c, x, y, w, h) => {
       let g = null;
       try {
         g = c.getContext("2d");
       } catch {
-        g = null;
+        return null;
       }
-      if (!g) continue;
+      if (!g) return null;
+      let d;
+      try {
+        d = g.getImageData(x, y, w, h).data;
+      } catch {
+        return null;
+      }
+      let a = 5381;
+      for (let i = 0; i < d.length; i += 37) a = ((a * 33) ^ d[i]) >>> 0;
+      return a.toString(36);
+    };
+    /**
+     * 一块区域的 DOM 摘要,拆成两份:
+     *   .dom —— 类名 + 坐标 + 文字,但**数字一律抹成 #**;倒计时、秒表这种自己会跳的
+     *            数字不会污染它,光标挪了 / 格子翻开了才会变。第 1 轮 mine-garden 的
+     *            双人取证就是被两边的计时器一起带跑的。
+     *   .num —— 只留数字,单独放一格,想看分数变化的时候再看它。
+     */
+    const leaves = (el) => {
+      const shape = [];
+      const nums = [];
+      // 坐标一律换算成「相对本座左上角」:一边的盘子长高了会把另一边整体推下去,
+      // 用绝对坐标的话另一边会跟着"变",看上去像串台,其实只是被挤了一下。
+      const base = el.getBoundingClientRect();
+      for (const n of el.querySelectorAll("*")) {
+        if (n.children.length > 0) continue;
+        const r = n.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        const t = (n.textContent ?? "").trim().slice(0, 20);
+        shape.push(
+          `${String(n.className || n.tagName).slice(0, 24)}@${Math.round(r.x - base.x)},${Math.round(r.y - base.y)}:${t.replace(/\d/g, "#")}`
+        );
+        const d = t.replace(/\D/g, "");
+        if (d) nums.push(d);
+      }
+      return { dom: `${shape.length}/${hash(shape.join("|"))}`, num: hash(nums.join(",")) };
+    };
+    /** 一块画布的像素摘要:整块 + 左右半 + 上下半,granularity 够细才分得出两个人 */
+    const canvasParts = (c, prefix, out) => {
+      if (!c.width || !c.height) return;
       const w = c.width;
       const h = c.height;
       const boxes = {
-        L: [0, 0, Math.floor(w / 2), h],
-        R: [Math.ceil(w / 2), 0, w - Math.ceil(w / 2), h],
-        T: [0, 0, w, Math.floor(h / 2)],
-        B: [0, Math.ceil(h / 2), w, h - Math.ceil(h / 2)]
+        "": [0, 0, w, h],
+        ".L": [0, 0, Math.floor(w / 2), h],
+        ".R": [Math.ceil(w / 2), 0, w - Math.ceil(w / 2), h],
+        ".T": [0, 0, w, Math.floor(h / 2)],
+        ".B": [0, Math.ceil(h / 2), w, h - Math.ceil(h / 2)]
       };
       for (const [k, [x, y, ww, hh]] of Object.entries(boxes)) {
         if (ww < 2 || hh < 2) continue;
-        let d;
-        try {
-          d = g.getImageData(x, y, ww, hh).data;
-        } catch {
-          continue;
-        }
-        let a = 5381;
-        for (let i = 0; i < d.length; i += 37) a = ((a * 33) ^ d[i]) >>> 0;
-        out[`canvas${ci}.${k}`] = a.toString(36);
+        const v = pix(c, x, y, ww, hh);
+        if (v) out[prefix + k] = v;
       }
-      ci += 1;
-    }
+    };
 
-    // 2) DOM 叶子按中心 x 分到左右两半
-    const rr = root.getBoundingClientRect();
-    const mid = rr.x + rr.width / 2;
-    const buckets = { "dom.L": [], "dom.R": [] };
+    const out = {};
+    const root = document.querySelector(".game-stage") ?? document.querySelector("#app") ?? document.body;
+
+    // 找游戏自己的分边容器:类名带 seats/panes/duo/split/sides,而且至少两个子节点
+    let split = null;
     for (const el of root.querySelectorAll("*")) {
-      if (el.children.length > 0) continue;
+      if (!RE.test(String(el.className))) continue;
+      if (el.children.length < 2) continue;
       const r = el.getBoundingClientRect();
-      if (r.width < 2 || r.height < 2) continue;
-      const key = r.x + r.width / 2 < mid ? "dom.L" : "dom.R";
-      buckets[key].push(
-        `${String(el.className || el.tagName).slice(0, 24)}@${Math.round(r.x)},${Math.round(r.y)}:${(el.textContent ?? "")
-          .trim()
-          .slice(0, 20)}`
-      );
+      if (r.width < 20 || r.height < 20) continue;
+      split = el;
+      break;
     }
-    for (const [k, v] of Object.entries(buckets)) out[k] = `${v.length}/${hash(v.join("|"))}`;
 
-    // 3) 朵朵 / 星星各自那一行读数(混战类共用一块场地,分不出左右,只能按名字分人)
-    for (const who of ["朵朵", "星星"]) {
-      const rows = [];
-      for (const el of root.querySelectorAll("*")) {
-        if (el.children.length > 0) continue;
-        if (!(el.textContent ?? "").includes(who)) continue;
-        const row = el.parentElement ?? el;
-        rows.push((row.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 90));
+    if (split) {
+      out.__split = String(split.className).slice(0, 30) + `×${split.children.length}`;
+      [...split.children].forEach((child, i) => {
+        const l = leaves(child);
+        out[`座${i}.dom`] = l.dom;
+        out[`座${i}.num`] = l.num;
+        const cs = child.tagName === "CANVAS" ? [child] : [...child.querySelectorAll("canvas")];
+        cs.forEach((c, j) => canvasParts(c, `座${i}.canvas${j}`, out));
+      });
+      // 分边容器之外的公共 HUD:记下来,但它不算谁的地盘
+      const outside = [];
+      for (const n of root.querySelectorAll("*")) {
+        if (n.children.length > 0 || split.contains(n)) continue;
+        const r = n.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        outside.push(`${String(n.className || n.tagName).slice(0, 24)}:${(n.textContent ?? "").trim().slice(0, 20).replace(/\d/g, "#")}`);
       }
-      if (rows.length > 0) out[`hud.${who}`] = hash(rows.join("¶"));
+      out["外.dom"] = `${outside.length}/${hash(outside.join("|"))}`;
+    } else {
+      // 退路:几何四分 + 每块画布整块
+      const rr = root.getBoundingClientRect();
+      const midX = rr.x + rr.width / 2;
+      const midY = rr.y + rr.height / 2;
+      const buckets = { "几何.L": [], "几何.R": [], "几何.T": [], "几何.B": [] };
+      for (const n of root.querySelectorAll("*")) {
+        if (n.children.length > 0) continue;
+        const r = n.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) continue;
+        const tag = `${String(n.className || n.tagName).slice(0, 24)}@${Math.round(r.x)},${Math.round(r.y)}:${(
+          n.textContent ?? ""
+        )
+          .trim()
+          .slice(0, 20)
+          .replace(/\d/g, "#")}`;
+        buckets[r.x + r.width / 2 < midX ? "几何.L" : "几何.R"].push(tag);
+        buckets[r.y + r.height / 2 < midY ? "几何.T" : "几何.B"].push(tag);
+      }
+      for (const [k, v] of Object.entries(buckets)) out[k] = `${v.length}/${hash(v.join("|"))}`;
+      [...document.querySelectorAll("canvas")].forEach((c, i) => canvasParts(c, `几何.canvas${i}`, out));
     }
     return out;
+  }, SPLIT_CLASS_RE);
+}
+
+/**
+ * 按玩家颜色数像素:朵朵 #F5A9C8(粉)、星星 #A9C8F5(蓝),都是各款 index.ts 里写死的。
+ * 混战类(圆圆 / 长蛇)两块 pane 都在画同一个场地、而且一直在动,
+ * 「变没变」这种问法分不出人,只能问「朵朵那团粉色的重心往哪边挪了」。
+ */
+async function colorCentroids(page) {
+  return page.evaluate(() => {
+    const near = (r, g, b, [R, G, B]) => Math.abs(r - R) < 46 && Math.abs(g - G) < 46 && Math.abs(b - B) < 46;
+    const DUO = [245, 169, 200];
+    const STAR = [169, 200, 245];
+    const out = [];
+    [...document.querySelectorAll("canvas")].forEach((c, i) => {
+      if (!c.width || !c.height) return;
+      let g = null;
+      try {
+        g = c.getContext("2d");
+      } catch {
+        return;
+      }
+      if (!g) return;
+      let d;
+      try {
+        d = g.getImageData(0, 0, c.width, c.height).data;
+      } catch {
+        return;
+      }
+      let dn = 0;
+      let dx = 0;
+      let sn = 0;
+      let sx = 0;
+      for (let k = 0; k < d.length; k += 4) {
+        const px = (k / 4) % c.width;
+        if (near(d[k], d[k + 1], d[k + 2], DUO)) {
+          dn++;
+          dx += px;
+        } else if (near(d[k], d[k + 1], d[k + 2], STAR)) {
+          sn++;
+          sx += px;
+        }
+      }
+      out.push({ pane: i, 朵朵n: dn, 朵朵x: dn ? Math.round(dx / dn) : null, 星星n: sn, 星星x: sn ? Math.round(sx / sn) : null });
+    });
+    return out;
+  });
+}
+
+async function holdKey(page, key, ms) {
+  await page.keyboard.down(key).catch(() => {});
+  await sleep(ms);
+  await page.keyboard.up(key).catch(() => {});
+  await sleep(260);
+}
+
+/** 谁的回合:回合制的四款(地产 / 飞行棋 / 围棋 / 麻将)靠这句话决定该按谁的键 */
+async function whoseTurn(page) {
+  return page.evaluate(() => {
+    const t = (document.querySelector(".game-stage")?.textContent ?? "").replace(/\s+/g, " ");
+    const m = /轮到\s*(朵朵|星星)|(朵朵|星星)\s*的回合/.exec(t);
+    return m ? m[1] ?? m[2] : "";
   });
 }
 
@@ -325,12 +460,22 @@ async function pickThrough(page, prefix, maxDepth = 4) {
   for (let i = 0; i < maxDepth; i++) {
     const hit = await page.evaluate((p) => {
       const back = /回闯关|换难度|返回|选关|攻略|暂停|←|◀/;
-      const btns = [...document.querySelectorAll(`.${p}-open, .${p}-btn-sm, .${p}-pick`)].filter(
+      // 只在「模式容器」里面找:顶上那排切模式的 `.<前缀>-modebar` 在容器外面,
+      // 点它会跳去另一个模式(combo-clash 的双人就是这么被带走的)。
+      // 也只认真正的 <button>:`.cc-pick` 是个容器 div,点它一辈子开不了局。
+      const scope = document.querySelector(`.${p}-mode`) ?? document;
+      const btns = [...scope.querySelectorAll(`button.${p}-open, button.${p}-btn-sm, button.${p}-face`)].filter(
         (b) => !b.closest("[hidden]") && b.getClientRects().length > 0 && !b.disabled && !back.test(b.textContent ?? "")
       );
       if (btns.length === 0) return false;
-      const go = btns.find((b) => /开始|开局|▶/.test(b.textContent ?? ""));
-      (go ?? btns[0]).click();
+      // 优先点真正「开局」的那颗:combo-clash 要先挑朵朵的角色、再点「星星用 X」才开打,
+      // 光顺着头像一路点下去,四层预算用完了局还没开。
+      const go =
+        btns.find((b) => /星星用\s*星星/.test(b.textContent ?? "")) ??
+        btns.find((b) => /开始|开局|▶|星星用/.test(b.textContent ?? "")) ??
+        btns.find((b) => String(b.className).includes(`${p}-open`)) ??
+        btns[0];
+      go.click();
       return true;
     }, prefix);
     if (!hit) break;
@@ -897,6 +1042,158 @@ async function partMatrix(browser, viewport, tag, { checkLeak = true, checkFont 
 // E. 双人键位分边取证
 // ---------------------------------------------------------------------------
 
+/** 各玩各的一块盘 / 一块 pane:靠「按谁的键、哪一座变了」取证 */
+async function duoBySeat(page, g) {
+  // 先热身:有的款(扫雷)第一次动手才启动计时器,不热身的话空跑基线是「静止」,
+  // 后面两轮却都被计时器带着变,分边差集就全被抵消掉了。
+  await pressAll(page, P1_KEYS.slice(0, 3), 120);
+  await sleep(400);
+  const idleOnce = async () => {
+    const a = await sideProbe(page);
+    await sleep(P1_KEYS.length * 150);
+    return changedKeys(a, await sideProbe(page));
+  };
+  const idle = new Set(await idleOnce());
+
+  const before1 = await sideProbe(page);
+  await pressAll(page, P1_KEYS);
+  const raw1 = changedKeys(before1, await sideProbe(page));
+  for (const k of await idleOnce()) idle.add(k);
+  const before2 = await sideProbe(page);
+  await pressAll(page, P2_KEYS);
+  const raw2 = changedKeys(before2, await sideProbe(page));
+  for (const k of await idleOnce()) idle.add(k);
+
+  const byP1 = raw1.filter((k) => !idle.has(k));
+  const byP2 = raw2.filter((k) => !idle.has(k));
+  const onlyP1 = byP1.filter((k) => !byP2.includes(k) && k.startsWith("座"));
+  const onlyP2 = byP2.filter((k) => !byP1.includes(k) && k.startsWith("座"));
+  note(`分边容器 ${before1.__split ?? "(没找到,走几何四分)"} · 空跑自己会变的:${[...idle].join(",") || "无"}`);
+  log(byP1.length > 0, `${g.title} 双人:朵朵 WASD+F+G 有反应`, `动了 ${byP1.join(",") || "(无)"}`);
+  log(byP2.length > 0, `${g.title} 双人:星星 方向键+L+K 有反应`, `动了 ${byP2.join(",") || "(无)"}`);
+  log(
+    onlyP1.length > 0 && onlyP2.length > 0,
+    `${g.title} 双人:两套键位各管各的一座(分边可辨,互不串台)`,
+    `只认朵朵=${onlyP1.join(",") || "-"} · 只认星星=${onlyP2.join(",") || "-"}`
+  );
+  return onlyP1.length > 0 && onlyP2.length > 0;
+}
+
+/**
+ * 混战类(圆圆 / 长蛇 / 连招):两个人在同一个场地里,pane 一直在动,
+ * 「变没变」分不出人 —— 改问「朵朵那团粉色 / 星星那团蓝色的重心往哪边挪」。
+ * 一律成对做:先按住左键再按住右键,看重心的横坐标是不是跟着反向 → 正向走。
+ */
+async function duoByColor(page, g) {
+  // 三段式:先往左压住、再往右压住、再往左压住。
+  // 真的接住了这套键位,重心的横坐标就该「左 → 右 → 左」走一个来回;
+  // 对家自己乱跑造成的漂移不会这么听话地跟着反向,所以要求两段符号相反。
+  const sweep = async (neg, pos) => {
+    await holdKey(page, neg, 1100);
+    const s1 = await colorCentroids(page);
+    await holdKey(page, pos, 2000);
+    const s2 = await colorCentroids(page);
+    await holdKey(page, neg, 2000);
+    const s3 = await colorCentroids(page);
+    return [s1, s2, s3];
+  };
+  /** 逐块 pane 算 Δ,挑「一来一回都够大、而且符号相反」的那一块 */
+  const bestPane = (frames, who) => {
+    const panes = frames[0].map((r) => r.pane);
+    let best = null;
+    for (const p of panes) {
+      const v = frames.map((f) => f.find((r) => r.pane === p));
+      if (v.some((r) => !r || r[`${who}n`] < 8 || r[`${who}x`] === null)) continue;
+      const d1 = v[1][`${who}x`] - v[0][`${who}x`];
+      const d2 = v[2][`${who}x`] - v[1][`${who}x`];
+      const score = d1 > 12 && d2 < -12 ? Math.min(d1, -d2) : -1;
+      if (!best || score > best.score) best = { pane: p, d1, d2, score };
+    }
+    return best;
+  };
+
+  const fd = await sweep("KeyA", "KeyD");
+  const duo = bestPane(fd, "朵朵");
+  const duoCross = bestPane(fd, "星星");
+  const fs = await sweep("ArrowLeft", "ArrowRight");
+  const star = bestPane(fs, "星星");
+  const starCross = bestPane(fs, "朵朵");
+
+  const fmt = (b) => (b ? `pane${b.pane} 左→右 ${b.d1 > 0 ? "+" : ""}${b.d1}px、右→左 ${b.d2}px` : "这个颜色在画布上找不到足够的像素");
+  note(`按住 A/D 时星星那团的动静:${fmt(duoCross)} · 按住 ←/→ 时朵朵那团的动静:${fmt(starCross)}`);
+  log(Boolean(duo && duo.score > 0), `${g.title} 双人:朵朵那团粉色跟着 A/D 左右来回`, fmt(duo));
+  log(Boolean(star && star.score > 0), `${g.title} 双人:星星那团蓝色跟着 ←/→ 左右来回`, fmt(star));
+  const ok = Boolean(duo && duo.score > 0 && star && star.score > 0);
+  log(
+    ok,
+    `${g.title} 双人:两套键位各推各的那一颗(按玩家颜色分人,不看整屏)`,
+    `朵朵 ${fmt(duo)} | 星星 ${fmt(star)}`
+  );
+  return ok;
+}
+
+/** 回合制(麻将 / 地产 / 围棋 / 飞行棋):同一块盘轮流出手,只有当前回合那个人的键该生效 */
+async function duoByTurn(page, g) {
+  // 一次只按一个键,按完立刻重新看「轮到谁」——
+  // 一口气按完六个键会把回合推过头,量到的就永远是同一个人。
+  const own = new Map();
+  const cross = new Map();
+  const seen = [];
+  let ki = 0;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 70000 && (own.size < 2 || cross.size < 2)) {
+    const who = await whoseTurn(page);
+    if (!who) {
+      await sleep(400);
+      continue;
+    }
+    if (seen.at(-1) !== who) seen.push(who);
+    // 先量「他自己那套键」——串台探针要是先按,会把这个人的回合白白用掉,
+    // 结果就是永远轮不到星星(上一版就栽在这)。
+    const keys = who === "朵朵" ? P1_KEYS : P2_KEYS;
+    const before = await sideProbe(page);
+    // 一轮按两个键:地产那种「先掷骰、再决定买不买」的回合,一个键推不完
+    for (let j = 0; j < 2; j++) {
+      await page.keyboard.press(keys[ki % keys.length]).catch(() => {});
+      ki += 1;
+      await sleep(330);
+    }
+    const moved = changedKeys(before, await sideProbe(page));
+    if (moved.length > 0 && !own.has(who)) own.set(who, moved);
+    // 回合还在他手上,才拿对家那套键探一下会不会串台
+    if (!cross.has(who) && (await whoseTurn(page)) === who) {
+      const b0 = await sideProbe(page);
+      const foeKeys = who === "朵朵" ? P2_KEYS : P1_KEYS;
+      await page.keyboard.press(foeKeys[ki % foeKeys.length]).catch(() => {});
+      await sleep(420);
+      cross.set(who, changedKeys(b0, await sideProbe(page)));
+    }
+  }
+  note(`回合流转:${seen.join(" → ") || "(读不到回合提示)"}`);
+  if (seen.length === 0) {
+    log(false, `${g.title} 双人:读不到「轮到谁」的提示,回合制取证做不下去`);
+    return false;
+  }
+  for (const who of ["朵朵", "星星"]) {
+    const keyName = who === "朵朵" ? "WASD+F+G" : "方向键+L+K";
+    log(
+      own.has(who),
+      `${g.title} 双人:轮到 ${who} 时 ${keyName} 真的吃得进去`,
+      own.get(who)?.join(",") ?? (seen.includes(who) ? "轮到过它但按了没反应" : "70s 里没轮到过它")
+    );
+    if (cross.has(who)) {
+      const c = cross.get(who);
+      note(`轮到 ${who} 时改按 ${other(who)} 那套键:${c.length === 0 ? "毫无反应(不串台)" : "动了 " + c.join(",")}`);
+    }
+  }
+  note(`${g.title} 是同一块盘轮流出手,没有「左右两边」,所以不做分边差集,改看「轮到谁、谁的键才吃得进去」`);
+  return own.size === 2;
+}
+
+function other(who) {
+  return who === "朵朵" ? "星星" : "朵朵";
+}
+
 async function partE(browser) {
   console.log("\n===== E. 双人键位分边取证(360×640) =====");
   for (const g of PICKED) {
@@ -905,41 +1202,28 @@ async function partE(browser) {
       log(true, `${g.title}:meta 里就没有 twoPlayer(身份场两个人挤一屏会互相看光牌),跳过`);
       continue;
     }
+    console.log(`\n----- ${g.title}(${g.duoKind}) -----`);
     const page = await newPage(browser, NARROW);
     const r = await enterMode(page, g, label);
-    if (!r.ok) {
-      log(false, `${g.title} 双人:进不去 ${label}`);
+    const started = await drewNodes(page, g.p);
+    if (!r.ok || started < 6) {
+      log(false, `${g.title} 双人:进不去 ${label}`, `选了 ${r.picks} 层 · ${started} 个节点`);
       await page.close();
       continue;
     }
-    // 1) 空跑基线:一根手指都不动,看哪些区域自己就会变(动画、倒计时、AI)
-    const s0 = await sideProbe(page);
-    await sleep(P1_KEYS.length * 150);
-    const sIdle = await sideProbe(page);
-    const idle = new Set(changedKeys(s0, sIdle));
+    log(true, `${g.title} 双人:${label} 开得起来`, `选了 ${r.picks} 层 · ${started} 个节点`);
 
-    // 2) 朵朵 WASD+F+G
-    const before1 = await sideProbe(page);
-    await pressAll(page, P1_KEYS);
-    const after1 = await sideProbe(page);
-    const byP1 = changedKeys(before1, after1).filter((k) => !idle.has(k));
-
-    // 3) 星星 方向键+L+K
-    const before2 = await sideProbe(page);
-    await pressAll(page, P2_KEYS);
-    const after2 = await sideProbe(page);
-    const byP2 = changedKeys(before2, after2).filter((k) => !idle.has(k));
-
-    const onlyP1 = byP1.filter((k) => !byP2.includes(k));
-    const onlyP2 = byP2.filter((k) => !byP1.includes(k));
-    log(byP1.length > 0, `${g.title} 双人:朵朵 WASD+F+G 有反应`, `动了 ${byP1.join(",") || "(无)"}`);
-    log(byP2.length > 0, `${g.title} 双人:星星 方向键+L+K 有反应`, `动了 ${byP2.join(",") || "(无)"}`);
-    log(
-      onlyP1.length > 0 || onlyP2.length > 0,
-      `${g.title} 双人:两套键位管的不是同一块地方(分边可辨)`,
-      `只认朵朵=${onlyP1.join(",") || "-"} · 只认星星=${onlyP2.join(",") || "-"}`
-    );
-    note(`空跑基线自己就会变的区域:${[...idle].join(",") || "(无,画面是静止的)"}`);
+    if (g.duoKind === "turn") {
+      await duoByTurn(page, g);
+    } else {
+      const ok = await duoBySeat(page, g);
+      if (!ok && g.duoKind === "realtime") {
+        // 混战类一局有时限,分边那一轮跑完往往已经打完了,颜色取证得重开一局
+        await enterMode(page, g, label);
+        await sleep(700);
+        await duoByColor(page, g);
+      }
+    }
     const flow = await overflowX(page);
     log(flow.doc <= 1, `${g.title} 双人:360px 不横向溢出`, `doc+${flow.doc}`);
     await page.close();
