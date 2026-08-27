@@ -231,6 +231,9 @@ describe("星星粒子与平台", () => {
     const src = readFileSync(new URL("./art.ts", import.meta.url), "utf8");
     expect(src).toMatch(/drawGoldStar\(ctx, x, y - r \* 1\.18, r \* 0\.5, 0\.35\)/);
     expect(src).toMatch(/r \* 0\.34, cy \+ Math\.sin\(a\) \* r \* 0\.34, r \* 0\.24/);
+    // r2 W4R2-03 补刀:与星呆毛最难分的啾啾弧呆毛也钉在放大档(0.34r,线宽 0.14r)
+    expect(src).toMatch(/arc\(x, y - r \* 1\.08, r \* 0\.34, Math\.PI \* 0\.85/);
+    expect(src).toMatch(/Math\.max\(1\.6, r \* 0\.14\)/);
   });
 
   it("4 芒闪光与蓬蓬云都是非空绘制（等待重生的 ☁️ 字符下岗）", () => {

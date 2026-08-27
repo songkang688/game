@@ -386,7 +386,8 @@ function drawCharTrait(ctx: CanvasRenderingContext2D, id: string, x: number, y: 
       return;
     }
     case "jiujiu":
-      // 尖嘴 + 头顶呆毛
+      // 尖嘴 + 头顶呆毛(r2 修复 W4R2-03:弧呆毛 0.22→0.34 并加粗,
+      // 16px 下 1.8px→2.7px;与放大后的星呆毛拉开,这对不再是全花名册最难分)
       ctx.fillStyle = "#ff9d47";
       ctx.beginPath();
       ctx.moveTo(x - r * 0.16, y + r * 0.12);
@@ -395,9 +396,9 @@ function drawCharTrait(ctx: CanvasRenderingContext2D, id: string, x: number, y: 
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#e8b93e";
-      ctx.lineWidth = Math.max(1.4, r * 0.1);
+      ctx.lineWidth = Math.max(1.6, r * 0.14);
       ctx.beginPath();
-      ctx.arc(x, y - r * 1.02, r * 0.22, Math.PI * 0.9, Math.PI * 1.9);
+      ctx.arc(x, y - r * 1.08, r * 0.34, Math.PI * 0.85, Math.PI * 1.95);
       ctx.stroke();
       return;
     case "paopao":
