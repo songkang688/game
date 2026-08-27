@@ -91,7 +91,7 @@ const CSS = `
 .sr-over-t{font-size:21px;font-weight:900;color:#3f7a52;margin-bottom:8px;}
 .sr-over-s{font-size:15px;font-weight:700;color:#54886a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 .sr-skins{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0 0;}
-.sr-skin{border:2px solid transparent;border-radius:12px;padding:5px 9px;font-size:13px;font-weight:800;
+.sr-skin{border:2px solid transparent;border-radius:12px;padding:5px 9px;font-size:14px;font-weight:800;
   font-family:inherit;cursor:pointer;background:#ffffffd9;color:#3f7a52;min-height:36px;}
 .sr-skin[aria-pressed="true"]{border-color:#4f9e6b;}
 .sr-skin[disabled]{opacity:.5;cursor:default;}

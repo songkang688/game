@@ -137,3 +137,90 @@ describe("styles.css 巡检", () => {
     expect(html).toContain("viewport-fit=cover");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 1.2 窗口 1 · 第 1 轮验收:360×640 真机走查回落下来的几处
+//
+// 上面那些用例查的是「约定写没写」,这一节查的是「约定有没有被具体的选择器违反」——
+// 都是拿 360×640 的真浏览器量出来、再钉回源码的,以后谁把字号调小就会红。
+// ---------------------------------------------------------------------------
+
+const HOME_TS = readFileSync(new URL("./home.ts", import.meta.url), "utf8");
+const L99_TS = readFileSync(new URL("../games/level99.ts", import.meta.url), "utf8");
+const SNAKE_TS = readFileSync(new URL("../games/snake-royale/index.ts", import.meta.url), "utf8");
+
+/**
+ * 从一段 CSS 源码里取某个选择器最终生效的 font-size(px);一条都没写返回 null。
+ * 同名选择器写了好几遍时按层叠取**最后一条**;`max(var(--mt-body), 16px)`
+ * 这种夹取写法取里面最大的那个 px 字面量。
+ */
+function fontSizeOf(css: string, selector: string): number | null {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const blocks = [...css.matchAll(new RegExp(`(?:^|[,}\\s])${escaped}\\s*\\{([^}]*)\\}`, "g"))];
+  let last: number | null = null;
+  for (const b of blocks) {
+    const decl = b[1].match(/font-size:\s*([^;]+)/);
+    if (!decl) continue;
+    const pxs = [...decl[1].matchAll(/(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
+    if (pxs.length > 0) last = Math.max(...pxs);
+  }
+  return last;
+}
+
+describe("360×640 走查回落:说明文字不许小过正文下限", () => {
+  // 选关地图上这几行都是「讲给孩子听的话」,不是按钮也不是格子里的数字,
+  // 按 MIN_BODY_PX 走。它们是 188 关框架的公共皮肤,12 款新游戏全都吃这一份。
+  const L99_BODY_CLASSES = [
+    ".l99-chapdesc", // 章节说明
+    ".l99-pagehint", // 第 X / Y 章 · 第 A–B 关
+    ".l99-flash", // 一次性提示条
+    ".l99-jump-note", // 管理员权限还剩 XX 分钟
+    ".l99-maphint" // 地图底部的玩法小贴士
+  ];
+
+  for (const cls of L99_BODY_CLASSES) {
+    it(`level99 的 ${cls} 不小于 ${MIN_BODY_PX}px`, () => {
+      const px = fontSizeOf(L99_TS, cls);
+      expect(px, `${cls} 在 level99.ts 里找不到`).not.toBeNull();
+      expect(px, `${cls} 是说明文字,360px 上不能小过 ${MIN_BODY_PX}px`).toBeGreaterThanOrEqual(
+        MIN_BODY_PX
+      );
+    });
+  }
+
+  it("首页页脚与结果计数是说明文字,不小于 16px", () => {
+    expect(fontSizeOf(CSS, ".home-footer")).toBeGreaterThanOrEqual(MIN_BODY_PX);
+    expect(fontSizeOf(HOME_TS, ".home-count")).toBeGreaterThanOrEqual(MIN_BODY_PX);
+  });
+
+  it("长蛇争霸的皮肤按钮是控件,不小于 14px", () => {
+    expect(fontSizeOf(SNAKE_TS, ".sr-skin")).toBeGreaterThanOrEqual(MIN_CONTROL_PX);
+  });
+});
+
+describe("360×640 走查回落:首页搜索框不许顶出屏幕", () => {
+  // 实测:360px 视口下 .home-search 被自动最小尺寸撑到 370px,
+  // 「清空搜索」的 ✕ 右边缘落在 375px,被屏幕裁掉一半点不着。
+  // flex item 的 min-width 缺省是 auto,必须显式夹成 0 才会跟着容器缩。
+  it(".home-search 写了 min-width:0", () => {
+    const block = HOME_TS.match(/\.home-search\s*\{([^}]*)\}/);
+    expect(block, "home.ts 里找不到 .home-search 规则").not.toBeNull();
+    expect(block?.[1], ".home-search 是 flex item,不夹 min-width:0 会顶出 360px 屏幕").toMatch(
+      /min-width:\s*0/
+    );
+  });
+
+  it("清空按钮不靠负 margin 挤出容器", () => {
+    const block = HOME_TS.match(/\.home-search-clear\s*\{([^}]*)\}/);
+    expect(block?.[1]).not.toMatch(/margin-right:\s*-/);
+  });
+});
+
+describe("首页文案里的游戏款数是数出来的,不是写死的", () => {
+  // 1.1 是 55 款,窗口 1 加完 12 款就已经是 67 款,写死的数字必然过时。
+  it("hero 气泡不写死款数", () => {
+    const bubble = HOME_TS.match(/heroBubble\.innerHTML\s*=\s*`([^`]*)`/);
+    expect(bubble, "找不到 hero 气泡文案").not.toBeNull();
+    expect(bubble?.[1], "款数要从 games.length 数出来").not.toMatch(/\d+\s*款/);
+  });
+});

@@ -496,9 +496,12 @@ const L99_CSS = `
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
 .l99-tab.l99-tab-on{color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
 .l99-tab.l99-tab-lock{opacity:.55;}
-.l99-chapdesc{font-size:13px;font-weight:700;color:#77619b;text-align:center;margin:2px 0 4px;min-height:18px;}
-.l99-pagehint{font-size:12px;font-weight:700;color:#8d7bab;text-align:center;margin:0 0 10px;}
-.l99-flash{font-size:13px;font-weight:800;color:#5f6f9b;text-align:center;margin:0 0 8px;}
+/* 下面几行都是讲给孩子听的说明文字,按 mobileText.MIN_BODY_PX 走 16px:
+   360px 手机上量过,13px / 12px 的小字在选关地图里根本看不清。 */
+.l99-chapdesc{font-size:16px;line-height:1.45;font-weight:700;color:#77619b;text-align:center;
+  margin:2px 0 4px;min-height:22px;overflow-wrap:anywhere;word-break:break-word;}
+.l99-pagehint{font-size:16px;line-height:1.45;font-weight:700;color:#8d7bab;text-align:center;margin:0 0 10px;}
+.l99-flash{font-size:16px;line-height:1.45;font-weight:800;color:#5f6f9b;text-align:center;margin:0 0 8px;}
 .l99-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
 .l99-node{aspect-ratio:1;border:none;border-radius:16px;cursor:pointer;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:2px;background:#fff;box-shadow:0 3px 8px rgba(140,130,190,.18);
@@ -521,9 +524,10 @@ const L99_CSS = `
 .l99-jump{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
 .l99-jump-input{width:76px;min-height:38px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
   font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;}
-.l99-jump-note{font-size:12px;font-weight:700;color:#8d7bab;}
+.l99-jump-note{font-size:16px;line-height:1.45;font-weight:700;color:#8d7bab;}
 .l99-jump-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
-.l99-maphint{margin-top:12px;text-align:center;font-size:13px;font-weight:700;color:#77619b;}
+.l99-maphint{margin-top:12px;text-align:center;font-size:16px;line-height:1.45;font-weight:700;
+  color:#77619b;overflow-wrap:anywhere;word-break:break-word;}
 .l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}
 .l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;}
 .l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;

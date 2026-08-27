@@ -1740,6 +1740,9 @@ html {
 }
 
 .home-footer {
+  /* 1.1 给的是 14px,但这行「无广告 · 不联网」是说明文字,按正文下限抬到 16px */
+  font-size: max(var(--mt-body), 16px);
+  line-height: max(var(--mt-line), 1.4);
   padding-bottom: var(--mt-safe-bottom);
   overflow-wrap: anywhere;
   word-break: break-word;

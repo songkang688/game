@@ -90,12 +90,15 @@ async function openCollectionSafely(): Promise<void> {
 /** 1.1 新增控件的样式:styles.css 归别的窗口管,这里只补自己新加的那几个类 */
 const HOME_EXTRA_CSS = `
 .home-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 18px}
-.home-search{flex:1 1 190px;display:flex;align-items:center;gap:8px;min-height:50px;padding:0 16px;
+/* min-width 缺省是 auto,搜索框会被自动最小尺寸撑到 370px,
+   360px 手机上「清空」的 ✕ 会被屏幕裁掉一半;夹成 0 才会跟着容器缩 */
+.home-search{flex:1 1 190px;min-width:0;display:flex;align-items:center;gap:8px;min-height:50px;
+  padding:0 12px 0 16px;
   border:3px solid #fff;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:var(--shadow-soft)}
 .home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;
   font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
 .home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
-.home-search-clear{display:grid;place-items:center;min-width:44px;min-height:44px;margin-right:-10px;
+.home-search-clear{display:grid;place-items:center;flex:0 0 auto;min-width:44px;min-height:44px;
   border:0;background:transparent;font-size:19px;line-height:1;color:var(--ink-soft)}
 .tabs.cat-tabs{margin-bottom:2px}
 .tabs.mode-chips{margin:0;padding-top:0;gap:10px}
@@ -128,7 +131,7 @@ const HOME_EXTRA_CSS = `
 @media (prefers-reduced-motion:reduce){
   .fav-btn,.fav-btn:hover,.fav-slot:hover>.fav-btn,.fav-slot:hover>.fav-btn:hover{transform:none}
 }
-.home-count{font-size:14px;font-weight:700;color:var(--ink-soft);margin:0 0 10px}
+.home-count{font-size:16px;line-height:1.45;font-weight:700;color:var(--ink-soft);margin:0 0 10px}
 `;
 
 const EXTRA_STYLE_ID = "home-extra-style";
@@ -288,7 +291,8 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   });
   const heroBubble = document.createElement("div");
   heroBubble.className = "hero-bubble";
-  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>55 款原创小游戏,闯关最长 188 关。上面可以筛选、搜索、收藏 🌈</span>`;
+  // 款数当场数,别写死:每加一批新游戏都要回来改数字的话,迟早会忘
+  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>${games.length} 款原创小游戏,闯关最长 188 关。上面可以筛选、搜索、收藏 🌈</span>`;
   const heroXingxing = createAvatarImg("xingxingRun", {
     round: false,
     className: "hero-figure hero-figure--xingxing"
