@@ -134,6 +134,14 @@ export function planeSVG(color: Color, pose: PlanePose = "fly"): string {
     // 座舱盖：白高光 + 天蓝玻璃
     `<ellipse cx="11" cy="6.4" rx="1.9" ry="2.3" fill="${KIT_PALETTE.sky}" stroke="${dark}" stroke-width=".4"/>` +
     `<ellipse cx="10.4" cy="5.6" rx=".7" ry="1" fill="${KIT_PALETTE.cloud}"/>` +
+    // 机身笑脸：眼睛 + 白瞳光 + 腮红 + 微笑(Q 版可爱档)
+    `<circle cx="9.9" cy="10.2" r=".55" fill="${KIT_PALETTE.ink}"/>` +
+    `<circle cx="12.1" cy="10.2" r=".55" fill="${KIT_PALETTE.ink}"/>` +
+    `<circle cx="9.75" cy="10" r=".2" fill="${KIT_PALETTE.cloud}"/>` +
+    `<circle cx="11.95" cy="10" r=".2" fill="${KIT_PALETTE.cloud}"/>` +
+    `<ellipse cx="9.1" cy="11.1" rx=".5" ry=".3" fill="${KIT_PALETTE.blush}" opacity=".7"/>` +
+    `<ellipse cx="12.9" cy="11.1" rx=".5" ry=".3" fill="${KIT_PALETTE.blush}" opacity=".7"/>` +
+    `<path d="M 10.4 11.4 Q 11 12 11.6 11.4" fill="none" stroke="${KIT_PALETTE.ink}" stroke-width=".4" stroke-linecap="round"/>` +
     finSVG(color) +
     gear +
     `</g></svg>`
