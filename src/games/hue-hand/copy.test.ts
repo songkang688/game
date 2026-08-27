@@ -135,7 +135,7 @@ describe("花色接龙 · 章节与攻略", () => {
 describe("花色接龙 · 源码巡检", () => {
   it("游戏目录里该有的文件都在", () => {
     expect(sourceFiles.sort()).toEqual(
-      ["ai.ts", "deck.ts", "domStub.ts", "guide.ts", "index.ts", "levels.ts", "meta.ts", "rules.ts", "score.ts", "sim.ts"].sort()
+      ["ai.ts", "art.ts", "deck.ts", "domStub.ts", "guide.ts", "index.ts", "levels.ts", "meta.ts", "rules.ts", "score.ts", "sim.ts"].sort()
     );
   });
 
