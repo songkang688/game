@@ -9,8 +9,10 @@ import {
   MG_CONSTS,
   MG_CSS,
   MOVE_MS,
+  SAY_THROTTLE_MS,
   SWIPE_MIN,
   cellPxFor,
+  createSayThrottle,
   createTable,
   keyToDir,
   meta,
@@ -213,6 +215,21 @@ function pressKey(key: string): void {
 
 function keyListenerCount(): number {
   return keys.get("keydown")?.size ?? 0;
+}
+
+/** 记下播报行被写了几次:节流看的是「写了几句」,不是「最后一句是什么」 */
+function spyWrites(el: FakeEl): string[] {
+  const writes: string[] = [];
+  let value = el.textContent;
+  Object.defineProperty(el, "textContent", {
+    configurable: true,
+    get: () => value,
+    set: (v: string) => {
+      value = v;
+      writes.push(v);
+    }
+  });
+  return writes;
 }
 
 function fakeApi(root: FakeEl) {
@@ -621,6 +638,102 @@ describe("读屏播报", () => {
     }
   });
 
+  describe("播报节流闸", () => {
+    function harness(gap = 1000) {
+      const writes: string[] = [];
+      let clockMs = 0;
+      const timers = new Map<number, { fn: () => void; at: number }>();
+      let id = 0;
+      const throttle = createSayThrottle(
+        {
+          write: (t) => writes.push(t),
+          now: () => clockMs,
+          setTimer: (fn, ms) => {
+            id += 1;
+            timers.set(id, { fn, at: clockMs + ms });
+            return id;
+          },
+          clearTimer: (t) => {
+            timers.delete(t);
+          }
+        },
+        gap
+      );
+      const advance = (ms: number): void => {
+        clockMs += ms;
+        for (const [key, t] of [...timers.entries()]) {
+          if (t.at <= clockMs) {
+            timers.delete(key);
+            t.fn();
+          }
+        }
+      };
+      return { writes, throttle, advance, pending: () => timers.size };
+    }
+
+    it("第一句立刻写出去,不让读屏干等", () => {
+      const h = harness();
+      h.throttle.polite("第 1 步");
+      expect(h.writes).toEqual(["第 1 步"]);
+    });
+
+    it("一个窗口里连着来的只留最后一句", () => {
+      const h = harness();
+      h.throttle.polite("第 1 步");
+      h.advance(100);
+      h.throttle.polite("第 2 步");
+      h.advance(100);
+      h.throttle.polite("第 3 步");
+      expect(h.writes).toEqual(["第 1 步"]);
+      h.advance(800);
+      expect(h.writes).toEqual(["第 1 步", "第 3 步"]);
+    });
+
+    it("慢慢走的每一句都不落下", () => {
+      const h = harness();
+      h.throttle.polite("第 1 步");
+      h.advance(1200);
+      h.throttle.polite("第 2 步");
+      h.advance(1200);
+      h.throttle.polite("第 3 步");
+      expect(h.writes).toEqual(["第 1 步", "第 2 步", "第 3 步"]);
+    });
+
+    it("结论插队:立刻写,攒着的那句丢掉", () => {
+      const h = harness();
+      h.throttle.polite("第 1 步");
+      h.throttle.polite("第 2 步");
+      h.throttle.urgent("目标达成");
+      expect(h.writes).toEqual(["第 1 步", "目标达成"]);
+      h.advance(5000);
+      expect(h.writes).toEqual(["第 1 步", "目标达成"]);
+      expect(h.pending()).toBe(0);
+    });
+
+    it("cancel 之后攒着的那句不再写,定时器也收干净", () => {
+      const h = harness();
+      h.throttle.polite("第 1 步");
+      h.throttle.polite("第 2 步");
+      expect(h.pending()).toBe(1);
+      h.throttle.cancel();
+      expect(h.pending()).toBe(0);
+      h.advance(5000);
+      expect(h.writes).toEqual(["第 1 步"]);
+    });
+
+    it("窗口设成 0 就是不节流(留给以后想关掉的场合)", () => {
+      const h = harness(0);
+      h.throttle.polite("甲");
+      h.throttle.polite("乙");
+      expect(h.writes).toEqual(["甲", "乙"]);
+    });
+
+    it("默认窗口不到一秒,够玩家连滑两下也不会久到听不见", () => {
+      expect(SAY_THROTTLE_MS).toBeGreaterThanOrEqual(500);
+      expect(SAY_THROTTLE_MS).toBeLessThanOrEqual(1200);
+    });
+  });
+
   it("seatEnded 认得出三种结束,没结束就是 false", () => {
     expect(seatEnded(st())).toBe(false);
     expect(seatEnded(st({ reached: true }))).toBe(true);
@@ -749,6 +862,76 @@ describe("读屏播报", () => {
       tick(10);
       expect(host.byClass("mg-pop").length + host.byClass("mg-born").length).toBeGreaterThan(0);
       t.destroy();
+    });
+
+    it("连着快滑只播最后一句,慢下来之后补上最新盘面", () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        let seen: SeatState | null = null;
+        const { host, t } = table([seatOpts({ onTick: (s) => (seen = s) })]);
+        const writes = spyWrites(host.byClass("mg-say")[0]);
+        for (const key of ["a", "d", "a", "d"]) {
+          pressKey(key);
+          tick(10);
+        }
+        const steps = (seen as unknown as SeatState).steps;
+        expect(steps).toBeGreaterThanOrEqual(3);
+        // 首句立刻听得见,后面三步在同一个窗口里攒着,读屏不用排四条
+        expect(writes).toHaveLength(1);
+        vi.advanceTimersByTime(SAY_THROTTLE_MS);
+        expect(writes).toHaveLength(2);
+        expect(writes[1]).toContain(`第 ${steps} 步`);
+        t.destroy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("攒着的那句在 destroy 之后不会再冒出来", () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        const { host, t } = table([seatOpts()]);
+        const writes = spyWrites(host.byClass("mg-say")[0]);
+        pressKey("a");
+        tick(10);
+        pressKey("d");
+        tick(10);
+        expect(writes).toHaveLength(1);
+        t.destroy();
+        vi.advanceTimersByTime(SAY_THROTTLE_MS * 3);
+        expect(writes).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("这一盘的结论不排队,直接盖掉攒着的「第几步」", () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        const { host, t } = table([
+          seatOpts({
+            start: boardFrom([
+              [2, 2, 0, 0],
+              [4, 4, 0, 0],
+              [0, 0, 0, 0],
+              [0, 0, 0, 0]
+            ]),
+            target: 8
+          })
+        ]);
+        const writes = spyWrites(host.byClass("mg-say")[0]);
+        pressKey("a");
+        tick(10);
+        pressKey("w");
+        tick(10);
+        const last = writes[writes.length - 1];
+        expect(last).toContain("目标达成");
+        vi.advanceTimersByTime(SAY_THROTTLE_MS * 2);
+        expect(writes[writes.length - 1]).toBe(last);
+        t.destroy();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("暂停这类提示还是写在看得见的那一行,播报行不抢词", () => {

@@ -202,6 +202,77 @@ export function overAnnounce(name: string, st: SeatState, withName = false): str
   return `${who}这一盘结束,最大合到 ${st.best}。`;
 }
 
+/** 两句播报之间至少隔这么久;隔得更近的连续步子只留最后一句 */
+export const SAY_THROTTLE_MS = 900;
+
+export interface SayThrottleHooks {
+  write: (text: string) => void;
+  now?: () => number;
+  setTimer?: (fn: () => void, ms: number) => number;
+  clearTimer?: (id: number) => void;
+}
+
+export interface SayThrottle {
+  /** 走一步的播报:窗口内攒着,只把最后一句写出去 */
+  polite: (text: string) => void;
+  /** 结论播报:立刻写,攒着的那句直接丢掉 */
+  urgent: (text: string) => void;
+  /** 卸载时调用:攒着的那句不再写 */
+  cancel: () => void;
+}
+
+/**
+ * 读屏播报的节流闸。
+ *
+ * `aria-live="polite"` 只保证不打断当前朗读,不会替你合并 —— 快速连滑时
+ * 每一步都写一句,读屏会排成一长串,等它念完玩家早就滑到别处去了。
+ * 这里按「首句立刻、窗口内攒最后一句」处理:慢慢走的玩家一句不少,
+ * 连着乱滑的只听到最新的盘面。结论(达成 / 卡死 / 步数用完)走 `urgent` 插队,
+ * 免得攒着的「第几步」把结论盖过去。
+ */
+export function createSayThrottle(hooks: SayThrottleHooks, gap = SAY_THROTTLE_MS): SayThrottle {
+  const now = hooks.now ?? ((): number => Date.now());
+  const setTimer = hooks.setTimer ?? ((fn: () => void, ms: number): number => setTimeout(fn, ms) as unknown as number);
+  const clearTimer = hooks.clearTimer ?? ((id: number): void => clearTimeout(id));
+  let lastAt = Number.NEGATIVE_INFINITY;
+  let pending: string | null = null;
+  let timer: number | null = null;
+
+  function flush(): void {
+    timer = null;
+    if (pending === null) return;
+    const text = pending;
+    pending = null;
+    lastAt = now();
+    hooks.write(text);
+  }
+
+  function cancel(): void {
+    if (timer !== null) clearTimer(timer);
+    timer = null;
+    pending = null;
+  }
+
+  return {
+    polite(text: string): void {
+      const at = now();
+      if (timer === null && at - lastAt >= gap) {
+        lastAt = at;
+        hooks.write(text);
+        return;
+      }
+      pending = text;
+      if (timer === null) timer = setTimer(flush, Math.max(0, gap - (at - lastAt)));
+    },
+    urgent(text: string): void {
+      cancel();
+      lastAt = now();
+      hooks.write(text);
+    },
+    cancel
+  };
+}
+
 export interface SeatOpts {
   name: string;
   /** 人类玩家的键位;不给就是本机假人 */
@@ -556,6 +627,20 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
   /** 只播人类那几块盘;假人一步一句会把读屏刷屏 */
   const announceNames = opts.seats.filter((s) => s.human).length > 1;
   const prevBest: number[] = opts.seats.map(() => 0);
+  // 一块盘一个闸:同一个人连着滑只听最后一句,两块盘之间互不排队
+  const sayers = opts.seats.map(() =>
+    createSayThrottle({
+      write: (text: string) => {
+        if (!destroyed) say.textContent = text;
+      },
+      setTimer: (fn: () => void, ms: number) => {
+        const id = window.setTimeout(fn, ms);
+        timers.push(id);
+        return id;
+      },
+      clearTimer: (id: number) => window.clearTimeout(id)
+    })
+  );
 
   const seats: Seat[] = [];
   opts.seats.forEach((so, i) => {
@@ -564,13 +649,13 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
         ...so,
         onTick: (s) => {
           so.onTick?.(s);
-          if (so.human && !seatEnded(s)) say.textContent = moveAnnounce(so.name, s, prevBest[i], announceNames);
+          if (so.human && !seatEnded(s)) sayers[i].polite(moveAnnounce(so.name, s, prevBest[i], announceNames));
           prevBest[i] = s.best;
           refresh();
         },
         onDone: (s) => {
           results[i] = s;
-          if (so.human) say.textContent = overAnnounce(so.name, s, announceNames);
+          if (so.human) sayers[i].urgent(overAnnounce(so.name, s, announceNames));
           so.onDone(s);
           if (done) return;
           // 人这边一结束就结算,不用干等着假人慢慢合
@@ -695,6 +780,7 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
       window.removeEventListener("keydown", onKeyDown);
+      for (const s of sayers) s.cancel();
       for (const t of timers) clearTimeout(t);
       timers.length = 0;
       for (const off of offs) off();
