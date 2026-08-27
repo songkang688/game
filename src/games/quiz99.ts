@@ -8,6 +8,8 @@
  * 评星阈值都按题量自动缩放；被家长授权跳过的关重玩时会显示一条温柔的「跳过」提示。
  */
 import { TOTAL_LEVELS, type PlayCtx, type PlayHandle } from "./level99";
+// 契约文件只有常量与纯逻辑,不会把弹窗 UI 拖进答题壳的 chunk
+import { clampJumpTarget, isRootOpen } from "../ui/root12Contract";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "./speech";
 
 export interface QuizQuestion {
@@ -99,6 +101,24 @@ export function quizProgressText(index: number, total: number): string {
   return total >= 20 ? `${head} · 还剩 ${Math.max(0, total - index - 1)}` : head;
 }
 
+/**
+ * 直达第 N 题的控件该不该出现：只有管理员权限开着才出现，
+ * 关着 / 过期时连 DOM 都不生成（和攻略按钮一个套路，单测环境保持干净）。
+ */
+export function quizJumpVisible(nowMs: number = Date.now()): boolean {
+  return isRootOpen(nowMs);
+}
+
+/**
+ * 输入框里的「第 N 题」→ 0 基题号；越界夹到 1..total，读不出数字返回 null。
+ * 直达不改错题数、不改评星口径，只是把题号挪过去。
+ */
+export function quizJumpIndex(raw: string, total: number): number | null {
+  const max = Number.isFinite(total) && total >= 1 ? Math.min(Math.floor(total), MAX_QUESTIONS) : 1;
+  const n = clampJumpTarget(raw, max);
+  return n === null ? null : n - 1;
+}
+
 /** 全部答完时的收尾夸奖（不批评、只肯定完成度） */
 export function quizFinishLine(wrong: number, total: number): string {
   if (wrong === 0) return "全部一次答对，太了不起啦！";
@@ -129,6 +149,10 @@ const QUIZ_CSS = `
 .qz-say-row { display: flex; justify-content: center; }
 .qz-say { border: none; border-radius: 999px; background: #ffffffe6; cursor: pointer; font-family: inherit; font-weight: 900; font-size: 16px; padding: 10px 24px; min-height: 46px; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
 .qz-say:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,120,160,.3); }
+.qz-jump { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.qz-jump-input { width: 76px; min-height: 38px; border: 2px solid #e0d6f2; border-radius: 12px; padding: 0 8px; font-family: inherit; font-size: 15px; font-weight: 800; }
+.qz-jump-go { border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-size: 14px; font-weight: 900; cursor: pointer; background: #ffffffe6; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
+.qz-jump-input:focus-visible, .qz-jump-go:focus-visible { outline: 3px solid #3c2a6b; outline-offset: 3px; }
 `;
 
 export function runQuiz(opts: QuizOptions): PlayHandle {
@@ -202,6 +226,44 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
       if (!destroyed && !ended && index < questions.length) speak(questions[index].ask);
     }
   });
+
+  /**
+   * 直达第 N 题:只有管理员权限开着时才生成控件,关着时连 DOM 都不出现。
+   * 直达不改错题数、不改评星口径,只是把题号挪过去。
+   */
+  function attachRootJump(): void {
+    if (!quizJumpVisible()) return;
+    const row = document.createElement("div");
+    row.className = "qz-jump";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "1";
+    input.max = String(questions.length);
+    input.className = "qz-jump-input";
+    input.value = "1";
+    input.setAttribute("aria-label", `直达第几题,1 到 ${questions.length}`);
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "qz-jump-go";
+    go.textContent = "🎫 直达这题";
+    const jump = (): void => {
+      if (ended || destroyed) return;
+      const target = quizJumpIndex(input.value, questions.length);
+      if (target === null) return;
+      input.value = String(target + 1);
+      index = target;
+      show();
+    };
+    go.addEventListener("click", jump);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        jump();
+      }
+    });
+    row.append(input, go);
+    wrap.insertBefore(row, promptEl);
+  }
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -288,6 +350,7 @@ export function runQuiz(opts: QuizOptions): PlayHandle {
     }
   }
 
+  attachRootJump();
   show();
 
   return {

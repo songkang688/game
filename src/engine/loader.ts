@@ -5,17 +5,28 @@
  * 其他子代理只要把游戏目录(meta.ts + index.ts)合并进来,首页就会自动出现,
  * 无需改壳代码。
  */
-import type { GameCategory, GameMeta, GameMode, GameModule, GameMount } from "./types";
-import { CATEGORY_ORDER, GAME_MODES } from "./types";
+import type { GameCategory, GameMeta, GameMode, GameModule, GameMount, GamePlatform } from "./types";
+import { CATEGORY_ORDER, GAME_MODES, GAME_PLATFORMS } from "./types";
 
 const VALID_CATEGORIES = new Set<string>(CATEGORY_ORDER);
 const VALID_MODES = new Set<string>(GAME_MODES);
+const VALID_PLATFORMS = new Set<string>(GAME_PLATFORMS);
 
 /** 归一化 meta.modes:只留认识的模式、去重、顺序按 GAME_MODES;没有合法项就当没填 */
 function normalizeModes(raw: unknown): GameMode[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const kept = GAME_MODES.filter((m) => raw.some((v) => v === m && VALID_MODES.has(String(v))));
   return kept.length > 0 ? kept : undefined;
+}
+
+/**
+ * 归一化 meta.platform(1.2 新增)。
+ *
+ * 认不出来的脏值当没填 —— 下游 `matchesPlatformChip` 把「没填」当 `"both"`,
+ * 手游端游两个筛选都能查到,所以老 meta 不填也不会有游戏凭空消失。
+ */
+function normalizePlatform(raw: unknown): GamePlatform | undefined {
+  return typeof raw === "string" && VALID_PLATFORMS.has(raw) ? (raw as GamePlatform) : undefined;
 }
 
 /** 归一化正整数字段(关数、年龄):非正整数一律当没填 */
@@ -65,6 +76,8 @@ function extractMeta(raw: unknown): GameMeta | null {
   // 1.1 新增的可选字段:填了才带上,老 meta 不填照样能上首页
   const modes = normalizeModes(m.modes);
   if (modes) normalized.modes = modes;
+  const platform = normalizePlatform(m.platform);
+  if (platform) normalized.platform = platform;
   const levels = normalizePositiveInt(m.levels);
   if (levels !== undefined) normalized.levels = levels;
   const ageHint = normalizePositiveInt(m.ageHint);

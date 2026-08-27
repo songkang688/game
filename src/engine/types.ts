@@ -20,6 +20,12 @@ export type GameMode = "campaign" | "versus" | "endless" | "coop" | "twoPlayer";
 /** 一款游戏可以声明的全部玩法模式(校验与遍历用) */
 export const GAME_MODES: GameMode[] = ["campaign", "versus", "endless", "coop", "twoPlayer"];
 
+/** 这款游戏在哪种设备上玩着顺手:mobile=手游 desktop=端游 both=都行 */
+export type GamePlatform = "mobile" | "desktop" | "both";
+
+/** 全部取值(校验与遍历用) */
+export const GAME_PLATFORMS: GamePlatform[] = ["mobile", "desktop", "both"];
+
 export interface GameMeta {
   /** 全局唯一 id,建议与目录名一致,只用小写字母、数字和连字符 */
   id: string;
@@ -38,6 +44,11 @@ export interface GameMeta {
    * 不填时首页只按分类展示,玩法芯片筛不到它。
    */
   modes?: readonly GameMode[];
+  /**
+   * 手游还是端游:手指玩着顺手填 `"mobile"`,要键盘 / 鼠标精度填 `"desktop"`,两边都顺手填 `"both"`。
+   * **不填一律按 `"both"` 处理**,所以老游戏在「手游」「端游」两个筛选下都找得到,不会有游戏因此消失。
+   */
+  platform?: GamePlatform;
   /**
    * 闯关战役的总关数(没有闯关就别填)。首页进度徽章拿它当分母,
    * 不填按 DEFAULT_LEVEL_TOTAL 算。存档 key 仍旧是 `yiduo-yixing.l99.<id>`。
