@@ -242,15 +242,71 @@ function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number,
   c.closePath();
 }
 
-function drawSky(c: CanvasRenderingContext2D, cam: Camera, w: number, t: number): void {
+/**
+ * 一章一个天色。
+ *
+ * 从初雪的上午一路走到极光下的夜里,八章八个样子——同一套判定,换个天色就像换了个地方。
+ * 天再暗也保证雪原是浅色的:雪球、落点圈、小人都画在这层上面,底子暗了就看不清了。
+ */
+interface Sky {
+  top: string;
+  bottom: string;
+  /** 飘雪的密度(0 = 不下) */
+  flakes: number;
+  /** 画在天上的字用什么颜色 */
+  ink: string;
+  aurora: boolean;
+}
+
+const SKIES: Sky[] = [
+  { top: "#cfe3f7", bottom: "#f2f8ff", flakes: 30, ink: "#4f6a9c", aurora: false },
+  { top: "#bfdcf6", bottom: "#f4fbff", flakes: 18, ink: "#4f6a9c", aurora: false },
+  { top: "#d8dfea", bottom: "#f5f8fb", flakes: 44, ink: "#556484", aurora: false },
+  { top: "#f3d7e6", bottom: "#fdf1f6", flakes: 26, ink: "#8a5677", aurora: false },
+  { top: "#e2d4f0", bottom: "#faf2fc", flakes: 52, ink: "#6a5a92", aurora: false },
+  { top: "#a8c4e6", bottom: "#e6effa", flakes: 22, ink: "#3f5a86", aurora: false },
+  { top: "#7d97c4", bottom: "#d8e5f4", flakes: 38, ink: "#eaf2ff", aurora: false },
+  { top: "#5d78ab", bottom: "#cfe0f2", flakes: 30, ink: "#eaf2ff", aurora: true },
+];
+
+/** 最后一档天色(极光夜)的序号 */
+const SKY_LAST = SKIES.length - 1;
+
+function skyFor(chapter: number): Sky {
+  return SKIES[Math.max(0, Math.min(SKY_LAST, Math.round(chapter)))] as Sky;
+}
+
+/** 无尽的天色:雪季从白天一直打到极光下的夜里,一波换一档,撑得越久天越晚 */
+export function endlessSky(a: Arena): number {
+  return Math.min(SKY_LAST, a.wave - 1);
+}
+
+function drawSky(c: CanvasRenderingContext2D, cam: Camera, w: number, t: number, sky: Sky, flakes: number): void {
   const g = c.createLinearGradient(0, 0, 0, cam.h);
-  g.addColorStop(0, "#cfe3f7");
-  g.addColorStop(1, "#f2f8ff");
+  g.addColorStop(0, sky.top);
+  g.addColorStop(1, sky.bottom);
   c.fillStyle = g;
   c.fillRect(0, 0, w, cam.h + GROUND_PAD);
+  if (sky.aurora) {
+    // 极光:两条横着淌的光带,只是背景,不参与任何判定
+    for (const [k, tint] of [[0.18, "rgba(126,224,190,.28)"], [0.3, "rgba(168,150,232,.24)"]] as Array<[number, string]>) {
+      c.fillStyle = tint;
+      c.beginPath();
+      c.moveTo(0, cam.h * k);
+      for (let x = 0; x <= w; x += 12) {
+        c.lineTo(x, cam.h * k + Math.sin(x / 70 + t * 0.35 + k * 9) * cam.h * 0.05);
+      }
+      c.lineTo(w, cam.h * (k + 0.12));
+      for (let x = w; x >= 0; x -= 12) {
+        c.lineTo(x, cam.h * (k + 0.12) + Math.sin(x / 70 + t * 0.35 + k * 9) * cam.h * 0.05);
+      }
+      c.closePath();
+      c.fill();
+    }
+  }
   // 一直在下的雪:位置只跟时间有关,不占状态,所以暂停 / 重挂都不会闪
   c.fillStyle = "rgba(255,255,255,.85)";
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < flakes; i++) {
     const px = ((i * 137.5 + t * 12) % (w + 20)) - 10;
     const py = ((i * 61.7 + t * 26) % (cam.h + 20)) - 10;
     c.beginPath();
@@ -570,13 +626,48 @@ function drawLanding(c: CanvasRenderingContext2D, cam: Camera, ring: { x: number
   c.restore();
 }
 
-function drawBall(c: CanvasRenderingContext2D, cam: Camera, b: { x: number; y: number }): void {
+/**
+ * 飞行中的雪球:一小截拖尾 + 一道转着的纹路。
+ *
+ * 转速跟着水平速度走,拖尾顺着速度方向往回拖一点——这两样都不进判定,
+ * 纯粹是为了让「这一发飞得快不快、往哪儿飞」一眼看得出来。
+ */
+function drawBall(
+  c: CanvasRenderingContext2D,
+  cam: Camera,
+  b: { x: number; y: number; vx: number; vy: number; spin?: number },
+  motion: boolean
+): void {
+  const x = sx(cam, b.x);
+  const y = sy(cam, b.y);
+  const r = Math.max(3, BALL_R_12 * cam.s);
+  if (motion) {
+    const speed = Math.hypot(b.vx, b.vy) || 1;
+    const tx = (b.vx / speed) * r * 2.6;
+    const ty = (-b.vy / speed) * r * 2.6 * cam.ys;
+    c.strokeStyle = "rgba(255,255,255,.62)";
+    c.lineWidth = r * 1.1;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(x - tx, y - ty);
+    c.lineTo(x, y);
+    c.stroke();
+    c.lineCap = "butt";
+  }
   c.fillStyle = "#ffffff";
   c.strokeStyle = "rgba(140,175,210,.9)";
   c.lineWidth = 1.2;
   c.beginPath();
-  c.arc(sx(cam, b.x), sy(cam, b.y), Math.max(3, BALL_R_12 * cam.s), 0, Math.PI * 2);
+  c.arc(x, y, r, 0, Math.PI * 2);
   c.fill();
+  c.stroke();
+  if (!motion) return;
+  // 转起来:一道横纹绕着球心走,看得见它在滚
+  const a = b.spin ?? 0;
+  c.strokeStyle = "rgba(150,185,220,.8)";
+  c.lineWidth = 1;
+  c.beginPath();
+  c.ellipse(x, y, r * 0.72, r * 0.72 * Math.abs(Math.cos(a)), 0, 0, Math.PI * 2);
   c.stroke();
 }
 
@@ -599,18 +690,18 @@ function drawPuffs(c: CanvasRenderingContext2D, cam: Camera, puffs: Puff[]): voi
   }
 }
 
-function drawWindFlag(c: CanvasRenderingContext2D, cam: Camera, w: number, wind: number): void {
+function drawWindFlag(c: CanvasRenderingContext2D, cam: Camera, w: number, wind: number, ink: string): void {
   const cx = w / 2;
   const cy = Math.max(15, cam.h * 0.1);
   c.textAlign = "center";
   c.textBaseline = "middle";
   c.font = `700 ${Math.max(12, Math.round(cam.s * 0.8))}px system-ui`;
-  c.fillStyle = "#4f6a9c";
+  c.fillStyle = ink;
   c.fillText(windWord(wind), cx, cy);
   if (Math.abs(wind) < 0.25) return;
   const len = Math.min(46, 12 + Math.abs(wind) * 12);
   const dir = wind > 0 ? 1 : -1;
-  c.strokeStyle = "rgba(90,130,180,.8)";
+  c.strokeStyle = ink;
   c.lineWidth = 2;
   c.beginPath();
   c.moveTo(cx - (len / 2) * dir, cy + 14);
@@ -709,6 +800,8 @@ interface RunOptions {
   /** 有几位真人在场(1 = 只有朵朵的键位生效) */
   humans: 1 | 2;
   hint: string;
+  /** 天色照第几章画(给函数就是「天色会跟着局势走」,无尽就是一波比一波晚) */
+  chapter?: number | ((a: Arena) => number);
   /** HUD 上额外挂几个小牌子 */
   extraChips?: (a: Arena) => string[];
   onEnd: (a: Arena) => void;
@@ -757,6 +850,17 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   let hudAt = 0;
   let cam: Camera = { s: 8, ys: 1, h: 128 };
   let cssW = 320;
+  const skyNow = (): Sky => skyFor(typeof opts.chapter === "function" ? opts.chapter(a) : (opts.chapter ?? 0));
+  /**
+   * 有人在系统里关了动效就别晃。
+   *
+   * 关掉的是「看着晃」的那些:飘雪、拖尾、旋转、靶子的摇摆。玩法一点不动——
+   * 雪球该落在哪儿还落在哪儿,不然关了动效就变成另一款游戏了。
+   */
+  const motion = !(globalThis.matchMedia?.("(prefers-reduced-motion:reduce)").matches ?? false);
+  /** 掉帧就少画点雪花:先保证抛物线是顺的 */
+  let flakeScale = motion ? 1 : 0;
+  let slowFrames = 0;
 
   // 暂停贴在画布右上角:手机上一横排按钮就得吃掉五十多像素,那点高度留给雪原
   const pauseBtn = document.createElement("button");
@@ -912,8 +1016,18 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
       layout();
     }
     if (last === 0) last = now;
-    const dt = Math.min(MAX_DT, Math.max(0, (now - last) / 1000));
+    const raw = (now - last) / 1000;
+    const dt = Math.min(MAX_DT, Math.max(0, raw));
     last = now;
+    // 掉帧了就少画点雪花。先砍装饰,再谈好看——抛物线卡住了这游戏就没法玩了
+    if (motion) {
+      if (raw > 0.034) slowFrames++;
+      else if (slowFrames > 0) slowFrames--;
+      if (slowFrames > 12 && flakeScale > 0.2) {
+        flakeScale = Math.max(0.2, flakeScale / 2);
+        slowFrames = 0;
+      }
+    }
     if (!paused && !finished) {
       clock += dt;
       for (const p of puffs) p.t += dt;
@@ -939,15 +1053,18 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   }
 
   function draw(c: CanvasRenderingContext2D): void {
-    drawSky(c, cam, cssW, clock);
+    // 关了动效就让靶子站住别晃:时间不往前走,摇摆的相位就一直是 0
+    const anim = motion ? clock : 0;
+    const sky = skyNow();
+    drawSky(c, cam, cssW, anim, sky, Math.round(sky.flakes * flakeScale));
     drawBackdrop(c, cam, cssW);
     drawGround(c, cam, cssW, a);
     if (a.mode !== "duel") drawFort(c, cam, a.fortX);
     // 远排先画,近排压在上面:两排一叠就有了「远处更远」的样子
     for (const cv of a.covers) if (cv.row === 1) drawCover(c, cam, cv);
-    for (const f of a.foes) if (f.row === 1) drawFoe(c, cam, f, clock);
+    for (const f of a.foes) if (f.row === 1) drawFoe(c, cam, f, anim);
     for (const cv of a.covers) if (cv.row === 0) drawCover(c, cam, cv);
-    for (const f of a.foes) if (f.row === 0) drawFoe(c, cam, f, clock);
+    for (const f of a.foes) if (f.row === 0) drawFoe(c, cam, f, anim);
     for (const f of a.fighters) {
       // 落点圈:没在蓄力也画一个虚的(那是「轻轻一点就松手」会落到的地方),
       // 蓄力中画实的。小朋友照着圈调,不用先学会看角度
@@ -957,8 +1074,9 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
       drawAimArrow(c, cam, f);
       drawFighter(c, cam, f, clock);
     }
-    for (const b of a.balls) drawBall(c, cam, b);
-    drawWindFlag(c, cam, cssW, a.wind);
+    // 转过的角度 = 转速 × 在天上待了多久,不额外记状态,暂停 / 重挂都对得上
+    for (const b of a.balls) drawBall(c, cam, { ...b, spin: b.spin * b.age }, motion);
+    drawWindFlag(c, cam, cssW, a.wind, skyNow().ink);
     for (let s = 0; s < opts.humans; s++) {
       const f = seatOf(s);
       if (f && f.charge !== null) drawChargeBar(c, cssW, cam, s, f.charge);
@@ -1228,6 +1346,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     arena,
     viewW: VIEW_W,
     humans: 1,
+    chapter: ci,
     hint: `${CHAPTER_NEW[ci] ?? ""} 蹲下搓雪(G),站起来按住 F 蓄力,落点圈套住靶子再松手。`,
     onEnd(a) {
       const me = a.fighters[0];
@@ -1325,6 +1444,8 @@ function mountDuel(host: HTMLElement, api: GameApi, back: () => void, ai: AiLeve
     arena,
     viewW: FIELD_W_12,
     humans: ai ? 1 : 2,
+    // 对战摆在傍晚的雪坡上,和闯关的白天分得开
+    chapter: 3,
     hint: ai
       ? `对面的灯笼躲在掩体后面,抬高角度绕过去。砸中${AI_12[ai].name}他会变 1.5 秒雪人,那正是你连投的机会。`
       : "两个人同时玩,键位与按钮各管各的(下面两块牌子上写着谁是谁)。先砸化对面三盏雪灯笼就赢。",
@@ -1408,6 +1529,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
     arena,
     viewW: VIEW_W,
     humans: 1,
+    chapter: endlessSky,
     hint: "雪季不会停,雪人一波比一波准。手里最多三颗,趁没人扔过来的时候蹲下多搓两颗。",
     extraChips: (a) => [`🌊 第 ${a.wave} 波`, `🌼 化掉 ${a.melted}`],
     onEnd: finish,

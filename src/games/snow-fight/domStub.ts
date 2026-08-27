@@ -25,9 +25,11 @@ export interface FakeEvent {
 export type Handler = (e: FakeEvent) => void;
 
 export interface DrawOp {
-  op: "arc" | "ellipse" | "fillText" | "setLineDash";
+  op: "arc" | "ellipse" | "fillText" | "setLineDash" | "gradient";
   args: number[];
   text?: string;
+  /** 渐变的色标:天色用例靠它认出「这一章是什么天」 */
+  stops?: string[];
 }
 
 export class FakeCtx {
@@ -80,8 +82,10 @@ export class FakeCtx {
   setLineDash(pattern: number[]): void {
     this.ops.push({ op: "setLineDash", args: [...pattern] });
   }
-  createLinearGradient(): { addColorStop: () => void } {
-    return { addColorStop: () => {} };
+  createLinearGradient(): { addColorStop: (at: number, color: string) => void } {
+    const stops: string[] = [];
+    this.ops.push({ op: "gradient", args: [], stops });
+    return { addColorStop: (_at: number, color: string) => void stops.push(color) };
   }
   createRadialGradient(): { addColorStop: () => void } {
     return { addColorStop: () => {} };
@@ -308,7 +312,9 @@ export interface Harness {
   restore: () => void;
 }
 
-export function install(opts: { innerWidth?: number; innerHeight?: number; search?: string } = {}): Harness {
+export function install(
+  opts: { innerWidth?: number; innerHeight?: number; search?: string; reduceMotion?: boolean } = {}
+): Harness {
   const g = globalThis as Record<string, unknown>;
   const saved = {
     document: g.document,
@@ -330,7 +336,9 @@ export function install(opts: { innerWidth?: number; innerHeight?: number; searc
   let clock = 0;
 
   const winListeners = new Map<string, Handler[]>();
-  const media = (): { matches: boolean } => ({ matches: false });
+  const media = (q: string): { matches: boolean } => ({
+    matches: /reduced-motion/.test(q) ? (opts.reduceMotion ?? false) : false,
+  });
   const win = {
     innerWidth: opts.innerWidth ?? 360,
     innerHeight: opts.innerHeight ?? 720,

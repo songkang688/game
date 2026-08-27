@@ -536,7 +536,87 @@ describe("snow-fight 1.2 · 平台接线", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 六、destroy 归零
+// 六、看着舒服:天色、拖尾、关了动效就别晃
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 · 画面", () => {
+  /** 这一帧天空那道渐变用了哪两个色 */
+  function skyStops(h: Harness): string[] {
+    const ctx = canvasOf(h).getContext("2d");
+    return ctx!.ops.find((o) => o.op === "gradient")?.stops ?? [];
+  }
+
+  it("一章一个天色:初雪的上午和极光下的夜里不是同一片天", async () => {
+    const h = (harness = install());
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(1);
+    h.flush(3);
+    const day = skyStops(h);
+    game.openCampaignLevel(188);
+    h.flush(3);
+    const night = skyStops(h);
+    expect(day.length).toBe(2);
+    expect(night.length).toBe(2);
+    expect(night[0]).not.toBe(day[0]);
+    game.destroy();
+  });
+
+  it("无尽的天一波比一波晚,顶到最后是极光", async () => {
+    const h = (harness = install());
+    const { endlessSky } = await import("./index");
+    const { bout } = await openBout(h, endlessArena(3), { chapter: endlessSky });
+    h.flush(3);
+    const first = skyStops(h);
+    bout.arena.wave = 8;
+    canvasOf(h).getContext("2d")!.ops.length = 0;
+    h.flush(1);
+    expect(skyStops(h)[0]).not.toBe(first[0]);
+    bout.destroy();
+  });
+
+  it("系统里关了动效就不飘雪:玩法一点没动,只是画面站住了", async () => {
+    const countArcs = async (reduceMotion: boolean): Promise<number> => {
+      const h = (harness = install({ reduceMotion }));
+      const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+      h.flush(3);
+      const ctx = canvasOf(h).getContext("2d");
+      ctx!.ops.length = 0;
+      h.flush(1);
+      const arcs = ctx!.ops.filter((o) => o.op === "arc").length;
+      bout.destroy();
+      h.restore();
+      harness = null;
+      return arcs;
+    };
+    const lively = await countArcs(false);
+    const calm = await countArcs(true);
+    expect(lively).toBeGreaterThan(calm + 20);
+  });
+
+  it("雪球在天上会转会拖尾,落地了就不画了", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    const ctx = canvasOf(h).getContext("2d");
+    h.key("keydown", "KeyF");
+    h.flush(30);
+    h.key("keyup", "KeyF");
+    h.flush(3);
+    expect(bout.arena.balls.length).toBe(1);
+    ctx!.ops.length = 0;
+    h.flush(1);
+    const ball = bout.arena.balls[0]!;
+    const bx = ball.x * pxPerUnit(h);
+    // 球身那个圆 + 转纹那个椭圆,都画在雪球所在的位置
+    const near = (v: number): boolean => Math.abs(v - bx) < 3;
+    expect(ctx!.ops.some((o) => o.op === "arc" && near(o.args[0] ?? -99))).toBe(true);
+    expect(ctx!.ops.some((o) => o.op === "ellipse" && near(o.args[0] ?? -99))).toBe(true);
+    bout.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 七、destroy 归零
 // ---------------------------------------------------------------------------
 
 describe("snow-fight 1.2 · destroy 收干净", () => {
