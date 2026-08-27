@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TIER_FRIGHT_MS } from "./ghosts";
+import { PHASE_TABLES, TIER_FRIGHT_MS } from "./ghosts";
 import {
   FRUITS,
   RESPAWN_GRACE_MS,
@@ -245,5 +245,52 @@ describe("豆豆迷宫 · 星星操纵一只小幽灵", () => {
     expect(state.notice).toContain("绕晕");
     expect(state.controlled).toBe(1);
     expect(state.ghosts[1].kind).toBe(kind);
+  });
+});
+
+/** 把唯一那只小幽灵摆在长廊中段、朝右走，方便看它有没有掉头 */
+function parkGhostFacingRight(state: ReturnType<typeof createRun>, elapsed: number): void {
+  state.elapsed = elapsed;
+  state.ghosts = state.ghosts.map((g) => ({
+    ...g,
+    cell: { x: 5, y: 1 },
+    dir: "right" as const,
+    mood: "scatter" as const,
+  }));
+  state.ghostCd = 10;
+}
+
+describe("豆豆迷宫 · 换段时全体转身", () => {
+  const FLIP_AT = PHASE_TABLES.rookie[0].ms;
+
+  it("巡游 ↔ 追击换段的那一刻，在场的小幽灵一起掉头", () => {
+    const state = createRun(cfg({ maze: corridor(), ghostCount: 1 }), 1);
+    parkPlayer(state);
+    parkGhostFacingRight(state, FLIP_AT - 50);
+    expect(state.phase).toBe("scatter");
+    stepRun(state, 100);
+    expect(state.phase).toBe("chase");
+    expect(state.ghosts[0].dir).toBe("left");
+    expect(state.ghosts[0].cell.x).toBeLessThan(5);
+  });
+
+  it("同一段里不会平白掉头：没换段就照着原方向继续走", () => {
+    const state = createRun(cfg({ maze: corridor(), ghostCount: 1 }), 1);
+    parkPlayer(state);
+    parkGhostFacingRight(state, FLIP_AT - 2000);
+    stepRun(state, 100);
+    expect(state.phase).toBe("scatter");
+    expect(state.ghosts[0].cell.x).toBeGreaterThan(5);
+  });
+
+  it("第二个人操纵的那只不跟着转身，方向始终握在他自己手里", () => {
+    const state = createRun(cfg({ maze: corridor(), ghostCount: 1, controlled: 0 }), 1);
+    parkPlayer(state);
+    parkGhostFacingRight(state, FLIP_AT - 50);
+    steerGhost(state, "right");
+    stepRun(state, 100);
+    expect(state.phase).toBe("chase");
+    expect(state.ghosts[0].dir).toBe("right");
+    expect(state.ghosts[0].cell.x).toBeGreaterThan(5);
   });
 });

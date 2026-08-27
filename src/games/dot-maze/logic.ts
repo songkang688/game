@@ -14,6 +14,7 @@ import {
   ghostPhase,
   hitGhost,
   makeGhost,
+  reversePhaseFlip,
   tickFright,
   tierFlanks,
   type ChaseInput,
@@ -98,6 +99,8 @@ export interface RunState {
   controlled: number;
   /** 第二个人给那只小幽灵下的转向（撞墙时保持原方向） */
   controlledDir: Dir;
+  /** 上一帧的节奏段，用来发现「巡游 ↔ 追击」换段的那一刻 */
+  phase: "scatter" | "chase";
 }
 
 /** 果子在场上停留多久 */
@@ -147,6 +150,7 @@ export function createRun(cfg: RunConfig, seed = 1): RunState {
       ? Math.floor(cfg.controlled)
       : -1,
     controlledDir: "left",
+    phase: ghostPhase(0, PHASE_TABLES[cfg.tier]),
   };
 }
 
@@ -295,6 +299,11 @@ export function stepRun(state: RunState, dt: number): RunState {
   }
 
   const phase = ghostPhase(state.elapsed, PHASE_TABLES[state.cfg.tier]);
+  if (phase !== state.phase) {
+    // 换段那一刻全体转身：第二个人操纵的那只不算，方向得留在他自己手里
+    state.ghosts = reversePhaseFlip(state.ghosts, state.controlled);
+    state.phase = phase;
+  }
   state.ghosts = state.ghosts.map((g) => tickFright(g, clamped, phase));
 
   // 玩家

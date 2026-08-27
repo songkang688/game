@@ -181,7 +181,12 @@ export function targetOf(kind: GhostKind, self: Ghost, input: ChaseInput): Cell 
   return corners[pick];
 }
 
-/** 惊吓状态下逃跑的目标：离玩家最远的角落 */
+/**
+ * 惊吓状态下逃跑的目标：先看哪个角落离玩家最远，一样远的时候各回各的角落。
+ * 只看「离玩家最远」的话四只会挑到同一个角落、排成一串往同一条路上跑，
+ * 玩家一颗能量豆就能顺着队伍一路吃到底；加上自己那个角落当第二判据，
+ * 四只就散开了，连击 200 / 400 / 800 / 1600 才需要真的绕路去凑。
+ */
 export function fleeTarget(self: Ghost, player: Cell, maze: Maze): Cell {
   const corners: Cell[] = [
     { x: 1, y: 1 },
@@ -190,11 +195,11 @@ export function fleeTarget(self: Ghost, player: Cell, maze: Maze): Cell {
     { x: maze.w - 2, y: maze.h - 2 },
   ];
   let best = corners[0];
-  let bestD = -1;
+  let bestScore = -Infinity;
   for (const c of corners) {
-    const d = manhattan(c, player);
-    if (d > bestD) {
-      bestD = d;
+    const score = manhattan(c, player) * 4 - manhattan(c, self.corner);
+    if (score > bestScore) {
+      bestScore = score;
       best = c;
     }
   }
@@ -227,6 +232,20 @@ export function frightenAll(ghosts: Ghost[], ms: number): Ghost[] {
   return ghosts.map((g) => {
     if (g.mood === "eyes") return g;
     return { ...g, mood: "fright" as GhostMood, frightMs: ms, dir: OPPOSITE[g.dir] };
+  });
+}
+
+/**
+ * 巡游 ↔ 追击换段的那一刻，在场的小幽灵统一掉一次头。
+ * 这是给玩家的一个「看得见的信号」：一整排小幽灵同时转身，就知道节奏变了，
+ * 该收还是该冲有得判断；顺带也把「贴着屁股一路跟到底」的黏人劲儿打断一下。
+ * 回家的眼睛与正被吓到的不掉头（它们本来就有自己的去处）。
+ */
+export function reversePhaseFlip(ghosts: readonly Ghost[], skip = -1): Ghost[] {
+  return ghosts.map((g, i) => {
+    if (i === skip) return g;
+    if (g.mood === "eyes" || g.mood === "fright") return g;
+    return { ...g, dir: OPPOSITE[g.dir] };
   });
 }
 

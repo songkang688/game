@@ -17,6 +17,7 @@ import {
   hitGhost,
   homeSlot,
   makeGhost,
+  reversePhaseFlip,
   targetOf,
   tickFright,
   tierFlanks,
@@ -83,6 +84,49 @@ describe("豆豆迷宫 · 四种脾气的目标函数", () => {
     const m = arena();
     const t = fleeTarget(ghostAt("zhi", 5, 3), { x: 1, y: 1 }, m);
     expect(t).toEqual({ x: m.w - 2, y: m.h - 2 });
+  });
+
+  it("玩家站在正中间时四只散开逃，不会挤到同一个角落里排队", () => {
+    const m = arena();
+    const center = { x: Math.floor(m.w / 2), y: Math.floor(m.h / 2) };
+    const targets = GHOST_KINDS.map((kind, slot) =>
+      fleeTarget(makeGhost(kind, m, slot), center, m)
+    );
+    expect(new Set(targets.map((t) => `${t.x},${t.y}`)).size).toBeGreaterThan(1);
+    // 各自跑的还是自己那个角落，不会跑到离玩家更近的地方去
+    for (let i = 0; i < targets.length; i++) {
+      const self = makeGhost(GHOST_KINDS[i], m, i);
+      expect(targets[i]).toEqual(self.corner);
+    }
+  });
+});
+
+describe("豆豆迷宫 · 换段时全体转身", () => {
+  it("在场的小幽灵一起掉头，回家的眼睛和被吓到的不动", () => {
+    const list: Ghost[] = [
+      ghostAt("zhi", 2, 1),
+      { ...ghostAt("guai", 3, 1), mood: "eyes" },
+      { ...ghostAt("rao", 4, 1), mood: "fright", frightMs: 2000 },
+    ];
+    const next = reversePhaseFlip(list);
+    expect(next[0].dir).toBe(OPPOSITE[list[0].dir]);
+    expect(next[1]).toEqual(list[1]);
+    expect(next[2]).toEqual(list[2]);
+  });
+
+  it("指定跳过的那一只（第二个人操纵的）原样保留", () => {
+    const list = [ghostAt("zhi", 2, 1), ghostAt("guai", 3, 1)];
+    const next = reversePhaseFlip(list, 1);
+    expect(next[0].dir).toBe(OPPOSITE[list[0].dir]);
+    expect(next[1]).toEqual(list[1]);
+  });
+
+  it("掉头只换朝向，格子和脾气都不动", () => {
+    const g = ghostAt("luan", 6, 5);
+    const [next] = reversePhaseFlip([g]);
+    expect(next.cell).toEqual(g.cell);
+    expect(next.kind).toBe(g.kind);
+    expect(next.mood).toBe(g.mood);
   });
 });
 
