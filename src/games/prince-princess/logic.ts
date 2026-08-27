@@ -22,6 +22,18 @@ import {
   type Gap,
   type LevelDef,
 } from "./levels";
+import {
+  BLOCK_H,
+  BLOCK_W,
+  canPush,
+  fallStep,
+  freshGlide,
+  glideStep,
+  pushStep,
+  type BlockState,
+  type GlideState,
+} from "./abilities";
+import { checkpointsFor, respawnX, updateReached } from "./checkpoints";
 
 // ---------------------------------------------------------------------------
 // 物理常量
@@ -67,6 +79,8 @@ export const STOMP_BOUNCE = 420;
 export const STOMP_DAMAGE = 2;
 /** 受伤后的公共无敌时间(两个人共用) */
 export const HURT_INVULN = 1.5;
+/** 被小云朵托回检查点之后的缓冲:让人站稳看清楚再说 */
+export const CLOUD_GRACE = 2.4;
 export const FALL_LIMIT = 260;
 /** 滑地板的减速系数(越小越滑) */
 export const SLIP_FRICTION = 3;
@@ -231,6 +245,10 @@ export interface HeroState {
   hurtFlash: number;
   kills: number;
   gems: number;
+  /** 公主的滑翔额度(王子的永远是空的) */
+  glide: GlideState;
+  /** 这一帧正推着箱子 */
+  pushing: boolean;
   /** 机器人托管时用来发现「卡住了」 */
   aiPrevX: number;
   aiStuckT: number;
@@ -313,6 +331,12 @@ export interface BossState {
 export type EventKind =
   | "jump"
   | "double"
+  | "glide"
+  | "push"
+  | "bridge"
+  | "shield"
+  | "cloud"
+  | "flag"
   | "slash"
   | "shoot"
   | "hit"
@@ -347,6 +371,12 @@ export interface World {
   gems: GemState[];
   spikes: Array<{ x: number; w: number }>;
   gaps: Gap[];
+  /** 重箱子(只有王子推得动) */
+  blocks: BlockState[];
+  /** 检查点小旗的 x(至少两面) */
+  flags: number[];
+  /** 两个人都走过的最后一面旗(-1 = 一面都还没点亮) */
+  reached: number;
   boss: BossState | null;
   /** 一个人玩的时候正在操作的是谁 */
   active: number;
@@ -383,6 +413,8 @@ function makeHero(index: number, kind: HeroKind, x: number): HeroState {
     hurtFlash: 0,
     kills: 0,
     gems: 0,
+    glide: freshGlide(),
+    pushing: false,
     aiPrevX: x,
     aiStuckT: 0,
   };
@@ -451,6 +483,9 @@ export function createWorld(def: LevelDef, players: 1 | 2 = 1): World {
     gems: def.gems.map((g) => ({ x: g.x, y: g.y, ground: g.ground, taken: false })),
     spikes: def.spikes.map((s) => ({ x: s.x, w: s.w })),
     gaps: def.gaps,
+    blocks: (def.blocks ?? []).map((b) => ({ x: b.x, y: b.y, vy: 0, bridge: false })),
+    flags: checkpointsFor(def),
+    reached: -1,
     boss: def.boss ? makeBoss(def.boss) : null,
     active: 0,
     players,
@@ -560,22 +595,44 @@ export function drainEvents(w: World): WorldEvent[] {
 // 受伤与击倒
 // ---------------------------------------------------------------------------
 
-/** 两个人共用一条心条:受伤后进入公共无敌,替对方挡刀是划算的 */
+/**
+ * 两个人共用一条心条:受伤后进入公共无敌,替对方挡刀是划算的。
+ *
+ * 画面上受伤 = **戴上小护盾闪一下**(`shield` 事件),没有任何受伤描写。
+ * 教学关(`def.noRisk`)连心都不掉,只闪护盾 —— 站着不动一整天也不会输。
+ */
 function hurt(w: World, h: HeroState, fromX: number, why: string): void {
   if (w.invuln > 0 || w.status !== "playing") return;
   w.invuln = HURT_INVULN;
   h.hurtFlash = 0.55;
-  w.hearts--;
   const away: 1 | -1 = h.x >= fromX ? 1 : -1;
   h.vx = away * 190;
   h.vy = -250;
   h.onGround = false;
+  pushEvent(w, "shield", h.x, h.y - 30, h.index);
+  if (w.def.noRisk) return;
+  w.hearts--;
   pushEvent(w, "hurt", h.x, h.y - 24, h.index);
   if (w.hearts <= 0) {
     w.status = "lost";
     w.message = why;
     pushEvent(w, "lose", h.x, h.y);
   }
+}
+
+/**
+ * 掉下去 = 被一朵小云托回最近点亮的那面小旗。
+ * **只挪人**:宝石、清怪数、已经开的城门统统保留,不许整关重来。
+ */
+function cloudBack(w: World, h: HeroState): void {
+  const back = respawnX(w.def, w.flags, w.reached, h.x);
+  h.x = back;
+  h.y = -50;
+  h.vy = 0;
+  h.vx = 0;
+  h.glide = freshGlide();
+  w.invuln = Math.max(w.invuln, CLOUD_GRACE);
+  pushEvent(w, "cloud", back, -70, h.index);
 }
 
 function defeatEnemy(w: World, e: EnemyState, by: HeroState | null): void {
@@ -723,6 +780,7 @@ function applyHorizontal(w: World, h: HeroState, input: Input, dt: number): void
   }
 
   h.x += h.vx * dt;
+  meetBlocks(w, h, dir === 0 ? 0 : dir > 0 ? 1 : -1, dt);
   if (h.x < 16) {
     h.x = 16;
     h.vx = 0;
@@ -733,13 +791,107 @@ function applyHorizontal(w: World, h: HeroState, input: Input, dt: number): void
   }
 }
 
-function applyVertical(w: World, h: HeroState, dt: number): void {
+/**
+ * 撞上重箱子:王子顶着走(推),公主被挡在外面(但箱子只有 `BLOCK_H` 高,跳过去就是了)。
+ * 架成桥的箱子不挡人也不再推得动。
+ */
+function meetBlocks(w: World, h: HeroState, dir: -1 | 0 | 1, dt: number): void {
+  h.pushing = false;
+  for (const b of w.blocks) {
+    if (b.bridge) continue;
+    const top = b.y - BLOCK_H;
+    // 站在箱子顶上不算撞
+    if (h.y <= top + 2) continue;
+    if (h.y - HERO_H >= b.y) continue;
+    const half = BLOCK_W / 2 + HERO_W / 2;
+    if (Math.abs(h.x - b.x) >= half) continue;
+    const fromLeft = h.x < b.x;
+    const moved = pushStep(b, h, dir, dt);
+    if (moved.pushed) {
+      b.x = moved.x;
+      h.pushing = true;
+      if (Math.abs(h.vx) > moved.limit) h.vx = Math.sign(h.vx) * moved.limit;
+      pushEvent(w, "push", b.x, b.y - BLOCK_H, h.index);
+    }
+    // 不管推没推动,人都不许穿进箱子里
+    h.x = fromLeft ? Math.min(h.x, b.x - half) : Math.max(h.x, b.x + half);
+  }
+}
+
+/** 箱子脚下托着它的那一面(地面 0 / 台面负数);断口上就是 null */
+function blockSupportY(w: World, b: BlockState): number | null {
+  let best: number | null = null;
+  for (const pl of w.platforms) {
+    if (b.x <= pl.x - 6 || b.x >= pl.x + pl.w + 6) continue;
+    if (pl.y < b.y - 2) continue;
+    if (best === null || pl.y < best) best = pl.y;
+  }
+  if (groundSolidAt(w.def, b.x) && b.y <= 2) {
+    if (best === null || best > 0) best = 0;
+  } else if (groundSolidAt(w.def, b.x) && (best === null || best > 0)) {
+    best = 0;
+  }
+  return best;
+}
+
+function stepBlocks(w: World, dt: number): void {
+  for (let i = 0; i < w.blocks.length; i++) {
+    const before = w.blocks[i];
+    if (before.bridge) continue;
+    const next = fallStep(before, blockSupportY(w, before), GRAVITY, dt);
+    w.blocks[i] = next;
+    if (next.bridge && !before.bridge) pushEvent(w, "bridge", next.x, next.y - BLOCK_H);
+  }
+}
+
+/** 这颗宝石现在被箱子压着吗(压着就捡不到,得先让王子把箱子推开) */
+export function gemCovered(w: World, g: { x: number; y: number }): boolean {
+  return w.blocks.some(
+    (b) =>
+      !b.bridge &&
+      g.x > b.x - BLOCK_W / 2 &&
+      g.x < b.x + BLOCK_W / 2 &&
+      g.y > b.y - BLOCK_H - 4 &&
+      g.y < b.y + 4
+  );
+}
+
+/** 这个 x 有没有踩得住的地面(架好的桥也算实地) */
+export function solidAtX(w: World, x: number): boolean {
+  if (groundSolidAt(w.def, x)) return true;
+  return w.blocks.some((b) => b.bridge && x > b.x - BLOCK_W / 2 && x < b.x + BLOCK_W / 2);
+}
+
+function applyVertical(w: World, h: HeroState, input: Input, dt: number): void {
   const def = w.def;
   const prevFeet = h.y;
   h.vy += GRAVITY * dt;
+  // 公主的滑翔:空中按住跳键,最多飘 2 秒
+  const glided = glideStep(h.glide, {
+    kind: h.kind,
+    onGround: h.onGround,
+    holding: input.up,
+    vy: h.vy,
+    dt,
+  });
+  if (glided.glide.active && !h.glide.active) pushEvent(w, "glide", h.x, h.y - 24, h.index);
+  h.vy = glided.vy;
+  h.glide = glided.glide;
   h.y += h.vy * dt;
   h.onGround = false;
   h.ridingPlatform = -1;
+
+  // 重箱子的顶面也是「可踩」:从上往下落才踩得住
+  for (const b of w.blocks) {
+    if (h.vy < 0) continue;
+    const top = b.y - BLOCK_H;
+    if (h.x <= b.x - BLOCK_W / 2 - HERO_W * 0.3 || h.x >= b.x + BLOCK_W / 2 + HERO_W * 0.3) continue;
+    if (prevFeet <= top + 6 && h.y >= top) {
+      h.y = top;
+      h.vy = 0;
+      h.onGround = true;
+    }
+  }
 
   // 空中平台(单向:只有从上往下落才踩得住)
   for (let i = 0; i < w.platforms.length; i++) {
@@ -758,21 +910,20 @@ function applyVertical(w: World, h: HeroState, dt: number): void {
 
   // 地面:只有「上一刻还在地面之上」才踩得住,
   // 否则掉进断口以后会被对面的地面从下面接住,像是穿墙一样弹上来
-  if (!h.onGround && h.vy >= 0 && prevFeet <= 0.01 && h.y >= 0 && groundSolidAt(def, h.x)) {
+  if (!h.onGround && h.vy >= 0 && prevFeet <= 0.01 && h.y >= 0 && solidAtX(w, h.x)) {
     h.y = 0;
     h.vy = 0;
     h.onGround = true;
   }
 
-  if (h.onGround) h.airJumps = h.kind === "princess" ? 1 : 0;
+  if (h.onGround) {
+    h.airJumps = h.kind === "princess" ? 1 : 0;
+    h.glide = freshGlide();
+  }
 
   if (h.y > FALL_LIMIT) {
-    const back = safeGroundX(def, h.x - 30);
-    hurt(w, h, h.x, "掉下去啦!别灰心,我们从头再来一遍。");
-    h.x = back;
-    h.y = -50;
-    h.vy = 0;
-    h.vx = 0;
+    hurt(w, h, h.x, "心用完啦!小云朵把大家送回起点,再来一遍就好。");
+    cloudBack(w, h);
   }
 }
 
@@ -857,9 +1008,10 @@ function applyActions(w: World, h: HeroState, input: Input, dt: number): void {
 function interactions(w: World, h: HeroState, dt: number): void {
   const box = heroBox(h);
 
-  // 宝石
+  // 宝石(被箱子压着的那颗捡不到,得先让王子把箱子推开)
   for (const g of w.gems) {
     if (g.taken) continue;
+    if (gemCovered(w, g)) continue;
     if (Math.abs(g.x - h.x) < 28 && g.y > box.y0 - 24 && g.y < box.y1 + 20) {
       g.taken = true;
       w.gemsTaken++;
@@ -1068,6 +1220,7 @@ function stepOnce(w: World, dt: number, inputs: Input[]): void {
   w.time += dt;
   if (w.invuln > 0) w.invuln = Math.max(0, w.invuln - dt);
   stepPlatforms(w);
+  stepBlocks(w, dt);
   stepEnemies(w, dt);
   stepShots(w, dt);
   stepBoss(w, dt);
@@ -1078,9 +1231,16 @@ function stepOnce(w: World, dt: number, inputs: Input[]): void {
     const input = inputs[i] ?? emptyInput();
     applyActions(w, h, input, dt);
     applyHorizontal(w, h, input, dt);
-    applyVertical(w, h, dt);
+    applyVertical(w, h, input, dt);
     interactions(w, h, dt);
     if (w.status !== "playing") return;
+  }
+
+  // 两个人都走过一面小旗,那面旗才点亮
+  const lit = updateReached(w.flags, w.reached, w.heroes.map((h) => h.x));
+  if (lit > w.reached) {
+    w.reached = lit;
+    pushEvent(w, "flag", w.flags[lit], -60);
   }
 
   stepShotHits(w);
@@ -1255,9 +1415,18 @@ function chooseTarget(w: World, h: HeroState): AiTarget {
   return { x: w.def.goalX, y: 0, halfW: 0, hostile: false, reachable: false, dangerous: false };
 }
 
-/** 前面一小段路上有没有断口 */
+/**
+ * 前面一小段路上有没有断口。
+ *
+ * 这个「一小段」有多长很要命:看得太远就会**起跳过早**,
+ * 王子一跳只有 `jumpRange("prince")≈158`,最宽的断口 118 —— 提前 56 起跳会正好摔进坑里。
+ * 1.1 靠「摔下去就地放回坑边」把这个毛病盖住了(第二次自然贴着边起跳);
+ * 1.2 改成回检查点以后盖不住了,所以这里把预判距离收到贴边起跳。
+ */
+const GAP_LOOKAHEAD = 30;
+
 function gapAhead(def: LevelDef, x: number, face: number): boolean {
-  return groundSolidAt(def, x) && !groundSolidAt(def, x + face * 56);
+  return groundSolidAt(def, x) && !groundSolidAt(def, x + face * GAP_LOOKAHEAD);
 }
 
 /** 前面一小段路上有没有尖刺 */
@@ -1265,6 +1434,20 @@ function spikeAhead(w: World, h: HeroState, face: number): boolean {
   return w.spikes.some((s) => {
     const rel = (s.x - h.x) * face;
     return rel > -10 && rel < 76 && h.y > -24;
+  });
+}
+
+/**
+ * 前面挡着一个推不动的重箱子(公主专属烦恼)。
+ * 箱子只有 `BLOCK_H` 高,跳上去就过去了 —— 托管的同伴不能被它卡住。
+ */
+function blockAhead(w: World, h: HeroState, face: number): boolean {
+  if (canPush(h.kind)) return false;
+  return w.blocks.some((b) => {
+    if (b.bridge) return false;
+    const rel = (b.x - h.x) * face;
+    if (rel < 0 || rel > BLOCK_W / 2 + HERO_W / 2 + 26) return false;
+    return h.y > b.y - BLOCK_H + 2 && h.y - HERO_H < b.y;
   });
 }
 
@@ -1321,6 +1504,7 @@ export function botInput(w: World, heroIndex = 0, dt = 1 / 60): Input {
   const jumpNow =
     gapAhead(def, h.x, face) ||
     spikeAhead(w, h, face) ||
+    blockAhead(w, h, face) ||
     shotIncoming(w, h) ||
     (needClimb && h.onGround) ||
     (h.aiStuckT > 0.5 && h.onGround);
