@@ -87,7 +87,9 @@ export function tableLayout(viewportWidth: number): Layout {
     cssH: Math.round(cssH),
     scale,
     ballPx: 2 * TABLE.r * scale,
-    fontPx: w < 380 ? 13 : 14,
+    // r2-3：这一路是 .ps-tip 的运行时内联来源，窄屏 13px 的老分支会把 CSS 的 14px 提级
+    // 整个架空——正文下限统一 14px，不再按视口回降
+    fontPx: 14,
   };
 }
 
