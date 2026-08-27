@@ -117,7 +117,7 @@ export const CSS = `
 .jq-cell.jq-camp .jq-face{border-radius:50%;}
 .jq-cell.jq-camp.jq-empty .jq-face{box-shadow:inset 0 0 0 2px #8FC46F59;}
 .jq-cell.jq-hq .jq-face{border-radius:8px;box-shadow:inset 0 0 0 3px #C9B48A;}
-.jq-empty .jq-face{background:#ffffff8c;color:#9aa88c;font-size:13px;font-weight:700;}
+.jq-empty .jq-face{background:#ffffff8c;color:#9aa88c;font-size:14px;font-weight:700;}
 .jq-duo .jq-face{background:linear-gradient(180deg,#FFE7D5,#FBD3B6);color:#A9531F;
   box-shadow:0 2px 0 #d9a97f,inset 0 0 0 1px #c9853f66;}
 /* 星星方按 B 档规格压暗一档：与朵朵暖橙面的灰度差从 ≈2 拉开到 ≥20，双通道更稳 */
