@@ -19,6 +19,8 @@
  * 角色与怪物的 (x, y) 指「脚底中点」,浮台的 y 指它的上表面。
  */
 import { mulberry32, randInt, type Chapter } from "../level99";
+import { gadget, type GadgetDef, type GadgetKind } from "./gadgets";
+import type { Pit } from "./bounds";
 
 // ---------------------------------------------------------------------------
 // 场地尺寸与几何红线
@@ -188,11 +190,11 @@ export interface SpawnDef {
   surface: number;
 }
 
-export type ArenaKind = "campaign" | "endless" | "versus";
+export type ArenaKind = "campaign" | "endless" | "versus" | "climb";
 
 export interface ArenaDef {
   kind: ArenaKind;
-  /** 战役里的 0 基关号;无尽是波次号;对战是场地编号 */
+  /** 战役里的 0 基关号;无尽是波次号;对战是场地编号;上升气流是段号 */
   index: number;
   chapterIndex: number;
   name: string;
@@ -212,7 +214,70 @@ export interface ArenaDef {
   timeLimit: number;
   /** 对战模式:先戳破对手几次就赢下这一局 */
   roundTarget: number;
+  /**
+   * 1.2 新增的机关(气流管 / 可推箱 / 脆弱地板 / 弹簧云 / 传送泡)。
+   * **前 99 关一律是空数组** —— 已经通关的孩子回头再打,那 99 关必须一格不差,
+   * `arena.test.ts` 用逐关指纹把这件事钉死。
+   */
+  gadgets: GadgetDef[];
+  /**
+   * 1.2 新增的坑:x 落在坑里就没有地板接着。空数组表示四面封死(战役与波次无尽都是)。
+   * 掉进坑里走 `bounds.ts` 的两段式:先打转,救不回来才出局。
+   */
+  pits: Pit[];
+  /** 1.2 新增:上升气流的终点层(>0 才是爬塔关,踩上这一层就算过) */
+  climbRow: number;
 }
+
+/** 1.1 就有的那些字段;指纹只看它们,新加的字段不参与,老关卡才钉得住 */
+export const LEGACY_FIELDS = [
+  "kind",
+  "index",
+  "chapterIndex",
+  "name",
+  "feature",
+  "hint",
+  "platforms",
+  "monsters",
+  "candies",
+  "spawns",
+  "hearts",
+  "parSeconds",
+  "candyGoal",
+  "timeLimit",
+  "roundTarget",
+] as const;
+
+function fnv1a(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** 一关的「老字段指纹」:只要 1.1 就有的那些数据没变,它就不变 */
+export function arenaFingerprint(def: ArenaDef): string {
+  const legacy: Record<string, unknown> = {};
+  for (const key of LEGACY_FIELDS) legacy[key] = def[key];
+  return fnv1a(JSON.stringify(legacy));
+}
+
+/** 前 n 关的合并指纹。测试拿它跟写死的值对账,少一格都对不上 */
+export function campaignFingerprint(count: number): string {
+  let all = "";
+  for (let i = 0; i < count; i++) all += `${arenaFingerprint(buildLevel(i))};`;
+  return fnv1a(all);
+}
+
+/**
+ * 1.1 收尾时前 99 关的合并指纹。这串东西不许改 —— 它变了就说明
+ * 老存档里已经打过的关卡被动了,已经拿到的三星就对不上了。
+ */
+export const CAMPAIGN_99_FINGERPRINT = "3a0bbdde";
+/** 机关是第 100 关(0 基 99)才开始出现的 */
+export const GADGET_FROM_LEVEL = 99;
 
 // ---------------------------------------------------------------------------
 // 章节配方
@@ -309,7 +374,7 @@ function pickFrom<T>(rand: () => number, arr: readonly T[]): T {
  * 按支撑树摆浮台:第 r 层的每一块都挂在第 r-1 层的某块(或地板)上,
  * 中点一定压在 parent 的跨度里,所以从 parent 上原地起跳就能顶上来。
  */
-function buildPlatforms(rand: () => number, rows: number, perRow: number): PlatformDef[] {
+export function buildSupportTree(rand: () => number, rows: number, perRow: number): PlatformDef[] {
   const out: PlatformDef[] = [];
   let below: Span[] = [FLOOR_SPAN];
 
@@ -487,6 +552,168 @@ function levelName(rand: () => number, ci: number): string {
   return `${CHAPTERS[ci].name}·${pickFrom(rand, KITS[ci].spots)}`;
 }
 
+// ---------------------------------------------------------------------------
+// 机关摆放(1.2 新增)
+// ---------------------------------------------------------------------------
+
+/** 机关离「机器人要走的地方」至少留这么远 */
+export const GADGET_CLEAR = 54;
+/** 脆弱地板悬在地面上方这么高:刚好过得了头,跳上去才踩得到 */
+export const BRITTLE_LIFT = 44;
+
+interface Band {
+  lo: number;
+  hi: number;
+}
+
+/**
+ * 这块地面上「不许摆机关」的那几段。
+ *
+ * 188 关的可解性是靠机器人逐关实打实跑出来的,而机器人只认三个地方:
+ * 自己脚下这块的中点(从那儿穿下去)、孩子浮台的中点(从那儿顶上去)、
+ * 还有咕噜怪的巡逻带。机关一旦压在这三处上,机器人就可能被弹走、被吹跑、
+ * 被传送到别处,原本必然可解的路就断了 —— 所以这几段整段让开。
+ */
+function busyBands(
+  platforms: readonly PlatformDef[],
+  monsters: readonly MonsterDef[],
+  spawns: readonly SpawnDef[],
+  surface: number
+): Band[] {
+  const bands: Band[] = [];
+  const own = surfaceSpan(platforms, surface);
+  if (surface >= 0) {
+    // 机器人要从自己这块浮台的中点蹲跳穿下去,那一段得空着。
+    // 地板没有「穿下去」这回事,所以地板的中间反倒是最安全的空地。
+    const mid = (own.x0 + own.x1) / 2;
+    bands.push({ lo: mid - GADGET_CLEAR, hi: mid + GADGET_CLEAR });
+  }
+  platforms.forEach((p) => {
+    if (p.parent !== surface) return;
+    const cm = p.x + p.w / 2;
+    bands.push({ lo: cm - GADGET_CLEAR, hi: cm + GADGET_CLEAR });
+  });
+  for (const m of monsters) {
+    if (m.surface !== surface) continue;
+    // 只让开咕噜怪站的那一小段就够了:机关碰不到咕噜怪,
+    // 整条巡逻带一让,地板上就一寸空地都不剩了
+    bands.push({ lo: m.x - GADGET_CLEAR, hi: m.x + GADGET_CLEAR });
+  }
+  for (const s of spawns) {
+    if (s.surface !== surface) continue;
+    bands.push({ lo: s.x - GADGET_CLEAR, hi: s.x + GADGET_CLEAR });
+  }
+  return bands;
+}
+
+/** 在这块地面上找一个宽 w 的空位;整块都腾不出来就返回 null */
+function freeSlot(
+  platforms: readonly PlatformDef[],
+  bands: readonly Band[],
+  surface: number,
+  w: number,
+  taken: readonly number[]
+): number | null {
+  const span = surfaceSpan(platforms, surface);
+  const half = w / 2 + 6;
+  const lo = span.x0 + half;
+  const hi = span.x1 - half;
+  if (hi < lo) return null;
+  const blocked = (x: number): boolean => {
+    for (const b of bands) if (x + half > b.lo && x - half < b.hi) return true;
+    for (const t of taken) if (Math.abs(t - x) < w + 16) return true;
+    return false;
+  };
+  const steps = 24;
+  for (let i = 0; i <= steps; i++) {
+    // 从两头往中间找:中点那一带是机器人的通道,越靠边越安全
+    const t = i / steps;
+    for (const x of [lo + (hi - lo) * t * 0.5, hi - (hi - lo) * t * 0.5]) {
+      if (!blocked(x)) return Math.round(x);
+    }
+  }
+  return null;
+}
+
+/** 第 lv 关(0 基)解锁到哪几种机关:一种一种教,不一次全端上来 */
+export function gadgetKindsFor(lv: number): GadgetKind[] {
+  if (lv < GADGET_FROM_LEVEL) return [];
+  const out: GadgetKind[] = ["brittle", "spring"];
+  if (lv >= 118) out.push("updraft");
+  if (lv >= 141) out.push("crate");
+  if (lv >= 164) out.push("warp");
+  return out;
+}
+
+/**
+ * 给第 lv 关摆机关。前 99 关直接返回空数组 —— 那 99 关的数据一格都不许动。
+ */
+function placeGadgets(
+  rand: () => number,
+  lv: number,
+  platforms: readonly PlatformDef[],
+  monsters: readonly MonsterDef[],
+  spawns: readonly SpawnDef[]
+): GadgetDef[] {
+  const kinds = gadgetKindsFor(lv);
+  if (kinds.length === 0) return [];
+
+  const surfaces = [-1, ...platforms.map((_, i) => i)];
+  const bands = new Map<number, Band[]>();
+  const taken = new Map<number, number[]>();
+  for (const s of surfaces) {
+    bands.set(s, busyBands(platforms, monsters, spawns, s));
+    taken.set(s, []);
+  }
+
+  const out: GadgetDef[] = [];
+  const want = 2 + (lv % 3);
+  // 从解锁列表里轮着取,保证每一种都轮得到,不会整章只见一种
+  for (let n = 0; n < want; n++) {
+    const kind = kinds[(lv + n) % kinds.length];
+    const need = kind === "warp" ? 2 : 1;
+    const picked: Array<{ surface: number; x: number }> = [];
+    const start = randInt(rand, 0, surfaces.length - 1);
+    for (let attempt = 0; attempt < surfaces.length * 3 && picked.length < need; attempt++) {
+      const surface = surfaces[(start + attempt) % surfaces.length];
+      const w = kind === "brittle" ? BRITTLE_W_HINT : kind === "spring" ? SPRING_W_HINT : SLOT_W_HINT;
+      const x = freeSlot(platforms, bands.get(surface) ?? [], surface, w, taken.get(surface) ?? []);
+      if (x === null) continue;
+      // 一对传送泡要么落在不同地面上,要么在同一块地面上离得够远,不然传了等于没传
+      if (picked.some((q) => q.surface === surface && Math.abs(q.x - x) < WARP_MIN_SPAN)) continue;
+      taken.get(surface)?.push(x);
+      picked.push({ surface, x });
+    }
+    if (picked.length < need) continue;
+
+    if (kind === "warp") {
+      const base = out.length;
+      picked.forEach((p, i) => {
+        out.push(
+          gadget("warp", p.x, surfaceY(platforms, p.surface), {
+            under: p.surface,
+            link: base + (1 - i),
+          })
+        );
+      });
+      continue;
+    }
+    const spot = picked[0];
+    const top = surfaceY(platforms, spot.surface);
+    // 脆弱地板悬在半空当捷径,其余的都坐在地面上
+    const y = kind === "brittle" ? top - BRITTLE_LIFT : top;
+    out.push(gadget(kind, spot.x, Math.round(y), { under: spot.surface }));
+  }
+  return out;
+}
+
+/** 找空位时按这几个宽度留白(比机关本身宽一点,免得贴着边) */
+const SLOT_W_HINT = 48;
+const BRITTLE_W_HINT = 86;
+const SPRING_W_HINT = 66;
+/** 同一块地面上的一对传送泡至少隔这么远 */
+const WARP_MIN_SPAN = 150;
+
 /** 两位噗噗兄弟的出生点:地板左右两头 */
 function defaultSpawns(): SpawnDef[] {
   return [
@@ -506,7 +733,7 @@ export function buildLevel(index: number): ArenaDef {
   const rand = mulberry32(0x7b0b00 + lv * 7919 + 29);
   const t = TOTAL > 1 ? lv / (TOTAL - 1) : 0;
 
-  const platforms = buildPlatforms(rand, kit.rows, 2 + (pos % 2));
+  const platforms = buildSupportTree(rand, kit.rows, 2 + (pos % 2));
   const spans = surfaceSpans(platforms);
   const monsterCount = Math.min(11, 3 + Math.round(t * 6) + (pos % 3));
   const { monsters, candies } = fillArena(rand, kit, spans, {
@@ -517,25 +744,41 @@ export function buildLevel(index: number): ArenaDef {
 
   const parSeconds = Math.round(10 + monsters.length * 5.5);
   const total = candies.length + monsters.length;
+  const spawns = defaultSpawns();
+  // 名字要在摆机关之前抽,不然 rand 的调用次序变了,前 99 关的关名就跟着变
+  const name = levelName(rand, ci);
+  const gadgets = placeGadgets(rand, lv, platforms, monsters, spawns);
 
   return {
     kind: "campaign",
     index: lv,
     chapterIndex: ci,
-    name: levelName(rand, ci),
-    feature: kit.feature,
-    hint: kit.hint,
+    name,
+    feature: gadgets.length > 0 ? `${kit.feature} + 机关` : kit.feature,
+    hint: gadgets.length > 0 ? `${kit.hint}${GADGET_HINT[gadgets[0].kind]}` : kit.hint,
     platforms,
     monsters,
     candies,
-    spawns: defaultSpawns(),
+    spawns,
     hearts: 5,
     parSeconds,
     candyGoal: Math.max(2, Math.ceil(total * 0.7)),
     timeLimit: Math.round(parSeconds * 2.6 + 30),
     roundTarget: 0,
+    gadgets,
+    pits: [],
+    climbRow: 0,
   };
 }
+
+/** 关卡提示语里给机关补的那半句 */
+const GADGET_HINT: Record<GadgetKind, string> = {
+  updraft: "这一关有气流管,掉进去会被托着往上飘。",
+  crate: "这一关有可推箱,顶一顶或者噗一口就能挪走。",
+  brittle: "这一关有脆弱地板,踩出裂纹就得赶紧走。",
+  spring: "这一关有弹簧云,跳上去会被弹得老高。",
+  warp: "这一关有传送泡,站上去按 ⬇ 就飞到另一头。",
+};
 
 /** 战役全 188 关(按需生成一次并缓存) */
 let cachedLevels: ArenaDef[] | null = null;
@@ -557,7 +800,7 @@ export function buildWave(wave: number): ArenaDef {
   const kit = KITS[ci];
   const rand = mulberry32(0x5eed11 + r * 104729 + 17);
 
-  const platforms = buildPlatforms(rand, kit.rows, 2 + (r % 2));
+  const platforms = buildSupportTree(rand, kit.rows, 2 + (r % 2));
   const spans = surfaceSpans(platforms);
   // 无尽是一波接一波连着打的,心不回满,所以每一波单看都得是「拼一下能清完」的量,
   // 难度靠波次叠加,而不是靠某一波突然塞满一屏怪
@@ -566,6 +809,10 @@ export function buildWave(wave: number): ArenaDef {
     monsterSpeed: 40 + Math.min(40, r * 4),
     candyCount: 2 + (r % 3),
   });
+
+  const spawns = defaultSpawns();
+  // 波次无尽是上升气流的热身场,第三波起也摆机关(闯关的前 99 关不受影响)
+  const gadgets = placeGadgets(rand, GADGET_FROM_LEVEL + r * 23, platforms, monsters, spawns);
 
   return {
     kind: "endless",
@@ -577,12 +824,15 @@ export function buildWave(wave: number): ArenaDef {
     platforms,
     monsters,
     candies,
-    spawns: defaultSpawns(),
+    spawns,
     hearts: 3,
     parSeconds: Math.round(10 + monsters.length * 5),
     candyGoal: Math.max(1, candies.length),
     timeLimit: 0,
     roundTarget: 0,
+    gadgets,
+    pits: [],
+    climbRow: 0,
   };
 }
 
@@ -630,9 +880,37 @@ export function buildVersusArena(index: number): ArenaDef {
   }
 
   const spans = surfaceSpans(platforms);
-  const candies: CandyDef[] = spans
-    .filter((s) => s.x1 - s.x0 >= 80)
-    .map((s) => ({ x: Math.round((s.x0 + s.x1) / 2), surface: s.id }));
+  // 糖果也要镜像成对:场地中线那颗正好落在坑上,所以地板这一层拆成左右两颗
+  const candies: CandyDef[] = [];
+  for (const s of spans) {
+    if (s.x1 - s.x0 < 80) continue;
+    const mid = (s.x0 + s.x1) / 2;
+    if (s.id === -1) {
+      candies.push({ x: Math.round(mid - VERSUS_PIT_HALF_W - 46), surface: -1 });
+      candies.push({ x: Math.round(mid + VERSUS_PIT_HALF_W + 46), surface: -1 });
+      continue;
+    }
+    candies.push({ x: Math.round(mid), surface: s.id });
+  }
+
+  // 机关也成对镜像:左边有什么,右边同一个位置就有什么
+  const gadgets: GadgetDef[] = [];
+  const deckY = rowSurface(1);
+  for (const side of [-1, 1] as const) {
+    const at = ARENA_W / 2 + side * (VERSUS_PIT_HALF_W + 74);
+    gadgets.push(gadget("spring", Math.round(at), FLOOR_Y, { under: -1 }));
+  }
+  for (const side of [-1, 1] as const) {
+    const sup = platforms[side < 0 ? 0 : 1];
+    if (!sup) continue;
+    const at = sup.x + sup.w / 2 + side * -1 * Math.min(38, sup.w / 2 - 18);
+    gadgets.push(gadget("crate", Math.round(at), deckY, { under: side < 0 ? 0 : 1 }));
+  }
+  // 场地中央那道坑的两侧各一根气流管:掉下去还能被托一把
+  for (const side of [-1, 1] as const) {
+    const at = ARENA_W / 2 + side * (VERSUS_PIT_HALF_W + 18);
+    gadgets.push(gadget("updraft", Math.round(at), FLOOR_Y, { under: -1 }));
+  }
 
   return {
     kind: "versus",
@@ -640,7 +918,7 @@ export function buildVersusArena(index: number): ArenaDef {
     chapterIndex: r % CHAPTERS.length,
     name: `噗噗擂台 第 ${r + 1} 号场地`,
     feature: "三局两胜",
-    hint: "把对手裹进泡泡里,再冲上去噗一下,就得一分!",
+    hint: "把对手裹进泡泡里,再冲上去噗一下,就得一分!当心中间那道口子。",
     platforms,
     monsters: [],
     candies,
@@ -650,5 +928,15 @@ export function buildVersusArena(index: number): ArenaDef {
     candyGoal: 0,
     timeLimit: VERSUS_ROUND_SECONDS,
     roundTarget: VERSUS_ROUND_TARGET,
+    gadgets,
+    // 正中间一道口子,关于中线对称,两边一样宽
+    pits: [{ x0: ARENA_W / 2 - VERSUS_PIT_HALF_W, x1: ARENA_W / 2 + VERSUS_PIT_HALF_W }],
+    climbRow: 0,
   };
 }
+
+/**
+ * 对战场中间那道口子的半宽:关于中线对称,谁也不吃亏。
+ * 它必须窄到「一次起跳跨得过去」,不然两边就被切成两个孤岛,谁也够不着谁。
+ */
+export const VERSUS_PIT_HALF_W = 36;

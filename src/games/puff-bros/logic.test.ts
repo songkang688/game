@@ -98,6 +98,9 @@ function testArena(over: Partial<ArenaDef> = {}): ArenaDef {
     candyGoal: 1,
     timeLimit: 0,
     roundTarget: 3,
+    gadgets: [],
+    pits: [],
+    climbRow: 0,
     ...over,
   };
 }
