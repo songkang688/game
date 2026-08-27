@@ -72,6 +72,15 @@ export const RBG_CSS = `
 .rbg-pull.rbg-ghost { background: linear-gradient(180deg, #DCD3E8, #C4B8D6); box-shadow: 0 5px 0 #A79ABB; cursor: default; }
 .rbg-sub { font-size: 13px; font-weight: 700; opacity: .92; }
 .rbg-msg { text-align: center; min-height: 22px; color: #B0555F; font-weight: 700; margin-top: 8px; font-size: 15px; }
+/* 拔河场退到底线 76px 还装不下时（320×640 实测差 37px）由 fitFieldIntoStage() 打上。
+   只减空隙——外框内边距 12→6、四处块间距 8→4、提示行上边距 8→4，一共让出 32px；
+   按钮一格不动，热区还是 44px 以上。剩下的几像素由场地再让一让。 */
+.rbg-wrap.rbg-tight { padding: 6px; }
+.rbg-wrap.rbg-tight .rbg-top,
+.rbg-wrap.rbg-tight .rbg-gear,
+.rbg-wrap.rbg-tight .rbg-field,
+.rbg-wrap.rbg-tight .rbg-meters { margin-bottom: 4px; }
+.rbg-wrap.rbg-tight .rbg-msg { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) {
   .rbg-beat, .rbg-team, .rbg-rope { transition: none !important; }
 }

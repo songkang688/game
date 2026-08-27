@@ -264,6 +264,7 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
   const reset = (): void => {
     if (!measurable) return;
     el.classList.remove("ktc-fit");
+    el.classList.remove("ktc-scroll");
     el.style.removeProperty("--ktc-cat-h");
     el.style.maxHeight = "";
     el.style.overflowY = "";
@@ -286,6 +287,8 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     // 猫收到最小还是装不下（多猫关 + 搓澡区就会这样），剩下的交给滚动
     el.style.maxHeight = `${Math.floor(room)}px`;
     el.style.overflowY = "auto";
+    // 打个记号：提示行这时候要粘在滚动口下沿，不然「这一关要干什么」滚不到就看不见
+    el.classList.add("ktc-scroll");
   };
   relayout();
   let live = true;

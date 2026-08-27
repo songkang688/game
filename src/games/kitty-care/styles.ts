@@ -176,6 +176,12 @@ export const KTC_CSS = `
 .ktc-tools[hidden]{display:none;}
 .ktc-msg{position:relative;z-index:3;text-align:center;min-height:22px;font-weight:800;color:#a86a28;
   margin-top:8px;font-size:15px;line-height:1.5;}
+/* 搓澡关这种真装不下的（搓澡池 min-height:240px，猫已经收到最小的 92px），
+   fitIntoStage() 会挂滚动条并打上 ktc-scroll。这时候提示行就是「这一关要干什么」，
+   初始位置整行在滚动口以外——粘在下沿，滚到哪儿都在，池子一格不动。 */
+.ktc-wrap.ktc-scroll .ktc-msg{position:sticky;bottom:0;z-index:6;background:#fff7ecf2;
+  border-radius:12px;padding:2px 8px;}
+.ktc-night.ktc-scroll .ktc-msg{background:#3a2f52f2;}
 .ktc-safety{position:relative;z-index:3;text-align:center;font-size:13px;font-weight:800;color:#3f7a68;
   background:#eafaf3;border-radius:12px;padding:6px 12px;margin:6px auto 0;width:fit-content;max-width:94%;}
 .ktc-score{position:relative;z-index:3;margin:6px auto 0;background:#ffffffdd;border-radius:14px;padding:8px 12px;

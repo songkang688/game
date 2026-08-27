@@ -64,6 +64,30 @@ export function clipBottomPx(bottom: number, borderBottom: string): number {
   return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
 }
 
+/**
+ * 竖向节奏减半能让出多少像素：块间距 8→4 共四处 16px、提示行上边距 8→4 共 4px、
+ * 外框上下内边距 12→6 共 12px，一共 32px。改一处就要改这个数，`tightFit.test.ts` 盯着。
+ */
+export const TIGHT_SAVING_PX = 32;
+
+/**
+ * 拔河场已经收到底线了还装不下吗——装不下就得把这一屏的竖向节奏压一档。
+ *
+ * 只在**场地无路可退**时才判 true：场地还扣得动就先扣场地，
+ * 少动一次布局就少一次「换个视口整屏跳一下」。
+ */
+export function needsTight(
+  wrapHeight: number,
+  fieldHeight: number,
+  roomPx: number,
+  minField = MIN_FIELD_H
+): boolean {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return false;
+  if (!Number.isFinite(wrapHeight) || !Number.isFinite(fieldHeight) || fieldHeight <= 0) return false;
+  if (wrapHeight - roomPx <= 1) return false;
+  return fieldHeight <= minField;
+}
+
 /** 量一次这个节点头顶到最近那条裁切线之间还剩多少（量不了就返回 Infinity） */
 export function stageRoomPx(el: HTMLElement): number {
   const view = el.ownerDocument?.defaultView ?? null;
@@ -96,9 +120,17 @@ export function fitFieldIntoStage(wrap: HTMLElement): { relayout: () => void; di
   const relayout = (): void => {
     if (!measurable || !field) return;
     field.style.height = "";
-    const next = fieldRoomPx(wrap.scrollHeight, field.offsetHeight, stageRoomPx(wrap));
+    wrap.classList.remove("rbg-tight");
+    const room = stageRoomPx(wrap);
+    const next = fieldRoomPx(wrap.scrollHeight, field.offsetHeight, room);
     if (next === null) return;
     field.style.height = `${next}px`;
+    // 场地退到底线还装不下（320×640 就是这样）：把这一屏的空隙减半，再让场地扣一次
+    if (!needsTight(wrap.scrollHeight, next, room)) return;
+    wrap.classList.add("rbg-tight");
+    field.style.height = "";
+    const tighter = fieldRoomPx(wrap.scrollHeight, field.offsetHeight, room);
+    field.style.height = `${tighter ?? next}px`;
   };
   relayout();
   // 平台顶栏在窄屏上会折行，折完这一屏的起点往下挪几像素——下一帧再量一次才准
@@ -109,6 +141,7 @@ export function fitFieldIntoStage(wrap: HTMLElement): { relayout: () => void; di
     relayout,
     dispose(): void {
       view?.removeEventListener("resize", relayout);
+      wrap.classList?.remove("rbg-tight");
       if (field) field.style.height = "";
     }
   };
