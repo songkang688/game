@@ -858,7 +858,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     }
   }
 
-  /** 大王关专属的失败:活着跑到终点,但血没打完,他就溜走了。 */
+  /** 大王关专属的失败:好好跑到终点,但护甲没卸完,他就溜走了。 */
   function bossEscaped(): void {
     loseReason = "boss";
     phase = "retry";
@@ -1110,7 +1110,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     }));
   }
 
-  /** 大王掉血:铲箱 1 下,三连完美跳 2 下。打满就当场宣布打赢。 */
+  /** 卸大王的护甲:铲箱 1 层,三连完美跳 2 层。卸满就当场宣布打赢。 */
   function syncBossHits(): void {
     stats.bossHits = bossHitsOf(stats);
     if (boss && !bossBeaten && bossDefeated(boss, stats)) {
@@ -2361,7 +2361,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
   }
 
   function drawRetryPanel(): void {
-    // 大王溜走不给复活:那不是"摔了一跤",是伤害没打够,得重新跑一趟
+    // 大王溜走不给复活:那不是"摔了一跤",是护甲没卸完,得重新跑一趟
     const bossLose = !endless && loseReason === "boss";
     const canRevive = !reviveUsed && !bossLose && api.getStars() >= REVIVE_COST;
     const skippable = canSkip();
@@ -2751,7 +2751,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
       );
     }
 
-    // 大王血条:接在任务条下面,窄屏也和任务条同宽,不会横着挤出去
+    // 大王护甲条:接在任务条下面,窄屏也和任务条同宽,不会横着挤出去
     // 无尽模式那一行已经被追风棉花云的距离条占了,道具倒计时同样往下顺一行
     let extraRow = endless ? 24 : 0;
     if (!endless && boss) {

@@ -556,7 +556,7 @@ export function patternsForLevel(def: PatternPoolSpec): PatternRow[][] {
     for (let i = 0; i < extra; i++) pool.push(...beats);
   }
   // 大王把整条轨道都堆上了彩纸箱:带箱子的花样在大王关出现得更密,
-  // 不然八种障碍摊薄之后,打满血量的机会太少。
+  // 不然八种障碍摊薄之后,把护甲卸满的机会太少。
   if (def.boss) {
     const crates = pool.filter((pat) =>
       pat.some((row) => row.obstacles.some((o) => o.kind === "crate")),
