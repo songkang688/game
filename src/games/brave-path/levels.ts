@@ -497,6 +497,48 @@ function easeElitePileup(steps: PathNode[][], level: number): void {
   }
 }
 
+/** 收尾那只精英少带这么一成的血量与气势（前面已经打过架时） */
+export const CLIMAX_EASE = 0.9;
+
+/**
+ * 收尾那一场是精英、而且到它跟前时星芒已经用掉过一截——这只精英松一成。
+ *
+ * 精英的数值是照「满状态迎战」配的（首领关索性在门口摆整装石，就是这个道理）。
+ * 可普通关没有整装石，一路打过来的消耗全带进最后一场。第八章那几关
+ * （第 135 / 138 / 139 / 153 / 155 关）就卡在这儿：达标勇者六局里输一局，
+ * 会以为是自己练得不够，其实是这一关的收尾比邻居们多背了一路的消耗。
+ *
+ * 「疲劳」按上一处歇脚石之后打了几架算，精英算两架。一架都没打过（比如
+ * 一路全是宝箱，或者刚在歇脚石上坐过）就不松——那种情况本来就是满状态迎战。
+ */
+function easeClimaxElite(steps: PathNode[][]): void {
+  const last = steps.length - 1;
+  if (last < 0) return;
+  let wear = 0;
+  for (let i = 0; i < last; i++) {
+    const opts = steps[i];
+    if (opts.length > 0 && opts.every((o) => o.kind === "rest")) {
+      wear = 0;
+      continue;
+    }
+    const fight = opts.some((o) => o.kind === "foe" || o.kind === "elite" || o.kind === "boss");
+    if (fight) wear += opts.some((o) => o.kind === "elite") ? 2 : 1;
+  }
+  if (wear < 1) return;
+  for (let k = 0; k < steps[last].length; k++) {
+    const n = steps[last][k];
+    if (n.kind !== "elite" || !n.foe) continue;
+    steps[last][k] = {
+      ...n,
+      foe: {
+        ...n.foe,
+        maxHp: Math.round(n.foe.maxHp * CLIMAX_EASE),
+        atk: Math.round(n.foe.atk * CLIMAX_EASE)
+      }
+    };
+  }
+}
+
 /**
  * 生成第 level 关（0 基）的完整小路。同一关号永远得到同一条路。
  */
@@ -552,6 +594,7 @@ export function buildLevel(level: number): LevelPlan {
     }
   }
   easeElitePileup(steps, lv);
+  if (!boss) easeClimaxElite(steps);
 
   // Boss 关：门口固定摆一块整装石。首领的数值本来就是照「满状态迎战」配的，
   // 不能让前面几步的消耗把这场硬仗变成硬撑。

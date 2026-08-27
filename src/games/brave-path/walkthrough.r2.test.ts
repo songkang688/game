@@ -16,7 +16,8 @@ import {
   type Element, type Fighter, type Action
 } from "./combat";
 import {
-  BOSSES, TOTAL_LEVELS, bossLevels, buildLevel, chapterOfLevel, expectedHero, makeBossSpec, rateByHp
+  BOSSES, TOTAL_LEVELS, bossLevels, buildLevel, chapterOfLevel, expectedHero, makeBossSpec, rateByHp,
+  CLIMAX_EASE
 } from "./levels";
 import {
   applyBlessing, buildHero, defaultSave, endlessCoins, endlessExp, endlessEndText, endlessFoeSpec,
@@ -157,21 +158,63 @@ describe("勇者小路 · R2 · 难度曲线", () => {
   });
 
   /**
-   * W4A-15（中等）· 第八章有一小段「达标也会翻车」的坎。
+   * W4A-15（中等）· 已由本轮监督修复员修掉。
    *
-   * 拿「刚好达到这一关设计水平、带三个技能」的勇者，每关换六个种子各走一遍：
+   * 原状：拿「刚好达到这一关设计水平、带三个技能」的勇者，每关换六个种子各走一遍，
    * 188 关里有 5 关不是每次都过——135 / 138 / 139 / 153 / 155，各是 5/6。
-   * 挑一关看细节：第 155 关是「小怪 → 小怪 → 精英」三连打，中间一个歇脚点都没有，
-   * 精英的血量比同段小怪高 48%。达标玩家在这里失手，会以为是自己练得不够，
-   * 其实是这一关比邻居们多排了一场。记录在案，交给学习优化员。
+   * 根因是精英的数值照「满状态迎战」配（首领关索性在门口摆整装石），
+   * 可普通关没有整装石，一路打过来的消耗全带进收尾那一场。
+   *
+   * 现状：`easeClimaxElite` 给收尾那只精英按「到它跟前时攒了多少疲劳」松一成
+   * （`CLIMAX_EASE`）。一架都没打过就不松——那种情况本来就是满状态迎战。
    */
-  it("W4A-15 特征化：188 关里恰好这 5 关不是每次都过", () => {
+  it("W4A-15 已修：188 关全部六局六过，一关不剩", () => {
     const shaky: number[] = [];
     for (let lv = 0; lv < TOTAL_LEVELS; lv++) if (clearRate(lv) < 6) shaky.push(lv + 1);
-    expect(shaky).toEqual([135, 138, 139, 153, 155]);
+    expect(shaky).toEqual([]);
   });
 
-  it("W4A-15 特征化：第 155 关是三连打不带歇脚，邻居们都只有两场", () => {
+  it("W4A-15 已修：原来那 5 关加倍换种子也稳得住", () => {
+    for (const lv of [135, 138, 139, 153, 155]) {
+      expect(clearRate(lv - 1, 14), `第 ${lv} 关`).toBe(14);
+    }
+  });
+
+  it("W4A-15 已修：松的只是「打过架之后」的收尾精英，满状态迎战的一点没松", () => {
+    const isFight = (k: string) => k === "foe" || k === "elite" || k === "boss";
+    let eased = 0;
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const steps = buildLevel(lv).steps;
+      const last = steps.length - 1;
+      const climax = steps[last].find((o) => o.kind === "elite");
+      if (!climax) continue;
+      let wear = 0;
+      for (let i = 0; i < last; i++) {
+        if (steps[i].every((o) => o.kind === "rest")) wear = 0;
+        else if (steps[i].some((o) => isFight(o.kind))) wear += steps[i].some((o) => o.kind === "elite") ? 2 : 1;
+      }
+      if (wear >= 1) eased++;
+      // 首领关不在此列：门口有整装石，本来就是满状态迎战
+      expect(buildLevel(lv).boss).toBe(false);
+    }
+    expect(eased).toBeGreaterThan(30);
+    expect(CLIMAX_EASE).toBe(0.9);
+  });
+
+  it("W4A-15 已修：松一成之后收尾精英还是明显强过同关小怪，不是白挂个名", () => {
+    let checked = 0;
+    for (let lv = 0; lv < TOTAL_LEVELS; lv++) {
+      const steps = buildLevel(lv).steps;
+      const climax = steps[steps.length - 1].find((o) => o.kind === "elite");
+      const grunt = steps.slice(0, -1).flat().find((o) => o.kind === "foe");
+      if (!climax?.foe || !grunt?.foe) continue;
+      expect(climax.foe.maxHp, `第 ${lv + 1} 关`).toBeGreaterThan(grunt.foe.maxHp);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  it("W4A-15 已修：第 155 关的三连打结构没被拆掉，只是收尾松了一成", () => {
     const foesOf = (lv: number) => buildLevel(lv).steps.filter((s) => s[0].foe).length;
     const restsOf = (lv: number) => buildLevel(lv).steps.filter((s) => s[0].kind === "rest").length;
     expect(foesOf(154)).toBe(3);
