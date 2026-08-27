@@ -81,9 +81,17 @@ export const TOUCH_MIN = 46;
 export const TOUCH_MIN_TWO = 44;
 
 const CSS = `
+/* 平台那层舞台是 overflow:hidden 的:自己这一层留一条竖向滚动做兜底,
+   万一哪台机器上算得不准,摇杆也不至于被切在屏幕外面点不到 */
+.tkb-root{height:100%;overflow-y:auto;overscroll-behavior:contain;}
 .tkb-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
-  -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;}
+  -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;align-items:center;
+  width:100%;max-width:100%;min-width:0;}
+.tkb-wrap > *{max-width:100%;min-width:0;}
 .tkb-hud{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;}
+/* display:flex 会把浏览器自带的 [hidden]{display:none} 顶掉,得自己补一条压回去 */
+.tkb-wrap[hidden],.tkb-hud[hidden],.tkb-bar[hidden],.tkb-pads[hidden],.tkb-acts[hidden],
+.tkb-mode[hidden],.tkb-mini-cv[hidden],.tkb-canvas[hidden]{display:none;}
 .tkb-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
   box-shadow:0 2px 6px rgba(150,140,180,.24);white-space:nowrap;}
 .tkb-chip-warn{background:#ffe9ef;color:#b8436f;}
@@ -98,14 +106,21 @@ const CSS = `
   flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:14px;}
 .tkb-over-t{font-size:21px;font-weight:900;color:#7a4f9a;line-height:1.3;}
 .tkb-over-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;max-width:280px;}
-.tkb-tip{font-size:12.5px;font-weight:700;color:#6f6390;text-align:center;line-height:1.5;max-width:420px;}
+.tkb-tip{font-size:12.5px;font-weight:700;color:#6f6390;text-align:center;line-height:1.5;max-width:min(420px,100%);}
 .tkb-pads{display:flex;gap:10px;justify-content:center;align-items:flex-start;flex-wrap:wrap;width:100%;}
-.tkb-pad{display:flex;flex-direction:column;align-items:center;gap:4px;}
-.tkb-pad-t{font-size:12px;font-weight:900;text-align:center;}
+.tkb-pad{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
+.tkb-pad-t{font-size:12px;font-weight:900;text-align:center;overflow-wrap:anywhere;}
 .tkb-sticks{display:flex;gap:6px;align-items:center;}
+/* 摇杆:上面一颗居中,下面 ◀▼▶ 一排。每一颗都写死格子,不靠自动排版猜 */
 .tkb-dpad{display:grid;grid-template-columns:repeat(3,auto);grid-template-rows:repeat(2,auto);gap:3px;}
-.tkb-dpad-top{grid-column:2;}
-.tkb-acts-col{display:flex;flex-direction:column;gap:3px;}
+.tkb-dpad-up{grid-area:1/2;}
+.tkb-dpad-left{grid-area:2/1;}
+.tkb-dpad-down{grid-area:2/2;}
+.tkb-dpad-right{grid-area:2/3;}
+/* 动作键单独一块:发射钮占满上面一行,换弹与补墙并排在下面。
+   和摇杆一样高,一屏就装得下;双人挤在窄屏上时再改回竖着一列(见下面的 media)。 */
+.tkb-acts-col{display:grid;grid-template-columns:repeat(2,auto);gap:3px;}
+.tkb-acts-col .tkb-fire{grid-column:1 / span 2;width:100%;}
 .tkb-key{border:none;border-radius:12px;min-width:${TOUCH_MIN}px;min-height:${TOUCH_MIN}px;padding:0;font-size:17px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#54446f;background:#efe9ff;
   box-shadow:0 3px 0 rgba(140,120,190,.4);}
@@ -125,23 +140,48 @@ const CSS = `
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7f9a5e,#65803f);box-shadow:0 4px 0 #4d6630;}
 .tkb-open.tkb-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}
 .tkb-open:active{transform:translateY(2px);box-shadow:0 2px 0 #4d6630;}
+/* align-items 用 stretch 而不是 center:居中会让每个孩子按 max-content 撑宽,
+   HUD 一长就把整块内容顶出屏幕(左边那一截就再也看不见了) */
 .tkb-mode{border-radius:18px;padding:10px;background:linear-gradient(180deg,#f2f6ea,#fff4f8);
-  display:flex;flex-direction:column;gap:8px;align-items:center;}
+  display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:0;}
+.tkb-mode > *{min-width:0;}
 .tkb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;}
 .tkb-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a7a52;box-shadow:0 3px 0 rgba(110,130,80,.3);}
 .tkb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,130,80,.3);}
 @media (max-width:420px){
   .tkb-pads{gap:4px;justify-content:space-between;}
+  /* 双人同屏,左右各一套。360px 上横着摆不下「摇杆 + 动作列」两块,
+     所以这一档改成上下摞:摇杆在上、发射/换弹/补墙一排在下,每套正好三颗键宽。 */
+  .tkb-pads-two{gap:4px;flex-wrap:nowrap;}
+  .tkb-pads-two .tkb-pad{max-width:150px;}
   .tkb-pads-two .tkb-key{min-width:${TOUCH_MIN_TWO}px;min-height:${TOUCH_MIN_TWO}px;font-size:15px;}
   .tkb-pads-two .tkb-fire{min-width:${TOUCH_MIN_TWO}px;min-height:${TOUCH_MIN_TWO}px;}
-  .tkb-pads-two .tkb-sticks{gap:2px;}
+  .tkb-pads-two .tkb-sticks{flex-direction:column;gap:5px;}
   .tkb-pads-two .tkb-dpad{gap:2px;}
+  .tkb-pads-two .tkb-acts-col{grid-template-columns:repeat(3,auto);gap:2px;}
+  .tkb-pads-two .tkb-acts-col .tkb-fire{grid-column:1;width:auto;}
   .tkb-pad-t{font-size:10.5px;}
   .tkb-open{padding:7px 11px;font-size:13px;}
   .tkb-bar{gap:6px;margin-bottom:4px;}
-  .tkb-tip{font-size:11.5px;}
+  /* 窄屏上高度比什么都金贵:HUD 与「选场地 / 选陪练」都排成一行,
+     放不下就横着滑,绝不换行——每换一行,战场就得缩掉一整格 */
+  .tkb-hud{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;}
+  .tkb-mode > .tkb-acts{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;width:100%;}
+  .tkb-mode{padding:6px;gap:5px;}
+  .tkb-mhead{flex-wrap:nowrap;overflow-x:auto;}
+  /* 装不下就收成两行加省略号,别把句子拦腰切一半留在屏幕上 */
+  .tkb-tip{font-size:11.5px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;}
   .tkb-chip{padding:4px 9px;font-size:12px;}
+  .tkb-wrap{gap:5px;}
+}
+/* 屏幕本来就矮(667 那一档):提示只留一行,间距再收一点,免得摇杆被挤出舞台 */
+@media (max-height:700px){
+  .tkb-tip{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden;}
+  .tkb-wrap{gap:4px;}
+  .tkb-mode{padding:5px;gap:4px;}
+  .tkb-pad{gap:2px;}
+  .tkb-pads-two .tkb-sticks{gap:3px;}
 }
 @media (prefers-reduced-motion:reduce){.tkb-key:active{transform:none;}}
 `;
@@ -594,6 +634,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   let last = 0;
   let clock = 0;
   let cell = 26;
+  let settled = 0;
   let shake = 0;
   let miniOpen = false;
   const reduced = prefersReducedMotion();
@@ -610,10 +651,40 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     miniCv.hidden = !miniOpen;
   }
 
+  /**
+   * 战场还能占多高。
+   *
+   * 平台那层舞台(`.game-stage`)是 `overflow:hidden` 的:算多了,摇杆就被切在屏幕外面,
+   * 手指再长也点不到。所以这里不猜,直接量——先找到那个会裁剪的祖先,
+   * 再拿它的高度减掉「战场以外的东西」(模式条、HUD、提示、暂停条、摇杆)。
+   * 量不到(比如跑在没有布局引擎的测试环境里)就退回按窗口高度估的老办法。
+   */
+  function boardRoom(): number {
+    const guess = Math.max(220, Math.min(430, (globalThis.innerHeight || 700) - 300));
+    try {
+      let clip: HTMLElement | null = wrap.parentElement;
+      while (clip) {
+        const oy = getComputedStyle(clip).overflowY;
+        if (oy !== "visible" && clip.clientHeight > 120) break;
+        clip = clip.parentElement;
+      }
+      if (!clip) return guess;
+      const box = clip.getBoundingClientRect();
+      const wrapBox = wrap.getBoundingClientRect();
+      const boardBox = canvas.getBoundingClientRect();
+      // 战场以外的一切:上面挡掉的那一截 + 整个 wrap 里除战场之外的部分
+      const chrome = wrapBox.top - box.top + (wrapBox.height - boardBox.height);
+      const room = clip.clientHeight - chrome - 10;
+      return room > 150 ? room : guess;
+    } catch {
+      return guess;
+    }
+  }
+
   function layout(): void {
     const availW = Math.max(220, (host.clientWidth || 340) - 8);
-    const availH = Math.max(220, Math.min(430, (globalThis.innerHeight || 700) - 300));
-    cell = Math.max(16, Math.floor(Math.min(availW / MAP_W, availH / MAP_H, 34)));
+    const availH = boardRoom();
+    cell = Math.max(14, Math.floor(Math.min(availW / MAP_W, availH / MAP_H, 34)));
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     canvas.width = Math.round(MAP_W * cell * dpr);
     canvas.height = Math.round(MAP_H * cell * dpr);
@@ -688,6 +759,11 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
 
   function frame(now: number): void {
     raf = requestAnimationFrame(frame);
+    if (settled < 2) {
+      // 头两帧再各量一次:第一次量的时候文字还没排完,战场高度会偏
+      settled += 1;
+      layout();
+    }
     if (last === 0) last = now;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
@@ -805,7 +881,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     grid.className = "tkb-dpad";
     const up = document.createElement("button");
     up.type = "button";
-    up.className = "tkb-key tkb-dpad-top";
+    up.className = "tkb-key tkb-dpad-up";
     up.textContent = "▲";
     up.setAttribute("aria-label", `${P_NAME[player]}向上开`);
     bindHold(up, `${player}:up`);
@@ -813,7 +889,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     for (const action of ["left", "down", "right"] as const) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "tkb-key";
+      b.className = `tkb-key tkb-dpad-${action}`;
       b.textContent = action === "left" ? "◀" : action === "down" ? "▼" : "▶";
       b.setAttribute("aria-label", `${P_NAME[player]}向${dirWord(action)}开`);
       bindHold(b, `${player}:${action}`);
@@ -1022,7 +1098,36 @@ const NESTS: readonly NestMap[] = [
   FROST_NEST_MAP,
 ];
 
+/**
+ * 换场地 / 再来一轮都是「拆掉这一局、原地开下一局」。
+ * 上层拿着的永远是这个壳,里头换过几茬它不知道也不用知道 ——
+ * 少了这一层,换一次场地就会漏一整局在 DOM 里没人收。
+ */
 function mountEndless(host: HTMLElement, api: GameApi, back: () => void, nestId = NESTS[0].id): { destroy: () => void } {
+  let live: { destroy: () => void } | null = null;
+  const open = (id: string): void => {
+    const old = live;
+    live = null;
+    old?.destroy();
+    live = buildEndless(host, api, back, id, open);
+  };
+  open(nestId);
+  return {
+    destroy() {
+      const old = live;
+      live = null;
+      old?.destroy();
+    },
+  };
+}
+
+function buildEndless(
+  host: HTMLElement,
+  api: GameApi,
+  back: () => void,
+  nestId: string,
+  open: (id: string) => void
+): { destroy: () => void } {
   const nest = NESTS.find((n) => n.id === nestId) ?? NESTS[0];
   const shell = modeShell(host, `♾️ 无尽守老巢 · ${nest.emoji}${nest.name}`, back, (n) => api.play(n));
 
@@ -1036,9 +1141,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void, nestId 
     (n) => {
       if (n.id === nest.id) return;
       api.play("tap");
-      runner?.destroy();
-      shell.destroy();
-      mountEndless(host, api, back, n.id);
+      open(n.id);
     }
   );
   shell.box.insertBefore(picker, shell.stage);
@@ -1074,8 +1177,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void, nestId 
     again.textContent = "🔁 再来一轮";
     again.addEventListener("click", () => {
       api.play("tap");
-      shell.destroy();
-      mountEndless(host, api, back, nest.id);
+      open(nest.id);
     });
     const home = document.createElement("button");
     home.type = "button";
@@ -1132,22 +1234,41 @@ interface VersusSetup {
 
 let lastVersus: VersusSetup = { arena: ARENAS[0], ai: null };
 
+/** 和无尽同一套壳:换场地 / 换陪练 / 再来一局都是原地换一茬,外面拿到的句柄不变 */
 function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destroy: () => void } {
+  let live: { destroy: () => void } | null = null;
+  const open = (next: Partial<VersusSetup>): void => {
+    lastVersus = { ...lastVersus, ...next };
+    const old = live;
+    live = null;
+    old?.destroy();
+    live = buildVersus(host, api, back, open);
+  };
+  open({});
+  return {
+    destroy() {
+      const old = live;
+      live = null;
+      old?.destroy();
+    },
+  };
+}
+
+function buildVersus(
+  host: HTMLElement,
+  api: GameApi,
+  back: () => void,
+  open: (next: Partial<VersusSetup>) => void
+): { destroy: () => void } {
   const setup: VersusSetup = { ...lastVersus };
   const shell = modeShell(host, "⚔️ 双人对战 · 先把对手打散 3 次", back, (n) => api.play(n));
 
   let runner: Runner | null = null;
   let over = false;
-  let rebuilding = false;
 
   function restart(next: Partial<VersusSetup>): void {
-    Object.assign(setup, next);
-    lastVersus = { ...setup };
     api.play("tap");
-    rebuilding = true;
-    runner?.destroy();
-    shell.destroy();
-    mountVersus(host, api, back);
+    open(next);
   }
 
   const arenaRow = chooserRow(
@@ -1223,7 +1344,6 @@ function mountVersus(host: HTMLElement, api: GameApi, back: () => void): { destr
 
   return {
     destroy() {
-      if (rebuilding) return;
       runner?.destroy();
       runner = null;
       stopSpeaking();
@@ -1256,6 +1376,7 @@ function clamp(n: number, lo: number, hi: number): number {
 
 export function mount(api: GameApi): TankBattleHandle {
   const root = document.createElement("div");
+  root.className = "tkb-root";
   const style = document.createElement("style");
   style.textContent = CSS;
   const bar = document.createElement("div");

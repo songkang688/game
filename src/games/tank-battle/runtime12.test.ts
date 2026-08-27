@@ -70,6 +70,11 @@ describe("画面外壳与样式", () => {
 
     const css = styleText(h.root);
     expect(css.length).toBeGreaterThan(200);
+    // display:flex / block 会把浏览器自带的 [hidden] 顶掉,这几条压回去的规则必须在
+    for (const cls of ["tkb-bar", "tkb-pads", "tkb-mode", "tkb-mini-cv"]) {
+      expect(css, `${cls} 少了 [hidden] 兜底`).toContain(`.${cls}[hidden]`);
+    }
+    expect(css).toMatch(/\[hidden\][^{]*\{display:none;\}/);
     const classes = [...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]);
     expect(classes.length).toBeGreaterThan(10);
     for (const cls of classes) expect(cls, `${cls} 没带 tkb- 前缀`).toMatch(/^tkb-/);
@@ -319,6 +324,35 @@ describe("模式入口", () => {
     findButton(h.root, "陪练·追人")?.fire("click");
     h.flush(3);
     expect(findAll(h.root, "tkb-pad")).toHaveLength(1);
+    game.destroy();
+  });
+
+  it("换场地 / 换陪练是原地换一茬,不会在后台留下上一局", async () => {
+    const h = (harness = install());
+    const game = await mountGame(h);
+    h.flush(2);
+
+    findButton(h.root, "无尽守老巢")?.fire("click");
+    h.flush(3);
+    findButton(h.root, "冰原老巢")?.fire("click");
+    h.flush(3);
+    expect(findAll(h.root, "tkb-canvas")).toHaveLength(1);
+    findButton(h.root, "回选关")?.fire("click");
+    h.flush(2);
+    expect(findAll(h.root, "tkb-canvas")).toHaveLength(0);
+
+    findButton(h.root, "双人对战")?.fire("click");
+    h.flush(3);
+    findButton(h.root, "转盘广场")?.fire("click");
+    h.flush(3);
+    findButton(h.root, "陪练·乱转")?.fire("click");
+    h.flush(3);
+    expect(findAll(h.root, "tkb-canvas")).toHaveLength(1);
+    expect(findAll(h.root, "tkb-pad")).toHaveLength(1);
+    findButton(h.root, "回选关")?.fire("click");
+    h.flush(2);
+    expect(findAll(h.root, "tkb-canvas")).toHaveLength(0);
+    expect(h.pendingFrames()).toBe(0);
     game.destroy();
   });
 
