@@ -493,6 +493,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
   let jumpElapsed = 0;
   let jumpJudged = false;
   let perfectStreak = 0;
+  /** 这一趟连着跳出过的最长完美串(只进结算面板,不进任何判定) */
+  let bestStreak = 0;
   let reviveUsed = false;
   /** 宠物「绵绵」白送的那一次接住,不花星星 */
   let petReviveLeft = 0;
@@ -849,6 +851,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     slideElapsed = 0;
     hurtFlash = 0;
     perfectStreak = 0;
+    bestStreak = 0;
     forkSign = null;
     banner = null;
     forkTimer = level().fork ? 5 : Infinity;
@@ -1374,6 +1377,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
         if (!jumpJudged) {
           jumpJudged = true;
           const perfect = isPerfectJump(jumpElapsed);
+          if (perfect) bestStreak = Math.max(bestStreak, perfectStreak + 1);
           if (completesPerfectRun(perfectStreak, perfect)) {
             stats.perfectRuns = (stats.perfectRuns ?? 0) + 1;
             score += 30;
@@ -2333,7 +2337,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
       Math.min(450, w - 40),
       (canRevive ? 260 : 210) +
         (bossLose ? 28 : 0) +
-        (endless ? 16 : 0) +
+        (endless ? 58 : 0) +
         (ghostRow ? 22 : 0) +
         (skippable ? 56 : 0),
     );
@@ -2391,6 +2395,36 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.font = "15px sans-serif";
     }
     let by = y + (endless ? 146 : loseReason === "boss" ? 138 : 116) + (ghostRow ? 22 : 0);
+    // 无尽结算:世界进度带(跑过的世界小点点亮) + 最高连击;破纪录时两侧点金色小星
+    if (endless) {
+      const total = THEME_ORDER.length;
+      const lit = worldDotsLit(dist, ENDLESS_STAGE_LEN, total);
+      const gap = Math.min(24, (Math.min(450, w - 40) - 96) / (total - 1));
+      const x0 = w / 2 - (gap * (total - 1)) / 2;
+      const dotY = by + 6;
+      for (let i = 0; i < total; i++) {
+        const st = THEME_STYLE[THEME_ORDER[i]];
+        ctx.fillStyle = i < lit ? st.accent : "#e2e2ea";
+        ctx.beginPath();
+        ctx.arc(x0 + i * gap, dotY, i < lit ? 5.5 : 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (broke.meters) {
+        drawStar(x0 - 20, dotY, 7, "#e0a030");
+        drawStar(x0 + (total - 1) * gap + 20, dotY, 7, "#e0a030");
+      }
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      fitText(
+        `跑过 ${lit} 个世界 · 最高完美连跳 ${bestStreak}`,
+        w / 2,
+        dotY + 20,
+        Math.min(440, w - 50),
+      );
+      by = dotY + 36;
+    }
     btnRevive = null;
     if (canRevive) {
       btnRevive = { x: w / 2 - 110, y: by, w: 220, h: 44 };
