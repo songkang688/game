@@ -52,6 +52,7 @@ import {
   TOOL_MIN_H,
   type CellCenter,
 } from "./runtime";
+import { BOARD_ART_CSS, glyphHTML, sceneStickersReady } from "./boardArt";
 import {
   BUBBLE_MS,
   CONFETTI_TINTS,
@@ -190,7 +191,7 @@ function prefersReducedMotion(): boolean {
 }
 
 /** 把一格的外观画出来：底色 + 一到两个图案（缩放 / 左右翻 / 格内位移都在这里落地） */
-function paintCell(el: HTMLElement, view: CellView, px: number): void {
+function paintCell(el: HTMLElement, view: CellView, px: number, art: boolean): void {
   el.style.background = view.tint ?? "";
   const font = Math.max(MIN_GLYPH_PX, Math.round(px * GLYPH_RATIO));
   const parts: string[] = [];
@@ -198,11 +199,12 @@ function paintCell(el: HTMLElement, view: CellView, px: number): void {
     const spread = view.count > 1 ? (k === 0 ? -COUNT_OFFSET : COUNT_OFFSET) : 0;
     const tx = (view.dx + spread) * px;
     const ty = view.dy * px;
-    parts.push(
-      `<span class="fdf-glyph" style="font-size:${font}px;transform:translate(-50%,-50%) translate(${tx.toFixed(
-        1
-      )}px,${ty.toFixed(1)}px) scale(${view.scale.toFixed(2)}) scaleX(${view.flip ? -1 : 1})">${view.emoji}</span>`
-    );
+    // W8R1-04：贴纸与 emoji 走同一份字号 + transform，六种差异维度照样成立；
+    // 门控关闸（图集没配齐的章节）输出与 1.2 逐字节一致
+    const style = `font-size:${font}px;transform:translate(-50%,-50%) translate(${tx.toFixed(
+      1
+    )}px,${ty.toFixed(1)}px) scale(${view.scale.toFixed(2)}) scaleX(${view.flip ? -1 : 1})`;
+    parts.push(art ? glyphHTML(view.emoji, font, style) : `<span class="fdf-glyph" style="${style}">${view.emoji}</span>`);
   }
   el.innerHTML = parts.join("");
 }
@@ -241,6 +243,8 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const answers = new Set(scene.diffIdx);
   const foundSet = new Set<number>();
   const reduced = prefersReducedMotion();
+  // W8R1-04：整关门控——盘面每种图案都有贴纸才换装，绝不出半贴纸半 emoji 的混排图
+  const artOn = sceneStickersReady(scene);
 
   let frozen = false;
   let cooling = false;
@@ -369,7 +373,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     perm.forEach((src) => {
       const cell = document.createElement("div");
       cell.className = `fdf-cell${slide ? " fdf-slide" : ""}`;
-      paintCell(cell, cells[src], px);
+      paintCell(cell, cells[src], px, artOn);
       grid.appendChild(cell);
       refCells[gi][src] = cell;
     });
@@ -382,7 +386,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `fdf-cell fdf-cell-play${slide ? " fdf-slide" : ""}`;
-      paintCell(btn, scene.right[src], playPx);
+      paintCell(btn, scene.right[src], playPx, artOn);
       btn.setAttribute("aria-label", `第 ${Math.floor(pos / scene.cols) + 1} 行第 ${(pos % scene.cols) + 1} 个`);
       // 鼠标/手指走 viewport 上的几何命中判定（有容差）；这里只接键盘敲出来的 click
       btn.addEventListener("click", (ev) => {
@@ -1054,7 +1058,7 @@ export function openCampaignLevel(level: number): boolean {
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
-  style.textContent = CSS + STAGE_CSS;
+  style.textContent = CSS + STAGE_CSS + BOARD_ART_CSS;
   const bar = document.createElement("div");
   bar.className = "fdf-tools";
   bar.style.margin = "0 0 8px";

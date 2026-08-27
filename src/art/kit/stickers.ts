@@ -1865,6 +1865,257 @@ reg("🧲", "磁铁", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 1–3 章（W8R1-04 专项：水果果园 / 萌宠乐园 / 海底世界） ----
+
+reg("🍌", "香蕉", () => {
+  const c = "#f4cf4c";
+  const out = o(c);
+  return (
+    gs(24, 42.5, 13) +
+    `<path d="M12 10.5 Q9 27.5 21.5 36 Q32.5 43 40.5 34.5 Q42.2 32.3 39.4 32 Q27.5 33.5 19.8 24.5 Q13.8 17.5 15.6 11.2 Q16 9 13.8 9.6 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M21.5 36 Q32.5 43 40.5 34.5 Q41.5 33.2 40.4 32.6 Q33 39 22.8 33.6 Q15 29.4 12.6 20 Q13.6 30.5 21.5 36 Z" fill="${shade(c, -14)}" opacity=".8"/>` +
+    `<path d="M15.8 15 Q14.8 24.5 21 30.5" fill="none" stroke="${shade(c, -8)}" stroke-width="1.4" opacity=".7"/>` +
+    `<path d="M12.6 9.9 L15.3 10.7" stroke="${o(P.wood)}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<circle cx="40" cy="33.6" r="1.7" fill="${P.brown}" stroke="${o(P.brown)}" stroke-width="1"/>` +
+    hi(17.5, 14.5, 2.4, 1.5)
+  );
+});
+
+reg("🍇", "葡萄", () => {
+  const c = "#a583e8";
+  const out = o(c);
+  const grape = (x: number, y: number): string =>
+    `<circle cx="${x}" cy="${y}" r="5.6" fill="${c}" stroke="${out}" stroke-width="1.8"/>`;
+  return (
+    gs(24, 43, 11) +
+    `<path d="M24 14.5 Q23.5 9.5 26.5 6.5" fill="none" stroke="${o(P.wood)}" stroke-width="2.2" stroke-linecap="round"/>` +
+    leafShape(29, 10, 9, -12, P.green) +
+    grape(17, 19.5) + grape(31, 19.5) +
+    grape(24, 17.5) +
+    grape(13.5, 27.5) + grape(24, 28) + grape(34.5, 27.5) +
+    grape(18.5, 35.5) + grape(29.5, 35.5) +
+    `<circle cx="24" cy="41" r="5.6" fill="${shade(c, -12)}" stroke="${out}" stroke-width="1.8"/>` +
+    `<circle cx="15.2" cy="17.8" r="1.8" fill="#ffffff" opacity=".55"/>` +
+    `<circle cx="12" cy="25.8" r="1.5" fill="#ffffff" opacity=".45"/>`
+  );
+});
+
+reg("🍓", "草莓", () => {
+  const c = P.red;
+  const out = o(c);
+  const seed = (x: number, y: number): string =>
+    `<ellipse cx="${x}" cy="${y}" rx="1" ry="1.5" fill="#ffe9a8" stroke="${out}" stroke-width=".5"/>`;
+  return (
+    gs(24, 43, 11) +
+    `<path d="M24 42 Q10.5 33.5 10.5 21.5 Q10.5 14.5 24 14.5 Q37.5 14.5 37.5 21.5 Q37.5 33.5 24 42 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 42 Q37.5 33.5 37.5 21.5 Q37.5 17.5 33 16 Q35.5 22 32.5 30 Q29.5 37.5 24 42 Z" fill="${shade(c, -14)}" opacity=".8"/>` +
+    seed(18, 22) + seed(30, 22) + seed(24, 27) + seed(15.5, 28.5) + seed(32, 28.5) + seed(20, 34) + seed(28, 34) +
+    `<path d="M24 15.5 L18 10.5 L23 12.5 L24 7.5 L25 12.5 L30 10.5 Z" fill="${P.green}" stroke="${o(P.green)}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    hi(17, 18.5, 2.8, 1.7)
+  );
+});
+
+reg("🍍", "菠萝", () => {
+  const c = "#f2bd4a";
+  const out = o(c);
+  const spike = (rot: number): string =>
+    `<path d="M24 13.5 L20.5 4.5 L24 7 L27.5 4.5 Z" fill="${P.green}" stroke="${o(P.green)}" stroke-width="1.5" stroke-linejoin="round" transform="rotate(${rot} 24 13.5)"/>`;
+  return (
+    gs(24, 43.5, 11) +
+    spike(-48) + spike(48) + spike(-24) + spike(24) + spike(0) +
+    `<ellipse cx="24" cy="29" rx="11.5" ry="13.5" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 42.5 a11.5 13.5 0 0 0 10.5 -18.8 a13.5 16 0 0 1 -10.5 18.8" fill="${shade(c, -14)}" opacity=".8"/>` +
+    `<path d="M15 21 L33.5 36 M13.5 27 L30 39.5 M18.5 17.5 L35 31 M13.8 33 L24.5 41.8 M22 16.2 L35.4 27.2"` +
+    ` stroke="${shade(c, -18)}" stroke-width="1.2" opacity=".6"/>` +
+    `<path d="M33 21 L14.5 36 M34.5 27 L18 39.5 M29.5 17.5 L13 31 M34.2 33 L23.5 41.8 M26 16.2 L12.6 27.2"` +
+    ` stroke="${shade(c, -18)}" stroke-width="1.2" opacity=".6"/>` +
+    hi(17.5, 21, 2.6, 1.6)
+  );
+});
+
+reg("🥝", "奇异果", () => {
+  const rind = "#a58453";
+  const flesh = "#9ccb62";
+  return (
+    gs(24, 43, 12) +
+    `<circle cx="24" cy="25" r="14.5" fill="${rind}" stroke="${o(rind)}" stroke-width="2"/>` +
+    `<path d="M24 39.5 a14.5 14.5 0 0 0 13.3 -20.2 a17 17 0 0 1 -13.3 20.2" fill="${shade(rind, -14)}" opacity=".8"/>` +
+    `<circle cx="24" cy="25" r="11" fill="${flesh}" stroke="${shade(flesh, -20)}" stroke-width="1.2"/>` +
+    `<circle cx="24" cy="25" r="4" fill="#f4f8e8"/>` +
+    `<circle cx="24" cy="17.5" r="1.1" fill="${INK}"/><circle cx="24" cy="32.5" r="1.1" fill="${INK}"/>` +
+    `<circle cx="17.5" cy="21.2" r="1.1" fill="${INK}"/><circle cx="30.5" cy="21.2" r="1.1" fill="${INK}"/>` +
+    `<circle cx="17.5" cy="28.8" r="1.1" fill="${INK}"/><circle cx="30.5" cy="28.8" r="1.1" fill="${INK}"/>` +
+    `<ellipse cx="19" cy="19" rx="2.6" ry="1.6" fill="#ffffff" opacity=".4" transform="rotate(-24 19 19)"/>`
+  );
+});
+
+reg("🍒", "樱桃", () => {
+  const c = P.red;
+  const out = o(c);
+  return (
+    gs(24, 43, 13) +
+    `<path d="M27 7.5 Q19 14.5 16.5 25 M27 7.5 Q30.5 17 32.5 26" fill="none" stroke="${P.green}" stroke-width="2.2" stroke-linecap="round"/>` +
+    leafShape(30, 9.5, 9, -28, P.green) +
+    `<circle cx="15.5" cy="31" r="7.4" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M15.5 38.4 a7.4 7.4 0 0 0 6.8 -10.3 a8.8 8.8 0 0 1 -6.8 10.3" fill="${shade(c, -14)}" opacity=".8"/>` +
+    `<circle cx="32.5" cy="33" r="7.4" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M32.5 40.4 a7.4 7.4 0 0 0 6.8 -10.3 a8.8 8.8 0 0 1 -6.8 10.3" fill="${shade(c, -14)}" opacity=".8"/>` +
+    `<circle cx="13" cy="28.5" r="1.7" fill="#ffffff" opacity=".6"/>` +
+    `<circle cx="30" cy="30.5" r="1.7" fill="#ffffff" opacity=".6"/>`
+  );
+});
+
+reg("🐼", "熊猫", () => {
+  const white = "#f6f3ec";
+  const dark = "#4a4458";
+  return (
+    gs() +
+    `<circle cx="12.5" cy="14.5" r="5.6" fill="${dark}" stroke="${o(dark)}" stroke-width="2"/>` +
+    `<circle cx="35.5" cy="14.5" r="5.6" fill="${dark}" stroke="${o(dark)}" stroke-width="2"/>` +
+    `<ellipse cx="24" cy="26" rx="14.5" ry="12.5" fill="${white}" stroke="${o(white)}" stroke-width="2"/>` +
+    `<path d="M24 38.5 a14.5 12.5 0 0 0 13.3 -6.9 a17 15 0 0 1 -13.3 6.9" fill="${shade(white, -12)}" opacity=".8"/>` +
+    `<ellipse cx="17" cy="24" rx="4.6" ry="5.4" fill="${dark}" transform="rotate(-12 17 24)"/>` +
+    `<ellipse cx="31" cy="24" rx="4.6" ry="5.4" fill="${dark}" transform="rotate(12 31 24)"/>` +
+    `<circle cx="17.8" cy="23.6" r="1.6" fill="#ffffff"/><circle cx="30.2" cy="23.6" r="1.6" fill="#ffffff"/>` +
+    `<circle cx="17.8" cy="23.6" r=".8" fill="${dark}"/><circle cx="30.2" cy="23.6" r=".8" fill="${dark}"/>` +
+    `<ellipse cx="24" cy="30.5" rx="2.2" ry="1.7" fill="${dark}"/>` +
+    `<path d="M21 33.8 Q24 36.2 27 33.8" fill="none" stroke="${INK}" stroke-width="1.4" stroke-linecap="round"/>` +
+    hi(16, 17.5)
+  );
+});
+
+reg("🦊", "狐狸", () =>
+  critterFace({
+    main: "#f0975a",
+    ear: "pointy",
+    earInner: "#f8d0b0",
+    front:
+      `<ellipse cx="16" cy="29.5" rx="6" ry="5" fill="${P.cream}" stroke="${o(P.cream)}" stroke-width="1.4"/>` +
+      `<ellipse cx="32" cy="29.5" rx="6" ry="5" fill="${P.cream}" stroke="${o(P.cream)}" stroke-width="1.4"/>` +
+      `<circle cx="18" cy="23.5" r="1.7" fill="${INK}"/><circle cx="30" cy="23.5" r="1.7" fill="${INK}"/>` +
+      `<path d="M22.2 29.5 L25.8 29.5 L24 31.7 Z" fill="${INK}"/>` +
+      `<path d="M24 31.7 q-1.8 2.2 -3.6 1 M24 31.7 q1.8 2.2 3.6 1" fill="none" stroke="${o("#f0975a")}" stroke-width="1.2" stroke-linecap="round"/>`
+  }));
+
+reg("🐙", "章鱼", () => {
+  const c = P.rose;
+  const out = o(c);
+  const leg = (d: string): string =>
+    `<path d="${d}" fill="none" stroke="${out}" stroke-width="6" stroke-linecap="round" opacity=".45"/>` +
+    `<path d="${d}" fill="none" stroke="${c}" stroke-width="4.2" stroke-linecap="round"/>`;
+  return (
+    gs(24, 43.5, 14) +
+    leg("M13 28 Q9.5 36.5 13.5 41") +
+    leg("M20 31 Q18.5 38.5 22 42.5") +
+    leg("M28 31 Q29.5 38.5 26 42.5") +
+    leg("M35 28 Q38.5 36.5 34.5 41") +
+    `<path d="M10.5 24 Q10.5 10.5 24 10.5 Q37.5 10.5 37.5 24 L37.5 28.5 Q37.5 31.5 34.5 31.5 L13.5 31.5 Q10.5 31.5 10.5 28.5 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M34.5 31.5 Q37.5 31.5 37.5 28.5 L37.5 24 Q37.5 15 30.5 12 Q35 16.5 34.8 24 L34.8 31.4 Z" fill="${shade(c, -13)}" opacity=".8"/>` +
+    `<circle cx="18.5" cy="22.5" r="2" fill="${INK}"/><circle cx="29.5" cy="22.5" r="2" fill="${INK}"/>` +
+    `<path d="M21 27 Q24 29.4 27 27" fill="none" stroke="${INK}" stroke-width="1.4" stroke-linecap="round"/>` +
+    blush(14.5, 33.5, 25.5) +
+    hi(17, 14.5)
+  );
+});
+
+reg("🦀", "螃蟹", () => {
+  const c = "#f07a5a";
+  const out = o(c);
+  return (
+    gs(24, 42, 14) +
+    `<path d="M9 20 Q4.5 18 4.5 12.5 Q10.5 13 12.5 17.5 Z" fill="${c}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M39 20 Q43.5 18 43.5 12.5 Q37.5 13 35.5 17.5 Z" fill="${c}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<circle cx="11" cy="19.5" r="4.4" fill="${c}" stroke="${out}" stroke-width="1.8"/>` +
+    `<circle cx="37" cy="19.5" r="4.4" fill="${c}" stroke="${out}" stroke-width="1.8"/>` +
+    `<path d="M8 32 L4.5 35 M11 35 L8.5 38.5 M40 32 L43.5 35 M37 35 L39.5 38.5"` +
+    ` stroke="${out}" stroke-width="2.2" stroke-linecap="round"/>` +
+    `<ellipse cx="24" cy="30" rx="12.5" ry="9" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 39 a12.5 9 0 0 0 11.5 -5 a15 11 0 0 1 -11.5 5" fill="${shade(c, -14)}" opacity=".8"/>` +
+    `<path d="M19 22.5 L19 17.5 M29 22.5 L29 17.5" stroke="${out}" stroke-width="1.8" stroke-linecap="round"/>` +
+    `<circle cx="19" cy="16" r="2.6" fill="#ffffff" stroke="${out}" stroke-width="1.4"/>` +
+    `<circle cx="29" cy="16" r="2.6" fill="#ffffff" stroke="${out}" stroke-width="1.4"/>` +
+    `<circle cx="19" cy="16" r="1.1" fill="${INK}"/><circle cx="29" cy="16" r="1.1" fill="${INK}"/>` +
+    `<path d="M21 31.5 Q24 33.8 27 31.5" fill="none" stroke="${INK}" stroke-width="1.4" stroke-linecap="round"/>` +
+    hi(17.5, 26)
+  );
+});
+
+reg("🐬", "海豚", () => {
+  const c = "#6db4e8";
+  const out = o(c);
+  return (
+    gs(24, 42, 14) +
+    `<path d="M25.5 12.5 Q26 6.5 31 7 Q28.5 9.5 29 13.5 Z" fill="${c}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M10.5 30 L4.5 25.5 Q7.5 30.5 6 35.5 Q10.5 33.5 12.5 31 Z" fill="${c}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M8.5 29.5 Q13 12.5 30 11.5 Q41.5 11 40.5 17.5 Q39.8 21.8 32.5 23 Q28.5 32 18.5 33 Q11 33.7 8.5 29.5 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M18.5 33 Q28.5 32 32.5 23 Q38.5 22 40.2 18.5 Q38 26.5 29 29.5 Q23 31.5 15.5 32.7 Q17 33.1 18.5 33 Z" fill="${shade(c, -14)}" opacity=".8"/>` +
+    `<path d="M12 27.5 Q17 18.5 27 16" fill="none" stroke="#eaf5fd" stroke-width="3.6" stroke-linecap="round" opacity=".85"/>` +
+    `<path d="M25 20.5 Q22 25 24.5 28.5" fill="none" stroke="${out}" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>` +
+    `<circle cx="33.5" cy="16" r="1.8" fill="${INK}"/>` +
+    `<path d="M37.5 19.5 Q39.5 19 40.3 17.8" fill="none" stroke="${INK}" stroke-width="1.2" stroke-linecap="round"/>` +
+    hi(29, 13, 2.4, 1.5)
+  );
+});
+
+reg("🐳", "鲸鱼", () => {
+  const c = "#7aa8e8";
+  const out = o(c);
+  return (
+    gs(24, 43, 15) +
+    `<path d="M20 8 Q21.5 4.5 24 4 Q23.5 6.5 24.5 8 Z M28 8 Q29.5 4.5 32 4 Q31.5 6.5 32.5 8 Z" fill="${P.blue}" stroke="${o(P.blue)}" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `<path d="M26 11.5 Q26 8.5 26 8" fill="none" stroke="${o(P.blue)}" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<path d="M38.5 26 Q44 22.5 44 16.5 Q39 18.5 36.5 22 Z" fill="${c}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M6.5 29 Q6.5 12.5 23 12.5 Q37 12.5 39 24 Q39.8 28.5 37 31.5 Q34 34.5 28 35 L12 35 Q6.5 33 6.5 29 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M28 35 Q34 34.5 37 31.5 Q39.8 28.5 39 24 Q38.2 19.5 34.5 16.5 Q37 21.5 35.5 27.5 Q33.8 33.5 25.5 34.8 Z" fill="${shade(c, -14)}" opacity=".8"/>` +
+    `<path d="M9 30.5 Q13 28.5 17 30.5 M11 33 Q14.5 31.4 18 33" fill="none" stroke="#e8f2fc" stroke-width="2" stroke-linecap="round" opacity=".9"/>` +
+    `<circle cx="15" cy="22.5" r="2" fill="${INK}"/>` +
+    `<path d="M11.5 27 Q14 29 16.5 27" fill="none" stroke="${INK}" stroke-width="1.4" stroke-linecap="round"/>` +
+    blush(11, 20, 25.5) +
+    hi(15, 16.5)
+  );
+});
+
+reg("🦑", "鱿鱼", () => {
+  const c = P.lav;
+  const out = o(c);
+  const leg = (d: string): string =>
+    `<path d="${d}" fill="none" stroke="${out}" stroke-width="4.6" stroke-linecap="round" opacity=".45"/>` +
+    `<path d="${d}" fill="none" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>`;
+  return (
+    gs(24, 43.5, 12) +
+    leg("M15.5 31 Q12.5 37.5 15 42") +
+    leg("M20 32.5 Q19 38.5 21.5 42.8") +
+    leg("M28 32.5 Q29 38.5 26.5 42.8") +
+    leg("M32.5 31 Q35.5 37.5 33 42") +
+    `<path d="M24 4.5 Q31 9.5 30.5 18 L17.5 18 Q17 9.5 24 4.5 Z" fill="${shade(c, -8)}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M16.5 17.5 Q15.5 30 24 31.5 Q32.5 30 31.5 17.5 Q28 15.5 24 15.5 Q20 15.5 16.5 17.5 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 31.5 Q32.5 30 31.5 17.5 Q29.8 16.5 28 16 Q30.5 27 22 30.9 Q23 31.4 24 31.5 Z" fill="${shade(c, -13)}" opacity=".8"/>` +
+    `<circle cx="20.5" cy="23" r="2.2" fill="#ffffff"/><circle cx="27.5" cy="23" r="2.2" fill="#ffffff"/>` +
+    `<circle cx="20.9" cy="23.3" r="1.1" fill="${INK}"/><circle cx="27.1" cy="23.3" r="1.1" fill="${INK}"/>` +
+    `<path d="M22.5 27.2 Q24 28.4 25.5 27.2" fill="none" stroke="${INK}" stroke-width="1.2" stroke-linecap="round"/>` +
+    hi(20, 8.5, 2.2, 1.4)
+  );
+});
+
+reg("🐚", "贝壳", () => {
+  const c = "#f4c9b0";
+  const out = o(c);
+  return (
+    gs(24, 42.5, 12) +
+    `<path d="M20.5 41 L16.5 36 Q7 26 8.5 15.5 Q8.9 12.5 12 13.5 Q16.5 15 19 19.5 Q20.5 13.5 24 9.5 Q27.5 13.5 29 19.5 Q31.5 15 36 13.5 Q39.1 12.5 39.5 15.5 Q41 26 31.5 36 L27.5 41 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M27.5 41 L31.5 36 Q41 26 39.5 15.5 Q39.3 14 38.2 13.6 Q39.5 24.5 31 33.5 Q28 36.8 25 40.2 Z" fill="${shade(c, -13)}" opacity=".8"/>` +
+    `<path d="M24 39.5 L24 12.5 M20 38 Q13.5 27 12 17 M28 38 Q34.5 27 36 17" fill="none" stroke="${out}" stroke-width="1.4" opacity=".65"/>` +
+    hi(17, 19, 2.6, 1.6)
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------
