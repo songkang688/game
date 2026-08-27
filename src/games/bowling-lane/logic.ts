@@ -813,8 +813,96 @@ export function spareAimX(standing: readonly boolean[]): number {
   return best + lean * 0.35;
 }
 
+// ---------------------------------------------------------------------------
+// 电脑对手的「打算」:三档差的不只是手,还有脑子
+// ---------------------------------------------------------------------------
+
 /**
- * 电脑这一球怎么投:满架瞄口袋,补中瞄「够得着的那一瓶」,档位越高抖得越小。
+ * 三档电脑的**脑子**有多好。
+ *
+ * 1.2 第一版三档共用同一套打算,差别只有 `AI_WOBBLE` 这一个手抖幅度,
+ * 结果实测 60 格总倒瓶数 545 / 572 / 596 —— 一档到三档只差 9.4%,
+ * 孩子选「新手球童」和「冠军球手」几乎没有体感差别,难度选择器等于摆设。
+ *
+ * 问题出在 `spareAimX()`:那是一条**专家级**启发式(知道分瓶时不能瞄两瓶中间的空气),
+ * 白送给新手档就没有档位差了。这里把「打算」按档位分层:
+ *
+ *  - `spareSense` —— 补中瞄准的成熟度。0 = 只会瞄剩下几瓶的重心
+ *    (分瓶时重心正落在缝上,球从两瓶之间穿过去一个都碰不到,这就是真人新手最典型的失误);
+ *    1 = 完整的 `spareAimX()`。
+ *  - `paceSense` —— 力度调节的成熟度。0 = 永远那一个力度;
+ *    1 = 按剩几瓶换力度(满架要速度带连锁,残局要控制)。
+ *
+ * **满架时三档瞄的仍然都是口袋**:那是这一款的教学主线,
+ * 不能让新手档连方向都是错的,不然孩子跟着电脑学不到东西。
+ */
+export interface PlanSkill {
+  spareSense: number;
+  paceSense: number;
+}
+
+export const PLAN_SKILL: Record<AiLevel, PlanSkill> = {
+  // 新手球童:瞄重心、不会换力度 —— 分瓶基本补不上
+  1: { spareSense: 0, paceSense: 0 },
+  // 熟练球手:知道要往瓶身上靠,但只靠到一半;力度也只调一半
+  2: { spareSense: 0.5, paceSense: 0.5 },
+  // 冠军球手:完整的专家解
+  3: { spareSense: 1, paceSense: 1 },
+};
+
+/**
+ * 天真的补中落点:还站着那几瓶的**重心**。
+ * 3-7 号分瓶的重心正好落在球道正中,球顺着缝滚过去两边一个都碰不到 ——
+ * 新手档就是这么打的。
+ */
+export function centroidAimX(standing: readonly boolean[]): number {
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < PINS; i++) {
+    if (standing[i]) {
+      sum += pinSpot(i).x;
+      n++;
+    }
+  }
+  return n === 0 ? LANE_W / 2 : sum / n;
+}
+
+/** 这一档补中会瞄球道上的哪个横坐标:从天真的重心到专家解之间按成熟度插值 */
+export function planSpareX(standing: readonly boolean[], skill: AiLevel): number {
+  const naive = centroidAimX(standing);
+  const expert = spareAimX(standing);
+  return naive + (expert - naive) * clamp(PLAN_SKILL[skill].spareSense, 0, 1);
+}
+
+/** 满架时的基准力度:够把连锁带起来 */
+export const PACE_FULL = 0.78;
+/** 残局单瓶的基准力度:要的是控制,不是速度 */
+export const PACE_SPARE = 0.58;
+/** 不会换力度的档位永远用这一个(就是 1.2 第一版的那个常数) */
+export const PACE_FLAT = 0.7;
+
+/**
+ * 这一球该用多大力(还没加手抖)。剩的瓶越多越需要速度:
+ * 满架靠头瓶把力量传下去,只剩一瓶时再猛推反而容易把球带偏。
+ * `paceSense` 决定这一档听不听得懂这个道理。
+ */
+export function planPower(standing: readonly boolean[], skill: AiLevel): number {
+  let n = 0;
+  for (let i = 0; i < PINS; i++) {
+    if (standing[i]) n++;
+  }
+  const ideal = PACE_SPARE + (PACE_FULL - PACE_SPARE) * clamp((n - 1) / (PINS - 1), 0, 1);
+  return clamp(PACE_FLAT + (ideal - PACE_FLAT) * clamp(PLAN_SKILL[skill].paceSense, 0, 1), 0.25, 1);
+}
+
+/** 这一档的补中落点离「够得着那一瓶」差多远(球道单位);档位越高越小 */
+export function spareMissBy(standing: readonly boolean[], skill: AiLevel): number {
+  return Math.abs(planSpareX(standing, skill) - spareAimX(standing));
+}
+
+/**
+ * 电脑这一球怎么投:满架瞄口袋,补中瞄「这一档看得出来的那个点」,
+ * 力度按剩瓶数走(会不会调由档位决定),最后再叠一层高斯手抖。
  * 纯函数,给定同样的场面与回合号一定投出同样的球。
  */
 export function aiShot(standing: readonly boolean[], skill: AiLevel, turn: number): Shot {
@@ -823,11 +911,11 @@ export function aiShot(standing: readonly boolean[], skill: AiLevel, turn: numbe
     if (standing[i]) n++;
   }
   const full = n >= PINS;
-  const want = full ? POCKET_AIM : aimForX(spareAimX(standing));
+  const want = full ? POCKET_AIM : aimForX(planSpareX(standing, skill));
   // 落点与旋转的手抖走高斯:大多数球只差一点点,偶尔来一发离谱的
   const shake = AI_WOBBLE[skill];
   const aim = clamp(want + gaussNoise(turn, skill) * shake, -1, 1);
-  const power = clamp(0.7 + gaussNoise(turn + 11, skill) * shake * 0.5, 0.25, 1);
+  const power = clamp(planPower(standing, skill) + gaussNoise(turn + 11, skill) * shake * 0.5, 0.25, 1);
   const spin = clamp(gaussNoise(turn + 23, skill) * shake * 0.8, -1, 1);
   return { power, aim, spin };
 }
