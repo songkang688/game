@@ -12,18 +12,23 @@ import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { TIER_FACES, TIER_NAMES, ghostLine, playGhost, type AiTier, type GhostRun } from "./ai";
 import {
+  drawChargeRing,
   drawCloudPuff,
   drawHeroSprite,
   drawHills,
   drawIsland,
   drawPadMotif,
   drawParticles,
+  drawProgressRing,
+  drawRescueCloud,
   drawSideStripes,
   drawSpringCoil,
   drawStar,
   fogAlpha,
   padTopPattern,
   skyTheme,
+  spawnDustPuff,
+  spawnPerfectBurst,
   spawnShards,
   stepParticles,
   type HeroPose,
@@ -84,6 +89,7 @@ const CSS = `
 .hp-over{position:absolute;inset:0;background:rgba(255,248,242,.95);display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:10px;text-align:center;padding:18px;}
 .hp-over-t{font-size:21px;font-weight:900;color:#9A5A2C;}
+.hp-result-cv{display:block;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(190,150,120,.28);}
 .hp-over-s{font-size:16px;font-weight:700;color:#7C6350;line-height:1.6;max-width:300px;}
 .hp-tip{text-align:center;font-size:13px;font-weight:700;color:#9A8676;line-height:1.5;}
 .hp-duo{display:flex;flex-direction:column;gap:8px;}
@@ -296,20 +302,6 @@ export function drawHero(
   });
 }
 
-/** 接住人的那朵云 */
-function drawCloud(ctx: Ctx, sx: number, sy: number, s: number): void {
-  ctx.fillStyle = "#FFFFFF";
-  for (const [dx, dy, r] of [
-    [-1.1, 0.1, 0.72],
-    [0, -0.25, 0.95],
-    [1.1, 0.1, 0.72],
-    [0, 0.32, 0.8],
-  ]) {
-    ellipse(ctx, sx + dx * s, sy + dy * s, r * s, r * s * 0.72);
-    ctx.fill();
-  }
-}
-
 // ---------------------------------------------------------------------------
 // 一条台路 = 一块画布 + 一套输入
 // ---------------------------------------------------------------------------
@@ -367,6 +359,8 @@ export interface Stage {
   tick: (ms: number) => void;
   /** 当前镜头(单测查 reduced-motion 有没有真的不晃) */
   camera: () => Camera;
+  /** 单测用:视觉特效快照(粒子数 / 扩散环 / 台顶发光 / 皇冠 / 弹簧脉冲) */
+  fx: () => { particles: number; ring: number; glow: number; crown: boolean; spring: number };
   root: HTMLElement;
 }
 
@@ -481,6 +475,9 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   /** 完美落点后的台顶发光:哪座台、还剩多少 */
   let glowT = 0;
   let glowIdx = -1;
+  /** 完美落点的金色扩散环:锚在世界坐标上,镜头动它也不飘 */
+  let ringT = 0;
+  let ringAt = { x: 0, z: 0 };
   /** 每座台第一次被看见的时刻:入场淡入 + 上浮用(reduced 直接就位) */
   const born = new Map<number, number>();
   const cam: Camera = { x: 0, z: 0, scale: 1, w: 360, h: 400, shake: 0 };
@@ -606,12 +603,23 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     dust = 1;
     landT = 0.2;
     if (!reduced) cam.shake = 5;
+    const g = project(cam, heroPos.x, heroPos.z, 0);
     if (res.verdict === "perfect") {
       opts.sfx("coin");
       flashText = res.combo > 1 ? `踩中圆心!${res.combo} 连` : "踩中圆心!";
+      // 完美落点:4 颗星星 + 金色扩散环 + 台顶发光(reduced 只留发光)
+      particles.push(...spawnPerfectBurst(g.sx, g.sy, cam.scale, reduced));
+      if (!reduced) {
+        ringT = 1;
+        ringAt = { x: heroPos.x, z: heroPos.z };
+      }
+      glowT = 1;
+      glowIdx = run.index;
     } else {
       opts.sfx("tap");
       flashText = "站住啦,连击重新数";
+      // 普通落地:两粒尘土
+      particles.push(...spawnDustPuff(g.sx, g.sy, cam.scale, reduced));
     }
     flashT = 1.1;
     if (res.bonus) {
@@ -689,6 +697,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (landT > 0) landT = Math.max(0, landT - dt);
     if (springT > 0) springT = Math.max(0, springT - dt * 3.2);
     if (glowT > 0) glowT = Math.max(0, glowT - dt * 1.6);
+    if (ringT > 0) ringT = Math.max(0, ringT - dt * 1.8);
     if (particles.length > 0) particles = stepParticles(particles, dt);
     if (phase === "flying" && !reduced) {
       trail.unshift({ ...heroPos });
@@ -781,6 +790,16 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       ctx.fill();
     }
 
+    // 完美落点:一圈金色扩散环从落点荡开
+    if (ringT > 0) {
+      const rp = project(cam, ringAt.x, ringAt.z, 0);
+      const rr = (16 + (1 - ringT) * 46) * cam.scale;
+      ctx.strokeStyle = `rgba(255,199,88,${0.85 * ringT})`;
+      ctx.lineWidth = 3;
+      ellipse(ctx, rp.sx, rp.sy, rr, rr * DEPTH_SQUASH);
+      ctx.stroke();
+    }
+
     if (phase !== "over") {
       const squash = phase === "charging" && !reduced ? power() * 0.85 : 0;
       const pose: HeroPose =
@@ -804,11 +823,20 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     }
 
     if (phase === "falling" || phase === "over") {
+      // 睡眼救援云:接住人的那一下弹性下沉再回弹(reduced 不沉)
       const g = project(cam, heroPos.x, heroPos.z, 0);
-      drawCloud(ctx, g.sx, Math.min(cam.h - 40, g.sy + 70), 26 * cam.scale);
+      const catchT = phase === "over" ? 1 : clamp01((fallT - (FALL_TIME - 0.3)) / 0.3);
+      const sink = reduced ? 0 : Math.sin(Math.min(1, catchT) * Math.PI) * 6;
+      drawRescueCloud(ctx, g.sx, Math.min(cam.h - 40, g.sy + 70), 26 * cam.scale, sink);
     }
 
     if (particles.length > 0) drawParticles(ctx, particles);
+
+    // 蓄力力度环:跟着角色脚下走,颜色绿→金→红;窄屏或 reduced 靠底部旧条(无障碍备份)
+    if (phase === "charging" && !reduced && cam.w >= 380) {
+      const g = project(cam, heroPos.x, heroPos.z, 0);
+      drawChargeRing(ctx, g.sx, g.sy + 6, 27 * cam.scale, power());
+    }
 
     drawChargeBar(ctx);
 
@@ -996,6 +1024,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     phase: () => phase,
     state: () => run,
     camera: () => cam,
+    fx: () => ({ particles: particles.length, ring: ringT, glow: glowT, crown: run.combo >= 3, spring: springT }),
     setPaused: (v: boolean) => {
       paused = v;
     },
@@ -1058,13 +1087,81 @@ function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: s
   };
 }
 
-/** 一块结算浮层 */
-function overPanel(host: HTMLElement, title: string, sub: string, label: string, onAgain: () => void): HTMLElement {
+/** 结算卡要画谁、画什么数:跳数 + 完美率进度环 + 最远台数;双人两角色并排 */
+export interface ResultViz {
+  heroes: Array<{ color: string; variant: HeroVariant; win?: boolean }>;
+  hops: number;
+  perfects: number;
+  far: number;
+}
+
+/** 结算卡:左边角色(胜者跳起庆祝),右边完美率进度环,顶上一行跳数与最远台数 */
+export function drawResultCard(ctx: Ctx, viz: ResultViz, w = 250, h = 116): void {
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#FFF8EE";
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "#7C6350";
+  ctx.font = "700 12px system-ui";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(`站住 ${viz.hops} 座 · 最远第 ${viz.far} 座`, 12, 18);
+
+  const ratio = viz.hops > 0 ? viz.perfects / viz.hops : 0;
+  drawProgressRing(ctx, w - 44, h / 2 + 4, 24, ratio, "#F2A268");
+  ctx.fillStyle = "#9A5A2C";
+  ctx.font = "900 14px system-ui";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${Math.round(ratio * 100)}%`, w - 44, h / 2 + 4);
+  ctx.font = "700 11px system-ui";
+  ctx.fillText("完美率", w - 44, h - 10);
+
+  viz.heroes.forEach((hero, i) => {
+    const solo = viz.heroes.length === 1;
+    const hx = solo ? 52 : 42 + i * 64;
+    const win = hero.win ?? solo;
+    const hy = h - 22 - (win ? 16 : 0);
+    ctx.fillStyle = "rgba(120,90,70,.18)";
+    ellipse(ctx, hx, h - 16, 20, 7);
+    ctx.fill();
+    drawHeroSprite(ctx, {
+      x: hx,
+      y: hy,
+      rx: 17,
+      ry: 13.5,
+      color: hero.color,
+      variant: hero.variant,
+      pose: win ? "fly" : "land",
+      crown: win && !solo,
+      t: 1,
+    });
+  });
+}
+
+/** 一块结算浮层(带 viz 就画结算卡) */
+function overPanel(
+  host: HTMLElement,
+  title: string,
+  sub: string,
+  label: string,
+  onAgain: () => void,
+  viz?: ResultViz
+): HTMLElement {
   const box = document.createElement("div");
   box.className = "hp-over";
   const t = document.createElement("div");
   t.className = "hp-over-t";
   t.textContent = title;
+  box.appendChild(t);
+  if (viz) {
+    const cv = document.createElement("canvas") as HTMLCanvasElement;
+    cv.className = "hp-result-cv";
+    cv.width = 250;
+    cv.height = 116;
+    const c2 = cv.getContext("2d") as Ctx | null;
+    if (c2) drawResultCard(c2, viz);
+    box.appendChild(cv);
+  }
   const s = document.createElement("div");
   s.className = "hp-over-s";
   s.textContent = sub;
@@ -1073,7 +1170,7 @@ function overPanel(host: HTMLElement, title: string, sub: string, label: string,
   btn.className = "hp-open";
   btn.textContent = label;
   btn.addEventListener("click", onAgain);
-  box.append(t, s, btn);
+  box.append(s, btn);
   host.appendChild(box);
   return box;
 }
@@ -1172,7 +1269,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
           () => {
             api.play("tap");
             start();
-          }
+          },
+          { heroes: [{ color: "#F2A268", variant: "duo" }], hops: run.hops, perfects: run.perfects, far: run.index }
         );
       },
     });
@@ -1272,7 +1370,8 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
           api.play("tap");
           round++;
           startRound();
-        }
+        },
+        { heroes: [{ color: "#F2A268", variant: "duo", win: iWin }], hops: run.hops, perfects: run.perfects, far: run.index }
       );
     }
 
@@ -1326,6 +1425,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     const diff = matchDifficulty(round);
     const done = [false, false];
     const scores = [0, 0];
+    const runs: Array<RunState | null> = [null, null];
 
     function maybeSettle(): void {
       if (!done[0] || !done[1]) return;
@@ -1347,6 +1447,15 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
           api.play("tap");
           round++;
           startRound();
+        },
+        {
+          heroes: [
+            { color: "#F2A268", variant: "duo", win: scores[0] > scores[1] },
+            { color: "#7FA7EA", variant: "star", win: scores[1] > scores[0] },
+          ],
+          hops: (runs[0]?.hops ?? 0) + (runs[1]?.hops ?? 0),
+          perfects: (runs[0]?.perfects ?? 0) + (runs[1]?.perfects ?? 0),
+          far: Math.max(runs[0]?.index ?? 0, runs[1]?.index ?? 0),
         }
       );
     }
@@ -1375,12 +1484,14 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
           if (done[i]) return;
           done[i] = true;
           scores[i] = run.score;
+          runs[i] = run;
           maybeSettle();
         },
         onOver: (run) => {
           if (done[i]) return;
           done[i] = true;
           scores[i] = run.score;
+          runs[i] = run;
           maybeSettle();
         },
       });
