@@ -919,7 +919,10 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
   let secrets = 0;
   let best = save.getGameProgress(meta.id).endlessBest;
   let stickers = loadAlbum();
-  let current: CastleRoom = buildCastleRoom(Math.floor(Date.now() % 100000) + 1, 1);
+  // 一趟古堡认一个种子:房间是顺着这个种子一间间挑下来的,
+  // 挑的时候会避开上一间,所以整趟不会出现「下一间还是刚才那间」。
+  const runSeed = Math.floor(Math.random() * 100000) + 1;
+  let current: CastleRoom = buildCastleRoom(runSeed, 1);
   let state: RoomState = current.state;
   let over = false;
   let miniOpen = false;
@@ -965,7 +968,7 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
     rooms++;
     best = save.recordEndlessBest(meta.id, rooms);
     api.addStars(1);
-    current = buildCastleRoom(Math.floor(Math.random() * 100000) + 1, rooms + 1);
+    current = buildCastleRoom(runSeed, rooms + 1);
     state = current.state;
     speakLine(`第 ${rooms} 间走通啦!下一间是${current.template.emoji} ${current.template.name}。`);
     renderBoard();

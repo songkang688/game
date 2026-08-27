@@ -237,30 +237,59 @@ export function buildQuizCard(target: number, correct: boolean, rand: () => numb
 /** 无尽地鼠场每一波的名字：每 5 波换一片场地，读起来有「越挖越深」的感觉 */
 export const ENDLESS_FIELDS = ["草坡地洞", "石板地洞", "萤火地洞", "冰霜地洞", "熔岩地洞"];
 
-/** 无尽地鼠场第 wave 波（1 基）的场地名 */
+/**
+ * 无尽地鼠场第 wave 波（1 基）的场地名。
+ * 五片场地跑完就从头再跑一圈——原来会永远停在最后一片，
+ * 第 21 波之后招牌再也不换。
+ */
 export function endlessFieldName(wave: number): string {
   const n = Math.max(1, Math.round(wave) || 1);
-  return ENDLESS_FIELDS[Math.min(ENDLESS_FIELDS.length - 1, Math.floor((n - 1) / 5))];
+  return ENDLESS_FIELDS[Math.floor((n - 1) / 5) % ENDLESS_FIELDS.length];
 }
+
+/** 夜市的「基础曲线」拧到底是第几摊 */
+export const ENDLESS_CAP_WAVE = 25;
+
+/** 台面上同时能站几只地鼠的上限（一共 9 个洞，留一半给反应时间） */
+export const ENDLESS_CONCURRENT_MAX = 5;
+
+/** 封顶之后目标分最多还能再加多少 */
+export const ENDLESS_TARGET_BONUS_MAX = 10;
 
 /**
  * 无尽地鼠场第 wave 波（1 基）的配置：越来越快、机关轮番上场，
  * 但速度、并发和目标分都有封顶，不会变成「不可能完成」。
+ *
+ * 第 25 摊之前走原来那条基础曲线；之后基础曲线拧到底了，
+ * 改成一批更慢的旋钮接着走（间隔、停留、目标分、兔子/盾牌的比例、台面预算），
+ * 每一项各有各的下限/上限，拧到底就稳住。
+ * 原来第 25 摊和第 300 摊的配置逐项相等，玩多久都是同一摊。
  */
 export function endlessWave(wave: number): MoleLevel {
   const n = Math.max(1, Math.round(wave) || 1);
-  const k = Math.min(n - 1, 24);
+  const k = Math.min(n - 1, ENDLESS_CAP_WAVE - 1);
+  // 封顶之后又守了几摊
+  const over = Math.max(0, n - ENDLESS_CAP_WAVE);
   return {
     duration: 20,
-    target: 6 + Math.floor(k / 2),
-    upMsMin: Math.max(430, 1200 - k * 30),
-    upMsMax: Math.max(760, 1650 - k * 32),
-    gapMs: Math.max(330, 820 - k * 20),
-    maxConcurrent: n >= 9 ? 3 : n >= 4 ? 2 : 1,
+    target: 6 + Math.floor(k / 2) + Math.min(ENDLESS_TARGET_BONUS_MAX, Math.floor(over / 4)),
+    upMsMin: Math.max(340, 1200 - k * 30 - over * 2),
+    upMsMax: Math.max(620, 1650 - k * 32 - over * 3),
+    gapMs: Math.max(240, 820 - k * 20 - over * 2),
+    maxConcurrent:
+      n >= 60
+        ? ENDLESS_CONCURRENT_MAX
+        : n >= 40
+          ? 4
+          : n >= 9
+            ? 3
+            : n >= 4
+              ? 2
+              : 1,
     goldChance: 0.14,
-    bunnyChance: n >= 3 ? 0.14 : 0,
+    bunnyChance: n >= 3 ? 0.14 + Math.min(0.08, over * 0.002) : 0,
     sleepyChance: 0.1,
-    shieldChance: n >= 6 ? 0.18 : 0,
+    shieldChance: n >= 6 ? 0.18 + Math.min(0.09, over * 0.002) : 0,
     comboTarget: 4,
     comboMs: 5000,
     night: n % 5 === 0,

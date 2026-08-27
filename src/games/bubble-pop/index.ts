@@ -18,6 +18,7 @@ import {
   previewLabel,
   pushUpRow,
   seaColors,
+  seaTideRows,
   seaLine,
   seaPushMs,
   visualColAt,
@@ -667,13 +668,18 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
       later(tide, 120);
       return;
     }
-    const result = pushUpRow(grid, COLS, seaColors(pushes), Math.random);
-    if (result.overflow) {
-      finish();
-      return;
+    // 后段会来「大潮」，一次涨两行；每一行都各自看一眼有没有顶穿
+    let next = grid as readonly number[][];
+    for (let i = 0; i < seaTideRows(pushes); i++) {
+      const result = pushUpRow(next, COLS, seaColors(pushes), Math.random);
+      if (result.overflow) {
+        finish();
+        return;
+      }
+      next = result.grid;
     }
     pushes++;
-    copyInto(grid, result.grid);
+    copyInto(grid, next as number[][]);
     api.play("tap");
     render();
     if (!hasMovesOn(grid, COLS, seaColors(pushes))) {

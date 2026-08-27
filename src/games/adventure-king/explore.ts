@@ -835,13 +835,31 @@ export interface CastleRoom {
 }
 
 /**
- * 拼一间古堡房间:按 seed 从模板池里挑一间,解析出来再当场校验。
+ * 从第 1 间一路挑到第 room 间,挑的时候永远避开上一间的那张模板。
+ * 原来每间各挑各的,结果同一张图能连着发四遍(seed=1234 的第 5~8 间就是),
+ * 玩家眼里就是「这不是刚拼过吗」。链式往前挑一遍就能杜绝挨着重样,
+ * 而且同一个 seed 仍旧完全可复现。
+ */
+function templateChain(seed: number, room: number): RoomTemplate {
+  const target = Math.max(1, Math.round(room) || 1);
+  let prevId = "";
+  let tpl = ROOM_TEMPLATES[0];
+  for (let r = 1; r <= target; r++) {
+    const pool = templatePoolFor(r);
+    const usable = pool.length > 1 ? pool.filter((t) => t.id !== prevId) : pool;
+    const rand = rng(seed * 7919 + r * 104729);
+    tpl = usable[Math.floor(rand() * usable.length) % usable.length] ?? ROOM_TEMPLATES[0];
+    prevId = tpl.id;
+  }
+  return tpl;
+}
+
+/**
+ * 拼一间古堡房间:按 seed 从模板池里挑一间(避开上一间),解析出来再当场校验。
  * 校验没过(理论上不会发生)就退回第一张模板,保证永远给得出一间走得通的房。
  */
 export function buildCastleRoom(seed: number, room: number): CastleRoom {
-  const pool = templatePoolFor(room);
-  const rand = rng(seed * 7919 + room * 104729);
-  const tpl = pool[Math.floor(rand() * pool.length) % pool.length] ?? ROOM_TEMPLATES[0];
+  const tpl = templateChain(seed, room);
   const state = parseRoom(tpl);
   if (!solveRoom(state)) {
     const safe = ROOM_TEMPLATES[0];

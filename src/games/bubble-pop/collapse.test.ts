@@ -9,7 +9,11 @@ import {
   FALL_STAGGER_MS,
   POP_MS,
   REDUCED_FRAME_MS,
+  SEA_BIG_TIDE_FROM,
+  SEA_BIG_TIDE_MIN_EVERY,
+  SEA_PUSH_FLOOR_MS,
   SEA_ROWS,
+  SEA_TIGHTEN_CAP,
   SHIFT_MS,
   blowShuffle,
   chainBlast,
@@ -25,6 +29,7 @@ import {
   seaColors,
   seaLine,
   seaPushMs,
+  seaTideRows,
   thawFrozen,
   visualColAt,
   visualRowAt,
@@ -244,11 +249,39 @@ describe("泡泡噗噗 · 无尽泡泡海", () => {
 
   it("上推节奏越来越紧但有下限,颜色数逐步变多", () => {
     expect(seaPushMs(0)).toBeGreaterThan(seaPushMs(6));
-    expect(seaPushMs(999)).toBe(2600);
+    // 第一段坡到第 18 推拧到 2600ms,原来到这儿就再也不动了
+    expect(seaPushMs(SEA_TIGHTEN_CAP)).toBe(2600);
+    // 接一段更缓的坡走到 1800ms 再稳住
+    expect(seaPushMs(SEA_TIGHTEN_CAP + 1)).toBeLessThan(2600);
+    expect(seaPushMs(999)).toBe(SEA_PUSH_FLOOR_MS);
     expect(seaColors(0)).toBe(3);
     expect(seaColors(30)).toBe(5);
     expect(seaColors(-3)).toBe(3);
     expect(SEA_ROWS).toBeGreaterThanOrEqual(10);
+  });
+
+  it("后段会来「大潮」:一次涨两行,但最勤也是三推一次", () => {
+    for (let n = 0; n < SEA_BIG_TIDE_FROM; n++) {
+      expect(seaTideRows(n), `第 ${n} 推还没到大潮的时候就涨了两行`).toBe(1);
+    }
+    expect(seaTideRows(SEA_BIG_TIDE_FROM)).toBe(2);
+    for (let n = 0; n <= 400; n++) {
+      expect(seaTideRows(n)).toBeGreaterThanOrEqual(1);
+      expect(seaTideRows(n)).toBeLessThanOrEqual(2);
+    }
+    // 任意连续 SEA_BIG_TIDE_MIN_EVERY 推里，大潮最多一次
+    for (let n = SEA_BIG_TIDE_FROM; n <= 400 - SEA_BIG_TIDE_MIN_EVERY; n++) {
+      let big = 0;
+      for (let i = 0; i < SEA_BIG_TIDE_MIN_EVERY; i++) if (seaTideRows(n + i) === 2) big++;
+      expect(big, `第 ${n} 推起连着 ${SEA_BIG_TIDE_MIN_EVERY} 推来了 ${big} 次大潮`).toBeLessThanOrEqual(1);
+    }
+    // 后段的大潮确实比刚开放时来得勤
+    const density = (from: number): number => {
+      let big = 0;
+      for (let i = 0; i < 60; i++) if (seaTideRows(from + i) === 2) big++;
+      return big;
+    };
+    expect(density(200)).toBeGreaterThan(density(SEA_BIG_TIDE_FROM));
   });
 
   it("收摊只鼓励,不批评", () => {

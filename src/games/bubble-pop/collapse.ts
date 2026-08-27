@@ -335,10 +335,40 @@ export function blowShuffle(
 /** 泡泡海的盘面高度:顶到第 0 行就收摊 */
 export const SEA_ROWS = 12;
 
-/** 第 n 次上推之间隔多久(毫秒):越玩越紧,但有下限 */
+/** 第一段收紧拧到底是第几推 */
+export const SEA_TIGHTEN_CAP = 18;
+
+/** 涨潮间隔的下限:再快也得留 1.8 秒看一眼盘面 */
+export const SEA_PUSH_FLOOR_MS = 1800;
+
+/** 从第几推开始会来「大潮」(一次涨两行) */
+export const SEA_BIG_TIDE_FROM = 20;
+
+/** 大潮最勤也是三推来一次,不会推推都是大潮 */
+export const SEA_BIG_TIDE_MIN_EVERY = 3;
+
+/**
+ * 第 n 次上推之间隔多久(毫秒):越玩越紧,但有下限。
+ * 第一段坡（每推快 220ms）第 18 推就拧到 2600ms 到底了,
+ * 原来到这儿就彻底不变——第 200 推和第 18 推是同一件事。
+ * 现在接一段更缓的坡（每推快 20ms）走到 1800ms 再稳住。
+ */
 export function seaPushMs(pushes: number): number {
   const n = Math.max(0, Math.round(pushes) || 0);
-  return Math.max(2600, 6500 - n * 220);
+  if (n <= SEA_TIGHTEN_CAP) return Math.max(2600, 6500 - n * 220);
+  return Math.max(SEA_PUSH_FLOOR_MS, 2600 - (n - SEA_TIGHTEN_CAP) * 20);
+}
+
+/**
+ * 第 n 次上推涨几行。
+ * 间隔一项旋钮拧不出多少花样,所以后段再加一个「大潮」:
+ * 每隔几推来一次双行,越到后面来得越勤,但最勤也是三推一次。
+ */
+export function seaTideRows(pushes: number): number {
+  const n = Math.max(0, Math.round(pushes) || 0);
+  if (n < SEA_BIG_TIDE_FROM) return 1;
+  const every = Math.max(SEA_BIG_TIDE_MIN_EVERY, 8 - Math.floor((n - SEA_BIG_TIDE_FROM) / 12));
+  return (n - SEA_BIG_TIDE_FROM) % every === 0 ? 2 : 1;
 }
 
 /** 泡泡海第 n 次上推用几种颜色:先少后多 */

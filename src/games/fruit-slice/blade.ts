@@ -318,11 +318,29 @@ export interface StormWave {
   extras: ExtraKind[];
 }
 
-/** 第 n 波(0 起)的基础节奏:越往后越密,但都有下限 / 上限 */
+/** 三个基础旋钮先后拧到底是第几波(0 起) */
+export const STORM_PACE_CAP = 22;
+
+/** 一波最多抛几颗:封顶之后还会再涨,但涨到这儿为止 */
+export const STORM_COUNT_MAX = 9;
+
+/** 封顶之后新目标最多多混多少概率 */
+export const STORM_EXTRA_BUMP_MAX = 0.2;
+
+/**
+ * 第 n 波(0 起)的基础节奏:越往后越密,但都有下限 / 上限。
+ *
+ * `count` 第 15 波、`interval` 与 `bombChance` 第 22 波先后到顶,
+ * 原来到这儿整场暴风就定死了 —— 第 22 波和第 200 波是同一件事。
+ * 现在封顶之后 `count` 再慢慢往上爬到 9 颗为止:间隔已经压到 0.55 秒不能再快,
+ * 炸弹也不该再多(会变成运气游戏),能加的只剩「一次要照顾几颗」。
+ */
 export function stormPace(n: number): { count: number; interval: number; bombChance: number } {
   const i = Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0);
+  const over = Math.max(0, i - STORM_PACE_CAP);
+  const base = Math.min(7, 2 + Math.floor(i / 3));
   return {
-    count: Math.min(7, 2 + Math.floor(i / 3)),
+    count: Math.min(STORM_COUNT_MAX, base + Math.floor(over / 12)),
     interval: Math.max(0.55, 1.5 - i * 0.045),
     bombChance: Math.min(0.34, 0.08 + i * 0.012),
   };
@@ -339,15 +357,20 @@ export function stormRand(seed: number, n: number): number {
   return x / 4294967296;
 }
 
-/** 第 n 波(0 起)长什么样:节奏是确定的,混哪种新目标由 seed 决定 */
+/**
+ * 第 n 波(0 起)长什么样:节奏是确定的,混哪种新目标由 seed 决定。
+ * 基础节奏封顶之后,三种新目标混得越来越勤(各自都有上限),
+ * 让后段的压力从「手快」慢慢转到「看清楚再下刀」。
+ */
 export function stormWave(n: number, seed: number): StormWave {
   const pace = stormPace(n);
   const i = Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0);
+  const bump = Math.min(STORM_EXTRA_BUMP_MAX, Math.max(0, i - STORM_PACE_CAP) * 0.006);
   const extras: ExtraKind[] = [];
   const roll = stormRand(seed, i);
-  if (i >= 2 && roll < 0.34) extras.push("double");
-  if (i >= 4 && stormRand(seed, i + 977) < 0.3) extras.push("flower");
-  if (i >= 6 && stormRand(seed, i + 4231) < 0.26) extras.push("twin");
+  if (i >= 2 && roll < 0.34 + bump) extras.push("double");
+  if (i >= 4 && stormRand(seed, i + 977) < 0.3 + bump) extras.push("flower");
+  if (i >= 6 && stormRand(seed, i + 4231) < 0.26 + bump) extras.push("twin");
   return { ...pace, extras };
 }
 

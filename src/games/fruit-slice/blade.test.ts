@@ -33,6 +33,8 @@ import {
   sampleCount,
   stormLine,
   stormOver,
+  STORM_COUNT_MAX,
+  STORM_PACE_CAP,
   stormPace,
   stormRand,
   stormStars,
@@ -209,9 +211,33 @@ describe("水果切切乐 · 无尽水果暴风", () => {
     expect(stormPace(0).interval).toBeGreaterThan(stormPace(10).interval);
     expect(stormPace(10).count).toBeGreaterThanOrEqual(stormPace(0).count);
     expect(stormPace(999).interval).toBe(0.55);
-    expect(stormPace(999).count).toBe(7);
+    // 间隔与炸弹率第 22 波先后拧到底,之后只剩「一次要照顾几颗」还能加,加到 9 颗为止
+    expect(stormPace(STORM_PACE_CAP).count).toBe(7);
+    expect(stormPace(999).count).toBe(STORM_COUNT_MAX);
     expect(stormPace(999).bombChance).toBeLessThanOrEqual(0.34);
     expect(stormPace(-5).count).toBe(stormPace(0).count);
+    for (let i = 1; i <= 400; i++) {
+      expect(stormPace(i).count, `第 ${i} 波抛得比上一波还少`).toBeGreaterThanOrEqual(stormPace(i - 1).count);
+      expect(stormPace(i).count).toBeLessThanOrEqual(STORM_COUNT_MAX);
+    }
+  });
+
+  it("基础节奏封顶之后,新目标混得越来越勤但有上限", () => {
+    const richness = (from: number): number => {
+      let n = 0;
+      for (let i = from; i < from + 40; i++) n += stormWave(i, 20260827).extras.length;
+      return n;
+    };
+    // 封顶之前那一段一个字都没变
+    for (let i = 0; i <= STORM_PACE_CAP; i++) {
+      const bumped = stormWave(i, 4242);
+      expect(bumped.extras.length).toBeLessThanOrEqual(3);
+    }
+    expect(richness(200)).toBeGreaterThan(richness(0));
+    // 三种新目标的概率各自都有上限,不会混到「波波都是三样齐」
+    let allThree = 0;
+    for (let i = 0; i <= 400; i++) if (stormWave(i, 4242).extras.length === 3) allThree++;
+    expect(allThree).toBeLessThan(401);
   });
 
   it("同一个 seed 的暴风是同一张牌,换 seed 就换", () => {

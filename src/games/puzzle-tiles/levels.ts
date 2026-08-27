@@ -326,10 +326,52 @@ export const LEVELS: PuzzleLevel[] = (() => {
 /** 无尽画廊每一幅的展厅名：每 4 幅换一间 */
 export const ENDLESS_HALLS = ["晨光厅", "森林厅", "海风厅", "星河厅", "焰火厅"];
 
-/** 无尽画廊第 round 幅（1 基）挂在哪个展厅 */
+/**
+ * 无尽画廊第 round 幅（1 基）挂在哪个展厅。
+ * 五个厅逛完就从头再逛一圈——原来会永远卡在最后一个厅，
+ * 逛到第 20 幅之后招牌再也不换，越玩越像在原地打转。
+ */
 export function endlessHallName(round: number): string {
   const n = Math.max(1, Math.round(round) || 1);
-  return ENDLESS_HALLS[Math.min(ENDLESS_HALLS.length - 1, Math.floor((n - 1) / 4))];
+  return ENDLESS_HALLS[Math.floor((n - 1) / 4) % ENDLESS_HALLS.length];
+}
+
+/** 画板尺寸在第几幅封顶（`k` 到顶的那一幅） */
+export const GALLERY_CAP_ROUND = 19;
+
+/** 封顶之后最多还能收紧多少步数（25%，再多就该逼人了） */
+export const GALLERY_TRIM_MAX = 0.25;
+
+/** 提示次数的下限：再紧也得留三次问路的机会 */
+export const GALLERY_HINT_FLOOR = 3;
+
+/** 板子封顶（第 19 幅）之后，还能继续拧的那几个旋钮 */
+export interface GalleryPressure {
+  /** 封顶之后又拼了几幅 */
+  over: number;
+  /** 提示次数 */
+  hints: number;
+  /** 这一幅要不要来一次「不看图挑战」 */
+  hidePreview: boolean;
+  /** 步数上限还剩几成（1 = 不收紧） */
+  moveScale: number;
+}
+
+/**
+ * 封顶之后的加压方案。
+ * 6×6 已经是 360px 上还点得准的上限，所以板子不再变大，
+ * 改成三件事接着拧：提示少一点、每四幅来一次不看图挑战、步数一点点收紧。
+ * 每一项都有下限，拧到底就稳住 —— 目的是「还在往上走」，不是把人劝退。
+ */
+export function galleryPressure(round: number, baseHints: number): GalleryPressure {
+  const n = Math.max(1, Math.round(round) || 1);
+  const over = Math.max(0, n - GALLERY_CAP_ROUND);
+  return {
+    over,
+    hints: Math.max(GALLERY_HINT_FLOOR, baseHints - Math.floor(over / 8)),
+    hidePreview: over > 0 && n % 4 === 0,
+    moveScale: 1 - Math.min(GALLERY_TRIM_MAX, over * 0.01),
+  };
 }
 
 /**
@@ -338,7 +380,7 @@ export function endlessHallName(round: number): string {
  */
 export function endlessBoard(round: number): PuzzleLevel {
   const n = Math.max(1, Math.round(round) || 1);
-  const k = Math.min(n - 1, 18);
+  const k = Math.min(n - 1, GALLERY_CAP_ROUND - 1);
   const theme = 6 + (n % 4);
   const seed = 90000 + n * 173;
   const kind = n % 3;
@@ -347,10 +389,12 @@ export function endlessBoard(round: number): PuzzleLevel {
     const wrong = Math.min(side * side, 4 + k);
     const need = minRotateClicks(buildRotations(side, side, wrong, seed));
     const two = need + Math.max(3, Math.ceil(need * 0.4));
+    const press = galleryPressure(n, 3);
+    const room = two + Math.max(8, need);
     return {
       rows: side, cols: side, shuffleSteps: 0,
-      moveLimit: two + Math.max(8, need), hints: 3,
-      hidePreview: false, theme,
+      moveLimit: Math.max(two + 1, Math.round(room * press.moveScale)), hints: press.hints,
+      hidePreview: press.hidePreview, theme,
       three: need, two,
       mode: "rotate", rotateWrong: wrong, seed
     };
@@ -359,21 +403,27 @@ export function endlessBoard(round: number): PuzzleLevel {
     const side = k < 8 ? 4 : 5;
     const missing = Math.min(side * side - 1, 3 + Math.floor(k / 2));
     const extra = 2 + Math.floor(k / 5);
+    const press = galleryPressure(n, 3);
+    const room = missing + extra + 6;
     return {
       rows: side, cols: side, shuffleSteps: 0,
-      moveLimit: missing + extra + 6, hints: 3,
-      hidePreview: false, theme,
+      moveLimit: Math.max(missing + 3, Math.round(room * press.moveScale)), hints: press.hints,
+      hidePreview: press.hidePreview, theme,
       three: missing, two: missing + 2,
       mode: "fill", missing, extraPieces: extra, seed
     };
   }
   const side = k < 5 ? 3 : k < 11 ? 4 : k < 16 ? 5 : 6;
   const shuffleSteps = 16 + k * 4;
+  const press = galleryPressure(n, 4);
+  const star = stars(shuffleSteps);
   return {
     rows: side, cols: side, shuffleSteps,
-    moveLimit: Math.max(160, shuffleSteps * 8), hints: 4,
-    hidePreview: false, theme, ...stars(shuffleSteps),
-    timeLimit: Math.max(150, 260 - k * 5)
+    moveLimit: Math.max(star.two + 1, Math.round(Math.max(160, shuffleSteps * 8) * press.moveScale)),
+    hints: press.hints,
+    hidePreview: press.hidePreview, theme, ...star,
+    // 板子封顶之后就靠限时继续加压，但再紧也留 120 秒
+    timeLimit: Math.max(120, 260 - k * 5 - press.over * 2)
   };
 }
 

@@ -28,6 +28,7 @@ import {
   safeLaunch,
   stormLine,
   stormOver,
+  STORM_COUNT_MAX,
   stormPace,
   stormStars,
   stormWave,
@@ -213,7 +214,7 @@ describe("档B R1 · 水果切切乐 · 三种无尽玩法各玩到结算", () =
       expect(paces[i].count).toBeGreaterThanOrEqual(paces[i - 1].count);
       expect(paces[i].interval).toBeLessThanOrEqual(paces[i - 1].interval);
     }
-    expect(paces[39].count).toBeLessThanOrEqual(7);
+    expect(paces[39].count).toBeLessThanOrEqual(STORM_COUNT_MAX);
     expect(paces[39].interval).toBeGreaterThanOrEqual(0.55);
     expect(stormOver(0, 0)).toBe(false);
     expect(stormOver(STORM_MISS_LIMIT, 0)).toBe(true);
