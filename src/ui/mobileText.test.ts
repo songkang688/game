@@ -162,7 +162,12 @@ function fontSizeOf(css: string, selector: string): number | null {
     const decl = b[1].match(/font-size:\s*([^;]+)/);
     if (!decl) continue;
     const pxs = [...decl[1].matchAll(/(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
-    if (pxs.length > 0) last = Math.max(...pxs);
+    if (pxs.length === 0) continue;
+    // clamp(下限, 首选, 上限):360px 上 vw 那一项算出来只有几个 px,
+    // 一路顶到下限,所以窄屏真正生效的是第一个数,不是最大的那个。
+    // 拿最大值去量等于自己骗自己 —— flight-chess 的 .fc-token-face
+    // 写着 clamp(13px,2.6vw,17px),按最大值算是 17px,实际画出来 13px。
+    last = /clamp\s*\(/.test(decl[1]) ? pxs[0] : Math.max(...pxs);
   }
   return last;
 }
@@ -303,7 +308,9 @@ describe("360×640 走查回落:二级界面的状态行与结算副标题", () 
       ["star-estate", [".se-btn", ".se-deed"]],
       ["hero-cards", [".hc-btn"]],
       ["weiqi-garden", [".wq-btn", ".wq-open"]],
-      ["flight-chess", [".fc-btn"]],
+      // .fc-token-face 是飞机身上那个字，藏在 .fc-token 这个 <button> 里，
+      // 360px 上 2.6vw 只有 9px，一路掉到 clamp 的下限，所以下限本身得是 14px
+      ["flight-chess", [".fc-btn", ".fc-token-face"]],
       ["mine-garden", [".mn-btn"]],
       ["sudoku-petal", [".sp-tool"]]
     ];

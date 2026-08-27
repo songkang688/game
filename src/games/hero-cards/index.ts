@@ -126,7 +126,7 @@ export const HC_CSS = `
 .hc-over-t{font-size:20px;font-weight:900;color:#9a5030;margin-bottom:6px;}
 .hc-over-s{font-size:16px;font-weight:700;color:#7a6252;line-height:1.6;margin-bottom:12px;overflow-wrap:anywhere;}
 .hc-reveal{font-size:var(--mt-body,16px);font-weight:800;color:#7a5238;line-height:1.7;margin-bottom:10px;}
-.hc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.hc-modebar,.hc-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .hc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#8a5238;text-align:center;overflow-wrap:anywhere;}
 .hc-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;
   color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#EE9A63,#D07540);
@@ -993,7 +993,7 @@ function mountExtra(host: HTMLElement, api: GameApi, kind: ExtraMode, onBack: ()
     stage.innerHTML = "";
     if (kind === "versus") {
       const row = document.createElement("div");
-      row.className = "hc-modebar";
+      row.className = "hc-optbar";
       (["rookie", "normal", "pro", "hell"] as AiTier[]).forEach((t) => {
         const b = document.createElement("button");
         b.type = "button";

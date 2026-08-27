@@ -6,6 +6,8 @@ import { SKINS, SKIN_KEY } from "./skins";
 import {
   ROYALE_CONSTS,
   SR_CSS,
+  WAVE_BREAK_MS,
+  afterWave,
   createRun,
   makeBots,
   meta,
@@ -241,5 +243,47 @@ describe("整款游戏挂载", () => {
 
   it("无尽模式的波次配置一直在加码", () => {
     expect(endlessConfig(5).bots).toBeGreaterThanOrEqual(endlessConfig(1).bots);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 第 2 轮 learner:无尽两波之间的过场
+// ---------------------------------------------------------------------------
+
+describe("无尽一波打完之后", () => {
+  it("赢了就报一句「第 N 波达成」,并把下一波号算好", () => {
+    const step = afterWave(true, 4, 233.7, 400);
+    expect(step.kind).toBe("next");
+    expect(step.nextWave).toBe(5);
+    expect(step.title).toBe("🎉 第 4 波达成！");
+    expect(step.sub).toContain("234");
+    expect(step.sub).toContain("第 5 波");
+  });
+
+  it("没赢就收场,波次归 1,最长纪录照写", () => {
+    const step = afterWave(false, 6, 311.2, 987);
+    expect(step.kind).toBe("over");
+    expect(step.nextWave).toBe(1);
+    expect(step.sub).toContain("第 6 波");
+    expect(step.sub).toContain("311");
+    expect(step.sub).toContain("987");
+  });
+
+  it("收场那句只鼓励,不打击", () => {
+    const step = afterWave(false, 2, 80, 80);
+    expect(step.title).not.toMatch(/输|失败|死|笨/);
+    expect(step.sub).toContain("下一次");
+  });
+
+  it("坏数据进来也算得出来,不会冒出 NaN", () => {
+    const step = afterWave(true, Number.NaN, Number.NaN, Number.POSITIVE_INFINITY);
+    expect(step.nextWave).toBe(2);
+    expect(step.title).not.toContain("NaN");
+    expect(step.sub).not.toContain("NaN");
+  });
+
+  it("过场停顿是看得清但不磨叽的一段", () => {
+    expect(WAVE_BREAK_MS).toBeGreaterThanOrEqual(800);
+    expect(WAVE_BREAK_MS).toBeLessThanOrEqual(2500);
   });
 });
