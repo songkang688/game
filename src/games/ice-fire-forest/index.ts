@@ -1536,35 +1536,29 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   }
 
   /**
-   * 背景视差:三层远景按 0.18 / 0.34 / 0.55 的比例跟着镜头挪。
-   * 纯装饰,一格判定都不碰 —— 它存在的唯一理由是让「镜头在动」这件事看得出来,
-   * 不然拉远的时候画面像卡住了。
+   * 背景视差:三层**森林**远景按 0.18 / 0.34 / 0.55 的比例跟着镜头挪
+   * (比例是 1.2 的原值,一个不动;1.3 只把三排白圆换成
+   * 远层雾色树冠 / 中层冷暖树干与蘑菇 / 近层草叶藤蔓)。
+   * 纯装饰,一格判定都不碰;装饰层饱和度压在主体层 70% 以下,不抢机关可读性。
    */
   function drawParallax(c: CanvasRenderingContext2D, cell: number): void {
-    const layers: Array<[number, number, string]> = [
-      [0.18, 0.52, "#ffffff5c"],
-      [0.34, 0.68, "#ffffff44"],
-      [0.55, 0.84, palette.wallTop],
-    ];
     c.save();
-    for (const [depth, top, tone] of layers) {
-      const shift = -camX * cell * depth;
-      const span = Math.max(72, cell * 3.4);
-      const baseY = viewH * top;
-      c.globalAlpha = depth === 0.55 ? 0.22 : 1;
-      c.fillStyle = tone;
-      c.beginPath();
-      c.moveTo(0, viewH);
-      const first = Math.floor(-shift / span) - 1;
-      const last = first + Math.ceil(viewW / span) + 2;
-      for (let i = first; i <= last; i++) {
-        const cx = shift + i * span;
-        c.lineTo(cx, baseY);
-        c.quadraticCurveTo(cx + span / 2, baseY - span * 0.34, cx + span, baseY);
-      }
-      c.lineTo(viewW, viewH);
-      c.closePath();
-      c.fill();
+    // 冰火半场色温:左冷右暖、中缝渐变。锚在世界坐标上,跟着镜头走
+    const worldX0 = viewW / 2 - camX * cell;
+    const tint = c.createLinearGradient(worldX0, 0, worldX0 + level.w * cell, 0);
+    tint.addColorStop(0, IFF_TINT_COLD);
+    tint.addColorStop(0.42, IFF_TINT_COLD);
+    tint.addColorStop(0.58, IFF_TINT_WARM);
+    tint.addColorStop(1, IFF_TINT_WARM);
+    c.fillStyle = tint;
+    c.fillRect(0, 0, viewW, viewH);
+
+    const span = Math.max(72, cell * 3.4);
+    const draws = [drawForestFar, drawForestMid, drawForestNear] as const;
+    for (let i = 0; i < IFF_PARALLAX_DEPTHS.length; i++) {
+      const shift = -camX * cell * IFF_PARALLAX_DEPTHS[i];
+      const baseY = viewH * IFF_PARALLAX_TOPS[i];
+      draws[i](c, shift, viewW, viewH, baseY, span * (1 - i * 0.16));
     }
     c.restore();
   }
