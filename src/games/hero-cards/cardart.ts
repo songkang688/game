@@ -309,6 +309,11 @@ export function gearIconSVG(id: GearId, size = 16): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-16 -16 32 32" width="${size}" height="${size}" aria-hidden="true">${gearIconInner(id)}</svg>`;
 }
 
+/** 任意牌类的小图标(座位判定区的延时锦囊标记等处用) */
+export function kindIconSVG(kind: CardKind, size = 16): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-18 -18 36 36" width="${size}" height="${size}" aria-hidden="true">${kindIconInner({ kind })}</svg>`;
+}
+
 // ---------------------------------------------------------------------------
 // 完整卡面:角标花色 + 点数、中央卡图、底部名牌,一眼三层
 // ---------------------------------------------------------------------------
