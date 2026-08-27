@@ -293,3 +293,43 @@ describe("钓场 · 水面按真实可视高排版", () => {
     expect(fitSource).not.toContain("maxHeight =");
   });
 });
+
+describe("钓场 · 地图页那三颗入口的热区（W5-B-11）", () => {
+  it("🌙 钓到天黑 / 📖 鱼类图鉴 / 🎒 我的装备 抬到 44px（原来 34px）", () => {
+    const open = rule(".fs-open");
+    expect(open).toContain(`min-height:${TOUCH_MIN_PX}px`);
+    expect(usesTouchConst(".fs-open"), "又抄了一个数字，没走共用常量").toBe(true);
+    expect(open).toContain("box-sizing:border-box");
+    expect(open).toContain("align-items:center");
+  });
+
+  it("图鉴的两个页签也抬到 44px（原来 34px）", () => {
+    expect(rule(".fss-tab")).toContain(`min-height:${TOUCH_MIN_PX}px`);
+    expect(usesTouchConst(".fss-tab")).toBe(true);
+  });
+
+  it("装备页的升级键也抬到 44px（原来 40px）", () => {
+    expect(rule(".fss-gbuy")).toContain(`min-height:${TOUCH_MIN_PX}px`);
+    expect(usesTouchConst(".fss-gbuy")).toBe(true);
+  });
+
+  it("整份样式里再没有低于 44px 的 min-height（大按钮那 64px 除外）", () => {
+    const mins = [...css.matchAll(/min-height:(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
+    for (const v of mins) {
+      // 只读的行（提示条、读数条、抬头）不是热区，热区一律走 ${TOUCH_MIN_PX}
+      expect(v === 64 || v < 30 || v >= TOUCH_MIN_PX, `还有一个 ${v}px 的 min-height`).toBe(true);
+    }
+  });
+
+  it("矮屏那两档不许把这几颗又收回 44px 以下", () => {
+    for (const q of ["@media (max-height:720px)", "@media (max-height:660px)"]) {
+      const at = css.indexOf(q);
+      const block = css.slice(at, css.indexOf("@media", at + 10));
+      for (const sel of [".fs-open", ".fss-let", ".fss-tab", ".fss-gbuy"]) {
+        expect(block, `${q} 里把 ${sel} 的高度又收回去了`).not.toMatch(
+          new RegExp(`\\${sel}\\{[^}]*min-height`)
+        );
+      }
+    }
+  });
+});

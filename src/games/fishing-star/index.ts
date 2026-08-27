@@ -197,8 +197,12 @@ const CSS = `
 .fs-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
 .fs-bar[hidden]{display:none;}
+/* 地图页那三颗入口(🌙 钓到天黑 / 📖 鱼类图鉴 / 🎒 我的装备)实测只有 34px 高,
+   低于 44px 触屏底线——测试员 W5-B-11。关内那一批第 1 轮已经清干净了,这是地图页的残留。
+   只抬高度,配色圆角内边距一个都不动;inline-flex 居中,免得抬高之后文字贴着上边。 */
 .fs-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#5aa9d6,#3d87b8);box-shadow:0 4px 0 #2d6a94;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#5aa9d6,#3d87b8);box-shadow:0 4px 0 #2d6a94;
+  min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;}
 .fs-open:active{transform:translateY(2px);box-shadow:0 2px 0 #2d6a94;}
 .fs-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .fs-open--endless{background:linear-gradient(180deg,#f0a35c,#dd8232);box-shadow:0 4px 0 #b46522;}
@@ -286,7 +290,8 @@ const CSS = `
 .fss-gnote{font-size:12px;font-weight:700;color:#4f6c86;}
 .fss-gbuy{border:none;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f0a35c,#dd8232);box-shadow:0 3px 0 #b46522;
-  min-height:40px;margin-left:auto;white-space:nowrap;}
+  min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
+  margin-left:auto;white-space:nowrap;}
 .fss-gbuy:disabled{background:#cbd7e0;box-shadow:0 3px 0 #aebecb;cursor:default;color:#f4f8fb;}
 .fss-gbuy:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #b46522;}
 .fss-gbuy:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -295,7 +300,8 @@ const CSS = `
 .fss-cdex{font-size:11px;font-weight:700;color:#6d8ba1;line-height:1.45;}
 .fss-tabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:4px;}
 .fss-tab{border:none;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffcc;color:#4f7c9c;box-shadow:0 2px 5px rgba(90,130,160,.18);min-height:34px;}
+  font-family:inherit;background:#ffffffcc;color:#4f7c9c;box-shadow:0 2px 5px rgba(90,130,160,.18);
+  min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;}
 .fss-tab[aria-pressed="true"]{background:#2f7ba6;color:#fff;}
 .fss-tab:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 @media (max-width:420px){
