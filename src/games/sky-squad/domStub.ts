@@ -32,11 +32,17 @@ export class FakeCtx {
   textAlign = "";
   textBaseline = "";
   globalAlpha = 1;
-  save(): void {}
-  restore(): void {}
+  save(): void {
+    this.ops.push({ op: "save", args: [] });
+  }
+  restore(): void {
+    this.ops.push({ op: "restore", args: [] });
+  }
   setTransform(): void {}
   transform(): void {}
-  translate(): void {}
+  translate(x: number, y: number): void {
+    this.ops.push({ op: "translate", args: [x, y] });
+  }
   rotate(): void {}
   scale(x: number, y: number): void {
     this.ops.push({ op: "scale", args: [x, y] });
@@ -50,8 +56,11 @@ export class FakeCtx {
   lineTo(): void {}
   quadraticCurveTo(): void {}
   bezierCurveTo(): void {}
-  /** 只记 `scale` 和 `arc`:版面用例要算「判定核心落到屏幕上有几像素」 */
-  readonly ops: Array<{ op: "scale" | "arc"; args: number[] }> = [];
+  /**
+   * 记下几类关键笔画:版面用例要算「判定核心落到屏幕上有几像素」,
+   * 1.3 的视觉用例还要断言「侧倾的 scaleX 只发生在 save/restore 之间」。
+   */
+  readonly ops: Array<{ op: "scale" | "arc" | "save" | "restore" | "translate"; args: number[] }> = [];
   arc(x: number, y: number, r: number): void {
     this.ops.push({ op: "arc", args: [x, y, r] });
   }
