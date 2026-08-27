@@ -3,6 +3,7 @@ export { meta };
 
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { dotSprite, powerSprite, versusStarSprite } from "./art";
 import guide from "./guide";
 import {
   GHOST_COLORS,
@@ -298,16 +299,22 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
           continue;
         }
         if (maze.dot[i]) {
-          ctx.fillStyle = "#FFE9A8";
-          ctx.beginPath();
-          ctx.arc(px + cell / 2, py + cell / 2, 2.2, 0, Math.PI * 2);
-          ctx.fill();
+          // 发光贴图整场复用；360px 最小格下 core 也还有 3px 以上，看得见
+          const s = Math.max(6, cell * 0.62);
+          ctx.drawImage(dotSprite(), px + (cell - s) / 2, py + (cell - s) / 2, s, s);
         } else if (maze.power[i]) {
+          // 脉动节奏沿用旧版（elapsed/180、±0.18），soft 下静止也不旋转
           const pulse = soft ? 1 : 1 + Math.sin(state.elapsed / 180) * 0.18;
-          ctx.fillStyle = "#FFD1E8";
-          ctx.beginPath();
-          ctx.arc(px + cell / 2, py + cell / 2, 4.6 * pulse, 0, Math.PI * 2);
-          ctx.fill();
+          const s = cell * 0.92 * pulse;
+          if (soft) {
+            ctx.drawImage(powerSprite(), px + (cell - s) / 2, py + (cell - s) / 2, s, s);
+          } else {
+            ctx.save();
+            ctx.translate(px + cell / 2, py + cell / 2);
+            ctx.rotate(((state.elapsed % 8000) / 8000) * Math.PI * 2);
+            ctx.drawImage(powerSprite(), -s / 2, -s / 2, s, s);
+            ctx.restore();
+          }
         }
       }
     }
@@ -332,12 +339,20 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     state.ghosts.forEach((g, i) => {
       drawGhost(g, i === state.controlled, blue[i] ?? 0);
     });
-    // 星星（抢豆模式）
+    // 星星（抢豆模式）：真五角星贴图，soft 之外带一点轻轻的摇摆
     if (star) {
-      ctx.fillStyle = "#8FD8FF";
-      ctx.beginPath();
-      ctx.arc(star.cell.x * cell + cell / 2, star.cell.y * cell + cell / 2, cell * 0.36, 0, Math.PI * 2);
-      ctx.fill();
+      const s = cell * 0.94;
+      const sx = star.cell.x * cell + cell / 2;
+      const sy = star.cell.y * cell + cell / 2;
+      if (soft) {
+        ctx.drawImage(versusStarSprite(), sx - s / 2, sy - s / 2, s, s);
+      } else {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(Math.sin(state.elapsed / 480) * 0.22);
+        ctx.drawImage(versusStarSprite(), -s / 2, -s / 2, s, s);
+        ctx.restore();
+      }
     }
     // 玩家：原创小圆脸，张嘴幅度跟着步进走
     const mouth = soft ? 0.28 : 0.1 + Math.abs(Math.sin(state.elapsed / 90)) * 0.35;

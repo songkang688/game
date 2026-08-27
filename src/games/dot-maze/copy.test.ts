@@ -194,7 +194,7 @@ describe("豆豆迷宫 · 章节与攻略", () => {
 describe("豆豆迷宫 · 源码巡检", () => {
   it("游戏目录里该有的文件都在", () => {
     expect(sourceFiles.sort()).toEqual(
-      ["domStub.ts", "ghosts.ts", "guide.ts", "index.ts", "layout.ts", "levels.ts", "logic.ts", "maze.ts", "meta.ts"].sort()
+      ["art.ts", "domStub.ts", "ghosts.ts", "guide.ts", "index.ts", "layout.ts", "levels.ts", "logic.ts", "maze.ts", "meta.ts"].sort()
     );
   });
 

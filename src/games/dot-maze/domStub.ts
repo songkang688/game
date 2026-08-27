@@ -235,12 +235,37 @@ function addText(el: El, text: string): void {
   el.appendChild(new El("#text")).textContent = trimmed;
 }
 
-/** canvas 2d 上下文：方法都是空操作，属性都写得进去 */
+/** 一次绘制调用（或一次属性赋值，op 前缀 `set:`） */
+export interface CtxOp {
+  op: string;
+  args: unknown[];
+}
+
+/**
+ * 绘制调用流水。1.3 的视觉契约用例靠它断言「画了什么」：
+ * 豆子走没走 sprite 的 drawImage、玩家多了几个 arc、果子还画不画 emoji。
+ * 只记账不改行为，旧用例一条都不受影响。
+ */
+export const ctxLog: CtxOp[] = [];
+
+export function clearCtxLog(): void {
+  ctxLog.length = 0;
+}
+
+/** canvas 2d 上下文：方法都是记录下来的空操作，属性赋值也记一笔 */
 export const ctx2d: unknown = new Proxy(
   {},
   {
-    get: () => () => ctx2d,
-    set: () => true,
+    get:
+      (_t, prop) =>
+      (...args: unknown[]) => {
+        ctxLog.push({ op: String(prop), args });
+        return ctx2d;
+      },
+    set: (_t, prop, value) => {
+      ctxLog.push({ op: `set:${String(prop)}`, args: [value] });
+      return true;
+    },
   }
 );
 
