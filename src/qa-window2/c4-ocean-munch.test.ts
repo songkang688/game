@@ -268,7 +268,11 @@ describe("R3-C4 · 点名项④-4：前 99 关参数相对 1.1 不漂", () => {
     } catch {
       return; // 本地没有 1.1 的 ref 就跳过，别把 CI 拖红
     }
-    const grab = (src: string): string => {
+    // 比的是「参数」不是「注释」：注释先摘掉，免得改一句措辞就误报成关卡漂移
+    const stripComments = (s: string): string =>
+      s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+    const grab = (raw: string): string => {
+      const src = stripComments(raw);
       const at = src.indexOf("export const LEVELS");
       expect(at, "1.1 的 logic.ts 里找不到 LEVELS").toBeGreaterThan(-1);
       const body = src.slice(at);
