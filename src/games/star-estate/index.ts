@@ -135,7 +135,7 @@ const CSS = `
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-family:inherit;
   overflow:hidden;min-width:0;min-height:0;}
 /* 地格主题图标（1.3 r1 G-6 修复）：kit 风格矢量小图标替代裸 emoji，字形不随系统漂移 */
-.se-tile-icon{width:clamp(15px,2.6vw,17px);line-height:0;position:relative;z-index:1;}
+.se-tile-icon{font-size:clamp(15px,2.6vw,17px);width:1em;line-height:0;position:relative;z-index:1;}
 .se-tile-icon svg{width:100%;height:auto;display:block;}
 .se-tile-price{display:flex;align-items:center;gap:2px;font-size:var(--mt-control,14px);font-weight:800;
   color:#8a6a44;line-height:1.1;position:relative;z-index:1;}
