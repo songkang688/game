@@ -17,14 +17,14 @@ const DRAW_FILES = ["index.ts", "paint13.ts", "visual13.ts"];
 const drawSrc = (): string => DRAW_FILES.map(read).join("\n");
 
 describe("snow-fight · 窗口5 第 1 轮视觉扫描(静态)", () => {
-  it("专项①:emoji 码点水位只降不升(含注释与 HUD 文案,基线 64)", () => {
+  it("专项①:emoji 码点水位只降不升(含注释与 HUD 文案,R2 测试员收紧:fixer G3 反馈矢量化后基线 64→55)", () => {
     const n = (drawSrc().match(/\p{Extended_Pictographic}/gu) ?? []).length;
-    expect(n).toBeLessThanOrEqual(64);
+    expect(n).toBeLessThanOrEqual(55);
   });
 
-  it("专项①:画布 fillText 调用水位只降不升(基线 4)", () => {
+  it("专项①:画布 fillText 调用水位只降不升(R2 测试员收紧:基线 4→3;剩 3 = 风旗功能字 + 座位标/暖手 emoji,座位标已记 R2 修复不彻底)", () => {
     const n = (drawSrc().match(/fillText\(/g) ?? []).length;
-    expect(n).toBeLessThanOrEqual(4);
+    expect(n).toBeLessThanOrEqual(3);
   });
 
   it("专项⑥:商标黑名单在绘制与文案源码 0 命中", () => {

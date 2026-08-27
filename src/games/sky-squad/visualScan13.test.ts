@@ -22,9 +22,9 @@ describe("sky-squad · 窗口5 第 1 轮视觉扫描(静态)", () => {
     expect(n).toBeLessThanOrEqual(43);
   });
 
-  it("专项①②:画布 fillText 调用水位只降不升(基线 2 = BOSS 徽章 + 拾取物字形,待 fixer 清零)", () => {
+  it("专项①②:画布 fillText 调用水位只降不升(R2 测试员收紧:fixer S7/G1 清零后锁 0)", () => {
     const n = (drawSrc().match(/fillText\(/g) ?? []).length;
-    expect(n).toBeLessThanOrEqual(2);
+    expect(n).toBeLessThanOrEqual(0);
   });
 
   it("专项⑥:商标黑名单在绘制与文案源码 0 命中", () => {

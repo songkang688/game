@@ -17,14 +17,14 @@ const DRAW_FILES = ["index.ts", "visual13.ts"];
 const drawSrc = (): string => DRAW_FILES.map(read).join("\n");
 
 describe("ice-fire-forest · 窗口5 第 1 轮视觉扫描(静态)", () => {
-  it("专项①:emoji 码点水位只降不升(含注释与 HUD 文案,基线 33)", () => {
+  it("专项①:emoji 码点水位只降不升(含注释与 HUD 文案,R2 测试员收紧:fixer G2 三组 icon 矢量化后基线 33→28)", () => {
     const n = (drawSrc().match(/\p{Extended_Pictographic}/gu) ?? []).length;
-    expect(n).toBeLessThanOrEqual(33);
+    expect(n).toBeLessThanOrEqual(28);
   });
 
-  it("专项①:画布 fillText 调用水位只降不升(基线 5)", () => {
+  it("专项①:画布 fillText 调用水位只降不升(R2 测试员收紧:基线 5→2,剩 2 处为功能文字)", () => {
     const n = (drawSrc().match(/fillText\(/g) ?? []).length;
-    expect(n).toBeLessThanOrEqual(5);
+    expect(n).toBeLessThanOrEqual(2);
   });
 
   it("专项⑥:商标黑名单在绘制与文案源码 0 命中", () => {

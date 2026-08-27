@@ -17,9 +17,9 @@ const DRAW_FILES = ["index.ts", "visual13.ts"];
 const drawSrc = (): string => DRAW_FILES.map(read).join("\n");
 
 describe("prince-princess · 窗口5 第 1 轮视觉扫描(静态)", () => {
-  it("专项①:emoji 码点水位只降不升(含注释与 HUD 文案,基线 65)", () => {
+  it("专项①:emoji 码点水位只降不升(含注释与 HUD 文案,R2 测试员收紧:fixer S1/S2 小怪与 BOSS 矢量化后基线 65→59)", () => {
     const n = (drawSrc().match(/\p{Extended_Pictographic}/gu) ?? []).length;
-    expect(n).toBeLessThanOrEqual(65);
+    expect(n).toBeLessThanOrEqual(59);
   });
 
   it("专项①:画布 fillText 调用水位只降不升(基线 4,小怪/BOSS emoji 走 emoji() 助手同受此限)", () => {

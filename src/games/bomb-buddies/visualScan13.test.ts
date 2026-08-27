@@ -22,9 +22,9 @@ describe("bomb-buddies · 窗口5 第 1 轮视觉扫描(静态)", () => {
     expect(n).toBeLessThanOrEqual(64);
   });
 
-  it("专项①:画布 fillText 调用水位只降不升(基线 4,小怪 emoji 待 fixer 清)", () => {
+  it("专项①:画布 fillText 调用水位只降不升(R2 测试员收紧:fixer S3/S4 清掉小怪 emoji 后基线 4→3)", () => {
     const n = (drawSrc().match(/fillText\(/g) ?? []).length;
-    expect(n).toBeLessThanOrEqual(4);
+    expect(n).toBeLessThanOrEqual(3);
   });
 
   it("专项⑥:商标黑名单在绘制与文案源码 0 命中", () => {
