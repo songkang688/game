@@ -24,6 +24,7 @@ import {
   rotateSlots,
   runsOn,
   settleOn,
+  shuffleLine,
   shuffleOn,
   specialOf,
   type Cellset,
@@ -246,5 +247,15 @@ describe("死局洗牌", () => {
     s.grid[1] = 2;
     expect(shuffleOn(s, mulberry32(1))).toBe(false);
     expect(s.grid[0]).toBe(1);
+  });
+
+  it("洗不出来也得说一句，不能让盘面静悄悄地卡住", () => {
+    const ok = shuffleLine(true);
+    const failed = shuffleLine(false);
+    expect(ok).not.toBe(failed);
+    expect(ok).toContain("洗");
+    expect(failed).toContain("重来");
+    // 洗不出来不是孩子的错，文案里不许有责怪的话
+    for (const bad of ["你输了", "失败", "笨"]) expect(failed).not.toContain(bad);
   });
 });

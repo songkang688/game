@@ -408,3 +408,14 @@ export function shuffleOn(s: Cellset, rand: () => number, tries = 80): boolean {
   });
   return false;
 }
+
+/**
+ * 洗牌之后说的话。洗成功了要说一声（不然孩子会以为盘面自己乱跳），
+ * **洗不出来更要说** —— 以前这一条是静默的：一步都消不动、盘面也没变、
+ * 屏幕上一个字都没有，孩子只能一直点到步数耗光。
+ */
+export function shuffleLine(ok: boolean): string {
+  return ok
+    ? "一步都消不动啦～重新洗了一次牌，接着来！"
+    : "这一盘实在挪不开了～按「重来」换一盘新的吧，不算你的错！";
+}

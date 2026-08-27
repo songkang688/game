@@ -22,7 +22,7 @@ import {
   type PlayHandle,
 } from "../level99";
 import { prefersReducedMotion } from "./anim";
-import { legalSwapsOn, RAINBOW, rotateSlots, shuffleOn, type Cellset } from "./board";
+import { legalSwapsOn, RAINBOW, rotateSlots, shuffleLine, shuffleOn, type Cellset } from "./board";
 import {
   applyPlan,
   creditOrder,
@@ -297,7 +297,7 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
     reshuffle: () => {
       if (levelDone || legalSwaps(state, cfg).length > 0) return false;
       const ok = shuffleOn(state, Math.random as () => number);
-      if (ok) msgEl.textContent = "一步都消不动啦～重新洗了一次牌，接着来！";
+      msgEl.textContent = shuffleLine(ok);
       return ok;
     },
     onPaint: () => {
