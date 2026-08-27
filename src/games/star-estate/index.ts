@@ -59,7 +59,17 @@ import {
   type MatchRules
 } from "./economy";
 import { AI_TIER_LABELS, buildContext, buildState, type AiTier } from "./ai";
-import { CHAPTERS, endlessConfig, goalLine, levelConfig, rulesLine, solveLevel, starsFor, versusConfig } from "./levels";
+import {
+  CHAPTERS,
+  endlessConfig,
+  goalLine,
+  goalReached,
+  levelConfig,
+  rulesLine,
+  solveLevel,
+  starsFor,
+  versusConfig
+} from "./levels";
 
 /** 棋子一格一格跳的单步时长（毫秒），不允许瞬移 */
 export const HOP_MS = 130;
@@ -245,6 +255,8 @@ export interface TableResult {
   reason: "bankrupt" | "settle" | "goal" | "timeout";
   rounds: number;
   netWorths: number[];
+  /** 收场时每个座位名下有几处产业 */
+  deeds: number[];
   humanWon: boolean;
 }
 
@@ -715,6 +727,7 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       reason,
       rounds: state.round,
       netWorths: state.players.map((p) => netWorth(state, p.id)),
+      deeds: state.players.map((p) => deedsOf(state, p.id).length),
       humanWon: humans.has(winner)
     });
   }
@@ -1151,16 +1164,19 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     preset: cfg.preset,
     scriptedDice: cfg.scriptedDice,
     goalText: `${goalLine(cfg)}｜${rulesLine(cfg)}`,
-    goalReached: (state) =>
-      cfg.goal.kind === "bankrupt"
-        ? Boolean(state.players[cfg.goal.who]?.bankrupt)
-        : netWorth(state, 0) >= cfg.goal.target,
+    goalReached: (state) => goalReached(cfg, state),
     sfx: (n) => ctx.sfx(n),
     onOver: (r) => {
-      // 只有真的达成目标、或者对手全部收摊才算过关；到点没够线一律重来
-      const won = r.reason === "goal" || (r.reason === "bankrupt" && r.winner === 0);
+      // 只有真的达成目标、或者对手全部收摊才算过关；到点没够线一律重来。
+      // 对手先收摊也要看地够不够 —— 只掷骰、一块地都不买，不算学会了这一章。
+      const shortDeeds = Math.max(0, cfg.goal.minDeeds - (r.deeds[0] ?? 0));
+      const won = r.reason === "goal" || (r.reason === "bankrupt" && r.winner === 0 && shortDeeds === 0);
       if (!won) {
-        ctx.lose("这一局没赶上目标，换个买地顺序再试一次，肯定能行！");
+        ctx.lose(
+          shortDeeds > 0
+            ? `这一局手里还差 ${shortDeeds} 处产业，下一把路过空地就把它买下来，肯定能行！`
+            : "这一局没赶上目标，换个买地顺序再试一次，肯定能行！"
+        );
         return;
       }
       const stars = starsFor(cfg, { win: true, rounds: r.rounds, netWorth: r.netWorths[0] ?? 0 });
