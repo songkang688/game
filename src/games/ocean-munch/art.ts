@@ -720,6 +720,41 @@ export function drawShieldBadge(ctx: Ctx, x: number, y: number, r: number, alpha
 }
 
 /**
+ * HUD / BOSS 血量的心心(圆心 x,y、半径 r;visual-r1 修 A 档 P-07):
+ * 实心=粉系径向渐变 + 深粉描边 + 左上高光点;空心=灰白面 + 浅描边。
+ * 掉几颗心从形色两个通道都读得出来,替掉 💗🤍 emoji 直出。
+ */
+export function drawHeartPip(ctx: Ctx, x: number, y: number, r: number, filled: boolean): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  ctx.moveTo(0, r * 0.9);
+  ctx.bezierCurveTo(-r * 1.15, r * 0.15, -r * 0.85, -r * 0.85, 0, -r * 0.25);
+  ctx.bezierCurveTo(r * 0.85, -r * 0.85, r * 1.15, r * 0.15, 0, r * 0.9);
+  ctx.closePath();
+  if (filled) {
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.15, 0, 0, r * 1.15);
+    g.addColorStop(0, "#ffd3e2");
+    g.addColorStop(0.55, "#ff8fb4");
+    g.addColorStop(1, "#f0608e");
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+  }
+  ctx.fill();
+  ctx.strokeStyle = filled ? "#d84a7c" : "#c9b8c4";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  if (filled) {
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.32, -r * 0.36, r * 0.2, r * 0.14, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
  * 顶部大标题的自适应字号(visual-r1 修 A 档 P-01):
  * 从 basePx 逐级往下试,直到 measure(px) 宽度塞得进 avail 或到 minPx 兜底。
  * 纯函数,measure 由调用方给(实机是 ctx.measureText,测试给线性桩)。

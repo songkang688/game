@@ -151,6 +151,7 @@ import {
   stepSwirls,
   swirlPose,
   drawCollectStar,
+  drawHeartPip,
   drawShieldBadge,
   titleFitPx,
 } from "./art";
@@ -3155,12 +3156,9 @@ export function mount(api: GameAPI): OceanMunchHandle {
         );
       }
     }
-    // 血量爱心
+    // 血量爱心:画制心片(visual-r1 修 P-07),位置排布与原 emoji 串一致
     for (let i = 0; i < b.maxHp; i++) {
-      ctx.font = "18px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(i < b.hp ? "💗" : "🤍", b.x - (b.maxHp - 1) * 11 + i * 22, b.y - b.r - 22);
+      drawHeartPip(ctx, b.x - (b.maxHp - 1) * 11 + i * 22, b.y - b.r - 22, 8, i < b.hp);
     }
     // 名字
     ctx.fillStyle = "#5a5a6e";
@@ -4131,12 +4129,14 @@ export function mount(api: GameAPI): OceanMunchHandle {
       12,
       21,
     );
+    // 心心换画制心片(visual-r1 修 P-07):分数右贴边,心片排在分数左侧
     ctx.textAlign = "right";
-    ctx.fillText(
-      "💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, HEARTS_PER_LEVEL - hearts)) + `  分 ${score}`,
-      w - 12,
-      21,
-    );
+    const scoreTxt = `分 ${score}`;
+    ctx.fillText(scoreTxt, w - 12, 21);
+    const heartsRight = w - 12 - ctx.measureText(scoreTxt).width - 14;
+    for (let i = 0; i < HEARTS_PER_LEVEL; i++) {
+      drawHeartPip(ctx, heartsRight - 17 * (HEARTS_PER_LEVEL - 1 - i), 21, 7, i < hearts);
+    }
 
     const bw = Math.min(340, w - 24);
     const bx = (w - bw) / 2;
@@ -4162,9 +4162,12 @@ export function mount(api: GameAPI): OceanMunchHandle {
       45,
     );
     if (shield > 0) {
+      // 护盾读秒:图标复用场上的护盾泡泡画法(visual-r1 修 P-07),对应关系一眼认出
       ctx.textAlign = "right";
       ctx.fillStyle = "#5a8ac9";
-      ctx.fillText(`🛡 ${Math.ceil(shield)}s`, w - 12, 70);
+      const shieldTxt = `${Math.ceil(shield)}s`;
+      ctx.fillText(shieldTxt, w - 12, 70);
+      drawShieldBadge(ctx, w - 12 - ctx.measureText(shieldTxt).width - 13, 70, 9, 1);
     }
     // 1.1 机制徽标:洋流方向 / 体型上限 / 共生小鱼 / 麻酥酥。
     // 单独占第三行左侧,右边留给护盾,375 宽也塞得下。
