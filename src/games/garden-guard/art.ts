@@ -509,6 +509,24 @@ export function drawHealHalo(ctx: Ctx, x: number, y: number, r: number, phase: n
   heart(0.68, 0.95, "#ff8aa8");
 }
 
+/**
+ * BOSS 家族剪影配饰(r2 修复 B档TOP10):皇冠只回答「是不是 BOSS」,
+ * 分家靠轮廓外配饰——铁壳系肩甲护板 / 疾风系后掠速度羽 / 浮云系身下云座 / 双生系分裂环。
+ * 十三章 BOSS 按最近原型套用:飞行优先(云座跟着飘),再分裂,再护甲,冲刺/暴走/隐身归疾风;
+ * 大软软与泥泥大王保持净版(后者已有回血光环)。纯查表,方便测试逐一钉住。
+ */
+export type BossTrim = "plate" | "feather" | "cloud" | "ring" | "none";
+
+export function bossTrimOf(kind: MonsterKind): BossTrim {
+  const spec = MONSTER_INFO[kind];
+  if (!spec.boss) return "none";
+  if (spec.flies) return "cloud";
+  if (spec.splits) return "ring";
+  if (spec.armor > 0) return "plate";
+  if (spec.dashes || spec.enrages || spec.sneaks) return "feather";
+  return "none";
+}
+
 /** 怪物的一帧视觉状态:全是数字与布尔,拼好了交给 drawMonsterSprite。 */
 export interface MonsterVisual {
   kind: MonsterKind;
@@ -561,6 +579,30 @@ export function drawMonsterSprite(ctx: Ctx, v: MonsterVisual): void {
   ctx.arc(mx + r * 0.4, my + r * 0.9 - stepB, r * 0.16, 0, Math.PI * 2);
   ctx.fill();
   const bodyColor = v.enraged ? "#7aa8e8" : MONSTER_COLORS[v.kind];
+  // BOSS 配饰配色:本体色加深约 30%,同族同色系,不抢识别色
+  const trim = bossTrimOf(v.kind);
+  const trimColor = shade(MONSTER_COLORS[v.kind], -77);
+  if (trim === "feather") {
+    // 疾风系:背后三根后掠速度羽(长在轮廓外,一条 path 三片羽叶)
+    ctx.fillStyle = trimColor;
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const fy = my - r * (0.45 - i * 0.35);
+      const fl = r * (1.05 - i * 0.18);
+      ctx.moveTo(mx - r * 0.55, fy);
+      ctx.quadraticCurveTo(mx - r * 0.55 - fl, fy - r * 0.34, mx - r * 0.55 - fl * 1.25, fy - r * 0.05);
+      ctx.quadraticCurveTo(mx - r * 0.55 - fl * 0.55, fy + r * 0.16, mx - r * 0.55, fy + r * 0.14);
+    }
+    ctx.fill();
+  } else if (trim === "cloud") {
+    // 浮云系:身下一朵小云座(三个圆拱,飞行抬升时跟着身体飘)
+    ctx.fillStyle = trimColor;
+    ctx.beginPath();
+    ctx.arc(mx - r * 0.62, my + r * 0.78, r * 0.34, 0, Math.PI * 2);
+    ctx.arc(mx, my + r * 0.92, r * 0.44, 0, Math.PI * 2);
+    ctx.arc(mx + r * 0.62, my + r * 0.78, r * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+  }
   const bodyGrad = ctx.createRadialGradient(mx - r * 0.35, my - r * 0.4, r * 0.15, mx, my, r * 1.25);
   bodyGrad.addColorStop(0, shade(bodyColor, 26));
   bodyGrad.addColorStop(1, bodyColor);
@@ -632,6 +674,43 @@ export function drawMonsterSprite(ctx: Ctx, v: MonsterVisual): void {
       ctx.arc(mx - r * 1.15, my - r * 0.1, r * 0.3, 0.4, Math.PI * 1.6);
       ctx.arc(mx + r * 1.15, my - r * 0.1, r * 0.3, Math.PI * 1.4, Math.PI * 0.6);
       ctx.stroke();
+    }
+    if (trim === "plate") {
+      // 铁壳系:肩上两块铆钉护板(圆角矩形 ×2,伸出身体轮廓)
+      ctx.fillStyle = trimColor;
+      ctx.strokeStyle = shade(MONSTER_COLORS[v.kind], -110);
+      ctx.lineWidth = Math.max(1, r * 0.06);
+      const pw = r * 0.66;
+      const ph = r * 0.42;
+      ctx.beginPath();
+      ctx.roundRect(mx - r * 1.18, my - r * 0.78, pw, ph, r * 0.12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.roundRect(mx + r * 1.18 - pw, my - r * 0.78, pw, ph, r * 0.12);
+      ctx.fill();
+      ctx.stroke();
+      // 每块一粒圆钉
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.arc(mx - r * 0.85, my - r * 0.57, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(mx + r * 0.85, my - r * 0.57, r * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (trim === "ring") {
+      // 双生系:腰间一圈双色分裂环(虚线圆,略宽于本体,两侧伸出剪影)
+      ctx.setLineDash([r * 0.3, r * 0.22]);
+      ctx.lineWidth = Math.max(2, r * 0.13);
+      ctx.strokeStyle = trimColor;
+      ctx.beginPath();
+      ctx.ellipse(mx, my + r * 0.28, r * 1.18, r * 0.34, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineDashOffset = r * 0.3;
+      ctx.beginPath();
+      ctx.ellipse(mx, my + r * 0.28, r * 1.18, r * 0.34, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
     }
   }
   if (v.slowed) {

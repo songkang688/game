@@ -42,6 +42,7 @@ import {
   goalMood,
   tileHash,
   towerLevelScale,
+  bossTrimOf,
   type BulletArtKind,
   type MonsterVisual,
 } from "./art";
@@ -256,6 +257,72 @@ describe("garden-guard 1.3 · 怪物渲染", () => {
       }
     }
     for (const k of kinds) expect(MONSTER_COLORS[k]).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  // ---- r2 修复 B档TOP10:BOSS 家族剪影配饰 ----
+  const ALL_BOSSES: MonsterKind[] = [
+    "boss1", "boss2", "boss3", "boss4", "boss5", "boss6", "boss7", "boss8", "boss9",
+    "boss10", "boss11", "boss12", "boss13", "bossArmor", "bossSwift", "bossFly", "bossSplit",
+  ];
+  /** 把颜色从指令里剥掉,只留几何——学习员点的正是「剪影只差颜色」 */
+  const geomOf = (k: MonsterKind): string =>
+    rec((c) => drawMonsterSprite(c, baseVisual(k)))
+      .map((op) => op.replace(/@.*$/, ""))
+      .join("|");
+
+  it("BOSS 配饰查表:四位原型各归各家,十三章按最近原型套用,四家都不空;小怪一律 none", () => {
+    expect(bossTrimOf("bossArmor")).toBe("plate");
+    expect(bossTrimOf("bossSwift")).toBe("feather");
+    expect(bossTrimOf("bossFly")).toBe("cloud");
+    expect(bossTrimOf("bossSplit")).toBe("ring");
+    const fam = new Map<string, number>();
+    for (const k of ALL_BOSSES) fam.set(bossTrimOf(k), (fam.get(bossTrimOf(k)) ?? 0) + 1);
+    for (const f of ["plate", "feather", "cloud", "ring"]) {
+      expect(fam.get(f) ?? 0, `${f} 家没有一位 BOSS`).toBeGreaterThanOrEqual(2);
+    }
+    // 净版只剩大软软(元祖)与泥泥大王(自带回血光环,已可分辨)
+    expect(ALL_BOSSES.filter((k) => bossTrimOf(k) === "none")).toEqual(["boss1", "boss5"]);
+    for (const k of ["softy", "fasty", "tanky", "splity", "sneaky", "healy", "mini"] as MonsterKind[]) {
+      expect(bossTrimOf(k), `小怪 ${k} 不该有 BOSS 配饰`).toBe("none");
+    }
+  });
+
+  it("五家代表剥掉颜色后几何序列两两互异(皇冠保留为通用标识)", () => {
+    const reps: MonsterKind[] = ["boss1", "bossArmor", "bossSwift", "bossFly", "bossSplit"];
+    const seqs = reps.map(geomOf);
+    for (let i = 0; i < seqs.length; i++) {
+      for (let j = i + 1; j < seqs.length; j++) {
+        expect(seqs[i], `${reps[i]} 与 ${reps[j]} 剥色后剪影一样`).not.toBe(seqs[j]);
+      }
+    }
+    // 皇冠(金色填充)每位 BOSS 都还在
+    for (const k of ALL_BOSSES) {
+      const ops = rec((c) => drawMonsterSprite(c, baseVisual(k)));
+      expect(ops.join("|"), `${k} 的皇冠丢了`).toContain("fill@#ffd868");
+    }
+  });
+
+  it("配饰真画在轮廓外:护板两块圆角矩形、分裂环带虚线两遍描边、云座在身体渐变之前多三个圆、速度羽三片曲线", () => {
+    const plate = rec((c) => drawMonsterSprite(c, baseVisual("bossArmor")));
+    expect(plate.filter((op) => op.startsWith("roundRect")).length).toBeGreaterThanOrEqual(2);
+    const ring = rec((c) => drawMonsterSprite(c, baseVisual("bossSplit")));
+    expect(ring.some((op) => op.startsWith("dash:") && op !== "dash:")).toBe(true);
+    expect(ring.filter((op) => op.startsWith("stroke@rgba(255,255,255"))).not.toHaveLength(0);
+    const arcsBeforeBody = (ops: string[]): number =>
+      ops.slice(0, ops.indexOf("radGrad")).filter((op) => op.startsWith("arc:")).length;
+    // 无配饰 BOSS 身体渐变前只有两粒脚点;云座 BOSS 多出三个圆拱
+    expect(arcsBeforeBody(rec((c) => drawMonsterSprite(c, baseVisual("bossFly"))))).toBe(
+      arcsBeforeBody(rec((c) => drawMonsterSprite(c, baseVisual("boss1")))) + 3,
+    );
+    const feather = rec((c) => drawMonsterSprite(c, baseVisual("bossSwift")));
+    const quadsBeforeBody = feather
+      .slice(0, feather.indexOf("radGrad"))
+      .filter((op) => op.startsWith("quad:")).length;
+    expect(quadsBeforeBody).toBeGreaterThanOrEqual(6);
+    // 蟹蟹将军钳子保留,同时穿上铁壳护板
+    const crab = rec((c) => drawMonsterSprite(c, baseVisual("boss2")));
+    expect(crab.filter((op) => op.startsWith("roundRect")).length).toBeGreaterThanOrEqual(2);
+    expect(crab.join("|")).toContain("stroke@#d0885a");
   });
 });
 
