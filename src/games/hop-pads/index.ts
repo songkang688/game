@@ -11,7 +11,20 @@ export { meta };
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { TIER_FACES, TIER_NAMES, ghostLine, playGhost, type AiTier, type GhostRun } from "./ai";
-import { drawHeroSprite, type HeroPose, type HeroVariant } from "./art";
+import {
+  drawHeroSprite,
+  drawPadMotif,
+  drawSideStripes,
+  drawSpringCoil,
+  fogAlpha,
+  padTopPattern,
+  spawnShards,
+  stepParticles,
+  drawParticles,
+  type HeroPose,
+  type HeroVariant,
+  type Particle,
+} from "./art";
 import guideBook from "./guide";
 import {
   CATCH_LINE,
@@ -26,7 +39,7 @@ import {
   winLine,
   type HopLevel,
 } from "./levels";
-import { KIND_ICONS, KIND_NAMES, padTick, perfectRadius, type Difficulty, type Pad } from "./pads";
+import { KIND_NAMES, padTick, perfectRadius, type Difficulty, type Pad } from "./pads";
 import { MAX_HOLD, clamp, clamp01, jumpApex, landPoint, powerFromHold, type Point } from "./physics";
 import { aimYaw, createRun, hop, requiredPower, type HopResult, type RunState } from "./run";
 
@@ -134,60 +147,94 @@ export function horizonFor(h: number): number {
 
 type Ctx = CanvasRenderingContext2D;
 
-const PAD_TOP: Record<string, string> = {
-  steady: "#FFD9B4",
-  slider: "#BFDCFF",
-  shrink: "#DCD7FF",
-  spring: "#FFC9E2",
-  once: "#BFEFDF",
-};
-const PAD_SIDE: Record<string, string> = {
-  steady: "#D9A473",
-  slider: "#8AAEDC",
-  shrink: "#A9A1DE",
-  spring: "#DB93B8",
-  once: "#84C4AC",
-};
-
 function ellipse(ctx: Ctx, sx: number, sy: number, rx: number, ry: number): void {
   ctx.beginPath();
   ctx.ellipse(sx, sy, Math.max(1, rx), Math.max(1, ry), 0, 0, Math.PI * 2);
 }
 
-function drawPad(ctx: Ctx, cam: Camera, pad: Pad, isTarget: boolean): void {
+/** drawPad 的视觉选项:入场淡入、深度雾、完美发光、弹簧压缩全在这儿,判定不认它们 */
+export interface PadDrawOpts {
+  /** 是不是下一座目标(完美圈画亮一点) */
+  target?: boolean;
+  /** 深度雾浓度 0..FOG_MAX(远台罩一层天空色) */
+  fog?: number;
+  /** 雾的颜色(跟着时段的地平线色走) */
+  fogColor?: string;
+  /** 入场进度 0..1:淡入 + 从下往上浮 4px,1 表示已就位 */
+  entry?: number;
+  /** 完美落点后的台顶发光 0..1 */
+  glow?: number;
+  /** 玩家正踩着它(一次台的裂纹扩展到 4 道) */
+  standing?: boolean;
+  /** 弹簧压缩脉冲 0..1(起跳 / 被弹那两帧) */
+  spring?: number;
+}
+
+/** 画一座台面:椭圆台顶 + 侧壁 + 种类图案 + 完美圈(种类靠图案+侧壁色双通道,不再用字符占位) */
+export function drawPad(ctx: Ctx, cam: Camera, pad: Pad, o: PadDrawOpts = {}): void {
   if (!pad.alive || pad.r <= 0) return;
+  const style = padTopPattern(pad.kind);
+  const entry = o.entry ?? 1;
+  const springSq = (o.spring ?? 0) > 0 ? Math.sin(Math.min(1, o.spring ?? 0) * Math.PI) * 0.22 : 0;
   const top = project(cam, pad.x, pad.z, 0);
+  const sy = top.sy + (1 - entry) * 4;
   const rx = pad.r * cam.scale;
   const ry = pad.r * cam.scale * DEPTH_SQUASH;
-  const wall = WALL_H * cam.scale;
+  const wall = WALL_H * cam.scale * (1 - springSq);
+
+  if (entry < 1) ctx.globalAlpha = entry;
 
   // 侧壁:上下两个椭圆之间的一段柱身
-  ctx.fillStyle = PAD_SIDE[pad.kind] ?? PAD_SIDE.steady;
+  ctx.fillStyle = style.side;
   ctx.beginPath();
-  ctx.ellipse(top.sx, top.sy + wall, rx, ry, 0, 0, Math.PI);
-  ctx.lineTo(top.sx - rx, top.sy);
-  ctx.ellipse(top.sx, top.sy, rx, ry, 0, Math.PI, 0, true);
+  ctx.ellipse(top.sx, sy + wall, rx, ry, 0, 0, Math.PI);
+  ctx.lineTo(top.sx - rx, sy);
+  ctx.ellipse(top.sx, sy, rx, ry, 0, Math.PI, 0, true);
   ctx.closePath();
   ctx.fill();
 
+  // 侧壁装饰:移动台条纹 / 弹簧台弹簧圈线
+  if (pad.kind === "slider") drawSideStripes(ctx, top.sx, sy, rx, ry, wall, style.accent);
+  else if (pad.kind === "spring") drawSpringCoil(ctx, top.sx, sy, rx, ry, wall, style.accent);
+
   // 台顶
-  ctx.fillStyle = PAD_TOP[pad.kind] ?? PAD_TOP.steady;
-  ellipse(ctx, top.sx, top.sy, rx, ry);
+  ctx.fillStyle = style.top;
+  ellipse(ctx, top.sx, sy, rx, ry);
   ctx.fill();
+
+  // 顶面图案:每种台一张脸(一次台被踩住时裂纹 2 道扩到 4 道)
+  drawPadMotif(ctx, pad.kind, top.sx, sy, rx, ry, pad.kind === "once" ? (o.standing ? 4 : 2) : 0);
 
   // 完美圈:浅浅一圈,告诉孩子要往哪儿落
   const pr = perfectRadius(pad) * cam.scale;
-  ctx.fillStyle = isTarget ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.55)";
-  ellipse(ctx, top.sx, top.sy, pr, pr * DEPTH_SQUASH);
+  ctx.fillStyle = o.target ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.55)";
+  ellipse(ctx, top.sx, sy, pr, pr * DEPTH_SQUASH);
   ctx.fill();
 
-  if (pad.kind !== "steady") {
-    ctx.fillStyle = "#7A5638";
-    ctx.font = `${Math.round(12 * cam.scale + 6)}px system-ui`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(KIND_ICONS[pad.kind], top.sx, top.sy + ry * 0.55);
+  // 完美落点后的台顶短暂发光
+  const glow = o.glow ?? 0;
+  if (glow > 0) {
+    ctx.globalAlpha = entry * glow * 0.65;
+    ctx.fillStyle = "#FFD76A";
+    ellipse(ctx, top.sx, sy, rx, ry);
+    ctx.fill();
   }
+
+  // 深度雾:远台罩一层淡天空色,拉开纵深
+  const fog = o.fog ?? 0;
+  if (fog > 0) {
+    ctx.globalAlpha = entry * fog;
+    ctx.fillStyle = o.fogColor ?? "#FFF3D9";
+    ctx.beginPath();
+    ctx.ellipse(top.sx, sy + wall, rx, ry, 0, 0, Math.PI);
+    ctx.lineTo(top.sx - rx, sy);
+    ctx.ellipse(top.sx, sy, rx, ry, 0, Math.PI, 0, true);
+    ctx.closePath();
+    ctx.fill();
+    ellipse(ctx, top.sx, sy, rx, ry);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** drawHero 的视觉选项:全是造型层,判定一个数都不掺 */
@@ -421,6 +468,16 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   let landT = 0;
   /** 星星的披风要拖着最近几帧的位置飘 */
   let trail: Array<{ x: number; z: number; y: number }> = [];
+  /** 屏幕坐标系的粒子:完美星星 / 落地尘土 / 一次台碎片 */
+  let particles: Particle[] = [];
+  /** 弹簧压缩脉冲:哪座台、还剩多少 */
+  let springT = 0;
+  let springIdx = -1;
+  /** 完美落点后的台顶发光:哪座台、还剩多少 */
+  let glowT = 0;
+  let glowIdx = -1;
+  /** 每座台第一次被看见的时刻:入场淡入 + 上浮用(reduced 直接就位) */
+  const born = new Map<number, number>();
   const cam: Camera = { x: 0, z: 0, scale: 1, w: 360, h: 400, shake: 0 };
 
   // ---- 画布尺寸 ----
@@ -497,6 +554,11 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (forcedHold !== undefined) holdMs = forcedHold;
     const p = power();
     run = { ...run, time: clock };
+    // 从弹簧台上起跳:柱身压缩回弹两帧(纯视觉)
+    if (run.pads[run.index]?.kind === "spring" && !reduced) {
+      springIdx = run.index;
+      springT = 1;
+    }
     pending = hop(run, p);
     legs = buildLegs(pending);
     legIndex = 0;
@@ -509,9 +571,22 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   function settleLanding(): void {
     if (!pending) return;
     const res = pending.result;
+    const prevPads = run.pads;
+    const prevIndex = run.index;
     run = pending.state;
     clock = run.time;
     pending = null;
+
+    // 一次台跳走即塌:碎成 3 块下坠(判定早在 run.ts 里定死,这儿只演给眼睛看)
+    for (let j = prevIndex; j < run.index; j++) {
+      const now = run.pads[j];
+      const was = prevPads[j];
+      if (now && was && now.kind === "once" && !now.alive && was.alive) {
+        const snap = padTick(was, clock);
+        const g = project(cam, snap.x, snap.z, 0);
+        particles.push(...spawnShards(g.sx, g.sy, cam.scale, padTopPattern("once").side, reduced));
+      }
+    }
 
     if (res.verdict === "miss") {
       phase = "falling";
@@ -537,6 +612,11 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (res.bonus) {
       opts.sfx("pop");
       flashText = `弹簧台!直接送你一跳,${run.combo} 连`;
+      // 被弹起的那座弹簧台压缩一下再回弹
+      if (!reduced) {
+        springIdx = res.targetIndex;
+        springT = 1;
+      }
     }
     if (opts.ramp) run = { ...run, difficulty: opts.ramp(run.hops) };
     opts.onHop?.(res, run);
@@ -602,6 +682,9 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (dust > 0) dust = Math.max(0, dust - dt * 2.4);
     if (flashT > 0) flashT = Math.max(0, flashT - dt);
     if (landT > 0) landT = Math.max(0, landT - dt);
+    if (springT > 0) springT = Math.max(0, springT - dt * 3.2);
+    if (glowT > 0) glowT = Math.max(0, glowT - dt * 1.6);
+    if (particles.length > 0) particles = stepParticles(particles, dt);
     if (phase === "flying" && !reduced) {
       trail.unshift({ ...heroPos });
       if (trail.length > 7) trail.pop();
@@ -632,9 +715,18 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     const from = Math.max(0, run.index - 1);
     const to = Math.min(run.pads.length - 1, run.index + 4);
     for (let i = to; i >= from; i--) {
+      if (!born.has(i)) born.set(i, clock);
       const snap = padTick(run.pads[i], clock);
       if (project(cam, snap.x, snap.z).sy < -10) continue;
-      drawPad(ctx, cam, snap, i === run.index + 1);
+      drawPad(ctx, cam, snap, {
+        target: i === run.index + 1,
+        fog: fogAlpha(snap.z - cam.z),
+        fogColor: "#FFF3D9",
+        entry: reduced ? 1 : clamp01((clock - (born.get(i) ?? clock)) / 0.45),
+        glow: i === glowIdx ? glowT : 0,
+        standing: i === run.index && (phase === "ready" || phase === "charging"),
+        spring: i === springIdx ? springT : 0,
+      });
     }
 
     // 训练关的落点辅助圆:告诉你现在松手会落在哪儿
@@ -681,6 +773,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       const g = project(cam, heroPos.x, heroPos.z, 0);
       drawCloud(ctx, g.sx, Math.min(cam.h - 40, g.sy + 70), 26 * cam.scale);
     }
+
+    if (particles.length > 0) drawParticles(ctx, particles);
 
     drawChargeBar(ctx);
 
