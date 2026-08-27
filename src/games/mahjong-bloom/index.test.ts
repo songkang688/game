@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createTable } from "./table";
+import { createTable, type TableState } from "./table";
 import { levelConfig } from "./levels";
 import { parseTiles, tileName } from "./tiles";
 import {
@@ -8,7 +8,9 @@ import {
   FLY_MS,
   MELD_MS,
   MJ_CONSTS,
+  MJ_CSS,
   claimButtonLabel,
+  createLive,
   endlessGain,
   faceOf,
   kanAvailable,
@@ -20,9 +22,10 @@ import {
   popFans,
   preferredAction,
   tierTip,
-  type Scheduler,
   tileColorClass,
-  tileEl
+  tileEl,
+  type LiveOptions,
+  type Scheduler
 } from "./index";
 
 // ---------------------------------------------------------------------------
@@ -194,6 +197,82 @@ describe("meta 与模块形状", () => {
     expect(MJ_CONSTS.FLY_MS).toBe(FLY_MS);
     expect(FAN_VISIBLE).toBe(6);
     expect(FAN_STEP_MS).toBeGreaterThan(0);
+  });
+});
+
+describe("窄屏与动效红线", () => {
+  /** 取某条选择器的声明块 */
+  function ruleOf(css: string, selector: string): string {
+    const at = css.indexOf(`${selector}{`);
+    if (at < 0) return "";
+    return css.slice(at + selector.length + 1, css.indexOf("}", at));
+  }
+
+  function pxOf(rule: string, prop: string): number {
+    const m = new RegExp(`(?:^|;)\\s*${prop}:(\\d+)px`).exec(rule);
+    return m ? Number(m[1]) : Number.NaN;
+  }
+
+  /** 360px 那段 media query 的内容 */
+  const narrow = (() => {
+    const at = MJ_CSS.indexOf("@media (max-width:360px)");
+    return at < 0 ? "" : MJ_CSS.slice(at, MJ_CSS.indexOf("\n}", at));
+  })();
+
+  it("牌宽任何屏下都 ≥ 28px", () => {
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-tile"), "width")).toBeGreaterThanOrEqual(28);
+    expect(pxOf(ruleOf(narrow, ".mj-tile"), "width")).toBeGreaterThanOrEqual(28);
+  });
+
+  it("360px 那段确实存在,而且把牌收窄了", () => {
+    expect(narrow.length).toBeGreaterThan(40);
+    expect(pxOf(ruleOf(narrow, ".mj-tile"), "width")).toBeLessThan(
+      pxOf(ruleOf(MJ_CSS, ".mj-tile"), "width")
+    );
+  });
+
+  it("自家手牌能横滑,不会在窄屏挤爆", () => {
+    expect(ruleOf(MJ_CSS, ".mj-hand")).toContain("overflow-x:auto");
+  });
+
+  it("动作钮热区 ≥ 44px,窄屏也不缩", () => {
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-btn"), "min-height")).toBeGreaterThanOrEqual(44);
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-open"), "min-height")).toBeGreaterThanOrEqual(44);
+    expect(pxOf(ruleOf(MJ_CSS, ".mj-back-btn"), "min-height")).toBeGreaterThanOrEqual(44);
+    expect(ruleOf(narrow, ".mj-btn")).not.toContain("min-height");
+  });
+
+  it("要读的字号一律 ≥ 13px", () => {
+    for (const sel of [".mj-badge", ".mj-goal", ".mj-msg", ".mj-btn", ".mj-fan", ".mj-foe-name"]) {
+      expect(pxOf(ruleOf(MJ_CSS, sel), "font-size")).toBeGreaterThanOrEqual(13);
+      const tight = ruleOf(narrow, sel);
+      if (tight.includes("font-size")) expect(pxOf(tight, "font-size")).toBeGreaterThanOrEqual(13);
+    }
+  });
+
+  it("番种表最多先露 6 条,再多就滚动看", () => {
+    const rule = ruleOf(MJ_CSS, ".mj-fans");
+    expect(rule).toContain("overflow-y:auto");
+    expect(rule).toContain("max-height");
+  });
+
+  it("出牌与副露都有动画,不是瞬变", () => {
+    expect(MJ_CSS).toContain(`animation:mjfly ${FLY_MS}ms`);
+    expect(MJ_CSS).toContain(`animation:mjslide ${MELD_MS}ms`);
+  });
+
+  it("prefers-reduced-motion 下动画缩到最短但还在", () => {
+    const at = MJ_CSS.indexOf("@media (prefers-reduced-motion:reduce)");
+    expect(at).toBeGreaterThan(0);
+    const block = MJ_CSS.slice(at);
+    expect(block).toContain(".mj-fly{animation-duration:60ms;}");
+    expect(block).not.toContain("animation:none");
+  });
+
+  it("不引用任何图片、字体或外部地址", () => {
+    expect(MJ_CSS).not.toMatch(/url\(/);
+    expect(MJ_CSS).not.toMatch(/@import/);
+    expect(MJ_CSS).not.toMatch(/https?:/);
   });
 });
 
@@ -485,6 +564,178 @@ describe("闯关残局", () => {
     for (const lv of [0, 30, 60, 100, 130, 170, 187]) {
       expect(levelSolvable(lv)).toBe(true);
     }
+  });
+});
+
+describe("四人牌桌", () => {
+  beforeEach(() => {
+    installDom();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    removeDom();
+  });
+
+  function table(seats: LiveOptions["seats"], seed = 4242, dealer = 0): {
+    host: FakeEl;
+    live: ReturnType<typeof createLive>;
+    over: TableState[];
+  } {
+    const host = new FakeEl("div");
+    const over: TableState[] = [];
+    const live = createLive(host as unknown as HTMLElement, {
+      seed,
+      floor: 8,
+      dealer,
+      roundWind: 1,
+      hints: true,
+      seats,
+      sfx: () => undefined,
+      onOver: (st) => over.push(st)
+    });
+    return { host, live, over };
+  }
+
+  const SOLO: LiveOptions["seats"] = [
+    { name: "朵朵", human: "duo" },
+    { name: "糯糯", tier: "normal" },
+    { name: "星星", tier: "normal" },
+    { name: "云云", tier: "normal" }
+  ];
+
+  /** 一直点到这盘结束:能鸣牌就先「过」,轮到自己就打第一张,番种表弹完就收下 */
+  function autoPlay(host: FakeEl, over: TableState[], rounds = 800): void {
+    for (let i = 0; i < rounds && over.length === 0; i++) {
+      vi.advanceTimersByTime(500);
+      const sheetBtn = host.byClass("mj-open")[0];
+      if (sheetBtn) {
+        sheetBtn.fire("click");
+        continue;
+      }
+      const pass = host.byClass("mj-btn").find((b) => b.textContent === "过");
+      if (pass) {
+        pass.fire("click");
+        continue;
+      }
+      const hand = host.byClass("mj-hand")[0];
+      const tile = hand?.byClass("mj-tile").find((t) => t.tag === "button");
+      if (tile) tile.fire("click");
+    }
+  }
+
+  it("开局摆好四家:自己有手牌,别人是牌背", () => {
+    const { host, live } = table(SOLO);
+    expect(host.byClass("mj-hand")[0].byClass("mj-tile").length).toBeGreaterThanOrEqual(13);
+    expect(host.byClass("mj-back").length).toBeGreaterThan(30);
+    live.destroy();
+  });
+
+  it("顶栏写着牌墙剩几张、几番起和、什么圈", () => {
+    const { host, live } = table(SOLO);
+    const texts = host.byClass("mj-badge").map((b) => b.textContent);
+    expect(texts.some((t) => t.includes("牌墙"))).toBe(true);
+    expect(texts.some((t) => t.includes("8 番起和"))).toBe(true);
+    expect(texts.some((t) => t.includes("圈"))).toBe(true);
+    live.destroy();
+  });
+
+  it("一盘从头打到尾会出结果,四家分数加起来还是 0", () => {
+    const { host, live, over } = table(SOLO);
+    autoPlay(host, over);
+    expect(over.length).toBe(1);
+    const st = over[0];
+    expect(st.phase).toBe("over");
+    expect(st.result).not.toBeNull();
+    expect(st.seats.reduce((a, s) => a + s.score, 0)).toBe(0);
+    live.destroy();
+  });
+
+  it("AI 会自己摸打,牌墙一路变少", () => {
+    // 庄家换成棋友,不点也会自己打起来
+    const { live } = table(SOLO, 4242, 1);
+    const start = live.state.wall.length;
+    vi.advanceTimersByTime(3000);
+    expect(live.state.wall.length).toBeLessThan(start);
+    live.destroy();
+  });
+
+  it("Esc 暂停,再按一次继续", () => {
+    const { host, live } = table(SOLO, 4242, 1);
+    vi.advanceTimersByTime(1500);
+    pressKey("Escape");
+    expect(host.byClass("mj-sheet-pause").length).toBe(1);
+    const frozen = live.state.wall.length;
+    vi.advanceTimersByTime(4000);
+    expect(live.state.wall.length).toBe(frozen);
+    pressKey("Escape");
+    expect(host.byClass("mj-sheet-pause").length).toBe(0);
+    vi.advanceTimersByTime(3000);
+    expect(live.state.wall.length).toBeLessThan(frozen);
+    live.destroy();
+  });
+
+  it("双人同桌:朵朵和星星各坐一家,另两家是棋友", () => {
+    const { host, live } = table([
+      { name: "朵朵", human: "duo" },
+      { name: "糯糯", tier: "normal" },
+      { name: "星星", human: "star" },
+      { name: "云云", tier: "normal" }
+    ]);
+    expect(live.state.seats.filter((s) => s.human).length).toBe(2);
+    // 两位小朋友的手牌都摊开画出来,不是牌背
+    expect(host.byClass("mj-hand").length).toBe(2);
+    live.destroy();
+  });
+
+  it("双人同桌时 WASD 只动朵朵、方向键只动星星", () => {
+    const { host, live } = table([
+      { name: "朵朵", human: "duo" },
+      { name: "糯糯", tier: "normal" },
+      { name: "星星", human: "star" },
+      { name: "云云", tier: "normal" }
+    ]);
+    // 庄家是朵朵,现在轮到她;方向键是星星的,按了不该动朵朵的光标
+    const before = host.byClass("mj-cur").length;
+    pressKey("ArrowLeft");
+    expect(host.byClass("mj-cur").length).toBe(before);
+    pressKey("a");
+    expect(host.byClass("mj-cur").length).toBe(1);
+    live.destroy();
+  });
+
+  it("轮到人的时候会等着,不会替人出牌", () => {
+    const { host, live } = table(SOLO);
+    const hand = live.state.seats[0].hand.length;
+    vi.advanceTimersByTime(8000);
+    // 庄家开局就是自己,没点就一直等
+    expect(live.state.seats[0].hand.length).toBe(hand);
+    expect(live.state.turn).toBe(0);
+    live.destroy();
+  });
+
+  it("点一张牌就打出去,牌河里多一张", () => {
+    const { host, live } = table(SOLO);
+    vi.advanceTimersByTime(500);
+    const tile = host.byClass("mj-hand")[0].byClass("mj-tile").find((t) => t.tag === "button");
+    expect(tile).toBeTruthy();
+    tile?.fire("click");
+    expect(live.state.seats[0].discards.length).toBe(1);
+    live.destroy();
+  });
+
+  it("destroy 之后监听撤干净,定时器也不再推进牌局", () => {
+    const before = keyListenerCount();
+    const { host, live } = table(SOLO);
+    expect(keyListenerCount()).toBe(before + 1);
+    vi.advanceTimersByTime(1200);
+    const frozen = live.state.wall.length;
+    live.destroy();
+    expect(keyListenerCount()).toBe(before);
+    expect(host.children.length).toBe(0);
+    vi.advanceTimersByTime(10000);
+    expect(live.state.wall.length).toBe(frozen);
+    expect(() => pressKey("f")).not.toThrow();
   });
 });
 

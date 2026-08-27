@@ -318,7 +318,7 @@ export function chooseClaim(
     return true;
   });
   if (usable.length === 0) {
-    // 菜鸟偶尔也会心血来潮碰一下，不然像块木头
+    // 菜鸟偶尔也会一时兴起碰一下，不然像块木头
     if (me.tier === "rookie" && rand() < 0.08) return opts.find((o) => o.kind === "pon") ?? null;
     return null;
   }

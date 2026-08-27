@@ -314,8 +314,8 @@ describe("整盘能跑到底", () => {
       const scores = playHandToEnd(st, mulberry32(seed));
       expect(st.phase).toBe("over");
       expect(st.result).not.toBeNull();
-      const flowers = st.result?.flowerPoints ?? 0;
-      expect(scores.reduce((a, b) => a + b, 0)).toBe(flowers);
+      // 花分也是从别家收上来的，所以一桌永远加起来是 0
+      expect(scores.reduce((a, b) => a + b, 0)).toBe(0);
     }
   });
 });

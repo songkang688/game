@@ -53,6 +53,59 @@ describe("番种全表", () => {
   it("本款 81 个番种全部写了识别器", () => {
     expect(undetectedFans()).toEqual([]);
   });
+
+  it("规格点名必做的那 40 个番种,全表里一个不缺", () => {
+    const must = [
+      "平和", "碰碰和", "混一色", "清一色", "七对", "十三幺", "大三元", "小三元", "大四喜", "小四喜",
+      "清龙", "花龙", "三色三同顺", "三色三节高", "杠上开花", "抢杠和", "妙手回春", "海底捞月",
+      "门前清", "不求人", "全求人", "断幺", "无字", "缺一门", "一般高", "喜相逢", "连六", "老少副",
+      "边张", "坎张", "单钓将", "自摸", "四归一", "箭刻", "圈风刻", "门风刻", "双同刻", "双暗刻",
+      "明杠", "暗杠"
+    ];
+    expect(must.length).toBe(40);
+    const table = new Set(FAN_TABLE.map((f) => f.name));
+    for (const name of must) expect(table.has(name)).toBe(true);
+  });
+});
+
+describe("无番和与花牌", () => {
+  it("一副什么番都沾不上的牌,按无番和算 8 分", () => {
+    // 吃了一副 678s 所以不门前清;三门齐全、带字牌、两面和,连平和都够不着
+    const melds: Meld[] = [makeChi(T("6s"), parseTiles("78s"), 3)];
+    const r = scoreFans(ctxOf("456m345p789s22z", T("5p"), { melds }));
+    expect(r.names).toContain("无番和");
+    expect(r.points).toBe(8);
+  });
+
+  it("无番和就是全表最后的兜底,不跟别的番同时出现", () => {
+    const melds: Meld[] = [makeChi(T("6s"), parseTiles("78s"), 3)];
+    expect(scoreFans(ctxOf("456m345p789s22z", T("5p"), { melds })).names).toEqual(["无番和"]);
+  });
+
+  it("花牌每张 1 分,记在花分里,不混进番种表", () => {
+    const withFlowers = scoreFans(ctxOf("111222333444z55m", T("5m"), { flowers: 3 }));
+    expect(withFlowers.flowerPoints).toBe(3);
+    expect(withFlowers.names).not.toContain("花牌");
+    // 番数只看番,花再多也不顶番
+    const noFlowers = scoreFans(ctxOf("111222333444z55m", T("5m")));
+    expect(withFlowers.points).toBe(noFlowers.points);
+  });
+
+  it("花牌在全表里占一格,每张 1 分", () => {
+    const flower = FAN_TABLE.find((f) => f.name === "花牌");
+    expect(flower?.points).toBe(1);
+    expect(flower?.repeatable).toBe(true);
+  });
+
+  it("起和门槛只看番,花分再多也不能拿来凑门槛", () => {
+    const r = scoreFans(ctxOf("456m345p789s22z", T("5p"), {
+      melds: [makeChi(T("6s"), parseTiles("78s"), 3)],
+      flowers: 8
+    }));
+    expect(r.flowerPoints).toBe(8);
+    expect(canHuWithFloor(r.points, 8)).toBe(true);
+    expect(canHuWithFloor(r.points, 12)).toBe(false);
+  });
 });
 
 describe("88 分档", () => {
@@ -481,10 +534,22 @@ describe("结算", () => {
     expect(s.delta[1]).toBe(34);
   });
 
-  it("花牌分只加给和牌那家，不影响别人付多少", () => {
+  it("花牌分不计番，每张花其余三家各付 1 分", () => {
     const s = settle(0, true, 8, -1, 3);
-    expect(s.delta[0]).toBe(48 + 3);
-    expect(s.delta[1]).toBe(-16);
+    expect(s.delta[0]).toBe(48 + 9);
+    expect(s.delta[1]).toBe(-16 - 3);
+  });
+
+  it("不管有没有花，一桌四家的分加起来永远是 0", () => {
+    for (const [selfDraw, from, flowers] of [
+      [true, -1, 0],
+      [true, -1, 5],
+      [false, 2, 0],
+      [false, 3, 8]
+    ] as Array<[boolean, number, number]>) {
+      const s = settle(0, selfDraw, 12, from, flowers);
+      expect(s.delta.reduce((a, b) => a + b, 0)).toBe(0);
+    }
   });
 
   it("座位号不合法时原样返回全 0，不抛异常", () => {

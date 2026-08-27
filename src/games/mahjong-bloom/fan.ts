@@ -871,7 +871,7 @@ export interface Settlement {
 
 /**
  * 结算：自摸时其余三家各付 `8 + 番`；点炮时点炮者付 `8 + 番`，另两家各付 8。
- * 花牌分直接加给和牌那家，不参与「谁付」的计算。
+ * 花牌分不计番，单独算：每张花其余三家各付 1 分，所以一桌的分永远加起来是 0。
  */
 export function settle(
   winner: number,
@@ -898,7 +898,11 @@ export function settle(
     }
   }
   const f = Math.max(0, Math.round(flowerPoints));
-  delta[winner] += f;
+  for (let s = 0; s < 4 && f > 0; s++) {
+    if (s === winner) continue;
+    delta[s] -= f;
+    delta[winner] += f;
+  }
   return { delta, gain: delta[winner] };
 }
 

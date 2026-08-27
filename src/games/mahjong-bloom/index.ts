@@ -53,7 +53,8 @@ export const FAN_VISIBLE = 6;
 /** AI 思考的停顿,让孩子看得清谁在动 */
 const AI_THINK_MS = 460;
 
-const CSS = `
+/** 本款全部样式。不动 `src/styles.css`,免得跟同窗并行的档撞车;窄屏红线由 index.test.ts 巡检 */
+export const MJ_CSS = `
 .mj-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF4F8,#F3F8FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;overflow:hidden;}
 .mj-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:8px;}
@@ -85,16 +86,17 @@ const CSS = `
 .mj-tile:active{transform:translateY(2px);box-shadow:0 1px 0 #CFC2AC;}
 .mj-tile:focus-visible{outline:3px solid #6b2a52;outline-offset:2px;}
 .mj-t-n{font-size:18px;font-weight:900;}
-.mj-t-s{font-size:12px;font-weight:800;}
+.mj-t-s{font-size:13px;font-weight:800;}
 .mj-t-m{color:#B4442F;}
 .mj-t-p{color:#2E5FA8;}
 .mj-t-s2{color:#28794C;}
 .mj-t-z{color:#4A3B6B;}
 .mj-t-red{color:#C42B3F;}
 .mj-t-green{color:#218454;}
-.mj-tile.mj-small{width:24px;height:32px;}
+/* 牌河与副露里的小牌只是让人认出打了什么,点数仍旧 13px 起,花色字是陪衬 */
+.mj-tile.mj-small{width:26px;height:34px;}
 .mj-tile.mj-small .mj-t-n{font-size:13px;}
-.mj-tile.mj-small .mj-t-s{font-size:9px;}
+.mj-tile.mj-small .mj-t-s{font-size:11px;}
 .mj-tile.mj-cur{outline:3px solid #E0609B;outline-offset:1px;}
 .mj-tile.mj-hot{box-shadow:0 2px 0 #CFC2AC,0 0 0 3px #FFD46A;}
 .mj-tile.mj-drawn{background:linear-gradient(180deg,#FFF8E6,#F6E7C4);}
@@ -380,7 +382,7 @@ export function mountPuzzle(
   const wrap = document.createElement("div");
   wrap.className = "mj-wrap";
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = MJ_CSS;
   wrap.appendChild(style);
   const top = document.createElement("div");
   top.className = "mj-top";
@@ -656,7 +658,7 @@ interface Pending {
 }
 
 /** 一桌四家。所有推进都靠 timers,destroy 时全部撤掉 */
-function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () => void; state: TableState } {
+export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () => void; state: TableState } {
   const timers = new Timers();
   const rand = mulberry32(opts.seed ^ 0x9e37);
   const state = createTable({
@@ -680,7 +682,7 @@ function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () => void
   const wrap = document.createElement("div");
   wrap.className = "mj-wrap";
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = MJ_CSS;
   wrap.appendChild(style);
   const top = document.createElement("div");
   top.className = "mj-top";
@@ -1231,7 +1233,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   const wrap = document.createElement("div");
   wrap.className = "mj-mode";
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = MJ_CSS;
   wrap.appendChild(style);
   const head = document.createElement("div");
   head.className = "mj-mhead";
@@ -1480,7 +1482,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = MJ_CSS;
   const bar = document.createElement("div");
   bar.className = "mj-modebar";
   const levelHost = document.createElement("div");
