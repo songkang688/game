@@ -24,6 +24,12 @@
 export const MIN_FIELD_H = 76;
 
 /**
+ * 两颗大按钮再收也得留这么高——手指按得准的下限是 44px，这里留 56px，
+ * 因为按钮里是两行字（「🪢 用力拉」+「按住 F / 空格」），56 以下第二行就压没了。
+ */
+export const MIN_PULL_H = 56;
+
+/**
  * 从 `selfTop` 往下，舞台真正看得见的还剩多少像素。
  * 取最靠里那一层裁切祖先的下沿；一层都没有（用例里的裸节点）返回 `Infinity`，表示不用钳。
  */
@@ -88,6 +94,37 @@ export function needsTight(
   return fieldHeight <= minField;
 }
 
+/**
+ * 空隙减半之后**还是**装不下吗——那就得连字号一起收一档（W5R3-B-02）。
+ *
+ * 判据和 `needsTight` 是同一个形状，只是问的是「下一档」：
+ * 场地已经在底线上、`rbg-tight` 也已经挂上了，这一屏却仍旧比可视段高。
+ */
+export function needsTighter(wrapHeight: number, roomPx: number): boolean {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return false;
+  if (!Number.isFinite(wrapHeight)) return false;
+  return wrapHeight - roomPx > 1;
+}
+
+/**
+ * 字号也收完还超出多少，两颗大按钮就该收到多高。
+ *
+ * 和 `fieldRoomPx` 同一套算法，只是底线换成 `MIN_PULL_H`。
+ * 返回 `null` 表示装得下 / 量不出来，照原样别管。
+ */
+export function pullRoomPx(
+  wrapHeight: number,
+  pullHeight: number,
+  roomPx: number,
+  minPull = MIN_PULL_H
+): number | null {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  if (!Number.isFinite(wrapHeight) || !Number.isFinite(pullHeight) || pullHeight <= 0) return null;
+  const over = wrapHeight - roomPx;
+  if (over <= 1) return null;
+  return Math.max(minPull, Math.floor(pullHeight - over));
+}
+
 /** 量一次这个节点头顶到最近那条裁切线之间还剩多少（量不了就返回 Infinity） */
 export function stageRoomPx(el: HTMLElement): number {
   const view = el.ownerDocument?.defaultView ?? null;
@@ -117,10 +154,26 @@ export function fitFieldIntoStage(wrap: HTMLElement): { relayout: () => void; di
   const field =
     typeof wrap.querySelector === "function" ? (wrap.querySelector(".rbg-field") as HTMLElement | null) : null;
   const measurable = !!view && !!field && typeof wrap.getBoundingClientRect === "function";
+  const pulls = (): HTMLElement[] =>
+    typeof wrap.querySelectorAll === "function"
+      ? (Array.from(wrap.querySelectorAll(".rbg-pull")) as HTMLElement[])
+      : [];
+  /**
+   * 把按钮高度的自定义属性还原成「这一次重绘写进来的那个内联高度」。
+   * 不能直接 `removeProperty`：收紧档的 CSS 规则带 `!important`，
+   * 属性一空高度就掉成 `auto`，按钮当场塌成一行字（比切掉 25px 还糟）。
+   */
+  const resetPull = (p: HTMLElement): void => {
+    const base = p.style?.height;
+    if (base) p.style.setProperty("--rbg-pull-h", base);
+    else p.style?.removeProperty?.("--rbg-pull-h");
+  };
   const relayout = (): void => {
     if (!measurable || !field) return;
     field.style.height = "";
     wrap.classList.remove("rbg-tight");
+    wrap.classList.remove("rbg-tighter");
+    for (const p of pulls()) resetPull(p);
     const room = stageRoomPx(wrap);
     const next = fieldRoomPx(wrap.scrollHeight, field.offsetHeight, room);
     if (next === null) return;
@@ -131,6 +184,20 @@ export function fitFieldIntoStage(wrap: HTMLElement): { relayout: () => void; di
     field.style.height = "";
     const tighter = fieldRoomPx(wrap.scrollHeight, field.offsetHeight, room);
     field.style.height = `${tighter ?? next}px`;
+    // 空隙减半也不够（320×568 后段章节：机关胶囊排到三行，把 .rbg-msg 整条顶出裁切线，
+    // 两颗大按钮也被切掉 25px）。再往下走两档：先收字号，还不够才收按钮。W5R3-B-02
+    if (!needsTighter(wrap.scrollHeight, room)) return;
+    wrap.classList.add("rbg-tighter");
+    field.style.height = "";
+    const tightest = fieldRoomPx(wrap.scrollHeight, field.offsetHeight, room);
+    field.style.height = `${tightest ?? tighter ?? next}px`;
+    const btns = pulls();
+    if (btns.length === 0) return;
+    const nextPull = pullRoomPx(wrap.scrollHeight, btns[0].offsetHeight, room);
+    if (nextPull === null) return;
+    // 按钮的高是 JS 按视口算完写成内联 `height` 的（`layout.height`），
+    // 直接改那一处会被下一次重绘覆盖；改自定义属性，CSS 里那条优先级更高的规则认它。
+    for (const p of btns) p.style.setProperty("--rbg-pull-h", `${nextPull}px`);
   };
   relayout();
   // 平台顶栏在窄屏上会折行，折完这一屏的起点往下挪几像素——下一帧再量一次才准
@@ -142,6 +209,8 @@ export function fitFieldIntoStage(wrap: HTMLElement): { relayout: () => void; di
     dispose(): void {
       view?.removeEventListener("resize", relayout);
       wrap.classList?.remove("rbg-tight");
+      wrap.classList?.remove("rbg-tighter");
+      for (const p of pulls()) p.style?.removeProperty?.("--rbg-pull-h");
       if (field) field.style.height = "";
     }
   };

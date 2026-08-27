@@ -53,7 +53,10 @@ describe("红蓝拔河 · 收到底线还装不下就压竖向节奏（W5R2-FC-0
 
   it("压的只是空隙，按钮热区一格不动", () => {
     const from = SRC.indexOf(".rbg-wrap.rbg-tight");
-    const block = SRC.slice(from, SRC.indexOf("@media (prefers-reduced-motion", from));
+    // 只看第一档：`rbg-tighter` 是 W5R3-B-02 加的下一档，它可以扣按钮，
+    // 但有 MIN_PULL_H=56 的底线，守门在 tighterFit.test.ts
+    const to = SRC.indexOf(".rbg-wrap.rbg-tighter", from);
+    const block = SRC.slice(from, to > from ? to : SRC.indexOf("@media (prefers-reduced-motion", from));
     expect(block.length).toBeGreaterThan(0);
     expect(block, "把控制键也压小了，热区会掉到 44px 以下").not.toMatch(/\.rbg-(pull|back|ctrl|toggle)\b[^{]*\{[^}]*height/);
     // 让出来的必须是空隙：内边距与块间距
