@@ -663,3 +663,74 @@ describe("PA-DM · 360px 热区与卡片文案", () => {
     handle.destroy();
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* R3-PA-DM-1 · 无尽刚破纪录，收场话不该还劝你去破它                       */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-16 · 无尽结算分「破了 / 没破」两种说法", () => {
+  /** `before` 是投这一轮之前的纪录，`best` 是把本轮算进去之后的 */
+  async function line(score: number, before: number, best: number): Promise<string> {
+    const { endlessLine } = await import("./index");
+    return endlessLine(score, before, best);
+  }
+
+  it("第一次玩就是历史最好：说新纪录，不再催人去刷新它", async () => {
+    // recordEndlessBest 回来的 best 已经把本轮算进去了，所以第一次玩它和 score 一样
+    const first = await line(30, 0, 30);
+    expect(first, "刚破纪录还在催人刷新").not.toContain("再来一次就能刷新它");
+    expect(first, "破了纪录却一句「新纪录」都没有").toContain("新纪录");
+    expect(first).toContain("30 分");
+  });
+
+  it("超过旧纪录就报新纪录，哪怕只多一分", async () => {
+    expect(await line(121, 120, 121)).toContain("新纪录");
+  });
+
+  it("只追平没超过：按没破算，报差距、鼓励再来一次", async () => {
+    const tie = await line(120, 120, 120);
+    expect(tie, "追平也报了新纪录").not.toContain("新纪录");
+    expect(tie).toContain("历史最好 120 分");
+  });
+
+  it("没追上就报差距，照旧鼓励再来一次", async () => {
+    const behind = await line(40, 120, 120);
+    expect(behind, "没破纪录却报了新纪录").not.toContain("新纪录");
+    expect(behind).toContain("40 分");
+    expect(behind).toContain("历史最好 120 分");
+    expect(behind).toContain("再来一次");
+  });
+
+  it("0 分不许算新纪录：第一次就掉光命也不该被夸破了纪录", async () => {
+    const zero = await line(0, 0, 0);
+    expect(zero, "0 分被当成了新纪录").not.toContain("新纪录");
+    expect(zero.length).toBeGreaterThan(6);
+  });
+
+  it("两种说法都过红线筛子，也不出现朵朵星星以外的角色", async () => {
+    for (const [s, bf, b] of [
+      [30, 0, 30],
+      [40, 120, 120],
+      [0, 0, 0],
+    ] as Array<[number, number, number]>) {
+      const text = await line(s, bf, b);
+      for (const bad of ["死", "血", "尸", "笨", "废", "活该"]) {
+        expect(text.includes(bad) ? `「${text}」里有「${bad}」` : "干净").toBe("干净");
+      }
+    }
+  });
+
+  it("无尽真跑一次：掉光命之后播报走的就是这一套说法", async () => {
+    const { mount } = await import("./index");
+    const lost: string[] = [];
+    const api = fakeApi().api;
+    const handle = mount({ ...api, onLose: (t: string) => lost.push(t) } as never);
+    byText("无尽迷宫")!.dispatch("click");
+    flushFrames(dom, 2, 120);
+    // 一动不动等着被抓完，命掉光就会收场
+    for (let i = 0; i < 900 && lost.length === 0; i++) flushFrames(dom, 1, 130);
+    expect(lost.length, "无尽跑到底也没收场").toBeGreaterThan(0);
+    expect(/新纪录|历史最好/.test(lost[0]), `播报没走 endlessLine：${lost[0]}`).toBe(true);
+    handle.destroy();
+  });
+});
