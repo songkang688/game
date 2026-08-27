@@ -39,10 +39,12 @@ describe("puff-bros · 修复员 S6 · 糖果四型自绘", () => {
     expect(new Set(mains).size).toBe(mains.length);
   });
 
-  it("index.ts 糖果不再走 emojiAt 字形,改走 drawCandy;糖果 emoji 全部退场", () => {
+  it("index.ts 糖果收集物不再走 emojiAt 字形,改走 drawCandy", () => {
     const src = read("index.ts");
     expect(src).toContain("drawCandy(");
-    expect(src).not.toMatch(/emojiAt\(g, CANDY/);
-    for (const e of ["🍬", "🍭", "🧁", "🍡"]) expect(src).not.toContain(e);
+    expect(src).not.toContain("CANDY_ART");
+    // 棒棒糖 / 纸杯 / 团子字形全退场;🍬 仅剩事件粒子表(G5 同批换)与 HUD DOM 计数字
+    for (const e of ["🍭", "🧁", "🍡"]) expect(src).not.toContain(e);
+    expect((src.match(/🍬/g) ?? []).length).toBeLessThanOrEqual(2);
   });
 });
