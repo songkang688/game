@@ -28,6 +28,8 @@ import {
   HUD_BTN_MIN_W,
   createDisposer,
   padMetrics,
+  canvasRoomPx,
+  stageRoomPx,
   parseLevelParam,
   resolveInitialLevel,
 } from "./runtime";
@@ -151,9 +153,9 @@ export const PH_CSS = `
   padding:5px 14px;font-size:13px;font-weight:800;color:#8A5A3C;box-shadow:0 3px 8px rgba(160,120,90,.25);
   pointer-events:none;opacity:0;transition:opacity .25s ease;max-width:90%;text-align:center;}
 .ph-toast.ph-on{opacity:1;}
-.ph-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;}
-.ph-pads[data-players="2"]{--k:40px;}
-.ph-pad{display:grid;grid-template-columns:repeat(4,var(--k));grid-auto-rows:var(--k);gap:4px;
+.ph-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;--cols:4;}
+.ph-pads[data-players="2"]{--cols:3;}
+.ph-pad{display:grid;grid-template-columns:repeat(var(--cols),var(--k));grid-auto-rows:var(--k);gap:4px;
   justify-content:center;}
 .ph-pad-name{grid-column:1/-1;font-size:11px;font-weight:800;color:#8A5A3C;text-align:center;
   height:auto;line-height:1.3;}
@@ -180,8 +182,9 @@ export const PH_CSS = `
   .ph-cv{height:178px;}
   /* 双人的两个摇杆并排,竖着省下不少地方,全都还给画面 */
   .ph-wrap[data-players="2"] .ph-cv{height:280px;}
+  /* 真正的边长由 padMetrics 逐档量出来写在行内,这里只是 JS 没跑起来时的兜底,不许低于 44 */
   .ph-pads{--k:46px;margin-top:6px;}
-  .ph-pads[data-players="2"]{--k:36px;}
+  .ph-pads[data-players="2"]{--k:44px;}
   .ph-chip{font-size:12px;padding:3px 7px;}
   .ph-hud{gap:4px;margin-bottom:4px;}
   .ph-bar{min-width:76px;height:18px;}
@@ -195,8 +198,8 @@ export const PH_CSS = `
 @media (max-height:620px){
   .ph-cv{height:138px;}
   .ph-wrap[data-players="2"] .ph-cv{height:224px;}
-  .ph-pads{--k:42px;margin-top:4px;}
-  .ph-pads[data-players="2"]{--k:34px;}
+  .ph-pads{--k:44px;margin-top:4px;}
+  .ph-pads[data-players="2"]{--k:44px;}
   .ph-tip{margin-top:4px;font-size:11px;}
 }
 
@@ -439,15 +442,27 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   // 360px 上摇杆(前三列)与清扫钮(第四列)之间永远隔着一个 gap,热区不缩到 44px 以下
   const layout = padMetrics(viewportWidth(), opts.players);
   pads.style.setProperty("--k", `${layout.key}px`);
+  pads.style.setProperty("--cols", String(layout.columns));
   pads.style.gap = `${layout.gap * 2}px`;
-  const PAD_KEYS: Array<{ act: InputName; label: string; cls?: string; aria: string; col: number; row: number }> = [
-    { act: "up", label: "⬆", aria: "跳", col: 2, row: 2 },
-    { act: "act", label: "💨", cls: "ph-key-act", aria: "冲刺清扫", col: 4, row: 2 },
-    { act: "left", label: "◀", aria: "往左", col: 1, row: 3 },
-    { act: "down", label: "⬇", aria: "蹲下", col: 2, row: 3 },
-    { act: "right", label: "▶", aria: "往右", col: 3, row: 3 },
-    { act: "sub", label: "🧹", cls: "ph-key-sub", aria: "扫一扫", col: 4, row: 3 },
-  ];
+  // 双人一行并排两盘,四列摊完一颗才 34–41px;砍成三列、动作键上提一行,四档全过 44px
+  const PAD_KEYS: Array<{ act: InputName; label: string; cls?: string; aria: string; col: number; row: number }> =
+    layout.actionsOwnRow
+      ? [
+          { act: "act", label: "💨", cls: "ph-key-act", aria: "冲刺清扫", col: 1, row: 2 },
+          { act: "up", label: "⬆", aria: "跳", col: 2, row: 2 },
+          { act: "sub", label: "🧹", cls: "ph-key-sub", aria: "扫一扫", col: 3, row: 2 },
+          { act: "left", label: "◀", aria: "往左", col: 1, row: 3 },
+          { act: "down", label: "⬇", aria: "蹲下", col: 2, row: 3 },
+          { act: "right", label: "▶", aria: "往右", col: 3, row: 3 },
+        ]
+      : [
+          { act: "up", label: "⬆", aria: "跳", col: 2, row: 2 },
+          { act: "act", label: "💨", cls: "ph-key-act", aria: "冲刺清扫", col: 4, row: 2 },
+          { act: "left", label: "◀", aria: "往左", col: 1, row: 3 },
+          { act: "down", label: "⬇", aria: "蹲下", col: 2, row: 3 },
+          { act: "right", label: "▶", aria: "往右", col: 3, row: 3 },
+          { act: "sub", label: "🧹", cls: "ph-key-sub", aria: "扫一扫", col: 4, row: 3 },
+        ];
   const padButtons: Array<{ btn: HTMLButtonElement; player: number; act: InputName }> = [];
   for (let pi = 0; pi < opts.players; pi++) {
     const pad = el("div", "ph-pad");
@@ -493,6 +508,16 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const tip = el("div", "ph-tip", opts.tip);
   wrap.appendChild(tip);
   host.appendChild(wrap);
+
+  /** 舞台矮到摇杆掉出裁切线时,把超出的那一截从画布身上扣掉 */
+  function fitCanvas(): void {
+    canvas.style.height = "";
+    const next = canvasRoomPx(wrap.scrollHeight, canvas.offsetHeight, stageRoomPx(wrap));
+    if (next === null) return;
+    canvas.style.height = `${next}px`;
+  }
+  fitCanvas();
+  bag.listen(window, "resize", fitCanvas);
 
   const g = canvas.getContext("2d");
 
@@ -1267,6 +1292,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     raf = bag.raf(requestAnimationFrame(frame));
   }
   raf = bag.raf(requestAnimationFrame(frame));
+  // HUD 的目标条、桶图例是挂上去之后才量得准的,第一帧再钳一次才收得干净
+  bag.raf(requestAnimationFrame(fitCanvas));
 
   return {
     get world() {

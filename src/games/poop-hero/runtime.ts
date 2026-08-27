@@ -97,10 +97,25 @@ export function createDisposer(env: DisposerEnv = {}): Disposer {
 
 /** 单人时每个按键的最小热区(手指按得准的下限) */
 export const MIN_HOT = 44;
-/** 双人分屏时两个摇杆挤一行,热区放宽到这个数 */
+/**
+ * 双人分屏时两个摇杆挤一行,热区曾经放宽到这个数。
+ *
+ * 现在不再拿它当下限了(见 `padMetrics`),留着只为讲清楚放宽换来的是什么:
+ * 390/360/320 三档上实测 41/37/34px,颗颗低于手指按得准的 44px,
+ * 两个孩子四只手同时按,按空是常态(W5R2-C-02 阻断)。
+ */
 export const MIN_HOT_DUO = 34;
-/** 按键网格的列数:← ↓ → 占前三列,清扫 / 冲刺放第四列 */
+/** 单人按键网格的列数:← ↓ → 占前三列,清扫 / 冲刺放第四列 */
 export const PAD_COLUMNS = 4;
+/**
+ * 双人按键网格的列数。
+ *
+ * 一行要并排塞下两个摇杆,四列怎么算都不够:360px 上每盘只分到 163px,
+ * 四列摊完一颗才 37px。砍成三列——动作键从第四列挪到上面一行——
+ * 同样的 163px 摊三列是 51px,320px 上也有 45px,四档视口全部过 44。
+ * 换来的代价是每盘竖着多占 8–15px,双人画布那一档一起收窄补回来。
+ */
+export const PAD_COLUMNS_DUO = 3;
 
 /**
  * HUD 那排小药丸按钮(⏸ 暂停 / 📖 攻略 …)的最小热区。
@@ -124,15 +139,20 @@ export interface PadMetrics {
   padWidth: number;
   /** 两个摇杆盘 + 中间空隙的总宽 */
   totalWidth: number;
-  /** 摇杆(前三列)的右边缘 */
+  /** 摇杆的右边缘(单人是前三列,双人是前两列) */
   joystickRight: number;
-  /** 动作键(第四列)的左边缘;必须大于 joystickRight,不然就叠上了 */
+  /** 动作键那一列的左边缘;必须大于 joystickRight,不然就叠上了 */
   actionLeft: number;
+  /** 动作键是不是挪到了自己那一行(双人三列版就是这样) */
+  actionsOwnRow: boolean;
 }
 
 /**
  * 算一遍摇杆与清扫钮的尺寸。
- * 360px 的窄屏上单人热区仍然 ≥ 44px,而且摇杆和清扫钮之间永远隔着一个 gap。
+ *
+ * 单人四列、双人三列,两档的热区都 ≥ 44px:
+ * 320/360/390 上单人 44/52/56、双人 45/51/56。
+ * 单人版摇杆和清扫钮之间永远隔着一个 gap;双人版动作键单独占一行,列上不相邻。
  */
 export function padMetrics(viewportW: number, players: 1 | 2 = 1): PadMetrics {
   const width = Number.isFinite(viewportW) && viewportW > 0 ? viewportW : 360;
@@ -141,24 +161,68 @@ export function padMetrics(viewportW: number, players: 1 | 2 = 1): PadMetrics {
   const between = players === 2 ? 10 : 0;
   const avail = Math.max(200, width - sidePadding * 2 - between);
   const perPad = avail / players;
-  const floor = players === 2 ? MIN_HOT_DUO : MIN_HOT;
-  const raw = Math.floor((perPad - gap * (PAD_COLUMNS - 1)) / PAD_COLUMNS);
-  const key = Math.max(floor, Math.min(56, raw));
-  const padWidth = key * PAD_COLUMNS + gap * (PAD_COLUMNS - 1);
+  const columns = players === 2 ? PAD_COLUMNS_DUO : PAD_COLUMNS;
+  const raw = Math.floor((perPad - gap * (columns - 1)) / columns);
+  const key = Math.max(MIN_HOT, Math.min(56, raw));
+  const padWidth = key * columns + gap * (columns - 1);
   return {
     key,
     gap,
-    columns: PAD_COLUMNS,
+    columns,
     padWidth,
     totalWidth: padWidth * players + between,
-    joystickRight: key * 3 + gap * 2,
-    actionLeft: key * 3 + gap * 3,
+    joystickRight: key * (columns - 1) + gap * (columns - 2),
+    actionLeft: key * (columns - 1) + gap * (columns - 1),
+    actionsOwnRow: players === 2,
   };
 }
 
 /** 摇杆和清扫钮有没有叠在一起(用例直接问它) */
 export function padOverlaps(m: PadMetrics): boolean {
+  // 双人版动作键在自己那一行,和摇杆连列都不共用,压根谈不上叠
+  if (m.actionsOwnRow) return false;
   return m.actionLeft < m.joystickRight;
+}
+
+/** 画布再收也得留这么高,不然看不清脚下的路 */
+export const MIN_CANVAS_H = 130;
+
+/**
+ * 舞台矮到摇杆掉出屏幕时,画布该收到多高。
+ *
+ * 为什么不能继续靠 `@media (max-height:…)`:媒体查询问的是**屏高**,
+ * 可 `.game-stage` 是 `overflow:hidden` 且定高的——360×640 的机器屏高 640(>620,
+ * 那一档媒体查询压根不触发),这一款却只分到 530px,平台顶栏再吃掉 116px。
+ * 双人版画布按屏高留了 280px,结果摇杆整排 `◀ ⬇ ▶` 掉在裁切线以下,
+ * 三列改造把热区抬到 45–51px 之后,多出来的那 8–15px 更是雪上加霜。
+ *
+ * 按舞台**真正看得见的那一段**摊,超出多少就从画布身上扣多少。
+ * 返回 null 表示装得下,照原样别管。
+ */
+export function canvasRoomPx(
+  wrapHeight: number,
+  canvasHeight: number,
+  roomPx: number,
+  minCanvas = MIN_CANVAS_H,
+): number | null {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  if (!Number.isFinite(wrapHeight) || !Number.isFinite(canvasHeight) || canvasHeight <= 0) return null;
+  const over = wrapHeight - roomPx;
+  if (over <= 1) return null;
+  return Math.max(minCanvas, Math.floor(canvasHeight - over));
+}
+
+/** 量一次这个节点头顶到最近那条裁切线之间还剩多少(量不了就返回 Infinity) */
+export function stageRoomPx(el: HTMLElement): number {
+  const view = el.ownerDocument?.defaultView ?? null;
+  if (!view || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
+  const bottoms: number[] = [];
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const oy = view.getComputedStyle(p).overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+  }
+  if (bottoms.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(...bottoms) - el.getBoundingClientRect().top;
 }
 
 // ---------------------------------------------------------------------------
