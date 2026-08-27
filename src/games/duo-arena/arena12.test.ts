@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   ARENA_AI_BOMB_SLIP,
   ARENA_AI_HINTS,
@@ -357,5 +358,50 @@ describe("1.2 左右 / 上下没有系统性优势", () => {
     const rate = winTop / played;
     expect(rate).toBeGreaterThanOrEqual(0.4);
     expect(rate).toBeLessThanOrEqual(0.6);
+  });
+});
+
+/**
+ * 1.2 监督修复员补的守门用例:钉住「无尽守擂到底走哪一条梯子」。
+ *
+ * 本款有**两套**守擂升档实现,而且节奏不一样:
+ *  - `arena12.ts` 的 `defenseAiLevel()`:每 **两** 场升一档;
+ *  - `match.ts` 的 `keepSetup()`:每 **一** 场升一档。
+ * 真正接进 `index.ts` 的是后者(`arena12` 这边只有 `bestStreak` 被用到)。
+ * 攻略里写的「守擂一场比一场强」说的也是后者。
+ *
+ * 两套并存本身不会让玩家出错,但下一个人很可能去调那条没接线的,
+ * 调完发现游戏里没反应。这里把「谁接线、攻略跟谁一致」写成断言,
+ * 免得有一天两条梯子悄悄换了位置。已在 R2 报告里列为交主管的清理项。
+ */
+describe("守擂无尽:接线的是哪一条梯子", () => {
+  const index = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  it("index.ts 用的是 match.ts 的 keepSetup,不是 arena12 的 defenseAiLevel", () => {
+    expect(index).toContain("keepSetup");
+    expect(index, "arena12 的守擂梯子并没有接线,别在这里出现").not.toMatch(/defenseAiLevel|defenseStage|defenseNext/);
+    // arena12 这边真正被用到的只有连胜纪录
+    expect(index).toContain("bestStreak");
+  });
+
+  it("接线的那条梯子确实「一场比一场强」,和攻略里写的一致", async () => {
+    const { keepSetup } = await import("./match");
+    const { AI_SPECS } = await import("./ai");
+    const order = ["rookie", "normal", "pro", "master"];
+    let prev = -1;
+    for (let bout = 1; bout <= 12; bout++) {
+      const at = order.indexOf(keepSetup(bout).ai);
+      expect(at, `第 ${bout} 场的档位不在四档里`).toBeGreaterThanOrEqual(0);
+      expect(at, `第 ${bout} 场比上一场还弱`).toBeGreaterThanOrEqual(prev);
+      prev = at;
+      expect(AI_SPECS[keepSetup(bout).ai], `第 ${bout} 场取不到人机参数`).toBeTruthy();
+    }
+    // 前四场就把四档走满,这正是「一场比一场强」而不是「两场升一档」
+    expect(order.indexOf(keepSetup(4).ai)).toBe(3);
+
+    const guide = (await import("./guide")).default;
+    const keepChapter = guide.entries.find((e) => e.title.includes("无尽守擂"));
+    expect(keepChapter, "攻略里没有守擂这一章").toBeTruthy();
+    expect(keepChapter!.tips.join(""), "攻略没说清一场比一场强").toContain("一场比一场强");
   });
 });
