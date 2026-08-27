@@ -484,6 +484,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     return Boolean(seat && seat.human);
   }
 
+  /** 电脑自己走的时候节奏收紧一半:人在旁边看，不用陪它「思考」 */
+  function beat(ms: number): number {
+    return humanTurn() ? ms : Math.round(ms * 0.5);
+  }
+
   function stackedAt(color: Color, p: number): boolean {
     if (p < 0 || p >= RING_LEN) return false;
     let n = 0;
@@ -571,7 +576,8 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     render();
     opts.sfx("tap");
     const value = nextDice();
-    const frames = spinFrames(opts.seed, rolls, reduced);
+    // 电脑的骰子也要转，只是少转几圈——绝不直接跳出数字
+    const frames = spinFrames(opts.seed, rolls, reduced || !humanTurn());
     let f = 0;
     diceBox.classList.add("fc-dice-spin");
     const tick = (): void => {
@@ -595,7 +601,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       state.streak = 0;
       opts.sfx("oops");
       say(`连着 ${SIX_STREAK_LIMIT} 个 6，这一手作废，换下一位。`);
-      after(BEAT_MS * 2, () => endTurn(false));
+      after(beat(BEAT_MS * 2), () => endTurn(false));
       return;
     }
     state.streak = streak.streak;
@@ -604,7 +610,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     picked = 0;
     if (moves.length === 0) {
       say(`掷到 ${value}，这一手没有能动的飞机，先过。`);
-      after(BEAT_MS * 2, () => endTurn(streak.again));
+      after(beat(BEAT_MS * 2), () => endTurn(streak.again));
       return;
     }
     const seat = seatOf.get(color);
@@ -613,14 +619,14 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       render();
       const pick = chooseMove(state, value, seat?.tier ?? "normal") ?? moves[0];
       say(`${COLOR_INFO[color].name} 掷到 ${value}。`);
-      after(BEAT_MS, () => runMove(pick, streak.again));
+      after(beat(BEAT_MS), () => runMove(pick, streak.again));
       return;
     }
     if (moves.length === 1) {
       phase = "choosing";
       render();
       say(`掷到 ${value}。${movePreview(state, moves[0], value)}`);
-      after(BEAT_MS, () => runMove(moves[0], streak.again));
+      after(beat(BEAT_MS), () => runMove(moves[0], streak.again));
       return;
     }
     phase = "choosing";
@@ -657,8 +663,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
 
   /* --------------------------- 走子 --------------------------- */
 
-  function runMove(move: Move, again: boolean): void {
-    if (destroyed || phase === "over") return;
+  function runMove(move: Move | undefined, again: boolean): void {
+    // 只有「正在挑飞机」这一刻才走得动:排在定时器里的自动走子，
+    // 要是玩家抢先自己点了一架，回来时这一手已经翻篇，直接作废。
+    if (destroyed || !move || phase !== "choosing") return;
     phase = "moving";
     const res: Landing =
       move.kind === "takeOff" ? resolveTakeOff(state, move.plane) : resolveLanding(state, move.plane, dice);
@@ -678,7 +686,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       if (champ !== null) return finish("win", true);
       if (outOfDice()) return finish("dice", false);
       const extra = move.kind === "takeOff" ? takeOffGrantsExtra(dice, state.rules) : again;
-      after(BEAT_MS, () => endTurn(extra));
+      after(beat(BEAT_MS), () => endTurn(extra));
     });
   }
 
@@ -746,7 +754,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     } else {
       say(`${COLOR_INFO[currentColor(state)].name} 正在想…`);
       render();
-      after(BEAT_MS, () => {
+      after(beat(BEAT_MS), () => {
         if (phase === "idle") doRoll();
       });
     }
@@ -786,7 +794,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     } else {
       pauseEl?.remove();
       pauseEl = null;
-      if (phase === "idle" && !humanTurn()) after(BEAT_MS, () => phase === "idle" && doRoll());
+      if (phase === "idle" && !humanTurn()) after(beat(BEAT_MS), () => phase === "idle" && doRoll());
     }
     render();
   }
@@ -828,7 +836,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   window.addEventListener("keydown", onKey);
 
   render();
-  if (!humanTurn()) after(BEAT_MS * 2, () => phase === "idle" && doRoll());
+  if (!humanTurn()) after(beat(BEAT_MS * 2), () => phase === "idle" && doRoll());
 
   return {
     destroy() {

@@ -419,6 +419,41 @@ describe("牌桌:挂载、走完一局、destroy 干净", () => {
     world.restore();
   });
 
+  it("只有一架能走时自动走子，玩家抢先按了确认也不会走两回", () => {
+    vi.useFakeTimers();
+    const world = installDom();
+    const table = createTable(world.root as unknown as HTMLElement, {
+      seats: [
+        { color: 0, human: "duo", tier: "pro" },
+        { color: 2, human: null, tier: "rookie", idle: true }
+      ],
+      rules: CLASSIC_RULES,
+      setup: [[10, BASE, BASE, BASE], [], [], []],
+      dice: [3, 2, 4, 1, 5, 3],
+      seed: 5,
+      goalText: "测试局",
+      sfx: () => undefined,
+      onOver: () => undefined
+    });
+
+    world.press("f");
+    // 骰子转完，只有一架能走，界面排了一个自动走子的定时器
+    vi.advanceTimersByTime(800);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    // 玩家手快，抢在定时器前面自己确认了一次
+    expect(() => world.press("f")).not.toThrow();
+    expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
+    // 这一架只走了 3 步，没有被走成 6 步
+    const label = world.root
+      .querySelectorAll(".fc-token")
+      .map((el) => el.getAttribute("aria-label") ?? "")
+      .find((t) => t.includes("第 14 格"));
+    expect(label).toBeTruthy();
+
+    table.destroy();
+    world.restore();
+  });
+
   it("残局关里「不动」的座位只当路障:轮不到它掷骰，飞机一格都不挪", () => {
     vi.useFakeTimers();
     const world = installDom();
