@@ -7,6 +7,7 @@ import {
   FAN_VISIBLE,
   FLY_MS,
   MELD_MS,
+  MATCH_HANDS,
   MJ_CONSTS,
   MJ_CSS,
   claimButtonLabel,
@@ -534,6 +535,33 @@ describe("闯关残局", () => {
     handle.destroy();
   });
 
+  it("Esc 暂停,摸牌停下来;再按一次接着摸", () => {
+    const { stage, handle } = play(0);
+    vi.advanceTimersByTime(400);
+    const drawn = stage.byClass("mj-drawn")[0];
+    drawn.fire("click");
+    pressKey("Escape");
+    expect(stage.byClass("mj-sheet-pause").length).toBe(1);
+    // 暂停期间不会自动摸下一张
+    vi.advanceTimersByTime(4000);
+    expect(stage.byClass("mj-drawn").length).toBe(0);
+    pressKey("Escape");
+    expect(stage.byClass("mj-sheet-pause").length).toBe(0);
+    vi.advanceTimersByTime(400);
+    expect(stage.byClass("mj-drawn").length).toBe(1);
+    handle.destroy();
+  });
+
+  it("暂停的时候点牌不生效,牌一张都不会少", () => {
+    const { stage, handle } = play(0);
+    vi.advanceTimersByTime(400);
+    pressKey("Escape");
+    const before = stage.byClass("mj-hand")[0].byClass("mj-tile").length;
+    stage.byClass("mj-hand")[0].byClass("mj-tile")[0].fire("click");
+    expect(stage.byClass("mj-hand")[0].byClass("mj-tile").length).toBe(before);
+    handle.destroy();
+  });
+
   it("destroy 之后监听撤干净、界面摘掉、定时器不再回调", () => {
     const stage = new FakeEl("div");
     const before = keyListenerCount();
@@ -722,6 +750,22 @@ describe("四人牌桌", () => {
     tile?.fire("click");
     expect(live.state.seats[0].discards.length).toBe(1);
     live.destroy();
+  });
+
+  it("听牌提示默认开着,对战里可以关掉", () => {
+    const { host, live } = table(SOLO);
+    const btn = (): FakeEl =>
+      host.byClass("mj-btn").find((b) => b.textContent.includes("提示")) as FakeEl;
+    expect(btn().textContent).toContain("开");
+    btn().fire("click");
+    expect(btn().textContent).toContain("关");
+    btn().fire("click");
+    expect(btn().textContent).toContain("开");
+    live.destroy();
+  });
+
+  it("一圈是四盘快棋,不是国标那十六盘", () => {
+    expect(MATCH_HANDS).toBe(4);
   });
 
   it("destroy 之后监听撤干净,定时器也不再推进牌局", () => {

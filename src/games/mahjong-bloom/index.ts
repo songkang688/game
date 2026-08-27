@@ -52,6 +52,8 @@ export const FAN_STEP_MS = 140;
 export const FAN_VISIBLE = 6;
 /** AI 思考的停顿,让孩子看得清谁在动 */
 const AI_THINK_MS = 460;
+/** 一场对战打几盘。国标一局是四圈十六盘,小朋友坐不住,这里用「一圈四盘」的快棋 */
+export const MATCH_HANDS = 4;
 
 /** 本款全部样式。不动 `src/styles.css`,免得跟同窗并行的档撞车;窄屏红线由 index.test.ts 巡检 */
 export const MJ_CSS = `
@@ -378,6 +380,7 @@ export function mountPuzzle(
   let cursor = 0;
   let wasted = 0;
   let flyRiver = false;
+  let paused = false;
 
   const wrap = document.createElement("div");
   wrap.className = "mj-wrap";
@@ -418,6 +421,11 @@ export function mountPuzzle(
 
   function draw(): void {
     if (destroyed || settled) return;
+    if (paused) {
+      // 暂停时不摸牌,等继续了再接着摸
+      timers.after(140, draw);
+      return;
+    }
     const t = wall.shift();
     if (t === undefined) {
       finish(false);
@@ -430,7 +438,7 @@ export function mountPuzzle(
   }
 
   function play(tile: number): void {
-    if (destroyed || settled || drawn < 0) return;
+    if (destroyed || settled || paused || drawn < 0) return;
     if (tile === drawn) {
       drawn = -1;
     } else {
@@ -512,7 +520,12 @@ export function mountPuzzle(
     const floor = document.createElement("span");
     floor.className = "mj-badge";
     floor.textContent = `${cfg.floor} 番起和`;
-    top.append(goal, left, wind, floor);
+    const pause = document.createElement("button");
+    pause.type = "button";
+    pause.className = "mj-btn mj-ghost";
+    pause.textContent = paused ? "▶ 继续" : "⏸ 暂停";
+    pause.addEventListener("click", togglePause);
+    top.append(goal, left, wind, floor, pause);
 
     board.innerHTML = "";
     const riverBox = document.createElement("div");
@@ -577,7 +590,31 @@ export function mountPuzzle(
     }
     board.appendChild(acts);
 
+    if (paused) {
+      if (!wrap.querySelector(".mj-sheet-pause")) {
+        const box = document.createElement("div");
+        box.className = "mj-sheet mj-sheet-pause";
+        const t = document.createElement("div");
+        t.className = "mj-sheet-t";
+        t.textContent = "☕ 歇一会儿";
+        const s = document.createElement("div");
+        s.className = "mj-sheet-s";
+        s.textContent = "牌都给你留着,想好了再按继续。";
+        const go = document.createElement("button");
+        go.type = "button";
+        go.className = "mj-open";
+        go.textContent = "▶ 接着摸牌";
+        go.addEventListener("click", togglePause);
+        box.append(t, s, go);
+        wrap.appendChild(box);
+      }
+    } else {
+      wrap.querySelector(".mj-sheet-pause")?.remove();
+    }
+
     if (settled) {
+      msg.textContent = "";
+    } else if (paused) {
       msg.textContent = "";
     } else if (canHuNow()) {
       msg.textContent = "番数够啦,按「和牌」就能开花!";
@@ -589,8 +626,21 @@ export function mountPuzzle(
     }
   }
 
+  function togglePause(): void {
+    if (destroyed || settled) return;
+    paused = !paused;
+    ctx.sfx("tap");
+    render();
+  }
+
   const onKeyDown = (e: KeyboardEvent): void => {
     if (destroyed || settled) return;
+    if (e.key === "Escape") {
+      togglePause();
+      e.preventDefault();
+      return;
+    }
+    if (paused) return;
     const act = keyAction(e.key);
     if (!act) return;
     const total = hand.length + (drawn >= 0 ? 1 : 0);
@@ -672,6 +722,8 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
   let destroyed = false;
   let paused = false;
   let finished = false;
+  /** 听牌提示:默认开着,对战里嫌它剧透可以关掉 */
+  let hints = opts.hints;
   /** 等着人类拿主意的鸣牌;先问座位小的那个 */
   let pendingQueue: Pending[] = [];
   const collected: Array<{ seat: number; opt: ClaimOption }> = [];
@@ -935,6 +987,15 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
     const round = document.createElement("span");
     round.className = "mj-badge";
     round.textContent = `${windName(state.roundWind)}圈`;
+    const hint = document.createElement("button");
+    hint.type = "button";
+    hint.className = "mj-btn mj-ghost";
+    hint.textContent = hints ? "💡 提示 开" : "💡 提示 关";
+    hint.addEventListener("click", () => {
+      opts.sfx("tap");
+      hints = !hints;
+      render();
+    });
     const pause = document.createElement("button");
     pause.type = "button";
     pause.className = "mj-btn mj-ghost";
@@ -944,7 +1005,7 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
       paused = !paused;
       render();
     });
-    top.append(wall, floor, round, pause);
+    top.append(wall, floor, round, hint, pause);
 
     board.innerHTML = "";
     // 对家在上,上下家在中间那行的两侧,自己永远在下方
@@ -1043,7 +1104,7 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
 
     const myTurn = !finished && !paused && state.phase === "discard" && state.turn === seat;
     // 听牌提示挺费算力(34 张牌逐一试胡),只在轮到自己时算一次
-    const waits = opts.hints && myTurn ? waitingTiles(s.hand, s.melds) : [];
+    const waits = hints && myTurn ? waitingTiles(s.hand, s.melds) : [];
     const cur = cursors[seat] ?? 0;
     const handBox = document.createElement("div");
     handBox.className = "mj-hand";
@@ -1063,13 +1124,13 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
         tileEl(s.drawn, {
           drawn: true,
           cursor: myTurn && cur >= s.hand.length,
-          hot: opts.hints && isHu(fullHand(s), null, s.melds),
+          hot: hints && isHu(fullHand(s), null, s.melds),
           onClick: myTurn ? () => humanPlay(seat, s.drawn) : undefined
         })
       );
     }
     box.appendChild(handBox);
-    if (opts.hints && waits.length > 0 && myTurn) {
+    if (hints && waits.length > 0 && myTurn) {
       const tip = document.createElement("div");
       tip.className = "mj-msg";
       tip.style.margin = "0";
@@ -1253,6 +1314,9 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   let tier: AiTier = "normal";
   let round = 1;
   let total = 0;
+  /** 对战 / 双人是「一圈四盘」的快棋:当前第几盘 + 四家累计花分 */
+  let handNo = 1;
+  let matchScore = [0, 0, 0, 0];
   let best = save.getGameProgress(meta.id).endlessBest;
 
   back.addEventListener("click", () => {
@@ -1317,13 +1381,14 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   function start(): void {
     if (mode === "versus") {
       picker(
-        "挑一位棋友坐下,八番起和",
+        `挑一位棋友坐下,八番起和,一圈 ${MATCH_HANDS} 盘`,
         ["🐣 菜鸟", "🙂 普通", "😎 高手", "🔥 地狱"],
         (i) => {
           tier = (["rookie", "normal", "pro", "hell"] as AiTier[])[i];
+          resetMatch();
           runVersus();
         },
-        "朵朵坐下方,另外三家是本机棋友。点手里的牌就能打出去。"
+        "朵朵坐下方,另外三家是本机棋友。点手里的牌就能打出去,四盘轮一圈庄。"
       );
       for (const t of ["rookie", "normal", "pro", "hell"] as AiTier[]) {
         const line = document.createElement("div");
@@ -1346,21 +1411,34 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       return;
     }
     picker(
-      "朵朵和星星各坐一家,另外两家是棋友",
+      `朵朵和星星各坐一家,另外两家是棋友,一圈 ${MATCH_HANDS} 盘`,
       ["▶ 开局"],
-      () => runDuo(),
+      () => {
+        resetMatch();
+        runDuo();
+      },
       "朵朵用 WASD 挑牌、F 打出、G 吃碰杠胡;星星用方向键、L 打出、K 吃碰杠胡。Esc 暂停。"
     );
   }
 
+  /** 一盘打完的标题与那句话:赢了夸,没赢也只鼓励 */
+  function handLine(st: TableState, me: number): { title: string; sub: string } {
+    const r = st.result;
+    const won = r?.kind === "hu" && r.winner === me;
+    if (won) return { title: "开花啦!", sub: `${r?.points ?? 0} 番,这盘进账 ${st.seats[me].score} 花分。` };
+    if (r?.kind === "draw") return { title: "这一盘平局", sub: "牌墙摸完了,谁都不丢分,下一盘再来。" };
+    return { title: "这一盘到此为止", sub: `${r?.line ?? ""} 这局差一点点,下一局把番凑够就好啦。` };
+  }
+
   function runVersus(): void {
     clearLive();
-    chip.textContent = `🀄 对手:${AI_TIER_LABELS[tier]}`;
+    chip.textContent = `🀄 ${AI_TIER_LABELS[tier]} · 第 ${handNo}/${MATCH_HANDS} 盘`;
     const seed = Math.floor(Math.random() * 1e9);
     live = createLive(stage, {
       seed,
       floor: 8,
-      dealer: 0,
+      // 四盘轮一圈庄,每人都当一次庄家
+      dealer: (handNo - 1) % 4,
       roundWind: 1,
       hints: true,
       seats: [
@@ -1371,19 +1449,35 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       ],
       sfx: (n) => api.play(n),
       onOver: (st) => {
-        const r = st.result;
-        const won = r?.kind === "hu" && r.winner === 0;
-        if (won) api.addStars(2);
-        showOver(
-          won ? "开花啦!" : r?.kind === "draw" ? "这一盘平局" : "这一盘到此为止",
-          won
-            ? `${r?.points ?? 0} 番,拿到 ${st.seats[0].score} 花分。`
-            : `${r?.line ?? ""} 这局差一点点,下一局把番凑够就好啦。`,
-          "🔁 再来一盘",
-          runVersus
-        );
+        for (let i = 0; i < 4; i++) matchScore[i] += st.seats[i].score;
+        const { title, sub } = handLine(st, 0);
+        if (st.result?.kind === "hu" && st.result.winner === 0) api.addStars(1);
+        if (handNo < MATCH_HANDS) {
+          handNo++;
+          showOver(title, `${sub} 累计 ${matchScore[0]} 花分,还剩 ${MATCH_HANDS - handNo + 1} 盘。`, "▶ 打下一盘", runVersus);
+          return;
+        }
+        showOver("一圈四盘打完啦", matchSummary(0), "🔁 再打一圈", () => {
+          resetMatch();
+          runVersus();
+        });
       }
     });
+  }
+
+  /** 一圈打完的成绩单:名次靠花分排,并列按座位 */
+  function matchSummary(me: number): string {
+    const rank = matchScore.map((s, i) => ({ s, i })).sort((a, b) => b.s - a.s || a.i - b.i);
+    const place = rank.findIndex((x) => x.i === me) + 1;
+    if (place === 1) api.addStars(3);
+    return place === 1
+      ? `朵朵一共 ${matchScore[me]} 花分,四盘下来排第一,今天手气真好!`
+      : `朵朵一共 ${matchScore[me]} 花分,排第 ${place}。下一圈把番凑够,名次就上来了。`;
+  }
+
+  function resetMatch(): void {
+    handNo = 1;
+    matchScore = [0, 0, 0, 0];
   }
 
   function runEndless(): void {
@@ -1436,12 +1530,12 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function runDuo(): void {
     clearLive();
-    chip.textContent = "👫 朵朵 WASD+F/G · 星星 方向键+L/K";
+    chip.textContent = `👫 第 ${handNo}/${MATCH_HANDS} 盘 · 朵朵 WASD+F/G · 星星 方向键+L/K`;
     const seed = Math.floor(Math.random() * 1e9);
     live = createLive(stage, {
       seed,
       floor: 6,
-      dealer: 0,
+      dealer: (handNo - 1) % 4,
       roundWind: 1,
       hints: true,
       seats: [
@@ -1452,15 +1546,26 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       ],
       sfx: (n) => api.play(n),
       onOver: (st) => {
-        const duoScore = st.seats[0].score;
-        const starScore = st.seats[2].score;
+        for (let i = 0; i < 4; i++) matchScore[i] += st.seats[i].score;
+        const done = handNo >= MATCH_HANDS;
+        const duoScore = matchScore[0];
+        const starScore = matchScore[2];
         const line =
           duoScore === starScore
             ? "朵朵和星星打成平手,再来一盘分高下!"
             : duoScore > starScore
-              ? `朵朵 ${duoScore} 分,星星 ${starScore} 分,这盘朵朵领先。`
-              : `星星 ${starScore} 分,朵朵 ${duoScore} 分,这盘星星领先。`;
-        showOver("这一盘结束啦", line, "🔁 再来一盘", runDuo);
+              ? `朵朵 ${duoScore} 分,星星 ${starScore} 分,朵朵暂时领先。`
+              : `星星 ${starScore} 分,朵朵 ${duoScore} 分,星星暂时领先。`;
+        if (!done) {
+          handNo++;
+          showOver("这一盘结束啦", `${line} 还剩 ${MATCH_HANDS - handNo + 1} 盘。`, "▶ 打下一盘", runDuo);
+          return;
+        }
+        api.addStars(2);
+        showOver("一圈四盘打完啦", `${line} 两个人都很厉害,再来一圈吧!`, "🔁 再打一圈", () => {
+          resetMatch();
+          runDuo();
+        });
       }
     });
   }
