@@ -14,7 +14,7 @@
  * 这套说法不是「我觉得能过」:`levels.test.ts` 用 `ai.ts` 的高手策略当固定策略,
  * 188 关一关一关真跑一遍,跑不到目标就红。
  */
-import { TOTAL_LEVELS, type Chapter } from "../level99";
+import { TOTAL_LEVELS, assertTotal, type Chapter } from "../level99";
 import {
   EMPTY,
   applyHazards,
@@ -35,6 +35,9 @@ export const CHAPTERS: Chapter[] = [
   { name: "限步挑战", emoji: "⏳", color: "#E3F2DC", desc: "步数是有限的,每一步都得合得上算。", size: 24 },
   { name: "合成杯", emoji: "🏆", color: "#FDE7D6", desc: "4096 与竞速。学过的全用上,和假人比谁先到。", size: 24 }
 ];
+
+// 章节加起来必须正好 188:加减关数时在这里就炸,不用等跑到首页才发现。
+assertTotal(CHAPTERS, 188, "merge-2048");
 
 export interface MergeLevel {
   /** 0 基关号 */
