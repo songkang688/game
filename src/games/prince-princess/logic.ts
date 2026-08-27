@@ -399,6 +399,11 @@ export interface World {
   kills: number;
   enemyTotal: number;
   gemsTaken: number;
+  /** 上面三项里,真人自己那一份(一个人玩的时候搭档的那份不算) */
+  playerKills: number;
+  playerGems: number;
+  /** 真人自己打中怪 / 首领的次数 —— 用来判「这一关是不是搭档一个人打完的」 */
+  playerHits: number;
   status: WorldStatus;
   message: string;
   events: WorldEvent[];
@@ -507,6 +512,9 @@ export function createWorld(def: LevelDef, players: 1 | 2 = 1): World {
     kills: 0,
     enemyTotal: def.enemies.length,
     gemsTaken: 0,
+    playerKills: 0,
+    playerGems: 0,
+    playerHits: 0,
     status: "playing",
     message: "",
     events: [],
@@ -556,6 +564,16 @@ export function meleeBox(h: HeroState): Box | null {
     y0: h.y - HERO_H - MELEE_LIFT,
     y1: h.y + 8,
   };
+}
+
+/**
+ * 这一位现在是真人在操作吗。
+ *
+ * 两个人玩的时候两位都是真人;一个人玩的时候只有 `active` 那位是,
+ * 另一位由 `botInput` 托管 —— 搭档的战果不能记在真人头上。
+ */
+export function humanHero(w: World, heroIndex: number): boolean {
+  return w.players === 2 || heroIndex === w.active;
 }
 
 /** 打倒的小怪比例(0..1);没有小怪的关直接算 1 */
@@ -652,7 +670,10 @@ function defeatEnemy(w: World, e: EnemyState, by: HeroState | null): void {
   e.alive = false;
   e.fade = 0.6;
   w.kills++;
-  if (by) by.kills++;
+  if (by) {
+    by.kills++;
+    if (humanHero(w, by.index)) w.playerKills++;
+  }
   pushEvent(w, "defeat", e.x, e.y - 20, by?.index);
   if (doorOpen(w) && !w.boss) pushEvent(w, "door", w.def.goalX, -40);
 }
@@ -668,6 +689,7 @@ function damageEnemy(w: World, e: EnemyState, amount: number, by: DamageKind, he
   }
   e.hp -= amount;
   e.hurtT = 0.22;
+  if (hero && humanHero(w, hero.index)) w.playerHits++;
   pushEvent(w, "hit", e.x, e.y - 24, hero?.index);
   if (e.hp <= 0) defeatEnemy(w, e, hero);
 }
@@ -686,6 +708,7 @@ function damageBoss(w: World, amount: number, by: DamageKind, hero: HeroState | 
   }
   boss.hp -= amount;
   boss.hurtT = 0.22;
+  if (hero && humanHero(w, hero.index)) w.playerHits++;
   pushEvent(w, "bossHit", boss.x, boss.y - BOSS_H, hero?.index);
   if (boss.hp <= 0) {
     boss.hp = 0;
@@ -1035,6 +1058,7 @@ function interactions(w: World, h: HeroState, dt: number): void {
       g.taken = true;
       w.gemsTaken++;
       h.gems++;
+      if (humanHero(w, h.index)) w.playerGems++;
       pushEvent(w, "gem", g.x, g.y, h.index);
     }
   }
@@ -1227,11 +1251,13 @@ function checkGoal(w: World): void {
   if (!doorOpen(w)) return;
   const atDoor = w.heroes.filter((h) => Math.abs(h.x - w.def.goalX) < 64 && h.y > -170);
   const need = w.def.goalNeedsAll ? w.heroes.length : 1;
-  if (atDoor.length >= need) {
-    w.status = "won";
-    w.message = "";
-    pushEvent(w, "win", w.def.goalX, -40);
-  }
+  if (atDoor.length < need) return;
+  // 一个人玩的时候城门只认你手上这位:搭档先跑到也得等你走过来。
+  // 不加这一条的话「站着不动让搭档跑完全程」就是通关捷径(第 3 轮 B2:188 关里 110 关中招)。
+  if (w.players === 1 && !atDoor.some((h) => h.index === w.active)) return;
+  w.status = "won";
+  w.message = "";
+  pushEvent(w, "win", w.def.goalX, -40);
 }
 
 function stepOnce(w: World, dt: number, inputs: Input[]): void {
@@ -1304,6 +1330,12 @@ export interface RunSummary {
   time: number;
   hearts: number;
   bossDown: boolean;
+  /** 一个人玩(另一位由搭档托管)吗 */
+  solo?: boolean;
+  /** 这些是真人自己的那一份 */
+  playerKills?: number;
+  playerGems?: number;
+  playerHits?: number;
 }
 
 export function summarize(w: World): RunSummary {
@@ -1316,13 +1348,30 @@ export function summarize(w: World): RunSummary {
     time: w.time,
     hearts: w.hearts,
     bossDown: w.boss ? !w.boss.alive : false,
+    solo: w.players === 1,
+    playerKills: w.playerKills,
+    playerGems: w.playerGems,
+    playerHits: w.playerHits,
   };
+}
+
+/**
+ * 「清怪」这一条算不算到你头上。
+ *
+ * 一个人玩的时候搭档会帮着打,这没问题;但一关下来自己一下都没打中,
+ * 就不该按「路上的怪一只不剩」给星 —— 那是搭档的功劳。
+ * 没有怪也没有首领的纯跑图关不受这条约束。
+ */
+function ownHandInFight(def: LevelDef, r: RunSummary): boolean {
+  if (!r.solo) return true;
+  if (r.enemyTotal === 0 && !def.boss) return true;
+  return (r.playerHits ?? 0) > 0;
 }
 
 /** 三条三星标准分别达成了没有:清怪 / 用时 / 宝石 */
 export function starGoals(def: LevelDef, r: RunSummary): { clear: boolean; time: boolean; gem: boolean } {
   return {
-    clear: r.enemyTotal === 0 || r.kills >= r.enemyTotal,
+    clear: (r.enemyTotal === 0 || r.kills >= r.enemyTotal) && ownHandInFight(def, r),
     time: r.time <= def.parSeconds,
     gem: r.gems >= def.gemGoal,
   };
@@ -1342,12 +1391,17 @@ export function winMessage(def: LevelDef, r: RunSummary): string {
   const g = starGoals(def, r);
   const done: string[] = [];
   const next: string[] = [];
-  if (def.boss) done.push("把首领打倒啦");
-  if (g.clear) done.push("路上的怪一只不剩");
-  else next.push(`还剩 ${r.enemyTotal - r.kills} 只没打倒`);
+  // 搭档打的、搭档捡的都照实说,不往真人身上安
+  const byPartner = r.solo === true && (r.playerHits ?? 0) <= 0;
+  const gemsByPartner = r.solo === true ? Math.max(0, r.gems - (r.playerGems ?? r.gems)) : 0;
+  if (def.boss) done.push(byPartner ? "首领是搭档打倒的" : "把首领打倒啦");
+  const allDown = r.enemyTotal === 0 || r.kills >= r.enemyTotal;
+  if (allDown && byPartner && r.enemyTotal > 0) next.push("这一路的怪都是搭档打倒的,下回你也上去砍两下");
+  else if (g.clear) done.push("路上的怪一只不剩");
+  else if (!allDown) next.push(`还剩 ${r.enemyTotal - r.kills} 只没打倒`);
   if (g.time) done.push(`只用了 ${Math.round(r.time)} 秒`);
   else next.push(`用时 ${Math.round(r.time)} 秒,标准是 ${def.parSeconds} 秒`);
-  if (g.gem) done.push(`宝石收了 ${r.gems} 颗`);
+  if (g.gem) done.push(gemsByPartner > 0 ? `宝石收了 ${r.gems} 颗(搭档帮着捡了 ${gemsByPartner} 颗)` : `宝石收了 ${r.gems} 颗`);
   else next.push(`宝石差 ${Math.max(0, def.gemGoal - r.gems)} 颗`);
   const head = done.length ? `${done.join("、")},真棒!` : "顺利通过啦!";
   return next.length ? `${head}下次试试:${next.join(";")}。` : head;

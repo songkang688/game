@@ -125,13 +125,14 @@ describe("prince-princess · 单人模式下「玩家一个键都不按」", () 
     let stall = 0;
     for (let i = 0; i < 188; i++) {
       const def = buildLevel(i);
-      // index.ts 单人:opts.players = 1,world.active 那位吃真人输入,另一位走 botInput
-      const w = logic.createWorld(def, 2);
-      const active = 0;
+      // index.ts 单人:`createWorld(opts.def, 1)`,world.active 那位吃真人输入,另一位走 botInput。
+      // 第 3 轮取证时这里传的是 2,漏掉了 world 自己知不知道「现在是一个人在玩」——
+      // 修 B2 用的正是这条信息(城门只认真人手上那位),所以按真机改回 1。
+      const w = logic.createWorld(def, 1);
       const cap = Math.ceil(((def.timeLimit > 0 ? def.timeLimit : 200) + 5) / DT);
       let steps = 0;
       while (w.status === "playing" && steps < cap) {
-        const feed = w.heroes.map((_, k) => (k === active ? logic.emptyInput() : logic.botInput(w, k, DT)));
+        const feed = w.heroes.map((_, k) => (k === w.active ? logic.emptyInput() : logic.botInput(w, k, DT)));
         logic.stepWorld(w, DT, feed);
         steps++;
       }
@@ -163,6 +164,8 @@ describe("prince-princess · 单人模式下「玩家一个键都不按」", () 
     );
     if (autoWin.length) console.log(`   → 关号:${autoWin.map((a) => a.level).join(",")}`);
     expect(autoWin.length + lost + stall).toBe(188);
+    // 修 B2 之前:110 关自动过关、94 关三星。现在城门只认真人手上那位,应当归零。
+    expect(autoWin.map((a) => a.level)).toEqual([]);
   });
 
   it("第 1 关的关卡定义:门槛在哪儿", async () => {

@@ -816,7 +816,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (ev.kind === "guard") {
         toast(ev.text === "melee" ? "护甲变红了!换王子的剑" : "护甲变蓝了!换公主的星星");
       }
-      if (ev.kind === "door") toast("城门开啦!快跑过去");
+      if (ev.kind === "door") {
+        toast(opts.players === 1 ? "城门开啦!你自己跑过去才算过关" : "城门开啦!快跑过去");
+      }
       if (ev.kind === "flag") toast(`${SPEC.checkpoint.icon} 小旗点亮啦,摔下去就回这儿`);
       if (ev.kind === "cloud") {
         const who = ev.hero === undefined ? "" : HERO_NAMES[world.heroes[ev.hero].kind];
@@ -1270,7 +1272,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       const pct = Math.round(killRatio(world) * 100);
       barFill.style.width = `${pct}%`;
       const left = remainingForDoor(world);
-      barTxt.textContent = left > 0 ? `还差 ${left} 只开门` : `城门已开 ${pct}%`;
+      barTxt.textContent =
+        left > 0 ? `还差 ${left} 只开门` : opts.players === 1 ? "城门已开 · 自己跑过去" : `城门已开 ${pct}%`;
     }
     gemChip.textContent = `${SPEC.reward.icon} ${world.gemsTaken}/${def.gemGoal}`;
     flagChip.textContent = checkpointLabel(world.flags, world.reached);
