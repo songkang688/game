@@ -1,15 +1,17 @@
-// 碰碰车大乱斗 · 电脑车手(三档)。
+// 碰碰车大乱斗 · 电脑车手(四档)。
 //
 // 决策全是纯函数:同样的世界 + 同样的 tick 一定给出同样的动作,
 // 所以无头单测可以直接用它把一整局打完,验证「真的分得出胜负」。
 //
-// 三档的差别不是靠数值加成作弊,而是靠「看得多远、想得多准」:
-//  - 新手:只会朝对手直冲,快掉下去了才想起来往回打方向;
-//  - 熟练:会挑对手离悬崖最近的那一侧绕后,自己也懂得躲边缘;
-//  - 高手:再加上预判对手位移、算准距离才放冲刺,还会避开滚桶。
+// 四档的差别不是靠数值加成作弊,而是靠「看得多远、想得多准」:
+//  - 1 会瞎撞:朝最近的人直冲,不看悬崖也不看角度;
+//  - 2 会追:方向稳了,懂得别把自己挂在场边;
+//  - 3 会预判走位:按对手的速度取提前量,绕到它的悬崖侧,还会躲滚桶;
+//  - 4 会卡边角逼出界:专挑离悬崖最近的对手,提前攒好蓄力,盯着正在打转的车补最后一下。
 import {
   CAR_R,
   MAX_SPEED,
+  boundaryHit,
   carActive,
   fieldCenter,
   hypot,
@@ -19,12 +21,13 @@ import {
   type World,
 } from "./logic";
 
-export type AiLevel = 1 | 2 | 3;
+export type AiLevel = 1 | 2 | 3 | 4;
 
 export const AI_LABEL: Record<AiLevel, string> = {
   1: "新手车手",
   2: "熟练车手",
   3: "冠军车手",
+  4: "卡角高手",
 };
 
 /** 每一档的性格参数(导出是为了让调参单测能横向对比,运行时不改它) */
@@ -41,16 +44,35 @@ export interface Trait {
   flank: boolean;
   /** 会不会躲滚桶 */
   dodge: boolean;
+  /** 预判走位:按对手当前速度往前推算几秒的落点(0 = 只追此刻的位置) */
+  lead: number;
+  /** 会不会攒蓄力去打强撞 */
+  chargeUp: boolean;
+  /** 会不会专挑「已经被逼到角落 / 正在打转」的对手下手 */
+  corner: boolean;
+  /**
+   * 自己挂在台沿上打转时,往场内使出几成劲(0..1)。
+   *
+   * 打转时车轮悬空,`teeterCrawl` 只认方向摇杆压得有多满:
+   * 新手一慌就乱打方向,劲使不到点子上,两秒里蹭不回台面;
+   * 冠军会把车头对准场心一推到底,基本都能自己开回来。
+   */
+  lipSave: number;
 }
 
 export const TRAITS: Record<AiLevel, Trait> = {
-  // 新手:油门踩死往前冲,不看悬崖也不看角度,冲刺要贴脸了才想起来按
-  1: { edgeCare: 3, react: 0, dashRange: 9, jitter: 0.45, flank: false, dodge: false },
-  // 熟练:会绕到对手的悬崖侧,也知道别把自己挂在边上
-  2: { edgeCare: 8, react: 0.35, dashRange: 16, jitter: 0.2, flank: true, dodge: false },
-  // 冠军:角度、时机、滚桶全算上,冲刺只在推力真的指着悬崖时才按
-  3: { edgeCare: 12, react: 0.7, dashRange: 16, jitter: 0.06, flank: true, dodge: true },
+  // 1 会瞎撞:油门踩死往前冲,不看悬崖也不看角度,冲刺要贴脸了才想起来按
+  1: { edgeCare: 3, react: 0, dashRange: 9, jitter: 0.45, flank: false, dodge: false, lead: 0, chargeUp: false, corner: false, lipSave: 0.4 },
+  // 2 会追:方向稳多了,也知道别把自己挂在边上,但还不会绕位
+  2: { edgeCare: 8, react: 0.35, dashRange: 14, jitter: 0.2, flank: false, dodge: false, lead: 0, chargeUp: false, corner: false, lipSave: 0.6 },
+  // 3 会预判走位:按对手速度取提前量,绕到它的悬崖侧,滚桶也躲得开
+  3: { edgeCare: 12, react: 0.7, dashRange: 16, jitter: 0.06, flank: true, dodge: true, lead: 0.16, chargeUp: false, corner: false, lipSave: 0.95 },
+  // 4 会卡边角逼出界:提前攒蓄力,专挑贴着悬崖和正在打转的对手补最后一下
+  4: { edgeCare: 13, react: 0.85, dashRange: 18, jitter: 0.04, flank: true, dodge: true, lead: 0.24, chargeUp: true, corner: true, lipSave: 1 },
 };
+
+/** 四档从弱到强的顺序,给调参单测和难度选择器用 */
+export const AI_LEVELS: AiLevel[] = [1, 2, 3, 4];
 
 /** 确定性伪噪声:同一个 tick 与座位号永远得到同一个抖动 */
 export function wobble(tick: number, salt: number): number {
@@ -77,19 +99,28 @@ export function nearestFoe(world: World, me: Car): Car | null {
  * 挑这一帧要收拾谁:近的好追,但**已经站在悬崖边上的那台更值得追**——
  * 一样是撞一下,把它撞下去的收益高得多。新手档想不到这一层,只会追最近的。
  */
-export function pickTarget(world: World, me: Car, edgeMinded: boolean): Car | null {
+export function pickTarget(world: World, me: Car, edgeMinded: boolean, cornerMinded = false): Car | null {
   if (!edgeMinded) return nearestFoe(world, me);
   let best: Car | null = null;
   let bestScore = Infinity;
   for (const c of world.cars) {
     if (c.id === me.id || c.team === me.team || !carActive(c)) continue;
-    const score = hypot(c.x - me.x, c.y - me.y) * 0.6 + worldEdge(world, c.x, c.y) * 1.4;
+    let score = hypot(c.x - me.x, c.y - me.y) * 0.6 + worldEdge(world, c.x, c.y) * 1.4;
+    // 有人已经在场边打转:补一下就出局,这是全场最划算的目标。
+    // 卡角档看得更死,再远也要赶过去。
+    if (c.teeter > 0) score -= cornerMinded ? 80 : 45;
     if (score < bestScore) {
       bestScore = score;
       best = c;
     }
   }
   return best;
+}
+
+/** 按对手当前速度往前推 lead 秒的落点:这就是「预判走位」 */
+export function leadPoint(foe: Car, lead: number): { x: number; y: number } {
+  if (lead <= 0) return { x: foe.x, y: foe.y };
+  return { x: foe.x + foe.vx * lead, y: foe.y + foe.vy * lead };
 }
 
 /**
@@ -183,27 +214,44 @@ export function chooseCarAction(
   // 沿着「往场外」方向的速度分量:正数就是正在被推向悬崖
   const speedOut = -(me.vx * inX + me.vy * inY);
 
-  const foe = pickTarget(world, me, trait.flank);
+  // 0. 自己正挂在台沿上打转:这两秒里没有别的事好做,只有把方向死死顶向场心。
+  //    档位越低越慌,劲使不满,两秒一到车就滑下去了。
+  if (me.teeter > 0) {
+    // 要顶的是「离台沿最近的那条法线」,不是场心方向:挂在角上的时候这两个差着 45°,
+    // 对着场心猛推反而蹭不回台面。
+    const lip = boundaryHit(world.field, me.x, me.y, world.inset);
+    const bx = lip.nx === 0 && lip.ny === 0 ? inX : lip.nx;
+    const by = lip.nx === 0 && lip.ny === 0 ? inY : lip.ny;
+    const shake = trait.jitter * 0.6 * wobble(tick, me.id + 9);
+    const cos = Math.cos(shake);
+    const sin = Math.sin(shake);
+    const k = trait.lipSave;
+    return { dx: (bx * cos - by * sin) * k, dy: (bx * sin + by * cos) * k, dash: false, brake: false };
+  }
+
+  const foe = pickTarget(world, me, trait.flank, trait.corner);
   if (!foe) {
     // 场上没人可撞就回中间待命,别停在悬崖边上等着挨撞
     return { dx: inX * 0.6, dy: inY * 0.6, dash: false, brake: backLen < me.r };
   }
 
   // 1. 站到对手的内侧:从这里撞过去,推力正好指着最近的悬崖。
-  //    追的是对手此刻的位置——碰碰车太灵活,预判反而会让车头一直偏在旁边。
+  //    高档位会按对手的速度取一点提前量(预判走位),低档位只追它此刻的位置。
   const gap = hypot(foe.x - me.x, foe.y - me.y);
   const push = outwardDir(world, foe.x, foe.y);
   const touch = (me.r + foe.r) * 1.7;
-  let tx = foe.x;
-  let ty = foe.y;
+  // 贴上去之后就别再预判了,不然车头会一直偏在旁边蹭不实
+  const aimAt = gap < touch ? { x: foe.x, y: foe.y } : leadPoint(foe, trait.lead);
+  let tx = aimAt.x;
+  let ty = aimAt.y;
   if (trait.flank) {
     if (gap < touch) {
       // 已经顶上了:别再绕位,顺着「场心 → 对手」的方向一路把它推下去
       tx = foe.x + push.x * touch;
       ty = foe.y + push.y * touch;
     } else {
-      tx = foe.x - push.x * (me.r + foe.r) * 1.05;
-      ty = foe.y - push.y * (me.r + foe.r) * 1.05;
+      tx = aimAt.x - push.x * (me.r + foe.r) * 1.05;
+      ty = aimAt.y - push.y * (me.r + foe.r) * 1.05;
     }
   }
   const chaseLen = Math.max(0.001, hypot(tx - me.x, ty - me.y));
@@ -256,5 +304,11 @@ export function chooseCarAction(
   // 6. 被顶向悬崖时点一脚刹车,把外飘的速度先吃掉
   const brake = speedOut > MAX_SPEED * 0.2 && myEdge < need;
 
-  return { dx: rx, dy: ry, dash, brake };
+  // 7. 蓄力冲撞(只有卡角档会用):对手还有一段距离时先按住攒力,
+  //    等真的贴上去、角度也对了再松手,那一下正好把它顶下台。
+  //    自己还在危险区就别攒了——蓄力期间车会慢下来,那正是最不该慢的时候。
+  const chargeWindow = trait.chargeUp && me.chargeCd <= 0 && danger < 0.35 && goodAngle;
+  const charge = chargeWindow && gap > touch * 0.92 && gap < trait.dashRange * 2.2;
+
+  return { dx: rx, dy: ry, dash, brake, charge };
 }

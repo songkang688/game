@@ -445,6 +445,7 @@ describe("stepWorld:开车", () => {
 
 describe("stepWorld:掉出场地", () => {
   it("越过开放边就算掉下去,功劳记给最后撞它的人", () => {
+    // 1.2 起是两段式:先在台沿上打转,松着手不管,两秒到了才真的下去。
     const a = hero(50, 35);
     const b = foe(50, 35, 1);
     const world = createWorld({ field: rect(), cars: [a, b] });
@@ -453,7 +454,7 @@ describe("stepWorld:掉出场地", () => {
     b.lastHitBy = a.id;
     b.lastHitAt = world.time;
     b.vx = 40;
-    for (let i = 0; i < 4; i++) stepWorld(world, 32, [NO_INPUT, NO_INPUT]);
+    for (let i = 0; i < 100 && !b.gone; i++) stepWorld(world, 32, [NO_INPUT, NO_INPUT]);
     expect(b.gone).toBe(true);
     expect(a.score).toBe(1);
     expect(levelCleared(world)).toBe(true);
@@ -464,7 +465,7 @@ describe("stepWorld:掉出场地", () => {
     const b = foe(50, 35);
     const world = createWorld({ field: rect(), cars: [a, b] });
     a.x = 105;
-    stepWorld(world, 16, [NO_INPUT, NO_INPUT]);
+    for (let i = 0; i < 100 && !a.out; i++) stepWorld(world, 16, [NO_INPUT, NO_INPUT]);
     expect(a.out).toBe(true);
     expect(b.score).toBe(0);
     expect(a.falls).toBe(1);

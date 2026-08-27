@@ -3,6 +3,7 @@
 // 188 关逐关检查出生点、加速带、滚桶、对手阵容是不是都落在场地里、数量合不合理。
 import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, assertTotal, totalSize } from "../level99";
+import { AI_LEVELS } from "./ai";
 import {
   ALL_LEVELS,
   CHAPTERS,
@@ -73,7 +74,8 @@ describe("188 关全量体检", () => {
       for (const foe of lv.foes) {
         expect(foe.lives).toBeGreaterThanOrEqual(1);
         expect(foe.mass).toBeGreaterThan(0);
-        expect([1, 2, 3]).toContain(foe.skill);
+        // 1.2 起电脑车手有四档,最后一章的收官关会派出第四档的「卡角高手」
+        expect(AI_LEVELS).toContain(foe.skill);
         expect(foe.name.length).toBeGreaterThan(0);
       }
     }

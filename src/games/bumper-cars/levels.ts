@@ -9,11 +9,14 @@ import type { AiLevel } from "./ai";
 import {
   CAR_R,
   DAMP_PER_SEC,
+  ENDLESS_REVIVES,
   makeHazard,
   type BoostPad,
   type EdgeName,
   type Field,
   type Hazard,
+  type Slick,
+  type Spinner,
 } from "./logic";
 
 export const CHAPTERS: Chapter[] = [
@@ -56,6 +59,10 @@ export interface CarLevel {
   field: Field;
   pads: BoostPad[];
   hazards: Hazard[];
+  /** 旋转盘:踩上去车头被带着转 */
+  spinners: Spinner[];
+  /** 油渍:踩上去摩擦变小,一路滑过去 */
+  slicks: Slick[];
   /** 每秒保留的速度比例(冰面关更高) */
   keep: number;
   spawn: { x: number; y: number };
@@ -137,6 +144,10 @@ interface Recipe {
   skill: AiLevel;
   pads: number;
   rollers: number;
+  /** 旋转盘个数 */
+  spinners: number;
+  /** 油渍摊数 */
+  slicks: number;
   keep: number;
   hearts: number;
   seconds: number;
@@ -146,43 +157,51 @@ interface Recipe {
 const RECIPES: Recipe[] = [
   {
     w: 104, h: 72, round: false, foesFrom: 1, foesTo: 2, skill: 1, pads: 0, rollers: 0,
+    spinners: 0, slicks: 0,
     keep: DAMP_PER_SEC, hearts: 5, seconds: 75,
-    hint: "把对手往上下两条悬崖赶,左右两边有护栏撞不出去。",
+    hint: "把对手往上下两条悬崖赶,左右两边有护栏撞不出去。滑出场边先打转两秒,这时候往场内打方向还能开回来。",
   },
   {
     w: 108, h: 74, round: false, foesFrom: 1, foesTo: 2, skill: 1, pads: 0, rollers: 0,
+    spinners: 0, slicks: 0,
     keep: DAMP_PER_SEC, hearts: 5, seconds: 92,
-    hint: "护栏能把车弹回来,贴着护栏起跳再撞,力道翻倍。",
+    hint: "护栏能把车弹回来,贴着护栏起跳再撞,力道翻倍。按住冲撞键蓄力,松手那一下推得最远。",
   },
   {
     w: 112, h: 76, round: false, foesFrom: 2, foesTo: 3, skill: 1, pads: 3, rollers: 0,
+    spinners: 0, slicks: 0,
     keep: DAMP_PER_SEC, hearts: 6, seconds: 90,
     hint: "加速带只在踩上去的那一瞬间推你,别在悬崖边踩。",
   },
   {
     w: 96, h: 96, round: true, foesFrom: 2, foesTo: 3, skill: 2, pads: 2, rollers: 0,
+    spinners: 1, slicks: 0,
     keep: DAMP_PER_SEC, hearts: 6, seconds: 90,
-    hint: "圆台只有半圈护栏,把对手引到缺口那一侧再发力。",
+    hint: "圆台只有半圈护栏,把对手引到缺口那一侧再发力。中间那块旋转盘会把车头带偏,别在上面蓄力。",
   },
   {
     w: 116, h: 78, round: false, foesFrom: 2, foesTo: 3, skill: 2, pads: 2, rollers: 2,
+    spinners: 0, slicks: 1,
     keep: DAMP_PER_SEC, hearts: 7, seconds: 95,
-    hint: "滚桶把谁都弹得一样远,站在它后面让对手自己撞上来。",
+    hint: "滚桶把谁都弹得一样远,站在它后面让对手自己撞上来。地上那摊油渍刹不住,绕着走。",
   },
   {
     w: 100, h: 100, round: true, foesFrom: 2, foesTo: 3, skill: 2, pads: 2, rollers: 1,
+    spinners: 1, slicks: 2,
     keep: 0.68, hearts: 7, seconds: 100,
-    hint: "冰面几乎不减速,想停下来只能提前按刹车。",
+    hint: "冰面几乎不减速,想停下来只能提前按刹车。油渍比冰面还滑,踩上去只能顺着滑完。",
   },
   {
     w: 118, h: 80, round: false, foesFrom: 2, foesTo: 3, skill: 2, pads: 4, rollers: 2,
+    spinners: 2, slicks: 1,
     keep: 0.6, hearts: 7, seconds: 105,
-    hint: "传送带整片朝外推,逆着它开才站得住。",
+    hint: "传送带整片朝外推,逆着它开才站得住。两块旋转盘会把车头转过去,进盘子前先对好方向。",
   },
   {
     w: 120, h: 84, round: false, foesFrom: 3, foesTo: 4, skill: 2, pads: 3, rollers: 3,
+    spinners: 1, slicks: 2,
     keep: DAMP_PER_SEC, hearts: 8, seconds: 125,
-    hint: "重量级对手撞不飞,先把轻车清掉再合力对付它。",
+    hint: "重量级对手撞不飞,先把轻车清掉再合力对付它。蓄满的一记强撞连重车都顶得动。",
   },
 ];
 
@@ -265,6 +284,47 @@ function makeRollers(recipe: Recipe, rand: () => number): Hazard[] {
   return out;
 }
 
+/**
+ * 旋转盘:摆在离场心不远的位置,半径固定,转向按序号交替。
+ * 位置刻意压在内圈——机关是用来「打乱走位」的,不该变成悬崖边的第二道杀器。
+ */
+export function makeSpinners(recipe: Recipe, rand: () => number): Spinner[] {
+  const out: Spinner[] = [];
+  const cx = recipe.w / 2;
+  const cy = recipe.h / 2;
+  const reach = Math.min(recipe.w, recipe.h) * 0.18;
+  for (let i = 0; i < recipe.spinners; i++) {
+    const ang = (i / Math.max(1, recipe.spinners)) * Math.PI * 2 + rand() * 0.5;
+    const dist = i === 0 && recipe.spinners === 1 ? 0 : reach;
+    out.push({
+      x: cx + Math.cos(ang) * dist,
+      y: cy + Math.sin(ang) * dist,
+      r: 7 + rand() * 3,
+      rate: (i % 2 === 0 ? 1 : -1) * (0.45 + rand() * 0.35),
+      push: 9 + rand() * 6,
+    });
+  }
+  return out;
+}
+
+/** 油渍:一摊摊圆形的油,踩上去每秒保留的速度比例被抬到 0.86 上下(= 摩擦变小) */
+export function makeSlicks(recipe: Recipe, rand: () => number): Slick[] {
+  const out: Slick[] = [];
+  const cx = recipe.w / 2;
+  const cy = recipe.h / 2;
+  const reach = Math.min(recipe.w, recipe.h) * 0.26;
+  for (let i = 0; i < recipe.slicks; i++) {
+    const ang = (i / Math.max(1, recipe.slicks)) * Math.PI * 2 + rand() * 0.8 + 0.7;
+    out.push({
+      x: cx + Math.cos(ang) * reach,
+      y: cy + Math.sin(ang) * reach,
+      r: 8 + rand() * 4,
+      keep: Math.max(recipe.keep + 0.12, 0.86 + rand() * 0.06),
+    });
+  }
+  return out;
+}
+
 /** 第 index 关(0 基)的完整场地数据 */
 export function buildLevel(index: number): CarLevel {
   const level = Math.max(0, Math.min(TOTAL_LEVELS - 1, Math.round(index)));
@@ -278,11 +338,15 @@ export function buildLevel(index: number): CarLevel {
   const field = makeField(recipe, chapter, inChapter);
   const pads = makePads(recipe, rand, chapter);
   const hazards = makeRollers(recipe, rand);
+  const spinners = makeSpinners(recipe, rand);
+  const slicks = makeSlicks(recipe, rand);
 
   // 章节内逐关加人:前几关只有下限,章末拉满
   const ramp = size <= 1 ? 1 : inChapter / (size - 1);
   const foeCount = Math.round(recipe.foesFrom + (recipe.foesTo - recipe.foesFrom) * ramp);
-  const skill: AiLevel = (ramp > 0.6 ? Math.min(3, recipe.skill + 1) : recipe.skill) as AiLevel;
+  // 冠军竞技场的最后几关才请得动「卡角高手」这一档,其余章节的档位跟 1.1 一模一样
+  const bump = chapter === CHAPTERS.length - 1 && ramp > 0.85 ? 2 : 1;
+  const skill: AiLevel = (ramp > 0.6 ? Math.min(4, recipe.skill + bump) : recipe.skill) as AiLevel;
 
   const cx = recipe.w / 2;
   const cy = recipe.h / 2;
@@ -313,6 +377,8 @@ export function buildLevel(index: number): CarLevel {
     field,
     pads,
     hazards,
+    spinners,
+    slicks,
     keep: recipe.keep,
     spawn,
     foeSpawns,
@@ -336,6 +402,8 @@ export interface ArenaLevel {
   field: Field;
   pads: BoostPad[];
   hazards: Hazard[];
+  spinners: Spinner[];
+  slicks: Slick[];
   keep: number;
   spawns: Array<{ x: number; y: number }>;
   seconds: number;
@@ -345,11 +413,11 @@ export interface ArenaLevel {
 }
 
 const ARENAS = [
-  { name: "月牙圆台", round: true, w: 98, h: 98, pads: 0, rollers: 0, keep: DAMP_PER_SEC, hint: "圆台缺口在一侧,把对手往那边挤。" },
-  { name: "弹簧方场", round: false, w: 110, h: 76, pads: 0, rollers: 1, keep: DAMP_PER_SEC, hint: "左右有护栏,上下是悬崖,借护栏反弹更好使。" },
-  { name: "加速十字", round: false, w: 112, h: 78, pads: 4, rollers: 0, keep: DAMP_PER_SEC, hint: "四条加速带都朝中间推,谁先站稳中心谁占便宜。" },
-  { name: "滚桶擂台", round: true, w: 102, h: 102, pads: 0, rollers: 2, keep: DAMP_PER_SEC, hint: "两只滚桶来回跑,躲在它后面等对手撞上来。" },
-  { name: "冰面圆环", round: true, w: 96, h: 96, pads: 2, rollers: 0, keep: 0.8, hint: "冰面刹不住,提前松油门才转得过来。" },
+  { name: "月牙圆台", round: true, w: 98, h: 98, pads: 0, rollers: 0, spinners: 0, slicks: 0, keep: DAMP_PER_SEC, hint: "圆台缺口在一侧,把对手往那边挤。" },
+  { name: "弹簧方场", round: false, w: 110, h: 76, pads: 0, rollers: 1, spinners: 0, slicks: 0, keep: DAMP_PER_SEC, hint: "左右有护栏,上下是悬崖,借护栏反弹更好使。" },
+  { name: "加速十字", round: false, w: 112, h: 78, pads: 4, rollers: 0, spinners: 1, slicks: 0, keep: DAMP_PER_SEC, hint: "四条加速带都朝中间推,中间那块旋转盘会把车头带偏。" },
+  { name: "滚桶擂台", round: true, w: 102, h: 102, pads: 0, rollers: 2, spinners: 0, slicks: 2, keep: DAMP_PER_SEC, hint: "两只滚桶来回跑,躲在它后面等对手撞上来;两摊油渍别乱踩。" },
+  { name: "冰面圆环", round: true, w: 96, h: 96, pads: 2, rollers: 0, spinners: 1, slicks: 1, keep: 0.8, hint: "冰面刹不住,提前松油门才转得过来。" },
 ];
 
 /** 第 round 局(1 基)的对战场地 */
@@ -367,6 +435,8 @@ export function buildArena(round: number): ArenaLevel {
     skill: 2,
     pads: spec.pads,
     rollers: spec.rollers,
+    spinners: spec.spinners,
+    slicks: spec.slicks,
     keep: spec.keep,
     hearts: 1,
     seconds: 60,
@@ -382,6 +452,8 @@ export function buildArena(round: number): ArenaLevel {
     field,
     pads: makePads(recipe, rand, 0),
     hazards: makeRollers(recipe, rand),
+    spinners: makeSpinners(recipe, rand),
+    slicks: makeSlicks(recipe, rand),
     keep: spec.keep,
     spawns: ringPoints(cx, cy, ringR, 2, 0.25),
     seconds: 60,
@@ -401,12 +473,13 @@ export function waveFoeCount(wave: number): number {
   return Math.min(7, Math.round(1 + (w - 1) * 0.8));
 }
 
-/** 第 wave 波的对手技能档 */
+/** 第 wave 波的对手技能档:第 10 波起「卡角高手」登场 */
 export function waveSkill(wave: number): AiLevel {
   const w = Math.max(1, Math.round(wave));
   if (w <= 2) return 1;
   if (w <= 5) return 2;
-  return 3;
+  if (w <= 9) return 3;
+  return 4;
 }
 
 /** 无尽第 wave 波(1 基)的场地与阵容 */
@@ -424,6 +497,8 @@ export function buildWave(wave: number): CarLevel {
     skill: waveSkill(w),
     pads: w >= 4 ? 2 : 0,
     rollers: w >= 6 ? 2 : 0,
+    spinners: w >= 3 ? 1 : 0,
+    slicks: w >= 5 ? 2 : 0,
     keep: DAMP_PER_SEC,
     hearts: 1,
     seconds: 0,
@@ -461,12 +536,15 @@ export function buildWave(wave: number): CarLevel {
     field,
     pads: makePads(recipe, rand, 3),
     hazards: makeRollers(recipe, rand),
+    spinners: makeSpinners(recipe, rand),
+    slicks: makeSlicks(recipe, rand),
     keep: DAMP_PER_SEC,
     spawn: spots[0],
     foeSpawns: spots.slice(1),
     foes,
+    // 无尽模式每台车能被工作人员推回来三次
     hunters: Math.min(count, 2),
-    hearts: 3,
+    hearts: ENDLESS_REVIVES,
     seconds: 0,
     seed,
     hint: "车海一波比一波多,守住中间的空地,让他们自己先撞成一团。",
