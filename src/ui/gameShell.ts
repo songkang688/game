@@ -18,6 +18,16 @@ import { createDuoPair } from "./avatars";
 import { recordRecent } from "./recent";
 import { getLevelExtras, registerLevelExtras, type GuideBook } from "./level188Contract";
 import { loadGuideBook, mountGuide, readCurrentLevel } from "./guide";
+import {
+  INTRO_HOLD_MS,
+  INTRO_LEAVE_MS,
+  SCORE_ROLL_MS,
+  STAR_BASE_MS,
+  STAR_STEP_MS,
+  motionPref,
+  staggerDelays,
+  tweenNumber
+} from "./motion";
 
 // ---------------------------------------------------------------------------
 // 关卡框架的两个外挂能力:攻略侧栏(本档实现)与跳关授权(家长高权限门)
@@ -128,6 +138,123 @@ export function guideAvailable(
 ): boolean {
   if (typeof getLevelExtras().mountGuide !== "function") return false;
   return Boolean(book) || stageHasGuideButton;
+}
+
+// ---------------------------------------------------------------------------
+// 1.3 第 1 步 B · 关卡壳视觉层:入场卡与结算舞台动效(纯 DOM 装配,可注入桩单测)
+// ---------------------------------------------------------------------------
+
+/** 入场卡的大字:闯关游戏是「第 N 关」,没有关卡概念的游戏用游戏名顶上 */
+export function introHeading(level: number, title: string): string {
+  return Number.isFinite(level) && level >= 1 ? `第 ${Math.floor(level)} 关` : title;
+}
+
+export interface LevelIntroOptions {
+  /** 当前关(1 基);≤0 表示这款没有闯关概念,大字改用 title */
+  level: number;
+  /** 游戏名(level ≤ 0 时的大字) */
+  title: string;
+  /** 一句目标文案(沿用 meta.blurb,不新造文案) */
+  goal: string;
+  /** 装饰图形:游戏自己的表情图标 */
+  emoji: string;
+  /** 减弱动效:立即静态显示,不弹入不离场 */
+  reduced: boolean;
+}
+
+/**
+ * 「第 N 关 + 目标」入场卡(视觉层,pointer-events 一律穿透,绝不挡操作)。
+ * 时长口径见 motion.ts:INTRO_HOLD_MS 后让位,INTRO_LEAVE_MS 内退场。
+ */
+export function buildLevelIntroCard(doc: Document, opts: LevelIntroOptions): HTMLElement {
+  const wrap = doc.createElement("div");
+  wrap.className = `level-intro${opts.reduced ? " level-intro--static" : ""}`;
+  // 转瞬即逝的装饰卡:读屏用户听壳层的 announce,不让焦点/朗读追着它跑
+  wrap.setAttribute("aria-hidden", "true");
+
+  const card = doc.createElement("div");
+  card.className = "level-intro-card";
+
+  const decor = doc.createElement("span");
+  decor.className = "level-intro-decor";
+  decor.textContent = opts.emoji;
+
+  const heading = doc.createElement("span");
+  heading.className = "level-intro-level";
+  heading.textContent = introHeading(opts.level, opts.title);
+
+  const goal = doc.createElement("span");
+  goal.className = "level-intro-goal";
+  goal.textContent = opts.goal;
+
+  card.append(decor, heading, goal);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+export interface ResultMotionOptions {
+  /** 这一局拿到的星数(1–3) */
+  stars: number;
+  /** 减弱动效:星星直接亮、分数直接显示 */
+  reduced: boolean;
+  /** 单测注入;缺省 requestAnimationFrame(拿不到就直接显示终值) */
+  raf?: ((fn: () => void) => unknown) | null;
+  /** 单测注入;缺省 performance.now */
+  now?: () => number;
+}
+
+/**
+ * 结算舞台的动效装配(视觉层,不改 dialogs 的结构与文案):
+ *  1. 星级逐颗点亮:把星位的动画延迟改写成 STAR_BASE_MS + i·STAR_STEP_MS(~250ms 一颗);
+ *  2. 分数滚动:在星位下面加一枚「+N ⭐」胶囊,数字从 0 滚到实际星数(≤ SCORE_ROLL_MS)。
+ * reduced 时延迟全 0、数字直接是终值。失败结算没有星位,整段静默跳过。
+ */
+export function applyResultMotion(dialogEl: HTMLElement | null, opts: ResultMotionOptions): void {
+  if (!dialogEl?.querySelectorAll) return;
+
+  const delays = staggerDelays(3, STAR_STEP_MS, opts.reduced);
+  const stars = Array.from(dialogEl.querySelectorAll(".result-stars .star"));
+  stars.forEach((el, i) => {
+    const star = el as HTMLElement;
+    const ms = opts.reduced ? 0 : STAR_BASE_MS + (delays[i] ?? 0);
+    star.style.animationDelay = `${ms / 1000}s`;
+  });
+
+  const starRow = dialogEl.querySelector(".result-stars");
+  if (!starRow?.parentElement) return;
+
+  const n = Number.isFinite(opts.stars) ? Math.max(0, Math.min(3, Math.floor(opts.stars))) : 0;
+  const doc = dialogEl.ownerDocument;
+  if (!doc) return;
+  const score = doc.createElement("span");
+  score.className = "result-score";
+  // announce() 已经把「拿到 N 颗星星」念过了,这枚滚动数字纯属视觉
+  score.setAttribute("aria-hidden", "true");
+  starRow.parentElement.insertBefore(score, starRow.nextSibling);
+
+  const raf =
+    opts.raf !== undefined
+      ? opts.raf
+      : typeof requestAnimationFrame === "function"
+        ? (fn: () => void) => requestAnimationFrame(fn)
+        : null;
+  const nowFn =
+    opts.now ?? (typeof performance !== "undefined" ? () => performance.now() : () => Date.now());
+
+  if (opts.reduced || typeof raf !== "function") {
+    score.textContent = `+${n} ⭐`;
+    return;
+  }
+
+  const t0 = nowFn();
+  const tick = (): void => {
+    // 弹窗关掉(整棵树被摘走)就停,不留幽灵动画
+    if (score.isConnected === false) return;
+    const t = (nowFn() - t0) / SCORE_ROLL_MS;
+    score.textContent = `+${Math.round(tweenNumber(0, n, t))} ⭐`;
+    if (t < 1) raf(tick);
+  };
+  tick();
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +531,45 @@ export function mountGameScreen(
     stage.innerHTML = `<div class="game-loading" role="status"><span class="game-loading-flower" aria-hidden="true">🌸</span><p class="game-loading-text">马上就好～</p></div>`;
   }
 
+  // ---- 入场卡:「第 N 关」+ 目标,INTRO_HOLD_MS 后自动让位(reduced 立即静态) ----
+  let introEl: HTMLElement | null = null;
+  let introTimers: number[] = [];
+
+  function clearIntro(): void {
+    for (const t of introTimers) window.clearTimeout(t);
+    introTimers = [];
+    introEl?.remove();
+    introEl = null;
+  }
+
+  function showIntro(): void {
+    clearIntro();
+    const reduced = motionPref();
+    // 只有闯关游戏才有「第 N 关」;当前关只读存档,读不到就是第 1 关
+    const level = game.meta.levels ? readCurrentLevel(game.meta.id) : 0;
+    introEl = buildLevelIntroCard(document, {
+      level,
+      title: game.meta.title,
+      goal: game.meta.blurb,
+      emoji: game.meta.emoji,
+      reduced
+    });
+    // 挂在 screen 上而不是舞台里:游戏挂载时会清空 stage.innerHTML,别把卡片一起洗掉
+    screen.appendChild(introEl);
+    introTimers.push(
+      window.setTimeout(() => {
+        if (!introEl) return;
+        if (reduced) {
+          // 减弱动效:不播离场动画,静态显示满时长后直接摘掉
+          clearIntro();
+          return;
+        }
+        introEl.classList.add("level-intro--leave");
+        introTimers.push(window.setTimeout(clearIntro, INTRO_LEAVE_MS + 80));
+      }, INTRO_HOLD_MS)
+    );
+  }
+
   function showError(): void {
     stage.innerHTML = `<div class="empty-state" role="alert"><div class="empty-emoji" aria-hidden="true">🛠️</div><p>这个游戏出了点小问题,先玩别的吧!</p></div>`;
   }
@@ -418,6 +584,7 @@ export function mountGameScreen(
     // 深链/PWA 恢复直接进游戏也要进「最近玩过」,所以记录放在壳里而不是首页
     recordRecent(game.meta.id);
     showLoading();
+    showIntro();
 
     const stale = (): boolean => disposed || seq !== startSeq;
 
@@ -443,6 +610,8 @@ export function mountGameScreen(
             dialog = null;
           }
         });
+        // 结算舞台动效:星级 ~250ms 逐颗点亮 + 分数滚动(reduced 直接亮、直接显示)
+        applyResultMotion(dialog.el, { stars, reduced: motionPref() });
       },
       onLose: (message) => {
         if (finished || stale()) return;
@@ -487,6 +656,7 @@ export function mountGameScreen(
     window.removeEventListener("keydown", onGlobalKeyDown);
     closeDialog();
     closePause();
+    clearIntro();
     unmount();
     guideCleanup?.();
     guideCleanup = null;

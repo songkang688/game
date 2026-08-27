@@ -585,6 +585,33 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     recentSection.appendChild(row);
   }
 
+  /**
+   * 元信息行的玩法徽章(纯展示,不参与筛选):
+   * 挑一眼最有用的一种 —— 对战 > 双人 > 无尽;闯关有进度小旗管着,不重复出徽章。
+   * 图形与文案沿用玩法芯片(MODE_CHIPS)的语言,孩子在两处看到的是同一套符号。
+   */
+  function modeBadgeOf(meta: GameModule["meta"]): { emoji: string; label: string } | null {
+    const modes = meta.modes ?? [];
+    if (modes.includes("versus")) return { emoji: "🤝", label: "对战" };
+    if (modes.includes("twoPlayer") || modes.includes("coop")) return { emoji: "👫", label: "双人" };
+    if (modes.includes("endless")) return { emoji: "♾️", label: "无尽" };
+    return null;
+  }
+
+  /** 胶囊 + 图形的小徽章(元信息行通用) */
+  function makeBadge(className: string, emoji: string, label: string): HTMLElement {
+    const badge = document.createElement("span");
+    badge.className = `card-badge ${className}`;
+    const em = document.createElement("span");
+    em.className = "card-badge-emoji";
+    em.setAttribute("aria-hidden", "true");
+    em.textContent = emoji;
+    const text = document.createElement("span");
+    text.textContent = label;
+    badge.append(em, text);
+    return badge;
+  }
+
   function createGameCard(game: GameModule, index: number): HTMLElement {
     const { meta } = game;
     const card = document.createElement("button");
@@ -594,10 +621,19 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     // 错峰浮现动画的序号(封顶,后面的卡片不再继续拖延)
     card.style.setProperty("--card-i", String(Math.min(index, 11)));
 
+    // ---- 第一层:封面区(渐变 + 分类图形语言,表情贴纸骑在封面下沿) ----
+    const cover = document.createElement("span");
+    cover.className = `card-cover card-cover--${meta.category}`;
+    cover.setAttribute("aria-hidden", "true");
+
     const emoji = document.createElement("span");
     emoji.className = "card-emoji";
-    emoji.setAttribute("aria-hidden", "true");
     emoji.textContent = meta.emoji;
+    cover.appendChild(emoji);
+
+    // ---- 第二层:标题行(游戏名 + 一句话目标) ----
+    const body = document.createElement("span");
+    body.className = "card-body";
 
     const titleEl = document.createElement("span");
     titleEl.className = "card-title";
@@ -607,6 +643,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     blurb.className = "card-blurb";
     blurb.textContent = meta.blurb;
 
+    // ---- 第三层:元信息行(星级胶囊 + 进度小旗 + 玩法/设备徽章) ----
     const metaRow = document.createElement("span");
     metaRow.className = "card-meta";
 
@@ -629,7 +666,18 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       metaRow.appendChild(badgeEl);
     }
 
-    card.append(emoji, titleEl, blurb, metaRow);
+    const mode = modeBadgeOf(meta);
+    if (mode) metaRow.appendChild(makeBadge("card-badge--mode", mode.emoji, mode.label));
+
+    // 设备徽章:两边都顺手(both / 不填)不出徽章,只标「只适合一边」的
+    if (meta.platform === "mobile") {
+      metaRow.appendChild(makeBadge("card-badge--platform", "📱", "手游"));
+    } else if (meta.platform === "desktop") {
+      metaRow.appendChild(makeBadge("card-badge--platform", "💻", "端游"));
+    }
+
+    body.append(titleEl, blurb, metaRow);
+    card.append(cover, body);
     card.addEventListener("click", () => openGame(meta.id));
     return withFavHeart(card, meta.id, meta.title);
   }
