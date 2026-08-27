@@ -165,6 +165,8 @@ export const PH_CSS = `
 .ph-key-sub{background:#DFF0FF;color:#3F72A8;}
 .ph-tip{margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#9A7A5E;line-height:1.5;}
 .ph-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.ph-modebar[hidden]{display:none;}
 /* 模式入口那两颗：只靠 padding 撑出来是 37px 高，比手指按得准的下限矮 7px */
 .ph-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#F0A87C,#D9834F);box-shadow:0 4px 0 #B4693C;
@@ -1586,7 +1588,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 真下到某一关里就把这两个入口收起来:360px 宽上它俩排不下、要折成两行,
+      // 连同外边距占掉 106px。舞台一共才看得见 530px,六颗 56×56 的方向键
+      // 整排掉在裁切线以下,纯触屏一步都走不动(W5R2-C-02)。
+      // 顺带把 W5R2-C-06 也堵上:关卡进行中点得着 ♾️ 的话,关卡层只被 hidden 藏起来,
+      // 两条 requestAnimationFrame 会同时跑。回选关地图就放回去,那儿地方够。
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy: () => {
+            handle?.destroy?.();
+            // 无尽 / 双人开着的时候这一条本来就该收着,别替它放回来
+            if (!current) bar.hidden = false;
+          },
+        };
+      },
       mapHint: "清洁度、用时、香香星,三样都做到就是三颗星!",
       grandMessage: "188 段路全部变香喷喷,你就是货真价实的便便超人!",
       guideTitle: "清洁小攻略",

@@ -78,6 +78,8 @@ export const RBG_CSS = `
 
 const SHELL_CSS = `
 .rbg-bar { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none}，这里补回来 */
+.rbg-bar[hidden] { display: none; }
 /* 模式入口那两颗：只靠 padding 撑出来是 40px 高，比手指按得准的下限矮 4px */
 .rbg-open { border: none; border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #FF9A9A, #E36A6A); box-shadow: 0 4px 0 #BF4A4A; display: inline-flex; align-items: center; justify-content: center; min-height: ${TOGGLE_MIN_H}px; }
 .rbg-open.rbg-open-vs { background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 4px 0 #3B55C2; }
@@ -997,7 +999,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel: (stage, ctx) => playLevel(stage, ctx, settings),
+      // 真下到某一关里就把这两个入口收起来：360px 宽上它俩排不下、要折成两行，
+      // 连同外边距占掉 106px。舞台一共才看得见 530px，两颗 132×76 的
+      // 「🪢 用力拉」整排掉在裁切线以下，触屏一下都拉不动（W5R2-C-05）。
+      // 顺带堵上 W5R2-C-06：关卡进行中点得着 ♾️ 的话，关卡层只被 hidden 藏起来，
+      // 两条 requestAnimationFrame 会同时跑。回选关地图就放回去。
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx, settings);
+        return {
+          destroy: () => {
+            handle?.destroy?.();
+            // 对战场 / 无尽开着的时候这一条本来就该收着，别替它放回来
+            if (!side) bar.hidden = false;
+          },
+        };
+      },
       guide,
       mapHint: "按住蓄力、松手换气,踩着 🎈 加油点发力,十大赛场等你称王!",
       grandMessage: "188 场拔河全部拉赢,大力士奖杯归你!",

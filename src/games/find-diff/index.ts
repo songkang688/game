@@ -134,6 +134,8 @@ const CSS = `
 @keyframes fdfPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
 .fdf-msg{min-height:20px;font-size:14px;font-weight:800;text-align:center;line-height:1.4;}
 .fdf-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none}，这里补回来 */
+.fdf-tools[hidden]{display:none;}
 .fdf-btn{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;cursor:pointer;
   min-height:44px;color:#fff;background:linear-gradient(180deg,#74c0fc,#4dabf7);box-shadow:0 4px 0 #1c7ed6;
   font-family:inherit;white-space:nowrap;}
@@ -945,7 +947,22 @@ export function mount(api: GameApi): { destroy: () => void } {
       chapters: CHAPTERS,
       mapHint: "一行一行按路线扫，比满屏乱看快得多～",
       grandMessage: "188 关全部找完，你已经练出一套自己的观察方法了！",
-      playLevel,
+      // 真下到某一关里就把 ♾️ 入口收起来，回选关地图再放回去。两件事一起解决：
+      // ① 关内那 52px 是提示键与放大滑杆掉出屏幕的一部分（W5R2-C-04）；
+      // ② 关卡进行中点得着 ♾️ 的话，关卡层只被 hidden 藏起来、秒表继续走，
+      //    52 秒后「时间到」结算屏会盖在正在进行的马拉松上（W5R2-C-06）。
+      // 先收再摆：格子是在 playLevel 里按可视高摊的，量早了这 52px 没人认领。
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy: () => {
+            handle?.destroy?.();
+            // 马拉松开着的时候这一条本来就该收着，别替它放回来
+            if (!mode) bar.hidden = false;
+          },
+        };
+      },
     }
   );
 

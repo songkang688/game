@@ -475,12 +475,28 @@ export function mount(api: GameApi): { destroy: () => void } {
   life.on(albumBtn, "click", () => openMode((host) => mountAlbum(host, api, closeMode)));
   refreshBar();
 
+  const runLevel = makePlayLevel(api, refreshBar);
+
   const game = mountLevelGame(
     { ...api, root: levelHost },
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel: makePlayLevel(api, refreshBar),
+      // 真下到某一关里就把这两个入口收起来：360px 宽上它俩排不下、要折成两行，
+      // 连同外边距占掉 104px。关内不需要这两个入口（回地图就有），
+      // 而且关卡进行中点得着 ♾️ 的话，关卡层只被 hidden 藏起来、不销毁（W5R2-C-06）。
+      // 先收再摆：fitIntoStage() 是在 playLevel 里量的，量早了这 104px 没人认领。
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = runLevel(stage, ctx);
+        return {
+          destroy: () => {
+            handle?.destroy?.();
+            // 马拉松 / 相册开着的时候这一条本来就该收着，别替它放回来
+            if (!mode) bar.hidden = false;
+          }
+        };
+      },
       guide,
       mapHint: "看清楚它想要什么再动手，一次都不做岔就是 3 星～",
       grandMessage: "188 天的照顾全部完成，小屋里到处都是你们的照片！"

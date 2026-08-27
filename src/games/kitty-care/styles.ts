@@ -172,6 +172,8 @@ export const KTC_CSS = `
 .ktc-mini:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(180,130,60,.28);}
 .ktc-mini.ktc-primary{background:linear-gradient(180deg,#ffb454,#f79c2a);color:#fff;box-shadow:0 3px 0 #d97f16;}
 .ktc-tools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 8px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none}，这里补回来 */
+.ktc-tools[hidden]{display:none;}
 .ktc-msg{position:relative;z-index:3;text-align:center;min-height:22px;font-weight:800;color:#a86a28;
   margin-top:8px;font-size:15px;line-height:1.5;}
 .ktc-safety{position:relative;z-index:3;text-align:center;font-size:13px;font-weight:800;color:#3f7a68;
