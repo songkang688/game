@@ -736,7 +736,8 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
     c2d.stroke();
     c2d.setLineDash([]);
     // 半屏名牌：自绘小花 / 小星标 + 名字文字（不再用 emoji 直出）
-    c2d.font = "bold 13px sans-serif";
+    // 窗口 7 R1 修复 A-12:名牌文字提到 14px(功能小字底线)
+    c2d.font = "bold 14px sans-serif";
     c2d.textAlign = "center";
     drawFcFlower(c2d, W * 0.25 - 22, 46, 7, PLAYERS.doudou.color);
     c2d.fillStyle = PLAYERS.doudou.color;
