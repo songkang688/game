@@ -73,7 +73,7 @@
 | 8 | 手感与分级 | 膨胀 / 晃悠 / 绷紧三段 + 最后一秒倒数;彩虹波;砖散成小花;被困的人在泡泡里左右晃、头顶一圈倒计时;`prefers-reduced-motion` CSS 关过渡、画布这边 `matchMedia` 自己收住晃动 | 照做 |
 | 9 | 手机 360px | 摇杆 + 放泡 / 踢泡 / 拍破三颗钮,热区 ≥44 | 计划以为「排得下」就完了。真机上**排下了也按不到**:平台的 `.game-stage` 是 `overflow:hidden` 的定高一屏,摇杆整块落在屏幕外面。棋盘高度因此改成量出来的(扣掉棋盘上方真实位置与下方提示条 / 摇杆实际高度),暂停钮搬进标题条腾出一行,矮屏提示条让位,救援条弹出时再重排一次 |
 | 10 | 平台接线 | `openCampaignLevel(n)` / `initialLevel` / `?level=` / `requestSkip` | 直达关卡这条路原本没有跳关按钮,补了和 `tank-battle` 同一套家长门 |
-| 11 | 收尾 | 局部 `<style>`;`destroy` 归零;**新增 129 个用例** | 用例数超出计划的 20 一大截,因为运行时那层得靠自带 DOM 桩(`domStub.ts`)才验得动 |
+| 11 | 收尾 | 局部 `<style>`;`destroy` 归零;**新增 120 个用例**(`upgrade12` 60 + `ai12` 16 + `runtime12` 44) | 用例数超出计划的 20 一大截,因为运行时那层得靠自带 DOM 桩(`domStub.ts`)才验得动 |
 
 **同格重复提交**:rebase 到 `origin/game-1.2-window3` 时本款目录只有 1.1 的代码,没有别人推的 1.2 版本,
 不存在需要合流的另一路实现。既有的 `logic.test.ts` / `levels.test.ts` / `ai.test.ts` / `smoke.test.ts`
