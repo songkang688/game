@@ -125,6 +125,10 @@ const MAX_CELL = 44;
 const MIN_CELL = 22;
 /** 击掌的冷却 */
 const HIGH_FIVE_MS = 2600;
+/** 暂停键 */
+const PAUSE_CODE = "Escape";
+/** 暂停时棋盘下面那一行 */
+const PAUSE_LINE = "⏸ 先歇一会儿,再按一次 Esc 接着玩。";
 
 // ---------------------------------------------------------------------------
 // 配色
@@ -470,6 +474,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   // ---- 键盘 ---------------------------------------------------------------
   function onKeyDown(e: KeyboardEvent): void {
     if (finished) return;
+    if (e.code === PAUSE_CODE) {
+      e.preventDefault();
+      setPaused(!paused);
+      return;
+    }
+    if (paused) return;
     if (isSwitchCode(e.code)) {
       e.preventDefault();
       // 双人模式下按 Tab 也直接进单人 —— 一个人坐下来玩的时候不用先找按钮
@@ -509,6 +519,31 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   window.addEventListener("blur", onBlur);
 
   // ---- 交互 ---------------------------------------------------------------
+  /**
+   * 暂停 / 继续。两套键位一起松开,缓冲也清掉 ——
+   * 不然暂停前按住的那一下会在恢复的瞬间兑现,人莫名其妙走出去一格。
+   */
+  function setPaused(next: boolean): void {
+    if (finished || paused === next) return;
+    paused = next;
+    held.clear();
+    views.ice.buffer = emptyBuffer();
+    views.fire.buffer = emptyBuffer();
+    if (paused) {
+      lastFrame = 0;
+      toastUntil = Number.POSITIVE_INFINITY;
+      tip.textContent = PAUSE_LINE;
+      say(PAUSE_LINE);
+    } else {
+      lastFrame = 0;
+      toastUntil = 0;
+      tip.textContent =
+        waitingLine(st.ice === level.iceDoor, st.fire === level.fireDoor) || analysis.hint;
+      say("接着玩");
+      refreshHud();
+    }
+  }
+
   function afterSoloChange(): void {
     held.clear();
     views.ice.buffer = emptyBuffer();
@@ -1502,6 +1537,40 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     }
   }
 
+  /**
+   * 背景视差:三层远景按 0.18 / 0.34 / 0.55 的比例跟着镜头挪。
+   * 纯装饰,一格判定都不碰 —— 它存在的唯一理由是让「镜头在动」这件事看得出来,
+   * 不然拉远的时候画面像卡住了。
+   */
+  function drawParallax(c: CanvasRenderingContext2D, cell: number): void {
+    const layers: Array<[number, number, string]> = [
+      [0.18, 0.52, "#ffffff5c"],
+      [0.34, 0.68, "#ffffff44"],
+      [0.55, 0.84, palette.wallTop],
+    ];
+    c.save();
+    for (const [depth, top, tone] of layers) {
+      const shift = -camX * cell * depth;
+      const span = Math.max(72, cell * 3.4);
+      const baseY = viewH * top;
+      c.globalAlpha = depth === 0.55 ? 0.22 : 1;
+      c.fillStyle = tone;
+      c.beginPath();
+      c.moveTo(0, viewH);
+      const first = Math.floor(-shift / span) - 1;
+      const last = first + Math.ceil(viewW / span) + 2;
+      for (let i = first; i <= last; i++) {
+        const cx = shift + i * span;
+        c.lineTo(cx, baseY);
+        c.quadraticCurveTo(cx + span / 2, baseY - span * 0.34, cx + span, baseY);
+      }
+      c.lineTo(viewW, viewH);
+      c.closePath();
+      c.fill();
+    }
+    c.restore();
+  }
+
   function render(now: number): void {
     const c = canvas.getContext("2d");
     if (!c) return;
@@ -1514,6 +1583,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     grad.addColorStop(1, palette.bg1);
     c.fillStyle = grad;
     c.fillRect(0, 0, viewW, viewH);
+    drawParallax(c, cell);
 
     const offX = viewW / 2 - camX * cell;
     const offY = viewH / 2 - camY * cell;
@@ -1602,12 +1672,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
 
   return {
     pause(): void {
-      paused = true;
-      held.clear();
+      setPaused(true);
     },
     resume(): void {
-      paused = false;
-      lastFrame = 0;
+      setPaused(false);
     },
     destroy(): void {
       finished = true;

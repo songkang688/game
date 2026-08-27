@@ -46,8 +46,11 @@ import {
   ENTER_OK,
   ENTER_SOLID,
   canEnter,
+  gemsAllReachable,
   initialState,
+  isWin,
   parseLevel,
+  solveLevel,
   type GameState,
   type Hero,
   type ParsedLevel,
@@ -514,6 +517,43 @@ describe("机关联动的光路提示", () => {
 // ---------------------------------------------------------------------------
 
 describe("机关接进真关卡", () => {
+  /**
+   * 规格点名要抽的三关。它们都在合作机关登场之后,
+   * 所以这一条同时证明「机关摆上去了」和「摆上去之后照样解得开」。
+   */
+  const SPOTLIGHT = [99, 144, 187];
+
+  it("第 100 / 145 / 188 关摆上机关之后依然可解,而且原来的解一步没丢", () => {
+    for (const level of SPOTLIGHT) {
+      const lv = parseLevel(analyzeLevel(level).grid);
+      const kit = buildCoopKit(level, lv);
+      const coop = initialCoop(kit);
+      expect(kit.kinds.length, `第 ${level + 1} 关`).toBeGreaterThan(0);
+
+      const res = solveLevel(lv, true);
+      expect(res.solvable, `第 ${level + 1} 关`).toBe(true);
+
+      // 照着旧解一步一步走,每一步在叠了机关之后都还走得通
+      let st = initialState(lv);
+      let cur = coop;
+      for (const step of res.path!) {
+        const out = moveWithCoop(lv, kit, cur, st, step.hero, step.dir);
+        expect(out.kind, `第 ${level + 1} 关的第 ${step.hero} 步`).toBe("moved");
+        st = out.state;
+        cur = out.coop;
+      }
+      expect(isWin(lv, st), `第 ${level + 1} 关走到门口`).toBe(true);
+    }
+  }, 120000);
+
+  it("第 100 / 145 / 188 关每颗宝石都还有人捡得到", () => {
+    for (const level of SPOTLIGHT) {
+      const lv = parseLevel(analyzeLevel(level).grid);
+      const res = solveLevel(lv);
+      expect(gemsAllReachable(lv, res), `第 ${level + 1} 关`).toBe(true);
+    }
+  }, 120000);
+
   it("第 100 关照样走得动第一步,机关没把出发点堵死", () => {
     const lv = parseLevel(analyzeLevel(COOP_FROM_LEVEL).grid);
     const kit = buildCoopKit(COOP_FROM_LEVEL, lv);
