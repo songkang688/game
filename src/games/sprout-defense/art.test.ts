@@ -307,6 +307,25 @@ describe("1.3 结算星是路径 + 渐变", () => {
     expect(unlit).not.toContain("linGrad");
     expect(popping.length).toBeGreaterThan(lit.length);
   });
+
+  it("r2 B档TOP8:星弹是金渐变+深金描边,花粉弹是三瓣圆云(源码钉住,不许退回平涂)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+    const start = src.indexOf("for (const s of shots)");
+    const end = src.indexOf("for (const bug of bugs)");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const shotSection = src.slice(start, end);
+    // 星弹:径向渐变(#ffe9a0→#f0b429)+ 描边 #c9861b,与 drawClearStar 金星三色同族
+    expect(shotSection).toContain("createRadialGradient");
+    expect(shotSection).toContain("#ffe9a0");
+    expect(shotSection).toContain("#f0b429");
+    expect(shotSection).toContain("#c9861b");
+    expect(shotSection).toContain("ctx.stroke()");
+    // 花粉弹:独立分支画三瓣圆云,不再落进星形分支
+    expect(shotSection).toContain('s.proj === "puff"');
+    expect((shotSection.match(/ctx\.ellipse\(/g) ?? []).length).toBeGreaterThanOrEqual(3);
+  });
 });
 
 /* ---------------- 七、氛围层的弱动效降级 ---------------- */

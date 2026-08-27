@@ -1982,8 +1982,29 @@ export function mount(api: GameAPI): SproutDefenseHandle {
           ctx.lineTo(x + Math.cos(a) * cell * 0.12, y + Math.sin(a) * cell * 0.12);
           ctx.stroke();
         }
+      } else if (s.proj === "puff") {
+        // r2(B档TOP8):蓬蓬花的花粉弹不再落进星形分支——三瓣小圆云才像一团花粉
+        ctx.fillStyle = "rgba(255,208,232,.9)";
+        ctx.beginPath();
+        ctx.ellipse(x, y - cell * 0.03, cell * 0.1, cell * 0.08, 0, 0, Math.PI * 2);
+        ctx.ellipse(x - cell * 0.09, y + cell * 0.04, cell * 0.07, cell * 0.06, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + cell * 0.09, y + cell * 0.04, cell * 0.07, cell * 0.06, 0, 0, Math.PI * 2);
+        ctx.fill();
       } else {
-        ctx.fillStyle = "#ffd868";
+        // r2(B档TOP8):星弹从平涂换金渐变 + 深金描边,与 drawClearStar 金星三色同族
+        const rGrad = ctx.createRadialGradient(
+          x - cell * 0.042,
+          y - cell * 0.042,
+          cell * 0.028,
+          x,
+          y,
+          cell * 0.14,
+        );
+        rGrad.addColorStop(0, "#ffe9a0");
+        rGrad.addColorStop(1, "#f0b429");
+        ctx.fillStyle = rGrad;
+        ctx.strokeStyle = "#c9861b";
+        ctx.lineWidth = Math.max(1, cell * 0.02);
         ctx.beginPath();
         for (let i = 0; i < 10; i++) {
           const a = (Math.PI * i) / 5 - Math.PI / 2 + s.x * 2;
@@ -1995,6 +2016,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
         }
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
       }
     }
 
