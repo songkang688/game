@@ -416,10 +416,10 @@ export function landingLine(plane: PlaneRef, res: Landing): string {
   const bits: string[] = [];
   if (res.from === BASE) bits.push(`${who}的飞机起飞啦`);
   else bits.push(`${who}向前走了 ${res.hops.length} 步`);
-  if (res.blocked) bits.push("前面有一座叠机堡垒，只好原路飞回来");
+  if (res.blocked) bits.push("前面有一座叠机堡垒，只好原路退回来");
   else if (res.bounced) bits.push("到终点还有多的步数，在通道里折返");
   if (res.jumped) bits.push("踩到本色格，向前跳了 4 格");
-  if (res.flew) bits.push("接上虚线航线，一路飞到对面");
+  if (res.flew) bits.push("接上虚线航线，径直飞到对面");
   if (res.selfBack) bits.push("撞进对方的叠机堡垒，大家一起绕回基地重新出发");
   else if (res.captured.length === 1) {
     bits.push(`把 ${COLOR_INFO[res.captured[0].color].name} 的一架送回基地`);

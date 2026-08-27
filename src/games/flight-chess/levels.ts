@@ -40,9 +40,9 @@ import { playTurn, previewMove, scoreMove, type AiTier } from "./ai";
 export const CHAPTERS: Chapter[] = [
   { name: "起飞跑道", emoji: "🛫", color: "#D6F0FF", desc: "只有掷到 6 才能从基地起飞，起飞之后还能再掷一次。", size: 24 },
   { name: "跳格子", emoji: "🟦", color: "#DCEBFF", desc: "停在自己颜色的格子上，就能再往前跳 4 格。", size: 24 },
-  { name: "航线飞", emoji: "〰️", color: "#E2E6FF", desc: "本色航线格连着一条虚线，踩上去就一路飞到对面。", size: 24 },
+  { name: "航线飞", emoji: "〰️", color: "#E2E6FF", desc: "本色航线格连着一条虚线，踩上去就径直飞到对面。", size: 24 },
   { name: "撞机演练", emoji: "💫", color: "#FFE6F1", desc: "落点上有对方一架，就把它送回基地重新出发。", size: 24 },
-  { name: "叠机堡垒", emoji: "🏰", color: "#E3F7E8", desc: "两架叠在一起谁也撞不动，还能把敌机挡得原路飞回去。", size: 22 },
+  { name: "叠机堡垒", emoji: "🏰", color: "#E3F7E8", desc: "两架叠在一起谁也撞不动，还能把敌机挡得原路退回去。", size: 22 },
   { name: "通道折返", emoji: "🎯", color: "#FFF0D8", desc: "终点必须正好走到，多出来的步数要在通道里折返。", size: 22 },
   { name: "改进规则", emoji: "🔧", color: "#EDE6FF", desc: "5 和 6 都能起飞，但连着掷出三个 6 这一手就作废。", size: 24 },
   { name: "四人决赛", emoji: "🏆", color: "#FFE2DC", desc: "四个人同场，对手是地狱档，全部机制一起上。", size: 24 }
