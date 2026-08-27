@@ -2608,7 +2608,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (r.mirror) tags.push("🪞 镜像会翻");
       if (tags.length > 0) {
         ctx.fillStyle = "#8a7a5e";
-        ctx.font = "13px sans-serif";
+        // 回合条件说明是功能文案,不许低于 14px(W7R2 清 R1 遗留 A-13)
+        ctx.font = "14px sans-serif";
         wrapText(tags.join(" · "), w / 2, y + 122, Math.min(w - 60, 420), 18);
       }
       ctx.fillStyle = "#c47a2a";
