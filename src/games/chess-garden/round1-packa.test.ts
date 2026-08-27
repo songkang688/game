@@ -401,6 +401,47 @@ describe("PA-CG · Esc 暂停", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* R2-PA-5 · 残局连胜里主动认输的收场话                                  */
+/* ------------------------------------------------------------------ */
+
+describe("R2-PA-5 · 残局连胜的收场话", () => {
+  /** 进到残局连胜里，返回整款的句柄 */
+  function openEndless(): { destroy: () => void } {
+    const handle = mount(fakeApi().api as never);
+    dom.root.find((e) => e.className.includes("cg-open") && e.textContent.includes("残局连胜"))!.click();
+    flushTimers(dom, 4);
+    return handle;
+  }
+
+  function overText(): string {
+    return dom.root.find((e) => e.className.includes("cg-over-s"))?.textContent ?? "";
+  }
+
+  it("自己点认输，收场话说的是「你先收手了」，不是「被对方翻过来了」", () => {
+    const handle = openEndless();
+    dom.root.find((e) => e.className.includes("cg-tool--warn"))!.click();
+    flushTimers(dom, 4);
+    const line = overText();
+    expect(line, "认输之后没有收场浮层").not.toBe("");
+    expect(line, "认输和被翻盘还是共用一句").toContain("你先收手了");
+    expect(line).not.toContain("被对方翻过来了");
+    expect(line, "连过几局没写出来").toContain("你连过了 0 局");
+    handle.destroy();
+  });
+
+  it("收场话里没有批评孩子的说法，也没有血腥字眼", () => {
+    const handle = openEndless();
+    dom.root.find((e) => e.className.includes("cg-tool--warn"))!.click();
+    flushTimers(dom, 4);
+    const line = overText();
+    for (const bad of ["笨", "蠢", "废物", "活该", "血", "死掉", "杀死"]) {
+      expect(line.includes(bad), `收场话里出现了「${bad}」`).toBe(false);
+    }
+    handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* PA-CG · 退出再进                                                     */
 /* ------------------------------------------------------------------ */
 

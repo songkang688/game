@@ -423,7 +423,16 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
           start();
           return;
         }
-        finish(st.winner === 0 ? "这一局走成和棋了。" : "这一局被对方翻过来了。");
+        // 自己收的手和被对方翻盘不是一回事,收场话分开说
+        finish(
+          st.kind === "resign"
+            ? st.winner === BLACK
+              ? "这一局你先收手了。"
+              : "对手先收手了，这一局不按连胜算。"
+            : st.winner === 0
+              ? "这一局走成和棋了。"
+              : "这一局被对方翻过来了。"
+        );
       },
     });
   }
