@@ -257,8 +257,10 @@ const CSS = `
   .dvs-card-head{font-size:12px;}
   .dvs-card-foot{font-size:10.5px;}
   .dvs-pads{flex-direction:column;gap:6px;padding:0 6px 8px;}
-  .dvs-pad{justify-content:center;}
-  .dvs-pad button{min-width:38px;min-height:40px;font-size:15px;border-radius:12px;}
+  /* r2 修复 W4R2-05:触控键回到 40px 触区底线;改收 gap(6→4)保住零溢出——
+     360px 下 7 键一行 7×40+6×4=304px,加两侧 6px 内边距 316px<360;320px 下 304≤308 也放得下 */
+  .dvs-pad{justify-content:center;gap:4px;}
+  .dvs-pad button{min-width:40px;min-height:40px;font-size:15px;border-radius:12px;}
   .dvs-pick{padding:5px 9px;font-size:12px;}
 }
 @media (prefers-reduced-motion:reduce){
