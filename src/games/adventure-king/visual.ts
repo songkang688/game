@@ -1058,3 +1058,129 @@ export function castleBoxSvg(): string {
     `</svg>`
   );
 }
+
+// ---------------------------------------------------------------------------
+// 古堡机关小图标(窗口 6 第 2 轮 C 档:第 1 轮登记的「机关全 emoji」清偿)
+// 与 castleHeroSvg / castleBoxSvg 同族:64 视窗 + 落影椭圆 + 1.5px 墨描边
+// + 左上高光。只换 cellGlyph 的产出字符串,格子判定 / explore.ts 一个字不动。
+// ---------------------------------------------------------------------------
+
+export type CastleGlyphKind =
+  | "exit"
+  | "key"
+  | "lock"
+  | "plate"
+  | "pgate"
+  | "lamp-on"
+  | "lamp-off"
+  | "cgate"
+  | "plank"
+  | "wedge"
+  | "portal"
+  | "sticker";
+
+function glyphWrap(kind: CastleGlyphKind, inner: string, shadow = true): string {
+  return (
+    `<svg class="advk-glyph advk-glyph-${kind}" viewBox="0 0 64 64" width="100%" height="100%" ` +
+    `aria-hidden="true" focusable="false">` +
+    (shadow ? `<ellipse cx="32" cy="57" rx="13" ry="3" fill="${CASTLE_SHADOW}"/>` : "") +
+    inner +
+    `</svg>`
+  );
+}
+
+const GLYPH_GOLD = "#F0C25A";
+const GLYPH_WOOD = "#C89B6C";
+
+const CASTLE_GLYPHS: Record<CastleGlyphKind, () => string> = {
+  /** 出口:拱顶木门 + 中缝 + 金门把,左上受光弧 */
+  exit: () =>
+    `<path d="M18 54V30a14 14 0 0 1 28 0v24z" fill="${GLYPH_WOOD}" stroke="${CASTLE_INK}" stroke-width="1.5" stroke-linejoin="round"/>` +
+    `<path d="M41 54V25.5a14 14 0 0 1 5 4.5v24z" fill="rgba(90,60,30,.22)"/>` +
+    `<path d="M27 54V21.6M36 54V18.4" stroke="rgba(90,60,30,.35)" stroke-width="1.2"/>` +
+    `<circle cx="39.5" cy="40" r="2.4" fill="${GLYPH_GOLD}" stroke="${CASTLE_INK}" stroke-width="1"/>` +
+    `<path d="M21 30a11.5 11.5 0 0 1 6.6-9" stroke="rgba(255,255,255,.7)" stroke-width="2" fill="none" stroke-linecap="round"/>`,
+  /** 钥匙:金环头 + 键身双齿 */
+  key: () =>
+    `<circle cx="32" cy="20" r="9" fill="${GLYPH_GOLD}" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<circle cx="32" cy="20" r="3.8" fill="#FFF7EC" stroke="${CASTLE_INK}" stroke-width="1.2"/>` +
+    `<path d="M29.2 29h5.6v17.5l-2.8 4-2.8-4z" fill="${GLYPH_GOLD}" stroke="${CASTLE_INK}" stroke-width="1.5" stroke-linejoin="round"/>` +
+    `<path d="M34.8 36h5.4v3.4h-5.4zM34.8 42h4.2v3.4h-4.2z" fill="${GLYPH_GOLD}" stroke="${CASTLE_INK}" stroke-width="1.3" stroke-linejoin="round"/>` +
+    `<path d="M25.9 15.6a7.6 7.6 0 0 1 5.1-3.2" stroke="rgba(255,255,255,.85)" stroke-width="2" fill="none" stroke-linecap="round"/>`,
+  /** 锁门:银锁梁 + 金锁身 + 墨锁孔 */
+  lock: () =>
+    `<path d="M24 30v-6a8 8 0 0 1 16 0v6" stroke="${CASTLE_INK}" stroke-width="6" fill="none" stroke-linecap="round"/>` +
+    `<path d="M24 30v-6a8 8 0 0 1 16 0v6" stroke="#AEB6CC" stroke-width="3.6" fill="none" stroke-linecap="round"/>` +
+    `<rect x="19" y="29" width="26" height="21" rx="5.6" fill="${GLYPH_GOLD}" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<path d="M19 35c0-3.3 2.7-6 6-6h14c3.3 0 6 2.7 6 6z" fill="rgba(255,255,255,.4)"/>` +
+    `<circle cx="32" cy="38.5" r="2.6" fill="${CASTLE_INK}"/><path d="M30.9 39.4h2.2v5.4h-2.2z" fill="${CASTLE_INK}"/>`,
+  /** 压力板:嵌地圆角板 + 中央按钮(顶亮描边) */
+  plate: () =>
+    glyphInnerPlate(),
+  /** 链闸:两根石柱 + 三节锁链横档 */
+  pgate: () =>
+    `<rect x="17" y="16" width="6.5" height="38" rx="2.6" fill="#B9AFA4" stroke="${CASTLE_INK}" stroke-width="1.4"/>` +
+    `<rect x="40.5" y="16" width="6.5" height="38" rx="2.6" fill="#B9AFA4" stroke="${CASTLE_INK}" stroke-width="1.4"/>` +
+    `<ellipse cx="27.5" cy="28" rx="3.4" ry="4.6" fill="none" stroke="#7C8794" stroke-width="2.6"/>` +
+    `<ellipse cx="32" cy="35" rx="3.4" ry="4.6" fill="none" stroke="#7C8794" stroke-width="2.6"/>` +
+    `<ellipse cx="36.5" cy="42" rx="3.4" ry="4.6" fill="none" stroke="#7C8794" stroke-width="2.6"/>` +
+    `<path d="M18.4 20a5 5 0 0 1 3.4-2.4" stroke="rgba(255,255,255,.7)" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+  /** 开关(亮):金灯罩 + 八向光芒(16px 下光芒突破圆罩剪影) */
+  "lamp-on": () =>
+    `<path d="M32 10.5l0 7M47.5 17.5l-5 5M54 33h-7.5M47.5 48.5l-5-5M16.5 17.5l5 5M10 33h7.5M16.5 48.5l5-5" ` +
+    `stroke="${GLYPH_GOLD}" stroke-width="3.4" stroke-linecap="round"/>` +
+    `<circle cx="32" cy="33" r="11.5" fill="#FFE9A8" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<circle cx="32" cy="33" r="6.4" fill="${GLYPH_GOLD}" stroke="${CASTLE_INK}" stroke-width="1.2"/>` +
+    `<rect x="27.5" y="45" width="9" height="5.4" rx="2" fill="${GLYPH_WOOD}" stroke="${CASTLE_INK}" stroke-width="1.3"/>` +
+    `<path d="M24.7 27.3a8.8 8.8 0 0 1 4.6-3.6" stroke="rgba(255,255,255,.85)" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,
+  /** 开关(灭):深灰灯罩、无光芒、无高光(灰度与亮灯拉开) */
+  "lamp-off": () =>
+    `<circle cx="32" cy="33" r="11.5" fill="#A79D8E" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<circle cx="32" cy="33" r="6.4" fill="#6E6455" stroke="${CASTLE_INK}" stroke-width="1.2"/>` +
+    `<rect x="27.5" y="45" width="9" height="5.4" rx="2" fill="${GLYPH_WOOD}" stroke="${CASTLE_INK}" stroke-width="1.3"/>`,
+  /** 彩门:紫水晶闸板(随开关联动,关着才画) */
+  cgate: () =>
+    `<rect x="18" y="16" width="28" height="38" rx="5" fill="#B08AE0" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<path d="M18 21c0-2.8 2.2-5 5-5h18c2.8 0 5 2.2 5 5v5H18z" fill="rgba(255,255,255,.3)"/>` +
+    `<path d="M25 24l14 22M39 24l-14 22" stroke="rgba(75,58,110,.35)" stroke-width="2" stroke-linecap="round"/>` +
+    `<circle cx="32" cy="35" r="4.6" fill="#D8C2F4" stroke="${CASTLE_INK}" stroke-width="1.3"/>`,
+  /** 跷跷板(可走端):平放厚木板 */
+  plank: () =>
+    `<rect x="14" y="36" width="36" height="9" rx="4.4" fill="${GLYPH_WOOD}" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<path d="M14 40.5h36" stroke="rgba(90,60,30,.3)" stroke-width="1.2"/>` +
+    `<path d="M17 39a10 10 0 0 1 6-1.6" stroke="rgba(255,255,255,.7)" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+  /** 跷跷板(翘起端):斜起的木板 + 支点 */
+  wedge: () =>
+    `<path d="M17 48L45 24" stroke="${CASTLE_INK}" stroke-width="11" stroke-linecap="round"/>` +
+    `<path d="M17 48L45 24" stroke="${GLYPH_WOOD}" stroke-width="8" stroke-linecap="round"/>` +
+    `<path d="M20.6 44.4l21-18" stroke="rgba(255,255,255,.5)" stroke-width="1.4" stroke-linecap="round"/>` +
+    `<path d="M26 54l6-8 6 8z" fill="#B9AFA4" stroke="${CASTLE_INK}" stroke-width="1.4" stroke-linejoin="round"/>`,
+  /** 传送圈:双圈漩涡(纯静态,不加动画通道) */
+  portal: () =>
+    `<circle cx="32" cy="34" r="14.5" fill="#CFE8FA" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<path d="M32 22.5a11.5 11.5 0 1 1-11.5 11.5" fill="none" stroke="#6FA8E8" stroke-width="3.4" stroke-linecap="round"/>` +
+    `<path d="M32 28a6 6 0 1 1-6 6" fill="none" stroke="#3E7CB8" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<circle cx="32" cy="34" r="1.8" fill="${CASTLE_INK}"/>` +
+    `<path d="M22.8 26.4a12 12 0 0 1 5.2-3.8" stroke="rgba(255,255,255,.85)" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,
+  /** 贴纸票根:锯齿票边 + 金星 */
+  sticker: () =>
+    `<path d="M17 24h30v7a4 4 0 0 0 0 8v7H17v-7a4 4 0 0 0 0-8z" fill="#F4859F" stroke="${CASTLE_INK}" stroke-width="1.5" stroke-linejoin="round"/>` +
+    `<path d="M17 24h30v7a4 4 0 0 0-1.4 1H17z" fill="rgba(255,255,255,.3)"/>` +
+    `<path d="M25 24v22" stroke="#FFF7EC" stroke-width="1.6" stroke-dasharray="2.6 2.6"/>` +
+    `<path d="M35.5 29.5l1.7 3.4 3.8.6-2.8 2.6.7 3.8-3.4-1.8-3.4 1.8.7-3.8-2.8-2.6 3.8-.6z" fill="${GLYPH_GOLD}" stroke="${CASTLE_INK}" stroke-width="1.1" stroke-linejoin="round"/>`
+};
+
+/** 压力板:嵌在地里的机关,不带落影(它就是地面),顶部受光唇 */
+function glyphInnerPlate(): string {
+  return (
+    `<rect x="16" y="22" width="32" height="24" rx="6" fill="#E4DDD0" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<rect x="16" y="22" width="32" height="6" rx="3" fill="rgba(255,255,255,.55)"/>` +
+    `<rect x="22" y="28" width="20" height="12" rx="4" fill="#CBBFA9" stroke="${CASTLE_INK}" stroke-width="1.3"/>` +
+    `<path d="M25 31a6 6 0 0 1 4-2" stroke="rgba(255,255,255,.7)" stroke-width="1.4" fill="none" stroke-linecap="round"/>`
+  );
+}
+
+/** 古堡机关小图标(导出供视觉用例咬字符串;plate 不带落影) */
+export function castleGlyphSvg(kind: CastleGlyphKind): string {
+  return glyphWrap(kind, CASTLE_GLYPHS[kind](), kind !== "plate");
+}

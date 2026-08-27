@@ -38,6 +38,7 @@ import {
   artifactSpinPhase,
   boomTrailSegments,
   castleBoxSvg,
+  castleGlyphSvg,
   castleHeroSvg,
   drawAnchorSprite,
   drawArtifactGem,
@@ -983,7 +984,8 @@ function saveAlbum(album: readonly string[]): void {
 /**
  * 一格该画成什么样(纯展示,规则都在 explore.ts)。
  * W6R1-01 修复:主角与箱子换参数化 SVG(castleHeroSvg / castleBoxSvg);
- * 机关小图标(门/钥匙/锁/开关/传送/贴纸等)按 A 档口径保留表意符号并登记。
+ * 第 2 轮 C 档清偿:机关小图标(门/钥匙/锁/压板/链闸/开关/彩门/跷跷板/
+ * 传送/贴纸)全部换同族参数化 SVG(castleGlyphSvg),emoji 退场。
  */
 function cellGlyph(state: RoomState, x: number, y: number): { html: string; cls: string } {
   const c = cellAt(state, x, y);
@@ -994,27 +996,29 @@ function cellGlyph(state: RoomState, x: number, y: number): { html: string; cls:
     case C_HIDDEN:
       return { html: "", cls: "advk-wall" };
     case C_EXIT:
-      return { html: "🚪", cls: "advk-hot" };
+      return { html: castleGlyphSvg("exit"), cls: "advk-hot" };
     case C_KEY:
-      return { html: "🔑", cls: "advk-hot" };
+      return { html: castleGlyphSvg("key"), cls: "advk-hot" };
     case C_DOOR:
-      return { html: "🔒", cls: "advk-hot" };
+      return { html: castleGlyphSvg("lock"), cls: "advk-hot" };
     case C_PLATE:
-      return { html: "🔲", cls: "advk-seen" };
+      return { html: castleGlyphSvg("plate"), cls: "advk-seen" };
     case C_PGATE:
-      return isPlateDown(state) ? { html: "", cls: "advk-seen" } : { html: "⛓️", cls: "advk-hot" };
+      return isPlateDown(state) ? { html: "", cls: "advk-seen" } : { html: castleGlyphSvg("pgate"), cls: "advk-hot" };
     case C_SWITCH:
-      return { html: state.switchOn ? "💡" : "🔅", cls: "advk-hot" };
+      return { html: castleGlyphSvg(state.switchOn ? "lamp-on" : "lamp-off"), cls: "advk-hot" };
     case C_CGATE:
-      return colorGateOpen(state.switchOn) ? { html: "", cls: "advk-seen" } : { html: "🟪", cls: "advk-hot" };
+      return colorGateOpen(state.switchOn)
+        ? { html: "", cls: "advk-seen" }
+        : { html: castleGlyphSvg("cgate"), cls: "advk-hot" };
     case C_SEESAW_L:
-      return { html: seesawWalkable("left", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+      return { html: castleGlyphSvg(seesawWalkable("left", seesawOf(state)) ? "plank" : "wedge"), cls: "advk-seen" };
     case C_SEESAW_R:
-      return { html: seesawWalkable("right", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+      return { html: castleGlyphSvg(seesawWalkable("right", seesawOf(state)) ? "plank" : "wedge"), cls: "advk-seen" };
     case C_PORTAL:
-      return { html: "🌀", cls: "advk-hot" };
+      return { html: castleGlyphSvg("portal"), cls: "advk-hot" };
     case C_STICKER:
-      return { html: "🎟️", cls: "advk-hot" };
+      return { html: castleGlyphSvg("sticker"), cls: "advk-hot" };
     default:
       return { html: "", cls: state.explored[y * state.w + x] ? "advk-seen" : "advk-dim" };
   }
