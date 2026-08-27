@@ -110,6 +110,16 @@ export function hitPoint(size: number, m: BoardMetrics, x: number, y: number): n
 export type KeyAction = "up" | "down" | "left" | "right" | "confirm" | "pass" | "pause" | null;
 
 /**
+ * 同屏双人开局前那一行说明。
+ *
+ * 原来只写了「点交叉点。F 确认,G 停一手」—— 那是朵朵那套键。
+ * 坐在右边的孩子照着按 F,按的是对家的键,轮到自己反而不知道该按什么，
+ * 所以两套键位各写各的。
+ */
+export const DUO_HINT =
+  "朵朵执黑先走,星星执白,轮流点交叉点。朵朵 WASD 挪光标、F 落子、G 停一手;星星 方向键挪光标、L 落子、K 停一手。";
+
+/**
  * 点选落子是主要玩法,键盘是等价通道:
  * 方向键 / `WASD` 挪光标,`F`(朵朵)或 `L`(星星)确认落子,`G` / `K` 停一手,`Esc` 暂停。
  */
@@ -1285,7 +1295,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, back: () =
         ? `${AI_TIER_HINTS[tier]} 贴还 ${komiFor(rule, handicap)}。`
         : mode === "endless"
           ? endlessLine(streak, best)
-          : "朵朵执黑先走,星星执白,轮流点交叉点。F 确认,G 停一手。";
+          : DUO_HINT;
     box.appendChild(note);
 
     const go = document.createElement("button");

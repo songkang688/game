@@ -63,6 +63,7 @@ import {
   CHAPTERS,
   endlessConfig,
   goalLine,
+  goalProgress,
   goalReached,
   levelConfig,
   rulesLine,
@@ -271,6 +272,8 @@ export interface TableOpts {
   scriptedDice?: Array<[number, number]>;
   /** 战役目标达成判定；返回 true 就立刻结算成功 */
   goalReached?: (state: EstateState) => boolean;
+  /** 战役目标还差多少，每次重绘都问一遍；不给就不挂这一行 */
+  goalProgress?: (state: EstateState) => string;
   sfx: (n: SoundName) => void;
   onOver: (r: TableResult) => void;
 }
@@ -341,7 +344,10 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
   const goalChip = document.createElement("span");
   goalChip.className = "se-badge";
   goalChip.textContent = opts.goalText;
-  top.append(roundChip, goalChip);
+  const progressChip = document.createElement("span");
+  progressChip.className = "se-badge";
+  progressChip.hidden = !opts.goalProgress;
+  top.append(roundChip, goalChip, progressChip);
   wrap.appendChild(top);
 
   const seatRow = document.createElement("div");
@@ -467,6 +473,7 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
   function render(): void {
     const me = state.players[state.turn];
     roundChip.textContent = `第 ${state.round} / ${opts.rules.maxRounds} 回合 · 轮到 ${me?.name ?? "-"}`;
+    if (opts.goalProgress) progressChip.textContent = opts.goalProgress(state);
     seatEls.forEach((el, i) => {
       const p = state.players[i];
       const own = deedsOf(state, i).length;
@@ -1168,6 +1175,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     scriptedDice: cfg.scriptedDice,
     goalText: `${goalLine(cfg)}｜${rulesLine(cfg)}`,
     goalReached: (state) => goalReached(cfg, state),
+    goalProgress: (state) => goalProgress(cfg, state),
     sfx: (n) => ctx.sfx(n),
     onOver: (r) => {
       // 只有真的达成目标、或者对手全部收摊才算过关；到点没够线一律重来。
