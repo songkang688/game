@@ -79,7 +79,7 @@ export function needsImmediateRefit(prevHeightPx: number, nowHeightPx: number): 
 }
 
 interface ViewLike {
-  getComputedStyle: (el: Element) => { overflowY: string; overflowX?: string };
+  getComputedStyle: (el: Element) => { overflowY: string; overflowX?: string; borderBottomWidth?: string };
 }
 
 /**
@@ -156,6 +156,20 @@ export function createClipWatch(): ClipWatch {
   };
 }
 
+/**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`（平台文件，禁改），不减这一刀就白多算 4px
+ * ——这一款拿这条线既倒推水面高度、又判「抛竿键掉出去没有」，两处都会跟着松 4px。
+ * 量不出宽度（测试桩 / 老浏览器）就当没有，绝不把可视段算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
 /** 沿祖先链找出「`overflow` 不是 `visible` 且 `keep` 认下」的那几层，各自的下沿在哪儿 */
 function bottomsOfClippers(
   el: HTMLElement,
@@ -164,10 +178,11 @@ function bottomsOfClippers(
 ): number[] {
   const out: number[] = [];
   for (let p = el.parentElement; p; p = p.parentElement) {
-    const oy = view.getComputedStyle(p).overflowY;
+    const cs = view.getComputedStyle(p);
+    const oy = cs.overflowY;
     if (oy !== "auto" && oy !== "scroll" && oy !== "hidden") continue;
     if (!keep(p)) continue;
-    out.push(p.getBoundingClientRect().bottom);
+    out.push(clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth ?? ""));
   }
   return out;
 }

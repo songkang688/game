@@ -171,6 +171,20 @@ export function arenaHeightPx(cssHeight: number, room: number): number {
  * 不走滚动条：这是个连点游戏，能滚就会「想点却滚走了」。直接收高度，点跟着百分比回来。
  * 返回拆监听的函数。
  */
+/**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`（平台文件，禁改），不减这一刀就白多算 4px
+ * ——而这一款的点是按百分比摆的、竞技场又不许滚，那 4px 里的点就是真的按不着。
+ * 量不出宽度（测试桩 / 老浏览器）就当没有，绝不把裁切线算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
 export function fitArena(el: HTMLElement): () => void {
   const view = el.ownerDocument?.defaultView ?? null;
   if (!view || typeof el.getBoundingClientRect !== "function") return () => {};
@@ -179,9 +193,10 @@ export function fitArena(el: HTMLElement): () => void {
     const css = el.getBoundingClientRect().height;
     let bottom = Number.POSITIVE_INFINITY;
     for (let p = el.parentElement; p; p = p.parentElement) {
-      const oy = view.getComputedStyle(p).overflowY;
+      const cs = view.getComputedStyle(p);
+      const oy = cs.overflowY;
       if (oy === "auto" || oy === "scroll" || oy === "hidden") {
-        bottom = Math.min(bottom, p.getBoundingClientRect().bottom);
+        bottom = Math.min(bottom, clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth));
       }
     }
     if (!Number.isFinite(bottom)) return;
