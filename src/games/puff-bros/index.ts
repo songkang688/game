@@ -1253,20 +1253,26 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
     // 地板。1.2 的对战场和上升气流里有真的坑,坑那一段不画地板 ——
     // 底下透出来的就是天,小朋友一眼看得出「这儿是空的,别走过去」
+    // (修复员装饰件:顶条上再压一道 shade(deck,+18) 亮边,镇住「平涂感」)
     for (const span of floorSpans()) {
       g.fillStyle = pal.deckSoft;
       g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, FLOOR_H);
       g.fillStyle = pal.deck;
       g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, 5);
+      g.fillStyle = shade(pal.deck, 18);
+      g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, 1.5);
     }
 
-    // 浮台
+    // 浮台(顶条同一道亮边)
     for (const pl of world.def.platforms) {
       g.fillStyle = pal.deckSoft;
       roundRect(g, pl.x, pl.y, pl.w, 13, 6);
       g.fill();
       g.fillStyle = pal.deck;
       roundRect(g, pl.x, pl.y, pl.w, 5, 3);
+      g.fill();
+      g.fillStyle = shade(pal.deck, 18);
+      roundRect(g, pl.x + 1, pl.y, pl.w - 2, 1.5, 1);
       g.fill();
     }
 

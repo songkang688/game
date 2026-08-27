@@ -91,3 +91,20 @@ describe("puff-bros · 修复员 G5 · 眩晕星与事件小图", () => {
     expect((src.match(/🍬/g) ?? []).length).toBeLessThanOrEqual(1);
   });
 });
+
+describe("puff-bros · 修复员装饰件 · 地板与浮台顶亮边", () => {
+  it("地板顶条与浮台顶条各压一道 shade(deck,+18) 亮边(镇平涂感)", () => {
+    const src = read("index.ts");
+    expect((src.match(/shade\(pal\.deck, 18\)/g) ?? []).length).toBe(2);
+    // 亮边只有 1.5px 细条,不改地板 / 浮台本体厚度
+    expect(src).toContain("span.x1 - span.x0, 1.5)");
+    expect(src).toContain("pl.w - 2, 1.5, 1)");
+  });
+
+  it("地板 / 浮台本体两阶画法原样保留(deckSoft 底 + deck 5px 顶条)", () => {
+    const src = read("index.ts");
+    expect(src).toContain("g.fillRect(span.x0, FLOOR_Y, span.x1 - span.x0, FLOOR_H)");
+    expect(src).toContain("roundRect(g, pl.x, pl.y, pl.w, 13, 6)");
+    expect(src).toContain("roundRect(g, pl.x, pl.y, pl.w, 5, 3)");
+  });
+});
