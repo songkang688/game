@@ -242,7 +242,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   });
   const heroBubble = document.createElement("div");
   heroBubble.className = "hero-bubble";
-  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>55 款原创小游戏,闯关最长 188 关。上面可以筛选、搜索、收藏 🌈</span>`;
+  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>76 款原创小游戏,闯关最长 188 关。上面可以筛选、搜索、收藏 🌈</span>`;
   const heroXingxing = createAvatarImg("xingxingRun", {
     round: false,
     className: "hero-figure hero-figure--xingxing"
