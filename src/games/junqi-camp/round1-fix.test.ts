@@ -6,6 +6,8 @@
  *  ② faceHTML 给「翻开的」棋面挂 jq-mark 角标；牌背仍统一无侧别（暗棋信息红线）；
  *  ③ crestSVG / hqSVG / hoistSVG 的旗形与旗徽双方互异（波浪旗+花徽 vs 燕尾旗+星徽）。
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SIDE_COLOR, SIDE_DARK, backSVG, crestSVG, hoistSVG, sideMarkSVG } from "./art";
 import { CSS as BOARD_CSS, faceHTML } from "./view";
@@ -50,5 +52,21 @@ describe("junqi-camp · 双方形状第二通道（A 档 3-1 严重修复）", (
     const rule = BOARD_CSS.match(/\.jq-mark\{[^}]*\}/)?.[0] ?? "";
     expect(rule).toContain("position:absolute");
     expect(rule).toContain("pointer-events:none");
+  });
+});
+
+describe("junqi-camp · HUD 字号 ≥14px（A 档 5-4 修复）", () => {
+  it("chip / note / tip / sub / pick / crest / 图例的每条规则字号都 ≥14", () => {
+    const INDEX = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    for (const cls of ["jq-chip", "jq-note", "jq-tip", "jq-sub", "jq-pick", "jq-crest"]) {
+      const rules = [...INDEX.matchAll(new RegExp(`\\.${cls}\\{[^}]*\\}`, "g"))];
+      expect(rules.length, `${cls} 没找到规则`).toBeGreaterThan(0);
+      for (const [rule] of rules) {
+        const m = /font-size:([\d.]+)px/.exec(rule);
+        if (m) expect(Number.parseFloat(m[1]), `${cls} 字号 ${m[1]}px 低于 14`).toBeGreaterThanOrEqual(14);
+      }
+    }
+    const legend = BOARD_CSS.match(/\.jq-legend\{[^}]*\}/)?.[0] ?? "";
+    expect(legend).toContain("font-size:14px");
   });
 });

@@ -164,7 +164,7 @@ export const CSS = `
 .jq-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,130,100,.28);}
 .jq-btn.jq-go{background:linear-gradient(180deg,#8FC46F,#6FA954);color:#fff;}
 .jq-btn.jq-off{opacity:.45;}
-.jq-legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;font-size:12px;
+.jq-legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;font-size:14px;
   font-weight:700;color:#6b7758;}
 .jq-legend span{background:#ffffffcc;border-radius:999px;padding:3px 9px;}
 @media (prefers-reduced-motion:reduce){
