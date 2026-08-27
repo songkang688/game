@@ -16,6 +16,12 @@ import {
   type MoleGear,
   type MolePose,
 } from "../../art/kit/moleSvg";
+import {
+  drowseBoldGroup,
+  flashCrestGroup,
+  injectAccents,
+  shieldSteelGroup,
+} from "../../art/kit/moleAccents";
 import { MOLE_SPECS, type MoleKind } from "./rhythm";
 
 // ---------------------------------------------------------------------------
@@ -129,18 +135,26 @@ export function gearFor(kind: MoleKind, hitsTaken: number): MoleGearKind | null 
   return null;
 }
 
-/** 一只地鼠(或花花兔)的主体 SVG:种类差异靠皮毛色 / 瞌睡眼 / 星芒 / 剪影 */
+/**
+ * 一只地鼠(或花花兔)的主体 SVG:种类差异靠皮毛色 / 瞌睡眼 / 星芒 / 剪影。
+ * W6R1-05/06 修复:闪光鼠叠头顶天线星(剪影级差异 + 描边星芒),
+ * 瞌睡鼠叠加粗闭眼弧与带描边瞌睡泡——kit 走 moleAccents 只增不改。
+ */
 export function moleFaceSvg(kind: MoleKind, pose: MolePose = "up"): string {
   if (kind === "bunny") return bunnySvg();
   if (kind === "gold") return moleSvg({ pose, fur: MOLE_FUR_GOLD });
-  if (kind === "sleepy") return moleSvg({ pose, sleepy: true });
-  if (kind === "flash") return moleSvg({ pose, sparkle: true });
+  if (kind === "sleepy") return injectAccents(moleSvg({ pose, sleepy: true }), [drowseBoldGroup()]);
+  if (kind === "flash") return injectAccents(moleSvg({ pose, sparkle: true }), [flashCrestGroup()]);
   return moleSvg({ pose });
 }
 
-/** 装备层 SVG(黑板要把手写算式带上) */
+/**
+ * 装备层 SVG(黑板要把手写算式带上)。
+ * W6R1-05 修复:盾面叠冷灰钢盾(灰度与皮毛拉开)+ 深描边 + 左上高光。
+ */
 export function gearSvgFor(gear: MoleGearKind, expr = ""): string {
-  return moleGearSvg(gear, expr);
+  const svg = moleGearSvg(gear, expr);
+  return gear === "shield" ? injectAccents(svg, [shieldSteelGroup()]) : svg;
 }
 
 /** 缩回时的姿态:没被敲到的可敲角色打个哈欠再降;花花兔照旧 */
