@@ -94,6 +94,9 @@ export const TIME_BUDGET_MS: Record<Difficulty, number> = {
   hell: 400,
 };
 
+/** 地狱档在多少个子以内才启动穷举杀法搜索 */
+export const MATE_PROBE_PIECES = 10;
+
 /** 界面上的「思考延时」：再快的档也不许秒应，孩子要看得见它在想 */
 export const THINK_DELAY_MS: Record<Difficulty, number> = {
   novice: 320,
@@ -165,43 +168,75 @@ export function evaluateFast(board: Board, side: Side): number {
 }
 
 /**
+ * 一方**控制**了哪些交叉点（每个点上叠了几个子）。
+ *
+ * 直接拿 `rawMoves` 数是不行的：它永远不会把自家子占着的点算进去，
+ * 于是「谁在保护谁」全数成 0，每个被盯上的子都像白送。
+ * 这里换一张影子盘 —— 占位一模一样（蹩马腿、塞象眼、炮架全都对得上），
+ * 只把要算的那个子摆回自己的颜色、其余一律算成对方的子，
+ * `rawMoves` 就会连自家子占的点一起吐出来。走法生成还是那一套，没有另写。
+ */
+export function controlMap(board: Board, side: Side): Uint8Array {
+  const foe = other(side);
+  const shadow: Board = board.slice();
+  for (let i = 0; i < shadow.length; i++) {
+    const p = shadow[i];
+    if (p && p.side === side) shadow[i] = { side: foe, type: p.type };
+  }
+  const out = new Uint8Array(90);
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const p = board[idx(x, y)];
+      if (!p || p.side !== side) continue;
+      const i = idx(x, y);
+      shadow[i] = p;
+      for (const m of rawMoves(shadow, x, y)) out[idx(m.x, m.y)]++;
+      shadow[i] = { side: foe, type: p.type };
+    }
+  }
+  return out;
+}
+
+/** 一方现在有多少条能走的路（含吃子，不含自家子占的点） */
+export function mobilityOf(board: Board, side: Side): number {
+  let n = 0;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const p = board[idx(x, y)];
+      if (p && p.side === side) n += rawMoves(board, x, y).length;
+    }
+  }
+  return n;
+}
+
+/**
  * 带机动性与威胁的细评（高档用）。
  * 「捉双」就藏在这里：一个子同时盯上两个没人保护的大子会拿到额外分。
  */
 export function evaluateFull(board: Board, side: Side): number {
   let score = evaluateFast(board, side);
-  // 谁在保护谁：一遍扫完，既拿到机动性，也拿到「攻击 / 保护」计数
-  const attackedBy: Record<string, number[]> = { red: new Array(90).fill(0), black: new Array(90).fill(0) };
-  const mobility = { red: 0, black: 0 };
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const p = board[idx(x, y)];
-      if (!p) continue;
-      const moves = rawMoves(board, x, y);
-      mobility[p.side] += moves.length;
-      for (const m of moves) attackedBy[p.side][idx(m.x, m.y)]++;
-    }
-  }
-  score += (mobility[side] - mobility[other(side)]) * 2;
-
   const enemy = other(side);
+  const mine = controlMap(board, side);
+  const theirs = controlMap(board, enemy);
+  const control: Record<Side, Uint8Array> = { red: side === "red" ? mine : theirs, black: side === "black" ? mine : theirs };
+
+  score += (mobilityOf(board, side) - mobilityOf(board, enemy)) * 2;
+
+  let hanging = 0;
   let doubleAttack = 0;
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const p = board[idx(x, y)];
-      if (!p) continue;
-      const i = idx(x, y);
-      const attackers = attackedBy[other(p.side)][i];
-      const guards = attackedBy[p.side][i];
-      if (attackers > 0 && guards === 0 && p.type !== "K") {
-        // 没人保护还被盯上：按子力的三成算风险
-        const risk = Math.round(PIECE_VALUE[p.type] * 0.3);
-        score += p.side === enemy ? risk : -risk;
-        if (p.side === enemy && attackers >= 2) doubleAttack += 20;
-      }
-    }
+  for (let i = 0; i < 90; i++) {
+    const p = board[i];
+    if (!p || p.type === "K") continue;
+    const attackers = control[other(p.side)][i];
+    if (attackers === 0) continue;
+    const guards = control[p.side][i];
+    // 被盯上又没人保护：按子力的三成算风险。有人保护就只算「被缠上」的一点点。
+    const risk = guards === 0 ? Math.round(PIECE_VALUE[p.type] * 0.3) : 8;
+    hanging += p.side === enemy ? risk : -risk;
+    // 捉双：同一个子被两路盯上、护不过来，比单纯挨一下值钱
+    if (p.side === enemy && guards === 0 && attackers >= 2) doubleAttack += 20;
   }
-  return score + doubleAttack;
+  return score + hanging + doubleAttack;
 }
 
 const MATE = 900000;
@@ -420,9 +455,9 @@ function pickRandom(moves: Move[], rng: () => number): Move {
 export interface ThinkOptions {
   /** 覆盖这一档的思考预算（测试里调小，界面上用默认值） */
   timeMs?: number;
-  /** 覆盖搜索层数（测试用） */
+  /** 覆盖搜索层数（测试用），给了就是硬顶，地狱档也不再往下多挖 */
   depth?: number;
-  /** 计时函数，默认 Date.now */
+  /** 计时函数，默认 Date.now。测试里换成「问一次走一格」的假时钟，结果就可复现 */
   now?: () => number;
 }
 
@@ -451,6 +486,23 @@ export function chooseMove(
   const now = opts.now ?? (() => Date.now());
   const budget = opts.timeMs ?? TIME_BUDGET_MS[level];
   const work = board.slice();
+
+  // 大师 / 地狱：开局照套路走
+  if (level === "master" || level === "hell") {
+    const book = bookMove(work, side, rng);
+    if (book) return book;
+  }
+
+  // 地狱：残局先算杀，能三步之内结束就直接结束。
+  // 卡在十个子以内是因为求解器是穷举的：子一多，光算杀就要好几秒，
+  // 界面上会卡成「电脑不动了」，而那种局面本来也轮不到三步杀。
+  if (level === "hell" && pieceCount(work) <= MATE_PROBE_PIECES) {
+    const mate = solveMate(work, side, 3);
+    if (mate && mate.first.length > 0) return mate.first[0];
+  }
+
+  // 计时从这里才起算：查开局库、算杀都在预算之外，
+  // 否则残局里光算杀就把时间用光，正式搜索一开跑就判超时、退回贪心着法。
   const ctx: Ctx = {
     board: work,
     full: level === "hard" || level === "master" || level === "hell",
@@ -462,26 +514,17 @@ export function chooseMove(
     now,
   };
 
-  // 大师 / 地狱：开局照套路走
-  if (level === "master" || level === "hell") {
-    const book = bookMove(work, side, rng);
-    if (book) return book;
-  }
-
-  // 地狱：残局先算杀，能三步之内结束就直接结束
-  if (level === "hell" && pieceCount(work) <= 12) {
-    const mate = solveMate(work, side, 3);
-    if (mate && mate.first.length > 0) return mate.first[0];
-  }
-
   const target = opts.depth ?? SEARCH_DEPTH[level];
   const mateFirst = level === "master" || level === "hell";
   const ordered = orderMoves(ctx, moves, null, mateFirst);
 
-  // 迭代加深：地狱档从两层起一层层往上挖，时间到就用上一层挖出来的结果；
-  // 其余档位只跑自己那一层（层数就是它们的性格）。
-  const startDepth = level === "hell" ? 2 : target;
-  const maxDepth = level === "hell" ? target + 3 : target;
+  // 迭代加深：一层一层往上挖，时间用完就交上一层挖完的结果。
+  // 直接按名义层数一次搜到底看着更省事，但时间一到就只剩半层残缺的排名，
+  // 反而不如浅一层搜完的答案 —— 所以每一档都走迭代加深，`target` 是它挖到的最深处。
+  const startDepth = Math.min(target, 2);
+  // 地狱档没被指定层数时可以一直往下挖，挖多深由时间说了算；
+  // 测试里显式给了 `depth` 就当成硬顶，好让结果可复现。
+  const maxDepth = opts.depth !== undefined ? target : level === "hell" ? target + 3 : target;
   let best = ordered[0];
   let searched = ordered;
   for (let depth = startDepth; depth <= maxDepth; depth++) {
@@ -504,13 +547,12 @@ export function chooseMove(
       }
       if (score > alpha) alpha = score;
     }
-    if (localBest) best = localBest;
+    // 这一层没搜完就整层作废：半层的排名是偏的，宁可用上一层的结论
     if (ctx.aborted) break;
+    if (localBest) best = localBest;
     // 上一层的排名拿来给下一层排序：越深越省时间
-    if (rank.length === searched.length) {
-      rank.sort((a, b) => b.s - a.s);
-      searched = rank.map((r) => r.m);
-    }
+    rank.sort((a, b) => b.s - a.s);
+    searched = rank.map((r) => r.m);
     if (now() >= ctx.deadline) break;
   }
   return best ?? moves[0];

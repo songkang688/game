@@ -23,6 +23,32 @@ import {
   rawMoves,
 } from "./logic";
 
+/** 九宫的三条横线（红在下、黑在上） */
+const PALACE_ROWS: Record<Side, readonly number[]> = { red: [9, 8, 7], black: [0, 1, 2] };
+
+/**
+ * 找将帅。规则保证它只会在自己的九宫那九格里，所以先扫九格；
+ * 万一没找到（测试里摆的怪局面）再退回 logic 的全盘扫描，结论保持一致。
+ * 合法性检查每走一步就要问一次将帅在哪，这九格和九十格的差别很值钱。
+ */
+function kingPos(board: Board, side: Side): Pos | null {
+  for (const y of PALACE_ROWS[side]) {
+    for (let x = 3; x <= 5; x++) {
+      const p = board[idx(x, y)];
+      if (p && p.type === "K" && p.side === side) return { x, y };
+    }
+  }
+  return findKing(board, side);
+}
+
+const RAY_DIRS: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/** 八个马位：马落在哪、以及该看哪一格的马腿 */
+const HORSE_SPOTS: ReadonlyArray<readonly [number, number, number, number]> = [
+  [1, 2, 1, 1], [-1, 2, -1, 1], [1, -2, 1, -1], [-1, -2, -1, -1],
+  [2, 1, 1, 1], [2, -1, 1, -1], [-2, 1, -1, 1], [-2, -1, -1, -1],
+];
+
 /**
  * side 的将帅有没有被攻击。
  *
@@ -31,13 +57,17 @@ import {
  * 前提是双方将帅都待在自己的九宫里 —— 这也是规则允许的唯一情况。
  */
 export function kingAttacked(board: Board, side: Side): boolean {
-  const king = findKing(board, side);
+  const king = kingPos(board, side);
   if (!king) return true;
+  return attackedAt(board, side, king.x, king.y);
+}
+
+/** 把「将帅在 (kx,ky)」这件事当已知条件问一遍：合法性检查里将帅的位置是算得出来的 */
+function attackedAt(board: Board, side: Side, kx: number, ky: number): boolean {
   const enemy = other(side);
-  const { x: kx, y: ky } = king;
 
   // 车与炮：沿四个方向找第一个子（车）与第二个子（炮）
-  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+  for (const [dx, dy] of RAY_DIRS) {
     let x = kx + dx;
     let y = ky + dy;
     while (inBoard(x, y) && !board[idx(x, y)]) {
@@ -60,11 +90,7 @@ export function kingAttacked(board: Board, side: Side): boolean {
   }
 
   // 马：八个可能的马位，各自看自己的马腿有没有被别住
-  const horseSpots: Array<[number, number, number, number]> = [
-    [1, 2, 1, 1], [-1, 2, -1, 1], [1, -2, 1, -1], [-1, -2, -1, -1],
-    [2, 1, 1, 1], [2, -1, 1, -1], [-2, 1, -1, 1], [-2, -1, -1, -1],
-  ];
-  for (const [dx, dy, lx, ly] of horseSpots) {
+  for (const [dx, dy, lx, ly] of HORSE_SPOTS) {
     const hx = kx + dx;
     const hy = ky + dy;
     if (!inBoard(hx, hy)) continue;
@@ -109,18 +135,65 @@ export function unmakeMove(board: Board, m: Move, captured: Piece | null): void 
   board[to] = captured;
 }
 
+/**
+ * 将帅照面没有（与 logic.generalsFacing 同语义）。
+ * 同样先在九宫里找将帅，找不到才退回全盘扫描。
+ */
+export function facing(board: Board): boolean {
+  const rk = kingPos(board, "red");
+  const bk = kingPos(board, "black");
+  if (!rk || !bk) return false;
+  return facingAt(board, rk.x, rk.y, bk.x, bk.y);
+}
+
+function facingAt(board: Board, ax: number, ay: number, bx: number, by: number): boolean {
+  if (ax !== bx) return false;
+  const lo = Math.min(ay, by);
+  const hi = Math.max(ay, by);
+  for (let y = lo + 1; y < hi; y++) if (board[idx(ax, y)]) return false;
+  return true;
+}
+
+/**
+ * 逐个试探某个子的着法，合法的交给 `keep`；`keep` 返回 true 就提前收工。
+ *
+ * 合法性检查是整个搜索里跑得最多的一段，所以这里把两个将帅的位置先取出来：
+ * 对方的将不会因为我走一步而挪窝，自己的将也只有「走的就是将」时才换位置，
+ * 于是内层一次九宫扫描都不用做。唯一的例外是这一步正好吃到对方的将
+ * （伪着法里会出现，合法棋里不会），那就退回通用的那条路，结论和 logic 一致。
+ */
+function tryMoves(board: Board, x: number, y: number, keep: (to: Pos) => boolean): void {
+  const piece = board[idx(x, y)];
+  if (!piece) return;
+  const foe = other(piece.side);
+  const my0 = kingPos(board, piece.side);
+  const foeKing = kingPos(board, foe);
+  const isKingMove = piece.type === "K";
+  // 反复复用同一个对象，省掉每个伪着法一次分配
+  const mv: Move = { from: { x, y }, to: { x: 0, y: 0 } };
+  for (const to of rawMoves(board, x, y)) {
+    mv.to = to;
+    const captured = makeMove(board, mv);
+    let bad: boolean;
+    if (!my0 || !foeKing || (captured && captured.type === "K")) {
+      bad = kingAttacked(board, piece.side) || facing(board);
+    } else {
+      const kx = isKingMove ? to.x : my0.x;
+      const ky = isKingMove ? to.y : my0.y;
+      bad = attackedAt(board, piece.side, kx, ky) || facingAt(board, kx, ky, foeKing.x, foeKing.y);
+    }
+    unmakeMove(board, mv, captured);
+    if (!bad && keep(to)) return;
+  }
+}
+
 /** 某个子的全部合法落点（与 logic.legalMoves 同语义，只是快一点） */
 export function legalTargets(board: Board, x: number, y: number): Pos[] {
-  const piece = board[idx(x, y)];
-  if (!piece) return [];
   const out: Pos[] = [];
-  for (const to of rawMoves(board, x, y)) {
-    const mv: Move = { from: { x, y }, to };
-    const captured = makeMove(board, mv);
-    const bad = kingAttacked(board, piece.side) || generalsFacing(board);
-    unmakeMove(board, mv, captured);
-    if (!bad) out.push(to);
-  }
+  tryMoves(board, x, y, (to) => {
+    out.push(to);
+    return false;
+  });
   return out;
 }
 
@@ -143,13 +216,12 @@ export function hasLegalMove(board: Board, side: Side): boolean {
     for (let x = 0; x < COLS; x++) {
       const p = board[idx(x, y)];
       if (!p || p.side !== side) continue;
-      for (const to of rawMoves(board, x, y)) {
-        const mv: Move = { from: { x, y }, to };
-        const captured = makeMove(board, mv);
-        const bad = kingAttacked(board, side) || generalsFacing(board);
-        unmakeMove(board, mv, captured);
-        if (!bad) return true;
-      }
+      let any = false;
+      tryMoves(board, x, y, () => {
+        any = true;
+        return true;
+      });
+      if (any) return true;
     }
   }
   return false;
