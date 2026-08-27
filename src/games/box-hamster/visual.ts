@@ -13,6 +13,12 @@ import {
   type HamsterPose,
   type HamsterStyle,
 } from "../../art/kit/hamsterSvg";
+import {
+  cowlickCrestGroup,
+  dorsalStripeGroup,
+  flowerCrestGroup,
+  injectFigureAccents,
+} from "../../art/kit/hamsterAccents";
 import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 import { PUSH_MS, WALK_MS } from "./assist";
 import type { Board, Dir, MoveOutcome } from "./logic";
@@ -106,14 +112,20 @@ export const BH_HAMSTER_STYLES: readonly HamsterStyle[] = [
   },
 ];
 
-/** 第 who 只仓鼠在某朝向 / 姿态下的 SVG(咀嚼两帧挂 bxh-chew,轮播归 CSS) */
+/**
+ * 第 who 只仓鼠在某朝向 / 姿态下的 SVG(咀嚼两帧挂 bxh-chew,轮播归 CSS)。
+ * W6R2-01:侧/背朝向 16px 灰度 1.2–2.0% 偏弱,按 moleAccents 先例叠加
+ * 头冠强化层(A 鼠花冠放大加描边 / B 鼠呆毛加粗成墨底色芯双笔道),
+ * 注入 bhh-figure 组内跟随推箱前倾;hamsterSvg.ts 冻结不动。
+ */
 export function bhHamsterSvg(who: number, facing: HamsterFacing, pose: HamsterPose): string {
-  return hamsterSvg({
-    style: BH_HAMSTER_STYLES[who % BH_HAMSTER_STYLES.length],
-    facing,
-    pose,
-    chewClass: "bxh-chew",
-  });
+  const style = BH_HAMSTER_STYLES[who % BH_HAMSTER_STYLES.length];
+  const svg = hamsterSvg({ style, facing, pose, chewClass: "bxh-chew" });
+  const groups =
+    style.topper === "flower"
+      ? [flowerCrestGroup(facing, style.topperColor)]
+      : [dorsalStripeGroup(facing, style.fur), cowlickCrestGroup(facing, style.topperColor)];
+  return injectFigureAccents(svg, groups);
 }
 
 // ---------------------------------------------------------------------------
