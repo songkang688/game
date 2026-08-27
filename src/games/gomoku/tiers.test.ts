@@ -364,6 +364,20 @@ describe("地狱档不是大师档的马甲", () => {
     expect(same).toBeLessThan(spots.length);
     expect(same / spots.length).toBeLessThanOrEqual(0.9);
   }, 300_000);
+
+  // 同一条尺也量一遍梯子中段：聪明档倒挂那一次，它在中盘同样是在抄普通档。
+  it("真实中盘局面上，聪明与普通不许 100% 走同一步", () => {
+    const spots = midPositions(24);
+    expect(spots.length).toBeGreaterThanOrEqual(20);
+    let same = 0;
+    for (const [i, s] of spots.entries()) {
+      const a = bestMove(s.board, s.turn, "normal", mulberry32(90 + i));
+      const c = bestMove(s.board, s.turn, "smart", mulberry32(90 + i));
+      if (a && c && a.x === c.x && a.y === c.y) same++;
+    }
+    expect(same).toBeLessThan(spots.length);
+    expect(same / spots.length).toBeLessThanOrEqual(0.9);
+  }, 120_000);
 });
 
 describe("地狱档：迭代加深 + 置换表 + 抓禁手", () => {
