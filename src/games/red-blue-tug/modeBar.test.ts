@@ -46,6 +46,20 @@ describe("红蓝拔河 · 模式条只在选关地图上露面（W5R2-C-05 / C-0
     expect(WIRED.indexOf("bar.hidden = true")).toBeLessThan(WIRED.indexOf("playLevel(stage, ctx, settings)"));
   });
 
+  it("光藏起来不算数：关卡在跑时侧模式入口点响了也不许开（W5R2-C-06 复测补修）", () => {
+    // 第 2 轮监督复测：把 `.rbg-bar` 的 hidden 撬开硬点一次，关卡层照样只被藏起来不销毁，
+    // 活句柄 interval +1 / listeners +1，两条 rAF 一起跑。hidden 挡的是手指，挡不住事件。
+    const openSide = SRC.slice(SRC.indexOf("function openSide("), SRC.indexOf("  vsBtn.addEventListener"));
+    expect(SRC).toContain("let inLevel = false;");
+    expect(openSide, "openSide 少了「关卡在跑就不开」这道闸").toContain("if (inLevel) return;");
+    // 闸要排在改 hidden 与 make() 之前，否则闸住了也已经把关卡层藏了
+    expect(openSide.indexOf("if (inLevel) return;")).toBeLessThan(openSide.indexOf("levelHost.hidden = true"));
+    expect(openSide.indexOf("if (inLevel) return;")).toBeLessThan(openSide.indexOf("side = make()"));
+    // 进关抬闸、离关落闸，落闸要排在关卡自己 destroy 之前
+    expect(WIRED).toContain("inLevel = true;");
+    expect(WIRED.indexOf("inLevel = false;")).toBeLessThan(WIRED.indexOf("handle?.destroy?.()"));
+  });
+
   it("热区没动：两颗入口键回到地图上仍是 44px", () => {
     // 读的是源码文本，模板串还没求值（rule() 会切在 ${} 的右花括号上），所以两头分开断言
     expect(rule(".rbg-open")).toContain("min-height:${TOGGLE_MIN_H");

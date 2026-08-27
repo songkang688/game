@@ -463,6 +463,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     albumBtn.textContent = `📷 小屋相册 ${store.count()}/${ALBUM_TOTAL}`;
   };
 
+  /** 关卡正在跑没有：♾️ / 📷 两个入口靠它挡住，别把关卡层只藏不销毁（W5R2-C-06） */
+  let inLevel = false;
+
   const closeMode = (): void => {
     mode?.destroy();
     mode = null;
@@ -474,6 +477,10 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   const openMode = (make: (host: HTMLElement) => { destroy: () => void }): void => {
     if (mode) return;
+    // 关卡正在跑就不许再开一层。`bar.hidden` 只是让手指够不着，焦点残留、
+    // 壳层补发的 click、自动化脚本照样能把它点响 —— 点响了关卡层就只被 hidden 藏起来，
+    // 两条 requestAnimationFrame 与两套定时器一起跑到天荒地老（W5R2-C-06）。
+    if (inLevel) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -498,9 +505,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       // 先收再摆：fitIntoStage() 是在 playLevel 里量的，量早了这 104px 没人认领。
       playLevel: (stage, ctx) => {
         bar.hidden = true;
+        inLevel = true;
         const handle = runLevel(stage, ctx);
         return {
           destroy: () => {
+            inLevel = false;
             handle?.destroy?.();
             // 马拉松 / 相册开着的时候这一条本来就该收着，别替它放回来
             if (!mode) bar.hidden = false;

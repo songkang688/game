@@ -1026,6 +1026,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   bar.append(vsBtn, endBtn);
 
   let side: { destroy: () => void } | null = null;
+  /** 关卡正在跑没有:侧模式的入口靠它挡住,别把关卡层只藏不销毁(W5R2-C-06) */
+  let inLevel = false;
 
   function refreshBtn(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
@@ -1043,6 +1045,10 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function openSide(make: () => { destroy: () => void }): void {
     if (side) return;
+    // 关卡正在跑就不许再开一层。`bar.hidden` 只是让手指够不着,焦点残留、
+    // 壳层补发的 click、自动化脚本照样能把它点响 —— 点响了关卡层就只被 hidden 藏起来,
+    // 两条 requestAnimationFrame 与两套定时器一起跑到天荒地老(W5R2-C-06)。
+    if (inLevel) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -1066,9 +1072,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       // 两条 requestAnimationFrame 会同时跑。回选关地图就放回去。
       playLevel: (stage, ctx) => {
         bar.hidden = true;
+        inLevel = true;
         const handle = playLevel(stage, ctx, settings);
         return {
           destroy: () => {
+            inLevel = false;
             handle?.destroy?.();
             // 对战场 / 无尽开着的时候这一条本来就该收着，别替它放回来
             if (!side) bar.hidden = false;

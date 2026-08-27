@@ -49,6 +49,19 @@ describe("便便超人 · 模式条只在选关地图上露面（W5R2-C-02 / C-0
     expect(WIRED.indexOf("bar.hidden = true")).toBeLessThan(WIRED.indexOf("playLevel(stage, ctx)"));
   });
 
+  it("光藏起来不算数:关卡在跑时侧模式入口点响了也不许开(W5R2-C-06 复测补修)", () => {
+    // 第 2 轮监督复测:把 `.ph-modebar` 的 hidden 撬开硬点一次,关卡层照样只被藏起来不销毁。
+    // hidden 挡的是手指,挡不住事件——焦点残留、壳层补发的 click 都能把它点响。
+    const openMode = SRC.slice(SRC.indexOf("function openMode("), SRC.indexOf("  endlessBtn.addEventListener"));
+    expect(SRC).toContain("let inLevel = false;");
+    expect(openMode, "openMode 少了「关卡在跑就不开」这道闸").toContain("if (inLevel) return;");
+    // 闸要排在改 hidden 与 make() 之前,否则闸住了也已经把关卡层藏了
+    expect(openMode.indexOf("if (inLevel) return;")).toBeLessThan(openMode.indexOf("levelHost.hidden = true"));
+    expect(openMode.indexOf("if (inLevel) return;")).toBeLessThan(openMode.indexOf("current = make("));
+    expect(WIRED).toContain("inLevel = true;");
+    expect(WIRED.indexOf("inLevel = false;")).toBeLessThan(WIRED.indexOf("handle?.destroy?.()"));
+  });
+
   it("热区没动:两颗入口键回到地图上仍是 44px", () => {
     // 读的是源码文本,模板串还没求值(rule() 会切在 ${} 的右花括号上),所以两头分开断言
     expect(rule(".ph-mode")).toContain("min-height:${HUD_BTN_MIN_H");

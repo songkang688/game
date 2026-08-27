@@ -53,6 +53,22 @@ describe("找不同 · 模式条只在选关地图上露面（W5R2-C-06）", () 
     expect(WIRED.indexOf("bar.hidden = true")).toBeLessThan(WIRED.indexOf("playLevel(stage, ctx)"));
   });
 
+  it("光藏起来不算数：关卡在跑时 ♾️ 点响了也不许开（W5R2-C-06 复测补修）", () => {
+    // 第 2 轮监督复测：把 `.fdf-tools` 的 hidden 撬开硬点一次，关卡层照样只被藏起来不销毁，
+    // 同屏立刻出现两个 `.fdf-hud`。hidden 挡的是手指，挡不住事件。
+    const handler = SRC.slice(
+      SRC.indexOf('endlessBtn.addEventListener("click"'),
+      SRC.indexOf("\n  const game = mountLevelGame(")
+    );
+    expect(SRC).toContain("let inLevel = false;");
+    expect(handler, "♾️ 少了「关卡在跑就不开」这道闸").toContain("if (inLevel) return;");
+    // 闸要排在改 hidden 与 mountEndless() 之前，否则闸住了也已经把关卡层藏了
+    expect(handler.indexOf("if (inLevel) return;")).toBeLessThan(handler.indexOf("levelHost.hidden = true"));
+    expect(handler.indexOf("if (inLevel) return;")).toBeLessThan(handler.indexOf("mode = mountEndless("));
+    expect(WIRED).toContain("inLevel = true;");
+    expect(WIRED.indexOf("inLevel = false;")).toBeLessThan(WIRED.indexOf("handle?.destroy?.()"));
+  });
+
   it("热区没动：入口键回到地图上仍是 44px", () => {
     expect(rule(".fdf-btn")).toContain("min-height:44px");
     expect(rule(".fdf-tools[hidden]"), "收起来那条不许顺手改尺寸").not.toContain("min-height");
