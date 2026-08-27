@@ -4,6 +4,12 @@ export { meta };
 // 星星合成:同样的数字撞在一起就会变成更大的星星。
 // 188 关战役 + 同一发牌序列的对战竞速 + 马拉松无尽 + 左右两块盘的同屏双人,对手是本机假人,全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+import {
+  compatFromMeta,
+  describeModes,
+  modeEntryKeys,
+  type ModeEntry
+} from "../../engine";
 import { save } from "../../engine/save";
 import { prefersReducedMotion } from "../../engine/view25d";
 import {
@@ -117,6 +123,7 @@ export const MG_CSS = `
 .mg-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .mg-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.mg-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a5f2e;text-align:center;overflow-wrap:anywhere;}
 .mg-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;min-height:44px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E8A93C,#CE8C22);box-shadow:0 4px 0 #A96F17;}
 .mg-open:active{transform:translateY(2px);box-shadow:0 2px 0 #A96F17;}
@@ -1150,12 +1157,42 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   };
 }
 
+// ---------------------------------------------------------------------------
+// 模式入口条:按 meta.modes 推,不硬写
+// ---------------------------------------------------------------------------
+
+/** 这一款按 `meta.modes` 算出来的模式口径(首页玩法芯片读的是同一份 meta) */
+export const MODE_COMPAT = compatFromMeta(meta);
+
+/** 本款自己的入口名 ↔ 三大类的对应关系;顺序就是入口条从左到右的顺序 */
+const MODE_ENTRIES: ModeEntry<ExtraMode>[] = [
+  { key: "versus", kind: "versus", versusKind: "ai" },
+  { key: "endless", kind: "endless" },
+  { key: "duo", kind: "versus", versusKind: "hotseat" }
+];
+
+/**
+ * 真正摆出来的入口。
+ * 以前这里是硬写的 `["versus","endless","duo"]`,`meta.modes` 一改就与首页芯片各说各话;
+ * 现在少写一个模式,入口条自己就少一个按钮。
+ */
+export const MODE_KEYS: ExtraMode[] = modeEntryKeys(MODE_COMPAT, MODE_ENTRIES);
+
+/** 模式菜单顶上那句话,措辞走 `describeModes` 的共享口径,十二款不各写各的 */
+export const MODE_SUMMARY = describeModes(MODE_COMPAT);
+
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = MG_CSS;
   const bar = document.createElement("div");
   bar.className = "mg-modebar";
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", MODE_SUMMARY);
+  const modeTip = document.createElement("p");
+  modeTip.className = "mg-modetip";
+  modeTip.textContent = MODE_SUMMARY;
+  bar.appendChild(modeTip);
   const levelHost = document.createElement("div");
   const modeHost = document.createElement("div");
   modeHost.hidden = true;
@@ -1172,7 +1209,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     bar.hidden = false;
   }
 
-  (["versus", "endless", "duo"] as ExtraMode[]).forEach((m) => {
+  MODE_KEYS.forEach((m) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "mg-open";

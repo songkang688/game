@@ -7,7 +7,9 @@ import {
   availableModes,
   compatFromMeta,
   describeModes,
+  filterModeEntries,
   modeButtonLabel,
+  modeEntryKeys,
   pickInitialMode,
   type ModeKind
 } from "./playModes";
@@ -159,6 +161,61 @@ describe("中文说明与文案", () => {
     expect(modeButtonLabel("campaign")).toBe("🚩 闯关");
     expect(modeButtonLabel("versus")).toBe("🤝 对战");
     expect(modeButtonLabel("endless")).toBe("♾️ 无尽");
+  });
+});
+
+describe("模式入口条按 meta 过滤", () => {
+  const entries = [
+    { key: "versus", kind: "versus", versusKind: "ai" },
+    { key: "endless", kind: "endless" },
+    { key: "duo", kind: "versus", versusKind: "hotseat" }
+  ] as const;
+
+  it("meta 声明齐的时候三个入口全留下,顺序照传进来的排", () => {
+    expect(modeEntryKeys(compat(["campaign", "versus", "endless", "twoPlayer"]), entries)).toEqual([
+      "versus",
+      "endless",
+      "duo"
+    ]);
+  });
+
+  it("meta 没写 endless 就不该冒出无尽入口", () => {
+    expect(modeEntryKeys(compat(["campaign", "versus", "twoPlayer"]), entries)).toEqual(["versus", "duo"]);
+  });
+
+  it("meta 没写 twoPlayer 就不该冒出双人入口,人机对战照留", () => {
+    expect(modeEntryKeys(compat(["campaign", "versus", "endless"]), entries)).toEqual(["versus", "endless"]);
+  });
+
+  it("meta 只写 twoPlayer 时留双人、去掉人机", () => {
+    expect(modeEntryKeys(compat(["campaign", "twoPlayer"]), entries)).toEqual(["duo"]);
+  });
+
+  it("meta 一条都没写时入口条整条空掉,不抛异常", () => {
+    expect(modeEntryKeys(compat([]), entries)).toEqual([]);
+    expect(modeEntryKeys(compat(undefined), entries)).toEqual([]);
+  });
+
+  it("不写 kind 的入口不归 meta 管(练习场那种),永远留着", () => {
+    const withTrain = [...entries, { key: "train" }] as const;
+    expect(modeEntryKeys(compat([]), withTrain)).toEqual(["train"]);
+    expect(modeEntryKeys(compat(["campaign", "versus", "endless", "twoPlayer"]), withTrain)).toEqual([
+      "versus",
+      "endless",
+      "duo",
+      "train"
+    ]);
+  });
+
+  it("filterModeEntries 原样把条目还回来,不是只剩 key", () => {
+    const kept = filterModeEntries(compat(["campaign", "twoPlayer"]), entries);
+    expect(kept).toEqual([{ key: "duo", kind: "versus", versusKind: "hotseat" }]);
+  });
+
+  it("没标 versusKind 的对战入口跟着大类走", () => {
+    const loose = [{ key: "fight", kind: "versus" }] as const;
+    expect(modeEntryKeys(compat(["campaign", "twoPlayer"]), loose)).toEqual(["fight"]);
+    expect(modeEntryKeys(compat(["campaign"]), loose)).toEqual([]);
   });
 });
 

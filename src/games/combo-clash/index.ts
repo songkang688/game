@@ -4,6 +4,12 @@ export { meta };
 // 连招对决:跳过去接一串连招,再取消成超必杀。
 // 188 关挑战塔 + 四档人机 BO3 + 连胜无尽 + 同屏双人 + 训练场,对手是本机 AI,全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import {
+  compatFromMeta,
+  describeModes,
+  modeEntryKeys,
+  type ModeEntry
+} from "../../engine";
 import { save } from "../../engine/save";
 import {
   ARCHETYPE_LABELS,
@@ -92,6 +98,7 @@ const CSS = `
 .cc-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #E7A9C6;}
 .cc-btn:focus-visible,.cc-open:focus-visible,.cc-back:focus-visible{outline:3px solid #46246b;outline-offset:3px;}
 .cc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.cc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a4a86;text-align:center;overflow-wrap:anywhere;}
 .cc-open{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#E27BAE,#C55A91);box-shadow:0 4px 0 #A44576;}
 .cc-open:active{transform:translateY(2px);box-shadow:0 2px 0 #A44576;}
@@ -1022,12 +1029,44 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 // 挂载
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 模式入口条:按 meta.modes 推,不硬写
+// ---------------------------------------------------------------------------
+
+/** 这一款按 `meta.modes` 算出来的模式口径(首页玩法芯片读的是同一份 meta) */
+export const MODE_COMPAT = compatFromMeta(meta);
+
+/** 本款自己的入口名 ↔ 三大类的对应关系;顺序就是入口条从左到右的顺序 */
+const MODE_ENTRIES: ModeEntry<ExtraMode>[] = [
+  { key: "versus", kind: "versus", versusKind: "ai" },
+  { key: "endless", kind: "endless" },
+  { key: "duo", kind: "versus", versusKind: "hotseat" },
+  // 训练场不是一种对局模式,不归 meta.modes 管,永远开着
+  { key: "train" }
+];
+
+/**
+ * 真正摆出来的入口。
+ * 以前这里是硬写的 `["versus","endless","duo"]`,`meta.modes` 一改就与首页芯片各说各话;
+ * 现在少写一个模式,入口条自己就少一个按钮。
+ */
+export const MODE_KEYS: ExtraMode[] = modeEntryKeys(MODE_COMPAT, MODE_ENTRIES);
+
+/** 模式菜单顶上那句话,措辞走 `describeModes` 的共享口径,十二款不各写各的 */
+export const MODE_SUMMARY = describeModes(MODE_COMPAT);
+
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = CSS;
   const bar = document.createElement("div");
   bar.className = "cc-modebar";
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", MODE_SUMMARY);
+  const modeTip = document.createElement("p");
+  modeTip.className = "cc-modetip";
+  modeTip.textContent = MODE_SUMMARY;
+  bar.appendChild(modeTip);
   const levelHost = document.createElement("div");
   const modeHost = document.createElement("div");
   modeHost.hidden = true;
@@ -1044,7 +1083,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     bar.hidden = false;
   }
 
-  (["versus", "endless", "duo", "train"] as ExtraMode[]).forEach((mkey) => {
+  MODE_KEYS.forEach((mkey) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "cc-open";

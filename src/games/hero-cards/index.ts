@@ -8,6 +8,12 @@ export { meta };
 // 为什么没有双人同屏:这一款的乐趣全在「藏着身份」上,两个人挤一块屏幕会互相
 // 看光手牌和身份牌,规则就塌了。所以 meta.modes 里不填 twoPlayer,攻略里也写明了。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+import {
+  compatFromMeta,
+  describeModes,
+  modeEntryKeys,
+  type ModeEntry
+} from "../../engine";
 import { save } from "../../engine/save";
 import { cardLabel, cardName, isRed, GEARS, SUIT_LABELS, type Card } from "./cards";
 import {
@@ -121,6 +127,7 @@ export const HC_CSS = `
 .hc-over-s{font-size:16px;font-weight:700;color:#7a6252;line-height:1.6;margin-bottom:12px;overflow-wrap:anywhere;}
 .hc-reveal{font-size:14px;font-weight:800;color:#7a5238;line-height:1.7;margin-bottom:10px;}
 .hc-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.hc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#8a5238;text-align:center;overflow-wrap:anywhere;}
 .hc-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;
   color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#EE9A63,#D07540);
   box-shadow:0 4px 0 #A95A28;}
@@ -1068,12 +1075,41 @@ function mountExtra(host: HTMLElement, api: GameApi, kind: ExtraMode, onBack: ()
   };
 }
 
+// ---------------------------------------------------------------------------
+// 模式入口条:按 meta.modes 推,不硬写
+// ---------------------------------------------------------------------------
+
+/** 这一款按 `meta.modes` 算出来的模式口径(首页玩法芯片读的是同一份 meta) */
+export const MODE_COMPAT = compatFromMeta(meta);
+
+/** 本款自己的入口名 ↔ 三大类的对应关系;顺序就是入口条从左到右的顺序 */
+const MODE_ENTRIES: ModeEntry<ExtraMode>[] = [
+  { key: "versus", kind: "versus", versusKind: "ai" },
+  { key: "endless", kind: "endless" }
+];
+
+/**
+ * 真正摆出来的入口。
+ * 以前这里是硬写的 `["versus","endless","duo"]`,`meta.modes` 一改就与首页芯片各说各话;
+ * 现在少写一个模式,入口条自己就少一个按钮。
+ */
+export const MODE_KEYS: ExtraMode[] = modeEntryKeys(MODE_COMPAT, MODE_ENTRIES);
+
+/** 模式菜单顶上那句话,措辞走 `describeModes` 的共享口径,十二款不各写各的 */
+export const MODE_SUMMARY = describeModes(MODE_COMPAT);
+
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
   style.textContent = HC_CSS;
   const bar = document.createElement("div");
   bar.className = "hc-modebar";
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", MODE_SUMMARY);
+  const modeTip = document.createElement("p");
+  modeTip.className = "hc-modetip";
+  modeTip.textContent = MODE_SUMMARY;
+  bar.appendChild(modeTip);
   const levelHost = document.createElement("div");
   const modeHost = document.createElement("div");
   modeHost.hidden = true;
@@ -1090,7 +1126,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     bar.hidden = false;
   }
 
-  (["versus", "endless"] as ExtraMode[]).forEach((m) => {
+  MODE_KEYS.forEach((m) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "hc-open";

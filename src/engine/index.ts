@@ -25,10 +25,12 @@ export {
   availableModes,
   compatFromMeta,
   describeModes,
+  filterModeEntries,
   modeButtonLabel,
+  modeEntryKeys,
   pickInitialMode
 } from "./playModes";
-export type { ModeCompat, ModeKind, VersusKind } from "./playModes";
+export type { ModeCompat, ModeEntry, ModeKind, VersusKind } from "./playModes";
 export {
   DEFAULT_FOV,
   DEFAULT_HORIZON,

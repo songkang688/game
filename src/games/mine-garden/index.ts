@@ -7,6 +7,12 @@ export { meta };
  * 188 关闯关 + 同图竞速对战 + 连续清盘无尽 + 朵朵星星左右分屏双人。
  * 全部离线，逻辑在 `board.ts` / `solver.ts` / `run.ts` 里，本文件只负责画和接线。
  */
+import {
+  compatFromMeta,
+  describeModes,
+  modeEntryKeys,
+  type ModeEntry
+} from "../../engine";
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import {
@@ -268,6 +274,7 @@ export const MN_CSS = `
 .mn-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#F4FBEC,#E9F5E0);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
 .mn-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.mn-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#41633A;text-align:center;overflow-wrap:anywhere;}
 .mn-open,.mn-back{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#6FA85A,#568844);box-shadow:0 4px 0 #416832;}
 .mn-open:active,.mn-back:active{transform:translateY(2px);box-shadow:0 2px 0 #416832;}
@@ -1276,11 +1283,41 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
 // 挂载
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 模式入口条:按 meta.modes 推,不硬写
+// ---------------------------------------------------------------------------
+
+/** 这一款按 `meta.modes` 算出来的模式口径(首页玩法芯片读的是同一份 meta) */
+export const MODE_COMPAT = compatFromMeta(meta);
+
+/** 本款自己的入口名 ↔ 三大类的对应关系;顺序就是入口条从左到右的顺序 */
+const MODE_ENTRIES: ModeEntry<ExtraMode>[] = [
+  { key: "versus", kind: "versus", versusKind: "ai" },
+  { key: "endless", kind: "endless" },
+  { key: "duo", kind: "versus", versusKind: "hotseat" }
+];
+
+/**
+ * 真正摆出来的入口。
+ * 以前这里是硬写的 `["versus","endless","duo"]`,`meta.modes` 一改就与首页芯片各说各话;
+ * 现在少写一个模式,入口条自己就少一个按钮。
+ */
+export const MODE_KEYS: ExtraMode[] = modeEntryKeys(MODE_COMPAT, MODE_ENTRIES);
+
+/** 模式菜单顶上那句话,措辞走 `describeModes` 的共享口径,十二款不各写各的 */
+export const MODE_SUMMARY = describeModes(MODE_COMPAT);
+
 export function mount(api: GameApi): { destroy: () => void } {
   const root = el("div", "mn-wrap");
   const style = document.createElement("style");
   style.textContent = MN_CSS;
   const bar = el("div", "mn-modebar");
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", MODE_SUMMARY);
+  const modeTip = document.createElement("p");
+  modeTip.className = "mn-modetip";
+  modeTip.textContent = MODE_SUMMARY;
+  bar.appendChild(modeTip);
   const levelHost = el("div");
   const modeHost = el("div");
   modeHost.hidden = true;
@@ -1298,7 +1335,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     bar.hidden = false;
   }
 
-  (Object.keys(MODE_LABELS) as ExtraMode[]).forEach((key) => {
+  MODE_KEYS.forEach((key) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "mn-open";

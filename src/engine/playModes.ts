@@ -134,3 +134,44 @@ export function modeButtonLabel(kind: ModeKind): string {
   const emoji: Record<ModeKind, string> = { campaign: "🚩", versus: "🤝", endless: "♾️" };
   return `${emoji[kind]} ${MODE_KIND_LABELS[kind]}`;
 }
+
+/**
+ * 游戏自己那条模式入口 ↔ 三大类的对应关系。
+ *
+ * `key` 是游戏内部的模式名(各写各的:`"duo"` `"train"` …),
+ * `kind` / `versusKind` 是这个入口在统一口径里算哪一类。
+ * `kind` 省略表示这个入口不归 `meta.modes` 管(练习场那种),永远显示。
+ */
+export interface ModeEntry<K extends string = string> {
+  key: K;
+  kind?: ModeKind;
+  versusKind?: VersusKind;
+}
+
+/**
+ * 按 `meta.modes` 过滤模式入口条,顺序保持传进来的顺序。
+ *
+ * 首页芯片读 `meta.modes`,游戏内的入口条以前是各自硬写一个数组 —— 两边一改一不改
+ * 就会出现「芯片说有无尽、进去找不着」。过一遍这里,菜单就没法跟 meta 各说各话。
+ */
+export function filterModeEntries<K extends string>(
+  compat: ModeCompat,
+  entries: readonly ModeEntry<K>[]
+): ModeEntry<K>[] {
+  const kinds = new Set(availableModes(compat));
+  const versusKinds = new Set(compat?.versusKinds ?? []);
+  return entries.filter((entry) => {
+    if (!entry.kind) return true;
+    if (!kinds.has(entry.kind)) return false;
+    if (entry.kind === "versus" && entry.versusKind) return versusKinds.has(entry.versusKind);
+    return true;
+  });
+}
+
+/** `filterModeEntries` 的只要 key 版本:入口循环直接照这个排 */
+export function modeEntryKeys<K extends string>(
+  compat: ModeCompat,
+  entries: readonly ModeEntry<K>[]
+): K[] {
+  return filterModeEntries(compat, entries).map((entry) => entry.key);
+}
