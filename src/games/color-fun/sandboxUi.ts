@@ -74,6 +74,18 @@ export function isSandboxDismissKey(key: string): boolean {
   return key === "Escape" || key === "Esc";
 }
 
+/**
+ * 把存档里记的线稿下标收进 `PICTURES` 的范围，越界一律回到第一幅。
+ *
+ * `sandbox.ts` 只管这个下标是不是个 ≥0 的有限数，它不认识这里有几幅线稿；
+ * 存档被改坏、或者从装过新版的机器退回旧版，都会留下一个指不到画的下标。
+ * 拿它去 `PICTURES[i].regions` 就是 `undefined.regions`，整间画室当场崩掉
+ * （窗口5 第1轮监督修复员 W5-F-01）。
+ */
+export function safePicIndex(i: number): number {
+  return Number.isInteger(i) && i >= 0 && i < PICTURES.length ? i : 0;
+}
+
 /** 在 `host` 上盖一层自由涂色画室 */
 export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): SandboxHandle {
   const doc = host.ownerDocument;
@@ -220,7 +232,7 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
       const btn = doc.createElement("button");
       btn.type = "button";
       btn.className = `clf-work${replacing ? " clf-work-on" : ""}`;
-      btn.innerHTML = thumbnailSvg(PICTURES[work.pic] ?? PICTURES[0], work.fills);
+      btn.innerHTML = thumbnailSvg(PICTURES[safePicIndex(work.pic)], work.fills);
       btn.setAttribute(
         "aria-label",
         replacing ? `把第 ${i + 1} 张换成现在这幅` : `打开第 ${i + 1} 张作品接着涂`
@@ -246,7 +258,7 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
     }
     // 打开旧作接着涂：整幅当作一笔铺上去，撤销一下就能回到空白
     sfx("tap");
-    picIndex = work.pic;
+    picIndex = safePicIndex(work.pic);
     history.clear();
     for (const [region, color] of Object.entries(work.fills)) {
       history.push({ region, from: null, to: color });
