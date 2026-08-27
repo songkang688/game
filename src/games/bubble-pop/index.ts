@@ -334,6 +334,9 @@ function runCollapse(host: CollapseHost, popped: Array<[number, number]>, origin
   host.onRaf(requestAnimationFrame(frame));
 }
 
+/** 仅供视觉冒烟测试(桩 DOM)取用的内部挂钩;运行时不走这条 */
+export const __bpVisualHooks = { paintCell, paintBoard, runCollapse, paintAmbience } as const;
+
 // ---------------------------------------------------------------------------
 // 188 关闯关
 // ---------------------------------------------------------------------------
