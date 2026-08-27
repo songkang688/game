@@ -24,6 +24,7 @@ import {
   OIL_STREAK_MS,
   drawBall,
   drawCeilingLamp,
+  drawNeighborLanes,
   drawPin,
   drawStar,
   neonAlpha,
@@ -805,6 +806,9 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     // 球道两侧的暗底(梯形之外的馆内地面)
     g.fillStyle = "#3b3556";
     g.fillRect(0, 0, view.w, view.h);
+    // 修复员装饰件:两侧邻道暗剪影 + 馆内立柱竖线
+    // (纯静态,画在跟球运镜之前 —— 不进缩放)
+    drawNeighborLanes(g, view);
 
     g.save();
     // 「跟球」运镜:参数与 1.2 完全一致(FOLLOW_ZOOM/IN/OUT 只是常量化)

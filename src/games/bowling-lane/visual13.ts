@@ -17,7 +17,7 @@
 import { shade, withAlpha } from "../../art/kit/palette";
 import { OUTLINE_DARKEN } from "../../art/kit/outline";
 import { ballGradient } from "../../art/kit/volume";
-import { LANE_W, type PinKind } from "./logic";
+import { LANE_LEN, LANE_W, laneProject, type LaneView, type PinKind } from "./logic";
 
 // ---------------------------------------------------------------------------
 // 4.3 配色板(token 一个不许飘)
@@ -414,4 +414,52 @@ export function drawCeilingLamp(g: CanvasRenderingContext2D, x: number, y: numbe
   g.arc(x, y, s * 0.32, 0, Math.PI * 2);
   g.fill();
   g.restore();
+}
+
+// ---------------------------------------------------------------------------
+// 邻道暗剪影(修复员装饰件:馆内两侧不再是一笔平涂)
+// ---------------------------------------------------------------------------
+
+/** 邻道剪影填色:比主道木色深 8%(剪影一色,不铺木纹不抢主道) */
+export const BL_NEIGHBOR_WOOD = shade(BL_COLORS.blWoodA, -8);
+/** 邻道与主道之间留出的暗色分隔带(俯视宽,LANE_W 的比例)——暗场层还在 */
+export const BL_NEIGHBOR_GAP = 0.18;
+/** 馆内立柱竖线透明度(learner 规格:≤ 0.25) */
+export const BL_PILLAR_ALPHA = 0.22;
+
+/**
+ * 两侧邻道暗剪影 + 馆内立柱竖线。
+ * 梯形四角全部走 `laneProject`(只读),与主道同一套透视会聚;
+ * 近端探出画布、远端收进上方两角 ——「邻道只在远处看得见」。
+ * 每侧 2 根立柱竖线只落在上半屏两侧,alpha 0.22 压灰。
+ * 纯静态件:调用方必须画在跟球运镜 save/scale 之前,reduced 无关。
+ */
+export function drawNeighborLanes(g: CanvasRenderingContext2D, view: LaneView): void {
+  const gap = LANE_W * BL_NEIGHBOR_GAP;
+  for (const side of [-1, 1] as const) {
+    const xNear = side === -1 ? -gap : LANE_W + gap;
+    const xFar = side === -1 ? -gap - LANE_W : LANE_W + gap + LANE_W;
+    const p0 = laneProject(xNear, 0, view);
+    const p1 = laneProject(xNear, LANE_LEN, view);
+    const p2 = laneProject(xFar, LANE_LEN, view);
+    const p3 = laneProject(xFar, 0, view);
+    g.fillStyle = BL_NEIGHBOR_WOOD;
+    g.beginPath();
+    g.moveTo(p0.sx, p0.sy);
+    g.lineTo(p1.sx, p1.sy);
+    g.lineTo(p2.sx, p2.sy);
+    g.lineTo(p3.sx, p3.sy);
+    g.closePath();
+    g.fill();
+    // 立柱竖线 ×2:给「馆」一点纵向结构,只到半屏高,不进球道区
+    g.strokeStyle = withAlpha("#221D38", BL_PILLAR_ALPHA);
+    g.lineWidth = 2.5;
+    for (const fx of [0.06, 0.14]) {
+      const px = side === -1 ? view.w * fx : view.w * (1 - fx);
+      g.beginPath();
+      g.moveTo(px, 0);
+      g.lineTo(px, view.h * 0.46);
+      g.stroke();
+    }
+  }
 }
