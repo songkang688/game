@@ -111,7 +111,7 @@ export const CSS = `
   display:flex;align-items:center;justify-content:center;font-size:var(--mt-control,14px);}
 .fc-line{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
 .fc-token{position:absolute;display:flex;align-items:center;justify-content:center;border:none;padding:0;margin:0;
-  background:transparent;font-family:inherit;line-height:1;cursor:pointer;z-index:5;
+  background:transparent;font-family:inherit;font-size:inherit;line-height:1;cursor:pointer;z-index:5;
   transition:left ${HOP_MS}ms linear,top ${HOP_MS}ms linear;}
 .fc-token-face{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;
   font-size:clamp(13px,2.6vw,17px);box-shadow:0 2px 4px rgba(80,120,160,.35);}
