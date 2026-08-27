@@ -112,6 +112,9 @@ export const MG_CSS = `
 .mg-btn:focus-visible,.mg-open:focus-visible,.mg-back:focus-visible{outline:3px solid #4a3a10;outline-offset:3px;}
 .mg-msg{text-align:center;min-height:20px;color:#7a5f2e;font-weight:800;margin-top:6px;font-size:14px;
   overflow-wrap:anywhere;line-height:1.5;}
+/* 只给读屏听的一行:看不见、不占位,但 aria-live 会把盘面的变化念出来 */
+.mg-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .mg-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .mg-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;min-height:44px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E8A93C,#CE8C22);box-shadow:0 4px 0 #A96F17;}
@@ -183,6 +186,32 @@ export interface SeatState {
   reached: boolean;
   stuck: boolean;
   outOfSteps: boolean;
+}
+
+/** 这一步是不是已经把这一盘走完了(走完就不用再报「第几步」,直接报结论) */
+export function seatEnded(st: SeatState): boolean {
+  return st.reached || st.stuck || st.outOfSteps;
+}
+
+/**
+ * 走完一步之后要念给读屏听的一句话。
+ * 盘面本身只有一句静态的 `aria-label`,看不见的人光靠它不知道刚才那一步合出了什么,
+ * 所以每一步都补一句短的:合出更大的数字时说「合出」,否则只报当前最大。
+ * `withName` 在双人同屏时打开,免得两块盘的播报分不清是谁。
+ */
+export function moveAnnounce(name: string, st: SeatState, prevBest: number, withName = false): string {
+  const who = withName ? `${name}:` : "";
+  const grew = st.best > prevBest;
+  return `${who}第 ${st.steps} 步,${grew ? `合出 ${st.best}` : `最大 ${st.best}`},${st.score} 分`;
+}
+
+/** 一盘结束时念的那一句:为什么结束、结果如何,都要说清楚 */
+export function overAnnounce(name: string, st: SeatState, withName = false): string {
+  const who = withName ? `${name}:` : "";
+  if (st.reached) return `${who}合到 ${st.best},目标达成,用了 ${st.steps} 步。`;
+  if (st.outOfSteps) return `${who}步数用完了,最大合到 ${st.best}。`;
+  if (st.stuck) return `${who}挪不动了,最大合到 ${st.best},走了 ${st.steps} 步。`;
+  return `${who}这一盘结束,最大合到 ${st.best}。`;
 }
 
 export interface SeatOpts {
@@ -522,9 +551,23 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
   pad.className = "mg-pad";
   const msg = document.createElement("div");
   msg.className = "mg-msg";
+  // 暂停 / 继续这类提示写在这里,读屏要能立刻听见
+  msg.setAttribute("role", "status");
+  msg.setAttribute("aria-live", "polite");
+  msg.setAttribute("aria-atomic", "true");
   msg.textContent = opts.hint ?? "同样的数字撞在一起就会变大。方向键或者滑屏都行。";
-  wrap.append(style, top, seatsHost, pad, msg);
+  // 看不见的一行:每走一步播一句盘面变化,不占版面也不改布局
+  const say = document.createElement("div");
+  say.className = "mg-say";
+  say.setAttribute("role", "status");
+  say.setAttribute("aria-live", "polite");
+  say.setAttribute("aria-atomic", "true");
+  wrap.append(style, top, seatsHost, pad, msg, say);
   stage.appendChild(wrap);
+
+  /** 只播人类那几块盘;假人一步一句会把读屏刷屏 */
+  const announceNames = opts.seats.filter((s) => s.human).length > 1;
+  const prevBest: number[] = opts.seats.map(() => 0);
 
   const seats: Seat[] = [];
   opts.seats.forEach((so, i) => {
@@ -533,10 +576,13 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
         ...so,
         onTick: (s) => {
           so.onTick?.(s);
+          if (so.human && !seatEnded(s)) say.textContent = moveAnnounce(so.name, s, prevBest[i], announceNames);
+          prevBest[i] = s.best;
           refresh();
         },
         onDone: (s) => {
           results[i] = s;
+          if (so.human) say.textContent = overAnnounce(so.name, s, announceNames);
           so.onDone(s);
           if (done) return;
           // 人这边一结束就结算,不用干等着假人慢慢合

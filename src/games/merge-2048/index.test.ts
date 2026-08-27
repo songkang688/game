@@ -15,6 +15,9 @@ import {
   keyToDir,
   meta,
   mount,
+  moveAnnounce,
+  overAnnounce,
+  seatEnded,
   swipeToDir,
   tileColors,
   tileFontPx,
@@ -576,6 +579,158 @@ describe("一块盘的实际操作", () => {
     const badge = host.byClass("mg-badge").find((b) => b.textContent.includes("最大"));
     expect(badge?.textContent).toContain("朵朵");
     t.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 无障碍:盘面只有一句静态 aria-label,看不见的人得靠 aria-live 才知道刚才那一步合出了什么
+// ---------------------------------------------------------------------------
+
+describe("读屏播报", () => {
+  function st(over: Partial<SeatState> = {}): SeatState {
+    return { score: 0, steps: 0, best: 0, reached: false, stuck: false, outOfSteps: false, ...over };
+  }
+
+  it("合出更大的数字时说「合出」,没合大就只报当前最大", () => {
+    expect(moveAnnounce("朵朵", st({ steps: 3, best: 16, score: 40 }), 8)).toBe("第 3 步,合出 16,40 分");
+    expect(moveAnnounce("朵朵", st({ steps: 4, best: 16, score: 44 }), 16)).toBe("第 4 步,最大 16,44 分");
+  });
+
+  it("双人同屏才带名字,一个人玩的时候不啰嗦", () => {
+    expect(moveAnnounce("星星", st({ steps: 1, best: 4, score: 4 }), 2, true)).toBe("星星:第 1 步,合出 4,4 分");
+    expect(moveAnnounce("星星", st({ steps: 1, best: 4, score: 4 }), 2, false)).not.toContain("星星");
+  });
+
+  it("三种结束各有各的说法,都说清楚为什么结束", () => {
+    expect(overAnnounce("朵朵", st({ reached: true, best: 32, steps: 9 }))).toContain("目标达成");
+    expect(overAnnounce("朵朵", st({ outOfSteps: true, best: 8 }))).toContain("步数用完");
+    expect(overAnnounce("朵朵", st({ stuck: true, best: 64, steps: 30 }))).toContain("挪不动");
+    expect(overAnnounce("朵朵", st({ best: 4 }))).toContain("这一盘结束");
+    // 达成优先于其它两种,不会同时念两句
+    expect(overAnnounce("朵朵", st({ reached: true, stuck: true, best: 32 }))).toContain("目标达成");
+  });
+
+  it("播报里只有数字与中文,不带 emoji 与标点噪音", () => {
+    const lines = [
+      moveAnnounce("朵朵", st({ steps: 2, best: 8, score: 12 }), 4),
+      overAnnounce("朵朵", st({ reached: true, best: 32, steps: 9 }))
+    ];
+    for (const line of lines) {
+      expect(line).not.toMatch(/[🌸⭐🚩♾️🤝👫]/u);
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it("seatEnded 认得出三种结束,没结束就是 false", () => {
+    expect(seatEnded(st())).toBe(false);
+    expect(seatEnded(st({ reached: true }))).toBe(true);
+    expect(seatEnded(st({ stuck: true }))).toBe(true);
+    expect(seatEnded(st({ outOfSteps: true }))).toBe(true);
+  });
+
+  describe("挂到盘上之后", () => {
+    beforeEach(installDom);
+    afterEach(removeDom);
+
+    it("有一块看不见的 live 区,提示行也是 status", () => {
+      const { host, t } = table([seatOpts()]);
+      const say = host.byClass("mg-say")[0];
+      expect(say.getAttribute("role")).toBe("status");
+      expect(say.getAttribute("aria-live")).toBe("polite");
+      expect(say.getAttribute("aria-atomic")).toBe("true");
+      const msg = host.byClass("mg-msg")[0];
+      expect(msg.getAttribute("aria-live")).toBe("polite");
+      // 看不见:靠 CSS 收成 1px,不是 display:none(那样读屏也读不到)
+      expect(MG_CSS).toContain(".mg-say{");
+      const rule = MG_CSS.slice(MG_CSS.indexOf(".mg-say{"), MG_CSS.indexOf("}", MG_CSS.indexOf(".mg-say{")));
+      expect(rule).toContain("width:1px");
+      expect(rule).not.toContain("display:none");
+      t.destroy();
+    });
+
+    it("走一步就播一句,合成了会说合出多少", () => {
+      const { host, t } = table([seatOpts()]);
+      const say = host.byClass("mg-say")[0];
+      expect(say.textContent).toBe("");
+      pressKey("a");
+      tick(10);
+      expect(say.textContent).toBe("第 1 步,合出 4,4 分");
+      t.destroy();
+    });
+
+    it("这一盘结束时播的是结论,不是「第几步」", () => {
+      const { host, t } = table([
+        seatOpts({
+          start: boardFrom([
+            [16, 16, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ]),
+          target: 32
+        })
+      ]);
+      pressKey("a");
+      tick(10);
+      const said = host.byClass("mg-say")[0].textContent;
+      expect(said).toContain("目标达成");
+      expect(said).not.toContain("第 1 步");
+      t.destroy();
+    });
+
+    it("步数用完与推不动也各播一句", () => {
+      const { host: h1, t: t1 } = table([seatOpts({ stepLimit: 1, target: 4096 })]);
+      pressKey("a");
+      tick(10);
+      expect(h1.byClass("mg-say")[0].textContent).toContain("步数用完");
+      t1.destroy();
+
+      const { host: h2, t: t2 } = table([
+        seatOpts({
+          start: boardFrom([
+            [2, 4, 2],
+            [4, 2, 4],
+            [0, 2, 4]
+          ]),
+          seed: 1
+        })
+      ]);
+      pressKey("a");
+      tick(10);
+      expect(h2.byClass("mg-say")[0].textContent).toContain("挪不动");
+      t2.destroy();
+    });
+
+    it("假人那块盘不播报,免得把读屏刷屏", () => {
+      const { host, t } = table([
+        seatOpts({ name: "地狱假人", human: undefined, tier: "hell", start: startBoard(0) })
+      ]);
+      tick(60, 40);
+      expect(host.byClass("mg-say")[0].textContent).toBe("");
+      t.destroy();
+    });
+
+    it("双人同屏时播报带上是谁走的", () => {
+      const { host, t } = table(
+        [seatOpts({ name: "朵朵", human: "duo" }), seatOpts({ name: "星星", human: "star" })],
+        { split: true }
+      );
+      pressKey("a");
+      tick(10);
+      expect(host.byClass("mg-say")[0].textContent).toContain("朵朵:");
+      pressKey("ArrowLeft");
+      tick(10);
+      expect(host.byClass("mg-say")[0].textContent).toContain("星星:");
+      t.destroy();
+    });
+
+    it("暂停这类提示还是写在看得见的那一行,播报行不抢词", () => {
+      const { host, t } = table([seatOpts()]);
+      pressKey("Escape");
+      expect(host.byClass("mg-msg")[0].textContent).toContain("暂停");
+      expect(host.byClass("mg-say")[0].textContent).toBe("");
+      t.destroy();
+    });
   });
 });
 
