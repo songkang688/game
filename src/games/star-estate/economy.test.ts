@@ -336,6 +336,50 @@ describe("清偿 tryRaise", () => {
   });
 });
 
+describe("交易与小黑屋里的经营", () => {
+  it("只能交易地皮、出门卡和现金：建筑一定先拆掉，绝不会连房子一起卖出去", () => {
+    const s = seats(2, 0);
+    const tiles = GROUP_TILES.cotton;
+    for (const t of tiles) grantTile(s, t, 0);
+    s.players[0].cash = 200;
+    buildHouse(s, tiles[0]);
+    buildHouse(s, tiles[1]);
+    buildHouse(s, tiles[0]);
+    s.players[0].cash = 0;
+    s.players[1].cash = 2000;
+
+    const offers: number[] = [];
+    tryRaise(s, 0, 900, (pos) => {
+      offers.push(pos);
+      // 走到交易这一步时，手上一定一栋房子都不剩了
+      expect(s.tiles[pos].houses).toBe(0);
+      return { buyer: 1, price: 900 };
+    });
+    expect(offers.length).toBeGreaterThan(0);
+    expect(tiles.every((t) => s.tiles[t].houses === 0)).toBe(true);
+  });
+
+  it("在小黑屋里照样能收租、能盖屋、能抵押", () => {
+    const s = seats(2, 3000);
+    const tiles = GROUP_TILES.cotton;
+    for (const t of tiles) grantTile(s, t, 0);
+    sendToJail(s, 0);
+    expect(s.players[0].inJail).toBe(true);
+
+    // 盖屋
+    expect(buildHouse(s, tiles[0])).toBe(true);
+    // 收租：对手停在他的地上照样要付
+    s.players[1].pos = tiles[0];
+    const before = s.players[0].cash;
+    expect(payDebt(s, 1, 0, rentOf(s, tiles[0]))).toBe(true);
+    expect(s.players[0].cash).toBeGreaterThan(before);
+    // 抵押（先拆房）
+    sellHouse(s, tiles[0]);
+    expect(mortgage(s, tiles[0])).toBe(30);
+    expect(s.players[0].inJail).toBe(true);
+  });
+});
+
 describe("破产两条路径", () => {
   it("债主是玩家：现金、出门卡、地契整体转过去，抵押地要交 10% 手续费", () => {
     const s = seats(2, 0);

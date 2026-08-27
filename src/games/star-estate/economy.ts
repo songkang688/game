@@ -722,20 +722,30 @@ function payCtxFor(state: EstateState, ctx: TurnContext, events: EstateEvent[]):
   };
 }
 
-/** 跑一轮拍卖并落槌。`skipId` 是刚刚放弃购买的人，从他的下家开始叫价。 */
+/**
+ * 跑一轮拍卖并落槌。`skipId` 是刚刚放弃购买的人，从他的下家开始叫价。
+ *
+ * 人类座位默认心理价位是 0（不会背着玩家自动掏钱），
+ * 界面问过玩家之后用 `limits` 把他这一次愿意出的上限传进来。
+ */
 export function runAuction(
   state: EstateState,
   pos: number,
   skipId: number,
   ctx: TurnContext,
-  events: EstateEvent[]
+  events: EstateEvent[],
+  limits?: Map<number, number>
 ): AuctionResult {
   const alive = alivePlayers(state);
   const start = skipId >= 0 ? (alive.indexOf(skipId) + 1) % Math.max(1, alive.length) : 0;
   const ordered = alive.slice(start).concat(alive.slice(0, start));
   const bidders: Bidder[] = ordered.map((id) => ({
     id,
-    limit: Math.max(0, Math.round(ctx.policyOf(id).bidLimit(state, id, pos))),
+    limit: limits?.has(id)
+      ? Math.max(0, Math.round(limits.get(id) ?? 0))
+      : ctx.humans?.has(id)
+        ? 0
+        : Math.max(0, Math.round(ctx.policyOf(id).bidLimit(state, id, pos))),
     cash: state.players[id].cash
   }));
   const result = auctionOnce(pos, bidders);

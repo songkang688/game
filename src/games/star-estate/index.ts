@@ -253,7 +253,7 @@ interface Table {
   state: () => EstateState;
 }
 
-type Phase = "idle" | "busy" | "decide" | "jail" | "over";
+type Phase = "idle" | "busy" | "decide" | "bid" | "jail" | "over";
 
 function createTable(host: HTMLElement, opts: TableOpts): Table {
   const soft = reducedMotion();
@@ -386,6 +386,11 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
   endBtn.textContent = "⏭️ 结束回合";
   pad.append(rollBtn, buyBtn, endBtn);
   wrap.appendChild(pad);
+
+  const bidRow = document.createElement("div");
+  bidRow.className = "se-pad";
+  bidRow.hidden = true;
+  wrap.appendChild(bidRow);
 
   const msg = document.createElement("div");
   msg.className = "se-msg";
@@ -527,6 +532,13 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
   function renderButtons(): void {
     const mine = currentHuman();
     const canAct = phase !== "over" && !paused && mine >= 0;
+    if (phase === "bid") {
+      // 正在问「最多跟到多少」，三个主钮先让位给出价按钮
+      rollBtn.disabled = true;
+      buyBtn.disabled = true;
+      endBtn.disabled = true;
+      return;
+    }
     if (phase === "decide") {
       rollBtn.disabled = true;
       rollBtn.textContent = "🎲 掷骰 F";
@@ -690,6 +702,13 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       finish("goal");
       return true;
     }
+    // 人类座位收摊了就当场结束，不让 AI 自己接着打完
+    for (const id of humans) {
+      if (state.players[id].bankrupt) {
+        finish("bankrupt");
+        return true;
+      }
+    }
     const last = lastOneStandingOrNone(state);
     if (last >= 0 || state.over) {
       finish("bankrupt");
@@ -729,6 +748,12 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     phase = "busy";
     render();
     later(() => {
+      // 暂停时对手也停下来等，回来还是原来那一步
+      if (paused) {
+        phase = "idle";
+        later(beginTurn, BEAT_MS);
+        return;
+      }
       const events = playTurn(state, id, ctx);
       playBeats(events, () => {
         if (checkEnd()) return;
@@ -814,12 +839,20 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
   function landing(id: number, steps: number): void {
     const p = state.players[id];
     const st = state.tiles[p.pos];
-    if (isBuyable(p.pos) && st.owner === BANK && p.cash >= (tileAt(p.pos).price ?? 0)) {
-      pendingBuy = p.pos;
-      phase = "decide";
-      say(`${tileAt(p.pos).name} 还没有主人，买下来吗？`);
-      render();
-      return;
+    if (isBuyable(p.pos) && st.owner === BANK) {
+      if (p.cash >= (tileAt(p.pos).price ?? 0)) {
+        pendingBuy = p.pos;
+        phase = "decide";
+        say(`${tileAt(p.pos).name} 还没有主人，买下来吗？`);
+        render();
+        return;
+      }
+      // 全价买不起，但拍卖是无底价的，兜里还有钱就还有机会
+      if (opts.rules.auction && p.cash >= 10) {
+        say(`${tileAt(p.pos).name} 的标价买不起，不过拍卖是无底价的。`);
+        askBid(p.pos, id);
+        return;
+      }
     }
     const events: EstateEvent[] = [];
     resolveLanding(state, id, steps, ctx, events);
@@ -859,6 +892,10 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     }
     if (phase === "jail") {
       const p = state.players[id];
+      if (p.outCards <= 0 && p.cash < JAIL_FINE) {
+        say(`交罚款要 ${JAIL_FINE} 星币，现在还不够。掷出一对同点也能出来。`);
+        return;
+      }
       const choice: JailChoice = p.outCards > 0 ? "card" : "pay";
       const res = jailStep(state, id, choice, lastDice);
       say(res.note);
@@ -891,11 +928,45 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
     if (id < 0 || phase !== "decide") return;
     const pos = pendingBuy;
     pendingBuy = -1;
-    phase = "busy";
-    const events: EstateEvent[] = [];
-    if (opts.rules.auction) runAuction(state, pos, id, ctx, events);
-    else events.push({ kind: "note", text: `${tileAt(pos).name} 先留在银行手里。` });
-    playBeats(events, afterLanding);
+    if (!opts.rules.auction) {
+      phase = "busy";
+      playBeats([{ kind: "note", text: `${tileAt(pos).name} 先留在银行手里。` }], afterLanding);
+      return;
+    }
+    askBid(pos, id);
+  }
+
+  /** 不买就上拍卖台：先问玩家这一次最多愿意跟到多少，绝不背着他掏钱 */
+  function askBid(pos: number, id: number): void {
+    phase = "bid";
+    const price = tileAt(pos).price ?? 0;
+    const cash = state.players[id].cash;
+    const low = Math.min(cash, Math.max(10, Math.round(price * 0.6)));
+    const high = Math.min(cash, Math.round(price * 1.2));
+    const choices: Array<{ label: string; limit: number }> = [{ label: "🙅 不跟", limit: 0 }];
+    if (low >= 10) choices.push({ label: `🔨 最多 ${low}`, limit: low });
+    if (high > low) choices.push({ label: `🔨 最多 ${high}`, limit: high });
+
+    bidRow.innerHTML = "";
+    bidRow.hidden = false;
+    for (const c of choices) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "se-btn se-btn-sm";
+      b.textContent = c.label;
+      b.addEventListener("click", () => {
+        bidRow.hidden = true;
+        bidRow.innerHTML = "";
+        opts.sfx("tap");
+        phase = "busy";
+        const events: EstateEvent[] = [];
+        runAuction(state, pos, id, ctx, events, new Map([[id, c.limit]]));
+        playBeats(events, afterLanding);
+      });
+      bidRow.appendChild(b);
+    }
+    say(`${tileAt(pos).name} 要上拍卖台了，你打算最多跟到多少？`);
+    render();
   }
 
   function endTurn(): void {
@@ -1064,7 +1135,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         : netWorth(state, 0) >= cfg.goal.target,
     sfx: (n) => ctx.sfx(n),
     onOver: (r) => {
-      const won = r.reason === "goal" || (r.winner === 0 && r.reason !== "timeout");
+      // 只有真的达成目标、或者对手全部收摊才算过关；到点没够线一律重来
+      const won = r.reason === "goal" || (r.reason === "bankrupt" && r.winner === 0);
       if (!won) {
         ctx.lose("这一局没赶上目标，换个买地顺序再试一次，肯定能行！");
         return;
