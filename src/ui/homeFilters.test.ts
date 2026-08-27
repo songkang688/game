@@ -470,7 +470,7 @@ describe("和已上架 meta 的约定", () => {
     "poop-hero": "bbcr",
     "red-blue-tug": "hlbh",
     "sprout-defense": "lybwz",
-    xiangqi: "ddxxxq"
+    xiangqi: "ylkkxq"
   };
 
   it("1.1 已在架游戏的标题拼音首字母没有跑偏", () => {
@@ -490,7 +490,7 @@ describe("和已上架 meta 的约定", () => {
     "block-drop": "fkddl",
     "combo-clash": "lzdj",
     "mahjong-bloom": "hkmj",
-    "star-estate": "dxdc",
+    "star-estate": "lkdc",
     "hero-cards": "yjl",
     "weiqi-garden": "wzhy",
     "flight-chess": "fxqly",
