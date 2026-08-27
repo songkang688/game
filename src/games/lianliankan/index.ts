@@ -4,7 +4,6 @@ export { meta };
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
 import {
-  MASK_FACE,
   anyMove,
   applyGravity,
   createBoard,
@@ -21,12 +20,15 @@ import {
 } from "./board";
 import { CHAPTERS, LEVELS, THEME_EMOJIS, turnsOf, type LlkLevel } from "./levels";
 import {
+  CELL_GAP_PX,
   HINT_MAX,
   Janitor,
+  RING_FRAC,
   SHAKE_MS,
   beginCollapse,
   bgOf,
   boardCleared,
+  cellSizePx,
   clearMs,
   collapseMs,
   endlessInit,
@@ -53,6 +55,18 @@ import {
   type LinkState,
   type Sfx
 } from "./logic";
+import {
+  HINT_GLOW_MS,
+  SHUFFLE_FX_MS,
+  hudGlyphSvg,
+  maskFaceSvg,
+  meteorPoints,
+  meteorSvg,
+  slimTile,
+  tileFaceSvg,
+  tileIconName,
+  type HudGlyph
+} from "./art";
 
 const CSS = `
 .llk-wrap {
@@ -303,6 +317,11 @@ class BoardView {
     return this.board;
   }
 
+  /** 这套主题的键：图标映射按它转起点，v 相同必同款 */
+  private get themeKey(): string {
+    return this.emojis[0] ?? "";
+  }
+
   render(): void {
     const { R, C } = this.board;
     for (let r = 1; r < R - 1; r++) {
@@ -313,8 +332,8 @@ class BoardView {
         node.className = "llk-cell";
         if (v < 0) {
           node.classList.add("llk-gone");
-          span.textContent = "";
-          node.style.background = "";
+          this.setFace(span, "", "");
+          node.style.backgroundColor = "";
           node.setAttribute("aria-hidden", "true");
           continue;
         }
@@ -324,17 +343,24 @@ class BoardView {
         node.classList.add(shapeClass(v));
         if (hidden) {
           node.classList.add("llk-mask");
-          span.textContent = MASK_FACE;
-          node.style.background = "";
+          this.setFace(span, "mask", maskFaceSvg());
+          node.style.backgroundColor = "";
           node.setAttribute("aria-label", "戴着面具的图案，点一下看看");
         } else {
-          span.textContent = this.emojis[v];
-          node.style.background = bgOf(v);
-          node.setAttribute("aria-label", `图案 ${this.emojis[v]}`);
+          this.setFace(span, `${this.themeKey}#${v}`, tileFaceSvg(this.themeKey, v));
+          node.style.backgroundColor = bgOf(v);
+          node.setAttribute("aria-label", `图案 ${tileIconName(this.themeKey, v)}`);
         }
         if (picked) node.classList.add("llk-sel");
       }
     }
+  }
+
+  /** 牌面只在真的换款时才重写 innerHTML，render 频繁跑也不抖 */
+  private setFace(span: HTMLElement, key: string, svg: string): void {
+    if (span.dataset.face === key) return;
+    span.dataset.face = key;
+    span.innerHTML = svg;
   }
 
   /** 提示：把真求解出来的一对高亮一下 */
