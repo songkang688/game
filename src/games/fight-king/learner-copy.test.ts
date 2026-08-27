@@ -19,4 +19,11 @@ describe("朵星格斗王 · 学习优化员文案快照", () => {
     expect(guide.entries[0].from).toBe(1);
     expect(guide.entries[guide.entries.length - 1].to).toBe(188);
   });
+
+  // 第 2 轮:把 1.3 的 P1/P2 头顶标记 + 脚下色环双通道讲进第一章攻略
+  it("第一章攻略把镜像同角色的双通道识别讲给玩家(第 2 轮逐字快照)", () => {
+    expect(guide.entries[0].tips).toContain(
+      "双人同屏就算两边选了同一位角色也不怕认错:一号头顶飘着小花标记、脚下一圈粉色光环,二号是小星标记加天蓝光环——贴身乱战时低头找脚下的色环最快。"
+    );
+  });
 });

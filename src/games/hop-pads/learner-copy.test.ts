@@ -21,4 +21,12 @@ describe("跳跳台 · 学习优化员文案快照", () => {
     expect(guide.entries[0].from).toBe(1);
     expect(guide.entries[guide.entries.length - 1].to).toBe(188);
   });
+
+  // 第 2 轮:把 visual-r1 补的高低错开云层(视差远景)讲进攻略
+  it("攻略把远景云的视差读法讲给玩家(第 2 轮逐字快照)", () => {
+    expect(guide.general.join("")).toContain(
+      "天上那几团高低错开的云是一层远景,飘得比脚下的台子慢:看云一点点被甩到身后,就知道自己真的又跳远了一截。"
+    );
+    expect(guide.general.length).toBeLessThanOrEqual(6);
+  });
 });

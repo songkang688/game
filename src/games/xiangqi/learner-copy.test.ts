@@ -18,4 +18,12 @@ describe("朵朵星星象棋 · 学习优化员文案快照", () => {
     expect(guide.entries[0].from).toBe(1);
     expect(guide.entries[7].to).toBe(188);
   });
+
+  // 第 2 轮:把 visual-r1 画制的小象头像与吃子槽读法讲进攻略(新增第 6 条)
+  it("攻略把小象头像与吃子槽讲给玩家(第 2 轮逐字快照)", () => {
+    expect(guide.general).toContain(
+      "座位条上那只圆头大耳的小象头像就是对手棋灵;旁边的吃子槽把被请走的子排成一列小棋子,谁吃了什么一目了然——兑子之前先看一眼槽,数数这笔账是亏是赚。"
+    );
+    expect(guide.general.length).toBeLessThanOrEqual(6);
+  });
 });

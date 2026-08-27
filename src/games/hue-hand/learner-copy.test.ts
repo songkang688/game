@@ -18,4 +18,12 @@ describe("花色接龙 · 学习优化员文案快照", () => {
     expect(guide.entries[0].from).toBe(1);
     expect(guide.entries[guide.entries.length - 1].to).toBe(188);
   });
+
+  // 第 2 轮:把 visual-r1 画制的三张对手头像(兔/熊猫/狐)讲进攻略
+  it("攻略教玩家按耳形认对手席头像并盯剩牌数(第 2 轮逐字快照)", () => {
+    expect(guide.general.join("")).toContain(
+      "对手席一眼认人:长耳朵的是团团、圆耳黑眼斑的是圆圆、尖耳朵的是点点,头像旁写着各自还剩几张——把跳过和加二招呼给剩牌最少的那位。"
+    );
+    expect(guide.general.length).toBeLessThanOrEqual(6);
+  });
 });

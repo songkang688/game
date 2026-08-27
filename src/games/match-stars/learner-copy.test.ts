@@ -18,4 +18,12 @@ describe("星星消消乐 · 学习优化员文案快照", () => {
     expect(guide.entries[0].from).toBe(1);
     expect(guide.entries[guide.entries.length - 1].to).toBe(188);
   });
+
+  // 第 2 轮:把 visual-r1 加的三主题剪影饰(云影/树影/星点)讲进攻略
+  it("攻略把主题剪影饰当进度里程碑讲给玩家(第 2 轮逐字快照)", () => {
+    expect(guide.general.join("")).toContain(
+      "背景还记着你的进度:晨光章飘着两朵云影,森林章底下立着几座圆树影,星夜章亮起点点星光——背景换了一幅,就说明你又往前推进了一大段。"
+    );
+    expect(guide.general.length).toBeLessThanOrEqual(6);
+  });
 });

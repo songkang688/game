@@ -18,4 +18,12 @@ describe("五子棋 · 学习优化员文案快照", () => {
     expect(guide.entries[0].from).toBe(1);
     expect(guide.entries[guide.entries.length - 1].to).toBe(188);
   });
+
+  // 第 2 轮:把 visual-r1 加的盘外暗角(聚焦盘心)讲进攻略
+  it("攻略把盘外暗角的用意讲给玩家(第 2 轮逐字快照)", () => {
+    expect(guide.general.join("")).toContain(
+      "棋盘四周那一圈淡淡的暗影不是脏了,是帮你把目光收回盘心——胜负手几乎都长在棋子扎堆的那片。"
+    );
+    expect(guide.general.length).toBeLessThanOrEqual(6);
+  });
 });

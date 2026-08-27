@@ -18,4 +18,12 @@ describe("彩虹跑跑 · 学习优化员文案快照", () => {
     expect(guide.entries[0].from).toBe(1);
     expect(guide.entries[guide.entries.length - 1].to).toBe(188);
   });
+
+  // 第 2 轮:把 visual-r1 画制化的 HUD 心心(掉心从右往左灰)讲进攻略
+  it("攻略把画制心心的读法讲给玩家(第 2 轮逐字快照)", () => {
+    expect(guide.general.join("")).toContain(
+      "顶栏右侧那排画制小心心是这一局的家底:撞一下就从右往左灰一颗,全灰就得重来——探险前先瞄一眼心心,再决定要不要为一枚星币冒险。"
+    );
+    expect(guide.general.length).toBeLessThanOrEqual(6);
+  });
 });
