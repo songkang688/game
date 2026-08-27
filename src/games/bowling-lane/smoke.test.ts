@@ -25,16 +25,32 @@ function playGame(opts: {
   oil: number;
   skill: AiLevel;
   seed: number;
+  /** 1.2 新增的球道花样:开球瓶阵 / 护栏 / 移动瓶 / 球沟宽度 */
+  rack?: boolean[];
+  bumpers?: boolean;
+  drift?: number;
+  gutter?: number;
 }): Played {
+  const fresh = (): boolean[] => (opts.rack ? opts.rack.slice() : new Array<boolean>(PINS).fill(true));
   const rolls: number[] = [];
-  let standing = new Array<boolean>(PINS).fill(true);
+  let standing = fresh();
   let guard = 0;
   while (guard++ < 80) {
     const st = turnState(rolls, opts.frames);
     if (st.over) break;
-    if (st.freshRack) standing = new Array<boolean>(PINS).fill(true);
+    if (st.freshRack) standing = fresh();
     const shot = aiShot(standing, opts.skill, opts.seed + st.frame * 3 + st.ball);
-    const res = simulateShot({ standing: standing.slice(), kinds: opts.kinds, oil: opts.oil }, shot);
+    const res = simulateShot(
+      {
+        standing: standing.slice(),
+        kinds: opts.kinds,
+        oil: opts.oil,
+        bumpers: opts.bumpers,
+        drift: opts.drift,
+        gutter: opts.gutter,
+      },
+      shot
+    );
     rolls.push(res.count);
     standing = res.standing;
   }
