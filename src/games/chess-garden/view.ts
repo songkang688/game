@@ -416,23 +416,32 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     overlay.hidden = false;
   }
 
-  function showPause(): void {
+  function pause(): void {
+    if (paused) return;
+    paused = true;
+    if (aiTimer !== null) {
+      clearTimeout(aiTimer);
+      aiTimer = null;
+    }
     const box = el("div", "cg-promo");
     box.appendChild(el("div", "cg-promo-t", "⏸️ 先歇一下"));
-    box.appendChild(el("div", "cg-promo-s", "棋局停在这儿了，想好了再继续。"));
+    box.appendChild(el("div", "cg-promo-s", "棋局停在这儿了，想好了再继续（再按一次 Esc 也行）。"));
     const b = button("cg-promo-b", "▶ 继续下棋");
-    b.addEventListener("click", () => {
-      paused = false;
-      overlay.hidden = true;
-      overlay.innerHTML = "";
-      opts.sfx("tap");
-      render();
-      scheduleAi();
-    });
+    b.addEventListener("click", resume);
     box.appendChild(b);
     overlay.innerHTML = "";
     overlay.appendChild(box);
     overlay.hidden = false;
+  }
+
+  function resume(): void {
+    if (!paused) return;
+    paused = false;
+    overlay.hidden = true;
+    overlay.innerHTML = "";
+    opts.sfx("tap");
+    render();
+    scheduleAi();
   }
 
   // -------------------------------------------------------------------------
@@ -458,7 +467,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   });
   tools.append(hintBtn, flipBtn, resignBtn);
 
-  /** 朵朵执白 WASD + F，星星执黑 方向键 + L，Esc 暂停 */
+  /** 朵朵执白 WASD 移光标、F 选中 / 落子、G 取消；星星执黑 方向键 + L / K；Esc 暂停与继续 */
   const WHITE_KEYS: Record<string, [number, number]> = {
     w: [0, 1],
     s: [0, -1],
@@ -478,13 +487,9 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     const key = ev.key ?? "";
     if (key === "Escape") {
       ev.preventDefault?.();
-      if (paused) return;
-      paused = true;
-      if (aiTimer !== null) {
-        clearTimeout(aiTimer);
-        aiTimer = null;
-      }
-      showPause();
+      // Esc 是开关：按一次停下来，再按一次接着下（和另外四款一个口径）
+      if (paused) resume();
+      else pause();
       return;
     }
     if (paused || pendingPromo || game.result) return;
@@ -506,6 +511,15 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     if ((lower === "f" && game.pos.turn === WHITE) || (lower === "l" && game.pos.turn === BLACK)) {
       ev.preventDefault?.();
       pickSquare(cursor);
+      return;
+    }
+    // 取消键：朵朵 G、星星 K，把刚选中的那颗子放回去，选错了不用非得走一手
+    if ((lower === "g" && game.pos.turn === WHITE) || (lower === "k" && game.pos.turn === BLACK)) {
+      ev.preventDefault?.();
+      if (selected < 0) return;
+      selected = -1;
+      opts.sfx("tap");
+      render();
     }
   }
 

@@ -303,7 +303,7 @@ function mountVersus(
       banner: `第 ${round} 局`,
       tip: cfg.tier
         ? `你执${cfg.side === WHITE ? "白" : "黑"}。白方先走，点一个自己的棋子再点落点。`
-        : "朵朵执白先走，星星执黑。手机点选，键盘朵朵 WASD+F、星星 方向键+L。",
+        : "朵朵执白先走，星星执黑。手机点选，键盘朵朵 WASD+F 选、G 取消；星星 方向键+L 选、K 取消。",
       showHints: true,
       allowFlip: true,
       allowResign: true,

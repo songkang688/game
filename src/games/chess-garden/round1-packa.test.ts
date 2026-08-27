@@ -208,23 +208,58 @@ describe("PA-CG · 双人同屏键位互不抢占", () => {
     handle.destroy();
   });
 
-  it("【已知问题】朵朵的 G 与星星的 K（取消选中）都没接", () => {
+  it("朵朵的 G 与星星的 K 都能把选中的子放回去", () => {
     const { handle } = duoBoard();
     press("w");
     press("f");
     expect(handle.snapshot().selected).toBe(parseSquare("e2"));
     press("g");
-    // 应有行为：G 该把选中撤掉。现状：按了没反应，只能再点一次那颗子。
-    expect(handle.snapshot().selected, "G 已经能取消选中了，这条可以翻面").toBe(parseSquare("e2"));
+    expect(handle.snapshot().selected, "G 没能取消选中").toBe(-1);
     handle.playHuman(fromSan(handle.game.pos, "e4")!);
     press("ArrowUp");
     press("ArrowUp");
     press("ArrowUp");
     press("l");
-    const picked = handle.snapshot().selected;
-    expect(picked).toBeGreaterThanOrEqual(0);
+    expect(handle.snapshot().selected).toBeGreaterThanOrEqual(0);
     press("k");
-    expect(handle.snapshot().selected, "K 已经能取消选中了，这条可以翻面").toBe(picked);
+    expect(handle.snapshot().selected, "K 没能取消选中").toBe(-1);
+    handle.destroy();
+  });
+
+  it("取消键只认自己那一套：白方回合按 K 不算数，黑方回合按 G 也不算数", () => {
+    const { handle } = duoBoard();
+    press("w");
+    press("f");
+    const picked = handle.snapshot().selected;
+    expect(picked).toBe(parseSquare("e2"));
+    press("k");
+    expect(handle.snapshot().selected, "白方回合被星星的 K 取消了选中").toBe(picked);
+    press("g");
+    expect(handle.snapshot().selected).toBe(-1);
+    handle.playHuman(fromSan(handle.game.pos, "e4")!);
+    press("ArrowUp");
+    press("ArrowUp");
+    press("ArrowUp");
+    press("l");
+    const black = handle.snapshot().selected;
+    expect(black).toBeGreaterThanOrEqual(0);
+    press("g");
+    expect(handle.snapshot().selected, "黑方回合被朵朵的 G 取消了选中").toBe(black);
+    handle.destroy();
+  });
+
+  it("取消之后还能重新选一颗子走棋，记谱不会因为取消多出一手", () => {
+    const { handle } = duoBoard();
+    press("w");
+    press("f");
+    press("g");
+    expect(handle.game.history, "取消键把棋走出去了").toHaveLength(0);
+    press("a");
+    press("f");
+    press("w");
+    press("w");
+    press("f");
+    expect(handle.game.history.map((h) => h.san)).toEqual(["d4"]);
     handle.destroy();
   });
 });
@@ -267,18 +302,55 @@ describe("PA-CG · Esc 暂停", () => {
     handle.destroy();
   });
 
-  it("【已知问题】Esc 只能进暂停，再按一次退不出来", () => {
+  it("Esc 是开关：再按一次就退出暂停，和另外四款一个口径", () => {
     const { handle } = duoBoard();
     press("Escape");
     expect(dom.root.find((e) => e.className.includes("cg-promo-t"))).not.toBeNull();
     press("Escape");
-    // 应有行为：和另外四款一样，Esc 是开关。现状：遮罩还在，只能点按钮。
-    expect(
-      dom.root.find((e) => e.className.includes("cg-promo-t")),
-      "Esc 已经能来回切了，这条可以翻面"
-    ).not.toBeNull();
-    dom.root.find((e) => e.className.includes("cg-promo-b"))!.click();
-    expect(dom.root.find((e) => e.className.includes("cg-promo-t"))).toBeNull();
+    expect(dom.root.find((e) => e.className.includes("cg-promo-t")), "再按一次 Esc 没退出暂停").toBeNull();
+    // 退出暂停之后棋接着下得动
+    press("w");
+    press("f");
+    press("w");
+    press("w");
+    press("f");
+    expect(handle.game.history.map((h) => h.san)).toEqual(["e4"]);
+    handle.destroy();
+  });
+
+  it("暂停 / 恢复来回 20 次之后棋照样走得动，也不会卡在遮罩里", () => {
+    const { handle } = duoBoard();
+    for (let i = 0; i < 20; i++) {
+      press("Escape");
+      expect(dom.root.find((e) => e.className.includes("cg-promo-t")), `第 ${i + 1} 次没暂停住`).not.toBeNull();
+      press("Escape");
+      expect(dom.root.find((e) => e.className.includes("cg-promo-t")), `第 ${i + 1} 次没恢复`).toBeNull();
+    }
+    press("w");
+    press("f");
+    press("w");
+    press("w");
+    press("f");
+    expect(handle.game.history.map((h) => h.san)).toEqual(["e4"]);
+    handle.destroy();
+  });
+
+  it("Esc 恢复之后电脑接着想，不会漏掉那一手", () => {
+    const { handle } = duoBoard(undefined, {
+      seats: [
+        { name: "朵朵", emoji: "🌸", color: "#fff", ai: null },
+        { name: "电脑", emoji: "🤖", color: "#eef", ai: 1 },
+      ],
+      aiDelayMs: 200,
+      think: (game: { pos: unknown }) => fromSan(game.pos as never, "e5"),
+    });
+    handle.playHuman(fromSan(handle.game.pos, "e4")!);
+    press("Escape");
+    flushTimers(dom, 4);
+    expect(handle.game.history.map((h) => h.san), "暂停期间电脑还是落了子").toEqual(["e4"]);
+    press("Escape");
+    flushTimers(dom, 4);
+    expect(handle.game.history.map((h) => h.san), "Esc 恢复之后电脑没接着走").toEqual(["e4", "e5"]);
     handle.destroy();
   });
 });
