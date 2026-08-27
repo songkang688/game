@@ -373,6 +373,89 @@ export function legalSwapsOn(s: Cellset): Array<[number, number]> {
   return out;
 }
 
+/* ---------------------------------------------------------------------------
+ * 卡壳指路：还有一步能消、就是找不着的时候
+ * ------------------------------------------------------------------------- */
+
+export interface HintSwap {
+  a: number;
+  b: number;
+  /** 换了之后大概能消掉几颗（彩虹星与特殊块按它们的波及面算） */
+  cleared: number;
+}
+
+/**
+ * 这一步换下去大概能消掉几颗。
+ * 彩虹星按「全场那种图案」算，特殊块按引爆范围算，普通三连按盘面上多出来的匹配格算
+ * （稳定盘面上本来就没有现成的三连，所以这个差值就是这一步的收成）。
+ */
+function swapGain(s: Cellset, a: number, b: number): number {
+  if (s.grid[a] === RAINBOW || s.grid[b] === RAINBOW) {
+    return rainbowTargetsOn(s, a, b, 0).size;
+  }
+  if (s.special[a] || s.special[b]) {
+    const set = new Set<number>();
+    for (const i of [a, b]) {
+      if (s.special[i]) for (const j of blastCells(s.cols, s.rows, i, s.special[i])) set.add(j);
+    }
+    return set.size;
+  }
+  const before = findMatchesOn(s.grid, s.cols, s.rows).size;
+  const g = s.grid.slice();
+  [g[a], g[b]] = [g[b], g[a]];
+  const after = findMatchesOn(g, s.cols, s.rows).size;
+  return Math.max(0, after - before);
+}
+
+/**
+ * 挑一步「消得最多」的交换，专门留给卡住的孩子指路。
+ *
+ * 真正卡住人的从来不是死局（死局会自动洗牌），而是**还有一步能消、我就是找不着**——
+ * 这时候游戏原先一句话都不说，孩子只能一直乱换到步数耗光。
+ *
+ * 消得一样多时取枚举顺序里最靠前的那一步（`legalSwapsOn` 是 index 升序，
+ * 所以就是 `a` 最小、再 `b` 最小），同一个盘面永远挑到同一步，可复现。
+ * 纯函数：不碰 DOM、不吃随机数，也**不会**把盘面改坏（换过就换回来）。
+ */
+export function bestHintSwap(s: Cellset): HintSwap | null {
+  let best: HintSwap | null = null;
+  for (const [a, b] of legalSwapsOn(s)) {
+    const cleared = swapGain(s, a, b);
+    if (cleared <= 0) continue;
+    if (!best || cleared > best.cleared) best = { a, b, cleared };
+  }
+  return best;
+}
+
+// 「行 / 列 / 第」这三个字一个都不用：指路只说方位，绝不退化成报坐标
+const HINT_ROW_WORD = ["上边", "中间", "下边"];
+const HINT_COL_WORD = ["靠左", "中间", "靠右"];
+
+/**
+ * 把一格说成「盘面的哪一片」。和五子棋的提示一个口径：
+ * **永远不报行号列号**，免得「指路」退化成直接报答案。
+ */
+export function swapAreaWords(s: Cellset, at: number): string {
+  const third = (v: number, n: number): number => (v < n / 3 ? 0 : v < (n * 2) / 3 ? 1 : 2);
+  const r = third(Math.floor(at / s.cols), s.rows);
+  const c = third(at % s.cols, s.cols);
+  if (r === 1 && c === 1) return "盘面正中间";
+  return `盘面${HINT_ROW_WORD[r]}${HINT_COL_WORD[c]}那一片`;
+}
+
+/**
+ * 卡壳时说的那一句。找不到能消的一步就返回空串
+ * （那是真死局，交给 `shuffleOn` / `shuffleLine` 处理，这里不抢话）。
+ */
+export function stuckHintLine(s: Cellset): string {
+  const sw = bestHintSwap(s);
+  if (!sw) return "";
+  const where = swapAreaWords(s, sw.a);
+  return sw.cleared >= 5
+    ? `别急～${where}藏着一步大的，换一下能消掉好几颗！`
+    : `别急～${where}还有一步能消，慢慢找找看！`;
+}
+
 /**
  * 死局救场：一步都消不动的时候，把还能动的格子重洗一遍，
  * 洗到「盘上没有现成的三连、又至少有一步能消」为止。

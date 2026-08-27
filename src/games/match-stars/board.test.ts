@@ -11,6 +11,7 @@ import {
   RAINBOW,
   ROCKET_H,
   ROCKET_V,
+  bestHintSwap,
   blastCells,
   columnSegments,
   findMatchesOn,
@@ -27,6 +28,8 @@ import {
   shuffleLine,
   shuffleOn,
   specialOf,
+  stuckHintLine,
+  swapAreaWords,
   type Cellset,
 } from "./board";
 import { mulberry32 } from "../level99";
@@ -249,6 +252,12 @@ describe("死局洗牌", () => {
     expect(s.grid[0]).toBe(1);
   });
 
+  it("死局里不抢洗牌的话：指路函数一句都不说", () => {
+    const s = deadBoard();
+    expect(bestHintSwap(s)).toBeNull();
+    expect(stuckHintLine(s)).toBe("");
+  });
+
   it("洗不出来也得说一句，不能让盘面静悄悄地卡住", () => {
     const ok = shuffleLine(true);
     const failed = shuffleLine(false);
@@ -257,5 +266,94 @@ describe("死局洗牌", () => {
     expect(failed).toContain("重来");
     // 洗不出来不是孩子的错，文案里不许有责怪的话
     for (const bad of ["你输了", "失败", "笨"]) expect(failed).not.toContain(bad);
+  });
+});
+
+describe("卡壳指路（还有一步能消、就是找不着）", () => {
+  /** 换一步就能连出三颗的 6×6 */
+  function liveBoard(): Cellset {
+    const s = makeCellset(C, R, 0);
+    s.grid = grid([
+      "112211",
+      "221122",
+      "112211",
+      "221122",
+      "112211",
+      "221122",
+    ]);
+    return s;
+  }
+
+  it("挑出来的那一步一定在合法交换里，而且换了真能消", () => {
+    const s = liveBoard();
+    const sw = bestHintSwap(s);
+    expect(sw).not.toBeNull();
+    const swaps = legalSwapsOn(s);
+    expect(swaps.some(([a, b]) => a === sw!.a && b === sw!.b)).toBe(true);
+    [s.grid[sw!.a], s.grid[sw!.b]] = [s.grid[sw!.b], s.grid[sw!.a]];
+    expect(matchesAtOn(s.grid, C, R, sw!.a) || matchesAtOn(s.grid, C, R, sw!.b)).toBe(true);
+  });
+
+  it("只看不动：算完之后盘面一格都没变", () => {
+    const s = liveBoard();
+    const before = s.grid.slice();
+    const beforeSp = s.special.slice();
+    bestHintSwap(s);
+    stuckHintLine(s);
+    expect(s.grid).toEqual(before);
+    expect(s.special).toEqual(beforeSp);
+  });
+
+  it("同一个盘面永远挑到同一步（消得一样多时取枚举里最靠前的）", () => {
+    const a = bestHintSwap(liveBoard());
+    const b = bestHintSwap(liveBoard());
+    expect(a).toEqual(b);
+  });
+
+  it("彩虹星那一步收成最大，就该挑它", () => {
+    const s = liveBoard();
+    // 盘面右下角塞一颗彩虹星：和谁换都清掉全场那种图案
+    const at = (R - 1) * C + (C - 1);
+    s.grid[at] = RAINBOW;
+    const sw = bestHintSwap(s);
+    expect(sw).not.toBeNull();
+    expect(sw!.a === at || sw!.b === at).toBe(true);
+    expect(sw!.cleared).toBeGreaterThan(5);
+  });
+
+  it("指路只说方位，一个行号列号都不报", () => {
+    const s = liveBoard();
+    const line = stuckHintLine(s);
+    expect(line.length).toBeGreaterThan(0);
+    expect(line).not.toMatch(/\d/);
+    // 也不许直接把答案说破
+    for (const bad of ["行", "列", "第"]) expect(line).not.toContain(bad);
+  });
+
+  it("九片方位词里都不带「行 / 列 / 第」", () => {
+    const s = makeCellset(C, R, 0);
+    for (let i = 0; i < s.grid.length; i++) {
+      const word = swapAreaWords(s, i);
+      for (const bad of ["行", "列", "第"]) expect(word).not.toContain(bad);
+    }
+  });
+
+  it("消得多的那一步换一句更来劲的话", () => {
+    const s = liveBoard();
+    const at = (R - 1) * C + (C - 1);
+    s.grid[at] = RAINBOW;
+    expect(stuckHintLine(s)).toContain("一步大的");
+  });
+
+  it("方位词把盘面切成九片，四角说得各不一样", () => {
+    const s = makeCellset(C, R, 0);
+    const corners = [0, C - 1, (R - 1) * C, R * C - 1];
+    const words = corners.map((i) => swapAreaWords(s, i));
+    expect(new Set(words).size).toBe(4);
+    expect(words[0]).toContain("上边");
+    expect(words[0]).toContain("靠左");
+    expect(words[3]).toContain("下边");
+    expect(words[3]).toContain("靠右");
+    expect(swapAreaWords(s, Math.floor(R / 2) * C + Math.floor(C / 2))).toBe("盘面正中间");
   });
 });

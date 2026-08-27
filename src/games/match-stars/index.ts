@@ -22,7 +22,15 @@ import {
   type PlayHandle,
 } from "../level99";
 import { prefersReducedMotion } from "./anim";
-import { legalSwapsOn, RAINBOW, rotateSlots, shuffleLine, shuffleOn, type Cellset } from "./board";
+import {
+  legalSwapsOn,
+  RAINBOW,
+  rotateSlots,
+  shuffleLine,
+  shuffleOn,
+  stuckHintLine,
+  type Cellset,
+} from "./board";
 import {
   applyPlan,
   creditOrder,
@@ -75,6 +83,9 @@ const TOKENS: TokenSkin[] = [
 ];
 
 const emojiOf = (t: number): string => (TOKENS[t] ?? TOKENS[0]).emoji;
+
+/** 连着换错这么多次才开口指路：头两次留给孩子自己找 */
+const STUCK_MISSES = 3;
 
 /** 一串可以一起清掉的定时器 */
 function makeTimers(): { later: (fn: () => void, ms: number) => void; clear: () => void } {
@@ -142,6 +153,8 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
   const timers = makeTimers();
   let moves = cfg.moves;
   let levelDone = false;
+  /** 连着换错几次了（换成了一步真的消除就归零） */
+  let misses = 0;
   const state: MatchState = createState(cfg, Math.random as () => number);
   const beltRows = new Set((cfg.belts ?? []).map((b) => ((b.row % SIZE) + SIZE) % SIZE));
   const frostTotal = state.frostLeft;
@@ -260,6 +273,7 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
     spawn: () => spawnToken(cfg, Math.random as () => number),
     onMove: () => {
       moves--;
+      misses = 0;
       movesEl.textContent = `👣 ${moves} 步`;
     },
     onRevert: (a, b) => {
@@ -271,7 +285,11 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
             : "这颗被藤蔓缠住啦，在它上面消除才能剪断！";
         return;
       }
-      msgEl.textContent = "这样换消不掉，不算步数～换个方向再试～";
+      misses++;
+      // 连着换错三次才指路:头两次留给孩子自己找,第三次再说盘面哪一片有戏。
+      // 只说方位不报行列号,和五子棋的提示一个口径。
+      const hint = misses >= STUCK_MISSES ? stuckHintLine(state) : "";
+      msgEl.textContent = hint || "这样换消不掉，不算步数～换个方向再试～";
     },
     belts: () =>
       (cfg.belts ?? []).map((b) => ({ slots: beltSlots(state, b), dir: b.dir })),
