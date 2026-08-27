@@ -302,11 +302,16 @@ export interface IdiomCard {
   idiom: string;
   /** 挖空的位置（0 基） */
   blank: number;
+  /**
+   * 释义句。**一个字都不许和被挖掉的那个字重复**——释义里带上答案字，
+   * 孩子不用会这条成语也能照着抄回去（1.2 窗口5 修的 W5-A-02）。
+   * `bank.test.ts` 有一条守门用例钉着这件事。
+   */
   meaning: string;
 }
 
 export const IDIOM_CARDS: IdiomCard[] = [
-  { idiom: "一心一意", blank: 1, meaning: "心思全在一件事上" },
+  { idiom: "一心一意", blank: 1, meaning: "只认准一件事去做" },
   { idiom: "三心二意", blank: 1, meaning: "拿不定主意，分神" },
   { idiom: "画蛇添足", blank: 2, meaning: "多此一举反而坏事" },
   { idiom: "守株待兔", blank: 2, meaning: "死等运气不动脑" },
@@ -324,10 +329,10 @@ export const IDIOM_CARDS: IdiomCard[] = [
   { idiom: "全神贯注", blank: 1, meaning: "注意力全部集中" },
   { idiom: "专心致志", blank: 2, meaning: "一门心思做一件事" },
   { idiom: "目不转睛", blank: 2, meaning: "眼睛一动不动地看" },
-  { idiom: "兴高采烈", blank: 1, meaning: "高兴得神气十足" },
+  { idiom: "兴高采烈", blank: 1, meaning: "情绪很好、很神气" },
   { idiom: "万紫千红", blank: 2, meaning: "花开得又多又艳" },
   { idiom: "鸟语花香", blank: 1, meaning: "又有鸟叫又有花香" },
-  { idiom: "春暖花开", blank: 1, meaning: "天气转暖花都开了" },
+  { idiom: "春暖花开", blank: 1, meaning: "天气回温，花都开了" },
   { idiom: "百发百中", blank: 2, meaning: "每一次都正中目标" },
   { idiom: "五颜六色", blank: 2, meaning: "颜色多得数不过来" },
 ];
@@ -397,9 +402,24 @@ export const CLOZE_CARDS: ClozeCard[] = [
 /** 偏旁部首：看偏旁猜字义 */
 export interface RadicalCard {
   radical: string;
-  /** 这个偏旁多半和什么有关 */
+  /**
+   * 这个偏旁多半和什么有关。
+   * 反过来问「哪个字和「X」有关？」的时候，凡是出现在这句话里的字都不许当答案
+   * ——义项词里就写着那个字，等于白送（1.2 窗口5 修的 W5-A-02，见 `radicalTargets`）。
+   */
   topic: string;
   chars: string[];
+}
+
+/**
+ * 这张偏旁卡里可以拿来当「哪个字和「X」有关？」答案的字。
+ *
+ * 把义项词里出现过的字剔掉：`木 / 树木` 不能问出「树」、`讠 / 说话` 不能问出「说」。
+ * 剔干净了要是一个都不剩（数据写坏了），就退回全表，宁可弱一点也不能出不了题。
+ */
+export function radicalTargets(card: RadicalCard): string[] {
+  const clean = card.chars.filter((c) => !card.topic.includes(c));
+  return clean.length ? clean : card.chars;
 }
 
 export const RADICAL_CARDS: RadicalCard[] = [

@@ -12,6 +12,7 @@ import {
   SYN_ANT_CARDS,
   WORD_LEVELS,
   lookalikeGroupOf,
+  radicalTargets,
   realWordList,
   type WordCard,
 } from "./logic";
@@ -361,7 +362,7 @@ function qRadical(rand: () => number): WordQ {
       choices, correct: choices.indexOf(card.topic),
     };
   }
-  const target = pick(rand, card.chars);
+  const target = pick(rand, radicalTargets(card));
   const others = RADICAL_CARDS.filter((c) => c.radical !== card.radical).flatMap((c) => c.chars);
   const choices = shuffled([target, ...takeDistinct(rand, others, 2, [target])], rand);
   return {
