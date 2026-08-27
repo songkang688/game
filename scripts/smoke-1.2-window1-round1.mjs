@@ -469,9 +469,11 @@ async function gameChecks(page, id, title) {
     return {
       declared: [...(meta.modes ?? [])],
       campaign: !!stage.querySelector(".l99-tab, .l99-continue") || /关$|\/188/.test(text),
-      versus: hit(/混战|对战|挑战|比赛|竞速|对决|争霸|擂台|抢/),
-      endless: hit(/无尽|马拉松|连续|不停/),
-      duo: hit(/双人|同屏|两个人/)
+      // 各款自己起的名字五花八门(「短盘连胜」「身份场 1v4」),
+      // 但表情前缀是统一的:🤝 对战、♾️ 无尽、👫 双人同屏
+      versus: hit(/^🤝|混战|对战|挑战|比赛|竞速|对决|争霸|擂台/),
+      endless: hit(/^♾️|^🔥|无尽|马拉松|连胜|连续|不停/),
+      duo: hit(/^👫|双人|同屏|两个人/)
     };
   }, id);
   const need = { campaign: "campaign", versus: "versus", endless: "endless", duo: "twoPlayer" };

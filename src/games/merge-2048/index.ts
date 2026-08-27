@@ -655,6 +655,9 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
     if (e.key === "Escape") {
       paused = !paused;
       msg.textContent = paused ? "⏸️ 暂停中,再按一次 Esc 继续。" : "继续!";
+      // 这一下归自己了:不拦住,游戏壳还会再弹一次统一暂停面板,
+      // 之后的 Esc 只关面板,盘面却一直停着
+      e.preventDefault();
       return;
     }
     if (paused) return;

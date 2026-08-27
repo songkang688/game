@@ -479,8 +479,9 @@ const L99_CSS = `
   user-select:none;-webkit-user-select:none;position:relative;}
 .l99-map{border-radius:20px;padding:14px;background:linear-gradient(180deg,#FFF7FB,#F0F4FF);}
 .l99-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-.l99-chip{background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:14px;color:#7a5da8;
-  box-shadow:0 2px 6px rgba(150,130,200,.2);}
+/* 「🚩 0/188 关」「⭐ 0/564」是孩子要读的进度,不是按钮也不是格子数字,按正文 16px 走 */
+.l99-chip{background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:16px;
+  line-height:1.4;color:#7a5da8;box-shadow:0 2px 6px rgba(150,130,200,.2);}
 .l99-chip-skip{color:#6d6580;background:#efedf5;}
 .l99-continue{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
