@@ -58,7 +58,9 @@ describe("贴纸工序（沿 crops.ts 规格）", () => {
       expect(s, e).toBeTruthy();
       expect(s!.startsWith("<svg "), e).toBe(true);
       expect(s!.endsWith("</svg>"), e).toBe(true);
-      expect(s, e).toContain(`data-sticker="${e}"`);
+      // data-sticker 放中文名不放 emoji：贴纸的输出里一个裸 emoji 字符都不许有
+      expect(s, e).toContain(`data-sticker="${stickerName(e)}"`);
+      expect(/\p{Extended_Pictographic}/u.test(s!), e).toBe(false);
       expect(s, e).toContain('aria-hidden="true"');
       expect(s, e).toContain("stroke=");
       // 白高光 / 白色亮部（高光斑或眼白）

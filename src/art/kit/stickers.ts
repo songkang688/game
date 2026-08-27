@@ -1758,7 +1758,8 @@ export function sticker(emoji: string, size = 32): string | null {
   if (!hit) return null;
   const s = Math.max(8, Math.round(Number.isFinite(size) && size > 0 ? size : 32));
   return (
+    // data-sticker 放中文名不放 emoji 字符：贴纸的使命就是让页面上一个裸 emoji 都不剩
     `<svg viewBox="0 0 48 48" width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg"` +
-    ` aria-hidden="true" data-sticker="${normalizeEmoji(emoji)}" role="img">${hit.draw()}</svg>`
+    ` aria-hidden="true" data-sticker="${hit.name}" role="img">${hit.draw()}</svg>`
   );
 }

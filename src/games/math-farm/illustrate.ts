@@ -10,7 +10,8 @@
  * 解析不出来（分数 / 方程 / 应用题…）就返回 null，题卡保持清爽。
  */
 import { BASKET_UNIT, CROP_NAMES, basket, crop, cropAt, type CropKind } from "../../art/kit/crops";
-import { CROP_PX } from "./farmScene";
+import { hasSticker, sticker, stickerName } from "../../art/kit/stickers";
+import { COUNT_PX, CROP_PX } from "./farmScene";
 import { strip, type MathSpec } from "./gen";
 
 /** 单个操作数的上限：三位数摆出来就是一片密密麻麻，宁可不配图 */
@@ -110,4 +111,46 @@ export function renderIllustration(plan: IllusPlan): string {
     parts.push(`<span class="mtf-illus-legend">${basketLegend(plan.crop)}</span>`);
   }
   return parts.join("");
+}
+
+// ---------------------------------------------------------------------------
+// 数一数题的贴纸行（W8R1-01：计数物由裸 emoji 换成 kit 贴纸自绘）
+// ---------------------------------------------------------------------------
+
+/** 数一数一行最多摆几个才肯配贴纸（关卡出题上限 10，留点冗余） */
+export const COUNT_ILLUS_MAX = 12;
+
+export interface CountPlan {
+  /** 题面上重复的那个 emoji（原样，从不改写） */
+  emoji: string;
+  n: number;
+  /** 贴纸的中文名（读屏 / 调试用） */
+  name: string;
+}
+
+/**
+ * 数一数题的贴纸计划：题面纯文本是「同一个 emoji 重复 n 次」时成立。
+ * 和 `operandsOf` 一样只读题面，从不反向改动题目数据；
+ * 解析不出（算式 / 混排 / 图集没画过的 emoji）返回 null，走原来的路。
+ */
+export function countPlan(q: IllusSource): CountPlan | null {
+  if (q.spec) return null;
+  const text = strip(q.promptHTML);
+  if (!text || /[0-9=+\-×÷?？]/.test(text)) return null;
+  const tokens = text.split(" ");
+  if (tokens.length < 2 || tokens.length > COUNT_ILLUS_MAX) return null;
+  const first = tokens[0];
+  if (!tokens.every((t) => t === first)) return null;
+  if (!hasSticker(first)) return null;
+  return { emoji: first, n: tokens.length, name: stickerName(first) ?? "" };
+}
+
+/**
+ * 贴纸计划 → HTML。结构约定与算式插图同一套：
+ * 单元带 `data-unit="one"`，组带 `data-n="原数"`；原 emoji 行留在题卡的
+ * sr-only 里（视觉层负责挂类），这行贴纸自己是 aria-hidden 的装饰。
+ */
+export function renderCountIllustration(plan: CountPlan): string {
+  const unit = `<span class="mtf-illus-unit mtf-illus-count-unit" data-unit="one">${sticker(plan.emoji, COUNT_PX)}</span>`;
+  return `<span class="mtf-illus-group" data-n="${plan.n}">${unit.repeat(plan.n)}</span>`;
 }

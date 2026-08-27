@@ -27,7 +27,13 @@ import {
   farmSceneSvg,
   wateringCanSvg,
 } from "./farmScene";
-import { illustrationPlan, renderIllustration, type IllusSource } from "./illustrate";
+import {
+  countPlan,
+  illustrationPlan,
+  renderCountIllustration,
+  renderIllustration,
+  type IllusSource,
+} from "./illustrate";
 
 /** 运行器辅助层往视觉层喊话的三个口子 */
 export interface FarmVisualHooks {
@@ -158,8 +164,22 @@ export function createFarmLayer(
       if (!planted[i] && cell.getAttribute("data-stage") === null) setStage(i, "sprout");
     }
     if (illus) {
-      const plan = questions[i] ? illustrationPlan(questions[i], i) : null;
-      if (plan) {
+      const q = questions[i];
+      // 数一数题：题面那行裸 emoji 收进 sr-only（读屏还念得到），可见层换成
+      // 贴纸行顶上当题卡。只改 class（属性变更），不动 .qz-prompt 的孩子，
+      // 辅助层盯 childList 的 MutationObserver 毫发无伤。
+      const counting = q ? countPlan(q) : null;
+      if (prompt instanceof HTMLElement) {
+        if (counting) prompt.classList.add("mtf-count-sr");
+        else prompt.classList.remove("mtf-count-sr");
+      }
+      if (counting) illus.classList.add("mtf-illus-count");
+      else illus.classList.remove("mtf-illus-count");
+      const plan = !counting && q ? illustrationPlan(q, i) : null;
+      if (counting) {
+        illus.innerHTML = renderCountIllustration(counting);
+        illus.hidden = false;
+      } else if (plan) {
         illus.innerHTML = renderIllustration(plan);
         illus.hidden = false;
       } else {
@@ -274,6 +294,7 @@ export function createFarmLayer(
       timers.forEach((t) => clearTimeout(t));
       timers.clear();
       if (host instanceof HTMLElement) host.classList.remove("mtf-farm-host");
+      if (prompt instanceof HTMLElement) prompt.classList.remove("mtf-count-sr");
       illus?.remove();
       fx.remove();
       plots.remove();

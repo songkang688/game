@@ -49,6 +49,10 @@ export const MILL_SPIN_S = 8;
 export const MIN_CROP_PX = 16;
 /** 插图作物的常规边长 */
 export const CROP_PX = 20;
+/** 数一数贴纸的常规边长（原 emoji 行字号 30px，贴纸给到同一视觉量级） */
+export const COUNT_PX = 34;
+/** 数一数贴纸在 360px 窄屏上的最小边长 */
+export const MIN_COUNT_PX = 26;
 /** 选项木牌的最小高度（规格底线 44px，本款给到 64px 与壳一致） */
 export const SIGN_MIN_H = 64;
 
@@ -259,6 +263,17 @@ export const FARM_CSS = `
 .mtf-illus-op { font-size: 20px; font-weight: 900; color: ${P.soilDark}; padding: 0 2px; }
 .mtf-illus-legend { width: 100%; text-align: center; font-size: 12px; font-weight: 800; color: ${P.soilDark}; opacity: .9; }
 
+/* ---- 数一数贴纸行（W8R1-01：计数物由裸 emoji 换成 kit 贴纸自绘） ----
+   贴纸行顶上当题卡：白底 + 木牌描边，和换肤后的题卡同一套衣服；
+   原 emoji 行收进 sr-only（读屏还念得到），视觉上只剩贴纸。 */
+.mtf-illus-count { background: #fff; border: 2px solid ${WOOD_EDGE}; border-radius: 18px;
+  padding: 12px 14px; min-height: 62px; gap: 5px 7px;
+  box-shadow: 0 4px 0 ${WOOD_SHADOW}, 0 8px 14px rgba(0,0,0,.10); }
+.mtf-illus-count-unit { width: ${COUNT_PX}px; height: ${COUNT_PX}px; }
+.mtf-count-sr { position: absolute !important; width: 1px !important; height: 1px !important;
+  min-height: 0 !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important;
+  clip: rect(0 0 0 0) !important; white-space: nowrap !important; border: 0 !important; box-shadow: none !important; }
+
 /* ---- 换肤：木牌选项 / 吊挂题卡 / 小喇叭木牌（只在本款宿主作用域内，不碰壳文件） ---- */
 .mtf-quizhost .qz-wrap { background: transparent !important; }
 .mtf-quizhost .qz-prompt { position: relative; margin-top: 12px; border: 2px solid ${WOOD_EDGE};
@@ -325,6 +340,7 @@ export const FARM_CSS = `
 @media (max-width: 400px) {
   .mtf-illus { gap: 3px 4px; padding: 5px 6px; }
   .mtf-illus-unit { width: ${MIN_CROP_PX}px; height: ${MIN_CROP_PX}px; }
+  .mtf-illus-count-unit { width: ${MIN_COUNT_PX}px; height: ${MIN_COUNT_PX}px; }
   .mtf-plot { width: 22px; height: 26px; }
   .mtf-plot svg { width: 18px; height: 18px; }
 }
