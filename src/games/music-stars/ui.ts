@@ -643,6 +643,46 @@ export interface BeatBarOptions {
   width?: number;
 }
 
+/** 判定线的宽度（和 `.mst-bar-line` 的 `width` 是同一个数，改一处两处都跟着走） */
+export const JUDGE_LINE_W = 4;
+
+/** 拍块的宽度：长音宽一点，看得出「这一下要按久一点」 */
+export const TICK_W_SHORT = 16;
+export const TICK_W_LONG = 30;
+
+export function tickWidthPx(long: boolean): number {
+  return long ? TICK_W_LONG : TICK_W_SHORT;
+}
+
+/**
+ * 拍块的左沿该摆在哪儿——**以拍点为中心**（1.2 窗口5 · 第 2 轮 · 档B）。
+ *
+ * 原来写的是 `left = 拍点 × pxPerSec`，也就是把**左沿**压在拍点上。轨道每秒走
+ * `pxPerSec` 像素、判定线钉在 `width/2`，于是「该敲的那一刻」拍块的左沿正好压线，
+ * 而它的**中心**还在判定线右边 8px（短音）/ 15px（长音）——按 150px/秒 换算就是
+ * 晚 53ms / 100ms。而游戏对孩子的原话是「看着黄线走到方块的那一刻再敲」：
+ * 孩子照着「方块中心对上黄线」敲，短音还在 perfect（<60ms）里，**长音直接从
+ * perfect 掉到 good**。不会判 miss，但稳定吃掉一档评分——测试员 W5-B-07.2 / W5-L-21。
+ *
+ * **这一条只改画法。** `timing.ts` 的 `judgeTap()`（音频时钟 + 输出延迟补偿 +
+ * perfect/good/ok 三档）一个字都没动——它本来就是对的，改它反而会把已经练熟的孩子打乱。
+ */
+export function tickLeftPx(sinceFirstSec: number, pxPerSec: number, tickWidth: number): number {
+  return sinceFirstSec * pxPerSec - tickWidth / 2;
+}
+
+/**
+ * 「拍块中心」与「判定线中心」在该敲的那一刻差多少像素。
+ * 对齐之后必须是 0；用例拿它当守门尺，以后谁把画法改回左沿对齐都会当场红。
+ */
+export function tickCenterOffsetPx(width: number, tickWidth: number): number {
+  const trackShift = Math.round(width / 2);
+  const tickLeft = Math.round(tickLeftPx(0, 1, tickWidth));
+  const tickCenter = trackShift + tickLeft + tickWidth / 2;
+  const lineCenter = Math.round(width / 2 - JUDGE_LINE_W / 2) + JUDGE_LINE_W / 2;
+  return tickCenter - lineCenter;
+}
+
 export interface BeatBarHandle {
   el: HTMLElement;
   start(): void;
@@ -664,15 +704,17 @@ export function createBeatBar(opts: BeatBarOptions): BeatBarHandle {
   bar.appendChild(track);
   const judge = document.createElement("div");
   judge.className = "mst-bar-line";
-  judge.style.left = `${Math.round(width / 2)}px`;
+  // 判定线也按中心对齐：`left` 是左沿，宽 JUDGE_LINE_W，中心要落在 width/2
+  judge.style.left = `${Math.round(width / 2 - JUDGE_LINE_W / 2)}px`;
   bar.appendChild(judge);
 
   const first = opts.beats[0] ?? 0;
   const ticks: HTMLElement[] = opts.beats.map((at, i) => {
     const tick = document.createElement("div");
     tick.className = `mst-bar-tick${opts.longs[i] ? " mst-bar-long" : ""}`;
-    tick.style.left = `${Math.round((at - first) * pxPerSec)}px`;
-    tick.style.width = `${opts.longs[i] ? 30 : 16}px`;
+    const w = tickWidthPx(!!opts.longs[i]);
+    tick.style.left = `${Math.round(tickLeftPx(at - first, pxPerSec, w))}px`;
+    tick.style.width = `${w}px`;
     track.appendChild(tick);
     return tick;
   });
