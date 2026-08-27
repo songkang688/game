@@ -241,7 +241,8 @@ interface ViewHooks {
 class BoardView {
   readonly root: HTMLElement;
   private readonly boardEl: HTMLElement;
-  private readonly canvas: HTMLCanvasElement;
+  /** 流星覆盖层的宿主:里面挂独立的 <svg class="llk-line">,永远在盘面容器最后 */
+  private readonly fx: HTMLElement;
   private readonly cells: HTMLButtonElement[][] = [];
   private link: LinkState = linkInit();
   private frozen = false;
@@ -257,8 +258,8 @@ class BoardView {
   ) {
     this.root = el("div", "llk-boardbox");
     this.boardEl = el("div", "llk-board");
-    this.canvas = el<HTMLCanvasElement>("canvas", "llk-line");
-    this.root.append(this.boardEl, this.canvas);
+    this.fx = el("div", "llk-fx");
+    this.root.append(this.boardEl, this.fx);
     // 一个委托监听管整块棋盘：无尽补盘时不会越攒越多
     this.jan.on(this.boardEl, "click", (ev: Event) => {
       const hit = (ev.target as HTMLElement | null)?.closest?.(".llk-cell") as HTMLElement | null;
@@ -311,6 +312,12 @@ class BoardView {
 
   freeze(): void {
     this.frozen = true;
+  }
+
+  /** 收摊：冻结输入、整体拆掉流星覆盖层（计时归零由 Janitor 统一管） */
+  dispose(): void {
+    this.freeze();
+    this.clearLine();
   }
 
   get state(): BoardState {
@@ -417,7 +424,7 @@ class BoardView {
     }
   }
 
-  /** 连上了：画线 → 撑住 → 缩掉 → 收拢滑动 → 回到待命 */
+  /** 连上了：流星滑过 → 到达 → 两张牌翻转消散 → 收拢滑动 → 回到待命 */
   private runLink(pair: [Pt, Pt], path: Pt[]): void {
     const [a, z] = pair;
     this.hooks.sfx("pop");
@@ -426,7 +433,6 @@ class BoardView {
     this.drawPath(path);
 
     this.jan.after(linkHoldMs(this.calm), () => {
-      this.clearLine();
       for (const [r, c] of pair) {
         const node = this.cells[r][c];
         node.classList.remove("llk-linking");
@@ -434,6 +440,8 @@ class BoardView {
       }
       this.jan.after(clearMs(this.calm), () => {
         for (const [r, c] of pair) this.cells[r][c].classList.remove("llk-clear");
+        // 流星焰尾陪着翻转淡完（CSS 那头在褪），这里才整体收走
+        this.clearLine();
         removePair(this.board, a, z);
         const moves = applyGravity(this.board, this.gravity);
         this.hooks.afterCollapse();
@@ -483,44 +491,24 @@ class BoardView {
     return longest;
   }
 
-  /** 画出真实路径（含拐点）的发光折线 */
+  /**
+   * 画出真实路径（含拐点）的流星光带。
+   * 折线坐标是 `meteorPoints` 把判定算出的拐点一比一映射成格子中心——
+   * 一个点都不自己算、不加、不减；「线是怎么绕过去的」全由判定说了算。
+   */
   private drawPath(path: readonly Pt[]): void {
     const w = this.boardEl.clientWidth;
     const h = this.boardEl.clientHeight;
     if (!w || !h) return;
-    this.canvas.width = w;
-    this.canvas.height = h;
-    const c2d = this.canvas.getContext("2d");
-    if (!c2d) return;
-    c2d.clearRect(0, 0, w, h);
-    const pts = path.map(([r, c]) => {
+    const pts = meteorPoints(path, (r, c) => {
       const node = this.cells[r][c];
       return [node.offsetLeft + node.offsetWidth / 2, node.offsetTop + node.offsetHeight / 2];
     });
-    c2d.lineCap = "round";
-    c2d.lineJoin = "round";
-    c2d.strokeStyle = "rgba(255,190,120,.55)";
-    c2d.lineWidth = 11;
-    c2d.beginPath();
-    pts.forEach(([x, y], i) => (i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y)));
-    c2d.stroke();
-    c2d.strokeStyle = "#FF8A4C";
-    c2d.lineWidth = 4;
-    c2d.beginPath();
-    pts.forEach(([x, y], i) => (i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y)));
-    c2d.stroke();
-    // 拐点上点一颗小圆点，让「线是怎么绕过去的」一目了然
-    c2d.fillStyle = "#FFD8A8";
-    for (let i = 1; i < pts.length - 1; i++) {
-      c2d.beginPath();
-      c2d.arc(pts[i][0], pts[i][1], 5, 0, Math.PI * 2);
-      c2d.fill();
-    }
+    this.fx.innerHTML = meteorSvg(pts, w, h, { calm: this.calm });
   }
 
   clearLine(): void {
-    const c2d = this.canvas.getContext("2d");
-    if (c2d) c2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.fx.innerHTML = "";
   }
 
   clearSelection(): void {
@@ -757,6 +745,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   return {
     destroy() {
       levelDone = true;
+      view.dispose();
       jan.destroy();
       wrap.remove();
     }
@@ -917,6 +906,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
   return {
     destroy() {
       st = { ...st, over: true };
+      view.dispose();
       jan.destroy();
       wrap.remove();
     }
