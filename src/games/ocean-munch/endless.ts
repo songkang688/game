@@ -528,6 +528,24 @@ export function endlessFailCopy(kind: EndlessFail, depth: number): EndlessCopy {
   };
 }
 
+/**
+ * 朗读专用的纪录播报。
+ *
+ * 面板上「🎉 破纪录!最深 N 米」那一行是画在画布上的,识字量有限的孩子只能靠听 ——
+ * 他刚破了自己的纪录,耳朵里听到的却和上一趟一模一样。这一句就是补给他听的。
+ *
+ * 不并进 `endlessFailCopy`:那两行是面板排版用的,`lines.join("")` 必须仍旧等于 `line`。
+ */
+export function endlessRecordSay(depth: number, best: number, newRecord: boolean): string {
+  const m = Math.max(0, Math.floor(depth));
+  const b = Math.max(0, Math.floor(best));
+  if (newRecord) {
+    return b > 0 ? `这是新纪录,比上次的 ${b} 米还深 ${m - b} 米!` : `这是你的第一条纪录:${m} 米!`;
+  }
+  if (b <= m) return `跟最好成绩打平,都是 ${b} 米!`;
+  return `你最深潜到过 ${b} 米,再往下 ${b - m} 米就追平啦。`;
+}
+
 /* ------------------------------------------------------------------ */
 /* 邻域网格:鱼一多也不能掉帧                                          */
 /* ------------------------------------------------------------------ */

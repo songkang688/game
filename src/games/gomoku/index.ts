@@ -798,7 +798,7 @@ function mountFree(
       onEnd: (r) => {
         const win = r.winner;
         if (win === 0) {
-          api.onWin(1, "棋盘下满了，握手言和！");
+          api.onWin(1, boardFullLine(size, ai));
         } else if (!ai) {
           api.onWin(
             1,
@@ -832,6 +832,25 @@ function mountFree(
       root.remove();
     },
   };
+}
+
+/**
+ * 满盘和棋的结算话术（纯函数，便于测试）。
+ *
+ * 15 路自由对战里两档旗鼓相当时，和棋是很常见的收场（相邻档实测能到四成以上）：
+ * 两边都会「必成五、必挡五」，谁都逼不出双威胁，就一路下满 225 手。
+ * 原来只有「棋盘下满了，握手言和！」一句，孩子听完不知道下一步该改什么，
+ * 于是这里按棋盘大小给一条真能改变结果的建议。
+ */
+export function boardFullLine(size: number, ai: Difficulty | null): string {
+  const head = `${size} 路棋盘下满了，握手言和！`;
+  if (!ai) return `${head}两边都守得很紧，谁都没让对方连成五颗。`;
+  return (
+    head +
+    (size >= 15
+      ? "两边都会挡活四，15 路又特别宽，很容易下成和棋。想分个胜负，可以换 9×9 入门盘，格子少一点，五颗更快连得上。"
+      : "两边都守住了对方的活三。下一盘先做双威胁：一手棋同时开两个活三，对手只挡得住一边。")
+  );
 }
 
 /** 连胜挑战的结算话术（纯函数，便于测试） */

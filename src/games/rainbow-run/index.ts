@@ -109,6 +109,7 @@ import {
   chaserPenalty,
   chaserWarning,
   emptyRecord,
+  endlessRecordSay,
   failCopy,
   mergeRecord,
   parseRecord,
@@ -739,7 +740,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     phase = "retry";
     api.play("oops");
     shake = 0.45;
-    speak(failCopy(kind, dist).line);
+    speak(failCopy(kind, dist).line + endlessRecordSay(meters, recordBefore.meters, brokeMeters));
   }
 
   /**

@@ -22,6 +22,7 @@ import {
   clearLanePath,
   declaredPathHolds,
   emptyRecord,
+  endlessRecordSay,
   failCopy,
   fairWindows,
   forkMergeHolds,
@@ -600,5 +601,36 @@ describe("无尽彩虹跑 · 最远距离与最高金币数", () => {
     expect(parseRecord("1500")).toEqual({ meters: 1500, coins: 0 });
     expect(parseRecord('{"meters":-3,"coins":"abc"}')).toEqual({ meters: 0, coins: 0 });
     expect(parseRecord('{"meters":12.9,"coins":7.2}')).toEqual({ meters: 12, coins: 7 });
+  });
+});
+
+describe("P3C-2 · 无尽收尾也把纪录说出来", () => {
+  it("破了纪录就明说远了多少,第一趟不硬扯「上次」", () => {
+    expect(endlessRecordSay(2928, 2000, true)).toBe("这是新纪录,比上次的 2000 米还远 928 米!");
+    expect(endlessRecordSay(2928, 0, true)).toBe("这是你的第一条纪录:2928 米!");
+  });
+
+  it("没破纪录就报还差多少,追平单说一句", () => {
+    expect(endlessRecordSay(2000, 2928, false)).toBe("你最远跑到过 2928 米,再多跑 928 米就追平啦。");
+    expect(endlessRecordSay(2928, 2928, false)).toBe("跟最好成绩打平,都是 2928 米!");
+  });
+
+  it("小数与负数都夹成整数", () => {
+    expect(endlessRecordSay(2928.8, 2000.4, true)).toContain("比上次的 2000 米还远 928 米");
+    expect(endlessRecordSay(-5, -9, false)).toBe("跟最好成绩打平,都是 0 米!");
+  });
+
+  it("接在失败文案后面仍旧只鼓励,面板那两行一个字没动", () => {
+    for (const kind of ["crash", "pit", "chaser"] as const) {
+      const copy = failCopy(kind, 2928);
+      // 面板排版的约束还在:两行拼起来仍旧等于 `line`,纪录那句不掺进去
+      expect(copy.lines.join("")).toBe(copy.line);
+      expect(copy.line).not.toContain("新纪录");
+    }
+    const say = endlessRecordSay(2928, 2000, true);
+    for (const bad of ["笨", "傻", "菜", "太差", "不行", "失败了", "输了", "血", "死"]) {
+      expect(say).not.toContain(bad);
+    }
+    expect(say).not.toMatch(/[A-Za-z]/);
   });
 });

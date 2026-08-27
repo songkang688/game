@@ -83,6 +83,7 @@ import {
   easeRadius,
   endlessFailAt,
   endlessFailCopy,
+  endlessRecordSay,
   endlessSpeed,
   growEndless,
   isPredator,
@@ -1008,7 +1009,10 @@ export function mount(api: GameAPI): OceanMunchHandle {
       }
       newRecord = scoreDepth > before;
       api.play(newRecord ? "win" : "oops");
-      speak(endlessFailCopy(fail ?? "starved", scoreDepth).line);
+      speak(
+        endlessFailCopy(fail ?? "starved", scoreDepth).line +
+          endlessRecordSay(scoreDepth, before, newRecord),
+      );
       return;
     }
     versusResult = versusOutcome(me.r, rival ? rival.r : 0);

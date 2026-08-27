@@ -455,3 +455,43 @@ describe("五子棋 · 文案红线", () => {
     handle.destroy();
   });
 });
+
+describe("P3C-3 · 满盘和棋不再只有干巴巴一句", () => {
+  it("15 路和棋会说清「为什么容易和」并指一条真能改结果的路", async () => {
+    const { boardFullLine } = await import("./index");
+    const s = boardFullLine(15, "smart");
+    expect(s).toContain("15 路棋盘下满了，握手言和！");
+    expect(s).toContain("容易下成和棋");
+    // 建议必须是玩家真按得到的那个开关:设置面板里就有 9×9 入门盘
+    expect(s).toContain("9×9 入门盘");
+  });
+
+  it("9 路和棋不劝人换盘,改教双威胁", async () => {
+    const { boardFullLine } = await import("./index");
+    const s = boardFullLine(9, "normal");
+    expect(s).toContain("9 路棋盘下满了");
+    expect(s).not.toContain("9×9 入门盘");
+    expect(s).toContain("双威胁");
+  });
+
+  it("双人同屏和棋说的是两个人的事,不提档位也不提换盘", async () => {
+    const { boardFullLine } = await import("./index");
+    const s = boardFullLine(15, null);
+    expect(s).toContain("握手言和！");
+    expect(s).toContain("两边都守得很紧");
+    expect(s).not.toContain("9×9");
+  });
+
+  it("六档都说得出话,而且一句批评都没有", async () => {
+    const { boardFullLine } = await import("./index");
+    for (const d of DIFFICULTIES) {
+      for (const size of [9, 15]) {
+        const s = boardFullLine(size, d);
+        expect(s.length).toBeGreaterThan(20);
+        for (const bad of ["笨", "傻", "菜", "太差", "不行", "输了", "血", "死"]) {
+          expect(s, `${d}/${size} 出现了「${bad}」`).not.toContain(bad);
+        }
+      }
+    }
+  });
+});

@@ -28,6 +28,7 @@ import {
   easeRadius,
   endlessFailAt,
   endlessFailCopy,
+  endlessRecordSay,
   endlessSpeed,
   growEndless,
   growthK,
@@ -600,5 +601,34 @@ describe("模拟一局:曲线到底能不能玩", () => {
     const run = simulateEndless({ seed: 12, seconds: 120 });
     expect(run.dex.length).toBeGreaterThanOrEqual(2);
     for (const id of run.dex) expect(typeof id).toBe("string");
+  });
+});
+
+describe("P3C-1 · 无尽收尾也把纪录说出来", () => {
+  it("破了纪录就明说破了多少,第一趟不硬扯「上次」", () => {
+    expect(endlessRecordSay(442, 300, true)).toBe("这是新纪录,比上次的 300 米还深 142 米!");
+    expect(endlessRecordSay(442, 0, true)).toBe("这是你的第一条纪录:442 米!");
+  });
+
+  it("没破纪录就报还差多少,追平单说一句", () => {
+    expect(endlessRecordSay(300, 442, false)).toBe("你最深潜到过 442 米,再往下 142 米就追平啦。");
+    expect(endlessRecordSay(442, 442, false)).toBe("跟最好成绩打平,都是 442 米!");
+  });
+
+  it("小数与负数都夹成整数,不会念出「-3 米」这种话", () => {
+    expect(endlessRecordSay(442.9, 300.2, true)).toContain("比上次的 300 米还深 142 米");
+    expect(endlessRecordSay(-5, -9, false)).toBe("跟最好成绩打平,都是 0 米!");
+  });
+
+  it("接在失败文案后面仍旧只鼓励,面板那两行一个字没动", () => {
+    const copy = endlessFailCopy("nibbled", 442);
+    const say = endlessRecordSay(442, 300, true);
+    // 面板排版的约束还在:两行拼起来仍旧等于 `line`,纪录那句不掺进去
+    expect(copy.lines.join("")).toBe(copy.line);
+    expect(copy.line).not.toContain("新纪录");
+    for (const bad of ["血", "伤", "死", "杀", "输了", "失败", "笨", "差劲"]) {
+      expect(say).not.toContain(bad);
+    }
+    expect(say).not.toMatch(/[A-Za-z]/);
   });
 });
