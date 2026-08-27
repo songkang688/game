@@ -110,7 +110,7 @@ export const KTC_CSS = `
 /* 饭碗原先是 position:absolute;bottom:4px，贴的是整个 .ktc-wrap 的底：
    底下正好排着托盘（z-index:3）和提示行（z-index:3），碗自己没有 z-index，
    于是被这两层盖住——屏幕上一个碗都看不见，elementFromPoint 拿到的是 .ktc-drag / .ktc-msg。
-   舞台越矮压得越死：320×640 上拿起食物、提示行折成两行之后就彻底点不中了。
+   舞台越矮压得越紧：320×640 上拿起食物、提示行折成两行之后就彻底点不中了。
    碗本来就该在托盘正上方，改回正常流里居中一块，既看得见也点得中。 */
 .ktc-bowl{position:relative;left:auto;bottom:auto;transform:none;margin:2px auto 6px;}
 .ktc-toy{position:absolute;width:56px;height:56px;border-radius:50%;background:#ffffffd8;font-size:30px;

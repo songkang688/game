@@ -107,6 +107,9 @@ export function clampPan(pan: number, zoom: number, size: number): number {
 /** 1× 时格子小于这个像素就该提醒孩子「可以放大」 */
 export const SMALL_CELL_PX = 44;
 
+/** 工具条上那一排（提示键、放大滑杆）的最小热区高度 */
+export const TOOL_MIN_H = 44;
+
 /**
  * 主棋盘一格的边长。竖屏上下两图必须同时看得见（不许滚动来回比对），
  * 所以每张图最多占约 40% 的屏高，格子按行数摊下来，再夹在 26–44px。
@@ -116,6 +119,46 @@ export function panelCellPx(rows: number, viewportHeight: number, max = SMALL_CE
   const h = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 640;
   const perPanel = Math.max(140, h * 0.4) - 28;
   return Math.max(26, Math.min(max, Math.floor(perPanel / Math.max(1, rows))));
+}
+
+/**
+ * 两张图之外那些固定占位一共吃掉多少：顶部徽章 29 + 提示行 20 + 工具条 72
+ * + 三道 8px 间距 + 上下各 10px 内边距，取整到 165。
+ */
+export const PANEL_CHROME_PX = 165;
+
+/**
+ * 同样是主棋盘一格的边长，但按**舞台真正看得见的那一段**摊，而不是按屏高。
+ *
+ * 为什么要有这一条：`panelCellPx()` 拿的是 `innerHeight`，可 `.game-stage` 是
+ * `overflow:hidden` 且定高的——360×720 的机器上屏高有 720，这一款却只分到 356px。
+ * 按屏高摊会得出「屏幕够高，两张图放大点没事」的错误结论，于是提示键与放大滑杆
+ * 被顶到裁切线以下，真实坐标一个都点不着（360×720 上实测 2 颗，360×640 上 5 颗）。
+ *
+ * 摊到最小仍是 26px：命中半径 22px（热区直径 44px），点得到。
+ */
+export function panelCellForRoom(rows: number, roomPx: number, max = SMALL_CELL_PX): number {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return max;
+  const perPanel = (roomPx - PANEL_CHROME_PX) / 2;
+  return Math.max(26, Math.min(max, Math.floor(perPanel / Math.max(1, rows))));
+}
+
+/** 从自己的顶边到最近那条裁切线还剩多少像素（没有裁切祖先就是无限） */
+export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]): number {
+  if (clipperBottoms.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(...clipperBottoms) - selfTop;
+}
+
+/** 量一次这个节点头顶到最近那条裁切线之间还剩多少（量不了就返回 Infinity） */
+export function stageRoomPx(el: HTMLElement): number {
+  const view = el.ownerDocument?.defaultView ?? null;
+  if (!view || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
+  const bottoms: number[] = [];
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const oy = view.getComputedStyle(p).overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+  }
+  return visibleRoomPx(el.getBoundingClientRect().top, bottoms);
 }
 
 /** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */

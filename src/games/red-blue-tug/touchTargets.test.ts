@@ -32,6 +32,12 @@ describe("红蓝拔河 · 齿轮条上的小开关（W5C-T02）", () => {
     expect(block).toMatch(/display\s*:\s*inline-flex/);
     expect(block).toMatch(/align-items\s*:\s*center/);
   });
+
+  // 窗口5 第1轮 档C 监督修复员补：抽查真机量到 107×32——26 → 32 只是「不算太离谱」，
+  // 离手指按得准的 44 还差 12px。两侧大按钮有 SIDE_BTN_MIN=72 守着，这颗不该被放行。
+  it("最小高度得够 44px，不能只抬到「不算太离谱」", () => {
+    expect(TOGGLE_MIN_H, "真机量到过 107×32").toBeGreaterThanOrEqual(44);
+  });
 });
 
 describe("红蓝拔河 · 星星队的键位对齐平台约定（W5C-T01）", () => {

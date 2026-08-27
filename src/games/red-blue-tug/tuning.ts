@@ -96,8 +96,12 @@ export const LABEL_FONT_MIN = 14;
  * 齿轮条上那颗小药丸开关(🔥 拼一把)的最小高度。
  * 两侧的大拉绳按钮有 `SIDE_BTN_MIN` 守着,这颗只靠 padding 撑,
  * 360px 上量出来只有 26px —— 比手指按得准的下限还矮,所以在 CSS 里钉死。
+ *
+ * 钉的是 44 不是 32:26 → 32 只是「不算太离谱」,离手指按得准的 44 还差 12px。
+ * `.rbg-gear` 是 `flex-wrap` 的一行、`min-height` 只有 22px,抬这一颗
+ * 不动绳场(`.rbg-field` 124px)也不动两侧大按钮。
  */
-export const TOGGLE_MIN_H = 32;
+export const TOGGLE_MIN_H = 44;
 
 /** 把力量倍率折算成绳子的抖动幅度(px);`reduced` 时不抖,只把形变留给形状 */
 export function ropeShake(factor: number, reduced: boolean): number {

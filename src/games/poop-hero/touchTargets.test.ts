@@ -32,6 +32,12 @@ describe("便便超人 · HUD 小按钮的热区（W5C-P01）", () => {
     expect(HUD_BTN_MIN_W).toBe(MIN_HOT);
   });
 
+  // 窗口5 第1轮 档C 监督修复员补：抽查真机量到 44×32——同一颗按钮横着达标、竖着还差 12px
+  it("两条边都得够 44px，不许一边达标一边不达标", () => {
+    expect(HUD_BTN_MIN_W, "宽不到手指按得准的下限").toBeGreaterThanOrEqual(MIN_HOT);
+    expect(HUD_BTN_MIN_H, "高不到手指按得准的下限（真机量到过 44×32）").toBeGreaterThanOrEqual(MIN_HOT);
+  });
+
   it(".ph-btn 在 CSS 里写死了最小宽高，撑得开才不会被 padding 收没", () => {
     const blocks = rulesFor(PH_CSS, ".ph-btn");
     expect(blocks.length, "CSS 里找不到 .ph-btn").toBeGreaterThan(0);

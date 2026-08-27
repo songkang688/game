@@ -78,7 +78,8 @@ export const RBG_CSS = `
 
 const SHELL_CSS = `
 .rbg-bar { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
-.rbg-open { border: none; border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #FF9A9A, #E36A6A); box-shadow: 0 4px 0 #BF4A4A; }
+/* 模式入口那两颗：只靠 padding 撑出来是 40px 高，比手指按得准的下限矮 4px */
+.rbg-open { border: none; border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #FF9A9A, #E36A6A); box-shadow: 0 4px 0 #BF4A4A; display: inline-flex; align-items: center; justify-content: center; min-height: ${TOGGLE_MIN_H}px; }
 .rbg-open.rbg-open-vs { background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 4px 0 #3B55C2; }
 .rbg-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #BF4A4A; }
 .rbg-open:focus-visible { outline: 3px solid #8A2F2F; outline-offset: 3px; }

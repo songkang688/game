@@ -106,9 +106,13 @@ export const PAD_COLUMNS = 4;
  * HUD 那排小药丸按钮(⏸ 暂停 / 📖 攻略 …)的最小热区。
  * 摇杆那几个大键有 `padMetrics` 守着,这排小的只靠 padding 撑,
  * 窄屏上 padding 一收就掉到 30×32——比手指按得准的下限还小,所以在 CSS 里钉死。
+ *
+ * 两条边都用 `MIN_HOT`:先前只把宽抬到 44、高留在 32,真机 360×720 上量到的
+ * 「⏸ 暂停」是 44×32——竖着仍然比下限矮 12px,同一颗按钮一半达标一半不达标。
+ * HUD 是 `flex-wrap` 的一行,抬高只让这一行长 12px,舞台自己会跟着让。
  */
 export const HUD_BTN_MIN_W = MIN_HOT;
-export const HUD_BTN_MIN_H = 32;
+export const HUD_BTN_MIN_H = MIN_HOT;
 
 export interface PadMetrics {
   /** 一个按键的边长(px) */

@@ -39,12 +39,15 @@ import {
   miniCellPx,
   missCooldownMs,
   panelCellPx,
+  panelCellForRoom,
+  stageRoomPx,
   openLevelOnMap,
   parseLevelParam,
   pickNearest,
   pinchZoom,
   resolveInitialLevel,
   shouldSuggestZoom,
+  TOOL_MIN_H,
   type CellCenter,
 } from "./runtime";
 
@@ -138,8 +141,10 @@ const CSS = `
 .fdf-btn:disabled{opacity:.45;}
 .fdf-btn-ghost{color:#7a5aa0;background:#ffffffe6;box-shadow:0 4px 0 rgba(120,90,160,.3);}
 .fdf-btn-ghost:active{box-shadow:0 2px 0 rgba(120,90,160,.3);}
-.fdf-zoomrow{display:flex;gap:6px;align-items:center;font-size:14px;font-weight:800;color:#7a5aa0;}
-.fdf-zoomrow input{width:110px;}
+.fdf-zoomrow{display:flex;gap:6px;align-items:center;font-size:14px;font-weight:800;color:#7a5aa0;
+  min-height:${TOOL_MIN_H}px;}
+/* 滑杆默认只有 16px 高，比手指按得准的下限矮 28px；旁边那颗提示键已经是 44 了 */
+.fdf-zoomrow input{width:110px;height:${TOOL_MIN_H}px;}
 .fdf-cell:focus-visible,.fdf-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:2px;}
 @media (max-width:380px){
   .fdf-wrap{padding:8px;}
@@ -226,7 +231,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const view = globalThis as { innerHeight?: number; innerWidth?: number };
   const triple = scene.second !== null;
   // 竖屏上下两图各占约 40% 高度，中间留 UI 条：格子按屏高摊，两张图始终同时可见
-  const playPx = panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
+  let playPx = panelCellPx(scene.rows, view.innerHeight ?? 640, PLAY_CELL_PX);
   const miniPx = triple ? miniCellPx(scene.cols, view.innerWidth ?? 360) : playPx;
 
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
@@ -255,6 +260,8 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
     </div>
   `;
   host.appendChild(root);
+  // 屏高只是上限，真正能用的是舞台裁切线以内那一段——两者取小的那个
+  playPx = Math.min(playPx, panelCellForRoom(scene.rows, stageRoomPx(root), PLAY_CELL_PX));
 
   const countEl = root.querySelector(".fdf-count") as HTMLElement;
   const hudEl = root.querySelector(".fdf-hud") as HTMLElement;
