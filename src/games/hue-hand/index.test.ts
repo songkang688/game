@@ -19,6 +19,8 @@ import { buildDeck, cardLabel, type Card, type Color } from "./deck";
 import { buildEndlessRound, dealRoundDeck } from "./levels";
 import { createGame, legalPlays } from "./rules";
 import {
+  CATCH_DELAY_MS,
+  CATCH_TICKS,
   createTable,
   cardWidthFor,
   duoScoreLine,
@@ -413,6 +415,93 @@ describe("闯关的手数限制", () => {
     expect(colorBarText()).toContain("现在是");
     expect(colorBarText()).not.toContain("还剩");
     handle.destroy();
+  });
+});
+
+describe("「就一张」的抢按窗口", () => {
+  const HUMAN: SeatCfg = { kind: "human", name: "朵朵", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  /** 高手档才会点破别人忘喊 */
+  const HUNTER: SeatCfg = { kind: "ai", name: "点点", avatar: "🦊", isImg: false, tier: "expert", keys: 0 };
+
+  /** 朵朵手上两张粉牌,打掉一张就剩一张 —— 正好落进「可以被点破」的窗口 */
+  function riggedDeck(): Card[] {
+    const pool = buildDeck();
+    const pick = (color: Color, num: number): Card => {
+      const i = pool.findIndex((c) => c.kind === "num" && c.color === color && c.num === num);
+      return pool.splice(i, 1)[0];
+    };
+    const mine = [pick("pink", 1), pick("pink", 2)];
+    const foe = [pick("sky", 3), pick("sky", 4)];
+    const top = pick("pink", 7);
+    const rest = [pick("lemon", 6), pick("lemon", 8)];
+    return [...rest, top, foe[1], mine[1], foe[0], mine[0]];
+  }
+
+  function oneBtn(): El | null {
+    return dom.root.querySelector(".hh-one");
+  }
+
+  function openWindow(): { destroy: () => void } {
+    const table = createTable(dom.root as unknown as HTMLElement, {
+      cfg: { players: 2, tiers: ["expert"], kinds: ["num"], handSize: 2, seed: 4242, hint: "抢按" },
+      deck: riggedDeck(),
+      seats: [HUMAN, HUNTER],
+      banner: "抢按",
+      sfx: () => undefined,
+      onDone: () => undefined,
+    });
+    // 打掉第一张,手上只剩一张又没喊
+    handCards()[0].click();
+    return table;
+  }
+
+  it("有人盯着的时候钮上摆倒数,一格一格往下走", () => {
+    const table = openWindow();
+    expect(oneBtn()?.textContent).toBe(`☝️ 就一张 ${CATCH_TICKS}`);
+    expect(oneBtn()?.className).toContain("hh-one-hot");
+    advance(dom, CATCH_DELAY_MS / CATCH_TICKS);
+    expect(oneBtn()?.getAttribute("data-left")).toBe(String(CATCH_TICKS - 1));
+    advance(dom, CATCH_DELAY_MS / CATCH_TICKS);
+    expect(oneBtn()?.getAttribute("data-left")).toBe("1");
+    table.destroy();
+  });
+
+  it("喊掉了就不再催,钮收回去", () => {
+    const table = openWindow();
+    expect(oneBtn()).toBeTruthy();
+    oneBtn()?.click();
+    expect(oneBtn()).toBeNull();
+    expect(dom.root.querySelector(".hh-say")?.textContent).toContain("喊得漂亮");
+    advance(dom, CATCH_DELAY_MS + 200);
+    // 喊过了就罚不到:手上还是那一张
+    expect(dom.root.querySelector(".hh-say")?.textContent).not.toContain("罚抽");
+    table.destroy();
+  });
+
+  it("窗口时长一毫秒没动:倒数走完照旧被点破,难度没被这条改动碰过", () => {
+    const table = openWindow();
+    advance(dom, CATCH_DELAY_MS - 1);
+    expect(dom.root.querySelector(".hh-say")?.textContent).not.toContain("罚抽");
+    advance(dom, 2);
+    expect(dom.root.querySelector(".hh-say")?.textContent).toContain("罚抽 2 张");
+    expect(CATCH_DELAY_MS).toBe(1800);
+    table.destroy();
+  });
+
+  it("没人会点破的桌子不摆倒数", () => {
+    const table = createTable(dom.root as unknown as HTMLElement, {
+      cfg: { players: 2, tiers: ["rookie"], kinds: ["num"], handSize: 2, seed: 4242, hint: "抢按" },
+      deck: riggedDeck(),
+      // 新手档从来不点破别人
+      seats: [HUMAN, { ...HUNTER, tier: "rookie" }],
+      banner: "抢按",
+      sfx: () => undefined,
+      onDone: () => undefined,
+    });
+    handCards()[0].click();
+    expect(oneBtn()?.textContent).toBe("☝️ 就一张");
+    expect(oneBtn()?.className).not.toContain("hh-one-hot");
+    table.destroy();
   });
 });
 

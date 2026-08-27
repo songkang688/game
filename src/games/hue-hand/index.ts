@@ -83,6 +83,17 @@ const DRAW_LINE = "牌都用完啦,谁也接不上,这一局算平局。";
 /** 结算浮层的平局标题(对战 / 无尽 / 双人同屏共用一句口径) */
 const DRAW_TITLE = "🤝 牌都用完啦,这局算平手";
 
+/**
+ * 会点破的对手等这么久才动手 —— 这是「抢按就一张」的窗口。
+ *
+ * 这个数一毫秒都没动过(动它就是动难度),只是把「还剩多久」摆成钮上的 `CATCH_TICKS` 格倒数:
+ * 以前孩子只看得见自己被罚抽了 2 张,根本不知道刚才该按哪儿。
+ */
+export const CATCH_DELAY_MS = 1800;
+
+/** 倒数分几格走完 */
+export const CATCH_TICKS = 3;
+
 /** 三个电脑对手:原创角色 */
 const BOT_FACES = [
   { name: "团团", avatar: "🐰" },
@@ -206,6 +217,9 @@ const CSS = `
   border-radius:999px;font-family:inherit;font-size:16px;font-weight:900;cursor:pointer;color:#fff;
   background:linear-gradient(180deg,#ff8ab0,#e2557f);box-shadow:0 4px 0 #b23c63;animation:hhcall 1s ease infinite;}
 .hh-one:active{transform:translateY(2px);box-shadow:0 2px 0 #b23c63;}
+/* 有人正盯着你忘喊:钮上摆倒数,配色再催一档,免得孩子只看见自己被罚抽了 2 张 */
+.hh-one.hh-one-hot{background:linear-gradient(180deg,#ffb45e,#ef7d24);box-shadow:0 4px 0 #c15e10;
+  animation-duration:.45s;}
 @keyframes hhcall{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 .hh-keys{font-size:13px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
 .hh-fly{position:absolute;z-index:60;pointer-events:none;transition:transform .42s cubic-bezier(.3,.9,.4,1),opacity .42s ease;}
@@ -350,6 +364,10 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
   let destroyed = false;
   let paused = false;
   let over = false;
+  /** 「就一张」抢按窗口还剩几格(0 = 没人盯着你,钮上不摆倒数) */
+  let catchLeft = 0;
+  /** 这一轮倒数盯的是哪个座位,免得同一个窗口被重复开成两轮 */
+  let catchFor = -1;
   const timers = new Set<number>();
 
   const state = createGame({
@@ -607,10 +625,15 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
     if (!over && me && me.hand.length === 1 && !me.called && opts.seats[showSeat].kind === "human") {
       const one = document.createElement("button");
       one.type = "button";
-      one.className = "hh-one";
-      one.textContent = "☝️ 就一张";
+      // 有人正等着点破你的时候,钮上摆一个看得见的倒数
+      const hot = catchLeft > 0 && state.oneCard?.player === showSeat;
+      one.className = hot ? "hh-one hh-one-hot" : "hh-one";
+      one.textContent = hot ? `☝️ 就一张 ${catchLeft}` : "☝️ 就一张";
+      one.setAttribute("data-left", String(hot ? catchLeft : 0));
       one.addEventListener("click", () => {
         if (callOneCard(state, showSeat)) {
+          catchLeft = 0;
+          catchFor = -1;
           opts.sfx("meow");
           tell("喊得漂亮!这下罚不到你了。");
           render();
@@ -883,12 +906,32 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
   /** 会点破的 AI 抓忘喊的人:留一点点时间让孩子先按按钮 */
   function scheduleCatch(): void {
     const window0 = state.oneCard;
-    if (!window0 || over) return;
+    if (!window0 || over) {
+      catchLeft = 0;
+      catchFor = -1;
+      return;
+    }
     const target = window0.player;
     if (opts.seats[target]?.kind !== "human") return;
     const hunter = opts.seats.findIndex((s, i) => i !== target && s.kind === "ai" && aiCatchesOneCard(s.tier));
     if (hunter < 0) return;
+    // 同一个窗口已经在倒数了就别重开一轮:头一个计时器照旧按时到点
+    if (catchFor === target && catchLeft > 0) return;
+    // 窗口时长一毫秒没动(动它等于动难度),只是把「还剩多久」摆到钮上
+    catchFor = target;
+    catchLeft = CATCH_TICKS;
+    render();
+    for (let i = 1; i < CATCH_TICKS; i++) {
+      later(() => {
+        if (over || paused) return;
+        if (state.oneCard?.player !== target) return;
+        catchLeft = CATCH_TICKS - i;
+        render();
+      }, (CATCH_DELAY_MS / CATCH_TICKS) * i);
+    }
     later(() => {
+      catchLeft = 0;
+      catchFor = -1;
       if (over || paused) return;
       if (state.oneCard?.player !== target) return;
       const res = oneCardPenalty(state, target);
@@ -897,7 +940,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
         tell(`${opts.seats[hunter].name} 点破了你没喊「就一张」,罚抽 ${res.drawn} 张。下次手快一点!`, true);
         render();
       }
-    }, 1800);
+    }, CATCH_DELAY_MS);
   }
 
   function pump(): void {
