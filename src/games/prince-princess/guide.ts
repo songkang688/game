@@ -97,6 +97,7 @@ function build(): GuideBook {
       `${ABILITIES.princess.icon} 公主会${ABILITIES.princess.name}:${ABILITIES.princess.howto},只有她够得到最高那颗宝石。`,
       "路上的小旗走过就点亮,摔下去会被小云朵托回最近那面旗,宝石都还在。",
       "两个人共用一条心条;一个人玩就按 Tab 换人,没被操作的那位会自己跟上来帮忙。",
+      "凡是要小心的东西旁边都插着一枚粉红小三角:断口、尖刺、小怪、对面飞来的弹全有,看见三角先想好退路。",
       "三颗星看的是清怪、用时、宝石三样,先求过关,再回头刷成绩。",
     ],
     entries: [
