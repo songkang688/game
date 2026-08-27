@@ -830,7 +830,9 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
         best = save.recordEndlessBest(meta.id, round);
         api.addStars(1);
         round++;
-        if (nextId) clearTimeout(nextId);
+        // 这一轮已经清干净了，秒表先停掉：换轮那 450 毫秒里它要是踩到 0,
+        // 会闪一屏「⏰ 这一轮没找完」，明明刚刚才找齐。
+        stopTimer();
         nextId = setTimeout(() => {
           nextId = null;
           if (!dead) startRound();
