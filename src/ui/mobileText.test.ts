@@ -250,12 +250,17 @@ describe("360×640 走查回落:二级界面的状态行与结算副标题", () 
     ["block-drop", [".bd-badge", ".bd-mini", ".bd-over-s"]],
     ["combo-clash", [".cc-badge", ".cc-name", ".cc-combo", ".cc-info", ".cc-over-s"]],
     ["mahjong-bloom", [".mj-badge", ".mj-goal", ".mj-sheet-s", ".mj-foe-name"]],
-    ["star-estate", [".se-badge", ".se-seat", ".se-over-s"]],
-    ["hero-cards", [".hc-badge", ".hc-seat", ".hc-log", ".hc-over-s"]],
-    ["weiqi-garden", [".wq-chip", ".wq-label", ".wq-over-s"]],
+    // 下面这几个是第 2 轮真浏览器进了模式之后才量到的:抽屉标题、地契卡、
+    // 席位难度、当前格预览、战报、牌堆、规则条、连清计数 —— 全是玩着玩着一直在看的读数
+    [
+      "star-estate",
+      [".se-badge", ".se-seat", ".se-over-s", ".se-seat-tier", ".se-preview", ".se-log", ".se-drawer-h", ".se-deed"]
+    ],
+    ["hero-cards", [".hc-badge", ".hc-seat", ".hc-log", ".hc-over-s", ".hc-pile"]],
+    ["weiqi-garden", [".wq-chip", ".wq-label", ".wq-over-s", ".wq-rows"]],
     ["flight-chess", [".fc-badge", ".fc-seat", ".fc-seat-tier", ".fc-goal", ".fc-keys", ".fc-over-s"]],
     ["merge-2048", [".mg-badge", ".mg-over-s"]],
-    ["mine-garden", [".mn-chip", ".mn-over-s"]],
+    ["mine-garden", [".mn-chip", ".mn-over-s", ".mn-side"]],
     ["sudoku-petal", [".sp-badge", ".sp-name", ".sp-hintbox", ".sp-pause"]]
   ];
 

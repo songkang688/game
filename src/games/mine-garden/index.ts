@@ -326,7 +326,7 @@ export const MN_CSS = `
 .mn-label{font-size:13px;font-weight:800;color:#4B6B3E;}
 .mn-duo{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:flex-start;}
 .mn-duo>div{flex:1 1 300px;min-width:280px;}
-.mn-side{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:800;color:#41633A;
+.mn-side{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:16px;font-weight:800;color:#41633A;
   line-height:1.7;margin:8px auto 0;max-width:520px;}
 .mn-bar{height:10px;border-radius:999px;background:#D6E6C6;overflow:hidden;margin-top:4px;}
 .mn-bar>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#8CC46C,#5E9B45);}

@@ -278,7 +278,7 @@ export const WQ_CSS = `
 /* 只给读屏听的一行:看不见也不占位,盘面一变就把变化念出来 */
 .wq-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
-.wq-rows{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:700;color:#6A5A42;
+.wq-rows{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:16px;font-weight:700;color:#6A5A42;
   line-height:1.7;margin:8px auto 0;max-width:520px;overflow-wrap:anywhere;}
 .wq-over{position:absolute;inset:0;background:rgba(251,247,238,.96);border-radius:16px;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:18px;z-index:6;}

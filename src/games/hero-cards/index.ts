@@ -92,7 +92,7 @@ export const HC_CSS = `
 .hc-seat-line{font-size:13px;color:#8a6a54;}
 .hc-vigor{color:#C24A6A;letter-spacing:1px;}
 .hc-mid{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:8px 0;}
-.hc-pile{background:#fff;border-radius:12px;padding:6px 10px;font-size:13px;font-weight:800;color:#7a5a44;
+.hc-pile{background:#fff;border-radius:12px;padding:6px 10px;font-size:16px;font-weight:800;color:#7a5a44;
   box-shadow:0 2px 6px rgba(210,160,140,.25);}
 .hc-log{background:#FFFDFA;border-radius:12px;padding:8px;font-size:16px;font-weight:700;color:#6b5a4a;
   line-height:1.6;min-height:4.8em;max-height:8em;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line;}

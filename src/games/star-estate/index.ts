@@ -80,7 +80,7 @@ const CSS = `
 .se-seat-on{outline:3px solid #F0A85C;}
 .se-seat-out{opacity:.5;}
 .se-seat-name{font-size:14px;}
-.se-seat-tier{font-size:13px;font-weight:700;color:#9a7a52;}
+.se-seat-tier{font-size:16px;font-weight:700;color:#9a7a52;}
 .se-seat-cash{color:#3f7d55;}
 .se-board-wrap{position:relative;width:100%;max-width:560px;margin:0 auto;}
 .se-board{display:grid;grid-template-columns:repeat(11,1fr);grid-template-rows:repeat(11,1fr);gap:2px;
@@ -109,8 +109,8 @@ const CSS = `
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px;text-align:center;min-width:0;}
 .se-dice{font-size:clamp(16px,5vw,30px);line-height:1;letter-spacing:4px;}
 .se-goal{font-size:clamp(13px,2.4vw,14px);font-weight:800;color:#9a6a3a;line-height:1.5;overflow-wrap:anywhere;}
-.se-preview{font-size:clamp(13px,2.8vw,15px);font-weight:900;color:#7a5230;line-height:1.5;overflow-wrap:anywhere;}
-.se-log{font-size:clamp(13px,2.3vw,14px);font-weight:700;color:#6b6152;line-height:1.5;max-height:5.2em;
+.se-preview{font-size:clamp(16px,2.8vw,17px);font-weight:900;color:#7a5230;line-height:1.5;overflow-wrap:anywhere;}
+.se-log{font-size:clamp(16px,2.3vw,17px);font-weight:700;color:#6b6152;line-height:1.5;max-height:5.2em;
   overflow:hidden;overflow-wrap:anywhere;}
 .se-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px;}
 .se-btn{min-width:88px;min-height:46px;border:none;border-radius:14px;font-family:inherit;font-size:16px;
@@ -124,10 +124,10 @@ const CSS = `
   overflow-wrap:anywhere;line-height:1.5;}
 .se-drawer{margin-top:10px;background:#fff;border-radius:14px;padding:8px;box-shadow:0 2px 8px rgba(200,170,120,.25);}
 .se-drawer-h{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;
-  font-size:14px;font-weight:900;color:#7a5230;}
+  font-size:16px;font-weight:900;color:#7a5230;}
 .se-deeds{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
 .se-deed{flex:1 1 150px;min-width:0;border:none;border-radius:10px;padding:6px 8px;text-align:left;cursor:pointer;
-  font-family:inherit;font-size:14px;font-weight:800;color:#6b4a24;background:#FFF6E6;line-height:1.5;overflow-wrap:anywhere;}
+  font-family:inherit;font-size:16px;font-weight:800;color:#6b4a24;background:#FFF6E6;line-height:1.5;overflow-wrap:anywhere;}
 .se-deed-mort{background:#EFEDF4;color:#6a6478;}
 .se-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .se-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a5230;text-align:center;overflow-wrap:anywhere;}
