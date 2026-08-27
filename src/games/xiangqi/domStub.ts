@@ -164,9 +164,15 @@ export const ctxCalls: CtxCall[] = [];
 export const ctx2d: unknown = new Proxy(
   {},
   {
-    get: (_t, prop) => (...a: unknown[]): unknown => {
-      if (typeof prop === "string") ctxCalls.push({ m: prop, a });
-      return ctx2d;
+    get: (_t, prop) => {
+      // 渐变对象也是这个代理本身，String(渐变) 要能转出原始值，测试才好比对
+      if (prop === Symbol.toPrimitive || prop === "toString" || prop === "valueOf") {
+        return () => "[ctx2d]";
+      }
+      return (...a: unknown[]): unknown => {
+        if (typeof prop === "string") ctxCalls.push({ m: prop, a });
+        return ctx2d;
+      };
     },
     set: (_t, prop, v) => {
       if (typeof prop === "string") ctxCalls.push({ m: `set:${prop}`, a: [v] });
