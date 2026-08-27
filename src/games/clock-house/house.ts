@@ -211,6 +211,21 @@ export function birdMoodClass(correct: boolean): string {
 /** 答对时小鸟说的话（只夸不评） */
 export const CUCKOO_SAY = "咕咕！";
 
+/**
+ * 星屑粒子的矢量四芒星本体（W8R2-03：原为裸 ✨ emoji，12 款里唯一的 emoji FX 粒子）。
+ * 尺寸沿用 sparkleSpecs 的字号档；金星 + 深描边 + 白星心，与库内星屑规格同族。
+ */
+export function sparkStarSVG(sizePx: number): string {
+  const s = Math.max(6, Math.round(sizePx));
+  return (
+    `<svg viewBox="0 0 12 12" width="${s}" height="${s}" aria-hidden="true" data-clk-spark="star">` +
+    `<polygon points="6,0.4 7.7,4.3 11.6,6 7.7,7.7 6,11.6 4.3,7.7 0.4,6 4.3,4.3"` +
+    ` fill="${PASTEL.starGold}" stroke="${shade(PASTEL.starGold, -35)}" stroke-width=".9" stroke-linejoin="round"/>` +
+    `<circle cx="6" cy="6" r="1.3" fill="#ffffff" opacity=".9"/>` +
+    `</svg>`
+  );
+}
+
 /** 答对的星屑颗数（规格：6 粒） */
 export const CHEER_SPARKS = 6;
 
@@ -282,11 +297,11 @@ export function mountClockFx(host: HTMLElement): ClockFxHandle {
       for (const spec of sparkleSpecs(rand, CHEER_SPARKS)) {
         const s = doc.createElement("span");
         s.className = "clk-spark";
-        s.textContent = "✨";
+        // W8R2-03：粒子本体换矢量四芒星（原为裸 ✨ emoji）；轨迹 / 颗数 / 时序不变
+        s.innerHTML = sparkStarSVG(spec.sizePx);
         s.style.setProperty("--clk-spark-dx", `${spec.dx}px`);
         s.style.setProperty("--clk-spark-dy", `${spec.dy}px`);
         s.style.animationDelay = `${spec.delayMs}ms`;
-        s.style.fontSize = `${spec.sizePx}px`;
         root.appendChild(s);
         later(() => s.remove(), SPARK_MS + spec.delayMs + 60);
       }
