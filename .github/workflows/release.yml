@@ -1,6 +1,6 @@
 name: Release
 
-# 打 tag 就出发行包:v1.1.0 这样的 tag 一 push,
+# 打 tag 就出发行包:v1.2.0 这样的 tag 一 push,
 # 这里会把 Windows / macOS / Linux / 安卓的安装包全打出来,挂到 GitHub Release 上。
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "要补包的已有 tag,例如 v1.1.0"
+        description: "要补包的已有 tag,例如 v1.2.0"
         required: true
 
 permissions:
@@ -248,7 +248,7 @@ jobs:
           cat > RELEASE_BODY.md <<EOF
           # 🌸 一朵一星 ⭐ $VERSION
 
-          给小朋友的 **55 款原创小游戏**合集:**188 关**战役地图,还有双人对战和无尽挑战。
+          给小朋友的 **76 款原创小游戏**合集:**188 关**战役地图,还有双人对战和无尽挑战。
           **没有广告、没有内购、不用注册、不联网、不收集任何数据。**
 
           ## 下载哪一个?
