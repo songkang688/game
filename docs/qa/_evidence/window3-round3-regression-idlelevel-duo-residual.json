@@ -1,0 +1,38 @@
+{
+  "games": [
+    "duo-vs-star"
+  ],
+  "levels": [
+    140,
+    144,
+    148
+  ],
+  "waitMs": 180000,
+  "rows": [
+    {
+      "id": "duo-vs-star",
+      "level": 140,
+      "seconds": 181,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 144,
+      "seconds": 181,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 148,
+      "seconds": 70,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图"
+    }
+  ],
+  "consoleErrors": 0
+}

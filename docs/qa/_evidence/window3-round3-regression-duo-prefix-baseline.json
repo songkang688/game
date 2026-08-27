@@ -1,0 +1,588 @@
+{
+  "note": "修前基线(5d7493f,四条修复都还没落地),用与修后完全相同的建局与统计口径重跑",
+  "autoWin": 72,
+  "byKo": 63,
+  "byTime": 9,
+  "capArtifacts": [
+    39,
+    112,
+    144,
+    151,
+    153,
+    155,
+    170
+  ],
+  "genuine": [
+    1,
+    2,
+    4,
+    6,
+    9,
+    10,
+    12,
+    14,
+    15,
+    18,
+    28,
+    31,
+    40,
+    41,
+    42,
+    44,
+    47,
+    48,
+    50,
+    51,
+    53,
+    54,
+    70,
+    71,
+    80,
+    100,
+    104,
+    106,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    152,
+    154,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    166,
+    167,
+    168,
+    171,
+    173,
+    177,
+    178,
+    180,
+    182,
+    183,
+    186
+  ],
+  "rows": [
+    {
+      "level": 1,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 2,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 4,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 6,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 9,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 1
+    },
+    {
+      "level": 10,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 12,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 14,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 15,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    },
+    {
+      "level": 18,
+      "stageId": "cloud-square",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 28,
+      "stageId": "wobble-isles",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 1
+    },
+    {
+      "level": 31,
+      "stageId": "wobble-isles",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 39,
+      "stageId": "belt-works",
+      "endReason": "time",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 40,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 41,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 42,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 44,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 47,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 1
+    },
+    {
+      "level": 48,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 50,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 51,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 53,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    },
+    {
+      "level": 54,
+      "stageId": "belt-works",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 70,
+      "stageId": "spring-candy",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 71,
+      "stageId": "spring-candy",
+      "endReason": "ko",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 80,
+      "stageId": "syrup-pool",
+      "endReason": "time",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 100,
+      "stageId": "windmill-field",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    },
+    {
+      "level": 104,
+      "stageId": "windmill-field",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 1
+    },
+    {
+      "level": 106,
+      "stageId": "windmill-field",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 112,
+      "stageId": "windmill-field",
+      "endReason": "time",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 134,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 135,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 136,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 137,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 138,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    },
+    {
+      "level": 139,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 140,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 141,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 142,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 1
+    },
+    {
+      "level": 143,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 144,
+      "stageId": "star-lift",
+      "endReason": "time",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 145,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 146,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 147,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 148,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    },
+    {
+      "level": 149,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 150,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 151,
+      "stageId": "star-lift",
+      "endReason": "time",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 152,
+      "stageId": "star-lift",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 153,
+      "stageId": "night-hops",
+      "endReason": "time",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 154,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 155,
+      "stageId": "night-hops",
+      "endReason": "time",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 157,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    },
+    {
+      "level": 158,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 159,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 160,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 161,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 1
+    },
+    {
+      "level": 162,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 163,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 164,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 166,
+      "stageId": "night-hops",
+      "endReason": "time",
+      "timeLimit": 60,
+      "allies": 0
+    },
+    {
+      "level": 167,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    },
+    {
+      "level": 168,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 170,
+      "stageId": "night-hops",
+      "endReason": "time",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 171,
+      "stageId": "night-hops",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 173,
+      "stageId": "allstar-arena",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 177,
+      "stageId": "allstar-arena",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 178,
+      "stageId": "allstar-arena",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 180,
+      "stageId": "allstar-arena",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 1
+    },
+    {
+      "level": 182,
+      "stageId": "allstar-arena",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 183,
+      "stageId": "allstar-arena",
+      "endReason": "ko",
+      "timeLimit": 0,
+      "allies": 0
+    },
+    {
+      "level": 186,
+      "stageId": "allstar-arena",
+      "endReason": "ko",
+      "timeLimit": 70,
+      "allies": 0
+    }
+  ]
+}

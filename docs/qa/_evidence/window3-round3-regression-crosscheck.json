@@ -1,0 +1,88 @@
+{
+  "tool": "scripts/w3qa-crosscheck/idlewin.mjs",
+  "note": "第二套独立驱动(从首页卡片点进游戏、读 .l99-stagetitle 校验落点)在修后 HEAD 上重跑摆烂复核",
+  "head": "65a690d(src/games 自此未再变动)",
+  "rows": [
+    {
+      "id": "sky-squad",
+      "level": 1,
+      "label": "☁️ 晴空起飞 · 第 1 关",
+      "seconds": 9.7,
+      "verdict": "lose",
+      "stars": 0,
+      "text": "l99-overlay :: 就差一点点！ 放跑了 3 架,超过 1 架就得重飞一趟。别等它们贴到底才开火。🔁 再试本关🗺️ 回地图 || l99-overlay :: 就差一点点！ 放跑了 3 架,超过 1 架就得重飞一趟。别等它们贴"
+    },
+    {
+      "id": "sky-squad",
+      "level": 60,
+      "label": "⚙️ 齿轮天空 · 第 60 关",
+      "seconds": 7.2,
+      "verdict": "lose",
+      "stars": 0,
+      "text": "l99-overlay :: 就差一点点！ 放跑了 4 架,超过 1 架就得重飞一趟。别等它们贴到底才开火。🔁 再试本关🗺️ 回地图 || l99-overlay :: 就差一点点！ 放跑了 4 架,超过 1 架就得重飞一趟。别等它们贴"
+    },
+    {
+      "id": "prince-princess",
+      "level": 1,
+      "label": "🌸 樱花城堡 · 第 1 关",
+      "seconds": 50.3,
+      "verdict": "none",
+      "stars": 0,
+      "text": ""
+    },
+    {
+      "id": "prince-princess",
+      "level": 60,
+      "label": "💎 水晶洞窟 · 第 60 关",
+      "seconds": 50.2,
+      "verdict": "none",
+      "stars": 0,
+      "text": ""
+    },
+    {
+      "id": "bumper-cars",
+      "level": 1,
+      "label": "🚗 新手车场 · 第 1 关",
+      "seconds": 32.2,
+      "verdict": "lose",
+      "stars": 0,
+      "text": "l99-overlay :: 就差一点点！ 这一次被顶出了场地。别急,下一把先用刹车稳住车头,再借冲刺撞回去,主动权就回来了。🔁 再试本关🗺️ 回地图 || l99-overlay :: 就差一点点！ 这一次被顶出了场地。别急,下一把先"
+    },
+    {
+      "id": "bumper-cars",
+      "level": 60,
+      "label": "⚡ 加速带广场 · 第 60 关",
+      "seconds": 32.2,
+      "verdict": "lose",
+      "stars": 0,
+      "text": "l99-overlay :: 就差一点点！ 这一次被顶出了场地。别急,下一把先用刹车稳住车头,再借冲刺撞回去,主动权就回来了。🔁 再试本关🗺️ 回地图 || l99-overlay :: 就差一点点！ 这一次被顶出了场地。别急,下一把先"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 1,
+      "label": "☁️ 云朵广场 · 第 1 关",
+      "seconds": 155.3,
+      "verdict": "lose",
+      "stars": 0,
+      "text": "l99-overlay :: 就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图 || l99-overlay :: 就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 134,
+      "label": "🛗 星光升降台 · 第 134 关",
+      "seconds": 32.6,
+      "verdict": "lose",
+      "stars": 0,
+      "text": "l99-overlay :: 就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图 || l99-overlay :: 就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 157,
+      "label": "🌙 夜空跳台 · 第 157 关",
+      "seconds": 69.2,
+      "verdict": "lose",
+      "stars": 0,
+      "text": "l99-overlay :: 就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图 || l99-overlay :: 就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图"
+    }
+  ]
+}

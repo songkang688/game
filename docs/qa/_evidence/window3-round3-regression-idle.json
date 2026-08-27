@@ -1,5 +1,5 @@
 {
-  "takenAt": "2026-08-27T08:46:29.177Z",
+  "takenAt": "2026-08-27T09:39:37.444Z",
   "skySquadNamed": [
     {
       "level": 1,
@@ -52,7 +52,7 @@
     "before": 180,
     "after": 0,
     "autoWin": [],
-    "escapedTotal": 1309,
+    "escapedTotal": 1306,
     "levelsWithZeroEscaped": [
       124
     ]
@@ -147,7 +147,8 @@
       "hits": 0,
       "outs": 1,
       "stars": 0,
-      "allies": 0
+      "allies": 0,
+      "timeLimit": 0
     },
     {
       "level": 134,
@@ -159,7 +160,8 @@
       "hits": 0,
       "outs": 3,
       "stars": 0,
-      "allies": 0
+      "allies": 0,
+      "timeLimit": 0
     },
     {
       "level": 145,
@@ -171,7 +173,8 @@
       "hits": 0,
       "outs": 2,
       "stars": 0,
-      "allies": 0
+      "allies": 0,
+      "timeLimit": 0
     },
     {
       "level": 157,
@@ -183,7 +186,8 @@
       "hits": 0,
       "outs": 0,
       "stars": 0,
-      "allies": 0
+      "allies": 0,
+      "timeLimit": 70
     }
   ],
   "duoRescan": {
@@ -201,7 +205,9 @@
         "endReason": "ko",
         "seconds": 115.5,
         "stars": 1,
-        "allies": 1
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": false
       },
       {
         "level": 104,
@@ -209,7 +215,9 @@
         "endReason": "ko",
         "seconds": 146.4,
         "stars": 1,
-        "allies": 1
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": false
       },
       {
         "level": 123,
@@ -217,7 +225,9 @@
         "endReason": "time",
         "seconds": 155,
         "stars": 1,
-        "allies": 1
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": true
       },
       {
         "level": 140,
@@ -225,7 +235,9 @@
         "endReason": "time",
         "seconds": 155,
         "stars": 1,
-        "allies": 0
+        "allies": 0,
+        "timeLimit": 0,
+        "capArtifact": true
       },
       {
         "level": 144,
@@ -233,7 +245,9 @@
         "endReason": "time",
         "seconds": 155,
         "stars": 1,
-        "allies": 0
+        "allies": 0,
+        "timeLimit": 0,
+        "capArtifact": true
       },
       {
         "level": 148,
@@ -241,7 +255,9 @@
         "endReason": "ko",
         "seconds": 68.5,
         "stars": 1,
-        "allies": 0
+        "allies": 0,
+        "timeLimit": 70,
+        "capArtifact": false
       },
       {
         "level": 161,
@@ -249,9 +265,23 @@
         "endReason": "time",
         "seconds": 155,
         "stars": 1,
-        "allies": 1
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": true
       }
     ],
+    "genuine": [
+      28,
+      104,
+      148
+    ],
+    "capArtifacts": [
+      123,
+      140,
+      144,
+      161
+    ],
+    "noTimeLimitLevels": 148,
     "byChapter": [
       {
         "chapter": "云朵广场",

@@ -314,6 +314,7 @@ describe("B3 回归 · duo-vs-star 对手自己掉台", () => {
       outs: me.outs,
       stars: m.winnerTeam === 0 ? rateLevel(me.outs, me.hits) : 0,
       allies: lv.allies.length,
+      timeLimit: lv.timeLimit,
     };
   };
 
@@ -371,7 +372,17 @@ describe("B3 回归 · duo-vs-star 对手自己掉台", () => {
         seconds: r.seconds,
         stars: r.stars,
         allies: r.allies,
+        timeLimit: r.timeLimit,
+        // 这一关的「赢」是不是扫描器自己的 155 秒上限造出来的:
+        // runMatch 排完 maxSeconds 就 endMatch(timeoutWinner(s), "time"),
+        // 而不限时的关在真机上根本不会到点判胜负,只会一直打下去。
+        capArtifact: r.endReason === "time" && r.timeLimit === 0,
       })),
+      /** 真机上真的会发生的那一批:对手被 KO,或者本来就有限时 */
+      genuine: autoWin.filter((r) => !(r.endReason === "time" && r.timeLimit === 0)).map((r) => r.level),
+      /** 扫描器 155 秒上限造出来的:这些关不限时,真机不会判胜负 */
+      capArtifacts: autoWin.filter((r) => r.endReason === "time" && r.timeLimit === 0).map((r) => r.level),
+      noTimeLimitLevels: rows.filter((r) => r.timeLimit === 0).length,
       byChapter: chapters,
       /** 修前那 72 关里,现在还剩哪些 */
       stillFromOld72: autoWin.map((r) => r.level).filter((n) => BEFORE.duoVsStarLevels.includes(n)),
@@ -379,7 +390,11 @@ describe("B3 回归 · duo-vs-star 对手自己掉台", () => {
       newlyIdleWinnable: autoWin.map((r) => r.level).filter((n) => !BEFORE.duoVsStarLevels.includes(n)),
     };
     console.log(`\nduo-vs-star 修后摆烂重扫:188 关中 ${autoWin.length} 关自动过关(修前 ${BEFORE.duoVsStar})`);
-    console.log(`   → 残量关号:${autoWin.map((r) => `${r.level}(${r.stageId})`).join("、")}`);
+    console.log(`   → 残量关号:${autoWin.map((r) => `${r.level}(${r.stageId},${r.endReason},限时${r.timeLimit})`).join("、")}`);
+    console.log(
+      `   → 其中 ${autoWin.filter((r) => r.endReason === "time" && r.timeLimit === 0).length} 关是扫描器 155 秒上限造出来的假胜` +
+        `(这些关不限时,真机不会到点判);全 188 关里不限时的有 ${rows.filter((r) => r.timeLimit === 0).length} 关`
+    );
     for (const c of chapters) {
       if (c.autoWin > 0) console.log(`   → ${c.chapter} ${c.stageId} 第${c.range}关 ${c.autoWin}/${c.size}`);
     }
