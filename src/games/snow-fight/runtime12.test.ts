@@ -312,8 +312,8 @@ describe("snow-fight 1.2 运行时 · 手机 360px", () => {
     const tall = await boardHeightOn(880);
     expect(tall).toBeGreaterThan(short);
     expect(short).toBeGreaterThan(squashed);
-    // 再挤也得看得清抛物线
-    expect(squashed).toBeGreaterThanOrEqual(156);
+    // 挤到没地方了也还看得出是条弧线(再往下就宁可让画面扁,也不能把按钮顶出屏幕)
+    expect(squashed).toBeGreaterThanOrEqual(108);
     // 拉得再高也有个谱:竖向不会拉到人变竹竿
     expect(tall).toBeLessThan(14 * (352 / VIEW_W) * 2.7 + 20);
   });
@@ -354,6 +354,25 @@ describe("snow-fight 1.2 运行时 · 双人同屏", () => {
     h.flush(2);
     expect(p0.thrown).toBe(1);
     expect(p1.thrown).toBe(1);
+    bout.destroy();
+  });
+
+  it("两块操作牌并排:一台手机上两个人的按钮都点得到", async () => {
+    const h = (harness = install({ innerWidth: 360, innerHeight: 720 }));
+    const { bout } = await openBout(h, duelArena(null, 5), { viewW: FIELD_W_12, humans: 2 });
+    h.flush(2);
+    const pads = findAll(h.root, "snf-pad");
+    expect(pads.length).toBe(2);
+    for (const pad of pads) {
+      // 走、瞄、搓、投一个都不能少,而且是并排那一版(3×2)
+      expect(pad.querySelectorAll("button").length).toBe(6);
+      expect(pad.className).toContain("snf-pad-duo");
+      expect(pad.querySelectorAll("snf-row").length).toBe(2);
+    }
+    // 两块牌子上写着各自的键位,认得出谁是谁
+    const marks = findAll(h.root, "snf-pad-t").map((el) => el.textContent);
+    expect(marks[0]).toContain("朵朵");
+    expect(marks[1]).toContain("星星");
     bout.destroy();
   });
 

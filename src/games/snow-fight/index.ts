@@ -76,13 +76,22 @@ const P_KEYS = [
   "A/D 走 · W/S 抬准星 · 按住 F 蓄力 · 按住 G 蹲下搓雪",
   "←/→ 走 · ↑/↓ 抬准星 · 按住 L 蓄力 · 按住 K 蹲下搓雪",
 ];
+/** 双人同屏时两块牌子并排,名字后面只塞得下这么短的一句 */
+const P_KEYS_SHORT = ["A/D·W/S·F·G", "←/→·↑/↓·L·K"];
 
 /** 画面往上画到多少个单位高(再高的雪球就飞出画面了,不影响判定) */
 const VIEW_H = 14;
 /** 地面线下面留几个像素画雪地 */
 const GROUND_PAD = 18;
-/** 手机上画面矮得看不清抛物线,至少给它这么多像素高 */
+/** 量不到这一屏还剩多少时的兜底高度(桌面上一般都比这个宽裕得多) */
 const MIN_BOARD_H = 156;
+/**
+ * 再挤也不能比这个矮。
+ *
+ * 到了这一步就是「画面矮一点」和「按钮点不到」二选一了——按钮点不到这一关就废了,
+ * 所以宁可让雪原扁一点。矮到 108 像素抛物线还看得出是条弧线,再矮就真不行了。
+ */
+const MIN_BOARD_TIGHT = 108;
 /**
  * 竖向最多拉伸几倍。
  *
@@ -127,6 +136,10 @@ const CSS = `
 .snf-pad-p0{box-shadow:0 0 0 2px #f3b6cf inset;}
 .snf-pad-p1{box-shadow:0 0 0 2px #a9c6ee inset;}
 .snf-pad-t{font-size:14px;font-weight:900;text-align:center;line-height:1.4;}
+/* 双人同屏:两块牌子并排,搓雪与蓄力缩成图标,一台 360px 的手机也放得下两套 */
+.snf-pad.snf-pad-duo{flex:0 0 auto;padding:4px 3px;gap:4px;}
+.snf-pad-duo .snf-row{gap:4px;}
+.snf-pad-duo .snf-btn,.snf-pad-duo .snf-btn-throw,.snf-pad-duo .snf-btn-scoop{min-width:44px;padding:2px;}
 .snf-row{display:flex;gap:6px;align-items:center;}
 .snf-btn{border:none;border-radius:12px;min-width:46px;min-height:46px;padding:2px 8px;font-size:16px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#42557a;background:#e8f0fb;
@@ -167,6 +180,8 @@ const CSS = `
   .snf-pads{gap:6px;}
   .snf-pad{padding:4px 6px;gap:4px;}
   .snf-tip{line-height:1.4;}
+  /* 旁白钉死两行高:它一涨,底下两排按钮就被顶出屏幕,那才是真的没法玩 */
+  .snf-say{height:42px;overflow:hidden;}
   .snf-open{padding:10px 12px;font-size:14px;}
   .snf-bar{gap:6px;margin-bottom:4px;}
   .snf-chip{padding:4px 9px;font-size:14px;}
@@ -788,7 +803,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const s = maxW / opts.viewW;
     const flat = VIEW_H * s;
     const room = boardRoom();
-    const want = room === null ? Math.max(MIN_BOARD_H, flat * 2) : Math.max(MIN_BOARD_H, room - GROUND_PAD);
+    const want = room === null ? Math.max(MIN_BOARD_H, flat * 2) : Math.max(MIN_BOARD_TIGHT, room - GROUND_PAD);
     const ys = Math.max(1, Math.min(MAX_STRETCH, want / flat));
     cam = { s, ys, h: Math.round(flat * ys) };
     cssW = Math.round(opts.viewW * s);
@@ -1060,15 +1075,21 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     });
   }
 
+  /**
+   * 一个人的那块操作牌。
+   *
+   * 两个人同屏的时候排法完全不一样:一台手机只有 360 像素宽,两块牌子上下摞着
+   * 第二块必然掉到屏幕外面(掉出去的按钮点都点不到,那位小朋友就只能干看着)。
+   * 所以双人版把六个键排成 3×2 的小方阵、搓雪与蓄力只留图标,两块牌子并排放得下。
+   */
   function makePad(seat: 0 | 1): HTMLElement {
+    const duo = opts.humans === 2;
     const box = document.createElement("div");
-    box.className = `snf-pad snf-pad-p${seat}`;
+    box.className = `snf-pad snf-pad-p${seat}${duo ? " snf-pad-duo" : ""}`;
     const name = document.createElement("div");
     name.className = "snf-pad-t";
     name.style.color = P_COLOR[seat] ?? P_COLOR[0];
-    name.textContent = `${P_MARK[seat]} ${P_NAME[seat]} · ${P_KEYS[seat]}`;
-    const row1 = document.createElement("div");
-    row1.className = "snf-row";
+    name.textContent = duo ? `${P_MARK[seat]} ${P_NAME[seat]} · ${P_KEYS_SHORT[seat]}` : `${P_MARK[seat]} ${P_NAME[seat]}`;
     const lf = makeBtn("◀", `${P_NAME[seat]}往左走`);
     bindHold(lf, seat, "left");
     const rt = makeBtn("▶", `${P_NAME[seat]}往右走`);
@@ -1077,18 +1098,25 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     bindHold(up, seat, "up");
     const dn = makeBtn("📐▼", `${P_NAME[seat]}压低准星`);
     bindHold(dn, seat, "down");
-    row1.append(lf, rt, up, dn);
+    const sc = makeBtn(duo ? "🤲" : "🤲 蹲下搓雪", `${P_NAME[seat]}蹲下搓雪球`, "snf-btn-scoop");
+    bindHold(sc, seat, "crouch");
+    const th = makeBtn(duo ? "❄️" : "❄️ 按住蓄力", `${P_NAME[seat]}按住蓄力,松手扔出去`, "snf-btn-throw");
+    bindHold(th, seat, "charge");
+    const row1 = document.createElement("div");
+    row1.className = "snf-row";
     const row2 = document.createElement("div");
     row2.className = "snf-row";
-    const sc = makeBtn("🤲 蹲下搓雪", `${P_NAME[seat]}蹲下搓雪球`, "snf-btn-scoop");
-    bindHold(sc, seat, "crouch");
-    const th = makeBtn("❄️ 按住蓄力", `${P_NAME[seat]}按住蓄力,松手扔出去`, "snf-btn-throw");
-    bindHold(th, seat, "charge");
-    row2.append(sc, th);
-    // 一个人玩的时候不写名字那一行:HUD 上本来就有 🌸,键位在提示行里,
-    // 省下来的二十几像素全给画布——手机上这一行的有无就是「按钮进不进得了屏幕」
-    if (opts.humans === 2) box.append(name, row1, row2);
-    else box.append(row1, row2);
+    if (duo) {
+      row1.append(lf, rt, up);
+      row2.append(dn, sc, th);
+      box.append(name, row1, row2);
+    } else {
+      // 一个人玩就不写名字那一行:HUD 上本来就有 🌸,键位在提示行里,
+      // 省下来的二十几像素全给画布——手机上这一行的有无就是「按钮进不进得了屏幕」
+      row1.append(lf, rt, up, dn);
+      row2.append(sc, th);
+      box.append(row1, row2);
+    }
     box.title = `${P_NAME[seat]}:${P_KEYS[seat]}`;
     return box;
   }
@@ -1299,7 +1327,7 @@ function mountDuel(host: HTMLElement, api: GameApi, back: () => void, ai: AiLeve
     humans: ai ? 1 : 2,
     hint: ai
       ? `对面的灯笼躲在掩体后面,抬高角度绕过去。砸中${AI_12[ai].name}他会变 1.5 秒雪人,那正是你连投的机会。`
-      : `两个人同时玩,键位各管各的:${P_KEYS[0]};${P_KEYS[1]}。`,
+      : "两个人同时玩,键位与按钮各管各的(下面两块牌子上写着谁是谁)。先砸化对面三盏雪灯笼就赢。",
     onEnd: finish,
   });
 
