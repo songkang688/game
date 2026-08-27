@@ -28,6 +28,7 @@ import {
   failedSpeechLine,
   isStone,
   nearDeadline,
+  neighbors,
   parseLayout,
   pressCeiling,
   releaseLoneRainbows,
@@ -81,6 +82,17 @@ import {
   type Faller,
   type Loader,
 } from "./aim12";
+import {
+  fuseSparkPhase,
+  isSquashy,
+  paintBombCat,
+  paintBubble,
+  paintRainbowOrb,
+  paintSqueezeDot,
+  paintStoneRock,
+  rainbowSpinAngle,
+  stoneCracked,
+} from "./visual";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -700,124 +712,19 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   // ---------- 绘制 ----------
 
+  /** 石泡:岩石棱面三块 + 裂纹两态(读既有 cracked 状态,只换皮不写状态) */
   function drawStoneAt(x: number, y: number, cracked: boolean, radius = R, alpha = 1): void {
-    ctx.globalAlpha = alpha;
-    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.15, x, y, radius);
-    grad.addColorStop(0, "#EDEFF4");
-    grad.addColorStop(0.4, "#C9CBD4");
-    grad.addColorStop(1, "#8B8FA0");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    // 石头斑点
-    ctx.fillStyle = "rgba(110,115,132,0.5)";
-    ctx.beginPath();
-    ctx.arc(x + radius * 0.3, y + radius * 0.2, radius * 0.16, 0, Math.PI * 2);
-    ctx.arc(x - radius * 0.25, y + radius * 0.35, radius * 0.11, 0, Math.PI * 2);
-    ctx.fill();
-    if (cracked) {
-      ctx.strokeStyle = "#5A5E70";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x - radius * 0.5, y - radius * 0.3);
-      ctx.lineTo(x - radius * 0.1, y);
-      ctx.lineTo(x - radius * 0.35, y + radius * 0.45);
-      ctx.moveTo(x - radius * 0.1, y);
-      ctx.lineTo(x + radius * 0.45, y - radius * 0.15);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+    paintStoneRock(ctx, x, y, radius, cracked, alpha);
   }
 
+  /** 彩虹泡:旋转七彩环 + 中心白星(reduced 静止) */
   function drawRainbowAt(x: number, y: number, radius = R, alpha = 1): void {
-    ctx.globalAlpha = alpha;
-    const spin = animTime * 0.8;
-    for (let k = 0; k < 6; k++) {
-      ctx.fillStyle = `hsl(${k * 60 + animTime * 40}, 85%, 72%)`;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.arc(x, y, radius, spin + (k * Math.PI) / 3, spin + ((k + 1) * Math.PI) / 3);
-      ctx.closePath();
-      ctx.fill();
-    }
-    const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.35, radius * 0.1, x, y, radius);
-    grad.addColorStop(0, "rgba(255,255,255,0.95)");
-    grad.addColorStop(0.55, "rgba(255,255,255,0.25)");
-    grad.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(x, y, radius - 1, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    paintRainbowOrb(ctx, x, y, radius, rainbowSpinAngle(animTime * 1000, softMotion), alpha);
   }
 
-  /** 色弱友好:每种颜色配一个专属白色小图案,不靠颜色也能分清 */
-  function drawColorMark(x: number, y: number, color: string, radius: number): void {
-    const s = radius * 0.34;
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    ctx.strokeStyle = "rgba(255,255,255,0.7)";
-    ctx.lineWidth = Math.max(1.5, radius * 0.12);
-    ctx.beginPath();
-    if (color === "R") {
-      // 红:实心三角
-      ctx.moveTo(x, y - s);
-      ctx.lineTo(x + s, y + s * 0.8);
-      ctx.lineTo(x - s, y + s * 0.8);
-      ctx.closePath();
-      ctx.fill();
-    } else if (color === "Y") {
-      // 黄:实心菱形
-      ctx.moveTo(x, y - s * 1.15);
-      ctx.lineTo(x + s * 1.15, y);
-      ctx.lineTo(x, y + s * 1.15);
-      ctx.lineTo(x - s * 1.15, y);
-      ctx.closePath();
-      ctx.fill();
-    } else if (color === "B") {
-      // 蓝:空心圆环
-      ctx.arc(x, y, s, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (color === "G") {
-      // 绿:实心方块
-      ctx.fillRect(x - s * 0.85, y - s * 0.85, s * 1.7, s * 1.7);
-    } else if (color === "P") {
-      // 紫:十字
-      ctx.moveTo(x - s, y);
-      ctx.lineTo(x + s, y);
-      ctx.moveTo(x, y - s);
-      ctx.lineTo(x, y + s);
-      ctx.stroke();
-    }
-  }
-
-  /** 炸弹泡:深色小球加一圈跳动的火花,和普通颜色一眼分得开 */
+  /** 炸弹泡:可爱黑猫(耳朵 + 引信星火;reduced 静止火点),不是武器 */
   function drawBombAt(x: number, y: number, radius = R, alpha = 1): void {
-    ctx.globalAlpha = alpha;
-    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.12, x, y, radius);
-    grad.addColorStop(0, "#8E9BB5");
-    grad.addColorStop(0.45, "#4A5670");
-    grad.addColorStop(1, "#2B3348");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#FFD27A";
-    ctx.lineWidth = Math.max(1.5, radius * 0.14);
-    const spark = 0.7 + 0.3 * Math.sin(animTime * 10);
-    ctx.beginPath();
-    for (let k = 0; k < 6; k++) {
-      const a = (k * Math.PI) / 3 + animTime * 1.6;
-      ctx.moveTo(x + Math.cos(a) * radius * 0.45, y + Math.sin(a) * radius * 0.45);
-      ctx.lineTo(x + Math.cos(a) * radius * 0.82 * spark, y + Math.sin(a) * radius * 0.82 * spark);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    paintBombCat(ctx, x, y, radius, fuseSparkPhase(animTime * 1000, softMotion), alpha);
   }
 
   function drawBubbleAt(x: number, y: number, color: string, radius = R, alpha = 1): void {
@@ -826,29 +733,16 @@ export function mount(api: GameApi): { destroy: () => void } {
       return;
     }
     if (color === STONE || color === STONE_CRACKED) {
-      drawStoneAt(x, y, color === STONE_CRACKED, radius, alpha);
+      drawStoneAt(x, y, stoneCracked(color), radius, alpha);
       return;
     }
     if (color === RAINBOW) {
       drawRainbowAt(x, y, radius, alpha);
       return;
     }
+    // 薄膜描边 + 月牙反光 + 双高光 + 色觉标记(标记最后画,永不被盖)全在 paintBubble 里
     const [light, dark] = COLOR_FILL[color] ?? COLOR_FILL.R;
-    ctx.globalAlpha = alpha;
-    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.15, x, y, radius);
-    grad.addColorStop(0, "#FFFFFF");
-    grad.addColorStop(0.35, light);
-    grad.addColorStop(1, dark);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    drawColorMark(x, y + radius * 0.08, color, radius);
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.beginPath();
-    ctx.ellipse(x - radius * 0.32, y - radius * 0.4, radius * 0.24, radius * 0.15, -0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    paintBubble(ctx, x, y, radius, light, dark, color, alpha);
   }
 
   function drawBackground(): void {
@@ -940,6 +834,20 @@ export function mount(api: GameApi): { destroy: () => void } {
         if (!color) continue;
         const cc = cellCenter(grid, r, c);
         drawBubbleAt(cc.x, cc.y, color);
+      }
+    }
+    // 贴附成串的软泡泡之间点一粒挤压高光(静态体积感,reduced 保留);
+    // 只挑「后面」的邻居,每对只画一次。只读网格,不写任何格子。
+    for (let r = 0; r < grid.rows.length; r++) {
+      for (let c = 0; c < rowLength(grid, r); c++) {
+        if (!isSquashy(grid.rows[r][c])) continue;
+        const a = cellCenter(grid, r, c);
+        for (const [nr, nc] of neighbors(grid, r, c)) {
+          if (nr < r || (nr === r && nc <= c)) continue;
+          if (!isSquashy(grid.rows[nr][nc])) continue;
+          const b = cellCenter(grid, nr, nc);
+          paintSqueezeDot(ctx, a.x, a.y, b.x, b.y);
+        }
       }
     }
   }
