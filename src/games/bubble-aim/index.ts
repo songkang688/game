@@ -83,15 +83,25 @@ import {
   type Loader,
 } from "./aim12";
 import {
+  BA_TIMINGS,
+  barrelAngle,
+  bounceOffset,
   fuseSparkPhase,
   isSquashy,
+  paintBarrel,
   paintBombCat,
   paintBubble,
+  paintLoadSlot,
   paintRainbowOrb,
+  paintShooterBase,
+  paintShooterShadow,
   paintSqueezeDot,
+  paintStarBadge,
   paintStoneRock,
   rainbowSpinAngle,
   stoneCracked,
+  swapPositions,
+  swapProgress,
 } from "./visual";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -107,6 +117,9 @@ interface GameApi {
 
 const FLY_SPEED = 820;
 const SAVE_KEY = "yiduo.bubble-aim.campaign.v2";
+/** 装填槽(下一发预览)的位置:沿用 1.2 原坐标,炮台伸最长也遮不到 */
+const NEXT_X = W - 46;
+const NEXT_Y = SHOOTER_Y + 2;
 /**
  * 无尽墙用的调色板:五色够热闹,又不至于凑不齐三连。
  * 实际每一行用几种由 `endlessPalette(rowsPushed, …)` 决定 —— 开局 3 色,压下来再逐步补满。
@@ -202,6 +215,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   let floatText = "";
   let floatSize = 14;
   let floatTime = 0;
+  /** 换弹旋转过场剩余毫秒(纯视觉;逻辑交换在按下那一刻已完成) */
+  let swapFx = 0;
   const softMotion = (() => {
     const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
     return typeof mm === "function" ? !!mm("(prefers-reduced-motion: reduce)").matches : false;
@@ -438,6 +453,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     endless = false;
     chain = 0;
     floatTime = 0;
+    swapFx = 0;
     loader = freshLoader();
     msgEl.textContent = def.tip;
     updateHud();
@@ -457,6 +473,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     rowsPushed = 0;
     chain = 0;
     floatTime = 0;
+    swapFx = 0;
     grid = parseLayout(endlessStartRows(endlessPalette(0, ENDLESS_COLORS), Math.random));
     obstacles = {};
     dropQueue = [];
@@ -551,10 +568,11 @@ export function mount(api: GameApi): { destroy: () => void } {
     updateHud();
   }
 
-  /** 换弹:当前和下一颗对调 */
+  /** 换弹:当前和下一颗对调(逻辑立刻换;150ms 只是视觉过场,reduced 瞬时) */
   function swapAmmo(): void {
     if (phase !== "play" || flight) return;
     loader = swapLoader(loader);
+    swapFx = softMotion ? 0 : BA_TIMINGS.swapMs;
     api.play("tap");
   }
 
@@ -904,7 +922,16 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  /**
+   * 发射器炮台六道工序(四·补二):落影 → 木底座 → 旋转炮管(只读瞄准角)→
+   * 星星徽章 → 装填槽待命泡(±2px 弹跳,reduced 静止)→ 换弹 150ms 旋转过场。
+   * 逻辑上 swapLoader 早在按下那一刻换完,这里只演过场。
+   */
   function drawShooter(): void {
+    paintShooterShadow(ctx, SHOOTER_X, SHOOTER_Y, R);
+    paintShooterBase(ctx, SHOOTER_X, SHOOTER_Y, R);
+    paintBarrel(ctx, SHOOTER_X, SHOOTER_Y, barrelAngle({ dx: aimDx, dy: aimDy }), R);
+    // 座舱圈(沿用原白圈,压在炮管根部上)
     ctx.fillStyle = "#FFFFFF";
     ctx.beginPath();
     ctx.arc(SHOOTER_X, SHOOTER_Y, R + 9, 0, Math.PI * 2);
@@ -912,17 +939,27 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.strokeStyle = "#BFD9F2";
     ctx.lineWidth = 3;
     ctx.stroke();
-    if (phase === "play" && shotsLeft > 0) {
-      drawBubbleAt(SHOOTER_X, SHOOTER_Y, loader.current);
-    }
     ctx.fillStyle = THEMES[themeOfLevel(levelIndex)].dark ? "rgba(255,255,255,0.85)" : "#5E86B0";
     ctx.font = "12px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("下一个", W - 46, SHOOTER_Y - 24);
+    ctx.fillText("下一个", NEXT_X, SHOOTER_Y - 24);
     ctx.textAlign = "left";
-    if (phase === "play" && shotsLeft > 1) {
-      drawBubbleAt(W - 46, SHOOTER_Y + 2, loader.next, R * 0.7);
+    paintLoadSlot(ctx, NEXT_X, NEXT_Y, R * 0.7);
+    if (phase === "play" && swapFx > 0) {
+      // 换弹过场:两颗泡上下弧对转 150ms;槽里那颗小、炮位那颗随进度长大
+      const p = swapProgress(BA_TIMINGS.swapMs - swapFx, softMotion);
+      const pos = swapPositions(p, SHOOTER_X, SHOOTER_Y, NEXT_X, NEXT_Y);
+      if (shotsLeft > 1) drawBubbleAt(pos.nxt.x, pos.nxt.y, loader.next, R * (1 - 0.3 * p));
+      if (shotsLeft > 0) drawBubbleAt(pos.cur.x, pos.cur.y, loader.current, R * (0.7 + 0.3 * p));
+    } else {
+      if (phase === "play" && shotsLeft > 1) {
+        drawBubbleAt(NEXT_X, NEXT_Y + bounceOffset(animTime * 1000, softMotion), loader.next, R * 0.7);
+      }
+      if (phase === "play" && shotsLeft > 0) {
+        drawBubbleAt(SHOOTER_X, SHOOTER_Y, loader.current);
+      }
     }
+    paintStarBadge(ctx, SHOOTER_X, SHOOTER_Y + R * 1.05, R);
   }
 
   /** 连锁飘字:掉得越多字越大,从发射台上方慢慢升起来 */
@@ -1111,6 +1148,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     animTime += dt;
     phaseTime += dt;
     if (bannerTime > 0) bannerTime -= dt;
+    if (swapFx > 0) swapFx = Math.max(0, swapFx - dt * 1000);
 
     if (screen === "play") {
       // 飞行推进

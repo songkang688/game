@@ -351,6 +351,152 @@ export function paintSqueezeDot(ctx: PaintCtx, ax: number, ay: number, bx: numbe
 }
 
 // ---------------------------------------------------------------------------
+// 七·补:发射器炮台六道工序(四·补二;每道一个纯 painter,index 按序调用)
+// ---------------------------------------------------------------------------
+
+/** 工序①:底座落影椭圆(统一落影色) */
+export function paintShooterShadow(ctx: PaintCtx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.fillStyle = BA_COLORS.baShadow;
+  ctx.beginPath();
+  ctx.ellipse(x, y + r * 1.32, r * 1.7, r * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 工序②:木质底座(木纹两条 + 顶亮边 + 两颗铆钉) */
+export function paintShooterBase(ctx: PaintCtx, x: number, y: number, r: number): void {
+  ctx.save();
+  const w = r * 2.5;
+  const h = r * 1.05;
+  const top = y + r * 0.42;
+  const grad = ctx.createLinearGradient(x, top, x, top + h);
+  grad.addColorStop(0, shade(BA_COLORS.baWood, 14));
+  grad.addColorStop(1, shade(BA_COLORS.baWood, -16));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, top + h);
+  ctx.lineTo(x - w * 0.36, top);
+  ctx.lineTo(x + w * 0.36, top);
+  ctx.lineTo(x + w / 2, top + h);
+  ctx.closePath();
+  ctx.fill();
+  // 顶亮边(左上光源)
+  ctx.strokeStyle = shade(BA_COLORS.baWood, 38);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.36, top + 1);
+  ctx.lineTo(x + w * 0.36, top + 1);
+  ctx.stroke();
+  // 木纹两条
+  ctx.strokeStyle = shade(BA_COLORS.baWood, -28);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.3, top + h * 0.38);
+  ctx.lineTo(x + w * 0.26, top + h * 0.34);
+  ctx.moveTo(x - w * 0.24, top + h * 0.68);
+  ctx.lineTo(x + w * 0.32, top + h * 0.72);
+  ctx.stroke();
+  // 铆钉两颗
+  ctx.fillStyle = shade(BA_COLORS.baWood, -34);
+  ctx.beginPath();
+  ctx.arc(x - w * 0.34, top + h * 0.55, r * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + w * 0.34, top + h * 0.55, r * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 工序③:炮管旋转层(只读瞄准角;圆管 + 口部亮环) */
+export function paintBarrel(ctx: PaintCtx, x: number, y: number, angleRad: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angleRad);
+  const inner = r * 0.34;
+  const outer = r * 1.9;
+  const half = r * 0.5;
+  const grad = ctx.createLinearGradient(0, -half, 0, half);
+  grad.addColorStop(0, shade(BA_COLORS.baWood, 26));
+  grad.addColorStop(0.5, BA_COLORS.baWood);
+  grad.addColorStop(1, shade(BA_COLORS.baWood, -24));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(inner, -half * 0.8);
+  ctx.lineTo(outer, -half);
+  ctx.lineTo(outer, half);
+  ctx.lineTo(inner, half * 0.8);
+  ctx.closePath();
+  ctx.fill();
+  // 口部亮环
+  ctx.strokeStyle = "#FFF4DC";
+  ctx.lineWidth = Math.max(2, r * 0.14);
+  ctx.beginPath();
+  ctx.moveTo(outer - 1, -half);
+  ctx.lineTo(outer - 1, half);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 工序④:座舱星星徽章(圆片 + 金星;kit 无 star.ts,星形路径归本档 starPath) */
+export function paintStarBadge(ctx: PaintCtx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.fillStyle = "#FFFFFF";
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.46, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = shade(BA_COLORS.baWood, -12);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.46, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = BA_COLORS.baLamp;
+  starPath(ctx, x, y, r * 0.3, r * 0.13, 5);
+  ctx.fill();
+  ctx.strokeStyle = "#E8B25A";
+  ctx.lineWidth = 1;
+  starPath(ctx, x, y, r * 0.3, r * 0.13, 5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 工序⑤:装填槽(下一发待命的小凹槽;待命泡的弹跳偏移由 bounceOffset 给) */
+export function paintLoadSlot(ctx: PaintCtx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.fillStyle = BA_COLORS.baShadow;
+  ctx.beginPath();
+  ctx.ellipse(x, y + r * 0.92, r * 1.06, r * 0.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = shade(BA_COLORS.baWood, 8);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, r + 3, Math.PI * 0.12, Math.PI * 0.88);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * 工序⑥:换弹旋转交换的两颗泡位置(p=0 起步,p=1 到位;上弧下弧对转)。
+ * 纯插值 —— 逻辑上 swapLoader 在按下那一刻已经换完,这里只演 150ms 的过场。
+ */
+export function swapPositions(
+  p: number,
+  cx: number,
+  cy: number,
+  nx: number,
+  ny: number
+): { cur: { x: number; y: number }; nxt: { x: number; y: number } } {
+  const k = Math.max(0, Math.min(1, p));
+  const lift = Math.sin(k * Math.PI) * 18;
+  return {
+    // 新的当前弹:从装填槽转到炮位(走上弧)
+    cur: { x: nx + (cx - nx) * k, y: ny + (cy - ny) * k - lift },
+    // 换下来的下一发:从炮位转回装填槽(走下弧)
+    nxt: { x: cx + (nx - cx) * k, y: cy + (ny - cy) * k + lift },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 八、特殊泡三兄弟:黑猫炸弹 / 岩石棱面 / 彩虹环(剪影一眼分清)
 // ---------------------------------------------------------------------------
 
