@@ -1007,6 +1007,171 @@ export function drawHook(c: Ctx, o: HookOpts): void {
   c.restore();
 }
 
+// ---------------------------------------------------------------------------
+// HUD 图标:全部矢量手绘,顶掉 1.2 的 💰🎯⏳💪🍀💥 emoji 芯片
+// ---------------------------------------------------------------------------
+
+export type IconKind = "coin" | "target" | "hourglass" | "arm" | "clover" | "bomb" | "bag";
+
+/**
+ * 在 [0, s]² 的方块里画一枚图标。调用方自己建 canvas(2 倍尺寸防糊)。
+ * emoji 换成手绘的理由和矿石一样:换台设备字体一变就认不出来,
+ * 而且 14px 的 emoji 在浅米黄底上糊成一团。
+ */
+export function drawIcon(c: Ctx, kind: IconKind, s: number): void {
+  const m = s / 2;
+  c.save();
+  if (kind === "coin") {
+    // 金币:金渐变圆 + 边缘厚度 + 内环 + 中心小星
+    const g = c.createLinearGradient(0, 0, 0, s);
+    g.addColorStop(0, "#FFE9A8");
+    g.addColorStop(1, "#F0A93C");
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(m, m, m - 0.8, 0, TAU);
+    c.fill();
+    c.strokeStyle = "#C98A1E";
+    c.lineWidth = 1.2;
+    c.stroke();
+    c.strokeStyle = "rgba(255,255,255,.85)";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.arc(m, m, m - 3.2, 0, TAU);
+    c.stroke();
+    c.fillStyle = "#FFF6D8";
+    starPath(c, m, m, s * 0.2);
+    c.fill();
+  } else if (kind === "target") {
+    // 目标:同心圆靶
+    c.fillStyle = "#FFE3E0";
+    c.beginPath();
+    c.arc(m, m, m - 0.8, 0, TAU);
+    c.fill();
+    c.strokeStyle = "#E4766B";
+    c.lineWidth = 1.2;
+    c.stroke();
+    c.beginPath();
+    c.arc(m, m, m - 4, 0, TAU);
+    c.stroke();
+    c.fillStyle = "#E4766B";
+    c.beginPath();
+    c.arc(m, m, 1.8, 0, TAU);
+    c.fill();
+  } else if (kind === "hourglass") {
+    // 沙漏:上下两撮沙 + 木框
+    c.fillStyle = "#FFD98A";
+    c.beginPath();
+    c.moveTo(3.2, 3.6);
+    c.lineTo(s - 3.2, 3.6);
+    c.lineTo(m, m);
+    c.closePath();
+    c.fill();
+    c.beginPath();
+    c.moveTo(3.2, s - 3.6);
+    c.lineTo(s - 3.2, s - 3.6);
+    c.lineTo(m, m);
+    c.closePath();
+    c.fill();
+    c.strokeStyle = "#B98A3C";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(3.2, 3.6);
+    c.lineTo(s - 3.2, s - 3.6);
+    c.moveTo(s - 3.2, 3.6);
+    c.lineTo(3.2, s - 3.6);
+    c.stroke();
+    c.fillStyle = "#8A6B45";
+    c.beginPath();
+    c.roundRect(2.2, 1.4, s - 4.4, 2.2, 1.1);
+    c.roundRect(2.2, s - 3.6, s - 4.4, 2.2, 1.1);
+    c.fill();
+  } else if (kind === "arm") {
+    // 力量:弯举的小手臂剪影(前臂上举 + 鼓起来的二头肌 + 小拳头)
+    c.strokeStyle = "#E08A5E";
+    c.lineWidth = 3.4;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(2.6, s - 3);
+    c.lineTo(s * 0.6, s * 0.62);
+    c.lineTo(s * 0.66, s * 0.26);
+    c.stroke();
+    c.fillStyle = "#E08A5E";
+    c.beginPath();
+    c.ellipse(s * 0.42, s * 0.68, s * 0.2, s * 0.15, -0.6, 0, TAU);
+    c.fill();
+    c.fillStyle = "#F5B896";
+    c.beginPath();
+    c.arc(s * 0.68, s * 0.22, s * 0.15, 0, TAU);
+    c.fill();
+  } else if (kind === "clover") {
+    // 幸运:四叶草
+    c.fillStyle = "#7CC576";
+    for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+      c.beginPath();
+      c.ellipse(m + Math.cos(a) * s * 0.2, m - 1 + Math.sin(a) * s * 0.2, s * 0.19, s * 0.14, a, 0, TAU);
+      c.fill();
+    }
+    c.strokeStyle = "#5B9E57";
+    c.lineWidth = 1.2;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(m, m + 1);
+    c.quadraticCurveTo(m + 1, s - 3, m + 2.6, s - 1.6);
+    c.stroke();
+    c.fillStyle = "#A8DCA2";
+    c.beginPath();
+    c.arc(m, m - 1, 1, 0, TAU);
+    c.fill();
+  } else if (kind === "bomb") {
+    // 炸药:圆炸弹 + 引信 + 一粒星火(没有火焰,口径和彩纸一致)
+    c.fillStyle = "#5E6470";
+    c.beginPath();
+    c.arc(m, m + 1.2, m - 2.6, 0, TAU);
+    c.fill();
+    c.fillStyle = "rgba(255,255,255,.45)";
+    c.beginPath();
+    c.ellipse(m - 2, m - 0.6, 2, 1.2, -0.6, 0, TAU);
+    c.fill();
+    c.strokeStyle = "#8A6B45";
+    c.lineWidth = 1.4;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(m + 1, m - 2.4);
+    c.quadraticCurveTo(m + 3, 2.6, s - 3, 2.8);
+    c.stroke();
+    c.fillStyle = "#FFD166";
+    starPath(c, s - 2.6, 2.4, 1.8);
+    c.fill();
+  } else {
+    // 钱袋:鼓鼓的布袋 + 扎口 + 袋面一枚小金币
+    c.fillStyle = "#C98C58";
+    c.beginPath();
+    c.moveTo(m - 2.4, s * 0.24);
+    c.quadraticCurveTo(2, s * 0.5, s * 0.2, s * 0.86);
+    c.quadraticCurveTo(m, s + 1, s * 0.8, s * 0.86);
+    c.quadraticCurveTo(s - 2, s * 0.5, m + 2.4, s * 0.24);
+    c.closePath();
+    c.fill();
+    c.strokeStyle = "#8A5A31";
+    c.lineWidth = 1;
+    c.stroke();
+    // 扎口
+    c.fillStyle = "#E7B98C";
+    c.beginPath();
+    c.roundRect(m - 3.2, s * 0.14, 6.4, s * 0.14, 1.4);
+    c.fill();
+    // 袋面小金币
+    c.fillStyle = "#FFD264";
+    c.beginPath();
+    c.arc(m, s * 0.62, s * 0.15, 0, TAU);
+    c.fill();
+    c.strokeStyle = "#C98A1E";
+    c.lineWidth = 0.9;
+    c.stroke();
+  }
+  c.restore();
+}
+
 /**
  * 绳子。空钩绷直、钩着东西中段下垂的贝塞尔逻辑原样保留（垂度由调用方拿
  * `ropeSag` 算好传进来）；1.3 在主线上叠一条错位的浅色短划线，读作麻绳绞纹。

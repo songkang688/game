@@ -72,12 +72,14 @@ import {
   drawCrew,
   drawGround,
   drawHook,
+  drawIcon,
   drawOre,
   drawParallax,
   drawRope,
   drawWalls,
   drawWinch,
   type CrewPose,
+  type IconKind,
   type Palette,
 } from "./art";
 
@@ -128,13 +130,22 @@ function iconButton(cls: string, icon: string, label: string): HTMLButtonElement
   return b;
 }
 
-/** 改这个按钮上那截会被收起来的文字（图标不动） */
-function setLabel(b: HTMLButtonElement, icon: string, label: string): void {
-  const ic = b.querySelector(".gdh-ic");
-  const lb = b.querySelector(".gdh-lb");
-  if (ic) ic.textContent = icon;
-  if (lb) lb.textContent = label;
-  b.setAttribute("aria-label", label);
+/**
+ * 一枚手绘的 HUD 图标(2 倍尺寸的小画布,CSS 再缩回去防糊)。
+ * 顶掉 1.2 的 💰🎯⏳💪🍀💥 emoji 芯片 —— emoji 换台设备就变脸,手绘不会。
+ */
+function iconCanvas(kind: IconKind, size = 14): HTMLCanvasElement {
+  const cv = el("canvas", "gdh-ic-cv");
+  cv.width = size * 2;
+  cv.height = size * 2;
+  cv.style.width = `${size}px`;
+  cv.style.height = `${size}px`;
+  const c = cv.getContext("2d");
+  if (c) {
+    c.setTransform(2, 0, 0, 2, 0, 0);
+    drawIcon(c, kind, size);
+  }
+  return cv;
 }
 
 /** 系统里关了动效吗（关了就不抖屏、不跳数） */
@@ -232,14 +243,21 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   const wrap = el("div", "gdh-run");
   // 顶部一行只放「金币 / 目标 / 剩余时间」三样,字号钉死 14px。
   // 道具栏挪到底下和放绳按钮同一行去了 —— 360px 上四样挤一行必换行,一换行字就得缩。
+  // 芯片一律「手绘图标 + 数字」两截:图标画一次不动,每帧只改数字那截的文字。
   const hud = el("div", "gdh-hud");
   const coinChip = el("span", "gdh-chip");
+  const coinNum = el("span");
+  coinChip.append(iconCanvas("coin"), coinNum);
   const goalChip = el("span", "gdh-chip gdh-chip-goal");
+  const goalNum = el("span");
+  goalChip.append(iconCanvas("target"), goalNum);
   const bar = el("div", "gdh-bar");
   const barFill = el("div", "gdh-bar-fill");
   const barTxt = el("span", "gdh-bar-txt");
+  const barNum = el("span");
+  barTxt.append(iconCanvas("hourglass"), barNum);
   bar.append(barFill, barTxt);
-  // 「收工」跟着「🎯 目标」走:达标了才冒出来,而且挂在顶部这一行 ——
+  // 「收工」跟着「目标」走:达标了才冒出来,而且挂在顶部这一行 ——
   // 底下那一行在 360px 上已经是掐着算的,再塞一格就要把「放绳」顶出屏幕
   const doneBtn = iconButton("gdh-btn gdh-done", "✅", "收工");
   doneBtn.hidden = true;
@@ -261,8 +279,17 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   // 一行才塞得下;热区靠 CSS 的 min-height/min-width 钉在 44px,一格都不缩。
   const ctrl = el("div", "gdh-ctrl");
   const fireBtn = iconButton("gdh-btn gdh-btn-fire", "⬇️", "放绳");
-  const bombBtn = iconButton("gdh-btn gdh-btn-bomb", "💥", "炸药");
+  // 炸药按钮:手绘炸弹图标 + 存量数字。数字和图标待在同一截里,
+  // 窄屏把「炸药」两个字收起来之后,还剩几个照样看得见
+  const bombBtn = button("gdh-btn gdh-btn-bomb", "");
+  const bombIc = el("span", "gdh-ic");
+  const bombNum = el("span", "gdh-ic-num");
+  bombIc.append(iconCanvas("bomb"), bombNum);
+  bombBtn.append(bombIc, el("span", "gdh-lb", "炸药"));
   const kitChip = el("span", "gdh-kit");
+  const kitStr = el("span");
+  const kitLuck = el("span");
+  kitChip.append(iconCanvas("arm"), kitStr, iconCanvas("clover"), kitLuck);
   const shopBtn = iconButton("gdh-btn gdh-btn-shop", "🛒", "商店");
   const pauseBtn = iconButton("gdh-btn", "⏸️", "暂停");
   ctrl.append(fireBtn, bombBtn, kitChip, shopBtn, pauseBtn);
@@ -524,14 +551,19 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   }
 
   function refreshHud(): void {
-    coinChip.textContent = `💰 ${wallet.coins}`;
-    goalChip.textContent = `🎯 ${o.goal}`;
+    coinNum.textContent = `${wallet.coins}`;
+    coinChip.setAttribute("aria-label", `金币 ${wallet.coins}`);
+    goalNum.textContent = `${o.goal}`;
+    goalChip.setAttribute("aria-label", `目标 ${o.goal}`);
     const ratio = Math.max(0, Math.min(1, timeLeft / Math.max(1, o.field.time)));
     barFill.style.width = `${ratio * 100}%`;
     barFill.classList.toggle("gdh-low", timeLeft <= 10);
-    barTxt.textContent = `⏳ ${Math.ceil(Math.max(0, timeLeft))} 秒`;
-    kitChip.textContent = `💪${wallet.strength} 🍀${wallet.luck}`;
-    setLabel(bombBtn, `💥${wallet.bombs}`, `炸药 ${wallet.bombs} 个`);
+    barNum.textContent = `${Math.ceil(Math.max(0, timeLeft))} 秒`;
+    kitStr.textContent = `${wallet.strength}`;
+    kitLuck.textContent = `${wallet.luck}`;
+    kitChip.setAttribute("aria-label", `力量水 ${wallet.strength} 瓶,幸运石 ${wallet.luck} 块`);
+    bombNum.textContent = `${wallet.bombs}`;
+    bombBtn.setAttribute("aria-label", `炸药 ${wallet.bombs} 个`);
     bombBtn.disabled = wallet.bombs <= 0 || !carrying;
     fireBtn.disabled = phase !== "swing";
     doneBtn.hidden = wallet.coins < o.goal || phase === "done";
@@ -952,23 +984,67 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
   /**
    * 金额跳数:`TALLY_MS`(640ms,规格上限是 800)走完,点一下立刻跳到终值。
    * 系统里关了动效就直接显示终值,一帧都不跳。
+   * 1.3 在数字上面加一小块「矿石飞进钱袋」的清点台:三颗小矿石沿抛物线
+   * 依次落进袋口,和跳数同一条时间线;calm 时直接画「都已入袋」的静止终态。
    */
   function tallyBlock(coins: number, caption: string): HTMLElement {
     const wrapper = el("div");
-    const line = el("div", "gdh-tally", `💰 ${calm ? coins : 0}`);
+    const fly = el("canvas", "gdh-tally-fly");
+    fly.width = 280;
+    fly.height = 88;
+    const fctx = fly.getContext("2d");
+    fctx?.setTransform(2, 0, 0, 2, 0, 0);
+    /** 清点台画到第 p(0–1)步:右边一只钱袋,三颗小矿石排队飞进去 */
+    const drawFly = (p: number): void => {
+      if (!fctx) return;
+      fctx.clearRect(0, 0, 140, 44);
+      fctx.save();
+      fctx.translate(102, 9);
+      drawIcon(fctx, "bag", 26);
+      fctx.restore();
+      const hues: Array<[string, string]> = [
+        ["#FFD264", "#CF9A20"],
+        ["#7DDDF0", "#2F97AF"],
+        ["#FFB22C", "#AE7305"],
+      ];
+      for (let i = 0; i < 3; i++) {
+        const q = Math.max(0, Math.min(1, p * 1.6 - i * 0.3));
+        if (q >= 1) continue;
+        const sx = 12 + i * 15;
+        const sy = 32 - i * 5;
+        const px = sx + (112 - sx) * q;
+        const py = sy + (14 - sy) * q - Math.sin(q * Math.PI) * 13;
+        fctx.fillStyle = hues[i][0];
+        fctx.strokeStyle = hues[i][1];
+        fctx.lineWidth = 1.2;
+        fctx.beginPath();
+        fctx.arc(px, py, 4 - i * 0.4, 0, Math.PI * 2);
+        fctx.fill();
+        fctx.stroke();
+      }
+    };
+    const line = el("div", "gdh-tally");
+    const num = el("span", "", `${calm ? coins : 0}`);
+    line.append(iconCanvas("coin", 20), num);
     const hint = el("div", "gdh-tally-hint", calm ? caption : "点一下直接看总数");
-    wrapper.append(line, hint);
-    if (calm) return wrapper;
+    wrapper.append(fly, line, hint);
+    if (calm) {
+      drawFly(1);
+      return wrapper;
+    }
 
+    drawFly(0);
     const t0 = performance.now();
     const settle = (): void => {
       stopTally();
-      line.textContent = `💰 ${coins}`;
+      num.textContent = `${coins}`;
       hint.textContent = caption;
+      drawFly(1);
     };
     const tick = (now: number): void => {
       const ms = now - t0;
-      line.textContent = `💰 ${tallyValue(coins, ms)}`;
+      num.textContent = `${tallyValue(coins, ms)}`;
+      drawFly(Math.min(1, ms / TALLY_MS));
       if (ms >= TALLY_MS) {
         settle();
         return;
