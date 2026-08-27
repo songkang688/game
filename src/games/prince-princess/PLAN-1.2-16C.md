@@ -68,6 +68,7 @@
 | 检查点 | `checkpoints.ts`:每关按主路均分 **≥2 个**,两人都越过才点亮;掉下去 / 挨打被托回**最近那个检查点**,宝石、清怪数、已开的门统统保留。 |
 | 无尽城堡塔 | `tower.ts`:模板拼段(平台阶梯 / 断口连跳 / 尖刺走廊 / 浮台风口 / 巡逻厅 / 宝石龛),每段自带**必过窗口**;`validateFloor` 逐段校验落点、抬升、尖刺、站位,随机 **2000 段全部可过**。层数走 `save.recordEndlessBest("prince-princess", n)`。 |
 | 前 99 关 | **碰撞数据一个字节都不改**。新加的东西(教学标记、检查点、重箱子、提示)全在非碰撞字段上,重箱子只从第 100 关起出现。用例里拿一枚**冻结校验和**(`693ebe7a`)盯着,改到就红。 |
+| 双人摄像机 | 先取中点,再往回夹一道:只要两人间距塞得进这一屏,就保证**两个人都在画面里**、离边至少 52px。实在拉开一屏以上,才在边上贴一个「他在那边」的指路标。 |
 | 分级红线 | 受伤 = 戴上小护盾闪一下,掉落 = 小云朵托回检查点,文案里不出现死 / 输 / 失败。角色是本作原创小人换装,不出现任何童话 IP 官方角色名与形象。 |
 
 ## 三、文件清单
@@ -75,8 +76,12 @@
 新增:`elements.ts` `abilities.ts` `checkpoints.ts` `teach.ts` `tower.ts` `bindings.ts` `domStub.ts`
 + `elements.test.ts` `abilities.test.ts` `checkpoints.test.ts` `teach.test.ts` `tower.test.ts` `runtime12.test.ts`
 
+新增里还有 `geometry.ts` —— 几何红线单独成模块,关卡与城堡塔照着同一套数卡,
+不会出现「关卡按 118 卡、塔按 120 卡」这种飘移。
+
 改:`levels.ts`(非碰撞层)、`logic.ts`(能力 / 检查点 / 无风险)、`guide.ts`(规范表)、
-`index.ts`(`pcp-` 前缀、照表渲染、视差、能力键、城堡塔、`?level=`、`destroy` 全卸)、`meta.ts`(blurb 对齐事实)。
+`index.ts`(`pcp-` 前缀、照表渲染、视差、能力键、城堡塔、双人摄像机夹人、`?level=`、`destroy` 全卸)、
+`meta.ts`(blurb 对齐事实)、`levels.test.ts`(前 99 关碰撞校验和冻结)。
 
 ## 四、测试清单(≥ 18 个新用例)
 

@@ -254,6 +254,37 @@ function emoji(g: CanvasRenderingContext2D, ch: string, x: number, y: number, si
   g.fillText(ch, x, y);
 }
 
+/** 两人都得留在画面里,边上还要给这么宽的余量 */
+export const CAM_MARGIN = 52;
+
+/**
+ * 摄像机该停在哪儿(世界坐标的左边界)。
+ *
+ * 1.1 是「两人 x 的平均值减半屏」,**不夹人也不管掉队**:一个人往前冲,
+ * 落后那位直接被挤出屏幕左边,玩家看不见自己操作的小人。
+ *
+ * 1.2 先取中点,再往回夹一道:只要两人的间距还塞得进这一屏,
+ * 就保证**两个人都在画面里**、而且离边至少 `CAM_MARGIN`。
+ * 实在拉得太开(超过一屏)才放弃,那时候由 `drawStrayMark` 在边上贴一个指路标。
+ */
+export function cameraX(xs: readonly number[], viewW: number, levelLen: number): number {
+  if (xs.length === 0) return 0;
+  const maxCam = Math.max(0, levelLen - viewW);
+  const lo = Math.min(...xs);
+  const hi = Math.max(...xs);
+  let cam = (lo + hi) / 2 - viewW / 2;
+  if (hi - lo <= viewW - CAM_MARGIN * 2) {
+    cam = Math.min(cam, lo - CAM_MARGIN);
+    cam = Math.max(cam, hi + CAM_MARGIN - viewW);
+  }
+  return Math.max(0, Math.min(maxCam, cam));
+}
+
+/** 这一位现在还在画面里吗 */
+export function onScreen(x: number, camX: number, viewW: number): boolean {
+  return x >= camX && x <= camX + viewW;
+}
+
 // ---------------------------------------------------------------------------
 // 照着「关卡元素规范表」画的六支笔
 //
@@ -962,8 +993,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const scale = Math.max(0.5, Math.min(1.1, cssW / 560));
     const viewW = cssW / scale;
     const groundY = cssH - Math.max(40, cssH * 0.2);
-    const focus = world.heroes.reduce((s, h) => s + h.x, 0) / world.heroes.length;
-    const camX = Math.max(0, Math.min(Math.max(0, def.len - viewW), focus - viewW / 2));
+    const camX = cameraX(world.heroes.map((h) => h.x), viewW, def.len);
     const sx = (wx: number): number => (wx - camX) * scale;
     const sy = (wy: number): number => groundY + wy * scale;
 
@@ -1132,6 +1162,23 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     for (let i = 0; i < world.heroes.length; i++) {
       const h = world.heroes[i];
       drawHero(g, sx(h.x), sy(h.y), scale, i);
+    }
+
+    // 掉队的那位:两人拉开一屏以上时,在边上贴一个「他在那边」的指路标
+    for (let i = 0; i < world.heroes.length; i++) {
+      const h = world.heroes[i];
+      if (onScreen(h.x, camX, viewW)) continue;
+      const left = h.x < camX;
+      const mx = left ? 18 * scale : cssW - 18 * scale;
+      const my = groundY - 46 * scale;
+      g.fillStyle = HERO_COLORS[i % HERO_COLORS.length].cloak;
+      g.beginPath();
+      g.moveTo(left ? mx - 10 * scale : mx + 10 * scale, my);
+      g.lineTo(left ? mx + 6 * scale : mx - 6 * scale, my - 11 * scale);
+      g.lineTo(left ? mx + 6 * scale : mx - 6 * scale, my + 11 * scale);
+      g.closePath();
+      g.fill();
+      emoji(g, h.kind === "prince" ? "🤴" : "👸", mx, my - 24 * scale, 17 * scale);
     }
 
     // 特效
