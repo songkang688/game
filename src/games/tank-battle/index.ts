@@ -120,9 +120,10 @@ const CSS = `
 /* display:flex 会把浏览器自带的 [hidden]{display:none} 顶掉,得自己补一条压回去 */
 .tkb-wrap[hidden],.tkb-hud[hidden],.tkb-bar[hidden],.tkb-pads[hidden],.tkb-acts[hidden],
 .tkb-mode[hidden],.tkb-mini-cv[hidden],.tkb-canvas[hidden]{display:none;}
-.tkb-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
+.tkb-chip{background:linear-gradient(180deg,#ffffff,#fdf4ec);border:1px solid rgba(160,140,120,.22);
+  border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
   box-shadow:0 2px 6px rgba(150,140,180,.24);white-space:nowrap;}
-.tkb-chip-warn{background:#ffe9ef;color:#b8436f;}
+.tkb-chip-warn{background:linear-gradient(180deg,#ffeef3,#ffe4ec);border-color:rgba(200,90,130,.3);color:#b8436f;}
 .tkb-board{position:relative;line-height:0;}
 .tkb-canvas{display:block;border-radius:14px;background:#f5ebdd;touch-action:none;
   box-shadow:0 4px 14px rgba(90,80,110,.28);}
@@ -804,33 +805,50 @@ function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number, 
   }
 }
 
-/** 角落里的小地图:默认折叠,展开也只有一小块,不遮战场 */
+/** 小地图上敌车的点色(和图例第二颗点同色) */
+const MINI_ENEMY = "#FF7A7A";
+
+/** 角落里的小地图:圆角壳 + 粉彩地形速览 + 我方/敌方/基地三色图例点 */
 function drawMinimap(c: CanvasRenderingContext2D, w: World, px: number): void {
-  const s = px / Math.max(w.map.w, w.map.h);
   c.clearRect(0, 0, px, px);
+  // 圆角壳:壳内上半是战场速览,下沿一条图例
+  c.fillStyle = "rgba(28,24,38,.85)";
+  roundRect(c, 0, 0, px, px, 8);
+  c.fill();
+  const pad = 3;
+  const legendH = 9;
+  const s = Math.min((px - pad * 2) / w.map.w, (px - pad * 2 - legendH) / w.map.h);
   for (let cy = 0; cy < w.map.h; cy++) {
     for (let cx = 0; cx < w.map.w; cx++) {
       const tile = w.map.tiles[cy * w.map.w + cx];
       if (tile === ".") continue;
       c.fillStyle =
         tile === "#"
-          ? "#c1714a"
+          ? TK_COLORS.tkBrick
           : tile === "S"
-            ? "#b9bfc9"
+            ? TK_COLORS.tkSteel
             : tile === "~"
-              ? "#6fb6dd"
+              ? TK_COLORS.tkWater
               : tile === "*"
-                ? "#5fa658"
+                ? TK_COLORS.tkGrass
                 : tile === "i"
-                  ? "#cfe9f7"
-                  : "#ffb937";
-      c.fillRect(cx * s, cy * s, s, s);
+                  ? TK_COLORS.tkIce
+                  : TK_GOLD;
+      c.fillRect(pad + cx * s, pad + cy * s, s, s);
     }
   }
   for (const tk of w.tanks) {
-    c.fillStyle = tk.side === "player" ? P_COLOR[tk.player] ?? P_COLOR[0] : "#ff7a7a";
+    c.fillStyle = tk.side === "player" ? (tk.player === 0 ? TK_COLORS.tkPink : TK_COLORS.tkBlue) : MINI_ENEMY;
     c.beginPath();
-    c.arc(tk.x * s, tk.y * s, Math.max(1.5, s * 0.42), 0, Math.PI * 2);
+    c.arc(pad + tk.x * s, pad + tk.y * s, Math.max(1.5, s * 0.42), 0, Math.PI * 2);
+    c.fill();
+  }
+  // 图例:我方(粉) / 敌方(红) / 基地(金),纯色点不占文字
+  const ly = px - legendH / 2 - 1.5;
+  for (const [i, col] of [TK_COLORS.tkPink, MINI_ENEMY, TK_GOLD].entries()) {
+    c.fillStyle = col;
+    c.beginPath();
+    c.arc(px * (0.25 + i * 0.25), ly, 2.4, 0, Math.PI * 2);
     c.fill();
   }
 }
