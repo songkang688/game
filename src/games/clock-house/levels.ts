@@ -9,7 +9,7 @@
 //  3. 错题回顾：`makeReviewQuestions` 用新种子出一批同类题，换数字不换套路。
 import { TOTAL_LEVELS, mulberry32, pick, randInt, shuffled, chapterOf, indexInChapter, type Chapter } from "../level99";
 import type { QuizQuestion, QuizTheme } from "../quiz99";
-import { faceSVG } from "./clockface";
+import { FACE_LABEL, faceSVG } from "./clockface";
 import { tableKinds, type ClockKind, type ClockType, typeOfKind } from "./kinds";
 import {
   DAY_MINUTES,
@@ -71,8 +71,13 @@ export const CHAPTER_THEMES: QuizTheme[] = [
   { bg: "linear-gradient(#fff8e1,#fff0d6)", accent: "#b8860b" },
 ];
 
-/** 画一个钟面 SVG（data-h / data-q 供测试与判定） */
-export function clockSVG(hour: number, quarter: Quarter, size: number): string {
+/**
+ * 画一个钟面 SVG（data-h / data-q 供测试与判定）。
+ *
+ * `label` 是读屏标签，默认那句不含时刻的 `FACE_LABEL`：钟面就是题目本身，
+ * 标签写成「4 点」等于把答案摆在读屏用户面前。
+ */
+export function clockSVG(hour: number, quarter: Quarter, size: number, label: string = FACE_LABEL): string {
   const cx = 50, cy = 50;
   const hA = ((hourHandAngle(hour, quarter) - 90) * Math.PI) / 180;
   const mA = ((minuteHandAngle(quarter) - 90) * Math.PI) / 180;
@@ -83,7 +88,7 @@ export function clockSVG(hour: number, quarter: Quarter, size: number): string {
     const ny = cy + Math.sin(a) * 36;
     ticks += `<text x="${nx.toFixed(1)}" y="${(ny + 3.4).toFixed(1)}" font-size="9" font-weight="800" text-anchor="middle" fill="#5c4a7d">${i === 0 ? 12 : i}</text>`;
   }
-  return `<svg data-h="${hour}" data-q="${quarter}" width="${size}" height="${size}" viewBox="0 0 100 100" aria-label="${formatClock(hour, quarter)}">
+  return `<svg data-h="${hour}" data-q="${quarter}" width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="${label}">
     <circle cx="${cx}" cy="${cy}" r="46" fill="#fff" stroke="#845ef7" stroke-width="5"/>
     ${ticks}
     <line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(hA) * 20).toFixed(1)}" y2="${(cy + Math.sin(hA) * 20).toFixed(1)}" stroke="#e8590c" stroke-width="6" stroke-linecap="round"/>
@@ -153,7 +158,7 @@ function qSet(rand: () => number, quarters: Quarter[]): ClockQ {
     kind: "set", answer: `data-h="${hour}" data-q="${quarter}"`,
     promptHTML: `<span style="font-size:30px">🔧</span> ${formatClock(hour, quarter)}`,
     ask: `哪个钟面是「${formatClock(hour, quarter)}」？`,
-    choices: order.map((f) => clockSVG(f.h, f.q, 82)),
+    choices: order.map((f) => clockSVG(f.h, f.q, 82, "钟面")),
     correct: order.findIndex((f) => f.h === hour && f.q === quarter),
   };
 }

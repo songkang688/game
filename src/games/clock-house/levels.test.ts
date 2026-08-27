@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { CORE_CLOCK_TYPES, typeOfKind } from "./kinds";
+import { formatClock, type Quarter } from "./logic";
 import {
   allowedQuarters,
   buildQuestions,
@@ -663,13 +664,50 @@ describe("时钟小屋 · 1.1 第 100–188 关", () => {
  */
 const LEGACY_DIGEST = "5a314feb42c6eb7f65c23ccf5b08d08a0f9a4a2804193fd0d2c7933ad37296cf";
 
+/**
+ * 窗口5 第1轮改了钟面的一个读屏属性（W5-A-01：`aria-label` 原本直接就是答案），
+ * 顺手补了 `role="img"`。孩子看得见的题面、选项、正确项一个字节都没动。
+ *
+ * 摘要锁不放水：这里把标签按钟面自己的 `data-h` / `data-q` 还原成 1.1 的写法、
+ * 去掉新加的 `role`，还原完的字节流必须和 1.1 的摘要**一模一样**——
+ * 也就是说这一条仍然钉着「除了那个读屏属性，前 99 关没有第二处改动」。
+ */
+function asLegacyHtml(html: string): string {
+  return html.replace(
+    /(<svg data-h="(\d+)" data-q="(\d)"[^>]*?) role="img" aria-label="[^"]*"(>)/g,
+    (_all, head: string, h: string, q: string, tail: string) =>
+      `${head} aria-label="${formatClock(Number(h), Number(q) as Quarter)}"${tail}`
+  );
+}
+
 const FRESH_KINDS = ["readMin", "setMin", "spanNoon", "unitHM", "unitMS", "unitMix", "routine"];
 
 describe("时钟小屋 · 1.2 前 99 关一个字都没改", () => {
-  it("第 1–99 关全部题目的摘要和 1.1 逐字节一致", () => {
-    const all = Array.from({ length: 99 }, (_, i) => buildQuestions(i));
+  it("第 1–99 关全部题目的摘要和 1.1 逐字节一致（还原读屏标签后）", () => {
+    const all = Array.from({ length: 99 }, (_, i) =>
+      buildQuestions(i).map((q) => ({
+        ...q,
+        promptHTML: asLegacyHtml(q.promptHTML),
+        choices: q.choices.map(asLegacyHtml),
+      }))
+    );
     const digest = createHash("sha256").update(JSON.stringify(all)).digest("hex");
     expect(digest, "前 99 关的题目被改动了").toBe(LEGACY_DIGEST);
+  });
+
+  it("前 99 关的钟面确实换上了不含时刻的读屏标签", () => {
+    let faces = 0;
+    for (let level = 0; level < 99; level++) {
+      for (const q of buildQuestions(level)) {
+        for (const html of [q.promptHTML, ...q.choices]) {
+          for (const m of html.matchAll(/aria-label="([^"]*)"/g)) {
+            faces++;
+            expect(/\d/.test(m[1]), `第 ${level + 1} 关的钟面标签带时刻：${m[1]}`).toBe(false);
+          }
+        }
+      }
+    }
+    expect(faces).toBeGreaterThan(300);
   });
 
   it("第 1–99 关只出 1.0 的三种老题型，一道 1.2 新题都没混进去", () => {

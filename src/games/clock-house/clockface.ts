@@ -7,7 +7,6 @@
  */
 import {
   clockMinute,
-  formatClockMinute,
   hourHandAngleAt,
   minuteHandAngleAt,
   normClockMinutes,
@@ -16,6 +15,15 @@ import {
 
 /** 钟面在 100×100 视口里的半径 */
 export const FACE_RADIUS = 46;
+
+/**
+ * 钟面默认的读屏标签。
+ *
+ * 钟面本身就是要读的那道题，标签一旦写成时刻，读屏的孩子和随手看一眼 DOM 的人
+ * 都不用读钟就拿到答案了。所以默认一律给这句不含时刻的说明，
+ * 真要把时刻念出来的地方（拨一拨那个练手钟面的实时读数）自己显式传 `label`。
+ */
+export const FACE_LABEL = "钟面，自己读一读";
 
 /**
  * 三根针的长度与粗细（视口坐标）。
@@ -84,7 +92,7 @@ export interface FaceOptions {
   hourAngle?: number;
   /** 画秒针（读到一分的关卡用它帮孩子建立「细红针走得最快」的印象） */
   second?: number;
-  /** 读屏标签；不传就按时刻自动生成 */
+  /** 读屏标签；不传就用不含时刻的 `FACE_LABEL`，免得标签自己把答案说了 */
   label?: string;
   /** 这是一个能拖的钟面（`dial.ts` 会认这个标记接管交互） */
   dial?: boolean;
@@ -93,7 +101,7 @@ export interface FaceOptions {
 /** 画一个分钟级钟面（`data-t` 是钟面分钟数，供测试与判定直接读） */
 export function faceSVG(t: number, size: number, opts: FaceOptions = {}): string {
   const time = normClockMinutes(t);
-  const label = opts.label ?? formatClockMinute(time);
+  const label = opts.label ?? FACE_LABEL;
   const hourAngle = opts.hourAngle ?? hourHandAngleAt(time);
   const cls = ["clk-face-svg", opts.className].filter(Boolean).join(" ");
   const second = typeof opts.second === "number" ? line("second", secondHandAngleAt(opts.second)) : "";
