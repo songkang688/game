@@ -11,7 +11,7 @@ import { save } from "../../engine/save";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { TIER_NAMES, aiCatchesOneCard, aiPlay, type AiTier } from "./ai";
-import { actionIconSVG, cardBackSVG, colorShapeSVG, lighten } from "./art";
+import { actionIconSVG, botFaceSVG, cardBackSVG, colorShapeSVG, lighten } from "./art";
 import {
   COLORS,
   COLOR_HEX,
@@ -95,11 +95,11 @@ export const CATCH_DELAY_MS = 1800;
 /** 倒数分几格走完 */
 export const CATCH_TICKS = 3;
 
-/** 三个电脑对手:原创角色 */
+/** 三个电脑对手:原创角色(1.3 visual-r1 起头像走画制 SVG,与升级后的卡面同一质感) */
 const BOT_FACES = [
-  { name: "团团", avatar: "🐰" },
-  { name: "圆圆", avatar: "🐼" },
-  { name: "点点", avatar: "🦊" },
+  { name: "团团", avatar: botFaceSVG("tuantuan") },
+  { name: "圆圆", avatar: botFaceSVG("yuanyuan") },
+  { name: "点点", avatar: botFaceSVG("diandian") },
 ];
 
 /** 对战结算的标题。`winner < 0` 是「牌都用完了」的平局,没有赢家 */
