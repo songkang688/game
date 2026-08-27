@@ -9,6 +9,10 @@
  * 旧测试(logic / levels188 / versus / touch / smoke)一个不动。
  */
 import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach } from "vitest";
+import type { Dom } from "./domStub";
+import { flushFrames, installDom, restoreDom } from "./domStub";
+import { mount } from "./index";
 import {
   BOSS_DEFEAT_S,
   BOSS_INTRO_S,
@@ -25,8 +29,10 @@ import {
   bubbleCap,
   depthTintAlpha,
   drawBubble,
+  drawCollectStar,
   drawCrown,
   drawFishBody,
+  drawShieldBadge,
   drawForeLayer,
   drawFarLayer,
   drawLightShafts,
@@ -371,6 +377,96 @@ describe("画质分档", () => {
 /* ------------------------------------------------------------------ */
 /* 常量与公式契约                                                       */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* 收集物标准:边缘厚度 + 高光 + 内圈细节(visual-bible 第四节)          */
+/* ------------------------------------------------------------------ */
+
+describe("收集物标准", () => {
+  it("收集星:暗金厚边 + 亮金星面 + 内圈小星 + 高光点,四层落笔", () => {
+    const r = recCtx();
+    drawCollectStar(r.ctx, 0, 0, 11, 1, false);
+    expect(count(r.ops, "fill")).toBeGreaterThanOrEqual(4);
+    expect(r.styles).toContain("fillStyle=#d9a832");
+    expect(r.styles).toContain("fillStyle=#ffd868");
+    expect(r.styles).toContain("fillStyle=#fff3c2");
+    expect(count(r.ops, "fillText")).toBe(0);
+  });
+
+  it("收集星 reduced:不上下浮动(两次绘制序列一致)", () => {
+    const a = recCtx();
+    drawCollectStar(a.ctx, 0, 0, 11, 0, true);
+    const b = recCtx();
+    drawCollectStar(b.ctx, 0, 0, 11, 3.3, true);
+    expect(a.ops.join("|")).toBe(b.ops.join("|"));
+  });
+
+  it("护盾徽章:气泡 + 渐变盾面 + 描边 + 高光", () => {
+    const r = recCtx();
+    drawShieldBadge(r.ctx, 0, 0, 15, 0.85);
+    expect(count(r.ops, "createLinearGradient")).toBe(1);
+    expect(count(r.ops, "stroke")).toBeGreaterThanOrEqual(3);
+    expect(count(r.ops, "fill")).toBeGreaterThanOrEqual(2);
+    expect(count(r.ops, "fillText")).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 整机烟囱:新绘制路径在 360 窄屏与 reduced 下跑几百帧不抛              */
+/* ------------------------------------------------------------------ */
+
+describe("整机烟囱(domStub 挂载)", () => {
+  let dom: Dom;
+
+  beforeEach(() => {
+    // 什么都不做:各用例自装(要控制 reduced 参数)
+  });
+
+  afterEach(() => {
+    restoreDom();
+  });
+
+  const api = () =>
+    ({
+      root: dom.root as never,
+      play: () => {},
+      addStars: () => 0,
+      getStars: () => 0,
+      onWin: () => {},
+      onLose: () => {},
+    }) as never;
+
+  it("360×640(低画质档)竞技场:全套新水体/鱼身/粒子跑 200 帧不抛", () => {
+    dom = installDom(360, 640, false);
+    const handle = mount(api());
+    flushFrames(dom, 1);
+    // 首屏第二张卡 = 无尽(和 smoke.test 的排版算式一致)
+    const ch = Math.min(96, (640 - 76 - 20 - 24) / 3);
+    dom.root.children[0].dispatch("pointerdown", { clientX: 180, clientY: 76 + ch + 12 + ch / 2, pointerType: "mouse" });
+    expect(() => flushFrames(dom, 200, 50)).not.toThrow();
+    handle.destroy();
+  });
+
+  it("reduced-motion 下同一条路径照样全绿(光柱静止/粒子砍半分支)", () => {
+    dom = installDom(360, 640, true);
+    const handle = mount(api());
+    flushFrames(dom, 1);
+    const ch = Math.min(96, (640 - 76 - 20 - 24) / 3);
+    dom.root.children[0].dispatch("pointerdown", { clientX: 180, clientY: 76 + ch + 12 + ch / 2, pointerType: "mouse" });
+    expect(() => flushFrames(dom, 200, 50)).not.toThrow();
+    handle.destroy();
+  });
+
+  it("战役关(高画质桌面尺寸):远景/前景层照画,连跑 120 帧不抛", () => {
+    dom = installDom(800, 600, false);
+    const handle = mount({ ...(api() as object), initialLevel: 5 } as never);
+    flushFrames(dom, 2);
+    // intro 面板上点一下开始玩
+    dom.root.children[0].dispatch("pointerdown", { clientX: 400, clientY: 560, pointerType: "mouse" });
+    expect(() => flushFrames(dom, 120, 50)).not.toThrow();
+    handle.destroy();
+  });
+});
 
 describe("色彩与动画公式契约", () => {
   it("shade / lerpColor 永远返回合法 #rrggbb,端点正确", () => {
