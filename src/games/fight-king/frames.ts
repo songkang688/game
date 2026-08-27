@@ -523,20 +523,11 @@ const SPECS: CharSpec[] = [
         knockback: 6.4,
         box: { x: 22, y: 22, w: 76, h: 46 }
       }),
+      // 前 + 重 = 追风踢：突进招挂在"往前"那个键上。
+      // 第 3 轮 R3B-2 的根因就在这儿 —— 原来朵朵是反的（往后按才往前冲、往前按却是对空），
+      // 于是中距离每按一次「前 + 重」都在原地打空一记收招 26 帧的对空招。
+      // 八位小伙伴里另外五位的对空招本来就在「后 + 重」，这一改是把她接回同一套口径。
       special("s2", {
-        name: "樱吹雪",
-        note: "往上挑，专门收拾跳进来的人；起手无敌感很强",
-        startup: 8,
-        active: 7,
-        recovery: 26,
-        power: 11,
-        hitStun: 26,
-        launch: 9,
-        knockback: 3.2,
-        priority: 7,
-        box: { x: 12, y: 40, w: 52, h: 74 }
-      }),
-      special("s3", {
         name: "追风踢",
         note: "向前突进一大段，能把跑远的对手追回来",
         startup: 13,
@@ -548,6 +539,20 @@ const SPECS: CharSpec[] = [
         knockdown: true,
         advance: 52,
         box: { x: 26, y: 24, w: 84, h: 36 }
+      }),
+      // 后 + 重 = 樱吹雪：对空招和大家一样挂在"往后"那个键上
+      special("s3", {
+        name: "樱吹雪",
+        note: "往上挑，专门收拾跳进来的人；起手无敌感很强",
+        startup: 8,
+        active: 7,
+        recovery: 26,
+        power: 11,
+        hitStun: 26,
+        launch: 9,
+        knockback: 3.2,
+        priority: 7,
+        box: { x: 12, y: 40, w: 52, h: 74 }
       }),
       special("super", {
         name: "漫天花雨",
