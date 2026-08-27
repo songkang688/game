@@ -4,6 +4,7 @@
  * S5:无尽雪怪从「无渐变纯白双圆 + 两点眼」升级为三停渐变双球 + 冷蓝底影 +
  *     深青歪毛线帽(第三帽形)+ 竖椭圆眼白高光,圆心半径与 1.2 同位。
  * B2:seat1 帽体加深到 shade(-18),两帽灰度亮度差 ≥ 15/255。
+ * G3:命中反馈冒泡从 8 种 emoji 字形换成白 + 冷蓝两停溅雪(reduced 单帧淡出)。
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -11,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { hexToRgb, shade } from "../../art/kit/palette";
 import { FakeCtx } from "./domStub";
-import { paintSnowFoe } from "./paint13";
+import { SNF_PUFF_COLORS, SNF_PUFF_DOTS, paintFeedbackPuff, paintSnowFoe } from "./paint13";
 import { HAT_BODY_SHADE, SNF_PALETTE, SNOWFOE_BODY_STOPS, SNOWFOE_HAT } from "./visual13";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -76,5 +77,40 @@ describe("snow-fight · 修复员 B2 · seat1 帽体加深", () => {
     const hat0 = shade(SNF_PALETTE.sfPink, HAT_BODY_SHADE[0]);
     const hat1 = shade(SNF_PALETTE.sfBlue, HAT_BODY_SHADE[1]);
     expect(Math.abs(luma(hat0) - luma(hat1))).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe("snow-fight · 修复员 G3 · 反馈冒泡换溅雪", () => {
+  it("溅雪画得动不抛:寿命两端 / 常规与 reduced 都不炸", () => {
+    for (const reduced of [false, true]) {
+      for (const k of [0, 0.5, 0.99]) {
+        expect(() => paintFeedbackPuff(ctx(), 100, 60, 12, k, reduced)).not.toThrow();
+      }
+    }
+  });
+
+  it("粒数在 6–10 档内,两停配色是雪白 + 冷蓝", () => {
+    expect(SNF_PUFF_DOTS).toBeGreaterThanOrEqual(6);
+    expect(SNF_PUFF_DOTS).toBeLessThanOrEqual(10);
+    expect(SNF_PUFF_COLORS[0]).toBe("#FFFFFF");
+    expect(luma(SNF_PUFF_COLORS[1])).toBeLessThan(luma(SNF_PUFF_COLORS[0]));
+  });
+
+  it("reduced 单帧淡出:不同寿命进度下粒子圆心不动(只降 alpha / 缩粒径)", () => {
+    const centers = (k: number, reduced: boolean): string => {
+      const g = new FakeCtx();
+      paintFeedbackPuff(g as unknown as CanvasRenderingContext2D, 100, 60, 12, k, reduced);
+      return JSON.stringify(g.ops.filter((o) => o.op === "arc").map((o) => [o.args[0], o.args[1]]));
+    };
+    expect(centers(0.2, true)).toBe(centers(0.7, true));
+    // 常规档确实外扩(圆心随 k 变)
+    expect(centers(0.2, false)).not.toBe(centers(0.7, false));
+  });
+
+  it("index.ts 冒泡账本不再携带 emoji 字形(Puff.face 退场,fillText 不喂反馈)", () => {
+    const src = read("index.ts");
+    expect(src).not.toContain("face:");
+    expect(src).not.toContain("fillText(p.face");
+    for (const e of ["📦", "🛡️", "💥", "💨", "✨"]) expect(src).not.toContain(e);
   });
 });

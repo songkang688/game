@@ -852,3 +852,43 @@ export function paintAimArrow(
   c.arc(ex, ey, 3, 0, Math.PI * 2);
   c.fill();
 }
+
+// ---------------------------------------------------------------------------
+// 修复员 G3:命中反馈溅雪(替换雪花/星星/纸箱/盾牌等 8 种 emoji 冒泡)
+// ---------------------------------------------------------------------------
+
+/** 反馈溅雪两停配色:雪白 + 冷蓝(与 kit snow 的雪语言同源) */
+export const SNF_PUFF_COLORS: readonly [string, string] = ["#FFFFFF", "#CFE3F5"];
+/** 一朵反馈溅雪的粒数(learner G3:6–10 档取 8) */
+export const SNF_PUFF_DOTS = 8;
+
+/**
+ * 事件反馈溅雪:k 是寿命进度 0→1。
+ * 常规:粒子外扩 + 上飘 + 淡出;reduced:单帧原地淡出(位置不动,只降 alpha)——
+ * 反馈是功能提示,reduced 下保留而不做位移动画。
+ */
+export function paintFeedbackPuff(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  k: number,
+  reduced: boolean
+): void {
+  const kk = Math.max(0, Math.min(1, k));
+  const fade = 1 - kk;
+  if (fade <= 0) return;
+  const grow = kk * (2 - kk); // easeOutQuad
+  const spread = reduced ? s * 0.72 : s * (0.3 + grow);
+  const lift = reduced ? 0 : grow * s * 0.7;
+  for (let i = 0; i < SNF_PUFF_DOTS; i++) {
+    const a = (i / SNF_PUFF_DOTS) * Math.PI * 2 + (i % 2) * 0.4;
+    const rr = spread * (i % 3 === 0 ? 1 : 0.7);
+    c.globalAlpha = fade * (i % 2 === 0 ? 0.95 : 0.75);
+    c.fillStyle = SNF_PUFF_COLORS[i % 2];
+    c.beginPath();
+    c.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.6 - lift, Math.max(1, s * 0.14 * (1 - kk * 0.4)), 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}

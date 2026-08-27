@@ -92,6 +92,7 @@ import {
   paintPineRow,
   paintSlope,
   paintSnowFoe,
+  paintFeedbackPuff,
   paintSnowMounds,
   paintSnowWall,
   paintSnowball,
@@ -625,18 +626,12 @@ interface Puff {
   x: number;
   y: number;
   t: number;
-  face: string;
 }
 
-function drawPuffs(c: CanvasRenderingContext2D, cam: Camera, puffs: Puff[]): void {
-  c.textAlign = "center";
-  c.textBaseline = "middle";
+/** 修复员 G3:8 种 emoji 反馈冒泡 → 白 + 冷蓝两停溅雪(reduced 单帧淡出) */
+function drawPuffs(c: CanvasRenderingContext2D, cam: Camera, puffs: Puff[], reduced: boolean): void {
   for (const p of puffs) {
-    const k = Math.max(0, 1 - p.t / 0.9);
-    c.globalAlpha = k;
-    c.font = `${Math.max(14, Math.round(cam.s * 1.1))}px system-ui`;
-    c.fillText(p.face, sx(cam, p.x), sy(cam, p.y) - (1 - k) * cam.s);
-    c.globalAlpha = 1;
+    paintFeedbackPuff(c, sx(cam, p.x), sy(cam, p.y), Math.max(8, cam.s * 0.6), p.t / 0.9, reduced);
   }
 }
 
@@ -923,18 +918,18 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
         // 出手瞬间:围巾往后甩一下 + 4 颗雪粉喷散(reduced 全停)
         if (e.seat < 2) fx.scarfAt[e.seat] = clock;
         if (motion) fx.bursts.push(...burstPowder(sx(cam, e.x), sy(cam, e.y), seatOf(e.seat)?.dir ?? 1, fx.rand));
-      } else if (e.kind === "scoop") puffs.push({ x: e.x, y: 0.7, t: 0, face: "❄️" });
+      } else if (e.kind === "scoop") puffs.push({ x: e.x, y: 0.7, t: 0 });
       else if (e.kind === "melt") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: e.foe === "snowfoe" ? "🌼" : "✨" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("coin");
       } else if (e.kind === "cover") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: e.broke ? "💥" : e.pushed !== 0 ? "📦" : "💨" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("tap");
       } else if (e.kind === "shield") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: "🛡️" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("tap");
       } else if (e.kind === "snowman") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: e.warming ? "🔥" : "⛄" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("oops");
         const f = seatOf(e.seat);
         if (f) {
@@ -1073,7 +1068,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     // 密度听各章天色的(SKIES.flakes),但上限钉死 24 颗、掉帧再按 flakeScale 打折
     drawSnowfield(c, fx.snow, Math.round(Math.min(sky.flakes, SNOWFALL_CAP_13) * flakeScale));
     if (fx.confetti.length > 0) drawParticles(c, fx.confetti);
-    drawPuffs(c, cam, puffs);
+    drawPuffs(c, cam, puffs, !motion);
     // ⑧ 功能件永远最顶
     drawWindFlag(c, cam, cssW, a.wind, skyNow().ink, anim, motion);
     for (let s = 0; s < opts.humans; s++) {
