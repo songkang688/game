@@ -1907,132 +1907,16 @@ export function mount(api: GameAPI): RainbowRunHandle {
     }
   }
 
+  /**
+   * 障碍换成 1.3 的立面画法(art.ts):顶面 / 立面双色 + 统一接地影。
+   * 滚滚球转速仍旧跟着它在轨道上跑了多远走;电光门通没通电仍由 logic 判。
+   */
   function drawObstacleShape(o: Obstacle, laneW: number): void {
-    const x = 0;
-    const oy = 0;
-    if (o.kind === "rock") {
-      ctx.fillStyle = "#c9a6f2";
-      ctx.beginPath();
-      ctx.ellipse(x, oy, laneW * 0.3, laneW * 0.26, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.beginPath();
-      ctx.arc(x - laneW * 0.1, oy - laneW * 0.08, laneW * 0.07, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (o.kind === "hurdle") {
-      ctx.fillStyle = "#f8f8ff";
-      ctx.strokeStyle = "#e0a8bc";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(x - laneW * 0.32, oy - 10, laneW * 0.64, 20, 8);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(x - laneW * 0.2, oy - 10);
-      ctx.lineTo(x - laneW * 0.2, oy + 10);
-      ctx.moveTo(x + laneW * 0.2, oy - 10);
-      ctx.lineTo(x + laneW * 0.2, oy + 10);
-      ctx.stroke();
-    } else if (o.kind === "bar") {
-      ctx.fillStyle = "#9adcf0";
-      ctx.fillRect(x - laneW * 0.36, oy - 26, 8, 30);
-      ctx.fillRect(x + laneW * 0.36 - 8, oy - 26, 8, 30);
-      const bands = ["#ff9eb5", "#ffd868", "#8fd8c8"];
-      for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = bands[i];
-        ctx.fillRect(x - laneW * 0.36, oy - 26 + i * 6, laneW * 0.72, 6);
-      }
-    } else if (o.kind === "pit") {
-      // 坑洞:深色椭圆 + 裂纹边
-      ctx.fillStyle = "rgba(60,55,90,0.85)";
-      ctx.beginPath();
-      ctx.ellipse(x, oy, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(x, oy, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (o.kind === "roller") {
-      // 滚滚球:带旋转纹路的大圆球
-      const rr = laneW * 0.27;
-      // 转速跟着它在轨道上跑了多远走,不是跟着屏幕位置走
-      const spin = o.y * 0.04;
-      ctx.fillStyle = "#e8a05a";
-      ctx.beginPath();
-      ctx.arc(x, oy, rr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.65)";
-      ctx.lineWidth = 3.5;
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(x, oy, rr * 0.65, spin + (i * Math.PI * 2) / 3, spin + (i * Math.PI * 2) / 3 + 1.1);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "rgba(120,70,30,0.4)";
-      ctx.beginPath();
-      ctx.ellipse(x, oy + rr + 5, rr * 0.9, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (o.kind === "zapper") {
-      // 电光门:两根柱子,通电时中间闪电
-      const active = zapperActive(time, o.phase);
-      const half = laneW * 0.36;
-      ctx.fillStyle = active ? "#ffd868" : "#9a9ab8";
-      ctx.beginPath();
-      ctx.roundRect(x - half - 5, oy - 26, 10, 42, 4);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.roundRect(x + half - 5, oy - 26, 10, 42, 4);
-      ctx.fill();
-      if (active) {
-        ctx.strokeStyle = `rgba(255,238,120,${0.75 + Math.sin(time * 20) * 0.25})`;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(x - half + 5, oy - 6);
-        for (let i = 1; i <= 4; i++) {
-          const zx = x - half + 5 + ((half * 2 - 10) * i) / 4;
-          ctx.lineTo(zx, oy - 6 + (i % 2 === 0 ? 6 : -8));
-        }
-        ctx.stroke();
-        ctx.font = "13px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("⚡", x, oy - 34);
-      }
-    } else if (o.kind === "crate") {
-      // 彩纸箱:方方正正带丝带,下滑铲得碎
-      const s = laneW * 0.3;
-      ctx.fillStyle = "#f2c48a";
-      ctx.beginPath();
-      ctx.roundRect(x - s, oy - s * 0.72, s * 2, s * 1.44, 6);
-      ctx.fill();
-      ctx.strokeStyle = "#c98a4a";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = "#ff9eb5";
-      ctx.fillRect(x - s * 0.16, oy - s * 0.72, s * 0.32, s * 1.44);
-      ctx.fillStyle = "#9adcf0";
-      ctx.fillRect(x - s, oy - s * 0.16, s * 2, s * 0.32);
-    } else {
-      // 云朵怪:飘来飘去的软云
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.beginPath();
-      ctx.arc(x - laneW * 0.16, oy, laneW * 0.15, 0, Math.PI * 2);
-      ctx.arc(x, oy - laneW * 0.08, laneW * 0.18, 0, Math.PI * 2);
-      ctx.arc(x + laneW * 0.16, oy, laneW * 0.15, 0, Math.PI * 2);
-      ctx.arc(x, oy + laneW * 0.06, laneW * 0.16, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#3a3a4a";
-      ctx.beginPath();
-      ctx.arc(x - laneW * 0.06, oy - laneW * 0.03, 3, 0, Math.PI * 2);
-      ctx.arc(x + laneW * 0.06, oy - laneW * 0.03, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#3a3a4a";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, oy + laneW * 0.03, 5, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-    }
+    drawObstacleArt(ctx, o.kind, laneW, {
+      time,
+      spin: o.y * 0.04,
+      active: o.kind === "zapper" && zapperActive(time, o.phase),
+    });
   }
 
   function drawPlayer(): void {
