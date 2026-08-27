@@ -296,3 +296,48 @@ describe("朵朵抢地主 · 接线与样式", () => {
     expect(FIT).toContain("clipBottomPx(p.getBoundingClientRect(), p.clientTop, p.clientHeight, cs.borderBottomWidth)");
   });
 });
+
+/**
+ * 兜底那一档钳出天花板之后自己长出来的第二个坑（同属 `W5R3-TA-01`，真机复测揪出来的）。
+ *
+ * `.ld-wrap` 是一根 `flex-direction:column`，`.ld-fanbox` 是它的一员。
+ * 手牌全是 `position:absolute`，所以这一格的 min-content 高度是 **0**，
+ * `min-height:auto` 拦不住它——天花板一钳下来，弹性布局第一个就把它压成 0 高，
+ * 而牌还照着 JS 写死的偏移画出去，整扇手牌直接盖在出牌那一排上。
+ *
+ * 真机 844×390 第 118 关实测（钉这一条之前）：
+ *   inline `height:137px`，量出来 `fanbox` 高 **0**，牌铺到 y=404；
+ *   出牌那四颗 vis 全是 48px（钳位是对的，真进了可视段），
+ *   可 `elementFromPoint(键心)` 打中的全是 `.ld-card` —— 落地 **0/5**。
+ * 钉上 `flex:0 0 auto` 之后同一台机器同一关：**5/5**，五档视口全过。
+ */
+describe("朵朵抢地主 · 天花板钳下来也不许把手牌扇压成 0 高（W5R3-TA-01）", () => {
+  /** 从样式里抠出一条规则的声明块（本款的 CSS 不留空格） */
+  function rule(selector: string): string {
+    const i = CSS.indexOf(`${selector}{`);
+    expect(i, `样式里没有 ${selector}`).toBeGreaterThan(-1);
+    return CSS.slice(i + selector.length + 1, CSS.indexOf("}", i));
+  }
+
+  it("手牌那一格不许被弹性布局压扁——它的高是量出来写死的", () => {
+    const box = rule(".ld-fanbox");
+    expect(box, "手牌扇没锁住，钳出天花板就会被压成 0 高").toMatch(/flex:0 0 auto|flex-shrink:0/);
+  });
+
+  it("锁的是「不许压」，尺寸一分没动：高度仍旧由 fanHeightFor() 写内联", () => {
+    const box = rule(".ld-fanbox");
+    expect(box, "不许在样式里给手牌扇写死高度，那是 JS 按牌宽算出来的").not.toMatch(/height:/);
+    expect(INDEX).toContain("fanBox.style.height = `${fanHeightFor(cardW)}px`");
+  });
+
+  it("两档收紧一次都没碰过这一格——收的是留白字号，不是手牌", () => {
+    expect(CSS).not.toContain(".ldc-tight .ld-fanbox");
+    expect(CSS).not.toContain(".ldc-tighter .ld-fanbox");
+    expect(CSS).not.toContain(".ldc-scroll .ld-fanbox");
+  });
+
+  it("手牌本身仍是绝对定位——正因为这样这一格的 min-content 才是 0", () => {
+    expect(rule(".ld-card")).toContain("position:absolute");
+    expect(rule(".ld-fanbox")).toContain("position:relative");
+  });
+});

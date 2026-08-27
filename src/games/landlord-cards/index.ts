@@ -168,7 +168,11 @@ const CSS = `
 .ld-say{font-size:13px;font-weight:800;color:#7d6aa6;text-align:center;line-height:1.5;min-height:19px;}
 .ld-say-oops{color:#c2557f;}
 .ld-mehead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center;}
-.ld-fanbox{position:relative;width:100%;touch-action:none;}
+/* 手牌全是 position:absolute,这一格的 min-content 高度是 0;它又是 .ld-wrap 这根弹性列的
+   一员,壳层一钳出天花板(第三档兜底)它就被压成 0 高,而牌还照着 JS 写死的偏移画出去,
+   整扇手牌直接盖在出牌那一排上——真机 844×390 量到 fanbox 0px、牌却铺到 y=404,
+   elementFromPoint 打中的全是 .ld-card(W5R3-TA-01)。inline height 是量出来的,不许压。 */
+.ld-fanbox{position:relative;width:100%;touch-action:none;flex:0 0 auto;}
 /* 牌面的点数与花色一律缩在左上角:扇形手牌只露出左边窄窄一条,角标必须待在那一条里 */
 .ld-card{position:absolute;border-radius:7px;background:#fff;border:1.5px solid #cfc4e4;overflow:hidden;
   box-shadow:0 2px 5px rgba(120,105,160,.3);transform-origin:50% 88%;transition:transform .12s ease;}
