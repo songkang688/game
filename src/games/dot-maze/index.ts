@@ -468,12 +468,13 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   function onKey(e: KeyboardEvent): void {
     const key = e.key.toLowerCase();
     if (key === "escape") {
-      paused = !paused;
-      sfx("tap");
-      renderHud();
+      togglePause();
       e.preventDefault();
       return;
     }
+    // 暂停就是暂停：除了 Esc，转向与取消一个都不接。
+    // 不加这道闸的话，遮住的这段时间里按下的转向会攒在缓冲里，一恢复就集体生效。
+    if (paused) return;
     const duo = KEY_DIR_DUO[key];
     if (duo) {
       requestTurn(state, duo, state.elapsed);
@@ -502,6 +503,12 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
   }
 
+  function togglePause(): void {
+    paused = !paused;
+    sfx("tap");
+    renderHud();
+  }
+
   /** 星星那一侧的「撤回转向」：抢豆的星星把待转方向收回当前方向，操纵小幽灵时同理，单人局归朵朵 */
   function cancelStarTurn(): void {
     if (star) star.next = star.dir;
@@ -513,7 +520,10 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const padHandlers: Array<() => void> = [];
   for (const btn of padButtons) {
     const dir = btn.dataset.dir as Dir;
-    const handler = (): void => requestTurn(state, dir, state.elapsed);
+    const handler = (): void => {
+      if (paused) return;
+      requestTurn(state, dir, state.elapsed);
+    };
     btn.addEventListener("click", handler);
     padHandlers.push(() => btn.removeEventListener("click", handler));
   }
@@ -526,6 +536,10 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   function onTouchEnd(e: TouchEvent): void {
     const t = e.changedTouches[0];
     if (!t || !touchStart) return;
+    if (paused) {
+      touchStart = null;
+      return;
+    }
     const dx = t.clientX - touchStart.x;
     const dy = t.clientY - touchStart.y;
     touchStart = null;

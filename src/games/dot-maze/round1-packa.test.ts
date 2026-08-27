@@ -386,6 +386,91 @@ describe("PA-DM · 键位归属", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* L3A-1 · 暂停期间除 Esc 外一律不接                                     */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-1 · 遮住的这一段不该把输入攒下来", () => {
+  /**
+   * 同一局跑三遍：不按 / 暂停时按 / 没暂停时按。
+   * 「暂停时按」应该和「不按」一模一样，「没暂停时按」必须不一样 ——
+   * 后面这一半是防呆：万一这个键本来就改不动局面，前一半的相等就说明不了任何事。
+   */
+  async function corridorRun(opts: {
+    keys?: string[];
+    pad?: boolean;
+    swipe?: boolean;
+    whilePaused: boolean;
+  }): Promise<string> {
+    const { mountStage } = await import("./index");
+    // 上一局 destroy 之后，桩里那条已经排好队的 rAF 回调还占着位置（真浏览器里会被
+    // cancelAnimationFrame 摘掉，桩只记账）。三局要严丝合缝地对比，先把队列清干净。
+    dom.frames.length = 0;
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg({ lives: 5, maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+      starRole: "none",
+      label: "走查",
+      onEnd: () => undefined,
+    });
+    const left = (): string => dom.root.querySelector(".dmz-left")!.textContent;
+    key("d");
+    flushFrames(dom, 2, 130);
+    if (opts.whilePaused) {
+      key("Escape");
+      flushFrames(dom, 1, 130);
+    }
+    for (const k of opts.keys ?? []) key(k);
+    if (opts.pad) {
+      dom.root
+        .querySelectorAll(".dmz-key[data-dir]")
+        .find((b) => b.dataset.dir === "left")!
+        .dispatch("click");
+    }
+    if (opts.swipe) {
+      const canvas = dom.root.querySelector(".dmz-canvas")!;
+      canvas.dispatch("touchstart", { touches: [{ clientX: 90, clientY: 20 }] });
+      canvas.dispatch("touchend", { changedTouches: [{ clientX: 10, clientY: 22 }] });
+    }
+    if (opts.whilePaused) {
+      key("Escape");
+    }
+    flushFrames(dom, 8, 130);
+    const out = left();
+    handle.destroy();
+    return out;
+  }
+
+  it("暂停期间按下的转向不会攒到恢复那一刻集体生效", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    expect(await corridorRun({ keys: ["a"], whilePaused: false }), "不暂停按 A 也没掉头，这条测不出东西").not.toBe(
+      quiet
+    );
+    expect(await corridorRun({ keys: ["a"], whilePaused: true }), "暂停期间按的 A 被攒下来了").toBe(quiet);
+  });
+
+  it("暂停期间点虚拟方向键也不算数", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    expect(await corridorRun({ pad: true, whilePaused: false }), "点方向键本来就不改局面？").not.toBe(quiet);
+    expect(await corridorRun({ pad: true, whilePaused: true }), "暂停期间点的方向键被攒下来了").toBe(quiet);
+  });
+
+  it("暂停期间在画布上滑一下也不算数", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    expect(await corridorRun({ swipe: true, whilePaused: false }), "滑动本来就不改局面？").not.toBe(quiet);
+    expect(await corridorRun({ swipe: true, whilePaused: true }), "暂停期间的滑动被攒下来了").toBe(quiet);
+  });
+
+  it("暂停期间取消键 G / K 一样不接，Esc 仍然是唯一的开关", async () => {
+    const quiet = await corridorRun({ whilePaused: true });
+    // 先按 A 攒一次转向、再按 G 撤回：不暂停时这一串等于什么都没按
+    expect(await corridorRun({ keys: ["a", "g"], whilePaused: false }), "G 没把 A 撤回来").toBe(
+      await corridorRun({ whilePaused: false })
+    );
+    // 暂停期间这一串一个都不该接，恢复后还是原样
+    expect(await corridorRun({ keys: ["a", "g", "k"], whilePaused: true })).toBe(quiet);
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* PA-DM · 铁则 4 / 5：热区与文案                                        */
 /* ------------------------------------------------------------------ */
 
