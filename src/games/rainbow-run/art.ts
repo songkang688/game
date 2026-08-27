@@ -1257,3 +1257,180 @@ export function titleFitPx(
   while (px > minPx && measure(px) > avail) px -= 1;
   return px;
 }
+
+/* ====================================================================== */
+/* 菜单 / 地图 / 结算徽章(visual-r2 修遗留 #2):替掉画布 fillText emoji   */
+/* 直出的小图标。与本库其它资产同约定:画在原点,translate 由调用方负责;  */
+/* 统一左上高光、1.5~2px 档描边、糖果粉彩板。                              */
+/* ====================================================================== */
+
+/** 地图/结算迷你星(替 ⭐▫☆):拿到=金星+暗金描边,空位=灰白描边星。 */
+export function drawMiniStar(ctx: Ctx, r: number, filled: boolean): void {
+  starPath(ctx, r);
+  if (filled) {
+    ctx.fillStyle = "#ffd868";
+    ctx.fill();
+    ctx.strokeStyle = "#e0a030";
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(150,150,165,0.75)";
+  }
+  ctx.lineWidth = Math.max(1, r * 0.18);
+  ctx.stroke();
+}
+
+/** 挂锁(替 🔒):灰梁 + 金身渐变 + 锁孔 + 左上高光。 */
+export function drawPadlock(ctx: Ctx, r: number): void {
+  ctx.strokeStyle = "#8a90a6";
+  ctx.lineWidth = Math.max(1.5, r * 0.24);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.28, r * 0.42, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  const g = ctx.createLinearGradient(0, -r * 0.3, 0, r * 0.9);
+  g.addColorStop(0, "#ffd868");
+  g.addColorStop(1, "#d9a832");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.62, -r * 0.3, r * 1.24, r * 1.16, r * 0.24);
+  ctx.fill();
+  ctx.strokeStyle = "#a87f28";
+  ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.stroke();
+  ctx.fillStyle = "#7a5a1a";
+  ctx.beginPath();
+  ctx.arc(0, r * 0.14, r * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.07, r * 0.14, r * 0.14, r * 0.4, r * 0.06);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.3, -r * 0.06, r * 0.14, r * 0.24, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** 终点旗(替 🏁):深杆 + 双色格纹旗面 + 杆顶圆钮。 */
+export function drawFinishFlag(ctx: Ctx, r: number): void {
+  // 旗杆
+  ctx.strokeStyle = "#8a7a6a";
+  ctx.lineWidth = Math.max(1.5, r * 0.16);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.55, r);
+  ctx.lineTo(-r * 0.55, -r * 0.95);
+  ctx.stroke();
+  ctx.fillStyle = "#8a7a6a";
+  ctx.beginPath();
+  ctx.arc(-r * 0.55, -r * 0.98, r * 0.14, 0, Math.PI * 2);
+  ctx.fill();
+  // 旗面:白底 + 2×3 深格
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#5a5a6e";
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.48, -r * 0.92, r * 1.3, r * 0.86, r * 0.08);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#5a5a6e";
+  const cell = (r * 1.3) / 3;
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 3; col++) {
+      if ((row + col) % 2 === 0) {
+        ctx.fillRect(-r * 0.48 + col * cell, -r * 0.92 + row * (r * 0.43), cell, r * 0.43);
+      }
+    }
+  }
+}
+
+/** 限时关小秒表(替 ⏱):白面钢蓝圈 + 顶钮 + 双针 + 左上弧光。 */
+export function drawStopwatchBadge(ctx: Ctx, r: number): void {
+  ctx.fillStyle = "#4a7ac9";
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.18, -r * 1.18, r * 0.36, r * 0.3, r * 0.1);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#4a7ac9";
+  ctx.lineWidth = Math.max(1.5, r * 0.18);
+  ctx.stroke();
+  ctx.strokeStyle = "#2a4a5e";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -r * 0.56);
+  ctx.moveTo(0, 0);
+  ctx.lineTo(r * 0.38, r * 0.1);
+  ctx.stroke();
+  ctx.fillStyle = "#2a4a5e";
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.66, Math.PI * 1.05, Math.PI * 1.45);
+  ctx.stroke();
+}
+
+/** 无尽入口的 ∞ 徽记(替 ♾️):两只彩虹描边圆环左右相扣 + 左上高光点。 */
+export function drawInfinityBadge(ctx: Ctx, r: number): void {
+  const loop = (cx: number, color: string): void => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, r * 0.3);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(cx, 0, r * 0.48, 0, Math.PI * 2);
+    ctx.stroke();
+  };
+  loop(-r * 0.46, "#ff8fb4");
+  loop(r * 0.46, "#7ac9e0");
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.beginPath();
+  ctx.arc(-r * 0.62, -r * 0.34, r * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** 任务小靶(替 🎯):红白同心环 + 靶心点 + 左上高光弧。 */
+export function drawTargetBadge(ctx: Ctx, r: number): void {
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#e0679f";
+  ctx.lineWidth = Math.max(1.5, r * 0.18);
+  ctx.stroke();
+  ctx.strokeStyle = "#e0679f";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.56, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "#c8497f";
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.78, Math.PI * 1.05, Math.PI * 1.4);
+  ctx.stroke();
+}
+
+/** 岔路路牌箭头(替 ◀▶):圆角实心三角,dir=-1 朝左 / 1 朝右。 */
+export function drawForkArrow(ctx: Ctx, r: number, dir: -1 | 1): void {
+  ctx.fillStyle = "#4a4a5e";
+  ctx.strokeStyle = "#4a4a5e";
+  ctx.lineWidth = Math.max(1, r * 0.2);
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(dir * r, 0);
+  ctx.lineTo(-dir * r * 0.6, -r * 0.7);
+  ctx.lineTo(-dir * r * 0.6, r * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
