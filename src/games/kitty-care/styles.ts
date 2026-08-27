@@ -7,6 +7,17 @@
  * 呼吸、尾巴、飘心全部停下，只保留表情切换。
  */
 
+/**
+ * 逗猫 / 打扮场地的高度（px）。
+ * 场地在场时猫收到 `FIELD_CAT_H`，两边加起来不许比原来的猫（约 300px）高，
+ * 否则底下的提示行会被舞台裁掉。这条关系有用例钉着。
+ */
+export const FIELD_H = 148;
+/** 场地在场时猫的画面高度（px） */
+export const FIELD_CAT_H = 138;
+/** 场地在场时，猫 + 场地一共占多高（用例用它跟原来的猫比） */
+export const FIELD_STACK_PX = FIELD_H + 6 + FIELD_CAT_H;
+
 export const KTC_CSS = `
 .ktc-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:16px;padding:10px;
   user-select:none;-webkit-user-select:none;position:relative;min-height:460px;touch-action:manipulation;}
@@ -97,7 +108,23 @@ export const KTC_CSS = `
 .ktc-bowl{left:50%;bottom:4px;transform:translateX(-50%);}
 .ktc-toy{position:absolute;width:56px;height:56px;border-radius:50%;background:#ffffffd8;font-size:30px;
   border:none;box-shadow:0 3px 8px rgba(160,110,40,.3);touch-action:none;cursor:grab;
-  display:flex;align-items:center;justify-content:center;}
+  display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);}
+
+/* 逗猫 / 打扮的场地。
+   这一块原先一条样式都没有：高度塌成 0，pointermove 收不到真手指；
+   里面那些 position:absolute 的孩子（棒子、爪印、两个吸附圈）于是拿 .ktc-wrap 当定位祖先，
+   还因为没有 z-index 被 .ktc-cats（z-index:2）压在下面，elementFromPoint 一个都够不着。
+   其余交互层（.ktc-tray / .ktc-btns / .ktc-washwrap / .ktc-beats）都写着 position:relative;z-index:3，
+   这里补齐同一套，并给它真实高度当好定位祖先。 */
+.ktc-field{position:relative;z-index:3;width:min(300px,92%);height:${FIELD_H}px;margin:6px auto 0;
+  border-radius:20px;background:radial-gradient(circle at 50% 42%,#fff8ea,#ffe7c4);
+  box-shadow:inset 0 2px 10px rgba(180,130,60,.22);touch-action:none;overflow:hidden;}
+.ktc-chaser{position:absolute;font-size:22px;line-height:1;pointer-events:none;transform:translate(-50%,-50%);}
+/* 两个吸附圈本来都没有偏移，会叠在同一个点上（「头顶」和「脖子」根本分不开） */
+.ktc-spot-head{left:calc(50% - 32px);top:10px;}
+.ktc-spot-neck{left:calc(50% - 32px);top:${FIELD_H - 74}px;}
+/* 场地在场时把猫收一档，省出来的高度正好给场地，舞台底下的提示行不会被顶出去 */
+.ktc-wrap.ktc-hasfield .ktc-cat-svg{height:${FIELD_CAT_H}px;width:auto;max-width:100%;margin:0 auto;}
 
 /* 搓澡区：至少 240×240，画圈就能搓 */
 .ktc-washwrap{position:relative;z-index:3;margin:6px auto 0;width:min(300px,92%);min-width:240px;}

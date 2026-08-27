@@ -428,6 +428,8 @@ export class Arena {
     if (!spec || this.dead) return;
     this.stopLoops();
     this.playEl.textContent = "";
+    // 只有逗猫 / 打扮会摆场地；每次重画先摘掉，画到那两种任务时再挂回去
+    this.root.classList.remove("ktc-hasfield");
     if (this.cats[this.targetCat()].hiding) {
       this.renderSoothe();
       return;
@@ -513,6 +515,7 @@ export class Arena {
     this.bubble(`🪶 ${name}想玩逗猫棒`);
     this.say(chaseHint(state));
     const field = el("div", "ktc-field");
+    this.root.classList.add("ktc-hasfield");
     const toy = btn("ktc-toy", "🪶", "逗猫棒");
     const chaser = el("span", "ktc-chaser", "🐾");
     chaser.style.position = "absolute";
@@ -686,6 +689,7 @@ export class Arena {
     this.bubble(`💭 ${name}想戴 ${state.want.emoji}`);
     this.say("把配饰拖到猫身上的虚线圈里～");
     const field = el("div", "ktc-field");
+    this.root.classList.add("ktc-hasfield");
     const spots: Array<{ id: string; node: HTMLElement }> = [
       { id: "head", node: el("div", "ktc-target ktc-spot-head", "⭕") },
       { id: "neck", node: el("div", "ktc-target ktc-spot-neck", "⭕") }
