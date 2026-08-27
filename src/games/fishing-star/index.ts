@@ -55,7 +55,14 @@ import {
   type GearBonus,
   type GearSet,
 } from "./gear";
-import { createClipWatch, needsImmediateRefit, resetClippedScroll, seaHeightPx, wrapCapPx } from "./fit";
+import {
+  createClipWatch,
+  needsImmediateRefit,
+  resetClippedScroll,
+  seaHeightPx,
+  showAct,
+  wrapCapPx,
+} from "./fit";
 import { createLedger } from "./runtime";
 import {
   BAND_LUCK,
@@ -726,16 +733,35 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
    * 百分比没有可解析的参照。只能量出真实像素写死。
    *
    * 收得动的那几档 `wrapCapPx()` 返回 `null`,一个字节都不写,手感一分不变。
+   *
+   * 返回**这一帧钳位值变没变**:变了才是一次布局事件,那一刻(也只有那一刻)
+   * 才该把抛竿键送进眼里。每帧都送就成了每 300ms 把孩子的滚动位置抢回来一次。
    */
-  function capWrap(): void {
+  let lastCap: number | null = null;
+  function capWrap(): boolean {
     const cap = wrapCapPx(clipWatch.roomPx(wrap), wrap.scrollHeight);
+    const changed = cap !== lastCap;
+    lastCap = cap;
     if (cap === null) {
       wrap.style.maxHeight = "";
       wrap.style.overflowY = "";
-      return;
+      return changed;
     }
     wrap.style.maxHeight = `${cap}px`;
     wrap.style.overflowY = "auto";
+    return changed;
+  }
+
+  /**
+   * 把抛竿键送进可视段（`W5R3-BT-01` / `W5R3-BT-02`）。
+   *
+   * 只在**布局事件**上调用：钳位值换了、换相位、这一屏的内容长高了、转屏。
+   * 这几刻这一屏刚重新落位，孩子也刚被交代一件新的事。**其余时间一格不动**
+   * ——想看水面就让他看，每帧都往回拽比看不见键更难受。
+   * 键本来就在眼前时 `showAct()` 一个字节都不写。
+   */
+  function sendActIntoView(): void {
+    showAct(wrap, actBtn);
   }
 
   /**
@@ -760,17 +786,30 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
       layout();
       if (H === before) break;
     }
-    capWrap();
+    const capChanged = capWrap();
     // 还回去。滚不动的那几档 scrollTop 恒 0,这一句是空转的;钳位变小了浏览器自己夹。
     if (keepScroll > 0 && wrap.scrollTop !== keepScroll) wrap.scrollTop = keepScroll;
+    // 钳位换了 = 这一屏刚刚重新落位(进关第一帧、转屏、上鱼那一下都走这里)。
+    // 「滚得动」和「落地就在眼前」是两件事:落地的 scrollTop 是 0,而抛竿键排在最后一行
+    // ——真机 640×360 上量到键在 428.3–472.3、可视段下沿只到 344,整颗在口子外面
+    // (W5R3-BT-01)。钳完顺手把它送进来,滚最小的那一段。键本来就在眼前时一格不动。
+    if (capChanged) sendActIntoView();
   }
   layout();
   /** 上一帧量到的这一屏总高:变了就当帧重排(见 frame() 里那一段) */
   let lastWrapH = 0;
+  /** 上一帧是哪个相位:换相位那一下把抛竿键送回眼前(见 frame() 末尾那一段) */
+  let lastActPhase: Phase | "" = "";
+  /** 上一帧这一屏的内容有多高:钳过之后它是唯一还在动的那个量(见 frame() 末尾那一段) */
+  let lastContentH = 0;
   const onResize = (): void => {
     // 转屏是「收无可收」那一档唯一的入口,只 layout() 一次收不住(水面到下限就不动了,
     // 钳位那一手压根不会跑)。走收敛版。
     refitNow();
+    // 竖着拿好好的,横过来拿抛竿键就整颗掉到可视段外面(W5R3-BT-01)。
+    // 转屏是这一条最要紧的入口:钳位值有可能没变(refitNow 里那一手就不会跑),
+    // 可这一屏的高矮全变了,得自己再送一次。
+    sendActIntoView();
     render();
   };
   window.addEventListener("resize", onResize);
@@ -1320,6 +1359,23 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
       // layout() 会重设画布尺寸,等于把画面擦了,得补画一次
       render();
       lastWrapH = wrap.getBoundingClientRect?.().height ?? nowWrapH;
+    }
+    // 换一次相位 = 这颗键换了一件事要孩子做(抛竿 → 收线 → 看看它 → 再抛竿)。
+    //
+    // 光认相位不够。上鱼那一下这一屏**不是一帧长完的**:提示行先换成
+    // 「🍬 棉花糖鲶 · 39.1 厘米 · 1.1 千克 · +27 分 · 完美收竿!」,过一会儿再追一句
+    // 「· 图鉴新收录!」多折一行 —— 真机 320×568 上量到内容 356 → 359,
+    // 只在换相位那一帧送一次会停在 30/33,「👀 看看它」的下沿仍旧被裁掉 2.6px。
+    //
+    // 而钳过之后 wrap 自己的高度被 maxHeight 焊死,上面那条 needsImmediateRefit()
+    // 和 capWrap() 的钳位值**都不会再变** —— 这一屏还在长高这件事,
+    // 只有 scrollHeight 说得出来。所以内容高度也算一次布局事件。
+    // (滚动不改 scrollHeight,这一条不会自己追自己。)
+    const nowContentH = wrap.scrollHeight;
+    if (phase !== lastActPhase || needsImmediateRefit(lastContentH, nowContentH)) {
+      lastActPhase = phase;
+      lastContentH = nowContentH;
+      sendActIntoView();
     }
     if (finished) ledger.dropRaf(raf);
   }
