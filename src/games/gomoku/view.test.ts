@@ -125,6 +125,36 @@ describe("棋盘视图 · 键盘可达", () => {
     view.destroy();
   });
 
+  it("光标挪一格，aria-label 就跟着报一次新位置", () => {
+    const { view, canvas } = mountView(9);
+    const before = canvas.getAttribute("aria-label");
+    canvas.dispatch("keydown", { key: "ArrowRight", preventDefault: () => undefined });
+    const after = canvas.getAttribute("aria-label");
+    expect(after).not.toBe(before);
+    // 9 路棋盘光标从 (4,4) 起，往右一格是第 5 行第 6 列
+    expect(after).toContain("第 5 行第 6 列");
+    view.destroy();
+  });
+
+  it("光标停在有子的格子上，读屏器听得出那儿已经有子了", () => {
+    const board = makeBoard(9);
+    setCell(board, 5, 4, 2);
+    const { view, canvas } = mountView(9);
+    view.update({ board, size: 9, interactive: true });
+    canvas.dispatch("keydown", { key: "ArrowRight", preventDefault: () => undefined });
+    expect(canvas.getAttribute("aria-label")).toContain("白棋");
+    view.destroy();
+  });
+
+  it("轮不到自己时播报也跟着变，不会一直催人按回车", () => {
+    const { view, canvas } = mountView(9);
+    view.update({ interactive: false });
+    expect(canvas.getAttribute("aria-label")).toContain("轮不到你");
+    view.update({ interactive: true, confirm: true });
+    expect(canvas.getAttribute("aria-label")).toContain("先出预览");
+    view.destroy();
+  });
+
   it("空格键完全不理会，绝不 preventDefault（页面照样能滚）", () => {
     const { view, canvas, taps } = mountView(9);
     let prevented = 0;

@@ -55,6 +55,7 @@ import {
   newHints,
   newStreak,
   prefersConfirm,
+  pruneConfirm,
   puzzleStars,
   spendHint,
   streakDifficulty,
@@ -280,7 +281,15 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     hintBtn.title = hintButtonHint(hints, playKind);
     hintBtn.setAttribute("aria-label", `${hintBtn.textContent}。${hintBtn.title}`);
     confirmBtn.textContent = confirmOn ? "✋ 确认落子：开" : "✋ 确认落子：关";
-    view.update({ turn: current, interactive: humansTurn(), pending: confirmState.pending });
+    // 预览点落空了（对手占了 / 悔棋把盘面改了）就在这里摘掉,
+    // 免得状态层还指着一格已经有子的位置——视图层本来就不画它了
+    confirmState = pruneConfirm(confirmState, (c) => board.cells[c.y * o.size + c.x] === 0);
+    view.update({
+      turn: current,
+      interactive: humansTurn(),
+      pending: confirmState.pending,
+      confirm: confirmOn,
+    });
   }
 
   function finish(winner: Player | 0, reason: EndReason): void {

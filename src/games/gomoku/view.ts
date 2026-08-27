@@ -4,6 +4,7 @@
 // 禁手点会红叉抖两下 —— 1.1 里这些全是瞬现的。
 
 import type { Board, Player } from "./ai";
+import { cursorLabel } from "./session";
 import type { Cell, HintArea } from "./session";
 
 /** 画布逻辑宽度（CSS 宽度自适应，坐标一律按这个算） */
@@ -82,6 +83,8 @@ export interface ViewState {
   /** 刚判为禁手的点，画红叉 */
   forbidden: Cell | null;
   interactive: boolean;
+  /** 确认落子开着没有（只用来播报「按回车是预览还是落子」） */
+  confirm: boolean;
 }
 
 export interface BoardViewOpts {
@@ -143,7 +146,26 @@ export function createBoardView(host: HTMLElement, opts: BoardViewOpts): BoardVi
     winLine: null,
     forbidden: null,
     interactive: true,
+    confirm: false,
   };
+
+  /**
+   * 把光标这一刻的位置写进 `aria-label`。读屏器认的是 label 的变化，
+   * 所以方向键挪一格就要刷一次；`update()` 里换手 / 换预览点也要刷。
+   */
+  function syncLabel(): void {
+    const n = state.size;
+    const v = state.board.cells[cursor.y * n + cursor.x];
+    canvas.setAttribute(
+      "aria-label",
+      cursorLabel(cursor, n, {
+        at: v === 1 || v === 2 ? v : 0,
+        pending: !!state.pending && state.pending.x === cursor.x && state.pending.y === cursor.y,
+        interactive: state.interactive,
+        confirm: state.confirm,
+      })
+    );
+  }
 
   function cs(): number {
     return VIEW_W / (size + 1);
@@ -430,6 +452,7 @@ export function createBoardView(host: HTMLElement, opts: BoardViewOpts): BoardVi
         y: Math.max(0, Math.min(size - 1, cursor.y + step[k][1])),
       };
       state.ghost = cursor;
+      syncLabel();
       return;
     }
     if (k === "Enter") {
@@ -455,6 +478,7 @@ export function createBoardView(host: HTMLElement, opts: BoardViewOpts): BoardVi
       if (patch.forbidden) forbidAt = nowMs();
       if (patch.winLine === null) sweepAt = -1;
       if (patch.size !== undefined) size = patch.size;
+      syncLabel();
     },
     drop(x, y) {
       drops.set(`${x},${y}`, nowMs());
@@ -474,6 +498,7 @@ export function createBoardView(host: HTMLElement, opts: BoardViewOpts): BoardVi
       sweepAt = -1;
       forbidAt = -1;
       cursor = { x: Math.floor(nextSize / 2), y: Math.floor(nextSize / 2) };
+      syncLabel();
     },
     destroy() {
       destroyed = true;

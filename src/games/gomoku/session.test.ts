@@ -12,6 +12,7 @@ import {
   areaContains,
   areaWords,
   brokeRecord,
+  cursorLabel,
   difficultyForLevel,
   emptyConfirm,
   hintArea,
@@ -23,6 +24,7 @@ import {
   newStreak,
   parseLegacyStars,
   prefersConfirm,
+  pruneConfirm,
   puzzleOfLevel,
   puzzleStars,
   spendHint,
@@ -113,6 +115,89 @@ describe("落子确认 · 状态机", () => {
     const r = tapCell(first.state, { x: 6, y: 6 }, { ...on, myTurn: false });
     expect(r.kind).toBe("ignore");
     expect(r.state.pending).toEqual({ x: 3, y: 4 });
+  });
+});
+
+describe("落子确认 · 落空的预览点", () => {
+  const on = { confirm: true, myTurn: true, occupied: false };
+
+  it("预览点那一格还空着就原样留着（连对象都不换）", () => {
+    const s = tapCell(emptyConfirm(), { x: 3, y: 4 }, on).state;
+    expect(pruneConfirm(s, () => true)).toBe(s);
+  });
+
+  it("预览点被占了就摘掉，不会留着一个指向有子格的 pending", () => {
+    const s = tapCell(emptyConfirm(), { x: 3, y: 4 }, on).state;
+    const pruned = pruneConfirm(s, (c) => !(c.x === 3 && c.y === 4));
+    expect(pruned.pending).toBeNull();
+  });
+
+  it("本来就没有预览点时是空转，不新建对象", () => {
+    const s = emptyConfirm();
+    expect(pruneConfirm(s, () => false)).toBe(s);
+  });
+
+  it("摘干净之后再点同一格，是全新的一次预览而不是「换地方」", () => {
+    const s = tapCell(emptyConfirm(), { x: 3, y: 4 }, on).state;
+    const pruned = pruneConfirm(s, () => false);
+    expect(tapCell(pruned, { x: 7, y: 7 }, on).kind).toBe("preview");
+  });
+});
+
+describe("键盘光标的读屏播报", () => {
+  it("报得出行列号，而且是 1 基的", () => {
+    const s = cursorLabel({ x: 0, y: 0 }, 15, { at: 0, interactive: true });
+    expect(s).toContain("第 1 行第 1 列");
+  });
+
+  it("正中间那一点叫天元", () => {
+    expect(cursorLabel({ x: 7, y: 7 }, 15, { at: 0, interactive: true })).toContain("天元");
+    expect(cursorLabel({ x: 7, y: 6 }, 15, { at: 0, interactive: true })).not.toContain("天元");
+  });
+
+  it("分得清空点、黑棋、白棋", () => {
+    expect(cursorLabel({ x: 2, y: 2 }, 15, { at: 0, interactive: true })).toContain("空点");
+    expect(cursorLabel({ x: 2, y: 2 }, 15, { at: 1, interactive: true })).toContain("黑棋");
+    expect(cursorLabel({ x: 2, y: 2 }, 15, { at: 2, interactive: true })).toContain("白棋");
+  });
+
+  it("确认落子开着时说「先出预览」，关着时说「按回车落子」", () => {
+    const withConfirm = cursorLabel({ x: 2, y: 2 }, 15, { at: 0, interactive: true, confirm: true });
+    const without = cursorLabel({ x: 2, y: 2 }, 15, { at: 0, interactive: true, confirm: false });
+    expect(withConfirm).toContain("先出预览");
+    expect(without).toContain("按回车落子");
+    expect(without).not.toContain("先出预览");
+  });
+
+  it("停在自己的预览点上时，说的是「再按一次回车就落子」", () => {
+    const s = cursorLabel({ x: 2, y: 2 }, 15, {
+      at: 0,
+      pending: true,
+      interactive: true,
+      confirm: true,
+    });
+    expect(s).toContain("预览点");
+    expect(s).toContain("再按一次回车");
+  });
+
+  it("轮不到自己时不催人按回车", () => {
+    const s = cursorLabel({ x: 2, y: 2 }, 15, { at: 0, interactive: false });
+    expect(s).toContain("轮不到你");
+    expect(s).not.toContain("按回车落子");
+  });
+
+  it("越界与坏数字都夹回棋盘里，不会播出 0 行或 NaN", () => {
+    const lo = cursorLabel({ x: -5, y: -9 }, 15, { at: 0, interactive: true });
+    const hi = cursorLabel({ x: 99, y: 99 }, 15, { at: 0, interactive: true });
+    expect(lo).toContain("第 1 行第 1 列");
+    expect(hi).toContain("第 15 行第 15 列");
+    expect(`${lo}${hi}`).not.toContain("NaN");
+  });
+
+  it("光标播报里带行列号，但提示文案仍旧一个坐标都不报", () => {
+    const area = hintArea({ x: 7, y: 7 }, 15, 1, () => 0);
+    expect(area.text).not.toMatch(/\d/);
+    expect(cursorLabel({ x: 7, y: 7 }, 15, { at: 0, interactive: true })).toMatch(/第 8 行/);
   });
 });
 

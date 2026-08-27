@@ -75,6 +75,22 @@ export interface TapOptions {
   occupied: boolean;
 }
 
+/**
+ * 摘掉落空的预览点：预览点所在的格子只要不再是空的（对手占了、悔棋改了盘面、
+ * 换了一副棋盘），这个 `pending` 就该作废。
+ *
+ * 这条约束本来只写在视图里 —— `view.ts` 画粉圈之前自己查了一次「这一格还空着吗」，
+ * 状态层却没有同一道闸，全靠 `index.ts` 每一处落子 / 悔棋都记得手动清一次。
+ * 放回纯函数之后，视图和状态用的是同一把尺，往后新增落子路径也不会漏。
+ *
+ * `isEmpty` 由调用方给：传进来的是「这一格还空着吗」，不是「有子吗」。
+ */
+export function pruneConfirm(state: ConfirmState, isEmpty: (cell: Cell) => boolean): ConfirmState {
+  const p = state.pending;
+  if (!p) return state;
+  return isEmpty(p) ? state : emptyConfirm();
+}
+
 /** 落子确认状态机：同一个点连点两次才算数，点别处只是换预览点。 */
 export function tapCell(state: ConfirmState, cell: Cell, opts: TapOptions): TapOutcome {
   if (!opts.myTurn) return { kind: "ignore", cell: null, state };
@@ -85,6 +101,57 @@ export function tapCell(state: ConfirmState, cell: Cell, opts: TapOptions): TapO
     return { kind: "commit", cell, state: emptyConfirm() };
   }
   return { kind: p ? "move" : "preview", cell, state: { pending: { x: cell.x, y: cell.y } } };
+}
+
+/* ---------------- 键盘光标的读屏播报 ---------------- */
+
+export interface CursorInfo {
+  /** 光标这一格上是什么：0 空、1 黑棋、2 白棋 */
+  at: 0 | 1 | 2;
+  /** 这一格正是等着再确认一次的预览点 */
+  pending?: boolean;
+  /** 现在轮得到这个人下 */
+  interactive?: boolean;
+  /** 确认落子开着没有 */
+  confirm?: boolean;
+}
+
+/**
+ * 键盘光标走到哪儿就播到哪儿。
+ *
+ * 棋盘是一块 `role="application"` 的 canvas，方向键把光标挪遍全盘、
+ * 屏幕上跟着画十字准星，但 accessibility tree 上原先**一个字都不变**：
+ * 看不清屏幕的孩子按了半天方向键，既不知道自己停在哪儿，也不知道那一格有没有子，
+ * 更不知道按回车是直接落子还是先出一个预览。
+ *
+ * 这句话报的是**光标自己的位置**，和提示不是一回事 —— 提示只圈一片区域、
+ * 永远不报行列号（`hintArea`），那条口径不受这里影响。
+ */
+export function cursorLabel(cell: Cell, size: number, info: CursorInfo): string {
+  const n = Math.max(1, Math.round(size) || 1);
+  const row = Math.max(1, Math.min(n, Math.round(cell.y) + 1));
+  const col = Math.max(1, Math.min(n, Math.round(cell.x) + 1));
+  const mid = Math.floor(n / 2);
+  const spot = row - 1 === mid && col - 1 === mid ? "，正中间天元" : "";
+  const what =
+    info.at === 1
+      ? "这里是黑棋"
+      : info.at === 2
+        ? "这里是白棋"
+        : info.pending
+          ? "这里是等着确认的预览点"
+          : "这里是空点";
+  const next = !info.interactive
+    ? "现在轮不到你，先等一等"
+    : info.at !== 0
+      ? "这一格有子了，换个空点"
+      : info.pending
+        ? "再按一次回车就落子"
+        : info.confirm
+          ? "按回车先出预览，再按一次才落子"
+          : "按回车落子";
+  // 位置放最前面、操作说明垫最后：读屏器可以随时打断，先听到的永远是「我在哪儿」
+  return `棋盘第 ${row} 行第 ${col} 列${spot}。${what}。${next}；方向键换位置。`;
 }
 
 /* ---------------- 提示 ---------------- */
