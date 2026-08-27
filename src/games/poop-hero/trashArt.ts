@@ -11,7 +11,7 @@
  */
 
 import { traceStar } from "../../art/kit/sparkle";
-import { shade } from "./visual";
+import { drawFlower, shade } from "./visual";
 
 /** 圆角矩形路径(本模块自用,不依赖 index.ts 的私有工具) */
 function rrect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -626,4 +626,239 @@ export function drawBinIcon(
     ctx.stroke();
   }
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// 场内小装饰与反馈图形:顶替 💫 🫧 ⭐ 🤔 🧽 🧼 🔒 与粒子 emoji 文本
+// ---------------------------------------------------------------------------
+
+/** 金色小星(投对 / 捡星反馈):两停渐变 + 描边,比香香星轻一号(无柔光圈) */
+export function drawMiniStar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.save();
+  const body = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, r * 0.08, x, y, r);
+  body.addColorStop(0, "#FFF3C2");
+  body.addColorStop(1, "#F2B93E");
+  ctx.fillStyle = body;
+  traceStar(ctx, x, y, r);
+  ctx.fill();
+  ctx.strokeStyle = "#C9931E";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 想一想气泡(投错的温柔提示):白气泡 + 自绘问号(弧 + 点),零责备感 */
+export function drawThinkBubble(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,.95)";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#B9A6D6";
+  ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.stroke();
+  // 气泡小尾巴:两颗渐小的点
+  ctx.fillStyle = "rgba(255,255,255,.9)";
+  ctx.beginPath();
+  ctx.arc(x - r * 0.8, y + r * 0.9, r * 0.22, 0, Math.PI * 2);
+  ctx.arc(x - r * 1.15, y + r * 1.3, r * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  // 自绘问号:上弯钩 + 下圆点
+  ctx.strokeStyle = "#8A6FB8";
+  ctx.lineWidth = Math.max(1.2, r * 0.2);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(x, y - r * 0.24, r * 0.34, Math.PI * 0.95, Math.PI * 2.22);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + Math.cos(Math.PI * 0.22) * r * 0.34, y - r * 0.24 + Math.sin(Math.PI * 0.22) * r * 0.34);
+  ctx.quadraticCurveTo(x + r * 0.08, y + r * 0.1, x, y + r * 0.2);
+  ctx.stroke();
+  ctx.fillStyle = "#8A6FB8";
+  ctx.beginPath();
+  ctx.arc(x, y + r * 0.56, Math.max(1, r * 0.12), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 清洁海绵(清洁车顶):双层软块 + 三个小气孔 */
+export function drawSponge(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  const u = s / 15;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = grad2(ctx, -7 * u, -5 * u, 7 * u, 5 * u, "#FFEFAE", "#F3D96E");
+  rrect(ctx, -7 * u, -2 * u, 14 * u, 7 * u, 2.4 * u);
+  ctx.fill();
+  ctx.strokeStyle = "#C9AE42";
+  ctx.lineWidth = Math.max(1, 1.2 * u);
+  ctx.stroke();
+  ctx.fillStyle = grad2(ctx, -7 * u, -6 * u, 7 * u, -1 * u, "#BFE6F2", "#8FCBE0");
+  rrect(ctx, -7 * u, -6 * u, 14 * u, 4.4 * u, 2 * u);
+  ctx.fill();
+  ctx.strokeStyle = "#5F9DB8";
+  ctx.stroke();
+  ctx.fillStyle = "rgba(160,130,60,.4)";
+  ctx.beginPath();
+  ctx.arc(-3.4 * u, 2 * u, 0.8 * u, 0, Math.PI * 2);
+  ctx.arc(0.6 * u, 1 * u, 0.7 * u, 0, Math.PI * 2);
+  ctx.arc(4 * u, 2.6 * u, 0.8 * u, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 香皂(净化门开):粉皂体 + 环纹 + 两颗小泡泡 */
+export function drawSoap(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  const u = s / 24;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = grad2(ctx, -10 * u, -7 * u, 10 * u, 7 * u, "#FBD3E0", "#F0A2BE");
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10 * u, 6.5 * u, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#CC7396";
+  ctx.lineWidth = Math.max(1.2, 1.6 * u);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.8)";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 6.4 * u, 3.6 * u, 0, Math.PI * 0.15, Math.PI * 0.9);
+  ctx.stroke();
+  gleam(ctx, -3.4 * u, -2.6 * u, 2.2 * u, 1.2 * u);
+  // 小泡泡
+  ctx.strokeStyle = "rgba(255,255,255,.9)";
+  ctx.beginPath();
+  ctx.arc(8.4 * u, -7 * u, 2 * u, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(11.4 * u, -3.6 * u, 1.2 * u, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 小挂锁(净化门未开):锁体渐变 + 锁梁 + 锁孔 */
+export function drawPadlock(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  const u = s / 24;
+  ctx.save();
+  ctx.translate(x, y);
+  // 锁梁
+  ctx.strokeStyle = "#9A8C7A";
+  ctx.lineWidth = Math.max(1.6, 2.4 * u);
+  ctx.beginPath();
+  ctx.arc(0, -4 * u, 5.4 * u, Math.PI, 0);
+  ctx.stroke();
+  // 锁体
+  ctx.fillStyle = grad2(ctx, -8 * u, -4 * u, 8 * u, 10 * u, "#F3CC7C", "#D9A23E");
+  rrect(ctx, -8 * u, -4 * u, 16 * u, 13 * u, 3.2 * u);
+  ctx.fill();
+  ctx.strokeStyle = "#A97B24";
+  ctx.lineWidth = Math.max(1.2, 1.6 * u);
+  ctx.stroke();
+  // 锁孔
+  ctx.fillStyle = "#8A6A2C";
+  ctx.beginPath();
+  ctx.arc(0, 1 * u, 1.8 * u, 0, Math.PI * 2);
+  ctx.fill();
+  rrect(ctx, -0.9 * u, 1 * u, 1.8 * u, 4 * u, 0.9 * u);
+  ctx.fill();
+  gleam(ctx, -4 * u, -1.6 * u, 1.6 * u, 1 * u);
+  ctx.restore();
+}
+
+/** 小气泡(移动平台顶):透明泡身 + 左上高光弧 */
+export function drawBubbleDot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.save();
+  const body = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+  body.addColorStop(0, "rgba(255,255,255,.75)");
+  body.addColorStop(1, "rgba(190,226,244,.35)");
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(120,180,210,.7)";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.9)";
+  ctx.lineWidth = Math.max(1, r * 0.16);
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.62, Math.PI * 0.95, Math.PI * 1.45);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 晕圈小旋星(灰尘印装饰 / 碰一下的软反馈):一圈弧 + 一颗小星 */
+export function drawSwirl(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.strokeStyle = "rgba(200,186,220,.9)";
+  ctx.lineWidth = Math.max(1, r * 0.2);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.85, Math.PI * 0.2, Math.PI * 1.55);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.5, Math.PI * 1.2, Math.PI * 2.4);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,.9)";
+  traceStar(ctx, x + r * 0.7, y - r * 0.7, r * 0.4);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 迷你蘑菇(踩弹簧的粒子):粉帽 + 白柄,和场上的弹簧蘑菇同族 */
+export function drawMiniMushroom(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+  const u = s / 18;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#FFF3E4";
+  rrect(ctx, -2.6 * u, -1 * u, 5.2 * u, 6 * u, 2 * u);
+  ctx.fill();
+  ctx.strokeStyle = "#D9B48A";
+  ctx.lineWidth = Math.max(1, 1.1 * u);
+  ctx.stroke();
+  ctx.fillStyle = grad2(ctx, -7 * u, -7 * u, 7 * u, 0, "#F9A9C4", "#F58FB0");
+  ctx.beginPath();
+  ctx.ellipse(0, -1 * u, 7 * u, 4.6 * u, 0, Math.PI, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#CC6D92";
+  ctx.stroke();
+  ctx.fillStyle = "#FFE3EC";
+  ctx.beginPath();
+  ctx.arc(-2.6 * u, -3 * u, 1.1 * u, 0, Math.PI * 2);
+  ctx.arc(2.4 * u, -3.8 * u, 0.9 * u, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 事件粒子的自绘字形集:顶替原来 PARTICLE_FOR_EVENT 里的 emoji 文本 */
+export type ParticleGlyph = "flower" | "star" | "spark" | "swirl" | "mushroom" | "bubble";
+
+/**
+ * 画一颗事件粒子(透明度由调用方的 globalAlpha 控):
+ * flower=五瓣花 / star=金星 / spark=白闪星 / swirl=晕圈 / mushroom=迷你蘑菇 / bubble=小气泡。
+ */
+export function drawParticleGlyph(
+  ctx: CanvasRenderingContext2D,
+  glyph: ParticleGlyph,
+  x: number,
+  y: number,
+  s: number
+): void {
+  const r = s / 2;
+  if (glyph === "flower") {
+    drawFlower(ctx, x, y, r, 0);
+  } else if (glyph === "star") {
+    drawMiniStar(ctx, x, y, r);
+  } else if (glyph === "spark") {
+    ctx.fillStyle = "rgba(255,255,255,.95)";
+    traceStar(ctx, x, y, r);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,244,200,.9)";
+    traceStar(ctx, x, y, r * 0.45);
+    ctx.fill();
+  } else if (glyph === "swirl") {
+    drawSwirl(ctx, x, y, r);
+  } else if (glyph === "mushroom") {
+    drawMiniMushroom(ctx, x, y, s);
+  } else {
+    drawBubbleDot(ctx, x, y, r * 0.8);
+  }
 }

@@ -143,3 +143,25 @@ describe("窗口7 R1 修复 · A-9 双人 16px 灰度可分", () => {
     expect(SRC).not.toContain('"#7FB2FF"');
   });
 });
+
+describe("窗口7 R1 修复 · A-7 场内装饰 emoji 清场:画布零 emoji 直出", () => {
+  it("emoji() 工具函数连根删掉,再没有任何 emoji 字形贴上画布", () => {
+    expect(SRC).not.toMatch(/function emoji\(/);
+    expect(SRC).not.toMatch(/emoji\(g,/);
+    // A 档登记的六处装饰位逐一核销:💫 🫧 🤔 🧽 🧼 🔒 与粒子文本
+    // (⭐ 仍在 HUD 连击卡 / 结算横幅的 DOM 文案里,属「装饰性可留」,画布上已零残留)
+    for (const ch of ["💫", "🫧", "🤔", "🧽", "🧼", "🔒", "🌸", "🍄", "🫳", "🚚"]) {
+      expect(SRC.includes(ch), `画布残留 ${ch}`).toBe(false);
+    }
+    // 顶上来的自绘字形都接了线
+    for (const fn of ["drawSwirl(", "drawBubbleDot(", "drawMiniStar(", "drawThinkBubble(", "drawSponge(", "drawSoap(", "drawPadlock(", "drawParticleGlyph("]) {
+      expect(SRC.includes(fn), `缺自绘接线 ${fn}`).toBe(true);
+    }
+  });
+
+  it("粒子表全部换成自绘字形键,不再存 emoji 文本", () => {
+    expect(SRC).toContain("ParticleGlyph");
+    expect(SRC).toMatch(/flower:\s*"flower"/);
+    expect(SRC).toMatch(/sortGood:\s*"star"/);
+  });
+});

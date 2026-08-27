@@ -69,8 +69,22 @@ import {
 import { SWEEP_TIME } from "./tuning";
 import { blendCape, capeMode, type CapeMode } from "../../art/kit/cape";
 import { traceStar } from "../../art/kit/sparkle";
-// 自绘道具小画坊(R1 修复):香香星 / 18 款垃圾条目 / 分类桶图标,全部顶替裸 emoji
-import { drawBinIcon, drawScentStar, drawTrashItem } from "./trashArt";
+// 自绘道具小画坊(R1 修复):香香星 / 18 款垃圾条目 / 分类桶图标 / 场内小装饰与粒子字形,
+// 全部顶替裸 emoji,画布做到零 emoji 直出
+import {
+  drawBinIcon,
+  drawBubbleDot,
+  drawMiniStar,
+  drawPadlock,
+  drawParticleGlyph,
+  drawScentStar,
+  drawSoap,
+  drawSponge,
+  drawSwirl,
+  drawThinkBubble,
+  drawTrashItem,
+  type ParticleGlyph,
+} from "./trashArt";
 import {
   BEAN_COLORS,
   FLOWER_STYLES,
@@ -310,12 +324,8 @@ function viewportWidth(): number {
   return typeof w === "number" && w > 0 ? w : 360;
 }
 
-function emoji(g: CanvasRenderingContext2D, ch: string, x: number, y: number, size: number): void {
-  g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText(ch, x, y);
-}
+// R1 修复:画布上最后一个 emoji 直出点位清场后,连 emoji() 工具函数一起删掉,
+// 从根上堵住「往画布贴 emoji 字形」这条回退路(DOM 文案里的装饰 emoji 不归它管)。
 
 // ---------------------------------------------------------------------------
 // 场地:一块画布 + 一套操作 + 一个世界
@@ -326,7 +336,7 @@ interface Particle {
   y: number;
   vy: number;
   life: number;
-  text: string;
+  glyph: ParticleGlyph;
   size: number;
 }
 
@@ -376,17 +386,18 @@ const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
   lose: "oops",
 };
 
-const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
-  flower: "🌸",
-  wipe: "✨",
-  sparkle: "⭐",
-  hurt: "💫",
-  smash: "✨",
-  spring: "🍄",
-  pickup: "🫳",
-  sortGood: "⭐",
-  sortSoft: "🤔",
-  cart: "🚚",
+// 事件粒子全部自绘(R1 修复:emoji 文本粒子清场),字形见 trashArt.drawParticleGlyph
+const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], ParticleGlyph>> = {
+  flower: "flower",
+  wipe: "spark",
+  sparkle: "star",
+  hurt: "swirl",
+  smash: "spark",
+  spring: "mushroom",
+  pickup: "bubble",
+  sortGood: "star",
+  sortSoft: "bubble",
+  cart: "star",
 };
 
 function createField(host: HTMLElement, opts: FieldOpts): Field {
@@ -715,7 +726,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (gentle) continue;
       const art = PARTICLE_FOR_EVENT[ev.kind];
       if (art) {
-        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, text: art, size: 18 });
+        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, glyph: art, size: 18 });
         if (particles.length > 40) particles.shift();
       }
     }
@@ -1451,7 +1462,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.ellipse(x + 6 * scale, groundY - 6 * scale, 5 * scale, 3 * scale, 0, 0, Math.PI * 2);
       g.fill();
       g.globalAlpha = 0.55;
-      emoji(g, "💫", x - 8 * scale, groundY - 12 * scale, 10 * scale);
+      drawSwirl(g, x - 8 * scale, groundY - 12 * scale, 5 * scale);
       g.globalAlpha = 1;
     });
 
@@ -1484,7 +1495,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fillStyle = pl.moving ? "#8CC7E8" : pal.groundDark;
       roundRect(g, x, sy(pl.y) + 8 * scale, pl.w * scale, 5 * scale, 3 * scale);
       g.fill();
-      if (pl.moving) emoji(g, "🫧", x + pl.w * scale * 0.5, sy(pl.y) - 9 * scale, 13 * scale);
+      if (pl.moving) drawBubbleDot(g, x + pl.w * scale * 0.5, sy(pl.y) - 9 * scale, 6 * scale);
     }
 
     // 低矮管道
@@ -1575,7 +1586,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       // 桶的身份 = 桶色 + 图标,全名走 HUD 图例(A-11)
       drawBinIcon(g, bin.kind, x, groundY - 20 * scale - lift, 11 * scale, info.color);
       if (bin.flash > 0) {
-        emoji(g, bin.lastOk ? "⭐" : "🤔", x, groundY - 58 * scale, 16 * scale);
+        // 投对亮金星、投错弹「想一想」气泡,都自绘(A-7 装饰 emoji 清场)
+        if (bin.lastOk) drawMiniStar(g, x, groundY - 58 * scale, 8 * scale);
+        else drawThinkBubble(g, x, groundY - 58 * scale, 8 * scale);
       }
     });
 
@@ -1602,7 +1615,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         g.arc(x - 13 * scale, groundY - wheel, wheel, 0, Math.PI * 2);
         g.arc(x + 13 * scale, groundY - wheel, wheel, 0, Math.PI * 2);
         g.fill();
-        emoji(g, "🧽", x, groundY - (CART_H - 12) * scale, 15 * scale);
+        drawSponge(g, x, groundY - (CART_H - 12) * scale, 15 * scale);
         // 推车尾气改自绘小气旋(💨 emoji 清场)
         if (world.cart.pushed && !gentle) drawGust(g, x - 34 * scale, groundY - 16 * scale, 8 * scale);
       }
@@ -1618,7 +1631,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fillStyle = open ? "#8FD69C" : "#CBBFB1";
       roundRect(g, doorX - 20 * scale, groundY - 82 * scale, 40 * scale, 82 * scale, 16 * scale);
       g.fill();
-      emoji(g, open ? "🧼" : "🔒", doorX, groundY - 52 * scale, 24 * scale);
+      if (open) drawSoap(g, doorX, groundY - 52 * scale, 24 * scale);
+      else drawPadlock(g, doorX, groundY - 52 * scale, 24 * scale);
       g.fillStyle = "#6B4A32";
       // 门帘进度是功能文案,360px 档也不许低于 14px(A-11)
       g.font = `900 ${Math.max(14, Math.round(11 * Math.max(0.85, scale)))}px system-ui,sans-serif`;
@@ -1723,10 +1737,10 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     fx.sparks.draw(g);
     g.restore();
 
-    // 小特效
+    // 小特效(自绘粒子字形,emoji 文本清场)
     for (const pt of particles) {
       g.globalAlpha = Math.max(0, Math.min(1, pt.life));
-      emoji(g, pt.text, sx(pt.x), sy(pt.y), pt.size * scale);
+      drawParticleGlyph(g, pt.glyph, sx(pt.x), sy(pt.y), pt.size * scale);
     }
     g.globalAlpha = 1;
 
