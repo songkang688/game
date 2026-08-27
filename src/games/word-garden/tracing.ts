@@ -13,6 +13,7 @@
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
+import { fitQuizHost } from "./fit";
 import {
   GRID,
   judgeTrace,
@@ -131,6 +132,13 @@ export function runTracing(opts: TraceOptions): PlayHandle {
     <div class="wgd-msg" style="color:${theme.accent}"></div>
   `;
   stage.appendChild(wrap);
+  // 描红台是本款第三条入口（答题屏 W5R2-F-A-02、组字工坊 W5R3-A-02 都接过了，这条漏着）。
+  // 真机 320×568 / 360×640 第 117 关实测：`.wgd-msg`「田字格里按顺序描一描，描错顺序也没关系～」
+  // 45px 高、**0px 可见**，田字格自己也被切掉 18px；这条链上一个能滚的祖先都没有。
+  // 那句话是描红的规则说明，看不见就不知道笔顺要按顺序来（W5R3-A-03）。
+  // 不自动滚：描红是按住画的玩法，替孩子滚屏会把手指底下的田字格挪走；
+  // `.wgd-pad` 写着 `touch-action:none`，落在格子上的手指不会带着壳一起滚。
+  const fit = fitQuizHost(wrap);
 
   const progressEl = wrap.querySelector(".wgd-progress") as HTMLElement;
   const countEl = wrap.querySelector(".wgd-count") as HTMLElement;
@@ -202,6 +210,8 @@ export function runTracing(opts: TraceOptions): PlayHandle {
     });
     flowersEl.textContent = Array.from({ length: done }, (_, i) => FLOWERS[i % FLOWERS.length]).join("");
     flowersEl.className = "wgd-flowers wgd-bloom";
+    // 换一个字、开一朵花，这一屏都会变高，钳位重算一次
+    fit.relayout();
   }
 
   function padPoint(ev: PointerEvent): Point {
@@ -303,6 +313,7 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       pad.removeEventListener("pointercancel", onUp);
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      fit.dispose();
       wrap.remove();
     },
   };

@@ -130,3 +130,48 @@ describe("识字小花园 · 组字工坊 · 钳位兜底（源码巡检）", ()
     }
   });
 });
+
+/**
+ * 描红台是本款第三条入口，也是最后一条（W5R3-A-03）。
+ *
+ * 真机 320×568 / 360×640 第 117 关实测：`.wgd-msg`「田字格里按顺序描一描，描错顺序也没关系～」
+ * 45px 高、**0px 可见**；田字格自己也被切掉 18px（320 档 241/259、360 档 275/292）。
+ * 那句话是描红的规则说明，看不见就不知道笔顺要按顺序来。
+ *
+ * 这一屏**不自动滚**：描红是按住画的玩法，替孩子滚屏会把手指底下的田字格挪走。
+ * 只钳位 + 挂滚动条；`.wgd-pad` 写着 `touch-action:none`，落在格子上的手指不会带着壳一起滚。
+ */
+describe("识字小花园 · 描红台 · 钳位（源码巡检）", () => {
+  const trace = readFileSync(`${dir}tracing.ts`, "utf8");
+
+  it("挂进舞台之后立刻钳一次", () => {
+    const at = trace.indexOf("stage.appendChild(wrap)");
+    expect(at).toBeGreaterThan(-1);
+    expect(trace.slice(at, at + 700)).toContain("fitQuizHost(wrap)");
+  });
+
+  it("换一个字 / 开一朵花都会变高，重量一次", () => {
+    const at = trace.indexOf('flowersEl.className = "wgd-flowers wgd-bloom"');
+    expect(at).toBeGreaterThan(-1);
+    expect(trace.slice(at, at + 220)).toContain("fit.relayout()");
+  });
+
+  it("destroy 里把 resize 那条监听拆掉", () => {
+    const at = trace.indexOf("destroy() {");
+    expect(at).toBeGreaterThan(-1);
+    expect(trace.slice(at)).toContain("fit.dispose()");
+  });
+
+  it("三条入口一条都不许漏：答题屏 / 组字工坊 / 描红台", () => {
+    const runner = readFileSync(`${dir}runner.ts`, "utf8");
+    for (const [name, text] of [["答题屏", runner], ["组字工坊", src], ["描红台", trace]] as const) {
+      expect(text, `${name}没接钳位器`).toContain("fitQuizHost(");
+    }
+  });
+
+  it("田字格自己不许被替玩家滚屏——描红是按住画的玩法", () => {
+    // `showChoices` 只认 `.qz-choices` / `.bc-choices`，描红台两样都没有，所以不会自动滚
+    expect(trace, "描红台不该有选项排").not.toContain("qz-choices");
+    expect(trace).not.toContain("bc-choices");
+  });
+});
