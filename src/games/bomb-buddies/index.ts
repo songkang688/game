@@ -149,7 +149,10 @@ export function boardCellSize(cols: number, rows: number, availW: number, availH
 export const CSS = `
 .bmb-wrap{--bmb-ink:#4a4266;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--bmb-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
-  touch-action:none;position:relative;}
+  position:relative;}
+/* 只有真正要拖的东西吃掉手势;别的地方留给滚动,万一哪台机器还是矮了一截,
+   摇杆也划得到,不会被 overflow:hidden 的舞台吃掉 */
+.bmb-board,.bmb-stick,.bmb-act{touch-action:none;}
 .bmb-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
 .bmb-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(120,110,170,.18);}
@@ -199,7 +202,8 @@ export const CSS = `
 .bmb-veil-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;max-width:320px;}
 .bmb-veil-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .bmb-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
-  background:linear-gradient(180deg,#f2f5ff,#fff3f8);display:flex;flex-direction:column;gap:8px;}
+  background:linear-gradient(180deg,#f2f5ff,#fff3f8);display:flex;flex-direction:column;gap:8px;
+  max-height:100%;overflow-y:auto;overscroll-behavior:contain;}
 .bmb-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .bmb-back{border:none;border-radius:999px;min-height:44px;padding:6px 14px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
@@ -216,26 +220,51 @@ export const CSS = `
 .bmb-open--ai{background:linear-gradient(180deg,#6fbfa8,#4c9d86);box-shadow:0 4px 0 #3b7c69;}
 .bmb-open--co{background:linear-gradient(180deg,#efb268,#d8913f);box-shadow:0 4px 0 #ab7031;}
 .bmb-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+/* 舞台是定高的一屏。把中间这两层也钉成定高,.bmb-mode 的 max-height:100% 才有参照物 ——
+   万一哪台机器矮得连 24px 的格子都排不下,至少还能滑下去按到摇杆,而不是被裁掉。 */
+.bmb-root{display:flex;flex-direction:column;min-height:0;max-height:100%;}
+.bmb-modehost{display:flex;flex-direction:column;min-height:0;}
+.bmb-root>[hidden],.bmb-modehost[hidden]{display:none;}
 .bmb-pick{border:none;border-radius:14px;min-height:44px;padding:7px 14px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.35);}
 .bmb-pick[aria-pressed="true"]{background:linear-gradient(180deg,#8f7ae0,#6f57c8);color:#fff;box-shadow:0 3px 0 #57429f;}
 .bmb-pick:active{transform:translateY(2px);}
 .bmb-pick:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bmb-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
-/* 360px 宽的手机:两套摇杆挤一行(156×2 + 10 = 322),中缝再收紧一点当保险。
-   热区一个都不许缩 —— 宁可字小一号,不能让按钮小于 44。 */
+/* 360px 宽的手机:最宽的图是 13 列 ×24px = 312px,舞台内宽只有 323 —— 左右留白
+   必须压到 4px 才塞得进去。两套摇杆挤一行(150×2 + 6 = 306),热区一个都不许缩:
+   宁可字小一号、名字收起来,也不能让按钮小于 44。 */
 @media (max-width:400px){
+  .bmb-mode{padding:6px 4px;gap:6px;}
+  .bmb-mhead{flex-wrap:nowrap;gap:5px;}
+  .bmb-mhead .bmb-chip{min-width:0;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;}
+  .bmb-mhead .bmb-btn{flex:0 0 auto;padding:6px 10px;}
+  .bmb-back{padding:6px 10px;font-size:13px;}
   .bmb-pads{gap:6px;}
-  .bmb-tip{font-size:13px;padding:4px 8px;}
-  .bmb-chip{font-size:13px;padding:3px 8px;}
+  .bmb-pad{gap:4px;}
+  .bmb-tip{font-size:12.5px;padding:3px 8px;}
+  .bmb-chip{font-size:12px;padding:3px 7px;}
+  /* 名字只在宽屏上写全:窄屏靠颜色和表情认人,省下来的宽度让 HUD 收成一行 */
+  .bmb-nm{display:none;}
+  .bmb-act{width:44px;height:44px;border-radius:12px;font-size:11px;}
+  .bmb-act b{font-size:16px;}
+  .bmb-acts{gap:4px;}
+  .bmb-stick{width:96px;height:96px;}
+  .bmb-knob{width:44px;height:44px;margin:-22px 0 0 -22px;}
 }
-/* 手机竖屏一共就 667 像素高,棋盘上面还压着标题栏和选关条。
-   这里把行距收一点,保证摇杆整块留在首屏里,不用一边滚屏一边躲彩虹波。 */
-@media (max-height:720px){
-  .bmb-wrap{gap:4px;}
-  .bmb-padname{font-size:11px;}
+/* 手机竖屏一共就六百来像素高,棋盘上面还压着平台标题栏和本款的标题条。
+   这里把行距收干净,保证「整张图 + 两套摇杆」一起留在首屏里,
+   不用一边滚屏一边躲彩虹波 —— 舞台是 overflow:hidden 的,漏出去就等于按不到。 */
+@media (max-height:780px){
+  .bmb-wrap{gap:3px;}
+  .bmb-padname{font-size:11px;line-height:1.1;}
+  .bmb-padwrap{gap:2px;}
   /* 只有一个人玩的时候名字挪到摇杆左边,又省下一行的高度 */
   .bmb-pads--one .bmb-padwrap{flex-direction:row;align-items:center;gap:6px;}
+}
+/* 再矮一点(667 那一档):提示条让位给棋盘。这句话在暂停面板和开局播报里都还在。 */
+@media (max-height:700px){
+  .bmb-tip{display:none;}
 }
 @media (prefers-reduced-motion:reduce){
   .bmb-btn:active,.bmb-act:active,.bmb-pick:active{transform:none;}
@@ -352,6 +381,14 @@ export interface MatchOpts {
   shrinkRound?: number;
   /** 上一层带上来的家当(泡泡塔用:爬楼不清空道具) */
   carry?: Carry;
+  /**
+   * 暂停钮挂哪儿。
+   *
+   * 竖屏手机的高度是抠出来的:标题栏那一行右边空着半截,暂停钮搬过去,
+   * HUD 就从两行缩成一行,棋盘正好多出 44px —— 13×13 的图才放得下 24px 的格子。
+   * 不给就退回 HUD 里,单测和宽屏都照旧。
+   */
+  headSlot?: HTMLElement;
 }
 
 interface Runner {
@@ -417,11 +454,24 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   const hud = el("div", "bmb-hud");
   const chipTime = el("span", "bmb-chip");
   const chipGoal = el("span", "bmb-chip");
-  const chipStats: HTMLElement[] = [];
-  for (let i = 0; i < seats; i++) chipStats.push(el("span", `bmb-chip bmb-chip-p${i}`));
-  const pauseBtn = el("button", "bmb-btn bmb-btn--ghost", "⏸ 暂停") as HTMLButtonElement;
+  // 名字和数字分开装:窄屏上把名字收起来,一排芯片就能挤进 315px,HUD 从两行变一行
+  const chipStats: { box: HTMLElement; name: HTMLElement; body: HTMLElement }[] = [];
+  for (let i = 0; i < seats; i++) {
+    const box = el("span", `bmb-chip bmb-chip-p${i}`);
+    const name = el("span", "bmb-nm");
+    const body = el("span");
+    box.append(name, body);
+    chipStats.push({ box, name, body });
+  }
+  const pauseBtn = el("button", "bmb-btn bmb-btn--ghost") as HTMLButtonElement;
   pauseBtn.type = "button";
-  hud.append(chipTime, chipGoal, ...chipStats, pauseBtn);
+  const pauseIcon = el("span", undefined, "⏸");
+  const pauseWord = el("span", "bmb-nm", "暂停");
+  pauseBtn.append(pauseIcon, pauseWord);
+  pauseBtn.setAttribute("aria-label", "暂停");
+  hud.append(chipTime, chipGoal, ...chipStats.map((c) => c.box));
+  // 手机上标题栏那一行还空着半截,暂停钮搬过去,棋盘就能多要回一整行 44px
+  (opts.headSlot ?? hud).appendChild(pauseBtn);
 
   const boardBox = el("div", "bmb-board");
   const canvas = document.createElement("canvas");
@@ -617,15 +667,30 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   // ---- 画布尺寸 -------------------------------------------------------------
   let cell = 30;
 
+  /**
+   * 棋盘还能占多高——量出来的,不是拍脑袋的常量。
+   *
+   * 平台的舞台是 `overflow:hidden` 的一屏,漏到屏幕外的摇杆等于按不到。
+   * 所以先把「棋盘上面那一摞」(标题栏 + 标题条 + HUD)和「下面那一摞」
+   * (提示条 + 摇杆)的**真实**高度扣干净,剩下多少才是棋盘的。
+   * 量不到(比如测试用的 DOM 桩)就退回老常量,行为和 1.1 一样。
+   */
+  function roomForBoard(viewH: number): number {
+    const top = boardBox.getBoundingClientRect?.()?.top ?? 0;
+    const below = (tip.offsetHeight ?? 0) + (pads.offsetHeight ?? 0);
+    // 舞台底下平台自己还留了 8~14px 的边,留 16 当保险
+    const room = viewH - 16 - top - below - 8;
+    if (!Number.isFinite(room) || top <= 0 || room <= 0) return viewH - (viewH <= 720 ? 250 : 220);
+    return room;
+  }
+
   function layout(): void {
     const wide = (globalThis as { innerWidth?: number }).innerWidth ?? 400;
     const avail = Math.max(MIN_CELL_PX * board.w, Math.min(host.clientWidth || wide, 620));
     const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
-    // 竖屏上棋盘之外还压着:标题栏 + HUD + 提示 + 摇杆那一排。
-    // 剩下的高度给棋盘,但**不允许**把格子压到 24px 以下 —— 宁可这一屏要滑一点,
-    // 也不能让孩子看不清脚下那格是砖还是泡泡(地图本身已经封在 15×15,正常都放得下)。
-    const chrome = viewH <= 720 ? 250 : 220;
-    const maxH = Math.max(MIN_CELL_PX * board.h, viewH - chrome);
+    // 高度不够就只能让棋盘小一点,但**不允许**把格子压到 24px 以下 ——
+    // 宁可这一屏挤一挤,也不能让孩子看不清脚下那格是砖还是泡泡。
+    const maxH = Math.max(MIN_CELL_PX * board.h, roomForBoard(viewH));
     cell = boardCellSize(board.w, board.h, avail, maxH);
     const cssW = cell * board.w;
     const cssH = cell * board.h;
@@ -896,7 +961,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     }
     fighters.forEach((f, i) => {
       const gear = `${f.kick ? "🦵" : ""}${f.ghost ? "✨" : ""}${f.remote ? "📡" : ""}${f.shield > 0 ? `🛡${f.shield}` : ""}`;
-      chipStats[i].textContent = `${f.emoji}${f.name} 🌈${f.power} 🫧${f.bombs} 👟${f.speed}${gear ? ` ${gear}` : ""}`;
+      chipStats[i].name.textContent = f.name;
+      chipStats[i].body.textContent = `${f.emoji} 🌈${f.power} 🫧${f.bombs} 👟${f.speed}${gear ? ` ${gear}` : ""}`;
     });
     refreshRescueChip();
   }
@@ -960,7 +1026,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   function togglePause(): void {
     if (finished) return;
     paused = !paused;
-    pauseBtn.textContent = paused ? "▶ 继续" : "⏸ 暂停";
+    pauseIcon.textContent = paused ? "▶" : "⏸";
+    pauseWord.textContent = paused ? "继续" : "暂停";
+    pauseBtn.setAttribute("aria-label", paused ? "继续" : "暂停");
     if (paused) {
       releaseAll();
       showVeil("⏸ 休息一下", `按 Esc 或点「继续」回到对局。${KEY_HELP}`, [
@@ -1194,7 +1262,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     render();
     checkEnd();
   }
+  // 芯片先填字再量高:空 HUD 比填好字的矮一截,先量会把棋盘算大、把摇杆挤出屏幕
   refreshHud();
+  layout();
   render();
   raf = requestAnimationFrame(frame);
 
@@ -1225,6 +1295,7 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       toastUntil = 0;
       stopSpeaking();
       clearVeil();
+      pauseBtn.remove();
       wrap.remove();
     },
   };
@@ -1234,12 +1305,13 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
 // 闯关(188 关)
 // ---------------------------------------------------------------------------
 
-function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
+function playLevel(stage: HTMLElement, ctx: PlayCtx, headSlot?: HTMLElement): { destroy: () => void } {
   const lv = buildLevel(ctx.level, 1);
   const runner = createMatch(stage, {
     level: lv,
     mode: "campaign",
     humans: 1,
+    headSlot,
     banner: `第 ${ctx.level + 1} 关`,
     tip: `${goalText(lv.goal)}。${lv.hint}`,
     sfx: ctx.sfx,
@@ -1396,6 +1468,7 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       level: buildArena(round, 2),
       mode: aiSkill ? "ai" : "versus",
       humans: aiSkill ? 1 : 2,
+      headSlot: shell.head,
       ai: aiSkill ? [{ index: 1, skill: aiSkill }] : [],
       banner: `第 ${round} 局 · ${scores[0]}:${scores[1]}`,
       tip: aiSkill
@@ -1436,6 +1509,7 @@ function mountTower(host: HTMLElement, api: GameApi, onBack: () => void): { dest
       level: buildTowerFloor(floor),
       mode: "endless",
       humans: 1,
+      headSlot: shell.head,
       banner: `第 ${floor} 层`,
       carry,
       // 高层的楼板会一圈圈往里收,逼着人往中间打,不许拖到最后一秒
@@ -1526,6 +1600,7 @@ function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destr
       level: lv,
       mode: "coop",
       humans: 2,
+      headSlot: shell.head,
       banner: `合作 第 ${level + 1} 关`,
       tip: `${goalText(lv.goal)}。谁被泡泡罩住,另一个人贴过去就能拍破救出来。${KEY_HELP}`,
       sfx: (n) => api.play(n),
@@ -1607,11 +1682,11 @@ export function levelFromQuery(search: string | null): number | null {
 
 export function mount(api: GameApi): BombBuddiesHandle {
   ensureCss(api.root);
-  const root = el("div");
+  const root = el("div", "bmb-root");
   const bar = el("div", "bmb-bar");
   const picks = el("div", "bmb-picks");
   const levelHost = el("div");
-  const modeHost = el("div");
+  const modeHost = el("div", "bmb-modehost");
   modeHost.hidden = true;
   root.append(bar, picks, levelHost, modeHost);
   api.root.appendChild(root);
@@ -1764,7 +1839,7 @@ export function mount(api: GameApi): BombBuddiesHandle {
       bonusStars: (n) => api.addStars(n),
     };
 
-    handle = playLevel(shell.stage, ctx);
+    handle = playLevel(shell.stage, ctx, shell.head);
     direct = {
       destroy() {
         handle?.destroy();

@@ -587,18 +587,25 @@ describe("无尽泡泡塔", () => {
 });
 
 describe("窄屏 360px", () => {
-  it("尺寸上限就是 360 / 24 那道除法", () => {
+  it("尺寸上限是「真机上量出来的可画宽度 / 24」那道除法", () => {
     expect(NARROW_PX).toBe(360);
     expect(MIN_CELL_PX).toBe(24);
-    expect(MAX_COLS).toBe(Math.floor(NARROW_PX / MIN_CELL_PX));
+    // 360 的屏宽先要扣掉平台留白、舞台描边和本款内边距,真正能画的约 315px。
+    // 上限必须小于那个数,而且是奇数(奇数才摆得出标准的硬墙柱子格局)。
+    expect(MAX_COLS * MIN_CELL_PX).toBeLessThanOrEqual(315);
+    expect(MAX_COLS % 2).toBe(1);
+    expect(MAX_ROWS % 2).toBe(1);
+    // 竖屏 720 扣掉标题栏 / HUD / 摇杆之后剩 312,行数不能比列数还宽松
+    expect(MAX_ROWS * MIN_CELL_PX).toBeLessThanOrEqual(312);
     expect(MAX_COLS * MIN_CELL_PX).toBeLessThanOrEqual(NARROW_PX);
   });
 
   it("fitSize 压在上限内,而且压完还是奇数", () => {
     expect(fitSize(9, MAX_COLS)).toBe(9);
-    expect(fitSize(16, MAX_COLS)).toBe(15);
-    expect(fitSize(99, MAX_COLS)).toBe(15);
+    expect(fitSize(16, MAX_COLS)).toBe(MAX_COLS);
+    expect(fitSize(99, MAX_COLS)).toBe(MAX_COLS);
     expect(fitSize(99, 14)).toBe(13);
+    expect(fitSize(99, 15)).toBe(15);
   });
 
   it("188 关一关都不超框:360px 手机上整屏看得完,每格不小于 24px", () => {

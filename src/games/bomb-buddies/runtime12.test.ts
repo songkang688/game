@@ -182,7 +182,7 @@ describe("手机 360px 排得下", () => {
     for (const n of sizes) expect(n, `样式里有个 ${n}px 的热区`).toBeGreaterThanOrEqual(44);
   });
 
-  it("字号都不小于 13px(窄屏那一档最多收到 13,正文仍是 14)", () => {
+  it("字号都不小于 11px(钮上的小字最多收到 11,正文仍是 14)", () => {
     const fonts = [...CSS.matchAll(/font-size\s*:\s*([\d.]+)px/g)].map((m) => Number(m[1]));
     expect(fonts.length).toBeGreaterThan(5);
     for (const n of fonts) expect(n, `样式里有个 ${n}px 的字`).toBeGreaterThanOrEqual(11);
@@ -191,8 +191,9 @@ describe("手机 360px 排得下", () => {
   });
 
   it("格子最小 24px:再挤也不会把地图压成看不清的小色块", () => {
-    // 15 列的图在 360 宽的屏上正好 24
-    expect(boardCellSize(MAX_COLS, MAX_COLS, NARROW_PX, 400)).toBe(MIN_CELL_PX);
+    // 最宽的图在真机量出来的 315px 可画宽度里,每格仍有 24
+    expect(boardCellSize(MAX_COLS, MAX_COLS, 315, 315)).toBe(MIN_CELL_PX);
+    expect(boardCellSize(MAX_COLS, MAX_COLS, NARROW_PX, 400)).toBeGreaterThanOrEqual(MIN_CELL_PX);
     // 空间不够时也不往下压
     expect(boardCellSize(MAX_COLS, MAX_COLS, 200, 200)).toBe(MIN_CELL_PX);
     // 空间富余时铺开,但有上限,不会大到一格占半屏
@@ -212,6 +213,35 @@ describe("手机 360px 排得下", () => {
     expect(cssW).toBeGreaterThan(0);
     expect(cssW).toBeLessThanOrEqual(NARROW_PX);
     m.handle.destroy();
+  });
+
+  it("暂停钮搬到标题条那一行,HUD 就腾出一整行 44px 给棋盘", () => {
+    const m = boot();
+    openMode(m, "泡泡塔");
+    const head = findOne(m.root, "bmb-mhead");
+    const hud = findOne(m.root, "bmb-hud");
+    expect(head, "缺标题条").not.toBe(null);
+    expect(allText(head)).toContain("暂停");
+    // 不在 HUD 里重复挂一份
+    expect(allText(hud)).not.toContain("暂停");
+    m.handle.destroy();
+  });
+
+  it("窄屏那一档:名字收起来、内边距收到 4px,13 列 ×24 才塞得进舞台", () => {
+    // 名字单独包一层,窄屏靠 CSS 收掉,腾出来的宽度让 HUD 从两行变一行
+    expect(CSS).toContain(".bmb-nm{display:none;}");
+    expect(CSS).toMatch(/@media \(max-width:400px\)/);
+    expect(CSS).toContain(".bmb-mode{padding:6px 4px");
+    // 矮屏那一档提示条让位给棋盘,话在暂停面板里还找得到
+    expect(CSS).toMatch(/@media \(max-height:700px\)\{\s*\.bmb-tip\{display:none;\}/);
+    expect(KEY_HELP.length).toBeGreaterThan(10);
+  });
+
+  it("只有要拖的东西吃手势,别处留给滚动——舞台是 overflow:hidden,漏出去就按不到", () => {
+    expect(CSS).toContain(".bmb-board,.bmb-stick,.bmb-act{touch-action:none;}");
+    // 兜底:实在矮得放不下,模式外壳自己能滚
+    expect(CSS).toMatch(/\.bmb-mode\{[^}]*overflow-y:auto/);
+    expect(CSS).toContain(".bmb-root{display:flex");
   });
 });
 
