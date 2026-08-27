@@ -128,6 +128,26 @@ describe("搜索", () => {
     expect(res.depth).toBeGreaterThanOrEqual(1);
   });
 
+  it("置换表按局面本身做键：同一手同一分，但省掉一大截节点", () => {
+    const pos = fromFen("r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1");
+    const res = search(pos, { depth: 5 });
+    expect(toSan(res.move!, pos)).toBe("Nc3");
+    expect(res.score).toBe(74);
+    // 表里掺了深度的时候这一趟要走 146175 个节点，按局面做键之后是 86952 个。
+    // 留出余量卡在 12 万：再退回「键里带深度」的写法，这条会当场变红。
+    expect(res.nodes).toBeLessThan(120000);
+  });
+
+  it("跨深度复用不会把杀分算串：多算两层照样报得出强制杀", () => {
+    // 两步杀（3 个半回合）：往下多搜两层，杀分仍然是杀分
+    const pos = fromFen("7k/8/8/5K2/8/8/8/6Q1 w - - 0 1");
+    for (const depth of [3, 4, 5]) {
+      const res = search(pos, { depth });
+      expect(res.score, `深度 ${depth} 没报出杀分`).toBeGreaterThan(MATE_SCORE - 100);
+      expect(forcesMate(pos, res.move!, 3), `深度 ${depth} 挑的不是杀法`).toBe(true);
+    }
+  });
+
   it("同一个局面算两遍给的是同一手（没有随机性混进来）", () => {
     const pos = fromFen("r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1");
     const a = search(pos, { depth: 3 });

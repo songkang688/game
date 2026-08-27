@@ -57,6 +57,13 @@ export const PIECE_VALUE: Record<PieceType, number> = {
 /** 将杀分：离根越近分越高，这样引擎会选最快的杀法 */
 export const MATE_SCORE = 100000;
 
+/**
+ * 分数绝对值超过这条线就是「几步之内见分晓」的杀分。
+ * 杀分是相对当前层数算的，同一个局面在不同层上的杀分不一样，
+ * 所以这种分数只借它记的那一手用来排序，不能当成缓存值直接返回。
+ */
+const MATE_BOUND = MATE_SCORE - 1000;
+
 // ---------------------------------------------------------------------------
 // 位置表（白方视角，按 a1..h8 排列；黑方查表时上下翻转）
 // ---------------------------------------------------------------------------
@@ -320,19 +327,21 @@ export function search(pos: Position, opts: SearchOptions = {}): SearchResult {
     nodes++;
     if (timeUp()) return p.turn * evaluate(p, usePst);
     const alphaOrig = alpha;
-    const key = `${zobrist(p)}|${depth}`;
-    const hit = tt.get(key);
-    if (hit && hit.depth >= depth) {
-      if (hit.flag === "exact") return hit.score;
-      if (hit.flag === "lower" && hit.score > alpha) alpha = hit.score;
-      else if (hit.flag === "upper" && hit.score < beta) beta = hit.score;
-      if (alpha >= beta) return hit.score;
-    }
     const moves = legalMoves(p);
     if (moves.length === 0) {
       return inCheck(p, p.turn) ? -(MATE_SCORE - ply) : 0;
     }
     if (p.halfmove >= 100) return 0;
+    // 表按局面本身做键，不掺深度：这样浅层算出来的结果与最好的一手，
+    // 深一层还用得上——迭代加深每加一层都能接着上一层的剪枝往下走。
+    const key = zobrist(p);
+    const hit = tt.get(key);
+    if (hit && hit.depth >= depth && Math.abs(hit.score) < MATE_BOUND) {
+      if (hit.flag === "exact") return hit.score;
+      if (hit.flag === "lower" && hit.score > alpha) alpha = hit.score;
+      else if (hit.flag === "upper" && hit.score < beta) beta = hit.score;
+      if (alpha >= beta) return hit.score;
+    }
     if (depth <= 0) {
       return useQuiescence ? quiesce(p, alpha, beta, ply) : p.turn * evaluate(p, usePst);
     }
@@ -354,12 +363,16 @@ export function search(pos: Position, opts: SearchOptions = {}): SearchResult {
         break;
       }
     }
-    tt.set(key, {
-      depth,
-      score: best,
-      flag: best <= alphaOrig ? "upper" : best >= beta ? "lower" : "exact",
-      best: bestKey,
-    });
+    // 深的结果比浅的值钱：只有同深度或更深才覆盖，别让一条浅记录把深记录冲掉
+    const stored = tt.get(key);
+    if (!stored || stored.depth <= depth) {
+      tt.set(key, {
+        depth,
+        score: best,
+        flag: best <= alphaOrig ? "upper" : best >= beta ? "lower" : "exact",
+        best: bestKey,
+      });
+    }
     return best;
   }
 
