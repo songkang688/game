@@ -59,7 +59,10 @@ const KEY_STEP = 9;
 const CSS = `
 .fs-wrap{--fs-ink:#5a4664;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--fs-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
-  touch-action:none;position:relative;width:100%;}
+  touch-action:none;position:relative;width:100%;
+  /* B 档 r2 一致性②:粉白壳卡(与 canvas 内天空渐变同族)。侧内衬收敛为 0:
+     双盆画布宽取自 host.clientWidth(卡外容器),侧内衬会让双盆行溢出卡外——上下留卡即可 */
+  background:linear-gradient(180deg,#FFF4F8,#FBF0FF);border-radius:16px;padding:10px 0;box-sizing:border-box;}
 .fs-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
 .fs-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(150,120,140,.18);}
