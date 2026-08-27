@@ -84,6 +84,19 @@ describe("五个入口", () => {
     }
   });
 
+  it("360px 上最小的那一档字号不低于 12px", () => {
+    const rec = setup(360);
+    open(rec);
+    const css = rec.dom.root.find((e) => e.tagName === "style")?.textContent ?? "";
+    expect(css.length).toBeGreaterThan(0);
+    // 训练场的帧数读数与触屏钮的钮名原来都是 11px，双人时左右各四颗钮更难认
+    expect(css).toContain(".fk-clock-r{font-size:12px;");
+    expect(css).toContain(".fk-pad-name{font-size:12px;");
+    for (const px of [8, 9, 10, 11]) {
+      expect(css, `还有 ${px}px 的字`).not.toContain(`font-size:${px}px`);
+    }
+  });
+
   it("进得去也退得回来：训练场 → 返回 → 还是那张菜单", () => {
     const rec = setup();
     open(rec);

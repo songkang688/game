@@ -144,7 +144,7 @@ const CSS = `
 .fk-pips{font-size:12px;letter-spacing:2px;color:#e0679f;height:14px;}
 .fk-clock{width:74px;text-align:center;flex:0 0 auto;}
 .fk-clock-t{font-size:21px;font-weight:900;color:#4a3a68;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.9);}
-.fk-clock-r{font-size:11px;font-weight:800;color:#7b6aa0;}
+.fk-clock-r{font-size:12px;font-weight:800;color:#7b6aa0;}
 .fk-banner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:6px;pointer-events:none;text-align:center;padding:14px;}
 .fk-banner-big{font-size:30px;font-weight:900;color:#c8497f;text-shadow:0 2px 0 #fff,0 4px 10px rgba(200,73,127,.3);}
@@ -173,7 +173,7 @@ const CSS = `
 .fk-padbtn-g{background:#d8f2e4;color:#2f7a56;box-shadow:0 3px 0 rgba(80,160,120,.35);}
 .fk-padbtn-g:active{box-shadow:0 1px 0 rgba(80,160,120,.35);}
 .fk-padbtn-ready{outline:3px solid #e0679f;}
-.fk-pad-name{font-size:11px;font-weight:900;color:#7b6aa0;text-align:center;}
+.fk-pad-name{font-size:12px;font-weight:900;color:#7b6aa0;text-align:center;}
 /* 连段计数是 HUD 里的独立一行 DOM，永远不会被元气条压住 */
 .fk-comborow{display:flex;justify-content:space-between;gap:8px;margin-top:4px;height:20px;}
 .fk-combo{font-size:15px;font-weight:900;color:#c8497f;text-shadow:0 1px 0 #fff,0 0 4px #fff;min-width:0;
