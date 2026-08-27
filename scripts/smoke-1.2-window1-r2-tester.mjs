@@ -64,6 +64,7 @@ function note(what, extra = "") {
 const GAMES = [
   {
     id: "orb-arena",
+    hold: true,
     duoKind: "realtime",
     title: "圆圆大作战",
     p: "oa",
@@ -74,6 +75,7 @@ const GAMES = [
   },
   {
     id: "snake-royale",
+    hold: true,
     duoKind: "realtime",
     title: "长蛇争霸",
     p: "sr",
@@ -84,6 +86,7 @@ const GAMES = [
   },
   {
     id: "block-drop",
+    hold: true,
     duoKind: "split",
     title: "方块叠叠乐",
     p: "bd",
@@ -94,6 +97,7 @@ const GAMES = [
   },
   {
     id: "combo-clash",
+    hold: true,
     duoKind: "realtime",
     title: "连招对决",
     p: "cc",
@@ -540,9 +544,19 @@ async function drive(page, g, { budgetMs = 26000, mode = "play" } = {}) {
       await sleep(700);
       continue;
     }
-    await page.keyboard.press(g.keys[k % g.keys.length]).catch(() => {});
-    k += 1;
-    acts += 1;
+    // 动作类要「按住」才走得动:轻点一下方向键,圆圆和长蛇几乎原地不动,
+    // 第 1 轮的通用假人打不出过关,多半就吃了这个亏。
+    if (g.hold) {
+      const key = g.keys[k % g.keys.length];
+      const isDir = /^(Key[WASD]|Arrow)/.test(key);
+      await holdKey(page, key, isDir ? 520 + (acts % 3) * 240 : 90);
+      k += 1;
+      acts += 1;
+    } else {
+      await page.keyboard.press(g.keys[k % g.keys.length]).catch(() => {});
+      k += 1;
+      acts += 1;
+    }
     if (g.clicks.length > 0) {
       await page
         .evaluate(
