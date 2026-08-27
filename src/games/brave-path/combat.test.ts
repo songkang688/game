@@ -54,7 +54,7 @@ const plainAttack = (): number => 0.6;
 function hero(over: Partial<FighterSpec> = {}): Fighter {
   return makeFighter({
     name: "鸭梨",
-    emoji: "🌸",
+    emoji: "🍐",
     element: "grass",
     maxHp: 120,
     atk: 30,
@@ -496,7 +496,7 @@ describe("道具与有限背包", () => {
   it("背包最多 4 格，多的会被砍掉", () => {
     const f = makeFighter({
       name: "鸭梨",
-      emoji: "🌸",
+      emoji: "🍐",
       element: "grass",
       maxHp: 100,
       atk: 10,

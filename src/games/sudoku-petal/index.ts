@@ -1200,7 +1200,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       hint: "鸭梨用 W A S D 移动、F 种下、G 切铅笔;康康用方向键、L 种下、K 切铅笔。手机上直接点各自的数字钮。",
       seats: [
         {
-          name: "🌸 鸭梨",
+          name: "🍐 鸭梨",
           who: "duo",
           entry,
           cell,
@@ -1210,7 +1210,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           onDone: () => undefined
         },
         {
-          name: "⭐ 康康",
+          name: "👓 康康",
           who: "star",
           entry,
           cell,

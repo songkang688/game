@@ -1169,8 +1169,8 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     shell.body.appendChild(wrap);
 
     const seats: Array<{ name: string; keys: string[]; cancelKeys: string[]; color: string }> = [
-      { name: "🌸 鸭梨 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268" },
-      { name: "⭐ 康康 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA" },
+      { name: "🍐 鸭梨 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268" },
+      { name: "👓 康康 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA" },
     ];
     seats.forEach((seat, i) => {
       const st = createStage(wrap, {

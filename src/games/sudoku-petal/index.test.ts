@@ -689,8 +689,8 @@ describe("一张桌子:计时、暂停、键盘与 destroy", () => {
 
   it("键盘落到对的那块盘上:鸭梨按 WASD,康康按方向键,互不串台", () => {
     const { host, t } = table([
-      seatOpts({ name: "🌸 鸭梨", who: "duo" }),
-      seatOpts({ name: "⭐ 康康", who: "star" })
+      seatOpts({ name: "🍐 鸭梨", who: "duo" }),
+      seatOpts({ name: "👓 康康", who: "star" })
     ]);
     expect(host.byClass("sp-grid")).toHaveLength(2);
     const before = host.byClass("sp-cur").map((e) => e.getAttribute("aria-label"));
@@ -869,7 +869,7 @@ describe("整款游戏挂载", () => {
     const handle = mount(api);
     root.byClass("sp-open")[2].fire("click");
     expect(root.byClass("sp-grid")).toHaveLength(2);
-    expect(root.byClass("sp-name").map((e) => e.textContent)).toEqual(["🌸 鸭梨", "⭐ 康康"]);
+    expect(root.byClass("sp-name").map((e) => e.textContent)).toEqual(["🍐 鸭梨", "👓 康康"]);
     const hint = root.byClass("sp-msg").find((e) => e.textContent.includes("方向键"));
     expect(hint?.textContent).toContain("W A S D");
     handle.destroy();

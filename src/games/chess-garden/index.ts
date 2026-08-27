@@ -33,8 +33,8 @@ import { insufficientMaterial, status, type Game, type Status } from "./rules";
 import { AI_BLURB, AI_LABEL, AI_TIERS, TIER_PLAN, chooseMove, forcesMate, type AiTier } from "./search";
 import { createBoard, type BoardHandle, type Judgement, type SeatPlan } from "./view";
 
-const DUO: SeatPlan = { name: "鸭梨", emoji: "🌸", color: "#F7DCE8", ai: null };
-const XING: SeatPlan = { name: "康康", emoji: "⭐", color: "#DCE6F7", ai: null };
+const DUO: SeatPlan = { name: "鸭梨", emoji: "🍐", color: "#F7DCE8", ai: null };
+const XING: SeatPlan = { name: "康康", emoji: "👓", color: "#DCE6F7", ai: null };
 
 function aiSeat(tier: AiTier): SeatPlan {
   return { name: AI_LABEL[tier], emoji: "🤖", color: "#E4E0F2", ai: tier };

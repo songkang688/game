@@ -237,7 +237,7 @@ export function branchForLane(lane: number): 0 | 1 {
 
 export function createMatch(opts: MatchOptions): MatchState {
   const names = opts.names ?? ["鸭梨", "康康"];
-  const emojis = opts.emojis ?? ["🌸", "⭐"];
+  const emojis = opts.emojis ?? ["🍐", "👓"];
   const isGhostRace = opts.mode === "ghost";
   const aiLevel = isGhostRace ? null : (opts.aiLevel ?? null);
   const ghostSource: GhostSource = opts.ghostSource ?? "self";

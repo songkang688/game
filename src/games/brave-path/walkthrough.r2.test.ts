@@ -35,7 +35,7 @@ function refHero(level: number, element: Element, rankBoost = 0): Fighter {
   const s = expectedHero(level);
   const rank = Math.max(1, Math.min(5, 1 + Math.floor(level / 45) + rankBoost));
   return makeFighter({
-    name: "鸭梨", emoji: "🌸", element,
+    name: "鸭梨", emoji: "🍐", element,
     maxHp: s.maxHp, atk: s.atk, def: s.def, spd: s.spd, crit: 0.1,
     skills: [{ id: "gustStep", rank }, { id: "crackHammer", rank }, { id: "warmSong", rank }],
     bag: [{ id: "honey", count: 2 }, { id: "berry", count: 2 }]
@@ -128,7 +128,7 @@ describe("勇者小路 · R2 · 换关卡再走一遍", () => {
   });
 
   it("光着身子的小勇者硬闯末章会输，收场话里没有一个吓人的字", () => {
-    const weak = makeFighter({ name: "鸭梨", emoji: "🌸", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
+    const weak = makeFighter({ name: "鸭梨", emoji: "🍐", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
     const res = simulateBattle(weak, makeFighter(makeBossSpec(bossLevels()[5])), 909, 60);
     expect(res.winner).toBe("foe");
     const end = res.events.filter((e) => e.kind === "end");
@@ -245,7 +245,7 @@ describe("勇者小路 · R2 · 难度曲线", () => {
 
 describe("勇者小路 · R2 · 竞态", () => {
   const dummy = (over: Partial<Parameters<typeof makeFighter>[0]> = {}) =>
-    makeFighter({ name: "鸭梨", emoji: "🌸", element: "light", maxHp: 100, atk: 20, def: 5, spd: 10, crit: 0, ...over });
+    makeFighter({ name: "鸭梨", emoji: "🍐", element: "light", maxHp: 100, atk: 20, def: 5, spd: 10, crit: 0, ...over });
 
   it("一场只会有一条收场事件：同一回合里赢家定了就立刻收手", () => {
     for (let s = 0; s < 40; s++) {
@@ -256,7 +256,7 @@ describe("勇者小路 · R2 · 竞态", () => {
 
   it("倒下的一方不会在同一回合里再出一次手", () => {
     const slow = dummy({ spd: 1, maxHp: 1 });
-    const fast = dummy({ name: "康康", emoji: "⭐", spd: 99, atk: 999 });
+    const fast = dummy({ name: "康康", emoji: "👓", spd: 99, atk: 999 });
     const st = startCombat(fast, slow);
     const res = resolveRound(st, { kind: "attack" }, mulberry32(9));
     expect(res.state.over).toBe(true);
@@ -296,7 +296,7 @@ describe("勇者小路 · R2 · 竞态", () => {
 
   it("刚用过的技能这一回合不减冷却，下一回合才开始走表", () => {
     const hero = dummy({ skills: [{ id: "gustStep", rank: 1 }] });
-    const foe = dummy({ name: "康康", emoji: "⭐", maxHp: 9999, atk: 1, spd: 1 });
+    const foe = dummy({ name: "康康", emoji: "👓", maxHp: 9999, atk: 1, spd: 1 });
     const skillId = hero.skills[0].id;
     let st = startCombat(hero, foe);
     expect(skillReady(st.hero, skillId)).toBe(true);
@@ -312,7 +312,7 @@ describe("勇者小路 · R2 · 竞态", () => {
 
   it("冷却没转好就点技能，系统直接不让点（不会白白丢一个回合）", () => {
     const hero = dummy({ skills: [{ id: "gustStep", rank: 1 }] });
-    const foe = dummy({ name: "康康", emoji: "⭐", maxHp: 9999, atk: 1, spd: 1 });
+    const foe = dummy({ name: "康康", emoji: "👓", maxHp: 9999, atk: 1, spd: 1 });
     const skillId = hero.skills[0].id;
     let st = startCombat(hero, foe);
     st = resolveRound(st, { kind: "skill", skillId }, mulberry32(5)).state;
@@ -325,7 +325,7 @@ describe("勇者小路 · R2 · 竞态", () => {
     const hero = dummy({ bag: [{ id: "honey", count: 1 }] });
     expect(itemCount(hero, "honey")).toBe(1);
     expect(actionAllowed(hero, { kind: "item", itemId: "honey" })).toBe(true);
-    const foe = dummy({ name: "康康", emoji: "⭐", maxHp: 9999, atk: 5, spd: 1 });
+    const foe = dummy({ name: "康康", emoji: "👓", maxHp: 9999, atk: 5, spd: 1 });
     let st = startCombat({ ...hero, hp: 10 }, foe);
     st = resolveRound(st, { kind: "item", itemId: "honey" }, mulberry32(3)).state;
     expect(itemCount(st.hero, "honey")).toBe(0);
@@ -334,7 +334,7 @@ describe("勇者小路 · R2 · 竞态", () => {
 
   it("眩晕撞上出手：转圈圈的那个回合不出招，但眩晕会自己走完", () => {
     const hero = dummy({ spd: 99 });
-    const foe = dummy({ name: "康康", emoji: "⭐", maxHp: 9999, atk: 1, spd: 1 });
+    const foe = dummy({ name: "康康", emoji: "👓", maxHp: 9999, atk: 1, spd: 1 });
     let st = startCombat(hero, foe);
     st = { ...st, foe: { ...st.foe, stun: 1 } };
     const res = resolveRound(st, { kind: "attack" }, mulberry32(11));
@@ -344,7 +344,7 @@ describe("勇者小路 · R2 · 竞态", () => {
 
   it("打满上限还没分胜负就按剩余星芒比例判，比例一样就是平局", () => {
     const a = dummy({ maxHp: 100 });
-    const b = dummy({ name: "康康", emoji: "⭐", maxHp: 100 });
+    const b = dummy({ name: "康康", emoji: "👓", maxHp: 100 });
     const st = startCombat(a, b);
     expect(judgeByHp(st)).toBeNull();
     expect(judgeByHp({ ...st, foe: { ...st.foe, hp: 90 } })).toBe("hero");

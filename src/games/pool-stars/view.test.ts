@@ -143,7 +143,7 @@ function mountTable(over: Partial<Parameters<typeof createTable>[1]> = {}) {
   const settled: Array<{ potted: number[]; shot: ShotIntent }> = [];
   const handle = createTable(dom.root as unknown as HTMLElement, {
     balls: [makeBall(0, "cue", 40, 50), makeBall(1, "warm", 140, 28)],
-    seats: [{ name: "鸭梨", emoji: "🌸", color: "#e8558f", ai: null }],
+    seats: [{ name: "鸭梨", emoji: "🍐", color: "#e8558f", ai: null }],
     turn: 0,
     banner: "练习台",
     tip: "先找线再出杆。",

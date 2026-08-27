@@ -137,7 +137,7 @@ describe("三档电脑的差别摊在一张表上", () => {
     const me = makeFighter(0, "电脑", "🤖", idx(board, 3, 1), 0);
     me.ai = true;
     me.power = 4;
-    const foe = makeFighter(1, "鸭梨", "🌸", idx(board, 5, 1), 1);
+    const foe = makeFighter(1, "鸭梨", "🍐", idx(board, 5, 1), 1);
     const world = createWorld({ board, fighters: [me, foe] });
     expect(chooseAiAction(world, 0, 1, 1).drop).toBe(false);
     expect(chooseAiAction(world, 0, 2, 1).drop).toBe(false);

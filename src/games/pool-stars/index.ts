@@ -39,7 +39,7 @@ import {
 import { createTable, type SeatPlan, type ShotIntent, type TableHandle } from "./view";
 
 const P_NAME = ["鸭梨", "康康"];
-const P_EMOJI = ["🌸", "⭐"];
+const P_EMOJI = ["🍐", "👓"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 
 const SHELL_CSS = `

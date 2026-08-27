@@ -593,8 +593,8 @@ export function beltX(fromX: number, planX: number, k: number): number {
 export type Player = "doudou" | "star";
 
 export const PLAYERS: Readonly<Record<Player, { name: string; emoji: string; keys: string; color: string }>> = {
-  doudou: { name: "鸭梨", emoji: "🌸", keys: "A / D", color: "#F07AA8" },
-  star: { name: "康康", emoji: "⭐", keys: "← / →", color: "#5A9BE8" }
+  doudou: { name: "鸭梨", emoji: "🍐", keys: "A / D", color: "#F07AA8" },
+  star: { name: "康康", emoji: "👓", keys: "← / →", color: "#5A9BE8" }
 };
 
 export interface DuoState {

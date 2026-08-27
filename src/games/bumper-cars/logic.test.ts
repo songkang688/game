@@ -78,7 +78,7 @@ function rect(w = 100, h = 70, springs: Field["springs"] = []): Field {
 const NO_INPUT: Intent = { dx: 0, dy: 0, dash: false, brake: false };
 
 function hero(x: number, y: number, lives = 1) {
-  return makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x, y, lives });
+  return makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x, y, lives });
 }
 
 function foe(x: number, y: number, lives = 1, id = 1) {
@@ -613,7 +613,7 @@ describe("胜负与计时", () => {
 
   it("对战里只剩一队还有车时分出胜负", () => {
     const a = hero(30, 35);
-    const b = makeCar({ id: 1, name: "康康", emoji: "⭐", color: "#3f7fd6", team: 1, x: 70, y: 35 });
+    const b = makeCar({ id: 1, name: "康康", emoji: "👓", color: "#3f7fd6", team: 1, x: 70, y: 35 });
     const world = createWorld({ field: rect(), cars: [a, b] });
     expect(lastTeamStanding(world)).toBe(-1);
     dropCar(world, 1);

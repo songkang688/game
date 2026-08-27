@@ -106,7 +106,7 @@ function avatarHTML(who: "duoduo" | "xingxing", size = 26): string {
   if (url) {
     return `<img src="${url}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;vertical-align:middle">`;
   }
-  const emoji = who === "duoduo" ? "🌸" : "⭐";
+  const emoji = who === "duoduo" ? "🍐" : "👓";
   const bg = who === "duoduo" ? "#FFD9E8" : "#D9E6FF";
   return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;background:${bg};align-items:center;justify-content:center;font-size:${Math.round(size * 0.58)}px;vertical-align:middle">${emoji}</span>`;
 }

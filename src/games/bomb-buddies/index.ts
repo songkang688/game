@@ -99,7 +99,7 @@ import {
 } from "./logic";
 
 const P_NAME = ["鸭梨", "康康"];
-const P_EMOJI = ["🌸", "⭐"];
+const P_EMOJI = ["🍐", "👓"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 
 /** 两套键位一个字都不重叠,写在一处,暂停面板与各模式提示共用 */

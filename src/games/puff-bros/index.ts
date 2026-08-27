@@ -1237,9 +1237,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   function refreshHud(): void {
     if (world.rivalry) {
       leftChip.className = "pfb-chip pfb-chip-a";
-      leftChip.textContent = `🌸 鸭梨 ${world.players[0]?.pops ?? 0}`;
+      leftChip.textContent = `🍐 鸭梨 ${world.players[0]?.pops ?? 0}`;
       rightChip.className = "pfb-chip pfb-chip-b";
-      rightChip.textContent = `⭐ 康康 ${world.players[1]?.pops ?? 0}`;
+      rightChip.textContent = `👓 康康 ${world.players[1]?.pops ?? 0}`;
       const target = Math.max(1, world.def.roundTarget);
       const lead = Math.max(world.players[0]?.pops ?? 0, world.players[1]?.pops ?? 0);
       barFill.style.width = `${Math.min(100, (lead / target) * 100)}%`;

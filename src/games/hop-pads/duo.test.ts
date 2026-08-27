@@ -38,8 +38,8 @@ function makeDuo(): Stage[] {
   const host = new El("div") as unknown as HTMLElement;
   dom.root.appendChild(host as unknown as El);
   return [
-    { keys: ["f"], cancelKeys: ["g"], name: "🌸 鸭梨 · F" },
-    { keys: ["l"], cancelKeys: ["k"], name: "⭐ 康康 · L" },
+    { keys: ["f"], cancelKeys: ["g"], name: "🍐 鸭梨 · F" },
+    { keys: ["l"], cancelKeys: ["k"], name: "👓 康康 · L" },
   ].map((seat) =>
     createStage(host, {
       seed: 4321,

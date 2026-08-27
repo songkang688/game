@@ -1342,7 +1342,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
       onDone: (res) => {
         api.addStars(1);
         const title =
-          res.winner < 0 ? "🤝 平手!" : res.winner === 0 ? "🎀 鸭梨这边守住啦!" : "⭐ 康康这边守住啦!";
+          res.winner < 0 ? "🤝 平手!" : res.winner === 0 ? "🎀 鸭梨这边守住啦!" : "👓 康康这边守住啦!";
         overBox(shell.stage, title, arenaVersusLine(res.winner, res.jars, P_NAME), [
           { label: "🔁 换边再来", cls: "mcr-btn-vs", onClick: () => {
             api.play("tap");

@@ -581,7 +581,7 @@ describe("样式与音效的规矩", () => {
   });
 
   it("carryOf 把该带上楼的七样都带上,不多不少", () => {
-    const f = makeFighter(0, "鸭梨", "🌸", 0, 0);
+    const f = makeFighter(0, "鸭梨", "🍐", 0, 0);
     f.power = 4;
     f.kick = true;
     f.shield = 2;

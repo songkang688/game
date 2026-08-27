@@ -1310,8 +1310,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     chip.textContent = `🤝 对手：${AI_TIER_LABELS[tier]} ×3`;
     table = createTable(stage, {
       seats: [
-        { name: "鸭梨", emoji: "🌸", human: "duo", tier: "pro", cash: cfg.cash },
-        { name: "康康", emoji: "⭐", tier, cash: cfg.cash },
+        { name: "鸭梨", emoji: "🍐", human: "duo", tier: "pro", cash: cfg.cash },
+        { name: "康康", emoji: "👓", tier, cash: cfg.cash },
         { name: "糯糯", emoji: "🍡", tier, cash: cfg.cash },
         { name: "云云", emoji: "☁️", tier, cash: cfg.cash }
       ],
@@ -1337,7 +1337,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     chip.textContent = `♾️ 连胜 ${streak} · 最高 ${best}`;
     table = createTable(stage, {
       seats: [
-        { name: "鸭梨", emoji: "🌸", human: "duo", tier: "pro", cash: cfg.cash },
+        { name: "鸭梨", emoji: "🍐", human: "duo", tier: "pro", cash: cfg.cash },
         { name: AI_TIER_LABELS[cfg.tiers[1]], emoji: "⭐", tier: cfg.tiers[1], cash: cfg.cash }
       ],
       rules: {
@@ -1375,8 +1375,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     chip.textContent = "👫 鸭梨 WASD+F/G · 康康 方向键+L/K";
     table = createTable(stage, {
       seats: [
-        { name: "鸭梨", emoji: "🌸", human: "duo", tier: "pro" },
-        { name: "康康", emoji: "⭐", human: "star", tier: "pro" },
+        { name: "鸭梨", emoji: "🍐", human: "duo", tier: "pro" },
+        { name: "康康", emoji: "👓", human: "star", tier: "pro" },
         { name: "糯糯", emoji: "🍡", tier: "normal" },
         { name: "云云", emoji: "☁️", tier: "rookie" }
       ],

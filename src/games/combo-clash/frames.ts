@@ -615,7 +615,7 @@ const CHAR_SPECS: CharSpec[] = [
   {
     id: "duoduo",
     name: "鸭梨",
-    emoji: "🌸",
+    emoji: "🍐",
     color: "#FFC1DC",
     ink: "#B85C8A",
     archetype: "rush",
@@ -652,7 +652,7 @@ const CHAR_SPECS: CharSpec[] = [
   {
     id: "xingxing",
     name: "康康",
-    emoji: "⭐",
+    emoji: "👓",
     color: "#FFE08A",
     ink: "#B98A1E",
     archetype: "zoner",

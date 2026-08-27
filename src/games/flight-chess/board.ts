@@ -52,8 +52,8 @@ export interface ColorInfo {
 
 /** 四位队员:鸭梨、康康，加上本作原创的小花与小鸟 */
 export const COLOR_INFO: readonly ColorInfo[] = [
-  { name: "鸭梨", token: "🌸", ink: "#E0679B", soft: "#FFDCEA", corner: "左上" },
-  { name: "康康", token: "⭐", ink: "#D79A24", soft: "#FFEFC4", corner: "右上" },
+  { name: "鸭梨", token: "🍐", ink: "#E0679B", soft: "#FFDCEA", corner: "左上" },
+  { name: "康康", token: "👓", ink: "#D79A24", soft: "#FFEFC4", corner: "右上" },
   { name: "小花", token: "🌼", ink: "#3E9C6A", soft: "#D6F5DF", corner: "右下" },
   { name: "小鸟", token: "🐦", ink: "#3D82BE", soft: "#D6ECFB", corner: "左下" }
 ];

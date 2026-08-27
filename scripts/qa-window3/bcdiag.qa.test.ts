@@ -23,7 +23,7 @@ describe("bumper-cars 摆烂根因", () => {
       const i = human - 1;
       const lv = buildLevel(i);
       const cars = [
-        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
+        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
         ...lv.foes.map((foe, k) => {
           const spot = lv.foeSpawns[k] ?? lv.foeSpawns[0] ?? lv.spawn;
           return logic.makeCar({ id: k + 1, name: foe.name, emoji: foe.emoji, color: foe.color, team: 1, x: spot.x, y: spot.y, lives: foe.lives, mass: foe.mass, r: foe.r, ai: true });

@@ -16,7 +16,7 @@ import { eventLine, tileSummary, ESTATE_CONSTS } from "./index";
 
 function table(n = 3, cash = START_CASH): EstateState {
   const names = ["鸭梨", "康康", "糯糯", "云云"];
-  const emoji = ["🌸", "⭐", "🍡", "☁️"];
+  const emoji = ["🍐", "👓", "🍡", "☁️"];
   return createState(
     Array.from({ length: n }, (_, i) => ({ name: names[i], emoji: emoji[i], cash })),
     cash

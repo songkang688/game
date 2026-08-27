@@ -217,8 +217,8 @@ const TICK = 16;
 function duel(round: number, aSkill: AiLevel, bSkill: AiLevel, salt: number): number {
   const arena = buildArena(round);
   const cars = [
-    makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x: arena.spawns[0].x, y: arena.spawns[0].y, lives: 1, ai: true }),
-    makeCar({ id: 1, name: "康康", emoji: "⭐", color: "#3f7fd6", team: 1, x: arena.spawns[1].x, y: arena.spawns[1].y, lives: 1, ai: true }),
+    makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: arena.spawns[0].x, y: arena.spawns[0].y, lives: 1, ai: true }),
+    makeCar({ id: 1, name: "康康", emoji: "👓", color: "#3f7fd6", team: 1, x: arena.spawns[1].x, y: arena.spawns[1].y, lives: 1, ai: true }),
   ];
   const world = createWorld({
     field: arena.field,

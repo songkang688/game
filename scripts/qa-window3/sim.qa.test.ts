@@ -489,7 +489,7 @@ describe("bumper-cars", () => {
 
     const boot = (lv: ReturnType<typeof buildLevel>, mySkill: number, drive: boolean) => {
       const cars = [
-        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
+        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
         ...lv.foes.map((foe, i) => {
           const spot = lv.foeSpawns[i] ?? lv.foeSpawns[0] ?? lv.spawn;
           return logic.makeCar({ id: i + 1, name: foe.name, emoji: foe.emoji, color: foe.color, team: 1, x: spot.x, y: spot.y, lives: foe.lives, mass: foe.mass, r: foe.r, ai: true });
@@ -845,7 +845,7 @@ describe(`第 ${IDLE_LV + 1} 关摆烂对照`, () => {
       const logic = await import("../../src/games/bumper-cars/logic");
       const lv = buildLevel(IDLE_LV);
       const cars = [
-        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
+        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
         ...lv.foes.map((foe, i) => {
           const spot = lv.foeSpawns[i] ?? lv.foeSpawns[0] ?? lv.spawn;
           return logic.makeCar({ id: i + 1, name: foe.name, emoji: foe.emoji, color: foe.color, team: 1, x: spot.x, y: spot.y, lives: foe.lives, mass: foe.mass, r: foe.r, ai: true });

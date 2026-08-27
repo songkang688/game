@@ -286,7 +286,7 @@ export const HEROES: readonly Hero[] = [
   {
     id: "xingxing",
     name: "康康",
-    emoji: "⭐",
+    emoji: "👓",
     vigor: 4,
     blurb: "许个愿多摸一张,代价是留不住太多牌。",
     skills: [
@@ -305,7 +305,7 @@ export const HEROES: readonly Hero[] = [
   {
     id: "duoduo",
     name: "鸭梨",
-    emoji: "🌸",
+    emoji: "🍐",
     vigor: 4,
     blurb: "花瓣掉光了也还能再开一次。",
     skills: [

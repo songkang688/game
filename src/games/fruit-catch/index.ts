@@ -710,10 +710,10 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
     </div>
     <canvas class="frc-canvas" width="${W}" height="${H}"></canvas>
     <div class="frc-ctrl">
-      <button class="frc-btn frc-al" type="button" aria-label="鸭梨往左">🌸⬅️</button>
-      <button class="frc-btn frc-ar" type="button" aria-label="鸭梨往右">➡️🌸</button>
-      <button class="frc-btn frc-bl" type="button" aria-label="康康往左">⭐⬅️</button>
-      <button class="frc-btn frc-br" type="button" aria-label="康康往右">➡️⭐</button>
+      <button class="frc-btn frc-al" type="button" aria-label="鸭梨往左">🍐⬅️</button>
+      <button class="frc-btn frc-ar" type="button" aria-label="鸭梨往右">➡️🍐</button>
+      <button class="frc-btn frc-bl" type="button" aria-label="康康往左">👓⬅️</button>
+      <button class="frc-btn frc-br" type="button" aria-label="康康往右">➡️👓</button>
     </div>
     <div class="frc-msg">鸭梨按 A / D，康康按 ← / →；手机就按下面四个大按钮，或者各按住自己那半边屏幕拖。</div>
     <div class="frc-legend">

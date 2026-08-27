@@ -1598,7 +1598,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     picks.appendChild(
       pickerFor(
-        mode === "versus" ? "🌸 1 号位（WASD + F/G）" : "🌸 你（WASD + F/G）",
+        mode === "versus" ? "🍐 1 号位（WASD + F/G）" : "🍐 你（WASD + F/G）",
         () => p1,
         (id) => {
           p1 = id;
@@ -1609,7 +1609,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     picks.appendChild(
       pickerFor(
         mode === "versus"
-          ? "⭐ 2 号位（方向键 + L/K）"
+          ? "👓 2 号位（方向键 + L/K）"
           : mode === "training"
             ? "🎓 陪练"
             : mode === "endless"

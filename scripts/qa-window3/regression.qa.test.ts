@@ -419,7 +419,7 @@ describe("S5 回归 · bumper-cars AI 自己冲下悬崖 + 撞飞归因", () => 
     // 建局与 idle.qa.test.ts 逐字一致(car.ai 只是个标记,logic 里不读它)
     const cars = [
       logic.makeCar({
-        id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0,
+        id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0,
         x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true,
       }),
       ...lv.foes.map((foe, k) => {

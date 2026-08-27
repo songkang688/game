@@ -220,7 +220,7 @@ describe("文案红线 · 打起来之后冒出的话", () => {
   function fighter(over: Partial<FighterSpec> = {}) {
     return makeFighter({
       name: "鸭梨",
-      emoji: "🌸",
+      emoji: "🍐",
       element: "grass",
       maxHp: 130,
       atk: 28,

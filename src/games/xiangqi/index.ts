@@ -107,7 +107,7 @@ function avatarHTML(who: Mascot, size = 30): string {
   if (url) {
     return `<img src="${url}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;vertical-align:middle">`;
   }
-  const emoji = who === "duoduo" ? "🌸" : who === "xingxing" ? "⭐" : "🐘";
+  const emoji = who === "duoduo" ? "🍐" : who === "xingxing" ? "👓" : "🐘";
   const bg = who === "duoduo" ? "#FFD9E8" : who === "xingxing" ? "#D9E6FF" : "#E4D9FF";
   return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;background:${bg};align-items:center;justify-content:center;font-size:${Math.round(
     size * 0.58,
@@ -874,7 +874,7 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
       headline: ai ? DIFFICULTY_NAME[ai] : "👫 鸭梨 VS 康康",
       opening: ai
         ? `${DIFFICULTY_BLURB[ai]}。红棋先走，点自己的子看看它能去哪。`
-        : "🌸 鸭梨执红先走，⭐ 康康执黑。悔棋和求和都要两边都同意。",
+        : "🍐 鸭梨执红先走，👓 康康执黑。悔棋和求和都要两边都同意。",
       extras: [{ cls: "xq-back", label: "🔧 换玩法", onClick: () => showSetup() }],
       onEnd: (r) => {
         if (r.winner === null) {

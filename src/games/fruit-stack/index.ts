@@ -43,7 +43,7 @@ import { allSettled, clamp, createWorld, nearLine, overLine, stepPhysics, type W
 import { createRuntime, type Runtime } from "./runtime";
 
 const P_NAME = ["鸭梨", "康康"];
-const P_EMOJI = ["🌸", "⭐"];
+const P_EMOJI = ["🍐", "👓"];
 
 /** 两次投放之间的冷却:防止连点把一整串果子糊在同一个点上 */
 const DROP_CD = 460;

@@ -344,7 +344,7 @@ export function buildContext(state: EstateState, opts: HeadlessOptions): TurnCon
   };
 }
 
-const SEAT_EMOJI = ["🌸", "⭐", "🍡", "☁️"];
+const SEAT_EMOJI = ["🍐", "👓", "🍡", "☁️"];
 const SEAT_NAME = ["鸭梨", "康康", "糯糯", "云云"];
 
 export function buildState(opts: HeadlessOptions): EstateState {

@@ -1476,7 +1476,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       const theirs = buildRivalTeam(save.level, save.arenaWins, gearFactor(save));
       const grid = el("div", "bvp-team");
       grid.appendChild(teamCard("🌸 我的队伍", mine, "linear-gradient(180deg,#fff4f9,#ffe6f1)"));
-      grid.appendChild(teamCard("⭐ 康康的队伍", theirs, "linear-gradient(180deg,#f0f6ff,#e0ecff)"));
+      grid.appendChild(teamCard("👓 康康的队伍", theirs, "linear-gradient(180deg,#f0f6ff,#e0ecff)"));
       wrap.appendChild(grid);
 
       const row = el("div", "bvp-bar");

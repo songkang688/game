@@ -325,7 +325,7 @@ describe("窄屏与按钮尺寸", () => {
 });
 
 describe("闯关的手数限制", () => {
-  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🍐", isImg: false, tier: "expert", keys: 0 };
   const BOT: SeatCfg = { kind: "ai", name: "团团", avatar: "🐰", isImg: false, tier: "rookie", keys: 0 };
 
   /** 从整副牌里挑一张还没用过的,拿到的是副本,id 天然不重复 */
@@ -419,7 +419,7 @@ describe("闯关的手数限制", () => {
 });
 
 describe("「就一张」的抢按窗口", () => {
-  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🍐", isImg: false, tier: "expert", keys: 0 };
   /** 高手档才会点破别人忘喊 */
   const HUNTER: SeatCfg = { kind: "ai", name: "点点", avatar: "🦊", isImg: false, tier: "expert", keys: 0 };
 
@@ -506,7 +506,7 @@ describe("「就一张」的抢按窗口", () => {
 });
 
 describe("牌都用完了的那一局", () => {
-  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🍐", isImg: false, tier: "expert", keys: 0 };
   const BOT: SeatCfg = { kind: "ai", name: "团团", avatar: "🐰", isImg: false, tier: "rookie", keys: 0 };
 
   /**

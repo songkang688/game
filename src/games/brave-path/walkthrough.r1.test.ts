@@ -61,7 +61,7 @@ function refHero(level: number, element: Element, rankBoost = 0): Fighter {
   const rank = Math.max(1, Math.min(5, 1 + Math.floor(level / 45) + rankBoost));
   return makeFighter({
     name: "鸭梨",
-    emoji: "🌸",
+    emoji: "🍐",
     element,
     maxHp: s.maxHp,
     atk: s.atk,
@@ -138,7 +138,7 @@ describe("勇者小路 · R1 · 赢一次 + 输一次", () => {
   });
 
   it("输一次：光着身子的勇者硬碰末章首领会输，而且收场只鼓励", () => {
-    const weak = makeFighter({ name: "鸭梨", emoji: "🌸", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
+    const weak = makeFighter({ name: "鸭梨", emoji: "🍐", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
     const lastBoss = bossLevels()[bossLevels().length - 1];
     const res = simulateBattle(weak, makeFighter(makeBossSpec(lastBoss)), 13, 60);
     expect(res.winner).toBe("foe");

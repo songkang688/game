@@ -19,7 +19,7 @@ const IDLE = { dir: -1, drop: false, detonate: false };
 
 function idleRun(level: number): { world: World; lv: ReturnType<typeof buildLevel> } {
   const lv = buildLevel(level, 1);
-  const me = makeFighter(0, "鸭梨", "🌸", lv.spawns[0], 0);
+  const me = makeFighter(0, "鸭梨", "🍐", lv.spawns[0], 0);
   for (const item of lv.starters) applyItem(me, item);
   const world = createWorld({
     board: lv.board,

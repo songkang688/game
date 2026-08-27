@@ -44,7 +44,7 @@ import { mulberry32 } from "../level99";
 
 function seats(n: number, cash = START_CASH): EstateState {
   const names = ["鸭梨", "康康", "糯糯", "云云"];
-  const emoji = ["🌸", "⭐", "🍡", "☁️"];
+  const emoji = ["🍐", "👓", "🍡", "☁️"];
   return createState(
     Array.from({ length: n }, (_, i) => ({ name: names[i], emoji: emoji[i], cash })),
     cash

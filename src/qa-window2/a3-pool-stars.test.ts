@@ -67,7 +67,7 @@ function mountTable(over: Partial<TableOptions> = {}): {
   const settled: ShotIntent[] = [];
   const handle = createTable(dom.root as unknown as HTMLElement, {
     balls: [makeBall(0, "cue", 40, 50), makeBall(1, "warm", 140, 28)],
-    seats: [{ name: "鸭梨", emoji: "🌸", color: "#e8558f", ai: null }],
+    seats: [{ name: "鸭梨", emoji: "🍐", color: "#e8558f", ai: null }],
     turn: 0,
     banner: "R3 练习台",
     tip: "先找线再出杆。",
@@ -224,8 +224,8 @@ describe("R3 包A · pool-stars", () => {
 
   it("⑨ PA-PS-2 未回潮：双人同屏两套瞄准键按座位分开", () => {
     const seats = [
-      { name: "鸭梨", emoji: "🌸", color: "#e8558f", ai: null },
-      { name: "康康", emoji: "⭐", color: "#3f7fd6", ai: null },
+      { name: "鸭梨", emoji: "🍐", color: "#e8558f", ai: null },
+      { name: "康康", emoji: "👓", color: "#3f7fd6", ai: null },
     ];
     function angleAfter(turn: number, keys: string[]): number {
       const { handle, settled } = mountTable({ seats, turn });

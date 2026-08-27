@@ -234,7 +234,7 @@ describe("道具掉落(纯函数)", () => {
   });
 
   it("火力 / 炸弹数 / 速度会顶到上限就不再涨", () => {
-    const f = makeFighter(0, "鸭梨", "🌸", 0);
+    const f = makeFighter(0, "鸭梨", "🍐", 0);
     for (let i = 0; i < 30; i++) {
       applyItem(f, "fire");
       applyItem(f, "bomb");
@@ -246,7 +246,7 @@ describe("道具掉落(纯函数)", () => {
   });
 
   it("三件特殊道具是开关型,捡第二次不再返回提升", () => {
-    const f = makeFighter(0, "鸭梨", "🌸", 0);
+    const f = makeFighter(0, "鸭梨", "🍐", 0);
     expect(applyItem(f, "kick")).toBe(true);
     expect(applyItem(f, "kick")).toBe(false);
     expect(applyItem(f, "ghost")).toBe(true);
@@ -267,7 +267,7 @@ describe("道具掉落(纯函数)", () => {
 
 function soloWorld(rows: string[], at: [number, number]): World {
   const board = parse(rows);
-  const me = makeFighter(0, "鸭梨", "🌸", idx(board, at[0], at[1]));
+  const me = makeFighter(0, "鸭梨", "🍐", idx(board, at[0], at[1]));
   return createWorld({ board, fighters: [me], seed: 42, richness: 0 });
 }
 
@@ -380,7 +380,7 @@ describe("爆炸结算", () => {
 
   it("砖底下藏的道具会落到地上,走过去就能捡", () => {
     const board = parse(["#####", "#.+.#", "#...#", "#####"]);
-    const me = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1));
+    const me = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1));
     const hidden = new Map([[idx(board, 2, 1), "fire" as const]]);
     const world = createWorld({ board, fighters: [me], hidden, seed: 3, richness: 0 });
     const b = dropBomb(world, 0);
@@ -413,7 +413,7 @@ describe("爆炸结算", () => {
 
   it("小怪被爆风碰到就会被包成泡泡送回家", () => {
     const board = parse(["#####", "#...#", "#####"]);
-    const me = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1));
+    const me = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1));
     const critter = makeCritter(1, "slime", idx(board, 3, 1));
     const world = createWorld({ board, fighters: [me], critters: [critter], seed: 1, richness: 0 });
     const b = dropBomb(world, 0);
@@ -424,7 +424,7 @@ describe("爆炸结算", () => {
 
   it("泡泡王要连着包三层才请得动", () => {
     const board = parse(["#####", "#...#", "#####"]);
-    const me = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1));
+    const me = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1));
     const boss = makeCritter(1, "boss", idx(board, 3, 1));
     const world = createWorld({ board, fighters: [me], critters: [boss], seed: 1, richness: 0 });
     for (let i = 0; i < 3; i++) {
@@ -466,7 +466,7 @@ describe("世界推进", () => {
 
   it("限时到了 timeUp 变真,剩余秒数一路减到 0", () => {
     const board = parse(["#####", "#...#", "#####"]);
-    const me = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1));
+    const me = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1));
     const world = createWorld({ board, fighters: [me], limit: 2000, seed: 1, richness: 0 });
     expect(secondsLeft(world)).toBe(2);
     run(world, 2100);
@@ -476,7 +476,7 @@ describe("世界推进", () => {
 
   it("小怪撞到人也只是把人包成泡泡", () => {
     const board = parse(["#######", "#.....#", "#######"]);
-    const me = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1));
+    const me = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1));
     const critter = makeCritter(1, "chaser", idx(board, 5, 1));
     const world = createWorld({ board, fighters: [me], critters: [critter], seed: 1, richness: 0 });
     run(world, 3000);
@@ -486,7 +486,7 @@ describe("世界推进", () => {
 
   it("出口藏在砖底下,炸开以后走过去就算逃出去了", () => {
     const board = parse(["#####", "#..+#", "#...#", "#####"]);
-    const me = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1));
+    const me = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1));
     const exit = idx(board, 3, 1);
     const world = createWorld({ board, fighters: [me], exit, goal: "exit", seed: 1, richness: 0 });
     expect(levelCleared(world)).toBe(false);
@@ -510,8 +510,8 @@ describe("世界推进", () => {
 describe("胜负与评分", () => {
   it("对战里只剩一个人没被包住,这一局就归他", () => {
     const board = parse(["#####", "#...#", "#####"]);
-    const a = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1), 0);
-    const b = makeFighter(1, "康康", "⭐", idx(board, 3, 1), 1);
+    const a = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1), 0);
+    const b = makeFighter(1, "康康", "👓", idx(board, 3, 1), 1);
     const world = createWorld({ board, fighters: [a, b], seed: 1, richness: 0 });
     expect(roundWinner(world)).toBe(-1);
     bubble(world, 1);

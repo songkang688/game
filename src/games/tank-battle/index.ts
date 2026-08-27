@@ -368,7 +368,7 @@ function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, t: number): 
   c.font = `${Math.round(s * 0.34)}px system-ui`;
   if (tk.side === "player") {
     c.fillStyle = "#fff";
-    c.fillText(tk.player === 0 ? "🌸" : "⭐", px, py);
+    c.fillText(tk.player === 0 ? "🍐" : "👓", px, py);
   } else {
     c.fillText(KIND_FACE[tk.kind] ?? "🚜", px, py);
   }
@@ -705,7 +705,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const gaps = fortGaps(w).length;
     const chips: string[] = [];
     if (w.mode === "versus") {
-      chips.push(`🌸 鸭梨 ${w.scores[0]}`, `⭐ 康康 ${w.scores[1]}`, `🎯 先打散 ${w.target} 次赢`);
+      chips.push(`🍐 鸭梨 ${w.scores[0]}`, `👓 康康 ${w.scores[1]}`, `🎯 先打散 ${w.target} 次赢`);
     } else {
       chips.push(`🚜 还剩 ${left} 辆`, `🌼 已变花 ${w.defeated}`);
       if (w.map.base) {
@@ -716,7 +716,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     chips.push(`⏱️ ${Math.max(0, Math.ceil(w.limit - w.time))} 秒`);
     for (const tk of w.tanks) {
       if (tk.side !== "player") continue;
-      const who = tk.player === 0 ? "🌸" : "⭐";
+      const who = tk.player === 0 ? "🍐" : "👓";
       const shell = SHELLS[tk.shell];
       chips.push(`${who} ${shell.emoji}${shell.name} · 砖 ${tk.bricks}`);
     }
@@ -871,7 +871,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const name = document.createElement("div");
     name.className = "tkb-pad-t";
     name.style.color = P_COLOR[player];
-    name.textContent = `${player === 0 ? "🌸" : "⭐"} ${P_NAME[player]} · ${P_KEYS[player]}`;
+    name.textContent = `${player === 0 ? "🍐" : "👓"} ${P_NAME[player]} · ${P_KEYS[player]}`;
 
     const sticks = document.createElement("div");
     sticks.className = "tkb-sticks";

@@ -69,8 +69,8 @@ function duoBoard(fen?: string, extra: Record<string, unknown> = {}) {
   const handle = createBoard(dom.root as unknown as HTMLElement, {
     fen,
     seats: [
-      { name: "鸭梨", emoji: "🌸", color: "#fff", ai: null },
-      { name: "康康", emoji: "⭐", color: "#eef", ai: null },
+      { name: "鸭梨", emoji: "🍐", color: "#fff", ai: null },
+      { name: "康康", emoji: "👓", color: "#eef", ai: null },
     ],
     banner: "双人同屏",
     tip: "轮流走。",
@@ -424,7 +424,7 @@ describe("PA-CG · Esc 暂停", () => {
   it("暂停期间电脑也不落子，恢复之后才接着想", () => {
     const { handle } = duoBoard(undefined, {
       seats: [
-        { name: "鸭梨", emoji: "🌸", color: "#fff", ai: null },
+        { name: "鸭梨", emoji: "🍐", color: "#fff", ai: null },
         { name: "电脑", emoji: "🤖", color: "#eef", ai: 1 },
       ],
       aiDelayMs: 200,
@@ -476,7 +476,7 @@ describe("PA-CG · Esc 暂停", () => {
   it("Esc 恢复之后电脑接着想，不会漏掉那一手", () => {
     const { handle } = duoBoard(undefined, {
       seats: [
-        { name: "鸭梨", emoji: "🌸", color: "#fff", ai: null },
+        { name: "鸭梨", emoji: "🍐", color: "#fff", ai: null },
         { name: "电脑", emoji: "🤖", color: "#eef", ai: 1 },
       ],
       aiDelayMs: 200,

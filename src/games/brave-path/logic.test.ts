@@ -472,7 +472,7 @@ describe("无尽深渊", () => {
 
   it("祝福真的会改数值，而且不改传进来的角色", () => {
     const base = makeFighter({
-      name: "鸭梨", emoji: "🌸", element: "grass",
+      name: "鸭梨", emoji: "🍐", element: "grass",
       maxHp: 200, atk: 40, def: 10, spd: 10, crit: 0.1, hp: 100
     });
     const snapshot = JSON.stringify(base);
@@ -491,7 +491,7 @@ describe("无尽深渊", () => {
 
   it("回复类祝福不会超过星芒上限", () => {
     const full = makeFighter({
-      name: "鸭梨", emoji: "🌸", element: "grass", maxHp: 100, atk: 10, def: 1, spd: 5
+      name: "鸭梨", emoji: "🍐", element: "grass", maxHp: 100, atk: 10, def: 1, spd: 5
     });
     const healed = applyBlessing(full, { id: "x", kind: "heal", name: "泉", emoji: "♨️", amount: 1, desc: "回复" });
     expect(healed.hp).toBe(100);

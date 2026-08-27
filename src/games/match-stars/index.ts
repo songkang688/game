@@ -627,8 +627,8 @@ function mountDuel(
     };
 
     const names = aiTier
-      ? ["🌸 你", `${TIER_FACES[tier]} ${TIER_NAMES[tier]}`]
-      : ["🌸 鸭梨 · WASD + F", "⭐ 康康 · 方向键 + L"];
+      ? ["🍐 你", `${TIER_FACES[tier]} ${TIER_NAMES[tier]}`]
+      : ["🍐 鸭梨 · WASD + F", "👓 康康 · 方向键 + L"];
     shell.chip.textContent = `⚔️ 第 ${round} 局 · ${wins[0]} : ${wins[1]}`;
     shell.say.textContent = aiTier
       ? `先清完 ${DUEL_TARGET} 张订单就赢。点两颗相邻的星星交换。`

@@ -36,7 +36,7 @@ export const ROSTER: Fighter[] = [
   {
     id: "duoduo",
     name: "鸭梨",
-    emoji: "🌸",
+    emoji: "🍐",
     color: "#ff9ec4",
     weight: 100,
     speed: 1.0,
@@ -48,7 +48,7 @@ export const ROSTER: Fighter[] = [
   {
     id: "xingxing",
     name: "康康",
-    emoji: "⭐",
+    emoji: "👓",
     color: "#ffd75e",
     weight: 92,
     speed: 1.06,

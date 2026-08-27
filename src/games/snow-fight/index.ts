@@ -69,7 +69,7 @@ import { BALL_R_12, CHARGE_MAX, chargeRatio, windWord } from "./throw12";
 import type { AiLevel } from "./physics";
 
 const P_NAME = ["鸭梨", "康康"];
-const P_MARK = ["🌸", "⭐"];
+const P_MARK = ["🍐", "👓"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 /** 两套键位互不重叠:一个人按 A/D/W/S/F/G,另一个按方向键 + L/K */
 const P_KEYS = [
@@ -578,7 +578,7 @@ function drawFighter(c: CanvasRenderingContext2D, cam: Camera, f: Fighter, time:
   if (f.hit.phase === "warming") {
     c.fillText("🔥", x, base - r * 3.2);
   } else {
-    c.fillText(P_MARK[f.seat] ?? "🌸", x, base - r * 3.2);
+    c.fillText(P_MARK[f.seat] ?? "🍐", x, base - r * 3.2);
   }
   // 手里攥着几颗:头顶上一排小白点,不用低头看 HUD
   c.fillStyle = "#ffffff";

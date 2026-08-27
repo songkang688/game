@@ -793,7 +793,7 @@ function mountFree(
       headline: ai ? DIFFICULTY_NAME[ai] : "👫 鸭梨 VS 康康",
       opening: ai
         ? `你执黑棋先下。${DIFFICULTY_BLURB[ai]}。提示每局 3 次，只圈一片区域哦。`
-        : "🌸 鸭梨执黑先下，⭐ 康康执白，轮流点棋盘落子！",
+        : "🍐 鸭梨执黑先下，👓 康康执白，轮流点棋盘落子！",
       extras: [{ cls: "gmk-back", label: "🔧 换玩法", onClick: () => showSetup() }],
       onEnd: (r) => {
         const win = r.winner;

@@ -1255,7 +1255,7 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
     left = mountField(lHost, {
       ...common,
       scheme: "p1",
-      title: "🌸 鸭梨",
+      title: "🍐 鸭梨",
       onEnd: (info) => {
         if (info.win) settle("鸭梨");
       }
@@ -1263,7 +1263,7 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
     right = mountField(rHost, {
       ...common,
       scheme: "p2",
-      title: "⭐ 康康",
+      title: "👓 康康",
       onEnd: (info) => {
         if (info.win) settle("康康");
       }
