@@ -18,6 +18,7 @@ import {
   ACTOR_R,
   coopTally,
   createMatch,
+  leadIdle,
   safeZone,
   stepMatch,
   teamStats,
@@ -1586,6 +1587,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       itemEvery: lv.itemEvery,
       itemPool: lv.itemPool,
       seed: (ctx.level + 1) * 7919,
+      // 闯关的主角就是 0 号槽：他出局这一关就结束，他一个键都没按就不给判胜
+      lead: 0,
     };
 
     const box = el("div");
@@ -1618,6 +1621,10 @@ export function mount(api: GameApi): { destroy: () => void } {
                 ? "一次都没被撞出去，太稳啦！"
                 : undefined;
           ctx.win(rateLevel(me.outs, me.hits), note);
+        } else if (leadIdle(state)) {
+          ctx.lose("这一局你一个键都没按呀。星星要自己动手才拿得到，来试试跳一下、挥一拳！");
+        } else if (me.retired) {
+          ctx.lose(`你被撞出去 ${me.outs} 次，上场机会用完啦。少往场边站一点，再来一次！`);
         } else {
           ctx.lose("对手站得更稳一点点，换个节奏再来一次！");
         }

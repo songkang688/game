@@ -97,6 +97,48 @@ export const PATIENT_SPACING = 128;
 export const RECOVER_LIFT = 70;
 
 /**
+ * 预判下落用的重力。跟 `battle.ts` 的 `GRAVITY` 取同一个数（场地重力倍率、
+ * 气球道具这些细节这里一律不管）—— 回场只要一个「大概还能飘几秒」的量级，
+ * 从 ai.ts 反过来引 battle.ts 会绕成环。
+ */
+const FALL_ACCEL = 1250;
+
+/** 落到 `top` 这条台面线上大约还要几秒；正在往上飞就按整段抛物线算 */
+function timeToFall(self: { y: number; vy: number }, top: number): number {
+  const drop = top - self.y;
+  const disc = self.vy * self.vy + 2 * FALL_ACCEL * drop;
+  if (drop <= 0 || disc <= 0) return 0.12;
+  return Math.max(0.12, Math.min(2, (-self.vy + Math.sqrt(disc)) / FALL_ACCEL));
+}
+
+/**
+ * 空中横速的容差（世界单位 / 秒）：跟「该有的横速」差在这以内就不推方向键。
+ * 太小会让小电脑在落脚点上方左右打摆 —— 它一次决策要保持 0.08~0.46 秒，
+ * 这段时间方向键是一直按着的。
+ */
+export const STEER_SLACK = 120;
+
+/**
+ * 朝落脚点对准：先算「要赶在落地前挪过去，横速大概该是多少」，再拿它跟现在的横速比，
+ * 快过头了就反着推刹车，慢了才继续推。
+ *
+ * 只比「现在站在哪」是不够的：人一飘到落脚点正上方就松手，两百多的横速还能再带出
+ * 七八十像素。夜空跳台的主平台只有 140 像素宽，这么一带就整块错过去 ——
+ * 明明是从台子正上方掉下来的，却擦着右边沿掉出场。
+ */
+function steerTo(
+  self: { x: number; y: number; vx: number; vy: number },
+  aimX: number,
+  aimTop: number,
+  input: Input
+): void {
+  const need = (aimX - self.x) / timeToFall(self, aimTop);
+  const diff = need - self.vx;
+  if (diff > STEER_SLACK) input.right = true;
+  else if (diff < -STEER_SLACK) input.left = true;
+}
+
+/**
  * 快掉出场了没有？（悬空 + 已经比主平台低，或者横着飘出了所有台子的范围）
  *
  * 保命这件事不该等反应间隔：空中跳跃只有一次、只能把人抬起一百来像素，
@@ -295,8 +337,7 @@ export function decideAi(
     const spot = pickLanding(view);
     const aimX = spot ? spot.x : (safe.min + safe.max) / 2;
     const aimTop = spot ? spot.top : safe.top;
-    if (self.x < aimX - 14) input.right = true;
-    else if (self.x > aimX + 14) input.left = true;
+    steerTo(self, aimX, aimTop, input);
     // 空中跳跃大多只有一次,一跳能升一百来像素,所以不能一离地就按掉:
     // 等真的掉到落脚点高度附近、这一跳还够得着的时候再用。
     // 之前是「只要不在上升就补跳」,跳跃次数在半空就用光了,后面直直往下掉。
@@ -305,14 +346,16 @@ export function decideAi(
     return { input, intent: "recover" };
   }
 
-  // 1.5) 空中跳跃已经用光、人还在往下掉，脚下又没有台子接着 —— 这时候只剩一件事
-  //      能做：横着挪到最近的落脚点上方。以前这种局面下它还在「追人」和「回场」
-  //      之间来回切，一会儿往左一会儿往右，最后正好落进台子之间的缝里。
-  if (!self.onGround && self.jumpsLeft <= 0 && self.vy > -40) {
+  // 1.5) 空中跳跃已经用光 —— 剩下的整段滞空里只有一件事能做：横着挪到落脚点上方。
+  //      以前这一条只在「已经开始往下掉」时生效，人还在上升的那半秒照旧归「追人」管：
+  //      星光升降台上对手拿最后一次空中跳跃救回自己，升到主平台上方又掉头去追
+  //      站在升降台上的玩家，横向速度反过来三百多，等它反应过来重新往回挪，
+  //      刹车加转向要小半秒，正好从主平台左边十几像素的地方擦过去掉下场。
+  //      没有跳跃可用的时候，人往哪儿飘就在哪儿落地，追人这件事得先放一放。
+  if (!self.onGround && self.jumpsLeft <= 0) {
     const spot = pickLanding(view);
     if (spot) {
-      if (spot.x > self.x + 6) input.right = true;
-      else if (spot.x < self.x - 6) input.left = true;
+      steerTo(self, spot.x, spot.top, input);
       return { input, intent: "recover" };
     }
   }

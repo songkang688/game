@@ -133,6 +133,17 @@ export interface MatchConfig {
   /** 限定道具池（不给就是全都有） */
   itemPool?: string[];
   seed: number;
+  /**
+   * 战役关的「主角」槽位下标（那位真人玩家）。给了就多两条判定：
+   *
+   *  · 主角自己的上场机会用完 —— 这一关当场结束、算他输。队友再能打也不能替他过关；
+   *  · 主角整局一个键都没按 —— 不给他这一队判胜。
+   *
+   * 星星是发给「你做到了」的凭证。组队赛让队友帮着赢没问题，
+   * 但「手柄放在一边、真人早被撞出局，星星照发、下一关照解锁」不行。
+   * 双人同乐、沙盒练习、无尽车轮战都不设主角，判法跟以前一模一样。
+   */
+  lead?: number;
 }
 
 export interface Actor {
@@ -194,6 +205,8 @@ export interface Actor {
   catches: number;
   /** 被队友顶举 / 拉回来几次（给合作特训数进度） */
   helped: number;
+  /** 这一位真人这一局按过键没有（小电脑的槽位不看这个） */
+  acted: boolean;
 }
 
 export interface ItemDrop {
@@ -317,6 +330,7 @@ function makeActor(slot: FighterSlot, index: number, stage: Stage): Actor {
     lifts: 0,
     catches: 0,
     helped: 0,
+    acted: false,
   };
 }
 
@@ -611,7 +625,10 @@ function landingPlatform(s: MatchState, a: Actor, prevFeet: number, feet: number
     const st = s.plats[i];
     if (st.hidden) continue;
     const top = st.y;
-    if (prevFeet > top + 1) continue;
+    // 「上一帧还在台面上方」比的要是上一帧的台面：升降台正往上走的时候，
+    // 台面这一帧能抬起两三个像素，拿新台面去判旧脚位，等于台子自己把落脚窗口吃掉了 ——
+    // 人明明是从台子正上方落下来的，却被判成「早就在台子下面」，直接穿过去掉下场。
+    if (prevFeet > st.prevY + 1) continue;
     if (feet < top) continue;
     if (a.x + r * 0.55 < st.x || a.x - r * 0.55 > st.x + p.w) continue;
     return i;
@@ -924,11 +941,37 @@ export function timeoutWinner(s: MatchState): number | null {
   return a.team;
 }
 
+/** 战役关的主角；这一局没设主角就是 null */
+export function leadActor(s: MatchState): Actor | null {
+  const i = s.cfg.lead;
+  if (i === undefined || !Number.isInteger(i)) return null;
+  return s.actors[i] ?? null;
+}
+
+/** 除了 `team` 以外战况最好的那一队；场上只有这一队就返回 null */
+function rivalWinner(s: MatchState, team: number): number | null {
+  const other = teamStats(s).find((t) => t.team !== team);
+  return other ? other.team : null;
+}
+
+/**
+ * 主角这一局是不是一个键都没按过。
+ * 结算文案要靠它区分「打输了」和「压根没上手」。
+ */
+export function leadIdle(s: MatchState): boolean {
+  const lead = leadActor(s);
+  return lead !== null && !lead.acted;
+}
+
 function endMatch(s: MatchState, winner: number | null, reason: "ko" | "time"): void {
+  // 判给主角那一队之前的最后一道关：他自己一个键都没按，这一局就不作数。
+  // 队友替你打赢可以，但「手柄放在一边」不该解锁下一关。
+  const lead = leadActor(s);
+  const credited = lead !== null && winner === lead.team && !lead.acted ? null : winner;
   s.over = true;
-  s.winnerTeam = winner;
+  s.winnerTeam = credited;
   s.endReason = reason;
-  s.events.push({ kind: "end", winnerTeam: winner });
+  s.events.push({ kind: "end", winnerTeam: credited });
 }
 
 /**
@@ -983,8 +1026,15 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       //
       // 只对「自己走下去的」提速。刚被打飞的那一下照旧要吃反应延迟，
       // 不然谁都救得回来，对局就再也打不出胜负了。
+      //
+      // 「空中跳跃用光了还没落地」跟真的飘出场外一样急：这段滞空里落点只剩横着挪
+      // 这一个变量，0.46 秒想一次的话，等它发现自己会从台子边上擦过去，
+      // 刹车加转向早就来不及了。云朵广场那次「对手飘到主平台左边 43 像素处掉下去」
+      // 就是这么来的 —— 它一直按着左，两百多的横速一直到出界都没收回来。
       const selfInflicted = s.t - s.lastHitT[a.index] > PERIL_GRACE;
-      if (selfInflicted && perilous(a, stageSafe, stageGround, livePads(s)) && a.aiT > PERIL_THINK) {
+      const stranded = !a.onGround && a.jumpsLeft <= 0;
+      const urgent = perilous(a, stageSafe, stageGround, livePads(s)) || stranded;
+      if (selfInflicted && urgent && a.aiT > PERIL_THINK) {
         a.aiT = PERIL_THINK;
       }
       a.aiT -= step;
@@ -1001,6 +1051,11 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       input = ledgeSafeInput(s, a, a.aiInput);
     } else {
       input = inputs[a.index] ?? emptyInput();
+      // 「这一局真人有没有上手」只认真按下去的那一下：僵直会把操作清空，
+      // 所以要在清空之前记，不然被打懵的那几帧会被当成没按。
+      if (!a.acted && (input.left || input.right || input.up || input.down || input.light || input.heavy)) {
+        a.acted = true;
+      }
     }
     // 挣扎窗口：僵直里唯一还能按的东西，所以要在「僵直清空操作」之前读
     const raw = input;
@@ -1255,6 +1310,13 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
   }
   if (startingTeams(s) > 1 && teams.length <= 1) {
     endMatch(s, teams.length === 1 ? teams[0] : null, "ko");
+    return s;
+  }
+  // 战役关的主角自己出局了：这一关到此为止。
+  // 组队赛的队友还站着也不算过关 —— 玩家已经在场边加油区了，星星不该发给他。
+  const lead = leadActor(s);
+  if (lead && lead.retired && startingTeams(s) > 1) {
+    endMatch(s, rivalWinner(s, lead.team), "ko");
     return s;
   }
   if (s.cfg.timeLimit > 0 && s.t >= s.cfg.timeLimit) {

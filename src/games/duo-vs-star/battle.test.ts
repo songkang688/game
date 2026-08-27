@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { AI_STYLES, decideAi, emptyInput, type AiTier, type Input } from "./ai";
 import {
   ACTOR_R,
+  RESPAWN_DELAY,
   createMatch,
+  leadIdle,
   livingTeams,
   makeRng,
   runMatch,
@@ -451,12 +453,25 @@ describe("出界、上场机会与胜负", () => {
     expect(s.endReason).toBe(snapshot.reason);
   });
 
-  it("两台小电脑放着自己打，一定能打到真实胜负", () => {
-    for (const seed of [3, 11, 29]) {
+  it("两台小电脑放着自己打，是真的在打，不是干瞪眼到时间到", () => {
+    // 每一局都要真打起来（两边都出手、场上真有人被撞出去），大多数局还要分出胜负。
+    // 1:1 收在时间到那种是正经的平局，不该当成「打不完」——
+    // 但要是一局都判不出赢家，那就是小电脑站着不动了。
+    const seeds = [3, 5, 7, 11, 13, 17, 23, 29];
+    let decided = 0;
+    for (const seed of seeds) {
       const s = runMatch(createMatch(cfg({ stocks: 2, timeLimit: 120, itemEvery: 6, seed })), 130);
       expect(s.over).toBe(true);
-      expect(s.winnerTeam === 0 || s.winnerTeam === 1).toBe(true);
+      for (const a of s.actors) {
+        expect(a.hits, `seed ${seed}：${a.char.name} 一整局一下都没打中过`).toBeGreaterThan(0);
+      }
+      const outs = s.actors.reduce((n, a) => n + a.outs, 0);
+      expect(outs, `seed ${seed}：120 秒里一个人都没被撞出去`).toBeGreaterThan(0);
+      if (s.winnerTeam !== null) decided++;
     }
+    expect(decided, `${seeds.length} 局里只有 ${decided} 局分出了胜负`).toBeGreaterThanOrEqual(
+      seeds.length - 2
+    );
   });
 
   // 小电脑不再自己走下台以后，四人混战全靠真的把人撞出去，比 1.1 时候慢一截：
@@ -481,6 +496,85 @@ describe("出界、上场机会与胜负", () => {
     );
     expect(s.over).toBe(true);
     expect(livingTeams(s).length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("战役关的主角规则（cfg.lead）", () => {
+  /** 一局 2v2：0 号是真人主角，1 号是小电脑队友，2/3 号是对手 */
+  function teamCfg(over: Partial<MatchConfig> = {}): MatchConfig {
+    return cfg({
+      stocks: 2,
+      timeLimit: 0,
+      itemEvery: 0,
+      seed: 21,
+      slots: [
+        { charId: "duoduo", team: 0, control: "p1", stocks: 2 },
+        { charId: "nuonuo", team: 0, control: "ai", aiTier: "hard", stocks: 2 },
+        { charId: "xingxing", team: 1, control: "ai", aiTier: "easy", stocks: 1 },
+        { charId: "shanshan", team: 1, control: "ai", aiTier: "easy", stocks: 1 },
+      ],
+      ...over,
+    });
+  }
+
+  /** 把某人连着撞出去 n 次（中间等他回场） */
+  function knockOut(s: MatchState, index: number, times: number): void {
+    for (let k = 0; k < times && !s.over; k++) {
+      sendOut(s, index);
+      stepMatch(s, 1 / 60, {});
+      if (!s.over) idle(s, RESPAWN_DELAY + 0.2);
+    }
+  }
+
+  it("主角上场机会用完，这一关当场结束、算他输——队友还站着也一样", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    knockOut(s, 0, 2);
+    expect(s.actors[0].retired, "主角该退场了").toBe(true);
+    expect(s.actors[1].retired, "队友还有上场机会").toBe(false);
+    expect(s.over).toBe(true);
+    expect(s.winnerTeam).toBe(1);
+  });
+
+  it("不设主角的局（双人同乐 / 沙盒）照旧：一个人退场不影响队友继续打", () => {
+    const s = createMatch(teamCfg());
+    knockOut(s, 0, 2);
+    expect(s.actors[0].retired).toBe(true);
+    expect(s.over, "没设主角就不该因为一个人退场而收摊").toBe(false);
+  });
+
+  it("主角一个键都没按，队友把对面清空也不给他判胜", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    sendOut(s, 2);
+    stepMatch(s, 1 / 60, {});
+    sendOut(s, 3);
+    stepMatch(s, 1 / 60, {});
+    expect(s.over).toBe(true);
+    expect(leadIdle(s)).toBe(true);
+    expect(s.winnerTeam, "摆烂不能靠队友过关").toBeNull();
+  });
+
+  it("主角只要真上手过，队友帮着赢就算赢", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    stepMatch(s, 1 / 60, { 0: press({ right: true }) });
+    sendOut(s, 2);
+    stepMatch(s, 1 / 60, {});
+    sendOut(s, 3);
+    stepMatch(s, 1 / 60, {});
+    expect(leadIdle(s)).toBe(false);
+    expect(s.winnerTeam).toBe(0);
+  });
+
+  it("按键要真按下去才算数：僵直里被清空的那几帧不影响判定", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    s.actors[0].stun = 0.5;
+    stepMatch(s, 1 / 60, { 0: press({ heavy: true }) });
+    expect(s.actors[0].acted, "被打懵的时候按键也是按了").toBe(true);
+  });
+
+  it("时间到那一路也走同一道关卡：主角没上手就不给判胜", () => {
+    const s = runMatch(createMatch(teamCfg({ lead: 0, timeLimit: 8 })), 10);
+    expect(s.endReason).toBe("time");
+    expect(s.winnerTeam).not.toBe(0);
   });
 });
 
