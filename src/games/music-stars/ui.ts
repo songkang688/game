@@ -11,7 +11,7 @@
  *
  * CSS 类名一律 `mst-` 前缀，样式跟着组件走，不进 `src/styles.css`。
  */
-import { prefersReducedMotion, keyLayout, KEY_MIN_GAP_PX, type KeyLayout } from "./runtime";
+import { prefersReducedMotion, keyLayout, layoutFits, KEY_MIN_GAP_PX, type KeyLayout } from "./runtime";
 import { SPEEDS, speedLabel } from "./practice";
 import { SCORE_MIN_FONT_PX, type ScoreGlyph } from "./notation";
 import { TIMBRES, VOLUME_MAX, type StarSynth } from "./synth";
@@ -43,6 +43,11 @@ export const MST_CSS = `
 .mst-lines-on{opacity:1;}
 .mst-keys{position:relative;display:flex;justify-content:center;align-items:flex-end;
   min-height:150px;width:100%;}
+/* 键排比可用宽度还宽时（七声音阶 8 个键就是）改成横向可滚：
+   键上挂着 touch-action:none 保证按下去出声，滑动从键与键之间、星空那一片起手 */
+.mst-keys-scroll{overflow-x:auto;justify-content:flex-start;touch-action:pan-x;
+  scrollbar-width:thin;padding-bottom:4px;}
+.mst-keys-scroll .mst-star{flex:0 0 auto;}
 .mst-star{border:none;background:transparent;padding:0;cursor:pointer;font-family:inherit;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
   transition:transform .12s ease,filter .12s ease;touch-action:none;}
@@ -135,10 +140,32 @@ export interface StarBoardOptions {
   onUp?: (index: number, pointerId: number) => void;
 }
 
+/** `.mst-wrap` 左右内边距合计 */
+export const WRAP_PADDING_X = 20;
+/** `.mst-sky` 的最大宽度（再宽星星就散得看不出高低了） */
+export const SKY_MAX_PX = 360;
+
+/**
+ * 星星键盘的可用宽度。老写法把 360 直接写死在 `createStarBoard` 里、从不问真实屏宽，
+ * 于是 320px 的老机器上算出来的键排比屏幕还宽，两端的键整个滑出去
+ * （测试员 W5-B-03）。这里按真实屏宽减掉 `.mst-wrap` 的左右内边距，再按 `.mst-sky`
+ * 的上限夹一次。写成纯函数，单测直接喂屏宽。
+ */
+export function boardWidth(viewportWidth?: number): number {
+  const raw =
+    typeof viewportWidth === "number" && viewportWidth > 0
+      ? viewportWidth
+      : (globalThis as { innerWidth?: number }).innerWidth;
+  const vw = typeof raw === "number" && raw > 0 ? raw : SKY_MAX_PX + WRAP_PADDING_X;
+  return Math.max(200, Math.min(SKY_MAX_PX, Math.floor(vw - WRAP_PADDING_X)));
+}
+
 export interface StarBoardHandle {
   el: HTMLElement;
   buttons: HTMLButtonElement[];
   layout: KeyLayout;
+  /** 键排放不放得下：放不下时键盘那一行改成横向可滚 */
+  fits: boolean;
   /** 范奏播放中要禁用输入，避免误判 */
   setEnabled(on: boolean): void;
   isEnabled(): boolean;
@@ -158,7 +185,9 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
   const count = opts.midis.length;
   const minGap = opts.wideGap ? DUET_MIN_GAP_PX : KEY_MIN_GAP_PX;
-  const layout = keyLayout(opts.width ?? 360, count, minGap);
+  const available = opts.width ?? boardWidth();
+  const layout = keyLayout(available, count, minGap);
+  const fits = layoutFits(layout, count, available);
   const lowMidi = Math.min(...opts.midis);
   const highMidi = Math.max(...opts.midis);
   const rise = count > 1 ? 60 : 0;
@@ -173,7 +202,7 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
   sky.appendChild(lines as unknown as Node);
 
   const keys = document.createElement("div");
-  keys.className = "mst-keys";
+  keys.className = fits ? "mst-keys" : "mst-keys mst-keys-scroll";
   keys.style.gap = `${layout.gap}px`;
   sky.appendChild(keys);
 
@@ -239,6 +268,7 @@ export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
     el: sky,
     buttons,
     layout,
+    fits,
     setEnabled(on: boolean): void {
       enabled = on;
       for (const b of buttons) b.disabled = !on;

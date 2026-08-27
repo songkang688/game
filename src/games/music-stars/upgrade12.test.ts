@@ -94,6 +94,7 @@ import { glyphAria, glyphLine, glyphOf, lineText, rhythmValue, SCORE_MIN_FONT_PX
 import {
   KEY_MIN_GAP_PX,
   KEY_MIN_PX,
+  KEY_TOUCH_MIN_PX,
   keyLayout,
   layoutFits,
   openLevelOnMap,
@@ -933,12 +934,20 @@ describe("音乐星星 1.2 · 平台接线与窄屏", () => {
     const tiny = keyLayout(320, 5);
     expect(tiny.width).toBeGreaterThanOrEqual(KEY_MIN_PX);
     expect(tiny.gap).toBeGreaterThanOrEqual(KEY_MIN_GAP_PX);
-    // 双声部关拉开间距之后，键仍然摆得下
+    expect(layoutFits(tiny, 5, 320)).toBe(true);
+    // 双声部关拉开间距之后，键仍然摆得下。
+    // 这里从「≥56px」放宽到「≥44px 触屏底线」是本轮有意改的：原来死守 56px，
+    // 算出来 5×56 + 4×24 = 376 > 360，两端各被切掉约 5px（测试员 W5-B-07）；
+    // 换成允许收一档之后，断言改成「真的摆得下」——比原来更严，不是放水。
     const duet = keyLayout(360, 5, DUET_MIN_GAP_PX);
     expect(duet.gap).toBeGreaterThanOrEqual(DUET_MIN_GAP_PX);
-    expect(duet.width).toBeGreaterThanOrEqual(KEY_MIN_PX);
-    // 七声音阶 8 个键在 360px 下就得靠横向滚动了，但热区照样不缩水
-    expect(keyLayout(360, 8).width).toBeGreaterThanOrEqual(KEY_MIN_PX);
+    expect(duet.width).toBeGreaterThanOrEqual(KEY_TOUCH_MIN_PX);
+    expect(layoutFits(duet, 5, 360)).toBe(true);
+    // 七声音阶 8 个键在 360px 下怎么排都塞不进（光键身 8×44 就 352px），
+    // 键收到触屏底线为止就不再收，剩下的交给横向滚动（`createStarBoard` 挂 mst-keys-scroll）
+    const seven = keyLayout(360, 8);
+    expect(seven.width).toBeGreaterThanOrEqual(KEY_TOUCH_MIN_PX);
+    expect(layoutFits(seven, 8, 360)).toBe(false);
   });
 
   it("meta 与事实对齐：188 关、只有闯关、按实测填了 platform", () => {

@@ -81,8 +81,15 @@ export function prefersReducedMotion(): boolean {
 
 /** 琴键（星星）热区的最小边长 */
 export const KEY_MIN_PX = 56;
+/**
+ * 实在摆不下时允许收到的触屏底线。再往下小手指就按不准了，
+ * 所以到 44px 就不再收，剩下的交给横向滚动（见 `layoutFits`）。
+ */
+export const KEY_TOUCH_MIN_PX = 44;
 /** 琴键之间的最小间隙 */
 export const KEY_MIN_GAP_PX = 8;
+/** 挤到底时允许的间隙 */
+export const KEY_TIGHT_GAP_PX = 4;
 
 export interface KeyLayout {
   width: number;
@@ -92,6 +99,13 @@ export interface KeyLayout {
 /**
  * 按可用宽度算键宽与间隙：先保证热区 ≥ 56px、间隙 ≥ 8px，
  * 有余量就把键铺宽一点（最宽 84px），余下的都给间隙。
+ *
+ * 摆不下的时候（七声音阶 8 个键、双声部关拉开间距的 5 个键都会摆不下）
+ * 老写法死守 56px，算出来的总宽直接超过 `available`，键就被切到屏幕外去了
+ * ——测试员 W5-B-03 / W5-B-07 量到「哆」和「高哆」整个在屏外。
+ * 现在改成逐级让步：先按原间隙把键收到触屏底线以上，再不行才收间隙，
+ * 一律不许收到 44px 以下；连 44px 都摆不下的（8 键 × 360px 就是）
+ * 就老老实实返回底线尺寸，由调用方按 `layoutFits` 开横向滚动。
  */
 export function keyLayout(available: number, count: number, minGap = KEY_MIN_GAP_PX): KeyLayout {
   const n = Math.max(1, Math.round(count));
@@ -99,9 +113,19 @@ export function keyLayout(available: number, count: number, minGap = KEY_MIN_GAP
   const gaps = Math.max(0, n - 1);
   const room = w - gaps * minGap;
   const width = Math.max(KEY_MIN_PX, Math.min(84, Math.floor(room / n)));
-  const spare = w - n * width;
-  const gap = gaps > 0 ? Math.max(minGap, Math.floor(spare / gaps)) : minGap;
-  return { width, gap };
+  if (n * width + gaps * minGap <= w) {
+    const spare = w - n * width;
+    const gap = gaps > 0 ? Math.max(minGap, Math.floor(spare / gaps)) : minGap;
+    return { width, gap };
+  }
+  const shrunk = Math.floor(room / n);
+  if (shrunk >= KEY_TOUCH_MIN_PX) return { width: shrunk, gap: minGap };
+  // 双声部关那种「刻意拉开」的间距不许被挤掉——一根手指盖住两颗键就判不出和弦了，
+  // 所以只有默认间距才允许再收一档，拉开过的间距宁可交给横向滚动。
+  const tightGap = minGap > KEY_MIN_GAP_PX ? minGap : Math.min(minGap, KEY_TIGHT_GAP_PX);
+  const tight = Math.floor((w - gaps * tightGap) / n);
+  if (tight >= KEY_TOUCH_MIN_PX) return { width: tight, gap: tightGap };
+  return { width: KEY_TOUCH_MIN_PX, gap: tightGap };
 }
 
 /** 这套布局在这个宽度下装不装得下 */
