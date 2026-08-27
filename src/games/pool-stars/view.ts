@@ -426,7 +426,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   const extraRow = el("div", "ps-row");
   const spinBtn = button("ps-btn", "🌀 旋转：不加");
   const placeBtn = button("ps-btn", "✅ 母球放好了");
-  extraRow.append(spinBtn, placeBtn);
+  // 手机上没有 Esc 键：给球桌配一个和另外四款同样口径的暂停钮
+  const pauseBtn = button("ps-btn", "⏸ 暂停");
+  pauseBtn.setAttribute("aria-pressed", "false");
+  extraRow.append(spinBtn, placeBtn, pauseBtn);
   const pockRow = el("div", "ps-pockets");
   const tipBox = el("div", "ps-tip", tip);
   wrap.append(hud, tableBox, bars, aimRow, extraRow, pockRow, tipBox);
@@ -786,14 +789,63 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     return owner === "duo" ? duo : (humans[1] ?? duo);
   }
 
+  // -------------------------------------------------------------------------
+  // 暂停
+  // -------------------------------------------------------------------------
+
+  let veil: HTMLElement | null = null;
+
+  function clearVeil(): void {
+    veil?.remove();
+    veil = null;
+  }
+
+  /** 暂停遮罩：手机上没有那行提示语也一眼看得出球桌停住了 */
+  function showVeil(): void {
+    clearVeil();
+    const box = el("div", "ps-veil");
+    box.append(
+      el("div", "ps-veil-t", "⏸ 歇一会儿"),
+      el("div", "ps-veil-s", "球都停在原地，想好了再接着打（按 Esc 或点「继续」）。")
+    );
+    const go = button("ps-btn", "▶ 继续");
+    go.addEventListener("click", () => setPaused(false));
+    box.appendChild(go);
+    wrap.appendChild(box);
+    veil = box;
+  }
+
+  function setPaused(next: boolean): void {
+    if (paused === next) return;
+    paused = next;
+    // 蓄到一半按暂停：这一杆作废，恢复之后重新蓄
+    if (paused && phase === "charge") phase = "aim";
+    tip = paused ? "已暂停，按 Esc 继续。" : opts.tip;
+    pauseBtn.textContent = paused ? "▶ 继续" : "⏸ 暂停";
+    pauseBtn.setAttribute("aria-pressed", String(paused));
+    if (paused) {
+      // 电脑那一杆也一起停住：不加这一句，遮罩盖着的时候排好的定时器照样把球打出去
+      if (aiTimer) {
+        clearTimeout(aiTimer);
+        aiTimer = null;
+      }
+      showVeil();
+    } else {
+      clearVeil();
+    }
+    refresh();
+    if (!paused) maybeAi();
+  }
+
+  pauseBtn.addEventListener("click", () => {
+    opts.sfx("tap");
+    setPaused(!paused);
+  });
+
   const onKeyDown = (e: KeyboardEvent): void => {
     const k = e.key;
     if (k === "Escape") {
-      paused = !paused;
-      // 蓄到一半按暂停：这一杆作废，恢复之后重新蓄
-      if (paused && phase === "charge") phase = "aim";
-      tip = paused ? "已暂停，按 Esc 继续。" : opts.tip;
-      refresh();
+      setPaused(!paused);
       return;
     }
     // 暂停就是暂停：除了 Esc，瞄准 / 蓄力 / 出杆一个都不接
@@ -934,11 +986,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   // -------------------------------------------------------------------------
 
   function maybeAi(): void {
-    if (destroyed || phase === "rolling" || !isAiTurn() || !opts.aiThink) return;
+    if (destroyed || paused || phase === "rolling" || !isAiTurn() || !opts.aiThink) return;
     if (aiTimer) clearTimeout(aiTimer);
     aiTimer = setTimeout(() => {
       aiTimer = null;
-      if (destroyed || phase === "rolling" || !isAiTurn()) return;
+      if (destroyed || paused || phase === "rolling" || !isAiTurn()) return;
       const shot = opts.aiThink?.(cloneBalls(balls), turn);
       if (!shot) return;
       angle = shot.angle;
@@ -993,6 +1045,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       shakeUntil = 0;
       shakeAmp = 0;
       tableBox.style.transform = "";
+      clearVeil();
       wrap.remove();
       releaseCss();
     },

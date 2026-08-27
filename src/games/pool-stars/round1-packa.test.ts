@@ -16,7 +16,7 @@
  * 顶部先静态 import 一次 index：让 level99 / audio 那条链在真 node 环境下加载完，
  * 之后再装 DOM 桩，免得 audio.ts 的 `document.addEventListener` 撞上没有该方法的桩。
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "./index";
 import { El, fireWindow, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
 import { makeBall } from "./physics";
@@ -307,6 +307,101 @@ describe("PA-PS-2 · 双人同屏键位互不抢占", () => {
     shoot("l");
     expect(handle.rolling(), "电脑回合被真人抢了杆").toBe(false);
     handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* L3A-4 · 手机上也停得下来，暂停时电脑那一杆也停住                        */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-4 · 球桌上的暂停钮与暂停遮罩", () => {
+  function pauseBtn(): El {
+    const btn = dom.root.find((e) => e.tagName === "button" && /⏸ 暂停|▶ 继续/.test(e.textContent));
+    if (!btn) throw new Error("球桌上没有暂停钮");
+    return btn;
+  }
+
+  function veil(): El | null {
+    return dom.root.find((e) => e.className.includes("ps-veil") && !e.className.includes("ps-veil-"));
+  }
+
+  it("点 ⏸ 就停住：滚球不再推进，遮罩挂出来，钮翻成「继续」", () => {
+    const { handle, settled } = mountTable();
+    expect(veil(), "还没暂停就挂了遮罩").toBeNull();
+    shoot("f");
+    expect(handle.rolling()).toBe(true);
+    flushFrames(dom, 3);
+    pauseBtn().dispatch("click", {});
+    expect(veil(), "点了暂停却没有遮罩").not.toBeNull();
+    expect(pauseBtn().textContent).toContain("继续");
+    expect(pauseBtn().getAttribute("aria-pressed")).toBe("true");
+    for (let i = 0; i < 200 && settled.length === 0; i++) flushFrames(dom, 1);
+    expect(settled, "点了暂停滚球还在跑").toHaveLength(0);
+    handle.destroy();
+  });
+
+  it("遮罩上的「▶ 继续」点得动，点完球接着滚，遮罩收得掉", () => {
+    const { handle, settled } = mountTable();
+    shoot("f");
+    flushFrames(dom, 3);
+    pauseBtn().dispatch("click", {});
+    const go = veil()!.find((e) => e.tagName === "button" && e.textContent.includes("继续"))!;
+    expect(go, "遮罩上没有继续钮").toBeTruthy();
+    go.dispatch("click", {});
+    expect(veil(), "点了继续遮罩没收掉").toBeNull();
+    runUntilSettled(settled);
+    expect(settled, "恢复之后这一杆结算不了").toHaveLength(1);
+    handle.destroy();
+  });
+
+  it("⏸ 钮和 Esc 是同一个开关，来回 10 次不会卡在暂停里", () => {
+    const { handle } = mountTable();
+    for (let i = 0; i < 10; i++) {
+      esc();
+      expect(veil(), `第 ${i + 1} 轮按 Esc 没挂遮罩`).not.toBeNull();
+      expect(pauseBtn().textContent, `第 ${i + 1} 轮屏幕上的钮没跟着翻面`).toContain("继续");
+      pauseBtn().dispatch("click", {});
+      expect(veil(), `第 ${i + 1} 轮点钮没退出暂停`).toBeNull();
+      expect(findText("已暂停"), `第 ${i + 1} 轮提示条还写着已暂停`).toBeNull();
+    }
+    handle.destroy();
+  });
+
+  it("暂停钮和别的按钮一样是 .ps-btn（热区 ≥ 44px 那一档）", () => {
+    const { handle } = mountTable();
+    expect(pauseBtn().className).toContain("ps-btn");
+    handle.destroy();
+  });
+
+  it("暂停期间电脑那一杆也停住，恢复之后才打出来", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let asked = 0;
+    const { handle } = mountTable({
+      seats: [{ name: "电脑", emoji: "🤖", color: "#3f7fd6", ai: 2 }],
+      aiThink: () => {
+        asked++;
+        return { angle: 0, power: 0.6, spin: 0, calledPocket: null };
+      },
+    });
+    esc();
+    vi.advanceTimersByTime(3000);
+    expect(asked, "遮罩盖着的时候电脑还是把球打出去了").toBe(0);
+    expect(handle.rolling()).toBe(false);
+    esc();
+    vi.advanceTimersByTime(900);
+    expect(asked, "恢复之后电脑不想了").toBe(1);
+    expect(handle.rolling()).toBe(true);
+    handle.destroy();
+    vi.useRealTimers();
+  });
+
+  it("暂停遮罩随球桌一起拆干净，不留节点也不留监听", () => {
+    const { handle } = mountTable();
+    esc();
+    expect(veil()).not.toBeNull();
+    handle.destroy();
+    expect(dom.root.children, "拆完还留着遮罩").toHaveLength(0);
+    expect(windowListenerCount(dom)).toBe(0);
   });
 });
 
