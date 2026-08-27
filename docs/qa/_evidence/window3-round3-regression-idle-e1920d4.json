@@ -1,5 +1,5 @@
 {
-  "takenAt": "2026-08-27T08:46:29.177Z",
+  "takenAt": "2026-08-27T08:44:58.982Z",
   "skySquadNamed": [
     {
       "level": 1,
@@ -52,7 +52,7 @@
     "before": 180,
     "after": 0,
     "autoWin": [],
-    "escapedTotal": 1309,
+    "escapedTotal": 1306,
     "levelsWithZeroEscaped": [
       124
     ]
@@ -140,13 +140,13 @@
     {
       "level": 1,
       "stageId": "cloud-square",
-      "win": false,
-      "winnerTeam": 1,
-      "endReason": "time",
-      "seconds": 155,
+      "win": true,
+      "winnerTeam": 0,
+      "endReason": "ko",
+      "seconds": 52.4,
       "hits": 0,
-      "outs": 1,
-      "stars": 0,
+      "outs": 0,
+      "stars": 1,
       "allies": 0
     },
     {
@@ -155,7 +155,7 @@
       "win": false,
       "winnerTeam": 1,
       "endReason": "ko",
-      "seconds": 72.9,
+      "seconds": 22.1,
       "hits": 0,
       "outs": 3,
       "stars": 0,
@@ -167,7 +167,7 @@
       "win": false,
       "winnerTeam": 1,
       "endReason": "ko",
-      "seconds": 8,
+      "seconds": 11.7,
       "hits": 0,
       "outs": 2,
       "stars": 0,
@@ -177,11 +177,11 @@
       "level": 157,
       "stageId": "night-hops",
       "win": false,
-      "winnerTeam": null,
-      "endReason": "time",
-      "seconds": 70,
+      "winnerTeam": 1,
+      "endReason": "ko",
+      "seconds": 3.6,
       "hits": 0,
-      "outs": 0,
+      "outs": 1,
       "stars": 0,
       "allies": 0
     }
@@ -189,38 +189,118 @@
   "duoRescan": {
     "scanned": 188,
     "before": 72,
-    "after": 7,
+    "after": 19,
     "threeStar": 0,
-    "byKo": 3,
-    "byTime": 4,
-    "withAlly": 4,
+    "byKo": 11,
+    "byTime": 8,
+    "withAlly": 5,
     "remaining": [
+      {
+        "level": 1,
+        "stageId": "cloud-square",
+        "endReason": "ko",
+        "seconds": 52.4,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 2,
+        "stageId": "cloud-square",
+        "endReason": "ko",
+        "seconds": 99.6,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 4,
+        "stageId": "cloud-square",
+        "endReason": "time",
+        "seconds": 60,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 6,
+        "stageId": "cloud-square",
+        "endReason": "ko",
+        "seconds": 31.5,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 9,
+        "stageId": "cloud-square",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 1
+      },
+      {
+        "level": 18,
+        "stageId": "cloud-square",
+        "endReason": "ko",
+        "seconds": 65.3,
+        "stars": 1,
+        "allies": 0
+      },
       {
         "level": 28,
         "stageId": "wobble-isles",
         "endReason": "ko",
-        "seconds": 115.5,
+        "seconds": 63.6,
         "stars": 1,
         "allies": 1
+      },
+      {
+        "level": 39,
+        "stageId": "belt-works",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 47,
+        "stageId": "belt-works",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 1
+      },
+      {
+        "level": 92,
+        "stageId": "syrup-pool",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 94,
+        "stageId": "syrup-pool",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 0
       },
       {
         "level": 104,
         "stageId": "windmill-field",
-        "endReason": "ko",
-        "seconds": 146.4,
-        "stars": 1,
-        "allies": 1
-      },
-      {
-        "level": 123,
-        "stageId": "ice-lake",
         "endReason": "time",
         "seconds": 155,
         "stars": 1,
         "allies": 1
       },
       {
-        "level": 140,
+        "level": 110,
+        "stageId": "windmill-field",
+        "endReason": "ko",
+        "seconds": 21.7,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 136,
         "stageId": "star-lift",
         "endReason": "time",
         "seconds": 155,
@@ -228,28 +308,44 @@
         "allies": 0
       },
       {
-        "level": 144,
-        "stageId": "star-lift",
-        "endReason": "time",
-        "seconds": 155,
-        "stars": 1,
-        "allies": 0
-      },
-      {
-        "level": 148,
+        "level": 142,
         "stageId": "star-lift",
         "endReason": "ko",
-        "seconds": 68.5,
+        "seconds": 67.8,
+        "stars": 1,
+        "allies": 1
+      },
+      {
+        "level": 146,
+        "stageId": "star-lift",
+        "endReason": "ko",
+        "seconds": 20.3,
         "stars": 1,
         "allies": 0
       },
       {
-        "level": 161,
+        "level": 158,
         "stageId": "night-hops",
-        "endReason": "time",
-        "seconds": 155,
+        "endReason": "ko",
+        "seconds": 119.3,
         "stars": 1,
-        "allies": 1
+        "allies": 0
+      },
+      {
+        "level": 173,
+        "stageId": "allstar-arena",
+        "endReason": "ko",
+        "seconds": 31.9,
+        "stars": 1,
+        "allies": 0
+      },
+      {
+        "level": 185,
+        "stageId": "allstar-arena",
+        "endReason": "ko",
+        "seconds": 15,
+        "stars": 1,
+        "allies": 0
       }
     ],
     "byChapter": [
@@ -258,8 +354,15 @@
         "stageId": "cloud-square",
         "range": "1-19",
         "size": 19,
-        "autoWin": 0,
-        "levels": []
+        "autoWin": 6,
+        "levels": [
+          1,
+          2,
+          4,
+          6,
+          9,
+          18
+        ]
       },
       {
         "chapter": "摇摇浮岛",
@@ -276,8 +379,11 @@
         "stageId": "belt-works",
         "range": "39-57",
         "size": 19,
-        "autoWin": 0,
-        "levels": []
+        "autoWin": 2,
+        "levels": [
+          39,
+          47
+        ]
       },
       {
         "chapter": "弹簧糖果地",
@@ -292,17 +398,21 @@
         "stageId": "syrup-pool",
         "range": "77-95",
         "size": 19,
-        "autoWin": 0,
-        "levels": []
+        "autoWin": 2,
+        "levels": [
+          92,
+          94
+        ]
       },
       {
         "chapter": "呼呼风车原",
         "stageId": "windmill-field",
         "range": "96-114",
         "size": 19,
-        "autoWin": 1,
+        "autoWin": 2,
         "levels": [
-          104
+          104,
+          110
         ]
       },
       {
@@ -310,10 +420,8 @@
         "stageId": "ice-lake",
         "range": "115-133",
         "size": 19,
-        "autoWin": 1,
-        "levels": [
-          123
-        ]
+        "autoWin": 0,
+        "levels": []
       },
       {
         "chapter": "星光升降台",
@@ -322,9 +430,9 @@
         "size": 19,
         "autoWin": 3,
         "levels": [
-          140,
-          144,
-          148
+          136,
+          142,
+          146
         ]
       },
       {
@@ -334,7 +442,7 @@
         "size": 19,
         "autoWin": 1,
         "levels": [
-          161
+          158
         ]
       },
       {
@@ -342,20 +450,35 @@
         "stageId": "allstar-arena",
         "range": "172-188",
         "size": 17,
-        "autoWin": 0,
-        "levels": []
+        "autoWin": 2,
+        "levels": [
+          173,
+          185
+        ]
       }
     ],
     "stillFromOld72": [
+      1,
+      2,
+      4,
+      6,
+      9,
+      18,
       28,
+      39,
+      47,
       104,
-      140,
-      144,
-      148,
-      161
+      136,
+      142,
+      146,
+      158,
+      173
     ],
     "newlyIdleWinnable": [
-      123
+      92,
+      94,
+      110,
+      185
     ]
   },
   "bumperLevel1": {

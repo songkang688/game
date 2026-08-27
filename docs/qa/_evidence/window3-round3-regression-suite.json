@@ -1,12 +1,12 @@
 {
   "total": {
     "files": 255,
-    "tests": 6542,
+    "tests": 6544,
     "failed": 0
   },
   "windowTotals": {
     "files": 154,
-    "tests": 3937,
+    "tests": 3939,
     "failed": 0
   },
   "per": {
@@ -56,7 +56,7 @@
     },
     "duo-vs-star": {
       "files": 9,
-      "tests": 307,
+      "tests": 309,
       "failed": 0,
       "keyTests": [
         "1.2 角色平衡：循环赛胜率矩阵 › 每对角色都真的打满了 20 局，先后手各一半",
