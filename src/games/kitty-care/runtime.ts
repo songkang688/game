@@ -263,14 +263,34 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     el.style.overflowY = "auto";
   };
   relayout();
+  let live = true;
+  nextFrame(view, () => {
+    if (live) relayout();
+  });
   view?.addEventListener("resize", relayout);
   return {
     relayout,
     dispose(): void {
+      live = false;
       view?.removeEventListener("resize", relayout);
       reset();
     }
   };
+}
+
+/**
+ * 下一帧再叫一次。
+ *
+ * 为什么非补这一帧不可：钳位是在 `playLevel` 里量的，而平台顶栏 `.l99-stagebar`
+ * 在窄屏上会折行——折之前和折之后，这一屏的起点差 8px。量在折行之前，
+ * `max-height` 就写大了 8px，钳完舞台照样裁掉 8px（CDP 实测 360×640 第 141 关：
+ * 写进去 408px，真正剩下的只有 400px）。拿不到 `requestAnimationFrame`
+ * （测试桩 / SSR）就安静跳过，不改变任何既有行为。
+ */
+function nextFrame(view: (Window & typeof globalThis) | null, fn: () => void): void {
+  const raf = view?.requestAnimationFrame;
+  if (typeof raf !== "function") return;
+  raf.call(view, () => fn());
 }
 
 /** 长列表钳到这个高度以下就不值得再钳了——再矮连一张卡片都露不全 */
@@ -314,10 +334,15 @@ export function scrollIntoStage(el: HTMLElement, minRoom = LIST_MIN_ROOM): { rel
     el.style.overflowY = "auto";
   };
   relayout();
+  let live = true;
+  nextFrame(view, () => {
+    if (live) relayout();
+  });
   view?.addEventListener("resize", relayout);
   return {
     relayout,
     dispose(): void {
+      live = false;
       view?.removeEventListener("resize", relayout);
       reset();
     }
