@@ -20,6 +20,7 @@
  *   node scripts/smoke-1.2-window1-r1-tester.mjs
  *
  * 只跑其中一段:PART=A|B|C,只跑某几款:IDS=orb-arena,block-drop
+ * PART=W 是「补过关证据」专场:只拿通用假人反复打第 1 关,预算给足(WIN_MS / WIN_ROUNDS 可调)
  * 它连着 dev server 跑源码,点的是真按钮、按的是真键盘,不走任何测试后门。
  */
 import puppeteer from "puppeteer-core";
@@ -981,6 +982,34 @@ async function main() {
       log(reenter && remount, "退出再进还能正常挂起来");
 
       log(errors.length === 0, "这一款全程没有 pageerror / console.error", errors.slice(0, 2).join(" ; "));
+    }
+  }
+
+  // =========================================================================
+  // W. 补过关证据:只反复打第 1 关,预算给足
+  // =========================================================================
+  if (PARTS.includes("W")) {
+    const budget = Number(process.env.WIN_MS ?? 90000);
+    const rounds = Number(process.env.WIN_ROUNDS ?? 6);
+    console.log(`\n===== W. 补过关证据(每款最多 ${rounds} 局 × ${Math.round(budget / 1000)}s) =====`);
+    for (const g of PICKED) {
+      let got = "";
+      await openLevel(page, g.id, 1);
+      for (let round = 0; round < rounds && !got; round++) {
+        const r = await drive(page, g, { budgetMs: budget, mode: "play" });
+        if (r.v.includes("过关")) got = `${r.v}(第 ${round + 1} 局 · ${r.acts} 次操作 · ${Math.round(r.ms / 1000)}s)`;
+        const again = await page.evaluate(() => {
+          const b = [...document.querySelectorAll(".l99-ov-btn")].find((x) =>
+            /再试本关|再玩一次/.test(x.textContent ?? "")
+          );
+          if (!b) return false;
+          b.click();
+          return true;
+        });
+        if (!again) await openLevel(page, g.id, 1);
+        await sleep(700);
+      }
+      log(got !== "", `${g.title}:第 1 关真打到过关`, got || `${rounds} 局都没打出过关`);
     }
   }
 
