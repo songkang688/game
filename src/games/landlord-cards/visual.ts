@@ -319,7 +319,7 @@ export const LDV_CSS = `
   background:linear-gradient(180deg,#ffe3a1,#f5c963);pointer-events:none;}
 .ldv-kribbon-small{background:linear-gradient(180deg,#e8eef5,#c9d3de);}
 /* 手牌层次:可出牌抬升 + 底光;轮到自己整扇呼吸微光 */
-.ldv-can{box-shadow:1px 0 0 rgba(46,26,60,.14),0 9px 12px -4px rgba(255,214,120,.6),0 2px 5px rgba(15,25,20,.35);}
+.ldv-can{box-shadow:1px 0 0 rgba(90,74,110,.14),0 9px 12px -4px rgba(255,214,120,.6),0 2px 5px rgba(15,25,20,.35);}
 .ldv-myturn{border-radius:12px;animation:ldvbreath var(--ldv-breath-ms) ease-in-out infinite;}
 @keyframes ldvbreath{0%,100%{box-shadow:0 0 0 0 var(--ld-turn-glow);}50%{box-shadow:0 0 18px 6px var(--ld-turn-glow);}}
 /* 出牌轨迹配菜:落桌软影一闪(1 帧 step)/ 上一手渐隐 / 炸弹震动 + 星屑环 */

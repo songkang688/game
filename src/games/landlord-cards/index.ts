@@ -193,7 +193,7 @@ const CSS = `
 .ld-fanbox{position:relative;width:100%;touch-action:none;}
 /* 牌面的点数与花色一律缩在左上角:扇形手牌只露出左边窄窄一条,角标必须待在那一条里 */
 .ld-card{position:absolute;border-radius:8px;background:var(--ld-card);border:1px solid rgba(90,70,110,.28);
-  overflow:hidden;box-shadow:1px 0 0 rgba(46,26,60,.14),0 2px 5px rgba(15,25,20,.35);
+  overflow:hidden;box-shadow:1px 0 0 rgba(90,74,110,.14),0 2px 5px rgba(15,25,20,.35);
   transform-origin:50% 88%;transition:transform var(--ldv-lift-ms) ease-out;}
 .ld-card-red{color:var(--ld-warm);}
 .ld-card-black{color:var(--ld-cool);}

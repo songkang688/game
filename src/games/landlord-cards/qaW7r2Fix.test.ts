@@ -5,6 +5,8 @@
  * 大小王「大/小王」9px 缎带小字改图形徽记(花徽 vs 星徽),
  * 1.3 新增样式块 LDV_CSS 再无任何 <14px 字号;窄牌砍缎带的降级逻辑保留。
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { isJoker } from "./logic";
@@ -47,5 +49,16 @@ describe("窗口7 R2 修复 · N-1 大小王缎带图形化", () => {
       const slim = cardFaceArtHTML(id, 24);
       expect(slim).not.toContain("ldv-kribbon");
     }
+  });
+});
+
+describe("窗口7 R2 修复 · B 档一致性 #4 深影色收敛", () => {
+  it("第三支深影 rgba(46,26,60) 清零,牌沿分隔影统一进 rgba(90,74,110,α) 家族", () => {
+    expect(LDV_CSS).toContain("1px 0 0 rgba(90,74,110,.14)");
+    expect(LDV_CSS).not.toContain("46,26,60");
+    const indexSrc = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    expect(indexSrc).not.toContain("46,26,60");
+    // .ld-card 基础影与 .ldv-can 抬升影的分隔线分量同源同值(同款内不许双 token)
+    expect(indexSrc).toContain("1px 0 0 rgba(90,74,110,.14)");
   });
 });
