@@ -128,11 +128,17 @@ export class El {
   }
 }
 
-/** canvas 2d 上下文：任何方法都是空操作，任何属性都写得进去 */
+/** 画布方法的调用记录（1.3 视觉契约：断言「一帧真的画了」以及走的是 sprite/渐变路径） */
+export const ctxCalls: string[] = [];
+
+/** canvas 2d 上下文：任何方法都是空操作（但记下方法名），任何属性都写得进去 */
 export const ctx2d: unknown = new Proxy(
   {},
   {
-    get: () => () => ctx2d,
+    get: (_t, prop) => (): unknown => {
+      if (typeof prop === "string") ctxCalls.push(prop);
+      return ctx2d;
+    },
     set: () => true,
   }
 );
@@ -151,6 +157,7 @@ const saved: Record<string, unknown> = {};
 
 /** 装上 DOM 桩，返回可以观察的句柄 */
 export function installDom(width = 800, coarsePointer = false): Dom {
+  ctxCalls.length = 0;
   const head = new El("head");
   const root = new El("div");
   root.width = width;
