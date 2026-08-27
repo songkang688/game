@@ -76,6 +76,7 @@ import {
   drawOre,
   drawParallax,
   drawRope,
+  drawSkyDecor,
   drawWalls,
   drawWinch,
   type CrewPose,
@@ -472,6 +473,8 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     g.addColorStop(1, pal.sky1);
     c.fillStyle = g;
     c.fillRect(0, 0, FIELD_W, FIELD_H);
+    // r2(B档TOP5):地表天空一件章节主题物 + 两朵慢云,calm 定格
+    drawSkyDecor(c, pal, Math.max(0, PALETTES.indexOf(pal)), worldClock, calm);
 
     drawParallax(c, pal, ropeLen);
 

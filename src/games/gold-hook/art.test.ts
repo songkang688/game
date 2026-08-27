@@ -21,8 +21,10 @@ import {
   drawParallax,
   drawPickaxe,
   drawRope,
+  drawSkyDecor,
   drawWalls,
   drawWinch,
+  skyDecorKind,
   type CrewOpts,
   type IconKind,
   type Palette,
@@ -358,6 +360,32 @@ describe("1.3 矿洞三层内容", () => {
     const ground = rec((c) => drawGround(c, PAL));
     expect(ground.some((o) => o.startsWith("quad:"))).toBe(true);
     expect(ground.some((o) => o.startsWith("ellipse:"))).toBe(true);
+  });
+
+  it("r2 B档TOP5:8 章各产出非空天空装饰,太阳/月牙/星三分支互不相同", () => {
+    const byKind = new Map<string, string>();
+    for (let ch = 0; ch < 8; ch++) {
+      const ops = rec((c) => drawSkyDecor(c, PAL, ch, 1, false));
+      expect(ops.length, `第 ${ch + 1} 章天空空空如也`).toBeGreaterThan(6);
+      expect(ops.some((o) => o.startsWith("text:"))).toBe(false);
+      byKind.set(skyDecorKind(ch), ops.join("|"));
+    }
+    // 三种主题物都被用到,且两两画得不同(冷暖分支可区分)
+    expect(new Set(["sun", "moon", "stars"]).size).toBe(3);
+    expect(byKind.size).toBe(3);
+    const all = [...byKind.values()];
+    expect(new Set(all).size).toBe(3);
+    // 太阳章带径向光晕
+    expect(rec((c) => drawSkyDecor(c, PAL, 0, 1, false))).toContain("radGrad");
+  });
+
+  it("r2 B档TOP5:云 6px/s 慢漂——两个 t 值画面不同;calm 定格一致", () => {
+    const a = rec((c) => drawSkyDecor(c, PAL, 2, 1, false));
+    const b = rec((c) => drawSkyDecor(c, PAL, 2, 9, false));
+    expect(seq(a)).not.toBe(seq(b));
+    const calmA = rec((c) => drawSkyDecor(c, PAL, 2, 1, true));
+    const calmB = rec((c) => drawSkyDecor(c, PAL, 2, 9, true));
+    expect(seq(calmA)).toBe(seq(calmB));
   });
 });
 

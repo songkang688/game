@@ -865,6 +865,88 @@ export function drawWalls(c: Ctx, pal: Palette): void {
 }
 
 /** 地面草皮:两条色带之上,加一排小草和几粒碎石 */
+/* ---------------- r2(B档TOP5):地表天空的主题物与慢云 ---------------- */
+
+/** 章节天空主题物:暖章太阳 / 冷章月牙 / 蓝紫章三粒闪星(按调色板下标查表,确定性) */
+export type SkyDecorKind = "sun" | "moon" | "stars";
+
+export function skyDecorKind(chapter: number): SkyDecorKind {
+  const i = ((chapter % 8) + 8) % 8;
+  if (i === 0 || i === 3) return "sun"; // 奶油金 / 蜜桃橙:暖
+  if (i === 1 || i === 4) return "moon"; // 青碧 / 水青:冷
+  return "stars"; // 蓝 / 紫系
+}
+
+/**
+ * 地表天空区的一件主题物 + 两朵三瓣慢云。
+ * 矿洞下面三层视差热热闹闹,地表却光秃秃——这里补上「头顶那口气」。
+ * 云 6px/s 慢漂(镜头不动,不需要视差);calm 时全部定格。
+ */
+export function drawSkyDecor(c: Ctx, pal: Palette, chapter: number, t: number, calm: boolean): void {
+  const kind = skyDecorKind(chapter);
+  const x = FIELD_W * 0.82;
+  const y = 38;
+  const r = FIELD_W * 0.045;
+  c.save();
+  if (kind === "sun") {
+    // 太阳:径向光晕 + 圆面
+    const halo = c.createRadialGradient(x, y, r * 0.4, x, y, r * 2.2);
+    halo.addColorStop(0, "rgba(255,214,110,.5)");
+    halo.addColorStop(1, "rgba(255,214,110,0)");
+    c.fillStyle = halo;
+    c.beginPath();
+    c.arc(x, y, r * 2.2, 0, TAU);
+    c.fill();
+    c.fillStyle = "#FFD87A";
+    c.strokeStyle = "#E8B54A";
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.arc(x, y, r, 0, TAU);
+    c.fill();
+    c.stroke();
+  } else if (kind === "moon") {
+    // 月牙:双圆相减(亮圆上盖一枚天色圆)
+    c.fillStyle = "#FFF3C2";
+    c.beginPath();
+    c.arc(x, y, r, 0, TAU);
+    c.fill();
+    c.fillStyle = pal.sky0;
+    c.beginPath();
+    c.arc(x + r * 0.42, y - r * 0.3, r * 0.86, 0, TAU);
+    c.fill();
+  } else {
+    // 三粒闪星:大小两档,错落着放
+    c.fillStyle = "#FFFDF0";
+    c.globalAlpha = 0.95;
+    starPath(c, x, y - 6, r * 0.42);
+    c.fill();
+    starPath(c, x - r * 1.4, y + r * 0.7, r * 0.28);
+    c.fill();
+    starPath(c, x + r * 1.2, y + r * 0.9, r * 0.22);
+    c.fill();
+    c.globalAlpha = 1;
+  }
+  // 两朵三瓣慢云(同 duo-rush drawCloudPuff 规格,透明度 0.5)
+  c.globalAlpha = 0.5;
+  c.fillStyle = "#FFFFFF";
+  for (const [seed, cy, s] of [
+    [86, 24, 1],
+    [312, 46, 0.78],
+  ] as const) {
+    const cx = ((seed + (calm ? 0 : t * 6)) % (FIELD_W + 80)) - 40;
+    for (const [dx, dy, cr] of [
+      [0, -2 * s, 10 * s],
+      [-10 * s, 3 * s, 7.5 * s],
+      [10 * s, 3 * s, 7.5 * s],
+    ] as const) {
+      c.beginPath();
+      c.arc(cx + dx, cy + dy, cr, 0, TAU);
+      c.fill();
+    }
+  }
+  c.restore();
+}
+
 export function drawGround(c: Ctx, pal: Palette): void {
   c.save();
   c.fillStyle = pal.ground;
