@@ -296,6 +296,10 @@ export function portalInverseColor(hex: string): string {
   return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
+/** 进口门的亮环色；出口门用它的反色——两扇门一眼分清 */
+export const PORTAL_ACCENT_IN = "#FFD75E";
+export const PORTAL_ACCENT_OUT = portalInverseColor(PORTAL_ACCENT_IN);
+
 /** 常驻旋转角（弧度）：3200ms 一圈 linear；reduced 恒为 0（静止双环） */
 export function portalSpinAngle(nowMs: number, reduced: boolean): number {
   if (reduced) return 0;
@@ -317,6 +321,10 @@ export function capsuleSwingDeg(nowMs: number, phase: number, reduced: boolean):
   if (reduced) return 0;
   return CAPSULE_SWING_DEG * Math.sin(((nowMs % CAPSULE_SWING_MS) / CAPSULE_SWING_MS) * Math.PI * 2 + phase);
 }
+
+/** 两半色药丸：上半亮白、下半淡蓝（好道具通用；「别接我」仍是空心圈形状通道） */
+export const CAPSULE_TOP = "#FFFFFF";
+export const CAPSULE_BOTTOM = "#C8E4FF";
 
 // ---------------------------------------------------------------------------
 // 十、裂纹层数：只读格子值换算，绝不写血量

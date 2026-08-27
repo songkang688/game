@@ -60,17 +60,28 @@ import {
 import { candyDarken, candyLighten, paintCandyBrick } from "../../art/kit/candyBrick";
 import {
   BK_PALETTE,
+  BK_TOWER_ACCENT,
+  BK_WALL_PX,
+  CAPSULE_BOTTOM,
+  CAPSULE_TOP,
   MAGNET_ARC_LINES,
   PIERCE_ORBIT_STARS,
+  PORTAL_ACCENT_IN,
+  PORTAL_ACCENT_OUT,
   RIBBON_COLORS,
   RIBBON_MIN_COMBO,
+  capsuleSwingDeg,
+  chapterAccent,
   clearDebris,
   crackLevel,
+  lampXs,
   magnetArcPhase,
   magnetArcWobble,
   paddlePressOffset,
   paintDebris,
   pierceOrbitAngle,
+  portalPulseScale,
+  portalSpinAngle,
   pushDebris,
   ribbonAlpha,
   spawnBrickDebris,
@@ -106,11 +117,11 @@ interface Capsule {
 const CSS = `
 .brk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFEFE4, #F3EDFF); border-radius: 16px; padding: 12px; user-select: none; touch-action: none; position: relative; }
 .brk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
-.brk-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(210,140,110,.25); font-size: 14px; white-space: nowrap; }
+.brk-badge { background: #fff; border: 1px solid rgba(224,210,232,.9); border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(93,74,110,.16); font-size: 14px; white-space: nowrap; }
 .brk-power { min-height: 20px; text-align: center; font-size: 14px; font-weight: 700; color: #7A5AA8; letter-spacing: 1px; }
 /* 砖塔的节奏牌：压得快的时候换个底色，色觉之外还有「快」字兜着 */
 .brk-badge.brk-pace-hot { color: #B4432B; background: #FFEDE6; }
-.brk-canvas { width: 100%; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDF8F0, #F4EFFB); touch-action: none; }
+.brk-canvas { width: 100%; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDEFF5, #F3E4F0); touch-action: none; }
 .brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
 .brk-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFC9AE; color: #8A4A20; cursor: pointer; box-shadow: 0 4px 0 #EBA987; touch-action: none; }
 .brk-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBA987; }
@@ -223,15 +234,55 @@ function drawBrick(
   drawMark(c2d, mark, x, y, w, h);
 }
 
-function drawPortal(c2d: CanvasRenderingContext2D, cx: number, cy: number): void {
+/**
+ * 星门：双环旋转（外环顺、内环逆，3200ms 一圈；reduced 静止）。
+ * 进口 / 出口的亮环互为反色，一眼分得清哪扇是哪扇；
+ * 球进出后 160ms 内门圈涨 8% 再回落（portalPulseScale，reduced 恒 1）。
+ */
+function drawPortal(
+  c2d: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  flip: boolean,
+  sincePulseMs: number,
+  nowMs: number,
+  reduce: boolean
+): void {
+  const spin = portalSpinAngle(nowMs, reduce) * (flip ? -1 : 1);
+  const pulse = portalPulseScale(sincePulseMs, reduce);
+  const R = (BRICK_H / 2 + 1) * pulse;
+  const accent = flip ? PORTAL_ACCENT_OUT : PORTAL_ACCENT_IN;
+  c2d.save();
+  c2d.translate(cx, cy);
+  c2d.beginPath();
+  c2d.arc(0, 0, R, 0, Math.PI * 2);
   c2d.fillStyle = PORTAL_COLOR;
-  c2d.beginPath();
-  c2d.arc(cx, cy, BRICK_H / 2 + 1, 0, Math.PI * 2);
   c2d.fill();
+  c2d.lineWidth = 2;
+  for (const [off, tone] of [
+    [0, accent],
+    [Math.PI, "rgba(255,255,255,.75)"]
+  ] as Array<[number, string]>) {
+    c2d.strokeStyle = tone;
+    c2d.beginPath();
+    c2d.arc(0, 0, R - 1.6, spin + off, spin + off + Math.PI * 0.62);
+    c2d.stroke();
+  }
+  c2d.lineWidth = 1.4;
+  for (const [off, tone] of [
+    [0, "rgba(255,255,255,.65)"],
+    [Math.PI, accent]
+  ] as Array<[number, string]>) {
+    c2d.strokeStyle = tone;
+    c2d.beginPath();
+    c2d.arc(0, 0, R * 0.55, -spin + off, -spin + off + Math.PI * 0.62);
+    c2d.stroke();
+  }
+  c2d.beginPath();
+  c2d.arc(0, 0, R * 0.26, 0, Math.PI * 2);
   c2d.fillStyle = "#EDE9FF";
-  c2d.beginPath();
-  c2d.arc(cx, cy, BRICK_H / 4, 0, Math.PI * 2);
   c2d.fill();
+  c2d.restore();
 }
 
 /**
@@ -365,24 +416,85 @@ function drawRibbon(c2d: CanvasRenderingContext2D, alpha: number): void {
   c2d.restore();
 }
 
-function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule): void {
+/** 药丸胶囊：下落时 ±4° 摆动（600ms 周期；reduced 竖直下落），图标始终 14px 可辨 */
+function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule, nowMs: number, reduce: boolean): void {
   const look = capsuleLook(cap.kind);
-  c2d.beginPath();
-  c2d.arc(cap.x, cap.y, 11, 0, Math.PI * 2);
+  const ang = (capsuleSwingDeg(nowMs, cap.x * 0.13, reduce) * Math.PI) / 180;
+  const rw = 9;
+  const rh = 12;
+  c2d.save();
+  c2d.translate(cap.x, cap.y);
+  c2d.rotate(ang);
   if (look.hollow) {
-    // 空心圈：形状本身就在说「别接我」，不指望孩子分得出那点粉色
+    // 空心圈药丸：形状本身就在说「别接我」，不指望孩子分得出那点粉色
     c2d.lineWidth = 3;
     c2d.strokeStyle = "#E0709A";
+    c2d.beginPath();
+    c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
     c2d.stroke();
   } else {
-    c2d.fillStyle = look.fill;
-    c2d.fill();
+    // 两半色药丸：上半亮白、下半淡蓝，中缝一道细影
+    c2d.beginPath();
+    c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
+    c2d.save();
+    c2d.clip();
+    c2d.fillStyle = look.fill === "#FFFFFF" ? CAPSULE_TOP : look.fill;
+    c2d.fillRect(-rw, -rh, rw * 2, rh);
+    c2d.fillStyle = CAPSULE_BOTTOM;
+    c2d.fillRect(-rw, 0, rw * 2, rh);
+    c2d.fillStyle = BK_PALETTE.bkShadow;
+    c2d.fillRect(-rw, -0.5, rw * 2, 1);
+    c2d.restore();
+    c2d.beginPath();
+    c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
+    c2d.strokeStyle = candyDarken(CAPSULE_BOTTOM, 0.2);
+    c2d.lineWidth = 1;
+    c2d.stroke();
   }
   c2d.font = "14px serif";
   c2d.textAlign = "center";
   c2d.textBaseline = "middle";
   c2d.fillStyle = "#3A2E4A";
-  c2d.fillText(look.emoji, cap.x, cap.y + 1);
+  c2d.fillText(look.emoji, 0, 1);
+  c2d.restore();
+}
+
+/**
+ * 场景底：上下渐变背景 + 顶部主题色装饰灯带 + 左右上边墙内凹槽。
+ * 边墙是纯装饰（3px），物理边界仍然是 0..W，一像素判定都不挪。
+ */
+function paintScene(c2d: CanvasRenderingContext2D, accent: string): void {
+  const g = c2d.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, BK_PALETTE.bkBgTop);
+  g.addColorStop(1, BK_PALETTE.bkBgBottom);
+  c2d.fillStyle = g;
+  c2d.fillRect(0, 0, W, H);
+  // 顶部灯带：一根细线挂一排小圆灯，关卡主题色与暖白相间（静态，reduced 同样保留）
+  c2d.strokeStyle = BK_PALETTE.bkShadow;
+  c2d.lineWidth = 1;
+  c2d.beginPath();
+  c2d.moveTo(0, 7);
+  c2d.lineTo(W, 7);
+  c2d.stroke();
+  lampXs(W).forEach((lx, i) => {
+    c2d.fillStyle = i % 2 === 0 ? accent : "#FFF6DF";
+    c2d.beginPath();
+    c2d.arc(lx, 9, 2.4, 0, Math.PI * 2);
+    c2d.fill();
+  });
+  // 边墙内凹槽：墙体 + 内侧暗线 + 最外亮线，光源统一左上 45°
+  c2d.fillStyle = BK_PALETTE.bkWall;
+  c2d.fillRect(0, 0, BK_WALL_PX, H);
+  c2d.fillRect(W - BK_WALL_PX, 0, BK_WALL_PX, H);
+  c2d.fillRect(0, 0, W, BK_WALL_PX);
+  c2d.fillStyle = candyDarken(BK_PALETTE.bkWall, 0.16);
+  c2d.fillRect(BK_WALL_PX - 1, 0, 1, H);
+  c2d.fillRect(W - BK_WALL_PX, 0, 1, H);
+  c2d.fillRect(0, BK_WALL_PX - 1, W, 1);
+  c2d.fillStyle = "rgba(255,255,255,.6)";
+  c2d.fillRect(0, 0, 1, H);
+  c2d.fillRect(W - 1, 0, 1, H);
+  c2d.fillRect(0, 0, W, 1);
 }
 
 /** 拖板热区：手指在球台下半屏拖，板心与手指之间留一点偏移，别被手挡住 */
@@ -402,6 +514,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const reduce = reducedMotion();
   const rand = mulberry32(ctx.level * 7919 + 17);
   const jan = new Janitor();
+  /** 灯带用的章节主题色（纯视觉） */
+  const accent = chapterAccent(ctx.level);
+  /** 每扇星门最近一次被球进出的时间戳（门圈涨缩用，纯视觉） */
+  const portalPulse = new Map<number, number>();
 
   let destroyed = false;
   let ended = false;
@@ -651,6 +767,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     b.y = BRICK_TOP + other[0] * BRICK_H + BRICK_H / 2 + (b.vy > 0 ? BRICK_H : -BRICK_H);
     b.portalCd = PORTAL_COOLDOWN;
     b.trail.length = 0;
+    // 进出两扇门一起涨缩一下（160ms，reduced 不动）
+    portalPulse.set(fromR * 100 + fromC, lastTime);
+    portalPulse.set(other[0] * 100 + other[1], lastTime);
     ctx.sfx("coin");
     msgEl.textContent = "🌀 咻——从另一扇星门飞出来啦！";
     hintT = 1.8;
@@ -812,23 +931,25 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   function draw(): void {
     if (!c2d) return;
-    c2d.clearRect(0, 0, W, H);
+    // 图层序（从底到顶）：①背景+灯带 ②边墙 ③砖阵 ④星门 ⑤胶囊 ⑥拖尾 ⑦球 ⑧挡板 ⑨碎片/彩带
+    paintScene(c2d, accent);
     const dx = brickOffsetX();
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < COLS; c++) {
         const orig = cfg.layout[r][c];
+        if (orig === KIND.PORTAL || grid[r][c] === KIND.EMPTY) continue;
         const x = c * brickW + 2 + dx;
         const y = BRICK_TOP + r * BRICK_H + 2;
-        if (orig === KIND.PORTAL) {
-          drawPortal(c2d, x + brickW / 2 - 2, y + BRICK_H / 2 - 2);
-          continue;
-        }
-        if (grid[r][c] === KIND.EMPTY) continue;
         const face = faceOf(r, c);
         drawBrick(c2d, x, y, brickW - 4, BRICK_H - 4, face.color, face.mark, crackLevel(orig, grid[r][c]), r * 31 + c);
       }
     }
-    for (const cap of capsules) drawCapsule(c2d, cap);
+    portals.forEach(([pr, pc], i) => {
+      const px = pc * brickW + brickW / 2 + dx;
+      const py = BRICK_TOP + pr * BRICK_H + BRICK_H / 2;
+      drawPortal(c2d, px, py, i % 2 === 1, lastTime - (portalPulse.get(pr * 100 + pc) ?? -1e9), lastTime, reduce);
+    });
+    for (const cap of capsules) drawCapsule(c2d, cap, lastTime, reduce);
     const sp = speed();
     for (const b of balls) drawBallWithTrail(c2d, b, sp, eff().pierce, lastTime, reduce);
     drawPaddle(c2d, paddleX, paddleW(), eff().magnet, reduce, lastTime, catchAt);
@@ -948,6 +1069,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       ended = true;
       cancelAnimationFrame(raf);
       clearDebris(debris);
+      portalPulse.clear();
       jan.destroy();
       wrap.remove();
     }
@@ -1249,7 +1371,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
 
   function draw(): void {
     if (!c2d) return;
-    c2d.clearRect(0, 0, W, H);
+    paintScene(c2d, BK_TOWER_ACCENT);
     // 危险线
     c2d.strokeStyle = "rgba(233,120,120,.5)";
     c2d.setLineDash([6, 6]);
@@ -1270,7 +1392,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
         drawBrick(c2d, c * brickW + 2, y + 2, brickW - 4, BRICK_H - 4, color, face.mark, 0, r * 31 + c);
       }
     }
-    for (const cap of capsules) drawCapsule(c2d, cap);
+    for (const cap of capsules) drawCapsule(c2d, cap, lastTime, reduce);
     if (ball.stuck !== null) {
       ball.x = Math.max(BALL_R, Math.min(W - BALL_R, paddleX + ball.stuck));
       ball.y = PADDLE_Y - BALL_R - 1;
