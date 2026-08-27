@@ -106,11 +106,34 @@ export function ldTokensCss(): string {
 // ---------------------------------------------------------------------------
 
 /**
- * 窄牌兜底线:牌宽小于它就省略中心浮雕与「王」字缎带,只留角标与立绘。
+ * 窄牌兜底线:牌宽小于它就省略中心浮雕与徽记缎带,只留角标与立绘。
  * `cardWidthFor(360) = 51` 在线上,`cardWidthFor(320) = 46` 在线下——
  * 360px 手机保浮雕,更窄的容器保角标。
  */
 export const EMBOSS_MIN_W = 48;
+
+/**
+ * 大小王缎带徽记(窗口 7 R2 修复 N-1):原 9px「大/小王」小字改图形徽记,
+ * 沿用立绘的身份语言——大王(朵朵)=五瓣花徽、小王(星星)=五角星徽,
+ * 形状 + 色相双通道,不再依赖 <14px 文字;身份文字仍由 ≥14px 角标承担。
+ */
+export function kribbonBadgeSvg(kind: JokerKind, size = 12): string {
+  if (kind === "big") {
+    let petals = "";
+    for (let i = 0; i < 5; i++) {
+      const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+      petals += `<circle cx="${(8 + Math.cos(a) * 4.2).toFixed(2)}" cy="${(8 + Math.sin(a) * 4.2).toFixed(2)}" r="3" fill="#E2648F"/>`;
+    }
+    return `<svg data-part="ribbon-flower" width="${size}" height="${size}" viewBox="0 0 16 16" aria-hidden="true">${petals}<circle cx="8" cy="8" r="2.7" fill="#FFF3D0" stroke="#B98A2F" stroke-width="1"/></svg>`;
+  }
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = (Math.PI * i) / 5 - Math.PI / 2;
+    const rr = i % 2 === 0 ? 7 : 2.9;
+    pts.push(`${(8 + Math.cos(a) * rr).toFixed(2)},${(8 + Math.sin(a) * rr).toFixed(2)}`);
+  }
+  return `<svg data-part="ribbon-star" width="${size}" height="${size}" viewBox="0 0 16 16" aria-hidden="true"><polygon points="${pts.join(" ")}" fill="#5C79C4" stroke="#44506B" stroke-width="1" stroke-linejoin="round"/></svg>`;
+}
 
 /** 中心大花色浮雕只给 10/J/Q/K/A(点数 10..14) */
 export function embossRank(rank: number): boolean {
@@ -121,7 +144,7 @@ export function embossRank(rank: number): boolean {
  * 牌面七道工序(白底圆角与软影由 .ld-card 承担):
  * ② 内圈双细线框 → ③ 左上 / 右下对角角标(数字 + 花色 SVG)→ ④ 花色四色自绘 →
  * ⑤ 10–A 中心浮雕淡纹(窄牌省略)→ ⑥ 大小王换朵朵 / 星星立绘 + 金银双线框 +
- * 「王」字缎带(窄牌省略缎带)→ ⑦ 全部 pointer-events:none,不碰热区。
+ * 徽记缎带(窄牌省略缎带)→ ⑦ 全部 pointer-events:none,不碰热区。
  */
 export function cardFaceArtHTML(id: number, cardW: number): string {
   const rank = cardRank(id);
@@ -132,7 +155,9 @@ export function cardFaceArtHTML(id: number, cardW: number): string {
     const kind: JokerKind = rank === RANK_BIG_JOKER ? "big" : "small";
     const word = kind === "big" ? "大" : "小";
     const art = jokerArtSvg(kind, Math.max(24, Math.round(cardW * 0.6)));
-    const ribbon = wide ? `<span class="ldv-kribbon ldv-kribbon-${kind}">${word}王</span>` : "";
+    const ribbon = wide
+      ? `<span class="ldv-kribbon ldv-kribbon-${kind}" aria-hidden="true">${kribbonBadgeSvg(kind)}</span>`
+      : "";
     return `<i class="ldv-frame ldv-frame-${kind}" aria-hidden="true"></i>
       <span class="ld-c-i ldv-kc-${kind}" style="font-size:${Math.round(idx * 0.85)}px"><span class="ld-c-r">${word}</span><span class="ld-c-s">王</span></span>
       ${ribbon}<span class="ldv-joker">${art}</span>`;
@@ -289,10 +314,10 @@ export const LDV_CSS = `
   line-height:0;pointer-events:none;}
 .ldv-kc-big{color:#c29028;}
 .ldv-kc-small{color:#6e7c92;}
-.ldv-kribbon{position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:9px;
-  font-weight:900;line-height:1.5;white-space:nowrap;color:#7a4d0b;padding:0 6px;border-radius:999px;
+.ldv-kribbon{position:absolute;top:2px;left:50%;transform:translateX(-50%);line-height:0;
+  padding:2px 6px;border-radius:999px;
   background:linear-gradient(180deg,#ffe3a1,#f5c963);pointer-events:none;}
-.ldv-kribbon-small{color:#44506b;background:linear-gradient(180deg,#e8eef5,#c9d3de);}
+.ldv-kribbon-small{background:linear-gradient(180deg,#e8eef5,#c9d3de);}
 /* 手牌层次:可出牌抬升 + 底光;轮到自己整扇呼吸微光 */
 .ldv-can{box-shadow:1px 0 0 rgba(46,26,60,.14),0 9px 12px -4px rgba(255,214,120,.6),0 2px 5px rgba(15,25,20,.35);}
 .ldv-myturn{border-radius:12px;animation:ldvbreath var(--ldv-breath-ms) ease-in-out infinite;}
