@@ -144,6 +144,8 @@ export const MG_CSS = `
   radial-gradient(circle 2px at 87% 5%,#FFF3C8 0 2px,transparent 3px),
   radial-gradient(circle 1.5px at 71% 11%,#FFE9A8 0 1.5px,transparent 2.5px),
   radial-gradient(circle 2px at 32% 4%,#F8D8FF 0 2px,transparent 3px),
+  radial-gradient(circle 3px at 12% 18%,#FFD75E14 0 60%,transparent 61%),
+  radial-gradient(circle 2px at 88% 72%,#D0A9F512 0 60%,transparent 61%),
   linear-gradient(180deg,#EFE4FB 0%,#FFF7E6 52%,#FFEFC9 100%);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .mg-wrap::before,.mg-wrap::after{content:"";position:absolute;width:12px;height:12px;background:#FFD75E;
