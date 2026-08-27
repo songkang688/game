@@ -113,6 +113,11 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
   sheet.className = "clf-sheet";
   sheet.setAttribute("role", "dialog");
   sheet.setAttribute("aria-label", "自由涂色画室");
+  // 画室自己也要能接焦点。点线稿上的色块时，浏览器把焦点交给「最近的可聚焦祖先」，
+  // 没有这一行就一路交到 <body>——下面那个 keydown 挂在画室上，收不到冒不上来的 Esc，
+  // 于是「涂一笔之后 Esc 就不灵了」（窗口5 第1轮监督修复员补 W5-L-05 的这半截）。
+  // 用 -1 是为了只接鼠标点击带来的焦点，不往 Tab 序里插一站。
+  sheet.setAttribute("tabindex", "-1");
   sheet.innerHTML = `
     <style>${CLF_CSS}</style>
     <div class="clf-sheet-head">

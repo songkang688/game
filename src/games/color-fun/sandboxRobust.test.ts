@@ -46,6 +46,16 @@ describe("涂色小屋 · 画室读到坏存档", () => {
     expect(pictureSvgBody(pic).length).toBeGreaterThan(0);
   });
 
+  it("涂过一笔之后 Esc 还得管用：画室自己接得住焦点（源码巡检）", () => {
+    // 学习优化员的 W5-L-05 把 keydown 挂在 `.clf-sheet` 上，只有焦点还在画室里才收得到。
+    // 线稿上的色块是 SVG 图形、不可聚焦，点它一下浏览器会把焦点交给最近的可聚焦祖先；
+    // 画室没有 tabindex 就一路交到 <body>，Esc 从此冒不到画室上——
+    // 而「点一下涂个颜色」恰恰是进画室要做的第一件事。
+    const head = SRC.slice(SRC.indexOf('sheet.className = "clf-sheet"'), SRC.indexOf("host.appendChild(sheet)"));
+    expect(head).toContain('sheet.setAttribute("role", "dialog")');
+    expect(head).toContain('sheet.setAttribute("tabindex", "-1")');
+  });
+
   it("点开旧作那条路真的走了收口（源码巡检）", () => {
     const onWork = SRC.slice(SRC.indexOf("function onWork("), SRC.indexOf("function currentWork("));
     expect(onWork).toContain("picIndex = safePicIndex(work.pic)");
