@@ -28,6 +28,30 @@ function makeView(reduceMotion = false) {
   return { view, taps, canvas: view.canvas as unknown as El };
 }
 
+/** 取某个选择器的基础规则体（`@media` 那几段单独切出来看） */
+function ruleBody(selector: string): string {
+  const base = CSS.slice(0, CSS.indexOf("@media"));
+  const re = new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`);
+  const m = re.exec(base);
+  if (!m) throw new Error(`CSS 里没有 ${selector}`);
+  return m[1];
+}
+
+/**
+ * 一条 CSS 规则能点多高（px）。`min-height` / `height` 优先；
+ * 都没写就按「上下 padding + 上下边框 + 字号 × 1.2」估 —— 行高取最小那一档，
+ * 估出来的是**下限**，所以 ≥ 44 的结论只会更保守。
+ */
+function hitHeight(body: string): number {
+  const explicit = /(?:^|;)\s*(?:min-)?height:\s*([\d.]+)px/.exec(body);
+  if (explicit) return Number(explicit[1]);
+  const pad = /(?:^|;)\s*padding:\s*([\d.]+)px/.exec(body);
+  const font = /(?:^|;)\s*font-size:\s*([\d.]+)px/.exec(body);
+  const border = /(?:^|;)\s*border:\s*([\d.]+)px/.exec(body);
+  if (!pad || !font) return Number.NaN;
+  return Number(pad[1]) * 2 + (border ? Number(border[1]) * 2 : 0) + Number(font[1]) * 1.2;
+}
+
 /** 按交叉点坐标点一下 canvas */
 function tap(canvas: El, x: number, y: number, cssWidth = GEOM.width): void {
   canvas.width = cssWidth;
@@ -235,5 +259,32 @@ describe("看得清：颜色与手机适配", () => {
 
   it("热区下限就是无障碍要的 44px", () => {
     expect(MIN_HIT_PX).toBe(44);
+  });
+
+  it("R2C-X1 · 局内那排按钮（悔棋 / 确认落子 / 提示 / 重摆 / 认输 / 求和 / 换玩法）够得到 44px", () => {
+    expect(hitHeight(ruleBody(".xq-btns button")), "局内按钮的热区又缩回去了").toBeGreaterThanOrEqual(MIN_HIT_PX);
+  });
+
+  it("R2C-X1 · 360px 那一档也得兜住 —— 窄屏把 padding 压小了，min-height 不能跟着丢", () => {
+    const narrow = CSS.slice(CSS.indexOf("@media (max-width:380px)"));
+    expect(hitHeight(/\.xq-btns button\{([^}]*)\}/.exec(narrow)?.[1] ?? "")).toBeGreaterThanOrEqual(MIN_HIT_PX);
+  });
+
+  it("R2C-X1 · 模式条与结算按钮不再卡在 44px 的临界线上", () => {
+    expect(hitHeight(ruleBody(".xq-mode")), "模式条的热区又缩回去了").toBeGreaterThanOrEqual(MIN_HIT_PX);
+    expect(hitHeight(ruleBody(".xq-over-btn")), "结算按钮的热区又缩回去了").toBeGreaterThanOrEqual(MIN_HIT_PX);
+  });
+
+  it("能点的按钮一个都没漏：逐条量过整份 CSS", () => {
+    for (const sel of [
+      ".xq-btns button",
+      ".xq-seg button",
+      ".xq-mode",
+      ".xq-over-btn",
+      ".xq-start",
+      ".xq-rules-close",
+    ]) {
+      expect(hitHeight(ruleBody(sel)), `${sel} 不到 44px`).toBeGreaterThanOrEqual(MIN_HIT_PX);
+    }
   });
 });

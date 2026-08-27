@@ -7,7 +7,7 @@
 //   · 将死时棋盘轻微变暗；
 //   · `prefers-reduced-motion`：徽章静帧、不脉冲。
 import { type Board, type Move, type Pos, type Side, PIECE_NAME, idx } from "./logic";
-import { type BoardGeom, hitRadius, pickPoint, pointAt } from "./session";
+import { type BoardGeom, MIN_HIT_PX, hitRadius, pickPoint, pointAt } from "./session";
 
 /** 画布几何：9 列 10 行，交叉点间距 44 */
 export const GEOM: BoardGeom = { margin: 24, cell: 44, width: 24 * 2 + 44 * 8, height: 24 * 2 + 44 * 9 };
@@ -71,8 +71,8 @@ export const CSS = `
 .xq-player.xq-turn{border-color:#FFC46B;background:#FFF6E0;}
 .xq-msg{text-align:center;min-height:22px;color:#7A4F86;font-weight:700;margin-top:8px;font-size:14px;line-height:1.5;}
 .xq-btns{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
-.xq-btns button{flex:1 1 92px;border:none;border-radius:14px;padding:11px 4px;font-size:14px;font-weight:800;
-  cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.12);font-family:inherit;}
+.xq-btns button{flex:1 1 92px;min-height:${MIN_HIT_PX}px;border:none;border-radius:14px;padding:11px 4px;
+  font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.12);font-family:inherit;}
 .xq-btns button:disabled{opacity:.45;cursor:default;}
 .xq-undo{background:#CDE6FF;color:#1F5687;}
 .xq-restart{background:#FFD9C4;color:#8A421F;}
@@ -99,24 +99,26 @@ export const CSS = `
   color:#7A234F;cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
 .xq-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
 .xq-modebar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
-.xq-mode{flex:1 1 150px;border:none;border-radius:16px;padding:12px 8px;font-size:15px;font-weight:900;
-  cursor:pointer;font-family:inherit;background:#FFE1EC;color:#A82F63;box-shadow:0 4px 0 #E8A9C4;}
+.xq-mode{flex:1 1 150px;min-height:${MIN_HIT_PX}px;border:none;border-radius:16px;padding:12px 8px;font-size:15px;
+  font-weight:900;cursor:pointer;font-family:inherit;background:#FFE1EC;color:#A82F63;box-shadow:0 4px 0 #E8A9C4;}
 .xq-mode-streak{background:#FFEFC7;color:#8A5A10;box-shadow:0 4px 0 #E8C97F;}
 .xq-mode:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.15);}
 .xq-over{position:absolute;inset:0;background:rgba(255,250,245,.94);border-radius:18px;z-index:6;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:18px;}
 .xq-over-title{font-size:22px;font-weight:900;color:#8A4A7A;}
 .xq-over-sub{font-size:15px;font-weight:700;color:#75608A;line-height:1.6;max-width:320px;}
-.xq-over-btn{border:none;border-radius:16px;padding:11px 22px;font-size:16px;font-weight:900;color:#fff;
-  cursor:pointer;background:linear-gradient(180deg,#C84483,#AD3A72);box-shadow:0 4px 0 #8F2C5C;font-family:inherit;}
+.xq-over-btn{border:none;border-radius:16px;min-height:${MIN_HIT_PX}px;padding:11px 22px;font-size:16px;
+  font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(180deg,#C84483,#AD3A72);
+  box-shadow:0 4px 0 #8F2C5C;font-family:inherit;}
 .xq-rules{position:absolute;inset:0;background:#FFF9F0;border-radius:18px;padding:14px;overflow-y:auto;z-index:7;}
 .xq-rules h3{color:#A82F63;margin:12px 0 4px;font-size:17px;}
 .xq-rules p{color:#6B4A2E;font-size:14.5px;line-height:1.7;margin:6px 0;}
 .xq-rules-close{position:sticky;top:0;float:right;border:none;border-radius:14px;background:#FFB3CD;color:#7A234F;
-  font-size:15px;font-weight:900;padding:9px 16px;cursor:pointer;box-shadow:0 3px 0 #E890B2;font-family:inherit;}
+  min-height:${MIN_HIT_PX}px;font-size:15px;font-weight:900;padding:9px 16px;cursor:pointer;box-shadow:0 3px 0 #E890B2;
+  font-family:inherit;}
 .xq-hidden{display:none;}
 @media (max-width:380px){
-  .xq-btns button{flex:1 1 74px;font-size:13px;padding:10px 2px;}
+  .xq-btns button{flex:1 1 74px;min-height:${MIN_HIT_PX}px;font-size:13px;padding:10px 2px;}
   .xq-badge{font-size:28px;}
 }
 @media (prefers-reduced-motion:reduce){
