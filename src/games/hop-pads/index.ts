@@ -48,7 +48,7 @@ const CSS = `
 .hp-open-duo:active{box-shadow:0 2px 0 #AB5178;}
 .hp-shell{display:flex;flex-direction:column;gap:8px;}
 .hp-shelltop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-.hp-back{border:none;border-radius:999px;min-height:40px;padding:7px 13px;font-size:15px;font-weight:900;
+.hp-back{border:none;border-radius:999px;min-height:44px;padding:7px 13px;font-size:15px;font-weight:900;
   cursor:pointer;background:#ffffffd9;color:#9A5A2C;box-shadow:0 3px 0 rgba(170,120,70,.3);font-family:inherit;}
 .hp-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,120,70,.3);}
 .hp-chip{flex:1;text-align:center;font-size:16px;font-weight:900;color:#9A5A2C;min-width:120px;}
@@ -245,6 +245,8 @@ export interface StageOpts {
   assist?: boolean;
   /** 这一路认哪些键蓄力(不区分大小写) */
   keys?: readonly string[];
+  /** 收力键:蓄力蓄过头了想反悔,按这个把力卸掉,回到站定状态(不消耗这一跳) */
+  cancelKeys?: readonly string[];
   /** 分屏时显示的名字 */
   name?: string;
   /** 角色颜色 */
@@ -269,6 +271,8 @@ export interface Stage {
   /** 给单测用:直接开始 / 结束蓄力,不必伪造指针事件 */
   press: () => void;
   release: (holdMs?: number) => void;
+  /** 收力:把蓄到一半的力卸掉,回到站定状态。真收掉了才返回 true */
+  cancel: () => boolean;
   phase: () => StagePhase;
   state: () => RunState;
   /** 暂停 / 继续 */
@@ -299,6 +303,7 @@ function prefersReducedMotion(): boolean {
 export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   const reduced = prefersReducedMotion();
   const keys = (opts.keys ?? ["f", " ", "spacebar"]).map((k) => k.toLowerCase());
+  const cancelKeys = (opts.cancelKeys ?? ["g"]).map((k) => k.toLowerCase());
   const heroColor = opts.color ?? "#F2A268";
   const goal = opts.goal ?? Number.POSITIVE_INFINITY;
 
@@ -376,6 +381,20 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (paused || frozen || over || phase !== "ready") return;
     phase = "charging";
     holdMs = 0;
+  }
+
+  /**
+   * 收力:蓄过头了想反悔,按收力键把力卸掉,人还站在原地。
+   * 这一跳不算数、连击不断——单键蓄力玩法里,"按下去就只能被迫跳出去"是最劝退的一件事。
+   */
+  function cancelCharge(): boolean {
+    if (paused || frozen || over || phase !== "charging") return false;
+    phase = "ready";
+    holdMs = 0;
+    opts.sfx("tap");
+    flashText = "收住啦,重新蓄力";
+    flashT = 0.9;
+    return true;
   }
 
   function buildLegs(step: { state: RunState; result: HopResult }): Leg[] {
@@ -641,6 +660,12 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       if (paused && phase === "charging") phase = "ready";
       return;
     }
+    if (cancelKeys.includes(k)) {
+      ev.preventDefault?.();
+      if (ev.repeat) return;
+      cancelCharge();
+      return;
+    }
     if (!keys.includes(k)) return;
     ev.preventDefault?.();
     if (ev.repeat) return;
@@ -682,6 +707,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     },
     press,
     release,
+    cancel: cancelCharge,
     phase: () => phase,
     state: () => run,
     camera: () => cam,
@@ -779,7 +805,7 @@ function playLevel(stageHost: HTMLElement, ctx: PlayCtx): PlayHandle {
   tip.textContent = `${lv.hint}${lv.assist ? " · 蓄力时会画出落点辅助圆" : ""}`;
   const say = document.createElement("div");
   say.className = "hp-say";
-  say.textContent = "按住屏幕(或空格 / F)蓄力,松手起跳;Esc 暂停。";
+  say.textContent = "按住屏幕(或空格 / F)蓄力,松手起跳;蓄过头按 G 收力,Esc 暂停。";
   box.append(tip, say);
   stageHost.appendChild(box);
 
@@ -838,7 +864,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     panel?.remove();
     panel = null;
     shell.chip.textContent = `♾️ 无尽跳 · 最好 ${best} 分`;
-    shell.say.textContent = "按住任意位置蓄力,松手起跳。台子会越来越小,慢慢来。";
+    shell.say.textContent = "按住任意位置蓄力,松手起跳;蓄过头按 G 收力。台子会越来越小,慢慢来。";
     shell.say.className = "hp-say";
     stage = createStage(shell.body, {
       seed: (Date.now() % 1_000_000) + 17,
@@ -1003,7 +1029,8 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     panel = null;
     shell.body.innerHTML = "";
     shell.chip.textContent = `👫 第 ${round} 局 · 朵朵 ${wins[0]} : ${wins[1]} 星星`;
-    shell.say.textContent = "上半屏是朵朵,按 F 或按住上半块屏幕;下半屏是星星,按 L 或按住下半块。";
+    shell.say.textContent =
+      "上半屏是朵朵,按 F 或按住上半块屏幕;下半屏是星星,按 L 或按住下半块。蓄过头:朵朵按 G、星星按 K 收力。";
     shell.say.className = "hp-say";
 
     const seed = matchSeed(round + 500);
@@ -1039,9 +1066,9 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     wrap.className = "hp-duo";
     shell.body.appendChild(wrap);
 
-    const seats: Array<{ name: string; keys: string[]; color: string }> = [
-      { name: "🌸 朵朵 · F", keys: ["f"], color: "#F2A268" },
-      { name: "⭐ 星星 · L", keys: ["l"], color: "#7FA7EA" },
+    const seats: Array<{ name: string; keys: string[]; cancelKeys: string[]; color: string }> = [
+      { name: "🌸 朵朵 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268" },
+      { name: "⭐ 星星 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA" },
     ];
     seats.forEach((seat, i) => {
       const st = createStage(wrap, {
@@ -1049,6 +1076,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
         difficulty: diff,
         goal: DUO_HOPS,
         keys: seat.keys,
+        cancelKeys: seat.cancelKeys,
         name: seat.name,
         color: seat.color,
         height: 236,

@@ -238,6 +238,58 @@ describe("一块舞台跑起来", () => {
     stage.destroy();
   });
 
+  it("蓄过头能收力:按 G 卸掉力,人还站在原地,这一跳不算数", () => {
+    const { stage, sounds } = makeStage();
+    stage.tick(20);
+    stage.press();
+    stage.tick(900); // 一路按到快满力
+    expect(stage.phase()).toBe("charging");
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "G" });
+    expect(stage.phase()).toBe("ready");
+    expect(sounds).toContain("tap");
+    // 收力不消耗这一跳,座数与连击都不动
+    stage.tick(600);
+    expect(stage.state().hops).toBe(0);
+    expect(stage.state().alive).toBe(true);
+    // 收完力还能重新蓄,而且力度是从零开始重新数的
+    perfectJump(stage);
+    expect(stage.state().hops).toBe(1);
+    expect(stage.state().perfects).toBe(1);
+    stage.destroy();
+  });
+
+  it("收力只在蓄力时有效,站着按不会有任何事", () => {
+    const { stage } = makeStage();
+    expect(stage.cancel()).toBe(false);
+    expect(stage.phase()).toBe("ready");
+    stage.tick(20);
+    stage.press();
+    expect(stage.cancel()).toBe(true);
+    expect(stage.cancel()).toBe(false);
+    // 飞行途中按收力键不能把人从半空中拽回来
+    stage.tick(20);
+    stage.press();
+    stage.release(300);
+    expect(stage.phase()).toBe("flying");
+    expect(stage.cancel()).toBe(false);
+    expect(stage.phase()).toBe("flying");
+    stage.destroy();
+  });
+
+  it("双人各收各的力:朵朵按 G、星星按 K,谁也收不掉对方的", () => {
+    const duo = makeStage({ keys: ["f"], cancelKeys: ["g"] });
+    const star = makeStage({ keys: ["l"], cancelKeys: ["k"] });
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "f" });
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "l" });
+    expect([duo.stage.phase(), star.stage.phase()]).toEqual(["charging", "charging"]);
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "k" });
+    expect([duo.stage.phase(), star.stage.phase()]).toEqual(["charging", "ready"]);
+    for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "g" });
+    expect([duo.stage.phase(), star.stage.phase()]).toEqual(["ready", "ready"]);
+    duo.stage.destroy();
+    star.stage.destroy();
+  });
+
   it("暂停期间时间不走,松手也不会偷偷起跳", () => {
     const { stage } = makeStage();
     stage.setPaused(true);
@@ -363,6 +415,38 @@ describe("四种模式都开得出来", () => {
     flushFrames(dom, 4);
     handle.destroy();
     expect(windowListenerCount(dom)).toBe(0);
+  });
+
+  it("壳里的返回钮也够手指点:44px 起,和模式钮一个线", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    const css = dom.root.find((e) => e.tagName === "style")?.textContent ?? "";
+    expect(css).toMatch(/\.hp-back\{[^}]*min-height:44px/);
+    expect(css).toMatch(/\.hp-open\{[^}]*min-height:44px/);
+    expect(css).not.toContain("min-height:40px");
+    handle.destroy();
+  });
+
+  it("每种玩法的说明行都写了收力键", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("开始冒险")!.dispatch("click");
+    expect(dom.root.textContent).toContain("收力");
+    flushFrames(dom, 4);
+    handle.destroy();
+
+    const h2 = mount(fakeApi(dom.root).api);
+    byText("无尽跳")!.dispatch("click");
+    expect(dom.root.textContent).toContain("收力");
+    flushFrames(dom, 4);
+    h2.destroy();
+
+    const h3 = mount(fakeApi(dom.root).api);
+    byText("双人同屏")!.dispatch("click");
+    expect(dom.root.textContent).toContain("朵朵按 G");
+    expect(dom.root.textContent).toContain("星星按 K");
+    flushFrames(dom, 4);
+    h3.destroy();
   });
 
   it("整个游戏 destroy 之后什么都不剩", () => {
