@@ -669,7 +669,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
       return;
     }
     // 后段会来「大潮」，一次涨两行；每一行都各自看一眼有没有顶穿
-    let next = grid as readonly number[][];
+    let next: number[][] = grid;
     for (let i = 0; i < seaTideRows(pushes); i++) {
       const result = pushUpRow(next, COLS, seaColors(pushes), Math.random);
       if (result.overflow) {
@@ -679,7 +679,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
       next = result.grid;
     }
     pushes++;
-    copyInto(grid, next as number[][]);
+    copyInto(grid, next);
     api.play("tap");
     render();
     if (!hasMovesOn(grid, COLS, seaColors(pushes))) {
