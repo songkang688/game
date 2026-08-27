@@ -570,9 +570,38 @@ export function endlessTier(depth: number): number {
 /** 深渊每深一层，对手强 4.5% */
 export const ENDLESS_GROWTH = 1.045;
 
-/** 每 8 层来一个镇守的大家伙 */
+/**
+ * 第一位守关排在第 4 层。
+ *
+ * 之前是「每 8 层一位」，可 1 级的朵朵大概第 4 层就走不动了——
+ * 第一次下深渊的孩子永远见不到守关长什么样，也就体会不到
+ * 「练一练能多走几层」的那个甜头。挪到第 4 层，第一趟就撞得上。
+ */
+export const FIRST_GUARDIAN = 4;
+
+/** 第 4 层来第一位，之后每 8 层一位 */
 export function isEndlessGuardian(depth: number): boolean {
-  return Math.max(1, Math.round(depth)) % 8 === 0;
+  const d = Math.max(1, Math.round(depth));
+  return d === FIRST_GUARDIAN || d % 8 === 0;
+}
+
+/** 守关比同层的小怪厚多少倍：浅层薄一点，第 16 层起满厚 */
+export const GUARDIAN_THICK_MIN = 1.5;
+export const GUARDIAN_THICK_MAX = 2.3;
+export const GUARDIAN_FULL_DEPTH = 16;
+
+/**
+ * 第 depth 层守关的厚度倍率。
+ *
+ * 第 4 层那位要是照原来的 2.3 倍配，就成了一堵谁也翻不过的墙——
+ * 「见得着」得配上「偶尔打得赢」才算数。所以浅层的守关薄一档，
+ * 一路爬到第 16 层回到原来的 2.3 倍，深层的分量一点没少。
+ */
+export function guardianThickness(depth: number): number {
+  const d = Math.max(1, Math.round(depth));
+  const span = GUARDIAN_FULL_DEPTH - FIRST_GUARDIAN;
+  const k = Math.min(1, Math.max(0, (d - FIRST_GUARDIAN) / span));
+  return GUARDIAN_THICK_MIN + (GUARDIAN_THICK_MAX - GUARDIAN_THICK_MIN) * k;
 }
 
 const ENDLESS_NAMES = ["苔绒小兽", "雾气小灯", "回音蝙蝠", "石纹小龟", "碎星飞虫", "藤影守卫"];
@@ -592,7 +621,7 @@ export function endlessFoeSpec(depth: number): FighterSpec {
   const boost = Math.pow(ENDLESS_GROWTH, d - 1);
   const cap = (n: number): number => Math.min(9_999_999, Math.round(n));
   const base = {
-    maxHp: cap((36 + tier * 1.92) * (guardian ? 2.3 : 1) * boost),
+    maxHp: cap((36 + tier * 1.92) * (guardian ? guardianThickness(d) : 1) * boost),
     atk: cap((9.5 + tier * 0.63) * (guardian ? 1.15 : 1) * boost),
     def: cap((2 + tier * 0.16) * (guardian ? 1.35 : 1) * boost),
     spd: Math.round(9 + tier * 0.09)

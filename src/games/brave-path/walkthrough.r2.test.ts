@@ -23,7 +23,8 @@ import {
   applyBlessing, buildHero, defaultSave, endlessCoins, endlessExp, endlessEndText, endlessFoeSpec,
   endlessStarReward, endlessTier, isBlessingFloor, isEndlessGuardian, rollBlessings, runArena,
   arenaScale, gearFactor, heroStats, powerScore, learnSkill, toggleLoadout, SKILL_UNLOCKS,
-  LOADOUT_SLOTS, MIN_LOADOUT, canUnequip, BLESSING_EVERY, BLESSING_RESCUE_FRAC, ENDLESS_GROWTH, type HeroSave
+  LOADOUT_SLOTS, MIN_LOADOUT, canUnequip, BLESSING_EVERY, BLESSING_RESCUE_FRAC, ENDLESS_GROWTH,
+  FIRST_GUARDIAN, guardianThickness, type HeroSave
 } from "./logic";
 import { REST_EVERY, fullRoute, ghostPace, ghostTotalMs, isRestFloor, judgeRace, roadMaze, rollSupplies, validateMaze } from "./maze";
 
@@ -415,17 +416,41 @@ describe("勇者小路 · R2 · 无尽之路能走多深", () => {
   });
 
   /**
-   * W4A-10（建议）· 新角色够不到第一位守关。
+   * W4A-10（建议）· 已由本轮监督修复员落地。
    *
-   * 守关排在第 8 层，可 1 级的朵朵大概第 4 层就打不动了：
+   * 原状：守关每 8 层一位，可 1 级的朵朵大概第 4 层就打不动了。
    * 第一次进无尽之路的孩子永远见不到守关长什么样，
    * 也就体会不到「练一练能多走几层」的那个甜头。
-   * 不算错——数值是自洽的、也确实随等级涨——但值得学习优化员看一眼。
+   *
+   * 现状：第一位守关挪到第 4 层（`FIRST_GUARDIAN`），之后仍是每 8 层一位；
+   * 浅层守关的厚度从 1.5 倍起步，爬到第 16 层才回到原来的 2.3 倍
+   * （`guardianThickness`）——见得着，还偶尔打得赢。
    */
-  it("W4A-10 特征化：1 级只走得到第 4 层，守关排在第 8 层", () => {
-    expect(endlessDepth(grownSave(1))).toBeLessThan(8);
+  it("W4A-10 已修：第一趟就撞得上守关，1 级的朵朵正好走到它跟前", () => {
+    expect(FIRST_GUARDIAN).toBe(4);
+    expect(isEndlessGuardian(4)).toBe(true);
     expect(isEndlessGuardian(8)).toBe(true);
-    expect(endlessDepth(grownSave(20))).toBeGreaterThanOrEqual(8);
+    expect(isEndlessGuardian(16)).toBe(true);
+    // 第 4 层之外的浅层仍是普通小怪，不会一层一个守关
+    for (const d of [1, 2, 3, 5, 6, 7, 9, 12]) expect(isEndlessGuardian(d), `第 ${d} 层`).toBe(false);
+    expect(endlessDepth(grownSave(1))).toBeGreaterThanOrEqual(FIRST_GUARDIAN - 1);
+  });
+
+  it("W4A-10 已修：浅层守关薄一档，第 16 层起回到满厚", () => {
+    expect(guardianThickness(4)).toBeCloseTo(1.5, 6);
+    expect(guardianThickness(16)).toBeCloseTo(2.3, 6);
+    expect(guardianThickness(40)).toBeCloseTo(2.3, 6);
+    // 中间是一路爬上去的，不会忽然变厚
+    for (let d = 5; d <= 16; d++) expect(guardianThickness(d)).toBeGreaterThan(guardianThickness(d - 1));
+    // 薄归薄，还是比同层小怪厚一大截
+    expect(endlessFoeSpec(4).maxHp).toBeGreaterThan(endlessFoeSpec(3).maxHp * 1.4);
+    expect(endlessFoeSpec(4).isBoss).toBe(true);
+  });
+
+  it("W4A-10 已修：练得越久还是走得越深，深层的分量一点没少", () => {
+    const depths = [1, 8, 20, 40, 60].map((lv) => endlessDepth(grownSave(lv)));
+    for (let i = 1; i < depths.length; i++) expect(depths[i]).toBeGreaterThan(depths[i - 1]);
+    expect(endlessDepth(grownSave(60))).toBeLessThan(60);
   });
 
   it("每 5 层有歇脚层，深层的歇脚层照样给得出补给", () => {
