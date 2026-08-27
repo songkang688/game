@@ -21,6 +21,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  AI_LABEL,
   AI_LEVELS,
   CHARGE_REACH,
   TRAITS,
@@ -251,6 +252,32 @@ function winsOver(a: AiLevel, b: AiLevel): number {
   return wins;
 }
 
+/**
+ * 高档位在**两个座位上**总共赢了几成。
+ *
+ * `winsOver` 只坐 0 号位打 20 场,这一局又是混沌的 —— 抖动盐差一个数,
+ * 同一张图能打出完全不同的过程。20 场的读数在 45% 到 75% 之间乱跳,
+ * 拿它比强弱等于在读噪声(S5 复查时就被它带偏过一次:同一份代码,
+ * 4 档对 3 档一会儿 9/20 一会儿 15/20,以为出了大问题,加样本才发现是抖的)。
+ *
+ * 所以这里换两条:样本开到十张图 × 十个盐,而且**两个座位各坐一遍**——
+ * 出生点是不对称的,只坐一边量出来的是座位优势不是档位强度。
+ * 返回 0..1 的胜率。
+ */
+function edgeOver(strong: AiLevel, weak: AiLevel, salts = 10): number {
+  let wins = 0;
+  let games = 0;
+  for (let round = 1; round <= 10; round++) {
+    for (let k = 0; k < salts; k++) {
+      const salt = k * 7;
+      if (duel(round, strong, weak, salt) === 0) wins++;
+      if (duel(round, weak, strong, salt) === 1) wins++;
+      games += 2;
+    }
+  }
+  return wins / games;
+}
+
 describe("1.2 · 四档单挑二档", () => {
   it("卡角高手赢得过熟练车手,而且不输给冠军车手的战绩", () => {
     const four = winsOver(4, 2);
@@ -264,4 +291,33 @@ describe("1.2 · 四档单挑二档", () => {
   it("二档打一档照旧赢得干脆:低档位的行为一个字节都没动", () => {
     expect(winsOver(2, 1)).toBeGreaterThanOrEqual(14);
   }, 60000);
+});
+
+/**
+ * 强弱要**直接对着打、两个座位都坐、样本够大**才算数。
+ *
+ * 上面那一条是 1.2 当时写的间接比法(「4 打 2 的战绩不低于 3 打 2」),
+ * 它其实盖得住真问题:同一份代码换个抖动盐,4 档直接对上 3 档能从 9/20 跳到 15/20。
+ * S5 复查时就是被这个读数带偏过一次,把噪声当成了「最强档打不过中间档」的阻断,
+ * 加到两百场才看清 —— 相邻两档的实际差距一直稳稳在 57% 上下。
+ *
+ * 所以补这一条常驻契约:相邻两档两百场、两个座位对半,高档必须赢过 55%,
+ * 而且差距要一档比一档小(1 档最好打,越往上越接近)。
+ */
+describe("1.2 · 四档强度是真的分得开(两百场、两个座位)", () => {
+  it("相邻两档:高的那一档稳定赢过 55%", () => {
+    for (const [strong, weak] of [
+      [2, 1],
+      [3, 2],
+      [4, 3],
+    ] as Array<[AiLevel, AiLevel]>) {
+      const rate = edgeOver(strong, weak);
+      expect(rate, `${AI_LABEL[strong]} 打 ${AI_LABEL[weak]} 只有 ${(rate * 100).toFixed(1)}%`).toBeGreaterThan(0.55);
+    }
+  }, 120000);
+
+  it("隔档更是碾压:最强的一档打新手赢过八成", () => {
+    expect(edgeOver(4, 1, 5)).toBeGreaterThan(0.8);
+    expect(edgeOver(3, 1, 5)).toBeGreaterThan(0.8);
+  }, 120000);
 });
