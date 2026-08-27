@@ -28,6 +28,20 @@ import { mulberry32, pick, randInt, type PlayCtx, type PlayHandle } from "../lev
 import type { QuizTheme } from "../quiz99";
 import { HINT_LABELS, safeHints, trio, type HintTrio } from "./hints";
 import { resetClippedScroll } from "./stageScroll";
+// 1.3 视觉升级（第 25 步 B 档）：宝石表面来自共享套件，王国场景是本款的纯视觉模块。
+// 这些 import 只喂皮肤——判定、placements、关卡数据一行都不经过它们。
+import { GEM_COUNT, gemBody, gemCellCss, gemFacetVisible } from "../../art/kit/gem";
+import { SPARK_MS, sparkleCss, sparkleSpecs } from "../../art/kit/sparkle";
+import {
+  CONFETTI_COUNT,
+  KINGDOM_CSS,
+  castleSvg,
+  confettiSpecs,
+  cornerFlagSvg,
+  litSegments,
+  pieceBadgeSvg,
+  tilingProgress,
+} from "./kingdom";
 
 // ---------------------------------------------------------------------------
 // 尺寸与吸附（纯函数，360px 下限靠它守住）
@@ -295,6 +309,31 @@ export function judgeTiling(task: TilingTask, placements: readonly Placement[]):
   }
   if (union.size !== total) return false;
   return sameCells(union, task.target);
+}
+
+/**
+ * 预放虚影的映射（1.3 纯视觉）：算出「如果现在点 (r, c)，这一块会落在哪几格」。
+ * 走的和 `tryPlace` 完全同一套既有校验（`placePiece` 摆形 → 锚点平移 →
+ * 轮廓内且不与已放置重叠），**只读不写**：判定不动、placements 不动。
+ * 校验不过就返回 null——虚影只在放得下的格子上出现。
+ */
+export function ghostFootprint(
+  task: TilingTask,
+  placements: readonly Placement[],
+  piece: number,
+  orientation: number,
+  r: number,
+  c: number
+): CellKey[] | null {
+  if (piece < 0 || piece >= task.pieces.length) return null;
+  if (placements.some((p) => p.piece === piece)) return null;
+  const shape = placePiece(task.pieces[piece], orientation, 0, 0);
+  const anchor = sortedCells(shape)[0];
+  const a = parseCellKey(anchor);
+  const cellsHere = sortedCells(translateCells(shape, r - a.r, c - a.c));
+  const target = new Set(task.target);
+  const occupied = new Set(placements.flatMap((p) => p.cells));
+  return cellsHere.every((k) => target.has(k) && !occupied.has(k)) ? cellsHere : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -584,8 +623,20 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   wrap.className = "shk-draw";
   wrap.style.background = theme.bg;
   const style = document.createElement("style");
-  style.textContent = DRAW_CSS;
+  // 皮肤三件套按序追加：DRAW_CSS 一字不改，宝石 / 星屑 / 王国场景靠级联在后面覆盖
+  style.textContent = DRAW_CSS + gemCellCss("shk") + sparkleCss("shk") + KINGDOM_CSS;
   wrap.appendChild(style);
+
+  // 场景氛围层（纯装饰，pointer-events:none）：淡色天空 + 远山两座 + 双云缓移
+  const scene = document.createElement("div");
+  scene.className = "shk-scene";
+  scene.setAttribute("aria-hidden", "true");
+  for (const cls of ["shk-mount shk-mount-a", "shk-mount shk-mount-b", "shk-cloud shk-cloud-a", "shk-cloud shk-cloud-b"]) {
+    const bit = document.createElement("i");
+    bit.className = cls;
+    scene.appendChild(bit);
+  }
+  wrap.appendChild(scene);
 
   const top = document.createElement("div");
   top.className = "shk-draw-top";
@@ -601,6 +652,12 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   const castleArt = document.createElement("div");
   castleArt.className = "shk-castle";
   wrap.appendChild(castleArt);
+
+  // 城堡剪影背景层：拼放进度越高点亮越多段（「形状拼好 = 王国建成」）
+  const kingdomHost = document.createElement("div");
+  kingdomHost.className = "shk-kingdom";
+  kingdomHost.setAttribute("aria-hidden", "true");
+  wrap.appendChild(kingdomHost);
 
   const askEl = document.createElement("div");
   askEl.className = "shk-ask";
@@ -704,6 +761,57 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
     castleArt.textContent = castleLine();
   }
 
+  /** 城堡剪影当前点亮到第几段（-1 = 还没画过，逼 paintKingdom 画第一笔） */
+  let kingdomLit = -1;
+
+  /** 把拼放进度（0–1）映射成城堡点亮段数并重画剪影。只读进度，判定零参与。 */
+  function paintKingdom(progressRatio: number): void {
+    const lit = litSegments(progressRatio);
+    if (lit === kingdomLit) return;
+    const prev = kingdomLit < 0 ? lit : kingdomLit;
+    kingdomLit = lit;
+    kingdomHost.innerHTML = castleSvg(lit, prev);
+  }
+
+  /** 一关拼满的完成仪式：城堡全亮 + 升旗 400ms + 彩纸 20 粒 + 星星逐颗弹入（浮层不接指针） */
+  function celebrate(): void {
+    paintKingdom(1);
+    const fete = document.createElement("div");
+    fete.className = "shk-fete";
+    fete.setAttribute("aria-hidden", "true");
+    const flag = document.createElement("div");
+    flag.className = "shk-fete-flagwrap";
+    const pole = document.createElement("i");
+    pole.className = "shk-fete-pole";
+    const cloth = document.createElement("i");
+    cloth.className = "shk-fete-flagcloth";
+    flag.append(pole, cloth);
+    fete.appendChild(flag);
+    const starRow = document.createElement("div");
+    starRow.className = "shk-fete-stars";
+    const starCount = drawStars(wrong, tasks.length);
+    for (let i = 0; i < starCount; i++) {
+      const s = document.createElement("span");
+      s.className = "shk-fete-star";
+      s.textContent = "⭐";
+      s.style.animationDelay = `${400 + i * 160}ms`;
+      starRow.appendChild(s);
+    }
+    fete.appendChild(starRow);
+    for (const spec of confettiSpecs(mulberry32(4200 + castle * 17), CONFETTI_COUNT)) {
+      const bit = document.createElement("i");
+      bit.className = "shk-confetti";
+      bit.style.left = `calc(50% + ${spec.dxPx}px)`;
+      bit.style.width = `${spec.sizePx}px`;
+      bit.style.height = `${spec.sizePx + 4}px`;
+      bit.style.background = gemBody(spec.colorIndex);
+      bit.style.animationDelay = `${spec.delayMs}ms`;
+      bit.style.animationDuration = `${spec.durationMs}ms`;
+      fete.appendChild(bit);
+    }
+    wrap.appendChild(fete);
+  }
+
   function showHint(): void {
     const task = tasks[index];
     hintLevel = Math.min(3, hintLevel + 1);
@@ -768,6 +876,8 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
         w > 0 && h > 0
           ? `现在是 ${w} × ${h}：周长 ${got.perimeter} 厘米，面积 ${got.area} 平方厘米`
           : "点两个点（或者按住拖），拉出一个长方形";
+      // 视觉映射：拉出矩形 = 全亮，摆了一个点 = 亮一半，什么都没有 = 熄着
+      paintKingdom(rectSel ? 1 : corner ? 0.5 : 0);
     }
 
     function paint(): void {
@@ -891,6 +1001,8 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
             else picked.add(key);
             el.classList.toggle("shk-cell-on", picked.has(key));
             readout.textContent = `已经补了 ${picked.size} 格`;
+            // 视觉映射：补的格数 / 给定那一半的格数（只读数量，不看对错）
+            paintKingdom(Math.min(1, picked.size / task.given.length));
           });
         }
         board.appendChild(el);
@@ -912,11 +1024,26 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   function buildTilingBoard(task: TilingTask): void {
     const m = drawMetrics(viewport(), task.cols, task.rows);
     const board = document.createElement("div");
-    board.className = "shk-board";
+    // 小格降级（360px 规则）：格宽 < 32px 就省略宝石切面三角，渐变 + 描边照旧
+    board.className = gemFacetVisible(m.unit - 3) ? "shk-board" : "shk-board shk-gem-small";
     board.style.width = `${(m.unit * task.cols).toFixed(0)}px`;
     board.style.height = `${(m.unit * task.rows).toFixed(0)}px`;
     const target = new Set(task.target);
     const cells = new Map<CellKey, HTMLElement>();
+    /** 当前挂着预放虚影的格子（只是视觉记号，placements 一个字不碰） */
+    let ghostKeys: CellKey[] = [];
+    const GHOST_CLASSES = ["shk-cell-ghost", "shk-cell-ghost-p0", "shk-cell-ghost-p1", "shk-cell-ghost-p2", "shk-cell-ghost-p3"];
+    function clearGhost(): void {
+      for (const k of ghostKeys) cells.get(k)?.classList.remove(...GHOST_CLASSES);
+      ghostKeys = [];
+    }
+    function showGhost(r: number, c: number): void {
+      clearGhost();
+      const foot = ghostFootprint(task, placements, activePiece, activeOrientation, r, c);
+      if (!foot) return;
+      ghostKeys = foot;
+      for (const k of foot) cells.get(k)?.classList.add("shk-cell-ghost", `shk-cell-ghost-p${activePiece % GEM_COUNT}`);
+    }
     for (const key of task.target) {
       const { r, c } = parseCellKey(key);
       const el = document.createElement("button");
@@ -928,8 +1055,19 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       el.style.top = `${(r * m.unit).toFixed(1)}px`;
       el.setAttribute("aria-label", `轮廓里第 ${r + 1} 行第 ${c + 1} 列`);
       el.addEventListener("click", () => tryPlace(r, c));
+      // 预放虚影：悬到哪格就照 tryPlace 的同一套校验亮出落点，校验不过一格都不亮
+      el.addEventListener("pointerenter", () => showGhost(r, c));
+      el.addEventListener("pointerleave", () => clearGhost());
       board.appendChild(el);
       cells.set(key, el);
+    }
+    // 城堡地基的四角小旗（纯装饰，pointer-events:none）
+    for (const pos of ["tl", "tr", "bl", "br"]) {
+      const f = document.createElement("span");
+      f.className = `shk-flag shk-flag-${pos}`;
+      f.setAttribute("aria-hidden", "true");
+      f.innerHTML = cornerFlagSvg();
+      board.appendChild(f);
     }
     boardWrap.appendChild(board);
 
@@ -940,7 +1078,18 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "shk-piece";
-      btn.textContent = `第 ${i + 1} 块 · ${p.length} 格`;
+      // 内层 face 承担拾起态的抬升 / 放大——按钮盒子（热区）原地不动
+      const face = document.createElement("span");
+      face.className = "shk-piece-face";
+      const art = document.createElement("span");
+      art.className = "shk-piece-art";
+      art.setAttribute("aria-hidden", "true");
+      art.innerHTML = pieceBadgeSvg(p, i % GEM_COUNT);
+      const label = document.createElement("span");
+      label.className = "shk-piece-label";
+      label.textContent = `第 ${i + 1} 块 · ${p.length} 格`;
+      face.append(art, label);
+      btn.appendChild(face);
       btn.setAttribute("aria-label", `选第 ${i + 1} 块，一共 ${p.length} 格`);
       btn.addEventListener("click", () => {
         ctx.sfx("tap");
@@ -976,15 +1125,57 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
     }
 
     function paintBoard(): void {
+      // className 整个重写会顺手抹掉虚影类，这里把记号也一起清零
+      ghostKeys = [];
+      let placedCells = 0;
       cells.forEach((el) => {
         el.className = "shk-cell shk-cell-target";
       });
       placements.forEach((p) => {
         for (const key of p.cells) {
+          placedCells++;
           const el = cells.get(key);
-          if (el) el.className = `shk-cell shk-cell-p${p.piece % 4}`;
+          // 老四色类原样保留（判定测试认它），宝石质感类叠在后面只管皮
+          if (el) el.className = `shk-cell shk-cell-p${p.piece % 4} shk-gem-p${p.piece % GEM_COUNT}`;
         }
       });
+      paintKingdom(tilingProgress(placedCells, task.target.length));
+    }
+
+    /** 放对的四角星闪：sparkle.ts 的轨迹参数 + 落定区四角定点星（纯装饰浮层） */
+    function spawnStarpop(cellsHere: readonly CellKey[]): void {
+      const pts = cellsHere.map((k) => parseCellKey(k));
+      const minR = Math.min(...pts.map((p) => p.r));
+      const minC = Math.min(...pts.map((p) => p.c));
+      const w = (Math.max(...pts.map((p) => p.c)) - minC + 1) * m.unit;
+      const h = (Math.max(...pts.map((p) => p.r)) - minR + 1) * m.unit;
+      const pop = document.createElement("div");
+      pop.className = "shk-starpop";
+      pop.setAttribute("aria-hidden", "true");
+      pop.style.left = `${(minC * m.unit).toFixed(1)}px`;
+      pop.style.top = `${(minR * m.unit).toFixed(1)}px`;
+      pop.style.width = `${w.toFixed(1)}px`;
+      pop.style.height = `${h.toFixed(1)}px`;
+      const corners: Array<[number, number]> = [[0, 0], [w, 0], [0, h], [w, h]];
+      const specs = sparkleSpecs(mulberry32(minR * 31 + minC * 7 + cellsHere.length), corners.length);
+      corners.forEach(([x, y], i) => {
+        const s = document.createElement("span");
+        s.className = "shk-spark";
+        s.textContent = "✦";
+        s.style.left = `${x.toFixed(1)}px`;
+        s.style.top = `${y.toFixed(1)}px`;
+        const spec = specs[i];
+        // CSS 变量要 setProperty；测试桩没有这个方法，星屑就用 keyframes 的兜底轨迹
+        const styleObj = s.style as CSSStyleDeclaration & { setProperty?: (k: string, v: string) => void };
+        if (typeof styleObj.setProperty === "function") {
+          styleObj.setProperty("--shk-spark-dx", `${spec.dx}px`);
+          styleObj.setProperty("--shk-spark-dy", `${spec.dy}px`);
+        }
+        s.style.animationDelay = `${spec.delayMs}ms`;
+        pop.appendChild(s);
+      });
+      board.appendChild(pop);
+      later(() => pop.remove(), SPARK_MS + 200);
     }
 
     function tryPlace(r: number, c: number): void {
@@ -1005,6 +1196,12 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       const fits = cellsHere.every((k) => target.has(k) && !occupied.has(k));
       if (!fits) {
         msg.textContent = "这一块放不进去，换个位置或者转一下～";
+        // 放错只摇头弹回（±3°，reduced 瞬回），不批评；placements 一个字没动
+        const denyEl = cells.get(cellKey(r, c));
+        if (denyEl) {
+          denyEl.classList.add("shk-cell-deny");
+          later(() => denyEl.classList.remove("shk-cell-deny"), 340);
+        }
         return;
       }
       msg.textContent = "";
@@ -1014,6 +1211,12 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       activeOrientation = 0;
       paintBoard();
       paintRack();
+      // 吸附落定：220ms 回弹 + 顿帧一格 + 四角星闪（reduced 下 CSS 全停、瞬落）
+      for (const k of cellsHere) cells.get(k)?.classList.add("shk-cell-landed");
+      later(() => {
+        for (const k of cellsHere) cells.get(k)?.classList.remove("shk-cell-landed");
+      }, 260);
+      spawnStarpop(cellsHere);
     }
 
     paintRack();
@@ -1029,6 +1232,9 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   function show(): void {
     const task = tasks[index];
     resetState();
+    // 换一道题，城堡剪影从熄灭重新点起
+    kingdomLit = -1;
+    paintKingdom(0);
     hintLevel = 0;
     triesHere = 0;
     hintEl.hidden = true;
@@ -1071,6 +1277,8 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       msg.textContent = "摆对啦！城堡长高一层～";
       paintHeader();
       opts.onTaskDone?.(task, true);
+      // 最后一道也摆对了：王国建成的完成仪式（升旗 + 彩纸 + 星星逐颗弹入）
+      if (index >= tasks.length - 1) celebrate();
       later(next, 700);
       return;
     }
