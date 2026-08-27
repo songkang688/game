@@ -409,12 +409,31 @@ describe("出界、上场机会与胜负", () => {
   it("时间到就按「剩余上场机会 → 撞飞数 → 被撞飞数」排名", () => {
     const s = createMatch(cfg({ stocks: 3, timeLimit: 3 }));
     s.actors[1].stocks = 1;
+    s.actors[1].outs = 2;
     idle(s, 4);
     expect(s.over).toBe(true);
     expect(s.endReason).toBe("time");
     expect(s.winnerTeam).toBe(0);
     const stats = teamStats(s);
     expect(stats[0].stocks).toBeGreaterThanOrEqual(stats[1].stocks);
+  });
+
+  it("两边开局命数不一样时，比的是「剩几成」而不是「剩几条」", () => {
+    // 战役关常给玩家 3 条命、对手只给 1 条。照剩余条数排，玩家一个键都不按也稳赢：
+    // 3 条对 1 条。改成比剩余比例以后，一条都没掉的那边才算赢。
+    const s = createMatch(
+      cfg({
+        stocks: 3,
+        timeLimit: 3,
+        slots: [
+          { charId: "duoduo", team: 0, control: "p1", stocks: 3 },
+          { charId: "xingxing", team: 1, control: "ai", aiTier: "normal", stocks: 1 },
+        ],
+      })
+    );
+    s.actors[0].stocks = 2;
+    s.actors[0].outs = 1;
+    expect(timeoutWinner(s)).toBe(1);
   });
 
   it("时间到时各项完全打平就是平局", () => {
@@ -440,12 +459,14 @@ describe("出界、上场机会与胜负", () => {
     }
   });
 
+  // 小电脑不再自己走下台以后，四人混战全靠真的把人撞出去，比 1.1 时候慢一截：
+  // 原来 150 秒的盘口现在正好卡在时间到，所以把盘口放宽，别把「打得久」当成「打不完」。
   it("四人混战也能打到只剩一队", () => {
     const s = runMatch(
       createMatch(
         cfg({
           stocks: 2,
-          timeLimit: 150,
+          timeLimit: 260,
           itemEvery: 5,
           seed: 5,
           slots: [
@@ -456,7 +477,7 @@ describe("出界、上场机会与胜负", () => {
           ],
         })
       ),
-      160
+      270
     );
     expect(s.over).toBe(true);
     expect(livingTeams(s).length).toBeLessThanOrEqual(1);

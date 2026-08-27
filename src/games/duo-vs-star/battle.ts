@@ -9,6 +9,7 @@
  */
 import {
   AI_TIERS,
+  canLandBeyond,
   decideAi,
   emptyInput,
   perilous,
@@ -800,6 +801,26 @@ function livePads(s: MatchState): Array<{ min: number; max: number; top: number 
   return out;
 }
 
+/**
+ * 每一帧都过一道台沿保险：脚下这块台子到头了、那边又没有接得住的台子，
+ * 就把那个方向的按键松开（顺手把跳也收了）。
+ *
+ * 只在 `decideAi` 里看边缘是拦不住的：轻松档 0.46 秒才想一次，
+ * 按着方向键这段时间能跑一百三十多像素，想明白的时候人已经在场外了。
+ */
+function ledgeSafeInput(s: MatchState, a: Actor, input: Input): Input {
+  if (!a.onGround) return input;
+  const dir = input.right ? 1 : input.left ? -1 : 0;
+  if (dir === 0) return input;
+  const stand = standingOn(s, a);
+  if (!stand) return input;
+  const look = actorRadius(a) + Math.max(18, Math.abs(a.vx) * 0.12);
+  const nextX = a.x + dir * look;
+  if (nextX <= stand.max && nextX >= stand.min) return input;
+  if (canLandBeyond(livePads(s), stand, a, dir)) return input;
+  return { ...input, left: false, right: false, up: false };
+}
+
 /** 脚下这块台子现在的横向范围；悬空（或踩在队友头上）时是 null */
 function standingOn(s: MatchState, a: Actor): { min: number; max: number } | null {
   if (!a.onGround || a.platIndex < 0) return null;
@@ -856,7 +877,16 @@ export interface TeamStat {
   outs: number;
 }
 
-/** 每队现在的战况，按「剩余上场机会多 → 撞飞别人多 → 自己被撞飞少」排 */
+/**
+ * 「上场机会还剩几成」。战役关经常给玩家 3 条命、对手只给 1 条（照顾小朋友），
+ * 时间到的时候直接比剩几条，玩家躺着不动也稳赢 —— 得比剩下的**比例**。
+ */
+function stockShare(t: TeamStat): number {
+  const started = t.stocks + t.outs;
+  return started > 0 ? t.stocks / started : 0;
+}
+
+/** 每队现在的战况，按「上场机会剩得多 → 撞飞别人多 → 自己被撞飞少」排 */
 export function teamStats(s: MatchState): TeamStat[] {
   const map = new Map<number, TeamStat>();
   for (const a of s.actors) {
@@ -867,7 +897,7 @@ export function teamStats(s: MatchState): TeamStat[] {
     map.set(a.team, cur);
   }
   return Array.from(map.values()).sort(
-    (x, y) => y.stocks - x.stocks || y.kos - x.kos || x.outs - y.outs
+    (x, y) => stockShare(y) - stockShare(x) || y.kos - x.kos || x.outs - y.outs
   );
 }
 
@@ -890,7 +920,7 @@ export function timeoutWinner(s: MatchState): number | null {
   if (stats.length === 1) return stats[0].team;
   const a = stats[0];
   const b = stats[1];
-  if (a.stocks === b.stocks && a.kos === b.kos && a.outs === b.outs) return null;
+  if (stockShare(a) === stockShare(b) && a.kos === b.kos && a.outs === b.outs) return null;
   return a.team;
 }
 
@@ -954,7 +984,9 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       // 只对「自己走下去的」提速。刚被打飞的那一下照旧要吃反应延迟，
       // 不然谁都救得回来，对局就再也打不出胜负了。
       const selfInflicted = s.t - s.lastHitT[a.index] > PERIL_GRACE;
-      if (selfInflicted && perilous(a, stageSafe, stageGround) && a.aiT > PERIL_THINK) a.aiT = PERIL_THINK;
+      if (selfInflicted && perilous(a, stageSafe, stageGround, livePads(s)) && a.aiT > PERIL_THINK) {
+        a.aiT = PERIL_THINK;
+      }
       a.aiT -= step;
       if (a.aiT <= 0) {
         const tier: AiTier = a.slot.aiTier ?? "normal";
@@ -966,7 +998,7 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
         // 小电脑只会在第一帧出招，之后再也不动手
         a.prev = { ...a.prev, light: false, heavy: false, up: false };
       }
-      input = a.aiInput;
+      input = ledgeSafeInput(s, a, a.aiInput);
     } else {
       input = inputs[a.index] ?? emptyInput();
     }

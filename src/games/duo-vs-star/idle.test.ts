@@ -6,13 +6,23 @@
  * 而滑滑冰湖 0/19 —— 不是 AI 档位的问题,是这两张台子的可站范围跟小电脑的
  * 走位逻辑对不上。
  *
- * 这里守三件事:
- * 1. 小电脑不会一开局就自己掉下去(第 1 / 134 / 157 关开局 6 秒内零出场);
- * 2. 摆烂过关的关数守在明显低于修复前的水位;
- * 3. 无论如何,玩家零输入拿不到三星 —— 星星要玩家自己撞出去才算数。
+ * 这里守四件事:
+ * 1. 小电脑不会一开局就自己掉下去(第 1 / 134 / 157 关开局 3 秒内零出场);
+ * 2. 摆烂过关的关数守在明显低于修复前的水位(72 → 个位数);
+ * 3. 无论如何,玩家零输入拿不到三星 —— 星星要玩家自己撞出去才算数;
+ * 4. 时间到判胜负比的是「上场机会还剩几成」,不是「还剩几条」——
+ *    战役关给玩家 3 条命、对手 1 条,照条数比的话摆烂也稳赢。
  */
 import { describe, expect, it } from "vitest";
-import { createMatch, runMatch, stepMatch, safeZone, standSpan, type MatchState } from "./battle";
+import {
+  createMatch,
+  runMatch,
+  safeZone,
+  standSpan,
+  stepMatch,
+  timeoutWinner,
+  type MatchState,
+} from "./battle";
 import { levelAt, rateLevel } from "./levels";
 import { stageById } from "./stages";
 
@@ -105,8 +115,19 @@ describe("duo-vs-star · 摆烂扫描(B3 回归)", () => {
       if (rateLevel(me.outs, me.hits) === 3) threeStar.push(i + 1);
     }
     expect(threeStar, `摆烂还能拿三星的:${threeStar.join("、")}`).toEqual([]);
-    // 修复前是 72 关(其中 63 关靠对手自己掉下台)。这里守一条明显更低的水位线,
+    // 修复前是 72 关(其中 63 关靠对手自己掉下台)。现在剩下的都是「场上不止一个对手、
+    // 它们自己打成一团」的混战关,玩家躺着捡漏也只有一星。守一条明显更低的水位线,
     // 免得日后哪次改动又把小电脑改成会自杀的。
-    expect(autoWin.length, `摆烂过关 ${autoWin.length} 关:${autoWin.join("、")}`).toBeLessThanOrEqual(30);
+    expect(autoWin.length, `摆烂过关 ${autoWin.length} 关:${autoWin.join("、")}`).toBeLessThanOrEqual(10);
   }, 60000);
+
+  it("时间到比的是「剩几成上场机会」,不是「剩几条」", () => {
+    // 战役关给玩家 3 条命、对手只给 1 条。照条数比,玩家一个键不按也是 3:1 稳赢。
+    const m = idleMatch(0);
+    const me = m.actors[0];
+    const foe = m.actors[1];
+    me.stocks -= 1;
+    me.outs += 1;
+    expect(timeoutWinner(m), "掉了一条命的玩家不该赢过一条没掉的对手").toBe(foe.team);
+  });
 });
