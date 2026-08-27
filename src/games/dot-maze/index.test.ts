@@ -343,3 +343,38 @@ describe("迷宫舞台", () => {
     }
   });
 });
+
+/**
+ * R3-PA-DM-1：第一次玩无尽，本轮分数就是历史最好，收场话却还在催人去刷新它，
+ * 也没有一句「新纪录」。这里钉死两种措辞各走各的路。
+ */
+describe("无尽收场的措辞", () => {
+  it("破了纪录就说新纪录，不再劝你去刷新一个刚创下的成绩", async () => {
+    const { endlessLine } = await import("./index");
+    const first = endlessLine(30, 0, 30);
+    expect(first).toContain("30");
+    expect(first).toContain("新纪录");
+    expect(first).not.toContain("刷新它");
+  });
+
+  it("没破纪录才报历史最好，并鼓励再来一次", async () => {
+    const { endlessLine } = await import("./index");
+    const line = endlessLine(18, 30, 30);
+    expect(line).toContain("18");
+    expect(line).toContain("历史最好 30 分");
+    expect(line).toContain("刷新它");
+    expect(line).not.toContain("新纪录");
+  });
+
+  it("打平旧纪录不算破：还是报历史最好", async () => {
+    const { endlessLine } = await import("./index");
+    expect(endlessLine(30, 30, 30)).toContain("历史最好");
+  });
+
+  it("两种措辞都只鼓励，不批评", async () => {
+    const { endlessLine } = await import("./index");
+    for (const line of [endlessLine(30, 0, 30), endlessLine(5, 40, 40)]) {
+      expect(line).not.toMatch(/笨|差劲|失败|你不行|死/);
+    }
+  });
+});

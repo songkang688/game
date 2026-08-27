@@ -36,6 +36,18 @@ export const GRACE_MS = 900;
 /** 一帧最多推进的毫秒数:标签页切回来的巨大 dt 会被钳在这里 */
 export const MAX_FRAME_MS = 120;
 
+/**
+ * 整盆连续这么久还没停稳,就开闸放能(强阻尼),把极限环压下去。
+ * 正常一盆从投下到停稳一秒出头,2.5 秒还在动就是解算自己在打转。
+ */
+export const STALL_MS = 2500;
+
+/** 放能之后还撑到这么久,直接判定为停稳 —— 任何情况下都不许把一局吊死 */
+export const FREEZE_MS = 4500;
+
+/** 放能期每 1/120 秒保留的速度比例 */
+export const STALL_KEEP = 0.55;
+
 export interface Box {
   w: number;
   h: number;
@@ -143,6 +155,8 @@ export interface World {
   popMs: number;
   over: boolean;
   side: number;
+  /** 连续多久没有全场停稳:看门狗靠它开闸放能、必要时强制停稳 */
+  stallMs: number;
 }
 
 export interface WorldOptions {
@@ -175,6 +189,7 @@ export function createWorld(opts: WorldOptions): World {
     popMs: opts.popMs ?? 80,
     over: false,
     side: opts.side ?? 0,
+    stallMs: 0,
   };
 }
 
@@ -365,10 +380,37 @@ export function substep(world: World, dt: number = SUB_DT): void {
     for (const f of list) resolveBounds(f, world.box, t);
   }
 
+  // 看门狗放能:只在解算已经打转 STALL_MS 之后才生效,正常一盆碰不到这一段。
+  // 乘数 ≤ 1,总动能仍旧只减不增,前面那条「不许算爆」的保证不受影响。
+  if (world.stallMs >= STALL_MS) {
+    const stallKeep = Math.pow(STALL_KEEP, dt * 120);
+    for (const f of world.fruits) {
+      f.vx *= stallKeep;
+      f.vy *= stallKeep;
+    }
+  }
+
   for (const f of world.fruits) {
     if (speedOf(f) < SETTLE_SPEED) f.restMs += ms;
     else f.restMs = 0;
   }
+}
+
+/**
+ * 兜底:把整盆按停稳处理。
+ *
+ * 只有看门狗撑满 `FREEZE_MS` 才会走到这里 —— 那时候解算已经打转好几秒,
+ * 再等下去这一局就永远收不了场(既判不了越线,也判不了果子用完)。
+ * 宁可让画面「唰」地一下停住,也不许把孩子吊在半截。
+ */
+export function forceSettle(world: World): void {
+  for (const f of world.fruits) {
+    f.vx = 0;
+    f.vy = 0;
+    f.graceMs = 0;
+    f.restMs = Math.max(f.restMs, SETTLE_MS);
+  }
+  world.stallMs = 0;
 }
 
 /** 按真实帧间隔推进:内部换算成固定子步,积压超过 MAX_SUBSTEPS 就丢掉 */
@@ -383,6 +425,13 @@ export function stepPhysics(world: World, dtMs: number): number {
   }
   if (steps >= MAX_SUBSTEPS && world.acc > SUB_DT) world.acc = 0;
   world.time += dt * 1000;
+
+  // 看门狗:全场停稳就清零,否则一路累加;先放能,再到点强制停稳
+  if (allSettled(world)) world.stallMs = 0;
+  else {
+    world.stallMs += dt * 1000;
+    if (world.stallMs >= FREEZE_MS) forceSettle(world);
+  }
   return steps;
 }
 

@@ -238,6 +238,36 @@ describe("无尽残局与评星", () => {
     expect(loseLine("这一关要先吃一次库，")).toContain("再来");
   });
 
+  // R3-PA-PS-1：`loseLine` 原来无条件在 reason 后面接一句鼓励语，
+  // 可最常见的那条 reason 自己就是这句话，结算浮层上连着说了两遍。
+  it("鼓励语不重复：reason 自己已经说过就不再接一遍", () => {
+    const twice = (s: string): number => s.split("这一杆差一点点").length - 1;
+    expect(twice(loseLine("这一杆差一点点，换个角度再来。"))).toBe(1);
+    expect(twice(loseLine("母球先碰到的不是自己那一组，这一杆差一点点。"))).toBe(1);
+    // reason 里没有这句话时照样补上，鼓励一句不能少
+    expect(twice(loseLine("母球掉袋了，"))).toBe(1);
+    expect(loseLine("母球掉袋了，")).toContain("换个角度再来");
+    // 补出来的话一定以句号收尾，不会断在半截
+    for (const r of ["这一杆差一点点，换个角度再来。", "母球先碰到的不是自己那一组，这一杆差一点点。", "母球掉袋了，"]) {
+      expect(loseLine(r).endsWith("。")).toBe(true);
+    }
+  });
+
+  it("judgeShot 给得出的每一条 reason 套进 loseLine 都不会重复", () => {
+    const reasons = [
+      "母球掉袋了，",
+      "母球要先碰前面那颗球，才叫组合球。",
+      "母球先碰到的不是自己那一组，这一杆差一点点。",
+      "这一杆差一点点，换个角度再来。",
+      "进了，可惜不是指定的那个袋，再瞄一次。",
+    ];
+    for (const r of reasons) {
+      const line = loseLine(r);
+      expect(line.split("这一杆差一点点").length - 1, `「${r}」套出来重复了`).toBeLessThanOrEqual(1);
+      expect(line.split("换个角度再来").length - 1).toBeLessThanOrEqual(1);
+    }
+  });
+
   it("真的照着解打一杆，关卡就过了", () => {
     const spec = buildLevel(6);
     const sol = findSolution(spec)!;

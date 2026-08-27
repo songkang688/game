@@ -559,6 +559,41 @@ export interface TableResult {
   reason: "goal" | "over" | "empty";
 }
 
+/** 判一局输赢只要知道每一座「达标了没 / 收摊了没 / 还剩几颗」 */
+export interface BowlEnd {
+  won: boolean;
+  lost: boolean;
+  left: number;
+}
+
+/** 一局的结论：没到收场时机就回 null */
+export type RoundVerdict = Pick<TableResult, "winner" | "cleared" | "reason">;
+
+/**
+ * 一局到底判给谁。
+ *
+ * 两座并排的时候按「同一帧同时发生就是平局」处理：原先四个分支挨个问，
+ * 两边同帧达标永远算 0 号赢，`roundOver()` 里那句「这一局打平」根本走不到（`R3-PA-FS-3`）。
+ * 顺带把「1 号收摊」的口径改成跟着输的那一边走 —— 星星把盆堆爆了不该记成朵朵达标过关。
+ */
+export function decideRound(bowls: readonly BowlEnd[]): RoundVerdict | null {
+  const why = (b: BowlEnd): "over" | "empty" => (b.left <= 0 ? "empty" : "over");
+  if (bowls.length === 0) return null;
+  if (bowls.length === 1) {
+    if (bowls[0].won) return { winner: 0, cleared: true, reason: "goal" };
+    if (bowls[0].lost) return { winner: -1, cleared: false, reason: why(bowls[0]) };
+    return null;
+  }
+  const [a, b] = bowls;
+  if (a.won && b.won) return { winner: -1, cleared: true, reason: "goal" };
+  if (a.won) return { winner: 0, cleared: true, reason: "goal" };
+  if (b.won) return { winner: 1, cleared: false, reason: "goal" };
+  if (a.lost && b.lost) return { winner: -1, cleared: false, reason: why(a) };
+  if (a.lost) return { winner: 1, cleared: false, reason: why(a) };
+  if (b.lost) return { winner: 0, cleared: false, reason: why(b) };
+  return null;
+}
+
 interface TableOptions {
   lv: StackLevel;
   /** 1 = 单盆,2 = 左右两盆 */
@@ -786,24 +821,15 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
 
   function checkEnd(): void {
     const w0 = bowls[0].world;
-    const base: TableResult = {
-      winner: -1,
-      cleared: false,
+    const verdict = decideRound(bowls);
+    if (!verdict) return;
+    settle({
+      ...verdict,
       score: w0.score,
       bestLevel: w0.bestLevel,
       bestChain: w0.bestChain,
       dropsUsed: w0.drops,
-      reason: "goal",
-    };
-    if (bowls.length === 1) {
-      if (bowls[0].won) settle({ ...base, winner: 0, cleared: true, reason: "goal" });
-      else if (bowls[0].lost) settle({ ...base, reason: bowls[0].left <= 0 ? "empty" : "over" });
-      return;
-    }
-    if (bowls[0].won) settle({ ...base, winner: 0, cleared: true, reason: "goal" });
-    else if (bowls[1].won) settle({ ...base, winner: 1, reason: "goal" });
-    else if (bowls[0].lost) settle({ ...base, winner: 1, reason: bowls[0].left <= 0 ? "empty" : "over" });
-    else if (bowls[1].lost) settle({ ...base, winner: 0, cleared: true, reason: "goal" });
+    });
   }
 
   const loop = runtime.loop((dtMs) => {

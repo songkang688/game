@@ -597,6 +597,11 @@ export function winLine(shotsUsed: number): string {
   return "清干净啦！多试几次，杆数还能再省。";
 }
 
+/** 结算浮层上补的那句鼓励语；`reason` 自己已经把话说全了就不再重复 */
+export const ENCOURAGE = "这一杆差一点点，换个角度再来。";
+
 export function loseLine(reason: string): string {
-  return `${reason}这一杆差一点点，换个角度再来。`;
+  // 最常见的那条 reason 本身就是这句话，硬接一遍会连着说两遍
+  if (reason.includes("这一杆差一点点")) return reason.endsWith("。") ? reason : `${reason}。`;
+  return `${reason}${ENCOURAGE}`;
 }

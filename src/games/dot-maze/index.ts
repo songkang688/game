@@ -648,6 +648,18 @@ function mountRounds(host: HTMLElement, api: GameApi, opts: SimpleModeOptions): 
   };
 }
 
+/**
+ * 无尽收场那一句。
+ *
+ * `recordEndlessBest` 返回的是**已经把本轮算进去之后**的最好成绩，所以要另外记一份
+ * 「投这一轮之前的纪录」才分得出破没破（`R3-PA-DM-1`：第一次玩本轮就是历史最好，
+ * 原来的措辞却还在催人去刷新一个刚创下的成绩，也没有一句「新纪录」）。
+ */
+export function endlessLine(score: number, before: number, best: number): string {
+  if (score > before) return `这一轮拿到 ${score} 分，是你的新纪录!下次还能再往上冲。`;
+  return `这一轮拿到 ${score} 分，历史最好 ${best} 分。再来一次就能刷新它!`;
+}
+
 export function mount(api: GameApi): { destroy: () => void } {
   let child: { destroy: () => void } | null = null;
   const wrap = document.createElement("div");
@@ -746,8 +758,11 @@ export function mount(api: GameApi): { destroy: () => void } {
           next(true);
           return;
         }
+        // 先读旧纪录再记这一轮，不然「历史最好」已经把本轮算进去了，
+        // 破没破纪录就分不出来 —— 第一次玩会被劝去刷新一个刚创下的成绩。
+        const before = save.getGameProgress(meta.id).endlessBest;
         const best = save.recordEndlessBest(meta.id, totalScore);
-        api.onLose(`这一轮拿到 ${totalScore} 分，历史最好 ${best} 分。再来一次就能刷新它！`);
+        api.onLose(endlessLine(totalScore, before, best));
         next(false);
       },
     });
