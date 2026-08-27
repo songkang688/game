@@ -445,6 +445,446 @@ export function drawCrew(c: Ctx, x: number, y: number, who: 0 | 1, o: CrewOpts):
 }
 
 // ---------------------------------------------------------------------------
+// 矿石家族（11 种，保留 1.2 的家族设计，加光影与小动作）
+// ---------------------------------------------------------------------------
+
+/**
+ * 矿石的皮肤。
+ *
+ * 全都手画成矢量而不是直接甩 emoji:矿洞底色是浅米黄,emoji 在上面又小又糊,
+ * 而且换个设备字体一变就认不出来了。自己画能保证「金的是暖黄、石头是冷灰」这条
+ * 最要紧的分辨线一直在。
+ */
+export const ORE_SKIN: Record<Ore["kind"], { fill: string; lit: string; edge: string }> = {
+  nugget: { fill: "#FFD264", lit: "#FFF0BC", edge: "#CF9A20" },
+  goldSmall: { fill: "#FFC441", lit: "#FFE79A", edge: "#C1880F" },
+  goldBig: { fill: "#FFB22C", lit: "#FFDD8C", edge: "#AE7305" },
+  goldHuge: { fill: "#FF9F14", lit: "#FFD07A", edge: "#9C6100" },
+  pebble: { fill: "#C6BFB4", lit: "#E6E1D9", edge: "#8F887E" },
+  boulder: { fill: "#A9A299", lit: "#CFC9C1", edge: "#77716A" },
+  gem: { fill: "#7DDDF0", lit: "#D6F7FF", edge: "#2F97AF" },
+  chest: { fill: "#C98C58", lit: "#E7B98C", edge: "#8A5A31" },
+  mole: { fill: "#D8A87A", lit: "#F0CFAC", edge: "#A57A4E" },
+  // 1.2 新矿:泥泥矿一眼看出「裹着泥」,双层晶用冷紫和钻石区分开
+  muddy: { fill: "#A8794F", lit: "#D0A87C", edge: "#6E4A28" },
+  twinCrystal: { fill: "#9FA8F0", lit: "#DCE0FF", edge: "#5B63B8" },
+};
+
+/** 金块家族:斜向扫光只给它们 */
+const GOLD_KINDS = new Set<Ore["kind"]>(["nugget", "goldSmall", "goldBig", "goldHuge"]);
+
+/** 金块 / 石头共用的圆角块 */
+function nuggetPath(c: Ctx, x: number, y: number, r: number): void {
+  c.beginPath();
+  c.roundRect(x - r, y - r * 0.86, r * 2, r * 1.72, r * 0.44);
+}
+
+/** 四角小星:金块的闪、图标里的花纹都用它 */
+function starPath(c: Ctx, x: number, y: number, s: number): void {
+  c.beginPath();
+  c.moveTo(x, y - s);
+  c.quadraticCurveTo(x + s * 0.18, y - s * 0.18, x + s, y);
+  c.quadraticCurveTo(x + s * 0.18, y + s * 0.18, x, y + s);
+  c.quadraticCurveTo(x - s * 0.18, y + s * 0.18, x - s, y);
+  c.quadraticCurveTo(x - s * 0.18, y - s * 0.18, x, y - s);
+  c.closePath();
+}
+
+/** 手绘的小问号(被钩住的地鼠头顶那个,不用 emoji 也不用字体字符) */
+function questionPath(c: Ctx, x: number, y: number, s: number): void {
+  c.beginPath();
+  c.arc(x, y, s, Math.PI * 0.9, Math.PI * 2.35);
+  c.lineTo(x + s * 0.28, y + s * 1.1);
+  c.stroke();
+  c.beginPath();
+  c.arc(x + s * 0.22, y + s * 2, s * 0.3, 0, TAU);
+  c.fill();
+}
+
+export interface OreDrawOpts {
+  /** 世界钟(秒):扫光、眨眼、挥肢都从它来,暂停即静止 */
+  t?: number;
+  /** 弱动效:扫光停成静态高光,闪烁恒亮,挥肢不动 */
+  calm?: boolean;
+  /** 正被钩着拉:宝箱盖微开漏金光、地鼠挥肢冒问号、影子不跟着飞 */
+  carried?: boolean;
+}
+
+export function drawOre(c: Ctx, ore: Ore, x: number, o: OreDrawOpts = {}): void {
+  const r = ore.radius;
+  const y = ore.y;
+  const skin = ORE_SKIN[ore.kind];
+  const t = o.t ?? 0;
+  const calm = o.calm === true;
+  c.save();
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+
+  // 影子:让矿石从背景里浮起来一点;被钩着悬在半空时影子不跟着飞
+  if (!o.carried) {
+    c.fillStyle = "rgba(120,95,60,.18)";
+    c.beginPath();
+    c.ellipse(x, y + r * 0.92, r * 0.86, r * 0.3, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  c.fillStyle = skin.fill;
+  c.strokeStyle = skin.edge;
+  c.lineWidth = 1.6;
+
+  if (ore.kind === "gem") {
+    c.beginPath();
+    c.moveTo(x, y - r);
+    c.lineTo(x + r * 0.92, y - r * 0.16);
+    c.lineTo(x, y + r);
+    c.lineTo(x - r * 0.92, y - r * 0.16);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.strokeStyle = "rgba(255,255,255,.85)";
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(x - r * 0.92, y - r * 0.16);
+    c.lineTo(x + r * 0.92, y - r * 0.16);
+    c.moveTo(x - r * 0.42, y - r * 0.16);
+    c.lineTo(x, y - r);
+    c.lineTo(x + r * 0.42, y - r * 0.16);
+    c.stroke();
+  } else if (ore.kind === "chest") {
+    const open = o.carried === true;
+    // 箱体(下半)
+    c.beginPath();
+    c.roundRect(x - r, y - r * 0.18, r * 2, r * 0.98, r * 0.22);
+    c.fill();
+    c.stroke();
+    // 箱盖:被拉着走的时候绕后沿微微翘开
+    c.save();
+    c.translate(x - r, y - r * 0.14);
+    if (open) c.rotate(-0.22);
+    c.fillStyle = skin.lit;
+    c.beginPath();
+    c.roundRect(0, -r * 0.66, r * 2, r * 0.66, r * 0.24);
+    c.fill();
+    c.stroke();
+    c.restore();
+    if (open) {
+      // 缝里漏出来的那一线金光(calm 时恒亮不闪)
+      c.save();
+      c.globalAlpha = calm ? 0.8 : 0.55 + 0.35 * Math.sin(t * 8);
+      c.fillStyle = "#FFEFA8";
+      c.beginPath();
+      c.roundRect(x - r * 0.92, y - r * 0.3, r * 1.84, r * 0.2, r * 0.1);
+      c.fill();
+      c.restore();
+    }
+    // 锁扣竖带 + 圆锁
+    c.fillStyle = "#F4C64A";
+    c.fillRect(x - r * 0.18, y - r * 0.16, r * 0.36, r * 0.9);
+    c.beginPath();
+    c.arc(x, y + r * 0.2, r * 0.24, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = skin.edge;
+    c.lineWidth = 1.2;
+    c.stroke();
+  } else if (ore.kind === "mole") {
+    // 两只耳朵先画,才会被脑袋压住一半
+    c.beginPath();
+    c.arc(x - r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
+    c.arc(x + r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    c.beginPath();
+    c.arc(x, y, r * 0.92, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    c.fillStyle = skin.lit;
+    c.beginPath();
+    c.ellipse(x, y + r * 0.3, r * 0.5, r * 0.36, 0, 0, Math.PI * 2);
+    c.fill();
+    // 待机每 3 秒眨一次眼;被钩住时眼睛瞪圆不眨
+    const blink = !o.carried && !calm && ((t + ore.id * 0.9) % 3.1) < 0.16;
+    if (blink) {
+      c.strokeStyle = "#5A3F2A";
+      c.lineWidth = 1.2;
+      c.beginPath();
+      c.moveTo(x - r * 0.48, y - r * 0.14);
+      c.lineTo(x - r * 0.2, y - r * 0.14);
+      c.moveTo(x + r * 0.2, y - r * 0.14);
+      c.lineTo(x + r * 0.48, y - r * 0.14);
+      c.stroke();
+      c.fillStyle = "#5A3F2A";
+      c.beginPath();
+      c.arc(x, y + r * 0.16, r * 0.16, 0, Math.PI * 2);
+      c.fill();
+    } else {
+      c.fillStyle = "#5A3F2A";
+      c.beginPath();
+      c.arc(x - r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
+      c.arc(x + r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
+      c.arc(x, y + r * 0.16, r * 0.16, 0, Math.PI * 2);
+      c.fill();
+    }
+    if (o.carried) {
+      // 被钩住:四只小短肢两帧交替地挥,头顶冒一个手绘的小问号
+      const f = calm ? 0 : Math.floor(t * 7) % 2;
+      c.strokeStyle = skin.fill;
+      c.lineWidth = 2.6;
+      c.lineCap = "round";
+      c.beginPath();
+      c.moveTo(x - r * 0.8, y + r * 0.1);
+      c.lineTo(x - r * 1.25, y + (f ? -r * 0.42 : r * 0.5));
+      c.moveTo(x + r * 0.8, y + r * 0.1);
+      c.lineTo(x + r * 1.25, y + (f ? r * 0.5 : -r * 0.42));
+      c.moveTo(x - r * 0.4, y + r * 0.85);
+      c.lineTo(x - r * 0.62, y + r * (f ? 1.32 : 1.12));
+      c.moveTo(x + r * 0.4, y + r * 0.85);
+      c.lineTo(x + r * 0.62, y + r * (f ? 1.12 : 1.32));
+      c.stroke();
+      c.strokeStyle = "#7A5A2E";
+      c.fillStyle = "#7A5A2E";
+      c.lineWidth = 1.6;
+      c.lineCap = "round";
+      questionPath(c, x + r * 0.95, y - r * 1.7, 3);
+    }
+  } else {
+    nuggetPath(c, x, y, r);
+    c.fill();
+    c.stroke();
+    // 左上角一小块高光,金子看着才有光泽;石头也留着,当作被磨亮的一面
+    c.fillStyle = skin.lit;
+    c.beginPath();
+    c.ellipse(x - r * 0.3, y - r * 0.34, r * 0.36, r * 0.22, -0.5, 0, Math.PI * 2);
+    c.fill();
+    if (GOLD_KINDS.has(ore.kind)) {
+      // 金块的斜向扫光:每 2 秒出头扫一趟;calm 时停成一道静态斜高光
+      const ph = calm ? 0.55 : ((t * 0.45 + ore.id * 0.37) % 1);
+      if (calm || ph < 0.42) {
+        const q = calm ? 0.5 : ph / 0.42;
+        const bx = x - r * 1.6 + q * r * 3.2;
+        c.save();
+        nuggetPath(c, x, y, r);
+        c.clip();
+        c.globalAlpha = 0.5;
+        c.fillStyle = "#FFFFFF";
+        c.beginPath();
+        c.moveTo(bx - r * 0.26, y + r);
+        c.lineTo(bx + r * 0.26, y + r);
+        c.lineTo(bx + r * 0.26 + r * 0.7, y - r);
+        c.lineTo(bx - r * 0.26 + r * 0.7, y - r);
+        c.closePath();
+        c.fill();
+        c.restore();
+      }
+    }
+    if (ore.kind === "goldHuge") {
+      // 巨型金块再压一道分层的纹,免得和大金块只差个头
+      c.strokeStyle = skin.edge;
+      c.lineWidth = 1.2;
+      c.beginPath();
+      c.moveTo(x - r * 0.72, y + r * 0.24);
+      c.lineTo(x + r * 0.72, y + r * 0.24);
+      c.stroke();
+      // 顶上两粒小星闪(calm 时恒亮)
+      c.save();
+      c.fillStyle = "#FFFDF0";
+      c.globalAlpha = calm ? 0.9 : 0.5 + 0.45 * Math.sin(t * 3 + ore.id);
+      starPath(c, x - r * 0.5, y - r * 0.95, r * 0.2);
+      c.fill();
+      c.globalAlpha = calm ? 0.9 : 0.5 + 0.45 * Math.sin(t * 3 + ore.id + 2.1);
+      starPath(c, x + r * 0.62, y - r * 0.7, r * 0.14);
+      c.fill();
+      c.restore();
+    }
+    if (ore.kind === "muddy") {
+      // 泥壳:两坨深泥 + 一滴往下淌的泥点,一眼看出「裹着泥」
+      c.fillStyle = "#8A5F35";
+      c.beginPath();
+      c.ellipse(x - r * 0.32, y - r * 0.18, r * 0.42, r * 0.3, -0.4, 0, Math.PI * 2);
+      c.ellipse(x + r * 0.4, y + r * 0.26, r * 0.34, r * 0.26, 0.3, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.ellipse(x - r * 0.08, y + r * 0.7, r * 0.12, r * 0.2, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+    if (ore.kind === "twinCrystal") {
+      // 「有两层」要看得出来:里圈再描一道壳线,再来两道内部折光
+      c.strokeStyle = "rgba(255,255,255,.65)";
+      c.lineWidth = 1.1;
+      nuggetPath(c, x, y, r * 0.72);
+      c.stroke();
+      c.beginPath();
+      c.moveTo(x - r * 0.5, y + r * 0.52);
+      c.lineTo(x + r * 0.08, y - r * 0.6);
+      c.moveTo(x - r * 0.05, y + r * 0.6);
+      c.lineTo(x + r * 0.5, y - r * 0.4);
+      c.stroke();
+    }
+    if (!ORES[ore.kind].treasure) {
+      // 石头补两个坑,一眼看出来是不值钱的那种
+      c.fillStyle = skin.edge;
+      c.beginPath();
+      c.arc(x + r * 0.32, y + r * 0.2, r * 0.16, 0, Math.PI * 2);
+      c.arc(x - r * 0.42, y + r * 0.34, r * 0.11, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+  c.restore();
+}
+
+// ---------------------------------------------------------------------------
+// 矿洞场景:三层视差内容、侧壁矿脉、地面草皮
+// ---------------------------------------------------------------------------
+
+/**
+ * 矿洞纵深:近岩壁 / 中矿层 / 远洞穴三层,跟着钩子放绳的长度错位挪动。
+ * **只有位移与明暗,没有透视** —— 钩子角度是这个玩法唯一要瞄的东西,一透视就瞄不准了。
+ * 1.3 只升级每一层的**内容**:远层钟乳石剪影、中层矿脉晶体、近层岩壁凹凸,
+ * `parallaxOffset` 的错位数学一个字没动。
+ */
+export function drawParallax(c: Ctx, pal: Palette, ropeLen: number): void {
+  for (let i = PARALLAX.length - 1; i >= 0; i--) {
+    const spec = PARALLAX[i];
+    const dy = parallaxOffset(spec.layer, ropeLen);
+    c.save();
+    c.globalAlpha = 0.16 + i * 0.05;
+    c.fillStyle = shadeHex(pal.wall, spec.shade);
+    if (spec.layer === "cavern") {
+      // 远洞穴:顶上垂下来的钟乳石剪影 + 一座圆顶石丘,一组一组往下重复
+      for (let y0 = 118 - dy; y0 < FIELD_H; y0 += 190) {
+        for (let k = 0; k < 4; k++) {
+          const sx = 70 + k * 88;
+          const len = 26 + ((k * 37) % 22);
+          c.beginPath();
+          c.moveTo(sx - 12, y0);
+          c.quadraticCurveTo(sx - 3, y0 + len * 0.7, sx, y0 + len);
+          c.quadraticCurveTo(sx + 3, y0 + len * 0.7, sx + 12, y0);
+          c.closePath();
+          c.fill();
+        }
+        c.beginPath();
+        c.ellipse(FIELD_W / 2, y0 + 158, 92, 26, 0, 0, TAU);
+        c.fill();
+      }
+    } else if (spec.layer === "seam") {
+      // 中矿层:嵌在岩里的小晶体,菱形加一圈更淡的光晕,像是微弱自发光
+      for (let y0 = 150 - dy; y0 < FIELD_H; y0 += 132) {
+        for (let k = 0; k < 5; k++) {
+          const sx = 58 + ((k * 83 + 31) % 344);
+          const sy = y0 + ((k * 57) % 70);
+          const s = 4 + (k % 3) * 1.5;
+          c.save();
+          c.globalAlpha = 0.28;
+          c.fillStyle = "#FFFFFF";
+          c.beginPath();
+          c.moveTo(sx, sy - s * 1.7);
+          c.lineTo(sx + s * 1.3, sy);
+          c.lineTo(sx, sy + s * 1.7);
+          c.lineTo(sx - s * 1.3, sy);
+          c.closePath();
+          c.fill();
+          c.restore();
+          c.beginPath();
+          c.moveTo(sx, sy - s);
+          c.lineTo(sx + s * 0.76, sy);
+          c.lineTo(sx, sy + s);
+          c.lineTo(sx - s * 0.76, sy);
+          c.closePath();
+          c.fill();
+        }
+      }
+    } else {
+      // 近岩壁:两侧探出来的不规则岩台,左右错开半格
+      for (let y0 = 126 - dy; y0 < FIELD_H; y0 += 108) {
+        c.beginPath();
+        c.moveTo(WALL, y0);
+        c.quadraticCurveTo(WALL + 20, y0 + 6, WALL + 14, y0 + 16);
+        c.quadraticCurveTo(WALL + 24, y0 + 24, WALL, y0 + 34);
+        c.closePath();
+        c.fill();
+        const ry = y0 + 54;
+        c.beginPath();
+        c.moveTo(FIELD_W - WALL, ry);
+        c.quadraticCurveTo(FIELD_W - WALL - 20, ry + 6, FIELD_W - WALL - 14, ry + 16);
+        c.quadraticCurveTo(FIELD_W - WALL - 24, ry + 24, FIELD_W - WALL, ry + 34);
+        c.closePath();
+        c.fill();
+      }
+    }
+    c.restore();
+  }
+}
+
+/** 两侧石壁:斜向的矿脉曲线代替 1.2 的等距横杠,再嵌几粒小金点和小晶体 */
+export function drawWalls(c: Ctx, pal: Palette): void {
+  c.save();
+  c.fillStyle = pal.wall;
+  c.fillRect(0, 96, WALL, FIELD_H - 96);
+  c.fillRect(FIELD_W - WALL, 96, WALL, FIELD_H - 96);
+  // 斜向矿脉:一条弯弯的脉络从壁里斜着淌下去
+  c.strokeStyle = pal.vein;
+  c.lineWidth = 3;
+  c.lineCap = "round";
+  for (const side of [0, 1]) {
+    const bx = side === 0 ? 0 : FIELD_W - WALL;
+    for (let y = 116; y < FIELD_H - 40; y += 74) {
+      const yy = y + side * 34;
+      c.beginPath();
+      c.moveTo(bx + 3, yy);
+      c.quadraticCurveTo(bx + WALL * 0.72, yy + 22, bx + 4, yy + 46);
+      c.stroke();
+    }
+  }
+  // 嵌在壁里的小金点
+  c.fillStyle = "#FFD264";
+  for (let y = 150; y < FIELD_H - 20; y += 96) {
+    c.beginPath();
+    c.arc(WALL * 0.45, y, 2.2, 0, TAU);
+    c.arc(FIELD_W - WALL * 0.45, y + 48, 2.2, 0, TAU);
+    c.fill();
+  }
+  // 两粒小晶体
+  c.fillStyle = "#BFEAF2";
+  for (const [cx, cy] of [
+    [WALL * 0.5, 262],
+    [FIELD_W - WALL * 0.5, 214],
+  ]) {
+    c.beginPath();
+    c.moveTo(cx, cy - 4);
+    c.lineTo(cx + 3, cy);
+    c.lineTo(cx, cy + 4);
+    c.lineTo(cx - 3, cy);
+    c.closePath();
+    c.fill();
+  }
+  c.restore();
+}
+
+/** 地面草皮:两条色带之上,加一排小草和几粒碎石 */
+export function drawGround(c: Ctx, pal: Palette): void {
+  c.save();
+  c.fillStyle = pal.ground;
+  c.fillRect(0, 74, FIELD_W, 26);
+  c.fillStyle = pal.groundDark;
+  c.fillRect(0, 96, FIELD_W, 6);
+  // 草皮边:地表探出来的小草芽
+  for (let gx = 10; gx < FIELD_W; gx += 34) {
+    c.beginPath();
+    c.moveTo(gx, 74.5);
+    c.quadraticCurveTo(gx + 3, 66, gx + 6, 74.5);
+    c.closePath();
+    c.fill();
+  }
+  // 地面上的碎石粒
+  c.fillStyle = shadeHex(pal.ground, 0.82);
+  for (let gx = 26; gx < FIELD_W; gx += 58) {
+    c.beginPath();
+    c.ellipse(gx, 88 + (gx % 3) * 2.5, 3, 1.8, 0, 0, TAU);
+    c.fill();
+  }
+  c.restore();
+}
+
+// ---------------------------------------------------------------------------
 // 绞盘与钩子（灵魂道具）
 // ---------------------------------------------------------------------------
 

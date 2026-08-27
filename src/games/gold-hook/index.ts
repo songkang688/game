@@ -23,7 +23,6 @@ import {
   PIVOT_Y,
   SHOP,
   SHOP_KINDS,
-  WALL,
   buyItem,
   canBuy,
   emptyWallet,
@@ -48,7 +47,6 @@ import {
 import {
   LIGHT_BAND_TOP,
   LIGHT_MAX_DIM,
-  PARALLAX,
   TALLY_MS,
   applySupply,
   createTwin,
@@ -58,7 +56,6 @@ import {
   lightRadius,
   makeHookRng,
   muddySlips,
-  parallaxOffset,
   priceAt,
   ropeSag,
   supplyChoices,
@@ -73,8 +70,12 @@ import { bestLine, loadEndlessBest, mergeEndlessBest, saveEndlessBest, type Endl
 
 import {
   drawCrew,
+  drawGround,
   drawHook,
+  drawOre,
+  drawParallax,
   drawRope,
+  drawWalls,
   drawWinch,
   type CrewPose,
   type Palette,
@@ -311,168 +312,8 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   window.addEventListener("resize", onResize);
 
   // ------------------------------------------------------------------
-  // 画面
+  // 画面(矿工 / 矿石 / 矿洞的绘制函数都在 art.ts,这里只管调度)
   // ------------------------------------------------------------------
-
-  /**
-   * 矿石的皮肤。
-   *
-   * 全都手画成矢量而不是直接甩 emoji:矿洞底色是浅米黄,emoji 在上面又小又糊,
-   * 而且换个设备字体一变就认不出来了。自己画能保证「金的是暖黄、石头是冷灰」这条
-   * 最要紧的分辨线一直在。
-   */
-  const ORE_SKIN: Record<Ore["kind"], { fill: string; lit: string; edge: string }> = {
-    nugget: { fill: "#FFD264", lit: "#FFF0BC", edge: "#CF9A20" },
-    goldSmall: { fill: "#FFC441", lit: "#FFE79A", edge: "#C1880F" },
-    goldBig: { fill: "#FFB22C", lit: "#FFDD8C", edge: "#AE7305" },
-    goldHuge: { fill: "#FF9F14", lit: "#FFD07A", edge: "#9C6100" },
-    pebble: { fill: "#C6BFB4", lit: "#E6E1D9", edge: "#8F887E" },
-    boulder: { fill: "#A9A299", lit: "#CFC9C1", edge: "#77716A" },
-    gem: { fill: "#7DDDF0", lit: "#D6F7FF", edge: "#2F97AF" },
-    chest: { fill: "#C98C58", lit: "#E7B98C", edge: "#8A5A31" },
-    mole: { fill: "#D8A87A", lit: "#F0CFAC", edge: "#A57A4E" },
-    // 1.2 新矿:泥泥矿一眼看出「裹着泥」,双层晶用冷紫和钻石区分开
-    muddy: { fill: "#A8794F", lit: "#D0A87C", edge: "#6E4A28" },
-    twinCrystal: { fill: "#9FA8F0", lit: "#DCE0FF", edge: "#5B63B8" },
-  };
-
-  /** 金块 / 石头共用的圆角块 */
-  function nuggetPath(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-    c.beginPath();
-    c.roundRect(x - r, y - r * 0.86, r * 2, r * 1.72, r * 0.44);
-  }
-
-  function drawOre(c: CanvasRenderingContext2D, ore: Ore, x: number): void {
-    const r = ore.radius;
-    const y = ore.y;
-    const skin = ORE_SKIN[ore.kind];
-    c.save();
-    c.textAlign = "center";
-    c.textBaseline = "middle";
-
-    // 影子:让矿石从背景里浮起来一点
-    c.fillStyle = "rgba(120,95,60,.18)";
-    c.beginPath();
-    c.ellipse(x, y + r * 0.92, r * 0.86, r * 0.3, 0, 0, Math.PI * 2);
-    c.fill();
-
-    c.fillStyle = skin.fill;
-    c.strokeStyle = skin.edge;
-    c.lineWidth = 1.6;
-
-    if (ore.kind === "gem") {
-      c.beginPath();
-      c.moveTo(x, y - r);
-      c.lineTo(x + r * 0.92, y - r * 0.16);
-      c.lineTo(x, y + r);
-      c.lineTo(x - r * 0.92, y - r * 0.16);
-      c.closePath();
-      c.fill();
-      c.stroke();
-      c.strokeStyle = "rgba(255,255,255,.85)";
-      c.lineWidth = 1.2;
-      c.beginPath();
-      c.moveTo(x - r * 0.92, y - r * 0.16);
-      c.lineTo(x + r * 0.92, y - r * 0.16);
-      c.moveTo(x - r * 0.42, y - r * 0.16);
-      c.lineTo(x, y - r);
-      c.lineTo(x + r * 0.42, y - r * 0.16);
-      c.stroke();
-    } else if (ore.kind === "chest") {
-      c.beginPath();
-      c.roundRect(x - r, y - r * 0.8, r * 2, r * 1.6, r * 0.26);
-      c.fill();
-      c.stroke();
-      c.fillStyle = skin.lit;
-      c.beginPath();
-      c.roundRect(x - r, y - r * 0.8, r * 2, r * 0.62, r * 0.26);
-      c.fill();
-      c.fillStyle = "#F4C64A";
-      c.fillRect(x - r * 0.2, y - r * 0.8, r * 0.4, r * 1.6);
-      c.beginPath();
-      c.arc(x, y - r * 0.06, r * 0.26, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = skin.edge;
-      c.lineWidth = 1.2;
-      c.stroke();
-    } else if (ore.kind === "mole") {
-      // 两只耳朵先画,才会被脑袋压住一半
-      c.beginPath();
-      c.arc(x - r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
-      c.arc(x + r * 0.66, y - r * 0.66, r * 0.36, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      c.beginPath();
-      c.arc(x, y, r * 0.92, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      c.fillStyle = skin.lit;
-      c.beginPath();
-      c.ellipse(x, y + r * 0.3, r * 0.5, r * 0.36, 0, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = "#5A3F2A";
-      c.beginPath();
-      c.arc(x - r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
-      c.arc(x + r * 0.34, y - r * 0.14, r * 0.13, 0, Math.PI * 2);
-      c.arc(x, y + r * 0.16, r * 0.16, 0, Math.PI * 2);
-      c.fill();
-    } else {
-      nuggetPath(c, x, y, r);
-      c.fill();
-      c.stroke();
-      // 左上角一小块高光,金子看着才有光泽;石头也留着,当作被磨亮的一面
-      c.fillStyle = skin.lit;
-      c.beginPath();
-      c.ellipse(x - r * 0.3, y - r * 0.34, r * 0.36, r * 0.22, -0.5, 0, Math.PI * 2);
-      c.fill();
-      if (ore.kind === "goldHuge") {
-        // 巨型金块再压一道分层的纹,免得和大金块只差个头
-        c.strokeStyle = skin.edge;
-        c.lineWidth = 1.2;
-        c.beginPath();
-        c.moveTo(x - r * 0.72, y + r * 0.24);
-        c.lineTo(x + r * 0.72, y + r * 0.24);
-        c.stroke();
-      }
-      if (!ORES[ore.kind].treasure) {
-        // 石头补两个坑,一眼看出来是不值钱的那种
-        c.fillStyle = skin.edge;
-        c.beginPath();
-        c.arc(x + r * 0.32, y + r * 0.2, r * 0.16, 0, Math.PI * 2);
-        c.arc(x - r * 0.42, y + r * 0.34, r * 0.11, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
-    c.restore();
-  }
-
-  /**
-   * 矿洞纵深:近岩壁 / 中矿层 / 远洞穴三层,跟着钩子放绳的长度错位挪动。
-   * **只有位移与明暗,没有透视** —— 钩子角度是这个玩法唯一要瞄的东西,一透视就瞄不准了。
-   */
-  function drawParallax(c: CanvasRenderingContext2D): void {
-    for (let i = PARALLAX.length - 1; i >= 0; i--) {
-      const spec = PARALLAX[i];
-      const dy = parallaxOffset(spec.layer, ropeLen);
-      c.save();
-      c.globalAlpha = 0.16 + i * 0.05;
-      c.fillStyle = shadeHex(pal.wall, spec.shade);
-      const band = 46 + i * 26;
-      for (let y = 118 - dy; y < FIELD_H; y += band * 2) {
-        c.fillRect(WALL + 4 + i * 10, y, FIELD_W - WALL * 2 - 8 - i * 20, band);
-      }
-      c.restore();
-    }
-  }
-
-  /** 把 #rrggbb 按比例调暗（远景层用） */
-  function shadeHex(hex: string, k: number): string {
-    const n = parseInt(hex.slice(1), 16);
-    const r = Math.round(((n >> 16) & 255) * k);
-    const g = Math.round(((n >> 8) & 255) * k);
-    const b = Math.round((n & 255) * k);
-    return `rgb(${r},${g},${b})`;
-  }
 
   /**
    * 无尽越深越暗的照明圈。半径有下限（`LIGHT_MIN`），
@@ -605,23 +446,11 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     c.fillStyle = g;
     c.fillRect(0, 0, FIELD_W, FIELD_H);
 
-    drawParallax(c);
+    drawParallax(c, pal, ropeLen);
 
-    // 两侧石壁 + 几道矿脉纹路
-    c.fillStyle = pal.wall;
-    c.fillRect(0, 96, WALL, FIELD_H - 96);
-    c.fillRect(FIELD_W - WALL, 96, WALL, FIELD_H - 96);
-    c.fillStyle = pal.vein;
-    for (let y = 120; y < FIELD_H - 8; y += 32) {
-      c.fillRect(3, y, WALL - 8, 4);
-      c.fillRect(FIELD_W - WALL + 5, y + 14, WALL - 8, 4);
-    }
-
-    // 地面与绞盘台
-    c.fillStyle = pal.ground;
-    c.fillRect(0, 74, FIELD_W, 26);
-    c.fillStyle = pal.groundDark;
-    c.fillRect(0, 96, FIELD_W, 6);
+    // 两侧石壁(斜向矿脉 + 嵌着的小金点)与地面草皮
+    drawWalls(c, pal);
+    drawGround(c, pal);
     // 两名矿工的动作跟着钩子的阶段走:放绳前倾、收绳摇柄、
     // 钩到重物后仰咬牙、宝物入袋举手欢呼;calm 时是静止的持镐站姿
     const heavyHaul = carrying !== null && carrying.weight >= 13;
@@ -644,7 +473,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       wraps: Math.max(0, Math.min(1, 1 - ropeLen / o.field.ropeMax)),
     });
 
-    for (const ore of ores) drawOre(c, ore, oreX(ore, worldClock));
+    for (const ore of ores) drawOre(c, ore, oreX(ore, worldClock), { t: worldClock, calm });
 
     // 绳子与钩子
     const angle = phase === "swing" ? hookAngle(o.field, swingClock) : fireAngle;
@@ -652,7 +481,13 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     drawRope(c, tipPt, carrying ? ropeSag(carrying.weight) : 0);
     // 钩住的那颗要跟着钩尖走。`drawOre` 用的是 ore.y,所以得临时把埋点换成钩尖,
     // 不然拉的过程里矿石会一直留在原来那个坑里,只有绳子在动
-    if (carrying) drawOre(c, { ...carrying, y: tipPt.y + carrying.radius * 0.5 }, tipPt.x);
+    if (carrying) {
+      drawOre(c, { ...carrying, y: tipPt.y + carrying.radius * 0.5 }, tipPt.x, {
+        t: worldClock,
+        calm,
+        carried: true,
+      });
+    }
     c.save();
     c.translate(tipPt.x, tipPt.y);
     c.rotate((-angle * Math.PI) / 180);
