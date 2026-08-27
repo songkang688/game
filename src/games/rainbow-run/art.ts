@@ -1190,3 +1190,19 @@ export function worldDotsLit(dist: number, stageLen: number, total: number): num
   if (!(stageLen > 0) || total <= 0) return 0;
   return Math.min(total, Math.floor(Math.max(0, dist) / stageLen) + 1);
 }
+
+/**
+ * 顶部大标题的自适应字号(visual-r1 修 A 档 P-02):
+ * 从 basePx 逐级往下试,直到 measure(px) 宽度塞得进 avail 或到 minPx 兜底。
+ * 纯函数,measure 由调用方给(实机是 ctx.measureText,测试给线性桩)。
+ */
+export function titleFitPx(
+  measure: (px: number) => number,
+  basePx: number,
+  minPx: number,
+  avail: number,
+): number {
+  let px = basePx;
+  while (px > minPx && measure(px) > avail) px -= 1;
+  return px;
+}

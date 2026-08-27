@@ -218,6 +218,7 @@ import {
   drawStarPickup,
   makeCoinSprite,
   pickupFloat,
+  titleFitPx,
   worldDotsLit,
 } from "./art";
 import { touchArea } from "./touch";
@@ -2094,6 +2095,29 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
   }
 
+  /**
+   * 顶部大标题避让(visual-r1 修 A 档 P-02):优先整幅居中;
+   * basePx 下会压到 [left,right] 之外的按钮时,改在空档内居中并自动缩字号
+   * (不小于 15px),fillText 的 maxWidth 再兜一层底。宽屏画面与原来一个像素不差。
+   */
+  function fitTitle(text: string, y: number, basePx: number, left: number, right: number): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `bold ${basePx}px sans-serif`;
+    const tw = ctx.measureText(text).width;
+    if (w / 2 - tw / 2 >= left + 6 && w / 2 + tw / 2 <= right - 6) {
+      ctx.fillText(text, w / 2, y);
+      return;
+    }
+    const avail = Math.max(60, right - left - 12);
+    const px = titleFitPx((p) => {
+      ctx.font = `bold ${p}px sans-serif`;
+      return ctx.measureText(text).width;
+    }, basePx, 15, avail);
+    ctx.font = `bold ${px}px sans-serif`;
+    ctx.fillText(text, (left + right) / 2, y, avail);
+  }
+
   function drawThemes(): void {
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, "#dff1ff");
@@ -2103,11 +2127,11 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.fillRect(0, 0, w, h);
 
     ctx.fillStyle = "#8a5ac9";
-    ctx.font = "bold 24px sans-serif";
+    // 360 窄屏标题末字会撞右上的 🎁 收藏册按钮(x 从 w-46 起),交给避让工具画
+    fitTitle("🌈 彩虹跑跑 · 十二大世界", 26, 24, 10, hasCollection() ? w - 54 : w - 10);
+    ctx.font = "14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌈 彩虹跑跑 · 十二大世界", w / 2, 26);
-    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#6a5a7e";
     ctx.fillText(
       `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选世界,再选关卡`,
@@ -2215,10 +2239,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
     drawButton(backFace, "◀ 世界", "rgba(255,255,255,0.85)", "#5a5a6e");
 
     ctx.fillStyle = st.accent;
-    ctx.font = "bold 22px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    // 章节名长的世界在 320 宽会蹭到「◀ 世界」,同一把避让尺(P-02 同类项)
+    fitTitle(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, 28, 22, 76, w - 8);
     const size = themeSize(chapterIdx);
     ctx.font = "14px sans-serif";
     ctx.fillText(
