@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { indexOf, type Cell, type Color, type Kind } from "./board";
 import { installDom, restoreDom, type Dom, type El } from "./domStub";
-import { createTable, QUIET_WARN_AT } from "./index";
+import { createTable, PLY_WARN_AT, QUIET_WARN_AT } from "./index";
 import { QUIET_LIMIT, makeState, type GameState } from "./rules";
 import { CSS as BOARD_CSS } from "./view";
 
@@ -156,5 +156,102 @@ describe("和棋倒数", () => {
   it("倒数的提示条有自己的配色，不和「轮到谁」那一枚撞在一起", () => {
     expect(BOARD_CSS).toContain(".dc-chip.dc-quiet{");
     expect(QUIET_WARN_AT).toBeLessThan(QUIET_LIMIT);
+  });
+});
+
+describe("手数上限倒数", () => {
+  function capTable(maxPlies: number, plies: number, quiet = 0): { state: GameState; destroy: () => void } {
+    const cells = blank();
+    place(cells, 0, 0, "red", "general");
+    place(cells, 3, 7, "blue", "general");
+    const state = makeState(cells, { colors: { duo: "red", star: "blue" }, turn: "duo", quiet, plies });
+    const handle = createTable(dom.root as unknown as HTMLElement, {
+      state,
+      rival: "human",
+      tier: "rookie",
+      showCounter: false,
+      label: "测试盘",
+      maxPlies,
+      seed: 7,
+      onEnd: () => undefined,
+    });
+    return { state, destroy: handle.destroy };
+  }
+
+  function capChip(): El | null {
+    return dom.root.find((e) => e.className.includes("dc-cap"));
+  }
+
+  function capText(): string {
+    const chip = capChip();
+    return chip && !chip.hidden ? chip.textContent : "";
+  }
+
+  it("离上限还早的时候不摆出来", () => {
+    const table = capTable(60, 0);
+    expect(capChip()).toBeTruthy();
+    expect(capChip()?.hidden).toBe(true);
+    expect(capText()).toBe("");
+    table.destroy();
+  });
+
+  it("走到还剩 10 手就摆出来，数字和上限对得上", () => {
+    const table = capTable(60, 60 - PLY_WARN_AT);
+    expect(capText()).toBe(`再 ${PLY_WARN_AT} 手就到手数上限`);
+    table.destroy();
+  });
+
+  it("再走一手，倒数就少一个", () => {
+    vi.useFakeTimers();
+    const table = capTable(60, 60 - PLY_WARN_AT);
+    const cells = dom.root.findAll((e) => e.className.includes("dc-cell"));
+    cells[indexOf(0, 0)].dispatch("click", {});
+    cells[indexOf(0, 1)].dispatch("click", {});
+    vi.advanceTimersByTime(400);
+    expect(capText()).toBe(`再 ${PLY_WARN_AT - 1} 手就到手数上限`);
+    table.destroy();
+  });
+
+  it("两条线一起逼近时只摆更紧的那一枚", () => {
+    // 和棋只剩 2 手、手数上限还剩 9 手：说和棋
+    const near = capTable(60, 60 - 9, QUIET_LIMIT - 2);
+    expect(chipText()).toBe("再 2 手不吃不翻就算和");
+    expect(capText()).toBe("");
+    near.destroy();
+
+    // 反过来：手数上限只剩 3 手、和棋还剩 8 手：说手数
+    const cap = capTable(60, 60 - 3, QUIET_LIMIT - QUIET_WARN_AT);
+    expect(capText()).toBe("再 3 手就到手数上限");
+    expect(chipText()).toBe("");
+    cap.destroy();
+  });
+
+  it("到线收场之后不再挂着，结算文案一个字没变", () => {
+    let why = "";
+    const cells = blank();
+    place(cells, 0, 0, "red", "general");
+    place(cells, 3, 7, "blue", "general");
+    const state = makeState(cells, { colors: { duo: "red", star: "blue" }, turn: "duo", plies: 60 });
+    const handle = createTable(dom.root as unknown as HTMLElement, {
+      state,
+      rival: "human",
+      tier: "rookie",
+      showCounter: false,
+      label: "测试盘",
+      maxPlies: 60,
+      seed: 7,
+      onEnd: (r) => {
+        why = r.why;
+      },
+    });
+    expect(capChip()?.hidden).toBe(true);
+    expect(why).toBe("手数用完啦，这一盘算平局收场。");
+    handle.destroy();
+  });
+
+  it("手数倒数有自己的配色，和和棋倒数分得开", () => {
+    expect(BOARD_CSS).toContain(".dc-chip.dc-cap{");
+    expect(BOARD_CSS).not.toContain(".dc-chip.dc-cap{background:#EDE7FF");
+    expect(PLY_WARN_AT).toBeGreaterThan(0);
   });
 });

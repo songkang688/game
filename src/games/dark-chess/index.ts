@@ -52,6 +52,15 @@ const AI_DELAY_MS = 520;
 /** 距离判和还剩这么多手时,顶栏才把倒数摆出来 */
 export const QUIET_WARN_AT = 8;
 
+/**
+ * 距离手数上限还剩这么多手时,顶栏摆出另一枚倒数。
+ *
+ * 判和有 P2B-5 的倒数了,可「超过 `maxPlies` 就算平局收场」这条线一直一声不吭 ——
+ * 第 6 / 7 章残局关上限只有 60 手,走到头一样是「怎么突然就结束了」。
+ * 两条线同时逼近时只摆更紧的那一枚,顶栏不堆两个倒数。
+ */
+export const PLY_WARN_AT = 10;
+
 export interface TableResult {
   /** 朵朵赢了没有 */
   won: boolean;
@@ -92,7 +101,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   const quietChip = document.createElement("span");
   quietChip.className = "dc-chip dc-quiet";
   quietChip.hidden = true;
-  top.append(turnChip, labelChip, plyChip, quietChip);
+  const capChip = document.createElement("span");
+  capChip.className = "dc-chip dc-cap";
+  capChip.hidden = true;
+  top.append(turnChip, labelChip, plyChip, quietChip, capChip);
   wrap.appendChild(top);
 
   const boardHost = document.createElement("div");
@@ -135,10 +147,19 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       opts.rival === "human" && state.turn === "star" ? "取消选择 (K)" : "取消选择 (G)";
     // 连着 QUIET_LIMIT 手不吃不翻就判和。快到线了才把倒数摆出来 ——
     // 一上来就挂个计数会喧宾夺主,可到了跟前不说一声,孩子只会觉得「怎么突然就结束了」。
+    // 手数走到上限也算收场了(finish() 就是按这条线收的),两枚倒数一起收回去
+    const playing = status(state).kind === "playing" && state.plies < opts.maxPlies;
     const left = QUIET_LIMIT - state.quiet;
-    const near = left <= QUIET_WARN_AT && status(state).kind === "playing";
-    quietChip.hidden = !near;
-    if (near) quietChip.textContent = `再 ${left} 手不吃不翻就算和`;
+    const capLeft = opts.maxPlies - state.plies;
+    const nearQuiet = playing && left <= QUIET_WARN_AT;
+    const nearCap = playing && capLeft <= PLY_WARN_AT;
+    // 两条线都快到了就只说更紧的那一条,顶栏不堆两个倒数
+    const showQuiet = nearQuiet && (!nearCap || left <= capLeft);
+    quietChip.hidden = !showQuiet;
+    if (showQuiet) quietChip.textContent = `再 ${left} 手不吃不翻就算和`;
+    const showCap = nearCap && !showQuiet;
+    capChip.hidden = !showCap;
+    if (showCap) capChip.textContent = `再 ${capLeft} 手就到手数上限`;
   }
 
   function finish(): void {

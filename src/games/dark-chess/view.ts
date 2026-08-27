@@ -40,6 +40,8 @@ export const CSS = `
 .dc-chip.dc-hot{background:#FFE9DC;color:#b4501f;}
 /* 和棋倒数:摆出来就说明快判和了,配色比普通提示更抢眼一点 */
 .dc-chip.dc-quiet{background:#EDE7FF;color:#5b46a8;}
+/* 手数上限倒数:另一条也会收场的线,配色和和棋倒数分开,一眼看得出说的是哪一条 */
+.dc-chip.dc-cap{background:#FFF0D6;color:#95651a;}
 .dc-note{text-align:center;min-height:20px;font-size:13px;font-weight:700;color:#795b3a;margin-top:8px;line-height:1.5;}
 .dc-count{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
 .dc-count span{font-size:12px;font-weight:800;border-radius:999px;padding:3px 8px;background:#fff8ec;color:#8a6a40;}
