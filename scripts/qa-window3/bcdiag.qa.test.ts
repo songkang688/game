@@ -58,7 +58,7 @@ describe("bumper-cars 摆烂根因", () => {
             aimOut: +(-(intents[k].dx * inX + intents[k].dy * inY)).toFixed(2),
             hunt: hunters.has(k) ? "hunt" : "patrol",
             skill: skills[k] ?? 2,
-            hitAgo: c.lastHitBy >= 0 ? Math.round(w.time - c.lastHitAt) : -1,
+            hitAgo: c.lastPushBy >= 0 ? Math.round(w.time - c.lastPushAt) : -1,
             dash: intents[k].dash === true,
           };
         });
