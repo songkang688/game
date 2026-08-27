@@ -47,6 +47,37 @@ export function pickNearest(cells: readonly CellCenter[], x: number, y: number, 
   return best;
 }
 
+/**
+ * 小格子上的命中：半径内**优先取还没找到的答案格**，没有答案才退回就近那一格。
+ *
+ * 为什么要偏心（W5R2-C-09）：图格是这一款唯一的点击目标，矮屏上摊到 26px，
+ * 加 4px 缝隙一格的步距才 30px——远不到手指按得准的 44px。
+ * 而格子是**紧挨着铺满**的，谁也没法把每格的热区各自撑到 44px 还互不重叠：
+ * 单纯放大命中半径只会让相邻两格抢同一片区域，`pickNearest` 照样判给几何上最近的那个，
+ * 孩子明明看见了、手指偏 6px 就算点错，白吃一次 0.6 秒冷却，还掉星。
+ *
+ * 所以把这 44px 的热区**整个让给答案格**：偏 6px 也算找到，
+ * 剩下的地盘留给普通格子照旧就近判。看上去一点没变，容错却真到了 44px。
+ *
+ * 只在格子撑不到 44px 时才这么判（见 `index.ts` 的 `hitAt`）——
+ * 大屏上格子本来就够大，仍旧一格一格如实判。
+ */
+export function pickForgiving(
+  cells: readonly CellCenter[],
+  x: number,
+  y: number,
+  radius: number,
+  isAnswer: (index: number) => boolean,
+): number | null {
+  const answer = pickNearest(
+    cells.filter((c) => isAnswer(c.index)),
+    x,
+    y,
+    radius,
+  );
+  return answer ?? pickNearest(cells, x, y, radius);
+}
+
 // ---------------------------------------------------------------------------
 // 温和惩罚：点错只冷却，不扣分不扣时，更不会失败
 // ---------------------------------------------------------------------------

@@ -43,6 +43,7 @@ import {
   stageRoomPx,
   openLevelOnMap,
   parseLevelParam,
+  pickForgiving,
   pickNearest,
   pinchZoom,
   resolveInitialLevel,
@@ -490,7 +491,12 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
       if (r.width > 0) width = r.width;
       centers.push({ index, cx: r.left + r.width / 2, cy: r.top + r.height / 2 });
     });
-    const hit = pickNearest(centers, clientX, clientY, hitRadius(width));
+    const radius = hitRadius(width);
+    // 格子撑得到 44px 就一格一格如实判；撑不到的矮屏上把这片热区让给答案格（W5R2-C-09）
+    const hit =
+      width >= PLAY_CELL_PX
+        ? pickNearest(centers, clientX, clientY, radius)
+        : pickForgiving(centers, clientX, clientY, radius, (i) => answers.has(i) && !foundSet.has(i));
     if (hit === null) return;
     attempt(hit, clientX, clientY);
   }
