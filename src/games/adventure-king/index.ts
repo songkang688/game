@@ -37,7 +37,10 @@ import {
   anchorGlow,
   artifactSpinPhase,
   boomTrailSegments,
+  castleBoxSvg,
+  castleHeroSvg,
   drawAnchorSprite,
+  drawArtifactGem,
   drawArtifactSprite,
   drawBoomerangSprite,
   drawEnemySprite,
@@ -157,6 +160,7 @@ const CSS = `
   max-width:420px;width:100%;}
 .advk-cell{aspect-ratio:1;border-radius:5px;display:flex;align-items:center;justify-content:center;
   font-size:15px;line-height:1;background:#fffaf0;}
+.advk-cell svg{width:88%;height:88%;display:block;}
 .advk-wall{background:#8d7a62;}
 .advk-dim{background:#f3ece0;color:#b8a88c;}
 .advk-seen{background:#fff4e0;}
@@ -537,7 +541,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
         x,
         y,
         scale,
-        ARTIFACT_EMOJI[art.kind],
+        art.kind,
         artifactSpinPhase(nowMs, reducedMotion),
         gy === null ? null : worldY(gy)
       );
@@ -571,12 +575,10 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     c2d.beginPath();
     c2d.roundRect(x + 3 * scale, y - h + 3 * scale, w * 0.32, h - 8 * scale, 8 * scale);
     c2d.fill();
+    // 门上的收集清单:三枚迷你纹石(拿到实色、没拿到 25% 透明),不再 emoji 直出
     for (let i = 0; i < 3; i++) {
-      c2d.font = `${Math.round(15 * scale)}px sans-serif`;
-      c2d.textAlign = "center";
-      c2d.textBaseline = "middle";
       c2d.globalAlpha = run.got.has(i) ? 1 : 0.25;
-      c2d.fillText(ARTIFACT_EMOJI[i], x + w / 2, y - h + (16 + i * 22) * scale);
+      drawArtifactGem(c2d, x + w / 2, y - h + (16 + i * 22) * scale, 8 * scale, i);
       c2d.globalAlpha = 1;
     }
     if (open) {
@@ -975,39 +977,43 @@ function saveAlbum(album: readonly string[]): void {
   }
 }
 
-/** 一格该画成什么样(纯展示,规则都在 explore.ts) */
-function cellGlyph(state: RoomState, x: number, y: number): { text: string; cls: string } {
+/**
+ * 一格该画成什么样(纯展示,规则都在 explore.ts)。
+ * W6R1-01 修复:主角与箱子换参数化 SVG(castleHeroSvg / castleBoxSvg);
+ * 机关小图标(门/钥匙/锁/开关/传送/贴纸等)按 A 档口径保留表意符号并登记。
+ */
+function cellGlyph(state: RoomState, x: number, y: number): { html: string; cls: string } {
   const c = cellAt(state, x, y);
-  if (state.player.x === x && state.player.y === y) return { text: "🌸", cls: "advk-me" };
-  if (state.boxes.some((b) => b.x === x && b.y === y)) return { text: "📦", cls: "advk-hot" };
+  if (state.player.x === x && state.player.y === y) return { html: castleHeroSvg(), cls: "advk-me" };
+  if (state.boxes.some((b) => b.x === x && b.y === y)) return { html: castleBoxSvg(), cls: "advk-hot" };
   switch (c) {
     case C_WALL:
     case C_HIDDEN:
-      return { text: "", cls: "advk-wall" };
+      return { html: "", cls: "advk-wall" };
     case C_EXIT:
-      return { text: "🚪", cls: "advk-hot" };
+      return { html: "🚪", cls: "advk-hot" };
     case C_KEY:
-      return { text: "🔑", cls: "advk-hot" };
+      return { html: "🔑", cls: "advk-hot" };
     case C_DOOR:
-      return { text: "🔒", cls: "advk-hot" };
+      return { html: "🔒", cls: "advk-hot" };
     case C_PLATE:
-      return { text: "🔲", cls: "advk-seen" };
+      return { html: "🔲", cls: "advk-seen" };
     case C_PGATE:
-      return isPlateDown(state) ? { text: "", cls: "advk-seen" } : { text: "⛓️", cls: "advk-hot" };
+      return isPlateDown(state) ? { html: "", cls: "advk-seen" } : { html: "⛓️", cls: "advk-hot" };
     case C_SWITCH:
-      return { text: state.switchOn ? "💡" : "🔅", cls: "advk-hot" };
+      return { html: state.switchOn ? "💡" : "🔅", cls: "advk-hot" };
     case C_CGATE:
-      return colorGateOpen(state.switchOn) ? { text: "", cls: "advk-seen" } : { text: "🟪", cls: "advk-hot" };
+      return colorGateOpen(state.switchOn) ? { html: "", cls: "advk-seen" } : { html: "🟪", cls: "advk-hot" };
     case C_SEESAW_L:
-      return { text: seesawWalkable("left", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+      return { html: seesawWalkable("left", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
     case C_SEESAW_R:
-      return { text: seesawWalkable("right", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
+      return { html: seesawWalkable("right", seesawOf(state)) ? "🪵" : "🔺", cls: "advk-seen" };
     case C_PORTAL:
-      return { text: "🌀", cls: "advk-hot" };
+      return { html: "🌀", cls: "advk-hot" };
     case C_STICKER:
-      return { text: "🎟️", cls: "advk-hot" };
+      return { html: "🎟️", cls: "advk-hot" };
     default:
-      return { text: "", cls: state.explored[y * state.w + x] ? "advk-seen" : "advk-dim" };
+      return { html: "", cls: state.explored[y * state.w + x] ? "advk-seen" : "advk-dim" };
   }
 }
 
@@ -1130,7 +1136,7 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
         const g = cellGlyph(state, x, y);
         const cell = document.createElement("div");
         cell.className = `advk-cell ${g.cls}`;
-        cell.textContent = g.text;
+        cell.innerHTML = g.html;
         board.appendChild(cell);
       }
     }

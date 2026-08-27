@@ -590,15 +590,116 @@ export function drawAnchorSprite(b: AkBrush, x: number, y: number, scale: number
 }
 
 // ---------------------------------------------------------------------------
-// 文物:金描边 + 底座光柱 + 缓慢自转闪点
+// 文物:原创纹石(日菱 / 月六边 / 星圆珠)+ 金描边 + 底座光柱 + 缓慢自转闪点
+// (W6R1-02 修复:emoji fillText 退休,宝石改 ≥3 停渐变 + 左上高光 + 墨描边)
 // ---------------------------------------------------------------------------
+
+/** 三种纹石主色:日暖橙 / 月青蓝 / 星紫(与粉彩色板同族) */
+export const ARTIFACT_GEM_COLORS = ["#F0A24B", "#6FA8E8", "#B08AE0"] as const;
+/** 纹石描边墨色 */
+export const ARTIFACT_GEM_INK = "#6E5433";
+
+/** 旧调用 / 旧用例还传 emoji 字符串,这里做兼容映射(0 日 / 1 月 / 2 星) */
+const ARTIFACT_KIND_BY_GLYPH: Record<string, number> = { "🔶": 0, "🔷": 1, "🔮": 2 };
+
+export function artifactKindOf(kindOrGlyph: number | string): number {
+  if (typeof kindOrGlyph === "number") return clampNum(Math.round(kindOrGlyph), 0, 2);
+  return ARTIFACT_KIND_BY_GLYPH[kindOrGlyph] ?? 0;
+}
+
+/** 纹石轮廓:日 = 菱形、月 = 六边、星 = 圆珠(剪影三选一,两两可分) */
+function gemOutline(b: AkBrush, x: number, y: number, r: number, kind: number): void {
+  b.beginPath();
+  if (kind === 0) {
+    b.moveTo(x, y - r);
+    b.lineTo(x + r * 0.78, y);
+    b.lineTo(x, y + r);
+    b.lineTo(x - r * 0.78, y);
+    b.closePath();
+  } else if (kind === 1) {
+    for (let i = 0; i < 6; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 3;
+      const px = x + Math.cos(a) * r * 0.92;
+      const py = y + Math.sin(a) * r * 0.92;
+      if (i === 0) b.moveTo(px, py);
+      else b.lineTo(px, py);
+    }
+    b.closePath();
+  } else {
+    b.arc(x, y, r * 0.92, 0, Math.PI * 2);
+  }
+}
+
+/**
+ * 纹石本体:三停线性渐变(左上亮 → 主色 → 右下暗)+ 墨色描边 +
+ * 左上白高光弧 + 各自的刻纹(日点芒 / 月牙 / 五角星)。
+ * 门上的收集清单与场上的文物共用这一支笔。
+ */
+export function drawArtifactGem(b: AkBrush, x: number, y: number, r: number, kindOrGlyph: number | string): void {
+  const kind = artifactKindOf(kindOrGlyph);
+  const base = ARTIFACT_GEM_COLORS[kind];
+  b.save();
+  const g = b.createLinearGradient(x - r, y - r, x + r, y + r);
+  g.addColorStop(0, shadeHex(base, 0.4));
+  g.addColorStop(0.5, base);
+  g.addColorStop(1, shadeHex(base, -0.22));
+  b.fillStyle = g;
+  gemOutline(b, x, y, r, kind);
+  b.fill();
+  b.strokeStyle = ARTIFACT_GEM_INK;
+  b.lineWidth = Math.max(1.5, 1.6 * (r / 13));
+  gemOutline(b, x, y, r, kind);
+  b.stroke();
+  // 左上高光弧(全场光源约定:左上 45°)
+  b.strokeStyle = "rgba(255,255,255,.85)";
+  b.lineWidth = Math.max(1.2, r * 0.14);
+  b.lineCap = "round";
+  b.beginPath();
+  b.arc(x, y, r * 0.62, Math.PI * 1.05, Math.PI * 1.45);
+  b.stroke();
+  // 刻纹:日 = 中点 + 四向短芒;月 = 月牙;星 = 五角星
+  b.fillStyle = "rgba(255,255,255,.92)";
+  b.strokeStyle = "rgba(255,255,255,.92)";
+  if (kind === 0) {
+    b.beginPath();
+    b.arc(x, y, r * 0.2, 0, Math.PI * 2);
+    b.fill();
+    b.lineWidth = Math.max(1, r * 0.1);
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2 + Math.PI / 4;
+      b.beginPath();
+      b.moveTo(x + Math.cos(a) * r * 0.32, y + Math.sin(a) * r * 0.32);
+      b.lineTo(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5);
+      b.stroke();
+    }
+  } else if (kind === 1) {
+    b.beginPath();
+    b.arc(x + r * 0.06, y, r * 0.42, Math.PI * 0.5, Math.PI * 1.5);
+    b.arc(x - r * 0.16, y, r * 0.34, Math.PI * 1.5, Math.PI * 0.5);
+    b.closePath();
+    b.fill();
+  } else {
+    b.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 === 0 ? r * 0.42 : r * 0.18;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const px = x + Math.cos(a) * rr;
+      const py = y + Math.sin(a) * rr;
+      if (i === 0) b.moveTo(px, py);
+      else b.lineTo(px, py);
+    }
+    b.closePath();
+    b.fill();
+  }
+  b.restore();
+}
 
 export function drawArtifactSprite(
   b: AkBrush,
   x: number,
   y: number,
   scale: number,
-  emoji: string,
+  kindOrGlyph: number | string,
   spinPhase: number,
   pillarBottomY: number | null
 ): void {
@@ -613,8 +714,12 @@ export function drawArtifactSprite(
     b.roundRect(x - 13 * scale, y - 24 * scale, 26 * scale, pillarBottomY - y + 24 * scale, 8 * scale);
     b.fill();
   }
-  // 柔光底 + 金描边
-  b.fillStyle = "rgba(255,240,180,.75)";
+  // 柔光底:三停径向渐变(亮心偏左上,同一光源)+ 金描边
+  const halo = b.createRadialGradient(x - 7 * scale, y - 7 * scale, 2 * scale, x, y, 20 * scale);
+  halo.addColorStop(0, "rgba(255,250,225,.92)");
+  halo.addColorStop(0.55, "rgba(255,240,180,.75)");
+  halo.addColorStop(1, "rgba(240,205,120,.58)");
+  b.fillStyle = halo;
   b.beginPath();
   b.arc(x, y, 20 * scale, 0, Math.PI * 2);
   b.fill();
@@ -631,11 +736,8 @@ export function drawArtifactSprite(
   b.beginPath();
   b.arc(sx, sy, 2.2 * scale, 0, Math.PI * 2);
   b.fill();
-  b.font = `${Math.round(26 * scale)}px sans-serif`;
-  b.textAlign = "center";
-  b.textBaseline = "middle";
-  b.fillStyle = "#7a5230";
-  b.fillText(emoji, x, y);
+  // 纹石本体(emoji 退休)
+  drawArtifactGem(b, x, y, 13 * scale, kindOrGlyph);
   b.restore();
 }
 
@@ -899,4 +1001,60 @@ export function drawFlagProgress(b: AkBrush, x: number, y: number, w: number, t0
   b.arc(x + w * t, y, 4, 0, Math.PI * 2);
   b.stroke();
   b.restore();
+}
+
+// ---------------------------------------------------------------------------
+// 无尽古堡(DOM 格子)角色皮:主角朵朵与木箱换参数化 SVG(W6R1-01 修复)。
+// 机关小图标(门/钥匙/锁/开关/传送/贴纸等)按 A 档口径保留表意符号并登记。
+// ---------------------------------------------------------------------------
+
+/** 古堡格子 SVG 的墨色与落影(与 badge 套件同规格:1.5px 描边 + 底部小影) */
+const CASTLE_INK = "#4B3A6E";
+const CASTLE_SHADOW = "rgba(0,0,0,.12)";
+
+/**
+ * 古堡主角朵朵:五瓣小花(花瓣描边 + 金花心笑脸 + 茎叶),
+ * 与 brave-path 的花徽同族但独立成株,一眼读作「会走路的小花」。
+ */
+export function castleHeroSvg(): string {
+  let petals = "";
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+    const px = (32 + 11 * Math.cos(a)).toFixed(1);
+    const py = (25 + 11 * Math.sin(a)).toFixed(1);
+    petals += `<circle cx="${px}" cy="${py}" r="7.2" fill="#FFB2D8" stroke="${CASTLE_INK}" stroke-width="1.5"/>`;
+  }
+  return (
+    `<svg class="advk-hero" viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true" focusable="false">` +
+    `<ellipse cx="32" cy="57" rx="12" ry="3" fill="${CASTLE_SHADOW}"/>` +
+    `<path d="M32 38v15" stroke="#7CBB5E" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<path d="M32 46q-7 -1.5 -8.5 -7 7 -.5 8.5 7zM32 50q7 -1.5 8.5 -7 -7 -.5 -8.5 7z" fill="#8BC96D" stroke="#5F9C46" stroke-width="1"/>` +
+    petals +
+    `<circle cx="32" cy="25" r="8.6" fill="#F0C25A" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<path d="M26.6 20.4a7 7 0 0 1 4.4-2.6" stroke="rgba(255,255,255,.85)" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+    `<circle cx="29" cy="24" r="1.6" fill="${CASTLE_INK}"/><circle cx="35" cy="24" r="1.6" fill="${CASTLE_INK}"/>` +
+    `<path d="M28.8 28q3.2 2.4 6.4 0" stroke="${CASTLE_INK}" stroke-width="1.4" fill="none" stroke-linecap="round"/>` +
+    `</svg>`
+  );
+}
+
+/**
+ * 古堡木箱:2.5D 双面(顶面受光 + 正面木纹 X 加固条)+ 墨描边,
+ * 顶亮底暗与全场左上光源一致。
+ */
+export function castleBoxSvg(): string {
+  const wood = AK_PALETTE.akHat;
+  const light = shadeHex(wood, 0.28);
+  const dark = shadeHex(wood, -0.2);
+  return (
+    `<svg class="advk-box" viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true" focusable="false">` +
+    `<ellipse cx="32" cy="57" rx="15" ry="3" fill="${CASTLE_SHADOW}"/>` +
+    `<path d="M15 22l6-9h22l6 9z" fill="${light}" stroke="${CASTLE_INK}" stroke-width="1.5" stroke-linejoin="round"/>` +
+    `<rect x="15" y="22" width="34" height="32" rx="2.5" fill="${wood}" stroke="${CASTLE_INK}" stroke-width="1.5"/>` +
+    `<path d="M44 22h5v32h-5z" fill="${dark}" opacity=".55"/>` +
+    `<path d="M15 26.5h34M15 49.5h34" stroke="${dark}" stroke-width="1.6"/>` +
+    `<path d="M17.5 28.5l29 19m0-19l-29 19" stroke="${dark}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<path d="M17 24.5a30 30 0 0 1 10-1.5" stroke="rgba(255,255,255,.75)" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+    `</svg>`
+  );
 }
