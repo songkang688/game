@@ -4,6 +4,7 @@ import { BLACK, WHITE, xy } from "./board";
 import { levelAt, levelSolutions } from "./levels";
 import { installDom, makeScheduler, type DomStub } from "./testkit";
 import {
+  DUO_HINT,
   MODE_LABELS,
   WQ_CONSTS,
   WQ_CSS,
@@ -141,6 +142,14 @@ describe("weiqi-garden · 键位", () => {
     expect(keyAction("g")).toBe("pass");
     expect(keyAction("k")).toBe("pass");
     expect(keyAction("Escape")).toBe("pause");
+  });
+
+  it("双人开局说明把两套键位分开写清楚,不会让星星去按朵朵的键", () => {
+    for (const k of ["WASD", "F 落子", "G 停一手", "方向键", "L 落子", "K 停一手"]) {
+      expect(DUO_HINT).toContain(k);
+    }
+    // 「F 确认,G 停一手」这种只写一套的说法不许再出现
+    expect(DUO_HINT).not.toMatch(/点交叉点。F/);
   });
 
   it("没绑的键一律不认", () => {

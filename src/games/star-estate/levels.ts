@@ -385,6 +385,24 @@ export function goalLine(cfg: EstateLevel): string {
   return `${cfg.rounds} 回合内把净资产做到 ${cfg.goal.target} 星币，同时${deeds}`;
 }
 
+/**
+ * 目标还差多少，写成一行小字。
+ *
+ * 目标里有两件事（钱到线、地买够），只写一句「目标是…」孩子看不出自己卡在哪一件上，
+ * 所以局内一直挂着这一行：买地几分之几、钱差多少，一眼就知道下一步该干什么。
+ */
+export function goalProgress(cfg: EstateLevel, state: EstateState): string {
+  const bought = Math.min(state.players[0]?.deedsBought ?? 0, cfg.goal.minBuys);
+  const parts = [`🏷️ 自己买下 ${bought}/${cfg.goal.minBuys}`];
+  if (cfg.goal.kind === "netWorth") {
+    parts.push(`💰 净资产 ${netWorth(state, 0)}/${cfg.goal.target}`);
+  } else {
+    const foe = state.players[cfg.goal.who];
+    parts.push(foe?.bankrupt ? "🏁 对手已经收摊" : `💰 对手还剩 ${foe?.cash ?? 0} 星币`);
+  }
+  return parts.join(" · ");
+}
+
 /** 本关开放了哪些机制，写成一行小字 */
 export function rulesLine(cfg: EstateLevel): string {
   const on: string[] = ["买地收租"];

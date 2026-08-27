@@ -11,6 +11,7 @@ import {
   chapterStartOf,
   endlessConfig,
   goalLine,
+  goalProgress,
   goalReached,
   levelConfig,
   rulesLine,
@@ -257,6 +258,27 @@ describe("star-estate · meta 与章节", () => {
     expect(moneyEnough, "样本里应当有关卡是「钱够了但地不够」").toBeGreaterThan(0);
   });
 
+  it("局内一直挂着「还差多少」：买地几分之几、钱差多少", () => {
+    const cfg = levelConfig(11);
+    const state = buildState({ seed: cfg.seed, tiers: cfg.tiers, cashes: cfg.cashes, preset: cfg.preset });
+    expect(goalProgress(cfg, state)).toContain(`自己买下 0/${cfg.goal.minBuys}`);
+    expect(goalProgress(cfg, state)).toContain("净资产");
+
+    for (let pos = 0; pos < state.tiles.length && state.players[0].deedsBought < 1; pos++) buyTile(state, 0, pos);
+    expect(goalProgress(cfg, state)).toContain(`自己买下 1/${cfg.goal.minBuys}`);
+    // 买超了也只写到门槛为止，不会出现 3/2 这种读不通的数
+    state.players[0].deedsBought = 99;
+    expect(goalProgress(cfg, state)).toContain(`自己买下 ${cfg.goal.minBuys}/${cfg.goal.minBuys}`);
+  });
+
+  it("第 8 章残局的进度行盯着对手的钱包", () => {
+    const cfg = levelConfig(170);
+    const state = buildState({ seed: cfg.seed, tiers: cfg.tiers, cashes: cfg.cashes, preset: cfg.preset });
+    expect(goalProgress(cfg, state)).toContain("对手还剩");
+    state.players[1].bankrupt = true;
+    expect(goalProgress(cfg, state)).toContain("对手已经收摊");
+  });
+
   it("第 8 章残局：对手不再一两个回合就把自己付破产", () => {
     for (let lv = 164; lv < TOTAL_LEVELS; lv++) {
       const cfg = levelConfig(lv);
@@ -314,6 +336,11 @@ describe("star-estate · 攻略", () => {
   it("总纲把垄断、平均建、抵押、拍卖四件事都讲到了", () => {
     const text = guide.general.join("");
     for (const key of ["垄断", "平均", "抵押", "拍卖"]) expect(text).toContain(key);
+  });
+
+  it("攻略把「必须自己买地」这条讲清楚了", () => {
+    expect(guide.general.join("")).toContain("自己下场买地");
+    expect(guide.entries[0].tips.join("")).toContain("自己买够 2 处");
   });
 });
 
