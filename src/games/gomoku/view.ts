@@ -96,6 +96,21 @@ export const CSS = `
   box-shadow:0 2px 6px rgba(180,130,80,.2);white-space:nowrap;}
 .gmk-badge.gmk-think{animation:gmk-think 1.1s ease-in-out infinite;}
 @keyframes gmk-think{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.97)}}
+.gmk-seats{display:flex;gap:8px;margin-bottom:8px;}
+.gmk-seat{flex:1;display:flex;align-items:center;gap:6px;background:#FFFDF8;border:2px solid #EED9B8;
+  border-radius:14px;padding:5px 10px;min-width:0;}
+.gmk-seat.gmk-seat-on{border-color:#E8C57C;box-shadow:0 0 0 2px rgba(232,197,124,.5),0 2px 6px rgba(180,130,80,.25);}
+.gmk-seat-ico{display:inline-flex;line-height:0;flex:none;}
+.gmk-seat.gmk-seat-on .gmk-seat-ico{animation:gmk-breath 1.6s ease-in-out infinite;}
+@keyframes gmk-breath{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+.gmk-seat-name{font-weight:800;color:#8A6B45;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;}
+.gmk-seat-time{font-weight:800;color:#B08A55;font-size:14px;font-variant-numeric:tabular-nums;flex:none;}
+.gmk-boardbox{position:relative;}
+.gmk-sand{position:absolute;top:10px;right:10px;z-index:2;line-height:0;pointer-events:none;
+  background:rgba(255,250,240,.85);border-radius:50%;padding:5px;box-shadow:0 2px 6px rgba(120,80,40,.3);}
+.gmk-sand .gmk-sandicon{animation:gmk-sandspin 1.4s ease-in-out infinite;}
+@keyframes gmk-sandspin{0%{transform:rotate(0)}45%{transform:rotate(180deg)}55%{transform:rotate(180deg)}100%{transform:rotate(360deg)}}
 .gmk-canvas{width:100%;border-radius:16px;display:block;touch-action:none;box-shadow:0 4px 14px rgba(190,140,90,.25);}
 .gmk-canvas:focus-visible{outline:3px solid #C2497E;outline-offset:3px;}
 .gmk-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
@@ -137,8 +152,14 @@ export const CSS = `
   font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(180deg,#C84483,#AD3A72);
   box-shadow:0 4px 0 #8F2C5C;font-family:inherit;}
 .gmk-over-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #8F2C5C;}
+.gmk-over-stoneimg{line-height:0;filter:drop-shadow(0 3px 5px rgba(120,80,40,.35));}
+.gmk-ceremony{animation:gmk-cardin .28s ease-out;}
+@keyframes gmk-cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
+  .gmk-seat.gmk-seat-on .gmk-seat-ico{animation:none;}
+  .gmk-sand .gmk-sandicon{animation:none;}
+  .gmk-ceremony{animation:none;}
 }
 `;
 
