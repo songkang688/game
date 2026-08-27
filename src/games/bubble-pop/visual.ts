@@ -334,5 +334,16 @@ export function bpVisualCss(): string {
   .bp-burst-skin, .bp-burst-ring, .bp-burst-drop { animation: none; opacity: 0; }
   .bp-decor, .bp-jelly, .bp-combo { animation: none; }
 }
+/* 窄屏 8 列全可见(W6R1 fixer 自查):
+   360px 下盘面可用宽只有约 279px,而 8×36px 格 + 缝要 316px+——1.3 池壁的
+   overflow:hidden 会把第 8 列裁到只剩一条边(基线则是溢出到池外)。
+   宽屏的 36px 热区一个像素不动,只在窄屏让格子等比收窄、并腾出池边距,
+   保证整盘 8 列都看得见、点得到。40px 触区需要 355px 盘宽,360 屏物理上限
+   约 303px,放不下 → W6R1-08 登记遗留。 */
+@media (max-width: 400px) {
+  .bp-wrap { padding-left: 8px; padding-right: 8px; }
+  .bp-board { gap: 4px; }
+  .bp-cell { min-width: 0; }
+}
 `;
 }
