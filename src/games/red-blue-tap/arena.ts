@@ -46,6 +46,50 @@ import {
 export const SIDE_GUTTER_PX = 24;
 /** 按钮边长下限 */
 export const KEY_MIN_PX = 72;
+/** 矮屏上收一档的按钮边长：仍然高出 44px 的触屏底线 */
+export const KEY_TIGHT_PX = 56;
+/** 按钮之间的间隙 */
+export const PAD_GAP_PX = 8;
+/** 矮屏上的间隙 */
+export const PAD_TIGHT_GAP_PX = 6;
+/** 「矮屏」的门槛：640 高的老安卓机上，一竖排四颗 72px 的键塞不进去 */
+export const SHORT_SCREEN_PX = 700;
+/**
+ * 对战面板里键盘上面那一截（返回条 + 比分 + 回合说明 + 分工名）实测占的高度。
+ * 测试员在 320×640 上量到第 4 颗键的盒子是 top 607 / bottom 677，
+ * 一竖排的前三颗键占 3×(72+8)=240，倒推出上面这一截约 367px。
+ */
+export const VERSUS_CHROME_PX = 367;
+
+export interface PadLayout {
+  columns: number;
+  keyPx: number;
+  gap: number;
+}
+
+/**
+ * 一侧键盘怎么排。宽屏与窄高屏维持原样（键不缩水），
+ * 只有**又窄又矮**的机器收回 2×2 并把键降一档——那种机器上竖排根本摆不下四颗，
+ * 而且全链路没有可滚容器，够不着就是真的够不着（测试员 W5-B-02，判阻断）。
+ */
+export function padLayout(viewportWidth: number, viewportHeight: number): PadLayout {
+  const vw = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;
+  const vh = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 720;
+  if (vw > 420) return { columns: 2, keyPx: KEY_MIN_PX, gap: PAD_GAP_PX };
+  if (vh > SHORT_SCREEN_PX) return { columns: 1, keyPx: KEY_MIN_PX, gap: PAD_GAP_PX };
+  return { columns: 2, keyPx: KEY_TIGHT_PX, gap: PAD_TIGHT_GAP_PX };
+}
+
+/** 一侧键盘占多高 */
+export function padHeightPx(layout: PadLayout, slots = SLOT_COUNT): number {
+  const rows = Math.ceil(Math.max(1, slots) / Math.max(1, layout.columns));
+  return rows * layout.keyPx + (rows - 1) * layout.gap;
+}
+
+/** 一侧键盘占多宽 */
+export function padWidthPx(layout: PadLayout): number {
+  return layout.columns * layout.keyPx + (layout.columns - 1) * layout.gap;
+}
 /** 一局对战先到几分 */
 export const VERSUS_TARGET = 7;
 
@@ -97,6 +141,17 @@ export const ARENA_CSS = `
   .rbt-key { min-width: ${KEY_MIN_PX}px; min-height: ${KEY_MIN_PX}px; font-size: 26px; }
   .rbt-vs-gap { flex-basis: ${SIDE_GUTTER_PX}px; }
   .rbt-vs-brief { font-size: 16px; }
+}
+@media (max-width: 420px) and (max-height: ${SHORT_SCREEN_PX}px) {
+  /* 又窄又矮的老机器（320×640 这种）：一竖排四颗 72px 的键要 ${KEY_MIN_PX * 4 + PAD_GAP_PX * 3}px 高，
+     第 4 颗整个掉到屏幕外，而且全链路没有可滚容器，那一侧玩家等于少一颗键。
+     收回每侧 2×2 并把边长降到 ${KEY_TIGHT_PX}px——仍然高出 44px 的触屏底线，
+     中间那条 ${SIDE_GUTTER_PX}px 的隔离带一分不动。 */
+  .rbt-pad { grid-template-columns: repeat(2, 1fr); gap: ${PAD_TIGHT_GAP_PX}px; }
+  .rbt-key { min-width: ${KEY_TIGHT_PX}px; min-height: ${KEY_TIGHT_PX}px; font-size: 22px; }
+  .rbt-vs { padding: 8px 6px; }
+  .rbt-vs-brief { min-height: 38px; font-size: 15px; }
+  .rbt-vs-foot { margin-top: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rbt-key { transition: background .3s linear, color .3s linear; }
