@@ -125,6 +125,55 @@ export function lastHitHeight(sheet: string, selector: string): number {
   return bodyHeight(`;${merged}`);
 }
 
+/**
+ * 朗读桩：把 `src/games/speech.ts` 会调用的两个全局接上，
+ * 结算面板自动朗读的那句话就成了「读屏取证」的抓手 —— 赢和输各自播哪一句，
+ * 在无头环境里也看得见。返回的数组按时间顺序收所有被读出来的文本。
+ */
+export function installSpeech(): string[] {
+  const spoken: string[] = [];
+  class Utterance {
+    lang = "";
+    rate = 1;
+    voice: unknown = null;
+    constructor(public text: string) {}
+  }
+  Object.assign(globalThis as Record<string, unknown>, {
+    SpeechSynthesisUtterance: Utterance,
+    speechSynthesis: {
+      getVoices: () => [{ lang: "zh-CN" }],
+      speak: (u: { text: string }) => void spoken.push(u.text),
+      cancel: () => {},
+    },
+  });
+  return spoken;
+}
+
+/**
+ * 把 `Math.random` 换成定 seed 的 mulberry32，跑酷这类每帧洒随机数的玩法
+ * 才能一跑一个样地复现。返回还原函数。
+ */
+export function seedRandom(seed: number): () => void {
+  const original = Math.random;
+  let a = seed >>> 0;
+  Math.random = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return () => {
+    Math.random = original;
+  };
+}
+
+/** 拆掉朗读桩 */
+export function restoreSpeech(): void {
+  delete (globalThis as Record<string, unknown>).SpeechSynthesisUtterance;
+  delete (globalThis as Record<string, unknown>).speechSynthesis;
+}
+
 /** 收集选择器列表的最终热区高度，返回 `sel=NNpx` 的可读串 */
 export function heightReport(sheet: string, selectors: readonly string[]): string {
   return selectors.map((s) => `${s}=${lastHitHeight(sheet, s).toFixed(1)}px`).join(" ");
