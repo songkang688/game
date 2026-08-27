@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   EARLY_CALL_MAX,
   ENDLESS_BOSS_EVERY,
@@ -353,5 +354,63 @@ describe("1.2 点名关与退款规则", () => {
       expect(sellRefund(kind, 1)).toBeLessThan(TOWER_INFO[kind].cost);
       expect(sellRefund(kind, 3)).toBeGreaterThan(sellRefund(kind, 1));
     }
+  });
+});
+
+/* ---------------- 监督修复员补的守门用例 ---------------- */
+
+/**
+ * 1.2 监督修复员第 3 轮:钉住「本文件里的东西没有一样进了游戏」。
+ *
+ * `defense12.ts` 写在 1.2 早期,把守塔这一轮要做的几件事的**规格**先定了下来。
+ * 后来这几件事各自落到了别的文件里,本文件就整个没接线了:
+ *
+ * | 规格(本文件)        | 真正接线的实现                   |
+ * | -------------------- | -------------------------------- |
+ * | 波次预告 `wavePreview` | `wave12.ts` 的同名函数(返回结构不同) |
+ * | 提前召唤 `earlyCallBonus` | `wave12.ts` 的同名函数(签名与上限都不同) |
+ * | 变速定步长 `planSteps` | `wave12.ts` 的 `accumulateSteps` |
+ * | 克制表 `THREAT_LABEL` / `countersFor` | `towers12.ts` 那一套 |
+ *
+ * 而且两份的数**对不上**:
+ *  - 提前召唤上限:本文件 12 片,接线的 `wave12` 是 6 片;
+ *    连入参含义都反了(本文件收「提前了几秒」,接线的收「还剩几秒」)。
+ *  - 一帧最多补几步:本文件 `MAX_SUBSTEPS` 是 8,接线的 `MAX_STEPS_PER_FRAME` 是 16。
+ *
+ * 玩家不会因此出错——跑的一直是 `wave12` / `towers12` 那份,它们各自有用例盯着。
+ * 但下一个人很可能来调本文件的常量,调完发现游戏里毫无反应。
+ * 这里把「谁接线」写成断言。删本文件要连它的用例一起删,那是「用例只减不增」,
+ * 超出监督修复员的权限,已列进 R3 报告交主管。
+ */
+describe("这份守塔规格里,有哪几节真的进了游戏", () => {
+  const read = (f: string) => readFileSync(new URL(`./${f}`, import.meta.url), "utf8");
+
+  it("玩法代码一律不 import 本文件", () => {
+    for (const f of ["index.ts", "logic.ts", "wave12.ts", "towers12.ts", "hud12.ts", "endless.ts", "fx12.ts", "sim.ts"]) {
+      expect(read(f), `${f} 不该 import defense12`).not.toMatch(/from\s+"\.\/defense12"/);
+    }
+  });
+
+  it("index.ts 的波次预告 / 提前召唤 / 变速接的都是 wave12 那一套", () => {
+    const index = read("index.ts");
+    expect(index).toMatch(/from\s+"\.\/wave12"/);
+    for (const name of ["wavePreview", "earlyCallBonus", "accumulateSteps", "SPEED_STEP"]) {
+      expect(index, `index.ts 没接 wave12 的 ${name}`).toContain(name);
+    }
+    // 本文件独有的那几个名字一个都不该出现在玩法代码里
+    for (const name of ["planSteps", "MAX_SUBSTEPS", "SPEED_STEPS", "EARLY_CALL_PER_SEC"]) {
+      expect(index, `index.ts 用到了没接线的 ${name}`).not.toContain(name);
+    }
+  });
+
+  it("两份的数确实对不上——这正是不能照着本文件调参的理由", async () => {
+    const wave12 = await import("./wave12");
+    // 提前召唤:上限一个 12 一个 6,入参含义还相反
+    expect(EARLY_CALL_MAX).toBe(12);
+    expect(wave12.EARLY_CALL_MAX_BONUS).toBe(6);
+    expect(EARLY_CALL_MAX).not.toBe(wave12.EARLY_CALL_MAX_BONUS);
+    // 一帧最多补几步:8 对 16
+    expect(MAX_SUBSTEPS).toBe(8);
+    expect(wave12.MAX_STEPS_PER_FRAME).toBe(16);
   });
 });
