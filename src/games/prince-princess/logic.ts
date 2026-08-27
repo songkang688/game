@@ -34,6 +34,15 @@ import {
   type GlideState,
 } from "./abilities";
 import { checkpointsFor, respawnX, updateReached } from "./checkpoints";
+import {
+  consumeJump,
+  freshJumpFeel,
+  noteJumpPress,
+  peekJump,
+  takeJump,
+  tickJumpFeel,
+  type JumpFeel,
+} from "./jumpFeel";
 
 // ---------------------------------------------------------------------------
 // 物理常量
@@ -239,6 +248,8 @@ export interface HeroState {
   attackCd: number;
   prevUp: boolean;
   prevAtk: boolean;
+  /** 跳跃的输入宽容:土狼时间 + 跳跃缓冲(见 `jumpFeel.ts`) */
+  jump: JumpFeel;
   ridingPlatform: number;
   /** 刚从浮台上蹲跳穿下去,这段时间内不再踩住浮台 */
   dropT: number;
@@ -408,6 +419,7 @@ function makeHero(index: number, kind: HeroKind, x: number): HeroState {
     attackCd: 0,
     prevUp: false,
     prevAtk: false,
+    jump: freshJumpFeel(),
     ridingPlatform: -1,
     dropT: 0,
     hurtFlash: 0,
@@ -969,28 +981,35 @@ function applyActions(w: World, h: HeroState, input: Input, dt: number): void {
   if (h.hurtFlash > 0) h.hurtFlash = Math.max(0, h.hurtFlash - dt);
   if (h.dropT > 0) h.dropT = Math.max(0, h.dropT - dt);
 
-  if (input.up && !h.prevUp) {
-    if (h.onGround) {
-      if (input.down && h.ridingPlatform >= 0) {
-        // 按着下再按跳:从浮台上穿下去
-        h.onGround = false;
-        h.ridingPlatform = -1;
-        h.dropT = 0.3;
-        h.y += 6;
-        h.vy = 60;
-      } else {
-        h.vy = -jumpSpeedOf(h.kind);
-        h.onGround = false;
-        pushEvent(w, "jump", h.x, h.y, h.index);
-      }
-    } else if (h.airJumps > 0) {
+  // 跳的输入宽容(`jumpFeel.ts`):按下沿先进缓冲,踩着地就把土狼时间刷满,
+  // 然后这一帧再决定那一下跳兑不兑现。放宽的只有「什么时候算数」,
+  // 跳多高、公主能跳几次,规则一个字没变。
+  tickJumpFeel(h.jump, dt, h.onGround);
+  if (input.up && !h.prevUp) noteJumpPress(h.jump);
+  h.prevUp = input.up;
+
+  const wants = peekJump(h.jump, h.onGround, h.airJumps);
+  if (wants === "ground" && h.onGround && input.down && h.ridingPlatform >= 0) {
+    // 按着下再按跳:从浮台上穿下去。这一下按键被穿台用掉了,不再兑现成跳
+    consumeJump(h.jump);
+    h.onGround = false;
+    h.ridingPlatform = -1;
+    h.dropT = 0.3;
+    h.y += 6;
+    h.vy = 60;
+  } else if (wants) {
+    takeJump(h.jump, h.onGround, h.airJumps);
+    if (wants === "ground") {
+      h.vy = -jumpSpeedOf(h.kind);
+      h.onGround = false;
+      pushEvent(w, "jump", h.x, h.y, h.index);
+    } else {
       // 公主的二段跳
       h.airJumps--;
       h.vy = -PRINCESS_DOUBLE_V;
       pushEvent(w, "double", h.x, h.y - 10, h.index);
     }
   }
-  h.prevUp = input.up;
 
   if (input.atk && !h.prevAtk && h.attackCd <= 0) {
     h.attackCd = h.kind === "prince" ? MELEE_CD : SHOT_CD;
