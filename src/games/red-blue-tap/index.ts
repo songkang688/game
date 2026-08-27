@@ -6,6 +6,7 @@ import { AVATAR_URLS } from "../../ui/avatars";
 import { save } from "../../engine/save";
 import { scorePop, spawnRippleAtDot } from "./fx";
 import { CAMPAIGN_VISUAL_CSS } from "./skin";
+import { DOT_ART_CSS, dotFace } from "./dotArt";
 import { CHAPTERS, LEVELS, type TapLevel } from "./levels";
 import { resetClippedScroll } from "./stageScroll";
 import {
@@ -523,8 +524,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "rbt-dot";
-    el.textContent =
-      kind === "freeze" ? POWER_SKIN.freeze : kind === "magnet" ? POWER_SKIN.magnet : kind === "trap" ? skin.trap : skin.mine;
+    // W8R2-01：点面贴纸化只动可见层——sr-only 里还是原 emoji，判定照旧读 kind
+    dotFace(
+      el,
+      kind === "freeze" ? POWER_SKIN.freeze : kind === "magnet" ? POWER_SKIN.magnet : kind === "trap" ? skin.trap : skin.mine
+    );
     if (label > 0) {
       const tag = document.createElement("span");
       tag.className = "rbt-dot-num";
@@ -743,7 +747,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const barStyle = document.createElement("style");
   // 1.3 视觉层（果冻点点 / 波纹 / 计分弹跳）贴在 1.2 规则后面，老规则一条不动
-  barStyle.textContent = ENDLESS_CSS + CSS_V12 + CAMPAIGN_VISUAL_CSS;
+  barStyle.textContent = ENDLESS_CSS + CSS_V12 + CAMPAIGN_VISUAL_CSS + DOT_ART_CSS;
   const bar = document.createElement("div");
   bar.className = "rte-bar";
   const levelHost = document.createElement("div");

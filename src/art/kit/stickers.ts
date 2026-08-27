@@ -1726,6 +1726,145 @@ reg("🐾", "小爪印", () => {
   );
 });
 
+// ---- 红蓝点点 · 闯关信号章（W8R2-01：SKINS mine/trap + 道具点的渲染层贴纸） ----
+
+/** 圆形信号点（🔵 / 🔴 共用）：大圆 + 底部暗弧分面 + 左上高光 */
+function signalDot(main: string): string {
+  const out = o(main);
+  return (
+    gs(24, 42.5, 13) +
+    `<circle cx="24" cy="25" r="14.5" fill="${main}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 39.5 a14.5 14.5 0 0 0 13.3 -20.2 a17 17 0 0 1 -13.3 20.2" fill="${shade(main, -16)}" opacity=".8"/>` +
+    `<ellipse cx="18" cy="18.5" rx="4.4" ry="2.8" fill="#ffffff" opacity=".5" transform="rotate(-24 18 18.5)"/>`
+  );
+}
+
+reg("🔵", "蓝圆点", () => signalDot(P.blue));
+reg("🔴", "红圆点", () => signalDot(P.red));
+
+/** 圆角色块（🟥🟦🟪🟫 共用）：圆角方 + 底部暗面 + 顶部釉光带 */
+function colorTile(main: string): string {
+  const out = o(main);
+  return (
+    gs(24, 42.5, 13) +
+    `<rect x="10" y="11" width="28" height="28" rx="7.5" fill="${main}" stroke="${out}" stroke-width="2"/>` +
+    `<rect x="11" y="28" width="26" height="10" rx="5.5" fill="${shade(main, -15)}" opacity=".7"/>` +
+    `<rect x="13.5" y="14" width="21" height="7.5" rx="3.75" fill="#ffffff" opacity=".3"/>` +
+    hi(16.5, 16.5)
+  );
+}
+
+reg("🟥", "红色块", () => colorTile(P.red));
+reg("🟦", "蓝色块", () => colorTile(P.blueDeep));
+reg("🟪", "紫色块", () => colorTile(P.lav));
+reg("🟫", "棕色块", () => colorTile(P.brown));
+
+/** 菱形宝钻（🔷 / 💠 共用骨架）：菱形 + 上亮下暗两停分面 */
+function gemDiamond(main: string, inner: string): string {
+  const out = o(main);
+  return (
+    gs(24, 42.5, 12) +
+    `<polygon points="24,7.5 39.5,24 24,40.5 8.5,24" fill="${main}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<polygon points="24,7.5 39.5,24 24,24" fill="${shade(main, 18)}" opacity=".65"/>` +
+    `<polygon points="24,40.5 8.5,24 24,24" fill="${shade(main, -16)}" opacity=".7"/>` +
+    inner +
+    `<ellipse cx="18.5" cy="17" rx="3" ry="1.9" fill="#ffffff" opacity=".55" transform="rotate(-38 18.5 17)"/>`
+  );
+}
+
+reg("🔷", "蓝宝钻", () => gemDiamond(P.blue, ""));
+reg("💠", "花芯钻", () =>
+  gemDiamond(
+    P.teal,
+    `<polygon points="24,15.5 32,24 24,32.5 16,24" fill="none" stroke="#ffffff" stroke-width="1.8" opacity=".75" stroke-linejoin="round"/>` +
+      `<circle cx="24" cy="24" r="2.6" fill="#ffffff" opacity=".85"/>`
+  ));
+
+reg("💙", "蓝爱心", () => {
+  const out = o(P.blue);
+  return (
+    gs(24, 42, 12) +
+    `<path d="${heartPath(24, 22, 1.25)}" fill="${P.blue}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 39.5 C34 30 40 22 37.5 14.5 Q40.5 24 31 33.5 Q27.5 37 24 39.5 Z" fill="${shade(P.blue, -14)}" opacity=".75"/>` +
+    `<ellipse cx="17" cy="16.5" rx="3.4" ry="2.2" fill="#ffffff" opacity=".55" transform="rotate(-28 17 16.5)"/>`
+  );
+});
+
+reg("🌑", "睡月亮", () => {
+  const c = "#8089a6";
+  const out = o(c);
+  return (
+    gs(24, 42.5, 12) +
+    `<circle cx="24" cy="24" r="14.5" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 38.5 a14.5 14.5 0 0 0 13.3 -20.2 a17 17 0 0 1 -13.3 20.2" fill="${shade(c, -16)}" opacity=".8"/>` +
+    `<circle cx="15.5" cy="20" r="2.6" fill="${shade(c, -10)}" opacity=".7"/>` +
+    `<circle cx="30" cy="14.5" r="1.8" fill="${shade(c, -10)}" opacity=".7"/>` +
+    `<circle cx="32.5" cy="30.5" r="2.2" fill="${shade(c, -10)}" opacity=".7"/>` +
+    `<path d="M18 26.5 q2 2 4 0 M26 26.5 q2 2 4 0" fill="none" stroke="${INK}" stroke-width="1.5" stroke-linecap="round"/>` +
+    `<path d="M22.5 31.5 q1.5 1.4 3 0" fill="none" stroke="${INK}" stroke-width="1.3" stroke-linecap="round"/>` +
+    `<ellipse cx="18" cy="15.5" rx="3.4" ry="2.1" fill="#ffffff" opacity=".4" transform="rotate(-24 18 15.5)"/>`
+  );
+});
+
+reg("🌩️", "雷雨云", () => {
+  const bolt = P.gold;
+  return (
+    cloudBody(24, 17, 1.05, "#dfe6f2") +
+    `<polygon points="27,24 18.5,35.5 23,35.5 21,44 30,32.5 25.5,32.5"` +
+    ` fill="${bolt}" stroke="${o(bolt)}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<polygon points="27,24 25.5,32.5 30,32.5 28,35 24.2,34 25.4,26.5 Z" fill="${shade(bolt, 20)}" opacity=".7"/>` +
+    hi(16.5, 10.5, 3, 1.8)
+  );
+});
+
+reg("👑", "小皇冠", () => {
+  const c = P.gold;
+  const out = o(c);
+  return (
+    gs(24, 41.5, 14) +
+    `<path d="M9.5 35 L8.5 17.5 L17 25 L24 12.5 L31 25 L39.5 17.5 L38.5 35 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M38.5 35 L39.5 17.5 L36 20.6 L35.5 35 Z" fill="${shade(c, -15)}" opacity=".75"/>` +
+    `<path d="M10 38.5 L38 38.5 L38.2 34.5 L9.8 34.5 Z" fill="${shade(c, -8)}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<circle cx="24" cy="10" r="2.6" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.4"/>` +
+    `<circle cx="8.8" cy="15.5" r="2.2" fill="${P.teal}" stroke="${o(P.teal)}" stroke-width="1.3"/>` +
+    `<circle cx="39.2" cy="15.5" r="2.2" fill="${P.teal}" stroke="${o(P.teal)}" stroke-width="1.3"/>` +
+    `<circle cx="24" cy="30" r="2.4" fill="${P.rose}" stroke="${o(P.rose)}" stroke-width="1.3"/>` +
+    hi(14.5, 22, 2.6, 1.6)
+  );
+});
+
+reg("💣", "小炸弹", () => {
+  const c = "#5f6678";
+  const out = o(c);
+  return (
+    gs(24, 43, 12) +
+    `<circle cx="23" cy="28" r="13" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M23 41 a13 13 0 0 0 11.9 -18.1 a15.5 15.5 0 0 1 -11.9 18.1" fill="${shade(c, -18)}" opacity=".8"/>` +
+    `<path d="M28.5 16.5 L31.5 12.5 Q33.5 9.5 36.5 10.5" fill="none" stroke="${o(P.wood)}" stroke-width="2.6" stroke-linecap="round"/>` +
+    `<rect x="26.4" y="14.6" width="6.4" height="4" rx="1.6" fill="${shade(c, -10)}" stroke="${out}" stroke-width="1.4" transform="rotate(-42 29.6 16.6)"/>` +
+    `<polygon points="${sparkPts(39, 8.5, 5)}" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.3" stroke-linejoin="round"/>` +
+    `<ellipse cx="17.5" cy="22" rx="4" ry="2.6" fill="#ffffff" opacity=".45" transform="rotate(-24 17.5 22)"/>`
+  );
+});
+
+reg("🧲", "磁铁", () => {
+  const c = P.red;
+  const out = o(c);
+  const tip = "#eef2fa";
+  return (
+    gs(24, 42.5, 13) +
+    `<path d="M13 39.5 L13 21.5 A11 11 0 0 1 35 21.5 L35 39.5 L27 39.5 L27 21.5 A3 3 0 0 0 21 21.5 L21 39.5 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M35 39.5 L35 21.5 A11 11 0 0 0 29.5 12 Q33 15.5 32.2 21.5 L32.2 39.5 Z" fill="${shade(c, -15)}" opacity=".75"/>` +
+    `<rect x="13" y="33" width="8" height="6.5" fill="${tip}" stroke="${out}" stroke-width="1.6"/>` +
+    `<rect x="27" y="33" width="8" height="6.5" fill="${tip}" stroke="${out}" stroke-width="1.6"/>` +
+    `<path d="M13.5 44 L15 42 M17 45 L17 42.8 M20.5 44 L19 42 M27.5 44 L29 42 M31 45 L31 42.8 M34.5 44 L33 42" ` +
+    `stroke="${P.blue}" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>` +
+    `<ellipse cx="17" cy="14.5" rx="3" ry="1.9" fill="#ffffff" opacity=".5" transform="rotate(-30 17 14.5)"/>`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------
