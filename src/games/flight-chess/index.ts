@@ -114,7 +114,7 @@ export const CSS = `
   background:transparent;font-family:inherit;font-size:inherit;line-height:1;cursor:pointer;z-index:5;
   transition:left ${HOP_MS}ms linear,top ${HOP_MS}ms linear;}
 .fc-token-face{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:50%;
-  font-size:clamp(13px,2.6vw,17px);box-shadow:0 2px 4px rgba(80,120,160,.35);}
+  font-size:clamp(14px,2.6vw,17px);box-shadow:0 2px 4px rgba(80,120,160,.35);}
 .fc-token-pick{outline:3px solid #2E80BC;outline-offset:1px;border-radius:50%;animation:fcpulse 1.2s ease infinite;}
 .fc-token-can .fc-token-face{box-shadow:0 0 0 3px rgba(255,255,255,.95),0 3px 6px rgba(80,120,160,.4);}
 /* 360px 屏上一格才 24px 见方，给能点的飞机垫一圈看不见的手指热区 */
