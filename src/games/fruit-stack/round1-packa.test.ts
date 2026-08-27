@@ -15,6 +15,8 @@
  * 顶部先静态 import 一次 index，让 level99 / audio 那条链在真 node 环境下加载完，
  * 之后再装 DOM 桩，免得撞上桩里没有的 `document.addEventListener`。
  */
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mount } from "./index";
 import { El, fireWindow, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
@@ -412,5 +414,38 @@ describe("PA-FS-3 · 退出再进", () => {
     }
     handle.destroy();
     expect(dom.head.children.some((c) => c.id === "fs-style")).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 第 2 轮测试员 PA-FS-3 · 源码里的血腥 / 死亡说法                        */
+/* ------------------------------------------------------------------ */
+
+describe("第 2 轮 PA-FS-3 · 全目录不出现血腥与死亡说法", () => {
+  const dir = fileURLToPath(new URL(".", import.meta.url));
+  const sources = readdirSync(dir).filter((f) => /\.(ts|md)$/.test(f) && !f.endsWith(".test.ts"));
+
+  it("扫得到这一款的源码与设计稿，不是空跑一趟", () => {
+    expect(sources.length).toBeGreaterThan(8);
+    expect(sources).toContain("merge.ts");
+    expect(sources).toContain("PLAN.md");
+  });
+
+  // 注释不上屏，但「血」「死掉」这类词一旦写进源码，改文案时很容易被顺手抄到界面上，
+  // 所以连注释一起拦住。`merge.ts` 原来写「合一次几乎不回血」，就是这条要收的口子。
+  it("连注释在内，一个血腥 / 死亡说法都不留", () => {
+    const banned = ["血", "尸", "阵亡", "牺牲", "死掉", "杀死", "残忍"];
+    for (const f of sources) {
+      const text = readFileSync(dir + f, "utf8");
+      for (const bad of banned) {
+        expect(text.includes(bad) ? `${f} 里出现了「${bad}」` : "干净").toBe("干净");
+      }
+    }
+  });
+
+  it("难度旋钮那段注释换了说法之后，讲的还是同一件事", () => {
+    const src = readFileSync(dir + "merge.ts", "utf8");
+    expect(src).toContain("合一次腾回来的地方很有限");
+    expect(src).toContain("小果子一直往里投盆迟早会满");
   });
 });
