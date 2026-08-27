@@ -58,7 +58,7 @@ import {
 /** 本作原创的名字,只用自家角色和拟声词 */
 const BOT_NAMES = ["糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾", "团团", "小青 7 号", "小青 9 号"];
 
-const CSS = `
+export const SR_CSS = `
 .sr-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EAF7E4,#F7FCF3);
   border-radius:16px;padding:10px;user-select:none;position:relative;}
 .sr-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;margin-bottom:6px;}
@@ -125,7 +125,7 @@ export interface RunResult {
   alive: boolean;
 }
 
-interface RunOpts {
+export interface RunOpts {
   cfg: SnakeLevel;
   owners: Owner[];
   banner?: string;
@@ -175,7 +175,7 @@ function reducedMotion(): boolean {
 /** 淘汰动画时长(秒):250–400ms,不允许瞬间消失 */
 export const FADE_SEC = 0.34;
 
-function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
+export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   const cfg = opts.cfg;
   const soft = reducedMotion();
   const humans = opts.owners.filter((o) => o.human);
@@ -189,6 +189,17 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   let zoneWarned = 0;
   let seq = 0;
   const nextId = (p: string): string => `${p}${++seq}`;
+
+  /** destroy 要收的东西:结算定时器与画布上的指针监听 */
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const offs: Array<() => void> = [];
+  function later(fn: () => void, ms: number): void {
+    const id = setTimeout(() => {
+      timers.delete(id);
+      if (!destroyed) fn();
+    }, ms);
+    timers.add(id);
+  }
 
   const runners: Runner[] = opts.owners.map((o, i) => {
     const ang = (Math.PI * 2 * i) / Math.max(1, opts.owners.length);
@@ -236,7 +247,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   const wrap = document.createElement("div");
   wrap.className = "sr-wrap";
   wrap.innerHTML = `
-    <style>${CSS}</style>
+    <style>${SR_CSS}</style>
     <div class="sr-top">
       <span class="sr-badge sr-len">🐍 长度 ${START_LEN}</span>
       <span class="sr-badge sr-goal">${goalLine(cfg)}</span>
@@ -315,9 +326,14 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       keyDir.set(owner.id, { x: 0, y: 0 });
       e.preventDefault();
     };
-    canvas.addEventListener("pointerdown", onPointer);
-    canvas.addEventListener("pointermove", (e) => {
+    const onMove = (e: PointerEvent): void => {
       if (e.buttons > 0 || e.pointerType === "touch") onPointer(e);
+    };
+    canvas.addEventListener("pointerdown", onPointer);
+    canvas.addEventListener("pointermove", onMove);
+    offs.push(() => {
+      canvas.removeEventListener("pointerdown", onPointer);
+      canvas.removeEventListener("pointermove", onMove);
     });
   });
 
@@ -802,9 +818,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       usedSec: elapsed,
       alive: Boolean(me?.alive)
     };
-    setTimeout(() => {
-      if (!destroyed) opts.onDone(result);
-    }, 340);
+    later(() => opts.onDone(result), 340);
   }
 
   function frame(ts: number): void {
@@ -823,6 +837,9 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
+      for (const id of timers) clearTimeout(id);
+      timers.clear();
+      while (offs.length) offs.pop()?.();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       boostHeld.clear();
@@ -908,7 +925,7 @@ const MODE_TITLE: Record<ExtraMode, string> = {
 function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: () => void): { destroy: () => void } {
   const wrap = document.createElement("div");
   wrap.className = "sr-mode";
-  wrap.innerHTML = `<style>${CSS}</style>`;
+  wrap.innerHTML = `<style>${SR_CSS}</style>`;
   const head = document.createElement("div");
   head.className = "sr-mhead";
   const back = document.createElement("button");
@@ -1070,7 +1087,7 @@ function mountSkinBar(host: HTMLElement, api: GameApi): { destroy: () => void } 
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = SR_CSS;
   const bar = document.createElement("div");
   bar.className = "sr-modebar";
   const skinHost = document.createElement("div");

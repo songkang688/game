@@ -45,7 +45,7 @@ import {
 const BOT_NAMES = ["糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾", "团团", "圆圆 3 号", "圆圆 7 号", "泡泡", "咕咕"];
 const BOT_COLORS = ["#F6B8D0", "#B8D8F6", "#CDEFC0", "#F8DFA8", "#D9C6F5", "#A9E5DE", "#F5C2A8", "#C9D6F7", "#EEC9E8", "#BFE7B0", "#F2D6B8"];
 
-const CSS = `
+export const OA_CSS = `
 .oa-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#F3EEFF,#FBF6FF);
   border-radius:16px;padding:10px;user-select:none;position:relative;}
 .oa-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between;margin-bottom:6px;}
@@ -83,7 +83,7 @@ const CSS = `
 }
 `;
 
-interface Owner {
+export interface Owner {
   id: string;
   name: string;
   color: string;
@@ -102,7 +102,7 @@ export interface RunResult {
   reason: "target" | "time" | "spent" | "ally";
 }
 
-interface RunOpts {
+export interface RunOpts {
   cfg: OrbLevel;
   owners: Owner[];
   banner?: string;
@@ -112,7 +112,7 @@ interface RunOpts {
   split?: boolean;
 }
 
-function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
+export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   const cfg = opts.cfg;
   const owners = opts.owners;
   const humans = owners.filter((o) => o.human);
@@ -127,6 +127,17 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   let elapsed = 0;
   let seq = 0;
   let paused = false;
+
+  /** destroy 要收的东西:结算定时器与画布上的指针监听 */
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const offs: Array<() => void> = [];
+  function later(fn: () => void, ms: number): void {
+    const id = setTimeout(() => {
+      timers.delete(id);
+      if (!destroyed) fn();
+    }, ms);
+    timers.add(id);
+  }
 
   const cells: Cell[] = [];
   const pellets: Pellet[] = [];
@@ -164,7 +175,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   const wrap = document.createElement("div");
   wrap.className = "oa-wrap";
   wrap.innerHTML = `
-    <style>${CSS}</style>
+    <style>${OA_CSS}</style>
     <div class="oa-top">
       <span class="oa-badge oa-mass">⚪ 质量 30</span>
       <span class="oa-badge oa-goal">${goalLine(cfg)}</span>
@@ -250,9 +261,14 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       keyDir.set(owner.id, { x: 0, y: 0 });
       e.preventDefault();
     };
-    canvas.addEventListener("pointerdown", onPointer);
-    canvas.addEventListener("pointermove", (e) => {
+    const onMove = (e: PointerEvent): void => {
       if (e.buttons > 0 || e.pointerType === "touch") onPointer(e);
+    };
+    canvas.addEventListener("pointerdown", onPointer);
+    canvas.addEventListener("pointermove", onMove);
+    offs.push(() => {
+      canvas.removeEventListener("pointerdown", onPointer);
+      canvas.removeEventListener("pointermove", onMove);
     });
   });
 
@@ -643,9 +659,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
     const rank = me ? Math.max(1, rankOf(cells, names, me.id)) : 1;
     opts.sfx(won ? "win" : "oops");
     const result: RunResult = { won, mass, rank, usedSec: elapsed, reason };
-    setTimeout(() => {
-      if (!destroyed) opts.onDone(result);
-    }, 320);
+    later(() => opts.onDone(result), 320);
   }
 
   function frame(ts: number): void {
@@ -664,6 +678,9 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       destroyed = true;
       ended = true;
       cancelAnimationFrame(raf);
+      for (const id of timers) clearTimeout(id);
+      timers.clear();
+      while (offs.length) offs.pop()?.();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       wrap.remove();
@@ -719,7 +736,7 @@ const MODE_TITLE: Record<ExtraMode, string> = {
 function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: () => void): { destroy: () => void } {
   const wrap = document.createElement("div");
   wrap.className = "oa-mode";
-  wrap.innerHTML = `<style>${CSS}</style>`;
+  wrap.innerHTML = `<style>${OA_CSS}</style>`;
   const head = document.createElement("div");
   head.className = "oa-mhead";
   const back = document.createElement("button");
@@ -839,7 +856,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const style = document.createElement("style");
-  style.textContent = CSS;
+  style.textContent = OA_CSS;
   const bar = document.createElement("div");
   bar.className = "oa-modebar";
   const levelHost = document.createElement("div");
