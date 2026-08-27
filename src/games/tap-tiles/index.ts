@@ -676,6 +676,30 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     }
   }
 
+  /**
+   * 上半屏主题饰层(visual-r1 · B 档 TOP10 之 8):5 枚列首同款符号极淡上飘,
+   * 补齐「音游基准 3 层背景」缺的主题饰层。只在判定线上方 60% 区间活动、
+   * globalAlpha 0.07,不遮判定线不抢音符;reduced 时静止定格。
+   */
+  function drawDriftSymbols(c: CanvasRenderingContext2D, t: number): void {
+    const reduced = reduceMotion();
+    const line = judgeY();
+    const top = 30;
+    const span = Math.max(60, line * 0.6 - top);
+    for (let k = 0; k < 5; k++) {
+      const fx = (0.5 + k * 0.83) % 1; // 黄金比错开,不成排
+      const phase = reduced ? k / 5 : (t / (14000 + k * 1600) + k / 5) % 1;
+      const y = top + span * (1 - phase);
+      const x = width * (0.08 + fx * 0.84);
+      c.save();
+      c.globalAlpha = 0.07;
+      c.fillStyle = LANE_COLORS[k % LANE_COUNT];
+      traceLaneSymbol(c, k % LANE_COUNT, x, y, 6 + (k % 3) * 2);
+      c.fill();
+      c.restore();
+    }
+  }
+
   /** 舞台灯:2–3 道极淡斜向光束,随曲目进度缓慢摆动;reduced 静止,连击 ≥ 20 转暖 */
   function drawBeams(c: CanvasRenderingContext2D, t: number): void {
     const reduced = reduceMotion();
@@ -702,6 +726,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     // 静态背景(轨道渐变 + 分隔线 + 列首符号)一次 drawImage
     if (bgLayer) c.drawImage(bgLayer, 0, 0);
     drawBeams(c, t);
+    drawDriftSymbols(c, t);
     for (let i = 0; i < LANE_COUNT; i++) {
       const dim = t - laneDim[i];
       if (dim >= 0 && dim < 700) {
