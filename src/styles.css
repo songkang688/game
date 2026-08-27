@@ -320,16 +320,18 @@ button {
   display: inline-block;
 }
 
+/* 鸭梨不像花那样转得起来:整圈旋转会看着头朝下,改成轻轻摇 */
 .logo-emoji--flower {
-  animation: spin-slow 9s linear infinite;
+  animation: sway-slow 4.5s ease-in-out infinite;
 }
 
 .logo-emoji--star {
   animation: twinkle 2.4s ease-in-out infinite;
 }
 
-@keyframes spin-slow {
-  to { transform: rotate(360deg); }
+@keyframes sway-slow {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(8deg); }
 }
 
 @keyframes twinkle {
