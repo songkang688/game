@@ -429,6 +429,220 @@ export function foeArt(kind: "scout" | "puff" | "kite" | "tanker", r: number): F
   }
 }
 
+// ---------------------------------------------------------------------------
+// 拾取物矢量小图形(修复员 S7:平涂白圆 + emoji 字形 → 渐变色圈 + 矢量符号)
+// ---------------------------------------------------------------------------
+
+export type PickupArtKind = "power" | "shield" | "bomb" | "wing" | "weapon" | "homing" | "pierce";
+
+/**
+ * 每类拾取物的「专属底色圈 + 符号主色」:弹雨里靠色圈与图形双通道识别。
+ * ring 是圆底三停渐变的基色(kit ballGradient),color 是内嵌矢量符号主色。
+ */
+export const PICKUP_BADGE: Record<PickupArtKind, { ring: string; color: string }> = {
+  power: { ring: "#FFE9A8", color: "#F5B942" },
+  shield: { ring: "#CDE8FF", color: "#6FB9E8" },
+  bomb: { ring: "#E3D9F7", color: "#9C8CE0" },
+  wing: { ring: "#D9F2E4", color: "#5FBF95" },
+  weapon: { ring: "#FFE1D4", color: "#F08C5A" },
+  homing: { ring: "#FFDCE9", color: "#F786B0" },
+  pierce: { ring: "#E6E3FA", color: "#8F7FD9" },
+} as const;
+
+/** 五角星折点(拾取物「散射」与 Boss 徽章共用) */
+function starSegs(r: number, inner = 0.45): ArtSeg[] {
+  const out: ArtSeg[] = [];
+  for (let i = 0; i < 10; i++) {
+    const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rad = i % 2 === 0 ? r : r * inner;
+    out.push({ kind: i === 0 ? "move" : "line", x: Math.cos(ang) * rad, y: Math.sin(ang) * rad });
+  }
+  out.push({ kind: "close" });
+  return out;
+}
+
+/**
+ * 七类拾取物的矢量符号(星 / 护盾泡 / 圆炸弹 / 小僚机 / 循环箭头 / 气球 / 菱晶)。
+ * 所有坐标夹在 ±r,受光面左上;role 配色沿用 foeArt 的 base/light/dark/white 四通道。
+ */
+export function pickupArt(kind: PickupArtKind, r: number): FoePart[] {
+  switch (kind) {
+    case "power":
+      // 五角星 + 左上小高光
+      return [
+        { role: "base", mode: "fill", segs: starSegs(r) },
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.22, y: -r * 0.28, rx: r * 0.12, ry: r * 0.12 }] },
+      ];
+    case "shield":
+      // 护盾泡泡:圆膜 + 左上受光弯 + 右下内侧影
+      return [
+        { role: "base", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: 0, rx: r * 0.85, ry: r * 0.85 }] },
+        { role: "light", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.3, y: -r * 0.35, rx: r * 0.26, ry: r * 0.17 }] },
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: r * 0.12, y: r * 0.6 },
+            { kind: "curve", c1x: r * 0.42, c1y: r * 0.5, c2x: r * 0.58, c2y: r * 0.28, x: r * 0.62, y: r * 0.05 },
+          ],
+        },
+      ];
+    case "bomb":
+      // 圆滚滚小炸弹:圆身 + 顶盖 + 引信弧 + 星火(可爱风,不写实)
+      return [
+        { role: "base", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: r * 0.16, rx: r * 0.68, ry: r * 0.68 }] },
+        { role: "light", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.24, y: -r * 0.06, rx: r * 0.2, ry: r * 0.13 }] },
+        {
+          role: "dark",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.18, y: -r * 0.5 },
+            { kind: "line", x: r * 0.18, y: -r * 0.5 },
+            { kind: "line", x: r * 0.12, y: -r * 0.72 },
+            { kind: "line", x: -r * 0.12, y: -r * 0.72 },
+            { kind: "close" },
+          ],
+        },
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: 0, y: -r * 0.72 },
+            { kind: "curve", c1x: r * 0.14, c1y: -r * 0.95, c2x: r * 0.26, c2y: -r * 0.98, x: r * 0.34, y: -r * 0.9 },
+          ],
+        },
+        {
+          role: "white",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: r * 0.34, y: -r * 1 },
+            { kind: "line", x: r * 0.42, y: -r * 0.9 },
+            { kind: "line", x: r * 0.34, y: -r * 0.8 },
+            { kind: "line", x: r * 0.26, y: -r * 0.9 },
+            { kind: "close" },
+          ],
+        },
+      ];
+    case "wing":
+      // 小僚机:机身竖椭圆 + 主翼三角 + 尾翼小三角 + 机头高光
+      return [
+        {
+          role: "base",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.8, y: r * 0.3 },
+            { kind: "line", x: r * 0.8, y: r * 0.3 },
+            { kind: "line", x: 0, y: -r * 0.22 },
+            { kind: "close" },
+          ],
+        },
+        { role: "base", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: 0, rx: r * 0.22, ry: r * 0.75 }] },
+        {
+          role: "dark",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.34, y: r * 0.75 },
+            { kind: "line", x: r * 0.34, y: r * 0.75 },
+            { kind: "line", x: 0, y: r * 0.42 },
+            { kind: "close" },
+          ],
+        },
+        { role: "light", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.06, y: -r * 0.45, rx: r * 0.1, ry: r * 0.2 }] },
+      ];
+    case "weapon":
+      // 循环双箭头:上下两道弧 + 两枚箭头(「换一把」的通行图形语言)
+      return [
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: -r * 0.65, y: -r * 0.1 },
+            { kind: "curve", c1x: -r * 0.55, c1y: -r * 0.8, c2x: r * 0.55, c2y: -r * 0.8, x: r * 0.65, y: -r * 0.1 },
+          ],
+        },
+        {
+          role: "base",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: r * 0.68, y: r * 0.3 },
+            { kind: "line", x: r * 0.44, y: -r * 0.14 },
+            { kind: "line", x: r * 0.94, y: -r * 0.08 },
+            { kind: "close" },
+          ],
+        },
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: r * 0.65, y: r * 0.1 },
+            { kind: "curve", c1x: r * 0.55, c1y: r * 0.8, c2x: -r * 0.55, c2y: r * 0.8, x: -r * 0.65, y: r * 0.1 },
+          ],
+        },
+        {
+          role: "base",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.68, y: -r * 0.3 },
+            { kind: "line", x: -r * 0.44, y: r * 0.14 },
+            { kind: "line", x: -r * 0.94, y: r * 0.08 },
+            { kind: "close" },
+          ],
+        },
+      ];
+    case "homing":
+      // 小气球:椭圆球 + 底结 + 飘绳 + 左上高光
+      return [
+        { role: "base", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: -r * 0.28, rx: r * 0.52, ry: r * 0.62 }] },
+        {
+          role: "dark",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.12, y: r * 0.42 },
+            { kind: "line", x: r * 0.12, y: r * 0.42 },
+            { kind: "line", x: 0, y: r * 0.3 },
+            { kind: "close" },
+          ],
+        },
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: 0, y: r * 0.44 },
+            { kind: "curve", c1x: r * 0.14, c1y: r * 0.62, c2x: -r * 0.08, c2y: r * 0.8, x: r * 0.06, y: r * 0.95 },
+          ],
+        },
+        { role: "light", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.18, y: -r * 0.46, rx: r * 0.14, ry: r * 0.2 }] },
+      ];
+    case "pierce":
+    default:
+      // 菱晶:菱形 + 左上受光切面 + 小星点
+      return [
+        {
+          role: "base",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: 0, y: -r * 0.85 },
+            { kind: "line", x: r * 0.6, y: 0 },
+            { kind: "line", x: 0, y: r * 0.85 },
+            { kind: "line", x: -r * 0.6, y: 0 },
+            { kind: "close" },
+          ],
+        },
+        {
+          role: "light",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: 0, y: -r * 0.85 },
+            { kind: "line", x: -r * 0.6, y: 0 },
+            { kind: "line", x: 0, y: 0 },
+            { kind: "close" },
+          ],
+        },
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: r * 0.14, y: -r * 0.3, rx: r * 0.09, ry: r * 0.09 }] },
+      ];
+  }
+}
+
 /** 一段路径里所有出现过的坐标(含贝塞尔控制点与椭圆外接盒),包围盒断言用 */
 export function segExtent(segs: readonly ArtSeg[]): number {
   let m = 0;

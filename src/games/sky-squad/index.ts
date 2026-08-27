@@ -49,9 +49,11 @@ import {
   TRAIL_FADE_FRAMES,
   TRAIL_STEP_S,
   WINGMAN_SCALE,
+  PICKUP_BADGE,
   cueGlowAlpha,
   easeOutQuad,
   foeArt,
+  pickupArt,
   planePath,
   shadowScaleAt,
   tiltScaleX,
@@ -60,7 +62,7 @@ import {
   type LayerName,
 } from "./art";
 import { shade, withAlpha } from "../../art/kit/palette";
-import { softShadow } from "../../art/kit/volume";
+import { ballGradient, softShadow } from "../../art/kit/volume";
 import { strokeOutline } from "../../art/kit/outline";
 import { makeParallax } from "../../art/kit/parallax";
 import {
@@ -1977,21 +1979,37 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       },
       // ⑥ 我方弹与拾取物
       shots: () => {
+        // 修复员 S7:平涂白圆 + emoji 字形 → kit 三停渐变专属色圈 + 矢量符号
+        // (每类一个底色圈,弹雨里靠色圈 + 图形双通道识别;±3px 浮动与 reduced 分支原样)
         for (const it of pickups) {
           ctx.save();
           ctx.translate(it.x, it.y + (reduce ? 0 : Math.sin(it.phase * 4) * 3));
-          ctx.fillStyle = "#FFFFFF";
+          const badge = PICKUP_BADGE[it.kind];
+          ctx.fillStyle = ballGradient(ctx, 0, 0, 15, badge.ring);
           ctx.beginPath();
           ctx.arc(0, 0, 15, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = "#8FD0FF";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-          ctx.font = '700 17px "PingFang SC",system-ui,sans-serif';
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillStyle = "#3F6BA8";
-          ctx.fillText(PICKUP_INFO[it.kind].emoji, 0, 1);
+          strokeOutline(ctx, badge.ring, 2);
+          const roleFill: Record<"base" | "light" | "dark" | "white", string> = {
+            base: badge.color,
+            light: shade(badge.color, 20),
+            dark: shade(badge.color, -24),
+            white: "rgba(255,255,255,.92)",
+          };
+          for (const part of pickupArt(it.kind, 8.5)) {
+            tracePath(ctx, part.segs);
+            if (part.mode === "fill") {
+              ctx.fillStyle = roleFill[part.role];
+              ctx.fill();
+              if (part.role === "base") strokeOutline(ctx, badge.color, 1.5);
+            } else {
+              ctx.strokeStyle = roleFill[part.role];
+              ctx.lineWidth = 1.6;
+              ctx.lineCap = "round";
+              ctx.stroke();
+              ctx.lineCap = "butt";
+            }
+          }
           ctx.restore();
         }
         drawShots(ctx);
