@@ -46,7 +46,31 @@ import {
   type GameState,
   type ScoreRule
 } from "./rules";
-import { RULE_HINTS, RULE_LABELS, damePoints, finalScore, komiFor, scoreLines } from "./score";
+import { RULE_HINTS, RULE_LABELS, applyDead, damePoints, finalScore, komiFor, scoreLines, territoryOf, type Territory } from "./score";
+import {
+  TERRITORY_COLORS,
+  WASH_MS,
+  WQ_WOOD,
+  drawCursorBox,
+  drawDeadCross,
+  drawKoFlower,
+  drawLeafMark,
+  drawPlaceRipple,
+  drawSproutHint,
+  harvestCount,
+  harvestFlowersSVG,
+  makePetalPool,
+  paintStone,
+  paintWoodBoard,
+  scoreBarParts,
+  stoneSprite,
+  stoneSpriteSize,
+  trophySVG,
+  washAlpha,
+  type ArtCtx,
+  type PetalPool,
+  type StoneKind
+} from "./art";
 import { AI_TIERS, AI_TIER_HINTS, AI_TIER_LABELS, aiMove, type AiTier } from "./ai";
 import {
   CHAPTERS,
@@ -294,6 +318,12 @@ export const WQ_CSS = `
   flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:18px;z-index:6;}
 .wq-over-t{font-size:20px;font-weight:900;color:#7A5A26;}
 .wq-over-s{font-size:16px;font-weight:700;color:#6A5A42;line-height:1.6;max-width:320px;overflow-wrap:anywhere;}
+.wq-trophy{line-height:0;filter:drop-shadow(0 2px 2px rgba(120,100,60,.35));}
+.wq-bars{display:flex;width:min(260px,86%);height:16px;border-radius:999px;overflow:hidden;background:#fff;
+  box-shadow:inset 0 1px 3px rgba(90,70,40,.35);}
+.wq-bar-b{display:block;height:100%;background:linear-gradient(180deg,#cfb7f2,#a98ae0);}
+.wq-bar-w{display:block;height:100%;background:linear-gradient(180deg,#fff8e8,#efe3c8);}
+.wq-harvest{line-height:0;max-width:280px;}
 .wq-stage{position:relative;}
 .wq-setup{display:flex;flex-direction:column;gap:8px;align-items:center;margin-bottom:8px;}
 .wq-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;}
@@ -322,6 +352,8 @@ type Ctx2D = {
   fill: () => void;
   stroke: () => void;
   setTransform?: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+  /** 有离屏 sprite 的环境走 drawImage;探测不到就逐子矢量兜底 */
+  drawImage?: (img: unknown, x: number, y: number, w: number, h: number) => void;
   fillStyle: string;
   strokeStyle: string;
   lineWidth: number;
@@ -343,6 +375,8 @@ export interface BoardView {
   moveCursor: (dx: number, dy: number) => void;
   confirmCursor: () => void;
   render: (board: Board, extra?: RenderExtra) => void;
+  /** 提子那一格喷一朵花瓣(reducedMotion 下自动不喷,子直接消失) */
+  burst: (pt: number, kind: StoneKind) => void;
   destroy: () => void;
 }
 
@@ -351,10 +385,15 @@ export interface RenderExtra {
   dead?: readonly number[];
   hints?: readonly number[];
   ghost?: { pt: number; color: Color } | null;
+  /** 劫争点:画一朵小红花提示「这里暂时不能提回来」 */
+  ko?: number | null;
+  /** 数一数阶段的领地归属:淡色块波纹铺开(只做展示,不进任何计分) */
+  territory?: Territory | null;
 }
 
-const GRID_COLOR = "#8A6F42";
-const BOARD_COLOR = "#E8D9B5";
+/** 落子动画总时长(ms):前 150ms 从 1.25 倍缩到 1 倍,后半段振纹淡出 */
+const DROP_MS = 300;
+const DROP_SCALE_MS = 150;
 
 function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
   const size = opts.size;
@@ -372,6 +411,47 @@ function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
   let metrics = boardMetrics(size, opts.hostWidth?.() ?? 320, zoom);
   let lastBoard: Board | null = null;
   let lastExtra: RenderExtra = {};
+
+  // ---- 1.3 视觉状态:花瓣池 / 落子动画 / 数目铺色,全是展示层,不碰胜负 ----
+  const reduced = reducedMotion();
+  const pool = makePetalPool();
+  // 测试探针:视觉契约用例从画布上取回花瓣池,断言「提子喷了、播完回收了」
+  (canvas as unknown as { wqFx?: PetalPool }).wqFx = pool;
+  let destroyed = false;
+  let fxOn = false;
+  let dropPt: number | null = null;
+  let dropStart = 0;
+  let prevLast: number | null = null;
+  let washStart: number | null = null;
+
+  function raf(): ((cb: (t: number) => void) => number) | null {
+    const r = (globalThis as { requestAnimationFrame?: (cb: (t: number) => void) => number }).requestAnimationFrame;
+    return typeof r === "function" ? r : null;
+  }
+
+  /** 动画泵:有活(花瓣 / 落子 / 铺色)就一帧帧重画,闲下来自动熄火 */
+  function pumpFx(): void {
+    const r = raf();
+    if (!r || fxOn || destroyed) return;
+    fxOn = true;
+    let prev = Date.now();
+    const loop = (): void => {
+      if (destroyed) {
+        fxOn = false;
+        return;
+      }
+      const now = Date.now();
+      pool.step(Math.min(0.1, (now - prev) / 1000));
+      prev = now;
+      if (lastBoard) draw(lastBoard, lastExtra);
+      const dropBusy = dropPt !== null && now - dropStart < DROP_MS;
+      const washBusy = washStart !== null && now - washStart < WASH_MS;
+      if (!pool.idle() || dropBusy || washBusy) r(loop);
+      else fxOn = false;
+    };
+    r(loop);
+  }
+
   const view: BoardView = {
     el: scroll,
     canvas,
@@ -391,9 +471,39 @@ function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
     render: (board, extra) => {
       lastBoard = board;
       lastExtra = extra ?? {};
+      // 新的一手:落子动画(soft / reducedMotion / 无 rAF 环境直接出现)
+      const last = lastExtra.last ?? null;
+      if (last !== prevLast) {
+        prevLast = last;
+        if (last !== null && board.cells[last] !== EMPTY && !reduced && raf()) {
+          dropPt = last;
+          dropStart = Date.now();
+          pumpFx();
+        } else {
+          dropPt = null;
+        }
+      }
+      // 数目铺色从领地第一次出现时起算;退出数子阶段就归零
+      if (lastExtra.territory) {
+        if (washStart === null) {
+          washStart = Date.now();
+          pumpFx();
+        }
+      } else {
+        washStart = null;
+      }
       draw(board, lastExtra);
     },
+    burst: (pt, kind) => {
+      const { x, y } = xy(size, pt);
+      pool.spawn(metrics.pad + x * metrics.cell, metrics.pad + y * metrics.cell, kind, {
+        reduced,
+        r: metrics.stone
+      });
+      pumpFx();
+    },
     destroy: () => {
+      destroyed = true;
       canvas.removeEventListener("pointerdown", onPointer);
       (globalThis as { removeEventListener?: typeof window.removeEventListener }).removeEventListener?.("resize", resize);
       scroll.remove();
@@ -422,92 +532,146 @@ function createBoardView(host: HTMLElement, opts: ViewOptions): BoardView {
     return c ?? null;
   }
 
+  /** 画布坐标:交叉点 (gx, gy) 的像素位置 */
+  function px(g: number): number {
+    return metrics.pad + g * metrics.cell;
+  }
+
+  /** 数目铺色进度:reduced / 无 rAF 环境直接铺满,不留半途 */
+  function washT(): number {
+    if (washStart === null || reduced || !raf()) return 1;
+    return Math.min(1, (Date.now() - washStart) / WASH_MS);
+  }
+
   function draw(board: Board, extra: RenderExtra): void {
     const ctx = ctx2d();
     if (!ctx) return;
     const ratio = dpr();
     ctx.setTransform?.(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, metrics.extent, metrics.extent);
-    ctx.fillStyle = BOARD_COLOR;
-    ctx.fillRect(0, 0, metrics.extent, metrics.extent);
+    const art = ctx as unknown as ArtCtx;
 
-    ctx.strokeStyle = GRID_COLOR;
+    // 1) 温润木盘:渐变底 + 木纹 + 深木边框 + 四角花藤(全在 art.ts)
+    paintWoodBoard(art, { extent: metrics.extent, pad: metrics.pad });
+
+    // 2) 网格深棕;星位点画「高光偏移 + 深点」做内嵌感
+    ctx.strokeStyle = WQ_WOOD.grid;
     ctx.lineWidth = Math.max(1, metrics.cell * 0.035);
     for (let i = 0; i < size; i++) {
-      const p = metrics.pad + i * metrics.cell;
+      const p = px(i);
       ctx.beginPath();
       ctx.moveTo(metrics.pad, p);
-      ctx.lineTo(metrics.pad + (size - 1) * metrics.cell, p);
+      ctx.lineTo(px(size - 1), p);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(p, metrics.pad);
-      ctx.lineTo(p, metrics.pad + (size - 1) * metrics.cell);
+      ctx.lineTo(p, px(size - 1));
       ctx.stroke();
     }
-    ctx.fillStyle = GRID_COLOR;
     for (const sp of starPoints(size)) {
       const { x, y } = xy(size, sp);
+      const sr = Math.max(2, metrics.cell * 0.08);
+      ctx.fillStyle = "#f6e8c8";
       ctx.beginPath();
-      ctx.arc(metrics.pad + x * metrics.cell, metrics.pad + y * metrics.cell, Math.max(2, metrics.cell * 0.08), 0, Math.PI * 2);
+      ctx.arc(px(x) + 1, px(y) + 1, sr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = WQ_WOOD.grid;
+      ctx.beginPath();
+      ctx.arc(px(x), px(y), sr, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    const dead = new Set(extra.dead ?? []);
-    for (let i = 0; i < board.cells.length; i++) {
-      const c = board.cells[i];
-      if (c === EMPTY) continue;
-      const { x, y } = xy(size, i);
-      const cx = metrics.pad + x * metrics.cell;
-      const cy = metrics.pad + y * metrics.cell;
-      ctx.globalAlpha = dead.has(i) ? 0.35 : 1;
-      ctx.fillStyle = c === BLACK ? "#2E2A24" : "#FBF8F0";
-      ctx.beginPath();
-      ctx.arc(cx, cy, metrics.stone, 0, Math.PI * 2);
-      ctx.fill();
+    // 3) 数一数阶段:领地淡色块波纹铺开(黑淡紫、白淡米,只做展示)
+    if (extra.territory) {
+      const c = (size - 1) / 2;
+      const maxDist = Math.hypot(c, c);
+      const t = washT();
+      const half = metrics.cell * 0.36;
+      const zones: readonly [StoneKind, readonly number[], number][] = [
+        ["black", extra.territory.black, 0.3],
+        ["white", extra.territory.white, 0.42]
+      ];
+      for (const [kind, pts, peak] of zones) {
+        ctx.fillStyle = TERRITORY_COLORS[kind];
+        for (const pt of pts) {
+          const { x, y } = xy(size, pt);
+          const a = washAlpha(Math.hypot(x - c, y - c), maxDist, t) * peak;
+          if (a <= 0) continue;
+          ctx.globalAlpha = a;
+          ctx.fillRect(px(x) - half, px(y) - half, half * 2, half * 2);
+        }
+      }
       ctx.globalAlpha = 1;
-      if (c === WHITE) {
-        ctx.strokeStyle = "#B4A88C";
-        ctx.lineWidth = Math.max(1, metrics.cell * 0.03);
-        ctx.beginPath();
-        ctx.arc(cx, cy, metrics.stone, 0, Math.PI * 2);
-        ctx.stroke();
+    }
+
+    // 4) 棋子:offscreen sprite 一张画到底(19 路满盘也只 drawImage);
+    //    拿不到离屏画布的环境退回逐子矢量,同一份 paintStone,质感一致
+    const dead = new Set(extra.dead ?? []);
+    const blit = (cx: number, cy: number, kind: StoneKind, alpha: number, scale: number): void => {
+      const sprite = typeof ctx.drawImage === "function" ? stoneSprite(kind, metrics.stone, ratio) : null;
+      if (sprite && typeof ctx.drawImage === "function") {
+        const s = stoneSpriteSize(metrics.stone) * scale;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(sprite, cx - s / 2, cy - s / 2, s, s);
+        ctx.globalAlpha = 1;
+      } else {
+        paintStone(art, cx, cy, metrics.stone * scale, kind, alpha);
+      }
+    };
+    const now = Date.now();
+    for (let i = 0; i < board.cells.length; i++) {
+      const cell = board.cells[i];
+      if (cell === EMPTY) continue;
+      const { x, y } = xy(size, i);
+      const kind: StoneKind = cell === BLACK ? "black" : "white";
+      let scale = 1;
+      if (dropPt === i) {
+        const el = now - dropStart;
+        if (el < DROP_SCALE_MS) scale = 1.25 - 0.25 * (el / DROP_SCALE_MS);
+        else if (el >= DROP_MS) dropPt = null;
+      }
+      blit(px(x), px(y), kind, dead.has(i) ? 0.35 : 1, scale);
+      if (dead.has(i)) drawDeadCross(art, px(x), px(y), metrics.stone, kind);
+    }
+    // 落定振纹:4 根极短线,后半段淡出
+    if (dropPt !== null && board.cells[dropPt] !== EMPTY) {
+      const k = (now - dropStart - DROP_SCALE_MS) / (DROP_MS - DROP_SCALE_MS);
+      if (k > 0) {
+        const { x, y } = xy(size, dropPt);
+        drawPlaceRipple(art, px(x), px(y), metrics.stone, k);
       }
     }
 
+    // 5) 预览 ghost:同款 sprite,alpha 0.4,质感与正式子一致
     if (extra.ghost && board.cells[extra.ghost.pt] === EMPTY) {
       const { x, y } = xy(size, extra.ghost.pt);
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle = extra.ghost.color === BLACK ? "#2E2A24" : "#FBF8F0";
-      ctx.beginPath();
-      ctx.arc(metrics.pad + x * metrics.cell, metrics.pad + y * metrics.cell, metrics.stone, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      blit(px(x), px(y), extra.ghost.color === BLACK ? "black" : "white", 0.4, 1);
     }
 
+    // 6) 提示点:发芽小点(形状通道,不再是绿描边圆)
     for (const h of extra.hints ?? []) {
       const { x, y } = xy(size, h);
-      ctx.strokeStyle = "#5FA35A";
-      ctx.lineWidth = Math.max(2, metrics.cell * 0.08);
-      ctx.beginPath();
-      ctx.arc(metrics.pad + x * metrics.cell, metrics.pad + y * metrics.cell, metrics.stone * 0.85, 0, Math.PI * 2);
-      ctx.stroke();
+      drawSproutHint(art, px(x), px(y), metrics.stone);
     }
 
+    // 7) 劫争点:小红花标记
+    if (extra.ko !== undefined && extra.ko !== null && board.cells[extra.ko] === EMPTY) {
+      const { x, y } = xy(size, extra.ko);
+      drawKoFlower(art, px(x), px(y), metrics.stone);
+    }
+
+    // 8) 最后一手:小枫叶,贴子的右上缘不遮中心
     if (extra.last !== undefined && extra.last !== null) {
       const { x, y } = xy(size, extra.last);
-      ctx.strokeStyle = "#D46A6A";
-      ctx.lineWidth = Math.max(2, metrics.cell * 0.07);
-      ctx.beginPath();
-      ctx.arc(metrics.pad + x * metrics.cell, metrics.pad + y * metrics.cell, metrics.stone * 0.55, 0, Math.PI * 2);
-      ctx.stroke();
+      drawLeafMark(art, px(x), px(y), metrics.stone);
     }
 
+    // 9) 键盘光标:圆角方框(与圆形棋子、发芽点形状区分)
     const { x: cxp, y: cyp } = xy(size, view.cursor);
-    ctx.strokeStyle = "#4A7BC8";
-    ctx.lineWidth = Math.max(2, metrics.cell * 0.06);
-    ctx.beginPath();
-    ctx.arc(metrics.pad + cxp * metrics.cell, metrics.pad + cyp * metrics.cell, metrics.cell * 0.46, 0, Math.PI * 2);
-    ctx.stroke();
+    drawCursorBox(art, px(cxp), px(cyp), metrics.cell * 0.46);
+
+    // 10) 花瓣粒子盖在最上层
+    pool.draw(art);
   }
 
   function onPointer(e: PointerEvent): void {
@@ -669,7 +833,9 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
 
   function refresh(note?: string): void {
     const last = state.moves.length ? state.moves[state.moves.length - 1].pt : null;
-    view.render(state.board, { last, dead, ghost: null });
+    // 数一数阶段把领地算出来铺淡色(纯展示,分数仍以 finalScore 为准)
+    const territory = counting ? territoryOf(applyDead(state.board, dead).board) : null;
+    view.render(state.board, { last, dead, ghost: null, ko: state.ko, territory });
     turnChip.textContent = counting ? "🧮 数一数" : `轮到 ${colorName(state.turn)}`;
     capChip.textContent = `提子 朵朵 ${state.captures[BLACK]} · 星星 ${state.captures[WHITE]}`;
     infoChip.textContent = `${SIZE_LABELS[opts.size]} · ${RULE_LABELS[opts.rule]} · 第 ${state.moves.length} 手`;
@@ -734,17 +900,19 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
     return true;
   }
 
-  /** 提子一颗颗提走:先画上还在的样子,再每隔 80ms 拿掉一颗 */
+  /** 提子一颗颗提走:先画上还在的样子,再每隔 80ms 拿掉一颗、原位开一朵花瓣 */
   function animateCaptures(before: GameState, pt: number, captured: number[], taker: Color): void {
     const step = captureStepMs(reduced);
     const shown = cloneGame(before);
     shown.board.cells[pt] = taker;
+    const gone: StoneKind = other(taker) === BLACK ? "black" : "white";
     let i = 0;
     const tick = (): void => {
       if (i >= captured.length) {
         refresh(captureLine(captured.length, other(taker)));
         return;
       }
+      view.burst(captured[i], gone);
       shown.board.cells[captured[i]] = EMPTY;
       i++;
       view.render(shown.board, { last: pt, dead });
@@ -833,9 +1001,25 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
     const t = document.createElement("div");
     t.className = "wq-over-t";
     t.textContent = verdict.winner === "draw" ? "和棋!" : verdict.winner === "black" ? "朵朵赢啦!" : "星星赢啦!";
+    // 奖杯 + 目数对比双色条 + 花园收成:全是展示,分数只认 finalScore
+    const trophy = document.createElement("div");
+    trophy.className = "wq-trophy";
+    trophy.innerHTML = trophySVG(46);
     const s = document.createElement("div");
     s.className = "wq-over-s";
     s.textContent = `${verdict.text} 贴还 ${verdict.komi}。`;
+    const bars = document.createElement("div");
+    bars.className = "wq-bars";
+    bars.setAttribute("role", "img");
+    bars.setAttribute("aria-label", `朵朵 ${verdict.black},星星 ${verdict.white}`);
+    const parts = scoreBarParts(verdict.black, verdict.white);
+    const barB = document.createElement("span");
+    barB.className = "wq-bar-b";
+    barB.style.width = `${parts.black}%`;
+    const barW = document.createElement("span");
+    barW.className = "wq-bar-w";
+    barW.style.width = `${parts.white}%`;
+    bars.append(barB, barW);
     const detail = document.createElement("div");
     detail.className = "wq-over-s";
     detail.textContent = scoreLines(state.board, {
@@ -844,7 +1028,17 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
       captures: state.captures,
       handicap: opts.handicap
     }).join("　");
-    box.append(t, s, detail);
+    box.append(t, trophy, s, bars, detail);
+    const bloomCount = harvestCount(verdict.diff);
+    if (verdict.winner !== "draw" && bloomCount > 0) {
+      const harvest = document.createElement("div");
+      harvest.className = "wq-harvest";
+      harvest.innerHTML = harvestFlowersSVG(verdict.diff, verdict.winner === "black" ? "black" : "white");
+      const harvestLine = document.createElement("div");
+      harvestLine.className = "wq-over-s";
+      harvestLine.textContent = `花园收成:领先的目数开出 ${bloomCount} 朵小花。`;
+      box.append(harvest, harvestLine);
+    }
     const ok = button("好的", () => {
       box.remove();
       overlay = null;
@@ -1014,7 +1208,7 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
 
   function refresh(text?: string): void {
     const last = state.moves.length ? state.moves[state.moves.length - 1].pt : null;
-    view.render(state.board, { last, dead: marked });
+    view.render(state.board, { last, dead: marked, ko: state.ko });
     moveChip.textContent =
       level.kind === "markDead" ? `已标 ${marked.length} 颗` : `第 ${used} / ${level.moveBudget} 手`;
     timeChip.textContent = opts.timed === false ? level.task : `⏳ ${Math.max(0, left)} 秒`;
@@ -1072,6 +1266,7 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
     if (res.captured.length > 0) {
       const shown = cloneGame(before);
       shown.board.cells[pt] = level.turn;
+      const gone: StoneKind = other(before.turn) === BLACK ? "black" : "white";
       let i = 0;
       const step = captureStepMs(reduced);
       const tick = (): void => {
@@ -1080,6 +1275,7 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
           settleStep();
           return;
         }
+        view.burst(res.captured[i], gone);
         shown.board.cells[res.captured[i]] = EMPTY;
         i++;
         view.render(shown.board, { last: pt, dead: marked });
