@@ -52,6 +52,7 @@ import {
 } from "./tasks";
 import { fitIntoStage, type Life, type Loop } from "./runtime";
 import { kitty, type KittyState } from "../../art/kit/kittySvg";
+import { sticker } from "../../art/kit/stickers";
 import {
   MEOW_TEXT,
   PURR_TEXT,
@@ -145,6 +146,26 @@ function btn(cls: string, label: string, sub?: string): HTMLElement & { subEl?: 
 function relabel(button: HTMLElement & { subEl?: HTMLElement }, sub: string): void {
   button.setAttribute("aria-label", sub);
   if (button.subEl) button.subEl.textContent = sub;
+}
+
+/** 道具贴纸的边长（W8R1-03：喂饭/逗猫核心道具由裸 emoji 换成 kit 贴纸） */
+export const PROP_PX = { food: 32, bowl: 42, toy: 30, chaser: 24, bubble: 24 } as const;
+
+/**
+ * emoji → 贴纸小节点（沿看病 `toolIconSvg` 的工序：空标签按钮 + 图标 span + 小字）。
+ * 贴纸永远是纯装饰（aria-hidden），朗读内容由宿主自己的标签 / sr-only 原文负责，
+ * 绝不给装饰件挂标签去和真按钮撞车；图集查不到就原样回退文本，绝不空一块。
+ */
+export function propIcon(emoji: string, px: number): HTMLElement {
+  const span = el("span", "ktc-propicon");
+  const svg = sticker(emoji, px);
+  if (svg) {
+    span.innerHTML = svg;
+    span.setAttribute("aria-hidden", "true");
+  } else {
+    span.textContent = emoji;
+  }
+  return span;
 }
 
 function now(): number {
@@ -514,16 +535,22 @@ export class Arena {
   private renderFeed(spec: TaskSpec): void {
     let state = buildFeed(spec.seed, spec.options);
     const name = this.cats[this.targetCat()].name;
-    this.bubble(`💭 ${name}想吃 ${state.want.emoji}`);
+    // 想吃气泡（W8R1-03）：想吃物可见层换贴纸，原 emoji 收进 sr-only（读屏念的
+    // 和原来一字不差）；判定读的是闭包里的 name，零改动
+    this.bubbleEl.textContent = `💭 ${name}想吃 `;
+    this.bubbleEl.appendChild(el("span", "ktc-propsr", state.want.emoji));
+    this.bubbleEl.appendChild(propIcon(state.want.emoji, PROP_PX.bubble));
     this.say("把它想吃的那一样拖进饭碗里～");
-    const bowl = el("div", "ktc-target ktc-bowl", "🥣");
+    const bowl = el("div", "ktc-target ktc-bowl");
+    bowl.appendChild(propIcon("🥣", PROP_PX.bowl));
     bowl.setAttribute("aria-label", "饭碗");
     this.playEl.appendChild(bowl);
 
     const tray = el("div", "ktc-tray");
     let picked: string | null = null;
     for (const food of state.options) {
-      const item = btn("ktc-drag", food.emoji, food.name);
+      const item = btn("ktc-drag", "", food.name);
+      item.appendChild(propIcon(food.emoji, PROP_PX.food));
       this.life.on(item, "click", () => {
         if (this.dead || !this.lockedOnTarget()) return;
         picked = food.name;
@@ -562,12 +589,18 @@ export class Arena {
   private renderPlay(spec: TaskSpec): void {
     let state = buildPlay(spec.playTaps);
     const name = this.cats[this.targetCat()].name;
-    this.bubble(`🪶 ${name}想玩逗猫棒`);
+    // 想玩气泡：羽毛前缀换贴纸（W8R1-03）
+    this.bubbleEl.textContent = "";
+    this.bubbleEl.appendChild(propIcon("🪶", PROP_PX.bubble));
+    this.bubbleEl.appendChild(el("span", undefined, ` ${name}想玩逗猫棒`));
     this.say(chaseHint(state));
     const field = el("div", "ktc-field");
     this.root.classList.add("ktc-hasfield");
-    const toy = btn("ktc-toy", "🪶", "逗猫棒");
-    const chaser = el("span", "ktc-chaser", "🐾");
+    const toy = btn("ktc-toy", "", "逗猫棒");
+    toy.appendChild(propIcon("🪶", PROP_PX.toy));
+    const chaser = el("span", "ktc-chaser");
+    chaser.appendChild(propIcon("🐾", PROP_PX.chaser));
+    chaser.setAttribute("aria-hidden", "true");
     chaser.style.position = "absolute";
     field.append(toy, chaser);
     this.playEl.appendChild(field);

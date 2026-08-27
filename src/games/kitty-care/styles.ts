@@ -312,6 +312,14 @@ export const KTC_CSS = `
 .ktc-toolicon{order:-1;width:30px;height:30px;display:block;pointer-events:none;}
 .ktc-toolicon svg{width:100%;height:100%;display:block;}
 
+/* 喂饭/逗猫道具贴纸位（W8R1-03）：裸 emoji 换 kit 贴纸，盒子与热区一个像素不动。
+   食物托盘与逗猫棒按钮里靠 order:-1 顶到小字上面，气泡里行内对齐。 */
+.ktc-propicon{display:inline-flex;vertical-align:middle;pointer-events:none;}
+.ktc-propicon svg{display:block;}
+.ktc-drag .ktc-propicon,.ktc-toy .ktc-propicon{order:-1;}
+.ktc-propsr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
 /* say 提示行在看病里升级成对话气泡：小尾巴指向护理角的小猫（--ktc-tail-x 由代码算） */
 .ktc-wrap.ktc-caring .ktc-msg{background:#ffffffef;border-radius:14px;padding:6px 14px;
   width:fit-content;max-width:94%;margin-left:auto;margin-right:auto;
