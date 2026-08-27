@@ -114,17 +114,31 @@ describe("W7R1 · 旧有关键事实词一个不丢", () => {
   });
 
   it("文案描述与视觉常量对得上:披风配色 / 双虫配色", () => {
-    // poop-hero:朵朵粉披风蓝衣、星星蓝披风粉衣(visual.ts HERO_VIS)
+    // 只验「粉 / 蓝」的色相关系,不钉具体色值——具体色值归 C 档(修复员)调,
+    // 例如 A-9 拉灰阶差时换披风深浅,不该被文案快照卡住。
+    const rgb = (hex: string): [number, number, number] => {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    };
+    const isPinkish = (hex: string): boolean => {
+      const [r, , b] = rgb(hex);
+      return r > b;
+    };
+    const isBluish = (hex: string): boolean => {
+      const [r, , b] = rgb(hex);
+      return b > r;
+    };
     return Promise.all([
       import("./poop-hero/visual"),
       import("./snake-snack/visual13"),
     ]).then(([ph, ss]) => {
+      // poop-hero:朵朵粉披风蓝衣、星星蓝披风粉衣(visual.ts HERO_VIS)
       expect(ph.HERO_VIS[0].name).toBe("朵朵");
-      expect(ph.HERO_VIS[0].capeOut0).toBe("#F4859F"); // 粉披风
-      expect(ph.HERO_VIS[0].suit).toBe("#7FB2F0"); // 蓝衣
+      expect(isPinkish(ph.HERO_VIS[0].capeOut0), "朵朵披风应是粉色系").toBe(true);
+      expect(isBluish(ph.HERO_VIS[0].suit), "朵朵衣服应是蓝色系").toBe(true);
       expect(ph.HERO_VIS[1].name).toBe("星星");
-      expect(ph.HERO_VIS[1].capeOut0).toBe("#7FA9F0"); // 蓝披风
-      expect(ph.HERO_VIS[1].suit).toBe("#F490AC"); // 粉衣
+      expect(isBluish(ph.HERO_VIS[1].capeOut0), "星星披风应是蓝色系").toBe(true);
+      expect(isPinkish(ph.HERO_VIS[1].suit), "星星衣服应是粉色系").toBe(true);
       // snake-snack:绿虫 / 粉虫两套主色确实不同
       expect(ss.SS_WORM_GREEN.bodyA).not.toBe(ss.SS_WORM_PINK.bodyA);
       expect(ss.SS_WORM_GREEN.head).not.toBe(ss.SS_WORM_PINK.head);
