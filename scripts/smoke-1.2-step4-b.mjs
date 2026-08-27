@@ -335,13 +335,40 @@ async function main() {
       return m ? Number(m[1]) : -1;
     });
 
+  // 别写死交叉点：地狱档 AI 最爱下的就是星位，写死 (2,2)/(6,6)/(2,6) 的话
+  // 第二三手多半落在它刚占掉的点上，落子被规则拒了，等回应就只能等到超时。
+  // （定 seed 复现见 src/games/__tests__/window1-smoke-seeds.test.ts：
+  //   120 个 seed 里超过两成第二三手被占；改成临下之前挑空点，120/120 全走得通。）
+  // 这里照样只用真鼠标点画布，不走后门：点下去手数没动就换下一个点。
+  const CANDIDATES = [];
+  for (const gy of [2, 6, 4, 3, 5, 1, 7]) for (const gx of [2, 6, 4, 3, 5, 1, 7]) CANDIDATES.push([gx, gy]);
+
   let slowest = 0;
   let played = await movesPlayed();
   const started = played;
-  for (const [gx, gy] of [[2, 2], [6, 6], [2, 6]]) {
-    const want = played + 2; // 朵朵一手 + 星星回一手
+  let landed = 0;
+  let tried = 0;
+  for (const [gx, gy] of CANDIDATES) {
+    if (landed >= 3) break;
+    tried++;
+    const before = played;
     const t0 = Date.now();
-    if (!(await clickPoint(page, 9, gy * 9 + gx))) break;
+    if (!(await clickPoint(page, 9, gy * 9 + gx))) continue;
+    // 先看自己这一手落没落地：没落地说明那个点有子了，换一个点，不算 AI 没回应
+    const mine = await page
+      .waitForFunction(
+        (n) => {
+          const txt = [...document.querySelectorAll(".wq-hud")].map((el) => el.textContent ?? "").join(" ");
+          const m = /第 (\d+) 手/.exec(txt);
+          return m ? Number(m[1]) >= n : false;
+        },
+        { timeout: 900 },
+        before + 1
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (!mine) continue;
+    // 自己落地了，才开始量星星（AI）多久回一手
     const replied = await page
       .waitForFunction(
         (n) => {
@@ -350,16 +377,21 @@ async function main() {
           return m ? Number(m[1]) >= n : false;
         },
         { timeout: 4000 },
-        want
+        before + 2
       )
       .then(() => true)
       .catch(() => false);
     if (!replied) break;
+    landed++;
     slowest = Math.max(slowest, Date.now() - t0);
     played = await movesPlayed();
     await sleep(120);
   }
-  log(played >= started + 6, "地狱档自由对战连下三手都有回应", `已走 ${played} 手（开局 ${started}）`);
+  log(
+    landed >= 3 && played >= started + 6,
+    "地狱档自由对战连下三手都有回应",
+    `落地 ${landed} 手（试了 ${tried} 个点）· 已走 ${played} 手（开局 ${started}）`
+  );
   log(slowest > 0 && slowest <= 1200, "AI 单手用时 ≤ 1s（含点击与重绘）", `最慢 ${slowest}ms`);
   const vsFlow = await overflowX(page);
   log(vsFlow.doc <= 1 && vsFlow.bad.length === 0, "自由对战 360px 不溢出", `${vsFlow.doc} ${vsFlow.bad}`);

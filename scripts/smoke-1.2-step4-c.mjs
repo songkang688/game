@@ -214,14 +214,24 @@ async function run() {
       await playUntilOver(page, 90);
       const t1 = await rollsOf();
       log(t1 > t0 + 20, `${vp.name} 四人对战一直在推进`, `已掷 ${t0} → ${t1} 次`);
-      const board = await page.evaluate(() =>
-        [...document.querySelectorAll(".fc-token")].map((n) => n.getAttribute("aria-label") ?? "")
-      );
-      log(
-        board.filter((t) => !t.includes("基地")).length >= 4,
-        `${vp.name} 四人对战四色都飞上了环线`,
-        `${board.filter((t) => !t.includes("基地")).length}/16 架在路上`
-      );
+      const airborne = async () =>
+        page.evaluate(
+          () =>
+            [...document.querySelectorAll(".fc-token")]
+              .map((n) => n.getAttribute("aria-label") ?? "")
+              .filter((t) => !t.includes("基地")).length
+        );
+      // 起飞只认 6 点：「≥4 架离开基地」中位数要掷 24 次骰、p99 要 63 次，
+      // 而上面那句只保证掷过 21 次 —— 原来在这个时刻拍一张快照断言 ≥4，
+      // 等于在分布正中间掷硬币，第 1 轮 375×667 就是这么挂的（W1-11）。
+      // 定 seed 复现与分布见 src/games/__tests__/window1-smoke-seeds.test.ts：
+      // 150 个 seed 全都到得了，只是要给够掷骰次数。所以这里改成接着打、打到为止。
+      let out = await airborne();
+      for (let more = 0; more < 3 && out < 4; more++) {
+        await playUntilOver(page, 45);
+        out = await airborne();
+      }
+      log(out >= 4, `${vp.name} 四人对战至少四架飞上了环线`, `${out}/16 架在路上（已掷 ${await rollsOf()} 次）`);
       await checkNoOverflow(page, `${vp.name} 四人对战`);
     }
 
