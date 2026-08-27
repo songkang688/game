@@ -6,7 +6,6 @@ import {
   applyGravity,
   createBoard,
   findPath,
-  MASK_FACE,
   maskKey,
   pickMasked,
   removePair,
@@ -129,7 +128,8 @@ describe("连连看 · 1.1 新场馆", () => {
     for (const pool of THEME_EMOJIS) {
       expect(pool.length).toBeGreaterThanOrEqual(14);
       expect(new Set(pool).size).toBe(pool.length);
-      expect(pool).not.toContain(MASK_FACE);
+      // 面具字符已随 SVG 化退役成字面量(窗口 7 R1 清理死常量),断言语义原样保留
+      expect(pool).not.toContain("❓");
     }
     const fresh = THEME_EMOJIS.slice(6).flat();
     const old = new Set(THEME_EMOJIS.slice(0, 6).flat());
