@@ -69,6 +69,7 @@ const CSS = `
   background:#ffffffd9;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;}
 .dmz-key:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .dmz-key-blank{visibility:hidden;}
+.dmz-pause{background:#fff3d6;color:#8a6a2f;font-size:17px;}
 .dmz-menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:8px 4px 4px;}
 .dmz-title{font-size:19px;font-weight:900;color:#7a5da8;text-align:center;}
 .dmz-sub{font-size:13px;font-weight:700;color:#8b7bb0;text-align:center;line-height:1.6;max-width:330px;}
@@ -160,9 +161,9 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     <canvas class="dmz-canvas"></canvas>
     <div class="dmz-note"></div>
     <div class="dmz-pad">
-      <button type="button" class="dmz-key dmz-key-blank" tabindex="-1"></button>
+      <button type="button" class="dmz-key dmz-pause" data-act="pause" aria-label="暂停">⏸</button>
       <button type="button" class="dmz-key" data-dir="up" aria-label="向上">▲</button>
-      <button type="button" class="dmz-key dmz-key-blank" tabindex="-1"></button>
+      <button type="button" class="dmz-key dmz-key-blank" tabindex="-1" aria-hidden="true"></button>
       <button type="button" class="dmz-key" data-dir="left" aria-label="向左">◀</button>
       <button type="button" class="dmz-key" data-dir="down" aria-label="向下">▼</button>
       <button type="button" class="dmz-key" data-dir="right" aria-label="向右">▶</button>
@@ -503,11 +504,25 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
     }
   }
 
+  // 手机上没有 Esc 键：方向键盘左上角那一格从占位改成暂停钮，和另外四款一样有触屏通路
+  const pauseBtn = wrap.querySelector('.dmz-key[data-act="pause"]') as HTMLElement | null;
+
+  function renderPause(): void {
+    if (!pauseBtn) return;
+    pauseBtn.textContent = paused ? "▶" : "⏸";
+    pauseBtn.setAttribute("aria-label", paused ? "继续" : "暂停");
+    pauseBtn.setAttribute("aria-pressed", String(paused));
+  }
+
   function togglePause(): void {
     paused = !paused;
     sfx("tap");
+    renderPause();
     renderHud();
   }
+
+  const onPauseClick = (): void => togglePause();
+  pauseBtn?.addEventListener("click", onPauseClick);
 
   /** 星星那一侧的「撤回转向」：抢豆的星星把待转方向收回当前方向，操纵小幽灵时同理，单人局归朵朵 */
   function cancelStarTurn(): void {
@@ -551,6 +566,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   canvas.addEventListener("touchend", onTouchEnd, { passive: true });
   window.addEventListener("keydown", onKey);
 
+  renderPause();
   renderHud();
   raf = requestAnimationFrame(frame);
 
@@ -559,6 +575,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       destroyed = true;
       finished = true;
       stop();
+      pauseBtn?.removeEventListener("click", onPauseClick);
       window.removeEventListener("keydown", onKey);
       canvas.removeEventListener("touchstart", onTouchStart);
       canvas.removeEventListener("touchend", onTouchEnd);
@@ -741,7 +758,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     const tip = document.createElement("div");
     tip.className = "dmz-tip";
     tip.textContent =
-      "朵朵：WASD 或滑动屏幕｜星星：方向键｜Esc 暂停。无尽最高分：" +
+      "朵朵：WASD 或滑动屏幕｜星星：方向键｜Esc 或方向键盘上的 ⏸ 暂停。无尽最高分：" +
       save.getGameProgress(meta.id).endlessBest;
     menu.appendChild(tip);
     view.appendChild(menu);
@@ -763,7 +780,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     totalScore = 0;
     child = mountRounds(host, api, {
       title: "无尽",
-      hint: "地图一圈比一圈快，掉光小星命就结算最高分。",
+      hint: "地图一圈比一圈快，掉光小星命就结算最高分。想歇一下就按 Esc 或点 ⏸。",
       starRole: "none",
       makeConfig: (round) => endlessConfig(round),
       onRoundEnd: ({ won, score }, next) => {
@@ -789,7 +806,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "抢豆",
-      hint: "同一张图两个人抢豆：朵朵 WASD，星星方向键，豆子吃完分高者胜。",
+      hint: "同一张图两个人抢豆：朵朵 WASD，星星方向键，豆子吃完分高者胜。想歇一下就按 Esc 或点 ⏸。",
       starRole: "eater",
       makeConfig: (round) => ({ ...configFor(60 + round * 9), fog: false }),
       onRoundEnd: ({ won, score, starScore }, next) => {
@@ -807,7 +824,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "追逃",
-      hint: "朵朵用 WASD 清豆，星星用方向键操纵带光圈的那只小幽灵。",
+      hint: "朵朵用 WASD 清豆，星星用方向键操纵带光圈的那只小幽灵。想歇一下就按 Esc 或点 ⏸。",
       starRole: "ghost",
       makeConfig: (round) => configFor(150 + round * 7),
       onRoundEnd: ({ won, score }, next) => {

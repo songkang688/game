@@ -471,6 +471,98 @@ describe("L3A-1 · 遮住的这一段不该把输入攒下来", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* L3A-2 / L3A-3 / L3A-10 · 触屏的暂停入口与读屏                          */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-2 · 手机上也停得下来", () => {
+  async function stage(): Promise<{ handle: { destroy: () => void }; left: () => string }> {
+    const { mountStage } = await import("./index");
+    dom.frames.length = 0;
+    const handle = mountStage(dom.root as unknown as HTMLElement, {
+      cfg: corridorCfg({ lives: 5, maze: corridor({ dotsAt: [2, 3, 4, 5], homeX: 5 }) }),
+      starRole: "none",
+      label: "走查",
+      onEnd: () => undefined,
+    });
+    return { handle, left: () => dom.root.querySelector(".dmz-left")!.textContent };
+  }
+
+  function pauseKey(): El {
+    const btn = dom.root.querySelector('.dmz-key[data-act="pause"]');
+    if (!btn) throw new Error("方向键盘上没有暂停钮");
+    return btn;
+  }
+
+  it("方向键盘上有一个 ⏸ 钮，点一下真的停住、再点一下接着走", async () => {
+    const { handle, left } = await stage();
+    key("d");
+    flushFrames(dom, 3, 130);
+    pauseKey().dispatch("click");
+    flushFrames(dom, 1, 130);
+    expect(dom.root.querySelector(".dmz-note")!.textContent, "点 ⏸ 没有停住").toContain("已暂停");
+    const frozen = left();
+    flushFrames(dom, 12, 130);
+    expect(left(), "暂停期间还在推进").toBe(frozen);
+    pauseKey().dispatch("click");
+    flushFrames(dom, 8, 130);
+    expect(left(), "再点一次没接着走").not.toBe(frozen);
+    handle.destroy();
+  });
+
+  it("⏸ 钮和 Esc 是同一个开关：读屏文字与按钮状态一起翻面", async () => {
+    const { handle } = await stage();
+    const btn = pauseKey();
+    expect(btn.getAttribute("aria-label")).toBe("暂停");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    key("Escape");
+    flushFrames(dom, 1, 130);
+    expect(btn.textContent, "按 Esc 停住了，屏幕上的钮还写着暂停").toBe("▶");
+    expect(btn.getAttribute("aria-label")).toBe("继续");
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    btn.dispatch("click");
+    flushFrames(dom, 1, 130);
+    expect(btn.textContent).toBe("⏸");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    handle.destroy();
+  });
+
+  it("⏸ 钮和方向键一样是 .dmz-key，热区 ≥ 44px；拆完不留监听", async () => {
+    const { handle } = await stage();
+    expect(pauseKey().className).toContain("dmz-key");
+    expect(lastHitHeight(css(), ".dmz-key")).toBeGreaterThanOrEqual(44);
+    handle.destroy();
+    expect(windowListenerCount(dom)).toBe(0);
+    expect(dom.root.children).toHaveLength(0);
+  });
+
+  it("L3A-3：剩下那个占位格对读屏隐身，不会念出一个空按钮", async () => {
+    const { handle } = await stage();
+    const blanks = dom.root.querySelectorAll(".dmz-key-blank");
+    expect(blanks.length, "占位格数量变了").toBe(1);
+    for (const b of blanks) {
+      expect(b.getAttribute("aria-hidden"), "占位格没有对读屏隐身").toBe("true");
+      expect(b.textContent).toBe("");
+    }
+    handle.destroy();
+  });
+
+  it("L3A-10：三种玩法的说明与攻略都写明了暂停怎么按", async () => {
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    expect(dom.root.find((e) => e.className.includes("dmz-tip"))!.textContent).toContain("⏸");
+    for (const label of ["无尽迷宫", "抢豆对战", "双人追逃"]) {
+      byText(label)!.dispatch("click");
+      flushFrames(dom, 2, 120);
+      const tips = dom.root.findAll((e) => e.className.includes("dmz-tip")).map((e) => e.textContent);
+      expect(tips.join("\n"), `${label} 的说明里没写暂停怎么按`).toContain("⏸");
+      byText("换个玩法")!.dispatch("click");
+    }
+    expect(dmGuide.general.join("\n"), "攻略里没写暂停钮").toContain("⏸");
+    handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* PA-DM · 铁则 4 / 5：热区与文案                                        */
 /* ------------------------------------------------------------------ */
 
