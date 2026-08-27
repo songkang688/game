@@ -109,6 +109,20 @@ export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]
 }
 
 /**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`（平台文件，禁改），不减这一刀就白多算 4px
+ * ——真机 360×720 上多算的量正好等于超出的量，钳是钳了，`canScroll` 还是 0。
+ * 量不出宽度（测试桩 / 老浏览器）就当没有，绝不把可视段算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
+/**
  * 把本款的壳钳进「舞台看得见的那一段」，钳不下就让它自己滚。
  *
  * 为什么不能只靠下面矮屏那一档里的 `max-height:100%`：百分比要有一个**定高**的父级
@@ -134,8 +148,11 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     el.style.overflowY = "";
     const bottoms: number[] = [];
     for (let p = el.parentElement; p; p = p.parentElement) {
-      const oy = view.getComputedStyle(p).overflowY;
-      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+      const cs = view.getComputedStyle(p);
+      const oy = cs.overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+        bottoms.push(clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth));
+      }
     }
     const room = visibleRoomPx(el.getBoundingClientRect().top, bottoms);
     if (!Number.isFinite(room) || room <= 0) return;

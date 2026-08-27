@@ -188,6 +188,20 @@ export function padOverlaps(m: PadMetrics): boolean {
 export const MIN_CANVAS_H = 130;
 
 /**
+ * 一盘手柄整块有多高:说明行 + 两行键 + 两道空隙。
+ *
+ * 说明行 `.ph-pad-name` 在触屏窄屏上是 `display:none`,`nameHeight` 传 0。
+ * 它原先归 `grid-auto-rows:var(--k)` 管,藏起来也照样占一整颗键那么高——
+ * 360×640 的分类关就是被这白留的 56px 顶得三色桶图例与提示行整块掉出屏幕
+ * (画布那时已经在 `MIN_CANVAS_H` 的底线上,一个像素都让不出来了)。
+ * 现在第一行写成 `auto`,这个函数就是那条算式的可测版本。
+ */
+export function padGridHeight(m: PadMetrics, nameHeight: number): number {
+  const name = Number.isFinite(nameHeight) && nameHeight > 0 ? nameHeight : 0;
+  return name + m.gap * 2 + m.key * 2;
+}
+
+/**
  * 舞台矮到摇杆掉出屏幕时,画布该收到多高。
  *
  * 为什么不能继续靠 `@media (max-height:…)`:媒体查询问的是**屏高**,
@@ -212,14 +226,31 @@ export function canvasRoomPx(
   return Math.max(minCanvas, Math.floor(canvasHeight - over));
 }
 
+/**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**,下边框那几像素照不进内容;
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`,不减这一刀就白多算 4px——
+ * 320×640 上提示行 `.ph-tip` 17px 高只露 9px,少的就是这一刀加上子像素。
+ * 量不出宽度就当没有,绝不算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
 /** 量一次这个节点头顶到最近那条裁切线之间还剩多少(量不了就返回 Infinity) */
 export function stageRoomPx(el: HTMLElement): number {
   const view = el.ownerDocument?.defaultView ?? null;
   if (!view || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
   const bottoms: number[] = [];
   for (let p = el.parentElement; p; p = p.parentElement) {
-    const oy = view.getComputedStyle(p).overflowY;
-    if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+    const cs = view.getComputedStyle(p);
+    const oy = cs.overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+      bottoms.push(clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth));
+    }
   }
   if (bottoms.length === 0) return Number.POSITIVE_INFINITY;
   return Math.min(...bottoms) - el.getBoundingClientRect().top;

@@ -204,6 +204,36 @@ export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]
 }
 
 /**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`（`src/styles.css`，禁改），
+ * 不减这一刀就白多算 4px——CDP 实测 390×844 第 141 关：舞台内容区下沿 826，
+ * 钳位却按 830 写了 `max-height:608px`，搓澡那句「用手指画圈搓…」被切掉 5px。
+ * 量不出宽度就当没有，绝不算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
+/** 量一次这个节点头顶到最近那条裁切线之间还剩多少（量不了就返回 Infinity） */
+export function stageRoomPx(el: HTMLElement): number {
+  const view = el.ownerDocument?.defaultView ?? null;
+  if (!view || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
+  const bottoms: number[] = [];
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const cs = view.getComputedStyle(p);
+    const oy = cs.overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+      bottoms.push(clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth));
+    }
+  }
+  return visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+}
+
+/**
  * 猫从大到小的几档画面高度（px）。装不下就往下退一档，退到最后一档还装不下才让小屋自己滚。
  * 一路退到 92px 是因为 320×640 上「舞台看得见的那一段」只有 304px，
  * 除猫以外的东西（任务条、心情条、气泡、托盘、提示行、内边距）就要去掉 200px 上下。
@@ -234,6 +264,7 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
   const reset = (): void => {
     if (!measurable) return;
     el.classList.remove("ktc-fit");
+    el.classList.remove("ktc-scroll");
     el.style.removeProperty("--ktc-cat-h");
     el.style.maxHeight = "";
     el.style.overflowY = "";
@@ -243,12 +274,7 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     if (!measurable || !view) return;
     // 先把上一次收出来的值还原，不然量到的是收完的高度，越量越小
     reset();
-    const bottoms: number[] = [];
-    for (let p = el.parentElement; p; p = p.parentElement) {
-      const oy = view.getComputedStyle(p).overflowY;
-      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
-    }
-    const room = visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+    const room = stageRoomPx(el);
     if (!Number.isFinite(room) || room <= 0) return;
     if (el.scrollHeight <= room + 1) return;
     // `min-height:460px` 会盖过一切，收的时候得先让开
@@ -261,16 +287,38 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     // 猫收到最小还是装不下（多猫关 + 搓澡区就会这样），剩下的交给滚动
     el.style.maxHeight = `${Math.floor(room)}px`;
     el.style.overflowY = "auto";
+    // 打个记号：提示行这时候要粘在滚动口下沿，不然「这一关要干什么」滚不到就看不见
+    el.classList.add("ktc-scroll");
   };
   relayout();
+  let live = true;
+  nextFrame(view, () => {
+    if (live) relayout();
+  });
   view?.addEventListener("resize", relayout);
   return {
     relayout,
     dispose(): void {
+      live = false;
       view?.removeEventListener("resize", relayout);
       reset();
     }
   };
+}
+
+/**
+ * 下一帧再叫一次。
+ *
+ * 为什么非补这一帧不可：钳位是在 `playLevel` 里量的，而平台顶栏 `.l99-stagebar`
+ * 在窄屏上会折行——折之前和折之后，这一屏的起点差 8px。量在折行之前，
+ * `max-height` 就写大了 8px，钳完舞台照样裁掉 8px（CDP 实测 360×640 第 141 关：
+ * 写进去 408px，真正剩下的只有 400px）。拿不到 `requestAnimationFrame`
+ * （测试桩 / SSR）就安静跳过，不改变任何既有行为。
+ */
+function nextFrame(view: (Window & typeof globalThis) | null, fn: () => void): void {
+  const raf = view?.requestAnimationFrame;
+  if (typeof raf !== "function") return;
+  raf.call(view, () => fn());
 }
 
 /** 长列表钳到这个高度以下就不值得再钳了——再矮连一张卡片都露不全 */
@@ -301,12 +349,7 @@ export function scrollIntoStage(el: HTMLElement, minRoom = LIST_MIN_ROOM): { rel
   const relayout = (): void => {
     if (!measurable || !view) return;
     reset();
-    const bottoms: number[] = [];
-    for (let p = el.parentElement; p; p = p.parentElement) {
-      const oy = view.getComputedStyle(p).overflowY;
-      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
-    }
-    const room = visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+    const room = stageRoomPx(el);
     // 量不到裁切线（高屏）或已经整块在裁切线以下（这时候钳只会把它压成一条缝）就不管
     if (!Number.isFinite(room) || room < minRoom) return;
     if (el.scrollHeight <= room + 1) return;
@@ -314,10 +357,15 @@ export function scrollIntoStage(el: HTMLElement, minRoom = LIST_MIN_ROOM): { rel
     el.style.overflowY = "auto";
   };
   relayout();
+  let live = true;
+  nextFrame(view, () => {
+    if (live) relayout();
+  });
   view?.addEventListener("resize", relayout);
   return {
     relayout,
     dispose(): void {
+      live = false;
       view?.removeEventListener("resize", relayout);
       reset();
     }

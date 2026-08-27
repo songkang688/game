@@ -953,6 +953,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     endlessBtn.textContent = best > 0 ? `♾️ 找不同马拉松 · 最好 第 ${best} 轮` : "♾️ 找不同马拉松 · 点我开始！";
   }
 
+  /** 关卡正在跑没有：♾️ 入口靠它挡住，别把关卡层只藏不销毁（W5R2-C-06） */
+  let inLevel = false;
+
   function closeMode(): void {
     mode?.destroy();
     mode = null;
@@ -964,6 +967,10 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   endlessBtn.addEventListener("click", () => {
     if (mode) return;
+    // 关卡正在跑就不许再开一层。`bar.hidden` 只是让手指够不着，焦点残留、
+    // 壳层补发的 click、自动化脚本照样能把它点响 —— 点响了关卡层就只被 hidden 藏起来，
+    // 秒表继续走，52 秒后「时间到」结算屏会盖在正在进行的马拉松上（W5R2-C-06）。
+    if (inLevel) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -986,9 +993,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       // 先收再摆：格子是在 playLevel 里按可视高摊的，量早了这 52px 没人认领。
       playLevel: (stage, ctx) => {
         bar.hidden = true;
+        inLevel = true;
         const handle = playLevel(stage, ctx);
         return {
           destroy: () => {
+            inLevel = false;
             handle?.destroy?.();
             // 马拉松开着的时候这一条本来就该收着，别替它放回来
             if (!mode) bar.hidden = false;

@@ -45,6 +45,19 @@ describe("萌猫小屋 · 模式条只在选关地图上露面（W5R2-C-06）", 
     expect(WIRED.indexOf("bar.hidden = true")).toBeLessThan(WIRED.indexOf("runLevel(stage, ctx)"));
   });
 
+  it("光藏起来不算数：关卡在跑时 ♾️ / 📷 点响了也不许开（W5R2-C-06 复测补修）", () => {
+    // 第 2 轮监督复测：把 `.ktc-tools` 的 hidden 撬开硬点一次，关卡层照样只被藏起来不销毁。
+    // hidden 挡的是手指，挡不住事件——焦点残留、壳层补发的 click 都能把它点响。
+    const openMode = SRC.slice(SRC.indexOf("const openMode ="), SRC.indexOf("  life.on(endlessBtn"));
+    expect(SRC).toContain("let inLevel = false;");
+    expect(openMode, "openMode 少了「关卡在跑就不开」这道闸").toContain("if (inLevel) return;");
+    // 闸要排在改 hidden 与 make() 之前，否则闸住了也已经把关卡层藏了
+    expect(openMode.indexOf("if (inLevel) return;")).toBeLessThan(openMode.indexOf("levelHost.hidden = true"));
+    expect(openMode.indexOf("if (inLevel) return;")).toBeLessThan(openMode.indexOf("mode = make(modeHost)"));
+    expect(WIRED).toContain("inLevel = true;");
+    expect(WIRED.indexOf("inLevel = false;")).toBeLessThan(WIRED.indexOf("handle?.destroy?.()"));
+  });
+
   it("关卡工厂只建一次，包一层不许每关重建", () => {
     expect(SRC).toContain("const runLevel = makePlayLevel(api, refreshBar);");
   });

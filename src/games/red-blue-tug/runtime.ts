@@ -184,3 +184,41 @@ export function resolveInitialLevel(raw: unknown, unlocked: number, total = 188)
   const reachable = Math.max(0, Math.min(top - 1, Math.round(unlocked)));
   return Math.min(wanted, reachable);
 }
+
+/** 地图上一个能点的格子(只要求这三样,真 DOM 与测试桩都对得上) */
+export interface MapNodeLike {
+  classList: { contains(token: string): boolean };
+  getAttribute(name: string): string | null;
+  click(): void;
+}
+
+/** 地图容器(只要求查得出格子) */
+export interface MapHostLike {
+  querySelectorAll(selector: string): ArrayLike<MapNodeLike>;
+}
+
+/**
+ * 替玩家在地图上点开第 `level` 关(0 基);章节锁着或格子锁着就返回 false。
+ *
+ * `UPGRADE-1.2.md` 当时记的是「`mountLevelGame` 没有 `initialLevel` 这个入口,
+ * 要接就得改 `level99.ts`」,于是上面那两支写好了、写了用例,却一次都没人调——
+ * 真机上 `?level=141#/game/red-blue-tug` 打开的还是选关地图,五款里只有这一款进不去。
+ * 那个理由现在站不住:同档另外四款一个字都没改 `level99.ts`,全是照着地图上的按钮
+ * 替玩家点一下落地的。这一支就是那一下。
+ */
+export function openLevelOnMap(host: MapHostLike, level: number, chapterIndex: number): boolean {
+  const tabs = host.querySelectorAll("button.l99-tab");
+  const tab = chapterIndex >= 0 && chapterIndex < tabs.length ? tabs[chapterIndex] : undefined;
+  if (!tab || tab.classList.contains("l99-tab-lock")) return false;
+  tab.click();
+  const label = `第 ${level + 1} 关`;
+  const nodes = host.querySelectorAll("button.l99-node");
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    if (!(node.getAttribute("aria-label") ?? "").startsWith(label)) continue;
+    if (node.classList.contains("l99-node-lock")) return false;
+    node.click();
+    return true;
+  }
+  return false;
+}

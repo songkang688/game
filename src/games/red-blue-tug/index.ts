@@ -1,7 +1,17 @@
 import { meta } from "./meta";
 export { meta };
 
-import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import {
+  TOTAL_LEVELS,
+  chapterOf,
+  furthestPlayable,
+  loadSkips,
+  loadStars,
+  mountLevelGame,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+} from "../level99";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { save } from "../../engine/save";
 import guide from "./guide";
@@ -26,7 +36,16 @@ import {
 } from "./force";
 import { AI_TIERS, aiController, type AiTier, type Controller } from "./ai";
 import { AI_POWER_SCALE, PLAYER_POWER_SCALE, endlessSetup, levelSetup } from "./duel";
-import { boundKeys, createDisposer, keySideOf, sideLayout } from "./runtime";
+import {
+  boundKeys,
+  createDisposer,
+  keySideOf,
+  openLevelOnMap,
+  parseLevelParam,
+  resolveInitialLevel,
+  sideLayout,
+} from "./runtime";
+import { fitFieldIntoStage } from "./fit";
 
 export const RBG_CSS = `
 .rbg-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0E4, #FFE4EC); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
@@ -71,6 +90,15 @@ export const RBG_CSS = `
 .rbg-pull.rbg-ghost { background: linear-gradient(180deg, #DCD3E8, #C4B8D6); box-shadow: 0 5px 0 #A79ABB; cursor: default; }
 .rbg-sub { font-size: 13px; font-weight: 700; opacity: .92; }
 .rbg-msg { text-align: center; min-height: 22px; color: #B0555F; font-weight: 700; margin-top: 8px; font-size: 15px; }
+/* 拔河场退到底线 76px 还装不下时（320×640 实测差 37px）由 fitFieldIntoStage() 打上。
+   只减空隙——外框内边距 12→6、四处块间距 8→4、提示行上边距 8→4，一共让出 32px；
+   按钮一格不动，热区还是 44px 以上。剩下的几像素由场地再让一让。 */
+.rbg-wrap.rbg-tight { padding: 6px; }
+.rbg-wrap.rbg-tight .rbg-top,
+.rbg-wrap.rbg-tight .rbg-gear,
+.rbg-wrap.rbg-tight .rbg-field,
+.rbg-wrap.rbg-tight .rbg-meters { margin-bottom: 4px; }
+.rbg-wrap.rbg-tight .rbg-msg { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) {
   .rbg-beat, .rbg-team, .rbg-rope { transition: none !important; }
 }
@@ -620,7 +648,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, settings: { comeback: boole
     },
   });
   stage.appendChild(run.root);
-  return { destroy: () => run.destroy() };
+  // 360×640 上这一屏比舞台看得见的那一段高 63px、320×640 上高 95px，
+  // 掉在裁切线以下的正是 `.rbg-msg`——红绿灯章唯一那句规则说明（W5R2-FC-03）
+  const fit = fitFieldIntoStage(run.root);
+  return {
+    destroy: () => {
+      fit.dispose();
+      run.destroy();
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -674,6 +710,7 @@ function mountVersus(
 ): { destroy: () => void } {
   const gone = createDisposer();
   let run: TugRun | null = null;
+  let fit: { dispose: () => void } | null = null;
   let seed = 101;
   let redWins = 0;
   let blueWins = 0;
@@ -697,6 +734,8 @@ function mountVersus(
   }
 
   function showPicker(): void {
+    fit?.dispose();
+    fit = null;
     run?.destroy();
     run = null;
     stageEl.innerHTML = "";
@@ -728,6 +767,8 @@ function mountVersus(
   }
 
   function startRound(pick: VersusPick): void {
+    fit?.dispose();
+    fit = null;
     run?.destroy();
     stageEl.innerHTML = "";
     seed += 13;
@@ -778,6 +819,7 @@ function mountVersus(
       },
     });
     stageEl.appendChild(run.root);
+    fit = fitFieldIntoStage(run.root);
     paintScore();
   }
 
@@ -789,6 +831,8 @@ function mountVersus(
 
   return {
     destroy() {
+      fit?.dispose();
+      fit = null;
       run?.destroy();
       run = null;
       gone.dispose();
@@ -832,6 +876,7 @@ function mountEndless(
   const gone = createDisposer();
   let streak = 0;
   let run: TugRun | null = null;
+  let fit: { dispose: () => void } | null = null;
   let best = save.getGameProgress(meta.id).endlessBest;
 
   const wrap = document.createElement("div");
@@ -904,6 +949,8 @@ function mountEndless(
   }
 
   function startRound(): void {
+    fit?.dispose();
+    fit = null;
     run?.destroy();
     stageEl.innerHTML = "";
     paintHead();
@@ -922,6 +969,7 @@ function mountEndless(
       },
     });
     stageEl.appendChild(run.root);
+    fit = fitFieldIntoStage(run.root);
   }
 
   gone.listen(wrap.querySelector(".rbg-back") as HTMLButtonElement, "click", () => {
@@ -932,6 +980,8 @@ function mountEndless(
 
   return {
     destroy() {
+      fit?.dispose();
+      fit = null;
       run?.destroy();
       run = null;
       gone.dispose();
@@ -943,6 +993,15 @@ function mountEndless(
 // ---------------------------------------------------------------------------
 // 挂载
 // ---------------------------------------------------------------------------
+
+/** 壳层给的 `initialLevel`(1 基),没有就看地址栏的 `?level=N` */
+function wantedLevel(api: GameApi): unknown {
+  const given = (api as { initialLevel?: unknown }).initialLevel;
+  if (given !== undefined && given !== null) return given;
+  const loc = (globalThis as { location?: { search?: string; hash?: string } }).location;
+  if (!loc) return undefined;
+  return parseLevelParam(loc.search ?? "") ?? parseLevelParam(loc.hash ?? "") ?? undefined;
+}
 
 export function mount(api: GameApi): { destroy: () => void } {
   const settings = { comeback: true };
@@ -967,6 +1026,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   bar.append(vsBtn, endBtn);
 
   let side: { destroy: () => void } | null = null;
+  /** 关卡正在跑没有:侧模式的入口靠它挡住,别把关卡层只藏不销毁(W5R2-C-06) */
+  let inLevel = false;
 
   function refreshBtn(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
@@ -984,6 +1045,10 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function openSide(make: () => { destroy: () => void }): void {
     if (side) return;
+    // 关卡正在跑就不许再开一层。`bar.hidden` 只是让手指够不着,焦点残留、
+    // 壳层补发的 click、自动化脚本照样能把它点响 —— 点响了关卡层就只被 hidden 藏起来,
+    // 两条 requestAnimationFrame 与两套定时器一起跑到天荒地老(W5R2-C-06)。
+    if (inLevel) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -1007,9 +1072,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       // 两条 requestAnimationFrame 会同时跑。回选关地图就放回去。
       playLevel: (stage, ctx) => {
         bar.hidden = true;
+        inLevel = true;
         const handle = playLevel(stage, ctx, settings);
         return {
           destroy: () => {
+            inLevel = false;
             handle?.destroy?.();
             // 对战场 / 无尽开着的时候这一条本来就该收着，别替它放回来
             if (!side) bar.hidden = false;
@@ -1021,6 +1088,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       grandMessage: "188 场拔河全部拉赢,大力士奖杯归你!",
     }
   );
+
+  // 壳层或地址栏点名了某一关就直接开进去,不用玩家再在地图上找一遍
+  const target = resolveInitialLevel(
+    wantedLevel(api),
+    furthestPlayable(loadStars(meta.id), loadSkips(meta.id), TOTAL_LEVELS),
+    TOTAL_LEVELS
+  );
+  if (target !== null) {
+    try {
+      openLevelOnMap(levelHost, target, chapterOf(CHAPTERS, target));
+    } catch (err) {
+      console.warn("[一朵一星] red-blue-tug 直开关卡失败,停在地图上:", err);
+    }
+  }
 
   return {
     destroy() {

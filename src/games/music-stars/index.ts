@@ -17,6 +17,7 @@ import { buildMelodies, CHAPTERS, LEVELS, type MusicLevel } from "./levels";
 import { clampSpeed, FULL_SPEED, rateWithSpeed, scaleMs, speedHint } from "./practice";
 import { openLevelOnMap, parseLevelParam, resolveInitialLevel } from "./runtime";
 import { createSandbox, type SandboxHandle } from "./sandboxUi";
+import { resetClippedScroll } from "./stageScroll";
 import { StarSynth } from "./synth";
 import { midiToFreq, PENTATONIC_MIDI, PENTATONIC_NOTES } from "./tuning";
 import { createAudioBar, createStarBoard, fitIntoStage, injectCss } from "./ui";
@@ -101,6 +102,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
   `;
   wrap.appendChild(head);
   stage.appendChild(wrap);
+  // 地图上「🎯 跳到当前关」与点节点的聚焦滚动会给舞台留下 scrollTop，一路带进关内，
+  // 横屏上把「🗺️ 选关」——关内唯一的退出口——顶到壳顶栏底下（W5R2-FBS-03）。
+  resetClippedScroll(wrap);
 
   const songEl = wrap.querySelector(".mst-song") as HTMLElement;
   const lenEl = wrap.querySelector(".mst-len") as HTMLElement;

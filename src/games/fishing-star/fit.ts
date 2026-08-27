@@ -46,6 +46,33 @@ export function seaHeightPx(want: number, room: number, chrome: number, min = MI
 }
 
 /**
+ * 水面已经收到 `MIN_SEA_PX` 还是装不下时，这一屏自己该钳到多高
+ * （`null` = 装得下，一个字节都不用写）。
+ *
+ * `seaHeightPx()` 收的只有水面，而水面有下限——低于 132px 就看不清鱼群带与深度尺了。
+ * 横过来拿（844×390 / 740×360 / 640×360）时，舞台看得见的那一段只剩两百出头，
+ * 光是水面以外那几行（HUD / 风向 / 张力条 / 提示 / 64px 的大按钮）就要 182px，
+ * 于是水面一路收到下限仍旧超出 90px——**整颗「🎣 按住抛竿」掉在裁切线以下**。
+ * 那是这一款唯一的操作键，按不着就开不了局，而这一屏当时连一处能起手滚的地方都没有。
+ *
+ * CSS 里那句 `.fs-wrap{max-height:100%}` 指望不上：壳层那条祖先链是 `auto` 高的，
+ * 百分比没有可解析的参照，整条规则是空转的（第 1 轮监督修复员的结论）。
+ * 所以只能量出真实像素再写死——和 `music-stars` / `shape-kingdom` 那两份
+ * `fitIntoStage()` 是同一个做法。
+ *
+ * 这里只算数不写 DOM：写在 `index.ts` 里，`fit.ts` 保持纯的（`clipLatch.test.ts` 钉着这一条）。
+ */
+export function wrapCapPx(roomPx: number, contentPx: number, slack = FIT_SLACK_PX): number | null {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  if (!Number.isFinite(contentPx) || contentPx <= 0) return null;
+  const cap = Math.floor(roomPx - slack);
+  if (cap <= 0) return null;
+  // 差一个像素以内不算超：亚像素抖动不值得为它挂一条滚动条
+  if (contentPx <= cap + 1) return null;
+  return cap;
+}
+
+/**
  * 排完之后底边掉到裁切线以下多少像素（≤0 = 还在里面）。
  *
  * `sea + chrome` 就是这一屏的总高，`room` 是「我头顶到裁切线」还剩多少。
@@ -79,7 +106,7 @@ export function needsImmediateRefit(prevHeightPx: number, nowHeightPx: number): 
 }
 
 interface ViewLike {
-  getComputedStyle: (el: Element) => { overflowY: string; overflowX?: string };
+  getComputedStyle: (el: Element) => { overflowY: string; overflowX?: string; borderBottomWidth?: string };
 }
 
 /**
@@ -156,6 +183,20 @@ export function createClipWatch(): ClipWatch {
   };
 }
 
+/**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`（平台文件，禁改），不减这一刀就白多算 4px
+ * ——这一款拿这条线既倒推水面高度、又判「抛竿键掉出去没有」，两处都会跟着松 4px。
+ * 量不出宽度（测试桩 / 老浏览器）就当没有，绝不把可视段算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
 /** 沿祖先链找出「`overflow` 不是 `visible` 且 `keep` 认下」的那几层，各自的下沿在哪儿 */
 function bottomsOfClippers(
   el: HTMLElement,
@@ -164,10 +205,11 @@ function bottomsOfClippers(
 ): number[] {
   const out: number[] = [];
   for (let p = el.parentElement; p; p = p.parentElement) {
-    const oy = view.getComputedStyle(p).overflowY;
+    const cs = view.getComputedStyle(p);
+    const oy = cs.overflowY;
     if (oy !== "auto" && oy !== "scroll" && oy !== "hidden") continue;
     if (!keep(p)) continue;
-    out.push(p.getBoundingClientRect().bottom);
+    out.push(clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth ?? ""));
   }
   return out;
 }

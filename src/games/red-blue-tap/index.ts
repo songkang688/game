@@ -83,13 +83,21 @@ const CSS = `
 }
 `;
 
-const ENDLESS_CSS = `
+export const ENDLESS_CSS = `
 .rte-bar { display: flex; justify-content: center; margin: 0 0 10px; }
-.rte-open { border: none; border-radius: 999px; padding: 10px 20px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 4px 0 #3B55C2; }
+/* display:flex 的优先级高过浏览器自带的 [hidden]{display:none}，
+   不补这一条 bar.hidden = true 就是写了等于没写：真机上关卡在跑时这一条
+   照旧 60px 高、两颗入口 elementFromPoint 全命中（W5R2-FB-03）。 */
+.rte-bar[hidden] { display: none; }
+/* min-height 是钉着的，不是靠 padding 凑的：竖屏上这两颗的文字折成两行，量出来 ≥44px，
+   看着达标；横过来拿一行就排得下，高度当场掉回 10+20+10=40px（真机全量扫 1901 颗键，
+   全场只有这两颗破底线，出现在横屏三档的地图 / 关内 / 侧模式共 9 处）。
+   而它们是双人与无尽两个模式仅有的入口。 */
+.rte-open { border: none; border-radius: 999px; padding: 10px 20px; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 4px 0 #3B55C2; }
 .rte-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #3B55C2; }
 .rte-open:focus-visible { outline: 3px solid #263E7A; outline-offset: 3px; }
 .rte-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.rte-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #3F5C9A; box-shadow: 0 3px 0 rgba(90,110,170,.28); }
+.rte-back { border: none; border-radius: 999px; padding: 7px 13px; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #3F5C9A; box-shadow: 0 3px 0 rgba(90,110,170,.28); }
 .rte-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(90,110,170,.28); }
 .rte-over { position: absolute; inset: 0; border-radius: 16px; background: rgba(248,251,255,.96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px; }
 .rte-over-title { font-size: 22px; font-weight: 900; color: #3F5C9A; }
@@ -133,13 +141,61 @@ function nowMs(): number {
 }
 
 /** 摆一个点：躲开这一轮已经摆过的位置，摆不开就用最后一次的落点 */
-function placeDot(el: HTMLElement, taken: Array<[number, number]> = []): void {
-  let x = 6 + Math.random() * 72;
-  let y = 6 + Math.random() * 72;
+/** 竞技场里那颗点多大（`.rbt-arena .rbt-dot`，四档视口都是这个数） */
+export const DOT_PX = 72;
+
+/** 点离场地边沿至少留这么多，免得贴着圆角 */
+export const DOT_EDGE_PX = 4;
+
+/** 点能落在场地的哪一段（相对场地的百分比） */
+export interface DotSpan {
+  min: number;
+  span: number;
+}
+
+/** 两个方向各一段 */
+export interface DotBand {
+  x: DotSpan;
+  y: DotSpan;
+}
+
+/** 量不到场地时退回 1.2 原来那对写死的数字（还没挂上 DOM、测试桩） */
+const LEGACY_SPAN: DotSpan = { min: 6, span: 72 };
+
+/**
+ * 点能落在场地的哪一段：**整颗点（含热区）必须留在场内**。
+ *
+ * 原来写死的是 `6% + random × 72%`，那对数字是按「场地 300px 上下」定的。
+ * 场地一收到 105px（横过来拿那三档），78% 就是 82px，再加 72px 的点整颗探出场外 22px
+ * （真机量到最大 +24px），而 `.rbt-arena{overflow:hidden}` 会把它裁掉半颗——
+ * 看得见一半、按下去却在场外。所以改成按真实像素倒推百分比。
+ *
+ * 纯函数，用例直接喂数字。
+ */
+export function dotBandPct(boxPx: number, dotPx = DOT_PX, edgePx = DOT_EDGE_PX): DotSpan {
+  if (!Number.isFinite(boxPx) || boxPx <= 0) return { ...LEGACY_SPAN };
+  const usable = boxPx - dotPx - edgePx * 2;
+  // 场地比一颗点还矮：贴边摆，至少整颗在场内
+  if (usable <= 0) return { min: 0, span: 0 };
+  return { min: (edgePx / boxPx) * 100, span: (usable / boxPx) * 100 };
+}
+
+/** 这一刻这块场地的两个方向各能摆在哪一段 */
+export function arenaBand(el: HTMLElement): DotBand {
+  return { x: dotBandPct(el.clientWidth), y: dotBandPct(el.clientHeight) };
+}
+
+const FULL_BAND: DotBand = { x: LEGACY_SPAN, y: LEGACY_SPAN };
+
+function placeDot(el: HTMLElement, taken: Array<[number, number]> = [], band: DotBand = FULL_BAND): void {
+  const roll = (): [number, number] => [
+    band.x.min + Math.random() * band.x.span,
+    band.y.min + Math.random() * band.y.span,
+  ];
+  let [x, y] = roll();
   for (let tries = 0; tries < 24; tries++) {
     if (taken.every(([px, py]) => Math.hypot(px - x, py - y) >= DOT_GAP_PCT)) break;
-    x = 6 + Math.random() * 72;
-    y = 6 + Math.random() * 72;
+    [x, y] = roll();
   }
   taken.push([x, y]);
   el.style.left = `${x}%`;
@@ -158,6 +214,48 @@ export function arenaHeightPx(cssHeight: number, room: number): number {
   return Math.max(ARENA_MIN_PX, Math.min(cssHeight, Math.floor(room)));
 }
 
+/** 竞技场再挤也得装得下一整颗点（含两边各 4px 边距），低于它就没得玩了 */
+export const ARENA_FLOOR_PX = DOT_PX + DOT_EDGE_PX * 2;
+
+/**
+ * 竞技场**最终**多高。
+ *
+ * `arenaHeightPx()` 守着 `ARENA_MIN_PX = 216`（低于它三行点摆不开）。
+ * 这条策略在竖屏上是对的，横过来拿就变成了**宁可让它掉出屏幕也要 216**：
+ * 真机 844×390 / 740×360 / 640×360 上可视段只有 105…135px，硬撑 216
+ * 等于把下面一半点摆到裁切线外面——而这一款故意不给滚动条（连点游戏，
+ * 能滚就会「想点却滚走了」），够不着就是真的够不着，整局作废。
+ * 14 轮 × 逐颗 `elementFromPoint` 量到 10/10、11/11、6/11 颗按不着。
+ *
+ * 摆得小一点还能玩，摆到屏幕外面就没得玩了。所以：要得到 216 就照旧，
+ * 要不到就退到「装得下就行」，底线是**装得下一整颗点**。
+ */
+export function arenaBoxPx(cssHeight: number, room: number): number {
+  const pref = arenaHeightPx(cssHeight, room);
+  if (!Number.isFinite(room) || room <= 0) return pref;
+  if (pref <= room) return pref;
+  return Math.max(ARENA_FLOOR_PX, Math.floor(room));
+}
+
+/**
+ * 竞技场下面还压着多少（排在它后面的那一行 `.rbt-msg`）。
+ * 收场地时得把这一截让出来，不然提示整行掉在裁切线以下——
+ * 「加油」「答对啦」那几句正是孩子最需要看见的。
+ *
+ * 量的是**后面的兄弟**而不是父元素的下沿：父元素有可能就是那条裁切线本身
+ * （用例里的假链就是这么搭的），拿它算等于把自己头顶那一段又减一遍。
+ */
+function belowPx(el: HTMLElement): number {
+  if (typeof el.getBoundingClientRect !== "function") return 0;
+  let low = Number.NEGATIVE_INFINITY;
+  for (let s = el.nextElementSibling; s; s = s.nextElementSibling) {
+    const rect = (s as HTMLElement).getBoundingClientRect?.();
+    if (rect) low = Math.max(low, rect.bottom);
+  }
+  if (!Number.isFinite(low)) return 0;
+  return Math.max(0, low - el.getBoundingClientRect().bottom);
+}
+
 /**
  * 把竞技场压进舞台看得见的那一段。
  *
@@ -171,6 +269,20 @@ export function arenaHeightPx(cssHeight: number, room: number): number {
  * 不走滚动条：这是个连点游戏，能滚就会「想点却滚走了」。直接收高度，点跟着百分比回来。
  * 返回拆监听的函数。
  */
+/**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`（平台文件，禁改），不减这一刀就白多算 4px
+ * ——而这一款的点是按百分比摆的、竞技场又不许滚，那 4px 里的点就是真的按不着。
+ * 量不出宽度（测试桩 / 老浏览器）就当没有，绝不把裁切线算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
 export function fitArena(el: HTMLElement): () => void {
   const view = el.ownerDocument?.defaultView ?? null;
   if (!view || typeof el.getBoundingClientRect !== "function") return () => {};
@@ -179,13 +291,14 @@ export function fitArena(el: HTMLElement): () => void {
     const css = el.getBoundingClientRect().height;
     let bottom = Number.POSITIVE_INFINITY;
     for (let p = el.parentElement; p; p = p.parentElement) {
-      const oy = view.getComputedStyle(p).overflowY;
+      const cs = view.getComputedStyle(p);
+      const oy = cs.overflowY;
       if (oy === "auto" || oy === "scroll" || oy === "hidden") {
-        bottom = Math.min(bottom, p.getBoundingClientRect().bottom);
+        bottom = Math.min(bottom, clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth));
       }
     }
     if (!Number.isFinite(bottom)) return;
-    const next = arenaHeightPx(css, bottom - el.getBoundingClientRect().top);
+    const next = arenaBoxPx(css, bottom - el.getBoundingClientRect().top - belowPx(el));
     if (next < css) el.style.height = `${next}px`;
   };
   relayout();
@@ -415,7 +528,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       el.appendChild(tag);
       el.setAttribute("aria-label", `${label} 号点`);
     }
-    placeDot(el, taken);
+    // 每摆一颗都按当下的场地量一次:转屏之后场地就不是原来那个了
+    placeDot(el, taken, arenaBand(arenaEl));
     const d: Dot = { el, kind, label, aiTimer: null, gone: false, id: dotSeq++, live: false };
     arenaEl.appendChild(el);
     dots.add(d);
@@ -637,6 +751,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   bar.append(versusBtn, openBtn);
 
   let side: { destroy: () => void } | null = null;
+  /** 关卡正在跑没有：两颗侧模式入口靠它挡住，别把关卡层只藏不销毁（W5R2-FB-03） */
+  let inLevel = false;
 
   function refreshBtn(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
@@ -648,12 +764,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     side = null;
     sideHost.hidden = true;
     levelHost.hidden = false;
-    bar.hidden = false;
+    bar.hidden = inLevel;
     refreshBtn();
   }
 
   function openSide(mountFn: (host: HTMLElement, api: GameApi, onExit: () => void) => { destroy: () => void }): void {
-    if (side) return;
+    // 关卡正在跑就不许再开一层。`bar.hidden` 只是让手指够不着,焦点残留、
+    // 壳层补发的 click、自动化脚本照样能把它点响 —— 点响了关卡层就只被 hidden 藏起来,
+    // 秒表、小电脑的 AI、点的生灭全都不停:真机上关内分数在对战屏后面 2.5 秒走了一分。
+    if (side || inLevel) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -668,7 +787,22 @@ export function mount(api: GameApi): { destroy: () => void } {
   const level = mountLevelGame({ ...api, root: levelHost }, {
     id: meta.id,
     chapters: CHAPTERS,
-    playLevel,
+    // 关卡在跑时把模式条收起来:一来它本来就不该在关卡上面(点一下就两套一起跑),
+    // 二来横过来拿的时候这一整条 50px 正是竞技场缺的那一截 —— 收要排在
+    // playLevel() 之前,竞技场是在里面按可视高收的,量早了这 50px 没人认领。
+    playLevel: (stage, ctx) => {
+      bar.hidden = true;
+      inLevel = true;
+      const handle = playLevel(stage, ctx);
+      return {
+        destroy: () => {
+          inLevel = false;
+          handle?.destroy?.();
+          // 侧模式开着的时候这一条本来就该收着,别替它放回来
+          if (!side) bar.hidden = false;
+        },
+      };
+    },
     mapHint: "让小电脑得分越少，星星越多！",
     grandMessage: "188 场抢点大战全部获胜，又准又稳，了不起！",
   });

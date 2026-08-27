@@ -67,6 +67,17 @@ export class StubEl {
     return child;
   }
 
+  /** `ref` 之前插一个（`ref` 为 null 时等同 `appendChild`，和真 DOM 一致） */
+  insertBefore<T extends StubEl>(child: T, ref: StubEl | null): T {
+    child.parentElement?.removeChild(child);
+    child.parentElement = this;
+    const at = ref ? this.children.indexOf(ref) : -1;
+    if (at >= 0) this.children.splice(at, 0, child);
+    else this.children.push(child);
+    notifyObservers(this);
+    return child;
+  }
+
   removeChild(child: StubEl): void {
     const at = this.children.indexOf(child);
     if (at >= 0) this.children.splice(at, 1);

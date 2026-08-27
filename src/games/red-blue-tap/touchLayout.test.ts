@@ -27,6 +27,7 @@ import {
   padLayout,
   padWidthPx,
 } from "./arena";
+import { ENDLESS_CSS } from "./index";
 import { SLOT_COUNT } from "./rounds";
 
 const dir = fileURLToPath(new URL(".", import.meta.url));
@@ -106,5 +107,34 @@ describe("红蓝点点 · 双人对战的四颗键在矮屏上也按得到", () 
     // 矮屏那一档不许把它又收回去
     const short = ARENA_CSS.slice(ARENA_CSS.indexOf(`@media (max-width: 420px) and (max-height: ${SHORT_SCREEN_PX}px)`));
     expect(short).not.toMatch(/\.rbt-vs-(back|mode)[^{]*\{[^}]*min-height/);
+  });
+
+  /**
+   * 模式条那两颗（`⚔️ 双人对战` / `♾️ 点到手软`）在竖屏上量到的都是 ≥44px，
+   * 但那是**文字折了两行**撑出来的，不是有人钉着。横过来拿一行就排得下，
+   * 高度当场掉回 `10 + 20 + 10 = 40px`。
+   *
+   * 真机全量扫（七档视口 × 五款 × 地图 / 关内 / 侧模式，共量 1901 颗键）：
+   * 全场只有这两颗破底线，**179.7×40 / 209.7×40，出现在 9 处**——
+   * 横屏三档（640×360 / 720×360 / 844×390）的地图页、关内、侧模式各一处。
+   * 而它们是双人与无尽两个模式**仅有的入口**。
+   */
+  it("模式条那两颗入口不许靠折行凑高度——横过来拿一行排得下时也得有 44px", () => {
+    const at = ENDLESS_CSS.indexOf(".rte-open {");
+    expect(at, "找不到 .rte-open").toBeGreaterThan(-1);
+    const decl = ENDLESS_CSS.slice(at, ENDLESS_CSS.indexOf("}", at));
+    expect(decl).toContain(`min-height: ${TAP_MIN}px`);
+    // padding 撑出来的 40px 是 content-box 的算法，钉 min-height 得同时钉盒模型
+    expect(decl).toContain("box-sizing: border-box");
+    // 抬高之后文字要居中，不然贴着上边缘更难按（和 .rbt-vs-back 那条同一处理）
+    expect(decl).toContain("align-items: center");
+  });
+
+  it("侧模式头上那颗返回键同样够 44px（横屏上它也只有一行）", () => {
+    const at = ENDLESS_CSS.indexOf(".rte-back {");
+    expect(at, "找不到 .rte-back").toBeGreaterThan(-1);
+    const decl = ENDLESS_CSS.slice(at, ENDLESS_CSS.indexOf("}", at));
+    expect(decl).toContain(`min-height: ${TAP_MIN}px`);
+    expect(decl).toContain("box-sizing: border-box");
   });
 });

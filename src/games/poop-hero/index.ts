@@ -155,7 +155,11 @@ export const PH_CSS = `
 .ph-toast.ph-on{opacity:1;}
 .ph-pads{display:flex;justify-content:space-between;gap:8px;margin-top:8px;--k:52px;--cols:4;}
 .ph-pads[data-players="2"]{--cols:3;}
-.ph-pad{display:grid;grid-template-columns:repeat(var(--cols),var(--k));grid-auto-rows:var(--k);gap:4px;
+/* 第一行是键盘说明,触屏上 display:none——归 grid-auto-rows 管的话它藏起来也照样占
+   一整颗键(44–56px),分类关的三色桶图例和提示行就是被这一行顶出屏幕的。
+   写成 auto:显示时照样撑开,藏起来就是 0。键仍旧在第 2、3 行。 */
+.ph-pad{display:grid;grid-template-columns:repeat(var(--cols),var(--k));
+  grid-template-rows:auto var(--k) var(--k);grid-auto-rows:var(--k);gap:4px;
   justify-content:center;}
 .ph-pad-name{grid-column:1/-1;font-size:11px;font-weight:800;color:#8A5A3C;text-align:center;
   height:auto;line-height:1.3;}
@@ -1588,6 +1592,9 @@ export function mount(api: GameApi): { destroy: () => void } {
     endlessBtn.textContent = best > 0 ? `♾️ 打扫不完的城市 · 最好 ${best} 个街区` : "♾️ 打扫不完的城市 · 来一趟!";
   }
 
+  /** 关卡正在跑没有:侧模式的入口靠它挡住,别把关卡层只藏不销毁(W5R2-C-06) */
+  let inLevel = false;
+
   function closeMode(): void {
     current?.destroy();
     current = null;
@@ -1599,6 +1606,10 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function openMode(make: (host: HTMLElement, api: GameApi, onExit: () => void) => { destroy: () => void }): void {
     if (current) return;
+    // 关卡正在跑就不许再开一层。`bar.hidden` 只是让手指够不着,焦点残留、
+    // 壳层补发的 click、自动化脚本照样能把它点响 —— 点响了关卡层就只被 hidden 藏起来,
+    // 两条 requestAnimationFrame 与两套定时器一起跑到天荒地老(W5R2-C-06)。
+    if (inLevel) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
@@ -1622,9 +1633,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       // 两条 requestAnimationFrame 会同时跑。回选关地图就放回去,那儿地方够。
       playLevel: (stage, ctx) => {
         bar.hidden = true;
+        inLevel = true;
         const handle = playLevel(stage, ctx);
         return {
           destroy: () => {
+            inLevel = false;
             handle?.destroy?.();
             // 无尽 / 双人开着的时候这一条本来就该收着,别替它放回来
             if (!current) bar.hidden = false;
