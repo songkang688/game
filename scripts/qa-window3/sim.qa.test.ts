@@ -422,33 +422,40 @@ describe("sling-birds", () => {
 // 12-B 糖果秋千
 // ---------------------------------------------------------------------------
 describe("candy-swing", () => {
-  it("抽查关卡能找到下刀方案 / 不下刀掉不进嘴 / 甜甜塔能一直搭", async () => {
+  it("抽查关卡照配方能过 / 不动手掉不进嘴 / 甜甜塔能一直搭", async () => {
     const { LEVELS } = await import("../../src/games/candy-swing/levels");
-    const { searchCutTime, makeSimFor, runSim } = await import("../../src/games/candy-swing/sim");
+    const { playRecipeFor, makeSimFor, runSim } = await import("../../src/games/candy-swing/sim");
     const { sweetStarCount } = await import("../../src/games/candy-swing/swing12");
     const r = row("candy-swing");
-    const solved: string[] = [];
-    const unsolved: number[] = [];
-    for (const lv of [0, 40, 90, 140, 187]) {
-      const t = searchCutTime(lv, 12, 0.1);
-      if (t === null) unsolved.push(lv + 1);
-      else solved.push(`第${lv + 1}关第${t.toFixed(1)}秒下刀`);
+    // 关卡自带 solve 配方,照着走一遍才是这一款真正的「通关」判据;
+    // 只扫下刀时机会把 hookRelay / cutPuff / lowPop 这些非纯剪绳关误判成无解。
+    const PICKS = [1, 40, 41, 60, 91, 120, 141, 170, 188];
+    const passed: string[] = [];
+    const failed: string[] = [];
+    for (const n of PICKS) {
+      const lv = LEVELS[n - 1];
+      const w = playRecipeFor(lv);
+      if (w.ate) passed.push(`第${n}关(${lv.solve.kind}/${w.t.toFixed(1)}秒/${w.collected.size}星)`);
+      else failed.push(`第${n}关(${lv.solve.kind}/${w.failed || "超时"})`);
     }
-    r.win = solved.length > 0;
-    r.notes.push(`下刀时机搜索(上限 12 秒):${solved.join("、")}${unsolved.length ? `;没搜到 ${unsolved.join("/")}` : ""}(共 ${LEVELS.length} 关)`);
+    r.win = failed.length === 0;
+    r.notes.push(
+      `自带配方跑 ${PICKS.length} 关:过 ${passed.length} 关 ${passed.join("、")}` +
+        `${failed.length ? `;过不去 ${failed.join("、")}` : ""}(共 ${LEVELS.length} 关)`
+    );
 
-    // 摆烂:一刀都不下,看糖果会不会自己掉进嘴里
+    // 摆烂:一下都不点,看糖果会不会自己掉进嘴里
     const lazy: string[] = [];
     const auto: string[] = [];
-    for (const lv of [0, 40, 90, 140, 187]) {
-      const w = makeSimFor(LEVELS[lv]);
-      runSim(w, 16);
-      (w.ate ? auto : lazy).push(String(lv + 1));
+    for (const n of PICKS) {
+      const w = makeSimFor(LEVELS[n - 1]);
+      runSim(w, 20);
+      (w.ate ? auto : lazy).push(`${n}${w.ate ? "" : `(${w.failed || "没掉进去"})`}`);
     }
     r.lose = lazy.length > 0;
     r.notes.push(
-      `一刀不下空跑 16 秒:吃不到的关 ${lazy.join("/") || "无"};` +
-        `不下刀也自己吃到的关 ${auto.join("/") || "无"}`
+      `一下不点空跑 20 秒:吃不到的关 ${lazy.join("/") || "无"};` +
+        `不动手也自己吃到的关 ${auto.join("/") || "无"}`
     );
 
     const towers = [1, 5, 10, 20].map((n) => `${n}层${sweetStarCount(n)}星`);
@@ -551,16 +558,21 @@ describe("snow-fight", () => {
     };
 
     try {
+      // status 只说「打完了」,谁赢要看 winner(座位号),别把摆烂局的 status=win 当成摆烂方赢
+      const score = (a: { fighters: ReadonlyArray<{ score?: number }> }) =>
+        a.fighters.map((f) => f.score ?? "?").join(":");
       const fight = runDuel("normal", true);
       r.win = fight.a.status !== "playing";
       r.notes.push(
-        `人机单挑(中档)双方都真打:${fight.steps} 步(${(fight.steps * DT).toFixed(0)} 秒)后 status=${fight.a.status}`
+        `人机单挑(中档)双方都真打:${fight.steps} 步(${(fight.steps * DT).toFixed(0)} 秒)分出胜负,` +
+          `胜者=座位${(fight.a as { winner?: number }).winner}、比分 ${score(fight.a)}`
       );
       const lazy = runDuel("hard", false);
-      r.lose = lazy.a.status !== "playing";
+      const lazyWinner = (lazy.a as { winner?: number }).winner;
+      r.lose = lazy.a.status !== "playing" && lazyWinner === 1;
       r.notes.push(
-        `0 号座位站着不还手:${lazy.steps} 步后 status=${lazy.a.status}、` +
-          `双方雪人次数 ${lazy.a.fighters.map((f) => (f as { bumps?: number }).bumps ?? "?").join("/")}`
+        `0 号座位站着不还手:${lazy.steps} 步后收场,胜者=座位${lazyWinner}、比分 ${score(lazy.a)}` +
+          ` → 摆烂方${lazyWinner === 0 ? "居然赢了(问题)" : "确实会输"}`
       );
     } catch (e) {
       r.notes.push(`对战驱动签名对不上(${String(e).slice(0, 70)}),改用波次表取证`);

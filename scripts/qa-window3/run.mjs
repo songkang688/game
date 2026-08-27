@@ -62,7 +62,8 @@ async function modeEntries(page) {
     for (const b of stage.querySelectorAll("button")) {
       if (b.closest(".l99-map") || b.closest(".l99-stagebar") || b.closest(".l99-overlay")) continue;
       const t = (b.textContent ?? "").trim().replace(/\s+/g, " ");
-      if (!t || t.length > 24) continue;
+      // 有几款(duo-vs-star / duo-arena)把玩法说明直接印在按钮里,文案能到 40+ 字
+      if (!t || t.length > 60) continue;
       const r = b.getBoundingClientRect();
       if (r.width < 8 || r.height < 8) continue;
       if (!re.test(t)) continue;
