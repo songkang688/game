@@ -227,10 +227,18 @@ export function canvasRoomPx(
 }
 
 /**
- * 整块玩法那一层最少要留多高才值得钳——比这还矮就别钳了,钳只会压成一条缝。
- * 画布底线 + 一盘手柄,正好 240px。
+ * 钳出来的滚动口最矮能矮到什么程度——比这还矮就真的不值得钳,
+ * 连一颗方向键的中心点都塞不进去,滚到哪儿都点不着。一颗键 56px。
+ *
+ * 这个数原先是 240(画布底线 + 一盘手柄),而且是当**下限**用的:`Math.max(240, 可视段)`。
+ * 横屏上量到的正是它的反面(W5R3-C-03,640×360 第 117 关):
+ * 可视段只有 190px,钳出来的口子却按 240px 写——多出来的 50px 连同排在最后的
+ * 六颗方向键一起停在裁切线以下。**滚动口自己有一截在屏外,滚到底也露不出来**,
+ * 真手指慢拖八趟 6 颗一个都点不着,这一款横屏纯触屏一步都走不动。
+ *
+ * 下限只能比可视段矮,绝不能比它高。
  */
-export const WRAP_MIN_ROOM = 240;
+export const WRAP_MIN_ROOM = 56;
 
 /**
  * 画布已经收到底线、整块玩法**仍然**装不下时,`.ph-wrap` 自己该钳到多高。
@@ -244,16 +252,54 @@ export const WRAP_MIN_ROOM = 240;
  *
  * 这里不再跟画布较劲,直接让 `.ph-wrap` 自己滚:手柄仍在第一屏,图例与提示往下一划就有。
  * 返回 null 表示装得下(或矮到不值得钳),照原样别管——高屏上绝不凭空多出一个滚动容器。
+ *
+ * **钳出来的这个数就是滚动口自己的高**,所以它一步也不许超过可视段:
+ * 超出去的那一截连同它装着的东西一起在裁切线以下,滚到底也露不出来(W5R3-C-03)。
  */
 export function wrapRoomPx(
   wrapHeight: number,
   roomPx: number,
   minRoom = WRAP_MIN_ROOM,
 ): number | null {
-  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx < minRoom) return null;
   if (!Number.isFinite(wrapHeight) || wrapHeight <= 0) return null;
   if (wrapHeight - roomPx <= 1) return null;
-  return Math.max(minRoom, Math.floor(roomPx));
+  return Math.floor(roomPx);
+}
+
+/**
+ * 要把 `[top, bottom]` 这一段送进眼前,`scrollTop` 该写多少。
+ *
+ * 滚**最小的那一段**:只要这一段的下沿进来就收手,上面的画面尽量留在眼里。
+ * 这一段比滚动口还高就从它的上沿开始露,先看得见头。
+ * 量不出数、或者根本没得滚,就返回 0,不平白往 DOM 上写一个 `scrollTop`。
+ */
+export function scrollToShowPx(top: number, bottom: number, client: number, max: number): number {
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return 0;
+  if (!(client > 0) || !(max > 0)) return 0;
+  const want = bottom - top > client ? top : bottom - client;
+  return Math.max(0, Math.min(max, Math.round(want)));
+}
+
+/**
+ * 挂上滚动条之后,把手柄送到孩子眼前(W5R3-C-03)。
+ *
+ * 落地的 `scrollTop` 是 0,而手柄排在这一屏最底下——横屏上钳完只是「有得滚」,
+ * 六颗方向键仍在折线以下,五六岁的孩子不会想到先把屏幕往上推。
+ * 这一款没有键盘以外的第二条路可走,看不见就等于走不动。
+ *
+ * 滚最小的那一段是有讲究的:手柄一进来就收手,画面的下半截还留在屏上,
+ * 孩子按键的时候仍看得见自己的人往哪儿走。
+ */
+export function showPad(wrap: HTMLElement): number {
+  if (typeof wrap.querySelector !== "function" || typeof wrap.getBoundingClientRect !== "function") return 0;
+  const pads = wrap.querySelector(".ph-pads");
+  if (!pads || typeof pads.getBoundingClientRect !== "function") return 0;
+  const r = pads.getBoundingClientRect();
+  const top = r.top - wrap.getBoundingClientRect().top + wrap.scrollTop;
+  const next = scrollToShowPx(top, top + r.height, wrap.clientHeight, wrap.scrollHeight - wrap.clientHeight);
+  wrap.scrollTop = next;
+  return next;
 }
 
 /**

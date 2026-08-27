@@ -12,7 +12,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { MIN_CANVAS_H, WRAP_MIN_ROOM, canvasRoomPx, wrapRoomPx } from "./runtime";
+import { MIN_CANVAS_H, MIN_HOT, WRAP_MIN_ROOM, canvasRoomPx, wrapRoomPx } from "./runtime";
 
 const SRC = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
@@ -35,9 +35,18 @@ describe("整块玩法装不下时 .ph-wrap 自己滚（W5R3-C-01）", () => {
     expect(392 - clamp).toBeGreaterThanOrEqual(60);
   });
 
-  it("再矮也不许压成一条缝：底线守住画布 + 一盘手柄", () => {
-    expect(wrapRoomPx(392, 40)).toBe(WRAP_MIN_ROOM);
-    expect(WRAP_MIN_ROOM).toBeGreaterThanOrEqual(MIN_CANVAS_H);
+  /**
+   * 这一条原先钉的是「可视段 40px 也照样钳到 240px 的下限」，
+   * 而那个下限恰恰是 W5R3-C-03 的病灶本身——钳出来的高度是**滚动口自己的高**，
+   * 一旦超过可视段，多出来的那一截连同里面的东西一起停在裁切线以下，滚到底也露不出来。
+   * 收官轮据实改判：下限只能比可视段矮；矮到连一颗键都塞不下就干脆别钳。
+   */
+  it("再矮也不许压成一条缝，但下限绝不许越过可视段（W5R3-C-03 据实改判）", () => {
+    expect(wrapRoomPx(392, 40)).toBeNull();
+    expect(wrapRoomPx(392, WRAP_MIN_ROOM)).toBe(WRAP_MIN_ROOM);
+    // 下限本身得放得下一颗按得准的键（56px 的方向键 ≥ 44px 热区）
+    expect(WRAP_MIN_ROOM).toBeGreaterThanOrEqual(MIN_HOT);
+    expect(WRAP_MIN_ROOM).toBeLessThan(MIN_CANVAS_H);
   });
 
   it("量不出来的一律不钳，绝不写出 NaN / 负数", () => {

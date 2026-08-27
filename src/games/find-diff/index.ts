@@ -48,7 +48,9 @@ import {
   pinchZoom,
   resolveInitialLevel,
   shouldSuggestZoom,
+  scrollToShowPx,
   viewportRoomPx,
+  wrapNeedsScroll,
   TOOL_MIN_H,
   type CellCenter,
 } from "./runtime";
@@ -137,6 +139,10 @@ const CSS = `
 @keyframes fdfPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
 .fdf-msg{min-height:20px;font-size:14px;font-weight:800;text-align:center;line-height:1.4;}
 .fdf-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
+/* 两张图收到底线仍装不下时（横屏 640×360）由 fitViewport() 挂上这一档：
+   整屏自己滚，翻到底不许把外面那层也带着走。两张图那一格有自己的滚动条与
+   touch-action，手指落在图上仍旧是拖图 / 捏合，不会误滚外层。 */
+.fdf-wrap.fdf-scroll{overscroll-behavior:contain;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none}，这里补回来 */
 .fdf-tools[hidden]{display:none;}
 .fdf-btn{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;cursor:pointer;
@@ -274,6 +280,7 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const zoomBox = root.querySelector(".fdf-zoom") as HTMLElement;
   const panelsEl = root.querySelector(".fdf-panels") as HTMLElement;
   const msgEl = root.querySelector(".fdf-msg") as HTMLElement;
+  const toolsEl = root.querySelector(".fdf-tools") as HTMLElement;
   const hintBtn = root.querySelector(".fdf-hint") as HTMLButtonElement;
   const zoomer = root.querySelector(".fdf-zoomer") as HTMLInputElement;
   const zoomVal = root.querySelector(".fdf-zoomval") as HTMLElement;
@@ -405,10 +412,24 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   function fitViewport(): void {
     viewport.style.maxHeight = "";
     viewport.style.overflowY = "";
-    const next = viewportRoomPx(root.scrollHeight, viewport.offsetHeight, stageRoomPx(root));
-    if (next === null) return;
-    viewport.style.maxHeight = `${next}px`;
-    viewport.style.overflowY = "auto";
+    root.classList.remove("fdf-scroll");
+    root.style.maxHeight = "";
+    root.style.overflowY = "";
+    const room = stageRoomPx(root);
+    const next = viewportRoomPx(root.scrollHeight, viewport.offsetHeight, room);
+    if (next !== null) {
+      viewport.style.maxHeight = `${next}px`;
+      viewport.style.overflowY = "auto";
+    }
+    // 两张图收到底线还是装不下（横屏 640×360）：让整屏自己滚，
+    // 并顺手把工具条送进眼里——提示键是这一款唯一的救济（W5R3-C-04）
+    if (!wrapNeedsScroll(root.scrollHeight, room)) return;
+    root.classList.add("fdf-scroll");
+    root.style.maxHeight = `${Math.floor(room)}px`;
+    root.style.overflowY = "auto";
+    const r = toolsEl.getBoundingClientRect();
+    const top = r.top - root.getBoundingClientRect().top + root.scrollTop;
+    root.scrollTop = scrollToShowPx(top, top + r.height, root.clientHeight, root.scrollHeight - root.clientHeight);
   }
 
   const pointers = new Map<number, { x: number; y: number }>();

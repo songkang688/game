@@ -114,6 +114,10 @@ export const RBG_CSS = `
 .rbg-wrap.rbg-tighter .rbg-meter { height: 12px; }
 .rbg-wrap.rbg-tighter .rbg-meters { gap: 8px; }
 .rbg-wrap.rbg-tighter .rbg-pull { height: var(--rbg-pull-h, auto) !important; font-size: 17px; }
+/* 四档收紧全用尽仍装不下时（横屏两档、320×568 后段章节）由 fit.ts 挂上这一档。
+   overscroll-behavior:contain 挡住「翻到底就把整页也带着走」；
+   两颗大按钮自己写着 touch-action:none，按住蓄力那一下不会被当成滚动手势。 */
+.rbg-wrap.rbg-scroll { overscroll-behavior: contain; }
 @media (prefers-reduced-motion: reduce) {
   .rbg-beat, .rbg-team, .rbg-rope { transition: none !important; }
 }

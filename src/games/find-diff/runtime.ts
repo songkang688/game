@@ -238,6 +238,37 @@ export function viewportRoomPx(
   return Math.max(minRoom, Math.floor(viewportHeight - over));
 }
 
+/**
+ * 两张图那一块已经钳到 `VIEWPORT_MIN_ROOM` 底线了，整屏**还是**装不下吗。
+ *
+ * 走到这一步说明再没有可让的像素了：两张图不能再矮（26px 的格子已经是下限，
+ * 再矮就看不清哪儿不一样），工具条又不能不要。以前这里直接收手，
+ * 横屏 640×360 上量到的就是后果：`.fdf-wrap` 237px、可视段只有 190px，
+ * **提示键 202×44、放大滑杆 110×44、朗读键 115×44 三颗全部落在裁切线以下，
+ * 而且一个可滚祖先都没有**，真手指慢拖八趟一颗都救不回来（W5R3-C-04）。
+ * 提示是这一款唯一的救济——找不出来又按不着提示，这一关就卡死在那儿了。
+ *
+ * 滚动口最矮也得放得下一颗工具键的中心点，所以下限就是 `TOOL_MIN_H`。
+ */
+export const WRAP_MIN_ROOM = TOOL_MIN_H;
+
+export function wrapNeedsScroll(wrapHeight: number, roomPx: number, minRoom = WRAP_MIN_ROOM): boolean {
+  if (!Number.isFinite(roomPx) || roomPx < minRoom) return false;
+  if (!Number.isFinite(wrapHeight) || wrapHeight <= 0) return false;
+  return wrapHeight - roomPx > 1;
+}
+
+/**
+ * 要把 `[top, bottom]` 这一段送进眼前，`scrollTop` 该写多少（滚最小的那一段）。
+ * 这一段比滚动口还高就从它的上沿开始露；量不出数 / 没得滚就返回 0。
+ */
+export function scrollToShowPx(top: number, bottom: number, client: number, max: number): number {
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return 0;
+  if (!(client > 0) || !(max > 0)) return 0;
+  const want = bottom - top > client ? top : bottom - client;
+  return Math.max(0, Math.min(max, Math.round(want)));
+}
+
 /** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */
 export function miniCellPx(cols: number, viewportWidth: number): number {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;

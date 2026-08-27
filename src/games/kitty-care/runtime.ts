@@ -370,20 +370,36 @@ export function scrollToShowPx(
  *
  * 修法和 `word-garden/fit.ts` 的 `showChoices` 同源：钳完顺手滚一次，
  * 滚**最小的那一段**（只要动手层的下沿进来就收手），上面的猫尽量留在眼里。
+ *
+ * 挑哪一层是有讲究的（W5R3-C-06）：`.ktc-play` 是整个交互层的外壳，
+ * 打扮 / 逗猫关里它还套着一整片场地，横屏 640×360 上量到 **214px > 滚动口 190px**。
+ * 一段比滚动口还高，`scrollToShowPx()` 只能从它的上沿开始露——露出来的是场地，
+ * 排在它最底下的托盘照旧被切：四颗 58×58 打扮件只露出上半截，
+ * 名字那一行（`.ktc-drag small`）**`vis 0/15`，一个像素都看不见**。
+ * 所以外壳装不下时就往里退一层，挑真正要用手指去碰的那一排（`.ktc-tray` / `.ktc-btns`）。
  */
 export function showPlayRow(el: HTMLElement): number {
   if (typeof el.querySelector !== "function" || typeof el.getBoundingClientRect !== "function") return 0;
-  let row: Element | null = null;
-  for (const sel of PLAY_ROW_SELECTORS) {
-    row = el.querySelector(sel);
-    if (row && typeof row.getBoundingClientRect === "function") break;
-    row = null;
-  }
-  if (!row) return 0;
-  const msg = el.querySelector(".ktc-msg");
-  const pinned = msg && typeof msg.getBoundingClientRect === "function"
-    ? msg.getBoundingClientRect().height
+  const msgFirst = el.querySelector(".ktc-msg");
+  const pinnedFirst = msgFirst && typeof msgFirst.getBoundingClientRect === "function"
+    ? msgFirst.getBoundingClientRect().height
     : 0;
+  const budget = Math.max(0, el.clientHeight - pinnedFirst);
+  let row: Element | null = null;
+  let fallback: Element | null = null;
+  for (const sel of PLAY_ROW_SELECTORS) {
+    const found = el.querySelector(sel);
+    if (!found || typeof found.getBoundingClientRect !== "function") continue;
+    fallback ??= found;
+    // 装得进滚动口的第一层就是最外那一层，直接用；装不进就继续往里找
+    if (budget <= 0 || found.getBoundingClientRect().height <= budget) {
+      row = found;
+      break;
+    }
+  }
+  row ??= fallback;
+  if (!row) return 0;
+  const pinned = pinnedFirst;
   const hostTop = el.getBoundingClientRect().top;
   const r = row.getBoundingClientRect();
   const top = r.top - hostTop + el.scrollTop;
@@ -398,8 +414,20 @@ export function showPlayRow(el: HTMLElement): number {
   return next;
 }
 
-/** 长列表钳到这个高度以下就不值得再钳了——再矮连一张卡片都露不全 */
-export const LIST_MIN_ROOM = 160;
+/**
+ * 长列表钳到这个高度以下就不值得再钳了——滚动口再矮也得放得下一颗
+ * 「⭐N 换回来」的中心点，比 44px 还矮才真的没救。
+ *
+ * 这个数原先是 160（「一张卡片都露不全就别钳」）。真机横屏上量到的是它的反面
+ * （W5R3-C-04，640×360 相册）：`.ktc-grid` 的可视段只有 **130px**，
+ * 于是这一条早退直接生效——`max-height:none / overflow:visible`，
+ * 2809px 的卡片一格都没钳，**24 颗兑换钮 0/24 够得着，一个可滚祖先都没有**，
+ * 真手指慢拖八趟纹丝不动。844×390 上 159.x px 同样卡在这一条上。
+ *
+ * 130px 的滚动口一次只看得见半张卡片，确实不好看；
+ * 可「看得见半张、翻得到全部」和「一颗都点不着」不是同一个量级的事。
+ */
+export const LIST_MIN_ROOM = 44;
 
 /**
  * 把一块**本来就该翻着看**的长列表钳进舞台看得见的那一段，并给它自己挂一条滚动条。
@@ -427,7 +455,7 @@ export function scrollIntoStage(el: HTMLElement, minRoom = LIST_MIN_ROOM): { rel
     if (!measurable || !view) return;
     reset();
     const room = stageRoomPx(el);
-    // 量不到裁切线（高屏）或已经整块在裁切线以下（这时候钳只会把它压成一条缝）就不管
+    // 量不到裁切线（高屏）或矮到连一颗兑换钮的中心点都塞不进去就不管
     if (!Number.isFinite(room) || room < minRoom) return;
     if (el.scrollHeight <= room + 1) return;
     el.style.maxHeight = `${Math.floor(room)}px`;
