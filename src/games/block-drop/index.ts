@@ -709,14 +709,8 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
     if (e.key === "Escape") {
       paused = !paused;
       msgEl.textContent = paused ? "⏸️ 暂停中,再按 Esc 继续。" : "继续!";
-<<<<<<< HEAD
       // 这一下归自己了:不拦住,游戏壳还会再弹一次统一暂停面板,
       // 之后的 Esc 只关面板,场上却一直停着
-=======
-      // 一定要 preventDefault:外壳(gameShell)也在 window 上听 Esc,
-      // 收到没被接住的 Esc 就会再弹一层它自己的暂停面板。两层各记各的,
-      // 按第二下时弹窗把 Esc 吃掉、这一层却还停着,第三下面板弹出来游戏反而在跑。
->>>>>>> 9bd2879 (fix(qa-r1): 五款自接 Esc 的游戏补 preventDefault,外壳不再叠第二层暂停)
       e.preventDefault();
       return;
     }

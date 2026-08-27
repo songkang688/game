@@ -340,9 +340,16 @@ describe("360×640 走查回落:首页搜索框不许顶出屏幕", () => {
 
 describe("首页文案里的游戏款数是数出来的,不是写死的", () => {
   // 1.1 是 55 款,窗口 1 加完 12 款就已经是 67 款,写死的数字必然过时。
+  // 只看结果：气泡那句话里不许出现写死的「N 款」，至于是拼 `innerHTML` 还是建 DOM 节点都行。
+  // 两批修复各用了一种写法，合流后走的是 `heroSubtitle` 纯函数（0 / NaN / 负数都有兜底）。
   it("hero 气泡不写死款数", () => {
-    const bubble = HOME_TS.match(/heroBubble\.innerHTML\s*=\s*`([^`]*)`/);
-    expect(bubble, "找不到 hero 气泡文案").not.toBeNull();
-    expect(bubble?.[1], "款数要从 games.length 数出来").not.toMatch(/\d+\s*款/);
+    const at = HOME_TS.indexOf("heroBubble");
+    expect(at, "找不到 hero 气泡").toBeGreaterThan(-1);
+    const block = HOME_TS.slice(at, HOME_TS.indexOf("renderTabs()", at))
+      // 注释里提「0 款 / NaN 都有兜底」是说明，不是会显示给孩子的文案
+      .replace(/\/\/[^\n]*/g, "");
+    expect(block.length, "找不到 hero 气泡文案").toBeGreaterThan(0);
+    expect(block, "款数要从 games.length 数出来").not.toMatch(/\d+\s*款/);
+    expect(block, "款数得真的过一遍 games.length").toMatch(/games\.length|heroSubtitle/);
   });
 });
