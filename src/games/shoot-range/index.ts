@@ -85,7 +85,7 @@ import {
   stepParticles,
   type Particle,
 } from "../../art/kit/sparkle";
-import { shade } from "../../art/kit/volume";
+import { shade } from "../../art/kit/palette";
 import {
   COMBO_RING_MS,
   PETAL_FALL_MS,
@@ -1116,13 +1116,13 @@ function createField(opts: FieldOptions): FieldHandle {
 
     for (const b of opts.blocks) {
       roundRect(ctx, b.x, b.y, b.w, b.h, 8);
-      ctx.fillStyle = shade(SHR_PALETTE.shrWood, 0.1);
+      ctx.fillStyle = shade(SHR_PALETTE.shrWood, 10);
       ctx.fill();
       ctx.strokeStyle = SHR_PALETTE.shrWoodDark;
       ctx.lineWidth = 2;
       ctx.stroke();
       // 顶亮边:和横梁 / 柜台同一套受光
-      ctx.fillStyle = shade(SHR_PALETTE.shrWood, 0.3);
+      ctx.fillStyle = shade(SHR_PALETTE.shrWood, 30);
       ctx.fillRect(b.x + 3, b.y + 2, b.w - 6, 3);
     }
 

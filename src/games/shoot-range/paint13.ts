@@ -6,8 +6,9 @@
  * 所有渐变 / 描边 / 落影走 `src/art/kit/`,颜色一律取 `visual13` 的 token,
  * 命中判定、靶子坐标与半径一个数都不碰。
  */
-import { ballGradient, shade, softShadow } from "../../art/kit/volume";
-import { outlineInk, strokeOutline } from "../../art/kit/outline";
+import { shade } from "../../art/kit/palette";
+import { OUTLINE_DARKEN, strokeOutline } from "../../art/kit/outline";
+import { carnivalBallGradient as ballGradient, carnivalShadow as softShadow } from "../../art/kit/carnival";
 import { easeOutBack } from "../../art/kit/sparkle";
 import { RAINBOW_TTL, SHIELD_HP } from "./targets12";
 import type { Target } from "./logic";
@@ -84,7 +85,7 @@ export function drawTent(ctx: CanvasRenderingContext2D, w: number): void {
   ctx.fillStyle = P.shrSky;
   ctx.fillRect(0, 0, w, TENT_H);
   const stripe = ctx.createLinearGradient(0, 0, 0, TENT_H);
-  stripe.addColorStop(0, shade(P.shrTent, 0.12));
+  stripe.addColorStop(0, shade(P.shrTent, 12));
   stripe.addColorStop(1, P.shrTent);
   ctx.fillStyle = stripe;
   for (let x = 0; x < w + TENT_STRIPE_W; x += TENT_STRIPE_W * 2) {
@@ -98,7 +99,7 @@ export function drawTent(ctx: CanvasRenderingContext2D, w: number): void {
     ctx.fill();
   }
   // 底边一排半圆波浪收口
-  ctx.fillStyle = shade(P.shrTent, -0.08);
+  ctx.fillStyle = shade(P.shrTent, -8);
   const scallop = TENT_STRIPE_W / 2;
   for (let x = scallop / 2; x < w + scallop; x += scallop) {
     ctx.beginPath();
@@ -142,9 +143,9 @@ export function drawBeam(ctx: CanvasRenderingContext2D, w: number): void {
   ctx.save();
   ctx.fillStyle = P.shrWood;
   ctx.fillRect(0, BEAM_Y, w, BEAM_H);
-  ctx.fillStyle = shade(P.shrWood, 0.25);
+  ctx.fillStyle = shade(P.shrWood, 25);
   ctx.fillRect(0, BEAM_Y, w, BEAM_TOP_EDGE);
-  ctx.fillStyle = shade(P.shrWood, -0.18);
+  ctx.fillStyle = shade(P.shrWood, -18);
   ctx.fillRect(0, BEAM_Y + BEAM_H - 2, w, 2);
   // 木纹短线
   ctx.strokeStyle = P.shrWoodDark;
@@ -168,11 +169,11 @@ export function drawCounter(ctx: CanvasRenderingContext2D, w: number, h: number)
   ctx.fillStyle = "#C7E4B4";
   ctx.fillRect(0, COUNTER_Y - 28, w, 6);
   const wood = ctx.createLinearGradient(0, COUNTER_Y, 0, h);
-  wood.addColorStop(0, shade(P.shrWood, 0.08));
-  wood.addColorStop(1, shade(P.shrWood, -0.12));
+  wood.addColorStop(0, shade(P.shrWood, 8));
+  wood.addColorStop(1, shade(P.shrWood, -12));
   ctx.fillStyle = wood;
   ctx.fillRect(0, COUNTER_Y, w, h - COUNTER_Y);
-  ctx.fillStyle = shade(P.shrWood, 0.3);
+  ctx.fillStyle = shade(P.shrWood, 30);
   ctx.fillRect(0, COUNTER_Y, w, BEAM_TOP_EDGE);
   // 竖板缝
   ctx.strokeStyle = P.shrWoodDark;
@@ -281,7 +282,7 @@ function skinBalloon(ctx: CanvasRenderingContext2D, t: Target): void {
   ctx.lineTo(4, r * 0.96);
   ctx.lineTo(0, r * 1.14);
   ctx.closePath();
-  ctx.fillStyle = shade(base, -0.18);
+  ctx.fillStyle = shade(base, -18);
   ctx.fill();
   // 一枚小玻璃光斑
   ctx.beginPath();
@@ -761,13 +762,13 @@ export function drawLauncherSkin(ctx: CanvasRenderingContext2D, x: number, y: nu
   ctx.translate(x, y + squash * 6);
   softShadow(ctx, 0, 24, 52, 9, P.shrShadow);
   const wood = ctx.createLinearGradient(0, -20, 0, 20);
-  wood.addColorStop(0, shade(P.shrWood, 0.22));
+  wood.addColorStop(0, shade(P.shrWood, 22));
   wood.addColorStop(0.15, P.shrWood);
-  wood.addColorStop(1, shade(P.shrWood, -0.15));
+  wood.addColorStop(1, shade(P.shrWood, -15));
   rr(ctx, -46, -20, 92, 40, 14);
   ctx.fillStyle = wood;
   ctx.fill();
-  ctx.strokeStyle = outlineInk(P.shrWood);
+  ctx.strokeStyle = shade(P.shrWood, OUTLINE_DARKEN);
   ctx.lineWidth = 2;
   ctx.stroke();
   // 台面镶一圈玩家色
