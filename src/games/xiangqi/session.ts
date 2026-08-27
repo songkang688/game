@@ -128,9 +128,59 @@ export function undoSteps(twoPlayer: boolean, history: number): number {
   return twoPlayer ? 1 : Math.min(2, history);
 }
 
-/** 电脑同不同意和棋：子力差不多、又走了很久才点头 */
-export function aiAgreesDraw(materialDiff: number, plies: number): boolean {
-  return Math.abs(materialDiff) <= 60 && plies >= 40;
+/** 子力差不到这么多分才谈得上和棋 */
+export const DRAW_MATERIAL = 60;
+/** 满盘（32 子）时要走够这么多手电脑才肯谈和 */
+export const DRAW_PLIES = 40;
+/** 盘上只剩这么少子就是残棋了，手数门槛降到最低 */
+export const DRAW_SPARSE_PIECES = 10;
+/** 残棋时的手数门槛 */
+export const DRAW_PLIES_SPARSE = 16;
+/** 从这个子数往上就按满盘算 */
+export const DRAW_FULL_PIECES = 24;
+
+/**
+ * 这个盘面要走够多少手，电脑才肯谈和。
+ *
+ * 原先写死 40 手，不看盘面稀不稀：两边只剩单车残棋、明摆着和了，
+ * 也得先凑满 40 手才点得动「求和」。子越少越该早点收，所以按剩多少子线性放宽；
+ * **满盘仍旧是 40 手，老口径一个字不变**。
+ */
+export function drawPlyGate(pieces = 32): number {
+  const n = Number.isFinite(pieces) ? Math.round(pieces) : 32;
+  if (n <= DRAW_SPARSE_PIECES) return DRAW_PLIES_SPARSE;
+  if (n >= DRAW_FULL_PIECES) return DRAW_PLIES;
+  const span = DRAW_FULL_PIECES - DRAW_SPARSE_PIECES;
+  return Math.round(
+    DRAW_PLIES_SPARSE + ((n - DRAW_SPARSE_PIECES) * (DRAW_PLIES - DRAW_PLIES_SPARSE)) / span
+  );
+}
+
+/**
+ * 电脑同不同意和棋：子力差不多、又走够了这个盘面该走的手数才点头。
+ * `pieces` 不给就按满盘算，和 1.2 第 1 轮的口径逐位一致。
+ */
+export function aiAgreesDraw(materialDiff: number, plies: number, pieces = 32): boolean {
+  const diff = Number.isFinite(materialDiff) ? Math.abs(materialDiff) : Number.POSITIVE_INFINITY;
+  const n = Number.isFinite(plies) ? plies : 0;
+  return diff <= DRAW_MATERIAL && n >= drawPlyGate(pieces);
+}
+
+/**
+ * 不肯和棋时说清楚**差在哪儿**。
+ *
+ * 以前只回一句「对手还想再下下去」，孩子不知道该继续兑子还是继续走 ——
+ * 是子力差太大（那就得先追回来），还是单纯手数不够（那就接着下）。
+ * 同意的时候返回空串，由调用方走收局那一路。
+ */
+export function drawRefusalLine(materialDiff: number, plies: number, pieces = 32): string {
+  if (aiAgreesDraw(materialDiff, plies, pieces)) return "";
+  const diff = Number.isFinite(materialDiff) ? Math.abs(materialDiff) : 0;
+  if (diff > DRAW_MATERIAL) {
+    return "对手还不肯和 —— 现在双方子力差得有点多，先把局面拉回来再提。";
+  }
+  const left = Math.max(1, Math.ceil(drawPlyGate(pieces) - (Number.isFinite(plies) ? plies : 0)));
+  return `对手还不肯和 —— 才走了这么几手，再下 ${left} 手看看局面。`;
 }
 
 /* ------------------------------------------------------------------ */

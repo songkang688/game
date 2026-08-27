@@ -57,8 +57,10 @@ import {
   type PickState,
   ENDLESS_REASON,
   agreeAsk,
+  aiAgreesDraw,
   confirmDefault,
   difficultyForLevel,
+  drawRefusalLine,
   emptyPick,
   initialLevelOf,
   newAsk,
@@ -207,6 +209,13 @@ function materialDiff(board: Board): number {
     s += p.side === "red" ? PIECE_VALUE[p.type] : -PIECE_VALUE[p.type];
   }
   return s;
+}
+
+/** 盘上还剩多少子（求和门槛按这个放宽：残棋不必凑满 40 手） */
+function pieceCount(board: Board): number {
+  let n = 0;
+  for (const p of board) if (p) n++;
+  return n;
 }
 
 function mountTable(host: HTMLElement, o: TableOpts): Table {
@@ -630,11 +639,15 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
       showAsk(newAsk("draw", current, true));
       return;
     }
-    // 人机：子力差不多、又下得够久，电脑才点头
+    // 人机：子力差不多、又下够了这个盘面该走的手数，电脑才点头。
+    // 门槛与说辞都走 session.ts 的纯函数,不再在这里抄第二份规则
     const diff = materialDiff(board);
-    const fair = Math.abs(diff) <= 60 && entries.length >= 40;
-    if (fair) finish(null, "draw", "对手同意和棋，这一局平分秋色。");
-    else msgEl.textContent = "对手还想再下下去 —— 局面还没到和棋的时候。";
+    const pieces = pieceCount(board);
+    if (aiAgreesDraw(diff, entries.length, pieces)) {
+      finish(null, "draw", "对手同意和棋，这一局平分秋色。");
+    } else {
+      msgEl.textContent = drawRefusalLine(diff, entries.length, pieces);
+    }
   });
 
   renderRecord();

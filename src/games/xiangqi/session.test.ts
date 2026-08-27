@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DIFFICULTIES } from "./ai";
 import {
+  DRAW_FULL_PIECES,
+  DRAW_PLIES,
+  DRAW_PLIES_SPARSE,
+  DRAW_SPARSE_PIECES,
   ENDLESS_REASON,
   MIN_HIT_PX,
   TIER_LEVEL_BOUNDS,
@@ -8,6 +12,8 @@ import {
   aiAgreesDraw,
   confirmDefault,
   difficultyForLevel,
+  drawPlyGate,
+  drawRefusalLine,
   emptyPick,
   hitRadius,
   initialLevelOf,
@@ -165,6 +171,58 @@ describe("悔棋 / 求和要不要两边同意", () => {
     expect(aiAgreesDraw(600, 60)).toBe(false);
     // 刚开局就求和，不理
     expect(aiAgreesDraw(0, 8)).toBe(false);
+  });
+});
+
+describe("求和门槛按盘面稀疏度放宽", () => {
+  it("满盘还是 40 手，老口径一个数没动", () => {
+    expect(drawPlyGate(32)).toBe(DRAW_PLIES);
+    expect(drawPlyGate()).toBe(DRAW_PLIES);
+    expect(drawPlyGate(DRAW_FULL_PIECES)).toBe(DRAW_PLIES);
+    expect(aiAgreesDraw(0, 39, 32)).toBe(false);
+    expect(aiAgreesDraw(0, 40, 32)).toBe(true);
+  });
+
+  it("残棋不必凑满 40 手：只剩十个子时 16 手就谈得动", () => {
+    expect(drawPlyGate(DRAW_SPARSE_PIECES)).toBe(DRAW_PLIES_SPARSE);
+    expect(drawPlyGate(4)).toBe(DRAW_PLIES_SPARSE);
+    expect(aiAgreesDraw(0, 16, 6)).toBe(true);
+    expect(aiAgreesDraw(0, 15, 6)).toBe(false);
+    // 老门槛下这一局是谈不动的
+    expect(aiAgreesDraw(0, 16)).toBe(false);
+  });
+
+  it("门槛随子数单调不降，中间没有台阶跳回去", () => {
+    for (let n = 1; n < 40; n++) {
+      expect(drawPlyGate(n)).toBeGreaterThanOrEqual(drawPlyGate(n - 1));
+      expect(drawPlyGate(n)).toBeGreaterThanOrEqual(DRAW_PLIES_SPARSE);
+      expect(drawPlyGate(n)).toBeLessThanOrEqual(DRAW_PLIES);
+    }
+  });
+
+  it("子力差太大，多稀疏的残棋也不肯和", () => {
+    expect(aiAgreesDraw(600, 99, 4)).toBe(false);
+    expect(drawRefusalLine(600, 99, 4)).toContain("子力差");
+  });
+
+  it("坏数字不会把门槛算糊：NaN 一律按满盘、按不同意处理", () => {
+    expect(drawPlyGate(Number.NaN)).toBe(DRAW_PLIES);
+    expect(aiAgreesDraw(Number.NaN, 99, 4)).toBe(false);
+    expect(aiAgreesDraw(0, Number.NaN, 4)).toBe(false);
+    expect(drawRefusalLine(0, Number.NaN, 4)).not.toContain("NaN");
+  });
+
+  it("不肯和的时候说清楚差在哪儿，还差几手也报得出来", () => {
+    const tooEarly = drawRefusalLine(0, 30, 32);
+    expect(tooEarly).toContain("再下 10 手");
+    expect(tooEarly).not.toContain("子力差");
+    // 差一手也说「再下 1 手」，不会说 0 手
+    expect(drawRefusalLine(0, 39, 32)).toContain("再下 1 手");
+  });
+
+  it("同意的时候不再多说一句拒绝的话", () => {
+    expect(drawRefusalLine(0, 40, 32)).toBe("");
+    expect(drawRefusalLine(0, 16, 6)).toBe("");
   });
 });
 
