@@ -126,6 +126,8 @@ import { save as wallet } from "../../engine/save";
 import { badge } from "../../art/kit/badge";
 import {
   BVP_TIMING,
+  ELEMENT_TINT,
+  RARITY_TINT,
   confettiHtml,
   cooldownAngle,
   foeBadgeKind,
@@ -137,6 +139,7 @@ import {
   litDelayMs,
   mazeCellView,
   prefersReducedMotion,
+  rowIconSvg,
   seenSet,
   skillRarity,
   tokenCss,
@@ -231,7 +234,8 @@ const CSS = `
 .bvp-opt{border:none;border-radius:16px;padding:13px;cursor:pointer;font-family:inherit;text-align:left;
   background:#fff;box-shadow:0 3px 10px rgba(140,120,190,.18);color:var(--bvp-ink);display:flex;gap:10px;align-items:center;}
 .bvp-opt:active{transform:translateY(2px);}
-.bvp-opt-em{font-size:27px;line-height:1;}
+.bvp-opt-em{font-size:27px;line-height:1;display:block;width:34px;height:34px;flex:0 0 auto;}
+.bvp-opt-em svg{width:100%;height:100%;display:block;}
 .bvp-opt-t{font-size:14px;font-weight:900;display:block;}
 .bvp-opt-d{font-size:12px;font-weight:700;color:var(--bvp-soft);display:block;margin-top:2px;}
 .bvp-list{display:flex;flex-direction:column;gap:8px;}
@@ -935,6 +939,12 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
     return row;
   }
 
+  /** 步骤卡图标：徽章族 SVG 优先（敌人按元素上色），未知节点回退原 emoji */
+  function nodeIconHtml(node: PathNode): string {
+    const tint = node.foe ? ELEMENT_TINT[node.foe.element] : undefined;
+    return rowIconSvg(`node-${node.kind}`, tint) || node.emoji;
+  }
+
   function nodeDesc(node: PathNode): string {
     switch (node.kind) {
       case "chest":
@@ -983,7 +993,7 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
     options.forEach((node) => {
       const b = el("button", "bvp-opt");
       b.type = "button";
-      b.innerHTML = `<span class="bvp-opt-em">${node.emoji}</span><span class="bvp-row-main">
+      b.innerHTML = `<span class="bvp-opt-em">${nodeIconHtml(node)}</span><span class="bvp-row-main">
         <span class="bvp-opt-t">${node.label}</span><span class="bvp-opt-d">${nodeDesc(node)}</span></span>`;
       b.addEventListener("click", () => {
         ctx.sfx("tap");
@@ -1067,7 +1077,7 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
         const def = ITEMS[id];
         if (!def) continue;
         const row = el("div", "bvp-row");
-        row.innerHTML = `<span class="bvp-ico bvp-ico-${itemRarity(def.price)}">${def.emoji}</span>
+        row.innerHTML = `<span class="bvp-ico bvp-ico-${itemRarity(def.price)}">${rowIconSvg(`item-${def.id}`) || def.emoji}</span>
           <span class="bvp-row-main"><span class="bvp-row-t">${def.name} · ${def.price} 金币</span>
           <span class="bvp-row-d">${def.desc}　仓库里有 ${stashCount(save, id)} 个</span></span>`;
         const buy = button("买一个", "bvp-btn bvp-btn-sm bvp-btn-go", () => {
@@ -1456,7 +1466,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         for (const s of rollSupplies(depth)) {
           const btn = el("button", "bvp-opt");
           btn.type = "button";
-          btn.innerHTML = `<span class="bvp-opt-em">${s.emoji}</span><span class="bvp-row-main">
+          btn.innerHTML = `<span class="bvp-opt-em">${rowIconSvg(`supply-${s.kind}`) || s.emoji}</span><span class="bvp-row-main">
             <span class="bvp-opt-t">${s.name}</span><span class="bvp-opt-d">${s.desc}</span></span>`;
           btn.addEventListener("click", () => {
             sfx("coin");
@@ -1500,7 +1510,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         for (const b of rollBlessings(depth, hero.maxHp > 0 ? hero.hp / hero.maxHp : 1)) {
           const btn = el("button", "bvp-opt");
           btn.type = "button";
-          btn.innerHTML = `<span class="bvp-opt-em">${b.emoji}</span><span class="bvp-row-main">
+          btn.innerHTML = `<span class="bvp-opt-em">${rowIconSvg(`bless-${b.kind}`) || b.emoji}</span><span class="bvp-row-main">
             <span class="bvp-opt-t">${b.name}</span><span class="bvp-opt-d">${b.desc}</span></span>`;
           btn.addEventListener("click", () => {
             sfx("coin");
@@ -1908,7 +1918,11 @@ export function mount(api: GameApi): { destroy: () => void } {
           const owned = save.owned.includes(g.id);
           const worn = save.gear[slot] === g.id;
           const row = el("div", "bvp-row");
-          row.innerHTML = `<span class="bvp-ico bvp-ico-${gearRarity(g.reqLevel)}">${g.emoji}</span><span class="bvp-row-main">
+          const gearIcon =
+            g.slot === "badge" && g.element
+              ? badge(heroBadgeKind(g.element), { camp: "hero" })
+              : rowIconSvg(`gear-${g.slot}`, RARITY_TINT[gearRarity(g.reqLevel)]) || g.emoji;
+          row.innerHTML = `<span class="bvp-ico bvp-ico-${gearRarity(g.reqLevel)}">${gearIcon}</span><span class="bvp-row-main">
             <span class="bvp-row-t">${g.name}${worn ? "　<span class=\"bvp-mini\">装备中</span>" : ""}</span>
             <span class="bvp-row-d">${g.desc}${owned ? "" : `　需要 ${g.reqLevel} 级 · ${g.price} 金币`}</span></span>`;
           if (worn) {
@@ -1966,7 +1980,9 @@ export function mount(api: GameApi): { destroy: () => void } {
         const on = save.loadout.includes(u.id);
         const cost = rank === 0 ? u.cost : rankUpCost(rank);
         const row = el("div", "bvp-row");
-        row.innerHTML = `<span class="bvp-ico bvp-ico-${skillRarity(u.cost)}">${def.emoji}</span><span class="bvp-row-main">
+        row.innerHTML = `<span class="bvp-ico bvp-ico-${skillRarity(u.cost)}">${
+          rowIconSvg(`skill-${def.kind}`, ELEMENT_TINT[def.element]) || def.emoji
+        }</span><span class="bvp-row-main">
           <span class="bvp-row-t">${def.name}　<span class="bvp-mini">${
             rank > 0 ? `${rank}/${MAX_SKILL_RANK} 级` : `${u.reqLevel} 级解锁`
           }${on ? " · 已上阵" : ""}</span></span>
@@ -2026,7 +2042,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         const inBag = save.bag.find((x) => x.id === def.id)?.count ?? 0;
         const inStash = stashCount(save, def.id);
         const row = el("div", "bvp-row");
-        row.innerHTML = `<span class="bvp-ico bvp-ico-${itemRarity(def.price)}">${def.emoji}</span><span class="bvp-row-main">
+        row.innerHTML = `<span class="bvp-ico bvp-ico-${itemRarity(def.price)}">${rowIconSvg(`item-${def.id}`) || def.emoji}</span><span class="bvp-row-main">
           <span class="bvp-row-t">${def.name}　<span class="bvp-mini">背包 ${inBag} · 仓库 ${inStash}</span></span>
           <span class="bvp-row-d">${def.desc}</span></span>`;
         const buy = button(`买（${def.price}）`, "bvp-btn bvp-btn-sm", () => {
