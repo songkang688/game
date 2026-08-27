@@ -137,13 +137,61 @@ function nowMs(): number {
 }
 
 /** 摆一个点：躲开这一轮已经摆过的位置，摆不开就用最后一次的落点 */
-function placeDot(el: HTMLElement, taken: Array<[number, number]> = []): void {
-  let x = 6 + Math.random() * 72;
-  let y = 6 + Math.random() * 72;
+/** 竞技场里那颗点多大（`.rbt-arena .rbt-dot`，四档视口都是这个数） */
+export const DOT_PX = 72;
+
+/** 点离场地边沿至少留这么多，免得贴着圆角 */
+export const DOT_EDGE_PX = 4;
+
+/** 点能落在场地的哪一段（相对场地的百分比） */
+export interface DotSpan {
+  min: number;
+  span: number;
+}
+
+/** 两个方向各一段 */
+export interface DotBand {
+  x: DotSpan;
+  y: DotSpan;
+}
+
+/** 量不到场地时退回 1.2 原来那对写死的数字（还没挂上 DOM、测试桩） */
+const LEGACY_SPAN: DotSpan = { min: 6, span: 72 };
+
+/**
+ * 点能落在场地的哪一段：**整颗点（含热区）必须留在场内**。
+ *
+ * 原来写死的是 `6% + random × 72%`，那对数字是按「场地 300px 上下」定的。
+ * 场地一收到 105px（横过来拿那三档），78% 就是 82px，再加 72px 的点整颗探出场外 22px
+ * （真机量到最大 +24px），而 `.rbt-arena{overflow:hidden}` 会把它裁掉半颗——
+ * 看得见一半、按下去却在场外。所以改成按真实像素倒推百分比。
+ *
+ * 纯函数，用例直接喂数字。
+ */
+export function dotBandPct(boxPx: number, dotPx = DOT_PX, edgePx = DOT_EDGE_PX): DotSpan {
+  if (!Number.isFinite(boxPx) || boxPx <= 0) return { ...LEGACY_SPAN };
+  const usable = boxPx - dotPx - edgePx * 2;
+  // 场地比一颗点还矮：贴边摆，至少整颗在场内
+  if (usable <= 0) return { min: 0, span: 0 };
+  return { min: (edgePx / boxPx) * 100, span: (usable / boxPx) * 100 };
+}
+
+/** 这一刻这块场地的两个方向各能摆在哪一段 */
+export function arenaBand(el: HTMLElement): DotBand {
+  return { x: dotBandPct(el.clientWidth), y: dotBandPct(el.clientHeight) };
+}
+
+const FULL_BAND: DotBand = { x: LEGACY_SPAN, y: LEGACY_SPAN };
+
+function placeDot(el: HTMLElement, taken: Array<[number, number]> = [], band: DotBand = FULL_BAND): void {
+  const roll = (): [number, number] => [
+    band.x.min + Math.random() * band.x.span,
+    band.y.min + Math.random() * band.y.span,
+  ];
+  let [x, y] = roll();
   for (let tries = 0; tries < 24; tries++) {
     if (taken.every(([px, py]) => Math.hypot(px - x, py - y) >= DOT_GAP_PCT)) break;
-    x = 6 + Math.random() * 72;
-    y = 6 + Math.random() * 72;
+    [x, y] = roll();
   }
   taken.push([x, y]);
   el.style.left = `${x}%`;
@@ -160,6 +208,48 @@ export const ARENA_MIN_PX = 216;
 export function arenaHeightPx(cssHeight: number, room: number): number {
   if (!Number.isFinite(room) || room <= 0) return cssHeight;
   return Math.max(ARENA_MIN_PX, Math.min(cssHeight, Math.floor(room)));
+}
+
+/** 竞技场再挤也得装得下一整颗点（含两边各 4px 边距），低于它就没得玩了 */
+export const ARENA_FLOOR_PX = DOT_PX + DOT_EDGE_PX * 2;
+
+/**
+ * 竞技场**最终**多高。
+ *
+ * `arenaHeightPx()` 守着 `ARENA_MIN_PX = 216`（低于它三行点摆不开）。
+ * 这条策略在竖屏上是对的，横过来拿就变成了**宁可让它掉出屏幕也要 216**：
+ * 真机 844×390 / 740×360 / 640×360 上可视段只有 105…135px，硬撑 216
+ * 等于把下面一半点摆到裁切线外面——而这一款故意不给滚动条（连点游戏，
+ * 能滚就会「想点却滚走了」），够不着就是真的够不着，整局作废。
+ * 14 轮 × 逐颗 `elementFromPoint` 量到 10/10、11/11、6/11 颗按不着。
+ *
+ * 摆得小一点还能玩，摆到屏幕外面就没得玩了。所以：要得到 216 就照旧，
+ * 要不到就退到「装得下就行」，底线是**装得下一整颗点**。
+ */
+export function arenaBoxPx(cssHeight: number, room: number): number {
+  const pref = arenaHeightPx(cssHeight, room);
+  if (!Number.isFinite(room) || room <= 0) return pref;
+  if (pref <= room) return pref;
+  return Math.max(ARENA_FLOOR_PX, Math.floor(room));
+}
+
+/**
+ * 竞技场下面还压着多少（排在它后面的那一行 `.rbt-msg`）。
+ * 收场地时得把这一截让出来，不然提示整行掉在裁切线以下——
+ * 「加油」「答对啦」那几句正是孩子最需要看见的。
+ *
+ * 量的是**后面的兄弟**而不是父元素的下沿：父元素有可能就是那条裁切线本身
+ * （用例里的假链就是这么搭的），拿它算等于把自己头顶那一段又减一遍。
+ */
+function belowPx(el: HTMLElement): number {
+  if (typeof el.getBoundingClientRect !== "function") return 0;
+  let low = Number.NEGATIVE_INFINITY;
+  for (let s = el.nextElementSibling; s; s = s.nextElementSibling) {
+    const rect = (s as HTMLElement).getBoundingClientRect?.();
+    if (rect) low = Math.max(low, rect.bottom);
+  }
+  if (!Number.isFinite(low)) return 0;
+  return Math.max(0, low - el.getBoundingClientRect().bottom);
 }
 
 /**
@@ -204,7 +294,7 @@ export function fitArena(el: HTMLElement): () => void {
       }
     }
     if (!Number.isFinite(bottom)) return;
-    const next = arenaHeightPx(css, bottom - el.getBoundingClientRect().top);
+    const next = arenaBoxPx(css, bottom - el.getBoundingClientRect().top - belowPx(el));
     if (next < css) el.style.height = `${next}px`;
   };
   relayout();
@@ -434,7 +524,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       el.appendChild(tag);
       el.setAttribute("aria-label", `${label} 号点`);
     }
-    placeDot(el, taken);
+    // 每摆一颗都按当下的场地量一次:转屏之后场地就不是原来那个了
+    placeDot(el, taken, arenaBand(arenaEl));
     const d: Dot = { el, kind, label, aiTimer: null, gone: false, id: dotSeq++, live: false };
     arenaEl.appendChild(el);
     dots.add(d);
