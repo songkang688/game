@@ -327,13 +327,28 @@ export function endlessRow(g: Grid, colors: readonly string[], rand: () => numbe
   return out;
 }
 
-/** 无尽开局:铺几行随机泡泡 */
-export function endlessStartRows(colors: readonly string[], rand: () => number, rows = ENDLESS_START_ROWS): string[] {
+/**
+ * 无尽开局:铺几行随机泡泡。
+ *
+ * `flip` 决定这批行的长度按 8/9 里的哪一头起头,默认 0——
+ * 也就是直接交给 `parseLayout` 用的那种(它按 `rowLen(0, r)` 解析)。
+ *
+ * 清屏之后拿这批行去 `descend` 补货时**必须**传 `g.flip ^ 1`:
+ * `descend` 要的长度是 `rowLen(g.flip ^ 1, 0)`,而 `g.flip` 每压一行翻一次,
+ * 所以第 r 行要的长度正好是 `rowLen(g.flip ^ 1, r)`。
+ * 不传就有一半的概率长度对不上,`parseRow` 会当场抛异常(C2-02)。
+ */
+export function endlessStartRows(
+  colors: readonly string[],
+  rand: () => number,
+  rows = ENDLESS_START_ROWS,
+  flip = 0
+): string[] {
   const palette = colors.length > 0 ? colors : ["R", "B", "G", "Y"];
   const out: string[] = [];
   for (let r = 0; r < rows; r++) {
     let line = "";
-    for (let i = 0; i < rowLen(0, r); i++) {
+    for (let i = 0; i < rowLen(flip, r); i++) {
       line += rand() < 0.85 ? palette[Math.min(palette.length - 1, Math.floor(rand() * palette.length))] : ".";
     }
     out.push(line);

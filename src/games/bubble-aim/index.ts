@@ -667,8 +667,12 @@ export function mount(api: GameApi): { destroy: () => void } {
       msgEl.textContent = "⬇️ 墙又压下来一行,顶住!";
     }
     if (countBubbles(grid) === 0) {
-      // 清空了就补一批新的,无尽不该停在空屏
-      for (const line of endlessStartRows(ENDLESS_COLORS, Math.random, 2)) descend(grid, line);
+      // 清空了就补一批新的,无尽不该停在空屏。
+      // 长度必须按 grid.flip 起头:descend 要的是 rowLen(flip ^ 1, 0),
+      // 而 flip 每压一行翻一次,给错了 parseRow 会抛异常(C2-02)
+      for (const line of endlessStartRows(ENDLESS_COLORS, Math.random, 2, grid.flip ^ 1)) {
+        descend(grid, line);
+      }
       msgEl.textContent = "清空啦!新的一波泡泡来喽~";
     }
     refreshQueue();
@@ -1184,6 +1188,11 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function tick(now: number): void {
     if (destroyed) return;
+    // 先把下一帧排上,再干活。
+    // 原来这句写在函数最后一行,一旦中间任何一步抛异常,重新排帧就永远执行不到,
+    // 整条 rAF 循环当场断掉——画面不动、按钮没反应,只能退出重进(C2-02 就是这么卡死的)。
+    // 排在最前面,逻辑出问题最多是这一帧画歪,不会把整局带走。
+    raf = requestAnimationFrame(tick);
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
     animTime += dt;
@@ -1226,7 +1235,6 @@ export function mount(api: GameApi): { destroy: () => void } {
 
       draw(dt);
     }
-    raf = requestAnimationFrame(tick);
   }
 
   // ---------- 输入 ----------

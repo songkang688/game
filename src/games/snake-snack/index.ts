@@ -647,6 +647,9 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
    */
   function frame(now: number): void {
     if (destroyed) return;
+    // 先排下一帧再干活:排帧句要是留在最后一行,中间任何一步抛异常都会把整条
+    // rAF 循环带走,画面当场冻住只能退出重进(C2-02 在 bubble-aim 上就是这么卡死的)。
+    raf = requestAnimationFrame(frame);
     const dt = Math.min(120, now - lastFrame || 16);
     lastFrame = now;
     if (!ended) {
@@ -660,7 +663,6 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       if (acc >= stepMs) acc = 0;
     }
     draw(ended ? 1 : moveT(acc, stepMs, REDUCED));
-    raf = requestAnimationFrame(frame);
   }
 
   refreshSpeed();

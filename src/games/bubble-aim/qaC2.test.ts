@@ -356,29 +356,46 @@ describe("档C R2 · bubble-aim · 无尽压到 120 行", () => {
     expect(endlessShouldPush(6)).toBe(false);
   });
 
-  it("【C2-02 阻断 · 待修】无尽清屏补货时,一半的时候直接抛异常把游戏卡死", () => {
-    // `afterEndlessShot()` 清屏后走的是
+  it("【C2-02 已修】无尽清屏补货,两种奇偶都补得上,不再有一半概率抛异常", () => {
+    // 原状:`afterEndlessShot()` 清屏后走的是
     //   for (const line of endlessStartRows(COLORS, rand, 2)) descend(g, line);
     // `endlessStartRows` 按 `rowLen(0, r)` 出长度,永远是「9 然后 8」;
-    // 而 `descend` 要的是 `rowLen(g.flip ^ 1, 0)`,随已压行数的奇偶在 8 / 9 之间来回。
-    // flip 为 0 时要 8 却给 9 —— parseRow 直接抛。
-    const rand = mulberry32(9);
-    const lines = endlessStartRows(COLORS, rand, 2);
-    expect(lines.map((l) => l.length)).toEqual([COLS, COLS - 1]);
+    // 而 `descend` 要的是 `rowLen(g.flip ^ 1, 0)`,随已压行数的奇偶在 8 / 9 之间来回,
+    // flip 为 0 时要 8 却给 9 —— parseRow 当场抛。
+    // 修法:`endlessStartRows` 收第四个参数 flip,补货时传 `g.flip ^ 1`。
 
-    // flip = 1(压过奇数行):要 9 给 9,补得上
-    const ok = parseLayout(endlessStartRows(COLORS, mulberry32(3), 4));
-    descend(ok, endlessRow(ok, COLORS, mulberry32(4), 0));
-    expect(ok.flip).toBe(1);
-    for (const line of endlessStartRows(COLORS, mulberry32(5), 2)) descend(ok, line);
-    expect(countBubbles(ok)).toBeGreaterThan(0);
+    // 不传 flip 还是老口径,`parseLayout` 那条路一个字节都没变
+    expect(endlessStartRows(COLORS, mulberry32(9), 2).map((l) => l.length)).toEqual([COLS, COLS - 1]);
+    expect(endlessStartRows(COLORS, mulberry32(9), 2, 1).map((l) => l.length)).toEqual([COLS - 1, COLS]);
 
-    // flip = 0(开局,或者压过偶数行):要 8 给 9 —— 抛异常
-    const bad = parseLayout(endlessStartRows(COLORS, mulberry32(3), 4));
-    expect(bad.flip).toBe(0);
-    expect(() => {
-      for (const line of endlessStartRows(COLORS, mulberry32(5), 2)) descend(bad, line);
-    }).toThrow(/8 个字符/);
+    // 两种奇偶都走一遍:先造出 flip = 0 和 flip = 1 两个网格
+    for (const pushes of [0, 1, 2, 3]) {
+      const g = parseLayout(endlessStartRows(COLORS, mulberry32(3), 4));
+      for (let k = 0; k < pushes; k++) descend(g, endlessRow(g, COLORS, mulberry32(40 + k), k));
+      expect(g.flip).toBe(pushes % 2);
+      // 清屏
+      g.rows.forEach((row) => row.fill(null));
+      expect(countBubbles(g)).toBe(0);
+      // 补货:index.ts 里那一句一比一搬下来
+      expect(() => {
+        for (const line of endlessStartRows(COLORS, mulberry32(5), 2, g.flip ^ 1)) descend(g, line);
+      }, `压过 ${pushes} 行之后补货抛了`).not.toThrow();
+      expect(countBubbles(g), `压过 ${pushes} 行之后补了个空屏`).toBeGreaterThan(0);
+    }
+  });
+
+  it("【C2-02 已修】连清 20 次屏都补得上,补进来的行长度逐行对得上", () => {
+    const g = parseLayout(endlessStartRows(COLORS, mulberry32(11), 4));
+    for (let round = 0; round < 20; round++) {
+      // 隔一轮压一行,让 flip 在 0 / 1 之间来回
+      if (round % 2 === 0) descend(g, endlessRow(g, COLORS, mulberry32(70 + round), round));
+      g.rows.forEach((row) => row.fill(null));
+      const want = [rowLen(g.flip ^ 1, 0), rowLen(g.flip, 0)];
+      const lines = endlessStartRows(COLORS, mulberry32(80 + round), 2, g.flip ^ 1);
+      expect(lines.map((l) => l.length), `第 ${round + 1} 次补货`).toEqual(want);
+      for (const line of lines) descend(g, line);
+      expect(countBubbles(g), `第 ${round + 1} 次补货补了个空屏`).toBeGreaterThan(0);
+    }
   });
 
   it("成绩换算只增不减,收工那句话只鼓励", () => {
