@@ -1,0 +1,247 @@
+{
+  "round": 3,
+  "levels": [
+    1,
+    60,
+    133,
+    188
+  ],
+  "home": {
+    "cards": 55,
+    "ourCards": 19
+  },
+  "results": [
+    {
+      "id": "sling-birds",
+      "title": "弹弹小鸟",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/sling-birds"
+      },
+      "modeButtons": [
+        "♾️ 无尽打靶塔"
+      ],
+      "chapters": 0,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 1,
+          "lose": 0,
+          "samples": [
+            {
+              "kind": "win",
+              "src": "platform",
+              "text": "🎉太棒啦!🎊 ✨ 🎊⭐⭐☆第 1 关「第一颗绿绿豆」通关!破坏率 100%,结构被你拆得很干净!"
+            }
+          ],
+          "ticks": 56
+        },
+        "60": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        },
+        "133": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 0,
+          "lose": 1,
+          "samples": [
+            {
+              "kind": "lose",
+              "src": "platform",
+              "text": "🌱就差一点啦!还剩 3 颗绿绿豆～先打最下面那根撑着的柱子,上面塌下来常常能一次带走一片!"
+            }
+          ],
+          "ticks": 61
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": null,
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 46
+      },
+      "modes": {
+        "♾️ 无尽打靶塔": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 48
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": "",
+          "hash": "#/game/sling-birds",
+          "hasStage": true,
+          "outside": []
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": "",
+          "hash": "#/game/sling-birds",
+          "hasStage": true,
+          "outside": []
+        },
+        "minHit": {
+          "min": 48,
+          "sel": "slb-btn slb-retry"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 118281
+    },
+    {
+      "id": "candy-swing",
+      "title": "糖果秋千",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/candy-swing"
+      },
+      "modeButtons": [
+        "🍩 无尽甜甜塔 看能吃到第几颗"
+      ],
+      "chapters": 0,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        },
+        "60": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        },
+        "133": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": null,
+          "win": 1,
+          "lose": 0,
+          "samples": [
+            {
+              "kind": "win",
+              "src": "platform",
+              "text": "🎈好厉害呀!🎊 ✨ 🎊⭐⭐⭐188 关全部通关！共收集 564 颗星星！"
+            }
+          ],
+          "ticks": 13
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": null,
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 46
+      },
+      "modes": {
+        "🍩 无尽甜甜塔 看能吃到第几颗": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 48
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": "",
+          "hash": "#/game/candy-swing",
+          "hasStage": true,
+          "outside": []
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": "",
+          "hash": "#/game/candy-swing",
+          "hasStage": true,
+          "outside": []
+        },
+        "minHit": {
+          "min": 44,
+          "sel": "cs-btn cds-tap cs-retry"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 101644
+    }
+  ]
+}

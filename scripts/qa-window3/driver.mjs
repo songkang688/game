@@ -431,7 +431,34 @@ export async function overflowPx(page) {
         }
       }
     }
-    return { doc: Math.round(doc), worst, worstSel };
+    // 撑宽页面的东西不一定挂在 .game-stage 里(浮层、toast 都可能挂到 body 上),
+    // 所以 doc 有溢出时再全 body 扫一遍,把最靠右的几个记下来好定位。
+    const outside = [];
+    if (doc > 0) {
+      for (const el of document.querySelectorAll("body *")) {
+        const r = el.getBoundingClientRect();
+        const past = Math.round(r.right - de.clientWidth);
+        if (past > 0 && r.width > 4 && r.height > 4) {
+          outside.push({
+            past,
+            left: Math.round(r.left),
+            w: Math.round(r.width),
+            sel:
+              el.tagName.toLowerCase() +
+              (typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/).join(".") : ""),
+          });
+        }
+      }
+      outside.sort((a, b) => b.past - a.past);
+    }
+    return {
+      doc: Math.round(doc),
+      worst,
+      worstSel,
+      hash: location.hash,
+      hasStage: !!stage,
+      outside: outside.slice(0, 5),
+    };
   });
 }
 
@@ -500,8 +527,10 @@ export async function openCustomLevel(page, id, n) {
   const sel = CUSTOM_MAP[id];
   if (!sel) return null;
   const tabs = await page.evaluate((s) => document.querySelectorAll(s).length, sel.tab);
-  const tryHere = () =>
-    page.evaluate(
+  // 关卡格子有的只听 pointer 事件,合成的 el.click() 点不动,
+  // 所以先量出格子中心,再用真鼠标点下去。
+  const tryHere = async () => {
+    const box = await page.evaluate(
       (cellSel, lv) => {
         const cells = [...document.querySelectorAll(cellSel)];
         const hit = cells.find((el) => {
@@ -511,21 +540,34 @@ export async function openCustomLevel(page, id, n) {
         if (!hit) return "not-here";
         if (hit.disabled || (hit.textContent ?? "").includes("🔒")) return "locked";
         hit.scrollIntoView({ block: "center" });
-        hit.click();
-        return "clicked";
+        const r = hit.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
       },
       sel.cell,
       n
     );
+    if (typeof box === "string") return box;
+    await sleep(160);
+    await page.mouse.click(box.x, box.y);
+    return "clicked";
+  };
 
   for (let i = 0; i <= tabs; i++) {
     const res = await tryHere();
     if (res === "clicked") {
       await sleep(1300);
+      // 地图还看得见 = 根本没进关(格子进关后只是被藏起来,并不会从 DOM 里删掉),
+      // 别把「点了一下」当成「进去了」
       const stage = await page.evaluate(
-        () => (document.querySelector(".game-stage")?.children.length ?? 0) > 0
+        (cellSel) =>
+          (document.querySelector(".game-stage")?.children.length ?? 0) > 0 &&
+          [...document.querySelectorAll(cellSel)].every((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width < 2 || r.height < 2;
+          }),
+        sel.cell
       );
-      return { open: "clicked", stage: stage ? "ok" : "empty" };
+      return { open: "clicked", stage: stage ? "ok" : "still-on-map" };
     }
     if (res === "locked") return { open: "locked", stage: "-" };
     if (i >= tabs) break;

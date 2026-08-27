@@ -18,7 +18,8 @@ const main = async () => {
   const opened = await D.openLevel(page, lv);
   // 溢出常常是「打起来以后」才出现的(计分板一格格填满、道具栏长出来),
   // 所以先真打一会儿再量。
-  await D.play(page, { ms: 12000, seed: 3, stopOnResult: false, stayInLevel: true });
+  // 跟 run.mjs 的 360px 段落对齐:同样是 8 秒 seed 77、留在关卡里,不然量不到同一处
+  await D.play(page, { ms: 8000, seed: 77, stopOnResult: true, stayInLevel: true });
   await D.sleep(600);
   const out = await page.evaluate(() => {
     const doc = document.documentElement;

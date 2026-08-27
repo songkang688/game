@@ -80,12 +80,14 @@ async function reseed(page, g) {
 }
 
 async function playLevel(page, g, lv, { idle = false, ms }) {
-  // 有几款先落在模式选择屏,得先点进「闯关」才有地图
-  const gate = await D.enterCampaign(page);
+  // 有几款先落在模式选择屏,得先点进「闯关」才有地图;
+  // 自带地图的几款首屏就是关卡格子,那个「闯关」按钮是「直接开打」,先点反而会跳进别的关。
+  let gate = null;
   let opened;
   if (D.CUSTOM_MAP[g.id]) {
     opened = (await D.openCustomLevel(page, g.id, lv)) ?? { open: "custom-map-miss" };
   } else {
+    gate = await D.enterCampaign(page);
     const found = await D.gotoChapterOf(page, lv);
     if (!found) return { open: "chapter-not-found", gate };
     opened = await D.openLevel(page, lv);
@@ -186,11 +188,11 @@ async function runGame(page, errs, g) {
   if (mEntry.entry === "ok") {
     rec.mobile.overflowHome = await D.overflowPx(page);
     if (g.levels && !g.canvasOnly) {
-      await D.enterCampaign(page);
       let opened;
       if (D.CUSTOM_MAP[g.id]) {
         opened = (await D.openCustomLevel(page, g.id, LEVELS[0])) ?? { open: "custom-map-miss", stage: "-" };
       } else {
+        await D.enterCampaign(page);
         await D.gotoChapterOf(page, LEVELS[0]);
         opened = await D.openLevel(page, LEVELS[0]);
       }
