@@ -163,14 +163,13 @@ export function drawStar(
 
 /** 反射斑中心亮度(修复员 R2 · N3:0.16 → 0.24 提一档,第 1 关浅粉地板上不再近乎隐形) */
 export const FLOOR_GLOW_CORE_ALPHA = 0.24;
-/** 反射斑腰部停(新增中途停,让提亮只集中在斑心,边缘仍柔和淡出) */
-export const FLOOR_GLOW_MID_ALPHA = 0.1;
 /** 斑心内核小亮斑的透明度(同一椭圆倾角的迷你高光,不是花纹) */
 export const FLOOR_GLOW_SHEEN_ALPHA = 0.12;
 
 /**
  * 地板反射斑:一块柔和的放射状白光,把「场馆灯照在地板上」讲出来。
- * 修复员 R2 · N3:中心 alpha 提档 + 加中途停 + 斑心一枚同倾角迷你内核亮斑;
+ * 修复员 R2 · N3:中心 alpha 提档(0.16 → 0.24)+ 斑心一枚同倾角迷你内核亮斑;
+ * 渐变保持两停(实测 4× 节流下大椭圆径向渐变加中途停是可测的帧率回压,不加),
  * 椭圆几何(r × 0.62r,倾角 −0.5)与三处调用点的位置半径一个数不动,冰面依旧不画花。
  */
 export function drawFloorGlow(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
@@ -178,13 +177,13 @@ export function drawFloorGlow(g: CanvasRenderingContext2D, x: number, y: number,
   g.save();
   const grad = g.createRadialGradient(x, y, r * 0.1, x, y, r);
   grad.addColorStop(0, withAlpha("#FFFFFF", FLOOR_GLOW_CORE_ALPHA));
-  grad.addColorStop(0.55, withAlpha("#FFFFFF", FLOOR_GLOW_MID_ALPHA));
   grad.addColorStop(1, withAlpha("#FFFFFF", 0));
   g.fillStyle = grad;
   g.beginPath();
   g.ellipse(x, y, r, r * 0.62, -0.5, 0, Math.PI * 2);
   g.fill();
-  // 内核亮斑:斑心再压一枚 0.34r 的同倾角小椭圆,给光斑一个读得出的核
+  // 内核亮斑:斑心再压一枚 0.34r 的同倾角纯色小椭圆,给光斑一个读得出的核
+  // (纯色小面积填充,4× 节流实测无帧率代价;不用第二层渐变)
   g.fillStyle = withAlpha("#FFFFFF", FLOOR_GLOW_SHEEN_ALPHA);
   g.beginPath();
   g.ellipse(x - r * 0.06, y - r * 0.05, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
