@@ -16,8 +16,8 @@ export const BP_TOKENS = {
   /** 水下背景渐变(上浅下深) */
   "--bp-water-top": "#DFF4FF",
   "--bp-water-bottom": "#C9E8F8",
-  /** 两道斜向光柱 */
-  "--bp-lightbeam": "rgba(255,255,255,.08)",
+  /** 两道斜向光柱(第 2 轮 C 档:.08 在 360px 上近不可见,抬到 .12) */
+  "--bp-lightbeam": "rgba(255,255,255,.12)",
   /** 底部水草剪影 */
   "--bp-weed": "#9FD9B8",
   /** 池壁圆角框 */
@@ -89,6 +89,8 @@ export const BP_TIMINGS = {
   decorFloatMs: 8000,
   /** 连消数字跳动 */
   comboMs: 120,
+  /** 光柱慢摆一个来回(第 2 轮 C 档:两道柱反相摆 2°,reduced 静止) */
+  beamSwayMs: 5200,
 } as const;
 
 /** 冰冻圈 / 变色圈:1.2 的色觉双通道,颜色宽度原样保留 */
@@ -292,8 +294,8 @@ export function bpVisualCss(): string {
     .map(([k, v]) => `${k}:${v};`)
     .join(" ");
   return `
-.bp-wrap { ${tokens} --bp-spin-ms:${t.rainbowSpinMs}ms; --bp-swell-ms:${t.swellMs}ms; --bp-ring-ms:${t.ringMs}ms; --bp-drop-ms:${t.dropMs}ms; --bp-jelly-ms:${t.jellyMs}ms; --bp-float-ms:${t.decorFloatMs}ms; --bp-combo-ms:${t.comboMs}ms; }
-.bp-wrap { background: linear-gradient(180deg, var(--bp-water-top), var(--bp-water-bottom)); box-shadow: inset 0 0 0 3px var(--bp-pool); overflow: hidden; }
+.bp-wrap { ${tokens} --bp-spin-ms:${t.rainbowSpinMs}ms; --bp-swell-ms:${t.swellMs}ms; --bp-ring-ms:${t.ringMs}ms; --bp-drop-ms:${t.dropMs}ms; --bp-jelly-ms:${t.jellyMs}ms; --bp-float-ms:${t.decorFloatMs}ms; --bp-combo-ms:${t.comboMs}ms; --bp-beam-ms:${t.beamSwayMs}ms; }
+.bp-wrap { background: linear-gradient(180deg, var(--bp-water-top), var(--bp-water-bottom)); box-shadow: inset 0 0 0 3px var(--bp-pool), inset 0 0 0 4px rgba(159,214,255,.35); overflow: hidden; }
 .bp-top, .bp-msg, .bbp-line { position: relative; z-index: 1; }
 .bp-badge { background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 2px 6px rgba(100,170,210,.25), inset 0 -2px 0 rgba(150,205,235,.28); }
 .bp-cell { position: relative; }
@@ -319,9 +321,10 @@ export function bpVisualCss(): string {
 @keyframes bpBurstDrop { 0% { opacity: .95; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.5); } }
 .bp-jelly { animation: bpJelly var(--bp-jelly-ms) ease-out; transform-origin: 50% 100%; }
 @keyframes bpJelly { 0% { transform: scaleY(.92); } 100% { transform: scaleY(1); } }
-.bp-beam { position: absolute; top: -12%; height: 150%; pointer-events: none; z-index: 0; background: linear-gradient(180deg, var(--bp-lightbeam), transparent 82%); transform: skewX(-16deg); display: block; }
+.bp-beam { position: absolute; top: -12%; height: 150%; pointer-events: none; z-index: 0; background: linear-gradient(180deg, var(--bp-lightbeam), transparent 82%); transform: skewX(-16deg); display: block; animation: bpBeamSway var(--bp-beam-ms) ease-in-out infinite alternate; }
 .bp-beam-a { left: 10%; width: 16%; }
-.bp-beam-b { left: 58%; width: 11%; }
+.bp-beam-b { left: 58%; width: 11%; animation-delay: calc(var(--bp-beam-ms) * -.5); }
+@keyframes bpBeamSway { from { transform: skewX(-17deg); } to { transform: skewX(-15deg); } }
 .bp-weeds { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; pointer-events: none; z-index: 0; color: var(--bp-weed); opacity: .6; display: block; }
 .bp-weeds svg { width: 100%; height: 100%; display: block; }
 .bp-decor { position: absolute; bottom: -26px; border-radius: 50%; pointer-events: none; z-index: 0; opacity: 0; display: block;
@@ -334,6 +337,7 @@ export function bpVisualCss(): string {
   .bp-rainbow::after { animation: none; }
   .bp-burst-skin, .bp-burst-ring, .bp-burst-drop { animation: none; opacity: 0; }
   .bp-decor, .bp-jelly, .bp-combo { animation: none; }
+  .bp-beam { animation: none; }
 }
 /* 窄屏 8 列全可见(W6R1 fixer 自查):
    360px 下盘面可用宽只有约 279px,而 8×36px 格 + 缝要 316px+——1.3 池壁的

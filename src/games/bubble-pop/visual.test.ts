@@ -220,7 +220,8 @@ describe("token 落表 / bp-tiny 降级 / reduced / 热区 / HUD", () => {
   it("六枚 --bp- 氛围 token 与规格表一字不差,并全部进样式表", () => {
     expect(BP_TOKENS["--bp-water-top"]).toBe("#DFF4FF");
     expect(BP_TOKENS["--bp-water-bottom"]).toBe("#C9E8F8");
-    expect(BP_TOKENS["--bp-lightbeam"]).toBe("rgba(255,255,255,.08)");
+    // 光柱 .08→.12:窗口 6 第 2 轮 C 档落 B 档建议(360px 上 .08 近不可见)
+    expect(BP_TOKENS["--bp-lightbeam"]).toBe("rgba(255,255,255,.12)");
     expect(BP_TOKENS["--bp-weed"]).toBe("#9FD9B8");
     expect(BP_TOKENS["--bp-pool"]).toBe("rgba(255,255,255,.5)");
     expect(BP_TOKENS["--bp-splash"]).toBe("rgba(190,230,255,.9)");
