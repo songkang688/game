@@ -9,6 +9,8 @@ import {
   AI_TIERS,
   aiCuePlacement,
   chooseShot,
+  clearOfPockets,
+  cushionHit,
   legalBalls,
   type AiContext,
   type AiTier,
@@ -92,6 +94,44 @@ describe("四档电脑球手", () => {
     expect(shot.safety).toBe(true);
     expect(shot.power).toBeLessThanOrEqual(0.4);
     const res = fireShot(blocked, shot);
+    expect(res.potted.some((p) => p.kind === "cue")).toBe(false);
+  });
+
+  it("库边反弹的碰库点算得对：方向不对、打在库外、压在袋口上一律不算", () => {
+    // 母球在台面里，镜像点在左库外侧：中间那一下正好落在 x = r 上
+    const hit = cushionHit({ x: 60, y: 40 }, { x: -20, y: 60 }, "left");
+    expect(hit).not.toBeNull();
+    expect(hit!.x).toBeCloseTo(TABLE.r, 6);
+    expect(hit!.y).toBeGreaterThan(40);
+    expect(hit!.y).toBeLessThan(60);
+    // 镜像点还在库内侧：这条线压根没碰到库
+    expect(cushionHit({ x: 60, y: 40 }, { x: 80, y: 60 }, "left")).toBeNull();
+    // 碰库点会落到台面外
+    expect(cushionHit({ x: 60, y: 40 }, { x: -20, y: 400 }, "left")).toBeNull();
+    // 正对着角袋打过去，碰的不是库是袋
+    expect(cushionHit({ x: 60, y: 40 }, { x: -60, y: -60 }, "left")).toBeNull();
+  });
+
+  it("顺路从袋口边上蹭过去的线不算通", () => {
+    // 沿着上库横穿，正好从中袋口上过
+    expect(clearOfPockets({ x: 40, y: 3 }, { x: 160, y: 3 })).toBe(false);
+    // 往台面中间挪开就通了
+    expect(clearOfPockets({ x: 40, y: 40 }, { x: 160, y: 40 })).toBe(true);
+  });
+
+  it("高手档打库边球时先碰到的是自己那一组，不再白丢一杆", () => {
+    // 己组球贴着上库，直线被三颗冷色球挡死，只有从下库弹回去这一条路
+    const bankable: Ball[] = [
+      makeBall(0, "cue", 40, 20),
+      makeBall(1, "warm", 150, 18),
+      makeBall(2, "cool", 95, 19),
+      makeBall(3, "cool", 95, 26),
+      makeBall(4, "cool", 95, 12),
+    ];
+    const shot = chooseShot(ctxOf(bankable), 3, mulberry32(9));
+    const res = fireShot(bankable, shot);
+    // 校验之前这一杆先撞上冷色球（犯规），现在先碰到的是自己那一组
+    expect(res.firstHit).toBe("warm");
     expect(res.potted.some((p) => p.kind === "cue")).toBe(false);
   });
 

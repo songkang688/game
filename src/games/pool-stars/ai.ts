@@ -110,24 +110,80 @@ function directPlans(cue: Ball, targets: readonly Ball[], balls: readonly Ball[]
   return out;
 }
 
-/** 一次库边反弹的候选（高手档以上才用） */
+type Cushion = "left" | "right" | "top" | "bottom";
+
+/**
+ * 母球从 `from` 打向镜像点 `mirror` 时，真正撞上这条库边的那个点。
+ * 拿不到有效交点（方向不对、打在库边之外、正好压在袋口上）就返回 null——
+ * 这三种情况下「一库反弹」根本不成立，硬打出去只会白丢一杆。
+ */
+export function cushionHit(from: Vec, mirror: Vec, side: Cushion): Vec | null {
+  const r = TABLE.r;
+  const rail = side === "left" ? r : side === "right" ? TABLE.w - r : side === "top" ? r : TABLE.h - r;
+  const along = side === "left" || side === "right" ? "x" : "y";
+  const a = along === "x" ? from.x : from.y;
+  const b = along === "x" ? mirror.x : mirror.y;
+  // 起点与镜像点得分别落在库边两侧，中间那一下才是真的碰库
+  if ((a - rail) * (b - rail) >= 0) return null;
+  const k = (rail - a) / (b - a);
+  const hit =
+    along === "x"
+      ? { x: rail, y: from.y + (mirror.y - from.y) * k }
+      : { x: from.x + (mirror.x - from.x) * k, y: rail };
+  const cross = along === "x" ? hit.y : hit.x;
+  const span = along === "x" ? TABLE.h : TABLE.w;
+  if (cross < r || cross > span - r) return null;
+  for (const p of POCKETS) {
+    if (dist(hit, p) < TABLE.pocketR * 1.2) return null; // 打在袋口上就直接掉进去了
+  }
+  return hit;
+}
+
+/** 这一段路上有没有从袋口边上蹭过去（母球顺路掉袋就白打了） */
+export function clearOfPockets(from: Vec, to: Vec, keep = TABLE.pocketR): boolean {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return true;
+  for (const p of POCKETS) {
+    const t = ((p.x - from.x) * dx + (p.y - from.y) * dy) / (len * len);
+    if (t <= 0 || t >= 1) continue;
+    const px = from.x + dx * t;
+    const py = from.y + dy * t;
+    if (Math.hypot(p.x - px, p.y - py) < keep) return false;
+  }
+  return true;
+}
+
+/**
+ * 一次库边反弹的候选（高手档以上才用）。
+ * 两段路都要通：母球到库边那一段、库边弹出去到假想球点那一段。
+ * 打分也按真实路程算——绕一大圈的库边球本来就比贴着打的难成。
+ */
 function bankPlans(cue: Ball, targets: readonly Ball[], balls: readonly Ball[]): PotPlan[] {
   const out: PotPlan[] = [];
-  const sides = ["left", "right", "top", "bottom"] as const;
+  const sides: Cushion[] = ["left", "right", "top", "bottom"];
   for (const t of targets) {
     for (let pi = 0; pi < POCKETS.length; pi++) {
       const p = POCKETS[pi];
       const g = ghostPoint(t, p);
+      if (g.x < 0 || g.x > TABLE.w || g.y < 0 || g.y > TABLE.h) continue;
       if (!pathClear(t, p, balls, [t.id])) continue;
       for (const side of sides) {
         const m = mirrorPoint(g, side);
-        const angle = angleTo(cue, m);
+        const hit = cushionHit(cue, m, side);
+        if (!hit) continue;
+        if (!pathClear(cue, hit, balls, [cue.id])) continue;
+        if (!pathClear(hit, g, balls, [cue.id, t.id])) continue;
+        if (!clearOfPockets(cue, hit) || !clearOfPockets(hit, g)) continue;
+        const run = dist(cue, hit) + dist(hit, g);
         out.push({
-          angle,
-          power: Math.min(1, 0.5 + dist(cue, g) / 260),
+          angle: angleTo(cue, m),
+          // 库边球不用打满：路程长归长，力气一大母球自己先满台乱窜
+          power: Math.min(0.78, 0.42 + run / 340),
           pocket: pi,
           targetId: t.id,
-          score: 26 - dist(cue, g) * 0.06,
+          score: 26 - run * 0.06,
           bank: true,
         });
       }
