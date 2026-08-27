@@ -379,6 +379,72 @@ interface Petal {
   spin: number;
 }
 
+// ---------------------------------------------------------------------------
+// 果王头顶徽记(窗口 7 R1 修复 A-6):自绘小皇冠替裸 emoji 身份牌
+// ---------------------------------------------------------------------------
+
+/**
+ * 果王珠色 = 身份通道:大果王(会翻镜湖)金珠、令牌果王粉珠、回旋果王蓝珠。
+ * 只读 spec 的既有布尔位,不添任何玩法字段。
+ */
+export function kingBeadColor(spec: { flips?: boolean; decrees?: boolean }): string {
+  if (spec.flips) return "#FFE9A8";
+  if (spec.decrees) return "#F4859F";
+  return "#7FC8E8";
+}
+
+/**
+ * 自绘小皇冠:宽 0.7r × 高 0.42r,三尖齿 + 齿顶圆珠 3 粒,
+ * 2 停线性渐变(#FFE9A8 → #E8A62E)+ 1.5px 描边 #C7861F + 底边束带 + 左上小高光。
+ * 画在果王本体的平移/摆动坐标系里(落位 -1.12r,与原 emoji 同位),随本体同角度摆。
+ */
+export function drawKingCrown(ctx: CanvasRenderingContext2D, r: number, bead: string): void {
+  const w = r * 0.7;
+  const h = r * 0.42;
+  const cy = -r * 1.12;
+  const top = cy - h / 2;
+  const bot = cy + h / 2;
+  const shoulder = top + h * 0.28;
+  ctx.save();
+  const g = ctx.createLinearGradient(0, top, 0, bot);
+  g.addColorStop(0, "#FFE9A8");
+  g.addColorStop(1, "#E8A62E");
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, bot);
+  ctx.lineTo(-w / 2, shoulder);
+  ctx.lineTo(-w * 0.25, cy);
+  ctx.lineTo(0, top);
+  ctx.lineTo(w * 0.25, cy);
+  ctx.lineTo(w / 2, shoulder);
+  ctx.lineTo(w / 2, bot);
+  ctx.closePath();
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = "#C7861F";
+  ctx.lineWidth = Math.max(1.5, r * 0.03);
+  ctx.lineJoin = "round";
+  ctx.stroke();
+  // 齿顶圆珠 3 粒(珠 r = 冠宽 × 0.07,珠色分果王)
+  ctx.fillStyle = bead;
+  for (const [bx, by] of [[-w / 2, shoulder], [0, top], [w / 2, shoulder]] as const) {
+    ctx.beginPath();
+    ctx.arc(bx, by, w * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  // 底边束带
+  ctx.fillStyle = "#C7861F";
+  ctx.beginPath();
+  ctx.rect(-w / 2, bot - h * 0.18, w, h * 0.18);
+  ctx.fill();
+  // 左上小高光(光源左上 45° 约定)
+  ctx.fillStyle = "rgba(255,255,255,.55)";
+  ctx.beginPath();
+  ctx.ellipse(-w * 0.26, cy - h * 0.04, w * 0.09, h * 0.1, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 export class PetalRain {
   private petals: Petal[] = [];
   private ageMs = 0;

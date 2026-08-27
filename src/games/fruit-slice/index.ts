@@ -109,7 +109,9 @@ import {
   TRAIL_RIBBON_MS,
   auraFor,
   drawCrossSection,
+  drawKingCrown,
   juiceColorFor,
+  kingBeadColor,
   silhouettePoints,
   traceSilhouette,
   type SliceFruitName,
@@ -2097,11 +2099,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    // 王冠
-    ctx.font = `${Math.round(r * 0.7)}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(k.spec.emoji, 0, -r * 1.12);
+    // 王冠(窗口 7 R1 修复 A-6):自绘小皇冠,珠色分果王,随本体同角度摆
+    drawKingCrown(ctx, r, kingBeadColor(k.spec));
     // 表情
     ctx.fillStyle = "#4a2a3a";
     ctx.beginPath();
