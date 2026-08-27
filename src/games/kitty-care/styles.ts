@@ -105,7 +105,14 @@ export const KTC_CSS = `
   justify-content:center;font-size:30px;background:#ffffffcc;box-shadow:0 3px 8px rgba(160,110,40,.28);
   outline:3px dashed #f7a23b66;}
 .ktc-target.ktc-target-hot{outline:3px solid #f7a23b;transform:scale(1.08);}
-.ktc-bowl{left:50%;bottom:4px;transform:translateX(-50%);}
+/* 交互层：喂饭的碗与托盘、逗猫与打扮的场地都住这儿 */
+.ktc-play{position:relative;z-index:3;}
+/* 饭碗原先是 position:absolute;bottom:4px，贴的是整个 .ktc-wrap 的底：
+   底下正好排着托盘（z-index:3）和提示行（z-index:3），碗自己没有 z-index，
+   于是被这两层盖住——屏幕上一个碗都看不见，elementFromPoint 拿到的是 .ktc-drag / .ktc-msg。
+   舞台越矮压得越死：320×640 上拿起食物、提示行折成两行之后就彻底点不中了。
+   碗本来就该在托盘正上方，改回正常流里居中一块，既看得见也点得中。 */
+.ktc-bowl{position:relative;left:auto;bottom:auto;transform:none;margin:2px auto 6px;}
 .ktc-toy{position:absolute;width:56px;height:56px;border-radius:50%;background:#ffffffd8;font-size:30px;
   border:none;box-shadow:0 3px 8px rgba(160,110,40,.3);touch-action:none;cursor:grab;
   display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);}
@@ -125,6 +132,8 @@ export const KTC_CSS = `
 .ktc-spot-neck{left:calc(50% - 32px);top:${FIELD_H - 74}px;}
 /* 场地在场时把猫收一档，省出来的高度正好给场地，舞台底下的提示行不会被顶出去 */
 .ktc-wrap.ktc-hasfield .ktc-cat-svg{height:${FIELD_CAT_H}px;width:auto;max-width:100%;margin:0 auto;}
+/* 矮舞台上由 fitIntoStage() 逐档写 --ktc-cat-h；写在 .ktc-hasfield 后面，两条同权重时它说了算 */
+.ktc-wrap.ktc-fit .ktc-cat-svg{height:var(--ktc-cat-h);width:auto;max-width:100%;margin:0 auto;}
 
 /* 搓澡区：至少 240×240，画圈就能搓 */
 .ktc-washwrap{position:relative;z-index:3;margin:6px auto 0;width:min(300px,92%);min-width:240px;}

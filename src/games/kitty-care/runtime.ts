@@ -193,6 +193,86 @@ export class Life {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 把小屋钳进「舞台看得见的那一段」
+// ---------------------------------------------------------------------------
+
+/** 从自己的顶边到最近那条裁切线还剩多少像素（没有裁切祖先就是无限） */
+export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]): number {
+  if (clipperBottoms.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(...clipperBottoms) - selfTop;
+}
+
+/**
+ * 猫从大到小的几档画面高度（px）。装不下就往下退一档，退到最后一档还装不下才让小屋自己滚。
+ * 一路退到 92px 是因为 320×640 上「舞台看得见的那一段」只有 304px，
+ * 除猫以外的东西（任务条、心情条、气泡、托盘、提示行、内边距）就要去掉 200px 上下。
+ */
+export const CAT_FIT_STEPS = [260, 220, 190, 160, 138, 120, 104, 92] as const;
+
+/**
+ * 把小屋收进舞台看得见的那一段：先一档一档地收猫，收到最小还装不下才让它自己滚。
+ *
+ * 为什么非做不可：真机 360×720 / 360×640 / 320×640 上，`.game-stage` 是
+ * `overflow:hidden` 且定高的（实测 `scrollHeight 544 > clientHeight 530`），
+ * 文档本身又不滚（`scrollingElement.scrollHeight === clientHeight`）。
+ * 小屋自己却由 `min-height:460px` 加一只 296px 高的猫撑到 488px，
+ * 于是饭碗、食物托盘、提示行整片落在裁切线以下，`elementFromPoint` 一律返回 null——
+ * 第 1 关连「喂饭」这一步都做不出来。`.game-stage{overflow:hidden}` 写在
+ * `src/styles.css` 里，是本档的禁改文件（交窗口1）；但本款够得着自己的盒子，
+ * 量一次裁切线的下沿，按它把猫收小就够了。
+ *
+ * 先收猫、后滚动是有先后的：矮屏上真正占地方的是那只猫，收它一档就能让整关不用滚；
+ * 而滚动容器一旦出现，拖食物的手指一动就会连带滚屏，比小一点的猫难用得多。
+ *
+ * 装得下就把 `--ktc-cat-h` / `max-height` / `overflow-y` / `min-height` 原样还回去，
+ * 免得高屏上凭空多出一个滚动容器。返回拆监听的函数，`destroy` 时叫一声。
+ */
+export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: () => void } {
+  const view = el.ownerDocument?.defaultView ?? null;
+  const measurable = typeof el.getBoundingClientRect === "function" && !!view;
+  const reset = (): void => {
+    if (!measurable) return;
+    el.classList.remove("ktc-fit");
+    el.style.removeProperty("--ktc-cat-h");
+    el.style.maxHeight = "";
+    el.style.overflowY = "";
+    el.style.minHeight = "";
+  };
+  const relayout = (): void => {
+    if (!measurable || !view) return;
+    // 先把上一次收出来的值还原，不然量到的是收完的高度，越量越小
+    reset();
+    const bottoms: number[] = [];
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = view.getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+    }
+    const room = visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+    if (!Number.isFinite(room) || room <= 0) return;
+    if (el.scrollHeight <= room + 1) return;
+    // `min-height:460px` 会盖过一切，收的时候得先让开
+    el.classList.add("ktc-fit");
+    el.style.minHeight = "0";
+    for (const h of CAT_FIT_STEPS) {
+      el.style.setProperty("--ktc-cat-h", `${h}px`);
+      if (el.scrollHeight <= room + 1) return;
+    }
+    // 猫收到最小还是装不下（多猫关 + 搓澡区就会这样），剩下的交给滚动
+    el.style.maxHeight = `${Math.floor(room)}px`;
+    el.style.overflowY = "auto";
+  };
+  relayout();
+  view?.addEventListener("resize", relayout);
+  return {
+    relayout,
+    dispose(): void {
+      view?.removeEventListener("resize", relayout);
+      reset();
+    }
+  };
+}
+
 /** 这台设备想要静一点的动画吗（呼吸、尾巴、飘心都听它的） */
 export function prefersReducedMotion(): boolean {
   const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;

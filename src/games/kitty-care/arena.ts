@@ -50,7 +50,7 @@ import {
   type SnapPoint,
   type TaskOutcome
 } from "./tasks";
-import type { Life, Loop } from "./runtime";
+import { fitIntoStage, type Life, type Loop } from "./runtime";
 
 const TASK_INFO: Record<KittyTask, { icon: string; name: string }> = {
   feed: { icon: "🍽️", name: "喂饭" },
@@ -166,6 +166,8 @@ export class Arena {
    * 光靠 `destroy()` 收，无尽里每跑一遍哄睡就会多留一个在那儿空转。
    */
   private readonly loops: Loop[] = [];
+  /** 把小屋钳进舞台看得见的那一段；矮屏上够不着饭碗就是没接这根线 */
+  private fit: { relayout: () => void; dispose: () => void } | null = null;
 
   constructor(host: HTMLElement, opts: ArenaOptions) {
     this.opts = opts;
@@ -235,6 +237,7 @@ export class Arena {
     host.appendChild(this.root);
     this.renderCats();
     this.renderMood();
+    this.fit = fitIntoStage(this.root);
   }
 
   // -- 基础渲染 -------------------------------------------------------------
@@ -424,6 +427,12 @@ export class Arena {
   }
 
   private renderTask(): void {
+    this.paintTask();
+    // 每件事摆出来的东西不一样高，钳一次再交给手指
+    this.fit?.relayout();
+  }
+
+  private paintTask(): void {
     const spec = this.spec;
     if (!spec || this.dead) return;
     this.stopLoops();
@@ -892,6 +901,8 @@ export class Arena {
   destroy(): void {
     this.dead = true;
     this.stopLoops();
+    this.fit?.dispose();
+    this.fit = null;
     this.spec = null;
     this.onDone = null;
     this.root.remove();
