@@ -156,7 +156,9 @@ export function gadgetRect(g: GadgetState): Rect {
   if (d.kind === "warp") {
     return { x0: d.x - WARP_R, x1: d.x + WARP_R, y0: d.y - WARP_R * 2, y1: d.y };
   }
-  return { x0: d.x - d.w / 2, x1: d.x + d.w / 2, y0: d.y - d.h, y1: d.y };
+  // 弹簧云与脆弱地板的 `y` 是**踩得住的那一面**,板身挂在它下面 ——
+  // 跟 `logic.ts` 里 `top = def.y` 的落地判定对齐,画出来才不会浮在半空
+  return { x0: d.x - d.w / 2, x1: d.x + d.w / 2, y0: d.y, y1: d.y + d.h };
 }
 
 export function rectsOverlap(a: Rect, b: Rect): boolean {

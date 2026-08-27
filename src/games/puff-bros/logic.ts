@@ -1331,6 +1331,9 @@ function stepCandies(w: World, dt: number): void {
 
 function checkCoopGoal(w: World): void {
   if (w.status !== "playing") return;
+  // 上升气流是跑酷,过关的唯一条件是爬到最高那一层。
+  // 顺手把路上那一两只咕噜怪清了不该直接算过段 —— 那一段还没爬完呢
+  if (w.def.climbRow > 0) return;
   if (w.monsterTotal > 0 && w.cleared >= w.monsterTotal) {
     w.status = "won";
     w.message = "";
