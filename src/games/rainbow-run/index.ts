@@ -76,7 +76,7 @@ import {
   wouldHit,
   zapperActive,
 } from "./logic";
-import type { ThemeStyle } from "./logic";
+import type { Theme, ThemeStyle } from "./logic";
 import {
   COYOTE_TIME,
   RunInput,
@@ -191,6 +191,31 @@ import {
   serializeSkipList,
 } from "./campaign";
 import type { RunnerBoosts } from "./campaign";
+import {
+  CoinSprite,
+  HEADBAND_P1,
+  PARALLAX_THEMES,
+  RunnerPose,
+  blinkHidden,
+  coinFrameAt,
+  coinLOD,
+  coinSweepPhase,
+  drawBoardArt,
+  drawCoin,
+  drawCoinDot,
+  drawCoinSweep,
+  drawContactShadow,
+  drawJetFlame,
+  drawObstacleArt,
+  drawPowerIcon,
+  drawRunner,
+  drawRunnerAfterimage,
+  drawSilhouetteUnit,
+  drawStarPickup,
+  makeCoinSprite,
+  pickupFloat,
+  worldDotsLit,
+} from "./art";
 import { touchArea } from "./touch";
 import type { Rect } from "./touch";
 import { save } from "../../engine/save";
@@ -251,6 +276,8 @@ interface Puff {
   y: number;
   life: number;
   color: string;
+  /** 星屑:画成小星星而不是圆点(吃到星币时撒的那三粒) */
+  star?: boolean;
 }
 
 interface Floaty {
@@ -398,6 +425,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
   canvas.style.touchAction = "none";
   root.appendChild(canvas);
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+
+  // 星币旋转帧:预渲染 8 帧到离屏画布,之后每帧只 drawImage(4 倍超采样,贴近镜头也不糊)
+  const coinSprite: CoinSprite = makeCoinSprite(10, 4, (cw, chh) => {
+    const c = document.createElement("canvas");
+    c.width = cw;
+    c.height = chh;
+    return c;
+  });
 
   let w = 640;
   let h = 480;
@@ -1378,9 +1413,22 @@ export function mount(api: GameAPI): RainbowRunHandle {
           puffs.push({ x: p.x, y: p.y, life: 0.5, color: "#ffe387" });
         } else if (p.kind === "coin") {
           stats.coins++;
-          score += Math.round(5 * boosts.coinMul);
+          const gain = Math.round(5 * boosts.coinMul);
+          score += gain;
           api.play("pop");
-          addFloat(p.x, p.y - 20, "+1🍬", "#e05a7a");
+          // 金色 +5 飘字 + 三粒星屑(粒子数走画质分档)。
+          // 散布用确定性偏移,不消耗 Math.random——种子回放的随机流一个数都不能挪
+          for (let k = 0; k < particleCount(3, qualityTier); k++) {
+            const a = (Math.PI * 2 * k) / 3 + p.x * 0.05;
+            puffs.push({
+              x: p.x + Math.cos(a) * 12,
+              y: p.y + Math.sin(a) * 9,
+              life: 0.5,
+              color: "#ffd868",
+              star: true,
+            });
+          }
+          addFloat(p.x, p.y - 20, `+${gain}`, "#e0a030");
           if (endless) chaserGap = chaserBoost(chaserGap, CHASER_COIN_BONUS);
         } else if (p.kind === "rail") {
           railTimer = RAIL_SECONDS;
@@ -1762,22 +1810,39 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.restore();
   }
 
-  /** 一个可以吃的东西,画在原点上。 */
-  function drawPickupShape(p: Pickup, laneW: number): void {
+  /** 一个可以吃的东西,画在原点上(scale 是投影倍率,给星币挑画法用)。 */
+  function drawPickupShape(p: Pickup, laneW: number, scale: number): void {
     if (p.kind === "star") {
-      drawStar(0, 0, 14, "#ffd868");
+      ctx.translate(0, pickupFloat(time, reducedMotion, p.x * 0.13));
+      drawStarPickup(ctx, 14, Math.abs(Math.sin(time * 3 + p.x * 0.02)));
       return;
     }
     if (p.kind === "coin") {
-      ctx.fillStyle = "#ffb84d";
-      ctx.beginPath();
-      ctx.arc(0, 0, 10, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, 6, 0, Math.PI * 2);
-      ctx.stroke();
+      // 360px 红线:投影缩到快看不清时退化成亮点(性能 + 可读)
+      if (coinLOD(scale) === "dot") {
+        drawCoinDot(ctx, 10);
+        return;
+      }
+      // 被磁铁吸着飞的星币,身后拖两帧金色残影
+      if (magnetTimer > 0 && !p.taken) {
+        const dx = laneX(lane) - p.x;
+        const dy = playerY() - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const ghosts: ReadonlyArray<readonly [number, number]> = [
+          [7, 0.3],
+          [14, 0.15],
+        ];
+        for (const [off, alpha] of ghosts) {
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate((-dx / d) * off, (-dy / d) * off);
+          drawCoin(ctx, coinSprite, coinFrameAt(time + p.x * 0.01));
+          ctx.restore();
+        }
+      }
+      // 8 帧旋转 sprite:各币相位错开,免得整屏一起翻面
+      drawCoin(ctx, coinSprite, coinFrameAt(time + p.x * 0.01));
+      if (!reducedMotion) drawCoinSweep(ctx, 10, coinSweepPhase(time + p.x * 0.02));
       return;
     }
     if (p.kind === "rail") {
@@ -1798,17 +1863,9 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.stroke();
       return;
     }
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.beginPath();
-    ctx.arc(0, 0, 18, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#c9a6f2";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.font = "18px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(p.kind === "magnet" ? "🧲" : p.kind === "jet" ? "🚀" : "🛹", 0, 1);
+    // 道具泡泡球:渐变球体 + 绘制图标(磁铁 / 火箭 / 滑板),不再用字符占位
+    ctx.translate(0, pickupFloat(time, reducedMotion, p.x * 0.11));
+    drawPowerIcon(ctx, p.kind, 18);
   }
 
   /** 追风棉花云:跟在身后,越近画得越大,近到一定程度整块画面边缘会泛红。 */
@@ -2614,7 +2671,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.translate(projectFlatX(cam, p.x, s), screenYAtDepth(cam, depthOf(cam, p.y)));
       ctx.scale(s, s);
       ctx.globalAlpha = 1 - fogAlpha(s);
-      drawPickupShape(p, laneW);
+      drawPickupShape(p, laneW, s);
       ctx.restore();
     }
 
@@ -2649,10 +2706,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
 
     for (const p of puffs) {
       ctx.globalAlpha = Math.max(0, p.life / 0.5);
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.star) {
+        drawStar(p.x, p.y, 6, p.color);
+      } else {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     }
 
