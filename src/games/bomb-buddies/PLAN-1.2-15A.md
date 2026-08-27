@@ -54,3 +54,27 @@
 
 泡泡不是炸药。**没有爆炸伤害、没有火焰、没有死亡**:被泡泡罩住 = 「困在泡泡里,队友可以拍破救你」,
 破裂是「啵」的一圈彩虹波,砖块被波及是「变成小花散开」。失败只鼓励,无商标。
+
+---
+
+## 五、施工对账(收工时回填)
+
+计划十一条全部落地,另外有四处是**真机上才露出来、计划里没写**的:
+
+| # | 计划 | 实际落点 | 差异 |
+| --- | --- | --- | --- |
+| 1 | 转向补正 | `logic.ts` `TURN_ASSIST_CELLS = 0.5` + `turnAssistReach()` / `planTurn()` | 函数名从 `turnAssist` 拆成两个:一个算容差、一个出决策,好单测 |
+| 2 | 泡泡时间线 | `BUBBLE_GROW_MS 400` / `BUBBLE_POP_MS 2000` / `CHAIN_FRAMES 3` / `CHAIN_STEP_MS`;`bubbleStage()`、`growProgress()`、`chainWaves()` | 照做 |
+| 3 | 第七件道具 | `shield` + `ITEM_KINDS_V2` / `rollItemV2`;第 6 章起换池,擂台仍用 v1 | 擂台**不**发护盾:两个人各揣两层护盾会把对局拖成平局,实测过 |
+| 4 | AI 三档 + 自保 | `canEscapeFrom()` 粗筛 + `escapeAfterBomb()` 定案;高档 `predictFoeCells()` / `foeEscapeCount()`;`AI_TUNING` 一张表列清三档差异 | 自保补了两处计划外的洞:算退路时要把**起步冷却 `moveT`** 算进去(2 秒引信下这半步就是生死),以及先绕开小怪、绕不开再退回原算法 |
+| 5 | coop 救援 | `RESCUE_MS 5000` / `RESCUE_TOUCH_MS`;`rescuerFor()` / `popBubble()`;救人 +1 星 | 另加 `FREE_GRACE_MS`:刚被放出来有 900ms 彩虹光,否则会被同一只追追怪当场再罩一次 |
+| 6 | 泡泡塔 | `buildTowerFloor(n)`,道具带着爬楼(`Carry` / `carryOf`),第 6 层起楼板往里收 | 照做,老的 `buildEndlessRound` 留着没删 |
+| 7 | 窄屏可见 | `MAX_COLS` / `MAX_ROWS` = **13**(不是 15) | 计划里按「360 / 24 = 15」算,**错了**:360 的屏宽要先扣掉平台留白、舞台描边和本款内边距,真机上量下来只剩 315px,15×24=360 根本画不下。收到 13 之后前 99 关一格没动(本来最大就是 13×13),被收窄的只有第 100 关之后原本会长到 15 的那些图 |
+| 8 | 手感与分级 | 膨胀 / 晃悠 / 绷紧三段 + 最后一秒倒数;彩虹波;砖散成小花;被困的人在泡泡里左右晃、头顶一圈倒计时;`prefers-reduced-motion` CSS 关过渡、画布这边 `matchMedia` 自己收住晃动 | 照做 |
+| 9 | 手机 360px | 摇杆 + 放泡 / 踢泡 / 拍破三颗钮,热区 ≥44 | 计划以为「排得下」就完了。真机上**排下了也按不到**:平台的 `.game-stage` 是 `overflow:hidden` 的定高一屏,摇杆整块落在屏幕外面。棋盘高度因此改成量出来的(扣掉棋盘上方真实位置与下方提示条 / 摇杆实际高度),暂停钮搬进标题条腾出一行,矮屏提示条让位,救援条弹出时再重排一次 |
+| 10 | 平台接线 | `openCampaignLevel(n)` / `initialLevel` / `?level=` / `requestSkip` | 直达关卡这条路原本没有跳关按钮,补了和 `tank-battle` 同一套家长门 |
+| 11 | 收尾 | 局部 `<style>`;`destroy` 归零;**新增 129 个用例** | 用例数超出计划的 20 一大截,因为运行时那层得靠自带 DOM 桩(`domStub.ts`)才验得动 |
+
+**同格重复提交**:rebase 到 `origin/game-1.2-window3` 时本款目录只有 1.1 的代码,没有别人推的 1.2 版本,
+不存在需要合流的另一路实现。既有的 `logic.test.ts` / `levels.test.ts` / `ai.test.ts` / `smoke.test.ts`
+一个用例都没删,只在新文件里做加法。
