@@ -40,6 +40,22 @@ import {
   pinCanvas,
   prefersReducedMotion,
 } from "./ui";
+import {
+  GLOW_MS,
+  HIT_CLASSES,
+  RIPPLE_MS,
+  SHAKE_MS,
+  SHINE_MS,
+  STUDIO_CSS,
+  dropBadgeMarkup,
+  hitClassOf,
+  nextPendingColor,
+  paletteBrushHTML,
+  rippleGhostMarkup,
+  studioSceneMarkup,
+  svgPointOf,
+} from "./studio";
+import { rippleReach, rippleRadius } from "../../art/kit/paintBlob";
 
 const THEME_BG = [
   "linear-gradient(#fff9db,#ffec99)",
@@ -129,6 +145,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     timeouts.add(t);
   }
 
+  /** 完成仪式与彩纸用的那一路：只看 destroyed 不看 ended——赢了以后动画还得走完 */
+  function anytime(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      timeouts.delete(t);
+      if (!destroyed) fn();
+    }, ms);
+    timeouts.add(t);
+  }
+
   /** 重钳一次（`fitColoringStage` 装好之前先是个空壳，渲染顺序决定了它必须晚绑） */
   let refit: () => void = () => {};
 
@@ -137,6 +162,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   wrap.style.background = THEME_BG[ctx.chapterIndex] ?? THEME_BG[0];
   wrap.innerHTML = `
     <style>${CLF_CSS}</style>
+    <style>${STUDIO_CSS}</style>
+    <div class="clf-studio" aria-hidden="true">${studioSceneMarkup()}</div>
     <div class="clf-top">
       <span class="clf-badge">${pic.emoji} ${pic.name}</span>
       <span class="clf-badge clf-progress">🖌️ 0/${cfg.tasks.length}</span>
@@ -184,6 +211,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const potText = wrap.querySelector(".clf-pot-text") as HTMLElement | null;
   const mixTip = wrap.querySelector(".clf-mix-tip") as HTMLElement | null;
   const primariesEl = wrap.querySelector(".clf-primaries") as HTMLElement | null;
+  // 调色盘实体化：挂上木板皮肤（纯 class，热区尺寸一个不动）
+  paletteEl.classList.add("clf-board");
 
   // --- 画布 ---
   svg.innerHTML = pictureSvgBody(pic);
@@ -191,25 +220,25 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   svg.querySelectorAll<SVGElement>(".clf-region").forEach((el) => {
     const id = el.getAttribute("data-id") ?? "";
     regionEls.set(id, el);
-    el.addEventListener("click", () => onRegion(id));
+    el.addEventListener("click", (e) => onRegion(id, e));
   });
+  // 涟漪擦除层：压在区域上面、角标下面（图层序 4.1），pointer-events:none 不挡任何点击
+  const rippleLayer = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+  rippleLayer.setAttribute("class", "clf-ripple-layer");
+  svg.appendChild(rippleLayer);
+  let rippleSeq = 0;
 
-  // 数字涂色贴编号、图例大画布贴符号
-  const markEls = new Map<string, SVGTextElement>();
+  // 数字涂色贴编号、图例大画布贴符号：颜料滴角标，描边 = 目标色（数字与颜色双通道）
+  const markEls = new Map<string, SVGElement>();
   if (cfg.mode === "number" || cfg.mode === "legend") {
     for (const task of cfg.tasks) {
       const r = pic.regions.find((x) => x.id === task.region);
       if (!r) continue;
-      const txt = doc.createElementNS("http://www.w3.org/2000/svg", "text");
-      txt.setAttribute("x", String(r.lx));
-      txt.setAttribute("y", String(r.ly));
-      txt.setAttribute("text-anchor", "middle");
-      txt.setAttribute("font-size", "18");
-      txt.setAttribute("fill", "#495057");
-      txt.setAttribute("class", "clf-mark");
-      txt.textContent = markOf.get(task.color) ?? "?";
-      svg.appendChild(txt);
-      markEls.set(task.region, txt);
+      const g = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.setAttribute("class", "clf-mark");
+      g.innerHTML = dropBadgeMarkup(markOf.get(task.color) ?? "?", ALL_PAINTS[task.color], r.lx, r.ly);
+      svg.appendChild(g);
+      markEls.set(task.region, g);
     }
   }
 
@@ -283,6 +312,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   function renderPalette(): void {
     paletteEl.innerHTML = "";
+    // 木板上先躺一支画笔，笔尖蘸着当前色（纯装饰 span，不接点击不进 Tab 序）
+    paletteEl.insertAdjacentHTML("beforeend", paletteBrushHTML(picked ? ALL_PAINTS[picked] : "#c9cfd8"));
     for (const name of unlocked) {
       const btn = makeSwatch(doc, name, { mark: markOf.get(name) });
       if (name === picked) btn.classList.add("clf-picked");
@@ -295,20 +326,39 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       });
       paletteEl.appendChild(btn);
     }
+    updateBreath();
     refit();
+  }
+
+  /** 按号模式：当前该涂的号在调色盘上呼吸提示（reduced 由 CSS 换成常亮描边） */
+  function updateBreath(): void {
+    if (cfg.mode !== "number") return;
+    const next = nextPendingColor(cfg.tasks, history.replay());
+    for (const el of Array.from(paletteEl.children)) {
+      const btn = el as HTMLElement;
+      if (!btn.classList?.contains("clf-swatch")) continue;
+      btn.classList.toggle("clf-breathe", next !== null && btn.dataset?.color === next && picked !== next);
+    }
   }
 
   function finish(): void {
     if (ended) return;
     ended = true;
     svg.classList.add("clf-done");
-    confetti(wrap, (fn, ms) => {
-      const t = setTimeout(() => {
-        timeouts.delete(t);
-        if (!destroyed) fn();
-      }, ms);
-      timeouts.add(t);
-    });
+    // 完成仪式（纯视觉，ctx.win 的时机原样不动）：闪光扫过 400ms → 装裱上画框；
+    // 减弱动效时跳过闪光直接装裱
+    if (softMotion) {
+      stageBox.classList.add("clf-mounted");
+    } else {
+      const shine = doc.createElement("div");
+      shine.className = "clf-shine";
+      stageBox.appendChild(shine);
+      anytime(() => {
+        shine.remove();
+        stageBox.classList.add("clf-mounted");
+      }, SHINE_MS + 20);
+    }
+    confetti(wrap, anytime);
     // 手误只扣星，绝不判负；添柴续命按两次手误算
     const got = rateBelow(slips + refills * 2, 0, 2);
     ctx.win(got, slips === 0 ? `${pic.name}一笔都没改过，真是小画家！` : `${pic.name}涂得五彩缤纷，真好看！`);
@@ -337,12 +387,67 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
     updateHud();
     renderChips();
+    updateBreath();
     if (!ended && cfg.tasks.every((k) => fills[k.region] === k.color)) {
       later(() => finish(), 480);
     }
   }
 
-  function onRegion(id: string): void {
+  /**
+   * 颜料涟漪（纯视觉过渡）：旧色残影盖在区域上，被一枚从点击点长大的圆洞
+   * 渐渐擦掉，露出**逻辑早已写好的最终色**——最终色 = 逻辑色，判定零改动。
+   * 残影挂在 pointer-events:none 的涟漪层里，减弱动效时整个跳过（瞬间填色）。
+   */
+  function spawnRipple(id: string, fromColor: string | null, ev?: Event): void {
+    if (softMotion) return;
+    const r = pic.regions.find((x) => x.id === id);
+    const el = regionEls.get(id);
+    if (!r || !el) return;
+    let cx = r.lx;
+    let cy = r.ly;
+    const me = ev as MouseEvent | undefined;
+    if (me && typeof me.clientX === "number" && typeof svg.getBoundingClientRect === "function") {
+      const p = svgPointOf(svg.getBoundingClientRect(), me.clientX, me.clientY);
+      if (p) {
+        cx = p.x;
+        cy = p.y;
+      }
+    }
+    // 铺到区域包围盒最远角就收；量不到包围盒时按整张画布对角线，保证一定铺满
+    let radius = rippleRadius(400, 300);
+    const shape = el as unknown as { getBBox?: () => { x: number; y: number; width: number; height: number } };
+    if (typeof shape.getBBox === "function") {
+      try {
+        radius = rippleReach(cx, cy, shape.getBBox());
+      } catch {
+        // 画布还没铺开量不出包围盒，就按整幅算
+      }
+    }
+    const g = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.innerHTML = rippleGhostMarkup(
+      r.svg,
+      fromColor ? ALL_PAINTS[fromColor] : "#ffffff",
+      `clfRip${++rippleSeq}`,
+      cx,
+      cy,
+      radius,
+      RIPPLE_MS
+    );
+    rippleLayer.appendChild(g);
+    later(() => g.remove(), RIPPLE_MS + 40);
+  }
+
+  /** 涂对亮圈 / 涂错抖动：两个视觉分支互斥——先把两个类都摘干净，下一拍再挂本次那个（动画才会重放） */
+  function flashRegion(id: string, right: boolean): void {
+    const el = regionEls.get(id);
+    if (!el) return;
+    for (const c of HIT_CLASSES) el.classList.remove(c);
+    if (softMotion) return;
+    later(() => el.classList.add(hitClassOf(right)), 16);
+    later(() => el.classList.remove(hitClassOf(right)), (right ? GLOW_MS : SHAKE_MS) + 76);
+  }
+
+  function onRegion(id: string, ev?: Event): void {
     if (ended || previewing) return;
     if (!regionEls.has(id)) return;
     const target = want.get(id);
@@ -362,12 +467,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         return;
       }
     }
-    const wasRight = fillOf(id) === target;
+    const before = fillOf(id);
+    const wasRight = before === target;
     applyPaint(id, picked);
+    // 真的换了色才起涟漪；涂对涂错的最终色一律照旧由 repaint 说了算
+    if (before !== picked) spawnRipple(id, before, ev);
     if (picked === target) {
+      flashRegion(id, true);
       ctx.sfx("pop");
       msgEl.textContent = `${regionName(id)}涂上${picked}，真好看！`;
     } else {
+      flashRegion(id, false);
       if (!wasRight) slips++;
       ctx.sfx("tap");
       msgEl.textContent = nudgeFor(cfg);
