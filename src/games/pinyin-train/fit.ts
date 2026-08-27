@@ -37,6 +37,35 @@ export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]
 }
 
 /**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`，不减这一刀就白多算 4px——
+ * 钳完舞台照样 `scrollHeight − clientHeight = 14`，最后一排选项缺一角。
+ * 量不出宽度就当没有，绝不算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
+/** 量一次这个节点头顶到最近那条裁切线之间还剩多少（量不了就返回 Infinity） */
+export function stageRoomPx(el: HTMLElement): number {
+  const view = el.ownerDocument?.defaultView ?? null;
+  if (!view || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
+  const bottoms: number[] = [];
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const cs = view.getComputedStyle(p);
+    const oy = cs.overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+      bottoms.push(clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth));
+    }
+  }
+  return visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+}
+
+/**
  * 要把 `[top, bottom]` 这一段带进可视段，宿主的 `scrollTop` 该写多少。
  *
  * 滚**最小的那一下**：只要下沿进来就收手，题面尽量留在眼前。
@@ -95,12 +124,7 @@ export function fitQuizHost(host: HTMLElement): { relayout: () => void; dispose:
     host.style.overflowY = "";
     host.style.overscrollBehavior = "";
     host.scrollTop = 0;
-    const bottoms: number[] = [];
-    for (let p = host.parentElement; p; p = p.parentElement) {
-      const oy = view.getComputedStyle(p).overflowY;
-      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
-    }
-    const room = visibleRoomPx(host.getBoundingClientRect().top, bottoms);
+    const room = stageRoomPx(host);
     if (!Number.isFinite(room) || room <= 0) return;
     if (host.scrollHeight <= room + 1) return;
     host.style.maxHeight = `${Math.floor(room)}px`;

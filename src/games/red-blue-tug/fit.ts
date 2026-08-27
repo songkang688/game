@@ -51,14 +51,30 @@ export function fieldRoomPx(
   return Math.max(minField, Math.floor(fieldHeight - over));
 }
 
+/**
+ * 一层裁切祖先真正的那条裁切线。
+ *
+ * 滚动口是 **padding box**，下边框那几像素照不进内容；
+ * `getBoundingClientRect().bottom` 给的却是 border box 的下沿。
+ * `.game-stage` 写着 `border:4px solid #fff`，不减这一刀就白多算 4px——
+ * 320×640 上拔河场因此还是压不住 `.rbg-msg`。量不出宽度就当没有，绝不算成 NaN。
+ */
+export function clipBottomPx(bottom: number, borderBottom: string): number {
+  const w = Number.parseFloat(borderBottom);
+  return Number.isFinite(w) && w > 0 ? bottom - w : bottom;
+}
+
 /** 量一次这个节点头顶到最近那条裁切线之间还剩多少（量不了就返回 Infinity） */
 export function stageRoomPx(el: HTMLElement): number {
   const view = el.ownerDocument?.defaultView ?? null;
   if (!view || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
   const bottoms: number[] = [];
   for (let p = el.parentElement; p; p = p.parentElement) {
-    const oy = view.getComputedStyle(p).overflowY;
-    if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+    const cs = view.getComputedStyle(p);
+    const oy = cs.overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+      bottoms.push(clipBottomPx(p.getBoundingClientRect().bottom, cs.borderBottomWidth));
+    }
   }
   return visibleRoomPx(el.getBoundingClientRect().top, bottoms);
 }
