@@ -267,7 +267,8 @@ export const DUOYIN_CARDS: DuoyinCard[] = [
   {
     char: "行",
     readings: [
-      { pinyin: "háng", words: ["银行", "行业", "同行"], sentence: "爸爸带我去银行存压岁钱" },
+      // 「同行」两读都标准（tóng háng 同业 / tóng xíng 结伴走），词本身定不了音，换成只读 háng 的「行列」
+      { pinyin: "háng", words: ["银行", "行业", "行列"], sentence: "爸爸带我去银行存压岁钱" },
       { pinyin: "xíng", words: ["行走", "行动", "不行"], sentence: "我们沿着小路行走了很久" },
     ],
   },
@@ -303,14 +304,16 @@ export const DUOYIN_CARDS: DuoyinCard[] = [
     char: "好",
     readings: [
       { pinyin: "hǎo", words: ["好看", "好人", "美好"], sentence: "这本书里的插图真好看" },
-      { pinyin: "hào", words: ["爱好", "好奇", "好学"], sentence: "他的爱好是收集各地邮票" },
+      // 「好学」两读都标准（hào xué 爱学 / hǎo xué 容易学），换成只读 hào 的「好动」
+      { pinyin: "hào", words: ["爱好", "好奇", "好动"], sentence: "他的爱好是收集各地邮票" },
     ],
   },
   {
     char: "觉",
     readings: [
       { pinyin: "jué", words: ["觉得", "感觉", "自觉"], sentence: "我觉得这个办法很聪明" },
-      { pinyin: "jiào", words: ["睡觉", "午觉", "困觉"], sentence: "弟弟中午一定要睡午觉" },
+      // 「困觉」是方言词（现汉标〈方〉），普通话不这么说，换成同样常见的「懒觉」
+      { pinyin: "jiào", words: ["睡觉", "午觉", "懒觉"], sentence: "弟弟中午一定要睡午觉" },
     ],
   },
   {
@@ -358,7 +361,8 @@ export const DUOYIN_CARDS: DuoyinCard[] = [
   {
     char: "转",
     readings: [
-      { pinyin: "zhuàn", words: ["转圈", "转动", "打转"], sentence: "风车在屋顶上一直转圈" },
+      // 「转动」两读都收（zhuàn dòng 打转 / zhuǎn dòng 挪动），和「同行」同一类毛病，换成只读 zhuàn 的「转盘」
+      { pinyin: "zhuàn", words: ["转圈", "转盘", "打转"], sentence: "风车在屋顶上一直转圈" },
       { pinyin: "zhuǎn", words: ["转弯", "转身", "转告"], sentence: "前面路口向左转弯就到了" },
     ],
   },
