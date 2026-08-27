@@ -8,7 +8,7 @@ import guide from "./guide";
 
 describe("音符下落 · 学习优化员文案快照", () => {
   it("攻略把 1.3 的判定爆点形状与长按白环讲给玩家(逐字快照)", () => {
-    expect(guide.general).toContain(
+    expect(guide.general.join("")).toContain(
       "爆点的形状会告诉你打得多准:金色六芒星是完美,白色四芒星是良好。练的时候多看一眼爆点,总出四芒星就把落手时机再磨一磨。"
     );
     expect(guide.general.join("")).toContain("长按块的中心画着一圈白环");

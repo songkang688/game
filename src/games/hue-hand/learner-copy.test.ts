@@ -8,7 +8,7 @@ import guide from "./guide";
 
 describe("花色接龙 · 学习优化员文案快照", () => {
   it("攻略把 1.3 的角标形状通道讲给玩家(逐字快照)", () => {
-    expect(guide.general).toContain(
+    expect(guide.general.join("")).toContain(
       "分不清颜色也不怕:卡面角标除了颜色还配了形状 —— 粉色是圆、黄色是方、绿色是三角、蓝色是星星,顶上的颜色条也画着同一个小符号,跟着形状找就不会出错。"
     );
   });

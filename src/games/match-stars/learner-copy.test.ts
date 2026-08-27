@@ -8,7 +8,7 @@ import guide from "./guide";
 
 describe("星星消消乐 · 学习优化员文案快照", () => {
   it("攻略把 1.3 的星星轮廓与火箭腰带讲给玩家(逐字快照)", () => {
-    expect(guide.general).toContain(
+    expect(guide.general.join("")).toContain(
       "星星除了颜色还有轮廓:尖角星、心形、花形、圆角星、胖星、六芒星各不相同,靠形状认比靠颜色快;火箭星腰带上的箭头指哪个方向,就往哪个方向清一整排。"
     );
   });
