@@ -166,10 +166,11 @@ const GAMES = [
     id: "mine-garden",
     duoKind: "split",
     title: "扫雷花园",
-    p: "mg",
+    // 上游把扫雷花园的类前缀从 mg- 换成 mn-(W1-05 的撞车修法),这里跟上。
+    p: "mn",
     modes: { versus: "🤖 竞速对战", endless: "🔥 连续清盘", twoPlayer: "👫 双人同屏" },
     keys: ["KeyD", "KeyS", "KeyF"],
-    clicks: [".mg-cell"]
+    clicks: [".mn-cell"]
   },
   {
     id: "sudoku-petal",
@@ -1526,6 +1527,93 @@ async function partI(browser) {
 }
 
 // ---------------------------------------------------------------------------
+// K. 围子花园双人同屏:两套键位到底分不分人
+// ---------------------------------------------------------------------------
+
+/**
+ * PART=E 的通用回合探针只能说「按了对家的键、画布动了」,画布动也可能只是光标挪了一格,
+ * 说服力不够。这里改读围子花园自己播报的「第 N 手」:
+ * 手数只有真落子才会 +1,所以「轮到朵朵时按星星的键,手数涨了」= 星星替朵朵下了子,
+ * 是决定性证据,不用再猜画布上那一下是光标还是棋子。
+ */
+async function readWeiqi(page) {
+  return page.evaluate(() => {
+    const all = (document.querySelector(".game-stage")?.textContent ?? "").replace(/\s+/g, " ");
+    const mv = /第\s*(\d+)\s*手/.exec(all);
+    const tn = /轮到\s*(朵朵|星星)/.exec(all);
+    return { moves: mv ? Number(mv[1]) : null, turn: tn ? tn[1] : "", raw: all.slice(0, 90) };
+  });
+}
+
+async function partK(browser) {
+  console.log("\n===== K. 围子花园双人同屏:两套键位分不分人(读「第 N 手」) =====");
+  const g = GAMES.find((x) => x.id === "weiqi-garden");
+  const page = await newPage(browser, NARROW);
+  const r = await enterMode(page, g, g.modes.twoPlayer);
+  if (!r.ok) {
+    log(false, "围子花园:双人同屏开不起来", `选了 ${r.picks} 层`);
+    await page.close();
+    return;
+  }
+  await sleep(600);
+  const start = await readWeiqi(page);
+  note(`开局读数:第 ${start.moves} 手 · 轮到 ${start.turn} · 「${start.raw}」`);
+  if (start.moves === null) {
+    note("这一屏没播报手数,决定性取证做不了 —— 记为取证上限");
+    await page.close();
+    return;
+  }
+
+  // 第 1 段:轮到朵朵,只按星星那套键(←/→ 挪光标 + L 确认)。手数涨了就是串台。
+  const rounds = [];
+  for (let i = 0; i < 6; i++) {
+    const before = await readWeiqi(page);
+    if (before.turn !== "朵朵") break;
+    await pressAll(page, ["ArrowRight", "ArrowDown", "KeyL"], 180);
+    await sleep(500);
+    const after = await readWeiqi(page);
+    rounds.push({ before, after });
+    if (after.moves > before.moves) break;
+  }
+  const crossed = rounds.find((x) => x.after.moves > x.before.moves);
+  log(
+    crossed === undefined,
+    "围子花园 双人:轮到朵朵时,星星那套键不该落得下子",
+    crossed
+      ? `串台了 —— 按 ←/↓/L 之后手数 ${crossed.before.moves} → ${crossed.after.moves}、轮次 ${crossed.before.turn} → ${crossed.after.turn}`
+      : `按了 ${rounds.length} 轮星星的键,手数一直停在 ${start.moves}(不串台)`
+  );
+
+  // 第 2 段:反向再探一次 —— 这一手轮到谁,就拿另一套键去试,看是不是两个方向都串
+  const own0 = await readWeiqi(page);
+  let own1 = own0;
+  for (let i = 0; i < 6 && own1.moves <= own0.moves; i++) {
+    await pressAll(page, ["ArrowRight", "KeyF"], 180);
+    await sleep(500);
+    own1 = await readWeiqi(page);
+  }
+  note(
+    `反向探针:轮到 ${own0.turn} 时按朵朵那套的 F,手数 ${own0.moves} → ${own1.moves}、轮次 ${own0.turn} → ${own1.turn}` +
+      (own1.moves > own0.moves && own0.turn === "星星" ? "(另一个方向也串)" : "")
+  );
+
+  // 第 3 段:同一份 keyAction 是不是真把两套键映成同一个动作(纯函数,不碰玩法)
+  const map = await page.evaluate(async () => {
+    const m = await import("/src/games/weiqi-garden/index.ts");
+    const ks = ["w", "ArrowUp", "a", "ArrowLeft", "f", "l", "g", "k"];
+    const out = {};
+    for (const k of ks) out[k] = m.keyAction(k);
+    return { arity: m.keyAction.length, out };
+  });
+  log(
+    map.arity >= 2,
+    "围子花园:keyAction 该带一个「这键是谁的」参数",
+    `keyAction.length=${map.arity} · 映射 ${JSON.stringify(map.out)}`
+  );
+  await page.close();
+}
+
+// ---------------------------------------------------------------------------
 // J. merge-2048 aria-live 观察
 // ---------------------------------------------------------------------------
 
@@ -1599,6 +1687,7 @@ async function main() {
     if (PARTS.includes("H")) await partH(browser);
     if (PARTS.includes("I")) await partI(browser);
     if (PARTS.includes("J")) await partJ(browser);
+    if (PARTS.includes("K")) await partK(browser);
   } finally {
     await browser.close();
   }
