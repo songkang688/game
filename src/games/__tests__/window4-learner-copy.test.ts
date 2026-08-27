@@ -54,3 +54,30 @@ describe("窗口4 学习优化员:9 款攻略都讲明了 1.3 的视觉线索", 
     });
   }
 });
+
+/**
+ * 第 2 轮追加:C 档第 1 轮把三款的画布 emoji 换成了手绘资产
+ * (garden-guard 花瓣币与十三章徽章 cd187a9 / duo-arena 技能图标·星阶·让分小花 f7af94d /
+ * sling-birds 横幅章节角标 a91fb0e),这里钉住把这些新画面讲进攻略的关键词。
+ * 报告:docs/qa/1.3-window4-round2-learner.md 第六节。
+ */
+const R2_FIX_CUES: ReadonlyArray<{ id: string; cues: string[] }> = [
+  // drawSkillIcon 三种图标 + 冷却环就绪绿圈 + AI_PIPS 星阶 + drawMicroFlower 让分小花
+  { id: "duo-arena", cues: ["三道蓝色速度线", "淡蓝泡泡圈", "紫色双圈波纹", "一到四颗小金星", "小粉花徽章"] },
+  // drawPetalIcon 粉瓣金芯花瓣币(升级/卖出/飘字共用) + drawThemeBadge 十三章徽章(grass=雏菊)
+  { id: "garden-guard", cues: ["粉瓣金芯", "认花就是认钱", "小雏菊"] },
+  // drawBannerBadge 横幅两端章节角标(草地小花/沙滩太阳/雪原雪花/夜空五角星…)
+  { id: "sling-birds", cues: ["章节角标", "沙滩太阳", "雪原雪花"] },
+];
+
+describe("窗口4 第2轮学习优化员:C 档修复出的手绘亮点讲进了攻略", () => {
+  for (const { id, cues } of R2_FIX_CUES) {
+    it(`${id} 的攻略里能找到修复亮点关键词`, async () => {
+      const mod = (await import(`../${id}/guide.ts`)) as { default: GuideBook };
+      const text = flat(mod.default);
+      for (const cue of cues) {
+        expect(text, `${id} 攻略缺关键词「${cue}」`).toContain(cue);
+      }
+    });
+  }
+});
