@@ -484,6 +484,30 @@ describe("残局连胜写 endlessBest", () => {
   });
 });
 
+describe("攻略", () => {
+  it("八条章节心得的区间和 188 课的章节边界完全对齐", async () => {
+    const { default: guide } = await import("./guide");
+    const { CHAPTERS } = await import("./index");
+    const chapterEntries = guide.entries.filter((e) => e.to - e.from + 1 < TOTAL_LEVELS);
+    expect(chapterEntries.length).toBe(CHAPTERS.length);
+    let at = 1;
+    chapterEntries.forEach((e, i) => {
+      expect(e.from, CHAPTERS[i].name).toBe(at);
+      expect(e.to, CHAPTERS[i].name).toBe(at + CHAPTERS[i].size - 1);
+      expect(e.title).toContain(CHAPTERS[i].name);
+      at += CHAPTERS[i].size;
+    });
+    expect(at - 1).toBe(TOTAL_LEVELS);
+  });
+
+  it("攻略只讲方法，不给某一课的具体着法", async () => {
+    const { default: guide } = await import("./guide");
+    const all = [...guide.general, ...guide.entries.flatMap((e) => e.tips)].join("\n");
+    expect(all).not.toMatch(/第\s*\d+\s*课.*[进平退]/);
+    expect(guide.gameId).toBe("xiangqi");
+  });
+});
+
 describe("分级红线", () => {
   beforeEach(() => boot());
 
@@ -491,9 +515,16 @@ describe("分级红线", () => {
     const { mount } = await import("./index");
     const handle = mount(api().api);
     findByText(dom.root, "规则")!.dispatch("click", {});
-    const text = dom.root.allText();
-    for (const bad of ["杀死", "血", "打死", "干掉", "弄死"]) expect(text, bad).not.toContain(bad);
+    const { default: guide } = await import("./guide");
+    const text =
+      dom.root.allText() +
+      [...guide.general, ...guide.entries.flatMap((e) => e.tips)].join("\n") +
+      THEMES.map((t) => `${t.name}${t.desc}${t.lesson}`).join("\n");
+    for (const bad of ["杀死", "血", "打死", "干掉", "弄死", "一刀", "砍"]) {
+      expect(text, bad).not.toContain(bad);
+    }
     expect(text).toContain("困毙");
+    expect(text).toContain("回家休息");
     handle.destroy();
   });
 
