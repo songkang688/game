@@ -671,6 +671,21 @@ export class BbBoomFx {
     return this.petals.length + this.flashes.length + this.sparks.length;
   }
 
+  /** 每一瓣的出现时刻(绝对毫秒,升序)——测试对「150ms/格推进」的账 */
+  petalStarts(): number[] {
+    return this.petals.map((p) => p.start).sort((a, b) => a - b);
+  }
+
+  /** 臂端星屑条目数(一条画 3 颗) */
+  sparkCount(): number {
+    return this.sparks.length;
+  }
+
+  /** 中心白闪条目数 */
+  flashCount(): number {
+    return this.flashes.length;
+  }
+
   /** destroy:一笔不剩 */
   reset(): void {
     this.petals.length = 0;
