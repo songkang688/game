@@ -136,6 +136,27 @@ describe("窗口 1 · 360px 手机文字下限", () => {
     }
   });
 
+  // 第 1 轮 W1-R1-05:`merge-2048` 和 `mine-garden` 都用 `mg-` 开头,
+  // `mg-btn` / `mg-msg` / `mg-open` / `mg-over*` / `mg-wrap` 这几个是重的。
+  // 外壳一次只挂一款,眼下不出事,但两边的 CSS 只要有一条漏了作用域就会串味,
+  // 冒烟脚本里的 `.mg-msg` 也已经分不清指的是谁。合成改用 `m48-` 之后这里钉死。
+  it("12 款各用各的类名前缀,没有两款撞在一起", () => {
+    const prefixOf = new Map<string, Set<string>>();
+    for (const id of WINDOW1_IDS) {
+      const set = new Set<string>();
+      for (const m of sourceOf(id).matchAll(/\.([a-z]{2,4})-[a-z0-9-]+\s*[{,:]/g)) set.add(m[1]);
+      prefixOf.set(id, set);
+    }
+    const clashes: string[] = [];
+    for (const [a, sa] of prefixOf) {
+      for (const [b, sb] of prefixOf) {
+        if (a >= b) continue;
+        for (const px of sa) if (sb.has(px)) clashes.push(`${a} 与 ${b} 都在用 .${px}-`);
+      }
+    }
+    expect([...new Set(clashes)], clashes.join(" | ")).toEqual([]);
+  });
+
   it("正文不许用 nowrap 挤成一条(按钮短标签除外)", () => {
     const bad: string[] = [];
     for (const id of WINDOW1_IDS) {
