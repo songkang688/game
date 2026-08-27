@@ -20,9 +20,13 @@
   - `vite.config.ts` → PWA `manifest.name` / `short_name` / `description`（手机主屏图标下的字）
   - `electron/main.cjs` → 桌面窗口标题
   - `capacitor.config.ts` + `android/app/src/main/res/values/strings.xml` → 安卓应用名
+  - `index.html` → 浏览器标签标题与 `meta description`
+  - `.github/workflows/release.yml` → GitHub Release 的标题
 - **对外版本号**：`1.1.0` → `1.2.0-kk`，安装包文件名随之变成
   `yiduo-yixing-1.2.0-kk-<平台>.<后缀>`。
-- **文档**：新增本文件与 `docs/game-1.2-kk.md`，README 补「1.2-kk 构建与发布」小节。
+- **文档**：新增本文件与 `docs/game-1.2-kk.md`；README 补「1.2-kk 构建与发布」小节，
+  并把游戏清单从 1.1 的 55 款补齐到实际的 **76 款**（新增 21 款分门别类列出），
+  各分类小标题的款数也一并对齐。
 
 ### 明确没改的
 
