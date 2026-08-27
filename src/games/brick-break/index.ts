@@ -416,7 +416,140 @@ function drawRibbon(c2d: CanvasRenderingContext2D, alpha: number): void {
   c2d.restore();
 }
 
-/** 药丸胶囊：下落时 ±4° 摆动（600ms 周期；reduced 竖直下落），图标始终 14px 可辨 */
+/** 胶囊图标墨色(与 HUD 文本同源) */
+const CAPSULE_ICON_INK = "#3A2E4A";
+
+/**
+ * 道具小图标:六种全走双色矢量(W6R1-04 修复,serif emoji 内贴退休)。
+ * 画在胶囊原点坐标系(已 translate/rotate),半径约 6.5px。
+ */
+function drawCapsuleIcon(c2d: CanvasRenderingContext2D, kind: Capsule["kind"]): void {
+  c2d.save();
+  c2d.lineCap = "round";
+  c2d.lineJoin = "round";
+  switch (kind) {
+    case "wide": {
+      // 双向外扩箭头:板变宽
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1.8;
+      c2d.beginPath();
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(5.5, 1);
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(-3, -1.6);
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(-3, 3.6);
+      c2d.moveTo(5.5, 1);
+      c2d.lineTo(3, -1.6);
+      c2d.moveTo(5.5, 1);
+      c2d.lineTo(3, 3.6);
+      c2d.stroke();
+      break;
+    }
+    case "triple": {
+      // 一颗变三颗:品字三小球(主色粉 + 墨描边)
+      c2d.fillStyle = "#FF6B9E";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1;
+      for (const [ix, iy] of [[0, -2.6], [-3.4, 3], [3.4, 3]] as const) {
+        c2d.beginPath();
+        c2d.arc(ix, iy + 1, 2.4, 0, Math.PI * 2);
+        c2d.fill();
+        c2d.stroke();
+      }
+      break;
+    }
+    case "pierce": {
+      // 穿透:四角星芒(金)+ 墨描边
+      c2d.fillStyle = "#F0C25A";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1;
+      c2d.beginPath();
+      c2d.moveTo(0, -5.6);
+      c2d.quadraticCurveTo(1.2, -0.2, 5.6, 1);
+      c2d.quadraticCurveTo(1.2, 2.2, 0, 7.6);
+      c2d.quadraticCurveTo(-1.2, 2.2, -5.6, 1);
+      c2d.quadraticCurveTo(-1.2, -0.2, 0, -5.6);
+      c2d.closePath();
+      c2d.fill();
+      c2d.stroke();
+      break;
+    }
+    case "slow": {
+      // 慢速小乌龟:绿壳半圆 + 壳纹 + 探头
+      c2d.fillStyle = "#7CC96B";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 1.1;
+      c2d.beginPath();
+      c2d.arc(-0.6, 2.4, 4.6, Math.PI, 0);
+      c2d.closePath();
+      c2d.fill();
+      c2d.stroke();
+      c2d.beginPath();
+      c2d.moveTo(-2.6, 2.4);
+      c2d.lineTo(-1.4, -1);
+      c2d.moveTo(1.4, 2.4);
+      c2d.lineTo(0.4, -1);
+      c2d.stroke();
+      c2d.fillStyle = "#8FD98B";
+      c2d.beginPath();
+      c2d.arc(4.9, 1.2, 1.7, 0, Math.PI * 2);
+      c2d.fill();
+      c2d.stroke();
+      break;
+    }
+    case "magnet": {
+      // 磁力:红 U 形磁铁 + 白极头
+      c2d.strokeStyle = "#E85D75";
+      c2d.lineWidth = 2.6;
+      c2d.beginPath();
+      c2d.arc(0, -0.4, 3.8, Math.PI, 0);
+      c2d.moveTo(-3.8, -0.4);
+      c2d.lineTo(-3.8, 4.4);
+      c2d.moveTo(3.8, -0.4);
+      c2d.lineTo(3.8, 4.4);
+      c2d.stroke();
+      c2d.fillStyle = "#FFFFFF";
+      c2d.strokeStyle = CAPSULE_ICON_INK;
+      c2d.lineWidth = 0.9;
+      for (const px of [-3.8, 3.8]) {
+        c2d.beginPath();
+        c2d.rect(px - 1.4, 3.2, 2.8, 2.4);
+        c2d.fill();
+        c2d.stroke();
+      }
+      break;
+    }
+    default: {
+      // narrow「别接」:双向内收箭头(形状通道再加一重表意)
+      c2d.strokeStyle = "#E0709A";
+      c2d.lineWidth = 1.8;
+      c2d.beginPath();
+      c2d.moveTo(-5.5, 1);
+      c2d.lineTo(-1.6, 1);
+      c2d.moveTo(-1.6, 1);
+      c2d.lineTo(-3.6, -1.4);
+      c2d.moveTo(-1.6, 1);
+      c2d.lineTo(-3.6, 3.4);
+      c2d.moveTo(5.5, 1);
+      c2d.lineTo(1.6, 1);
+      c2d.moveTo(1.6, 1);
+      c2d.lineTo(3.6, -1.4);
+      c2d.moveTo(1.6, 1);
+      c2d.lineTo(3.6, 3.4);
+      c2d.stroke();
+      break;
+    }
+  }
+  c2d.restore();
+}
+
+/**
+ * 药丸胶囊：下落时 ±4° 摆动（600ms 周期；reduced 竖直下落）。
+ * W6R1-04 修复:主体从平涂双段改为四停纵向渐变(受光白 → 上半 → 下半 → 暗底)
+ * + 左上高光斑;图标从 serif emoji 换成 drawCapsuleIcon 的双色矢量。
+ * 「别接我」的空心圈形状通道原样保留(capsuleLook 判定一个字不动)。
+ */
 function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule, nowMs: number, reduce: boolean): void {
   const look = capsuleLook(cap.kind);
   const ang = (capsuleSwingDeg(nowMs, cap.x * 0.13, reduce) * Math.PI) / 180;
@@ -433,29 +566,34 @@ function drawCapsule(c2d: CanvasRenderingContext2D, cap: Capsule, nowMs: number,
     c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
     c2d.stroke();
   } else {
-    // 两半色药丸：上半亮白、下半淡蓝，中缝一道细影
+    // 双段果冻药丸:同一支四停纵向渐变里保住「上白下蓝」的两半读法
+    const g = c2d.createLinearGradient(0, -rh, 0, rh);
+    g.addColorStop(0, "#FFFFFF");
+    g.addColorStop(0.46, candyDarken(look.fill === "#FFFFFF" ? CAPSULE_TOP : look.fill, 0.05));
+    g.addColorStop(0.54, CAPSULE_BOTTOM);
+    g.addColorStop(1, candyDarken(CAPSULE_BOTTOM, 0.18));
     c2d.beginPath();
     c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
+    c2d.fillStyle = g;
+    c2d.fill();
+    // 中缝细影(两半胶囊的接缝)
     c2d.save();
     c2d.clip();
-    c2d.fillStyle = look.fill === "#FFFFFF" ? CAPSULE_TOP : look.fill;
-    c2d.fillRect(-rw, -rh, rw * 2, rh);
-    c2d.fillStyle = CAPSULE_BOTTOM;
-    c2d.fillRect(-rw, 0, rw * 2, rh);
     c2d.fillStyle = BK_PALETTE.bkShadow;
     c2d.fillRect(-rw, -0.5, rw * 2, 1);
     c2d.restore();
+    // 左上高光斑(全场光源左上 45° 约定)
+    c2d.fillStyle = "rgba(255,255,255,.85)";
+    c2d.beginPath();
+    c2d.ellipse(-rw * 0.38, -rh * 0.52, 2.2, 3.4, -0.5, 0, Math.PI * 2);
+    c2d.fill();
     c2d.beginPath();
     c2d.roundRect(-rw, -rh, rw * 2, rh * 2, rw);
     c2d.strokeStyle = candyDarken(CAPSULE_BOTTOM, 0.2);
-    c2d.lineWidth = 1;
+    c2d.lineWidth = 1.5;
     c2d.stroke();
   }
-  c2d.font = "14px serif";
-  c2d.textAlign = "center";
-  c2d.textBaseline = "middle";
-  c2d.fillStyle = "#3A2E4A";
-  c2d.fillText(look.emoji, 0, 1);
+  drawCapsuleIcon(c2d, cap.kind);
   c2d.restore();
 }
 
