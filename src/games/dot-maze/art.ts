@@ -380,6 +380,17 @@ export function lifeBadgeSVG(size = 15): string {
 
 export type GhostFigureMood = "normal" | "fright" | "eyes";
 
+/** 把 #rrggbb 按系数压暗（呆毛描边用）；认不出的颜色串原样返回，闪白帧也不会画崩 */
+export function darkenColor(color: string, f: number): string {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(color);
+  if (!m) return color;
+  const n = Number.parseInt(m[1], 16);
+  const r = Math.round(((n >> 16) & 255) * f);
+  const g = Math.round(((n >> 8) & 255) * f);
+  const b = Math.round((n & 255) * f);
+  return `rgb(${r},${g},${b})`;
+}
+
 export interface GhostFigureOpts {
   x: number;
   y: number;
@@ -397,9 +408,11 @@ export interface GhostFigureOpts {
 }
 
 /**
- * 圆头圆脑小幽灵：上半圆 + 四尖波浪裙边 + 顶部高光。
+ * 圆头圆脑小幽灵：上半圆 + 三尖波浪裙边 + 头顶小呆毛 + 顶部高光。
  * 三种状态画法互不相同——normal 是白底深瞳（瞳孔随移动方向偏），
  * fright 是缩成小点的眼睛加一条抖抖的锯齿嘴，eyes 只剩一对眼睛飘回巢。
+ * 1.3 第 1 轮修复（A 档 6-1 / B 档 #6）：裙边由四尖改三尖、头顶加呆毛，
+ * 与街机官方幽灵的剪影距离拉开——认得出「是幽灵」，认不成「那只幽灵」。
  */
 export function drawGhostFigure(g: CanvasRenderingContext2D, o: GhostFigureOpts): void {
   const { x, y, r } = o;
@@ -416,20 +429,28 @@ export function drawGhostFigure(g: CanvasRenderingContext2D, o: GhostFigureOpts)
     g.fill();
     return;
   }
-  // 身体：上半圆 + 四尖波浪裙边
+  // 身体：上半圆 + 三尖波浪裙边（齿距 r/1.5，剪影与街机四齿裙边拉开）
   const hem = y + r * 0.82;
   const valley = y + r * 0.5;
-  const tooth = r / 2;
+  const tooth = r / 1.5;
   g.fillStyle = o.color;
   g.beginPath();
   g.arc(x, y - r * 0.08, r, Math.PI, 0);
   g.lineTo(x + r, valley);
-  for (let k = 0; k < 4; k++) {
+  for (let k = 0; k < 3; k++) {
     g.lineTo(x + r - tooth * (k + 0.5), hem);
     g.lineTo(x + r - tooth * (k + 1), valley);
   }
   g.closePath();
   g.fill();
+  // 头顶小呆毛：与豆豆勇士同款语汇，身体色加深两成，dark 迷宫底上也看得清
+  g.strokeStyle = darkenColor(o.color, 0.8);
+  g.lineWidth = Math.max(1.5, r * 0.12);
+  g.lineCap = "round";
+  g.beginPath();
+  g.moveTo(x + r * 0.06, y - r * 1.0);
+  g.quadraticCurveTo(x - r * 0.16, y - r * 1.32, x + r * 0.2, y - r * 1.38);
+  g.stroke();
   // 顶部约两成高度的高光
   g.fillStyle = "rgba(255,255,255,0.32)";
   g.beginPath();
