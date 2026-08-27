@@ -430,6 +430,31 @@ export function showPlayRow(el: HTMLElement): number {
 export const LIST_MIN_ROOM = 44;
 
 /**
+ * 这一格自己有没有地方滚；没有的话外面那层壳还有没有（W5R3-CF-01）。
+ *
+ * `LIST_MIN_ROOM` 从 160 改判成 44 只是把悬崖从 160 挪到了 44，**没有把它填掉**：
+ * 把手机横过来拿得再矮一点（568×320，也就是把 320×568 那台机器转 90°），
+ * 舞台看得见 170px，而卡片格上面还压着「◀ 回选关」+ 四个摆放位置 + 一行说明——
+ * `.ktc-grid` 自己的可视段只剩 40 来 px，`< 44` 于是那条早退照旧生效：
+ * 1724px 的卡片墙一格没钳、一个可滚祖先都没有，真手指慢拖 30 趟
+ * **24 颗兑换钮逐档累计 0/24**，`.game-stage` 下裁死的有字叶子 **93 个**。
+ *
+ * 卡片格自己挤不出一颗兑换钮的中心点时就往外退一层，把整块相册板钳进可视段。
+ * 退路（「◀ 回选关」）跟着一起滚了，这是代价；可「翻得到全部」比
+ * 「退路永远钉在眼前、卡片一张都够不着」值钱。
+ * **卡片格自己有地方的时候一个字节都不变**——`who === "list"`，只钳那一格。
+ */
+export function listOrShellRoom(
+  listRoom: number,
+  shellRoom: number,
+  minRoom = LIST_MIN_ROOM,
+): { who: "list" | "shell" | "none"; room: number } {
+  if (Number.isFinite(listRoom) && listRoom >= minRoom) return { who: "list", room: Math.floor(listRoom) };
+  if (Number.isFinite(shellRoom) && shellRoom >= minRoom) return { who: "shell", room: Math.floor(shellRoom) };
+  return { who: "none", room: 0 };
+}
+
+/**
  * 把一块**本来就该翻着看**的长列表钳进舞台看得见的那一段，并给它自己挂一条滚动条。
  *
  * 与 `fitIntoStage()` 的分工：那一份是「先收猫、收不下才滚」，为的是让整关不用滚
@@ -442,24 +467,37 @@ export const LIST_MIN_ROOM = 44;
  * 24 颗 `⭐N 换回来` 里 20–22 颗永远点不着。星星兑换是相册唯一的主动玩法（W5R2-C-03 阻断）。
  *
  * 装得下就把值原样还回去，免得高屏上凭空多出一个滚动容器。
+ *
+ * `shell` 是这一格外面那层壳（相册传的是 `.ktc-album`），只在**这一格自己挤不出
+ * `minRoom`** 时才轮到它上场（W5R3-CF-01）。不传就是改判前的老行为，一个字节不差。
  */
-export function scrollIntoStage(el: HTMLElement, minRoom = LIST_MIN_ROOM): { relayout: () => void; dispose: () => void } {
+export function scrollIntoStage(
+  el: HTMLElement,
+  minRoom = LIST_MIN_ROOM,
+  shell: HTMLElement | null = null,
+): { relayout: () => void; dispose: () => void } {
   const view = el.ownerDocument?.defaultView ?? null;
   const measurable = typeof el.getBoundingClientRect === "function" && !!view;
+  const shellOk = !!shell && typeof shell.getBoundingClientRect === "function";
   const reset = (): void => {
     if (!measurable) return;
     el.style.maxHeight = "";
     el.style.overflowY = "";
+    if (shellOk && shell) {
+      shell.style.maxHeight = "";
+      shell.style.overflowY = "";
+    }
   };
   const relayout = (): void => {
     if (!measurable || !view) return;
     reset();
-    const room = stageRoomPx(el);
-    // 量不到裁切线（高屏）或矮到连一颗兑换钮的中心点都塞不进去就不管
-    if (!Number.isFinite(room) || room < minRoom) return;
-    if (el.scrollHeight <= room + 1) return;
-    el.style.maxHeight = `${Math.floor(room)}px`;
-    el.style.overflowY = "auto";
+    // 量不到裁切线（高屏）或两层都矮到连一颗兑换钮的中心点都塞不进去就不管
+    const pick = listOrShellRoom(stageRoomPx(el), shellOk && shell ? stageRoomPx(shell) : Number.NaN, minRoom);
+    if (pick.who === "none") return;
+    const host = pick.who === "list" ? el : (shell as HTMLElement);
+    if (host.scrollHeight <= pick.room + 1) return;
+    host.style.maxHeight = `${pick.room}px`;
+    host.style.overflowY = "auto";
   };
   relayout();
   let live = true;

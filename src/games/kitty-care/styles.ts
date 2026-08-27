@@ -196,7 +196,9 @@ export const KTC_CSS = `
 .ktc-night .ktc-bubble{background:#fffdf3;}
 
 /* 相册与小屋摆设：360px 上两列，缩略图 ≥ 100px */
-.ktc-album{padding:8px;}
+/* 矮横屏（568×320）上卡片格自己挤不出 44px，那一档由 scrollIntoStage() 退一层
+   把这块板子写成滚动口；这里先把「翻起来别把整页也带着走」定下来（W5R3-CF-01） */
+.ktc-album{padding:8px;overscroll-behavior:contain;touch-action:pan-y;}
 .ktc-albumhead{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
 /* 矮屏上由 scrollIntoStage() 逐档写 max-height / overflow-y；
    这里先把「翻起来别把整页也带着走」和「手指竖划归它」定下来 */
