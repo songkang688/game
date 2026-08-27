@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assertTotal, TOTAL_LEVELS } from "../level99";
 import { BLACK, formatRows, groupAt, parseRows } from "./board";
-import { autoDeadStones } from "./life";
+import { autoDeadStones, expandDead } from "./life";
 import { play, playMove, createGame } from "./rules";
 import { damePoints } from "./score";
 import guide from "./guide";
@@ -148,6 +148,14 @@ describe("weiqi-garden · 走出正确解就能过关", () => {
     }
   });
 
+  it("打劫题:提到劫就算过关(别去要求两只眼)", () => {
+    for (const lv of ALL.filter((l) => l.kind === "ko")) {
+      expect(lv.need).toBe(1);
+      expect(levelCleared(lv, levelBoard(lv), 0)).toBe(false);
+      expect(levelCleared(lv, levelBoard(lv), lv.need)).toBe(true);
+    }
+  });
+
   it("官子题:把单官一个个填完就过关", () => {
     for (const lv of ALL.filter((l) => l.kind === "dame").slice(0, 8)) {
       let board = levelBoard(lv);
@@ -184,6 +192,45 @@ describe("weiqi-garden · 走出正确解就能过关", () => {
       expect(res!.captured.length).toBeGreaterThanOrEqual(lv.need);
       expect(lv.moveBudget).toBeGreaterThanOrEqual(4);
     }
+  });
+
+  it("188 关全部都能按正解走到 levelCleared,而且不超手数", () => {
+    const stuck: string[] = [];
+    for (const lv of ALL) {
+      let board = levelBoard(lv);
+      let captured = 0;
+      let marked: number[] = [];
+      let used = 0;
+      if (lv.kind === "markDead") {
+        // 界面上点一颗就整块标上,所以每块只点一次
+        const seen = new Set<number>();
+        for (const p of autoDeadStones(board)) {
+          if (seen.has(p)) continue;
+          for (const q of expandDead(board, [p])) seen.add(q);
+          used++;
+        }
+        marked = autoDeadStones(board);
+      } else if (lv.kind === "dame") {
+        while (damePoints(board).length > 0 && used <= lv.moveBudget) {
+          const res = play(board, damePoints(board)[0], BLACK);
+          if (!res) break;
+          board = res.board;
+          captured += res.captured.length;
+          used++;
+        }
+      } else {
+        const pt = levelSolutions(lv)[0];
+        const res = pt === undefined ? null : play(board, pt, BLACK);
+        if (res) {
+          board = res.board;
+          captured = res.captured.length;
+          used = 1;
+        }
+      }
+      const ok = levelCleared(lv, board, captured, marked) && used > 0 && used <= lv.moveBudget;
+      if (!ok) stuck.push(`第 ${lv.index + 1} 关(${lv.kind}) 用了 ${used}/${lv.moveBudget} 手`);
+    }
+    expect(stuck).toEqual([]);
   });
 
   it("星级按手数给:一手过关是三星,拖久了降到一星", () => {

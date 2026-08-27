@@ -671,7 +671,10 @@ export function levelCleared(
   capturedTotal: number,
   markedDead: readonly number[] = []
 ): boolean {
-  if (level.kind === "capture" || level.kind === "battle") return capturedTotal >= level.need;
+  // 打劫题的目标就是「先把劫提到手上」,提到那颗子就算走对了
+  if (level.kind === "capture" || level.kind === "battle" || level.kind === "ko") {
+    return capturedTotal >= level.need;
+  }
   if (level.kind === "dame") return damePoints(board).length === 0;
   if (level.kind === "markDead") {
     const want = autoDeadStones(board);
