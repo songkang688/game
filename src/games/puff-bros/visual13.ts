@@ -150,6 +150,14 @@ export function highFiveFrame(msSinceWin: number, reduced: boolean): number {
   return Math.floor(Math.max(0, msSinceWin) / HIGH_FIVE_FRAME_MS) % HIGH_FIVE_FRAMES;
 }
 
+/**
+ * 击掌只在**过关**分支画:世界状态是 won 且过关时间戳已经记下。
+ * 失败(只鼓励)、打转飘回、进行中,都轮不到它。
+ */
+export function shouldHighFive(status: string, wonAtMs: number): boolean {
+  return status === "won" && wonAtMs >= 0;
+}
+
 /** #RRGGBB 的严格反色(传送门双色旋涡「互为反色」用) */
 export function invertHex(hex: string): string {
   const raw = hex.trim().replace(/^#/, "");
