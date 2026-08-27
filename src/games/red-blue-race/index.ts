@@ -6,6 +6,7 @@ import { AVATAR_URLS } from "../../ui/avatars";
 import { save } from "../../engine/save";
 import { CHAPTERS, LEVELS, TRACK_LEN, type Obstacle, type ObstacleType, type RaceLevel } from "./levels";
 import {
+  ENDLESS_GOAL_M,
   ENDLESS_MAX_HITS,
   ITEM_BOOST,
   ITEM_SLOW_FACTOR,
@@ -15,6 +16,7 @@ import {
   endlessChaserSpeed,
   endlessDensity,
   endlessGapMeters,
+  endlessGoalReached,
   endlessHitsLeft,
   endlessRunOver,
   inZone,
@@ -1402,7 +1404,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
   wrap.appendChild(keyHint);
   const msgEl = document.createElement("div");
   msgEl.className = "rbe-msg";
-  msgEl.textContent = "跑道没有终点:左右交替按,💧🚧 要跳,🎁⭐ 顺手抢。撞 3 次这一趟就收工。";
+  msgEl.textContent = `左右交替按,💧🚧 要跳,🎁⭐ 顺手抢。撞 3 次收工,跑满 ${ENDLESS_GOAL_M} 米也收工。`;
   wrap.appendChild(msgEl);
   host.appendChild(wrap);
 
@@ -1450,7 +1452,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     densEl.textContent = `每百米 ${endlessDensity(dist).toFixed(1)} 个机关`;
   }
 
-  function finish(): void {
+  /** `full` = 跑满全程收工(W5R2-A-09 的新出口),否则是摔够三跤 */
+  function finish(full = false): void {
     if (over) return;
     over = true;
     rt.stopFrame();
@@ -1460,18 +1463,22 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     // 长跑奖励:每 100 米一颗小星星,最多 6 颗,别把关卡星星比下去
     const bonus = Math.min(6, Math.floor(score / 100));
     if (bonus > 0) api.addStars(bonus);
-    api.play(record ? "win" : "oops");
+    api.play(full || record ? "win" : "oops");
+
+    const face = full ? "🎉" : record ? "🏅" : "☁️";
+    const title = full ? `跑完全程 ${score} 米!` : record ? `新纪录 ${score} 米!` : `这趟跑了 ${score} 米`;
+    const sub = full
+      ? `一跤没摔跑到头,抢到 ${picked} 个礼物箱!${bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""}歇一歇,再跑一趟还是新的一条路。`
+      : record
+        ? `抢到 ${picked} 个礼物箱,节奏保持得真好!${bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""}`
+        : `最远纪录 ${best} 米,再跑一趟就有机会追上它。${bonus > 0 ? `这趟也拿到 ${bonus} 颗小星星。` : ""}`;
 
     const ov = document.createElement("div");
     ov.className = "rbe-over";
     ov.innerHTML = `
-      <div style="font-size:46px;line-height:1">${record ? "🏅" : "☁️"}</div>
-      <div class="rbe-over-title">${record ? `新纪录 ${score} 米!` : `这趟跑了 ${score} 米`}</div>
-      <div class="rbe-over-sub">${
-        record
-          ? `抢到 ${picked} 个礼物箱,节奏保持得真好!${bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""}`
-          : `最远纪录 ${best} 米,再跑一趟就有机会追上它。${bonus > 0 ? `这趟也拿到 ${bonus} 颗小星星。` : ""}`
-      }</div>
+      <div style="font-size:46px;line-height:1">${face}</div>
+      <div class="rbe-over-title">${title}</div>
+      <div class="rbe-over-sub">${sub}</div>
     `;
     const btns = document.createElement("div");
     btns.style.display = "flex";
@@ -1516,7 +1523,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     for (const o of obs) o.el.remove();
     obs.length = 0;
     bestEl.textContent = best > 0 ? `🏅 最远 ${best} 米` : "🏅 还没有纪录";
-    msgEl.textContent = "跑道没有终点:左右交替按,💧🚧 要跳,🎁⭐ 顺手抢。撞 3 次这一趟就收工。";
+    msgEl.textContent = `左右交替按,💧🚧 要跳,🎁⭐ 顺手抢。撞 3 次收工,跑满 ${ENDLESS_GOAL_M} 米也收工。`;
     refill();
     render();
     lastTime = 0;
@@ -1602,6 +1609,13 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 
   function loop(now: number): void {
     if (rt.dead() || over) return;
+    // 跑满全程也收工:不然「见坑就跳」的孩子一趟停不下来,而不收工就不结算,
+    // 跑得再远都不写纪录、不发小星星(W5R2-A-09)
+    if (endlessGoalReached(dist)) {
+      render();
+      finish(true);
+      return;
+    }
     const dt = Math.min(0.05, lastTime ? (now - lastTime) / 1000 : 0.016);
     lastTime = now;
     // 星星只是陪跑员:被它超过只是个提示,不会因此结束

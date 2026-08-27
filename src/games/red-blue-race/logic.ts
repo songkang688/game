@@ -252,10 +252,30 @@ export function endlessGapMeters(meters: number): number {
 /** 无尽模式撞几次结束：摔第三跤这一趟就收工（只是坐一下，不掉血、不判输） */
 export const ENDLESS_MAX_HITS = 3;
 
-/** 撞了 hits 次之后这一趟是不是结束了 */
-export function endlessRunOver(hits: number): boolean {
+/**
+ * 跑到这里这一趟也收工——「跑完全程」，和摔三跤是并列的另一个出口。
+ *
+ * 第 2 轮测试员 W5R2-A-09：机器人「见坑就跳」跑满 91 秒 / 6950 步 / 511 次起跳仍不收工，
+ * 因为规则只有「撞 3 次」这一个出口，不撞就永远不结束——而不结束就不结算，
+ * 跑得再远也**不写纪录、不发小星星**。
+ *
+ * 1200 米这个数不是拍的：陪跑星星的速度在 1020 米封顶（{@link endlessChaserSpeed}），
+ * 机关密度在 810 米封顶（{@link endlessGapMeters} 撞到 16 米最小安全间距）。
+ * 过了 1020 米，这条跑道上每一个旋钮都已经拧到头，再跑就是同一段路原样重播。
+ * 收在 1200 米，既把两条曲线跑完整了，也不至于让一趟停不下来。
+ */
+export const ENDLESS_GOAL_M = 1200;
+
+/** 跑满全程了没有 */
+export function endlessGoalReached(meters: number): boolean {
+  const m = Number.isFinite(meters) ? meters : 0;
+  return m >= ENDLESS_GOAL_M;
+}
+
+/** 这一趟是不是结束了：摔够三跤，或者跑满全程 */
+export function endlessRunOver(hits: number, meters = 0): boolean {
   const n = Number.isFinite(hits) ? Math.floor(hits) : 0;
-  return n >= ENDLESS_MAX_HITS;
+  return n >= ENDLESS_MAX_HITS || endlessGoalReached(meters);
 }
 
 /** 还能撞几次（给 HUD 用，不会是负数） */
