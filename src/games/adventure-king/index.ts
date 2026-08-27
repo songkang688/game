@@ -717,7 +717,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     showTimer: false,
     sfx: ctx.sfx,
     onClear: (info) => ctx.win(levelStars(info.artifacts, info.hurts), clearLine(info)),
-    onFail: () => ctx.lose("这条走廊先撤一步～下一趟贴着墙走、先清掉挡路的那只,血量就省下来了!"),
+    onFail: () => ctx.lose("这条走廊先撤一步～下一趟贴着墙走、先清掉挡路的那只,💗 就省下来了!"),
   });
   return { destroy: () => runner.destroy() };
 }
@@ -732,7 +732,7 @@ export function clearLine(info: ClearInfo): string {
 /** 无尽遗迹结束时的一句话 */
 export function endlessLine(floor: number, best: number): string {
   if (floor > best) return `新纪录!你钻到了第 ${floor} 层遗迹!`;
-  return `这次下到第 ${floor} 层,最深纪录是第 ${best} 层。血量剩一半就先绕开怪、找补给,再来一趟就能刷新它!`;
+  return `这次下到第 ${floor} 层,最深纪录是第 ${best} 层。💗 剩一半就先绕开怪、找补给,再来一趟就能刷新它!`;
 }
 
 // ---------------------------------------------------------------------------

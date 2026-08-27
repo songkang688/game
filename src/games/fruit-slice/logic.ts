@@ -386,7 +386,7 @@ export interface FruitKingSpec {
   decrees?: boolean;
   /** 会把左右翻过来 */
   flips?: boolean;
-  /** 血量过半会加速躲闪 */
+  /** 挨过半数刀之后会加速躲闪 */
   enrages?: boolean;
   blurb: string;
 }

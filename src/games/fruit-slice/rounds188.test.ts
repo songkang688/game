@@ -312,7 +312,7 @@ describe("fruit-slice 1.1 · 三位果王", () => {
     expect(ROUNDS[187].king).toBe("grandKing");
   });
 
-  it("果王的血量、体型和奖励随章节变大,技能组合互不相同", () => {
+  it("果王的耐打刀数、体型和奖励随章节变大,技能组合互不相同", () => {
     const order = ["swirlKing", "decreeKing", "grandKing"] as const;
     for (let i = 1; i < order.length; i++) {
       const prev = KING_INFO[order[i - 1]];

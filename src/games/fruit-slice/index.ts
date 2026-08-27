@@ -1960,7 +1960,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.restore();
   }
 
-  /** 果王:大果子本体 + 王冠 + 血条。躲起来的时候只留个水影。 */
+  /** 果王:大果子本体 + 王冠 + 剩余刀数条。躲起来的时候只留个水影。 */
   function drawKing(k: King): void {
     const down = kingDown(k.spec, k.hits);
     const r = k.spec.r;
@@ -2007,7 +2007,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.arc(0, r * 0.1, r * 0.34, 0.12 * Math.PI, 0.88 * Math.PI);
     ctx.stroke();
     ctx.restore();
-    // 血条:还剩几刀一目了然
+    // 刀数条:还剩几刀一目了然
     const bw = r * 1.8;
     const left = Math.max(0, k.spec.hp - k.hits);
     ctx.fillStyle = "rgba(255,255,255,0.85)";
