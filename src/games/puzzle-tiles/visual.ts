@@ -11,6 +11,7 @@
  */
 import { jigsawD, jigsawRadiusPct } from "../../art/kit/jigsaw";
 import { shade } from "../../art/kit/fruit";
+import { PATTERN_CELL, patternSliceNestedSvg } from "../../art/kit/pattern";
 
 // ---------------------------------------------------------------------------
 // 一、配色 token 与动效时序(step 文档 四·补一 / 四·补三,测试逐字核对)
@@ -147,10 +148,16 @@ export interface PieceSkinOpts {
   seed?: number;
   /** 虚影皮肤:粉色半透明,无描边无纸纹 */
   ghost?: boolean;
+  /**
+   * 牌面切片(窗口 7 R1 修复:拼的是画不是 emoji):
+   * 传主题号 + 块号,场景画切片会被齿形路径裁剪后垫在纸纹下面;
+   * 不传时输出与 1.3 首发一字不差(既有用例不惊动)。
+   */
+  slice?: { theme: number; home: number };
 }
 
 /**
- * 一块拼图的皮肤:凹凸齿轮廓 + 纸质渐变(135°,白 4% → 透明 60%)+ 1px 内亮边。
+ * 一块拼图的皮肤:凹凸齿轮廓 + 场景画切片(齿形裁剪) + 纸质渐变(135°,白 4% → 透明 60%)+ 1px 内亮边。
  * 绝对定位、pointer-events:none,往四周各多出一个齿形半径,按钮热区一个像素不动。
  */
 export function pieceSkinSvg(opts: PieceSkinOpts): string {
@@ -166,6 +173,23 @@ export function pieceSkinSvg(opts: PieceSkinOpts): string {
     return `${head}<path d="${d}" fill="var(--pt-ghost)"/></svg>`;
   }
   const gid = `ptg${++skinUid}`;
+  // 切片视窗四周多裁一个齿形半径(换算成画面单位),凸齿上也有画,拼合无缝
+  const slice = opts.slice
+    ? `<clipPath id="${gid}c"><path d="${d}"/></clipPath>` +
+      `<g clip-path="url(#${gid}c)">` +
+      patternSliceNestedSvg(
+        opts.slice.theme,
+        opts.rows,
+        opts.cols,
+        opts.slice.home,
+        -rad,
+        -rad,
+        size + 2 * rad,
+        size + 2 * rad,
+        (rad / size) * PATTERN_CELL
+      ) +
+      `</g>`
+    : "";
   return (
     head +
     `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">` +
@@ -173,6 +197,7 @@ export function pieceSkinSvg(opts: PieceSkinOpts): string {
     `<stop offset=".6" stop-color="rgba(255,255,255,0)"/>` +
     `</linearGradient></defs>` +
     `<path d="${d}" fill="${opts.bg}" stroke="var(--pt-piece-edge)" stroke-width="2"/>` +
+    slice +
     `<path d="${d}" fill="url(#${gid})"/>` +
     `</svg>`
   );
@@ -356,6 +381,11 @@ export const PT_CSS = `
 .pzv-cut.pz-glow { box-shadow: none; filter: drop-shadow(0 0 6px #FFD86E) drop-shadow(0 0 2px #FFD86E); }
 .pzv-cut.pzt-target { box-shadow: none; filter: drop-shadow(0 0 6px #FFD86E); }
 .pz-piece.pzv-cut.pz-piece-on { outline: none; filter: drop-shadow(0 0 5px #C2456F); }
+/* 牌面切片(窗口 7 R1 修复):预览小样与底图虚影里撑满格子;记忆关藏图时切片一并藏 */
+.pz-preview i, .pzt-ghost i { overflow: hidden; }
+.pz-preview i .pzv-slice, .pzt-ghost i .pzv-slice { display: block; width: 100%; height: 100%; }
+.pz-preview.pz-hidden i .pzv-slice { visibility: hidden; }
+.pzv-scenedefs { position: absolute; width: 0; height: 0; overflow: hidden; }
 /* 画框:目标预览升级成木质画框小样(框纹 + 玻璃反光斜线) */
 .pz-preview {
   position: relative; overflow: hidden;

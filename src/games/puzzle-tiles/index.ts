@@ -66,6 +66,7 @@ import {
   pieceSkinSvg,
   stepAngle,
 } from "./visual";
+import { patternDefsSvg, patternSliceSvg } from "../../art/kit/pattern";
 
 const SMOKE = typeof location !== "undefined" && /[?&]smoke=1/.test(location.search);
 
@@ -201,6 +202,8 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   const EMPTY = total - 1;
   const pool = THEME_TILES[cfg.theme] ?? THEME_TILES[0];
   const pic = pool.slice(0, kind === "slide" ? total - 1 : Math.min(pool.length, total));
+  // 窗口 7 R1 修复:牌面内容 = 主题场景画切片,emoji 只当关卡数据里的主题钥匙,不上屏
+  const themeIdx = THEME_TILES[cfg.theme] ? cfg.theme : 0;
 
   // 推格子
   const board: number[] = Array.from({ length: total }, (_, i) => i);
@@ -226,6 +229,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   wrap.className = "pz-wrap";
   wrap.innerHTML = `
     <style>${CSS}</style>
+    ${patternDefsSvg(themeIdx, cfg.rows, cfg.cols)}
     <div class="pz-top">
       ${modeTagHtml(kind)}
       <span class="pz-badge pz-moves">👣 0 / ${cfg.moveLimit} 步</span>
@@ -303,6 +307,8 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       cellPx: tiles[0]?.clientWidth || 64,
       seed: skinSeed,
       ghost,
+      // 虚影只要粉色影子;正常块嵌场景画切片(齿形裁剪,凸齿上也有画)
+      slice: ghost ? undefined : { theme: themeIdx, home },
     });
   }
 
@@ -322,31 +328,23 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     fx.later(() => star.remove(), 420);
   }
 
-  /** 这一格拼完之后长什么样（三种板式的「标准答案」都从这里取） */
-  function targetTile(pos: number): { emoji: string; bg: string } | null {
-    if (kind === "slide") return pos < EMPTY ? pic[pos] : null;
-    return pic[pos] ?? pic[pic.length - 1];
+  /** 这一格是不是有内容(推格子的最后一格是空格,预览与虚影都留白) */
+  function hasFace(pos: number): boolean {
+    return kind !== "slide" || pos < EMPTY;
   }
 
   function renderPreview(): void {
+    // 预览小样与底图虚影都直接裁场景画:与牌面同源,拼的就是这幅画
     previewEl.innerHTML = "";
-    const cells = kind === "slide" ? total : Math.min(total, pic.length);
     for (let v = 0; v < total; v++) {
       const cell = document.createElement("i");
-      if (v < cells && (kind !== "slide" || v < EMPTY)) {
-        cell.style.background = pic[v].bg;
-        cell.textContent = pic[v].emoji;
-      }
+      if (hasFace(v)) cell.innerHTML = patternSliceSvg(themeIdx, cfg.rows, cfg.cols, v);
       previewEl.appendChild(cell);
     }
     ghostEl.innerHTML = "";
     for (let pos = 0; pos < total; pos++) {
       const cell = document.createElement("i");
-      const tile = targetTile(pos);
-      if (tile) {
-        cell.style.background = tile.bg;
-        cell.textContent = tile.emoji;
-      }
+      if (hasFace(pos)) cell.innerHTML = patternSliceSvg(themeIdx, cfg.rows, cfg.cols, pos);
       ghostEl.appendChild(cell);
     }
   }
@@ -411,9 +409,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       } else {
         el.className = `pz-tile pzv-cut${canSlide.includes(pos) ? " pzv-can" : ""}`;
         el.style.background = "";
-        el.innerHTML =
-          skinFor(v, pic[v].bg) +
-          `<span class="pzv-face">${pic[v].emoji}</span><small>${v + 1}</small>`;
+        el.innerHTML = skinFor(v, pic[v].bg) + `<small>${v + 1}</small>`;
       }
     }
     renderTop();
@@ -431,7 +427,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       if (!rotor) {
         el.innerHTML =
           `<span class="pzv-rotor">${skinFor(pos, tile.bg)}` +
-          `<span class="pz-spin"><span class="pz-mark">▲</span><span>${tile.emoji}</span></span>` +
+          `<span class="pz-spin"><span class="pz-mark">▲</span></span>` +
           `</span><span class="pzv-knob"></span>`;
         rotor = el.querySelector<HTMLElement>(".pzv-rotor") as HTMLElement;
       }
@@ -460,7 +456,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       } else {
         el.className = `pz-tile pzv-cut${isHole ? "" : " pz-fixed"}`;
         el.style.background = "";
-        el.innerHTML = skinFor(pos, tile.bg) + `<span class="pzv-face">${tile.emoji}</span>`;
+        el.innerHTML = skinFor(pos, tile.bg);
       }
     }
     if (trayEl) {
@@ -471,7 +467,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
         btn.className = `pz-piece pzv-cut${picked === i ? " pz-piece-on" : ""}${usedPiece[i] ? " pz-piece-used" : ""}`;
         const tile = pool[v] ?? pool[pool.length - 1];
         btn.style.background = "";
-        btn.innerHTML = skinFor(v, tile.bg) + `<span class="pzv-face">${tile.emoji}</span>`;
+        btn.innerHTML = skinFor(v, tile.bg);
         btn.disabled = usedPiece[i] || levelDone;
         btn.addEventListener("pointerdown", (ev) => beginDrag(i, btn, ev));
         trayEl.appendChild(btn);
@@ -723,8 +719,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     el.className = "pzt-drag pzv-cut";
     el.style.width = `${side}px`;
     el.style.height = `${side}px`;
-    el.style.fontSize = `${Math.round(side * 0.56)}px`;
-    el.innerHTML = skinFor(v, tile.bg) + `<span class="pzv-face">${tile.emoji}</span>`;
+    el.innerHTML = skinFor(v, tile.bg);
     document.body.appendChild(el);
     return el;
   }
