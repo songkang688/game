@@ -24,6 +24,7 @@ import {
 } from "./anim";
 import {
   HINT_MODE_NAMES,
+  PASS_BUTTON_LABEL,
   groupsSummary,
   nextHintMode,
   playableGroups,
@@ -779,7 +780,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       }
     } else if (phase === "play") {
       // 底部固定一行三钮:不出 / 提示 / 出牌,热区都在 48px 以上
-      btnsEl.appendChild(mkBtn("🙅 不出", "", doPass, !iAct || !state?.prev));
+      btnsEl.appendChild(mkBtn(PASS_BUTTON_LABEL, "", doPass, !iAct || !state?.prev));
       btnsEl.appendChild(mkBtn("💡 提示", "", doHint, !iAct));
       btnsEl.appendChild(mkBtn("✅ 出牌", "ld-btn-go", doPlay, !iAct || selected.size === 0));
       subEl.appendChild(mkBtn(HINT_MODE_NAMES[hintMode], "", cycleHintMode, paused));

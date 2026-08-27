@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   HINT_MODES,
   HINT_MODE_NAMES,
+  PASS_BUTTON_LABEL,
+  PASS_WORD,
   groupsSummary,
   nextHintMode,
   playableGroups,
@@ -105,7 +108,7 @@ describe("牌力提示三档", () => {
   it("高亮档的牌组不重复,接不上时直接说清楚", () => {
     const list = playableGroups(cards("3 4 5 6 7 8 9"), null);
     expect(new Set(list.map((p) => p.cards.join(","))).size).toBe(list.length);
-    expect(groupsSummary([])).toContain("不要");
+    expect(groupsSummary([])).toContain(PASS_WORD);
   });
 
   it("教练档推荐的一定是手里的牌,而且是合法牌型", () => {
@@ -198,5 +201,49 @@ describe("牌力提示三档", () => {
         expect(res.reason).not.toMatch(/错|不行|笨|下注|赌|筹码|赔率|充值/);
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W5R3-A-01：提示让孩子按的那颗键，牌桌上必须真有这个名字
+// ---------------------------------------------------------------------------
+
+describe("提示里点名的按钮和牌桌上那颗是同一个字", () => {
+  const SRC = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  it("过牌键的字面由 hint.ts 一处说了算,牌桌不再自己写死一份", () => {
+    expect(PASS_WORD).toBe("不出");
+    expect(PASS_BUTTON_LABEL).toContain(PASS_WORD);
+    // 牌桌那颗键必须用常量拼，不许再出现写死的字面
+    expect(SRC).toContain("mkBtn(PASS_BUTTON_LABEL");
+    expect(SRC).not.toContain('mkBtn("🙅 不出"');
+  });
+
+  it("三句劝过牌的提示都点「不出」,一句都不许再说「不要」", () => {
+    // 一组都接不上（groups 档）
+    expect(groupsSummary([])).toContain(`「${PASS_WORD}」`);
+    // 一种压法都搜不到（coach 档，prev 存在）
+    const none = searchHint(inputOf({ hand: cards("3 4 5"), prev: play("A") }), "coach");
+    expect(none.pass).toBe(true);
+    expect(none.reason).toContain(`「${PASS_WORD}」`);
+    // 全档全局面扫一遍：只要提到过牌键，就得是「不出」
+    const specs = ["3 4 5", "3 4 5 6 7 9 9 K", "3 3 3 3 4 6", "5 6 7 8 9 10 J Q 2 w W"];
+    for (const spec of specs) {
+      for (const prev of [null, play("A"), play("2")]) {
+        for (const mode of HINT_MODES) {
+          const res = searchHint(inputOf({ hand: cards(spec), prev }), mode);
+          expect(res.reason, `${spec} / ${mode}`).not.toContain("「不要」");
+        }
+      }
+    }
+  });
+
+  it("hint.ts 正文里一句写死的「不要」都不剩", () => {
+    const hintSrc = readFileSync(new URL("./hint.ts", import.meta.url), "utf8");
+    const code = hintSrc
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("*") && !l.trimStart().startsWith("//") && !l.includes("/**"))
+      .join("\n");
+    expect(code).not.toContain("「不要」");
   });
 });
