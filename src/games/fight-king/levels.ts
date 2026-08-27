@@ -104,13 +104,30 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** 增益曲线的缓收点：过了这个进度，厚度的涨速降下来 */
+export const BUFF_KNEE = 0.62;
+/** 缓收之后还剩多少涨速 */
+export const BUFF_TAIL_SLOPE = 0.55;
+
 /**
- * 对手增益：随关号平滑上涨，守擂者再多一点厚度。
+ * 增益用的进度：前段照直走，后段缓收。
+ *
+ * 后三章的对手 AI 已经是「老练 / 高手」了，再让元气和威力照原来的斜率涨上去，
+ * 就成了「更会打**而且**更耐打」——两级台阶叠一起，孩子的体感是突然打不动了。
+ * 缓收之后最后一层仍旧是全塔最厚的（元气 ×1.25 · 威力 ×1.13），只是不再厚到离谱。
+ */
+export function buffProgress(p: number): number {
+  const c = Math.max(0, Math.min(1, p));
+  return c <= BUFF_KNEE ? c : BUFF_KNEE + (c - BUFF_KNEE) * BUFF_TAIL_SLOPE;
+}
+
+/**
+ * 对手增益：随关号平滑上涨，后段缓收，守擂者再多一点厚度。
  * 涨幅刻意做得比 1.1 收敛（元气 +0.52 而不是 +0.62，威力 +0.48 而不是 +0.58）——
  * 差出来的那一截交给 AI 档位去补，后段的对手是"更会打"，不是"更耐打"。
  */
 export function foeBuffOf(level: number): FighterBuff {
-  const p = progressOf(level);
+  const p = buffProgress(progressOf(level));
   const boss = isBossLevel(level);
   return {
     vigorMul: round2(0.72 + p * 0.52 + (boss ? 0.1 : 0)),
@@ -155,7 +172,9 @@ export function towerStage(level: number): TowerStage {
     aiLevel: aiLevelOf(lv),
     foeBuff: foeBuffOf(lv),
     boss,
-    roundsToWin: ci >= 5 ? 2 : 1,
+    // 一章只上一级台阶:第 6 章上的是 AI 档(灵巧 → 老练),两回合制往后挪一章,
+    // 免得「对手换脑子」和「一局要赢两回合」撞在同一章,后段直接变成打不过
+    roundsToWin: ci >= 6 ? 2 : 1,
     timeLimitSec: boss ? 90 : 75,
     hint: boss ? `${CHAPTERS[ci].name}的守擂者在等你，稳住节奏别急。` : HINTS[lv % HINTS.length]
   };

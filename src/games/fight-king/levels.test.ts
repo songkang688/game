@@ -6,9 +6,11 @@ import { TOTAL_LEVELS, assertTotal, chapterOf } from "../level99";
 import { AI_LABELS } from "./ai";
 import { CHARACTERS, characterById } from "./frames";
 import {
+  BUFF_KNEE,
   CHAPTERS,
   STAGE_SKY,
   aiLevelOf,
+  buffProgress,
   bossIdOf,
   chapterIndexOf,
   chapterStartLevel,
@@ -176,6 +178,47 @@ describe("难度曲线", () => {
   it("后期章节要打两个回合", () => {
     expect(towerStage(0).roundsToWin).toBe(1);
     expect(towerStage(TOTAL_LEVELS - 1).roundsToWin).toBe(2);
+  });
+
+  it("一章只上一级台阶:AI 档和回合数不在同一章一起往上跳", () => {
+    for (let ci = 1; ci < CHAPTERS.length; ci++) {
+      const here = towerStage(chapterStartLevel(ci));
+      // 拿上一章的普通关做对照(每章最后一关是守擂者,会额外加一档,不能当基准)
+      const prev = towerStage(chapterStartLevel(ci) - 2);
+      const aiUp = here.aiLevel > prev.aiLevel;
+      const roundsUp = here.roundsToWin > prev.roundsToWin;
+      expect(aiUp && roundsUp, `第 ${ci + 1} 章同时抬了 AI 档和回合数`).toBe(false);
+    }
+  });
+
+  it("两回合制排在 AI 换脑子的后一章:第 6 章只上档,第 7 章才上回合", () => {
+    const ch6 = towerStage(chapterStartLevel(5));
+    const ch7 = towerStage(chapterStartLevel(6));
+    expect(ch6.aiLevel).toBeGreaterThan(towerStage(chapterStartLevel(4)).aiLevel);
+    expect(ch6.roundsToWin).toBe(1);
+    expect(ch7.aiLevel).toBe(ch6.aiLevel);
+    expect(ch7.roundsToWin).toBe(2);
+  });
+
+  it("后段增益缓收:最高档的对手是更会打,不是更耐打", () => {
+    const round2 = (n: number): number => Math.round(n * 100) / 100;
+    expect(buffProgress(0)).toBe(0);
+    expect(buffProgress(BUFF_KNEE)).toBeCloseTo(BUFF_KNEE, 6);
+    // 缓收之后仍然单调,只是斜率降下来了
+    expect(buffProgress(1)).toBeGreaterThan(buffProgress(0.8));
+    expect(buffProgress(1)).toBeLessThan(1);
+    const slopeEarly = buffProgress(0.4) - buffProgress(0.3);
+    const slopeLate = buffProgress(0.95) - buffProgress(0.85);
+    expect(slopeLate).toBeLessThan(slopeEarly);
+
+    // 最后一层还是全塔最厚的一层,但厚度收在孩子够得着的范围里
+    const last = foeBuffOf(TOTAL_LEVELS - 1);
+    const mid = foeBuffOf(Math.floor(TOTAL_LEVELS / 2));
+    expect(last.vigorMul).toBeGreaterThan(mid.vigorMul);
+    expect(last.vigorMul).toBeLessThanOrEqual(1.3);
+    expect(last.powerMul).toBeLessThanOrEqual(1.2);
+    // 缓收之后,最后一层比原来的线性曲线薄一截(线性到顶是元气 ×1.34)
+    expect(last.vigorMul).toBeLessThan(round2(0.72 + 0.52 + 0.1));
   });
 
   it("同一关每次读出来都一模一样（确定性）", () => {
