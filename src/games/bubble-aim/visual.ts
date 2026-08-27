@@ -242,6 +242,68 @@ export function starPath(ctx: PaintCtx, x: number, y: number, rOut: number, rIn:
   ctx.closePath();
 }
 
+// ---------------------------------------------------------------------------
+// 画布 HUD 单色小件(窗口 6 第 2 轮 C 档:第 1 轮登记的警示/无穷/星形字符清偿)
+// 与 starPath 同族:纯路径、单色、由调用方给色(跟随 HUD 的呼吸透明度)。
+// ---------------------------------------------------------------------------
+
+/** 警戒三角(警示字符退场):2px 描边三角 + 感叹号,size 为全高 */
+export function paintWarnTriangle(ctx: PaintCtx, x: number, y: number, size: number, color: string): void {
+  const s = size / 2;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s * 0.92);
+  ctx.lineTo(x + s * 0.98, y + s * 0.72);
+  ctx.lineTo(x - s * 0.98, y + s * 0.72);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.fillRect(x - s * 0.12, y - s * 0.42, s * 0.24, s * 0.62);
+  ctx.beginPath();
+  ctx.arc(x, y + s * 0.45, s * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 横 8 字(无穷字符退场):两枚并排圆环,size 为全宽 */
+export function paintInfinity(ctx: PaintCtx, x: number, y: number, size: number, color: string): void {
+  const r = size * 0.27;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, size * 0.16);
+  ctx.beginPath();
+  ctx.arc(x - r * 0.94, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x + r * 0.94, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 结算星排(星字符退场):won 颗实心金星 + 其余空心星,r 为单星外径 */
+export function paintStarRow(ctx: PaintCtx, x: number, y: number, r: number, won: number, total = 3): void {
+  const gap = r * 2.7;
+  const x0 = x - ((total - 1) * gap) / 2;
+  ctx.save();
+  for (let i = 0; i < total; i++) {
+    starPath(ctx, x0 + i * gap, y, r, r * 0.45, 5);
+    if (i < won) {
+      ctx.fillStyle = "#F5B301";
+      ctx.fill();
+      ctx.strokeStyle = "#C98A00";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "#B9C6D4";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 /** 这颗子(彩色或彩虹)算不算「软泡泡」:成串挤压高光只画在软泡泡之间 */
 export function isSquashy(cell: Cell): boolean {
   return isClearable(cell);

@@ -97,6 +97,7 @@ import {
   paintBombCat,
   paintBounceStar,
   paintBubble,
+  paintInfinity,
   paintLightBlobs,
   paintLoadSlot,
   paintRainbowOrb,
@@ -104,7 +105,9 @@ import {
   paintShooterShadow,
   paintSqueezeDot,
   paintStarBadge,
+  paintStarRow,
   paintStoneRock,
+  paintWarnTriangle,
   paintVineLampBand,
   rainbowSpinAngle,
   stoneCracked,
@@ -825,10 +828,12 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     ctx.stroke();
     ctx.setLineDash([]);
     if (danger) {
-      ctx.fillStyle = `rgba(255, 70, 100, ${0.6 + blink * 0.4})`;
+      const warnColor = `rgba(255, 70, 100, ${0.6 + blink * 0.4})`;
+      ctx.fillStyle = warnColor;
       ctx.font = "bold 12px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("⚠️ 快到警戒线啦!", W / 2, dy + 16);
+      paintWarnTriangle(ctx, W / 2 - 50, dy + 12, 12, warnColor);
+      ctx.fillText("快到警戒线啦!", W / 2 + 7, dy + 16);
       ctx.textAlign = "left";
     }
   }
@@ -1105,7 +1110,8 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       ctx.fillStyle = `rgba(62, 124, 184, ${a})`;
       ctx.font = "bold 21px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("♾️ 无尽墙", W / 2, 212);
+      paintInfinity(ctx, W / 2 - 34, 205, 24, `rgba(62, 124, 184, ${a})`);
+      ctx.fillText("无尽墙", W / 2 + 13, 212);
       ctx.font = "13px sans-serif";
       ctx.fillText(`每 ${ENDLESS_PUSH_EVERY} 发压下一行,能顶多久?`, W / 2, 238);
       ctx.fillText(`最好成绩 ${bestEndless} 分`, W / 2, 258);
@@ -1149,8 +1155,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       ctx.font = "bold 24px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("清空啦！", W / 2, 210);
-      ctx.font = "26px sans-serif";
-      ctx.fillText("⭐".repeat(wonStars) + "☆".repeat(3 - wonStars), W / 2, 248);
+      paintStarRow(ctx, W / 2, 240, 11, wonStars);
       // 14px 深蓝：小字对比 5.5:1（标题的 #3E7CB8 只有 4.4:1，13px 小字不达 AA）
       ctx.font = "14px sans-serif";
       ctx.fillStyle = "#3a6c9e";
