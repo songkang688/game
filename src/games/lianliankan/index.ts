@@ -23,6 +23,8 @@ import { CHAPTERS, LEVELS, THEME_EMOJIS, turnsOf, type LlkLevel } from "./levels
 import {
   HINT_MAX,
   Janitor,
+  freezeAll,
+  thawAll,
   SHAKE_MS,
   beginCollapse,
   bgOf,
@@ -805,7 +807,11 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
   });
   jan.on(wrap.querySelector(".llk-back") as HTMLButtonElement, "click", back);
   jan.on(window, "keydown", (ev: Event) => {
-    if ((ev as KeyboardEvent).key === "Escape") back();
+    const e = ev as KeyboardEvent;
+    if (e.key !== "Escape") return;
+    // 自己接住的 Esc 必须吃掉，否则外壳会在退场之后再叠一层「先歇一会儿」
+    e.preventDefault();
+    back();
   });
 
   jan.every(1000, () => {
@@ -833,7 +839,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = el("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -898,6 +904,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：倒计时停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边被扣时间
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       endlessBtn.removeEventListener("click", onEndless);
       mode?.destroy();

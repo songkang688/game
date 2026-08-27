@@ -14,6 +14,8 @@ import {
   GIFT_RISE_MUL,
   GOAL_LABELS,
   Janitor,
+  freezeAll,
+  thawAll,
   KINDS,
   SKY_H,
   blastGroup,
@@ -998,7 +1000,7 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = el("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -1064,6 +1066,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：气球、计时一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边看气球飘走
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       endlessBtn.removeEventListener("click", onEndless);
       mode?.destroy();

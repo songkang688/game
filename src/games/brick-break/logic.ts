@@ -1055,38 +1055,65 @@ function defaultHost(): TimerHost {
   };
 }
 
-/** 定时器 / rAF / 监听的总管：`pending()` 在 destroy 之后必须是 0 */
+/** 冻住时被收起来的一条待办：定时器记剩余毫秒，帧记回调 */
+interface Held {
+  fn: (t: number) => void;
+  /** 定时器还欠多少毫秒；帧不用这个字段 */
+  restMs: number;
+  frame: boolean;
+}
+
+/**
+ * 定时器 / rAF / 监听的总管：`pending()` 在 destroy 之后必须是 0。
+ *
+ * `freeze()` / `thaw()` 是给外壳暂停面板用的：外壳弹出「先歇一会儿」时会调
+ * 游戏的 `pause()`，游戏不接就只是画了一张面板、球还在后面继续掉，
+ * 孩子一边看着暂停一边输。冻住时把在飞的定时器按**剩余时间**收起来、
+ * 把在排队的帧取消掉，化冻时原样接上，暂停多久就欠多久。
+ */
 export class Janitor {
-  private timers = new Set<number>();
-  private frames = new Set<number>();
+  private timers = new Map<number, { fn: () => void; dueAt: number }>();
+  private frames = new Map<number, (t: number) => void>();
+  private held: Held[] = [];
   private offs: Array<() => void> = [];
   private readonly host: TimerHost;
   dead = false;
+  frozen = false;
 
   constructor(host?: TimerHost) {
     this.host = host ?? defaultHost();
+    LIVE.add(this);
   }
 
   pending(): number {
-    return this.timers.size + this.frames.size + this.offs.length;
+    return this.timers.size + this.frames.size + this.held.length + this.offs.length;
   }
 
   after(ms: number, fn: () => void): number {
+    if (this.dead) return 0;
+    if (this.frozen) {
+      this.held.push({ fn, restMs: Math.max(0, ms), frame: false });
+      return 0;
+    }
     const id = this.host.setTimeout(() => {
       this.timers.delete(id);
       if (!this.dead) fn();
     }, ms);
-    this.timers.add(id);
+    this.timers.set(id, { fn, dueAt: Date.now() + Math.max(0, ms) });
     return id;
   }
 
   frame(fn: (t: number) => void): number {
-    if (!this.host.requestAnimationFrame) return 0;
+    if (this.dead || !this.host.requestAnimationFrame) return 0;
+    if (this.frozen) {
+      this.held.push({ fn, restMs: 0, frame: true });
+      return 0;
+    }
     const id = this.host.requestAnimationFrame((t) => {
       this.frames.delete(id);
       if (!this.dead) fn(t);
     });
-    this.frames.add(id);
+    this.frames.set(id, fn);
     return id;
   }
 
@@ -1099,14 +1126,43 @@ export class Janitor {
     this.offs.push(off);
   }
 
-  destroy(): void {
-    this.dead = true;
-    for (const id of this.timers) this.host.clearTimeout(id);
+  /** 收起所有在飞的定时器与帧；监听照旧留着（Esc 还得能把面板关掉） */
+  freeze(): void {
+    if (this.frozen || this.dead) return;
+    this.frozen = true;
+    const now = Date.now();
+    for (const [id, t] of this.timers) {
+      this.host.clearTimeout(id);
+      this.held.push({ fn: t.fn, restMs: Math.max(0, t.dueAt - now), frame: false });
+    }
     this.timers.clear();
-    if (this.host.cancelAnimationFrame) {
-      for (const id of this.frames) this.host.cancelAnimationFrame(id);
+    for (const [id, fn] of this.frames) {
+      this.host.cancelAnimationFrame?.(id);
+      this.held.push({ fn, restMs: 0, frame: true });
     }
     this.frames.clear();
+  }
+
+  /** 化冻：欠多少毫秒补多少，排队中的那一帧重新排上 */
+  thaw(): void {
+    if (!this.frozen || this.dead) return;
+    this.frozen = false;
+    const back = this.held.splice(0);
+    for (const h of back) {
+      if (h.frame) this.frame(h.fn);
+      else this.after(h.restMs, () => h.fn(0));
+    }
+  }
+
+  destroy(): void {
+    this.dead = true;
+    LIVE.delete(this);
+    for (const id of this.timers.keys()) this.host.clearTimeout(id);
+    this.timers.clear();
+    for (const id of this.frames.keys()) this.host.cancelAnimationFrame?.(id);
+    this.frames.clear();
+    this.held.length = 0;
+    this.frozen = false;
     while (this.offs.length) {
       try {
         this.offs.pop()?.();
@@ -1115,4 +1171,25 @@ export class Janitor {
       }
     }
   }
+}
+
+/**
+ * 还活着的总管。闯关、无尽各建各的总管，外壳只认 `mount()` 返回的那一对
+ * `pause` / `resume`，所以这里留一份名册，暂停时不用管孩子当下在哪个屏。
+ */
+const LIVE = new Set<Janitor>();
+
+/** 外壳弹暂停面板时调：把这一款所有还活着的总管一起冻住 */
+export function freezeAll(): void {
+  for (const j of [...LIVE]) j.freeze();
+}
+
+/** 关掉面板时调：原样接上 */
+export function thawAll(): void {
+  for (const j of [...LIVE]) j.thaw();
+}
+
+/** 用例用：当前还有几个总管活着（destroy 之后必须归零） */
+export function liveJanitors(): number {
+  return LIVE.size;
 }

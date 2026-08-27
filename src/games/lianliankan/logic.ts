@@ -498,35 +498,50 @@ function defaultHost(): TimerHost {
 
 /** 定时器 / 计时器 / 监听的总管：`pending()` 在 destroy 之后必须是 0 */
 export class Janitor {
-  private timers = new Set<number>();
-  private tickers = new Set<number>();
+  private timers = new Map<number, { fn: () => void; dueAt: number }>();
+  private tickers = new Map<number, { fn: () => void; ms: number }>();
+  private heldTimers: Array<{ fn: () => void; restMs: number }> = [];
+  private heldTickers: Array<{ fn: () => void; ms: number }> = [];
   private offs: Array<() => void> = [];
   private readonly host: TimerHost;
   dead = false;
+  frozen = false;
 
   constructor(host?: TimerHost) {
     this.host = host ?? defaultHost();
+    LIVE.add(this);
   }
 
   pending(): number {
-    return this.timers.size + this.tickers.size + this.offs.length;
+    return (
+      this.timers.size + this.tickers.size + this.heldTimers.length + this.heldTickers.length + this.offs.length
+    );
   }
 
   after(ms: number, fn: () => void): number {
+    if (this.dead) return 0;
+    if (this.frozen) {
+      this.heldTimers.push({ fn, restMs: Math.max(0, ms) });
+      return 0;
+    }
     const id = this.host.setTimeout(() => {
       this.timers.delete(id);
       if (!this.dead) fn();
     }, ms);
-    this.timers.add(id);
+    this.timers.set(id, { fn, dueAt: Date.now() + Math.max(0, ms) });
     return id;
   }
 
   every(ms: number, fn: () => void): number {
-    if (!this.host.setInterval) return 0;
+    if (this.dead || !this.host.setInterval) return 0;
+    if (this.frozen) {
+      this.heldTickers.push({ fn, ms });
+      return 0;
+    }
     const id = this.host.setInterval(() => {
       if (!this.dead) fn();
     }, ms);
-    this.tickers.add(id);
+    this.tickers.set(id, { fn, ms });
     return id;
   }
 
@@ -539,12 +554,41 @@ export class Janitor {
     this.offs.push(off);
   }
 
+  /** 收起在飞的定时器与倒计时心跳；监听留着，孩子还得能把面板关掉 */
+  freeze(): void {
+    if (this.frozen || this.dead) return;
+    this.frozen = true;
+    const now = Date.now();
+    for (const [id, t] of this.timers) {
+      this.host.clearTimeout(id);
+      this.heldTimers.push({ fn: t.fn, restMs: Math.max(0, t.dueAt - now) });
+    }
+    this.timers.clear();
+    for (const [id, t] of this.tickers) {
+      this.host.clearInterval?.(id);
+      this.heldTickers.push(t);
+    }
+    this.tickers.clear();
+  }
+
+  /** 化冻：定时器欠多少毫秒补多少，倒计时心跳原样接上 */
+  thaw(): void {
+    if (!this.frozen || this.dead) return;
+    this.frozen = false;
+    for (const t of this.heldTimers.splice(0)) this.after(t.restMs, t.fn);
+    for (const t of this.heldTickers.splice(0)) this.every(t.ms, t.fn);
+  }
+
   destroy(): void {
     this.dead = true;
-    for (const id of this.timers) this.host.clearTimeout(id);
+    LIVE.delete(this);
+    for (const id of this.timers.keys()) this.host.clearTimeout(id);
     this.timers.clear();
-    for (const id of this.tickers) this.host.clearInterval?.(id);
+    for (const id of this.tickers.keys()) this.host.clearInterval?.(id);
     this.tickers.clear();
+    this.heldTimers.length = 0;
+    this.heldTickers.length = 0;
+    this.frozen = false;
     while (this.offs.length) {
       try {
         this.offs.pop()?.();
@@ -553,4 +597,25 @@ export class Janitor {
       }
     }
   }
+}
+
+/**
+ * 还活着的总管。闯关、无尽各建各的，外壳只认 `mount()` 返回的那一对
+ * `pause` / `resume`，所以留一份名册，暂停时不用管孩子当下在哪个屏。
+ */
+const LIVE = new Set<Janitor>();
+
+/** 外壳弹「先歇一会儿」时调：这一款所有还活着的总管一起冻住 */
+export function freezeAll(): void {
+  for (const j of [...LIVE]) j.freeze();
+}
+
+/** 关掉面板时调：原样接上 */
+export function thawAll(): void {
+  for (const j of [...LIVE]) j.thaw();
+}
+
+/** 用例用：当前还有几个总管活着（destroy 之后必须归零） */
+export function liveJanitors(): number {
+  return LIVE.size;
 }

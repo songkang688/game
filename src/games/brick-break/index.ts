@@ -28,6 +28,7 @@ import {
   capsuleLook,
   comboGapMs,
   damageBrick,
+  freezeAll,
   grantPower,
   hitStopFrames,
   isBreakableKind,
@@ -42,6 +43,7 @@ import {
   rollPower,
   stallNudges,
   stepBall,
+  thawAll,
   tickPowers,
   towerBottomY,
   towerBreak,
@@ -1263,7 +1265,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = el("div");
   const bar = el("div", "brk-bar");
   const style = document.createElement("style");
@@ -1330,6 +1332,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：球、砖、计时一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边把命输光
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       endlessBtn.removeEventListener("click", onEndless);
       mode?.destroy();

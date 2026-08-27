@@ -18,6 +18,8 @@ import {
   H,
   HEAVY_SLOW_S,
   Janitor,
+  freezeAll,
+  thawAll,
   MAGNET_SECONDS,
   MAX_MISS,
   PLAYERS,
@@ -1202,6 +1204,8 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
       dir = 1;
       e.preventDefault();
     } else if (e.key === "Escape") {
+      // 自己接住的 Esc 必须吃掉，否则外壳会在退场之后再叠一层「先歇一会儿」
+      e.preventDefault();
       back();
     }
   });
@@ -1231,7 +1235,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
 // 挂载：模式条 + 188 关地图
 // ---------------------------------------------------------------------------
 
-export function mount(api: GameApi): { destroy: () => void } {
+export function mount(api: GameApi): { pause: () => void; resume: () => void; destroy: () => void } {
   const root = el("div");
   const style = document.createElement("style");
   style.textContent = CSS;
@@ -1304,6 +1308,10 @@ export function mount(api: GameApi): { destroy: () => void } {
   );
 
   return {
+    // 外壳弹「先歇一会儿」时会调这一对：水果、篮子、计时一起停住，
+    // 不接的话面板只是挡在前面，孩子一边看着暂停一边漏水果
+    pause: freezeAll,
+    resume: thawAll,
     destroy() {
       duoBtn.removeEventListener("click", onDuo);
       rainBtn.removeEventListener("click", onRain);
