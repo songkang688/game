@@ -9,7 +9,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { applyTightDock, needsTightDock, TIGHT_DOCK_CLASS, TIGHT_DOCK_CSS } from "./dockTight";
+import {
+  applyTightDock,
+  needsTightDock,
+  scrollToShowPx,
+  showBoard,
+  TIGHT_DOCK_CLASS,
+  TIGHT_DOCK_CSS,
+} from "./dockTight";
 import { DRAW_CSS } from "./draw";
 
 const dir = fileURLToPath(new URL(".", import.meta.url));
@@ -127,6 +134,104 @@ describe("图形王国 · applyTightDock", () => {
     const bare = new FakeEl();
     bare.clientHeight = 332;
     expect(applyTightDock(as(bare))).toBe(false);
+  });
+});
+
+describe("图形王国 · scrollToShowPx", () => {
+  it("滚最小的那一段：图形下沿进来就收手，题面尽量留在眼里", () => {
+    // 图形在内容里 120..321，可视段 332、dock 94 → 可用窗口 238
+    expect(scrollToShowPx(120, 321, 332, 97, 94)).toBe(83);
+  });
+
+  it("不减掉 dock 就当图形早就看得见了，一格都不滚——这条钉的是缺陷本身", () => {
+    // 201 高的点阵塞进 332 的可视段确实「装得下」，可下面 94px 被常驻控件盖着，
+    // 真正能用的窗口只有 238。不减这一刀算出来的就是「不用滚」，也就是缺陷现场。
+    expect(scrollToShowPx(120, 321, 332, 97, 0)).toBe(0);
+    expect(scrollToShowPx(120, 321, 332, 97, 94)).toBe(83);
+  });
+
+  it("图形自己比窗口还高就从上沿开始露，先看得见头", () => {
+    expect(scrollToShowPx(120, 600, 332, 400, 94)).toBe(120);
+  });
+
+  it("不许滚过头，也不许滚成负的", () => {
+    expect(scrollToShowPx(120, 321, 332, 40, 94)).toBe(40);
+    expect(scrollToShowPx(0, 60, 332, 97, 94)).toBe(0);
+  });
+
+  it("没得滚 / 量不出数 / dock 比整个可视段还高，一律不动", () => {
+    expect(scrollToShowPx(120, 321, 332, 0, 94)).toBe(0);
+    expect(scrollToShowPx(120, 321, 0, 97, 94)).toBe(0);
+    expect(scrollToShowPx(Number.NaN, 321, 332, 97, 94)).toBe(0);
+    expect(scrollToShowPx(120, 321, 332, 97, 400)).toBe(0);
+  });
+});
+
+describe("图形王国 · showBoard", () => {
+  /** showBoard 要量位置，桩得比上面那个多给 top / clientHeight / scrollHeight */
+  class PosEl {
+    constructor(readonly top: number, readonly h: number) {}
+    getBoundingClientRect(): { top: number; height: number } {
+      return { top: this.top, height: this.h };
+    }
+  }
+  class PosWrap {
+    scrollTop = 0;
+    clientHeight = 332;
+    scrollHeight = 429;
+    classList = new FakeList();
+    private readonly kids = new Map<string, PosEl>();
+    put(sel: string, el: PosEl): void {
+      this.kids.set(sel, el);
+    }
+    querySelector(sel: string): PosEl | null {
+      return this.kids.get(sel) ?? null;
+    }
+    getBoundingClientRect(): { top: number } {
+      return { top: 218 };
+    }
+  }
+  const asW = (w: PosWrap): HTMLElement => w as unknown as HTMLElement;
+
+  it("真机第 117 关那一档：落地滚一次，整张点阵进眼里", () => {
+    const wrap = new PosWrap();
+    // 屏上 y=338..539 = 内容里 120..321（宿主顶 218、scrollTop 0）
+    wrap.put(".shk-board", new PosEl(338, 201));
+    wrap.put(".shk-dock", new PosEl(448, 94));
+    const moved = showBoard(asW(wrap));
+    expect(moved).toBeGreaterThan(0);
+    expect(wrap.scrollTop).toBe(moved);
+    // 滚完之后图形下沿落在「可视段减去 dock」以内
+    expect(321 - wrap.scrollTop).toBeLessThanOrEqual(wrap.clientHeight - 94);
+  });
+
+  it("图形本来就整张在眼里就一格都不滚", () => {
+    const wrap = new PosWrap();
+    wrap.put(".shk-board", new PosEl(238, 100));
+    wrap.put(".shk-dock", new PosEl(448, 94));
+    expect(showBoard(asW(wrap))).toBe(0);
+    expect(wrap.scrollTop).toBe(0);
+  });
+
+  it("没挂滚动条（高屏）就返回 0", () => {
+    const wrap = new PosWrap();
+    wrap.scrollHeight = wrap.clientHeight;
+    wrap.put(".shk-board", new PosEl(338, 201));
+    wrap.put(".shk-dock", new PosEl(448, 94));
+    expect(showBoard(asW(wrap))).toBe(0);
+  });
+
+  it("没有图形（答题小题）/ 传 null 都不抛", () => {
+    expect(showBoard(asW(new PosWrap()))).toBe(0);
+    expect(showBoard(null)).toBe(0);
+    expect(showBoard({} as HTMLElement)).toBe(0);
+  });
+
+  it("接线：收薄之后才滚——没收薄就滚，滚到的还是那个看不全的位置", () => {
+    const tight = drawSource.indexOf("applyTightDock(wrap);");
+    const show = drawSource.indexOf("showBoard(wrap);");
+    expect(tight).toBeGreaterThan(-1);
+    expect(show).toBeGreaterThan(tight);
   });
 });
 

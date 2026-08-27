@@ -71,6 +71,59 @@ export function applyTightDock(wrap: HTMLElement | null): boolean {
 }
 
 /**
+ * 要把 `[top, bottom]` 这一段送进眼前，`scrollTop` 该写多少。
+ *
+ * `client` 是作图台可视段的高，`dock` 是钉在下沿常驻的那一摞——
+ * 它盖住的那一条不算「看得见」，不减掉就会把图形正好停在控件底下。
+ * 这一段比剩下的窗口还高就从它的上沿开始露，先看得见头。
+ * 量不出数、或者根本没得滚，就返回 0，不平白往 DOM 上写一个 `scrollTop`。
+ */
+export function scrollToShowPx(
+  top: number,
+  bottom: number,
+  client: number,
+  max: number,
+  dock = 0,
+): number {
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return 0;
+  if (!(client > 0) || !(max > 0)) return 0;
+  const room = client - Math.max(0, Number.isFinite(dock) ? dock : 0);
+  if (room <= 0) return 0;
+  const want = bottom - top > room ? top : bottom - room;
+  return Math.max(0, Math.min(max, Math.round(want)));
+}
+
+/**
+ * 钳出滚动条之后，把图形整张送到孩子眼前（W5R3-B-03）。
+ *
+ * 收薄 dock（W5R3-B-01）之后 320×568 第 117 关已经**存在**一个能看全整张点阵的位置，
+ * 可孩子落地时 `scrollTop` 是 0，那一档只够得着 21/35 颗点，下面 14 颗压在 dock 底下。
+ * 逐档复量：0% 与 25% 处都是 21/35，50% 处 28/35，滚到 75% 才第一次 35/35。
+ * 「存在一个好位置」和「一进关就在那个位置」是两回事——
+ * 五六岁的孩子不会先想到把屏幕往上推一下再动笔。
+ *
+ * 和 `kitty-care/runtime.ts` 的 `showPlayRow` 是同一套做法：钳完顺手滚一次，
+ * 滚最小的那一段（只要图形下沿进来就收手），上面的题面尽量留在眼里。
+ */
+export function showBoard(wrap: HTMLElement | null): number {
+  if (!wrap || typeof wrap.getBoundingClientRect !== "function") return 0;
+  const { board, dock } = hosts(wrap);
+  if (!board) return 0;
+  const hostTop = wrap.getBoundingClientRect().top;
+  const r = board.getBoundingClientRect();
+  const top = r.top - hostTop + wrap.scrollTop;
+  const next = scrollToShowPx(
+    top,
+    top + r.height,
+    wrap.clientHeight,
+    wrap.scrollHeight - wrap.clientHeight,
+    heightOf(dock),
+  );
+  wrap.scrollTop = next;
+  return next;
+}
+
+/**
  * 收薄档的样式。挂在宿主上，作用范围仅限本款自己的选择器。
  *
  * `.shk-tools` 改成 `nowrap`：那三颗键折行才是 96px 的由来，一行排下就是 44px。

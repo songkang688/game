@@ -28,7 +28,7 @@ import { mulberry32, pick, randInt, type PlayCtx, type PlayHandle } from "../lev
 import type { QuizTheme } from "../quiz99";
 import { HINT_LABELS, safeHints, trio, type HintTrio } from "./hints";
 import { resetClippedScroll } from "./stageScroll";
-import { applyTightDock, TIGHT_DOCK_CSS } from "./dockTight";
+import { applyTightDock, showBoard, TIGHT_DOCK_CSS } from "./dockTight";
 
 // ---------------------------------------------------------------------------
 // 尺寸与吸附（纯函数，360px 下限靠它守住）
@@ -667,6 +667,9 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   // 顺序不能反——收薄看的是钳完的可视段，拿没钳的高度量出来的结论是错的。
   const tighten = (): void => {
     applyTightDock(wrap);
+    // 收完再滚一次：收薄之后才存在「看得全整张点阵」的那个位置，
+    // 可落地的 scrollTop 是 0，孩子不会自己先把屏幕推上去（W5R3-B-03）
+    showBoard(wrap);
   };
   const winRef = wrap.ownerDocument?.defaultView ?? null;
   // fitIntoStage 自己也挂了一条 resize；这条后挂，于是总在它重算完之后才跑
