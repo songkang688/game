@@ -1,0 +1,1928 @@
+{
+  "kidWordHits": [
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/copy.ts",
+      "line": 12,
+      "word": "血",
+      "text": "血"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/copy.ts",
+      "line": 12,
+      "word": "死",
+      "text": "死"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/copy.ts",
+      "line": 12,
+      "word": "杀",
+      "text": "杀"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/copy.ts",
+      "line": 12,
+      "word": "尸",
+      "text": "尸"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 768,
+      "word": "血",
+      "text": "奶油怪回血"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 769,
+      "word": "血",
+      "text": "奶油怪会给附近的怪回血,先打它!"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 945,
+      "word": "血",
+      "text": "泥泥大王一边走一边给全军奶血,快拆奶源!"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 1001,
+      "word": "血",
+      "text": "雪雪大王半血后会暴走加速,留好减速塔!"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 1107,
+      "word": "血",
+      "text": "岩浆巨人会冲刺,半血还会暴走!稳住!"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 25,
+      "word": "血",
+      "text": "半血"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 26,
+      "word": "血",
+      "text": "回血"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 27,
+      "word": "血",
+      "text": "奶血"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 28,
+      "word": "血",
+      "text": "掉血"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 29,
+      "word": "血",
+      "text": "吸血"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 30,
+      "word": "血",
+      "text": "血量"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 31,
+      "word": "血",
+      "text": "血条"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 39,
+      "word": "血",
+      "text": "血"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/guide.ts",
+      "line": 93,
+      "word": "伤害",
+      "text": "有壳的虫会削减每次命中的伤害,靠数量堆输出效果不好。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 583,
+      "word": "血",
+      "text": "壳壳虫有硬壳,要先敲碎再掉血!"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 25,
+      "word": "血",
+      "text": "半血"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 26,
+      "word": "血",
+      "text": "回血"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 27,
+      "word": "血",
+      "text": "奶血"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 28,
+      "word": "血",
+      "text": "掉血"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 29,
+      "word": "血",
+      "text": "吸血"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 30,
+      "word": "血",
+      "text": "血量"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 31,
+      "word": "血",
+      "text": "血条"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 39,
+      "word": "血",
+      "text": "血"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/copy.ts",
+      "line": 15,
+      "word": "血",
+      "text": "血"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/copy.ts",
+      "line": 15,
+      "word": "死",
+      "text": "死"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/copy.ts",
+      "line": 15,
+      "word": "杀",
+      "text": "杀"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/copy.ts",
+      "line": 15,
+      "word": "尸",
+      "text": "尸"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/guide.ts",
+      "line": 14,
+      "word": "死",
+      "text": "把小怪往死胡同里赶,再在路口摆弹,比追着它们跑省时间得多。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/guide.ts",
+      "line": 44,
+      "word": "死",
+      "text": "爆风被硬墙挡死,所以柱子背后永远安全,记住这条就不会慌。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/guide.ts",
+      "line": 75,
+      "word": "死",
+      "text": "被逼进死胡同时先别放弹,先退出来再说。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/index.ts",
+      "line": 1505,
+      "word": "死",
+      "text": "朵朵:WASD 走 · F 放泡 · V 踢泡 · G 拍破。把电脑逼进死胡同就赢了。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 293,
+      "word": "死",
+      "text": "小怪碰到彩虹波就变泡泡,把它们赶进死胡同再放。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 671,
+      "word": "死",
+      "text": "钻墙怪能穿软砖,别把自己堵在死胡同里。"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/guide.ts",
+      "line": 77,
+      "word": "死",
+      "text": "滑行中方向还是能微调的,别死踩油门,用小幅度点方向来修正路线。"
+    },
+    {
+      "game": "ice-fire-forest",
+      "file": "src/games/ice-fire-forest/levels.ts",
+      "line": 658,
+      "word": "死",
+      "text": "先各走各的,把路走顺;宝石一般藏在冰水或岩浆守着的死胡同尽头。"
+    }
+  ],
+  "brandHits": [
+    {
+      "game": "candy-swing",
+      "file": "src/games/candy-swing/levels.ts",
+      "line": 1603,
+      "word": "路飞",
+      "text": "风大得很，糖果一路飞到边上！"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/expedition.ts",
+      "line": 209,
+      "word": "路飞",
+      "text": "一路飞过 ${legs} 段,擦弹 ${grazes} 次还全身而退 —— 你已经敢贴着弹走了!"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/expedition.ts",
+      "line": 210,
+      "word": "路飞",
+      "text": "一路飞过 ${legs} 段云海,请回机库 ${downed} 架小飞机。下一趟试试贴着弹边走,擦弹也有分。"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/throw12.ts",
+      "line": 138,
+      "word": "路飞",
+      "text": "/** 让一发雪球一路飞到落地,报告落点、飞行时间与轨迹 */"
+    }
+  ],
+  "commentHits": [
+    {
+      "game": "duo-rush",
+      "file": "src/games/duo-rush/ai.ts",
+      "line": 173,
+      "word": "死",
+      "text": "// 所以它不会为了卡人把自己撞死，也不会横冲直撞去碰对手。"
+    },
+    {
+      "game": "duo-rush",
+      "file": "src/games/duo-rush/rush12.ts",
+      "line": 5,
+      "word": "伤害",
+      "text": "*  1. 温和道具（加速云 / 护盾泡 / 减速彩纸 / 磁力星）——全部是状态机，没有任何攻击伤害语义；"
+    },
+    {
+      "game": "duo-rush",
+      "file": "src/games/duo-rush/rush12.ts",
+      "line": 27,
+      "word": "血",
+      "text": "* - `confetti` 减速彩纸：撒给对手，对手慢一阵（不掉血、不打断操作）；"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/ai.ts",
+      "line": 90,
+      "word": "死",
+      "text": "/** 地狱档也不许比这更快 —— 这是写死的反打窗口下限 */"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/arena12.ts",
+      "line": 9,
+      "word": "血",
+      "text": "*     全部用「元气」「星星点数」的说法，**没有伤害与血量语义**；"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/arena12.ts",
+      "line": 9,
+      "word": "伤害",
+      "text": "*     全部用「元气」「星星点数」的说法，**没有伤害与血量语义**；"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/arena12.ts",
+      "line": 131,
+      "word": "伤害",
+      "text": "/** 三个技能都不带伤害语义：护住自己、把对手的目标推走、让自己的点数亮一会儿。 */"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/index.ts",
+      "line": 13,
+      "word": "血",
+      "text": "// 全程没有血、没有伤、没有淘汰:被弹到只是原地转个圈,输了只有鼓励。"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/skills.ts",
+      "line": 5,
+      "word": "血",
+      "text": "*  1. **没有伤害、没有血量。** 分数叫「元气」,被弹到只是原地转个圈,站起来接着抢。"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/skills.ts",
+      "line": 5,
+      "word": "伤害",
+      "text": "*  1. **没有伤害、没有血量。** 分数叫「元气」,被弹到只是原地转个圈,站起来接着抢。"
+    },
+    {
+      "game": "duo-arena",
+      "file": "src/games/duo-arena/skills.ts",
+      "line": 7,
+      "word": "死",
+      "text": "*     这就是「可反打的窗口」,也顺手掐死了 1.1 那套「无脑连点也能赢」。"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/depth12.ts",
+      "line": 100,
+      "word": "伤害",
+      "text": "/** 硬度：撞击伤害要除以它，越大越结实 */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/materials.ts",
+      "line": 16,
+      "word": "血",
+      "text": "/** 血量:越大越硬(石 > 木 > 冰 > 玻璃) */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/materials.ts",
+      "line": 18,
+      "word": "血",
+      "text": "/** 易碎系数:同样一撞,数值越大掉血越多(冰脆、石头闷) */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/materials.ts",
+      "line": 131,
+      "word": "血",
+      "text": "* 才算「砸」到它。低于门槛只是靠着,不掉血,免得静止的塔自己散架。"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/materials.ts",
+      "line": 136,
+      "word": "血",
+      "text": "/** 传伤系数:超出门槛的每 px/s 相对速度换算成多少血 */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/materials.ts",
+      "line": 144,
+      "word": "血",
+      "text": "* 低于门槛返回 0(只是压着,不掉血)。"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/materials.ts",
+      "line": 150,
+      "word": "血",
+      "text": "/** 砸到地面 / 坡面的伤害:轻轻落地不掉血 */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/materials.ts",
+      "line": 150,
+      "word": "伤害",
+      "text": "/** 砸到地面 / 坡面的伤害:轻轻落地不掉血 */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/physics.ts",
+      "line": 240,
+      "word": "血",
+      "text": "/** 撞击伤害:低速蹭一下不掉血,速度越快越疼 */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/physics.ts",
+      "line": 240,
+      "word": "伤害",
+      "text": "/** 撞击伤害:低速蹭一下不掉血,速度越快越疼 */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/world.ts",
+      "line": 347,
+      "word": "血",
+      "text": "/** 给方块记一次伤:掉血、记形变,血空了就碎 */"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/world.ts",
+      "line": 517,
+      "word": "血",
+      "text": "// 抽掉承重柱之后上面整片塌下来,砸到谁谁掉血 —— 这就是连锁倒塌。"
+    },
+    {
+      "game": "sling-birds",
+      "file": "src/games/sling-birds/world.ts",
+      "line": 816,
+      "word": "血",
+      "text": "// 1.2:侧面撞细高柱子多给一点推力,柱子会被撞倒而不是原地掉血"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/copy.ts",
+      "line": 4,
+      "word": "血",
+      "text": "* 单独抽一份是为了守分级红线：**无血无伤**。"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/copy.ts",
+      "line": 7,
+      "word": "死",
+      "text": "* 以后谁顺手改文案改出「炸飞 / 打死 / 受伤」，测试会先拦下来。"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/index.ts",
+      "line": 232,
+      "word": "死",
+      "text": "// 顶部一行只放「金币 / 目标 / 剩余时间」三样,字号钉死 14px。"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/index.ts",
+      "line": 300,
+      "word": "死",
+      "text": "// 按钮行和提示行是写死在画面下面的,先把它们的高度让出来,再留 10px 呼吸"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/logic.ts",
+      "line": 7,
+      "word": "死",
+      "text": "*  2. **回收**:钩到的东西越重拉得越慢,喝了力量水会快一截,上下都夹死,"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/logic.ts",
+      "line": 25,
+      "word": "死",
+      "text": "* 竖着画就意味着宽度被高度卡死,矿石跟着一起缩到看不清。横过来以后同样的高度能撑开"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/logic.ts",
+      "line": 242,
+      "word": "死",
+      "text": "* 越重越慢(双曲线,不会掉到 0),每瓶力量水整体抬 30%,上下都夹死。"
+    },
+    {
+      "game": "gold-hook",
+      "file": "src/games/gold-hook/style.ts",
+      "line": 17,
+      "word": "死",
+      "text": "/* 顶部一行:金币 / 目标 / 剩余时间。字号钉死在 ${HUD_MIN_FONT}px,窄屏也不许再小。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/defense12.ts",
+      "line": 300,
+      "word": "死",
+      "text": "* 塔一旦种下就要用很多波，路太短会变成「第一波种哪儿定生死」。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 52,
+      "word": "血",
+      "text": "* 花瓣产出参照的关号——故意比血量参照涨得慢得多。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 104,
+      "word": "血",
+      "text": "/** 一只怪要打掉多少「工作量」(血 + 壳)。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 110,
+      "word": "血",
+      "text": "* 第 n 波的小怪「工作量预算」(血 + 壳的总和)。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 112,
+      "word": "血",
+      "text": "* 二次曲线是故意的。单只怪的血量跟着 `endlessLevelIndex` 只是线性上涨,"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 114,
+      "word": "血",
+      "text": "* 只让血量线性涨的话,封顶之后的每一波都一样轻松,那就不是无尽是散步。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 115,
+      "word": "血",
+      "text": "* 预算按 n² 走,数量与单只血量各出一半力,压力才会稳稳越过任何一条封顶线。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 175,
+      "word": "血",
+      "text": "/** 撑过第 n 波给的花瓣奖励(波次越深给得越多,经济才追得上血量)。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 197,
+      "word": "血",
+      "text": "* 单看某一波会有起伏——云朵怪那波血厚、飘飘怪那波血薄,这是刻意留的呼吸感;"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/endless.ts",
+      "line": 207,
+      "word": "血",
+      "text": "/** 第 n 波的血量总压力,给单测断言「越来越难」用。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/fx12.ts",
+      "line": 3,
+      "word": "血",
+      "text": "// 分级红线:这个游戏里没有血、没有伤、没有倒下。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/fx12.ts",
+      "line": 5,
+      "word": "血",
+      "text": "// 头顶那条也不是血条,是元气条——所以颜色一律走暖色,不用红。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/index.ts",
+      "line": 441,
+      "word": "血",
+      "text": "/** 挨了一下:头上冒星星。不是流血,是被弹得眼冒金星。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/index.ts",
+      "line": 874,
+      "word": "死",
+      "text": "// ---- 怪物生成与死亡 ----"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/index.ts",
+      "line": 943,
+      "word": "血",
+      "text": "// 挨了一下:往后弹一小段 + 头上冒星星,没有血也没有伤"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/index.ts",
+      "line": 961,
+      "word": "死",
+      "text": "* 这些和逻辑步长解耦,所以暂停布阵时画面依然是活的,不会像卡死了一样。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/index.ts",
+      "line": 1068,
+      "word": "血",
+      "text": "// 半血暴走"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/index.ts",
+      "line": 1641,
+      "word": "血",
+      "text": "// 元气条(带硬壳段)。这不是血条:掉光了不是倒下,是没劲了、散成花瓣回家。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/index.ts",
+      "line": 2021,
+      "word": "血",
+      "text": "// 1.1 冻结的前 99 关里还有几句写着「回血 / 半血 / 奶血」——数据带回归指纹不能动,"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 229,
+      "word": "血",
+      "text": "/** 毒雾塔每次脉冲的毒伤(无视护甲,直接掉血)。1.2 起 +1:重甲局要它当主力。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 317,
+      "word": "血",
+      "text": "/** 行为开关:给附近怪回血 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 321,
+      "word": "血",
+      "text": "/** 行为开关:半血后暴走加速 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 367,
+      "word": "血",
+      "text": "/** 奶油怪:每隔几秒给附近怪 +1 血。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 372,
+      "word": "血",
+      "text": "/** 暴走型 BOSS 半血后的加速倍率。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 375,
+      "word": "血",
+      "text": "/** 怪物血量随关卡缓慢加深(0 起的关卡下标,前 99 关全程约 5 倍;"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 391,
+      "word": "血",
+      "text": "/** 打倒奖励也随关卡上涨,让后期经济跟得上怪物血量。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 396,
+      "word": "血",
+      "text": "/** 伤害先打护甲再掉血;返回新值和\"这一下是否敲碎了护甲\"。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 396,
+      "word": "伤害",
+      "text": "/** 伤害先打护甲再掉血;返回新值和\"这一下是否敲碎了护甲\"。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/logic.ts",
+      "line": 903,
+      "word": "血",
+      "text": "/* ---- 第五章 · 幽幽沼泽:回血拉锯 ---- */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/sim.ts",
+      "line": 3,
+      "word": "死",
+      "text": "// 对空补针塔、拐角放减速、后期升级,确认 188 关的资源曲线不是死局。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/sim.ts",
+      "line": 365,
+      "word": "血",
+      "text": "/** 毒雾:无视护甲直接掉血,躲起来的也罩得住,但够不着天上的。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/sim.ts",
+      "line": 490,
+      "word": "伤害",
+      "text": "// 3. 输出塔够 5 座后,升级比铺新塔划算(升级 = 原价+2 换一倍伤害)"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wave12.ts",
+      "line": 95,
+      "word": "血",
+      "text": "/** 一波的「压力值」:总血量 + 数量权重,用来断言无尽波次确实越来越难。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wave12.ts",
+      "line": 125,
+      "word": "死",
+      "text": "/** 一帧最多补几步,防止切后台回来一次性追上百步卡死。 */"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 4,
+      "word": "血",
+      "text": "* 本作从来不说「血」——头顶那条是**元气条**,怪被打完是没劲了回家。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 6,
+      "word": "血",
+      "text": "* (`upgrade12.test.ts` 的「1.2 新写的文案一律不说『血』」)。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 14,
+      "word": "血",
+      "text": "* 指纹照旧绿,孩子看到的那一行也不再有「血」。两边的约束同时满足。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 21,
+      "word": "血",
+      "text": "* 替换表。长的写在前面 —— 「半血」必须排在「血」之前,"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 22,
+      "word": "血",
+      "text": "* 不然先把「血」换掉,「半」就落单了。"
+    },
+    {
+      "game": "garden-guard",
+      "file": "src/games/garden-guard/wording.ts",
+      "line": 35,
+      "word": "血",
+      "text": "* 把一句给孩子看的话里的「血」换成元气的说法。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/index.ts",
+      "line": 564,
+      "word": "血",
+      "text": "/** 排下一波夜虫:波次无限,越往后种类越全、虫越多、血越厚。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/index.ts",
+      "line": 1165,
+      "word": "血",
+      "text": "// 进化体掉到半血进入狂暴:提速 + 一次性大特效"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/index.ts",
+      "line": 1793,
+      "word": "血",
+      "text": "// 血量点点"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/index.ts",
+      "line": 2110,
+      "word": "血",
+      "text": "// 1.1 冻结的第 13 关那句还写着「掉血」——数据带回归指纹不能动,"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 160,
+      "word": "血",
+      "text": "* 虫子血量随关卡(0 起)缓慢加深。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 161,
+      "word": "血",
+      "text": "* 1.1:前 99 关公式一字不动;新章(第 100 关起)血量回落到温和档再慢慢爬坡——"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 162,
+      "word": "血",
+      "text": "* 新章的难度靠昼夜循环/地下虫/分裂/露珠上限这些新机制,而不是把血条堆到打不动"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 163,
+      "word": "血",
+      "text": "* (飞虫拦不了墙,血太厚会变成数学上的死局)。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 163,
+      "word": "死",
+      "text": "* (飞虫拦不了墙,血太厚会变成数学上的死局)。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 178,
+      "word": "血",
+      "text": "/** 伤害先打护甲再掉血;返回新状态和\"这一下是否敲碎了护甲\"。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 178,
+      "word": "伤害",
+      "text": "/** 伤害先打护甲再掉血;返回新状态和\"这一下是否敲碎了护甲\"。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 258,
+      "word": "血",
+      "text": "/** 女王进化体:血量剩一半以下进入狂暴,速度倍增。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/logic.ts",
+      "line": 1620,
+      "word": "伤害",
+      "text": "/** 蓬蓬花的花粉团:命中点前后这么多格里的地面虫一起吃 1 点溅射伤害。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 2,
+      "word": "死",
+      "text": "// 验证 188 关的资源曲线可通关、不是死局,顺带验证「稳扎稳打」和「速攻」两种流派都活得下去。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 124,
+      "word": "死",
+      "text": "* 另外三套是给「这一关到底是不是死局」用的确定性备选,谁赢都算这关有解。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 170,
+      "word": "血",
+      "text": "/** 血量曲线用的关号(无尽用等效关号) */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 174,
+      "word": "血",
+      "text": "/** 无尽:第几波额外加多少血 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 353,
+      "word": "血",
+      "text": "/** 车道剩余威胁:场上活虫 + 还没出场的虫的(血+甲)总和。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 744,
+      "word": "死",
+      "text": "// P11 传送关兜底:苗是白给的,来一株就赶紧找地方栽下去,别把传送带堵死。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 762,
+      "word": "死",
+      "text": "// 队列快堵死了就顾不上「虫子跟前不种」这一条,先把格子占上"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sim.ts",
+      "line": 1064,
+      "word": "死",
+      "text": "* 只要有一套打得过,这一关就不是死局(结果仍然完全确定,不含随机)。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sprout12.ts",
+      "line": 160,
+      "word": "伤害",
+      "text": "/** 持续输出(每秒伤害) */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sprout12.ts",
+      "line": 379,
+      "word": "血",
+      "text": "/** 这一波虫的额外血量 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sprout12.ts",
+      "line": 405,
+      "word": "血",
+      "text": "/** 无尽第 n 波(1 起)。虫数逐波变多,血量三波一涨,每 6 波压一个大块头。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sprout12.ts",
+      "line": 423,
+      "word": "血",
+      "text": "/** 一波的总压力(血 + 甲),用来验证难度是递增的。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/sprout12.ts",
+      "line": 579,
+      "word": "血",
+      "text": "/** 一关的总压力(血 + 甲),给资源曲线体检用。 */"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 4,
+      "word": "血",
+      "text": "* 本作从来不说「血」——头顶那条是**元气条**,虫子被打完是没劲了回家。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 6,
+      "word": "血",
+      "text": "* (`sprout12.test.ts` 的「1.2 新写的文案一律不说『血』」)。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 8,
+      "word": "血",
+      "text": "* 剩下的一句在**前 99 关**里(第 13 关「壳壳虫有硬壳,要先敲碎再掉血!」)。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 15,
+      "word": "血",
+      "text": "* 指纹照旧绿,孩子看到的那一行也不再有「血」。两边的约束同时满足。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 21,
+      "word": "血",
+      "text": "* 替换表。长的写在前面 —— 「半血」必须排在「血」之前,"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 22,
+      "word": "血",
+      "text": "* 不然先把「血」换掉,「半」就落单了。"
+    },
+    {
+      "game": "sprout-defense",
+      "file": "src/games/sprout-defense/wording.ts",
+      "line": 35,
+      "word": "血",
+      "text": "* 把一句给孩子看的话里的「血」换成元气的说法。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/arena.ts",
+      "line": 8,
+      "word": "血",
+      "text": "//  1. 走位 / 前摇出手 / 被撞转圈 + 短无敌(无血无伤无死亡);"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/arena.ts",
+      "line": 8,
+      "word": "死",
+      "text": "//  1. 走位 / 前摇出手 / 被撞转圈 + 短无敌(无血无伤无死亡);"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/arena.ts",
+      "line": 148,
+      "word": "血",
+      "text": "* 竞技场里的血量:老怪表按「等效关号」算完再折一道。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/arena.ts",
+      "line": 149,
+      "word": "血",
+      "text": "* 大怪折得最狠 —— 站着不动挨打的塔防节奏没了,再按老血量算就成了磨到手酸。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/arena.ts",
+      "line": 355,
+      "word": "血",
+      "text": "/** 每一波按哪个「等效关号」算血量 */"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/arenaSim.ts",
+      "line": 3,
+      "word": "死",
+      "text": "// 用一套写死的、完全确定性的「像样操作」把一局从头打到尾:"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/copy.ts",
+      "line": 7,
+      "word": "血",
+      "text": "// 三条底线:不说血、不说输赢里的丧气话、失败只讲下一步怎么做。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/copy.ts",
+      "line": 12,
+      "word": "血",
+      "text": "* 一律不许出现的字眼。规格第七节的红线:无血无伤无死亡,"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/copy.ts",
+      "line": 12,
+      "word": "死",
+      "text": "* 一律不许出现的字眼。规格第七节的红线:无血无伤无死亡,"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/index.ts",
+      "line": 11,
+      "word": "伤害",
+      "text": "// 全程没有一点伤害描写,守不住也只说下一次怎么办。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/levels.ts",
+      "line": 329,
+      "word": "血",
+      "text": "/** 无尽 / 合作 / 对战里小怪物血量按「等效关号」变厚,曲线和战役对齐。 */"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/logic.ts",
+      "line": 5,
+      "word": "伤害",
+      "text": "// 然后变成一朵小花或者一颗棉花糖弹回家去 —— 全程没有一点伤害描写。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/logic.ts",
+      "line": 115,
+      "word": "伤害",
+      "text": "/** 自动炮台的单发伤害 */"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/logic.ts",
+      "line": 156,
+      "word": "血",
+      "text": "/** 拆掉自己的建筑退回一半颜料(向上取整),摆错位置不至于血本无归。 */"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/logic.ts",
+      "line": 340,
+      "word": "血",
+      "text": "* 小怪物血量随关数缓慢变厚。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/logic.ts",
+      "line": 341,
+      "word": "死",
+      "text": "* 大怪不吃这个加成 —— 它们本来就一章比一章壮,再叠一层会直接变成算不过来的死局。"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/logic.ts",
+      "line": 349,
+      "word": "血",
+      "text": "/** 外壳同理,加得比血量还慢。 */"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/logic.ts",
+      "line": 521,
+      "word": "伤害",
+      "text": "/** 炮台线给所有自动炮台的伤害倍率。 */"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/sim.ts",
+      "line": 3,
+      "word": "死",
+      "text": "// 用一套写死的、完全确定性的「合理操作」把一关从头打到尾,验证 188 关都守得住,"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/sim.ts",
+      "line": 115,
+      "word": "血",
+      "text": "/** 每一波用哪个「等效关号」算血量(无尽 / 合作越往后越厚) */"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/sim.ts",
+      "line": 348,
+      "word": "血",
+      "text": "// P7 补炮:哪条道剩下的血量最多就先补哪条"
+    },
+    {
+      "game": "monster-crisis",
+      "file": "src/games/monster-crisis/sim.ts",
+      "line": 600,
+      "word": "死",
+      "text": "* 用来确认「越打越难」的曲线在前中期不会突然变成死局。"
+    },
+    {
+      "game": "shoot-range",
+      "file": "src/games/shoot-range/feel12.ts",
+      "line": 8,
+      "word": "伤害",
+      "text": "* 加上连发时准星圈会变大（星星弹撒得开一些）。没有枪械建模，没有伤害。"
+    },
+    {
+      "game": "shoot-range",
+      "file": "src/games/shoot-range/levels.ts",
+      "line": 221,
+      "word": "死",
+      "text": "// 木板只负责「难打」,不负责「打不到」:凡是会把某个必打靶彻底封死的木板一律不要。"
+    },
+    {
+      "game": "shoot-range",
+      "file": "src/games/shoot-range/levels.ts",
+      "line": 242,
+      "word": "死",
+      "text": "// 不许打的靶挡在必打靶正前方同样会把关卡卡死,横着挪开就好(挪不开就撤掉它)"
+    },
+    {
+      "game": "shoot-range",
+      "file": "src/games/shoot-range/levels.ts",
+      "line": 287,
+      "word": "死",
+      "text": "* `levels.test.ts` 拿它锁死「前 99 关数据 1.2 不许改」——`Target` 的四个 1.2 新字段"
+    },
+    {
+      "game": "shoot-range",
+      "file": "src/games/shoot-range/logic.ts",
+      "line": 9,
+      "word": "血",
+      "text": "* 没有血、没有伤、没有死亡描写,发射物统一叫「星星弹」。"
+    },
+    {
+      "game": "shoot-range",
+      "file": "src/games/shoot-range/logic.ts",
+      "line": 9,
+      "word": "死",
+      "text": "* 没有血、没有伤、没有死亡描写,发射物统一叫「星星弹」。"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/bullets.ts",
+      "line": 326,
+      "word": "死",
+      "text": "// 朝着底部一个来回扫动的引导点打一小束,永远只覆盖一段,不会封死整行"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/bullets.ts",
+      "line": 428,
+      "word": "血",
+      "text": "/** 血量降到总量的这个比例以下时进入下一阶段(最后一阶段写 0) */"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/bullets.ts",
+      "line": 446,
+      "word": "血",
+      "text": "/** 血量(打中一次掉 1) */"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/index.ts",
+      "line": 822,
+      "word": "伤害",
+      "text": "// 单发模板取自 1.1 的三把主武器(决定弹体大小 / 速度 / 伤害),"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/index.ts",
+      "line": 1563,
+      "word": "血",
+      "text": "// 元气条 + 三段刻度(看得见「还有几段」)。本作没有血,掉光只是迫降滑走"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/logic.ts",
+      "line": 59,
+      "word": "血",
+      "text": "/** 打一下掉多少血 */"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/logic.ts",
+      "line": 110,
+      "word": "伤害",
+      "text": "/** 单位时间的期望伤害:三种武器各有各的强项,不能有一把完全压过另外两把 */"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/logic.ts",
+      "line": 146,
+      "word": "血",
+      "text": "/** 备用小飞机数量(被碰到就换一架,不是「命」也不是「血」) */"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/logic.ts",
+      "line": 319,
+      "word": "血",
+      "text": "/** 敌机被打中:掉血;掉到 0 就冒烟迫降(alive=false 交给上层处理) */"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/pool.ts",
+      "line": 9,
+      "word": "死",
+      "text": "*   - `sweep(pred)` 原地压缩活跃数组,把死掉的顺手回收 —— 不产生新数组。"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/pool.ts",
+      "line": 194,
+      "word": "血",
+      "text": "/** 已经打过的目标 id,免得穿透弹在同一个身上反复扣血 */"
+    },
+    {
+      "game": "sky-squad",
+      "file": "src/games/sky-squad/power.ts",
+      "line": 183,
+      "word": "伤害",
+      "text": "/** 合流后那一发的伤害 */"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/ai12.ts",
+      "line": 101,
+      "word": "死",
+      "text": "* 只罚死胡同,不罚走廊——这张图上两边有墙的走廊到处都是,"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/ai12.ts",
+      "line": 114,
+      "word": "死",
+      "text": "/** 这一格是不是个死胡同(只有一个出口) */"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/ai12.ts",
+      "line": 138,
+      "word": "死",
+      "text": "* 代价 = 地形代价 + 墙角过路费,所以它宁可多绕两格也不往死胡同里钻。"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/ai12.ts",
+      "line": 226,
+      "word": "死",
+      "text": "/** 这条路踩没踩死胡同(墙角过路费到底管不管用,用例看这个) */"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/ballistics12.ts",
+      "line": 195,
+      "word": "死",
+      "text": "// 撞进死角时可能一步都走不动,给个上限免得空转"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/index.ts",
+      "line": 9,
+      "word": "血",
+      "text": "// 全程没有血量与淘汰:铁皮车挨够弹丸冒烟变成花,自己人被打中是零件散一地、3 秒后组装回来。"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/index.ts",
+      "line": 113,
+      "word": "死",
+      "text": "/* 摇杆:上面一颗居中,下面 ◀▼▶ 一排。每一颗都写死格子,不靠自动排版猜 */"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/levels.ts",
+      "line": 7,
+      "word": "死",
+      "text": "* 通道把钢墙和水面清掉,绝不会出现「怎么打都过不去」的死关。"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/logic.ts",
+      "line": 13,
+      "word": "血",
+      "text": "* 全程没有血量、没有受伤、没有淘汰的说法:"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/logic.ts",
+      "line": 1121,
+      "word": "死",
+      "text": "* 1.2 之前这里写死 9,于是 `TIER_SPECS.fireRange`(5 / 9 / 10)**全仓库没有一行代码读过**:"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/logic.ts",
+      "line": 1144,
+      "word": "死",
+      "text": "/** A\\* 找路的第一步(墙角过路费默认开着,所以不会往死胡同里钻) */"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/logic.ts",
+      "line": 1176,
+      "word": "死",
+      "text": "// 侧门也被堵死了就老老实实走正门,别原地发呆"
+    },
+    {
+      "game": "tank-battle",
+      "file": "src/games/tank-battle/logic.ts",
+      "line": 1287,
+      "word": "血",
+      "text": "* 没有淘汰、没有伤,连「掉血」这个词都不存在——只是要等一会儿才回得来。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/ai.ts",
+      "line": 453,
+      "word": "死",
+      "text": "/** 会不会挑「能把对手退路封死」的那一格 */"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/ai.ts",
+      "line": 723,
+      "word": "死",
+      "text": "* 泡泡缩到 2 秒以后这种站桩会直接卡死一整关。轻松档不做这件事(它本来就笨手笨脚)。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/index.ts",
+      "line": 13,
+      "word": "血",
+      "text": "// 全程没有血、没有伤、没有死亡:被彩虹波扫到只是被泡泡罩住几秒,"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/index.ts",
+      "line": 13,
+      "word": "死",
+      "text": "// 全程没有血、没有伤、没有死亡:被彩虹波扫到只是被泡泡罩住几秒,"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/index.ts",
+      "line": 124,
+      "word": "死",
+      "text": "/** 摇杆死区:手指离圆心这么近就算「不动」,免得贴着中心抖出乱七八糟的方向 */"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 8,
+      "word": "死",
+      "text": "// 「每一关都能从出生点走到全部小怪与出口」是硬指标,不允许出现死图。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 102,
+      "word": "死",
+      "text": "// 追追怪,被贴脸了都不知道)。两个都不能接受,所以宽高在生成器这一层就封死。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 147,
+      "word": "死",
+      "text": "/** 出生点周围要留出来的空地(不放砖也不放怪),免得一开局就被堵死 */"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 179,
+      "word": "死",
+      "text": "/** 从某一格出发能走到的全部格子(软砖当墙,用来验证关卡不是死图) */"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 216,
+      "word": "死",
+      "text": "// 前 99 关一格都没动过——地图指纹用例逐关钉死了这一点。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/levels.ts",
+      "line": 340,
+      "word": "死",
+      "text": "// 先保证不是死图:走不到的小怪一律挖通,再挑出口。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/logic.ts",
+      "line": 10,
+      "word": "死",
+      "text": "// **泡泡不是炸药**:全程没有火焰、没有伤害、没有死亡。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/logic.ts",
+      "line": 10,
+      "word": "伤害",
+      "text": "// **泡泡不是炸药**:全程没有火焰、没有伤害、没有死亡。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/logic.ts",
+      "line": 210,
+      "word": "死",
+      "text": "// 这四个数是本款手感的全部来源,谁也不许在别处写死。"
+    },
+    {
+      "game": "bomb-buddies",
+      "file": "src/games/bomb-buddies/logic.ts",
+      "line": 960,
+      "word": "死",
+      "text": "// 被这一圈波扫到的泡泡:引信压到一帧,下一帧跟着破(顺序由 chainWaves 定死,可复现)"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/arena.ts",
+      "line": 12,
+      "word": "血",
+      "text": "* 被砸中不掉血、不淘汰,连中三次去炉子边暖手 5 秒再回场。"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/arena.ts",
+      "line": 881,
+      "word": "死",
+      "text": "// 文案(只鼓励,不说输赢死伤)"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/index.ts",
+      "line": 13,
+      "word": "血",
+      "text": "// 全程没有血量、没有淘汰:靶子化成一摊雪,人被砸中只是变一会儿雪人,"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/index.ts",
+      "line": 183,
+      "word": "死",
+      "text": "/* 旁白钉死两行高:它一涨,底下两排按钮就被顶出屏幕,那才是真的没法玩 */"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/index.ts",
+      "line": 520,
+      "word": "血",
+      "text": "* 变雪人画成一个顶着胡萝卜鼻子的小雪人 —— 不掉血、不倒地,只是动不了。"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/levels.ts",
+      "line": 165,
+      "word": "死",
+      "text": "* 留窄了就会出现「掩体正好糊在靶子脸上」的关:雪球从上面掉下来的路被自己挡死,"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/levels.ts",
+      "line": 166,
+      "word": "死",
+      "text": "* 那一关就成了死局。留出这段距离,抬高角度总能绕过去。"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/logic.ts",
+      "line": 10,
+      "word": "血",
+      "text": "* 全程没有血量、没有受伤:雪怪化成雪堆,人变成雪人,笑一笑接着玩。"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/logic.ts",
+      "line": 442,
+      "word": "血",
+      "text": "// 变雪人的那一位歇一回合(不是被扣血,只是先站着笑)"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/physics.ts",
+      "line": 26,
+      "word": "死",
+      "text": "* 每一发都得拉满的话,蓄力条就没得选了,顶风的关还会直接变成死局。"
+    },
+    {
+      "game": "snow-fight",
+      "file": "src/games/snow-fight/snowman.ts",
+      "line": 4,
+      "word": "血",
+      "text": "* 这一款没有血、没有伤、没有淘汰。被雪球砸中只有两件事:"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/ai.ts",
+      "line": 73,
+      "word": "死",
+      "text": "// 1 会瞎撞:油门踩死往前冲,不看悬崖也不看角度,冲刺要贴脸了才想起来按"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/ai.ts",
+      "line": 119,
+      "word": "死",
+      "text": "// 卡角档看得更死,再远也要赶过去。"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/ai.ts",
+      "line": 301,
+      "word": "死",
+      "text": "// 0. 自己正挂在台沿上打转:这两秒里没有别的事好做,只有把方向死死顶向场心。"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/index.ts",
+      "line": 12,
+      "word": "血",
+      "text": "// 全程没有血也没有伤:被顶出场地只是转一圈再开回来,生命用光就是这一局结束。"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/index.ts",
+      "line": 525,
+      "word": "死",
+      "text": "// 场地上下压着标题栏、HUD、提示语和摇杆那一排。摇杆旁边两颗键锁死 44px 热区"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/levels.ts",
+      "line": 289,
+      "word": "杀",
+      "text": "* 位置刻意压在内圈——机关是用来「打乱走位」的,不该变成悬崖边的第二道杀器。"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 58,
+      "word": "死",
+      "text": "* 恢复系数被规格钉死在 0.8 以内,纯弹性碰撞再也不能凭空造能量;"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 74,
+      "word": "死",
+      "text": "/** 打转期间死命往场内打方向能蹭回来的速度(单位/秒) */"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 92,
+      "word": "死",
+      "text": "* 死命往里打也只有 `TEETER_CRAWL - TEETER_SLIDE` 这么一点点爬回去的速度,"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 114,
+      "word": "死",
+      "text": "/** 挨一记重撞之后失控旋转多久(规格钉死 0.3 秒) */"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 169,
+      "word": "死",
+      "text": "/** 刚体:inv 是质量的倒数,0 表示钉死不动的物体(墙柱、移动障碍) */"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 251,
+      "word": "死",
+      "text": "/** 一堆刚体的总动量(质量 = 1/inv;钉死的物体不计) */"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 384,
+      "word": "死",
+      "text": "* 障碍:钉死的柱子(speed = 0)或者来回移动的滚桶。"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 872,
+      "word": "死",
+      "text": "// 只剩「往场内死命打方向」这一件事能做。"
+    },
+    {
+      "game": "bumper-cars",
+      "file": "src/games/bumper-cars/logic.ts",
+      "line": 1268,
+      "word": "死",
+      "text": "/** 摇杆的原始偏移 → 归一化方向(死区之内当没动) */"
+    },
+    {
+      "game": "bowling-lane",
+      "file": "src/games/bowling-lane/scoring.ts",
+      "line": 12,
+      "word": "死",
+      "text": "// 第十格的各种情况一条一条钉死。"
+    },
+    {
+      "game": "ice-fire-forest",
+      "file": "src/games/ice-fire-forest/coop.ts",
+      "line": 345,
+      "word": "死",
+      "text": "* 闩开之后人走开也不会再关 —— 不然两个人被按钮钉死在原地,门就成了摆设。"
+    },
+    {
+      "game": "ice-fire-forest",
+      "file": "src/games/ice-fire-forest/levels.ts",
+      "line": 9,
+      "word": "死",
+      "text": "* 宝石与机关一律摆在这两条通路旁边的死胡同口袋里。这样段内连通性是构造出来的,"
+    },
+    {
+      "game": "ice-fire-forest",
+      "file": "src/games/ice-fire-forest/levels.ts",
+      "line": 402,
+      "word": "死",
+      "text": "// 7. 把机关摆进空闲行的口袋里(口袋从最左那一列进,是条死胡同)"
+    },
+    {
+      "game": "ice-fire-forest",
+      "file": "src/games/ice-fire-forest/logic.ts",
+      "line": 356,
+      "word": "死",
+      "text": "* 打到接收器就算接通。光门自己永远挡光,所以不会出现「光门开不开取决于光门」的死循环。"
+    },
+    {
+      "game": "ice-fire-forest",
+      "file": "src/games/ice-fire-forest/solo.ts",
+      "line": 5,
+      "word": "死",
+      "text": "* 做法很简单,但每一条都得钉死:"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/arena.ts",
+      "line": 220,
+      "word": "死",
+      "text": "* `arena.test.ts` 用逐关指纹把这件事钉死。"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/arena.ts",
+      "line": 224,
+      "word": "死",
+      "text": "* 1.2 新增的坑:x 落在坑里就没有地板接着。空数组表示四面封死(战役与波次无尽都是)。"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/arena.ts",
+      "line": 267,
+      "word": "死",
+      "text": "/** 前 n 关的合并指纹。测试拿它跟写死的值对账,少一格都对不上 */"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/bounds.ts",
+      "line": 4,
+      "word": "死",
+      "text": "* 1.1 的场地四面封死:左右有墙、头顶有天花板、脚下永远是一整条地板,"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/index.ts",
+      "line": 189,
+      "word": "死",
+      "text": "/* 第一行是键位说明,按字数占多高就多高:按钮的行号是写死的,"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/index.ts",
+      "line": 682,
+      "word": "死",
+      "text": "// 外壳不滚动,超出窗口的部分是直接看不见的,所以画面高度不能写死:"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/index.ts",
+      "line": 685,
+      "word": "死",
+      "text": "/** 画面底下留一点空,不要顶死窗口边 */"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/logic.ts",
+      "line": 158,
+      "word": "死",
+      "text": "* 站着不动去蹭它照样要挨一下 —— 跳是躲,不是免死金牌。"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/logic.ts",
+      "line": 979,
+      "word": "血",
+      "text": "// 被吹得往后翻一下,但不掉血、不受伤 —— 只是身体扁一下再弹回来"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/push.ts",
+      "line": 10,
+      "word": "血",
+      "text": "*  | `rival` 推开对手 | 气流环里有别人 | 把对手推开并轻轻抬起来,他会被吹得扁一下,但不掉血 | 中 |"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/push.ts",
+      "line": 44,
+      "word": "血",
+      "text": "/** 被推之后这么久里身体是扁的(渲染层用),不掉血也不算受伤 */"
+    },
+    {
+      "game": "puff-bros",
+      "file": "src/games/puff-bros/push.ts",
+      "line": 205,
+      "word": "血",
+      "text": "/** 记一次「被吹扁」:不掉血,只是身体扁一下再弹回来 */"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/abilities.ts",
+      "line": 11,
+      "word": "死",
+      "text": "*    公主推不动,但箱子只有 `BLOCK_H` 那么高,她跳上去、跳过去都行——**永远不会把人卡死**。"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/abilities.ts",
+      "line": 86,
+      "word": "死",
+      "text": "/** 重箱子的高:必须明显低于公主的一段跳,不然推不动的人会被卡死 */"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/checkpoints.ts",
+      "line": 15,
+      "word": "死",
+      "text": "* 文案里没有任何「死」「输」的说法,只是「被小云朵托回休息点」。"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/checkpoints.ts",
+      "line": 36,
+      "word": "血",
+      "text": "* 尖刺这一条是血的教训:旗子插在尖刺堆里,被托回来的人一落地就再挨一下,"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/elements.ts",
+      "line": 10,
+      "word": "死",
+      "text": "* 所以这里把**含义**而不是**章节**钉死:"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/elements.ts",
+      "line": 30,
+      "word": "死",
+      "text": "/** 规范表里钉死的形状 */"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/index.ts",
+      "line": 935,
+      "word": "血",
+      "text": "// 受伤那一下:身上罩一层小护盾(不是伤口,也不是血)"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/index.ts",
+      "line": 1118,
+      "word": "血",
+      "text": "// 元气条(本作没有血,掉光只是坐下歇口气)"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/levels.ts",
+      "line": 158,
+      "word": "死",
+      "text": "* 公主推不动,但箱子只有 `BLOCK_H` 那么高,她跳上去、跳过去都行,**卡不死人**。"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/logic.ts",
+      "line": 63,
+      "word": "伤害",
+      "text": "/** 挥剑:出手快、伤害高、够不远 */"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/logic.ts",
+      "line": 71,
+      "word": "伤害",
+      "text": "/** 星星:飞得远、会自己瞄、伤害低一点 */"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/logic.ts",
+      "line": 161,
+      "word": "伤害",
+      "text": "/** 这位主角的普通攻击属于哪一类伤害 */"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/logic.ts",
+      "line": 678,
+      "word": "伤害",
+      "text": "// 踩首领不算伤害,只把人弹开"
+    },
+    {
+      "game": "prince-princess",
+      "file": "src/games/prince-princess/logic.ts",
+      "line": 1067,
+      "word": "伤害",
+      "text": "// 首领的身体本身就有碰撞伤害"
+    }
+  ],
+  "brandWordCount": 95,
+  "files": 200
+}

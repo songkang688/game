@@ -1,0 +1,1062 @@
+{
+  "b1SourceStillBroken": {
+    "zeroAt": 30048,
+    "filterAt": 30547
+  },
+  "b1Replay": {
+    "escapedCaught": 0,
+    "escapedTotal": 0,
+    "foesLeft": 1
+  },
+  "b1Chain": {
+    "shippedCleared": true,
+    "shippedStars": 3,
+    "designedCleared": false,
+    "escapeLimit12": 3
+  },
+  "b1Scope": {
+    "bossLevels": 8,
+    "exposedLevels": 180,
+    "bossList": [
+      24,
+      48,
+      72,
+      96,
+      120,
+      144,
+      166,
+      188
+    ],
+    "sample": [
+      {
+        "level": 1,
+        "foes": 3
+      },
+      {
+        "level": 60,
+        "foes": 5
+      },
+      {
+        "level": 133,
+        "foes": 20
+      }
+    ]
+  },
+  "princeIdleSolo": {
+    "scanned": 188,
+    "autoWin": 110,
+    "threeStar": 94,
+    "lost": 77,
+    "stall": 1,
+    "levels": [
+      {
+        "level": 1,
+        "seconds": 12,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 2,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 3,
+        "gemGoal": 2
+      },
+      {
+        "level": 3,
+        "seconds": 10,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 4,
+        "seconds": 10,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 5,
+        "seconds": 11,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 6,
+        "seconds": 18,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 7,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 8,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 9,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 8,
+        "gemGoal": 6
+      },
+      {
+        "level": 10,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 11,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 12,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 13,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 3,
+        "gemGoal": 3
+      },
+      {
+        "level": 14,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 16,
+        "seconds": 12,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 17,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 18,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 19,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 8,
+        "gemGoal": 6
+      },
+      {
+        "level": 20,
+        "seconds": 19,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 21,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 22,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 3,
+        "gemGoal": 3
+      },
+      {
+        "level": 23,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 9,
+        "gemGoal": 7
+      },
+      {
+        "level": 24,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 25,
+        "seconds": 23,
+        "stars": 3,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 8,
+        "gemGoal": 6
+      },
+      {
+        "level": 26,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 9,
+        "gemGoal": 7
+      },
+      {
+        "level": 27,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 10,
+        "gemGoal": 7
+      },
+      {
+        "level": 29,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 30,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 31,
+        "seconds": 12,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 32,
+        "seconds": 10,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 3
+      },
+      {
+        "level": 33,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 34,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 35,
+        "seconds": 11,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 8,
+        "gemGoal": 5
+      },
+      {
+        "level": 36,
+        "seconds": 12,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 9,
+        "gemGoal": 7
+      },
+      {
+        "level": 37,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 38,
+        "seconds": 12,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 4
+      },
+      {
+        "level": 39,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 40,
+        "seconds": 23,
+        "stars": 3,
+        "kills": 7,
+        "enemyTotal": 7,
+        "gems": 3,
+        "gemGoal": 3
+      },
+      {
+        "level": 41,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 43,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 44,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 10,
+        "gemGoal": 7
+      },
+      {
+        "level": 45,
+        "seconds": 20,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 46,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 6,
+        "gemGoal": 3
+      },
+      {
+        "level": 47,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 3,
+        "gemGoal": 3
+      },
+      {
+        "level": 48,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 3,
+        "gemGoal": 3
+      },
+      {
+        "level": 49,
+        "seconds": 18,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 50,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 51,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 7,
+        "gemGoal": 3
+      },
+      {
+        "level": 52,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 53,
+        "seconds": 12,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 9,
+        "gemGoal": 5
+      },
+      {
+        "level": 54,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 9,
+        "gemGoal": 6
+      },
+      {
+        "level": 56,
+        "seconds": 32,
+        "stars": 1,
+        "kills": 5,
+        "enemyTotal": 6,
+        "gems": 2,
+        "gemGoal": 2
+      },
+      {
+        "level": 64,
+        "seconds": 11,
+        "stars": 2,
+        "kills": 3,
+        "enemyTotal": 4,
+        "gems": 10,
+        "gemGoal": 7
+      },
+      {
+        "level": 79,
+        "seconds": 14,
+        "stars": 2,
+        "kills": 4,
+        "enemyTotal": 5,
+        "gems": 10,
+        "gemGoal": 7
+      },
+      {
+        "level": 83,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 5,
+        "gemGoal": 3
+      },
+      {
+        "level": 84,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 85,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 86,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 87,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 88,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 89,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 90,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 92,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 93,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 95,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 97,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 4,
+        "gemGoal": 3
+      },
+      {
+        "level": 98,
+        "seconds": 13,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 11,
+        "gemGoal": 7
+      },
+      {
+        "level": 99,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 12,
+        "gemGoal": 9
+      },
+      {
+        "level": 100,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 101,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 102,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 11,
+        "gemGoal": 8
+      },
+      {
+        "level": 103,
+        "seconds": 16,
+        "stars": 2,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 4,
+        "gemGoal": 12
+      },
+      {
+        "level": 104,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 6,
+        "gemGoal": 4
+      },
+      {
+        "level": 105,
+        "seconds": 15,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 8,
+        "gemGoal": 5
+      },
+      {
+        "level": 107,
+        "seconds": 18,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 9,
+        "gemGoal": 7
+      },
+      {
+        "level": 108,
+        "seconds": 14,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 11,
+        "gemGoal": 8
+      },
+      {
+        "level": 118,
+        "seconds": 14,
+        "stars": 2,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 10,
+        "gemGoal": 16
+      },
+      {
+        "level": 119,
+        "seconds": 20,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 8,
+        "gemGoal": 5
+      },
+      {
+        "level": 120,
+        "seconds": 14,
+        "stars": 2,
+        "kills": 3,
+        "enemyTotal": 4,
+        "gems": 8,
+        "gemGoal": 6
+      },
+      {
+        "level": 129,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 133,
+        "seconds": 21,
+        "stars": 2,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 8,
+        "gemGoal": 10
+      },
+      {
+        "level": 134,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 3,
+        "enemyTotal": 3,
+        "gems": 10,
+        "gemGoal": 7
+      },
+      {
+        "level": 137,
+        "seconds": 23,
+        "stars": 3,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 140,
+        "seconds": 20,
+        "stars": 3,
+        "kills": 7,
+        "enemyTotal": 7,
+        "gems": 5,
+        "gemGoal": 4
+      },
+      {
+        "level": 141,
+        "seconds": 21,
+        "stars": 3,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 11,
+        "gemGoal": 8
+      },
+      {
+        "level": 142,
+        "seconds": 20,
+        "stars": 2,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 12,
+        "gemGoal": 18
+      },
+      {
+        "level": 143,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 9,
+        "gemGoal": 7
+      },
+      {
+        "level": 144,
+        "seconds": 21,
+        "stars": 3,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 7,
+        "gemGoal": 4
+      },
+      {
+        "level": 145,
+        "seconds": 27,
+        "stars": 2,
+        "kills": 8,
+        "enemyTotal": 8,
+        "gems": 10,
+        "gemGoal": 12
+      },
+      {
+        "level": 146,
+        "seconds": 20,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 13,
+        "gemGoal": 10
+      },
+      {
+        "level": 147,
+        "seconds": 18,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 8,
+        "gemGoal": 6
+      },
+      {
+        "level": 149,
+        "seconds": 30,
+        "stars": 3,
+        "kills": 9,
+        "enemyTotal": 9,
+        "gems": 9,
+        "gemGoal": 7
+      },
+      {
+        "level": 151,
+        "seconds": 23,
+        "stars": 2,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 12,
+        "gemGoal": 18
+      },
+      {
+        "level": 152,
+        "seconds": 18,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 13,
+        "gemGoal": 8
+      },
+      {
+        "level": 153,
+        "seconds": 23,
+        "stars": 3,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 154,
+        "seconds": 22,
+        "stars": 2,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 10,
+        "gemGoal": 15
+      },
+      {
+        "level": 155,
+        "seconds": 30,
+        "stars": 3,
+        "kills": 8,
+        "enemyTotal": 8,
+        "gems": 9,
+        "gemGoal": 7
+      },
+      {
+        "level": 156,
+        "seconds": 20,
+        "stars": 3,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 13,
+        "gemGoal": 10
+      },
+      {
+        "level": 157,
+        "seconds": 26,
+        "stars": 2,
+        "kills": 7,
+        "enemyTotal": 7,
+        "gems": 10,
+        "gemGoal": 12
+      },
+      {
+        "level": 160,
+        "seconds": 24,
+        "stars": 2,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 10,
+        "gemGoal": 17
+      },
+      {
+        "level": 161,
+        "seconds": 22,
+        "stars": 3,
+        "kills": 7,
+        "enemyTotal": 7,
+        "gems": 12,
+        "gemGoal": 8
+      },
+      {
+        "level": 163,
+        "seconds": 43,
+        "stars": 2,
+        "kills": 7,
+        "enemyTotal": 7,
+        "gems": 11,
+        "gemGoal": 6
+      },
+      {
+        "level": 164,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 10,
+        "gemGoal": 7
+      },
+      {
+        "level": 165,
+        "seconds": 29,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 167,
+        "seconds": 16,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 8,
+        "gemGoal": 5
+      },
+      {
+        "level": 169,
+        "seconds": 17,
+        "stars": 3,
+        "kills": 5,
+        "enemyTotal": 5,
+        "gems": 6,
+        "gemGoal": 5
+      },
+      {
+        "level": 171,
+        "seconds": 26,
+        "stars": 3,
+        "kills": 7,
+        "enemyTotal": 7,
+        "gems": 7,
+        "gemGoal": 5
+      },
+      {
+        "level": 177,
+        "seconds": 22,
+        "stars": 3,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 17,
+        "gemGoal": 12
+      },
+      {
+        "level": 181,
+        "seconds": 24,
+        "stars": 2,
+        "kills": 6,
+        "enemyTotal": 6,
+        "gems": 9,
+        "gemGoal": 12
+      },
+      {
+        "level": 187,
+        "seconds": 19,
+        "stars": 2,
+        "kills": 4,
+        "enemyTotal": 4,
+        "gems": 16,
+        "gemGoal": 22
+      }
+    ]
+  },
+  "princeLevel1": {
+    "name": "樱花城堡·城门前",
+    "teach": true,
+    "noRisk": true,
+    "requiredRatio": 0.5,
+    "enemies": 3,
+    "goalNeedsAll": false,
+    "gems": 7,
+    "gemGoal": 4,
+    "parSeconds": 24,
+    "timeLimit": 0,
+    "len": 1780,
+    "goalX": 1650
+  },
+  "princeIdleDuo": {
+    "scanned": 4,
+    "won": 0
+  }
+}
