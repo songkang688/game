@@ -247,17 +247,32 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
         chip.appendChild(el("span", "cg-piece-tag", PIECE_CN[type]));
         b.appendChild(chip);
       }
-      b.setAttribute("aria-label", squareLabel(sq));
+      b.setAttribute("aria-label", squareLabel(sq, hit, sq === checkSq));
+      // 光标那一格用 aria-current 点名，读屏在 64 个同名按钮里才定得到位置
+      if (sq === cursor) b.setAttribute("aria-current", "true");
+      else b.setAttribute("aria-current", "false");
       boardEl.appendChild(b);
     }
   }
 
-  function squareLabel(sq: number): string {
+  /**
+   * 格子的读屏说明。
+   *
+   * 光标、选中、可走点、将军这四样界面上都是用颜色画的，
+   * 只报「格名 + 棋子」的话，看不见颜色的人就只剩一张 64 格的静态清单：
+   * 不知道光标停在哪、不知道刚才那一下选中没有、更不知道哪几格现在能落。
+   * 所以把这四样一并读出来，顺序按「这一格是什么 → 它现在处在什么状态」。
+   */
+  function squareLabel(sq: number, hint: Move | undefined, checked: boolean): string {
     const piece = game.pos.board[sq];
     const name = squareName(sq);
-    if (piece === 0) return `${name} 空格`;
     const type = typeOf(piece) as PieceType;
-    return `${name} ${piece > 0 ? "白" : "黑"}${PIECE_CN[type]}`;
+    let label = piece === 0 ? `${name} 空格` : `${name} ${piece > 0 ? "白" : "黑"}${PIECE_CN[type]}`;
+    if (sq === selected) label += "，已选中";
+    if (hint) label += hint.captured !== 0 ? "，可以吃这一颗" : "，可以走到这儿";
+    if (checked) label += "，正被将军";
+    if (sq === cursor) label += "，光标在这儿";
+    return label;
   }
 
   function renderLog(): void {

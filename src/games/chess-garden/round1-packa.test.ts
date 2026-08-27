@@ -643,6 +643,112 @@ describe("第 2 轮 PA-CG-4 · 上屏文案不出现死亡说法", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* L3A-9 · 64 格的读屏说明要带上光标 / 选中 / 可走点 / 将军               */
+/* ------------------------------------------------------------------ */
+
+describe("L3A-9 · 棋盘格的读屏说明", () => {
+  /** 所有格子的 aria-label */
+  function labels(): string[] {
+    return dom.root.byClass("cg-sq").map((e) => e.getAttribute("aria-label") ?? "");
+  }
+
+  function labelOf(name: string): string {
+    return squareAt(name).getAttribute("aria-label") ?? "";
+  }
+
+  it("格名与棋子照旧报，光标那一格额外点名，而且只有一格", () => {
+    const { handle } = duoBoard();
+    // 开局白方光标停在 e1（白王）
+    expect(labelOf("e1")).toBe("e1 白王，光标在这儿");
+    expect(labelOf("d4")).toBe("d4 空格");
+    expect(labelOf("e8")).toBe("e8 黑王");
+    expect(labelOf("g8")).toBe("g8 黑马");
+    expect(labels().filter((t) => t.includes("光标在这儿")), "光标不止一格，读屏会数不清").toHaveLength(1);
+    handle.destroy();
+  });
+
+  it("光标挪一格，说明跟着挪，aria-current 也跟着翻面", () => {
+    const { handle } = duoBoard();
+    expect(squareAt("e1").getAttribute("aria-current")).toBe("true");
+    expect(squareAt("e2").getAttribute("aria-current")).toBe("false");
+    press("w");
+    expect(handle.snapshot().cursor).toBe(parseSquare("e2"));
+    expect(labelOf("e2")).toContain("光标在这儿");
+    expect(labelOf("e1"), "光标走了，上一格还留着说明").not.toContain("光标在这儿");
+    expect(squareAt("e2").getAttribute("aria-current")).toBe("true");
+    expect(squareAt("e1").getAttribute("aria-current")).toBe("false");
+    expect(dom.root.byClass("cg-sq").filter((e) => e.getAttribute("aria-current") === "true")).toHaveLength(1);
+    handle.destroy();
+  });
+
+  it("选中一颗子：这一格报「已选中」，能落的空格报「可以走到这儿」", () => {
+    const { handle } = duoBoard();
+    squareAt("e2").click();
+    expect(handle.snapshot().selected).toBe(parseSquare("e2"));
+    expect(labelOf("e2")).toBe("e2 白兵，已选中，光标在这儿");
+    expect(labelOf("e3")).toBe("e3 空格，可以走到这儿");
+    expect(labelOf("e4")).toBe("e4 空格，可以走到这儿");
+    // 走不到的空格一个字都不该多
+    expect(labelOf("e5")).toBe("e5 空格");
+    expect(labels().filter((t) => t.includes("已选中")), "选中说明串到别的格子上了").toHaveLength(1);
+    expect(labels().filter((t) => t.includes("可以走到这儿"))).toHaveLength(2);
+    handle.destroy();
+  });
+
+  it("能吃的那一格和能走的那一格分开报", () => {
+    // 白车 a1、黑车 e1、白王 h3、黑王 g8：白车沿第一横线能走 b1 c1 d1、吃 e1
+    const { handle } = duoBoard("6k1/8/8/8/8/7K/8/R3r3 w - - 0 1");
+    squareAt("a1").click();
+    expect(handle.snapshot().selected).toBe(parseSquare("a1"));
+    expect(labelOf("e1")).toBe("e1 黑车，可以吃这一颗");
+    for (const empty of ["b1", "c1", "d1"]) expect(labelOf(empty)).toBe(`${empty} 空格，可以走到这儿`);
+    expect(labels().filter((t) => t.includes("可以吃这一颗")), "只有 e1 那一颗能吃").toHaveLength(1);
+    // 车过不去的 f1 后面那些格子不该报成能走
+    expect(labelOf("f1")).toBe("f1 空格");
+    handle.destroy();
+  });
+
+  it("取消选中之后，「已选中」与可走点的说明一起收回去", () => {
+    const { handle } = duoBoard();
+    squareAt("e2").click();
+    expect(labels().some((t) => t.includes("已选中"))).toBe(true);
+    press("g");
+    expect(handle.snapshot().selected).toBe(-1);
+    expect(labels().some((t) => t.includes("已选中")), "取消了还报着选中").toBe(false);
+    expect(labels().some((t) => t.includes("可以走到这儿")), "取消了还留着可走点").toBe(false);
+    handle.destroy();
+  });
+
+  it("提示关掉之后不报可走点，但「已选中」还得报", () => {
+    const { handle } = duoBoard(undefined, { showHints: false });
+    squareAt("e2").click();
+    expect(labelOf("e2")).toContain("已选中");
+    expect(labels().some((t) => t.includes("可以走到这儿")), "提示关着还报可走点，跟画面对不上").toBe(false);
+    handle.destroy();
+  });
+
+  it("被将军的王那一格自己报出来", () => {
+    // 白王 h1 被黑车 e1 沿第一横线将着，轮到白方
+    const { handle } = duoBoard("6k1/8/8/8/8/8/8/4r2K w - - 0 1");
+    expect(labelOf("h1")).toContain("正被将军");
+    expect(labels().filter((t) => t.includes("正被将军")), "将军说明只该落在挨将的那个王上").toHaveLength(1);
+    handle.destroy();
+  });
+
+  it("翻转棋盘之后说明跟着格子走，不跟着屏幕位置走", () => {
+    const { handle } = duoBoard(undefined, { allowFlip: true });
+    const flip = dom.root.byClass("cg-tool").find((b) => b.textContent.includes("翻转"))!;
+    flip.click();
+    // 翻转后 DOM 顺序倒过来，但 e1 这一格上的还是白王
+    const flippedOrder = boardOrder(true);
+    const cells = dom.root.byClass("cg-sq");
+    expect(cells[flippedOrder.indexOf(parseSquare("e1"))].getAttribute("aria-label")).toContain("e1 白王");
+    expect(cells[flippedOrder.indexOf(parseSquare("e8"))].getAttribute("aria-label")).toContain("e8 黑王");
+    handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* PA-CG · 退出再进                                                     */
 /* ------------------------------------------------------------------ */
 
