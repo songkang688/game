@@ -11,9 +11,9 @@ export default defineConfig({
       includeAssets: ["icons/icon.svg", "icons/apple-touch-icon.png"],
       manifest: {
         id: "/",
-        name: "一朵一星",
-        short_name: "一朵一星",
-        description: "一朵一星 1.1 —— 55 款原创小游戏合集,无广告、无内购。",
+        name: "鸭梨康康",
+        short_name: "鸭梨康康",
+        description: "鸭梨康康 1.2-kk —— 76 款原创小游戏合集,无广告、无内购。",
         lang: "zh-CN",
         display: "standalone",
         orientation: "any",

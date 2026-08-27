@@ -1,8 +1,8 @@
 {
   "name": "yiduo-yixing",
   "private": true,
-  "version": "1.1.0",
-  "description": "一朵一星 1.1 —— 55 款原创小游戏合集(188 关战役 / 双人 / 无尽)",
+  "version": "1.2.0-kk",
+  "description": "鸭梨康康 1.2-kk —— 76 款原创小游戏合集(188 关战役 / 双人 / 无尽)",
   "author": "yiduo-yixing",
   "license": "MIT",
   "type": "module",
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "com.yiduoyixing.hub",
-    "productName": "一朵一星",
+    "productName": "鸭梨康康",
     "artifactName": "yiduo-yixing-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.yiduoyixing.hub",
-  appName: "一朵一星",
+  appName: "鸭梨康康",
   webDir: "dist",
   server: {
     androidScheme: "https"

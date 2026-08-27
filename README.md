@@ -147,7 +147,31 @@ npm run build      # 类型检查 + 构建到 dist/
 npm run preview    # 本地预览构建产物
 ```
 
-当前版本号 **1.1.0**（`package.json`）。开发线在分支 `game-1.1`。
+当前版本号 **1.2.0-kk**（`package.json`），对外叫 **1.2-kk**。开发线在分支 `1.2-kk`。
+
+## 🍐 1.2-kk 构建与发布
+
+`1.2-kk` 是 `game-1.2` 的**换人物分叉**：朵朵 → **鸭梨**（左，女）、星星（角色）→ **康康**
+（右，男），产品名从「一朵一星」换成「**鸭梨康康**」。玩法、关卡、数值一律不动，
+**存档 key 仍然是 `yiduo-yixing.*`，老进度不丢**；`appId` 与安卓包名也没变，
+从旧版本直接覆盖安装即可。
+
+> 评分体系里的「星星」（三星评级、星星余额、小屋解锁）**不改名**，它跟角色无关。
+
+```bash
+git fetch origin 1.2-kk
+git checkout 1.2-kk
+npm install
+npm test -- --testTimeout=30000   # 673 个测试文件 / 14803 条用例
+npm run build                     # tsc --noEmit + vite build,产物在 dist/
+```
+
+出包：`npm run dist:win`（Windows 便携版）、`npm run dist:win:nsis`（安装器）、
+`npm run dist:linux`、`npm run dist:mac`、`npm run android:apk`，产物落在 `release/`，
+文件名形如 `yiduo-yixing-1.2.0-kk-win-portable.exe`。PWA 直接部署 `dist/` 即可。
+
+- 本叉说明（改了什么、人物对照、存档口径）：[`docs/game-1.2-kk.md`](docs/game-1.2-kk.md)
+- 发布说明与构建记录（含各端出包步骤、tag 规则）：[`docs/release-1.2-kk.md`](docs/release-1.2-kk.md)
 
 ## 📱 手机上安装（PWA）——最简单，推荐
 
