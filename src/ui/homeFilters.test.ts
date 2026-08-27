@@ -346,6 +346,46 @@ describe("和已上架 meta 的约定", () => {
       expect(pinyinInitials(meta.title), meta.id).toBe(expected);
     }
   });
+
+  // 1.2 窗口 1 这 12 款上架时字表没跟着补,结果整批都搜不出来:
+  //「长蛇争霸」「英杰令」的首字母串直接是空串,只能靠 id 搜。
+  // 这里把 12 款逐字钉住,以后再加新字漏了也会红。
+  const WINDOW1_INITIALS: Record<string, string> = {
+    "orb-arena": "yydzz",
+    "snake-royale": "cszb",
+    "block-drop": "fkddl",
+    "combo-clash": "lzdj",
+    "mahjong-bloom": "hkmj",
+    "star-estate": "dxdc",
+    "hero-cards": "yjl",
+    "weiqi-garden": "wzhy",
+    "flight-chess": "fxqly",
+    "merge-2048": "xxhc",
+    "mine-garden": "slhy",
+    "sudoku-petal": "sdht"
+  };
+
+  it("1.2 窗口 1 的 12 款标题全都能拼出首字母", () => {
+    const seen: string[] = [];
+    for (const { meta } of shipped) {
+      const expected = meta.id ? WINDOW1_INITIALS[meta.id] : undefined;
+      if (!expected || !meta.title) continue;
+      seen.push(meta.id as string);
+      expect(pinyinInitials(meta.title), meta.id).toBe(expected);
+    }
+    expect(seen.sort()).toEqual(Object.keys(WINDOW1_INITIALS).sort());
+  });
+
+  it("1.2 窗口 1 的 12 款都能用拼音首字母搜到", () => {
+    for (const { meta } of shipped) {
+      const expected = meta.id ? WINDOW1_INITIALS[meta.id] : undefined;
+      if (!expected || !meta.title) continue;
+      expect(
+        matchesSearch({ id: meta.id as string, title: meta.title }, expected),
+        meta.id
+      ).toBe(true);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
