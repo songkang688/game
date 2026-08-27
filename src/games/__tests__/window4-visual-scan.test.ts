@@ -209,14 +209,15 @@ describe("窗口4 · 专项② 收集物体积契约", () => {
     expect(colorStops(grad)).toBeGreaterThanOrEqual(2);
   });
 
-  it("gold-hook drawOre 现状：无渐变、靠高光+描边+落影撑体积【W4R1-05 · 一般 · 待修：补渐变后收紧断言】", () => {
+  it("gold-hook drawOre：≥2 停渐变 + 高光 + 描边 + 落影四重体积线索【W4R1-05 已修，断言已收紧】", () => {
     const body = artFnBody("gold-hook", "drawOre");
-    // 现状钉住：三重体积线索一个不能少（skin.lit 高光 / lineWidth+stroke 描边 / 落影椭圆）
+    // 三重既有体积线索一个不能少（skin.lit 高光 / lineWidth+stroke 描边 / 落影椭圆）
     expect(/skin\.lit/.test(body), "高光没了").toBe(true);
     expect(/stroke\(\)/.test(body), "描边没了").toBe(true);
     expect(/ellipse\([^)]*r \* 0\.92, r \* 0\.86/.test(body) || /影子/.test(body), "落影没了").toBe(true);
-    // 待修现状：还没有渐变（修复后把这行取反）
-    expect(/create(Linear|Radial)Gradient\(/.test(body)).toBe(false);
+    // r2 修复：体表 2 停线性渐变(lit→fill)，与 drawKitCoin 金币标准对齐
+    expect(/create(Linear|Radial)Gradient\(/.test(body)).toBe(true);
+    expect(colorStops(body), "渐变停靠点不足 2").toBeGreaterThanOrEqual(2);
   });
 });
 

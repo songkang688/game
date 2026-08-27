@@ -528,7 +528,12 @@ export function drawOre(c: Ctx, ore: Ore, x: number, o: OreDrawOpts = {}): void 
     c.fill();
   }
 
-  c.fillStyle = skin.fill;
+  // 体表 2 停线性渐变(lit→fill,左上受光):r2 修复 W4R1-05,
+  // 与 duo-arena drawKitCoin 的全产品金币标准对齐;扫光/高光/描边/落影全部保留
+  const bodyGrad = c.createLinearGradient(x - r * 0.8, y - r * 0.9, x + r * 0.7, y + r * 0.9);
+  bodyGrad.addColorStop(0, skin.lit);
+  bodyGrad.addColorStop(1, skin.fill);
+  c.fillStyle = bodyGrad;
   c.strokeStyle = skin.edge;
   c.lineWidth = 1.6;
 
