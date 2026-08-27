@@ -129,6 +129,7 @@ import {
   drawFace,
   drawFootprintTrail,
   drawGoldStar,
+  drawHeartIcon,
   drawHorizonStrip,
   drawLockIcon,
   drawMapScrollIcon,
@@ -511,6 +512,67 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function addFloat(x: number, y: number, text: string, color: string, big = false, petal = false): void {
     floats.push({ x, y, text, color, life: big ? 1.1 : 0.85, big, petal });
+  }
+
+  // ---- hud12 段串的绘制层替换(r2 修复 W4R1-01) ----
+  // hud12 的 hudSegments 仍按 1.2 冻结契约拼花瓣/爱心 emoji(宽度测量按 1.15 字宽),
+  // 但这些字符不再交给系统字体:逐 token 拆开,emoji 槽位画手绘图标,其余走 fillText。
+  // 用码点常量而不用字面量,守住「index.ts 源码零 emoji」的既有契约。
+  const TOKEN_PETAL = 0x1f338; // 花瓣币(U+1F338)
+  const TOKEN_HEART = 0x1f497; // 还在的命(U+1F497)
+  const TOKEN_HEART_EMPTY = 0x1f90d; // 掉掉的命(U+1F90D)
+
+  /**
+   * 画一段可能含花瓣/爱心 token 的 HUD 文字。
+   * emoji 槽宽 = 1.15 × 字号,与 hud12.estimateTextWidth 的系数一致:量多宽就画多宽,
+   * 窄屏宽度测量测试因此完全不用动。maxW 用横向缩放模拟 fillText 的挤压行为。
+   */
+  function drawHudRichText(
+    text: string,
+    anchorX: number,
+    cy0: number,
+    align: "left" | "center" | "right",
+    fs: number,
+    maxW = Infinity,
+  ): void {
+    const slot = fs * 1.15;
+    const tokens: Array<{ icon?: "petal" | "heart" | "heartEmpty"; text?: string; w: number }> = [];
+    let run = "";
+    const flush = (): void => {
+      if (run) tokens.push({ text: run, w: ctx.measureText(run).width });
+      run = "";
+    };
+    for (const ch of text) {
+      const code = ch.codePointAt(0);
+      if (code === TOKEN_PETAL) {
+        flush();
+        tokens.push({ icon: "petal", w: slot });
+      } else if (code === TOKEN_HEART) {
+        flush();
+        tokens.push({ icon: "heart", w: slot });
+      } else if (code === TOKEN_HEART_EMPTY) {
+        flush();
+        tokens.push({ icon: "heartEmpty", w: slot });
+      } else run += ch;
+    }
+    flush();
+    const totalW = tokens.reduce((s, t) => s + t.w, 0);
+    ctx.save();
+    if (totalW > maxW) {
+      const k = maxW / totalW;
+      ctx.translate(anchorX, cy0);
+      ctx.scale(k, 1);
+      ctx.translate(-anchorX, -cy0);
+    }
+    let x = align === "left" ? anchorX : align === "center" ? anchorX - totalW / 2 : anchorX - totalW;
+    ctx.textAlign = "left";
+    for (const t of tokens) {
+      if (t.text !== undefined) ctx.fillText(t.text, x, cy0);
+      else if (t.icon === "petal") drawPetalIcon(ctx, x + t.w / 2, cy0, fs * 0.5);
+      else drawHeartIcon(ctx, x + t.w / 2, cy0, fs * 0.5, t.icon === "heart");
+      x += t.w;
+    }
+    ctx.restore();
   }
 
   /** 居中画「文字 + 花瓣币」:花瓣是绘制资产,不再贴花朵 emoji 字符。 */
@@ -1438,7 +1500,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#a5322d";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(reason, bx + tw / 2, by + 11);
+      // 「差几瓣」的原因句带花瓣币 token,同样走绘制层替换
+      drawHudRichText(reason, bx + tw / 2, by + 11, "center", 13);
     }
     ctx.restore();
   }
@@ -2201,14 +2264,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const fs = Math.max(HUD_MIN_FONT, layout.fontSize);
     ctx.font = `${fs}px sans-serif`;
     ctx.textBaseline = "middle";
-    ctx.textAlign = "left";
+    // 三段都走 token 渲染:花瓣币与爱心画手绘图标,emoji 字符不再上画布
     ctx.fillStyle = petalFlash > 0 && Math.floor(petalFlash * 8) % 2 === 0 ? "#c2456a" : "#5a5a6e";
-    ctx.fillText(layout.segments.left, backW + 14, HUD_H / 2);
+    drawHudRichText(layout.segments.left, backW + 14, HUD_H / 2, "left", fs);
     ctx.fillStyle = "#5a5a6e";
-    ctx.textAlign = "center";
-    ctx.fillText(layout.segments.center, w / 2 + backW / 2, HUD_H / 2);
-    ctx.textAlign = "right";
-    ctx.fillText(layout.segments.right, w - 10, HUD_H / 2);
+    drawHudRichText(layout.segments.center, w / 2 + backW / 2, HUD_H / 2, "center", fs);
+    drawHudRichText(layout.segments.right, w - 10, HUD_H / 2, "right", fs);
 
     if (combo >= 2 && comboTimer > 0) {
       ctx.fillStyle = "#7a4ec2";
@@ -2295,7 +2356,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = showToast ? "#a5322d" : "#5a5a6e";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(tip, w / 2, HUD_H + TOOLBAR_H + 17, tipW - 16);
+    drawHudRichText(tip, w / 2, HUD_H + TOOLBAR_H + 17, "center", 14, tipW - 16);
   }
 
   /** 右下角 ⏸ / 1× / 2×。 */

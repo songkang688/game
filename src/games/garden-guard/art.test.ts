@@ -24,6 +24,7 @@ import {
   drawFootprintTrail,
   drawGoldStar,
   drawHealHalo,
+  drawHeartIcon,
   drawHorizonStrip,
   drawLockIcon,
   drawMapScrollIcon,
@@ -463,5 +464,51 @@ describe("garden-guard 1.3 r1 · 画布 emoji 清零(浮字花瓣币/标题徽�
       const b = rec((c) => drawThemeBadge(c, 50, 50, 12, t)).join("|");
       expect(a).toBe(b);
     }
+  });
+});
+
+/* ---------------- ⑦ r2:hud12 段串的绘制层替换(W4R1-01) ---------------- */
+
+describe("garden-guard 1.3 r2 · 战内 HUD 花瓣/爱心手绘化(hud12 契约不动)", () => {
+  it("实心爱心是渐变路径绘制:双弧顶 + 高光,零 fillText", () => {
+    const ops = rec((c) => drawHeartIcon(c, 50, 50, 8, true));
+    expect(ops).toContain("radGrad");
+    expect(ops.filter((op) => op.startsWith("arc:")).length, "两片圆顶").toBeGreaterThanOrEqual(2);
+    expect(ops.filter((op) => op.startsWith("quad:")).length, "两侧下摆曲线").toBeGreaterThanOrEqual(2);
+    expect(ops.some((op) => op.startsWith("stroke@"))).toBe(true);
+    expect(ops.some((op) => op.startsWith("ellipse:")), "左上高光").toBe(true);
+    expect(ops.some((op) => op.startsWith("text:"))).toBe(false);
+  });
+
+  it("空心爱心与实心序列不同:无渐变无高光,灰粉平涂 + 描边", () => {
+    const filled = rec((c) => drawHeartIcon(c, 50, 50, 8, true));
+    const empty = rec((c) => drawHeartIcon(c, 50, 50, 8, false));
+    expect(empty.join("|")).not.toBe(filled.join("|"));
+    expect(empty).not.toContain("radGrad");
+    expect(empty.some((op) => op.startsWith("fill@#e"))).toBe(true);
+    expect(empty.some((op) => op.startsWith("text:"))).toBe(false);
+  });
+
+  it("drawHud 三段与原因句/说明条都走 token 渲染,不再把段串原样 fillText", () => {
+    // hud12 的段串契约(💗×N / 🌸 N)一字未动;index.ts 只在绘制层拆 token
+    expect(indexSrc).toMatch(/drawHudRichText\(layout\.segments\.left/);
+    expect(indexSrc).toMatch(/drawHudRichText\(layout\.segments\.center/);
+    expect(indexSrc).toMatch(/drawHudRichText\(layout\.segments\.right/);
+    expect(indexSrc).not.toMatch(/fillText\(layout\.segments\./);
+    expect(indexSrc).toMatch(/drawHudRichText\(reason/);
+    expect(indexSrc).toMatch(/drawHudRichText\(tip/);
+  });
+
+  it("token 渲染器:emoji 槽位映射到手绘图标,槽宽系数与 hud12 宽度估算一致", () => {
+    // 码点常量对上 hud12 里的 🌸/💗/🤍;槽宽 1.15×字号 = estimateTextWidth 的 emoji 系数
+    expect(indexSrc).toMatch(/0x1f338/);
+    expect(indexSrc).toMatch(/0x1f497/);
+    expect(indexSrc).toMatch(/0x1f90d/);
+    expect(indexSrc).toMatch(/fs \* 1\.15/);
+    const fnStart = indexSrc.indexOf("function drawHudRichText(");
+    expect(fnStart).toBeGreaterThanOrEqual(0);
+    const fnBody = indexSrc.slice(fnStart, indexSrc.indexOf("\n  }", fnStart));
+    expect(fnBody).toContain("drawPetalIcon(");
+    expect(fnBody).toContain("drawHeartIcon(");
   });
 });

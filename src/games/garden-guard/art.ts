@@ -1145,6 +1145,45 @@ export function drawPetalIcon(ctx: Ctx, x: number, y: number, r: number): void {
   ctx.restore();
 }
 
+/**
+ * 手绘爱心:替代 hud12 段串里的 💗/🤍 字符上画布(r2 修复 W4R1-01)。
+ * filled=true 是还在的命(粉渐变+高光),false 是掉掉的命(灰粉空心,
+ * 同结算面板既有的 #e9d8dd 系)。hud12 的契约字符串与宽度测量不动,
+ * 只在绘制层把 emoji 槽位换成这枚图标。
+ */
+export function drawHeartIcon(ctx: Ctx, x: number, y: number, r: number, filled: boolean): void {
+  ctx.save();
+  const lobeR = r * 0.45;
+  const cyTop = y - r * 0.6 + lobeR;
+  ctx.beginPath();
+  ctx.moveTo(x, y + r * 0.62);
+  ctx.quadraticCurveTo(x - r * 0.98, y + r * 0.02, x - lobeR * 2, cyTop);
+  ctx.arc(x - lobeR, cyTop, lobeR, Math.PI, 0);
+  ctx.arc(x + lobeR, cyTop, lobeR, Math.PI, 0);
+  ctx.quadraticCurveTo(x + r * 0.98, y + r * 0.02, x, y + r * 0.62);
+  ctx.closePath();
+  if (filled) {
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.32, r * 0.12, x, y, r * 1.05);
+    g.addColorStop(0, "#ffd9e4");
+    g.addColorStop(1, "#ff7fa2");
+    ctx.fillStyle = g;
+    ctx.strokeStyle = "#d4607e";
+  } else {
+    ctx.fillStyle = "#eee2e6";
+    ctx.strokeStyle = "#c8b6bd";
+  }
+  ctx.lineWidth = 1.5;
+  ctx.fill();
+  ctx.stroke();
+  if (filled) {
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.beginPath();
+    ctx.ellipse(x - r * 0.34, y - r * 0.26, r * 0.17, r * 0.11, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 /** 小灯泡:暖光玻璃球 + 灯座 + 两道短光线,替代 "💡" 字符。 */
 export function drawBulbIcon(ctx: Ctx, x: number, y: number, r: number): void {
   ctx.save();
