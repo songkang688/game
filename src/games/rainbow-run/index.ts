@@ -190,6 +190,8 @@ import {
   serializeSkipList,
 } from "./campaign";
 import type { RunnerBoosts } from "./campaign";
+import { touchArea } from "./touch";
+import type { Rect } from "./touch";
 import { save } from "../../engine/save";
 import { getLevelExtras } from "../../ui/level188Contract";
 import { speak, stopSpeaking } from "../speech";
@@ -257,13 +259,6 @@ interface Floaty {
   color: string;
   life: number;
   big: boolean;
-}
-
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
 }
 
 function loadProgress(): number[] {
@@ -2153,7 +2148,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
 
     // 无尽跑入口:一直跑、吃金币、越跑越快
     const ex = Math.max(10, w * 0.06);
-    btnEndless = { x: ex, y: 68, w: w - ex * 2, h: 42 };
+    btnEndless = { x: ex, y: 68, w: w - ex * 2, h: 44 };
     const eg = ctx.createLinearGradient(btnEndless.x, 0, btnEndless.x + btnEndless.w, 0);
     eg.addColorStop(0, "#ffd868");
     eg.addColorStop(0.5, "#ff9eb5");
@@ -2182,8 +2177,10 @@ export function mount(api: GameAPI): RainbowRunHandle {
     // 收藏册入口:另一个窗口还没把收藏册放进来时,这个按钮压根不出现
     btnCollection = null;
     if (hasCollection()) {
-      btnCollection = { x: w - 46, y: 8, w: 38, h: 34 };
-      drawButton(btnCollection, "🎁", "rgba(255,255,255,0.9)", "#8a5ac9");
+      // 画的是右上角那颗小礼物,能点的范围兜到 44px 见方(标题横着排到 x≈310,扩出来的 6px 不打架)
+      const face: Rect = { x: w - 46, y: 8, w: 38, h: 34 };
+      btnCollection = touchArea(face);
+      drawButton(face, "🎁", "rgba(255,255,255,0.9)", "#8a5ac9");
     }
 
     themeCards.length = 0;
@@ -2243,8 +2240,10 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    btnBack = { x: 6, y: 7, w: 62, h: 30 };
-    drawButton(btnBack, "◀ 世界", "rgba(255,255,255,0.85)", "#5a5a6e");
+    // 章节标题就在下面一行,按钮画大了会被压住 —— 画的照旧,能点的范围兜到 44px 高
+    const backFace: Rect = { x: 6, y: 7, w: 62, h: 30 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, "◀ 世界", "rgba(255,255,255,0.85)", "#5a5a6e");
 
     ctx.fillStyle = st.accent;
     ctx.font = "bold 22px sans-serif";
@@ -2805,13 +2804,15 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.fillText(`⚡${Math.ceil(railTimer)}s`, px2, ptY);
     }
 
-    btnBack = { x: 6, y: 6, w: 62, h: 28 };
-    drawButton(btnBack, endless ? "◀ 回家" : "◀ 地图", "rgba(255,255,255,0.85)", "#5a5a6e");
+    // HUD 第二行(赛道进度 + 任务条)从 y=40 起,按钮画到 44px 高就压上去了 —— 只扩热区
+    const backFace: Rect = { x: 6, y: 6, w: 62, h: 28 };
+    btnBack = touchArea(backFace);
+    drawButton(backFace, endless ? "◀ 回家" : "◀ 地图", "rgba(255,255,255,0.85)", "#5a5a6e");
 
     // ---- 覆盖层 ----
     if (phase === "intro") {
       drawIntroPanel();
-      drawButton(btnBack, endless ? "◀ 回家" : "◀ 地图", "#f0f0f5", "#5a5a6e");
+      drawButton(backFace, endless ? "◀ 回家" : "◀ 地图", "#f0f0f5", "#5a5a6e");
     } else if (phase === "clear") {
       drawClearPanel();
     } else if (phase === "retry") {
