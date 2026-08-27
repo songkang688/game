@@ -247,9 +247,86 @@ function paintCloud(g: Ctx, x: number, y: number, r: number, color: string, alph
   g.globalAlpha = 1;
 }
 
+/** 井壁浮雕件的高度(px);宽度 ≤ WELL_WALL.side(6px) */
+export const RELIEF_H = 12;
+
 /**
- * 井体全套:井内渐变 + 远景装饰 + 网格 + 三面井壁(双色条纹、内缘高光、螺钉)。
- * 静态内容,真浏览器里由 drawWellBackground 缓存成一张离屏贴图。
+ * 单件井壁浮雕(1.3 r1 · learner P9):cx 为壁中线,ty 为件顶。
+ * 6×12 内的主题小件:wood=小花窗 / ice=冰晶 / dusk=果酱滴 / night=星窗。
+ * 双色阶只从 wallLight 同族派生(shade 深底 + tint 亮点),条纹明暗两段上都读得出。
+ */
+export function paintWallRelief(g: Ctx, cx: number, ty: number, theme: WellTheme): void {
+  const dark = shade(theme.wallLight, 0.32);
+  const lite = tint(theme.wallLight, 0.5);
+  const my = ty + RELIEF_H / 2;
+  if (theme.decor === "clouds") {
+    // wood · 小花窗:圆头窗一扇 + 亮色花心与花茎
+    g.fillStyle = dark;
+    g.beginPath();
+    g.arc(cx, ty + 2.4, 2.4, Math.PI, TAU);
+    g.fill();
+    g.fillRect(cx - 2.4, ty + 2.4, 4.8, RELIEF_H - 2.4);
+    g.fillStyle = lite;
+    g.beginPath();
+    g.arc(cx, ty + 4.6, 1.1, 0, TAU);
+    g.fill();
+    g.fillRect(cx - 0.5, ty + 6, 1, 3.8);
+    return;
+  }
+  if (theme.decor === "ice") {
+    // ice · 冰晶:竖菱形 + 亮十字芯
+    g.fillStyle = dark;
+    g.beginPath();
+    g.moveTo(cx, ty);
+    g.lineTo(cx + 2.6, my);
+    g.lineTo(cx, ty + RELIEF_H);
+    g.lineTo(cx - 2.6, my);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = lite;
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(cx, ty + 2);
+    g.lineTo(cx, ty + RELIEF_H - 2);
+    g.moveTo(cx - 1.5, my);
+    g.lineTo(cx + 1.5, my);
+    g.stroke();
+    return;
+  }
+  if (theme.decor === "dusk") {
+    // dusk · 果酱滴:尖顶圆滴 + 亮高光点
+    g.fillStyle = dark;
+    g.beginPath();
+    g.moveTo(cx, ty + 0.5);
+    g.lineTo(cx + 2.3, ty + 7.4);
+    g.lineTo(cx - 2.3, ty + 7.4);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.arc(cx, ty + 8.6, 2.6, 0, TAU);
+    g.fill();
+    g.fillStyle = lite;
+    g.beginPath();
+    g.arc(cx - 0.8, ty + 7.9, 0.9, 0, TAU);
+    g.fill();
+    return;
+  }
+  // night · 星窗:深色窗身 + 亮色四角星
+  g.fillStyle = dark;
+  g.fillRect(cx - 2.4, ty, 4.8, RELIEF_H);
+  g.fillStyle = lite;
+  g.beginPath();
+  g.moveTo(cx, ty + 3);
+  g.lineTo(cx + 1.6, my);
+  g.lineTo(cx, ty + RELIEF_H - 3);
+  g.lineTo(cx - 1.6, my);
+  g.closePath();
+  g.fill();
+}
+
+/**
+ * 井体全套:井内渐变 + 远景装饰 + 网格 + 三面井壁(双色条纹、内缘高光、螺钉、
+ * 主题浮雕)。静态内容,真浏览器里由 drawWellBackground 缓存成一张离屏贴图。
  */
 export function paintWellBackground(g: Ctx, w: number, h: number, cell: number, theme: WellTheme): void {
   const ws = WELL_WALL.side;
@@ -314,6 +391,14 @@ export function paintWellBackground(g: Ctx, w: number, h: number, cell: number, 
     g.fillRect(w - ws, y + seg * 0.5, ws, seg);
   }
   for (let x = seg; x < w; x += seg * 2) g.fillRect(x, innerH, seg, wb);
+  // 井壁主题浮雕(1.3 r1 · learner P9):左右壁各一列、纵向每 6 格一件。
+  // 顶部远景云 / 星会被堆高的方块盖住,井壁浮雕是中后期唯一还看得见的装饰。
+  // 静态内容,随本函数一起进离屏缓存,零逐帧成本。
+  const reliefStep = Math.max(60, cell * 6);
+  for (let ry = reliefStep * 0.5; ry + RELIEF_H <= innerH - cell * 0.6; ry += reliefStep) {
+    paintWallRelief(g, ws / 2, ry, theme);
+    paintWallRelief(g, w - ws / 2, ry, theme);
+  }
   // 内缘高光线
   g.strokeStyle = tint(theme.wallLight, 0.5);
   g.lineWidth = 1.5;

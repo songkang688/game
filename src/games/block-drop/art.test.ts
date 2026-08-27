@@ -6,6 +6,7 @@ import {
   CLEAR_FX_PER_ROW,
   MARK_MIN_PX,
   RAINBOW_SEC,
+  RELIEF_H,
   SHOT_SEC,
   WELL_THEMES,
   WELL_WALL,
@@ -23,6 +24,7 @@ import {
   paintHoldCanvas,
   paintNextCanvas,
   paintTrophy,
+  paintWallRelief,
   paintWellBackground,
   themeForLevel
 } from "./art";
@@ -190,6 +192,57 @@ describe("井与背景 · 花园积木箱", () => {
     paintWellBackground(night as unknown as CanvasRenderingContext2D, 252, 488, 24, WELL_THEMES[3]);
     expect(night.painted).toBeGreaterThan(0);
     expect(WELL_THEMES[3].decor).toBe("night");
+  });
+
+  it("井壁浮雕:四主题四款小件,件件收在 6×12 内(1.3 r1 P9)", () => {
+    const sigs = new Set<string>();
+    for (const t of WELL_THEMES) {
+      const g = ctx();
+      paintWallRelief(g as unknown as CanvasRenderingContext2D, 100, 40, t);
+      expect(g.painted).toBeGreaterThanOrEqual(1);
+      expect(g.ops.length).toBeGreaterThanOrEqual(4);
+      sigs.add(JSON.stringify(g.ops));
+      for (const o of g.ops) {
+        if (o.op === "moveTo" || o.op === "lineTo") {
+          expect(Math.abs(o.args[0] - 100)).toBeLessThanOrEqual(3);
+          expect(o.args[1]).toBeGreaterThanOrEqual(40 - 0.01);
+          expect(o.args[1]).toBeLessThanOrEqual(40 + RELIEF_H + 0.01);
+        } else if (o.op === "arc") {
+          expect(Math.abs(o.args[0] - 100) + o.args[2]).toBeLessThanOrEqual(3.01);
+          expect(o.args[1] - o.args[2]).toBeGreaterThanOrEqual(40 - 0.01);
+          expect(o.args[1] + o.args[2]).toBeLessThanOrEqual(40 + RELIEF_H + 0.01);
+        } else if (o.op === "fillRect") {
+          expect(o.args[0]).toBeGreaterThanOrEqual(100 - 3);
+          expect(o.args[0] + o.args[2]).toBeLessThanOrEqual(100 + 3);
+          expect(o.args[1]).toBeGreaterThanOrEqual(40 - 0.01);
+          expect(o.args[1] + o.args[3]).toBeLessThanOrEqual(40 + RELIEF_H + 0.01);
+        }
+      }
+    }
+    // 四主题四款造型,绝不共用一款
+    expect(sigs.size).toBe(4);
+  });
+
+  it("浮雕上墙:左右壁各一列、纵向每 6 格一件,堆高后仍有装饰可看(1.3 r1 P9)", () => {
+    // 252×488、cell 24 → 井内高 480,步长 144,起点 72 → 每壁 72/216/360 三件
+    const g = ctx();
+    paintWellBackground(g as unknown as CanvasRenderingContext2D, 252, 488, 24, WELL_THEMES[3]);
+    // night 星窗的窗身是 4.8×12 的 fillRect,壁中线 3 / 249 → 左缘 0.6 / 246.6
+    const bodies = g.ops.filter((o) => o.op === "fillRect" && o.args[2] === 4.8 && o.args[3] === RELIEF_H);
+    const left = bodies.filter((o) => Math.abs(o.args[0] - 0.6) < 0.01);
+    const right = bodies.filter((o) => Math.abs(o.args[0] - 246.6) < 0.01);
+    expect(left).toHaveLength(3);
+    expect(right).toHaveLength(3);
+    expect(left.map((o) => o.args[1])).toEqual([72, 216, 360]);
+    expect(right.map((o) => o.args[1])).toEqual([72, 216, 360]);
+    // 浮雕全部收在井壁内(≤ WELL_WALL.side),绝不探进井内玩法区
+    for (const o of bodies) {
+      const x0 = o.args[0];
+      const x1 = o.args[0] + o.args[2];
+      const inLeftWall = x0 >= 0 && x1 <= WELL_WALL.side + 0.01;
+      const inRightWall = x0 >= 252 - WELL_WALL.side - 0.01 && x1 <= 252;
+      expect(inLeftWall || inRightWall).toBe(true);
+    }
   });
 });
 
