@@ -181,7 +181,7 @@ const CSS = `
 .fk-ch{border:none;border-radius:13px;padding:7px 2px;cursor:pointer;font-family:inherit;background:#f6f2ff;
   display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
 .fk-ch:active{transform:translateY(1px);}
-.fk-ch-e{font-size:21px;line-height:1;}
+.fk-ch-a{width:28px;height:28px;flex:0 0 auto;}
 .fk-ch-n{font-size:12px;font-weight:900;color:#5b4890;}
 .fk-ch-on{outline:3px solid #e0679f;background:#fff;}
 /* 连着几场没赢下来才写字,平时是空的,所以不占地方 */
@@ -344,6 +344,18 @@ function button(cls: string, label: string, onClick: () => void): HTMLButtonElem
   b.type = "button";
   b.addEventListener("click", onClick);
   return b;
+}
+
+/** 选人按钮上的小头像：画的脑袋 + 头饰（和 HUD 头像同一套画法），不再用 emoji 占位 */
+function chAvatar(ch: Character, size: number): HTMLCanvasElement {
+  const c = el("canvas", "fk-ch-a");
+  c.width = size;
+  c.height = size;
+  c.style.width = `${size}px`;
+  c.style.height = `${size}px`;
+  const actx = c.getContext?.("2d");
+  if (actx) drawAvatar(actx, size, lookOf(ch.id), ch.color, ch.ink);
+  return c;
 }
 
 /* ------------------------------------------------------------------ */
@@ -691,9 +703,9 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     return out;
   }
 
-  pads.appendChild(buildPad(0, `${characterById(o.p1).emoji} ${characterById(o.p1).name}`));
+  pads.appendChild(buildPad(0, characterById(o.p1).name));
   if (o.aiLevel === null) {
-    pads.appendChild(buildPad(1, `${characterById(o.p2).emoji} ${characterById(o.p2).name}`));
+    pads.appendChild(buildPad(1, characterById(o.p2).name));
   }
   if (!coarsePointer()) pads.classList.add("fk-hidden");
   wrap.appendChild(pads);
@@ -1764,7 +1776,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       for (const ch of CHARACTERS) {
         const b = el("button", "fk-ch");
         b.type = "button";
-        b.innerHTML = `<span class="fk-ch-e">${ch.emoji}</span><span class="fk-ch-n">${ch.name}</span>`;
+        b.appendChild(chAvatar(ch, 28));
+        b.appendChild(el("span", "fk-ch-n", ch.name));
         b.setAttribute("aria-label", `选择 ${ch.name}：${ch.style}`);
         b.addEventListener("click", () => {
           set(ch.id);
@@ -1780,7 +1793,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         const cur = get();
         CHARACTERS.forEach((ch, i) => buttons[i].classList.toggle("fk-ch-on", ch.id === cur));
         const ch = characterById(cur);
-        info.innerHTML = `<b>${ch.emoji} ${ch.name}</b>　${ch.blurb}<br>${ch.style}<br>
+        info.innerHTML = `<b>${ch.name}</b>　${ch.blurb}<br>${ch.style}<br>
           必杀：${(["s1", "s2", "s3"] as const).map((s) => ch.moves[s].name).join(" / ")}　
           超必杀：<b>${ch.moves.super.name}</b>`;
       };
@@ -2033,16 +2046,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     // 塔里默认派 TOWER_HERO_ID 上场（见那条常量的注释）；上面这一排随时能换人
     let heroId: string = TOWER_HERO_ID;
     const heroRow = el("div", "fk-card");
-    const heroDefault = characterById(TOWER_HERO_ID);
-    heroRow.appendChild(
-      el("div", "fk-pick-t", `${heroDefault.emoji} 出战角色（随时可以换，换完从当前关继续）`)
-    );
+    heroRow.appendChild(el("div", "fk-pick-t", "出战角色（随时可以换，换完从当前关继续）"));
     const grid = el("div", "fk-grid");
     const heroBtns: HTMLButtonElement[] = [];
     CHARACTERS.forEach((ch, i) => {
       const b = el("button", "fk-ch");
       b.type = "button";
-      b.innerHTML = `<span class="fk-ch-e">${ch.emoji}</span><span class="fk-ch-n">${ch.name}</span>`;
+      b.appendChild(chAvatar(ch, 28));
+      b.appendChild(el("span", "fk-ch-n", ch.name));
       b.setAttribute("aria-label", `出战角色 ${ch.name}：${ch.style}`);
       b.addEventListener("click", () => {
         heroId = ch.id;
