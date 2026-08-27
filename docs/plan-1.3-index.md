@@ -1,8 +1,9 @@
 # 一朵一星 1.3 · 提示词目录（`docs/plan-1.3-*`）
 
 > **本目录是 1.3 视觉升级唯一有效的提示词入口。** 1.3 只升级前端视觉（建模 / 布局 / 动效 / Q 版人物），
-> 玩法与数值不动。全部工作推分支 **`game-1.2-kk`**（基线 `origin/game-1.2`）；
-> `origin/1.2-kk` 是另一摊品牌改名工作，与本目录无关。
+> 玩法与数值不动。实现主线是 **`game-1.3`**；八窗口工作分支是 `game-1.3-window1` … `game-1.3-window8`。
+> 发给八个窗口的完整提示词：[`plan-1.3-windows.md`](./plan-1.3-windows.md)。
+> 提示词原稿曾写在 `game-1.2-kk`；不要推品牌分支 `origin/1.2-kk`。
 >
 > 命名照抄 1.2 的成功做法：**一步一档一份文件**，`docs/plan-1.3-step<步号>-<档>-<英文短名>.md`。
 > **总步数 29 步**（1 共享基建 + 25 视觉升级 + 3 验收），87 份提示词。
@@ -15,6 +16,8 @@
 | 视觉宪法（负面清单 / Q 版标准 / 分级口径） | [`plan-1.3-visual-bible.md`](./plan-1.3-visual-bible.md) | A 档（主管） |
 | vendored skills 说明 | [`plan-1.3-skills.md`](./plan-1.3-skills.md)（实体在 `.cursor/skills/1.3-visual/`） | A 档（主管） |
 | 本目录 | `plan-1.3-index.md` | A 档（主管） |
+| 八窗口怎么发 / 完整提示词 | [`plan-1.3-windows.md`](./plan-1.3-windows.md) · [`plan-1.3-window1.md`](./plan-1.3-window1.md) … [`window8`](./plan-1.3-window8.md) | 主管发给 8 个统筹 |
+| 窗口向下转发的五角色模板 | [`plan-1.3-roles.md`](./plan-1.3-roles.md) | 窗口必须 Task 转发 |
 | 1.2 对照 | [`plan-1.2-supervisor.md`](./plan-1.2-supervisor.md) · [`plan-1.2-index.md`](./plan-1.2-index.md) | 1.2 各档 |
 
 ---
