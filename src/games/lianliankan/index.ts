@@ -40,6 +40,7 @@ import {
   gridTemplate,
   hintPair,
   hintsLeft,
+  selfHelp,
   linkHoldMs,
   linkInit,
   settle,
@@ -511,8 +512,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     timeEl.classList.toggle("llk-hurry", timeLeft <= 15);
     shuffleBtn.textContent = `🔀 洗牌 x${shufflesLeft}`;
     shuffleBtn.disabled = shufflesLeft <= 0 || levelDone;
-    hintBtn.textContent = `💡 提示 x${hintsLeft(hintsUsed)}`;
-    hintBtn.disabled = hintsLeft(hintsUsed) <= 0 || levelDone;
+    // 提示用完之后按钮不灰掉，改成「指个方向」：不给格子，只把搜索范围缩小
+    const left = hintsLeft(hintsUsed);
+    hintBtn.textContent = left > 0 ? `💡 提示 x${left}` : "🔍 指个方向";
+    hintBtn.disabled = levelDone;
   }
 
   function stop(): void {
@@ -584,7 +587,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   jan.on(hintBtn, "click", () => {
-    if (levelDone || hintsLeft(hintsUsed) <= 0) return;
+    if (levelDone) return;
+    if (hintsLeft(hintsUsed) <= 0) {
+      // 三次都用光了也不把孩子晾在那儿：报个方向，答案仍旧他自己找
+      msgEl.textContent = selfHelp(board, maxTurns).word;
+      return;
+    }
     const pair = hintPair(board, maxTurns);
     if (!pair) {
       msgEl.textContent = "这会儿真的没有能连的了，先洗一次牌吧～";

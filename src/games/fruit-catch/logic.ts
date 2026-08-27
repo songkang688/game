@@ -212,6 +212,53 @@ export function missWord(n: number): string {
   return words[Math.min(words.length - 1, Math.max(0, n - 1))];
 }
 
+/** 这一颗是怎么漏掉的 */
+export type MissReason =
+  /** 落点在大半个屏幕之外，起步太晚 */
+  | "far"
+  /** 掉得比平常快，还没走到就落地了 */
+  | "fast"
+  /** 差一点点就够着了 */
+  | "near"
+  /** 篮子当时正被沉水果压慢 */
+  | "slow";
+
+/** 落点离篮子超过这么远就算「起步太晚」 */
+export const MISS_FAR_PX = W * 0.4;
+/** 差这么点就够着了 */
+export const MISS_NEAR_PX = BASKET_HALF + SNAP_PX + 24;
+/** 掉得比这个还快就算「这颗快」 */
+export const MISS_FAST_VY = 210;
+
+/**
+ * 判断这一颗是怎么漏掉的。
+ *
+ * 原来漏球只按「这是第几颗」轮着说三句话，说的都是同一套通用道理。
+ * 可孩子漏球的原因其实分得很清：有的是落点在屏幕另一头、起步太晚；
+ * 有的是这颗掉得比刚才快；有的是差半个篮子就够着了；
+ * 有的是刚吃了沉水果、篮子正被压慢。四种原因对应四种做法，
+ * 混成一句「提前挪到落点下面等」，孩子改不到点子上。
+ */
+export function missReason(dropX: number, basketX: number, vy: number, slowLeft = 0): MissReason {
+  const gap = Math.abs(dropX - basketX);
+  if (slowLeft > 0) return "slow";
+  if (gap <= MISS_NEAR_PX) return "near";
+  if (gap >= MISS_FAR_PX) return "far";
+  return vy >= MISS_FAST_VY ? "fast" : "near";
+}
+
+/** 按原因说的那句话：先说发生了什么，再给一条下一次用得上的做法 */
+export function missWordFor(reason: MissReason, n: number): string {
+  const tail = n >= MAX_MISS ? "最后一颗爱心啦，稳住～" : "";
+  const words: Record<MissReason, string> = {
+    far: "这颗落在屏幕另一头，它一冒头就得起步——别等它掉到一半再跑。",
+    fast: "这颗掉得比刚才快，看见它就直接往落点走，中途不用来回改主意。",
+    near: "就差半个篮子啦！下次早半步站定，站住比追着跑更接得到。",
+    slow: "刚接了沉水果，篮子这会儿走得慢——压慢的这一下先接近的，远的让它过去。"
+  };
+  return tail ? `${tail}${words[reason]}` : words[reason];
+}
+
 // ---------------------------------------------------------------------------
 // 四、可达性生成
 // ---------------------------------------------------------------------------

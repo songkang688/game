@@ -8,6 +8,7 @@ import { CHAPTERS, LEVELS, mathExprFor, type BalloonLevel } from "./levels";
 import {
   CHAIN_MIN,
   ESCAPE_Y,
+  aboutToEscape,
   FAR_SCALE,
   FEST_MISS_LIMIT,
   GIFT_RISE_MUL,
@@ -102,6 +103,9 @@ const CSS = `
 .blp-twin { box-shadow: 0 0 0 3px #FFE1F0, 0 0 0 5px rgba(240,150,200,.6); }
 .blp-far { filter: saturate(.8) brightness(1.06); }
 .blp-gift { box-shadow: 0 0 0 3px #FFF0C4, 0 0 0 6px rgba(230,180,90,.45); }
+/* 快飘出画面的气球：虚线圈 + 上挑的小箭头，形状说话，不只靠颜色 */
+.blp-leaving { outline: 3px dashed rgba(232,89,12,.85); outline-offset: 2px; }
+.blp-leaving::after { content: "⬆"; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 13px; color: #E8590C; }
 .blp-pop { animation: blpPop .22s ease forwards; pointer-events: none; }
 .blp-shake { animation: blpShake .34s ease; }
 @keyframes blpPop { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
@@ -589,6 +593,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       b.el.style.left = `${b.x}%`;
       b.el.style.top = `${b.y}px`;
       b.el.style.marginLeft = `${pos.swayPx}px`;
+      // 快飘出画面的标出来：护礼物、按顺序这些关最吃「先处理最靠上的」
+      const rise = (b.kind === "gift" ? giftAir : air).riseSpeed;
+      b.el.classList.toggle("blp-leaving", b.kind !== "cloud" && aboutToEscape(b.y, rise));
       if (b.y < ESCAPE_Y) {
         const wasTarget = isTarget(b);
         const wasGift = b.kind === "gift";
@@ -931,6 +938,8 @@ function mountFestival(host: HTMLElement, api: GameApi, back: () => void): { des
       b.el.style.left = `${b.x}%`;
       b.el.style.top = `${b.y}px`;
       b.el.style.marginLeft = `${pos.swayPx}px`;
+      // 快飘出画面的标出来：「先打最靠上的」这句话当场看得见
+      b.el.classList.toggle("blp-leaving", b.kind !== "cloud" && aboutToEscape(b.y, rise));
       if (b.y < ESCAPE_Y) {
         const kind = b.kind;
         remove(b, false);

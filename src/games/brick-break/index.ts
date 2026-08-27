@@ -46,6 +46,8 @@ import {
   towerBottomY,
   towerBreak,
   towerRowY,
+  towerPacePct,
+  towerPaceWord,
   towerTick,
   trailLength,
   type BallLike,
@@ -90,6 +92,8 @@ const CSS = `
 .brk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
 .brk-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #C97B5A; box-shadow: 0 2px 6px rgba(210,140,110,.25); font-size: 14px; white-space: nowrap; }
 .brk-power { min-height: 20px; text-align: center; font-size: 14px; font-weight: 700; color: #7A5AA8; letter-spacing: 1px; }
+/* 砖塔的节奏牌：压得快的时候换个底色，色觉之外还有「快」字兜着 */
+.brk-badge.brk-pace-hot { color: #B4432B; background: #FFEDE6; }
 .brk-canvas { width: 100%; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDF8F0, #F4EFFB); touch-action: none; }
 .brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
 .brk-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFC9AE; color: #8A4A20; cursor: pointer; box-shadow: 0 4px 0 #EBA987; touch-action: none; }
@@ -845,6 +849,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     <div class="brk-top">
       <span class="brk-badge brk-score">💯 0</span>
       <span class="brk-badge brk-rows">🧱 0 行</span>
+      <span class="brk-badge brk-pace">⏱️ 慢速</span>
       <span class="brk-badge brk-best"></span>
     </div>
     <div class="brk-power"></div>
@@ -862,6 +867,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   const c2d = canvas.getContext("2d");
   const scoreEl = wrap.querySelector(".brk-score") as HTMLElement;
   const rowsEl = wrap.querySelector(".brk-rows") as HTMLElement;
+  const paceEl = wrap.querySelector(".brk-pace") as HTMLElement;
   const bestEl = wrap.querySelector(".brk-best") as HTMLElement;
   const powerEl = wrap.querySelector(".brk-power") as HTMLElement;
   const msgEl = wrap.querySelector(".brk-msg") as HTMLElement;
@@ -881,6 +887,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   let hintT = 0;
   let combo = 0;
   let lastPop = 0;
+  let paceT = 0;
   const brickW = W / TOWER_COLS;
 
   function eff() {
@@ -896,6 +903,9 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
   function refreshTop(): void {
     scoreEl.textContent = `💯 ${state.score}`;
     rowsEl.textContent = `🧱 ${state.rowsCleared} 行`;
+    // 下一排还有多久挤进来：让「打得快就多玩一会儿」这件事看得见
+    paceEl.textContent = towerPaceWord(state);
+    paceEl.classList.toggle("brk-pace-hot", towerPacePct(state) >= 0.72);
     const best = save.getGameProgress(meta.id).endlessBest;
     bestEl.textContent = best > 0 ? `🏅 最好 ${best}` : "🏅 第一次";
     powerEl.textContent = powerBarLabel(timers);
@@ -1154,6 +1164,13 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
     if (!over) {
       if (running) physics(dt);
       else if (ball.stuck === null) ball.stuck = 0;
+    }
+    // 倒数每 0.2 秒刷一次就够看，不必逐帧改 DOM
+    paceT += dt;
+    if (paceT >= 0.2 && !over) {
+      paceT = 0;
+      paceEl.textContent = towerPaceWord(state);
+      paceEl.classList.toggle("brk-pace-hot", towerPacePct(state) >= 0.72);
     }
     draw();
     if (!over) raf = requestAnimationFrame(tick);

@@ -203,6 +203,71 @@ export function hintsLeft(used: number, max = HINT_MAX): number {
   return Math.max(0, max - used);
 }
 
+/** 现在这一手最好找的那一对落在盘面的哪一带 */
+export type ScanBand = "上" | "中" | "下";
+
+export interface SelfHelp {
+  /** 此刻场上一共有几对连得上 */
+  pairs: number;
+  /** 最好找的那一对在哪一带 */
+  band: ScanBand;
+  /** 它是不是贴着边（最外一圈）——贴边的线拐弯少，最适合拿来起手 */
+  edge: boolean;
+  /** 说给孩子听的那句话：指方向、不指格子 */
+  word: string;
+}
+
+/**
+ * 三次提示用光之后说什么。
+ *
+ * 原来提示用完按钮就灰掉，屏幕上只剩一句「用完啦，接下来靠自己扫盘」。
+ * 「靠自己扫盘」不是方法，是把问题原样退回去——孩子卡住的恰恰是不知道从哪儿扫起。
+ *
+ * 这里换成**指方向不指格子**：报出此刻还有几对连得上，
+ * 再说最好找的那一对在上 / 中 / 下哪一带、贴不贴边。
+ * 答案还是要孩子自己找，但搜索范围从整盘缩到一条，
+ * 而「贴边的先看、同行同列先看」这条规矩他下一局还用得上。
+ */
+export function selfHelp(board: BoardState, maxTurns = 2): SelfHelp {
+  const spots = new Map<number, Pt[]>();
+  for (let r = 0; r < board.R; r++) {
+    for (let c = 0; c < board.C; c++) {
+      const v = board.grid[r][c];
+      if (v < 0) continue;
+      const list = spots.get(v);
+      if (list) list.push([r, c]);
+      else spots.set(v, [[r, c]]);
+    }
+  }
+  let pairs = 0;
+  let pick: { a: Pt; z: Pt; turns: number } | null = null;
+  for (const list of spots.values()) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        if (!findPath(board, list[i], list[j], maxTurns)) continue;
+        pairs++;
+        const turns = turnCount(findPath(board, list[i], list[j], maxTurns)!);
+        if (!pick || turns < pick.turns) pick = { a: list[i], z: list[j], turns };
+      }
+    }
+  }
+  if (!pick) {
+    return { pairs: 0, band: "中", edge: false, word: "这会儿真的一对都连不上了～按一下重排，盘面会换成还走得动的样子。" };
+  }
+  const mid = (pick.a[0] + pick.z[0]) / 2;
+  const band: ScanBand = mid <= 1 + board.rows / 3 ? "上" : mid >= 1 + (board.rows * 2) / 3 ? "下" : "中";
+  const onEdge = (p: Pt): boolean => p[0] === 1 || p[0] === board.rows || p[1] === 1 || p[1] === board.cols;
+  const edge = onEdge(pick.a) || onEdge(pick.z);
+  const where = edge ? `${band}半场贴边那一圈` : `${band}半场靠里那一片`;
+  const how = pick.turns === 0 ? "而且是一条直线，同行同列先扫就撞得上" : "线拐得不多，顺着行和列比一比就找出来了";
+  return {
+    pairs,
+    band,
+    edge,
+    word: `提示用完啦，不过场上还有 ${pairs} 对连得上～最好找的在${where}，${how}。`
+  };
+}
+
 /**
  * 星星：剩的时间越多越好，但**只要用过提示就封顶两星**。
  * 一次都不给三星是太严了，孩子会不敢按；封顶两星刚好。

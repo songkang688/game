@@ -38,7 +38,8 @@ import {
   isHazard,
   markReachable,
   missCostsLife,
-  missWord,
+  missReason,
+  missWordFor,
   planDrops,
   RAIN_CHUNK,
   RAIN_LOOKAHEAD,
@@ -563,7 +564,10 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           missed++;
           combo = 0;
           ctx.sfx("oops");
-          msgEl.textContent = missWord(missed);
+          // 说清是「起步晚了」「这颗快」「差半个篮子」还是「刚被压慢」，
+          // 四种原因对应四种做法，孩子才改得到点子上
+          const nearest = basketXs().reduce((a, b) => (Math.abs(b - it.x) < Math.abs(a - it.x) ? b : a));
+          msgEl.textContent = missWordFor(missReason(it.x, nearest, it.plan.vy, slowLeft), missed);
           updateTop();
           if (missed >= MAX_MISS) {
             finish(false);
@@ -1136,7 +1140,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
         st = rainMiss(st, it.plan.kind, it.plan.bonus);
         if (!it.plan.bonus && missCostsLife(it.plan.kind)) {
           api.play("oops");
-          msgEl.textContent = missWord(st.missed);
+          msgEl.textContent = missWordFor(missReason(it.x, basketX, it.plan.vy), st.missed);
         }
         updateTop();
         if (st.over) {

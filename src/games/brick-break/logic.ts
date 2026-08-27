@@ -656,6 +656,34 @@ export function towerSpeed(elapsed: number): number {
 }
 
 /**
+ * 下一排砖挤进来还有几秒。
+ *
+ * 改成按时间加速之后，「打得快就能多玩一会儿」这件事在数值上成立了，
+ * 可屏幕上看不出来：墙一直在压，孩子分不清现在压得比开场快多少，
+ * 也就学不到「先抢着清一行，再回头慢慢磨」这个节奏。把倒数报出来，
+ * 那条看不见的规律才变成看得见的钟。
+ */
+export function towerNextRowIn(state: TowerState): number {
+  const v = towerSpeed(state.elapsed);
+  if (v <= 0) return Infinity;
+  return Math.max(0, (BRICK_H - state.drop) / v);
+}
+
+/** 这一趟的下压加速到几成：0 = 刚开场那一档，1 = 已经顶到封顶速度 */
+export function towerPacePct(state: TowerState): number {
+  const span = TOWER_SPEED_MAX - TOWER_SPEED_BASE;
+  if (span <= 0) return 1;
+  return Math.min(1, Math.max(0, (towerSpeed(state.elapsed) - TOWER_SPEED_BASE) / span));
+}
+
+/** 顶栏那格节奏牌上写什么：三档说法，只描述节奏，不催也不吓 */
+export function towerPaceWord(state: TowerState): string {
+  const pct = towerPacePct(state);
+  const beat = pct < 0.34 ? "慢" : pct < 0.72 ? "中" : "快";
+  return `⏱️ ${beat}速 ${towerNextRowIn(state).toFixed(1)}s`;
+}
+
+/**
  * 把已经打空的排收掉，下面那半截整体往上提一格。
  *
  * 原来空排是原地留着的（怕行号变了砖墙看起来「跳一下」），

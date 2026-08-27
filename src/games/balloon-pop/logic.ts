@@ -470,6 +470,30 @@ export function festGiftFlightS(wave: number): number {
   return (SKY_H + 40 - ESCAPE_Y) / (festRiseSpeed(wave) * GIFT_RISE_MUL);
 }
 
+/** 还剩这么久就要飘出画面的气球，算「快走了」 */
+export const ESCAPE_WARN_S = 1.4;
+
+/** 这个气球还有几秒飘出画面（越小越急） */
+export function escapeIn(y: number, riseSpeed: number): number {
+  if (riseSpeed <= 0) return Infinity;
+  return Math.max(0, (y - ESCAPE_Y) / riseSpeed);
+}
+
+/**
+ * 这个气球是不是「快走了」。
+ *
+ * 气球一路往上飘，快到顶的那一个和刚出场的那一个长得一模一样，
+ * 孩子只能靠「它在上面」自己判断还剩多久——可上升速度是一直在变的，
+ * 同一个高度在开场还有三秒，到后面只剩一秒。
+ * 屏幕不告诉他，他就只能一次次靠飘走来体会，那学得太贵了。
+ *
+ * 标出来之后，「先处理最靠上的那几个」这条本来只写在失败话术里的道理
+ * （`goalFailure` 那句「优先处理最靠上的那几个」），当场就看得见。
+ */
+export function aboutToEscape(y: number, riseSpeed: number, warn = ESCAPE_WARN_S): boolean {
+  return escapeIn(y, riseSpeed) <= warn;
+}
+
 /** 气球节一次排这么多个，出完再续一段——所以天空不会空掉 */
 export const FEST_CHUNK = 900;
 
