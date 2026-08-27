@@ -14,6 +14,8 @@ import {
   START_GAP,
   SUPER_COST,
   WALL_MARGIN,
+  activeBoxAt,
+  advanceAt,
   characterById,
   type Character,
   type Move,
@@ -24,12 +26,14 @@ import {
   GUARD_BREAK_FRAMES,
   METER_ON_TAKEN,
   NORMAL_WAKEUP_FRAMES,
+  THROW_PROTECT_FRAMES,
   WAKEUP_INVULN,
   blocksAttack,
   bodyGap,
   canChain,
   canPaySuper,
   cappedOutcome,
+  extendHurtRect,
   facingTowards,
   guardAfterBlock,
   guardRegen,
@@ -184,6 +188,8 @@ export interface FighterState {
   teched: boolean;
   /** 无敌帧（起身瞬间） */
   invuln: number;
+  /** 投技保护帧：刚被摔过的人这段时间内摔不着，投技循环从根上不成立 */
+  throwProtect: number;
   /** 这一段连段我打中了几下 */
   combo: number;
   /** 这一段连段已经用过哪几招（同一招不许在同一段里用第二次） */
@@ -270,6 +276,7 @@ function makeFighter(charId: string, side: 0 | 1, buff: FighterBuff): FighterSta
     downFrames: 0,
     teched: false,
     invuln: 0,
+    throwProtect: 0,
     combo: 0,
     comboUsed: [],
     comboTimer: 0,
@@ -322,15 +329,25 @@ export function isFree(f: FighterState): boolean {
   return FREE_PHASES.includes(f.phase);
 }
 
+/**
+ * 这一帧的受击框。站着一个高、蹲着矮一截；
+ * 招式打出去之后（命中帧与收招帧）前面还要多伸出 `hurtExtend` 那么一截。
+ */
 export function fighterHurtRect(f: FighterState) {
   const ch = charOf(f);
-  return hurtRect(f.x, f.y, ch.halfWidth, ch.height, ch.crouchHeight, f.crouching && !f.airborne);
+  const base = hurtRect(f.x, f.y, ch.halfWidth, ch.height, ch.crouchHeight, f.crouching && !f.airborne);
+  const mv = currentMove(f);
+  if (!mv || f.phase !== "attack" || mv.hurtExtend <= 0) return base;
+  const ph = movePhase(mv, f.frame);
+  if (ph !== "active" && ph !== "recovery") return base;
+  return extendHurtRect(base, f.facing, mv.hurtExtend);
 }
 
+/** 这一帧真正生效的判定框（按帧成长；不在命中帧就是 null） */
 export function activeHitRect(f: FighterState) {
   const mv = currentMove(f);
   if (!mv || f.phase !== "attack" || !isActiveFrame(mv, f.frame)) return null;
-  return worldBox(f.x, f.y, f.facing, mv.box);
+  return worldBox(f.x, f.y, f.facing, activeBoxAt(mv, f.frame));
 }
 
 /** 两人身体之间的净距离 */
@@ -396,6 +413,7 @@ function updateFighter(state: MatchState, f: FighterState, other: FighterState, 
   const ch = charOf(f);
 
   if (f.invuln > 0) f.invuln--;
+  if (f.throwProtect > 0) f.throwProtect--;
   if (f.comboTimer > 0) {
     f.comboTimer--;
     if (f.comboTimer === 0) {
@@ -459,6 +477,9 @@ function updateFighter(state: MatchState, f: FighterState, other: FighterState, 
     }
     case "attack": {
       const mv = charOf(f).moves[f.slot as MoveSlot];
+      // 突进招真的往前走：位移平摊在命中帧上，撞墙与推挤照旧由后面两步收拾
+      const step = advanceAt(mv, f.frame);
+      if (step > 0) f.x += f.facing * step;
       f.frame++;
       // 命中 / 被挡之后可以取消成更"重"的招，这就是连段
       if (f.hitDone && movePhase(mv, f.frame) !== "done") {
@@ -558,10 +579,10 @@ function findContacts(state: MatchState): Contact[] {
     if (!mv || a.phase !== "attack" || a.hitDone || !isActiveFrame(mv, a.frame)) continue;
     if (!hittable(d)) continue;
     if (mv.kind === "throw") {
-      if (throwConnects(gapBetween(a, d), d.phase, d.airborne)) out.push({ atk, move: mv });
+      if (throwConnects(gapBetween(a, d), d.phase, d.airborne, d.throwProtect)) out.push({ atk, move: mv });
       continue;
     }
-    const hit = worldBox(a.x, a.y, a.facing, mv.box);
+    const hit = worldBox(a.x, a.y, a.facing, activeBoxAt(mv, a.frame));
     if (rectsOverlap(hit, fighterHurtRect(d))) out.push({ atk, move: mv });
   }
   return out;
@@ -640,6 +661,8 @@ function applyContact(state: MatchState, c: Contact, defenderInput: InputFrame):
     d.airborne = false;
     d.y = 0;
     d.vy = 0;
+    // 被摔倒的人爬起来之后有一段摔不着的时间：摔 → 起身 → 再摔 这条循环不成立
+    if (mv.kind === "throw") d.throwProtect = NORMAL_WAKEUP_FRAMES + THROW_PROTECT_FRAMES;
   } else {
     d.phase = "hitstun";
     d.stun = stun;

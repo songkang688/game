@@ -1,14 +1,16 @@
 // 泡泡炸弹人 · 纯逻辑层。
 //
 // 这一层只算数,不画一个像素、不碰一次 DOM:
-//  - 棋盘与走位(硬墙 / 软砖 / 空地,踢炸弹、穿砖);
-//  - 爆风传播与连锁引爆(`blastCells` / `chainBombs`,纯函数);
-//  - 软砖里的道具掉落(`rollItem`,同一颗种子同一格永远掉同一件);
-//  - 世界推进 `stepWorld`:给定 dt 与两位玩家的意图,把炸弹、爆风、
+//  - 棋盘与走位(硬墙 / 软砖 / 空地,踢泡泡、穿泡,以及 1.2 的拐弯补正 `planTurn`);
+//  - 彩虹波传播与连锁(`blastCells` / `chainBombs` / `chainWaves`,纯函数);
+//  - 软砖里的道具掉落(`rollItem` 老六件 / `rollItemV2` 含护盾的七件,同一颗种子同一格永远掉同一件);
+//  - 世界推进 `stepWorld`:给定 dt 与两位玩家的意图,把泡泡、彩虹波、
 //    小怪、道具、出口全部往前走一帧,并把这一帧发生的事记成事件。
 //
-// 全程没有血、没有伤、没有死亡:被爆风碰到的人和小怪只是被泡泡包起来,
-// 玩家困几秒自己就破泡泡出来,小怪则开开心心飘回家。
+// **泡泡不是炸药**:全程没有火焰、没有伤害、没有死亡。
+// 泡泡到点是「啵」的一声破开一圈彩虹波;被波扫到的人只是被罩进一个泡泡里,
+// 自己晃几秒就出来,合作模式里队友还能贴上去拍破把他捞出来(`popBubble`);
+// 被扫到的砖变成一把小花散开;小怪则开开心心飘回家。
 //
 // 逃生路径与 AI 决策在 ai.ts;关卡数据在 levels.ts;画面在 index.ts。
 
@@ -108,9 +110,16 @@ export function manhattan(b: Board, a: number, c: number): number {
 // 道具
 // ---------------------------------------------------------------------------
 
-export type ItemKind = "fire" | "bomb" | "speed" | "kick" | "ghost" | "remote";
+export type ItemKind = "fire" | "bomb" | "speed" | "kick" | "ghost" | "remote" | "shield";
 
+/**
+ * 老池(六件)。**前 99 关与老存档认的就是这一张表**,
+ * 顺序与权重一个字节都不能动,不然背过板的孩子回来会发现道具全换了位置。
+ */
 export const ITEM_KINDS: readonly ItemKind[] = ["fire", "bomb", "speed", "kick", "ghost", "remote"];
+
+/** 1.2 新池(七件):第 100 关起、擂台与泡泡塔用,多一件「泡泡护盾」 */
+export const ITEM_KINDS_V2: readonly ItemKind[] = [...ITEM_KINDS, "shield"];
 
 export interface ItemInfo {
   emoji: string;
@@ -120,18 +129,21 @@ export interface ItemInfo {
 }
 
 export const ITEM_INFO: Record<ItemKind, ItemInfo> = {
-  fire: { emoji: "🔥", name: "火力+1", line: "火力+1!爆风又长了一格。" },
-  bomb: { emoji: "💣", name: "炸弹+1", line: "炸弹+1!可以同时多摆一颗。" },
+  fire: { emoji: "🌈", name: "彩虹波+1", line: "彩虹波+1!泡泡破开时的波纹又长了一格。" },
+  bomb: { emoji: "🫧", name: "泡泡+1", line: "泡泡+1!可以同时多放一颗。" },
   speed: { emoji: "👟", name: "速度+1", line: "速度+1!跑起来更利索了。" },
-  kick: { emoji: "🦵", name: "踢炸弹", line: "学会踢炸弹啦!撞上去就能把它踹走。" },
-  ghost: { emoji: "🫧", name: "穿墙泡", line: "穿墙泡!软砖可以直接钻过去。" },
-  remote: { emoji: "📡", name: "遥控引爆", line: "遥控引爆!想炸的时候再按引爆键。" },
+  kick: { emoji: "🦵", name: "踢泡泡", line: "学会踢泡泡啦!撞上去就能把它踹到走廊深处。" },
+  ghost: { emoji: "👻", name: "穿泡", line: "穿泡!软砖可以直接钻过去。" },
+  remote: { emoji: "📡", name: "遥控拍破", line: "遥控拍破!想让它破的时候再按一下。" },
+  shield: { emoji: "🛡️", name: "泡泡护盾", line: "泡泡护盾!下一次被彩虹波扫到,护盾替你挡一下。" },
 };
 
-/** 火力 / 炸弹数 / 速度的上限,免得后期一颗炸弹清全屏 */
+/** 彩虹波长度 / 泡泡数 / 速度的上限,免得后期一颗泡泡清全屏 */
 export const MAX_POWER = 8;
 export const MAX_BOMBS = 6;
 export const MAX_SPEED = 5;
+/** 护盾最多叠两层 */
+export const MAX_SHIELD = 2;
 
 /**
  * 软砖被炸掉时掉什么(纯函数)。
@@ -162,20 +174,83 @@ export function rollItem(seed: number, cell: number, richness = 1): ItemKind | n
   return "remote";
 }
 
+/**
+ * 1.2 的新掉落表(七件,多一件护盾)。
+ *
+ * 为什么另开一个函数而不是给 `rollItem` 加参数:掉落表一改,同一颗种子同一格掉的东西就变了,
+ * 前 99 关的藏品位置会整体错位。老函数原样封存给前 99 关用,新表只在
+ * 第 100 关起、对战擂台与泡泡塔上线,两边都能背板。
+ */
+export function rollItemV2(seed: number, cell: number, richness = 1): ItemKind | null {
+  if (richness <= 0) return null;
+  // 换一颗盐,免得同一格在新旧两张表里掉出同一件,失去「新池」的意义
+  let a = (Math.imul(seed | 0, 0x27d4eb2f) + Math.imul(cell | 0, 0x165667b1)) | 0;
+  a = (a + 0x6d2b79f5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  const r = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+
+  const rate = Math.min(0.7, 0.42 * richness);
+  if (r >= rate) return null;
+  const pickR = (r / rate) * 100;
+  if (pickR < 24) return "fire";
+  if (pickR < 46) return "bomb";
+  if (pickR < 64) return "speed";
+  if (pickR < 76) return "kick";
+  if (pickR < 85) return "ghost";
+  if (pickR < 93) return "remote";
+  return "shield";
+}
+
 // ---------------------------------------------------------------------------
-// 炸弹与爆风
+// 泡泡与彩虹波(1.2:整条时间线都是常量,画面与 AI 读同一组数)
 // ---------------------------------------------------------------------------
 
-/** 引信:放下去到自己炸的毫秒数 */
-export const FUSE_MS = 2400;
-/** 遥控炸弹的保险丝:一直不按引爆键,过了这个时间也会自己炸(免得摆满全场) */
+// 放下去 → 0.4 秒鼓起来 → 2.0 秒「啵」的一声破开 → 波及到的泡泡 3 帧内跟着破。
+// 这四个数是本款手感的全部来源,谁也不许在别处写死。
+
+/** 一帧按 60fps 算多少毫秒(连锁节奏用它换算) */
+export const FRAME_MS = 16;
+/** 放下去到彻底鼓起来:这 0.4 秒里泡泡还在长大,踢得动、也躲得开 */
+export const BUBBLE_GROW_MS = 400;
+/** 放下去到「啵」的一声破开 */
+export const BUBBLE_POP_MS = 2000;
+/** 引信:放下去到自己破开的毫秒数(= 时间线的终点) */
+export const FUSE_MS = BUBBLE_POP_MS;
+/** 被波及的泡泡最多几帧内跟着破 */
+export const CHAIN_FRAMES = 3;
+/** 连锁一环传一环的间隔:一帧一环,肉眼看得见「一颗带一串」 */
+export const CHAIN_STEP_MS = FRAME_MS;
+/** 连锁的兑现窗口:被波及的泡泡从被点到破,绝不超过这个时间 */
+export const CHAIN_WINDOW_MS = CHAIN_FRAMES * FRAME_MS;
+/** 遥控泡泡的保险绳:一直不按拍破键,过了这个时间它也会自己破(免得摆满全场) */
 export const REMOTE_FUSE_MS = 9000;
-/** 爆风留在格子上的时间 */
+/** 彩虹波留在格子上的时间 */
 export const FLAME_MS = 460;
-/** 被泡泡包住多久自己破出来 */
+/** 被泡泡罩住多久自己晃出来 */
 export const BUBBLE_MS = 3600;
-/** 被踢的炸弹每滑一格要多久 */
+/** 被踢的泡泡每滑一格要多久 */
 export const SLIDE_MS = 110;
+
+/** 泡泡的三个阶段:鼓起来 → 晃悠悠 → 马上要破 */
+export type BubbleStage = "grow" | "wobble" | "burst";
+
+/** 已经过去多少毫秒(遥控泡泡按自己的保险绳算) */
+export function bubbleAge(fuse: number, remote = false): number {
+  const total = remote ? REMOTE_FUSE_MS : BUBBLE_POP_MS;
+  return Math.max(0, total - Math.max(0, fuse));
+}
+
+/** 膨胀进度 0..1:0 是刚放下的小点,1 是鼓满了 */
+export function growProgress(fuse: number, remote = false): number {
+  return Math.max(0, Math.min(1, bubbleAge(fuse, remote) / BUBBLE_GROW_MS));
+}
+
+/** 这一颗泡泡现在处在时间线的哪一段 */
+export function bubbleStage(fuse: number, remote = false): BubbleStage {
+  if (bubbleAge(fuse, remote) < BUBBLE_GROW_MS) return "grow";
+  return fuse <= CHAIN_WINDOW_MS * 4 ? "burst" : "wobble";
+}
 
 export interface Bomb {
   id: number;
@@ -191,6 +266,8 @@ export interface Bomb {
   slide: number;
   /** 滑行累计时间 */
   slideT: number;
+  /** 是被隔壁那颗的彩虹波点着的(连锁的一环,画面给它换一圈颜色) */
+  chained?: boolean;
 }
 
 /**
@@ -272,6 +349,69 @@ export function chainBombs(
   };
 }
 
+/** 连锁的一环:第几波、这一波破的是哪几颗、盖到哪些格 */
+export interface ChainWave {
+  wave: number;
+  ids: number[];
+  cells: number[];
+  /** 这一波相对第一声「啵」延后多少毫秒 */
+  delay: number;
+}
+
+/**
+ * 把一串连锁拆成一波一波(纯函数)。
+ *
+ * 第 0 波是自己到点破的那几颗;第 k+1 波是被第 k 波的彩虹波扫到的泡泡。
+ * 每一波的 id 与格子都升序排好,**同一个局面永远拆出同一份波次表**——
+ * 连锁顺序可复现这条要求就落在这里,画面按 `delay` 一环一环放彩虹圈。
+ */
+export function chainWaves(
+  board: Board,
+  bombs: readonly Bomb[],
+  seedIds: readonly number[],
+  pierce = false
+): ChainWave[] {
+  const byId = new Map<number, Bomb>();
+  for (const b of bombs) byId.set(b.id, b);
+  const atCell = new Map<number, Bomb>();
+  // 同一格万一摞了两颗(理论上不会),取 id 小的那颗,保证结果稳定
+  for (const b of [...bombs].sort((a, b) => a.id - b.id)) if (!atCell.has(b.pos)) atCell.set(b.pos, b);
+
+  const fired = new Set<number>();
+  let current = [...new Set(seedIds)].filter((id) => byId.has(id)).sort((a, b) => a - b);
+  for (const id of current) fired.add(id);
+
+  const out: ChainWave[] = [];
+  let wave = 0;
+  while (current.length > 0) {
+    const cells = new Set<number>();
+    const next = new Set<number>();
+    for (const id of current) {
+      const bomb = byId.get(id) as Bomb;
+      for (const cell of blastCells(board, bomb.pos, bomb.power, pierce)) {
+        cells.add(cell);
+        const other = atCell.get(cell);
+        if (other && !fired.has(other.id)) next.add(other.id);
+      }
+    }
+    out.push({
+      wave,
+      ids: [...current],
+      cells: [...cells].sort((a, b) => a - b),
+      delay: chainDelay(wave),
+    });
+    for (const id of next) fired.add(id);
+    current = [...next].sort((a, b) => a - b);
+    wave++;
+  }
+  return out;
+}
+
+/** 第 wave 波相对第一声「啵」延后多少毫秒(一波一帧) */
+export function chainDelay(wave: number): number {
+  return Math.max(0, Math.round(wave)) * CHAIN_STEP_MS;
+}
+
 // ---------------------------------------------------------------------------
 // 角色
 // ---------------------------------------------------------------------------
@@ -298,10 +438,20 @@ export interface Fighter {
   kick: boolean;
   ghost: boolean;
   remote: boolean;
-  /** 被泡泡包住的剩余毫秒,>0 时不能动也不能放弹 */
+  /** 手上还有几层泡泡护盾:被彩虹波扫到时先扣护盾,人不进泡泡 */
+  shield: number;
+  /** 被泡泡罩住的剩余毫秒,>0 时不能动也不能放泡泡 */
   bubbleT: number;
-  /** 这一局一共被包了几次 */
+  /** 这一局一共被罩了几次 */
   bubbled: number;
+  /** 护盾刚替你挡过一下的无敌毫秒:同一圈彩虹波不许连扣两层 */
+  safeT: number;
+  /** 队友贴着泡泡拍了多久(合作模式的救援进度) */
+  rescueT: number;
+  /** 这一局被队友救出来几次 */
+  rescued: number;
+  /** 这一局救了队友几次 */
+  saves: number;
   /** 走格子的冷却 */
   moveT: number;
   facing: number;
@@ -324,8 +474,13 @@ export function makeFighter(index: number, name: string, emoji: string, pos: num
     kick: false,
     ghost: false,
     remote: false,
+    shield: 0,
     bubbleT: 0,
     bubbled: 0,
+    safeT: 0,
+    rescueT: 0,
+    rescued: 0,
+    saves: 0,
     moveT: 0,
     facing: DIR_DOWN,
     ai: false,
@@ -359,6 +514,10 @@ export function applyItem(f: Fighter, kind: ItemKind): boolean {
     case "remote":
       if (f.remote) return false;
       f.remote = true;
+      return true;
+    case "shield":
+      if (f.shield >= MAX_SHIELD) return false;
+      f.shield++;
       return true;
   }
 }
@@ -412,11 +571,17 @@ export function makeCritter(id: number, kind: CritterKind, pos: number, dir = DI
 export type GoalKind = "clear" | "exit" | "boss";
 
 export type WorldEvent =
-  | { kind: "boom"; cells: number[] }
+  /** 一声「啵」:cells 是彩虹波盖到的格,waves 是这一串连锁的波次(画面按波放圈) */
+  | { kind: "boom"; cells: number[]; waves: ChainWave[] }
+  /** 一块砖变成小花散开了 */
   | { kind: "brick"; cell: number }
   | { kind: "pickup"; who: number; item: ItemKind }
   | { kind: "bubble"; who: number }
+  /** 护盾替你挡了一下,人没进泡泡 */
+  | { kind: "shield"; who: number; left: number }
   | { kind: "free"; who: number }
+  /** 队友把泡泡拍破了:who 被救,by 是救人的那个 */
+  | { kind: "rescue"; who: number; by: number }
   | { kind: "critter"; id: number; done: boolean }
   | { kind: "exit"; who: number };
 
@@ -437,8 +602,10 @@ export interface World {
   /** 出口要先清完小怪才打得开吗 */
   exitNeedsClear: boolean;
   goal: GoalKind;
-  /** 爆风能不能贯通软砖(后期 Boss 关) */
+  /** 彩虹波能不能贯通软砖(后期泡泡王关) */
   pierce: boolean;
+  /** 合作模式:被罩住的人可以被队友拍破救出来(见 RESCUE_MS) */
+  rescue: boolean;
   nextBombId: number;
   /** 已经过去的毫秒 */
   time: number;
@@ -447,6 +614,8 @@ export interface World {
   /** 道具掉落用的种子 */
   seed: number;
   richness: number;
+  /** 掉落表:v1 是前 99 关的老六件,v2 是含护盾的七件 */
+  pool: "v1" | "v2";
   /** 本帧发生的事,index.ts 消费完自己清空 */
   events: WorldEvent[];
   /** 谁走到了出口(-1 表示还没有) */
@@ -462,9 +631,11 @@ export interface WorldInit {
   exitNeedsClear?: boolean;
   goal?: GoalKind;
   pierce?: boolean;
+  rescue?: boolean;
   limit?: number;
   seed?: number;
   richness?: number;
+  pool?: "v1" | "v2";
 }
 
 export function createWorld(init: WorldInit): World {
@@ -481,11 +652,13 @@ export function createWorld(init: WorldInit): World {
     exitNeedsClear: init.exitNeedsClear ?? true,
     goal: init.goal ?? "clear",
     pierce: init.pierce ?? false,
+    rescue: init.rescue ?? false,
     nextBombId: 1,
     time: 0,
     limit: init.limit ?? 0,
     seed: init.seed ?? 1,
     richness: init.richness ?? 1,
+    pool: init.pool ?? "v1",
     events: [],
     escaped: -1,
   };
@@ -523,11 +696,86 @@ export function canStand(board: Board, cell: number, opts: WalkOpts = {}): boole
   return true;
 }
 
-/** 当前场上全部炸弹所在格 */
+/** 当前场上全部泡泡所在格 */
 export function bombCells(world: World): Set<number> {
   const s = new Set<number>();
   for (const b of world.bombs) s.add(b.pos);
   return s;
+}
+
+// ---------------------------------------------------------------------------
+// 转向补正(1.2):差半格也能拐弯
+// ---------------------------------------------------------------------------
+
+/**
+ * 补正阈值:想拐弯的时候,**前方半格以内**只要有通路就自动对齐过去。
+ *
+ * 棋盘是一格一格的,半格换算到格子上就是「往两边各看一格」:
+ * 角色的身子本来就骑在格子边界上,差半格的观感,落到数据上正好是相邻的那一格。
+ */
+export const TURN_ASSIST_CELLS = 0.5;
+
+/** 补正最远看几格(由阈值换算,半格 → 1 格) */
+export function turnAssistReach(cells: number = TURN_ASSIST_CELLS): number {
+  return Math.max(1, Math.round(cells * 2));
+}
+
+export interface TurnPlan {
+  /** 这一帧真正要走的方向 */
+  dir: number;
+  /** 是不是补正出来的(true = 先往旁边挪一格对齐,下一步才拐过去) */
+  assisted: boolean;
+  /** 补正时先落脚的那一格(没补正就是 -1) */
+  via: number;
+}
+
+/**
+ * 拐弯补正(纯函数)。
+ *
+ * 想往 `want` 走却被墙或砖挡住时,顺着当前朝向的那条轴往两边各看 `turnAssistReach()` 格:
+ * 只要有一格「站得上去,而且从那里就能拐进 `want`」,就先往那一格挪,把自己对齐到路口上。
+ * 找不到就老老实实返回 `want`(让上层照常判定「走不动」)。
+ *
+ * 只对地形补正:目标格上有泡泡时不补正,因为那一步是「踢泡泡」,不该被悄悄改成别的方向。
+ */
+export function planTurn(
+  board: Board,
+  from: number,
+  facing: number,
+  want: number,
+  opts: WalkOpts & { reach?: number } = {}
+): TurnPlan {
+  const plain: TurnPlan = { dir: want, assisted: false, via: -1 };
+  if (want < 0 || want > 3) return plain;
+
+  const target = stepCell(board, from, want);
+  // 目标格本来就能走 / 上面压着一颗泡泡(那是踢的事) → 不插手
+  if (target >= 0 && canStand(board, target, opts)) return plain;
+  if (target >= 0 && opts.bombs?.has(target)) return plain;
+
+  const reach = Math.max(1, Math.round(opts.reach ?? turnAssistReach()));
+  // 先顺着当前朝向找(玩家正在跑的方向优先,拐起来最跟手),再看反方向
+  const axis = facing >= 0 && facing % 2 !== want % 2 ? [facing, (facing + 2) % 4] : [(want + 1) % 4, (want + 3) % 4];
+
+  for (let step = 1; step <= reach; step++) {
+    for (const side of axis) {
+      let cursor = from;
+      let ok = true;
+      for (let k = 0; k < step; k++) {
+        const nb = stepCell(board, cursor, side);
+        if (nb < 0 || !canStand(board, nb, { ...opts, from })) {
+          ok = false;
+          break;
+        }
+        cursor = nb;
+      }
+      if (!ok) continue;
+      const turn = stepCell(board, cursor, want);
+      if (turn < 0 || !canStand(board, turn, { ...opts, from })) continue;
+      return { dir: side, assisted: true, via: cursor };
+    }
+  }
+  return plain;
 }
 
 // ---------------------------------------------------------------------------
@@ -606,25 +854,116 @@ function pickUp(world: World, who: number): void {
   world.events.push({ kind: "pickup", who, item });
 }
 
-/** 把某人包成泡泡(同一个人正被包着就不重复计数) */
+/**
+ * 把某人罩进泡泡里(同一个人正被罩着就不重复计数)。
+ *
+ * 手上有护盾就先扣护盾:泡泡「啵」地替他破掉一层,人一点事没有,
+ * 再给一小段无敌时间,免得同一圈彩虹波在相邻两帧里把两层护盾一起吃掉。
+ */
 export function bubble(world: World, who: number): void {
   const f = world.fighters[who];
-  if (!f || f.bubbleT > 0) return;
-  f.bubbleT = BUBBLE_MS;
+  if (!f || f.bubbleT > 0 || f.safeT > 0) return;
+  if (f.shield > 0) {
+    f.shield--;
+    f.safeT = FLAME_MS;
+    world.events.push({ kind: "shield", who, left: f.shield });
+    return;
+  }
+  f.bubbleT = world.rescue ? RESCUE_MS : BUBBLE_MS;
+  f.rescueT = 0;
   f.bubbled++;
   world.events.push({ kind: "bubble", who });
+}
+
+/**
+ * 刚从泡泡里出来的一小会儿有一层彩虹光罩着,谁也碰不到。
+ *
+ * 没有这段缓冲会出人命(不是真的出人命,是玩不下去):追追怪站在你头上不走,
+ * 泡泡一破立刻又把你罩回去,一整关就这么循环到时间结束。
+ */
+export const FREE_GRACE_MS = 900;
+/** 合作模式:被罩住的人最多困这么久,这段时间里队友随时能把他拍出来 */
+export const RESCUE_MS = 5000;
+/** 队友贴着泡泡拍多久才「啵」的一下救出来 */
+export const RESCUE_TOUCH_MS = 600;
+
+/** 谁能来救 who:同队、自己没被罩住、就站在旁边一格(或同一格) */
+export function rescuerFor(world: World, who: number): number {
+  const f = world.fighters[who];
+  if (!f || f.bubbleT <= 0) return -1;
+  const near = new Set<number>([f.pos, ...neighbors(world.board, f.pos)]);
+  for (const mate of world.fighters) {
+    if (mate.index === who || mate.team !== f.team || mate.bubbleT > 0) continue;
+    if (near.has(mate.pos)) return mate.index;
+  }
+  return -1;
+}
+
+/** 把泡泡拍破,把人放出来(by 是救人的那位;-1 表示自己晃出来的) */
+export function popBubble(world: World, who: number, by = -1): boolean {
+  const f = world.fighters[who];
+  if (!f || f.bubbleT <= 0) return false;
+  f.bubbleT = 0;
+  f.rescueT = 0;
+  f.safeT = Math.max(f.safeT, FREE_GRACE_MS);
+  if (by >= 0) {
+    f.rescued++;
+    const mate = world.fighters[by];
+    if (mate) mate.saves++;
+    world.events.push({ kind: "rescue", who, by });
+  }
+  world.events.push({ kind: "free", who });
+  return true;
+}
+
+/**
+ * 主动踢一脚:把面前那颗泡泡朝自己的朝向踹出去(手机上的「踢泡钮」走这条)。
+ * 没学会踢泡、面前没泡泡、或者泡泡后面没地方滑,都返回 false。
+ */
+export function kickBomb(world: World, who: number, dir?: number): boolean {
+  const f = world.fighters[who];
+  if (!f || f.bubbleT > 0 || !f.kick) return false;
+  const way = dir === undefined ? f.facing : dir;
+  const next = stepCell(world.board, f.pos, way);
+  if (next < 0) return false;
+  const bomb = bombAt(world, next);
+  if (!bomb || bomb.slide !== DIR_NONE) return false;
+  const beyond = stepCell(world.board, next, way);
+  if (beyond < 0 || !canStand(world.board, beyond, { ghost: false, bombs: bombCells(world) })) return false;
+  bomb.slide = way;
+  bomb.slideT = 0;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
 // 爆炸
 // ---------------------------------------------------------------------------
 
-/** 引爆指定的几颗炸弹(会连锁),把砖、道具、人和小怪一并结算 */
+/**
+ * 让指定的几颗泡泡「啵」地破开,把砖、道具、人和小怪一并结算。
+ *
+ * 1.2 起连锁不再是瞬间全炸:被这一圈彩虹波扫到的泡泡只是**被点着**
+ * (引信压到 `CHAIN_STEP_MS`),下一帧才轮到它破。
+ * 这样一串泡泡是一环一环「啵啵啵」地传过去,看得见节奏,
+ * 而且每一环都在 `CHAIN_WINDOW_MS`(3 帧)内兑现,不会拖成慢动作。
+ */
 export function explodeBombs(world: World, ids: readonly number[]): number[] {
-  const { ids: fired, cells } = chainBombs(world.board, world.bombs, ids, world.pierce);
-  if (fired.length === 0) return [];
+  const seeds = [...new Set(ids)].sort((a, b) => a - b);
+  const waves = chainWaves(world.board, world.bombs, seeds, world.pierce);
+  if (waves.length === 0) return [];
+
+  const fired = waves[0].ids;
+  const cells = waves[0].cells;
   const firedSet = new Set(fired);
+  const nextWave = new Set(waves[1]?.ids ?? []);
   world.bombs = world.bombs.filter((b) => !firedSet.has(b.id));
+  // 被这一圈波扫到的泡泡:引信压到一帧,下一帧跟着破(顺序由 chainWaves 定死,可复现)
+  for (const b of world.bombs) {
+    if (nextWave.has(b.id) && b.fuse > CHAIN_STEP_MS) {
+      b.fuse = CHAIN_STEP_MS;
+      b.chained = true;
+    }
+  }
 
   for (const cell of cells) {
     world.flames.set(cell, FLAME_MS);
@@ -636,21 +975,22 @@ export function explodeBombs(world: World, ids: readonly number[]): number[] {
         world.hidden.delete(cell);
         world.items.set(cell, drop);
       } else {
-        const rolled = rollItem(world.seed, cell, world.richness);
+        const roll = world.pool === "v2" ? rollItemV2 : rollItem;
+        const rolled = roll(world.seed, cell, world.richness);
         if (rolled) world.items.set(cell, rolled);
       }
       if (cell === world.exit) world.exitOpen = true;
     } else {
-      // 地上的道具被爆风烧掉(免得刷屏),出口不会被烧
+      // 地上的道具被彩虹波卷走(免得刷屏),出口不会被卷走
       if (world.items.has(cell) && cell !== world.exit) world.items.delete(cell);
     }
   }
-  world.events.push({ kind: "boom", cells });
+  world.events.push({ kind: "boom", cells, waves });
   applyFlameHits(world, cells);
   return cells;
 }
 
-/** 爆风扫到的人和小怪 */
+/** 彩虹波扫到的人和小怪 */
 function applyFlameHits(world: World, cells: readonly number[]): void {
   const hot = new Set(cells);
   for (const f of world.fighters) {
@@ -674,21 +1014,23 @@ function applyFlameHits(world: World, cells: readonly number[]): void {
 export interface Intent {
   /** 想往哪走(-1 表示不动) */
   dir: number;
-  /** 这一帧按了放弹键 */
+  /** 这一帧按了放泡钮 */
   drop: boolean;
-  /** 这一帧按了引爆键 */
+  /** 这一帧按了遥控拍破键 */
   detonate: boolean;
+  /** 这一帧按了踢泡钮(手机上的第三颗按钮) */
+  kick?: boolean;
 }
 
 export function idleIntent(): Intent {
-  return { dir: DIR_NONE, drop: false, detonate: false };
+  return { dir: DIR_NONE, drop: false, detonate: false, kick: false };
 }
 
 /**
  * 把世界往前推 dt 毫秒。
  *
- * 顺序很讲究:先烧掉旧爆风 → 走炸弹引信与滑行 → 人动 → 小怪动 →
- * 最后再判一次「谁站在火里」,这样「刚好走进爆风」和「爆风刚好烧到脚下」
+ * 顺序很讲究:先散掉旧彩虹波 → 走泡泡引信与滑行 → 人动 → 小怪动 →
+ * 最后再判一次「谁站在波里」,这样「刚好走进彩虹波」和「彩虹波刚好扫到脚下」
  * 两种情况都会被抓到,不会漏判也不会重复判。
  */
 export function stepWorld(world: World, dt: number, intents: readonly Intent[]): void {
@@ -713,21 +1055,52 @@ export function stepWorld(world: World, dt: number, intents: readonly Intent[]):
 
   // 3) 人
   for (const f of world.fighters) {
+    if (f.safeT > 0) f.safeT = Math.max(0, f.safeT - step);
     if (f.bubbleT > 0) {
+      // 合作模式:队友贴着泡泡拍,拍够 RESCUE_TOUCH_MS 就「啵」的一下把人放出来
+      if (world.rescue) {
+        const mate = rescuerFor(world, f.index);
+        if (mate >= 0) {
+          f.rescueT += step;
+          if (f.rescueT >= RESCUE_TOUCH_MS) {
+            popBubble(world, f.index, mate);
+            continue;
+          }
+        } else {
+          f.rescueT = Math.max(0, f.rescueT - step);
+        }
+      }
       f.bubbleT -= step;
       if (f.bubbleT <= 0) {
         f.bubbleT = 0;
+        f.rescueT = 0;
+        f.safeT = Math.max(f.safeT, FREE_GRACE_MS);
         world.events.push({ kind: "free", who: f.index });
       }
       continue;
     }
     const intent = intents[f.index] ?? idleIntent();
     if (intent.detonate) detonate(world, f.index);
+    if (intent.kick) kickBomb(world, f.index);
     if (intent.drop) dropBomb(world, f.index);
     f.moveT -= step;
     if (f.moveT <= 0 && intent.dir >= 0) {
-      if (tryStep(world, f.index, intent.dir)) f.moveT = stepMsFor(f.speed);
-      else f.moveT = 60;
+      // 拐弯补正:请求的方向被墙挡住时,先往旁边对齐一格,让这一拐拐得过去。
+      // 只补人的手指头 —— 电脑玩家的每一步都是 BFS 算准的,替它改方向反而会把它推进彩虹波里。
+      const plan = f.ai
+        ? { dir: intent.dir, assisted: false, via: -1 }
+        : planTurn(world.board, f.pos, f.facing, intent.dir, {
+            ghost: f.ghost,
+            bombs: bombCells(world),
+            from: f.pos,
+          });
+      if (tryStep(world, f.index, plan.dir)) {
+        f.moveT = stepMsFor(f.speed);
+        // 补正只是「对齐」,朝向仍然记玩家真正想去的方向,下一步就拐过去了
+        if (plan.assisted) f.facing = intent.dir;
+      } else {
+        f.moveT = 60;
+      }
     } else if (f.moveT < 0) {
       f.moveT = 0;
     }
@@ -903,39 +1276,54 @@ export function rateLevel(secLeft: number, totalSec: number, bubbled: number): 1
 
 export function winLine(secLeft: number, bubbled: number, picked: number): string {
   if (bubbled === 0 && secLeft > 0) {
-    return `一次泡泡都没挨上,还剩 ${secLeft} 秒收工。摆弹的位置挑得很准,继续保持这个节奏。`;
+    return `一次泡泡都没挨上,还剩 ${secLeft} 秒收工。放泡泡的位置挑得很准,继续保持这个节奏。`;
   }
   if (bubbled === 0) {
-    return `全程没被泡泡包住,路线规划得很稳。下一关试着提前算好退路,时间还能再省一截。`;
+    return `全程没被泡泡罩住,路线规划得很稳。下一关试着提前算好退路,时间还能再省一截。`;
   }
-  return `被包了 ${bubbled} 次也照样通关,捡到 ${picked} 件道具。下次放弹前先想好往哪躲,时间会更宽裕。`;
+  return `被罩了 ${bubbled} 次也照样通关,捡到 ${picked} 件道具。下次放泡泡之前先想好往哪躲,时间会更宽裕。`;
 }
 
 export function loseLine(reason: "time" | "bubble"): string {
   if (reason === "time") {
-    return "时间到啦。下一次先炸开一条直路,把火力和炸弹数攒起来,清场速度会快很多。";
+    return "时间到啦。下一次先拍开一条直路,把彩虹波和泡泡数攒起来,清场速度会快很多。";
   }
-  return "泡泡把你包住了一小会儿。放弹之前先看好身后有没有退路,拐角是最好的藏身处。";
+  return "泡泡把你罩住了一小会儿。放泡泡之前先看好身后有没有退路,拐角是最好的藏身处。";
+}
+
+/** 合作模式的结算:救人是这一版最想让孩子看见的那件事,放在最前面说 */
+export function coopLine(saves: number, picked: number, bubbled: number): string {
+  if (saves > 0) {
+    return `两个人一共拍破 ${saves} 次泡泡把对方救出来,捡了 ${picked} 件道具。互相盯着点,谁被罩住都能捞回来。`;
+  }
+  if (bubbled > 0) {
+    return `这一关谁也没顾上救谁,被罩住 ${bubbled} 次都是自己晃出来的。下次听见「啵」的一声就往队友那边跑,5 秒之内拍一下就能救人。`;
+  }
+  return `两个人一次都没被罩住,配合得很干净,一共捡了 ${picked} 件道具。下一关试试分头开路,速度还能更快。`;
 }
 
 export function versusLine(scores: readonly number[], names: readonly string[]): string {
   return `${names[0]} ${scores[0]} 比 ${scores[1]} ${names[1]}`;
 }
 
-export function endlessLine(round: number, best: number): string {
-  if (round >= best && round > 0) {
-    return `撑到第 ${round} 轮,刷新了自己的纪录!场地越缩越小,越往后越要抢中间的位置。`;
+/** 无尽「泡泡塔」:一层一张小地图,说的是爬到第几层 */
+export function endlessLine(floor: number, best: number): string {
+  if (floor >= best && floor > 0) {
+    return `爬到泡泡塔第 ${floor} 层,刷新了自己的纪录!越往上小怪越多,先拍开一条能来回跑的路。`;
   }
-  return `这次到第 ${round} 轮,最好成绩是第 ${best} 轮。场地开始收缩前先往中间靠,活动空间会大很多。`;
+  return `这次爬到第 ${floor} 层,最好成绩是第 ${best} 层。上一层之前把彩虹波攒长一点,清场会快很多。`;
 }
 
 // ---------------------------------------------------------------------------
 // 键位
 // ---------------------------------------------------------------------------
 
-export type InputName = "up" | "right" | "down" | "left" | "drop" | "boom";
+export type InputName = "up" | "right" | "down" | "left" | "drop" | "boom" | "kick";
 
-/** 朵朵 WASD + F 放弹 / G 引爆;星星 方向键 + L 放弹 / K 引爆 */
+/**
+ * 朵朵 WASD + F 放泡 / G 拍破 / V 踢泡;
+ * 星星 方向键 + L 放泡 / K 拍破 / J 踢泡。两套键零重叠。
+ */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {
   KeyW: { player: 0, action: "up" },
   KeyD: { player: 0, action: "right" },
@@ -943,12 +1331,14 @@ export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {
   KeyA: { player: 0, action: "left" },
   KeyF: { player: 0, action: "drop" },
   KeyG: { player: 0, action: "boom" },
+  KeyV: { player: 0, action: "kick" },
   ArrowUp: { player: 1, action: "up" },
   ArrowRight: { player: 1, action: "right" },
   ArrowDown: { player: 1, action: "down" },
   ArrowLeft: { player: 1, action: "left" },
   KeyL: { player: 1, action: "drop" },
   KeyK: { player: 1, action: "boom" },
+  KeyJ: { player: 1, action: "kick" },
 };
 
 /**

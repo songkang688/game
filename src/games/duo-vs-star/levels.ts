@@ -5,7 +5,7 @@
  * 前几关是一对一慢慢练手，中段开始出现三人乱斗、限时守擂、无道具硬碰硬，
  * 章末是本章的「守场大将」。第 10 章把所有机关凑到一张图上收尾。
  */
-import type { AiTier } from "./ai";
+import { AI_STYLES, type AiStyle, type AiTier } from "./ai";
 import type { Chapter } from "../level99";
 import { ROSTER, fighterAt } from "./roster";
 import { STAGES } from "./stages";
@@ -15,6 +15,8 @@ export interface LevelFoe {
   tier: AiTier;
   /** 挥击力度加成 */
   powerBonus?: number;
+  /** 打法：会绕后 / 抢道具 / 等你出招 */
+  style?: AiStyle;
   /** 这一位的上场机会 */
   stocks?: number;
 }
@@ -135,6 +137,19 @@ function tierFor(ci: number, t: number): AiTier {
   return "easy";
 }
 
+/**
+ * 后段的难度从哪儿来。
+ *
+ * 1.1 是一路往上加 `powerBonus`：数字越来越大，对手的打法却一成不变，
+ * 玩起来只是数字更大而已。1.2 把数值坡度压平了一大半，改成**换打法**：
+ * 第六章起对手开始会绕后、会抢道具、会站在够不着的地方等你出招，
+ * 后面难在「他懂你」，不再难在「他力气大」。
+ */
+export function styleFor(ci: number, t: number): AiStyle {
+  if (ci < 5) return "plain";
+  return AI_STYLES[(ci + t) % AI_STYLES.length];
+}
+
 function buildLevel(ci: number, t: number, size: number): DuoLevel {
   const stageId = STAGES[ci % STAGES.length].id;
   const cycle = RULE_CYCLE[t % RULE_CYCLE.length];
@@ -143,7 +158,9 @@ function buildLevel(ci: number, t: number, size: number): DuoLevel {
   const baseTier = tierFor(ci, t);
   // 第一章是上手坡道：对手先让着点，力度从七成一路加回到十成
   const warmup = ci === 0 ? 0.7 + 0.3 * (t / Math.max(1, size - 1)) : 1;
-  const bonus = (1 + ci * 0.018 + t * 0.004) * warmup;
+  // 数值坡度压到 1.1 的一半上下：后段靠 `styleFor` 换打法，不靠力气堆
+  const bonus = (1 + ci * 0.009 + t * 0.002) * warmup;
+  const style = styleFor(ci, t);
 
   // 对手人数：章节越靠后越容易出现两三个人
   let foeCount = 1;
@@ -160,13 +177,15 @@ function buildLevel(ci: number, t: number, size: number): DuoLevel {
     foes.push({
       charId,
       tier,
-      powerBonus: Number((bonus * (isBoss && k === 0 ? 1.12 : 1)).toFixed(3)),
+      // 大将不再多给力气，改成换一种更难缠的打法
+      powerBonus: Number((bonus * (isBoss && k === 0 ? 1.04 : 1)).toFixed(3)),
+      style: isBoss && k === 0 && ci >= 5 ? bossStyle(ci) : style,
     });
   }
 
   const allies: LevelFoe[] =
     spec.tag === "组队赛"
-      ? [{ charId: fighterAt(ci * 3 + t + 9).id, tier: baseTier, powerBonus: 1 }]
+      ? [{ charId: fighterAt(ci * 3 + t + 9).id, tier: baseTier, powerBonus: 1, style: "plain" }]
       : [];
 
   let playerStocks = 3;
@@ -241,6 +260,12 @@ function bossTier(t: AiTier): AiTier {
   return "hard";
 }
 
+/** 守场大将的打法：后面的章节一章换一种，别让十位大将长一个样 */
+function bossStyle(ci: number): AiStyle {
+  const rest = AI_STYLES.filter((s) => s !== "plain");
+  return rest[ci % rest.length];
+}
+
 export const LEVELS: DuoLevel[] = (() => {
   const out: DuoLevel[] = [];
   CHAPTERS.forEach((ch, ci) => {
@@ -257,9 +282,13 @@ export function levelAt(level: number): DuoLevel {
 
 /**
  * 本关的星级：没被撞出去过就是 3 星，掉一次 2 星，掉更多但还是赢了 1 星。
- * `lost` = 玩家这一关一共被撞出去几次。
+ *
+ * `lost` = 玩家这一关一共被撞出去几次；`hits` = 玩家自己出招打中对手几次。
+ * 一次都没打中过就只给 1 星 —— 这一局不是打赢的（对手自己掉下去、或者时间到
+ * 靠上场机会判的），星星是「做到了」的凭证，站着不动不该拿满。
  */
-export function rateLevel(lost: number): 1 | 2 | 3 {
+export function rateLevel(lost: number, hits = 1): 1 | 2 | 3 {
+  if (hits <= 0) return 1;
   if (lost <= 0) return 3;
   if (lost === 1) return 2;
   return 1;
@@ -272,7 +301,9 @@ export function endlessFoe(round: number): LevelFoe {
   return {
     charId: ROSTER[(r * 5 + 3) % ROSTER.length].id,
     tier,
-    powerBonus: Number((1 + r * 0.035).toFixed(3)),
+    // 力气只慢慢加一点点，越往后主要是打法越刁
+    powerBonus: Number((1 + r * 0.016).toFixed(3)),
+    style: r < 3 ? "plain" : AI_STYLES[r % AI_STYLES.length],
     stocks: 1,
   };
 }

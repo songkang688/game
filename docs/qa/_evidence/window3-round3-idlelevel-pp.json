@@ -1,0 +1,47 @@
+{
+  "games": [
+    "prince-princess"
+  ],
+  "levels": [
+    1,
+    60,
+    133,
+    188
+  ],
+  "waitMs": 45000,
+  "rows": [
+    {
+      "id": "prince-princess",
+      "level": 1,
+      "seconds": 13,
+      "result": "win",
+      "stars": 3,
+      "text": "★★★ 第 1 关过关！ 路上的怪一只不剩、只用了 12 秒、宝石收了 5 颗,真棒!下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "prince-princess",
+      "level": 60,
+      "seconds": 20,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 被打中啦!炮弹是直线飞的,跳一下就躲开了。🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "prince-princess",
+      "level": 133,
+      "seconds": 22,
+      "result": "win",
+      "stars": 2,
+      "text": "★★★ 第 133 关过关！ 路上的怪一只不剩、只用了 21 秒,真棒!下次试试:宝石差 2 颗。下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "prince-princess",
+      "level": 188,
+      "seconds": 29,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 被打中啦!炮弹是直线飞的,跳一下就躲开了。🔁 再试本关🗺️ 回地图"
+    }
+  ],
+  "consoleErrors": 0
+}

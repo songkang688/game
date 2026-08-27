@@ -11,18 +11,23 @@ import { isBgmOn, playSound, toggleBgm, toggleSound } from "../engine/audio";
 import { showParentGate } from "./parentGate";
 import { createAvatarImg } from "./avatars";
 import { RECENT_SHOWN, loadRecentIds } from "./recent";
+import { applyMobileTextVars } from "./mobileText";
 import {
   MODE_CHIPS,
+  PLATFORM_CHIPS,
   emptyStateText,
   favoriteGames,
   filterGames,
+  heroSubtitle,
   isFav,
   isFiltering,
+  levelTotalOf,
   loadFavIds,
   progressBadgeText,
   saveFavIds,
   toggleFavIds,
   type ModeChip,
+  type PlatformChip,
   type Tab
 } from "./homeFilters";
 
@@ -51,6 +56,28 @@ function hasCollection(): boolean {
   return typeof COLLECTION_MODULES[COLLECTION_PATH] === "function";
 }
 
+/**
+ * 「管理员权限」入口(1.2):`rootGate.ts` 可能还没进仓库,
+ * 同样用 glob 探一眼,模块不在就连按钮都不出现,首页绝不因此崩。
+ */
+const ROOT_GATE_MODULES = import.meta.glob("./rootGate.ts");
+const ROOT_GATE_PATH = "./rootGate.ts";
+
+function hasRootGate(): boolean {
+  return typeof ROOT_GATE_MODULES[ROOT_GATE_PATH] === "function";
+}
+
+async function openRootGateSafely(): Promise<void> {
+  const loader = ROOT_GATE_MODULES[ROOT_GATE_PATH];
+  if (typeof loader !== "function") return;
+  try {
+    const mod = (await loader()) as { requestRootOpen?: (reason: string) => Promise<boolean> };
+    await mod.requestRootOpen?.("管理员要打开直达关卡");
+  } catch {
+    // 密码门加载失败就当没这个按钮,首页照常玩
+  }
+}
+
 async function openCollectionSafely(): Promise<void> {
   const loader = COLLECTION_MODULES[COLLECTION_PATH];
   if (typeof loader !== "function") return;
@@ -65,17 +92,26 @@ async function openCollectionSafely(): Promise<void> {
 /** 1.1 新增控件的样式:styles.css 归别的窗口管,这里只补自己新加的那几个类 */
 const HOME_EXTRA_CSS = `
 .home-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 18px}
-.home-search{flex:1 1 190px;display:flex;align-items:center;gap:8px;min-height:50px;padding:0 16px;
+/* min-width 缺省是 auto,搜索框会被自动最小尺寸撑到 370px,
+   360px 手机上「清空」的 ✕ 会被屏幕裁掉一半;夹成 0 才会跟着容器缩 */
+.home-search{flex:1 1 190px;min-width:0;display:flex;align-items:center;gap:8px;min-height:50px;
+  padding:0 12px 0 16px;
   border:3px solid #fff;border-radius:999px;background:rgba(255,255,255,.9);box-shadow:var(--shadow-soft)}
 .home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;
   font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
 .home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
-.home-search-clear{display:grid;place-items:center;min-width:44px;min-height:44px;margin-right:-10px;
+.home-search-clear{display:grid;place-items:center;flex:0 0 auto;min-width:44px;min-height:44px;
   border:0;background:transparent;font-size:19px;line-height:1;color:var(--ink-soft)}
 .tabs.cat-tabs{margin-bottom:2px}
 .tabs.mode-chips{margin:0;padding-top:0;gap:10px}
 .mode-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
 .mode-chips .tab-emoji{font-size:19px}
+.tabs.platform-chips{margin:0 0 4px;padding-top:0;gap:10px}
+.platform-chips .tab{min-height:46px;padding:0 18px;font-size:17px}
+.platform-chips .tab-emoji{font-size:19px}
+/* 管理员入口:大人才用,做得不显眼,但热区仍是 44×44 */
+.icon-btn--admin{opacity:.55;font-size:17px}
+.icon-btn--admin:hover,.icon-btn--admin:focus-visible{opacity:1}
 /* 心形是卡片的兄弟节点(按钮不能套按钮),浮在卡片右上角,热区 44×44 */
 .fav-slot{position:relative;display:flex}
 .fav-slot>.game-card,.fav-slot>.recent-card{flex:1;min-width:0}
@@ -97,7 +133,7 @@ const HOME_EXTRA_CSS = `
 @media (prefers-reduced-motion:reduce){
   .fav-btn,.fav-btn:hover,.fav-slot:hover>.fav-btn,.fav-slot:hover>.fav-btn:hover{transform:none}
 }
-.home-count{font-size:14px;font-weight:700;color:var(--ink-soft);margin:0 0 10px}
+.home-count{font-size:16px;line-height:1.45;font-weight:700;color:var(--ink-soft);margin:0 0 10px}
 `;
 
 const EXTRA_STYLE_ID = "home-extra-style";
@@ -215,6 +251,21 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   actions.append(starChip, soundBtn, bgmBtn, parentBtn);
 
+  // 管理员权限入口:密码门模块进仓库了才出现,文案不写「root」
+  if (hasRootGate()) {
+    const adminBtn = document.createElement("button");
+    adminBtn.type = "button";
+    adminBtn.className = "icon-btn icon-btn--admin";
+    adminBtn.title = "管理员权限";
+    adminBtn.setAttribute("aria-label", "管理员权限");
+    adminBtn.textContent = "🔑";
+    adminBtn.addEventListener("click", () => {
+      playSound("tap");
+      void openRootGateSafely();
+    });
+    actions.appendChild(adminBtn);
+  }
+
   // 收藏册入口:第 6 步的模块进仓库了才出现
   if (hasCollection()) {
     const collectionBtn = document.createElement("button");
@@ -242,7 +293,16 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   });
   const heroBubble = document.createElement("div");
   heroBubble.className = "hero-bubble";
-  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>55 款原创小游戏,闯关最长 188 关。上面可以筛选、搜索、收藏 🌈</span>`;
+  // 款数和关数都当场数,别写死:每加一批新游戏都要回来改数字的话,迟早会忘。
+  // 具体那句话怎么组由 `heroSubtitle` 拼(它连 0 款 / NaN 这些脏值也有兜底,单测盯着)。
+  const heroStrong = document.createElement("strong");
+  heroStrong.textContent = `${greetingText()}朵朵和星星请你来玩!`;
+  const heroSpan = document.createElement("span");
+  heroSpan.textContent = heroSubtitle(
+    games.length,
+    games.reduce((m, g) => Math.max(m, levelTotalOf(g.meta)), 0)
+  );
+  heroBubble.append(heroStrong, heroSpan);
   const heroXingxing = createAvatarImg("xingxingRun", {
     round: false,
     className: "hero-figure hero-figure--xingxing"
@@ -275,6 +335,13 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   modeBar.setAttribute("role", "tablist");
   modeBar.setAttribute("aria-label", "玩法筛选");
   screen.appendChild(modeBar);
+
+  // ---- 平台筛选芯片(手游 / 端游,与前两排叠加) ----
+  const platformBar = document.createElement("nav");
+  platformBar.className = "tabs platform-chips";
+  platformBar.setAttribute("role", "tablist");
+  platformBar.setAttribute("aria-label", "设备筛选");
+  screen.appendChild(platformBar);
 
   // ---- 搜索框 ----
   const toolbar = document.createElement("div");
@@ -313,6 +380,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
 
   let activeTab: Tab = "all";
   let activeMode: ModeChip = "all";
+  let activePlatform: PlatformChip = "all";
   let query = "";
   let favIds = loadFavIds(globalThis.localStorage);
 
@@ -365,6 +433,33 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
         renderGrid();
       });
       modeBar.appendChild(btn);
+    }
+  }
+
+  function renderPlatformChips(): void {
+    platformBar.innerHTML = "";
+    for (const { key, emoji, label } of PLATFORM_CHIPS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `tab ${key === activePlatform ? "tab--active" : ""}`.trim();
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", String(key === activePlatform));
+      btn.setAttribute("aria-pressed", String(key === activePlatform));
+      const em = document.createElement("span");
+      em.className = "tab-emoji";
+      em.setAttribute("aria-hidden", "true");
+      em.textContent = emoji;
+      const text = document.createElement("span");
+      text.textContent = label;
+      btn.append(em, text);
+      btn.addEventListener("click", () => {
+        if (activePlatform === key) return;
+        activePlatform = key;
+        playSound("tap");
+        renderPlatformChips();
+        renderGrid();
+      });
+      platformBar.appendChild(btn);
     }
   }
 
@@ -545,7 +640,12 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     em.setAttribute("aria-hidden", "true");
     em.textContent = "🌱";
     const p = document.createElement("p");
-    p.textContent = emptyStateText({ tab: activeTab, mode: activeMode, query });
+    p.textContent = emptyStateText({
+      tab: activeTab,
+      mode: activeMode,
+      platform: activePlatform,
+      query
+    });
     empty.append(em, p);
     return empty;
   }
@@ -558,7 +658,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       return;
     }
 
-    const filtering = isFiltering({ mode: activeMode, query });
+    const filtering = isFiltering({ mode: activeMode, platform: activePlatform, query });
 
     // 不筛玩法也不搜索时,「全部」页签仍旧按分类分小节,孩子滚动时有方位感
     if (!filtering && activeTab === "all") {
@@ -578,7 +678,12 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
       return;
     }
 
-    const shown = filterGames(games, { tab: activeTab, mode: activeMode, query });
+    const shown = filterGames(games, {
+      tab: activeTab,
+      mode: activeMode,
+      platform: activePlatform,
+      query
+    });
     if (filtering && shown.length > 0) {
       const count = document.createElement("p");
       count.className = "home-count";
@@ -611,8 +716,10 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     searchInput.focus();
   });
 
+  applyMobileTextVars(screen);
   renderTabs();
   renderModeChips();
+  renderPlatformChips();
   renderFavorites();
   renderRecent();
   renderGrid();

@@ -12,15 +12,20 @@ export { meta };
 // 全程没有血也没有伤:被顶出场地只是转一圈再开回来,生命用光就是这一局结束。
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
-import { AI_LABEL, chooseCarAction, huntersFor, type AiLevel } from "./ai";
+import { AI_LABEL, AI_LEVELS, chooseCarAction, huntersFor, type AiLevel } from "./ai";
 import GUIDE from "./guide";
 import { CHAPTERS, buildArena, buildLevel, buildWave, type CarLevel } from "./levels";
 import {
+  CHARGE_MIN_MS,
+  CHARGE_MS,
+  TEETER_MS,
   axisFromHeld,
+  chargeRatio,
   createWorld,
   endlessLine,
   fieldCenter,
   fieldRadius,
+  foesGone,
   formatClock,
   hypot,
   inArc,
@@ -28,6 +33,7 @@ import {
   keyToAction,
   lastTeamStanding,
   levelCleared,
+  levelForfeit,
   loseLine,
   makeCar,
   matchWinner,
@@ -58,7 +64,9 @@ const CSS = `
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
   touch-action:none;position:relative;}
 .bc-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
-.bc-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:800;white-space:nowrap;
+/* 比分与剩余车数走这个芯片。规格第八节要求字号 ≥ 14px:这是比赛里唯一
+   要用余光扫的数字,再小就得低头找,所以下面两个 @media 只收内边距,不动字号。 */
+.bc-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(120,110,170,.18);}
 .bc-chip-p0{color:#a8306a;background:#ffeaf3;}
 .bc-chip-p1{color:#28568f;background:#e6f0ff;}
@@ -82,8 +90,10 @@ const CSS = `
   pointer-events:none;background:linear-gradient(180deg,#ffffff,#e7e0f5);box-shadow:0 3px 7px rgba(90,80,140,.3);
   display:flex;align-items:center;justify-content:center;font-size:19px;}
 .bc-acts{display:flex;flex-direction:column;gap:6px;}
-.bc-acts button{border:none;border-radius:13px;height:44px;width:60px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;line-height:1.2;}
+/* 冲撞键与刹车键是手指全程按住的两颗,热区不许低于 44px(规格第八节)。
+   下面窄屏 / 矮屏两档只收宽度和字号,高度锁死 44。 */
+.bc-acts button{border:none;border-radius:13px;height:44px;min-height:44px;width:60px;font-size:13px;
+  font-weight:900;cursor:pointer;font-family:inherit;color:#fff;line-height:1.2;}
 .bc-acts button:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bc-acts--p0 button{background:linear-gradient(180deg,#f79ac0,#e8558f);box-shadow:0 3px 0 #bf3a70;}
 .bc-acts--p1 button{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 3px 0 #2f63aa;}
@@ -119,23 +129,34 @@ const CSS = `
 @media (max-width:420px){
   .bc-stick{width:92px;height:92px;}
   .bc-knob{width:38px;height:38px;margin:-19px 0 0 -19px;font-size:17px;}
-  .bc-acts button{height:38px;width:54px;font-size:12px;}
-  .bc-chip{font-size:11.5px;padding:3px 8px;}
+  .bc-acts button{height:44px;width:54px;font-size:12px;}
+  .bc-chip{padding:3px 8px;}
   .bc-pads{gap:9px;}
 }
 /* 手机竖屏一共 667 像素高,场地上面还压着标题栏。每一行都收一点,
    保证摇杆整块留在首屏里,不用一边滚屏一边躲对手。 */
 @media (max-height:720px){
   .bc-wrap{gap:5px;}
-  .bc-chip{font-size:11px;padding:2px 7px;}
+  .bc-chip{padding:2px 7px;}
   .bc-btn{padding:5px 11px;font-size:12px;}
   .bc-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
   .bc-stick{width:86px;height:86px;}
   .bc-knob{width:36px;height:36px;margin:-18px 0 0 -18px;}
-  .bc-acts button{height:35px;width:52px;font-size:11.5px;}
+  .bc-acts button{height:44px;width:52px;font-size:11.5px;}
 }
 @media (prefers-reduced-motion:reduce){
   .bc-btn:active,.bc-acts button:active,.bc-pick:active{transform:none;}
+}
+/* ---- 1.2 新增(bpc- 前缀):冲撞键的蓄力条 ---- */
+.bpc-hit{position:relative;overflow:hidden;}
+.bpc-hit-t{position:relative;z-index:2;}
+.bpc-hit-bar{position:absolute;left:0;bottom:0;height:5px;width:0;background:#ffd166;border-radius:0 3px 3px 0;
+  z-index:1;}
+.bpc-hit--full .bpc-hit-bar{background:#ff8a3d;}
+.bpc-hit--cd{opacity:.55;}
+.bpc-legend{font-size:11.5px;font-weight:800;color:#7b6f9e;text-align:center;line-height:1.5;max-width:620px;}
+@media (max-width:420px){
+  .bpc-legend{font-size:11px;}
 }
 `;
 
@@ -241,7 +262,8 @@ function makeStick(player: 0 | 1): Stick {
 
 export interface MatchResult {
   cleared: boolean;
-  reason: "clear" | "fall" | "time";
+  /** empty = 对手全自己开下去了,一台都不是玩家顶的:场面清空了,但这一关不算赢 */
+  reason: "clear" | "fall" | "time" | "empty";
   secondsLeft: number;
   totalSeconds: number;
   /** 玩家掉下去几次 */
@@ -332,6 +354,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     cars,
     pads: lv.pads,
     hazards: lv.hazards,
+    spinners: lv.spinners,
+    slicks: lv.slicks,
     limit: lv.seconds > 0 ? lv.seconds * 1000 : 0,
     keep: lv.keep,
     seed: lv.seed,
@@ -363,21 +387,53 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   arena.appendChild(canvas);
   const tip = el("div", "bc-tip", opts.tip);
   const pads = el("div", "bc-pads");
-  wrap.append(hud, arena, tip, pads);
+  const legend = el(
+    "div",
+    "bpc-legend",
+    "💥 轻点 = 小冲刺,按住 0.8 秒 = 蓄力强撞(蓄力时车会慢下来)· 滑到场边会打转两秒,往场内打方向就能开回来"
+  );
+  wrap.append(hud, arena, tip, pads, legend);
   host.appendChild(wrap);
 
   const g = canvas.getContext("2d");
+
+  // 关掉动效的孩子:旋转盘不转、车身不形变、撞击不顿帧
+  const spinArt = !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
   // ---- 输入 ------------------------------------------------------------------
   const held: boolean[][] = [
     [false, false, false, false],
     [false, false, false, false],
   ];
+  // 一个「冲撞键」两种用法:轻点是小冲刺,按住 220ms 以上是蓄力强撞。
+  // hold 记的是按下的时刻,dashOnce 是这一帧要放出去的小冲刺。
   const btnHeld = [
-    { dash: false, brake: false },
-    { dash: false, brake: false },
+    { dash: false, brake: false, holdAt: 0, charging: false, dashOnce: false },
+    { dash: false, brake: false, holdAt: 0, charging: false, dashOnce: false },
   ];
   const sticks: Stick[] = [];
+  const hitBtns: HTMLButtonElement[] = [];
+
+  function nowMs(): number {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
+  }
+
+  /** 按下冲撞键 */
+  function pressHit(player: 0 | 1): void {
+    const b = btnHeld[player];
+    if (b.charging) return;
+    b.charging = true;
+    b.holdAt = nowMs();
+  }
+
+  /** 松开冲撞键:按得短就是轻冲刺,按得久让 logic 层去结算蓄力 */
+  function releaseHit(player: 0 | 1): void {
+    const b = btnHeld[player];
+    if (!b.charging) return;
+    b.charging = false;
+    if (nowMs() - b.holdAt < CHARGE_MIN_MS) b.dashOnce = true;
+    b.holdAt = 0;
+  }
 
   for (let p = 0; p < seats; p++) {
     if (duel && cars[p]?.ai) continue;
@@ -386,27 +442,35 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const stick = makeStick(player);
     sticks[player] = stick;
     const acts = el("div", `bc-acts bc-acts--p${player}`);
-    const dash = document.createElement("button");
-    dash.type = "button";
-    dash.textContent = "💨冲刺";
+    const hit = document.createElement("button");
+    hit.type = "button";
+    hit.className = "bpc-hit";
+    hit.innerHTML = "";
+    hit.append(el("span", "bpc-hit-t", "💥冲撞"), el("span", "bpc-hit-bar"));
+    hit.setAttribute("aria-label", `${P_NAME[player]}的冲撞键:轻点小冲刺,按住蓄力强撞`);
     const brake = document.createElement("button");
     brake.type = "button";
     brake.textContent = "🛑刹车";
-    const bind = (btn: HTMLButtonElement, key: "dash" | "brake"): void => {
-      btn.addEventListener("pointerdown", (ev) => {
-        btnHeld[player][key] = true;
-        ev.preventDefault();
-      });
-      const off = (): void => {
-        btnHeld[player][key] = false;
-      };
-      btn.addEventListener("pointerup", off);
-      btn.addEventListener("pointerleave", off);
-      btn.addEventListener("pointercancel", off);
+    hit.addEventListener("pointerdown", (ev) => {
+      pressHit(player);
+      ev.preventDefault();
+    });
+    const letGo = (): void => releaseHit(player);
+    hit.addEventListener("pointerup", letGo);
+    hit.addEventListener("pointerleave", letGo);
+    hit.addEventListener("pointercancel", letGo);
+    brake.addEventListener("pointerdown", (ev) => {
+      btnHeld[player].brake = true;
+      ev.preventDefault();
+    });
+    const brakeOff = (): void => {
+      btnHeld[player].brake = false;
     };
-    bind(dash, "dash");
-    bind(brake, "brake");
-    acts.append(dash, brake);
+    brake.addEventListener("pointerup", brakeOff);
+    brake.addEventListener("pointerleave", brakeOff);
+    brake.addEventListener("pointercancel", brakeOff);
+    acts.append(hit, brake);
+    hitBtns[player] = hit;
     box.append(stick.root, acts);
     pads.appendChild(box);
   }
@@ -416,6 +480,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     for (const b of btnHeld) {
       b.dash = false;
       b.brake = false;
+      b.charging = false;
+      b.holdAt = 0;
+      b.dashOnce = false;
     }
     for (const s of sticks) s?.reset();
   }
@@ -431,7 +498,7 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     ev.preventDefault();
     const idx = ARROW_KEYS.indexOf(hit.action);
     if (idx >= 0) held[hit.player][idx] = true;
-    else if (hit.action === "dash") btnHeld[hit.player].dash = true;
+    else if (hit.action === "dash") pressHit(hit.player as 0 | 1);
     else btnHeld[hit.player].brake = true;
   };
   const onKeyUp = (ev: KeyboardEvent): void => {
@@ -439,25 +506,28 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     if (!hit) return;
     const idx = ARROW_KEYS.indexOf(hit.action);
     if (idx >= 0) held[hit.player][idx] = false;
-    else if (hit.action === "dash") btnHeld[hit.player].dash = false;
+    else if (hit.action === "dash") releaseHit(hit.player as 0 | 1);
     else btnHeld[hit.player].brake = false;
+  };
+  const onGlobalUp = (): void => {
+    for (let p = 0; p < btnHeld.length; p++) {
+      btnHeld[p].brake = false;
+      releaseHit(p as 0 | 1);
+    }
   };
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("blur", releaseAll);
-  window.addEventListener("pointerup", () => {
-    for (const b of btnHeld) {
-      b.dash = false;
-      b.brake = false;
-    }
-  });
+  window.addEventListener("pointerup", onGlobalUp);
 
   // ---- 画面尺寸 --------------------------------------------------------------
   let scale = 4;
 
   function layout(): void {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
-    const roomH = Math.max(200, (window.innerHeight || 700) - 300);
+    // 场地上下压着标题栏、HUD、提示语和摇杆那一排。摇杆旁边两颗键锁死 44px 热区
+    // 之后这一排比原来高了近 20px,预留值跟着让出来,免得矮屏上摇杆被挤出首屏。
+    const roomH = Math.max(200, (window.innerHeight || 700) - 320);
     scale = Math.min(avail / lv.field.w, roomH / lv.field.h);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cw = Math.round(lv.field.w * scale);
@@ -615,6 +685,43 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       g.restore();
     }
 
+    // 油渍:一摊深色的油,踩上去就刹不住
+    for (const sl of world.slicks) {
+      g.save();
+      g.globalAlpha = 0.55;
+      g.fillStyle = "#b9a8d8";
+      g.beginPath();
+      g.arc(sl.x, sl.y, sl.r, 0, Math.PI * 2);
+      g.fill();
+      g.globalAlpha = 0.9;
+      g.strokeStyle = "#8b78b5";
+      g.lineWidth = 0.7;
+      g.stroke();
+      g.restore();
+      emojiAt("💧", sl.x, sl.y, sl.r * 0.7);
+    }
+
+    // 旋转盘:一圈箭头指出它往哪边转
+    for (const sp of world.spinners) {
+      g.save();
+      g.fillStyle = "#cfe7ff";
+      g.beginPath();
+      g.arc(sp.x, sp.y, sp.r, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = "#7fa8d8";
+      g.lineWidth = 0.9;
+      g.stroke();
+      const turn = spinArt ? (world.time / 1000) * sp.rate * Math.PI * 2 : 0;
+      for (let k = 0; k < 4; k++) {
+        const a = turn + (k / 4) * Math.PI * 2;
+        g.beginPath();
+        g.moveTo(sp.x + Math.cos(a) * sp.r * 0.35, sp.y + Math.sin(a) * sp.r * 0.35);
+        g.lineTo(sp.x + Math.cos(a) * sp.r * 0.86, sp.y + Math.sin(a) * sp.r * 0.86);
+        g.stroke();
+      }
+      g.restore();
+    }
+
     // 滚桶
     for (const h of world.hazards) {
       g.fillStyle = "#cfc3ae";
@@ -650,23 +757,56 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         g.fill();
         g.globalAlpha = 1;
       }
+      // 蓄力环:按住越久圈越满,对手一眼看得见「它在攒大的」,这就是躲避窗口
+      if (car.charge > 0) {
+        const ratio = chargeRatio(car.charge);
+        g.save();
+        g.strokeStyle = ratio >= 1 ? "#ff8a3d" : "#ffc663";
+        g.lineWidth = 1.1;
+        g.beginPath();
+        g.arc(car.x, car.y, car.r * 1.45, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
+        g.stroke();
+        g.restore();
+      }
+      g.save();
+      g.translate(car.x, car.y);
+      // 撞击形变:挨撞那一小会儿沿着车头方向压扁 8%
+      if (spinArt && car.skid > 0) {
+        g.rotate(car.face);
+        g.scale(1 - 0.08, 1 + 0.08);
+        g.rotate(-car.face);
+      }
       g.fillStyle = car.color;
       g.beginPath();
-      g.arc(car.x, car.y, car.r, 0, Math.PI * 2);
+      g.arc(0, 0, car.r, 0, Math.PI * 2);
       g.fill();
       g.fillStyle = "#ffffffcc";
       g.beginPath();
-      g.arc(car.x - car.r * 0.25, car.y - car.r * 0.28, car.r * 0.34, 0, Math.PI * 2);
+      g.arc(-car.r * 0.25, -car.r * 0.28, car.r * 0.34, 0, Math.PI * 2);
       g.fill();
       // 车头小箭头:一眼看出这台车正朝哪边
       g.strokeStyle = "#ffffff";
       g.lineWidth = 0.9;
       g.beginPath();
-      g.moveTo(car.x, car.y);
-      g.lineTo(car.x + Math.cos(car.face) * car.r * 1.35, car.y + Math.sin(car.face) * car.r * 1.35);
+      g.moveTo(0, 0);
+      g.lineTo(Math.cos(car.face) * car.r * 1.35, Math.sin(car.face) * car.r * 1.35);
       g.stroke();
+      g.restore();
       emojiAt(car.emoji, car.x, car.y, car.r * 1.05);
-      if (car.skid > 0) emojiAt("💫", car.x + car.r, car.y - car.r, car.r * 0.8);
+      if (car.teeter > 0) {
+        // 打转两秒:场边一圈倒计时,外加一个推车的小人
+        const left = car.teeter / TEETER_MS;
+        g.save();
+        g.strokeStyle = "#ff7ba8";
+        g.lineWidth = 1.4;
+        g.beginPath();
+        g.arc(car.x, car.y, car.r * 1.7, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2);
+        g.stroke();
+        g.restore();
+        emojiAt("🧹", car.x - car.r * 1.4, car.y - car.r * 1.4, car.r * 0.9);
+      } else if (car.spin > 0) {
+        emojiAt("💫", car.x + car.r, car.y - car.r, car.r * 0.8);
+      }
     }
   }
 
@@ -680,8 +820,15 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       world.limit > 0 ? `⏱ ${formatClock(secondsLeft(world))}` : `⏱ ${formatClock(Math.floor(world.time / 1000))}`;
     for (let i = 0; i < statSeats; i++) {
       const car = world.cars[i];
-      const cd = car.dashCd > 0 ? ` 💨${Math.ceil(car.dashCd / 100) / 10}s` : " 💨就绪";
-      chipStats[i].textContent = `${car.emoji}${car.name} ${heartRow(car)} 撞飞${car.score}${cd}`;
+      const cd = car.chargeCd > 0 ? `💥${Math.ceil(car.chargeCd / 100) / 10}s` : "💥就绪";
+      chipStats[i].textContent = `${car.emoji}${car.name} ${heartRow(car)} 撞飞${car.score} ${cd}`;
+      const btn = hitBtns[i];
+      if (btn) {
+        const bar = btn.querySelector(".bpc-hit-bar") as HTMLElement | null;
+        if (bar) bar.style.width = `${Math.round(chargeRatio(world.cars[i].charge) * 100)}%`;
+        btn.classList.toggle("bpc-hit--cd", world.cars[i].chargeCd > 0);
+        btn.classList.toggle("bpc-hit--full", world.cars[i].charge >= CHARGE_MS);
+      }
     }
     if (!duel) {
       const left = world.cars.filter((c) => c.team !== 0 && !c.gone).length;
@@ -728,7 +875,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       releaseAll();
       showVeil(
         "⏸ 休息一下",
-        "按 Esc 或点「继续」回到场上。朵朵用 WASD 开车、F 冲刺、G 刹车;星星用方向键开车、L 冲刺、K 刹车。",
+        "按 Esc 或点「继续」回到场上。朵朵用 WASD 开车、F 冲撞、G 刹车;星星用方向键开车、L 冲撞、K 刹车。" +
+          "冲撞键轻点是小冲刺,按住 0.8 秒蓄满再松手是强撞——蓄力的时候车会慢下来,对手看得见。",
         [{ label: "▶ 继续", onClick: () => togglePause() }]
       );
     } else {
@@ -744,11 +892,19 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   let lastBump = 0;
   let toast = "";
   let toastUntil = 0;
+  /** 顿帧:重要的一撞之后停 3–5 帧,撞击才有分量 */
+  let hitStop = 0;
 
   function consumeEvents(now: number): void {
     for (const e of world.events) {
       switch (e.kind) {
         case "bump":
+          if (now - lastBump > 110) {
+            opts.sfx("pop");
+            lastBump = now;
+          }
+          if (spinArt && e.impact >= 26) hitStop = Math.max(hitStop, 3);
+          break;
         case "wall":
           if (now - lastBump > 110) {
             opts.sfx("pop");
@@ -758,6 +914,35 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         case "dash":
           opts.sfx("jump");
           break;
+        case "charge":
+          opts.sfx("jump");
+          if (world.cars[e.who].team === 0) {
+            toast = "蓄满的一记强撞!推力全在车头上,顺着悬崖方向顶最划算。";
+            toastUntil = now + 1200;
+          }
+          break;
+        case "teeter": {
+          const who = world.cars[e.who];
+          opts.sfx("oops");
+          toast =
+            who.team === 0
+              ? `${who.name}滑到场边打转啦!赶紧往场中间打方向,两秒之内还开得回来。`
+              : `${who.name}被逼到场边了,趁它打转再补一下!`;
+          toastUntil = now + 1600;
+          hitStop = spinArt ? 4 : 0;
+          break;
+        }
+        case "rescue": {
+          const who = world.cars[e.who];
+          if (who.team === 0) {
+            opts.sfx("coin");
+            toast = `${who.name}自己开回场上了,漂亮!`;
+            toastUntil = now + 1200;
+          }
+          break;
+        }
+        case "spinner":
+        case "slick":
         case "boost":
           break;
         case "out": {
@@ -801,7 +986,12 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       const stick = sticks[player]?.value ?? { dx: 0, dy: 0 };
       const dx = axis.dx !== 0 || axis.dy !== 0 ? axis.dx : stick.dx;
       const dy = axis.dx !== 0 || axis.dy !== 0 ? axis.dy : stick.dy;
-      return { dx, dy, dash: btnHeld[player].dash, brake: btnHeld[player].brake };
+      const b = btnHeld[player];
+      // 按住超过 CHARGE_MIN_MS 才真的开始蓄力,之前都当「还没决定」
+      const charge = b.charging && nowMs() - b.holdAt >= CHARGE_MIN_MS;
+      const dash = b.dashOnce;
+      b.dashOnce = false;
+      return { dx, dy, dash, brake: b.brake, charge };
     });
   }
 
@@ -835,8 +1025,14 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       if (timeUp(world)) settle({ ...baseResult(), reason: "time", winner: -1 });
       return;
     }
-    if (levelCleared(world)) {
+    // 无尽车海考的是「在越来越多的车里撑住」,场面清空就算这一波过了;
+    // 闯关还要问一句「这一场是不是玩家自己打下来的」,见 levelCleared / levelForfeit。
+    if (opts.mode === "endless" ? foesGone(world) : levelCleared(world)) {
       settle({ ...baseResult(), cleared: true, reason: "clear" });
+      return;
+    }
+    if (levelForfeit(world)) {
+      settle({ ...baseResult(), reason: "empty" });
       return;
     }
     if (playerDown(world)) {
@@ -852,6 +1048,11 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const dt = Math.max(0, Math.min(48, now - last));
     last = now;
     if (paused || finished) {
+      render();
+      return;
+    }
+    if (hitStop > 0) {
+      hitStop--;
       render();
       return;
     }
@@ -878,7 +1079,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", releaseAll);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointerup", onGlobalUp);
       for (const s of sticks) s?.destroy();
+      hitBtns.length = 0;
       clearVeil();
       wrap.remove();
     },
@@ -900,9 +1103,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
     sfx: ctx.sfx,
     onDone: (res) => {
       if (res.cleared) {
-        ctx.win(rateLevel(res.secondsLeft, lv.seconds, res.falls), winLine(res.secondsLeft, res.falls, res.knocked));
+        ctx.win(
+          rateLevel(res.secondsLeft, lv.seconds, res.falls, res.knocked),
+          winLine(res.secondsLeft, res.falls, res.knocked)
+        );
       } else {
-        ctx.lose(loseLine(res.reason === "fall" ? "fall" : "time"));
+        ctx.lose(loseLine(res.reason === "fall" || res.reason === "empty" ? res.reason : "time"));
       }
     },
   });
@@ -1049,6 +1255,8 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
         field: arena.field,
         pads: arena.pads,
         hazards: arena.hazards,
+        spinners: arena.spinners,
+        slicks: arena.slicks,
         keep: arena.keep,
         spawn: arena.spawns[0],
         foeSpawns: [arena.spawns[1]],
@@ -1172,7 +1380,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   bar.append(vsBtn, aiBtn, endlessBtn);
 
   const pickBtns: HTMLButtonElement[] = [];
-  ([1, 2, 3] as AiLevel[]).forEach((skill) => {
+  AI_LEVELS.forEach((skill) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "bc-pick";

@@ -22,7 +22,7 @@ export function levelTips(cfg: MoleLevel): string {
   if (cfg.shieldChance) tips.push("🪖 铁盔鼠得连打两下才倒，别打一下就走");
   if (cfg.comboTarget) tips.push(`🔥 连着拍中 ${cfg.comboTarget} 只就进嘭嘭时间，分数翻倍`);
   if (cfg.night) tips.push("🔦 视线跟着月光圈挪，圈到哪就守哪");
-  if (cfg.bunnyChance > 0) tips.push("🐰 小兔子是干扰项，别碰");
+  if (cfg.bunnyChance > 0) tips.push("🌷 花花兔不参加游戏，别碰它");
   return tips.length > 0 ? tips.join("；") + "！" : "视线放在棋盘中间，用余光扫全场！";
 }
 
@@ -65,7 +65,7 @@ export function winLine(cfg: MoleLevel, result: RoundResult): string {
 export function loseLine(cfg: MoleLevel, result: RoundResult): string {
   if (result.mistakes >= 3) {
     if (cfg.quizChance) return "算式看花眼啦～下一局在心里算完得数再落手，命中率立刻就上去了！";
-    return "小兔子混进来三次啦～下一局先排除小兔再出手，命中率立刻就上去了！";
+    return "花花兔凑了三次热闹～下一局先认清它再出手，命中率立刻就上去了！";
   }
   return `时间到，拿到 ${result.score} 分。手指守在棋盘中间，来回的路就短了，再来一局！`;
 }

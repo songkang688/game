@@ -11,8 +11,8 @@
  */
 import type { Chapter } from "../level99";
 
-/** 1.1 新增 "up" 与 "right" 两个方向 */
-export type Gravity = "none" | "down" | "left" | "up" | "right";
+/** 1.1 新增 "up" 与 "right"，1.2 补上「向中间」凑齐四种收拢 */
+export type Gravity = "none" | "down" | "left" | "up" | "right" | "center";
 
 /** 1.0 的六大场馆：合计 99 关，1.1 起不再改动 */
 export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
@@ -141,12 +141,12 @@ function buildLevel(ci: number, t: number): LlkLevel {
         autoShuffleFree: true
       };
     case 8:
-      // 伪装迷影阁：面具越来越多、换得越来越快
+      // 伪装迷影阁：面具越来越多、换得越来越快；1.2 起后半段改成「向中间收拢」
       return {
         rows: 5 + Math.floor(t / 11), cols: 6,
         kinds: Math.min(14, 9 + Math.floor(t / 4)),
         seconds: 190 + Math.floor(t / 3) * 10,
-        shuffles: 3, gravity: t < 12 ? "none" : "left", theme: 8,
+        shuffles: 3, gravity: t < 12 ? "none" : t % 2 === 0 ? "left" : "center", theme: 8,
         maxTurns: 2,
         disguise: 0.2 + t * 0.008,
         disguiseMs: 9000 - t * 200,

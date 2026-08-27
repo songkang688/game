@@ -1,0 +1,544 @@
+{
+  "takenAt": "2026-08-27T09:39:37.444Z",
+  "skySquadNamed": [
+    {
+      "level": 1,
+      "boss": false,
+      "cleared": false,
+      "downed": 0,
+      "escaped": 3,
+      "total": 3,
+      "escapeLimit": 1,
+      "stars": 2,
+      "line": "有 3 架从底下溜走了。让它们靠近一点再打,命中率反而更高。"
+    },
+    {
+      "level": 60,
+      "boss": false,
+      "cleared": false,
+      "downed": 1,
+      "escaped": 4,
+      "total": 5,
+      "escapeLimit": 1,
+      "stars": 2,
+      "line": "有 4 架从底下溜走了。让它们靠近一点再打,命中率反而更高。"
+    },
+    {
+      "level": 133,
+      "boss": false,
+      "cleared": false,
+      "downed": 4,
+      "escaped": 6,
+      "total": 13,
+      "escapeLimit": 3,
+      "stars": 1,
+      "line": "有 6 架从底下溜走了。让它们靠近一点再打,命中率反而更高。"
+    },
+    {
+      "level": 188,
+      "boss": true,
+      "cleared": false,
+      "downed": 1,
+      "escaped": 8,
+      "total": 9,
+      "escapeLimit": 2,
+      "stars": 1,
+      "line": "有 8 架从底下溜走了。让它们靠近一点再打,命中率反而更高。"
+    }
+  ],
+  "skySquadEscapedRecorded": true,
+  "skySquadRescan": {
+    "scanned": 188,
+    "before": 180,
+    "after": 0,
+    "autoWin": [],
+    "escapedTotal": 1306,
+    "levelsWithZeroEscaped": [
+      124
+    ]
+  },
+  "princeNamed": [
+    {
+      "level": 1,
+      "status": "playing",
+      "seconds": 205,
+      "stars": 0,
+      "kills": 1,
+      "enemyTotal": 3,
+      "gems": 0,
+      "gemGoal": 4,
+      "escortReach": 71
+    },
+    {
+      "level": 60,
+      "status": "lost",
+      "seconds": 103,
+      "stars": 0,
+      "kills": 1,
+      "enemyTotal": 4,
+      "gems": 0,
+      "gemGoal": 5,
+      "escortReach": 70
+    },
+    {
+      "level": 133,
+      "status": "lost",
+      "seconds": 13,
+      "stars": 0,
+      "kills": 0,
+      "enemyTotal": 3,
+      "gems": 0,
+      "gemGoal": 10,
+      "escortReach": 104
+    },
+    {
+      "level": 188,
+      "status": "lost",
+      "seconds": 42,
+      "stars": 0,
+      "kills": 0,
+      "enemyTotal": 2,
+      "gems": 0,
+      "gemGoal": 3,
+      "escortReach": 86
+    }
+  ],
+  "princeRescan": {
+    "scanned": 188,
+    "before": 110,
+    "after": 0,
+    "autoWin": [],
+    "lost": 181,
+    "stall": 7,
+    "escort": {
+      "kills": 84,
+      "gems": 5,
+      "clearedAllLevels": 0,
+      "gemGoalMetLevels": 0,
+      "maxReachPx": 142
+    }
+  },
+  "princeDuoIdle": [
+    {
+      "level": 1,
+      "status": "playing"
+    },
+    {
+      "level": 60,
+      "status": "lost"
+    },
+    {
+      "level": 133,
+      "status": "lost"
+    },
+    {
+      "level": 188,
+      "status": "lost"
+    }
+  ],
+  "duoNamed": [
+    {
+      "level": 1,
+      "stageId": "cloud-square",
+      "win": false,
+      "winnerTeam": 1,
+      "endReason": "time",
+      "seconds": 155,
+      "hits": 0,
+      "outs": 1,
+      "stars": 0,
+      "allies": 0,
+      "timeLimit": 0
+    },
+    {
+      "level": 134,
+      "stageId": "star-lift",
+      "win": false,
+      "winnerTeam": 1,
+      "endReason": "ko",
+      "seconds": 72.9,
+      "hits": 0,
+      "outs": 3,
+      "stars": 0,
+      "allies": 0,
+      "timeLimit": 0
+    },
+    {
+      "level": 145,
+      "stageId": "star-lift",
+      "win": false,
+      "winnerTeam": 1,
+      "endReason": "ko",
+      "seconds": 8,
+      "hits": 0,
+      "outs": 2,
+      "stars": 0,
+      "allies": 0,
+      "timeLimit": 0
+    },
+    {
+      "level": 157,
+      "stageId": "night-hops",
+      "win": false,
+      "winnerTeam": null,
+      "endReason": "time",
+      "seconds": 70,
+      "hits": 0,
+      "outs": 0,
+      "stars": 0,
+      "allies": 0,
+      "timeLimit": 70
+    }
+  ],
+  "duoRescan": {
+    "scanned": 188,
+    "before": 72,
+    "after": 7,
+    "threeStar": 0,
+    "byKo": 3,
+    "byTime": 4,
+    "withAlly": 4,
+    "remaining": [
+      {
+        "level": 28,
+        "stageId": "wobble-isles",
+        "endReason": "ko",
+        "seconds": 115.5,
+        "stars": 1,
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": false
+      },
+      {
+        "level": 104,
+        "stageId": "windmill-field",
+        "endReason": "ko",
+        "seconds": 146.4,
+        "stars": 1,
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": false
+      },
+      {
+        "level": 123,
+        "stageId": "ice-lake",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": true
+      },
+      {
+        "level": 140,
+        "stageId": "star-lift",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 0,
+        "timeLimit": 0,
+        "capArtifact": true
+      },
+      {
+        "level": 144,
+        "stageId": "star-lift",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 0,
+        "timeLimit": 0,
+        "capArtifact": true
+      },
+      {
+        "level": 148,
+        "stageId": "star-lift",
+        "endReason": "ko",
+        "seconds": 68.5,
+        "stars": 1,
+        "allies": 0,
+        "timeLimit": 70,
+        "capArtifact": false
+      },
+      {
+        "level": 161,
+        "stageId": "night-hops",
+        "endReason": "time",
+        "seconds": 155,
+        "stars": 1,
+        "allies": 1,
+        "timeLimit": 0,
+        "capArtifact": true
+      }
+    ],
+    "genuine": [
+      28,
+      104,
+      148
+    ],
+    "capArtifacts": [
+      123,
+      140,
+      144,
+      161
+    ],
+    "noTimeLimitLevels": 148,
+    "byChapter": [
+      {
+        "chapter": "云朵广场",
+        "stageId": "cloud-square",
+        "range": "1-19",
+        "size": 19,
+        "autoWin": 0,
+        "levels": []
+      },
+      {
+        "chapter": "摇摇浮岛",
+        "stageId": "wobble-isles",
+        "range": "20-38",
+        "size": 19,
+        "autoWin": 1,
+        "levels": [
+          28
+        ]
+      },
+      {
+        "chapter": "传送带工厂",
+        "stageId": "belt-works",
+        "range": "39-57",
+        "size": 19,
+        "autoWin": 0,
+        "levels": []
+      },
+      {
+        "chapter": "弹簧糖果地",
+        "stageId": "spring-candy",
+        "range": "58-76",
+        "size": 19,
+        "autoWin": 0,
+        "levels": []
+      },
+      {
+        "chapter": "咕嘟糖浆池",
+        "stageId": "syrup-pool",
+        "range": "77-95",
+        "size": 19,
+        "autoWin": 0,
+        "levels": []
+      },
+      {
+        "chapter": "呼呼风车原",
+        "stageId": "windmill-field",
+        "range": "96-114",
+        "size": 19,
+        "autoWin": 1,
+        "levels": [
+          104
+        ]
+      },
+      {
+        "chapter": "滑滑冰湖",
+        "stageId": "ice-lake",
+        "range": "115-133",
+        "size": 19,
+        "autoWin": 1,
+        "levels": [
+          123
+        ]
+      },
+      {
+        "chapter": "星光升降台",
+        "stageId": "star-lift",
+        "range": "134-152",
+        "size": 19,
+        "autoWin": 3,
+        "levels": [
+          140,
+          144,
+          148
+        ]
+      },
+      {
+        "chapter": "夜空跳台",
+        "stageId": "night-hops",
+        "range": "153-171",
+        "size": 19,
+        "autoWin": 1,
+        "levels": [
+          161
+        ]
+      },
+      {
+        "chapter": "全明星决战场",
+        "stageId": "allstar-arena",
+        "range": "172-188",
+        "size": 17,
+        "autoWin": 0,
+        "levels": []
+      }
+    ],
+    "stillFromOld72": [
+      28,
+      104,
+      140,
+      144,
+      148,
+      161
+    ],
+    "newlyIdleWinnable": [
+      123
+    ]
+  },
+  "bumperLevel1": {
+    "level": 1,
+    "cleared": false,
+    "down": true,
+    "seconds": 37,
+    "knocked": 0,
+    "falls": 5,
+    "credits": [],
+    "miscredited": 0,
+    "stars": 0,
+    "line": "这一次被顶出了场地。别急,下一把先用刹车稳住车头,再借冲刺撞回去,主动权就回来了。"
+  },
+  "bumperRescan": {
+    "scanned": 188,
+    "before": 31,
+    "after": 6,
+    "autoWin": [
+      {
+        "level": 3,
+        "seconds": 27,
+        "knocked": 0,
+        "stars": 1,
+        "credits": [
+          -1
+        ],
+        "line": "对手自己开下了悬崖,你一台都没撞飞,自己还掉下去 4 次。下一关先在场地中间站稳,再找机会顶人。"
+      },
+      {
+        "level": 8,
+        "seconds": 10,
+        "knocked": 0,
+        "stars": 1,
+        "credits": [
+          -1
+        ],
+        "line": "对手自己开下了悬崖,你一台都没撞飞,自己还掉下去 1 次。下一关先在场地中间站稳,再找机会顶人。"
+      },
+      {
+        "level": 54,
+        "seconds": 29,
+        "knocked": 0,
+        "stars": 1,
+        "credits": [
+          -1,
+          -1
+        ],
+        "line": "对手自己开下了悬崖,你一台都没撞飞,自己还掉下去 5 次。下一关先在场地中间站稳,再找机会顶人。"
+      },
+      {
+        "level": 78,
+        "seconds": 23,
+        "knocked": 0,
+        "stars": 1,
+        "credits": [
+          -1,
+          -1
+        ],
+        "line": "对手自己开下了悬崖,你一台都没撞飞,自己还掉下去 4 次。下一关先在场地中间站稳,再找机会顶人。"
+      },
+      {
+        "level": 152,
+        "seconds": 17,
+        "knocked": 0,
+        "stars": 1,
+        "credits": [
+          -1,
+          -1
+        ],
+        "line": "对手自己开下了悬崖,你一台都没撞飞,自己还掉下去 2 次。下一关先在场地中间站稳,再找机会顶人。"
+      },
+      {
+        "level": 153,
+        "seconds": 27,
+        "knocked": 0,
+        "stars": 1,
+        "credits": [
+          -1,
+          -1
+        ],
+        "line": "对手自己开下了悬崖,你一台都没撞飞,自己还掉下去 4 次。下一关先在场地中间站稳,再找机会顶人。"
+      }
+    ],
+    "threeStar": 0,
+    "old31StillIdleWinnable": [
+      153
+    ],
+    "levelsMiscreditingPlayer": [],
+    "levelsStillPraisingKnockouts": []
+  },
+  "idleTestCoverage": {
+    "scanned": 17,
+    "covered": [
+      "sky-squad",
+      "prince-princess",
+      "duo-vs-star",
+      "bumper-cars",
+      "garden-guard",
+      "sprout-defense",
+      "monster-crisis",
+      "gold-hook"
+    ],
+    "missing": [
+      "candy-swing",
+      "puff-bros",
+      "bomb-buddies",
+      "tank-battle",
+      "sling-birds",
+      "shoot-range",
+      "snow-fight",
+      "bowling-lane",
+      "ice-fire-forest"
+    ],
+    "detail": {
+      "sky-squad": [
+        "idle.test.ts › 第 1 关摆烂:放跑超过容错,既不算通关也拿不到三星",
+        "idle.test.ts › 全 188 关摆烂:一关都过不去"
+      ],
+      "prince-princess": [
+        "idle.test.ts › 第 1 关摆烂:搭档跑到城门也不算过关",
+        "idle.test.ts › 全 188 关单人摆烂:一关都过不去"
+      ],
+      "duo-vs-star": [
+        "idle.test.ts › 全 188 关摆烂:玩家一颗三星都拿不到"
+      ],
+      "bumper-cars": [
+        "idle.test.ts › 第 1 关不再是白送的:零输入既过不了关,也拿不到星",
+        "idle.test.ts › 第 3 轮点名的那批关:零输入通关的比例压到 5% 以下"
+      ],
+      "candy-swing": [],
+      "puff-bros": [],
+      "bomb-buddies": [],
+      "garden-guard": [
+        "defense12.test.ts › 一座塔都不种的话，抽样这几关都守不住（说明关卡不是白送）",
+        "logic.test.ts › 四个新 BOSS 关能赢也能输:不种塔必输,正常打必赢",
+        "upgrade12.test.ts › 一座塔都不种连第一波都守不住,五颗心和闯关一致"
+      ],
+      "sprout-defense": [
+        "logic.test.ts › 四个新章 BOSS 关能赢也能输:不种植物必输,正常打必赢"
+      ],
+      "monster-crisis": [
+        "sim.test.ts › 什么都不做,188 关一关都守不住"
+      ],
+      "gold-hook": [
+        "levels.test.ts › 专挑石头钩的摆烂玩法一关都过不去"
+      ],
+      "tank-battle": [],
+      "sling-birds": [],
+      "shoot-range": [],
+      "snow-fight": [],
+      "bowling-lane": [],
+      "ice-fire-forest": []
+    }
+  }
+}

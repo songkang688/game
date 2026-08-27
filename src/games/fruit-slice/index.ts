@@ -48,6 +48,7 @@ import {
   kingDown,
   kingShowMult,
   makeLaunch,
+  mapLayout,
   mirrorOn,
   mirrorX,
   parseBest,
@@ -68,6 +69,36 @@ import {
   totalStars,
   zenStars,
 } from "./logic";
+import {
+  BLADE_WINDOW,
+  BladeBag,
+  CHILL_SECONDS,
+  DOUBLE_SECONDS,
+  EXTRA_SPEC,
+  ExtraKind,
+  FLOWER_COST,
+  STORM_MISS_LIMIT,
+  STORM_MISTAKE_LIMIT,
+  bladeLabel,
+  bladeScore,
+  bladeWindowAlive,
+  doubleScore,
+  extraChance,
+  extrasForRound,
+  flowerLine,
+  isRainbowBlade,
+  safeLaunch,
+  stormLine,
+  stormOver,
+  stormStars,
+  stormWave,
+  strokeBonus,
+  sweptHit,
+  swipeCounts,
+  twinCracked,
+  twinStepScore,
+} from "./blade";
+import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -81,7 +112,7 @@ export interface GameAPI {
   onLose: (message?: string) => void;
 }
 
-type Mode = "classic" | "zen" | "arcade";
+type Mode = "classic" | "zen" | "arcade" | "storm";
 type Phase = "menu" | "themes" | "map" | "intro" | "play" | "clear" | "retry" | "end";
 
 interface FruitKind {
@@ -103,8 +134,24 @@ const FRUITS: FruitKind[] = [
 const SHELL_FRUIT: FruitKind = { name: "壳壳", skin: "#c9a06a", flesh: "#fff0d0", r: 32 };
 /** 指令果切开后的果肉配色(1.1)。 */
 const CMD_FRUIT: FruitKind = { name: "令令", skin: "#c9a6f2", flesh: "#f3e6ff", r: 30 };
+/** 双倍果切开后的果肉配色(1.2)。 */
+const DOUBLE_FRUIT: FruitKind = { name: "亮亮", skin: "#ffd85a", flesh: "#fff6c8", r: 28 };
+/** 连体果切开后的果肉配色(1.2)。 */
+const TWIN_FRUIT: FruitKind = { name: "双双", skin: "#ff8fa8", flesh: "#ffe0e8", r: 30 };
 
-type FlyKind = "fruit" | "bomb" | "bigbomb" | "banana" | "ice" | "boom" | "shell" | "command";
+type FlyKind =
+  | "fruit"
+  | "bomb"
+  | "bigbomb"
+  | "banana"
+  | "ice"
+  | "boom"
+  | "shell"
+  | "command"
+  // 1.2 新目标:双倍果 / 小花朵(不能切)/ 连体果(要切两刀)
+  | "double"
+  | "flower"
+  | "twin";
 
 interface Flying {
   fly: FlyKind;
@@ -294,6 +341,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
   const rings: Ring[] = [];
   const floats: Floaty[] = [];
 
+  /**
+   * 系统开了「减弱动态效果」。
+   * 切水果整块是 canvas,动效全在帧循环里用 JS 画,没有 CSS 动画可以挂 `@media`,
+   * 所以这里自己读一次媒体查询,把**纯装饰**的那几样压下去:
+   * 刀光拖尾短一截、迸溅和光圈几乎立刻收、飘分不再往上飘、彩虹刀不再刷色相。
+   * 水果的抛物线、判定、计时一概不动——那是玩法,不是动效。
+   */
+  const reducedMotion = typeof matchMedia === "function"
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /** 装饰性残留的消退倍速:减弱动效时收得快得多 */
+  const FX_FADE = reducedMotion ? 5 : 1;
+
+  /** 刀光拖尾留几帧、留多久 */
+  const TRAIL_MAX = reducedMotion ? 5 : 16;
+  const TRAIL_SEC = reducedMotion ? 0.06 : 0.18;
+
   let time = 0;
   let launchTimer = 0.8;
   let slicing = false;
@@ -328,6 +392,29 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let mirrorInvert = false;
   /** 果王 */
   let king: King | null = null;
+
+  // ---- 1.2 新机制 ----
+  /** 上一帧的时长:扫掠判定要用它把水果往回推 */
+  let lastDt = 1 / 60;
+  /** 这一刀到现在划了多长(像素);不够 MIN_SWIPE 之前不吃判定 */
+  let strokeLen = 0;
+  /** 连击串数(800ms 窗口内可累计,倍率封顶) */
+  let bladeStreak = 0;
+  let bladeClock = 0;
+  /** 双倍果剩余秒数 */
+  let doubleTimer = 0;
+  /** 水果暴风:第几波、这一局的种子、漏了几个、切错几次 */
+  let stormN = 0;
+  let stormSeed = 1;
+  let stormMissed = 0;
+  let stormMistakes = 0;
+  let stormBest = save.getGameProgress(meta.id).endlessBest;
+  /** 上一刀是什么时候收的(算连击窗口用) */
+  let lastStrokeAt = -99;
+  /** 彩虹刀余辉:刀光整条变彩虹的剩余秒数 */
+  let rainbowBlade = 0;
+  /** 结束面板要显示的鼓励语(暴风用) */
+  let endMsg = "";
 
   const menuRects: Array<{ mode: Mode; rect: Rect }> = [];
   const themeCards: Array<{ idx: number; rect: Rect }> = [];
@@ -397,6 +484,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     mirrored = false;
     mirrorFlash = 0;
     mirrorInvert = false;
+    strokeLen = 0;
+    bladeStreak = 0;
+    bladeClock = 0;
+    doubleTimer = 0;
+    stormN = 0;
+    stormMissed = 0;
+    stormMistakes = 0;
+    if (mode === "storm") stormSeed = Math.floor(Math.random() * 1e6) + 1;
     const m = mech();
     king = m.king
       ? {
@@ -454,6 +549,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function endFreeMode(): void {
     settleCombo();
     phase = "end";
+    if (mode === "storm") {
+      endStars = stormStars(totalScore);
+      const prevBest = stormBest;
+      const gained = Math.max(0, endStars - stormStars(prevBest));
+      stormBest = save.recordEndlessBest(meta.id, totalScore);
+      endMsg = stormLine(totalScore, prevBest);
+      if (gained > 0) {
+        api.addStars(gained);
+        addFloat(w / 2, h / 2 - 120, `+${gained} ⭐`, "#e0a030", true);
+      }
+      api.play(endStars > 0 ? "win" : "oops");
+      speak(endMsg);
+      return;
+    }
     endStars = mode === "zen" ? zenStars(totalScore) : arcadeStars(totalScore);
     const prevBest = mode === "zen" ? best.zen : best.arcade;
     const prevStars = mode === "zen" ? zenStars(prevBest) : arcadeStars(prevBest);
@@ -487,23 +596,35 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (fly === "banana") return 30;
     if (fly === "shell") return 32;
     if (fly === "command") return 30;
+    // 1.2 新目标都按 ≥44px 直径来,手指按得住
+    if (fly === "twin") return 30;
+    if (fly === "double") return 26;
+    if (fly === "flower") return 24;
     return 26;
+  }
+
+  /** 本局的实际重力(果园手感会改它),抛物线与模拟共用同一个值 */
+  function gravityNow(): number {
+    return gravityFor(h) * orchardStyle().gravityMult;
   }
 
   function launchOne(fly: FlyKind): void {
     const st = orchardStyle();
-    const l = makeLaunch(w, h, Math.random(), Math.random(), Math.random());
-    // 初速按重力倍率开方缩放:抛物线顶点不变,低重力飘、高重力砸。
-    const vyScale = Math.sqrt(st.gravityMult);
+    // 1.2:先挑好顶点落在可视区哪一点,再倒算初速度,不会再有「飞出屏幕根本切不到」的果子
+    const r = radiusFor(fly);
+    const g = gravityNow();
+    const arc = safeLaunch(w, h, Math.random(), Math.random(), Math.random(), g, r);
+    // 侧风会额外推着果子跑,先从初速里扣掉,顶点才落在算好的位置上
+    const vx = arc.vx - st.wind;
     if (fly === "fruit") {
       const kind = FRUITS[Math.floor(Math.random() * FRUITS.length)];
       flying.push({
         fly,
         kind,
-        x: l.x,
-        y: l.y,
-        vx: l.vx,
-        vy: l.vy * vyScale,
+        x: arc.x,
+        y: arc.y,
+        vx,
+        vy: arc.vy,
         rot: Math.random() * Math.PI * 2,
         vrot: (Math.random() - 0.5) * 4,
         r: kind.r * st.fruitScale,
@@ -512,14 +633,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
       flying.push({
         fly,
         kind: null,
-        x: l.x,
-        y: l.y,
-        vx: l.vx,
-        vy: l.vy * vyScale * (fly === "bigbomb" ? 0.92 : 1),
+        x: arc.x,
+        y: arc.y,
+        vx,
+        vy: arc.vy * (fly === "bigbomb" ? 0.92 : 1),
         rot: fly === "banana" ? Math.random() * Math.PI : 0,
         vrot: (Math.random() - 0.5) * (fly === "banana" ? 5 : 2),
-        r: radiusFor(fly),
-        ...(fly === "shell" ? { hits: 0 } : {}),
+        r,
+        ...(fly === "shell" || fly === "twin" ? { hits: 0 } : {}),
       });
     }
   }
@@ -558,23 +679,51 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return ["banana", "ice", "boom"];
   }
 
+  /** 1.2 的连刀倍率 / 新目标只在第 100 回合之后与水果暴风里生效,老回合手感原样保留 */
+  function bladeOn(): boolean {
+    return mode === "storm" || (mode === "classic" && roundIdx >= 99);
+  }
+
+  /** 这一波会混哪些 1.2 新目标 */
+  function activeExtras(): ExtraKind[] {
+    if (mode === "storm") return stormWave(stormN, stormSeed).extras;
+    if (mode === "classic") return extrasForRound(roundIdx);
+    return [];
+  }
+
   function launchVolley(): void {
     const r = round();
     const m = mech();
-    const min = mode === "classic" ? r.volleyMin : mode === "zen" ? 2 : 1;
-    const max = mode === "classic" ? r.volleyMax : mode === "zen" ? 4 : 3;
+    const storm = mode === "storm" ? stormWave(stormN, stormSeed) : null;
+    const min = storm ? storm.count : mode === "classic" ? r.volleyMin : mode === "zen" ? 2 : 1;
+    const max = storm ? storm.count : mode === "classic" ? r.volleyMax : mode === "zen" ? 4 : 3;
     const n = min + Math.floor(Math.random() * (max - min + 1));
     for (let i = 0; i < n; i++) launchOne("fruit");
     if (mode !== "zen" && time > 4) {
-      const bombChance = mode === "arcade" ? arcadePace(totalScore).bombChance : r.bombChance;
-      const bigChance = mode === "arcade" ? Math.min(0.1, totalScore / 1500) : r.bigBombChance;
+      const bombChance = storm
+        ? storm.bombChance
+        : mode === "arcade"
+          ? arcadePace(totalScore).bombChance
+          : r.bombChance;
+      const bigChance = storm
+        ? Math.min(0.1, stormN / 90)
+        : mode === "arcade"
+          ? Math.min(0.1, totalScore / 1500)
+          : r.bigBombChance;
       if (Math.random() < bigChance) launchOne("bigbomb");
       else if (Math.random() < bombChance) launchOne("bomb");
     }
     for (const sp of activeSpecials()) {
       if (Math.random() < SPECIAL_CHANCE) launchOne(sp);
     }
+    // 1.2 新目标:双倍果 / 小花朵 / 连体果
+    const extras = activeExtras();
+    if (extras.length > 0) {
+      const chance = mode === "storm" ? 0.34 : extraChance(roundIdx);
+      if (Math.random() < chance) launchOne(extras[Math.floor(Math.random() * extras.length)]);
+    }
     if (m.shellChance > 0 && Math.random() < m.shellChance) launchOne("shell");
+    if (storm) stormN++;
     api.play("jump");
   }
 
@@ -626,14 +775,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
-  /** 记一笔分,并把连击窗口续上。 */
-  function scoreHit(x: number, y: number, gain: number): void {
-    roundScore += gain;
-    totalScore += gain;
+  /**
+   * 记一笔分,并把连击窗口续上。
+   * 1.2:第 100 回合之后与水果暴风里,还要叠上双倍果与连击串倍率(倍率封顶)。
+   * 返回真正入账的分数,浮字直接用它,免得屏幕上写的和账上记的对不上。
+   */
+  function scoreHit(x: number, y: number, gain: number): number {
+    const paid = bladeOn() ? bladeScore(doubleScore(gain, doubleTimer > 0), bladeStreak) : gain;
+    roundScore += paid;
+    totalScore += paid;
     comboCount++;
     comboClock = COMBO_WINDOW;
     comboX = x;
     comboY = y;
+    return paid;
   }
 
   function sliceFruit(f: Flying, x1: number, y1: number, x2: number, y2: number): void {
@@ -642,8 +797,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 连刀:一刀之内第 n 颗值 n 分(上限 CHAIN_MAX)
     strokeCount++;
     const chain = mech().chain ? chainGain(strokeCount) : 1;
-    const gain = chain * mult;
-    scoreHit(f.x, f.y, gain);
+    const gain = scoreHit(f.x, f.y, chain * mult);
     strokeX = f.x;
     strokeY = f.y;
     api.play("pop");
@@ -669,8 +823,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const mult = frenzyTimer > 0 ? FRENZY_MULTIPLIER : 1;
     strokeCount++;
     const chain = mech().chain ? chainGain(strokeCount) : 1;
-    const gain = SHELL_SCORE * chain * mult;
-    scoreHit(f.x, f.y, gain);
+    const gain = scoreHit(f.x, f.y, SHELL_SCORE * chain * mult);
     strokeX = f.x;
     strokeY = f.y;
     api.play("coin");
@@ -691,10 +844,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     const mult = frenzyTimer > 0 ? FRENZY_MULTIPLIER : 1;
-    let gain = commandStepScore(num) * mult;
+    let base = commandStepScore(num) * mult;
     const last = num >= cmdTotal;
-    if (last) gain += COMMAND_CLEAR_BONUS * mult;
-    scoreHit(f.x, f.y, gain);
+    if (last) base += COMMAND_CLEAR_BONUS * mult;
+    const gain = scoreHit(f.x, f.y, base);
     api.play(last ? "win" : "coin");
     addFloat(
       f.x,
@@ -716,8 +869,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function sliceKing(k: King): void {
     k.hits++;
     const mult = frenzyTimer > 0 ? FRENZY_MULTIPLIER : 1;
-    const gain = k.spec.hitScore * mult;
-    scoreHit(k.x, k.y, gain);
+    const gain = scoreHit(k.x, k.y, k.spec.hitScore * mult);
     shake = Math.max(shake, 0.45);
     api.play("coin");
     splashes.push({ x: k.x, y: k.y, life: 0.6, color: "#ffd0e0" });
@@ -743,6 +895,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     shake = big ? 0.9 : 0.6;
     comboCount = 0;
     comboClock = 0;
+    bladeStreak = 0;
+    if (mode === "storm") stormMistakes++;
     api.play("oops");
     splashes.push({ x: f.x, y: f.y, life: 0.8, color: "#8a93a8" });
     rings.push({ x: f.x, y: f.y, life: 0.6, maxR: big ? 220 : 110, color: big ? "#e05a7a" : "#8a93a8" });
@@ -770,8 +924,64 @@ export function mount(api: GameAPI): { destroy: () => void } {
     splashes.push({ x: f.x, y: f.y, life: 0.6, color: "#ffe66b" });
   }
 
+  /** 1.2 双倍果:切开之后几秒钟内每一刀都算两份。 */
+  function sliceDouble(f: Flying, x1: number, y1: number, x2: number, y2: number): void {
+    doubleTimer = DOUBLE_SECONDS;
+    const gain = scoreHit(f.x, f.y, 3);
+    strokeCount++;
+    strokeX = f.x;
+    strokeY = f.y;
+    api.play("coin");
+    addFloat(w / 2, h * 0.3, `${EXTRA_SPEC.double.emoji} 双倍果!接下来 ${DOUBLE_SECONDS} 秒都算两份`, "#e0a030", true);
+    addFloat(f.x, f.y - 12, `+${gain}`, "#c47a2a");
+    rings.push({ x: f.x, y: f.y, life: 0.7, maxR: 170, color: "#ffd85a" });
+    splitHalves(f, DOUBLE_FRUIT, Math.atan2(y2 - y1, x2 - x1));
+  }
+
+  /** 1.2 小花朵:不能切。切了只少一次机会 + 温和提示,不掉血、不训人。 */
+  function sliceFlower(f: Flying): void {
+    hearts -= FLOWER_COST;
+    heartsLost += FLOWER_COST;
+    if (mode === "storm") stormMistakes++;
+    comboCount = 0;
+    comboClock = 0;
+    bladeStreak = 0;
+    api.play("oops");
+    addFloat(f.x, f.y - 24, flowerLine(), "#c86a9a", true);
+    // 花瓣飘落:用果肉两半冒充花瓣,颜色换成粉白
+    splashes.push({ x: f.x, y: f.y, life: 0.7, color: "#ffd8e8" });
+    rings.push({ x: f.x, y: f.y, life: 0.5, maxR: 110, color: "#ffc0d8" });
+    if (hearts <= 0) roundFail();
+  }
+
+  /** 1.2 连体果:两颗连在一起,第一刀先分开一半,第二刀才整颗算完。 */
+  function sliceTwin(f: Flying, x1: number, y1: number, x2: number, y2: number): boolean {
+    const hits = (f.hits ?? 0) + 1;
+    f.hits = hits;
+    const mult = frenzyTimer > 0 ? FRENZY_MULTIPLIER : 1;
+    strokeCount++;
+    strokeX = f.x;
+    strokeY = f.y;
+    if (!twinCracked(hits)) {
+      const gain = scoreHit(f.x, f.y, twinStepScore(hits) * mult);
+      f.r = Math.max(18, f.r * 0.72);
+      f.vy -= 120;
+      f.vrot = (Math.random() - 0.5) * 7;
+      api.play("pop");
+      addFloat(f.x, f.y - 20, `分开一半 +${gain},再补一刀!`, "#c8506a");
+      splitHalves(f, TWIN_FRUIT, Math.atan2(y2 - y1, x2 - x1));
+      return false;
+    }
+    const gain = scoreHit(f.x, f.y, twinStepScore(hits) * mult);
+    api.play("coin");
+    addFloat(f.x, f.y - 16, `连体果切完!+${gain}`, "#c8506a", true);
+    splitHalves(f, TWIN_FRUIT, Math.atan2(y2 - y1, x2 - x1));
+    return true;
+  }
+
   function sliceIce(f: Flying): void {
-    freezeTimer = ICE_SECONDS;
+    // 暴风节奏更快,冰冻按 1.2 规格给 3 秒;老回合沿用 1.0 的手感不动
+    freezeTimer = mode === "storm" ? CHILL_SECONDS : ICE_SECONDS;
     api.play("coin");
     addFloat(w / 2, h * 0.3, "冰冻果!全场慢动作~", "#5a8ac9", true);
     splashes.push({ x: f.x, y: f.y, life: 0.6, color: "#bfe9ff" });
@@ -804,6 +1014,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
   function slice(x1: number, y1: number, x2: number, y2: number): void {
     if (phase !== "play") return;
+    // 1.2:一刀没划够 MIN_SWIPE 之前不吃判定,小手指头点一下不会误切
+    if (!swipeCounts(strokeLen)) return;
+    const wind = orchardStyle().wind;
     // 果王判定放在水果前面:它块头大,别被后面的果子抢了刀
     if (king && king.out && segCircleHit(x1, y1, x2, y2, king.x, king.y, king.spec.r)) {
       sliceKing(king);
@@ -813,11 +1026,19 @@ export function mount(api: GameAPI): { destroy: () => void } {
       // 爆裂果会在这一轮里连锁清掉好几个,数组可能已经比 i 短了
       const f = flying[i];
       if (!f) continue;
-      // 触控放宽:判定走廊 = 果半径 + 12px,配合 ≥24px 的可见刀光,一年级拖不准也切得中
-      if (!segCircleHit(x1, y1, x2, y2, f.x, f.y, f.r + 12)) continue;
+      // 触控放宽:判定走廊 = 果半径 + 12px,配合 ≥24px 的可见刀光,一年级拖不准也切得中。
+      // 1.2 换成扫掠判定:这一帧里刀和果子一起往前走,划得再快也不会擦身而过还判没切到。
+      if (!sweptHit(x1, y1, x2, y2, { x: f.x, y: f.y, vx: f.vx + wind, vy: f.vy, r: f.r }, lastDt, 12)) continue;
       if (f.fly === "shell") {
         // 硬壳果第一刀不移除,弹开等补刀
         if (!sliceShell(f, x1, y1, x2, y2)) continue;
+        flying.splice(i, 1);
+        if (checkClassicTarget()) return;
+        continue;
+      }
+      if (f.fly === "twin") {
+        // 连体果第一刀只分开一半,留在场上等补刀
+        if (!sliceTwin(f, x1, y1, x2, y2)) continue;
         flying.splice(i, 1);
         if (checkClassicTarget()) return;
         continue;
@@ -826,6 +1047,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (f.fly === "bomb" || f.fly === "bigbomb") {
         sliceBomb(f, f.fly === "bigbomb");
         if (phase !== "play") return;
+      } else if (f.fly === "flower") {
+        sliceFlower(f);
+        if (phase !== "play") return;
+      } else if (f.fly === "double") {
+        sliceDouble(f, x1, y1, x2, y2);
+        if (checkClassicTarget()) return;
       } else if (f.fly === "banana") {
         sliceBanana(f);
       } else if (f.fly === "ice") {
@@ -843,13 +1070,35 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
-  /** 一刀结束:报连刀战果。 */
+  /** 一刀结束:报连刀战果,并把 800ms 的连击串接上(倍率封顶)。 */
   function settleStroke(): void {
-    if (strokeCount >= 2 && mech().chain) {
+    if (strokeCount >= 1) {
+      bladeStreak = bladeWindowAlive(time - lastStrokeAt) ? bladeStreak + 1 : 1;
+      lastStrokeAt = time;
+    }
+    if (strokeCount >= 2 && bladeOn()) {
+      const bonus = strokeBonus(strokeCount);
+      roundScore += bonus;
+      totalScore += bonus;
+      bestCombo = Math.max(bestCombo, strokeCount);
+      const rainbow = isRainbowBlade(strokeCount);
+      const label = bladeLabel(strokeCount);
+      if (label) {
+        addFloat(strokeX, strokeY - 52, `${label} +${bonus}`, rainbow ? "#c85ab0" : "#1f7a5e", true);
+      }
+      if (rainbow) {
+        // 彩虹刀:刀光整条变彩虹,再来一圈水花
+        api.play("win");
+        shake = Math.max(shake, 0.32);
+        rainbowBlade = 0.55;
+        rings.push({ x: strokeX, y: strokeY, life: 0.7, maxR: 210, color: "#ffb0e0" });
+      }
+    } else if (strokeCount >= 2 && mech().chain) {
       const label = chainLabel(strokeCount);
       if (label) addFloat(strokeX, strokeY - 52, label, "#1f7a5e", true);
     }
     strokeCount = 0;
+    strokeLen = 0;
   }
 
   // ---- 输入 ----
@@ -963,6 +1212,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     slicing = true;
     strokeCount = 0;
+    strokeLen = 0;
     // 镜像开着的时候,手往右划刀就往左走
     lastX = mirrorX(x, w, mirrored);
     lastY = y;
@@ -974,11 +1224,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const rect = canvas.getBoundingClientRect();
     const x = mirrorX(e.clientX - rect.left, w, mirrored);
     const y = e.clientY - rect.top;
+    strokeLen += Math.hypot(x - lastX, y - lastY);
     slice(lastX, lastY, x, y);
     lastX = x;
     lastY = y;
     trail.push({ x, y, t: time });
-    if (trail.length > 16) trail.shift();
+    if (trail.length > TRAIL_MAX) trail.shift();
   }
 
   function onPointerUp(): void {
@@ -1029,21 +1280,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
     hitStop = Math.max(0, hitStop - rawDt);
     const dt = rawDt * scale;
     time += dt;
+    // 扫掠判定要拿这一帧的时长把水果往回推,所以记下来
+    lastDt = Math.max(1 / 240, rawDt);
     shake = Math.max(0, shake - rawDt);
     freezeTimer = Math.max(0, freezeTimer - rawDt);
+    doubleTimer = Math.max(0, doubleTimer - rawDt);
+    rainbowBlade = Math.max(0, rainbowBlade - rawDt);
+    if (bladeStreak > 0 && time - lastStrokeAt > BLADE_WINDOW) bladeStreak = 0;
 
     for (let i = floats.length - 1; i >= 0; i--) {
       floats[i].life -= rawDt;
-      floats[i].y -= rawDt * 32;
+      // 减弱动效时飘分停在原地,只淡出——分数照样读得到
+      if (!reducedMotion) floats[i].y -= rawDt * 32;
       if (floats[i].life <= 0) floats.splice(i, 1);
     }
-    while (trail.length > 0 && time - trail[0].t > 0.18) trail.shift();
+    while (trail.length > 0 && time - trail[0].t > TRAIL_SEC) trail.shift();
     for (let i = splashes.length - 1; i >= 0; i--) {
-      splashes[i].life -= dt;
+      splashes[i].life -= dt * FX_FADE;
       if (splashes[i].life <= 0) splashes.splice(i, 1);
     }
     for (let i = rings.length - 1; i >= 0; i--) {
-      rings[i].life -= rawDt;
+      rings[i].life -= rawDt * FX_FADE;
       if (rings[i].life <= 0) rings.splice(i, 1);
     }
 
@@ -1097,9 +1354,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
     } else {
       launchTimer -= dt;
-      const maxOn = mode === "classic" ? round().maxOnScreen : mode === "zen" ? 9 : 8;
+      const maxOn =
+        mode === "classic" ? round().maxOnScreen : mode === "zen" ? 9 : mode === "storm" ? 13 : 8;
       if (launchTimer <= 0 && flying.length < maxOn) {
-        launchTimer = mode === "arcade" ? arcadePace(totalScore).interval : mode === "zen" ? 1.1 : 1.4;
+        launchTimer =
+          mode === "storm"
+            ? stormWave(stormN, stormSeed).interval
+            : mode === "arcade"
+              ? arcadePace(totalScore).interval
+              : mode === "zen"
+                ? 1.1
+                : 1.4;
         launchVolley();
       }
     }
@@ -1136,7 +1401,18 @@ export function mount(api: GameAPI): { destroy: () => void } {
       f.x += (f.vx + wind) * simDt;
       f.y += f.vy * simDt;
       f.rot += f.vrot * simDt;
-      if (f.y > h + 80 && f.vy > 0) flying.splice(i, 1);
+      if (f.y > h + 80 && f.vy > 0) {
+        flying.splice(i, 1);
+        // 水果暴风:能切的果子落地就算漏一个(炸弹和花朵本来就不该切,不算)
+        if (mode === "storm" && f.fly !== "bomb" && f.fly !== "bigbomb" && f.fly !== "flower") {
+          stormMissed++;
+          addFloat(Math.max(30, Math.min(w - 30, f.x)), h - 40, `漏了 ${stormMissed}/${STORM_MISS_LIMIT}`, "#c86a9a");
+        }
+      }
+    }
+    if (mode === "storm" && stormOver(stormMissed, stormMistakes)) {
+      endFreeMode();
+      return;
     }
 
     for (let i = halves.length - 1; i >= 0; i--) {
@@ -1363,6 +1639,89 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
+  /** 1.2 双倍果:亮闪闪的金果子,身上刻着 ×2。 */
+  function drawDoubleFruit(f: Flying): void {
+    const r = f.r;
+    const glow = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.5);
+    glow.addColorStop(0, "rgba(255,232,150,0.9)");
+    glow.addColorStop(1, "rgba(255,216,90,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    const body = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r * 1.1);
+    body.addColorStop(0, "#fff3b0");
+    body.addColorStop(1, "#ffce4a");
+    ctx.fillStyle = body;
+    ctx.strokeStyle = "#d99a10";
+    ctx.lineWidth = Math.max(2, r * 0.09);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.rotate(-f.rot);
+    ctx.fillStyle = "#8a5a10";
+    ctx.font = `bold ${Math.round(r * 0.9)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("×2", 0, 1);
+  }
+
+  /** 1.2 小花朵:这是给朵朵的礼物,不能切。画得柔和一点,一眼就和果子区分开。 */
+  function drawFlower(f: Flying): void {
+    const r = f.r;
+    ctx.rotate(-f.rot * 0.6);
+    ctx.fillStyle = "#ffd6e6";
+    ctx.strokeStyle = "#f0a8c8";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 * i) / 6 + f.rot * 0.4;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, r * 0.46, r * 0.32, a, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#ffe89a";
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#e8c460";
+    ctx.stroke();
+    ctx.fillStyle = "#c86a9a";
+    ctx.font = `bold ${Math.round(r * 0.5)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("护", 0, 1);
+  }
+
+  /** 1.2 连体果:两颗黏在一起,第一刀分开一半,第二刀才切完。 */
+  function drawTwinFruit(f: Flying): void {
+    const r = f.r;
+    const first = (f.hits ?? 0) >= 1;
+    const body = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r * 1.15);
+    body.addColorStop(0, "#ffc3d0");
+    body.addColorStop(1, "#f5758f");
+    ctx.strokeStyle = "#c8506a";
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.fillStyle = body;
+    const lobes: Array<[number, number]> = first ? [[0, 0]] : [[-r * 0.42, 0], [r * 0.42, 0]];
+    for (const [ox, oy] of lobes) {
+      ctx.beginPath();
+      ctx.arc(ox, oy, r * (first ? 0.92 : 0.66), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    if (!first) {
+      // 连着的那根小梗
+      ctx.strokeStyle = "#7aa860";
+      ctx.lineWidth = Math.max(2, r * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.2, -r * 0.5);
+      ctx.quadraticCurveTo(0, -r * 0.9, r * 0.2, -r * 0.5);
+      ctx.stroke();
+    }
+  }
+
   function drawFruit(f: Flying): void {
     ctx.save();
     ctx.translate(f.x, f.y);
@@ -1396,6 +1755,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
     if (f.fly === "boom") {
       drawBoomFruit(f);
+      ctx.restore();
+      return;
+    }
+    if (f.fly === "double") {
+      drawDoubleFruit(f);
+      ctx.restore();
+      return;
+    }
+    if (f.fly === "flower") {
+      drawFlower(f);
+      ctx.restore();
+      return;
+    }
+    if (f.fly === "twin") {
+      drawTwinFruit(f);
       ctx.restore();
       return;
     }
@@ -1604,7 +1978,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.restore();
   }
 
-  /** 果王:大果子本体 + 王冠 + 血条。躲起来的时候只留个水影。 */
+  /** 果王:大果子本体 + 王冠 + 剩余刀数条。躲起来的时候只留个水影。 */
   function drawKing(k: King): void {
     const down = kingDown(k.spec, k.hits);
     const r = k.spec.r;
@@ -1651,7 +2025,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.arc(0, r * 0.1, r * 0.34, 0.12 * Math.PI, 0.88 * Math.PI);
     ctx.stroke();
     ctx.restore();
-    // 血条:还剩几刀一目了然
+    // 刀数条:还剩几刀一目了然
     const bw = r * 1.8;
     const left = Math.max(0, k.spec.hp - k.hits);
     ctx.fillStyle = "rgba(255,255,255,0.85)";
@@ -1743,11 +2117,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.lineJoin = "round";
     for (let i = 1; i < trail.length; i++) {
       const age = time - trail[i].t;
-      const alpha = Math.max(0, 1 - age / 0.18);
+      const alpha = Math.max(0, 1 - age / TRAIL_SEC);
       // 刀光加宽到最粗 24px(白芯)+32px(粉晕),和判定走廊一致,孩子看得清切到哪
       const width = 18 * (i / trail.length) + 6;
       ctx.globalAlpha = alpha * 0.45;
-      ctx.strokeStyle = "#ff9eb5";
+      // 彩虹刀余辉:整条刀光换成彩虹渐变(1.2 的一划切 ≥4 颗奖励演出)
+      // 减弱动效时彩虹刀不再逐帧刷色相(那是闪烁),换成沿刀身的一段固定渐变
+      ctx.strokeStyle = rainbowBlade > 0
+        ? `hsl(${(((reducedMotion ? 0 : time * 200) + i * 26) % 360).toFixed(0)}, 85%, 68%)`
+        : "#ff9eb5";
       ctx.lineWidth = width + 8;
       ctx.beginPath();
       ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
@@ -1820,6 +2198,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
         title: "🎪 街机无尽",
         sub: `越切越快,挑战最高分 · 最好 ${best.arcade} 分`,
         color: "#b28ae8",
+      },
+      {
+        mode: "storm",
+        title: "🌪 水果暴风",
+        sub: `一波接一波,漏 ${STORM_MISS_LIMIT} 个就收摊 · 最好 ${stormBest} 分`,
+        color: "#6fc7a8",
       },
     ];
     const cardH = Math.min(88, (h * 0.66) / configs.length - 12);
@@ -1936,22 +2320,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     mapNodes.length = 0;
     const base = themeStart(chapterIdx);
-    // 1.1 的新果园一章 29~30 回合,列数加到 5 才排得下
-    const cols = size > 16 ? 5 : 4;
-    const rows = Math.ceil(size / cols);
-    const mx0 = w * 0.12;
-    const mx1 = w * 0.88;
-    const my0 = 96;
-    // 最后一行的星星也要留得下:375×667 上原来会被切掉一截
-    const my1 = h - 62;
-    const nr = Math.max(13, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
-    for (let i = 0; i < size; i++) {
-      const row = Math.floor(i / cols);
-      const colRaw = i % cols;
-      const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
-      const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
-      const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
-      mapNodes.push({ idx: base + i, x, y, r: nr });
+    const layout = mapLayout(w, h, size);
+    const nr = layout.r;
+    for (const spot of layout.spots) {
+      mapNodes.push({ idx: base + spot.i, x: spot.x, y: spot.y, r: spot.r });
     }
     ctx.strokeStyle = "rgba(255,255,255,0.75)";
     ctx.lineWidth = 5;
@@ -2076,6 +2448,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#c47a2a";
       ctx.font = "bold 16px sans-serif";
       ctx.fillText("🎯 冲 40/80/130 分拿 1/2/3 星", w / 2, y + 122);
+    } else if (mode === "storm") {
+      ctx.fillStyle = "#3f9a80";
+      ctx.font = "bold 24px sans-serif";
+      ctx.fillText("🌪 水果暴风", w / 2, y + 42);
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "15px sans-serif";
+      wrapText(
+        `一波接一波越来越密。漏掉 ${STORM_MISS_LIMIT} 个果子、或者切错 ${STORM_MISTAKE_LIMIT} 次(炸弹、花朵)就收摊。`,
+        w / 2,
+        y + 82,
+        Math.min(w - 60, 400),
+        20,
+      );
+      ctx.fillStyle = "#c47a2a";
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillText("🎯 冲 45/95/160 分拿 1/2/3 星", w / 2, y + 132);
     } else {
       ctx.fillStyle = "#b28ae8";
       ctx.font = "bold 24px sans-serif";
@@ -2142,15 +2530,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(mode === "zen" ? "禅宗时间到!" : "街机挑战结束!", w / 2, y + 40);
+    ctx.fillText(
+      mode === "zen" ? "禅宗时间到!" : mode === "storm" ? "水果暴风停啦!" : "街机挑战结束!",
+      w / 2,
+      y + 40,
+    );
     ctx.font = "34px sans-serif";
     let starTxt = "";
     for (let s = 0; s < 3; s++) starTxt += s < endStars ? "⭐" : "☆";
     ctx.fillText(starTxt, w / 2, y + 86);
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
-    const bestScore = mode === "zen" ? best.zen : best.arcade;
-    ctx.fillText(`本局 ${totalScore} 分 · 最好 ${bestScore} 分 · 最高 ${bestCombo} 连切`, w / 2, y + 124);
+    if (mode === "storm") {
+      wrapText(endMsg, w / 2, y + 118, Math.min(w - 60, 400), 20);
+    } else {
+      const bestScore = mode === "zen" ? best.zen : best.arcade;
+      ctx.fillText(`本局 ${totalScore} 分 · 最好 ${bestScore} 分 · 最高 ${bestCombo} 连切`, w / 2, y + 124);
+    }
     const bw2 = 132;
     btnMenu = { x: w / 2 - bw2 - 10, y: y + 168, w: bw2, h: 44 };
     btnRetry = { x: w / 2 + 10, y: y + 168, w: bw2, h: 44 };
@@ -2308,6 +2704,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       hudText = `第${chapterIdx + 1}章 ${rel}/${themeSize(chapterIdx)} · 🍑 ${roundScore}/${round().target}`;
     } else if (mode === "zen") {
       hudText = `禅宗 · 分 ${totalScore}`;
+    } else if (mode === "storm") {
+      hudText = `暴风 · 分 ${totalScore} · 漏 ${stormMissed}/${STORM_MISS_LIMIT} · 错 ${stormMistakes}/${STORM_MISTAKE_LIMIT}`;
     } else {
       hudText = `街机 · 分 ${totalScore}`;
     }
@@ -2363,6 +2761,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = "#5a8ac9";
       ctx.font = "bold 18px sans-serif";
       ctx.fillText(`❄ 慢动作 ${Math.ceil(freezeTimer)}s`, w / 2, bannerY);
+      bannerY += 26;
+    }
+    if (doubleTimer > 0) {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#c48a1a";
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText(`✨ 双倍果 ×2 ${Math.ceil(doubleTimer)}s`, w / 2, bannerY);
+      bannerY += 26;
+    }
+    if (bladeStreak >= 2 && phase === "play") {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#1f7a5e";
+      ctx.font = "bold 17px sans-serif";
+      ctx.fillText(`🔗 连击 ×${bladeStreak}`, w / 2, bannerY);
     }
 
     // ---- 覆盖层 ----
@@ -2383,20 +2795,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
     raf = requestAnimationFrame(frame);
   }
 
+  // 拆卸清单统一记在袋子里,destroy 一把倒干净(监听 / rAF / 朗读一个都不剩)
+  const bag = new BladeBag();
   canvas.addEventListener("pointerdown", onPointerDown);
+  bag.add(() => canvas.removeEventListener("pointerdown", onPointerDown));
   canvas.addEventListener("pointermove", onPointerMove);
+  bag.add(() => canvas.removeEventListener("pointermove", onPointerMove));
   window.addEventListener("pointerup", onPointerUp);
+  bag.add(() => window.removeEventListener("pointerup", onPointerUp));
   raf = requestAnimationFrame(frame);
+  bag.add(() => cancelAnimationFrame(raf));
+  bag.add(() => stopSpeaking());
+  bag.add(() => canvas.remove());
 
   return {
     destroy(): void {
       destroyed = true;
-      cancelAnimationFrame(raf);
-      stopSpeaking();
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      canvas.remove();
+      bag.clear();
     },
   };
 }

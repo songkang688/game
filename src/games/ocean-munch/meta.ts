@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🐟",
   category: "action" as const,
   color: "#bfe9ff",
-  blurb: "188 关十二片海域战役!洋流、毒藻鱼、共生小鱼、深渊压力,挑战十二位海域大王!",
-  // logic.ts 的 TOTAL_LEVELS = 188,只有闯关一种玩法
-  modes: ["campaign"] as const,
+  blurb: "吃小鱼长大!188 关十二片海域战役,外加一直往下潜的深海马拉松和 60 秒比谁更胖的人机对战。",
+  // index.ts 三个入口:188 关战役(logic.ts 的 TOTAL_LEVELS)/ 无尽深海马拉松 / 人机对战
+  modes: ["campaign", "endless", "versus"] as const,
   levels: 188,
+  // 手指跟着滑最顺,鼠标一样能玩;WASD / 方向键游动、空格冲刺(Esc 留给壳层)
+  platform: "both" as const,
 };

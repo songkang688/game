@@ -266,7 +266,7 @@ describe("寻找外星朋友 · 双人对战与无尽", () => {
     expect(endlessSpotCount(1)).toBeLessThan(endlessSpotCount(10));
     expect(endlessSpotCount(999)).toBeLessThanOrEqual(16);
     expect(endlessTargetCount(1)).toBeLessThanOrEqual(endlessTargetCount(20));
-    expect(endlessTargetCount(999)).toBeLessThanOrEqual(5);
+    expect(endlessTargetCount(999)).toBeLessThanOrEqual(8);
   });
 
   it("无尽播报会认新纪录", () => {

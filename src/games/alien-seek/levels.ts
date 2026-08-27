@@ -13,6 +13,10 @@ import {
   SCENE_W,
   ZONES,
   clueHolds,
+  endlessMissPenalty,
+  endlessSeconds,
+  endlessSpotCount,
+  endlessTargetCount,
   isTop,
   solveDeduction,
   zoneOf,
@@ -58,6 +62,11 @@ interface BaseLevel {
   /** 限时(秒) */
   seconds: number;
   hint: string;
+  /**
+   * 点错一次扣几秒。战役关不写这一项,按 `missPenalty(chapter)` 算;
+   * 无尽轮的 chapter 是循环出来的,必须自带罚时才不会忽轻忽重。
+   */
+  penalty?: number;
 }
 
 export interface FindLevel extends BaseLevel {
@@ -267,26 +276,58 @@ export function cluesAreTight(spots: Spot[], clues: Clue[]): boolean {
 }
 
 /**
- * 给一张场景出一道推理题。
- * 换着藏身点当答案试,优先挑出「3~5 条线索、而且一条都不能少」的那种;
- * 万一整张场景都凑不出这种好题,退而求其次也保证解唯一。
+ * 这一关的推理题该出几条线索。
+ *
+ * 刚开始出推理题的那一章给 3 条(入门:读三句话就能圈出答案),
+ * 下一章 4 条,最后一章 5 条 —— 不这么点名的话生成器会一路吐 4~5 条,
+ * 第 6 章开门第一道推理题就和最后一章一样绕,难度台阶少了一整档。
  */
-export function buildDeduction(spots: Spot[], rand: () => number): { answer: number; clues: Clue[] } {
+export function clueBudgetFor(chapter: number): number {
+  if (chapter <= DEDUCE_FROM_CHAPTER) return MIN_CLUES;
+  if (chapter === DEDUCE_FROM_CHAPTER + 1) return MIN_CLUES + 1;
+  return MAX_CLUES;
+}
+
+/** 一道推理题:答案 + 线索,只在 buildDeduction 内部流转 */
+interface Riddle {
+  answer: number;
+  clues: Clue[];
+}
+
+/**
+ * 给一张场景出一道推理题。
+ *
+ * 换着藏身点当答案试,优先挑出「3~5 条线索、一条都不能少、而且条数正好等于 want」的那种;
+ * 凑不出正好的就取最接近的;万一整张场景连紧致题都凑不出,退而求其次也保证解唯一。
+ */
+export function buildDeduction(
+  spots: Spot[],
+  rand: () => number,
+  want: number = MIN_CLUES + 1
+): Riddle {
   const order = shuffled(
     spots.map((_, i) => i),
     rand
   );
-  let fallback: { answer: number; clues: Clue[] } | null = null;
+  const goal = Math.max(MIN_CLUES, Math.min(MAX_CLUES, Math.round(want)));
+  let best: { riddle: Riddle; gap: number } | null = null;
+  let fallback: Riddle | null = null;
+
   for (const answer of order) {
-    const clues = buildClues(spots, answer, rand);
-    const sol = solveDeduction(spots, clues);
-    if (sol.length !== 1 || sol[0] !== answer) continue;
-    if (clues.length >= MIN_CLUES && clues.length <= MAX_CLUES && cluesAreTight(spots, clues)) {
-      return { answer, clues };
+    // buildClues 内部本来就会洗牌,同一个答案多问几次能拿到长短不同的题面
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const clues = buildClues(spots, answer, rand);
+      const sol = solveDeduction(spots, clues);
+      if (sol.length !== 1 || sol[0] !== answer) continue;
+      if (!fallback) fallback = { answer, clues };
+      if (clues.length < MIN_CLUES || clues.length > MAX_CLUES) continue;
+      if (!cluesAreTight(spots, clues)) continue;
+      const gap = Math.abs(clues.length - goal);
+      if (gap === 0) return { answer, clues };
+      if (!best || gap < best.gap) best = { riddle: { answer, clues }, gap };
     }
-    if (!fallback) fallback = { answer, clues };
   }
-  return fallback ?? { answer: order[0], clues: buildClues(spots, order[0], rand) };
+  return best?.riddle ?? fallback ?? { answer: order[0], clues: buildClues(spots, order[0], rand) };
 }
 
 // ---------------------------------------------------------------------------
@@ -299,6 +340,8 @@ interface GenOptions {
   targets: number;
   seconds: number;
   deduce: boolean;
+  /** 推理题想要几条线索(找物关用不上) */
+  clueWant?: number;
   hint: string;
 }
 
@@ -350,7 +393,7 @@ function generate(opts: GenOptions, seed: number, index: number): SeekLevel {
   const spots = layoutSpots(rand, opts.spots);
 
   if (opts.deduce) {
-    const { answer, clues } = buildDeduction(spots, rand);
+    const { answer, clues } = buildDeduction(spots, rand, opts.clueWant ?? clueBudgetFor(opts.chapter));
     return {
       mode: "deduce",
       index,
@@ -395,19 +438,26 @@ export const LEVELS: SeekLevel[] = Array.from({ length: TOTAL_LEVELS }, (_, i) =
 /** 全部推理关(单测拿它逐题断言解唯一) */
 export const DEDUCE_LEVELS: DeduceLevel[] = LEVELS.filter((l): l is DeduceLevel => l.mode === "deduce");
 
-/** 无尽模式第 round 轮(1 基):点越来越多、时间越来越短,每第 4 轮来一道推理题 */
+/**
+ * 无尽模式第 round 轮(1 基):点越来越多、时间越来越短,每第 4 轮来一道推理题。
+ *
+ * 三条曲线一律走 `logic.ts` 里那一份 —— 以前这里手抄了一遍同样的公式,
+ * 改一处漏一处的风险白送,现在只有一个出处。
+ */
 export function buildEndlessRound(round: number): SeekLevel {
   const r = Math.max(1, Math.round(round));
   const deduce = r % 4 === 0;
   const opts: GenOptions = {
     chapter: (r - 1) % CHAPTERS.length,
-    spots: Math.min(16, 7 + Math.floor(r / 2)),
-    targets: deduce ? 1 : Math.min(5, 2 + Math.floor(r / 4)),
-    seconds: deduce ? Math.max(30, 60 - r) : Math.max(14, 38 - Math.floor(r * 1.2)),
+    spots: endlessSpotCount(r),
+    targets: deduce ? 1 : endlessTargetCount(r),
+    seconds: deduce ? Math.max(30, 60 - r) : endlessSeconds(r),
     deduce,
+    // 无尽的推理题跟着轮次加线索:头几轮 3 条入门,越往后越绕
+    clueWant: Math.min(MAX_CLUES, MIN_CLUES + Math.floor(r / 12)),
     hint: deduce ? "推理时间!读完线索再点。" : "越来越多啦,眼睛要快!",
   };
-  return generate(opts, 880000 + r * 5171, -1);
+  return { ...generate(opts, 880000 + r * 5171, -1), penalty: endlessMissPenalty(r) };
 }
 
 /** 双人对战第 round 局(1 基):同一张场景,两个人抢着点 */

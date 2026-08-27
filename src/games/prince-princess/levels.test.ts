@@ -427,3 +427,73 @@ describe("无尽模式", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// 前 99 关碰撞冻结
+// ---------------------------------------------------------------------------
+
+/** 只把**碰得到**的字段拼进去:长度、城门、断口、平台、怪、尖刺、宝石、首领、冰面 */
+function collisionOf(d: LevelDef): string {
+  return JSON.stringify({
+    len: d.len,
+    goalX: d.goalX,
+    gaps: d.gaps,
+    platforms: d.platforms,
+    enemies: d.enemies,
+    spikes: d.spikes,
+    gems: d.gems,
+    boss: d.boss,
+    slippery: d.slippery,
+  });
+}
+
+/** FNV-1a,32 位。不引依赖,自己算 */
+function fnv1a(s: string): string {
+  let a = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    a ^= s.charCodeAt(i);
+    a = Math.imul(a, 0x01000193) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0");
+}
+
+describe("前 99 关碰撞冻结", () => {
+  /**
+   * 1.2 的规矩:**前 99 关的碰撞数据一个字节都不许改**,只许改视觉与提示。
+   *
+   * 所以这里钉一枚校验和。它红了只有两种可能:
+   *  1. 你真的动了前 99 关的地形 / 怪 / 机关 —— 那是违规,改回去;
+   *  2. 你在 `LevelDef` 上加了新的**碰撞**字段 —— 那就想清楚它该不该进这张表。
+   *
+   * 教学关标记、检查点、重箱子、提示文案这些 1.2 新加的东西全在**非碰撞**字段上,
+   * 所以加了它们这一枚数字不会动。
+   */
+  const FROZEN_99 = "693ebe7a";
+
+  it("头 99 关的碰撞校验和还是那一枚", () => {
+    const parts: string[] = [];
+    for (let i = 0; i < 99; i++) parts.push(collisionOf(LEVELS[i]));
+    expect(parts).toHaveLength(99);
+    expect(fnv1a(parts.join("|"))).toBe(FROZEN_99);
+  });
+
+  it("前 99 关一个重箱子都没摆,教学关也只是规则层开关(地形原样)", () => {
+    for (let i = 0; i < 99; i++) {
+      expect(LEVELS[i].blocks, `第 ${i + 1} 关`).toEqual([]);
+      expect(LEVELS[i].alternating, `第 ${i + 1} 关`).toBe(false);
+    }
+    // 第 1 关是教学关:标记加了,碰撞照旧
+    expect(LEVELS[0].teach).toBe(true);
+    expect(LEVELS[0].noRisk).toBe(true);
+    expect(LEVELS[0].enemies.length).toBeGreaterThan(0);
+  });
+
+  it("校验和真的盯着碰撞:随便挪一格断口就对不上了", () => {
+    const victim = LEVELS.slice(0, 99).findIndex((d) => d.gaps.length > 0);
+    expect(victim).toBeGreaterThanOrEqual(0);
+    const tampered = LEVELS.slice(0, 99).map((d, i) =>
+      i === victim ? { ...d, gaps: d.gaps.map((g) => ({ x0: g.x0 + 1, x1: g.x1 })) } : d
+    );
+    expect(fnv1a(tampered.map(collisionOf).join("|"))).not.toBe(FROZEN_99);
+  });
+});

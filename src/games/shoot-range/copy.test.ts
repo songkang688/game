@@ -72,12 +72,28 @@ describe("shoot-range 分级与文案红线", () => {
     expect(gradeWord("C")).not.toContain("差");
   });
 
-  it("靶子清一色是非人形或卡通对象,好人靶特别说明了不能打", () => {
+  it("靶子清一色是非人形或卡通对象,两种不许打的靶都写明了", () => {
     const kinds = Object.keys(TARGET_INFO);
-    expect(kinds).toEqual(["bull", "balloon", "ufo", "robot", "number", "friend"]);
+    expect(kinds).toEqual([
+      "bull",
+      "balloon",
+      "ufo",
+      "robot",
+      "number",
+      "friend",
+      // 1.2 补齐的四类
+      "split",
+      "shield",
+      "rainbow",
+      "flower",
+    ]);
     expect(TARGET_INFO.friend.desc).toContain("别打");
+    expect(TARGET_INFO.flower.desc).toContain("扣分");
     expect(TARGET_INFO.robot.desc).toContain("坐下");
     expect(TARGET_INFO.balloon.desc).toContain("彩纸");
+    expect(TARGET_INFO.shield.desc).toContain("两次");
+    expect(TARGET_INFO.split.desc).toContain("两个");
+    expect(TARGET_INFO.rainbow.desc).toContain("几秒");
   });
 
   it("攻略十章无缝铺满 188 关,区间与章节切分对得上", () => {

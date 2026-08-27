@@ -1,0 +1,212 @@
+{
+  "games": [
+    "sling-birds",
+    "shoot-range",
+    "sky-squad",
+    "snow-fight",
+    "bowling-lane",
+    "ice-fire-forest"
+  ],
+  "levels": [
+    1,
+    60,
+    133,
+    188
+  ],
+  "waitMs": 40000,
+  "rows": [
+    {
+      "id": "sling-birds",
+      "level": 1,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "sling-birds",
+      "level": 60,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "sling-birds",
+      "level": 133,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "sling-birds",
+      "level": 188,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "shoot-range",
+      "level": 1,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "shoot-range",
+      "level": 60,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "shoot-range",
+      "level": 133,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "shoot-range",
+      "level": 188,
+      "seconds": 21,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 时间到,还剩 6 个靶。下次先挑好打的开手,连击起来就快了。🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "sky-squad",
+      "level": 1,
+      "seconds": 11,
+      "result": "win",
+      "stars": 3,
+      "text": "★★★ 第 1 关过关！ 0 架全部请回机库,一下都没被碰到,漂亮的满分航线!擦弹 1 次,胆子很稳!下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "sky-squad",
+      "level": 60,
+      "seconds": 8,
+      "result": "win",
+      "stars": 3,
+      "text": "★★★ 第 60 关过关！ 1 架全部请回机库,一下都没被碰到,漂亮的满分航线!下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "sky-squad",
+      "level": 133,
+      "seconds": 19,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 小飞机都去检修啦。记住机身判定点只有中间那一小点,别急着往缝里冲。🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "sky-squad",
+      "level": 188,
+      "seconds": 22,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 月亮大灯笼还剩一口气。留一颗炸弹给它的最后一段,下次一定行。🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "snow-fight",
+      "level": 1,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "snow-fight",
+      "level": 60,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "snow-fight",
+      "level": 133,
+      "seconds": 35,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 雪人走到雪堡跟前啦。下次先拦最靠前的那一个,雪墙能挡它三下,雪坡后面蹲着搓雪最安全。🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "snow-fight",
+      "level": 188,
+      "seconds": 27,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 雪人走到雪堡跟前啦。下次先拦最靠前的那一个,雪墙能挡它三下,雪坡后面蹲着搓雪最安全。🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "bowling-lane",
+      "level": 1,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "bowling-lane",
+      "level": 60,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "bowling-lane",
+      "level": 133,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "bowling-lane",
+      "level": 188,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "ice-fire-forest",
+      "level": 1,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "ice-fire-forest",
+      "level": 60,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "ice-fire-forest",
+      "level": 133,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "ice-fire-forest",
+      "level": 188,
+      "seconds": 40,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    }
+  ],
+  "consoleErrors": 0
+}

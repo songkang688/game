@@ -8,8 +8,8 @@
 //
 // 这里全是纯函数,不碰 DOM,也不碰战役那 188 关的关卡表。
 
-import type { ObstacleKind, PatternRow } from "./logic";
-import { rowIsSurvivable } from "./logic";
+import type { ObstacleKind, PatternRow, PlayerAction } from "./logic";
+import { PERFECT_STREAK_GOAL, rowIsSurvivable, wouldHit } from "./logic";
 
 /** 随机源:传 Math.random 或者测试里的定种子发生器都行。 */
 export type Rng = () => number;
@@ -119,6 +119,37 @@ export function tierForDistance(dist: number): EndlessTier {
 /** 必过车道在这一段里怎么走。 */
 export type PathShape = "straight" | "zigzag" | "drift" | "weave";
 
+/**
+ * 1.2:一段路里,必过路线的每一行要做什么动作。
+ * 老模板一路都是 `run`(必过车道整格空着);
+ * 新模板会在必过车道上摆「跳一下」或者「滑一下」就过得去的障碍,
+ * 这时对应那一行记的就是 `jump` / `slide`。
+ */
+export type PathAction = PlayerAction;
+
+export interface BuildContext {
+  tier: EndlessTier;
+  startLane: number;
+  rng: Rng;
+  /** 这一档解锁了的障碍 */
+  allowed: ObstacleKind[];
+}
+
+export interface BuiltRows {
+  rows: PatternRow[];
+  path: number[];
+  actions: PathAction[];
+  merge?: ForkMerge;
+}
+
+/** 分岔段的合流点:两条支线在**同一行**汇合。 */
+export interface ForkMerge {
+  /** 合流落在第几行 */
+  row: number;
+  /** 分岔口那两条支线各走哪条道 */
+  lanes: [number, number];
+}
+
 export interface SegmentTemplate {
   name: string;
   shape: PathShape;
@@ -126,6 +157,10 @@ export interface SegmentTemplate {
   favor: ObstacleKind[];
   /** 到第几档才解锁 */
   minLevel: number;
+  /** 1.2:自己拼行的模板;不给就走通用的「空车道 + 两侧摆障碍」那一套 */
+  build?: (ctx: BuildContext) => BuiltRows;
+  /** 这个模板必须先有这些障碍才摆得出来 */
+  needs?: ObstacleKind[];
 }
 
 export const SEGMENT_TEMPLATES: readonly SegmentTemplate[] = [
@@ -137,11 +172,52 @@ export const SEGMENT_TEMPLATES: readonly SegmentTemplate[] = [
   { name: "云朵飘飘", shape: "weave", favor: ["cloudy"], minLevel: 4 },
   { name: "滚球快线", shape: "zigzag", favor: ["roller"], minLevel: 5 },
   { name: "星屑混合", shape: "weave", favor: ["zapper", "crate"], minLevel: 6 },
+  // ---- 1.2 路段语法升级:四种自己拼行的模板 ----
+  {
+    name: "三连节拍",
+    shape: "straight",
+    favor: ["hurdle"],
+    minLevel: 3,
+    needs: ["hurdle"],
+    build: buildBeatRun,
+  },
+  {
+    name: "低梁抢道",
+    shape: "drift",
+    favor: ["bar"],
+    minLevel: 3,
+    needs: ["bar", "rock"],
+    build: buildLowBarCut,
+  },
+  {
+    name: "彩纸箱链",
+    shape: "straight",
+    favor: ["crate"],
+    minLevel: 3,
+    needs: ["crate"],
+    build: buildCrateChain,
+  },
+  {
+    name: "分岔合流",
+    shape: "weave",
+    favor: ["hurdle", "bar"],
+    minLevel: 4,
+    needs: ["rock", "hurdle"],
+    build: buildForkMerge,
+  },
 ];
 
 /** 这一档能抽到的模板。 */
 export function templatesForLevel(level: number): SegmentTemplate[] {
   return SEGMENT_TEMPLATES.filter((t) => t.minLevel <= level);
+}
+
+/** 这一档既解锁了、需要的障碍也齐了的模板。 */
+export function usableTemplates(tier: EndlessTier): SegmentTemplate[] {
+  const kinds = new Set(tier.kinds);
+  return templatesForLevel(tier.level).filter((t) =>
+    (t.needs ?? []).every((k) => kinds.has(k)),
+  );
 }
 
 function clamp3(lane: number): number {
@@ -191,21 +267,172 @@ export interface EndlessSegment {
   rows: PatternRow[];
   /** 逐行的必过车道 */
   clearPath: number[];
+  /** 1.2:必过路线每一行要做的动作(老模板一路都是 run) */
+  pathActions: PathAction[];
   /** 进这一段时玩家该站的车道(等于 clearPath[0]) */
   startLane: number;
+  /** 分岔段专属:两条支线在第几行合流 */
+  merge?: ForkMerge;
+}
+
+/* ---------------- 1.2 新模板:自己拼行 ---------------- */
+
+/** 一行「什么都没有」的路,顺手摆一枚糖果。 */
+function breatherRow(lane: number, coin: boolean): PatternRow {
+  return { obstacles: [], stars: [], coins: coin ? [lane] : [] };
+}
+
+/** 把 rows 补到本档该有的长度,补的全是空行(收尾让人喘口气)。 */
+function padTail(built: BuiltRows, tier: EndlessTier, rng: Rng): BuiltRows {
+  const lane = built.path[built.path.length - 1];
+  while (built.rows.length < tier.rows) {
+    built.rows.push(breatherRow(lane, rng() < tier.coinRate));
+    built.path.push(lane);
+    built.actions.push("run");
+  }
+  return built;
 }
 
 /**
- * 拼一段路。
- * 先画出必过车道的走法,再往**别的**车道上摆障碍——必过车道那一格永远空着,
- * 所以「一个动作都不用做也能跑过去」这件事是构造出来的,不是碰运气碰出来的。
+ * 三连节拍段:连着三行等距同款障碍,三条道全摆上,只能跳。
+ * 贴着起跳就是完美跳,连着三次正好凑满一组——节奏段的意义就在这儿,
+ * 所以三行的间距、障碍种类都保持一致,不给任何「这一行要不要换道」的干扰。
  */
-export function buildSegment(dist: number, startLane: number, rng: Rng): EndlessSegment {
-  const tier = tierForDistance(dist);
-  const template = pick(templatesForLevel(tier.level), rng);
-  const path = clearLanePath(template.shape, startLane, tier.rows, rng);
+function buildBeatRun(ctx: BuildContext): BuiltRows {
+  const lane = clamp3(ctx.startLane);
+  const kind: ObstacleKind =
+    ctx.allowed.includes("pit") && ctx.rng() < 0.4 ? "pit" : "hurdle";
+  const rows: PatternRow[] = [breatherRow(lane, true)];
+  const path: number[] = [lane];
+  const actions: PathAction[] = ["run"];
+  for (let k = 0; k < PERFECT_STREAK_GOAL; k++) {
+    rows.push({
+      obstacles: [0, 1, 2].map((l) => ({ lane: l, kind })),
+      stars: [],
+      coins: [],
+      beat: true,
+    });
+    path.push(lane);
+    actions.push("jump");
+  }
+  // 数完三拍给一颗星星当奖励,落地那一行是空的,不会打断节奏
+  rows.push({ obstacles: [], stars: [lane], coins: [] });
+  path.push(lane);
+  actions.push("run");
+  return padTail({ rows, path, actions }, ctx.tier, ctx.rng);
+}
 
-  const allowed = tier.kinds;
+/**
+ * 低梁抢道:先趴过一道压得很低的彩虹杆,落地那一行原道被堵死,必须立刻换到旁边。
+ * 「滑完马上换」是这段路唯一的解法,所以下滑锁定必须短于跳跃(见 motion.ts 的 SLIDE_LOCK)。
+ */
+function buildLowBarCut(ctx: BuildContext): BuiltRows {
+  let lane = clamp3(ctx.startLane);
+  const rows: PatternRow[] = [breatherRow(lane, true)];
+  const path: number[] = [lane];
+  const actions: PathAction[] = ["run"];
+  const bouts = ctx.tier.rows >= 6 ? 2 : 1;
+  for (let b = 0; b < bouts; b++) {
+    const next = lane === 1 ? (ctx.rng() < 0.5 ? 0 : 2) : 1;
+    // 低梁:自己这条道一定有,偶尔连旁边那条一起压下来
+    const barLanes = ctx.rng() < 0.5 ? [lane] : [lane, lane === next ? lane : 3 - lane - next];
+    rows.push({
+      obstacles: [...new Set(barLanes)]
+        .filter((l) => l >= 0 && l <= 2)
+        .map((l) => ({ lane: l, kind: "bar" as ObstacleKind })),
+      stars: [],
+      coins: [],
+    });
+    path.push(lane);
+    actions.push("slide");
+    // 紧接着原道被软糖堵死,只能挪到刚空出来的那条
+    rows.push({ obstacles: [{ lane, kind: "rock" }], stars: [], coins: [next] });
+    path.push(next);
+    actions.push("run");
+    lane = next;
+  }
+  return padTail({ rows, path, actions }, ctx.tier, ctx.rng);
+}
+
+/**
+ * 彩纸箱链:一整串箱子铺在同一条道上,一路滑过去挨个铲碎。
+ * 箱子是唯一「跳也行、滑也行」的障碍,所以这段路对手生的孩子也留了退路——
+ * 只是跳过去不计数,想刷铲箱任务还得滑。
+ */
+function buildCrateChain(ctx: BuildContext): BuiltRows {
+  const lane = clamp3(ctx.startLane);
+  const rows: PatternRow[] = [breatherRow(lane, true)];
+  const path: number[] = [lane];
+  const actions: PathAction[] = ["run"];
+  const links = Math.max(3, Math.min(4, ctx.tier.rows - 2));
+  for (let k = 0; k < links; k++) {
+    const obstacles = [{ lane, kind: "crate" as ObstacleKind }];
+    // 链子越到后面越粗:旁边那条道也堆一个,逼着人别绕开
+    const side = lane === 0 ? 1 : lane === 2 ? 1 : ctx.rng() < 0.5 ? 0 : 2;
+    if (k > 0 && ctx.rng() < 0.5) obstacles.push({ lane: side, kind: "crate" });
+    const free = [0, 1, 2].filter((l) => !obstacles.some((o) => o.lane === l));
+    rows.push({
+      obstacles,
+      stars: k === links - 1 && free.length > 0 ? [free[0]] : [],
+      coins: k === 0 && free.length > 0 ? [free[free.length - 1]] : [],
+    });
+    path.push(lane);
+    actions.push("slide");
+  }
+  return padTail({ rows, path, actions }, ctx.tier, ctx.rng);
+}
+
+/**
+ * 分岔合流:中间道被一排软糖封死,左右各成一条支线,跑几行之后在**同一行**汇合。
+ * 「同帧合流」是硬要求——两条支线行数一样长,谁走哪边都在同一行回到三条道全开的路面,
+ * 后面的路才接得上,也不会因为选错边被多堵一行。
+ */
+function buildForkMerge(ctx: BuildContext): BuiltRows {
+  const branchLen = ctx.tier.rows >= 6 ? 3 : 2;
+  const side: number = ctx.startLane === 0 ? 0 : ctx.startLane === 2 ? 2 : ctx.rng() < 0.5 ? 0 : 2;
+  // 岔路牌那一行整行空着:不管上一段收在哪条道上,都进得来
+  const rows: PatternRow[] = [breatherRow(clamp3(ctx.startLane), true)];
+  const path: number[] = [clamp3(ctx.startLane)];
+  const actions: PathAction[] = ["run"];
+
+  const jumpables = (["hurdle", "pit", "crate"] as ObstacleKind[]).filter((k) =>
+    ctx.allowed.includes(k),
+  );
+  const slideables = (["bar", "crate"] as ObstacleKind[]).filter((k) => ctx.allowed.includes(k));
+
+  for (let k = 0; k < branchLen; k++) {
+    const obstacles = [{ lane: 1, kind: "rock" as ObstacleKind }];
+    let act: PathAction = "run";
+    // 左支线偏跳、右支线偏滑,两边难度不同但都过得去
+    if (k > 0 && jumpables.length > 0 && ctx.rng() < 0.7) {
+      obstacles.push({ lane: 0, kind: pick(jumpables, ctx.rng) });
+      if (side === 0) act = "jump";
+    }
+    if (k > 0 && slideables.length > 0 && ctx.rng() < 0.7) {
+      obstacles.push({ lane: 2, kind: pick(slideables, ctx.rng) });
+      if (side === 2) act = "slide";
+    }
+    const free = [0, 1, 2].filter((l) => !obstacles.some((o) => o.lane === l));
+    rows.push({ obstacles, stars: [], coins: free });
+    path.push(side);
+    actions.push(act);
+  }
+  // 合流行:三条道同时放开,两条支线在这一行会合
+  const mergeRow = rows.length;
+  rows.push({ obstacles: [], stars: [1], coins: [0, 2] });
+  path.push(side);
+  actions.push("run");
+  const built = padTail({ rows, path, actions }, ctx.tier, ctx.rng);
+  built.merge = { row: mergeRow, lanes: [0, 2] };
+  return built;
+}
+
+/* ---------------- 通用模板:必过车道整格空着 ---------------- */
+
+function buildGeneric(ctx: BuildContext, template: SegmentTemplate): BuiltRows {
+  const { tier, rng } = ctx;
+  const path = clearLanePath(template.shape, ctx.startLane, tier.rows, rng);
+  const allowed = ctx.allowed;
   const favored = template.favor.filter((k) => allowed.includes(k));
   const kindFor = (): ObstacleKind =>
     favored.length > 0 && rng() < 0.65 ? pick(favored, rng) : pick(allowed, rng);
@@ -237,7 +464,45 @@ export function buildSegment(dist: number, startLane: number, rng: Rng): Endless
     return row;
   });
 
-  return { name: template.name, level: tier.level, rows, clearPath: path, startLane: path[0] };
+  return { rows, path, actions: path.map(() => "run" as PathAction) };
+}
+
+/** 指定模板拼一段路(测试里拿来单独盯某一种模板)。 */
+export function buildSegmentWith(
+  template: SegmentTemplate,
+  dist: number,
+  startLane: number,
+  rng: Rng,
+): EndlessSegment {
+  const tier = tierForDistance(dist);
+  const ctx: BuildContext = {
+    tier,
+    startLane: clamp3(startLane),
+    rng,
+    allowed: [...tier.kinds],
+  };
+  const built = template.build ? template.build(ctx) : buildGeneric(ctx, template);
+  return {
+    name: template.name,
+    level: tier.level,
+    rows: built.rows,
+    clearPath: built.path,
+    pathActions: built.actions,
+    startLane: built.path[0],
+    merge: built.merge,
+  };
+}
+
+/**
+ * 拼一段路。
+ * 通用模板先画出必过车道的走法,再往**别的**车道上摆障碍——必过车道那一格永远空着;
+ * 1.2 的四种新模板自己拼行,必过车道上会有「跳一下 / 滑一下就过去」的障碍,
+ * 每一行该做什么动作都记在 `pathActions` 里。
+ * 两种口径都是**构造**出来的,不是碰运气碰出来的。
+ */
+export function buildSegment(dist: number, startLane: number, rng: Rng): EndlessSegment {
+  const tier = tierForDistance(dist);
+  return buildSegmentWith(pick(usableTemplates(tier), rng), dist, startLane, rng);
 }
 
 /* ------------------------------------------------------------------ */
@@ -250,29 +515,40 @@ export function freeLanes(row: PatternRow): number[] {
 }
 
 /**
- * 从 startLane 出发,能不能一路踩着空车道跑完这几行?
- * 规则:每一行都得站在一条完全空的道上,相邻两行之间最多横移一格。
- * 找得到就返回那条路线(逐行车道号),找不到返回 null。
+ * 1.2:这一行哪几条道是**走得通**的——空着的、或者跳一下 / 滑一下就能过去的。
+ * 只能换道躲的那几种(软糖、云怪、滚球、电门)不算走得通。
  */
-export function segmentClearPath(
+export function passableLanes(row: PatternRow): number[] {
+  return [0, 1, 2].filter((l) => laneActions(row, l).length > 0);
+}
+
+/** 站在这一行的这条道上,哪些动作过得去(空道就是三种动作都行)。 */
+export function laneActions(row: PatternRow, lane: number): PathAction[] {
+  const ob = row.obstacles.find((o) => o.lane === lane);
+  if (!ob) return ["run", "jump", "slide"];
+  return (["run", "jump", "slide"] as PathAction[]).filter((a) => !wouldHit(ob.kind, a));
+}
+
+/** 从 startLane 出发按某种「这条道站不站得住」的口径找一条路线。 */
+function findPath(
   rows: ReadonlyArray<PatternRow>,
   startLane: number,
+  lanesOf: (row: PatternRow) => number[],
 ): number[] | null {
   if (rows.length === 0) return [];
   const start = clamp3(startLane);
   // prev[i][lane] = 走到第 i 行的 lane 时,上一行站在哪条道;-1 表示这一格走不到
   const prev: number[][] = [];
   let reach: boolean[] = [false, false, false];
-  const firstFree = freeLanes(rows[0]);
-  if (!firstFree.includes(start)) return null;
+  if (!lanesOf(rows[0]).includes(start)) return null;
   reach[start] = true;
   prev.push([-1, -1, -1]);
 
   for (let i = 1; i < rows.length; i++) {
-    const free = freeLanes(rows[i]);
+    const open = lanesOf(rows[i]);
     const next: boolean[] = [false, false, false];
     const from: number[] = [-1, -1, -1];
-    for (const lane of free) {
+    for (const lane of open) {
       for (const p of [lane - 1, lane, lane + 1]) {
         if (p < 0 || p > 2 || !reach[p]) continue;
         next[lane] = true;
@@ -294,6 +570,50 @@ export function segmentClearPath(
 }
 
 /**
+ * 从 startLane 出发,能不能一路踩着空车道跑完这几行?
+ * 规则:每一行都得站在一条完全空的道上,相邻两行之间最多横移一格。
+ * 找得到就返回那条路线(逐行车道号),找不到返回 null。
+ */
+export function segmentClearPath(
+  rows: ReadonlyArray<PatternRow>,
+  startLane: number,
+): number[] | null {
+  return findPath(rows, startLane, freeLanes);
+}
+
+/**
+ * 1.2 的必过路线口径:每行站的道要么空着,要么跳一下 / 滑一下就过得去。
+ * 新的节拍段、低梁段、纸箱链故意把障碍摆在必过车道上,量的就是这条。
+ */
+export function segmentPassablePath(
+  rows: ReadonlyArray<PatternRow>,
+  startLane: number,
+): number[] | null {
+  return findPath(rows, startLane, passableLanes);
+}
+
+/** 必过窗口一次看几行。 */
+export const FAIR_WINDOW_ROWS = 3;
+
+/**
+ * 必过窗口:任意连续 3 行里,都得存在一条走得通的路线——
+ * 每行站的道要么空着、要么跳一下滑一下就过去,相邻两行之间横移不超过一格。
+ * 换句话说,不会出现「三条车道全是既不可跳又不可滑」的组合把人堵死在窗口里。
+ */
+export function fairWindows(
+  rows: ReadonlyArray<PatternRow>,
+  size: number = FAIR_WINDOW_ROWS,
+): boolean {
+  if (!rows.every(rowIsSurvivable)) return false;
+  const span = Math.max(1, Math.floor(size));
+  for (let i = 0; i + span <= rows.length; i++) {
+    const win = rows.slice(i, i + span);
+    if (![0, 1, 2].some((l) => segmentPassablePath(win, l) !== null)) return false;
+  }
+  return true;
+}
+
+/**
  * 一段路公不公道:
  *  · 每一行本身有活路(不会三条道全是只能换道躲的障碍);
  *  · 存在一条从 startLane 出发、每行都踩空道、横移不超过一格的必过路线。
@@ -301,6 +621,43 @@ export function segmentClearPath(
 export function segmentIsFair(seg: EndlessSegment, startLane: number): boolean {
   if (!seg.rows.every(rowIsSurvivable)) return false;
   return segmentClearPath(seg.rows, startLane) !== null;
+}
+
+/**
+ * 1.2 的验收口径:必过窗口过关,而且从进这一段站的那条道出发真的走得通。
+ * 四种新模板与八种老模板都得过这一关。
+ */
+export function segmentIsPassable(seg: EndlessSegment, startLane: number): boolean {
+  if (!fairWindows(seg.rows)) return false;
+  return segmentPassablePath(seg.rows, startLane) !== null;
+}
+
+/** 生成器自己报的那条必过路线站不站得住:每一行的动作真的能过去。 */
+export function declaredPathHolds(seg: EndlessSegment): boolean {
+  if (seg.clearPath.length !== seg.rows.length) return false;
+  if (seg.pathActions.length !== seg.rows.length) return false;
+  for (let i = 0; i < seg.rows.length; i++) {
+    if (!laneActions(seg.rows[i], seg.clearPath[i]).includes(seg.pathActions[i])) return false;
+  }
+  return pathStepsAreReachable(seg.clearPath);
+}
+
+/**
+ * 分岔段:两条支线各自走得通,而且在**同一行**合流。
+ * 不是分岔段就返回 null,免得把「没有岔路」当成「岔路坏了」。
+ */
+export function forkMergeHolds(seg: EndlessSegment): boolean | null {
+  const merge = seg.merge;
+  if (!merge) return null;
+  if (merge.row <= 0 || merge.row >= seg.rows.length) return false;
+  // 合流那一行三条道全开:两边的人这一帧同时回到同一条路面上
+  if (freeLanes(seg.rows[merge.row]).length !== 3) return false;
+  const upto = seg.rows.slice(0, merge.row + 1);
+  for (const lane of merge.lanes) {
+    const path = segmentPassablePath(upto, lane);
+    if (!path || path.length !== upto.length) return false;
+  }
+  return true;
 }
 
 /** 一条路线是不是每行最多横移一格。 */
@@ -401,6 +758,24 @@ export function failCopy(kind: FailKind, meters: number): FailCopy {
     );
   }
   return make("撞了一下,没事的", "眼睛多看远一点,提前一个身位换道就躲得开,再来一次!");
+}
+
+/**
+ * 朗读专用的纪录播报。
+ *
+ * 面板上 `recordLine()` 那一行是画在画布上的,识字量有限的孩子只能靠听 ——
+ * 他刚跑出自己最远的一趟,耳朵里听到的却和上一趟一模一样。这一句就是补给他听的。
+ *
+ * 不并进 `failCopy`:那两行是面板排版用的,`lines.join("")` 必须仍旧等于 `line`。
+ */
+export function endlessRecordSay(meters: number, best: number, newRecord: boolean): string {
+  const m = Math.max(0, Math.floor(meters));
+  const b = Math.max(0, Math.floor(best));
+  if (newRecord) {
+    return b > 0 ? `这是新纪录,比上次的 ${b} 米还远 ${m - b} 米!` : `这是你的第一条纪录:${m} 米!`;
+  }
+  if (b <= m) return `跟最好成绩打平,都是 ${b} 米!`;
+  return `你最远跑到过 ${b} 米,再多跑 ${b - m} 米就追平啦。`;
 }
 
 /* ------------------------------------------------------------------ */

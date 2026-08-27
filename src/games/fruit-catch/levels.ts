@@ -35,6 +35,39 @@ export interface CatchLevel {
   conveyor?: number;
   /** 1.1 连击倍率：连续接住攒连击，满 5 连击多算一颗，前 99 关不带 */
   combo?: boolean;
+  /** 1.2 小辣椒概率（掉得最慢、红红的，接到掉一颗爱心），前 99 关不带 */
+  chiliChance?: number;
+  /** 1.2 冰冻果概率（接住定住 2 秒），前 99 关不带 */
+  freezeChance?: number;
+  /** 1.2 磁铁果概率（接住 3 秒里篮口变大），前 99 关不带 */
+  magnetChance?: number;
+  /**
+   * 1.2 手速门槛（0..1）：这一关的链会用掉多少「篮子够得着的范围」。
+   *
+   * 不填就是用满——那样每一关都顶着篮子的极速排链，第 1 关和第 188 关
+   * 要的手速一模一样，「跑多快」这一维等于没参与难度。填上之后，
+   * 章内一路加宽、换章再松一口气，孩子才感觉得到自己在变快。
+   */
+  reach?: number;
+}
+
+/**
+ * 第 ci 章第 t 关用掉多少「够得着的范围」（`undefined` = 用满）。
+ *
+ * 每一章都从「跑一半多一点就够」起步，章内一路加宽到接近满格；
+ * 章号越大起点越高，所以整体是一段一段往上抬的缓坡，而不是一条直线。
+ *
+ * 前 99 关（1.0 的六种天气）是冻结的，一个参数都不加——那 99 关的手感
+ * 从 1.0 起就没变过，`levels188.test.ts` 有指纹守着。手速曲线只铺在
+ * 1.1 之后新加的四条果道上。
+ */
+export function reachOf(ci: number, t: number, size: number): number | undefined {
+  if (ci < LEGACY_CHAPTER_SIZES.length) return undefined;
+  const step = ci - LEGACY_CHAPTER_SIZES.length;
+  const floor = Math.min(0.78, 0.52 + step * 0.07);
+  const span = 0.98 - floor;
+  const k = size <= 1 ? 1 : Math.max(0, Math.min(1, t / (size - 1)));
+  return Math.round((floor + span * k) * 100) / 100;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -107,33 +140,38 @@ function buildLevel(ci: number, t: number): CatchLevel {
         wind: 0.3 + t * 0.03, theme: 5
       };
     case 6:
-      // 双篮果谷：两只篮子镜像动，坏东西少一点作补偿
+      // 双篮果谷：两只篮子镜像动，坏东西少一点作补偿；1.2 起中段开始掉冰冻果
       return {
         target: 14 + Math.floor(t / 2), speed: 1.0 + t * 0.02,
         spawnMs: 1000 - t * 10, badChance: 0.08 + t * 0.004, goldChance: 0.08,
-        wind: 0, theme: 6, baskets: 2
+        wind: 0, theme: 6, baskets: 2,
+        freezeChance: t >= 8 ? 0.05 : 0
       };
     case 7:
-      // 沉甸果坡：沉水果掉得快、顶两颗，但篮子会被压慢
+      // 沉甸果坡：沉水果掉得快、顶两颗，但篮子会被压慢；1.2 起给磁铁果当补偿
       return {
         target: 16 + Math.floor(t / 2), speed: 1.05 + t * 0.02,
         spawnMs: 950 - t * 10, badChance: 0.1, goldChance: 0.06,
-        wind: 0, theme: 7, heavyChance: 0.18 + t * 0.005
+        wind: 0, theme: 7, heavyChance: 0.18 + t * 0.005,
+        magnetChance: t >= 6 ? 0.06 : 0
       };
     case 8:
-      // 传送果道：水果先在半空传送带上滑一段，方向逐关轮换
+      // 传送果道：水果先在半空传送带上滑一段，方向逐关轮换；1.2 起传送带上会混进小辣椒
       return {
         target: 14 + Math.floor(t / 2), speed: 1.05 + t * 0.02,
         spawnMs: 950 - t * 10, badChance: 0.1, goldChance: 0.07,
-        wind: 0, theme: 8, conveyor: (t % 2 === 0 ? 1 : -1) * (46 + t * 2)
+        wind: 0, theme: 8, conveyor: (t % 2 === 0 ? 1 : -1) * (46 + t * 2),
+        chiliChance: t >= 4 ? 0.05 + t * 0.002 : 0,
+        freezeChance: t >= 10 ? 0.05 : 0
       };
     default:
-      // 连击星光坡：连击倍率 + 后段混入风和沉水果
+      // 连击星光坡：连击倍率 + 后段混入风和沉水果；1.2 起五种水果道具在这里全员登场
       return {
         target: 18 + Math.floor(t / 2), speed: 1.1 + t * 0.02,
         spawnMs: 900 - t * 10, badChance: 0.12 + t * 0.004, goldChance: 0.07,
         wind: t >= 12 ? 0.3 : 0, theme: 9, combo: true,
-        heavyChance: t >= 16 ? 0.1 : 0
+        heavyChance: t >= 16 ? 0.1 : 0,
+        chiliChance: 0.05, freezeChance: 0.05, magnetChance: 0.05
       };
   }
 }
@@ -141,7 +179,10 @@ function buildLevel(ci: number, t: number): CatchLevel {
 export const LEVELS: CatchLevel[] = (() => {
   const out: CatchLevel[] = [];
   CHAPTERS.forEach((ch, ci) => {
-    for (let t = 0; t < ch.size; t++) out.push(buildLevel(ci, t));
+    for (let t = 0; t < ch.size; t++) {
+      const reach = reachOf(ci, t, ch.size);
+      out.push(reach === undefined ? buildLevel(ci, t) : { ...buildLevel(ci, t), reach });
+    }
   });
   return out;
 })();

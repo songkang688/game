@@ -42,12 +42,45 @@ import {
   MECH_INFO,
   THEMES,
   THEME_SIZES,
+  budgetNote,
   levelMechanisms,
   parseStars,
   themeOfLevel,
   themeStart,
 } from "./levels";
 import { speak, stopSpeaking } from "../speech";
+import { save } from "../../engine/save";
+import {
+  BOMB,
+  COARSE_STEP_DEG,
+  ENDLESS_PUSH_EVERY,
+  SHOOTER_X,
+  SHOOTER_Y,
+  aimFromDrag,
+  angleStepDeg,
+  chainFontSize,
+  chainLabel,
+  chainScore,
+  detonate,
+  endlessLine,
+  endlessPalette,
+  endlessRow,
+  endlessShouldPush,
+  endlessStartRows,
+  endlessTotal,
+  fallGravity,
+  fallenOut,
+  fixDeadAmmo,
+  isBomb,
+  makeFaller,
+  pickAmmo,
+  previewPath,
+  reload,
+  stepFaller,
+  swapLoader,
+  type Faller,
+  type Loader,
+} from "./aim12";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -60,10 +93,13 @@ interface GameApi {
   onLose: (message?: string) => void;
 }
 
-const SHOOTER_X = W / 2;
-const SHOOTER_Y = 444;
 const FLY_SPEED = 820;
 const SAVE_KEY = "yiduo.bubble-aim.campaign.v2";
+/**
+ * 无尽墙用的调色板:五色够热闹,又不至于凑不齐三连。
+ * 实际每一行用几种由 `endlessPalette(rowsPushed, …)` 决定 —— 开局 3 色,压下来再逐步补满。
+ */
+const ENDLESS_COLORS = ["R", "Y", "G", "B", "P"];
 
 const COLOR_FILL: Record<string, [string, string]> = {
   R: ["#FFA7BD", "#F26D93"],
@@ -109,15 +145,6 @@ interface PopAnim {
   t: number;
 }
 
-interface FallAnim {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  color: string;
-  t: number;
-}
-
 interface CrackFx {
   x: number;
   y: number;
@@ -150,12 +177,31 @@ export function mount(api: GameApi): { destroy: () => void } {
   let shotsTotal = LEVELS[0].shots;
   let shotsLeft = shotsTotal;
   let shotsFired = 0;
-  let currentColor = "R";
-  let nextColor = "B";
+  /** 发射器:手里这颗 + 下一颗,可以随时对调 */
+  let loader: Loader = { current: "R", next: "B" };
+  /** 无尽墙:一直打,每 5 发压一行,顶到底线为止 */
+  let endless = false;
+  let endlessPoints = 0;
+  let rowsPushed = 0;
+  /** 连锁:连着几发都消掉了东西 */
+  let chain = 0;
+  let bestEndless = save.getGameProgress(meta.id).endlessBest;
+  /** 掉落连锁的飘字 */
+  let floatText = "";
+  let floatSize = 14;
+  let floatTime = 0;
+  const softMotion = (() => {
+    const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    return typeof mm === "function" ? !!mm("(prefers-reduced-motion: reduce)").matches : false;
+  })();
 
   let aiming = false;
   let aimDx = 0;
   let aimDy = -1;
+  /** 当前瞄准角度(度),画面上给个读数 */
+  let aimDeg = 90;
+  /** 拖得远了就进微调档,读数显示一位小数 */
+  let fineAim = false;
   let flight: {
     result: ShotResult;
     seg: number;
@@ -164,8 +210,11 @@ export function mount(api: GameApi): { destroy: () => void } {
   } | null = null;
 
   const pops: PopAnim[] = [];
-  const falls: FallAnim[] = [];
+  /** 失联的泡泡真的带着重力往下掉,不是原地消失 */
+  const falls: Faller[] = [];
   const cracks: CrackFx[] = [];
+  /** 掉落用的序号,同一批散得不一样 */
+  let fallSeed = 0;
 
   const wrap = document.createElement("div");
   wrap.className = "ba-wrap";
@@ -192,17 +241,26 @@ export function mount(api: GameApi): { destroy: () => void } {
       .ba-lv .mech { font-size: 10px; min-height: 13px; }
       .ba-lv.locked { background: #E3EAF2; box-shadow: 0 3px 0 #CBD6E2; cursor: not-allowed; }
       .ba-lv.locked .num { color: #9AA9BC; }
+      .bba-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+      .bba-mode { border: none; border-radius: 14px; padding: 8px 12px; font-size: 13px; font-weight: 800; background: #FFE7B8; color: #8A5A12; cursor: pointer; box-shadow: 0 3px 0 #E7C489; }
+      .bba-mode:active { transform: translateY(2px); box-shadow: 0 1px 0 #E7C489; }
+      .bba-swap { min-width: 44px; min-height: 34px; background: #FFDCEB; color: #A8467A; box-shadow: 0 3px 0 #EEB6CF; }
+      .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
     </style>
     <div class="ba-top">
       <button class="ba-btn ba-back" type="button">🗺️ 地图</button>
       <span class="ba-badge ba-level">第 1 关</span>
       <span class="ba-badge ba-count">🫧 0</span>
       <span class="ba-badge ba-shots">🎯 0</span>
+      <button class="ba-btn bba-swap" type="button" title="换弹（Tab）" aria-label="换弹">🔀</button>
       <button class="ba-btn ba-retry" type="button">🔄</button>
     </div>
     <div class="ba-map">
       <div class="ba-map-title">🫧 泡泡瞄准手 · 188 关主题地图</div>
       <div class="ba-map-sub"></div>
+      <div class="bba-modes">
+        <button class="bba-mode bba-endless" type="button">♾️ 无尽墙</button>
+      </div>
       <div class="ba-themes"></div>
     </div>
     <canvas class="ba-canvas" width="${W}" height="${H}"></canvas>
@@ -222,6 +280,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   const msgEl = wrap.querySelector(".ba-msg") as HTMLElement;
   const retryBtn = wrap.querySelector(".ba-retry") as HTMLButtonElement;
   const backBtn = wrap.querySelector(".ba-back") as HTMLButtonElement;
+  const swapBtn = wrap.querySelector(".bba-swap") as HTMLButtonElement;
+  const endlessBtn = wrap.querySelector(".bba-endless") as HTMLButtonElement;
 
   function unlocked(i: number): boolean {
     return i === 0 || progress.stars[i - 1] > 0;
@@ -242,10 +302,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     stopSpeaking();
     flight = null;
     aiming = false;
+    endless = false;
     topBar.style.display = "none";
     canvas.style.display = "none";
     mapEl.style.display = "";
     mapSubEl.textContent = `⭐ ${totalStars()}/${LEVELS.length * 3} · 通关 ${progress.stars.filter((s) => s > 0).length}/${LEVELS.length}`;
+    endlessBtn.textContent = bestEndless > 0 ? `♾️ 无尽墙 · 最好 ${bestEndless} 分` : "♾️ 无尽墙";
     themesEl.innerHTML = "";
     THEMES.forEach((th, t) => {
       const start = themeStart(t);
@@ -298,6 +360,12 @@ export function mount(api: GameApi): { destroy: () => void } {
   // ---------- 关卡 ----------
 
   function updateHud(): void {
+    if (endless) {
+      levelEl.textContent = "♾️ 无尽墙";
+      countEl.textContent = `🫧 ${countBubbles(grid)}`;
+      shotsEl.textContent = `✨ ${endlessTotal(endlessPoints, rowsPushed)} · ⬇️${rowsPushed}`;
+      return;
+    }
     const def = LEVELS[levelIndex];
     levelEl.textContent = `${levelIndex + 1}. ${def.name}`;
     countEl.textContent = `🫧 ${countBubbles(grid)}`;
@@ -312,15 +380,23 @@ export function mount(api: GameApi): { destroy: () => void } {
     shotsEl.textContent = shotsText;
   }
 
-  function randomColor(pool: string[]): string {
-    return pool[Math.floor(Math.random() * pool.length)] ?? "R";
+  /** 开局上膛:颜色只从墙上真有的里挑,一进关就不会攥着死球 */
+  function freshLoader(): Loader {
+    const pool = colorsInGrid(grid);
+    return { current: pickAmmo(pool, Math.random), next: pickAmmo(pool, Math.random) };
   }
 
+  /** 后段章节与无尽墙才发特殊弹,前面几章保持 1.1 的手感 */
+  function specialsFor(): { bomb: number; rainbow: number } {
+    if (endless) return { bomb: 0.07, rainbow: 0.06 };
+    if (levelIndex >= 99) return { bomb: 0.05, rainbow: 0.04 };
+    return { bomb: 0, rainbow: 0 };
+  }
+
+  /** 手里的两颗都得配得上墙上还有的颜色,不然就是死球 */
   function refreshQueue(): void {
-    const pool = colorsInGrid(grid);
-    if (pool.length === 0) return;
-    if (!pool.includes(currentColor)) currentColor = randomColor(pool);
-    if (!pool.includes(nextColor)) nextColor = randomColor(pool);
+    if (colorsInGrid(grid).length === 0) return;
+    loader = fixDeadAmmo(loader, grid, Math.random);
   }
 
   function startLevel(index: number): void {
@@ -347,10 +423,47 @@ export function mount(api: GameApi): { destroy: () => void } {
     pops.length = 0;
     falls.length = 0;
     cracks.length = 0;
-    const pool = colorsInGrid(grid);
-    currentColor = randomColor(pool);
-    nextColor = randomColor(pool);
+    endless = false;
+    chain = 0;
+    floatTime = 0;
+    loader = freshLoader();
     msgEl.textContent = def.tip;
+    updateHud();
+  }
+
+  /**
+   * 无尽墙:开局铺几行,每 5 发从顶上压一行下来,泡泡顶到警戒线就结束。
+   * 成绩记在 `save.recordEndlessBest("bubble-aim", 分数)`。
+   */
+  function startEndless(): void {
+    screen = "play";
+    topBar.style.display = "";
+    canvas.style.display = "";
+    mapEl.style.display = "none";
+    endless = true;
+    endlessPoints = 0;
+    rowsPushed = 0;
+    chain = 0;
+    floatTime = 0;
+    grid = parseLayout(endlessStartRows(endlessPalette(0, ENDLESS_COLORS), Math.random));
+    obstacles = {};
+    dropQueue = [];
+    dropEvery = 0;
+    pressEvery = 0;
+    pressLeft = 0;
+    shotsTotal = 0;
+    shotsLeft = Number.MAX_SAFE_INTEGER;
+    shotsFired = 0;
+    phase = "play";
+    phaseTime = 0;
+    bannerTime = 1.6;
+    flight = null;
+    aiming = false;
+    pops.length = 0;
+    falls.length = 0;
+    cracks.length = 0;
+    loader = freshLoader();
+    msgEl.textContent = `♾️ 无尽墙:每 ${ENDLESS_PUSH_EVERY} 发压下一行,顶住!`;
     updateHud();
   }
 
@@ -358,7 +471,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (screen !== "play") return;
     api.play("tap");
     stopSpeaking();
-    startLevel(levelIndex);
+    if (endless) startEndless();
+    else startLevel(levelIndex);
   }
 
   function failLevel(reason: string): void {
@@ -387,13 +501,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       for (let c = 0; c < rowLength(grid, r); c++) {
         const cell = grid.rows[r][c];
         if (cell && isStone(cell)) {
-          const cc = cellCenter(grid, r, c);
-          falls.push({
-            x: cc.x, y: cc.y,
-            vx: (Math.random() - 0.5) * 100,
-            vy: -50 - Math.random() * 50,
-            color: cell, t: 0,
-          });
+          pushFall(r, c, cell);
           grid.rows[r][c] = null;
         }
       }
@@ -417,23 +525,44 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function pushFall(r: number, c: number, color: string): void {
     const cc = cellCenter(grid, r, c);
-    falls.push({
-      x: cc.x, y: cc.y,
-      vx: (Math.random() - 0.5) * 120,
-      vy: -60 - Math.random() * 60,
-      color, t: 0,
-    });
+    falls.push(makeFaller(cc.x, cc.y, color, ++fallSeed));
   }
 
   function fire(): void {
     if (phase !== "play" || flight || shotsLeft <= 0) return;
     const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy, obstacles);
     shotsLeft--;
-    flight = { result, seg: 0, segPos: 0, color: currentColor };
-    currentColor = nextColor;
-    nextColor = randomColor(colorsInGrid(grid));
+    flight = { result, seg: 0, segPos: 0, color: loader.current };
+    // 上膛:下一颗顶上来,再补一颗(颜色只从墙上还有的里出)
+    loader = reload(loader, grid, Math.random, specialsFor());
     api.play("jump");
     updateHud();
+  }
+
+  /** 换弹:当前和下一颗对调 */
+  function swapAmmo(): void {
+    if (phase !== "play" || flight) return;
+    loader = swapLoader(loader);
+    api.play("tap");
+  }
+
+  /**
+   * 一发的结算:消掉的、掉下去的都记账。
+   * 连着几发都有收获就叠连锁,掉落分翻倍还要飘字。
+   */
+  function scoreShot(popped: number, dropped: number): void {
+    if (popped === 0 && dropped === 0) {
+      chain = 0;
+      return;
+    }
+    chain++;
+    endlessPoints += chainScore(popped, dropped, chain);
+    const label = chainLabel(dropped, chain);
+    if (label) {
+      floatText = label;
+      floatSize = chainFontSize(chain);
+      floatTime = 1.2;
+    }
   }
 
   function landFlight(): void {
@@ -443,6 +572,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (result.swallowed) {
       // 被黑洞吞掉：这发就没了
       api.play("oops");
+      scoreShot(0, 0);
       afterShot();
       return;
     }
@@ -459,14 +589,27 @@ export function mount(api: GameApi): { destroy: () => void } {
         for (const f of hit.dropped) pushFall(f.r, f.c, f.color);
         if (hit.dropped.length > 0) api.play("coin");
       }
+      scoreShot(hit.result === "broken" ? 1 : 0, hit.dropped.length);
       afterShot();
       return;
     }
     if (!result.landing) {
+      scoreShot(0, 0);
       afterShot();
       return;
     }
     const { r, c } = result.landing;
+    // 炸弹泡:落到哪就把那一圈连石泡一起炸开,失联的照样往下掉
+    if (isBomb(color)) {
+      const blast = detonate(grid, r, c);
+      api.play("pop");
+      for (const p of blast.popped) pushPop(p.r, p.c, p.color);
+      for (const f of blast.dropped) pushFall(f.r, f.c, f.color);
+      if (blast.dropped.length > 0) api.play("coin");
+      scoreShot(blast.popped.length, blast.dropped.length);
+      afterShot();
+      return;
+    }
     grid.rows[r][c] = color;
     const settle = settleShot(grid, r, c);
     if (settle.popped.length > 0) {
@@ -477,6 +620,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     } else {
       api.play("tap");
     }
+    scoreShot(settle.popped.length, settle.dropped.length);
     afterShot();
   }
 
@@ -484,6 +628,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     shotsFired++;
     // 孤零零的彩虹泡自己飞走
     for (const p of releaseLoneRainbows(grid)) pushPop(p.r, p.c, p.color);
+    if (endless) {
+      afterEndlessShot();
+      return;
+    }
     if (countBubbles(grid) === 0) {
       refreshQueue();
       updateHud();
@@ -512,6 +660,42 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (shotsLeft <= 0) {
       failLevel("子弹用完了！");
     }
+  }
+
+  /** 无尽墙的一发结算:每 5 发压一行,泡泡顶到警戒线就收工 */
+  function afterEndlessShot(): void {
+    if (endlessShouldPush(shotsFired)) {
+      descend(grid, endlessRow(grid, endlessPalette(rowsPushed, ENDLESS_COLORS), Math.random, rowsPushed));
+      rowsPushed++;
+      api.play("jump");
+      msgEl.textContent = "⬇️ 墙又压下来一行,顶住!";
+    }
+    if (countBubbles(grid) === 0) {
+      // 清空了就补一批新的,无尽不该停在空屏。
+      // 长度必须按 grid.flip 起头:descend 要的是 rowLen(flip ^ 1, 0),
+      // 而 flip 每压一行翻一次,给错了 parseRow 会抛异常(C2-02)
+      const palette = endlessPalette(rowsPushed, ENDLESS_COLORS);
+      for (const line of endlessStartRows(palette, Math.random, 2, grid.flip ^ 1)) {
+        descend(grid, line);
+      }
+      msgEl.textContent = "清空啦!新的一波泡泡来喽~";
+    }
+    refreshQueue();
+    updateHud();
+    if (crossedDeadline(grid)) endEndless();
+  }
+
+  function endEndless(): void {
+    if (phase !== "play") return;
+    phase = "failed";
+    phaseTime = 0;
+    const total = endlessTotal(endlessPoints, rowsPushed);
+    failReason = `顶住了 ${rowsPushed} 行!`;
+    api.play("oops");
+    msgEl.textContent = endlessLine(total, bestEndless);
+    speak(endlessLine(total, bestEndless));
+    save.recordEndlessBest(meta.id, total);
+    bestEndless = Math.max(bestEndless, total);
   }
 
   // ---------- 绘制 ----------
@@ -612,7 +796,35 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
   }
 
+  /** 炸弹泡:深色小球加一圈跳动的火花,和普通颜色一眼分得开 */
+  function drawBombAt(x: number, y: number, radius = R, alpha = 1): void {
+    ctx.globalAlpha = alpha;
+    const grad = ctx.createRadialGradient(x - radius * 0.35, y - radius * 0.4, radius * 0.12, x, y, radius);
+    grad.addColorStop(0, "#8E9BB5");
+    grad.addColorStop(0.45, "#4A5670");
+    grad.addColorStop(1, "#2B3348");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#FFD27A";
+    ctx.lineWidth = Math.max(1.5, radius * 0.14);
+    const spark = 0.7 + 0.3 * Math.sin(animTime * 10);
+    ctx.beginPath();
+    for (let k = 0; k < 6; k++) {
+      const a = (k * Math.PI) / 3 + animTime * 1.6;
+      ctx.moveTo(x + Math.cos(a) * radius * 0.45, y + Math.sin(a) * radius * 0.45);
+      ctx.lineTo(x + Math.cos(a) * radius * 0.82 * spark, y + Math.sin(a) * radius * 0.82 * spark);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   function drawBubbleAt(x: number, y: number, color: string, radius = R, alpha = 1): void {
+    if (color === BOMB) {
+      drawBombAt(x, y, radius, alpha);
+      return;
+    }
     if (color === STONE || color === STONE_CRACKED) {
       drawStoneAt(x, y, color === STONE_CRACKED, radius, alpha);
       return;
@@ -734,30 +946,42 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawAim(): void {
     if (!aiming || phase !== "play" || flight) return;
-    // 和 fire() 完全一样的调用 → 预览即实弹
+    // 和 fire() 完全一样的调用 → 指哪打哪;但只把开头一小段(最多一次反射)画出来,
+    // 剩下的留给小朋友自己判断,不把整条解直接送到眼前。
     const result = simulateShot(grid, SHOOTER_X, SHOOTER_Y, aimDx, aimDy, obstacles);
+    const shown = previewPath(result.path);
     ctx.strokeStyle = result.swallowed ? "rgba(120, 90, 200, 0.75)" : "rgba(90, 150, 220, 0.75)";
     ctx.lineWidth = 3;
     ctx.setLineDash([7, 9]);
     ctx.lineDashOffset = -animTime * 40;
     ctx.beginPath();
-    result.path.forEach((p, i) => {
+    shown.forEach((p, i) => {
       if (i === 0) ctx.moveTo(p.x, p.y);
       else ctx.lineTo(p.x, p.y);
     });
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
-    if (result.landing) {
-      const cc = cellCenter(grid, result.landing.r, result.landing.c);
-      ctx.strokeStyle = "rgba(90, 150, 220, 0.8)";
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([4, 5]);
+    // 预览线断掉的地方画个淡淡的箭头,提示「还会继续往那边飞」
+    const tip = shown[shown.length - 1];
+    const prev = shown[shown.length - 2];
+    if (tip && prev) {
+      const a = Math.atan2(tip.y - prev.y, tip.x - prev.x);
+      ctx.fillStyle = "rgba(90, 150, 220, 0.55)";
       ctx.beginPath();
-      ctx.arc(cc.x, cc.y, R - 2, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    } else if (result.hitCell) {
+      ctx.moveTo(tip.x + Math.cos(a) * 9, tip.y + Math.sin(a) * 9);
+      ctx.lineTo(tip.x + Math.cos(a + 2.5) * 7, tip.y + Math.sin(a + 2.5) * 7);
+      ctx.lineTo(tip.x + Math.cos(a - 2.5) * 7, tip.y + Math.sin(a - 2.5) * 7);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // 当前角度:远端拖动时看得见微调到了第几档
+    ctx.fillStyle = "rgba(62, 124, 184, 0.85)";
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`${aimDeg.toFixed(fineAim ? 1 : 0)}°`, SHOOTER_X, SHOOTER_Y + R + 26);
+    ctx.textAlign = "left";
+    if (result.hitCell && isStone(grid.rows[result.hitCell.r]?.[result.hitCell.c] ?? null)) {
       // 会砸到石泡：画个小炸花
       const cc = cellCenter(grid, result.hitCell.r, result.hitCell.c);
       ctx.strokeStyle = "rgba(240, 160, 90, 0.9)";
@@ -781,7 +1005,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.lineWidth = 3;
     ctx.stroke();
     if (phase === "play" && shotsLeft > 0) {
-      drawBubbleAt(SHOOTER_X, SHOOTER_Y, currentColor);
+      drawBubbleAt(SHOOTER_X, SHOOTER_Y, loader.current);
     }
     ctx.fillStyle = THEMES[themeOfLevel(levelIndex)].dark ? "rgba(255,255,255,0.85)" : "#5E86B0";
     ctx.font = "12px sans-serif";
@@ -789,8 +1013,26 @@ export function mount(api: GameApi): { destroy: () => void } {
     ctx.fillText("下一个", W - 46, SHOOTER_Y - 24);
     ctx.textAlign = "left";
     if (phase === "play" && shotsLeft > 1) {
-      drawBubbleAt(W - 46, SHOOTER_Y + 2, nextColor, R * 0.7);
+      drawBubbleAt(W - 46, SHOOTER_Y + 2, loader.next, R * 0.7);
     }
+  }
+
+  /** 连锁飘字:掉得越多字越大,从发射台上方慢慢升起来 */
+  function drawFloatText(dt: number): void {
+    if (floatTime <= 0 || !floatText) return;
+    floatTime -= dt;
+    const k = Math.max(0, Math.min(1, floatTime / 1.2));
+    ctx.globalAlpha = k;
+    ctx.fillStyle = "#F0872F";
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 4;
+    ctx.font = `bold ${floatSize}px sans-serif`;
+    ctx.textAlign = "center";
+    const y = SHOOTER_Y - 70 - (1 - k) * 40;
+    ctx.strokeText(floatText, W / 2, y);
+    ctx.fillText(floatText, W / 2, y);
+    ctx.textAlign = "left";
+    ctx.globalAlpha = 1;
   }
 
   function drawFlight(): void {
@@ -827,17 +1069,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.arc(p.x, p.y, R * (1 + k), 0, Math.PI * 2);
       ctx.stroke();
     }
+    // 掉落走 aim12 的重力:一帧一帧经过中间位置,关掉动效也只是掉得更快
     for (let i = falls.length - 1; i >= 0; i--) {
-      const f = falls[i];
-      f.t += dt;
-      f.vy += 900 * dt;
-      f.x += f.vx * dt;
-      f.y += f.vy * dt;
-      if (f.y > H + R) {
+      const stepped = stepFaller(falls[i], dt, fallGravity(softMotion));
+      falls[i] = stepped;
+      if (fallenOut(stepped)) {
         falls.splice(i, 1);
         continue;
       }
-      drawBubbleAt(f.x, f.y, f.color, R, Math.max(0.3, 1 - f.t * 0.6));
+      drawBubbleAt(stepped.x, stepped.y, stepped.color, R, Math.max(0.3, 1 - stepped.age * 0.6));
     }
     for (let i = cracks.length - 1; i >= 0; i--) {
       const cfx = cracks[i];
@@ -856,14 +1096,30 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function drawOverlays(): void {
-    if (bannerTime > 0 && phase === "play") {
+    if (bannerTime > 0 && phase === "play" && endless) {
+      const a = Math.min(1, bannerTime / 0.4);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * a})`;
+      ctx.beginPath();
+      ctx.roundRect(30, 178, 300, 92, 18);
+      ctx.fill();
+      ctx.fillStyle = `rgba(62, 124, 184, ${a})`;
+      ctx.font = "bold 21px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("♾️ 无尽墙", W / 2, 212);
+      ctx.font = "13px sans-serif";
+      ctx.fillText(`每 ${ENDLESS_PUSH_EVERY} 发压下一行,能顶多久?`, W / 2, 238);
+      ctx.fillText(`最好成绩 ${bestEndless} 分`, W / 2, 258);
+      ctx.textAlign = "left";
+    } else if (bannerTime > 0 && phase === "play") {
       const a = Math.min(1, bannerTime / 0.4);
       const def = LEVELS[levelIndex];
       const th = THEMES[themeOfLevel(levelIndex)];
       const mechs = levelMechanisms(def);
+      const note = budgetNote(def);
+      const extraLines = (mechs.length > 0 ? 1 : 0) + (note ? 1 : 0);
       ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * a})`;
       ctx.beginPath();
-      ctx.roundRect(30, 168, 300, mechs.length > 0 ? 120 : 100, 18);
+      ctx.roundRect(30, 168, 300, 100 + extraLines * 20, 18);
       ctx.fill();
       ctx.fillStyle = `rgba(62, 124, 184, ${a})`;
       ctx.font = "13px sans-serif";
@@ -872,12 +1128,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.font = "bold 21px sans-serif";
       ctx.fillText(`第 ${levelIndex + 1} 关 · ${def.name}`, W / 2, 220);
       ctx.font = "12px sans-serif";
-      ctx.fillText(def.tip, W / 2, 248);
+      let y = 248;
+      ctx.fillText(def.tip, W / 2, y);
       if (mechs.length > 0) {
-        ctx.fillText(
-          "机关：" + mechs.map((m) => MECH_INFO[m].icon + MECH_INFO[m].name).join(" "),
-          W / 2, 272
-        );
+        y += 24;
+        ctx.fillText("机关：" + mechs.map((m) => MECH_INFO[m].icon + MECH_INFO[m].name).join(" "), W / 2, y);
+      }
+      if (note) {
+        y += 24;
+        ctx.fillText(note, W / 2, y);
       }
       ctx.textAlign = "left";
     }
@@ -913,7 +1172,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       ctx.font = "14px sans-serif";
       // 深蓝：小字对比 5.8:1（原 #5E86B0 只有 3.8:1，不达 AA）
       ctx.fillStyle = "#46688f";
-      ctx.fillText("点击画面重试本关", W / 2, 252);
+      ctx.fillText(endless ? "点击画面再来一局" : "点击画面重试本关", W / 2, 252);
       ctx.textAlign = "left";
     }
   }
@@ -926,6 +1185,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     drawFlight();
     drawShooter();
     drawAnims(dt);
+    drawFloatText(dt);
     drawOverlays();
   }
 
@@ -933,6 +1193,11 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function tick(now: number): void {
     if (destroyed) return;
+    // 先把下一帧排上,再干活。
+    // 原来这句写在函数最后一行,一旦中间任何一步抛异常,重新排帧就永远执行不到,
+    // 整条 rAF 循环当场断掉——画面不动、按钮没反应,只能退出重进(C2-02 就是这么卡死的)。
+    // 排在最前面,逻辑出问题最多是这一帧画歪,不会把整局带走。
+    raf = requestAnimationFrame(tick);
     const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
     animTime += dt;
@@ -975,7 +1240,6 @@ export function mount(api: GameApi): { destroy: () => void } {
 
       draw(dt);
     }
-    raf = requestAnimationFrame(tick);
   }
 
   // ---------- 输入 ----------
@@ -989,12 +1253,13 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function setAim(p: { x: number; y: number }): boolean {
-    const dx = p.x - SHOOTER_X;
-    const dy = p.y - SHOOTER_Y;
-    if (dy > -24) return false; // 只能向上瞄准
-    const len = Math.hypot(dx, dy);
-    aimDx = dx / len;
-    aimDy = dy / len;
+    // 拖得越远,角度吸附得越细 —— 远端 1px 抖动不会再让弹道乱飞
+    const aim = aimFromDrag(SHOOTER_X, SHOOTER_Y, p.x, p.y);
+    if (!aim) return false; // 只能向上瞄准
+    aimDx = aim.dx;
+    aimDy = aim.dy;
+    aimDeg = aim.deg;
+    fineAim = angleStepDeg(Math.hypot(p.x - SHOOTER_X, p.y - SHOOTER_Y)) < COARSE_STEP_DEG;
     return true;
   }
 
@@ -1026,11 +1291,26 @@ export function mount(api: GameApi): { destroy: () => void } {
     aiming = false;
   };
 
+  // Tab 换弹:手机点 🔀 钮,键盘按 Tab,两边等价
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (screen !== "play") return;
+    if (e.key === "Tab") {
+      e.preventDefault();
+      swapAmmo();
+    }
+  };
+
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
   window.addEventListener("pointercancel", onPointerCancel);
+  window.addEventListener("keydown", onKeyDown);
   retryBtn.addEventListener("click", retryLevel);
+  swapBtn.addEventListener("click", swapAmmo);
+  endlessBtn.addEventListener("click", () => {
+    api.play("tap");
+    startEndless();
+  });
   backBtn.addEventListener("click", () => {
     api.play("tap");
     showMap();
@@ -1047,8 +1327,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       destroyed = true;
       cancelAnimationFrame(raf);
       stopSpeaking();
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onKeyDown);
       wrap.remove();
     },
   };

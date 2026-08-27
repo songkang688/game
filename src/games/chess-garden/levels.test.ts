@@ -1,0 +1,394 @@
+/**
+ * 花园国际象棋 · 188 关题库体检。
+ *
+ * 这一份不测 UI，只回答一件事：**这 188 道题每一道都真的有解吗**。
+ * 杀棋题用搜索证明「N 步内强制将杀」，和棋题按类型断言那一手真的判和。
+ */
+import { describe, expect, it } from "vitest";
+import { assertTotal } from "../level99";
+import { fromFen, toFen, WHITE } from "./board";
+import {
+  CHAPTERS,
+  ENDLESS_COUNT,
+  ENDLESS_TOP_THINK_MS,
+  ENDLESS_TOP_TIER,
+  LEVELS,
+  buildLevel,
+  endlessAtTop,
+  endlessLap,
+  endlessStart,
+  endlessThinkMs,
+  endlessTier,
+  loseLine,
+  rateLevel,
+  winLine,
+} from "./levels";
+import { fromSan, inCheck, legalMoves, makeMove, toSan } from "./moves";
+import { createGame, gameStatus, insufficientMaterial, playMove, status } from "./rules";
+import { findForcedMate, forcesMate } from "./search";
+
+describe("章节切分", () => {
+  it("八章之和恒等于 188", () => {
+    expect(assertTotal(CHAPTERS, 188)).toBe(true);
+  });
+
+  it("章节表按规格写满八章，每章都有名字、图标与介绍", () => {
+    expect(CHAPTERS.length).toBe(8);
+    for (const ch of CHAPTERS) {
+      expect(ch.name.length).toBeGreaterThan(0);
+      expect(ch.emoji.length).toBeGreaterThan(0);
+      expect(ch.desc.length).toBeGreaterThan(4);
+      expect(ch.size).toBeGreaterThan(0);
+    }
+    expect(CHAPTERS.map((c) => c.size)).toEqual([24, 24, 24, 24, 22, 22, 24, 24]);
+  });
+
+  it("188 关都拼出来了，关号连续、章节下标对得上", () => {
+    expect(LEVELS.length).toBe(188);
+    let acc = 0;
+    for (let ci = 0; ci < CHAPTERS.length; ci++) {
+      for (let i = 0; i < CHAPTERS[ci].size; i++) {
+        const spec = LEVELS[acc];
+        expect(spec.index).toBe(acc);
+        expect(spec.chapterIndex).toBe(ci);
+        expect(spec.indexInChapter).toBe(i);
+        acc++;
+      }
+    }
+    expect(acc).toBe(188);
+  });
+
+  it("buildLevel 越界也不会崩", () => {
+    expect(buildLevel(-5).index).toBe(0);
+    expect(buildLevel(999).index).toBe(187);
+    expect(buildLevel(87).index).toBe(87);
+  });
+});
+
+describe("题面本身是合法的局面", () => {
+  it("每一关的 FEN 都读得进来、双方都有王、轮到白方走、白方有棋可走", () => {
+    for (const spec of LEVELS) {
+      const pos = fromFen(spec.fen);
+      expect(toFen(pos), `第 ${spec.index + 1} 关 FEN 转回去不一致`).toBe(spec.fen);
+      expect(pos.turn, `第 ${spec.index + 1} 关应该轮白方走`).toBe(WHITE);
+      expect(pos.board.filter((p) => p === 6).length, `第 ${spec.index + 1} 关缺白王`).toBe(1);
+      expect(pos.board.filter((p) => p === -6).length, `第 ${spec.index + 1} 关缺黑王`).toBe(1);
+      expect(inCheck(pos, -1), `第 ${spec.index + 1} 关黑王一开局就被将`).toBe(false);
+      expect(legalMoves(pos).length, `第 ${spec.index + 1} 关白方无棋可走`).toBeGreaterThan(0);
+    }
+  });
+
+  it("每一关的参考解都是一条合法走法", () => {
+    for (const spec of LEVELS) {
+      const pos = fromFen(spec.fen);
+      const move = fromSan(pos, spec.solution);
+      expect(move, `第 ${spec.index + 1} 关的参考解「${spec.solution}」不合法`).not.toBeNull();
+    }
+  });
+
+  it("题面没有重复（188 道题是 188 个不同局面）", () => {
+    const seen = new Set(LEVELS.map((s) => s.fen));
+    expect(seen.size).toBe(188);
+  });
+});
+
+describe("杀棋题正好是 N 步杀", () => {
+  const mates = LEVELS.filter((s) => s.kind === "mate");
+
+  it("杀棋题占了绝大多数，深度从 1 步到 4 步都有", () => {
+    expect(mates.length).toBe(176);
+    const depths = new Set(mates.map((s) => s.plies));
+    expect([...depths].sort((a, b) => a - b)).toEqual([1, 3, 5, 7]);
+  });
+
+  it("每一道杀棋题都能在标称步数内强制将杀", () => {
+    for (const spec of mates) {
+      const pos = fromFen(spec.fen);
+      const solve = findForcedMate(pos, spec.plies);
+      expect(solve, `第 ${spec.index + 1} 关（${spec.plies} 个半回合）找不到强制杀`).not.toBeNull();
+    }
+  }, 120000);
+
+  it("每一道杀棋题都不能更快解掉（标称几步就是几步）", () => {
+    for (const spec of mates) {
+      if (spec.plies <= 1) continue;
+      const pos = fromFen(spec.fen);
+      expect(
+        findForcedMate(pos, spec.plies - 2),
+        `第 ${spec.index + 1} 关其实是更短的杀，标称步数写大了`
+      ).toBeNull();
+    }
+  }, 120000);
+
+  it("参考解本身就是能强制将杀的那一手", () => {
+    for (const spec of mates) {
+      const pos = fromFen(spec.fen);
+      const move = fromSan(pos, spec.solution)!;
+      expect(forcesMate(pos, move, spec.plies), `第 ${spec.index + 1} 关参考解不成立`).toBe(true);
+    }
+  }, 120000);
+
+  it("规定首着的关卡（易位课 / 过路兵课 / 升变课）参考解确实是那一类走法", () => {
+    for (const spec of mates.filter((s) => s.require)) {
+      const pos = fromFen(spec.fen);
+      const move = fromSan(pos, spec.solution)!;
+      const isCastle = move.flag === "k" || move.flag === "q";
+      const isEp = move.flag === "e";
+      const isPromo = move.promo !== 0;
+      expect(isCastle || isEp || isPromo, `第 ${spec.index + 1} 关的首着要求没落实`).toBe(true);
+    }
+  });
+
+  it("易位课的 22 关首着都是易位", () => {
+    const chapter = LEVELS.filter((s) => s.chapterIndex === 4);
+    expect(chapter.length).toBe(22);
+    for (const spec of chapter) {
+      const move = fromSan(fromFen(spec.fen), spec.solution)!;
+      expect(move.flag === "k" || move.flag === "q", `第 ${spec.index + 1} 关首着不是易位`).toBe(true);
+    }
+  });
+
+  it("过路与升变章的 22 关首着不是吃过路兵就是升变", () => {
+    const chapter = LEVELS.filter((s) => s.chapterIndex === 5);
+    expect(chapter.length).toBe(22);
+    let ep = 0;
+    let promo = 0;
+    for (const spec of chapter) {
+      const move = fromSan(fromFen(spec.fen), spec.solution)!;
+      if (move.flag === "e") ep++;
+      else if (move.promo !== 0) promo++;
+      else throw new Error(`第 ${spec.index + 1} 关既不是过路兵也不是升变`);
+    }
+    expect(ep).toBe(14);
+    expect(promo).toBe(8);
+  });
+
+  it("升变课里有「升成后反而不是杀」的题，必须升马", () => {
+    const under = LEVELS.filter((s) => s.chapterIndex === 5 && s.solution.includes("=N"));
+    expect(under.length).toBeGreaterThanOrEqual(4);
+    for (const spec of under) {
+      const pos = fromFen(spec.fen);
+      const knight = fromSan(pos, spec.solution)!;
+      expect(forcesMate(pos, knight, 1)).toBe(true);
+      // 同一格升成后就不是杀了，这才是这道题的意思
+      const queen = legalMoves(pos).find((m) => m.from === knight.from && m.to === knight.to && m.promo === 5)!;
+      expect(queen, `第 ${spec.index + 1} 关没有升后这个选项`).toBeTruthy();
+      expect(forcesMate(pos, queen, 1), `第 ${spec.index + 1} 关升后也是杀，就不是升变课了`).toBe(false);
+    }
+  });
+});
+
+describe("和棋题真的能走成和棋", () => {
+  it("逼和题：参考解走完就是逼和", () => {
+    const list = LEVELS.filter((s) => s.kind === "stalemate");
+    expect(list.length).toBe(5);
+    for (const spec of list) {
+      const pos = fromFen(spec.fen);
+      const move = fromSan(pos, spec.solution)!;
+      const next = makeMove(pos, move);
+      const st = status(next);
+      expect(st.kind, `第 ${spec.index + 1} 关不是逼和`).toBe("stalemate");
+      expect(st.winner).toBe(0);
+    }
+  });
+
+  it("子力不足题：参考解走完剩下的子谁也杀不掉谁", () => {
+    const list = LEVELS.filter((s) => s.kind === "material");
+    expect(list.length).toBe(4);
+    for (const spec of list) {
+      const pos = fromFen(spec.fen);
+      const move = fromSan(pos, spec.solution)!;
+      const next = makeMove(pos, move);
+      expect(insufficientMaterial(next), `第 ${spec.index + 1} 关子力还够`).toBe(true);
+      expect(status(next).kind).toBe("material");
+    }
+  });
+
+  it("50 回合题：参考解是一步不吃子不动兵的棋，走完就判和", () => {
+    const list = LEVELS.filter((s) => s.kind === "fifty");
+    expect(list.length).toBe(1);
+    for (const spec of list) {
+      const pos = fromFen(spec.fen);
+      expect(pos.halfmove).toBe(99);
+      const move = fromSan(pos, spec.solution)!;
+      expect(move.captured).toBe(0);
+      const next = makeMove(pos, move);
+      expect(next.halfmove).toBe(100);
+      expect(status(next).kind).toBe("fifty");
+    }
+  });
+
+  it("三次重复题：主线里黑方每一步都是唯一应手，循环走两遍就判和", () => {
+    const list = LEVELS.filter((s) => s.kind === "repetition");
+    expect(list.length).toBe(2);
+    for (const spec of list) {
+      expect(spec.line.length).toBe(4);
+      const game = createGame(spec.fen);
+      for (let round = 0; round < 2; round++) {
+        for (let i = 0; i < spec.line.length; i++) {
+          const san = spec.line[i];
+          const move = fromSan(game.pos, san);
+          expect(move, `第 ${spec.index + 1} 关主线第 ${round * 4 + i + 1} 手「${san}」走不出来`).not.toBeNull();
+          if (i % 2 === 1) {
+            // 黑方的应手必须是唯一的，否则这条「永久将」就不成立
+            expect(legalMoves(game.pos).length, `第 ${spec.index + 1} 关黑方有别的选择`).toBe(1);
+          }
+          expect(playMove(game, move!)).toBe(true);
+        }
+      }
+      const st = gameStatus(game);
+      expect(st.kind, `第 ${spec.index + 1} 关没走成三次重复`).toBe("repetition");
+      expect(st.winner).toBe(0);
+    }
+  });
+});
+
+describe("关卡外围工具", () => {
+  it("评星按失误次数递减", () => {
+    expect(rateLevel(0)).toBe(3);
+    expect(rateLevel(1)).toBe(2);
+    expect(rateLevel(4)).toBe(1);
+  });
+
+  it("过关与失败的文案都在鼓励，不批评", () => {
+    const spec = buildLevel(0);
+    expect(winLine(spec, 0).length).toBeGreaterThan(4);
+    expect(winLine(spec, 2).length).toBeGreaterThan(4);
+    const lose = loseLine(spec);
+    expect(lose.length).toBeGreaterThan(4);
+    for (const bad of ["笨", "错了", "失败", "不行"]) expect(lose.includes(bad)).toBe(false);
+  });
+
+  it("无尽模式一局比一局难：档位单调不降，思考时间也往上走", () => {
+    let prevTier = 0;
+    let prevMs = 0;
+    for (let round = 1; round <= 14; round++) {
+      const tier = endlessTier(round);
+      const ms = endlessThinkMs(round);
+      expect(tier).toBeGreaterThanOrEqual(prevTier);
+      expect(ms).toBeGreaterThanOrEqual(prevMs);
+      expect(ms).toBeLessThanOrEqual(240);
+      prevTier = tier;
+      prevMs = ms;
+    }
+    expect(endlessTier(1)).toBe(1);
+    expect(endlessTier(20)).toBe(4);
+  });
+
+  /* -- R2-PA-4：对手第 10 局封顶、题面池太小，后段既不更难也不更新鲜 -- */
+
+  it("题面池扩到了 41 个，一局一个不重样地转完一整轮", () => {
+    expect(ENDLESS_COUNT).toBe(41);
+    const lap = new Set<string>();
+    for (let round = 1; round <= ENDLESS_COUNT; round++) lap.add(endlessStart(round));
+    expect(lap.size, "同一轮里有两局撞了同一个题面").toBe(ENDLESS_COUNT);
+  });
+
+  it("扩进来的题面一样是「白方有强制杀」，难度量级和原来那批齐平", () => {
+    for (let round = 1; round <= ENDLESS_COUNT; round++) {
+      const pos = fromFen(endlessStart(round));
+      expect(pos.turn, `第 ${round} 局不是白方先走`).toBe(WHITE);
+      const found = [1, 3, 5].some((plies) => findForcedMate(pos, plies) !== null);
+      expect(found, `第 ${round} 局的题面白方没有 3 手以内的强制杀`).toBe(true);
+    }
+  });
+
+  it("跑满一轮之后题面从头再来，界面能说出这是第几轮", () => {
+    expect(endlessLap(1)).toBe(1);
+    expect(endlessLap(ENDLESS_COUNT)).toBe(1);
+    expect(endlessLap(ENDLESS_COUNT + 1)).toBe(2);
+    expect(endlessStart(ENDLESS_COUNT + 1)).toBe(endlessStart(1));
+    expect(endlessLap(ENDLESS_COUNT * 2 + 1)).toBe(3);
+  });
+
+  it("对手封顶那一刻说得清楚：到顶之前不报，到顶之后一直报", () => {
+    expect(endlessTier(9)).toBeLessThan(ENDLESS_TOP_TIER);
+    expect(endlessAtTop(9), "还没到顶就说到顶了").toBe(false);
+    for (let round = 1; round <= 40; round++) {
+      const capped = endlessTier(round) >= ENDLESS_TOP_TIER && endlessThinkMs(round) >= ENDLESS_TOP_THINK_MS;
+      expect(endlessAtTop(round), `第 ${round} 局的封顶判断对不上`).toBe(capped);
+    }
+    expect(endlessAtTop(20), "第 20 局早该封顶了").toBe(true);
+  });
+
+  /* -- R2-PA-4 的护栏：题面池是「题库里没排进 188 关的余料」，
+        靠 `FAM.xx.slice(N)` 里那几个偏移量和 `PLAN` 对齐。
+        哪天有人调了 `PLAN` 某一段的 `count`，池子就会悄悄开始发已经玩过的关卡题，
+        甚至发到一个空槽。下面几条就是拦这个的。 -- */
+
+  it("题面池和 188 关不撞题：连胜里发的每一道都是没在闯关里出现过的", () => {
+    const inLevels = new Set(LEVELS.map((s) => s.fen));
+    for (let round = 1; round <= ENDLESS_COUNT; round++) {
+      const fen = endlessStart(round);
+      expect(fen, `第 ${round} 局取到了空题面`).toBeTruthy();
+      expect(inLevels.has(fen), `第 ${round} 局发的 ${fen} 已经排进 188 关了`).toBe(false);
+    }
+  });
+
+  it("每一道题面都摆得出来：FEN 转得回去、双方都有王、黑王没一开局就被将、白方有棋可走", () => {
+    for (let round = 1; round <= ENDLESS_COUNT; round++) {
+      const fen = endlessStart(round);
+      const pos = fromFen(fen);
+      expect(toFen(pos), `第 ${round} 局的 FEN 转回去不一致`).toBe(fen);
+      expect(pos.board.filter((p) => p === 6).length, `第 ${round} 局缺白王`).toBe(1);
+      expect(pos.board.filter((p) => p === -6).length, `第 ${round} 局缺黑王`).toBe(1);
+      expect(inCheck(pos, -1), `第 ${round} 局黑王一开局就被将`).toBe(false);
+      expect(legalMoves(pos).length, `第 ${round} 局白方无棋可走`).toBeGreaterThan(0);
+    }
+  });
+
+  it("扩池是往后追加：第 1–35 局的题面一格没挪，第 36 局起才是新收进来的 6 道", () => {
+    // 这两个是老池子的头和尾。挪了位就说明扩池插到中间去了，
+    // 已经连胜到一半的孩子下一局会突然换题。
+    expect(endlessStart(1)).toBe("k1K1R3/8/B4Q2/4n3/1p6/r7/8/8 w - - 0 1");
+    expect(endlessStart(35)).toBe("1K3k2/2P1ppp1/5R2/8/8/2p5/8/6n1 w - - 0 1");
+    const old35 = Array.from({ length: 35 }, (_, i) => endlessStart(i + 1));
+    const fresh = Array.from({ length: 6 }, (_, i) => endlessStart(36 + i));
+    expect(new Set(fresh).size, "新收进来的 6 道里有重样的").toBe(6);
+    for (const fen of fresh) {
+      expect(old35.includes(fen), `第 36 局起的 ${fen} 其实前 35 局已经出过`).toBe(false);
+    }
+    // 原来第 36 局就绕回第 1 题了，现在要到第 42 局
+    expect(endlessStart(36)).not.toBe(endlessStart(1));
+    expect(endlessStart(42)).toBe(endlessStart(1));
+  });
+
+  it("新收进来的 6 道正好是标称步数的强制杀，不是「随便有个杀就行」", () => {
+    // 前 4 道是两步杀（3 个半回合），后 2 道是一步杀
+    const want: Array<readonly [number, number]> = [
+      [36, 3],
+      [37, 3],
+      [38, 3],
+      [39, 3],
+      [40, 1],
+      [41, 1],
+    ];
+    for (const [round, plies] of want) {
+      const pos = fromFen(endlessStart(round));
+      expect(findForcedMate(pos, plies), `第 ${round} 局找不到 ${plies} 个半回合的强制杀`).not.toBeNull();
+      if (plies > 1) {
+        expect(findForcedMate(pos, plies - 2), `第 ${round} 局其实是更短的杀`).toBeNull();
+      }
+    }
+  }, 60000);
+
+  it("局号越界、0、负数、小数都兜得住，取到的还是池子里的题", () => {
+    const pool = new Set(Array.from({ length: ENDLESS_COUNT }, (_, i) => endlessStart(i + 1)));
+    for (const round of [0, -1, -99, 1.4, ENDLESS_COUNT * 7 + 3, 1000]) {
+      expect(pool.has(endlessStart(round)), `第 ${round} 局取到了池子外的题面`).toBe(true);
+    }
+    expect(endlessStart(0)).toBe(endlessStart(1));
+    expect(endlessStart(-99)).toBe(endlessStart(1));
+    expect(endlessLap(0)).toBe(1);
+    expect(endlessLap(-99)).toBe(1);
+    expect(endlessLap(ENDLESS_COUNT * 2)).toBe(2);
+  });
+
+  it("每一关都写了标题与提示，提示里不直接给出答案着法", () => {
+    for (const spec of LEVELS) {
+      expect(spec.title.length).toBeGreaterThan(1);
+      expect(spec.hint.length).toBeGreaterThan(8);
+      expect(spec.hint.includes(spec.solution), `第 ${spec.index + 1} 关的提示把答案写出来了`).toBe(false);
+    }
+  });
+});

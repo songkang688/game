@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { TOTAL_LEVELS } from "./level99";
+import {
+  ROOT_TTL_MS,
+  clearRootSession,
+  resetRoot12Extras,
+  writeRootSession
+} from "../ui/root12Contract";
+import { quizJumpIndex, quizJumpVisible } from "./quiz99";
 import {
   CHEERS,
   FAIL_LINE,
@@ -110,5 +117,54 @@ describe("quiz99 文案只鼓励不批评", () => {
   it("收尾文案按是否全对给不同的肯定", () => {
     expect(quizFinishLine(0, 188)).toBe("全部一次答对，太了不起啦！");
     expect(quizFinishLine(2, 188)).toBe("188 道题全部完成！");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2 新增：管理员权限「直达第 N 题」
+// ---------------------------------------------------------------------------
+
+describe("quiz99 直达第 N 题（管理员权限）", () => {
+  const NOW = 1_700_000_000_000;
+
+  beforeEach(() => {
+    resetRoot12Extras();
+    clearRootSession(null);
+  });
+
+  it("管理员权限关着时，直达控件根本不该出现", () => {
+    expect(quizJumpVisible(NOW)).toBe(false);
+  });
+
+  it("管理员权限开着时才出现，一小时后又消失", () => {
+    writeRootSession(NOW + ROOT_TTL_MS, null);
+    expect(quizJumpVisible(NOW)).toBe(true);
+    expect(quizJumpVisible(NOW + ROOT_TTL_MS)).toBe(false);
+  });
+
+  it("能直达题组里的最后一题（内部是 0 基题号）", () => {
+    expect(quizJumpIndex("12", 12)).toBe(11);
+    expect(quizJumpIndex("1", 12)).toBe(0);
+  });
+
+  it("越界与坏输入都不炸：夹到题组范围内或原地不动", () => {
+    expect(quizJumpIndex("0", 12)).toBe(0);
+    expect(quizJumpIndex("99", 12)).toBe(11);
+    expect(quizJumpIndex("1e9", 12)).toBe(11);
+    expect(quizJumpIndex("abc", 12)).toBeNull();
+    expect(quizJumpIndex("", 12)).toBeNull();
+    expect(() => quizJumpIndex("abc", 0)).not.toThrow();
+  });
+
+  it("直达不会把题量上限撑破（最多 188 题）", () => {
+    expect(quizJumpIndex("500", 999)).toBe(MAX_QUESTIONS - 1);
+    expect(MAX_QUESTIONS).toBe(TOTAL_LEVELS);
+  });
+
+  it("直达不改评星口径：错题数怎么算还是怎么算", () => {
+    expect(quizStars(0, 12)).toBe(3);
+    quizJumpIndex("6", 12);
+    expect(quizStars(0, 12)).toBe(3);
+    expect(quizStars(9, 12)).toBe(1);
   });
 });

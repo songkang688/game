@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { GameMeta, GameModule } from "../engine/types";
-import { GAME_MODES } from "../engine/types";
+import { GAME_MODES, GAME_PLATFORMS } from "../engine/types";
 import {
   FAV_KEY,
   FAV_MAX,
   MODE_CHIPS,
+  PLATFORM_CHIPS,
+  matchesPlatformChip,
   emptyStateText,
   favoriteGames,
   filterGames,
+  heroSubtitle,
   isFav,
   isFiltering,
   levelTotalOf,
@@ -126,6 +129,103 @@ describe("拼音首字母", () => {
 
   it("多音字游戏有额外的候选首字母串", () => {
     expect(searchKeys({ id: "music-stars", title: "音乐星星" })).toContain("yyxx");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2 窗口 1 新增的 12 款:字表是手工维护的,新标题不补进来就一个字都搜不到。
+// 下面那个「和已上架 meta 的约定」里已经逐款钉过首字母串了,这里补的是搜索行为:
+// 串长对不对、前缀 / 中段 / 大写能不能命中、十二款会不会互相撞车、多音字有没有候选。
+// ---------------------------------------------------------------------------
+
+describe("窗口 1 的 12 款新游戏也能用拼音搜", () => {
+  const WINDOW1: { id: string; title: string; initials: string }[] = [
+    { id: "orb-arena", title: "圆圆大作战", initials: "yydzz" },
+    { id: "snake-royale", title: "长蛇争霸", initials: "cszb" },
+    { id: "block-drop", title: "方块叠叠乐", initials: "fkddl" },
+    { id: "combo-clash", title: "连招对决", initials: "lzdj" },
+    { id: "mahjong-bloom", title: "花开麻将", initials: "hkmj" },
+    { id: "star-estate", title: "朵星地产", initials: "dxdc" },
+    { id: "hero-cards", title: "英杰令", initials: "yjl" },
+    { id: "weiqi-garden", title: "围子花园", initials: "wzhy" },
+    { id: "flight-chess", title: "飞行棋乐园", initials: "fxqly" },
+    { id: "merge-2048", title: "星星合成", initials: "xxhc" },
+    { id: "mine-garden", title: "扫雷花园", initials: "slhy" },
+    { id: "sudoku-petal", title: "数独花田", initials: "sdht" }
+  ];
+
+  it("每一款的首字母串都逐字对得上,没有一个字被字表漏掉", () => {
+    for (const g of WINDOW1) {
+      expect(pinyinInitials(g.title), g.id).toBe(g.initials);
+      // 一个汉字出一个字母:串长必须等于标题里的汉字数
+      expect(g.initials.length, g.id).toBe([...g.title].length);
+    }
+  });
+
+  it("整串、前缀、中间一段都能搜到", () => {
+    for (const g of WINDOW1) {
+      expect(matchesSearch(g, g.initials), g.id).toBe(true);
+      expect(matchesSearch(g, g.initials.slice(0, 2)), g.id).toBe(true);
+      expect(matchesSearch(g, g.initials.slice(1)), g.id).toBe(true);
+      expect(matchesSearch(g, g.initials.toUpperCase()), g.id).toBe(true);
+    }
+  });
+
+  it("十二款的首字母串互不相同,搜出来不会一片全中", () => {
+    expect(new Set(WINDOW1.map((g) => g.initials)).size).toBe(WINDOW1.length);
+  });
+
+  it("多音字给了第二种念法的候选串", () => {
+    // 长:cháng / zhǎng
+    expect(searchKeys({ id: "snake-royale", title: "长蛇争霸" })).toContain("zszb");
+    expect(matchesSearch({ id: "snake-royale", title: "长蛇争霸" }, "zszb")).toBe(true);
+    // 行:xíng / háng
+    expect(searchKeys({ id: "flight-chess", title: "飞行棋乐园" })).toContain("fhqly");
+    expect(matchesSearch({ id: "flight-chess", title: "飞行棋乐园" }, "fhqly")).toBe(true);
+  });
+
+  it("新补的字没有把老标题搜歪", () => {
+    expect(pinyinInitials("贪吃毛毛虫")).toBe("tcmmc");
+    expect(pinyinInitials("五子棋")).toBe("wzq");
+    expect(pinyinInitials("连连看")).toBe("llk");
+    expect(pinyinInitials("红蓝拔河")).toBe("hlbh");
+    expect(pinyinInitials("绿芽保卫战")).toBe("lybwz");
+  });
+
+  // 补 12 款时顺手核了一遍全库,发现 1.1 还有 16 个标题一直缺字 ——
+  // 「金矿钩钩」四个字一个都没进表,「保龄球小馆」缺龄和馆。
+  // 这些字一并补进来,顺带把它们钉住,免得下次改字表又被搞回去。
+  const OLD_TITLES_FIXED: { title: string; initials: string }[] = [
+    { title: "泡泡炸弹人", initials: "ppzdr" },
+    { title: "保龄球小馆", initials: "blqxg" },
+    { title: "推箱小仓鼠", initials: "txxcs" },
+    { title: "碰碰车大乱斗", initials: "ppcdld" },
+    { title: "朵星格斗王", initials: "dxgdw" },
+    { title: "钓鱼小达人", initials: "dyxdr" },
+    { title: "金矿钩钩", initials: "jkgg" },
+    { title: "冰冰火火森林", initials: "bbhhsl" },
+    { title: "朵朵抢地主", initials: "ddqdz" },
+    { title: "小怪物危机", initials: "xgwwj" },
+    { title: "王子公主大冒险", initials: "wzgzdmx" },
+    { title: "噗噗兄弟", initials: "ppxd" },
+    { title: "星星射击场", initials: "xxsjc" },
+    { title: "飞机小队", initials: "fjxd" },
+    { title: "雪球大作战", initials: "xqdzz" },
+    { title: "铁皮坦克大战", initials: "tptkdz" }
+  ];
+
+  it("1.1 老标题里缺的字也补齐了,全库都能用拼音搜", () => {
+    for (const g of OLD_TITLES_FIXED) {
+      expect(pinyinInitials(g.title), g.title).toBe(g.initials);
+      expect(g.initials.length, g.title).toBe([...g.title].length);
+    }
+  });
+
+  it("顺手把老标题里缺的字也补齐了,飞机小队与雪球大作战不再掉字", () => {
+    // 原来这两条钉的是「补了飞、还缺机队雪」的半截状态(fjxd 写成 f、xqdzz 写成 qdzz)。
+    // 字补齐之后就该是完整串了。
+    expect(pinyinInitials("飞机小队")).toBe("fjxd");
+    expect(pinyinInitials("雪球大作战")).toBe("xqdzz");
   });
 });
 
@@ -343,5 +443,246 @@ describe("和已上架 meta 的约定", () => {
       if (!expected || !meta.title) continue;
       expect(pinyinInitials(meta.title), meta.id).toBe(expected);
     }
+  });
+
+  // 1.2 窗口 1 这 12 款上架时字表没跟着补,结果整批都搜不出来:
+  //「长蛇争霸」「英杰令」的首字母串直接是空串,只能靠 id 搜。
+  // 这里把 12 款逐字钉住,以后再加新字漏了也会红。
+  const WINDOW1_INITIALS: Record<string, string> = {
+    "orb-arena": "yydzz",
+    "snake-royale": "cszb",
+    "block-drop": "fkddl",
+    "combo-clash": "lzdj",
+    "mahjong-bloom": "hkmj",
+    "star-estate": "dxdc",
+    "hero-cards": "yjl",
+    "weiqi-garden": "wzhy",
+    "flight-chess": "fxqly",
+    "merge-2048": "xxhc",
+    "mine-garden": "slhy",
+    "sudoku-petal": "sdht"
+  };
+
+  it("1.2 窗口 1 的 12 款标题全都能拼出首字母", () => {
+    const seen: string[] = [];
+    for (const { meta } of shipped) {
+      const expected = meta.id ? WINDOW1_INITIALS[meta.id] : undefined;
+      if (!expected || !meta.title) continue;
+      seen.push(meta.id as string);
+      expect(pinyinInitials(meta.title), meta.id).toBe(expected);
+    }
+    expect(seen.sort()).toEqual(Object.keys(WINDOW1_INITIALS).sort());
+  });
+
+  it("1.2 窗口 1 的 12 款都能用拼音首字母搜到", () => {
+    for (const { meta } of shipped) {
+      const expected = meta.id ? WINDOW1_INITIALS[meta.id] : undefined;
+      if (!expected || !meta.title) continue;
+      expect(
+        matchesSearch({ id: meta.id as string, title: meta.title }, expected),
+        meta.id
+      ).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2 新增：手游 / 端游筛选
+// ---------------------------------------------------------------------------
+
+describe("平台筛选芯片", () => {
+  it("三颗芯片就是全部 / 手游 / 端游，顺序固定", () => {
+    expect(PLATFORM_CHIPS.map((c) => c.key)).toEqual(["all", "mobile", "desktop"]);
+    expect(PLATFORM_CHIPS.map((c) => c.label)).toEqual(["全部", "手游", "端游"]);
+  });
+
+  it("芯片文案不写系统名与商店名", () => {
+    const text = PLATFORM_CHIPS.map((c) => c.label).join("");
+    expect(text).not.toMatch(/iOS|安卓|Android|应用商店|App Store/i);
+  });
+
+  it("不填 platform 的老游戏三种筛选都能找到", () => {
+    const meta = { platform: undefined };
+    expect(matchesPlatformChip(meta, "all")).toBe(true);
+    expect(matchesPlatformChip(meta, "mobile")).toBe(true);
+    expect(matchesPlatformChip(meta, "desktop")).toBe(true);
+  });
+
+  it("填 both 的游戏两边都命中", () => {
+    expect(matchesPlatformChip({ platform: "both" }, "mobile")).toBe(true);
+    expect(matchesPlatformChip({ platform: "both" }, "desktop")).toBe(true);
+  });
+
+  it("mobile 的游戏会被端游筛掉", () => {
+    expect(matchesPlatformChip({ platform: "mobile" }, "mobile")).toBe(true);
+    expect(matchesPlatformChip({ platform: "mobile" }, "desktop")).toBe(false);
+    expect(matchesPlatformChip({ platform: "mobile" }, "all")).toBe(true);
+  });
+
+  it("desktop 的游戏会被手游筛掉", () => {
+    expect(matchesPlatformChip({ platform: "desktop" }, "desktop")).toBe(true);
+    expect(matchesPlatformChip({ platform: "desktop" }, "mobile")).toBe(false);
+  });
+
+  it("脏值当 both，不抛异常", () => {
+    const dirty = { platform: "switch" } as unknown as Pick<GameMeta, "platform">;
+    expect(() => matchesPlatformChip(dirty, "mobile")).not.toThrow();
+    expect(matchesPlatformChip(dirty, "mobile")).toBe(true);
+    expect(matchesPlatformChip(dirty, "desktop")).toBe(true);
+  });
+
+  it("GAME_PLATFORMS 三个取值齐全且不重复", () => {
+    expect(GAME_PLATFORMS).toEqual(["mobile", "desktop", "both"]);
+    expect(new Set(GAME_PLATFORMS).size).toBe(3);
+  });
+});
+
+describe("四条件叠加筛选", () => {
+  const pool: GameModule[] = [
+    game({ id: "tap-only", title: "点点乐", platform: "mobile", modes: ["endless"], category: "casual" }),
+    game({ id: "keys-only", title: "双人对战", platform: "desktop", modes: ["versus", "twoPlayer"], category: "party" }),
+    game({ id: "anywhere", title: "五子棋", modes: ["campaign", "versus"], category: "party" })
+  ];
+
+  it("端游筛选选不到只适合手指的那款", () => {
+    const ids = filterGames(pool, { platform: "desktop" }).map((g) => g.meta.id);
+    expect(ids).not.toContain("tap-only");
+    expect(ids).toContain("keys-only");
+    expect(ids).toContain("anywhere");
+  });
+
+  it("手游筛选选不到只适合键盘的那款", () => {
+    const ids = filterGames(pool, { platform: "mobile" }).map((g) => g.meta.id);
+    expect(ids).toEqual(["tap-only", "anywhere"]);
+  });
+
+  it("分类 × 玩法 × 平台 × 搜索四条件一起叠", () => {
+    const ids = filterGames(pool, {
+      tab: "party",
+      mode: "versus",
+      platform: "desktop",
+      query: "zzz"
+    }).map((g) => g.meta.id);
+    expect(ids).toEqual([]);
+    const hit = filterGames(pool, { tab: "party", mode: "versus", platform: "desktop" }).map(
+      (g) => g.meta.id
+    );
+    expect(hit).toEqual(["keys-only", "anywhere"]);
+  });
+
+  it("只切平台芯片也算「在筛」", () => {
+    expect(isFiltering({ platform: "mobile" })).toBe(true);
+    expect(isFiltering({ platform: "all" })).toBe(false);
+    expect(isFiltering({})).toBe(false);
+  });
+
+  it("平台维度的空态文案是「换个筛选」的口气", () => {
+    expect(emptyStateText({ platform: "mobile" })).toContain("手游");
+    expect(emptyStateText({ platform: "desktop" })).toContain("端游");
+    expect(emptyStateText({ platform: "mobile", mode: "campaign" })).toContain("闯关");
+    expect(emptyStateText({ platform: "mobile" })).not.toMatch(/宝宝|乖乖/);
+  });
+
+  it("1.1 已有的三条筛选行为一个字都没变", () => {
+    expect(matchesTab({ category: "party" }, "party")).toBe(true);
+    expect(matchesModeChip({ modes: ["coop"] }, "duo")).toBe(true);
+    expect(matchesSearch({ id: "gomoku", title: "五子棋" }, "wzq")).toBe(true);
+    expect(filterGames(pool, {}).length).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 第 1 轮学习优化：设备芯片得真的筛得动
+//
+// 第 1 轮走查发现「全部 / 手游 / 端游」三颗芯片点下去都是同一批 67 张卡 ——
+// 筛选函数是对的，是没有一款 meta 敢不填 `both`。本窗口这 12 款按各自真实的
+// 操作方式把 `platform` 填准了，这一组用例守住它，别哪天又被批量刷回 `both`。
+// ---------------------------------------------------------------------------
+
+const WINDOW1_METAS = import.meta.glob<{ meta: GameMeta }>(
+  [
+    "../games/orb-arena/meta.ts",
+    "../games/snake-royale/meta.ts",
+    "../games/block-drop/meta.ts",
+    "../games/combo-clash/meta.ts",
+    "../games/mahjong-bloom/meta.ts",
+    "../games/star-estate/meta.ts",
+    "../games/hero-cards/meta.ts",
+    "../games/weiqi-garden/meta.ts",
+    "../games/flight-chess/meta.ts",
+    "../games/merge-2048/meta.ts",
+    "../games/mine-garden/meta.ts",
+    "../games/sudoku-petal/meta.ts"
+  ],
+  { eager: true }
+);
+
+describe("窗口 1 那 12 款的 platform 填得准不准", () => {
+  const metas = Object.values(WINDOW1_METAS).map((m) => m.meta);
+
+  it("12 款全都在，而且都显式填了 platform", () => {
+    expect(metas).toHaveLength(12);
+    for (const m of metas) expect(GAME_PLATFORMS).toContain(m.platform);
+  });
+
+  it("滑动合并、点格子、点牌这些用手指最顺的，标成手游", () => {
+    const mobile = metas.filter((m) => m.platform === "mobile").map((m) => m.id).sort();
+    expect(mobile).toEqual(
+      ["flight-chess", "hero-cards", "mahjong-bloom", "merge-2048", "mine-garden", "star-estate", "sudoku-petal"].sort()
+    );
+  });
+
+  it("同屏双人格斗要两套键位，标成端游", () => {
+    expect(metas.find((m) => m.id === "combo-clash")?.platform).toBe("desktop");
+  });
+
+  it("手指和键盘都顺手的仍旧是 both", () => {
+    const both = metas.filter((m) => m.platform === "both").map((m) => m.id).sort();
+    expect(both).toEqual(["block-drop", "orb-arena", "snake-royale", "weiqi-garden"]);
+  });
+
+  it("三颗芯片筛出来的数量真的不一样了（不再是 12/12/12）", () => {
+    const pool = metas.map((meta) => ({ meta }) as unknown as GameModule);
+    const all = filterGames(pool, { platform: "all" }).length;
+    const mobile = filterGames(pool, { platform: "mobile" }).length;
+    const desktop = filterGames(pool, { platform: "desktop" }).length;
+    expect(all).toBe(12);
+    expect(mobile).toBe(11); // 7 款 mobile + 4 款 both
+    expect(desktop).toBe(5); // 1 款 desktop + 4 款 both
+    expect(new Set([all, mobile, desktop]).size).toBeGreaterThan(1);
+  });
+
+  it("标成端游的那一款，在手游芯片下就查不到了", () => {
+    const pool = metas.map((meta) => ({ meta }) as unknown as GameModule);
+    const ids = filterGames(pool, { platform: "mobile" }).map((g) => g.meta.id);
+    expect(ids).not.toContain("combo-clash");
+    expect(filterGames(pool, { platform: "desktop" }).map((g) => g.meta.id)).toContain("combo-clash");
+  });
+});
+
+describe("首页气泡的数量跟着实际收录走", () => {
+  it("有几款就说几款,不再写死 55", () => {
+    expect(heroSubtitle(67, 188)).toContain("67 款原创小游戏");
+    expect(heroSubtitle(67, 188)).not.toContain("55");
+    expect(heroSubtitle(120, 188)).toContain("120 款");
+  });
+
+  it("闯关关数也跟着最长的那一款走", () => {
+    expect(heroSubtitle(67, 188)).toContain("闯关最长 188 关");
+    expect(heroSubtitle(67, 99)).toContain("闯关最长 99 关");
+  });
+
+  it("一款都没有 / 数字是脏的时候不许说出「0 款」这种话", () => {
+    expect(heroSubtitle(0, 0)).toBe("原创小游戏合集。上面可以筛选、搜索、收藏 🌈");
+    expect(heroSubtitle(Number.NaN, Number.POSITIVE_INFINITY)).toBe(
+      "原创小游戏合集。上面可以筛选、搜索、收藏 🌈"
+    );
+    expect(heroSubtitle(-3, -1)).not.toContain("-");
+  });
+
+  it("还是原来那句招呼的口气,没有低幼词", () => {
+    const t = heroSubtitle(67, 188);
+    expect(t).toContain("上面可以筛选、搜索、收藏");
+    expect(t).not.toMatch(/宝宝|乖乖|小朋友们快来/);
   });
 });

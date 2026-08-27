@@ -4,6 +4,8 @@ import { chapterOf, mulberry32, totalSize, TOTAL_LEVELS } from "../level99";
 import {
   buildQuizCard,
   CHAPTERS,
+  ENDLESS_CONCURRENT_MAX,
+  ENDLESS_TARGET_BONUS_MAX,
   endlessFieldName,
   endlessLine,
   endlessWave,
@@ -203,25 +205,39 @@ describe("地鼠嘭嘭 · 出题地鼠逐题可解", () => {
 
 describe("地鼠嘭嘭 · 无尽地鼠场", () => {
   it("每一波都能打：速度、并发、目标分都有封顶", () => {
-    for (let wave = 1; wave <= 60; wave++) {
+    for (let wave = 1; wave <= 400; wave++) {
       const cfg = endlessWave(wave);
       expect(cfg.duration).toBe(20);
       expect(cfg.target).toBeGreaterThanOrEqual(6);
-      expect(cfg.target).toBeLessThanOrEqual(18);
-      expect(cfg.upMsMin).toBeGreaterThanOrEqual(430);
+      expect(cfg.target).toBeLessThanOrEqual(18 + ENDLESS_TARGET_BONUS_MAX);
+      expect(cfg.upMsMin).toBeGreaterThanOrEqual(340);
       expect(cfg.upMsMax).toBeGreaterThan(cfg.upMsMin);
-      expect(cfg.gapMs).toBeGreaterThanOrEqual(330);
-      expect(cfg.maxConcurrent).toBeLessThanOrEqual(3);
+      expect(cfg.gapMs).toBeGreaterThanOrEqual(240);
+      expect(cfg.maxConcurrent).toBeLessThanOrEqual(ENDLESS_CONCURRENT_MAX);
       const spawns = ((cfg.duration * 1000) / (cfg.gapMs + cfg.upMsMin)) * cfg.maxConcurrent;
       expect(spawns * (1 - cfg.bunnyChance)).toBeGreaterThan(cfg.target);
     }
   });
 
-  it("波次越靠后越难，但第 25 波之后停在封顶不再加码", () => {
+  it("波次越靠后越难：第 25 摊拧到底之后还有第二批旋钮接着走", () => {
     expect(endlessWave(1).gapMs).toBeGreaterThan(endlessWave(10).gapMs);
     expect(endlessWave(1).target).toBeLessThan(endlessWave(20).target);
-    expect(endlessWave(25)).toEqual(endlessWave(60));
+    // 原来第 25 摊之后一切冻结，第 300 摊和第 25 摊一模一样；现在还接着走
+    expect(endlessWave(60).target).toBeGreaterThan(endlessWave(25).target);
+    expect(endlessWave(60).gapMs).toBeLessThan(endlessWave(25).gapMs);
+    expect(endlessWave(60).maxConcurrent).toBeGreaterThan(endlessWave(25).maxConcurrent);
     expect(endlessWave(0)).toEqual(endlessWave(1));
+  });
+
+  it("第二批旋钮也各有各的下限：拧到底就稳住，不会一路紧到没法玩", () => {
+    // 每一项在第 113 摊之前先后触底，之后再守多久配置都不再变
+    expect(endlessWave(120)).toEqual(endlessWave(400));
+    const cap = endlessWave(400);
+    expect(cap.gapMs).toBe(240);
+    expect(cap.upMsMin).toBe(340);
+    expect(cap.maxConcurrent).toBe(ENDLESS_CONCURRENT_MAX);
+    expect(cap.bunnyChance).toBeLessThanOrEqual(0.22 + 1e-9);
+    expect(cap.shieldChance).toBeLessThanOrEqual(0.27 + 1e-9);
   });
 
   it("场地名每 5 波换一片，且全是中文", () => {

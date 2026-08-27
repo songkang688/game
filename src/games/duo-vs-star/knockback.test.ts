@@ -3,11 +3,30 @@ import {
   ANGLE_BY_KIND,
   BUMP_MAX,
   BUMP_PER_POWER,
+  HIT_STOP_MAX,
+  KNOCK_SPAN,
+  KNOCK_VIGOR_STEPS,
+  KO_SPEED,
+  LAUNCH_CAP_TABLE,
   MAX_LAUNCH,
   SHIELD_COST_PER_POWER,
   SHIELD_MAX,
+  STRUGGLE_DAMP,
+  STRUGGLE_PUSH,
+  STRUGGLE_VIGOR,
+  STRUGGLE_WINDOW,
   addBump,
+  bumpFromVigor,
   bumpLabel,
+  canStruggle,
+  cappedLaunchSpeed,
+  hitStopFrames,
+  hitStopSeconds,
+  knockbackCurve,
+  launchCap,
+  struggleVelocity,
+  vigorLabel,
+  vigorOf,
   bumpNeededToKnockOut,
   bumpTier,
   clamp,
@@ -466,5 +485,210 @@ describe("弹飞模拟", () => {
       { gravity: 0 }
     );
     expect(need).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 1.2：元气、封顶表、挣扎窗口、顿帧                                   */
+/* ------------------------------------------------------------------ */
+
+/** 云朵广场那块主平台，用来判断「飘不飘得回来」 */
+const MAIN_GROUND = { y: 400, min: 190, max: 770 };
+
+describe("元气：击退值的正向说法", () => {
+  it("元气和击退值是同一个数的两面，来回换算对得上", () => {
+    expect(vigorOf(0)).toBe(100);
+    expect(vigorOf(BUMP_MAX)).toBe(0);
+    expect(vigorOf(BUMP_MAX / 2)).toBeCloseTo(50, 6);
+    for (const v of [0, 17, 40, 63.5, 100]) {
+      expect(vigorOf(bumpFromVigor(v))).toBeCloseTo(v, 6);
+    }
+  });
+
+  it("脏数据也只会得到 0..100 之间的元气", () => {
+    for (const b of [-500, 0, 99, BUMP_MAX * 3, Number.NaN]) {
+      const v = vigorOf(b);
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(100);
+    }
+    expect(bumpFromVigor(-40)).toBe(BUMP_MAX);
+    expect(bumpFromVigor(999)).toBe(0);
+  });
+
+  it("元气的说法和击退值分档是同一套档位", () => {
+    expect(vigorLabel(100)).toBe(bumpLabel(0));
+    expect(vigorLabel(0)).toBe(bumpLabel(BUMP_MAX));
+    expect(vigorLabel(100)).not.toBe(vigorLabel(0));
+  });
+});
+
+describe("弹飞初速封顶表", () => {
+  it("元气满的时候封得最紧，而且封在「从场地中间飞不出去」的那条线以下", () => {
+    expect(launchCap(100)).toBeLessThan(KO_SPEED);
+    expect(launchCap(100)).toBe(LAUNCH_CAP_TABLE[0][1]);
+  });
+
+  it("元气越低封得越松，掉到一半以下就完全放开", () => {
+    let prev = -1;
+    for (let v = 100; v >= 0; v -= 5) {
+      const cap = launchCap(v);
+      expect(cap).toBeGreaterThanOrEqual(prev);
+      expect(cap).toBeLessThanOrEqual(MAX_LAUNCH);
+      prev = cap;
+    }
+    expect(launchCap(50)).toBe(MAX_LAUNCH);
+    expect(launchCap(0)).toBe(MAX_LAUNCH);
+  });
+
+  it("封过顶的初速既不超过原公式，也不超过封顶值", () => {
+    for (const v of [100, 90, 75, 60, 30, 0]) {
+      const before = bumpFromVigor(v);
+      const after = addBump(before, 20);
+      const capped = cappedLaunchSpeed(before, after, 20, 100);
+      expect(capped).toBeLessThanOrEqual(launchSpeed(after, 20, 100) + 1e-9);
+      expect(capped).toBeLessThanOrEqual(launchCap(v) + 1e-9);
+    }
+  });
+
+  it("一击必出界不存在：元气满着挨最重的一下，也飞不到弹飞线", () => {
+    // 全场力气最大的一记重击，还叠上软软锤子的加成
+    const hit = resolveHit({
+      bump: 0,
+      shield: 0,
+      weight: 72,
+      power: 16.5 * 1.27 * 1.9,
+      kind: "heavy",
+      attackerX: 420,
+      targetX: 480,
+    });
+    expect(hit.speed).toBeLessThan(KO_SPEED);
+    expect(
+      simulateLaunch({ x: 480, y: 300, vx: hit.vx, vy: hit.vy }, BOUNDS, { ground: MAIN_GROUND }).out
+    ).toBe(false);
+  });
+
+  it("元气见底就照样送得出去——封顶不是给对局降速的", () => {
+    const hit = resolveHit({
+      bump: BUMP_MAX,
+      shield: 0,
+      weight: 100,
+      power: 16.5,
+      kind: "heavy",
+      attackerX: 420,
+      targetX: 480,
+    });
+    expect(hit.speed).toBeGreaterThan(KO_SPEED);
+    expect(
+      simulateLaunch({ x: 480, y: 300, vx: hit.vx, vy: hit.vy }, BOUNDS, { ground: MAIN_GROUND }).out
+    ).toBe(true);
+  });
+});
+
+describe("「元气 → 击退距离」分档表", () => {
+  it("一档一档地列出来，元气越低飞得越远", () => {
+    const rows = knockbackCurve(16.5, 100, "heavy");
+    expect(rows.map((r) => r.vigor)).toEqual([...KNOCK_VIGOR_STEPS]);
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].distance).toBeGreaterThanOrEqual(rows[i - 1].distance);
+      expect(rows[i].speed).toBeGreaterThanOrEqual(rows[i - 1].speed);
+    }
+  });
+
+  it("满元气那一档送不出去，元气掉下来之后就送得出去了", () => {
+    const rows = knockbackCurve(16.5, 100, "heavy");
+    expect(rows[0].knocksOut).toBe(false);
+    expect(rows[rows.length - 1].knocksOut).toBe(true);
+  });
+
+  it("最远的一档也就飞出去半个场地，距离一直是有限的正数", () => {
+    for (const weight of [72, 100, 134]) {
+      for (const row of knockbackCurve(16.5, weight, "heavy")) {
+        expect(Number.isFinite(row.distance)).toBe(true);
+        expect(row.distance).toBeGreaterThan(0);
+        expect(row.distance).toBeLessThan(960 * 0.6);
+      }
+    }
+    expect(KNOCK_SPAN).toBeGreaterThan(0);
+  });
+});
+
+describe("低元气的挣扎窗口", () => {
+  it("元气跌破 40 才给挣扎窗口，站得稳的时候没有", () => {
+    expect(STRUGGLE_VIGOR).toBe(40);
+    expect(STRUGGLE_WINDOW).toBeCloseTo(0.4, 6);
+    expect(canStruggle(bumpFromVigor(100))).toBe(false);
+    expect(canStruggle(bumpFromVigor(STRUGGLE_VIGOR + 1))).toBe(false);
+    expect(canStruggle(bumpFromVigor(STRUGGLE_VIGOR))).toBe(true);
+    expect(canStruggle(BUMP_MAX)).toBe(true);
+  });
+
+  it("挣一下把速度削掉一大截，还往场地里推一点点", () => {
+    const out = struggleVelocity(-900, -400, 1);
+    expect(Math.abs(out.vx)).toBeLessThan(900);
+    expect(out.vx).toBeGreaterThan(-900 * STRUGGLE_DAMP - 1e-9);
+    expect(Math.abs(out.vy)).toBeLessThan(400);
+    const right = struggleVelocity(900, 0, -1);
+    expect(right.vx).toBeLessThan(900);
+  });
+
+  it("挣扎不会把人反着甩出去：削过之后速度只会更小", () => {
+    for (const vx of [-1700, -500, 0, 500, 1700]) {
+      for (const inward of [1, -1] as const) {
+        const out = struggleVelocity(vx, 0, inward);
+        expect(Math.abs(out.vx)).toBeLessThanOrEqual(Math.abs(vx) + STRUGGLE_PUSH);
+      }
+    }
+    expect(struggleVelocity(Number.NaN, Number.NaN, 1).vx).toBeCloseTo(STRUGGLE_PUSH, 6);
+  });
+
+  it("被拍飞之后挣一下，飞行距离明显短一截", () => {
+    const hit = resolveHit({
+      bump: bumpFromVigor(20),
+      shield: 0,
+      weight: 88,
+      power: 16.5,
+      kind: "heavy",
+      attackerX: 520,
+      targetX: 460,
+    });
+    const plain = simulateLaunch({ x: 460, y: 300, vx: hit.vx, vy: hit.vy }, BOUNDS, { ground: MAIN_GROUND });
+    const fought = struggleVelocity(hit.vx, hit.vy, 1);
+    const saved = simulateLaunch({ x: 460, y: 300, vx: fought.vx, vy: fought.vy }, BOUNDS, {
+      ground: MAIN_GROUND,
+    });
+    expect(plain.out).toBe(true);
+    expect(saved.out).toBe(false);
+  });
+});
+
+describe("命中顿帧", () => {
+  it("顿帧最多 6 帧，再重的一下也不会更久", () => {
+    expect(HIT_STOP_MAX).toBe(6);
+    for (const speed of [0, 300, 900, MAX_LAUNCH, MAX_LAUNCH * 10, Number.NaN]) {
+      for (const heavy of [true, false]) {
+        const f = hitStopFrames(speed, heavy);
+        expect(f).toBeGreaterThanOrEqual(0);
+        expect(f).toBeLessThanOrEqual(HIT_STOP_MAX);
+      }
+    }
+  });
+
+  it("弱化动效下一帧都不卡", () => {
+    for (const speed of [0, 900, MAX_LAUNCH]) {
+      expect(hitStopFrames(speed, true, true)).toBe(0);
+      expect(hitStopFrames(speed, false, true)).toBe(0);
+    }
+  });
+
+  it("重击比轻击卡得久，飞得越快卡得越久", () => {
+    expect(hitStopFrames(600, true)).toBeGreaterThan(hitStopFrames(600, false));
+    expect(hitStopFrames(MAX_LAUNCH, true)).toBeGreaterThan(hitStopFrames(0, true));
+  });
+
+  it("换算成秒之后也守着上限（60fps 下不超过 0.1 秒）", () => {
+    expect(hitStopSeconds(HIT_STOP_MAX)).toBeCloseTo(0.1, 6);
+    expect(hitStopSeconds(999)).toBeCloseTo(0.1, 6);
+    expect(hitStopSeconds(0)).toBe(0);
+    expect(hitStopSeconds(-4)).toBe(0);
   });
 });

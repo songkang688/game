@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🧺",
   category: "casual" as const,
   color: "#FFF4D6",
-  blurb: "188 关十条果道！双篮镜像、沉甸水果、半空传送带、连击星光全新开张！",
-  // 10 章合计 188 关,只有闯关一种玩法
-  modes: ["campaign"] as const,
+  blurb: "188 关十条果道 + 双人抢果 + 无尽水果雨!冰冻果定住全场、磁铁果放大篮口,每一颗都保证跑得到。",
+  // 10 章合计 188 关,外加左右半屏的双人抢果与越下越密的无尽水果雨
+  modes: ["campaign", "twoPlayer", "endless"] as const,
   levels: 188,
+  // 四个大按钮 + 半屏拖动,键盘 A/D 与方向键也顺手
+  platform: "both" as const,
 };

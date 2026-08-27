@@ -41,7 +41,18 @@ export const NUDGE_STEP = 26;
 // 靶子
 // ---------------------------------------------------------------------------
 
-export type TargetKind = "bull" | "balloon" | "ufo" | "robot" | "number" | "friend";
+export type TargetKind =
+  | "bull"
+  | "balloon"
+  | "ufo"
+  | "robot"
+  | "number"
+  | "friend"
+  // 1.2 补齐的四类(细则在 targets12.ts)
+  | "split"
+  | "shield"
+  | "rainbow"
+  | "flower";
 
 /** 每种靶子的说明,给 HUD 与攻略用(不要出现任何真实武器或人形敌人) */
 export const TARGET_INFO: Record<TargetKind, { name: string; emoji: string; desc: string }> = {
@@ -51,6 +62,10 @@ export const TARGET_INFO: Record<TargetKind, { name: string; emoji: string; desc
   robot: { name: "铁皮机器人", emoji: "🤖", desc: "走来走去,被打中就摊手坐下休息。" },
   number: { name: "编号靶", emoji: "🔢", desc: "带号码,必须从 1 号按顺序打。" },
   friend: { name: "好人靶", emoji: "🙂", desc: "举着小旗子的笑脸靶,千万别打它。" },
+  split: { name: "分裂靶", emoji: "🫧", desc: "打中会分成两个小的,小的还要再打一次。" },
+  shield: { name: "护盾靶", emoji: "🛡️", desc: "外面罩着一层软壳,要打两次才倒。" },
+  rainbow: { name: "彩虹靶", emoji: "🌈", desc: "只待几秒就走,越早打中分越高。" },
+  flower: { name: "花朵靶", emoji: "🌸", desc: "朵朵种的花,打中要扣分,得忍住。" },
 };
 
 export interface Target {
@@ -68,6 +83,18 @@ export interface Target {
   alive: boolean;
   /** 摆动相位,让同批靶子不要整齐划一 */
   phase: number;
+  /**
+   * 以下四个是 1.2 追加的可选字段。故意不给默认值:不写进对象,
+   * `JSON.stringify` 就看不见它们,前 99 关的关卡数据才能逐字节保持原样。
+   */
+  /** 护盾靶还剩几层壳(其余靶不写) */
+  hp?: number;
+  /** 还能待几秒(彩虹靶与无尽靶场的靶子会自己走掉) */
+  ttl?: number;
+  /** 远排靶:小一点、分数高一点(伪纵深) */
+  far?: boolean;
+  /** 分裂代数:0 是原靶,1 是分裂出来的小靶(小靶不再分裂) */
+  gen?: number;
 }
 
 /** 遮挡木板:星星弹打在上面就停住 */
@@ -84,9 +111,9 @@ export function makeTarget(
   x: number,
   y: number,
   r: number,
-  extra: Partial<Pick<Target, "vx" | "vy" | "order" | "phase">> = {}
+  extra: Partial<Pick<Target, "vx" | "vy" | "order" | "phase" | "hp" | "ttl" | "far" | "gen">> = {}
 ): Target {
-  return {
+  const t: Target = {
     id,
     kind,
     x,
@@ -98,6 +125,12 @@ export function makeTarget(
     alive: true,
     phase: extra.phase ?? 0,
   };
+  // 1.2 的可选字段只在真的用到时才写进去,老靶子的形状一个字节都不变
+  if (extra.hp !== undefined) t.hp = extra.hp;
+  if (extra.ttl !== undefined) t.ttl = extra.ttl;
+  if (extra.far !== undefined) t.far = extra.far;
+  if (extra.gen !== undefined) t.gen = extra.gen;
+  return t;
 }
 
 /**
@@ -327,18 +360,28 @@ export function ringScore(offset: number, radius: number): number {
   return 4;
 }
 
-/** 连击倍率:每连中一发 +0.1,最高 2.0 倍 */
+/** 连击每连中一发涨多少倍率 */
+export const COMBO_STEP = 0.1;
+/** 涨到第几连就封顶(第 10 连之后再连也不涨,避免一局定胜负) */
+export const COMBO_CAP_HITS = 10;
+/** 倍率上限 */
+export const COMBO_MAX_MULT = 1 + COMBO_CAP_HITS * COMBO_STEP;
+
+/** 连击倍率:每连中一发 +0.1,最高 2.0 倍;失手由调用方清零 */
 export function comboMultiplier(combo: number): number {
   const n = Math.max(0, Math.floor(combo));
-  return 1 + Math.min(10, n) * 0.1;
+  return 1 + Math.min(COMBO_CAP_HITS, n) * COMBO_STEP;
 }
 
 /** 打中好人靶的扣分(只扣分,不做任何受伤表现) */
 export const FRIEND_PENALTY = 30;
+/** 打中花朵靶的扣分(比好人靶轻一点:花能再开,但也是要忍住的) */
+export const FLOWER_PENALTY = 25;
 
-/** 一发命中的得分(好人靶返回负分) */
+/** 一发命中的得分(好人靶 / 花朵靶返回负分) */
 export function scoreForHit(kind: TargetKind, offset: number, radius: number, combo: number): number {
   if (kind === "friend") return -FRIEND_PENALTY;
+  if (kind === "flower") return -FLOWER_PENALTY;
   const base =
     kind === "bull"
       ? ringScore(offset, radius) * 2
@@ -348,7 +391,13 @@ export function scoreForHit(kind: TargetKind, offset: number, radius: number, co
           ? 18
           : kind === "robot"
             ? 20
-            : 16;
+            : kind === "split"
+              ? 12
+              : kind === "shield"
+                ? 26
+                : kind === "rainbow"
+                  ? 45
+                  : 16;
   return Math.round(base * comboMultiplier(combo));
 }
 
@@ -390,6 +439,13 @@ export interface RoundStat {
   friendHits: number;
   /** 编号打错顺序几次 */
   orderMistakes: number;
+  /** 打到花朵靶几次(1.2 新增,老调用方不传就是 0) */
+  flowerHits?: number;
+}
+
+/** 「不许打的靶」一共碰了几次:好人靶 + 花朵靶 */
+export function foulHits(stat: RoundStat): number {
+  return stat.friendHits + (stat.flowerHits ?? 0);
 }
 
 /**
@@ -398,9 +454,10 @@ export interface RoundStat {
  */
 export function starsForRound(stat: RoundStat): 1 | 2 | 3 {
   const acc = accuracy(stat.hits, stat.shots);
-  const clean = stat.friendHits === 0 && stat.orderMistakes === 0;
+  const fouls = foulHits(stat);
+  const clean = fouls === 0 && stat.orderMistakes === 0;
   if (clean && acc >= 0.9) return 3;
-  if (acc >= 0.7 && stat.friendHits === 0) return 2;
+  if (acc >= 0.7 && fouls === 0) return 2;
   return 1;
 }
 
@@ -409,12 +466,15 @@ export function roundMessage(stat: RoundStat): string {
   const acc = accuracy(stat.hits, stat.shots);
   const grade = accuracyGrade(acc);
   const pct = Math.round(acc * 100);
+  const flowers = stat.flowerHits ?? 0;
   const extra =
     stat.friendHits > 0
       ? `不过好人靶被碰到 ${stat.friendHits} 次,下次看清旗子再打。`
-      : stat.orderMistakes > 0
-        ? `编号乱了 ${stat.orderMistakes} 次,记得从 1 号开始数。`
-        : "";
+      : flowers > 0
+        ? `花朵靶碰到 ${flowers} 次,忍住不打才是真本事。`
+        : stat.orderMistakes > 0
+          ? `编号乱了 ${stat.orderMistakes} 次,记得从 1 号开始数。`
+          : "";
   return `命中率 ${pct}%,评级 ${grade}。${gradeWord(grade)}${extra}`;
 }
 

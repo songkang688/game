@@ -28,13 +28,34 @@ import {
   endlessLine,
   findStars,
   formatClock,
-  hitSpot,
   missPenalty,
-  toSceneXY,
   versusLine,
   versusWinner,
   type Spot,
 } from "./logic";
+import {
+  DEFAULT_VIEW,
+  canUseHint,
+  checklistItems,
+  checklistLabel,
+  clampView,
+  emptyClickTip,
+  hintText,
+  hintsLeft,
+  panView,
+  pickNearestSpot,
+  pinchZoom,
+  screenToScene,
+  starsAfterHints,
+  telescopeRegion,
+  telescopeView,
+  toleranceInScene,
+  viewScale,
+  zoomAt,
+  type Region,
+  type View,
+  type Viewport,
+} from "./seek12";
 
 /** 两位玩家的光标颜色:朵朵粉、星星蓝 */
 const P_COLOR = ["#e8558f", "#3f7fd6"];
@@ -77,8 +98,31 @@ const CSS = `
   flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
 .as-over-t{font-size:20px;font-weight:900;color:#6a4fa8;}
 .as-over-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;}
-@media (prefers-reduced-motion:reduce){.as-btn:active{transform:none;}}
+/* 1.2 新增:缩略图清单栏 + 望远镜 / 缩放工具条(als- 前缀) */
+.als-list{display:flex;gap:8px;overflow-x:auto;padding:6px 4px;scrollbar-width:thin;
+  -webkit-overflow-scrolling:touch;}
+.als-item{flex:0 0 auto;width:56px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:#fffdf6;border-radius:12px;padding:4px 2px;box-shadow:0 2px 6px rgba(160,150,190,.22);}
+.als-item.als-done{background:#e9fbe8;}
+.als-thumb{width:40px;height:40px;display:block;border-radius:10px;background:#f4f1ff;}
+.als-name{font-size:11px;font-weight:800;color:#5f5280;max-width:54px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;}
+.als-tick{font-size:12px;font-weight:900;color:#3f9a54;line-height:1;}
+.als-tools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center;}
+.als-tool{border:none;border-radius:13px;min-width:46px;min-height:44px;padding:4px 10px;font-size:15px;
+  font-weight:900;cursor:pointer;font-family:inherit;color:#5b4a7a;background:#efe9ff;
+  box-shadow:0 3px 0 rgba(140,120,190,.4);}
+.als-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.4);}
+.als-tool:disabled{opacity:.5;cursor:default;box-shadow:none;}
+.als-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+@media (prefers-reduced-motion:reduce){.as-btn:active,.als-tool:active{transform:none;}}
 `;
+
+/** 用户在系统里关掉了动画吗(关了就不抖不闪) */
+function reducedMotion(): boolean {
+  const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+  return typeof mm === "function" ? !!mm("(prefers-reduced-motion: reduce)").matches : false;
+}
 
 // ---------------------------------------------------------------------------
 // 画笔:全部程序化绘制,一张外部图片都不用
@@ -369,6 +413,8 @@ export interface SeekResult {
   misses: number;
   /** 双人对战时两边各找到几个 */
   scores: [number, number];
+  /** 用掉了几次望远镜(用过就不给三星) */
+  hintsUsed: number;
 }
 
 interface RunnerOpts {
@@ -385,6 +431,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   const deduce = lv.mode === "deduce";
   const targets = lv.mode === "find" ? lv.targets : [];
   const need = deduce ? 1 : targets.length;
+  // 无尽轮自带罚时(它的 chapter 是循环的,照章算会忽轻忽重);战役关照旧按章
+  const penalty = lv.penalty ?? missPenalty(lv.chapter);
 
   const wrap = document.createElement("div");
   wrap.className = "as-wrap";
@@ -415,6 +463,16 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     wrap.appendChild(box);
   }
 
+  // 找物关的清单栏:缩略图 + 名字,横着滑,找到一个打一个勾
+  const list = document.createElement("div");
+  list.className = "als-list";
+  if (!deduce && targets.length > 0) wrap.appendChild(list);
+
+  // 单人才给缩放与望远镜:双人抢答两个人共用一块屏,镜头必须固定
+  const tools = document.createElement("div");
+  tools.className = "als-tools";
+  if (opts.players === 1) wrap.appendChild(tools);
+
   const pads = document.createElement("div");
   pads.className = "as-pads";
   wrap.appendChild(pads);
@@ -433,9 +491,6 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   // ---- 状态 ----
   let cssW = 320;
   let cssH = 210;
-  let scale = 0.3;
-  let offX = 0;
-  let offY = 0;
   let left = lv.seconds;
   let misses = 0;
   let paused = false;
@@ -451,6 +506,16 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   /** 推理关点错过的藏身点,画个叉 */
   const crossed = new Set<number>();
   const scores: [number, number] = [0, 0];
+  /** 镜头:0.8~2.5 倍,双人时永远锁在 1 倍 */
+  let view: View = { ...DEFAULT_VIEW };
+  /** 用掉了几次望远镜 */
+  let hintsUsed = 0;
+  /** 连着点空了几次 */
+  let emptyStreak = 0;
+  /** 望远镜圈出来的那一片(只圈范围,不圈目标本体) */
+  let focus: Region | null = null;
+  let focusTimer = 0;
+  const softMotion = reducedMotion();
 
   // 出生点与 sim.ts 的限时校验保持一致:那边算「够不够时间」就是从这里起步的
   const cursors = [
@@ -467,12 +532,15 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     messageTimer = 1.6;
   }
 
+  /** 画布这一刻的可视范围(缩放换算全靠它) */
+  function viewport(): Viewport {
+    return { left: 0, top: 0, width: cssW, height: cssH };
+  }
+
   function syncSize(): void {
     cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
     cssH = Math.round(cssW * (SCENE_H / SCENE_W));
-    scale = cssW / SCENE_W;
-    offX = 0;
-    offY = 0;
+    view = clampView(view, viewport());
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     const bw = Math.max(1, Math.round(cssW * dpr));
     const bh = Math.max(1, Math.round(cssH * dpr));
@@ -488,17 +556,23 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     if (finished) return;
     finished = true;
     opts.sfx(cleared ? "win" : "oops");
-    opts.onDone({ cleared, secondsLeft: Math.max(0, left), misses, scores });
+    opts.onDone({ cleared, secondsLeft: Math.max(0, left), misses, scores, hintsUsed });
   }
 
   /** 某个玩家点了场景上的一个点 */
   function pick(player: number, sx: number, sy: number): void {
     if (finished || paused) return;
-    const i = hitSpot(lv.spots, sx, sy);
+    // 手指比看上去粗一圈:目标外 44px 以内都算,几个挨着就取最近的那个
+    const i = pickNearestSpot(lv.spots, sx, sy, toleranceInScene(viewScale(viewport(), view.zoom)));
     if (i < 0) {
+      emptyStreak++;
       opts.sfx("tap");
+      // 点空不扣星也不扣时间,连着点空几次才轻轻提醒一句
+      const coach = emptyClickTip(emptyStreak);
+      if (coach) say(coach);
       return;
     }
+    emptyStreak = 0;
     if (deduce) {
       if (crossed.has(i)) return;
       if (i === (lv as DeduceLevel).answer) {
@@ -508,7 +582,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       } else {
         crossed.add(i);
         misses++;
-        left = Math.max(0, left - missPenalty(lv.chapter));
+        left = Math.max(0, left - penalty);
         opts.sfx("oops");
         say("这个地方和线索对不上,再读一遍线索～");
         if (misses >= 3) settle(false);
@@ -520,7 +594,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     const hit = targets.find((t) => t.spot === i);
     if (!hit) {
       misses++;
-      left = Math.max(0, left - missPenalty(lv.chapter));
+      left = Math.max(0, left - penalty);
       opts.sfx("oops");
       say("这里没人躲着,再找找!");
       return;
@@ -529,6 +603,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     scores[player]++;
     opts.sfx(hit.role === "alien" ? "meow" : "coin");
     say(hit.role === "alien" ? `找到${hit.name}啦!` : `捡到${hit.name}!`);
+    refreshList();
     if (found.size >= need) settle(true);
   }
 
@@ -536,6 +611,10 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     if (paused || finished) return;
     clock += dt;
     messageTimer = Math.max(0, messageTimer - dt);
+    if (focusTimer > 0) {
+      focusTimer = Math.max(0, focusTimer - dt);
+      if (focusTimer === 0) focus = null;
+    }
     left -= dt;
     for (let p = 0; p < opts.players; p++) {
       const h = held[p];
@@ -556,10 +635,14 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
 
   // ---- 画面 ----
   function draw(): void {
+    const s = viewScale(viewport(), view.zoom);
+    c2d.clearRect(0, 0, cssW, cssH);
     c2d.save();
-    c2d.translate(offX, offY);
-    c2d.scale(scale, scale);
-    drawBackdrop(c2d, lv.chapter, clock);
+    // 镜头:画面正中对着 view.cx / view.cy,放大倍数 view.zoom
+    c2d.translate(cssW / 2, cssH / 2);
+    c2d.scale(s, s);
+    c2d.translate(-view.cx, -view.cy);
+    drawBackdrop(c2d, lv.chapter, softMotion ? 0 : clock);
 
     lv.spots.forEach((s, i) => {
       const hidden = deduce ? -1 : targets.findIndex((t) => t.spot === i);
@@ -596,12 +679,22 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       }
     });
 
+    // 望远镜圈出来的一片:只框范围,里头有几个藏身点还是要自己认
+    if (focus) {
+      c2d.strokeStyle = "rgba(120,90,200,.75)";
+      c2d.lineWidth = 6;
+      c2d.setLineDash([18, 12]);
+      c2d.lineDashOffset = softMotion ? 0 : -clock * 26;
+      c2d.strokeRect(focus.left + 6, focus.top + 6, focus.right - focus.left - 12, focus.bottom - focus.top - 12);
+      c2d.setLineDash([]);
+    }
+
     for (let p = 0; p < opts.players; p++) {
       const cur = cursors[p];
       c2d.strokeStyle = P_COLOR[p];
       c2d.lineWidth = 5;
       c2d.setLineDash([12, 9]);
-      c2d.lineDashOffset = -clock * 34;
+      c2d.lineDashOffset = softMotion ? 0 : -clock * 34;
       c2d.beginPath();
       c2d.arc(cur.x, cur.y, 30, 0, Math.PI * 2);
       c2d.stroke();
@@ -666,12 +759,14 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
 
   function frame(now: number): void {
     if (destroyed) return;
+    // 先排下一帧再干活:排帧句要是留在最后一行,中间任何一步抛异常都会把整条
+    // rAF 循环带走,画面当场冻住只能退出重进(C2-02 在 bubble-aim 上就是这么卡死的)。
+    raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     syncSize();
     step(dt);
     draw();
-    raf = requestAnimationFrame(frame);
   }
 
   // ---- 输入 ----
@@ -727,14 +822,175 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     }
   }
 
+  /** 画布在屏幕上的位置与大小:点击换算与缩放都要用 */
+  function canvasViewport(): Viewport {
+    const rect = canvas.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, width: rect.width || cssW, height: rect.height || cssH };
+  }
+
+  /** 按下去的手指:一根是点 / 拖,两根是捏合缩放 */
+  const touches = new Map<number, { x: number; y: number }>();
+  let drag: { x: number; y: number; view: View; moved: boolean } | null = null;
+  let pinch: { dist: number; view: View; ax: number; ay: number } | null = null;
+  const DRAG_SLOP = 7;
+
+  function twoFingerDistance(): number {
+    const pts = [...touches.values()];
+    if (pts.length < 2) return 0;
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  }
+
   function onPointerDown(e: PointerEvent): void {
     if (opts.players === 2) return;
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const p = toSceneXY(e.clientX, e.clientY, rect);
-    cursors[0].x = p.x;
-    cursors[0].y = p.y;
-    pick(0, p.x, p.y);
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 1) {
+      drag = { x: e.clientX, y: e.clientY, view: { ...view }, moved: false };
+      pinch = null;
+    } else if (touches.size === 2) {
+      const vp = canvasViewport();
+      const pts = [...touches.values()];
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      const anchor = screenToScene(mid.x, mid.y, vp, view);
+      pinch = { dist: twoFingerDistance(), view: { ...view }, ax: anchor.x, ay: anchor.y };
+      drag = null;
+    }
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const vp = canvasViewport();
+    if (pinch && touches.size >= 2) {
+      const zoom = pinchZoom(pinch.view.zoom, pinch.dist, twoFingerDistance());
+      view = zoomAt(pinch.view, zoom / pinch.view.zoom, pinch.ax, pinch.ay, vp);
+      return;
+    }
+    if (drag) {
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) > DRAG_SLOP) drag.moved = true;
+      if (drag.moved) view = panView(drag.view, dx, dy, vp);
+    }
+  }
+
+  function onPointerUp(e: PointerEvent): void {
+    if (!touches.has(e.pointerId)) return;
+    const spent = drag;
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinch = null;
+    if (touches.size > 0) {
+      drag = null;
+      return;
+    }
+    drag = null;
+    // 手指没怎么动才算「点了一下」;拖过画面就只是挪镜头
+    if (spent && !spent.moved) {
+      const p = screenToScene(e.clientX, e.clientY, canvasViewport(), view);
+      cursors[0].x = Math.max(0, Math.min(SCENE_W, p.x));
+      cursors[0].y = Math.max(0, Math.min(SCENE_H, p.y));
+      pick(0, p.x, p.y);
+    }
+  }
+
+  /** 滚轮缩放:鼠标指到哪就以哪儿为中心放大 */
+  function onWheel(e: WheelEvent): void {
+    if (opts.players === 2) return;
+    e.preventDefault();
+    const vp = canvasViewport();
+    const anchor = screenToScene(e.clientX, e.clientY, vp, view);
+    view = zoomAt(view, e.deltaY < 0 ? 1.12 : 1 / 1.12, anchor.x, anchor.y, vp);
+  }
+
+  /** 按钮缩放:以画面正中为锚,键盘党也能用 */
+  function nudgeZoom(factor: number): void {
+    view = zoomAt(view, factor, view.cx, view.cy, viewport());
+    opts.sfx("tap");
+  }
+
+  /** 望远镜:把镜头缩到目标所在的那一片,不直接指出是哪个藏身点 */
+  function useTelescope(): void {
+    if (finished || paused || !canUseHint(hintsUsed)) return;
+    const goal =
+      lv.mode === "deduce"
+        ? lv.spots[(lv as DeduceLevel).answer]
+        : lv.spots[(targets.find((t) => !found.has(t.spot)) ?? targets[0]).spot];
+    if (!goal) return;
+    hintsUsed++;
+    const region = telescopeRegion(goal.x, goal.y);
+    focus = region;
+    focusTimer = 6;
+    view = telescopeView(region, viewport());
+    say(hintText(region));
+    opts.sfx("pop");
+    refreshTools();
+  }
+
+  /** 清单栏里的一枚缩略图:直接把外星朋友 / 线索物画一遍,不用任何外部图片 */
+  function drawThumb(target: { role: "alien" | "clue"; spot: number }): HTMLCanvasElement {
+    const cv = document.createElement("canvas");
+    cv.className = "als-thumb";
+    cv.width = 80;
+    cv.height = 80;
+    const g = cv.getContext("2d");
+    if (g) {
+      g.scale(2, 2);
+      g.fillStyle = "#f4f1ff";
+      g.fillRect(0, 0, 40, 40);
+      if (target.role === "alien") drawAlien(g, 20, 24, 15, target.spot, false);
+      else drawTrinket(g, 20, 20, 13);
+    }
+    return cv;
+  }
+
+  function refreshList(): void {
+    if (deduce || targets.length === 0) return;
+    list.innerHTML = "";
+    for (const item of checklistItems(targets, found)) {
+      const box = document.createElement("div");
+      box.className = `als-item${item.found ? " als-done" : ""}`;
+      box.setAttribute("aria-label", checklistLabel(item));
+      const name = document.createElement("div");
+      name.className = "als-name";
+      name.textContent = item.name;
+      const tick = document.createElement("div");
+      tick.className = "als-tick";
+      tick.textContent = item.found ? "✓ 找到" : "找找看";
+      box.append(drawThumb(item), name, tick);
+      list.appendChild(box);
+    }
+  }
+
+  let hintBtn: HTMLButtonElement | null = null;
+  function refreshTools(): void {
+    if (!hintBtn) return;
+    const n = hintsLeft(hintsUsed);
+    hintBtn.textContent = `🔭 望远镜 ${n}`;
+    hintBtn.disabled = n <= 0;
+    hintBtn.setAttribute("aria-label", n > 0 ? `用望远镜缩小范围,还剩 ${n} 次` : "望远镜用完了");
+  }
+
+  function buildTools(): void {
+    const mk = (label: string, aria: string, onClick: () => void): HTMLButtonElement => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "als-tool";
+      b.textContent = label;
+      b.setAttribute("aria-label", aria);
+      b.addEventListener("click", onClick);
+      return b;
+    };
+    hintBtn = mk("🔭 望远镜 2", "用望远镜缩小范围", () => useTelescope());
+    tools.append(
+      mk("＋", "放大场景", () => nudgeZoom(1.25)),
+      mk("－", "缩小场景", () => nudgeZoom(1 / 1.25)),
+      mk("⤢", "回到整张场景", () => {
+        view = clampView({ ...DEFAULT_VIEW }, viewport());
+        opts.sfx("tap");
+      }),
+      hintBtn
+    );
+    refreshTools();
   }
 
   /** 触屏方向盘:每位玩家一套,和键盘完全等价 */
@@ -793,7 +1049,14 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   pause.addEventListener("click", () => togglePause());
   pads.appendChild(pause);
 
+  if (opts.players === 1) buildTools();
+  refreshList();
+
   canvas.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
 
@@ -807,8 +1070,16 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       finished = true;
       cancelAnimationFrame(raf);
       canvas.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      canvas.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      touches.clear();
+      drag = null;
+      pinch = null;
+      hintBtn = null;
       wrap.remove();
     },
   };
@@ -850,8 +1121,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           : "时间到～下一轮按「从上到下、一行行扫」的顺序找,不回头重复看,速度立刻就上来了!");
         return;
       }
-      if (deduce) ctx.win(deduceStars(res.misses, res.secondsLeft), deduceLine(res));
-      else ctx.win(findStars(res.secondsLeft, lv.seconds, res.misses), findLine(res, (lv as FindLevel).targets.length));
+      // 用过望远镜就封顶两星:提示帮了忙,星星要留给自己找到的那一次
+      const base = deduce
+        ? deduceStars(res.misses, res.secondsLeft)
+        : findStars(res.secondsLeft, lv.seconds, res.misses);
+      const stars = starsAfterHints(base, res.hintsUsed);
+      const line = deduce ? deduceLine(res) : findLine(res, (lv as FindLevel).targets.length);
+      ctx.win(stars, res.hintsUsed > 0 ? `${line}(这次用了望远镜,自己找到就是三星啦!)` : line);
     },
   });
   return { destroy: () => runner.destroy() };

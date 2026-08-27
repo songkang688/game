@@ -8,7 +8,11 @@ export const meta = {
   emoji: "🐘",
   category: "party" as const,
   color: "#F6DFC5",
-  blurb: "楚河汉界摆开阵！朵朵战星星，也能挑战棋灵象，将军——",
-  // index.ts 只有 pvp(朵朵 VS 星星双人同屏)与 ai 两种对局,没有闯关地图
-  modes: ["versus", "twoPlayer"] as const,
+  blurb: "188 课残局闯关，人机六档从小象学步打到星海棋神，还有残局连胜！",
+  // endgames.ts 的 PUZZLES 正好 188 课残局(走 188 关框架);index.ts 另有
+  // 自由对战(六档人机 + 朵朵 VS 星星双人同屏)与残局连胜(写平台 endlessBest)
+  modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
+  levels: 188,
+  // 手机点交叉点、桌面点鼠标都好用:热区按 44px 反推,落子确认手机默认开
+  platform: "both" as const,
 };

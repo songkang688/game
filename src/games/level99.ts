@@ -18,6 +18,8 @@
 import { AVATAR_URLS } from "../ui/avatars";
 import { isGuardedClick } from "../ui/dialogs";
 import { getLevelExtras, type GuideBook } from "../ui/level188Contract";
+// 契约文件只有常量与纯逻辑,没有弹窗 UI,静态 import 不会把 dialog 代码拖进游戏 chunk
+import { clampJumpTarget, isRootOpen, rootRemainMinutes, rootRemainMs } from "../ui/root12Contract";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -400,6 +402,35 @@ export function settleSpeechLine(kind: "win" | "lose", level: number, msg: strin
   return kind === "win" ? `第 ${level + 1} 关过关！${msg}` : `就差一点点！${msg}`;
 }
 
+// ---------------------------------------------------------------------------
+// 管理员权限：直达第 N 关（纯判定，便于测试；DOM 由 attachRootJump 照着画）
+// ---------------------------------------------------------------------------
+
+/** 直达控件该不该出现：管理员权限开着才出现，关着 / 过期时连 DOM 都不生成 */
+export function rootJumpVisible(nowMs: number = Date.now()): boolean {
+  return isRootOpen(nowMs);
+}
+
+/** 跳关还要不要做算术题：管理员权限开着就免了，关着时仍旧走 1.1 的家长门 */
+export function skipNeedsParentAuth(nowMs: number = Date.now()): boolean {
+  return !isRootOpen(nowMs);
+}
+
+/**
+ * 输入框里的「第 N 关」→ 框架内部的 0 基关号。
+ * 越界夹到 1..total，读不出数字返回 null（调用方原地不动，绝不抛异常、绝不白屏）。
+ */
+export function jumpTargetLevel(raw: string, total: number = TOTAL_LEVELS): number | null {
+  const max = Number.isFinite(total) && total >= 1 ? Math.min(Math.floor(total), TOTAL_LEVELS) : 1;
+  const n = clampJumpTarget(raw, max);
+  return n === null ? null : n - 1;
+}
+
+/** 直达控件旁边那行小字 */
+export function rootJumpNote(remainMs: number): string {
+  return `管理员权限还剩 ${rootRemainMinutes(remainMs)} 分钟`;
+}
+
 /** 选关格子的无障碍标签（读屏与键盘用户靠它区分状态） */
 export function nodeAriaLabel(level: number, stars: number, state: "locked" | "skipped" | "open"): string {
   const n = level + 1;
@@ -448,8 +479,9 @@ const L99_CSS = `
   user-select:none;-webkit-user-select:none;position:relative;}
 .l99-map{border-radius:20px;padding:14px;background:linear-gradient(180deg,#FFF7FB,#F0F4FF);}
 .l99-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-.l99-chip{background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:14px;color:#7a5da8;
-  box-shadow:0 2px 6px rgba(150,130,200,.2);}
+/* 「🚩 0/188 关」「⭐ 0/564」是孩子要读的进度,不是按钮也不是格子数字,按正文 16px 走 */
+.l99-chip{background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:16px;
+  line-height:1.4;color:#7a5da8;box-shadow:0 2px 6px rgba(150,130,200,.2);}
 .l99-chip-skip{color:#6d6580;background:#efedf5;}
 .l99-continue{border:none;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;font-family:inherit;}
@@ -465,9 +497,12 @@ const L99_CSS = `
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
 .l99-tab.l99-tab-on{color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
 .l99-tab.l99-tab-lock{opacity:.55;}
-.l99-chapdesc{font-size:13px;font-weight:700;color:#77619b;text-align:center;margin:2px 0 4px;min-height:18px;}
-.l99-pagehint{font-size:12px;font-weight:700;color:#8d7bab;text-align:center;margin:0 0 10px;}
-.l99-flash{font-size:13px;font-weight:800;color:#5f6f9b;text-align:center;margin:0 0 8px;}
+/* 下面几行都是讲给孩子听的说明文字,按 mobileText.MIN_BODY_PX 走 16px:
+   360px 手机上量过,13px / 12px 的小字在选关地图里根本看不清。 */
+.l99-chapdesc{font-size:16px;line-height:1.45;font-weight:700;color:#77619b;text-align:center;
+  margin:2px 0 4px;min-height:22px;overflow-wrap:anywhere;word-break:break-word;}
+.l99-pagehint{font-size:16px;line-height:1.45;font-weight:700;color:#8d7bab;text-align:center;margin:0 0 10px;}
+.l99-flash{font-size:16px;line-height:1.45;font-weight:800;color:#5f6f9b;text-align:center;margin:0 0 8px;}
 .l99-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
 .l99-node{aspect-ratio:1;border:none;border-radius:16px;cursor:pointer;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:2px;background:#fff;box-shadow:0 3px 8px rgba(140,130,190,.18);
@@ -487,7 +522,13 @@ const L99_CSS = `
 .l99-node-flag{font-size:15px;line-height:1;filter:grayscale(1);opacity:.75;}
 .l99-node:focus-visible,.l99-tab:focus-visible,.l99-tool:focus-visible,.l99-continue:focus-visible,
 .l99-back:focus-visible,.l99-ov-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
-.l99-maphint{margin-top:12px;text-align:center;font-size:13px;font-weight:700;color:#77619b;}
+.l99-jump{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
+.l99-jump-input{width:76px;min-height:38px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
+  font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;}
+.l99-jump-note{font-size:16px;line-height:1.45;font-weight:700;color:#8d7bab;}
+.l99-jump-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
+.l99-maphint{margin-top:12px;text-align:center;font-size:16px;line-height:1.45;font-weight:700;
+  color:#77619b;overflow-wrap:anywhere;word-break:break-word;}
 .l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}
 .l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;}
 .l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;
@@ -591,18 +632,64 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
    * 跳关入口：壳层没注册 requestSkip 就不显示按钮。
    * 传给授权方的关号与框架内部一致，是 0 基的（家长弹窗自己 +1 后展示）。
    */
+  /**
+   * 直达第 N 关:只有管理员权限开着时才生成 DOM,关着 / 过期时连控件都不出现。
+   * 直达一个没解锁的关允许开打,但星级数组一个字都不动 —— 没打过就是 0 星。
+   */
+  function attachRootJump(host: HTMLElement, getLevel: () => number): void {
+    if (!rootJumpVisible()) return;
+    const box = document.createElement("div");
+    box.className = "l99-jump";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "1";
+    input.max = String(total);
+    input.className = "l99-jump-input";
+    input.setAttribute("aria-label", `直达第几关,1 到 ${total}`);
+    input.value = String(Math.min(total, getLevel() + 1));
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "l99-tool";
+    go.textContent = "🎫 直达";
+    const note = document.createElement("span");
+    note.className = "l99-jump-note";
+    note.textContent = rootJumpNote(rootRemainMs());
+    const jump = (): void => {
+      const target = jumpTargetLevel(input.value, total);
+      if (target === null) return;
+      input.value = String(target + 1);
+      api.play("tap");
+      // 只挪当前关，星级数组与跳关标记一个字都不写：没打过就是 0 星
+      startLevel(target);
+    };
+    go.addEventListener("click", jump);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        jump();
+      }
+    });
+    box.append(input, go, note);
+    host.appendChild(box);
+  }
+
   function attachSkip(host: HTMLElement, level: number, after: (level: number) => void): void {
     const request = getLevelExtras().requestSkip;
-    if (!request || level >= total) return;
+    const rootOn = !skipNeedsParentAuth();
+    if ((!request && !rootOn) || level >= total) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "l99-tool l99-tool-skip";
-    btn.textContent = `⏭️ 跳过 第${level + 1}关`;
-    btn.title = "需要家长确认才能跳过这一关";
+    btn.textContent = rootOn ? `⏭️ 跳过 第${level + 1}关（管理员）` : `⏭️ 跳过 第${level + 1}关`;
+    btn.title = rootOn ? "管理员权限开着,可以直接跳过这一关" : "需要家长确认才能跳过这一关";
     btn.addEventListener("click", () => {
       api.play("tap");
       btn.disabled = true;
-      Promise.resolve(request(opts.id, level))
+      // 管理员权限开着就不必再做算术题;关着时仍旧走 1.1 的家长算术门
+      const allow: Promise<boolean> = skipNeedsParentAuth()
+        ? Promise.resolve(request ? request(opts.id, level) : false)
+        : Promise.resolve(true);
+      allow
         .then((ok) => {
           if (destroyed) return;
           btn.disabled = false;
@@ -672,6 +759,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     tools.appendChild(jump);
     attachGuide(tools, () => furthestPlayable(stars, skips, total) + 1);
     attachSkip(tools, furthest, () => showMap(true));
+    attachRootJump(tools, () => furthestPlayable(stars, skips, total));
     map.appendChild(tools);
 
     const tabs = document.createElement("div");
@@ -902,6 +990,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       if (skipped + 1 < total) startLevel(skipped + 1);
       else showMap(true);
     });
+    attachRootJump(barTools, () => level);
     if (barTools.childElementCount > 0) bar.appendChild(barTools);
     stageWrap.appendChild(bar);
 

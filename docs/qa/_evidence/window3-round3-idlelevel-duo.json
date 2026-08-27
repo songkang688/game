@@ -1,0 +1,80 @@
+{
+  "games": [
+    "duo-vs-star",
+    "bumper-cars"
+  ],
+  "levels": [
+    1,
+    60,
+    140,
+    188
+  ],
+  "waitMs": 45000,
+  "rows": [
+    {
+      "id": "duo-vs-star",
+      "level": 1,
+      "seconds": 9,
+      "result": "win",
+      "stars": 3,
+      "text": "★★★ 第 1 关过关！ 一次都没被撞出去，太稳啦！下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 60,
+      "seconds": 18,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 140,
+      "seconds": 46,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 188,
+      "seconds": 40,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图"
+    },
+    {
+      "id": "bumper-cars",
+      "level": 1,
+      "seconds": 10,
+      "result": "win",
+      "stars": 3,
+      "text": "★★★ 第 1 关过关！ 撞飞 1 台对手车,自己一次都没掉下去,还剩 65 秒。走位和刹车配合得很好,继续保持。下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "bumper-cars",
+      "level": 60,
+      "seconds": 10,
+      "result": "win",
+      "stars": 2,
+      "text": "★★★ 第 60 关过关！ 撞飞 1 台对手车,自己掉下去 1 次。下一关记得贴着场地中间打,边缘留给对手。下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "bumper-cars",
+      "level": 140,
+      "seconds": 46,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    },
+    {
+      "id": "bumper-cars",
+      "level": 188,
+      "seconds": 46,
+      "result": "lose",
+      "stars": 0,
+      "text": "就差一点点！ 这一次被顶出了场地。别急,下一把先用刹车稳住车头,再借冲刺撞回去,主动权就回来了。🔁 再试本关🗺️ 回地图"
+    }
+  ],
+  "consoleErrors": 0
+}

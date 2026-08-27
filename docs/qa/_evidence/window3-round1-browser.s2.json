@@ -1,0 +1,629 @@
+{
+  "round": 1,
+  "levels": [
+    1,
+    100,
+    188
+  ],
+  "home": {
+    "cards": 55,
+    "ourCards": 19
+  },
+  "results": [
+    {
+      "id": "duo-vs-star",
+      "title": "朵朵大战星星",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/duo-vs-star"
+      },
+      "modeButtons": [],
+      "chapters": 0,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🗺️ 闯关 188 关十个主题章节，每关有指定场地、对手和特别规则",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 3,
+          "leftLevel": true
+        },
+        "100": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🗺️ 闯关 188 关十个主题章节，每关有指定场地、对手和特别规则",
+          "win": 0,
+          "lose": 1,
+          "samples": [
+            {
+              "kind": "lose",
+              "src": "l99",
+              "text": "就差一点点！ 对手站得更稳一点点，换个节奏再来一次！🔁 再试本关🗺️ 回地图"
+            }
+          ],
+          "ticks": 25
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🗺️ 闯关 188 关十个主题章节，每关有指定场地、对手和特别规则",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 7,
+          "leftLevel": true
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "🗺️ 闯关 188 关十个主题章节，每关有指定场地、对手和特别规则",
+        "win": 1,
+        "lose": 0,
+        "samples": [
+          {
+            "kind": "win",
+            "src": "l99",
+            "text": "★★★ 第 1 关过关！ 一次都没被撞出去，太稳啦！下一关 ▶🔁 再玩一次🗺️ 回地图"
+          }
+        ],
+        "ticks": 36
+      },
+      "modes": {},
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 32,
+          "sel": "dvs-back"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 52977
+    },
+    {
+      "id": "gold-hook",
+      "title": "金矿钩钩",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/gold-hook"
+      },
+      "modeButtons": [
+        "♾️无尽矿井矿层无限下探,看你能挖到第几层。"
+      ],
+      "chapters": 0,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🚩闯关矿洞八条矿脉共 188 关,每关一个金币目标。",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 232
+        },
+        "100": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🚩闯关矿洞八条矿脉共 188 关,每关一个金币目标。",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 230
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🚩闯关矿洞八条矿脉共 188 关,每关一个金币目标。",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 232
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "🚩闯关矿洞八条矿脉共 188 关,每关一个金币目标。",
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 58
+      },
+      "modes": {
+        "♾️无尽矿井矿层无限下探,看你能挖到第几层。": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 192
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 44,
+          "sel": "l99-back"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 138824
+    },
+    {
+      "id": "monster-crisis",
+      "title": "小怪物危机",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/monster-crisis"
+      },
+      "modeButtons": [
+        "♾️ 无尽守家 · 点我开始!",
+        "🤝 双人合作"
+      ],
+      "chapters": 8,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 232
+        },
+        "100": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 232
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 233
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "已在地图",
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 58
+      },
+      "modes": {
+        "♾️ 无尽守家 · 点我开始!": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 191
+        },
+        "🤝 双人合作": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 191
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 563,
+          "worstSel": "l99-tab l99-tab-on"
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 44,
+          "sel": "l99-back"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 154704
+    },
+    {
+      "id": "tank-battle",
+      "title": "铁皮坦克大战",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/tank-battle"
+      },
+      "modeButtons": [
+        "♾️ 无尽守老巢 · 点我开始!",
+        "⚔️ 双人对战"
+      ],
+      "chapters": 8,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 3,
+          "leftLevel": true
+        },
+        "100": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 214,
+          "leftLevel": true
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 7,
+          "leftLevel": true
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "已在地图",
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 58
+      },
+      "modes": {
+        "♾️ 无尽守老巢 · 点我开始!": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 192
+        },
+        "⚔️ 双人对战": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 191
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 549,
+          "worstSel": "l99-tab l99-tab-on"
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 127,
+          "worstSel": "tkb-chip"
+        },
+        "minHit": {
+          "min": 23,
+          "sel": "tkb-mini-btn"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 109603
+    },
+    {
+      "id": "bumper-cars",
+      "title": "碰碰车大乱斗",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/bumper-cars"
+      },
+      "modeButtons": [
+        "⚔️ 双人对战",
+        "🤖 人机对战 · 熟练车手",
+        "♾️ 无尽车海"
+      ],
+      "chapters": 8,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 3,
+          "leftLevel": true
+        },
+        "100": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 214,
+          "leftLevel": true
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 7,
+          "leftLevel": true
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "已在地图",
+        "win": 1,
+        "lose": 0,
+        "samples": [
+          {
+            "kind": "win",
+            "src": "l99",
+            "text": "★★★ 第 1 关过关！ 撞飞 1 台对手车,自己一次都没掉下去,还剩 65 秒。走位和刹车配合得很好,继续保持。下一关 ▶🔁 再玩一次🗺️ 回地图"
+          }
+        ],
+        "ticks": 40
+      },
+      "modes": {
+        "⚔️ 双人对战": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 192
+        },
+        "🤖 人机对战 · 熟练车手": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 192
+        },
+        "♾️ 无尽车海": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 191
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 563,
+          "worstSel": "l99-tab l99-tab-on"
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 31,
+          "sel": "bc-btn bc-btn--ghost"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 126875
+    },
+    {
+      "id": "puff-bros",
+      "title": "噗噗兄弟",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/puff-bros"
+      },
+      "modeButtons": [
+        "⚔️ 双人对战",
+        "🤖 人机三档"
+      ],
+      "chapters": 8,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 3,
+          "leftLevel": true
+        },
+        "100": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 214,
+          "leftLevel": true
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 7,
+          "leftLevel": true
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "已在地图",
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 58
+      },
+      "modes": {
+        "⚔️ 双人对战": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 192
+        },
+        "🤖 人机三档": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 192
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 577,
+          "worstSel": "l99-tab l99-tab-on"
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 31,
+          "sel": "pfb-btn"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 109662
+    }
+  ]
+}

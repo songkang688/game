@@ -15,7 +15,10 @@ export type PlantKind =
   | "boom" // 爆爆果:虫靠近就轰一大片(一次性)
   | "lily" // 荷叶垫:铺在水格上,别的植物才能种
   | "scout" // 望望草(1.1):照亮整条车道,地地虫无处遁形
-  | "moon"; // 月月菇(1.1):黑夜里咕嘟咕嘟冒露珠
+  | "moon" // 月月菇(1.1):黑夜里咕嘟咕嘟冒露珠
+  | "sunbud" // 暖暖花(1.2):产资源,开出☀️阳光
+  | "puff" // 蓬蓬花(1.2):溅射,一团花粉打一小片
+  | "netpad"; // 弹弹网(1.2):阻挡,会跳的跳不过、挖地的钻不过
 
 export const PLANT_INFO: Record<
   PlantKind,
@@ -30,10 +33,14 @@ export const PLANT_INFO: Record<
   lily: { cost: 1, hp: 6, name: "荷叶垫", desc: "铺水上才能种别的" },
   scout: { cost: 2, hp: 3, name: "望望草", desc: "照出这条道钻地的虫" },
   moon: { cost: 2, hp: 3, name: "月月菇", desc: "黑夜里咕嘟冒露珠" },
+  sunbud: { cost: 3, hp: 4, name: "暖暖花", desc: "晒太阳,开出☀️阳光" },
+  puff: { cost: 2, hp: 3, name: "蓬蓬花", desc: "花粉一团,打一小片" },
+  netpad: { cost: 2, hp: 8, name: "弹弹网", desc: "会跳的跳不过去" },
 };
 
 export const PLANT_KINDS: PlantKind[] = [
   "sparkle", "bubble", "nut", "star", "ice", "boom", "lily", "scout", "moon",
+  "sunbud", "puff", "netpad",
 ];
 
 export const LANES = 4;
@@ -89,7 +96,8 @@ export type BugKind =
   | "mole" // 地地虫(1.1):钻在土里,要望望草照出来才打得到
   | "moth" // 扑扑蛾(1.1):会飞,一到黑夜就加速扑过来
   | "mama" // 分分虫(1.1):被打倒会蹦出两只爬爬虫宝宝
-  | "queenx"; // 虫虫女王进化体(1.1):终章 BOSS,血少一半就狂暴加速
+  | "queenx" // 虫虫女王进化体(1.1):终章 BOSS,血少一半就狂暴加速
+  | "tunneler"; // 哧溜虫(1.2):进场就挖地,绕过前排从后面钻出来
 
 export interface BugSpec {
   hp: number;
@@ -105,6 +113,8 @@ export interface BugSpec {
   splits?: number;
   /** 1.1:黑夜里的速度倍率(昼夜循环关生效) */
   nightMult?: number;
+  /** 1.2:进场就挖地,过一会儿从前排后面钻出来 */
+  digs?: boolean;
 }
 
 export const BUG_INFO: Record<BugKind, BugSpec> = {
@@ -121,7 +131,30 @@ export const BUG_INFO: Record<BugKind, BugSpec> = {
   moth: { hp: 1, armor: 0, speed: 0.55, flying: true, jumps: false, name: "扑扑蛾", boss: false, nightMult: 1.6 },
   mama: { hp: 5, armor: 2, speed: 0.4, flying: false, jumps: false, name: "分分虫", boss: false, splits: 2 },
   queenx: { hp: 95, armor: 12, speed: 0.2, flying: false, jumps: false, name: "虫虫女王进化体", boss: true },
+  tunneler: { hp: 3, armor: 0, speed: 0.6, flying: false, jumps: false, name: "哧溜虫", boss: false, digs: true },
 };
+
+/* ---------------- 1.2:挖地虫 / 会跳的虫与阻挡苗的关系 ---------------- */
+
+/** 哧溜虫钻多久才冒出来(秒);这段时间打不到它,但出土点一直冒土花。 */
+export const TUNNEL_TIME = 3.5;
+/** 没有弹弹网时,哧溜虫从这一列钻出来(绕过前排的炮与墙)。 */
+export const TUNNEL_EXIT_COL = 4;
+
+/**
+ * 哧溜虫的出土列:弹弹网底下钻不过去,只能在最靠里的那张网前面冒头。
+ * 网铺到最后一列就等于把它按在场外(返回 PLANT_COLS)。
+ */
+export function tunnelExitCol(netpadColsInLane: ReadonlyArray<number>): number {
+  let col = TUNNEL_EXIT_COL;
+  for (const c of netpadColsInLane) col = Math.max(col, c + 1);
+  return Math.min(PLANT_COLS, col);
+}
+
+/** 会跳的虫能不能跳过这棵苗:弹弹网专门治跳跃,别的阻挡苗都会被跳过。 */
+export function canJumpOver(kind: PlantKind): boolean {
+  return kind !== "netpad";
+}
 
 /**
  * 虫子血量随关卡(0 起)缓慢加深。
@@ -134,9 +167,12 @@ export function bugHp(kind: BugKind, levelIdx: number): number {
   return BUG_INFO[kind].hp + extra;
 }
 
-/** 泡泡打不到飞虫,星星和冰冰什么都能打。 */
-export function projectileCanHit(proj: "bubble" | "star" | "ice", flying: boolean): boolean {
-  return proj !== "bubble" || !flying;
+/** 会飞的子弹种类(1.2 起蓬蓬花的花粉团也算一种)。 */
+export type ProjKind = "bubble" | "star" | "ice" | "puff";
+
+/** 贴地飞的(泡泡、花粉)打不到飞虫;星星和冰冰什么都能打。 */
+export function projectileCanHit(proj: ProjKind, flying: boolean): boolean {
+  return (proj !== "bubble" && proj !== "puff") || !flying;
 }
 
 /** 伤害先打护甲再掉血;返回新状态和"这一下是否敲碎了护甲"。 */
@@ -375,6 +411,37 @@ export interface WaveEntry {
   gap: number;
 }
 
+/* ---------------- 1.2 特殊关:解谜 / 传送 / 速攻 ---------------- */
+
+export type SpecialKind = "puzzle" | "conveyor" | "blitz";
+
+/** 解谜关发的一沓固定苗。 */
+export interface PlantStock {
+  kind: PlantKind;
+  count: number;
+}
+
+export interface SpecialSpec {
+  kind: SpecialKind;
+  /** 解谜关:全关只有这些苗,没有露珠收入,考的是摆在哪儿 */
+  stock?: PlantStock[];
+  /** 传送关:传送带循环发这一串苗 */
+  belt?: PlantKind[];
+  /** 传送带每隔几秒送一株 */
+  beltEvery?: number;
+}
+
+/** 传送带每隔几秒送一株。 */
+export const BELT_EVERY = 1.0;
+/** 传送带上最多同时候着几张苗卡(满了就先不发,催着你赶紧种)。 */
+export const BELT_QUEUE_MAX = 5;
+/** 速攻关:最后一只虫出场之后还留多少秒清场。 */
+export const BLITZ_GRACE = 22;
+/** 速攻关的波次间隔压缩比(普通关 9~11 秒 → 速攻关一半)。 */
+export const BLITZ_GAP_SCALE = 0.5;
+/** 波与波之间至少留这么多秒布置。 */
+export const PREP_SECONDS = 3;
+
 export interface LevelDef {
   name: string;
   scene: SceneId;
@@ -394,6 +461,8 @@ export interface LevelDef {
   cycle?: DayNightCycle;
   /** 1.1:露珠上限(不设 = 无上限;产露植物每棵 +3) */
   dewCap?: number;
+  /** 1.2:特殊关配置(解谜/传送/速攻);不填 = 普通波次关 */
+  special?: SpecialSpec;
 }
 
 type WSpec = readonly [BugKind, number, number];
@@ -972,9 +1041,9 @@ const moonfieldHand: LevelDef[] = [
     waves: [W(["walker", 5, 1.5]), W(["walker", 5, 1.2], ["speedy", 4, 1.1]), W(["walker", 6, 1.0], ["flyer", 4, 1.1])],
   },
   {
-    name: "扑扑蛾初见", scene: "moonfield", waterLanes: [], startDew: 17,
-    feature: "扑扑蛾登场", cycle: { day: 24, night: 12 },
-    hint: "扑扑蛾一到黑夜就加速!星星芽多种几排", flagWaves: [2],
+    name: "扑扑蛾初见", scene: "moonfield", waterLanes: [], startDew: 17, unlockPlant: "sunbud",
+    feature: "扑扑蛾登场+暖暖花", cycle: { day: 24, night: 12 },
+    hint: "新绿芽暖暖花会开出☀️阳光,白天开得快;扑扑蛾一到黑夜就加速!", flagWaves: [2],
     waves: [W(["moth", 2, 1.8], ["walker", 4, 1.4]), W(["moth", 3, 1.4], ["speedy", 3, 1.0]), W(["walker", 6, 1.0], ["moth", 4, 1.2])],
   },
   {
@@ -984,9 +1053,9 @@ const moonfieldHand: LevelDef[] = [
     waves: [W(["walker", 5, 1.3], ["flyer", 3, 1.4]), W(["speedy", 4, 1.0], ["moth", 3, 1.4]), W(["flyer", 5, 1.0], ["walker", 6, 1.0])],
   },
   {
-    name: "月食断粮夜", scene: "moonfield", waterLanes: [], startDew: 8,
-    feature: "月光经济挑战", cycle: { day: 14, night: 16 },
-    hint: "月食之夜黑得特别久,月月菇是救星!", flagWaves: [2],
+    name: "月食断粮夜", scene: "moonfield", waterLanes: [], startDew: 8, unlockPlant: "puff",
+    feature: "月光经济挑战+蓬蓬花", cycle: { day: 14, night: 16 },
+    hint: "新绿芽蓬蓬花吃 2 点☀️阳光,一团花粉能扫一小片;月食之夜月月菇是救星!", flagWaves: [2],
     waves: [W(["walker", 4, 1.8]), W(["speedy", 4, 1.2], ["walker", 5, 1.3]), W(["moth", 4, 1.3], ["walker", 5, 1.1])],
   },
   {
@@ -1036,10 +1105,15 @@ const burrowHand: LevelDef[] = [
     waves: [W(["mole", 3, 2.0], ["walker", 4, 1.5]), W(["mole", 4, 1.6], ["digger", 2, 1.5]), W(["walker", 5, 1.1], ["mole", 3, 1.4])],
   },
   {
-    name: "钻地小队", scene: "burrow", waterLanes: [], startDew: 16,
-    feature: "地地虫小队",
-    hint: "每条道都要一棵望望草,别漏了!", flagWaves: [2],
-    waves: [W(["mole", 4, 1.6], ["walker", 4, 1.3]), W(["mole", 5, 1.3], ["armor", 3, 1.5]), W(["mole", 6, 1.1], ["digger", 4, 1.2])],
+    name: "钻地小队", scene: "burrow", waterLanes: [], startDew: 18, unlockPlant: "netpad",
+    feature: "地地虫小队+哧溜虫",
+    hint: "哧溜虫一进场就挖地,会绕到前排后面冒出来;弹弹网铺一张,它就只能在网前冒头!",
+    flagWaves: [2],
+    waves: [
+      W(["mole", 4, 1.6], ["walker", 4, 1.3]),
+      W(["tunneler", 3, 1.8], ["armor", 3, 1.5]),
+      W(["mole", 5, 1.2], ["tunneler", 3, 1.4]),
+    ],
   },
   {
     name: "泥壳车队", scene: "burrow", waterLanes: [], startDew: 17,
@@ -1048,10 +1122,10 @@ const burrowHand: LevelDef[] = [
     waves: [W(["armor", 4, 1.4], ["mole", 3, 1.5]), W(["armor", 5, 1.2], ["digger", 4, 1.3]), W(["mole", 5, 1.2], ["armor", 5, 1.1])],
   },
   {
-    name: "黑土断粮", scene: "burrow", waterLanes: [], startDew: 12,
+    name: "黑土断粮", scene: "burrow", waterLanes: [], startDew: 14,
     feature: "地底经济挑战",
-    hint: "黑土里露珠难攒,望望草也不能省!", flagWaves: [2],
-    waves: [W(["walker", 5, 1.5]), W(["mole", 4, 1.5], ["walker", 4, 1.3]), W(["digger", 4, 1.2], ["mole", 4, 1.3])],
+    hint: "黑土里露珠难攒,望望草和弹弹网都得挑最要紧的道铺!", flagWaves: [2],
+    waves: [W(["walker", 5, 1.5]), W(["mole", 4, 1.5], ["tunneler", 3, 1.5]), W(["digger", 4, 1.2], ["mole", 4, 1.3])],
   },
   {
     name: "地道四震", scene: "burrow", waterLanes: [], startDew: 18,
@@ -1063,12 +1137,12 @@ const burrowHand: LevelDef[] = [
     ],
   },
   {
-    name: "根须双旗", scene: "burrow", waterLanes: [], startDew: 18,
+    name: "根须双旗", scene: "burrow", waterLanes: [], startDew: 20,
     feature: "地底双旗",
-    hint: "两面泥土大旗,地上地下一起上!", flagWaves: [1, 3],
+    hint: "两面泥土大旗,地上、地下、挖地的一起上!", flagWaves: [1, 3],
     waves: [
-      W(["mole", 4, 1.4], ["walker", 5, 1.2]), W(["digger", 5, 1.1], ["mole", 5, 1.15]),
-      W(["armor", 5, 1.1], ["walker", 5, 1.0]), W(["mole", 6, 1.0], ["armor", 5, 0.95], ["digger", 5, 1.0]),
+      W(["mole", 4, 1.4], ["walker", 5, 1.2]), W(["digger", 5, 1.1], ["tunneler", 4, 1.3]),
+      W(["armor", 5, 1.1], ["walker", 5, 1.0]), W(["mole", 6, 1.0], ["armor", 5, 0.95], ["tunneler", 4, 1.1]),
     ],
   },
   {
@@ -1081,11 +1155,11 @@ const burrowHand: LevelDef[] = [
     ],
   },
   {
-    name: "地底大虫王", scene: "burrow", waterLanes: [], startDew: 24,
+    name: "地底大虫王", scene: "burrow", waterLanes: [], startDew: 26,
     feature: "地底章BOSS",
-    hint: "大虫王从最深的地道钻出来啦!", flagWaves: [2],
+    hint: "大虫王从最深的地道钻出来啦,哧溜虫在前头给它开路!", flagWaves: [2],
     waves: [
-      W(["mole", 5, 1.2], ["armor", 4, 1.15]), W(["digger", 5, 1.0], ["walker", 6, 0.95]),
+      W(["mole", 5, 1.2], ["armor", 4, 1.15]), W(["tunneler", 4, 1.1], ["walker", 6, 0.95]),
       W(["bossbug", 1, 1], ["mole", 5, 1.1]),
     ],
   },
@@ -1100,7 +1174,7 @@ const candyHand: LevelDef[] = [
     waves: [W(["mama", 2, 2.0], ["walker", 4, 1.4]), W(["mama", 3, 1.6], ["speedy", 4, 1.0]), W(["walker", 6, 1.0], ["mama", 3, 1.4])],
   },
   {
-    name: "分分小队", scene: "candy", waterLanes: [], startDew: 17, dewCap: 26,
+    name: "分分小队", scene: "candy", waterLanes: [], startDew: 19, dewCap: 26,
     feature: "分分虫小队",
     hint: "分分虫组团来袭,爆爆果一锅端最划算!", flagWaves: [2],
     waves: [W(["mama", 2, 1.6], ["speedy", 3, 1.1]), W(["mama", 3, 1.4], ["flyer", 3, 1.0]), W(["mama", 3, 1.2], ["racer", 3, 0.9])],
@@ -1145,7 +1219,7 @@ const candyHand: LevelDef[] = [
     ],
   },
   {
-    name: "糖霜大虫王", scene: "candy", waterLanes: [], startDew: 24, dewCap: 34,
+    name: "糖霜大虫王", scene: "candy", waterLanes: [], startDew: 28, dewCap: 34,
     feature: "糖霜章BOSS",
     hint: "大虫王闻着糖香来啦,分分虫全程护驾!", flagWaves: [2],
     waves: [
@@ -1158,7 +1232,7 @@ const candyHand: LevelDef[] = [
 /* ---- 第十三章 · 虫巢王庭:全机制汇合,终章 BOSS 女王进化体 ---- */
 const hiveHand: LevelDef[] = [
   {
-    name: "王庭前哨", scene: "hive", waterLanes: [], startDew: 20,
+    name: "王庭前哨", scene: "hive", waterLanes: [], startDew: 22,
     feature: "王庭章开场", cycle: { day: 20, night: 12 },
     hint: "终章!地上地下天上,虫虫全家出动!", flagWaves: [2],
     waves: [W(["walker", 5, 1.3], ["mole", 3, 1.4]), W(["moth", 4, 1.3], ["armor", 4, 1.2]), W(["mama", 3, 1.3], ["walker", 5, 1.0])],
@@ -1170,10 +1244,10 @@ const hiveHand: LevelDef[] = [
     waves: [W(["moth", 2, 1.4], ["walker", 4, 1.2]), W(["moth", 4, 1.2], ["mole", 4, 1.3]), W(["moth", 6, 1.0], ["mama", 3, 1.2])],
   },
   {
-    name: "王家钻地队", scene: "hive", waterLanes: [], startDew: 21,
+    name: "王家钻地队", scene: "hive", waterLanes: [], startDew: 23,
     feature: "王庭钻地重甲",
-    hint: "女王的钻地亲卫队,铁桶虫殿后!", flagWaves: [2],
-    waves: [W(["mole", 5, 1.3], ["bucket", 2, 2.2]), W(["mole", 5, 1.15], ["armor", 4, 1.1]), W(["bucket", 3, 1.8], ["mole", 5, 1.05])],
+    hint: "女王的钻地亲卫队:哧溜虫绕后、铁桶虫殿后!", flagWaves: [2],
+    waves: [W(["mole", 5, 1.3], ["bucket", 2, 2.2]), W(["tunneler", 4, 1.15], ["armor", 4, 1.1]), W(["bucket", 3, 1.8], ["mole", 5, 1.05])],
   },
   {
     name: "王庭断粮日", scene: "hive", waterLanes: [], startDew: 15, dewCap: 20,
@@ -1187,32 +1261,32 @@ const hiveHand: LevelDef[] = [
     hint: "女王亲卫排成四阵,昼夜不停!", flagWaves: [3],
     waves: [
       W(["walker", 6, 1.1]), W(["moth", 4, 1.2], ["mole", 4, 1.2]),
-      W(["bucket", 3, 1.8], ["mama", 3, 1.2]), W(["moth", 5, 1.0], ["mole", 5, 1.0], ["bucket", 3, 1.6]),
+      W(["bucket", 3, 1.8], ["tunneler", 3, 1.2]), W(["moth", 5, 1.0], ["mole", 5, 1.0], ["bucket", 3, 1.6]),
     ],
   },
   {
-    name: "王庭双旗", scene: "hive", waterLanes: [], startDew: 24, dewCap: 32,
+    name: "王庭双旗", scene: "hive", waterLanes: [], startDew: 26, dewCap: 32,
     feature: "王庭双旗",
     hint: "两面王旗压阵,罐子上限要靠产露植物撑大!", flagWaves: [1, 3],
     waves: [
       W(["mole", 4, 1.15], ["walker", 4, 1.05]), W(["mama", 3, 1.1], ["moth", 4, 1.1]),
-      W(["bucket", 3, 1.7], ["armor", 3, 1.0]), W(["mama", 3, 1.0], ["moth", 5, 0.95], ["mole", 4, 0.95]),
+      W(["bucket", 3, 1.7], ["tunneler", 2, 1.0]), W(["mama", 3, 1.0], ["moth", 5, 0.95], ["mole", 4, 0.95]),
     ],
   },
   {
-    name: "决战前夜", scene: "hive", waterLanes: [], startDew: 24,
+    name: "决战前夜", scene: "hive", waterLanes: [], startDew: 30,
     feature: "王庭六波前夜", cycle: { day: 20, night: 14 },
-    hint: "决战前的最后试炼,整整六波!", flagWaves: [2, 5],
+    hint: "决战前的最后试炼,整整六波,四种机制全都会来!", flagWaves: [2, 5],
     waves: [
       W(["walker", 6, 1.1]), W(["moth", 4, 1.15], ["mole", 4, 1.15]),
-      W(["bucket", 3, 1.7], ["mama", 3, 1.15]), W(["mole", 5, 1.0], ["walker", 5, 1.0]),
+      W(["bucket", 3, 1.7], ["mama", 3, 1.15]), W(["tunneler", 2, 1.0], ["walker", 5, 1.0]),
       W(["moth", 5, 0.95], ["armor", 5, 0.95]), W(["mama", 4, 1.0], ["bucket", 3, 1.5], ["moth", 4, 0.95]),
     ],
   },
   {
     name: "女王进化体降临", scene: "hive", waterLanes: [], startDew: 32,
     feature: "最终BOSS女王进化体", cycle: { day: 26, night: 12 },
-    hint: "最终决战!进化体血少一半会狂暴加速,冰冰花备好!", flagWaves: [3],
+    hint: "最终决战!进化体元气少一半会狂暴加速,冰冰花备好!", flagWaves: [3],
     waves: [
       W(["mole", 4, 1.1], ["moth", 3, 1.1]), W(["mama", 3, 1.15], ["bucket", 3, 1.6]),
       W(["bossbug", 1, 1], ["moth", 4, 1.0]),
@@ -1279,19 +1353,158 @@ function genLevel2(sceneIdx: number, sub: number): LevelDef {
   };
 }
 
-/** 新章组装:手写 8 关打骨架,虫潮关填满,章末必是 BOSS。 */
+/** 一关里出现了哪些机制(生成特殊关的配苗要照着这个给)。 */
+function waveTraitScan(
+  waves: WaveEntry[][],
+  levelIdx: number,
+): { hp: number; flying: boolean; fast: boolean; jump: boolean; dig: boolean; hide: boolean; armor: boolean } {
+  let hp = 0;
+  let flying = false;
+  let fast = false;
+  let jump = false;
+  let dig = false;
+  let hide = false;
+  let armor = false;
+  for (const wave of waves) {
+    for (const e of wave) {
+      const info = BUG_INFO[e.kind];
+      hp += e.count * (bugHp(e.kind, levelIdx) + info.armor);
+      flying = flying || info.flying;
+      fast = fast || info.speed >= 0.9;
+      jump = jump || !!info.jumps;
+      dig = dig || !!info.digs;
+      hide = hide || !!info.underground;
+      armor = armor || info.armor > 0;
+    }
+  }
+  return { hp, flying, fast, jump, dig, hide, armor };
+}
+
+/** 解谜关的苗是按这一关真实的虫量配的,所以一定摆得平 —— 难在摆哪儿。 */
+function puzzleStock(waves: WaveEntry[][], levelIdx: number): PlantStock[] {
+  const t = waveTraitScan(waves, levelIdx);
+  const stock: PlantStock[] = [
+    { kind: "nut", count: 6 },
+    { kind: "bubble", count: Math.max(6, Math.ceil(t.hp / 6)) },
+  ];
+  if (t.flying) stock.push({ kind: "star", count: Math.max(5, Math.ceil(t.hp / 8)) });
+  if (t.fast) stock.push({ kind: "ice", count: 4 });
+  if (t.jump || t.dig) stock.push({ kind: "netpad", count: 4 });
+  if (t.hide) stock.push({ kind: "scout", count: 4 });
+  stock.push({ kind: "boom", count: 3 }, { kind: "puff", count: 2 });
+  return stock;
+}
+
+/**
+ * 传送带发什么由这一关的虫决定,而且「先来后到」很讲究:
+ * 最要紧的(照地下虫的望望草、头几门炮)排在最前面,墙和一次性的爆爆果往后放。
+ * 整条带子循环发,枪占一多半 —— 传送关不产资源,火力全靠带子。
+ */
+function conveyorBelt(waves: WaveEntry[][], levelIdx: number): PlantKind[] {
+  const t = waveTraitScan(waves, levelIdx);
+  const gun: PlantKind = t.flying ? "star" : "bubble";
+  const belt: PlantKind[] = [];
+  if (t.hide) belt.push("scout", "scout");
+  belt.push(gun, gun);
+  if (t.flying) belt.push("star");
+  belt.push("nut", gun);
+  if (t.hide) belt.push("scout", "scout");
+  if (t.fast) belt.push("ice");
+  belt.push(gun, "nut", gun);
+  if (t.jump || t.dig) belt.push("netpad");
+  if (t.flying) belt.push("star");
+  if (t.armor) belt.push("boom", "ice");
+  belt.push(gun, "boom", gun, "puff", gun, "nut");
+  return belt;
+}
+
+/** 波次整体缩量(解谜关的苗是有限的,虫也跟着少一些)。 */
+function scaleWaves(waves: WaveEntry[][], scale: number): WaveEntry[][] {
+  return waves.map((wave) =>
+    wave.map((e) => ({ ...e, count: Math.max(2, Math.round(e.count * scale)) })),
+  );
+}
+
+/** 把一关虫潮改造成特殊关(名字/提示/feature 都跟着换,查重仍然成立)。 */
+function specialize(def: LevelDef, kind: SpecialKind, levelIdx: number): LevelDef {
+  if (kind === "puzzle") {
+    const waves = scaleWaves(def.waves, 0.6);
+    const stock = puzzleStock(waves, levelIdx);
+    // 水道关先把荷叶垫配够,不然一格都种不下去
+    if (def.waterLanes.length > 0) {
+      stock.unshift({ kind: "lily", count: def.waterLanes.length * 6 });
+    }
+    return {
+      ...def,
+      waves,
+      name: `${def.name}·苗阵谜题`,
+      feature: `${def.feature}·解谜关`,
+      hint: "解谜关:没有露珠收入,只有这一沓固定的苗,想清楚每一株摆哪儿!",
+      special: { kind, stock },
+    };
+  }
+  if (kind === "conveyor") {
+    let belt = conveyorBelt(def.waves, levelIdx);
+    // 水道关:荷叶垫要一路跟着发,不然水道上只铺得下开头那两格
+    if (def.waterLanes.length > 0) {
+      belt = belt.flatMap((k, i) => (i % 3 === 2 ? [k, "lily" as PlantKind] : [k]));
+      belt.unshift("lily", "lily");
+    }
+    return {
+      ...def,
+      waves: scaleWaves(def.waves, 0.8),
+      name: `${def.name}·传送带`,
+      feature: `${def.feature}·传送关`,
+      hint: "传送关:传送带一株一株往这儿送苗,不花资源,来什么就用什么!",
+      special: { kind, belt, beltEvery: BELT_EVERY },
+    };
+  }
+  return {
+    ...def,
+    name: `${def.name}·限时速攻`,
+    feature: `${def.feature}·速攻关`,
+    hint: "速攻关:波次连着来,倒计时归零前要把全场清空,火力优先!",
+    special: { kind },
+  };
+}
+
+/** 新四章里第几号虫潮改成什么特殊关(每章 2 解谜 + 2 传送 + 2 速攻)。 */
+const SPECIAL_BY_SUB: ReadonlyArray<[number, SpecialKind]> = [
+  [1, "puzzle"],
+  [3, "conveyor"],
+  [5, "blitz"],
+  [8, "puzzle"],
+  [10, "conveyor"],
+  [12, "blitz"],
+];
+
+function specialForSub(sub: number): SpecialKind | null {
+  for (const [s, kind] of SPECIAL_BY_SUB) if (s === sub) return kind;
+  return null;
+}
+
+/** 新章组装:手写 8 关打骨架,虫潮关填满(其中 6 关是特殊关),章末必是 BOSS。 */
 function buildTheme2(sceneIdx: number, hand: LevelDef[], size: number): LevelDef[] {
   if (hand.length !== HANDMADE_PER_THEME) {
     throw new Error(`scene ${sceneIdx} 手写关数量应为 ${HANDMADE_PER_THEME}`);
   }
+  const base = themeOffset(sceneIdx);
   const genCount = size - hand.length;
   const gens = Array.from({ length: genCount }, (_, i) => genLevel2(sceneIdx, i));
   const out: LevelDef[] = [hand[0]];
   let gi = 0;
+  const pushGen = (): void => {
+    const sub = gi;
+    const raw = gens[gi++];
+    const kind = specialForSub(sub);
+    out.push(kind ? specialize(raw, kind, base + out.length) : raw);
+  };
   for (const mid of hand.slice(1, 7)) {
-    out.push(gens[gi++], gens[gi++], mid);
+    pushGen();
+    pushGen();
+    out.push(mid);
   }
-  while (gi < genCount) out.push(gens[gi++]);
+  while (gi < genCount) pushGen();
   out.push(hand[7]);
   return out;
 }
@@ -1315,8 +1528,11 @@ export interface BugSpawn {
 /** 把一关的波次定义摊成确定性的出虫时间表。 */
 export function buildLevelSchedule(levelIdx: number): BugSpawn[] {
   const def = LEVELS[levelIdx];
+  // 速攻关:开场早一点、波与波之间只留一半的喘息(仍然 ≥ 3 秒布置时间)
+  const blitz = def.special?.kind === "blitz";
+  const gapScale = blitz ? BLITZ_GAP_SCALE : 1;
   const out: BugSpawn[] = [];
-  let clock = 5;
+  let clock = blitz ? 4 : 5;
   for (let wi = 0; wi < def.waves.length; wi++) {
     const isFlag = def.flagWaves.includes(wi);
     let i = 0;
@@ -1333,12 +1549,37 @@ export function buildLevelSchedule(levelIdx: number): BugSpawn[] {
         waveEnd = Math.max(waveEnd, t);
         i++;
       }
-      clock += 1.2;
+      clock += blitz ? 0.9 : 1.2;
     }
-    clock = waveEnd + (isFlag ? 11 : 9);
+    clock = waveEnd + (isFlag ? 11 : 9) * gapScale;
   }
   out.sort((a, b) => a.time - b.time);
   return out;
+}
+
+/** 速攻关的倒计时:最后一只出场之后再给 BLITZ_GRACE 秒清场。 */
+export function blitzLimit(levelIdx: number): number {
+  const sched = buildLevelSchedule(levelIdx);
+  const last = sched.length > 0 ? sched[sched.length - 1].time : 0;
+  return Math.round((last + BLITZ_GRACE) * 10) / 10;
+}
+
+/** 这一关最短的一段波间隙(布置时间够不够就看它)。 */
+export function shortestPrepGap(levelIdx: number): number {
+  const sched = buildLevelSchedule(levelIdx);
+  const firstOfWave = new Map<number, number>();
+  const lastOfWave = new Map<number, number>();
+  for (const s of sched) {
+    if (!firstOfWave.has(s.wave)) firstOfWave.set(s.wave, s.time);
+    firstOfWave.set(s.wave, Math.min(firstOfWave.get(s.wave)!, s.time));
+    lastOfWave.set(s.wave, Math.max(lastOfWave.get(s.wave) ?? 0, s.time));
+  }
+  const waves = [...firstOfWave.keys()].sort((a, b) => a - b);
+  let gap = firstOfWave.get(waves[0]) ?? Infinity;
+  for (let i = 1; i < waves.length; i++) {
+    gap = Math.min(gap, firstOfWave.get(waves[i])! - lastOfWave.get(waves[i - 1])!);
+  }
+  return gap;
 }
 
 export function levelBugCount(def: LevelDef): number {
@@ -1356,7 +1597,29 @@ export function levelWaveSignature(def: LevelDef): string {
 export const BUBBLE_SPEED = 3.5;
 export const STAR_SPEED = 4.2;
 export const ICE_SPEED = 3.8;
+export const PUFF_SPEED = 3.0;
 export const SHOOT_CD = 1.3;
+
+/**
+ * 射速表。1.1 的三门炮一律 1.3 秒,这三档 1.2 一个字不改 —— 前 99 关的手感原样保留;
+ * 星星芽与冰冰花的区别改走 1.2 新加的「卡片冷却」那条轴(见 sprout12.PLANT_SPEC):
+ * 星星芽 0.8 秒就能再种一株,冰冰花要歇 1.4 秒,换来命中冻住。
+ * 新苗蓬蓬花打得慢,但一团花粉能扫一小片。
+ */
+export const SHOOT_CD_BY_KIND: Record<ProjKind, number> = {
+  bubble: SHOOT_CD,
+  star: SHOOT_CD,
+  ice: SHOOT_CD,
+  puff: 1.7,
+};
+
+export function shootCooldown(proj: ProjKind): number {
+  return SHOOT_CD_BY_KIND[proj];
+}
+
+/** 蓬蓬花的花粉团:命中点前后这么多格里的地面虫一起吃 1 点溅射伤害。 */
+export const PUFF_SPLASH_RANGE = 0.9;
+export const PUFF_SPLASH_DAMAGE = 1;
 export const CHEW_INTERVAL = 0.9;
 export const BOSS_CHEW_INTERVAL = 0.35;
 export const SPARKLE_DEW_EVERY = 4.5;

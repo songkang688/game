@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { emptyInput, type AiTier, type Input } from "./ai";
+import { AI_STYLES, decideAi, emptyInput, type AiTier, type Input } from "./ai";
 import {
   ACTOR_R,
+  RESPAWN_DELAY,
   createMatch,
+  leadIdle,
   livingTeams,
   makeRng,
   runMatch,
@@ -13,7 +15,8 @@ import {
   type MatchConfig,
   type MatchState,
 } from "./battle";
-import { itemById } from "./items";
+import { HAMMER_CHARGE, ITEM_EDGE_MARGIN, itemById, itemSpawnX, powerMul } from "./items";
+import { STRUGGLE_WINDOW, bumpFromVigor } from "./knockback";
 import { stageById } from "./stages";
 
 function cfg(over: Partial<MatchConfig> = {}): MatchConfig {
@@ -408,12 +411,31 @@ describe("出界、上场机会与胜负", () => {
   it("时间到就按「剩余上场机会 → 撞飞数 → 被撞飞数」排名", () => {
     const s = createMatch(cfg({ stocks: 3, timeLimit: 3 }));
     s.actors[1].stocks = 1;
+    s.actors[1].outs = 2;
     idle(s, 4);
     expect(s.over).toBe(true);
     expect(s.endReason).toBe("time");
     expect(s.winnerTeam).toBe(0);
     const stats = teamStats(s);
     expect(stats[0].stocks).toBeGreaterThanOrEqual(stats[1].stocks);
+  });
+
+  it("两边开局命数不一样时，比的是「剩几成」而不是「剩几条」", () => {
+    // 战役关常给玩家 3 条命、对手只给 1 条。照剩余条数排，玩家一个键都不按也稳赢：
+    // 3 条对 1 条。改成比剩余比例以后，一条都没掉的那边才算赢。
+    const s = createMatch(
+      cfg({
+        stocks: 3,
+        timeLimit: 3,
+        slots: [
+          { charId: "duoduo", team: 0, control: "p1", stocks: 3 },
+          { charId: "xingxing", team: 1, control: "ai", aiTier: "normal", stocks: 1 },
+        ],
+      })
+    );
+    s.actors[0].stocks = 2;
+    s.actors[0].outs = 1;
+    expect(timeoutWinner(s)).toBe(1);
   });
 
   it("时间到时各项完全打平就是平局", () => {
@@ -431,20 +453,35 @@ describe("出界、上场机会与胜负", () => {
     expect(s.endReason).toBe(snapshot.reason);
   });
 
-  it("两台小电脑放着自己打，一定能打到真实胜负", () => {
-    for (const seed of [3, 11, 29]) {
+  it("两台小电脑放着自己打，是真的在打，不是干瞪眼到时间到", () => {
+    // 每一局都要真打起来（两边都出手、场上真有人被撞出去），大多数局还要分出胜负。
+    // 1:1 收在时间到那种是正经的平局，不该当成「打不完」——
+    // 但要是一局都判不出赢家，那就是小电脑站着不动了。
+    const seeds = [3, 5, 7, 11, 13, 17, 23, 29];
+    let decided = 0;
+    for (const seed of seeds) {
       const s = runMatch(createMatch(cfg({ stocks: 2, timeLimit: 120, itemEvery: 6, seed })), 130);
       expect(s.over).toBe(true);
-      expect(s.winnerTeam === 0 || s.winnerTeam === 1).toBe(true);
+      for (const a of s.actors) {
+        expect(a.hits, `seed ${seed}：${a.char.name} 一整局一下都没打中过`).toBeGreaterThan(0);
+      }
+      const outs = s.actors.reduce((n, a) => n + a.outs, 0);
+      expect(outs, `seed ${seed}：120 秒里一个人都没被撞出去`).toBeGreaterThan(0);
+      if (s.winnerTeam !== null) decided++;
     }
+    expect(decided, `${seeds.length} 局里只有 ${decided} 局分出了胜负`).toBeGreaterThanOrEqual(
+      seeds.length - 2
+    );
   });
 
+  // 小电脑不再自己走下台以后，四人混战全靠真的把人撞出去，比 1.1 时候慢一截：
+  // 原来 150 秒的盘口现在正好卡在时间到，所以把盘口放宽，别把「打得久」当成「打不完」。
   it("四人混战也能打到只剩一队", () => {
     const s = runMatch(
       createMatch(
         cfg({
           stocks: 2,
-          timeLimit: 150,
+          timeLimit: 260,
           itemEvery: 5,
           seed: 5,
           slots: [
@@ -455,10 +492,89 @@ describe("出界、上场机会与胜负", () => {
           ],
         })
       ),
-      160
+      270
     );
     expect(s.over).toBe(true);
     expect(livingTeams(s).length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("战役关的主角规则（cfg.lead）", () => {
+  /** 一局 2v2：0 号是真人主角，1 号是小电脑队友，2/3 号是对手 */
+  function teamCfg(over: Partial<MatchConfig> = {}): MatchConfig {
+    return cfg({
+      stocks: 2,
+      timeLimit: 0,
+      itemEvery: 0,
+      seed: 21,
+      slots: [
+        { charId: "duoduo", team: 0, control: "p1", stocks: 2 },
+        { charId: "nuonuo", team: 0, control: "ai", aiTier: "hard", stocks: 2 },
+        { charId: "xingxing", team: 1, control: "ai", aiTier: "easy", stocks: 1 },
+        { charId: "shanshan", team: 1, control: "ai", aiTier: "easy", stocks: 1 },
+      ],
+      ...over,
+    });
+  }
+
+  /** 把某人连着撞出去 n 次（中间等他回场） */
+  function knockOut(s: MatchState, index: number, times: number): void {
+    for (let k = 0; k < times && !s.over; k++) {
+      sendOut(s, index);
+      stepMatch(s, 1 / 60, {});
+      if (!s.over) idle(s, RESPAWN_DELAY + 0.2);
+    }
+  }
+
+  it("主角上场机会用完，这一关当场结束、算他输——队友还站着也一样", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    knockOut(s, 0, 2);
+    expect(s.actors[0].retired, "主角该退场了").toBe(true);
+    expect(s.actors[1].retired, "队友还有上场机会").toBe(false);
+    expect(s.over).toBe(true);
+    expect(s.winnerTeam).toBe(1);
+  });
+
+  it("不设主角的局（双人同乐 / 沙盒）照旧：一个人退场不影响队友继续打", () => {
+    const s = createMatch(teamCfg());
+    knockOut(s, 0, 2);
+    expect(s.actors[0].retired).toBe(true);
+    expect(s.over, "没设主角就不该因为一个人退场而收摊").toBe(false);
+  });
+
+  it("主角一个键都没按，队友把对面清空也不给他判胜", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    sendOut(s, 2);
+    stepMatch(s, 1 / 60, {});
+    sendOut(s, 3);
+    stepMatch(s, 1 / 60, {});
+    expect(s.over).toBe(true);
+    expect(leadIdle(s)).toBe(true);
+    expect(s.winnerTeam, "摆烂不能靠队友过关").toBeNull();
+  });
+
+  it("主角只要真上手过，队友帮着赢就算赢", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    stepMatch(s, 1 / 60, { 0: press({ right: true }) });
+    sendOut(s, 2);
+    stepMatch(s, 1 / 60, {});
+    sendOut(s, 3);
+    stepMatch(s, 1 / 60, {});
+    expect(leadIdle(s)).toBe(false);
+    expect(s.winnerTeam).toBe(0);
+  });
+
+  it("按键要真按下去才算数：僵直里被清空的那几帧不影响判定", () => {
+    const s = createMatch(teamCfg({ lead: 0 }));
+    s.actors[0].stun = 0.5;
+    stepMatch(s, 1 / 60, { 0: press({ heavy: true }) });
+    expect(s.actors[0].acted, "被打懵的时候按键也是按了").toBe(true);
+  });
+
+  it("时间到那一路也走同一道关卡：主角没上手就不给判胜", () => {
+    const s = runMatch(createMatch(teamCfg({ lead: 0, timeLimit: 8 })), 10);
+    expect(s.endReason).toBe("time");
+    expect(s.winnerTeam).not.toBe(0);
   });
 });
 
@@ -591,5 +707,278 @@ describe("小电脑三档", () => {
     const wins = duel("normal", "normal", 20);
     expect(wins).toBeGreaterThan(3);
     expect(wins).toBeLessThan(17);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 1.2：挣扎窗口、锤子蓄力、道具镜像落点、打法风格                     */
+/* ------------------------------------------------------------------ */
+
+describe("挣扎窗口", () => {
+  /** 把两个人摆到面对面，且挨拍那位元气见底 */
+  function setup(): MatchState {
+    const s = createMatch(
+      cfg({
+        timeLimit: 0,
+        slots: [
+          { charId: "dundun", team: 0, control: "p1" },
+          { charId: "duoduo", team: 1, control: "p2" },
+        ],
+      })
+    );
+    idle(s, 2);
+    const [atk, def] = s.actors;
+    atk.safe = 0;
+    def.safe = 0;
+    def.bump = bumpFromVigor(10);
+    def.x = atk.x + 40;
+    def.y = atk.y;
+    atk.facing = 1;
+    return s;
+  }
+
+  /** 出一记重击，一直打到命中为止 */
+  function landHeavy(s: MatchState): boolean {
+    for (let i = 0; i < 60; i++) {
+      stepMatch(s, 1 / 60, { 0: press({ heavy: i === 0 }) });
+      if (s.events.some((e) => e.kind === "hit")) return true;
+    }
+    return false;
+  }
+
+  it("元气见底挨拍会开出挣扎窗口，长度就是 STRUGGLE_WINDOW", () => {
+    const s = setup();
+    expect(landHeavy(s)).toBe(true);
+    expect(s.actors[1].struggle).toBeGreaterThan(0);
+    expect(s.actors[1].struggle).toBeLessThanOrEqual(STRUGGLE_WINDOW);
+  });
+
+  it("元气还满着的时候挨拍没有挣扎窗口——那一下本来也飞不出去", () => {
+    const s = setup();
+    s.actors[1].bump = 0;
+    expect(landHeavy(s)).toBe(true);
+    expect(s.actors[1].struggle).toBe(0);
+  });
+
+  it("挣扎窗口里朝场地里按方向键，这一下的飞行距离明显短一截", () => {
+    const zone = safeZone(stageById("cloud-square"));
+    const inward = (s: MatchState): Partial<Input> =>
+      s.actors[1].x < (zone.min + zone.max) / 2 ? { right: true } : { left: true };
+
+    const lazy = setup();
+    expect(landHeavy(lazy)).toBe(true);
+    const lazyStart = lazy.actors[1].x;
+    idle(lazy, 0.5);
+    const lazyGone = Math.abs(lazy.actors[1].x - lazyStart);
+
+    const fought = setup();
+    expect(landHeavy(fought)).toBe(true);
+    const foughtStart = fought.actors[1].x;
+    const key = press(inward(fought));
+    for (let i = 0; i < 30; i++) stepMatch(fought, 1 / 60, { 1: key });
+    const foughtGone = Math.abs(fought.actors[1].x - foughtStart);
+
+    expect(fought.actors[1].struggle).toBe(0);
+    expect(foughtGone).toBeLessThan(lazyGone);
+  });
+
+  it("挣扎只认「朝场地里」那一下，朝外按不算", () => {
+    const s = setup();
+    expect(landHeavy(s)).toBe(true);
+    const zone = safeZone(s.stage);
+    const outward = s.actors[1].x < (zone.min + zone.max) / 2 ? { left: true } : { right: true };
+    stepMatch(s, 1 / 60, { 1: press(outward) });
+    expect(s.events.some((e) => e.kind === "struggle")).toBe(false);
+    expect(s.actors[1].struggle).toBeGreaterThan(0);
+  });
+
+  it("一次弹飞只许挣一下，挣完窗口就关了", () => {
+    const s = setup();
+    expect(landHeavy(s)).toBe(true);
+    const zone = safeZone(s.stage);
+    const key = press(s.actors[1].x < (zone.min + zone.max) / 2 ? { right: true } : { left: true });
+    stepMatch(s, 1 / 60, { 1: key });
+    expect(s.events.some((e) => e.kind === "struggle")).toBe(true);
+    stepMatch(s, 1 / 60, { 1: key });
+    expect(s.events.some((e) => e.kind === "struggle")).toBe(false);
+  });
+
+  it("回场之后挣扎窗口清零，不会带着上一条命的状态回来", () => {
+    const s = setup();
+    expect(landHeavy(s)).toBe(true);
+    sendOut(s, 1);
+    idle(s, 2.5);
+    expect(s.actors[1].struggle).toBe(0);
+    expect(s.actors[1].coopCd).toBe(0);
+  });
+});
+
+describe("软软锤子要举满才沉手", () => {
+  function withHammer(): MatchState {
+    const s = createMatch(
+      cfg({
+        timeLimit: 0,
+        slots: [
+          { charId: "duoduo", team: 0, control: "p1" },
+          { charId: "duoduo", team: 1, control: "p2" },
+        ],
+      })
+    );
+    idle(s, 2);
+    const [atk, def] = s.actors;
+    atk.safe = 0;
+    def.safe = 0;
+    def.x = atk.x + 40;
+    def.y = atk.y;
+    atk.facing = 1;
+    const hammer = itemById("hammer");
+    expect(hammer).not.toBeNull();
+    atk.buffs.hammer = hammer?.duration ?? 8;
+    atk.buffs.hammerCharge = HAMMER_CHARGE;
+    return s;
+  }
+
+  it("捡到的那一刻锤子还是软的，力度一点都没加", () => {
+    const s = withHammer();
+    expect(powerMul(s.actors[0].buffs)).toBe(1);
+    expect(HAMMER_CHARGE).toBeGreaterThan(0);
+  });
+
+  it("举满之后力度才翻上去", () => {
+    const s = withHammer();
+    idle(s, HAMMER_CHARGE + 0.1);
+    expect(s.actors[0].buffs.hammerCharge).toBe(0);
+    expect(powerMul(s.actors[0].buffs)).toBeGreaterThan(1.5);
+  });
+
+  it("蓄力期间打出去的那一下，比举满之后轻得多", () => {
+    function hitBump(waitFor: number): number {
+      const s = withHammer();
+      if (waitFor > 0) idle(s, waitFor);
+      s.actors[1].x = s.actors[0].x + 40;
+      s.actors[1].y = s.actors[0].y;
+      s.actors[0].facing = 1;
+      for (let i = 0; i < 60; i++) {
+        stepMatch(s, 1 / 60, { 0: press({ heavy: i === 0 }) });
+        if (s.events.some((e) => e.kind === "hit")) break;
+      }
+      return s.actors[1].bump;
+    }
+    expect(hitBump(0)).toBeLessThan(hitBump(HAMMER_CHARGE + 0.1));
+  });
+});
+
+describe("道具落点左右轮流", () => {
+  it("连着掉下来的道具在中线两边轮换，不会连着偏一边", () => {
+    const s = createMatch(
+      cfg({ itemEvery: 0.6, slots: [{ charId: "duoduo", team: 0, control: "p1" }] })
+    );
+    const zone = safeZone(s.stage);
+    const mid = (zone.min + zone.max) / 2;
+    const sides: number[] = [];
+    const seen = new Set<number>();
+    for (let i = 0; i < 60 * 40 && sides.length < 8; i++) {
+      stepMatch(s, 1 / 60, {});
+      for (const it of s.items) {
+        if (seen.has(it.id)) continue;
+        seen.add(it.id);
+        sides.push(Math.sign(it.x - mid));
+      }
+    }
+    expect(sides.length).toBeGreaterThanOrEqual(6);
+    // 第 0 件在左、第 1 件在右，往下一直轮着来
+    sides.forEach((side, i) => expect(side).toBe(i % 2 === 0 ? -1 : 1));
+  });
+
+  it("同一个随机数抽出来的左右两点关于中线严格对称", () => {
+    for (const roll of [0, 0.13, 0.5, 0.87, 1]) {
+      const left = itemSpawnX(200, 800, 0, roll);
+      const right = itemSpawnX(200, 800, 1, roll);
+      expect(left + right).toBeCloseTo(1000, 6);
+      expect(left).toBeGreaterThanOrEqual(200 + ITEM_EDGE_MARGIN - 1e-9);
+      expect(right).toBeLessThanOrEqual(800 - ITEM_EDGE_MARGIN + 1e-9);
+    }
+  });
+});
+
+describe("小电脑的打法风格", () => {
+  it("四种打法都能跑完一整局，不会把自己走下场", () => {
+    for (const style of AI_STYLES) {
+      const s = runMatch(
+        createMatch(
+          cfg({
+            stocks: 2,
+            timeLimit: 90,
+            itemEvery: 6,
+            seed: 4242,
+            slots: [
+              { charId: "duoduo", team: 0, control: "ai", aiTier: "normal", aiStyle: style },
+              { charId: "xingxing", team: 1, control: "ai", aiTier: "normal" },
+            ],
+          })
+        ),
+        95
+      );
+      expect(s.over).toBe(true);
+      expect(livingTeams(s).length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("「会绕后」真的会往对手背后跑，而不是正面顶上去", () => {
+    const view = {
+      self: { x: 400, y: 358, vx: 0, vy: 0, onGround: true, bump: 0, jumpsLeft: 1 },
+      target: { x: 460, y: 358, bump: 0, onGround: true },
+      item: null,
+      safe: { min: 190, max: 770, top: 380 },
+      bounds: stageById("cloud-square").bounds,
+    };
+    const plain = decideAi(view, "normal", 0.5, "plain");
+    const flank = decideAi(view, "normal", 0.5, "flank");
+    expect(plain.intent).toBe("attack");
+    // 对手站在中线左边，绕后就是绕到他更左边去
+    expect(flank.input.left).toBe(true);
+    expect(flank.input.right).toBe(false);
+  });
+
+  it("「等你出招」会先拉开距离，看到对手收招才压上去", () => {
+    const base = {
+      self: { x: 420, y: 358, vx: 0, vy: 0, onGround: true, bump: 0, jumpsLeft: 1 },
+      item: null,
+      safe: { min: 190, max: 770, top: 380 },
+      bounds: stageById("cloud-square").bounds,
+    };
+    const idleFoe = decideAi(
+      { ...base, target: { x: 470, y: 358, bump: 0, onGround: true } },
+      "normal",
+      0.5,
+      "patient"
+    );
+    expect(idleFoe.intent).toBe("wait");
+    expect(idleFoe.input.left).toBe(true);
+    const openFoe = decideAi(
+      { ...base, target: { x: 470, y: 358, bump: 0, onGround: true, recovering: true } },
+      "normal",
+      0.5,
+      "patient"
+    );
+    expect(openFoe.intent).toBe("attack");
+  });
+
+  it("「抢道具」比正面来的更容易被道具勾走", () => {
+    const view = {
+      self: { x: 400, y: 358, vx: 0, vy: 0, onGround: true, bump: 0, jumpsLeft: 1 },
+      target: { x: 440, y: 358, bump: 0, onGround: true },
+      item: { x: 700, y: 300 },
+      safe: { min: 190, max: 770, top: 380 },
+      bounds: stageById("cloud-square").bounds,
+    };
+    let plainGrabs = 0;
+    let greedyGrabs = 0;
+    for (let i = 0; i < 100; i++) {
+      const roll = i / 100;
+      if (decideAi(view, "normal", roll, "plain").intent === "grab") plainGrabs++;
+      if (decideAi(view, "normal", roll, "greedy").intent === "grab") greedyGrabs++;
+    }
+    expect(greedyGrabs).toBeGreaterThan(plainGrabs);
   });
 });

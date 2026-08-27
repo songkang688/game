@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🫧",
   category: "casual" as const,
   color: "#DCF3FF",
-  blurb: "188 关十大主题！重力翻转、变色泡泡、限步挑战、灯影迷宫等你来！",
-  // 10 章合计 188 关,只有闯关一种玩法
-  modes: ["campaign"] as const,
+  blurb: "188 关十大主题！按住先看这一团值多少分,连锁泡炸开一圈,没得消就吹口气重排,还有无尽泡泡海!",
+  // 10 章合计 188 关,外加无尽泡泡海
+  modes: ["campaign", "endless"] as const,
+  // 手指按住预览、抬手才消,手机最顺;桌面用鼠标悬停预览同样完整
+  platform: "both" as const,
   levels: 188,
 };

@@ -46,6 +46,8 @@ export const BOUNCE = 0.7;
 export const SHOT_CAP_MS = 6000;
 /** 球心越过这条线就掉进球沟了 */
 export const GUTTER_EDGE = 3.4;
+/** 护栏的弹性:撞上去弹回来,但速度会掉一截 */
+export const BUMPER_BOUNCE = 0.55;
 
 export function hypot(x: number, y: number): number {
   return Math.sqrt(x * x + y * y);
@@ -154,10 +156,48 @@ export interface Rack {
   kinds?: PinKind[];
   /** 打油量 0..1:油越多球越难拐弯 */
   oil?: number;
+  /** 球沟上架了护栏:球撞上去会被弹回球道,不会洗沟(教学关用) */
+  bumpers?: boolean;
+  /** 瓶阵横向来回挪的幅度(球道单位);0 = 老老实实站着 */
+  drift?: number;
+  /** 球沟宽度:无尽模式每十格加宽一次,球道就一格比一格窄 */
+  gutter?: number;
 }
 
 export function fullRack(kinds?: PinKind[], oil = 0.4): Rack {
   return { standing: new Array<boolean>(PINS).fill(true), kinds, oil };
+}
+
+/**
+ * 「分瓶」:只留几个瓶站着,别的先撤走。
+ * 3-7 号分瓶这种经典难题就是这么摆出来的(参数是 1 基的瓶号)。
+ */
+export function splitRack(pins: readonly number[]): boolean[] {
+  const standing = new Array<boolean>(PINS).fill(false);
+  for (const n of pins) {
+    const i = Math.round(n) - 1;
+    if (i >= 0 && i < PINS) standing[i] = true;
+  }
+  return standing;
+}
+
+// ---------------------------------------------------------------------------
+// 移动瓶
+// ---------------------------------------------------------------------------
+
+/** 瓶阵来回挪一趟要多少毫秒 */
+export const DRIFT_MS = 2600;
+
+/**
+ * 移动瓶这一刻挪到哪儿(纯函数的三角波,-amp..amp)。
+ * 球快撞上的时候瓶阵会定住——要的是「提前量」这个脑筋,不是手忙脚乱。
+ */
+export function driftOffset(amp: number, timeMs: number): number {
+  if (amp <= 0) return 0;
+  const t = ((timeMs % DRIFT_MS) + DRIFT_MS) % DRIFT_MS;
+  const phase = t / DRIFT_MS;
+  // 0 → +amp → 0 → -amp → 0
+  return amp * Math.sin(phase * Math.PI * 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +238,7 @@ export type LaneEvent =
   | { kind: "hit"; pin: number; force: number }
   | { kind: "chain"; pin: number; other: number }
   | { kind: "gutter" }
+  | { kind: "bumper" }
   | { kind: "down"; pin: number };
 
 export interface LaneState {
@@ -208,11 +249,20 @@ export interface LaneState {
   events: LaneEvent[];
   /** 这一球已经算完了 */
   settled: boolean;
+  /** 球沟上有没有护栏 */
+  bumpers: boolean;
+  /** 瓶阵横移的幅度 */
+  drift: number;
+  /** 瓶阵当前已经横移了多少(stepLane 自己维护) */
+  driftAt: number;
+  /** 这条道的球沟有多宽 */
+  gutter: number;
 }
 
 /** 落点换算成出手的横向位置 */
-export function releaseX(aim: number): number {
-  return LANE_W / 2 + clamp(aim, -1, 1) * (LANE_W / 2 - GUTTER_EDGE - BALL_R);
+export function releaseX(aim: number, gutter = GUTTER_EDGE): number {
+  const room = Math.max(1, LANE_W / 2 - gutter - BALL_R);
+  return LANE_W / 2 + clamp(aim, -1, 1) * room;
 }
 
 /** 力度换算成出手速度 */
@@ -231,6 +281,7 @@ export function hookAccel(spin: number, oil: number): number {
 export function createLane(rack: Rack, shot: Shot): LaneState {
   const s = cleanShot(shot);
   const oil = clamp(rack.oil ?? 0.4, 0, 1);
+  const gutter = clamp(rack.gutter ?? GUTTER_EDGE, GUTTER_EDGE, LANE_W / 2 - BALL_R - 2);
   const pins: Pin[] = [];
   for (let i = 0; i < PINS; i++) {
     const pin = makePin(i, rack.kinds?.[i] ?? "wood");
@@ -239,7 +290,7 @@ export function createLane(rack: Rack, shot: Shot): LaneState {
   }
   return {
     ball: {
-      x: releaseX(s.aim),
+      x: releaseX(s.aim, gutter),
       y: 0,
       vx: 0,
       vy: releaseSpeed(s.power),
@@ -254,6 +305,10 @@ export function createLane(rack: Rack, shot: Shot): LaneState {
     time: 0,
     events: [],
     settled: false,
+    bumpers: rack.bumpers === true,
+    drift: Math.max(0, rack.drift ?? 0),
+    driftAt: 0,
+    gutter,
   };
 }
 
@@ -369,6 +424,23 @@ export function stepLane(state: LaneState, dtMs: number): void {
   state.time += dt;
   const ball = state.ball;
 
+  // ---- 移动瓶:球还没到跟前的时候瓶阵一直在横着挪,快撞上了就定住 ----
+  if (state.drift > 0) {
+    const frozen = ball.gone || ball.y >= HEAD_Y - PIN_R * 3;
+    const want = frozen ? state.driftAt : driftOffset(state.drift, state.time);
+    const move = want - state.driftAt;
+    if (move !== 0) {
+      for (const pin of state.pins) {
+        if (!pinInPlay(pin) || pin.down) continue;
+        // 只挪还没被碰过的瓶:被撞飞的那几个自己滚自己的
+        if (pinShift(pin) > 0.01) continue;
+        pin.x += move;
+        pin.homeX += move;
+      }
+      state.driftAt = want;
+    }
+  }
+
   // ---- 球 ----
   if (!ball.gone) {
     ball.vx += ball.ax * s;
@@ -377,7 +449,21 @@ export function stepLane(state: LaneState, dtMs: number): void {
     ball.vy *= k;
     ball.x += ball.vx * s;
     ball.y += ball.vy * s;
-    if (!ball.gutter && (ball.x < GUTTER_EDGE || ball.x > LANE_W - GUTTER_EDGE)) {
+    const edge = state.gutter;
+    if (state.bumpers) {
+      // 护栏:球撞上去被弹回球道,永远洗不了沟(前两章的教学护栏就是这个)
+      if (ball.x < edge + ball.r) {
+        ball.x = edge + ball.r;
+        if (ball.vx < 0) ball.vx = -ball.vx * BUMPER_BOUNCE;
+        if (ball.ax < 0) ball.ax = -ball.ax;
+        state.events.push({ kind: "bumper" });
+      } else if (ball.x > LANE_W - edge - ball.r) {
+        ball.x = LANE_W - edge - ball.r;
+        if (ball.vx > 0) ball.vx = -ball.vx * BUMPER_BOUNCE;
+        if (ball.ax > 0) ball.ax = -ball.ax;
+        state.events.push({ kind: "bumper" });
+      }
+    } else if (!ball.gutter && (ball.x < edge || ball.x > LANE_W - edge)) {
       ball.gutter = true;
       ball.vx = 0;
       ball.ax = 0;
@@ -545,6 +631,122 @@ export function nextStage(stage: Stage): Stage {
   return "roll";
 }
 
+/**
+ * 上一段是什么:三段里的**每一段在球出手之前都能反悔重来**。
+ * 已经在滚球了就没得反悔——球都出手了,规矩就是规矩。
+ */
+export function prevStage(stage: Stage): Stage {
+  if (stage === "spin") return "aim";
+  if (stage === "aim") return "power";
+  return "power";
+}
+
+/** 这一段还能不能反悔(第一段没有上一段,滚球中也来不及了) */
+export function canUndo(stage: Stage): boolean {
+  return stage === "aim" || stage === "spin";
+}
+
+// ---------------------------------------------------------------------------
+// 口袋位教学
+// ---------------------------------------------------------------------------
+
+/**
+ * 口袋:1 号瓶(头瓶)与 3 号瓶之间的那条缝。
+ * 球从这儿切进去,头瓶会斜着撞倒 2 号、5 号,连锁一路铺开——全中基本都是这么来的。
+ * 正对头瓶撞过去反而容易剩下两边的角瓶。
+ */
+export function pocketX(): number {
+  return (pinSpot(0).x + pinSpot(2).x) / 2;
+}
+
+/** 左撇子的口袋(1 号瓶与 2 号瓶之间),画教学线时两条一起画 */
+export function pocketLeftX(): number {
+  return (pinSpot(0).x + pinSpot(1).x) / 2;
+}
+
+/**
+ * 瞄准辅助线的浓淡:前两章常驻(实打实画出来),越往后越淡,第七章起彻底消失。
+ *
+ * **只给方向,不给答案**——线画的是「口袋在哪儿」,不是「这一球该用什么参数」,
+ * 力度、旋转和落点还是得自己定。
+ */
+export function guideAlpha(chapter: number): number {
+  const c = Math.max(0, Math.round(chapter));
+  if (c <= 1) return 1;
+  if (c >= 6) return 0;
+  // 第三章 0.8,往后一章淡一档,到第七章正好归零
+  return Math.max(0, 1 - (c - 1) * 0.2);
+}
+
+// ---------------------------------------------------------------------------
+// 伪 2.5D 透视:碰撞永远在俯视坐标里算,透视只发生在渲染这一步
+// ---------------------------------------------------------------------------
+
+/** 球道从出手线到瓶台尽头的总长度 */
+export const LANE_LEN = DECK_END + 4;
+/** 最远端(瓶台)的宽度是近端的百分之多少 */
+export const VIEW_FAR = 0.46;
+/** 纵深压缩强度:越大,近处的一段占的屏幕越多 */
+export const VIEW_PERSP = 0.9;
+
+export interface LaneView {
+  /** 画布宽 */
+  w: number;
+  /** 画布高 */
+  h: number;
+  /** 远端宽度比例;不传用 VIEW_FAR */
+  far?: number;
+  /** 纵深压缩;不传用 VIEW_PERSP */
+  persp?: number;
+}
+
+/** 世界纵深 0..1 → 屏幕纵向 0..1(近处铺得开、远处挤在一起) */
+export function depthAt(t: number, persp = VIEW_PERSP): number {
+  const k = clamp(t, 0, 1);
+  const p = Math.max(0, persp);
+  return (k * (1 + p)) / (1 + p * k);
+}
+
+/** depthAt 的反函数:屏幕纵向 0..1 → 世界纵深 0..1 */
+export function depthInv(u: number, persp = VIEW_PERSP): number {
+  const k = clamp(u, 0, 1);
+  const p = Math.max(0, persp);
+  return k / (1 + p - p * k);
+}
+
+/** 这个纵深上的横向缩放:1 = 近端原宽,越远越小 */
+export function widthScaleAt(t: number, far = VIEW_FAR): number {
+  return 1 + (clamp(far, 0.05, 1) - 1) * clamp(t, 0, 1);
+}
+
+/**
+ * 俯视坐标 (x = 球道左右, y = 往前推进) → 画布坐标。
+ * k 是这一点的缩放倍率,球和瓶按它放大缩小,就有了「近大远小」。
+ */
+export function laneProject(x: number, y: number, view: LaneView): { sx: number; sy: number; k: number } {
+  const t = clamp(y / LANE_LEN, 0, 1);
+  const k = widthScaleAt(t, view.far);
+  const perUnit = view.w / LANE_W;
+  return {
+    // 屏幕下方是出手线,上方是瓶台:纵深越大画得越高
+    sx: view.w / 2 + (x - LANE_W / 2) * perUnit * k,
+    sy: view.h * (1 - depthAt(t, view.persp)),
+    k,
+  };
+}
+
+/** laneProject 的反函数:点在画布上的位置 → 俯视坐标(触屏拖落点要用) */
+export function laneUnproject(sx: number, sy: number, view: LaneView): { x: number; y: number } {
+  const u = clamp(1 - sy / Math.max(1, view.h), 0, 1);
+  const t = depthInv(u, view.persp);
+  const k = widthScaleAt(t, view.far);
+  const perUnit = view.w / LANE_W;
+  return {
+    x: LANE_W / 2 + (sx - view.w / 2) / Math.max(0.0001, perUnit * k),
+    y: t * LANE_LEN,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 电脑对手:按「想要的落点」倒推一次投球
 // ---------------------------------------------------------------------------
@@ -557,13 +759,27 @@ export const AI_LABEL: Record<AiLevel, string> = {
   3: "冠军球手",
 };
 
-/** 三档电脑的手抖幅度:越低档越抖 */
+/** 三档电脑的手抖幅度(高斯噪声的标准差):越低档抖得越厉害 */
 export const AI_WOBBLE: Record<AiLevel, number> = { 1: 0.34, 2: 0.16, 3: 0.05 };
 
-/** 确定性伪噪声:同一个回合号永远抖出同一个值 */
+/** 确定性伪噪声:同一个回合号永远抖出同一个值,落在 -1..1 */
 export function wobble(seedA: number, seedB: number): number {
   const t = Math.sin(seedA * 12.9898 + seedB * 78.233) * 43758.5453;
   return (t - Math.floor(t)) * 2 - 1;
+}
+
+/**
+ * 确定性的高斯噪声(Box–Muller):真人手抖是「大多数时候差一点点,偶尔差很多」,
+ * 均匀噪声做不出这个味道——所以落点和旋转的抖动走这一条,标准差就是档位的 `AI_WOBBLE`。
+ *
+ * 结果被夹在 ±3 个标准差以内:再倒霉的一球也不会离谱到直接扔进隔壁球道。
+ */
+export function gaussNoise(seedA: number, seedB: number): number {
+  // wobble 落在 -1..1,先搬回 (0,1) 当均匀分布用
+  const u1 = Math.min(0.999999, Math.max(1e-6, (wobble(seedA, seedB) + 1) / 2));
+  const u2 = (wobble(seedA + 101, seedB + 7) + 1) / 2;
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  return clamp(z, -3, 3);
 }
 
 /** 落点条的可用行程:把球道上的横坐标换算回 -1..1 的落点值 */
@@ -575,23 +791,132 @@ export function aimForX(x: number): number {
 export const POCKET_AIM = 0.2;
 
 /**
- * 电脑这一球怎么投:满架瞄口袋,补中瞄还站着的瓶的重心,档位越高抖得越小。
- * 纯函数,给定同样的场面与回合号一定投出同样的球。
+ * 补中该往哪儿投。
+ *
+ * 不能直接瞄剩下几瓶的**重心**——分瓶的时候重心正好落在两瓶中间那片空气上,
+ * 球从缝里穿过去一个都碰不到。所以先找出离重心最近的那一瓶,球必须实打实
+ * 砸在它身上;再朝重心那边偏一点点(不超过半个瓶距),让它倒下时往同伴那边滚,
+ * 连锁才有机会补上另一边。
  */
-export function aiShot(standing: readonly boolean[], skill: AiLevel, turn: number): Shot {
+export function spareAimX(standing: readonly boolean[]): number {
+  const xs: number[] = [];
+  for (let i = 0; i < PINS; i++) {
+    if (standing[i]) xs.push(pinSpot(i).x);
+  }
+  if (xs.length === 0) return LANE_W / 2;
+  const mid = xs.reduce((a, b) => a + b, 0) / xs.length;
+  let best = xs[0];
+  for (const x of xs) {
+    if (Math.abs(x - mid) < Math.abs(best - mid)) best = x;
+  }
+  const lean = clamp(mid - best, -PIN_GAP / 2, PIN_GAP / 2);
+  return best + lean * 0.35;
+}
+
+// ---------------------------------------------------------------------------
+// 电脑对手的「打算」:三档差的不只是手,还有脑子
+// ---------------------------------------------------------------------------
+
+/**
+ * 三档电脑的**脑子**有多好。
+ *
+ * 1.2 第一版三档共用同一套打算,差别只有 `AI_WOBBLE` 这一个手抖幅度,
+ * 结果实测 60 格总倒瓶数 545 / 572 / 596 —— 一档到三档只差 9.4%,
+ * 孩子选「新手球童」和「冠军球手」几乎没有体感差别,难度选择器等于摆设。
+ *
+ * 问题出在 `spareAimX()`:那是一条**专家级**启发式(知道分瓶时不能瞄两瓶中间的空气),
+ * 白送给新手档就没有档位差了。这里把「打算」按档位分层:
+ *
+ *  - `spareSense` —— 补中瞄准的成熟度。0 = 只会瞄剩下几瓶的重心
+ *    (分瓶时重心正落在缝上,球从两瓶之间穿过去一个都碰不到,这就是真人新手最典型的失误);
+ *    1 = 完整的 `spareAimX()`。
+ *  - `paceSense` —— 力度调节的成熟度。0 = 永远那一个力度;
+ *    1 = 按剩几瓶换力度(满架要速度带连锁,残局要控制)。
+ *
+ * **满架时三档瞄的仍然都是口袋**:那是这一款的教学主线,
+ * 不能让新手档连方向都是错的,不然孩子跟着电脑学不到东西。
+ */
+export interface PlanSkill {
+  spareSense: number;
+  paceSense: number;
+}
+
+export const PLAN_SKILL: Record<AiLevel, PlanSkill> = {
+  // 新手球童:瞄重心、不会换力度 —— 分瓶基本补不上
+  1: { spareSense: 0, paceSense: 0 },
+  // 熟练球手:知道要往瓶身上靠,但只靠到一半;力度也只调一半
+  2: { spareSense: 0.5, paceSense: 0.5 },
+  // 冠军球手:完整的专家解
+  3: { spareSense: 1, paceSense: 1 },
+};
+
+/**
+ * 天真的补中落点:还站着那几瓶的**重心**。
+ * 3-7 号分瓶的重心正好落在球道正中,球顺着缝滚过去两边一个都碰不到 ——
+ * 新手档就是这么打的。
+ */
+export function centroidAimX(standing: readonly boolean[]): number {
   let sum = 0;
   let n = 0;
   for (let i = 0; i < PINS; i++) {
-    if (!standing[i]) continue;
-    sum += pinSpot(i).x;
-    n++;
+    if (standing[i]) {
+      sum += pinSpot(i).x;
+      n++;
+    }
+  }
+  return n === 0 ? LANE_W / 2 : sum / n;
+}
+
+/** 这一档补中会瞄球道上的哪个横坐标:从天真的重心到专家解之间按成熟度插值 */
+export function planSpareX(standing: readonly boolean[], skill: AiLevel): number {
+  const naive = centroidAimX(standing);
+  const expert = spareAimX(standing);
+  return naive + (expert - naive) * clamp(PLAN_SKILL[skill].spareSense, 0, 1);
+}
+
+/** 满架时的基准力度:够把连锁带起来 */
+export const PACE_FULL = 0.78;
+/** 残局单瓶的基准力度:要的是控制,不是速度 */
+export const PACE_SPARE = 0.58;
+/** 不会换力度的档位永远用这一个(就是 1.2 第一版的那个常数) */
+export const PACE_FLAT = 0.7;
+
+/**
+ * 这一球该用多大力(还没加手抖)。剩的瓶越多越需要速度:
+ * 满架靠头瓶把力量传下去,只剩一瓶时再猛推反而容易把球带偏。
+ * `paceSense` 决定这一档听不听得懂这个道理。
+ */
+export function planPower(standing: readonly boolean[], skill: AiLevel): number {
+  let n = 0;
+  for (let i = 0; i < PINS; i++) {
+    if (standing[i]) n++;
+  }
+  const ideal = PACE_SPARE + (PACE_FULL - PACE_SPARE) * clamp((n - 1) / (PINS - 1), 0, 1);
+  return clamp(PACE_FLAT + (ideal - PACE_FLAT) * clamp(PLAN_SKILL[skill].paceSense, 0, 1), 0.25, 1);
+}
+
+/** 这一档的补中落点离「够得着那一瓶」差多远(球道单位);档位越高越小 */
+export function spareMissBy(standing: readonly boolean[], skill: AiLevel): number {
+  return Math.abs(planSpareX(standing, skill) - spareAimX(standing));
+}
+
+/**
+ * 电脑这一球怎么投:满架瞄口袋,补中瞄「这一档看得出来的那个点」,
+ * 力度按剩瓶数走(会不会调由档位决定),最后再叠一层高斯手抖。
+ * 纯函数,给定同样的场面与回合号一定投出同样的球。
+ */
+export function aiShot(standing: readonly boolean[], skill: AiLevel, turn: number): Shot {
+  let n = 0;
+  for (let i = 0; i < PINS; i++) {
+    if (standing[i]) n++;
   }
   const full = n >= PINS;
-  const want = full ? POCKET_AIM : aimForX(n > 0 ? sum / n : LANE_W / 2);
+  const want = full ? POCKET_AIM : aimForX(planSpareX(standing, skill));
+  // 落点与旋转的手抖走高斯:大多数球只差一点点,偶尔来一发离谱的
   const shake = AI_WOBBLE[skill];
-  const aim = clamp(want + wobble(turn, skill) * shake, -1, 1);
-  const power = clamp(0.7 + wobble(turn + 11, skill) * shake * 0.5, 0.25, 1);
-  const spin = clamp(wobble(turn + 23, skill) * shake * 0.8, -1, 1);
+  const aim = clamp(want + gaussNoise(turn, skill) * shake, -1, 1);
+  const power = clamp(planPower(standing, skill) + gaussNoise(turn + 11, skill) * shake * 0.5, 0.25, 1);
+  const spin = clamp(gaussNoise(turn + 23, skill) * shake * 0.8, -1, 1);
   return { power, aim, spin };
 }
 

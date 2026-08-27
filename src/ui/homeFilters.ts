@@ -4,8 +4,8 @@
  * home.ts 只负责把结果画出来;要改「怎么筛、怎么搜、怎么排」都在这个文件里改。
  * 存档约定:收藏单独一个 key `yiduo-yixing.fav.v1`,与 save.ts、l99 进度互不影响。
  */
-import type { GameCategory, GameMeta, GameMode, GameModule } from "../engine/types";
-import { DEFAULT_LEVEL_TOTAL } from "../engine/types";
+import type { GameCategory, GameMeta, GameMode, GameModule, GamePlatform } from "../engine/types";
+import { DEFAULT_LEVEL_TOTAL, GAME_PLATFORMS } from "../engine/types";
 
 /** 分类页签:全部 + 五个分类 */
 export type Tab = "all" | GameCategory;
@@ -29,6 +29,34 @@ const CHIP_MODES: Record<Exclude<ModeChip, "all">, GameMode[]> = {
   endless: ["endless"],
   duo: ["twoPlayer", "coop"]
 };
+
+/** 平台筛选芯片(1.2 新增):与分类页签、玩法芯片、搜索四条件叠加 */
+export type PlatformChip = "all" | "mobile" | "desktop";
+
+/** 平台芯片的展示顺序与文案(home.ts 直接照着渲染) */
+export const PLATFORM_CHIPS: { key: PlatformChip; emoji: string; label: string }[] = [
+  { key: "all", emoji: "🌈", label: "全部" },
+  { key: "mobile", emoji: "📱", label: "手游" },
+  { key: "desktop", emoji: "💻", label: "端游" }
+];
+
+/**
+ * 这款游戏是否命中某个平台芯片。
+ * 没填 platform、填了 `"both"`、或者填了看不懂的脏值,一律当「两边都顺手」,手游端游都命中。
+ */
+export function matchesPlatformChip(
+  meta: Pick<GameMeta, "platform">,
+  chip: PlatformChip
+): boolean {
+  if (chip === "all") return true;
+  const raw = meta.platform;
+  const platform: GamePlatform =
+    typeof raw === "string" && (GAME_PLATFORMS as string[]).includes(raw)
+      ? (raw as GamePlatform)
+      : "both";
+  if (platform === "both") return true;
+  return platform === chip;
+}
 
 /** 收藏存档 key(1.1 新增,只存一个 id 数组) */
 export const FAV_KEY = "yiduo-yixing.fav.v1";
@@ -75,7 +103,21 @@ const PINYIN_INITIALS: Record<string, string> = {
   翻: "f", 者: "z", 胃: "w", 色: "s", 花: "h", 芽: "y", 萌: "m", 蓝: "l",
   虫: "c", 虹: "h", 记: "j", 识: "s", 象: "x", 贪: "t", 赛: "s", 超: "c",
   跑: "p", 路: "l", 车: "c", 连: "l", 钟: "z", 险: "x", 音: "y", 鸟: "n",
-  鼠: "s"
+  鼠: "s",
+  // 1.2 窗口 1 的 12 款新游戏用到的字。多音字按各自标题里的念法收:
+  // 长蛇 cháng、飞行 xíng —— 换个词念法可能就不同,别照抄去别处。
+  产: "c", 争: "z", 令: "l", 作: "z", 决: "j",
+  叠: "d", 合: "h", 围: "w", 圆: "y", 开: "k", 对: "d", 将: "j",
+  成: "c", 扫: "s", 招: "z", 方: "f", 杰: "j", 独: "d", 田: "t",
+  英: "y", 蛇: "s", 行: "x", 长: "c", 雷: "l", 霸: "b", 飞: "f",
+  麻: "m",
+  // 1.1 就在架、但当年漏掉的字:这 16 个标题一直只能靠 id 或原文搜。
+  // 一起补上,拼音搜索才对全库都算数。
+  乱: "l", 仓: "c", 兄: "x", 公: "g", 冰: "b", 击: "j", 危: "w",
+  弟: "d", 怪: "g", 推: "t", 抢: "q", 斗: "d", 机: "j", 林: "l",
+  格: "g", 森: "s", 物: "w", 皮: "p", 矿: "k", 箱: "x", 达: "d",
+  金: "j", 钓: "d", 钩: "g", 铁: "t", 队: "d", 雪: "x", 主: "z",
+  炸: "z", 坦: "t", 克: "k", 射: "s", 鱼: "y", 馆: "g", 龄: "l"
 };
 
 /**
@@ -84,7 +126,11 @@ const PINYIN_INITIALS: Record<string, string> = {
  */
 const INITIALS_ALIASES: Record<string, string[]> = {
   "music-stars": ["yyxx"],
-  "sling-birds": ["ttxn"]
+  "sling-birds": ["ttxn"],
+  // 「长蛇争霸」的长念 cháng,但小朋友多半会照「zhǎng」去打 z
+  "snake-royale": ["zszb"],
+  // 「飞行棋」的行念 xíng,照「háng」打 h 的也认
+  "flight-chess": ["fhqly"]
 };
 
 /**
@@ -190,30 +236,56 @@ export function favoriteGames(games: readonly GameModule[], favIds: readonly str
 export interface HomeFilter {
   tab: Tab;
   mode: ModeChip;
+  /** 1.2 新增:手游 / 端游 */
+  platform: PlatformChip;
   query: string;
 }
 
-/** 分类 + 玩法 + 搜索三个条件叠加(缺省都当「全部」) */
+/** 分类 + 玩法 + 平台 + 搜索四个条件叠加(缺省都当「全部」) */
 export function filterGames(
   games: readonly GameModule[],
   filter: Partial<HomeFilter> = {}
 ): GameModule[] {
   const tab = filter.tab ?? "all";
   const mode = filter.mode ?? "all";
+  const platform = filter.platform ?? "all";
   const query = filter.query ?? "";
   return games.filter(
-    (g) => matchesTab(g.meta, tab) && matchesModeChip(g.meta, mode) && matchesSearch(g.meta, query)
+    (g) =>
+      matchesTab(g.meta, tab) &&
+      matchesModeChip(g.meta, mode) &&
+      matchesPlatformChip(g.meta, platform) &&
+      matchesSearch(g.meta, query)
   );
 }
 
 /** 有没有在筛/在搜(决定首页是分类分节展示还是一整片结果) */
 export function isFiltering(filter: Partial<HomeFilter> = {}): boolean {
-  return (filter.mode ?? "all") !== "all" || normalizeQuery(filter.query ?? "") !== "";
+  return (
+    (filter.mode ?? "all") !== "all" ||
+    (filter.platform ?? "all") !== "all" ||
+    normalizeQuery(filter.query ?? "") !== ""
+  );
 }
 
 // ---------------------------------------------------------------------------
 // 进度徽章
 // ---------------------------------------------------------------------------
+
+/**
+ * 首页欢迎气泡的第二行。
+ *
+ * 以前这句把「55 款」写死在模板里,1.2 一路加新款以后就对不上了 ——
+ * 首页明明列着 67 张卡,气泡还在说 55。改成跟着真实收录数走,
+ * 以后再加多少款都不用回来改文案。
+ */
+export function heroSubtitle(gameCount: number, maxLevels: number): string {
+  const n = Number.isFinite(gameCount) ? Math.max(0, Math.floor(gameCount)) : 0;
+  const lv = Number.isFinite(maxLevels) ? Math.max(0, Math.floor(maxLevels)) : 0;
+  const head = n > 0 ? `${n} 款原创小游戏` : "原创小游戏合集";
+  const levels = lv > 0 ? `,闯关最长 ${lv} 关` : "";
+  return `${head}${levels}。上面可以筛选、搜索、收藏 🌈`;
+}
 
 /** 这款游戏的闯关总数:meta 没填就按通用框架的 188 关算 */
 export function levelTotalOf(meta: Pick<GameMeta, "levels">): number {
@@ -240,9 +312,19 @@ export function progressBadgeText(
 export function emptyStateText(filter: Partial<HomeFilter> = {}): string {
   if (normalizeQuery(filter.query ?? "") !== "") return "没找到这个名字的游戏,换个词试试吧!";
   const mode = filter.mode ?? "all";
+  const platform = filter.platform ?? "all";
+  if (mode !== "all" && platform !== "all") {
+    const modeLabel = MODE_CHIPS.find((c) => c.key === mode)?.label ?? "这种";
+    const platformLabel = PLATFORM_CHIPS.find((c) => c.key === platform)?.label ?? "这类设备";
+    return `${platformLabel}里还没有${modeLabel}玩法的游戏,换个筛选试试吧!`;
+  }
   if (mode !== "all") {
     const label = MODE_CHIPS.find((c) => c.key === mode)?.label ?? "这种";
     return `这里还没有${label}玩法的游戏,换个筛选看看吧!`;
+  }
+  if (platform !== "all") {
+    const label = PLATFORM_CHIPS.find((c) => c.key === platform)?.label ?? "这类设备";
+    return `${label}这边还没有合适的游戏,换个筛选试试吧!`;
   }
   if ((filter.tab ?? "all") !== "all") return "这个分类还没有游戏,去别的分类看看吧!";
   return "小游戏正在路上,很快就到啦!";

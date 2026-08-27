@@ -123,7 +123,11 @@ export type OreKind =
   | "boulder"
   | "gem"
   | "chest"
-  | "mole";
+  | "mole"
+  /** 1.2 新矿:裹着泥,拉的路上可能打滑掉回去(炸药固定住就不滑) */
+  | "muddy"
+  /** 1.2 新矿:外壳先钩一次会裂开,晶芯要再钩一次才拿得走 */
+  | "twinCrystal";
 
 export interface OreProfile {
   label: string;
@@ -148,6 +152,10 @@ export const ORES: Record<OreKind, OreProfile> = {
   gem: { label: "钻石", emoji: "💎", value: 380, weight: 2, radius: 8, treasure: true },
   chest: { label: "宝箱", emoji: "🧰", value: 150, weight: 6, radius: 13, treasure: true },
   mole: { label: "小地鼠", emoji: "🐹", value: 95, weight: 4, radius: 10, treasure: true },
+  muddy: { label: "泥泥矿", emoji: "🟤", value: 120, weight: 12, radius: 13, treasure: true },
+  // 双层晶的 value 是**钩一次**的价钱:它要连钩两次才拿得走,两次加起来才是全价。
+  // 模拟器只会算一次,所以这里填单次价 —— 目标金额宁可保守,不许把它按全价高估。
+  twinCrystal: { label: "双层晶", emoji: "🔷", value: 150, weight: 9, radius: 14, treasure: true },
 };
 
 /** 全部矿石种类,遍历与校验用 */

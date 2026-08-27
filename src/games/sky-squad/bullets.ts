@@ -8,8 +8,14 @@
  *  2. 整片弹幕可以离线完整模拟,于是「这一阶段到底躲不躲得掉」可以被**证明**,
  *     而不是靠手感估计。`findDodgePath` 就是那个证明器,单测逐个阶段跑它。
  *
+ * 1.2 在上面加了一层**声明式弹幕语法**:`PatternDecl` 就是一段 JSON
+ * (`{ pattern, count, speed, delay, arc }`),`compileDecl` 把它翻成引擎口径,
+ * 顺手把「弹速上限 / 弹体下限 / 预警下限」这三条可读性底线夹回去。
+ * 基础图案八种,Boss 用它们的组合。
+ *
  * 分级约定:子弹是星星 / 泡泡 / 光点这类卡通造型,飞得慢、个头大、暖色(敌)冷色(我)
- * 区分;被打中只是冒烟迫降,没有爆炸、没有伤亡描写。
+ * 区分,而且**形状也各不相同**(不能只靠颜色);被打中只是打个转冒串白烟,
+ * 没有爆炸、没有伤亡描写。
  */
 import { mulberry32 } from "../level99";
 
@@ -24,7 +30,26 @@ export const PLAYER_HIT_R = 9;
 /** 玩家最大横向速度(逻辑单位 / 秒) */
 export const PLAYER_SPEED = 250;
 
-export type PatternKind = "fan" | "ring" | "spiral" | "sweep" | "wall" | "rain";
+/**
+ * 1.2 判定盒口径。画出来的小飞机是 72 宽 × 64 高(翅膀椭圆到 ±36,
+ * 机身圆角矩形 22×42,尾焰再往下 12),判定圆直径只有 18 ——
+ * 横向 25%、面积 5% 不到。「看着擦到翅膀其实没事」这句话是有数的。
+ */
+export const PLANE_ART = { width: 72, height: 64 } as const;
+
+/** 判定核心画多大(半径):比判定圆略小一点点,免得孩子以为核心边缘也算中 */
+export const CORE_DOT_R = 6;
+
+/**
+ * 擦弹半径:弹边缘进到这个距离但没碰到判定圆,就算「好险!」。
+ * 做得比判定圆大不少,擦弹反馈才够容易触发,孩子才会去学「贴着弹走」。
+ */
+export const GRAZE_R = 30;
+
+export type PatternKind = "fan" | "ring" | "spiral" | "sweep" | "wall" | "rain" | "aimed" | "cross";
+
+/** 全部基础图案(≥ 6 种;boss 用它们的组合) */
+export const PATTERN_KINDS: PatternKind[] = ["fan", "ring", "aimed", "spiral", "sweep", "wall", "rain", "cross"];
 
 /** 弹幕图案说明,给攻略与 Boss 预告用 */
 export const PATTERN_LABEL: Record<PatternKind, string> = {
@@ -34,6 +59,25 @@ export const PATTERN_LABEL: Record<PatternKind, string> = {
   sweep: "扫射弹",
   wall: "缺口墙",
   rain: "落雨弹",
+  aimed: "锁定弹",
+  cross: "十字弹",
+};
+
+/**
+ * 图案的形状标记。同阵营里也要靠形状分得开 —— 只靠颜色的话,
+ * 色觉不敏感的孩子就读不动弹幕了。敌弹一律是这几种暖色卡通造型。
+ */
+export type BulletShape = "bubble" | "star" | "petal" | "candy" | "cloud" | "drop" | "diamond" | "plus";
+
+export const PATTERN_SHAPE: Record<PatternKind, BulletShape> = {
+  fan: "bubble",
+  ring: "petal",
+  spiral: "star",
+  sweep: "candy",
+  wall: "cloud",
+  rain: "drop",
+  aimed: "diamond",
+  cross: "plus",
 };
 
 export interface PatternSpec {
@@ -56,6 +100,85 @@ export interface PatternSpec {
   warn: number;
   /** 第一轮齐射前的静默(秒) */
   delay: number;
+}
+
+// ---------------------------------------------------------------------------
+// 1.2 弹幕语法:一段 JSON 就是一个图案
+// ---------------------------------------------------------------------------
+
+/**
+ * 声明式弹幕。整张表可以直接写在 JSON 里(角度用**度**,不用弧度,
+ * 手写和读日志都省事),`compileDecl` 负责翻成引擎口径的 `PatternSpec`。
+ *
+ * 只有 `pattern` 是必填的,其余全部有安全默认值;而且编译时会把
+ * 「弹速上限 / 弹体下限 / 预警下限」这三条可读性底线夹回去 ——
+ * 语法层就不允许写出一片看不清的弹雨。
+ */
+export interface PatternDecl {
+  pattern: PatternKind;
+  /** 每轮齐射发多少弹 */
+  count?: number;
+  /** 弹速(逻辑单位 / 秒) */
+  speed?: number;
+  /** 第一轮齐射前的静默(秒) */
+  delay?: number;
+  /** 扇面张角,单位**度**;环形 / 十字 / 缺口墙用不上 */
+  arc?: number;
+  /** 弹半径 */
+  radius?: number;
+  /** 两轮齐射的间隔(秒) */
+  interval?: number;
+  /** 每轮整体旋转多少**度**(螺旋 / 环形 / 十字用) */
+  rotate?: number;
+  /** 缺口墙里留几个缺口 */
+  gaps?: number;
+  /** 亮一下再飞的预警时间(秒) */
+  warn?: number;
+}
+
+/** 可读性底线:弹再快也不许超过这个速度 */
+export const MAX_BULLET_SPEED = 160;
+/** 可读性底线:弹再小也不许小于这个半径 */
+export const MIN_BULLET_RADIUS = 10;
+/** 可读性底线:再急也要先亮这么久的预警 */
+export const MIN_BULLET_WARN = 0.2;
+
+const DEG = Math.PI / 180;
+
+/**
+ * 把一段声明翻成引擎口径的 `PatternSpec`(纯函数,同样的输入永远同样的输出)。
+ * 越界的字段一律夹回可读范围,而不是抛错 —— 关卡数据写错也不能让孩子白屏。
+ */
+export function compileDecl(decl: PatternDecl): PatternSpec {
+  const kind: PatternKind = PATTERN_KINDS.includes(decl.pattern) ? decl.pattern : "fan";
+  const num = (v: number | undefined, fallback: number): number => (Number.isFinite(v) ? (v as number) : fallback);
+  return {
+    kind,
+    count: Math.max(1, Math.round(num(decl.count, 8))),
+    speed: Math.max(40, Math.min(MAX_BULLET_SPEED, num(decl.speed, 110))),
+    radius: Math.max(MIN_BULLET_RADIUS, num(decl.radius, 12)),
+    interval: Math.max(0.05, num(decl.interval, 1.5)),
+    spread: Math.max(0, Math.min(Math.PI * 2, num(decl.arc, 90) * DEG)),
+    rotate: num(decl.rotate, 20) * DEG,
+    gaps: Math.max(1, Math.round(num(decl.gaps, 2))),
+    warn: Math.max(MIN_BULLET_WARN, num(decl.warn, 0.35)),
+    delay: Math.max(0, num(decl.delay, 0)),
+  };
+}
+
+/** 一整套弹幕的声明(boss 一个阶段就是若干套叠在一起) */
+export function compileDecks(decls: readonly PatternDecl[]): PatternSpec[] {
+  return decls.map(compileDecl);
+}
+
+/** 声明 → 直接展开成子弹列表(纯函数,给测试和攻略预览用) */
+export function expandDecl(
+  decl: PatternDecl,
+  index: number,
+  origin: { x: number; y: number },
+  ctx: VolleyCtx = {}
+): Bullet[] {
+  return buildVolley(compileDecl(decl), index, origin, ctx);
 }
 
 export function makeSpec(kind: PatternKind, over: Partial<PatternSpec> = {}): PatternSpec {
@@ -85,6 +208,8 @@ export interface Bullet {
   kind: PatternKind;
   /** 同一轮齐射共用一个序号,方便配色 */
   volley: number;
+  /** 画成什么形状(不能只靠颜色区分阵营) */
+  shape: BulletShape;
 }
 
 /** Boss 在 t 秒时的横向位置(确定函数,和玩家无关) */
@@ -92,11 +217,72 @@ export function bossX(t: number, swing: number, width = SKY_W): number {
   return width / 2 + Math.sin(t * 0.6) * swing;
 }
 
+export interface VolleyCtx {
+  width?: number;
+  /**
+   * 锁定弹瞄准的那个点。不给就用「指路星」——一条与玩家无关的确定性轨迹,
+   * 这样整片 boss 弹幕仍然可以离线完整模拟,可躲避性还是能被**证明**。
+   * 普通敌机才把真实机位传进来(它们弹稀、预警足,侧身一步就让开)。
+   */
+  aim?: { x: number; y: number };
+}
+
+/** 「指路星」:锁定弹与扫射弹的确定性引导点,和玩家位置无关 */
+export function guideStar(index: number, width = SKY_W): { x: number; y: number } {
+  return { x: width * (0.5 + 0.34 * Math.sin(index * 0.8)), y: PLAYER_ROW };
+}
+
+/**
+ * 锁定弹是不是「侧身一步就能让开」:预警时间里能挪出的距离,
+ * 要大于弹体加机身的直径还有富余。语法层保证了 warn ≥ 0.2,
+ * 这个判据让「敌机可以瞄着你打」不至于变成躲不掉的追踪弹。
+ */
+export function aimedDodgeable(spec: PatternSpec, playerSpeed = PLAYER_SPEED, playerR = PLAYER_HIT_R): boolean {
+  return playerSpeed * spec.warn > (spec.radius + playerR) * 2;
+}
+
+export type TouchLevel = "hit" | "graze" | "clear";
+
+/**
+ * 一发弹和判定核心的关系:碰到了 / 擦过去了 / 还早着呢。
+ * 擦弹是正反馈(「好险!」),不扣任何东西 —— 它教的是「判定点很小,
+ * 敢贴着弹走」,这正是弹幕手感的基本盘。
+ */
+export function bulletTouch(
+  dx: number,
+  dy: number,
+  bulletR: number,
+  playerR = PLAYER_HIT_R,
+  grazeR = GRAZE_R
+): TouchLevel {
+  const d2 = dx * dx + dy * dy;
+  const hit = bulletR + playerR;
+  if (d2 <= hit * hit) return "hit";
+  const graze = bulletR + grazeR;
+  return d2 <= graze * graze ? "graze" : "clear";
+}
+
+/** 判定圆相对机身画面的占比(横向 / 面积),给「判定盒必须更小」的断言用 */
+export function hitBoxRatio(): { width: number; area: number } {
+  const d = PLAYER_HIT_R * 2;
+  return {
+    width: d / PLANE_ART.width,
+    area: (Math.PI * PLAYER_HIT_R * PLAYER_HIT_R) / (PLANE_ART.width * PLANE_ART.height),
+  };
+}
+
 /**
  * 生成第 index 轮齐射(0 基)。origin 是 Boss 当时的位置。
  * 屏幕坐标:y 向下为正,所以「朝下」是角度 π/2。
  */
-export function buildVolley(spec: PatternSpec, index: number, origin: { x: number; y: number }, width = SKY_W): Bullet[] {
+export function buildVolley(
+  spec: PatternSpec,
+  index: number,
+  origin: { x: number; y: number },
+  ctx: VolleyCtx = {}
+): Bullet[] {
+  const width = ctx.width ?? SKY_W;
+  const shape = PATTERN_SHAPE[spec.kind] ?? "bubble";
   const out: Bullet[] = [];
   const push = (x: number, y: number, ang: number, speed = spec.speed): void => {
     out.push({
@@ -108,6 +294,7 @@ export function buildVolley(spec: PatternSpec, index: number, origin: { x: numbe
       warn: spec.warn,
       kind: spec.kind,
       volley: index,
+      shape,
     });
   };
   const down = Math.PI / 2;
@@ -137,13 +324,37 @@ export function buildVolley(spec: PatternSpec, index: number, origin: { x: numbe
     }
     case "sweep": {
       // 朝着底部一个来回扫动的引导点打一小束,永远只覆盖一段,不会封死整行
-      const aimX = width * (0.5 + 0.34 * Math.sin(index * 0.8));
-      const aimY = PLAYER_ROW;
-      const base = Math.atan2(aimY - origin.y, aimX - origin.x);
+      const star = guideStar(index, width);
+      const base = Math.atan2(star.y - origin.y, star.x - origin.x);
       const n = Math.max(1, Math.min(5, spec.count));
       for (let i = 0; i < n; i++) {
         const f = n === 1 ? 0 : i / (n - 1) - 0.5;
         push(origin.x, origin.y, base + f * spec.spread * 0.4);
+      }
+      break;
+    }
+    case "aimed": {
+      // 锁定弹:亮完预警才朝锁定点飞过去,而且一次只锁一小束。
+      // 不给 aim 就锁「指路星」,整片弹幕依旧与玩家无关、可离线证明。
+      const target = ctx.aim ?? guideStar(index, width);
+      const base = Math.atan2(target.y - origin.y, target.x - origin.x);
+      const n = Math.max(1, Math.min(5, spec.count));
+      for (let i = 0; i < n; i++) {
+        const f = n === 1 ? 0 : i / (n - 1) - 0.5;
+        push(origin.x, origin.y, base + f * spec.spread * 0.25);
+      }
+      break;
+    }
+    case "cross": {
+      // 十字弹:四条胳膊,整体每轮转一点。胳膊之间永远是空的,
+      // 站在两条胳膊中间的扇区就一定安全。
+      const arms = 4;
+      const per = Math.max(1, Math.min(3, Math.ceil(spec.count / arms)));
+      for (let a = 0; a < arms; a++) {
+        const ang = index * spec.rotate + (a / arms) * Math.PI * 2 + Math.PI / 4;
+        for (let i = 0; i < per; i++) {
+          push(origin.x, origin.y, ang, spec.speed * (1 - i * 0.18));
+        }
       }
       break;
     }
@@ -190,11 +401,33 @@ export function buildVolley(spec: PatternSpec, index: number, origin: { x: numbe
 // Boss 阶段
 // ---------------------------------------------------------------------------
 
+/**
+ * 阶段切换的**预告动作**。1.2 要求「阶段切换有明确预告」:
+ * Boss 先做一个看得懂的大动作(吸气 / 张开 / 转身),这段时间**完全停火**,
+ * 场上残弹也清空,孩子有一段绝对安全的窗口去读下一段是什么。
+ */
+export interface PhaseCue {
+  /** 预告动作:吸气缩小 / 花瓣张开 / 原地转身 */
+  move: "inhale" | "bloom" | "spin";
+  /** 预告持续多久(秒);这段时间不发弹 */
+  seconds: number;
+  /** 预告时的一句话(和 `shout` 分工:call 是「要来了」,shout 是「这段怎么躲」) */
+  call: string;
+}
+
+/** 没写预告时的兜底(保证运行时永远有一个安全窗口) */
+export const DEFAULT_CUE: PhaseCue = { move: "inhale", seconds: 1.4, call: "它要换招啦,看好下一段!" };
+
+export function cueOf(phase: PhaseSpec): PhaseCue {
+  const cue = phase.cue ?? DEFAULT_CUE;
+  return { ...cue, seconds: Math.max(0.8, cue.seconds) };
+}
+
 export interface PhaseSpec {
   name: string;
   /** 血量降到总量的这个比例以下时进入下一阶段(最后一阶段写 0) */
   until: number;
-  /** 这一阶段同时跑的弹幕(1~2 套) */
+  /** 这一阶段同时跑的弹幕(1~3 套) */
   patterns: PatternSpec[];
   /** Boss 这一阶段的横向摆动幅度 */
   swing: number;
@@ -202,6 +435,8 @@ export interface PhaseSpec {
   color: string;
   /** 进入这一阶段时的提示语 */
   shout: string;
+  /** 进这一段之前的预告动作;不写就用 `DEFAULT_CUE` */
+  cue?: PhaseCue;
 }
 
 export interface BossSpec {
@@ -211,6 +446,36 @@ export interface BossSpec {
   /** 血量(打中一次掉 1) */
   hp: number;
   phases: PhaseSpec[];
+}
+
+export interface TimelineSlot {
+  kind: "cue" | "phase";
+  /** 属于第几阶段(0 基) */
+  phase: number;
+  name: string;
+  /** 这一段从 Boss 出场后第几秒开始(阶段段落按「打得动」的估计时长排) */
+  at: number;
+  seconds: number;
+  /** cue 段落一定不发弹 */
+  firing: boolean;
+}
+
+/**
+ * Boss 的三阶段时间线(纯函数,给攻略、预告 UI 与测试共用)。
+ * 结构永远是:预告 → 一阶段 → 预告 → 二阶段 → 预告 → 三阶段,
+ * 也就是**每一次换段前面都挂着一个不发弹的安全窗口**。
+ */
+export function bossTimeline(boss: BossSpec, phaseSeconds = 18): TimelineSlot[] {
+  const out: TimelineSlot[] = [];
+  let at = 0;
+  boss.phases.forEach((ph, i) => {
+    const cue = cueOf(ph);
+    out.push({ kind: "cue", phase: i, name: cue.call, at, seconds: cue.seconds, firing: false });
+    at += cue.seconds;
+    out.push({ kind: "phase", phase: i, name: ph.name, at, seconds: phaseSeconds, firing: true });
+    at += phaseSeconds;
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -353,7 +618,7 @@ export function findDodgePath(phase: PhaseSpec, options: Partial<DodgeOptions> =
       const spec = phase.patterns[pi];
       while (t >= nextVolley[pi]) {
         const origin = { x: bossX(nextVolley[pi], phase.swing, opt.width), y: opt.bossY };
-        const fresh = buildVolley(spec, volleyIndex[pi], origin, opt.width);
+        const fresh = buildVolley(spec, volleyIndex[pi], origin, { width: opt.width });
         bullets = bullets.concat(fresh);
         spawned += fresh.length;
         volleyIndex[pi]++;

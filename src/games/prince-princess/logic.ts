@@ -22,6 +22,27 @@ import {
   type Gap,
   type LevelDef,
 } from "./levels";
+import {
+  BLOCK_H,
+  BLOCK_W,
+  canPush,
+  fallStep,
+  freshGlide,
+  glideStep,
+  pushStep,
+  type BlockState,
+  type GlideState,
+} from "./abilities";
+import { checkpointsFor, respawnX, updateReached } from "./checkpoints";
+import {
+  consumeJump,
+  freshJumpFeel,
+  noteJumpPress,
+  peekJump,
+  takeJump,
+  tickJumpFeel,
+  type JumpFeel,
+} from "./jumpFeel";
 
 // ---------------------------------------------------------------------------
 // 物理常量
@@ -67,6 +88,8 @@ export const STOMP_BOUNCE = 420;
 export const STOMP_DAMAGE = 2;
 /** 受伤后的公共无敌时间(两个人共用) */
 export const HURT_INVULN = 1.5;
+/** 被小云朵托回检查点之后的缓冲:让人站稳看清楚再说 */
+export const CLOUD_GRACE = 2.4;
 export const FALL_LIMIT = 260;
 /** 滑地板的减速系数(越小越滑) */
 export const SLIP_FRICTION = 3;
@@ -225,12 +248,18 @@ export interface HeroState {
   attackCd: number;
   prevUp: boolean;
   prevAtk: boolean;
+  /** 跳跃的输入宽容:土狼时间 + 跳跃缓冲(见 `jumpFeel.ts`) */
+  jump: JumpFeel;
   ridingPlatform: number;
   /** 刚从浮台上蹲跳穿下去,这段时间内不再踩住浮台 */
   dropT: number;
   hurtFlash: number;
   kills: number;
   gems: number;
+  /** 公主的滑翔额度(王子的永远是空的) */
+  glide: GlideState;
+  /** 这一帧正推着箱子 */
+  pushing: boolean;
   /** 机器人托管时用来发现「卡住了」 */
   aiPrevX: number;
   aiStuckT: number;
@@ -313,6 +342,12 @@ export interface BossState {
 export type EventKind =
   | "jump"
   | "double"
+  | "glide"
+  | "push"
+  | "bridge"
+  | "shield"
+  | "cloud"
+  | "flag"
   | "slash"
   | "shoot"
   | "hit"
@@ -347,6 +382,12 @@ export interface World {
   gems: GemState[];
   spikes: Array<{ x: number; w: number }>;
   gaps: Gap[];
+  /** 重箱子(只有王子推得动) */
+  blocks: BlockState[];
+  /** 检查点小旗的 x(至少两面) */
+  flags: number[];
+  /** 两个人都走过的最后一面旗(-1 = 一面都还没点亮) */
+  reached: number;
   boss: BossState | null;
   /** 一个人玩的时候正在操作的是谁 */
   active: number;
@@ -358,6 +399,11 @@ export interface World {
   kills: number;
   enemyTotal: number;
   gemsTaken: number;
+  /** 上面三项里,真人自己那一份(一个人玩的时候搭档的那份不算) */
+  playerKills: number;
+  playerGems: number;
+  /** 真人自己打中怪 / 首领的次数 —— 用来判「这一关是不是搭档一个人打完的」 */
+  playerHits: number;
   status: WorldStatus;
   message: string;
   events: WorldEvent[];
@@ -378,11 +424,14 @@ function makeHero(index: number, kind: HeroKind, x: number): HeroState {
     attackCd: 0,
     prevUp: false,
     prevAtk: false,
+    jump: freshJumpFeel(),
     ridingPlatform: -1,
     dropT: 0,
     hurtFlash: 0,
     kills: 0,
     gems: 0,
+    glide: freshGlide(),
+    pushing: false,
     aiPrevX: x,
     aiStuckT: 0,
   };
@@ -451,6 +500,9 @@ export function createWorld(def: LevelDef, players: 1 | 2 = 1): World {
     gems: def.gems.map((g) => ({ x: g.x, y: g.y, ground: g.ground, taken: false })),
     spikes: def.spikes.map((s) => ({ x: s.x, w: s.w })),
     gaps: def.gaps,
+    blocks: (def.blocks ?? []).map((b) => ({ x: b.x, y: b.y, vy: 0, bridge: false })),
+    flags: checkpointsFor(def),
+    reached: -1,
     boss: def.boss ? makeBoss(def.boss) : null,
     active: 0,
     players,
@@ -460,6 +512,9 @@ export function createWorld(def: LevelDef, players: 1 | 2 = 1): World {
     kills: 0,
     enemyTotal: def.enemies.length,
     gemsTaken: 0,
+    playerKills: 0,
+    playerGems: 0,
+    playerHits: 0,
     status: "playing",
     message: "",
     events: [],
@@ -511,6 +566,16 @@ export function meleeBox(h: HeroState): Box | null {
   };
 }
 
+/**
+ * 这一位现在是真人在操作吗。
+ *
+ * 两个人玩的时候两位都是真人;一个人玩的时候只有 `active` 那位是,
+ * 另一位由 `botInput` 托管 —— 搭档的战果不能记在真人头上。
+ */
+export function humanHero(w: World, heroIndex: number): boolean {
+  return w.players === 2 || heroIndex === w.active;
+}
+
 /** 打倒的小怪比例(0..1);没有小怪的关直接算 1 */
 export function killRatio(w: World): number {
   return w.enemyTotal > 0 ? w.kills / w.enemyTotal : 1;
@@ -560,16 +625,23 @@ export function drainEvents(w: World): WorldEvent[] {
 // 受伤与击倒
 // ---------------------------------------------------------------------------
 
-/** 两个人共用一条心条:受伤后进入公共无敌,替对方挡刀是划算的 */
+/**
+ * 两个人共用一条心条:受伤后进入公共无敌,替对方挡刀是划算的。
+ *
+ * 画面上受伤 = **戴上小护盾闪一下**(`shield` 事件),没有任何受伤描写。
+ * 教学关(`def.noRisk`)连心都不掉,只闪护盾 —— 站着不动一整天也不会输。
+ */
 function hurt(w: World, h: HeroState, fromX: number, why: string): void {
   if (w.invuln > 0 || w.status !== "playing") return;
   w.invuln = HURT_INVULN;
   h.hurtFlash = 0.55;
-  w.hearts--;
   const away: 1 | -1 = h.x >= fromX ? 1 : -1;
   h.vx = away * 190;
   h.vy = -250;
   h.onGround = false;
+  pushEvent(w, "shield", h.x, h.y - 30, h.index);
+  if (w.def.noRisk) return;
+  w.hearts--;
   pushEvent(w, "hurt", h.x, h.y - 24, h.index);
   if (w.hearts <= 0) {
     w.status = "lost";
@@ -578,12 +650,30 @@ function hurt(w: World, h: HeroState, fromX: number, why: string): void {
   }
 }
 
+/**
+ * 掉下去 = 被一朵小云托回最近点亮的那面小旗。
+ * **只挪人**:宝石、清怪数、已经开的城门统统保留,不许整关重来。
+ */
+function cloudBack(w: World, h: HeroState): void {
+  const back = respawnX(w.def, w.flags, w.reached, h.x);
+  h.x = back;
+  h.y = -50;
+  h.vy = 0;
+  h.vx = 0;
+  h.glide = freshGlide();
+  w.invuln = Math.max(w.invuln, CLOUD_GRACE);
+  pushEvent(w, "cloud", back, -70, h.index);
+}
+
 function defeatEnemy(w: World, e: EnemyState, by: HeroState | null): void {
   if (!e.alive) return;
   e.alive = false;
   e.fade = 0.6;
   w.kills++;
-  if (by) by.kills++;
+  if (by) {
+    by.kills++;
+    if (humanHero(w, by.index)) w.playerKills++;
+  }
   pushEvent(w, "defeat", e.x, e.y - 20, by?.index);
   if (doorOpen(w) && !w.boss) pushEvent(w, "door", w.def.goalX, -40);
 }
@@ -599,6 +689,7 @@ function damageEnemy(w: World, e: EnemyState, amount: number, by: DamageKind, he
   }
   e.hp -= amount;
   e.hurtT = 0.22;
+  if (hero && humanHero(w, hero.index)) w.playerHits++;
   pushEvent(w, "hit", e.x, e.y - 24, hero?.index);
   if (e.hp <= 0) defeatEnemy(w, e, hero);
 }
@@ -617,6 +708,7 @@ function damageBoss(w: World, amount: number, by: DamageKind, hero: HeroState | 
   }
   boss.hp -= amount;
   boss.hurtT = 0.22;
+  if (hero && humanHero(w, hero.index)) w.playerHits++;
   pushEvent(w, "bossHit", boss.x, boss.y - BOSS_H, hero?.index);
   if (boss.hp <= 0) {
     boss.hp = 0;
@@ -723,6 +815,7 @@ function applyHorizontal(w: World, h: HeroState, input: Input, dt: number): void
   }
 
   h.x += h.vx * dt;
+  meetBlocks(w, h, dir === 0 ? 0 : dir > 0 ? 1 : -1, dt);
   if (h.x < 16) {
     h.x = 16;
     h.vx = 0;
@@ -733,13 +826,107 @@ function applyHorizontal(w: World, h: HeroState, input: Input, dt: number): void
   }
 }
 
-function applyVertical(w: World, h: HeroState, dt: number): void {
+/**
+ * 撞上重箱子:王子顶着走(推),公主被挡在外面(但箱子只有 `BLOCK_H` 高,跳过去就是了)。
+ * 架成桥的箱子不挡人也不再推得动。
+ */
+function meetBlocks(w: World, h: HeroState, dir: -1 | 0 | 1, dt: number): void {
+  h.pushing = false;
+  for (const b of w.blocks) {
+    if (b.bridge) continue;
+    const top = b.y - BLOCK_H;
+    // 站在箱子顶上不算撞
+    if (h.y <= top + 2) continue;
+    if (h.y - HERO_H >= b.y) continue;
+    const half = BLOCK_W / 2 + HERO_W / 2;
+    if (Math.abs(h.x - b.x) >= half) continue;
+    const fromLeft = h.x < b.x;
+    const moved = pushStep(b, h, dir, dt);
+    if (moved.pushed) {
+      b.x = moved.x;
+      h.pushing = true;
+      if (Math.abs(h.vx) > moved.limit) h.vx = Math.sign(h.vx) * moved.limit;
+      pushEvent(w, "push", b.x, b.y - BLOCK_H, h.index);
+    }
+    // 不管推没推动,人都不许穿进箱子里
+    h.x = fromLeft ? Math.min(h.x, b.x - half) : Math.max(h.x, b.x + half);
+  }
+}
+
+/** 箱子脚下托着它的那一面(地面 0 / 台面负数);断口上就是 null */
+function blockSupportY(w: World, b: BlockState): number | null {
+  let best: number | null = null;
+  for (const pl of w.platforms) {
+    if (b.x <= pl.x - 6 || b.x >= pl.x + pl.w + 6) continue;
+    if (pl.y < b.y - 2) continue;
+    if (best === null || pl.y < best) best = pl.y;
+  }
+  if (groundSolidAt(w.def, b.x) && b.y <= 2) {
+    if (best === null || best > 0) best = 0;
+  } else if (groundSolidAt(w.def, b.x) && (best === null || best > 0)) {
+    best = 0;
+  }
+  return best;
+}
+
+function stepBlocks(w: World, dt: number): void {
+  for (let i = 0; i < w.blocks.length; i++) {
+    const before = w.blocks[i];
+    if (before.bridge) continue;
+    const next = fallStep(before, blockSupportY(w, before), GRAVITY, dt);
+    w.blocks[i] = next;
+    if (next.bridge && !before.bridge) pushEvent(w, "bridge", next.x, next.y - BLOCK_H);
+  }
+}
+
+/** 这颗宝石现在被箱子压着吗(压着就捡不到,得先让王子把箱子推开) */
+export function gemCovered(w: World, g: { x: number; y: number }): boolean {
+  return w.blocks.some(
+    (b) =>
+      !b.bridge &&
+      g.x > b.x - BLOCK_W / 2 &&
+      g.x < b.x + BLOCK_W / 2 &&
+      g.y > b.y - BLOCK_H - 4 &&
+      g.y < b.y + 4
+  );
+}
+
+/** 这个 x 有没有踩得住的地面(架好的桥也算实地) */
+export function solidAtX(w: World, x: number): boolean {
+  if (groundSolidAt(w.def, x)) return true;
+  return w.blocks.some((b) => b.bridge && x > b.x - BLOCK_W / 2 && x < b.x + BLOCK_W / 2);
+}
+
+function applyVertical(w: World, h: HeroState, input: Input, dt: number): void {
   const def = w.def;
   const prevFeet = h.y;
   h.vy += GRAVITY * dt;
+  // 公主的滑翔:空中按住跳键,最多飘 2 秒
+  const glided = glideStep(h.glide, {
+    kind: h.kind,
+    onGround: h.onGround,
+    holding: input.up,
+    vy: h.vy,
+    dt,
+  });
+  if (glided.glide.active && !h.glide.active) pushEvent(w, "glide", h.x, h.y - 24, h.index);
+  h.vy = glided.vy;
+  h.glide = glided.glide;
   h.y += h.vy * dt;
   h.onGround = false;
   h.ridingPlatform = -1;
+
+  // 重箱子的顶面也是「可踩」:从上往下落才踩得住
+  for (const b of w.blocks) {
+    if (h.vy < 0) continue;
+    const top = b.y - BLOCK_H;
+    if (h.x <= b.x - BLOCK_W / 2 - HERO_W * 0.3 || h.x >= b.x + BLOCK_W / 2 + HERO_W * 0.3) continue;
+    if (prevFeet <= top + 6 && h.y >= top) {
+      h.y = top;
+      h.vy = 0;
+      h.onGround = true;
+    }
+  }
 
   // 空中平台(单向:只有从上往下落才踩得住)
   for (let i = 0; i < w.platforms.length; i++) {
@@ -758,21 +945,20 @@ function applyVertical(w: World, h: HeroState, dt: number): void {
 
   // 地面:只有「上一刻还在地面之上」才踩得住,
   // 否则掉进断口以后会被对面的地面从下面接住,像是穿墙一样弹上来
-  if (!h.onGround && h.vy >= 0 && prevFeet <= 0.01 && h.y >= 0 && groundSolidAt(def, h.x)) {
+  if (!h.onGround && h.vy >= 0 && prevFeet <= 0.01 && h.y >= 0 && solidAtX(w, h.x)) {
     h.y = 0;
     h.vy = 0;
     h.onGround = true;
   }
 
-  if (h.onGround) h.airJumps = h.kind === "princess" ? 1 : 0;
+  if (h.onGround) {
+    h.airJumps = h.kind === "princess" ? 1 : 0;
+    h.glide = freshGlide();
+  }
 
   if (h.y > FALL_LIMIT) {
-    const back = safeGroundX(def, h.x - 30);
-    hurt(w, h, h.x, "掉下去啦!别灰心,我们从头再来一遍。");
-    h.x = back;
-    h.y = -50;
-    h.vy = 0;
-    h.vx = 0;
+    hurt(w, h, h.x, "心用完啦!小云朵把大家送回起点,再来一遍就好。");
+    cloudBack(w, h);
   }
 }
 
@@ -818,28 +1004,35 @@ function applyActions(w: World, h: HeroState, input: Input, dt: number): void {
   if (h.hurtFlash > 0) h.hurtFlash = Math.max(0, h.hurtFlash - dt);
   if (h.dropT > 0) h.dropT = Math.max(0, h.dropT - dt);
 
-  if (input.up && !h.prevUp) {
-    if (h.onGround) {
-      if (input.down && h.ridingPlatform >= 0) {
-        // 按着下再按跳:从浮台上穿下去
-        h.onGround = false;
-        h.ridingPlatform = -1;
-        h.dropT = 0.3;
-        h.y += 6;
-        h.vy = 60;
-      } else {
-        h.vy = -jumpSpeedOf(h.kind);
-        h.onGround = false;
-        pushEvent(w, "jump", h.x, h.y, h.index);
-      }
-    } else if (h.airJumps > 0) {
+  // 跳的输入宽容(`jumpFeel.ts`):按下沿先进缓冲,踩着地就把土狼时间刷满,
+  // 然后这一帧再决定那一下跳兑不兑现。放宽的只有「什么时候算数」,
+  // 跳多高、公主能跳几次,规则一个字没变。
+  tickJumpFeel(h.jump, dt, h.onGround);
+  if (input.up && !h.prevUp) noteJumpPress(h.jump);
+  h.prevUp = input.up;
+
+  const wants = peekJump(h.jump, h.onGround, h.airJumps);
+  if (wants === "ground" && h.onGround && input.down && h.ridingPlatform >= 0) {
+    // 按着下再按跳:从浮台上穿下去。这一下按键被穿台用掉了,不再兑现成跳
+    consumeJump(h.jump);
+    h.onGround = false;
+    h.ridingPlatform = -1;
+    h.dropT = 0.3;
+    h.y += 6;
+    h.vy = 60;
+  } else if (wants) {
+    takeJump(h.jump, h.onGround, h.airJumps);
+    if (wants === "ground") {
+      h.vy = -jumpSpeedOf(h.kind);
+      h.onGround = false;
+      pushEvent(w, "jump", h.x, h.y, h.index);
+    } else {
       // 公主的二段跳
       h.airJumps--;
       h.vy = -PRINCESS_DOUBLE_V;
       pushEvent(w, "double", h.x, h.y - 10, h.index);
     }
   }
-  h.prevUp = input.up;
 
   if (input.atk && !h.prevAtk && h.attackCd <= 0) {
     h.attackCd = h.kind === "prince" ? MELEE_CD : SHOT_CD;
@@ -857,13 +1050,15 @@ function applyActions(w: World, h: HeroState, input: Input, dt: number): void {
 function interactions(w: World, h: HeroState, dt: number): void {
   const box = heroBox(h);
 
-  // 宝石
+  // 宝石(被箱子压着的那颗捡不到,得先让王子把箱子推开)
   for (const g of w.gems) {
     if (g.taken) continue;
+    if (gemCovered(w, g)) continue;
     if (Math.abs(g.x - h.x) < 28 && g.y > box.y0 - 24 && g.y < box.y1 + 20) {
       g.taken = true;
       w.gemsTaken++;
       h.gems++;
+      if (humanHero(w, h.index)) w.playerGems++;
       pushEvent(w, "gem", g.x, g.y, h.index);
     }
   }
@@ -1056,11 +1251,13 @@ function checkGoal(w: World): void {
   if (!doorOpen(w)) return;
   const atDoor = w.heroes.filter((h) => Math.abs(h.x - w.def.goalX) < 64 && h.y > -170);
   const need = w.def.goalNeedsAll ? w.heroes.length : 1;
-  if (atDoor.length >= need) {
-    w.status = "won";
-    w.message = "";
-    pushEvent(w, "win", w.def.goalX, -40);
-  }
+  if (atDoor.length < need) return;
+  // 一个人玩的时候城门只认你手上这位:搭档先跑到也得等你走过来。
+  // 不加这一条的话「站着不动让搭档跑完全程」就是通关捷径(第 3 轮 B2:188 关里 110 关中招)。
+  if (w.players === 1 && !atDoor.some((h) => h.index === w.active)) return;
+  w.status = "won";
+  w.message = "";
+  pushEvent(w, "win", w.def.goalX, -40);
 }
 
 function stepOnce(w: World, dt: number, inputs: Input[]): void {
@@ -1068,6 +1265,7 @@ function stepOnce(w: World, dt: number, inputs: Input[]): void {
   w.time += dt;
   if (w.invuln > 0) w.invuln = Math.max(0, w.invuln - dt);
   stepPlatforms(w);
+  stepBlocks(w, dt);
   stepEnemies(w, dt);
   stepShots(w, dt);
   stepBoss(w, dt);
@@ -1078,9 +1276,16 @@ function stepOnce(w: World, dt: number, inputs: Input[]): void {
     const input = inputs[i] ?? emptyInput();
     applyActions(w, h, input, dt);
     applyHorizontal(w, h, input, dt);
-    applyVertical(w, h, dt);
+    applyVertical(w, h, input, dt);
     interactions(w, h, dt);
     if (w.status !== "playing") return;
+  }
+
+  // 两个人都走过一面小旗,那面旗才点亮
+  const lit = updateReached(w.flags, w.reached, w.heroes.map((h) => h.x));
+  if (lit > w.reached) {
+    w.reached = lit;
+    pushEvent(w, "flag", w.flags[lit], -60);
   }
 
   stepShotHits(w);
@@ -1125,6 +1330,12 @@ export interface RunSummary {
   time: number;
   hearts: number;
   bossDown: boolean;
+  /** 一个人玩(另一位由搭档托管)吗 */
+  solo?: boolean;
+  /** 这些是真人自己的那一份 */
+  playerKills?: number;
+  playerGems?: number;
+  playerHits?: number;
 }
 
 export function summarize(w: World): RunSummary {
@@ -1137,13 +1348,30 @@ export function summarize(w: World): RunSummary {
     time: w.time,
     hearts: w.hearts,
     bossDown: w.boss ? !w.boss.alive : false,
+    solo: w.players === 1,
+    playerKills: w.playerKills,
+    playerGems: w.playerGems,
+    playerHits: w.playerHits,
   };
+}
+
+/**
+ * 「清怪」这一条算不算到你头上。
+ *
+ * 一个人玩的时候搭档会帮着打,这没问题;但一关下来自己一下都没打中,
+ * 就不该按「路上的怪一只不剩」给星 —— 那是搭档的功劳。
+ * 没有怪也没有首领的纯跑图关不受这条约束。
+ */
+function ownHandInFight(def: LevelDef, r: RunSummary): boolean {
+  if (!r.solo) return true;
+  if (r.enemyTotal === 0 && !def.boss) return true;
+  return (r.playerHits ?? 0) > 0;
 }
 
 /** 三条三星标准分别达成了没有:清怪 / 用时 / 宝石 */
 export function starGoals(def: LevelDef, r: RunSummary): { clear: boolean; time: boolean; gem: boolean } {
   return {
-    clear: r.enemyTotal === 0 || r.kills >= r.enemyTotal,
+    clear: (r.enemyTotal === 0 || r.kills >= r.enemyTotal) && ownHandInFight(def, r),
     time: r.time <= def.parSeconds,
     gem: r.gems >= def.gemGoal,
   };
@@ -1163,12 +1391,17 @@ export function winMessage(def: LevelDef, r: RunSummary): string {
   const g = starGoals(def, r);
   const done: string[] = [];
   const next: string[] = [];
-  if (def.boss) done.push("把首领打倒啦");
-  if (g.clear) done.push("路上的怪一只不剩");
-  else next.push(`还剩 ${r.enemyTotal - r.kills} 只没打倒`);
+  // 搭档打的、搭档捡的都照实说,不往真人身上安
+  const byPartner = r.solo === true && (r.playerHits ?? 0) <= 0;
+  const gemsByPartner = r.solo === true ? Math.max(0, r.gems - (r.playerGems ?? r.gems)) : 0;
+  if (def.boss) done.push(byPartner ? "首领是搭档打倒的" : "把首领打倒啦");
+  const allDown = r.enemyTotal === 0 || r.kills >= r.enemyTotal;
+  if (allDown && byPartner && r.enemyTotal > 0) next.push("这一路的怪都是搭档打倒的,下回你也上去砍两下");
+  else if (g.clear) done.push("路上的怪一只不剩");
+  else if (!allDown) next.push(`还剩 ${r.enemyTotal - r.kills} 只没打倒`);
   if (g.time) done.push(`只用了 ${Math.round(r.time)} 秒`);
   else next.push(`用时 ${Math.round(r.time)} 秒,标准是 ${def.parSeconds} 秒`);
-  if (g.gem) done.push(`宝石收了 ${r.gems} 颗`);
+  if (g.gem) done.push(gemsByPartner > 0 ? `宝石收了 ${r.gems} 颗(搭档帮着捡了 ${gemsByPartner} 颗)` : `宝石收了 ${r.gems} 颗`);
   else next.push(`宝石差 ${Math.max(0, def.gemGoal - r.gems)} 颗`);
   const head = done.length ? `${done.join("、")},真棒!` : "顺利通过啦!";
   return next.length ? `${head}下次试试:${next.join(";")}。` : head;
@@ -1201,11 +1434,51 @@ interface AiTarget {
   dangerous: boolean;
 }
 
-/** 这位主角现在该盯着谁 */
-function chooseTarget(w: World, h: HeroState): AiTarget {
+/**
+ * 单人托管的搭档跟真人之间的绳子。
+ *
+ * 城门已经只认真人手上那位了(见 `checkGoal`),但搭档跑的还是和真人一模一样的
+ * 全功能 AI:自己清怪、自己捡宝、自己一路冲到城门口。孩子把手放开,一关的活
+ * 全让小伙伴干完了 —— 帮忙可以,包场不行。所以再给搭档系上一根绳子:
+ * 只接真人身边的活,绝不越过真人往城门那头开路。
+ */
+const ESCORT_LEASH = 220;
+/** 比真人还超前这么多的怪,搭档不接;落在真人身后的漏网之鱼倒是照打不误 */
+const ESCORT_ENGAGE = 300;
+/** 没仗打的时候站在真人身后半步等着 */
+const ESCORT_FOLLOW_GAP = 60;
+
+/** 搭档闲着的时候站哪儿:真人朝出发点那一侧半步,免得替真人开路 */
+function escortSpot(w: World, leader: HeroState): number {
+  const toGoal = Math.sign(w.def.goalX - leader.x) || 1;
+  return leader.x - toGoal * ESCORT_FOLLOW_GAP;
+}
+
+/**
+ * 这位主角现在该盯着谁。
+ *
+ * `leader` 不为空表示这是单人模式里托管的搭档,真人手上那位是 `leader`:
+ * 这时只接真人身边的活,没活干就回到真人身边待着,不会自己奔向城门。
+ */
+function chooseTarget(w: World, h: HeroState, leader: HeroState | null): AiTarget {
   const my = attackKindOf(h.kind);
+  /** 这个位置算不算「真人身边」:比真人超前太多就不算,身后多远都算 */
+  const nearLeader = (x: number): boolean => {
+    if (!leader) return true;
+    const toGoal = Math.sign(w.def.goalX - leader.x) || 1;
+    return (x - leader.x) * toGoal <= ESCORT_ENGAGE;
+  };
+  const idle = (): AiTarget => ({
+    x: leader ? escortSpot(w, leader) : w.def.goalX,
+    y: 0,
+    halfW: 0,
+    hostile: false,
+    reachable: false,
+    dangerous: false,
+  });
   const boss = w.boss;
   if (boss?.alive) {
+    if (!nearLeader(boss.x)) return idle();
     const side = h.x <= boss.x ? -1 : 1;
     return {
       x: boss.x,
@@ -1225,6 +1498,7 @@ function chooseTarget(w: World, h: HeroState): AiTarget {
   let fallbackD = Infinity;
   for (const e of w.enemies) {
     if (!e.alive) continue;
+    if (!nearLeader(e.x)) continue;
     const d = Math.abs(e.x - h.x);
     if (canDamage(e.kind, my)) {
       if (d < bestD) {
@@ -1252,12 +1526,21 @@ function chooseTarget(w: World, h: HeroState): AiTarget {
     // 自己打不动这只,那就跟过去,让搭档来收拾
     return { x: fallback.x - 90, y: 0, halfW: 0, hostile: false, reachable: false, dangerous: false };
   }
-  return { x: w.def.goalX, y: 0, halfW: 0, hostile: false, reachable: false, dangerous: false };
+  return idle();
 }
 
-/** 前面一小段路上有没有断口 */
+/**
+ * 前面一小段路上有没有断口。
+ *
+ * 这个「一小段」有多长很要命:看得太远就会**起跳过早**,
+ * 王子一跳只有 `jumpRange("prince")≈158`,最宽的断口 118 —— 提前 56 起跳会正好摔进坑里。
+ * 1.1 靠「摔下去就地放回坑边」把这个毛病盖住了(第二次自然贴着边起跳);
+ * 1.2 改成回检查点以后盖不住了,所以这里把预判距离收到贴边起跳。
+ */
+const GAP_LOOKAHEAD = 30;
+
 function gapAhead(def: LevelDef, x: number, face: number): boolean {
-  return groundSolidAt(def, x) && !groundSolidAt(def, x + face * 56);
+  return groundSolidAt(def, x) && !groundSolidAt(def, x + face * GAP_LOOKAHEAD);
 }
 
 /** 前面一小段路上有没有尖刺 */
@@ -1265,6 +1548,20 @@ function spikeAhead(w: World, h: HeroState, face: number): boolean {
   return w.spikes.some((s) => {
     const rel = (s.x - h.x) * face;
     return rel > -10 && rel < 76 && h.y > -24;
+  });
+}
+
+/**
+ * 前面挡着一个推不动的重箱子(公主专属烦恼)。
+ * 箱子只有 `BLOCK_H` 高,跳上去就过去了 —— 托管的同伴不能被它卡住。
+ */
+function blockAhead(w: World, h: HeroState, face: number): boolean {
+  if (canPush(h.kind)) return false;
+  return w.blocks.some((b) => {
+    if (b.bridge) return false;
+    const rel = (b.x - h.x) * face;
+    if (rel < 0 || rel > BLOCK_W / 2 + HERO_W / 2 + 26) return false;
+    return h.y > b.y - BLOCK_H + 2 && h.y - HERO_H < b.y;
   });
 }
 
@@ -1279,13 +1576,19 @@ function shotIncoming(w: World, h: HeroState): boolean {
   });
 }
 
-/** 机器人这一帧要按什么键 */
+/**
+ * 机器人这一帧要按什么键。
+ *
+ * 单人模式里没被真人操作的那位走「托管搭档」的分支:帮忙打真人身边的怪,
+ * 但被 `ESCORT_LEASH` 拴在真人身边,不会替真人把关走完(见 `chooseTarget`)。
+ */
 export function botInput(w: World, heroIndex = 0, dt = 1 / 60): Input {
   const input = emptyInput();
   const h = w.heroes[heroIndex];
   if (!h || w.status !== "playing") return input;
   const def = w.def;
-  const target = chooseTarget(w, h);
+  const leader = humanHero(w, heroIndex) ? null : w.heroes[w.active] ?? null;
+  const target = chooseTarget(w, h, leader);
 
   /**
    * 站位:永远待在自己原来那一侧,绝不为了绕后而从怪身上穿过去。
@@ -1302,6 +1605,12 @@ export function botInput(w: World, heroIndex = 0, dt = 1 / 60): Input {
     else if (h.kind === "prince") standoff = target.halfW + HERO_W / 2 + 16;
     else standoff = target.halfW + 170 + slip;
     wantX = target.x + side * standoff;
+  }
+  // 绳子只拴住「往城门那头跑」的方向:搭档想退到多远都行(公主放星星本来就要站得远),
+  // 但绝不能越过真人去替他开路。
+  if (leader) {
+    const toGoal = Math.sign(def.goalX - leader.x) || 1;
+    if ((wantX - leader.x) * toGoal > ESCORT_LEASH) wantX = leader.x + toGoal * ESCORT_LEASH;
   }
   wantX = Math.max(50, Math.min(def.len - 50, wantX));
 
@@ -1321,6 +1630,7 @@ export function botInput(w: World, heroIndex = 0, dt = 1 / 60): Input {
   const jumpNow =
     gapAhead(def, h.x, face) ||
     spikeAhead(w, h, face) ||
+    blockAhead(w, h, face) ||
     shotIncoming(w, h) ||
     (needClimb && h.onGround) ||
     (h.aiStuckT > 0.5 && h.onGround);

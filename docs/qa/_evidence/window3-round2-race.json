@@ -1,0 +1,496 @@
+{
+  "games": [
+    {
+      "id": "duo-rush",
+      "r1": {
+        "clicked": 8,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "duo-arena",
+      "r1": {
+        "clicked": 6,
+        "stage": true,
+        "canvases": 2,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 2,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "duo-vs-star",
+      "r1": {
+        "clicked": 6,
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "sling-birds",
+      "r1": {
+        "clicked": 8,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "candy-swing",
+      "r1": {
+        "clicked": 8,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "gold-hook",
+      "r1": {
+        "clicked": 2,
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "garden-guard",
+      "r1": {
+        "clicked": 0,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "sprout-defense",
+      "r1": {
+        "clicked": 0,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "monster-crisis",
+      "r1": {
+        "clicked": 3,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "shoot-range",
+      "r1": {
+        "clicked": 3,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "sky-squad",
+      "r1": {
+        "clicked": 3,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "tank-battle",
+      "r1": {
+        "clicked": 3,
+        "stage": true,
+        "canvases": 2,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "bomb-buddies",
+      "r1": {
+        "clicked": 7,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "snow-fight",
+      "r1": {
+        "clicked": 5,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "bumper-cars",
+      "r1": {
+        "clicked": 7,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "bowling-lane",
+      "r1": {
+        "clicked": 6,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "ice-fire-forest",
+      "r1": {
+        "clicked": 0,
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "puff-bros",
+      "r1": {
+        "clicked": 5,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    },
+    {
+      "id": "prince-princess",
+      "r1": {
+        "clicked": 3,
+        "stage": true,
+        "canvases": 1,
+        "roots": 1,
+        "overlays": 0
+      },
+      "r2": {
+        "stage": false
+      },
+      "r3": {
+        "cards": 55,
+        "remount": "ok",
+        "stage": true,
+        "canvases": 0,
+        "roots": 1,
+        "overlays": 0
+      },
+      "errors": []
+    }
+  ],
+  "cross": [
+    {
+      "a": "duo-rush",
+      "b": "duo-arena",
+      "beforeA": 0,
+      "afterA": 0,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "duo-vs-star",
+      "b": "sling-birds",
+      "beforeA": 0,
+      "afterA": 0,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "candy-swing",
+      "b": "gold-hook",
+      "beforeA": 0,
+      "afterA": 0,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "garden-guard",
+      "b": "sprout-defense",
+      "beforeA": 0,
+      "afterA": 0,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "monster-crisis",
+      "b": "shoot-range",
+      "beforeA": 8,
+      "afterA": 8,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "sky-squad",
+      "b": "tank-battle",
+      "beforeA": 8,
+      "afterA": 8,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "bomb-buddies",
+      "b": "snow-fight",
+      "beforeA": 8,
+      "afterA": 8,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "bumper-cars",
+      "b": "bowling-lane",
+      "beforeA": 8,
+      "afterA": 8,
+      "same": true,
+      "errors": 0
+    },
+    {
+      "a": "ice-fire-forest",
+      "b": "puff-bros",
+      "beforeA": 8,
+      "afterA": 8,
+      "same": true,
+      "errors": 0
+    }
+  ]
+}

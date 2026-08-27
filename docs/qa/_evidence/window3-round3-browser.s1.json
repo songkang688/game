@@ -1,0 +1,611 @@
+{
+  "round": 3,
+  "levels": [
+    1,
+    60,
+    133,
+    188
+  ],
+  "home": {
+    "cards": 55,
+    "ourCards": 19
+  },
+  "results": [
+    {
+      "id": "duo-arena",
+      "title": "朵星擂台",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/duo-arena"
+      },
+      "modeButtons": [
+        "👫 双人同屏两个人一台设备,各守半场",
+        "🤖 单人挑战一个人也能打,人机四档",
+        "🏰 无尽守擂连着接招,对手一场比一场强",
+        "开擂 ▶"
+      ],
+      "chapters": 0,
+      "campaign": {},
+      "idleLose": null,
+      "modes": {
+        "👫 双人同屏两个人一台设备,各守半场": {
+          "enter": "ok",
+          "started": "开擂",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 116
+        },
+        "🤖 单人挑战一个人也能打,人机四档": {
+          "enter": "ok",
+          "started": "开擂",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 116
+        },
+        "🏰 无尽守擂连着接招,对手一场比一场强": {
+          "enter": "ok",
+          "started": "开擂",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 115
+        },
+        "开擂 ▶": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 117
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 44,
+          "sel": "dua-rules-close"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 73832
+    },
+    {
+      "id": "candy-swing",
+      "title": "糖果秋千",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/candy-swing"
+      },
+      "modeButtons": [
+        "🍩 无尽甜甜塔 看能吃到第几颗"
+      ],
+      "chapters": 0,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🗺️ 闯关 188 关 10 大主题，慢慢挑",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        },
+        "60": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🗺️ 闯关 188 关 10 大主题，慢慢挑",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 64
+        },
+        "133": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🗺️ 闯关 188 关 10 大主题，慢慢挑",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "🗺️ 闯关 188 关 10 大主题，慢慢挑",
+          "win": 1,
+          "lose": 0,
+          "samples": [
+            {
+              "kind": "win",
+              "src": "platform",
+              "text": "🌟好厉害呀!🎊 ✨ 🎊⭐⭐⭐188 关全部通关！共收集 564 颗星星！"
+            }
+          ],
+          "ticks": 13
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "🗺️ 闯关 188 关 10 大主题，慢慢挑",
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 46
+      },
+      "modes": {
+        "🍩 无尽甜甜塔 看能吃到第几颗": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 47
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 44,
+          "sel": "cs-btn cds-tap cs-retry"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 106011
+    },
+    {
+      "id": "sprout-defense",
+      "title": "绿芽保卫战",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/sprout-defense"
+      },
+      "modeButtons": [],
+      "chapters": 0,
+      "campaign": {},
+      "idleLose": null,
+      "modes": {},
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 44,
+          "sel": "spd-skip"
+        }
+      },
+      "errors": [],
+      "canvasOnly": true,
+      "canvas": {
+        "w": 828,
+        "h": 1086,
+        "cssW": 828,
+        "cssH": 1086
+      },
+      "canvasPlay": {
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 260
+      },
+      "ms": 42857
+    },
+    {
+      "id": "sky-squad",
+      "title": "飞机小队",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/sky-squad"
+      },
+      "modeButtons": [
+        "♾️ 云海远征 · 起飞!",
+        "👫 双人合作",
+        "🙌 双人同屏"
+      ],
+      "chapters": 8,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 1,
+          "lose": 0,
+          "samples": [
+            {
+              "kind": "win",
+              "src": "l99",
+              "stars": 1,
+              "text": "★★★ 第 1 关过关！ 一下都没被碰到,就是炸弹用了 2 颗——留着炸弹打 Boss 更划算。下一关 ▶🔁 再玩一次🗺️ 回地图"
+            }
+          ],
+          "ticks": 5
+        },
+        "60": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 1,
+          "lose": 0,
+          "samples": [
+            {
+              "kind": "win",
+              "src": "l99",
+              "stars": 1,
+              "text": "★★★ 第 60 关过关！ 一下都没被碰到,就是炸弹用了 2 颗——留着炸弹打 Boss 更划算。下一关 ▶🔁 再玩一次🗺️ 回地图"
+            }
+          ],
+          "ticks": 6
+        },
+        "133": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 1,
+          "lose": 0,
+          "samples": [
+            {
+              "kind": "win",
+              "src": "l99",
+              "stars": 1,
+              "text": "★★★ 第 133 关过关！ 一下都没被碰到,就是炸弹用了 3 颗——留着炸弹打 Boss 更划算。下一关 ▶🔁 再玩一次🗺️ 回地图"
+            }
+          ],
+          "ticks": 11
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 1,
+          "samples": [
+            {
+              "kind": "lose",
+              "src": "l99",
+              "stars": 0,
+              "text": "就差一点点！ 月亮大灯笼还剩一口气。留一颗炸弹给它的最后一段,下次一定行。🔁 再试本关🗺️ 回地图"
+            }
+          ],
+          "ticks": 46
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "已在地图",
+        "win": 1,
+        "lose": 0,
+        "samples": [
+          {
+            "kind": "win",
+            "src": "l99",
+            "stars": 3,
+            "text": "★★★ 第 1 关过关！ 0 架全部请回机库,一下都没被碰到,漂亮的满分航线!擦弹 1 次,胆子很稳!下一关 ▶🔁 再玩一次🗺️ 回地图"
+          }
+        ],
+        "ticks": 42
+      },
+      "modes": {
+        "♾️ 云海远征 · 起飞!": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 47
+        },
+        "👫 双人合作": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 47
+        },
+        "🙌 双人同屏": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 47
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 521,
+          "worstSel": "l99-tab l99-tab-on"
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 1,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 484,
+          "worstSel": "sks-opt"
+        },
+        "minHit": {
+          "min": 31,
+          "sel": "sks-opt"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 104279
+    },
+    {
+      "id": "snow-fight",
+      "title": "雪球大作战",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/snow-fight"
+      },
+      "modeButtons": [
+        "⚔️ 双人对战",
+        "♾️ 无尽雪季 · 点我开始!"
+      ],
+      "chapters": 8,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 60,
+          "leftLevel": true
+        },
+        "60": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 37,
+          "leftLevel": true
+        },
+        "133": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 27,
+          "leftLevel": true
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 65
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "已在地图",
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 46
+      },
+      "modes": {
+        "⚔️ 双人对战": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 47
+        },
+        "♾️ 无尽雪季 · 点我开始!": {
+          "enter": "ok",
+          "started": null,
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 47
+        }
+      },
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 507,
+          "worstSel": "l99-tab l99-tab-on"
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 44,
+          "sel": "l99-back"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 120082
+    },
+    {
+      "id": "ice-fire-forest",
+      "title": "冰冰火火森林",
+      "entry": {
+        "entry": "ok",
+        "hash": "#/game/ice-fire-forest"
+      },
+      "modeButtons": [],
+      "chapters": 8,
+      "campaign": {
+        "1": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 157
+        },
+        "60": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 155
+        },
+        "133": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 153
+        },
+        "188": {
+          "open": "clicked",
+          "stage": "ok",
+          "gate": "已在地图",
+          "win": 0,
+          "lose": 0,
+          "samples": [],
+          "ticks": 152
+        }
+      },
+      "idleLose": {
+        "open": "clicked",
+        "stage": "ok",
+        "gate": "已在地图",
+        "win": 0,
+        "lose": 0,
+        "samples": [],
+        "ticks": 46
+      },
+      "modes": {},
+      "reentry": {
+        "first": "ok",
+        "second": "ok"
+      },
+      "mobile": {
+        "entry": "ok",
+        "overflowHome": {
+          "doc": 0,
+          "worst": 479,
+          "worstSel": "l99-tab l99-tab-on"
+        },
+        "level": {
+          "open": "clicked",
+          "stage": "ok"
+        },
+        "play": {
+          "win": 0,
+          "lose": 0
+        },
+        "overflowLevel": {
+          "doc": 0,
+          "worst": 0,
+          "worstSel": ""
+        },
+        "minHit": {
+          "min": 25,
+          "sel": "iff-btn iff-btn--ghost"
+        }
+      },
+      "errors": [],
+      "canvasOnly": false,
+      "ms": 109867
+    }
+  ]
+}

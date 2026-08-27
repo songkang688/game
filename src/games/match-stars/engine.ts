@@ -2,26 +2,54 @@
  * 星星消消乐的棋盘引擎（纯函数，不碰 DOM）。
  * 1.1 把 1.0 内联在 index.ts 里的匹配 / 下落 / 机关结算抽了出来，
  * 界面和单测跑的是同一套规则，第 100–188 关的可解性才能真跑一遍自动玩家。
+ *
+ * 1.2 做了两件事，规则一条没改：
+ *  1. 匹配 / 压实 / 补块下沉到尺寸无关的 `board.ts`，好和对战的 6×6 共用；
+ *  2. `applyGravity` 拆成 `settleGravity`（只挪）+ `refillGrid`（只补）。
+ *     拆开之后才有「幸存块落到位、顶上还空着」的中间盘面，
+ *     `anim.ts` 拿它算出下落清单，方块才是滑下去而不是原地变脸。
+ *     补块取随机数的顺序（列 0→7、每列自下而上）与 1.1 一字不差，老关卡 seed 一位没变。
  */
 import { mulberry32 } from "../level99";
+import {
+  EMPTY,
+  RAINBOW,
+  findMatchesOn,
+  legalSwapsOn,
+  matchesAtOn,
+  PLAIN,
+  refillOn,
+  rotateSlots,
+  settleOn,
+  type Cellset,
+} from "./board";
 import type { MatchBelt, MatchLevel } from "./levels";
 
-export const SIZE = 8;
-/** 彩虹星：和谁交换就清掉全场那种图案 */
-export const RAINBOW = -2;
-export const EMPTY = -1;
+export { EMPTY, RAINBOW };
 
-export interface MatchState {
+export const SIZE = 8;
+
+export interface MatchState extends Cellset {
+  cols: number;
+  rows: number;
   grid: number[];
+  /** 特殊块：闯关不产出，恒为 `PLAIN`（火箭 / 炸弹只在对战与无尽里出现） */
+  special: number[];
   /** 冰块：旁边消除就能敲开 */
   ice: boolean[];
   /** 藤蔓：必须在它上面消除才能剪断 */
   vine: boolean[];
   /** 1.1 糖霜层数（0..2）：在它上面每消一次剥一层 */
   frost: number[];
+  /** `ice || vine`：不参与下落，但下落可以从旁边穿过去 */
+  fixed: boolean[];
+  /** 1.2 挡板：挡住下落，上面的星星落不下来，得先在旁边消一次把它敲掉 */
+  solid: boolean[];
   iceLeft: number;
   vineLeft: number;
   frostLeft: number;
+  /** 1.2 还剩几块挡板 */
+  blockerLeft: number;
   /** 各收集目标已收到的数量 */
   collected: number[];
   /** 1.1 各订单已完成的次数 */
@@ -91,15 +119,23 @@ export function placeFrost(frost: number[], n: number, layers: number, blocked: 
   return placed;
 }
 
+/** 冰块 / 藤蔓变了就得同步这一格的「不参与下落」标记 */
+function syncFixed(s: MatchState, i: number): void {
+  s.fixed[i] = s.ice[i] || s.vine[i];
+}
+
 export function createState(cfg: MatchLevel, rand: () => number): MatchState {
   const grid = new Array<number>(SIZE * SIZE).fill(0);
   const ice = new Array<boolean>(SIZE * SIZE).fill(false);
   const vine = new Array<boolean>(SIZE * SIZE).fill(false);
   const frost = new Array<number>(SIZE * SIZE).fill(0);
+  const solid = new Array<boolean>(SIZE * SIZE).fill(false);
   const iceLeft = placeMarks(ice, cfg.ice, vine, rand);
   const vineLeft = placeMarks(vine, cfg.vine, ice, rand);
   const blocked = ice.map((v, i) => v || vine[i]);
   const frostLeft = placeFrost(frost, cfg.frost ?? 0, cfg.frostLayers ?? 1, blocked, rand);
+  // 1.2 挡板：摆在冰块 / 藤蔓之外的中间区域，和它们一样互不相邻
+  const blockerLeft = cfg.blockers ? placeMarks(solid, cfg.blockers, blocked, rand) : 0;
   const randToken = (): number => Math.floor(rand() * cfg.colors);
   for (let i = 0; i < grid.length; i++) {
     let v = randToken();
@@ -113,14 +149,22 @@ export function createState(cfg: MatchLevel, rand: () => number): MatchState {
     }
     grid[i] = v;
   }
+  // 挡板格自己不放星星，它就是一堵墙
+  for (let i = 0; i < grid.length; i++) if (solid[i]) grid[i] = EMPTY;
   return {
+    cols: SIZE,
+    rows: SIZE,
     grid,
+    special: new Array<number>(SIZE * SIZE).fill(PLAIN),
     ice,
     vine,
     frost,
+    fixed: blocked.slice(),
+    solid,
     iceLeft,
     vineLeft,
     frostLeft,
+    blockerLeft,
     collected: cfg.goals.map(() => 0),
     orders: (cfg.orders ?? []).map(() => 0),
     armor: cfg.boss?.armor ?? 0,
@@ -130,13 +174,19 @@ export function createState(cfg: MatchLevel, rand: () => number): MatchState {
 
 export function cloneState(s: MatchState): MatchState {
   return {
+    cols: s.cols,
+    rows: s.rows,
     grid: s.grid.slice(),
+    special: s.special.slice(),
     ice: s.ice.slice(),
     vine: s.vine.slice(),
     frost: s.frost.slice(),
+    fixed: s.fixed.slice(),
+    solid: s.solid.slice(),
     iceLeft: s.iceLeft,
     vineLeft: s.vineLeft,
     frostLeft: s.frostLeft,
+    blockerLeft: s.blockerLeft,
     collected: s.collected.slice(),
     orders: s.orders.slice(),
     armor: s.armor,
@@ -146,37 +196,12 @@ export function cloneState(s: MatchState): MatchState {
 
 /** 找出棋盘上所有三连及以上的格子 */
 export function findMatches(g: number[]): Set<number> {
-  const out = new Set<number>();
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      const i = r * SIZE + c;
-      const v = g[i];
-      if (v < 0) continue;
-      if (c <= SIZE - 3 && g[i + 1] === v && g[i + 2] === v) {
-        out.add(i); out.add(i + 1); out.add(i + 2);
-      }
-      if (r <= SIZE - 3 && g[i + SIZE] === v && g[i + 2 * SIZE] === v) {
-        out.add(i); out.add(i + SIZE); out.add(i + 2 * SIZE);
-      }
-    }
-  }
-  return out;
+  return findMatchesOn(g, SIZE, SIZE);
 }
 
 /** 单点快查：格子 i 现在是不是某个三连的一员（挑候选交换用，比全盘扫快得多） */
 export function matchesAt(g: number[], i: number): boolean {
-  const v = g[i];
-  if (v < 0) return false;
-  const r = Math.floor(i / SIZE);
-  const c = i % SIZE;
-  let run = 1;
-  for (let x = c - 1; x >= 0 && g[r * SIZE + x] === v; x--) run++;
-  for (let x = c + 1; x < SIZE && g[r * SIZE + x] === v; x++) run++;
-  if (run >= 3) return true;
-  run = 1;
-  for (let y = r - 1; y >= 0 && g[y * SIZE + c] === v; y--) run++;
-  for (let y = r + 1; y < SIZE && g[y * SIZE + c] === v; y++) run++;
-  return run >= 3;
+  return matchesAtOn(g, SIZE, SIZE, i);
 }
 
 export function adjacent(a: number, b: number): boolean {
@@ -185,12 +210,15 @@ export function adjacent(a: number, b: number): boolean {
   return Math.abs(ra - rb) + Math.abs(ca - cb) === 1;
 }
 
-function refillToken(cfg: MatchLevel, rand: () => number): number {
+/** 补一颗新星星：本关会出彩虹星的话有 6% 概率补出彩虹星 */
+export function spawnToken(cfg: MatchLevel, rand: () => number): number {
   if (cfg.rainbow && rand() < 0.06) return RAINBOW;
   return Math.floor(rand() * cfg.colors);
 }
 
-/** 消掉一组格子：计目标、敲冰、剪藤、剥糖霜、打护甲 */
+const refillToken = spawnToken;
+
+/** 消掉一组格子：计目标、敲冰、剪藤、剥糖霜、敲挡板、打护甲 */
 export function clearCells(s: MatchState, cfg: MatchLevel, set: Set<number>): void {
   set.forEach((i) => {
     const v = s.grid[i];
@@ -199,54 +227,60 @@ export function clearCells(s: MatchState, cfg: MatchLevel, set: Set<number>): vo
     });
     if (cfg.boss && v === cfg.boss.token && s.armor > 0) s.armor--;
     if (s.frost[i] > 0) { s.frost[i]--; s.frostLeft--; }
-    if (s.vine[i]) { s.vine[i] = false; s.vineLeft--; }
-    if (s.ice[i]) { s.ice[i] = false; s.iceLeft--; }
+    if (s.vine[i]) { s.vine[i] = false; s.vineLeft--; syncFixed(s, i); }
+    if (s.ice[i]) { s.ice[i] = false; s.iceLeft--; syncFixed(s, i); }
     const r = Math.floor(i / SIZE), c = i % SIZE;
     const neighbors = [
       r > 0 ? i - SIZE : -1, r < SIZE - 1 ? i + SIZE : -1,
       c > 0 ? i - 1 : -1, c < SIZE - 1 ? i + 1 : -1,
     ];
     for (const n of neighbors) {
-      if (n >= 0 && s.ice[n]) { s.ice[n] = false; s.iceLeft--; }
+      if (n >= 0 && s.ice[n]) { s.ice[n] = false; s.iceLeft--; syncFixed(s, n); }
+      // 挡板和冰块一个脾气：在它旁边消一次就敲掉，敲掉之后底下才补得进新块
+      if (n >= 0 && s.solid[n]) { s.solid[n] = false; s.blockerLeft--; }
     }
     s.grid[i] = EMPTY;
   });
 }
 
-export function applyGravity(s: MatchState, cfg: MatchLevel, rand: () => number): void {
-  for (let c = 0; c < SIZE; c++) {
-    const vals: number[] = [];
-    for (let r = SIZE - 1; r >= 0; r--) {
-      const i = r * SIZE + c;
-      if (!s.ice[i] && !s.vine[i] && s.grid[i] >= 0) vals.push(s.grid[i]);
-    }
-    let vi = 0;
-    for (let r = SIZE - 1; r >= 0; r--) {
-      const i = r * SIZE + c;
-      if (s.ice[i] || s.vine[i]) continue;
-      s.grid[i] = vi < vals.length ? vals[vi++] : refillToken(cfg, rand);
-    }
-  }
+/**
+ * 只压实、不补块：每列（挡板会把一列切成几段）里活着的图案落到底，顶上留 `EMPTY`。
+ * 这张有洞的中间盘面就是下落动画的依据。
+ */
+export function settleGravity(s: MatchState): void {
+  settleOn(s.grid, SIZE, SIZE, s);
 }
 
 /**
- * 1.1 传送带：整行的图案循环平移一格（冰块 / 藤蔓 卡着的格子不动）。
+ * 只补块、不压实：把 `EMPTY` 填成新图案。
+ * 取随机数的顺序是「列 0→7、每列自下而上」，和 1.1 合写时完全一致。
+ */
+export function refillGrid(s: MatchState, cfg: MatchLevel, rand: () => number): number {
+  return refillOn(s.grid, SIZE, SIZE, () => refillToken(cfg, rand), s);
+}
+
+/** 压实 + 补块。规则与 1.1 完全等价，只是内部分成了两步 */
+export function applyGravity(s: MatchState, cfg: MatchLevel, rand: () => number): void {
+  settleGravity(s);
+  refillGrid(s, cfg, rand);
+}
+
+/**
+ * 1.1 传送带：整行的图案循环平移一格（冰块 / 藤蔓 / 挡板卡着的格子不动）。
  * 每走完一步就转一下，节奏和真机一致。
  */
-export function shiftBelt(s: MatchState, belt: MatchBelt): void {
+export function beltSlots(s: MatchState, belt: MatchBelt): number[] {
   const row = ((belt.row % SIZE) + SIZE) % SIZE;
   const slots: number[] = [];
   for (let c = 0; c < SIZE; c++) {
     const i = row * SIZE + c;
-    if (!s.ice[i] && !s.vine[i] && s.grid[i] >= 0) slots.push(i);
+    if (!s.ice[i] && !s.vine[i] && !s.solid[i] && s.grid[i] >= 0) slots.push(i);
   }
-  if (slots.length < 2) return;
-  const vals = slots.map((i) => s.grid[i]);
-  const n = vals.length;
-  const step = belt.dir >= 0 ? 1 : -1;
-  slots.forEach((i, k) => {
-    s.grid[i] = vals[((k - step) % n + n) % n];
-  });
+  return slots;
+}
+
+export function shiftBelt(s: MatchState, belt: MatchBelt): void {
+  rotateSlots(s.grid, s.special, beltSlots(s, belt), belt.dir);
 }
 
 export function runBelts(s: MatchState, cfg: MatchLevel): void {
@@ -264,6 +298,7 @@ export function bossRoar(s: MatchState, cfg: MatchLevel, rand: () => number): nu
   const pick = free[Math.floor(rand() * free.length)];
   s.ice[pick] = true;
   s.iceLeft++;
+  syncFixed(s, pick);
   return pick;
 }
 
@@ -336,6 +371,14 @@ export function remaining(s: MatchState, cfg: MatchLevel): number {
   return left;
 }
 
+/**
+ * 挡板不是过关条件，但它堵着盘面：自动玩家打分时给一点点权重，
+ * 让它顺手把挡板敲了，别绕着走（`remaining` 保持原样，`goalsMet` 才不会被带偏）。
+ */
+export function boardPressure(s: MatchState, cfg: MatchLevel): number {
+  return remaining(s, cfg) + s.blockerLeft * 2;
+}
+
 // ---------------------------------------------------------------------------
 // 自动玩家：第 100–188 关的可解性靠它证明
 // ---------------------------------------------------------------------------
@@ -350,18 +393,16 @@ export interface SimResult {
 
 /** 列出所有「换了就能消」的相邻交换 */
 export function legalSwaps(s: MatchState, cfg: MatchLevel): Array<[number, number]> {
+  if (cfg.rainbow) return legalSwapsOn(s);
+  // 本关不出彩虹星时保持 1.1 的判定：只认「换了真能凑出三连」的那些
   const out: Array<[number, number]> = [];
-  const locked = (i: number): boolean => s.ice[i] || s.vine[i];
+  const locked = (i: number): boolean => s.ice[i] || s.vine[i] || s.solid[i];
   for (let i = 0; i < s.grid.length; i++) {
     if (locked(i) || s.grid[i] === EMPTY) continue;
     const c = i % SIZE;
     const cands = [c < SIZE - 1 ? i + 1 : -1, i + SIZE < s.grid.length ? i + SIZE : -1];
     for (const j of cands) {
       if (j < 0 || locked(j) || s.grid[j] === EMPTY) continue;
-      if (cfg.rainbow && (s.grid[i] === RAINBOW || s.grid[j] === RAINBOW)) {
-        out.push([i, j]);
-        continue;
-      }
       [s.grid[i], s.grid[j]] = [s.grid[j], s.grid[i]];
       const ok = matchesAt(s.grid, i) || matchesAt(s.grid, j);
       [s.grid[i], s.grid[j]] = [s.grid[j], s.grid[i]];
@@ -411,7 +452,7 @@ export function simulateLevel(cfg: MatchLevel, seed: number): SimResult {
     if (goalsMet(state, cfg)) break;
     const swaps = legalSwaps(state, cfg);
     if (swaps.length === 0) break;
-    const before = remaining(state, cfg);
+    const before = boardPressure(state, cfg);
     let bestSwap = swaps[0];
     if (stalled >= 4) {
       // 连着几步没进展就换个思路随便走一步，真人卡住时也是这么干的
@@ -423,7 +464,7 @@ export function simulateLevel(cfg: MatchLevel, seed: number): SimResult {
         const trial = cloneState(state);
         const info = playSwap(trial, cfg, a, b, mulberry32(evalSeed++));
         // 主要看离过关近了多少，再稍微偏好大消除与连锁
-        const score = (before - remaining(trial, cfg)) * 10 + info.best + info.steps * 2;
+        const score = (before - boardPressure(trial, cfg)) * 10 + info.best + info.steps * 2;
         if (score > bestScore) {
           bestScore = score;
           bestSwap = [a, b];
@@ -431,7 +472,7 @@ export function simulateLevel(cfg: MatchLevel, seed: number): SimResult {
       }
     }
     playSwap(state, cfg, bestSwap[0], bestSwap[1], rand);
-    stalled = remaining(state, cfg) < before ? 0 : stalled + 1;
+    stalled = boardPressure(state, cfg) < before ? 0 : stalled + 1;
   }
   const won = goalsMet(state, cfg);
   return { won, movesUsed: state.used, movesLeft: cfg.moves - state.used, left: remaining(state, cfg) };

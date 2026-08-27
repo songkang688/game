@@ -4,7 +4,9 @@ export { meta };
 // 花园守卫:188 关十三章主题塔防战役!先选主题再选关,每章专属配色、怪物阵容和 BOSS。
 // 通关解锁下一关,回放刷 3 星;失败只重试本关。
 // 1.1 新增:冰晶塔/毒雾塔、天上的飞怪、可拆路障、天气影响射程。
+// 1.2 新增:铃兰支援塔、四类原型 BOSS、波次预览与提前召唤、1×/2×/暂停、无尽「守到底」。
 import {
+  BarricadeDef,
   BARRICADE_SMASH_REWARD,
   DASH_CYCLE,
   DASH_MULT,
@@ -27,13 +29,16 @@ import {
   THEME_ORDER,
   THEME_STYLE,
   TOWER_INFO,
+  TOWER_KINDS,
+  ThemeId,
   TowerKind,
   WEATHER_INFO,
+  WaveEntry,
+  WeatherKind,
   applyHit,
   barricadeMap,
   boomSplash,
   buildWaypoints,
-  canPlace,
   clearSpeechLine,
   combineSlow,
   comboPetalBonus,
@@ -63,14 +68,58 @@ import {
   themeStars,
   totalStars,
   towerCanHitAir,
-  towerCooldown,
   towerDamage,
-  towerRange,
   towersUnlockedAt,
   upgradeCost,
   waveSpawnTimes,
   weatherSpeedMult,
 } from "./logic";
+import {
+  ENDLESS_HEARTS,
+  ENDLESS_PATH,
+  ENDLESS_START_PETALS,
+  endlessClearReward,
+  endlessKillReward,
+  endlessLevelIndex,
+  endlessResultLine,
+  endlessTheme,
+  endlessWave,
+  endlessWaveName,
+} from "./endless";
+import { chimeLevelsAt, supportedCooldown, supportedRange } from "./towers12";
+import {
+  EARLY_CALL_MAX_BONUS,
+  PREWAVE_SECONDS,
+  SPEED_STEP,
+  SpeedMode,
+  accumulateSteps,
+  earlyCallBonus,
+  waveHintLine,
+  wavePreview,
+} from "./wave12";
+import {
+  HUD_MIN_FONT,
+  clampScroll,
+  hudLayout,
+  placementIssue,
+  placementReason,
+  scrollToCard,
+  towerBarLayout,
+  towerCardX,
+} from "./hud12";
+import { kidWording } from "./wording";
+import {
+  CLEAR_PETALS,
+  HIT_STARS,
+  KNOCK_TIME,
+  clearPetal,
+  energyColor,
+  hitStar,
+  knockOffset,
+  prefersReducedMotion,
+  shakeAmount,
+} from "./fx12";
+import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -87,7 +136,74 @@ export interface GameAPI {
 const HUD_H = 44;
 const TOOLBAR_H = 58;
 
-type Phase = "themes" | "map" | "intro" | "prewave" | "wave" | "clear" | "retry";
+type Phase = "home" | "themes" | "map" | "intro" | "prewave" | "wave" | "clear" | "retry" | "endlessOver";
+
+type RunMode = "campaign" | "endless";
+
+/**
+ * 一局的定义。闯关是「一关 = 一局」,无尽是「一整轮 = 一局」。
+ * 把两种模式的差异全收在这个对象里,update / draw 就只认 `run`,
+ * 不必到处写 `if (mode === "endless")` ——这也是模拟器里 SimScenario 的同一套思路。
+ */
+interface RunDef {
+  name: string;
+  hint: string;
+  theme: (waveIdx: number) => ThemeId;
+  paths: ReadonlyArray<ReadonlyArray<readonly [number, number]>>;
+  weather?: WeatherKind;
+  barricades?: ReadonlyArray<BarricadeDef>;
+  speedMult?: number;
+  startPetals: number;
+  hearts: number;
+  unlocked: TowerKind[];
+  /** null = 无尽,永远还有下一波 */
+  waveTotal: number | null;
+  waveAt: (waveIdx: number) => WaveEntry[];
+  waveName: (waveIdx: number) => string;
+  hpLevel: (waveIdx: number) => number;
+  killReward: (kind: MonsterKind, waveIdx: number) => number;
+  waveReward: (waveIdx: number) => number;
+}
+
+function campaignRun(levelIdx: number): RunDef {
+  const def = LEVELS[levelIdx];
+  return {
+    name: def.name,
+    hint: def.hint,
+    theme: () => def.theme,
+    paths: def.paths,
+    weather: def.weather,
+    barricades: def.barricades,
+    speedMult: def.speedMult,
+    startPetals: def.startPetals,
+    hearts: HEARTS_PER_LEVEL,
+    unlocked: towersUnlockedAt(levelIdx, LEVELS),
+    waveTotal: def.waves.length,
+    waveAt: (i) => def.waves[Math.max(0, Math.min(def.waves.length - 1, i))],
+    waveName: (i) => `第 ${i + 1} 波`,
+    hpLevel: () => levelIdx,
+    killReward: (kind) => monsterReward(kind, levelIdx),
+    waveReward: () => 3,
+  };
+}
+
+function endlessRun(): RunDef {
+  return {
+    name: "无尽 · 守到底",
+    hint: "波次没有尽头,每 5 波来一位原型 BOSS。撑到第几波就是成绩!",
+    theme: (i) => endlessTheme(i + 1),
+    paths: [ENDLESS_PATH],
+    startPetals: ENDLESS_START_PETALS,
+    hearts: ENDLESS_HEARTS,
+    unlocked: [...TOWER_KINDS],
+    waveTotal: null,
+    waveAt: (i) => endlessWave(i + 1),
+    waveName: (i) => endlessWaveName(i + 1),
+    hpLevel: (i) => endlessLevelIndex(i + 1),
+    killReward: (kind, i) => endlessKillReward(kind, i + 1),
+    waveReward: (i) => endlessClearReward(i + 1),
+  };
+}
 
 interface Monster {
   kind: MonsterKind;
@@ -112,6 +228,8 @@ interface Monster {
   enraged: boolean;
   frostTimer: number;
   frostSlow: number;
+  /** 受击弹开的剩余时间(0 = 没在被弹) */
+  knock: number;
 }
 
 interface Tower {
@@ -143,8 +261,13 @@ interface Particle {
   vx: number;
   vy: number;
   life: number;
+  maxLife: number;
   color: string;
   r: number;
+  /** 圆点 / 五角星 / 花瓣——受击冒星星,清除飞花瓣 */
+  shape: "dot" | "star" | "petal";
+  rot: number;
+  spin: number;
 }
 
 interface Floaty {
@@ -195,7 +318,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
   // ---- 局状态 ----
   let levelIdx = 0;
   let chapterIdx = 0;
-  let phase: Phase = "themes";
+  let mode: RunMode = "campaign";
+  let run: RunDef = campaignRun(0);
+  let phase: Phase = "home";
   let phaseTimer = 0;
   let waveIdx = 0;
   let petals = LEVELS[0].startPetals;
@@ -210,6 +335,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let petalFlash = 0;
   let shake = 0;
   let time = 0;
+  /** 0 = 暂停布阵,1 = 正常,2 = 快进。逻辑一律走固定步长,快进只是一帧多走几步。 */
+  let speed: SpeedMode = 1;
+  let stepCarry = 0;
+  let reducedMotion = prefersReducedMotion();
+  /** 无尽成绩 */
+  let endlessWaveReached = 0;
+  let endlessBest = save.getGameProgress(meta.id).endlessBest;
 
   let wpList = LEVELS[0].paths.map((p) => buildWaypoints(p));
   let lenList = wpList.map((wp) => pathLength(wp));
@@ -240,6 +372,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let btnMap: Rect | null = null;
   let btnRetry: Rect | null = null;
   let btnBack: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  let btnCampaign: Rect | null = null;
+  let btnEndless: Rect | null = null;
+  let btnEarly: Rect | null = null;
+  const speedButtons: Array<{ value: SpeedMode; rect: Rect }> = [];
+
+  // 塔选择条横滑:360px 上八座塔摆不下,又不许缩图标,只能滑
+  let barScroll = 0;
+  let barDragId: number | null = null;
+  let barDragX = 0;
+  let barDragMoved = 0;
+
+  // 悬停 / 按下预览的格子:显示射程圈,非法就变红并给原因
+  let hoverCol = -1;
+  let hoverRow = -1;
+  let hoverActive = false;
+  // 点错格子的说明:只留最后一条,占工具栏下方那条固定位置。
+  // 早先做成飘字,连点几下就堆成一摞、长句子还会横着戳出屏幕。
+  let toastText = "";
+  let toastTimer = 0;
 
   // ---- 布局 ----
   let w = 640;
@@ -277,8 +428,53 @@ export function mount(api: GameAPI): { destroy: () => void } {
         vx: Math.cos(a) * (40 + Math.random() * 60) * power,
         vy: Math.sin(a) * (40 + Math.random() * 60) * power,
         life: 0.5,
+        maxLife: 0.5,
         color,
         r: 3 + Math.random() * 3,
+        shape: "dot",
+        rot: 0,
+        spin: 0,
+      });
+    }
+  }
+
+  /** 挨了一下:头上冒星星。不是流血,是被弹得眼冒金星。 */
+  function hitStars(x: number, y: number, power = 1): void {
+    for (let i = 0; i < HIT_STARS; i++) {
+      const s = hitStar(i, HIT_STARS, power);
+      particles.push({
+        x,
+        y,
+        vx: s.vx,
+        vy: s.vy,
+        life: s.life,
+        maxLife: s.life,
+        color: "#ffd868",
+        r: s.size,
+        shape: "star",
+        rot: i,
+        spin: s.spin,
+      });
+    }
+  }
+
+  /** 被清掉:整只散成花瓣飞走。 */
+  function petalsAway(x: number, y: number, color: string, power = 1): void {
+    const n = Math.round(CLEAR_PETALS * power);
+    for (let i = 0; i < n; i++) {
+      const s = clearPetal(i, n, power);
+      particles.push({
+        x,
+        y,
+        vx: s.vx,
+        vy: s.vy,
+        life: s.life,
+        maxLife: s.life,
+        color,
+        r: s.size,
+        shape: "petal",
+        rot: i * 0.7,
+        spin: s.spin,
       });
     }
   }
@@ -288,44 +484,82 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   // ---- 关卡流程 ----
-  function loadLevel(idx: number): void {
-    levelIdx = idx;
-    chapterIdx = themeIndexOfLevel(idx);
-    const def = LEVELS[idx];
-    wpList = def.paths.map((p) => buildWaypoints(p));
+  function loadRun(next: RunDef): void {
+    run = next;
+    wpList = run.paths.map((p) => buildWaypoints(p));
     lenList = wpList.map((wp) => pathLength(wp));
-    blocked = pathsCellSet(def.paths);
-    unlockedTowers = towersUnlockedAt(idx, LEVELS);
+    blocked = pathsCellSet(run.paths);
+    unlockedTowers = run.unlocked;
     if (!unlockedTowers.includes(selectedCard)) selectedCard = "bubble";
-    resetLevel();
+    barScroll = 0;
+    resetRun();
     phase = "intro";
   }
 
-  function resetLevel(): void {
-    const def = LEVELS[levelIdx];
+  function loadLevel(idx: number): void {
+    mode = "campaign";
+    levelIdx = idx;
+    chapterIdx = themeIndexOfLevel(idx);
+    loadRun(campaignRun(idx));
+  }
+
+  function loadEndless(): void {
+    mode = "endless";
+    endlessWaveReached = 0;
+    loadRun(endlessRun());
+  }
+
+  function resetRun(): void {
     monsters.length = 0;
     bullets.length = 0;
     towers.length = 0;
+    particles.length = 0;
+    floats.length = 0;
     occupied.clear();
-    barricades = barricadeMap(def.barricades);
-    petals = def.startPetals;
-    hearts = HEARTS_PER_LEVEL;
+    barricades = barricadeMap(run.barricades);
+    petals = run.startPetals;
+    hearts = run.hearts;
     heartsLost = 0;
     waveIdx = 0;
     combo = 0;
     score = 0;
+    speed = 1;
+    stepCarry = 0;
+    toastText = "";
+    toastTimer = 0;
     selectedTower = null;
     spawnList = [];
     spawnIdx = 0;
     spawnClock = 0;
     spawnCounter = 0;
+    endlessWaveReached = 0;
   }
 
   function startWave(): void {
-    spawnList = waveSpawnTimes(LEVELS[levelIdx].waves[waveIdx]);
+    spawnList = waveSpawnTimes(run.waveAt(waveIdx));
     spawnIdx = 0;
     spawnClock = -0.3;
     phase = "wave";
+    api.play("jump");
+  }
+
+  /** 提前召唤:剩下的布阵时间换花瓣,越果断给得越多。 */
+  function callWaveEarly(): void {
+    if (phase !== "prewave") return;
+    const bonus = earlyCallBonus(phaseTimer, PREWAVE_SECONDS);
+    petals += bonus;
+    addFloat(w / 2, oy + 46, `提前召唤 +${bonus} 🌸`, "#c47a2a", true);
+    api.play("coin");
+    phaseTimer = 0;
+    startWave();
+  }
+
+  function endEndlessRun(): void {
+    endlessWaveReached = waveIdx;
+    endlessBest = save.recordEndlessBest(meta.id, endlessWaveReached);
+    phase = "endlessOver";
+    api.play("oops");
+    speak(endlessResultLine(endlessWaveReached, endlessBest));
   }
 
   function levelCleared(): void {
@@ -360,7 +594,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    if (phase === "home") {
+      if (inRect(x, y, btnCampaign)) {
+        api.play("tap");
+        phase = "themes";
+        return;
+      }
+      if (inRect(x, y, btnEndless)) {
+        api.play("tap");
+        loadEndless();
+      }
+      return;
+    }
     if (phase === "themes") {
+      if (inRect(x, y, btnBack)) {
+        api.play("tap");
+        phase = "home";
+        return;
+      }
       for (const c of themeCards) {
         if (inRect(x, y, c.rect)) {
           if (isThemeUnlocked(progress, c.idx)) {
@@ -397,12 +648,28 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase === "intro") {
       if (inRect(x, y, btnBack)) {
         api.play("tap");
-        phase = "map";
+        phase = mode === "endless" ? "home" : "map";
         return;
       }
       api.play("tap");
       phase = "prewave";
-      phaseTimer = 1.6;
+      phaseTimer = PREWAVE_SECONDS;
+      return;
+    }
+    if (phase === "endlessOver") {
+      if (inRect(x, y, btnRetry)) {
+        api.play("tap");
+        stopSpeaking();
+        loadEndless();
+        phase = "prewave";
+        phaseTimer = PREWAVE_SECONDS;
+        return;
+      }
+      if (inRect(x, y, btnMap)) {
+        api.play("tap");
+        stopSpeaking();
+        phase = "home";
+      }
       return;
     }
     if (phase === "clear") {
@@ -423,15 +690,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (inRect(x, y, btnRetry)) {
         api.play("tap");
         stopSpeaking();
-        resetLevel();
+        resetRun();
         phase = "prewave";
-        phaseTimer = 1.6;
+        phaseTimer = PREWAVE_SECONDS;
         return;
       }
       if (inRect(x, y, btnMap)) {
         api.play("tap");
         stopSpeaking();
-        phase = "map";
+        phase = mode === "endless" ? "home" : "map";
       }
       return;
     }
@@ -439,18 +706,33 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 玩关卡时左上角随时回地图
     if (inRect(x, y, btnBack)) {
       api.play("tap");
-      phase = "map";
+      phase = mode === "endless" ? "home" : "map";
       return;
     }
 
-    // 工具栏选卡
-    for (const c of cardRects) {
-      if (inRect(x, y, c.rect)) {
-        selectedCard = c.kind;
-        selectedTower = null;
+    // 1× / 2× / 暂停布阵
+    for (const b of speedButtons) {
+      if (inRect(x, y, b.rect)) {
+        speed = b.value;
+        // 切速度不清余数:固定步长的积分是连续的,清了才会漏掉半步
         api.play("tap");
         return;
       }
+    }
+
+    // 提前召唤下一波换奖励
+    if (phase === "prewave" && inRect(x, y, btnEarly)) {
+      callWaveEarly();
+      return;
+    }
+
+    // 工具栏选卡(横滑区:按下先记住,松手没滑动过才算点选)
+    if (y >= HUD_H && y < HUD_H + TOOLBAR_H) {
+      barDragId = e.pointerId;
+      barDragX = x;
+      barDragMoved = 0;
+      canvas.setPointerCapture?.(e.pointerId);
+      return;
     }
 
     // 塔操作面板
@@ -513,16 +795,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
 
-    if (!canPlace(col, row, blocked, new Set(occupied.keys()))) {
+    const issue = placementIssue(col, row, selectedCard, {
+      cols: GRID_COLS,
+      rows: GRID_ROWS,
+      blocked,
+      occupied: new Set(occupied.keys()),
+      barricades: new Set(barricades.keys()),
+      petals,
+    });
+    if (issue !== null) {
+      // 点了不能种的格子:说清楚为什么,而不是默默没反应
+      if (issue === "poor") petalFlash = 0.8;
       api.play("tap");
+      toastText = placementReason(issue, selectedCard);
+      toastTimer = 1.6;
       return;
     }
     const cost = TOWER_INFO[selectedCard].cost;
-    if (petals < cost) {
-      petalFlash = 0.8;
-      api.play("tap");
-      return;
-    }
     petals -= cost;
     const tw: Tower = {
       kind: selectedCard,
@@ -539,18 +828,62 @@ export function mount(api: GameAPI): { destroy: () => void } {
     burst(px(col + 0.5), py(row + 0.5), "#ffd6e7", 10);
   }
 
+  function onPointerMove(e: PointerEvent): void {
+    if (destroyed) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    if (barDragId === e.pointerId) {
+      const dx = x - barDragX;
+      barDragX = x;
+      barDragMoved += Math.abs(dx);
+      const layout = towerBarLayout(unlockedTowers.length, w, TOOLBAR_H);
+      barScroll = clampScroll(barScroll - dx, layout.maxScroll);
+      return;
+    }
+    // 悬停预览:射程圈跟着手指 / 鼠标走,非法格子当场变红
+    hoverCol = Math.floor((x - ox) / cell);
+    hoverRow = Math.floor((y - oy) / cell);
+    hoverActive = y > HUD_H + TOOLBAR_H;
+  }
+
+  function onPointerUp(e: PointerEvent): void {
+    if (destroyed) return;
+    if (barDragId !== e.pointerId) return;
+    barDragId = null;
+    canvas.releasePointerCapture?.(e.pointerId);
+    // 滑过就算滑动,没滑动才算点选——不然横滑一下会顺手换掉手里的塔
+    if (barDragMoved > 8) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    for (const c of cardRects) {
+      if (inRect(x, y, c.rect)) {
+        selectedCard = c.kind;
+        selectedTower = null;
+        api.play("tap");
+        return;
+      }
+    }
+  }
+
+  function onPointerLeave(): void {
+    hoverActive = false;
+  }
+
   // ---- 怪物生成与死亡 ----
   function spawnMonster(kind: MonsterKind, pathIdx: number, dist = 0): void {
     const spec = MONSTER_INFO[kind];
-    const hp = monsterHp(kind, levelIdx);
-    const armor = monsterArmor(kind, levelIdx);
+    const hpLevel = run.hpLevel(waveIdx);
+    const hp = monsterHp(kind, hpLevel);
+    const armor = monsterArmor(kind, hpLevel);
     const wp = wpList[pathIdx];
     const p = pointAlongPath(wp, dist);
     monsters.push({
       kind,
       pathIdx,
       dist,
-      baseSpeed: spec.speed * (LEVELS[levelIdx].speedMult ?? 1) * weatherSpeedMult(LEVELS[levelIdx].weather),
+      baseSpeed: spec.speed * (run.speedMult ?? 1) * weatherSpeedMult(run.weather),
       hp,
       maxHp: hp,
       armor,
@@ -569,12 +902,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       enraged: false,
       frostTimer: 0,
       frostSlow: 1,
+      knock: 0,
     });
   }
 
   function onMonsterKilled(m: Monster): void {
     const spec = MONSTER_INFO[m.kind];
-    petals += monsterReward(m.kind, levelIdx);
+    petals += run.killReward(m.kind, waveIdx);
     combo++;
     comboTimer = 2.2;
     const gain = 10 + (Math.min(combo, 8) - 1) * 5;
@@ -588,15 +922,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
       api.play(spec.boss ? "win" : "coin");
     }
     addFloat(px(m.x), py(m.y), `+${gain}`, "#c47a2a");
-    burst(px(m.x), py(m.y), "#c9b6f2", spec.boss ? 26 : 12, spec.boss ? 1.8 : 1);
+    // 被清掉不是「倒下」,是整只散成花瓣飞走
+    petalsAway(px(m.x), py(m.y), MONSTER_COLORS[m.kind], spec.boss ? 2 : 1);
     if (spec.splits) {
       spawnMonster("mini", m.pathIdx, Math.max(0, m.dist - 0.2));
       spawnMonster("mini", m.pathIdx, m.dist + 0.15);
       addFloat(px(m.x), py(m.y) - 30, "分身!", "#b28ae8");
     }
     if (spec.boss) {
-      addFloat(px(m.x), py(m.y) - 40, `${spec.name} 打倒啦!`, "#e05a7a", true);
-      shake = 0.5;
+      addFloat(px(m.x), py(m.y) - 40, `${spec.name}回家啦!`, "#c47a2a", true);
+      shake = shakeAmount(0.5, reducedMotion);
     }
   }
 
@@ -604,9 +939,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const res = applyHit(m.hp, m.armor, dmg);
     m.hp = res.hp;
     m.armor = res.armor;
+    if (m.hp > 0) {
+      // 挨了一下:往后弹一小段 + 头上冒星星,没有血也没有伤
+      m.knock = KNOCK_TIME;
+      hitStars(px(m.x), py(m.y) - cell * 0.3, MONSTER_INFO[m.kind].boss ? 1.3 : 1);
+    }
     if (res.brokeArmor) {
       api.play("meow");
-      addFloat(px(m.x), py(m.y) - 18, "壳碎啦!", "#c47a2a");
+      addFloat(px(m.x), py(m.y) - 18, "壳掉啦!", "#c47a2a");
     }
     if (m.hp <= 0) {
       const mi = monsters.indexOf(m);
@@ -616,21 +956,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   // ---- 更新 ----
-  function update(dt: number): void {
-    const def = LEVELS[levelIdx];
+  /**
+   * 只跟真实时间走的部分:粒子、飘字、抖动。
+   * 这些和逻辑步长解耦,所以暂停布阵时画面依然是活的,不会像卡死了一样。
+   */
+  function updateCosmetic(dt: number): void {
     time += dt;
     petalFlash = Math.max(0, petalFlash - dt);
     shake = Math.max(0, shake - dt);
-    if (comboTimer > 0) {
-      comboTimer -= dt;
-      if (comboTimer <= 0) combo = 0;
-    }
-
+    toastTimer = Math.max(0, toastTimer - dt);
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.life -= dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+      p.rot += p.spin * dt;
+      if (p.shape !== "star") p.vy += 40 * dt;
       if (p.life <= 0) particles.splice(i, 1);
     }
     for (let i = floats.length - 1; i >= 0; i--) {
@@ -638,6 +979,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
       f.life -= dt;
       f.y -= dt * 34;
       if (f.life <= 0) floats.splice(i, 1);
+    }
+  }
+
+  /** 逻辑更新。永远按固定步长调用,2× 只是一帧里多调用几次。 */
+  function update(dt: number): void {
+    if (comboTimer > 0) {
+      comboTimer -= dt;
+      if (comboTimer <= 0) combo = 0;
     }
 
     if (phase === "prewave") {
@@ -650,15 +999,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
         spawnMonster(s.kind, spawnCounter++ % wpList.length);
       }
       if (spawnIdx >= spawnList.length && monsters.length === 0) {
-        petals += 3;
-        addFloat(w / 2, oy + 40, "波次奖励 +3 🌸", "#e05a7a", true);
-        if (waveIdx >= LEVELS[levelIdx].waves.length - 1) {
+        const reward = run.waveReward(waveIdx);
+        petals += reward;
+        addFloat(w / 2, oy + 40, `守住啦!+${reward} 🌸`, "#c47a2a", true);
+        if (run.waveTotal !== null && waveIdx >= run.waveTotal - 1) {
           levelCleared();
         } else {
           waveIdx++;
+          if (mode === "endless") endlessWaveReached = waveIdx;
           phase = "prewave";
-          phaseTimer = 2.4;
-          api.play("jump");
+          phaseTimer = PREWAVE_SECONDS;
+          api.play("win");
         }
         return;
       }
@@ -717,7 +1068,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       // 半血暴走
       if (mSpec.enrages && !m.enraged && m.hp <= m.maxHp / 2) {
         m.enraged = true;
-        shake = 0.4;
+        shake = shakeAmount(0.4, reducedMotion);
         addFloat(px(m.x), py(m.y) - 34, `${mSpec.name}暴走啦!`, "#5a8ac9", true);
         api.play("oops");
       }
@@ -729,7 +1080,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         for (const t of towers) {
           if (t.kind !== "dew") continue;
           const d = Math.hypot(m.x - (t.col + 0.5), m.y - (t.row + 0.5));
-          if (d <= effectiveRange("dew", t.level, def.weather)) factors.push(dewSlowFactor(t.level));
+          if (d <= effectiveRange("dew", t.level, run.weather)) factors.push(dewSlowFactor(t.level));
         }
       }
       if (m.frostTimer > 0) factors.push(m.frostSlow);
@@ -740,21 +1091,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (m.enraged) spd *= ENRAGE_MULT;
       m.dist += spd * dt;
       m.wob += dt * 7;
+      m.knock = Math.max(0, m.knock - dt);
       const wp = wpList[m.pathIdx];
-      const p = pointAlongPath(wp, m.dist);
+      // 被弹开:沿路径往回退一小段,只是看着退,走过的路程不还给它
+      const p = pointAlongPath(wp, Math.max(0, m.dist - knockOffset(KNOCK_TIME - m.knock)));
       m.x = p.x;
       m.y = p.y;
-      if (p.done || m.dist >= lenList[m.pathIdx]) {
+      if (m.dist >= lenList[m.pathIdx]) {
         monsters.splice(i, 1);
         hearts--;
         heartsLost++;
-        shake = 0.35;
+        shake = shakeAmount(0.35, reducedMotion);
         api.play("oops");
-        burst(px(m.x), py(m.y), "#ff9eb5", 14);
+        petalsAway(px(m.x), py(m.y), "#ffb3c8", 1);
         if (hearts <= 0) {
-          phase = "retry";
-          api.play("oops");
-          speak(retrySpeechLine(bossFailHint()));
+          if (mode === "endless") {
+            endEndlessRun();
+          } else {
+            phase = "retry";
+            api.play("oops");
+            speak(retrySpeechLine(bossFailHint()));
+          }
           return;
         }
       }
@@ -763,7 +1120,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 塔行为
     for (const t of towers) {
       t.firedAnim = Math.max(0, t.firedAnim - dt * 4);
-      if (t.kind === "dew") continue;
+      // 露珠是光环、铃兰是加成,两座都不开火
+      if (t.kind === "dew" || t.kind === "chime") continue;
       if (t.kind === "sunny") {
         t.prodTimer -= dt;
         if (t.prodTimer <= 0) {
@@ -777,7 +1135,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
       t.cd -= dt;
       if (t.cd <= 0) {
-        const range = effectiveRange(t.kind, t.level, def.weather);
+        // 铃兰铃罩住的塔:射程更远、装弹更快
+        const chimes = chimeLevelsAt(t.col, t.row, towers, run.weather);
+        const range = supportedRange(t.kind, t.level, run.weather, chimes);
         if (t.kind === "mist") {
           // 毒雾塔:周期毒雾脉冲,罩住射程内所有地面怪(无视护甲,连隐身怪也躲不掉)
           let hitAny = false;
@@ -795,7 +1155,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
             }
           }
           if (hitAny) {
-            t.cd = towerCooldown("mist", t.level);
+            t.cd = supportedCooldown("mist", t.level, chimes);
             t.firedAnim = 1;
             burst(px(t.col + 0.5), py(t.row + 0.5), "#b5d8a8", 10, 0.9);
           }
@@ -803,7 +1163,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         }
         const idx = pickTarget(monsters, t.col + 0.5, t.row + 0.5, range, towerCanHitAir(t.kind));
         if (idx >= 0) {
-          t.cd = towerCooldown(t.kind, t.level);
+          t.cd = supportedCooldown(t.kind, t.level, chimes);
           t.firedAnim = 1;
           bullets.push({
             x: t.col + 0.5,
@@ -1166,6 +1526,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     boss11: "#c9985a",
     boss12: "#9ec8ea",
     boss13: "#b06ad8",
+    bossArmor: "#8fa8bc",
+    bossSwift: "#7ec8e0",
+    bossFly: "#c8dcf5",
+    bossSplit: "#e8909a",
   };
 
   function drawMonster(m: Monster): void {
@@ -1274,22 +1638,105 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.arc(mx + r * 0.4, my + r * 0.9, r * 0.16, 0, Math.PI * 2);
     ctx.fill();
     drawFace(mx, my, r);
-    // 血条(带护甲段)
+    // 元气条(带硬壳段)。这不是血条:掉光了不是倒下,是没劲了、散成花瓣回家。
+    // 所以配色一路走暖色,满是嫩绿、少是暖橙,任何时候都不出现红。
     const bw = r * 2.2;
     const bh = Math.max(3, r * 0.16);
     ctx.fillStyle = "rgba(0,0,0,0.12)";
     ctx.beginPath();
     ctx.roundRect(mx - bw / 2, my - r * 1.55, bw, bh, 3);
     ctx.fill();
-    ctx.fillStyle = spec.boss ? "#e05a7a" : "#7ac97a";
+    ctx.fillStyle = energyColor(m.hp / m.maxHp);
     ctx.beginPath();
-    ctx.roundRect(mx - bw / 2, my - r * 1.55, (bw * m.hp) / m.maxHp, bh, 3);
+    ctx.roundRect(mx - bw / 2, my - r * 1.55, (bw * Math.max(0, m.hp)) / m.maxHp, bh, 3);
     ctx.fill();
     if (m.maxArmor > 0) {
       ctx.fillStyle = "#8aa0b8";
       ctx.beginPath();
       ctx.roundRect(mx - bw / 2, my - r * 1.55 - bh - 1, (bw * m.armor) / m.maxArmor, bh * 0.8, 2);
       ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawStar(x: number, y: number, r: number, rot: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.beginPath();
+    for (let k = 0; k < 5; k++) {
+      const a = (Math.PI * 2 * k) / 5 - Math.PI / 2;
+      const a2 = a + Math.PI / 5;
+      if (k === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      ctx.lineTo(Math.cos(a2) * r * 0.44, Math.sin(a2) * r * 0.44);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * 手指 / 鼠标停在哪一格,就在那儿画射程圈。
+   * 不能种就整格变红并写明原因——「点了没反应」是塔防里最劝退的一件事。
+   */
+  function drawPlacementPreview(): void {
+    if (!hoverActive || selectedTower) return;
+    if (phase !== "wave" && phase !== "prewave") return;
+    if (hoverCol < 0 || hoverRow < 0 || hoverCol >= GRID_COLS || hoverRow >= GRID_ROWS) return;
+    const issue = placementIssue(hoverCol, hoverRow, selectedCard, {
+      cols: GRID_COLS,
+      rows: GRID_ROWS,
+      blocked,
+      occupied: new Set(occupied.keys()),
+      barricades: new Set(barricades.keys()),
+      petals,
+    });
+    const cx = px(hoverCol + 0.5);
+    const cy = py(hoverRow + 0.5);
+    const ok = issue === null;
+    ctx.save();
+    ctx.fillStyle = ok ? "rgba(143,216,168,0.3)" : "rgba(226,110,110,0.32)";
+    ctx.strokeStyle = ok ? "#4e9a6a" : "#c2453f";
+    ctx.lineWidth = Math.max(2, cell * 0.06);
+    ctx.beginPath();
+    ctx.roundRect(px(hoverCol) + 2, py(hoverRow) + 2, cell - 4, cell - 4, cell * 0.2);
+    ctx.fill();
+    ctx.stroke();
+    if (ok && TOWER_INFO[selectedCard].range > 0) {
+      const rr = supportedRange(
+        selectedCard,
+        1,
+        run.weather,
+        chimeLevelsAt(hoverCol, hoverRow, towers, run.weather),
+      );
+      ctx.fillStyle = "rgba(143,216,168,0.14)";
+      ctx.strokeStyle = "rgba(78,154,106,0.55)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, rr * cell, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (!ok) {
+      const reason = placementReason(issue, selectedCard);
+      ctx.font = "bold 13px sans-serif";
+      const tw = ctx.measureText(reason).width + 16;
+      const bx = Math.max(6, Math.min(w - tw - 6, cx - tw / 2));
+      const by = Math.max(HUD_H + TOOLBAR_H + 34, py(hoverRow) - 26);
+      ctx.fillStyle = "rgba(255,238,238,0.96)";
+      ctx.strokeStyle = "#c2453f";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, tw, 22, 11);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#a5322d";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(reason, bx + tw / 2, by + 11);
     }
     ctx.restore();
   }
@@ -1326,11 +1773,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = "#e05a7a";
-    ctx.font = "bold 24px sans-serif";
+    btnBack = { x: 6, y: 7, w: 62, h: 30 };
+    drawButton(btnBack, "◀ 首页", "rgba(255,255,255,0.85)", "#5a5a6e");
+
+    ctx.fillStyle = "#c2456a";
+    ctx.font = "bold 22px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌼 花园守卫 · 十三章主题战役", w / 2, 28);
+    ctx.fillText("🌼 十三章主题战役", w / 2, 28);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#8a7a5e";
     ctx.fillText(
@@ -1513,12 +1963,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
       for (const e of wave) {
         const spec = MONSTER_INFO[e.kind];
         if (!spec.boss) continue;
-        if (spec.heals) return `${spec.name}会给随从回血,先集火它本体!`;
+        if (spec.heals) return `${spec.name}会给随从补元气,先集火它本体!`;
         if (spec.sneaks) return `${spec.name}会隐身,现身那几秒赶紧集火!`;
         if (spec.summons) return `${spec.name}会叫小兵,花火塔一炸一片!`;
         if (spec.splits) return `${spec.name}倒下会裂开,留塔看住路口!`;
         if (spec.dashes) return `${spec.name}会冲刺,露珠塔能拖住它!`;
-        if (spec.enrages) return `${spec.name}半血会暴走,提前升级好塔!`;
+        if (spec.enrages) return `${spec.name}元气过半会暴走,提前升级好塔!`;
         return `${spec.name}皮很厚,提前把塔升一升级!`;
       }
     }
@@ -1553,29 +2003,129 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawIntroPanel(): void {
-    const def = LEVELS[levelIdx];
-    const st = THEME_STYLE[def.theme];
+    const st = THEME_STYLE[run.theme(0)];
     const { y } = panelBox(Math.min(450, w - 40), 200);
     ctx.fillStyle = st.accent;
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${def.name}`, w / 2, y + 44);
+    ctx.fillText(
+      mode === "endless"
+        ? `🛡️ ${run.name}`
+        : `${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${run.name}`,
+      w / 2,
+      y + 44,
+    );
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
-    ctx.fillText(def.hint, w / 2, y + 90, Math.min(420, w - 60));
+    // 1.1 冻结的前 99 关里还有几句写着「回血 / 半血 / 奶血」——数据带回归指纹不能动,
+    // 所以在这儿按元气的说法念给孩子听。详见 `wording.ts`。
+    ctx.fillText(kidWording(run.hint), w / 2, y + 90, Math.min(420, w - 60));
     ctx.font = "14px sans-serif";
-    ctx.fillStyle = "#a0a0b2";
-    const wSpec = def.weather && def.weather !== "clear" ? WEATHER_INFO[def.weather] : null;
+    ctx.fillStyle = "#8a8a9a";
+    const wSpec = run.weather && run.weather !== "clear" ? WEATHER_INFO[run.weather] : null;
     ctx.fillText(
-      `${st.name} · ${def.waves.length} 波${wSpec ? ` · ${wSpec.emoji}${wSpec.name}` : ""} · 点一下屏幕开始`,
+      mode === "endless"
+        ? `最好成绩 第 ${endlessBest} 波 · 点一下屏幕开始`
+        : `${st.name} · ${run.waveTotal} 波${wSpec ? ` · ${wSpec.emoji}${wSpec.name}` : ""} · 点一下屏幕开始`,
       w / 2,
       y + 130,
     );
-    ctx.fillText("(左上角 ◀ 可回地图)", w / 2, y + 158);
+    ctx.fillText(mode === "endless" ? "(左上角 ◀ 可回首页)" : "(左上角 ◀ 可回地图)", w / 2, y + 158);
+  }
+
+  /** 首页:闯关 188 与无尽守到底两个入口。 */
+  function drawHome(): void {
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#e3f7dc");
+    grad.addColorStop(0.55, "#fdf3e0");
+    grad.addColorStop(1, "#e8f0fb");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = "#c2456a";
+    ctx.font = "bold 26px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🌼 花园守卫", w / 2, 40);
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "#7a6a52";
+    ctx.fillText("在格子上种下小塔,别让小怪走到花朵那儿", w / 2, 70);
+
+    const bw2 = Math.min(300, w - 48);
+    const bh2 = Math.min(120, (h - 130) / 2.4);
+    const gap = 18;
+    const y0 = Math.max(96, h / 2 - bh2 - gap / 2);
+    btnCampaign = { x: (w - bw2) / 2, y: y0, w: bw2, h: bh2 };
+    btnEndless = { x: (w - bw2) / 2, y: y0 + bh2 + gap, w: bw2, h: bh2 };
+
+    const cards: Array<{ rect: Rect; emoji: string; title: string; sub: string; bg: string; fg: string }> = [
+      {
+        rect: btnCampaign,
+        emoji: "🗺️",
+        title: `闯关 · ${LEVELS.length} 关`,
+        sub: `⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 十三章主题战役`,
+        bg: "#fff1c9",
+        fg: "#a05914",
+      },
+      {
+        rect: btnEndless,
+        emoji: "🛡️",
+        title: "无尽 · 守到底",
+        sub: endlessBest > 0 ? `最好成绩 第 ${endlessBest} 波` : "波次没有尽头,撑到第几波就是成绩",
+        bg: "#e3f2ff",
+        fg: "#2f6a96",
+      },
+    ];
+    for (const c of cards) {
+      ctx.fillStyle = c.bg;
+      ctx.strokeStyle = c.fg;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(c.rect.x, c.rect.y, c.rect.w, c.rect.h, 18);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.font = `${Math.round(c.rect.h * 0.42)}px sans-serif`;
+      ctx.fillText(c.emoji, c.rect.x + 18, c.rect.y + c.rect.h / 2);
+      ctx.fillStyle = c.fg;
+      ctx.font = "bold 20px sans-serif";
+      ctx.fillText(c.title, c.rect.x + 18 + c.rect.h * 0.5, c.rect.y + c.rect.h * 0.38);
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "14px sans-serif";
+      ctx.fillText(c.sub, c.rect.x + 18 + c.rect.h * 0.5, c.rect.y + c.rect.h * 0.66, c.rect.w - c.rect.h * 0.5 - 28);
+    }
+  }
+
+  function drawEndlessOverPanel(): void {
+    const { y } = panelBox(Math.min(440, w - 40), 236);
+    ctx.fillStyle = "#2f6a96";
+    ctx.font = "bold 24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`守到第 ${endlessWaveReached} 波!`, w / 2, y + 46);
+    ctx.font = "15px sans-serif";
+    ctx.fillStyle = "#5a5a6e";
+    ctx.fillText(
+      endlessWaveReached >= endlessBest ? "这是你的新纪录,太厉害啦!" : `最好成绩 第 ${endlessBest} 波,再来一次!`,
+      w / 2,
+      y + 84,
+    );
+    ctx.fillStyle = "#a05914";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText("💡 每 5 波换一位原型 BOSS,记住它怕什么就好办了", w / 2, y + 118, Math.min(400, w - 60));
+    const bw2 = 132;
+    btnMap = { x: w / 2 - bw2 - 10, y: y + 158, w: bw2, h: 44 };
+    btnRetry = { x: w / 2 + 10, y: y + 158, w: bw2, h: 44 };
+    drawButton(btnMap, "回首页", "#f0f0f5", "#5a5a6e");
+    drawButton(btnRetry, "再守一次", "#ffd868", "#7a5a1a");
   }
 
   function draw(): void {
+    if (phase === "home") {
+      drawHome();
+      return;
+    }
     if (phase === "themes") {
       drawThemes();
       return;
@@ -1585,8 +2135,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
 
-    const def = LEVELS[levelIdx];
-    const st = THEME_STYLE[def.theme];
+    const st = THEME_STYLE[run.theme(waveIdx)];
     ctx.save();
     if (shake > 0) {
       ctx.translate((Math.random() - 0.5) * shake * 14, (Math.random() - 0.5) * shake * 14);
@@ -1684,13 +2233,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 露珠塔光环 / 毒雾塔毒圈(射程受天气影响)
     for (const t of towers) {
       if (t.kind === "dew") {
-        const rr = effectiveRange("dew", t.level, def.weather) * cell;
+        const rr = effectiveRange("dew", t.level, run.weather) * cell;
         ctx.fillStyle = `rgba(160,220,255,${0.12 + Math.sin(time * 3) * 0.04})`;
         ctx.beginPath();
         ctx.arc(px(t.col + 0.5), py(t.row + 0.5), rr, 0, Math.PI * 2);
         ctx.fill();
       } else if (t.kind === "mist") {
-        const rr = effectiveRange("mist", t.level, def.weather) * cell;
+        const rr = effectiveRange("mist", t.level, run.weather) * cell;
         ctx.fillStyle = `rgba(150,200,136,${0.1 + t.firedAnim * 0.12})`;
         ctx.beginPath();
         ctx.arc(px(t.col + 0.5), py(t.row + 0.5), rr, 0, Math.PI * 2);
@@ -1705,7 +2254,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(px(t.col + 0.5), py(t.row + 0.5), effectiveRange(t.kind, t.level, def.weather) * cell, 0, Math.PI * 2);
+        ctx.arc(px(t.col + 0.5), py(t.row + 0.5), supportedRange(t.kind, t.level, run.weather, chimeLevelsAt(t.col, t.row, towers, run.weather)) * cell, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -1782,13 +2331,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     for (const p of particles) {
-      ctx.globalAlpha = Math.max(0, p.life / 0.5);
+      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.shape === "star") {
+        drawStar(p.x, p.y, p.r, p.rot);
+      } else if (p.shape === "petal") {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.r, p.r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     }
+
+    drawPlacementPreview();
 
     // 塔操作面板
     panelUpgrade = null;
@@ -1842,59 +2405,85 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     ctx.restore();
 
-    // ---- HUD ----
+    drawHud();
+    drawTowerBar();
+    drawSpeedBar();
+
+    // ---- 覆盖层 ----
+    if (phase === "intro") {
+      drawIntroPanel();
+      // 覆盖层上补画返回按钮,保证可点
+      drawButton(btnBack, mode === "endless" ? "◀ 首页" : "◀ 地图", "#f0f0f5", "#5a5a6e");
+    } else if (phase === "clear") {
+      drawLevelSummaryPanel();
+    } else if (phase === "retry") {
+      drawRetryPanel();
+    } else if (phase === "endlessOver") {
+      drawEndlessOverPanel();
+    } else if (phase === "prewave") {
+      drawWavePreview();
+    }
+  }
+
+  /** 生命 / 花瓣 / 波次一行。字号由 hud12 算,360px 上保证 ≥ 14px 且不溢出。 */
+  function drawHud(): void {
     ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.fillRect(0, 0, w, HUD_H);
-    btnBack = { x: 6, y: 7, w: 62, h: 30 };
-    drawButton(btnBack, "◀ 地图", "#f0f0f5", "#5a5a6e");
+    const backW = 62;
+    btnBack = { x: 6, y: 7, w: backW, h: 30 };
+    drawButton(btnBack, mode === "endless" ? "◀ 首页" : "◀ 地图", "#f0f0f5", "#5a5a6e");
+
+    const levelInTheme = levelIdx - themeOffset(chapterIdx) + 1;
+    const hudWeather = run.weather && run.weather !== "clear" ? ` ${WEATHER_INFO[run.weather].emoji}` : "";
+    const layout = hudLayout(
+      {
+        hearts,
+        maxHearts: run.hearts,
+        petals,
+        wave: waveIdx + 1,
+        waveTotal: run.waveTotal,
+        title: mode === "endless" ? `守到底${hudWeather}` : `${chapterIdx + 1}-${levelInTheme}${hudWeather}`,
+      },
+      w,
+      backW + 12,
+    );
+    const fs = Math.max(HUD_MIN_FONT, layout.fontSize);
+    ctx.font = `${fs}px sans-serif`;
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
-    ctx.font = "17px sans-serif";
-    ctx.fillStyle = petalFlash > 0 && Math.floor(petalFlash * 8) % 2 === 0 ? "#e05a7a" : "#5a5a6e";
-    ctx.fillText(`🌸 ${petals}`, 78, HUD_H / 2);
-    ctx.textAlign = "center";
+    ctx.fillStyle = petalFlash > 0 && Math.floor(petalFlash * 8) % 2 === 0 ? "#c2456a" : "#5a5a6e";
+    ctx.fillText(layout.segments.left, backW + 14, HUD_H / 2);
     ctx.fillStyle = "#5a5a6e";
-    ctx.font = "15px sans-serif";
-    // 窄屏修复:360 宽中间只显示"章-关 · 波n/m",右侧只留爱心,
-    // 原"(99/99)+分数"三段长文字会和左边花瓣数、右边爱心互相压盖
-    const narrowHud = w < 480;
-    const levelInTheme = levelIdx - themeOffset(chapterIdx) + 1;
-    const hudWeather = def.weather && def.weather !== "clear" ? ` ${WEATHER_INFO[def.weather].emoji}` : "";
-    ctx.fillText(
-      narrowHud
-        ? `${chapterIdx + 1}-${levelInTheme}${hudWeather} · 波${waveIdx + 1}/${def.waves.length}`
-        : `${chapterIdx + 1}-${levelInTheme} (${levelIdx + 1}/${LEVELS.length})${hudWeather} · 波 ${waveIdx + 1}/${def.waves.length}`,
-      w / 2,
-      HUD_H / 2,
-    );
+    ctx.textAlign = "center";
+    ctx.fillText(layout.segments.center, w / 2 + backW / 2, HUD_H / 2);
     ctx.textAlign = "right";
-    ctx.fillText(
-      "💗".repeat(Math.max(0, hearts)) +
-        "🤍".repeat(Math.max(0, HEARTS_PER_LEVEL - hearts)) +
-        (narrowHud ? "" : `  分 ${score}`),
-      w - 12,
-      HUD_H / 2,
-    );
+    ctx.fillText(layout.segments.right, w - 10, HUD_H / 2);
 
     if (combo >= 2 && comboTimer > 0) {
-      ctx.fillStyle = "#b28ae8";
+      ctx.fillStyle = "#7a4ec2";
       ctx.font = `bold ${20 + Math.min(combo, 8)}px sans-serif`;
       ctx.textAlign = "center";
-      // 连击字样往下挪,避开工具栏下方的选中提示条
       ctx.fillText(`连击 ×${combo}`, w / 2, HUD_H + TOOLBAR_H + 52);
     }
+  }
 
-    // ---- 工具栏(只显示已解锁的塔) ----
+  /** 塔选择条:一行横滑,图标 ≥ 44px,不折行也不缩图标。 */
+  function drawTowerBar(): void {
     ctx.fillStyle = "rgba(255,255,255,0.82)";
     ctx.fillRect(0, HUD_H, w, TOOLBAR_H);
+    const layout = towerBarLayout(unlockedTowers.length, w, TOOLBAR_H);
+    barScroll = clampScroll(barScroll, layout.maxScroll);
     cardRects.length = 0;
-    // 窄屏修复:卡片改为"图标在上 + 价格在下",价格 12→14px 加粗;
-    // 塔名和说明挪到工具栏下方的选中提示条里,360 宽放 5 张卡也不挤
-    const cw = Math.min(96, (w - 24) / unlockedTowers.length);
+    const cardY = HUD_H + (TOOLBAR_H - layout.cardH) / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, HUD_H, w, TOOLBAR_H);
+    ctx.clip();
     for (let i = 0; i < unlockedTowers.length; i++) {
       const kind = unlockedTowers[i];
-      const rect: Rect = { x: 8 + i * (cw + 6), y: HUD_H + 6, w: cw, h: TOOLBAR_H - 12 };
+      const rect: Rect = { x: towerCardX(i, layout, barScroll), y: cardY, w: layout.cardW, h: layout.cardH };
       cardRects.push({ kind, rect });
+      if (rect.x > w || rect.x + rect.w < 0) continue;
       const afford = petals >= TOWER_INFO[kind].cost;
       ctx.fillStyle = selectedCard === kind ? "#fff1c9" : afford ? "#f6f6fa" : "#efeff3";
       ctx.strokeStyle = selectedCard === kind ? "#ffb84d" : "rgba(0,0,0,0.08)";
@@ -1904,7 +2493,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = afford ? 1 : 0.45;
-      drawTowerIcon(kind, rect.x + rect.w / 2, rect.y + 13, 10);
+      drawTowerIcon(kind, rect.x + rect.w / 2, rect.y + rect.h * 0.34, rect.h * 0.26);
       ctx.fillStyle = afford ? "#5a5a6e" : "#8a8a9a";
       ctx.font = "bold 14px sans-serif";
       ctx.textAlign = "center";
@@ -1912,41 +2501,141 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(`${TOWER_INFO[kind].cost}🌸`, rect.x + rect.w / 2, rect.y + rect.h - 11);
       ctx.globalAlpha = 1;
     }
-    // 两段式放塔提示:选中卡片后,工具栏下方一条 14px 说明,再点草地格就能种
-    if (selectedCard) {
-      const info = TOWER_INFO[selectedCard];
-      const tip = `${info.name} ${info.cost}🌸 · ${info.desc} · 点草地放置`;
-      ctx.font = "14px sans-serif";
-      const tipW = Math.min(w - 16, ctx.measureText(tip).width + 24);
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      ctx.beginPath();
-      ctx.roundRect((w - tipW) / 2, HUD_H + TOOLBAR_H + 4, tipW, 26, 13);
-      ctx.fill();
-      ctx.fillStyle = "#5a5a6e";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(tip, w / 2, HUD_H + TOOLBAR_H + 17, tipW - 16);
+    ctx.restore();
+    // 还能往两边滑的时候给个渐隐边,不然孩子不知道右边还有塔
+    if (layout.scrollable) {
+      for (const side of [0, 1]) {
+        if (side === 0 && barScroll <= 0.5) continue;
+        if (side === 1 && barScroll >= layout.maxScroll - 0.5) continue;
+        const g = ctx.createLinearGradient(side === 0 ? 0 : w, 0, side === 0 ? 22 : w - 22, 0);
+        g.addColorStop(0, "rgba(255,255,255,0.95)");
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(side === 0 ? 0 : w - 22, HUD_H, 22, TOOLBAR_H);
+      }
     }
+    // 说明条:平时说手里这座塔是干嘛的,点错格子时临时换成原因
+    const info = TOWER_INFO[selectedCard];
+    const showToast = toastTimer > 0;
+    const tip = showToast ? toastText : `${info.name} ${info.cost}🌸 · ${info.desc}`;
+    ctx.font = "14px sans-serif";
+    const tipW = Math.min(w - 16, ctx.measureText(tip).width + 24);
+    ctx.fillStyle = showToast ? "rgba(255,238,238,0.96)" : "rgba(255,255,255,0.92)";
+    ctx.strokeStyle = showToast ? "#c2453f" : "rgba(0,0,0,0)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect((w - tipW) / 2, HUD_H + TOOLBAR_H + 4, tipW, 26, 13);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = showToast ? "#a5322d" : "#5a5a6e";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(tip, w / 2, HUD_H + TOOLBAR_H + 17, tipW - 16);
+  }
 
-    // ---- 覆盖层 ----
-    if (phase === "intro") {
-      drawIntroPanel();
-      // 覆盖层上补画返回按钮,保证可点
-      drawButton(btnBack, "◀ 地图", "#f0f0f5", "#5a5a6e");
-    } else if (phase === "clear") {
-      drawLevelSummaryPanel();
-    } else if (phase === "retry") {
-      drawRetryPanel();
-    } else if (phase === "prewave") {
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.fillRect(0, h / 2 - 30, w, 60);
-      ctx.fillStyle = "#e05a7a";
-      ctx.font = "bold 24px sans-serif";
+  /** 右下角 ⏸ / 1× / 2×。 */
+  function drawSpeedBar(): void {
+    speedButtons.length = 0;
+    if (phase !== "wave" && phase !== "prewave") return;
+    const bh2 = 34;
+    const bw2 = 44;
+    const gap = 6;
+    const y0 = h - bh2 - 8;
+    const opts: Array<{ value: SpeedMode; label: string }> = [
+      { value: 0, label: "⏸" },
+      { value: 1, label: "1×" },
+      { value: 2, label: "2×" },
+    ];
+    const totalW = opts.length * bw2 + (opts.length - 1) * gap;
+    let x0 = w - totalW - 8;
+    for (const o of opts) {
+      const rect: Rect = { x: x0, y: y0, w: bw2, h: bh2 };
+      speedButtons.push({ value: o.value, rect });
+      const on = speed === o.value;
+      ctx.fillStyle = on ? "#ffd868" : "rgba(255,255,255,0.9)";
+      ctx.strokeStyle = on ? "#e8a830" : "rgba(0,0,0,0.12)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 10);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = on ? "#7a5a1a" : "#5a5a6e";
+      ctx.font = "bold 15px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`第 ${waveIdx + 1} 波怪要来啦!`, w / 2, h / 2);
+      ctx.fillText(o.label, rect.x + bw2 / 2, rect.y + bh2 / 2);
+      x0 += bw2 + gap;
+    }
+    if (speed === 0) {
+      ctx.fillStyle = "#2f6a96";
+      ctx.font = "bold 15px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("布阵中 · 慢慢想", 10, y0 + bh2 / 2);
     }
   }
+
+  /** 波次预览:下一波来什么、几只,还能提前召唤换花瓣。 */
+  function drawWavePreview(): void {
+    const items = wavePreview(run.waveAt(waveIdx));
+    const boxH = 96;
+    const y0 = Math.max(HUD_H + TOOLBAR_H + 38, h / 2 - boxH);
+    const boxW = Math.min(w - 16, 420);
+    const x0 = (w - boxW) / 2;
+    ctx.fillStyle = "rgba(255,255,255,0.94)";
+    ctx.strokeStyle = "#ffb84d";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, boxW, boxH, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#c2456a";
+    ctx.font = "bold 16px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${run.waveName(waveIdx)} 要来啦!`, w / 2, y0 + 18);
+
+    // 图标 + 数量,一行摆得下几个就摆几个,摆不下的收成「+n 种」
+    const iconW = 52;
+    const maxShow = Math.max(1, Math.floor((boxW - 20) / iconW));
+    const show = items.slice(0, maxShow);
+    const startX = w / 2 - (show.length * iconW) / 2 + iconW / 2;
+    for (let i = 0; i < show.length; i++) {
+      const it = show[i];
+      const cx = startX + i * iconW;
+      ctx.font = "22px sans-serif";
+      ctx.fillText(it.emoji, cx, y0 + 46);
+      ctx.font = it.boss ? "bold 13px sans-serif" : "13px sans-serif";
+      ctx.fillStyle = it.boss ? "#c2456a" : "#5a5a6e";
+      ctx.fillText(`×${it.count}`, cx, y0 + 64);
+      ctx.fillStyle = "#c2456a";
+    }
+    if (items.length > show.length) {
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#8a8a9a";
+      ctx.fillText(`+${items.length - show.length} 种`, w / 2 + (show.length * iconW) / 2 + 4, y0 + 56);
+    }
+    ctx.font = "13px sans-serif";
+    ctx.fillStyle = "#7a6a52";
+    ctx.fillText(waveHintLine(run.waveAt(waveIdx)), w / 2, y0 + 82, boxW - 20);
+
+    // 提前召唤:剩下的布阵时间换花瓣
+    const bonus = earlyCallBonus(phaseTimer, PREWAVE_SECONDS);
+    const bw2 = Math.min(220, boxW);
+    btnEarly = { x: (w - bw2) / 2, y: y0 + boxH + 10, w: bw2, h: 44 };
+    drawButton(btnEarly, `⚡ 提前召唤 +${bonus}🌸`, "#ffd868", "#7a5a1a");
+    ctx.fillStyle = "#8a8a9a";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      `还有 ${Math.max(0, phaseTimer).toFixed(1)} 秒布阵 · 越早召唤给得越多(最多 ${EARLY_CALL_MAX_BONUS}🌸)`,
+      w / 2,
+      btnEarly.y + 56,
+    );
+  }
+
+  /** 一帧最多补几步:切后台回来不要一次性追上百步,那会卡一下还打乱节奏。 */
+  const MAX_STEPS_PER_FRAME = 12;
 
   let raf = 0;
   let last = performance.now();
@@ -1954,12 +2643,58 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     syncSize();
-    update(dt);
+    updateCosmetic(dt);
+    if (phase === "prewave" || phase === "wave") {
+      // 2× 不是「把 dt 乘 2」,而是「同一帧里多走几个同样长的步子」。
+      // 步长永远是 SPEED_STEP,所以 2× 跑出来的局面和 1× 逐帧跑是同一个。
+      const plan = accumulateSteps(stepCarry, dt, speed, SPEED_STEP, MAX_STEPS_PER_FRAME);
+      stepCarry = plan.carry;
+      for (let i = 0; i < plan.steps; i++) {
+        update(SPEED_STEP);
+        if (phase !== "prewave" && phase !== "wave") break;
+      }
+    }
     draw();
     raf = requestAnimationFrame(frame);
   }
 
+  /** 平台「直达第 N 关」:壳层传 initialLevel,或地址栏 ?level=N。越界 clamp。 */
+  function openCampaignLevel(n: number): boolean {
+    if (!Number.isFinite(n)) return false;
+    const idx = Math.max(0, Math.min(LEVELS.length - 1, Math.round(n) - 1));
+    loadLevel(idx);
+    return true;
+  }
+
+  function levelFromQuery(search: string | null): number | null {
+    if (!search) return null;
+    const raw = new URLSearchParams(search).get("level");
+    if (raw === null) return null;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  const motionQuery =
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)")
+      : null;
+  function onMotionChange(): void {
+    reducedMotion = prefersReducedMotion();
+    if (reducedMotion) shake = 0;
+  }
+  motionQuery?.addEventListener?.("change", onMotionChange);
+
   canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("pointerleave", onPointerLeave);
+
+  const jumpTo =
+    (api as { initialLevel?: number }).initialLevel ??
+    levelFromQuery(typeof location === "object" ? location.search : null);
+  if (jumpTo !== null && jumpTo !== undefined) openCampaignLevel(jumpTo);
+
   syncSize();
   raf = requestAnimationFrame(frame);
 
@@ -1967,8 +2702,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
     destroy(): void {
       destroyed = true;
       cancelAnimationFrame(raf);
+      raf = 0;
       stopSpeaking();
+      motionQuery?.removeEventListener?.("change", onMotionChange);
       canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
+      canvas.removeEventListener("pointerleave", onPointerLeave);
+      monsters.length = 0;
+      towers.length = 0;
+      bullets.length = 0;
+      particles.length = 0;
+      floats.length = 0;
+      occupied.clear();
       canvas.remove();
     },
   };

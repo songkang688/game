@@ -67,6 +67,17 @@ export function hurtRect(
   };
 }
 
+/**
+ * 出招时的受击框：手脚伸出去多远，前面那一截就得跟着挨打。
+ * 有了这一条，长手招不再是白嫖 —— 隔着老远戳过来的人自己也在判定里。
+ */
+export function extendHurtRect(base: Rect, facing: Facing, extend: number): Rect {
+  if (extend <= 0) return base;
+  return facing === 1
+    ? { ...base, w: base.w + extend }
+    : { ...base, x: base.x - extend, w: base.w + extend };
+}
+
 /** 身体碰撞框（只管左右推挤，不管上下） */
 export function bodyRect(x: number, halfWidth: number): { left: number; right: number } {
   return { left: x - halfWidth, right: x + halfWidth };
@@ -159,13 +170,21 @@ export function throwBeatsStrike(throwMove: Move, strike: Move): boolean {
 
 /**
  * 取消表：一招在命中 / 被挡之后可以取消成哪几类招。
- * 轻 → 轻（换一个不同的轻招）→ 重 → 必杀 → 超必杀，一条单向的路，
- * 所以连段永远越接越"重"，接不回去，这就挡住了一整类无限连。
+ *
+ * 轻 → 轻 → 重 → 重 → 必杀 → 必杀 → 超必杀，一条**单向**的路：
+ * 同一类里可以再接一招（换一个槽），但绝不能往回走。
+ * 配上「同一段连段里同一个槽只用一次」，任何取消路线都必然越走越短，
+ * 走不出环 —— 这是无限连的第一道闸。
+ *
+ * 1.1 时代 `heavy` 与 `special` 都只能往下一类走，
+ * 结果地面最长路线只有 `5L > 2L > 5H > s1 > super` 五段，
+ * 「上限 6」那道闸这辈子没被触发过。补上同类接续之后，
+ * `5L > 2L > 5H > s1 > s2 > super` 正好是六段，第七下必定撞上上限。
  */
 export const CANCEL_TABLE: Record<MoveKind, MoveKind[]> = {
   light: ["light", "heavy", "special", "super"],
-  heavy: ["special", "super"],
-  special: ["super"],
+  heavy: ["heavy", "special", "super"],
+  special: ["special", "super"],
   super: [],
   throw: []
 };
@@ -309,8 +328,21 @@ export const THROW_IMMUNE_PHASES = ["hitstun", "blockstun", "knockdown", "wakeup
 
 export type ThrowImmunePhase = (typeof THROW_IMMUNE_PHASES)[number];
 
-export function throwConnects(gap: number, defenderPhase: string, defenderAirborne: boolean): boolean {
+/**
+ * 被摔过一次之后的投技保护帧：爬起来之后这么久之内摔不着。
+ * 有了它，"摔倒 → 起身 → 再摔" 这条循环就彻底成不了立 ——
+ * 挨摔的人一定拿得到一段完整的、能走能打的自由时间。
+ */
+export const THROW_PROTECT_FRAMES = 46;
+
+export function throwConnects(
+  gap: number,
+  defenderPhase: string,
+  defenderAirborne: boolean,
+  defenderThrowProtect = 0
+): boolean {
   if (defenderAirborne) return false;
+  if (defenderThrowProtect > 0) return false;
   if ((THROW_IMMUNE_PHASES as readonly string[]).includes(defenderPhase)) return false;
   return gap <= THROW_RANGE;
 }
@@ -325,8 +357,12 @@ export const TECH_WINDOW = 8;
 export const TECH_WAKEUP_FRAMES = 18;
 /** 没受身的起身帧 */
 export const NORMAL_WAKEUP_FRAMES = 40;
-/** 起身瞬间这么多帧打不到（免得刚站起来又被压回去） */
-export const WAKEUP_INVULN = 6;
+/**
+ * 起身瞬间这么多帧打不到（免得刚站起来又被压回去）。
+ * 1.1 给的 6 帧还不够连最快的轻击都躲不开一拍，1.2 提到 12 帧：
+ * 起身的人至少来得及做一个选择（后退格挡 / 跳走 / 抢一手轻击）。
+ */
+export const WAKEUP_INVULN = 12;
 
 export function techWindowOpen(framesSinceKnockdown: number): boolean {
   return framesSinceKnockdown >= 0 && framesSinceKnockdown <= TECH_WINDOW;

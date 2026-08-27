@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🐹",
   category: "casual" as const,
   color: "#EBDFC8",
-  blurb: "188 关十大地洞！算式鼠、连击槽、铁盔鼠、月夜手电筒，还有无尽地鼠场！",
-  // levels.ts 的 10 章合计 188 关,外加无尽地鼠场
+  blurb: "188 关十大地洞！谱面打点分 Perfect / Good / 擦边，帽子鼠、闪光鼠、群鼠齐上，还有无尽地鼠夜市！",
+  // levels.ts 的 10 章合计 188 关,外加无尽地鼠夜市
   modes: ["campaign", "endless"] as const,
+  // 全程点触,手机 / 平板最顺手(桌面用鼠标点也能玩)
+  platform: "mobile" as const,
   levels: 188,
 };

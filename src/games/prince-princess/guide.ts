@@ -8,8 +8,30 @@
  * 第一章关数最多(28 关),拆成「先分清谁打谁」和「练配合」两段,读起来有台阶。
  */
 import type { GuideBook } from "../../ui/level188Contract";
-import { CHAPTERS } from "./levels";
+import { CHAPTERS, TOTAL } from "./levels";
+import { ELEMENT_ROLES, ELEMENT_SPECS, legendLines, type ElementRole, type ElementSpec } from "./elements";
+import { ABILITIES } from "./abilities";
 import { meta } from "./meta";
+
+/**
+ * 1.2 核心交付:**关卡元素规范表**。
+ *
+ * 正身在 `elements.ts`(渲染层照着它画),这里把同一张表翻成孩子读得懂的一条条短句,
+ * 摆成一条覆盖全 188 关的攻略词条 —— 所以「攻略抽屉里看到的」和「关卡里看到的」
+ * 永远是同一套约定,不会一章一个样。
+ */
+export const ELEMENT_TABLE: Array<{ role: ElementRole; spec: ElementSpec }> = ELEMENT_ROLES.map(
+  (role) => ({ role, spec: ELEMENT_SPECS[role] })
+);
+
+/** 规范表词条:形状 + 颜色 + 描边,一条一行 */
+export function elementTableTips(): string[] {
+  return [
+    "全 188 关一套规矩:形状认含义,颜色只是帮着认。",
+    ...legendLines(),
+    "六样东西的形状两两不同,看不清颜色也认得出轮廓。",
+  ];
+}
 
 /** 每一章的起止关号(从 1 数起) */
 function chapterRanges(): Array<[number, number]> {
@@ -70,13 +92,30 @@ function build(): GuideBook {
     gameId: meta.id,
     title: "冒险小攻略",
     general: [
-      "王子近战、公主远程,遇到打不动的怪就换人,别硬碰。",
-      "怪头顶的小图标已经写明了该谁上:写着「剑」的找王子,写着「星」的找公主。",
-      "两个人共用一条心条,替对方挡一下是划算的。",
+      "王子近战、公主远程:怪头顶写着「剑」的找王子,写着「星」的找公主,别硬碰。",
+      `${ABILITIES.prince.icon} 王子会${ABILITIES.prince.name}:${ABILITIES.prince.howto},推进断口就架成一座桥。`,
+      `${ABILITIES.princess.icon} 公主会${ABILITIES.princess.name}:${ABILITIES.princess.howto},只有她够得到最高那颗宝石。`,
+      "路上的小旗走过就点亮,摔下去会被小云朵托回最近那面旗,宝石都还在。",
+      "两个人共用一条心条;一个人玩就按 Tab 换人,没被操作的那位会自己跟上来帮忙。",
       "三颗星看的是清怪、用时、宝石三样,先求过关,再回头刷成绩。",
-      "一个人玩就按 Tab 换人,没被操作的那位会自己跟上来帮忙。",
     ],
     entries: [
+      {
+        from: 1,
+        to: TOTAL,
+        title: "🎨 看图认路 · 关卡元素规范表",
+        tips: elementTableTips(),
+      },
+      {
+        from: 1,
+        to: CHAPTERS[0].size,
+        title: "🎓 每章第 1 关是练习关",
+        tips: [
+          "每一章的第 1 关不掉心,站着看一会儿也没关系。",
+          "开头 3 秒会有两个小图标,告诉你这一章要学什么。",
+          "练熟了再往下走,后面的关就轻松多了。",
+        ],
+      },
       {
         from: firstFrom,
         to: mid,

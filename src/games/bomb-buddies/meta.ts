@@ -8,8 +8,12 @@ export const meta = {
   emoji: "🫧",
   category: "action" as const,
   color: "#e6f0ff",
-  blurb: "格子迷宫里摆泡泡弹!188 关八大主题清怪找出口,还能双人对战、人机对战、无尽收缩和双人合作。",
-  // levels.ts 的 CHAPTERS 八章合计 188 关;index.ts 的模式条另有对战 / 人机 / 无尽 / 合作
+  blurb: "格子迷宫里摆泡泡!188 关八大主题清怪找出口,还能双人对战、三档人机、一层一图的无尽泡泡塔,以及被罩住时队友拍破救人的双人合作。",
+  // levels.ts 的 CHAPTERS 八章合计 188 关;index.ts 的模式条另有对战 / 人机 / 泡泡塔 / 合作
   modes: ["campaign", "versus", "endless", "coop", "twoPlayer"] as const,
   levels: 188,
+  // 实测:键盘两套键位齐全(朵朵 WASD+F/V/G、星星 方向键+L/J/K),手机每人一根摇杆
+  // 加放泡 / 踢泡 / 拍破三颗 44px 钮;375×667 与 360×720 两个视口上
+  // 五种模式的控件都落在舞台内、互不重叠,最大的 13×13 地图每格仍有 24px → both。
+  platform: "both" as const,
 };

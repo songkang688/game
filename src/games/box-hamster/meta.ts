@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🐹",
   category: "action" as const,
   color: "#FBEFD6",
-  blurb: "188 关推箱子!帮小仓鼠把箱子推到脚印上,后面还有滑溜溜的冰面、成对的传送门和双鼠搭档。",
+  blurb: "188 关推箱子!帮小仓鼠把箱子推到脚印上,撤销随便按不扣星,推到墙角还会提醒你;后面有冰面、传送门和双鼠搭档。",
   // levels.ts 七章合计 188 关;index.ts 模式条另有无尽「仓库大挑战」
   modes: ["campaign", "endless"] as const,
+  // 十字方向键 44px 热区,手指玩顺;键盘 WASD / 方向键也全套 —— 两边都能玩
+  platform: "both" as const,
   levels: 188,
 };

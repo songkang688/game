@@ -1,0 +1,29 @@
+{
+  "games": [
+    "duo-vs-star"
+  ],
+  "levels": [
+    28,
+    104
+  ],
+  "waitMs": 180000,
+  "rows": [
+    {
+      "id": "duo-vs-star",
+      "level": 28,
+      "seconds": 128,
+      "result": "win",
+      "stars": 1,
+      "text": "★★★ 第 28 关过关！ 这一局你一下都没出手，对手是自己站不住掉下去的。下次主动迎上去，把他撞出场外试试！下一关 ▶🔁 再玩一次🗺️ 回地图"
+    },
+    {
+      "id": "duo-vs-star",
+      "level": 104,
+      "seconds": 181,
+      "result": "没结算",
+      "stars": null,
+      "text": ""
+    }
+  ],
+  "consoleErrors": 0
+}

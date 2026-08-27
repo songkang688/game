@@ -21,29 +21,61 @@ import {
   trackClusters,
 } from "./logic";
 
-/** 0 = 新手，1 = 稳当，2 = 高手 */
-export type AiLevel = 0 | 1 | 2;
+/**
+ * 0 = 新手，1 = 稳当，2 = 高手，3 = 领跑（1.2 新增的段位档）。
+ *
+ * 领跑档只多一件事：**会卡位**——在自己安全的前提下优先占住对手要用的那条道。
+ * 它仍然跑同一条赛道、同一条速度曲线，**没有任何玩家拿不到的加速**，
+ * 也不会去撞人（本作没有攻击语义），所以它是「难缠」而不是「耍赖」。
+ */
+export type AiLevel = 0 | 1 | 2 | 3;
 
-export const AI_LEVELS: readonly AiLevel[] = [0, 1, 2];
+export const AI_LEVELS: readonly AiLevel[] = [0, 1, 2, 3];
 
 export const AI_LABELS: Record<AiLevel, string> = {
   0: "新手",
   1: "稳当",
   2: "高手",
+  3: "领跑",
 };
 
 export const AI_HINTS: Record<AiLevel, string> = {
   0: "反应慢半拍，还常常愣神，第一次上手挑它",
   1: "反应中等，基本不失误，赢它要靠稳",
   2: "几乎不失误，但它也有反应延迟，抓住这半拍就能超车",
+  3: "还会提前占住好走的那条道，得换个路线绕过去",
 };
 
 /** 每一档隔多久才重新看一眼前方（秒）—— 这就是反应延迟 */
-export const AI_REACTION_SECONDS: Record<AiLevel, number> = { 0: 0.46, 1: 0.26, 2: 0.14 };
+export const AI_REACTION_SECONDS: Record<AiLevel, number> = {
+  0: 0.46,
+  1: 0.26,
+  2: 0.14,
+  3: 0.11,
+};
 /** 每次重新看的时候「愣一下」的概率 */
-export const AI_MISTAKE_CHANCE: Record<AiLevel, number> = { 0: 0.34, 1: 0.09, 2: 0.015 };
+export const AI_MISTAKE_CHANCE: Record<AiLevel, number> = {
+  0: 0.34,
+  1: 0.09,
+  2: 0.015,
+  3: 0.008,
+};
 /** 安全时顺手拐去吃金币的积极度 */
-export const AI_COIN_GREED: Record<AiLevel, number> = { 0: 0.18, 1: 0.5, 2: 0.78 };
+export const AI_COIN_GREED: Record<AiLevel, number> = { 0: 0.18, 1: 0.5, 2: 0.78, 3: 0.86 };
+/** 会不会去卡对手的道：只有领跑档会，且只在自己那条道也安全时才卡 */
+export const AI_BLOCKING: Record<AiLevel, boolean> = {
+  0: false,
+  1: false,
+  2: false,
+  3: true,
+};
+
+/**
+ * **不许耍赖的白纸黑字**：电脑的速度倍率永远是 1，四档都一样。
+ * 它跑的是玩家一模一样的速度曲线，也只吃玩家能吃到的加速带与道具，
+ * 强只强在「看得早、想得清、站得好」。`ai.test.ts` 会逐档检查这张表。
+ */
+export const AI_SPEED_MULT: Record<AiLevel, 1> = { 0: 1, 1: 1, 2: 1, 3: 1 };
 
 /** 提前多少秒开始横移（换道比跳跃安全，所以给的提前量大得多） */
 export const LANE_LEAD_SECONDS = 1.25;
@@ -62,6 +94,8 @@ export interface AiView {
   entities: readonly Entity[];
   /** 已经跑过的实体下标，从这里往后扫就够了 */
   from: number;
+  /** 对手现在在第几条道（只有「领跑」档会用它来卡位，缺省不填） */
+  rivalLane?: number;
 }
 
 function clampLane(lane: number): 0 | 1 | 2 {
@@ -93,7 +127,7 @@ function nearestLane(lanes: number[], from: number): number | null {
  * 顺序是先保命再吃分：能换到空道就换道（最安全），换不掉才跳或滑，
  * 前方彻底干净的时候才考虑拐去吃金币。
  */
-export function planFor(view: AiView, greedy: boolean): Action | null {
+export function planFor(view: AiView, greedy: boolean, blocking: boolean = false): Action | null {
   const speed = Math.max(1, view.speed);
   const horizon = Math.max(16, speed * 1.6);
   const ahead: Entity[] = [];
@@ -131,6 +165,17 @@ export function planFor(view: AiView, greedy: boolean): Action | null {
     }
     // 自己这条道本来就空，眼前这一排不用管
     if (eta <= LANE_LEAD_SECONDS) return null;
+  }
+
+  if (blocking && cluster && typeof view.rivalLane === "number") {
+    // 卡位：对手要走的那条道如果对我也安全，就抢先站过去，逼他换一条。
+    // 前提有两条——我自己站过去必须是「什么都不用做」的空道，而且只挪一格，
+    // 所以它不会为了卡人把自己撞死，也不会横冲直撞去碰对手。
+    const rival = clampLane(view.rivalLane);
+    if (rival !== lane && Math.abs(rival - lane) === 1 && cluster.lanes[rival] === "lane") {
+      const eta = (cluster.at - view.dist) / speed;
+      if (eta <= LANE_LEAD_SECONDS) return stepToward(lane, rival);
+    }
   }
 
   if (!greedy) return null;
@@ -177,7 +222,7 @@ export function decide(brain: AiBrain, view: AiView, now: number): Action | null
     return null; // 愣了一下
   }
   const greedy = brain.rand() < AI_COIN_GREED[brain.level];
-  const action = planFor(view, greedy);
+  const action = planFor(view, greedy, AI_BLOCKING[brain.level]);
   brain.lastAction = action;
   return action;
 }

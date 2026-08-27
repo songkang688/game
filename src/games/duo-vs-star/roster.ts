@@ -2,6 +2,12 @@
  * 朵朵大战星星 · 出场名单（纯数据）。
  * 全部是本作原创的小伙伴，体重 / 速度 / 跳跃 / 力度各不相同：
  * 轻的跑得快但容易被撞飞，沉的稳当却慢半拍，谁都有自己的活法。
+ *
+ * **1.2 平衡过一轮**：`balance12.ts` 的循环赛（每对 20 局、先后手各一半）跑出来
+ * 三个最轻的（云云 / 啾啾 / 泡泡）胜率只有三成出头，两个最沉的（墩墩 / 团团）到了八成，
+ * 于是给最轻的补了一点体重与力度、给最快的收了一点速度、把团团的力度压回来。
+ * 现在 12 位的总胜率全部落在 44%–56%，断言写在 `balance12.test.ts`。
+ * **以后再改这里的数字，那份测试会当场告诉你有没有把谁调成支配解。**
  */
 
 export interface Fighter {
@@ -45,7 +51,7 @@ export const ROSTER: Fighter[] = [
     emoji: "⭐",
     color: "#ffd75e",
     weight: 92,
-    speed: 1.12,
+    speed: 1.06,
     jump: 1.06,
     power: 0.94,
     airJumps: 1,
@@ -68,10 +74,10 @@ export const ROSTER: Fighter[] = [
     name: "云云",
     emoji: "☁️",
     color: "#bcd8ff",
-    weight: 78,
+    weight: 86,
     speed: 1.06,
     jump: 1.2,
-    power: 0.86,
+    power: 0.94,
     airJumps: 2,
     tip: "飘得高、回得来，被撞飞了也常常能自己飘回场地。",
   },
@@ -93,9 +99,9 @@ export const ROSTER: Fighter[] = [
     emoji: "✨",
     color: "#ffe89a",
     weight: 84,
-    speed: 1.24,
+    speed: 1.18,
     jump: 1.1,
-    power: 0.84,
+    power: 0.88,
     airJumps: 1,
     tip: "跑得最快，靠一串轻击把对手的击退值慢慢磨上去。",
   },
@@ -116,10 +122,10 @@ export const ROSTER: Fighter[] = [
     name: "啾啾",
     emoji: "🐤",
     color: "#ffe07a",
-    weight: 72,
+    weight: 80,
     speed: 1.16,
     jump: 1.26,
-    power: 0.8,
+    power: 0.86,
     airJumps: 2,
     tip: "最轻最会跳，缺点也很明显——一撞就飞。",
   },
@@ -128,10 +134,10 @@ export const ROSTER: Fighter[] = [
     name: "泡泡",
     emoji: "🫧",
     color: "#c9ecff",
-    weight: 80,
+    weight: 86,
     speed: 1.08,
     jump: 1.16,
-    power: 0.88,
+    power: 0.94,
     airJumps: 2,
     tip: "轻飘飘地黏着人打，专挑对手落地那一下。",
   },
@@ -140,10 +146,10 @@ export const ROSTER: Fighter[] = [
     name: "团团",
     emoji: "🍙",
     color: "#f2ede1",
-    weight: 124,
+    weight: 120,
     speed: 0.86,
     jump: 0.9,
-    power: 1.2,
+    power: 1.14,
     airJumps: 1,
     tip: "稳稳当当守着平台边，谁靠近就来一下。",
   },
@@ -183,6 +189,14 @@ export function fighterAt(index: number): Fighter {
   const n = ROSTER.length;
   const i = ((Math.trunc(index) % n) + n) % n;
   return ROSTER[i];
+}
+
+/** 窄屏（360px）名牌放不下全名时截断，末尾补省略号 */
+export function shortName(name: string, max = 3): string {
+  const chars = Array.from(name ?? "");
+  const limit = Math.max(1, Math.trunc(max));
+  if (chars.length <= limit) return chars.join("");
+  return `${chars.slice(0, limit).join("")}…`;
 }
 
 /** 队伍配色：0 号粉队、1 号蓝队、2 号绿队、3 号黄队 */

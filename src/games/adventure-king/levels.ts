@@ -264,19 +264,44 @@ export function buildLevel(level: number): AdvLevel {
 
 export const LEVELS: AdvLevel[] = Array.from({ length: TOTAL_LEVELS }, (_, i) => buildLevel(i));
 
+/** 无尽遗迹的几个旋钮全部拧到底是第几层 */
+export const RUINS_CAP_FLOOR = 16;
+
+/** 遗迹再深也给 2 颗心:再少就成了「碰一下就重来」 */
+export const RUINS_HEART_FLOOR = 2;
+
+/** 守卫再快也就这么快:超过这个速度按窄屏的反应窗口算就不讲道理了 */
+export const RUINS_ENEMY_SPEED_MAX = 132;
+
+/**
+ * 深层遗迹的额外压力。
+ * 平台数、坑宽、守卫数这三个旋钮到第 16 层就全顶到安全上限了
+ * ——上限本身是有道理的(坑再宽跳不过去、守卫再多屏上站不下),不能往上抬。
+ * 所以深层改用两个不动几何的旋钮继续加压:心少一颗、守卫再快一点。
+ */
+export function ruinsPressure(floor: number): { hearts: number; enemySpeed: number } {
+  const f = Math.max(1, Math.round(floor));
+  const over = Math.max(0, f - RUINS_CAP_FLOOR);
+  return {
+    hearts: Math.max(RUINS_HEART_FLOOR, 4 - Math.floor(over / 24)),
+    enemySpeed: Math.min(RUINS_ENEMY_SPEED_MAX, Math.min(108, 48 + f * 5) + Math.floor(over / 8)),
+  };
+}
+
 /** 无尽遗迹的第 floor 层(1 基):越往下越长、坑越宽、守卫越多 */
 export function buildEndlessFloor(floor: number): AdvLevel {
   const f = Math.max(1, Math.round(floor));
   const ci = (f - 1) % CHAPTERS.length;
   const base = optionsFor(chapterStartLevel(ci));
+  const press = ruinsPressure(f);
   const opts: GenOptions = {
     ...base,
     platforms: Math.min(13, 5 + Math.floor(f / 2)),
     swingRate: Math.min(0.6, 0.12 + f * 0.05),
     swingGapMax: Math.min(SWING_GAP_MAX, 180 + f * 8),
     enemies: Math.min(6, Math.floor(f / 2)),
-    enemySpeed: Math.min(108, 48 + f * 5),
-    hearts: 4,
+    enemySpeed: press.enemySpeed,
+    hearts: press.hearts,
     hint: "遗迹一层比一层深,拿齐三件神器就能往下走!",
   };
   return generateLevel(opts, 515000 + f * 4813, -1);

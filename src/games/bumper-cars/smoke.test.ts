@@ -8,6 +8,7 @@ import { chooseCarAction, huntersFor, type AiLevel } from "./ai";
 import { buildArena, buildLevel, buildWave, type CarLevel } from "./levels";
 import {
   createWorld,
+  foesGone,
   lastTeamStanding,
   levelCleared,
   makeCar,
@@ -67,6 +68,8 @@ function bootstrap(lv: CarLevel, mySkill: AiLevel): Table {
     cars,
     pads: lv.pads,
     hazards: lv.hazards,
+    spinners: lv.spinners,
+    slicks: lv.slicks,
     limit: lv.seconds > 0 ? lv.seconds * 1000 : 0,
     keep: lv.keep,
     seed: lv.seed,
@@ -92,12 +95,15 @@ function bootstrap(lv: CarLevel, mySkill: AiLevel): Table {
 // stepWorld 单独 import 一次,避免上面的 import 列表被 lint 排序打乱
 import { stepWorld } from "./logic";
 
+// 一局什么时候结束,和 index.ts 的 checkEnd 对齐:场面清空(`foesGone`)就收场,
+// 至于这一场算不算玩家赢,再由 `levelCleared` 单独回答——对手全是自己开下去的
+// 那种局面场面也是空的,但不算通关。所以下面「打通了没有」一律断言 levelCleared。
 describe("冒烟:闯关真的能打通", () => {
   it("第 1 关能被真的打赢——对手被撞出场地,自己没掉下去", () => {
     const lv = buildLevel(0);
     const { world, play } = bootstrap(lv, 3);
     expect(levelCleared(world)).toBe(false);
-    play(lv.seconds * 1000, (w) => levelCleared(w) || playerDown(w));
+    play(lv.seconds * 1000, (w) => foesGone(w) || playerDown(w));
     expect(levelCleared(world), "第 1 关没能在限时内清场").toBe(true);
     expect(world.cars[0].score).toBeGreaterThan(0);
   });
@@ -107,7 +113,7 @@ describe("冒烟:闯关真的能打通", () => {
     for (const level of [0, 24, 48, 72, 96, 119, 142, 165]) {
       const lv = buildLevel(level);
       const { world, play } = bootstrap(lv, 3);
-      play(lv.seconds * 1000, (w) => levelCleared(w) || playerDown(w));
+      play(lv.seconds * 1000, (w) => foesGone(w) || playerDown(w));
       expect(levelCleared(world), `第 ${level + 1} 关(第 ${lv.chapter + 1} 章开章)没打通`).toBe(true);
     }
   });
@@ -120,7 +126,7 @@ describe("冒烟:闯关真的能打通", () => {
       for (const level of sample) {
         const lv = buildLevel(level);
         const { world, play } = bootstrap(lv, skill);
-        play(lv.seconds * 1000, (w) => levelCleared(w) || playerDown(w));
+        play(lv.seconds * 1000, (w) => foesGone(w) || playerDown(w));
         if (levelCleared(world)) win++;
       }
       return win / sample.length;
@@ -136,8 +142,8 @@ describe("冒烟:闯关真的能打通", () => {
     const { world, play } = bootstrap(lv, 1);
     // 把生命压到 1:同一张图,掉一次就结束
     world.cars[0].lives = 1;
-    play(lv.seconds * 1000, (w) => levelCleared(w) || playerDown(w));
-    expect(levelCleared(world) || playerDown(world) || timeUp(world)).toBe(true);
+    play(lv.seconds * 1000, (w) => foesGone(w) || playerDown(w));
+    expect(foesGone(world) || playerDown(world) || timeUp(world)).toBe(true);
   });
 });
 
@@ -153,6 +159,8 @@ describe("冒烟:对战真的分得出胜负", () => {
       cars,
       pads: arena.pads,
       hazards: arena.hazards,
+      spinners: arena.spinners,
+      slicks: arena.slicks,
       limit: arena.seconds * 1000,
       keep: arena.keep,
       seed: arena.seed,
@@ -193,13 +201,16 @@ describe("冒烟:对战真的分得出胜负", () => {
   });
 });
 
+// 无尽考的是「在越来越多的车里撑住」,所以这一段判的是 foesGone(场面清空)
+// 而不是闯关那道 levelCleared(还要问一句这一场是不是玩家自己打下来的)。
+// 混战里对手互相顶下去本来就是车海的一部分,不该拿闯关的尺子量。
 describe("冒烟:无尽车海", () => {
   it("前三波都能清完,波次真的能往上走", () => {
     for (const wave of [1, 2, 3]) {
       const lv = buildWave(wave);
       const { world, play } = bootstrap(lv, 3);
-      play(90000, (w) => levelCleared(w) || playerDown(w));
-      expect(levelCleared(world), `无尽第 ${wave} 波没清完`).toBe(true);
+      play(90000, (w) => foesGone(w) || playerDown(w));
+      expect(foesGone(world), `无尽第 ${wave} 波没清完`).toBe(true);
     }
   });
 
@@ -208,7 +219,7 @@ describe("冒烟:无尽车海", () => {
     for (let wave = 1; wave <= 8 && !ended; wave++) {
       const lv = buildWave(wave);
       const { world, play } = bootstrap(lv, 1);
-      play(90000, (w) => levelCleared(w) || playerDown(w));
+      play(90000, (w) => foesGone(w) || playerDown(w));
       if (playerDown(world)) ended = true;
     }
     expect(ended, "新手档撑过了八波车海,难度爬得太慢").toBe(true);

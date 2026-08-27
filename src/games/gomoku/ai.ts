@@ -1,4 +1,4 @@
-// 五子棋纯逻辑：棋盘、胜负判定、禁手、四档 AI。不依赖 DOM，可单元测试。
+// 五子棋纯逻辑：棋盘、胜负判定、禁手、六档 AI。不依赖 DOM，可单元测试。
 
 /** 1 = 黑棋，2 = 白棋 */
 export type Player = 1 | 2;
@@ -9,7 +9,21 @@ export interface Board {
   cells: Uint8Array;
 }
 
-export type Difficulty = "easy" | "normal" | "smart" | "master";
+/**
+ * 六个难度档（1.2 起）。中间四档是 1.0/1.1 就有的，中文名与行为都不动；
+ * 首尾两档是 1.2 补的：novice「菜鸟」把梯度接到零起点，hell「地狱」封顶。
+ */
+export type Difficulty = "novice" | "easy" | "normal" | "smart" | "master" | "hell";
+
+/** 从弱到强，连胜挑战与档位选择器都按这个顺序 */
+export const DIFFICULTIES: readonly Difficulty[] = [
+  "novice",
+  "easy",
+  "normal",
+  "smart",
+  "master",
+  "hell",
+];
 
 const DIRS: Array<[number, number]> = [
   [1, 0],
@@ -289,14 +303,19 @@ export function isForbidden(
 
 /** 候选点：已有棋子周围 2 格内的空位；空棋盘给天元。 */
 export function candidateMoves(b: Board): Array<[number, number]> {
+  return candidateMovesR(b, 2);
+}
+
+/** 候选点（可指定半径）：深层搜索用半径 1 收窄分支，浅层用 2 看得全。 */
+export function candidateMovesR(b: Board, radius: number): Array<[number, number]> {
   const marks = new Set<number>();
   let hasStone = false;
   for (let y = 0; y < b.size; y++) {
     for (let x = 0; x < b.size; x++) {
       if (b.cells[y * b.size + x] === 0) continue;
       hasStone = true;
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
           const nx = x + dx;
           const ny = y + dy;
           if (!inBoard(b, nx, ny)) continue;
@@ -314,12 +333,31 @@ export function candidateMoves(b: Board): Array<[number, number]> {
 }
 
 /**
- * 聪明档：两层搜索。
- * 先按"进攻分+防守分"初筛前 12 个点，然后对每个点假设落子，
- * 计算对手的最佳回应分值（含对手成五检查），
- * 总分 = 自身点分 + 0.95×防守分 − 0.6×对手最佳回应。
- * 这样活二/眠三/冲四的权重（见 evaluatePoint）在两层里都会生效，
- * 能提前一步看到"对手活三将变活四"之类的威胁。
+ * 聪明档的防守权重：与普通档（`bestMove` 里的 `defenseW`）对齐。
+ * 对齐这件事本身就是 1.2 的修正 —— 见 `smartMove` 的注释。
+ */
+const SMART_DEFENSE = 0.9;
+
+/**
+ * 聪明档多算的那一层里，「对手下一手的最高进攻分」占多少权重。
+ * 这一项只是用来分先后手节奏的，给大了它就变回那个只会拆家的怯懦档。
+ */
+const SMART_TEMPO = 0.1;
+
+/**
+ * 聪明档：在普通档那把尺（进攻 1.0 / 防守 0.9）之上多算一层。
+ *
+ * 它比普通档多会三件事，每一件都是「看得见下一手」：
+ * ① 自己手里已经有要害点（活四 / 双冲四 / 冲四活三 / 双活三）就直接拍下去；
+ * ② 对手有要害点时，不只会占那个交叉点，也会去**拆掉组成它的那条活三**
+ *    （落完子真的再查一遍对手还有没有要害点，破得掉才走）；
+ * ③ 平静局面下，把「我走这里之后对手会不会立刻多出一个要害点」当成硬扣分。
+ *
+ * 1.2 修正：老版本的总分是 `自家分 + 0.95×对手分 − 0.6×对手最佳回应`，
+ * 「占掉对手要点」被算了两遍（`0.95` 一遍、`−0.6×reply` 又一遍），
+ * 等效防守权重 ≈ 1.55 而进攻权重只有 1.0 —— 它比普通档更怕事，
+ * 只会拆家不会成家，长局反而下不过普通档。现在防守权重与普通档对齐，
+ * 多出来的那一层只用来看「对手的下一手」，不再重复给防守加码。
  */
 export function smartMove(
   b: Board,
@@ -335,27 +373,76 @@ export function smartMove(
   const oppWin = cands.find(([x, y]) => makesFive(b, x, y, opp));
   if (oppWin) return { x: oppWin[0], y: oppWin[1] };
 
+  // ① 自己就有要害点：一步定型的棋，抢在对手前面拍下去
+  //    （对手已经握着活四 / 双冲四时抢不过，那种局面交给下面的破杀分支）
+  const myHot = hotPoints(b, me);
+  if (myHot.length > 0 && killerPoints(b, opp).length === 0) return myHot[0];
+
+  // 三手之内的连续冲四杀（大师档看五手、地狱档看七手，聪明档只看三手）
+  const kill = findVcf(b, me, 3);
+  if (kill) return kill;
+
   const scored = cands.map(([x, y]) => ({
     x,
     y,
-    base: evaluatePoint(b, x, y, me) + 0.95 * evaluatePoint(b, x, y, opp),
+    base: evaluatePoint(b, x, y, me) + SMART_DEFENSE * evaluatePoint(b, x, y, opp),
   }));
   scored.sort((a, c) => c.base - a.base);
   const top = scored.slice(0, 12);
 
+  // ② 对手有要害点：占掉它、或者拆掉组成它的那条活三，破得掉才算数
+  const oppHot = hotPoints(b, opp);
+  if (oppHot.length > 0) {
+    const tries: Array<{ x: number; y: number }> = [
+      ...oppHot,
+      ...top.map((m) => ({ x: m.x, y: m.y })),
+    ];
+    for (const t of tries) {
+      if (getCell(b, t.x, t.y) !== 0) continue;
+      setCell(b, t.x, t.y, me);
+      const broken = hotPoints(b, opp).length === 0 && fiveSpotsOf(b, opp).length === 0;
+      setCell(b, t.x, t.y, 0);
+      if (broken) return t;
+    }
+    return oppHot[0];
+  }
+
+  // ③ 平静局面：多算一层 ——「我走这里，对手挡完之后，谁手上还有要害点」
   let best = top[0];
   let bestVal = -Infinity;
   for (const m of top) {
     setCell(b, m.x, m.y, me);
-    // 对手的最佳回应分（对手成五 = 天文数字，等价于必输警告）
-    let reply = 0;
-    for (const [ox, oy] of candidateMoves(b)) {
-      const v = evaluatePoint(b, ox, oy, opp);
-      if (v > reply) reply = v;
-      if (reply >= 10_000_000) break;
+    let val = m.base;
+    if (hotPoints(b, opp).length > 0) {
+      // 这一手等于把活四 / 双三送到对手手里
+      val -= 250_000;
+    } else {
+      // 对手用同一把尺挑他的最佳应手
+      let rx = -1;
+      let ry = -1;
+      let rv = -Infinity;
+      let atk = 0;
+      for (const [ox, oy] of candidateMoves(b)) {
+        const a = evaluatePoint(b, ox, oy, opp);
+        if (a > atk) atk = a;
+        const v = a + SMART_DEFENSE * evaluatePoint(b, ox, oy, me);
+        if (v > rv) {
+          rv = v;
+          rx = ox;
+          ry = oy;
+        }
+      }
+      val -= SMART_TEMPO * atk;
+      if (rx >= 0) {
+        setCell(b, rx, ry, opp);
+        // 他挡完我还有要害点 = 这一手做出了他一手挡不掉的双威胁
+        if (hotPoints(b, me).length > 0) val += 60_000;
+        if (hotPoints(b, opp).length > 0) val -= 120_000;
+        setCell(b, rx, ry, 0);
+      }
     }
     setCell(b, m.x, m.y, 0);
-    const val = m.base - 0.6 * reply + rng() * 4;
+    val += rng() * 4;
     if (val > bestVal) {
       bestVal = val;
       best = m;
@@ -363,6 +450,15 @@ export function smartMove(
   }
   return { x: best.x, y: best.y };
 }
+
+/**
+ * 大师档挑点时对手棋型的权重。
+ *
+ * 1.2 上调（0.95 → 1.15）：大师档手里有算杀（VCF 5 手 / VCT 3 手）和三层前瞻，
+ * 进攻这一头本来就够用；真正会输棋的是「对手在别处慢慢做形，它只顾自己长」。
+ * 把对手的形看得比自己重一点点，它才配得上比聪明档更强这句话。
+ */
+const MASTER_DEFENSE = 1.15;
 
 /* ---------------- 1.1 新增：大师档 ---------------- */
 // 大师档比聪明档多两件武器：
@@ -568,6 +664,92 @@ function unstoppable(b: Board, p: Player): boolean {
 }
 
 /**
+ * 对手握着杀招时，所有值得一试的解法。顺序就是「先看最直接的」：
+ * 对手的连续冲四点 / 连续威胁点 → 对手的要害点 → 拆掉组成要害点的那条线
+ * → 自己这边最想下的几个点（一边解杀一边落在要点上最划算）→ 自己的冲四。
+ * 同一个点只留一次。
+ */
+function defenseCandidates(
+  b: Board,
+  me: Player,
+  cands: Array<[number, number]>,
+  oppHot: Array<{ x: number; y: number }>,
+  oppVcf: { x: number; y: number } | null,
+  oppVct: { x: number; y: number } | null
+): Array<{ x: number; y: number }> {
+  const opp = other(me);
+  const raw: Array<{ x: number; y: number }> = [];
+  if (oppVcf) raw.push(oppVcf);
+  if (oppVct) raw.push(oppVct);
+  raw.push(...oppHot);
+  const breakers = cands
+    .map(([x, y]) => ({ x, y, v: evaluateMaster(b, x, y, opp) }))
+    .sort((a, c) => c.v - a.v)
+    .slice(0, 6);
+  for (const d of breakers) raw.push({ x: d.x, y: d.y });
+  const mine = cands
+    .map(([x, y]) => ({
+      x,
+      y,
+      v: evaluateMaster(b, x, y, me) + 0.9 * evaluateMaster(b, x, y, opp),
+    }))
+    .sort((a, c) => c.v - a.v)
+    .slice(0, 6);
+  for (const d of mine) raw.push({ x: d.x, y: d.y });
+  for (const f of forcingMoves(b, me).slice(0, 4)) raw.push({ x: f.x, y: f.y });
+
+  const seen = new Set<string>();
+  const out: Array<{ x: number; y: number }> = [];
+  for (const t of raw) {
+    const k = `${t.x},${t.y}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if (getCell(b, t.x, t.y) !== 0) continue;
+    out.push(t);
+    if (out.length >= 14) break;
+  }
+  return out;
+}
+
+/**
+ * 从解法候选里挑一个。
+ *
+ * 1.2 修正：老版本是「按固定顺序试，拿到第一个安全的就走」——
+ * 顺序是拍脑袋定的，于是常常解了杀却把自己的要点让了出去；
+ * 真的一个都不安全时又直接返回 `tries[0]`，等于随手一放。
+ * 现在改成两道筛子：先要「对手不再有必胜招」，再要「对手至少没有现成的要害点」，
+ * 同一道筛子里选自己这边分数最高的那个。
+ */
+function pickDefense(
+  b: Board,
+  me: Player,
+  tries: Array<{ x: number; y: number }>
+): { x: number; y: number } | null {
+  const opp = other(me);
+  let hard: { x: number; y: number } | null = null;
+  let hardV = -Infinity;
+  let soft: { x: number; y: number } | null = null;
+  let softV = -Infinity;
+  for (const t of tries) {
+    if (getCell(b, t.x, t.y) !== 0) continue;
+    const v = evaluateMaster(b, t.x, t.y, me) + 0.9 * evaluateMaster(b, t.x, t.y, opp);
+    setCell(b, t.x, t.y, me);
+    const quiet = fiveSpotsOf(b, opp).length === 0 && hotPoints(b, opp).length === 0;
+    const safe = quiet && !unstoppable(b, opp);
+    setCell(b, t.x, t.y, 0);
+    if (safe && v > hardV) {
+      hardV = v;
+      hard = t;
+    }
+    if (quiet && v > softV) {
+      softV = v;
+      soft = t;
+    }
+  }
+  return hard ?? soft;
+}
+
+/**
  * 大师档：先算杀，再算被杀，都没有才用三层前瞻挑点。
  * ① 自己能成五 / 必须挡对手成五；
  * ② 自己有连续冲四的杀棋（最多 5 手）→ 直接走；
@@ -600,33 +782,15 @@ export function masterMove(
     if (vct) return vct;
   }
   if (oppHot.length > 0 || oppVcf || oppVct) {
-    // 对手的要害点、我方自己的冲四，谁能真的把杀棋破掉就走谁
-    const tries: Array<{ x: number; y: number }> = [];
-    if (oppVcf) tries.push(oppVcf);
-    if (oppVct) tries.push(oppVct);
-    tries.push(...oppHot);
-    // 除了直接占掉要害点，拆掉组成双三的某一条活三同样是解法
-    const breakers = cands
-      .map(([x, y]) => ({ x, y, v: evaluateMaster(b, x, y, opp) }))
-      .sort((a, c) => c.v - a.v)
-      .slice(0, 6);
-    for (const d of breakers) tries.push({ x: d.x, y: d.y });
-    for (const f of forcingMoves(b, me).slice(0, 4)) tries.push({ x: f.x, y: f.y });
-    for (const t of tries) {
-      if (getCell(b, t.x, t.y) !== 0) continue;
-      setCell(b, t.x, t.y, me);
-      const safe = !unstoppable(b, opp);
-      setCell(b, t.x, t.y, 0);
-      if (safe) return t;
-    }
-    return tries[0];
+    const tries = defenseCandidates(b, me, cands, oppHot, oppVcf, oppVct);
+    return pickDefense(b, me, tries) ?? tries[0];
   }
 
   const scored = cands
     .map(([x, y]) => ({
       x,
       y,
-      base: evaluateMaster(b, x, y, me) + 0.95 * evaluateMaster(b, x, y, opp),
+      base: evaluateMaster(b, x, y, me) + MASTER_DEFENSE * evaluateMaster(b, x, y, opp),
     }))
     .sort((a, c) => c.base - a.base)
     .slice(0, 8);
@@ -645,24 +809,612 @@ export function masterMove(
   return { x: ranked[0].x, y: ranked[0].y };
 }
 
+/* ---------------- 1.2 新增：菜鸟档 ---------------- */
+
+/**
+ * 菜鸟档（0 层，完全不搜索）：
+ * 在已有棋子附近随便挑一个空点，只有 30% 的时候会想起来去挡对手的冲四，
+ * **连自己能成五都常常看不见**——刚学会规则的小朋友就是这么下的。
+ * 它存在的意义是让梯度从零开始：谁都能赢它一盘。
+ */
+export function noviceMove(
+  b: Board,
+  me: Player,
+  rng: () => number = Math.random
+): { x: number; y: number } | null {
+  const cands = candidateMoves(b);
+  if (cands.length === 0) return null;
+  const opp = other(me);
+  // 30%：会去堵对手「下一手就成五」的点（冲四），其余七成压根没看
+  if (rng() < 0.3) {
+    const block = cands.find(([x, y]) => makesFive(b, x, y, opp));
+    if (block) return { x: block[0], y: block[1] };
+  }
+  const idx = Math.min(cands.length - 1, Math.max(0, Math.floor(rng() * cands.length)));
+  return { x: cands[idx][0], y: cands[idx][1] };
+}
+
+/* ---------------- 1.2 新增：地狱档 ---------------- */
+// 地狱档比大师档多三件东西：
+// ① Zobrist 置换表：同一个局面在不同着法顺序下只算一次；
+// ② 迭代加深 + 限时：算到时间用完为止，保证「想得越久越准」但绝不卡住 UI；
+// ③ 禁手抓杀：禁手规则打开时，把黑棋的三三 / 四四 / 长连点当成非法着法，
+//    于是「白棋冲四、黑棋唯一的挡点正好是禁手」这种杀法会被自动找出来。
+
+/** 每格两个玩家各一把随机数（拆成高低两半，凑成 52 位内的整数 key） */
+interface Zobrist {
+  hi: Int32Array;
+  lo: Int32Array;
+}
+
+function buildZobrist(cells: number): Zobrist {
+  const hi = new Int32Array(cells * 2);
+  const lo = new Int32Array(cells * 2);
+  let s = 0x9e3779b9;
+  const next = (): number => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return (t ^ (t >>> 14)) >>> 0;
+  };
+  for (let i = 0; i < cells * 2; i++) {
+    hi[i] = next() & 0x3ffffff;
+    lo[i] = next() & 0x3ffffff;
+  }
+  return { hi, lo };
+}
+
+const ZOBRIST_CACHE = new Map<number, Zobrist>();
+
+function zobristOf(size: number): Zobrist {
+  let z = ZOBRIST_CACHE.get(size);
+  if (!z) {
+    z = buildZobrist(size * size);
+    ZOBRIST_CACHE.set(size, z);
+  }
+  return z;
+}
+
+/** 局面哈希（拆成两半的 26 位，合起来当 Map 的数字 key，不会丢精度） */
+export function hashBoard(b: Board): { hi: number; lo: number } {
+  const z = zobristOf(b.size);
+  let hi = 0;
+  let lo = 0;
+  for (let i = 0; i < b.cells.length; i++) {
+    const c = b.cells[i];
+    if (c === 0) continue;
+    const k = i * 2 + (c === 1 ? 0 : 1);
+    hi ^= z.hi[k];
+    lo ^= z.lo[k];
+  }
+  return { hi, lo };
+}
+
+function ttKey(hi: number, lo: number, depth: number, turn: Player): number {
+  // hi/lo 各 26 位 → 52 位；再乘进层数与行棋方会超 2^53，所以拆成两级 Map 的复合 key
+  return (hi * 67108864 + lo) * 16 + depth * 2 + (turn - 1);
+}
+
+/** 五连的分值上限；再减去层数，保证「早一步杀」优于「晚一步杀」 */
+const WIN_SCORE = 1_000_000;
+
+/**
+ * 深搜要推翻大师档给的那一手，至少得多出这么多分。
+ *
+ * 1.2 下调（4000 → 200）：4000 约等于一个活二的价值，实测在真实中盘局面里
+ * **一次都没跨过去** —— 地狱档每一步都在原样交回大师档的答案，深搜白算，
+ * 两档因此 100% 同步。200 是「一个五格窗口里多一颗子」的量级，
+ * 深搜确实说得上话，同时仍然要求它**严格更好**才改着；
+ * 改着之后还要过一遍「不许把杀招送给对手」的保险（见 `hellMove`）。
+ */
+const SEARCH_OVERRIDE_MARGIN = 200;
+
+/**
+ * 深搜要推翻大师档的着法，至少得完整跑完这么多层。
+ * 预算被压得很紧（比如测试里的 12ms）时迭代加深只来得及跑两三层，
+ * 那种半成品的分数不配改写一手已经过了算杀复核的棋 —— 这时老老实实用大师档的答案。
+ */
+const SEARCH_OVERRIDE_MIN_DEPTH = 4;
+
+/** 一个 5 格窗口里 n 颗己方子（其余是空）值多少分 */
+const WINDOW_SCORE = [0, 1, 14, 160, 1_800, 200_000];
+
+/**
+ * 整盘静态评分（只给搜索的叶子节点用，必须便宜）：
+ * 四个方向扫所有长度 5 的窗口，窗口里只有一种颜色才算数，
+ * 两头还空着的（活形）再翻 2.4 倍。
+ */
+export function boardScore(b: Board, p: Player): number {
+  const n = b.size;
+  const cells = b.cells;
+  let total = 0;
+  for (const [dx, dy] of DIRS) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const ex = x + dx * 4;
+        const ey = y + dy * 4;
+        if (ex < 0 || ey < 0 || ex >= n || ey >= n) continue;
+        let mine = 0;
+        let theirs = 0;
+        for (let i = 0; i < 5; i++) {
+          const c = cells[(y + dy * i) * n + (x + dx * i)];
+          if (c === p) mine++;
+          else if (c !== 0) theirs++;
+        }
+        if (theirs > 0 || mine === 0) continue;
+        let sc = WINDOW_SCORE[mine];
+        if (mine >= 2) {
+          const before = getCell(b, x - dx, y - dy);
+          const after = getCell(b, ex + dx, ey + dy);
+          if (before === 0 && after === 0) sc = Math.round(sc * 2.4);
+        }
+        total += sc;
+      }
+    }
+  }
+  return total;
+}
+
+/** 从 p 的角度看这个局面值多少（自己的形 − 对手的形） */
+export function evaluateBoard(b: Board, p: Player): number {
+  return boardScore(b, p) - boardScore(b, other(p));
+}
+
+export interface HellOptions {
+  /** 思考时间上限（毫秒），默认 350 */
+  timeMs?: number;
+  /** 最多算几层，默认 8（一般时间先用完） */
+  maxDepth?: number;
+  /** 禁手规则是否打开：打开后黑棋的三三 / 四四 / 长连点在搜索里就是非法着法 */
+  forbidden?: boolean;
+  /** 计时器（测试可注入） */
+  now?: () => number;
+  /** 优先搜索的一手（放在根节点第一个：剪枝更狠，而且它的分数一定是精确值） */
+  prefer?: { x: number; y: number } | null;
+}
+
+export interface SearchResult {
+  x: number;
+  y: number;
+  /** 真正算完的层数（迭代加深最后一次完整跑完的深度） */
+  depth: number;
+  /** 走到的节点数 */
+  nodes: number;
+  score: number;
+  /** 最后一层里 prefer 那一手的分数（没传 prefer 就是 null） */
+  preferScore: number | null;
+}
+
+interface TTEntry {
+  value: number;
+  /** 0 精确 1 下界 2 上界 */
+  flag: number;
+}
+
+interface SearchCtx {
+  deadline: number;
+  now: () => number;
+  tt: Map<number, TTEntry>;
+  nodes: number;
+  stopped: boolean;
+  forbidden: boolean;
+  root: Player;
+}
+
+/** 黑棋在禁手规则下不能走的点（白棋永远不受限） */
+function illegalFor(b: Board, x: number, y: number, p: Player, forbidden: boolean): boolean {
+  if (!forbidden || p !== 1) return false;
+  return isForbidden(b, x, y).forbidden;
+}
+
+/**
+ * 搜索用的着法生成：
+ * ① 自己能成五 → 只留这一个；
+ * ② 对手有成五点 → 只留挡点（顺带留下自己的冲四，四比挡快）；
+ * ③ 否则按「进攻分 + 0.85×破坏分」排序取前 width 个。
+ * 禁手规则下黑棋的禁手点在这里被直接筛掉，于是「唯一挡点是禁手」= 无路可走。
+ */
+function genMoves(
+  b: Board,
+  turn: Player,
+  width: number,
+  forbidden: boolean,
+  radius = 2
+): Array<[number, number]> {
+  const opp = other(turn);
+  const cands = candidateMovesR(b, radius);
+  const legal = cands.filter(([x, y]) => !illegalFor(b, x, y, turn, forbidden));
+  const win = legal.find(([x, y]) => makesFive(b, x, y, turn));
+  if (win) return [win];
+  const blocks = legal.filter(([x, y]) => makesFive(b, x, y, opp));
+  if (blocks.length > 0) {
+    const fours = forcingMoves(b, turn)
+      .filter((m) => !illegalFor(b, m.x, m.y, turn, forbidden))
+      .slice(0, 2)
+      .map((m) => [m.x, m.y] as [number, number]);
+    const seen = new Set(blocks.map(([x, y]) => `${x},${y}`));
+    for (const f of fours) if (!seen.has(`${f[0]},${f[1]}`)) blocks.push(f);
+    return blocks;
+  }
+  // 排序用大师档那套权重：单纯的冲四不值钱，活三、双三才留得住
+  return legal
+    .map(([x, y]) => ({
+      x,
+      y,
+      v: evaluateMaster(b, x, y, turn) + 0.85 * evaluateMaster(b, x, y, opp),
+    }))
+    .sort((a, c) => c.v - a.v)
+    .slice(0, width)
+    .map((m) => [m.x, m.y] as [number, number]);
+}
+
+function negamax(
+  b: Board,
+  depth: number,
+  ply: number,
+  alpha: number,
+  beta: number,
+  turn: Player,
+  hi: number,
+  lo: number,
+  ctx: SearchCtx
+): number {
+  if ((ctx.nodes++ & 31) === 0 && ctx.now() >= ctx.deadline) {
+    ctx.stopped = true;
+    return 0;
+  }
+  const key = ttKey(hi, lo, depth, turn);
+  const hit = ctx.tt.get(key);
+  if (hit) {
+    if (hit.flag === 0) return hit.value;
+    if (hit.flag === 1 && hit.value >= beta) return hit.value;
+    if (hit.flag === 2 && hit.value <= alpha) return hit.value;
+  }
+  if (depth <= 0) {
+    const v = evaluateBoard(b, turn);
+    ctx.tt.set(key, { value: v, flag: 0 });
+    return v;
+  }
+
+  const moves = genMoves(b, turn, depth >= 3 ? 8 : 6, ctx.forbidden, depth >= 3 ? 2 : 1);
+  // 一个能走的点都没有：禁手规则下的黑棋被抓死了（唯一的挡点是禁手）
+  if (moves.length === 0) return -(WIN_SCORE - ply);
+
+  const z = zobristOf(b.size);
+  let best = -Infinity;
+  const a0 = alpha;
+  for (const [x, y] of moves) {
+    setCell(b, x, y, turn);
+    const k = (y * b.size + x) * 2 + (turn === 1 ? 0 : 1);
+    const nhi = hi ^ z.hi[k];
+    const nlo = lo ^ z.lo[k];
+    let value: number;
+    if (findWinLine(b, x, y)) {
+      value = WIN_SCORE - ply;
+    } else if (boardFull(b)) {
+      value = 0;
+    } else {
+      value = -negamax(b, depth - 1, ply + 1, -beta, -alpha, other(turn), nhi, nlo, ctx);
+    }
+    setCell(b, x, y, 0);
+    if (ctx.stopped) return best === -Infinity ? 0 : best;
+    if (value > best) best = value;
+    if (best > alpha) alpha = best;
+    if (alpha >= beta) break;
+  }
+  ctx.tt.set(key, { value: best, flag: best <= a0 ? 2 : best >= beta ? 1 : 0 });
+  return best;
+}
+
+/**
+ * 地狱档的迭代加深搜索：从 2 层往上一层层加，时间一到就用上一层的结果。
+ * 返回真正跑完的层数，测试靠它确认「至少 4 层」。
+ */
+export function hellSearch(b: Board, me: Player, opts: HellOptions = {}): SearchResult | null {
+  const now = opts.now ?? (() => performance.now());
+  const timeMs = opts.timeMs ?? 350;
+  const maxDepth = opts.maxDepth ?? 8;
+  const forbidden = opts.forbidden ?? false;
+  const cands = candidateMoves(b);
+  if (cands.length === 0) return null;
+
+  const ctx: SearchCtx = {
+    deadline: now() + timeMs,
+    now,
+    tt: new Map(),
+    nodes: 0,
+    stopped: false,
+    forbidden,
+    root: me,
+  };
+  const { hi, lo } = hashBoard(b);
+  const z = zobristOf(b.size);
+  let rootMoves = genMoves(b, me, 12, forbidden);
+  if (rootMoves.length === 0) rootMoves = [[cands[0][0], cands[0][1]]];
+  const prefer = opts.prefer ?? null;
+  if (prefer && getCell(b, prefer.x, prefer.y) === 0) {
+    rootMoves = [
+      [prefer.x, prefer.y],
+      ...rootMoves.filter(([x, y]) => x !== prefer.x || y !== prefer.y),
+    ];
+  }
+
+  let best: SearchResult = {
+    x: rootMoves[0][0],
+    y: rootMoves[0][1],
+    depth: 0,
+    nodes: 0,
+    score: 0,
+    preferScore: null,
+  };
+  for (let depth = 2; depth <= maxDepth; depth++) {
+    let localBest = -Infinity;
+    let localMove = rootMoves[0];
+    let alpha = -Infinity;
+    let preferScore: number | null = null;
+    for (const [x, y] of rootMoves) {
+      setCell(b, x, y, me);
+      const k = (y * b.size + x) * 2 + (me === 1 ? 0 : 1);
+      let value: number;
+      if (findWinLine(b, x, y)) {
+        value = WIN_SCORE;
+      } else if (boardFull(b)) {
+        value = 0;
+      } else {
+        value = -negamax(
+          b,
+          depth - 1,
+          1,
+          -Infinity,
+          -alpha,
+          other(me),
+          hi ^ z.hi[k],
+          lo ^ z.lo[k],
+          ctx
+        );
+      }
+      setCell(b, x, y, 0);
+      if (ctx.stopped) break;
+      if (prefer && x === prefer.x && y === prefer.y) preferScore = value;
+      if (value > localBest) {
+        localBest = value;
+        localMove = [x, y];
+      }
+      if (value > alpha) alpha = value;
+    }
+    if (ctx.stopped) break;
+    best = {
+      x: localMove[0],
+      y: localMove[1],
+      depth,
+      nodes: ctx.nodes,
+      score: localBest,
+      preferScore,
+    };
+    // 把这一层的最佳着法提到最前面，下一层剪枝更狠
+    rootMoves = [localMove, ...rootMoves.filter(([x, y]) => x !== localMove[0] || y !== localMove[1])];
+    if (localBest >= WIN_SCORE - 32 || localBest <= -(WIN_SCORE - 32)) break;
+    if (now() >= ctx.deadline) break;
+  }
+  best.nodes = ctx.nodes;
+  return best;
+}
+
+/**
+ * 禁手抓杀：白棋走一手冲四，黑棋唯一的挡点却是三三 / 四四 / 长连 —— 黑棋挡也不是、不挡也不是。
+ * 只在禁手规则打开、且对手是黑棋时才有意义。找不到就返回 null。
+ */
+export function findForbiddenTrap(b: Board, me: Player): { x: number; y: number } | null {
+  if (me !== 2) return null;
+  if (fiveSpotsOf(b, 1).length > 0) return null;
+  for (const m of forcingMoves(b, me)) {
+    if (getCell(b, m.x, m.y) !== 0) continue;
+    setCell(b, m.x, m.y, me);
+    const threats = fiveSpotsOf(b, me);
+    const trapped =
+      threats.length > 0 &&
+      threats.every(([x, y]) => isForbidden(b, x, y).forbidden) &&
+      fiveSpotsOf(b, 1).length === 0;
+    setCell(b, m.x, m.y, 0);
+    if (trapped) return { x: m.x, y: m.y };
+  }
+  return null;
+}
+
+/**
+ * 地狱档的破杀。
+ *
+ * 1.2 修正：老版本在这里直接 `return masterMove(...)` —— 21% 的中盘局面
+ * 地狱档压根不搜索，原样把答案交回大师档，这是「地狱与大师 100% 同一步」的第一道口子。
+ * 现在解法候选仍旧是大师档那一批（一个都不少），但多了两道地狱档专属的关：
+ * ① 复核用的算杀更深：大师看 `findVcf(opp, 4)`，这里看到 6 手，还要求对手没有连续威胁杀；
+ * ② 幸存下来的解法不是「按顺序拿第一个」，而是交给限时深搜逐个打分，挑分最高的。
+ * 一个都活不下来时仍旧退回大师档的答案，所以它不可能比大师档弱。
+ */
+function hellDefend(
+  b: Board,
+  me: Player,
+  rng: () => number,
+  opts: HellOptions,
+  cands: Array<[number, number]>,
+  oppHot: Array<{ x: number; y: number }>,
+  oppVcf: { x: number; y: number } | null,
+  oppVct: { x: number; y: number } | null
+): { x: number; y: number } | null {
+  const opp = other(me);
+  const fallback = masterMove(b, me, rng);
+  const tries = defenseCandidates(b, me, cands, oppHot, oppVcf, oppVct);
+  if (fallback && !tries.some((t) => t.x === fallback.x && t.y === fallback.y)) {
+    tries.push(fallback);
+  }
+
+  // 第一道关：对手在更深的算杀里也找不到必胜
+  const survivors: Array<{ x: number; y: number }> = [];
+  for (const t of tries) {
+    if (getCell(b, t.x, t.y) !== 0) continue;
+    setCell(b, t.x, t.y, me);
+    const quiet = fiveSpotsOf(b, opp).length === 0 && hotPoints(b, opp).length === 0;
+    const safe =
+      quiet && findVcf(b, opp, 6) === null && findVct(b, opp, 2) === null;
+    setCell(b, t.x, t.y, 0);
+    if (safe) survivors.push(t);
+  }
+  if (survivors.length === 0) return fallback;
+  if (survivors.length === 1) return survivors[0];
+
+  // 第二道关：幸存者交给搜索排座次
+  const budget = opts.timeMs ?? 350;
+  const share = Math.max(8, Math.round(budget / Math.min(6, survivors.length)));
+  let best: { x: number; y: number } | null = null;
+  let bestScore = -Infinity;
+  for (const t of survivors.slice(0, 6)) {
+    setCell(b, t.x, t.y, me);
+    const r = hellSearch(b, opp, { ...opts, timeMs: share });
+    setCell(b, t.x, t.y, 0);
+    // r 是对手视角的分，取负就是我这边的分
+    if (!r || r.depth <= 0) continue;
+    const score = -r.score;
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+  if (best) return best;
+  // 预算太紧、搜索一层都没算完：不猜，仍旧用大师档的答案（只要它过了第一道关）
+  if (fallback && survivors.some((s) => s.x === fallback.x && s.y === fallback.y)) {
+    return fallback;
+  }
+  return survivors[0];
+}
+
+/**
+ * 地狱档 = 大师档的全部战术判断 + 三件加料：
+ * ① 算杀更深（VCF 7 手 / VCT 4 手，大师是 5 手 / 3 手）；
+ * ② 禁手规则打开时会主动抓杀（对手唯一的挡点是禁手）；
+ * ③ 局面平静、没有现成杀招时，用限时迭代加深搜索选点，而不是大师档的三层启发式。
+ * 防守局面仍然交给大师档那套已经验证过的解法，所以地狱档不可能比大师档弱。
+ */
+export function hellMove(
+  b: Board,
+  me: Player,
+  rng: () => number = Math.random,
+  opts: HellOptions = {}
+): { x: number; y: number } | null {
+  const cands = candidateMoves(b);
+  if (cands.length === 0) return null;
+  const opp = other(me);
+
+  const myWin = cands.find(([x, y]) => makesFive(b, x, y, me));
+  if (myWin) return { x: myWin[0], y: myWin[1] };
+  const oppWin = cands.find(([x, y]) => makesFive(b, x, y, opp));
+  if (oppWin) return { x: oppWin[0], y: oppWin[1] };
+
+  const kill = findVcf(b, me, 7);
+  if (kill) return kill;
+  if (opts.forbidden) {
+    const trap = findForbiddenTrap(b, me);
+    if (trap) return trap;
+  }
+
+  const oppHot = hotPoints(b, opp).slice(0, 4);
+  const oppVcf = findVcf(b, opp, 5);
+  const oppVct = oppHot.length === 0 && !oppVcf ? findVct(b, opp, 2) : null;
+  if (oppHot.length > 0 || oppVcf || oppVct) {
+    // 对手手里有活四 / 双三 / 连续冲四：解法候选与大师档同一批，
+    // 但每一个解法都要多过一道「更深的算杀」复核，再由搜索在幸存者里挑分最高的那个。
+    return hellDefend(b, me, rng, opts, cands, oppHot, oppVcf, oppVct);
+  }
+  const vct = findVct(b, me, 4);
+  if (vct) return vct;
+
+  // 平静局面：大师档先给一手，深搜算够层数、而且确实更好时才改着
+  const fallback = masterMove(b, me, rng);
+  const found = hellSearch(b, me, { ...opts, prefer: fallback });
+  if (
+    found &&
+    found.depth >= SEARCH_OVERRIDE_MIN_DEPTH &&
+    (found.x !== fallback?.x || found.y !== fallback?.y)
+  ) {
+    const beats =
+      found.preferScore === null || found.score >= found.preferScore + SEARCH_OVERRIDE_MARGIN;
+    if (beats) {
+      setCell(b, found.x, found.y, me);
+      const safe = !unstoppable(b, opp);
+      setCell(b, found.x, found.y, 0);
+      if (safe || found.score >= WIN_SCORE - 64) return { x: found.x, y: found.y };
+    }
+  }
+  return fallback;
+}
+
+/* ---------------- 六档的展示信息 ---------------- */
+
+/** 六档中文名：中间四档沿用 1.0/1.1 的叫法，一个字都没改 */
+export const DIFFICULTY_NAME: Record<Difficulty, string> = {
+  novice: "🐣 棋灵苗·菜鸟",
+  easy: "🐱 棋灵喵·简单",
+  normal: "🦊 棋灵狐·普通",
+  smart: "🐲 棋灵龙·聪明",
+  master: "🐘 棋灵象·大师",
+  hell: "🌌 棋灵渊·地狱",
+};
+
+/** 一句话说明这档会干什么，选档时给孩子看 */
+export const DIFFICULTY_BLURB: Record<Difficulty, string> = {
+  novice: "刚学会规则，会乱下，也常常看不见自己能连成五",
+  easy: "自己能成五一定会下，但十次里有四次忘了拦你",
+  normal: "该成五就成五、该挡就挡，还会自己走活三",
+  smart: "会算两层：你活四、双三的苗头它提前拆",
+  master: "开局有套路，还会算五步的连续冲四杀招",
+  hell: "算到时间用完为止，禁手规则一开就专门抓你的三三四四",
+};
+
+/** 各档大致搜索深度（层）。菜鸟真的是 0 层：不搜索 */
+export const DIFFICULTY_DEPTH: Record<Difficulty, number> = {
+  novice: 0,
+  easy: 1,
+  normal: 1,
+  smart: 2,
+  master: 3,
+  hell: 4,
+};
+
+/**
+ * 落子前的「思考」延时（毫秒）。地狱档硬性 ≥ 200ms：
+ * 秒回的无敌对手会把孩子劝退，让它看起来在想。
+ */
+export const THINK_DELAY_MS: Record<Difficulty, number> = {
+  novice: 300,
+  easy: 420,
+  normal: 480,
+  smart: 520,
+  master: 560,
+  hell: 320,
+};
+
 /**
  * AI 选点。
- * - master：算杀 + 三层前瞻（见 masterMove），最强。
+ * - hell：迭代加深 + 置换表 + 禁手抓杀（见 hellMove），最强。
+ * - master：算杀 + 三层前瞻（见 masterMove）。
  * - smart：两层搜索（见 smartMove）。
  * - normal：永远抓住成五机会、必挡对方成五，评分带 0.9 防守权重
  *   （活三/冲四威胁都会被看见并处理）。
- * - easy：会漏——60% 概率才挡对方的成五，防守权重也低，
+ * - easy：必成五，但只有 60% 概率去挡对方的成五，防守权重也低，
  *   且从前三名里随机挑一个。
+ * - novice：随机点，30% 才想起挡冲四（见 noviceMove）。
  * rng 传入便于测试（默认 Math.random）。
  */
 export function bestMove(
   b: Board,
   me: Player,
   difficulty: Difficulty,
-  rng: () => number = Math.random
+  rng: () => number = Math.random,
+  opts: HellOptions = {}
 ): { x: number; y: number } | null {
+  if (difficulty === "hell") return hellMove(b, me, rng, opts);
   if (difficulty === "master") return masterMove(b, me, rng);
   if (difficulty === "smart") return smartMove(b, me, rng);
+  if (difficulty === "novice") return noviceMove(b, me, rng);
   const cands = candidateMoves(b);
   if (cands.length === 0) return null;
   const opp = other(me);
@@ -673,7 +1425,8 @@ export function bestMove(
     if (myWin) return { x: myWin[0], y: myWin[1] };
     if (oppWin) return { x: oppWin[0], y: oppWin[1] };
   } else {
-    if (myWin && rng() < 0.85) return { x: myWin[0], y: myWin[1] };
+    // 简单档：自己能成五一定会下，但挡不挡看运气
+    if (myWin) return { x: myWin[0], y: myWin[1] };
     if (oppWin && rng() < 0.6) return { x: oppWin[0], y: oppWin[1] };
   }
 
