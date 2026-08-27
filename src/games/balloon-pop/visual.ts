@@ -178,6 +178,63 @@ export function giftBoxSvg(scale = 1): string {
 }
 
 // ---------------------------------------------------------------------------
+// 三·补、特殊球徽记(W6R1-12 修复):替代 1.2 贴在球面上的 emoji 小图标
+// ---------------------------------------------------------------------------
+
+/** 徽记基准尺寸(近景 12px;far 0.72 缩到 8.6px,仍在 8px 最小可见线上) */
+export const KIND_BADGE_PX = 12;
+/** 徽记描边宽(球主色压暗 30%) */
+export const KIND_BADGE_STROKE = 1.2;
+/** 徽记底形白色(与数字衬牌同族,压住球面渐变保可读) */
+export const KIND_BADGE_FILL = "rgba(255,255,255,.92)";
+
+/**
+ * 特殊球身份徽记:12px 白底形 + 1.2px 主色描边的内联 SVG。
+ * 形状语言(全几何原创,涂黑仍认得):护盾=盾形五边、双子=双圆相扣、
+ * 礼物=礼盒加十字缎带、连锁=三连小圆、乌云=三弧云朵、彩虹=三色拱弧。
+ * 挂点沿用 LABEL_TOP_PCT=55(躲开 22% 高度的主高光);低于 8px 自动省略。
+ * 普通五色球没有徽记(身份=颜色,不加噪)。
+ */
+export function kindBadgeSvg(kind: BalloonKind, colorIdx: number, scale = 1): string {
+  if (!decorVisible(KIND_BADGE_PX, scale)) return "";
+  const tone = shade(balloonKey(kind, colorIdx), -30);
+  const fill = KIND_BADGE_FILL;
+  const sw = KIND_BADGE_STROKE;
+  const round = `stroke-linejoin="round" stroke-linecap="round"`;
+  const shapes: Partial<Record<BalloonKind, string>> = {
+    iron:
+      `<path d="M6 1.4 L10.2 3 V6.2 Q10.2 9.3 6 10.9 Q1.8 9.3 1.8 6.2 V3 Z" fill="${fill}" stroke="${tone}" stroke-width="${sw}" ${round}/>` +
+      `<path d="M6 3.4 V8.8 M3.6 6.1 H8.4" stroke="${tone}" stroke-width="${sw}" ${round}/>`,
+    twin:
+      `<circle cx="4.3" cy="6" r="2.6" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>` +
+      `<circle cx="7.7" cy="6" r="2.6" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>`,
+    gift:
+      `<rect x="2.6" y="4.6" width="6.8" height="5.2" rx="1" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>` +
+      `<rect x="2" y="2.8" width="8" height="2" rx=".9" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>` +
+      `<path d="M6 2.8 V9.8" stroke="${tone}" stroke-width="${sw}" ${round}/>`,
+    chain:
+      `<circle cx="2.9" cy="6" r="1.9" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>` +
+      `<circle cx="6" cy="6" r="1.9" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>` +
+      `<circle cx="9.1" cy="6" r="1.9" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>`,
+    cloud:
+      `<path d="M3.2 8.6 Q1.5 8.6 1.5 7.1 Q1.5 5.7 2.9 5.6 Q3.1 3.6 5.2 3.6 Q6.9 3.6 7.3 5 Q8 4.6 8.9 5.1 Q10.5 5.3 10.5 6.9 Q10.5 8.6 8.9 8.6 Z" fill="${fill}" stroke="${tone}" stroke-width="${sw}" ${round}/>`,
+    rainbow:
+      `<circle cx="6" cy="6" r="5" fill="${fill}" stroke="${tone}" stroke-width="${sw}"/>` +
+      `<path d="M2.9 8.3 A3.1 3.1 0 0 1 9.1 8.3" fill="none" stroke="#F0605F" stroke-width="${sw}" ${round}/>` +
+      `<path d="M4.2 8.3 A1.8 1.8 0 0 1 7.8 8.3" fill="none" stroke="#F5C142" stroke-width="${sw}" ${round}/>` +
+      `<path d="M5.4 8.3 A0.6 0.6 0 0 1 6.6 8.3" fill="none" stroke="#4F94E8" stroke-width="${sw}" ${round}/>`,
+  };
+  const body = shapes[kind];
+  if (!body) return "";
+  const size = Math.round(KIND_BADGE_PX * scale);
+  return (
+    `<svg class="blp-kbadge" width="${size}" height="${size}" viewBox="0 0 ${KIND_BADGE_PX} ${KIND_BADGE_PX}" aria-hidden="true">` +
+    body +
+    `</svg>`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 四、动效时序表(四·补二;CSS 里全部写成自定义属性)
 // ---------------------------------------------------------------------------
 

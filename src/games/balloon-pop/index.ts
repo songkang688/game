@@ -65,6 +65,7 @@ import {
   colorSkin,
   giftBoxSvg,
   ironSkin,
+  kindBadgeSvg,
   kindSkin,
   knotColor,
   shardCount,
@@ -122,6 +123,8 @@ const CSS = `
 .blp-expr { font-size: 15px; letter-spacing: -0.5px; }
 /* 数字/算式衬牌:躲开 22% 高度的主高光,白底圆角保可读 */
 .blp-tag { position: absolute; left: 50%; top: ${LABEL_TOP_PCT}%; transform: translate(-50%, -50%); background: rgba(255,255,255,${LABEL_PLATE_ALPHA}); border-radius: 8px; padding: 0 5px; color: #A8386A; text-shadow: none; line-height: 1.3; white-space: nowrap; }
+/* 特殊球徽记(W6R1-12):与衬牌同一挂点,同样躲开主高光;形状见 visual.kindBadgeSvg */
+.blp-kbadge { position: absolute; left: 50%; top: ${LABEL_TOP_PCT}%; transform: translate(-50%, -50%); filter: drop-shadow(0 1px 1px rgba(90,74,60,.22)); }
 .blp-shielded { box-shadow: 0 0 0 4px #C9D8E8, 0 0 0 6px rgba(160,190,220,.5); }
 .blp-twin { box-shadow: 0 0 0 3px #FFE1F0, 0 0 0 5px rgba(240,150,200,.6); }
 .blp-far { filter: saturate(.8) brightness(1.06) blur(${FAR_BLUR_PX}px); }
@@ -202,9 +205,11 @@ export function paintBalloon(b: Balloon, mode: BalloonLevel["mode"], rand: () =>
   const special = kindSkin(b.kind);
   let label = "";
   let plate = false;
+  // 特殊球身份改挂 12px 白底描边 SVG 徽记(W6R1-12),不再贴系统 emoji
+  let badge = "";
   if (special) {
     node.style.background = special;
-    label = KINDS[b.kind].emoji;
+    badge = kindBadgeSvg(b.kind, b.color, scale);
     if (b.kind === "gift") node.classList.add("blp-gift");
   } else {
     node.style.background =
@@ -218,12 +223,13 @@ export function paintBalloon(b: Balloon, mode: BalloonLevel["mode"], rand: () =>
     } else if (mode === "number") {
       label = String(b.num);
       plate = true;
-    } else {
-      label = b.kind === "twin" ? KINDS.twin.emoji : b.kind === "iron" ? KINDS.iron.emoji : "";
+    } else if (b.kind === "twin" || b.kind === "iron") {
+      badge = kindBadgeSvg(b.kind, b.color, scale);
     }
   }
   node.textContent = "";
   if (label) node.appendChild(el("span", plate ? "blp-tag" : "blp-label", label));
+  if (badge) node.insertAdjacentHTML("beforeend", badge);
   const knot = el("span", "blp-knot");
   knot.style.background = knotColor(balloonKey(b.kind, b.color));
   node.appendChild(knot);
