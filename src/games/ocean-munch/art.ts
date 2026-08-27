@@ -662,6 +662,63 @@ export function drawDepthTint(ctx: Ctx, w: number, h: number): void {
   ctx.fillRect(0, h * 0.7, w, h * 0.3);
 }
 
+/* ------------------------------------------------------------------ */
+/* 收集物(星星 / 护盾):边缘厚度 + 高光 + 内圈细节                     */
+/* ------------------------------------------------------------------ */
+
+/** 收集星:底层厚边(暗金错位)+ 亮金星面 + 内圈小星 + 高光点。 */
+export function drawCollectStar(ctx: Ctx, x: number, y: number, r: number, t: number, reduced: boolean): void {
+  const bob = reduced ? 0 : Math.sin(t * 2.4) * r * 0.12;
+  const star = (cx: number, cy: number, outer: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rad = i % 2 === 0 ? outer : outer * 0.46;
+      const a = -Math.PI / 2 + (Math.PI * i) / 5;
+      const px = cx + Math.cos(a) * rad;
+      const py = cy + Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+  star(x, y + bob + r * 0.12, r, "#d9a832");
+  star(x, y + bob, r, "#ffd868");
+  star(x, y + bob, r * 0.5, "#fff3c2");
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.beginPath();
+  ctx.arc(x - r * 0.28, y + bob - r * 0.32, r * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** 护盾泡泡:大气泡里一面小盾(顶宽底尖,两阶蓝 + 高光)。 */
+export function drawShieldBadge(ctx: Ctx, x: number, y: number, r: number, alpha: number): void {
+  drawBubble(ctx, x, y, r, alpha);
+  ctx.save();
+  ctx.translate(x, y);
+  const g = ctx.createLinearGradient(0, -r * 0.55, 0, r * 0.6);
+  g.addColorStop(0, "#9fc6ff");
+  g.addColorStop(1, "#4a7ac9");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.42, -r * 0.4);
+  ctx.lineTo(r * 0.42, -r * 0.4);
+  ctx.lineTo(r * 0.42, r * 0.05);
+  ctx.quadraticCurveTo(r * 0.42, r * 0.42, 0, r * 0.58);
+  ctx.quadraticCurveTo(-r * 0.42, r * 0.42, -r * 0.42, r * 0.05);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#2f5a9e";
+  ctx.lineWidth = Math.max(1, r * 0.08);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.14, -r * 0.14, r * 0.12, r * 0.22, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 /** BOSS 进场暗角:四边压暗一圈,力度由 `bossEntrance().vignette` 给。 */
 export function drawVignette(ctx: Ctx, w: number, h: number, strength: number): void {
   if (strength <= 0) return;
