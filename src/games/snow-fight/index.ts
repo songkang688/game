@@ -1091,6 +1091,27 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   };
 }
 
+/**
+ * 不经过选关地图与模式条,直接把一局摆上来。
+ *
+ * 三种模式的运行器本来就是同一个,导出它是为了让运行时用例能抓住这一局的 `arena`——
+ * 「按住 F 真的飞出了雪球」这种事只有对着同一份状态问才问得清楚。
+ */
+export function createBout(
+  opts: Omit<RunOptions, "onEnd" | "hint"> & {
+    host: HTMLElement;
+    hint?: string;
+    sfx?: (n: SoundName) => void;
+    onEnd?: (a: Arena) => void;
+  }
+): Runner {
+  const { host, sfx, onEnd, hint, ...rest } = opts;
+  return mountRun(host, sfx ?? ((): void => {}), { ...rest, hint: hint ?? "", onEnd: onEnd ?? ((): void => {}) });
+}
+
+/** 本款的全部样式(用例拿它验热区与字号,顺便证明一行都没进 src/styles.css) */
+export const CSS_12 = CSS;
+
 // ---------------------------------------------------------------------------
 // 188 关闯关
 // ---------------------------------------------------------------------------
@@ -1450,7 +1471,7 @@ export function mount(api: GameApi): SnowFightHandle {
     if (request && i + 1 < LEVEL_TOTAL) {
       const skip = document.createElement("button");
       skip.type = "button";
-      skip.className = "snf-back";
+      skip.className = "snf-back snf-skip";
       skip.textContent = `⏭️ 跳过 第${i + 1}关`;
       skip.title = "需要家长确认才能跳过这一关";
       skip.addEventListener("click", () => {

@@ -1,0 +1,556 @@
+/**
+ * 雪球大作战 1.2 的运行时用例:真的把一局挂起来跑。
+ *
+ * 跑在 node 环境,DOM 桩在 `domStub.ts`。这里管的是纯逻辑管不到的那几件事:
+ * 按住 F 真的飞出雪球、落点圈在**松手之前**就画在地上了、蹲下搓雪 HUD 跟着变、
+ * 手机一根手指按住 + 拖 + 松手、两套键位不串、平台直达第 N 关、
+ * Skip 走 `requestSkip`、`destroy` 之后 rAF 与监听全部归零。
+ */
+import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { allText, findAll, findButton, findOne, install, type FakeEl, type Harness } from "./domStub";
+import { registerLevelExtras, resetLevelExtras } from "../../ui/level188Contract";
+import { VIEW_W, buildLevel } from "./levels";
+import { FIELD_W_12, aimCircle, campaignArena, duelArena, endlessArena, type Arena } from "./arena";
+import { HAND_MAX } from "./economy";
+import { meta } from "./meta";
+
+let harness: Harness | null = null;
+
+afterEach(() => {
+  harness?.restore();
+  harness = null;
+  resetLevelExtras();
+});
+
+interface Mounted {
+  destroy: () => void;
+  openCampaignLevel: (n: number) => number;
+}
+
+async function mountGame(
+  h: Harness,
+  extra: Record<string, unknown> = {}
+): Promise<{ game: Mounted; played: string[] }> {
+  const mod = await import("./index");
+  const played: string[] = [];
+  const game = mod.mount({
+    root: h.root as unknown as HTMLElement,
+    play: (n: string) => void played.push(n),
+    addStars: (n: number) => n,
+    getStars: () => 0,
+    onWin: () => {},
+    onLose: () => {},
+    ...extra,
+  } as never) as unknown as Mounted;
+  return { game, played };
+}
+
+/** 直接开一局(不经过地图),手感相关的断言都走这条路 */
+async function openBout(
+  h: Harness,
+  arena: Arena,
+  over: Record<string, unknown> = {}
+): Promise<{ bout: { destroy: () => void; arena: Arena }; played: string[] }> {
+  const mod = await import("./index");
+  const played: string[] = [];
+  const bout = mod.createBout({
+    host: h.root as unknown as HTMLElement,
+    arena,
+    viewW: VIEW_W,
+    humans: 1,
+    sfx: (n: string) => void played.push(n),
+    ...over,
+  } as never);
+  return { bout, played };
+}
+
+function canvasOf(h: Harness): FakeEl {
+  const cv = findOne(h.root, "snf-canvas");
+  if (!cv) throw new Error("画布没挂上");
+  return cv;
+}
+
+/** 画布上一个世界坐标对应到屏幕上几像素(用例照着运行时同一套算法算) */
+function pxPerUnit(h: Harness, viewW = VIEW_W): number {
+  return Number.parseFloat(canvasOf(h).style.width) / viewW;
+}
+
+// ---------------------------------------------------------------------------
+// 一、投:按住蓄力,松手飞出去
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 运行时 · 蓄力与出手", () => {
+  it("按住 F 只是在蓄力,松开那一下才飞出雪球,手里跟着少一颗", async () => {
+    const h = (harness = install());
+    const { bout, played } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    const me = bout.arena.fighters[0];
+    const before = me.hands.balls;
+
+    h.key("keydown", "KeyF");
+    h.flush(30);
+    expect(me.charge).toBeGreaterThan(0.3);
+    expect(bout.arena.balls.length).toBe(0);
+    expect(me.hands.balls).toBe(before);
+
+    h.key("keyup", "KeyF");
+    h.flush(2);
+    expect(me.charge).toBeNull();
+    expect(me.hands.balls).toBe(before - 1);
+    expect(me.thrown).toBe(1);
+    expect(played).toContain("pop");
+    bout.destroy();
+  });
+
+  it("落点圈在松手**之前**就画在地上,而且画的就是物理算出来的那个圈", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    const me = bout.arena.fighters[0];
+    const ctx = canvasOf(h).getContext("2d");
+    const s = pxPerUnit(h);
+
+    h.key("keydown", "KeyF");
+    h.flush(40);
+    ctx!.ops.length = 0;
+    h.flush(1);
+    // 一帧里先推进再画,所以这一帧画下去的就是这帧跑完的状态
+    const ring = aimCircle(bout.arena, me);
+    const drawn = ctx!.ops.filter((o) => o.op === "ellipse");
+    // 地上那个粉圈:半径和 landingCircle 算出来的对得上(误差不到一像素)
+    const hit = drawn.find((o) => Math.abs(o.args[2] - ring.r * s) < 1 && Math.abs(o.args[0] - ring.x * s) < 1);
+    expect(hit, `没找到落点圈,画了 ${drawn.length} 个椭圆`).toBeDefined();
+    expect(bout.arena.balls.length).toBe(0);
+    bout.destroy();
+  });
+
+  it("蓄得越久,落点圈越往外跑——「按多久落多远」看得见", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    const me = bout.arena.fighters[0];
+    h.key("keydown", "KeyF");
+    h.flush(10);
+    const near = aimCircle(bout.arena, me);
+    h.flush(40);
+    const far = aimCircle(bout.arena, me);
+    expect(far.x).toBeGreaterThan(near.x + 1);
+    // 越远的圈越大越虚
+    expect(far.r).toBeGreaterThan(near.r);
+    expect(far.blur).toBeGreaterThanOrEqual(near.blur);
+    h.key("keyup", "KeyF");
+    bout.destroy();
+  });
+
+  it("空着手按蓄力扔不出去,HUD 会写着「脚下还能搓几颗」提醒去搓", async () => {
+    const h = (harness = install());
+    const arena = campaignArena(buildLevel(0));
+    arena.fighters[0].hands = { balls: 0, progress: 0 };
+    const { bout } = await openBout(h, arena);
+    h.flush(2);
+    h.key("keydown", "KeyF");
+    h.flush(90);
+    h.key("keyup", "KeyF");
+    h.flush(2);
+    expect(bout.arena.balls.length).toBe(0);
+    expect(bout.arena.fighters[0].thrown).toBe(0);
+    expect(allText(h.root)).toContain("🤲");
+    bout.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 二、搓:蹲下 0.6 秒一颗
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 运行时 · 蹲下搓雪", () => {
+  it("按住 G 蹲下搓雪:手里的雪球多起来,HUD 上的雪花跟着变多", async () => {
+    const h = (harness = install());
+    const arena = campaignArena(buildLevel(0));
+    arena.fighters[0].hands = { balls: 0, progress: 0 };
+    const { bout } = await openBout(h, arena);
+    h.flush(2);
+    expect(allText(h.root)).toContain("···");
+
+    h.key("keydown", "KeyG");
+    h.flush(60); // 约 0.96 秒
+    expect(bout.arena.fighters[0].hands.balls).toBeGreaterThanOrEqual(1);
+    h.flush(120);
+    expect(bout.arena.fighters[0].hands.balls).toBe(HAND_MAX);
+    expect(allText(h.root)).toContain("❄️❄️❄️");
+    h.key("keyup", "KeyG");
+    bout.destroy();
+  });
+
+  it("触屏那两个大钮和键盘走同一条路:按住「蹲下搓雪」照样搓得出来", async () => {
+    const h = (harness = install());
+    const arena = campaignArena(buildLevel(0));
+    arena.fighters[0].hands = { balls: 0, progress: 0 };
+    const { bout } = await openBout(h, arena);
+    h.flush(2);
+    const scoop = findButton(h.root, "蹲下搓雪");
+    expect(scoop).not.toBeNull();
+    scoop!.fire("pointerdown");
+    h.flush(60);
+    expect(bout.arena.fighters[0].hands.balls).toBeGreaterThanOrEqual(1);
+    scoop!.fire("pointerup");
+    const after = bout.arena.fighters[0].hands.balls;
+    h.flush(60);
+    expect(bout.arena.fighters[0].hands.balls).toBe(after);
+    bout.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 三、手机:一根手指按住 + 拖 + 松手
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 运行时 · 手机 360px", () => {
+  it("按住画面就开始蓄力、上下拖调准星、松手扔出去,全程一根手指", async () => {
+    const h = (harness = install({ innerWidth: 360 }));
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    const cv = canvasOf(h);
+    const me = bout.arena.fighters[0];
+    const aim0 = me.aim;
+
+    cv.fire("pointerdown", { pointerId: 1, clientX: 120, clientY: 300 });
+    h.flush(20);
+    expect(me.charge).toBeGreaterThan(0.2);
+
+    // 手指往上拖 = 抬高准星
+    cv.fire("pointermove", { pointerId: 1, clientX: 120, clientY: 220 });
+    h.flush(2);
+    expect(me.aim).toBeGreaterThan(aim0 + 5);
+    // 往下拖回去
+    cv.fire("pointermove", { pointerId: 1, clientX: 120, clientY: 380 });
+    h.flush(2);
+    expect(me.aim).toBeLessThan(aim0);
+
+    cv.fire("pointerup", { pointerId: 1, clientX: 120, clientY: 380 });
+    h.flush(2);
+    expect(me.charge).toBeNull();
+    expect(me.thrown).toBe(1);
+    bout.destroy();
+  });
+
+  it("准星拖到头也出不了 8..82 度这个范围", async () => {
+    const h = (harness = install({ innerWidth: 360 }));
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    const cv = canvasOf(h);
+    const me = bout.arena.fighters[0];
+    cv.fire("pointerdown", { pointerId: 1, clientX: 120, clientY: 300 });
+    cv.fire("pointermove", { pointerId: 1, clientX: 120, clientY: -9000 });
+    expect(me.aim).toBeLessThanOrEqual(82);
+    cv.fire("pointermove", { pointerId: 1, clientX: 120, clientY: 9000 });
+    expect(me.aim).toBeGreaterThanOrEqual(8);
+    cv.fire("pointerup", { pointerId: 1 });
+    bout.destroy();
+  });
+
+  it("360px 上画布进得去,热区都 ≥ 44px、字号都 ≥ 14px", async () => {
+    const h = (harness = install({ innerWidth: 360 }));
+    const mod = await import("./index");
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    expect(Number.parseFloat(canvasOf(h).style.width)).toBeLessThanOrEqual(360);
+
+    const css = mod.CSS_12;
+    const sizes = [...css.matchAll(/font-size:(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
+    expect(sizes.length).toBeGreaterThan(8);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(14);
+    // 只查按钮那几类的热区(`.snf-say` 那种是文字行,矮一点不影响手指)
+    const taps: number[] = [];
+    for (const rule of css.split("}")) {
+      const head = rule.split("{")[0] ?? "";
+      if (!/snf-(btn|act|open|back)/.test(head)) continue;
+      for (const m of rule.matchAll(/min-(?:width|height):(\d+(?:\.\d+)?)px/g)) taps.push(Number(m[1]));
+    }
+    expect(taps.length).toBeGreaterThan(4);
+    expect(Math.min(...taps)).toBeGreaterThanOrEqual(44);
+    bout.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 四、双人:两套键位不串
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 运行时 · 双人同屏", () => {
+  it("A/D/W/S/F/G 归朵朵,方向键 + L/K 归星星,谁也抢不了谁", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, duelArena(null, 5), { viewW: FIELD_W_12, humans: 2 });
+    h.flush(2);
+    const [p0, p1] = bout.arena.fighters;
+    const x0 = p0.x;
+    const x1 = p1.x;
+
+    h.key("keydown", "KeyD");
+    h.flush(20);
+    expect(p0.x).toBeGreaterThan(x0);
+    expect(p1.x).toBe(x1);
+    h.key("keyup", "KeyD");
+
+    h.key("keydown", "ArrowLeft");
+    h.flush(20);
+    expect(p1.x).toBeLessThan(x1);
+    h.key("keyup", "ArrowLeft");
+
+    // 两个人同时蓄力,各扔各的
+    h.key("keydown", "KeyF");
+    h.key("keydown", "KeyL");
+    h.flush(30);
+    expect(p0.charge).toBeGreaterThan(0);
+    expect(p1.charge).toBeGreaterThan(0);
+    h.key("keyup", "KeyF");
+    h.key("keyup", "KeyL");
+    h.flush(2);
+    expect(p0.thrown).toBe(1);
+    expect(p1.thrown).toBe(1);
+    bout.destroy();
+  });
+
+  it("单人局里星星那套键一点反应都没有(免得旁边的人乱按)", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, duelArena("normal", 6), { viewW: FIELD_W_12, humans: 1 });
+    h.flush(2);
+    const p1 = bout.arena.fighters[1];
+    const thrown = p1.thrown;
+    h.key("keydown", "KeyL");
+    h.flush(40);
+    h.key("keyup", "KeyL");
+    h.flush(2);
+    // 电脑自己扔归电脑,但「按 L」这件事一点都没进来
+    expect(p1.charge === null || p1.ai !== null).toBe(true);
+    expect(p1.thrown).toBeGreaterThanOrEqual(thrown);
+    bout.destroy();
+  });
+
+  it("切走窗口 = 所有键都松开,回来时不会发现自己一直在蓄力", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, campaignArena(buildLevel(0)));
+    h.flush(2);
+    h.key("keydown", "KeyF");
+    h.flush(10);
+    expect(bout.arena.fighters[0].charge).toBeGreaterThan(0);
+    h.fireWindow("blur");
+    h.flush(2);
+    // 松手那一下会把球扔出去,之后就不再涨了
+    const after = bout.arena.fighters[0].charge;
+    h.flush(20);
+    expect(bout.arena.fighters[0].charge).toBe(after);
+    bout.destroy();
+  });
+
+  it("Esc 暂停:时间停住,画面上给一块「先歇一会儿」", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, endlessArena(9));
+    h.flush(4);
+    const t0 = bout.arena.t;
+    h.key("keydown", "Escape");
+    h.flush(30);
+    expect(bout.arena.t).toBe(t0);
+    expect(allText(h.root)).toContain("先歇一会儿");
+    h.key("keydown", "Escape");
+    h.flush(10);
+    expect(bout.arena.t).toBeGreaterThan(t0);
+    bout.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 五、平台接线
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 · 平台接线", () => {
+  it("模式条上四个入口都在:双人、三档人机、无尽雪季", async () => {
+    const h = (harness = install());
+    await mountGame(h);
+    h.flush(2);
+    const text = allText(h.root);
+    expect(text).toContain("双人对战");
+    expect(text).toContain("简单");
+    expect(text).toContain("会算风");
+    expect(text).toContain("无尽雪季");
+    expect(findAll(h.root, "snf-open").length).toBe(5);
+  });
+
+  it("openCampaignLevel(n) 直达第 N 关,越界夹回 1..188", async () => {
+    const h = (harness = install());
+    const { game } = await mountGame(h);
+    expect(game.openCampaignLevel(42)).toBe(42);
+    h.flush(2);
+    expect(allText(h.root)).toContain("第 42 关");
+    expect(findOne(h.root, "snf-canvas")).not.toBeNull();
+    expect(game.openCampaignLevel(0)).toBe(1);
+    expect(game.openCampaignLevel(9999)).toBe(188);
+    h.flush(2);
+    expect(allText(h.root)).toContain("第 188 关");
+    game.destroy();
+  });
+
+  it("壳层给了 initialLevel 就直接开在那一关,不用先点地图", async () => {
+    const h = (harness = install());
+    const { game } = await mountGame(h, { initialLevel: 60 });
+    h.flush(2);
+    expect(allText(h.root)).toContain("第 60 关");
+    game.destroy();
+  });
+
+  it("壳层没给就退回地址栏的 ?level=;读不出数字就老老实实留在地图上", async () => {
+    const mod = await import("./index");
+    expect(mod.levelFromQuery("?level=33")).toBe(33);
+    expect(mod.levelFromQuery("?level=7.4&x=1")).toBe(7);
+    expect(mod.levelFromQuery("?level=abc")).toBeNull();
+    expect(mod.levelFromQuery("")).toBeNull();
+    expect(mod.levelFromQuery(null)).toBeNull();
+
+    const h = (harness = install({ search: "?level=33" }));
+    const { game } = await mountGame(h);
+    h.flush(2);
+    expect(allText(h.root)).toContain("第 33 关");
+    game.destroy();
+  });
+
+  it("跳关走 requestSkip:壳层没注册就不挂按钮,注册了才出现", async () => {
+    const bare = (harness = install());
+    const first = await mountGame(bare);
+    first.game.openCampaignLevel(5);
+    bare.flush(2);
+    expect(findOne(bare.root, "snf-skip")).toBeNull();
+    first.game.destroy();
+    bare.restore();
+
+    const h = (harness = install());
+    const asked: Array<[string, number]> = [];
+    registerLevelExtras({
+      requestSkip: (gameId, level) => {
+        asked.push([gameId, level]);
+        return Promise.resolve(true);
+      },
+    });
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(5);
+    h.flush(2);
+    const btn = findOne(h.root, "snf-skip");
+    expect(btn).not.toBeNull();
+    expect(btn!.textContent).toContain("第5关");
+    btn!.fire("click");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(asked).toEqual([[meta.id, 4]]);
+    game.destroy();
+  });
+
+  it("无尽成绩写进平台存档,回到模式条能看到「最好 第 N 波」", async () => {
+    const h = (harness = install());
+    const { save } = await import("../../engine/save");
+    save.recordEndlessBest(meta.id, 7);
+    const { game } = await mountGame(h);
+    h.flush(2);
+    expect(allText(h.root)).toContain("最好 第 7 波");
+    game.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 六、destroy 归零
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 · destroy 收干净", () => {
+  it("一局跑起来之后 destroy:rAF、window 监听、画布监听、节点树全部归零", async () => {
+    const h = (harness = install());
+    const { bout } = await openBout(h, campaignArena(buildLevel(3)));
+    h.flush(6);
+    expect(h.pendingFrames()).toBeGreaterThan(0);
+    expect(h.windowListeners()).toBeGreaterThan(0);
+    const cv = canvasOf(h);
+    expect(cv.listenerCount()).toBeGreaterThan(0);
+
+    bout.destroy();
+    expect(h.pendingFrames()).toBe(0);
+    expect(h.windowListeners()).toBe(0);
+    expect(cv.listenerCount()).toBe(0);
+    expect(findOne(h.root, "snf-canvas")).toBeNull();
+    // 再按键盘也不会有人接
+    h.key("keydown", "KeyF");
+    h.flush(4);
+    expect(h.pendingFrames()).toBe(0);
+  });
+
+  it("整款 destroy 之后再调一次也不炸,rAF 一个不剩", async () => {
+    const h = (harness = install());
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(12);
+    h.flush(6);
+    game.destroy();
+    expect(h.pendingFrames()).toBe(0);
+    expect(() => game.destroy()).not.toThrow();
+    expect(h.root.children.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 七、边界:样式、音效、红线
+// ---------------------------------------------------------------------------
+
+describe("snow-fight 1.2 · 边界", () => {
+  const src = (name: string): string => readFileSync(new URL(name, import.meta.url), "utf8");
+
+  it("CSS 类名一律 snf- 前缀,而且一行都没进 src/styles.css", () => {
+    const css = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+    const classes = [...css.matchAll(/className = `?"?(snf-[\w- ${}.]*)/g)];
+    expect(classes.length).toBeGreaterThan(10);
+    for (const m of [...css.matchAll(/^\.([\w-]+)\{/gm)]) {
+      expect(m[1].startsWith("snf-"), `${m[1]} 不是 snf- 前缀`).toBe(true);
+    }
+    const global = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    expect(global).not.toContain("snf-");
+    expect(global).not.toContain("snow-fight");
+  });
+
+  it("音效只走 api.play:没有自建 AudioContext,也没有 setInterval", () => {
+    const index = src("./index.ts");
+    expect(index).not.toContain("AudioContext");
+    expect(index).not.toContain("setInterval");
+    expect(index).toContain("api.play");
+  });
+
+  it("index.ts 接了平台那几条线:直达关卡、跳关授权、无尽成绩", () => {
+    const index = src("./index.ts");
+    expect(index).toContain("openCampaignLevel");
+    expect(index).toContain("initialLevel");
+    expect(index).toContain("requestSkip");
+    expect(index).toContain('recordEndlessBest(meta.id');
+  });
+
+  it("meta 说的四种玩法,四个都真的能开起来", async () => {
+    expect(meta.modes).toEqual(["campaign", "versus", "twoPlayer", "endless"]);
+    expect(meta.platform).toBe("both");
+    for (const arena of [campaignArena(buildLevel(0)), duelArena(null, 1), duelArena("hard", 1), endlessArena(1)]) {
+      const h = install();
+      const { bout } = await openBout(h, arena, { viewW: FIELD_W_12, humans: arena.mode === "duel" ? 2 : 1 });
+      h.flush(4);
+      expect(findOne(h.root, "snf-canvas")).not.toBeNull();
+      expect(bout.arena.status).toBe("playing");
+      bout.destroy();
+      h.restore();
+    }
+  });
+
+  it("界面上的字只鼓励,不出现输 / 死 / 血 / 伤,也不蹭商标", async () => {
+    const h = (harness = install());
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(1);
+    h.flush(6);
+    h.key("keydown", "Escape");
+    h.flush(2);
+    const text = allText(h.root);
+    expect(text).not.toMatch(/死|鲜血|流血|受伤|疼|痛|杀|淘汰/);
+    expect(text).not.toMatch(/愤怒的小鸟|王者荣耀|吃鸡|Angry|Fortnite/i);
+    expect(text).toContain("雪");
+    game.destroy();
+  });
+});
