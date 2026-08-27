@@ -13,6 +13,7 @@ import {
   type HamsterPose,
   type HamsterStyle,
 } from "../../art/kit/hamsterSvg";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 import { PUSH_MS, WALK_MS } from "./assist";
 import type { Board, Dir, MoveOutcome } from "./logic";
 
@@ -470,5 +471,7 @@ export function bhVisualCss(): string {
   .bxh-win .bxh-hamster,.bxh-confetti{animation:none;}
   .bxh-confetti{opacity:.85;}
 }
+${touchUpliftCss([".bh-mode", ".bh-btn"])}
+${bodyFontUpliftCss([".bh-tag", ".bh-tip"])}
 `;
 }

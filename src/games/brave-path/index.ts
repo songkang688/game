@@ -142,6 +142,7 @@ import {
   tokenCss,
   type FxPlan
 } from "./visual";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 /* ------------------------------------------------------------------ */
 /* 样式                                                                */
@@ -316,6 +317,8 @@ const CSS = `
   .bvp-turn{transform:none;}
   .bvp-row:hover,.bvp-act:hover:not([disabled]){transform:none;}
 }
+${touchUpliftCss([".bvp-btn"])}
+${bodyFontUpliftCss([".bvp-chip", ".bvp-btn-sm"])}
 `;
 
 /* ------------------------------------------------------------------ */

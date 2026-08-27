@@ -113,6 +113,7 @@ import {
   trailFrames,
   vineShadowAlpha,
 } from "./visual";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -286,6 +287,8 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .bba-mode:active { transform: translateY(2px); box-shadow: 0 1px 0 #E7C489; }
       .bba-swap { min-width: 44px; min-height: 34px; background: #FFDCEB; color: #A8467A; box-shadow: 0 3px 0 #EEB6CF; }
       .bba-swap:active { box-shadow: 0 1px 0 #EEB6CF; }
+      ${touchUpliftCss([".ba-btn", ".bba-mode", ".bba-swap"], { minWidth: true })}
+      ${bodyFontUpliftCss([".ba-msg"])}
     </style>
     <div class="ba-top">
       <button class="ba-btn ba-back" type="button" title="回地图" aria-label="回地图">🗺️</button>

@@ -113,6 +113,7 @@ import {
   type Dir,
   type RoomState,
 } from "./explore";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 const CSS = `
 .ak-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
@@ -206,6 +207,8 @@ const CSS = `
 @media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
+${touchUpliftCss([".ak-open"])}
+${bodyFontUpliftCss([".ak-tip"])}
 `;
 
 export interface ClearInfo {

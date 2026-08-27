@@ -89,6 +89,7 @@ import {
   trailLayers,
   type Debris
 } from "./visual";
+import { touchUpliftCss } from "../../art/kit/uiTouch";
 
 const BRICK_COLORS = ["#FF9EC8", "#FFD26E", "#9FE08D", "#8FCBFF", "#C9A0F0", "#FFB48A"];
 const PORTAL_COLOR = "#7B6CD9";
@@ -137,6 +138,7 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) {
   .brk-btn:active, .brk-open:active { transform: none; }
 }
+${touchUpliftCss([".brk-open", ".brk-back"])}
 `;
 
 function reducedMotion(): boolean {

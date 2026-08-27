@@ -4,6 +4,7 @@
 // 同色连消判定、塌陷时序、盘面数据一个字不碰(那些住在 logic.ts / collapse.ts)。
 // 皮肤渐变与 A 档 balloon-pop 同源(src/art/kit/bubbleSkin.ts),三款观感一族。
 import { BUBBLE_INNER_ARC, bubbleHighlight, bubbleSkin } from "../../art/kit/bubbleSkin";
+import { touchUpliftCss } from "../../art/kit/uiTouch";
 import { CHAIN } from "./collapse";
 import { BOLT, CHAMELEON_BASE, FROZEN_OFFSET, RAINBOW, STONE, isChameleon, isFrozen, isHidden } from "./logic";
 
@@ -345,5 +346,6 @@ export function bpVisualCss(): string {
   .bp-board { gap: 4px; }
   .bp-cell { min-width: 0; }
 }
+${touchUpliftCss([".bbp-open", ".bbp-back"])}
 `;
 }

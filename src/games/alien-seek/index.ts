@@ -101,6 +101,7 @@ import {
   stepSparkles,
   type SparkleParticle,
 } from "../../art/kit/sparkle";
+import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
 
 /** 两位玩家的光标颜色:朵朵粉、星星蓝 */
 const P_COLOR = ["#e8558f", "#3f7fd6"];
@@ -162,6 +163,8 @@ const CSS = `
 .als-tool:disabled{opacity:.5;cursor:default;box-shadow:none;}
 .als-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (prefers-reduced-motion:reduce){.as-btn:active,.als-tool:active{transform:none;}}
+${touchUpliftCss([".as-open", ".as-back"])}
+${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
 `;
 
 /** 用户在系统里关掉了动画吗(关了就不抖不闪) */

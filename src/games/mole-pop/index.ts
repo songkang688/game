@@ -165,6 +165,7 @@ const CSS = `
   .mp-flame [data-part="flame-outer"], .mp-flame [data-part="flame-inner"] { animation: none; }
   .mp-badge .mp-mult.mp-pop { animation: none; }
 }
+.mp-open, .mp-back { min-height: 40px; }
 `;
 
 interface RoundOpts {

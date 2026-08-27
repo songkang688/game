@@ -76,6 +76,7 @@ import {
   tokensCss,
   twinRibbonSvg
 } from "./visual";
+import { touchUpliftCss } from "../../art/kit/uiTouch";
 
 interface Balloon {
   id: number;
@@ -178,6 +179,7 @@ const CSS = `
   .blp-shard { transition: none; opacity: 0; }
   .blp-gift-drop { animation-duration: .01s; }
 }
+${touchUpliftCss([".blp-open", ".blp-back"])}
 `;
 
 function reducedMotion(): boolean {
