@@ -3,7 +3,15 @@ export { meta };
 
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
-import { dotSprite, powerSprite, versusStarSprite } from "./art";
+import {
+  WALL_THEMES,
+  drawBackdrop,
+  drawWalls,
+  dotSprite,
+  powerSprite,
+  versusStarSprite,
+  wallThemeIndex,
+} from "./art";
 import guide from "./guide";
 import {
   GHOST_COLORS,
@@ -127,6 +135,8 @@ export interface StageOptions {
   starRole: StarRole;
   /** 顶部标题 */
   label: string;
+  /** 墙色主题下标（WALL_THEMES），闯关每 47 关换一套；省略用第一套 */
+  theme?: number;
   /** 结算回调：won 表示朵朵这边达成目标 */
   onEnd: (result: { won: boolean; score: number; livesLeft: number; starScore: number }) => void;
   /** 每帧回调（HUD 额外信息） */
@@ -208,6 +218,18 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   canvas.setAttribute("data-cols", String(maze.w));
   const ctx = canvas.getContext("2d");
 
+  // 静态层：夜空底色 + 星点 + 霓虹连通墙。墙在一局里不会变，
+  // 开局预渲染一次，之后每帧只要一次 drawImage，比逐格重画便宜
+  const theme = WALL_THEMES[Math.max(0, opts.theme ?? 0) % WALL_THEMES.length];
+  const still = document.createElement("canvas") as HTMLCanvasElement;
+  still.width = canvas.width;
+  still.height = canvas.height;
+  const stillCtx = still.getContext("2d");
+  if (stillCtx) {
+    drawBackdrop(stillCtx, still.width, still.height, theme);
+    drawWalls(stillCtx, maze, cell, theme);
+  }
+
   let raf = 0;
   let last = 0;
   let paused = false;
@@ -284,20 +306,14 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
 
   function draw(): void {
     if (!ctx) return;
-    ctx.fillStyle = "#241f3a";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    // 墙
+    // 背景 + 星点 + 墙：开局预渲染好的静态层
+    ctx.drawImage(still, 0, 0);
+    // 豆子与能量豆
     for (let y = 0; y < maze.h; y++) {
       for (let x = 0; x < maze.w; x++) {
         const i = cellIndex(maze, x, y);
         const px = x * cell;
         const py = y * cell;
-        if (maze.wall[i]) {
-          ctx.fillStyle = "#4b5ea8";
-          roundRect(ctx, px + 1.5, py + 1.5, cell - 3, cell - 3, 5);
-          ctx.fill();
-          continue;
-        }
         if (maze.dot[i]) {
           // 发光贴图整场复用；360px 最小格下 core 也还有 3px 以上，看得见
           const s = Math.max(6, cell * 0.62);
@@ -600,17 +616,6 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   };
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = configFor(ctx.level);
   const plan = planFor(ctx.level);
@@ -618,6 +623,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     cfg,
     starRole: plan.duoChase ? "ghost" : "none",
     label: `${TIER_LABELS[plan.tier]}档`,
+    theme: wallThemeIndex(ctx.level),
     play: (name) => ctx.sfx(name),
     extraChip: () => `${TIER_LABELS[plan.tier]}档 · ${plan.ghostCount} 只小幽灵`,
     onEnd: ({ won, livesLeft }) => {
@@ -667,6 +673,8 @@ function mountRounds(host: HTMLElement, api: GameApi, opts: SimpleModeOptions): 
       cfg: opts.makeConfig(round),
       starRole: opts.starRole,
       label: opts.title,
+      // 无尽 / 抢豆 / 追逃：一轮换一套墙色，跑得越久风景越多
+      theme: round % WALL_THEMES.length,
       play: (name) => api.play(name),
       extraChip: () => `${opts.title} · 第 ${round + 1} 轮`,
       onEnd: ({ won, score, starScore }) => {

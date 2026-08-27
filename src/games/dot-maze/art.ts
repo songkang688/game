@@ -9,6 +9,30 @@
  */
 
 /* ------------------------------------------------------------------ */
+/* 墙面主题                                                            */
+/* ------------------------------------------------------------------ */
+
+/** 一套墙色：外缘霓虹描边 + 内部深色填充 + 背景星点的淡色 */
+export interface WallTheme {
+  edge: string;
+  fill: string;
+  spark: string;
+}
+
+/** 四套主题：蓝紫 → 青绿 → 橙红 → 金紫，每 47 关换一套 */
+export const WALL_THEMES: readonly WallTheme[] = [
+  { edge: "#6E82D9", fill: "#39406E", spark: "#8FA3F0" },
+  { edge: "#5BC8AF", fill: "#2E5B52", spark: "#8FE7D2" },
+  { edge: "#E8845E", fill: "#5C3A34", spark: "#F5B598" },
+  { edge: "#D9B75E", fill: "#4A3A6E", spark: "#F0DC9A" },
+];
+
+/** 第 level 关（0 基）用第几套墙色：每 47 关换一套，循环使用 */
+export function wallThemeIndex(level: number): number {
+  return Math.floor(Math.max(0, level) / 47) % WALL_THEMES.length;
+}
+
+/* ------------------------------------------------------------------ */
 /* 贴图小工厂                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -106,6 +130,96 @@ export function powerSprite(): HTMLCanvasElement {
     g.fill();
   });
   return powerCache;
+}
+
+/* ------------------------------------------------------------------ */
+/* 背景与迷宫墙                                                        */
+/* ------------------------------------------------------------------ */
+
+/** 圆角矩形路径（只建路径，fill 交给调用方） */
+export function pathRoundRect(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+): void {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  g.beginPath();
+  g.moveTo(x + rr, y);
+  g.arcTo(x + w, y, x + w, y + h, rr);
+  g.arcTo(x + w, y + h, x, y + h, rr);
+  g.arcTo(x, y + h, x, y, rr);
+  g.arcTo(x, y, x + w, y, rr);
+  g.closePath();
+}
+
+/**
+ * 夜空背景：深色底 + 20 颗极淡的静态星点。
+ * 位置用黄金比例哈希撒出来，同一张画布上永远一样，不闪不抖，
+ * 所以 soft 与否都可以画（它本来就是静态的）。
+ */
+export function drawBackdrop(g: CanvasRenderingContext2D, w: number, h: number, theme: WallTheme): void {
+  g.fillStyle = "#241f3a";
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = theme.spark;
+  for (let i = 0; i < 20; i++) {
+    const fx = (i * 0.6180339887 + 0.19) % 1;
+    const fy = (i * 0.7548776662 + 0.37) % 1;
+    const r = 0.7 + ((i * 37) % 5) * 0.16;
+    g.globalAlpha = 0.1 + ((i * 13) % 4) * 0.03;
+    g.beginPath();
+    g.arc(fx * w, fy * h, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+}
+
+/** drawWalls 只关心这三样，方便测试用手搓的小迷宫喂它 */
+export interface WallGrid {
+  w: number;
+  h: number;
+  wall: readonly boolean[];
+}
+
+/**
+ * 连通霓虹墙：不再逐格画孤立的小方块。
+ * 画两层圆角矩形——外层霓虹描边色、内层深色填充——相邻墙格之间
+ * 各补一段连接矩形，墙面就连成一整条，外缘自然留出约 2px 的霓虹描边，
+ * 拐角由圆角矩形自带的圆弧收圆。全部落在静态层上，每帧只 drawImage 一次。
+ */
+export function drawWalls(g: CanvasRenderingContext2D, maze: WallGrid, cell: number, theme: WallTheme): void {
+  const at = (x: number, y: number): boolean =>
+    x < 0 || y < 0 || x >= maze.w || y >= maze.h ? false : Boolean(maze.wall[y * maze.w + x]);
+  const edgeInset = Math.max(1.5, cell * 0.08);
+  const fillInset = edgeInset + 2;
+  // 第一层：霓虹描边色打底
+  g.fillStyle = theme.edge;
+  for (let y = 0; y < maze.h; y++) {
+    for (let x = 0; x < maze.w; x++) {
+      if (!at(x, y)) continue;
+      const px = x * cell;
+      const py = y * cell;
+      pathRoundRect(g, px + edgeInset, py + edgeInset, cell - edgeInset * 2, cell - edgeInset * 2, cell * 0.24);
+      g.fill();
+      if (at(x + 1, y)) g.fillRect(px + cell - edgeInset - 1, py + edgeInset, edgeInset * 2 + 2, cell - edgeInset * 2);
+      if (at(x, y + 1)) g.fillRect(px + edgeInset, py + cell - edgeInset - 1, cell - edgeInset * 2, edgeInset * 2 + 2);
+    }
+  }
+  // 第二层：内部深色，四周留出的就是霓虹描边
+  g.fillStyle = theme.fill;
+  for (let y = 0; y < maze.h; y++) {
+    for (let x = 0; x < maze.w; x++) {
+      if (!at(x, y)) continue;
+      const px = x * cell;
+      const py = y * cell;
+      pathRoundRect(g, px + fillInset, py + fillInset, cell - fillInset * 2, cell - fillInset * 2, cell * 0.18);
+      g.fill();
+      if (at(x + 1, y)) g.fillRect(px + cell - fillInset - 1, py + fillInset, fillInset * 2 + 2, cell - fillInset * 2);
+      if (at(x, y + 1)) g.fillRect(px + fillInset, py + cell - fillInset - 1, cell - fillInset * 2, fillInset * 2 + 2);
+    }
+  }
 }
 
 let versusStarCache: HTMLCanvasElement | null = null;
