@@ -69,6 +69,8 @@ import {
 import { SWEEP_TIME } from "./tuning";
 import { blendCape, capeMode, type CapeMode } from "../../art/kit/cape";
 import { traceStar } from "../../art/kit/sparkle";
+// 自绘道具小画坊(R1 修复):香香星 / 18 款垃圾条目 / 分类桶图标,全部顶替裸 emoji
+import { drawScentStar } from "./trashArt";
 import {
   BEAN_COLORS,
   FLOWER_STYLES,
@@ -1491,13 +1493,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       }
     }
 
-    // 香香星
+    // 香香星:自绘渐变星(专项①②:平涂 ✨ 清场,原字号 19px ≈ 星半径 9.5)
     world.sparkles.forEach((s) => {
       if (s.taken) return;
       const x = sx(s.x);
       if (x < -30 || x > cssW + 30) return;
       const bob = Math.sin(world.time * 3 + s.x * 0.02) * 3 * scale;
-      emoji(g, "✨", x, sy(s.y) + bob, 19 * scale);
+      drawScentStar(g, x, sy(s.y) + bob, 9.5 * scale);
     });
 
     // ── 图层③ 豆豆怪 / 小花
