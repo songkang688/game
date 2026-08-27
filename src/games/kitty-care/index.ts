@@ -62,6 +62,8 @@ function ensureAlbum(api: GameApi): AlbumStore {
   return albumStore;
 }
 
+const healedLevels = (): number => loadStars(meta.id).filter((n) => n > 0).length; // 只读进度：窗台摆件用
+
 /** 小屋里现在摆着的家具（画背景用） */
 function placedFurniture(store: AlbumStore): Array<{ spot: HomeSpot; emoji: string; name: string }> {
   const out: Array<{ spot: HomeSpot; emoji: string; name: string }> = [];
@@ -94,6 +96,7 @@ function makePlayLevel(
       moodMax: cfg.moodMax ?? 0,
       theme: cfg.theme,
       furniture: placedFurniture(store),
+      cured: healedLevels(),
       reduceMotion: prefersReducedMotion()
     });
 
@@ -216,7 +219,7 @@ export function mountEndless(
       moodStart: 0,
       moodMax: 0,
       theme: 6 + (round % 4),
-      furniture: placedFurniture(store),
+      furniture: placedFurniture(store), cured: healedLevels(),
       reduceMotion: prefersReducedMotion()
     });
     const target = (round - 1) % cfg.cats;
