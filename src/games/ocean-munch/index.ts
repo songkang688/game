@@ -156,6 +156,15 @@ import {
   drawMiniStar,
   drawShieldBadge,
   titleFitPx,
+  drawPadlock,
+  drawClockBadge,
+  drawDownChevron,
+  drawBoltGlyph,
+  drawVsBadge,
+  drawBookBadge,
+  drawQuestBadge,
+  drawBulbBadge,
+  drawRivalChip,
 } from "./art";
 import type { Headdress, Swirl } from "./art";
 import { save } from "../../engine/save";
@@ -2465,10 +2474,18 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     if (arenaMode === "endless") {
-      ctx.fillText(`⬇ ${Math.floor(depth)} 米 · 第 ${arenaTier} 层 ${spec.name}`, 12, 20);
+      // 下潜箭头画制(visual-r2 修遗留#3):替掉 ⬇ 字符
+      drawDownChevron(ctx, 18, 20, 7);
+      ctx.fillText(`${Math.floor(depth)} 米 · 第 ${arenaTier} 层 ${spec.name}`, 29, 20);
     } else {
       const left = Math.max(0, Math.ceil(VERSUS_SECONDS - arenaTime));
-      ctx.fillText(`⏱ ${left} 秒 · 对手 ${rivalProfile.emoji} ${rivalProfile.name}`, 12, 20);
+      // 读秒闹钟 + 对手小徽章画制(visual-r2 修 N-03):名牌和场上那条鱼同一套画法
+      drawClockBadge(ctx, 19, 20, 7.5);
+      const lead = `${left} 秒 · 对手 `;
+      ctx.fillText(lead, 31, 20);
+      const leadW = ctx.measureText(lead).width;
+      drawRivalChip(ctx, 31 + leadW + 8, 20, 7.5);
+      ctx.fillText(rivalProfile.name, 31 + leadW + 18, 20);
     }
     ctx.textAlign = "right";
     ctx.fillText(`体型 ${Math.round(me.r)}${rival ? ` · 它 ${Math.round(rival.r)}` : ""}`, w - 12, 20);
@@ -2492,13 +2509,13 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.textAlign = "right";
     ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.font = "13px sans-serif";
-    ctx.fillText(
+    // 图鉴小书画制(visual-r2 修遗留#3):替掉 📖 字符,书画在文字左侧
+    const dexLine =
       arenaMode === "endless"
-        ? `📖 ${dexSeen.size}/${DEX.length} · 最好 ${endlessBest} 米`
-        : `📖 ${dexSeen.size}/${DEX.length}`,
-      w - 12,
-      41,
-    );
+        ? `${dexSeen.size}/${DEX.length} · 最好 ${endlessBest} 米`
+        : `${dexSeen.size}/${DEX.length}`;
+    ctx.fillText(dexLine, w - 12, 41);
+    drawBookBadge(ctx, w - 12 - ctx.measureText(dexLine).width - 10, 41, 6.5);
 
     // 饿了就提醒:剩 20 秒开始跳字,最后 8 秒催得更急,别等到游不动才知道
     if (arenaMode === "endless") {
@@ -2546,7 +2563,11 @@ export function mount(api: GameAPI): OceanMunchHandle {
       ctx.font = "12px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${rivalProfile.emoji} ${rivalProfile.name}`, rival.x, rival.y - rival.shown - 16);
+      // 名牌小头像画制(visual-r2 修 N-03):emoji 换成与场上同款的迷你对手鱼
+      const plateY = rival.y - rival.shown - 16;
+      const plateW = ctx.measureText(rivalProfile.name).width;
+      drawRivalChip(ctx, rival.x - plateW / 2 - 3, plateY, 6);
+      ctx.fillText(rivalProfile.name, rival.x + 7, plateY);
     }
 
     const blinkMe = me.inv > 0 && Math.floor(arenaTime * 8) % 2 === 0;
@@ -2742,8 +2763,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
       ctx.fill();
       ctx.stroke();
       ctx.textAlign = "left";
-      ctx.font = `${Math.round(rect.h * 0.4)}px sans-serif`;
-      ctx.fillText(p.emoji, rect.x + 14, rect.y + rect.h * 0.5);
+      // 档位卡头像画制(visual-r2 修 N-03):同一条紫身银星对手鱼,档位越高画得越大
+      drawRivalChip(ctx, rect.x + 16 + rect.h * 0.2, rect.y + rect.h * 0.5, rect.h * (0.17 + i * 0.03));
       ctx.fillStyle = "#a03a72";
       ctx.font = `bold ${Math.min(19, Math.round(rect.h * 0.25))}px sans-serif`;
       ctx.fillText(`第 ${i + 1} 档 · ${p.name}`, rect.x + 16 + rect.h * 0.5, rect.y + rect.h * 0.38);
@@ -3270,11 +3291,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
       }
       ctx.stroke();
       if (active) {
-        ctx.fillStyle = "#ffe14a";
-        ctx.font = "16px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("⚡", ex, 40 + Math.sin(time * 8) * 6);
+        // 闪电画制(visual-r2 修遗留#3):替掉 ⚡ 字符,上下浮动沿用原节奏
+        drawBoltGlyph(ctx, ex, 40 + Math.sin(time * 8) * 6, 9);
       }
     }
     // 气泡墙
@@ -3646,8 +3664,13 @@ export function mount(api: GameAPI): OceanMunchHandle {
       ctx.stroke();
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
-      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      if (unlocked) {
+        ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+        ctx.fillText(st.emoji, rect.x + 10, rect.y + ch * 0.3);
+      } else {
+        // 挂锁画制(visual-r2 修遗留#3):替掉 🔒 字符,落在原 emoji 的图标位
+        drawPadlock(ctx, rect.x + 10 + ch * 0.16, rect.y + ch * 0.3, ch * 0.15);
+      }
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
       ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
@@ -3682,11 +3705,11 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.textBaseline = "middle";
     ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
     ctx.font = "14px sans-serif";
-    ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${themeSize(chapterIdx) * 3} · 通关解锁下一关,回放可刷 3 星`,
-      w / 2,
-      54,
-    );
+    // 星标画制(visual-r2 修遗留#3):行首 ⭐ 换 drawMiniStar,文字整体居中不变
+    const starLine = `${themeStars(progress, chapterIdx)}/${themeSize(chapterIdx) * 3} · 通关解锁下一关,回放可刷 3 星`;
+    const starLineW = ctx.measureText(starLine).width;
+    drawMiniStar(ctx, w / 2 - starLineW / 2 - 3, 54, 7, true);
+    ctx.fillText(starLine, w / 2 + 7, 54);
 
     mapNodes.length = 0;
     const base = themeStart(chapterIdx);
@@ -3734,8 +3757,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       if (!unlocked) {
-        ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
-        ctx.fillText("🔒", n.x, n.y);
+        // 挂锁画制(visual-r2 修遗留#3):替掉 🔒 字符
+        drawPadlock(ctx, n.x, n.y, r * 0.52);
       } else {
         ctx.fillStyle = isBoss ? "#e05a7a" : st.accent;
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
@@ -3747,8 +3770,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
           drawCrown(ctx, r * 1.4);
           ctx.restore();
         } else if (def.gen) {
-          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-          ctx.fillText("⚔", n.x, n.y - r * 0.95);
+          // 对战节点徽章画制(visual-r2 修遗留#3):两条相向小鱼替掉 ⚔ 兵器字符
+          drawVsBadge(ctx, n.x, n.y - r * 0.95, r * 0.34);
         }
         // 星级改画制迷你星(visual-r1 修 P-07),空位是灰白描边星
         for (let s = 0; s < 3; s++) {
@@ -3768,7 +3791,11 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`📖 生物图鉴 ${dexSeen.size}/${DEX.length}`, w / 2, 32);
+    // 图鉴小书画制(visual-r2 修遗留#3):替掉标题行的 📖 字符
+    const dexTitle = `生物图鉴 ${dexSeen.size}/${DEX.length}`;
+    const dexTitleW = ctx.measureText(dexTitle).width;
+    drawBookBadge(ctx, w / 2 - dexTitleW / 2 - 4, 32, 12);
+    ctx.fillText(dexTitle, w / 2 + 13, 32);
     ctx.font = "13px sans-serif";
     ctx.fillStyle = "#9a8a6e";
     ctx.fillText("吃过、见过的海洋生物都会记在这里!点任意处返回", w / 2, 58);
@@ -3788,8 +3815,13 @@ export function mount(api: GameAPI): OceanMunchHandle {
       ctx.beginPath();
       ctx.roundRect(cx - cw / 2 + 5, cy - ch / 2 + 5, cw - 10, ch - 10, 12);
       ctx.fill();
-      ctx.font = `${Math.round(ch * 0.34)}px sans-serif`;
-      ctx.fillText(seen ? d.emoji : "❓", cx, cy - ch * 0.15);
+      if (seen) {
+        ctx.font = `${Math.round(ch * 0.34)}px sans-serif`;
+        ctx.fillText(d.emoji, cx, cy - ch * 0.15);
+      } else {
+        // 未收录问号牌画制(visual-r2 修遗留#3):替掉 ❓ 字符
+        drawQuestBadge(ctx, cx, cy - ch * 0.15, ch * 0.18);
+      }
       ctx.font = `bold ${Math.max(11, Math.round(ch * 0.15))}px sans-serif`;
       ctx.fillStyle = seen ? "#5a5a6e" : "#b8b8c2";
       ctx.fillText(seen ? d.name : "???", cx, cy + ch * 0.18);
@@ -3853,10 +3885,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${def.name} 通过啦!`, w / 2, y + 38);
-    ctx.font = "34px sans-serif";
-    let starTxt = "";
-    for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
-    ctx.fillText(starTxt, w / 2, y + 78);
+    // 结算三星画制(visual-r2 修遗留#3):拿到=金星、空位=灰白描边星,替掉 ⭐☆ 字符
+    for (let s = 0; s < 3; s++) drawMiniStar(ctx, w / 2 + (s - 1) * 42, y + 78, 16, s < earnedStars);
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
     ctx.fillText(`吃了 ${eaten} 条鱼 · 掉心 ${heartsLost} · 得分 ${score}`, w / 2, y + 112);
@@ -3904,9 +3934,12 @@ export function mount(api: GameAPI): OceanMunchHandle {
     let by = y + 128;
     if (hint) {
       // BOSS 失败给一句针对性提示,温柔不吓人(深橙 5.3:1,14px 小字要 4.5:1)
+      // 小灯泡画制(visual-r2 修遗留#3):替掉 💡 字符,灯在句首、整行居中
       ctx.fillStyle = "#a05914";
       ctx.font = "bold 14px sans-serif";
-      ctx.fillText(`💡 ${hint}`, w / 2, y + 112);
+      const hintW = ctx.measureText(hint).width;
+      drawBulbBadge(ctx, w / 2 - hintW / 2 - 4, y + 112, 8);
+      ctx.fillText(hint, w / 2 + 8, y + 112);
       by = y + 158;
     }
     const bw2 = 132;
