@@ -7,7 +7,7 @@
 ## 怎么发送（你对着 8 个窗口做）
 
 1. 确认 `origin/game-1.3` 已是 1.2.2 代码 + 全套 `docs/plan-1.3-step*` + `.cursor/skills/1.3-visual/`。
-2. 开 **8 个** Cursor 云端 Agent（8 个独立对话 / 8 个窗口）。模型一律选 **claude-opus-5-thinking-high-fast**。
+2. 开 **8 个** Cursor 云端 Agent（8 个独立对话 / 8 个窗口）。模型一律选 **claude-fable-5-thinking-xhigh**。
 3. 仓库选本仓库，基线 / 起始分支选 **`game-1.3`**（不要选 `game-1.2`、`main`、`1.2-kk`）。
 4. 每个窗口粘贴对应文件里**从「请通过 Task 工具派生」一直到文末**的全文。标题和引用块可以带上，不要拆开，不要再套一层摘要。
 
@@ -32,6 +32,6 @@
 
 | 谁 | slug（不要方括号） |
 | --- | --- |
-| 你发给的 8 个窗口统筹 | `claude-opus-5-thinking-high-fast` |
+| 你发给的 8 个窗口统筹 | `claude-fable-5-thinking-xhigh` |
 | 窗口转发出去的画师（实现格） | `claude-fable-5-thinking-xhigh` |
-| 窗口转发出去的测试员 / 学习优化员 / 监督修复员 | `claude-opus-5-thinking-high-fast` |
+| 窗口转发出去的测试员 / 学习优化员 / 监督修复员 | `claude-fable-5-thinking-xhigh` |

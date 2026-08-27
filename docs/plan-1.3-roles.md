@@ -16,7 +16,7 @@
 - 窗口 2 → `docs/plan-1.3-window2.md`
 - …直到窗口 8 → `docs/plan-1.3-window8.md`
 
-发给窗口时：模型 `claude-opus-5-thinking-high-fast`，基线 `game-1.3`。
+发给窗口时：模型 `claude-fable-5-thinking-xhigh`，基线 `game-1.3`。
 
 ---
 
@@ -50,13 +50,13 @@ Task 参数：`subagent_type=generalPurpose`，`environment=cloud`，`model=clau
 
 ## 角色 3 · 测试员 · 每轮先派
 
-Task 参数：`model=claude-opus-5-thinking-high-fast`，其余同角色 2（`cloud_base_branch={{BRANCH}}`）。
+Task 参数：`model=claude-fable-5-thinking-xhigh`，其余同角色 2（`cloud_base_branch={{BRANCH}}`）。
 
 `prompt` = 下面头 + `docs/plan-1.3-step27-A-tester.md`（第 2 轮用 step28-A，第 3 轮用 step29-A）全文，并改范围与报告路径。
 
 ```
 请通过 Task 工具派生一或多个云端子代理执行本任务。
-指定模型 slug：claude-opus-5-thinking-high-fast。
+指定模型 slug：claude-fable-5-thinking-xhigh。
 请在独立功能分支上进行修改，叫 {{BRANCH}}。后续都用这个。不要直接修改主分支。
 完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
 
@@ -81,7 +81,7 @@ Task 参数同角色 3。`prompt` 头：
 
 ```
 请通过 Task 工具派生一或多个云端子代理执行本任务。
-指定模型 slug：claude-opus-5-thinking-high-fast。
+指定模型 slug：claude-fable-5-thinking-xhigh。
 请在独立功能分支上进行修改，叫 {{BRANCH}}。后续都用这个。不要直接修改主分支。
 完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
 
@@ -104,7 +104,7 @@ Task 参数同角色 3。`prompt` 头：
 
 ```
 请通过 Task 工具派生一或多个云端子代理执行本任务。
-指定模型 slug：claude-opus-5-thinking-high-fast。
+指定模型 slug：claude-fable-5-thinking-xhigh。
 请在独立功能分支上进行修改，叫 {{BRANCH}}。后续都用这个。不要直接修改主分支。
 完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
 

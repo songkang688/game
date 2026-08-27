@@ -1,10 +1,10 @@
 # 1.3 窗口 2 统筹提示词 —— 窗口 2 · 第 5–7 步（9 款） + 本窗三轮验收（+1） + 做完帮别人
 
 > 把本文件**从下面四行口令起到文末**整段复制，发给窗口 2。不要拆开，不要再套一层摘要。
-> 窗口模型选 **claude-opus-5-thinking-high-fast**。仓库基线选 **`game-1.3`**。
+> 窗口模型选 **claude-fable-5-thinking-xhigh**。仓库基线选 **`game-1.3`**。
 
 请通过 Task 工具派生一或多个云端子代理执行本任务。
-指定模型 slug：claude-opus-5-thinking-high-fast。
+指定模型 slug：claude-fable-5-thinking-xhigh。
 请在独立功能分支上进行修改，叫 game-1.3-window2。后续都用这个。不要直接修改主分支。
 完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
 
@@ -53,7 +53,7 @@
 | --- | --- | --- |
 | `subagent_type` | `generalPurpose` | `generalPurpose` |
 | `environment` | `cloud`（工人必须独立工作区） | `cloud` |
-| `model` | `claude-fable-5-thinking-xhigh`（不要方括号） | `claude-opus-5-thinking-high-fast`（不要方括号） |
+| `model` | `claude-fable-5-thinking-xhigh`（不要方括号） | `claude-fable-5-thinking-xhigh`（不要方括号） |
 | `cloud_base_branch` | 本职工作时填 `game-1.3-window2`；帮窗口 K 时填 `game-1.3-windowK` | 同左 |
 | `run_in_background` | `true`（一步三格必须同时派） | 测试员可先单独派；学习优化员与监督修复员等测试员 IDLE 后再并行 |
 | `description` | `w2-s<步>-<A\|B\|C>-<id>` 这种短名 | `w2-r<轮>-tester` / `learner` / `fixer` |
@@ -133,7 +133,7 @@
 
 这是任务数 +1，不是全局 27–29。实现格全部 IDLE、测试构建全绿之后才开始。
 
-每轮 3 个云端子代理。模型：`claude-opus-5-thinking-high-fast`。同一轮：先派**角色 3 测试员**；IDLE 交出报告后再并行派**角色 4 学习优化员**与**角色 5 监督修复员**（修复员 prompt 必须写明本轮测试报告路径）。三轮串行。
+每轮 3 个云端子代理。模型：`claude-fable-5-thinking-xhigh`。同一轮：先派**角色 3 测试员**；IDLE 交出报告后再并行派**角色 4 学习优化员**与**角色 5 监督修复员**（修复员 prompt 必须写明本轮测试报告路径）。三轮串行。
 
 规格参照（读思路，改分支与报告路径，**整份转发，禁止摘要**）：
 
@@ -160,7 +160,7 @@ docs/qa/1.3-window2-round3-fixer.md
 
 ```
 请通过 Task 工具派生一或多个云端子代理执行本任务。
-指定模型 slug：claude-opus-5-thinking-high-fast。
+指定模型 slug：claude-fable-5-thinking-xhigh。
 请在独立功能分支上进行修改，叫 game-1.3-window2。后续都用这个。不要直接修改主分支。
 完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
 
@@ -171,7 +171,7 @@ docs/qa/1.3-window2-round3-fixer.md
 
 ```
 请通过 Task 工具派生一或多个云端子代理执行本任务。
-指定模型 slug：claude-opus-5-thinking-high-fast。
+指定模型 slug：claude-fable-5-thinking-xhigh。
 请在独立功能分支上进行修改，叫 game-1.3-window2。后续都用这个。不要直接修改主分支。
 完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
 
@@ -182,7 +182,7 @@ docs/qa/1.3-window2-round3-fixer.md
 
 ```
 请通过 Task 工具派生一或多个云端子代理执行本任务。
-指定模型 slug：claude-opus-5-thinking-high-fast。
+指定模型 slug：claude-fable-5-thinking-xhigh。
 请在独立功能分支上进行修改，叫 game-1.3-window2。后续都用这个。不要直接修改主分支。
 完成后说明修改了哪些文件、测试结果，以及实际使用的模型 slug
 
