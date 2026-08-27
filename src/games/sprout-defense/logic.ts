@@ -1286,7 +1286,7 @@ const hiveHand: LevelDef[] = [
   {
     name: "女王进化体降临", scene: "hive", waterLanes: [], startDew: 32,
     feature: "最终BOSS女王进化体", cycle: { day: 26, night: 12 },
-    hint: "最终决战!进化体血少一半会狂暴加速,冰冰花备好!", flagWaves: [3],
+    hint: "最终决战!进化体元气少一半会狂暴加速,冰冰花备好!", flagWaves: [3],
     waves: [
       W(["mole", 4, 1.1], ["moth", 3, 1.1]), W(["mama", 3, 1.15], ["bucket", 3, 1.6]),
       W(["bossbug", 1, 1], ["moth", 4, 1.0]),

@@ -482,3 +482,28 @@ describe("sprout-defense 1.2 · 红线自查", () => {
     expect(index).toContain('recordEndlessBest("sprout-defense"');
   });
 });
+
+/**
+ * 1.2 监督修复员补的守门用例。
+ *
+ * 上面那条老用例放过了「掉血 / 血量」——它是 1.1 就有的数值说法。
+ * 但本作头顶那条本来就该叫元气,1.2 新写的文案没有理由再冒出这个字。
+ * 1.1 冻结的前 99 关关卡数据带指纹、一个字都不许动,所以这里从第 100 关起守。
+ */
+describe("1.2 新写的文案一律不说「血」", () => {
+  it("第 100 关起的关卡文案、攻略、特性克制、放置提示都不含「血」", () => {
+    const fresh: string[] = [];
+    for (let i = 99; i < LEVELS.length; i++) {
+      const lv = LEVELS[i];
+      fresh.push(`第 ${i + 1} 关:${lv.name} ${lv.hint} ${lv.feature}`);
+    }
+    fresh.push(...guide.general);
+    fresh.push(...guide.entries.flatMap((e) => [e.title, ...e.tips]));
+    fresh.push(...Object.values(TRAIT_INFO).map((t) => `${t.label} ${t.counter}`));
+    fresh.push(...Object.values(BLOCK_REASON_TEXT));
+    expect(fresh.length).toBeGreaterThan(80);
+    for (const line of fresh) {
+      expect(line, `这句里还留着「血」:${line}`).not.toMatch(/血/);
+    }
+  });
+});

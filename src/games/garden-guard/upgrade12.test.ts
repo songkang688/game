@@ -767,3 +767,37 @@ describe("garden-guard 1.2 · destroy 归零", () => {
     handle.destroy();
   });
 });
+
+/**
+ * 1.2 监督修复员补的守门用例。
+ *
+ * 本作从来不说「血」——头顶那条是元气条,怪被打完是没劲了回家。
+ * 1.1 冻结的前 99 关关卡数据带指纹,一个字都不许动(那几句 `回血` / `半血`
+ * 留给主管定夺);这里守的是 **1.2 新写的那批文案**:第 100 关起的关卡提示、
+ * 波次预告、克制表。新写的东西没有理由再冒出「血」字。
+ */
+describe("1.2 新写的文案一律不说「血」", () => {
+  it("第 100 关起的关卡提示与特色都不含血腥字眼", () => {
+    for (let i = 99; i < LEVELS.length; i++) {
+      const lv = LEVELS[i];
+      const text = `${lv.name ?? ""}${lv.feature ?? ""}${lv.hint ?? ""}`;
+      expect(text, `第 ${i + 1} 关的文案里有血腥字眼`).not.toMatch(/血|尸|杀|死亡/);
+    }
+  });
+
+  it("怪物名、原型名、每一只怪的波次预告语都不说血", () => {
+    const kinds = Object.keys(MONSTER_INFO) as MonsterKind[];
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const kind of kinds) {
+      expect(MONSTER_INFO[kind].name, `${kind} 的名字里有血腥字眼`).not.toMatch(/血|尸|杀|死亡/);
+      // 一只一只单独摆一波,把每一条预告语都念出来
+      const line = waveHintLine([{ kind, count: 3, gap: 1 }]);
+      expect(line, `${kind} 那一波的提示语里有血腥字眼`).not.toMatch(/血|尸|杀|死亡/);
+      const preview = wavePreviewLine([{ kind, count: 3, gap: 1 }]);
+      expect(preview, `${kind} 那一波的预告里有血腥字眼`).not.toMatch(/血|尸|杀|死亡/);
+    }
+    for (const a of CORE_ARCHETYPES) {
+      expect(ARCHETYPE_LABEL[a], `原型「${a}」的名字里有血腥字眼`).not.toMatch(/血|尸|杀|死亡/);
+    }
+  });
+});

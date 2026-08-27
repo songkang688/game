@@ -50,7 +50,7 @@ export const THREAT_LABEL: Record<ThreatTag, string> = {
   air: "会飞",
   split: "会分身",
   sneak: "会隐身",
-  heal: "会回血",
+  heal: "会回元气",
   swarm: "数量多",
 };
 
@@ -164,7 +164,7 @@ export function previewAdvice(items: readonly PreviewItem[]): string {
   for (const it of items) for (const t of it.threats) tags.add(t);
   if (tags.has("air")) return "这一波有会飞的，得有打得到天上的塔";
   if (tags.has("armor")) return "这一波硬壳厚，毒雾塔能绕过硬壳";
-  if (tags.has("heal")) return "这一波有会回血的，先把它清掉再打别的";
+  if (tags.has("heal")) return "这一波有会回元气的，先把它清掉再打别的";
   if (tags.has("split")) return "这一波会分身，花火塔的溅射最划算";
   if (tags.has("sneak")) return "这一波会隐身，毒雾罩着比点名打稳";
   if (tags.has("swift")) return "这一波跑得快，露珠或者冰晶先拖住";

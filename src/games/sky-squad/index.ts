@@ -1560,7 +1560,7 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     ctx.fillText(b.spec.emoji, 0, 30);
     ctx.restore();
 
-    // 血条 + 三段刻度(看得见「还有几段」)
+    // 元气条 + 三段刻度(看得见「还有几段」)。本作没有血,掉光只是迫降滑走
     const w = 200;
     const pct = Math.max(0, b.hp / b.spec.hp);
     roundRect(ctx, SKY_W / 2 - w / 2, 18, w, 14, 7);

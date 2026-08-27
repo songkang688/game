@@ -258,7 +258,7 @@ export type BugTrait = "shield" | "jump" | "dig" | "fly" | "hide";
 export const REQUIRED_TRAITS: BugTrait[] = ["shield", "jump", "dig", "fly"];
 
 export const TRAIT_INFO: Record<BugTrait, { label: string; icon: string; counter: string }> = {
-  shield: { label: "带盾", icon: "🛡", counter: "先把盾打碎才掉血,溅射和爆爆果拆盾最快" },
+  shield: { label: "带盾", icon: "🛡", counter: "先把盾打碎才掉元气,溅射和爆爆果拆盾最快" },
   jump: { label: "会跳", icon: "🦘", counter: "会跳过第一排阻挡,弹弹网能把它按下来" },
   dig: { label: "挖地", icon: "🕳", counter: "绕到前排后面出土,出土点会先冒土花,弹弹网让它钻不过去" },
   fly: { label: "会飞", icon: "🪽", counter: "只有星星芽和冰冰花打得到" },

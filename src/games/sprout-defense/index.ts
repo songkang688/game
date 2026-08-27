@@ -2035,7 +2035,7 @@ export function mount(api: GameAPI): SproutDefenseHandle {
     for (const wave of level().waves) {
       for (const e of wave) {
         if (!BUG_INFO[e.kind].boss) continue;
-        if (e.kind === "queenx") return "进化体半血会狂暴,提前埋爆爆果,冰冰花别停!";
+        if (e.kind === "queenx") return "进化体元气掉一半会狂暴,提前埋爆爆果,冰冰花别停!";
         if (e.kind === "queen") return "冰冰花冻住女王,星星芽集火!";
         return "大虫王那条道多种果果墩顶住!";
       }

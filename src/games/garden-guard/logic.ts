@@ -458,7 +458,7 @@ export const THEME_STYLE: Record<ThemeId, ThemeStyle> = {
   },
   swamp: {
     name: "幽幽沼泽", emoji: "🐸", bgA: "#c8dcc8", bgB: "#d5e5d0", path: "#a8c8b0", accent: "#4a7a5a",
-    boss: "boss5", palette: ["healy", "sneaky", "tanky", "shieldy"], blurb: "奶油怪扎堆奶血的泥潭拉锯",
+    boss: "boss5", palette: ["healy", "sneaky", "tanky", "shieldy"], blurb: "奶油怪扎堆补元气的泥潭拉锯",
   },
   snow: {
     name: "雪雪山坡", emoji: "⛄", bgA: "#e8f0fb", bgB: "#f0f6ff", path: "#d8e4f5", accent: "#5a8ac9",
@@ -1222,7 +1222,7 @@ const dewhouseHand: LevelDef[] = [
   },
   {
     name: "露灵仙子", theme: "dewhouse", paths: [P_LOOP], startPetals: 25, feature: "章节BOSS露灵仙子",
-    hint: "露灵仙子会隐身还会给随从奶血!她现身那几秒集火!",
+    hint: "露灵仙子会隐身还会给随从补元气!她现身那几秒集火!",
     waves: [
       W(["sneaky", 6, 0.85], ["healy", 3, 1.8]), W(["shieldy", 6, 0.95], ["flappy", 5, 1.0]),
       W(["boss10", 1, 1], ["healy", 3, 1.8], ["sneaky", 5, 0.9]),
@@ -1333,7 +1333,7 @@ const cloudfarmHand: LevelDef[] = [
   },
   {
     name: "云绒巨鸟", theme: "cloudfarm", paths: [P_UTURN], startPetals: 28, feature: "章节BOSS云绒巨鸟",
-    hint: "云绒巨鸟飞在天上,半血还会暴走!泡泡、针针、冰晶全上!",
+    hint: "云绒巨鸟飞在天上,元气掉一半还会暴走!泡泡、针针、冰晶全上!",
     waves: [
       W(["flappy", 7, 0.8], ["glidey", 3, 1.6]), W(["sneaky", 7, 0.7], ["fasty", 9, 0.5]),
       W(["boss12", 1, 1], ["flappy", 6, 0.85], ["glidey", 3, 1.5]),
@@ -1391,7 +1391,7 @@ const starcrownHand: LevelDef[] = [
   },
   {
     name: "星尘魔王", theme: "starcrown", paths: [P_UTURN], startPetals: 31, feature: "最终BOSS星尘魔王",
-    hint: "最终决战!星尘魔王会冲刺、会召唤、半血还会暴走!",
+    hint: "最终决战!星尘魔王会冲刺、会召唤、元气掉一半还会暴走!",
     waves: [
       W(["shieldy", 5, 0.9], ["sneaky", 6, 0.75]), W(["healy", 3, 1.6], ["tanky", 5, 0.9]),
       W(["glidey", 3, 1.45], ["flappy", 6, 0.8], ["dashy", 6, 0.7]),

@@ -1115,7 +1115,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (counter) {
         emoji(g, counter === "prince" ? "⚔️" : "⭐", x0, cy - stat.h * 0.78 * scale, 12 * scale);
       }
-      // 血条
+      // 元气条(本作没有血,掉光只是坐下歇口气)
       if (e.hp < e.maxHp) {
         const bw = stat.w * scale;
         g.fillStyle = "#00000022";
@@ -1201,7 +1201,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.fillText(def.feature, cssW / 2, cssH * 0.58);
     }
 
-    // 首领血条画在画布顶上
+    // 首领元气条画在画布顶上
     if (boss && boss.alive) {
       const info = BOSSES[boss.kind % BOSSES.length];
       const w = cssW * 0.62;

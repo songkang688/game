@@ -370,3 +370,25 @@ describe("1.2 段位式人机（四档）", () => {
     expect(crashes(2)).toBeLessThanOrEqual(crashes(0));
   });
 });
+
+/**
+ * 1.2 监督修复员补的守门用例。
+ *
+ * 本款没有伤害:撞一下只是踉跄一步、少一次机会。上面的道具用例已经守住了
+ * 道具文案,这里把**攻略整本**也守起来——原先第三章有一句写着「对手的血量」,
+ * 既不合红线也说错了(那一格显示的是还剩几次机会)。
+ */
+describe("攻略通篇没有伤害语义", () => {
+  it("通用心得与每一章的提示都不说血 / 伤 / 杀", async () => {
+    const guide = (await import("./guide")).default;
+    const lines = [
+      guide.title,
+      ...guide.general,
+      ...guide.entries.flatMap((e) => [e.title, ...e.tips]),
+    ];
+    expect(lines.length).toBeGreaterThan(20);
+    for (const line of lines) {
+      expect(line, `这句有伤害语义:${line}`).not.toMatch(/血|伤害|杀|打死|炸死|尸/);
+    }
+  });
+});
