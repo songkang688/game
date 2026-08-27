@@ -127,9 +127,23 @@ export const CSS = `
 .mst-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF0F7,#F3F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
 /* 背景按关卡段换主题:粉黄晨光 → 青绿森林 → 星夜(themeClassOf 查表) */
-.mst-wrap.mst-theme-dawn{background:linear-gradient(180deg,#FFF3D6,#FFE1EE 55%,#F3E8FF);}
-.mst-wrap.mst-theme-forest{background:linear-gradient(180deg,#EAF9E4,#D8F3EA 55%,#E6F3FF);}
-.mst-wrap.mst-theme-night{background:linear-gradient(180deg,#2E3161,#453C78 60%,#6C4E96);}
+/* 每主题再叠 1 层静态剪影饰(纯 background 多层,不加动画):晨光云影/森林树影/星夜星点 */
+.mst-wrap.mst-theme-dawn{background:
+  radial-gradient(ellipse 88px 30px at 20% 8%,rgba(255,255,255,.20),transparent 70%),
+  radial-gradient(ellipse 66px 24px at 76% 15%,rgba(255,255,255,.17),transparent 70%),
+  linear-gradient(180deg,#FFF3D6,#FFE1EE 55%,#F3E8FF);}
+.mst-wrap.mst-theme-forest{background:
+  radial-gradient(circle 44px at 10% 100%,rgba(44,102,70,.12),transparent 70%),
+  radial-gradient(circle 58px at 50% 103%,rgba(44,102,70,.10),transparent 70%),
+  radial-gradient(circle 40px at 88% 100%,rgba(44,102,70,.12),transparent 70%),
+  linear-gradient(180deg,#EAF9E4,#D8F3EA 55%,#E6F3FF);}
+.mst-wrap.mst-theme-night{background:
+  radial-gradient(circle at 12% 6%,rgba(255,255,255,.20) 0 1px,transparent 2px),
+  radial-gradient(circle at 30% 3%,rgba(255,255,255,.20) 0 1px,transparent 2px),
+  radial-gradient(circle at 55% 8%,rgba(255,255,255,.20) 0 1px,transparent 2px),
+  radial-gradient(circle at 76% 4%,rgba(255,255,255,.20) 0 1px,transparent 2px),
+  radial-gradient(circle at 92% 9%,rgba(255,255,255,.20) 0 1px,transparent 2px),
+  linear-gradient(180deg,#2E3161,#453C78 60%,#6C4E96);}
 .mst-theme-night .mst-msg{color:#F0DCFF;}
 .mst-theme-night .mst-seat-name{color:#E6DBFF;}
 .mst-top{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
