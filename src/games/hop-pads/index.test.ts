@@ -258,6 +258,56 @@ describe("一块舞台跑起来", () => {
     stage.destroy();
   });
 
+  it("蓄满力会给信号:蓄力条换色、画布挂 data-full、屏上闪一句「满力啦」", () => {
+    const { stage } = makeStage();
+    const canvas = (stage.root as unknown as El).querySelector(".hp-canvas");
+    stage.tick(20);
+    expect(stage.full()).toBe(false);
+    expect(canvas?.getAttribute("data-full")).toBe("0");
+
+    stage.press();
+    stage.tick(MAX_HOLD - 200); // 还差一点点
+    expect(stage.full()).toBe(false);
+    expect(canvas?.getAttribute("data-full")).toBe("0");
+
+    stage.tick(400); // 跨过封顶线
+    expect(stage.full()).toBe(true);
+    expect(canvas?.getAttribute("data-full")).toBe("1");
+    expect(canvas?.getAttribute("aria-label")).toContain("力度已经满了");
+    // 满力之后蓄力条一直保持满力那一档配色
+    stage.tick(600);
+    expect(stage.full()).toBe(true);
+
+    // 收力之后信号跟着收回去
+    expect(stage.cancel()).toBe(true);
+    expect(stage.full()).toBe(false);
+    stage.tick(16);
+    expect(canvas?.getAttribute("data-full")).toBe("0");
+    stage.destroy();
+  });
+
+  it("满力提示只是提示:同样的力度,跳出来的结果一字不差", () => {
+    const a = makeStage();
+    a.stage.tick(20);
+    a.stage.press();
+    a.stage.tick(MAX_HOLD + 300); // 一路按到满力还多按了一会儿
+    expect(a.stage.full()).toBe(true);
+    a.stage.release();
+    a.stage.tick(2600);
+
+    const b = makeStage();
+    b.stage.tick(20);
+    b.stage.press();
+    b.stage.release(MAX_HOLD); // 直接给满力,不经过满力提示那一帧
+    b.stage.tick(2600);
+
+    expect(a.stage.state().hops).toBe(b.stage.state().hops);
+    expect(a.stage.state().score).toBe(b.stage.state().score);
+    expect(a.stage.phase()).toBe(b.stage.phase());
+    a.stage.destroy();
+    b.stage.destroy();
+  });
+
   it("收力只在蓄力时有效,站着按不会有任何事", () => {
     const { stage } = makeStage();
     expect(stage.cancel()).toBe(false);

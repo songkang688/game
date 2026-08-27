@@ -88,6 +88,8 @@ export const WALL_H = 26;
 export const FALL_TIME = 1.15;
 /** 底部蓄力条的高度(CSS 像素),360px 上也要看得清 */
 export const CHARGE_BAR_H = 16;
+/** 蓄满力之后蓄力条换的那一档颜色 */
+export const FULL_BAR_COLOR = "#E2703A";
 
 export interface Camera {
   x: number;
@@ -273,6 +275,8 @@ export interface Stage {
   release: (holdMs?: number) => void;
   /** 收力:把蓄到一半的力卸掉,回到站定状态。真收掉了才返回 true */
   cancel: () => boolean;
+  /** 力度是不是已经蓄满了(再按下去也不会更远) */
+  full: () => boolean;
   phase: () => StagePhase;
   state: () => RunState;
   /** 暂停 / 继续 */
@@ -383,6 +387,14 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     return powerFromHold(holdMs);
   }
 
+  /**
+   * 力度封顶了没有。`powerFromHold` 在 `MAX_HOLD` 之后就不再涨,
+   * 可屏幕上一点变化都没有,孩子按着不放只能靠「飞过头」才知道按久了。
+   */
+  function isFull(): boolean {
+    return phase === "charging" && holdMs >= MAX_HOLD;
+  }
+
   // ---- 蓄力 / 起跳 ----
   function press(): void {
     if (paused || frozen || over || phase !== "ready") return;
@@ -487,7 +499,15 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     if (phase === "ready" || phase === "charging") {
       clock += dt;
       run.time = clock;
-      if (phase === "charging") holdMs = Math.min(MAX_HOLD * 1.6, holdMs + dt * 1000);
+      if (phase === "charging") {
+        const before = holdMs;
+        holdMs = Math.min(MAX_HOLD * 1.6, holdMs + dt * 1000);
+        // 刚刚跨过封顶线的那一帧闪一次,之后蓄力条一直保持满力配色,不再重复弹字
+        if (before < MAX_HOLD && holdMs >= MAX_HOLD) {
+          flashText = "💪 满力啦,松手就跳";
+          flashT = 0.8;
+        }
+      }
       const cur = padTick(run.pads[run.index], clock);
       heroPos = { x: cur.x, z: cur.z, y: 0 };
     } else if (phase === "flying") {
@@ -607,7 +627,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     const w = cam.w - pad * 2;
     ctx2.fillStyle = "rgba(255,255,255,.8)";
     ctx2.fillRect(pad, y, w, h);
-    ctx2.fillStyle = "#F2A268";
+    // 满力之后换一档更亮的颜色顶住,让「再按也不会更远」这件事一直看得见
+    ctx2.fillStyle = isFull() ? FULL_BAR_COLOR : "#F2A268";
     ctx2.fillRect(pad, y, w * clamp01(power()), h);
     // 训练关才给刻度:标出正好够到下一座台心的那个力度,别的关自己找手感
     if (opts.assist) {
@@ -626,14 +647,15 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     canvas.setAttribute(
       "aria-label",
       `${opts.name ? `${opts.name},` : ""}站住 ${run.hops} 座,${run.score} 分,连击 ${run.combo}${
-        paused ? ",已暂停" : ""
-      }`
+        isFull() ? ",力度已经满了" : ""
+      }${paused ? ",已暂停" : ""}`
     );
     canvas.setAttribute("data-hops", String(run.hops));
     canvas.setAttribute("data-score", String(run.score));
     canvas.setAttribute("data-combo", String(run.combo));
     canvas.setAttribute("data-phase", phase);
     canvas.setAttribute("data-paused", paused ? "1" : "0");
+    canvas.setAttribute("data-full", isFull() ? "1" : "0");
   }
 
   // ---- 主循环 ----
@@ -745,6 +767,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     press,
     release,
     cancel: cancelCharge,
+    full: isFull,
     phase: () => phase,
     state: () => run,
     camera: () => cam,
@@ -842,7 +865,7 @@ function playLevel(stageHost: HTMLElement, ctx: PlayCtx): PlayHandle {
   tip.textContent = `${lv.hint}${lv.assist ? " · 蓄力时会画出落点辅助圆" : ""}`;
   const say = document.createElement("div");
   say.className = "hp-say";
-  say.textContent = "按住屏幕(或空格 / F)蓄力,松手起跳;蓄过头按 G 收力,Esc 暂停。";
+  say.textContent = "按住屏幕(或空格 / F)蓄力,松手起跳;蓄力条变色就是满力了,蓄过头按 G 收力,Esc 暂停。";
   box.append(tip, say);
   stageHost.appendChild(box);
 
