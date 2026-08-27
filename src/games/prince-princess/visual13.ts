@@ -15,6 +15,7 @@
  */
 
 import { shade, withAlpha } from "../../art/kit/palette";
+import { strokeOutline } from "../../art/kit/outline";
 import {
   spawnRibbons,
   spawnSparkles,
@@ -22,6 +23,7 @@ import {
   drawParticles,
   type Particle,
 } from "../../art/kit/sparkle";
+import type { EnemyKind } from "./levels";
 
 // ---------------------------------------------------------------------------
 // 四·补一 配色板(token 一个不许飘)
@@ -360,4 +362,435 @@ export class PcpFx {
     this.list = [];
     this.celebrateT = 0;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 修复员 S1/S2:五小怪母形自绘 + 参数化 Q 版首领骨架
+// (几何全按 ENEMY_STATS / BOSS_W / BOSS_H 现尺寸挂比例,判定盒只读不动)
+// ---------------------------------------------------------------------------
+
+/**
+ * 五小怪主色(母形 + 专属色双通道识别):
+ * 果冻=草绿半圆水滴 / 蝙蝠=暮紫圆体三角翼 / 铠甲=钢蓝圆体前置盾 /
+ * 幽灵=雾紫摆边纱体 / 法珠=晶紫圆体环绕珠。
+ */
+export const PP_ENEMY = {
+  slime: "#8FCF7A",
+  bat: "#9B8CCB",
+  armor: "#8FA8C8",
+  ghost: "#CFC5EA",
+  turret: "#C08BD6",
+} as const;
+
+/** 蝙蝠翼两帧摆动:300ms 一换(learner #6);reduced 定格 0 帧 */
+export const BAT_FLAP_MS = 300;
+/** 法珠怪环绕小珠:3 颗互差 120°,公转一圈的毫秒数;reduced 静止在初相 */
+export const ORB_SPIN_MS = 2400;
+export const ORB_COUNT = 3;
+
+/** 小怪 / 首领统一眼型:竖椭圆 + 白高光点(与两位主角同一张脸谱语言) */
+function enemyEyes(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, spread = 0.34): void {
+  ctx.fillStyle = "#4A3D5E";
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.ellipse(cx + s * r * spread, cy, Math.max(1, r * 0.1), Math.max(1.4, r * 0.16), 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "rgba(255,255,255,.92)";
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.arc(cx + s * r * spread - r * 0.03, cy - r * 0.05, Math.max(0.5, r * 0.045), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** 2 停体渐变:顶亮 +16 → 底 -10(左上光源的纵向近似) */
+function enemyBodyGrad(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  top: number,
+  bottom: number
+): CanvasGradient {
+  const grad = ctx.createLinearGradient(0, top, 0, bottom);
+  grad.addColorStop(0, shade(color, 16));
+  grad.addColorStop(1, shade(color, -10));
+  return grad;
+}
+
+/**
+ * 五小怪自绘(替换绿圆/蝙蝠/盾牌/幽灵/水晶球五只裸 emoji 字形)。
+ * 以 (cx,cy) 为怪物中心、w×h 为 ENEMY_STATS 现尺寸盒;
+ * tMs 只喂动效相位(蝙蝠翼两帧 / 法珠公转),reduced 全部定格,判定不碰。
+ */
+export function drawEnemy(
+  ctx: CanvasRenderingContext2D,
+  kind: EnemyKind,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  tMs: number,
+  reduced: boolean,
+  dir: 1 | -1 = 1
+): void {
+  const color = PP_ENEMY[kind];
+  const hw = w / 2;
+  const hh = h / 2;
+  ctx.save();
+  // 落影(全场统一 ppShadow)
+  ctx.fillStyle = PP_COLORS.ppShadow;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + hh * 0.98, hw * 0.72, hh * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = enemyBodyGrad(ctx, color, cy - hh, cy + hh);
+  if (kind === "slime") {
+    // 半圆水滴体:圆顶拱 + 底压暗带 + 顶部高光弧
+    ctx.beginPath();
+    ctx.moveTo(cx - hw, cy + hh);
+    ctx.bezierCurveTo(cx - hw, cy - hh * 0.9, cx + hw, cy - hh * 0.9, cx + hw, cy + hh);
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    ctx.fillStyle = withAlpha(shade(color, -22), 0.55);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + hh * 0.86, hw * 0.78, hh * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.8)";
+    ctx.lineWidth = Math.max(1.5, hh * 0.12);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(cx, cy + hh * 0.15, hw * 0.62, -Math.PI * 0.78, -Math.PI * 0.4);
+    ctx.stroke();
+    ctx.lineCap = "butt";
+    enemyEyes(ctx, cx, cy + hh * 0.1, hh);
+  } else if (kind === "bat") {
+    // 圆体 + 双三角翼(两帧 300ms 摆;reduced 定格)+ 双立耳
+    const flap = reduced ? 0 : Math.floor(tMs / BAT_FLAP_MS) % 2;
+    const tipY = cy - hh * (flap === 0 ? 0.72 : 0.1);
+    for (const s of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.moveTo(cx + s * hw * 0.24, cy - hh * 0.1);
+      ctx.lineTo(cx + s * hw * 1.02, tipY);
+      ctx.quadraticCurveTo(cx + s * hw * 0.86, cy + hh * 0.34, cx + s * hw * 0.2, cy + hh * 0.28);
+      ctx.closePath();
+      ctx.fill();
+    }
+    for (const s of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.moveTo(cx + s * hh * 0.16, cy - hh * 0.5);
+      ctx.lineTo(cx + s * hh * 0.42, cy - hh * 1.0);
+      ctx.lineTo(cx + s * hh * 0.52, cy - hh * 0.4);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, hh * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    enemyEyes(ctx, cx, cy - hh * 0.1, hh * 0.9);
+  } else if (kind === "armor") {
+    // 圆体 + 前置小盾牌(圆角盾形 2 停 + 铆钉 2 点);盾随行进方向换边
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(hw, hh) * 0.86, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    enemyEyes(ctx, cx - dir * hw * 0.16, cy - hh * 0.22, hh * 0.8);
+    const sx = cx + dir * hw * 0.56;
+    const sw = hw * 0.52;
+    const sh = hh * 0.78;
+    const shieldGrad = ctx.createLinearGradient(0, cy - sh * 0.6, 0, cy + sh * 0.6);
+    shieldGrad.addColorStop(0, shade("#C8D4E4", 12));
+    shieldGrad.addColorStop(1, shade("#C8D4E4", -10));
+    ctx.fillStyle = shieldGrad;
+    ctx.beginPath();
+    ctx.moveTo(sx - sw * 0.5, cy - sh * 0.55);
+    ctx.quadraticCurveTo(sx, cy - sh * 0.7, sx + sw * 0.5, cy - sh * 0.55);
+    ctx.quadraticCurveTo(sx + sw * 0.5, cy + sh * 0.2, sx, cy + sh * 0.6);
+    ctx.quadraticCurveTo(sx - sw * 0.5, cy + sh * 0.2, sx - sw * 0.5, cy - sh * 0.55);
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, "#C8D4E4", 1.5);
+    ctx.fillStyle = shade("#C8D4E4", -30);
+    for (const dy of [-0.2, 0.14]) {
+      ctx.beginPath();
+      ctx.arc(sx, cy + sh * dy, Math.max(1, sw * 0.09), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (kind === "ghost") {
+    // 摆边纱体(半透明 0.85 = 剑会穿过去的视觉语言)+ 内层暗芯
+    ctx.globalAlpha = 0.85;
+    const r = Math.min(hw, hh * 0.62);
+    ctx.beginPath();
+    ctx.arc(cx, cy - hh * 0.28, r, Math.PI, 0);
+    ctx.lineTo(cx + r, cy + hh * 0.62);
+    for (let k = 2; k >= 0; k--) {
+      const wx = cx - r + ((k + 0.5) / 3) * r * 2;
+      ctx.quadraticCurveTo(wx + r * 0.32, cy + hh * 0.98, wx, cy + hh * 0.62);
+      ctx.quadraticCurveTo(wx - r * 0.32, cy + hh * 0.3, wx - r * 0.66, cy + hh * 0.62);
+    }
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    ctx.fillStyle = shade(color, -14);
+    ctx.beginPath();
+    ctx.arc(cx, cy + hh * 0.05, r * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    enemyEyes(ctx, cx, cy - hh * 0.34, hh * 0.9);
+  } else {
+    // 法珠怪:圆体 + 环绕小珠 3 颗(公转;reduced 静止在初相)
+    const spin = reduced ? 0 : ((tMs % ORB_SPIN_MS) / ORB_SPIN_MS) * Math.PI * 2;
+    const body = Math.min(hw, hh) * 0.72;
+    ctx.beginPath();
+    ctx.arc(cx, cy + hh * 0.08, body, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    enemyEyes(ctx, cx, cy - hh * 0.06, hh * 0.85);
+    for (let i = 0; i < ORB_COUNT; i++) {
+      const a = spin + (i / ORB_COUNT) * Math.PI * 2;
+      const ox = cx + Math.cos(a) * hw * 1.0;
+      const oy = cy + hh * 0.08 + Math.sin(a) * hh * 0.42;
+      ctx.fillStyle = "#E8C7F2";
+      ctx.beginPath();
+      ctx.arc(ox, oy, Math.max(2, hw * 0.13), 0, Math.PI * 2);
+      ctx.fill();
+      strokeOutline(ctx, "#E8C7F2", 1);
+      ctx.fillStyle = "rgba(255,255,255,.9)";
+      ctx.beginPath();
+      ctx.arc(ox - hw * 0.04, oy - hh * 0.04, Math.max(0.8, hw * 0.045), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// 修复员 S2:参数化 Q 版首领骨架(一副骨架 + 七套特征件,不画七个独立 BOSS)
+// ---------------------------------------------------------------------------
+
+/** BOSS 出场弹入时长(learner #7:400ms 缩放弹入;reduced 直接淡入) */
+export const BOSS_INTRO_MS = 400;
+
+/** 出场缩放:0.7 → 1,途中一点点回弹;reduced 恒 1(淡入交给调用侧 alpha) */
+export function bossIntroScale(k: number, reduced: boolean): number {
+  if (reduced) return 1;
+  const t = Math.max(0, Math.min(1, k));
+  return 0.7 + 0.3 * t + 0.08 * Math.sin(t * Math.PI);
+}
+
+/** guard 光环:平涂 0.28 底 → 边缘径向渐变淡出(中心实、边缘散) */
+export function drawGuardHalo(
+  ctx: CanvasRenderingContext2D,
+  bx: number,
+  by: number,
+  w: number,
+  h: number,
+  color: string,
+  alpha: number
+): void {
+  const cy = by - h * 0.52;
+  const rr = Math.max(w, h) * 0.72;
+  const grad = ctx.createRadialGradient(bx, cy, rr * 0.35, bx, cy, rr);
+  grad.addColorStop(0, withAlpha(color, alpha));
+  grad.addColorStop(1, withAlpha(color, 0));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(bx, cy, rr, rr * 0.86, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 参数化首领:三停渐变胖椭圆本体 + 皱眉鼓腮脸 + 短圆四肢,
+ * 再按 kindIdx(BOSSES 下标)配 1–2 件特征件:
+ * 0 糖串首领=头顶三色丸串 / 1 蜂后=双翅+条纹腹 / 2 石像=方下巴+眉檐 /
+ * 3 风筝=菱形背板+飘带 / 4 小龙=圆角背鳍 3 齿 / 5 雪首领=雪球肚+毛线帽 /
+ * 6 王者=大王冠。特征件全部文字规格原创,不参照任何现存商业形象。
+ * (bx,by) 是脚底中点,w×h = BOSS_W×BOSS_H 现判定盒;体渐变 +20/−16、描边 2px 深 26%。
+ */
+export function drawBossFigure(
+  ctx: CanvasRenderingContext2D,
+  bx: number,
+  by: number,
+  w: number,
+  h: number,
+  kindIdx: number,
+  color: string
+): void {
+  const cy = by - h * 0.52;
+  const rx = w * 0.5;
+  const ry = h * 0.48;
+  ctx.save();
+  // 落影
+  ctx.fillStyle = PP_COLORS.ppShadow;
+  ctx.beginPath();
+  ctx.ellipse(bx, by, rx * 0.9, h * 0.07, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 背后特征件(翼 / 背板 / 背鳍):画在本体之下
+  if (kindIdx === 1) {
+    ctx.fillStyle = "rgba(255,255,255,.65)";
+    for (const s of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.ellipse(bx + s * rx * 0.66, cy - ry * 0.72, rx * 0.42, ry * 0.24, s * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (kindIdx === 3) {
+    ctx.fillStyle = shade(color, 12);
+    ctx.beginPath();
+    ctx.moveTo(bx, cy - ry * 1.3);
+    ctx.lineTo(bx + rx * 1.2, cy);
+    ctx.lineTo(bx, cy + ry * 1.26);
+    ctx.lineTo(bx - rx * 1.2, cy);
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, shade(color, 12), 2);
+    ctx.strokeStyle = shade(color, 26);
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    for (const s of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.moveTo(bx + s * rx * 0.3, by);
+      ctx.quadraticCurveTo(bx + s * rx * 0.7, by + h * 0.12, bx + s * rx * 0.5, by + h * 0.2);
+      ctx.stroke();
+    }
+    ctx.lineCap = "butt";
+  } else if (kindIdx === 4) {
+    ctx.fillStyle = shade(color, -18);
+    for (const [dx, dy] of [
+      [-0.42, -0.78],
+      [0, -1.0],
+      [0.42, -0.78],
+    ] as Array<[number, number]>) {
+      ctx.beginPath();
+      ctx.arc(bx + rx * dx, cy + ry * dy, rx * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // 短圆四肢(手在身侧、脚在身底)
+  ctx.fillStyle = shade(color, -8);
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.arc(bx + s * rx * 1.02, cy + ry * 0.16, rx * 0.17, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, shade(color, -8), 1.5);
+    ctx.fillStyle = shade(color, -8);
+    ctx.beginPath();
+    ctx.ellipse(bx + s * rx * 0.44, by - h * 0.03, rx * 0.24, h * 0.07, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 本体:三停径向渐变(+20 → 本体 → −16),高光偏左上 45°
+  const grad = ctx.createRadialGradient(bx - rx * 0.36, cy - ry * 0.42, rx * 0.14, bx, cy, Math.max(rx, ry) * 1.06);
+  grad.addColorStop(0, shade(color, 20));
+  grad.addColorStop(0.55, color);
+  grad.addColorStop(1, shade(color, -16));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(bx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = shade(color, -26);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // 皱眉鼓腮脸(倒 U 撇嘴,无凶相只有「鼓着腮不服气」)
+  ctx.strokeStyle = shade(color, -40);
+  ctx.lineWidth = Math.max(1.5, ry * 0.06);
+  ctx.lineCap = "round";
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.moveTo(bx + s * rx * 0.36, cy - ry * 0.56);
+    ctx.lineTo(bx + s * rx * 0.1, cy - ry * 0.42);
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  enemyEyes(ctx, bx, cy - ry * 0.26, ry * 0.9, 0.24);
+  ctx.fillStyle = withAlpha(shade(color, 22), 0.8);
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.ellipse(bx + s * rx * 0.42, cy - ry * 0.06, rx * 0.16, ry * 0.11, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = shade(color, -40);
+  ctx.lineWidth = Math.max(1.5, ry * 0.05);
+  ctx.beginPath();
+  ctx.arc(bx, cy + ry * 0.28, rx * 0.14, Math.PI * 1.15, Math.PI * 1.85);
+  ctx.stroke();
+  // 前景特征件
+  if (kindIdx === 0) {
+    // 头顶三色丸串(糖串首领)
+    ctx.strokeStyle = "#B58A5C";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx, cy - ry * 0.98);
+    ctx.lineTo(bx, cy - ry * 1.62);
+    ctx.stroke();
+    const dango = ["#F9C6D8", "#FFF3E8", "#BFE3B4"];
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = dango[i];
+      ctx.beginPath();
+      ctx.arc(bx, cy - ry * (1.5 - i * 0.2), rx * 0.11, 0, Math.PI * 2);
+      ctx.fill();
+      strokeOutline(ctx, dango[i], 1.5);
+    }
+  } else if (kindIdx === 1) {
+    // 条纹腹:椭圆内两道深色横带(clip 进本体)
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(bx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = withAlpha(shade(color, -30), 0.8);
+    for (const dy of [0.3, 0.58]) {
+      ctx.fillRect(bx - rx, cy + ry * dy, rx * 2, ry * 0.14);
+    }
+    ctx.restore();
+  } else if (kindIdx === 2) {
+    // 方下巴 + 眉檐(石像)
+    ctx.fillStyle = shade(color, -14);
+    ctx.fillRect(bx - rx * 0.3, cy + ry * 0.4, rx * 0.6, ry * 0.22);
+    strokeOutline(ctx, shade(color, -14), 1.5);
+    ctx.fillStyle = shade(color, -26);
+    ctx.fillRect(bx - rx * 0.42, cy - ry * 0.52, rx * 0.84, ry * 0.1);
+  } else if (kindIdx === 5) {
+    // 雪球肚 + 毛线帽(雪首领)
+    const belly = ctx.createRadialGradient(bx - rx * 0.12, cy + ry * 0.1, rx * 0.05, bx, cy + ry * 0.24, rx * 0.4);
+    belly.addColorStop(0, "#FFFFFF");
+    belly.addColorStop(1, "#DFE8F2");
+    ctx.fillStyle = belly;
+    ctx.beginPath();
+    ctx.arc(bx, cy + ry * 0.24, rx * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, "#DFE8F2", 1.5);
+    ctx.fillStyle = shade(color, -24);
+    ctx.beginPath();
+    ctx.arc(bx, cy - ry * 0.88, rx * 0.3, Math.PI, Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(bx - rx * 0.32, cy - ry * 0.94, rx * 0.64, ry * 0.09);
+    ctx.beginPath();
+    ctx.arc(bx, cy - ry * 1.2, rx * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kindIdx === 6) {
+    // 大王冠(王者):金 2 停三齿
+    const cw = rx * 0.5;
+    const baseY = cy - ry * 0.92;
+    const ch = ry * 0.42;
+    const gold = ctx.createLinearGradient(0, baseY - ch * 1.15, 0, baseY);
+    gold.addColorStop(0, shade(PP_COLORS.ppGold, 18));
+    gold.addColorStop(1, PP_COLORS.ppGold);
+    ctx.fillStyle = gold;
+    ctx.beginPath();
+    ctx.moveTo(bx - cw, baseY);
+    ctx.lineTo(bx - cw, baseY - ch * 0.9);
+    ctx.lineTo(bx - cw * 0.5, baseY - ch * 0.45);
+    ctx.lineTo(bx, baseY - ch * 1.15);
+    ctx.lineTo(bx + cw * 0.5, baseY - ch * 0.45);
+    ctx.lineTo(bx + cw, baseY - ch * 0.9);
+    ctx.lineTo(bx + cw, baseY);
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, PP_COLORS.ppGold, 1.5);
+    ctx.fillStyle = PP_COLORS.ppRuby;
+    ctx.beginPath();
+    ctx.arc(bx, baseY - ch * 0.16, rx * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }

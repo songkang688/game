@@ -75,6 +75,7 @@ import { strokeOutline } from "../../art/kit/outline";
 import { traceStar } from "../../art/kit/star";
 import {
   BLADE_FLASH_COLOR,
+  BOSS_INTRO_MS,
   CROWN_RUBY,
   PP_COLORS,
   PRINCESS_CROWN_OFFSET_X,
@@ -86,11 +87,15 @@ import {
   TOP_LIGHT,
   bladeFlashOn,
   blinkLift,
+  bossIntroScale,
   bowShape,
   buttonPoints,
   capePhase,
   crownPath,
   crownTeethTips,
+  drawBossFigure,
+  drawEnemy,
+  drawGuardHalo,
   flagWavePhase,
   gemGlowAlpha,
   headwearDetail,
@@ -155,13 +160,7 @@ const HERO_COLORS = [
   },
 ];
 
-const ENEMY_FACE: Record<string, string> = {
-  slime: "🟢",
-  bat: "🦇",
-  armor: "🛡️",
-  ghost: "👻",
-  turret: "🔮",
-};
+// 修复员 S1:小怪脸谱表(五只 emoji 字形)退休 —— 本体改走 visual13.drawEnemy 自绘。
 
 // ---------------------------------------------------------------------------
 // 样式(全部 pcp- 前缀)
@@ -1401,6 +1400,10 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     }
   }
 
+  // 修复员 S2:BOSS 出场弹入的渲染侧小账本(按 world 实例起算一次,重开/下一关自动归零)
+  let bossIntroWorld: World | null = null;
+  let bossIntroAt = 0;
+
   function render(): void {
     if (!g) return;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
@@ -1538,7 +1541,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       // 「碰到会闪护盾」的东西一律带一枚危险三角(攒到最顶层)
       hazardMarks.push([x0, cy + stat.h * 0.52 * scale, 7 * scale]);
       if (e.hurtT > 0) g.globalAlpha = 0.55;
-      emoji(g, ENEMY_FACE[e.kind] ?? "❓", x0, cy, stat.h * 1.1 * scale);
+      // 修复员 S1:裸 emoji 字形 → 五母形自绘(尺寸盒 = ENEMY_STATS 现值,判定不动)
+      drawEnemy(g, e.kind, x0, cy, stat.w * scale, stat.h * scale, world.time * 1000, calm, e.dir);
       g.globalAlpha = 1;
       // 只吃某一种攻击的怪,头顶挂一个小提示(星星是自绘的,不再贴 emoji)
       const counter = counterFor(e.kind);
@@ -1556,25 +1560,34 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       }
     }
 
-    // 首领
+    // 首领(修复员 S2:单色圆角矩形 + emoji 脸 → 参数化 Q 版首领骨架 + 七套特征件)
     const boss = world.boss;
     if (boss && boss.alive) {
       const info = BOSSES[boss.kind % BOSSES.length];
       const bx = sx(boss.x);
       const by = sy(boss.y);
+      // 出场 400ms 缩放弹入:首次进画面才起算;reduced 直接淡入(纯视觉,判定不碰)
+      if (bossIntroWorld !== world && bx > -BOSS_W * scale && bx < cssW + BOSS_W * scale) {
+        bossIntroWorld = world;
+        bossIntroAt = world.time;
+      }
+      const introK =
+        bossIntroWorld === world ? Math.min(1, (world.time - bossIntroAt) / (BOSS_INTRO_MS / 1000)) : 0;
       const guardColor = boss.guard === "melee" ? "#E4635F" : "#5B8FD6";
-      g.fillStyle = guardColor;
-      g.globalAlpha = boss.hurtT > 0 ? 0.45 : 0.28;
-      roundRect(g, bx - (BOSS_W / 2 + 8) * scale, by - (BOSS_H + 10) * scale, (BOSS_W + 16) * scale, (BOSS_H + 12) * scale, 20 * scale);
-      g.fill();
+      g.save();
+      if (calm) {
+        g.globalAlpha = Math.max(0.001, introK);
+      } else {
+        const sc = bossIntroScale(introK, false);
+        g.translate(bx, by);
+        g.scale(sc, sc);
+        g.translate(-bx, -by);
+      }
+      // guard 光环:0.28 平涂底 → 边缘径向渐变淡出(被击中的一瞬更亮,读法不变)
+      drawGuardHalo(g, bx, by, BOSS_W * scale, BOSS_H * scale, guardColor, boss.hurtT > 0 ? 0.45 : 0.28);
+      drawBossFigure(g, bx, by, BOSS_W * scale, BOSS_H * scale, boss.kind % BOSSES.length, info.color);
+      g.restore();
       g.globalAlpha = 1;
-      g.fillStyle = info.color;
-      roundRect(g, bx - (BOSS_W / 2) * scale, by - BOSS_H * scale, BOSS_W * scale, BOSS_H * scale, 22 * scale);
-      g.fill();
-      g.strokeStyle = SPEC.hazard.stroke;
-      g.lineWidth = Math.max(1, SPEC.hazard.strokeWidth * scale);
-      g.stroke();
-      emoji(g, info.emoji, bx, by - BOSS_H * 0.52 * scale, BOSS_H * 0.6 * scale);
       if (boss.guard === "melee") emoji(g, "⚔️", bx, by - (BOSS_H + 22) * scale, 20 * scale);
       else drawStarIcon(g, bx, by - (BOSS_H + 22) * scale, 10 * scale);
     }
