@@ -81,19 +81,43 @@ export function levelConfig(level: number): OrbLevel {
 }
 
 /** 无尽模式第 n 波的配置:密度和缩圈速度一直往上走 */
+/**
+ * 无尽的收圈速度上限。
+ *
+ * 起圈半径是 `min(mapW,mapH) * 0.52 = 1040`,`shrinkZone` 收到 60 就不再收,
+ * 也就是一共要收 980。原先 `shrink = 3 + w * 1.4` 一路长下去,第 20 波 32 秒
+ * 就收到底、第 100 波只剩 7 秒 —— 那时候不是「更难」,是场上没地方待了,
+ * 剩下的时间只能在圈外硬扛掉质量,等结算。封到 24 之后收圈窗口不会短过 41 秒,
+ * 目标质量照旧一波一波往上加,难度还是在涨,只是涨在「要吃多少」而不是「还剩几秒」。
+ *
+ * 第 15 波开始才封得住(3 + 1.4×15 = 24),之前每一波的数字一个都没变。
+ */
+export const ENDLESS_MAX_SHRINK = 24;
+
+/**
+ * 无尽的豆子数上限。
+ *
+ * 豆子被吃掉会立刻在地图上随机重生,供给本来就是无限的,`pellets` 只决定
+ * 同时铺在地上多少颗。而碰撞检测是每帧遍历一遍这个数组,原先
+ * `140 + w * 6` 无上限,第 500 波要铺 3140 颗、第 5000 波 30140 颗 ——
+ * 纯粹的帧率悬崖,一点玩法收益都没有。第 30 波开始才封得住。
+ */
+export const ENDLESS_MAX_PELLETS = 320;
+
 export function endlessConfig(wave: number): OrbLevel {
   const w = Math.max(1, Math.round(wave));
   return {
     level: -1,
     mapW: 2000,
     mapH: 2000,
-    pellets: 140 + w * 6,
+    // 三个「越往后越大」的旋钮都有上限,理由见下面的常量注释
+    pellets: Math.min(ENDLESS_MAX_PELLETS, 140 + w * 6),
     viruses: Math.min(14, 2 + w),
     bots: Math.min(11, 2 + Math.floor(w / 2)),
     botTier: w >= 9 ? "hell" : w >= 6 ? "pro" : w >= 3 ? "normal" : "rookie",
     targetMass: 140 + w * 55,
     timeSec: 0,
-    shrink: 3 + w * 1.4,
+    shrink: Math.min(ENDLESS_MAX_SHRINK, 3 + w * 1.4),
     ally: false,
     fog: w >= 5
   };

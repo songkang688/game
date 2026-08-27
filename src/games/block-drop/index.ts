@@ -104,7 +104,7 @@ const CSS = `
 .bd-btn:focus-visible{outline:3px solid #24406b;outline-offset:3px;}
 .bd-msg{text-align:center;min-height:20px;color:#3f5b8a;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
-.bd-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+.bd-modebar,.bd-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .bd-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f5b8a;text-align:center;overflow-wrap:anywhere;}
 .bd-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#7fa5e0,#5c83c4);box-shadow:0 4px 0 #47679f;}
@@ -916,7 +916,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function picker(labels: string[], onPick: (i: number) => void): HTMLElement {
     const row = document.createElement("div");
-    row.className = "bd-modebar";
+    row.className = "bd-optbar";
     labels.forEach((label, i) => {
       const b = document.createElement("button");
       b.type = "button";

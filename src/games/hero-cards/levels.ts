@@ -682,7 +682,10 @@ function chapter7(
     seed,
     seats,
     maxTurns: 14,
-    tier: "rookie",
+    // 残局章也要有坡度：整章 24 关都用菜鸟档的话，这一章会夹在第 6 章
+    // （normal → pro）和第 8 章（pro → hell）中间塌成一段低谷。
+    // 前 6 关留菜鸟档把「花主留到最后」这条规则教清楚，之后跟上。
+    tier: step >= 3 ? "pro" : step >= 1 ? "normal" : "rookie",
     recipe: undefined,
     factionLock: false,
     goal: "全场只剩你一个人,而且花主是最后一个退场的",

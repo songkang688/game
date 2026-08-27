@@ -90,12 +90,31 @@ export function levelConfig(level: number): SnakeLevel {
 }
 
 /** 无尽模式第 n 波:缩圈更快、对手更多 */
+/**
+ * 无尽的收圈速度上限。
+ *
+ * 起圈半径是 `mapR * 0.96 = 1440`,`shrinkZone` 收到 180 就不再收,
+ * 一共要收 1260。原先 `shrink = 3 + w * 1.3` 一路长下去,第 100 波
+ * 9 秒就收到底 —— 那不是更难,是原野没了。封到 22.5 之后收圈窗口
+ * 不会短过 56 秒,目标长度照旧一波一波往上加。
+ *
+ * 第 15 波开始才封得住(3 + 1.3×15 = 22.5),之前每一波的数字一个都没变。
+ */
+export const ENDLESS_MAX_SHRINK = 22.5;
+
+/**
+ * 无尽的食物数上限。同 `orb-arena`:食物吃掉立刻重生,供给本来就是无限的,
+ * 这个数只决定同时铺多少颗,而每帧都要遍历一遍。第 20 波开始才封得住。
+ */
+export const ENDLESS_MAX_FOOD = 330;
+
 export function endlessConfig(wave: number): SnakeLevel {
   const w = Math.max(1, Math.round(Number.isFinite(wave) ? wave : 1));
   return {
     level: -1,
     mapR: 1500,
-    food: 170 + w * 8,
+    // 三个「越往后越大」的旋钮都有上限,理由见上面的常量注释
+    food: Math.min(ENDLESS_MAX_FOOD, 170 + w * 8),
     bots: Math.min(9, 3 + Math.floor(w / 2)),
     botTier: w >= 9 ? "hell" : w >= 6 ? "pro" : w >= 3 ? "normal" : "rookie",
     goal: "survive",
@@ -103,7 +122,7 @@ export function endlessConfig(wave: number): SnakeLevel {
     targetRank: 1,
     targetStops: 0,
     timeSec: 0,
-    shrink: 3 + w * 1.3,
+    shrink: Math.min(ENDLESS_MAX_SHRINK, 3 + w * 1.3),
     fog: w >= 5,
     botsFight: true
   };

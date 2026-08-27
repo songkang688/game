@@ -121,6 +121,36 @@ describe("关卡配置", () => {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // 第 2 轮 W1-R2-02:第 7 章原先整章 24 关都是菜鸟档,夹在第 6 章(normal→pro)
+  // 与第 8 章(pro→hell)中间塌成一段低谷
+  // ---------------------------------------------------------------------------
+
+  it("第七章也有章内坡度,不是整章一个档位", () => {
+    const start = chapterStartOf(6);
+    const tiers = new Set<string>();
+    for (let i = start; i < start + CHAPTERS[6].size; i++) tiers.add(levelConfig(i).tier);
+    expect([...tiers].sort()).not.toEqual(["rookie"]);
+    expect(tiers.size).toBeGreaterThanOrEqual(3);
+    // 头几关还是菜鸟档:先把「花主要留到最后」这条规则教清楚
+    expect(levelConfig(start).tier).toBe("rookie");
+    expect(levelConfig(start + CHAPTERS[6].size - 1).tier).toBe("pro");
+  });
+
+  it("每一章最强的那一档,一章比一章不弱", () => {
+    const peak = (ci: number): number => {
+      const start = chapterStartOf(ci);
+      let best = 0;
+      for (let i = start; i < start + CHAPTERS[ci].size; i++) {
+        best = Math.max(best, AI_TIERS.indexOf(levelConfig(i).tier));
+      }
+      return best;
+    };
+    for (let ci = 1; ci < CHAPTERS.length; ci++) {
+      expect(peak(ci), `第 ${ci + 1} 章比第 ${ci} 章弱了`).toBeGreaterThanOrEqual(peak(ci - 1));
+    }
+  });
+
   it("有合作小关:同阵营互相打不了", () => {
     let locked = 0;
     for (let lv = 0; lv < TOTAL; lv++) if (levelConfig(lv).factionLock) locked++;

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, assertTotal, totalSize } from "../level99";
-import { CHAPTERS, chapterIndexOf, endlessConfig, goalLine, levelConfig, starsFor } from "./levels";
+import {
+  CHAPTERS,
+  ENDLESS_MAX_PELLETS,
+  ENDLESS_MAX_SHRINK,
+  chapterIndexOf,
+  endlessConfig,
+  goalLine,
+  levelConfig,
+  starsFor
+} from "./levels";
 import guide from "./guide";
 import { meta } from "./meta";
 
@@ -71,6 +80,41 @@ describe("圆圆大作战 · 188 关切分", () => {
     expect(endlessConfig(1).pellets).toBeLessThan(endlessConfig(9).pellets);
     expect(endlessConfig(1).shrink).toBeLessThan(endlessConfig(9).shrink);
     expect(endlessConfig(99).bots).toBeLessThanOrEqual(11);
+  });
+
+  // -------------------------------------------------------------------------
+  // 第 2 轮 W1-R2-01:无尽的三个旋钮里只有 bots / viruses 封了顶
+  // -------------------------------------------------------------------------
+
+  it("收圈速度有上限,再往后走也不会一眨眼收到底", () => {
+    for (const w of [1, 15, 20, 50, 100, 5000, 1e6]) {
+      expect(endlessConfig(w).shrink, `第 ${w} 波`).toBeLessThanOrEqual(ENDLESS_MAX_SHRINK);
+    }
+    // 起圈 min(2000,2000)*0.52 = 1040,收到 60 就不再收:收圈窗口不许短过 40 秒
+    const span = 2000 * 0.52 - 60;
+    for (const w of [20, 100, 5000]) {
+      expect(span / endlessConfig(w).shrink, `第 ${w} 波的收圈窗口`).toBeGreaterThan(40);
+    }
+  });
+
+  it("豆子数有上限,不会为了「更难」把每帧要遍历的数组撑爆", () => {
+    for (const w of [1, 30, 100, 500, 5000, 1e6]) {
+      expect(endlessConfig(w).pellets, `第 ${w} 波`).toBeLessThanOrEqual(ENDLESS_MAX_PELLETS);
+    }
+    expect(endlessConfig(1e6).pellets).toBe(ENDLESS_MAX_PELLETS);
+  });
+
+  it("封顶只在后面才生效:孩子玩得到的前十四波一个数字都没变", () => {
+    for (let w = 1; w <= 14; w++) {
+      expect(endlessConfig(w).shrink, `第 ${w} 波收圈`).toBeCloseTo(3 + w * 1.4, 6);
+      expect(endlessConfig(w).pellets, `第 ${w} 波豆子`).toBe(140 + w * 6);
+    }
+  });
+
+  it("难度照旧一波一波在涨,只是涨在「要吃多少」上", () => {
+    for (const w of [20, 50, 100]) {
+      expect(endlessConfig(w + 1).targetMass).toBeGreaterThan(endlessConfig(w).targetMass);
+    }
   });
 
   it("评星:没到目标只有一星,超额又快才三星", () => {

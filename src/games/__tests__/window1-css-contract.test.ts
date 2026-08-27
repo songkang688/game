@@ -113,4 +113,31 @@ describe("返回键不和模式入口共用类名", () => {
       expect(/className\s*=\s*[`"'][a-z]+-open/.test(src), `${id} 找不到 <前缀>-open 入口`).toBe(true);
     }
   });
+
+  /**
+   * 第 2 轮 W1-R2-03。`-modebar` 原先被当成「一排按钮」的通用类名用:
+   * 地图上那排模式入口叫它,模式内部的档位选择器也叫它。真机上
+   * `document.querySelectorAll('[class$="-modebar"]')` 因此永远数出两排,
+   * 走查脚本分不清「多出来的那排」是档位选择器还是重复挂载 ——
+   * 第 2 轮竞态脚本第一版就在 6 款上误报了这一条。
+   * 内层的按钮行改叫 `<前缀>-optbar`,`-modebar` 只留给模式入口那一排。
+   */
+  it("`-modebar` 只归模式入口那一排,内层按钮行叫 `-optbar`", () => {
+    const bad: string[] = [];
+    for (const id of GAMES) {
+      const src = SRC.get(id) as string;
+      const hits = [...src.matchAll(/className\s*=\s*"([a-z]+-modebar)"/g)];
+      if (hits.length > 1) bad.push(`${id}: ${hits.length} 处赋了 -modebar`);
+    }
+    expect(bad, `这些款仍把 -modebar 当通用按钮行用: ${bad.join(" / ")}`).toEqual([]);
+  });
+
+  it("凡是有 `-optbar` 的,样式里也得声明它,别让内层按钮行掉版", () => {
+    for (const id of GAMES) {
+      const src = SRC.get(id) as string;
+      const m = /className\s*=\s*"([a-z]+)-optbar"/.exec(src);
+      if (!m) continue;
+      expect(src, `${id} 用了 .${m[1]}-optbar 却没给它写样式`).toMatch(new RegExp(`\\.${m[1]}-optbar\\s*[,{]`));
+    }
+  });
 });
