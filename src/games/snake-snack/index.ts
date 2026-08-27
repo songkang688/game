@@ -68,7 +68,18 @@ import {
   SS_WORM_PINK,
   bulgePos,
   createVisualFx,
+  doorSwingT,
   moveGlideT,
+  paintBush,
+  paintDoor,
+  paintHedgehog,
+  paintRock,
+  paintSnack,
+  paintStar,
+  paintSwirl,
+  paintTile,
+  swirlPhase,
+  tileGlowT,
 } from "./visual13";
 
 const CELL = 26;
@@ -293,6 +304,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   function openRingDoor(): void {
     if (ringOpen) return;
     ringOpen = true;
+    fx.noteDoorOpen(elapsedMs);
     const head = worms[0].cells[0];
     const from = cellKey(head[0], head[1]);
     const before = reachableNow(cfg, from, { gateOpen: gateOpen(), ringOpen: false, stones });
@@ -312,69 +324,49 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   function draw(t: number): void {
     if (!c2d) return;
     c2d.clearRect(0, 0, SIZE, SIZE);
-    c2d.font = `${CELL - 4}px serif`;
-    c2d.textAlign = "center";
-    c2d.textBaseline = "middle";
-    c2d.fillStyle = "#A9C79A";
-    walls.forEach((key) => {
-      const [x, y] = cellXY(key);
-      c2d.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
-    });
-    walls.forEach((key) => {
-      const [x, y] = cellXY(key);
-      c2d.fillText("🌿", x * CELL + CELL / 2, y * CELL + CELL / 2 + 1);
-    });
-    // 绕圈那一圈：踩过的格子点亮，一眼看得出还差哪几格
+    // ② 花砖小路:绕圈那一圈串成小路,未踩灰花 / 踩过亮花 + 260ms 微光
     for (const key of ring) {
       const [x, y] = cellXY(key);
-      c2d.fillStyle = ringWalked.has(key) ? "rgba(255, 205, 90, 0.45)" : "rgba(255, 235, 190, 0.5)";
-      c2d.fillRect(x * CELL + 2, y * CELL + 2, CELL - 4, CELL - 4);
-      if (!ringWalked.has(key)) {
-        c2d.strokeStyle = "rgba(220, 175, 70, 0.7)";
-        c2d.lineWidth = 1.5;
-        c2d.setLineDash([4, 4]);
-        c2d.strokeRect(x * CELL + 2, y * CELL + 2, CELL - 4, CELL - 4);
-        c2d.setLineDash([]);
-      }
+      const lit = ringWalked.has(key);
+      const litAt = fx.tileLitAt.get(key);
+      const glow = lit ? tileGlowT(litAt === undefined ? Number.POSITIVE_INFINITY : elapsedMs - litAt, REDUCED) : 0;
+      paintTile(c2d, x, y, CELL, lit, glow);
     }
-    // 绕圈小门
+    // ③ 墙草丛 / 石头 / 门
+    walls.forEach((key) => {
+      const [x, y] = cellXY(key);
+      paintBush(c2d, x, y, CELL);
+    });
+    stones.forEach((key) => {
+      const [x, y] = cellXY(key);
+      paintRock(c2d, x, y, CELL);
+    });
+    // 绕圈小门:开门那一下门板 150ms 旋开,开完门洞里放一朵小花当路标
     doors.forEach((key) => {
       const [x, y] = cellXY(key);
-      c2d.fillStyle = ringOpen ? "#E7F3DC" : "#F6E6C8";
-      c2d.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
-      c2d.fillText(ringOpen ? "🌼" : "🔐", x * CELL + CELL / 2, y * CELL + CELL / 2 + 1);
+      const sinceOpen = fx.doorOpenAtMs < 0 ? Number.POSITIVE_INFINITY : elapsedMs - fx.doorOpenAtMs;
+      paintDoor(c2d, x, y, CELL, ringOpen, ringOpen ? doorSwingT(sinceOpen, REDUCED) : 0, true);
     });
-    // 星门
-    portals.forEach((_, key) => {
-      const [x, y] = cellXY(key);
-      c2d.fillStyle = "#D8E4FB";
-      c2d.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
-      c2d.fillText("🌀", x * CELL + CELL / 2, y * CELL + CELL / 2 + 1);
-    });
-    // 窄门
+    // 窄门:开着是敞开的木门,关着挂锁牌
     const open = gateOpen();
     gates.forEach((key) => {
       const [x, y] = cellXY(key);
-      c2d.fillStyle = open ? "#E7F3DC" : "#F3DCE8";
-      c2d.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
-      c2d.fillText(open ? "🚪" : "🔒", x * CELL + CELL / 2, y * CELL + CELL / 2 + 1);
+      paintDoor(c2d, x, y, CELL, open, open ? 1 : 0);
     });
-    // 小石头
-    stones.forEach((key) => {
+    // ④ 传送 = 双色旋涡(2400ms/圈,reduced 静止)
+    portals.forEach((_, key) => {
       const [x, y] = cellXY(key);
-      c2d.fillText("🪨", x * CELL + CELL / 2, y * CELL + CELL / 2 + 1);
+      paintSwirl(c2d, x, y, CELL, swirlPhase(elapsedMs, REDUCED));
     });
-    // 小刺猬
+    // ⑤ 食物 / 奖励星(限时星星果快溜走时会一闪一闪)
+    const blink = snackIsStar && starHurry(starTicks, starLimit) && Math.floor(elapsedMs / 180) % 2 === 0;
+    paintSnack(c2d, snack[0], snack[1], CELL, snackEmoji, blink ? 0.45 : 1);
+    if (bonus) paintStar(c2d, bonus[0], bonus[1], CELL, true, 1);
+    // ⑥ 小刺猬:自绘圆背小刺球,友好脸(碰到只是「哎呀」弹回,语义没变)
     hedgehogs().forEach((key) => {
       const [x, y] = cellXY(key);
-      c2d.fillText("🦔", x * CELL + CELL / 2, y * CELL + CELL / 2 + 1);
+      paintHedgehog(c2d, x, y, CELL);
     });
-    // 点心（限时星星果快溜走时会一闪一闪）
-    const blink = snackIsStar && starHurry(starTicks, starLimit) && Math.floor(elapsedMs / 180) % 2 === 0;
-    c2d.globalAlpha = blink ? 0.45 : 1;
-    c2d.fillText(snackEmoji, snack[0] * CELL + CELL / 2, snack[1] * CELL + CELL / 2 + 1);
-    c2d.globalAlpha = 1;
-    if (bonus) c2d.fillText("⭐", bonus[0] * CELL + CELL / 2, bonus[1] * CELL + CELL / 2 + 1);
     // ⑦⑧ 毛毛虫(尾→头,头永远最上):圆节链 + 鼓包波 + 张嘴 / 金闪帧
     const wave = bulgePos(fx.eatAtMs < 0 ? -1 : elapsedMs - fx.eatAtMs, REDUCED);
     for (const w of worms) {
@@ -554,6 +546,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
         const k = cellKey(head[0], head[1]);
         if (ring.includes(k) && !ringWalked.has(k)) {
           ringWalked.add(k);
+          fx.noteTileLit(k, elapsedMs);
           hintEl.textContent = ringHint(ring, ringWalked);
         }
       }
