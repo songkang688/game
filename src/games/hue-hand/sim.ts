@@ -108,10 +108,12 @@ export function simulateGame(opts: SimOptions): SimResult {
   }
 
   const scores = state.players.map((p) => handScore(p.hand));
-  if (state.finished) {
+  if (state.finished && state.winner >= 0) {
     return { winner: state.winner, stalled: false, steps, actions, scores, state };
   }
-  // 牌打不动了:手牌分最少的人算赢下这一局
+  // 牌打不动了(步数用光,或者牌真的用完判了平局):手牌分最少的人算赢下这一局。
+  // 「牌用完」这一路以前会一直空转到 maxSteps 才落到这儿,现在提前收口,落点还是同一个 ——
+  // 谁也接不上就意味着手牌一张都不会再变,所以算出来的赢家与改前一模一样。
   let winner = 0;
   for (let i = 1; i < scores.length; i++) {
     if (scores[i] < scores[winner]) winner = i;

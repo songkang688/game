@@ -9,9 +9,12 @@ import {
   challengeW4,
   chainPending,
   createGame,
+  deckExhausted,
   drawFromDeck,
   drawStack,
+  isDraw,
   legalPlays,
+  noWayForward,
   mustTakeChain,
   oneCardPenalty,
   passAfterDraw,
@@ -374,5 +377,75 @@ describe("一局的开始与结束", () => {
     const drew = drawFromDeck(state, 0);
     expect(drew.card).not.toBeNull();
     expect(state.pile.length).toBe(1);
+  });
+});
+
+describe("牌真的用完了", () => {
+  /** 抽牌堆空 + 台面只剩一张 + 两个人都接不上:局面再也走不动的那种残局 */
+  function deadEnd() {
+    return createGame({
+      players: 2,
+      seed: 1,
+      hands: [[card("num", "sky", 3)], [card("num", "mint", 5)]],
+      deck: [],
+      top: card("num", "pink", 7),
+      color: "pink",
+    });
+  }
+
+  it("认得出「抽牌堆空、弃牌堆也洗不出牌」", () => {
+    const state = deadEnd();
+    expect(deckExhausted(state)).toBe(true);
+    expect(noWayForward(state)).toBe(true);
+  });
+
+  it("摸一次就收成平局,不再空转", () => {
+    const state = deadEnd();
+    const drew = drawFromDeck(state, 0);
+    expect(drew.card).toBeNull();
+    expect(state.finished).toBe(true);
+    expect(state.winner).toBe(-1);
+    expect(isDraw(state)).toBe(true);
+    expect(state.log[state.log.length - 1]).toContain("平局");
+    // 已经收官了,再摸多少次手数都不涨(改前这里能一路涨到 200)
+    const moves = state.moves;
+    for (let i = 0; i < 50; i++) drawFromDeck(state, state.turn);
+    expect(state.moves).toBe(moves);
+    expect(state.players.map((p) => p.hand.length)).toEqual([1, 1]);
+  });
+
+  it("还有人接得上就绝不判平局,照旧只是让手", () => {
+    const state = createGame({
+      players: 2,
+      seed: 1,
+      // 座位 0 接不上,座位 1 手上有粉色,下一手就能把弃牌堆重新喂起来
+      hands: [[card("num", "sky", 3)], [card("num", "pink", 5)]],
+      deck: [],
+      top: card("num", "pink", 7),
+      color: "pink",
+    });
+    expect(deckExhausted(state)).toBe(true);
+    expect(noWayForward(state)).toBe(false);
+    drawFromDeck(state, 0);
+    expect(state.finished).toBe(false);
+    expect(isDraw(state)).toBe(false);
+    expect(state.turn).toBe(1);
+  });
+
+  it("弃牌堆还洗得出牌时不算用完(老路径一个字节没动)", () => {
+    const state = deadEnd();
+    state.pile = [card("num", "lemon", 1), card("num", "lemon", 2), card("num", "pink", 7)];
+    expect(deckExhausted(state)).toBe(false);
+    expect(noWayForward(state)).toBe(false);
+    const drew = drawFromDeck(state, 0);
+    expect(drew.card).not.toBeNull();
+    expect(state.finished).toBe(false);
+  });
+
+  it("正常开一局离「牌用完」还远得很", () => {
+    const state = createGame({ players: 4, seed: 12 });
+    expect(deckExhausted(state)).toBe(false);
+    expect(noWayForward(state)).toBe(false);
+    expect(isDraw(state)).toBe(false);
   });
 });

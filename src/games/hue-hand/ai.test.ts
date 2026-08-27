@@ -151,6 +151,33 @@ describe("档位强弱", () => {
     expect(a.scores).toEqual(b.scores);
   });
 
+  it("牌用完的那一局按「打不动」算,口径与步数用光完全一致", () => {
+    // 2 人各 1 张,台面粉 7,抽牌堆空:谁也接不上
+    const res = simulateGame({
+      seats: ["normal", "normal"],
+      seed: 1,
+      hands: [[card("num", "mint", 3)], [card("num", "sky", 5)]],
+      deck: [],
+      top: card("num", "pink", 7),
+      color: "pink",
+    });
+    // 提前收口,不再一路空转到 maxSteps
+    expect(res.steps).toBeLessThan(10);
+    // 落点仍旧是老那条「手牌分最少的人算赢」,所以 duel / buildLevel 的判定一个字节没变
+    expect(res.stalled).toBe(true);
+    expect(res.winner).toBe(0);
+    expect(res.scores).toEqual([3, 5]);
+  });
+
+  it("正常对局一局都不会打到「牌用完」,胜率门槛没被这条改动碰过", () => {
+    for (const pair of [
+      ["hell", "rookie"],
+      ["expert", "normal"],
+    ] as const) {
+      expect(duel(pair[0], pair[1], 30).stalls).toBe(0);
+    }
+  });
+
   it("一局总能打完,不会没完没了", () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const res = simulateGame({ seats: ["expert", "normal", "rookie", "hell"], seed: seed * 31 });

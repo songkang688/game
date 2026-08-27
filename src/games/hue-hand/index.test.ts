@@ -18,7 +18,16 @@ import {
 import { buildDeck, cardLabel, type Card, type Color } from "./deck";
 import { buildEndlessRound, dealRoundDeck } from "./levels";
 import { createGame, legalPlays } from "./rules";
-import { createTable, cardWidthFor, meta, mount, type SeatCfg, type TableDone } from "./index";
+import {
+  createTable,
+  cardWidthFor,
+  duoScoreLine,
+  meta,
+  mount,
+  versusTitle,
+  type SeatCfg,
+  type TableDone,
+} from "./index";
 
 let dom: Dom;
 
@@ -404,6 +413,64 @@ describe("闯关的手数限制", () => {
     expect(colorBarText()).toContain("现在是");
     expect(colorBarText()).not.toContain("还剩");
     handle.destroy();
+  });
+});
+
+describe("牌都用完了的那一局", () => {
+  const HUMAN: SeatCfg = { kind: "human", name: "朵朵", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const BOT: SeatCfg = { kind: "ai", name: "团团", avatar: "🐰", isImg: false, tier: "rookie", keys: 0 };
+
+  /**
+   * 摆一副刚好发完就见底的牌:2 人各 1 张,台面翻出粉 7,抽牌堆一张不剩。
+   * 两个人手上一张粉色 / 7 都没有,谁也接不上 —— 这就是 R3B-1 说的那个死局面。
+   * 数组末尾先被 pop,所以顺序要倒着排。
+   */
+  function emptyDeck(): Card[] {
+    const pool = buildDeck();
+    const pick = (color: Color, num: number): Card => {
+      const i = pool.findIndex((c) => c.kind === "num" && c.color === color && c.num === num);
+      return pool.splice(i, 1)[0];
+    };
+    const mine = pick("mint", 3);
+    const foe = pick("sky", 5);
+    const top = pick("pink", 7);
+    return [top, foe, mine];
+  }
+
+  it("摸不到牌就收成平局:winner = -1,一分都不给", () => {
+    let done: TableDone | null = null;
+    const table = createTable(dom.root as unknown as HTMLElement, {
+      cfg: { players: 2, tiers: ["rookie"], kinds: ["num"], handSize: 1, seed: 4242, hint: "牌用完" },
+      deck: emptyDeck(),
+      seats: [HUMAN, BOT],
+      banner: "牌用完",
+      sfx: () => undefined,
+      onDone: (r) => {
+        done = r;
+      },
+    });
+    fireWindow(dom, "keydown", { key: "g" });
+    expect(dom.root.querySelector(".hh-say")?.textContent).toContain("这一局算平局");
+    advance(dom, 900);
+
+    const r = done as TableDone | null;
+    expect(r).toBeTruthy();
+    expect(r?.winner).toBe(-1);
+    expect(r?.gained).toBe(0);
+    table.destroy();
+  });
+
+  it("对战结算标题分得清赢 / 输 / 平", () => {
+    expect(versusTitle(0)).toContain("你先出完");
+    expect(versusTitle(1)).toContain("这局被");
+    expect(versusTitle(-1)).toContain("平手");
+    expect(versusTitle(-1)).not.toContain("输");
+  });
+
+  it("双人同屏的平局单记一格「平 N」,两边胜场都不涨", () => {
+    expect(duoScoreLine([0, 0], 0)).toBe("朵朵 0 : 0 星星");
+    expect(duoScoreLine([1, 0], 0)).toBe("朵朵 1 : 0 星星");
+    expect(duoScoreLine([1, 0], 2)).toBe("朵朵 1 : 0 星星 · 平 2");
   });
 });
 

@@ -44,6 +44,7 @@ import {
   createGame,
   drawFromDeck,
   drawStack,
+  isDraw,
   legalPlays,
   mustTakeChain,
   oneCardPenalty,
@@ -71,12 +72,34 @@ export interface SeatCfg {
   keys: 0 | 1;
 }
 
+/**
+ * 「牌都用完了」那一句。
+ *
+ * 108 张全在大家手上、谁也接不上时,这一局收成平局(`rules.ts` 的 `noWayForward`)。
+ * 正常对局到不了这儿,可到了就得有句话交代,不能让屏幕一直空转。
+ */
+const DRAW_LINE = "牌都用完啦,谁也接不上,这一局算平局。";
+
+/** 结算浮层的平局标题(对战 / 无尽 / 双人同屏共用一句口径) */
+const DRAW_TITLE = "🤝 牌都用完啦,这局算平手";
+
 /** 三个电脑对手:原创角色 */
 const BOT_FACES = [
   { name: "团团", avatar: "🐰" },
   { name: "圆圆", avatar: "🐼" },
   { name: "点点", avatar: "🦊" },
 ];
+
+/** 对战结算的标题。`winner < 0` 是「牌都用完了」的平局,没有赢家 */
+export function versusTitle(winner: number): string {
+  if (winner < 0) return DRAW_TITLE;
+  return winner === 0 ? "🏆 你先出完啦!" : `🤖 这局被 ${BOT_FACES[(winner - 1) % BOT_FACES.length].name} 拿下`;
+}
+
+/** 双人同屏的总比分。平局不算谁赢,单独记一格「平 N」 */
+export function duoScoreLine(wins: readonly number[], draws: number): string {
+  return `朵朵 ${wins[0]} : ${wins[1]} 星星${draws > 0 ? ` · 平 ${draws}` : ""}`;
+}
 
 function humanSeat(name: "朵朵" | "星星", keys: 0 | 1): SeatCfg {
   return {
@@ -796,7 +819,9 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
         ? res.playable
           ? "摸到能出的啦,可以马上打出去。"
           : `摸到${cardLabel(res.card)},这张接不上,换下一家。`
-        : "牌堆空了,这一手先过。"
+        : isDraw(state)
+          ? DRAW_LINE
+          : "牌堆空了,这一手先过。"
     );
     afterMove();
   }
@@ -927,6 +952,9 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
         opts.sfx("tap");
         tell(`${cfg.name} 摸了一张,顺手就打出去了。`);
         if (state.players[seat].hand.length === 1 && cfg.tier !== "rookie") callOneCard(state, seat);
+      } else if (!res.card) {
+        opts.sfx("pop");
+        tell(isDraw(state) ? DRAW_LINE : `${cfg.name} 想摸牌,可牌堆空着,这一手先过。`);
       } else {
         passAfterDraw(state, seat);
         opts.sfx("pop");
@@ -1211,7 +1239,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
           best = save.recordEndlessBest(meta.id, streak);
           overPanel(
             shell.stage,
-            "这一局被对手先出完啦",
+            r.winner < 0 ? DRAW_TITLE : "这一局被对手先出完啦",
             `连胜停在 ${streak} 局,最好成绩 ${best} 连胜,一共收了 ${points} 分。${leftoverLine(
               r.state.players[0].hand.length
             )}`,
@@ -1313,12 +1341,12 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
       banner: `⚔️ ${cfg.players} 人桌 · 对手是「${TIER_NAMES[tier]}」档<br>先出完手牌的人赢下这一局`,
       sfx: (n) => api.play(n),
       onDone: (r) => {
-        totals[r.winner] += r.gained;
+        // 牌用完判平局时没有赢家(winner < 0):谁的分都不涨,也不给星
+        if (r.winner >= 0) totals[r.winner] += r.gained;
         if (r.winner === 0) api.addStars(1);
-        const title = r.winner === 0 ? "🏆 你先出完啦!" : `🤖 这局被 ${BOT_FACES[(r.winner - 1) % BOT_FACES.length].name} 拿下`;
         overPanel(
           shell.stage,
-          title,
+          versusTitle(r.winner),
           `这一局收了 ${r.gained} 分。你的总分 ${totals[0]} 分。${
             r.winner === 0 ? "" : leftoverLine(r.state.players[0].hand.length)
           }`,
@@ -1351,13 +1379,15 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
   const shell = makeShell(host, api, onBack);
   let round = 1;
   const wins = [0, 0];
+  /** 牌用完判平局的局数:单独记一格,不算谁赢 */
+  let draws = 0;
   let table: { destroy: () => void } | null = null;
 
   function startRound(): void {
     table?.destroy();
     shell.stage.innerHTML = "";
     const cfg = buildVersusRound(round + 100, 2, "normal");
-    shell.chip.textContent = `👫 第 ${round} 局 · 朵朵 ${wins[0]} : ${wins[1]} 星星`;
+    shell.chip.textContent = `👫 第 ${round} 局 · ${duoScoreLine(wins, draws)}`;
     table = createTable(shell.stage, {
       cfg,
       deck: dealRoundDeck(cfg),
@@ -1366,12 +1396,14 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
       banner: "👫 朵朵和星星各拿一手牌,轮到谁就先把另一位的牌盖起来<br>朵朵 A/D + F/G · 星星 ←/→ + L/K",
       sfx: (n) => api.play(n),
       onDone: (r) => {
-        wins[r.winner]++;
+        // 牌用完判平局:两边的胜场都不涨,和 tap-tiles 打平那一路是同一个口径
+        if (r.winner >= 0) wins[r.winner]++;
+        else draws++;
         api.addStars(1);
         overPanel(
           shell.stage,
-          r.winner === 0 ? "🏆 朵朵先出完啦!" : "🏆 星星先出完啦!",
-          `这一局收了 ${r.gained} 分。总比分:朵朵 ${wins[0]} : ${wins[1]} 星星。`,
+          r.winner < 0 ? DRAW_TITLE : r.winner === 0 ? "🏆 朵朵先出完啦!" : "🏆 星星先出完啦!",
+          `这一局收了 ${r.gained} 分。总比分:${duoScoreLine(wins, draws)}。`,
           "🔁 再来一局",
           () => {
             api.play("tap");

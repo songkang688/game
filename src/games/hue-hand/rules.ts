@@ -347,6 +347,29 @@ export function mustTakeChain(state: HueState, player: number): boolean {
   return chainPending(state) && legalPlays(state, player).length === 0;
 }
 
+/** 牌真的用完了:抽牌堆空着,弃牌堆也只剩台面那一张,洗不出新的抽牌堆 */
+export function deckExhausted(state: HueState): boolean {
+  return state.deck.length === 0 && state.pile.length <= 1;
+}
+
+/**
+ * 局面再也走不动了吗:牌用完了,而且没有任何一家接得上。
+ *
+ * 只要还有一个人出得了牌,弃牌堆下一手就会重新长出来,洗一洗又有得摸,所以不算走不动。
+ */
+export function noWayForward(state: HueState): boolean {
+  if (!deckExhausted(state)) return false;
+  for (let i = 0; i < state.players.length; i++) {
+    if (legalPlays(state, i).length > 0) return false;
+  }
+  return true;
+}
+
+/** 这一局收在「牌用完了」的平局上:打完了,但没有赢家 */
+export function isDraw(state: HueState): boolean {
+  return state.finished && state.winner < 0;
+}
+
 export interface PlayResult {
   ok: boolean;
   /** 出不了时的一句温柔提示 */
@@ -444,6 +467,13 @@ export function drawFromDeck(state: HueState, player: number): DrawResult {
   const card = pullCard(state, player);
   state.moves++;
   if (!card) {
+    // 108 张全在大家手上、谁也接不上:再让多少手局面都不会动,收成平局
+    if (noWayForward(state)) {
+      state.finished = true;
+      state.winner = -1;
+      note(state, "牌都用完啦,谁也接不上,这一局算平局。");
+      return { card: null, playable: false };
+    }
     stepTurn(state, null);
     return { card: null, playable: false };
   }
