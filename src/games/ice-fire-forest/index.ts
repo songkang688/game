@@ -110,6 +110,26 @@ import {
   toggleSolo,
   type SoloState,
 } from "./solo";
+import { shade, withAlpha } from "../../art/kit/palette";
+import {
+  IFF_COLORS,
+  IFF_PARALLAX_DEPTHS,
+  IFF_PARALLAX_TOPS,
+  IFF_TINT_COLD,
+  IFF_TINT_WARM,
+  IffDustFx,
+  drawCloudBuddy,
+  drawControlRing,
+  drawForestFar,
+  drawForestMid,
+  drawForestNear,
+  drawHeroFigure,
+  drawMiniHero,
+  flagWave,
+  gemSparks,
+  lavaBubbles,
+  lavaSheenPhase,
+} from "./visual13";
 
 // ---------------------------------------------------------------------------
 // 画面常数(手感常量全部搬去 feel.ts 了,这里只剩「画多大」)
@@ -154,9 +174,7 @@ const PALETTES: Palette[] = [
   { bg0: "#FAE9F1", bg1: "#FEF4F8", wall: "#C68DAC", wallTop: "#DBA7C3", floor: "#FFFAFC", floorLine: "#F4DEE9" },
 ];
 
-const ICE_BODY = "#8FD3F4";
 const ICE_DARK = "#4FA8D8";
-const FIRE_BODY = "#FFB077";
 const FIRE_DARK = "#E8763C";
 const WATER_FILL = "#B9E4F7";
 const WATER_DEEP = "#7FC9EC";
@@ -1441,82 +1459,47 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     }
   }
 
+  /**
+   * 双主角(四·补二工序单):共用 `drawHeroFigure` 骨架、两套参数。
+   * 凛凛 = 水滴剪影 + 雪晶发饰 + 围巾;焰焰 = 火苗剪影 + 火簇发型 + 腰带 ——
+   * 16px 灰度下剪影 / 头饰 / 附件三通道都分得开。
+   * 判定格与半径没动:锚点仍是 1.2 的 `cy = y + cell*0.56`、`r = cell*0.33`。
+   */
   function drawHero(c: CanvasRenderingContext2D, hero: Hero, cell: number, now: number): void {
     const v = views[hero];
     const at = heroScreenPos(hero, now);
     const cloud = now < v.cloudUntil;
     const x = at.x * cell;
     const y = at.y * cell - at.lift;
-    const body = hero === "ice" ? ICE_BODY : FIRE_BODY;
     const dark = hero === "ice" ? ICE_DARK : FIRE_DARK;
     const flash = !reduced && now - v.flash < 400;
     const cx = x + cell / 2;
     const cy = y + cell * 0.56;
     const r = cell * 0.33;
 
-    if (!cloud) {
-      c.fillStyle = "rgba(90,80,130,.16)";
-      c.beginPath();
-      c.ellipse(cx, y + cell * 0.9, r * 0.9, r * 0.32, 0, 0, Math.PI * 2);
-      c.fill();
-    }
-
     if (cloud) {
-      // 小云朵:一团白色的圆,没有任何「撑不住」的画法,就是换个地方接着玩
-      c.fillStyle = "#FFFFFF";
-      c.strokeStyle = dark;
-      c.lineWidth = Math.max(1.5, cell * 0.05);
-      c.beginPath();
-      c.arc(cx - r * 0.5, cy, r * 0.5, 0, Math.PI * 2);
-      c.arc(cx + r * 0.45, cy, r * 0.42, 0, Math.PI * 2);
-      c.arc(cx, cy - r * 0.35, r * 0.55, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      c.fillStyle = dark;
-      dot(c, cx - r * 0.22, cy - r * 0.2, Math.max(1.2, r * 0.11));
-      dot(c, cx + r * 0.24, cy - r * 0.2, Math.max(1.2, r * 0.11));
+      // 借位小云朵:换个地方接着玩,没有任何「撑不住」的画法(判定与时序不变)
+      drawCloudBuddy(c, cx, cy, r, dark);
       return;
     }
 
-    c.fillStyle = flash ? "#FFFFFF" : body;
-    c.beginPath();
-    c.arc(cx, cy, r, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = dark;
-    c.lineWidth = Math.max(1.5, cell * 0.06);
-    c.stroke();
+    drawHeroFigure(c, {
+      kind: hero,
+      cx,
+      cy,
+      r,
+      nowMs: now,
+      reduced,
+      moving: v.glide.queue.length > 0,
+      jumping: at.lift > 0,
+      leanX: v.facing === DIR_RIGHT ? 1 : v.facing === DIR_LEFT ? -1 : 0,
+      flash,
+      shadow: true,
+    });
 
-    // 头顶的小尖:凛凛是雪花簇,焰焰是火苗
-    c.fillStyle = dark;
-    c.beginPath();
-    if (hero === "ice") {
-      c.moveTo(cx - r * 0.5, cy - r * 0.8);
-      c.lineTo(cx, cy - r * 1.6);
-      c.lineTo(cx + r * 0.5, cy - r * 0.8);
-    } else {
-      c.moveTo(cx - r * 0.45, cy - r * 0.85);
-      c.quadraticCurveTo(cx - r * 0.1, cy - r * 1.8, cx + r * 0.45, cy - r * 0.85);
-    }
-    c.closePath();
-    c.fill();
-
-    c.fillStyle = "#3B3358";
-    dot(c, cx - r * 0.34, cy - r * 0.1, Math.max(1.2, r * 0.13));
-    dot(c, cx + r * 0.34, cy - r * 0.1, Math.max(1.2, r * 0.13));
-    c.strokeStyle = "#3B3358";
-    c.lineWidth = Math.max(1, cell * 0.045);
-    c.beginPath();
-    c.arc(cx, cy + r * 0.18, r * 0.3, 0.15 * Math.PI, 0.85 * Math.PI);
-    c.stroke();
-
+    // 当前控制角色的虚线圈(功能件,数值与 1.2 一个不差)
     if (isControlled(soloState, hero)) {
-      c.strokeStyle = dark;
-      c.lineWidth = Math.max(2, cell * 0.07);
-      c.setLineDash([cell * 0.1, cell * 0.09]);
-      c.beginPath();
-      c.arc(cx, cy, r * 1.42, 0, Math.PI * 2);
-      c.stroke();
-      c.setLineDash([]);
+      drawControlRing(c, cx, cy, r, dark, cell);
     }
   }
 
