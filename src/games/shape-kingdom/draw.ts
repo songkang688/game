@@ -59,6 +59,36 @@ export function drawMetrics(viewportWidth: number, cols: number, rows: number): 
   return { board, unit, hit: Math.max(MIN_HIT, unit) };
 }
 
+export interface DotBoardMetrics extends DrawMetrics {
+  /** 整块板子的宽（含两端各半个热区） */
+  width: number;
+  /** 整块板子的高 */
+  height: number;
+}
+
+/**
+ * 点阵作图台的尺寸。和 `drawMetrics` 的差别只有一处，但那一处是致命的：
+ * 点阵两端各要探出半个热区，所以整块板子是 `unit * cols + hit` 宽。老算法先把
+ * 格子撑到可用宽度、再往外加一个热区，板子必然比屏幕宽；`.shk-boardwrap` 是 flex，
+ * 板子被压扁之后绝对定位的点还按原像素摆，最右边那一列就掉到板外去了
+ * （测试员 W5-B-03：7 列点阵的第 7 列在任何手机宽度上都够不着）。
+ * 这里反过来算：先定死「整块板子不许超过可用宽度」，再往回推格距与热区。
+ */
+export function dotBoardMetrics(viewportWidth: number, cols: number, rows: number): DotBoardMetrics {
+  const usable = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth - 40 : 320;
+  const board = Math.max(MIN_BOARD, Math.min(360, usable));
+  const span = Math.max(1, Math.max(cols, rows));
+  // 先试「热区正好等于一格」：这时整块板子刚好是 span + 1 个热区宽
+  let unit = board / (span + 1);
+  let hit = unit;
+  if (unit < MIN_HIT) {
+    // 格子挤到 44px 以下了：热区守住 44px 不缩，相邻热区允许重叠，落点精度交给吸附半径
+    hit = MIN_HIT;
+    unit = (board - hit) / span;
+  }
+  return { board, unit, hit, width: unit * cols + hit, height: unit * rows + hit };
+}
+
 export interface DotHit {
   r: number;
   c: number;
@@ -341,7 +371,7 @@ const DRAW_CSS = `
 .shk-ask{text-align:center;font-size:16px;font-weight:800;line-height:1.5;}
 .shk-boardwrap{display:flex;justify-content:center;}
 .shk-board{position:relative;background:#fff;border-radius:14px;box-shadow:0 3px 10px rgba(120,120,160,.18);
-  touch-action:none;}
+  touch-action:none;flex:none;}
 .shk-dot{position:absolute;border:none;background:transparent;padding:0;margin:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;font-family:inherit;}
 .shk-dot::before{content:"";width:10px;height:10px;border-radius:50%;background:#adb5bd;}
@@ -542,11 +572,11 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   // --- 三种作图台 ---
 
   function buildRectBoard(task: RectTask): void {
-    const m = drawMetrics(viewport(), task.cols, task.rows);
+    const m = dotBoardMetrics(viewport(), task.cols, task.rows);
     const board = document.createElement("div");
     board.className = "shk-board";
-    board.style.width = `${(m.unit * task.cols + m.hit).toFixed(0)}px`;
-    board.style.height = `${(m.unit * task.rows + m.hit).toFixed(0)}px`;
+    board.style.width = `${m.width.toFixed(0)}px`;
+    board.style.height = `${m.height.toFixed(0)}px`;
     const pad = m.hit / 2;
     const preview = document.createElement("div");
     preview.className = "shk-preview";
