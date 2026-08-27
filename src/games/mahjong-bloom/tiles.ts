@@ -146,8 +146,10 @@ export function parseTiles(text: string): number[] {
       continue;
     }
     if (ch === "m" || ch === "p" || ch === "s" || ch === "z" || ch === "f") {
+      // 点数越界的写法（例如 `9z`）直接忽略，免得算出一个不存在的 id
+      const top = ch === "z" ? 7 : ch === "f" ? 8 : 9;
       for (const d of digits) {
-        if (d >= 1) out.push(tileId({ suit: ch, rank: d }));
+        if (d >= 1 && d <= top) out.push(tileId({ suit: ch, rank: d }));
       }
     }
     digits = [];
