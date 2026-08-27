@@ -70,6 +70,7 @@ import {
   createVisualFx,
   doorSwingT,
   moveGlideT,
+  paintBoard,
   paintBush,
   paintDoor,
   paintHedgehog,
@@ -95,7 +96,7 @@ const REDUCED = (() => {
 const CSS = `
 .sn-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #EAFBE4, #FDF7E2); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
 .sn-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
-.sn-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #67A05B; box-shadow: 0 2px 6px rgba(120,180,110,.25); font-size: 14px; }
+.sn-badge { background: linear-gradient(180deg, #FFFFFF, #F3F9EC); border: 1px solid #DCE9CD; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #67A05B; box-shadow: 0 2px 6px rgba(120,180,110,.25); font-size: 14px; }
 .sn-badge.sn-shut { color: #C2456F; }
 .sn-canvas { width: 100%; border-radius: 16px; display: block; background: #F4FBEF; }
 .sn-pad { display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 48px 48px; gap: 6px; justify-content: center; margin-top: 10px; }
@@ -120,6 +121,12 @@ const CSS = `
 .snk-toggle { border: none; border-radius: 999px; padding: 9px 16px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #FFF0C9; color: #8A6A16; box-shadow: 0 3px 0 #E4CE92; min-height: 44px; }
 .snk-toggle:active { transform: translateY(2px); box-shadow: 0 1px 0 #E4CE92; }
 .snk-pace-tip { text-align: center; font-size: 13px; color: #6E8C5F; margin: -4px 0 10px; }
+.snk-beat { display: inline-flex; gap: 3px; margin: 0 5px 0 2px; vertical-align: middle; }
+.snk-beat i { width: 5px; height: 5px; border-radius: 50%; background: #C9A96E; animation: snkBeat 1.2s ease-in-out infinite; }
+.snk-beat i:nth-child(2) { animation-delay: .2s; }
+.snk-beat i:nth-child(3) { animation-delay: .4s; }
+@keyframes snkBeat { 0%, 60%, 100% { transform: translateY(0); opacity: .55; } 30% { transform: translateY(-3px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .snk-beat i { animation: none; } }
 .snk-pad-off .sn-pad { display: none; }
 .snk-hint { text-align: center; font-size: 13px; color: #8A6A16; min-height: 18px; margin-top: 4px; }
 `;
@@ -224,6 +231,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
     <style>${CSS}</style>
     <div class="sn-top">
       <span class="sn-badge sn-score">🍓 0 / ${cfg.target}</span>
+      <span class="sn-badge sn-len">🐛 3 节</span>
       <span class="sn-badge sn-star">⭐ 0</span>
       ${cfg.gate ? '<span class="sn-badge sn-gate">🚪 窄门开着</span>' : ""}
       ${opts.banner ? `<span class="sn-badge sn-banner">${opts.banner}</span>` : ""}
@@ -243,6 +251,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   const canvas = wrap.querySelector(".sn-canvas") as HTMLCanvasElement;
   const c2d = canvas.getContext("2d");
   const scoreEl = wrap.querySelector(".sn-score") as HTMLElement;
+  const lenEl = wrap.querySelector(".sn-len") as HTMLElement;
   const starEl = wrap.querySelector(".sn-star") as HTMLElement;
   const gateEl = wrap.querySelector(".sn-gate") as HTMLElement | null;
   const hintEl = wrap.querySelector(".snk-hint") as HTMLElement;
@@ -323,7 +332,8 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
 
   function draw(t: number): void {
     if (!c2d) return;
-    c2d.clearRect(0, 0, SIZE, SIZE);
+    // ① 棋盘双色格(明度差 4%) + 花园栅栏边框:整张底一次画满
+    paintBoard(c2d, GRID, CELL);
     // ② 花砖小路:绕圈那一圈串成小路,未踩灰花 / 踩过亮花 + 260ms 微光
     for (const key of ring) {
       const [x, y] = cellXY(key);
@@ -402,6 +412,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
 
   function renderTop(): void {
     scoreEl.textContent = `🍓 ${eaten} / ${cfg.target}`;
+    lenEl.textContent = `🐛 ${bodyLength()} 节`;
     starEl.textContent = snackIsStar
       ? `⭐ ${starsGot} · 还剩 ${starLeft(starTicks, starLimit)} 步`
       : `⭐ ${starsGot}`;
@@ -720,7 +731,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 
   function renderPace(): void {
     paceBtn.textContent = endlessPaceLabel(pace);
-    tip.textContent = endlessPaceTip(pace);
+    // 小鼓图标 + 点点节拍:节奏档只是读出来给孩子看,pace 数据一个字不动
+    tip.innerHTML = `🥁 <span class="snk-beat"><i></i><i></i><i></i></span>${endlessPaceTip(pace)}`;
   }
 
   // 换档从第 1 座重新开始：同一趟里改速度对成绩不公平
@@ -824,7 +836,8 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function renderPace(): void {
     paceBtn.textContent = paceLabel(pace);
-    paceTipEl.textContent = `${paceTip(pace)}（换档不影响三星标准）`;
+    // 小鼓图标 + 点点节拍:提示只换画法,速度数据只读
+    paceTipEl.innerHTML = `🥁 <span class="snk-beat"><i></i><i></i><i></i></span>${paceTip(pace)}（换档不影响三星标准）`;
   }
 
   paceBtn.addEventListener("click", () => {
