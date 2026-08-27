@@ -1753,11 +1753,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText(def.name, cssW / 2, cssH * 0.44);
-      g.font = `800 ${Math.round(13 * Math.max(0.85, scale))}px system-ui,sans-serif`;
+      // 开场横幅是功能文案,360px 档也不许低于 14px(W7R2 N-2,写法同门帘计数)
+      g.font = `800 ${Math.max(14, Math.round(13 * Math.max(0.85, scale)))}px system-ui,sans-serif`;
       g.fillStyle = "#9A7A5E";
       g.fillText(def.hint.slice(0, 24), cssW / 2, cssH * 0.56);
       // 开场顺带念一条卫生小知识(洗手 / 分类 / 少用一次性)
-      g.font = `700 ${Math.round(12 * Math.max(0.85, scale))}px system-ui,sans-serif`;
+      g.font = `700 ${Math.max(14, Math.round(12 * Math.max(0.85, scale)))}px system-ui,sans-serif`;
       g.fillStyle = "#A98F76";
       g.fillText(hygieneTip(def.index + def.chapterIndex), cssW / 2, cssH * 0.64);
     }
