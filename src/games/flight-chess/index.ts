@@ -65,6 +65,7 @@ import { KIT_PALETTE, makeCollectBurst } from "../../art/kit";
 import {
   contrailSVG,
   dieSVG,
+  grassSVG,
   hangarSVG,
   headingDeg,
   parachuteSVG,
@@ -143,6 +144,7 @@ export const CSS = `
 .fc-pad{position:absolute;display:flex;align-items:center;justify-content:center;font-size:var(--mt-control,14px);}
 .fc-pad svg{width:100%;height:100%;display:block;}
 .fc-line{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+.fc-decor{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
 .fc-token{position:absolute;display:flex;align-items:center;justify-content:center;border:none;padding:0;margin:0;
   background:transparent;font-family:inherit;font-size:inherit;line-height:1;cursor:pointer;z-index:5;
   transition:left ${HOP_MS}ms linear,top ${HOP_MS}ms linear;}
@@ -333,6 +335,34 @@ export function overlayArt(): string {
   return out;
 }
 
+/**
+ * 静态盘面装饰层(1.3 r1 · learner P3):四角机库内沿各 1 簇草地 +
+ * 中央塔台垫两侧 2 朵云(远小近大)。总计 6 件、全部静态低饱和,
+ * 位置只落在基地内角与塔台垫对角(全盘唯一不压 `.fc-cell` 与航线弧的空位);
+ * 整层 `aria-hidden` + `pointer-events:none`,零动画,reduced-motion 无涉。
+ */
+export function decorArt(): string {
+  // 四角基地的内角落(基地 6×6,内角在 5.1 / 9.9;格子从 6 或到 6 为止,不相交)
+  const grassSpots: Array<[number, number, Color]> = [
+    [5.1, 5.1, 0],
+    [9.9, 5.1, 1],
+    [9.9, 9.9, 2],
+    [5.1, 9.9, 3]
+  ];
+  let out = "";
+  for (const [x, y, c] of grassSpots) {
+    out += `<g class="fc-decor-grass" opacity=".35" transform="translate(${x} ${y}) scale(0.055)">${grassSVG(
+      COLOR_INFO[c].soft
+    )}</g>`;
+  }
+  // 塔台垫(6–9 × 6–9)的两个对角口袋,在塔台圆(r≈1.35)之外;远小近大
+  return (
+    out +
+    `<g class="fc-decor-cloud" opacity=".8" transform="translate(6.45 6.45) scale(0.045)">${cloudSVG()}</g>` +
+    `<g class="fc-decor-cloud" opacity=".8" transform="translate(8.55 8.55) scale(0.06)">${cloudSVG()}</g>`
+  );
+}
+
 /** 提示这一手能干什么（无障碍标签与提示条共用） */
 export function movePreview(s: FlightState, move: Move, dice: number): string {
   const res = move.kind === "takeOff" ? resolveTakeOff(s, move.plane) : resolveLanding(s, move.plane, dice);
@@ -493,6 +523,14 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     el.innerHTML = hangarSVG(c);
     board.appendChild(el);
   }
+
+  // 静态装饰层(草地簇 ×4 + 塔台旁云 ×2):盖在基地色块之上、格子与棋子之下
+  const decor = document.createElementNS(svgNS, "svg");
+  decor.setAttribute("class", "fc-decor");
+  decor.setAttribute("viewBox", `0 0 ${GRID} ${GRID}`);
+  decor.setAttribute("aria-hidden", "true");
+  decor.innerHTML = decorArt();
+  board.appendChild(decor);
 
   // 环线 52 格
   RING_XY.forEach((cell, ring) => {

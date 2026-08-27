@@ -16,6 +16,7 @@ import {
   cloudSVG,
   contrailSVG,
   dieSVG,
+  grassSVG,
   hangarSVG,
   headingDeg,
   parachuteSVG,
@@ -185,5 +186,26 @@ describe("座位进度与名次条", () => {
     expect(html.indexOf(COLOR_INFO[2].name)).toBeLessThan(html.indexOf(COLOR_INFO[0].name));
     expect(html.split("fc-rank-star").length - 1).toBe(1);
     expect(html).toContain("fc-plane-land");
+  });
+});
+
+describe("grassSVG · 盘面装饰草地簇(1.3 r1 P3)", () => {
+  it("三个叠圆土丘 + 两根短草,双色阶从底色派生", () => {
+    const g = grassSVG(COLOR_INFO[0].soft);
+    expect(g).toContain('class="fc-grass"');
+    expect(g.split("<circle").length - 1).toBe(3);
+    expect(g.split("<path").length - 1).toBe(1); // 两根草并进一条 path
+    expect(g).toContain('stroke-width="1.2"');
+    const colors = new Set([...g.matchAll(/(?:fill|stroke)="(#[0-9a-f]{6})"/g)].map((m) => m[1]));
+    expect(colors.size).toBeGreaterThanOrEqual(2); // 土丘 + 草叶两阶
+  });
+
+  it("四色底各派生一簇,输出互异且全是静态图形(无动画标签)", () => {
+    const outs = COLORS.map((c) => grassSVG(COLOR_INFO[c].soft));
+    expect(new Set(outs).size).toBe(4);
+    for (const g of outs) {
+      expect(g).not.toContain("<animate");
+      expect(g).not.toContain("animation");
+    }
   });
 });

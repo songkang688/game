@@ -318,6 +318,24 @@ export function cloudSVG(): string {
   );
 }
 
+/**
+ * 草地簇（1.3 r1 · learner P3 盘面装饰）：三个叠圆土丘 + 两根短草。
+ * `<g>` 形式与 cloudSVG 同款，交给装配层定位缩放；
+ * 色值从传入底色 shade 派生（低饱和，不抢格子与棋子）。
+ */
+export function grassSVG(color: string): string {
+  const mound = shade(color, 0.15);
+  const blade = shade(color, 0.3);
+  return (
+    `<g class="fc-grass">` +
+    `<circle cx="-4.6" cy="1.2" r="5" fill="${mound}"/>` +
+    `<circle cx="4.6" cy="1.2" r="5" fill="${mound}"/>` +
+    `<circle cx="0" cy="-0.6" r="7" fill="${mound}"/>` +
+    `<path d="M -2 -5.4 Q -2.6 -8.6 -4.4 -10 M 2.2 -5.8 Q 3 -9 5 -10.4" fill="none" stroke="${blade}" stroke-width="1.2" stroke-linecap="round"/>` +
+    `</g>`
+  );
+}
+
 /** 降落伞（被撞返航用）：色伞衣 + 伞骨分瓣 + 四根伞绳 */
 export function parachuteSVG(color: Color): string {
   const ink = COLOR_INFO[color].ink;

@@ -9,9 +9,9 @@
  * 5) 起飞尾迹、跳格影子分离、迭子 ×2 徽章、座位卡机位进度、终局烟花全接住。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BASE, COLOR_INFO, GOAL, baseXY, describePos, type Color } from "./board";
+import { BASE, COLOR_INFO, GOAL, HOME_XY, RING_XY, baseXY, describePos, type Color } from "./board";
 import { CLASSIC_RULES } from "./dice";
-import { byClass, install, type FakeEl, type Harness } from "./domStub";
+import { byClass, install, walk, type FakeEl, type Harness } from "./domStub";
 import {
   ARC_MS,
   BEAT_MS,
@@ -21,6 +21,7 @@ import {
   HOP_MS,
   SHOT_MS,
   createTable,
+  decorArt,
   pctOf,
   tokenXY,
   type OverResult,
@@ -293,5 +294,46 @@ describe("视觉契约 6 · 终局烟花", () => {
     expect(over).toBe(1);
     table.destroy();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("视觉契约 7 · 盘面静态装饰层(1.3 r1 P3)", () => {
+  it("装饰恰好 6 件(草地簇 ×4 + 塔台旁云 ×2),全部静态、透明度克制", () => {
+    const art = decorArt();
+    expect(art.split("fc-decor-grass").length - 1).toBe(4);
+    expect(art.split("fc-decor-cloud").length - 1).toBe(2);
+    expect(art).not.toContain("<animate");
+    // 草地簇 opacity ≤ 0.35;两朵云远小近大(0.045 < 0.06)
+    expect(art.split('class="fc-decor-grass" opacity=".35"').length - 1).toBe(4);
+    expect(art.indexOf("scale(0.045)")).toBeLessThan(art.indexOf("scale(0.06)"));
+  });
+
+  it("装饰坐标全部避开环线格 / 终点通道格(不压任何 .fc-cell)", () => {
+    const art = decorArt();
+    const cells = [...RING_XY, ...HOME_XY.flat()];
+    const spots = [...art.matchAll(/translate\(([\d.]+) ([\d.]+)\)/g)].map((m) => ({
+      x: Number(m[1]),
+      y: Number(m[2])
+    }));
+    expect(spots.length).toBe(6);
+    for (const s of spots) {
+      const clash = cells.some((c) => s.x >= c.x && s.x < c.x + 1 && s.y >= c.y && s.y < c.y + 1);
+      expect(clash, `装饰 (${s.x},${s.y}) 压到了格子`).toBe(false);
+    }
+  });
+
+  it("挂桌后装饰层真实存在:aria-hidden、盖在基地之上、格子之前", () => {
+    const h = setup();
+    const table = mountTable(h);
+    // svg 节点用 setAttribute("class") 设类,walk 按属性找
+    const layers: FakeEl[] = [];
+    walk(h.root, (el) => {
+      if (el.getAttribute("class") === "fc-decor") layers.push(el);
+    });
+    expect(layers).toHaveLength(1);
+    expect(layers[0].getAttribute("aria-hidden")).toBe("true");
+    expect(layers[0].innerHTML).toContain("fc-grass");
+    expect(layers[0].innerHTML).toContain("fc-cloud");
+    table.destroy();
   });
 });
