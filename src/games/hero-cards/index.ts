@@ -132,7 +132,8 @@ export const HC_CSS = `
   line-height:1.6;min-height:4.8em;max-height:8em;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line;}
 .hc-hand{display:flex;gap:6px;overflow-x:auto;padding:12px 4px 8px;scrollbar-width:none;}
 .hc-hand::-webkit-scrollbar{display:none;}
-.hc-card{flex:0 0 auto;width:60px;min-height:84px;border:none;border-radius:9px;background:#fff;cursor:pointer;
+/* 卡面米白纸感(1.3 r1 P8):纯白平涂换纵向纸色渐变,和暖色桌面不再生硬 */
+.hc-card{flex:0 0 auto;width:60px;min-height:84px;border:none;border-radius:9px;background:linear-gradient(180deg,#fffdf8,#f6efe2);cursor:pointer;
   position:relative;font-family:inherit;padding:0;
   box-shadow:0 2px 0 #E6D5C0,0 3px 7px rgba(200,150,130,.32);
   /* 扇形微倾:--fan/--arc 由 renderHand 按张数算,中间高两边低 */
