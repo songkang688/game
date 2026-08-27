@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { drawHeartPip, titleFitPx } from "./art";
+import { drawHeartPip, drawMiniStar, titleFitPx } from "./art";
 
 const indexSrc = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
 
@@ -106,5 +106,27 @@ describe("fix(visual-r1) P-07：局内 HUD / BOSS 血量图标画制化", () => 
   it("护盾读秒图标复用场上的护盾泡泡画法(不再 🛡 emoji)", () => {
     expect(indexSrc.includes("🛡 ${Math.ceil(shield)}s")).toBe(false);
     expect(indexSrc).toContain("drawShieldBadge(ctx, w - 12 - ctx.measureText(shieldTxt).width - 13, 70, 9, 1)");
+  });
+
+  it("drawMiniStar:满/空两态互异,都有描边,零 fillText", () => {
+    const filled = makeRec();
+    drawMiniStar(filled.ctx, 0, 0, 6, true);
+    const empty = makeRec();
+    drawMiniStar(empty.ctx, 0, 0, 6, false);
+    for (const r of [filled, empty]) {
+      expect(r.ops.filter((o) => o === "lineTo").length).toBeGreaterThanOrEqual(9); // 五角星路径
+      expect(r.ops).toContain("stroke");
+      expect(r.texts).toEqual([]);
+    }
+    // 满星金面 vs 空位灰白面:填色不同
+    const fillOf = (ops: string[]) => ops.filter((o) => o.startsWith("fillStyle="));
+    expect(fillOf(filled.ops)).not.toEqual(fillOf(empty.ops));
+  });
+
+  it("关卡地图 👑/⭐▫ 改画制:皇冠复用 drawCrown,星级走 drawMiniStar", () => {
+    expect(indexSrc.includes('ctx.fillText("👑"')).toBe(false);
+    expect(indexSrc.includes('s < got ? "⭐" : "▫"')).toBe(false);
+    expect(indexSrc).toContain("drawCrown(ctx, r * 1.4)");
+    expect(indexSrc).toContain("drawMiniStar(ctx, n.x + (s - 1) * r * 0.62");
   });
 });

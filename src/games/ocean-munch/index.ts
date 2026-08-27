@@ -151,7 +151,9 @@ import {
   stepSwirls,
   swirlPose,
   drawCollectStar,
+  drawCrown,
   drawHeartPip,
+  drawMiniStar,
   drawShieldBadge,
   titleFitPx,
 } from "./art";
@@ -3739,16 +3741,19 @@ export function mount(api: GameAPI): OceanMunchHandle {
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
         ctx.fillText(String(n.idx - base + 1), n.x, n.y);
         if (isBoss) {
-          ctx.font = `${Math.round(r * 0.62)}px sans-serif`;
-          ctx.fillText("👑", n.x, n.y - r * 0.95);
+          // BOSS 关皇冠改画制(visual-r1 修 P-07):复用对战头饰同款 drawCrown
+          ctx.save();
+          ctx.translate(n.x - r * 0.07, n.y + r * 0.2);
+          drawCrown(ctx, r * 1.4);
+          ctx.restore();
         } else if (def.gen) {
           ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
           ctx.fillText("⚔", n.x, n.y - r * 0.95);
         }
-        ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-        let starTxt = "";
-        for (let s = 0; s < 3; s++) starTxt += s < got ? "⭐" : "▫";
-        ctx.fillText(starTxt, n.x, n.y + r * 1.45);
+        // 星级改画制迷你星(visual-r1 修 P-07),空位是灰白描边星
+        for (let s = 0; s < 3; s++) {
+          drawMiniStar(ctx, n.x + (s - 1) * r * 0.62, n.y + r * 1.45, r * 0.26, s < got);
+        }
       }
     }
   }

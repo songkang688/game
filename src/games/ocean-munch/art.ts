@@ -719,6 +719,34 @@ export function drawShieldBadge(ctx: Ctx, x: number, y: number, r: number, alpha
   ctx.restore();
 }
 
+/** 关卡地图的迷你星(visual-r1 修 P-07):拿到=金星+暗金描边,空位=灰白描边星。 */
+export function drawMiniStar(ctx: Ctx, x: number, y: number, r: number, filled: boolean): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? r : r * 0.46;
+    const a = -Math.PI / 2 + (Math.PI * i) / 5;
+    const px = Math.cos(a) * rad;
+    const py = Math.sin(a) * rad;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  if (filled) {
+    ctx.fillStyle = CROWN_GOLD;
+    ctx.fill();
+    ctx.strokeStyle = CROWN_GOLD_DARK;
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(150,150,165,0.75)";
+  }
+  ctx.lineWidth = Math.max(1, r * 0.18);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * HUD / BOSS 血量的心心(圆心 x,y、半径 r;visual-r1 修 A 档 P-07):
  * 实心=粉系径向渐变 + 深粉描边 + 左上高光点;空心=灰白面 + 浅描边。
