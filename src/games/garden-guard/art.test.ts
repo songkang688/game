@@ -18,6 +18,7 @@ import {
   MONSTER_COLORS,
   NODE_DECOR,
   drawBarricade,
+  drawBulbIcon,
   drawBullet,
   drawCrownIcon,
   drawFootprintTrail,
@@ -25,9 +26,13 @@ import {
   drawHealHalo,
   drawHorizonStrip,
   drawLockIcon,
+  drawMapScrollIcon,
   drawMonsterSprite,
   drawNodeDecor,
+  drawPetalIcon,
+  drawShieldIcon,
   drawSwordsIcon,
+  drawThemeBadge,
   drawTileDecor,
   drawTileDoodad,
   drawTileGrass,
@@ -402,5 +407,61 @@ describe("garden-guard 1.3 · 子弹分型", () => {
     const t1 = rec((c) => drawBullet(c, "frost", 50, 50, 48, 0, 0.3)).join("|");
     expect(t0).not.toBe(t1);
     expect(rec((c) => drawBullet(c, "frost", 50, 50, 48, 0, 0)).join("|")).toBe(t0);
+  });
+});
+
+/* ---------------- ⑤ r1 监督修复:画布层 emoji 直出清零 ---------------- */
+
+describe("garden-guard 1.3 r1 · 画布 emoji 清零(浮字花瓣币/标题徽章/主题徽章)", () => {
+  it("index.ts 源码里 🌸/🌼/💡/🛡/🗺/⚡ 与 .emoji 插值全部清零", () => {
+    for (const glyph of ["🌸", "🌼", "💡", "🛡", "🗺", "⚡"]) {
+      expect(indexSrc.includes(glyph), `index.ts 里还有 ${glyph}`).toBe(false);
+    }
+    expect(indexSrc).not.toMatch(/\.emoji/);
+  });
+
+  it("花瓣币是含径向渐变的路径绘制(五瓣 + 花芯),零 fillText", () => {
+    const ops = rec((c) => drawPetalIcon(c, 50, 50, 8));
+    expect(ops.length).toBeGreaterThan(10);
+    expect(ops).toContain("radGrad");
+    expect(ops.filter((op) => op.startsWith("ellipse:")).length, "五片花瓣").toBe(5);
+    expect(ops.some((op) => op.startsWith("text:"))).toBe(false);
+  });
+
+  it("十三章主题徽章两两互异、全是路径绘制,零 fillText", () => {
+    const seqs = THEME_ORDER.map((t) => rec((c) => drawThemeBadge(c, 50, 50, 12, t)));
+    for (const [i, ops] of seqs.entries()) {
+      expect(ops.length, `${THEME_ORDER[i]} 徽章什么都没画`).toBeGreaterThan(3);
+      expect(ops.some((op) => op.startsWith("text:")), `${THEME_ORDER[i]} 还在贴字符`).toBe(false);
+    }
+    const joined = seqs.map((ops) => ops.join("|"));
+    for (let i = 0; i < joined.length; i++) {
+      for (let j = i + 1; j < joined.length; j++) {
+        expect(joined[i], `${THEME_ORDER[i]} 和 ${THEME_ORDER[j]} 的徽章一模一样`).not.toBe(joined[j]);
+      }
+    }
+  });
+
+  it("灯泡 / 盾牌 / 地图卷轴图标都是绘制资产:有填充有渐变,零 fillText", () => {
+    for (const [name, ops] of [
+      ["bulb", rec((c) => drawBulbIcon(c, 50, 50, 8))],
+      ["shield", rec((c) => drawShieldIcon(c, 50, 50, 12))],
+      ["mapScroll", rec((c) => drawMapScrollIcon(c, 50, 50, 12))],
+    ] as const) {
+      expect(ops.length, `${name} 什么都没画`).toBeGreaterThan(4);
+      expect(ops.some((op) => op.startsWith("fill@")), `${name} 没有填充`).toBe(true);
+      expect(ops.some((op) => op.startsWith("text:")), `${name} 还在贴字符`).toBe(false);
+    }
+    expect(rec((c) => drawShieldIcon(c, 50, 50, 12))).toContain("linGrad");
+    // 卷轴上的小路是虚线,别退化成实线
+    expect(rec((c) => drawMapScrollIcon(c, 50, 50, 12)).some((op) => op.startsWith("dash:"))).toBe(true);
+  });
+
+  it("徽章同参数两次序列一致(确定性,不会每帧乱闪)", () => {
+    for (const t of THEME_ORDER) {
+      const a = rec((c) => drawThemeBadge(c, 50, 50, 12, t)).join("|");
+      const b = rec((c) => drawThemeBadge(c, 50, 50, 12, t)).join("|");
+      expect(a).toBe(b);
+    }
   });
 });

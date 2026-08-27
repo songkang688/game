@@ -123,6 +123,7 @@ import {
   MONSTER_COLORS,
   NODE_DECOR,
   drawBarricade,
+  drawBulbIcon,
   drawBullet,
   drawCrownIcon,
   drawFace,
@@ -130,9 +131,13 @@ import {
   drawGoldStar,
   drawHorizonStrip,
   drawLockIcon,
+  drawMapScrollIcon,
   drawMonsterSprite,
   drawNodeDecor,
+  drawPetalIcon,
+  drawShieldIcon,
   drawSwordsIcon,
+  drawThemeBadge,
   drawTileDecor,
   drawTowerBase,
   drawTowerIcon,
@@ -298,6 +303,8 @@ interface Floaty {
   color: string;
   life: number;
   big: boolean;
+  /** 结尾补画一枚手绘花瓣币(替代 1.2 的花朵 emoji 字符)。 */
+  petal?: boolean;
 }
 
 interface Rect {
@@ -502,8 +509,30 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
-  function addFloat(x: number, y: number, text: string, color: string, big = false): void {
-    floats.push({ x, y, text, color, life: big ? 1.1 : 0.85, big });
+  function addFloat(x: number, y: number, text: string, color: string, big = false, petal = false): void {
+    floats.push({ x, y, text, color, life: big ? 1.1 : 0.85, big, petal });
+  }
+
+  /** 居中画「文字 + 花瓣币」:花瓣是绘制资产,不再贴花朵 emoji 字符。 */
+  function drawPetalLabel(cx0: number, cy0: number, text: string, pr: number): void {
+    const tw = ctx.measureText(text).width;
+    const sx = cx0 - (tw + 4 + pr * 2) / 2;
+    const prevAlign = ctx.textAlign;
+    ctx.textAlign = "left";
+    ctx.fillText(text, sx, cy0);
+    drawPetalIcon(ctx, sx + tw + 4 + pr, cy0, pr);
+    ctx.textAlign = prevAlign;
+  }
+
+  /** 居中画「手绘小徽章 + 标题」:徽章替代标题打头的 emoji 字符。 */
+  function drawIconTitle(cx0: number, cy0: number, text: string, ir: number, icon: (x: number, y: number) => void): void {
+    const tw = ctx.measureText(text).width;
+    const sx = cx0 - (tw + ir * 2 + 8) / 2;
+    icon(sx + ir, cy0);
+    const prevAlign = ctx.textAlign;
+    ctx.textAlign = "left";
+    ctx.fillText(text, sx + ir * 2 + 8, cy0);
+    ctx.textAlign = prevAlign;
   }
 
   // ---- 关卡流程 ----
@@ -571,7 +600,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     if (phase !== "prewave") return;
     const bonus = earlyCallBonus(phaseTimer, PREWAVE_SECONDS);
     petals += bonus;
-    addFloat(w / 2, oy + 46, `提前召唤 +${bonus} 🌸`, "#c47a2a", true);
+    addFloat(w / 2, oy + 46, `提前召唤 +${bonus}`, "#c47a2a", true, true);
     api.play("coin");
     phaseTimer = 0;
     startWave();
@@ -784,7 +813,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         if (ti >= 0) towers.splice(ti, 1);
         selectedTower = null;
         api.play("coin");
-        addFloat(px(t.col + 0.5), py(t.row + 0.5), `+${refund} 🌸`, "#e05a7a");
+        addFloat(px(t.col + 0.5), py(t.row + 0.5), `+${refund}`, "#e05a7a", false, true);
         return;
       }
     }
@@ -828,7 +857,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
             });
           }
         }
-        addFloat(px(col + 0.5), py(row), `拆掉啦!+${BARRICADE_SMASH_REWARD}🌸`, "#c47a2a");
+        addFloat(px(col + 0.5), py(row), `拆掉啦!+${BARRICADE_SMASH_REWARD}`, "#c47a2a", false, true);
       } else {
         barricades.set(key, barrHp - 1);
         api.play("tap");
@@ -977,7 +1006,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const bonus = comboPetalBonus(combo);
     if (bonus > 0) {
       petals += bonus;
-      addFloat(px(m.x), py(m.y) - 22, `连击 ×${combo} +${bonus}🌸`, "#b28ae8", true);
+      addFloat(px(m.x), py(m.y) - 22, `连击 ×${combo} +${bonus}`, "#b28ae8", true, true);
       api.play("coin");
     } else {
       api.play(spec.boss ? "win" : "coin");
@@ -1063,7 +1092,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (spawnIdx >= spawnList.length && monsters.length === 0) {
         const reward = run.waveReward(waveIdx);
         petals += reward;
-        addFloat(w / 2, oy + 40, `守住啦!+${reward} 🌸`, "#c47a2a", true);
+        addFloat(w / 2, oy + 40, `守住啦!+${reward}`, "#c47a2a", true, true);
         if (run.waveTotal !== null && waveIdx >= run.waveTotal - 1) {
           levelCleared();
         } else {
@@ -1191,7 +1220,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
           petals += 1;
           t.firedAnim = 1;
           api.play("coin");
-          addFloat(px(t.col + 0.5), py(t.row), "+1🌸", "#e0a030");
+          addFloat(px(t.col + 0.5), py(t.row), "+1", "#e0a030", false, true);
         }
         continue;
       }
@@ -1471,7 +1500,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 22px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌼 十三章主题战役", w / 2, 28);
+    drawIconTitle(w / 2, 28, "十三章主题战役", 12, (x, y) => drawThemeBadge(ctx, x, y, 12, "grass"));
     drawStarLine(
       w / 2,
       54,
@@ -1506,8 +1535,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       if (unlocked) {
-        ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
-        ctx.fillText(st.emoji, rect.x + 10, rect.y + ch * 0.3);
+        // 主题徽章是手绘小图,不再贴主题表里的 emoji 字符
+        drawThemeBadge(ctx, rect.x + 10 + ch * 0.16, rect.y + ch * 0.3, ch * 0.16, THEME_ORDER[i]);
       } else {
         // 没解锁的章:画一把小挂锁,不再贴 emoji
         drawLockIcon(ctx, rect.x + 10 + ch * 0.16, rect.y + ch * 0.28, ch * 0.16);
@@ -1544,7 +1573,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 22px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    drawIconTitle(w / 2, 28, `第${chapterIdx + 1}章 · ${st.name}`, 12, (x, y) =>
+      drawThemeBadge(ctx, x, y, 12, THEME_ORDER[chapterIdx]),
+    );
     drawStarLine(
       w / 2,
       54,
@@ -1698,7 +1729,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       // BOSS 失败给一句针对性提示,温柔不吓人(深橙 5.3:1,14px 小字要 4.5:1)
       ctx.fillStyle = "#a05914";
       ctx.font = "bold 14px sans-serif";
-      ctx.fillText(`💡 ${hint}`, w / 2, y + 116, Math.min(400, w - 60));
+      const maxW = Math.min(400, w - 60);
+      const tw = Math.min(ctx.measureText(hint).width, maxW);
+      drawBulbIcon(ctx, w / 2 - tw / 2 - 13, y + 116, 6.5);
+      ctx.fillText(hint, w / 2, y + 116, maxW);
       by = y + 160;
     }
     const bw2 = 132;
@@ -1715,13 +1749,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(
-      mode === "endless"
-        ? `🛡️ ${run.name}`
-        : `${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${run.name}`,
-      w / 2,
-      y + 44,
-    );
+    if (mode === "endless") {
+      drawIconTitle(w / 2, y + 44, run.name, 13, (x, yy) => drawShieldIcon(ctx, x, yy, 12));
+    } else {
+      ctx.fillText(`${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${run.name}`, w / 2, y + 44);
+    }
     ctx.fillStyle = "#5a5a6e";
     ctx.font = "16px sans-serif";
     // 1.1 冻结的前 99 关里还有几句写着「回血 / 半血 / 奶血」——数据带回归指纹不能动,
@@ -1733,7 +1765,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText(
       mode === "endless"
         ? `最好成绩 第 ${endlessBest} 波 · 点一下屏幕开始`
-        : `${st.name} · ${run.waveTotal} 波${wSpec ? ` · ${wSpec.emoji}${wSpec.name}` : ""} · 点一下屏幕开始`,
+        : `${st.name} · ${run.waveTotal} 波${wSpec ? ` · ${wSpec.name}` : ""} · 点一下屏幕开始`,
       w / 2,
       y + 130,
     );
@@ -1753,7 +1785,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.font = "bold 26px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌼 花园守卫", w / 2, 40);
+    drawIconTitle(w / 2, 40, "花园守卫", 14, (x, y) => drawThemeBadge(ctx, x, y, 14, "grass"));
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#7a6a52";
     ctx.fillText("在格子上种下小塔,别让小怪走到花朵那儿", w / 2, 70);
@@ -1765,10 +1797,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
     btnCampaign = { x: (w - bw2) / 2, y: y0, w: bw2, h: bh2 };
     btnEndless = { x: (w - bw2) / 2, y: y0 + bh2 + gap, w: bw2, h: bh2 };
 
-    const cards: Array<{ rect: Rect; emoji: string; title: string; sub: string; star?: boolean; bg: string; fg: string }> = [
+    const cards: Array<{ rect: Rect; icon: "map" | "shield"; title: string; sub: string; star?: boolean; bg: string; fg: string }> = [
       {
         rect: btnCampaign,
-        emoji: "🗺️",
+        icon: "map",
         title: `闯关 · ${LEVELS.length} 关`,
         sub: `${totalStars(progress)}/${LEVELS.length * 3} · 十三章主题战役`,
         star: true,
@@ -1777,7 +1809,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       },
       {
         rect: btnEndless,
-        emoji: "🛡️",
+        icon: "shield",
         title: "无尽 · 守到底",
         sub: endlessBest > 0 ? `最好成绩 第 ${endlessBest} 波` : "波次没有尽头,撑到第几波就是成绩",
         bg: "#e3f2ff",
@@ -1793,8 +1825,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.textAlign = "left";
-      ctx.font = `${Math.round(c.rect.h * 0.42)}px sans-serif`;
-      ctx.fillText(c.emoji, c.rect.x + 18, c.rect.y + c.rect.h / 2);
+      // 入口图标改手绘卷轴地图 / 小盾牌,不再贴 emoji 字符
+      const ir = c.rect.h * 0.19;
+      if (c.icon === "map") drawMapScrollIcon(ctx, c.rect.x + 18 + ir, c.rect.y + c.rect.h / 2, ir);
+      else drawShieldIcon(ctx, c.rect.x + 18 + ir, c.rect.y + c.rect.h / 2, ir);
       ctx.fillStyle = c.fg;
       ctx.font = "bold 20px sans-serif";
       ctx.fillText(c.title, c.rect.x + 18 + c.rect.h * 0.5, c.rect.y + c.rect.h * 0.38);
@@ -1826,7 +1860,11 @@ export function mount(api: GameAPI): { destroy: () => void } {
     );
     ctx.fillStyle = "#a05914";
     ctx.font = "bold 14px sans-serif";
-    ctx.fillText("💡 每 5 波换一位原型 BOSS,记住它怕什么就好办了", w / 2, y + 118, Math.min(400, w - 60));
+    const tipTxt = "每 5 波换一位原型 BOSS,记住它怕什么就好办了";
+    const tipMaxW = Math.min(400, w - 60);
+    const tipW = Math.min(ctx.measureText(tipTxt).width, tipMaxW);
+    drawBulbIcon(ctx, w / 2 - tipW / 2 - 13, y + 118, 6.5);
+    ctx.fillText(tipTxt, w / 2, y + 118, tipMaxW);
     const bw2 = 132;
     btnMap = { x: w / 2 - bw2 - 10, y: y + 158, w: bw2, h: 44 };
     btnRetry = { x: w / 2 + 10, y: y + 158, w: bw2, h: 44 };
@@ -2092,11 +2130,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.font = "bold 14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(
-        canUp ? `⬆升级 ${upgradeCost(t.kind, t.level)}🌸` : "已满级",
-        panelUpgrade.x + bw2 / 2,
-        panelUpgrade.y + 18,
-      );
+      if (canUp) drawPetalLabel(panelUpgrade.x + bw2 / 2, panelUpgrade.y + 18, `升级 ${upgradeCost(t.kind, t.level)}`, 6.5);
+      else ctx.fillText("已满级", panelUpgrade.x + bw2 / 2, panelUpgrade.y + 18);
       ctx.fillStyle = "#ffe3ec";
       ctx.strokeStyle = "#ff9eb5";
       ctx.beginPath();
@@ -2104,7 +2139,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#e05a7a";
-      ctx.fillText(`卖 +${sellRefund(t.kind, t.level)}🌸`, panelSell.x + bw2 / 2, panelSell.y + 18);
+      drawPetalLabel(panelSell.x + bw2 / 2, panelSell.y + 18, `卖 +${sellRefund(t.kind, t.level)}`, 6.5);
     }
 
     for (const f of floats) {
@@ -2113,7 +2148,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.font = f.big ? "bold 22px sans-serif" : "bold 16px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(f.text, f.x, f.y);
+      if (f.petal) drawPetalLabel(f.x, f.y, f.text, f.big ? 9 : 7);
+      else ctx.fillText(f.text, f.x, f.y);
       ctx.globalAlpha = 1;
     }
 
@@ -2148,7 +2184,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     drawButton(btnBack, mode === "endless" ? "◀ 首页" : "◀ 地图", "#f0f0f5", "#5a5a6e");
 
     const levelInTheme = levelIdx - themeOffset(chapterIdx) + 1;
-    const hudWeather = run.weather && run.weather !== "clear" ? ` ${WEATHER_INFO[run.weather].emoji}` : "";
+    // 天气改用名字上 HUD:emoji 换台设备就变脸,两个字哪儿都长一样
+    const hudWeather = run.weather && run.weather !== "clear" ? ` ${WEATHER_INFO[run.weather].name}` : "";
     const layout = hudLayout(
       {
         hearts,
@@ -2226,7 +2263,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.font = "bold 14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${TOWER_INFO[kind].cost}🌸`, rect.x + rect.w / 2, rect.y - lift + rect.h - 11);
+      drawPetalLabel(rect.x + rect.w / 2, rect.y - lift + rect.h - 11, `${TOWER_INFO[kind].cost}`, 6.5);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -2245,7 +2282,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 说明条:平时说手里这座塔是干嘛的,点错格子时临时换成原因
     const info = TOWER_INFO[selectedCard];
     const showToast = toastTimer > 0;
-    const tip = showToast ? toastText : `${info.name} ${info.cost}🌸 · ${info.desc}`;
+    const tip = showToast ? toastText : `${info.name} ${info.cost} 花瓣 · ${info.desc}`;
     ctx.font = "14px sans-serif";
     const tipW = Math.min(w - 16, ctx.measureText(tip).width + 24);
     ctx.fillStyle = showToast ? "rgba(255,238,238,0.96)" : "rgba(255,255,255,0.92)";
@@ -2371,12 +2408,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     const bonus = earlyCallBonus(phaseTimer, PREWAVE_SECONDS);
     const bw2 = Math.min(220, boxW);
     btnEarly = { x: (w - bw2) / 2, y: y0 + boxH + 10, w: bw2, h: 44 };
-    drawButton(btnEarly, `⚡ 提前召唤 +${bonus}🌸`, "#ffd868", "#7a5a1a");
+    drawButton(btnEarly, `提前召唤 +${bonus} 花瓣`, "#ffd868", "#7a5a1a");
     ctx.fillStyle = "#8a8a9a";
     ctx.font = "12px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(
-      `还有 ${Math.max(0, phaseTimer).toFixed(1)} 秒布阵 · 越早召唤给得越多(最多 ${EARLY_CALL_MAX_BONUS}🌸)`,
+      `还有 ${Math.max(0, phaseTimer).toFixed(1)} 秒布阵 · 越早召唤给得越多(最多 ${EARLY_CALL_MAX_BONUS} 花瓣)`,
       w / 2,
       btnEarly.y + 56,
     );
