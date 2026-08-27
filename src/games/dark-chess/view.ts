@@ -37,6 +37,8 @@ export const CSS = `
 .dc-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#7a5a34;
   box-shadow:0 2px 6px rgba(160,130,90,.25);white-space:nowrap;}
 .dc-chip.dc-hot{background:#FFE9DC;color:#b4501f;}
+/* 和棋倒数:摆出来就说明快判和了,配色比普通提示更抢眼一点 */
+.dc-chip.dc-quiet{background:#EDE7FF;color:#5b46a8;}
 .dc-note{text-align:center;min-height:20px;font-size:13px;font-weight:700;color:#795b3a;margin-top:8px;line-height:1.5;}
 .dc-count{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
 .dc-count span{font-size:12px;font-weight:800;border-radius:999px;padding:3px 8px;background:#fff8ec;color:#8a6a40;}

@@ -15,7 +15,16 @@ import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../
 import { TIERS, TIER_LABELS, chooseAction, type Tier } from "./ai";
 import guide from "./guide";
 import { CHAPTERS, endlessPlan, planFor, rateLevel, setupFor, type LevelPlan } from "./levels";
-import { applyAction, legalActions, newGame, status, type Action, type GameState, type Side } from "./rules";
+import {
+  QUIET_LIMIT,
+  applyAction,
+  legalActions,
+  newGame,
+  status,
+  type Action,
+  type GameState,
+  type Side,
+} from "./rules";
 import { CSS as BOARD_CSS, createBoard, type BoardHandle } from "./view";
 
 const SHELL_CSS = `
@@ -39,6 +48,9 @@ const SHELL_CSS = `
 `;
 
 const AI_DELAY_MS = 520;
+
+/** 距离判和还剩这么多手时,顶栏才把倒数摆出来 */
+export const QUIET_WARN_AT = 8;
 
 export interface TableResult {
   /** 朵朵赢了没有 */
@@ -77,7 +89,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   labelChip.textContent = opts.label;
   const plyChip = document.createElement("span");
   plyChip.className = "dc-chip";
-  top.append(turnChip, labelChip, plyChip);
+  const quietChip = document.createElement("span");
+  quietChip.className = "dc-chip dc-quiet";
+  quietChip.hidden = true;
+  top.append(turnChip, labelChip, plyChip, quietChip);
   wrap.appendChild(top);
 
   const boardHost = document.createElement("div");
@@ -115,6 +130,12 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     turnChip.textContent = paused ? "已暂停" : `轮到${who}`;
     turnChip.className = state.turn === "duo" ? "dc-chip dc-turn dc-hot" : "dc-chip dc-turn";
     plyChip.textContent = `第 ${state.plies + 1} 手`;
+    // 连着 QUIET_LIMIT 手不吃不翻就判和。快到线了才把倒数摆出来 ——
+    // 一上来就挂个计数会喧宾夺主,可到了跟前不说一声,孩子只会觉得「怎么突然就结束了」。
+    const left = QUIET_LIMIT - state.quiet;
+    const near = left <= QUIET_WARN_AT && status(state).kind === "playing";
+    quietChip.hidden = !near;
+    if (near) quietChip.textContent = `再 ${left} 手不吃不翻就算和`;
   }
 
   function finish(): void {
