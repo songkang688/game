@@ -719,6 +719,22 @@ export function drawShieldBadge(ctx: Ctx, x: number, y: number, r: number, alpha
   ctx.restore();
 }
 
+/**
+ * 顶部大标题的自适应字号(visual-r1 修 A 档 P-01):
+ * 从 basePx 逐级往下试,直到 measure(px) 宽度塞得进 avail 或到 minPx 兜底。
+ * 纯函数,measure 由调用方给(实机是 ctx.measureText,测试给线性桩)。
+ */
+export function titleFitPx(
+  measure: (px: number) => number,
+  basePx: number,
+  minPx: number,
+  avail: number,
+): number {
+  let px = basePx;
+  while (px > minPx && measure(px) > avail) px -= 1;
+  return px;
+}
+
 /** BOSS 进场暗角:四边压暗一圈,力度由 `bossEntrance().vignette` 给。 */
 export function drawVignette(ctx: Ctx, w: number, h: number, strength: number): void {
   if (strength <= 0) return;

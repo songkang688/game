@@ -152,6 +152,7 @@ import {
   swirlPose,
   drawCollectStar,
   drawShieldBadge,
+  titleFitPx,
 } from "./art";
 import type { Headdress, Swirl } from "./art";
 import { save } from "../../engine/save";
@@ -2635,11 +2636,11 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.fillRect(0, 0, w, h);
 
     ctx.fillStyle = "#1f4a72";
-    ctx.font = "bold 24px sans-serif";
+    // 360 窄屏标题会伸到右上的图鉴徽章(x 从 w-120 起)底下,交给避让工具画
+    fitTitle("🐟 海底大胃王", 28, 24, 8, w - 128);
+    ctx.font = "14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🐟 海底大胃王", w / 2, 28);
-    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#2a5a86";
     ctx.fillText(`吃比自己小的鱼,越吃越大 · 最深 ${endlessBest} 米`, w / 2, 52);
 
@@ -2714,10 +2715,8 @@ export function mount(api: GameAPI): OceanMunchHandle {
     btnBack = touchArea(backFace);
     drawButton(backFace, "◀ 返回", "rgba(255,255,255,0.9)", "#5a5a6e");
     ctx.fillStyle = "#a03a72";
-    ctx.font = "bold 22px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("⚖️ 限时谁更胖", w / 2, 30);
+    // 320 宽下标题左缘会蹭到「◀ 返回」,同一把避让尺(P-01 同类项)
+    fitTitle("⚖️ 限时谁更胖", 30, 22, 92, w - 8);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#6a4a6e";
     ctx.fillText(`${VERSUS_SECONDS} 秒同池抢食,时间到谁更胖谁赢`, w / 2, 56);
@@ -3566,6 +3565,29 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
   }
 
+  /**
+   * 顶部大标题避让(visual-r1 修 A 档 P-01):优先整幅居中;
+   * basePx 下会压到 [left,right] 之外的按钮/徽章时,改在空档内居中并自动缩字号
+   * (不小于 15px),fillText 的 maxWidth 再兜一层底。宽屏画面与原来一个像素不差。
+   */
+  function fitTitle(text: string, y: number, basePx: number, left: number, right: number): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `bold ${basePx}px sans-serif`;
+    const tw = ctx.measureText(text).width;
+    if (w / 2 - tw / 2 >= left + 6 && w / 2 + tw / 2 <= right - 6) {
+      ctx.fillText(text, w / 2, y);
+      return;
+    }
+    const avail = Math.max(60, right - left - 12);
+    const px = titleFitPx((p) => {
+      ctx.font = `bold ${p}px sans-serif`;
+      return ctx.measureText(text).width;
+    }, basePx, 15, avail);
+    ctx.font = `bold ${px}px sans-serif`;
+    ctx.fillText(text, (left + right) / 2, y, avail);
+  }
+
   function drawThemes(): void {
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, "#c9edff");
@@ -3574,17 +3596,22 @@ export function mount(api: GameAPI): OceanMunchHandle {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = "#2a6a9a";
+    // 标题左有「◀ 首页」右有图鉴徽章:两钮之间塞不下 24px 标题时,
+    // 整个标题块下移到按钮行下面(visual-r1 修 P-01 同类项,窄屏专用,宽屏原样)
+    const themesTitle = "🐟 海底大胃王 · 九大海域";
     ctx.font = "bold 24px sans-serif";
+    const stacked = ctx.measureText(themesTitle).width > w - 126 - 90 - 12;
+    ctx.fillStyle = "#2a6a9a";
+    if (stacked) fitTitle(themesTitle, 58, 24, 8, w - 8);
+    else fitTitle(themesTitle, 26, 24, 90, w - 126);
+    ctx.font = "14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🐟 海底大胃王 · 九大海域", w / 2, 26);
-    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#3a5a7e";
     ctx.fillText(
       `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选海域,再选关卡`,
       w / 2,
-      52,
+      stacked ? 82 : 52,
     );
 
     const dexFace: Rect = { x: w - 118, y: 8, w: 110, h: 30 };
@@ -3599,7 +3626,7 @@ export function mount(api: GameAPI): OceanMunchHandle {
     const rows = Math.ceil(ZONE_ORDER.length / cols);
     const pad = 10;
     const x0 = Math.max(10, w * 0.06);
-    const y0 = 70;
+    const y0 = stacked ? 96 : 70;
     const cw = (w - x0 * 2 - pad * (cols - 1)) / cols;
     const ch = Math.min(96, (h - y0 - 16 - pad * (rows - 1)) / rows);
     for (let i = 0; i < ZONE_ORDER.length; i++) {
