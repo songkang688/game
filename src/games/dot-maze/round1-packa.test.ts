@@ -104,7 +104,23 @@ function css(): string {
 function hitHeight(sheet: string, selector: string): number {
   const m = new RegExp(`\\${selector}\\{([^}]*)\\}`).exec(sheet);
   if (!m) return Number.NaN;
-  const body = m[1];
+  return bodyHeight(m[1]);
+}
+
+/** 同一个选择器写了好几遍时（媒体查询会覆盖前面的），最后那一条说了算 */
+function lastHitHeight(sheet: string, selector: string): number {
+  const re = new RegExp(`\\${selector}\\{([^}]*)\\}`, "g");
+  let height = Number.NaN;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(sheet)) !== null) {
+    const h = bodyHeight(m[1]);
+    if (!Number.isNaN(h)) height = h;
+  }
+  return height;
+}
+
+/** 一条规则体算下来能点多高（显式 height 优先，否则按 padding×2 + 字号×1.2 估） */
+function bodyHeight(body: string): number {
   const explicit = /(?:^|;)\s*(?:min-)?height:\s*([\d.]+)px/.exec(body);
   if (explicit) return Number(explicit[1]);
   const pad = /(?:^|;)\s*padding:\s*([\d.]+)px/.exec(body);
@@ -344,15 +360,23 @@ describe("PA-DM · 360px 热区与卡片文案", () => {
     handle.destroy();
   });
 
-  it("【已知问题】换个玩法用的 .dmz-btn 只有 33px 出头，够不到 44px", async () => {
+  it("换个玩法 / 回选关用的 .dmz-btn 也够得到 44px", async () => {
     const { mount } = await import("./index");
     const handle = mount(fakeApi().api);
     byText("无尽迷宫")!.dispatch("click");
     expect(byText("换个玩法"), "退回菜单的按钮不见了").not.toBeNull();
-    const h = hitHeight(css(), ".dmz-btn");
-    // 应有行为：≥ 44。现状：padding 8px + 14px 字 ≈ 32.8px。
-    expect(h).toBeLessThan(44);
-    expect(h).toBeCloseTo(32.8, 1);
+    expect(hitHeight(css(), ".dmz-btn"), "换个玩法钮的热区又缩回去了").toBeGreaterThanOrEqual(44);
+    handle.destroy();
+  });
+
+  it("三类热区按「后面的规则说了算」算出来都还是 ≥ 44px", async () => {
+    // 兜底：以后谁往 @media 里补一条把高度压小的规则，这一条会当场变红
+    const { mount } = await import("./index");
+    const handle = mount(fakeApi().api);
+    const sheet = css();
+    for (const sel of [".dmz-key", ".dmz-mode", ".dmz-btn"]) {
+      expect(lastHitHeight(sheet, sel), `${sel} 最终生效的高度不到 44px`).toBeGreaterThanOrEqual(44);
+    }
     handle.destroy();
   });
 

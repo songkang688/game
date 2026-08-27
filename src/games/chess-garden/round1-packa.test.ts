@@ -18,6 +18,8 @@
 // `mount` 必须走顶部静态 import 并在文件里被真正用到：这样 level99 → dialogs → audio
 // 那条链会在装 DOM 桩之前、`document` 还是 undefined 的时候求值完，
 // 不会撞上桩里没实现的 `document.addEventListener`。
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mount } from "./index";
 import { BLACK, WHITE, parseSquare } from "./board";
@@ -84,6 +86,18 @@ function press(key: string): void {
 
 function squareAt(name: string): El {
   return dom.root.byClass("cg-sq")[boardOrder(false).indexOf(parseSquare(name))];
+}
+
+/** 这一款棋盘那一层的样式在公共 `styles.css` 里，热区得直接读文件量 */
+const SHEET = readFileSync(fileURLToPath(new URL("../../styles.css", import.meta.url)), "utf8");
+
+/** 取某个选择器最后一次出现的规则体（后面的规则会覆盖前面的） */
+function sheetRule(selector: string): string {
+  const re = new RegExp(`(?:^|[},])\\s*\\${selector}\\s*\\{([^}]*)\\}`, "gm");
+  let body = "";
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(SHEET)) !== null) body = m[1];
+  return body;
 }
 
 /* ------------------------------------------------------------------ */
@@ -156,6 +170,37 @@ describe("PA-CG · 第 1 / 100 / 188 关", () => {
         }
       }
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* R2-PA-2 · 360px 上工具条的热区                                        */
+/* ------------------------------------------------------------------ */
+
+describe("R2-PA-2 · 360px 上棋盘工具条的热区", () => {
+  it("💡 提示 / 🔄 翻转棋盘 / 🏳️ 认输 三个钮都 ≥ 44px", () => {
+    const body = sheetRule(".cg-tool");
+    expect(body, "styles.css 里找不到 .cg-tool").not.toBe("");
+    const m = /(?:^|;)\s*min-height:\s*([\d.]+)px/.exec(body);
+    expect(m, ".cg-tool 没有 min-height").not.toBeNull();
+    expect(Number((m as RegExpExecArray)[1]), "工具条的热区又缩回 44px 以下了").toBeGreaterThanOrEqual(44);
+  });
+
+  it("长高之后字仍然是竖直居中的，版式不塌", () => {
+    const body = sheetRule(".cg-tool");
+    expect(body).toMatch(/align-items:\s*center/);
+    expect(body).toMatch(/justify-content:\s*center/);
+  });
+
+  it("三个钮在界面上真的挂着 .cg-tool，量的就是它们", () => {
+    const { handle } = duoBoard(undefined, { allowFlip: true, allowResign: true });
+    const tools = dom.root.byClass("cg-tool");
+    expect(tools.map((t) => t.textContent).filter((t) => t.length > 0)).toEqual([
+      "💡 提示：开",
+      "🔄 翻转棋盘",
+      "🏳️ 认输",
+    ]);
+    handle.destroy();
   });
 });
 

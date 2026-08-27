@@ -1743,8 +1743,11 @@ html {
 .cg-tool {
   border: none;
   border-radius: 999px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: inherit;
   font-size: 13px;
   font-weight: 800;

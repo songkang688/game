@@ -79,7 +79,8 @@ const CSS = `
 .dmz-mode.dmz-mode-c{background:linear-gradient(180deg,#4fa77c,#3d8c66);box-shadow:0 4px 0 #2e6d4f;}
 .dmz-mode.dmz-mode-d{background:linear-gradient(180deg,#c05490,#a5457a);box-shadow:0 4px 0 #843761;}
 .dmz-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
-.dmz-btn{border:none;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:800;cursor:pointer;
+.dmz-btn{border:none;border-radius:999px;padding:8px 14px;min-height:44px;font-size:14px;font-weight:800;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffd9;color:#6b5a90;box-shadow:0 3px 0 rgba(120,90,160,.22);}
 .dmz-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .dmz-btn[aria-pressed="true"]{background:#ffe6b8;color:#7a5520;}
