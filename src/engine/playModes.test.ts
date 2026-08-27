@@ -161,3 +161,20 @@ describe("中文说明与文案", () => {
     expect(modeButtonLabel("endless")).toBe("♾️ 无尽");
   });
 });
+
+describe("从引擎统一出口拿得到", () => {
+  it("每个公开符号都能从 ../../engine 导入,而且是同一个函数", async () => {
+    const barrel = (await import("./index")) as unknown as Record<string, unknown>;
+    const mod = (await import("./playModes")) as unknown as Record<string, unknown>;
+    for (const key of Object.keys(mod)) {
+      expect(barrel[key], `engine/index.ts 漏了 ${key}`).toBe(mod[key]);
+    }
+  });
+
+  it("出口给的是能直接用的东西,不是名字对上就算", async () => {
+    const barrel = await import("./index");
+    const c = barrel.compatFromMeta({ modes: ["campaign", "endless"], levels: 188 });
+    expect(barrel.availableModes(c)).toEqual(["campaign", "endless"]);
+    expect(barrel.modeButtonLabel("endless")).toBe("♾️ 无尽");
+  });
+});

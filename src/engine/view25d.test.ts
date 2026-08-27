@@ -272,3 +272,22 @@ describe("prefersReducedMotion", () => {
     expect(respectReducedMotion(cam, prefersReducedMotion(() => ({ matches: false }))).kind).toBe("perspective");
   });
 });
+
+describe("从引擎统一出口拿得到", () => {
+  it("每个公开符号都能从 ../../engine 导入,而且是同一个函数", async () => {
+    const barrel = (await import("./index")) as unknown as Record<string, unknown>;
+    const mod = (await import("./view25d")) as unknown as Record<string, unknown>;
+    for (const key of Object.keys(mod)) {
+      expect(barrel[key], `engine/index.ts 漏了 ${key}`).toBe(mod[key]);
+    }
+  });
+
+  it("透视数学从出口拿到的也是同一套结果", async () => {
+    const barrel = await import("./index");
+    const cam = barrel.defaultCamera();
+    const near = barrel.project(cam, 0, 0, 0, 320, 480);
+    const far = barrel.project(cam, 0, 0, 40, 320, 480);
+    expect(far.scale).toBeLessThan(near.scale);
+    expect(barrel.prefersReducedMotion(() => ({ matches: true }))).toBe(true);
+  });
+});
