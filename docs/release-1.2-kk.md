@@ -59,6 +59,7 @@
 
 - **验证的提交：`f91d08c`**（三个档 A / B / C 全部合到一起之后的分支尖端）。
   分叉起点是 `69d6c31`，即 `origin/game-1.2` 当时的 HEAD。
+  它之后只有本文件与 README 的文字改动，一行代码没动，产物与这次记录一致。
 - 构建产物落在 `dist/`：`index.html`、`assets/`、`icons/`、`manifest.webmanifest`、
   `sw.js`、`workbox-<hash>.js`。`dist/` 不进 git。
 - 生成的 `dist/manifest.webmanifest` 已确认写着 `"name":"鸭梨康康"`。
