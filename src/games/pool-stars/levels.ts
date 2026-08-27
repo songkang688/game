@@ -601,16 +601,20 @@ export function winLine(shotsUsed: number): string {
 export const ENCOURAGE = "这一杆差一点点，换个角度再来。";
 
 /**
- * reason 自己就已经把「再试一次」说完了的收尾说法。
+ * `ENCOURAGE` 其实是两件事拼起来的：前半句「这一杆差一点点」是**说这一杆的成色**，
+ * 后半句「换个角度再来。」是**请他再来一次**。reason 自带哪一半，就只补另一半。
  *
- * 监督修复员那一版只拦住了「这一杆差一点点」，可另外两条 reason 也自带收尾：
- * 「母球掉袋了，这一杆不算数，换个角度再来。」再接一遍会把**「换个角度再来」**说两次，
- * 「进了，可惜不是指定的那个袋，再瞄一次。」接上之后也是催两遍再来一次。
- * 三条一起拦，不是回滚那一版，是把同一条闸拉宽。
+ * 之前这两件事是混在一张表里数的，于是
+ * 「母球先碰到的不是自己那一组，这一杆差一点点。」只因为带了前半句就被整句放行，
+ * 结算浮层上这一条成了六条里唯一一条**没有一句「再来」**的收场话。
  */
-const SELF_CLOSING = ["这一杆差一点点", "换个角度再来", "再瞄一次"];
+const HAS_VERDICT = "这一杆差一点点";
+const INVITES = ["换个角度再来", "再瞄一次"];
+const INVITE = "换个角度再来。";
 
 export function loseLine(reason: string): string {
-  if (SELF_CLOSING.some((s) => reason.includes(s))) return reason.endsWith("。") ? reason : `${reason}。`;
+  const tail = reason.endsWith("。") ? reason : `${reason}。`;
+  if (INVITES.some((s) => reason.includes(s))) return tail;
+  if (reason.includes(HAS_VERDICT)) return `${tail}${INVITE}`;
   return `${reason}${ENCOURAGE}`;
 }
