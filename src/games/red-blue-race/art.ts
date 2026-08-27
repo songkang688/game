@@ -5,8 +5,27 @@
  * 以及全部 `--rbr-` 设计 token。判定、结算、速度演算一个字都不在这个文件里。
  * 全部函数输出确定、node 环境可直接断言;同页多实例用 `uid` 隔离渐变 id。
  */
-import { KIT_PALETTE, shade, tint } from "../../art/kit/palette";
+import { shade as mixPct } from "../../art/kit/palette";
 import type { ObstacleType } from "./levels";
+
+/** 暗部推导:向黑靠 amount(0..1)。公共 palette 的 shade 是百分比语义,这里包一层 */
+function shade(hex: string, amount: number): string {
+  return mixPct(hex, -amount * 100);
+}
+
+/** 高光推导:向白靠 amount(0..1) */
+function tint(hex: string, amount: number): string {
+  return mixPct(hex, amount * 100);
+}
+
+/** 本款专属的粉彩补充色(公共 PASTEL 没有的集中在这里,不散落) */
+const RACE_PASTEL = {
+  candyPink: "#F8B7CD",
+  lemon: "#FFE28A",
+  mint: "#A8E6C3",
+  starGold: "#F5C445",
+  ink: "#4A4458"
+} as const;
 
 /**
  * 设计 token(四·补一):色板 + 动效时长全部集中在这里,
@@ -41,7 +60,7 @@ function cleanUid(uid: string): string {
   return uid.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
-const INK = KIT_PALETTE.ink;
+const INK = RACE_PASTEL.ink;
 
 /** 水坑:椭圆水洼 + 反光高光 + 溅起的两滴水 */
 function puddleSvg(): string {
@@ -89,9 +108,9 @@ function starSvg(uid: string): string {
   return (
     `<svg viewBox="0 0 34 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" data-ob="star">` +
     `<defs><linearGradient id="${uid}-star" x1="0" y1="0" x2="0" y2="1">` +
-    `<stop offset="0" stop-color="${tint(KIT_PALETTE.starGold, 0.35)}"/><stop offset="1" stop-color="${KIT_PALETTE.starGold}"/>` +
+    `<stop offset="0" stop-color="${tint(RACE_PASTEL.starGold, 0.35)}"/><stop offset="1" stop-color="${RACE_PASTEL.starGold}"/>` +
     `</linearGradient></defs>` +
-    `<polygon points="${pts.join(" ")}" fill="url(#${uid}-star)" stroke="${shade(KIT_PALETTE.starGold, 0.4)}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    `<polygon points="${pts.join(" ")}" fill="url(#${uid}-star)" stroke="${shade(RACE_PASTEL.starGold, 0.4)}" stroke-width="1.6" stroke-linejoin="round"/>` +
     `<circle cx="12.6" cy="10.5" r="1.7" fill="#FFFFFF" opacity=".85"/>` +
     `</svg>`
   );
@@ -99,8 +118,8 @@ function starSvg(uid: string): string {
 
 /** 礼物箱:渐变箱体 + 缎带蝴蝶结 + 描边 */
 function giftSvg(uid: string): string {
-  const pink = KIT_PALETTE.candyPink;
-  const ribbon = KIT_PALETTE.lemon;
+  const pink = RACE_PASTEL.candyPink;
+  const ribbon = RACE_PASTEL.lemon;
   return (
     `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" data-ob="item">` +
     `<defs><linearGradient id="${uid}-gift" x1="0" y1="0" x2="0" y2="1">` +
@@ -123,7 +142,7 @@ function hillSvg(): string {
     `<svg viewBox="0 0 44 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" data-ob="hill">` +
     `<path d="M2 22 Q13 4 25 22 Z" fill="${sand}" stroke="${shade(sand, 0.3)}" stroke-width="1.2" stroke-linejoin="round"/>` +
     `<path d="M20 22 Q31 8 42 22 Z" fill="${tint(sand, 0.14)}" stroke="${shade(sand, 0.3)}" stroke-width="1.2" stroke-linejoin="round"/>` +
-    `<path d="M8 15 Q13 9 18 15" fill="none" stroke="${KIT_PALETTE.mint}" stroke-width="2" stroke-linecap="round" opacity=".9"/>` +
+    `<path d="M8 15 Q13 9 18 15" fill="none" stroke="${RACE_PASTEL.mint}" stroke-width="2" stroke-linecap="round" opacity=".9"/>` +
     `</svg>`
   );
 }
@@ -200,7 +219,7 @@ export function checkerFlagSvg(uid: string): string {
 
 /** 领先方的小皇冠(HUD 双条用) */
 export function crownSvg(): string {
-  const gold = KIT_PALETTE.starGold;
+  const gold = RACE_PASTEL.starGold;
   return (
     `<svg viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" data-art="crown">` +
     `<path d="M2.6 11.4 L1.6 3.4 L6.4 6.6 L10 1.6 L13.6 6.6 L18.4 3.4 L17.4 11.4 Z" fill="${gold}" stroke="${shade(gold, 0.42)}" stroke-width="1.2" stroke-linejoin="round"/>` +
@@ -230,7 +249,7 @@ export function standsSvg(): string {
 
 /** 彩旗串:三色小三角旗,挂在看台前一层(视差第二层) */
 export function buntingSvg(): string {
-  const colors = [KIT_PALETTE.candyPink, KIT_PALETTE.lemon, KIT_PALETTE.mint];
+  const colors = [RACE_PASTEL.candyPink, RACE_PASTEL.lemon, RACE_PASTEL.mint];
   let flags = "";
   for (let i = 0; i < 12; i++) {
     const x = 4 + i * 25;
@@ -247,7 +266,7 @@ export function buntingSvg(): string {
 
 /** 裁判小哨子(抢跑气泡用,画风圆润不凶) */
 export function whistleSvg(): string {
-  const gold = KIT_PALETTE.starGold;
+  const gold = RACE_PASTEL.starGold;
   return (
     `<svg viewBox="0 0 22 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" data-art="whistle">` +
     `<path d="M3 5 L14 5 L14 8 A5 5 0 1 1 6.2 8 L3 8 Z" fill="${gold}" stroke="${shade(gold, 0.4)}" stroke-width="1.2" stroke-linejoin="round"/>` +
