@@ -107,8 +107,9 @@ export function neighborsOf(idx: number, n: number): number[] {
  * 异形宫:把 9×9 切成九块连通的、每块九格的「花瓣」。
  *
  * 做法是逐块生长:从扫描顺序里第一个还没归属的格子起步,每次从边界里随机挑一个
- * 邻格并进来,长到九格为止。长不动就换个种子重来(最多 `tries` 次),
- * 兜底返回标准的九宫格,保证任何 seed 都拿得到一张合法的宫图,绝不抛异常。
+ * 邻格并进来,长到九格为止。长不动、或者长出来的宫图**一个解都没有**(歪得太狠时真会发生)
+ * 就换个种子重来,最多 `tries` 次;兜底返回标准的九宫格。
+ * 所以这个函数交出来的宫图一定合法、一定填得满,任何 seed 都不会空手而归。
  */
 export function jigsawRegions(seed: number, tries = 60): number[] {
   const n = 9;
@@ -148,7 +149,10 @@ export function jigsawRegions(seed: number, tries = 60): number[] {
         taken.push(pickCell);
       }
     }
-    if (ok && owner.every((v) => v >= 0)) return owner;
+    if (!ok || owner.some((v) => v < 0)) continue;
+    // 形状再好看,填不满也没用:空盘上先解一次,解不出来就换个种子重来
+    const probe = buildVariant("jigsaw", 9, 0, 0, owner, false);
+    if (solveFirst({ variant: probe, cells: new Array<number>(81).fill(EMPTY) })) return owner;
   }
   return boxRegions(9, 3, 3);
 }

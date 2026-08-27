@@ -113,7 +113,14 @@ export function randomSolution(variant: Variant, rand: () => number): number[] |
     return false;
   };
 
-  return step() ? cells : null;
+  if (step()) return cells;
+
+  // 个别歪得厉害的异形宫上,随机顺序会陷进很深的回溯里。这时改走稳的那条路:
+  // 顺序求解出一个解,再把九个数字标签随机换一遍 —— 换标签不影响任何一条约束。
+  const base = solveFirst({ variant, cells: new Array<number>(size).fill(EMPTY) });
+  if (!base) return null;
+  const perm = shuffle(digits, rand);
+  return base.map((d) => (d > 0 ? perm[d - 1] : d));
 }
 
 export interface DigOptions {
