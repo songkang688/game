@@ -560,6 +560,15 @@ describe("L3A-2 · 手机上也停得下来", () => {
     expect(dmGuide.general.join("\n"), "攻略里没写暂停钮").toContain("⏸");
     handle.destroy();
   });
+
+  it("暂停这一句是并进按键那一条的，通用心得没有因此超出平台的 3–6 条", () => {
+    // 平台侧 copy.test.ts 卡的是 3–6 条；本包自己也留一道，改文案时先在本款红
+    expect(dmGuide.general.length).toBeGreaterThanOrEqual(3);
+    expect(dmGuide.general.length, "多写一条心得就顶破平台上限了，并进相邻那一条去").toBeLessThanOrEqual(6);
+    const keyTip = dmGuide.general.find((t) => t.includes("取消键"));
+    expect(keyTip, "按键那一条不见了").toBeDefined();
+    expect(keyTip, "暂停口径该跟按键说明写在一起").toContain("⏸");
+  });
 });
 
 /* ------------------------------------------------------------------ */
