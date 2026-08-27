@@ -1,23 +1,34 @@
 import { describe, expect, it } from "vitest";
+import { save } from "../../engine/save";
 import { TOTAL_LEVELS, assertTotal, chapterOf, totalSize } from "../level99";
 import { AI_LEVEL_ORDER } from "./ai";
+import { meta } from "./meta";
 import {
   CHAPTERS,
+  GOAL_FROM_LEVEL,
   LEVELS,
   TOWER_TOP,
   aiLevelOf,
+  battleHighlight,
   boostOf,
   buildEndlessRound,
   buildLevel,
   dealForLevel,
   endlessLine,
+  goalLabel,
+  goalMet,
+  goalOf,
+  goalWinLine,
+  proveInputOf,
+  proveLevelWinnable,
   starGate,
   towerLoseLine,
   towerStars,
+  towerStarsWithGoal,
   towerWinLine,
 } from "./levels";
 import { DECK_SIZE } from "./logic";
-import { createGame, runBidding } from "./sim";
+import { createGame, findWinningLine, replayLine, runBidding } from "./sim";
 
 describe("地主塔章节", () => {
   it("八个主题章节,加起来正好 188 关", () => {
@@ -186,6 +197,148 @@ describe("评星与文案", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// 1.2:每关目标 + 可赢性证明
+// ---------------------------------------------------------------------------
+
+describe("关卡目标", () => {
+  it("前 99 关一律只要求「赢」——1.1 的数据一个字不改", () => {
+    for (let i = 0; i < GOAL_FROM_LEVEL; i++) {
+      expect(goalOf(i)).toEqual({ kind: "win" });
+      expect(LEVELS[i].goal).toEqual({ kind: "win" });
+    }
+  });
+
+  it("前 99 关的种子、档位、底分、照顾、身份、星门都和 1.1 的算法一模一样", () => {
+    for (let i = 0; i < GOAL_FROM_LEVEL; i++) {
+      const lv = LEVELS[i];
+      expect(lv.seed).toBe(70000 + i * 1013);
+      expect(lv.aiLevel).toBe(aiLevelOf(i));
+      expect(lv.boost).toBe(boostOf(i));
+      expect(lv.base).toBe(lv.chapter <= 1 ? 1 : lv.chapter <= 5 ? 2 : 3);
+      expect(lv.playerIsLandlord).toBe(i < CHAPTERS[0].size ? true : i % 3 !== 2);
+      expect(lv.starThree).toBe(starGate(lv.playerIsLandlord).three);
+      expect(lv.starTwo).toBe(starGate(lv.playerIsLandlord).two);
+    }
+  });
+
+  it("第 100 关起三种目标轮着来,「几手内赢」越往塔顶要求越紧", () => {
+    const kinds = new Set(LEVELS.slice(GOAL_FROM_LEVEL).map((l) => l.goal.kind));
+    expect(kinds).toEqual(new Set(["win", "hands", "noBomb"]));
+    const first = LEVELS.slice(GOAL_FROM_LEVEL).find((l) => l.goal.kind === "hands")!;
+    const last = [...LEVELS].reverse().find((l) => l.goal.kind === "hands")!;
+    expect(first.goal.kind === "hands" && last.goal.kind === "hands").toBe(true);
+    if (first.goal.kind === "hands" && last.goal.kind === "hands") {
+      expect(last.goal.hands).toBeLessThanOrEqual(first.goal.hands);
+      expect(last.goal.hands).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it("没赢就一定不算达成目标", () => {
+    expect(goalMet({ kind: "win" }, { won: false, plays: 3, bombs: 0 })).toBe(false);
+    expect(goalMet({ kind: "hands", hands: 12 }, { won: false, plays: 3, bombs: 0 })).toBe(false);
+    expect(goalMet({ kind: "noBomb" }, { won: false, plays: 3, bombs: 0 })).toBe(false);
+  });
+
+  it("「几手内赢」按自己出了几手算,「不出炸弹赢」按自己炸了几次算", () => {
+    expect(goalMet({ kind: "hands", hands: 10 }, { won: true, plays: 10, bombs: 2 })).toBe(true);
+    expect(goalMet({ kind: "hands", hands: 10 }, { won: true, plays: 11, bombs: 0 })).toBe(false);
+    expect(goalMet({ kind: "noBomb" }, { won: true, plays: 20, bombs: 0 })).toBe(true);
+    expect(goalMet({ kind: "noBomb" }, { won: true, plays: 4, bombs: 1 })).toBe(false);
+    expect(goalMet({ kind: "win" }, { won: true, plays: 40, bombs: 9 })).toBe(true);
+  });
+
+  it("达成目标多给一颗星,封顶还是三星", () => {
+    expect(towerStarsWithGoal(2, true, false)).toBe(towerStars(2, true));
+    expect(towerStarsWithGoal(2, true, true)).toBe(2);
+    expect(towerStarsWithGoal(20, true, true)).toBe(3);
+    expect(towerStarsWithGoal(20, true, false)).toBe(3);
+  });
+
+  it("目标那一行看得懂,达成了才有那句夸奖", () => {
+    for (const lv of LEVELS) expect(goalLabel(lv.goal).length).toBeGreaterThan(6);
+    expect(goalLabel({ kind: "hands", hands: 9 })).toContain("9");
+    expect(goalWinLine({ kind: "noBomb" }, true)).toContain("炸");
+    expect(goalWinLine({ kind: "noBomb" }, false)).toBe("");
+  });
+});
+
+describe("每一关都证明得了可以赢", () => {
+  /** 抽 30 关:第 1 关、每 6 关一抽,再把 100 / 145 / 188 这三关钉进去 */
+  const sample = (() => {
+    const picks = new Set<number>([0, 99, 144, 187]);
+    for (let i = 0; picks.size < 30; i += 6) picks.add(Math.min(TOWER_TOP - 1, i));
+    return [...picks].sort((a, b) => a - b);
+  })();
+
+  it("抽样的 30 关里含第 100 / 145 / 188 关", () => {
+    expect(sample).toHaveLength(30);
+    for (const i of [99, 144, 187]) expect(sample).toContain(i);
+  });
+
+  it("每一关都搜得到一条真能赢的线路,而且能一步不差地重放出来", () => {
+    for (const i of sample) {
+      const lv = LEVELS[i];
+      const line = proveLevelWinnable(lv);
+      expect(line, `第 ${i + 1} 关搜不到能赢的线路`).not.toBeNull();
+      expect(line!.moves.length).toBeGreaterThan(0);
+      expect(replayLine(proveInputOf(lv), line!), `第 ${i + 1} 关的线路重放不出来`).toBe(true);
+    }
+  }, 120000);
+
+  it("线路里玩家自己那几手都记了账(出了几手、炸了几次)", () => {
+    const lv = LEVELS[144];
+    const input = proveInputOf(lv);
+    const line = findWinningLine(input);
+    expect(line).not.toBeNull();
+    const mine = line!.moves.filter((m) => m.seat === input.playerSeat && m.cards.length > 0);
+    expect(line!.playerPlays).toBe(mine.length);
+    expect(line!.playerBombs).toBeLessThanOrEqual(line!.playerPlays);
+  }, 60000);
+
+  it("带加分目标去搜也搜得到:不出炸弹的关就真有不出炸弹的赢法", () => {
+    const noBomb = LEVELS.filter((l) => l.goal.kind === "noBomb").slice(0, 3);
+    expect(noBomb.length).toBe(3);
+    for (const lv of noBomb) {
+      const line = findWinningLine(proveInputOf(lv), 1600, { noBomb: true });
+      expect(line, `第 ${lv.index + 1} 关找不到不用炸弹的赢法`).not.toBeNull();
+      expect(line!.playerBombs).toBe(0);
+    }
+  }, 120000);
+
+  it("「几手内赢」的关也有满足手数的赢法", () => {
+    const limited = LEVELS.filter((l) => l.goal.kind === "hands").slice(0, 3);
+    expect(limited.length).toBe(3);
+    for (const lv of limited) {
+      const max = lv.goal.kind === "hands" ? lv.goal.hands : 99;
+      const line = findWinningLine(proveInputOf(lv), 1600, { maxHands: max });
+      expect(line, `第 ${lv.index + 1} 关找不到 ${max} 手内的赢法`).not.toBeNull();
+      expect(line!.playerPlays).toBeLessThanOrEqual(max);
+    }
+  }, 120000);
+});
+
+describe("本局亮点", () => {
+  it("赢了挑最亮的一条夸", () => {
+    expect(battleHighlight({ won: true, plays: 6, bombs: 1, bombsHeld: 0, longest: 4, foeLeft: 9 })).toContain("炸弹");
+    expect(battleHighlight({ won: true, plays: 12, bombs: 0, bombsHeld: 1, longest: 3, foeLeft: 5 })).toContain("捏在手里");
+    expect(battleHighlight({ won: true, plays: 11, bombs: 0, bombsHeld: 0, longest: 8, foeLeft: 4 })).toContain("8");
+  });
+
+  it("输了也只讲这一局做得好的地方,一句批评都没有", () => {
+    const lines = [
+      battleHighlight({ won: false, plays: 9, bombs: 0, bombsHeld: 0, longest: 7, foeLeft: 8 }),
+      battleHighlight({ won: false, plays: 9, bombs: 0, bombsHeld: 1, longest: 3, foeLeft: 8 }),
+      battleHighlight({ won: false, plays: 9, bombs: 1, bombsHeld: 0, longest: 3, foeLeft: 2 }),
+      battleHighlight({ won: false, plays: 9, bombs: 1, bombsHeld: 0, longest: 3, foeLeft: 9 }),
+    ];
+    for (const line of lines) {
+      expect(line.length).toBeGreaterThan(8);
+      expect(line).not.toMatch(/错|不行|笨|输给|太差/);
+    }
+  });
+});
+
 describe("无尽连胜", () => {
   it("轮次越靠后电脑越厉害、底分越高", () => {
     expect(buildEndlessRound(1).aiLevel).toBe("easy");
@@ -213,5 +366,32 @@ describe("无尽连胜", () => {
     expect(endlessLine(0, 5)).toContain("第一局");
     expect(endlessLine(7, 7)).toContain("刷新");
     expect(endlessLine(3, 7)).toContain("7");
+  });
+
+  it("电脑档位随连胜一路升级,底分也跟着涨", () => {
+    const ladder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12].map((n) => buildEndlessRound(n));
+    const rank = ladder.map((r) => AI_LEVEL_ORDER.indexOf(r.aiLevel));
+    for (let i = 1; i < rank.length; i++) expect(rank[i]).toBeGreaterThanOrEqual(rank[i - 1]);
+    for (let i = 1; i < ladder.length; i++) expect(ladder[i].base).toBeGreaterThanOrEqual(ladder[i - 1].base);
+    expect(rank[rank.length - 1]).toBe(AI_LEVEL_ORDER.length - 1);
+  });
+
+  it("连胜成绩记在 landlord-cards 名下,而且只保留最高的那次", () => {
+    expect(meta.id).toBe("landlord-cards");
+    const before = save.getGameProgress(meta.id).endlessBest;
+    expect(save.recordEndlessBest(meta.id, before + 4)).toBe(before + 4);
+    // 后面打得差一点不会把最好成绩顶掉
+    expect(save.recordEndlessBest(meta.id, 1)).toBe(before + 4);
+    expect(save.getGameProgress(meta.id).endlessBest).toBe(before + 4);
+    // 脏数据进不来
+    expect(save.recordEndlessBest(meta.id, Number.NaN)).toBe(before + 4);
+    expect(save.recordEndlessBest(meta.id, -5)).toBe(before + 4);
+  });
+
+  it("连胜每赢一局就往上记一格", () => {
+    const id = `${meta.id}-streak-probe`;
+    let best = save.getGameProgress(id).endlessBest;
+    for (let streak = 1; streak <= 5; streak++) best = save.recordEndlessBest(id, streak);
+    expect(best).toBe(5);
   });
 });

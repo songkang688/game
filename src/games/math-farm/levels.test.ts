@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
+import { validateQuestion } from "./gen";
 import { buildQuestions, CHAPTERS, kindPool, LEVELS, questionCount } from "./levels";
 
 describe("算数小农场 188 关", () => {
@@ -123,7 +124,23 @@ const LEGACY_CHAPTER_SNAPSHOT = [
 
 const NEW_FROM = 99;
 const NEW_LEVELS = Array.from({ length: 188 - NEW_FROM }, (_, i) => NEW_FROM + i);
-const ADVANCED_KINDS = new Set(["mul", "div", "divmod", "frac", "dec", "paren", "word"]);
+/** 1.2 起第 100–188 关的全部种类：1.1 的七种 + 补齐六年级的七种 */
+const ADVANCED_KINDS = new Set([
+  "mul",
+  "div",
+  "divmod",
+  "frac",
+  "dec",
+  "paren",
+  "word",
+  "vertical",
+  "fracLcd",
+  "decMul",
+  "percent",
+  "ratio",
+  "equation",
+  "pattern",
+]);
 
 function strip(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -189,8 +206,10 @@ function gcdOf(a: number, b: number): number {
   return x || 1;
 }
 
-/** 逐题机器验算：从题面重新算一遍答案，对不上就是这一关不可解 */
+/** 逐题机器验算：先过一遍本款自己的校验器，再用这份测试独立写的解析器复算 1.1 那七种老题型 */
 function verify(q: ReturnType<typeof buildQuestions>[number], where: string): void {
+  const problems = validateQuestion(q);
+  expect(problems.join("；"), where).toBe("");
   const text = strip(q.promptHTML);
   switch (q.kind) {
     case "mul": {
@@ -271,7 +290,10 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
       break;
     }
     default:
-      throw new Error(`${where}：第 100–188 关不该出现旧题型 ${q.kind}`);
+      // 1.2 新增的七种（竖式 / 通分 / 小数乘除 / 百分数 / 比与比例 / 方程 / 找规律）
+      // 由上面的校验器逐条盯着：它会从题面重新解析、独立算一遍，再核对约束
+      expect(ADVANCED_KINDS.has(q.kind), `${where}：出现了没登记的题型`).toBe(true);
+      break;
   }
 }
 
@@ -440,7 +462,7 @@ describe("算数小农场 · 1.1 第 100–188 关", () => {
     expect(word).toBeGreaterThan(10);
   });
 
-  it("引入了前 99 关没有的新机制（乘除 / 余数 / 分数小数 / 括号应用题）", () => {
+  it("引入了前 99 关没有的新机制（乘除 / 余数 / 分数小数 / 括号应用题 / 1.2 补齐的六年级题型）", () => {
     const legacy = new Set<string>();
     for (let level = 0; level < 99; level++) for (const q of buildQuestions(level)) legacy.add(q.kind);
     const fresh = new Set<string>();
@@ -464,10 +486,16 @@ describe("算数小农场 · 1.1 第 100–188 关", () => {
     }
   });
 
-  it("文案零商标：题面与选项里没有英文字母", () => {
+  it("文案零商标：题面与选项里除了方程的未知数没有任何英文字母", () => {
     for (const level of NEW_LEVELS) {
       for (const q of buildQuestions(level)) {
-        expect(strip(q.promptHTML)).not.toMatch(/[A-Za-z]/);
+        // 简单方程要写 x + 3 = 8 这种式子，那个 x 是数学符号，别的字母一个都不许有
+        const text = strip(q.promptHTML);
+        const letters = text.match(/[A-Za-z]/g) ?? [];
+        if (letters.length > 0) {
+          expect(q.kind, `第 ${level + 1} 关：${text}`).toBe("equation");
+          expect(letters).toEqual(["x"]);
+        }
         expect(q.ask).not.toMatch(/[A-Za-z]/);
         for (const c of q.choices) expect(c).not.toMatch(/[A-Za-z]/);
       }

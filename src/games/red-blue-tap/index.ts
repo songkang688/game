@@ -5,21 +5,25 @@ import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../
 import { AVATAR_URLS } from "../../ui/avatars";
 import { save } from "../../engine/save";
 import { CHAPTERS, LEVELS, type TapLevel } from "./levels";
+import { resetClippedScroll } from "./stageScroll";
 import {
-  ENDLESS_LIVES,
   FREEZE_FACTOR,
   FREEZE_ROUNDS,
   adaptiveAiDelay,
-  endlessAiDelay,
-  endlessDotCount,
-  endlessTrapChance,
   inCombo,
-  isNewRecord,
   mechanicsOf,
   pointsFor,
   sequenceGrace,
   sequenceLabels
 } from "./logic";
+import {
+  READY_MIN_MS,
+  aiMisses,
+  aiTier,
+  aiTierForDelay,
+  createTapGate
+} from "./rounds";
+import { mountEndless, mountVersus } from "./arena";
 
 /** 各主题的「该抢的点」与「陷阱点」外观 */
 const SKINS = [
@@ -64,6 +68,19 @@ const CSS = `
   .rbt-arena { height: 280px; }
   .rbt-dot { width: 56px; height: 56px; font-size: 30px; }
 }
+/* 又窄又矮的机器上，竞技场上面那一截（比分条 + 道具芯片）在 320px 宽会各折成两三行,
+   一共吃掉 150 多像素，把竞技场顶到舞台裁切线以下——而点是随机摆的，
+   落在下半截的那颗就按不着，表现成「时灵时不灵」。这里只收留白与字号，
+   .rbt-dot 的热区一分不动（那是这一款唯一的操作对象）。 */
+@media (max-width: 420px) and (max-height: 700px) {
+  .rbt-top { margin-bottom: 4px; }
+  .rbt-badge { padding: 3px 8px; font-size: 13px; }
+  .rbt-badge.rbt-ai { padding: 3px 3px 3px 8px; }
+  .rbt-ava { width: 22px; height: 22px; }
+  .rbt-gear { gap: 4px; margin-bottom: 4px; min-height: 0; }
+  .rbt-chip { padding: 2px 8px; font-size: 12px; }
+  .rbt-msg { margin-top: 4px; min-height: 18px; font-size: 14px; }
+}
 `;
 
 const ENDLESS_CSS = `
@@ -91,11 +108,89 @@ interface Dot {
   label: number;
   aiTimer: ReturnType<typeof setTimeout> | null;
   gone: boolean;
+  /** 1.2 · 每个点一个号，去抖与「手掌拍」连坐都按这个号认 */
+  id: number;
+  /** 1.2 · 已经亮起来了吗；预备期间点下去只会被小云朵挡一下 */
+  live: boolean;
 }
 
-function placeDot(el: HTMLElement): void {
-  el.style.left = `${6 + Math.random() * 72}%`;
-  el.style.top = `${6 + Math.random() * 72}%`;
+/**
+ * 1.2 · 两个点之间至少岔开这么多（相对场地的百分比）。
+ * 场地宽高都在 300px 上下，30% 折算过去差不多 90px，
+ * 够 72px 的点之间留出 24px 的隔离带，一只手掌盖不住两个。
+ */
+const DOT_GAP_PCT = 30;
+
+/** 1.2 · 预备到亮灯的这一段：短了就是无预警闪现，长了小孩会走神 */
+const CAMPAIGN_READY_MAX_MS = 820;
+
+function campaignReadyMs(): number {
+  return Math.round(READY_MIN_MS + Math.random() * (CAMPAIGN_READY_MAX_MS - READY_MIN_MS));
+}
+
+function nowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+}
+
+/** 摆一个点：躲开这一轮已经摆过的位置，摆不开就用最后一次的落点 */
+function placeDot(el: HTMLElement, taken: Array<[number, number]> = []): void {
+  let x = 6 + Math.random() * 72;
+  let y = 6 + Math.random() * 72;
+  for (let tries = 0; tries < 24; tries++) {
+    if (taken.every(([px, py]) => Math.hypot(px - x, py - y) >= DOT_GAP_PCT)) break;
+    x = 6 + Math.random() * 72;
+    y = 6 + Math.random() * 72;
+  }
+  taken.push([x, y]);
+  el.style.left = `${x}%`;
+  el.style.top = `${y}%`;
+}
+
+/** 竞技场再矮也得摆得开三行点，低于这个高度宁可让它被裁一点也不再收 */
+export const ARENA_MIN_PX = 216;
+
+/**
+ * 竞技场该多高：CSS 给的高度与「舞台看得见的那一段」取小，再守住 ARENA_MIN_PX 的下限。
+ * 纯函数，用例直接喂数字。
+ */
+export function arenaHeightPx(cssHeight: number, room: number): number {
+  if (!Number.isFinite(room) || room <= 0) return cssHeight;
+  return Math.max(ARENA_MIN_PX, Math.min(cssHeight, Math.floor(room)));
+}
+
+/**
+ * 把竞技场压进舞台看得见的那一段。
+ *
+ * 点是按**百分比**摆在竞技场里的（`placeDot` 写的是 `left/top: n%`），所以只要竞技场
+ * 本身不超出可视范围，每一颗点就都按得到；反过来，竞技场一被裁，落在下半截的点就是
+ * 真的按不到——这一款整个玩法就是「按亮起来的那颗点」，按不到等于这一局作废。
+ * 320×640 上实测：竞技场高 280、上面那一截（本款的无尽入口条 + 壳层关卡条在窄屏折行）
+ * 把它顶到 y=416，舞台底边只到 626，**下面 70px 里的点一颗都按不着**，而点又是随机摆的，
+ * 所以是「时灵时不灵」——比一直坏更难查。
+ *
+ * 不走滚动条：这是个连点游戏，能滚就会「想点却滚走了」。直接收高度，点跟着百分比回来。
+ * 返回拆监听的函数。
+ */
+export function fitArena(el: HTMLElement): () => void {
+  const view = el.ownerDocument?.defaultView ?? null;
+  if (!view || typeof el.getBoundingClientRect !== "function") return () => {};
+  const relayout = (): void => {
+    el.style.height = "";
+    const css = el.getBoundingClientRect().height;
+    let bottom = Number.POSITIVE_INFINITY;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = view.getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+        bottom = Math.min(bottom, p.getBoundingClientRect().bottom);
+      }
+    }
+    if (!Number.isFinite(bottom)) return;
+    const next = arenaHeightPx(css, bottom - el.getBoundingClientRect().top);
+    if (next < css) el.style.height = `${next}px`;
+  };
+  relayout();
+  view.addEventListener("resize", relayout);
+  return () => view.removeEventListener("resize", relayout);
 }
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -113,6 +208,13 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   let seqNext = 0;
   const dots = new Set<Dot>();
   const gears = mechanicsOf(cfg);
+  /** 1.2 · 防乱拍的门：同一个点 60ms 内只算一次，一巴掌拍多个点连一分都不给 */
+  const gate = createTapGate();
+  /** 1.2 · 每个点刚刚给出去多少分，被判成「手掌拍」时要照这份账收回来 */
+  const awarded = new Map<number, number>();
+  /** 1.2 · 小电脑的档位：由本关的出手时间折算，四档各有各的失误率 */
+  const tier = aiTierForDelay(cfg.aiDelayMs);
+  let dotSeq = 0;
 
   const wrap = document.createElement("div");
   wrap.className = "rbt-wrap";
@@ -128,6 +230,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <div class="rbt-msg"></div>
   `;
   stage.appendChild(wrap);
+  // 地图上「🎯 跳到当前关」留下的 scrollTop 会被带进关内，把双人 / 无尽这两颗
+  // 入口顶到裁切线以上（W5-B-09）。进关这一刻归 0。
+  resetClippedScroll(wrap);
 
   const arenaEl = wrap.querySelector(".rbt-arena") as HTMLElement;
   const meEl = wrap.querySelector(".rbt-me-score") as HTMLElement;
@@ -198,10 +303,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   /** 记分：mine=true 是你得分，stake 是这一下值几个基础分 */
-  function score(mine: boolean, stake: number, msg?: string): void {
+  function score(mine: boolean, stake: number, msg?: string, dotId?: number): void {
     if (ended) return;
     if (mine) {
-      meScore += pointsFor(streak, stake, cfg);
+      const gained = pointsFor(streak, stake, cfg);
+      meScore += gained;
+      if (dotId !== undefined) awarded.set(dotId, gained);
       streak++;
       ctx.sfx("coin");
     } else {
@@ -225,6 +332,69 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     dots.delete(d);
   }
 
+  /**
+   * 1.2 · 每一下点击都得先过这道门：
+   *  · 同一个点 60ms 内的重复输入（连点器、手指抖）只算一次；
+   *  · 同一只手掌同时盖住好几个点时，这一下不算，刚给出去的分也一并收回。
+   * 亮灯之前点下去只是被小云朵挡一下，不扣分，文案也不批评。
+   */
+  function passGate(d: Dot): boolean {
+    if (!d.live) {
+      msgEl.textContent = "☁️ 还没亮呢，小云朵先挡一下，等亮了再点～";
+      return false;
+    }
+    const v = gate.accept(d.id, nowMs());
+    if (v.reason === "debounce") return false;
+    if (v.reason === "palm") {
+      let back = 0;
+      for (const id of v.revoke) {
+        back += awarded.get(id) ?? 0;
+        awarded.delete(id);
+      }
+      if (back > 0) {
+        meScore = Math.max(0, meScore - back);
+        renderTop();
+      }
+      msgEl.textContent = "☁️ 一整只手拍上去不算分哦，一个一个点才有效！";
+      ctx.sfx("oops");
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * 1.2 · 让点先「预备」再「亮」：亮之前不判分，也不给小电脑出手，
+   * 禁止无预警闪现，免得变成比运气。
+   */
+  function lightUp(created: Dot[], arm: (d: Dot) => void): void {
+    for (const d of created) d.el.classList.add("rbt-dot-ready");
+    later(() => {
+      for (const d of created) {
+        if (d.gone) continue;
+        d.live = true;
+        d.el.classList.remove("rbt-dot-ready");
+        d.el.classList.add("rbt-dot-live");
+        arm(d);
+      }
+    }, campaignReadyMs());
+  }
+
+  /**
+   * 1.2 · 小电脑按四档失误率出手：一档也不给完美反应，
+   * 失手时它会「手滑」，把这一个点让出更多时间给孩子。
+   */
+  function armAi(d: Dot, ms: number, fire: () => void, canMiss = true): void {
+    d.aiTimer = setTimeout(() => {
+      if (destroyed || ended || d.gone) return;
+      if (canMiss && aiMisses(tier, Math.random)) {
+        msgEl.textContent = `星星（${aiTier(tier).name}）手滑了一下，快抢！`;
+        armAi(d, Math.max(220, ms * 0.75), fire, false);
+        return;
+      }
+      fire();
+    }, ms);
+  }
+
   /** 本轮小电脑的出手时间：读招 + 冻结都算进去 */
   function roundDelay(): number {
     let delay = adaptiveAiDelay(cfg, meScore, aiScore);
@@ -232,7 +402,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     return delay;
   }
 
-  function makeDot(kind: DotKind, label: number): Dot {
+  function makeDot(kind: DotKind, label: number, taken: Array<[number, number]> = []): Dot {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "rbt-dot";
@@ -245,8 +415,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       el.appendChild(tag);
       el.setAttribute("aria-label", `${label} 号点`);
     }
-    placeDot(el);
-    const d: Dot = { el, kind, label, aiTimer: null, gone: false };
+    placeDot(el, taken);
+    const d: Dot = { el, kind, label, aiTimer: null, gone: false, id: dotSeq++, live: false };
     arenaEl.appendChild(el);
     dots.add(d);
     return d;
@@ -269,29 +439,37 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     // 保证每轮至少有一个能抢的点
     if (!kinds.some((k) => k === "mine")) kinds.push("mine");
 
-    for (const kind of kinds) {
-      const d = makeDot(kind, 0);
-      d.aiTimer = setTimeout(() => {
-        if (destroyed || ended || d.gone) return;
-        removeDot(d);
-        if (kind === "mine") {
-          score(false, 1, "被小电脑抢走啦，再快一点！");
-        } else if (dots.size === 0 && !ended) {
-          later(spawnRound, 400);
-        }
-      }, kind === "trap" ? delay * 1.6 : delay + Math.random() * 200);
+    const taken: Array<[number, number]> = [];
+    const created = kinds.map((kind) => makeDot(kind, 0, taken));
+    for (const d of created) {
       d.el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         if (ended || d.gone) return;
+        if (!passGate(d)) return;
         removeDot(d);
-        if (kind === "trap") {
+        if (d.kind === "trap") {
           score(false, 1, `碰到 ${skin.trap} 啦，这可是陷阱！`);
         } else {
           ctx.sfx("pop");
-          score(true, 1, inCombo(streak + 1, cfg) ? "连击中，双倍分！" : "抢到！");
+          score(true, 1, inCombo(streak + 1, cfg) ? "连击中，双倍分！" : "抢到！", d.id);
         }
       });
     }
+    lightUp(created, (d) => {
+      armAi(
+        d,
+        d.kind === "trap" ? delay * 1.6 : delay + Math.random() * 200,
+        () => {
+          removeDot(d);
+          if (d.kind === "mine") {
+            score(false, 1, "被小电脑抢走啦，再快一点！");
+          } else if (dots.size === 0 && !ended) {
+            later(spawnRound, 400);
+          }
+        },
+        d.kind === "mine"
+      );
+    });
   }
 
   /** 道具轮：只冒一个 ❄️ 或 🧲，抢到手才有用，错过就没了 */
@@ -299,15 +477,22 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const kind: DotKind = Math.random() < 0.5 ? "freeze" : "magnet";
     const d = makeDot(kind, 0);
     const delay = roundDelay();
-    d.aiTimer = setTimeout(() => {
-      if (destroyed || ended || d.gone) return;
-      removeDot(d);
-      msgEl.textContent = "道具点飞走啦，下一个别错过！";
-      later(spawnRound, 380);
-    }, delay + 260);
+    lightUp([d], () => {
+      armAi(
+        d,
+        delay + 260,
+        () => {
+          removeDot(d);
+          msgEl.textContent = "道具点飞走啦，下一个别错过！";
+          later(spawnRound, 380);
+        },
+        false
+      );
+    });
     d.el.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       if (ended || d.gone) return;
+      if (!passGate(d)) return;
       removeDot(d);
       ctx.sfx("pop");
       if (kind === "freeze") {
@@ -338,28 +523,43 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   function spawnSequenceRound(chain: number): void {
     const delay = roundDelay() + sequenceGrace(chain);
     if (frozen > 0) frozen--;
-    seqNext = 1;
+    seqNext = 0;
     const labels = sequenceLabels(chain);
-    const created: Dot[] = labels.map((n) => makeDot("mine", n));
-    markSeqNext();
+    const taken: Array<[number, number]> = [];
+    const created: Dot[] = labels.map((n) => makeDot("mine", n, taken));
 
-    const expire = setTimeout(() => {
-      if (destroyed || ended) return;
-      created.forEach((d) => { if (!d.gone) removeDot(d); });
-      seqNext = 0;
-      score(false, 1, "号码还没拍完就被抢走啦，先看清顺序再动手！");
-    }, delay);
-    timeouts.add(expire);
+    // 预备期间号码就摆好了，可以先看清顺序；亮了才开始计时、才判分
+    let expire: ReturnType<typeof setTimeout> | null = null;
+    lightUp(created, () => {
+      if (seqNext !== 0) return;
+      seqNext = 1;
+      markSeqNext();
+      expire = setTimeout(() => {
+        if (destroyed || ended) return;
+        created.forEach((d) => { if (!d.gone) removeDot(d); });
+        seqNext = 0;
+        score(false, 1, "号码还没拍完就被抢走啦，先看清顺序再动手！");
+      }, delay);
+      timeouts.add(expire);
+    });
+
+    function stopExpire(): void {
+      if (!expire) return;
+      clearTimeout(expire);
+      timeouts.delete(expire);
+      expire = null;
+    }
 
     for (const d of created) {
       d.aiTimer = null;
       d.el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        if (ended || d.gone || seqNext === 0) return;
+        if (ended || d.gone) return;
+        if (!passGate(d)) return;
+        if (seqNext === 0) return;
         if (d.label !== seqNext) {
           const want = seqNext;
-          clearTimeout(expire);
-          timeouts.delete(expire);
+          stopExpire();
           created.forEach((x) => { if (!x.gone) removeDot(x); });
           seqNext = 0;
           score(false, 1, `这一串轮到 ${want} 号啦，慢一点看清号码，下一串一定拍得对！`);
@@ -371,10 +571,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         seqNext++;
         markSeqNext();
         if (seqNext > chain) {
-          clearTimeout(expire);
-          timeouts.delete(expire);
+          stopExpire();
           seqNext = 0;
-          score(true, chain, `${chain} 个号码一次拍对，漂亮！`);
+          score(true, chain, `${chain} 个号码一次拍对，漂亮！`, d.id);
         }
       });
     }
@@ -400,6 +599,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   later(spawnRound, 700);
   renderTop();
+  // 竞技场比舞台看得见的那一段高的时候，落在下半截的点是真按不到的（见 fitArena）
+  const fitArenaOff = fitArena(arenaEl);
 
   return {
     destroy() {
@@ -408,204 +609,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       clearDots();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
-      wrap.remove();
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// 无尽模式「霓虹抢点」：一轮比一轮快，丢完三颗爱心就结束
-// ---------------------------------------------------------------------------
-
-function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { destroy: () => void } {
-  const timeouts = new Set<ReturnType<typeof setTimeout>>();
-  let destroyed = false;
-  let over = false;
-  let round = 0;
-  let score = 0;
-  let streak = 0;
-  let lives = ENDLESS_LIVES;
-  let best = save.getGameProgress(meta.id).endlessBest;
-  const live = new Set<Dot>();
-
-  const wrap = document.createElement("div");
-  wrap.className = "rbt-wrap";
-  wrap.innerHTML = `
-    <style>${CSS}${ENDLESS_CSS}</style>
-    <div class="rte-head">
-      <button class="rte-back" type="button">🗺️ 回关卡</button>
-      <span class="rbt-chip rte-score">0 分</span>
-      <span class="rbt-chip rte-lives"></span>
-      <span class="rbt-chip rte-best"></span>
-    </div>
-    <div class="rbt-arena"></div>
-    <div class="rbt-msg">抢到 🌟 加分，碰到 💣 扣一颗心，被抢走也扣一颗心！</div>
-  `;
-  host.appendChild(wrap);
-
-  const arenaEl = wrap.querySelector(".rbt-arena") as HTMLElement;
-  const scoreEl = wrap.querySelector(".rte-score") as HTMLElement;
-  const livesEl = wrap.querySelector(".rte-lives") as HTMLElement;
-  const bestEl = wrap.querySelector(".rte-best") as HTMLElement;
-  const msgEl = wrap.querySelector(".rbt-msg") as HTMLElement;
-
-  function later(fn: () => void, ms: number): void {
-    const t = setTimeout(() => {
-      timeouts.delete(t);
-      if (!destroyed) fn();
-    }, ms);
-    timeouts.add(t);
-  }
-
-  function renderTop(): void {
-    scoreEl.textContent = `${score} 分${streak >= 4 ? " · 连击双倍" : ""}`;
-    livesEl.textContent = "❤️".repeat(Math.max(0, lives)) || "💔";
-    bestEl.textContent = best > 0 ? `🏅 最高 ${best}` : "🏅 还没有纪录";
-  }
-
-  function clearDots(): void {
-    live.forEach((d) => {
-      if (d.aiTimer) clearTimeout(d.aiTimer);
-      d.el.remove();
-    });
-    live.clear();
-  }
-
-  function loseHeart(msg: string): void {
-    lives--;
-    api.play("oops");
-    streak = 0;
-    msgEl.textContent = msg;
-    renderTop();
-    if (lives <= 0) finish();
-    else if (live.size === 0) later(spawnRound, 460);
-  }
-
-  function finish(): void {
-    if (over) return;
-    over = true;
-    clearDots();
-    const record = isNewRecord(score, best);
-    if (record) best = save.recordEndlessBest(meta.id, score);
-    const bonus = Math.min(6, Math.floor(score / 15));
-    if (bonus > 0) api.addStars(bonus);
-    api.play(record ? "win" : "oops");
-
-    const ov = document.createElement("div");
-    ov.className = "rte-over";
-    ov.innerHTML = `
-      <div style="font-size:46px;line-height:1">${record ? "🏅" : "💫"}</div>
-      <div class="rte-over-title">${record ? `新纪录 ${score} 分！` : `这轮拿了 ${score} 分`}</div>
-      <div class="rte-over-sub">${
-        record
-          ? `撑到第 ${round} 轮，眼神和手速都很稳！${bonus > 0 ? `送你 ${bonus} 颗小星星。` : ""}`
-          : `最高纪录 ${best} 分，再来一轮就有机会追上它！${bonus > 0 ? `这轮也拿到 ${bonus} 颗小星星。` : ""}`
-      }</div>
-    `;
-    const btns = document.createElement("div");
-    btns.style.display = "flex";
-    btns.style.gap = "10px";
-    btns.style.flexWrap = "wrap";
-    btns.style.justifyContent = "center";
-    const again = document.createElement("button");
-    again.type = "button";
-    again.className = "rte-btn";
-    again.textContent = "🔁 再抢一轮";
-    again.addEventListener("click", () => {
-      api.play("tap");
-      ov.remove();
-      restart();
-    });
-    const back = document.createElement("button");
-    back.type = "button";
-    back.className = "rte-btn rte-ghost";
-    back.textContent = "🗺️ 回关卡";
-    back.addEventListener("click", () => {
-      api.play("tap");
-      onExit();
-    });
-    btns.append(again, back);
-    ov.appendChild(btns);
-    wrap.appendChild(ov);
-  }
-
-  function removeDot(d: Dot): void {
-    d.gone = true;
-    if (d.aiTimer) clearTimeout(d.aiTimer);
-    d.el.remove();
-    live.delete(d);
-  }
-
-  function spawnRound(): void {
-    if (over || destroyed || live.size > 0) return;
-    round++;
-    const delay = endlessAiDelay(round);
-    const trap = endlessTrapChance(round);
-    const count = endlessDotCount(round);
-    const kinds: DotKind[] = [];
-    for (let i = 0; i < count; i++) kinds.push(Math.random() < trap ? "trap" : "mine");
-    if (!kinds.some((k) => k === "mine")) kinds[0] = "mine";
-
-    for (const kind of kinds) {
-      const el = document.createElement("button");
-      el.type = "button";
-      el.className = "rbt-dot";
-      el.textContent = kind === "trap" ? "💣" : "🌟";
-      placeDot(el);
-      const d: Dot = { el, kind, label: 0, aiTimer: null, gone: false };
-      arenaEl.appendChild(el);
-      live.add(d);
-      d.aiTimer = setTimeout(() => {
-        if (destroyed || over || d.gone) return;
-        removeDot(d);
-        if (kind === "mine") loseHeart("被小电脑抢走一个，稳住！");
-        else if (live.size === 0) later(spawnRound, 380);
-      }, kind === "trap" ? delay * 1.5 : delay);
-      el.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        if (over || d.gone) return;
-        removeDot(d);
-        if (kind === "trap") {
-          loseHeart("碰到 💣 啦，看清楚再出手！");
-          return;
-        }
-        streak++;
-        score += streak >= 4 ? 2 : 1;
-        api.play("pop");
-        msgEl.textContent = streak >= 4 ? `连击 ${streak}，双倍分！` : "抢到！";
-        renderTop();
-        if (live.size === 0) later(spawnRound, 340);
-      });
-    }
-  }
-
-  function restart(): void {
-    over = false;
-    round = 0;
-    score = 0;
-    streak = 0;
-    lives = ENDLESS_LIVES;
-    clearDots();
-    msgEl.textContent = "抢到 🌟 加分，碰到 💣 扣一颗心，被抢走也扣一颗心！";
-    renderTop();
-    later(spawnRound, 600);
-  }
-
-  (wrap.querySelector(".rte-back") as HTMLButtonElement).addEventListener("click", () => {
-    api.play("tap");
-    onExit();
-  });
-
-  renderTop();
-  later(spawnRound, 700);
-
-  return {
-    destroy() {
-      destroyed = true;
-      over = true;
-      clearDots();
-      timeouts.forEach((t) => clearTimeout(t));
-      timeouts.clear();
+      fitArenaOff();
       wrap.remove();
     },
   };
@@ -614,44 +618,51 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const barStyle = document.createElement("style");
-  barStyle.textContent = ENDLESS_CSS;
+  barStyle.textContent = ENDLESS_CSS + CSS_V12;
   const bar = document.createElement("div");
   bar.className = "rte-bar";
   const levelHost = document.createElement("div");
-  const endlessHost = document.createElement("div");
-  endlessHost.hidden = true;
-  root.append(barStyle, bar, levelHost, endlessHost);
+  const sideHost = document.createElement("div");
+  sideHost.hidden = true;
+  root.append(barStyle, bar, levelHost, sideHost);
   api.root.appendChild(root);
 
+  const versusBtn = document.createElement("button");
+  versusBtn.type = "button";
+  versusBtn.className = "rte-open";
+  versusBtn.textContent = "⚔️ 双人对战 · 谁更准";
   const openBtn = document.createElement("button");
   openBtn.type = "button";
   openBtn.className = "rte-open";
-  bar.appendChild(openBtn);
+  bar.append(versusBtn, openBtn);
 
-  let endless: { destroy: () => void } | null = null;
+  let side: { destroy: () => void } | null = null;
 
   function refreshBtn(): void {
     const best = save.getGameProgress(meta.id).endlessBest;
-    openBtn.textContent = best > 0 ? `♾️ 霓虹抢点 · 最高 ${best} 分` : "♾️ 霓虹抢点 · 点我开抢！";
+    openBtn.textContent = best > 0 ? `♾️ 点到手软 · 最好 ${best} 轮` : "♾️ 点到手软 · 点我开抢！";
   }
 
-  function closeEndless(): void {
-    endless?.destroy();
-    endless = null;
-    endlessHost.hidden = true;
+  function closeSide(): void {
+    side?.destroy();
+    side = null;
+    sideHost.hidden = true;
     levelHost.hidden = false;
     bar.hidden = false;
     refreshBtn();
   }
 
-  openBtn.addEventListener("click", () => {
-    if (endless) return;
+  function openSide(mountFn: (host: HTMLElement, api: GameApi, onExit: () => void) => { destroy: () => void }): void {
+    if (side) return;
     api.play("tap");
     levelHost.hidden = true;
     bar.hidden = true;
-    endlessHost.hidden = false;
-    endless = mountEndless(endlessHost, api, closeEndless);
-  });
+    sideHost.hidden = false;
+    side = mountFn(sideHost, api, closeSide);
+  }
+
+  versusBtn.addEventListener("click", () => openSide(mountVersus));
+  openBtn.addEventListener("click", () => openSide(mountEndless));
   refreshBtn();
 
   const level = mountLevelGame({ ...api, root: levelHost }, {
@@ -659,15 +670,36 @@ export function mount(api: GameApi): { destroy: () => void } {
     chapters: CHAPTERS,
     playLevel,
     mapHint: "让小电脑得分越少，星星越多！",
-    grandMessage: "188 场抢点大战全部获胜，你的手速天下第一！",
+    grandMessage: "188 场抢点大战全部获胜，又准又稳，了不起！",
   });
 
   return {
     destroy() {
-      endless?.destroy();
-      endless = null;
+      side?.destroy();
+      side = null;
       level.destroy();
       root.remove();
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// 1.2 追加的样式：一律 `rbt-` 前缀（拔河那款用的是 rbg 前缀，不会撞），
+// 只贴在 1.1 的规则后面，一条老规则都不改。
+// ---------------------------------------------------------------------------
+
+const CSS_V12 = `
+.rbt-dot-ready { opacity: .5; filter: grayscale(.7); box-shadow: 0 2px 6px rgba(100,120,180,.2); }
+.rbt-dot-ready::after { content: "预备"; position: absolute; left: 50%; top: -18px; transform: translateX(-50%); font-size: 11px; font-weight: 900; color: #6E7FA8; background: #ffffffdd; border-radius: 999px; padding: 1px 7px; }
+.rbt-dot-live { animation: rbtLightOn .22s ease; }
+@keyframes rbtLightOn { from { transform: scale(.86); } to { transform: scale(1); } }
+.rbt-arena .rbt-dot { width: 72px; height: 72px; font-size: 36px; }
+@media (max-width: 420px) {
+  .rbt-arena .rbt-dot { width: 72px; height: 72px; font-size: 32px; }
+  .rbt-arena { height: 300px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rbt-dot { animation: none; }
+  .rbt-dot-live { animation: none; transition: opacity .3s linear, filter .3s linear; }
+}
+`;

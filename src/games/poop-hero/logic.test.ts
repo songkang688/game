@@ -60,6 +60,15 @@ function level(over: Partial<LevelDef> = {}): LevelDef {
     springs: [],
     beams: [],
     junks: [],
+    litters: [],
+    bins: [],
+    mission: "sweep",
+    weather: "clear",
+    cart: null,
+    haulGoal: 0,
+    roles: false,
+    messRate: 0,
+    blocks: [],
     chaserSpeed: null,
     slippery: false,
     requiredRatio: 1,
@@ -214,7 +223,7 @@ describe("poop-hero 清洁大作战", () => {
     expect(Math.abs(w.players[0].x - x0)).toBeLessThan(2);
   });
 
-  it("踩中臭臭怪会变成小花,人还会弹起来", () => {
+  it("踩中豆豆怪会变成小花,人还会弹起来", () => {
     const def = level({ monsters: [{ x: 300, minX: 300, maxX: 300, speed: 0 }] });
     const w = createWorld(def, 1);
     w.players[0].x = 300;
@@ -226,7 +235,7 @@ describe("poop-hero 清洁大作战", () => {
     expect(drainEvents(w).some((e) => e.kind === "flower")).toBe(true);
   });
 
-  it("从侧面撞上臭臭怪会掉一颗心,并且有一小段无敌时间", () => {
+  it("从侧面撞上豆豆怪会掉一颗心,并且有一小段无敌时间", () => {
     const def = level({ monsters: [{ x: 300, minX: 300, maxX: 300, speed: 0 }] });
     const w = createWorld(def, 1);
     run(w, 1.2, [press({ right: true })]);
@@ -237,7 +246,7 @@ describe("poop-hero 清洁大作战", () => {
     expect(w.hearts).toBe(2);
   });
 
-  it("冲刺撞上臭臭怪也能把它变成花,人不掉心", () => {
+  it("冲刺撞上豆豆怪也能把它变成花,人不掉心", () => {
     const def = level({ monsters: [{ x: 190, minX: 190, maxX: 190, speed: 0 }] });
     const w = createWorld(def, 1);
     run(w, 0.26, [press({ right: true, act: true })]);
@@ -343,7 +352,7 @@ describe("poop-hero 地形机关", () => {
     expect(w.message).not.toContain("笨");
   });
 
-  it("臭味潮追上来会掉心,并把人往前推一段", () => {
+  it("尘土风追上来会掉心,并把人往前推一段", () => {
     const w = createWorld(level({ chaserSpeed: 420 }), 1);
     run(w, 1.6);
     expect(w.hearts).toBeLessThan(3);

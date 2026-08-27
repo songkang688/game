@@ -7,10 +7,11 @@ describe("涂色小屋 188 关", () => {
     expect(LEVELS).toHaveLength(188);
   });
 
-  it("至少 6 个主题章节，章节大小之和为 188；十幅线稿齐全", () => {
+  it("至少 6 个主题章节，章节大小之和为 188；线稿至少一章一幅（1.2 起共 16 幅）", () => {
     expect(CHAPTERS.length).toBeGreaterThanOrEqual(6);
     expect(totalSize(CHAPTERS)).toBe(188);
-    expect(PICTURES).toHaveLength(CHAPTERS.length);
+    expect(PICTURES.length).toBeGreaterThanOrEqual(CHAPTERS.length);
+    expect(PICTURES).toHaveLength(16);
     for (const p of PICTURES) {
       expect(p.regions.length).toBeGreaterThanOrEqual(8);
       expect(new Set(p.regions.map((r) => r.id)).size).toBe(p.regions.length);

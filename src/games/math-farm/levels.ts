@@ -1,10 +1,22 @@
-// 算数小农场：188 关 · 十大农场章节题库生成（20 以内加减 → 乘除/余数/分数小数/括号应用题）
+// 算数小农场：188 关 · 十大农场章节题库生成（20 以内加减 → 六年级全套）
 //
-// 1.1 起总关数 99 → 188：前 99 关（前 6 章）的章节切分、seed、生成参数逐字未动，
-// 新的 4 章共 89 关只在末尾追加，面向约小学六年级，允许多步推理。
+// 1.1 起总关数 99 → 188：前 99 关（前 6 章）的章节切分、seed、生成参数逐字未动。
+// 1.2 把第 100–188 关的出题换成「难度权重表（kinds.ts）+ 生成器与校验器（gen.ts）」那一套，
+// 题型从 7 种补到 14 种（竖式 / 通分 / 小数乘除 / 百分数 / 比与比例 / 方程 / 找规律），
+// 干扰项一律来自典型错误。前 99 关的代码路径一行都没动。
 import { TOTAL_LEVELS, mulberry32, pick, randInt, shuffled, chapterOf, indexInChapter, type Chapter } from "../level99";
-import type { QuizQuestion, QuizTheme } from "../quiz99";
-import { compareFractions, formatFraction, formatTenths, simplifyFraction } from "./logic";
+import type { QuizTheme } from "../quiz99";
+import { makeAdvanced, type MathQ } from "./gen";
+import {
+  KINDS_BY_TYPE,
+  hardnessOf,
+  tableKinds,
+  typeOfKind,
+  type AdvancedMathKind,
+  type LegacyMathKind,
+  type MathKind,
+  type MathType,
+} from "./kinds";
 
 /** 1.0 时代的章节数：下标 < 这个数的章节一律保持原样 */
 export const LEGACY_CHAPTER_COUNT = 6;
@@ -16,11 +28,11 @@ export const CHAPTERS: Chapter[] = [
   { name: "彩虹麦田", emoji: "🌈", color: "#fff3bf", desc: "凑十法：进位加法闯关", size: 16 },
   { name: "星星谷仓", emoji: "⭐", color: "#e5dbff", desc: "破十法：退位减法 + 比大小", size: 16 },
   { name: "月光农庄", emoji: "🌙", color: "#ffdeeb", desc: "连加连减混合大挑战", size: 16 },
-  // ↓ 1.1 新增：第 100–188 关
-  { name: "丰收乘法坊", emoji: "✖️", color: "#ffe9d6", desc: "两位数乘一位数、整十数除法，一步算到底", size: 23 },
-  { name: "余数磨坊", emoji: "🌾", color: "#fff4d6", desc: "分不完怎么办：带余除法，商和余数都要说清", size: 22 },
-  { name: "分数果酱铺", emoji: "🍯", color: "#ffe9f0", desc: "分数比大小与约分，还有一位小数加减", size: 22 },
-  { name: "括号谷仓", emoji: "🧺", color: "#e3f0ff", desc: "带括号的混合运算和两步应用题", size: 22 },
+  // ↓ 1.1 新增：第 100–188 关（1.2 把每一章的内容都补厚了，章节切分没动）
+  { name: "丰收乘法坊", emoji: "✖️", color: "#ffe9d6", desc: "两位数乘一位数、整十数除法，还有竖式的进位与退位", size: 23 },
+  { name: "余数磨坊", emoji: "🌾", color: "#fff4d6", desc: "分不完怎么办：带余除法、竖式与找规律", size: 22 },
+  { name: "分数果酱铺", emoji: "🍯", color: "#ffe9f0", desc: "通分与约分、小数四则，还有百分数和打折", size: 22 },
+  { name: "括号谷仓", emoji: "🧺", color: "#e3f0ff", desc: "混合运算、比与比例、简单方程和三类应用题", size: 22 },
 ];
 
 export const CHAPTER_THEMES: QuizTheme[] = [
@@ -54,21 +66,9 @@ const COUNT_NAMES: string[][] = [
   ["月亮", "猫头鹰", "蘑菇"],
 ];
 
-export type LegacyMathKind = "count" | "add" | "sub" | "missing" | "compare" | "chain";
-/** 1.1 新增的进阶题型（第 100–188 关专用） */
-export type AdvancedMathKind = "mul" | "div" | "divmod" | "frac" | "dec" | "paren" | "word";
-export type MathKind = LegacyMathKind | AdvancedMathKind;
-
-export interface MathQ extends QuizQuestion {
-  kind: MathKind;
-  /** 正确答案（数字题为数值，比大小题为符号） */
-  answer: number | string;
-  /**
-   * 1.1 应用题专用：题目对应的规范算式（例如 `3*8-5`）。
-   * 测试会独立求值一遍并核对题面里出现过这些数字，保证每一关都真的可解。
-   */
-  expr?: string;
-}
+// 题型分类与出题参数都搬进了 kinds.ts / gen.ts，这里只做转发，老的 import 路径继续可用
+export type { AdvancedMathKind, LegacyMathKind, MathKind } from "./kinds";
+export type { MathQ, MathSpec } from "./gen";
 
 function numChoices(rand: () => number, answer: number, max: number): { choices: string[]; correct: number } {
   const set = new Set<number>([answer]);
@@ -248,297 +248,6 @@ function qChain(rand: () => number): MathQ {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 1.1 新机制一：两位数乘一位数 / 整除 / 带余除法
-// ---------------------------------------------------------------------------
-
-/** 大数题的干扰项：围着正确答案做「像模像样的错算」，而不是随便偏 1、2 */
-function bigChoicesFor(rand: () => number, answer: number, deltas: number[]): { choices: string[]; correct: number } {
-  const set = new Set<number>([answer]);
-  let guard = 0;
-  while (set.size < 3 && guard++ < 120) {
-    const v = answer + pick(rand, deltas) * (rand() < 0.5 ? 1 : -1);
-    if (v >= 0 && v !== answer) set.add(v);
-  }
-  let filler = 1;
-  while (set.size < 3) set.add(answer + filler++);
-  const arr = shuffled([...set], rand);
-  return { choices: arr.map(String), correct: arr.indexOf(answer) };
-}
-
-/** 从若干候选字符串里凑够 3 个互不相同的选项 */
-function textChoices(rand: () => number, answer: string, more: () => string | null): { choices: string[]; correct: number } {
-  const set = new Set<string>([answer]);
-  let guard = 0;
-  while (set.size < 3 && guard++ < 200) {
-    const v = more();
-    if (v) set.add(v);
-  }
-  let filler = 1;
-  while (set.size < 3) set.add(`${answer}　${"·".repeat(filler++)}`);
-  const arr = shuffled([...set], rand);
-  return { choices: arr, correct: arr.indexOf(answer) };
-}
-
-/** 乘法：表内乘法 → 两位数乘一位数 */
-function qMul(rand: () => number, t: number): MathQ {
-  const a = t < 0.4 ? randInt(rand, 3, 9) : randInt(rand, 11, t < 0.75 ? 29 : 49);
-  const b = randInt(rand, 2, 9);
-  const answer = a * b;
-  const { choices, correct } = bigChoicesFor(rand, answer, [a, b, 10, 1, a + b]);
-  return {
-    kind: "mul", answer,
-    promptHTML: `${a} × ${b} = ?`,
-    ask: "算一算，积是多少？",
-    choices, correct,
-  };
-}
-
-/** 除法：正好分完（含整十数除法） */
-function qDiv(rand: () => number, t: number): MathQ {
-  const b = randInt(rand, 2, 9);
-  const quotient = t < 0.4 ? randInt(rand, 2, 9) : randInt(rand, 5, t < 0.75 ? 20 : 40);
-  const a = b * quotient;
-  const { choices, correct } = bigChoicesFor(rand, quotient, [1, 2, 10, b]);
-  return {
-    kind: "div", answer: quotient,
-    promptHTML: `${a} ÷ ${b} = ?`,
-    ask: "平均分，每份是多少？",
-    choices, correct,
-  };
-}
-
-/** 带余除法：问「商几余几」或单问余数 */
-function qDivMod(rand: () => number, t: number): MathQ {
-  const b = randInt(rand, 3, 9);
-  const quotient = t < 0.4 ? randInt(rand, 2, 9) : randInt(rand, 6, 30);
-  const remainder = randInt(rand, 1, b - 1);
-  const a = b * quotient + remainder;
-  const askRemainderOnly = t >= 0.5 && rand() < 0.4;
-  if (askRemainderOnly) {
-    const { choices, correct } = bigChoicesFor(rand, remainder, [1, 2, 3]);
-    return {
-      kind: "divmod", answer: remainder,
-      promptHTML: `${a} ÷ ${b} = ?`,
-      ask: "余数是几？",
-      choices, correct,
-    };
-  }
-  const answer = `${quotient} 余 ${remainder}`;
-  const { choices, correct } = textChoices(rand, answer, () => {
-    const dq = quotient + randInt(rand, -2, 2);
-    const dr = randInt(rand, 1, b - 1);
-    return dq >= 0 ? `${dq} 余 ${dr}` : null;
-  });
-  return {
-    kind: "divmod", answer,
-    promptHTML: `${a} ÷ ${b} = ?`,
-    ask: "商几余几？",
-    choices, correct,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// 1.1 新机制二：简易分数与一位小数
-// ---------------------------------------------------------------------------
-
-/** 分数题：比大小 / 约分 / 同分母加减 */
-function qFrac(rand: () => number, t: number): MathQ {
-  const form = t < 0.35 ? 0 : t < 0.7 ? randInt(rand, 0, 1) : randInt(rand, 0, 2);
-  if (form === 0) {
-    // 比大小
-    const ad = randInt(rand, 2, 9);
-    const an = randInt(rand, 1, ad - 1);
-    const bd = randInt(rand, 2, 9);
-    const bn = randInt(rand, 1, bd - 1);
-    const cmp = compareFractions(an, ad, bn, bd);
-    const answer = cmp > 0 ? "＞" : cmp < 0 ? "＜" : "＝";
-    const arr = shuffled(["＞", "＜", "＝"], rand);
-    return {
-      kind: "frac", answer,
-      promptHTML: `${formatFraction(an, ad)} <span style="color:#e8590c">○</span> ${formatFraction(bn, bd)}`,
-      ask: "○ 里应该填哪个符号？",
-      choices: arr, correct: arr.indexOf(answer),
-    };
-  }
-  if (form === 1) {
-    // 约分
-    const base = simplifyFraction(randInt(rand, 1, 7), randInt(rand, 2, 9));
-    const k = randInt(rand, 2, 6);
-    const n = base.n * k;
-    const d = base.d * k;
-    const answer = formatFraction(base.n, base.d);
-    const { choices, correct } = textChoices(rand, answer, () => {
-      const wn = base.n * randInt(rand, 1, 3) + randInt(rand, -1, 1);
-      const wd = base.d * randInt(rand, 1, 3);
-      return wn >= 1 && wd >= 2 ? formatFraction(wn, wd) : null;
-    });
-    return {
-      kind: "frac", answer,
-      promptHTML: `${formatFraction(n, d)} <span style="color:#e8590c">⇒</span> 最简`,
-      ask: "约成最简分数是多少？",
-      choices, correct,
-    };
-  }
-  // 同分母加减：加法保证和仍是真分数，减法保证差为正
-  const d = randInt(rand, 4, 12);
-  const plus = rand() < 0.5;
-  let an: number;
-  let bn: number;
-  if (plus) {
-    an = randInt(rand, 1, d - 2);
-    bn = randInt(rand, 1, d - 1 - an);
-  } else {
-    an = randInt(rand, 2, d - 1);
-    bn = randInt(rand, 1, an - 1);
-  }
-  const resultN = plus ? an + bn : an - bn;
-  const answer = formatFraction(resultN, d);
-  const { choices, correct } = textChoices(rand, answer, () => {
-    const wn = resultN + randInt(rand, -2, 2);
-    return wn >= 1 && wn !== resultN ? formatFraction(wn, d) : formatFraction(Math.max(1, resultN), d + randInt(rand, 1, 3));
-  });
-  return {
-    kind: "frac", answer,
-    promptHTML: `${formatFraction(an, d)} ${plus ? "+" : "-"} ${formatFraction(bn, d)} = ?`,
-    ask: "同分母，分子直接算～",
-    choices, correct,
-  };
-}
-
-/** 一位小数加减（内部按十分之几的整数算，结果不会出现浮点毛刺） */
-function qDec(rand: () => number, t: number): MathQ {
-  const max = t < 0.5 ? 99 : 299;
-  let a10 = 0;
-  let b10 = 0;
-  let plus = true;
-  let result = 0;
-  let guard = 0;
-  do {
-    a10 = randInt(rand, 11, max);
-    b10 = randInt(rand, 11, max);
-    plus = rand() < 0.5;
-    if (!plus && b10 > a10) [a10, b10] = [b10, a10];
-    result = plus ? a10 + b10 : a10 - b10;
-  } while ((result % 10 === 0 || result <= 0) && guard++ < 60);
-  const answer = formatTenths(result);
-  const { choices, correct } = textChoices(rand, answer, () => {
-    const v = result + pick(rand, [-10, -9, -1, 1, 9, 10]);
-    return v > 0 && v !== result ? formatTenths(v) : null;
-  });
-  return {
-    kind: "dec", answer,
-    promptHTML: `${formatTenths(a10)} ${plus ? "+" : "-"} ${formatTenths(b10)} = ?`,
-    ask: "小数点对齐，再算～",
-    choices, correct,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// 1.1 新机制三：带括号的混合运算 + 两步应用题
-// ---------------------------------------------------------------------------
-
-/** 带括号 / 先乘除后加减的混合运算 */
-function qParen(rand: () => number, t: number): MathQ {
-  for (let guard = 0; guard < 200; guard++) {
-    const form = randInt(rand, 0, t < 0.5 ? 2 : 3);
-    const a = randInt(rand, 2, t < 0.5 ? 12 : 25);
-    const b = randInt(rand, 2, t < 0.5 ? 9 : 18);
-    const c = randInt(rand, 2, 9);
-    let text = "";
-    let answer = 0;
-    if (form === 0) {
-      text = `( ${a} + ${b} ) × ${c}`;
-      answer = (a + b) * c;
-    } else if (form === 1) {
-      if (a <= b) continue;
-      text = `( ${a} - ${b} ) × ${c}`;
-      answer = (a - b) * c;
-    } else if (form === 2) {
-      text = `${a} + ${b} × ${c}`;
-      answer = a + b * c;
-    } else {
-      const sum = c * randInt(rand, 2, 12);
-      text = `( ${sum} + ${c} ) ÷ ${c}`;
-      answer = (sum + c) / c;
-    }
-    if (answer < 0 || answer > 500 || !Number.isInteger(answer)) continue;
-    const { choices, correct } = bigChoicesFor(rand, answer, [1, c, b, 10, a]);
-    return {
-      kind: "paren", answer,
-      promptHTML: `${text} = ?`,
-      ask: form === 2 ? "先乘除，后加减～" : "先算括号里的～",
-      choices, correct,
-    };
-  }
-  const { choices, correct } = bigChoicesFor(rand, 24, [1, 2, 6]);
-  return { kind: "paren", answer: 24, promptHTML: `( 5 + 3 ) × 3 = ?`, ask: "先算括号里的～", choices, correct };
-}
-
-/** 应用题里的原创农场物件（不使用任何商标或官方角色名） */
-const FARM_ITEMS = ["南瓜", "玉米", "草莓", "小番茄", "鸡蛋", "萝卜", "苹果", "土豆"];
-const FARM_BAGS = ["筐", "袋", "箱", "篮"];
-
-/** 两步应用题：题面是中文，`expr` 给出规范算式，测试会独立验算 */
-function qWord(rand: () => number, t: number): MathQ {
-  const item = pick(rand, FARM_ITEMS);
-  const bag = pick(rand, FARM_BAGS);
-  const form = randInt(rand, 0, t < 0.5 ? 1 : 3);
-  let text = "";
-  let expr = "";
-  let answer = 0;
-  if (form === 0) {
-    const rows = randInt(rand, 3, 9);
-    const each = randInt(rand, 4, 12);
-    const away = randInt(rand, 2, Math.max(2, rows * each - 2));
-    text = `农场种了 ${rows} 排${item}，每排 ${each} 个，送走 ${away} 个，还剩几个？`;
-    expr = `${rows}*${each}-${away}`;
-    answer = rows * each - away;
-  } else if (form === 1) {
-    const per = randInt(rand, 3, 9);
-    const bags = randInt(rand, 4, 15);
-    const extra = randInt(rand, 2, 19);
-    text = `每${bag}装 ${per} 个${item}，装满了 ${bags} ${bag}，又多出 ${extra} 个，一共几个？`;
-    expr = `${per}*${bags}+${extra}`;
-    answer = per * bags + extra;
-  } else if (form === 2) {
-    const people = randInt(rand, 3, 9);
-    const each = randInt(rand, 4, 15);
-    const sold = randInt(rand, 5, 40);
-    const total = people * each + sold;
-    text = `一共 ${total} 个${item}，先卖掉 ${sold} 个，剩下的平均分给 ${people} 个小朋友，每人几个？`;
-    expr = `(${total}-${sold})/${people}`;
-    answer = each;
-  } else {
-    const per = randInt(rand, 3, 9);
-    const bags = randInt(rand, 3, 12);
-    const away = randInt(rand, 2, 30);
-    const total = per * bags + away;
-    text = `摘了 ${total} 个${item}，先送走 ${away} 个，剩下的每${bag}放 ${per} 个，能装满几${bag}？`;
-    expr = `(${total}-${away})/${per}`;
-    answer = bags;
-  }
-  const { choices, correct } = bigChoicesFor(rand, answer, [1, 2, 5, 10]);
-  return {
-    kind: "word", answer, expr,
-    promptHTML: `<span style="font-size:19px;font-weight:800;line-height:1.6;display:block">🧑‍🌾 ${text}</span>`,
-    ask: "分两步想，先算什么？",
-    choices, correct,
-  };
-}
-
-function makeAdvanced(rand: () => number, kind: AdvancedMathKind, t: number): MathQ {
-  switch (kind) {
-    case "mul": return qMul(rand, t);
-    case "div": return qDiv(rand, t);
-    case "divmod": return qDivMod(rand, t);
-    case "frac": return qFrac(rand, t);
-    case "dec": return qDec(rand, t);
-    case "paren": return qParen(rand, t);
-    default: return qWord(rand, t);
-  }
-}
-
 /** 每关题目数：前 99 关 4 → 7 题；第 100–188 关 6 → 10 题（明显更长） */
 export function questionCount(level: number): number {
   const ci = chapterOf(CHAPTERS, level);
@@ -573,23 +282,9 @@ export function kindPool(level: number): MathKind[] {
     case 5:
       if (t < 0.4) return ["chain"];
       return ["chain", "compare", "add", "sub"];
-    // ↓ 1.1 新增章节
-    case 6:
-      if (t < 0.35) return ["mul"];
-      if (t < 0.7) return ["mul", "div"];
-      return ["mul", "div", "word"];
-    case 7:
-      if (t < 0.4) return ["divmod"];
-      if (t < 0.7) return ["divmod", "div"];
-      return ["divmod", "div", "word"];
-    case 8:
-      if (t < 0.35) return ["frac"];
-      if (t < 0.7) return ["frac", "dec"];
-      return ["frac", "dec", "word"];
+    // ↓ 第 100–188 关：1.2 起由 kinds.ts 的难度权重表排题，这里只是把排出来的种类去重报出去
     default:
-      if (t < 0.35) return ["paren"];
-      if (t < 0.7) return ["paren", "word"];
-      return ["paren", "word", "mul", "dec"];
+      return [...new Set(tableKinds(level, questionCount(level)))];
   }
 }
 
@@ -599,9 +294,15 @@ export function buildQuestions(level: number): MathQ[] {
   const ci = chapterOf(CHAPTERS, level);
   const idx = indexInChapter(CHAPTERS, level);
   const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
-  const pool = kindPool(level);
   const count = questionCount(level);
   const out: MathQ[] = [];
+  if (ci >= LEGACY_CHAPTER_COUNT) {
+    // 第 100–188 关：题位由权重表分配，每道题都过一遍校验器
+    const hard = hardnessOf(level);
+    for (const kind of tableKinds(level, count)) out.push(makeAdvanced(rand, kind, hard));
+    return shuffled(out, rand);
+  }
+  const pool = kindPool(level);
   for (let i = 0; i < count; i++) {
     // 轮流覆盖全部题型，超出部分随机补
     const kind = i < pool.length ? pool[i] : pick(rand, pool);
@@ -610,9 +311,46 @@ export function buildQuestions(level: number): MathQ[] {
   return shuffled(out, rand);
 }
 
+/**
+ * 错题回顾用的「同类换数字」新题：答错过哪几类，就每类再来一道。
+ * 换一颗种子，并且躲开正题已经出过的题面，孩子不会以为是原题重播。
+ */
+export function makeReviewQuestions(
+  kinds: readonly MathKind[],
+  level: number,
+  salt = 0,
+  avoid: readonly string[] = []
+): MathQ[] {
+  const rand = mulberry32(9700 + level * 104729 + salt * 7919);
+  const ci = chapterOf(CHAPTERS, level);
+  const idx = indexInChapter(CHAPTERS, level);
+  const t = idx / Math.max(1, CHAPTERS[ci].size - 1);
+  const hard = hardnessOf(level);
+  const seen = new Set(avoid);
+  const out: MathQ[] = [];
+  for (const kind of [...new Set(kinds)].slice(0, 4)) {
+    for (let guard = 0; guard < 20; guard++) {
+      const q = ci >= LEGACY_CHAPTER_COUNT ? makeAdvanced(rand, kind as AdvancedMathKind, hard) : makeOne(rand, ci, t, kind);
+      if (seen.has(q.promptHTML)) continue;
+      seen.add(q.promptHTML);
+      out.push(q);
+      break;
+    }
+  }
+  return out;
+}
+
+/** 本关答错过的那几类题型（错题本按类型记，不记具体题目） */
+export function typesOfKinds(kinds: readonly MathKind[]): MathType[] {
+  return [...new Set(kinds.map((k) => typeOfKind(k)))];
+}
+
+/** 某一类题型能派出的具体种类（「练一练」按类型推荐时用） */
+export function kindsOfType(type: MathType): readonly AdvancedMathKind[] {
+  return KINDS_BY_TYPE[type];
+}
+
 function makeOne(rand: () => number, ci: number, t: number, kind: MathKind): MathQ {
-  // 1.1 新章节走独立的进阶生成器；前 6 章的分支一行都没动
-  if (ci >= LEGACY_CHAPTER_COUNT) return makeAdvanced(rand, kind as AdvancedMathKind, t);
   switch (ci) {
     case 0: {
       const maxN = t < 0.5 ? 5 : 8;

@@ -95,13 +95,20 @@ export function makeIntervalPair(
 /**
  * 双声部和弦：每一拍两个不同的音，两颗星星要一起按到。
  * 相邻两拍不会完全一样，不然一直按同两颗就过关了。
+ *
+ * @param minGap 两颗星星至少隔几格。1.2 起双声部关传 2：
+ *   两个键真要同时按，挨在一起会被一根手指盖住（见 `touch.ts` 的 `DUET_MIN_GAP_PX`）。
+ *   默认仍是 1，`makeChords` 本身的老行为一格不变。
  */
 export function makeChords(
   length: number,
   starCount: number,
-  rand: () => number = Math.random
+  rand: () => number = Math.random,
+  minGap = 1
 ): number[][] {
   if (length <= 0 || starCount < 2) return [];
+  // 星星不够宽时退回相邻也允许，否则一个和弦都摆不出来
+  const gap = Math.max(1, Math.min(minGap, starCount - 1));
   const out: number[][] = [];
   for (let i = 0; i < length; i++) {
     let chord: number[] = [];
@@ -109,11 +116,12 @@ export function makeChords(
       const lo = Math.floor(rand() * starCount);
       const hi = Math.floor(rand() * starCount);
       if (lo === hi) continue;
+      if (Math.abs(hi - lo) < gap) continue;
       chord = [Math.min(lo, hi), Math.max(lo, hi)];
       const prev = out[i - 1];
       if (!prev || prev[0] !== chord[0] || prev[1] !== chord[1]) break;
     }
-    if (chord.length < 2) chord = [0, Math.min(1, starCount - 1)];
+    if (chord.length < 2) chord = [0, Math.min(gap, starCount - 1)];
     out.push(chord);
   }
   return out;

@@ -41,14 +41,19 @@ import {
 import {
   CHARGE_CYCLE_MS,
   MAX_DEPTH,
+  RED_SNAP_MS,
   autoReel,
   biteDelayMs,
   catchScore,
+  distanceLuck,
+  distanceOfDepth,
   fightParams,
   newFight,
   pickFish,
+  rollLengthCm,
   sinkMs,
   stepFight,
+  weightForLength,
 } from "./logic";
 
 const TOTAL = 188;
@@ -363,5 +368,92 @@ describe("全 188 关可通关性", () => {
   it("一直不收线会跑鱼,同样一关都赢不了", () => {
     const report = runMustLose(spec("idle"), [0, 40, 90, 140, 187], [1, 2]);
     expect(report.failures, formatReport(report)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2 的真实节奏:咬钩反应窗口 + 900 毫秒小演出 + 每条鱼体重不一样
+// ---------------------------------------------------------------------------
+//
+// 上面那一套模拟是 1.1 的口径(不算反应窗口、按标准体重结算)。
+// 1.2 每一竿多花掉「0.4 秒反应窗口 + 0.9 秒上鱼演出」,重量目标也改成按体长换算的实际体重,
+// 所以这里再跑一遍真实节奏,证明新增的这些开销没有把哪一关卡死。
+
+/** 咬钩反应窗口(和 index.ts 的 BITE_WINDOW_MS 一致,不带浮标加成) */
+const BITE_WINDOW_MS = 400;
+/** 上鱼小演出(和 index.ts 的 SHOW_MS 一致) */
+const SHOW_MS = 900;
+
+function simulate12(idx: number, rand: Rng): FishOutcome {
+  const lv = buildLevel(idx);
+  const depth = bandCenter(lv.band);
+  // 落点预览是带风修正的,所以「瞄准鱼群带中心」这件事风再大也做得到
+  const luck = BAND_LUCK + distanceLuck(distanceOfDepth(depth));
+  let remainMs = lv.seconds * 1000;
+  let casts = lv.casts;
+  let log = emptyLog();
+
+  while (casts > 0 && remainMs > 0) {
+    casts -= 1;
+    remainMs -= 260 + chargeMs(depth) + sinkMs(depth) + biteDelayMs(rand, depth) + BITE_WINDOW_MS;
+    if (remainMs <= 0) break;
+    const fish = pickFish(depth, rand, luck);
+    // 出厂鱼线:装备只会让手感更松,不装备也必须过得去
+    const out = fightOnce(fightParams(fish, lv.hardness), "good");
+    remainMs -= out.ms;
+    if (out.landed) {
+      const kg = weightForLength(fish, rollLengthCm(fish, rand()));
+      log = {
+        count: log.count + 1,
+        score: log.score + catchScore(fish, { inBand: true }),
+        weight: log.weight + kg,
+        species: log.species.includes(fish.id) ? log.species : [...log.species, fish.id],
+      };
+      if (goalMet(lv, log)) return { win: true, got: goalValue(lv, log), casts: lv.casts - casts };
+    }
+    remainMs -= SHOW_MS;
+  }
+
+  return {
+    win: false,
+    got: goalValue(lv, log),
+    casts: lv.casts - casts,
+    note: `${goalText(lv)},只完成 ${goalValue(lv, log)}(用了 ${lv.casts - casts} 竿,剩 ${Math.round(remainMs / 1000)} 秒)`,
+  };
+}
+
+describe("1.2 真实节奏下的可通关性", () => {
+  it("算上反应窗口与上鱼演出,188 关全量跑一遍还是一关都不卡", () => {
+    const report = runCampaign(
+      {
+        game: "钓鱼小达人(1.2 真实节奏)",
+        total: TOTAL,
+        label: (i: number) => `${CHAPTERS[buildLevel(i).chapter].name} · ${goalText(buildLevel(i))}`,
+        play: (i: number, rng: Rng) => simulate12(i, rng),
+      },
+      { seeds: [1, 2, 3, 4, 5], mode: "every" }
+    );
+    expect(report.ran).toBe(TOTAL);
+    expect(report.failures, formatReport(report)).toEqual([]);
+    expect(assertAllWin(report)).toBe(true);
+  });
+
+  it("红区不是当帧断线:标准手法整局下来一次都不会踩到红区计时", () => {
+    for (const idx of [0, 47, 96, 140, 187]) {
+      const lv = buildLevel(idx);
+      const rand = levelRandom(lv, 3);
+      const fish = pickFish(bandCenter(lv.band), rand, BAND_LUCK);
+      const p = fightParams(fish, lv.hardness);
+      let st = newFight();
+      let reeling = true;
+      let maxRed = 0;
+      for (let i = 0; i < 3000 && st.status === "fighting"; i++) {
+        reeling = autoReel(st, 0.34, 0.6, reeling);
+        st = stepFight(st, p, reeling, 16);
+        maxRed = Math.max(maxRed, st.redMs);
+      }
+      expect(st.status, `第 ${idx + 1} 关`).toBe("landed");
+      expect(maxRed, `第 ${idx + 1} 关踩到红区了`).toBeLessThan(RED_SNAP_MS);
+    }
   });
 });

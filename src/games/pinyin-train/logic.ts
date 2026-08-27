@@ -1,4 +1,10 @@
 // 拼音小火车：出题纯逻辑（三站递进 + 声调题 + 看图选音节）
+import {
+  markTone,
+  readTone,
+  removeToneMarks,
+  WHOLE_READ_SYLLABLES as WHOLE_READ,
+} from "./pinyin";
 
 /** 韵母（单韵母 + 常见复韵母/鼻韵母） */
 export const VOWELS = [
@@ -208,70 +214,30 @@ export function makeQuestionForStage(stage: 1 | 2 | 3, rand: () => number = Math
 // 以下全部是新增内容，前 99 关的题库与出题函数一个字都没动。
 // ===========================================================================
 
-/** 声调符号表：基础元音 → 一二三四声 */
-const TONED_VOWELS: Record<string, string[]> = {
-  a: ["ā", "á", "ǎ", "à"],
-  o: ["ō", "ó", "ǒ", "ò"],
-  e: ["ē", "é", "ě", "è"],
-  i: ["ī", "í", "ǐ", "ì"],
-  u: ["ū", "ú", "ǔ", "ù"],
-  "ü": ["ǖ", "ǘ", "ǚ", "ǜ"],
-};
-
-/** 反查表：带调字母 → { 基础字母, 声调 } */
-const TONE_LOOKUP: Record<string, { base: string; tone: number }> = (() => {
-  const map: Record<string, { base: string; tone: number }> = {};
-  for (const [base, forms] of Object.entries(TONED_VOWELS)) {
-    forms.forEach((f, i) => {
-      map[f] = { base, tone: i + 1 };
-    });
-  }
-  return map;
-})();
-
-/** 音节的声调：1..4，轻声（没有调号）返回 0 */
+/**
+ * 音节的声调：1..4，轻声（没有调号）返回 0。
+ * 1.2 起规则统一收在 `pinyin.ts`，这里只做转调，结果与 1.1 完全一致。
+ */
 export function toneOf(syllable: string): number {
-  for (const ch of syllable) {
-    const hit = TONE_LOOKUP[ch];
-    if (hit) return hit.tone;
-  }
-  return 0;
+  return readTone(syllable);
 }
 
 /** 去掉调号，得到「光板」音节（轻声本来就没调号，原样返回） */
 export function stripTone(syllable: string): string {
-  let out = "";
-  for (const ch of syllable) out += TONE_LOOKUP[ch]?.base ?? ch;
-  return out;
+  return removeToneMarks(syllable);
 }
 
 /**
  * 给光板音节标调（tone 为 0 就是轻声，不加调号）。
- * 标调规则：有 a 标 a，没 a 找 o / e，iu 标后面的 u，ui 标后面的 i，其余标唯一的元音。
+ * 标调规则见 `pinyin.ts` 的 `toneTargetIndex`：有 a 标 a，没 a 找 o / e，
+ * 都没有就标在最后一个 i / u / ü 上（iu 标 u、ui 标 i 都由这一条覆盖）。
  */
 export function applyTone(plain: string, tone: number): string {
-  if (tone <= 0 || tone > 4) return plain;
-  let idx = -1;
-  for (const v of ["a", "o", "e"]) {
-    idx = plain.indexOf(v);
-    if (idx >= 0) break;
-  }
-  if (idx < 0) {
-    if (plain.includes("iu")) idx = plain.indexOf("iu") + 1;
-    else if (plain.includes("ui")) idx = plain.indexOf("ui") + 1;
-    else idx = plain.search(/[iuü]/);
-  }
-  if (idx < 0) return plain;
-  const forms = TONED_VOWELS[plain[idx]];
-  if (!forms) return plain;
-  return plain.slice(0, idx) + forms[tone - 1] + plain.slice(idx + 1);
+  return markTone(plain, tone);
 }
 
-/** 十六个整体认读音节：看见就整个儿读出来，不用拼 */
-export const WHOLE_READ_SYLLABLES = [
-  "zhi", "chi", "shi", "ri", "zi", "ci", "si", "yi",
-  "wu", "yu", "ye", "yue", "yuan", "yin", "yun", "ying",
-];
+/** 十六个整体认读音节：看见就整个儿读出来，不用拼（数据在 `pinyin.ts`） */
+export const WHOLE_READ_SYLLABLES: readonly string[] = WHOLE_READ;
 
 /** 长得像整体认读、其实要拼读的音节，用来做干扰项 */
 export const SPELL_ONLY_SYLLABLES = [
@@ -301,7 +267,8 @@ export const DUOYIN_CARDS: DuoyinCard[] = [
   {
     char: "行",
     readings: [
-      { pinyin: "háng", words: ["银行", "行业", "同行"], sentence: "爸爸带我去银行存压岁钱" },
+      // 「同行」两读都标准（tóng háng 同业 / tóng xíng 结伴走），词本身定不了音，换成只读 háng 的「行列」
+      { pinyin: "háng", words: ["银行", "行业", "行列"], sentence: "爸爸带我去银行存压岁钱" },
       { pinyin: "xíng", words: ["行走", "行动", "不行"], sentence: "我们沿着小路行走了很久" },
     ],
   },
@@ -337,14 +304,16 @@ export const DUOYIN_CARDS: DuoyinCard[] = [
     char: "好",
     readings: [
       { pinyin: "hǎo", words: ["好看", "好人", "美好"], sentence: "这本书里的插图真好看" },
-      { pinyin: "hào", words: ["爱好", "好奇", "好学"], sentence: "他的爱好是收集各地邮票" },
+      // 「好学」两读都标准（hào xué 爱学 / hǎo xué 容易学），换成只读 hào 的「好动」
+      { pinyin: "hào", words: ["爱好", "好奇", "好动"], sentence: "他的爱好是收集各地邮票" },
     ],
   },
   {
     char: "觉",
     readings: [
       { pinyin: "jué", words: ["觉得", "感觉", "自觉"], sentence: "我觉得这个办法很聪明" },
-      { pinyin: "jiào", words: ["睡觉", "午觉", "困觉"], sentence: "弟弟中午一定要睡午觉" },
+      // 「困觉」是方言词（现汉标〈方〉），普通话不这么说，换成同样常见的「懒觉」
+      { pinyin: "jiào", words: ["睡觉", "午觉", "懒觉"], sentence: "弟弟中午一定要睡午觉" },
     ],
   },
   {
@@ -392,7 +361,8 @@ export const DUOYIN_CARDS: DuoyinCard[] = [
   {
     char: "转",
     readings: [
-      { pinyin: "zhuàn", words: ["转圈", "转动", "打转"], sentence: "风车在屋顶上一直转圈" },
+      // 「转动」两读都收（zhuàn dòng 打转 / zhuǎn dòng 挪动），和「同行」同一类毛病，换成只读 zhuàn 的「转盘」
+      { pinyin: "zhuàn", words: ["转圈", "转盘", "打转"], sentence: "风车在屋顶上一直转圈" },
       { pinyin: "zhuǎn", words: ["转弯", "转身", "转告"], sentence: "前面路口向左转弯就到了" },
     ],
   },
@@ -552,4 +522,259 @@ export const PINYIN_SENTENCES: PinyinSentence[] = [
     text: "清晨的露珠挂在草叶尖上",
     syllables: ["qīng", "chén", "de", "lù", "zhū", "guà", "zài", "cǎo", "yè", "jiān", "shàng"],
   },
+];
+
+// ===========================================================================
+// 1.2 追加：易混淆专项 / 标声调 / 拼读组合的题库
+// 以下全部是新增数据，上面 1.0 与 1.1 的题库一个字都没动。
+// ===========================================================================
+
+/** 一个易混淆的字：正确读音，外加同组里最像的那个错读音 */
+export interface ConfuseItem {
+  /** 单音字（不要放多音字，否则「唯一正确答案」立不住） */
+  char: string;
+  /** 正确读音（带调号） */
+  pinyin: string;
+  /** 同组对手的读音：只差组内那一个特征，且本身是合法音节写法 */
+  rival: string;
+}
+
+/** 一组容易混的声母或韵母 */
+export interface ConfuseGroup {
+  id: string;
+  /** 展示名，例如「b d p q」 */
+  name: string;
+  /** 这一组混的是声母还是韵母 */
+  kind: "initial" | "final";
+  members: string[];
+  /** 判别方法，只讲怎么想，不写任何一题的答案 */
+  tip: string;
+  /** 挖空题的第三个选项（同组只有两个成员时补上一个近邻） */
+  extras: string[];
+  items: ConfuseItem[];
+  /** 每个成员的音节池，「找出读音不同的一个」从这里取 */
+  pools: Record<string, string[]>;
+}
+
+/** 六组专项：形近四胞胎、鼻音、唇齿与喉、前后鼻韵母、平翘舌 */
+export const CONFUSE_GROUPS: ConfuseGroup[] = [
+  {
+    id: "b-d-p-q",
+    name: "b d p q",
+    kind: "initial",
+    members: ["b", "d", "p", "q"],
+    tip: "先看竖线在左边还是右边，再看半圆朝上还是朝下。",
+    extras: [],
+    items: [
+      { char: "八", pinyin: "bā", rival: "pā" },
+      { char: "爸", pinyin: "bà", rival: "pà" },
+      { char: "大", pinyin: "dà", rival: "bà" },
+      { char: "弟", pinyin: "dì", rival: "qì" },
+      { char: "皮", pinyin: "pí", rival: "bí" },
+      { char: "跑", pinyin: "pǎo", rival: "bǎo" },
+      { char: "七", pinyin: "qī", rival: "pī" },
+      { char: "去", pinyin: "qù", rival: "bù" },
+    ],
+    pools: {
+      b: ["bā", "bǐ", "bù", "bái", "bào"],
+      d: ["dà", "dì", "dù", "dài", "dào"],
+      p: ["pá", "pí", "pǎo", "pài", "pù"],
+      q: ["qī", "qí", "qù", "qiū", "qiáo"],
+    },
+  },
+  {
+    id: "n-l",
+    name: "n l",
+    kind: "initial",
+    members: ["n", "l"],
+    tip: "捏住鼻子念一遍，鼻子发麻的那个是鼻音。",
+    extras: ["m"],
+    items: [
+      { char: "那", pinyin: "nà", rival: "là" },
+      { char: "男", pinyin: "nán", rival: "lán" },
+      { char: "牛", pinyin: "niú", rival: "liú" },
+      { char: "女", pinyin: "nǚ", rival: "lǚ" },
+      { char: "老", pinyin: "lǎo", rival: "nǎo" },
+      { char: "你", pinyin: "nǐ", rival: "lǐ" },
+      { char: "力", pinyin: "lì", rival: "nì" },
+      { char: "蓝", pinyin: "lán", rival: "nán" },
+    ],
+    pools: {
+      n: ["nà", "nán", "niú", "nǚ", "nǎo", "nǐ"],
+      l: ["là", "lán", "liú", "lǜ", "lǎo", "lǐ"],
+    },
+  },
+  {
+    id: "f-h",
+    name: "f h",
+    kind: "initial",
+    members: ["f", "h"],
+    tip: "上牙咬住下唇送气的是一个，喉咙里呼气的是另一个。",
+    extras: ["k"],
+    items: [
+      { char: "飞", pinyin: "fēi", rival: "hēi" },
+      { char: "饭", pinyin: "fàn", rival: "hàn" },
+      { char: "风", pinyin: "fēng", rival: "hēng" },
+      { char: "发", pinyin: "fā", rival: "hā" },
+      { char: "黑", pinyin: "hēi", rival: "fēi" },
+      { char: "很", pinyin: "hěn", rival: "fěn" },
+      { char: "汗", pinyin: "hàn", rival: "fàn" },
+      { char: "房", pinyin: "fáng", rival: "háng" },
+    ],
+    pools: {
+      f: ["fēi", "fàn", "fēng", "fā", "fáng"],
+      h: ["hēi", "hàn", "hěn", "hā", "háng"],
+    },
+  },
+  {
+    id: "an-ang",
+    name: "an ang",
+    kind: "final",
+    members: ["an", "ang"],
+    tip: "收音时舌尖抵住上齿龈的是前鼻韵母，舌根抬起来的是后鼻韵母。",
+    extras: ["en", "eng"],
+    items: [
+      { char: "山", pinyin: "shān", rival: "shāng" },
+      { char: "蓝", pinyin: "lán", rival: "láng" },
+      { char: "班", pinyin: "bān", rival: "bāng" },
+      { char: "半", pinyin: "bàn", rival: "bàng" },
+      { char: "上", pinyin: "shàng", rival: "shàn" },
+      { char: "忙", pinyin: "máng", rival: "mán" },
+      { char: "帮", pinyin: "bāng", rival: "bān" },
+      { char: "光", pinyin: "guāng", rival: "guān" },
+    ],
+    pools: {
+      an: ["shān", "lán", "bān", "bàn", "sān", "guān"],
+      ang: ["shāng", "láng", "bāng", "bàng", "sāng", "guāng"],
+    },
+  },
+  {
+    id: "in-ing",
+    name: "in ing",
+    kind: "final",
+    members: ["in", "ing"],
+    tip: "把手放在鼻梁上念，震得厉害、尾音拖长的那个是后鼻韵母。",
+    extras: ["en", "eng"],
+    items: [
+      { char: "星", pinyin: "xīng", rival: "xīn" },
+      { char: "心", pinyin: "xīn", rival: "xīng" },
+      { char: "林", pinyin: "lín", rival: "líng" },
+      { char: "铃", pinyin: "líng", rival: "lín" },
+      { char: "金", pinyin: "jīn", rival: "jīng" },
+      { char: "京", pinyin: "jīng", rival: "jīn" },
+      { char: "明", pinyin: "míng", rival: "mín" },
+      { char: "民", pinyin: "mín", rival: "míng" },
+    ],
+    pools: {
+      in: ["xīn", "lín", "jīn", "mín", "pǐn", "bīn"],
+      ing: ["xīng", "líng", "jīng", "míng", "pīng", "bīng"],
+    },
+  },
+  {
+    id: "z-zh",
+    name: "z zh",
+    kind: "initial",
+    members: ["z", "zh"],
+    tip: "舌尖平平贴着下齿的是平舌音，舌尖翘起来抵住上颚的是翘舌音。",
+    extras: ["c"],
+    items: [
+      { char: "早", pinyin: "zǎo", rival: "zhǎo" },
+      { char: "字", pinyin: "zì", rival: "zhì" },
+      { char: "走", pinyin: "zǒu", rival: "zhǒu" },
+      { char: "坐", pinyin: "zuò", rival: "zhuò" },
+      { char: "找", pinyin: "zhǎo", rival: "zǎo" },
+      { char: "知", pinyin: "zhī", rival: "zī" },
+      { char: "纸", pinyin: "zhǐ", rival: "zǐ" },
+      { char: "中", pinyin: "zhōng", rival: "zōng" },
+    ],
+    pools: {
+      z: ["zǎo", "zì", "zǒu", "zuò", "zī", "zǐ"],
+      zh: ["zhǎo", "zhì", "zhǒu", "zhuò", "zhī", "zhǐ"],
+    },
+  },
+];
+
+/** 按 id 找一组（找不到就退回第一组，绝不返回 undefined 让出题崩掉） */
+export function confuseGroupById(id: string): ConfuseGroup {
+  return CONFUSE_GROUPS.find((g) => g.id === id) ?? CONFUSE_GROUPS[0];
+}
+
+/** 标声调专用卡：光板音节 + 该标的调 + 一个能对上的字 */
+export interface ToneDrillCard {
+  plain: string;
+  tone: number;
+  word: string;
+}
+
+/**
+ * 标声调题库：每张卡都至少有两个能戴调号的字母，
+ * 覆盖 iu / ui / üe / ao / ei / ie / ou / uo / uai / iao 等课本反复强调的组合。
+ */
+export const TONE_DRILL_CARDS: ToneDrillCard[] = [
+  { plain: "hao", tone: 3, word: "好" },
+  { plain: "liu", tone: 2, word: "流" },
+  { plain: "shui", tone: 3, word: "水" },
+  { plain: "xue", tone: 2, word: "学" },
+  { plain: "mei", tone: 3, word: "美" },
+  { plain: "xie", tone: 3, word: "写" },
+  { plain: "gou", tone: 3, word: "狗" },
+  { plain: "huo", tone: 3, word: "火" },
+  { plain: "kuai", tone: 4, word: "快" },
+  { plain: "jiu", tone: 3, word: "九" },
+  { plain: "gui", tone: 1, word: "龟" },
+  { plain: "lüe", tone: 4, word: "略" },
+  { plain: "niao", tone: 3, word: "鸟" },
+  { plain: "bai", tone: 2, word: "白" },
+  { plain: "tiao", tone: 4, word: "跳" },
+  { plain: "zhuo", tone: 1, word: "桌" },
+  { plain: "xiu", tone: 1, word: "休" },
+  { plain: "dui", tone: 4, word: "对" },
+  { plain: "yue", tone: 4, word: "月" },
+  { plain: "you", tone: 3, word: "有" },
+];
+
+/** 拼读车厢卡：声母 + 韵母（基本形）+ 声调，拼出来就是那个字的音 */
+export interface SpellCard {
+  word: string;
+  emoji: string;
+  /** 声母；零声母写 "y" / "w"（按隔音规则处理） */
+  initial: string;
+  /** 韵母基本形：三拼不省写、ü 带两点 */
+  final: string;
+  tone: number;
+  /** 属于哪几组易混淆（专项章按组挑卡；不属于任何一组就留空） */
+  groups: string[];
+}
+
+export const SPELL_CARDS: SpellCard[] = [
+  { word: "妈", emoji: "👩", initial: "m", final: "a", tone: 1, groups: [] },
+  { word: "水", emoji: "💧", initial: "sh", final: "uei", tone: 3, groups: [] },
+  { word: "学", emoji: "📚", initial: "x", final: "üe", tone: 2, groups: [] },
+  { word: "女", emoji: "👧", initial: "n", final: "ü", tone: 3, groups: ["n-l"] },
+  { word: "绿", emoji: "🟢", initial: "l", final: "ü", tone: 4, groups: ["n-l"] },
+  { word: "六", emoji: "6️⃣", initial: "l", final: "iou", tone: 4, groups: ["n-l"] },
+  { word: "牛", emoji: "🐮", initial: "n", final: "iou", tone: 2, groups: ["n-l"] },
+  { word: "龟", emoji: "🐢", initial: "g", final: "uei", tone: 1, groups: [] },
+  { word: "火", emoji: "🔥", initial: "h", final: "uo", tone: 3, groups: ["f-h"] },
+  { word: "花", emoji: "🌸", initial: "h", final: "ua", tone: 1, groups: ["f-h"] },
+  { word: "飞", emoji: "✈️", initial: "f", final: "ei", tone: 1, groups: ["f-h"] },
+  { word: "风", emoji: "🌬️", initial: "f", final: "eng", tone: 1, groups: ["f-h"] },
+  { word: "山", emoji: "⛰️", initial: "sh", final: "an", tone: 1, groups: ["an-ang"] },
+  { word: "上", emoji: "⬆️", initial: "sh", final: "ang", tone: 4, groups: ["an-ang"] },
+  { word: "蓝", emoji: "🟦", initial: "l", final: "an", tone: 2, groups: ["an-ang", "n-l"] },
+  { word: "星", emoji: "⭐", initial: "x", final: "ing", tone: 1, groups: ["in-ing"] },
+  { word: "心", emoji: "❤️", initial: "x", final: "in", tone: 1, groups: ["in-ing"] },
+  { word: "明", emoji: "🌞", initial: "m", final: "ing", tone: 2, groups: ["in-ing"] },
+  { word: "金", emoji: "🪙", initial: "j", final: "in", tone: 1, groups: ["in-ing"] },
+  { word: "早", emoji: "🌅", initial: "z", final: "ao", tone: 3, groups: ["z-zh"] },
+  { word: "找", emoji: "🔍", initial: "zh", final: "ao", tone: 3, groups: ["z-zh"] },
+  { word: "桌", emoji: "🪑", initial: "zh", final: "uo", tone: 1, groups: ["z-zh"] },
+  { word: "字", emoji: "🔤", initial: "z", final: "i", tone: 4, groups: ["z-zh"] },
+  { word: "八", emoji: "8️⃣", initial: "b", final: "a", tone: 1, groups: ["b-d-p-q"] },
+  { word: "大", emoji: "🐘", initial: "d", final: "a", tone: 4, groups: ["b-d-p-q"] },
+  { word: "跑", emoji: "🏃", initial: "p", final: "ao", tone: 3, groups: ["b-d-p-q"] },
+  { word: "七", emoji: "7️⃣", initial: "q", final: "i", tone: 1, groups: ["b-d-p-q"] },
+  { word: "月", emoji: "🌙", initial: "y", final: "üe", tone: 4, groups: [] },
+  { word: "鱼", emoji: "🐟", initial: "y", final: "ü", tone: 2, groups: [] },
+  { word: "云", emoji: "☁️", initial: "y", final: "ün", tone: 2, groups: [] },
 ];

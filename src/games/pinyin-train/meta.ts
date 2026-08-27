@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🚂",
   category: "edu" as const,
   color: "#74c0fc",
-  blurb: "十座车站 188 关！从单韵母声母一路开到整体认读、多音字、轻声儿化和句子注音！",
-  // 10 章合计 188 关,只有闯关一种玩法
+  blurb: "十一座车站 188 关！认声母韵母、标声调、拖车厢拼音节，还要过易混淆专项和句子注音！",
+  // 11 章合计 188 关,只有闯关一种玩法
   modes: ["campaign"] as const,
+  // 触屏拖车厢与键盘 Tab 逐个点选都能玩,手游端游通吃
+  platform: "both" as const,
   levels: 188,
 };

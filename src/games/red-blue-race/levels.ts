@@ -71,6 +71,13 @@ function spread(n: number, rand: () => number): number[] {
 }
 
 /**
+ * 节拍风廊头三关的步长：鼓点这套东西第一次见面，
+ * 把步长从上一章的 1.6 缓缓交回本章的 1.5，第 4 关起就是原来的数。
+ * 少了这一段，第 145 关（本章首关）熟练档只剩 0.98 秒余量——全 188 关最小值。
+ */
+const BEAT_STEP_RAMP = [1.6, 1.57, 1.53];
+
+/**
  * 1.1 新章专用的机关排布：在 [16, maxPos] 之间排 n 个至少相隔 10 的位置。
  * 前 99 关继续用上面的 `spread`，一个数都不动。
  */
@@ -139,8 +146,10 @@ function buildLevel(ci: number, t: number, rand: () => number): RaceLevel {
         obstacles.push({ type: "hurdle", pos, len: 4 });
       }
       return {
-        aiSpeed: 8.6 + t * 0.05,
-        tapStep: 1.5,
+        // 章末仍旧是 9.65，只把开头这一段放缓：本章首关原来只剩 0.98 秒余量，
+        // 是全 188 关最小值，比上一关掉了 4.25 秒(窗口5 第2轮 W5R2-A-07)
+        aiSpeed: 8.3 + (t * 1.35) / 21,
+        tapStep: BEAT_STEP_RAMP[t] ?? 1.5,
         obstacles,
         theme: 8,
         beatMs: 250 - t * 2,

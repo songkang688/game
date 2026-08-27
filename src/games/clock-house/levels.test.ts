@@ -1,6 +1,21 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
-import { allowedQuarters, buildQuestions, CHAPTERS, kindPool, LEVELS, questionCount } from "./levels";
+import { CORE_CLOCK_TYPES, typeOfKind } from "./kinds";
+import { formatClock, type Quarter } from "./logic";
+import {
+  allowedQuarters,
+  buildQuestions,
+  CHAPTERS,
+  kindPool,
+  legacyKindPool,
+  LEVELS,
+  makeReviewQuestions,
+  MAX_REVIEW_QUESTIONS,
+  questionCount,
+  reviewSeed,
+  typesOfLevel,
+} from "./levels";
 
 describe("时钟小屋 188 关", () => {
   it("恰好 188 关", () => {
@@ -136,8 +151,11 @@ const LEGACY_CHAPTER_SNAPSHOT = [
 const NEW_FROM = 99;
 const NEW_LEVELS = Array.from({ length: 188 - NEW_FROM }, (_, i) => NEW_FROM + i);
 const ADVANCED_KINDS = new Set([
+  // 1.1
   "span", "arrive", "depart", "h24", "h12", "zone",
   "weekday", "monthdays", "nthday", "tableEarly", "tableFast", "tableWait",
+  // 1.2
+  "readMin", "setMin", "spanNoon", "unitHM", "unitMS", "unitMix", "routine",
 ]);
 
 function strip(html: string): string {
@@ -178,6 +196,74 @@ function fmtDur(mins: number): string {
 const WEEK = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 const MONTH_LEN = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
+/** 钟面分钟数 → 「3 点」/「3 点 25 分」，独立算一遍，不复用被测代码 */
+function fmtFace(t: number): string {
+  const v = ((t % 720) + 720) % 720;
+  const h = Math.floor(v / 60) === 0 ? 12 : Math.floor(v / 60);
+  const m = v % 60;
+  return m === 0 ? `${h} 点` : `${h} 点 ${m} 分`;
+}
+
+/** 从一段 SVG 里读出钟面分钟数 */
+function faceTime(svg: string): number {
+  const m = svg.match(/data-t="(\d+)"/);
+  if (!m) throw new Error(`钟面缺 data-t: ${svg.slice(0, 60)}`);
+  return Number(m[1]);
+}
+
+/** 从一段 SVG 里读出时针末端坐标 */
+function hourTip(svg: string): { x: number; y: number } {
+  const m = svg.match(/data-clk-hand="hour" x1="50" y1="50" x2="([-\d.]+)" y2="([-\d.]+)"/);
+  if (!m) throw new Error(`钟面缺时针: ${svg.slice(0, 60)}`);
+  return { x: Number(m[1]), y: Number(m[2]) };
+}
+
+/**
+ * 时段词 → 这一段管的 24 小时制整点区间（含两端）。
+ *
+ * 这份表是**照小学课本《24 时计时法》单独抄的一份**，不从 `logic.ts` import——
+ * 用产品代码去验产品代码等于什么都没验。W5R2-A-03 就是拿这张表逐题核出来的。
+ */
+const PERIOD_RANGE: Record<string, [number, number]> = {
+  夜里: [0, 0],
+  凌晨: [1, 5],
+  早上: [6, 8],
+  上午: [9, 11],
+  中午: [12, 12],
+  下午: [13, 17],
+  晚上: [18, 23],
+};
+
+const PERIOD_WORDS = Object.keys(PERIOD_RANGE).join("|");
+
+/** 「上午 10:40」/「中午 12:20」/「晚上 10:15」→ 一天内的分钟数（时段词说错了就抛） */
+function parsePeriodHM(text: string): number {
+  const m = text.match(new RegExp(`(${PERIOD_WORDS}) (\\d{1,2}):(\\d{2})`));
+  if (!m) throw new Error(`带时段词的时刻解析失败: ${text}`);
+  const [from, to] = PERIOD_RANGE[m[1]];
+  const h12 = Number(m[2]) % 12;
+  const h24 = from >= 12 ? h12 + 12 : h12;
+  if (h24 < from || h24 > to) throw new Error(`时段词和钟点对不上: ${text}`);
+  return h24 * 60 + Number(m[3]);
+}
+
+/** 「3 分 20 秒」/「45 秒」/「2 分」→ 秒数 */
+function parseMinSec(text: string): number {
+  const m = text.match(/(\d+)\s*分/);
+  const s = text.match(/(\d+)\s*秒/);
+  return (m ? Number(m[1]) * 60 : 0) + (s ? Number(s[1]) : 0);
+}
+
+function parseRoutine(text: string): Array<{ name: string; at: number }> {
+  const out: Array<{ name: string; at: number }> = [];
+  const re = /🗓️ ([^\s]+) (\d{2}):(\d{2})/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    out.push({ name: m[1], at: Number(m[2]) * 60 + Number(m[3]) });
+  }
+  return out;
+}
+
 function parseTrips(text: string): Array<{ no: number; dep: number; arr: number }> {
   const out: Array<{ no: number; dep: number; arr: number }> = [];
   const re = /(\d+) 号车 (\d{2}):(\d{2}) → (\d{2}):(\d{2})/g;
@@ -217,18 +303,16 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
       break;
     }
     case "h24": {
-      const m = text.match(/(上午|下午) (\d{1,2}):(\d{2})/);
-      expect(m, where).not.toBeNull();
-      const h12 = Number(m![2]);
-      const base = h12 === 12 ? 0 : h12;
-      const h24 = m![1] === "上午" ? base : base + 12;
-      expect(q.answer, where).toBe(fmtHM24(h24 * 60 + Number(m![3])));
+      // parsePeriodHM 自己会核「时段词和钟点对不对得上」，对不上直接抛
+      expect(q.answer, where).toBe(fmtHM24(parsePeriodHM(text)));
       break;
     }
     case "h12": {
       const mins = parseHM(text);
       const h = Math.floor(mins / 60);
-      const period = h < 12 ? "上午" : "下午";
+      const period = Object.keys(PERIOD_RANGE).find(
+        (p) => h >= PERIOD_RANGE[p][0] && h <= PERIOD_RANGE[p][1]
+      );
       const hour = h % 12 === 0 ? 12 : h % 12;
       expect(q.answer, where).toBe(`${period} ${hour}:${String(mins % 60).padStart(2, "0")}`);
       break;
@@ -292,6 +376,94 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
       expect(target, where).toBeDefined();
       expect(target!.dep - now, where).toBeGreaterThan(0);
       expect(q.answer, where).toBe(fmtDur(target!.dep - now));
+      break;
+    }
+    // ---- 1.2 新增题型 ----
+    case "readMin": {
+      const t = faceTime(q.promptHTML);
+      expect(q.answer, where).toBe(fmtFace(t));
+      // 时针必须带着分针带动的那一点偏移，不许死死压在数字上
+      const tip = hourTip(q.promptHTML);
+      const rad = ((t * 0.5 - 90) * Math.PI) / 180;
+      expect(tip.x, where).toBeCloseTo(50 + Math.cos(rad) * 21, 1);
+      expect(tip.y, where).toBeCloseTo(50 + Math.sin(rad) * 21, 1);
+      break;
+    }
+    case "setMin": {
+      const label = q.ask.match(/「(.+)」/)![1];
+      expect(q.answerText, where).toBe(label);
+      const right = q.choices[q.correct];
+      const t = faceTime(right);
+      expect(fmtFace(t), where).toBe(label);
+      // 正确钟面的时针联动到位；三张钟面里一定有一张是「时针压在数字上」的错钟面
+      const rad = ((t * 0.5 - 90) * Math.PI) / 180;
+      expect(hourTip(right).x, where).toBeCloseTo(50 + Math.cos(rad) * 21, 1);
+      const stiffRad = (((t - (t % 60)) * 0.5 - 90) * Math.PI) / 180;
+      const stiff = q.choices.some(
+        (c) => faceTime(c) === t && Math.abs(hourTip(c).x - (50 + Math.cos(stiffRad) * 21)) < 0.05
+      );
+      expect(stiff, `${where}：缺少「时针压数字」的干扰钟面`).toBe(true);
+      // 题面里那个能拖的钟面起点不能就是答案，否则孩子不用拨
+      expect(q.promptHTML, where).toContain('data-clk-dial="1"');
+      expect(faceTime(q.promptHTML), where).not.toBe(t);
+      break;
+    }
+    case "spanNoon": {
+      const parts = text.split("➜");
+      expect(parts.length, where).toBe(2);
+      const from = parsePeriodHM(parts[0]);
+      const to = parsePeriodHM(parts[1]);
+      expect(from, `${where}：出发必须在中午之前`).toBeLessThan(12 * 60);
+      expect(to, `${where}：到达必须在中午之后`).toBeGreaterThan(12 * 60);
+      expect(q.answer, where).toBe(fmtDur(to - from));
+      break;
+    }
+    case "unitHM": {
+      const only = text.match(/^⏳ (\d+) 分$/);
+      if (only) {
+        expect(q.answer, where).toBe(fmtDur(Number(only[1])));
+      } else {
+        expect(q.answer, where).toBe(`${parseDur(text)} 分`);
+      }
+      break;
+    }
+    case "unitMS": {
+      const only = text.match(/^⏱️ (\d+) 秒$/);
+      if (only) {
+        const total = Number(only[1]);
+        expect(q.answer, where).toBe(total % 60 === 0 ? `${total / 60} 分` : `${Math.floor(total / 60)} 分 ${total % 60} 秒`);
+      } else {
+        expect(q.answer, where).toBe(`${parseMinSec(text)} 秒`);
+      }
+      break;
+    }
+    case "unitMix": {
+      const days = text.match(/📆 (\d+) 天/);
+      if (days) expect(q.answer, where).toBe(`${Number(days[1]) * 24} 小时`);
+      else expect(q.answer, where).toBe(`${parseDur(text) * 60} 秒`);
+      break;
+    }
+    case "routine": {
+      const rows = parseRoutine(text);
+      expect(rows.length, where).toBe(5);
+      for (let i = 1; i < rows.length; i++) expect(rows[i].at, where).toBeGreaterThan(rows[i - 1].at);
+      expect(new Set(rows.map((r) => r.name)).size, where).toBe(5);
+      const gap = q.ask.match(/^从(.+?)到(.+?)隔多久？$/);
+      if (gap) {
+        const a = rows.find((r) => r.name === gap[1])!;
+        const b = rows.find((r) => r.name === gap[2])!;
+        expect(a, where).toBeDefined();
+        expect(b, where).toBeDefined();
+        expect(b.at - a.at, where).toBeGreaterThan(0);
+        expect(q.answer, where).toBe(fmtDur(b.at - a.at));
+      } else {
+        const m = q.ask.match(/^(.+?)之后紧接着是什么？$/);
+        expect(m, where).not.toBeNull();
+        const at = rows.findIndex((r) => r.name === m![1]);
+        expect(at, where).toBeGreaterThanOrEqual(0);
+        expect(at, where).toBeLessThan(rows.length - 1);
+        expect(q.answer, where).toBe(rows[at + 1].name);
+      }
       break;
     }
     default:
@@ -405,7 +577,9 @@ describe("时钟小屋 · 1.1 第 100–188 关", () => {
         if (q.kind === "h24" || q.kind === "zone") {
           expect(q.answer).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/);
         }
-        if (q.kind === "h12") expect(q.answer).toMatch(/^(上午|下午) ([1-9]|1[0-2]):[0-5]\d$/);
+        if (q.kind === "h12") {
+          expect(q.answer).toMatch(new RegExp(`^(${PERIOD_WORDS}) ([1-9]|1[0-2]):[0-5]\\d$`));
+        }
       }
     }
   });
@@ -486,9 +660,10 @@ describe("时钟小屋 · 1.1 第 100–188 关", () => {
   it("文案零商标：题面与选项里没有英文字母（城市名全是原创中文）", () => {
     for (const level of NEW_LEVELS) {
       for (const q of buildQuestions(level)) {
+        // 钟面是 SVG,标签名与属性名当然是英文;只看渲染出来的文字
         expect(strip(q.promptHTML)).not.toMatch(/[A-Za-z]/);
         expect(q.ask).not.toMatch(/[A-Za-z]/);
-        for (const c of q.choices) expect(c).not.toMatch(/[A-Za-z]/);
+        for (const c of q.choices) expect(strip(c)).not.toMatch(/[A-Za-z]/);
       }
     }
   });
@@ -496,5 +671,252 @@ describe("时钟小屋 · 1.1 第 100–188 关", () => {
   it("四个新章节的题型池互不相同", () => {
     const sigs = new Set([110, 133, 155, 180].map((i) => kindPool(i).slice().sort().join(",")));
     expect(sigs.size).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.2：题型补齐到 8 类、难度表驱动、错题回顾，以及「前 99 关一个字都没改」的锁
+// ---------------------------------------------------------------------------
+
+/**
+ * 1.1 收尾时前 99 关全部题目的摘要。
+ * 这一串是本步动代码之前从 `origin/game-1.2-window5` 上跑出来的，
+ * 只要它对得上，就说明第 1–99 关的题面、选项、正确项一个字节都没被 1.2 碰过。
+ */
+const LEGACY_DIGEST = "5a314feb42c6eb7f65c23ccf5b08d08a0f9a4a2804193fd0d2c7933ad37296cf";
+
+/**
+ * 窗口5 第1轮改了钟面的一个读屏属性（W5-A-01：`aria-label` 原本直接就是答案），
+ * 顺手补了 `role="img"`。孩子看得见的题面、选项、正确项一个字节都没动。
+ *
+ * 摘要锁不放水：这里把标签按钟面自己的 `data-h` / `data-q` 还原成 1.1 的写法、
+ * 去掉新加的 `role`，还原完的字节流必须和 1.1 的摘要**一模一样**——
+ * 也就是说这一条仍然钉着「除了那个读屏属性，前 99 关没有第二处改动」。
+ */
+function asLegacyHtml(html: string): string {
+  return html.replace(
+    /(<svg data-h="(\d+)" data-q="(\d)"[^>]*?) role="img" aria-label="[^"]*"(>)/g,
+    (_all, head: string, h: string, q: string, tail: string) =>
+      `${head} aria-label="${formatClock(Number(h), Number(q) as Quarter)}"${tail}`
+  );
+}
+
+const FRESH_KINDS = ["readMin", "setMin", "spanNoon", "unitHM", "unitMS", "unitMix", "routine"];
+
+describe("时钟小屋 · 1.2 前 99 关一个字都没改", () => {
+  it("第 1–99 关全部题目的摘要和 1.1 逐字节一致（还原读屏标签后）", () => {
+    const all = Array.from({ length: 99 }, (_, i) =>
+      buildQuestions(i).map((q) => ({
+        ...q,
+        promptHTML: asLegacyHtml(q.promptHTML),
+        choices: q.choices.map(asLegacyHtml),
+      }))
+    );
+    const digest = createHash("sha256").update(JSON.stringify(all)).digest("hex");
+    expect(digest, "前 99 关的题目被改动了").toBe(LEGACY_DIGEST);
+  });
+
+  it("前 99 关的钟面确实换上了不含时刻的读屏标签", () => {
+    let faces = 0;
+    for (let level = 0; level < 99; level++) {
+      for (const q of buildQuestions(level)) {
+        for (const html of [q.promptHTML, ...q.choices]) {
+          for (const m of html.matchAll(/aria-label="([^"]*)"/g)) {
+            faces++;
+            expect(/\d/.test(m[1]), `第 ${level + 1} 关的钟面标签带时刻：${m[1]}`).toBe(false);
+          }
+        }
+      }
+    }
+    expect(faces).toBeGreaterThan(300);
+  });
+
+  it("第 1–99 关只出 1.0 的三种老题型，一道 1.2 新题都没混进去", () => {
+    for (let level = 0; level < 99; level++) {
+      for (const q of buildQuestions(level)) {
+        expect(["read", "set", "next"], `第 ${level + 1} 关混进了 ${q.kind}`).toContain(q.kind);
+        expect(q.answerText, `第 ${level + 1} 关的老题型不该多出字段`).toBeUndefined();
+      }
+    }
+  });
+
+  it("kindPool 在前 99 关就是老阶梯，第 100 关起才换成难度表", () => {
+    for (let level = 0; level < 99; level++) {
+      expect(kindPool(level)).toEqual(legacyKindPool(level));
+    }
+    for (let level = 99; level < 188; level++) {
+      expect(kindPool(level), `第 ${level + 1} 关`).toHaveLength(questionCount(level));
+    }
+  });
+});
+
+describe("时钟小屋 · 1.2 八类题型", () => {
+  it("八类核心题型在 188 关里每一类都真的出过题", () => {
+    const seen = new Set<string>();
+    for (let level = 0; level < 188; level++) for (const q of buildQuestions(level)) seen.add(typeOfKind(q.kind));
+    for (const type of CORE_CLOCK_TYPES) expect(seen.has(type), `${type} 一次都没出现`).toBe(true);
+  });
+
+  it("1.2 新加的七个种类都在第 100 关之后出过题", () => {
+    const seen = new Set<string>();
+    for (let level = 99; level < 188; level++) for (const q of buildQuestions(level)) seen.add(q.kind);
+    for (const kind of FRESH_KINDS) expect(seen.has(kind), `${kind} 一次都没出现`).toBe(true);
+  });
+
+  it("读钟面读到一分：不是只出五分刻度的整数格", () => {
+    const minutes = new Set<number>();
+    for (let level = 99; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind !== "readMin") continue;
+        minutes.add(faceTime(q.promptHTML) % 60);
+      }
+    }
+    expect(minutes.size).toBeGreaterThan(10);
+    expect([...minutes].some((m) => m % 5 !== 0), "一分刻度的题一道都没有").toBe(true);
+    expect([...minutes].some((m) => m % 5 === 0), "五分刻度的题一道都没有").toBe(true);
+  });
+
+  it("经过时间既有跨小时的，也有跨中午的", () => {
+    let overHour = 0;
+    let overNoon = 0;
+    for (let level = 99; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind === "span" && parseDur(q.answer) > 60) overHour++;
+        if (q.kind !== "spanNoon") continue;
+        const parts = strip(q.promptHTML).split("➜");
+        expect(parsePeriodHM(parts[0])).toBeLessThan(12 * 60);
+        expect(parsePeriodHM(parts[1])).toBeGreaterThan(12 * 60);
+        overNoon++;
+      }
+    }
+    expect(overHour, "跨小时的经过时间太少").toBeGreaterThan(20);
+    expect(overNoon, "跨中午的经过时间一道都没有").toBeGreaterThan(10);
+  });
+
+  it("时分秒换算逐题验算：进率一处都不能错", () => {
+    let checked = 0;
+    for (let level = 99; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        if (!q.kind.startsWith("unit")) continue;
+        verify(q, `第 ${level + 1} 关 · ${q.kind}`);
+        checked++;
+      }
+    }
+    expect(checked, "单位换算题太少").toBeGreaterThan(30);
+  });
+
+  it("时区题只做「北京 + N」这种直观的，方向不会搞反", () => {
+    let checked = 0;
+    for (let level = 99; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind !== "zone") continue;
+        const text = strip(q.promptHTML);
+        expect(text, `第 ${level + 1} 关`).toContain("北京时间");
+        const m = text.match(/(.+?) 比 北京 (早|晚) (\d+) 小时/)!;
+        expect(m).not.toBeNull();
+        expect(m[1]).not.toBe("北京");
+        expect(Number(m[3])).toBeGreaterThan(0);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  it("作息表逐张验：五行时刻严格递增，事项不重样，答案唯一", () => {
+    let checked = 0;
+    for (let level = 99; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind !== "routine") continue;
+        verify(q, `第 ${level + 1} 关 · 作息表`);
+        checked++;
+      }
+    }
+    expect(checked, "作息表题太少").toBeGreaterThan(15);
+  });
+
+  it("拨指针题一定给了一张「时针压在数字上」的错钟面，且练手钟面不是答案", () => {
+    let checked = 0;
+    for (let level = 99; level < 188; level++) {
+      for (const q of buildQuestions(level)) {
+        if (q.kind !== "setMin") continue;
+        verify(q, `第 ${level + 1} 关 · 拨指针`);
+        checked++;
+      }
+    }
+    expect(checked, "拨指针题太少").toBeGreaterThan(5);
+  });
+});
+
+describe("时钟小屋 · 1.2 错题回顾", () => {
+  it("答错什么就回顾什么：题型一一对上，最多四道", () => {
+    for (const level of [0, 50, 99, 130, 187]) {
+      const kinds = [...new Set(buildQuestions(level).map((q) => q.kind))];
+      const review = makeReviewQuestions(kinds, level);
+      expect(review.length).toBe(Math.min(kinds.length, MAX_REVIEW_QUESTIONS));
+      review.forEach((q, i) => expect(q.kind, `第 ${level + 1} 关第 ${i + 1} 道回顾题`).toBe(kinds[i]));
+    }
+    expect(makeReviewQuestions([], 10)).toEqual([]);
+  });
+
+  it("回顾题是「换个数字的同类题」：题面和原题不一样，也不会把原答案端出来", () => {
+    let compared = 0;
+    for (let level = 0; level < 188; level += 7) {
+      const original = buildQuestions(level);
+      const kinds = [...new Set(original.map((q) => q.kind))];
+      const review = makeReviewQuestions(kinds, level, 0, original.map((q) => q.promptHTML));
+      for (const q of review) {
+        const sameKind = original.filter((o) => o.kind === q.kind);
+        const identical = sameKind.filter((o) => o.promptHTML === q.promptHTML && o.ask === q.ask);
+        expect(identical, `第 ${level + 1} 关的 ${q.kind} 回顾题和原题一模一样`).toHaveLength(0);
+        compared++;
+      }
+    }
+    expect(compared).toBeGreaterThan(40);
+  });
+
+  it("回顾题一样是三个唯一选项、正确项就是答案，重开一次结果不变", () => {
+    for (const level of [12, 105, 150, 187]) {
+      const kinds = [...new Set(buildQuestions(level).map((q) => q.kind))];
+      const review = makeReviewQuestions(kinds, level);
+      expect(review.length).toBeGreaterThan(0);
+      for (const q of review) {
+        expect(q.choices).toHaveLength(3);
+        expect(new Set(q.choices).size).toBe(3);
+        expect(q.choices[q.correct]).toContain(q.answer);
+      }
+      expect(JSON.stringify(makeReviewQuestions(kinds, level))).toBe(JSON.stringify(review));
+      // 换一轮种子就换一批题，连着错两次不会看到同一道
+      expect(JSON.stringify(makeReviewQuestions(kinds, level, 1))).not.toBe(JSON.stringify(review));
+      expect(reviewSeed(level, 0)).not.toBe(reviewSeed(level, 1));
+    }
+  });
+
+  it("回顾轮的种子和正题错开，绝不会撞成同一批题", () => {
+    const seeds = new Set<number>();
+    for (let level = 0; level < 188; level++) {
+      for (const round of [0, 1, 2]) seeds.add(reviewSeed(level, round));
+      expect(reviewSeed(level)).not.toBe(8500 + level * 7919);
+    }
+    expect(seeds.size).toBe(188 * 3);
+  });
+});
+
+describe("时钟小屋 · 1.2 模式矩阵", () => {
+  it("每一关都能列出它考的题型，全 188 关一关不落", () => {
+    for (let level = 0; level < 188; level++) {
+      const types = typesOfLevel(level);
+      expect(types.length, `第 ${level + 1} 关一个题型都没有`).toBeGreaterThan(0);
+      for (const t of types) expect(CORE_CLOCK_TYPES.concat(["calendar"])).toContain(t);
+    }
+  });
+
+  it("学习类只做闯关：188 关一关不少，题量还是 4–10 道", () => {
+    expect(LEVELS).toHaveLength(188);
+    for (let level = 0; level < 188; level++) {
+      const n = questionCount(level);
+      expect(n).toBeGreaterThanOrEqual(4);
+      expect(n).toBeLessThanOrEqual(10);
+      expect(buildQuestions(level)).toHaveLength(n);
+    }
   });
 });

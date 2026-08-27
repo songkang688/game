@@ -8,8 +8,8 @@ export const meta = {
   emoji: "🔍",
   category: "edu" as const,
   color: "#63e6be",
-  blurb: "十大主题 188 关！上下两幅图找不同，后面还有三图对照、旋转和镜像挑战！",
-  // 10 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
-  modes: ["campaign"] as const,
+  blurb: "十大主题 188 关!两图对照找不同,后段还有三图对照、旋转、镜像与连环挑战;另有找不同马拉松无尽模式。",
+  // 10 章合计 188 关(前 6 章 99 关是 1.0 原样保留),闯关 + 无尽两种模式
+  modes: ["campaign", "endless"] as const,
   levels: 188,
 };

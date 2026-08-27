@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { totalSize } from "../level99";
 import { COLOR_NAMES, SHAPE_NAMES, SHAPE_SIDES, type ShapeColor, type ShapeKind } from "./logic";
 import { buildQuestions, CHAPTERS, kindPool, LEVELS, questionCount, shapeSVG } from "./levels";
+import { polyominoArea, polyominoPerimeter } from "./geometry";
+import { foldsIntoCube } from "./nets";
 
 describe("形状王国 188 关", () => {
   it("恰好 188 关", () => {
@@ -141,6 +143,8 @@ const NEW_FROM = 99;
 const NEW_LEVELS = Array.from({ length: 188 - NEW_FROM }, (_, i) => NEW_FROM + i);
 const ADVANCED_KINDS = new Set([
   "perimeter", "area", "symmetry", "mirror", "rotate", "solid", "net", "coord", "path",
+  // ↓ 1.2 补齐的题型
+  "classify", "netpick", "symsum", "transform", "solidcalc", "coordmove",
 ]);
 
 function attr(html: string, name: string): string | null {
@@ -152,6 +156,13 @@ function numAttr(html: string, name: string): number {
   const v = attr(html, name);
   expect(v, `缺少属性 ${name}`).not.toBeNull();
   return Number(v);
+}
+
+/** 从方格纸图形的 `data-cellkeys` 里取回格子集合，好用纯函数重算面积周长 */
+function cellKeys(html: string): string[] {
+  const v = attr(html, "data-cellkeys");
+  expect(v, "缺少 data-cellkeys").not.toBeNull();
+  return v!.split(" ");
 }
 
 function rotateKeyCW(key: string, size: number): string {
@@ -199,6 +210,11 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
   switch (q.kind) {
     case "perimeter": {
       const fig = attr(html, "data-fig");
+      // 1.2 的三步题画在方格纸上：直接拿格子集合重算一圈，公式和图必须对得上
+      if (fig === "notch") {
+        expect(q.answer, where).toBe(`${polyominoPerimeter(cellKeys(html))} 厘米`);
+        break;
+      }
       const w = numAttr(html, "data-w");
       const h = numAttr(html, "data-h");
       expect(["rect", "ell"], where).toContain(fig);
@@ -208,7 +224,9 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
     }
     case "area": {
       const fig = attr(html, "data-fig");
-      if (fig === "rect") {
+      if (fig === "comp") {
+        expect(q.answer, where).toBe(`${polyominoArea(cellKeys(html))} 平方厘米`);
+      } else if (fig === "rect") {
         expect(q.answer, where).toBe(`${numAttr(html, "data-w") * numAttr(html, "data-h")} 平方厘米`);
       } else if (fig === "tri") {
         const v = (numAttr(html, "data-b") * numAttr(html, "data-h")) / 2;
@@ -294,6 +312,91 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
       }
       expect(moves.length, where).toBeGreaterThanOrEqual(2);
       expect(q.answer, where).toBe(`(${x}, ${y})`);
+      break;
+    }
+    // ↓ 1.2 补齐的六种题型，同样逐题机器验算
+    case "symsum": {
+      const kinds = attr(html, "data-sym")!.split(",");
+      const counts = kinds.map((k) => {
+        expect(AXES[k], `${where}：${k} 没有确定的对称轴条数`).toBeDefined();
+        return AXES[k];
+      });
+      const want =
+        attr(html, "data-symask") === "sum"
+          ? counts.reduce((a, b) => a + b, 0)
+          : Math.max(...counts);
+      if (attr(html, "data-symask") === "max") {
+        // 「最多的那个」必须唯一，否则题目本身就有歧义
+        expect(counts.filter((c) => c === want).length, `${where}：并列最多`).toBe(1);
+      }
+      expect(q.answer, where).toBe(`${want} 条`);
+      break;
+    }
+    case "transform": {
+      const key = attr(html, "data-cells")!;
+      const size = numAttr(html, "data-size");
+      expect(q.answer, where).toBe(`data-cells="${rotateKeyCW(mirrorKey(key, size), size)}"`);
+      expect(new Set(q.choices.map((c) => attr(c, "data-cells"))).size, where).toBe(3);
+      break;
+    }
+    case "solidcalc": {
+      const kind = attr(html, "data-solid")!;
+      expect(EDGES[kind], `${where}：${kind} 不是多面体`).toBeDefined();
+      expect(q.answer, where).toBe(`${EDGES[kind] - VERTICES[kind]} 条`);
+      // 欧拉公式自洽：棱 − 顶点 一定等于 面 − 2
+      expect(EDGES[kind] - VERTICES[kind], where).toBe(FACES[kind] - 2);
+      break;
+    }
+    case "netpick": {
+      const nets = q.choices.map((c) => attr(c, "data-net")!);
+      expect(new Set(nets).size, where).toBe(3);
+      nets.forEach((n, i) => {
+        expect(foldsIntoCube(n.split(" ")), `${where}：第 ${i + 1} 张`).toBe(i === q.correct);
+      });
+      expect(q.answer, where).toBe(`data-net="${nets[q.correct]}"`);
+      break;
+    }
+    case "classify": {
+      const kinds = q.choices.map((c) => attr(c, "data-kind") as ShapeKind);
+      const colors = q.choices.map((c) => attr(c, "data-color")!);
+      const sides = kinds.map((k) => SHAPE_SIDES[k]);
+      if (attr(html, "data-classify") === "sides") {
+        expect(new Set(colors).size, `${where}：只比边数时颜色要一致`).toBe(1);
+        // 另外两个边数相同、答案那个不同，答案才唯一
+        const others = sides.filter((_, i) => i !== q.correct);
+        expect(others[0], where).toBe(others[1]);
+        expect(sides[q.correct], where).not.toBe(others[0]);
+      } else {
+        expect(sides[q.correct], where).toBe(4);
+        expect(colors.filter((c) => c === colors[q.correct]).length, where).toBe(1);
+        // 其余两个至少缺一个条件
+        q.choices.forEach((_, i) => {
+          if (i === q.correct) return;
+          expect(sides[i] === 4 && colors.filter((c) => c === colors[i]).length === 1, where).toBe(false);
+        });
+      }
+      break;
+    }
+    case "coordmove": {
+      const items = attr(html, "data-grid")!.split("|").map((s) => {
+        const [x, y, kind] = s.split(",");
+        return { x: Number(x), y: Number(y), kind };
+      });
+      const start = attr(html, "data-start")!.split(",").map(Number);
+      let cx = start[0];
+      let cy = start[1];
+      for (const mv of attr(html, "data-moves")!.split("|")) {
+        const m = mv.match(/^(右|左|上|下)(\d+)$/)!;
+        const n = Number(m[2]);
+        if (m[1] === "右") cx += n;
+        else if (m[1] === "左") cx -= n;
+        else if (m[1] === "上") cy += n;
+        else cy -= n;
+        expect(cx >= 1 && cx <= 5 && cy >= 1 && cy <= 5, `${where}：走出格子了`).toBe(true);
+      }
+      const hit = items.find((i) => i.x === cx && i.y === cy);
+      expect(hit, `${where}：终点上没有图形`).toBeDefined();
+      expect(q.answer, where).toBe(SHAPE_NAMES[hit!.kind as ShapeKind]);
       break;
     }
     default:

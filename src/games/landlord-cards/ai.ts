@@ -438,6 +438,12 @@ export function sameTeam(a: number, b: number, landlord: number): boolean {
   return a === b || (a !== landlord && b !== landlord);
 }
 
+/**
+ * 农民配合的让牌线:队友手上不多于这么多张时,困难档一律不压队友。
+ * 队友一口气就能走完,抢回出牌权只会把自己的牌拖在手里。
+ */
+export const FARMER_YIELD_CARDS = 3;
+
 function lowestPlay(list: Play[]): Play | null {
   if (list.length === 0) return null;
   let best = list[0];
@@ -472,7 +478,7 @@ const W = {
   urgentRank: 0.7,
   /**
    * 「不要」的门槛:负数表示困难档默认「压得住就压」。
-   * 出牌权在斗地主里比省牌值钱得多,一味忍牌会被对手一路甩到底。
+   * 这一类牌局里出牌权比省牌值钱得多,一味忍牌会被对手一路甩到底。
    */
   passMargin: -32,
   urgentPassMargin: -60,
@@ -493,8 +499,11 @@ function dangerLevel(ctx: AiContext): number {
   return foes.length > 0 ? Math.min(...foes) : 99;
 }
 
-/** 困难档的打分:出完这手之后我的局面好不好,再加上「别乱甩大牌」的小惩罚 */
-function scoreChoice(hand: readonly number[], play: Play, ctx: AiContext): number {
+/**
+ * 困难档的打分:出完这手之后我的局面好不好,再加上「别乱甩大牌」的小惩罚。
+ * 牌力提示(hint.ts)也用这把尺,所以「教练推荐的」就是「厉害档会打的」。
+ */
+export function scoreChoice(hand: readonly number[], play: Play, ctx: AiContext): number {
   const rest = withoutCards(hand, play.cards);
   if (rest.length === 0) return -10000;
   let s = positionScore(rest) + play.main * W.rank;
@@ -589,6 +598,8 @@ function decideFollow(ctx: AiContext, level: AiLevel): number[] {
   if (teammatePlayed) {
     // 队友已经压住了就别再抢,除非对手马上要走完、或者队友这手压根不牢
     const teammateCards = ctx.counts[ctx.prevSeat];
+    // 队友只剩三张以内,一口气就能收尾:彻底让路,连炸弹都不抢
+    if (danger > 2 && teammateCards <= FARMER_YIELD_CARDS) return [];
     if (danger > 2 && teammateCards <= ctx.hand.length) return [];
     if (danger > 3 && prev.main >= 14) return [];
   }

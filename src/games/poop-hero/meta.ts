@@ -8,8 +8,8 @@ export const meta = {
   emoji: "🦸",
   category: "action" as const,
   color: "#F3E0CE",
-  blurb: "披上披风当噗噗超人!188 关跳跳冲冲把臭臭怪变成小花,还有清洁马拉松和双人合作。",
-  // 8 章合计 188 关;index.ts 的模式条有清洁马拉松(无尽)与双人合作
+  blurb: "披上披风当爱干净的小超人!188 关跑跳清扫,把豆豆怪变成小花、把垃圾投进三色桶,还有打扫不完的城市和双人分工合作。",
+  // 8 章合计 188 关;index.ts 的模式条有「打扫不完的城市」(无尽)与双人合作
   modes: ["campaign", "endless", "coop"] as const,
   levels: 188,
 };

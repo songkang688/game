@@ -231,10 +231,13 @@ export function simulateRace(cfg: RaceLevel, opt: RaceSimOptions): RaceSimResult
 }
 
 // ---------------------------------------------------------------------------
-// 无尽模式「星轨长跑」：赛道不设终点，身后的追赶者越跑越快，被追上就结束
+// 无尽模式「跑不完的跑道」：赛道不设终点，机关越跑越密，摔够三次这一趟就结束
+//
+// 1.1 时它叫「星轨长跑」，被身后的追赶者追上就结束；1.2 改成「撞 3 次结束」，
+// 星星留下来当陪跑员——速度还是下面这条曲线，被它超过只是提示，不再直接收工。
 // ---------------------------------------------------------------------------
 
-/** 无尽模式的追赶者速度：每 60 米提一档，有封顶，不会快到追不上也跑不掉 */
+/** 无尽模式陪跑星星的速度：每 60 米提一档，有封顶，不会快到彻底看不见 */
 export function endlessChaserSpeed(meters: number): number {
   const m = Number.isFinite(meters) ? Math.max(0, meters) : 0;
   return Math.min(13.5, 6.4 + Math.floor(m / 60) * 0.42);
@@ -244,6 +247,49 @@ export function endlessChaserSpeed(meters: number): number {
 export function endlessGapMeters(meters: number): number {
   const m = Number.isFinite(meters) ? Math.max(0, meters) : 0;
   return Math.max(16, 34 - Math.floor(m / 90) * 2);
+}
+
+/** 无尽模式撞几次结束：摔第三跤这一趟就收工（只是坐一下，不掉血、不判输） */
+export const ENDLESS_MAX_HITS = 3;
+
+/**
+ * 跑到这里这一趟也收工——「跑完全程」，和摔三跤是并列的另一个出口。
+ *
+ * 第 2 轮测试员 W5R2-A-09：机器人「见坑就跳」跑满 91 秒 / 6950 步 / 511 次起跳仍不收工，
+ * 因为规则只有「撞 3 次」这一个出口，不撞就永远不结束——而不结束就不结算，
+ * 跑得再远也**不写纪录、不发小星星**。
+ *
+ * 1200 米这个数不是拍的：陪跑星星的速度在 1020 米封顶（{@link endlessChaserSpeed}），
+ * 机关密度在 810 米封顶（{@link endlessGapMeters} 撞到 16 米最小安全间距）。
+ * 过了 1020 米，这条跑道上每一个旋钮都已经拧到头，再跑就是同一段路原样重播。
+ * 收在 1200 米，既把两条曲线跑完整了，也不至于让一趟停不下来。
+ */
+export const ENDLESS_GOAL_M = 1200;
+
+/** 跑满全程了没有 */
+export function endlessGoalReached(meters: number): boolean {
+  const m = Number.isFinite(meters) ? meters : 0;
+  return m >= ENDLESS_GOAL_M;
+}
+
+/** 这一趟是不是结束了：摔够三跤，或者跑满全程 */
+export function endlessRunOver(hits: number, meters = 0): boolean {
+  const n = Number.isFinite(hits) ? Math.floor(hits) : 0;
+  return n >= ENDLESS_MAX_HITS || endlessGoalReached(meters);
+}
+
+/** 还能撞几次（给 HUD 用，不会是负数） */
+export function endlessHitsLeft(hits: number): number {
+  const n = Number.isFinite(hits) ? Math.max(0, Math.floor(hits)) : 0;
+  return Math.max(0, ENDLESS_MAX_HITS - n);
+}
+
+/**
+ * 机关密度：这一段每 100 米摆几个机关。
+ * 间距越跑越小，密度就随距离单调不减，最后封顶在最小安全间距对应的密度上。
+ */
+export function endlessDensity(meters: number): number {
+  return 100 / endlessGapMeters(meters);
 }
 
 /** 无尽模式跑到多少米算破纪录（0 分不写档，免得刚开跑就弹「新纪录」） */

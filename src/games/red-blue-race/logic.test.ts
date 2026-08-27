@@ -5,6 +5,7 @@ import {
   BEAT_WINDOW_MS,
   CASUAL_PLAY,
   COMBO_STEP_BONUS,
+  ENDLESS_MAX_HITS,
   ITEM_SLOW_FACTOR,
   SKILLED_PLAY,
   STAMINA_RESUME_RATIO,
@@ -12,7 +13,10 @@ import {
   adaptiveAiSpeed,
   comboMultiplier,
   endlessChaserSpeed,
+  endlessDensity,
   endlessGapMeters,
+  endlessHitsLeft,
+  endlessRunOver,
   inZone,
   isNewRecord,
   mechanicsOf,
@@ -145,6 +149,45 @@ describe("红蓝赛跑 · 无尽星轨长跑", () => {
     expect(isNewRecord(80, 80)).toBe(false);
     expect(isNewRecord(0, 0)).toBe(false);
     expect(isNewRecord(1, 0)).toBe(true);
+  });
+});
+
+describe("红蓝赛跑 · 1.2 跑不完的跑道", () => {
+  it("撞 3 次这一趟才结束，前两次只是摔一跤", () => {
+    expect(ENDLESS_MAX_HITS).toBe(3);
+    expect(endlessRunOver(0)).toBe(false);
+    expect(endlessRunOver(1)).toBe(false);
+    expect(endlessRunOver(2)).toBe(false);
+    expect(endlessRunOver(3)).toBe(true);
+    expect(endlessRunOver(9)).toBe(true);
+    expect(endlessRunOver(Number.NaN)).toBe(false);
+  });
+
+  it("HUD 上「还能撞几次」不会跑到负数", () => {
+    expect(endlessHitsLeft(0)).toBe(3);
+    expect(endlessHitsLeft(2)).toBe(1);
+    expect(endlessHitsLeft(3)).toBe(0);
+    expect(endlessHitsLeft(10)).toBe(0);
+    expect(endlessHitsLeft(-4)).toBe(3);
+  });
+
+  it("机关密度随距离单调不减，而且有封顶", () => {
+    expect(endlessDensity(0)).toBeCloseTo(100 / 34, 10);
+    let prev = 0;
+    for (let m = 0; m <= 1500; m += 30) {
+      const d = endlessDensity(m);
+      expect(d).toBeGreaterThanOrEqual(prev);
+      prev = d;
+    }
+    expect(endlessDensity(300)).toBeGreaterThan(endlessDensity(0));
+    expect(endlessDensity(99999)).toBeCloseTo(100 / 16, 10);
+    expect(endlessDensity(Number.NaN)).toBeCloseTo(100 / 34, 10);
+  });
+
+  it("密度上升靠的是间距收窄，同一条曲线两头都对得上", () => {
+    for (const m of [0, 90, 450, 900, 5000]) {
+      expect(endlessDensity(m)).toBeCloseTo(100 / endlessGapMeters(m), 10);
+    }
   });
 });
 

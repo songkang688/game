@@ -7,11 +7,16 @@ import {
   CLOZE_CARDS,
   IDIOM_CARDS,
   LOOKALIKE_SETS,
+  POLYPHONE_CARDS,
   RADICAL_CARDS,
   SYN_ANT_CARDS,
   WORD_LEVELS,
+  lookalikeGroupOf,
+  radicalTargets,
+  realWordList,
   type WordCard,
 } from "./logic";
+import { hasStrokes } from "./strokes";
 
 /** 1.0 的六座花园：合计 99 关，1.1 起不再改动 */
 export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
@@ -49,16 +54,16 @@ export const CHAPTER_THEMES: QuizTheme[] = [
 
 /** 第四章：汉字数字（数一数选汉字） */
 export const NUMBER_CARDS: WordCard[] = [
-  { char: "一", pinyin: "yī", word: "一个", emoji: "1️⃣" },
-  { char: "二", pinyin: "èr", word: "二月", emoji: "2️⃣" },
-  { char: "三", pinyin: "sān", word: "三只", emoji: "3️⃣" },
-  { char: "四", pinyin: "sì", word: "四个", emoji: "4️⃣" },
-  { char: "五", pinyin: "wǔ", word: "五角星", emoji: "5️⃣" },
-  { char: "六", pinyin: "liù", word: "六岁", emoji: "6️⃣" },
-  { char: "七", pinyin: "qī", word: "七彩", emoji: "7️⃣" },
-  { char: "八", pinyin: "bā", word: "八个", emoji: "8️⃣" },
-  { char: "九", pinyin: "jiǔ", word: "九层", emoji: "9️⃣" },
-  { char: "十", pinyin: "shí", word: "十分", emoji: "🔟" },
+  { char: "一", pinyin: "yī", word: "一个", emoji: "1️⃣", meaning: "数目里最小的那个正整数，单个儿" },
+  { char: "二", pinyin: "èr", word: "二月", emoji: "2️⃣", meaning: "一加一得到的数" },
+  { char: "三", pinyin: "sān", word: "三只", emoji: "3️⃣", meaning: "二再加一得到的数" },
+  { char: "四", pinyin: "sì", word: "四个", emoji: "4️⃣", meaning: "三再加一得到的数" },
+  { char: "五", pinyin: "wǔ", word: "五角星", emoji: "5️⃣", meaning: "一只手的手指头那么多" },
+  { char: "六", pinyin: "liù", word: "六岁", emoji: "6️⃣", meaning: "五再加一得到的数" },
+  { char: "七", pinyin: "qī", word: "七彩", emoji: "7️⃣", meaning: "六再加一得到的数" },
+  { char: "八", pinyin: "bā", word: "八个", emoji: "8️⃣", meaning: "七再加一得到的数" },
+  { char: "九", pinyin: "jiǔ", word: "九层", emoji: "9️⃣", meaning: "个位里最大的那个数" },
+  { char: "十", pinyin: "shí", word: "十分", emoji: "🔟", meaning: "九再加一，正好满一个整数位" },
 ];
 const NUMBER_VALUE: Record<string, number> = {
   一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
@@ -66,42 +71,42 @@ const NUMBER_VALUE: Record<string, number> = {
 
 /** 第五章：家人与称呼 */
 export const FAMILY_CARDS: WordCard[] = [
-  { char: "爸", pinyin: "bà", word: "爸爸", emoji: "👨" },
-  { char: "妈", pinyin: "mā", word: "妈妈", emoji: "👩" },
-  { char: "爷", pinyin: "yé", word: "爷爷", emoji: "👴" },
-  { char: "奶", pinyin: "nǎi", word: "奶奶", emoji: "👵" },
-  { char: "哥", pinyin: "gē", word: "哥哥", emoji: "👦" },
-  { char: "姐", pinyin: "jiě", word: "姐姐", emoji: "👧" },
-  { char: "弟", pinyin: "dì", word: "弟弟", emoji: "🧒" },
-  { char: "妹", pinyin: "mèi", word: "妹妹", emoji: "👶" },
-  { char: "我", pinyin: "wǒ", word: "我们", emoji: "🙋" },
-  { char: "友", pinyin: "yǒu", word: "朋友", emoji: "🤝" },
-  { char: "家", pinyin: "jiā", word: "家人", emoji: "🏠" },
-  { char: "爱", pinyin: "ài", word: "爱心", emoji: "💖" },
-  { char: "笑", pinyin: "xiào", word: "笑脸", emoji: "😄" },
-  { char: "好", pinyin: "hǎo", word: "你好", emoji: "👍" },
-  { char: "宝", pinyin: "bǎo", word: "宝贝", emoji: "🍼" },
-  { char: "亲", pinyin: "qīn", word: "亲人", emoji: "🥰" },
+  { char: "爸", pinyin: "bà", word: "爸爸", emoji: "👨", meaning: "家里的男性长辈，孩子管他叫父亲" },
+  { char: "妈", pinyin: "mā", word: "妈妈", emoji: "👩", meaning: "家里的女性长辈，孩子管她叫母亲" },
+  { char: "爷", pinyin: "yé", word: "爷爷", emoji: "👴", meaning: "父亲的父亲，家里辈分最高的男长辈" },
+  { char: "奶", pinyin: "nǎi", word: "奶奶", emoji: "👵", meaning: "父亲的母亲，家里辈分高的女长辈" },
+  { char: "哥", pinyin: "gē", word: "哥哥", emoji: "👦", meaning: "同辈里比自己大的男孩" },
+  { char: "姐", pinyin: "jiě", word: "姐姐", emoji: "👧", meaning: "同辈里比自己大的女孩" },
+  { char: "弟", pinyin: "dì", word: "弟弟", emoji: "🧒", meaning: "同辈里比自己小的男孩" },
+  { char: "妹", pinyin: "mèi", word: "妹妹", emoji: "👶", meaning: "同辈里比自己小的女孩" },
+  { char: "我", pinyin: "wǒ", word: "我们", emoji: "🙋", meaning: "说话的那一位自称的时候用它" },
+  { char: "友", pinyin: "yǒu", word: "朋友", emoji: "🤝", meaning: "合得来、常在一起玩的伙伴" },
+  { char: "家", pinyin: "jiā", word: "家人", emoji: "🏠", meaning: "自己住的那个地方，回去就踏实" },
+  { char: "爱", pinyin: "ài", word: "爱心", emoji: "💖", meaning: "很喜欢、很在乎的那种心情" },
+  { char: "笑", pinyin: "xiào", word: "笑脸", emoji: "😄", meaning: "高兴的时候脸上的样子" },
+  { char: "好", pinyin: "hǎo", word: "你好", emoji: "👍", meaning: "不错，让大家满意" },
+  { char: "宝", pinyin: "bǎo", word: "宝贝", emoji: "🍼", meaning: "很珍贵、舍不得的东西" },
+  { char: "亲", pinyin: "qīn", word: "亲人", emoji: "🥰", meaning: "关系很近、很贴心" },
 ];
 
 /** 第六章：美味食物 */
 export const FOOD_CARDS: WordCard[] = [
-  { char: "瓜", pinyin: "guā", word: "西瓜", emoji: "🍉" },
-  { char: "豆", pinyin: "dòu", word: "豆子", emoji: "🫘" },
-  { char: "菜", pinyin: "cài", word: "青菜", emoji: "🥬" },
-  { char: "蛋", pinyin: "dàn", word: "鸡蛋", emoji: "🥚" },
-  { char: "肉", pinyin: "ròu", word: "烤肉", emoji: "🍖" },
-  { char: "茶", pinyin: "chá", word: "热茶", emoji: "🍵" },
-  { char: "糖", pinyin: "táng", word: "糖果", emoji: "🍬" },
-  { char: "面", pinyin: "miàn", word: "面条", emoji: "🍜" },
-  { char: "包", pinyin: "bāo", word: "面包", emoji: "🍞" },
-  { char: "桃", pinyin: "táo", word: "桃子", emoji: "🍑" },
-  { char: "梨", pinyin: "lí", word: "梨子", emoji: "🍐" },
-  { char: "橙", pinyin: "chéng", word: "橙子", emoji: "🍊" },
-  { char: "汤", pinyin: "tāng", word: "热汤", emoji: "🍲" },
-  { char: "虾", pinyin: "xiā", word: "大虾", emoji: "🦐" },
-  { char: "饼", pinyin: "bǐng", word: "饼干", emoji: "🍪" },
-  { char: "麦", pinyin: "mài", word: "麦子", emoji: "🌾" },
+  { char: "瓜", pinyin: "guā", word: "西瓜", emoji: "🍉", meaning: "藤上结的大果实，切开红瓤黑籽" },
+  { char: "豆", pinyin: "dòu", word: "豆子", emoji: "🫘", meaning: "一粒一粒圆圆的，能煮能磨" },
+  { char: "菜", pinyin: "cài", word: "青菜", emoji: "🥬", meaning: "能吃的绿叶植物，炒着吃" },
+  { char: "蛋", pinyin: "dàn", word: "鸡蛋", emoji: "🥚", meaning: "圆圆一个，敲开里面有黄有清" },
+  { char: "肉", pinyin: "ròu", word: "烤肉", emoji: "🍖", meaning: "能吃的那部分，红红的，有嚼头" },
+  { char: "茶", pinyin: "chá", word: "热茶", emoji: "🍵", meaning: "泡出来的褐色饮品，微苦回甘" },
+  { char: "糖", pinyin: "táng", word: "糖果", emoji: "🍬", meaning: "甜甜的一小块，含在嘴里会化" },
+  { char: "面", pinyin: "miàn", word: "面条", emoji: "🍜", meaning: "磨成粉做成的长条，煮着吃" },
+  { char: "包", pinyin: "bāo", word: "面包", emoji: "🍞", meaning: "外面一层裹住里面，也指裹好的那种食物" },
+  { char: "桃", pinyin: "táo", word: "桃子", emoji: "🍑", meaning: "夏季的果子，尖尖的，外皮毛茸茸" },
+  { char: "梨", pinyin: "lí", word: "梨子", emoji: "🍐", meaning: "秋季的果子，脆甜多汁" },
+  { char: "橙", pinyin: "chéng", word: "橙子", emoji: "🍊", meaning: "黄红色的圆果子，剥开一瓣一瓣" },
+  { char: "汤", pinyin: "tāng", word: "热汤", emoji: "🍲", meaning: "煮出来的一碗，稀稀的，能喝" },
+  { char: "虾", pinyin: "xiā", word: "大虾", emoji: "🦐", meaning: "河里海里游的小东西，煮熟变红" },
+  { char: "饼", pinyin: "bǐng", word: "饼干", emoji: "🍪", meaning: "扁扁圆圆、烙出来或烤出来的" },
+  { char: "麦", pinyin: "mài", word: "麦子", emoji: "🌾", meaning: "地里种的作物，磨成粉做馒头" },
 ];
 
 /** 每章的字卡池 */
@@ -126,7 +131,12 @@ export type WordKind =
   | "synonym"
   | "antonym"
   | "cloze"
-  | "radical";
+  | "radical"
+  // ↓ 1.2 追加
+  /** 多音字辨析：同一个字摆进两句话，读音就变了 */
+  | "polyphone"
+  /** 给字选意思：错题复查专用的「换个问法」 */
+  | "meaning";
 
 export interface WordQ extends QuizQuestion {
   kind: WordKind;
@@ -224,24 +234,43 @@ function takeDistinct(rand: () => number, pool: readonly string[], n: number, ex
   return out;
 }
 
-/** 形近字：给一个只有它才组得成的词，挑出正确的那个字 */
+/**
+ * 形近字：给一个只有它才组得成的词，挑出正确的那个字。
+ *
+ * 1.2 起干扰项**只从同一组里取**。1.1 的组大多只有 2 个字，凑不齐三选一时
+ * 会从全表随便抓一个，结果 46% 的干扰项跟正确答案毫无关系；
+ * 现在每组都补到 ≥3 个字，组内两两共享部件或只差一笔，随便挑都是真形近。
+ */
 function qLookalike(rand: () => number): WordQ {
   const group = pick(rand, LOOKALIKE_SETS);
   const target = pick(rand, group);
   const siblings = shuffled(group.filter((x) => x.char !== target.char).map((x) => x.char), rand).slice(0, 2);
-  const filler = takeDistinct(
-    rand,
-    LOOKALIKE_SETS.flat().map((x) => x.char),
-    2 - siblings.length,
-    [target.char, ...siblings]
-  );
-  const choices = shuffled([target.char, ...siblings, ...filler], rand);
+  const choices = shuffled([target.char, ...siblings], rand);
   const blanked = target.word.replace(target.char, "□");
   return {
     kind: "lookalike", answer: target.char,
     promptHTML: `<span style="font-size:40px">${blanked}</span>`,
     ask: `${target.hint}，「□」里填哪个字？`,
     choices, correct: choices.indexOf(target.char),
+  };
+}
+
+/** 多音字辨析：同一个字，换一句话就换一个读音 */
+function qPolyphone(rand: () => number): WordQ {
+  const card = pick(rand, POLYPHONE_CARDS);
+  const at = rand() < 0.5 ? 0 : 1;
+  const right = card.readings[at];
+  const other = card.readings[1 - at];
+  const choices = shuffled([right.pinyin, other.pinyin, card.decoy], rand);
+  const shown = right.sentence.replace(
+    card.char,
+    `<span style="color:#c2255c">${card.char}</span>`
+  );
+  return {
+    kind: "polyphone", answer: right.pinyin,
+    promptHTML: `<span style="font-size:19px;line-height:1.7">${shown}</span>`,
+    ask: `这句话里的「${card.char}」读什么？`,
+    choices, correct: choices.indexOf(right.pinyin),
   };
 }
 
@@ -333,7 +362,7 @@ function qRadical(rand: () => number): WordQ {
       choices, correct: choices.indexOf(card.topic),
     };
   }
-  const target = pick(rand, card.chars);
+  const target = pick(rand, radicalTargets(card));
   const others = RADICAL_CARDS.filter((c) => c.radical !== card.radical).flatMap((c) => c.chars);
   const choices = shuffled([target, ...takeDistinct(rand, others, 2, [target])], rand);
   return {
@@ -379,9 +408,12 @@ export function kindPool(level: number): WordKind[] {
     case 8:
       return t < 0.4 ? ["synonym", "antonym"] : ["synonym", "antonym", "idiom"];
     case 9:
-      return t < 0.4 ? ["cloze", "synonym"] : ["cloze", "antonym", "idiom", "lookalike"];
+      // 句子填空亭：读懂整句才选得对，多音字正好也是「回到句子里」，1.2 排进来
+      return t < 0.4 ? ["cloze", "synonym", "polyphone"] : ["cloze", "antonym", "polyphone", "idiom", "lookalike"];
     default:
-      return t < 0.4 ? ["radical", "lookalike"] : ["radical", "cloze", "idiom", "synonym"];
+      return t < 0.4
+        ? ["radical", "lookalike", "polyphone"]
+        : ["radical", "cloze", "polyphone", "idiom", "synonym"];
   }
 }
 
@@ -428,8 +460,250 @@ function makeOne(rand: () => number, pool: WordCard[], kind: WordKind, t: number
     case "antonym": return qAntonym(rand);
     case "cloze": return qCloze(rand);
     case "radical": return qRadical(rand);
+    case "polyphone": return qPolyphone(rand);
     default: return qCountChar(rand, t < 0.5 ? 5 : 10);
   }
+}
+
+// ---------------------------------------------------------------------------
+// 1.2 新机制一：笔顺描红台
+// 前 8 章都在「认」，这里第一次让孩子把字**写**出来：田字格里按顺序描，
+// 描错顺序只温和提示重来，不扣分也不判失败。
+// ---------------------------------------------------------------------------
+
+/** 描红台每三关来一次（只在形近字迷宫里；一笔之差的字正好靠描红体会） */
+export const TRACE_CHAPTER = 6;
+
+/** 这一关是不是「笔顺描红台」 */
+export function isTraceLevel(level: number): boolean {
+  if (level < LEGACY_LEVELS) return false;
+  if (chapterOf(CHAPTERS, level) !== TRACE_CHAPTER) return false;
+  return indexInChapter(CHAPTERS, level) % 3 === 2;
+}
+
+/** 描红台一关描几个字：章节越往后越多，最多 4 个 */
+export function traceCharCount(level: number): number {
+  const idx = indexInChapter(CHAPTERS, level);
+  const t = idx / Math.max(1, CHAPTERS[TRACE_CHAPTER].size - 1);
+  return 2 + Math.min(2, Math.floor(t * 3));
+}
+
+// ---------------------------------------------------------------------------
+// 1.2 新机制二：错题本换题型复查
+// 「答错的是哪个字」不写进 WordQ（前 99 关的题目 JSON 一个字节都不能变），
+// 而是靠下面这个纯函数从题目反查出来。
+// ---------------------------------------------------------------------------
+
+const ALL_CARDS: WordCard[] = CHAPTER_POOLS.flat();
+const stripTags = (html: string): string => html.replace(/<[^>]+>/g, "");
+
+/**
+ * 受控真词表：组词题的每一个选项都必须落在这张表里。
+ * 表里全是六张字卡表、形近字组、组字工坊、近反义卡上真实出现过的词 ——
+ * 一个生造出来凑数的词都没有，`bank.test.ts` 会逐题反查。
+ */
+export const REAL_WORDS: ReadonlySet<string> = new Set(realWordList(ALL_CARDS.map((c) => c.word)));
+
+/** 这道题在考哪个字（近反义与填空考的是词，就返回那个词） */
+export function questionFocus(q: WordQ): string {
+  switch (q.kind) {
+    case "char2pic": {
+      const card = ALL_CARDS.find((c) => c.char === stripTags(q.promptHTML).trim());
+      return card?.char ?? "";
+    }
+    case "char2word": {
+      const card = ALL_CARDS.find((c) => c.word === q.answer);
+      return card?.char ?? "";
+    }
+    case "synonym":
+    case "antonym":
+      return stripTags(q.promptHTML).trim();
+    case "polyphone": {
+      const hit = POLYPHONE_CARDS.find((c) => q.ask.includes(`「${c.char}」`));
+      return hit?.char ?? "";
+    }
+    case "radical": {
+      const byTopic = RADICAL_CARDS.find((c) => q.ask.includes(`「${c.topic}」`));
+      return byTopic ? q.answer : stripTags(q.promptHTML).trim();
+    }
+    default:
+      return q.answer;
+  }
+}
+
+function meaningQuestion(char: string, rand: () => number): WordQ | null {
+  const card = ALL_CARDS.find((c) => c.char === char);
+  if (card) {
+    const others = takeDistinct(rand, ALL_CARDS.filter((c) => c.char !== char).map((c) => c.meaning), 2, [
+      card.meaning,
+    ]);
+    if (others.length < 2) return null;
+    const choices = shuffled([card.meaning, ...others], rand);
+    return {
+      kind: "meaning", answer: card.meaning,
+      promptHTML: `<span style="font-size:48px">${card.char}</span>`,
+      ask: `「${card.char}」是什么意思？`,
+      choices, correct: choices.indexOf(card.meaning),
+    };
+  }
+  const idiom = IDIOM_CARDS.find((c) => Array.from(c.idiom)[c.blank] === char);
+  if (!idiom) return null;
+  const others = takeDistinct(rand, IDIOM_CARDS.filter((c) => c !== idiom).map((c) => c.meaning), 2, [
+    idiom.meaning,
+  ]);
+  if (others.length < 2) return null;
+  const choices = shuffled([idiom.meaning, ...others], rand);
+  return {
+    kind: "meaning", answer: idiom.meaning,
+    promptHTML: `<span style="font-size:34px;letter-spacing:4px">${idiom.idiom}</span>`,
+    ask: `「${idiom.idiom}」是什么意思？`,
+    choices, correct: choices.indexOf(idiom.meaning),
+  };
+}
+
+function cardQuestion(kind: WordKind, char: string, rand: () => number): WordQ | null {
+  const ci = CHAPTER_POOLS.findIndex((pool) => pool.some((c) => c.char === char));
+  if (ci < 0) return null;
+  const pool = CHAPTER_POOLS[ci];
+  const target = pool.find((c) => c.char === char);
+  if (!target || pool.length < 3) return null;
+  const cards = shuffled([target, ...pickDistinct(pool, 2, rand, target.char)], rand);
+  switch (kind) {
+    case "pic2char":
+      return {
+        kind, answer: target.char,
+        promptHTML: `<span style="font-size:56px">${target.emoji}</span>`,
+        ask: `这是「${target.word}」，哪个字是「${target.char}」？`,
+        choices: cards.map((c) => c.char), correct: cards.indexOf(target),
+      };
+    case "char2pic":
+      return {
+        kind, answer: target.emoji,
+        promptHTML: target.char,
+        ask: `「${target.char}」说的是哪一个？`,
+        choices: cards.map((c) => `<span style="font-size:34px">${c.emoji}</span>`),
+        correct: cards.indexOf(target),
+      };
+    case "py2char":
+      return {
+        kind, answer: target.char,
+        promptHTML: `<span style="color:#e64980">${target.pinyin}</span>`,
+        ask: "读一读拼音，选出对的字～",
+        choices: cards.map((c) => c.char), correct: cards.indexOf(target),
+      };
+    case "char2word":
+      return {
+        kind, answer: target.word,
+        promptHTML: `${target.emoji} ${target.char}`,
+        ask: `「${target.char}」可以组成哪个词？`,
+        choices: cards.map((c) => c.word), correct: cards.indexOf(target),
+      };
+    default:
+      return null;
+  }
+}
+
+/** 形近字换个问法：给字选词（干扰项是同组兄弟的真词，不是生造词） */
+function lookalikeWordQuestion(char: string, rand: () => number): WordQ | null {
+  const group = lookalikeGroupOf(char);
+  const target = group.find((x) => x.char === char);
+  if (!target || group.length < 3) return null;
+  const others = shuffled(group.filter((x) => x.char !== char), rand).slice(0, 2);
+  const choices = shuffled([target.word, ...others.map((x) => x.word)], rand);
+  return {
+    kind: "char2word", answer: target.word,
+    promptHTML: `<span style="font-size:48px">${char}</span>`,
+    ask: `「${char}」能组成下面哪个词？`,
+    choices, correct: choices.indexOf(target.word),
+  };
+}
+
+function polyphoneQuestion(char: string, rand: () => number): WordQ | null {
+  if (!POLYPHONE_CARDS.some((c) => c.char === char)) return null;
+  let q = qPolyphone(rand);
+  for (let i = 0; i < 40 && questionFocus(q) !== char; i++) q = qPolyphone(rand);
+  return questionFocus(q) === char ? q : null;
+}
+
+function synAntQuestion(kind: "synonym" | "antonym" | "cloze", word: string, rand: () => number): WordQ | null {
+  if (kind === "cloze") {
+    const card = CLOZE_CARDS.find((c) => c.answer === word);
+    if (!card) return null;
+    let q = qCloze(rand);
+    for (let i = 0; i < 60 && q.answer !== word; i++) q = qCloze(rand);
+    return q.answer === word ? q : null;
+  }
+  if (!SYN_ANT_CARDS.some((c) => c.word === word)) return null;
+  let q = kind === "synonym" ? qSynonym(rand) : qAntonym(rand);
+  for (let i = 0; i < 60 && stripTags(q.promptHTML).trim() !== word; i++) {
+    q = kind === "synonym" ? qSynonym(rand) : qAntonym(rand);
+  }
+  return stripTags(q.promptHTML).trim() === word ? q : null;
+}
+
+/** 复查轮的候选题型，按这个顺序试第一个能出得来的 */
+const REVIEW_ORDER: WordKind[] = [
+  "meaning",
+  "char2word",
+  "py2char",
+  "pic2char",
+  "char2pic",
+  "polyphone",
+  "antonym",
+  "synonym",
+  "cloze",
+];
+
+function buildReviewOne(kind: WordKind, focus: string, rand: () => number): WordQ | null {
+  switch (kind) {
+    case "meaning": return meaningQuestion(focus, rand);
+    case "char2word": return cardQuestion("char2word", focus, rand) ?? lookalikeWordQuestion(focus, rand);
+    case "py2char":
+    case "pic2char":
+    case "char2pic": return cardQuestion(kind, focus, rand);
+    case "polyphone": return polyphoneQuestion(focus, rand);
+    case "synonym":
+    case "antonym":
+    case "cloze": return synAntQuestion(kind, focus, rand);
+    default: return null;
+  }
+}
+
+/**
+ * 给答错的那个字换一种题型再考一遍。
+ * @param focus 答错的字（近反义与填空是词）
+ * @param avoid 刚才错的是哪种题型 —— 复查一定换一种，换不出来就返回 null
+ */
+export function makeReviewQuestion(focus: string, avoid: WordKind, seed: number): WordQ | null {
+  if (!focus) return null;
+  const rand = mulberry32(9700 + seed * 7919);
+  for (const kind of REVIEW_ORDER) {
+    if (kind === avoid) continue;
+    const q = buildReviewOne(kind, focus, rand);
+    if (q && q.choices.length === 3 && new Set(q.choices).size === 3) return q;
+  }
+  return null;
+}
+
+/** 一关答完，给错过的字排一轮复查题（同一个字只复查一次，题型一定和刚才不同） */
+export function buildReviewRound(
+  wrong: ReadonlyArray<{ focus: string; kind: WordKind }>,
+  level: number
+): WordQ[] {
+  const out: WordQ[] = [];
+  const seen = new Set<string>();
+  wrong.forEach((w, i) => {
+    if (!w.focus || seen.has(w.focus)) return;
+    seen.add(w.focus);
+    const q = makeReviewQuestion(w.focus, w.kind, level * 31 + i);
+    if (q) out.push(q);
+  });
+  return out;
+}
+
+/** 这个字能不能进描红台（错题本回顾时用来判断要不要建议去描一描） */
+export function traceableFocus(focus: string): boolean {
+  return hasStrokes(focus);
 }
 
 // ---------------------------------------------------------------------------
