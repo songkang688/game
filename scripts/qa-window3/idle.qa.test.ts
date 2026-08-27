@@ -22,7 +22,8 @@ const scans: Scan[] = [];
 
 afterAll(() => {
   mkdirSync("docs/qa/_evidence", { recursive: true });
-  writeFileSync("docs/qa/_evidence/window3-round2-idle.json", JSON.stringify({ scans }, null, 2));
+  const round = process.env.QA_ROUND ?? "2";
+  writeFileSync(`docs/qa/_evidence/window3-round${round}-idle.json`, JSON.stringify({ scans }, null, 2));
   console.log("\n===== 摆烂扫描(只有玩家不动,对手照常动) =====");
   for (const s of scans) {
     const pctStr = ((s.autoWin.length / s.scanned) * 100).toFixed(1);
@@ -156,6 +157,139 @@ describe("摆烂扫描", () => {
       else s.lost++;
     }
     void chooseAiAction;
+    scans.push(s);
+    expect(s.scanned).toBeGreaterThan(0);
+  });
+
+  it("garden-guard · 抽 17 关(一座塔都不种)", async () => {
+    const { simulateLevel } = await import("../../src/games/garden-guard/sim");
+    const s: Scan = { id: "garden-guard", scanned: 0, autoWin: [], lost: 0, stall: 0, note: "" };
+    for (const i of SAMPLE) {
+      const out = simulateLevel(i, { noTowers: true });
+      s.scanned++;
+      if (out.win) s.autoWin.push(i + 1);
+      else s.lost++;
+    }
+    scans.push(s);
+    expect(s.scanned).toBeGreaterThan(0);
+  });
+
+  it("sprout-defense · 抽 17 关(一株苗都不种)", async () => {
+    const { simulateLevel } = await import("../../src/games/sprout-defense/sim");
+    const s: Scan = { id: "sprout-defense", scanned: 0, autoWin: [], lost: 0, stall: 0, note: "" };
+    for (const i of SAMPLE) {
+      const out = simulateLevel(i, { build: false });
+      s.scanned++;
+      if (out.win) s.autoWin.push(i + 1);
+      else s.lost++;
+    }
+    scans.push(s);
+    expect(s.scanned).toBeGreaterThan(0);
+  });
+
+  it("monster-crisis · 抽 17 关(不摆不打)", async () => {
+    const { simulateLevel } = await import("../../src/games/monster-crisis/sim");
+    const s: Scan = { id: "monster-crisis", scanned: 0, autoWin: [], lost: 0, stall: 0, note: "" };
+    for (const i of SAMPLE) {
+      const out = simulateLevel(i, { build: false, shoot: false });
+      s.scanned++;
+      if (out.win) s.autoWin.push(i + 1);
+      else s.lost++;
+    }
+    scans.push(s);
+    expect(s.scanned).toBeGreaterThan(0);
+  });
+
+  it("gold-hook · 抽 17 关(只钩石头,不钩金子)", async () => {
+    const { levelAt } = await import("../../src/games/gold-hook/levels");
+    const { simulateRun } = await import("../../src/games/gold-hook/logic");
+    const s: Scan = { id: "gold-hook", scanned: 0, autoWin: [], lost: 0, stall: 0, note: "" };
+    for (const i of SAMPLE) {
+      const def = levelAt(i);
+      const out = simulateRun(def.field, { takeTreasure: false, takeRocks: true });
+      s.scanned++;
+      if (out.coins >= def.target) s.autoWin.push(i + 1);
+      else s.lost++;
+    }
+    s.note = "这一款没有「完全不动」的模拟口子,用「只钩石头」当摆烂近似";
+    scans.push(s);
+    expect(s.scanned).toBeGreaterThan(0);
+  });
+
+  it("tank-battle · 抽 17 关(两个人都一动不动)", async () => {
+    const { buildLevel, scaleForPlayers } = await import("../../src/games/tank-battle/levels");
+    const logic = await import("../../src/games/tank-battle/logic");
+    const s: Scan = { id: "tank-battle", scanned: 0, autoWin: [], lost: 0, stall: 0, note: "" };
+    const IDLE = { dir: -1, fire: false, brick: false };
+    for (const i of SAMPLE) {
+      const lv = buildLevel(i);
+      const w = logic.createWorld({
+        rows: lv.rows, mode: "campaign", queue: lv.waves,
+        limit: lv.limit, players: 1, ...scaleForPlayers(lv, 1),
+      } as never);
+      const DT = 1 / 60;
+      let t = 0;
+      while (w.status === "playing" && t < lv.limit + 5) {
+        logic.stepWorld(w, DT, [IDLE] as never);
+        t += DT;
+      }
+      s.scanned++;
+      if (w.status === "win") s.autoWin.push(i + 1);
+      else if (w.status === "lose") s.lost++;
+      else s.stall++;
+    }
+    scans.push(s);
+    expect(s.scanned).toBeGreaterThan(0);
+  });
+
+  it("duo-vs-star · 全 188 关(玩家一个键都不按,对手照常打)", async () => {
+    const { createMatch, runMatch } = await import("../../src/games/duo-vs-star/battle");
+    const { levelAt, CHAPTERS } = await import("../../src/games/duo-vs-star/levels");
+    const s: Scan = { id: "duo-vs-star", scanned: 0, autoWin: [], lost: 0, stall: 0, note: "" };
+    const byTimeout: number[] = [];
+    for (let i = 0; i < 188; i++) {
+      // 完全照 index.ts playLevel 的配法搭局:关号 0 基、seed 同式、对手带档位/打法/力气/命数
+      const lv = levelAt(i);
+      const slots: unknown[] = [{ charId: "duoduo", team: 0, control: "p1", stocks: lv.playerStocks }];
+      for (const ally of lv.allies) {
+        slots.push({
+          charId: ally.charId, team: 0, control: "ai",
+          aiTier: ally.tier, stocks: ally.stocks ?? lv.playerStocks,
+        });
+      }
+      lv.foes.forEach((foe, fi: number) => {
+        slots.push({
+          charId: foe.charId, team: lv.allies.length > 0 ? 1 : 1 + fi, control: "ai",
+          aiTier: foe.tier, aiStyle: foe.style, powerBonus: foe.powerBonus, stocks: foe.stocks,
+        });
+      });
+      // p1 槽位全程不喂输入 = 一个键都不按
+      const m = runMatch(
+        createMatch({
+          stageId: lv.stageId, slots, stocks: lv.playerStocks, timeLimit: lv.timeLimit,
+          itemEvery: lv.itemEvery, itemPool: lv.itemPool, seed: (i + 1) * 7919,
+        } as never),
+        (lv.timeLimit > 0 ? lv.timeLimit : 150) + 5
+      );
+      s.scanned++;
+      if (m.winnerTeam === 0) {
+        s.autoWin.push(i + 1);
+        if (m.endReason === "time") byTimeout.push(i + 1);
+      } else if (m.winnerTeam === null) s.stall++;
+      else s.lost++;
+    }
+    if (s.autoWin.length > 0) {
+      let base = 0;
+      const perChapter = CHAPTERS.map((ch) => {
+        const hit = s.autoWin.filter((n) => n > base && n <= base + ch.size).length;
+        const line = `${levelAt(base).stageId} 第${base + 1}-${base + ch.size}关 ${hit}/${ch.size}`;
+        base += ch.size;
+        return line;
+      }).join("、");
+      s.note =
+        `靠时间到判赢 ${byTimeout.length} 关、靠对手自己掉下去 ${s.autoWin.length - byTimeout.length} 关;` +
+        `按章节分布:${perChapter}`;
+    }
     scans.push(s);
     expect(s.scanned).toBeGreaterThan(0);
   });
