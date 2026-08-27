@@ -16,6 +16,7 @@ import { AI_TIERS, STYLE_LABELS, emptyInput, type AiTier, type Input } from "./a
 import { isPauseKey, isWatchedKey, readKeys } from "./keys";
 import {
   ACTOR_R,
+  RESPAWN_DELAY,
   coopTally,
   createMatch,
   leadIdle,
@@ -27,6 +28,27 @@ import {
   type MatchConfig,
   type MatchState,
 } from "./battle";
+import {
+  animT,
+  drawBelt,
+  drawCharBody,
+  drawCharFace,
+  drawCracks,
+  drawFluffyCloud,
+  drawGoldStar,
+  drawHiddenPlatform,
+  drawIceDetail,
+  drawItem,
+  drawItemIcon,
+  drawPlatformBase,
+  drawSparkle,
+  drawSprings,
+  drawStageDecor,
+  drawSyrupBubbles,
+  drawTeamRing,
+  tiltAngle,
+  type FaceMood,
+} from "./art";
 import {
   bumpTier,
   hitStopFrames,
@@ -273,9 +295,17 @@ interface Burst {
   x: number;
   y: number;
   t: number;
-  text: string;
+  /** 命中星屑 / 重击冲击圈 / 护盾水圈 / 配合喝彩底板 / 出界底板 / 道具图标 */
+  kind: "hit" | "heavy" | "block" | "cheer" | "ko" | "item";
+  /** 圆角底板上的短句（全部是文字，不再用 emoji 字符占位） */
+  text?: string;
   color: string;
+  /** kind = "item" 时画哪种道具的图标 */
+  itemId?: string;
 }
+
+/** 落地压扁演出多长（秒），只影响画法不影响判定 */
+const SQUASH_TIME = 0.15;
 
 /** 出界演出的小星星：从出界那一点朝四周飞散开 */
 interface Spark {
@@ -310,6 +340,9 @@ function mountArena(opts: ArenaOptions): Arena {
   let hitStop = 0;
   const bursts: Burst[] = [];
   const sparks: Spark[] = [];
+  /** 每位角色落地压扁演出的剩余秒数（纯演出，soft 时不用） */
+  const landSquash: number[] = state.actors.map(() => 0);
+  const wasGround: boolean[] = state.actors.map(() => false);
   const timers = new Set<number>();
 
   function later(fn: () => void, ms: number): void {
@@ -515,51 +548,61 @@ function mountArena(opts: ArenaOptions): Arena {
     hitStop = 0;
     bursts.length = 0;
     sparks.length = 0;
+    landSquash.fill(0);
+    wasGround.fill(false);
     state = createMatch({ ...opts.config, seed: (opts.config.seed + 1013) >>> 0 });
     last = 0;
     opts.sfx("jump");
   }
 
-  /** 出界演出：从出界那一点撒一圈小星星飞走 */
+  /** 出界演出：从出界那一点撒一圈五角星飞走（弱化动效时数量减半） */
   function starburst(x: number, y: number): void {
-    if (soft) return;
-    for (let i = 0; i < STARBURST_COUNT; i++) {
-      const angle = (Math.PI * 2 * i) / STARBURST_COUNT;
+    const n = soft ? Math.ceil(STARBURST_COUNT / 2) : STARBURST_COUNT;
+    for (let i = 0; i < n; i++) {
+      const angle = (Math.PI * 2 * i) / n;
       const speed = 180 + (i % 3) * 45;
       sparks.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, t: 0 });
     }
   }
 
-  /* ---- 事件转成看得见的反馈 ---- */
+  /* ---- 事件转成看得见的反馈（全部绘制粒子 / 底板字，不再飘 emoji） ---- */
   function drainEvents(): void {
     for (const e of state.events) {
       if (e.kind === "hit") {
-        bursts.push({ x: e.x, y: e.y, t: 0, text: e.heavy ? "💥" : "✨", color: "#ffb937" });
+        bursts.push({ x: e.x, y: e.y, t: 0, kind: e.heavy ? "heavy" : "hit", color: "#ffb937" });
         // 打中那一下卡几帧，重击更沉手；弱化动效时 hitStopFrames 恒返回 0
         const speed = Math.hypot(state.actors[e.actor].vx, state.actors[e.actor].vy);
         hitStop = Math.max(hitStop, hitStopSeconds(hitStopFrames(speed, e.heavy, soft)));
         opts.sfx(e.heavy ? "pop" : "tap");
       } else if (e.kind === "block") {
-        bursts.push({ x: e.x, y: e.y, t: 0, text: "🫧", color: "#7fb2ff" });
+        bursts.push({ x: e.x, y: e.y, t: 0, kind: "block", color: "#7fb2ff" });
       } else if (e.kind === "pop") {
         opts.sfx("oops");
       } else if (e.kind === "struggle") {
-        bursts.push({ x: e.x, y: e.y, t: 0, text: "💪", color: "#8fd6a4" });
+        bursts.push({ x: e.x, y: e.y, t: 0, kind: "cheer", text: "挣脱！", color: "#3f7a55" });
         opts.sfx("jump");
       } else if (e.kind === "lift") {
-        bursts.push({ x: e.x, y: e.y, t: 0, text: "🙌", color: "#8fd6a4" });
+        bursts.push({ x: e.x, y: e.y, t: 0, kind: "cheer", text: "顶举！", color: "#3f7a55" });
         opts.sfx("coin");
       } else if (e.kind === "catch") {
-        bursts.push({ x: e.x, y: e.y, t: 0, text: "🤝", color: "#8fd6a4" });
+        bursts.push({ x: e.x, y: e.y, t: 0, kind: "cheer", text: "接住！", color: "#3f7a55" });
         opts.sfx("coin");
       } else if (e.kind === "ko") {
         const who = state.actors[e.actor];
-        bursts.push({ x: e.x, y: e.y, t: 0, text: `${who.char.emoji}💫`, color: "#ff8fbe" });
+        bursts.push({ x: e.x, y: e.y, t: 0, kind: "ko", text: `${who.char.name}出界啦`, color: "#c2497e" });
         starburst(e.x, e.y);
         opts.sfx("oops");
       } else if (e.kind === "item") {
         const def = itemById(e.item);
-        bursts.push({ x: e.x, y: e.y, t: 0, text: def?.emoji ?? "🎁", color: "#8fd6a4" });
+        bursts.push({
+          x: e.x,
+          y: e.y,
+          t: 0,
+          kind: "item",
+          itemId: e.item,
+          text: def?.name,
+          color: "#3f7a55",
+        });
         opts.sfx("coin");
       } else if (e.kind === "respawn") {
         opts.sfx("jump");
@@ -647,7 +690,10 @@ function mountArena(opts: ArenaOptions): Arena {
     ctx.fillStyle = sky;
     ctx.fillRect(-30, -30, WORLD_W + 60, WORLD_H + 60);
 
-    // 咕嘟糖浆池
+    // 场地主题装饰层（云朵 / 齿轮 / 风车 / 月牙……soft 时全部定格）
+    drawStageDecor(ctx, stage.id, WORLD_W, WORLD_H, animT(state.t, soft), stage.sky[0]);
+
+    // 咕嘟糖浆池：保留 1.2 的波浪，再加几粒上浮的小气泡
     const syrup = syrupLevel(stage, state.t);
     if (Number.isFinite(syrup)) {
       ctx.fillStyle = "#ffcf8f";
@@ -658,64 +704,32 @@ function mountArena(opts: ArenaOptions): Arena {
         ctx.arc(x + Math.sin(state.t * 1.6 + x) * 6, syrup, 13, Math.PI, 0);
         ctx.fill();
       }
+      drawSyrupBubbles(ctx, syrup, WORLD_H, animT(state.t, soft));
     }
 
-    // 平台
+    // 平台：顶面高光 + 底面投影，机制各有专属画法（数据一个都没动）
     stage.platforms.forEach((p, i) => {
       const st = state.plats[i];
       if (st.hidden) {
-        ctx.globalAlpha = 0.25;
-        ctx.fillStyle = "#ffffff";
-        roundRect(ctx, st.x, st.y, p.w, p.h, 8);
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        drawHiddenPlatform(ctx, st.x, st.y, p.w, p.h);
         return;
       }
       const wobble = p.collapse ? Math.max(0, st.standT / p.collapse) : 0;
       ctx.save();
       if (wobble > 0.5 && !soft) ctx.translate(Math.sin(state.t * 30) * wobble * 2, 0);
-      ctx.fillStyle = p.color ?? "#ffe3f0";
-      roundRect(ctx, st.x, st.y, p.w, p.h, Math.min(10, p.h / 2));
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,.85)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      if (p.drift) {
-        ctx.fillStyle = "rgba(120,120,190,.35)";
-        ctx.font = "bold 13px system-ui";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const arrow = p.drift > 0 ? "▶▶▶" : "◀◀◀";
-        ctx.fillText(arrow, st.x + p.w / 2, st.y + p.h / 2);
-      }
-      if (p.bounce) {
-        ctx.strokeStyle = "rgba(210,90,150,.4)";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (let x = st.x + 8; x < st.x + p.w - 6; x += 12) {
-          ctx.moveTo(x, st.y + p.h - 3);
-          ctx.lineTo(x + 6, st.y + 3);
-        }
-        ctx.stroke();
-      }
-      if (p.ice) {
-        ctx.fillStyle = "rgba(255,255,255,.7)";
-        ctx.fillRect(st.x + 6, st.y + 2, p.w - 12, 2);
-      }
+      drawPlatformBase(ctx, st.x, st.y, p.w, p.h, p.color ?? "#ffe3f0");
+      if (p.drift) drawBelt(ctx, st.x, st.y, p.w, p.h, p.drift, animT(state.t, soft));
+      if (p.bounce) drawSprings(ctx, st.x, st.y, p.w, p.h);
+      if (p.ice) drawIceDetail(ctx, st.x, st.y, p.w, p.h);
+      // 会塌的台子：站得越久裂纹越多
+      if (wobble > 0.15) drawCracks(ctx, st.x, st.y, p.w, p.h, Math.ceil(wobble * 3));
       ctx.restore();
     });
 
-    // 道具
-    ctx.font = "26px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    // 道具：泡壳 + 绘制图标（漂浮节奏与 1.2 相同）
     for (const it of state.items) {
       const bob = soft ? 0 : Math.sin(state.t * 5 + it.id) * 3;
-      ctx.fillStyle = "rgba(255,255,255,.85)";
-      ctx.beginPath();
-      ctx.arc(it.x, it.y + bob, 17, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillText(it.def.emoji, it.x, it.y + bob + 1);
+      drawItem(ctx, it.def.id, it.x, it.y + bob, 17);
     }
 
     // 角色
@@ -727,23 +741,70 @@ function mountArena(opts: ArenaOptions): Arena {
       drawActor(ctx, a);
     }
 
-    // 出界演出：一圈小星星飞走
+    // 出界演出：金渐变五角星旋转着飞散（不再是 "⭐" 字符）
     for (const p of sparks) {
       const k = 1 - p.t / STARBURST_LIFE;
       if (k <= 0) continue;
       ctx.globalAlpha = k;
-      ctx.font = `${Math.round(10 + k * 12)}px system-ui`;
-      ctx.fillText("⭐", p.x, p.y);
+      drawGoldStar(ctx, p.x, p.y, 5 + k * 6, animT(p.t, soft) * 7 + p.vx * 0.01);
       ctx.globalAlpha = 1;
     }
 
-    // 特效
+    // 特效：星屑爆点 / 冲击圈 / 圆角底板短句
     for (const b of bursts) {
       const k = 1 - b.t / 0.7;
       if (k <= 0) continue;
+      const rise = (1 - k) * 26;
       ctx.globalAlpha = k;
-      ctx.font = `${Math.round(22 + (1 - k) * 14)}px system-ui`;
-      ctx.fillText(b.text, b.x, b.y - (1 - k) * 26);
+      if (b.kind === "hit" || b.kind === "heavy") {
+        // 轻击 3 粒星屑、重击 5 粒 + 白色冲击圈
+        const n = b.kind === "heavy" ? 5 : 3;
+        const spread = 10 + (1 - k) * 26;
+        for (let i = 0; i < n; i++) {
+          const a2 = (Math.PI * 2 * i) / n + 0.7;
+          drawGoldStar(
+            ctx,
+            b.x + Math.cos(a2) * spread,
+            b.y + Math.sin(a2) * spread * 0.8,
+            4 + k * 3,
+            a2 + (1 - k) * 2
+          );
+        }
+        if (b.kind === "heavy") {
+          ctx.strokeStyle = "rgba(255,255,255,.9)";
+          ctx.lineWidth = Math.max(1, 3 * k);
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 8 + (1 - k) * 34, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (b.kind === "block") {
+        // 护盾荡开的双层水圈
+        ctx.strokeStyle = "rgba(130,190,255,.9)";
+        ctx.lineWidth = Math.max(1, 3 * k);
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 12 + (1 - k) * 22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,.8)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 8 + (1 - k) * 14, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (b.kind === "item" && b.itemId) {
+        drawItemIcon(ctx, b.itemId, b.x, b.y - rise, 10 + (1 - k) * 4);
+      }
+      if (b.text) {
+        // 圆角底板 + 彩字（挣脱 / 顶举 / 接住 / 出界 / 道具名）
+        const w = b.text.length * 14 + 12;
+        const plateY = b.y - rise - (b.kind === "item" ? 36 : 10);
+        ctx.fillStyle = "rgba(255,255,255,.92)";
+        roundRect(ctx, b.x - w / 2, plateY, w, 20, 9);
+        ctx.fill();
+        ctx.font = "bold 13px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = b.color;
+        ctx.fillText(b.text, b.x, plateY + 10);
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -754,17 +815,35 @@ function mountArena(opts: ArenaOptions): Arena {
     const zone = safeZone(state.stage);
     const x = (zone.min + zone.max) / 2;
     const y = 60;
-    c.font = "22px system-ui";
+    // 蓬蓬云（绘制的，不是 ☁️ 字符）+ 坐在云上的小头像 + 倒计时进度弧
+    drawFluffyCloud(c, x, y + 14, 64);
+    drawCharBody(c, a.char.color, x, y - 8, 13);
+    drawCharFace(c, a.char.id, x, y - 8, 13, "happy", 0);
+    const wait = Math.max(0, Math.min(1, 1 - a.respawn / RESPAWN_DELAY));
+    c.strokeStyle = TEAM_COLORS[a.team % TEAM_COLORS.length];
+    c.lineWidth = 3;
+    c.lineCap = "round";
+    c.beginPath();
+    c.arc(x, y - 2, 27, -Math.PI / 2, -Math.PI / 2 + wait * Math.PI * 2);
+    c.stroke();
+    c.font = "bold 13px system-ui";
     c.textAlign = "center";
     c.textBaseline = "middle";
-    c.fillStyle = "rgba(255,255,255,.9)";
-    c.beginPath();
-    c.arc(x, y, 22, 0, Math.PI * 2);
-    c.fill();
-    c.fillText("☁️", x, y + 2);
-    c.font = "bold 13px system-ui";
     c.fillStyle = "#7b6aa0";
-    c.fillText(`${a.char.name} 马上回来`, x, y + 32);
+    c.fillText(`${a.char.name} 马上回来`, x, y + 36);
+  }
+
+  /** 角色脚下最近的平台顶（画投影用；没有就不画） */
+  function groundYBelow(a: Actor): number | null {
+    let best: number | null = null;
+    for (let i = 0; i < state.stage.platforms.length; i++) {
+      const p = state.stage.platforms[i];
+      const st = state.plats[i];
+      if (st.hidden) continue;
+      if (a.x < st.x - 6 || a.x > st.x + p.w + 6) continue;
+      if (st.y >= a.y && (best === null || st.y < best)) best = st.y;
+    }
+    return best;
   }
 
   function drawActor(c: CanvasRenderingContext2D, a: Actor): void {
@@ -773,47 +852,113 @@ function mountArena(opts: ArenaOptions): Arena {
     if (a.safe > 0 && !soft && Math.floor(state.t * 10) % 2 === 0) c.globalAlpha = 0.55;
     else if (a.safe > 0 && soft) c.globalAlpha = 0.7;
 
-    // 队伍光圈
-    c.fillStyle = TEAM_COLORS[a.team % TEAM_COLORS.length];
-    c.beginPath();
-    c.arc(a.x, a.y, r + 4, 0, Math.PI * 2);
-    c.fill();
-    // 身体
-    c.fillStyle = a.char.color;
-    c.beginPath();
-    c.arc(a.x, a.y, r, 0, Math.PI * 2);
-    c.fill();
-    // 脸
-    c.font = `${Math.round(r * 1.25)}px system-ui`;
-    c.textAlign = "center";
-    c.textBaseline = "middle";
-    c.fillText(a.buffs.dizzy > 0 ? "💫" : a.char.emoji, a.x, a.y + 1);
+    // 脚下投影：椭圆随离地高度缩小变淡（2D 里的层次感来源之一）
+    const gy = groundYBelow(a);
+    if (gy !== null) {
+      const k = Math.max(0, 1 - (gy - a.y - r) / 240);
+      if (k > 0.05) {
+        c.fillStyle = `rgba(90,70,120,${(0.16 * k).toFixed(3)})`;
+        c.beginPath();
+        c.ellipse(a.x, gy + 2, r * (0.45 + 0.45 * k), 4, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
 
-    // 挥击的小手
+    // 身体随速度微倾斜（≤8°）+ 落地压扁 0.15s（soft 全关）
+    const squash = soft ? 0 : Math.min(1, landSquash[a.index] / SQUASH_TIME);
+    const tilt = tiltAngle(a.vx, soft);
+    if (tilt !== 0 || squash > 0) {
+      c.translate(a.x, a.y + r);
+      c.rotate(tilt);
+      c.scale(1 + squash * 0.08, 1 - squash * 0.15);
+      c.translate(-a.x, -(a.y + r));
+    }
+
+    // 队伍外环：颜色 + 线型双通道（色弱也分得开）
+    drawTeamRing(c, TEAM_COLORS[a.team % TEAM_COLORS.length], a.team, a.x, a.y, r + 4);
+    // 身体三层：径向渐变 + 底部阴影弧 + 描边
+    drawCharBody(c, a.char.color, a.x, a.y, r);
+    // 脸谱按状态查表（不再贴 emoji）；soft 时 t=0 就不眨眼
+    const mood: FaceMood =
+      a.buffs.dizzy > 0
+        ? "dizzy"
+        : a.stun > 0.05 || a.struggle > 0
+          ? "hurt"
+          : a.attack
+            ? "attack"
+            : "idle";
+    drawCharFace(c, a.char.id, a.x, a.y, r, mood, soft ? 0 : state.t);
+
+    // 眩晕：螺旋眼 + 头顶两颗小星公转（替代 💫 字符；soft 时定格）
+    if (a.buffs.dizzy > 0) {
+      const th = animT(state.t, soft) * 4;
+      for (const off of [0, Math.PI]) {
+        const sx = a.x + Math.cos(th + off) * (r * 0.9);
+        const sy = a.y - r - 6 + Math.sin(th + off) * 4;
+        drawGoldStar(c, sx, sy, 5, th + off);
+      }
+    }
+
+    // 挥击「拳套弧线」：判定口径（圆心 / 半径）与 1.2 完全一致，只加装饰层
     if (a.attack) {
       const heavy = a.attack.kind === "heavy";
-      c.fillStyle = heavy ? "rgba(255,150,190,.75)" : "rgba(255,220,140,.8)";
+      const fx = a.x + a.facing * (r + 16);
+      const fr = heavy ? 17 : 12;
+      // 3 根弧形拖影线沿挥击方向展开
+      c.strokeStyle = heavy ? "rgba(255,150,190,.55)" : "rgba(255,220,140,.6)";
+      c.lineCap = "round";
+      const mid = a.facing > 0 ? 0 : Math.PI;
+      for (let i = 0; i < 3; i++) {
+        c.lineWidth = 3 - i * 0.7;
+        c.beginPath();
+        c.arc(a.x, a.y, r + 10 + i * 7, mid - 0.55, mid + 0.55);
+        c.stroke();
+      }
+      // 实心拳头（带体积的渐变球 + 指缝小弧）
+      const g = c.createRadialGradient(fx - fr * 0.3, a.y - fr * 0.3, fr * 0.2, fx, a.y, fr);
+      g.addColorStop(0, heavy ? "#ffd3e4" : "#fff3cf");
+      g.addColorStop(1, heavy ? "rgba(255,150,190,.9)" : "rgba(255,220,140,.92)");
+      c.fillStyle = g;
       c.beginPath();
-      c.arc(a.x + a.facing * (r + 16), a.y, heavy ? 17 : 12, 0, Math.PI * 2);
+      c.arc(fx, a.y, fr, 0, Math.PI * 2);
       c.fill();
+      c.strokeStyle = "rgba(200,120,90,.45)";
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(fx - a.facing * fr * 0.3, a.y - fr * 0.2, fr * 0.4, Math.PI * 0.2, Math.PI * 0.9);
+      c.stroke();
+      // 重击附 4 芒冲击星
+      if (heavy) drawSparkle(c, fx + a.facing * fr * 0.9, a.y - fr * 0.8, 7, "#ffffff");
     }
-    // 护盾泡泡
+    // 护盾泡泡：双层圈 + 高光弧
     if (a.shield > 0) {
       c.strokeStyle = "rgba(130,190,255,.85)";
       c.lineWidth = 3;
       c.beginPath();
       c.arc(a.x, a.y, r + 9, 0, Math.PI * 2);
       c.stroke();
+      c.strokeStyle = "rgba(255,255,255,.6)";
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(a.x, a.y, r + 6, Math.PI * 1.1, Math.PI * 1.6);
+      c.stroke();
     }
-    // 挣扎窗口：低元气挨拍的那 0.4 秒，头顶亮个提示让人来得及按方向键
+    // 挣扎窗口：白色圆角底板 + ←→（提示口径与 1.2 相同，只是更醒目）
     if (a.struggle > 0) {
+      c.fillStyle = "rgba(255,255,255,.92)";
+      roundRect(c, a.x - 22, a.y - r - 39, 44, 20, 9);
+      c.fill();
       c.font = "bold 15px system-ui";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
       c.fillStyle = "#3f7a55";
-      c.fillText("←→", a.x, a.y - r - 28);
+      c.fillText("←→", a.x, a.y - r - 29);
     }
-    // 元气：颜色 + 数字两条通道，只看数字也不会误判
+    // 元气：颜色 + 数字两条通道，只看数字也不会误判（原样保留）
     const tier = bumpTier(a.bump);
     c.font = "bold 13px system-ui";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
     c.fillStyle = tier === 0 ? "#4b7a5c" : tier === 1 ? "#9a7020" : "#c2497e";
     c.fillText(`${Math.round(vigorOf(a.bump))}`, a.x, a.y - r - 12);
     c.restore();
@@ -833,6 +978,12 @@ function mountArena(opts: ArenaOptions): Arena {
       checkGoal();
       if (opts.progress) hint.textContent = opts.progress(state);
     }
+    // 落地那一下的压扁演出：只记「刚踩到地」的时刻，判定完全不掺和
+    state.actors.forEach((a, i) => {
+      if (a.onStage && a.onGround && !wasGround[i]) landSquash[i] = SQUASH_TIME;
+      wasGround[i] = a.onStage && a.onGround;
+      landSquash[i] = Math.max(0, landSquash[i] - dt);
+    });
     for (const b of bursts) b.t += dt;
     while (bursts.length && bursts[0].t > 0.7) bursts.shift();
     for (const p of sparks) {
@@ -1062,6 +1213,84 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(arena.root);
   }
 
+  /** 结算头像画布的动画帧句柄（浮层收掉 / 游戏销毁时要取消） */
+  let ovRaf = 0;
+
+  /**
+   * 胜利结算画布：胜者头像放大入场 + 主题色粒子雨 + 比分数字滚动。
+   * 弱化动效时只画一帧静态（头像满尺寸、粒子定格、数字直接到位）。
+   */
+  function victoryCanvas(state: MatchState): HTMLCanvasElement {
+    const canvas = el("canvas");
+    const W = 320;
+    const H = 150;
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = "min(320px, 86%)";
+    const c = canvas.getContext("2d");
+    const soft = reduceMotion();
+    const team = state.winnerTeam;
+    const members = (
+      team === null ? state.actors.slice(0, 2) : state.actors.filter((a) => a.team === team)
+    ).slice(0, 2);
+    const stats = team === null ? null : teamStats(state).find((t) => t.team === team);
+    const TOTAL = 96;
+    let f = soft ? TOTAL : 0;
+
+    const drawFrame = (): void => {
+      if (!c) return;
+      c.clearRect(0, 0, W, H);
+      const k = Math.min(1, f / 24);
+      // 主题色粒子雨：花瓣圆点 + 小金星（位置由下标决定，soft 定格一帧）
+      for (let i = 0; i < 14; i++) {
+        const px = (i * 53 + 20) % W;
+        const py = ((f * 1.8 + i * 37) % (H + 30)) - 15;
+        c.globalAlpha = 0.75;
+        if (i % 3 === 0) drawGoldStar(c, px, py, 5, i + f * 0.05);
+        else {
+          const m = members[i % Math.max(1, members.length)];
+          c.fillStyle = m ? m.char.color : "#ff9ec4";
+          c.beginPath();
+          c.ellipse(px, py, 4.5, 3, i, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.globalAlpha = 1;
+      }
+      // 胜者头像放大入场（脸谱复用，开心表情）
+      members.forEach((m, i) => {
+        const mx = W / 2 + (members.length === 1 ? 0 : i === 0 ? -56 : 56);
+        const r = 30 * (0.55 + 0.45 * k);
+        drawTeamRing(c, TEAM_COLORS[m.team % TEAM_COLORS.length], m.team, mx, 62, r + 5);
+        drawCharBody(c, m.char.color, mx, 62, r);
+        drawCharFace(c, m.char.id, mx, 62, r, "happy", 0);
+      });
+      // 比分数字滚动（soft 直接到位）
+      if (stats) {
+        const roll = Math.min(1, f / 45);
+        c.font = "bold 15px system-ui";
+        c.textAlign = "center";
+        c.textBaseline = "middle";
+        c.fillStyle = "#8a5aa8";
+        c.fillText(
+          `剩 ${Math.round(stats.stocks * roll)} 次上场 · 撞飞对手 ${Math.round(stats.kos * roll)} 次`,
+          W / 2,
+          H - 22
+        );
+      }
+    };
+
+    drawFrame();
+    if (!soft && c) {
+      const step = (): void => {
+        f++;
+        drawFrame();
+        if (f < TOTAL) ovRaf = requestAnimationFrame(step);
+      };
+      ovRaf = requestAnimationFrame(step);
+    }
+    return canvas;
+  }
+
   /** 一局打完后的通用结算浮层（闯关模式不用它，交给 level99） */
   function showResult(
     state: MatchState,
@@ -1074,7 +1303,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     sfx(won ? "win" : "oops");
     const ov = el("div", "dvs-over");
     ov.append(
-      el("div", "big", w.big),
+      victoryCanvas(state),
       el("div", "ttl", w.ttl),
       el("div", "sub", won ? w.sub : `${w.sub} 下一局换个打法试试！`)
     );
@@ -1092,7 +1321,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     ov.appendChild(row);
     wrap.appendChild(ov);
     ov.querySelector("button")?.focus?.();
-    const clean = (): void => ov.remove();
+    const clean = (): void => {
+      cancelAnimationFrame(ovRaf);
+      ov.remove();
+    };
     row.addEventListener("click", clean, { once: true });
   }
 
@@ -1648,6 +1880,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      cancelAnimationFrame(ovRaf);
       clearView();
       wrap.remove();
     },

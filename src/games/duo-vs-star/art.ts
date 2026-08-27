@@ -192,7 +192,7 @@ function drawEyes(
   for (const side of [-1, 1]) {
     const ex = x + side * dx;
     if (mood === "hurt") {
-      // ×眼：分级红线要求「无痛苦表情」，× + 星星就够了
+      // ×眼：分级口径是挨打不许做难受的脸，× 眼 + 头顶星星就够了
       ctx.strokeStyle = "#5c4a7d";
       ctx.lineWidth = Math.max(1.4, r * 0.09);
       ctx.beginPath();
