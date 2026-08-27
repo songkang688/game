@@ -334,10 +334,21 @@ export function streakRecordLine(s: StreakState): string {
     : `最高纪录 ${s.best} 盘，还差 ${gap} 盘追平。`;
 }
 
-/** 开局播报：进行时的连胜播报 + 纪录播报，拼成一句话。 */
-export function streakOpening(s: StreakState): string {
+/**
+ * 开局播报：进行时的连胜播报 + 纪录播报 + 这一档什么脾气。
+ *
+ * 六档各有一句 `DIFFICULTY_BLURB`，自由对战的开局播报里一直有，
+ * 连胜挑战里原先**没有**：下一档的脾气只在上一盘的结算浮层上闪一次，
+ * 点掉「继续挑战」就再也看不见；第 1 盘更是压根没有任何一档说明。
+ *
+ * `blurb` 由调用方传（`session.ts` 不依赖 `ai.ts` 的运行时导出），
+ * 不传就是原来那句，老口径一字不变。
+ */
+export function streakOpening(s: StreakState, blurb = ""): string {
   const rec = streakRecordLine(s);
-  return rec ? `${streakLine(s)}${rec}` : streakLine(s);
+  const head = rec ? `${streakLine(s)}${rec}` : streakLine(s);
+  const tip = typeof blurb === "string" ? blurb.trim().replace(/[。.]+$/, "") : "";
+  return tip ? `${head}这一档的脾气：${tip}。` : head;
 }
 
 /** 赢下一盘之后的标题：刷新纪录那一盘要看得出来和平常不一样。 */

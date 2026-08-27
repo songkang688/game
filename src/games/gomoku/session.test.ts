@@ -1,7 +1,7 @@
 // 对局层纯逻辑的回归：落子确认、提示限次、连胜阶梯、level→AI 档、
 // 直开第 N 题、旧存档迁移。全是纯函数，不需要 DOM。
 import { describe, expect, it } from "vitest";
-import { DIFFICULTIES } from "./ai";
+import { DIFFICULTIES, DIFFICULTY_BLURB } from "./ai";
 import { TOTAL_LEVELS, loadStars, saveStar, type StorageLike } from "../level99";
 import {
   HINTS_PER_FREE_GAME,
@@ -412,6 +412,46 @@ describe("连胜 · 破纪录反馈", () => {
     const opening = streakOpening(s);
     expect(opening.startsWith(streakLine(s))).toBe(true);
     expect(opening).toContain(streakRecordLine(s));
+  });
+});
+
+describe("连胜 · 开局播报里的档位脾气", () => {
+  it("给了档位说明就接在纪录播报后面，前半截一字不变", () => {
+    const s = streakStep(newStreak(4), "win");
+    const plain = streakOpening(s);
+    const withBlurb = streakOpening(s, "会算两层：你活四、双三的苗头它提前拆");
+    expect(withBlurb.startsWith(plain)).toBe(true);
+    expect(withBlurb).toContain("这一档的脾气");
+    expect(withBlurb).toContain("双三的苗头它提前拆");
+  });
+
+  it("第 1 盘（还没有纪录）也说得出这一档什么脾气", () => {
+    const s = newStreak(0);
+    expect(streakRecordLine(s)).toBe("");
+    const opening = streakOpening(s, "刚学会规则，会乱下，也常常看不见自己能连成五");
+    expect(opening).toContain(streakLine(s));
+    expect(opening).toContain("会乱下");
+  });
+
+  it("不给档位说明就是原来那句，老口径一字不变", () => {
+    const s = streakStep(newStreak(4), "win");
+    expect(streakOpening(s, "")).toBe(streakOpening(s));
+    expect(streakOpening(s, "   ")).toBe(streakOpening(s));
+  });
+
+  it("档位说明自带句号也不会拼出两个句号", () => {
+    const s = newStreak(0);
+    const a = streakOpening(s, "该成五就成五、该挡就挡，还会自己走活三");
+    const b = streakOpening(s, "该成五就成五、该挡就挡，还会自己走活三。");
+    expect(b).toBe(a);
+    expect(a).not.toContain("。。");
+  });
+
+  it("六档都拼得出一句话，而且互相不重样", () => {
+    const s = newStreak(0);
+    const lines = new Set(DIFFICULTIES.map((d) => streakOpening(s, DIFFICULTY_BLURB[d])));
+    expect(lines.size).toBe(DIFFICULTIES.length);
+    for (const line of lines) expect(line).toContain("这一档的脾气");
   });
 
   it("超过旧纪录那一盘才算刷新纪录，追平不算", () => {

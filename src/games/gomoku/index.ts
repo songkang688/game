@@ -891,7 +891,8 @@ function mountStreak(host: HTMLElement, api: GameApi, back: () => void): { destr
       forbidden: false,
       hints: newHints("free"),
       headline: `🔥 连胜 ${streak.wins} · ${DIFFICULTY_NAME[tier]}`,
-      opening: streakOpening(streak),
+      // 这一档什么脾气,整局都看得见——不再只在上一盘的结算浮层上闪一次
+      opening: streakOpening(streak, DIFFICULTY_BLURB[tier]),
       extras: [{ cls: "gmk-back", label: "🧩 回解局学堂", onClick: back }],
       onEnd: (r) => {
         if (dead) return;
