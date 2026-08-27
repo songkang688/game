@@ -40,7 +40,10 @@ import {
   missCostsLife,
   missWord,
   planDrops,
+  RAIN_CHUNK,
+  RAIN_LOOKAHEAD,
   rainCatch,
+  rainExtend,
   rainInit,
   rainMiss,
   rainPlan,
@@ -944,6 +947,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
   const cfg: CatchLevel = { target: 9999, speed: 1, spawnMs: 900, badChance: 0, goldChance: 0, wind: 0, theme: 0 };
   let plan: DropPlan[] = [];
   let planAt = 0;
+  let rainSeed = 0;
   let raf = 0;
   let lastTime = 0;
   let clock = 0;
@@ -1013,8 +1017,16 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
     magnetLeft = 0;
     freezeLeft = 0;
     over = false;
-    plan = markReachable(rainPlan((Math.random() * 0x7fffffff) >>> 0, 320));
+    rainSeed = (Math.random() * 0x7fffffff) >>> 0;
+    plan = markReachable(rainPlan(rainSeed, RAIN_CHUNK));
     updateTop();
+  }
+
+  /** 出场表快见底就再续一段——水果雨没有「下完」这回事，只有三次机会用完 */
+  function topUpPlan(): void {
+    if (planAt < plan.length - RAIN_LOOKAHEAD) return;
+    rainSeed = (rainSeed * 1664525 + 1013904223) >>> 0;
+    plan = plan.concat(rainExtend(plan, rainSeed, plan.length, RAIN_CHUNK));
   }
 
   function draw(): void {
@@ -1045,7 +1057,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
     save.recordEndlessBest(meta.id, st.score);
     api.play(st.score > before ? "win" : "tap");
     const box = el("div", "frc-over");
-    box.innerHTML = `<h3>🧺 这场水果雨接完啦</h3><p>${rainWord(st, before)}</p>`;
+    box.innerHTML = `<h3>🧺 这场水果雨告一段落</h3><p>${rainWord(st, before)}</p>`;
     const again = el("div", "frc-again");
     const retry = el<HTMLButtonElement>("button", "frc-open", "🔁 再下一场");
     retry.type = "button";
@@ -1074,6 +1086,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
     magnetLeft = Math.max(0, magnetLeft - dt);
     if (!wasFrozen) clock += dt;
 
+    topUpPlan();
     while (planAt < plan.length && plan[planAt].at <= clock) {
       const p = plan[planAt++];
       const it: Live = {
@@ -1133,10 +1146,6 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
       }
     }
 
-    if (planAt >= plan.length && items.length === 0) {
-      finish();
-      return;
-    }
     draw();
     raf = requestAnimationFrame(tick);
   }

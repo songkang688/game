@@ -254,6 +254,14 @@ export interface PlanOptions {
    * 「这一关最少要跑多快」这一维才真的参与难度曲线。
    */
   reachUse?: number;
+  /**
+   * 篮子从哪一刻开始算（默认 0）。
+   *
+   * 只有「接着上一段往下排」时才用得上：水果雨是一段一段续出来的，
+   * 续出来那一段的 `landAt` 是接着上一段往后走的绝对时刻。若还从 0 起算，
+   * 生成器会以为篮子有几百秒可以慢慢走，第一颗就能摆到屏幕另一头。
+   */
+  startT?: number;
 }
 
 interface Slot {
@@ -292,10 +300,11 @@ export function predictBasket(
   chain: ReadonlyArray<{ landAt: number; x: number }>,
   t: number,
   startX = W / 2,
-  speed = BASKET_SPEED
+  speed = BASKET_SPEED,
+  startT = 0
 ): number {
   let px = clampBasket(startX);
-  let pt = 0;
+  let pt = startT;
   for (const g of chain) {
     if (g.landAt >= t) {
       const d = g.x - px;
@@ -352,7 +361,7 @@ function layoutPlan(slots: readonly Slot[], rand: () => number, opts: PlanOption
   const xs = new Array<number>(slots.length).fill(0);
   const chain: Array<{ landAt: number; x: number }> = [];
   let prevX = startX;
-  let prevT = 0;
+  let prevT = opts.startT ?? 0;
   for (let i = 0; i < slots.length; i++) {
     if (isHazard(slots[i].kind)) continue;
     const span = reachSpan(slots[i].landAt - prevT, speed) * use;
@@ -368,7 +377,7 @@ function layoutPlan(slots: readonly Slot[], rand: () => number, opts: PlanOption
   // 碰不得的东西避开这条链，绝不逼孩子在「接」和「躲」之间二选一
   for (let i = 0; i < slots.length; i++) {
     if (!isHazard(slots[i].kind)) continue;
-    xs[i] = hazardX(predictBasket(chain, slots[i].landAt, startX, speed), rand(), minX, maxX);
+    xs[i] = hazardX(predictBasket(chain, slots[i].landAt, startX, speed, opts.startT ?? 0), rand(), minX, maxX);
   }
 
   const out: DropPlan[] = [];
@@ -402,10 +411,15 @@ export function planDrops(cfg: CatchLevel, seed: number, opts: PlanOptions = {})
  * 走一遍下落表，标出哪些是「必接」哪些是「奖励果」。
  * 碰不得的东西不进链；已经标好的奖励果保持原样。
  */
-export function markReachable(drops: DropPlan[], startX = W / 2, speed = BASKET_SPEED): DropPlan[] {
+export function markReachable(
+  drops: DropPlan[],
+  startX = W / 2,
+  speed = BASKET_SPEED,
+  startT = 0
+): DropPlan[] {
   const sorted = [...drops].sort((a, b) => a.landAt - b.landAt);
   let atX = clampBasket(startX);
-  let atT = 0;
+  let atT = startT;
   for (const d of sorted) {
     if (isHazard(d.kind) || d.bonus) continue;
     const span = reachSpan(d.landAt - atT, speed);
@@ -600,13 +614,26 @@ export function rainSpeed(wave: number): number {
   return Math.min(2.1, 0.95 + wave * 0.016);
 }
 
-/** 一整场水果雨的出场表：同一个种子永远是同一场，并且条条可达 */
-export function rainPlan(seed: number, count = 320, opts: PlanOptions = {}): DropPlan[] {
+/** 水果雨一次生成这么多颗，接完了再续下一段——所以它是真的没有尽头 */
+export const RAIN_CHUNK = 320;
+
+/** 出场表只剩这么多颗没出场时就提前续段，别等真的见底 */
+export const RAIN_LOOKAHEAD = 40;
+
+/**
+ * 水果雨的一段出场表：同一个种子永远是同一段，并且条条可达。
+ *
+ * `fromWave` 是这一段的第一颗在整场雨里排第几（0 就是开场那一段）。
+ * 间隔与落速都按它算，所以第二段接着第一段继续变密变快，
+ * 而不是回到开场那种慢悠悠的节奏。
+ */
+export function rainPlan(seed: number, count = RAIN_CHUNK, opts: PlanOptions = {}, fromWave = 0): DropPlan[] {
   const rand = mulberry32(seed >>> 0);
   const slots: Slot[] = [];
   let land = opts.firstLand ?? FIRST_LAND;
   for (let i = 0; i < count; i++) {
-    if (i > 0) land += rainSpawnMs(i) / 1000;
+    const wave = fromWave + i;
+    if (wave > 0) land += rainSpawnMs(wave) / 1000;
     const r = rand();
     let kind: FruitKind = "fruit";
     if (r < 0.1) kind = "chili";
@@ -614,9 +641,27 @@ export function rainPlan(seed: number, count = 320, opts: PlanOptions = {}): Dro
     else if (r < 0.23) kind = "freeze";
     else if (r < 0.29) kind = "magnet";
     else if (r < 0.36) kind = "heavy";
-    slots.push({ landAt: land, kind, vy: (100 + rand() * 60) * rainSpeed(i) * FRUITS[kind].fallMul });
+    slots.push({ landAt: land, kind, vy: (100 + rand() * 60) * rainSpeed(wave) * FRUITS[kind].fallMul });
   }
   return layoutPlan(slots, rand, { twinChance: 0.14, ...opts });
+}
+
+/**
+ * 接着 `prev` 这一段往下续一段，返回「已经标好必接 / 奖励果」的新一段。
+ *
+ * 续段的接缝要接得上：新一段从上一段最后一颗的落点、落地时刻起算，
+ * 篮子不需要瞬移就能跟上第一颗。
+ */
+export function rainExtend(prev: readonly DropPlan[], seed: number, fromWave: number, count = RAIN_CHUNK): DropPlan[] {
+  let lastX = W / 2;
+  let lastT = 0;
+  for (const d of prev) {
+    if (d.bonus || isHazard(d.kind) || d.landAt < lastT) continue;
+    lastX = d.x;
+    lastT = d.landAt;
+  }
+  const more = rainPlan(seed, count, { firstLand: lastT, startX: lastX, startT: lastT }, fromWave);
+  return markReachable(more, lastX, BASKET_SPEED, lastT);
 }
 
 export interface RainState {

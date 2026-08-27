@@ -16,9 +16,12 @@ import {
   planDrops, rainPlan, rainSpawnMs, rainSpeed, rainInit, rainCatch, rainMiss,
   rainWord, RAIN_MISS_LIMIT, simulateLevel, checkReachable, steadyMul, scoreFor,
   duoInit, duoCatch, duoMiss, duoWinner, duoDone, duoWord, duoSide, DUO_GOAL,
-  isHazard, FRUITS
+  isHazard, FRUITS, rainExtend, reachSpan, RAIN_CHUNK, type DropPlan
 } from "./logic";
 import { mulberry32 } from "../level99";
+import { readFileSync } from "node:fs";
+
+const SRC = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
 /** 这一轮抽查的关卡：横跨十个章节，一个第 1 关都不带 */
 const SPOTS = [12, 25, 44, 60, 78, 95, 110, 128, 150, 170, 185];
@@ -226,22 +229,71 @@ describe("接住小水果 · R2 · 无尽能不能一直接下去", () => {
   });
 
   /**
-   * W4A-11（中等）· 无尽其实只有两分半。
+   * W4A-11（中等）· 已由本轮监督修复员修掉。
    *
-   * `reset()` 里排的是一张 320 颗的固定表（`rainPlan(seed, 320)`）；
-   * 出场表走完、屏幕上一颗不剩时 `tick` 就直接 `finish()`。
-   * 320 颗按 rainSpawnMs 累出来的总时长约 156 秒——也就是说，
-   * 就算孩子一颗都没漏，果雨也会在 2 分 36 秒时自己下完、自己结算。
-   * 「无尽」的承诺是「能一直玩到手滑为止」，现在是「能玩到表用完为止」。
-   * 记录在案，交给学习优化员：表走完该续排，而不是收场。
+   * 原状：`reset()` 排一张 320 颗的固定表，出场表走完、屏幕上一颗不剩时
+   * `tick` 就直接 `finish()`。320 颗累出来只有约 156 秒——就算一颗都没漏，
+   * 果雨也会在 2 分 36 秒自己下完、自己结算。
+   *
+   * 现状：320 颗改成「一段」（`RAIN_CHUNK`）。`tick` 里每帧先 `topUpPlan()`，
+   * 只剩 `RAIN_LOOKAHEAD` 颗没出场就用 `rainExtend` 续下一段，
+   * 「表走完就收场」那条分支已经删掉。收场只剩一个出口：三颗爱心用完。
    */
-  it("W4A-11 特征化：320 颗的固定表走完就结算，撑不过 3 分钟", () => {
-    const plan = rainPlan(2026, 320);
-    const last = Math.max(...plan.map((p) => p.landAt));
-    expect(last).toBeGreaterThan(150);
-    expect(last).toBeLessThan(180);
-    // 表是有限长的：没有任何一颗排在 3 分钟之后
-    expect(plan.every((p) => p.landAt < 180)).toBe(true);
+  it("W4A-11 已修：一段接一段续得下去，续到 20 分钟以后还在下", () => {
+    let plan = markReachable(rainPlan(2026, RAIN_CHUNK));
+    expect(Math.max(...plan.map((p) => p.landAt))).toBeLessThan(180);
+
+    let seed = 2026;
+    for (let seg = 0; seg < 8; seg++) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      plan = plan.concat(rainExtend(plan, seed, plan.length, RAIN_CHUNK));
+    }
+    expect(plan.length).toBe(RAIN_CHUNK * 9 + plan.filter((p) => p.bonus).length);
+    expect(Math.max(...plan.map((p) => p.landAt))).toBeGreaterThan(20 * 60);
+  });
+
+  it("W4A-11 已修：续段的接缝接得上——篮子不用瞬移就跟得到下一颗", () => {
+    let plan = markReachable(rainPlan(777, RAIN_CHUNK));
+    const before = plan.length;
+    const more = rainExtend(plan, 8888, before, RAIN_CHUNK);
+    plan = plan.concat(more);
+
+    // 接缝那一颗必接果没有被标成「够不着的奖励果」
+    const firstMust = more.filter((p) => !p.bonus && !isHazard(p.kind))[0];
+    expect(firstMust).toBeDefined();
+    expect(firstMust.bonus).toBe(false);
+
+    // 整条表（含接缝）逐颗核一遍可达性
+    const sorted = [...plan].sort((a, b) => a.landAt - b.landAt);
+    let atX = 180;
+    let atT = 0;
+    for (const d of sorted) {
+      if (d.bonus || isHazard(d.kind)) continue;
+      expect(Math.abs(d.x - atX)).toBeLessThanOrEqual(reachSpan(d.landAt - atT) + 1e-6);
+      atX = d.x;
+      atT = d.landAt;
+    }
+  });
+
+  it("W4A-11 已修：续段接着变密变快，不会回到开场那种慢节奏", () => {
+    const head = markReachable(rainPlan(555, RAIN_CHUNK));
+    const tail = rainExtend(head, 556, RAIN_CHUNK, RAIN_CHUNK);
+    const gapOf = (list: readonly DropPlan[]) => {
+      const ts = list.filter((p) => !p.bonus).map((p) => p.landAt).sort((a, b) => a - b);
+      return (ts[ts.length - 1] - ts[0]) / (ts.length - 1);
+    };
+    // 第二段的平均间隔已经贴着 420ms 的下限，比开场那段紧
+    expect(gapOf(tail)).toBeLessThan(gapOf(head));
+    expect(gapOf(tail)).toBeCloseTo(0.42, 2);
+    expect(rainSpeed(RAIN_CHUNK)).toBe(2.1);
+  });
+
+  it("W4A-11 已修：index.ts 里已经没有「表走完就结算」那条分支", () => {
+    expect(SRC).toContain("topUpPlan()");
+    expect(SRC).toMatch(/rainExtend\(plan, rainSeed, plan\.length, RAIN_CHUNK\)/);
+    // 无尽段落里唯一还会调 finish() 的是 st.over（爱心用完）
+    const rainPart = SRC.slice(SRC.indexOf("function mountRain"));
+    expect(rainPart).not.toMatch(/planAt >= plan\.length && items\.length === 0/);
   });
 
   it("真接一场：一路不漏，分数一直涨，连接倍率封顶在 2 倍", () => {
