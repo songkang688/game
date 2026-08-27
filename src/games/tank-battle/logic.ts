@@ -1087,6 +1087,32 @@ export function worldGrid(w: World, brickCost = 5): Grid {
   };
 }
 
+/**
+ * 闯关里敌人「重新拿一次主意」的间隔(秒)。
+ *
+ * 这个数**故意不按脾气档走**。`TIER_SPECS.think`(0.55 / 0.3 / 0.26)是给
+ * 对战陪练用的节奏,一对一的时候对面只有一辆车,快慢都无所谓;
+ * 闯关是一群车围着一座堡垒,整体节奏一动,188 关的可通过性就跟着塌:
+ * 实测把这里换成按档位走,第 51 / 90 / 98 关连无头机器人都打不过去(堡垒被砸 / 超时),
+ * 就算给绕后档压一条 0.3 秒的下限、再给乱转档封到 0.4 秒,第 164 关照样守不住。
+ *
+ * 也就是说这一套关卡是**围着 0.3 秒这个整体节奏配出来的**。要动它得连着 188 关的
+ * 波次一起重配,那是关卡设计的活,不是手感调参的活 —— 留给主管排期。
+ */
+export const ENEMY_RETHINK = 0.3;
+
+/**
+ * 这一档的敌人隔多远就敢开火(格)。
+ *
+ * 1.2 之前这里写死 9,于是 `TIER_SPECS.fireRange`(5 / 9 / 10)在闯关里**从来没生效过**:
+ * 「乱转」档隔着 9 格就点射,比自己规格里的 5 格远了八成,第一章就在远距离招呼人;
+ * 「绕后卡位」档反而被砍到 9 格,比规格的 10 格还短。这一条改完,
+ * 三档的「看得多远」才真的分得开。
+ */
+export function enemyFireRange(tier: AiTier): number {
+  return TIER_SPECS[tier].fireRange;
+}
+
 /** 乱转的车离目标这么近就不装了,直接扑上去(格) */
 export const WANDER_LOCK = 6;
 /** 乱转的车每次拿主意时,有这么大概率会朝目标那边挪一步(其余时间真的在瞎逛) */
@@ -1138,8 +1164,10 @@ export function enemyIntent(w: World, t: Tank): { dir: Dir | -1; fire: boolean }
   }
   if (dir === -1) dir = wanderStep(grid, here, t.dir, w.rng);
 
-  // 先看看现在这个朝向能不能直接打到东西
-  const ahead = lineOfFire(w, t, 9);
+  // 先看看现在这个朝向能不能直接打到东西。
+  // **看多远由脾气档说了算**(`TIER_SPECS.fireRange`):乱转档只有 5 格,
+  // 得凑到跟前才会来一发;绕后卡位档 10 格开外就敢点射。
+  const ahead = lineOfFire(w, t, enemyFireRange(t.tier));
   if (ahead.kind === "player") return { dir, fire: true };
   if (ahead.kind === "base" && t.goal === "base") return { dir, fire: true };
   // 挡路的砖墙:先想办法绕,实在卡住了(>STUCK_SECONDS)才动手拆。
@@ -1509,7 +1537,7 @@ function stepEnemies(w: World, dt: number): void {
       const intent = enemyIntent(w, t);
       t.aiDir = intent.dir;
       t.aiFire = intent.fire;
-      t.aiTimer = 0.3;
+      t.aiTimer = ENEMY_RETHINK;
     }
     if (t.aiDir >= 0) {
       const ok = driveTank(w, t, t.aiDir as Dir, dt);
@@ -1521,7 +1549,7 @@ function stepEnemies(w: World, dt: number): void {
         t.aiTimer = Math.min(t.aiTimer, 0.05);
       }
     }
-    const ahead = lineOfFire(w, t, 9);
+    const ahead = lineOfFire(w, t, enemyFireRange(t.tier));
     if (t.aiFire || ahead.kind === "player" || (ahead.kind === "base" && t.goal === "base")) {
       fire(w, t);
     }
