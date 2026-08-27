@@ -22,6 +22,7 @@ import {
   type PlayHandle,
 } from "../level99";
 import { prefersReducedMotion } from "./anim";
+import { celebrationHTML, themeClassOf } from "./art";
 import {
   legalSwapsOn,
   RAINBOW,
@@ -151,17 +152,22 @@ export function openCampaignLevel(host: HTMLElement, level: number): boolean {
 function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg: MatchLevel = LEVELS[ctx.level];
   const timers = makeTimers();
+  const reduced = prefersReducedMotion();
   let moves = cfg.moves;
   let levelDone = false;
   /** 连着换错几次了（换成了一步真的消除就归零） */
   let misses = 0;
   const state: MatchState = createState(cfg, Math.random as () => number);
-  const beltRows = new Set((cfg.belts ?? []).map((b) => ((b.row % SIZE) + SIZE) % SIZE));
+  /** 传送带行 → 转向（画流动箭头纹要知道往哪边流） */
+  const beltRows = new Map<number, 1 | -1>(
+    (cfg.belts ?? []).map((b) => [((b.row % SIZE) + SIZE) % SIZE, b.dir])
+  );
   const frostTotal = state.frostLeft;
   const blockerTotal = state.blockerLeft;
 
   const wrap = document.createElement("div");
-  wrap.className = "mst-wrap";
+  // 背景按关卡段换主题:粉黄晨光 → 青绿森林 → 星夜
+  wrap.className = `mst-wrap ${themeClassOf(ctx.level)}`;
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="mst-top">
@@ -229,10 +235,21 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
       levelDone = true;
       stage.setEnabled(false);
       const got = moves >= cfg.three ? 3 : moves >= cfg.two ? 2 : 1;
-      timers.later(() => ctx.win(got as 1 | 2 | 3, `还剩 ${moves} 步没用完，这一局的规划很省！`), 420);
+      // 过关仪式:目标芯片逐个点亮 + 三星逐颗砸下 + 星屑雨(reduced 静止直亮、无雨)
+      goalsEl.classList.add("mst-party");
+      const cheer = document.createElement("div");
+      cheer.className = "mst-cheer";
+      cheer.innerHTML = celebrationHTML(got, reduced);
+      wrap.appendChild(cheer);
+      timers.later(
+        () => ctx.win(got as 1 | 2 | 3, `还剩 ${moves} 步没用完，这一局的规划很省！`),
+        reduced ? 420 : 1250
+      );
     } else if (moves <= 0) {
       levelDone = true;
       stage.setEnabled(false);
+      // 失败不吓人:文案温柔,棋盘轻轻灰化
+      stage.root.classList.add("mst-gray");
       timers.later(() => ctx.lose("步数用完啦～下一局先扫一遍全盘，挑能连锁的那一步再出手，省得下来！"), 420);
     }
   }
@@ -323,10 +340,12 @@ function playLevel(host: HTMLElement, ctx: PlayCtx): PlayHandle {
     },
   });
 
-  // 传送带那几行画虚线框
-  for (const row of beltRows) {
+  // 传送带那几行画流动箭头纹，方向跟着 dir 走
+  for (const [row, dir] of beltRows) {
     for (let c = 0; c < SIZE; c++) {
-      stage.board.children[row * SIZE + c]?.classList.add("mst-belt");
+      const btn = stage.board.children[row * SIZE + c];
+      btn?.classList.add("mst-belt");
+      if (dir === -1) btn?.classList.add("mst-belt-rev");
     }
   }
 

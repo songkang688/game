@@ -35,14 +35,15 @@ import {
   RAINBOW,
   refillOn,
   settleOn,
-  SPECIAL_ICON,
   type Cellset,
   type RoundPlan,
 } from "./board";
+import { gearSVG, rainbowStarSVG, STAR_STYLES, tokenSVG, type GearKind } from "./art";
 
 export type { RoundPlan };
 
 export interface TokenSkin {
+  /** 读屏与 HUD 文案用的名字（棋盘上画的是 art.ts 的 SVG，不再渲染这个字符） */
   emoji: string;
   bg: string;
 }
@@ -125,6 +126,12 @@ export function boardWidthAt(viewportWidth: number): number {
 export const CSS = `
 .mst-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FFF0F7,#F3F0FF);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;}
+/* 背景按关卡段换主题:粉黄晨光 → 青绿森林 → 星夜(themeClassOf 查表) */
+.mst-wrap.mst-theme-dawn{background:linear-gradient(180deg,#FFF3D6,#FFE1EE 55%,#F3E8FF);}
+.mst-wrap.mst-theme-forest{background:linear-gradient(180deg,#EAF9E4,#D8F3EA 55%,#E6F3FF);}
+.mst-wrap.mst-theme-night{background:linear-gradient(180deg,#2E3161,#453C78 60%,#6C4E96);}
+.mst-theme-night .mst-msg{color:#F0DCFF;}
+.mst-theme-night .mst-seat-name{color:#E6DBFF;}
 .mst-top{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
 .mst-badge{background:#fff;border-radius:14px;padding:5px 10px;font-weight:800;color:#A66BBE;
   box-shadow:0 2px 6px rgba(180,140,220,.25);font-size:16px;white-space:nowrap;}
@@ -141,33 +148,91 @@ export const CSS = `
 .mst-bar{height:10px;background:#fff;border-radius:8px;overflow:hidden;margin-bottom:6px;
   box-shadow:inset 0 1px 3px rgba(0,0,0,.08);}
 .mst-fill{height:100%;width:0%;background:linear-gradient(90deg,#FFB6D9,#C9A7F5);border-radius:8px;transition:width .3s;}
-.mst-boardwrap{position:relative;overflow:hidden;border-radius:14px;background:rgba(255,255,255,.35);
+/* 棋盘衬板:星空深蓝渐变 + 内阴影凹槽感;格位淡影由 board 的分格径向渐变画 */
+.mst-boardwrap{position:relative;overflow:hidden;border-radius:14px;
+  background:linear-gradient(180deg,#3A3F75,#262B58 55%,#1C2148);
+  box-shadow:inset 0 2px 10px rgba(8,10,32,.55),0 3px 10px rgba(70,60,130,.22);
   margin-inline:calc(-1 * var(--mst-bleed, 0px));}
+.mst-boardwrap::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;
+  background-image:radial-gradient(circle,rgba(255,255,255,.9) 1px,transparent 1.7px),
+    radial-gradient(circle,rgba(255,255,255,.5) 1px,transparent 1.5px);
+  background-size:67px 53px,41px 37px;background-position:9px 7px,27px 21px;}
 /* gap 为 0:整格都是热区,360px 上 8 列每格 45px */
-.mst-board{display:grid;gap:0;}
+.mst-board{display:grid;gap:0;position:relative;}
 .mst-cell{position:relative;aspect-ratio:1;border:none;background:transparent;padding:0;margin:0;cursor:pointer;
   display:block;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .mst-tile{position:absolute;inset:2px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-  font-size:clamp(17px,4.6vw,26px);line-height:1;overflow:hidden;}
-/* 轻微高光:唯一允许的立体感,不做透视 */
-.mst-tile::before{content:"";position:absolute;left:12%;top:8%;width:34%;height:26%;border-radius:50%;
-  background:rgba(255,255,255,.55);pointer-events:none;}
+  line-height:1;overflow:hidden;box-shadow:inset 0 -2px 0 rgba(24,22,64,.10),inset 0 1px 0 rgba(255,255,255,.45);}
+.mst-tile svg{width:88%;height:88%;display:block;pointer-events:none;}
+/* 下落残影:一帧前的淡色块,只在 fall 段亮起(reduced 关) */
+.mst-ghost{position:absolute;inset:4px;border-radius:10px;opacity:0;pointer-events:none;}
+/* 机关罩层(冰晶/藤蔓/霜花/砖缝):绘制 SVG,不再是 emoji 角标 */
+.mst-gear{position:absolute;inset:2px;border-radius:11px;overflow:hidden;pointer-events:none;}
+.mst-gear svg{position:absolute;left:0;top:0;width:100%;height:100%;}
 .mst-cell.mst-sel .mst-tile{box-shadow:0 0 0 3px #FF8FC7;}
 .mst-cell.mst-cursor .mst-tile{box-shadow:0 0 0 3px #6FA8DC;}
-.mst-cell.mst-ice .mst-tile::after{content:"🧊";position:absolute;inset:0;display:flex;align-items:center;
-  justify-content:center;font-size:1.1em;background:rgba(200,235,255,.5);}
+.mst-cell.mst-ice .mst-tile{background-image:linear-gradient(160deg,rgba(214,242,255,.55),rgba(168,220,246,.45));}
 .mst-cell.mst-vine .mst-tile{box-shadow:inset 0 0 0 3px #8FD08A;}
-.mst-cell.mst-vine .mst-tile::after{content:"🌿";position:absolute;right:1px;top:0;font-size:.72em;}
 .mst-cell.mst-frost1 .mst-tile{background-image:linear-gradient(135deg,rgba(255,224,240,.66),rgba(255,224,240,.66));}
 .mst-cell.mst-frost2 .mst-tile{background-image:linear-gradient(135deg,rgba(255,203,232,.88),rgba(255,203,232,.88));}
-.mst-cell.mst-frost1 .mst-tile::after,.mst-cell.mst-frost2 .mst-tile::after{content:"🍥";position:absolute;
-  right:1px;bottom:0;font-size:.7em;}
 .mst-cell.mst-solid .mst-tile{background:repeating-linear-gradient(45deg,#B9A88F,#B9A88F 6px,#A5937A 6px,#A5937A 12px);
   box-shadow:inset 0 0 0 3px #8C7B63;}
-.mst-cell.mst-solid .mst-tile::after{content:"🧱";position:absolute;inset:0;display:flex;align-items:center;
-  justify-content:center;font-size:1.05em;}
-.mst-cell.mst-belt .mst-tile{outline:2px dashed #7FB7D8;outline-offset:-4px;}
-.mst-spec{position:absolute;right:1px;bottom:0;font-size:.66em;}
+/* 传送带:虚线框改流动箭头纹(reduced 静止) */
+.mst-cell.mst-belt::after{content:"";position:absolute;left:4px;right:4px;bottom:3px;height:6px;border-radius:3px;
+  pointer-events:none;opacity:.9;background-repeat:repeat-x;
+  background-image:linear-gradient(135deg,transparent 0 25%,#8FC7E8 25% 50%,transparent 50% 100%),
+    linear-gradient(45deg,transparent 0 25%,#8FC7E8 25% 50%,transparent 50% 100%);
+  background-size:8px 3px,8px 3px;background-position:0 0,0 3px;
+  animation:mst-flow .8s linear infinite;}
+.mst-cell.mst-belt-rev::after{animation-direction:reverse;}
+@keyframes mst-flow{to{background-position:8px 0,8px 3px;}}
+/* 彩虹星缓慢自转(reduced 静止) */
+.mst-spin{transform-origin:50% 50%;animation:mst-spin 6s linear infinite;}
+@keyframes mst-spin{to{transform:rotate(360deg);}}
+/* 粒子层:星屑/微尘/冰片/叶片/冲击波,总池 ≤ 30,reduced 一颗不出 */
+.mst-p,.mst-ring{position:absolute;pointer-events:none;z-index:4;}
+.mst-p-spark{width:9px;height:9px;margin:-4px 0 0 -4px;
+  clip-path:polygon(50% 0,63% 35%,98% 38%,71% 60%,82% 100%,50% 76%,18% 100%,29% 60%,2% 38%,37% 35%);
+  animation:mst-spark .55s ease-out forwards;}
+@keyframes mst-spark{to{transform:translate(var(--dx,0px),var(--dy,0px)) rotate(220deg) scale(.15);opacity:0;}}
+.mst-p-dust{width:7px;height:5px;margin:-2px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.75);
+  animation:mst-dust .4s ease-out forwards;}
+@keyframes mst-dust{to{transform:translate(var(--dx,0px),-8px) scale(1.6);opacity:0;}}
+.mst-p-shard{width:8px;height:10px;margin:-5px 0 0 -4px;background:rgba(210,240,255,.95);
+  clip-path:polygon(50% 0,100% 42%,62% 100%,0 52%);animation:mst-shard .5s ease-in forwards;}
+.mst-p-leaf{width:9px;height:6px;margin:-3px 0 0 -4px;border-radius:60% 40% 60% 40%;background:#7CC97F;
+  animation:mst-shard .45s ease-in forwards;}
+@keyframes mst-shard{20%{transform:none;}to{transform:translate(var(--dx,0px),var(--dy,0px)) rotate(160deg);opacity:0;}}
+.mst-ring{border:3px solid rgba(255,255,255,.9);border-radius:50%;width:14px;height:14px;margin:-7px 0 0 -7px;
+  animation:mst-ring .5s ease-out forwards;}
+@keyframes mst-ring{to{transform:scale(5);opacity:0;}}
+/* 连锁 ≥ 3:屏顶花体字 0.6s */
+.mst-chainpop{position:absolute;top:4px;left:50%;transform:translateX(-50%);z-index:5;pointer-events:none;
+  font-size:22px;font-weight:900;font-style:italic;letter-spacing:1px;color:#FF8FC7;white-space:nowrap;
+  text-shadow:0 1px 0 #fff,0 2px 8px rgba(255,143,199,.55);animation:mst-chainpop .6s ease-out forwards;}
+@keyframes mst-chainpop{0%{transform:translateX(-50%) scale(.4);opacity:0;}
+  30%{transform:translateX(-50%) scale(1.15);opacity:1;}80%{transform:translateX(-50%) scale(1);opacity:1;}
+  100%{transform:translateX(-50%) scale(1);opacity:0;}}
+/* 过关仪式:三星逐颗砸下(easeOutBack) + 星屑雨;失败棋盘灰化 */
+.mst-cheer{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,250,253,.7);border-radius:16px;pointer-events:none;overflow:hidden;}
+.mst-cheer-row{display:flex;gap:8px;}
+.mst-cheer-star{width:56px;height:56px;transform:translateY(-150px) scale(.4);opacity:0;
+  animation:mst-drop .5s cubic-bezier(.34,1.56,.64,1) forwards;}
+.mst-cheer-star svg{width:100%;height:100%;}
+.mst-cheer-star.mst-dim{filter:grayscale(1) opacity(.4);}
+@keyframes mst-drop{to{transform:none;opacity:1;}}
+.mst-rain{position:absolute;top:-12px;width:9px;height:9px;
+  clip-path:polygon(50% 0,63% 35%,98% 38%,71% 60%,82% 100%,50% 76%,18% 100%,29% 60%,2% 38%,37% 35%);
+  animation:mst-rainfall 1.2s linear forwards;}
+@keyframes mst-rainfall{to{transform:translateY(180px) rotate(240deg);opacity:0;}}
+.mst-gray{filter:grayscale(.9) opacity(.85);}
+.mst-party .mst-goal.mst-done{animation:mst-glowpop .4s ease-out;}
+@keyframes mst-glowpop{50%{transform:scale(1.12);}}
+/* 弱动效:旋转/流动/仪式动画全部静止(粒子在 JS 里就不出生) */
+.mst-reduced .mst-spin,.mst-reduced .mst-cell.mst-belt::after,.mst-reduced .mst-chainpop,
+.mst-wrap.mst-reduced .mst-cheer-star{animation:none;}
+.mst-reduced .mst-cheer-star{animation:none;transform:none;opacity:1;}
 .mst-msg{text-align:center;min-height:22px;color:#B06BC0;font-weight:800;margin-top:6px;font-size:15px;line-height:1.4;}
 .mst-btn{border:none;border-radius:16px;min-height:44px;padding:10px 16px;font-size:16px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#D882B6,#BD6497);box-shadow:0 4px 0 #994B79;}
@@ -192,8 +257,15 @@ export const CSS = `
 }
 @media (prefers-reduced-motion:reduce){
   .mst-fill{transition:none;}
+  .mst-spin,.mst-cell.mst-belt::after,.mst-chainpop,.mst-cheer-star{animation:none;}
+  .mst-cheer-star{transform:none;opacity:1;}
 }
 `;
+
+/** 连锁 ≥ 3 才弹的「连锁 ×N」花体字文案；再小的连锁不打扰 */
+export function chainPopText(chain: number): string {
+  return chain >= 3 ? `连锁 ×${chain}` : "";
+}
 
 export interface Stage {
   root: HTMLElement;
@@ -236,26 +308,45 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   const runner = new Runner();
 
   const root = document.createElement("div");
-  root.className = "mst-boardwrap";
+  root.className = reduced ? "mst-boardwrap mst-reduced" : "mst-boardwrap";
   const board = document.createElement("div");
   board.className = "mst-board";
   board.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  // 格位淡影:按格重复的径向渐变画出凹槽感,跟着列数走,不占额外节点
+  board.style.backgroundImage =
+    "radial-gradient(circle at 50% 55%, rgba(10,14,40,.16) 58%, rgba(10,14,40,.42) 100%)";
+  board.style.backgroundSize = `${(100 / cols).toFixed(3)}% ${(100 / rows).toFixed(3)}%`;
   root.appendChild(board);
   host.appendChild(root);
 
   const cells: HTMLButtonElement[] = [];
   const tiles: HTMLElement[] = [];
+  const ghosts: HTMLElement[] = [];
+  const gears: HTMLElement[] = [];
+  /** 每格现在画着什么（key 变了才重建 SVG，paint 每帧跑，不能每帧重建节点） */
+  const tileKeys: string[] = [];
+  const gearKeys: string[] = [];
   for (let i = 0; i < cols * rows; i++) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "mst-cell";
+    const ghost = document.createElement("span");
+    ghost.className = "mst-ghost";
     const tile = document.createElement("span");
     tile.className = "mst-tile";
+    const gear = document.createElement("span");
+    gear.className = "mst-gear";
+    btn.appendChild(ghost);
     btn.appendChild(tile);
+    btn.appendChild(gear);
     btn.addEventListener("click", () => tap(i));
     board.appendChild(btn);
     cells.push(btn);
     tiles.push(tile);
+    ghosts.push(ghost);
+    gears.push(gear);
+    tileKeys.push("\u0000");
+    gearKeys.push("");
   }
 
   /** 正飘在半空的方块：key 是它最终落进的格子 */
@@ -278,6 +369,90 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     return cellPitch(w, cols);
   }
 
+  // -------------------------------------------------------------------------
+  // 粒子层（纯表现：星屑 / 微尘 / 冰片 / 叶片 / 冲击波 / 连锁字）
+  // -------------------------------------------------------------------------
+
+  /** 粒子池上限：全场同时在飞的粒子加起来不超过这个数 */
+  const MAX_PARTICLES = 30;
+  let liveFx = 0;
+  const fxTimers = new Set<ReturnType<typeof setTimeout>>();
+
+  function fxLater(fn: () => void, ms: number): void {
+    const t = setTimeout(() => {
+      fxTimers.delete(t);
+      fn();
+    }, ms);
+    fxTimers.add(t);
+  }
+
+  /** 自定义属性在真浏览器上必须走 setProperty，单测桩上直接写下标 */
+  function setVar(el: HTMLElement, key: string, val: string): void {
+    const st = el.style as CSSStyleDeclaration & Record<string, string>;
+    if (typeof st.setProperty === "function") st.setProperty(key, val);
+    else st[key] = val;
+  }
+
+  /** 在第 i 格出一颗粒子。reduced 一颗都不出；池满了就不出，绝不排队 */
+  function fxAt(cls: string, i: number, life: number, dx: number, dy: number, bg?: string, oy = 0.5): void {
+    if (reduced || destroyed || liveFx >= MAX_PARTICLES) return;
+    const px = pitch();
+    const el = document.createElement("span");
+    el.className = `mst-p ${cls}`;
+    el.style.left = `${((colOf(i) + 0.5) * px).toFixed(1)}px`;
+    el.style.top = `${((rowOf(i) + oy) * px).toFixed(1)}px`;
+    setVar(el, "--dx", `${dx.toFixed(1)}px`);
+    setVar(el, "--dy", `${dy.toFixed(1)}px`);
+    if (bg) el.style.background = bg;
+    root.appendChild(el);
+    liveFx++;
+    fxLater(() => {
+      liveFx--;
+      el.remove();
+    }, life);
+  }
+
+  /** 爆点星屑：每颗爆点迸 3 颗本色星屑（要在 applyRound 之前读 grid 才有颜色） */
+  function boomFx(list: number[]): void {
+    if (reduced) return;
+    for (const i of list) {
+      const v = cell.grid[i];
+      const base = v >= 0 ? (STAR_STYLES[v] ?? STAR_STYLES[0]).base : "#FFD34D";
+      for (let k = 0; k < 3; k++) {
+        const ang = (k / 3) * Math.PI * 2 + (i % 5) * 0.7;
+        fxAt("mst-p-spark", i, 560, Math.cos(ang) * 22, Math.sin(ang) * 22 - 8, base);
+      }
+    }
+  }
+
+  /** 一次消掉 ≥ 5 颗：在爆点重心放一圈冲击波环 */
+  function ringFx(list: number[]): void {
+    if (reduced || destroyed || list.length === 0) return;
+    const px = pitch();
+    let r = 0;
+    let c = 0;
+    for (const i of list) {
+      r += rowOf(i);
+      c += colOf(i);
+    }
+    const el = document.createElement("span");
+    el.className = "mst-ring";
+    el.style.left = `${((c / list.length + 0.5) * px).toFixed(1)}px`;
+    el.style.top = `${((r / list.length + 0.5) * px).toFixed(1)}px`;
+    root.appendChild(el);
+    fxLater(() => el.remove(), 520);
+  }
+
+  /** 连锁 ≥ 3 的「连锁 ×N」花体字（reduced 下 CSS 关动画，字照样报喜） */
+  function chainFx(text: string): void {
+    if (destroyed) return;
+    const el = document.createElement("div");
+    el.className = "mst-chainpop";
+    el.textContent = text;
+    root.appendChild(el);
+    fxLater(() => el.remove(), 620);
+  }
+
   function setMoving(list: SlideTween[]): void {
     moving = new Map();
     for (const tw of list) moving.set(tw.cell, tw);
@@ -293,45 +468,113 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     return tw ? tweenPos(tw, runner.elapsed).col : colOf(i);
   }
 
+  /** 这一格该画哪张 SVG（key 变了才重建节点） */
+  function tileKeyOf(i: number): string {
+    if (cell.solid[i]) return "solid";
+    const v = cell.grid[i];
+    if (v === RAINBOW) return "rainbow";
+    if (v === EMPTY) return "empty";
+    return `t${v}s${cell.special[i] || 0}`;
+  }
+
+  /** key 变了：把绘制资产（星星家族 / 彩虹星 / 空格）真正写进 tile */
+  function renderTile(i: number, key: string): void {
+    const tile = tiles[i];
+    if (key === "solid") {
+      tile.innerHTML = "";
+      tile.style.background = "";
+      tile.style.backgroundColor = "";
+    } else if (key === "rainbow") {
+      tile.innerHTML = rainbowStarSVG();
+      tile.style.backgroundColor = "";
+      tile.style.background =
+        "conic-gradient(from 210deg,#FFE3EC,#FFF3D0,#E1F7DF,#DBEBFF,#EFE1FF,#FFE3EC)";
+    } else if (key === "empty") {
+      tile.innerHTML = "";
+      tile.style.background = "";
+      tile.style.backgroundColor = "rgba(255,255,255,.12)";
+    } else {
+      const v = cell.grid[i];
+      const skin = opts.tokens[v] ?? opts.tokens[0];
+      tile.innerHTML = tokenSVG(v, cell.special[i] || 0);
+      tile.style.background = "";
+      // 只写 backgroundColor,免得 shorthand 把糖霜 / 冰面的 background-image 顶掉
+      tile.style.backgroundColor = skin.bg;
+    }
+  }
+
+  /** 这一格现在盖着哪种机关罩 */
+  function gearKeyOf(i: number): GearKind | "" {
+    if (cell.solid[i]) return "brick";
+    if (cell.fixed[i] && (cell as { ice?: boolean[] }).ice?.[i]) return "ice";
+    if ((cell as { vine?: boolean[] }).vine?.[i]) return "vine";
+    const frost = (cell as { frost?: number[] }).frost?.[i] ?? 0;
+    if (frost >= 2) return "frost2";
+    if (frost === 1) return "frost1";
+    return "";
+  }
+
   function paint(): void {
     const px = pitch();
     const boom = runner.phase === "boom" ? runner.progress : 0;
     const land = runner.phase === "land" ? runner.progress : 0;
+    const falling = runner.phase === "fall";
     for (let i = 0; i < cells.length; i++) {
       const btn = cells[i];
       const tile = tiles[i];
       const v = cell.grid[i];
-      const sp = cell.special[i];
-      if (cell.solid[i]) {
-        tile.textContent = "";
-        tile.style.background = "";
-      } else if (v === RAINBOW) {
-        tile.textContent = "🌈";
-        tile.style.background = "#fff";
-      } else if (v === EMPTY) {
-        tile.textContent = "";
-        tile.style.background = "rgba(255,255,255,.28)";
-      } else {
-        const skin = opts.tokens[v] ?? opts.tokens[0];
-        tile.textContent = sp ? `${skin.emoji}${SPECIAL_ICON[sp] ?? ""}` : skin.emoji;
-        tile.style.background = skin.bg;
+      const key = tileKeyOf(i);
+      if (key !== tileKeys[i]) {
+        tileKeys[i] = key;
+        renderTile(i, key);
       }
-      btn.classList.toggle("mst-ice", !!cell.fixed[i] && !!(cell as { ice?: boolean[] }).ice?.[i]);
-      btn.classList.toggle("mst-vine", !!(cell as { vine?: boolean[] }).vine?.[i]);
-      const frost = (cell as { frost?: number[] }).frost?.[i] ?? 0;
-      btn.classList.toggle("mst-frost1", frost === 1);
-      btn.classList.toggle("mst-frost2", frost >= 2);
+      const gearKey = gearKeyOf(i);
+      if (gearKey !== gearKeys[i]) {
+        const prev = gearKeys[i];
+        gearKeys[i] = gearKey;
+        gears[i].innerHTML = gearKey ? gearSVG(gearKey) : "";
+        if (prev === "ice" && !gearKey) {
+          // 破冰:碎成 3 片飞出去
+          for (let k = 0; k < 3; k++) fxAt("mst-p-shard", i, 500, (k - 1) * 14, -6 - k * 4);
+        } else if (prev === "vine" && !gearKey) {
+          // 解藤:两片叶子飘走
+          fxAt("mst-p-leaf", i, 450, -10, -8);
+          fxAt("mst-p-leaf", i, 450, 10, -6);
+        }
+      }
+      btn.classList.toggle("mst-ice", gearKey === "ice");
+      btn.classList.toggle("mst-vine", gearKey === "vine");
+      btn.classList.toggle("mst-frost1", gearKey === "frost1");
+      btn.classList.toggle("mst-frost2", gearKey === "frost2");
       btn.classList.toggle("mst-solid", !!cell.solid[i]);
       btn.classList.toggle("mst-sel", i === selected);
       btn.classList.toggle("mst-cursor", i === cursor);
 
       const tw = moving.get(i);
+      const ghost = ghosts[i];
       let dx = 0;
       let dy = 0;
+      let ghostOn = false;
       if (tw) {
         const pos = tweenPos(tw, runner.elapsed);
         dx = (pos.col - colOf(i)) * px;
         dy = (pos.row - rowOf(i)) * px;
+        if (falling && !reduced) {
+          // 下落残影:一帧(约 17ms)前的位置放一块极淡的本色影子
+          const prev = tweenPos(tw, Math.max(0, runner.elapsed - 17));
+          const gx = (prev.col - pos.col) * px;
+          const gy = (prev.row - pos.row) * px;
+          if (gx || gy) {
+            ghostOn = true;
+            ghost.style.opacity = "0.22";
+            ghost.style.transform = `translate(${gx.toFixed(2)}px, ${gy.toFixed(2)}px)`;
+            ghost.style.background = v >= 0 ? (opts.tokens[v] ?? opts.tokens[0]).bg : "rgba(255,255,255,.4)";
+          }
+        }
+      }
+      if (!ghostOn && ghost.style.opacity) {
+        ghost.style.opacity = "";
+        ghost.style.transform = "";
       }
       let scale = 1;
       let opacity = 1;
@@ -383,6 +626,11 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
         };
         opts.sfx?.("pop");
         opts.onRound?.(plan, chain);
+        // 纯表现:星屑要趁 applyRound 之前读 grid 才知道本色
+        boomFx(plan.cells);
+        if (plan.cells.length >= 5) ringFx(plan.cells);
+        const pop = chainPopText(chain);
+        if (pop) chainFx(pop);
       },
       done: () => {
         boomSet = new Set();
@@ -437,6 +685,10 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
     pushStep({
       phase: "land",
       durMs: T.landMs,
+      enter: () => {
+        // 纯表现:每颗落地的棋子扬 1 粒微尘(粒子池满了就不扬)
+        for (const i of landSet) fxAt("mst-p-dust", i, 420, i % 2 ? 5 : -5, -6, undefined, 0.92);
+      },
       done: () => {
         landSet = new Set();
         const next = opts.round();
@@ -641,6 +893,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
       cancelAnimationFrame(raf);
       raf = 0;
       runner.clear();
+      for (const t of fxTimers) clearTimeout(t);
+      fxTimers.clear();
       root.remove();
     },
   };
