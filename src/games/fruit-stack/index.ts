@@ -301,7 +301,8 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     const preview = previewFruits(opts.seed, dropIndex, 2, lv.maxDrop, lv.minDrop);
     preview.forEach((lvl, i) => {
       const cell = el("span", `fs-basket-cell${i === 1 ? " fs-basket-cell--next" : ""}`);
-      const size = Math.round(clamp(CHAIN[lvl].r * 0.7, 14, 28) * (i === 0 ? 1 : 0.82));
+      // 下限 15px:次格再打 0.82 折也不低于 12px,360px 上仍认得出种类
+      const size = Math.round(clamp(CHAIN[lvl].r * 0.7, 15, 28) * (i === 0 ? 1 : 0.82));
       cell.appendChild(fruitStamp(lvl, size));
       basket.appendChild(cell);
     });
@@ -1082,7 +1083,7 @@ function makeShell(host: HTMLElement, api: GameApi, onBack: () => void, title: s
  * 结算插画:每一盆的最大果画成大号果卡(同一套贴图),下面一条 11 级合成树,
  * 点亮到本局到过的最高级。双人 / 对战给两个格,一眼比出谁的果更大。
  */
-function resultArt(bestLevels: number[], names: string[]): HTMLElement {
+export function resultArt(bestLevels: number[], names: string[]): HTMLElement {
   const box = el("div");
   const row = el("div", "fs-result");
   bestLevels.forEach((lvl, i) => {
