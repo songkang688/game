@@ -25,6 +25,7 @@ import { methodHint, stepHint } from "./hints";
 import type { MathKind } from "./kinds";
 import { buildQuestions, makeReviewQuestions, typesOfKinds, CHAPTER_THEMES } from "./levels";
 import { practiceLine, recordMistakes, type StorageLike } from "./mistakes";
+import { resetClippedScroll } from "./stageScroll";
 
 /** 连错几次给方法提示（和 `quiz99.shouldHint` 的门槛保持一致，两边同时发生） */
 export const HINT_AFTER_WRONG = 2;
@@ -213,6 +214,9 @@ export function playFarmLevel(stage: HTMLElement, ctx: PlayCtx, deps: FarmDeps =
   const style = stage.ownerDocument.createElement("style");
   style.textContent = MTF_CSS;
   stage.appendChild(style);
+  // 地图上「🎯 跳到当前关」留下的 scrollTop 会被带进关内，把 `🗺️ 选关` 顶到裁切线
+  // 以上（W5-B-09）。进关这一刻归 0。
+  resetClippedScroll(stage);
 
   let quiz: PlayHandle | null = null;
   let helper: HelperHandle | null = null;

@@ -5,6 +5,7 @@ import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../
 import { AVATAR_URLS } from "../../ui/avatars";
 import { save } from "../../engine/save";
 import { CHAPTERS, LEVELS, type TapLevel } from "./levels";
+import { resetClippedScroll } from "./stageScroll";
 import {
   FREEZE_FACTOR,
   FREEZE_ROUNDS,
@@ -229,6 +230,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     <div class="rbt-msg"></div>
   `;
   stage.appendChild(wrap);
+  // 地图上「🎯 跳到当前关」留下的 scrollTop 会被带进关内，把双人 / 无尽这两颗
+  // 入口顶到裁切线以上（W5-B-09）。进关这一刻归 0。
+  resetClippedScroll(wrap);
 
   const arenaEl = wrap.querySelector(".rbt-arena") as HTMLElement;
   const meEl = wrap.querySelector(".rbt-me-score") as HTMLElement;
