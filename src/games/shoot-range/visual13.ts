@@ -62,6 +62,10 @@ export const TENT_MAX_VIEW_RATIO = 0.22;
 export const TENT_H = 120;
 /** 彩旗串挂的高度 */
 export const BUNTING_Y = TENT_H + 14;
+/** 修复员装饰件:奖品架剪影的单色(2 阶 = 底色 + 暗 15%),压灰不抢靶 */
+export const SHR_PRIZE = "#C9B4DE";
+/** 奖品架搁板顶边(天幕与横梁之间的中景空档) */
+export const PRIZE_SHELF_Y = 214;
 /** 中景横梁顶边（远排靶脚下,原 y=236 白带的位置换成木梁） */
 export const BEAM_Y = 244;
 /** 横梁厚度 */

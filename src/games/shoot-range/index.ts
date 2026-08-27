@@ -97,6 +97,7 @@ import {
 import {
   drawBeam,
   drawBunting,
+  drawPrizeRack,
   drawCounter,
   drawCrosshairSkin,
   drawFrownCloud,
@@ -1104,6 +1105,9 @@ function createField(opts: FieldOptions): FieldHandle {
     // 图层序(visual13.SHR_LAYERS):① 天幕条纹 → ② 彩旗串
     drawTent(ctx, FIELD_W);
     drawBunting(ctx, FIELD_W);
+
+    // ②½ 中景奖品架剪影(修复员装饰件:静态单色 2 阶,填天幕与横梁之间的空档)
+    drawPrizeRack(ctx, FIELD_W);
 
     // ③ 中景横梁 + 远排靶(白雾圈退役,「远」由横梁与侧视支架来说)
     drawBeam(ctx, FIELD_W);

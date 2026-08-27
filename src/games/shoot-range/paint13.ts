@@ -20,7 +20,9 @@ import {
   BULLSEYE_GLOW_R,
   BUNTING_Y,
   COUNTER_Y,
+  PRIZE_SHELF_Y,
   SHR_PALETTE,
+  SHR_PRIZE,
   TARGET_SHADOW_DY,
   TARGET_SHADOW_RX,
   TARGET_SHADOW_RY,
@@ -135,6 +137,78 @@ export function drawBunting(ctx: CanvasRenderingContext2D, w: number): void {
     ctx.closePath();
     ctx.fill();
   }
+  ctx.restore();
+}
+
+/**
+ * ②½ 中景奖品架剪影(修复员装饰件):一条搁板 + 四件玩偶轮廓
+ * (小熊 / 长耳兔 / 大星星 / 圆鸭),单色 2 阶(底色 + 暗 15%),
+ * 纯静态、不加动效不抢靶;reduced 无需分支。
+ */
+export function drawPrizeRack(ctx: CanvasRenderingContext2D, w: number): void {
+  ctx.save();
+  const shelfY = PRIZE_SHELF_Y;
+  const base = SHR_PRIZE;
+  const dark = shade(SHR_PRIZE, -15);
+  // 搁板与两只托架
+  ctx.fillStyle = dark;
+  ctx.fillRect(w * 0.08, shelfY, w * 0.84, 5);
+  for (const bx of [w * 0.14, w * 0.86]) {
+    ctx.beginPath();
+    ctx.moveTo(bx - 7, shelfY + 5);
+    ctx.lineTo(bx + 7, shelfY + 5);
+    ctx.lineTo(bx, shelfY + 16);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // 小熊:圆头双耳 + 椭圆身
+  const bearX = w * 0.18;
+  ctx.fillStyle = base;
+  ctx.beginPath();
+  ctx.ellipse(bearX, shelfY - 12, 13, 12, 0, 0, Math.PI * 2);
+  ctx.arc(bearX, shelfY - 33, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  ctx.arc(bearX - 8, shelfY - 41, 4, 0, Math.PI * 2);
+  ctx.arc(bearX + 8, shelfY - 41, 4, 0, Math.PI * 2);
+  ctx.arc(bearX, shelfY - 31, 3.4, 0, Math.PI * 2);
+  ctx.fill();
+  // 长耳兔:竖长耳 + 圆头圆身
+  const bunX = w * 0.42;
+  ctx.fillStyle = base;
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(bunX + s * 5, shelfY - 48, 3.6, 12, s * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(bunX, shelfY - 30, 9, 0, Math.PI * 2);
+  ctx.ellipse(bunX, shelfY - 11, 11, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  ctx.ellipse(bunX, shelfY - 9, 6, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 大星星玩偶
+  const starX = w * 0.64;
+  ctx.fillStyle = base;
+  starPath(ctx, starX, shelfY - 22, 20, 9.5);
+  ctx.fill();
+  ctx.fillStyle = dark;
+  starPath(ctx, starX, shelfY - 22, 10, 4.6);
+  ctx.fill();
+  // 圆鸭:圆身 + 小头 + 扁嘴
+  const duckX = w * 0.84;
+  ctx.fillStyle = base;
+  ctx.beginPath();
+  ctx.ellipse(duckX, shelfY - 11, 13, 11, 0, 0, Math.PI * 2);
+  ctx.arc(duckX - 6, shelfY - 28, 7.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  ctx.ellipse(duckX - 15, shelfY - 28, 5, 2.6, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
