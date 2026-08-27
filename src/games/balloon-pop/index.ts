@@ -192,8 +192,9 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
  * 把气球做成一颗按钮：颜色 + 图案两条通道，色觉不一样的孩子也分得清。
  * 1.3 只换皮：三层渐变体积 + 气球结 + 贝塞尔气球线 + 特殊气球本体差异件；
  * 按钮热区（56×68 与 far 缩放）、aria-label 语义、dataset 镜像一个字不动。
+ * （export 只为视觉冒烟测试；游戏加载器仍只用 meta / mount。）
  */
-function paintBalloon(b: Balloon, mode: BalloonLevel["mode"], rand: () => number, windDir = 0): void {
+export function paintBalloon(b: Balloon, mode: BalloonLevel["mode"], rand: () => number, windDir = 0): void {
   const node = b.el;
   node.className = "blp-balloon";
   if (b.far) node.classList.add("blp-far");
