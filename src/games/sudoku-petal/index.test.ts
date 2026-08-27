@@ -15,9 +15,13 @@ import {
   SP_CSS,
   bloomDelayMs,
   cellPxFor,
+  cellSay,
+  clearSay,
   createSeat,
   createTable,
   digitFontPx,
+  doneSay,
+  fillSay,
   isFilledComplete,
   isOutOfTries,
   keyAction,
@@ -27,6 +31,7 @@ import {
   noteFontPx,
   regionEdgeShadow,
   toggleNote,
+  wrongSay,
   type SeatOpts,
   type SeatState
 } from "./index";
@@ -892,5 +897,93 @@ describe("文案红线", () => {
     expect(names).toEqual(["朵朵", "星星"]);
     const corpus = [...guide.general, ...guide.entries.flatMap((e) => e.tips)].join("");
     for (const bad of ["笨", "死", "血", "输给", "太差"]) expect(corpus).not.toContain(bad);
+  });
+});
+
+describe("读屏听得见落子", () => {
+  it("行列的说法和格子 aria-label 一个口径", () => {
+    expect(cellSay(0, 9)).toBe("第1行第1列");
+    expect(cellSay(80, 9)).toBe("第9行第9列");
+    expect(cellSay(5, 4)).toBe("第2行第2列");
+  });
+
+  it("种对了会说还剩多少朵,最后一朵改口说种满", () => {
+    expect(fillSay(10, 9, 7, 42)).toBe("第2行第2列种下 7,还剩 42 朵。");
+    expect(fillSay(10, 9, 7, 0)).toContain("花田种满啦");
+  });
+
+  it("种错了要说还能改几次;不判负的局不吓唬人", () => {
+    expect(wrongSay(0, 9, 5, 1, 3)).toContain("还能改 2 次");
+    expect(wrongSay(0, 9, 5, 3, 3)).toContain("还能改 0 次");
+    expect(wrongSay(0, 9, 5, 9, 0)).toContain("再看看同一行同一列");
+  });
+
+  it("擦掉与收场各有一句,收场那句不批评人", () => {
+    expect(clearSay(0, 9)).toBe("第1行第1列擦干净了。");
+    expect(doneSay(true, 51, 0)).toContain("一共种了 51 朵");
+    const lose = doneSay(false, 12, 3);
+    expect(lose).toContain("种了 12 朵");
+    expect(lose).not.toMatch(/笨|差劲|输|失败/);
+  });
+
+  it("播报行是 status,而且靠 1px 收起来不是 display:none", () => {
+    installDom();
+    const { host } = seat();
+    const say = host.byClass("sp-say")[0];
+    expect(say).toBeDefined();
+    expect(say.getAttribute("role")).toBe("status");
+    expect(say.getAttribute("aria-live")).toBe("polite");
+    expect(say.getAttribute("aria-atomic")).toBe("true");
+    expect(host.byClass("sp-msg")[0].getAttribute("role")).toBe("status");
+    const rule = SP_CSS.slice(SP_CSS.indexOf(".sp-say{"), SP_CSS.indexOf("}", SP_CSS.indexOf(".sp-say{")));
+    expect(rule).toContain("width:1px");
+    expect(rule).not.toContain("display:none");
+  });
+
+  it("种下一朵就播一句,擦掉也播", () => {
+    installDom();
+    const { host, s } = seat();
+    const entry = bankAt(0);
+    const puzzle = cellsFromString(entry.p);
+    const solution = solutionOfBank(entry);
+    const hole = puzzle.findIndex((v) => v === EMPTY);
+    const say = host.byClass("sp-say")[0];
+    expect(say.textContent).toBe("");
+    host.byClass("sp-cell")[hole].fire("click");
+    s.act({ type: "digit", digit: solution[hole] });
+    expect(say.textContent).toContain(cellSay(hole, 9));
+    expect(say.textContent).toContain(`种下 ${solution[hole]}`);
+    expect(say.textContent).toMatch(/还剩 \d+ 朵/);
+    s.act({ type: "digit", digit: solution[hole] });
+    expect(say.textContent).toBe(clearSay(hole, 9));
+  });
+
+  it("种错了播的是「还能改几次」,不是「还剩多少朵」", () => {
+    installDom();
+    const { host, s } = seat({ errorLimit: 3 });
+    const entry = bankAt(0);
+    const puzzle = cellsFromString(entry.p);
+    const solution = solutionOfBank(entry);
+    const hole = puzzle.findIndex((v) => v === EMPTY);
+    const wrong = solution[hole] === 9 ? 1 : solution[hole] + 1;
+    host.byClass("sp-cell")[hole].fire("click");
+    s.act({ type: "digit", digit: wrong });
+    const said = host.byClass("sp-say")[0].textContent;
+    expect(said).toContain("还能改 2 次");
+    expect(said).not.toContain("还剩");
+  });
+
+  it("种满之后播的是结论,不是「还剩 0 朵」", () => {
+    installDom();
+    const { host, s } = seat();
+    fillSolved(s, host, 0);
+    expect(host.byClass("sp-say")[0].textContent).toContain("花田开满啦");
+  });
+
+  it("假人那块盘一句都不播", () => {
+    installDom();
+    const { host, s } = seat({ who: undefined, ai: "normal" });
+    for (let i = 0; i < 12; i++) s.stepAi(0.5);
+    expect(host.byClass("sp-say")[0].textContent).toBe("");
   });
 });

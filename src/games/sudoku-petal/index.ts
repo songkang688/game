@@ -178,6 +178,42 @@ export function isOutOfTries(errors: number, errorLimit: number): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// 读屏播报
+//
+// 格子自己有 aria-label,读屏点到哪一格能念哪一格;但「刚才那一手成没成、
+// 还剩多少朵、还能错几次」只有看得见的人知道。下面几句短话写进看不见的 live 区,
+// 只在真的落子 / 擦掉 / 收场时写,光挪光标不写(挪得快会把读屏刷屏)。
+// ---------------------------------------------------------------------------
+
+/** 「第 3 行第 5 列」这半句,和格子 aria-label 一个口径 */
+export function cellSay(idx: number, n: number): string {
+  return `第${Math.floor(idx / n) + 1}行第${(idx % n) + 1}列`;
+}
+
+/** 种对了 */
+export function fillSay(idx: number, n: number, digit: number, leftHoles: number): string {
+  const tail = leftHoles > 0 ? `还剩 ${leftHoles} 朵` : "花田种满啦";
+  return `${cellSay(idx, n)}种下 ${digit},${tail}。`;
+}
+
+/** 种错了:还能错几次要说清楚,errorLimit 为 0 时不吓唬人 */
+export function wrongSay(idx: number, n: number, digit: number, errors: number, errorLimit: number): string {
+  const tail = errorLimit > 0 ? `还能改 ${Math.max(0, errorLimit - errors)} 次` : "再看看同一行同一列";
+  return `${cellSay(idx, n)}的 ${digit} 先放一放,${tail}。`;
+}
+
+/** 擦掉一格 */
+export function clearSay(idx: number, n: number): string {
+  return `${cellSay(idx, n)}擦干净了。`;
+}
+
+/** 一盘收场 */
+export function doneSay(solved: boolean, filled: number, errors: number): string {
+  if (solved) return `花田开满啦,一共种了 ${filled} 朵,错了 ${errors} 次。`;
+  return `这一盘先到这里,种了 ${filled} 朵。歇一会儿再来。`;
+}
+
+// ---------------------------------------------------------------------------
 // 样式
 // ---------------------------------------------------------------------------
 
@@ -238,6 +274,9 @@ export const SP_CSS = `
   overflow-wrap:anywhere;line-height:1.5;max-width:340px;}
 .sp-hintbox{background:#FFFBEA;border-radius:12px;padding:8px 10px;font-size:14px;font-weight:700;color:#7a5f1e;
   line-height:1.6;max-width:340px;text-align:left;}
+/* 只给读屏听的一行:看不见、不占位,落子成没成靠它 */
+.sp-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}
 .sp-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .sp-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;min-height:44px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#8E6BD0,#7554B8);box-shadow:0 4px 0 #5B3F93;}
@@ -413,12 +452,34 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
 
   const msg = document.createElement("div");
   msg.className = "sp-msg";
+  msg.setAttribute("role", "status");
+  msg.setAttribute("aria-live", "polite");
+  msg.setAttribute("aria-atomic", "true");
   msg.textContent = opts.ai ? AI_TIER_BLURBS[opts.ai] : "点一个格子,再按下面的数字钮种进去。";
+
+  // 看不见的一行:落子成没成、还剩多少朵,读屏靠它知道
+  const say = document.createElement("div");
+  say.className = "sp-say";
+  say.setAttribute("role", "status");
+  say.setAttribute("aria-live", "polite");
+  say.setAttribute("aria-atomic", "true");
 
   wrap.append(name, grid);
   if (opts.who) wrap.append(pad, tools, hintBox);
-  wrap.append(msg);
+  wrap.append(msg, say);
   host.appendChild(wrap);
+
+  /** 只有人在玩的那块盘才播;假人一步一句会把读屏刷屏 */
+  function announce(text: string): void {
+    if (!opts.who) return;
+    if (say.textContent === text) return;
+    say.textContent = text;
+  }
+
+  /** 还有几朵没种(种满了就是 0) */
+  function leftHoles(): number {
+    return board.cells.filter((v, i) => v === EMPTY && !given[i]).length;
+  }
 
   function snapshot(): SeatSnapshot {
     return { cells: board.cells, notes };
@@ -442,6 +503,7 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     notes[idx] = 0;
     hint = null;
     opts.sfx("tap");
+    announce(clearSay(idx, n));
     render();
   }
 
@@ -481,10 +543,12 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
         opts.errorLimit > 0
           ? `这一朵先放一放,还能改 ${Math.max(0, opts.errorLimit - errors)} 次。`
           : "这一朵先放一放,再看看同一行同一列。";
+      announce(wrongSay(idx, n, digit, errors, opts.errorLimit));
       opts.onError?.(errors);
       if (isOutOfTries(errors, opts.errorLimit)) {
         failed = true;
         render();
+        announce(doneSay(false, state().filled, errors));
         opts.onDone(state());
         return;
       }
@@ -496,12 +560,14 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
         for (const cell of variant.groups[g]) notes[cell] &= ~bit;
       }
       msg.textContent = "";
+      announce(fillSay(idx, n, digit, leftHoles()));
     }
 
     render();
     if (isFilledComplete(variant, snapshot())) {
       solved = true;
       opts.sfx("win");
+      announce(doneSay(true, state().filled, errors));
       bloom();
       opts.onDone(state());
     }
@@ -751,6 +817,10 @@ export function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () 
   seatsHost.className = "sp-seats";
   const pauseLine = document.createElement("div");
   pauseLine.className = "sp-pause";
+  // 暂停 / 继续这一下读屏也要立刻听见
+  pauseLine.setAttribute("role", "status");
+  pauseLine.setAttribute("aria-live", "polite");
+  pauseLine.setAttribute("aria-atomic", "true");
   pauseLine.textContent = "";
 
   wrap.append(top, seatsHost, pauseLine);
