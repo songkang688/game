@@ -48,6 +48,7 @@ import {
   battleHighlight,
   buildEndlessRound,
   dealForLevel,
+  endlessDealSeed,
   endlessLine,
   goalLabel,
   goalMet,
@@ -1408,7 +1409,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     again.addEventListener("click", () => {
       api.play("tap");
       streak = 0;
-      bump = 0;
+      // bump 只增不减:清成 0 的话第 1 局会永远发同一副牌,卡住的孩子就一直卡着(W5R2-A-04)
+      bump++;
       startRound();
     });
     box.appendChild(again);
@@ -1420,7 +1422,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     stage.innerHTML = "";
     const round = buildEndlessRound(streak + 1);
     chip.textContent = `♾️ 无尽连胜 · 第 ${round.round} 局 · 最好 ${best} 连胜`;
-    const d = dealCards(round.seed + bump * 65537);
+    const d = dealCards(endlessDealSeed(round.round, bump));
     const mySeat = round.playerIsLandlord ? 0 : 1;
     table = createTable(stage, {
       hands: d.hands,

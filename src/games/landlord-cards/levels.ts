@@ -311,6 +311,19 @@ export function buildEndlessRound(round: number): EndlessRound {
   };
 }
 
+/**
+ * 无尽连胜发牌用的种子:第 `round` 局、这一整趟里第 `attempt` 次发牌。
+ *
+ * `attempt` 是**整趟只增不减**的计数——不光换牌(`onRedeal`)时要 +1,
+ * 输了之后点「🔁 从第 1 局再来」也要 +1。第 2 轮测试员 W5R2-A-04:
+ * 老代码在重开时把它清成 0,于是第 1 局永远是同一副牌
+ * (连开三次首局,手牌签名逐字相同),孩子在第 1 局卡住就会一直卡在这副牌上。
+ * 对照 ⚔️ 双人对战的「🔁 再来一局」是 `round++`,每局本来就换牌,所以没这个毛病。
+ */
+export function endlessDealSeed(round: number, attempt: number): number {
+  return buildEndlessRound(round).seed + Math.max(0, Math.round(attempt)) * 65537;
+}
+
 /** 无尽模式结束时的一句话 */
 export function endlessLine(streak: number, best: number): string {
   if (streak === 0) return "第一局就被拦下来啦,别急,再来一次!";
