@@ -151,12 +151,27 @@ export class El {
   }
 }
 
-/** canvas 2d 上下文：任何方法都是空操作，任何属性都写得进去 */
+/** 一条画布调用记录：方法调用记 { m, a }，属性写入记 { m: "set:属性名", a: [值] } */
+export interface CtxCall {
+  m: string;
+  a: unknown[];
+}
+
+/** 画布调用流水（1.3 视觉契约：断言走了 sprite / 渐变路径、楚河汉界还在等），installDom 时清零 */
+export const ctxCalls: CtxCall[] = [];
+
+/** canvas 2d 上下文：任何方法都是空操作（但记下方法与参数），任何属性都写得进去（记成 set:xx） */
 export const ctx2d: unknown = new Proxy(
   {},
   {
-    get: () => () => ctx2d,
-    set: () => true,
+    get: (_t, prop) => (...a: unknown[]): unknown => {
+      if (typeof prop === "string") ctxCalls.push({ m: prop, a });
+      return ctx2d;
+    },
+    set: (_t, prop, v) => {
+      if (typeof prop === "string") ctxCalls.push({ m: `set:${prop}`, a: [v] });
+      return true;
+    },
   },
 );
 
@@ -186,6 +201,7 @@ function setGlobals(values: Record<string, unknown>): void {
 
 /** 装上 DOM 桩，返回可以观察的句柄 */
 export function installDom(width = 800, coarsePointer = false): Dom {
+  ctxCalls.length = 0;
   const head = new El("head");
   const root = new El("div");
   root.width = width;
