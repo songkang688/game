@@ -308,6 +308,7 @@ class BoardView {
     this.clearLine();
     this.build();
     this.render();
+    this.fit();
   }
 
   freeze(): void {
@@ -327,6 +328,16 @@ class BoardView {
   /** 这套主题的键：图标映射按它转起点，v 相同必同款 */
   private get themeKey(): string {
     return this.emojis[0] ?? "";
+  }
+
+  /** 360px 兜底：量出真实牌宽，低于 34px 就切成「顶面 + 描边」的轻量画法 */
+  fit(): void {
+    const w = this.boardEl.clientWidth;
+    const px =
+      w > 0
+        ? (w - CELL_GAP_PX * (this.board.cols + 1)) / (this.board.cols + RING_FRAC * 2)
+        : cellSizePx(this.board.cols);
+    this.boardEl.classList.toggle("llk-slim", slimTile(px));
   }
 
   render(): void {
@@ -370,13 +381,35 @@ class BoardView {
     span.innerHTML = svg;
   }
 
-  /** 提示：把真求解出来的一对高亮一下 */
+  /** 提示：判定真求解出来的那一对泛柔光（呼吸两次共 2s） */
   highlight(pair: [Pt, Pt]): void {
     for (const [r, c] of pair) {
       const node = this.cells[r][c];
       node.classList.add("llk-hint");
-      this.jan.after(1400, () => node.classList.remove("llk-hint"));
+      this.jan.after(HINT_GLOW_MS, () => node.classList.remove("llk-hint"));
     }
+  }
+
+  /** 洗牌：全部牌小幅腾空转位（180ms 交错）；安静模式瞬换不动 */
+  shuffleFx(): void {
+    if (this.calm) return;
+    const { R, C } = this.board;
+    for (let r = 1; r < R - 1; r++) {
+      for (let c = 1; c < C - 1; c++) {
+        if (this.board.grid[r][c] < 0) continue;
+        const node = this.cells[r][c];
+        node.style.animationDelay = `${((r + c) % 5) * 14}ms`;
+        node.classList.add("llk-shuf");
+      }
+    }
+    this.jan.after(SHUFFLE_FX_MS + 90, () => {
+      for (const row of this.cells) {
+        for (const node of row) {
+          node.classList.remove("llk-shuf");
+          node.style.animationDelay = "";
+        }
+      }
+    });
   }
 
   private onCell(r: number, c: number): void {
@@ -541,28 +574,31 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   );
 
   const wrap = el("div", "llk-wrap");
+  // 顶栏卡片化:剩余对数 / 计时 / 洗牌 / 提示四枚圆角卡片一行(360px 也放得下)
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="llk-top">
-      <span class="llk-badge llk-left">🧸 剩 0 对</span>
-      <span class="llk-badge llk-time">⏰ 0 秒</span>
+      <span class="llk-badge llk-left">${hudGlyphSvg("pairs")}<b class="llk-btext">剩0对</b></span>
+      <span class="llk-badge llk-time">${hudGlyphSvg("clock")}<b class="llk-btext">0秒</b></span>
+      <button class="llk-tool llk-shuffle" type="button">${hudGlyphSvg("shuffle")}<b class="llk-btext">洗牌×${cfg.shuffles}</b></button>
+      <button class="llk-tool llk-hintbtn" type="button"><span class="llk-bico">${hudGlyphSvg("bulb")}</span><b class="llk-btext">提示×${HINT_MAX}</b></button>
       ${ruleChip(cfg) ? `<span class="llk-badge llk-rule">${ruleChip(cfg)}</span>` : ""}
     </div>
     <div class="llk-holder"></div>
-    <div class="llk-tools">
-      <button class="llk-tool llk-hintbtn" type="button">💡 提示 x${HINT_MAX}</button>
-      <button class="llk-tool llk-shuffle" type="button">🔀 洗牌 x${cfg.shuffles}</button>
-    </div>
     <div class="llk-msg"></div>
   `;
   stage.appendChild(wrap);
 
   const holder = wrap.querySelector(".llk-holder") as HTMLElement;
-  const leftEl = wrap.querySelector(".llk-left") as HTMLElement;
+  const leftText = wrap.querySelector(".llk-left .llk-btext") as HTMLElement;
   const timeEl = wrap.querySelector(".llk-time") as HTMLElement;
+  const timeText = wrap.querySelector(".llk-time .llk-btext") as HTMLElement;
   const msgEl = wrap.querySelector(".llk-msg") as HTMLElement;
   const hintBtn = wrap.querySelector(".llk-hintbtn") as HTMLButtonElement;
+  const hintIco = wrap.querySelector(".llk-hintbtn .llk-bico") as HTMLElement;
+  const hintText = wrap.querySelector(".llk-hintbtn .llk-btext") as HTMLElement;
   const shuffleBtn = wrap.querySelector(".llk-shuffle") as HTMLButtonElement;
+  const shuffleText = wrap.querySelector(".llk-shuffle .llk-btext") as HTMLElement;
 
   function rerollMasks(): void {
     if (!cfg.disguise) return;
@@ -587,16 +623,23 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   });
   view.setGravity(cfg.gravity);
   holder.appendChild(view.root);
+  jan.after(0, () => view.fit());
+  jan.on(window, "resize", () => view.fit());
 
   function renderTop(): void {
-    leftEl.textContent = `🧸 剩 ${tilesLeft(board) / 2} 对`;
-    timeEl.textContent = `⏰ ${timeLeft} 秒`;
+    leftText.textContent = `剩${tilesLeft(board) / 2}对`;
+    timeText.textContent = `${timeLeft}秒`;
     timeEl.classList.toggle("llk-hurry", timeLeft <= 15);
-    shuffleBtn.textContent = `🔀 洗牌 x${shufflesLeft}`;
+    shuffleText.textContent = `洗牌×${shufflesLeft}`;
     shuffleBtn.disabled = shufflesLeft <= 0 || levelDone;
     // 提示用完之后按钮不灰掉，改成「指个方向」：不给格子，只把搜索范围缩小
     const left = hintsLeft(hintsUsed);
-    hintBtn.textContent = left > 0 ? `💡 提示 x${left}` : "🔍 指个方向";
+    hintText.textContent = left > 0 ? `提示×${left}` : "指个方向";
+    const glyph: HudGlyph = left > 0 ? "bulb" : "compass";
+    if (hintIco.dataset.g !== glyph) {
+      hintIco.dataset.g = glyph;
+      hintIco.innerHTML = hudGlyphSvg(glyph);
+    }
     hintBtn.disabled = levelDone;
   }
 
@@ -639,6 +682,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         ? "洗好啦！这一把是特意摆出来的，保证有得连～"
         : `洗好啦，重新找找看（还剩 ${shufflesLeft} 次）`;
     view.clearSelection();
+    view.shuffleFx();
     renderTop();
   }
 
@@ -769,26 +813,27 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
     <style>${CSS}</style>
     <div class="llk-modebar">
       <button class="llk-back" type="button">⬅️ 回地图</button>
-      <span class="llk-badge llk-best"></span>
+      <span class="llk-badge llk-best">${hudGlyphSvg("medal")}<b class="llk-btext"></b></span>
     </div>
     <div class="llk-top">
-      <span class="llk-badge llk-round">🎪 第 1 盘</span>
-      <span class="llk-badge llk-pairs">🔗 0 对</span>
-      <span class="llk-badge llk-time">⏰ 不限时</span>
+      <span class="llk-badge llk-round">${hudGlyphSvg("round")}<b class="llk-btext">第 1 盘</b></span>
+      <span class="llk-badge llk-pairs">${hudGlyphSvg("chain")}<b class="llk-btext">0 对</b></span>
+      <span class="llk-badge llk-time">${hudGlyphSvg("clock")}<b class="llk-btext">不限时</b></span>
     </div>
     <div class="llk-holder"></div>
     <div class="llk-tools">
-      <button class="llk-tool llk-shuffle" type="button">🔀 重排</button>
+      <button class="llk-tool llk-shuffle" type="button">${hudGlyphSvg("shuffle")}<b class="llk-btext">重排</b></button>
     </div>
     <div class="llk-msg"></div>
   `;
   host.appendChild(wrap);
 
   const holder = wrap.querySelector(".llk-holder") as HTMLElement;
-  const roundEl = wrap.querySelector(".llk-round") as HTMLElement;
-  const pairsEl = wrap.querySelector(".llk-pairs") as HTMLElement;
+  const roundText = wrap.querySelector(".llk-round .llk-btext") as HTMLElement;
+  const pairsText = wrap.querySelector(".llk-pairs .llk-btext") as HTMLElement;
   const timeEl = wrap.querySelector(".llk-time") as HTMLElement;
-  const bestEl = wrap.querySelector(".llk-best") as HTMLElement;
+  const timeText = wrap.querySelector(".llk-time .llk-btext") as HTMLElement;
+  const bestText = wrap.querySelector(".llk-best .llk-btext") as HTMLElement;
   const msgEl = wrap.querySelector(".llk-msg") as HTMLElement;
   const shuffleBtn = wrap.querySelector(".llk-shuffle") as HTMLButtonElement;
 
@@ -804,15 +849,17 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
   });
   view.setGravity(spec.gravity);
   holder.appendChild(view.root);
+  jan.after(0, () => view.fit());
+  jan.on(window, "resize", () => view.fit());
 
   function renderTop(): void {
-    roundEl.textContent = `🎪 第 ${st.round} 盘`;
-    pairsEl.textContent = `🔗 ${st.pairs} 对`;
-    timeEl.textContent = timeLeft > 0 ? `⏰ ${timeLeft} 秒` : "⏰ 不限时";
+    roundText.textContent = `第 ${st.round} 盘`;
+    pairsText.textContent = `${st.pairs} 对`;
+    timeText.textContent = timeLeft > 0 ? `${timeLeft} 秒` : "不限时";
     timeEl.classList.toggle("llk-hurry", timeLeft > 0 && timeLeft <= 15);
-    bestEl.textContent = (() => {
+    bestText.textContent = (() => {
       const best = save.getGameProgress(meta.id).endlessBest;
-      return best > 0 ? `🏅 最好 ${best} 对` : "🏅 还没有最好成绩";
+      return best > 0 ? `最好 ${best} 对` : "还没有最好成绩";
     })();
     shuffleBtn.disabled = st.over;
   }
@@ -840,6 +887,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
     if (!anyMove(board, spec.maxTurns)) {
       const rep = fairShuffle(board, Math.random, spec.maxTurns);
       view.clearSelection();
+      view.shuffleFx();
       msgEl.textContent = rep.constructed
         ? "连不动啦，帮你摆了一把保证有得连的～"
         : "连不动啦，自动重排一次，接着连！";
@@ -883,6 +931,7 @@ function mountEndless(host: HTMLElement, api: GameApi, back: () => void): { dest
     if (st.over) return;
     fairShuffle(board, Math.random, spec.maxTurns);
     view.clearSelection();
+    view.shuffleFx();
     api.play("meow");
     msgEl.textContent = "重排好啦，重新扫一遍～";
   });
