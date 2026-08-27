@@ -46,6 +46,7 @@ import {
   HERO_H,
   HERO_NAMES,
   HERO_W,
+  MELEE_TIME,
   SHOT_R,
   botInput,
   counterFor,
@@ -68,6 +69,39 @@ import {
   type World,
   type WorldEvent,
 } from "./logic";
+import { shade, withAlpha } from "../../art/kit/palette";
+import { ballGradient, softShadow } from "../../art/kit/volume";
+import { strokeOutline } from "../../art/kit/outline";
+import { traceStar } from "../../art/kit/star";
+import {
+  BLADE_FLASH_COLOR,
+  CROWN_RUBY,
+  PP_COLORS,
+  PRINCESS_CROWN_OFFSET_X,
+  PRINCESS_CROWN_SCALE,
+  PcpFx,
+  SHADOW_H_RATIO,
+  SHADOW_W_RATIO,
+  SKIRT_STAR_R,
+  TOP_LIGHT,
+  bladeFlashOn,
+  blinkLift,
+  bowShape,
+  buttonPoints,
+  capePhase,
+  crownPath,
+  crownTeethTips,
+  flagWavePhase,
+  gemGlowAlpha,
+  headwearDetail,
+  invulnBlink,
+  princeSilhouette,
+  princessSilhouette,
+  shawlFill,
+  shawlPath,
+  skirtLiningArcs,
+  skirtStars,
+} from "./visual13";
 
 // ---------------------------------------------------------------------------
 // 配色
@@ -98,10 +132,27 @@ const PALETTES: Palette[] = [
   { sky0: "#F4F0FC", sky1: "#EBE4F7", far: "#D6CBEE", mid: "#C3B4E5", ground: "#AC98DC", groundDark: "#E1D8F2", deco: "#7C66B8" },
 ];
 
-/** 两位主角的配色(本作原创小人换装,不是任何童话 IP 的角色) */
+/**
+ * 两位主角的配色(本作原创小人换装,不是任何童话 IP 的角色)。
+ * 1.3 起主色对齐四·补一的 token,深浅一律走 `shade`,不再手写十六进制。
+ */
 const HERO_COLORS = [
-  { cloak: "#6FA8E8", cloakDark: "#4B7FC0", skin: "#FFE0BE", hair: "#6B4A32", trim: "#FFD75E", name: "王子" },
-  { cloak: "#F58BB6", cloakDark: "#D66593", skin: "#FFE4C6", hair: "#C97C3A", trim: "#FFF0A8", name: "公主" },
+  {
+    cloak: PP_COLORS.ppPrince,
+    cloakDark: shade(PP_COLORS.ppPrince, -24),
+    skin: "#FFE0BE",
+    hair: "#6B4A32",
+    trim: PP_COLORS.ppGold,
+    name: "王子",
+  },
+  {
+    cloak: PP_COLORS.ppPrincess,
+    cloakDark: shade(PP_COLORS.ppPrincess, -22),
+    skin: "#FFE4C6",
+    hair: "#C97C3A",
+    trim: PP_COLORS.ppGold,
+    name: "公主",
+  },
 ];
 
 const ENEMY_FACE: Record<string, string> = {
@@ -120,15 +171,24 @@ export const CSS = `
 .pcp-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;position:relative;}
 .pcp-hud{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
-.pcp-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:800;color:#7B4A72;
+.pcp-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;color:#7B4A72;
   box-shadow:0 2px 6px rgba(170,120,160,.22);white-space:nowrap;}
 .pcp-chip-teach{background:#FFF3D6;color:#8A5A2B;}
+.pcp-chip-gem{background:linear-gradient(180deg,#FFFDF4,#FFF3D9);border:1px solid ${withAlpha(PP_COLORS.ppGold, 0.55)};
+  box-shadow:0 2px 6px rgba(201,138,23,.24);}
+.pcp-chip-duo{display:inline-flex;align-items:center;gap:3px;padding:4px 8px;}
+.pcp-ava{display:inline-block;width:16px;height:16px;border-radius:50%;
+  box-shadow:inset 0 -3px 0 rgba(90,74,120,.14),0 1px 2px rgba(90,74,120,.25);}
+.pcp-ava-prince{background:radial-gradient(circle at 35% 30%,${shade(PP_COLORS.ppPrince, 32)},${PP_COLORS.ppPrince});
+  border-top:3px solid ${PP_COLORS.ppGold};}
+.pcp-ava-princess{background:radial-gradient(circle at 35% 30%,${shade(PP_COLORS.ppPrincess, 32)},${PP_COLORS.ppPrincess});
+  border-top:3px solid ${PP_COLORS.ppRuby};}
 .pcp-bar{position:relative;flex:1;min-width:110px;height:20px;border-radius:999px;background:#ffffffcc;
   overflow:hidden;box-shadow:inset 0 1px 3px rgba(150,110,140,.25);}
 .pcp-bar-fill{height:100%;width:0%;border-radius:999px;transition:width .16s linear;
   background:linear-gradient(90deg,#F7A8C8,#9FD48C);}
 .pcp-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:900;color:#6B3A62;}
+  font-size:14px;font-weight:900;color:#6B3A62;}
 .pcp-btn{border:none;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7B4A72;box-shadow:0 3px 0 rgba(170,120,160,.3);}
 .pcp-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,120,160,.3);}
@@ -189,9 +249,9 @@ export const CSS = `
   .pcp-wrap[data-players="2"] .pcp-cv{height:270px;}
   .pcp-pads{--k:46px;margin-top:6px;}
   .pcp-pads[data-players="2"]{--k:37px;}
-  .pcp-chip{font-size:12px;padding:3px 7px;}
+  .pcp-chip{font-size:14px;padding:3px 6px;}
   .pcp-hud{gap:4px;margin-bottom:4px;}
-  .pcp-bar{min-width:78px;height:18px;}
+  .pcp-bar{min-width:78px;height:20px;}
   .pcp-btn{padding:5px 9px;}
   .pcp-lbl{display:none;}
   .pcp-tip{font-size:11px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -294,7 +354,11 @@ export function onScreen(x: number, camX: number, viewW: number): boolean {
 
 const SPEC = ELEMENT_SPECS;
 
-/** 危险:尖尖的三角 + 深红粗描边。只有危险是三角形 */
+/**
+ * 危险:1.3 起改成**圆头软刺 + 警示条纹底座**。
+ * 危险语义双保险:条纹底座沿用规范表深红,顶上再由 `drawHazardMark`(最顶层)插三角。
+ * 条纹用填充的平行四边形画,**不用 setLineDash** —— 虚线是「推我」箱子的专属语义。
+ */
 function drawHazardSpikes(
   g: CanvasRenderingContext2D,
   x0: number,
@@ -303,20 +367,43 @@ function drawHazardSpikes(
   scale: number
 ): void {
   const s = SPEC.hazard;
+  const baseH = 6 * scale;
+  // 警示条纹底座:深红底 + 斜纹
+  g.fillStyle = s.stroke;
+  g.fillRect(x0, baseY - baseH, x1 - x0, baseH);
+  g.fillStyle = s.fill;
+  const stripe = 9 * scale;
+  const slant = baseH * 0.7;
+  for (let px = x0; px < x1; px += stripe * 2) {
+    g.beginPath();
+    g.moveTo(px, baseY);
+    g.lineTo(Math.min(x1, px + stripe), baseY);
+    g.lineTo(Math.min(x1, px + stripe + slant), baseY - baseH);
+    g.lineTo(Math.min(x1, px + slant), baseY - baseH);
+    g.closePath();
+    g.fill();
+  }
+  // 圆头软刺:肩线走二次曲线,顶是圆滚滚的一颗
   const teeth = Math.max(2, Math.round((x1 - x0) / (16 * scale)));
   const tw = (x1 - x0) / teeth;
-  g.fillStyle = s.fill;
   g.strokeStyle = s.stroke;
   g.lineWidth = Math.max(1, s.strokeWidth * scale * 0.8);
   for (let i = 0; i < teeth; i++) {
     const tx = x0 + tw * i;
+    const tipY = baseY - baseH - 12 * scale;
+    g.fillStyle = s.fill;
     g.beginPath();
-    g.moveTo(tx, baseY);
-    g.lineTo(tx + tw / 2, baseY - 17 * scale);
-    g.lineTo(tx + tw, baseY);
+    g.moveTo(tx + tw * 0.1, baseY - baseH);
+    g.quadraticCurveTo(tx + tw * 0.2, tipY + 2 * scale, tx + tw * 0.5, tipY);
+    g.quadraticCurveTo(tx + tw * 0.8, tipY + 2 * scale, tx + tw * 0.9, baseY - baseH);
     g.closePath();
     g.fill();
     g.stroke();
+    // 圆头上一点高光,软乎乎的不吓人,但红得清楚
+    g.fillStyle = shade(s.fill, 30);
+    g.beginPath();
+    g.arc(tx + tw * 0.42, tipY + 3 * scale, Math.max(1, 1.8 * scale), 0, Math.PI * 2);
+    g.fill();
   }
 }
 
@@ -333,6 +420,17 @@ function drawHazardMark(g: CanvasRenderingContext2D, cx: number, baseY: number, 
   g.closePath();
   g.fill();
   g.stroke();
+}
+
+/**
+ * 自绘小星星:公主的星弹 / 「只吃星星」的克制提示 / 首领弱点提示都用它。
+ * 星星 emoji 的 `fillText` 从此在本文件绝迹(源码字符串断言盯着)。
+ */
+function drawStarIcon(g: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  traceStar(g, cx, cy, Math.max(2, r));
+  g.fillStyle = PP_COLORS.ppGold;
+  g.fill();
+  strokeOutline(g, PP_COLORS.ppGold, 1.5);
 }
 
 /** 可踩:圆角横条 + 深棕描边 + 顶上一条亮边。只有能站的东西有亮顶边 */
@@ -356,7 +454,7 @@ function drawStandSlab(
   g.fillRect(x + 1.5 * scale, topY + 1.2 * scale, Math.max(0, w - 3 * scale), Math.max(1, 3 * scale));
 }
 
-/** 可推:方块 + 一圈「推我」虚线。只有方块推得动 */
+/** 可推:方块 + 一圈「推我」虚线。只有方块推得动(1.3 加木纹与角铁,语义件全保) */
 function drawPushCrate(g: CanvasRenderingContext2D, cx: number, baseY: number, scale: number): void {
   const s = SPEC.push;
   const w = BLOCK_W * scale;
@@ -366,22 +464,49 @@ function drawPushCrate(g: CanvasRenderingContext2D, cx: number, baseY: number, s
   g.fillStyle = s.fill;
   roundRect(g, x, y, w, h, 5 * scale);
   g.fill();
+  // 木纹:两条横板缝(细实线,不抢「推我」虚线的戏)
+  g.strokeStyle = shade(s.fill, -18);
+  g.lineWidth = Math.max(1, 1.1 * scale);
+  g.beginPath();
+  g.moveTo(x + 3 * scale, y + h * 0.36);
+  g.lineTo(x + w - 3 * scale, y + h * 0.36);
+  g.moveTo(x + 3 * scale, y + h * 0.66);
+  g.lineTo(x + w - 3 * scale, y + h * 0.66);
+  g.stroke();
   g.strokeStyle = s.stroke;
   g.lineWidth = Math.max(1, s.strokeWidth * scale * 0.8);
+  roundRect(g, x, y, w, h, 5 * scale);
   g.stroke();
+  // 四角角铁:短短的 L 形铁片,重箱子的分量感
+  g.fillStyle = shade(s.stroke, 16);
+  const arm = 5.5 * scale;
+  const thick = Math.max(1, 1.8 * scale);
+  for (const [cxs, cys] of [
+    [x + 1.5 * scale, y + 1.5 * scale],
+    [x + w - 1.5 * scale - arm, y + 1.5 * scale],
+    [x + 1.5 * scale, y + h - 1.5 * scale - thick],
+    [x + w - 1.5 * scale - arm, y + h - 1.5 * scale - thick],
+  ] as const) {
+    g.fillRect(cxs, cys, arm, thick);
+  }
   g.setLineDash([4 * scale, 3 * scale]);
+  g.strokeStyle = s.stroke;
   g.lineWidth = Math.max(1, 1.6 * scale);
   roundRect(g, x + 5 * scale, y + 5 * scale, w - 10 * scale, h - 10 * scale, 3 * scale);
   g.stroke();
   g.setLineDash([]);
 }
 
-/** 奖励:会发光的菱形。只有奖励发光 */
-function drawRewardGem(g: CanvasRenderingContext2D, cx: number, cy: number, scale: number, glow: boolean): void {
+/**
+ * 奖励:会发光的菱形。只有奖励发光。
+ * 1.3:光圈透明度按 `gemGlowAlpha` 呼吸(reduced 停在 1.2 的固定档),
+ * 菱形切出上半受光面 + 一点星光,像颗真宝石。
+ */
+function drawRewardGem(g: CanvasRenderingContext2D, cx: number, cy: number, scale: number, glowAlpha: number): void {
   const s = SPEC.reward;
   const r = 10 * scale;
-  if (glow && s.glow) {
-    g.globalAlpha = 0.42;
+  if (glowAlpha > 0 && s.glow) {
+    g.globalAlpha = Math.max(0, Math.min(1, glowAlpha));
     g.fillStyle = s.glow;
     g.beginPath();
     g.arc(cx, cy, r * 1.75, 0, Math.PI * 2);
@@ -399,9 +524,28 @@ function drawRewardGem(g: CanvasRenderingContext2D, cx: number, cy: number, scal
   g.strokeStyle = s.stroke;
   g.lineWidth = Math.max(1, s.strokeWidth * scale);
   g.stroke();
+  // 切面:上半受光面(左上 45° 光源)
+  g.fillStyle = shade(s.fill, 26);
+  g.beginPath();
+  g.moveTo(cx, cy - r);
+  g.lineTo(cx + r * 0.78, cy);
+  g.lineTo(cx - r * 0.78, cy);
+  g.closePath();
+  g.fill();
+  // 腰线 + 星光点
+  g.strokeStyle = shade(s.fill, -14);
+  g.lineWidth = Math.max(1, 1 * scale);
+  g.beginPath();
+  g.moveTo(cx - r * 0.78, cy);
+  g.lineTo(cx + r * 0.78, cy);
+  g.stroke();
+  g.fillStyle = "rgba(255,255,255,.85)";
+  g.beginPath();
+  g.arc(cx - r * 0.26, cy - r * 0.38, Math.max(0.8, r * 0.14), 0, Math.PI * 2);
+  g.fill();
 }
 
-/** 出口:青绿色的拱门。只有出口是拱形 */
+/** 出口:青绿色的拱门。只有出口是拱形(1.3 加花藤缠绕与门内暖光渐变) */
 function drawExitArch(
   g: CanvasRenderingContext2D,
   cx: number,
@@ -425,20 +569,61 @@ function drawExitArch(
   g.strokeStyle = s.stroke;
   g.lineWidth = Math.max(1, s.strokeWidth * scale);
   g.stroke();
+  // 门洞:开门时里面透出暖光渐变(回家的灯),没开就是一扇深色门板
+  const iw = w * 0.58;
+  const ih = h * 0.62;
+  if (open) {
+    const warm = g.createLinearGradient(0, baseY - ih, 0, baseY);
+    warm.addColorStop(0, "#FFF6DF");
+    warm.addColorStop(1, "#FFD9A0");
+    g.fillStyle = warm;
+  } else {
+    g.fillStyle = shade(s.fill, -26);
+  }
+  g.beginPath();
+  g.moveTo(cx - iw / 2, baseY);
+  g.lineTo(cx - iw / 2, baseY - ih + iw / 2);
+  g.quadraticCurveTo(cx - iw / 2, baseY - ih, cx, baseY - ih);
+  g.quadraticCurveTo(cx + iw / 2, baseY - ih, cx + iw / 2, baseY - ih + iw / 2);
+  g.lineTo(cx + iw / 2, baseY);
+  g.closePath();
+  g.fill();
+  // 花藤缠绕:两侧各一条绿藤 + 叶片与小花
+  g.strokeStyle = "#5FA96C";
+  g.lineWidth = Math.max(1, 1.6 * scale);
+  for (const side of [-1, 1] as const) {
+    g.beginPath();
+    g.moveTo(cx + side * (w / 2), baseY - 4 * scale);
+    g.quadraticCurveTo(cx + side * (w / 2 + 5 * scale), baseY - h * 0.4, cx + side * (w * 0.3), baseY - h * 0.86);
+    g.stroke();
+    g.fillStyle = "#7BC96F";
+    g.beginPath();
+    g.ellipse(cx + side * (w / 2 + 2 * scale), baseY - h * 0.32, 3.4 * scale, 2 * scale, side * 0.5, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(cx + side * (w * 0.42), baseY - h * 0.66, 3 * scale, 1.8 * scale, side * 0.9, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = PP_COLORS.ppLining;
+    g.beginPath();
+    g.arc(cx + side * (w * 0.34), baseY - h * 0.82, Math.max(1, 1.9 * scale), 0, Math.PI * 2);
+    g.fill();
+  }
   g.globalAlpha = 1;
   emoji(g, open ? s.icon : "🔒", cx, baseY - h * 0.52, 24 * scale);
 }
 
-/** 检查点:蓝色的小旗。只有检查点是旗子 */
+/** 检查点:蓝色的小旗。只有检查点是旗子(1.3 加 2 帧飘动,reduced 时 wave 恒 0) */
 function drawCheckpointFlag(
   g: CanvasRenderingContext2D,
   cx: number,
   baseY: number,
   scale: number,
-  lit: boolean
+  lit: boolean,
+  wave: 0 | 1
 ): void {
   const s = SPEC.checkpoint;
   const h = 40 * scale;
+  const dip = wave === 1 ? 3 * scale : 0;
   g.globalAlpha = lit ? 1 : 0.42;
   g.strokeStyle = s.stroke;
   g.lineWidth = Math.max(1.4, s.strokeWidth * scale * 0.9);
@@ -449,11 +634,16 @@ function drawCheckpointFlag(
   g.fillStyle = lit ? s.fill : "#D9E4EE";
   g.beginPath();
   g.moveTo(cx, baseY - h);
-  g.lineTo(cx + 22 * scale, baseY - h + 9 * scale);
+  g.lineTo(cx + 22 * scale - dip, baseY - h + 9 * scale + dip);
   g.lineTo(cx, baseY - h + 18 * scale);
   g.closePath();
   g.fill();
   g.stroke();
+  // 杆顶一颗小圆珠,点亮的旗更精神
+  g.fillStyle = lit ? PP_COLORS.ppGold : "#D9E4EE";
+  g.beginPath();
+  g.arc(cx, baseY - h - 2 * scale, Math.max(1, 2.2 * scale), 0, Math.PI * 2);
+  g.fill();
   g.globalAlpha = 1;
 }
 
@@ -553,6 +743,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   let cueT = opts.def.teach ? TEACH_CUE_SECONDS : 0;
   const calm = reducedMotion();
   const particles: Particle[] = [];
+  /** 纯视觉的小账本:挥杖星尘轨迹 + 通关击掌彩纸(只读事件,不写 World) */
+  const fx = new PcpFx();
   const inputs: Input[] = [emptyInput(), emptyInput()];
   const sfxAt = new Map<SoundName, number>();
 
@@ -569,7 +761,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const barFill = el("div", "pcp-bar-fill");
   const barTxt = el("span", "pcp-bar-txt");
   bar.append(barFill, barTxt);
-  const gemChip = el("span", "pcp-chip");
+  const gemChip = el("span", "pcp-chip pcp-chip-gem");
   const flagChip = el("span", "pcp-chip");
   const timerChip = el("span", "pcp-chip");
   const extraChip = el("span", "pcp-chip");
@@ -579,6 +771,13 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   pauseBtn.type = "button";
   pauseBtn.innerHTML = `⏸<span class="pcp-lbl"> 暂停</span>`;
   pauseBtn.setAttribute("aria-label", "暂停(也可以按 Esc)");
+  if (opts.players === 2) {
+    // 双人头像徽章:一蓝一粉两枚小圆脸,谁在场一眼看清
+    const avaChip = el("span", "pcp-chip pcp-chip-duo");
+    avaChip.append(el("span", "pcp-ava pcp-ava-prince"), el("span", "pcp-ava pcp-ava-princess"));
+    avaChip.setAttribute("aria-label", "王子和公主一起上场");
+    hud.appendChild(avaChip);
+  }
   hud.append(hearts, bar, gemChip, flagChip);
   if (opts.showTimer) hud.appendChild(timerChip);
   if (opts.extraChip) hud.appendChild(extraChip);
@@ -813,6 +1012,14 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, text: art, size: 18 });
         if (particles.length > 42) particles.shift();
       }
+      // 公主挥杖(带 hero 下标的 shoot):杖头甩出 5 颗星尘轨迹(reduced 不生成)
+      if (ev.kind === "shoot" && ev.hero !== undefined) fx.stardust(ev.x, ev.y, calm);
+      // 通关:两人对视击掌 + 彩纸;reduced 只摆姿势(静止合影)
+      if (ev.kind === "win") {
+        const a = world.heroes[0];
+        const b = world.heroes[1] ?? a;
+        fx.highFive((a.x + b.x) / 2, Math.min(a.y, b.y) - HERO_H * 0.8, calm);
+      }
       if (ev.kind === "guard") {
         toast(ev.text === "melee" ? "护甲变红了!换王子的剑" : "护甲变蓝了!换公主的星星");
       }
@@ -836,64 +1043,231 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const c = HERO_COLORS[hi % HERO_COLORS.length];
     const hh = HERO_H * scale;
     const hw = HERO_W * scale;
-    const blink = world.invuln > 0 && (calm || Math.floor(world.invuln * 12) % 2 === 0);
+    // 无敌闪烁:节拍和 1.2 逐帧一致(`invulnBlink` 就是原公式),
+    // 只把闪烁的表达从「压透明度」换成「主色 +40% 提亮」。
+    const blink = invulnBlink(world.invuln, calm);
+    const lift = (col: string): string => (blink ? blinkLift(col) : col);
     const headR = Math.max(4, hw * 0.4);
     const headCY = -hh + headR * 0.95;
     const bodyTop = headCY + headR * 0.72;
+    // 通关击掌:两人转身对视、举起手里的家伙(reduced 也摆,静止合影)
+    const celebrating = fx.celebrating && world.status === "won";
+    let facing = h.facing;
+    if (celebrating && world.heroes.length > 1) {
+      facing = world.heroes[1 - hi].x >= h.x ? 1 : -1;
+    }
+    const sway = capePhase(world.time * 1000, Math.abs(h.vx) > 8, calm);
+
+    // ① 落影椭圆(0.75×HERO_W、0.2 高,全场统一 ppShadow)
+    softShadow(
+      ctx,
+      sx,
+      sy + 1.5 * scale,
+      (hw * SHADOW_W_RATIO) / 2,
+      (hw * SHADOW_W_RATIO * SHADOW_H_RATIO) / 2,
+      0.16,
+      1,
+      "rgba(90,74,120,1)"
+    );
 
     ctx.save();
-    ctx.globalAlpha = blink ? 0.55 : 1;
     ctx.translate(sx, sy);
-    ctx.scale(h.facing, 1);
+    ctx.scale(facing, 1);
 
-    // 披风 / 裙摆
-    ctx.fillStyle = c.cloakDark;
-    ctx.beginPath();
-    ctx.moveTo(-hw * 0.05, bodyTop);
-    ctx.quadraticCurveTo(-hw * 0.95, -hh * 0.4, -hw * 0.5, -hh * 0.02);
-    ctx.quadraticCurveTo(-hw * 0.2, -hh * 0.22, -hw * 0.05, bodyTop + hh * 0.1);
-    ctx.closePath();
-    ctx.fill();
-
-    // 身体
-    ctx.fillStyle = c.cloak;
-    if (h.kind === "princess") {
+    // ② 披风 / 披纱(画在身后,随移动 2 帧摆动;reduced 冻在 0 相)
+    if (h.kind === "prince") {
+      const tail = -hw * (0.62 + 0.14 * sway);
+      const capeGrad = ctx.createLinearGradient(0, bodyTop, 0, 0);
+      capeGrad.addColorStop(0, lift(shade(c.cloak, 8)));
+      capeGrad.addColorStop(1, lift(shade(c.cloak, -24)));
+      ctx.fillStyle = capeGrad;
       ctx.beginPath();
-      ctx.moveTo(-hw * 0.22, bodyTop);
-      ctx.lineTo(hw * 0.22, bodyTop);
-      ctx.lineTo(hw * 0.44, -hh * 0.02);
-      ctx.lineTo(-hw * 0.44, -hh * 0.02);
+      ctx.moveTo(-hw * 0.02, bodyTop);
+      ctx.quadraticCurveTo(-hw * 0.95, -hh * 0.42, tail, -hh * 0.03);
+      ctx.quadraticCurveTo(-hw * 0.24, -hh * 0.2, -hw * 0.05, bodyTop + hh * 0.1);
+      ctx.closePath();
+      ctx.fill();
+      // 内层衬色:亮一档的里子,双层披风的层次全靠它
+      ctx.fillStyle = lift(shade(c.cloak, 42));
+      ctx.beginPath();
+      ctx.moveTo(-hw * 0.06, bodyTop + hh * 0.05);
+      ctx.quadraticCurveTo(-hw * 0.68, -hh * 0.36, tail * 0.8, -hh * 0.06);
+      ctx.quadraticCurveTo(-hw * 0.24, -hh * 0.2, -hw * 0.08, bodyTop + hh * 0.13);
       ctx.closePath();
       ctx.fill();
     } else {
-      roundRect(ctx, -hw * 0.32, bodyTop, hw * 0.64, -bodyTop - hh * 0.02, hw * 0.2);
+      // 半透明披肩短纱(白 30%),勾一条细边免得和浅色背景糊成一片
+      const drift = hw * 0.06 * sway;
+      const veil = shawlPath();
+      ctx.fillStyle = shawlFill();
+      ctx.beginPath();
+      ctx.moveTo(veil[0][0] * hw, veil[0][1] * hh);
+      for (let i = 1; i < veil.length; i++) {
+        ctx.lineTo(veil[i][0] * hw - (i <= 2 ? drift : 0), veil[i][1] * hh);
+      }
+      ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = withAlpha(c.cloakDark, 0.5);
+      ctx.lineWidth = Math.max(1, 1.2 * scale);
+      ctx.stroke();
     }
 
-    // 脑袋
-    ctx.fillStyle = c.skin;
+    // ③ 身体剪影(共用骨架、两套参数:王子裤装 / 公主钟形裙)
+    const sil = h.kind === "princess" ? princessSilhouette() : princeSilhouette();
+    const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, 0);
+    bodyGrad.addColorStop(0, lift(shade(c.cloak, TOP_LIGHT)));
+    bodyGrad.addColorStop(1, lift(c.cloak));
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(sil[0][0] * hw, sil[0][1] * hh);
+    for (let i = 1; i < sil.length; i++) ctx.lineTo(sil[i][0] * hw, sil[i][1] * hh);
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, c.cloak, 1.6);
+
+    if (h.kind === "prince") {
+      // 立领
+      ctx.fillStyle = lift(shade(c.cloak, 32));
+      ctx.fillRect(-hw * 0.15, bodyTop - 2.4 * scale, hw * 0.3, 3.2 * scale);
+      // 肩章两枚 + 双排金扣 4 点
+      ctx.fillStyle = lift(PP_COLORS.ppGold);
+      roundRect(ctx, -hw * 0.36, bodyTop - 1.2 * scale, hw * 0.15, 3 * scale, 1.5 * scale);
+      ctx.fill();
+      roundRect(ctx, hw * 0.21, bodyTop - 1.2 * scale, hw * 0.15, 3 * scale, 1.5 * scale);
+      ctx.fill();
+      for (const [bx, by] of buttonPoints()) {
+        ctx.beginPath();
+        ctx.arc(bx * hw, by * hh, Math.max(1, hw * 0.045), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 腰带 + 金扣
+      ctx.fillStyle = lift(shade(c.cloak, -38));
+      ctx.fillRect(-hw * 0.27, -hh * 0.22, hw * 0.54, hh * 0.045);
+      ctx.fillStyle = lift(PP_COLORS.ppGold);
+      ctx.fillRect(-hw * 0.05, -hh * 0.228, hw * 0.1, hh * 0.06);
+      ctx.fillStyle = lift(shade(c.cloak, -38));
+      ctx.fillRect(-hw * 0.022, -hh * 0.213, hw * 0.044, hh * 0.03);
+    } else {
+      // 内衬波浪下摆:ppLining 扇贝从外裙下缘探出来 —— 双层裙的辨识件
+      ctx.fillStyle = lift(PP_COLORS.ppLining);
+      for (const [ax, ay, ar] of skirtLiningArcs()) {
+        ctx.beginPath();
+        ctx.arc(ax * hw, ay * hh, ar * hw, 0, Math.PI);
+        ctx.fill();
+      }
+      // 裙面三点小星纹(自绘五角星,不是贴 emoji)
+      for (const [px, py] of skirtStars()) {
+        traceStar(ctx, px * hw, py * hh, Math.max(1.4, SKIRT_STAR_R * hw));
+        ctx.fill();
+      }
+      // 腰线
+      ctx.fillStyle = lift(shade(c.cloak, 30));
+      ctx.fillRect(-hw * 0.16, -hh * 0.375, hw * 0.32, 2 * scale);
+    }
+
+    // ④ 脑袋 + 脸(1.2 的眼睛腮红笑弧底子保住)
+    ctx.fillStyle = lift(c.skin);
     ctx.beginPath();
     ctx.arc(0, headCY, headR, 0, Math.PI * 2);
     ctx.fill();
-    // 头发
-    ctx.fillStyle = c.hair;
+    ctx.fillStyle = lift(c.hair);
     ctx.beginPath();
     ctx.arc(0, headCY - headR * 0.22, headR * 0.96, Math.PI * 1.05, Math.PI * 2.05);
     ctx.fill();
-    // 头饰
-    ctx.fillStyle = c.trim;
-    ctx.beginPath();
     if (h.kind === "prince") {
-      ctx.moveTo(-headR * 0.8, headCY - headR * 0.78);
-      ctx.lineTo(-headR * 0.4, headCY - headR * 1.3);
-      ctx.lineTo(0, headCY - headR * 0.82);
-      ctx.lineTo(headR * 0.4, headCY - headR * 1.3);
-      ctx.lineTo(headR * 0.8, headCY - headR * 0.78);
+      // 刘海分缝:一道细缝 + 一撮斜刘海
+      ctx.strokeStyle = lift(shade(c.hair, -18));
+      ctx.lineWidth = Math.max(1, headR * 0.09);
+      ctx.beginPath();
+      ctx.moveTo(-headR * 0.12, headCY - headR * 0.88);
+      ctx.quadraticCurveTo(-headR * 0.05, headCY - headR * 0.55, -headR * 0.16, headCY - headR * 0.3);
+      ctx.stroke();
+      ctx.fillStyle = lift(c.hair);
+      ctx.beginPath();
+      ctx.moveTo(-headR * 0.1, headCY - headR * 0.8);
+      ctx.lineTo(headR * 0.32, headCY - headR * 0.6);
+      ctx.lineTo(headR * 0.05, headCY - headR * 0.34);
       ctx.closePath();
+      ctx.fill();
     } else {
-      ctx.arc(headR * 0.55, headCY - headR * 0.72, headR * 0.3, 0, Math.PI * 2);
+      // 长发侧束:脑后垂一束,发梢一个小卷
+      ctx.fillStyle = lift(c.hair);
+      ctx.beginPath();
+      ctx.moveTo(-headR * 0.72, headCY - headR * 0.3);
+      ctx.quadraticCurveTo(-headR * 1.06, headCY + headR * 0.5, -headR * 0.78, headCY + headR * 1.35);
+      ctx.quadraticCurveTo(-headR * 0.5, headCY + headR * 0.9, -headR * 0.52, headCY + headR * 0.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-headR * 0.74, headCY + headR * 1.38, headR * 0.2, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.fill();
+
+    // ⑤ 头饰:王子 3 齿大皇冠 / 公主蝶结 + 小皇冠(渲染高低于 6px 退化为纯色块)
+    const crownPx = headR * 0.72;
+    const jewels = headwearDetail(crownPx);
+    const paintCrown = (cs: number, ox: number, oy: number): void => {
+      const pts = crownPath();
+      ctx.fillStyle = lift(PP_COLORS.ppGold);
+      ctx.beginPath();
+      ctx.moveTo(ox + pts[0][0] * headR * cs, oy + pts[0][1] * headR * cs);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(ox + pts[i][0] * headR * cs, oy + pts[i][1] * headR * cs);
+      ctx.closePath();
+      ctx.fill();
+      if (!jewels) return;
+      // 齿尖圆珠
+      ctx.fillStyle = lift(shade(PP_COLORS.ppGold, 28));
+      for (const [tx, ty] of crownTeethTips()) {
+        ctx.beginPath();
+        ctx.arc(ox + tx * headR * cs, oy + ty * headR * cs, Math.max(1, headR * 0.09 * cs), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 正中红宝石 + 高光点
+      ctx.fillStyle = lift(PP_COLORS.ppRuby);
+      ctx.beginPath();
+      ctx.ellipse(
+        ox + CROWN_RUBY.x * headR * cs,
+        oy + CROWN_RUBY.y * headR * cs,
+        Math.max(1, CROWN_RUBY.rx * headR * cs),
+        Math.max(1, CROWN_RUBY.ry * headR * cs),
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,.75)";
+      ctx.beginPath();
+      ctx.arc(
+        ox + (CROWN_RUBY.x - CROWN_RUBY.rx * 0.4) * headR * cs,
+        oy + (CROWN_RUBY.y - CROWN_RUBY.ry * 0.5) * headR * cs,
+        Math.max(0.6, CROWN_RUBY.hi * headR * cs),
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    };
+    if (h.kind === "prince") {
+      paintCrown(1, 0, headCY);
+    } else {
+      paintCrown(PRINCESS_CROWN_SCALE, PRINCESS_CROWN_OFFSET_X * headR, headCY - headR * PRINCESS_CROWN_SCALE);
+      // 蝴蝶结:双翼 + 中间结,长在头侧,和王子的大皇冠一眼分清
+      const bow = bowShape();
+      ctx.fillStyle = lift(PP_COLORS.ppRuby);
+      for (const wing of bow.wings) {
+        ctx.beginPath();
+        ctx.moveTo(wing[0][0] * headR, headCY + wing[0][1] * headR);
+        for (let i = 1; i < wing.length; i++) ctx.lineTo(wing[i][0] * headR, headCY + wing[i][1] * headR);
+        ctx.closePath();
+        ctx.fill();
+      }
+      if (jewels) {
+        ctx.fillStyle = lift(shade(PP_COLORS.ppRuby, 24));
+        ctx.beginPath();
+        ctx.arc(bow.knot.x * headR, headCY + bow.knot.y * headR, Math.max(1, bow.knot.r * headR), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // 眼睛与笑脸
     ctx.fillStyle = "#4A3020";
     ctx.beginPath();
@@ -906,31 +1280,78 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx.arc(headR * 0.1, headCY + headR * 0.3, headR * 0.22, 0.12 * Math.PI, 0.88 * Math.PI);
     ctx.stroke();
 
-    // 手上的家伙:剑 / 魔杖
+    // ⑥ 手上的家伙:剑 / 魔杖(挥动窗口 attackT 只读,一个字不改)
     const swing = h.attackT > 0;
     if (h.kind === "prince") {
       ctx.save();
       ctx.translate(hw * 0.34, -hh * 0.48);
-      ctx.rotate(swing ? -0.75 : -0.15);
-      ctx.fillStyle = "#DCE6F2";
-      roundRect(ctx, 0, -hw * 0.09, hw * (swing ? 1.5 : 1.1), hw * 0.18, hw * 0.08);
+      ctx.rotate(celebrating ? -1.35 : swing ? -0.75 : -0.15);
+      const bladeLen = hw * (swing ? 1.5 : 1.1);
+      // 柄尾圆珠 + 握把 + 护手弧
+      ctx.fillStyle = lift(PP_COLORS.ppGold);
+      ctx.beginPath();
+      ctx.arc(-hw * 0.17, 0, Math.max(1, hw * 0.055), 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = c.trim;
-      roundRect(ctx, -hw * 0.12, -hw * 0.16, hw * 0.16, hw * 0.32, hw * 0.06);
+      ctx.fillStyle = lift(shade(PP_COLORS.ppGold, -28));
+      roundRect(ctx, -hw * 0.15, -hw * 0.045, hw * 0.15, hw * 0.09, hw * 0.04);
       ctx.fill();
+      ctx.strokeStyle = lift(PP_COLORS.ppGold);
+      ctx.lineWidth = Math.max(1.4, hw * 0.07);
+      ctx.beginPath();
+      ctx.arc(0, 0, hw * 0.13, -Math.PI * 0.65, Math.PI * 0.65);
+      ctx.stroke();
+      // 剑刃:两段渐变(根深尖亮) + 脊线高光
+      const bladeGrad = ctx.createLinearGradient(0, 0, bladeLen, 0);
+      bladeGrad.addColorStop(0, "#C9D8EC");
+      bladeGrad.addColorStop(0.55, "#DCE6F2");
+      bladeGrad.addColorStop(1, "#F4F9FF");
+      ctx.fillStyle = bladeGrad;
+      ctx.beginPath();
+      ctx.moveTo(hw * 0.05, -hw * 0.085);
+      ctx.lineTo(bladeLen * 0.9, -hw * 0.07);
+      ctx.lineTo(bladeLen, 0);
+      ctx.lineTo(bladeLen * 0.9, hw * 0.07);
+      ctx.lineTo(hw * 0.05, hw * 0.085);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.8)";
+      ctx.lineWidth = Math.max(0.8, hw * 0.02);
+      ctx.beginPath();
+      ctx.moveTo(hw * 0.09, 0);
+      ctx.lineTo(bladeLen * 0.94, 0);
+      ctx.stroke();
+      // 刃光:挥剑起手那一帧,刃口一抹白扫过(功能反馈,reduced 也保留)
+      if (bladeFlashOn(h.attackT, MELEE_TIME)) {
+        ctx.fillStyle = BLADE_FLASH_COLOR;
+        ctx.beginPath();
+        ctx.moveTo(hw * 0.1, -hw * 0.16);
+        ctx.lineTo(bladeLen * 1.06, -hw * 0.02);
+        ctx.lineTo(bladeLen * 0.9, hw * 0.1);
+        ctx.lineTo(hw * 0.1, -hw * 0.02);
+        ctx.closePath();
+        ctx.fill();
+      }
       ctx.restore();
     } else {
       ctx.save();
       ctx.translate(hw * 0.36, -hh * 0.5);
-      ctx.rotate(swing ? -0.6 : -0.2);
-      ctx.strokeStyle = "#E8D4A8";
+      ctx.rotate(celebrating ? -1.3 : swing ? -0.6 : -0.2);
+      // 杖杆
+      ctx.strokeStyle = lift("#E8D4A8");
       ctx.lineWidth = Math.max(1.4, hw * 0.09);
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(hw * 0.7, -hw * 0.2);
       ctx.stroke();
+      // 杖头:自绘五角星 + 星心渐变(挥动时放大一号;星尘轨迹由事件层生成)
+      const starR = hw * (swing ? 0.24 : 0.18);
+      const scx = hw * 0.78;
+      const scy = -hw * 0.24;
+      traceStar(ctx, scx, scy, starR);
+      ctx.fillStyle = ballGradient(ctx, scx, scy, starR, lift(PP_COLORS.ppGold));
+      ctx.fill();
+      strokeOutline(ctx, PP_COLORS.ppGold, 1.5);
       ctx.restore();
-      if (swing) emoji(ctx, "⭐", hw * 1.1, -hh * 0.62, 14 * Math.max(0.7, scale));
     }
     ctx.restore();
 
@@ -999,13 +1420,17 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const sx = (wx: number): number => (wx - camX) * scale;
     const sy = (wy: number): number => groundY + wy * scale;
 
+    // 危险标记是功能件,攒着最后画(图层序第 ⑧ 层,只让 HUD 盖它)
+    const hazardMarks: Array<[number, number, number]> = [];
+
+    // ① 天空
     const sky = g.createLinearGradient(0, 0, 0, cssH);
     sky.addColorStop(0, pal.sky0);
     sky.addColorStop(1, pal.sky1);
     g.fillStyle = sky;
     g.fillRect(0, 0, cssW, cssH);
 
-    // 三层视差城堡纵深:越远跟镜头跑得越慢
+    // ②③ 城堡塔楼两层视差 + 中景灌木:越远跟镜头跑得越慢
     drawParallax(g, camX, viewW, groundY, scale, cssW);
 
     // 地面(断口留空)。地面的**上表面**照「可踩」那一条画:
@@ -1037,28 +1462,30 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       for (let d = Math.ceil(a / 92) * 92; d < b; d += 92) g.fillRect(sx(d), groundY + 17 * scale, 5 * scale, 5 * scale);
     }
 
-    // 断口:两边的崖口各插一枚危险三角,一眼看出「这儿要跳」
+    // 断口:两边的崖口各插一枚危险三角,一眼看出「这儿要跳」(标记攒到最顶层)
     for (const gap of def.gaps) {
       const x0 = sx(gap.x0);
       const x1 = sx(gap.x1);
       if (x1 < -30 || x0 > cssW + 30) continue;
-      drawHazardMark(g, x0 - 7 * scale, groundY - 1, 9 * scale);
-      drawHazardMark(g, x1 + 7 * scale, groundY - 1, 9 * scale);
+      hazardMarks.push([x0 - 7 * scale, groundY - 1, 9 * scale]);
+      hazardMarks.push([x1 + 7 * scale, groundY - 1, 9 * scale]);
     }
 
-    // 危险 · 尖刺
+    // 危险 · 尖刺(圆头软刺 + 警示条纹底座;顶上再攒一枚三角,双保险)
     for (const s of world.spikes) {
       const x0 = sx(s.x);
       const x1 = sx(s.x + s.w);
       if (x1 < -20 || x0 > cssW + 20) continue;
       drawHazardSpikes(g, x0, x1, groundY, scale);
+      hazardMarks.push([(x0 + x1) / 2, groundY - 21 * scale, 8 * scale]);
     }
 
-    // 检查点 · 小旗(两人都走过才点亮)
+    // 检查点 · 小旗(两人都走过才点亮;2 帧 900ms 飘动,reduced 恒 0 相静止)
+    const wave = flagWavePhase(world.time * 1000, calm);
     for (let i = 0; i < world.flags.length; i++) {
-      const fx = sx(world.flags[i]);
-      if (fx < -40 || fx > cssW + 40) continue;
-      drawCheckpointFlag(g, fx, groundY, scale, i <= world.reached);
+      const fxp = sx(world.flags[i]);
+      if (fxp < -40 || fxp > cssW + 40) continue;
+      drawCheckpointFlag(g, fxp, groundY, scale, i <= world.reached, wave);
     }
 
     // 可踩 · 平台
@@ -1084,13 +1511,14 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     const gx = sx(def.goalX);
     if (gx > -70 && gx < cssW + 70) drawExitArch(g, gx, groundY, scale, doorOpen(world));
 
-    // 奖励 · 宝石
+    // 奖励 · 宝石(光圈 2000ms 呼吸;reduced 停在 1.2 的固定档,浮动也停)
+    const glowA = gemGlowAlpha(world.time * 1000, calm);
     for (const gem of world.gems) {
       if (gem.taken) continue;
       const x0 = sx(gem.x);
       if (x0 < -30 || x0 > cssW + 30) continue;
       const bob = calm ? 0 : Math.sin(world.time * 3 + gem.x * 0.02) * 3 * scale;
-      drawRewardGem(g, x0, sy(gem.y) + bob, scale, true);
+      drawRewardGem(g, x0, sy(gem.y) + bob, scale, glowA);
     }
 
     // 危险 · 小怪
@@ -1107,16 +1535,15 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         continue;
       }
       const cy = e.baseY < 0 ? sy(e.y) : sy(e.y) - stat.h * 0.5 * scale;
-      // 「碰到会闪护盾」的东西一律带一枚危险三角
-      drawHazardMark(g, x0, cy + stat.h * 0.52 * scale, 7 * scale);
+      // 「碰到会闪护盾」的东西一律带一枚危险三角(攒到最顶层)
+      hazardMarks.push([x0, cy + stat.h * 0.52 * scale, 7 * scale]);
       if (e.hurtT > 0) g.globalAlpha = 0.55;
       emoji(g, ENEMY_FACE[e.kind] ?? "❓", x0, cy, stat.h * 1.1 * scale);
       g.globalAlpha = 1;
-      // 只吃某一种攻击的怪,头顶挂一个小提示
+      // 只吃某一种攻击的怪,头顶挂一个小提示(星星是自绘的,不再贴 emoji)
       const counter = counterFor(e.kind);
-      if (counter) {
-        emoji(g, counter === "prince" ? "⚔️" : "⭐", x0, cy - stat.h * 0.78 * scale, 12 * scale);
-      }
+      if (counter === "prince") emoji(g, "⚔️", x0, cy - stat.h * 0.78 * scale, 12 * scale);
+      else if (counter) drawStarIcon(g, x0, cy - stat.h * 0.78 * scale, 6 * scale);
       // 元气条(本作没有血,掉光只是坐下歇口气)
       if (e.hp < e.maxHp) {
         const bw = stat.w * scale;
@@ -1148,16 +1575,17 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.lineWidth = Math.max(1, SPEC.hazard.strokeWidth * scale);
       g.stroke();
       emoji(g, info.emoji, bx, by - BOSS_H * 0.52 * scale, BOSS_H * 0.6 * scale);
-      emoji(g, boss.guard === "melee" ? "⚔️" : "⭐", bx, by - (BOSS_H + 22) * scale, 20 * scale);
+      if (boss.guard === "melee") emoji(g, "⚔️", bx, by - (BOSS_H + 22) * scale, 20 * scale);
+      else drawStarIcon(g, bx, by - (BOSS_H + 22) * scale, 10 * scale);
     }
 
-    // 弹幕:敌方的弹也是危险,照三角画
+    // 弹幕:敌方的弹也是危险,照三角画(攒到最顶层);公主的星弹是自绘五角星
     for (const s of world.shots) {
       if (!s.alive) continue;
       const x0 = sx(s.x);
       if (x0 < -20 || x0 > cssW + 20) continue;
-      if (s.friendly) emoji(g, "⭐", x0, sy(s.y), SHOT_R * 2 * scale);
-      else drawHazardMark(g, x0, sy(s.y) + SHOT_R * scale, SHOT_R * scale);
+      if (s.friendly) drawStarIcon(g, x0, sy(s.y), SHOT_R * 1.2 * scale);
+      else hazardMarks.push([x0, sy(s.y) + SHOT_R * scale, SHOT_R * scale]);
     }
 
     // 主角
@@ -1183,12 +1611,22 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       emoji(g, h.kind === "prince" ? "🤴" : "👸", mx, my - 24 * scale, 17 * scale);
     }
 
-    // 特效
+    // ⑦ 特效:飘字小图 + 星尘轨迹 / 击掌彩纸(世界坐标 → 屏幕坐标)
     for (const p of particles) {
       g.globalAlpha = Math.max(0, Math.min(1, p.life));
       emoji(g, p.text, sx(p.x), sy(p.y), p.size * scale);
     }
     g.globalAlpha = 1;
+    if (fx.count > 0) {
+      g.save();
+      g.translate(-camX * scale, groundY);
+      g.scale(scale, scale);
+      fx.draw(g);
+      g.restore();
+    }
+
+    // ⑧ 危险标记(功能件):压过所有美术层,只让 HUD 盖它
+    for (const [mx, my, ms] of hazardMarks) drawHazardMark(g, mx, my, ms);
 
     // 开场横幅
     if (readyT > 0) {
@@ -1222,7 +1660,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     }
   }
 
-  /** 2D 侧视不变,拿三层背景堆出城堡的纵深 */
+  /**
+   * 2D 侧视不变,背景堆出城堡的纵深:
+   * ② 两层塔楼剪影(远 ppCastleFar / 中 ppCastleMid,城齿 + 尖顶 + 小旗),
+   * ③ 中景灌木(圆头绿丛,颜色仍跟章节走,保住「一章一景」)。
+   */
   function drawParallax(
     ctx: CanvasRenderingContext2D,
     camX: number,
@@ -1231,31 +1673,75 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     scale: number,
     cssW: number
   ): void {
-    const layers: Array<{ color: string; speed: number; step: number; hi: number; alpha: number }> = [
-      { color: pal.far, speed: 0.18, step: 250, hi: 96, alpha: 0.34 },
-      { color: pal.mid, speed: 0.42, step: 190, hi: 66, alpha: 0.42 },
-      { color: pal.deco, speed: 0.68, step: 140, hi: 36, alpha: 0.24 },
+    const towers: Array<{ color: string; speed: number; step: number; hi: number; alpha: number }> = [
+      { color: PP_COLORS.ppCastleFar, speed: 0.18, step: 260, hi: 96, alpha: 0.5 },
+      { color: PP_COLORS.ppCastleMid, speed: 0.42, step: 200, hi: 64, alpha: 0.55 },
     ];
-    for (let li = 0; li < layers.length; li++) {
-      const L = layers[li];
+    for (let li = 0; li < towers.length; li++) {
+      const L = towers[li];
       ctx.globalAlpha = L.alpha;
-      ctx.fillStyle = L.color;
       const span = viewW + L.step * 2;
       const count = Math.ceil(span / L.step) + 1;
       for (let i = 0; i < count; i++) {
         const bx = ((i * L.step - camX * L.speed) % span + span) % span - L.step;
-        const bh = L.hi * 0.55 + ((i * 41 + li * 17) % Math.max(1, L.hi * 0.7));
-        const bw = L.step * 0.34 + ((i * 19 + li * 7) % Math.max(1, L.step * 0.22));
-        roundRect(ctx, bx * scale, groundY - bh * scale, bw * scale, bh * scale, 8 * scale);
+        const bh = L.hi * 0.6 + ((i * 41 + li * 17) % Math.max(1, L.hi * 0.6));
+        const bw = L.step * 0.26 + ((i * 19 + li * 7) % Math.max(1, L.step * 0.16));
+        const x = bx * scale;
+        const w = bw * scale;
+        const topY = groundY - bh * scale;
+        // 塔身
+        ctx.fillStyle = L.color;
+        roundRect(ctx, x, topY, w, bh * scale, 3 * scale);
         ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(bx * scale, groundY - bh * scale);
-        ctx.lineTo((bx + bw / 2) * scale, groundY - (bh + L.hi * 0.28) * scale);
-        ctx.lineTo((bx + bw) * scale, groundY - bh * scale);
-        ctx.closePath();
-        ctx.fill();
-        if (bx * scale > cssW + L.step) break;
+        // 城齿(三枚方齿)
+        const merlon = w / 5;
+        for (let m = 0; m < 3; m++) {
+          ctx.fillRect(x + merlon * (m * 1.5 + 0.25), topY - merlon * 0.8, merlon, merlon * 0.9);
+        }
+        // 尖顶塔楼:每隔一座给一顶锥形帽 + 一面小旗
+        if ((i + li) % 2 === 0) {
+          ctx.fillStyle = shade(L.color, -12);
+          ctx.beginPath();
+          ctx.moveTo(x + w * 0.18, topY - merlon * 0.6);
+          ctx.lineTo(x + w * 0.5, topY - bh * scale * 0.42 - merlon);
+          ctx.lineTo(x + w * 0.82, topY - merlon * 0.6);
+          ctx.closePath();
+          ctx.fill();
+          const flagX = x + w * 0.5;
+          const flagY = topY - bh * scale * 0.42 - merlon;
+          ctx.strokeStyle = shade(L.color, -24);
+          ctx.lineWidth = Math.max(1, scale);
+          ctx.beginPath();
+          ctx.moveTo(flagX, flagY);
+          ctx.lineTo(flagX, flagY - 8 * scale);
+          ctx.stroke();
+          ctx.fillStyle = PP_COLORS.ppRuby;
+          ctx.beginPath();
+          ctx.moveTo(flagX, flagY - 8 * scale);
+          ctx.lineTo(flagX + 7 * scale, flagY - 5.5 * scale);
+          ctx.lineTo(flagX, flagY - 3 * scale);
+          ctx.closePath();
+          ctx.fill();
+        }
+        if (x > cssW + L.step) break;
       }
+    }
+    // ③ 中景灌木:两球一丛的圆头绿篱,颜色跟章节
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = pal.mid;
+    const bStep = 140;
+    const bSpan = viewW + bStep * 2;
+    const bCount = Math.ceil(bSpan / bStep) + 1;
+    for (let i = 0; i < bCount; i++) {
+      const bx = ((i * bStep - camX * 0.68) % bSpan + bSpan) % bSpan - bStep;
+      const r = (12 + ((i * 23) % 9)) * scale;
+      ctx.beginPath();
+      ctx.arc(bx * scale, groundY - r * 0.35, r, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(bx * scale + r * 0.9, groundY - r * 0.2, r * 0.72, Math.PI, Math.PI * 2);
+      ctx.fill();
+      if (bx * scale > cssW + bStep) break;
     }
     ctx.globalAlpha = 1;
   }
@@ -1316,6 +1802,11 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         p.y += p.vy * dt;
       }
       while (particles.length > 0 && particles[0].life <= 0) particles.shift();
+    }
+
+    // 星尘与击掌彩纸是纯视觉账本:通关后世界停了它也要走完,只有暂停才冻结
+    if (!paused) {
+      fx.step(dt);
       if (toastT > 0) {
         toastT -= dt;
         if (toastT <= 0) toastEl.classList.remove("pcp-on");
@@ -1346,6 +1837,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       cueT = def.teach ? TEACH_CUE_SECONDS : 0;
       refreshCue(def);
       particles.length = 0;
+      fx.clear();
       releaseAll();
       clearVeil();
     },
@@ -1354,6 +1846,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     destroy() {
       destroyed = true;
       ended = true;
+      particles.length = 0;
+      fx.clear();
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
@@ -1706,7 +2200,7 @@ export function mount(api: GameApi): PrincePrincessHandle {
         if (i + 1 < TOTAL_LEVELS) buttons.push({ label: "下一关 ▶", go: () => openDirectLevel(i + 1) });
         buttons.push({ label: "🔁 再玩一次", go: () => openDirectLevel(i) });
         buttons.push({ label: "🗺️ 选关地图", go: () => closeDirect(true) });
-        settle(`⭐ 第 ${i + 1} 关过关!`, msg ?? "走得漂亮!", buttons);
+        settle(`🌟 第 ${i + 1} 关过关!`, msg ?? "走得漂亮!", buttons);
       },
       lose: (msg) => {
         if (settled) return;
