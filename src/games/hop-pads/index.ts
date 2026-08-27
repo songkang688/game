@@ -967,7 +967,11 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 // 对战:和幽灵跑同一条台序比分
 // ---------------------------------------------------------------------------
 
-/** 对战一局跳多少座 */
+/**
+ * 对战一局站满多少座。
+ * 玩家看 `run.hops >= goal`、幽灵看 `playGhost(..., MATCH_HOPS)`,两边数的是同一件事:
+ * **站住的座数**(弹簧台白送的那一跳两边都算)。
+ */
 export const MATCH_HOPS = 16;
 
 function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
