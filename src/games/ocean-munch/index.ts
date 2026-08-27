@@ -71,7 +71,6 @@ import {
   DEPTH_PER_BITE,
   ELITE_BREAK,
   ENDLESS_START_RADIUS,
-  PRESSURE_FROM_TIER,
   SWALLOW_MS,
   SpatialGrid,
   TIER_MAX as ENDLESS_TIER_MAX,
@@ -89,7 +88,8 @@ import {
   isPredator,
   makeRng,
   pressureDrain,
-  radiusCapAt,
+  pressureLine,
+  pressureState,
   spawnEndlessFish,
   startTierForLevel,
   starveWarnLevel,
@@ -2302,17 +2302,20 @@ export function mount(api: GameAPI): OceanMunchHandle {
         ctx.font = `bold ${warn === "hard" ? 17 : 15}px sans-serif`;
         ctx.fillText(starveWarnLine(sinceEat), w / 2, 62);
       }
-      if (arenaTier >= PRESSURE_FROM_TIER) {
+      // 正在被压小的时候要说出来:不然孩子只看到「我一直在吃,鱼却越来越小」
+      const squeezed = pressureState(me.r, arenaTier, eliteLeft) === "squeezed";
+      const pressure = pressureLine(me.r, arenaTier, eliteLeft);
+      if (pressure) {
         ctx.textAlign = "center";
         ctx.font = "12px sans-serif";
-        ctx.fillStyle = eliteLeft > 0 ? "#ffe6a8" : "rgba(255,255,255,0.82)";
-        ctx.fillText(
-          eliteLeft > 0
-            ? `💫 顶住水压 ${Math.ceil(eliteLeft)} 秒(上限 ${Math.round(radiusCapAt(arenaTier, eliteLeft))})`
-            : `🕳 水压上限 ${Math.round(radiusCapAt(arenaTier, 0))}`,
-          w / 2,
-          warn === "none" ? 62 : 82,
-        );
+        ctx.fillStyle = squeezed
+          ? Math.floor(arenaTime * 4) % 2 === 0
+            ? "#ffb0b0"
+            : "#ffe6a8"
+          : eliteLeft > 0
+            ? "#ffe6a8"
+            : "rgba(255,255,255,0.82)";
+        ctx.fillText(pressure, w / 2, warn === "none" ? 62 : 82);
       }
     }
   }

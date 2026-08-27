@@ -36,6 +36,8 @@ import {
   isStarved,
   makeRng,
   pressureDrain,
+  pressureLine,
+  pressureState,
   radiusCapAt,
   simulateEndless,
   spawnEndlessFish,
@@ -242,6 +244,78 @@ describe("深渊压力", () => {
     expect(radiusCapAt(6, 0)).toBe(cap);
     expect(radiusCapAt(6, ELITE_BREAK)).toBe(cap + ELITE_SLACK);
     expect(pressureDrain(cap + 5, 6, 1, ELITE_BREAK)).toBe(cap + 5);
+  });
+});
+
+describe("深渊压力 · 「我正在被压小」这件事说不说得出来", () => {
+  const TIER = 6;
+  const CAP = tierSpec(TIER).sizeCap;
+
+  it("三态和 pressureDrain 是同一把尺:它掉的时候才叫 squeezed", () => {
+    for (let t = 1; t <= 9; t++) {
+      const cap = radiusCapAt(t, 0);
+      for (const r of [cap - 4, cap, cap + 0.001, cap + 6]) {
+        const drains = pressureDrain(r, t, 1) < r;
+        expect(pressureState(r, t) === "squeezed").toBe(drains);
+      }
+    }
+  });
+
+  it("没有水压的层一个字都不说", () => {
+    for (let t = 1; t < PRESSURE_FROM_TIER; t++) {
+      expect(pressureState(MAX_RADIUS, t)).toBe("none");
+      expect(pressureLine(MAX_RADIUS, t)).toBe("");
+    }
+  });
+
+  it("安全和被压小说的是两句话,被压小那句要讲清楚原因和解法", () => {
+    const safe = pressureLine(CAP - 4, TIER);
+    const squeezed = pressureLine(CAP + 6, TIER);
+    expect(safe).not.toBe(squeezed);
+    expect(safe).toContain("水压上限");
+    expect(squeezed).toContain("正在被慢慢压小");
+    expect(squeezed).toContain("精英鱼");
+  });
+
+  it("破上限期间即使超了也不吓唬人,只提醒时间快到了", () => {
+    const held = pressureLine(CAP + 6, TIER, ELITE_BREAK);
+    expect(pressureState(CAP + 6, TIER, ELITE_BREAK)).toBe("safe");
+    expect(held).toContain("顶住水压");
+    expect(held).not.toContain("正在被慢慢压小");
+    // 顶到快没了、体型又已经超过没有加成时的上限:提前打个招呼
+    const expiring = pressureLine(CAP + ELITE_SLACK + 4, TIER, 2);
+    expect(expiring).toContain("会被压回去");
+  });
+
+  it("上限报的是这一刻真正生效的那个数（吃到精英鱼会变大）", () => {
+    expect(pressureLine(CAP - 4, TIER)).toContain(`${Math.round(CAP)}`);
+    expect(pressureLine(CAP + 4, TIER, ELITE_BREAK)).toContain(
+      `${Math.round(CAP + ELITE_SLACK)}`,
+    );
+  });
+
+  it("坏数字不会把 NaN 印到 HUD 上", () => {
+    for (const line of [
+      pressureLine(Number.NaN, TIER),
+      pressureLine(Number.POSITIVE_INFINITY, TIER),
+      pressureLine(CAP + 6, TIER, Number.NaN),
+    ]) {
+      expect(line).not.toContain("NaN");
+    }
+  });
+
+  it("分级红线:水压文案里没有血伤死杀这类字眼", () => {
+    for (const [r, elite] of [
+      [CAP - 4, 0],
+      [CAP + 6, 0],
+      [CAP + 6, ELITE_BREAK],
+      [CAP + ELITE_SLACK + 4, 2],
+    ]) {
+      const line = pressureLine(r, TIER, elite);
+      for (const bad of ["血", "伤", "死", "杀", "输了", "失败"]) {
+        expect(line).not.toContain(bad);
+      }
+    }
   });
 });
 

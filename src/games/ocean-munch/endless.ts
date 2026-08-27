@@ -288,6 +288,43 @@ export function pressureDrain(r: number, tier: number, dt: number, eliteLeft = 0
   return Math.max(cap, r - PRESSURE_DRAIN * Math.max(0, dt));
 }
 
+/**
+ * 这一刻水压对你是什么状态:
+ * `none` 还没到有水压的层 / `safe` 在上限之内 / `squeezed` 超了,正在被压小。
+ */
+export type PressureState = "none" | "safe" | "squeezed";
+
+export function pressureState(r: number, tier: number, eliteLeft = 0): PressureState {
+  if (!hasPressure(tier)) return "none";
+  const size = Number.isFinite(r) ? r : 0;
+  return size > radiusCapAt(tier, eliteLeft) ? "squeezed" : "safe";
+}
+
+/**
+ * HUD 上那一行水压提示。
+ *
+ * 以前这一行只有两种写法:吃到精英鱼是「顶住水压 N 秒」,其余一律「水压上限 M」——
+ * **不管你现在是安全的还是正在被 `pressureDrain` 一点点压小,印的都是同一句话**。
+ * 孩子看到的现象是「我明明一直在吃,鱼却越来越小」,屏幕上没有一个字解释为什么。
+ *
+ * 这里只改这一行字怎么写:`PRESSURE_DRAIN`、`sizeCap`、`ELITE_BREAK` 一个数都没动。
+ * `none` 档返回空串,调用方照常什么都不显示。
+ */
+export function pressureLine(r: number, tier: number, eliteLeft = 0): string {
+  const state = pressureState(r, tier, eliteLeft);
+  if (state === "none") return "";
+  const cap = Math.round(radiusCapAt(tier, eliteLeft));
+  if (eliteLeft > 0) {
+    const secs = Math.ceil(eliteLeft);
+    return state === "squeezed"
+      ? `💫 顶住水压 ${secs} 秒(上限 ${cap})· 时间一到就会被压回去,快再找一条精英鱼`
+      : `💫 顶住水压 ${secs} 秒(上限 ${cap})`;
+  }
+  return state === "squeezed"
+    ? `🕳 超过水压上限 ${cap} 啦,正在被慢慢压小 —— 吃一条精英鱼就能顶住`
+    : `🕳 水压上限 ${cap}`;
+}
+
 /* ------------------------------------------------------------------ */
 /* 鱼群抽样                                                            */
 /* ------------------------------------------------------------------ */
