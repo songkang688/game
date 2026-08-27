@@ -1,7 +1,17 @@
 import { meta } from "./meta";
 export { meta };
 
-import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import {
+  TOTAL_LEVELS,
+  chapterOf,
+  furthestPlayable,
+  loadSkips,
+  loadStars,
+  mountLevelGame,
+  type GameApi,
+  type PlayCtx,
+  type PlayHandle,
+} from "../level99";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { save } from "../../engine/save";
 import guide from "./guide";
@@ -26,7 +36,15 @@ import {
 } from "./force";
 import { AI_TIERS, aiController, type AiTier, type Controller } from "./ai";
 import { AI_POWER_SCALE, PLAYER_POWER_SCALE, endlessSetup, levelSetup } from "./duel";
-import { boundKeys, createDisposer, keySideOf, sideLayout } from "./runtime";
+import {
+  boundKeys,
+  createDisposer,
+  keySideOf,
+  openLevelOnMap,
+  parseLevelParam,
+  resolveInitialLevel,
+  sideLayout,
+} from "./runtime";
 import { fitFieldIntoStage } from "./fit";
 
 export const RBG_CSS = `
@@ -976,6 +994,15 @@ function mountEndless(
 // 挂载
 // ---------------------------------------------------------------------------
 
+/** 壳层给的 `initialLevel`(1 基),没有就看地址栏的 `?level=N` */
+function wantedLevel(api: GameApi): unknown {
+  const given = (api as { initialLevel?: unknown }).initialLevel;
+  if (given !== undefined && given !== null) return given;
+  const loc = (globalThis as { location?: { search?: string; hash?: string } }).location;
+  if (!loc) return undefined;
+  return parseLevelParam(loc.search ?? "") ?? parseLevelParam(loc.hash ?? "") ?? undefined;
+}
+
 export function mount(api: GameApi): { destroy: () => void } {
   const settings = { comeback: true };
   const root = document.createElement("div");
@@ -1053,6 +1080,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       grandMessage: "188 场拔河全部拉赢,大力士奖杯归你!",
     }
   );
+
+  // 壳层或地址栏点名了某一关就直接开进去,不用玩家再在地图上找一遍
+  const target = resolveInitialLevel(
+    wantedLevel(api),
+    furthestPlayable(loadStars(meta.id), loadSkips(meta.id), TOTAL_LEVELS),
+    TOTAL_LEVELS
+  );
+  if (target !== null) {
+    try {
+      openLevelOnMap(levelHost, target, chapterOf(CHAPTERS, target));
+    } catch (err) {
+      console.warn("[一朵一星] red-blue-tug 直开关卡失败,停在地图上:", err);
+    }
+  }
 
   return {
     destroy() {
