@@ -212,9 +212,12 @@ export async function readResult(page) {
       if (l99) {
         const t = clean(l99.querySelector(".l99-ov-title")?.textContent);
         const sub = clean(l99.textContent);
-        if (t.includes("过关") || t.includes("通关")) return { kind: "win", src: "l99", text: sub };
-        if (t.includes("就差")) return { kind: "lose", src: "l99", text: sub };
-        return { kind: "unknown", src: "l99", text: sub };
+        // 星级看 .l99-star-on 的个数,不能看文字 —— starRowHTML 永远吐三个 ★,
+        // 亮不亮只体现在 class 上,靠 textContent 读会一律读成「★★★」。
+        const stars = l99.querySelectorAll(".l99-star-on").length;
+        if (t.includes("过关") || t.includes("通关")) return { kind: "win", src: "l99", stars, text: sub };
+        if (t.includes("就差")) return { kind: "lose", src: "l99", stars, text: sub };
+        return { kind: "unknown", src: "l99", stars, text: sub };
       }
       // 3. 游戏自带结算
       const stage = document.querySelector(".game-stage");

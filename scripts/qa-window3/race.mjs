@@ -103,12 +103,13 @@ const main = async () => {
 
     rec.errors = [...errs.errors].slice(0, 8);
     out.push(rec);
+    // R2 猛点返回的正常结局就是退回首页,`.game-stage` 消失不算问题;
+    // 真正要看的是有没有报错、有没有多挂一份、退干净以后还能不能重进。
+    // R2 猛点返回的正常结局就是退回首页,`.game-stage` 消失不算问题;
+    // 画布数也不能当信号 —— 进了模式才画布,停在选关页就是 0 张。
+    // 真正要看的是:有没有报错、有没有多挂一份根节点、退干净以后还能不能重进。
     const bad =
-      rec.errors.length ||
-      rec.r1.canvases > 1 ||
-      rec.r2.stage === false ||
-      rec.r3.cards !== 55 ||
-      rec.r3.remount !== "ok";
+      rec.errors.length || rec.r1.roots !== 1 || rec.r3.cards !== 55 || rec.r3.remount !== "ok";
     console.log(
       `${bad ? "✗" : "✓"} ${id} | R1 点${rec.r1.clicked}下 canvas${rec.r1.canvases}/根${rec.r1.roots}` +
         ` | R2 stage=${rec.r2.stage} canvas${rec.r2.canvases ?? "-"}` +
