@@ -411,10 +411,25 @@ export function learnSkill(save: HeroSave, skillId: string): LearnResult {
   return { ok: true, save: { ...save, skillPoints: save.skillPoints - cost, ranks, loadout } };
 }
 
-/** 上阵 / 下阵一个技能（最多 4 个），返回新存档 */
+/**
+ * 学会一招之后，身上至少留一招。
+ *
+ * 技能栏本来能一个一个卸干净。卸干净之后星星那边照样带三个随等级涨阶的技能，
+ * 朵朵只剩平砍——20 级的擂台胜率从 20/20 掉到 4/20，而孩子从界面上看不出
+ * 是自己把招式卸光了，只会觉得「这游戏突然打不赢了」。
+ */
+export const MIN_LOADOUT = 1;
+
+/** 现在还能不能再卸一招下来（身上只剩一招时不行） */
+export function canUnequip(save: HeroSave): boolean {
+  return save.loadout.length > MIN_LOADOUT;
+}
+
+/** 上阵 / 下阵一个技能（最多 4 个，至少留 1 个），返回新存档 */
 export function toggleLoadout(save: HeroSave, skillId: string): HeroSave {
   if (!(save.ranks[skillId] > 0)) return save;
   if (save.loadout.includes(skillId)) {
+    if (!canUnequip(save)) return save;
     return { ...save, loadout: save.loadout.filter((id) => id !== skillId) };
   }
   if (save.loadout.length >= LOADOUT_SLOTS) return save;
@@ -555,9 +570,38 @@ export function endlessTier(depth: number): number {
 /** 深渊每深一层，对手强 4.5% */
 export const ENDLESS_GROWTH = 1.045;
 
-/** 每 8 层来一个镇守的大家伙 */
+/**
+ * 第一位守关排在第 4 层。
+ *
+ * 之前是「每 8 层一位」，可 1 级的朵朵大概第 4 层就走不动了——
+ * 第一次下深渊的孩子永远见不到守关长什么样，也就体会不到
+ * 「练一练能多走几层」的那个甜头。挪到第 4 层，第一趟就撞得上。
+ */
+export const FIRST_GUARDIAN = 4;
+
+/** 第 4 层来第一位，之后每 8 层一位 */
 export function isEndlessGuardian(depth: number): boolean {
-  return Math.max(1, Math.round(depth)) % 8 === 0;
+  const d = Math.max(1, Math.round(depth));
+  return d === FIRST_GUARDIAN || d % 8 === 0;
+}
+
+/** 守关比同层的小怪厚多少倍：浅层薄一点，第 16 层起满厚 */
+export const GUARDIAN_THICK_MIN = 1.5;
+export const GUARDIAN_THICK_MAX = 2.3;
+export const GUARDIAN_FULL_DEPTH = 16;
+
+/**
+ * 第 depth 层守关的厚度倍率。
+ *
+ * 第 4 层那位要是照原来的 2.3 倍配，就成了一堵谁也翻不过的墙——
+ * 「见得着」得配上「偶尔打得赢」才算数。所以浅层的守关薄一档，
+ * 一路爬到第 16 层回到原来的 2.3 倍，深层的分量一点没少。
+ */
+export function guardianThickness(depth: number): number {
+  const d = Math.max(1, Math.round(depth));
+  const span = GUARDIAN_FULL_DEPTH - FIRST_GUARDIAN;
+  const k = Math.min(1, Math.max(0, (d - FIRST_GUARDIAN) / span));
+  return GUARDIAN_THICK_MIN + (GUARDIAN_THICK_MAX - GUARDIAN_THICK_MIN) * k;
 }
 
 const ENDLESS_NAMES = ["苔绒小兽", "雾气小灯", "回音蝙蝠", "石纹小龟", "碎星飞虫", "藤影守卫"];
@@ -577,7 +621,7 @@ export function endlessFoeSpec(depth: number): FighterSpec {
   const boost = Math.pow(ENDLESS_GROWTH, d - 1);
   const cap = (n: number): number => Math.min(9_999_999, Math.round(n));
   const base = {
-    maxHp: cap((36 + tier * 1.92) * (guardian ? 2.3 : 1) * boost),
+    maxHp: cap((36 + tier * 1.92) * (guardian ? guardianThickness(d) : 1) * boost),
     atk: cap((9.5 + tier * 0.63) * (guardian ? 1.15 : 1) * boost),
     def: cap((2 + tier * 0.16) * (guardian ? 1.35 : 1) * boost),
     spd: Math.round(9 + tier * 0.09)
@@ -673,15 +717,33 @@ export function isBlessingFloor(depth: number): boolean {
   return d % BLESSING_EVERY === 0;
 }
 
-/** 抽两个不一样的祝福让玩家二选一（同 depth 结果固定） */
-export function rollBlessings(depth: number): Blessing[] {
+/** 星芒掉到这个比例以下，两个祝福里保证有一个能立刻补回来 */
+export const BLESSING_RESCUE_FRAC = 0.35;
+
+function healsUp(b: Blessing): boolean {
+  return b.kind === "heal" || b.kind === "maxhp";
+}
+
+/**
+ * 抽两个不一样的祝福让玩家二选一（同 depth + 同星芒比例结果固定）。
+ *
+ * `hpFrac` 是现在的星芒比例。快见底的时候还只给「攻击 + 暴击」两个选项，
+ * 等于逼孩子带着 20% 的星芒继续下潜，下一层多半就被送回城了——
+ * 这种时候一定留一个回复位，让「稳一手」始终是个能选的选择。
+ */
+export function rollBlessings(depth: number, hpFrac = 1): Blessing[] {
   const rng = mulberry32((Math.max(1, Math.round(depth)) * 40503 + 7) >>> 0);
   const pool = BLESSING_POOL.slice();
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  return pool.slice(0, 2);
+  const pick = pool.slice(0, 2);
+  if (hpFrac <= BLESSING_RESCUE_FRAC && !pick.some(healsUp)) {
+    const rescue = BLESSING_POOL.find(healsUp) as Blessing;
+    pick[1] = rescue;
+  }
+  return pick;
 }
 
 /** 把祝福作用在勇者身上（纯函数，返回新的 Fighter） */

@@ -1,5 +1,7 @@
 /**
- * 记忆翻翻乐 · 188 关关卡表。
+ * 记忆翻翻乐 · 188 关关卡表（纯数据）。
+ * 1.2 起，发牌 / 翻牌状态机 / 配对判定 / 计分都搬到了 `logic.ts`，这里只留关卡参数。
+ *
  * 前 99 关是 1.0 的六个主题，生成参数一个字都没动；
  * 1.1 在末尾追加四个新主题（第 100–188 关）：
  *  ⑦算式配对屋=一张算式配一张得数  ⑧旋转木马厅=牌阵会整体转一格
@@ -9,7 +11,7 @@
  *  ③海底世界=调皮章鱼换牌位  ④太空基地=三张一样才配对
  *  ⑤玩具小屋=倒计时挑战  ⑥魔法城堡=机关混合终极挑战
  */
-import { mulberry32, shuffled, type Chapter } from "../level99";
+import type { Chapter } from "../level99";
 
 /** 1.0 的六个主题：合计 99 关，1.1 起不再改动 */
 export const LEGACY_CHAPTER_SIZES = [17, 17, 17, 16, 16, 16];
@@ -40,6 +42,8 @@ export interface MemoryLevel {
   rotateEvery?: number;
   /** 1.1 混进几张没有同伴的干扰卡，前 99 关不带 */
   decoys?: number;
+  /** 1.2 会移动的牌：每隔这么多毫秒换两张扣着的牌的位置（换之前先预警），前 99 关不带 */
+  swapEvery?: number;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -161,7 +165,9 @@ function buildLevel(ci: number, t: number): MemoryLevel {
         pairs, cols: pairs >= 10 ? 5 : 4,
         maxMiss: pairs + decoys + 6, imp: 0, peekMs: 0,
         matchSize: 2, timeLimit: 0, theme: 8,
-        decoys
+        decoys,
+        // 1.2 后半章的牌自己会挪窝，换之前会先亮一下预警
+        ...(t >= 14 ? { swapEvery: 10000 } : {})
       };
     }
     default: {
@@ -194,7 +200,9 @@ function buildLevel(ci: number, t: number): MemoryLevel {
         maxMiss: pairs + decoys + 8, imp: t >= 14 ? 4 : 0, peekMs: 1400,
         matchSize: 2, timeLimit: 0, theme: 9,
         rotateEvery: 6,
-        decoys
+        decoys,
+        // 1.2 终极厅：牌阵会转，单张牌还会自己挪窝
+        ...(t >= 8 ? { swapEvery: 10000 } : {})
       };
     }
   }
@@ -207,243 +215,3 @@ export const LEVELS: MemoryLevel[] = (() => {
   });
   return out;
 })();
-
-// ---------------------------------------------------------------------------
-// 1.1 机制一：配对是「算式 = 得数」
-// ---------------------------------------------------------------------------
-
-export interface MathPair {
-  expr: string;
-  value: number;
-}
-
-/** 口算求值：只认「a 运算符 b」，看不懂就返回 NaN */
-export function evalExpr(expr: string): number {
-  const m = /^(\d+)([+\-×÷])(\d+)$/.exec(expr);
-  if (!m) return NaN;
-  const a = Number(m[1]);
-  const b = Number(m[3]);
-  switch (m[2]) {
-    case "+": return a + b;
-    case "-": return a - b;
-    case "×": return a * b;
-    default: return b === 0 ? NaN : a / b;
-  }
-}
-
-/**
- * 生成 count 组「算式 + 得数」，得数两两不同——
- * 不然一张得数卡会同时配得上两张算式卡，孩子就没法判断对错了。
- * hard：0 = 二十以内加减，1 = 乘法口诀与整除，2 = 两位数加减乘除。
- */
-export function buildMathPairs(seed: number, count: number, hard: number): MathPair[] {
-  const rand = mulberry32(seed);
-  const level = Math.max(0, Math.min(2, Math.floor(hard)));
-  const out: MathPair[] = [];
-  const used = new Set<number>();
-  const ri = (min: number, max: number): number => min + Math.floor(rand() * (max - min + 1));
-  let guard = 0;
-  while (out.length < Math.max(0, Math.floor(count)) && guard < 4000) {
-    guard++;
-    let expr = "";
-    let value = 0;
-    const op = level === 0 ? (rand() < 0.55 ? "+" : "-") : ["+", "-", "×", "÷"][Math.floor(rand() * 4)];
-    if (op === "+") {
-      const a = level === 0 ? ri(2, 9) : level === 1 ? ri(6, 29) : ri(15, 79);
-      const b = level === 0 ? ri(2, 9) : level === 1 ? ri(6, 29) : ri(15, 79);
-      expr = `${a}+${b}`;
-      value = a + b;
-    } else if (op === "-") {
-      const b = level === 0 ? ri(2, 9) : level === 1 ? ri(4, 19) : ri(12, 49);
-      const v = level === 0 ? ri(2, 11) : level === 1 ? ri(3, 40) : ri(10, 90);
-      expr = `${v + b}-${b}`;
-      value = v;
-    } else if (op === "×") {
-      const a = level === 1 ? ri(2, 9) : ri(3, 12);
-      const b = level === 1 ? ri(2, 9) : ri(3, 12);
-      expr = `${a}×${b}`;
-      value = a * b;
-    } else {
-      const b = level === 1 ? ri(2, 9) : ri(3, 12);
-      const v = level === 1 ? ri(2, 9) : ri(3, 12);
-      expr = `${v * b}÷${b}`;
-      value = v;
-    }
-    if (used.has(value)) continue;
-    used.add(value);
-    out.push({ expr, value });
-  }
-  // 极端情况下补几组最简单的，保证张数一定够（宁可简单也不能少牌）
-  let fill = 1;
-  while (out.length < Math.max(0, Math.floor(count))) {
-    while (used.has(fill)) fill++;
-    used.add(fill);
-    out.push({ expr: `${fill}+0`, value: fill });
-    fill++;
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// 1.1 机制二：牌阵整体旋转
-// ---------------------------------------------------------------------------
-
-/**
- * 把还在场上的牌整体挪一格（已经配掉的空位不参与）。
- * order[slot] = 牌号；返回新的 order，牌一张不多一张不少。
- */
-export function rotatePositions(order: number[], gone: boolean[], step = 1): number[] {
-  const slots: number[] = [];
-  order.forEach((card, slot) => {
-    if (card >= 0 && !gone[card]) slots.push(slot);
-  });
-  if (slots.length < 2) return order.slice();
-  const next = order.slice();
-  const cards = slots.map((slot) => order[slot]);
-  const n = cards.length;
-  const s = ((Math.round(step) % n) + n) % n;
-  slots.forEach((slot, k) => {
-    next[slot] = cards[(k - s + n * 2) % n];
-  });
-  return next;
-}
-
-// ---------------------------------------------------------------------------
-// 1.1 机制三：干扰卡（没有同伴的独苗）
-// ---------------------------------------------------------------------------
-
-export interface MemoryCard {
-  /** 同一组的牌 group 相同；干扰卡的 group 独一无二 */
-  group: number;
-  /** 牌面（表情、算式或得数） */
-  face: string;
-  /** 没有同伴的独苗卡 */
-  decoy: boolean;
-}
-
-/** 一关要发多少张牌 */
-export function deckSize(cfg: MemoryLevel): number {
-  return cfg.pairs * cfg.matchSize + (cfg.decoys ?? 0);
-}
-
-/** 发一副牌：算式关一张算式配一张得数，普通关同一个表情配 matchSize 张 */
-export function buildDeck(cfg: MemoryLevel, seed: number): MemoryCard[] {
-  const pool = THEME_EMOJIS[cfg.theme] ?? THEME_EMOJIS[0];
-  const cards: MemoryCard[] = [];
-  if (cfg.mathPairs) {
-    const pairs = buildMathPairs(seed, cfg.pairs + (cfg.decoys ?? 0), cfg.mathHard ?? 0);
-    pairs.slice(0, cfg.pairs).forEach((p, gi) => {
-      cards.push({ group: gi, face: p.expr, decoy: false });
-      cards.push({ group: gi, face: String(p.value), decoy: false });
-    });
-    // 干扰卡：得数对不上任何一道算式的孤零零一张
-    pairs.slice(cfg.pairs).forEach((p, k) => {
-      cards.push({ group: 1000 + k, face: String(p.value), decoy: true });
-    });
-  } else {
-    for (let gi = 0; gi < cfg.pairs; gi++) {
-      for (let k = 0; k < cfg.matchSize; k++) {
-        cards.push({ group: gi, face: pool[gi % pool.length], decoy: false });
-      }
-    }
-    for (let k = 0; k < (cfg.decoys ?? 0); k++) {
-      cards.push({ group: 1000 + k, face: pool[(cfg.pairs + k) % pool.length], decoy: true });
-    }
-  }
-  return shuffled(cards, mulberry32(seed * 31 + 17));
-}
-
-// ---------------------------------------------------------------------------
-// 可解性：一个记性完美的孩子要翻多少次、错多少次
-// ---------------------------------------------------------------------------
-
-export interface PlayEstimate {
-  /** 翻牌总次数 */
-  flips: number;
-  /** 配错的次数 */
-  misses: number;
-}
-
-/**
- * 记性完美的玩法：见过的牌都记得住，
- * 先把已经认出来的一组收掉，认不出来才去翻生牌（翻岔了才算一次失误）。
- * 返回这一关最少需要几次失误——maxMiss 必须比它宽裕，这一关才算过得去。
- */
-export function simulatePerfectPlay(cfg: MemoryLevel, seed: number): PlayEstimate {
-  const deck = buildDeck(cfg, seed);
-  const need = cfg.matchSize;
-  const gone = new Array<boolean>(deck.length).fill(false);
-  /** 已经翻开看过的牌（下标） */
-  const known = new Set<number>();
-  let flips = 0;
-  let misses = 0;
-  let matched = 0;
-
-  const knownGroup = (group: number): number[] =>
-    Array.from(known).filter((i) => !gone[i] && deck[i].group === group);
-
-  const collect = (idxs: number[]): void => {
-    for (const i of idxs) {
-      gone[i] = true;
-      known.delete(i);
-    }
-    matched++;
-  };
-
-  let guard = 0;
-  while (matched < cfg.pairs && guard++ < 5000) {
-    // ① 手上已经有凑齐的一组，直接收掉，一次都不会错
-    let done = false;
-    for (const i of Array.from(known)) {
-      if (gone[i] || deck[i].decoy) continue;
-      const same = knownGroup(deck[i].group);
-      if (same.length >= need) {
-        flips += need;
-        collect(same.slice(0, need));
-        done = true;
-        break;
-      }
-    }
-    if (done) continue;
-
-    // ② 没有现成的，就去翻一张生牌
-    const fresh = deck
-      .map((_, i) => i)
-      .filter((i) => !gone[i] && !known.has(i));
-    if (fresh.length === 0) break;
-    const first = fresh[0];
-    known.add(first);
-    flips++;
-    // 翻出来的牌正好补齐一组，就顺手收掉
-    const same = knownGroup(deck[first].group);
-    if (!deck[first].decoy && same.length >= need) {
-      flips += need - 1;
-      collect(same.slice(0, need));
-      continue;
-    }
-    // 补不齐：再翻一张生牌碰运气，碰不上就记一次失误
-    const more = fresh.filter((i) => i !== first);
-    if (more.length === 0) break;
-    const second = more[0];
-    known.add(second);
-    flips++;
-    const pair = knownGroup(deck[second].group);
-    if (!deck[second].decoy && pair.length >= need) {
-      flips += need - 1;
-      collect(pair.slice(0, need));
-    } else {
-      misses++;
-    }
-  }
-  return { flips, misses };
-}
-
-/** 按翻牌次数估一局要多久（一次翻牌 1.2 秒，配错还要等牌翻回去） */
-export function estimateSeconds(est: PlayEstimate): number {
-  return est.flips * 1.2 + est.misses * 0.9;
-}
-
-/** 本关发牌的随机种子：同一关每次进入的牌面一致 */
-export function deckSeed(level: number): number {
-  return level * 6151 + 409;
-}

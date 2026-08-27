@@ -41,6 +41,12 @@ export interface SnakeLevel {
   gateMax?: number;
   /** 1.1 剪刀果：每隔这么多口出现一次，吃了身子短三节，前 99 关不带 */
   trimEvery?: number;
+  /** 1.2 可推的小石头：顶一下滑一格，推不动就原地停住（不算撞），前 99 关不带 */
+  stones?: Array<[number, number]>;
+  /** 1.2 绕圈开门：踩遍这一圈格子，ringDoor 才会打开，前 99 关不带 */
+  ring?: Array<[number, number]>;
+  /** 1.2 绕圈门本身占的格子（不是墙，只是关着时走不过去） */
+  ringDoor?: Array<[number, number]>;
 }
 
 export const CHAPTERS: Chapter[] = [
@@ -80,7 +86,17 @@ function safeTwin(walls: Array<[number, number]>): Array<[number, number]> {
   return safe(walls).filter(([x, y]) => !(y === 2 && x >= GRID - 8 && x <= GRID - 2));
 }
 
-/** 去掉重复的墙格（镜像生成时可能撞车） */
+/**
+ * 去掉重复的墙格（镜像生成、回字四角、十字中心都会撞车）。
+ *
+ * **只有 1.1 / 1.2 追加的第 100–188 关走这一步**。1.0 的六章漏了它，
+ * 于是第 52–67、85–98 共 25 关里同一格墙被写了两遍（C3-01，合计 88 格）。
+ * 那 88 格**玩起来看不出来**——碰撞判定走的是 `wallSet()`（Set），
+ * 画墙也是同一格画两遍、像素完全一致；脏的只是 `walls.length` 这个数。
+ * 之所以不补：`levels188.test.ts` 上有一把 FNV 指纹锁焊住 1.0 的前 99 关，
+ * 去个重就得先拆锁，那是拿「老关卡一字不动」去换一处玩家看不见的数据洁癖。
+ * 判定改由 `wallSet(lv).size` 走，`qaC3.test.ts` 里有断言钉着它别再脏下去。
+ */
 function dedupe(walls: Array<[number, number]>): Array<[number, number]> {
   const seen = new Set<number>();
   const out: Array<[number, number]> = [];
@@ -91,6 +107,70 @@ function dedupe(walls: Array<[number, number]>): Array<[number, number]> {
     out.push([x, y]);
   }
   return out;
+}
+
+/** 小刺猬来回踩过的所有格子（放石头时要躲开，不然它俩会卡在一起） */
+function moverPathOf(movers: Mover[]): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const [x, y, dx, dy, span] of movers) {
+    for (let s = 0; s <= Math.max(1, Math.round(span)); s++) out.push([x + dx * s, y + dy * s]);
+  }
+  return out;
+}
+
+/**
+ * 挑几个放小石头的空格：躲开墙、巡逻线、两条毛毛虫的出生段，
+ * 也不贴边（贴边的石头一顶就顶死，孩子会觉得这块石头坏掉了）。
+ */
+function pickStones(
+  rand: () => number,
+  count: number,
+  busy: Array<[number, number]>
+): Array<[number, number]> {
+  const taken = new Set(busy.map(([x, y]) => y * GRID + x));
+  const mid = Math.floor(GRID / 2);
+  for (const [x, y] of [...spawnCells(), ...spawnCellsB()]) taken.add(y * GRID + x);
+  for (let x = 0; x < GRID; x++) taken.add(mid * GRID + x);
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < count; i++) {
+    for (let guard = 0; guard < 40; guard++) {
+      const x = randInt(rand, 2, GRID - 3);
+      const y = randInt(rand, 2, GRID - 3);
+      const k = y * GRID + x;
+      if (taken.has(k)) continue;
+      taken.add(k);
+      out.push([x, y]);
+      break;
+    }
+  }
+  return out;
+}
+
+/** 绕圈开门用的小花坛：绕着它走满一圈，角落那扇小门就开 */
+export const BED: [number, number] = [4, 3];
+/** 小门后面的兜：里面藏一颗星星果，只有开了门才进得去 */
+export const POCKET: [number, number] = [GRID - 1, GRID - 1];
+/** 小门本身占的格子（不是墙，只是关着时走不过去） */
+export const POCKET_DOOR: [number, number] = [GRID - 2, GRID - 1];
+
+/** 花坛四周那一圈（顺着走就是绕一圈） */
+function ringAroundBed(cx: number, cy: number): Array<[number, number]> {
+  const order: Array<[number, number]> = [
+    [cx - 1, cy - 1], [cx, cy - 1], [cx + 1, cy - 1],
+    [cx + 1, cy], [cx + 1, cy + 1], [cx, cy + 1],
+    [cx - 1, cy + 1], [cx - 1, cy],
+  ];
+  return order.filter(([x, y]) => x >= 0 && x < GRID && y >= 0 && y < GRID);
+}
+
+/** 出生段（和 logic.ts 的 spawnA 保持一致，这里不 import 免得循环依赖） */
+function spawnCells(): Array<[number, number]> {
+  const mid = Math.floor(GRID / 2);
+  return [[3, mid], [2, mid], [1, mid]];
+}
+
+function spawnCellsB(): Array<[number, number]> {
+  return [[GRID - 4, 2], [GRID - 3, 2], [GRID - 2, 2]];
 }
 
 function buildLevel(ci: number, t: number, rand: () => number): SnakeLevel {
@@ -242,10 +322,19 @@ function buildLevel(ci: number, t: number, rand: () => number): SnakeLevel {
         for (let s = 0; s <= m[4]; s++) taken.delete((m[1] + m[3] * s) * GRID + (m[0] + m[2] * s));
         movers.push(m);
       }
+      const keptWalls = clean.filter(([x, y]) => taken.has(y * GRID + x));
+      // 1.2 小石头：后半章补几块推得动的石头，给孩子多一条自己开路的办法
+      const stones = t >= 8
+        ? pickStones(rand, 1 + Math.floor((t - 8) / 6), [
+          ...keptWalls,
+          ...moverPathOf(movers),
+        ])
+        : undefined;
       return {
         target: 9 + Math.floor(t / 3), tickMs,
-        walls: clean.filter(([x, y]) => taken.has(y * GRID + x)),
-        movers
+        walls: keptWalls,
+        movers,
+        ...(stones && stones.length > 0 ? { stones } : {})
       };
     }
     default: {
@@ -292,6 +381,37 @@ export function endlessGardenName(garden: number): string {
   return ENDLESS_GARDENS[(n - 1) % ENDLESS_GARDENS.length];
 }
 
+/** 无尽第一段爬坡爬到第几座封顶（1 基）：速度、墙量、机关都在这里到顶 */
+export const ENDLESS_RAMP_GARDENS = 16;
+/** 清一座园最多要吃几口 */
+export const ENDLESS_MAX_TARGET = 18;
+
+/**
+ * 第 garden 座（1 基）要吃几口才算清园。
+ *
+ * 前 16 座跟着 `k` 每两座多一口，吃到 13 口；再往后每 4 座多一口，到 18 口封顶。
+ * 分第二段是给「休闲无尽」用的：经典档还能靠 `endlessTickMs` 按累计口数继续加速，
+ * 休闲档速度恒定，第 16 座之后要是连目标口数都不动，后面就纯粹是换风景。
+ */
+export function endlessTarget(garden: number): number {
+  const n = Math.max(1, Math.round(garden) || 1);
+  const base = 6 + Math.floor(Math.min(n - 1, 15) / 2);
+  return Math.min(ENDLESS_MAX_TARGET, base + Math.floor(Math.max(0, n - ENDLESS_RAMP_GARDENS) / 4));
+}
+
+/**
+ * 无尽第 garden 座的难度分：速度和目标口数合成一个数（和另外四款一个口径），
+ * 单测拿它钉住「休闲档的曲线也一路不掉头」。第 36 座到顶。
+ */
+export function endlessDifficulty(garden: number): number {
+  const n = Math.max(1, Math.round(garden) || 1);
+  const k = Math.min(n - 1, 15);
+  return endlessTarget(n) * 10 + (300 - Math.max(180, 300 - k * 8));
+}
+
+/** 难度分到顶的那一座；再往后只换风景 */
+export const ENDLESS_PEAK_GARDEN = 36;
+
 /**
  * 无尽花园第 garden 座（1 基）：四种新机制轮着上，越往后越快，
  * 但速度、墙量与目标口数都有封顶。
@@ -302,7 +422,7 @@ export function endlessGarden(garden: number): SnakeLevel {
   const rand = mulberry32(60000 + n * 197);
   const mid = Math.floor(GRID / 2);
   const tickMs = Math.max(180, 300 - k * 8);
-  const target = 6 + Math.floor(k / 2);
+  const target = endlessTarget(n);
   switch ((n - 1) % 5) {
     case 1: {
       const walls: Array<[number, number]> = [];
@@ -349,7 +469,27 @@ export function endlessGarden(garden: number): SnakeLevel {
         const x1 = randInt(rand, 1, GRID - 5);
         walls.push(...hLine(y, x1, x1 + randInt(rand, 2, 3)));
       }
-      return { target, tickMs, walls: dedupe(safe(walls)) };
+      // 1.2 露水园补两样新机关：绕圈开门的小花坛，以及推得动的小石头
+      const ring = k >= 5 ? ringAroundBed(BED[0], BED[1]) : undefined;
+      const ringDoor: Array<[number, number]> | undefined = ring ? [POCKET_DOOR] : undefined;
+      if (ring) walls.push([BED[0], BED[1]], [POCKET[0], POCKET[1] - 1]);
+      const reserved = new Set<number>(
+        [...(ring ?? []), ...(ringDoor ?? []), ...(ring ? [POCKET] : [])].map(([x, y]) => y * GRID + x)
+      );
+      const clean = dedupe(safe(walls)).filter(([x, y]) => !reserved.has(y * GRID + x));
+      const stones = k >= 3
+        ? pickStones(rand, 1 + Math.floor(k / 6), [
+          ...clean,
+          ...(ring ?? []),
+          ...(ringDoor ?? []),
+          ...(ring ? [POCKET] : []),
+        ])
+        : undefined;
+      return {
+        target, tickMs, walls: clean,
+        ...(ring ? { ring, ringDoor } : {}),
+        ...(stones && stones.length > 0 ? { stones } : {})
+      };
     }
   }
 }

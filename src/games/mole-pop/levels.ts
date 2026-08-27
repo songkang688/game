@@ -237,34 +237,114 @@ export function buildQuizCard(target: number, correct: boolean, rand: () => numb
 /** 无尽地鼠场每一波的名字：每 5 波换一片场地，读起来有「越挖越深」的感觉 */
 export const ENDLESS_FIELDS = ["草坡地洞", "石板地洞", "萤火地洞", "冰霜地洞", "熔岩地洞"];
 
-/** 无尽地鼠场第 wave 波（1 基）的场地名 */
+/**
+ * 无尽地鼠场第 wave 波（1 基）的场地名。
+ * 五片场地跑完就从头再跑一圈——原来会永远停在最后一片，
+ * 第 21 波之后招牌再也不换。
+ */
 export function endlessFieldName(wave: number): string {
   const n = Math.max(1, Math.round(wave) || 1);
-  return ENDLESS_FIELDS[Math.min(ENDLESS_FIELDS.length - 1, Math.floor((n - 1) / 5))];
+  return ENDLESS_FIELDS[Math.floor((n - 1) / 5) % ENDLESS_FIELDS.length];
 }
+
+/** 夜市的「基础曲线」拧到底是第几摊 */
+export const ENDLESS_CAP_WAVE = 25;
+
+/** 台面上同时能站几只地鼠的上限（一共 9 个洞，留一半给反应时间） */
+export const ENDLESS_CONCURRENT_MAX = 5;
+
+/** 封顶之后目标分最多还能再加多少 */
+export const ENDLESS_TARGET_BONUS_MAX = 10;
 
 /**
  * 无尽地鼠场第 wave 波（1 基）的配置：越来越快、机关轮番上场，
  * 但速度、并发和目标分都有封顶，不会变成「不可能完成」。
+ *
+ * 第 25 摊之前走原来那条基础曲线；之后基础曲线拧到底了，
+ * 改成一批更慢的旋钮接着走（间隔、停留、目标分、兔子/盾牌的比例、台面预算），
+ * 每一项各有各的下限/上限，拧到底就稳住。
+ * 原来第 25 摊和第 300 摊的配置逐项相等，玩多久都是同一摊。
  */
 export function endlessWave(wave: number): MoleLevel {
   const n = Math.max(1, Math.round(wave) || 1);
-  const k = Math.min(n - 1, 24);
+  const k = Math.min(n - 1, ENDLESS_CAP_WAVE - 1);
+  // 封顶之后又守了几摊
+  const over = Math.max(0, n - ENDLESS_CAP_WAVE);
   return {
     duration: 20,
-    target: 6 + Math.floor(k / 2),
-    upMsMin: Math.max(430, 1200 - k * 30),
-    upMsMax: Math.max(760, 1650 - k * 32),
-    gapMs: Math.max(330, 820 - k * 20),
-    maxConcurrent: n >= 9 ? 3 : n >= 4 ? 2 : 1,
+    target: 6 + Math.floor(k / 2) + Math.min(ENDLESS_TARGET_BONUS_MAX, Math.floor(over / 4)),
+    upMsMin: Math.max(340, 1200 - k * 30 - over * 2),
+    upMsMax: Math.max(620, 1650 - k * 32 - over * 3),
+    gapMs: Math.max(240, 820 - k * 20 - over * 2),
+    maxConcurrent:
+      n >= 60
+        ? ENDLESS_CONCURRENT_MAX
+        : n >= 40
+          ? 4
+          : n >= 9
+            ? 3
+            : n >= 4
+              ? 2
+              : 1,
     goldChance: 0.14,
-    bunnyChance: n >= 3 ? 0.14 : 0,
+    bunnyChance: n >= 3 ? 0.14 + Math.min(0.08, over * 0.002) : 0,
     sleepyChance: 0.1,
-    shieldChance: n >= 6 ? 0.18 : 0,
+    shieldChance: n >= 6 ? 0.18 + Math.min(0.09, over * 0.002) : 0,
     comboTarget: 4,
     comboMs: 5000,
     night: n % 5 === 0,
     torchMs: 2200
+  };
+}
+
+/** 夜市第一个「算式摊」摆在第几摊 */
+export const ENDLESS_QUIZ_FROM = 14;
+
+/** 之后每隔几摊再来一个算式摊 */
+export const ENDLESS_QUIZ_EVERY = 7;
+
+/** 算式摊再赶,一只地鼠也得露头这么久——不然来不及在心里算完 */
+export const QUIZ_UP_FLOOR_MS = 900;
+
+/** 算式摊两只之间至少隔这么久 */
+export const QUIZ_GAP_FLOOR_MS = 520;
+
+/** 第 wave 摊是不是算式摊 */
+export function isQuizStall(wave: number): boolean {
+  const n = Math.max(1, Math.round(wave) || 1);
+  return n >= ENDLESS_QUIZ_FROM && (n - ENDLESS_QUIZ_FROM) % ENDLESS_QUIZ_EVERY === 0;
+}
+
+/**
+ * 夜市实际摆出来的那一摊。
+ *
+ * 战役第 6 章有一整章「算术地洞」（举算式牌的地鼠），夜市却一摊都没有——
+ * `endlessWave` 从头到尾不带 `quizChance`，越守越只剩「看见就拍」这一件事。
+ * 这里每隔 7 摊摆一个算式摊：牌子照战役那章的规矩放慢节奏、把目标分压下来，
+ * 让人来得及在心里算一遍。
+ *
+ * 难度曲线本身仍然由 `endlessWave` 说了算（那条曲线上有一串单调性用例），
+ * 算式摊只是盖在它上面的一层皮，不动底下那条曲线。
+ */
+export function stallConfig(wave: number): MoleLevel {
+  const base = endlessWave(wave);
+  if (!isQuizStall(wave)) return base;
+  return {
+    ...base,
+    // 心算要时间：停留和间隔都放慢，跟战役第 6 章一个量级，而且各有地板
+    upMsMin: Math.max(QUIZ_UP_FLOOR_MS, Math.round(base.upMsMin * 1.9)),
+    upMsMax: Math.max(QUIZ_UP_FLOOR_MS + 400, Math.round(base.upMsMax * 1.9)),
+    gapMs: Math.max(QUIZ_GAP_FLOOR_MS, Math.round(base.gapMs * 1.7)),
+    // 每一只都得先算再拍，目标分按四成算，别让人只顾着抢手速
+    target: Math.max(6, Math.round(base.target * 0.4)),
+    maxConcurrent: Math.max(2, Math.min(3, base.maxConcurrent)),
+    // 算式摊只考心算：金鼠/兔子/盾牌这一摊都不来凑热闹（跟战役那章一致）
+    goldChance: 0,
+    bunnyChance: 0,
+    sleepyChance: 0,
+    shieldChance: 0,
+    night: false,
+    quizChance: 1
   };
 }
 

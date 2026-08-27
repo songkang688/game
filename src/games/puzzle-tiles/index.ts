@@ -3,6 +3,7 @@ export { meta };
 
 // 拼图乐园:188 关十本画册 + 无尽画廊。
 // 1.1 新玩法:5×5 / 6×6 大画板、旋转块(点一下转 90°)、缺块补齐(托盘里挑对的补回去)、限时拼。
+// 1.2 新增:碎片拖着走 + 磁性吸附(阈值 = 格宽 × 0.35)、预览三档、旋转撤销栈、大画板中途续拼。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
 import {
@@ -27,6 +28,34 @@ import {
   starsFor,
   winLine,
 } from "./logic";
+import {
+  BOUNCE_MS,
+  PREVIEW_KEY,
+  RESUME_KEY,
+  TileBag,
+  applyRotate,
+  bounceLine,
+  cellCenter,
+  challengeBadge,
+  dropCostsMove,
+  dropDistance,
+  magnetMs,
+  nearestCell,
+  needsResume,
+  nextPreview,
+  parsePreview,
+  parseResume,
+  previewLabel,
+  resolveDrop,
+  resumeMatches,
+  serializeResume,
+  snapThreshold,
+  undoRotate,
+  type GridGeom,
+  type PreviewMode,
+  type ResumeState,
+  type RotateStep,
+} from "./snap";
 
 const SMOKE = typeof location !== "undefined" && /[?&]smoke=1/.test(location.search);
 
@@ -35,14 +64,14 @@ const CSS = `
 .pz-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap; }
 .pz-badge { background: #fff; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #7B7FD0; box-shadow: 0 2px 6px rgba(130,130,210,.25); font-size: 14px; }
 .pz-badge.pz-hot { color: #C2456F; }
-.pz-row2 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+.pz-row2 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
 .pz-preview { display: grid; gap: 2px; background: #fff; padding: 5px; border-radius: 10px; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pz-preview i { width: 16px; height: 16px; border-radius: 4px; font-style: normal; font-size: 11px; display: flex; align-items: center; justify-content: center; }
 .pz-preview.pz-hidden i { background: #E8E6F5 !important; color: transparent; }
 .pz-hint { border: none; border-radius: 14px; padding: 8px 14px; font-weight: 800; background: #D5C8F8; color: #5D48A0; cursor: pointer; box-shadow: 0 3px 0 #B7A3E8; font-size: 15px; font-family: inherit; }
 .pz-hint:active { transform: translateY(2px); box-shadow: 0 1px 0 #B7A3E8; }
 .pz-hint:disabled { opacity: .5; }
-.pz-board { display: grid; gap: 8px; }
+.pz-board { display: grid; gap: 8px; position: relative; }
 .pz-tile { aspect-ratio: 1; border: none; border-radius: 16px; font-size: var(--pz-fs, clamp(22px, 8vw, 44px)); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: transform .14s; box-shadow: 0 3px 8px rgba(120,120,200,.2); padding: 0; }
 .pz-tile small { font-size: var(--pz-num, 12px); color: rgba(90,80,120,.65); font-weight: 700; }
 .pz-tile:active { transform: scale(.94); }
@@ -71,14 +100,70 @@ const CSS = `
 .pz-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(130,130,210,.25); }
 .pz-over-t { font-size: 22px; font-weight: 900; color: #6E64C8; margin-bottom: 8px; }
 .pz-over-s { font-size: 15px; font-weight: 700; color: #7B7FD0; line-height: 1.6; margin-bottom: 14px; }
+
+/* ---- 1.2 新增（全部 pzt- 前缀，不改上面 1.0/1.1 的规则） ---- */
+.pzt-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pzt-eye, .pzt-undo { border: none; border-radius: 14px; padding: 8px 12px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; background: #fff; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
+.pzt-eye:active, .pzt-undo:active { transform: translateY(1px); }
+.pzt-undo:disabled { opacity: .45; cursor: default; }
+/* 整图半透明底图：铺在画板上当参照，不吃点击 */
+.pzt-ghost { position: absolute; inset: 0; display: grid; pointer-events: none; opacity: .26; }
+.pzt-ghost i { border-radius: 16px; font-style: normal; display: flex; align-items: center; justify-content: center; font-size: var(--pz-fs, clamp(22px, 8vw, 44px)); }
+.pzt-ghost[hidden] { display: none; }
+/* 拿在手里的碎片：抬高 20px、放大 6%、带投影 */
+.pzt-drag { position: fixed; z-index: 60; border-radius: 14px; display: flex; align-items: center; justify-content: center; pointer-events: none; box-shadow: 0 10px 20px rgba(80,70,140,.38); transform: translate(-50%, -50%) scale(1.06); }
+.pz-tile.pzt-target { box-shadow: 0 0 0 4px #FFD86E, 0 3px 8px rgba(120,120,200,.2); }
+.pz-board.pzt-shine .pz-tile { box-shadow: 0 0 14px 4px #FFE7A0; }
+.pz-board.pzt-shine { gap: 2px !important; transition: gap .45s ease; }
+.pz-piece { touch-action: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pzt-drag { transition: none !important; }
+  .pz-board.pzt-shine { transition: none; }
+}
+@media (max-width: 380px) {
+  .pz-tray { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; -webkit-overflow-scrolling: touch; }
+  .pz-piece { flex: 0 0 auto; width: 40px; height: 40px; font-size: 21px; }
+  .pz-badge, .pzt-eye, .pzt-undo { font-size: 14px; }
+}
 `;
 
 interface BoardOpts {
   cfg: PuzzleLevel;
   banner?: string;
+  /** 闯关关号（0 基）：只有闯关的大画板才存中途续拼，无尽画廊不填 */
+  level?: number;
   sfx: (name: "tap" | "win" | "oops" | "coin" | "pop") => void;
   onWin: (stars: 1 | 2 | 3, msg: string) => void;
   onLose: (msg: string) => void;
+}
+
+function prefersReduced(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** 小设置读写：浏览器隐私模式下 localStorage 会抛，一律吞掉当没存过 */
+function readLS(key: string): string | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLS(key: string, value: string): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(key, value);
+  } catch {
+    /* 存不下就算了，不影响这一局 */
+  }
+}
+
+function dropLS(key: string): void {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.removeItem(key);
+  } catch {
+    /* 同上 */
+  }
 }
 
 /**
@@ -90,6 +175,8 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   const kind = boardKind(cfg);
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
   const intervals = new Set<ReturnType<typeof setInterval>>();
+  const bag = new TileBag();
+  let raf = 0;
   let destroyed = false;
   let levelDone = false;
   let moves = 0;
@@ -105,12 +192,20 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   let undoPlan: number[] = [];
   // 旋转块
   let rot: number[] = [];
+  /** 旋转撤销栈：点歪了可以一步步退回去，退回不算走冤枉路 */
+  const rotUndo: RotateStep[] = [];
   // 缺块补齐
   let holes: number[] = [];
   let tray: number[] = [];
   let placed: Record<number, boolean> = {};
   let usedPiece: boolean[] = [];
   let picked = -1;
+
+  // 1.2：预览三档 + 大画板续拼
+  let preview: PreviewMode = parsePreview(readLS(PREVIEW_KEY));
+  /** 记忆关（水果派对 / 彩虹大画展）开局几秒后把图藏起来，这一档由关卡说了算 */
+  let memoryHidden = false;
+  const canResume = typeof opts.level === "number" && needsResume(cfg.rows, cfg.cols);
 
   const wrap = document.createElement("div");
   wrap.className = "pz-wrap";
@@ -123,7 +218,11 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       ${opts.banner ? `<span class="pz-badge pz-banner">${opts.banner}</span>` : ""}
     </div>
     <div class="pz-row2">
-      <button class="pz-hint" type="button">💡 提示 x${cfg.hints}</button>
+      <div class="pzt-tools">
+        <button class="pz-hint" type="button">💡 提示 x${cfg.hints}</button>
+        <button class="pzt-eye" type="button"></button>
+        ${kind === "rotate" ? '<button class="pzt-undo" type="button">↩️ 撤一步</button>' : ""}
+      </div>
       <div class="pz-preview" style="grid-template-columns:repeat(${cfg.cols},16px)"></div>
     </div>
     <div class="pz-board"></div>
@@ -138,12 +237,22 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   const msgEl = wrap.querySelector(".pz-msg") as HTMLElement;
   const previewEl = wrap.querySelector(".pz-preview") as HTMLElement;
   const hintBtn = wrap.querySelector(".pz-hint") as HTMLButtonElement;
+  const eyeBtn = wrap.querySelector(".pzt-eye") as HTMLButtonElement;
+  const undoBtn = wrap.querySelector(".pzt-undo") as HTMLButtonElement | null;
   const trayEl = wrap.querySelector(".pz-tray") as HTMLElement | null;
 
   boardEl.style.gridTemplateColumns = `repeat(${cfg.cols},1fr)`;
-  boardEl.style.gap = cfg.cols >= 5 ? "5px" : "8px";
+  const gapCss = cfg.cols >= 5 ? "5px" : "8px";
+  boardEl.style.gap = gapCss;
   boardEl.style.setProperty("--pz-fs", `clamp(13px, ${Math.max(6, Math.floor(52 / cfg.cols))}vw, 44px)`);
   boardEl.style.setProperty("--pz-num", cfg.cols >= 6 ? "0px" : cfg.cols >= 5 ? "9px" : "12px");
+
+  const ghostEl = document.createElement("div");
+  ghostEl.className = "pzt-ghost";
+  ghostEl.style.gridTemplateColumns = `repeat(${cfg.cols},1fr)`;
+  ghostEl.style.gap = gapCss;
+  ghostEl.hidden = true;
+  boardEl.appendChild(ghostEl);
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -164,6 +273,12 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     tiles.push(btn);
   }
 
+  /** 这一格拼完之后长什么样（三种板式的「标准答案」都从这里取） */
+  function targetTile(pos: number): { emoji: string; bg: string } | null {
+    if (kind === "slide") return pos < EMPTY ? pic[pos] : null;
+    return pic[pos] ?? pic[pic.length - 1];
+  }
+
   function renderPreview(): void {
     previewEl.innerHTML = "";
     const cells = kind === "slide" ? total : Math.min(total, pic.length);
@@ -175,6 +290,50 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       }
       previewEl.appendChild(cell);
     }
+    ghostEl.innerHTML = "";
+    for (let pos = 0; pos < total; pos++) {
+      const cell = document.createElement("i");
+      const tile = targetTile(pos);
+      if (tile) {
+        cell.style.background = tile.bg;
+        cell.textContent = tile.emoji;
+      }
+      ghostEl.appendChild(cell);
+    }
+  }
+
+  // ---- 预览三档：整图底图 / 角落小图 / 不看图挑战 ----
+  function applyPreview(): void {
+    eyeBtn.textContent = previewLabel(preview);
+    const hidden = memoryHidden || preview === "none";
+    ghostEl.hidden = hidden || preview !== "ghost";
+    previewEl.classList.toggle("pz-hidden", hidden || preview === "ghost");
+  }
+
+  function cyclePreview(): void {
+    preview = nextPreview(preview);
+    writeLS(PREVIEW_KEY, preview);
+    opts.sfx("tap");
+    applyPreview();
+    msgEl.textContent =
+      preview === "ghost"
+        ? "整幅画淡淡地铺在下面啦，照着它拼就行～"
+        : preview === "thumb"
+          ? "小图挪回右上角，随时抬头看一眼～"
+          : "不看图挑战！拼完会多一枚徽章，三星标准一点没变～";
+  }
+
+  /** 看一眼：提示 / 记忆关到点都借这条路,临时把图放出来几秒 */
+  function peek(ms: number): void {
+    const back = preview;
+    if (preview === "none") preview = "thumb";
+    memoryHidden = false;
+    applyPreview();
+    later(() => {
+      preview = back;
+      if (cfg.hidePreview) memoryHidden = true;
+      applyPreview();
+    }, ms);
   }
 
   function renderTop(): void {
@@ -182,6 +341,10 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     if (timeEl) timeEl.textContent = `⏳ ${Math.max(0, timeLeft)}s`;
     hintBtn.textContent = `💡 提示 x${hintsLeft}`;
     hintBtn.disabled = hintsLeft <= 0 || levelDone;
+    if (undoBtn) {
+      undoBtn.textContent = rotUndo.length > 0 ? `↩️ 撤一步 (${rotUndo.length})` : "↩️ 撤一步";
+      undoBtn.disabled = rotUndo.length === 0 || levelDone;
+    }
   }
 
   // ---- 推格子 ----
@@ -243,7 +406,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
         btn.style.background = tile.bg;
         btn.textContent = tile.emoji;
         btn.disabled = usedPiece[i] || levelDone;
-        btn.addEventListener("click", () => onPiece(i));
+        btn.addEventListener("pointerdown", (ev) => beginDrag(i, btn, ev));
         trayEl.appendChild(btn);
       });
     }
@@ -256,13 +419,64 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     else renderSlide();
   }
 
+  // ---- 中途续拼：≥25 片的大画板每走一步就记一次，下次进同一关接着拼 ----
+  function saveResume(): void {
+    if (!canResume || levelDone) return;
+    const s: ResumeState = { level: opts.level as number, kind, total, moves };
+    if (kind === "slide") s.board = board.slice();
+    else if (kind === "rotate") s.rot = rot.slice();
+    else {
+      s.filled = holes.filter((h) => placed[h]);
+      s.used = usedPiece.map((u, i) => (u ? i : -1)).filter((i) => i >= 0);
+    }
+    writeLS(RESUME_KEY, serializeResume(s));
+  }
+
+  function clearResume(): void {
+    if (canResume) dropLS(RESUME_KEY);
+  }
+
+  function loadResume(): boolean {
+    if (!canResume) return false;
+    const s = parseResume(readLS(RESUME_KEY));
+    if (!resumeMatches(s, opts.level as number, kind, total) || !s) return false;
+    if (s.moves >= cfg.moveLimit) return false;
+    moves = s.moves;
+    if (kind === "slide" && s.board) s.board.forEach((v, i) => { board[i] = v; });
+    else if (kind === "rotate" && s.rot) rot = s.rot.slice();
+    else {
+      for (const p of s.filled ?? []) if (holes.includes(p)) placed[p] = true;
+      for (const i of s.used ?? []) if (i >= 0 && i < usedPiece.length) usedPiece[i] = true;
+    }
+    return true;
+  }
+
+  /** 拼完先让整幅画亮一下、拼缝合拢，展示 1.2 秒；点一下可以跳过 */
+  function celebrate(then: () => void): void {
+    boardEl.classList.add("pzt-shine");
+    let fired = false;
+    const go = (): void => {
+      if (fired) return;
+      fired = true;
+      wrap.removeEventListener("click", go);
+      then();
+    };
+    wrap.addEventListener("click", go);
+    bag.add(() => wrap.removeEventListener("click", go));
+    later(go, prefersReduced() ? 200 : 1200);
+  }
+
   function finishWin(): void {
     if (levelDone) return;
     levelDone = true;
     intervals.forEach((t) => clearInterval(t));
     intervals.clear();
+    clearResume();
     opts.sfx("win");
-    later(() => opts.onWin(starsFor(moves, cfg), winLine(cfg, moves, Math.max(0, timeLeft))), 400);
+    render();
+    const badge = challengeBadge(preview);
+    const line = winLine(cfg, moves, Math.max(0, timeLeft)) + (badge ? ` ${badge}` : "");
+    celebrate(() => opts.onWin(starsFor(moves, cfg), line));
   }
 
   function finishLose(reason: "moves" | "time"): void {
@@ -270,18 +484,34 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     levelDone = true;
     intervals.forEach((t) => clearInterval(t));
     intervals.clear();
+    clearResume();
     later(() => opts.onLose(loseLine(cfg, reason)), 300);
   }
 
   function spendMove(): void {
     moves++;
+    saveResume();
     if (moves >= cfg.moveLimit && !levelDone) later(() => finishLose("moves"), 120);
+  }
+
+  function undoOnce(): void {
+    if (levelDone || kind !== "rotate") return;
+    const step = rotUndo.pop();
+    if (!step) return;
+    rot = undoRotate(rot, step);
+    moves = Math.max(0, moves - 1);
+    opts.sfx("tap");
+    saveResume();
+    render();
+    msgEl.textContent = "退回上一步啦，这一下不算走冤枉路～";
   }
 
   function onTile(pos: number): void {
     if (levelDone) return;
     if (kind === "rotate") {
-      rot[pos] = (rot[pos] + 1) % 4;
+      const turned = applyRotate(rot, pos);
+      rot = turned.rot;
+      rotUndo.push(turned.step);
       opts.sfx("tap");
       spendMove();
       render();
@@ -296,7 +526,7 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       }
       if (picked < 0) {
         opts.sfx("tap");
-        msgEl.textContent = "先点下面托盘里的一块，再来补这个缺口！";
+        msgEl.textContent = "把托盘里的一块拖上来，或者先点一块再点这个缺口！";
         return;
       }
       const value = tray[picked];
@@ -307,11 +537,12 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
         picked = -1;
         opts.sfx("coin");
         msgEl.textContent = "补对啦！继续找下一个缺口～";
+        saveResume();
         render();
         if (holes.every((h) => placed[h])) finishWin();
       } else {
         opts.sfx("oops");
-        msgEl.textContent = "这块和小图上的不一样，再对着小图比一比～";
+        msgEl.textContent = bounceLine("wrong");
         render();
       }
       return;
@@ -335,8 +566,178 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
     if (levelDone || usedPiece[i]) return;
     picked = picked === i ? -1 : i;
     opts.sfx("tap");
-    msgEl.textContent = picked >= 0 ? "选好啦，点画上的缺口把它放进去！" : "换一块也行，慢慢挑～";
+    msgEl.textContent = picked >= 0 ? "选好啦，拖上去或者点缺口都行！" : "换一块也行，慢慢挑～";
     render();
+  }
+
+  // -------------------------------------------------------------------------
+  // 1.2 拖着碎片走 + 磁性吸附
+  // -------------------------------------------------------------------------
+
+  interface DragState {
+    /** 托盘下标 */
+    i: number;
+    /** 按下时的手指位置，用来分辨「点一下」和「拖一段」 */
+    x0: number;
+    y0: number;
+    /** 出发时碎片在屏幕上的中心，弹回就回这儿 */
+    homeX: number;
+    homeY: number;
+    moved: boolean;
+    el: HTMLElement | null;
+  }
+
+  /** 手指要挪过这么多像素才算拖，短于它仍然当点一下（保留 1.1 的点选手感） */
+  const DRAG_SLOP = 6;
+  /** 拖动时碎片浮在手指上方这么高，免得被手挡住 */
+  const LIFT = 20;
+  let drag: DragState | null = null;
+
+  /** 现在这块画板的几何：格宽 / 缝宽都按真实布局量，缩放和横竖屏都不会算歪 */
+  function boardGeom(): GridGeom {
+    const first = tiles[0].getBoundingClientRect();
+    const gap = cfg.cols > 1 ? tiles[1].getBoundingClientRect().left - first.left - first.width : 0;
+    return { left: first.left, top: first.top, cell: first.width, gap, rows: cfg.rows, cols: cfg.cols };
+  }
+
+  function markTarget(pos: number | null): void {
+    for (let p = 0; p < total; p++) tiles[p].classList.toggle("pzt-target", p === pos);
+  }
+
+  function beginDrag(i: number, btn: HTMLElement, ev: PointerEvent): void {
+    if (levelDone || usedPiece[i] || drag) return;
+    const box = btn.getBoundingClientRect();
+    drag = {
+      i,
+      x0: ev.clientX,
+      y0: ev.clientY,
+      homeX: box.left + box.width / 2,
+      homeY: box.top + box.height / 2,
+      moved: false,
+      el: null,
+    };
+  }
+
+  function makeFloater(i: number): HTMLElement {
+    const tile = pool[tray[i]] ?? pool[pool.length - 1];
+    const side = Math.max(40, Math.round(boardGeom().cell));
+    const el = document.createElement("div");
+    el.className = "pzt-drag";
+    el.style.width = `${side}px`;
+    el.style.height = `${side}px`;
+    el.style.fontSize = `${Math.round(side * 0.56)}px`;
+    el.style.background = tile.bg;
+    el.textContent = tile.emoji;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function moveFloater(el: HTMLElement, x: number, y: number): void {
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+  }
+
+  function onDragMove(ev: PointerEvent): void {
+    if (!drag || levelDone) return;
+    if (!drag.moved) {
+      if (Math.hypot(ev.clientX - drag.x0, ev.clientY - drag.y0) < DRAG_SLOP) return;
+      drag.moved = true;
+      picked = drag.i;
+      drag.el = makeFloater(drag.i);
+      render();
+    }
+    if (!drag.el) return;
+    ev.preventDefault();
+    moveFloater(drag.el, ev.clientX, ev.clientY - LIFT);
+    const g = boardGeom();
+    const pos = nearestCell(g, ev.clientX, ev.clientY - LIFT);
+    const near = dropDistance(g, ev.clientX, ev.clientY - LIFT) <= snapThreshold(g.cell);
+    markTarget(near && holes.includes(pos) && !placed[pos] ? pos : null);
+  }
+
+  /** 把手里的碎片滑到 (x,y) 再收工：磁性吸附和弹回共用这一段 */
+  function glideTo(el: HTMLElement, x: number, y: number, ms: number, done: () => void): void {
+    el.style.transition = `left ${ms}ms cubic-bezier(.2,.85,.3,1), top ${ms}ms cubic-bezier(.2,.85,.3,1), transform ${ms}ms ease`;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      moveFloater(el, x, y);
+      el.style.transform = "translate(-50%, -50%) scale(1)";
+    });
+    later(() => {
+      el.remove();
+      done();
+    }, ms + 30);
+  }
+
+  function onDragEnd(ev: PointerEvent): void {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    markTarget(null);
+    if (!d.moved || !d.el) {
+      onPiece(d.i);
+      return;
+    }
+    const el = d.el;
+    if (levelDone) {
+      el.remove();
+      return;
+    }
+    const g = boardGeom();
+    // 判定用碎片自己的中心（手指上方 20px 那一点），孩子看到哪就落在哪
+    const px = ev.clientX;
+    const py = ev.clientY - LIFT;
+    const res = resolveDrop(g, px, py, {
+      holes,
+      filled: holes.filter((h) => placed[h]),
+      value: tray[d.i],
+    });
+    const reduced = prefersReduced();
+    if (res.kind === "snap") {
+      const c = cellCenter(g, res.pos);
+      opts.sfx("tap");
+      spendMove();
+      glideTo(el, c.x, c.y, magnetMs(reduced), () => {
+        placed[res.pos] = true;
+        usedPiece[d.i] = true;
+        picked = -1;
+        opts.sfx("coin");
+        msgEl.textContent = "咔哒，吸进去啦！继续找下一个缺口～";
+        saveResume();
+        render();
+        if (holes.every((h) => placed[h])) finishWin();
+      });
+      return;
+    }
+    if (dropCostsMove(res)) {
+      opts.sfx("oops");
+      spendMove();
+    }
+    msgEl.textContent = bounceLine(res.reason);
+    glideTo(el, d.homeX, d.homeY, reduced ? 16 : BOUNCE_MS, () => {
+      picked = -1;
+      render();
+    });
+  }
+
+  if (kind === "fill") {
+    const move = (ev: PointerEvent): void => onDragMove(ev);
+    const up = (ev: PointerEvent): void => onDragEnd(ev);
+    const cancel = (): void => {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      markTarget(null);
+      d.el?.remove();
+      picked = -1;
+      render();
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    bag.add(() => window.removeEventListener("pointermove", move));
+    bag.add(() => window.removeEventListener("pointerup", up));
+    bag.add(() => window.removeEventListener("pointercancel", cancel));
   }
 
   function showHint(): void {
@@ -363,11 +764,10 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       }
       return;
     }
-    if (cfg.hidePreview) {
-      previewEl.classList.remove("pz-hidden");
+    if (cfg.hidePreview || preview === "none") {
+      peek(2200);
       msgEl.textContent = "👀 再看一眼完整图案，重点记特征明显的那几块！";
       render();
-      later(() => previewEl.classList.add("pz-hidden"), 2200);
       return;
     }
     render();
@@ -380,6 +780,8 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   }
 
   hintBtn.addEventListener("click", showHint);
+  eyeBtn.addEventListener("click", cyclePreview);
+  undoBtn?.addEventListener("click", undoOnce);
 
   // ---- 开局布置 ----
   if (kind === "rotate") {
@@ -410,12 +812,18 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
   }
   if (SMOKE) boardEl.dataset.kind = kind;
 
+  const resumed = loadResume();
+
   renderPreview();
+  applyPreview();
   render();
-  msgEl.textContent = openingLine(cfg);
+  msgEl.textContent = resumed
+    ? `📌 上次这幅画拼到第 ${moves} 步，接着来！`
+    : openingLine(cfg);
   if (kind === "slide" && cfg.hidePreview) {
     later(() => {
-      previewEl.classList.add("pz-hidden");
+      memoryHidden = true;
+      applyPreview();
       msgEl.textContent = "图案藏起来了，先把记住的那几块归位当参照（提示能再看一眼）！";
     }, 5000);
   }
@@ -438,6 +846,11 @@ function createBoard(stage: HTMLElement, opts: BoardOpts): { destroy: () => void
       intervals.clear();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      drag?.el?.remove();
+      drag = null;
+      bag.clear();
       wrap.remove();
     },
   };
@@ -447,6 +860,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg: PuzzleLevel = LEVELS[ctx.level];
   const board = createBoard(stage, {
     cfg,
+    level: ctx.level,
     sfx: ctx.sfx,
     onWin: (stars, msg) => ctx.win(stars, msg),
     onLose: (msg) => ctx.lose(msg),

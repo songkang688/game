@@ -141,32 +141,58 @@ export function removePair(b: BoardState, a: Pt, z: Pt): void {
   b.grid[z[0]][z[1]] = -1;
 }
 
-/** 四向重力：消掉一对之后，剩下的图案往指定方向靠拢 */
-export function applyGravity(b: BoardState, gravity: Gravity): void {
-  if (gravity === "none") return;
+/** 收拢时哪一格搬到了哪一格（1.2 靠它做滑动动画） */
+export interface TileMove {
+  from: Pt;
+  to: Pt;
+}
+
+/** 一条线（一行或一列）上的格子按顺序收拢到 lane 的前面，返回搬家清单 */
+function packLane(b: BoardState, lane: Pt[], startAt = 0): TileMove[] {
+  const filled: Array<{ at: Pt; v: number }> = [];
+  for (const [r, c] of lane) {
+    if (b.grid[r][c] >= 0) filled.push({ at: [r, c], v: b.grid[r][c] });
+  }
+  for (const [r, c] of lane) b.grid[r][c] = -1;
+  const moves: TileMove[] = [];
+  filled.forEach((t, i) => {
+    const to = lane[startAt + i];
+    b.grid[to[0]][to[1]] = t.v;
+    if (to[0] !== t.at[0] || to[1] !== t.at[1]) moves.push({ from: t.at, to });
+  });
+  return moves;
+}
+
+/**
+ * 收拢：消掉一对之后剩下的图案往指定方向靠拢。
+ * 1.2 补上「向中间」，并把搬家清单返回出去，好让 UI 一格一格滑过去而不是瞬移。
+ */
+export function applyGravity(b: BoardState, gravity: Gravity): TileMove[] {
+  if (gravity === "none") return [];
+  const moves: TileMove[] = [];
   if (gravity === "down" || gravity === "up") {
     for (let c = 1; c <= b.cols; c++) {
-      const vals: number[] = [];
-      if (gravity === "down") {
-        for (let r = b.rows; r >= 1; r--) if (b.grid[r][c] >= 0) vals.push(b.grid[r][c]);
-        for (let r = b.rows, i = 0; r >= 1; r--, i++) b.grid[r][c] = i < vals.length ? vals[i] : -1;
-      } else {
-        for (let r = 1; r <= b.rows; r++) if (b.grid[r][c] >= 0) vals.push(b.grid[r][c]);
-        for (let r = 1, i = 0; r <= b.rows; r++, i++) b.grid[r][c] = i < vals.length ? vals[i] : -1;
-      }
+      const lane: Pt[] = [];
+      if (gravity === "down") for (let r = b.rows; r >= 1; r--) lane.push([r, c]);
+      else for (let r = 1; r <= b.rows; r++) lane.push([r, c]);
+      moves.push(...packLane(b, lane));
     }
-    return;
+    return moves;
   }
   for (let r = 1; r <= b.rows; r++) {
-    const vals: number[] = [];
-    if (gravity === "left") {
-      for (let c = 1; c <= b.cols; c++) if (b.grid[r][c] >= 0) vals.push(b.grid[r][c]);
-      for (let c = 1, i = 0; c <= b.cols; c++, i++) b.grid[r][c] = i < vals.length ? vals[i] : -1;
+    const lane: Pt[] = [];
+    if (gravity === "right") for (let c = b.cols; c >= 1; c--) lane.push([r, c]);
+    else for (let c = 1; c <= b.cols; c++) lane.push([r, c]);
+    if (gravity === "center") {
+      // 向中间：整行的图案挤成一段，居中摆放（多出来的一格靠左）
+      let n = 0;
+      for (let c = 1; c <= b.cols; c++) if (b.grid[r][c] >= 0) n++;
+      moves.push(...packLane(b, lane, Math.floor((b.cols - n) / 2)));
     } else {
-      for (let c = b.cols; c >= 1; c--) if (b.grid[r][c] >= 0) vals.push(b.grid[r][c]);
-      for (let c = b.cols, i = 0; c >= 1; c--, i++) b.grid[r][c] = i < vals.length ? vals[i] : -1;
+      moves.push(...packLane(b, lane));
     }
   }
+  return moves;
 }
 
 /** 风车旋转：整块内圈顺时针转 90°（只对正方形棋盘有意义） */
@@ -181,8 +207,19 @@ export function rotateBoard(b: BoardState): boolean {
   return true;
 }
 
-/** 洗牌：原地打乱剩下的图案，尽量洗出至少一步可走的局面 */
-export function shuffleBoard(b: BoardState, rand: () => number, maxTurns = 2, tries = 40): boolean {
+/** 洗牌上限：洗满这么多次还是死局，就改用「保证可解的构造式重排」 */
+export const SHUFFLE_TRIES = 50;
+
+export interface ShuffleReport {
+  /** 洗完之后场上一定至少有一对能连（空盘也算 ok） */
+  ok: boolean;
+  /** 随机洗了几次 */
+  tries: number;
+  /** 是不是动用了构造式重排 */
+  constructed: boolean;
+}
+
+function collectTiles(b: BoardState): { tiles: Pt[]; values: number[] } {
   const tiles: Pt[] = [];
   const values: number[] = [];
   for (let r = 0; r < b.R; r++) {
@@ -193,15 +230,82 @@ export function shuffleBoard(b: BoardState, rand: () => number, maxTurns = 2, tr
       }
     }
   }
-  for (let guard = 0; guard < Math.max(1, tries); guard++) {
+  return { tiles, values };
+}
+
+/**
+ * 构造式重排：不靠运气，直接算出一种「一定有得连」的摆法。
+ *
+ * 关键在于「哪两格连得上」只跟**哪些格子有人**有关，跟上面画的什么图案无关。
+ * 所以先在现有的占位里找一对连得上的坐标，把同一种图案摆到这两格，
+ * 剩下的随便填——这样摆出来的局面必然至少有一步可走。
+ */
+export function constructSolvable(b: BoardState, rand: () => number, maxTurns = 2): boolean {
+  const { tiles, values } = collectTiles(b);
+  if (tiles.length === 0) return true;
+  let spot: [Pt, Pt] | null = null;
+  for (let i = 0; i < tiles.length && !spot; i++) {
+    for (let j = i + 1; j < tiles.length; j++) {
+      if (findPath(b, tiles[i], tiles[j], maxTurns)) {
+        spot = [tiles[i], tiles[j]];
+        break;
+      }
+    }
+  }
+  // 连占位本身都两两不通，那是格子摆法的问题，换图案也救不回来
+  if (!spot) return false;
+
+  const count = new Map<number, number>();
+  for (const v of values) count.set(v, (count.get(v) ?? 0) + 1);
+  let pick = -1;
+  for (const [v, n] of count) if (n >= 2 && (pick < 0 || v < pick)) pick = v;
+  if (pick < 0) return false;
+  count.set(pick, (count.get(pick) as number) - 2);
+
+  const rest: number[] = [];
+  for (const [v, n] of count) for (let i = 0; i < n; i++) rest.push(v);
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+
+  const taken = new Set([`${spot[0][0]},${spot[0][1]}`, `${spot[1][0]},${spot[1][1]}`]);
+  let ri = 0;
+  for (const [r, c] of tiles) {
+    b.grid[r][c] = taken.has(`${r},${c}`) ? pick : rest[ri++];
+  }
+  return anyMove(b, maxTurns) !== null;
+}
+
+/**
+ * 公平洗牌：随机洗，每洗一次都校验「场上还有得连」，不满足就重洗；
+ * 洗满 50 次仍然是死局才改用构造式重排。绝不会把孩子扔在一个走不动的盘面上。
+ */
+export function fairShuffle(
+  b: BoardState,
+  rand: () => number,
+  maxTurns = 2,
+  tries = SHUFFLE_TRIES
+): ShuffleReport {
+  const { tiles, values } = collectTiles(b);
+  if (tiles.length === 0) return { ok: true, tries: 0, constructed: false };
+  const limit = Math.max(0, tries);
+  for (let n = 1; n <= limit; n++) {
     for (let i = values.length - 1; i > 0; i--) {
       const j = Math.floor(rand() * (i + 1));
       [values[i], values[j]] = [values[j], values[i]];
     }
-    tiles.forEach(([r, c], i) => { b.grid[r][c] = values[i]; });
-    if (anyMove(b, maxTurns)) return true;
+    tiles.forEach(([r, c], i) => {
+      b.grid[r][c] = values[i];
+    });
+    if (anyMove(b, maxTurns)) return { ok: true, tries: n, constructed: false };
   }
-  return tilesLeft(b) === 0;
+  return { ok: constructSolvable(b, rand, maxTurns), tries: limit, constructed: true };
+}
+
+/** 洗牌：走公平洗牌那一套，洗完一定还有得连 */
+export function shuffleBoard(b: BoardState, rand: () => number, maxTurns = 2, tries = SHUFFLE_TRIES): boolean {
+  return fairShuffle(b, rand, maxTurns, tries).ok;
 }
 
 export interface SolveResult {

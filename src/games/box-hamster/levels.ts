@@ -12,7 +12,7 @@
  */
 import { mulberry32, type Chapter } from "../level99";
 import { buildSkeleton, decorate, freeCells } from "./generate";
-import { isPlainRules, type Move, type Puzzle } from "./logic";
+import { hasIce, hasPortal, isPlainRules, type Move, type Puzzle } from "./logic";
 import { solutionFootprint, solve } from "./solver";
 
 // ---------------------------------------------------------------------------
@@ -104,6 +104,13 @@ export interface Recipe {
   portalPairs: number;
   feature: string;
   hint: string;
+  /**
+   * 严格兑现机关：点了漩涡就一定要摆出漩涡，摆不出来这一张就不算满分候选。
+   *
+   * 战役的 188 关是**按固定种子长出来的既有内容**，改了生成器等于把老玩家打过的关换掉，
+   * 所以战役一律不开这个开关；无尽每一仓都是当场现造、不进存档，开了只有好处。
+   */
+  strictDecor?: boolean;
 }
 
 function lerpInt(from: number, to: number, t: number): number {
@@ -313,6 +320,19 @@ function wantsDecor(recipe: Recipe): boolean {
 }
 
 /**
+ * 撒完之后，配方点名的机关是不是真的摆上去了。
+ *
+ * `decorate()` 是「尽量满足」：候选空格被冰面占完、或者凑不出成对的两格，
+ * 漩涡就悄悄少一对，可关卡标签、难度分算的却是配方上写的那个数。
+ * 严格档拿这个函数当验收，摆不出来就不算满分候选，逼生成器再试几张。
+ */
+function decorRealized(p: Puzzle, recipe: Recipe): boolean {
+  if (recipe.iceRuns > 0 && !hasIce(p)) return false;
+  if (recipe.portalPairs > 0 && !hasPortal(p)) return false;
+  return true;
+}
+
+/**
  * 候选打分:难度优先、机关其次。
  * 「够难」这一条值 600 分,压过任何机关 —— 宁可给一关没有冰面的硬题,
  * 也不给一关撒满冰面但一步就推完的白送题。
@@ -362,16 +382,24 @@ function attemptBuild(recipe: Recipe, seed: number): Candidate | null {
     return score >= idealScore(true);
   };
 
+  // 严格档多试几张:一张撒不出漩涡就换一张,别把「点了机关却没机关」的那张交出去
+  const strict = recipe.strictDecor === true;
+  const boldTries = strict ? 10 : 4;
+  // 严格档先摆漩涡再铺冰面 —— 冰面是贪心的,先铺就会把成对的空格吃光
+  const portalsFirst = strict && recipe.portalPairs > 0;
+
   // 大胆档:随便撒,撒完重新求解,过了(而且没把关卡变白送)才用
-  for (let bold = 0; bold < 4; bold++) {
+  for (let bold = 0; bold < boldTries; bold++) {
     const cand = decorate(skeleton, {
       iceRuns: recipe.iceRuns,
       portalPairs: recipe.portalPairs,
       rand,
+      portalsFirst,
     });
     const res = solve(cand, { nodeCap: 50_000 });
     if (!res.solved) continue;
-    if (consider({ puzzle: cand, moves: res.moves, pushes: res.pushes, decorated: true })) return best;
+    const decorated = strict ? decorRealized(cand, recipe) : true;
+    if (consider({ puzzle: cand, moves: res.moves, pushes: res.pushes, decorated })) return best;
   }
 
   // 保底档:只撒在参考解一路没踩到的格子上,原来那条解一步不改照样走得通
@@ -382,10 +410,16 @@ function attemptBuild(recipe: Recipe, seed: number): Candidate | null {
     portalPairs: recipe.portalPairs,
     rand,
     allowed,
+    portalsFirst,
   });
   const safeRes = solve(safe, { nodeCap: 140_000 });
   if (safeRes.solved) {
-    consider({ puzzle: safe, moves: safeRes.moves, pushes: safeRes.pushes, decorated: true });
+    consider({
+      puzzle: safe,
+      moves: safeRes.moves,
+      pushes: safeRes.pushes,
+      decorated: strict ? decorRealized(safe, recipe) : true,
+    });
   }
   return best;
 }
@@ -484,24 +518,78 @@ export function getLevel(index: number): LevelDef {
   return made;
 }
 
+/** 无尽第一段爬坡爬到第几仓(0 基):仓库尺寸、箱子数、墙密度都在这里到顶 */
+export const ENDLESS_RAMP_ROUNDS = 14;
+/** 第二段每几仓再加一档机关 */
+export const ENDLESS_LATE_STEP = 4;
+/** 无尽仓的机关上限(和战役章节里已经验证过的上限一样) */
+export const ENDLESS_MAX_ICE = 4;
+export const ENDLESS_MAX_PORTALS = 2;
+
+/** 第二段爬了几档(第 15 仓起才开始算) */
+function endlessLateStep(round: number): number {
+  return Math.max(0, Math.floor((Math.max(0, round) - ENDLESS_RAMP_ROUNDS) / ENDLESS_LATE_STEP));
+}
+
+/** 第 round 仓有几段冰面 */
+export function endlessIceRuns(round: number): number {
+  const r = Math.max(0, Math.round(round));
+  if (r < 6) return 0;
+  return Math.min(ENDLESS_MAX_ICE, 2 + Math.floor(endlessLateStep(r) / 2));
+}
+
+/** 第 round 仓有几对漩涡 */
+export function endlessPortalPairs(round: number): number {
+  const r = Math.max(0, Math.round(round));
+  if (r < 10) return 0;
+  return Math.min(ENDLESS_MAX_PORTALS, 1 + Math.floor(endlessLateStep(r) / 3));
+}
+
+/**
+ * 无尽第 round 仓的难度分:尺寸、箱子、墙、冰、漩涡合成一个数,
+ * 和另外四款的 `endlessDifficulty` 一个口径,单测拿它钉住「曲线一路不掉头」。
+ * 第 31 仓五条曲线全部到顶,再往后是同一个分数。
+ */
+export function endlessDifficulty(round: number): number {
+  const r = Math.max(0, Math.round(round));
+  const ramp = Math.min(1, r / ENDLESS_RAMP_ROUNDS);
+  return (
+    lerpInt(7, 8, ramp) * 2 +
+    lerpInt(1, 3, ramp) * 20 +
+    Math.round(lerp(0.12, 0.26, ramp) * 100) +
+    endlessIceRuns(r) * 6 +
+    endlessPortalPairs(r) * 10
+  );
+}
+
+/** 难度分到顶的那一仓(0 基);再往后只换名字和布局 */
+export const ENDLESS_PEAK_ROUND = 30;
+
 /**
  * 无尽模式「仓库大挑战」的第 round 仓(0 基)。
  * 一仓比一仓大、箱子一仓比一仓多,机关也逐步加进来。
+ *
+ * 前 14 仓把尺寸、箱子数、墙密度一次爬满;第 15 仓起换成慢档,
+ * 每 4 仓多一段冰或多一对漩涡——这两样在战役里已经验证过能到 4 段 / 2 对,
+ * 是这套生成器手上还没用完的余量。墙密度不再往上加:0.26 以上没验证过,
+ * 密到一定程度求解器会一路退回兜底关,反而更简单。
  */
 export function buildEndless(round: number): LevelDef {
   const r = Math.max(0, Math.round(round));
   const ci = Math.min(CHAPTERS.length - 1, Math.floor(r / 3));
-  const ramp = Math.min(1, r / 14);
+  const ramp = Math.min(1, r / ENDLESS_RAMP_ROUNDS);
   const recipe: Recipe = {
     w: lerpInt(7, 8, ramp),
     h: 7,
     boxesPerRoom: lerpInt(1, 3, ramp),
     wallDensity: lerp(0.12, 0.26, ramp),
     divided: false,
-    iceRuns: r >= 6 ? 2 : 0,
-    portalPairs: r >= 10 ? 1 : 0,
+    iceRuns: endlessIceRuns(r),
+    portalPairs: endlessPortalPairs(r),
     feature: "仓库大挑战",
     hint: "一仓接一仓,推完就换下一仓!步数用完这趟就结束。",
+    // 无尽是现造的、不进存档,所以这里要求「点了漩涡就一定摆出漩涡」
+    strictDecor: true,
   };
   return finalize("endless", r, ci, recipe, bestOfAttempts(recipe, 0x5ee000 + r * 26417 + 5), mulberry32(r * 13 + 3));
 }

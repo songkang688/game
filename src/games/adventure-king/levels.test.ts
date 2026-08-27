@@ -192,7 +192,8 @@ describe("冒险小王 · 无尽遗迹与速通赛道", () => {
       checkShape(lv);
       expect(levelTraversable(lv)).toBe(true);
       expect(artifactsGrounded(lv)).toBe(true);
-      expect(lv.hearts).toBe(4);
+      // 第 40 层起深层压力开始少给一颗心(见 `ruinsPressure`),再深也不会少于 2 颗
+      expect(lv.hearts).toBe(f < 40 ? 4 : 3);
     }
   });
 

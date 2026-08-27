@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🗺️",
   category: "action" as const,
   color: "#ffe0b2",
-  blurb: "188 关八大遗迹!甩回旋镖、荡抓钩,集齐三件神器推开首领之门,还有无尽遗迹和计时速通!",
-  // 8 章合计 188 关(levels.ts 的 CHAPTERS),index.ts 另有无尽遗迹与计时速通
+  blurb: "188 关八大遗迹!甩回旋镖、荡抓钩集齐三件神器,再钻进无尽古堡推箱找钥匙、撞开隐藏墙收贴纸!",
+  // 8 章合计 188 关(levels.ts 的 CHAPTERS),index.ts 另有无尽遗迹、无尽古堡与计时速通
   modes: ["campaign", "endless"] as const,
+  // 键盘 WASD / 方向键与手机方向盘、点触都实测顺手
+  platform: "both" as const,
   levels: 188,
 };

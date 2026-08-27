@@ -386,7 +386,7 @@ export interface FruitKingSpec {
   decrees?: boolean;
   /** 会把左右翻过来 */
   flips?: boolean;
-  /** 血量过半会加速躲闪 */
+  /** 挨过半数刀之后会加速躲闪 */
   enrages?: boolean;
   blurb: string;
 }
@@ -910,6 +910,57 @@ export const ROUNDS: RoundDef[] = [
     ],
   }),
 ];
+
+/* ---------------- 选关地图排版(纯函数,窄屏基线靠它守住) ---------------- */
+
+/** 选关地图上一个回合节点的位置与半径 */
+export interface MapNodeSpot {
+  /** 这一章里的第几个(0 起) */
+  i: number;
+  x: number;
+  y: number;
+  r: number;
+}
+
+/** 一章的选关地图排版结果 */
+export interface MapLayout {
+  cols: number;
+  rows: number;
+  /** 节点半径(整章统一) */
+  r: number;
+  spots: MapNodeSpot[];
+}
+
+/**
+ * 选关地图的蛇形排版。
+ * 抽成纯函数是为了让「360px 窄屏排不排得下」这件事能被测试直接问,
+ * 而不是靠测试自己抄一遍公式——抄一遍就等于什么也没测。
+ */
+export function mapLayout(w: number, h: number, size: number): MapLayout {
+  const n = Math.max(1, Math.round(size) || 1);
+  // 1.1 的新果园一章 29~30 回合,列数加到 5 才排得下
+  const cols = n > 16 ? 5 : 4;
+  const rows = Math.ceil(n / cols);
+  const mx0 = w * 0.12;
+  const mx1 = w * 0.88;
+  const my0 = 96;
+  // 最后一行的星星也要留得下:375×667 上原来会被切掉一截
+  const my1 = h - 62;
+  const r = Math.max(13, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+  const spots: MapNodeSpot[] = [];
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / cols);
+    const colRaw = i % cols;
+    const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
+    spots.push({
+      i,
+      x: mx0 + ((mx1 - mx0) * col) / (cols - 1),
+      y: my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1)),
+      r,
+    });
+  }
+  return { cols, rows, r, spots };
+}
 
 export const HEARTS_PER_ROUND = 3;
 

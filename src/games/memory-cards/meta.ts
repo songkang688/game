@@ -8,8 +8,10 @@ export const meta = {
   emoji: "🃏",
   category: "casual" as const,
   color: "#E3F2FF",
-  blurb: "188 关十大主题！偷看、章鱼换牌、算式配对、旋转牌阵，记忆小达人冲鸭！",
-  // 10 章合计 188 关(blurb 里的「99」是 1.0 遗留文案,归 B 改),只有闯关
-  modes: ["campaign"] as const,
+  blurb: "188 关十大主题,六套原创手绘图案:偷看、章鱼换牌、算式配对、旋转牌阵、会挪窝的牌;还有无尽记忆挑战和两个人轮流翻的家庭局。",
+  // levels.ts 的 10 章合计 188 关,外加无尽记忆挑战与双人同屏轮流翻
+  modes: ["campaign", "endless", "versus", "twoPlayer"] as const,
+  // 全程点一下就翻牌,鼠标、触屏、键盘 Tab 都能玩
+  platform: "both" as const,
   levels: 188,
 };
