@@ -26,6 +26,10 @@ export class El {
   listeners = new Map<string, Set<Handler>>();
   /** 这个节点上一共画过几次(canvas 才有意义) */
   draws = 0;
+  /** 每种画布操作各调用了几次(fillRect / drawImage / fillText …),1.3 视觉契约用 */
+  ops: Record<string, number> = {};
+  /** fillStyle 被赋过的每一个值,按顺序记录(断言「miss 无红闪」用) */
+  fillStyles: string[] = [];
 
   constructor(tag: string) {
     this.tagName = tag;
@@ -118,27 +122,58 @@ export class El {
   }
 }
 
-/** canvas 2d 上下文:方法都是空操作,只把「画过几笔」记下来 */
+/**
+ * canvas 2d 上下文:方法都是空操作,但把「画过几笔」和每种操作的次数都记下来,
+ * 1.3 的视觉契约(音符走 drawImage、粒子不再 fillText、miss 无红闪)靠这些计数断言。
+ */
 function makeCtx(owner: El): unknown {
-  const bump = (): void => {
-    owner.draws++;
+  const count = (name: string): void => {
+    owner.ops[name] = (owner.ops[name] ?? 0) + 1;
   };
+  /** 真正落笔的操作:计数并累加 draws */
+  const paint =
+    (name: string) =>
+    (): void => {
+      count(name);
+      owner.draws++;
+    };
+  /** 只建路径 / 变换,不落笔 */
+  const trace =
+    (name: string) =>
+    (): void => {
+      count(name);
+    };
+  const gradient = (): unknown => ({ addColorStop: () => undefined });
+  let fillStyle: unknown = "";
   return {
-    clearRect: bump,
-    fillRect: bump,
-    fillText: bump,
-    beginPath: () => undefined,
-    closePath: () => undefined,
-    moveTo: () => undefined,
-    lineTo: () => undefined,
-    quadraticCurveTo: () => undefined,
-    fill: bump,
-    stroke: bump,
-    save: () => undefined,
-    restore: () => undefined,
-    translate: () => undefined,
-    scale: () => undefined,
-    fillStyle: "",
+    clearRect: paint("clearRect"),
+    fillRect: paint("fillRect"),
+    fillText: paint("fillText"),
+    strokeText: paint("strokeText"),
+    drawImage: paint("drawImage"),
+    fill: paint("fill"),
+    stroke: paint("stroke"),
+    beginPath: trace("beginPath"),
+    closePath: trace("closePath"),
+    moveTo: trace("moveTo"),
+    lineTo: trace("lineTo"),
+    quadraticCurveTo: trace("quadraticCurveTo"),
+    arc: trace("arc"),
+    ellipse: trace("ellipse"),
+    save: trace("save"),
+    restore: trace("restore"),
+    translate: trace("translate"),
+    scale: trace("scale"),
+    rotate: trace("rotate"),
+    createLinearGradient: gradient,
+    createRadialGradient: gradient,
+    get fillStyle(): string {
+      return fillStyle as string;
+    },
+    set fillStyle(v: string) {
+      fillStyle = v;
+      owner.fillStyles.push(typeof v === "string" ? v : "[gradient]");
+    },
     strokeStyle: "",
     lineWidth: 1,
     font: "",
