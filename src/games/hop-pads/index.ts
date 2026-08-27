@@ -92,7 +92,7 @@ const CSS = `
 .hp-over-t{font-size:21px;font-weight:900;color:#9A5A2C;}
 .hp-result-cv{display:block;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(190,150,120,.28);}
 .hp-over-s{font-size:16px;font-weight:700;color:#7C6350;line-height:1.6;max-width:300px;}
-.hp-tip{text-align:center;font-size:13px;font-weight:700;color:#9A8676;line-height:1.5;}
+.hp-tip{text-align:center;font-size:14px;font-weight:700;color:#9A8676;line-height:1.5;}
 .hp-duo{display:flex;flex-direction:column;gap:8px;}
 .hp-name{position:absolute;left:12px;bottom:36px;font-size:15px;font-weight:900;color:#8A5330;
   pointer-events:none;text-shadow:0 1px 0 #fff;}
@@ -1112,10 +1112,11 @@ export function drawResultCard(ctx: Ctx, viz: ResultViz, w = 250, h = 116): void
   ctx.fillStyle = "#FFF8EE";
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#7C6350";
-  ctx.font = "700 12px system-ui";
+  // 宪法下限 14px(visual-r3 修 N-R3-01):结算卡统计行原 12px;卡宽 250,整行 ~200px 放得下
+  ctx.font = "700 14px system-ui";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(`站住 ${viz.hops} 座 · 最远第 ${viz.far} 座`, 12, 18);
+  ctx.fillText(`站住 ${viz.hops} 座 · 最远第 ${viz.far} 座`, 12, 18, 226);
 
   const ratio = viz.hops > 0 ? viz.perfects / viz.hops : 0;
   drawProgressRing(ctx, w - 44, h / 2 + 4, 24, ratio, "#F2A268");
@@ -1124,7 +1125,8 @@ export function drawResultCard(ctx: Ctx, viz: ResultViz, w = 250, h = 116): void
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`${Math.round(ratio * 100)}%`, w - 44, h / 2 + 4);
-  ctx.font = "700 11px system-ui";
+  // 宪法下限 14px(visual-r3 修 N-R3-01):「完美率」注脚原 11px
+  ctx.font = "700 14px system-ui";
   ctx.fillText("完美率", w - 44, h - 10);
 
   viz.heroes.forEach((hero, i) => {
