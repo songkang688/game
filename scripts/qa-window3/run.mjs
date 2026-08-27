@@ -33,8 +33,11 @@ export const GAMES = [
   { id: "sling-birds", title: "弹弹小鸟", levels: 188, drag: true },
   { id: "candy-swing", title: "糖果秋千", levels: 188, drag: true },
   { id: "gold-hook", title: "金矿钩钩", levels: 188, drag: false },
-  { id: "garden-guard", title: "花园守卫", levels: 188, drag: false },
-  { id: "sprout-defense", title: "绿芽保卫战", levels: 188, drag: false },
+  // 这两款整屏都是 canvas(选关、塔条、HUD 全画在画布上),DOM 里只有一个 <canvas>,
+  // 所以浏览器层只能验「挂得起来 / 指针能操作 / 不报错 / 不溢出」,
+  // 真实胜负与 188 关可通性由 sim.qa.test.ts 那一层取证。
+  { id: "garden-guard", title: "花园守卫", levels: 188, drag: false, canvasOnly: true },
+  { id: "sprout-defense", title: "绿芽保卫战", levels: 188, drag: false, canvasOnly: true },
   { id: "monster-crisis", title: "小怪物危机", levels: 188, drag: false },
   { id: "shoot-range", title: "星星射击场", levels: 188, drag: true },
   { id: "sky-squad", title: "飞机小队", levels: 188, drag: true },
@@ -76,19 +79,26 @@ async function reseed(page, g) {
 }
 
 async function playLevel(page, g, lv, { idle = false, ms }) {
-  const found = await D.gotoChapterOf(page, lv);
-  if (!found) return { open: "chapter-not-found" };
-  const opened = await D.openLevel(page, lv);
-  if (opened.open !== "clicked" || opened.stage !== "ok") return opened;
+  // 有几款先落在模式选择屏,得先点进「闯关」才有地图
+  const gate = await D.enterCampaign(page);
+  let opened;
+  if (D.CUSTOM_MAP[g.id]) {
+    opened = (await D.openCustomLevel(page, g.id, lv)) ?? { open: "custom-map-miss" };
+  } else {
+    const found = await D.gotoChapterOf(page, lv);
+    if (!found) return { open: "chapter-not-found", gate };
+    opened = await D.openLevel(page, lv);
+  }
+  if (opened.open !== "clicked" || opened.stage !== "ok") return { ...opened, gate };
   const played = await D.play(page, {
     ms,
     drag: g.drag,
     idle,
     seed: ROUND * 1000 + lv + (idle ? 7 : 0),
     stopOnResult: true,
-    stayInLevel: true,
+    stayInLevel: !D.CUSTOM_MAP[g.id],
   });
-  const out = { ...opened, ...played };
+  const out = { ...opened, gate, ...played };
   await D.dismissResult(page);
   await D.backToMap(page);
   return out;
@@ -114,9 +124,20 @@ async function runGame(page, errs, g) {
 
   rec.modeButtons = await modeEntries(page);
   rec.chapters = (await D.chapterTabs(page)).length;
+  rec.canvasOnly = Boolean(g.canvasOnly);
+  if (g.canvasOnly) {
+    rec.canvas = await page.evaluate(() => {
+      const c = document.querySelector(".game-stage canvas");
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      return { w: c.width, h: c.height, cssW: Math.round(r.width), cssH: Math.round(r.height) };
+    });
+    // 整屏 canvas:只能靠指针敲,记录敲 25 秒有没有崩、有没有结算
+    rec.canvasPlay = await D.play(page, { ms: 25000, drag: false, seed: ROUND * 31, stopOnResult: true });
+  }
 
   // ---- 战役:每关主动打一局 ----
-  if (g.levels) {
+  if (g.levels && !g.canvasOnly) {
     for (const lv of LEVELS) {
       rec.campaign[lv] = await playLevel(page, g, lv, { ms: PLAY_MS });
       // 上一局可能改了存档,重置回全通关再开下一关
@@ -163,9 +184,15 @@ async function runGame(page, errs, g) {
   rec.mobile.entry = mEntry.entry;
   if (mEntry.entry === "ok") {
     rec.mobile.overflowHome = await D.overflowPx(page);
-    if (g.levels) {
-      await D.gotoChapterOf(page, LEVELS[0]);
-      const opened = await D.openLevel(page, LEVELS[0]);
+    if (g.levels && !g.canvasOnly) {
+      await D.enterCampaign(page);
+      let opened;
+      if (D.CUSTOM_MAP[g.id]) {
+        opened = (await D.openCustomLevel(page, g.id, LEVELS[0])) ?? { open: "custom-map-miss", stage: "-" };
+      } else {
+        await D.gotoChapterOf(page, LEVELS[0]);
+        opened = await D.openLevel(page, LEVELS[0]);
+      }
       rec.mobile.level = opened;
       if (opened.stage === "ok") {
         const played = await D.play(page, {

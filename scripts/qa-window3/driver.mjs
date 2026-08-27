@@ -48,13 +48,34 @@ export function collectErrors(page) {
   return state;
 }
 
-/** 预置 188 关全解锁存档,好让第 100 / 188 关点得开 */
+/**
+ * 预置「188 关全通关」存档,好让第 100 / 188 关点得开。
+ * 大部分款走平台的 `yiduo-yixing.l99.<id>`;下面五款自带存档,格式各不相同,
+ * 所以一并写上(只写测试环境的 localStorage,不改任何产品代码)。
+ */
 export async function seedProgress(page, ids, levels = 188) {
   await page.evaluate(
     (gameIds, total) => {
+      const full = new Array(total).fill(3);
       for (const id of gameIds) {
-        const stars = new Array(total).fill(3);
-        localStorage.setItem(`yiduo-yixing.l99.${id}`, JSON.stringify(stars));
+        localStorage.setItem(`yiduo-yixing.l99.${id}`, JSON.stringify(full));
+      }
+      if (gameIds.includes("garden-guard")) {
+        localStorage.setItem("yiduo-yixing.garden-guard.campaign.v2", JSON.stringify(full));
+      }
+      if (gameIds.includes("sprout-defense")) {
+        localStorage.setItem("yiduo-yixing.sprout-defense.campaign.v2", JSON.stringify(full));
+      }
+      if (gameIds.includes("candy-swing")) {
+        localStorage.setItem("yiduo-yixing.candy-swing.campaign.v2", JSON.stringify({ stars: full }));
+      }
+      if (gameIds.includes("sling-birds")) {
+        const stars = {};
+        for (let i = 1; i <= total; i++) stars[String(i)] = 3;
+        localStorage.setItem(
+          "yiduo-yixing.sling-birds.v2",
+          JSON.stringify({ stars, resume: null, chapter: 0 })
+        );
       }
     },
     ids,
@@ -403,6 +424,94 @@ export async function openLevel(page, n) {
     return s.children.length > 0 ? "ok" : "empty";
   });
   return { open: "clicked", stage: st };
+}
+
+/**
+ * 有几款进游戏先落在「模式选择」屏,得先点「闯关 / 战役 / 一个人玩」才看得到选关地图。
+ * 返回点到的那颗按钮的文字,没找到返回 null。
+ */
+export const CAMPAIGN_RE = /闯关|战役|冒险|188|关卡地图|一个人玩|合作\s*188|独自|单人闯/;
+export async function enterCampaign(page) {
+  const already = await page.evaluate(
+    () => document.querySelectorAll(".l99-tab").length > 0 || document.querySelectorAll(".l99-node").length > 0
+  );
+  if (already) return "已在地图";
+  const hit = await page.evaluate((reSrc) => {
+    const re = new RegExp(reSrc);
+    const stage = document.querySelector(".game-stage");
+    if (!stage) return null;
+    for (const b of stage.querySelectorAll("button")) {
+      const t = (b.textContent ?? "").trim().replace(/\s+/g, " ");
+      if (!t || !re.test(t)) continue;
+      const r = b.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) continue;
+      b.click();
+      return t;
+    }
+    return null;
+  }, CAMPAIGN_RE.source);
+  if (hit) await sleep(900);
+  return hit;
+}
+
+/**
+ * 自带选关地图的几款(不走 level99.ts):选择器各不相同,这里统一收口。
+ * 返回 null 表示这一款走平台的 l99 地图。
+ */
+export const CUSTOM_MAP = {
+  "sling-birds": { tab: ".slb-tab", cell: ".slb-cell" },
+  // 糖果秋千把 188 关一次全铺在一页上,没有需要翻的章节页签
+  "candy-swing": { tab: ".cs-chapter-nope", cell: ".cs-lv" },
+};
+
+/** 自带地图:翻到含第 n 关的那一章并点开它 */
+export async function openCustomLevel(page, id, n) {
+  const sel = CUSTOM_MAP[id];
+  if (!sel) return null;
+  const tabs = await page.evaluate((s) => document.querySelectorAll(s).length, sel.tab);
+  const tryHere = () =>
+    page.evaluate(
+      (cellSel, lv) => {
+        const cells = [...document.querySelectorAll(cellSel)];
+        const hit = cells.find((el) => {
+          const label = el.getAttribute("aria-label") ?? el.textContent ?? "";
+          return new RegExp(`(^|\\D)${lv}(\\D|$)`).test(label.trim());
+        });
+        if (!hit) return "not-here";
+        if (hit.disabled || (hit.textContent ?? "").includes("🔒")) return "locked";
+        hit.scrollIntoView({ block: "center" });
+        hit.click();
+        return "clicked";
+      },
+      sel.cell,
+      n
+    );
+
+  for (let i = 0; i <= tabs; i++) {
+    const res = await tryHere();
+    if (res === "clicked") {
+      await sleep(1300);
+      const stage = await page.evaluate(
+        () => (document.querySelector(".game-stage")?.children.length ?? 0) > 0
+      );
+      return { open: "clicked", stage: stage ? "ok" : "empty" };
+    }
+    if (res === "locked") return { open: "locked", stage: "-" };
+    if (i >= tabs) break;
+    const more = await page.evaluate(
+      (tabSel, idx) => {
+        const tabs2 = [...document.querySelectorAll(tabSel)];
+        if (!tabs2[idx]) return false;
+        tabs2[idx].click();
+        return true;
+      },
+      sel.tab,
+      i
+    );
+    if (!more) break;
+    await sleep(320);
+  }
+  return { open: "not-found", stage: "-" };
 }
 
 /** 188 关地图翻章:逐个点 `.l99-tab`,直到含第 n 关的那一章出现 */
