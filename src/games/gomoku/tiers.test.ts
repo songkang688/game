@@ -289,6 +289,83 @@ describe("实战单调：固定 seed 的成对对局", () => {
   }, 120_000);
 });
 
+/* ---------------- 相邻档：菜鸟→地狱一档都不许跳 ---------------- */
+
+// 地狱档默认按真实时钟限时，跑对局会因机器快慢而飘。
+// 冻住时钟（now 恒为 0，永远追不上 deadline）之后，搜索一定跑满 maxDepth，
+// 于是「同一个 seed 永远同一盘棋」，相邻档战绩才是可复现的。
+const FROZEN_HELL: HellOptions = { timeMs: 1_000, maxDepth: 4, now: () => 0 };
+
+/** 一批由普通档自对弈铺出来的真实中盘局面（长度各不相同） */
+function midPositions(count: number): Array<{ board: Board; turn: Player }> {
+  const out: Array<{ board: Board; turn: Player }> = [];
+  for (let g = 0; g < count; g++) {
+    const b = makeBoard(15);
+    const rng = mulberry32(500 + g);
+    let turn: Player = 1;
+    const plies = 8 + (g % 9) * 2;
+    let finished = false;
+    for (let i = 0; i < plies; i++) {
+      const mv = bestMove(b, turn, "normal", rng);
+      if (!mv) break;
+      setCell(b, mv.x, mv.y, turn);
+      if (findWinLine(b, mv.x, mv.y)) {
+        finished = true;
+        break;
+      }
+      turn = turn === 1 ? 2 : 1;
+    }
+    if (!finished) out.push({ board: b, turn });
+  }
+  return out;
+}
+
+describe("实战单调：相邻档五对全覆盖（强档执黑执白各一半）", () => {
+  it("简单 → 菜鸟", () => {
+    const r = series("easy", "novice", 15, 12);
+    expect(r.strongWins).toBeGreaterThan(r.weakWins);
+    expect(r.strongWins).toBeGreaterThanOrEqual(9);
+  }, 60_000);
+
+  it("普通 → 简单", () => {
+    const r = series("normal", "easy", 15, 12);
+    expect(r.strongWins).toBeGreaterThan(r.weakWins);
+    expect(r.strongWins).toBeGreaterThanOrEqual(8);
+  }, 60_000);
+
+  it("聪明 → 普通：聪明档必须真的比普通档强，不许倒挂", () => {
+    const r = series("smart", "normal", 15, 12);
+    expect(r.strongWins).toBeGreaterThan(r.weakWins);
+    expect(r.strongWins).toBeGreaterThanOrEqual(7);
+  }, 120_000);
+
+  it("大师 → 聪明：聪明档改强之后也不许反压大师", () => {
+    const r = series("master", "smart", 15, 12);
+    expect(r.strongWins).toBeGreaterThan(r.weakWins);
+    expect(r.strongWins).toBeGreaterThanOrEqual(7);
+  }, 180_000);
+
+  it("地狱 → 大师：地狱档必须是大师档的严格加强", () => {
+    const r = series("hell", "master", 15, 8, FROZEN_HELL);
+    expect(r.strongWins).toBeGreaterThan(r.weakWins);
+  }, 300_000);
+});
+
+describe("地狱档不是大师档的马甲", () => {
+  it("真实中盘局面上，地狱与大师不许 100% 走同一步", () => {
+    const spots = midPositions(24);
+    expect(spots.length).toBeGreaterThanOrEqual(20);
+    let same = 0;
+    for (const [i, s] of spots.entries()) {
+      const a = bestMove(s.board, s.turn, "master", mulberry32(90 + i));
+      const c = bestMove(s.board, s.turn, "hell", mulberry32(90 + i), FROZEN_HELL);
+      if (a && c && a.x === c.x && a.y === c.y) same++;
+    }
+    expect(same).toBeLessThan(spots.length);
+    expect(same / spots.length).toBeLessThanOrEqual(0.9);
+  }, 300_000);
+});
+
 describe("地狱档：迭代加深 + 置换表 + 抓禁手", () => {
   /** 一个走了十几手的中盘局面 */
   function midGame(): { board: Board; turn: Player } {
