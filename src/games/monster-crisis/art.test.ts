@@ -387,6 +387,25 @@ describe("1.3 家与场地", () => {
     expect(fills(ops)).toBeGreaterThanOrEqual(6);
     expect(texts(ops)).toBe(0);
   });
+
+  it("r2 B档TOP6:motion=true 两个 t 值云的位置不同;motion=false 完全一致", () => {
+    const a = rec((c) => drawSky(c, 360, 240, "#fff3f8", 1, true));
+    const b = rec((c) => drawSky(c, 360, 240, "#fff3f8", 9, true));
+    expect(seq(a)).not.toBe(seq(b));
+    const stillA = rec((c) => drawSky(c, 360, 240, "#fff3f8", 1, false));
+    const stillB = rec((c) => drawSky(c, 360, 240, "#fff3f8", 9, false));
+    expect(seq(stillA)).toBe(seq(stillB));
+  });
+
+  it("r2 B档TOP6:暖调天空挂太阳(径向光晕),冷调挂月牙+四粒星,两分支画得不同", () => {
+    const warm = rec((c) => drawSky(c, 360, 240, "#fff6ec"));
+    const cool = rec((c) => drawSky(c, 360, 240, "#eef7ff"));
+    expect(warm).toContain("radGrad");
+    expect(cool).not.toContain("radGrad");
+    expect(seq(warm)).not.toBe(seq(cool));
+    // 冷调的四粒星是 quad 曲线四芒星
+    expect(cool.filter((o) => o.startsWith("quad:")).length).toBeGreaterThanOrEqual(16);
+  });
 });
 
 /* ---------------- 四、子弹与粒子:☁️ 退休 ---------------- */

@@ -789,18 +789,67 @@ export interface ScenerySpec {
   yard: number;
 }
 
-/** 天空:纯色 fillRect 升级为纵向微渐变 + 两朵远处的定格白云。 */
-export function drawSky(c: CanvasRenderingContext2D, w: number, h: number, sky: string): void {
+/**
+ * 天空:纵向微渐变 + 两朵慢云 + 一件章节主题物(r2 · B档TOP6)。
+ * 云在 motion 时以 4/7px/s 相位漂移,弱动效定格;主题物按场景色调查表——
+ * 暖调(r≥b)画太阳,冷调画月牙 + 四粒定格小星。半径都收着,天空带本来矮,别抢主场。
+ */
+export function drawSky(
+  c: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  sky: string,
+  t = 0,
+  motion = false
+): void {
   const g = c.createLinearGradient(0, 0, 0, h);
   g.addColorStop(0, sky);
   g.addColorStop(1, shade(sky, 1.04));
   c.fillStyle = g;
   c.fillRect(0, 0, w, h);
+  const n = parseInt(sky.slice(1), 16);
+  const warm = ((n >> 16) & 255) >= (n & 255);
+  const mx = w * 0.64;
+  if (warm) {
+    const halo = c.createRadialGradient(mx, 18, 4, mx, 18, 26);
+    halo.addColorStop(0, "rgba(255,214,110,.45)");
+    halo.addColorStop(1, "rgba(255,214,110,0)");
+    c.fillStyle = halo;
+    c.beginPath();
+    c.arc(mx, 18, 26, 0, TAU);
+    c.fill();
+    c.fillStyle = "#ffd66b";
+    c.strokeStyle = "#e8b54a";
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.arc(mx, 18, 9, 0, TAU);
+    c.fill();
+    c.stroke();
+  } else {
+    // 月牙:双圆相减(顶部渐变几乎就是 sky 色,拿它当挖空色)
+    c.fillStyle = "#fff2c4";
+    c.beginPath();
+    c.arc(mx, 18, 9, 0, TAU);
+    c.fill();
+    c.fillStyle = sky;
+    c.beginPath();
+    c.arc(mx + 3.6, 15.4, 7.6, 0, TAU);
+    c.fill();
+    for (const [sx, sy, sr] of [
+      [w * 0.5, 10, 2.6],
+      [w * 0.74, 26, 2.2],
+      [w * 0.44, 26, 1.9],
+      [w * 0.58, 31, 1.6],
+    ] as const) {
+      drawSparkStar(c, sx, sy, sr, "rgba(255,255,255,.9)");
+    }
+  }
   c.fillStyle = "rgba(255,255,255,.5)";
-  for (const [cx, cy, s] of [
-    [w * 0.16, 16, 1],
-    [w * 0.85, 22, 0.8],
+  for (const [seed, cy, s, v] of [
+    [w * 0.16, 16, 1, 4],
+    [w * 0.85, 22, 0.8, 7],
   ] as const) {
+    const cx = motion ? ((seed + t * v) % (w + 80)) - 40 : seed;
     for (const [dx, dy, rr] of [
       [-7, 1.5, 4.4],
       [0, -1.5, 5.6],

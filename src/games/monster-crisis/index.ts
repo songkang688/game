@@ -638,7 +638,7 @@ function createArenaView(host: HTMLElement, opts: ViewOptions): ViewHandle {
     const ground = SCENE_GROUND[scene] ?? SCENE_GROUND[0];
 
     c2d.clearRect(0, 0, ARENA_W, ARENA_H);
-    drawSky(c2d, ARENA_W, ARENA_H, sky);
+    drawSky(c2d, ARENA_W, ARENA_H, sky, t, !reduced);
 
     c2d.save();
     if (shake > 0 && !reduced) c2d.translate(Math.sin(t * 46) * shake * 5, Math.cos(t * 39) * shake * 3);
