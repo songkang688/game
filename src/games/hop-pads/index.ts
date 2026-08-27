@@ -291,6 +291,13 @@ interface Leg {
   dur: number;
 }
 
+/** 指针 / 触摸事件里我们只关心「是谁的手指」这一点 */
+interface PointerLikeEvent {
+  preventDefault?: () => void;
+  pointerId?: number;
+  changedTouches?: ArrayLike<{ identifier?: number }>;
+}
+
 function prefersReducedMotion(): boolean {
   const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
   try {
@@ -644,11 +651,41 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
   raf = requestAnimationFrame(frame);
 
   // ---- 输入:整块画面都能按 ----
-  const onDown = (ev: { preventDefault?: () => void }): void => {
+  //
+  // 双人同屏是两块 stage 各挂一份 window 监听,所以「抬手」必须认得出是谁的手指:
+  // 不对账的话,一个人松手会把两个人一起弹出去(蓄力时长根本不由自己决定)。
+  // pointer 事件用 pointerId,touch 事件用 changedTouches[].identifier;
+  // 同一次按下往往两种事件都会来一遍,所以本台按下时收到的手指号全记进账本,谁的号回来就放谁。
+  const touchIdsOf = (ev: PointerLikeEvent): string[] => {
+    const out: string[] = [];
+    const list = ev.changedTouches;
+    if (list) {
+      for (let i = 0; i < list.length; i++) {
+        const id = list[i]?.identifier;
+        if (typeof id === "number") out.push(`t${id}`);
+      }
+    }
+    if (typeof ev.pointerId === "number") out.push(`p${ev.pointerId}`);
+    return out;
+  };
+  /** 本台正按着屏幕的那根(些)手指;空集合表示这一台没人按着屏幕 */
+  const heldTouches = new Set<string>();
+  let heldByTouch = false;
+
+  const onDown = (ev: PointerLikeEvent): void => {
     ev.preventDefault?.();
+    heldByTouch = true;
+    for (const id of touchIdsOf(ev)) heldTouches.add(id);
     press();
   };
-  const onUp = (): void => {
+  const onUp = (ev: PointerLikeEvent): void => {
+    // 没按过屏幕就不关这一台的事(键盘那一路走 onKeyUp)
+    if (!heldByTouch) return;
+    const ids = touchIdsOf(ev);
+    // 认得出手指号、又不是本台按下的那根,就是隔壁那个人在抬手
+    if (ids.length > 0 && heldTouches.size > 0 && !ids.some((id) => heldTouches.has(id))) return;
+    heldByTouch = false;
+    heldTouches.clear();
     if (phase === "charging") release();
   };
   const onKeyDown = (ev: { key?: string; repeat?: boolean; preventDefault?: () => void }): void => {
