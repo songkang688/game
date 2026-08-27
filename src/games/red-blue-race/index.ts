@@ -43,6 +43,7 @@ import {
 } from "./fair";
 import { AI_LEVELS, aiMisses, aiPacePerSec, aiStumbleSec, profileOf, respectsHumanCap, type AiLevel } from "./ai";
 import { bindRaceKeys, type KeyHost, type RaceKeyHit } from "./keys";
+import { fitRaceStage } from "./fit";
 import {
   FINISH_SLOWMO_MS,
   confettiCount,
@@ -139,6 +140,55 @@ const CSS = `
   .rbr-side .rbr-step { font-size: 15px; }
   .rbr-pads { gap: 6px; }
 }
+/* ---------------------------------------------------------------------------
+   舞台矮到装不下这一屏时逐档收紧(fit.ts 实测祖先裁切线后挂上来,窗口5 第2轮 W5R2-A-02)。
+   收的都是留白 / 字号 / 装饰;跑动键最狠一档仍有 52px、让分开关仍是 44px。
+   写不成媒体查询:舞台比视口矮一大截,按 vh 判会判成「够高,不用收」。
+   --------------------------------------------------------------------------- */
+.rbr-tight { padding: 9px; }
+.rbr-tight .rbr-top { gap: 4px; margin-bottom: 5px; }
+.rbr-tight .rbr-badge { font-size: 12px; padding: 3px 9px 3px 3px; }
+.rbr-tight .rbr-badge.rbr-badge-right { padding: 3px 3px 3px 9px; }
+.rbr-tight .rbr-ava { width: 22px; height: 22px; border-width: 1px; }
+.rbr-tight .rbr-meters { font-size: 12px; gap: 4px; }
+.rbr-tight .rbr-gear { margin-bottom: 5px; gap: 6px; }
+.rbr-tight .rbr-chip { font-size: 12px; padding: 3px 9px; }
+.rbr-tight .rbr-lane { height: 52px; margin-bottom: 5px; }
+.rbr-tight .rbr-runner { font-size: 25px; }
+.rbr-tight .rbr-runner-img { width: 34px; height: 34px; border-width: 2px; }
+.rbr-tight .rbr-call { font-size: 16px; min-height: 20px; margin: 0 0 4px; letter-spacing: 1px; }
+/* 跳键原来独占一整行,是这一屏最下面那 64px;收成三键一排,高度直接省掉一行 */
+.rbr-tight .rbr-pads:not(.rbr-pads-duo) { grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 5px; }
+.rbr-tight .rbr-pads:not(.rbr-pads-duo) .rbr-jump-btn { grid-column: auto; }
+.rbr-tight .rbr-step, .rbr-tight .rbr-jump-btn { min-height: 60px; font-size: 16px; }
+.rbr-tight .rbr-side { padding: 5px; gap: 5px; }
+.rbr-tight .rbr-side-title { font-size: 12px; }
+.rbr-tight .rbr-side .rbr-step { min-height: 52px; font-size: 14px; }
+/* 键盘提示对触屏没用,而它正压在跳键下面 */
+.rbr-tight .rbr-keyhint { display: none; }
+.rbr-tight .rbr-msg, .rbr-tight .rbe-msg { font-size: 12px; margin-top: 5px; min-height: 16px; }
+.rbr-tight .rbe-head { margin-bottom: 6px; gap: 6px; }
+.rbr-tight .rbe-chip { font-size: 12px; padding: 4px 9px; }
+.rbr-tight .rbe-lane { height: 78px; margin-bottom: 5px; }
+.rbr-tight .rbe-face { width: 34px; height: 34px; }
+.rbr-tight .rbv-head { margin-bottom: 5px; }
+.rbr-tight .rbv-foes { padding: 2px 0 5px; }
+.rbr-tight .rbv-foe-note { margin-bottom: 4px; min-height: 15px; font-size: 12px; }
+.rbr-tighter { padding: 7px; }
+/* 名字和头像在赛道条上还各挂着一份,抬头条这一份让位给「点得着」 */
+.rbr-tighter .rbr-badge { display: none; }
+.rbr-tighter .rbr-top { margin-bottom: 4px; }
+.rbr-tighter .rbr-lane { height: 44px; margin-bottom: 4px; }
+.rbr-tighter .rbr-runner-img { width: 28px; height: 28px; }
+.rbr-tighter .rbr-runner { font-size: 21px; }
+.rbr-tighter .rbr-ob { font-size: 15px; top: 2px; }
+.rbr-tighter .rbr-finish { font-size: 18px; }
+.rbr-tighter .rbr-call { font-size: 15px; min-height: 18px; margin: 0 0 3px; }
+.rbr-tighter .rbr-step, .rbr-tighter .rbr-jump-btn { min-height: 52px; font-size: 15px; }
+.rbr-tighter .rbr-side .rbr-step { min-height: 46px; font-size: 13px; }
+.rbr-tighter .rbr-msg, .rbr-tighter .rbe-msg { font-size: 11px; margin-top: 4px; min-height: 14px; line-height: 1.35; }
+.rbr-tighter .rbe-lane { height: 66px; }
+.rbr-tighter .rbe-face { width: 28px; height: 28px; }
 @media (prefers-reduced-motion: reduce) {
   .rbr-lane-run .rbr-speed { animation: none; opacity: 0; }
   .rbr-runner-inner { animation: none; }
@@ -848,6 +898,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   );
 
   render();
+  // 仪表盘的芯片都挂完了才量:量早了会漏掉体力条 / 连击那一行的高度
+  const fit = fitRaceStage(wrap);
   rt.frame((t) => {
     lastTime = t;
     rt.frame(tick);
@@ -856,6 +908,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   return {
     destroy() {
       ended = true;
+      fit.dispose();
       rt.dispose();
       wrap.remove();
     }
@@ -1267,15 +1320,19 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       lastTime = t;
       rt.frame(loop);
     });
+    // 换对手会整块重搭赛台(两人场比单人场多一整排键),每回合重量一次
+    fit.relayout();
   }
 
   renderFoes();
+  const fit = fitRaceStage(wrap);
   startRound();
 
   return {
     destroy() {
       roundRt?.dispose();
       roundRt = null;
+      fit.dispose();
       wrap.remove();
     }
   };
@@ -1572,11 +1629,13 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 
   refill();
   render();
+  const fit = fitRaceStage(wrap);
   rt.frame(loop);
 
   return {
     destroy() {
       over = true;
+      fit.dispose();
       rt.dispose();
       wrap.remove();
     }
