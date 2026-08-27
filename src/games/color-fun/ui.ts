@@ -272,6 +272,47 @@ export function fitColoringStage(
 }
 
 /**
+ * 画布钉得住吗：滚动视口在画布底下，还剩不剩得下**后面最高的那一排**。
+ *
+ * 钉住画布是白赚的好处，前提是别把底下的控件挤没了。390×844 上滚动视口 556px、
+ * 画布 180px，钉住之后还剩 376px，调锅那一排（105px）整整齐齐露在外面；
+ * 可 320×568 上滚动视口只剩 284px，钉住只留 104px——比调锅那一排还矮 1px，
+ * 于是孩子照最自然的那一下「一甩到底」，落在 `scrollTop` 最大值上，
+ * 调锅整排正好躺在画布底下，倒入红 / 黄 / 蓝 / 白 / 黑 五颗一颗都点不着
+ * （CDP 实测 `elementFromPoint(键心)` 拿回来的是线稿里的 `<rect>`）。
+ * 而这一款的调色关就是靠这五颗兑色，够不着 = 过不了关。
+ *
+ * 剩不下就这一档不钉，让画布跟着滚出去。矮屏上「看得见画」和「够得着调锅」
+ * 只能二选一时，够得着才是能不能玩下去的那一个。
+ *
+ * 量不到（后面一排都没有、视口算不出来）一律返回 `true` 照旧钉，
+ * 不拿一个量不准的数去改高屏上本来就对的行为。
+ */
+export function canPinCanvas(portPx: number, canvasPx: number, tallestTailPx: number): boolean {
+  if (!Number.isFinite(portPx) || portPx <= 0) return true;
+  if (!Number.isFinite(tallestTailPx) || tallestTailPx <= 0) return true;
+  return portPx - canvasPx >= tallestTailPx;
+}
+
+/** 这一屏里排在画布后面的那些排，最高的一排有多高；量不到就是 0（＝不拦着钉） */
+function tallestTailPx(wrap: HTMLElement, stage: HTMLElement): number {
+  const kids = wrap.children as unknown as ArrayLike<Element> | undefined;
+  if (!kids || typeof kids.length !== "number") return 0;
+  let seen = false;
+  let tallest = 0;
+  for (let i = 0; i < kids.length; i++) {
+    const kid = kids[i];
+    if (kid === stage) {
+      seen = true;
+      continue;
+    }
+    if (!seen || typeof kid?.getBoundingClientRect !== "function") continue;
+    tallest = Math.max(tallest, kid.getBoundingClientRect().height);
+  }
+  return tallest;
+}
+
+/**
  * 把画布钉在滚动区顶上，滑到下面选颜色时它也不会被顶出屏幕。
  *
  * 手机上光标题栏加关卡条就吃掉三成屏高，画布再占 55% 就一屏装不下，
@@ -279,7 +320,8 @@ export function fitColoringStage(
  *
  * 本该交给 `position:sticky`，可壳层的滚动区是 `overflow:hidden`，
  * 浏览器不拿它当粘性定位的参照物，画照样滑走，所以这里自己按滚动量挪。
- * 挪的幅度卡在「不超出整块的下沿」，画布不会盖到调色盘上。
+ * 挪的幅度卡在「不超出整块的下沿」；矮到连后面最高那一排都腾不出来时，
+ * 这一档干脆不钉（见 {@link canPinCanvas}）。
  *
  * 返回值是拆监听的函数，`destroy` 时记得叫一声。
  */
@@ -293,9 +335,13 @@ export function pinCanvas(wrap: HTMLElement, stage: HTMLElement): () => void {
   const relayout = (): void => {
     // getBoundingClientRect 带着已经挪过的量，先减回去还原成原本的位置
     const raw = stage.getBoundingClientRect().top - shift;
-    const room = wrap.getBoundingClientRect().bottom - raw - stage.getBoundingClientRect().height;
+    const stageH = stage.getBoundingClientRect().height;
+    const room = wrap.getBoundingClientRect().bottom - raw - stageH;
     const top = Math.max(...ports.map((p) => p.getBoundingClientRect().top));
-    const want = Math.min(Math.max(top - raw, 0), Math.max(room, 0));
+    const bottom = Math.min(...ports.map((p) => p.getBoundingClientRect().bottom));
+    const want = canPinCanvas(bottom - top, stageH, tallestTailPx(wrap, stage))
+      ? Math.min(Math.max(top - raw, 0), Math.max(room, 0))
+      : 0;
     if (Math.abs(want - shift) < 0.5) return;
     shift = want;
     stage.style.transform = shift > 0 ? `translateY(${shift.toFixed(1)}px)` : "";
