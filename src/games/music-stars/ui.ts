@@ -273,6 +273,16 @@ export const MST_CSS = `
      哪天给舞台链定了高就自动接上，两边不打架。 */
   .mst-wrap{min-height:0;max-height:100%;overflow-y:auto;touch-action:pan-y;
     gap:${SHORT_SIZES.wrapGap}px;padding:${SHORT_SIZES.wrapPad}px 10px;}
+  /* 上面那行让**壳**能竖着滚了，可键自己还挂着 touch-action:none，于是手指落在
+     键上就划不动——和第 1 轮那条横向的坑是同一个，只是换了个方向。
+     真机 320×640 第 188 关要往下滚 159px 才够得着「⭐哆 / ⭐来 / ⭐咪」和
+     声音设置那三颗，而键排几乎铺满这一屏，能起手划的只剩星空那 ${SHORT_SIZES.sky}px。
+     所以滚得起来的这一档里，键让出**竖**这一个方向；横向那一档（七声八键的
+     .mst-keys-scroll）两个方向都要，写成 pan-x pan-y。
+     按下去出声照旧走 pointerdown，手指真的划走时浏览器补 pointercancel，音会正常停。
+     热区一个都没动：让的是手势，不是尺寸。 */
+  .mst-star{touch-action:pan-y;}
+  .mst-keys-scroll .mst-star{touch-action:pan-x pan-y;}
   .mst-msg{min-height:${SHORT_SIZES.msg}px;font-size:16px;}
   .mst-dots{min-height:${SHORT_SIZES.dots}px;}
   .mst-sky{min-height:${SHORT_SIZES.sky}px;}
