@@ -9,24 +9,22 @@
  * 章节数据在这儿**只读不写**——一个玩法数值都不许从这里改。
  */
 
+import { shade as kitShade } from "../../art/kit/fruit";
 import { SparklePool } from "../../art/kit/sparkle";
 
 // ---------------------------------------------------------------------------
 // 配色板(四·补一):统一光源左上 45°,粉彩不搞脏
 // ---------------------------------------------------------------------------
 
-/** 加深(pct<0)或提亮(pct>0)一个 #RRGGBB 颜色,pct 按百分比算 */
+/**
+ * 加深(pct<0)或提亮(pct>0)一个 #RRGGBB 颜色,pct 按百分比算。
+ * W7R2 N-4 收敛:混色引擎归一到 kit 单源(`art/kit/fruit.shade`,import 只读),
+ * 本函数只保留「百分比 → 0–1 小数」的量纲适配 + 大写输出,
+ * 行为与收敛前逐位一致(PH_TOKENS 全部派生色值不变)。
+ */
 export function shade(hex: string, pct: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const mix = (v: number): number => {
-    const target = pct >= 0 ? 255 : 0;
-    const k = Math.min(1, Math.abs(pct) / 100);
-    return Math.round(v + (target - v) * k);
-  };
-  const r = mix((n >> 16) & 0xff);
-  const g = mix((n >> 8) & 0xff);
-  const b = mix(n & 0xff);
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0").toUpperCase()}`;
+  const out = kitShade(hex, pct / 100);
+  return out === hex ? hex : out.toUpperCase();
 }
 
 /** 视觉 token(四·补一表,值不许跑偏,用例钉死) */

@@ -6,6 +6,7 @@
  * 全部纯函数 + 极窄的画布接口,单测拿假上下文就能逐笔验收。
  */
 import { drawIcon, type Icon, type IconCtx, type Shape } from "./art";
+import { shade as kitShade } from "../../art/kit/fruit";
 import { traceStar } from "../../art/kit/sparkle";
 
 // ---------------------------------------------------------------------------
@@ -49,19 +50,15 @@ export function backBaseForTheme(theme: number): string {
   return MC_BACK_BASES[Math.max(0, t)];
 }
 
-/** 把 #rrggbb 变深(amt<0)或提亮(amt>0);非 hex 原样返回,绝不抛错 */
+/**
+ * 把 #rrggbb 变深(amt<0)或提亮(amt>0);非 hex 原样返回,绝不抛错。
+ * W7R2 N-4 收敛:混色引擎归一到 kit 单源(`art/kit/fruit.shade`,import 只读),
+ * 本函数只保留「小数量纲 + 大写输出」的薄适配,行为与收敛前逐位一致
+ * (visual21 用例钉死的 #C59C56 / #626272 等色值不变)。
+ */
 export function shade(hex: string, amt: number): string {
-  const m = /^#([0-9a-fA-F]{6})$/.exec(hex);
-  if (!m) return hex;
-  const v = parseInt(m[1], 16);
-  const ch = (c: number): number => {
-    const out = amt < 0 ? c * (1 + amt) : c + (255 - c) * amt;
-    return Math.max(0, Math.min(255, Math.round(out)));
-  };
-  const r = ch((v >> 16) & 255);
-  const g = ch((v >> 8) & 255);
-  const b = ch(v & 255);
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0").toUpperCase()}`;
+  const out = kitShade(hex, amt);
+  return out === hex ? hex : out.toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
