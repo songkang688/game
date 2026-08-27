@@ -137,6 +137,157 @@ const BLOB_SEEDS: ReadonlyArray<readonly [number, number, number]> = [
 /** 竞技场边界墙厚度(世界像素) */
 export const WALL_WORLD = 30;
 
+// ---------------------------------------------------------------------------
+// 中景具象贴片(1.3 r1 · learner P2):圆斑层之上、网格层之下,
+// 把「7 粒无形柔光斑」补成具象中景(五瓣小花 / 四芒星 / 糖果石子三式)。
+// 确定性哈希布点(写法参照 snake-royale/art.ts 的 hash2,注明出处、不引随机源);
+// 视差 0.3 与圆斑层同系数(不添第三档速度);贴片静态,soft 无差别。
+// ---------------------------------------------------------------------------
+
+/** 贴片布点的世界格边(约 40% 格出件,八成画面留白) */
+export const DECOR_CELL = 176;
+/** 贴片层视差系数(与圆斑层同 0.3) */
+export const DECOR_PARALLAX = 0.3;
+
+/** 确定性二维哈希(搬自 snake-royale/art.ts hash2):同一格永远同一件 */
+function hash2(ix: number, iy: number): number {
+  const a = Math.imul((Math.round(fin(ix) ? ix : 0) | 0) + 0x9e3779b9, 0x85ebca6b);
+  const b = Math.imul((Math.round(fin(iy) ? iy : 0) | 0) + 0x165667b1, 0xc2b2ae35);
+  const m = Math.imul(a ^ (b >>> 13), 0x27d4eb2f);
+  return (m ^ (m >>> 15)) >>> 0;
+}
+
+export interface ArenaDecor {
+  /** 0 五瓣小花 / 1 四芒星 / 2 糖果石子 */
+  kind: 0 | 1 | 2;
+  /** 格内偏移(0..1) */
+  u: number;
+  v: number;
+  /** 世界半径 3–5px(直径 6–10px) */
+  s: number;
+  /** 0.35–0.5,永不超 0.5 */
+  alpha: number;
+}
+
+/** 某格出什么贴片(确定性;六成格子留白返回 null) */
+export function decorAt(ix: number, iy: number): ArenaDecor | null {
+  const h = hash2(ix, iy);
+  if (h % 5 >= 2) return null; // 40% 格出件
+  return {
+    kind: (h % 3) as 0 | 1 | 2,
+    u: ((h >>> 5) % 97) / 97,
+    v: ((h >>> 11) % 89) / 89,
+    s: 3 + ((h >>> 17) % 3),
+    alpha: 0.35 + (((h >>> 21) % 16) / 15) * 0.15
+  };
+}
+
+/** 单件贴片矢量画法(纯 fill,不加渐变;也是精灵图底稿) */
+export function paintArenaDecor(g: Ctx, x: number, y: number, s: number, kind: 0 | 1 | 2, theme: ArenaTheme): void {
+  if (!fin(x) || !fin(y) || !fin(s) || s <= 0) return;
+  if (kind === 0) {
+    // 五瓣小花:5 圆瓣 + 1 圆心
+    g.fillStyle = tint(theme.blob, 0.3);
+    for (let k = 0; k < 5; k++) {
+      const a = -Math.PI / 2 + (k / 5) * TAU;
+      g.beginPath();
+      g.arc(x + Math.cos(a) * s * 0.62, y + Math.sin(a) * s * 0.62, s * 0.5, 0, TAU);
+      g.fill();
+    }
+    g.fillStyle = shade(theme.blob, 0.15);
+    g.beginPath();
+    g.arc(x, y, s * 0.4, 0, TAU);
+    g.fill();
+    return;
+  }
+  if (kind === 1) {
+    // 四芒星:主体 + 中心亮点
+    g.fillStyle = shade(theme.blob, 0.15);
+    pathStar(g, x, y, s, s * 0.4, -Math.PI / 2, 4);
+    g.fill();
+    g.fillStyle = tint(theme.blob, 0.5);
+    g.beginPath();
+    g.arc(x, y - s * 0.1, s * 0.22, 0, TAU);
+    g.fill();
+    return;
+  }
+  // 糖果石子:圆 + 左上高光点(两阶)
+  g.fillStyle = shade(theme.blob, 0.1);
+  g.beginPath();
+  g.arc(x, y, s * 0.85, 0, TAU);
+  g.fill();
+  g.fillStyle = tint(theme.blob, 0.45);
+  g.beginPath();
+  g.arc(x - s * 0.26, y - s * 0.3, s * 0.3, 0, TAU);
+  g.fill();
+}
+
+/** 贴片精灵缓存(3 式 × 主题;node 单测环境建不出来就走矢量兜底) */
+const decorSpriteCache = new Map<string, HTMLCanvasElement | null>();
+
+function decorSprite(theme: ArenaTheme, kind: 0 | 1 | 2): HTMLCanvasElement | null {
+  const key = `${theme.name}#${kind}`;
+  const hit = decorSpriteCache.get(key);
+  if (hit !== undefined) return hit;
+  let made: HTMLCanvasElement | null = null;
+  try {
+    if (typeof document !== "undefined") {
+      const base = 12;
+      const pad = Math.ceil(base * 1.6) + 2;
+      const c = document.createElement("canvas");
+      c.width = pad * 2;
+      c.height = pad * 2;
+      const g = c.getContext("2d");
+      if (g) {
+        paintArenaDecor(g as Ctx, pad, pad, base, kind, theme);
+        made = c;
+      }
+    }
+  } catch {
+    made = null;
+  }
+  decorSpriteCache.set(key, made);
+  return made;
+}
+
+/** 贴片层:主循环里每件要么 drawImage 一笔贴,要么矢量兜底 */
+function drawArenaDecorLayer(g: Ctx, o: BackgroundOpts): void {
+  const { w, h, zoom, theme } = o;
+  const px = o.camX * DECOR_PARALLAX;
+  const py = o.camY * DECOR_PARALLAX;
+  const halfW = w / 2 / zoom;
+  const halfH = h / 2 / zoom;
+  const ix0 = Math.floor((px - halfW) / DECOR_CELL) - 1;
+  const ix1 = Math.ceil((px + halfW) / DECOR_CELL) + 1;
+  const iy0 = Math.floor((py - halfH) / DECOR_CELL) - 1;
+  const iy1 = Math.ceil((py + halfH) / DECOR_CELL) + 1;
+  let budget = 240;
+  const canBlit = typeof (g as { drawImage?: unknown }).drawImage === "function";
+  g.save();
+  for (let iy = iy0; iy <= iy1 && budget > 0; iy++) {
+    for (let ix = ix0; ix <= ix1 && budget > 0; ix++) {
+      budget--;
+      const d = decorAt(ix, iy);
+      if (!d) continue;
+      const wx = (ix + d.u) * DECOR_CELL;
+      const wy = (iy + d.v) * DECOR_CELL;
+      const sx = w / 2 + (wx - px) * zoom;
+      const sy = h / 2 + (wy - py) * zoom;
+      const s = Math.max(2.8, d.s * zoom);
+      if (sx < -s * 2 || sy < -s * 2 || sx > w + s * 2 || sy > h + s * 2) continue;
+      g.globalAlpha = d.alpha;
+      const sprite = canBlit ? decorSprite(theme, d.kind) : null;
+      if (sprite) {
+        const dw = sprite.width * (s / 12);
+        g.drawImage(sprite, sx - dw / 2, sy - dw / 2, dw, dw);
+      } else {
+        paintArenaDecor(g, sx, sy, s, d.kind, theme);
+      }
+    }
+  }
+  g.restore();
+}
+
 export function drawArenaBackground(g: Ctx, o: BackgroundOpts): void {
   if (!fin(o.w) || !fin(o.h) || o.w <= 0 || o.h <= 0 || !fin(o.zoom) || o.zoom <= 0) return;
   const { w, h, zoom, theme } = o;
@@ -163,6 +314,9 @@ export function drawArenaBackground(g: Ctx, o: BackgroundOpts): void {
     g.arc(sx, sy, br, 0, TAU);
     g.fill();
   }
+
+  // 2.5) 中景具象贴片(圆斑层之上、网格层之下;确定性哈希,约 40% 格出件)
+  drawArenaDecorLayer(g, o);
 
   // 3) 中层网格降到 6% 透明
   const step = 100 * zoom;

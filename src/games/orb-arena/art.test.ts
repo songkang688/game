@@ -11,9 +11,13 @@ import {
   ARENA_THEMES,
   CANDY_COLORS,
   CREST_COLORS,
+  DECOR_CELL,
+  DECOR_PARALLAX,
   SPIKE_COUNT,
   ZONE_ORBIT_DOTS,
+  decorAt,
   drawArenaBackground,
+  paintArenaDecor,
   drawJellyOrb,
   drawMassCurve,
   drawNameTag,
@@ -223,6 +227,64 @@ describe("糖果竞技场背景与主题", () => {
     expect(s.count("createLinearGradient")).toBe(1);
     expect(s.count("createRadialGradient")).toBe(7);
     expect(s.calls.some((c) => c.method === "set:globalAlpha" && c.args[0] === 0.06)).toBe(true);
+  });
+
+  it("中景具象贴片(1.3 r1 P2):确定性布点,约 40% 格出件,尺寸 6–10 世界 px", () => {
+    // 同一格永远同一件(不引随机源)
+    expect(decorAt(3, 7)).toEqual(decorAt(3, 7));
+    expect(decorAt(-12, 40)).toEqual(decorAt(-12, 40));
+    // 400 格抽样:出件率落在 40% 附近(80/20 密度律:八成留白)
+    let hits = 0;
+    for (let i = 0; i < 20; i++) {
+      for (let j = 0; j < 20; j++) {
+        const d = decorAt(i, j);
+        if (!d) continue;
+        hits++;
+        expect([0, 1, 2]).toContain(d.kind);
+        expect(d.s).toBeGreaterThanOrEqual(3); // 直径 6–10 世界 px
+        expect(d.s).toBeLessThanOrEqual(5);
+        expect(d.alpha).toBeGreaterThanOrEqual(0.35);
+        expect(d.alpha).toBeLessThanOrEqual(0.5); // 永不抢主体
+        expect(d.u).toBeGreaterThanOrEqual(0);
+        expect(d.u).toBeLessThan(1);
+      }
+    }
+    expect(hits).toBeGreaterThanOrEqual(400 * 0.28);
+    expect(hits).toBeLessThanOrEqual(400 * 0.52);
+    expect(DECOR_CELL).toBe(176);
+    expect(DECOR_PARALLAX).toBe(0.3); // 与圆斑层同系数,不添第三档速度
+  });
+
+  it("三式贴片都是具象多笔画法(纯 fill、零渐变,不动摇背景 7 粒径向渐变契约)", () => {
+    for (const kind of [0, 1, 2] as const) {
+      const s = makeStubCtx();
+      paintArenaDecor(s.ctx, 40, 40, 5, kind, ARENA_THEMES[0]);
+      expect(s.count("fill"), `kind ${kind} 不是多笔具象`).toBeGreaterThanOrEqual(2);
+      expect(s.count("createRadialGradient")).toBe(0);
+      expect(s.count("createLinearGradient")).toBe(0);
+      expect(s.distinctFillStyles().length, `kind ${kind} 缺双色阶`).toBeGreaterThanOrEqual(2);
+    }
+    // 三式互异(不是一式换色)
+    const snaps = ([0, 1, 2] as const).map((k) => {
+      const s = makeStubCtx();
+      paintArenaDecor(s.ctx, 40, 40, 5, k, ARENA_THEMES[0]);
+      return s.snapshot();
+    });
+    expect(new Set(snaps).size).toBe(3);
+    // 非法输入不画
+    const bad = makeStubCtx();
+    paintArenaDecor(bad.ctx, Number.NaN, 0, 5, 0, ARENA_THEMES[0]);
+    expect(bad.count("fill")).toBe(0);
+  });
+
+  it("背景整帧带贴片层:fill 数超过 7 粒圆斑,且同机位两帧逐笔一致(静态无闪烁)", () => {
+    const opts = { w: 320, h: 180, camX: 400, camY: 400, zoom: 1, mapW: 800, mapH: 800, theme: ARENA_THEMES[0] };
+    const a = makeStubCtx();
+    drawArenaBackground(a.ctx, opts);
+    expect(a.count("fill")).toBeGreaterThan(7);
+    const b = makeStubCtx();
+    drawArenaBackground(b.ctx, opts);
+    expect(a.snapshot()).toBe(b.snapshot());
   });
 
   it("走到世界边缘看得见糖果条纹墙,不是「突然没了」", () => {
