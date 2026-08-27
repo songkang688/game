@@ -104,16 +104,77 @@ export function isRealClipper(el: { scrollHeight?: number; clientHeight?: number
   return Math.abs(sh - ch) > 1;
 }
 
-/** 这个盒子头上有哪些「真会裁人」的祖先，各自的下沿在哪儿 */
-export function clipperBottoms(el: HTMLElement, view: ViewLike): number[] {
+/**
+ * 一条边界认下之后，还算不算数。
+ *
+ * `isRealClipper()` 问的是「**这一刻**它裁不裁人」，而 `.game-stage` 是**定高**的：
+ * 内容比它高时 `scrollHeight` 才大于 `clientHeight`，一旦水面收到刚好装得下，
+ * 浏览器就把 `scrollHeight` 夹回 `clientHeight`（定高盒子的 `scrollHeight` 恒 ≥ `clientHeight`），
+ * 两者相等，于是这一问当场回答成「不裁」——**可它明明还是那条边界**。
+ * 真机 320×640 上量到的就是这个：水面从 180 弹回 230（`innerHeight` 猜出来的没钳过的值），
+ * 「🎣 按住抛竿」的中心掉到舞台下沿以下 12px，要等下一个 `REFIT_MS`（实测 314ms）才收回来。
+ *
+ * 所以判据要分成两问：**没认下过**就问「这一刻裁不裁」，**认下过**就一直算数。
+ * 缩包盒（`.l99-stage-wrap` 那种高度被内容撑出来的）永远满足 `scrollHeight === clientHeight`，
+ * 一次都不会被认下，`W5R2-LB-02` 踩过的「自己追自己」的死循环不会回来。
+ */
+export function staysClipLine(alreadySeen: boolean, el: { scrollHeight?: number; clientHeight?: number }): boolean {
+  return alreadySeen || isRealClipper(el);
+}
+
+/** 会记事的那把尺子：认下过的裁切线不会因为「这一刻装得下」就消失 */
+export interface ClipWatch {
+  /** 已经认下几条裁切线（用例靠它判缩包盒有没有被误认） */
+  readonly latched: number;
+  /** 这个盒子头顶到最近一条裁切线还剩多少（一条都没有就是 `Infinity`） */
+  roomPx(el: HTMLElement, view?: ViewLike | null): number;
+}
+
+export function createClipWatch(): ClipWatch {
+  const seen = new WeakSet<object>();
+  let latched = 0;
+  function bottoms(el: HTMLElement, view: ViewLike): number[] {
+    return bottomsOfClippers(el, view, (p) => {
+      const already = seen.has(p);
+      if (!staysClipLine(already, p)) return false;
+      if (!already) {
+        seen.add(p);
+        latched += 1;
+      }
+      return true;
+    });
+  }
+  return {
+    get latched(): number {
+      return latched;
+    },
+    roomPx(el: HTMLElement, view?: ViewLike | null): number {
+      const v = view ?? (el.ownerDocument?.defaultView as unknown as ViewLike | undefined) ?? null;
+      if (!v || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
+      return visibleRoomPx(el.getBoundingClientRect().top, bottoms(el, v));
+    },
+  };
+}
+
+/** 沿祖先链找出「`overflow` 不是 `visible` 且 `keep` 认下」的那几层，各自的下沿在哪儿 */
+function bottomsOfClippers(
+  el: HTMLElement,
+  view: ViewLike,
+  keep: (p: HTMLElement) => boolean
+): number[] {
   const out: number[] = [];
   for (let p = el.parentElement; p; p = p.parentElement) {
     const oy = view.getComputedStyle(p).overflowY;
     if (oy !== "auto" && oy !== "scroll" && oy !== "hidden") continue;
-    if (!isRealClipper(p)) continue;
+    if (!keep(p)) continue;
     out.push(p.getBoundingClientRect().bottom);
   }
   return out;
+}
+
+/** 这个盒子头上有哪些「**这一刻**真会裁人」的祖先，各自的下沿在哪儿（不记事的那把尺子） */
+export function clipperBottoms(el: HTMLElement, view: ViewLike): number[] {
+  return bottomsOfClippers(el, view, isRealClipper);
 }
 
 /** 这个盒子头顶到最近一条裁切线还剩多少（没有裁切祖先就是 `Infinity`） */

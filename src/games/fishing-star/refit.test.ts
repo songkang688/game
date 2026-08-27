@@ -92,19 +92,22 @@ describe("钓场 · needsImmediateRefit：高度一变就当帧重排", () => {
 });
 
 describe("钓场 · 主循环真的接上了这一条", () => {
-  it("frame() 里量这一屏的高度，变了就当帧 layout()", () => {
+  it("frame() 里量这一屏的高度，变了就当帧重排", () => {
     const at = shell.indexOf("function frame(");
     expect(at, "frame() 不见了，这条断言得跟着改").toBeGreaterThan(0);
     const body = shell.slice(at, shell.indexOf("\n  }", at));
     expect(body).toContain("needsImmediateRefit(");
-    expect(body).toContain("layout();");
+    // 第 2 轮档B 监督修复员把这一句换成了收敛版（一趟收完 chrome 会跟着变，得再量一次）
+    expect(body).toContain("refitNow();");
+    const refit = shell.slice(shell.indexOf("function refitNow("));
+    expect(refit.slice(0, refit.indexOf("\n  }"))).toContain("layout();");
   });
 
   it("重排之后要再画一次——layout() 会重设画布尺寸，等于把画面擦了", () => {
     const at = shell.indexOf("needsImmediateRefit(");
     expect(at).toBeGreaterThan(0);
     const after = shell.slice(at, at + 400);
-    expect(after.indexOf("layout();")).toBeLessThan(after.indexOf("render();"));
+    expect(after.indexOf("refitNow();")).toBeLessThan(after.indexOf("render();"));
   });
 
   it("REFIT_MS 那条周期性兜底还在（转屏 / 字体加载不改文字也会变高）", () => {

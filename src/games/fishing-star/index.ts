@@ -55,7 +55,7 @@ import {
   type GearBonus,
   type GearSet,
 } from "./gear";
-import { needsImmediateRefit, resetClippedScroll, seaHeightPx, stageRoomPx } from "./fit";
+import { createClipWatch, needsImmediateRefit, resetClippedScroll, seaHeightPx } from "./fit";
 import { createLedger } from "./runtime";
 import {
   BAND_LUCK,
@@ -655,6 +655,11 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
   let W = 320;
   let H = 260;
 
+  // 一条裁切线认下之后就一直算数。只问「这一刻裁不裁」会在水面收到刚好装得下的那一帧
+  // 把舞台弄丢(定高盒子的 scrollHeight 会被夹回 clientHeight),钳位整条被跳过,
+  // 水面一口气弹回按 innerHeight 猜的那个值,把抛竿键顶出舞台 —— 见 fit.ts 的 staysClipLine。
+  const clipWatch = createClipWatch();
+
   /** 这一屏现在应该多宽多高（纯测量，不写任何东西） */
   function wantedSize(): { w: number; h: number } {
     const avail = clamp(host.clientWidth || 340, 240, 620);
@@ -667,7 +672,7 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     // l99 抬头 + 关卡 HUD 在矮屏上要吃掉两百多像素,而多出来的部分被 .game-stage
     // (定高 + overflow:hidden,平台文件,交窗口1)直接裁掉。这里量一次真实可视高
     // 再倒推水面——水面以外那几行(HUD / 风向 / 张力条 / 提示 / 大按钮)就是 chrome。
-    const room = stageRoomPx(wrap);
+    const room = clipWatch.roomPx(wrap);
     if (Number.isFinite(room) && typeof wrap.getBoundingClientRect === "function") {
       const chrome = Math.max(0, wrap.getBoundingClientRect().height - seaBox.getBoundingClientRect().height);
       want = seaHeightPx(want, room, chrome);
@@ -692,6 +697,20 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     canvas.style.width = `${W}px`;
     canvas.style.height = `${H}px`;
     g?.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  /**
+   * 重排到不动为止。
+   *
+   * 一趟只收水面,可 chrome(HUD / 提示行那几排)会跟着这一趟变——320px 宽上
+   * HUD 那排药丸的折行数就跟着水面走。收完再量一次,直到高度不再变化。
+   * `layout()` 幂等,所以「不变了」就是 0 成本的一次空跑;三趟封顶,不给它机会来回荡。
+   */
+  function refitNow(): void {
+    for (let i = 0; i < 3; i++) {
+      const before = H;
+      layout();
+      if (H === before) break;
+    }
   }
   layout();
   /** 上一帧量到的这一屏总高:变了就当帧重排(见 frame() 里那一段) */
@@ -1229,7 +1248,7 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     sinceFit += dt;
     if (sinceFit >= REFIT_MS) {
       sinceFit = 0;
-      layout();
+      refitNow();
     }
     if (!paused && !finished) tick(dt);
     render();
@@ -1243,7 +1262,7 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     const nowWrapH = wrap.getBoundingClientRect?.().height ?? 0;
     if (needsImmediateRefit(lastWrapH, nowWrapH)) {
       sinceFit = 0;
-      layout();
+      refitNow();
       // layout() 会重设画布尺寸,等于把画面擦了,得补画一次
       render();
       lastWrapH = wrap.getBoundingClientRect?.().height ?? nowWrapH;

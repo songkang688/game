@@ -278,8 +278,11 @@ describe("钓场 · 水面按真实可视高排版", () => {
     expect(shell).toContain("if (sinceFit >= REFIT_MS)");
   });
 
-  it("量的是 stageRoomPx，不是只拿 innerHeight 猜", () => {
-    expect(shell).toContain("const room = stageRoomPx(wrap);");
+  it("量的是真实可视高，不是只拿 innerHeight 猜", () => {
+    // 第 2 轮档B 监督修复员换成了会记事的那把尺子（`createClipWatch`）：
+    // 无状态的 `stageRoomPx` 会在「这一刻正好装得下」的那一帧把舞台弄丢。
+    // 见 `clipLatch.test.ts`。这里只钉「量过、并且量出来的数真的喂给了 seaHeightPx」。
+    expect(shell).toContain("const room = clipWatch.roomPx(wrap);");
     expect(shell).toContain("seaHeightPx(want, room, chrome)");
   });
 
