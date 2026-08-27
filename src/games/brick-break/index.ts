@@ -58,8 +58,15 @@ import {
   type TowerState
 } from "./logic";
 
+import { paintCandyBrick } from "../../art/kit/candyBrick";
+import { crackLevel } from "./visual";
+
 const BRICK_COLORS = ["#FF9EC8", "#FFD26E", "#9FE08D", "#8FCBFF", "#C9A0F0", "#FFB48A"];
 const PORTAL_COLOR = "#7B6CD9";
+
+/** 浮雕标记的两层墨色：亮唇在下、墨色压上（光源统一左上 45°） */
+const MARK_LIGHT = "rgba(255,255,255,.8)";
+const MARK_INK = "rgba(74,58,88,.65)";
 
 /** 冒烟脚本才需要逐帧状态镜像，正常游玩不写 DOM 属性 */
 const SMOKE = typeof location !== "undefined" && /[?&]smoke=1/.test(location.search);
@@ -127,11 +134,18 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 // 画砖 / 画球：闯关与无尽共用同一套笔触
 // ---------------------------------------------------------------------------
 
-function drawMark(c2d: CanvasRenderingContext2D, mark: BrickMark, x: number, y: number, w: number, h: number): void {
-  if (mark === "none") return;
-  c2d.save();
-  c2d.strokeStyle = "rgba(255,255,255,.9)";
-  c2d.fillStyle = "rgba(255,255,255,.9)";
+/** 标记的一遍笔触：几何与 1.2 完全一致，只把颜色抽成参数，浮雕靠画两遍 */
+function markPass(
+  c2d: CanvasRenderingContext2D,
+  mark: BrickMark,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  tone: string
+): void {
+  c2d.strokeStyle = tone;
+  c2d.fillStyle = tone;
   c2d.lineWidth = 1.6;
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -167,15 +181,24 @@ function drawMark(c2d: CanvasRenderingContext2D, mark: BrickMark, x: number, y: 
     c2d.closePath();
     c2d.fill();
   } else if (mark === "shine") {
-    c2d.strokeStyle = "#FFF6DF";
+    c2d.strokeStyle = tone;
     c2d.lineWidth = 2;
     c2d.beginPath();
     c2d.roundRect(x, y, w, h, 5);
     c2d.stroke();
   }
+}
+
+/** 特殊砖标记升级成内凹浮雕：亮唇偏移 1px 在下、墨色压上，图案通道语义不变 */
+function drawMark(c2d: CanvasRenderingContext2D, mark: BrickMark, x: number, y: number, w: number, h: number): void {
+  if (mark === "none") return;
+  c2d.save();
+  markPass(c2d, mark, x, y + 1, w, h, mark === "shine" ? "#FFF6DF" : MARK_LIGHT);
+  markPass(c2d, mark, x, y, w, h, MARK_INK);
   c2d.restore();
 }
 
+/** 果冻糖砖：五道工序交给 kit/candyBrick；多血砖掉几档血就叠几层裂纹 */
 function drawBrick(
   c2d: CanvasRenderingContext2D,
   x: number,
@@ -183,12 +206,11 @@ function drawBrick(
   w: number,
   h: number,
   color: string,
-  mark: BrickMark
+  mark: BrickMark,
+  cracks = 0,
+  crackSeed = 1
 ): void {
-  c2d.fillStyle = color;
-  c2d.beginPath();
-  c2d.roundRect(x, y, w, h, 5);
-  c2d.fill();
+  paintCandyBrick(c2d, x, y, w, h, color, { cracks, crackSeed });
   drawMark(c2d, mark, x, y, w, h);
 }
 
@@ -702,7 +724,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         }
         if (grid[r][c] === KIND.EMPTY) continue;
         const face = faceOf(r, c);
-        drawBrick(c2d, x, y, brickW - 4, BRICK_H - 4, face.color, face.mark);
+        drawBrick(c2d, x, y, brickW - 4, BRICK_H - 4, face.color, face.mark, crackLevel(orig, grid[r][c]), r * 31 + c);
       }
     }
     for (const cap of capsules) drawCapsule(c2d, cap);
@@ -1136,7 +1158,7 @@ function mountTower(host: HTMLElement, api: GameApi, back: () => void): { destro
         if (kind === KIND.EMPTY) continue;
         const face = brickFace(kind, kind);
         const color = kind === KIND.NORMAL ? BRICK_COLORS[(r + c) % BRICK_COLORS.length] : face.color;
-        drawBrick(c2d, c * brickW + 2, y + 2, brickW - 4, BRICK_H - 4, color, face.mark);
+        drawBrick(c2d, c * brickW + 2, y + 2, brickW - 4, BRICK_H - 4, color, face.mark, 0, r * 31 + c);
       }
     }
     for (const cap of capsules) drawCapsule(c2d, cap);
