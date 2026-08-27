@@ -341,6 +341,23 @@ export function mount(api: GameAPI): { destroy: () => void } {
   const rings: Ring[] = [];
   const floats: Floaty[] = [];
 
+  /**
+   * 系统开了「减弱动态效果」。
+   * 切水果整块是 canvas,动效全在帧循环里用 JS 画,没有 CSS 动画可以挂 `@media`,
+   * 所以这里自己读一次媒体查询,把**纯装饰**的那几样压下去:
+   * 刀光拖尾短一截、迸溅和光圈几乎立刻收、飘分不再往上飘、彩虹刀不再刷色相。
+   * 水果的抛物线、判定、计时一概不动——那是玩法,不是动效。
+   */
+  const reducedMotion = typeof matchMedia === "function"
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /** 装饰性残留的消退倍速:减弱动效时收得快得多 */
+  const FX_FADE = reducedMotion ? 5 : 1;
+
+  /** 刀光拖尾留几帧、留多久 */
+  const TRAIL_MAX = reducedMotion ? 5 : 16;
+  const TRAIL_SEC = reducedMotion ? 0.06 : 0.18;
+
   let time = 0;
   let launchTimer = 0.8;
   let slicing = false;
@@ -1212,7 +1229,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     lastX = x;
     lastY = y;
     trail.push({ x, y, t: time });
-    if (trail.length > 16) trail.shift();
+    if (trail.length > TRAIL_MAX) trail.shift();
   }
 
   function onPointerUp(): void {
@@ -1273,16 +1290,17 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     for (let i = floats.length - 1; i >= 0; i--) {
       floats[i].life -= rawDt;
-      floats[i].y -= rawDt * 32;
+      // 减弱动效时飘分停在原地,只淡出——分数照样读得到
+      if (!reducedMotion) floats[i].y -= rawDt * 32;
       if (floats[i].life <= 0) floats.splice(i, 1);
     }
-    while (trail.length > 0 && time - trail[0].t > 0.18) trail.shift();
+    while (trail.length > 0 && time - trail[0].t > TRAIL_SEC) trail.shift();
     for (let i = splashes.length - 1; i >= 0; i--) {
-      splashes[i].life -= dt;
+      splashes[i].life -= dt * FX_FADE;
       if (splashes[i].life <= 0) splashes.splice(i, 1);
     }
     for (let i = rings.length - 1; i >= 0; i--) {
-      rings[i].life -= rawDt;
+      rings[i].life -= rawDt * FX_FADE;
       if (rings[i].life <= 0) rings.splice(i, 1);
     }
 
@@ -2099,13 +2117,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.lineJoin = "round";
     for (let i = 1; i < trail.length; i++) {
       const age = time - trail[i].t;
-      const alpha = Math.max(0, 1 - age / 0.18);
+      const alpha = Math.max(0, 1 - age / TRAIL_SEC);
       // 刀光加宽到最粗 24px(白芯)+32px(粉晕),和判定走廊一致,孩子看得清切到哪
       const width = 18 * (i / trail.length) + 6;
       ctx.globalAlpha = alpha * 0.45;
       // 彩虹刀余辉:整条刀光换成彩虹渐变(1.2 的一划切 ≥4 颗奖励演出)
+      // 减弱动效时彩虹刀不再逐帧刷色相(那是闪烁),换成沿刀身的一段固定渐变
       ctx.strokeStyle = rainbowBlade > 0
-        ? `hsl(${((time * 200 + i * 26) % 360).toFixed(0)}, 85%, 68%)`
+        ? `hsl(${(((reducedMotion ? 0 : time * 200) + i * 26) % 360).toFixed(0)}, 85%, 68%)`
         : "#ff9eb5";
       ctx.lineWidth = width + 8;
       ctx.beginPath();

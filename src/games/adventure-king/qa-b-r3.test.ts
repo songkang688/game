@@ -139,9 +139,9 @@ describe("档B R3 · 五款横扫 · 360px 一份源码都不漏", () => {
    * B3-01(本轮测试员新查出来的):五款里只有 `fruit-slice` 一份源码都没提
    * `prefers-reduced-motion`。前两轮的窄屏走查只翻各款的 `index.ts` 内联样式,
    * 而切水果整块是 canvas、没有内联 CSS 动画,就这么漏过去了。
-   * 这条先按现状钉住,交给本轮修复员收;修复员落地后把它翻成「五款全过」。
+   * 本轮监督修复员已收(见 `fruit-slice/index.ts` 的 `reducedMotion`),这里翻成五款全过。
    */
-  it("五款里有四款照顾了 prefers-reduced-motion,切水果是这一轮查出来的缺口", () => {
+  it("五款都照顾了 prefers-reduced-motion(B3-01 已收)", () => {
     const missing: string[] = [];
     for (const game of DOCK_B_GAMES) {
       const sources = readGameSources(game);
@@ -149,7 +149,7 @@ describe("档B R3 · 五款横扫 · 360px 一份源码都不漏", () => {
       const css = sources.map(inlineCss).join("\n");
       if (!respectsReducedMotion(css) && !text.includes("prefers-reduced-motion")) missing.push(game);
     }
-    expect(missing, "缺口游戏跟测试员记的 B3-01 对不上").toEqual(["fruit-slice"]);
+    expect(missing, `这几款没照顾 prefers-reduced-motion:${missing.join("、")}`).toEqual([]);
   });
 
   it("五款都读得到源码,而且每款都有 index.ts(闸门本身没扫空)", () => {
