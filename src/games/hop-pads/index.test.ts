@@ -7,8 +7,36 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GameApi } from "../level99";
-import { El, flushFrames, installDom, restoreDom, windowListenerCount, type Dom } from "./domStub";
+import {
+  DUST_PUFFS,
+  FOG_MAX,
+  HERO_TRIM,
+  ONCE_SHARDS,
+  PERFECT_STARS,
+  SKY_THEMES,
+  chargeColor,
+  fogAlpha,
+  mixColor,
+  padTopPattern,
+  skyTheme,
+  spawnDustPuff,
+  spawnPerfectBurst,
+  spawnShards,
+  stepParticles,
+  type HeroPose,
+} from "./art";
+import {
+  El,
+  flushFrames,
+  installDom,
+  makeRecordingCtx,
+  restoreDom,
+  useRecordingCtx,
+  windowListenerCount,
+  type Dom,
+} from "./domStub";
 import { MAX_HOLD, powerForDistance } from "./physics";
+import { makePad, type PadKind } from "./pads";
 import { requiredPower } from "./run";
 import { levelDifficulty } from "./levels";
 import {
@@ -16,11 +44,15 @@ import {
   FALL_TIME,
   IDLE_KEYS,
   createStage,
+  drawHero,
+  drawPad,
+  drawResultCard,
   fitScale,
   meta,
   mount,
   project,
   singleKeyHint,
+  type Camera,
   type Stage,
 } from "./index";
 
@@ -564,5 +596,200 @@ describe("四种模式都开得出来", () => {
     handle.destroy();
     expect(dom.root.children.length).toBe(0);
     expect(windowListenerCount(dom)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约:只断言「画了什么、画得不一样」,判定一个数都不碰
+// ---------------------------------------------------------------------------
+
+describe("1.3 视觉契约 · 纯函数资产", () => {
+  const cam: Camera = { x: 0, z: 0, scale: 1, w: 360, h: 400, shake: 0 };
+
+  it("project() 输出回归:改版前后同输入同输出", () => {
+    expect(project(cam, 0, 0)).toEqual({ sx: 180, sy: 296 });
+    expect(project(cam, 40, 100, 20)).toEqual({ sx: 220, sy: 224 });
+    const cam2: Camera = { x: 10, z: 5, scale: 1.4, w: 800, h: 260, horizon: 0.68, shake: 3 };
+    const p = project(cam2, -6, 30, 12);
+    expect(p.sx).toBeCloseTo(400 + (-6 - 10) * 1.4, 10);
+    expect(p.sy).toBeCloseTo(260 * 0.68 - (30 - 5) * 1.4 * 0.52 - 12 * 1.4 + 3, 10);
+  });
+
+  it("深度雾按 z 生效:远台罩色更浓(单调不减),封顶 FOG_MAX", () => {
+    expect(fogAlpha(0)).toBe(0);
+    expect(fogAlpha(120)).toBe(0);
+    expect(fogAlpha(300)).toBeGreaterThan(0);
+    expect(fogAlpha(520)).toBeGreaterThan(fogAlpha(300));
+    expect(fogAlpha(5000)).toBe(FOG_MAX);
+  });
+
+  it("天空时段查表:非无尽恒白天,无尽每 20 跳向下一时段插值,星夜有星星", () => {
+    expect(skyTheme(50, false)).toEqual(SKY_THEMES[0]);
+    expect(skyTheme(0, true).top).toBe(SKY_THEMES[0].top);
+    expect(skyTheme(20, true).top).toBe(SKY_THEMES[1].top);
+    expect(skyTheme(40, true).top).toBe(SKY_THEMES[2].top);
+    expect(skyTheme(40, true).stars).toBeGreaterThan(0);
+    const mid = skyTheme(10, true).top;
+    expect(mid).not.toBe(SKY_THEMES[0].top);
+    expect(mid).not.toBe(SKY_THEMES[1].top);
+    expect(mixColor("#000000", "#FFFFFF", 0.5)).toBe("#808080");
+  });
+
+  it("调色板契约:主题与台面色全是合法 #RRGGBB,顶面/侧壁两阶,双人配饰色不同", () => {
+    const HEX = /^#[0-9A-F]{6}$/i;
+    for (const t of SKY_THEMES) {
+      for (const c of [t.top, t.horizon, t.ground, t.hill, t.island, t.cloud, t.ink]) expect(c).toMatch(HEX);
+    }
+    for (const k of ["steady", "slider", "shrink", "spring", "once"]) {
+      const st = padTopPattern(k);
+      expect(st.top).toMatch(HEX);
+      expect(st.side).toMatch(HEX);
+      expect(st.accent).toMatch(HEX);
+      expect(st.top).not.toBe(st.side);
+    }
+    expect(HERO_TRIM.duo).not.toBe(HERO_TRIM.star);
+    expect(chargeColor(0)).not.toBe(chargeColor(1));
+  });
+
+  it("粒子纯函数:完美 4 星 / 尘土 2 粒 / 碎片 3 块,reduced 全零,寿命到点自动清走", () => {
+    expect(spawnPerfectBurst(0, 0, 1, false)).toHaveLength(PERFECT_STARS);
+    expect(spawnDustPuff(0, 0, 1, false)).toHaveLength(DUST_PUFFS);
+    expect(spawnShards(0, 0, 1, "#84C4AC", false)).toHaveLength(ONCE_SHARDS);
+    expect(spawnPerfectBurst(0, 0, 1, true)).toHaveLength(0);
+    expect(spawnDustPuff(0, 0, 1, true)).toHaveLength(0);
+    expect(spawnShards(0, 0, 1, "#84C4AC", true)).toHaveLength(0);
+    let ps = spawnPerfectBurst(0, 0, 1, false);
+    ps = stepParticles(ps, 0.1);
+    expect(ps).toHaveLength(PERFECT_STARS);
+    expect(stepParticles(ps, 10)).toHaveLength(0);
+  });
+
+  it("双人可分辨:朵朵与星星的绘制序列不同(花苞呆毛裙边 / 星星呆毛披风)", () => {
+    const ops = (variant: "duo" | "star"): string => {
+      const rec = makeRecordingCtx();
+      drawHero(rec.ctx, cam, { x: 0, z: 0, y: 0 }, 0, "#F2A268", { variant, pose: "idle", t: 1 });
+      return rec.ops.join("|");
+    };
+    expect(ops("duo").length).toBeGreaterThan(0);
+    expect(ops("duo")).not.toBe(ops("star"));
+  });
+
+  it("姿态可分辨:蓄力眯眼 / 飞行圆睁 / 落地咧嘴笑 / 坠落 >< 眼,两两不同", () => {
+    const ops = (pose: HeroPose): string => {
+      const rec = makeRecordingCtx();
+      drawHero(rec.ctx, cam, { x: 0, z: 0, y: 0 }, 0, "#F2A268", { variant: "duo", pose, t: 1 });
+      return rec.ops.join("|");
+    };
+    const faces = (["charge", "fly", "land", "fall"] as const).map(ops);
+    for (let i = 0; i < faces.length; i++) {
+      for (let j = i + 1; j < faces.length; j++) expect(faces[i]).not.toBe(faces[j]);
+    }
+  });
+
+  it("连击皇冠:crown 分支画得出来,reduced 换成安静光环,都和素颜不同", () => {
+    const ops = (crown: boolean, reduced: boolean): string => {
+      const rec = makeRecordingCtx();
+      drawHero(rec.ctx, cam, { x: 0, z: 0, y: 0 }, 0, "#F2A268", { variant: "duo", pose: "idle", crown, reduced, t: 1 });
+      return rec.ops.join("|");
+    };
+    expect(ops(true, false)).not.toBe(ops(false, false));
+    expect(ops(true, true)).not.toBe(ops(true, false));
+  });
+
+  it("台子种类绘制互不相同,字符占位真的移除了", () => {
+    const ops = (kind: PadKind): string => {
+      const rec = makeRecordingCtx();
+      drawPad(rec.ctx, cam, makePad({ kind, x: 0, z: 0, r: 40 }), {});
+      return rec.ops.join("|");
+    };
+    const faces = (["steady", "slider", "shrink", "spring", "once"] as const).map(ops);
+    for (let i = 0; i < faces.length; i++) {
+      expect(faces[i].length).toBeGreaterThan(0);
+      for (let j = i + 1; j < faces.length; j++) expect(faces[i]).not.toBe(faces[j]);
+    }
+    expect(faces.join("")).not.toContain("fillText");
+  });
+
+  it("一次台被踩住裂纹加倍;深度雾与入场淡入都按 globalAlpha 生效", () => {
+    const ops = (o: Parameters<typeof drawPad>[3]): string[] => {
+      const rec = makeRecordingCtx();
+      drawPad(rec.ctx, cam, makePad({ kind: "once", x: 0, z: 0, r: 40 }), o);
+      return rec.ops;
+    };
+    expect(ops({ standing: true }).join("|")).not.toBe(ops({ standing: false }).join("|"));
+    expect(ops({ fog: 0.3 })).toContain("globalAlpha=0.3");
+    expect(ops({ entry: 0.5 })).toContain("globalAlpha=0.5");
+  });
+
+  it("结算卡画得出:完美率进度环 + 胜者与败者不同帧", () => {
+    const rec = makeRecordingCtx();
+    drawResultCard(rec.ctx, {
+      heroes: [
+        { color: "#F2A268", variant: "duo", win: true },
+        { color: "#7FA7EA", variant: "star", win: false },
+      ],
+      hops: 10,
+      perfects: 6,
+      far: 12,
+    });
+    expect(rec.ops.length).toBeGreaterThan(20);
+    expect(rec.ops.some((o) => o.startsWith("arc"))).toBe(true);
+    const win = makeRecordingCtx();
+    drawResultCard(win.ctx, { heroes: [{ color: "#F2A268", variant: "duo", win: true }], hops: 5, perfects: 5, far: 6 });
+    const lose = makeRecordingCtx();
+    drawResultCard(lose.ctx, { heroes: [{ color: "#F2A268", variant: "duo", win: false }], hops: 5, perfects: 5, far: 6 });
+    expect(win.ops.join("|")).not.toBe(lose.ops.join("|"));
+  });
+});
+
+describe("1.3 视觉契约 · 舞台联动", () => {
+  function newStage(): Stage {
+    const host = new El("div") as unknown as HTMLElement;
+    dom.root.appendChild(host as unknown as El);
+    return createStage(host, { seed: 4321, difficulty: levelDifficulty(0, 0), sfx: () => undefined });
+  }
+
+  it("一帧 draw() 绘制非空,背景走天空渐变 + 视差层路径", () => {
+    const rec = makeRecordingCtx();
+    useRecordingCtx(rec.ctx);
+    const stage = newStage();
+    stage.tick(16);
+    expect(rec.ops.length).toBeGreaterThan(50);
+    expect(rec.ops.some((o) => o.startsWith("createLinearGradient"))).toBe(true);
+    expect(rec.ops.filter((o) => o.startsWith("addColorStop")).length).toBeGreaterThanOrEqual(3);
+    expect(rec.ops.some((o) => o.startsWith("ellipse"))).toBe(true);
+    stage.destroy();
+  });
+
+  it("完美落点触发星星粒子、扩散环与台顶发光;连击满 3 冒皇冠", () => {
+    const stage = newStage();
+    stage.tick(20);
+    stage.press();
+    stage.release(requiredPower(stage.state()) * MAX_HOLD);
+    stage.tick(760);
+    expect(stage.state().perfects).toBe(1);
+    expect(stage.fx().particles).toBeGreaterThan(0);
+    expect(stage.fx().ring).toBeGreaterThan(0);
+    expect(stage.fx().glow).toBeGreaterThan(0);
+    perfectJump(stage);
+    perfectJump(stage);
+    expect(stage.state().combo).toBeGreaterThanOrEqual(3);
+    expect(stage.fx().crown).toBe(true);
+    stage.destroy();
+  });
+
+  it("reduced:完美落点无粒子、无扩散环,只留台顶发光这种淡出", () => {
+    restoreDom();
+    dom = installDom(360, true);
+    const stage = newStage();
+    stage.tick(20);
+    stage.press();
+    stage.release(requiredPower(stage.state()) * MAX_HOLD);
+    stage.tick(760);
+    expect(stage.state().perfects).toBe(1);
+    expect(stage.fx().particles).toBe(0);
+    expect(stage.fx().ring).toBe(0);
+    expect(stage.fx().glow).toBeGreaterThan(0);
+    stage.destroy();
   });
 });
