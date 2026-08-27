@@ -14,51 +14,69 @@
  * 本款**明确不做 188 关战役**：纯反应对战硬凑 188 关只会变成「同一局重复 188 遍」的注水，
  * 平台传进来的第 N 关改成映射「人机档 + 擂台」，见 `levelToArenaSetup`。
  */
+import { AI_LEVELS, AI_SPECS, MIN_COUNTER_WINDOW_S, reactionOf, type AiLevel, type AiSpec } from "./ai";
 import { makeRng, type SpawnEvent, type TargetKind } from "./logic";
 
 /* ---------------- 一、人机四档 ---------------- */
 
-/** 0 菜鸟 / 1 普通 / 2 高手 / 3 地狱 */
+/**
+ * 0 菜鸟 / 1 普通 / 2 高手 / 3 地狱 —— 就是 `AI_LEVELS` 的下标。
+ *
+ * **这一节的数据全部从 `ai.ts` 的 `AI_SPECS` 推出来,一个数都不再手写。**
+ * 1.2 之前这里是一张自己的表:反应 0.62 / 0.40 / 0.22 / 0.16、
+ * 漏点 0.4 / 0.2 / 0.07 / 0.02、误点炸弹 0.3 / 0.14 / 0.04 / 0.012。
+ * 可**擂台真正跑的是 `ai.ts` 那张表**(`index.ts` 走 `createBrain`),
+ * 那边的数字是 0.85 / 0.48 / 0.30 / 0.18。两张表从头到尾对不上,
+ * 连写给孩子看的说明都在报错的数——「它也要 0.22 秒才反应过来」,
+ * 实际上高手档要 0.30 秒。
+ *
+ * 同一款游戏的同一个「四档」只能有一份定义。推导出来之后,
+ * 这一节仍然是纯数据、仍然可以被单测逐条断言,但它再也不可能和真正在跑的那张表跑偏。
+ */
 export type ArenaAiLevel = 0 | 1 | 2 | 3;
 
 export const ARENA_AI_LEVELS: readonly ArenaAiLevel[] = [0, 1, 2, 3];
 
-export const ARENA_AI_LABELS: Record<ArenaAiLevel, string> = {
-  0: "菜鸟",
-  1: "普通",
-  2: "高手",
-  3: "地狱",
-};
+/** 档号 → `ai.ts` 里那一档的名字(越界当普通档) */
+export function arenaAiName(level: ArenaAiLevel): AiLevel {
+  return AI_LEVELS[level] ?? "normal";
+}
 
-export const ARENA_AI_HINTS: Record<ArenaAiLevel, string> = {
-  0: "手慢半拍，还常常点到炸弹，第一次上擂台挑它",
-  1: "反应一般，偶尔手滑，稳住就能赢",
-  2: "眼疾手快，但它也要 0.22 秒才反应过来，抢那半拍",
-  3: "几乎不失误，可它照样有 0.16 秒的反应时间——你先手就还有机会",
-};
+/** 按档号摊平成一张 0..3 的表 */
+function byArenaLevel<T>(pick: (spec: AiSpec) => T): Record<ArenaAiLevel, T> {
+  const out = {} as Record<ArenaAiLevel, T>;
+  for (const lv of [0, 1, 2, 3] as ArenaAiLevel[]) out[lv] = pick(AI_SPECS[arenaAiName(lv)]);
+  return out;
+}
+
+export const ARENA_AI_LABELS: Record<ArenaAiLevel, string> = byArenaLevel((s) => s.label);
+
+/**
+ * 写给孩子看的一句话。
+ *
+ * 后半句那个秒数**必须从规格里取**:手写过一次,就写错过一次。
+ * 这句话的用处是告诉孩子「它也要愣一下,抢那半拍就是你的机会」——
+ * 数字错了,这句话就成了骗人的。
+ */
+export const ARENA_AI_HINTS: Record<ArenaAiLevel, string> = byArenaLevel(
+  (s) => `${s.blurb}它也要 ${s.reactionS.toFixed(2)} 秒才反应得过来,抢那半拍就是你的机会。`
+);
 
 /** 看见一个目标之后要多久才点得到（秒）：这就是它的反应窗口 */
-export const ARENA_AI_REACTION: Record<ArenaAiLevel, number> = {
-  0: 0.62,
-  1: 0.4,
-  2: 0.22,
-  3: 0.16,
-};
+export const ARENA_AI_REACTION: Record<ArenaAiLevel, number> = byArenaLevel((s) => s.reactionS);
 /** 该点的没点（手滑漏掉）的概率 */
-export const ARENA_AI_MISS: Record<ArenaAiLevel, number> = { 0: 0.4, 1: 0.2, 2: 0.07, 3: 0.02 };
+export const ARENA_AI_MISS: Record<ArenaAiLevel, number> = byArenaLevel((s) => s.missRate);
 /** 误点炸弹的概率 */
-export const ARENA_AI_BOMB_SLIP: Record<ArenaAiLevel, number> = {
-  0: 0.3,
-  1: 0.14,
-  2: 0.04,
-  3: 0.012,
-};
+export const ARENA_AI_BOMB_SLIP: Record<ArenaAiLevel, number> = byArenaLevel((s) => s.bombRisk);
 
 /**
  * 地狱档也必须留出这么多反应时间，**不许写成 0**。
  * 有了这条，孩子只要比它先看到目标就一定抢得到，输了也是「我慢了半拍」而不是「它作弊」。
+ *
+ * 这条下限现在真正兜在 `ai.ts` 的 `reactionOf()` 里 —— 也就是**擂台真正在跑的那条路上**。
+ * 以前它只兜在这个文件里,而这个文件的人机从来没上过场。
  */
-export const ARENA_AI_MIN_REACTION = 0.15;
+export const ARENA_AI_MIN_REACTION = MIN_COUNTER_WINDOW_S;
 
 export interface ArenaAiBrain {
   level: ArenaAiLevel;
@@ -84,7 +102,7 @@ export interface AiTapPlan {
  */
 export function planArenaTaps(brain: ArenaAiBrain, schedule: readonly SpawnEvent[]): AiTapPlan[] {
   const out: AiTapPlan[] = [];
-  const reaction = Math.max(ARENA_AI_MIN_REACTION, ARENA_AI_REACTION[brain.level]);
+  const reaction = reactionOf(AI_SPECS[arenaAiName(brain.level)]);
   for (const [index, ev] of schedule.entries()) {
     if (ev.kind === "bomb") {
       // 炸弹本来就不该点，只有手滑才会点

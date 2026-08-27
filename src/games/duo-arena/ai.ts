@@ -90,6 +90,22 @@ export const AI_SPECS: Readonly<Record<AiLevel, AiSpec>> = {
 /** 地狱档也不许比这更快 —— 这是写死的反打窗口下限 */
 export const MIN_COUNTER_WINDOW_S = 0.15;
 
+/**
+ * 这一档实际生效的反应时间(秒)。
+ *
+ * 「地狱档也必须留出反打窗口」是这一款的**硬规矩**:孩子只要比它先看见目标就抢得到,
+ * 输了也是「我慢了半拍」,不是「它作弊」。以前这条规矩落在两个地方——
+ * 规格表里把 `master.reactionS` 写成 0.18(确实大于下限),
+ * 以及 `arena12.ts` 那张**根本没上场**的表里有一句 `Math.max(MIN, ...)`。
+ * 真正在跑的 `thinkAi` 直接读 `spec.reactionS`,**下限一次都没兜住过**:
+ * 谁把规格表里那个数改成 0,地狱档当场变成 0 帧完美反应,而且没有一条断言会红。
+ *
+ * 现在下限收在这里——所有读反应时间的地方都走这一个函数,规矩就兜得住了。
+ */
+export function reactionOf(spec: AiSpec): number {
+  return Math.max(MIN_COUNTER_WINDOW_S, spec.reactionS);
+}
+
 export function aiSpec(level: AiLevel): AiSpec {
   return AI_SPECS[level] ?? AI_SPECS.normal;
 }
@@ -129,7 +145,7 @@ export function simulateAiScore(level: AiLevel, seed: number, schedule: readonly
   for (const ev of schedule) {
     const roll = rng();
     const roll2 = rng();
-    const start = Math.max(busyUntil, ev.t + spec.reactionS);
+    const start = Math.max(busyUntil, ev.t + reactionOf(spec));
     const reach = start + travel * (0.7 + roll2 * 0.6);
     if (reach > ev.t + ev.ttl) continue; // 来不及,目标自己谢幕
     if (ev.kind === "bomb") {
@@ -296,7 +312,8 @@ export function thinkAi(
   if (now < brain.hesitateUntil) return { ...idle, skill };
 
   // 只看得见「已经出现满一个反应时间」的目标
-  const visible = targets.filter((t) => now >= t.bornAt + spec.reactionS && now < t.dieAt);
+  const react = reactionOf(spec);
+  const visible = targets.filter((t) => now >= t.bornAt + react && now < t.dieAt);
   if (visible.length === 0) {
     brain.lockedId = null;
     // 场上有东西但还没「看见」→ 站着等,这段愣神就是留给对手的反打窗口;
@@ -331,7 +348,7 @@ export function thinkAi(
   if (brain.lockedId !== best.id) {
     brain.lockedId = best.id;
     if (brain.rng() < spec.missRate) {
-      brain.hesitateUntil = now + spec.reactionS * 0.9;
+      brain.hesitateUntil = now + react * 0.9;
       return { ...idle, skill };
     }
   }
