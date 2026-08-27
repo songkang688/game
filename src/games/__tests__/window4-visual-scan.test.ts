@@ -141,17 +141,21 @@ function fillTextEmojiLines(id: string): string[] {
 }
 
 describe("窗口4 · 专项① canvas fillText emoji 直出", () => {
-  const CLEAN = WINDOW4_GAMES.filter((g) => g !== "garden-guard");
-  for (const id of CLEAN) {
+  // garden-guard 原有 6 处字面量已被本轮 fixer（cd187a9）清零，9 款一起守 0
+  for (const id of WINDOW4_GAMES) {
     it(`${id} canvas 文本 0 emoji`, () => {
       expect(fillTextEmojiLines(id)).toEqual([]);
     });
   }
 
-  it("garden-guard 现状 6 处钉住防恶化【W4R1-01 · 一般 · 待修：修复后应为 0】", () => {
-    // 现状：index.ts 1474/1756 标题🌼、1701/1829 提示💡、2107/2229 造价卖价🌸。
-    // HUD 的 🌸/💗/🤍 走 hud12.ts 变量拼接，不在此计数内，一并登记在报告 W4R1-01。
-    expect(fillTextEmojiLines("garden-guard")).toHaveLength(6);
+  it("garden-guard hud12 段串 emoji 残余现状 4 行钉住【W4R1-01 残余 · 一般 · 待修：换手绘后应为 0】", () => {
+    // 现状：hud12.ts 的 hudSegments 仍拼 🌸 花瓣币与 💗/🤍 爱心、tip 文案带 🌸，
+    // 经 index.ts drawHud 的 fillText 每帧上画布（变量拼接，抓不进上面的同行扫描）。
+    const src = readFileSync(join(GAMES_DIR, "garden-guard", "hud12.ts"), "utf8");
+    const lines = src
+      .split("\n")
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l) && EMOJI_RANGE.test(l));
+    expect(lines).toHaveLength(4);
   });
 });
 
