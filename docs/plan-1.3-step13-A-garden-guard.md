@@ -104,3 +104,29 @@
 2. 实际使用的模型 slug；
 3. 修改的文件与关键绘制函数清单（如 `drawTowerIcon` 等级分支/`drawMonster` 花瓣散场/`drawMap` 去 emoji/战场装饰层）；
 4. 测试结果（新增用例 + 旧用例全绿），以及截图或逐函数说明六塔升级视觉、怪物家族、战场与地图改后长什么样。
+
+## 附录一 · 开工步骤（执行者照抄）
+
+```
+git fetch origin game-1.2 game-1.2-kk
+git checkout -B game-1.2-kk origin/game-1.2-kk 2>/dev/null || git checkout -B game-1.2-kk origin/game-1.2
+npm ci                       # 以仓库锁文件为准
+npx vitest run src/games/garden-guard # 开工前先确认该款旧测试全绿
+```
+
+- 开工前通读本文件全部章节；若仓库已有 `docs/plan-1.3-visual-bible.md`，其共享资产规格优先于本文件的本地实现建议；
+- 每完成一个资产（角色/金币/障碍/背景/UI）就跑一次该款测试并提交一次，小步提交，提交信息格式 `feat(garden-guard): 1.3 视觉升级——<资产名>`；
+- 中途 `git fetch origin game-1.2-kk && git rebase origin/game-1.2-kk` 跟上游同步（他人只增文件，冲突概率低）；
+- 收尾 `git push -u origin game-1.2-kk`（普通推送，禁止 --force，禁止 push main / game-1.2）。
+
+## 附录二 · 验收清单（完成后逐项自查）
+
+- [ ] 本文件点名的每一处 emoji/字符占位均已替换为绘制资产
+- [ ] 核心资产（角色/金币/主体物）达到「可爱」以上，与 origin/game-1.2 基线对比有肉眼可见提升
+- [ ] 多角色/双人可分辨：形状+颜色双通道，色弱模式下仍可区分
+- [ ] 弱动效开关（prefers-reduced-motion 或该款自有 soft/calm/lessMotion 分支）接入了全部新增动画
+- [ ] 360px 宽度下所有可点目标、文字与关键状态仍清晰可读
+- [ ] 旧测试 0 删除 0 失败；本文件「测试要求」小节的新增视觉契约用例全部通过
+- [ ] 无商标、无恐怖元素，演出符合低龄分级红线
+- [ ] 改动只落在 `src/games/garden-guard/**`（及允许的共享 art kit 引用），未触碰其他游戏与玩法数值
+- [ ] 回复包含：game-1.2-kk 最新 SHA、实际模型 slug、改动绘制函数清单、测试结果、截图或逐函数效果说明
