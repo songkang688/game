@@ -127,3 +127,78 @@ describe("朵星双人冲刺 · 1.2 destroy 归零", () => {
     expect(countNodes(h.root)).toBe(1);
   });
 });
+
+/**
+ * 竞态:本款的开跑链上有一条倒计时 setTimeout 和一条结算 setTimeout,
+ * 「倒计时还没走完就按了换玩法」「结算还没弹就退出」是最容易漏东西的两处。
+ */
+describe("朵星双人冲刺 · 1.2 抢按与竞态", () => {
+  it("destroy 调两次不炸,第二次是空操作", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    startRace(h);
+    h.flush(8);
+
+    game.destroy();
+    expect(() => game.destroy()).not.toThrow();
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(h.pendingTimers()).toBe(0);
+    expect(h.liveObservers()).toBe(0);
+  });
+
+  it("倒计时还在数就按换玩法:那条 setTimeout 必须当场清掉", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+
+    findOne(h.root, "dr-start")?.fire("click");
+    // 只走一拍倒计时,后面还排着
+    h.runTimers();
+    h.flush(1);
+    expect(h.pendingTimers(), "倒计时没排上").toBeGreaterThan(0);
+
+    findOne(h.root, "dr-back")?.fire("click");
+    h.flush(2);
+    expect(h.pendingTimers(), "换玩法之后倒计时还排在队里").toBe(0);
+
+    game.destroy();
+    expect(h.pendingFrames()).toBe(0);
+    expect(h.liveObservers()).toBe(0);
+  });
+
+  it("开跑键连按三下,倒计时不会叠成三条", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+
+    const start = findOne(h.root, "dr-start");
+    expect(start).not.toBeNull();
+    start?.fire("click");
+    start?.fire("click");
+    start?.fire("click");
+    h.flush(1);
+    expect(h.pendingTimers(), "连按三下排了不止一条倒计时").toBeLessThanOrEqual(1);
+
+    game.destroy();
+    expect(h.pendingTimers()).toBe(0);
+  });
+
+  it("按着方向键直接 destroy,监听与观察者都不留", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    startRace(h);
+    h.key("keydown", "w", "KeyW");
+    h.key("keydown", "ArrowUp", "ArrowUp");
+    h.flush(12);
+    game.destroy();
+
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(h.pendingTimers()).toBe(0);
+    expect(h.liveObservers()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+});

@@ -106,3 +106,82 @@ describe("保龄球 · 1.2 destroy 归零", () => {
     expect(countNodes(h.root)).toBe(1);
   });
 });
+
+/**
+ * 竞态:三段式最怕「一段还没结算完就被按了下一段」,
+ * 退出模式与 destroy 也一样,连点三下不该把上层一起拆掉。
+ */
+describe("保龄球 · 1.2 抢按与竞态", () => {
+  it("destroy 调两次不炸,第二次是空操作", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    findButton(h.root, "无尽格")?.fire("click");
+    h.flush(5);
+
+    game.destroy();
+    expect(() => game.destroy()).not.toThrow();
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+
+  it("同一拍里把三个模式键全按一遍,只会开一个模式", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    const base = h.windowListeners();
+
+    findButton(h.root, "双人对战")?.fire("click");
+    findButton(h.root, "人机对战")?.fire("click");
+    findButton(h.root, "无尽格")?.fire("click");
+    h.flush(5);
+    expect(h.windowListeners()).toBeGreaterThan(base);
+
+    findButton(h.root, "回选关")?.fire("click");
+    h.flush(2);
+    expect(h.windowListeners(), "抢按之后有模式没被关掉").toBe(base);
+
+    game.destroy();
+    expect(h.windowListeners()).toBe(0);
+  });
+
+  it("三段式连按十下停指针:球滚出去也好、还在排队也好,都不该炸", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    findButton(h.root, "人机对战")?.fire("click");
+    h.flush(3);
+
+    expect(() => {
+      for (let i = 0; i < 10; i++) {
+        h.key("keydown", "KeyF");
+        h.flush(1);
+      }
+    }).not.toThrow();
+    h.flush(40);
+
+    game.destroy();
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+
+  it("球还在滚的时候直接 destroy,照样清干净", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    findButton(h.root, "双人对战")?.fire("click");
+    h.flush(3);
+    // 三段停完,球正在球道上
+    h.key("keydown", "KeyF");
+    h.key("keydown", "KeyF");
+    h.key("keydown", "KeyF");
+    h.flush(4);
+    game.destroy();
+
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+});

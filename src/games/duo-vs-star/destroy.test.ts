@@ -110,3 +110,85 @@ describe("朵朵大战星星 · 1.2 destroy 归零", () => {
     expect(countNodes(h.root)).toBe(1);
   });
 });
+
+/**
+ * 竞态:菜单 → 选人 → 开打这条链上每一步都能被连点,
+ * 结算浮层还会在对局之上再叠一层。这几条把它们跑一遍。
+ */
+describe("朵朵大战星星 · 1.2 抢按与竞态", () => {
+  it("destroy 调两次不炸,第二次是空操作(mount 里就有 destroyed 闸)", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    findButton(h.root, "人机混战")?.fire("click");
+    h.flush(4);
+
+    game.destroy();
+    expect(() => game.destroy()).not.toThrow();
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+
+  it("同一拍里把菜单上的模式键全按一遍,只留最后一个界面", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    const base = h.windowListeners();
+
+    for (const label of ["双人对战", "人机混战", "团队赛", "合作特训", "无尽车轮战"]) {
+      findButton(h.root, label)?.fire("click");
+    }
+    h.flush(4);
+    // 还停在选人界面,没开局,所以不该有对局的那套监听
+    expect(h.windowListeners()).toBe(base);
+
+    game.destroy();
+    expect(h.windowListeners()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+
+  it("开打键连按三下,只开一局(监听不会变成三套)", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    const base = h.windowListeners();
+
+    findButton(h.root, "人机混战")?.fire("click");
+    const go = findButton(h.root, "开打") ?? findButton(h.root, "开始");
+    expect(go).not.toBeNull();
+    go?.fire("click");
+    go?.fire("click");
+    go?.fire("click");
+    h.flush(6);
+
+    const oneMatch = h.windowListeners() - base;
+    expect(oneMatch, "开局之后一套监听都没挂").toBeGreaterThan(0);
+    expect(oneMatch, `连按三下开打挂了 ${oneMatch} 个监听,像是开了不止一局`).toBeLessThanOrEqual(4);
+
+    game.destroy();
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+
+  it("按着键退出对局:按键状态不会把监听留下", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    findButton(h.root, "人机混战")?.fire("click");
+    (findButton(h.root, "开打") ?? findButton(h.root, "开始"))?.fire("click");
+    h.flush(5);
+
+    h.key("keydown", "KeyD");
+    h.key("keydown", "KeyF");
+    findButton(h.root, "◀ 返回")?.fire("click");
+    h.flush(3);
+    game.destroy();
+
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(h.pendingTimers()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+});

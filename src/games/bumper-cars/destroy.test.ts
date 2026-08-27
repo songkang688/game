@@ -106,3 +106,89 @@ describe("碰碰车 · 1.2 destroy 归零", () => {
     expect(countNodes(h.root)).toBe(1);
   });
 });
+
+/**
+ * 竞态:孩子不会「一次点一下再等着」,他们会连点、会在动画中途退出。
+ * 这几条把最容易出事的几种抢按跑一遍,要的是「不炸、不叠加、不留东西」。
+ */
+describe("碰碰车 · 1.2 抢按与竞态", () => {
+  it("destroy 调两次不炸,第二次是空操作", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    findButton(h.root, "无尽车海")?.fire("click");
+    h.flush(5);
+
+    game.destroy();
+    expect(() => game.destroy()).not.toThrow();
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+
+  it("同一拍里把三个模式键全按一遍,只会开一个模式", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    const base = h.windowListeners();
+
+    // 连点:双人 → 人机 → 无尽,中间一帧都不给
+    findButton(h.root, "双人对战")?.fire("click");
+    findButton(h.root, "人机对战")?.fire("click");
+    findButton(h.root, "无尽车海")?.fire("click");
+    h.flush(5);
+
+    // 开一个模式挂一套监听。要是三个都开了,这里就会是三倍
+    const oneMode = h.windowListeners() - base;
+    expect(oneMode).toBeGreaterThan(0);
+    findButton(h.root, "回选关")?.fire("click");
+    h.flush(2);
+    expect(h.windowListeners(), "抢按之后有模式没被关掉").toBe(base);
+
+    game.destroy();
+    expect(h.windowListeners()).toBe(0);
+  });
+
+  it("同一拍里把返回键连按三下,不会把上层也拆掉", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+    const base = h.windowListeners();
+
+    findButton(h.root, "人机对战")?.fire("click");
+    h.flush(4);
+    const back = findButton(h.root, "回选关");
+    expect(back).not.toBeNull();
+    back?.fire("click");
+    back?.fire("click");
+    back?.fire("click");
+    h.flush(3);
+
+    expect(h.windowListeners()).toBe(base);
+    // 上层还在:模式条还能再开一次
+    findButton(h.root, "无尽车海")?.fire("click");
+    h.flush(3);
+    expect(h.windowListeners()).toBeGreaterThan(base);
+
+    game.destroy();
+    expect(h.windowListeners()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+
+  it("对局跑到一半直接 destroy(不先退模式),照样清干净", async () => {
+    const h = install();
+    harness = h;
+    const game = await mountGame(h);
+
+    findButton(h.root, "双人对战")?.fire("click");
+    // 一边按着方向键一边退出:按键状态不该把监听留下
+    h.key("keydown", "KeyW");
+    h.key("keydown", "ArrowUp");
+    h.flush(15);
+    game.destroy();
+
+    expect(h.windowListeners()).toBe(0);
+    expect(h.pendingFrames()).toBe(0);
+    expect(countNodes(h.root)).toBe(1);
+  });
+});

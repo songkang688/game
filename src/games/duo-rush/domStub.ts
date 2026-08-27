@@ -424,6 +424,7 @@ export function install(
     computed: g.getComputedStyle,
     ro: g.ResizeObserver,
     image: g.Image,
+    clearTimeout: g.clearTimeout,
   };
 
   const frames = new Map<number, (t: number) => void>();
@@ -540,6 +541,17 @@ export function install(
     removeItem: (k: string) => void store.delete(k),
   };
   g.performance = { now: () => clock };
+  // 本款排队用的是 `window.setTimeout`,取消用的却是**裸的** `clearTimeout` ——
+  // 浏览器里这两个本来就是同一个函数,所以没毛病;但 node 里裸的那个是 node 自己的,
+  // 够不着上面那份桩。这里让裸 `clearTimeout` 先在桩的队列里找,找不到再交回 node。
+  const nativeClear = saved.clearTimeout as ((id: unknown) => void) | undefined;
+  g.clearTimeout = (id: unknown): void => {
+    if (typeof id === "number" && timers.has(id)) {
+      timers.delete(id);
+      return;
+    }
+    nativeClear?.(id);
+  };
 
   function fireWin(type: string, e: FakeEvent): void {
     for (const fn of [...(winListeners.get(type) ?? [])]) fn(e);
@@ -585,6 +597,7 @@ export function install(
       g.getComputedStyle = saved.computed;
       g.ResizeObserver = saved.ro;
       g.Image = saved.image;
+      g.clearTimeout = saved.clearTimeout;
     },
   };
 }
