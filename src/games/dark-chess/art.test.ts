@@ -398,7 +398,9 @@ describe("结算演出 · 只有画面没有数据", () => {
 
 describe("CSS 红线 · 热区 / 窄屏 / 弱动效", () => {
   it("44px 热区与窄屏 gap 收缩逻辑原样保留", () => {
-    expect(BOARD_CSS).toContain(".dc-cell{position:relative;aspect-ratio:1/1;min-height:44px;");
+    // r2-1 回归修复：44px 热区从格子本体（会被 aspect-ratio 传导成固定宽）挪到 ::before 扩展点击区
+    expect(BOARD_CSS).toContain(".dc-cell{position:relative;aspect-ratio:1/1;min-width:0;min-height:0;");
+    expect(BOARD_CSS).toContain(".dc-cell:not(.dc-empty)::before");
     expect(BOARD_CSS).toContain("@media (max-width:400px)");
     expect(BOARD_CSS).toContain(".dc-board{gap:3px;}");
     expect(BOARD_CSS).not.toContain("min-height:40px");

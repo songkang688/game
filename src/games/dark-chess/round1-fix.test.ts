@@ -3,8 +3,10 @@
  *
  * A 档 5-2（阻断）：`.dc-cell{min-height:44px}` 经 aspect-ratio 转移出 44px 的最小内容宽，
  * 8 列 1fr 一行最小约 373px，360/320 视口下末列被 overflow:hidden 裁掉、点不到。
- * 修法：触区与列宽解耦——列模板改 `minmax(0,1fr)`、格子加 `min-width:0`，
- * 44px 触控高度保留，列宽允许收进容器（收缩后仍是 ≥31×44 的可点面积）。
+ * 修法：触区与列宽解耦——列模板改 `minmax(0,1fr)`、格子加 `min-width:0`。
+ * r2-1 又发现 min-height:44px 在收缩轨道上仍被 Chrome 传导成 44px 固定宽（相邻格互叠、
+ * 末列出框），第 2 轮修复把格上最小尺寸全部去掉、格尺寸完全跟随轨道，
+ * 44px 触控红线改由 `::before` 零视觉扩展点击区保住（契约见 round2-fix.test.ts）。
  */
 import { describe, expect, it } from "vitest";
 import { backSVG, pieceFaceSVG } from "./art";
@@ -15,8 +17,11 @@ describe("dark-chess · 360/320 列宽收缩（A 档 5-2 阻断）", () => {
     expect(BOARD_CSS).toContain("grid-template-columns:repeat(8,minmax(0,1fr))");
     const cellRule = BOARD_CSS.match(/\.dc-cell\{[^}]*\}/)?.[0] ?? "";
     expect(cellRule).toContain("min-width:0");
-    // 触控高度红线不回退：44px 仍钉死在格子上
-    expect(cellRule).toContain("min-height:44px");
+    // 触控红线不回退：44px 从格子本体挪到 ::before 扩展点击区（r2-1 回归修复后的口径），
+    // 格子本体不许再写会被 aspect-ratio 传导成固定宽的最小尺寸
+    expect(cellRule).toContain("min-height:0");
+    expect(cellRule).not.toContain("min-height:44px");
+    expect(BOARD_CSS).toContain(".dc-cell:not(.dc-empty)::before");
   });
 });
 

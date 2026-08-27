@@ -34,10 +34,16 @@ export const CSS = `
 .dc-board{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;width:100%;max-width:520px;margin:0 auto;
   position:relative;padding:7px;border:6px solid #9a6a3a;border-radius:16px;
   background:linear-gradient(180deg,#f3e3c6,#e7d2ae);box-shadow:0 3px 0 #7c5227,inset 0 1px 0 #fff3dd;}
-/* 触区与列宽解耦：minmax(0,1fr)+min-width:0 让 8 列在 360/320 收得进容器，44px 触控高度不丢 */
-.dc-cell{position:relative;aspect-ratio:1/1;min-height:44px;min-width:0;border:none;border-radius:10px;cursor:pointer;padding:0;
+/* 格尺寸完全跟随轨道（r2-1 回归修复）：实测 Chrome 会把 min-height 经 aspect-ratio 传导成
+   44px 固定宽，收缩轨道上相邻格互叠 10–14px、末列出棋盘框——格子本身不再写最小尺寸，
+   方格边长由 aspect-ratio 从轨道宽得出，360/320 一行八格永远排得下 */
+.dc-cell{position:relative;aspect-ratio:1/1;min-width:0;min-height:0;border:none;border-radius:10px;cursor:pointer;padding:0;
   font-family:inherit;font-size:20px;font-weight:900;line-height:1;background:#EBD9BD;color:#7a5a34;
   box-shadow:0 2px 0 rgba(150,120,80,.35);transition:transform .16s ease,opacity .18s ease;}
+/* 44px 触控红线改由零视觉扩展点击区保住：格宽不足 44 时 inset 取负值把热区补到 44×44，
+   格宽 ≥44 时被 min() 钳回 0 不缩热区；伪元素命中仍算按钮本体，热区中心一格不挪。
+   空格是禁用按钮，不给扩展区——免得它盖住邻格边缘吞掉点击 */
+.dc-cell:not(.dc-empty)::before{content:"";position:absolute;inset:min(0px,calc((100% - 44px)/2));}
 /* 石板格：斜向交替 2% 左右的明度差，8 列在眼里就不糊成一片 */
 .dc-cell.dc-alt{background:#E4D2B2;}
 .dc-cell:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
