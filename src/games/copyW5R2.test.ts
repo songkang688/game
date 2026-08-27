@@ -4,7 +4,7 @@
  * 两件事:
  *  1. 钉住本轮新增的 9 处「视觉亮点入引导」文案(全部对应修复员 R1 真实落地的绘制行为,
  *     出处逐条登记在 docs/qa/1.3-window5-round2-learner.md 第六节);
- *  2. 钉住第 1 轮学习优化员的 5 处 guide/blurb 文案(bomb-buddies 更名已有
+ *  2. 钉住第 1 轮学习优化员的 6 处 guide/blurb 文案(bomb-buddies 更名已有
  *     copy13.test.ts 单独钉),防止后续 rebase / 改稿把它们冲掉而没人发现。
  *
  * 只读文案模块,零玩法零绘制;新增用例只增不减。
@@ -77,7 +77,7 @@ describe("窗口5 R2 学习优化员 · 本轮 9 处视觉亮点文案在位", (
 });
 
 describe("窗口5 R2 学习优化员 · 第 1 轮文案防冲掉(rebase 防线)", () => {
-  it("R1 五处 guide/blurb 亮点文案全部仍在位", () => {
+  it("R1 六处 guide/blurb 亮点文案全部仍在位", () => {
     expect(skySquadMeta.blurb).toContain("机翼下三层云海");
     expect(iceFireForestMeta.blurb).toContain("一半冰蓝一半暖橙");
     expect(flat(shootRangeGuide)).toContain("要溜走的信号");
