@@ -314,6 +314,15 @@ function gridLines(cols: number, rows: number, u: number, ox: number, oy: number
   return s;
 }
 
+/**
+ * 长方形的「长」与「宽」：中文数学习惯里长的那条边叫长、短的那条叫宽，
+ * 跟它画出来是横着还是竖着无关。出题时宽高是随机摆的，所以凡是要说
+ * 「长多少、宽多少」的地方一律走这里，别直接把横向那条当成长。
+ */
+export function rectSides(w: number, h: number): { long: number; short: number } {
+  return { long: Math.max(w, h), short: Math.min(w, h) };
+}
+
 /** 带边长标注的长方形 */
 export function rectFigSVG(w: number, h: number): string {
   const u = Math.min(16, 150 / w, 84 / h);
@@ -321,7 +330,8 @@ export function rectFigSVG(w: number, h: number): string {
   const rh = h * u;
   const ox = (220 - rw) / 2;
   const oy = 20;
-  return `<svg data-fig="rect" data-w="${w}" data-h="${h}" width="220" height="150" viewBox="0 0 220 150" aria-label="长 ${w} 厘米、宽 ${h} 厘米的长方形">
+  const side = rectSides(w, h);
+  return `<svg data-fig="rect" data-w="${w}" data-h="${h}" width="220" height="150" viewBox="0 0 220 150" aria-label="长 ${side.long} 厘米、宽 ${side.short} 厘米的长方形">
     ${gridLines(w, h, u, ox, oy)}
     <rect x="${ox.toFixed(1)}" y="${oy}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" fill="#a5d8ff88" stroke="#1971c2" stroke-width="3"/>
     <text x="${(ox + rw / 2).toFixed(1)}" y="${(oy + rh + 24).toFixed(1)}" font-size="15" font-weight="800" text-anchor="middle" fill="#1864ab">${w} 厘米</text>
@@ -424,7 +434,7 @@ function qPerimeter(rand: () => number, t: number, steps: 1 | 2 | 3): ShapeQ {
       hints: trio(
         "先想周长是绕一圈，再看看缺掉的那一角有没有把「一圈」变长或者变短。",
         "把缺口的两条边平移回去，正好补成原来的长方形：周长 = （长 + 宽）× 2。",
-        `补回去以后长是 ${w} 厘米、宽是 ${h} 厘米，长加宽先算出来是 ${w + h}。`
+        `补回去以后长是 ${rectSides(w, h).long} 厘米、宽是 ${rectSides(w, h).short} 厘米，长加宽先算出来是 ${w + h}。`
       ),
     };
   }
@@ -440,7 +450,7 @@ function qPerimeter(rand: () => number, t: number, steps: 1 | 2 | 3): ShapeQ {
     hints: trio(
       "先想周长是绕一圈：四条边都要走到，不是只走两条。",
       "长方形周长 = （长 + 宽）× 2。",
-      `图上长是 ${w} 厘米、宽是 ${h} 厘米，长加宽先算出来是 ${w + h}。`
+      `图上长是 ${rectSides(w, h).long} 厘米、宽是 ${rectSides(w, h).short} 厘米，长加宽先算出来是 ${w + h}。`
     ),
   };
 }
