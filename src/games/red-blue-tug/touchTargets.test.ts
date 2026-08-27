@@ -38,6 +38,23 @@ describe("红蓝拔河 · 齿轮条上的小开关（W5C-T02）", () => {
   it("最小高度得够 44px，不能只抬到「不算太离谱」", () => {
     expect(TOGGLE_MIN_H, "真机量到过 107×32").toBeGreaterThanOrEqual(44);
   });
+
+  // 窗口5 第2轮 档C 学习优化员补：四档视口逐颗量下来，全场只剩这一颗不达标——
+  // 「🗺️ 回关卡」实测 87×31，对战、拉不完的绳、关卡里各挂一颗，
+  // 它是这三处唯一的退出口，按不准就只能退到浏览器后退键（W5R2 热区红线）
+  it("「🗺️ 回关卡」也得够 44px：三处唯一的退出口", () => {
+    // 这一颗在没导出的 SHELL_CSS 里，跟 modeBar.test.ts 一样直接读源码文本
+    const src = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    const shell = src.slice(src.indexOf("const SHELL_CSS = `"), src.indexOf("\n`;", src.indexOf("const SHELL_CSS = `")));
+    const block = ruleFor(shell, ".rbg-back");
+    expect(block, "CSS 里找不到 .rbg-back").not.toBe("");
+    // 读的是模板串还没求值的源码，ruleFor 会切在 ${} 的右花括号上，所以变量名和数值分开断言
+    expect(block).toContain("min-height: ${TOGGLE_MIN_H");
+    expect(TOGGLE_MIN_H).toBeGreaterThanOrEqual(44);
+    // 撑高了字得跟着居中，不然贴在左上角
+    expect(block).toMatch(/display\s*:\s*inline-flex/);
+    expect(block).toMatch(/align-items\s*:\s*center/);
+  });
 });
 
 describe("红蓝拔河 · 星星队的键位对齐平台约定（W5C-T01）", () => {

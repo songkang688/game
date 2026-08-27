@@ -86,7 +86,8 @@ const SHELL_CSS = `
 .rbg-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #BF4A4A; }
 .rbg-open:focus-visible { outline: 3px solid #8A2F2F; outline-offset: 3px; }
 .rbg-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.rbg-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #B0555F; box-shadow: 0 3px 0 rgba(190,120,130,.28); }
+/* 侧模式和关卡里都靠它退出去，只靠 padding 撑出来是 31px 高，比手指按得准的下限矮 13px */
+.rbg-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #B0555F; box-shadow: 0 3px 0 rgba(190,120,130,.28); display: inline-flex; align-items: center; justify-content: center; min-height: ${TOGGLE_MIN_H}px; }
 .rbg-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(190,120,130,.28); }
 .rbg-over { position: absolute; inset: 0; border-radius: 16px; background: rgba(255,248,250,.96); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px; }
 .rbg-over-title { font-size: 22px; font-weight: 900; color: #B0555F; }
