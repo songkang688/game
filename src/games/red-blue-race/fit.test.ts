@@ -237,3 +237,56 @@ describe("红蓝跑道 · 收紧器怎么接进去的（源码巡检）", () => 
     expect(TIERS).not.toMatch(/overflow-y:\s*(auto|scroll)/);
   });
 });
+
+/**
+ * 第 2 轮监督修复员 W5R2-F-A-03（W5R2-A-02 收口）。
+ *
+ * 两档收完在 320×568 上仍旧超出 114px，左脚 / 右脚 / 跳三颗键心都落在 y=601、
+ * 舞台裁在 y=554 —— 真实坐标 `elementFromPoint` 拿不回自己，触屏玩家跑不了。
+ * 这 114px 不在这一屏身上：
+ *
+ *   `.rbe-bar`（🤝 对战场 / ♾️ 跑不完的跑道）从关卡地图一路跟进关内常驻，
+ *   两颗 44px 的键在 320px 宽上排不下、折成两行占掉 96px，连同外边距共 106px。
+ *   舞台看得见 458px，这一屏真正分到的只剩 230px。
+ *
+ * 两处都得补：
+ *   ① `bar.hidden = true` 在这一款身上是空转 —— `.rbe-bar{display:flex}` 是作者样式，
+ *      压过浏览器自带的 `[hidden]{display:none}`。「开对战场 / 开无尽时收起模式条」
+ *      这件本来就该成立的事，一直没真的发生过。
+ *   ② 关内不需要这两个入口（回地图就有），进关收起来、离关放回去。
+ *
+ * 仍旧不给它挂滚动条，热区一分没动：两颗入口键回到地图上照样是 44px。
+ */
+describe("红蓝跑道 · 模式条只在选关地图上露面", () => {
+  /** 两个入口键的样式在 ENDLESS_CSS 那一块，不在闯关那一块 */
+  const ECSS = INDEX.slice(INDEX.indexOf("const ENDLESS_CSS = `"), INDEX.indexOf("\n`;", INDEX.indexOf("const ENDLESS_CSS = `")));
+  const erule = (selector: string): string => {
+    const i = ECSS.indexOf(`${selector} {`);
+    return i < 0 ? "" : ECSS.slice(i + selector.length + 2, ECSS.indexOf("}", i));
+  };
+
+  it("[hidden] 得压得住 display:flex,不然「收起模式条」全是空转", () => {
+    // 这一条同时钉住一个一直在的老毛病:开对战场 / 开无尽时 bar.hidden 没起过作用
+    expect(erule(".rbe-bar")).toContain("display: flex");
+    expect(ECSS).toContain(".rbe-bar[hidden]");
+    expect(erule(".rbe-bar[hidden]")).toContain("display: none");
+  });
+
+  it("进关收起来、离关放回去", () => {
+    const wired = INDEX.slice(INDEX.indexOf("      playLevel: ("), INDEX.indexOf("      mapHint:"));
+    expect(wired, "playLevel 没接成收模式条的那一版").toContain("bar.hidden = true");
+    expect(wired, "离开这一关得把模式条放回去,不然回地图就没入口了").toContain("bar.hidden = false");
+    expect(wired).toContain("handle?.destroy?.()");
+    // 侧场开着时这一条本来就该收着,离关时别替它放回来
+    expect(wired).toContain("if (!side) bar.hidden = false;");
+  });
+
+  it("得先收再摆:收紧器是在 playLevel 里量的,量早了这 106px 白让", () => {
+    const wired = INDEX.slice(INDEX.indexOf("      playLevel: ("), INDEX.indexOf("      mapHint:"));
+    expect(wired.indexOf("bar.hidden = true")).toBeLessThan(wired.indexOf("playLevel(stage, ctx)"));
+  });
+
+  it("热区没动:两颗入口键回到地图上仍是 44px", () => {
+    expect(px(erule(".rbe-open"), "min-height")).toBeGreaterThanOrEqual(44);
+  });
+});

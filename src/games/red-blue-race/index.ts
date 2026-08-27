@@ -201,6 +201,8 @@ const CSS = `
 
 const ENDLESS_CSS = `
 .rbe-bar { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.rbe-bar[hidden] { display: none; }
 /* 对战场 / 无尽两个入口原来 40px 高,差 4px 够不到触屏口径(窗口5 第1轮 W5-A-04) */
 .rbe-open { border: none; border-radius: 999px; padding: 10px 20px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #6FC98A, #33845A); box-shadow: 0 4px 0 #276A47; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 .rbe-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #276A47; }
@@ -1720,7 +1722,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 真下到某一关里就把这两个入口收起来:320px 宽上它俩排不下、要折成两行,
+      // 连同外边距占掉 106px。舞台一共才看得见 458px,这一屏被挤到只剩 230px——
+      // 左脚 / 右脚 / 跳三颗键心全掉在裁切线以下,真实坐标点不着(W5R2-A-02)。
+      // 回选关地图就放回去,那儿地方够。
+      // 先收再摆:收紧器是在 playLevel 里量的,量的时候这一条已经不占地方了
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy: () => {
+            handle?.destroy?.();
+            // 侧场开着的时候这一条本来就该收着,别替它放回来
+            if (!side) bar.hidden = false;
+          },
+        };
+      },
       mapHint: "左右交替按跑得最快;对战场里可以两个人比,也可以挑四档小电脑。",
       grandMessage: "188 场比赛全部夺冠,你就是赛跑总冠军!"
     }

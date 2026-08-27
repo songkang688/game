@@ -200,6 +200,8 @@ const CSS = `
 .ld-shake{animation:ldshake .3s;}
 @keyframes ldshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .ld-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;}
+/* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
+.ld-bar[hidden]{display:none;}
 /* 模式入口原来只有 38px 高,360px 手机上最容易点歪(窗口5 第1轮 W5-A-04);
    撑到 44px 并居中,视觉上还是同一颗圆角胶囊 */
 .ld-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
@@ -1666,7 +1668,22 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 真下到某一关里就把这两个入口收起来:320px 宽上它俩排不下、要折成两行,
+      // 连同外边距占掉 104px。舞台一共才看得见 458px,这一桌被挤到只剩 232px——
+      // 叫地主那一排四颗和「⏸ 暂停」全掉在裁切线以下,真实坐标点不着(W5R2-L-14)。
+      // 回选关地图就放回去,那儿地方够。
+      // 先收再摆:收紧器是在 playLevel 里量的,量的时候这一条已经不占地方了
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const handle = playLevel(stage, ctx);
+        return {
+          destroy: () => {
+            handle?.destroy?.();
+            // 侧模式开着的时候这一条本来就该收着,别替它放回来
+            if (!mode) bar.hidden = false;
+          },
+        };
+      },
       mapHint: "先叫分抢地主,再一手一手把牌走完;拿不准就点「提示」。",
       grandMessage: "188 层地主塔全部登顶,你就是牌桌上的小王者!",
       guideTitle: "朵朵抢地主 · 出牌手记",

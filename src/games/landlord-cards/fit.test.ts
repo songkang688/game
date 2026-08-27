@@ -220,3 +220,52 @@ describe("朵朵抢地主 · 收紧器怎么接进去的（源码巡检）", () 
     expect(TIERS).not.toMatch(/overflow-y:\s*(auto|scroll)/);
   });
 });
+
+/**
+ * 第 2 轮监督修复员 W5R2-F-A-04（W5R2-L-14 收口）。
+ *
+ * 两档收完在 320×568 上还差 107px，学习优化员那一轮把这 107px 挂了起来。
+ * 本轮 CDP 复量把这 107px 找着了，不在这一桌身上：
+ *
+ *   舞台看得见 458px，`.ld-bar`（♾️ 无尽连胜 / ⚔️ 双人对战）却从关卡地图一路
+ *   跟进关内常驻，两颗 44px 的键在 320px 宽上排不下、折成两行占掉 96px，
+ *   连同外边距一共 104px —— 这一桌真正分到的只剩 232px。
+ *   叫地主那一排四颗与「⏸ 暂停」全部掉在裁切线以下，真实坐标点不着。
+ *
+ * 两处都得补，缺一条都不成：
+ *   ① `bar.hidden = true` 在这一款身上是空转 —— `.ld-bar{display:flex}` 是作者样式，
+ *      压过浏览器自带的 `[hidden]{display:none}`。所以「开无尽 / 开对战时收起模式条」
+ *      这件本来就该成立的事，一直没真的发生过。
+ *   ② 关内根本不需要这两个入口（回地图就有），进关收起来、离关放回去。
+ *
+ * 收的是本款自己的壳，热区一分没动：两颗入口键仍是 44px，回到地图照样露面。
+ * 仓内已有七款同样的做法（钓鱼星星 / 泡泡兄弟 / 怪兽危机 / 黄金矿工 / 碰碰车 / 炸弹伙伴 / 保龄球道）。
+ */
+describe("朵朵抢地主 · 模式条只在选关地图上露面", () => {
+  it("[hidden] 得压得住 display:flex,不然「收起模式条」全是空转", () => {
+    // 这一条同时钉住一个一直在的老毛病:开无尽 / 开对战时 bar.hidden 没起过作用
+    expect(rule(".ld-bar")).toContain("display:flex");
+    expect(CSS).toContain(".ld-bar[hidden]");
+    expect(rule(".ld-bar[hidden]")).toContain("display:none");
+  });
+
+  it("进关收起来、离关放回去", () => {
+    const wired = INDEX.slice(INDEX.indexOf("      playLevel: ("), INDEX.indexOf("      mapHint:"));
+    expect(wired, "playLevel 没接成收模式条的那一版").toContain("bar.hidden = true");
+    expect(wired, "离开这一关得把模式条放回去,不然回地图就没入口了").toContain("bar.hidden = false");
+    // 关卡框架允许 playLevel 什么都不返回,包一层的时候别把这种情况漏了
+    expect(wired).toContain("handle?.destroy?.()");
+    // 侧模式开着时这一条本来就该收着,离关时别替它放回来
+    expect(wired).toContain("if (!mode) bar.hidden = false;");
+  });
+
+  it("得先收再摆:收紧器是在 playLevel 里量的,量早了这 104px 白让", () => {
+    const wired = INDEX.slice(INDEX.indexOf("      playLevel: ("), INDEX.indexOf("      mapHint:"));
+    expect(wired.indexOf("bar.hidden = true")).toBeLessThan(wired.indexOf("playLevel(stage, ctx)"));
+  });
+
+  it("热区没动:两颗入口键回到地图上仍是 44px", () => {
+    expect(px(rule(".ld-open"), "min-height")).toBeGreaterThanOrEqual(44);
+    expect(rule(".ld-bar[hidden]")).not.toContain("min-height");
+  });
+});
