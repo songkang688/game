@@ -186,14 +186,14 @@ describe("气球砰砰 · R1 · 360px 窄屏", () => {
 });
 
 describe("气球砰砰 · R1 · 本轮记录在案的问题（现状快照）", () => {
-  it("W4A-03：festPlan 自己不管礼物上限，靠 index.ts 的 spawn 兜底", () => {
+  it("W4A-03（已由 A-L03 修掉）：出场表自己守礼物上限，index.ts 的兜底还留着当第二道锁", () => {
     expect(GIFT_MAX_ON_SCREEN).toBe(1);
     expect(canSpawnGift(0)).toBe(true);
     expect(canSpawnGift(1)).toBe(false);
-    // 出场表里礼物是连着排的，纯函数层没有任何节流
+    // 出场表里的礼物已经按飞行时间隔开了（详见 learn.r1.test.ts 的不撞面断言）
     const gifts = festPlan(12345, 400).filter((p) => p.kind === "gift");
     expect(gifts.length).toBeGreaterThan(1);
-    // 真机靠这一行兜住，缺了它天上就会同时挂好几个礼物
+    // 真机这一行照旧留着：礼物被摇下去会飘得更久，计划层只算得出理想飞行时间
     expect(SRC).toContain("canSpawnGift(balloons.filter");
   });
 

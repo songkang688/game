@@ -293,10 +293,22 @@ export function blastGroup(list: readonly ChainNode[], startId: number, radius =
     .map((n) => n.id);
 }
 
+/**
+ * 一条 n 颗的链，每两颗之间隔多久爆。
+ * 短链保持 50ms 的节奏；长到 50ms 排不下时按比例压紧，
+ * 这样「整条链在 250ms 内连完」对多长的链都成立——
+ * 不然七八颗的大链要响将近一秒，孩子早就以为没打中又补了一下。
+ */
+export function chainStepMs(n: number, step = CHAIN_STEP_MS): number {
+  const gaps = Math.max(1, Math.max(0, n) - 1);
+  return Math.min(step, CHAIN_WINDOW_MS / gaps);
+}
+
 /** 依次爆开的时刻表（毫秒）：不同帧全炸完，而是一颗接一颗 */
 export function chainDelays(n: number, step = CHAIN_STEP_MS): number[] {
+  const s = chainStepMs(n, step);
   const out: number[] = [];
-  for (let i = 0; i < Math.max(0, n); i++) out.push(Math.min(CHAIN_WINDOW_MS * 4, i * step));
+  for (let i = 0; i < Math.max(0, n); i++) out.push(Math.round(i * s));
   return out;
 }
 
@@ -437,11 +449,22 @@ export function festRiseSpeed(wave: number): number {
 export const FAR_SCALE = 0.72;
 export const FAR_BONUS = 2;
 
+/**
+ * 第 wave 个礼物气球从出场飘到顶大概要几秒。
+ * 「同一时间只挂一个礼物」这条规矩要在出场表里就守住，
+ * 靠的就是让两个礼物至少隔开这么久。
+ */
+export function festGiftFlightS(wave: number): number {
+  return (SKY_H + 40 - ESCAPE_Y) / (festRiseSpeed(wave) * GIFT_RISE_MUL);
+}
+
 /** 一整场气球节的出场表：同一个种子永远是同一场（可复现） */
 export function festPlan(seed: number, count: number, colors = 5): FestSpawn[] {
   const rand = mulberry32(seed >>> 0);
   const out: FestSpawn[] = [];
   let at = 0.6;
+  // 上一个礼物气球飘到顶的时刻：在这之前再排一个礼物就会撞上限，降级成普通球
+  let giftFreeAt = 0;
   for (let i = 0; i < count; i++) {
     const r = rand();
     let kind: BalloonKind = "normal";
@@ -451,6 +474,10 @@ export function festPlan(seed: number, count: number, colors = 5): FestSpawn[] {
     else if (r < 0.26) kind = "iron";
     else if (r < 0.33) kind = "gift";
     else if (r < 0.43) kind = "twin";
+    if (kind === "gift") {
+      if (at < giftFreeAt) kind = "normal";
+      else giftFreeAt = at + festGiftFlightS(i);
+    }
     out.push({
       at,
       kind,

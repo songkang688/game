@@ -1322,7 +1322,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         pick.appendChild(el("div", "bvp-h", "✨ 挑一个祝福带走"));
         pick.appendChild(el("div", "bvp-sub", "只能挑一个。想稳一点就挑防御和回复，想快点下潜就挑攻击。"));
         const box = el("div", "bvp-opts bvp-opts-2");
-        for (const b of rollBlessings(depth)) {
+        for (const b of rollBlessings(depth, hero.maxHp > 0 ? hero.hp / hero.maxHp : 1)) {
           const btn = el("button", "bvp-opt");
           btn.type = "button";
           btn.innerHTML = `<span class="bvp-opt-em">${b.emoji}</span><span class="bvp-row-main">

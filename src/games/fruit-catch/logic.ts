@@ -452,6 +452,24 @@ export function checkReachable(
   return { ok: firstBad < 0 && hazardRisk === 0, firstBad, bonusCount, hazardRisk };
 }
 
+/**
+ * 照着链走一趟，篮子最少要跑多快才一颗都不漏（像素/秒）。
+ * 它就是这一关的「手速门槛」：比 BASKET_SPEED 越低，这一关越宽松。
+ */
+export function minSpeedNeeded(drops: readonly DropPlan[], startX = W / 2): number {
+  const chain = [...drops].filter((d) => !isHazard(d.kind) && !d.bonus).sort((a, b) => a.landAt - b.landAt);
+  let atX = clampBasket(startX);
+  let atT = 0;
+  let need = 0;
+  for (const d of chain) {
+    const gap = d.landAt - atT;
+    if (gap > 0) need = Math.max(need, Math.abs(d.x - atX) / gap);
+    atX = d.x;
+    atT = d.landAt;
+  }
+  return need;
+}
+
 /** 同一刻落地的都有谁：至少要有一颗是必接的 */
 export function sameFrameGroups(drops: readonly DropPlan[], eps = 1e-6): DropPlan[][] {
   const sorted = [...drops].sort((a, b) => a.landAt - b.landAt);
@@ -639,7 +657,13 @@ export function rainWord(st: RainState, best: number): string {
 export interface SimOptions {
   seed?: number;
   dt?: number;
+  /** 生成器排「跑得过来的链」时假定的篮子速度 */
   basketSpeed?: number;
+  /**
+   * 假玩家真正跑得多快（不填就跟 basketSpeed 一样）。
+   * 把它调低就是「手慢一点的孩子」：这一关到底留了多少余量，一跑就知道。
+   */
+  playerSpeed?: number;
   maxSeconds?: number;
   count?: number;
 }
@@ -655,6 +679,8 @@ export interface SimResult {
   hazardHits: number;
   bestCombo: number;
   seconds: number;
+  /** 这一关照着链走最少要跑多快（像素/秒），拿来量难度曲线 */
+  needSpeed: number;
 }
 
 interface SimItem extends DropPlan {
@@ -669,14 +695,18 @@ interface SimItem extends DropPlan {
  */
 export function simulateLevel(cfg: CatchLevel, opts: SimOptions = {}): SimResult {
   const dt = opts.dt ?? 1 / 60;
-  const speed = opts.basketSpeed ?? BASKET_SPEED;
+  // 生成器按 planSpeed 排链，假玩家按 playerSpeed 跑：
+  // 两者分开，才能既验证「设计上够得着」，又量出「手慢一点还剩多少余量」。
+  const planSpeed = opts.basketSpeed ?? BASKET_SPEED;
+  const speed = opts.playerSpeed ?? planSpeed;
   const maxSeconds = opts.maxSeconds ?? 400;
   const startX = W / 2;
   const plan = markReachable(
-    planDrops(cfg, opts.seed ?? 20250520, { count: opts.count ?? 140, startX }),
+    planDrops(cfg, opts.seed ?? 20250520, { count: opts.count ?? 140, startX, basketSpeed: planSpeed }),
     startX,
-    speed
+    planSpeed
   );
+  const needSpeed = minSpeedNeeded(plan, startX);
   const items: SimItem[] = plan.map((p) => ({ ...p, y: SPAWN_Y, done: false }));
   const chain = items.filter((it) => !isHazard(it.kind) && !it.bonus).sort((a, b) => a.landAt - b.landAt);
 
@@ -725,12 +755,12 @@ export function simulateLevel(cfg: CatchLevel, opts: SimOptions = {}): SimResult
     }
 
     if (caught >= cfg.target) {
-      return { won: true, caught, target: cfg.target, missed, bonusMissed, hazardHits, bestCombo, seconds: t };
+      return { won: true, caught, target: cfg.target, missed, bonusMissed, hazardHits, bestCombo, seconds: t, needSpeed };
     }
     if (missed >= MAX_MISS) break;
   }
 
-  return { won: false, caught, target: cfg.target, missed, bonusMissed, hazardHits, bestCombo, seconds: t };
+  return { won: false, caught, target: cfg.target, missed, bonusMissed, hazardHits, bestCombo, seconds: t, needSpeed };
 }
 
 // ---------------------------------------------------------------------------

@@ -673,15 +673,33 @@ export function isBlessingFloor(depth: number): boolean {
   return d % BLESSING_EVERY === 0;
 }
 
-/** 抽两个不一样的祝福让玩家二选一（同 depth 结果固定） */
-export function rollBlessings(depth: number): Blessing[] {
+/** 星芒掉到这个比例以下，两个祝福里保证有一个能立刻补回来 */
+export const BLESSING_RESCUE_FRAC = 0.35;
+
+function healsUp(b: Blessing): boolean {
+  return b.kind === "heal" || b.kind === "maxhp";
+}
+
+/**
+ * 抽两个不一样的祝福让玩家二选一（同 depth + 同血量结果固定）。
+ *
+ * `hpFrac` 是现在的星芒比例。快见底的时候还只给「攻击 + 暴击」两个选项，
+ * 等于逼孩子带着 20% 的血继续下潜，下一层多半就被送回城了——
+ * 这种时候一定留一个回复位，让「稳一手」始终是个能选的选择。
+ */
+export function rollBlessings(depth: number, hpFrac = 1): Blessing[] {
   const rng = mulberry32((Math.max(1, Math.round(depth)) * 40503 + 7) >>> 0);
   const pool = BLESSING_POOL.slice();
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  return pool.slice(0, 2);
+  const pick = pool.slice(0, 2);
+  if (hpFrac <= BLESSING_RESCUE_FRAC && !pick.some(healsUp)) {
+    const rescue = BLESSING_POOL.find(healsUp) as Blessing;
+    pick[1] = rescue;
+  }
+  return pick;
 }
 
 /** 把祝福作用在勇者身上（纯函数，返回新的 Fighter） */

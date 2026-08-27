@@ -724,7 +724,10 @@ export function towerBreak(
       broke.push([rr, cc]);
       if (res.gift) gifts.push([rr, cc]);
       if (res.chain) {
-        for (const [nr, nc] of popcornTargets(rr, cc, rows.length, TOWER_COLS)) queue.push([nr, nc, false]);
+        // 连带的一圈按穿透算，和战役里的爆米花砖同一套规矩。
+        // 砖塔从第 8 排起会掺钢砖，不让爆米花清得动它，钢砖就会一路堆到底线，
+        // 无尽模式撑不了几分钟就被一堵拆不开的墙压死。
+        for (const [nr, nc] of popcornTargets(rr, cc, rows.length, TOWER_COLS)) queue.push([nr, nc, true]);
       }
     }
   }

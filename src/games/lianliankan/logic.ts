@@ -6,14 +6,14 @@
  *  - **连线状态机**：选中 → 画出带拐点的发光折线 → 撑够 180–260ms → 两块一起缩掉 →
  *    收拢滑动 → 回到待命。1.1 那种「点两下直接不见」在 1.2 是不允许的，
  *    所以消除必须经过 `linking` 这个相位，测试直接盯着相位序列。
- *  - **提示经济**：每关 3 次，走的是真求解（`anyMove`），用过就封顶两星。
+ *  - **提示经济**：每关 3 次，走的是真求解，而且优先给拐弯最少的一对；用过就封顶两星。
  *  - **收拢时长**：每格 60–80ms，格子挪得越远滑得越久。
  *  - **色觉友好**：同一色系的图案底色必须配不同形状，靠形状也分得开。
  *  - **无尽「连到底」**：清完一盘自动补新盘，累计对数计分，每 3 盘加一档难度。
  */
 
 import type { SoundName } from "../../engine/types";
-import { anyMove, findPath, tilesLeft, type BoardSpec, type BoardState, type Pt } from "./board";
+import { findPath, tilesLeft, type BoardSpec, type BoardState, type Pt } from "./board";
 
 /** 棋盘视图往外喊音效时只认这几个内置音，别处不许自己合成 */
 export type Sfx = SoundName;
@@ -149,9 +149,53 @@ export function pathIsOrthogonal(path: readonly Pt[]): boolean {
 /** 每关能用几次提示 */
 export const HINT_MAX = 3;
 
+export interface HintPick {
+  pair: [Pt, Pt];
+  /** 这一对连起来要拐几次弯 */
+  turns: number;
+  path: Pt[];
+}
+
+/**
+ * 提示走的是真求解，而且**挑最好懂的那一对**：
+ * 先看拐弯少的（直线 > 一拐 > 两拐），一样少就挑离得近的。
+ *
+ * `anyMove` 返回的是「碰巧最先扫到」的那一对，常常是横跨大半个盘的两拐线；
+ * 孩子照着按掉，学到的只是「原来这两个能连」。改成先给直线之后，
+ * 提示教的是「同行同列先看」这条自己能反复用的规矩。
+ */
+export function hintBest(board: BoardState, maxTurns = 2): HintPick | null {
+  const spots = new Map<number, Pt[]>();
+  for (let r = 0; r < board.R; r++) {
+    for (let c = 0; c < board.C; c++) {
+      const v = board.grid[r][c];
+      if (v < 0) continue;
+      const list = spots.get(v);
+      if (list) list.push([r, c]);
+      else spots.set(v, [[r, c]]);
+    }
+  }
+  let best: HintPick | null = null;
+  let bestDist = Infinity;
+  for (const list of spots.values()) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const path = findPath(board, list[i], list[j], maxTurns);
+        if (!path) continue;
+        const turns = turnCount(path);
+        const dist = Math.abs(list[i][0] - list[j][0]) + Math.abs(list[i][1] - list[j][1]);
+        if (best && (turns > best.turns || (turns === best.turns && dist >= bestDist))) continue;
+        best = { pair: [list[i], list[j]], turns, path };
+        bestDist = dist;
+      }
+    }
+  }
+  return best;
+}
+
 /** 提示走的是真求解，不是随便挑两个高亮 */
 export function hintPair(board: BoardState, maxTurns = 2): [Pt, Pt] | null {
-  return anyMove(board, maxTurns);
+  return hintBest(board, maxTurns)?.pair ?? null;
 }
 
 /** 提示还剩几次 */
