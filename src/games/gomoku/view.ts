@@ -48,8 +48,9 @@ export const CSS = `
 .gmk-panel{display:flex;flex-direction:column;gap:12px;padding:10px 6px;}
 .gmk-label{font-weight:800;color:#A8743C;font-size:15px;margin-bottom:6px;}
 .gmk-seg{display:flex;gap:8px;flex-wrap:wrap;}
-.gmk-seg button{flex:1;min-width:98px;border:3px solid #EED9B8;background:#FFFDF8;border-radius:16px;padding:9px 8px;
-  font-size:14px;font-weight:700;color:#8A6B45;cursor:pointer;font-family:inherit;text-align:center;}
+.gmk-seg button{flex:1;min-width:98px;min-height:${MIN_HIT_PX}px;border:3px solid #EED9B8;background:#FFFDF8;
+  border-radius:16px;padding:9px 8px;font-size:14px;font-weight:700;color:#8A6B45;cursor:pointer;font-family:inherit;
+  text-align:center;}
 .gmk-seg button.gmk-on{border-color:#F2A0C0;background:#FFE4EF;color:#C2497E;}
 .gmk-seg button:focus-visible{outline:3px solid #C2497E;outline-offset:2px;}
 .gmk-tierblurb{font-size:12.5px;color:#8A6B45;font-weight:700;margin-top:6px;min-height:18px;line-height:1.5;}
@@ -57,8 +58,9 @@ export const CSS = `
   cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
 .gmk-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
 .gmk-modebar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 0 10px;}
-.gmk-mode{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#FFE8C8;color:#96601F;box-shadow:0 3px 0 rgba(150,96,31,.25);white-space:nowrap;}
+.gmk-mode{border:none;border-radius:999px;min-height:${MIN_HIT_PX}px;padding:9px 16px;font-size:15px;font-weight:900;
+  cursor:pointer;font-family:inherit;background:#FFE8C8;color:#96601F;box-shadow:0 3px 0 rgba(150,96,31,.25);
+  white-space:nowrap;}
 .gmk-mode:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(150,96,31,.25);}
 .gmk-mode-streak{background:#FFD7E4;color:#A8325C;box-shadow:0 3px 0 rgba(168,50,92,.25);}
 .gmk-claimbar{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap;}
@@ -67,8 +69,9 @@ export const CSS = `
   flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .gmk-over-title{font-size:22px;font-weight:900;color:#8A5AA8;}
 .gmk-over-sub{font-size:15px;font-weight:700;color:#77619B;line-height:1.6;max-width:300px;}
-.gmk-over-btn{border:none;border-radius:16px;padding:11px 24px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;
-  background:linear-gradient(180deg,#C84483,#AD3A72);box-shadow:0 4px 0 #8F2C5C;font-family:inherit;}
+.gmk-over-btn{border:none;border-radius:16px;min-height:${MIN_HIT_PX}px;padding:11px 24px;font-size:16px;
+  font-weight:900;color:#fff;cursor:pointer;background:linear-gradient(180deg,#C84483,#AD3A72);
+  box-shadow:0 4px 0 #8F2C5C;font-family:inherit;}
 .gmk-over-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #8F2C5C;}
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}

@@ -264,4 +264,19 @@ describe("360px 上的热区", () => {
       MIN_HIT_PX,
     );
   });
+
+  it("R2C-G2 · 选择条（棋盘大小 / 档位 / 禁手）与模式条也够得到 44px", () => {
+    expect(hitHeight(ruleBody(".gmk-seg button")), "选择条的热区又缩回去了").toBeGreaterThanOrEqual(MIN_HIT_PX);
+    expect(hitHeight(ruleBody(".gmk-mode")), "模式条的热区又缩回去了").toBeGreaterThanOrEqual(MIN_HIT_PX);
+  });
+
+  it("R2C-G2 · 结算浮层上的按钮不再卡在 44px 的临界线上", () => {
+    expect(hitHeight(ruleBody(".gmk-over-btn")), "结算按钮的热区又缩回去了").toBeGreaterThanOrEqual(MIN_HIT_PX);
+  });
+
+  it("能点的按钮一个都没漏：整份 CSS 里每条按钮规则都写了 min-height", () => {
+    for (const sel of [".gmk-btns button", ".gmk-seg button", ".gmk-mode", ".gmk-over-btn", ".gmk-start"]) {
+      expect(hitHeight(ruleBody(sel)), `${sel} 不到 44px`).toBeGreaterThanOrEqual(MIN_HIT_PX);
+    }
+  });
 });
