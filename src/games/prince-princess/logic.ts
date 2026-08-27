@@ -1434,11 +1434,51 @@ interface AiTarget {
   dangerous: boolean;
 }
 
-/** 这位主角现在该盯着谁 */
-function chooseTarget(w: World, h: HeroState): AiTarget {
+/**
+ * 单人托管的搭档跟真人之间的绳子。
+ *
+ * 城门已经只认真人手上那位了(见 `checkGoal`),但搭档跑的还是和真人一模一样的
+ * 全功能 AI:自己清怪、自己捡宝、自己一路冲到城门口。孩子把手放开,一关的活
+ * 全让小伙伴干完了 —— 帮忙可以,包场不行。所以再给搭档系上一根绳子:
+ * 只接真人身边的活,绝不越过真人往城门那头开路。
+ */
+const ESCORT_LEASH = 220;
+/** 比真人还超前这么多的怪,搭档不接;落在真人身后的漏网之鱼倒是照打不误 */
+const ESCORT_ENGAGE = 300;
+/** 没仗打的时候站在真人身后半步等着 */
+const ESCORT_FOLLOW_GAP = 60;
+
+/** 搭档闲着的时候站哪儿:真人朝出发点那一侧半步,免得替真人开路 */
+function escortSpot(w: World, leader: HeroState): number {
+  const toGoal = Math.sign(w.def.goalX - leader.x) || 1;
+  return leader.x - toGoal * ESCORT_FOLLOW_GAP;
+}
+
+/**
+ * 这位主角现在该盯着谁。
+ *
+ * `leader` 不为空表示这是单人模式里托管的搭档,真人手上那位是 `leader`:
+ * 这时只接真人身边的活,没活干就回到真人身边待着,不会自己奔向城门。
+ */
+function chooseTarget(w: World, h: HeroState, leader: HeroState | null): AiTarget {
   const my = attackKindOf(h.kind);
+  /** 这个位置算不算「真人身边」:比真人超前太多就不算,身后多远都算 */
+  const nearLeader = (x: number): boolean => {
+    if (!leader) return true;
+    const toGoal = Math.sign(w.def.goalX - leader.x) || 1;
+    return (x - leader.x) * toGoal <= ESCORT_ENGAGE;
+  };
+  const idle = (): AiTarget => ({
+    x: leader ? escortSpot(w, leader) : w.def.goalX,
+    y: 0,
+    halfW: 0,
+    hostile: false,
+    reachable: false,
+    dangerous: false,
+  });
   const boss = w.boss;
   if (boss?.alive) {
+    if (!nearLeader(boss.x)) return idle();
     const side = h.x <= boss.x ? -1 : 1;
     return {
       x: boss.x,
@@ -1458,6 +1498,7 @@ function chooseTarget(w: World, h: HeroState): AiTarget {
   let fallbackD = Infinity;
   for (const e of w.enemies) {
     if (!e.alive) continue;
+    if (!nearLeader(e.x)) continue;
     const d = Math.abs(e.x - h.x);
     if (canDamage(e.kind, my)) {
       if (d < bestD) {
@@ -1485,7 +1526,7 @@ function chooseTarget(w: World, h: HeroState): AiTarget {
     // 自己打不动这只,那就跟过去,让搭档来收拾
     return { x: fallback.x - 90, y: 0, halfW: 0, hostile: false, reachable: false, dangerous: false };
   }
-  return { x: w.def.goalX, y: 0, halfW: 0, hostile: false, reachable: false, dangerous: false };
+  return idle();
 }
 
 /**
@@ -1535,13 +1576,19 @@ function shotIncoming(w: World, h: HeroState): boolean {
   });
 }
 
-/** 机器人这一帧要按什么键 */
+/**
+ * 机器人这一帧要按什么键。
+ *
+ * 单人模式里没被真人操作的那位走「托管搭档」的分支:帮忙打真人身边的怪,
+ * 但被 `ESCORT_LEASH` 拴在真人身边,不会替真人把关走完(见 `chooseTarget`)。
+ */
 export function botInput(w: World, heroIndex = 0, dt = 1 / 60): Input {
   const input = emptyInput();
   const h = w.heroes[heroIndex];
   if (!h || w.status !== "playing") return input;
   const def = w.def;
-  const target = chooseTarget(w, h);
+  const leader = humanHero(w, heroIndex) ? null : w.heroes[w.active] ?? null;
+  const target = chooseTarget(w, h, leader);
 
   /**
    * 站位:永远待在自己原来那一侧,绝不为了绕后而从怪身上穿过去。
@@ -1558,6 +1605,12 @@ export function botInput(w: World, heroIndex = 0, dt = 1 / 60): Input {
     else if (h.kind === "prince") standoff = target.halfW + HERO_W / 2 + 16;
     else standoff = target.halfW + 170 + slip;
     wantX = target.x + side * standoff;
+  }
+  // 绳子只拴住「往城门那头跑」的方向:搭档想退到多远都行(公主放星星本来就要站得远),
+  // 但绝不能越过真人去替他开路。
+  if (leader) {
+    const toGoal = Math.sign(def.goalX - leader.x) || 1;
+    if ((wantX - leader.x) * toGoal > ESCORT_LEASH) wantX = leader.x + toGoal * ESCORT_LEASH;
   }
   wantX = Math.max(50, Math.min(def.len - 50, wantX));
 
