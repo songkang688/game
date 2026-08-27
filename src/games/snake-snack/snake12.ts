@@ -311,6 +311,22 @@ export function pickSnack(pool: readonly number[], rand: () => number): number |
   return pool[i];
 }
 
+/** 普通点心的样子(星星果 ⭐ 和剪刀果 ✂️ 是另外两种，不在这一串里) */
+export const SNACK_EMOJI = ["🍓", "🍎", "🍇", "🍪", "🧁"] as const;
+
+/**
+ * 下一颗普通点心长什么样：随机挑一个，但**不许和上一颗重样**。
+ *
+ * 原来是直接 `SNACKS[floor(rand()*5)]`，五选一有 1/5 的概率连着两颗一模一样。
+ * 对小孩子来说「吃掉一颗、原地又冒出一颗同样的」看着像没刷新，
+ * 会去戳已经吃过的那个位置。避开上一颗之后每一颗都看得出换了。
+ */
+export function nextSnackEmoji(prev: string, rand: () => number): string {
+  const pool = SNACK_EMOJI.filter((e) => e !== prev);
+  const list = pool.length > 0 ? pool : SNACK_EMOJI;
+  return list[Math.min(list.length - 1, Math.floor(rand() * list.length))];
+}
+
 /** 满盘了:这是了不起的事,不是失败 */
 export function boardFullLine(): string {
   return "整座花园都被你的身子铺满啦!这一关到此为止,厉害得不得了!";

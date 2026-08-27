@@ -301,12 +301,10 @@ describe("档C R1 · memory-cards · 无尽玩到结算", () => {
     }
   });
 
-  it("【C1-02 一般 · 待改】无尽从第 8 轮起完全不再变难,只换配色", () => {
-    // 现状快照:endlessPairs 在第 8 轮触顶 10 组,之后每一轮的牌数、列数、机关全一样。
+  it("【C1-02 一般 · 本轮学习优化员已改】牌数封顶之后不再是同一关换配色", () => {
+    // 组数确实第 8 轮就顶到 10 —— 这条是对的,360px 上再多也摆不下。
     expect(endlessPairs(8)).toBe(10);
     expect(endlessPairs(100)).toBe(10);
-    const r8 = endlessLevel(8, 6);
-    const r99 = endlessLevel(99, 6);
     const shape = (c: MemoryLevel): string =>
       JSON.stringify({
         pairs: c.pairs,
@@ -317,9 +315,12 @@ describe("档C R1 · memory-cards · 无尽玩到结算", () => {
         swapEvery: c.swapEvery ?? 0,
         timeLimit: c.timeLimit,
       });
-    expect(shape(r8)).toBe(shape(r99));
-    // 唯一还在动的只有主题配色
-    expect(r8.theme).not.toBe(r99.theme);
+    // 改之前 shape(第 8 轮) === shape(第 99 轮),整整 91 轮一模一样;
+    // 现在封顶之后接上了不加牌的机关,题面继续在变。
+    expect(shape(endlessLevel(8, 6))).not.toBe(shape(endlessLevel(99, 6)));
+    const shapes = new Set<string>();
+    for (let r = 8; r <= 40; r++) shapes.add(shape(endlessLevel(r, 6)));
+    expect(shapes.size, "第 8–40 轮的题面种类").toBeGreaterThanOrEqual(8);
   });
 });
 

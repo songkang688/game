@@ -482,10 +482,13 @@ export function swapSlots(order: readonly number[], a: number, b: number): numbe
 /** 错满这么多次就收工 */
 export const ENDLESS_MAX_MISS = 3;
 
+/** 牌数封顶：10 组 20 张，再多 360px 上就摆不下（5 列 × 4 行已经到底） */
+export const ENDLESS_MAX_PAIRS = 10;
+
 /** 第 round 轮（1 基）要配几组：从 3 组起步，越往后越多，封顶 10 组 */
 export function endlessPairs(round: number): number {
   const n = Math.max(1, Math.round(round) || 1);
-  return Math.min(10, 2 + n);
+  return Math.min(ENDLESS_MAX_PAIRS, 2 + n);
 }
 
 /** 第 round 轮用第几套主题：一轮换一套，六套轮着来 */
@@ -494,14 +497,58 @@ export function endlessTheme(round: number, packs: number): number {
   return (n - 1) % Math.max(1, packs);
 }
 
-/** 第 round 轮的牌盘几列：牌多就多一列，窄屏也摆得下 */
+/**
+ * 第 round 轮的牌盘几列：牌多就多一列。
+ *
+ * 上限就是 5 —— 6 列时每张牌在 360px 上只剩 52px，戳不准（`CARD_MIN_W` 是 56）。
+ * 原来写成 `<=15 ? 5 : 5` 的三目两个分支一模一样，读起来像是「超过 15 张还有别的排法」，
+ * 实际没有；这里把它写实，并由 `qaC1` 的窄屏性质测试盯着。
+ */
+export const ENDLESS_MAX_COLS = 5;
+
 export function endlessCols(pairs: number): number {
-  return pairs * 2 <= 8 ? 4 : pairs * 2 <= 15 ? 5 : 5;
+  return pairs * 2 <= 8 ? 4 : ENDLESS_MAX_COLS;
+}
+
+/** 从第几轮起牌阵开始整体转 */
+export const ENDLESS_ROTATE_FROM = 16;
+/** 从第几轮起单张牌开始自己挪窝 */
+export const ENDLESS_SWAP_FROM = 10;
+
+/**
+ * 牌数封顶之后接着上的两样「不加牌」的机关。
+ *
+ * 组数第 8 轮就顶到 10 了，机关不接上的话第 8 轮和第 99 轮是同一关换个配色，
+ * 剩下的只有换皮。所以封顶之后改用不占地方的机关继续往上加：
+ * 先是单张牌自己挪窝（换之前有预警），再是整个牌阵按节奏转一格，
+ * 两样都从慢到快，各有下限——挪得再勤也要留出「翻完一组」的时间。
+ */
+export function endlessTwist(round: number): { rotateEvery: number; swapEvery: number } {
+  const n = Math.max(1, Math.round(round) || 1);
+  // 每 2 轮快 500ms，14 秒起步，8 秒到底（和战役终极厅同一个下限）
+  const swapEvery =
+    n < ENDLESS_SWAP_FROM ? 0 : Math.max(8000, 14000 - Math.floor((n - ENDLESS_SWAP_FROM) / 2) * 500);
+  // 每 4 轮少 1 翻，9 翻转一格起步，5 翻到底（还够翻完一组再转）
+  const rotateEvery =
+    n < ENDLESS_ROTATE_FROM ? 0 : Math.max(5, 9 - Math.floor((n - ENDLESS_ROTATE_FROM) / 4));
+  return { rotateEvery, swapEvery };
+}
+
+/**
+ * 这一轮到底有多难，越大越难（只给单测盯「曲线一路往上、不许走平」用）。
+ * 组数占大头，机关按「加得多快」折算成小数往上垫。
+ */
+export function endlessDifficulty(round: number): number {
+  const { rotateEvery, swapEvery } = endlessTwist(round);
+  const swapPart = swapEvery > 0 ? 1 + (14000 - swapEvery) / 6000 : 0;
+  const rotatePart = rotateEvery > 0 ? 1 + (9 - rotateEvery) / 4 : 0;
+  return endlessPairs(round) * 10 + swapPart + rotatePart;
 }
 
 /** 无尽这一轮的关卡配置（复用同一套发牌与判定） */
 export function endlessLevel(round: number, packs: number): MemoryLevel {
   const pairs = endlessPairs(round);
+  const { rotateEvery, swapEvery } = endlessTwist(round);
   return {
     pairs,
     cols: endlessCols(pairs),
@@ -512,6 +559,8 @@ export function endlessLevel(round: number, packs: number): MemoryLevel {
     matchSize: 2,
     timeLimit: 0,
     theme: endlessTheme(round, packs),
+    ...(rotateEvery > 0 ? { rotateEvery } : {}),
+    ...(swapEvery > 0 ? { swapEvery } : {}),
   };
 }
 

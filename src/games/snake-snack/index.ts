@@ -41,6 +41,7 @@ import {
   knotReport,
   lerp,
   moveT,
+  nextSnackEmoji,
   paceLabel,
   paceTip,
   pickSnack,
@@ -51,6 +52,7 @@ import {
   ringDoorOpen,
   ringDoorSet,
   ringHint,
+  SNACK_EMOJI,
   snackPool,
   speedCurveFor,
   starExpired,
@@ -66,7 +68,6 @@ import {
 
 const CELL = 26;
 const SIZE = GRID * CELL;
-const SNACKS = ["🍓", "🍎", "🍇", "🍪", "🧁"];
 const SMOKE = typeof location !== "undefined" && /[?&]smoke=1/.test(location.search);
 
 /** 关掉动效时:插值压到一帧,状态机照旧 */
@@ -183,7 +184,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   let eaten = 0;
   let starsGot = 0;
   let snack: [number, number] = [9, 1];
-  let snackEmoji = SNACKS[0];
+  let snackEmoji: string = SNACK_EMOJI[0];
   let snackIsStar = false;
   let snackIsTrim = false;
   let starTicks = 0;
@@ -253,7 +254,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
     snackIsStar = kind === "star";
     snackIsTrim = kind === "trim";
     starTicks = 0;
-    snackEmoji = snackIsTrim ? "✂️" : snackIsStar ? "⭐" : SNACKS[Math.floor(Math.random() * SNACKS.length)];
+    snackEmoji = snackIsTrim ? "✂️" : snackIsStar ? "⭐" : nextSnackEmoji(snackEmoji, Math.random);
     // 只在「这会儿真的走得到」的格子里放点心：窄门关着、绕圈门没开、石头挡着都算数
     const head = worms[0].cells[0];
     const reach = reachableNow(cfg, cellKey(head[0], head[1]), {
@@ -585,7 +586,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
       if (starExpired(starTicks, starLimit)) {
         // 星星果限时溜走，换回普通点心
         snackIsStar = false;
-        snackEmoji = SNACKS[Math.floor(Math.random() * SNACKS.length)];
+        snackEmoji = nextSnackEmoji(snackEmoji, Math.random);
         msgEl.textContent = "星星果溜走了～下一颗顺路的时候优先去拿！";
       }
     }
