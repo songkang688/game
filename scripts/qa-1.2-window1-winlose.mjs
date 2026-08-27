@@ -79,9 +79,12 @@ const PLANS = [
     winLevel: 1,
     loseLevel: 170,
     bot: "press",
-    // 轻击学堂：贴上去不停轻击，偶尔挡一下
-    keys: ["KeyD", "KeyF", "KeyF", "KeyF", "KeyG", "KeyD", "KeyF", "KeyF"],
-    tick: 110
+    // 轻击学堂教的就是「打完就退」：`d` 往前贴、`f` 轻击两下、`a` 往后拉开。
+    // 一直往前压会被对手打断（元气对拼输 0% : 8%），退这一下正是这一章要教的距离感。
+    // 这一款是「按住」模型（keydown 置位、keyup 清位），必须真按住一会儿才算数
+    keys: ["KeyD", "KeyF", "KeyF", "KeyA"],
+    holdMs: 180,
+    tick: 60
   },
   {
     id: "mahjong-bloom",
@@ -103,8 +106,8 @@ const PLANS = [
     bot: "click",
     // 掷骰 → 能买就买 → 能建就建
     priority: [/掷骰/, /购买|买下/, /建屋|盖房/, /结束回合|过/],
-    // 输局用：只掷骰、只过回合，一块地都不置 —— 让本地假人把地占满
-    losePriority: [/掷骰/, /结束回合|过/],
+    // 输局用：只掷骰，一块地都不置（碰到地就「不买，上拍卖」）—— 让本地假人把地占满
+    losePriority: [/掷骰/, /不买|不参与|放弃|不加价/, /不跟/, /结束回合|过/],
     fallback: ".se-tile"
   }
 ];
@@ -367,7 +370,16 @@ async function pressBot(page, plan, budgetMs) {
   while (Date.now() - t0 < budgetMs) {
     const s = await settle(page);
     if (s) return s;
-    await page.keyboard.press(plan.keys[i++ % plan.keys.length]);
+    const key = plan.keys[i++ % plan.keys.length];
+    if (plan.holdMs) {
+      // 有些款是「按住」模型：keydown 置位、keyup 清位，游戏每帧读这个位。
+      // `keyboard.press` 的按下和抬起之间几乎没有时间，一帧都占不到，等于没按。
+      await page.keyboard.down(key);
+      await sleep(plan.holdMs);
+      await page.keyboard.up(key);
+    } else {
+      await page.keyboard.press(key);
+    }
     await sleep(plan.tick);
   }
   return settle(page);
