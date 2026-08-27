@@ -73,6 +73,68 @@ export function wrapCapPx(roomPx: number, contentPx: number, slack = FIT_SLACK_P
 }
 
 /**
+ * 钳完之后要滚到哪儿，才能让 `[top, bottom)` 这一段整个落进可视段（`W5R3-BT-01`）。
+ *
+ * `top` / `bottom` 是**内容坐标**（已经含当前滚动量），`client` 是可视段高，
+ * `max` 是这一屏还能滚多少，`at` 是现在滚到哪儿了。
+ *
+ * 三条规矩，缺一条这一手就会从「帮忙」变成「捣乱」：
+ *  1. **够得着就一格不动**——原样返回 `at`。这一款每 300ms 重排一次，
+ *     不加这一条就是每 0.3 秒把孩子的滚动位置抢回来一次；
+ *  2. 滚**最小的那一段**：掉在下面就把下沿贴住可视段下沿，跑到上面就把上沿贴住上沿。
+ *     水面、张力条那些能留在屏上的尽量留着；
+ *  3. 目标比可视段还高就从它的**上沿**开始露——露上半截总比一点都不露强。
+ */
+export function scrollToShowPx(
+  top: number,
+  bottom: number,
+  client: number,
+  max: number,
+  at = 0
+): number {
+  const now = Number.isFinite(at) ? at : 0;
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return now;
+  if (!(client > 0) || !(max > 0)) return now;
+  const lo = bottom - client;
+  let want = now;
+  if (bottom - top > client) want = top;
+  else if (now < lo) want = lo;
+  else if (now > top) want = top;
+  return Math.max(0, Math.min(max, Math.round(want)));
+}
+
+/**
+ * 把「🎣 按住抛竿」送到孩子眼前（`W5R3-BT-01` 严重 / `W5R3-BT-02` 一般）。
+ *
+ * `wrapCapPx()` 那一手（`W5R2-FB-01`）解决的是「一处能起手滚的地方都没有」，
+ * 它做到了：横屏三档现在真挂得上滚动条、真手指真推得动。可**落地的 `scrollTop` 是 0**，
+ * 而这颗键排在这一屏最后一行——真机 640×360 上量到键在 428.3–472.3、
+ * 可视段下沿只到 344，`elementFromPoint(键心)` 拿回 `null`：**整颗在口子外面**。
+ * 第一屏上没有任何「下面还有东西」的提示，孩子横过来看到的是水面和一条张力条，
+ * 不会想到要先把屏幕往上推，而这是这一款唯一的操作键。
+ *
+ * 320×568 上鱼那一下是同一件事的另一面：这一屏当场长高，
+ * 「👀 看看它」被自己的壳裁掉 29.6px，44px 的键只剩顶上 14.4px 能按。
+ *
+ * 只碰 `scrollTop`，不改任何人的样式，也不改任何人的 DOM——
+ * 和 `resetClippedScroll()` 同一个分寸，`fit.ts` 仍旧不写样式。
+ * 调用时机由 `index.ts` 挑：**只在布局事件上滚**（钳位值变了 / 换相位 / 转屏），
+ * 普通帧里一格不动。
+ */
+export function showAct(wrap: HTMLElement, act: HTMLElement | null): number {
+  if (!wrap || typeof wrap.getBoundingClientRect !== "function") return 0;
+  if (!act || typeof act.getBoundingClientRect !== "function") return 0;
+  const at = typeof wrap.scrollTop === "number" ? wrap.scrollTop : 0;
+  const client = typeof wrap.clientHeight === "number" ? wrap.clientHeight : 0;
+  const content = typeof wrap.scrollHeight === "number" ? wrap.scrollHeight : 0;
+  const r = act.getBoundingClientRect();
+  const top = r.top - wrap.getBoundingClientRect().top + at;
+  const next = scrollToShowPx(top, top + r.height, client, content - client, at);
+  if (next !== at) wrap.scrollTop = next;
+  return typeof wrap.scrollTop === "number" ? wrap.scrollTop : next;
+}
+
+/**
  * 排完之后底边掉到裁切线以下多少像素（≤0 = 还在里面）。
  *
  * `sea + chrome` 就是这一屏的总高，`room` 是「我头顶到裁切线」还剩多少。

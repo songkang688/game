@@ -179,8 +179,12 @@ export const KTC_CSS = `
 /* 搓澡关这种真装不下的（搓澡池 min-height:240px，猫已经收到最小的 92px），
    fitIntoStage() 会挂滚动条并打上 ktc-scroll。这时候提示行就是「这一关要干什么」，
    初始位置整行在滚动口以外——粘在下沿，滚到哪儿都在，池子一格不动。 */
+/* 粘上去之后它就压在别人头上了（z-index:6 比所有交互层的 3 都高）。
+   提示行从头到尾只是一句话，没有任何可点的东西，让手指直接穿过去——
+   真机 360×640 第 188 关实测：不穿透时托盘那五颗食物 elementFromPoint 命中的全是它，
+   落地那一档 0/5 够得着（W5R3-C-02）。滚动位置怎么变都不会再挡住谁。 */
 .ktc-wrap.ktc-scroll .ktc-msg{position:sticky;bottom:0;z-index:6;background:#fff7ecf2;
-  border-radius:12px;padding:2px 8px;}
+  border-radius:12px;padding:2px 8px;pointer-events:none;}
 .ktc-night.ktc-scroll .ktc-msg{background:#3a2f52f2;}
 .ktc-safety{position:relative;z-index:3;text-align:center;font-size:13px;font-weight:800;color:#3f7a68;
   background:#eafaf3;border-radius:12px;padding:6px 12px;margin:6px auto 0;width:fit-content;max-width:94%;}
@@ -192,7 +196,9 @@ export const KTC_CSS = `
 .ktc-night .ktc-bubble{background:#fffdf3;}
 
 /* 相册与小屋摆设：360px 上两列，缩略图 ≥ 100px */
-.ktc-album{padding:8px;}
+/* 矮横屏（568×320）上卡片格自己挤不出 44px，那一档由 scrollIntoStage() 退一层
+   把这块板子写成滚动口；这里先把「翻起来别把整页也带着走」定下来（W5R3-CF-01） */
+.ktc-album{padding:8px;overscroll-behavior:contain;touch-action:pan-y;}
 .ktc-albumhead{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
 /* 矮屏上由 scrollIntoStage() 逐档写 max-height / overflow-y；
    这里先把「翻起来别把整页也带着走」和「手指竖划归它」定下来 */

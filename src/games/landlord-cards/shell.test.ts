@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { FLY_MAX_MS, FLY_MIN_MS } from "./anim";
 import { cardWidthFor } from "./fan";
 import guide from "./guide";
+import { PASS_BUTTON_LABEL } from "./hint";
 import { meta } from "./meta";
 
 const dir = fileURLToPath(new URL(".", import.meta.url));
@@ -103,7 +104,9 @@ describe("手机 360px", () => {
   it("底部「不出 / 提示 / 出牌」是固定一行三钮", () => {
     const bar = shell.slice(shell.indexOf('btnsEl.className = "ldc-mainbar"'));
     const play = bar.slice(bar.indexOf('} else if (phase === "play")'), bar.indexOf("subEl.appendChild"));
-    expect(play).toContain("🙅 不出");
+    // 过牌键的字面搬进 hint.ts 的 PASS_BUTTON_LABEL（提示语要引用同一个字，W5R3-A-01）
+    expect(play).toContain("PASS_BUTTON_LABEL");
+    expect(PASS_BUTTON_LABEL).toBe("🙅 不出");
     expect(play).toContain("💡 提示");
     expect(play).toContain("✅ 出牌");
     expect(shell).toContain("flex-wrap:nowrap");

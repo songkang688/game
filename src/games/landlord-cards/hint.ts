@@ -20,6 +20,18 @@ import {
 } from "./ai";
 import { PLAY_NAMES, cardLabel, describePlay, isBombLike, type Play } from "./logic";
 
+/**
+ * 过牌键的字面，和牌桌上那颗按钮共用同一份。
+ *
+ * 提示语原先写死「点「不要」过掉就好」，可牌桌底下那颗键印的是「🙅 不出」——
+ * 第 3 轮真机上打到「一种压法都搜不到」那一手时，提示让孩子按一个牌桌上不存在的名字，
+ * 五六岁刚认字的读到「不要」根本对不上「不出」（W5R3-A-01）。
+ * 按钮与提示从此只认这一个常量，改一处两边一起动，不会再各说各的。
+ */
+export const PASS_WORD = "不出";
+/** 牌桌上那颗过牌键的完整字面（表情 + 字） */
+export const PASS_BUTTON_LABEL = `🙅 ${PASS_WORD}`;
+
 export type HintMode = "off" | "groups" | "coach";
 
 /** 三档的显示顺序:关 → 高亮 → 教练 */
@@ -127,7 +139,7 @@ export function playableGroups(hand: readonly number[], prev: Play | null): Play
 
 /** 把候选牌组按牌型点一遍数,给高亮档写一句「有几组能出」 */
 export function groupsSummary(list: readonly Play[]): string {
-  if (list.length === 0) return "这一手一组都接不上,点「不要」过掉就好。";
+  if (list.length === 0) return `这一手一组都接不上,点「${PASS_WORD}」过掉就好。`;
   const byType = new Map<string, number>();
   for (const p of list) byType.set(p.type, (byType.get(p.type) ?? 0) + 1);
   const parts = [...byType.entries()]
@@ -207,7 +219,7 @@ export function explainChoice(
 
 /** 建议过牌时的那句话,同样只说搜索算出来的事 */
 function explainPass(best: HintCandidate | undefined, searched: number): string {
-  if (!best) return `这一手一种压法都搜不到,点「不要」过一手,等自己重新先手。`;
+  if (!best) return `这一手一种压法都搜不到,点「${PASS_WORD}」过一手,等自己重新先手。`;
   if (best.usesBomb) {
     return `搜了 ${searched} 种压法,能压住的只有炸弹这一类。现在炸下去太亏,先过一手,把它留到对手快走完的时候。`;
   }
@@ -247,7 +259,7 @@ export function searchHint(input: HintInput, mode: HintMode = "coach"): HintResu
       play: null,
       pass: input.prev !== null,
       reason: input.prev
-        ? "这一手一种压法都搜不到,点「不要」过一手,等自己重新先手。"
+        ? `这一手一种压法都搜不到,点「${PASS_WORD}」过一手,等自己重新先手。`
         : "手里已经没牌啦!",
       searched: 0,
       ranked,

@@ -214,10 +214,32 @@ describe("朵朵抢地主 · 收紧器怎么接进去的（源码巡检）", () 
     expect(destroy.slice(0, 600)).toContain("fit?.dispose()");
   });
 
-  it("说到底不许给它挂滚动条:手牌是拖着框选的,能滚就框不成", () => {
+  /*
+   * 【据实改判 · 第 3 轮档A W5R3-TA-01】
+   *
+   * 原来这里钉的是「一个字节都不许往 style 上写滚动条」。那条线**就是缺陷本身**：
+   * 真机复量（Chrome headless + CDP，`document.elementFromPoint` 定案）横屏两档上
+   *   640×360  `.ldc-mainbar .ld-btn` 落地 0/4、逐档滚动累计 0/4，可滚祖先＝**无**；
+   *   844×390  同上，`.ldc-subbar .ld-btn`（⏸ 暂停）0/1，可滚祖先＝**无**。
+   * 叫不了地主这一局就开不了——「能滚就框不成」难受，可「一颗都按不着」是开局都开不了，
+   * 两者不同价。所以这条线从「一律不挂」挪到「**两档收紧全用尽之后才挂**」。
+   *
+   * 保护意图一个没丢，只是换了个说法钉：
+   *  - 滚动**永远排在两档收紧后面**，能让的高度先让干净；
+   *  - 收紧那两档的 CSS 自己仍旧一个 `overflow-y` 都不许写（那会绕过顺序）；
+   *  - 手牌扇仍旧 `touch-action:none`，落在牌上的手指只框选、不带着壳滚。
+   */
+  it("说到底不许给它挂滚动条:手牌是拖着框选的,能滚就框不成——改判为「两档用尽才挂,且框选一分不受影响」", () => {
     const FIT = readFileSync(fileURLToPath(new URL("./fit.ts", import.meta.url)), "utf8");
-    expect(FIT).not.toMatch(/\.style\.(overflow|maxHeight|height)/);
+    // 顺序不许换：兜底那一档必须排在两档收紧之后
+    const wearTier = FIT.indexOf("wear(tier);");
+    const scroll = FIT.indexOf("needsScroll(wrap.scrollHeight, room)");
+    expect(wearTier).toBeGreaterThan(-1);
+    expect(scroll).toBeGreaterThan(wearTier);
+    // 收紧那两档自己仍旧一个 overflow-y 都不许写
     expect(TIERS).not.toMatch(/overflow-y:\s*(auto|scroll)/);
+    // 框选那一手靠的是手牌扇自己的 touch-action:none，一分没动
+    expect(rule(".ld-fanbox")).toContain("touch-action:none");
   });
 });
 

@@ -33,6 +33,7 @@ import { endlessClockText, endlessLine, endlessParams, endlessRound, endlessTime
 import { KTC_CSS } from "./styles";
 import {
   Life,
+  LIST_MIN_ROOM,
   openLevelOnMap,
   parseLevelParam,
   prefersReducedMotion,
@@ -349,8 +350,9 @@ function mountAlbum(host: HTMLElement, api: GameApi, onBack: () => void): { dest
     // 24 件一共 2809px，舞台只给 530–730px，而这一层原先没有任何可滚祖先，
     // 后面 20–22 颗「⭐N 换回来」永远点不着（W5R2-C-03）。
     // 只钳这一格：上面的「◀ 回选关」、四个位置、说明行钉着不动，翻的只有卡片。
+    // 矮横屏上卡片格自己连 44px 都挤不出来，那一档退一层让整块板子滚（W5R3-CF-01）
     gridFit?.dispose();
-    gridFit = scrollIntoStage(grid);
+    gridFit = scrollIntoStage(grid, LIST_MIN_ROOM, wrap);
   };
 
   const card = (piece: AlbumPiece): HTMLElement => {
