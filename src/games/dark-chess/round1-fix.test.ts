@@ -20,6 +20,19 @@ describe("dark-chess · 360/320 列宽收缩（A 档 5-2 阻断）", () => {
   });
 });
 
+describe("dark-chess · HUD 字号 ≥14px（A 档 5-4 修复）", () => {
+  it("chip 与 note 的每条规则字号都 ≥14", () => {
+    for (const cls of ["dc-chip", "dc-note"]) {
+      const rules = [...BOARD_CSS.matchAll(new RegExp(`\\.${cls}\\{[^}]*\\}`, "g"))];
+      expect(rules.length, `${cls} 没找到规则`).toBeGreaterThan(0);
+      for (const [rule] of rules) {
+        const m = /font-size:([\d.]+)px/.exec(rule);
+        if (m) expect(Number.parseFloat(m[1]), `${cls} 字号 ${m[1]}px 低于 14`).toBeGreaterThanOrEqual(14);
+      }
+    }
+  });
+});
+
 describe("dark-chess · defs 固定 id 撞车修复（A 档 2-2 一般）", () => {
   it("牌背改三停层叠实心:零 defs/url(#/id=,且 32 张除木纹外仍逐字节相同", () => {
     const strip = (svg: string): string => svg.replace(/<path class="dcg" d="[^"]*"/g, '<path class="dcg"');

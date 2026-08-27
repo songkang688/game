@@ -84,7 +84,7 @@ export const CSS = `
 .dc-cell.dc-cheer-l{transform:rotate(-15deg);}
 .dc-cell.dc-cheer-r{transform:rotate(15deg);}
 .dc-top{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px;}
-.dc-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#7a5a34;
+.dc-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;color:#7a5a34;
   box-shadow:0 2px 6px rgba(160,130,90,.25);white-space:nowrap;}
 .dc-chip.dc-hot{background:#FFE9DC;color:#b4501f;}
 /* 和棋倒数:摆出来就说明快判和了,配色比普通提示更抢眼一点 */
@@ -95,7 +95,7 @@ export const CSS = `
 .dc-chip.dc-quiet::before,.dc-chip.dc-cap::before{content:"";display:inline-block;width:12px;height:12px;
   margin:0 4px -1px 0;background:url("${QUIET_HOURGLASS}") center/contain no-repeat;}
 .dc-chip.dc-cap::before{background:url("${CAP_HOURGLASS}") center/contain no-repeat;}
-.dc-note{text-align:center;min-height:20px;font-size:13px;font-weight:700;color:#795b3a;margin-top:8px;line-height:1.5;}
+.dc-note{text-align:center;min-height:20px;font-size:14px;font-weight:700;color:#795b3a;margin-top:8px;line-height:1.5;}
 .dc-count{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
 .dc-count span{font-size:12px;font-weight:800;border-radius:999px;padding:3px 8px;background:#fff8ec;color:#8a6a40;
   display:inline-flex;align-items:center;gap:3px;}
