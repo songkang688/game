@@ -8,7 +8,7 @@
  * 是可以用无头模拟一关一关跑出来的。
  */
 import { TOTAL_LEVELS, type Chapter } from "../level99";
-import { CHARACTER_IDS } from "./frames";
+import { CHARACTER_IDS, characterById } from "./frames";
 import type { MoveSlot } from "./frames";
 import { NARROW_STAGE_WIDTH, STAGE_WIDTH, defaultConfig, type MatchConfig, type SideStats } from "./engine";
 import type { AiTier, FoeStyle } from "./ai";
@@ -54,11 +54,11 @@ export interface ClashLevel {
   stageWidth: number;
   roundsToWin: number;
   roundSeconds: number;
-  /** 对手元气倍率 */
+  /** 对手有玩家的几成元气(始终 ≤ 1:再难也不让对手比你还耐打) */
   foeVigor: number;
   /** 开局送给玩家多少能量 */
   startMeter: number;
-  /** 这一关玩家只许用这些槽(null = 不限) */
+  /** 这一关**两边**都只许用这些槽(null = 不限)。教学章限招是为了把那一手讲清楚,单方面限招就成了刁难 */
   allowedSlots: MoveSlot[] | null;
 }
 
@@ -126,10 +126,25 @@ export function levelConfig(level: number, playerChar = "duoduo"): ClashLevel {
     stageWidth: mechanic === "corner" ? NARROW_STAGE_WIDTH : STAGE_WIDTH,
     roundsToWin: ci === 7 ? 2 : 1,
     roundSeconds: ci === 7 ? 60 : 50,
-    foeVigor: Math.round((0.55 + ci * 0.07 + ramp * 0.12) * 100) / 100,
+    // 五成起步、九成三封顶。难度靠人机档位和三局两胜往上抬,不靠给对手加元气
+    foeVigor: Math.round((0.5 + ci * 0.05 + ramp * 0.08) * 100) / 100,
     startMeter: mechanic === "superCancel" ? 60 : ci >= 6 ? 30 : 0,
     allowedSlots: mechanic === "light" ? [...LIGHT_ONLY_SLOTS] : mechanic === "cancel" ? [...CANCEL_SLOTS] : null
   };
+}
+
+/**
+ * 关卡里的 `foeVigor` 说的是「对手有玩家的几成元气」。
+ *
+ * 引擎那边的 `vigorScale` 是乘在**角色自己**的元气上的,直接把 0.7 递进去,
+ * 换个厚墩墩那样的重量级对手就会比玩家还耐打,难度曲线全乱。
+ * 所以这里按两边的底子先折算一次,让「七成」在任何配对下都真是七成。
+ */
+export function foeVigorScale(playerChar: string, foeChar: string, want: number): number {
+  const mine = characterById(playerChar).vigor;
+  const theirs = characterById(foeChar).vigor;
+  if (theirs <= 0) return want;
+  return Math.round(((want * mine) / theirs) * 1000) / 1000;
 }
 
 /** 把一关的配置翻译成对局配置 */
@@ -140,8 +155,8 @@ export function matchConfigFor(cfg: ClashLevel, reducedMotion = false): MatchCon
     roundsToWin: cfg.roundsToWin,
     roundFrames: cfg.roundSeconds * 60,
     reducedMotion,
-    vigorScale: [1, cfg.foeVigor],
-    allowedSlots: [cfg.allowedSlots, null],
+    vigorScale: [1, foeVigorScale(cfg.playerChar, cfg.foeChar, cfg.foeVigor)],
+    allowedSlots: [cfg.allowedSlots, cfg.allowedSlots],
     startMeter: [cfg.startMeter, 0]
   });
 }
@@ -248,7 +263,7 @@ export function endlessMatchConfig(cfg: EndlessConfig, playerChar: string, reduc
     roundsToWin: cfg.roundsToWin,
     roundFrames: cfg.roundSeconds * 60,
     reducedMotion,
-    vigorScale: [1, cfg.foeVigor],
+    vigorScale: [1, foeVigorScale(playerChar, cfg.foeChar, cfg.foeVigor)],
     startMeter: [Math.min(50, cfg.streak * 10), 0]
   });
 }

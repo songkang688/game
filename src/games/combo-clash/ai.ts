@@ -10,6 +10,7 @@
  * 随机数用自带的确定性发生器,给同一个 seed 就得到同一串行为,方便单测。
  */
 import { characterOf, currentMove, gapBetween, isFree, type MatchState } from "./engine";
+import type { MoveSlot } from "./frames";
 import {
   THROW_RANGE,
   inCancelWindow,
@@ -91,6 +92,22 @@ function dirs(facing: 1 | -1): { forward: "left" | "right"; back: "left" | "righ
   return facing === 1 ? { forward: "right", back: "left" } : { forward: "left", back: "right" };
 }
 
+/** 正朝我飞过来、而且快到脸上的弹丸(没有就返回 null) */
+export function incomingShot(m: MatchState, side: 0 | 1): { frames: number; height: string } | null {
+  const me = m.fighters[side];
+  let best: { frames: number; height: string } | null = null;
+  for (const p of m.projectiles) {
+    if (p.side === side) continue;
+    const dx = me.x - p.x;
+    // 背对着飞走的不用管
+    if (dx * p.vx <= 0) continue;
+    const frames = Math.abs(dx) / Math.max(0.1, Math.abs(p.vx));
+    if (frames > 30) continue;
+    if (!best || frames < best.frames) best = { frames, height: p.height };
+  }
+  return best;
+}
+
 /** 对手现在正在出招的哪一段(没出招返回 null) */
 export function foePhaseNow(m: MatchState, side: 0 | 1): "startup" | "active" | "recovery" | null {
   const foe = m.fighters[side === 0 ? 1 : 0];
@@ -100,19 +117,24 @@ export function foePhaseNow(m: MatchState, side: 0 | 1): "startup" | "active" | 
   return ph === "done" ? null : ph;
 }
 
+/**
+ * 这一关允许用这个槽吗。
+ *
+ * 教学关会把招式表砍到只剩几个槽,不看一眼就照原样按,
+ * 必杀钮按下去什么都不会发生 —— 白白站在原地挨打。
+ */
+export function canUse(m: MatchState, side: 0 | 1, slot: MoveSlot): boolean {
+  const list = m.cfg.allowedSlots[side];
+  return !list || list.includes(slot);
+}
+
 /** 一小段连段脚本:轻 → 取消重 → 取消必杀(地狱档再超级取消) */
-function comboScript(forward: "left" | "right", withSuper: boolean): InputFrame[] {
-  const script: InputFrame[] = [
-    ...hold({}, 1),
-    ...hold({ light: true }, 2),
-    ...hold({}, 5),
-    ...hold({ heavy: true }, 2),
-    ...hold({}, 6),
-    ...hold({ burst: true }, 2),
-    ...hold({}, 4)
-  ];
-  if (withSuper) {
-    script.push(...hold({}, 1), ...hold({ burst: true }, 2), ...hold({}, 3));
+function comboScript(forward: "left" | "right", withHeavy: boolean, withSpecial: boolean, withSuper: boolean): InputFrame[] {
+  const script: InputFrame[] = [...hold({}, 1), ...hold({ light: true }, 2), ...hold({}, 5)];
+  if (withHeavy) script.push(...hold({ heavy: true }, 2), ...hold({}, 6));
+  if (withSpecial) {
+    script.push(...hold({ burst: true }, 2), ...hold({}, 4));
+    if (withSuper) script.push(...hold({}, 1), ...hold({ burst: true }, 2), ...hold({}, 3));
   }
   // 连段全程轻轻按住前方向,免得被推开就断
   return script.map((f) => ({ ...f, [forward]: true }) as InputFrame);
@@ -136,9 +158,12 @@ export function aiDecide(m: MatchState, side: 0 | 1, brain: AiBrain): InputFrame
   const { forward, back } = dirs(me.facing);
   const tier = brain.tier;
   const gap = gapBetween(m);
+  const heavyOn = canUse(m, side, "5H");
+  const specialOn = canUse(m, side, "s1");
+  const superOn = canUse(m, side, "sv1");
 
   // 超级取消:必杀命中的窗口里按必杀钮
-  if (AI_SUPER_CANCEL[tier]) {
+  if (AI_SUPER_CANCEL[tier] && superOn) {
     const mv = currentMove(me);
     if (mv && mv.kind === "special" && inCancelWindow(mv, me.frame - 1, me.hasHit) && superLevelFor(me.meter) >= 1) {
       brain.queue = [];
@@ -163,15 +188,28 @@ export function aiDecide(m: MatchState, side: 0 | 1, brain: AiBrain): InputFrame
   const react = AI_REACTION[tier];
   const r = brain.rand();
 
+  // 有弹丸飞过来:会防的档先挡下来,高档还会直接跳过去顺势压上
+  const shot = incomingShot(m, side);
+  if (shot && r < AI_GUARD_CHANCE[tier]) {
+    const jumpOver = (tier === "pro" || tier === "hell") && shot.frames > 6 && gap > 90 && me.y <= 0;
+    if (jumpOver) {
+      brain.queue = hold({ up: true, [forward]: true } as Partial<InputFrame>, 2).concat(hold({}, 12));
+    } else {
+      brain.queue = hold({ [back]: true } as Partial<InputFrame>, Math.max(6, Math.ceil(shot.frames) + 6));
+    }
+    return brain.queue.shift() ?? neutralInput();
+  }
+
   // 抓起身:对手正在倒地 / 起身,贴上去抱
   if (AI_WAKEUP_PRESSURE[tier] && (foe.phase === "knockdown" || foe.phase === "wakeup") && gap < 90) {
     brain.queue = wakeupThrowScript(forward);
     return brain.queue.shift() ?? neutralInput();
   }
 
-  // 反跳入:对手在空中扑过来,用起手快的必杀顶回去
+  // 反跳入:对手在空中扑过来,用起手快的必杀顶回去(没必杀就抬手打)
   if ((tier === "pro" || tier === "hell") && foe.y > 24 && gap < 90) {
-    brain.queue = hold({ burst: true }, 2).concat(hold({}, 6));
+    const poke = specialOn ? { burst: true } : heavyOn ? { heavy: true } : { light: true };
+    brain.queue = hold(poke, 2).concat(hold({}, 6));
     return brain.queue.shift() ?? neutralInput();
   }
 
@@ -185,7 +223,7 @@ export function aiDecide(m: MatchState, side: 0 | 1, brain: AiBrain): InputFrame
   // 太远就往前压;投射型偶尔在远处丢一发
   if (gap > 120) {
     const ch = characterOf(me);
-    if (ch.archetype === "zoner" && tier !== "rookie" && r < 0.45) {
+    if (ch.archetype === "zoner" && specialOn && tier !== "rookie" && r < 0.45) {
       brain.queue = hold({ burst: true }, 2).concat(hold({}, react));
       return brain.queue.shift() ?? neutralInput();
     }
@@ -195,7 +233,7 @@ export function aiDecide(m: MatchState, side: 0 | 1, brain: AiBrain): InputFrame
   }
 
   // 贴身:抓投
-  if (gap <= THROW_RANGE && brain.rand() < AI_THROW_CHANCE[tier]) {
+  if (gap <= THROW_RANGE && canUse(m, side, "throw") && brain.rand() < AI_THROW_CHANCE[tier]) {
     brain.queue = hold({ [forward]: true, burst: true } as Partial<InputFrame>, 2).concat(hold({}, react));
     return brain.queue.shift() ?? neutralInput();
   }
@@ -203,10 +241,15 @@ export function aiDecide(m: MatchState, side: 0 | 1, brain: AiBrain): InputFrame
   // 打得着就打
   if (gap < 74) {
     if (AI_COMBO[tier]) {
-      brain.queue = comboScript(forward, AI_SUPER_CANCEL[tier] && superLevelFor(me.meter) >= 1);
+      brain.queue = comboScript(
+        forward,
+        heavyOn,
+        specialOn,
+        superOn && AI_SUPER_CANCEL[tier] && superLevelFor(me.meter) >= 1
+      );
       return brain.queue.shift() ?? neutralInput();
     }
-    if (tier === "normal" && brain.rand() < 0.35) {
+    if (tier === "normal" && heavyOn && brain.rand() < 0.35) {
       brain.queue = hold({ heavy: true }, 2).concat(hold({}, react));
       return brain.queue.shift() ?? neutralInput();
     }
@@ -221,9 +264,10 @@ export function aiDecide(m: MatchState, side: 0 | 1, brain: AiBrain): InputFrame
 
   // 中距离:往前挪一点,高手偶尔跳入
   if ((tier === "pro" || tier === "hell") && brain.rand() < 0.22) {
+    const air = canUse(m, side, "jH") ? { heavy: true } : { light: true };
     brain.queue = hold({ up: true, [forward]: true } as Partial<InputFrame>, 2)
       .concat(hold({}, 10))
-      .concat(hold({ heavy: true }, 2))
+      .concat(hold(air, 2))
       .concat(hold({}, 8))
       .concat(hold({ light: true }, 2))
       .concat(hold({}, 6));

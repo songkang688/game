@@ -1034,7 +1034,7 @@ function resolveOne(m: MatchState, ai: 0 | 1, move: Move): void {
 // 回合与整场
 // ---------------------------------------------------------------------------
 
-/** 两边元气上限可能被关卡调过,时间到了要按比例比,不然让血多的一方白占便宜 */
+/** 两边元气上限可能被关卡调过,时间到了要按比例比,不然元气条更长的一方白占便宜 */
 function vigorRatio(f: FighterState): number {
   if (f.vigor <= 0) return 0;
   return f.vigor / f.vigorMax;
