@@ -105,6 +105,26 @@ describe("豆豆迷宫 · 卡片文案", () => {
     checkCopy("meta.blurb", meta.blurb);
   });
 
+  it("PA-DM-2：豆子就叫豆子，「小星」这个词只留给命数", () => {
+    // 卡片、攻略、界面三处必须是同一套叫法：地上捡的是「豆 / 能量豆」，
+    // 「⭐ 小星命」是掉了会结算的命数,两者不许混着说。
+    const onScreen: Array<[string, string]> = [
+      ["meta.blurb", meta.blurb],
+      ["guide.title", guide.title],
+      ...guide.general.map((t, i) => [`guide.general[${i}]`, t] as [string, string]),
+      ...guide.entries.flatMap((e) => [
+        [`guide「${e.title}」标题`, e.title] as [string, string],
+        ...e.tips.map((t, i) => [`guide「${e.title}」tips[${i}]`, t] as [string, string]),
+      ]),
+    ];
+    expect(onScreen.length).toBeGreaterThan(20);
+    for (const [where, text] of onScreen) {
+      const hit = /小星(?!命)/.exec(text);
+      expect(hit ? `${where} 用「小星」称呼了命数以外的东西：${text}` : "干净").toBe("干净");
+    }
+    expect(meta.blurb, "卡片上得说清楚要吃的是豆子").toContain("豆子");
+  });
+
   it("四只小幽灵用的是本作原创名，不是任何官方名", () => {
     for (const name of Object.values(GHOST_NAMES)) {
       expect(ORIGINAL_NAMES, `小幽灵 ${name}`).toContain(name);

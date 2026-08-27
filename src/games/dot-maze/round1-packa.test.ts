@@ -446,7 +446,7 @@ describe("PA-DM · 360px 热区与卡片文案", () => {
     expect(windowListenerCount(dom)).toBe(0);
   });
 
-  it("【已知问题】meta.blurb 把豆子叫「小星星」，界面上却一律叫「豆」", async () => {
+  it("meta.blurb 与界面同一套叫法：地上捡的是豆，「小星命」才是命数", async () => {
     const { mount } = await import("./index");
     const handle = mount(fakeApi().api);
     // 读屏文字与菜单里的叫法：剩 N 颗「豆」、能量「豆」
@@ -455,13 +455,13 @@ describe("PA-DM · 360px 热区与卡片文案", () => {
     expect(dom.root.querySelector(".dmz-canvas")!.getAttribute("aria-label")).toContain("颗豆");
     byText("换个玩法")!.dispatch("click");
     expect(dom.root.find((e) => e.className.includes("dmz-sub"))!.textContent).toContain("能量豆");
-    // 而界面上的「小星星」是命数：⭐ 小星命
+    // 而界面上的「小星」是命数：⭐ 小星命
     byText("无尽迷宫")!.dispatch("click");
     flushFrames(dom, 2, 120);
     expect(dom.root.querySelector(".dmz-canvas")!.getAttribute("aria-label")).toContain("小星命");
-    // 应有行为：blurb 也该说「吃光豆子」。
-    // 现状：同一句话里既写「吃光小星星」又写「能量豆」，两种叫法混在一起。
-    expect(meta.blurb, "blurb 已经不写「吃光小星星」了，这条可以翻面").toContain("吃光小星星");
+    // 卡片这一句跟着界面走：吃的是豆子，「小星」不再拿去指豆子
+    expect(meta.blurb, "blurb 又把豆子叫回「小星星」了").not.toContain("小星星");
+    expect(meta.blurb).toContain("豆子");
     expect(meta.blurb).toContain("能量豆");
     handle.destroy();
   });

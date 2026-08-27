@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🟡",
   category: "action" as const,
   color: "#FFF5B8",
-  blurb: "在迷宫里吃光小星星。四只迷途小幽灵脾气各不相同，能量豆一亮它们就变成昏昏蓝。",
+  blurb: "在迷宫里吃光每一颗豆子。四只迷途小幽灵脾气各不相同，能量豆一亮它们就变成昏昏蓝。",
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
   platform: "both" as const,
