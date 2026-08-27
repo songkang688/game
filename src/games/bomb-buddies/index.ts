@@ -1,7 +1,7 @@
 import { meta } from "./meta";
 export { meta };
 
-// 泡泡炸弹人:格子迷宫里摆泡泡的合家欢对战游戏。
+// 泡泡布阵:格子迷宫里摆泡泡的合家欢对战游戏。
 //
 // 五种玩法共用同一套对局运行时 `createMatch`:
 //  - 闯关:188 关八大主题,清怪 / 找出口 / 泡泡王三种目标(走 level99 框架);
@@ -2095,8 +2095,8 @@ export function mount(api: GameApi): BombBuddiesHandle {
       },
       guide: GUIDE,
       mapHint: "放泡泡之前先想好往哪躲,拐角后面永远安全。",
-      grandMessage: "188 关全部通关,你就是泡泡炸弹人里最会算退路的那一个!",
-      guideTitle: "泡泡炸弹人 · 放泡手册",
+      grandMessage: "188 关全部通关,你就是泡泡布阵里最会算退路的那一个!",
+      guideTitle: "泡泡布阵 · 放泡手册",
     }
   );
 
