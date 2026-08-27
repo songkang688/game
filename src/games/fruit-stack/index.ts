@@ -65,7 +65,8 @@ const CSS = `
 .fs-chip-goal{color:#a8456a;background:#ffe9f0;}
 .fs-chip-p0{color:#a8306a;background:#ffeaf3;}
 .fs-chip-p1{color:#28568f;background:#e6f0ff;}
-.fs-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
+.fs-btn{border:none;border-radius:999px;padding:6px 13px;min-height:44px;font-size:13px;font-weight:900;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f08aa8,#d0608a);box-shadow:0 3px 0 #a8496d;}
 .fs-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #a8496d;}
 .fs-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -95,13 +96,15 @@ const CSS = `
 .fs-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#fff4f6,#f4f6ff);display:flex;flex-direction:column;gap:8px;}
 .fs-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-.fs-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
+.fs-back{border:none;border-radius:999px;padding:6px 12px;min-height:44px;font-size:13px;font-weight:900;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffdd;color:#a8456a;box-shadow:0 3px 0 rgba(180,100,140,.28);}
 .fs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(180,100,140,.28);}
 .fs-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .fs-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
 .fs-bar[hidden],.fs-picks[hidden]{display:none;}
-.fs-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
+.fs-open{border:none;border-radius:999px;padding:8px 14px;min-height:44px;font-size:13.5px;font-weight:900;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f08aa8,#d0608a);box-shadow:0 4px 0 #a8496d;}
 .fs-open:active{transform:translateY(2px);box-shadow:0 2px 0 #a8496d;}
 .fs-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -109,7 +112,8 @@ const CSS = `
 .fs-open--two{background:linear-gradient(180deg,#8f9ae0,#6f79c8);box-shadow:0 4px 0 #57619f;}
 .fs-open--en{background:linear-gradient(180deg,#e0a45c,#c4853c);box-shadow:0 4px 0 #9c672c;}
 .fs-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
-.fs-pick{border:none;border-radius:14px;padding:7px 13px;font-size:13px;font-weight:900;cursor:pointer;
+.fs-pick{border:none;border-radius:14px;padding:7px 13px;min-height:44px;font-size:13px;font-weight:900;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffe0;color:#6a4f7a;box-shadow:0 3px 0 rgba(160,120,180,.35);}
 .fs-pick[aria-pressed="true"]{background:linear-gradient(180deg,#f08aa8,#d0608a);color:#fff;box-shadow:0 3px 0 #a8496d;}
 .fs-pick:active{transform:translateY(2px);}
@@ -118,7 +122,7 @@ const CSS = `
   .fs-chip{font-size:12px;padding:3px 8px;}
   .fs-tip{font-size:12.5px;padding:4px 8px;}
   .fs-bowls{gap:6px;}
-  .fs-key{min-width:50px;height:42px;font-size:14px;}
+  .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-key:active,.fs-pick:active{transform:none;}

@@ -8,8 +8,9 @@
  * 标了「【已知问题】」的用例断言的是**当前行为**，修好之后会红，那时候连断言一起翻面。
  * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
  *  - PA-FS-1（严重）：`.fs-open` / `.fs-btn` / `.fs-back` / `.fs-pick` 靠 padding 撑高度，
- *    算下来只有 28–33px；`.fs-key` 在 `max-width:420px` 里还被压到 42px，360px 上全都不到 44px；
- *  - PA-FS-2（一般）：双人同屏只用了 A/D + F 与 方向键 + L，规格里的 W/S 与 G/K 没接。
+ *    算下来只有 28–33px；`.fs-key` 在 `max-width:420px` 里还被压到 42px，360px 上全都不到 44px。
+ *    第 1 轮修复员已修（补 `min-height:44px`，窄屏只缩字号），下面那一组断言已经翻成修好后的行为；
+ *  - PA-FS-2（一般）：双人同屏只用了 A/D + F 与 方向键 + L，规格里的 W/S 与 G/K 没接（留第 2 轮）。
  *
  * 顶部先静态 import 一次 index，让 level99 / audio 那条链在真 node 环境下加载完，
  * 之后再装 DOM 桩，免得撞上桩里没有的 `document.addEventListener`。
@@ -98,27 +99,24 @@ function narrowBlock(sheet: string): string {
 /* ------------------------------------------------------------------ */
 
 describe("PA-FS-1 · 360px 上的热区", () => {
-  it("【已知问题】三个模式入口 .fs-open 只有 32px 出头，够不到 44px", () => {
+  it("三个模式入口 .fs-open 够得到 44px", () => {
     const handle = mount(fakeApi().api);
     const h = hitHeight(ruleBody(css(), ".fs-open"));
-    // 应有行为：≥ 44。现状：padding 8px + 13.5px 字 ≈ 32.2px。
-    expect(h).toBeLessThan(44);
-    expect(h).toBeCloseTo(32.2, 1);
+    expect(h, "模式入口的热区又缩回去了").toBeGreaterThanOrEqual(44);
     handle.destroy();
   });
 
-  it("【已知问题】暂停钮与结算钮 .fs-btn 只有 27px 出头", () => {
+  it("暂停钮与结算钮 .fs-btn 够得到 44px", () => {
     const handle = mount(fakeApi().api);
     const h = hitHeight(ruleBody(css(), ".fs-btn"));
-    expect(h).toBeLessThan(44);
-    expect(h).toBeCloseTo(27.6, 1);
+    expect(h, "暂停 / 结算钮的热区又缩回去了").toBeGreaterThanOrEqual(44);
     handle.destroy();
   });
 
-  it("【已知问题】回选关 .fs-back 与难度 .fs-pick 也都不到 44px", () => {
+  it("回选关 .fs-back 与难度 .fs-pick 也都够 44px", () => {
     const handle = mount(fakeApi().api);
-    expect(hitHeight(ruleBody(css(), ".fs-back"))).toBeLessThan(44);
-    expect(hitHeight(ruleBody(css(), ".fs-pick"))).toBeLessThan(44);
+    expect(hitHeight(ruleBody(css(), ".fs-back"))).toBeGreaterThanOrEqual(44);
+    expect(hitHeight(ruleBody(css(), ".fs-pick"))).toBeGreaterThanOrEqual(44);
     handle.destroy();
   });
 
@@ -130,12 +128,24 @@ describe("PA-FS-1 · 360px 上的热区", () => {
     handle.destroy();
   });
 
-  it("【已知问题】窄屏那段把 .fs-key 压到 42px，360px 上正好踩线不过", () => {
+  it("窄屏那段只缩字号，不再把 .fs-key 压到 42px", () => {
     const handle = mount(fakeApi().api);
     const narrow = narrowBlock(css());
     expect(narrow, "没找到 max-width:420px 那段").toContain(".fs-key");
-    // 应有行为：窄屏只该缩字号、不该缩高度。现状：42px。
-    expect(hitHeight(ruleBody(narrow, ".fs-key"))).toBe(42);
+    expect(hitHeight(ruleBody(narrow, ".fs-key")), "窄屏又把方向键压矮了").toBeGreaterThanOrEqual(44);
+    handle.destroy();
+  });
+
+  it("窄屏那段里出现过的每个热区选择器都不许把高度压到 44px 以下", () => {
+    const handle = mount(fakeApi().api);
+    const narrow = narrowBlock(css());
+    for (const sel of [".fs-key", ".fs-btn", ".fs-open", ".fs-back", ".fs-pick"]) {
+      const body = ruleBody(narrow, sel);
+      if (!body) continue;
+      const h = hitHeight(body);
+      if (Number.isNaN(h)) continue;
+      expect(h, `${sel} 在窄屏里被压到 ${h}px`).toBeGreaterThanOrEqual(44);
+    }
     handle.destroy();
   });
 
