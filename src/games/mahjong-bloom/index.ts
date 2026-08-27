@@ -96,10 +96,11 @@ export const MJ_CSS = `
   background:rgba(255,244,248,.92);border-radius:16px;}
 .mj-pause-t{font-size:20px;font-weight:900;color:#8a4a70;line-height:1.4;}
 .mj-pause-k{font-size:var(--mt-body,16px);font-weight:800;color:#7a5a90;line-height:1.6;overflow-wrap:anywhere;}
-/* 牌桌:深绿毛毡径向渐变(中心亮边缘暗)+ 8px 木纹条纹边框 */
+/* 牌桌:深绿毛毡径向渐变(中心亮边缘暗)+ ≤4% 斜织纹(1.3 r1 P8,眯眼不抢牌面)+ 8px 木纹条纹边框 */
 .mj-board{display:flex;flex-direction:column;gap:8px;position:relative;border-radius:16px;padding:8px;
   border:8px solid transparent;
-  background:radial-gradient(130% 95% at 50% 30%,#3f9e72 0%,#2c7c57 55%,#1e5f43 100%) padding-box,
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0 6px,transparent 6px 12px) padding-box,
+  radial-gradient(130% 95% at 50% 30%,#3f9e72 0%,#2c7c57 55%,#1e5f43 100%) padding-box,
   linear-gradient(135deg,#a87a4c,#6e4a26 28%,#9c7042 50%,#5f3d1f 76%,#8a5f36) border-box;
   box-shadow:0 6px 16px rgba(70,50,70,.28),inset 0 0 24px rgba(0,20,10,.18);}
 .mj-foe{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:34px;}
