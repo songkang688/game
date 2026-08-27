@@ -858,10 +858,16 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     ctx.win(stars, winLine(run, stars));
   }
 
-  function settleLose(reason: "time" | "hearts"): void {
+  /**
+   * 唯一会结束一局的原因是**超时**。
+   *
+   * 1.1 里心掉光就整关重来;1.2 有了检查点,踩空只是变成小云朵飘回去,
+   * 心从此只影响星数 —— 一个卡在半路的孩子不会被打回起点。
+   */
+  function settleLose(): void {
     if (finished) return;
     finished = true;
-    ctx.lose(loseLine(reason));
+    ctx.lose(loseLine("time"));
   }
 
   // ---- HUD ---------------------------------------------------------------
@@ -1635,7 +1641,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
         if (level.tiles[other] === TILE.LIFT_PAD) views[hero].lastSupported = now;
         pumpHero(hero, now);
       }
-      if (elapsed >= analysis.limitSeconds) settleLose("time");
+      if (elapsed >= analysis.limitSeconds) settleLose();
       const shown = chipTime.textContent ?? "";
       if (!shown.startsWith(`⏱ ${formatClock(elapsed)}`)) refreshHud();
     }

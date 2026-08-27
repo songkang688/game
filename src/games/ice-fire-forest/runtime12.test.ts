@@ -310,7 +310,9 @@ function findTrap(): Trap {
   if (cachedTrap) return cachedTrap;
   for (let i = 0; i < COOP_FROM_LEVEL; i++) {
     const lv: ParsedLevel = parseLevel(analyzeLevel(i).grid);
-    if (lv.tiles.includes(TILE.BELT)) continue;
+    // 传送带会顺手把焰焰也带走,拉杆 / 踏板会让第二次重走的路不一样 —— 都躲开,
+    // 这样同一串方向可以反复走,用例才好数「掉了几次」
+    if (lv.tiles.some((t) => t === TILE.BELT || t === TILE.LEVER || t === TILE.PLATE)) continue;
     const start = initialState(lv);
     const seen = new Set<string>([`${start.ice}|${start.levers}`]);
     const queue: Array<{ st: typeof start; path: number[] }> = [{ st: start, path: [] }];
@@ -338,6 +340,11 @@ function findTrap(): Trap {
 function walkIntoTrap(h: Harness, trap: Trap): void {
   for (const dir of trap.walk) tapStep(h, keyFor("ice", dir));
   tapStep(h, keyFor("ice", trap.fall));
+}
+
+/** 等小云朵飘完这一趟 */
+function waitCloud(h: Harness): void {
+  h.flush(1, FEEL.CLOUD_MS + 40);
 }
 
 describe("掉池回检查点", () => {
@@ -391,6 +398,22 @@ describe("掉池回检查点", () => {
     h.flush(3, 100);
     expect(chipText(h, "💗")).toBe(hearts);
     h.key("keyup", keyFor("ice", trap.fall));
+    game.destroy();
+  });
+
+  it("心掉光了也不会被打回起点 —— 1.2 只有时间用完才收场", async () => {
+    const h = install();
+    harness = h;
+    const { game } = await mountGame(h);
+    const trap = findTrap();
+    game.openCampaignLevel(trap.level + 1);
+    for (let i = 0; i < 4; i++) {
+      walkIntoTrap(h, trap);
+      waitCloud(h);
+    }
+    expect(chipText(h, "💗")).toBe("💗 ···");
+    expect(allText(h.root)).not.toContain("再试一次");
+    expect(findAll(h.root, "iff-board").length).toBe(1);
     game.destroy();
   });
 
