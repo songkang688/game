@@ -19,7 +19,7 @@ import {
   other,
   statusOf,
 } from "./logic";
-import { pieceIconSVG } from "./art";
+import { pieceIconSVG, robotAvatarSVG } from "./art";
 import {
   type Difficulty,
   DIFFICULTIES,
@@ -109,8 +109,10 @@ function avatarHTML(who: Mascot, size = 30): string {
   if (url) {
     return `<img src="${url}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;vertical-align:middle">`;
   }
-  const emoji = who === "duoduo" ? "🌸" : who === "xingxing" ? "⭐" : "🐘";
-  const bg = who === "duoduo" ? "#FFD9E8" : who === "xingxing" ? "#D9E6FF" : "#E4D9FF";
+  // 棋灵象：1.3 起用画制的 Q 版小象头像（visual-r1 修 A 档 P-04，不再走 emoji 兜底）
+  if (who === "robot") return robotAvatarSVG(size);
+  const emoji = who === "duoduo" ? "🌸" : "⭐";
+  const bg = who === "duoduo" ? "#FFD9E8" : "#D9E6FF";
   return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;background:${bg};align-items:center;justify-content:center;font-size:${Math.round(
     size * 0.58,
   )}px;vertical-align:middle">${emoji}</span>`;
