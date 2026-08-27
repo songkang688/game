@@ -138,6 +138,7 @@ import {
   itemRarity,
   litDelayMs,
   mazeCellView,
+  mazeItemSvg,
   prefersReducedMotion,
   rowIconSvg,
   seenSet,
@@ -226,6 +227,7 @@ const CSS = `
   justify-content:center;font-size:13px;color:#8d7bb5;font-weight:900;
   box-shadow:inset 0 -2px 0 rgba(120,95,170,.18);}
 .bvp-dot-done{background:#cfeedd;color:#3c7a58;box-shadow:inset 0 -2px 0 rgba(60,122,88,.25);}
+.bvp-dot-goal svg{width:20px;height:20px;display:block;}
 .bvp-dot-now{background:#ffd6ea;color:#a83a72;outline:3px solid #fff;}
 .bvp-dot-lit{animation:bvpLit .3s ease-out backwards;}
 @keyframes bvpLit{from{transform:scale(.4);opacity:.2;}to{transform:scale(1);opacity:1;}}
@@ -476,7 +478,7 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
   host.appendChild(wrap);
 
   const bar = el("div", "bvp-bar bvp-hud");
-  const stateChip = el("span", "bvp-chip", "🔑 还没拿到钥匙");
+  const stateChip = el("span", "bvp-chip", "还没拿到钥匙徽章");
   const timeChip = el("span", "bvp-chip", "⏱️ 0.0 秒");
   bar.append(stateChip, timeChip);
   wrap.appendChild(bar);
@@ -498,7 +500,7 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
   }
   wrap.appendChild(grid);
 
-  const note = el("div", "bvp-note", "方向键 / WASD 或下面的按钮走路。先找到钥匙 🔑，再从门 🚪 过去到出口 🏁。");
+  const note = el("div", "bvp-note", "方向键 / WASD 或下面的按钮走路。先找到钥匙徽章，再从木门过去到终点小旗。");
   wrap.appendChild(note);
 
   const pads = el("div", "bvp-pads");
@@ -565,7 +567,7 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
         }
       }
     }
-    stateChip.textContent = hasKey ? "🔑 钥匙到手，去出口！" : "🔑 还没拿到钥匙";
+    stateChip.textContent = hasKey ? "钥匙徽章到手，去出口！" : "还没拿到钥匙徽章";
     timeChip.textContent = `⏱️ ${(elapsed / 1000).toFixed(1)} 秒`;
   }
 
@@ -585,7 +587,7 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
     if (nr < 0 || nr >= m.rows || nc < 0 || nc >= m.cols) return;
     if (m.walls[nr][nc]) return;
     if (!hasKey && nr === m.door[0] && nc === m.door[1]) {
-      note.textContent = "🔒 这扇门锁着，先去把钥匙 🔑 找到。";
+      note.textContent = "这扇门还锁着，先去把钥匙徽章找到。";
       opts.sfx("oops");
       return;
     }
@@ -594,7 +596,7 @@ function mountMazeRace(host: HTMLElement, opts: MazeRaceOptions): { destroy: () 
     if (!hasKey && nr === m.key[0] && nc === m.key[1]) {
       hasKey = true;
       opts.sfx("coin");
-      note.textContent = "🔑 钥匙拿到啦！现在门开得了，冲向 🏁 出口！";
+      note.textContent = "钥匙徽章拿到啦！现在门开得了，冲向终点小旗！";
     } else {
       opts.sfx("tap");
     }
@@ -927,7 +929,10 @@ function playPathLevel(stage: HTMLElement, ctx: LevelCtxLike, deps: RunDeps): { 
       dot.textContent = done ? "✓" : String(i + 1);
       row.appendChild(dot);
     });
-    row.appendChild(el("div", "bvp-dot", "🏁"));
+    // 终点点位画徽章族的棋盘小旗(与迷宫拾取物同一件),不再用旗帜 emoji 字符
+    const goal = el("div", "bvp-dot bvp-dot-goal");
+    goal.innerHTML = mazeItemSvg("exit");
+    row.appendChild(goal);
     return row;
   }
 
@@ -1694,7 +1699,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         el(
           "div",
           "bvp-sub",
-          "同一张迷宫，你和星星留下的影子各跑各的：先找到钥匙 🔑，再穿过门 🚪 冲到 🏁。" +
+          "同一张迷宫，你和星星留下的影子各跑各的：先找到钥匙徽章，再穿过木门冲到终点小旗。" +
             "影子跑的是最短路，但它会时不时犹豫一下——你只要不绕远路，就追得上。"
         )
       );

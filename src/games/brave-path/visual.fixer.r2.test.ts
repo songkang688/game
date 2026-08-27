@@ -161,3 +161,26 @@ describe("W6R1-07 · index.ts 七个位点换绘制(emoji 兜底保留,数据不
     expect(maze).toContain('emoji: "🧺"');
   });
 });
+
+describe("W6R1-07 · 迷宫文案与画面一套语言(B 档第 2 轮第六节登记的改口)", () => {
+  const SRC = readFileSync(join(__dirname, "index.ts"), "utf8");
+
+  it("钥匙/门/终点/锁四枚 emoji 从 index.ts 全文清零(盘面画的已是徽章)", () => {
+    expect(/[🔑🚪🏁🔒]/u.test(SRC)).toBe(false);
+  });
+
+  it("HUD 汇报与介绍卡改说「钥匙徽章 / 木门 / 终点小旗」", () => {
+    expect(SRC).toContain('"还没拿到钥匙徽章"');
+    expect(SRC).toContain('"钥匙徽章到手，去出口！"');
+    expect(SRC).toContain('"这扇门还锁着，先去把钥匙徽章找到。"');
+    expect(SRC).toContain('"钥匙徽章拿到啦！现在门开得了，冲向终点小旗！"');
+    expect(SRC).toContain("先找到钥匙徽章，再从木门过去到终点小旗。");
+    expect(SRC).toContain("先找到钥匙徽章，再穿过木门冲到终点小旗。");
+  });
+
+  it("过层进度条终点点位改画棋盘小旗徽章(mazeItemSvg exit),带尺寸规则", () => {
+    expect(SRC).toContain('goal.innerHTML = mazeItemSvg("exit")');
+    expect(SRC).toContain('"bvp-dot bvp-dot-goal"');
+    expect(SRC).toContain(".bvp-dot-goal svg{width:20px;height:20px;display:block;}");
+  });
+});
