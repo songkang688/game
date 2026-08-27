@@ -21,50 +21,86 @@ afterAll(() => {
 });
 
 describe("B1 · sky-squad 放跑判罚", () => {
-  it("`escaped` 筛子与上一行的 hp 清零互斥,恒为空", async () => {
+  it("源码里那句「先清零」已经撤掉:`escaped` 筛子拿得到飞出下边界的敌机", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("src/games/sky-squad/index.ts", "utf8");
-    // 先清零、后按 hp > 0 筛同一批飞机 —— 两行都还在,顺序也没换
     const zeroAt = src.indexOf("if (f.y > SKY_H + 60) f.hp = 0;");
-    const filterAt = src.indexOf('const escaped = foes.filter((f) => f.hp > 0 && f.y > SKY_H + 60);');
-    expect(zeroAt).toBeGreaterThan(0);
-    expect(filterAt).toBeGreaterThan(zeroAt);
-    report.b1SourceStillBroken = { zeroAt, filterAt };
+    const filterAt = src.indexOf("const escaped = foes.filter((f) => f.hp > 0 && f.y > SKY_H + 60);");
+    // 清零那一行没了,筛子还在
+    expect(zeroAt).toBe(-1);
+    expect(filterAt).toBeGreaterThan(0);
+    report.b1SourceFixed = { zeroAt, filterAt };
   });
 
-  it("按同一套规则复演 stepFoes:飞出下边界的敌机一架都不进 escapedTotal", async () => {
-    const SKY_H = 720;
-    // 复演 stepFoes 里那两行的相对顺序(不 import 玩法代码,只按源码顺序推一遍)
-    let escapedTotal = 0;
-    let foes = [
-      { y: SKY_H + 10, hp: 3 },
-      { y: SKY_H + 200, hp: 3 },
-      { y: 100, hp: 3 },
-    ];
-    for (const f of foes) {
-      f.y += 120;
-      if (f.y > SKY_H + 60) f.hp = 0;
-    }
-    const escaped = foes.filter((f) => f.hp > 0 && f.y > SKY_H + 60);
-    escapedTotal += escaped.length;
-    foes = foes.filter((f) => f.hp > 0);
-    expect(escaped.length).toBe(0);
-    expect(escapedTotal).toBe(0);
-    report.b1Replay = { escapedCaught: escaped.length, escapedTotal, foesLeft: foes.length };
+  it("走真实路径:摆烂一局,飞出下边界的敌机全进 escapedTotal", async () => {
+    const { install } = await import("../../src/games/sky-squad/domStub");
+    const { buildSortie } = await import("../../src/games/sky-squad/levels");
+    const mod = await import("../../src/games/sky-squad/index");
+    const h = install();
+    const def = buildSortie(0);
+    let out: { downed: number; total: number; escaped: number } | null = null;
+    const sortie = mod.createSortie({
+      host: h.root as unknown as HTMLElement,
+      players: 1, tint: "#EAF2FF", hint: def.hint, waves: def.waves, boss: def.boss,
+      pickups: def.pickups, sfx: () => {},
+      onFinish: (_pilots: unknown, r: { downed: number; total: number; escaped: number }) => { out = r; },
+    } as never);
+    for (let f = 0; f < 4000 && out === null; f++) h.flush(1);
+    sortie.destroy();
+    h.restore();
+    expect(out).not.toBeNull();
+    const res = out as unknown as { downed: number; total: number; escaped: number };
+    expect(res.escaped).toBeGreaterThan(0);
+    expect(res.downed + res.escaped).toBe(res.total);
+    report.b1Replay = res;
   });
 
-  it("`escaped = 0` 灌进判定链:非 Boss 关必过,而且直上三星", async () => {
+  it("判定链:放跑超过容错就判没完成,三星更拿不到", async () => {
     const { sortieCleared, starsForSortie, escapeLimit } = await import("../../src/games/sky-squad/logic");
-    // 全放跑(downed = 0)但 escapedTotal 卡在 0 —— 这就是真机里发生的事
-    const asShipped = { downed: 0, total: 12, touched: 0, bombs: 0, escaped: 0, bossDown: false };
-    expect(sortieCleared(asShipped, false)).toBe(true);
-    expect(starsForSortie(asShipped)).toBe(3);
-    // 同一局若 escapedTotal 记对了(12 架全放跑)应当是判负
-    const asDesigned = { ...asShipped, escaped: 12 };
-    expect(sortieCleared(asDesigned, false)).toBe(false);
+    const allEscaped = { downed: 0, total: 12, touched: 0, bombs: 0, escaped: 12, bossDown: false };
+    expect(sortieCleared(allEscaped, false)).toBe(false);
+    expect(starsForSortie(allEscaped)).toBeLessThan(3);
     expect(escapeLimit(12)).toBe(3);
-    report.b1Chain = { shippedCleared: true, shippedStars: 3, designedCleared: false, escapeLimit12: 3 };
+    // 编制小的关也不再靠「至少给 2 架」的兜底白拿:3 架的关只容 1 架
+    expect(escapeLimit(3)).toBe(1);
+    expect(sortieCleared({ downed: 1, total: 3, touched: 0, bombs: 0, escaped: 2, bossDown: false }, false)).toBe(false);
+    report.b1Chain = { escapeLimit12: 3, escapeLimit3: 1 };
   });
+
+  it("全 188 关摆烂重扫:一关都过不去", async () => {
+    const { install } = await import("../../src/games/sky-squad/domStub");
+    const { buildSortie, isBossLevel } = await import("../../src/games/sky-squad/levels");
+    const { sortieCleared } = await import("../../src/games/sky-squad/logic");
+    const mod = await import("../../src/games/sky-squad/index");
+    const autoWin: number[] = [];
+    for (let i = 0; i < 188; i++) {
+      const h = install();
+      const def = buildSortie(i);
+      let out: { cleared: boolean; downed: number; total: number; escaped: number; bossDown: boolean } | null = null;
+      let touched = 0;
+      let bombs = 0;
+      const sortie = mod.createSortie({
+        host: h.root as unknown as HTMLElement,
+        players: 1, tint: "#EAF2FF", hint: def.hint, waves: def.waves, boss: def.boss,
+        pickups: def.pickups, sfx: () => {},
+        onFinish: (pilots: Array<{ touched: number; bombsUsed: number }>, r: typeof out) => {
+          out = r;
+          touched = pilots[0].touched;
+          bombs = pilots[0].bombsUsed;
+        },
+      } as never);
+      for (let f = 0; f < 6000 && out === null; f++) h.flush(1);
+      sortie.destroy();
+      h.restore();
+      if (!out) continue;
+      const r = out as unknown as { cleared: boolean; downed: number; total: number; escaped: number; bossDown: boolean };
+      const stat = { downed: r.downed, total: r.total, touched, bombs, escaped: r.escaped, bossDown: r.bossDown };
+      if (r.cleared && sortieCleared(stat, isBossLevel(i))) autoWin.push(i + 1);
+    }
+    report.b1IdleRescan = { scanned: 188, autoWin: autoWin.length, levels: autoWin };
+    console.log(`\nsky-squad 摆烂重扫:188 关中 ${autoWin.length} 关自动过关`);
+    expect(autoWin).toEqual([]);
+  }, 120000);
 
   it("影响面:188 关里有多少关不是 Boss 关", async () => {
     const { isBossLevel, buildSortie } = await import("../../src/games/sky-squad/levels");

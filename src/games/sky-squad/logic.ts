@@ -346,9 +346,15 @@ export interface SortieStat {
   bossDown: boolean;
 }
 
-/** 放跑多少架就算这趟没完成任务(至少给 2 架的容错) */
+/**
+ * 放跑多少架就算这趟没完成任务。
+ *
+ * 基准是 25% 的容错,并且至少给 2 架。但编制小的关要再收一道口:
+ * 3 架的关放跑 2 架还判「完成任务」就说不过去了,所以容错永远不超过编制的三分之一。
+ */
 export function escapeLimit(total: number): number {
-  return Math.max(2, Math.floor(Math.max(0, total) * 0.25));
+  if (total <= 0) return 2;
+  return Math.min(Math.max(2, Math.floor(total * 0.25)), Math.floor(total / 3));
 }
 
 /** 这一趟算不算完成:Boss 关必须把 Boss 请回机库,普通关不能放跑太多 */

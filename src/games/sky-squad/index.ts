@@ -933,7 +933,6 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       f.phase += dt;
       f.y += f.vy * dt;
       f.x += Math.sin(f.phase * 1.1) * 34 * dt;
-      if (f.y > SKY_H + 60) f.hp = 0;
       f.fireIn -= dt;
       if (f.fireIn <= 0 && spec && f.y > 30 && f.y < SKY_H * 0.62) {
         f.fireIn = gap;
