@@ -210,6 +210,32 @@ function clippersOf(el: HTMLElement): HTMLElement[] {
 }
 
 /**
+ * 一层裁切祖先真正的那条裁切线：**padding box 的下沿**，不是 border box 的。
+ *
+ * 滚动口是 padding box，下边框那几像素照不进内容；`getBoundingClientRect().bottom`
+ * 给的却是 border box 的下沿，而 `.game-stage` 写着 `border:4px solid #fff`。
+ * `W5R3-TA-05` 已经把本档四份 `fit.ts` 改成了 `clientHeight` 口径，
+ * 这一款的收紧器是第五份、当时漏在外面：真机复量 320×568 上真可视段 278px，
+ * 它却钳出 282px；矮横屏 568×320 上可视段总共才 44px，多算的 4px 将近一成（W5R3-AF-01）。
+ *
+ * 优先走 `clientHeight` 口径（`rect.top + clientTop + clientHeight`，横向滚动条也一并算掉）；
+ * 量不出来（用例里的桩节点 / SSR）才退回「减掉下边框宽度」，再不行就照原样返回。
+ * 那圈 4px 边框本身在 `src/styles.css`（禁改），交窗口1；这里改的只是自己量的那把尺子。
+ */
+export function clipBottomPx(
+  rect: { top: number; bottom: number },
+  clientTop: number,
+  clientHeight: number,
+  borderBottomWidth: string
+): number {
+  if (Number.isFinite(clientTop) && Number.isFinite(clientHeight) && clientHeight > 0) {
+    return rect.top + clientTop + clientHeight;
+  }
+  const w = Number.parseFloat(borderBottomWidth);
+  return Number.isFinite(w) && w > 0 ? rect.bottom - w : rect.bottom;
+}
+
+/**
  * 从 `selfTop` 往下，舞台真正看得见的还剩多少像素。
  *
  * `clipperBottoms` 是所有会裁掉内容的祖先的下沿——取最小的那个，
@@ -299,7 +325,9 @@ export function fitColoringStage(
     stageBox.style.height = "";
     stageBox.style.minHeight = "";
     const bottoms: number[] = [];
-    for (const p of clippersOf(wrap)) bottoms.push(p.getBoundingClientRect().bottom);
+    for (const p of clippersOf(wrap)) {
+      bottoms.push(clipBottomPx(p.getBoundingClientRect(), p.clientTop, p.clientHeight, view.getComputedStyle(p).borderBottomWidth));
+    }
     const room = visibleRoomPx(wrap.getBoundingClientRect().top, bottoms);
     if (!Number.isFinite(room) || room <= 0) return;
     if (wrap.scrollHeight <= room + 1) return;
