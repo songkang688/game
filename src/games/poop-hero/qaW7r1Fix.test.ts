@@ -8,7 +8,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { drawScentStar } from "./trashArt";
+import { TRASH_ITEMS } from "./trash";
+import { drawScentStar, drawTrashItem } from "./trashArt";
 
 const SRC = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
 
@@ -66,5 +67,24 @@ describe("窗口7 R1 修复 · A-4 香香星:平涂 ✨ 清场", () => {
     expect(stats.strokes).toBeGreaterThanOrEqual(1);
     expect(stats.fills).toBeGreaterThanOrEqual(2);
     expect(stats.fillTexts).toBe(0);
+  });
+});
+
+describe("窗口7 R1 修复 · A-3 地面垃圾 / 携带件:裸 item.emoji 清场", () => {
+  it("index.ts 不再 emoji(item.emoji),两处渲染都走 drawTrashItem", () => {
+    expect(/emoji\([^)]*item\.emoji/.test(SRC)).toBe(false);
+    // 地面等分类的垃圾 + 头顶携带件,两处都换成自绘
+    expect(SRC.match(/drawTrashItem\(/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  it("18 款条目逐一实测:每款 ≥2 停渐变 + ≥1 圈描边 + 零 fillText", () => {
+    expect(TRASH_ITEMS).toHaveLength(18);
+    for (const item of TRASH_ITEMS) {
+      const { ctx, stats } = stubCtx();
+      drawTrashItem(ctx, item.id, 0, 0, 20);
+      expect(stats.stops, `${item.id} 渐变停靠不足`).toBeGreaterThanOrEqual(2);
+      expect(stats.strokes, `${item.id} 缺描边`).toBeGreaterThanOrEqual(1);
+      expect(stats.fillTexts, `${item.id} 不许 fillText`).toBe(0);
+    }
   });
 });

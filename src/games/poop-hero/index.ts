@@ -70,7 +70,7 @@ import { SWEEP_TIME } from "./tuning";
 import { blendCape, capeMode, type CapeMode } from "../../art/kit/cape";
 import { traceStar } from "../../art/kit/sparkle";
 // 自绘道具小画坊(R1 修复):香香星 / 18 款垃圾条目 / 分类桶图标,全部顶替裸 emoji
-import { drawScentStar } from "./trashArt";
+import { drawScentStar, drawTrashItem } from "./trashArt";
 import {
   BEAN_COLORS,
   FLOWER_STYLES,
@@ -1541,7 +1541,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       g.ellipse(x, groundY - 3 * scale, 15 * scale, 5 * scale, 0, 0, Math.PI * 2);
       g.fill();
       g.globalAlpha = 1;
-      emoji(g, item.emoji, x, groundY - 15 * scale, 20 * scale);
+      // 核心道具自绘(专项①:裸 item.emoji 清场),条目造型见 trashArt.drawTrashItem
+      drawTrashItem(g, l.item, x, groundY - 13 * scale, 21 * scale);
     }
 
     // 三色分类站
@@ -1684,10 +1685,10 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         return;
       }
       drawHero(g, x, sy(p.y), scale, i, p);
-      // 手上抱着的垃圾:顶在头上,一眼看得出在搬什么
+      // 手上抱着的垃圾:顶在头上,一眼看得出在搬什么(自绘条目,裸 emoji 清场)
       if (p.carry) {
         const item = trashById(p.carry);
-        if (item) emoji(g, item.emoji, x, sy(p.y) - (PLAYER_H + 18) * scale, 17 * scale);
+        if (item) drawTrashItem(g, item.id, x, sy(p.y) - (PLAYER_H + 18) * scale, 18 * scale);
       }
     });
 

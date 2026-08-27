@@ -80,3 +80,451 @@ export function drawScentStar(ctx: CanvasRenderingContext2D, x: number, y: numbe
   ctx.fill();
   ctx.restore();
 }
+
+// ---------------------------------------------------------------------------
+// 18 款分类条目(核心道具):顶替裸 `item.emoji`
+// ---------------------------------------------------------------------------
+
+/** 描一圈:统一 1.5–2px 级别的收边(线宽由 drawTrashItem 按缩放算好) */
+function edge(ctx: CanvasRenderingContext2D, color: string): void {
+  ctx.strokeStyle = color;
+  ctx.stroke();
+}
+
+/** 左上受光的小高光(白色半透明小椭圆) */
+function gleam(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number): void {
+  ctx.fillStyle = "rgba(255,255,255,.55)";
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 自绘一件分类条目。全部画在 20 单位设计网格上(条目居中于 x/y,s 是整体高度,
+ * 原 emoji 字号 20px ⇒ s 传 20 上下)。每款:≥2 停渐变 + 描边 + 左上高光。
+ * 不认识的 id 画一颗中性小圆石兜底(理论到不了,防御一下)。
+ */
+export function drawTrashItem(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, s: number): void {
+  const u = s / 20;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(u, u);
+  // 缩放后有效线宽 = lineWidth × u:正常 1.7px,小画幅下限 1.2px
+  ctx.lineWidth = Math.max(1.2 / Math.max(0.01, u), 1.7);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  switch (id) {
+    case "bottle": {
+      // 塑料水瓶:瓶身 + 瓶颈 + 蓝盖
+      ctx.fillStyle = grad2(ctx, -4.5, -6, 4.5, 8, "#D5EAF8", "#95C4EA");
+      rrect(ctx, -4.5, -4, 9, 13, 3);
+      ctx.fill();
+      edge(ctx, "#6E9CC4");
+      ctx.fillStyle = "#BCD9F0";
+      rrect(ctx, -2, -8, 4, 4.4, 1.2);
+      ctx.fill();
+      edge(ctx, "#6E9CC4");
+      ctx.fillStyle = grad2(ctx, -2.8, -10.5, 2.8, -7.5, "#A7CBF2", "#7FB2F0");
+      rrect(ctx, -2.8, -10.5, 5.6, 3, 1.2);
+      ctx.fill();
+      edge(ctx, "#547FB4");
+      gleam(ctx, -2.4, -1.5, 1.1, 3.4);
+      break;
+    }
+    case "can": {
+      // 易拉罐:银身粉带 + 顶盖拉环
+      ctx.fillStyle = grad2(ctx, -5, -7, 5, 8, "#F0F4F9", "#B9C5D8");
+      rrect(ctx, -5, -7, 10, 15, 2.5);
+      ctx.fill();
+      edge(ctx, "#8896AC");
+      ctx.fillStyle = "#F6B6CD";
+      rrect(ctx, -5, -2.5, 10, 5, 1);
+      ctx.fill();
+      ctx.fillStyle = grad2(ctx, -5, -8.6, 5, -5.6, "#E2E9F2", "#C3CEDD");
+      ctx.beginPath();
+      ctx.ellipse(0, -7, 5, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      edge(ctx, "#8896AC");
+      ctx.fillStyle = "#98A6BC";
+      ctx.beginPath();
+      ctx.arc(0, -7, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      gleam(ctx, -2.6, 0, 1, 4);
+      break;
+    }
+    case "paper": {
+      // 旧报纸:白纸面 + 粉彩报头 + 三行字线
+      ctx.fillStyle = grad2(ctx, -7, -6, 7, 6, "#FFFFFF", "#E5EAF1");
+      rrect(ctx, -7, -6, 14, 12, 1.2);
+      ctx.fill();
+      edge(ctx, "#AEB9C9");
+      ctx.fillStyle = "#F5C1D0";
+      rrect(ctx, -5.4, -4.4, 6.4, 3, 0.8);
+      ctx.fill();
+      ctx.strokeStyle = "#C2CBD8";
+      for (const ly of [0.6, 2.4, 4.2]) {
+        ctx.beginPath();
+        ctx.moveTo(-5.4, ly);
+        ctx.lineTo(5.4, ly);
+        ctx.stroke();
+      }
+      gleam(ctx, -4.6, -5, 1.6, 0.8);
+      break;
+    }
+    case "carton": {
+      // 纸箱板:牛皮纸箱 + 竖封条
+      ctx.fillStyle = grad2(ctx, -7, -6, 7, 7, "#EBCB9C", "#CBA265");
+      rrect(ctx, -7, -6, 14, 12.5, 1.5);
+      ctx.fill();
+      edge(ctx, "#A57F42");
+      ctx.fillStyle = "#F6E9CF";
+      rrect(ctx, -1.4, -6, 2.8, 12.5, 0.6);
+      ctx.fill();
+      ctx.strokeStyle = "#B98F52";
+      ctx.beginPath();
+      ctx.moveTo(-7, -1.6);
+      ctx.lineTo(-1.4, -1.6);
+      ctx.moveTo(1.4, -1.6);
+      ctx.lineTo(7, -1.6);
+      ctx.stroke();
+      gleam(ctx, -4.8, -4.6, 1.4, 0.9);
+      break;
+    }
+    case "glass": {
+      // 玻璃瓶:青瓷绿罐身 + 瓶口 + 竖高光
+      ctx.fillStyle = grad2(ctx, -4.5, -4, 4.5, 9, "#D3EDDD", "#97CBAA");
+      rrect(ctx, -4.5, -3, 9, 12, 3.5);
+      ctx.fill();
+      edge(ctx, "#6FA383");
+      ctx.fillStyle = "#BCE0C9";
+      rrect(ctx, -2.5, -7.5, 5, 4.8, 1.4);
+      ctx.fill();
+      edge(ctx, "#6FA383");
+      ctx.fillStyle = "#8FBF9F";
+      rrect(ctx, -3, -9.5, 6, 2.4, 1);
+      ctx.fill();
+      edge(ctx, "#5F8F73");
+      gleam(ctx, -2.2, 0.5, 0.9, 3.6);
+      break;
+    }
+    case "cloth": {
+      // 旧衣服:粉紫小 T 恤(身+两袖+领口)
+      ctx.fillStyle = grad2(ctx, -7, -7, 6, 8, "#F8C4DD", "#E793BE");
+      ctx.beginPath();
+      ctx.moveTo(-3.6, -6.5);
+      ctx.lineTo(3.6, -6.5);
+      ctx.lineTo(7, -3.2);
+      ctx.lineTo(5, -0.6);
+      ctx.lineTo(3.4, -2);
+      ctx.lineTo(3.4, 7);
+      ctx.lineTo(-3.4, 7);
+      ctx.lineTo(-3.4, -2);
+      ctx.lineTo(-5, -0.6);
+      ctx.lineTo(-7, -3.2);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#C06593");
+      ctx.strokeStyle = "#C06593";
+      ctx.beginPath();
+      ctx.arc(0, -6.5, 1.8, 0, Math.PI);
+      ctx.stroke();
+      gleam(ctx, -1.8, -3.6, 1.2, 2.2);
+      break;
+    }
+    case "apple": {
+      // 苹果核:上下两瓣红 + 中间果芯收腰 + 小叶子
+      ctx.fillStyle = grad2(ctx, -5, -8, 4, 8, "#F6A9A9", "#E4726F");
+      ctx.beginPath();
+      ctx.arc(0, -4.6, 4.6, Math.PI, 0);
+      ctx.quadraticCurveTo(2.2, -2.4, 1.6, -1);
+      ctx.lineTo(-1.6, -1);
+      ctx.quadraticCurveTo(-2.2, -2.4, -4.6, -4.6);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#B4504E");
+      ctx.beginPath();
+      ctx.arc(0, 4.6, 4.6, 0, Math.PI);
+      ctx.quadraticCurveTo(-2.2, 2.4, -1.6, 1);
+      ctx.lineTo(1.6, 1);
+      ctx.quadraticCurveTo(2.2, 2.4, 4.6, 4.6);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#B4504E");
+      // 果芯
+      ctx.fillStyle = grad2(ctx, -2, -3, 2, 5, "#FFF6E0", "#EFDDB6");
+      ctx.beginPath();
+      ctx.moveTo(-2.4, -3.4);
+      ctx.quadraticCurveTo(-1, 0, -2.4, 3.4);
+      ctx.lineTo(2.4, 3.4);
+      ctx.quadraticCurveTo(1, 0, 2.4, -3.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#8A6A4A";
+      ctx.beginPath();
+      ctx.ellipse(0, 0.2, 0.7, 1.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 叶柄
+      ctx.strokeStyle = "#8A6A4A";
+      ctx.beginPath();
+      ctx.moveTo(0, -8.6);
+      ctx.lineTo(0.6, -10.4);
+      ctx.stroke();
+      ctx.fillStyle = "#8FCB70";
+      ctx.beginPath();
+      ctx.ellipse(2.2, -10, 1.8, 1, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case "banana": {
+      // 香蕉皮:中间果肉柱 + 左右翻开的两片皮
+      ctx.fillStyle = grad2(ctx, -8, -6, 8, 8, "#FFE48A", "#F0C34A");
+      ctx.beginPath();
+      ctx.moveTo(0, -7.5);
+      ctx.quadraticCurveTo(-2.6, -2, -8, 5.5);
+      ctx.quadraticCurveTo(-4.2, 7.5, -2.2, 4.2);
+      ctx.quadraticCurveTo(-0.8, 1.6, 0, 0.6);
+      ctx.quadraticCurveTo(0.8, 1.6, 2.2, 4.2);
+      ctx.quadraticCurveTo(4.2, 7.5, 8, 5.5);
+      ctx.quadraticCurveTo(2.6, -2, 0, -7.5);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#C9973A");
+      ctx.fillStyle = "#8A6A4A";
+      ctx.beginPath();
+      ctx.arc(0, -7.6, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      gleam(ctx, -2.6, -3, 1, 2);
+      break;
+    }
+    case "leaf": {
+      // 菜叶:两瓣叶身 + 主叶脉两侧脉
+      ctx.fillStyle = grad2(ctx, -6, -7, 5, 8, "#C9EAA6", "#8FCB70");
+      ctx.beginPath();
+      ctx.moveTo(0, -8.5);
+      ctx.quadraticCurveTo(7.5, -4, 5, 4.5);
+      ctx.quadraticCurveTo(3, 8.5, 0, 8.5);
+      ctx.quadraticCurveTo(-3, 8.5, -5, 4.5);
+      ctx.quadraticCurveTo(-7.5, -4, 0, -8.5);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#6FA352");
+      ctx.strokeStyle = "#6FA352";
+      ctx.beginPath();
+      ctx.moveTo(0, -7);
+      ctx.lineTo(0, 8);
+      ctx.moveTo(0, -1);
+      ctx.lineTo(-3, 2.4);
+      ctx.moveTo(0, -3.4);
+      ctx.lineTo(3, 0);
+      ctx.stroke();
+      gleam(ctx, -2.4, -3.6, 1.2, 2);
+      break;
+    }
+    case "egg": {
+      // 蛋壳:下半只壳 + 锯齿裂口
+      ctx.fillStyle = grad2(ctx, -5, -5, 5, 8, "#FFFDF2", "#EDE2C6");
+      ctx.beginPath();
+      ctx.moveTo(-5, -2);
+      ctx.lineTo(-3.2, 0.4);
+      ctx.lineTo(-1.6, -2.4);
+      ctx.lineTo(0, 0.4);
+      ctx.lineTo(1.6, -2.4);
+      ctx.lineTo(3.2, 0.4);
+      ctx.lineTo(5, -2);
+      ctx.quadraticCurveTo(5, 7.5, 0, 7.5);
+      ctx.quadraticCurveTo(-5, 7.5, -5, -2);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#C9BC96");
+      ctx.fillStyle = "rgba(201,188,150,.3)";
+      ctx.beginPath();
+      ctx.ellipse(0.8, 1.4, 3, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      gleam(ctx, -2.4, 2.4, 1, 2);
+      break;
+    }
+    case "rice": {
+      // 剩米饭:蓝瓷碗 + 三团白米
+      ctx.fillStyle = grad2(ctx, -7, 0, 7, 8, "#9BC7F2", "#6E9FD4");
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.quadraticCurveTo(-6.4, 7.5, 0, 7.5);
+      ctx.quadraticCurveTo(6.4, 7.5, 7, 0);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#517BB0");
+      ctx.fillStyle = grad2(ctx, -6, -8, 5, 0, "#FFFFFF", "#EFEAE0");
+      ctx.beginPath();
+      ctx.arc(-3.2, -1.6, 3, 0, Math.PI * 2);
+      ctx.arc(0, -4, 3.4, 0, Math.PI * 2);
+      ctx.arc(3.2, -1.6, 3, 0, Math.PI * 2);
+      ctx.fill();
+      edge(ctx, "#D8D0C0");
+      gleam(ctx, -1.6, -5.4, 1.2, 0.9);
+      break;
+    }
+    case "tea": {
+      // 茶叶渣:三片小叶叠成一撮
+      const leaves: ReadonlyArray<readonly [number, number, number]> = [
+        [-3.4, 1.2, 0.7],
+        [3, 1.6, -0.6],
+        [0, -2.2, 0.1],
+      ];
+      for (const [lx, ly, rot] of leaves) {
+        ctx.fillStyle = grad2(ctx, lx - 3, ly - 3, lx + 3, ly + 3, "#B7DFA8", "#7FB584");
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, 4, 2.2, rot, 0, Math.PI * 2);
+        ctx.fill();
+        edge(ctx, "#5F9366");
+      }
+      ctx.strokeStyle = "#5F9366";
+      ctx.beginPath();
+      ctx.moveTo(0, -4.2);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+      gleam(ctx, -1.4, -3, 0.9, 0.7);
+      break;
+    }
+    case "tissue": {
+      // 用过的纸巾:皱巴巴的一小团
+      ctx.fillStyle = grad2(ctx, -6, -6, 6, 7, "#FFFFFF", "#E8E4DC");
+      ctx.beginPath();
+      ctx.moveTo(-6, 1);
+      ctx.quadraticCurveTo(-6.5, -4.5, -2, -5.5);
+      ctx.quadraticCurveTo(0.5, -7.5, 3.5, -5);
+      ctx.quadraticCurveTo(7, -4, 6, 0.5);
+      ctx.quadraticCurveTo(6.8, 4.6, 2.5, 5.5);
+      ctx.quadraticCurveTo(-1, 7, -4, 5);
+      ctx.quadraticCurveTo(-6.8, 4, -6, 1);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#C5BFB2");
+      ctx.strokeStyle = "#D8D2C6";
+      ctx.beginPath();
+      ctx.moveTo(-3, -1);
+      ctx.quadraticCurveTo(-1, 1, 1.5, -0.5);
+      ctx.moveTo(-1, 3);
+      ctx.quadraticCurveTo(1, 4, 3, 2.5);
+      ctx.stroke();
+      gleam(ctx, -2.8, -3.2, 1.4, 1);
+      break;
+    }
+    case "chopstick": {
+      // 一次性筷子:两根微微张开的木筷
+      for (const tilt of [-0.1, 0.14] as const) {
+        ctx.save();
+        ctx.rotate(tilt);
+        ctx.fillStyle = grad2(ctx, -1.4, -9, 1.4, 9, "#EBCB9C", "#CBA265");
+        rrect(ctx, tilt < 0 ? -2.6 : 0.6, -9, 2, 18, 1);
+        ctx.fill();
+        edge(ctx, "#A57F42");
+        ctx.restore();
+      }
+      ctx.fillStyle = "#F6E9CF";
+      rrect(ctx, -3, -8.4, 6, 2.6, 1);
+      ctx.fill();
+      edge(ctx, "#A57F42");
+      break;
+    }
+    case "ceramic": {
+      // 碎陶瓷碗:半只碗 + 崩口锯齿 + 青花纹
+      ctx.fillStyle = grad2(ctx, -7, -4, 6, 8, "#FDFDFD", "#DDE5EF");
+      ctx.beginPath();
+      ctx.moveTo(-7, -2);
+      ctx.lineTo(-4.4, -0.2);
+      ctx.lineTo(-2.6, -3.4);
+      ctx.lineTo(-0.6, -0.6);
+      ctx.lineTo(1.8, -4.2);
+      ctx.lineTo(3.4, -1);
+      ctx.lineTo(7, -2);
+      ctx.quadraticCurveTo(6.2, 7, 0, 7);
+      ctx.quadraticCurveTo(-6.2, 7, -7, -2);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#A9B6C8");
+      ctx.strokeStyle = "#7FA9F0";
+      ctx.beginPath();
+      ctx.moveTo(-6.2, 2.4);
+      ctx.quadraticCurveTo(0, 4.6, 6.2, 2.4);
+      ctx.stroke();
+      gleam(ctx, -3, 1, 1.1, 1.8);
+      break;
+    }
+    case "brush": {
+      // 旧牙刷:粉柄 + 白刷头 + 蓝刷毛
+      ctx.save();
+      ctx.rotate(0.5);
+      ctx.fillStyle = grad2(ctx, -1.6, -4, 1.6, 10, "#F8B8CD", "#E98BAD");
+      rrect(ctx, -1.6, -5, 3.2, 14.5, 1.6);
+      ctx.fill();
+      edge(ctx, "#C06590");
+      ctx.fillStyle = grad2(ctx, -2.2, -10.5, 2.2, -5, "#FFFFFF", "#E8ECF2");
+      rrect(ctx, -2.2, -10.5, 4.4, 6, 2);
+      ctx.fill();
+      edge(ctx, "#A9B6C8");
+      ctx.strokeStyle = "#9BC7F2";
+      for (const by of [-9.4, -7.9, -6.4]) {
+        ctx.beginPath();
+        ctx.moveTo(-1.2, by);
+        ctx.lineTo(1.2, by);
+        ctx.stroke();
+      }
+      ctx.restore();
+      break;
+    }
+    case "wrap": {
+      // 保鲜膜:纸盒 + 抽出的半透明膜
+      ctx.fillStyle = "rgba(214,238,248,.6)";
+      rrect(ctx, -5, -8.5, 10, 7.5, 1);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(116,169,198,.85)";
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(116,169,198,.5)";
+      ctx.beginPath();
+      ctx.moveTo(-2.6, -8);
+      ctx.quadraticCurveTo(-1.6, -4.5, -2.6, -1.4);
+      ctx.moveTo(1.8, -8);
+      ctx.quadraticCurveTo(2.8, -4.5, 1.8, -1.4);
+      ctx.stroke();
+      ctx.fillStyle = grad2(ctx, -7, -1, 7, 7.5, "#CBE7F5", "#9CCBE4");
+      rrect(ctx, -7, -1, 14, 8.5, 1.6);
+      ctx.fill();
+      edge(ctx, "#74A9C6");
+      ctx.fillStyle = "#F6B6CD";
+      rrect(ctx, -7, -1, 14, 2.4, 1.2);
+      ctx.fill();
+      gleam(ctx, -4.4, 3.6, 1.4, 1);
+      break;
+    }
+    case "dust": {
+      // 扫起来的尘土:软软一小丘 + 三粒小点(灰紫粉彩,不搞脏)
+      ctx.fillStyle = grad2(ctx, -8, -2, 7, 8, "#DCD6E4", "#B9B0C6");
+      ctx.beginPath();
+      ctx.moveTo(-8, 7);
+      ctx.quadraticCurveTo(-6.5, -0.5, -2.5, -1.5);
+      ctx.quadraticCurveTo(0, -4.5, 3, -2);
+      ctx.quadraticCurveTo(7, -1.5, 8, 7);
+      ctx.closePath();
+      ctx.fill();
+      edge(ctx, "#948AA6");
+      ctx.fillStyle = "#948AA6";
+      ctx.beginPath();
+      ctx.arc(-3.4, 3.4, 0.8, 0, Math.PI * 2);
+      ctx.arc(0.6, 1.4, 0.7, 0, Math.PI * 2);
+      ctx.arc(3.8, 4, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+      gleam(ctx, -2.6, 0.4, 1.4, 0.9);
+      break;
+    }
+    default: {
+      // 兜底:中性小圆石(理论到不了)
+      ctx.fillStyle = grad2(ctx, -5, -5, 5, 6, "#E4DFE8", "#BDB4C8");
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+      edge(ctx, "#968CA8");
+      gleam(ctx, -2.2, -2.4, 1.4, 1);
+    }
+  }
+  ctx.restore();
+}
