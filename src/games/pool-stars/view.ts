@@ -405,6 +405,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     const b = button("ps-btn", label);
     b.setAttribute("aria-label", `把黑星球指定到${label}`);
     b.addEventListener("click", () => {
+      if (paused) return;
       opts.sfx("tap");
       calledPocket = i;
       refresh();
@@ -579,7 +580,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     spinBtn.hidden = !opts.allowSpin;
     spinBtn.textContent = spin > 0 ? "🌀 旋转：跟进" : spin < 0 ? "🌀 旋转：拉杆" : "🌀 旋转：不加";
     placeBtn.hidden = phase !== "place";
-    const human = !isAiTurn();
+    const human = !isAiTurn() && !paused;
     const canShoot = phase === "aim" || phase === "charge";
     shootBtn.disabled = !human || !canShoot;
     leftBtn.disabled = !human || phase === "rolling";
@@ -701,7 +702,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   // -------------------------------------------------------------------------
 
   function startCharge(): void {
-    if (phase !== "aim" || isAiTurn()) return;
+    if (paused || phase !== "aim" || isAiTurn()) return;
     phase = "charge";
     chargeStart = now();
     opts.sfx("tap");
@@ -709,7 +710,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   }
 
   function releaseCharge(): void {
-    if (phase !== "charge") return;
+    if (paused || phase !== "charge") return;
     phase = "aim";
     fire({ angle, power, spin, calledPocket: calledPocket ?? autoPocket() });
   }
@@ -738,13 +739,23 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   }
 
   function nudge(delta: number): void {
-    if (phase === "rolling" || isAiTurn()) return;
+    if (paused || phase === "rolling" || isAiTurn()) return;
     angle += delta;
     refresh();
   }
 
   const onKeyDown = (e: KeyboardEvent): void => {
     const k = e.key;
+    if (k === "Escape") {
+      paused = !paused;
+      // 蓄到一半按暂停：这一杆作废，恢复之后重新蓄
+      if (paused && phase === "charge") phase = "aim";
+      tip = paused ? "已暂停，按 Esc 继续。" : opts.tip;
+      refresh();
+      return;
+    }
+    // 暂停就是暂停：除了 Esc，瞄准 / 蓄力 / 出杆一个都不接
+    if (paused) return;
     const fine = e.shiftKey ? 0.008 : 0.03;
     if (k === "ArrowLeft" || k === "a" || k === "A") {
       nudge(-fine);
@@ -766,12 +777,6 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       e.preventDefault();
       return;
     }
-    if (k === "Escape") {
-      paused = !paused;
-      tip = paused ? "已暂停，按 Esc 继续。" : opts.tip;
-      refresh();
-      return;
-    }
     if (e.repeat) return;
     const seat = seatOf(turn);
     const mine = seat.ai === null;
@@ -789,6 +794,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   };
 
   const onKeyUp = (e: KeyboardEvent): void => {
+    if (paused) return;
     const k = e.key;
     const isP0 = turn === 0;
     if ((isP0 && (k === "f" || k === "F")) || (!isP0 && (k === "l" || k === "L"))) {
@@ -858,12 +864,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     if (k === "Enter" || k === " ") releaseCharge();
   });
   spinBtn.addEventListener("click", () => {
+    if (paused) return;
     spin = spin > 0 ? -1 : spin < 0 ? 0 : 1;
     opts.sfx("tap");
     refresh();
   });
   placeBtn.addEventListener("click", () => {
-    if (phase !== "place") return;
+    if (paused || phase !== "place") return;
     const pos = placePos ?? { x: TABLE.w * 0.22, y: TABLE.h / 2 };
     const safe = placeCueBall(balls, pos).pos;
     const next = cloneBalls(balls);

@@ -6,9 +6,10 @@
  * 标了「【已知问题】」的用例断言的是**当前行为**，修好之后这些用例会红，那时候连同断言一起翻面。
  *
  * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
- *  - PA-PS-1（严重）：Esc 暂停只挡住了 rAF 与台面指针，键盘瞄准 / 蓄力 / 出杆与按钮照样生效；
- *  - PA-PS-2（一般）：双人同屏里方向键与 WASD 都改「当前出杆方」的角度，两人互相够得着；
- *  - PA-PS-3（一般）：`mount` 的 destroy 不回收注入到 document.head 的 `ps-shell-style`。
+ *  - PA-PS-1（严重）：Esc 暂停只挡住了 rAF 与台面指针，键盘瞄准 / 蓄力 / 出杆与按钮照样生效。
+ *    第 1 轮修复员已修，下面 `PA-PS-1` 那一组断言已经翻成修好后的行为；
+ *  - PA-PS-2（一般）：双人同屏里方向键与 WASD 都改「当前出杆方」的角度，两人互相够得着（留第 2 轮）；
+ *  - PA-PS-3（一般）：`mount` 的 destroy 不回收注入到 document.head 的 `ps-shell-style`（留第 2 轮）。
  *
  * 顶部先静态 import 一次 index：让 level99 / audio 那条链在真 node 环境下加载完，
  * 之后再装 DOM 桩，免得 audio.ts 的 `document.addEventListener` 撞上没有该方法的桩。
@@ -117,7 +118,7 @@ describe("PA-PS-1 · Esc 暂停的封锁范围", () => {
     handle.destroy();
   });
 
-  it("【已知问题】暂停期间方向键仍然改得动瞄准角", () => {
+  it("暂停期间方向键改不动瞄准角，恢复之后还是原来那条线", () => {
     const { handle, settled } = mountTable();
     esc();
     for (let i = 0; i < 10; i++) fireWin("keydown", "ArrowRight");
@@ -125,29 +126,68 @@ describe("PA-PS-1 · Esc 暂停的封锁范围", () => {
     shoot("f", 200);
     runUntilSettled(settled);
     expect(settled).toHaveLength(1);
-    // 应有行为：暂停期间的按键被吃掉，角度还是 0。现状：10 × 0.03 = 0.3 全都算进去了。
-    expect(settled[0].angle, "暂停期间的方向键被算进了瞄准角").toBeCloseTo(0.3, 5);
+    expect(settled[0].angle, "暂停期间的方向键又被算进了瞄准角").toBeCloseTo(0, 5);
     handle.destroy();
   });
 
-  it("【已知问题】暂停期间按 F 蓄力、松手照样把球打出去", () => {
+  it("恢复之后方向键照旧管用（别把人一起锁死了）", () => {
+    const { handle, settled } = mountTable();
+    esc();
+    for (let i = 0; i < 4; i++) fireWin("keydown", "ArrowRight");
+    esc();
+    for (let i = 0; i < 10; i++) fireWin("keydown", "ArrowRight");
+    shoot("f", 200);
+    runUntilSettled(settled);
+    expect(settled).toHaveLength(1);
+    expect(settled[0].angle, "恢复之后方向键失灵了").toBeCloseTo(0.3, 5);
+    handle.destroy();
+  });
+
+  it("暂停期间按 F 蓄力、松手也打不出去", () => {
     const { handle } = mountTable();
     esc();
     expect(handle.rolling()).toBe(false);
     shoot("f");
-    // 应有行为：暂停期间不该出杆，rolling() 还是 false
-    expect(handle.rolling(), "暂停期间键盘还能出杆").toBe(true);
+    expect(handle.rolling(), "暂停期间键盘还能出杆").toBe(false);
+    // 恢复之后照样打得出去
+    esc();
+    shoot("f");
+    expect(handle.rolling(), "恢复之后反而打不出去了").toBe(true);
     handle.destroy();
   });
 
-  it("【已知问题】暂停期间点屏幕上的击球钮也一样拦不住", () => {
+  it("蓄力蓄到一半按 Esc，这一杆就作废，松手不出杆", () => {
+    const { handle } = mountTable();
+    fireWin("keydown", "f");
+    dom.clock.ms += 200;
+    esc();
+    fireWin("keyup", "f");
+    expect(handle.rolling(), "暂停把蓄到一半的杆放出去了").toBe(false);
+    handle.destroy();
+  });
+
+  it("暂停期间点屏幕上的击球钮也出不了杆", () => {
     const { handle } = mountTable();
     esc();
     const shootBtn = dom.root.find((e) => e.className.includes("ps-shoot"))!;
     shootBtn.dispatch("pointerdown", {});
     dom.clock.ms += 250;
     shootBtn.dispatch("pointerup", {});
-    expect(handle.rolling(), "暂停期间击球钮还能出杆").toBe(true);
+    expect(handle.rolling(), "暂停期间击球钮还能出杆").toBe(false);
+    handle.destroy();
+  });
+
+  it("暂停期间左右微调钮也拨不动瞄准角", () => {
+    const { handle, settled } = mountTable();
+    esc();
+    const rightBtn = dom.root.find((e) => e.textContent.includes("右 ▶"))!;
+    expect(rightBtn, "找不到微调钮").toBeTruthy();
+    for (let i = 0; i < 10; i++) rightBtn.dispatch("click", {});
+    esc();
+    shoot("f", 200);
+    runUntilSettled(settled);
+    expect(settled).toHaveLength(1);
+    expect(settled[0].angle, "暂停期间微调钮改动了瞄准角").toBeCloseTo(0, 5);
     handle.destroy();
   });
 
