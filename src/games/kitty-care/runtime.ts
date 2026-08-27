@@ -289,6 +289,9 @@ export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: 
     el.style.overflowY = "auto";
     // 打个记号：提示行这时候要粘在滚动口下沿，不然「这一关要干什么」滚不到就看不见
     el.classList.add("ktc-scroll");
+    // 挂上滚动条就必须顺手滚一次：落地的 scrollTop 是 0，而动手层排在小屋最底下，
+    // 那一片正好被刚粘上去的提示行盖着，孩子看不见也点不着（W5R3-C-02）
+    showPlayRow(el);
   };
   relayout();
   let live = true;
@@ -319,6 +322,80 @@ function nextFrame(view: (Window & typeof globalThis) | null, fn: () => void): v
   const raf = view?.requestAnimationFrame;
   if (typeof raf !== "function") return;
   raf.call(view, () => fn());
+}
+
+// ---------------------------------------------------------------------------
+// 挂上滚动条之后，得把「这一关真正要动手的那一层」送到孩子眼前
+// ---------------------------------------------------------------------------
+
+/**
+ * 动手层的选择器，按优先级排。`.ktc-play` 是喂饭 / 逗猫 / 打扮 / 搓澡这些交互层的外壳，
+ * 找不到它（早期关卡结构不同）就退而求其次直接找里面那几块。
+ */
+export const PLAY_ROW_SELECTORS = [".ktc-play", ".ktc-tray", ".ktc-btns", ".ktc-field", ".ktc-wash", ".ktc-beats"];
+
+/**
+ * 要把 `[top, bottom]` 这一段送进眼前，`scrollTop` 该写多少。
+ *
+ * `client` 是滚动口的高，`pinned` 是**粘在下沿常驻**的那条提示行的高——
+ * 它盖住的那一条不算「看得见」，不减掉就会把动手层正好停在提示行底下。
+ * 这一段比剩下的窗口还高就从它的上沿开始露，先看得见头。
+ * 量不出数、或者根本没得滚，就返回 0，不平白往 DOM 上写一个 `scrollTop`。
+ */
+export function scrollToShowPx(
+  top: number,
+  bottom: number,
+  client: number,
+  max: number,
+  pinned = 0,
+): number {
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return 0;
+  if (!(client > 0) || !(max > 0)) return 0;
+  const room = Math.max(0, client - Math.max(0, Number.isFinite(pinned) ? pinned : 0));
+  if (room <= 0) return 0;
+  const want = bottom - top > room ? top : bottom - room;
+  return Math.max(0, Math.min(max, Math.round(want)));
+}
+
+/**
+ * 小屋一旦变成滚动容器，就把动手层送到孩子眼前（W5R3-C-02）。
+ *
+ * 缺陷长什么样：真机 360×640 第 188 关（三只猫 + 喂饭），猫已经收到最小的 92px 还是装不下，
+ * `fitIntoStage()` 于是挂上滚动条。**孩子落地时 `scrollTop` 是 0**，
+ * 而食物托盘排在小屋最底下 y=560（屏高 640、滚动口下沿更靠上），
+ * 那一片正好被粘在下沿的 `.ktc-msg` 盖着——五颗食物 `elementFromPoint` 命中的全是提示行，
+ * 逐档量下来 0% 处 0/5 够得着、50% 处 4/5、只有滚到底才 5/5。
+ * 第 117 关（两只猫）更绝：0% 与 50% 处都是 0/4。
+ * 喂饭是这一关唯一的主动玩法，落地就点不着 = 这一关不知道怎么开始，按阻断记。
+ *
+ * 修法和 `word-garden/fit.ts` 的 `showChoices` 同源：钳完顺手滚一次，
+ * 滚**最小的那一段**（只要动手层的下沿进来就收手），上面的猫尽量留在眼里。
+ */
+export function showPlayRow(el: HTMLElement): number {
+  if (typeof el.querySelector !== "function" || typeof el.getBoundingClientRect !== "function") return 0;
+  let row: Element | null = null;
+  for (const sel of PLAY_ROW_SELECTORS) {
+    row = el.querySelector(sel);
+    if (row && typeof row.getBoundingClientRect === "function") break;
+    row = null;
+  }
+  if (!row) return 0;
+  const msg = el.querySelector(".ktc-msg");
+  const pinned = msg && typeof msg.getBoundingClientRect === "function"
+    ? msg.getBoundingClientRect().height
+    : 0;
+  const hostTop = el.getBoundingClientRect().top;
+  const r = row.getBoundingClientRect();
+  const top = r.top - hostTop + el.scrollTop;
+  const next = scrollToShowPx(
+    top,
+    top + r.height,
+    el.clientHeight,
+    el.scrollHeight - el.clientHeight,
+    pinned,
+  );
+  el.scrollTop = next;
+  return next;
 }
 
 /** 长列表钳到这个高度以下就不值得再钳了——再矮连一张卡片都露不全 */
