@@ -220,10 +220,12 @@ export function nightSceneSvg(): string {
     `<svg viewBox="0 0 360 240" width="100%" height="100%" preserveAspectRatio="xMidYMax slice" ` +
     `aria-hidden="true" focusable="false">` +
     `<defs><mask id="mp-night-moon"><rect width="360" height="240" fill="#fff"/>` +
-    `<circle cx="265" cy="19" r="11.5" fill="#000"/></mask></defs>` +
+    `<circle cx="258" cy="35" r="11.5" fill="#000"/></mask></defs>` +
     `<g data-part="night-trees">${treeShadow(52, 52)}${treeShadow(310, 56)}</g>` +
-    `<g data-part="moon"><circle cx="259" cy="24" r="14" fill="#FFF3C9" mask="url(#mp-night-moon)"/></g>` +
-    `<g data-part="stars">${star(36, 30, 1.5)}${star(96, 18, 1.2)}${star(150, 42, 1.8)}${star(206, 22, 1.3)}${star(322, 48, 1.5)}</g>` +
+    // 月牙与星子放在 y 34–54 的可见带:躲开顶部 HUD,也不进洞区(栅栏线 y=58);
+    // 360 窄屏 slice 只留 x≈79–281,星子横坐标全部收在这个窗口里
+    `<g data-part="moon"><circle cx="252" cy="40" r="14" fill="#FFF3C9" mask="url(#mp-night-moon)"/></g>` +
+    `<g data-part="stars">${star(96, 38, 1.2)}${star(126, 52, 1.5)}${star(152, 28, 1.8)}${star(204, 46, 1.3)}${star(120, 20, 1.5)}</g>` +
     `</svg>`
   );
 }
