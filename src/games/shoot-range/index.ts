@@ -71,14 +71,39 @@ import {
   windupProgress,
 } from "./feel12";
 import {
-  RAINBOW_TTL,
-  SHIELD_HP,
   isLeavingSoon,
   mustClear,
   resolveHit,
   stepLifespan,
   targetDepthMul,
 } from "./targets12";
+import {
+  drawParticles,
+  spawnPetals,
+  spawnRibbons,
+  spawnSparkles,
+  stepParticles,
+  type Particle,
+} from "../../art/kit/sparkle";
+import { shade } from "../../art/kit/volume";
+import {
+  COMBO_RING_MS,
+  PETAL_FALL_MS,
+  RIBBON_FALL_MS,
+  SHR_PALETTE,
+  SPARKLE_BURST_MS,
+  hitParticleBudget,
+} from "./visual13";
+import {
+  drawBeam,
+  drawBunting,
+  drawCounter,
+  drawCrosshairSkin,
+  drawFrownCloud,
+  drawLauncherSkin,
+  drawTargetSkin,
+  drawTent,
+} from "./paint13";
 import {
   ENDLESS_MISS_LIMIT,
   endlessLine,
@@ -115,11 +140,13 @@ export const CSS = `
   padding-bottom:2px;scrollbar-width:none;}
 .shr-hud::-webkit-scrollbar{display:none;}
 .shr-tools{display:flex;align-items:center;gap:4px;flex:0 0 auto;}
-.shr-chip{background:#fff;border-radius:999px;padding:5px 9px;font-size:14px;font-weight:800;color:#A2557C;
-  box-shadow:0 2px 6px rgba(190,130,165,.24);white-space:nowrap;flex:0 0 auto;}
-.shr-chip-warn{background:#FFF0D6;color:#A9761F;}
-.shr-chip-duo{background:#FFE6F0;color:#B44F84;}
-.shr-chip-star{background:#E4EEFF;color:#39699F;}
+/* 1.3:HUD 卡片化——圆角 12px、白 72% 底、1.5px 描边,一行放得下 */
+.shr-chip{background:rgba(255,255,255,.72);border:1.5px solid rgba(190,130,165,.4);border-radius:12px;
+  padding:5px 9px;font-size:14px;font-weight:800;color:#A2557C;
+  box-shadow:0 2px 6px rgba(190,130,165,.18);white-space:nowrap;flex:0 0 auto;}
+.shr-chip-warn{background:rgba(255,240,214,.72);border-color:rgba(169,118,31,.4);color:#A9761F;}
+.shr-chip-duo{background:rgba(255,230,240,.72);border-color:rgba(180,79,132,.4);color:#B44F84;}
+.shr-chip-star{background:rgba(228,238,255,.72);border-color:rgba(57,105,159,.4);color:#39699F;}
 .shr-mag{display:inline-flex;gap:2px;align-items:center;vertical-align:middle;}
 .shr-star{width:7px;height:7px;border-radius:50%;background:#F5B8CE;display:inline-block;}
 .shr-star-off{background:#EDE6EE;}
@@ -418,6 +445,10 @@ function createField(opts: FieldOptions): FieldHandle {
   let bursts: Burst[] = [];
   let floats: Float[] = [];
   let fallen: Fallen[] = [];
+  /** 星屑 / 丝带 / 花瓣(纯视觉,destroy 时清空;reduced 下根本不生成) */
+  let particles: Particle[] = [];
+  /** 连击金环的扩散计时:倍率一变就从 0 重新弹开(纯视觉) */
+  const haloPulse = shooters.map(() => ({ mul: comboMultiplier(0), t: COMBO_RING_MS / 1000 }));
   let hitStop = 0;
   let timeLeft = opts.seconds;
   let shotsLeft = opts.shotBudget;
@@ -575,6 +606,13 @@ function createField(opts: FieldOptions): FieldHandle {
       else s.flowerHits++;
       s.combo = 0;
       s.score += out.score;
+      // 误击花朵:花瓣飘落 + 皱眉小云,不批评(reduced 下不生成花瓣)
+      const foulBudget = hitParticleBudget(target.kind, { destroyed: false, foul: true, reduced: reduce });
+      if (foulBudget.petals > 0) {
+        particles.push(
+          ...spawnPetals(target.x, target.y, { count: foulBudget.petals, lifeMs: PETAL_FALL_MS })
+        );
+      }
       bursts.push({ x: target.x, y: target.y - target.r - 8, life: 0.7, max: 0.7, colors: ["#FFD27F"], kind: target.kind });
       floats.push({ x: target.x, y: target.y - target.r, life: 0.9, text: `${out.score}`, ink: "#B98A2E" });
       opts.sfx("oops");
@@ -608,7 +646,25 @@ function createField(opts: FieldOptions): FieldHandle {
       ink: s.ink,
     });
     if (out.destroyed) {
-      bursts.push({ x: target.x, y: target.y, life: 0.55, max: 0.55, colors: burstColors(target.kind), kind: target.kind });
+      // 1.3:彩纸方块升级为「星屑 + 丝带」双粒子;reduced 下预算全零,不生成
+      const budget = hitParticleBudget(target.kind, { destroyed: true, foul: false, reduced: reduce });
+      if (budget.sparkles > 0) {
+        particles.push(
+          ...spawnSparkles(target.x, target.y, {
+            colors: [SHR_PALETTE.shrGold, ...burstColors(target.kind)],
+            lifeMs: SPARKLE_BURST_MS,
+          })
+        );
+      }
+      if (budget.ribbons > 0) {
+        particles.push(
+          ...spawnRibbons(target.x, target.y, {
+            count: budget.ribbons,
+            colors: burstColors(target.kind),
+            lifeMs: RIBBON_FALL_MS,
+          })
+        );
+      }
       if (target.kind === "robot" || target.kind === "ufo") {
         fallen.push({ kind: target.kind, x: target.x, y: target.y, r: target.r, vy: 40, rot: 0, life: 1.4 });
       }
@@ -962,6 +1018,18 @@ function createField(opts: FieldOptions): FieldHandle {
     for (const s of shooters) s.tracers = s.tracers.filter((tr) => (tr.life -= dt) > 0);
     bursts = bursts.filter((b) => (b.life -= dt) > 0);
     floats = floats.filter((f) => (f.life -= dt) > 0);
+    particles = stepParticles(particles, dt);
+    // 金环扩散计时:倍率一变就重新弹开一圈(只读 comboMultiplier,不改连击)
+    for (const s of shooters) {
+      const pulse = haloPulse[s.index];
+      const mul = comboMultiplier(s.combo);
+      if (mul !== pulse.mul) {
+        pulse.mul = mul;
+        pulse.t = 0;
+      } else {
+        pulse.t += dt;
+      }
+    }
     for (const f of fallen) {
       f.life -= dt;
       f.y += f.vy * dt;
@@ -985,326 +1053,37 @@ function createField(opts: FieldOptions): FieldHandle {
     offY = (canvas.height - FIELD_H * scale) / 2;
   }
 
+  /**
+   * 1.3:靶子七道工序在 paint13 总装(落影 / 支架 / 木框 / 三停色环 / 靶心亮点 /
+   * 靶种剪影 / 离场倒计时)。判定半径与远近排口径原样,只换皮肤;
+   * 远排的白雾圈退役,「远」由中景横梁 + 一根侧视支架来说。
+   */
   function drawTarget(ctx: CanvasRenderingContext2D, t: Target, now: number): void {
-    const { x, y, r } = t;
-    ctx.save();
-    ctx.translate(x, y);
-    // 远排靶:身后垫一层白雾,一眼看出「这排远、这排小、分更高」
-    if (targetDepthMul(t) > 1) {
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,255,255,.45)";
-      ctx.fill();
-    }
-    if (isLeavingSoon(t) && !reduce) {
-      ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(now * 8));
-    }
-    switch (t.kind) {
-      case "bull": {
-        const rings = ["#FFFFFF", "#FFC9DC", "#FFFFFF", "#F4859F"];
-        for (let i = 0; i < rings.length; i++) {
-          ctx.beginPath();
-          ctx.arc(0, 0, r * (1 - i * 0.24), 0, Math.PI * 2);
-          ctx.fillStyle = rings[i];
-          ctx.fill();
-        }
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.13, 0, Math.PI * 2);
-        ctx.fillStyle = "#D95C82";
-        ctx.fill();
-        ctx.strokeStyle = "#E7A9BE";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = "#C9A98F";
-        ctx.fillRect(-4, r * 0.9, 8, r * 0.7);
-        break;
-      }
-      case "balloon": {
-        ctx.strokeStyle = "#D7C9DE";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, r);
-        ctx.quadraticCurveTo(6, r * 1.6, 0, r * 2.1);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.ellipse(0, 0, r * 0.86, r, 0, 0, Math.PI * 2);
-        ctx.fillStyle = ["#FF9FC4", "#9BD9F5", "#C7ED9E", "#FFD48A"][t.id % 4];
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(-r * 0.28, -r * 0.32, r * 0.2, r * 0.28, -0.5, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255,255,255,.7)";
-        ctx.fill();
-        break;
-      }
-      case "ufo": {
-        ctx.beginPath();
-        ctx.ellipse(0, r * 0.15, r, r * 0.42, 0, 0, Math.PI * 2);
-        ctx.fillStyle = "#B9CFE8";
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(0, -r * 0.2, r * 0.5, r * 0.45, 0, Math.PI, 0);
-        ctx.fillStyle = "#DCEBFB";
-        ctx.fill();
-        for (let i = -2; i <= 2; i++) {
-          ctx.beginPath();
-          ctx.arc(i * r * 0.34, r * 0.2, r * 0.09, 0, Math.PI * 2);
-          ctx.fillStyle = i % 2 === 0 ? "#FFD98A" : "#9FD0F5";
-          ctx.fill();
-        }
-        break;
-      }
-      case "robot": {
-        const bob = Math.sin(now * 4 + t.phase) * (reduce ? 0 : 2);
-        ctx.translate(0, bob);
-        ctx.strokeStyle = "#A9BCCB";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(0, -r * 0.75);
-        ctx.lineTo(0, -r * 1.05);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, -r * 1.12, r * 0.11, 0, Math.PI * 2);
-        ctx.fillStyle = "#FFB3C8";
-        ctx.fill();
-        roundRect(ctx, -r * 0.7, -r * 0.75, r * 1.4, r * 1.5, r * 0.3);
-        ctx.fillStyle = "#D7E3ED";
-        ctx.fill();
-        ctx.strokeStyle = "#AFC2D2";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = "#5B7386";
-        ctx.beginPath();
-        ctx.arc(-r * 0.24, -r * 0.18, r * 0.11, 0, Math.PI * 2);
-        ctx.arc(r * 0.24, -r * 0.18, r * 0.11, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#8FA6B8";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(-r * 0.22, r * 0.28);
-        ctx.lineTo(r * 0.22, r * 0.28);
-        ctx.stroke();
-        break;
-      }
-      case "number": {
-        roundRect(ctx, -r * 0.85, -r * 0.85, r * 1.7, r * 1.7, r * 0.28);
-        ctx.fillStyle = "#EAF1FB";
-        ctx.fill();
-        ctx.strokeStyle = "#9FB7D4";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.fillStyle = "#3F6B9E";
-        ctx.font = `900 ${Math.round(r * 1.05)}px "PingFang SC",system-ui,sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(t.order), 0, r * 0.04);
-        break;
-      }
-      case "split": {
-        // 一团会分家的泡泡:小靶画成一颗单泡,大靶里能看见两颗小的
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(168,230,255,.85)";
-        ctx.fill();
-        ctx.strokeStyle = "#7FC8E8";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        if ((t.gen ?? 0) === 0) {
-          for (const dir of [-1, 1]) {
-            ctx.beginPath();
-            ctx.arc(dir * r * 0.36, 0, r * 0.3, 0, Math.PI * 2);
-            ctx.strokeStyle = "rgba(255,255,255,.9)";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          }
-        }
-        ctx.beginPath();
-        ctx.arc(-r * 0.32, -r * 0.34, r * 0.16, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255,255,255,.8)";
-        ctx.fill();
-        break;
-      }
-      case "shield": {
-        const hp = t.hp ?? SHIELD_HP;
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.68, 0, Math.PI * 2);
-        ctx.fillStyle = "#FFE3F0";
-        ctx.fill();
-        ctx.strokeStyle = "#E58FB4";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
-        ctx.fillStyle = "#D95C82";
-        ctx.fill();
-        // 外面那层软壳:还没敲开是整圈,敲开一层就变成断续的弧
-        ctx.strokeStyle = hp > 1 ? "rgba(150,130,220,.85)" : "rgba(150,130,220,.4)";
-        ctx.lineWidth = hp > 1 ? 6 : 4;
-        if (hp > 1) {
-          ctx.beginPath();
-          ctx.arc(0, 0, r, 0, Math.PI * 2);
-          ctx.stroke();
-        } else {
-          for (let i = 0; i < 4; i++) {
-            ctx.beginPath();
-            ctx.arc(0, 0, r, i * 1.57 + 0.25, i * 1.57 + 1.1);
-            ctx.stroke();
-          }
-        }
-        break;
-      }
-      case "rainbow": {
-        const bands = ["#FF9FC4", "#FFC98A", "#FFF3A8", "#B9EAB0", "#9BD9F5", "#C9B7F5"];
-        for (let i = 0; i < bands.length; i++) {
-          ctx.beginPath();
-          ctx.arc(0, r * 0.35, r * (1 - i * 0.14), Math.PI, 0);
-          ctx.strokeStyle = bands[i];
-          ctx.lineWidth = Math.max(3, r * 0.14);
-          ctx.stroke();
-        }
-        // 剩余时间画成脚下的一段弧
-        const left = Math.max(0, Math.min(1, (t.ttl ?? RAINBOW_TTL) / RAINBOW_TTL));
-        ctx.beginPath();
-        ctx.arc(0, r * 0.35, r * 0.35, Math.PI, Math.PI + Math.PI * left);
-        ctx.strokeStyle = "#A2557C";
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        break;
-      }
-      case "friend": {
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fillStyle = "#FFF2CE";
-        ctx.fill();
-        ctx.strokeStyle = "#F0C367";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.fillStyle = "#9C7433";
-        ctx.beginPath();
-        ctx.arc(-r * 0.28, -r * 0.16, r * 0.1, 0, Math.PI * 2);
-        ctx.arc(r * 0.28, -r * 0.16, r * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#9C7433";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, r * 0.08, r * 0.36, 0.25 * Math.PI, 0.75 * Math.PI);
-        ctx.stroke();
-        // 手里的小旗子:一眼认出「这是好人靶」
-        ctx.strokeStyle = "#B08A4E";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(r * 0.95, -r * 0.2);
-        ctx.lineTo(r * 0.95, -r * 1.1);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(r * 0.95, -r * 1.1);
-        ctx.lineTo(r * 1.75, -r * 0.86);
-        ctx.lineTo(r * 0.95, -r * 0.62);
-        ctx.closePath();
-        ctx.fillStyle = "#8FD9A8";
-        ctx.fill();
-        break;
-      }
-      case "flower": {
-        // 朵朵种的花:五片花瓣一张笑脸,画得越可爱越舍不得打
-        for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-          ctx.beginPath();
-          ctx.ellipse(Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6, r * 0.42, r * 0.32, a, 0, Math.PI * 2);
-          ctx.fillStyle = "#FFC2DA";
-          ctx.fill();
-          ctx.strokeStyle = "#F09AC0";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.38, 0, Math.PI * 2);
-        ctx.fillStyle = "#FFEFA8";
-        ctx.fill();
-        ctx.fillStyle = "#C08A3A";
-        ctx.beginPath();
-        ctx.arc(-r * 0.14, -r * 0.06, r * 0.06, 0, Math.PI * 2);
-        ctx.arc(r * 0.14, -r * 0.06, r * 0.06, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#C08A3A";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, r * 0.04, r * 0.16, 0.2 * Math.PI, 0.8 * Math.PI);
-        ctx.stroke();
-        ctx.strokeStyle = "#8FD9A8";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(0, r);
-        ctx.lineTo(0, r * 1.7);
-        ctx.stroke();
-        break;
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    drawTargetSkin(ctx, t, now, reduce, isLeavingSoon(t));
   }
 
-  /** 嘉年华准星:一圈小花瓣加中心星点,不是瞄准镜 */
+  /** 嘉年华准星:朵朵粉四爪 / 星星蓝三角爪 + 呼吸外圈 + 连击金环双通道 */
   function drawCrosshair(ctx: CanvasRenderingContext2D, s: Shooter, now: number): void {
     const aim = liveAim(s);
-    const rad = crosshairRadius(s.spread, now, reduce);
-    ctx.save();
-    ctx.translate(aim.x, aim.y);
-    // 连击光环:HUD 上那个 ×1.3 是数字,这圈光是第二条通道,不用读字也知道手正顺
-    const halo = comboHalo(s.combo);
-    if (halo.alpha > 0) {
-      ctx.globalAlpha = halo.alpha;
-      ctx.strokeStyle = s.ink;
-      ctx.lineWidth = halo.width;
-      ctx.beginPath();
-      ctx.arc(0, 0, rad + 7 + halo.width / 2, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    ctx.strokeStyle = s.ink;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 0, rad, 0, Math.PI * 2);
-    ctx.stroke();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + (reduce ? 0 : now * 0.6);
-      ctx.beginPath();
-      ctx.ellipse(Math.cos(a) * rad, Math.sin(a) * rad, 5, 3.4, a, 0, Math.PI * 2);
-      ctx.fillStyle = s.ink;
-      ctx.fill();
-    }
-    ctx.beginPath();
-    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-    ctx.fillStyle = s.ink;
-    ctx.fill();
-    if (opts.players === 2) {
-      ctx.fillStyle = s.ink;
-      ctx.font = '900 20px "PingFang SC",system-ui,sans-serif';
-      ctx.textAlign = "center";
-      ctx.fillText(s.name, 0, -rad - 10);
-    }
-    ctx.restore();
+    const pulse = haloPulse[s.index];
+    drawCrosshairSkin(ctx, aim.x, aim.y, {
+      player: s.index,
+      ink: s.ink,
+      radius: crosshairRadius(s.spread, now, reduce),
+      spread: s.spread,
+      halo: comboHalo(s.combo),
+      haloPulse: pulse.t / (COMBO_RING_MS / 1000),
+      nowS: now,
+      reduce,
+      ...(opts.players === 2 ? { label: s.name } : {}),
+    });
   }
 
-  /** 发射台:前摇的时候压下去一点,出手那一下弹回来 */
+  /** 发射台:前摇的时候压下去一点,出手那一下弹回来(皮肤在 paint13) */
   function drawLauncher(ctx: CanvasRenderingContext2D, s: Shooter): void {
     const squash = s.windup ? 1 - windupProgress(s.windup.left) : 0;
-    ctx.save();
     // 台子整个要留在画布里,压下去那 6 像素也算进来,不然底边会被切掉一条
-    ctx.translate(s.muzzleX, FIELD_H - 28 + squash * 6);
-    ctx.fillStyle = "#F4C7DA";
-    roundRect(ctx, -46, -20, 92, 40, 14);
-    ctx.fill();
-    ctx.strokeStyle = s.ink;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fillStyle = s.ink;
-    ctx.font = '900 22px "PingFang SC",system-ui,sans-serif';
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("★", 0, 1);
-    ctx.restore();
+    drawLauncherSkin(ctx, s.muzzleX, FIELD_H - 28, s.ink, squash);
   }
 
   function drawField(ctx: CanvasRenderingContext2D, now: number): void {
@@ -1322,28 +1101,29 @@ function createField(opts: FieldOptions): FieldHandle {
     ctx.translate(offX + (shake ? (Math.random() - 0.5) * shake : 0), offY);
     ctx.scale(scale, scale);
 
-    // 远处的小山与草地,纯装饰
-    ctx.fillStyle = "rgba(255,255,255,.5)";
-    for (let i = 0; i < 4; i++) {
-      ctx.beginPath();
-      ctx.arc(120 + i * 250, 520, 130, Math.PI, 0);
-      ctx.fill();
+    // 图层序(visual13.SHR_LAYERS):① 天幕条纹 → ② 彩旗串
+    drawTent(ctx, FIELD_W);
+    drawBunting(ctx, FIELD_W);
+
+    // ③ 中景横梁 + 远排靶(白雾圈退役,「远」由横梁与侧视支架来说)
+    drawBeam(ctx, FIELD_W);
+    for (const t of targets) {
+      if (t.alive && targetDepthMul(t) > 1) drawTarget(ctx, t, now);
     }
-    // 远排靶站的那条台子:伪纵深的地面参照
-    ctx.fillStyle = "rgba(255,255,255,.35)";
-    ctx.fillRect(0, 236, FIELD_W, 8);
-    ctx.fillStyle = "#DCEFCF";
-    ctx.fillRect(0, 520, FIELD_W, FIELD_H - 520);
-    ctx.fillStyle = "#C7E4B4";
-    ctx.fillRect(0, 520, FIELD_W, 10);
+
+    // ④ 近景柜台 + 木板障碍 + 倒下的靶 + 近排靶
+    drawCounter(ctx, FIELD_W, FIELD_H);
 
     for (const b of opts.blocks) {
       roundRect(ctx, b.x, b.y, b.w, b.h, 8);
-      ctx.fillStyle = "#D9B892";
+      ctx.fillStyle = shade(SHR_PALETTE.shrWood, 0.1);
       ctx.fill();
-      ctx.strokeStyle = "#BE9A72";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = SHR_PALETTE.shrWoodDark;
+      ctx.lineWidth = 2;
       ctx.stroke();
+      // 顶亮边:和横梁 / 柜台同一套受光
+      ctx.fillStyle = shade(SHR_PALETTE.shrWood, 0.3);
+      ctx.fillRect(b.x + 3, b.y + 2, b.w - 6, 3);
     }
 
     for (const f of fallen) {
@@ -1376,17 +1156,19 @@ function createField(opts: FieldOptions): FieldHandle {
       ctx.restore();
     }
 
-    // 先画远排再画近排,近的盖住远的
-    for (const t of targets) {
-      if (t.alive && targetDepthMul(t) > 1) drawTarget(ctx, t, now);
-    }
     for (const t of targets) {
       if (t.alive && targetDepthMul(t) <= 1) drawTarget(ctx, t, now);
     }
 
+    // ⑤ 弹道与粒子
     for (const b of bursts) {
       const k = 1 - b.life / b.max;
-      if (b.kind === "friend" || b.kind === "flower") {
+      if (b.kind === "flower") {
+        // 误击花朵:皱眉小云 + (releaseShot 里生成的)花瓣飘落,不批评
+        drawFrownCloud(ctx, b.x, b.y, k);
+        continue;
+      }
+      if (b.kind === "friend") {
         ctx.fillStyle = "#B98A2E";
         ctx.font = '900 26px "PingFang SC",system-ui,sans-serif';
         ctx.textAlign = "center";
@@ -1409,6 +1191,8 @@ function createField(opts: FieldOptions): FieldHandle {
       }
       ctx.globalAlpha = 1;
     }
+
+    drawParticles(ctx, particles);
 
     for (const f of floats) {
       ctx.globalAlpha = Math.max(0, Math.min(1, f.life));
@@ -1436,8 +1220,11 @@ function createField(opts: FieldOptions): FieldHandle {
     }
 
     for (const s of shooters) drawLauncher(ctx, s);
+
+    // ⑥ 准星
     for (const s of shooters) drawCrosshair(ctx, s, now);
 
+    // ⑦ 画布内 HUD:装填进度条
     for (const s of shooters) {
       if (s.gun.reloadLeft <= 0) continue;
       const pct = 1 - s.gun.reloadLeft / s.gun.reloadTime;
@@ -1490,6 +1277,7 @@ function createField(opts: FieldOptions): FieldHandle {
       bursts = [];
       floats = [];
       fallen = [];
+      particles = [];
       for (const s of shooters) {
         s.tracers = [];
         s.windup = null;
