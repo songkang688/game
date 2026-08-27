@@ -529,6 +529,15 @@ export function mount(api: GameAPI): OceanMunchHandle {
   const BIG_COLORS = ["#b8a9f5", "#8fc8e8", "#f5b8c9"];
 
   // ---- 1.3 纯视觉状态(只影响像素,不碰任何判定与数值)----
+  /**
+   * 视觉特效专用的私有随机(LCG):特效抖动绝不消耗 `Math.random()`,
+   * 否则会把种子随机的判定流搬位——QA 的确定性走查就废了。
+   */
+  let vfxSeed = 20260827;
+  function vfxRand(): number {
+    vfxSeed = (vfxSeed * 1664525 + 1013904223) >>> 0;
+    return vfxSeed / 4294967296;
+  }
   /** 被吞的鱼缩小旋入嘴的残影池(art.SWIRL_CAP 封顶,自动回收) */
   const swirls: Swirl[] = [];
   /** 玩家上一口咬下的时刻(嘴巴张大一帧用);战役与竞技场各一份 */
@@ -573,7 +582,7 @@ export function mount(api: GameAPI): OceanMunchHandle {
     const cap = bubbleCap(quality(), reducedMotion);
     for (let i = 0; i < eatBubbleCount(reducedMotion); i++) {
       if (bubbles.length >= cap) break;
-      bubbles.push({ x: mx + (Math.random() - 0.5) * 12, y: my - 4 - i * 5, r: 2.5 + Math.random() * 2.5, vy: 46 + Math.random() * 24 });
+      bubbles.push({ x: mx + (vfxRand() - 0.5) * 12, y: my - 4 - i * 5, r: 2.5 + vfxRand() * 2.5, vy: 46 + vfxRand() * 24 });
     }
   }
 
@@ -583,7 +592,7 @@ export function mount(api: GameAPI): OceanMunchHandle {
     const n = reducedMotion ? 1 : 2;
     for (let i = 0; i < n; i++) {
       if (bubbles.length >= cap) break;
-      bubbles.push({ x: x + facing * 10, y: y - 4 - i * 6, r: 2 + Math.random() * 2, vy: 50 + Math.random() * 20 });
+      bubbles.push({ x: x + facing * 10, y: y - 4 - i * 6, r: 2 + vfxRand() * 2, vy: 50 + vfxRand() * 20 });
     }
   }
 
@@ -1582,8 +1591,11 @@ export function mount(api: GameAPI): OceanMunchHandle {
       if (streakTimer <= 0) streak = 0;
     }
 
-    if (Math.random() < dt * 3 && bubbles.length < bubbleCap(quality(), reducedMotion)) {
-      bubbles.push({ x: Math.random() * w, y: h + 10, r: 3 + Math.random() * 6, vy: 30 + Math.random() * 40 });
+    // 环境气泡:随机消耗次数与 1.2 基线逐一相同(种子随机的 QA 走查靠它),
+    // 超过对象池上限时只是不入池,四次 random 照样取
+    if (Math.random() < dt * 3) {
+      const nb = { x: Math.random() * w, y: h + 10, r: 3 + Math.random() * 6, vy: 30 + Math.random() * 40 };
+      if (bubbles.length < bubbleCap(quality(), reducedMotion)) bubbles.push(nb);
     }
     for (let i = bubbles.length - 1; i >= 0; i--) {
       bubbles[i].y -= bubbles[i].vy * dt;
@@ -2020,7 +2032,7 @@ export function mount(api: GameAPI): OceanMunchHandle {
               const cap = bubbleCap(quality(), reducedMotion);
               for (let i = 0; i < (reducedMotion ? 4 : 9); i++) {
                 if (bubbles.length >= cap) break;
-                bubbles.push({ x: b.x + (Math.random() - 0.5) * b.r * 1.6, y: b.y + (Math.random() - 0.5) * b.r, r: 3 + Math.random() * 5, vy: 40 + Math.random() * 50 });
+                bubbles.push({ x: b.x + (vfxRand() - 0.5) * b.r * 1.6, y: b.y + (vfxRand() - 0.5) * b.r, r: 3 + vfxRand() * 5, vy: 40 + vfxRand() * 50 });
               }
               boss = null;
               levelCleared();
