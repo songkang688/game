@@ -11,6 +11,7 @@ import {
   AI_TIERS,
   decideAi,
   emptyInput,
+  perilous,
   type AiStyle,
   type AiTier,
   type AiIntent,
@@ -73,6 +74,10 @@ export const JUMP_V = -520;
 export const GRAVITY = 1250;
 /** 被撞出去后等多久回场 */
 export const RESPAWN_DELAY = 1.5;
+/** 小电脑快掉出场时的思考间隔（保命不吃档位的反应延迟） */
+export const PERIL_THINK = 0.06;
+/** 挨打之后多少秒内不给这份「保命提速」：被撞飞的那一下还是得靠反应 */
+export const PERIL_GRACE = 1.4;
 /** 回场后的无敌时间（免得刚回来又被堵着打） */
 export const SAFE_TIME = 1.2;
 
@@ -158,6 +163,8 @@ export interface Actor {
   outs: number;
   /** 把别人撞出去几次 */
   kos: number;
+  /** 自己出招打中对手几次（道具引发的推挤不算，那不是玩家操作） */
+  hits: number;
   /** 上场机会用完了 */
   retired: boolean;
   /** 在场上（没在等回场、也没退场） */
@@ -294,6 +301,7 @@ function makeActor(slot: FighterSlot, index: number, stage: Stage): Actor {
     stocks: 1,
     outs: 0,
     kos: 0,
+    hits: 0,
     retired: false,
     onStage: true,
     prev: emptyInput(),
@@ -365,6 +373,29 @@ export function safeZone(stage: Stage): { min: number; max: number; top: number 
   }
   if (!best) return { min: 240, max: 720, top: 400 };
   return { min: best.x, max: best.x + best.w, top: best.y };
+}
+
+/**
+ * 整张场地「脚下还有东西」的横向范围：所有台子的并集，平移台按它跑到的两头算。
+ *
+ * 主平台只是其中最大的一块。像「星光升降台」「夜空跳台」这种主平台只有 140–200px、
+ * 出生点却在两侧台子上的图，光看主平台会得出「一出生就掉出场了」的错觉——
+ * 小电脑因此一开局就狂按回场键，把二段跳全耗在半空，然后直直掉下去。
+ * 判断「是不是真的掉出场了」要看这个并集，不是主平台。
+ */
+export function standSpan(stage: Stage): { min: number; max: number } {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const p of stage.platforms) {
+    const swing = Math.abs(p.moveX ?? 0);
+    min = Math.min(min, p.x - swing);
+    max = Math.max(max, p.x + p.w + swing);
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    const zone = safeZone(stage);
+    return { min: zone.min, max: zone.max };
+  }
+  return { min, max };
 }
 
 function actorWeight(a: Actor): number {
@@ -642,6 +673,7 @@ function tryHit(s: MatchState, a: Actor): void {
     // 元气见底的时候给 0.4 秒挣扎窗口：朝场地里按方向键就能把这一下挣回来大半
     o.struggle = canStruggle(o.bump) ? STRUGGLE_WINDOW : 0;
     o.stun = Math.min(0.7, 0.14 + hit.speed / 2600);
+    a.hits++;
     s.lastHitBy[o.index] = a.index;
     s.lastHitT[o.index] = s.t;
     s.shake = Math.min(1, s.shake + (a.attack.kind === "heavy" ? 0.6 : 0.28));
@@ -750,8 +782,31 @@ function buildAiView(s: MatchState, a: Actor) {
       : null,
     item,
     safe: safeZone(s.stage),
+    ground: standSpan(s.stage),
+    stand: standingOn(s, a),
+    pads: livePads(s),
     bounds: s.stage.bounds,
   };
+}
+
+/** 场上还在的台子，按此刻的位置给（升降 / 平移台会动） */
+function livePads(s: MatchState): Array<{ min: number; max: number; top: number }> {
+  const out: Array<{ min: number; max: number; top: number }> = [];
+  for (let i = 0; i < s.stage.platforms.length; i++) {
+    const st = s.plats[i];
+    if (st.hidden) continue;
+    out.push({ min: st.x, max: st.x + s.stage.platforms[i].w, top: st.y });
+  }
+  return out;
+}
+
+/** 脚下这块台子现在的横向范围；悬空（或踩在队友头上）时是 null */
+function standingOn(s: MatchState, a: Actor): { min: number; max: number } | null {
+  if (!a.onGround || a.platIndex < 0) return null;
+  const p = s.stage.platforms[a.platIndex];
+  const st = s.plats[a.platIndex];
+  if (!p || !st || st.hidden) return null;
+  return { min: st.x, max: st.x + p.w };
 }
 
 function respawnActor(s: MatchState, a: Actor): void {
@@ -862,6 +917,8 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
 
   const gravity = GRAVITY * (s.stage.gravityScale ?? 1);
   const syrupY = syrupLevel(s.stage, s.t);
+  const stageSafe = safeZone(s.stage);
+  const stageGround = standSpan(s.stage);
 
   // ---- 道具掉落 ----
   if (s.cfg.itemEvery > 0 && s.t >= s.nextItemT && s.items.length < 4) {
@@ -890,6 +947,14 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
     // ---- 取本帧操作 ----
     let input: Input;
     if (a.slot.control === "ai") {
+      // 快掉出场了就别再等反应间隔：空中跳跃只有一次、只抬得起一百来像素，
+      // 轻松档 0.46 秒才想一次，等它想明白人已经低到跳不回来了 ——
+      // 「对手自己掉下台、玩家白拿三星」大半就是这么来的。
+      //
+      // 只对「自己走下去的」提速。刚被打飞的那一下照旧要吃反应延迟，
+      // 不然谁都救得回来，对局就再也打不出胜负了。
+      const selfInflicted = s.t - s.lastHitT[a.index] > PERIL_GRACE;
+      if (selfInflicted && perilous(a, stageSafe, stageGround) && a.aiT > PERIL_THINK) a.aiT = PERIL_THINK;
       a.aiT -= step;
       if (a.aiT <= 0) {
         const tier: AiTier = a.slot.aiTier ?? "normal";
@@ -955,8 +1020,16 @@ export function stepMatch(s: MatchState, dt: number, inputs: Record<number, Inpu
       }
       if (plat?.drift) a.vx += plat.drift;
     } else if (canMove && dir !== 0) {
-      a.vx += dir * AIR_ACCEL * step;
-      if (Math.abs(a.vx) > run) a.vx = Math.sign(a.vx) * Math.max(run, Math.abs(a.vx) * 0.985);
+      // 空中推方向最多把人推到跑动速度。
+      // 之前是「先加速、超了再乘 0.985」，那不是封顶而是慢一点的加速：
+      // 一直朝一个方向按下去会收敛到一千六百多、半秒横穿全场，
+      // 小电脑追道具追着追着就把自己射出了场外。
+      // 比跑动速度更快的横向速度只可能来自被撞飞，那一份照旧慢慢衰减、手感不变。
+      const pushed = a.vx + dir * AIR_ACCEL * step;
+      a.vx =
+        Math.abs(pushed) > run
+          ? Math.sign(pushed) * Math.max(run, Math.abs(a.vx) * 0.985)
+          : pushed;
     }
 
     // ---- 跳（先看看头顶上是不是站着队友：那就改成顶举） ----

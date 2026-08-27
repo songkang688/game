@@ -87,6 +87,28 @@ export const FLANK_OFFSET = 96;
 /** 「等你出招」在对手没出招时保持的距离 */
 export const PATIENT_SPACING = 128;
 
+/**
+ * 回场时留着空中跳跃不按的高度差：掉到「台面上方这么多像素」以内才起跳。
+ * 一次空中跳跃大约能把人抬起 110px，早按就是白按。
+ */
+export const RECOVER_LIFT = 70;
+
+/**
+ * 快掉出场了没有？（悬空 + 已经比主平台低，或者横着飘出了所有台子的范围）
+ *
+ * 保命这件事不该等反应间隔：空中跳跃只有一次、只能把人抬起一百来像素，
+ * 轻松档 0.46 秒想一次，等它想明白的时候人已经掉到跳不回来的高度了。
+ * 对局循环拿这个判断给「危险中的小电脑」临时提速。
+ */
+export function perilous(
+  self: { x: number; y: number; onGround: boolean },
+  safe: { top: number },
+  ground: { min: number; max: number }
+): boolean {
+  if (self.onGround) return false;
+  return self.x < ground.min + 10 || self.x > ground.max - 10 || self.y > safe.top - 24;
+}
+
 /** 小电脑看到的战场快照（只读） */
 export interface AiView {
   self: {
@@ -113,6 +135,15 @@ export interface AiView {
   item: { x: number; y: number } | null;
   /** 站得住的横向区间（主平台范围） */
   safe: { min: number; max: number; top: number };
+  /**
+   * 整张场地脚下还有台子的横向范围（所有台子的并集）。
+   * 不给就退回主平台 —— 老用例照旧能用。
+   */
+  ground?: { min: number; max: number };
+  /** 脚下这块台子的横向范围；悬空时是 null。走到边上要先跳，别直接踏空 */
+  stand?: { min: number; max: number } | null;
+  /** 场上所有台子此刻的位置（升降 / 平移台会动）。悬空时靠它挑落脚点 */
+  pads?: Array<{ min: number; max: number; top: number }>;
   bounds: Bounds;
 }
 
@@ -122,6 +153,32 @@ export type AiIntent = "recover" | "chase" | "attack" | "grab" | "wait";
 export interface AiDecision {
   input: Input;
   intent: AiIntent;
+}
+
+/**
+ * 悬空、又没有空中跳跃可用时该往哪儿挪才落得到台子上。
+ *
+ * 返回目标 x（挑最近的一块，并且往里留一点边距，免得贴着边掉下去）；
+ * 没有台子信息、或者下面一块台子都没有就返回 null。
+ * 只看比自己低的台子 —— 比自己高的落不上去。
+ */
+function pickLanding(view: AiView): number | null {
+  const pads = view.pads;
+  const self = view.self;
+  if (!pads || pads.length === 0) return null;
+  let best: number | null = null;
+  let bestD = Number.POSITIVE_INFINITY;
+  for (const pad of pads) {
+    if (pad.top < self.y + 8) continue;
+    const margin = Math.min(18, Math.max(0, (pad.max - pad.min) / 2 - 2));
+    const aim = Math.min(Math.max(self.x, pad.min + margin), pad.max - margin);
+    const d = Math.abs(aim - self.x);
+    if (d < bestD) {
+      bestD = d;
+      best = aim;
+    }
+  }
+  return best;
 }
 
 /**
@@ -140,17 +197,34 @@ export function decideAi(
   const r = Number.isFinite(roll) ? Math.min(0.999999, Math.max(0, roll)) : 0.5;
   const { self, target, item, safe } = view;
 
-  // 1) 掉到安全区外面或者比平台还低 —— 先回家再说
-  const offLeft = self.x < safe.min + 10;
-  const offRight = self.x > safe.max - 10;
+  // 1) 真的飘到场地外面、或者已经比主平台还低 —— 先回家再说。
+  //    「外面」看的是整张图台子的并集：侧边台子上方不算掉出去，
+  //    不然出生点在两侧的图（星光升降台 / 夜空跳台）一开局就会误判成要回场，
+  //    二段跳全耗在半空，最后自己掉下去。
+  const ground = view.ground ?? { min: safe.min, max: safe.max };
   const below = self.y > safe.top - 24;
-  if (!self.onGround && (offLeft || offRight || below)) {
+  if (perilous(self, safe, ground)) {
     const mid = (safe.min + safe.max) / 2;
     if (self.x < mid - 20) input.right = true;
     else if (self.x > mid + 20) input.left = true;
-    // 往下掉或者已经低于平台了就赶紧再跳一次，跳跃次数用完只能横着挪
-    if ((below || self.vy > -40) && self.jumpsLeft > 0) input.up = true;
+    // 空中跳跃大多只有一次,一跳能升一百来像素,所以不能一离地就按掉:
+    // 等真的掉到台面高度附近、这一跳还够得着的时候再用。
+    // 之前是「只要不在上升就补跳」,跳跃次数在半空就用光了,后面直直往下掉。
+    const needLift = self.y > safe.top - RECOVER_LIFT;
+    if (needLift && self.vy > -40 && self.jumpsLeft > 0) input.up = true;
     return { input, intent: "recover" };
+  }
+
+  // 1.5) 空中跳跃已经用光、人还在往下掉，脚下又没有台子接着 —— 这时候只剩一件事
+  //      能做：横着挪到最近的落脚点上方。以前这种局面下它还在「追人」和「回场」
+  //      之间来回切，一会儿往左一会儿往右，最后正好落进台子之间的缝里。
+  if (!self.onGround && self.jumpsLeft <= 0 && self.vy > -40) {
+    const aim = pickLanding(view);
+    if (aim !== null) {
+      if (aim > self.x + 6) input.right = true;
+      else if (aim < self.x - 6) input.left = true;
+      return { input, intent: "recover" };
+    }
   }
 
   // 2) 发呆：站着看一会儿。放在保命之后，所以它只会在场上安全时才走神
@@ -170,7 +244,9 @@ export function decideAi(
       if (dx > 0) input.right = true;
       else input.left = true;
     }
-    if (item.y < self.y - 40 && self.jumpsLeft > 0) input.up = true;
+    // 只在地上起跳去够高处的道具：地上起跳会把空中跳跃次数补满，
+    // 悬空时那唯一一次要留着回场用
+    if (item.y < self.y - 40 && self.onGround) input.up = true;
     return { input, intent: "grab" };
   }
 
@@ -196,7 +272,7 @@ export function decideAi(
     if (Math.abs(gap) > 24) {
       if (gap > 0) input.right = true;
       else input.left = true;
-      if (dy < -46 && self.jumpsLeft > 0) input.up = true;
+      if (dy < -46 && self.onGround) input.up = true;
       return { input, intent: "chase" };
     }
   }
@@ -227,9 +303,12 @@ export function decideAi(
     return { input, intent: "attack" };
   }
 
-  // 7) 追人：但别追出安全区（越小心的档越早收脚）
+  // 7) 追人：但别追出场地（越小心的档越早收脚）。
+  //    收脚看的是整张图所有台子的范围，不是主平台 —— 主平台只有两百来像素的图
+  //    （星光升降台 / 夜空跳台）如果照主平台收脚，对手只要站到侧边台子上
+  //    就永远追不到，两边在场上干等到时间到。
   const nextX = self.x + Math.sign(dx) * 55;
-  const wouldLeaveSafe = nextX < safe.min || nextX > safe.max;
+  const wouldLeaveSafe = nextX < ground.min || nextX > ground.max;
   if (wouldLeaveSafe && r < p.ledgeCare) {
     const mid = (safe.min + safe.max) / 2;
     if (self.x < mid) input.right = true;
@@ -238,7 +317,12 @@ export function decideAi(
   }
   if (dx > 0) input.right = true;
   else input.left = true;
-  if (dy < -46 && self.jumpsLeft > 0) input.up = true;
+  // 追人只在地上起跳：一来从地上跳会把空中跳跃次数补满，二来悬空时仅有的那一次
+  // 要留着回场 —— 以前追着追着把跳跃用光，落下来就再也上不来了。
+  // 要迈出脚下这块台子也先跳一下，别直接踏空掉进缺口。
+  const stand = view.stand;
+  const stepOff = !!stand && (nextX < stand.min || nextX > stand.max);
+  if (self.onGround && (dy < -46 || stepOff)) input.up = true;
   return { input, intent: "chase" };
 }
 

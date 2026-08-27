@@ -282,9 +282,13 @@ export function levelAt(level: number): DuoLevel {
 
 /**
  * 本关的星级：没被撞出去过就是 3 星，掉一次 2 星，掉更多但还是赢了 1 星。
- * `lost` = 玩家这一关一共被撞出去几次。
+ *
+ * `lost` = 玩家这一关一共被撞出去几次；`hits` = 玩家自己出招打中对手几次。
+ * 一次都没打中过就只给 1 星 —— 这一局不是打赢的（对手自己掉下去、或者时间到
+ * 靠上场机会判的），星星是「做到了」的凭证，站着不动不该拿满。
  */
-export function rateLevel(lost: number): 1 | 2 | 3 {
+export function rateLevel(lost: number, hits = 1): 1 | 2 | 3 {
+  if (hits <= 0) return 1;
   if (lost <= 0) return 3;
   if (lost === 1) return 2;
   return 1;

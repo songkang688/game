@@ -1609,7 +1609,15 @@ export function mount(api: GameApi): { destroy: () => void } {
       onEnd: (state) => {
         const me = state.actors[0];
         if (state.winnerTeam === 0) {
-          ctx.win(rateLevel(me.outs), me.outs === 0 ? "一次都没被撞出去，太稳啦！" : undefined);
+          // 结算只夸玩家自己做到的事：一下都没打中过的话，那一局是对手自己
+          // 掉下去、或者时间到按上场机会判的，别写成「你太稳啦」
+          const note =
+            me.hits === 0
+              ? "这一局你一下都没出手，对手是自己站不住掉下去的。下次主动迎上去，把他撞出场外试试！"
+              : me.outs === 0
+                ? "一次都没被撞出去，太稳啦！"
+                : undefined;
+          ctx.win(rateLevel(me.outs, me.hits), note);
         } else {
           ctx.lose("对手站得更稳一点点，换个节奏再来一次！");
         }
