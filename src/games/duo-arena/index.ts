@@ -800,10 +800,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (t.kind === "bomb") {
       f.score = applyTap(f.score, "bomb", doubled);
       if (isProtected(f.skills, roundTime)) {
-        pushFloat(f, "🫧 泡泡挡住啦", "#4A90D9");
+        pushFloat(f, "泡泡挡住啦", "#4A90D9");
       } else {
         f.spinUntil = roundTime + BOMB_STUN_SECONDS;
-        pushFloat(f, "💫 转晕了 -2", "#B06AB3");
+        pushFloat(f, "转晕了 -2", "#B06AB3");
       }
       api.play("oops");
       updateHud();
@@ -813,20 +813,20 @@ export function mount(api: GameApi): { destroy: () => void } {
       const effect = t.effect ?? "plus3";
       if (effect === "plus3") {
         f.score += 3;
-        pushFloat(f, "🎉 +3", "#E8A93C");
+        pushFloat(f, "惊喜 +3", "#E8A93C");
         api.play("coin");
       } else if (effect === "freeze") {
         const o = other(f);
         if (isProtected(o.skills, roundTime)) {
-          pushFloat(f, "🫧 对手有护盾", "#7A6A90");
+          pushFloat(f, "对手有护盾", "#7A6A90");
         } else {
           o.frozenUntil = roundTime + FREEZE_SECONDS;
-          pushFloat(f, "❄️ 冰住对手", "#4A90D9");
+          pushFloat(f, "冰住对手", "#4A90D9");
         }
         api.play("meow");
       } else {
         f.doubleUntil = roundTime + DOUBLE_SECONDS;
-        pushFloat(f, "✨ 双倍星光", "#B06AB3");
+        pushFloat(f, "双倍星光", "#B06AB3");
         api.play("jump");
       }
       updateHud();
@@ -867,14 +867,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (waveJustFired(f.skills, prevTime, roundTime)) {
       const o = other(f);
       if (isProtected(o.skills, roundTime)) {
-        pushFloat(o, "🫧 挡下来了", "#4A90D9");
+        pushFloat(o, "挡下来了", "#4A90D9");
       } else {
         const p = pushedPosition({ x: o.x, y: o.y }, { x: f.x, y: f.y });
         const c = clampToArena(stage, p.x, p.y, BODY_R, roundTime);
         o.x = c.x;
         o.y = c.y;
         o.spinUntil = roundTime + WAVE_SPIN_SECONDS;
-        pushFloat(o, "🌀 被弹开,转个圈", "#8A5AA8");
+        pushFloat(o, "被弹开,转个圈", "#8A5AA8");
         api.play("pop");
       }
     }
