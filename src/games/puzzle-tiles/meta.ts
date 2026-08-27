@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🧩",
   category: "casual" as const,
   color: "#E5E9FF",
-  blurb: "188 关十本画册！拼块带纸纹齿边像真拼图，大画板、旋转块、拖着碎片磁性吸附，预览三档随你挑，还有无尽画廊！",
+  blurb: "188 关十本画册！每关拼的都是一整幅手绘场景画，拼块带纸纹齿边像真拼图，大画板、旋转块、拖着碎片磁性吸附，预览三档随你挑，还有无尽画廊！",
   // levels.ts 的 10 章合计 188 关,外加无尽画廊
   modes: ["campaign", "endless"] as const,
   // 拖碎片手指最顺,鼠标拖也是同一套吸附判定
