@@ -2034,6 +2034,17 @@ html {
   .cg-log-row {
     font-size: 13px;
   }
+
+  /* R2-PA-3：窄屏上棋盘格是这一款最主要的热区，能长多大就长多大。
+     `.cg-mode` 左右各留了 10px 内边距，这里用负外边距让棋盘溢出去铺到整宽，
+     一格从 ≈38.9px 抬到 ≈41.4px。不用 vw 换算，所以既不会被 `html`
+     的 `overflow-x:hidden` 裁掉一列，也不会随滚动条宽度漂。
+     再往上就要动窗口 1 的 `.screen` 内边距了，本包不碰——差额在
+     docs/qa/1.2-window2-round2-fixer-packA.md 里立了例外。 */
+  .cg-board {
+    margin-inline: -10px;
+    border-radius: 10px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

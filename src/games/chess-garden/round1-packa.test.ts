@@ -207,6 +207,97 @@ describe("R2-PA-2 · 360px 上棋盘工具条的热区", () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* R2-PA-3 · 360px 上棋盘格能长多大                                      */
+/* ------------------------------------------------------------------ */
+
+describe("R2-PA-3 · 360px 上的棋盘格", () => {
+  const VIEW = 360;
+  const SHELL_SRC = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+
+  /**
+   * 窗口 1 的 `.screen` 左右内边距：`clamp(14px, 4vw, 32px)`，360px 上是 14.4px。
+   * 取的是基础那一条（后面 `max-width:340px` 里还有一条更窄的，360px 上用不上）。
+   */
+  function screenPad(): number {
+    const body = /\.screen\s*\{([^}]*)\}/.exec(SHEET)?.[1] ?? "";
+    const m = /padding:\s*[\d.]+px\s+clamp\(([\d.]+)px,\s*([\d.]+)vw,\s*([\d.]+)px\)/.exec(body);
+    expect(m, "styles.css 里 .screen 的内边距写法变了，这条算式要跟着改").not.toBeNull();
+    const [, lo, vw, hi] = m as RegExpExecArray;
+    return Math.min(Math.max(Number(lo), (Number(vw) * VIEW) / 100), Number(hi));
+  }
+
+  /** 这一款自己那层壳 `.cg-mode` 的左右内边距（样式在 index.ts 的 SHELL_CSS 里） */
+  function modePad(): number {
+    const m = /\.cg-mode\{[^}]*padding:(\d+)px/.exec(SHELL_SRC);
+    expect(m, "SHELL_CSS 里找不到 .cg-mode 的内边距").not.toBeNull();
+    return Number((m as RegExpExecArray)[1]);
+  }
+
+  /** `.cg-board` 在窄屏那一段的左右负外边距（正数表示往外挣了多少） */
+  function boardBleed(): number {
+    const m = /margin-inline:\s*(-?[\d.]+)px/.exec(sheetRule(".cg-board"));
+    return m ? -Number(m[1]) : 0;
+  }
+
+  it("棋盘在窄屏上挣脱了 .cg-mode 的内边距，铺到整宽", () => {
+    expect(boardBleed(), "窄屏那一段的 .cg-board 负外边距没了，棋盘又缩回去了").toBe(modePad());
+  });
+
+  it("这么一铺，一格从 ≈38.9px 长到 ≈41.4px", () => {
+    const inner = VIEW - 2 * screenPad();
+    const before = (inner - 2 * modePad()) / 8;
+    const after = (inner - 2 * modePad() + 2 * boardBleed()) / 8;
+    expect(before).toBeLessThan(40);
+    expect(after).toBeGreaterThan(before);
+    expect(Number(after.toFixed(1))).toBe(41.4);
+  });
+
+  /**
+   * 记录在案的例外：8 列 × 44px = 352px，比 360px 屏上真正能用的
+   * `360 − 2 × 14.4 = 331.2px` 还宽 20.8px，物理上排不下。
+   * 要补上这 20.8px 只能去动窗口 1 的 `.screen` 内边距，不在本包范围内。
+   * 详见 docs/qa/1.2-window2-round2-fixer-packA.md 第四节。
+   */
+  it("例外的算式成立：8×44 在 360px 上就是排不下", () => {
+    const inner = VIEW - 2 * screenPad();
+    expect(inner).toBeCloseTo(331.2, 1);
+    expect(8 * 44, "8 格 44px 居然排得下了，那这条例外就该撤掉").toBeGreaterThan(inner);
+  });
+
+  it("宁可小一点也不许重叠或被裁：8 格按 min-width 排下来不撑破棋盘", () => {
+    const body = sheetRule(".cg-sq");
+    const minW = Number(/min-width:\s*([\d.]+)px/.exec(body)?.[1] ?? 0);
+    expect(minW).toBeGreaterThan(0);
+    expect(body, "格子不是正方形了").toMatch(/aspect-ratio:\s*1/);
+    const inner = VIEW - 2 * screenPad() - 2 * modePad() + 2 * boardBleed();
+    expect(8 * minW, "8 格的最小宽度加起来撑破了棋盘，会被 overflow:hidden 裁掉一列").toBeLessThanOrEqual(inner);
+  });
+
+  it("够不到 44 的只有棋盘格：按钮和键盘那条通路都是足尺的", () => {
+    expect(/\.cg-tool\b/.test(SHEET), ".cg-tool 应该在公共样式表里").toBe(true);
+    const bodies: Array<[string, string]> = [
+      [".cg-tool", sheetRule(".cg-tool")],
+      ...[".cg-back", ".cg-btn", ".cg-open", ".cg-pick"].map(
+        (sel) => [sel, new RegExp(`\\${sel}\\{([^}]*)\\}`).exec(SHELL_SRC)?.[1] ?? ""] as [string, string]
+      ),
+    ];
+    for (const [sel, body] of bodies) {
+      const m = /min-height:\s*([\d.]+)px/.exec(body);
+      expect(m, `${sel} 没写 min-height`).not.toBeNull();
+      expect(Number((m as RegExpExecArray)[1]), `${sel} 缩到 44px 以下了`).toBeGreaterThanOrEqual(44);
+    }
+    // 不想点小格子的人可以全程用键盘：光标键挪、F / L 确认、G / K 取消
+    const { handle } = duoBoard();
+    press("w");
+    press("f");
+    expect(handle.snapshot().selected, "键盘选不中子，那棋盘格就成了唯一通路").toBeGreaterThanOrEqual(0);
+    press("g");
+    expect(handle.snapshot().selected).toBe(-1);
+    handle.destroy();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* PA-CG · 铁则 3：双人同屏键位                                          */
 /* ------------------------------------------------------------------ */
 
