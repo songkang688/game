@@ -113,12 +113,33 @@ import {
   HIT_STARS,
   KNOCK_TIME,
   clearPetal,
-  energyColor,
   hitStar,
   knockOffset,
   prefersReducedMotion,
   shakeAmount,
 } from "./fx12";
+import {
+  HORIZON_KIND,
+  MONSTER_COLORS,
+  NODE_DECOR,
+  drawBarricade,
+  drawBullet,
+  drawCrownIcon,
+  drawFace,
+  drawFootprintTrail,
+  drawGoldStar,
+  drawHorizonStrip,
+  drawLockIcon,
+  drawMonsterSprite,
+  drawNodeDecor,
+  drawSwordsIcon,
+  drawTileDecor,
+  drawTowerBase,
+  drawTowerIcon,
+  drawVineArch,
+  goalMood,
+  type BulletArtKind,
+} from "./art";
 import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
 
@@ -335,6 +356,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
   let petalFlash = 0;
   let shake = 0;
   let time = 0;
+  /** 结算面板已经亮了多久:三颗星逐颗点亮用(纯演出)。 */
+  let clearAnim = 0;
   /** 0 = 暂停布阵,1 = 正常,2 = 快进。逻辑一律走固定步长,快进只是一帧多走几步。 */
   let speed: SpeedMode = 1;
   let stepCarry = 0;
@@ -569,6 +592,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     progress[levelIdx] = Math.max(prev, earnedStars);
     saveProgress(progress);
     phase = "clear";
+    clearAnim = 0;
     api.play("win");
     if (levelIdx >= LEVELS.length - 1 && !finaleFired) {
       finaleFired = true;
@@ -578,7 +602,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       speak(clearSpeechLine(LEVELS[levelIdx].name, earnedStars));
       if (gained > 0) {
         api.addStars(gained);
-        addFloat(w / 2, h / 2 - 110, `+${gained} ⭐`, "#e0a030", true);
+        addFloat(w / 2, h / 2 - 110, `+${gained} 星`, "#e0a030", true);
       }
     }
   }
@@ -784,7 +808,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
         barricades.delete(key);
         petals += BARRICADE_SMASH_REWARD;
         api.play("pop");
-        burst(px(col + 0.5), py(row + 0.5), "#c9a86a", 14, 1.2);
+        burst(px(col + 0.5), py(row + 0.5), "#c9a86a", reducedMotion ? 7 : 14, 1.2);
+        // 敲碎的木箱掉 4 片旋转的木屑(弱动效不撒)
+        if (!reducedMotion) {
+          for (let i = 0; i < 4; i++) {
+            const a = -Math.PI / 2 + (i - 1.5) * 0.5;
+            particles.push({
+              x: px(col + 0.5),
+              y: py(row + 0.5),
+              vx: Math.cos(a) * (50 + i * 14),
+              vy: Math.sin(a) * 70,
+              life: 0.4,
+              maxLife: 0.4,
+              color: i % 2 === 0 ? "#a3764e" : "#c9a86a",
+              r: 4 + (i % 2) * 2,
+              shape: "petal",
+              rot: i * 0.9,
+              spin: (i % 2 === 0 ? 1 : -1) * 7,
+            });
+          }
+        }
         addFloat(px(col + 0.5), py(row), `拆掉啦!+${BARRICADE_SMASH_REWARD}🌸`, "#c47a2a");
       } else {
         barricades.set(key, barrHp - 1);
@@ -904,6 +947,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
       frostSlow: 1,
       knock: 0,
     });
+    // 从藤蔓拱门出场:门下扬两粒尘土(弱动效不扬)
+    if (dist === 0 && !reducedMotion) {
+      for (const side of [-1, 1]) {
+        particles.push({
+          x: px(p.x) + side * cell * 0.14,
+          y: py(p.y) + cell * 0.24,
+          vx: side * 26,
+          vy: -18,
+          life: 0.32,
+          maxLife: 0.32,
+          color: "#d8c8a8",
+          r: 3,
+          shape: "dot",
+          rot: 0,
+          spin: 0,
+        });
+      }
+    }
   }
 
   function onMonsterKilled(m: Monster): void {
@@ -964,6 +1025,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     time += dt;
     petalFlash = Math.max(0, petalFlash - dt);
     shake = Math.max(0, shake - dt);
+    if (phase === "clear") clearAnim += dt;
     toastTimer = Math.max(0, toastTimer - dt);
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
@@ -1206,7 +1268,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
           );
           for (const m of inRange) damageMonster(m, b.dmg);
         } else {
-          burst(px(tgt.x), py(tgt.y), b.needle ? "#c8f2d8" : b.frostSlow !== undefined ? "#cfeafc" : "#bfe9ff", 6);
+          // 命中反馈分型:泡泡破成 3 粒小水滴,冰弹开一朵小冰花,针刺保持利落
+          if (b.needle) {
+            burst(px(tgt.x), py(tgt.y), "#c8f2d8", 6);
+          } else if (b.frostSlow !== undefined) {
+            burst(px(tgt.x), py(tgt.y), "#cfeafc", reducedMotion ? 3 : 5, 0.8);
+            particles.push({
+              x: px(tgt.x),
+              y: py(tgt.y),
+              vx: 0,
+              vy: -14,
+              life: 0.4,
+              maxLife: 0.4,
+              color: "#dff2fc",
+              r: cell * 0.12,
+              shape: "star",
+              rot: 0.3,
+              spin: reducedMotion ? 0 : 2,
+            });
+          } else {
+            burst(px(tgt.x), py(tgt.y), "#bfe9ff", 3, 0.8);
+          }
           if (b.frostSlow !== undefined) {
             tgt.frostTimer = FROST_DURATION;
             tgt.frostSlow = b.frostSlow;
@@ -1222,441 +1304,32 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   // ---- 绘制 ----
-  /** 把 #rrggbb 变深/变浅(amt 为 -255..255) */
-  function shade(hex: string, amt: number): string {
-    const n = parseInt(hex.slice(1), 16);
-    const r = Math.max(0, Math.min(255, (n >> 16) + amt));
-    const g = Math.max(0, Math.min(255, ((n >> 8) & 0xff) + amt));
-    const b = Math.max(0, Math.min(255, (n & 0xff) + amt));
-    return `rgb(${r},${g},${b})`;
-  }
+  // 1.3:塔 / 怪 / 地图图标 / 地块装饰全部搬进 art.ts 的纯函数,
+  // 这里只负责把局内状态折算成视觉参数(见 drawMonster 适配器)。
 
-  function drawFace(x: number, y: number, r: number, blush = true): void {
-    if (blush) {
-      ctx.fillStyle = "rgba(255,150,160,0.4)";
-      ctx.beginPath();
-      ctx.arc(x - r * 0.52, y + r * 0.12, r * 0.16, 0, Math.PI * 2);
-      ctx.arc(x + r * 0.52, y + r * 0.12, r * 0.16, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#3a3a4a";
-    ctx.beginPath();
-    ctx.arc(x - r * 0.32, y - r * 0.1, r * 0.1, 0, Math.PI * 2);
-    ctx.arc(x + r * 0.32, y - r * 0.1, r * 0.1, 0, Math.PI * 2);
-    ctx.fill();
-    // 眼睛高光
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.beginPath();
-    ctx.arc(x - r * 0.35, y - r * 0.13, r * 0.035, 0, Math.PI * 2);
-    ctx.arc(x + r * 0.29, y - r * 0.13, r * 0.035, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#3a3a4a";
-    ctx.lineWidth = Math.max(1.5, r * 0.08);
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.arc(x, y + r * 0.15, r * 0.28, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-  }
-
-  /** 已种下的植物底座:小土丘 + 两片叶子,让"这是种在土里的植物"一目了然 */
-  function drawTowerBase(tx: number, ty: number, r: number): void {
-    ctx.fillStyle = "rgba(58,58,74,0.12)";
-    ctx.beginPath();
-    ctx.ellipse(tx, ty + r * 1.15, r * 1.05, r * 0.32, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#b98c62";
-    ctx.beginPath();
-    ctx.ellipse(tx, ty + r * 1.05, r * 0.85, r * 0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#a3764e";
-    ctx.beginPath();
-    ctx.ellipse(tx, ty + r * 1.02, r * 0.62, r * 0.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // 两片小叶子
-    ctx.fillStyle = "#8fd8a8";
-    ctx.beginPath();
-    ctx.ellipse(tx - r * 0.72, ty + r * 0.88, r * 0.3, r * 0.14, -0.6, 0, Math.PI * 2);
-    ctx.ellipse(tx + r * 0.72, ty + r * 0.88, r * 0.3, r * 0.14, 0.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function drawTowerIcon(kind: TowerKind, tx: number, ty: number, r: number, level = 1, anim = 0): void {
-    ctx.save();
-    ctx.lineJoin = "round";
-    if (kind === "bubble") {
-      const squish = 1 + anim * 0.15;
-      ctx.fillStyle = "#fff7f0";
-      ctx.strokeStyle = "#e8b8c8";
-      ctx.lineWidth = Math.max(1, r * 0.08);
-      ctx.beginPath();
-      ctx.ellipse(tx, ty + r * 0.35, r * 0.55, r * 0.6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      const bodyGrad = ctx.createRadialGradient(tx - r * 0.3, ty - r * 0.5, r * 0.1, tx, ty - r * 0.25, r * 1.1);
-      bodyGrad.addColorStop(0, "#ffc3d4");
-      bodyGrad.addColorStop(1, "#ff8aa8");
-      ctx.fillStyle = bodyGrad;
-      ctx.strokeStyle = "#e87a9a";
-      ctx.beginPath();
-      ctx.ellipse(tx, ty - r * 0.25, r * squish, r * 0.75 * squish, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      for (const [dx2, dy2] of [
-        [-0.45, -0.3],
-        [0.35, -0.5],
-        [0.1, 0.05],
-      ]) {
-        ctx.beginPath();
-        ctx.arc(tx + dx2 * r, ty - r * 0.25 + dy2 * r, r * 0.14, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      drawFace(tx, ty + r * 0.4, r * 0.55);
-    } else if (kind === "needle") {
-      ctx.strokeStyle = "#5aa878";
-      ctx.lineWidth = Math.max(1.5, r * 0.11);
-      ctx.lineCap = "round";
-      const spikes = 6;
-      for (let i = 0; i < spikes; i++) {
-        const a = (Math.PI * 2 * i) / spikes + anim * 0.5;
-        ctx.beginPath();
-        ctx.moveTo(tx + Math.cos(a) * r * 0.62, ty + Math.sin(a) * r * 0.8);
-        ctx.lineTo(tx + Math.cos(a) * r * (0.9 + anim * 0.2), ty + Math.sin(a) * r * (1.1 + anim * 0.2));
-        ctx.stroke();
-      }
-      const cactusGrad = ctx.createLinearGradient(tx, ty - r, tx, ty + r);
-      cactusGrad.addColorStop(0, "#a8e8bc");
-      cactusGrad.addColorStop(1, "#76c894");
-      ctx.fillStyle = cactusGrad;
-      ctx.strokeStyle = "#4e9a6a";
-      ctx.lineWidth = Math.max(1, r * 0.08);
-      ctx.beginPath();
-      ctx.ellipse(tx, ty, r * 0.62, r * 0.85, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      // 仙人掌花
-      ctx.fillStyle = "#ffb3c8";
-      for (let i = 0; i < 5; i++) {
-        const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
-        ctx.beginPath();
-        ctx.arc(tx + Math.cos(a) * r * 0.18, ty - r * 0.85 + Math.sin(a) * r * 0.18, r * 0.12, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = "#ffe387";
-      ctx.beginPath();
-      ctx.arc(tx, ty - r * 0.85, r * 0.09, 0, Math.PI * 2);
-      ctx.fill();
-      drawFace(tx, ty, r * 0.55);
-    } else if (kind === "dew") {
-      const dewGrad = ctx.createLinearGradient(tx, ty - r, tx, ty + r);
-      dewGrad.addColorStop(0, "#c8ecfc");
-      dewGrad.addColorStop(1, "#7ec4ea");
-      ctx.fillStyle = dewGrad;
-      ctx.strokeStyle = "#5aa0cc";
-      ctx.lineWidth = Math.max(1, r * 0.08);
-      ctx.beginPath();
-      ctx.moveTo(tx, ty - r * 0.95);
-      ctx.quadraticCurveTo(tx + r * 0.75, ty - r * 0.05, tx + r * 0.6, ty + r * 0.4);
-      ctx.arc(tx, ty + r * 0.28, r * 0.62, 0.1 * Math.PI, 0.9 * Math.PI);
-      ctx.quadraticCurveTo(tx - r * 0.75, ty - r * 0.05, tx, ty - r * 0.95);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.beginPath();
-      ctx.ellipse(tx - r * 0.24, ty - r * 0.1, r * 0.12, r * 0.2, -0.4, 0, Math.PI * 2);
-      ctx.fill();
-      drawFace(tx, ty + r * 0.25, r * 0.5);
-    } else if (kind === "sunny") {
-      // 阳光花:黄色花瓣圈
-      ctx.fillStyle = "#ffe387";
-      ctx.strokeStyle = "#f2c24e";
-      ctx.lineWidth = Math.max(1, r * 0.06);
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8 + anim * 0.4;
-        ctx.beginPath();
-        ctx.ellipse(tx + Math.cos(a) * r * 0.62, ty + Math.sin(a) * r * 0.62, r * 0.3, r * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-      const coreGrad = ctx.createRadialGradient(tx - r * 0.15, ty - r * 0.15, r * 0.05, tx, ty, r * 0.7);
-      coreGrad.addColorStop(0, "#ffe9a8");
-      coreGrad.addColorStop(1, "#ffc94e");
-      ctx.fillStyle = coreGrad;
-      ctx.strokeStyle = "#e8a830";
-      ctx.beginPath();
-      ctx.arc(tx, ty, r * (0.55 + anim * 0.1), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      drawFace(tx, ty, r * 0.5);
-    } else if (kind === "frost") {
-      // 冰晶塔:六角小冰花
-      ctx.strokeStyle = "#8ac8ea";
-      ctx.lineWidth = Math.max(1.5, r * 0.12);
-      ctx.lineCap = "round";
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI * i) / 3 + anim * 0.4;
-        ctx.beginPath();
-        ctx.moveTo(tx, ty - r * 0.1);
-        ctx.lineTo(tx + Math.cos(a) * r * 0.9, ty - r * 0.1 + Math.sin(a) * r * 0.9);
-        ctx.stroke();
-      }
-      const iceGrad = ctx.createRadialGradient(tx - r * 0.2, ty - r * 0.35, r * 0.1, tx, ty - r * 0.1, r * 0.9);
-      iceGrad.addColorStop(0, "#eaf8ff");
-      iceGrad.addColorStop(1, "#a8dcf2");
-      ctx.fillStyle = iceGrad;
-      ctx.strokeStyle = "#6ab0d8";
-      ctx.lineWidth = Math.max(1, r * 0.08);
-      ctx.beginPath();
-      ctx.moveTo(tx, ty - r * 0.85);
-      for (let i = 1; i <= 6; i++) {
-        const a = (Math.PI * i) / 3 - Math.PI / 2;
-        ctx.lineTo(tx + Math.cos(a) * r * 0.62, ty - r * 0.1 + Math.sin(a) * r * 0.75);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      drawFace(tx, ty + r * 0.05, r * 0.5);
-    } else if (kind === "mist") {
-      // 毒雾塔:胖蘑菇喷雾壶
-      ctx.fillStyle = `rgba(181,216,168,${0.35 + anim * 0.3})`;
-      for (let i = 0; i < 3; i++) {
-        const a = (Math.PI * 2 * i) / 3 + anim * 2;
-        ctx.beginPath();
-        ctx.arc(tx + Math.cos(a) * r * (0.7 + anim * 0.4), ty - r * 0.6 + Math.sin(a) * r * 0.3, r * 0.24, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      const potGrad2 = ctx.createLinearGradient(tx, ty - r * 0.2, tx, ty + r * 0.8);
-      potGrad2.addColorStop(0, "#cfe8c0");
-      potGrad2.addColorStop(1, "#96c888");
-      ctx.fillStyle = potGrad2;
-      ctx.strokeStyle = "#6aa85e";
-      ctx.lineWidth = Math.max(1, r * 0.08);
-      ctx.beginPath();
-      ctx.ellipse(tx, ty + r * 0.25, r * 0.6, r * 0.55, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      // 蘑菇帽
-      ctx.fillStyle = "#a884d8";
-      ctx.strokeStyle = "#8a68b8";
-      ctx.beginPath();
-      ctx.arc(tx, ty - r * 0.25, r * 0.62, Math.PI, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.beginPath();
-      ctx.arc(tx - r * 0.28, ty - r * 0.45, r * 0.12, 0, Math.PI * 2);
-      ctx.arc(tx + r * 0.2, ty - r * 0.55, r * 0.09, 0, Math.PI * 2);
-      ctx.fill();
-      drawFace(tx, ty + r * 0.3, r * 0.45);
-    } else {
-      // 花火果:圆滚滚的小果子炮
-      const potGrad = ctx.createLinearGradient(tx, ty - r * 0.2, tx, ty + r * 0.75);
-      potGrad.addColorStop(0, "#ffd0ae");
-      potGrad.addColorStop(1, "#f2a878");
-      ctx.fillStyle = potGrad;
-      ctx.strokeStyle = "#d88a58";
-      ctx.lineWidth = Math.max(1, r * 0.08);
-      ctx.beginPath();
-      ctx.ellipse(tx, ty + r * 0.25, r * 0.62, r * 0.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#e8926a";
-      ctx.strokeStyle = "#c8744e";
-      ctx.beginPath();
-      ctx.ellipse(tx + r * 0.1, ty - r * 0.4, r * 0.3, r * 0.5, -0.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      // 引信小火花
-      ctx.fillStyle = "#ffd868";
-      ctx.beginPath();
-      ctx.arc(tx + r * (0.35 + anim * 0.3), ty - r * (0.75 + anim * 0.3), r * 0.16, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ff9a4e";
-      ctx.beginPath();
-      ctx.arc(tx + r * (0.35 + anim * 0.3), ty - r * (0.75 + anim * 0.3), r * 0.08, 0, Math.PI * 2);
-      ctx.fill();
-      drawFace(tx, ty + r * 0.25, r * 0.5);
-    }
-    // 等级:头顶小星星
-    for (let i = 1; i < level; i++) {
-      const sx = tx - r * 0.5 + (i - 1) * r * 0.45;
-      const sy = ty - r * 1.2;
-      ctx.fillStyle = "#ffc94e";
-      ctx.beginPath();
-      for (let k = 0; k < 5; k++) {
-        const a = (Math.PI * 2 * k) / 5 - Math.PI / 2;
-        const outX = sx + Math.cos(a) * r * 0.16;
-        const outY = sy + Math.sin(a) * r * 0.16;
-        const a2 = a + Math.PI / 5;
-        const inX = sx + Math.cos(a2) * r * 0.07;
-        const inY = sy + Math.sin(a2) * r * 0.07;
-        if (k === 0) ctx.moveTo(outX, outY);
-        else ctx.lineTo(outX, outY);
-        ctx.lineTo(inX, inY);
-      }
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  const MONSTER_COLORS: Record<MonsterKind, string> = {
-    softy: "#c9b6f2",
-    fasty: "#9fd8f5",
-    tanky: "#ffc09b",
-    dashy: "#ffd868",
-    shieldy: "#b8c8d8",
-    splity: "#b5e8a8",
-    sneaky: "#d8c8f0",
-    healy: "#f5d8e8",
-    mini: "#d5c9f5",
-    boss1: "#ff9eb5",
-    boss2: "#f0a878",
-    boss3: "#c9a86a",
-    boss4: "#e8c060",
-    boss5: "#8aa86a",
-    boss6: "#a8c8f0",
-    boss7: "#e87a5a",
-    boss8: "#9a8ac9",
-    boss9: "#f078b0",
-    flappy: "#a8d8e8",
-    glidey: "#e8e2f5",
-    boss10: "#8a9ae0",
-    boss11: "#c9985a",
-    boss12: "#9ec8ea",
-    boss13: "#b06ad8",
-    bossArmor: "#8fa8bc",
-    bossSwift: "#7ec8e0",
-    bossFly: "#c8dcf5",
-    bossSplit: "#e8909a",
-  };
-
+  /** 怪物:把局内状态折算成 MonsterVisual,交给 art.drawMonsterSprite 画。 */
   function drawMonster(m: Monster): void {
-    const mx = px(m.x);
     const spec = MONSTER_INFO[m.kind];
-    const r = cell * spec.size;
-    // 飞怪浮在半空:身体抬高,影子留在地面且更小
-    const lift = m.flying ? r * 0.85 + Math.sin(m.wob * 1.4) * r * 0.12 : 0;
-    const my = py(m.y) - lift;
-    const sq = 1 + Math.sin(m.wob) * 0.08;
-    ctx.save();
-    if (m.hidden) ctx.globalAlpha = 0.22;
-    // 脚下软阴影
-    ctx.fillStyle = m.flying ? "rgba(58,58,74,0.1)" : "rgba(58,58,74,0.14)";
-    ctx.beginPath();
-    ctx.ellipse(mx, py(m.y) + r * 1.02, r * (m.flying ? 0.55 : 0.9), r * (m.flying ? 0.16 : 0.26), 0, 0, Math.PI * 2);
-    ctx.fill();
-    const bodyColor = m.enraged ? "#7aa8e8" : MONSTER_COLORS[m.kind];
-    const bodyGrad = ctx.createRadialGradient(mx - r * 0.35, my - r * 0.4, r * 0.15, mx, my, r * 1.25);
-    bodyGrad.addColorStop(0, shade(bodyColor, 26));
-    bodyGrad.addColorStop(1, bodyColor);
-    ctx.fillStyle = bodyGrad;
-    ctx.strokeStyle = shade(bodyColor, -46);
-    ctx.lineWidth = Math.max(1.5, r * 0.09);
-    ctx.beginPath();
-    ctx.ellipse(mx, my, r * sq, r / sq, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (m.kind === "fasty" || m.kind === "sneaky" || m.flying) {
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      const flap = Math.sin(m.wob * (m.flying ? 3 : 2)) * r * (m.flying ? 0.42 : 0.3);
-      const wingW = m.flying ? r * 0.6 : r * 0.45;
-      ctx.beginPath();
-      ctx.ellipse(mx - r * 0.9, my - r * 0.3 - flap, wingW, r * 0.22, -0.5, 0, Math.PI * 2);
-      ctx.ellipse(mx + r * 0.9, my - r * 0.3 + flap, wingW, r * 0.22, 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    if (m.kind === "tanky") {
-      ctx.fillStyle = "#e8a878";
-      ctx.beginPath();
-      ctx.arc(mx, my - r * 0.55, r * 0.6, Math.PI, 0);
-      ctx.fill();
-    }
-    if (m.kind === "dashy" && m.dashing) {
-      ctx.strokeStyle = "rgba(255,216,104,0.8)";
-      ctx.lineWidth = 3;
-      for (let k = 1; k <= 2; k++) {
-        ctx.beginPath();
-        ctx.arc(mx - k * r * 0.9, my, r * 0.7, -0.6, 0.6);
-        ctx.stroke();
-      }
-    }
-    if (m.maxArmor > 0 && m.armor > 0) {
-      ctx.fillStyle = "rgba(150,170,190,0.9)";
-      ctx.beginPath();
-      ctx.arc(mx, my - r * 0.2, r * 1.05, Math.PI, 0);
-      ctx.fill();
-      ctx.strokeStyle = "#7a90a8";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    if (m.kind === "healy") {
-      ctx.fillStyle = "#e05a7a";
-      ctx.font = `${Math.round(r * 0.8)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("💗", mx, my - r * 1.1);
-    }
-    if (m.kind === "splity") {
-      // 两个小圆点表示会分身
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.beginPath();
-      ctx.arc(mx - r * 0.4, my - r * 0.75, r * 0.2, 0, Math.PI * 2);
-      ctx.arc(mx + r * 0.4, my - r * 0.75, r * 0.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    if (spec.boss) {
-      ctx.fillStyle = "#ffd868";
-      ctx.beginPath();
-      ctx.moveTo(mx - r * 0.4, my - r * 0.95);
-      ctx.lineTo(mx - r * 0.2, my - r * 1.35);
-      ctx.lineTo(mx, my - r * 1.0);
-      ctx.lineTo(mx + r * 0.2, my - r * 1.35);
-      ctx.lineTo(mx + r * 0.4, my - r * 0.95);
-      ctx.closePath();
-      ctx.fill();
-      if (m.kind === "boss2") {
-        // 蟹蟹钳子
-        ctx.strokeStyle = "#d0885a";
-        ctx.lineWidth = Math.max(2, r * 0.14);
-        ctx.beginPath();
-        ctx.arc(mx - r * 1.15, my - r * 0.1, r * 0.3, 0.4, Math.PI * 1.6);
-        ctx.arc(mx + r * 1.15, my - r * 0.1, r * 0.3, Math.PI * 1.4, Math.PI * 0.6);
-        ctx.stroke();
-      }
-    }
-    if (m.slowed) {
-      ctx.fillStyle = "rgba(160,220,255,0.5)";
-      ctx.beginPath();
-      ctx.arc(mx + r * 0.7, my - r * 0.8, r * 0.18, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(58,58,74,0.35)";
-    ctx.beginPath();
-    ctx.arc(mx - r * 0.4, my + r * 0.9, r * 0.16, 0, Math.PI * 2);
-    ctx.arc(mx + r * 0.4, my + r * 0.9, r * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-    drawFace(mx, my, r);
-    // 元气条(带硬壳段)。这不是血条:掉光了不是倒下,是没劲了、散成花瓣回家。
-    // 所以配色一路走暖色,满是嫩绿、少是暖橙,任何时候都不出现红。
-    const bw = r * 2.2;
-    const bh = Math.max(3, r * 0.16);
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
-    ctx.beginPath();
-    ctx.roundRect(mx - bw / 2, my - r * 1.55, bw, bh, 3);
-    ctx.fill();
-    ctx.fillStyle = energyColor(m.hp / m.maxHp);
-    ctx.beginPath();
-    ctx.roundRect(mx - bw / 2, my - r * 1.55, (bw * Math.max(0, m.hp)) / m.maxHp, bh, 3);
-    ctx.fill();
-    if (m.maxArmor > 0) {
-      ctx.fillStyle = "#8aa0b8";
-      ctx.beginPath();
-      ctx.roundRect(mx - bw / 2, my - r * 1.55 - bh - 1, (bw * m.armor) / m.maxArmor, bh * 0.8, 2);
-      ctx.fill();
-    }
-    ctx.restore();
+    drawMonsterSprite(ctx, {
+      kind: m.kind,
+      x: px(m.x),
+      y: py(m.y),
+      r: cell * spec.size,
+      wob: m.wob,
+      hidden: m.hidden,
+      flying: m.flying,
+      dashing: m.dashing,
+      enraged: m.enraged,
+      slowed: m.slowed,
+      armor: m.armor,
+      maxArmor: m.maxArmor,
+      hpRatio: m.hp / m.maxHp,
+      // 受击白闪:弹开的前一小段整只泛白;弱动效不闪
+      hurtFlash: reducedMotion ? 0 : Math.max(0, m.knock / KNOCK_TIME - 0.55) / 0.45,
+      // 心形光环 0.6s 一轮向外扩散;弱动效停在中间相位
+      healPhase: reducedMotion ? 0.35 : (time % 0.6) / 0.6,
+      walk: reducedMotion ? 0 : m.wob,
+    });
   }
 
   function drawStar(x: number, y: number, r: number, rot: number): void {
@@ -1753,6 +1426,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return { x, y };
   }
 
+  /** 居中画「文字 + 小金星 + 文字」的统计行:emoji 星改成绘制的金渐变星。 */
+  function drawStarLine(cx0: number, y: number, left: string, right: string, color: string, font = "14px sans-serif"): void {
+    ctx.font = font;
+    const sr = 7;
+    const lw = left ? ctx.measureText(left).width : 0;
+    const rw = ctx.measureText(right).width;
+    let sx = cx0 - (lw + sr * 2 + 3 + rw) / 2;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = color;
+    if (left) ctx.fillText(left, sx, y);
+    sx += lw;
+    drawGoldStar(ctx, sx + sr, y, sr, true);
+    sx += sr * 2 + 3;
+    ctx.fillStyle = color;
+    ctx.fillText(right, sx, y);
+  }
+
   function drawButton(r: Rect, label: string, bg: string, fg: string): void {
     ctx.fillStyle = bg;
     ctx.beginPath();
@@ -1781,12 +1472,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("🌼 十三章主题战役", w / 2, 28);
-    ctx.font = "14px sans-serif";
-    ctx.fillStyle = "#8a7a5e";
-    ctx.fillText(
-      `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选主题,再选关卡`,
+    drawStarLine(
       w / 2,
       54,
+      `共 ${LEVELS.length} 关 · `,
+      `${totalStars(progress)}/${LEVELS.length * 3} · 先选主题,再选关卡`,
+      "#8a7a5e",
     );
 
     themeCards.length = 0;
@@ -1814,21 +1505,27 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.stroke();
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
-      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      if (unlocked) {
+        ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+        ctx.fillText(st.emoji, rect.x + 10, rect.y + ch * 0.3);
+      } else {
+        // 没解锁的章:画一把小挂锁,不再贴 emoji
+        drawLockIcon(ctx, rect.x + 10 + ch * 0.16, rect.y + ch * 0.28, ch * 0.16);
+      }
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
       ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
       ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
       ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
       ctx.fillText(unlocked ? st.blurb : "通关上一章解锁", rect.x + 10, rect.y + ch * 0.6);
-      ctx.fillText(
-        unlocked
-          ? `${cleared}/${themeSize(i)} 关 · ⭐${themeStars(progress, i)}/${themeSize(i) * 3}`
-          : "",
-        rect.x + 10,
-        rect.y + ch * 0.82,
-      );
+      if (unlocked) {
+        // 「x/y 关 · ★n/m」:星星用绘制的金星
+        const leftTxt = `${cleared}/${themeSize(i)} 关 · `;
+        ctx.fillText(leftTxt, rect.x + 10, rect.y + ch * 0.82);
+        const lw2 = ctx.measureText(leftTxt).width;
+        drawGoldStar(ctx, rect.x + 10 + lw2 + 5, rect.y + ch * 0.82, 5, true);
+        ctx.fillText(`${themeStars(progress, i)}/${themeSize(i) * 3}`, rect.x + 10 + lw2 + 12, rect.y + ch * 0.82);
+      }
     }
   }
 
@@ -1848,13 +1545,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
-    ctx.font = "14px sans-serif";
-    ctx.fillStyle = "#6a6a7e";
-    ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${themeSize(chapterIdx) * 3} · 通关解锁下一关,回放可刷 3 星`,
+    drawStarLine(
       w / 2,
       54,
+      "",
+      `${themeStars(progress, chapterIdx)}/${themeSize(chapterIdx) * 3} · 通关解锁下一关,回放可刷 3 星`,
+      "#6a6a7e",
     );
+    // 地图底部:当前主题的地平线剪影(树丛 / 沙丘 / 雪丘 / 星空 / 云朵)
+    drawHorizonStrip(ctx, w, h - 30, 30, HORIZON_KIND[THEME_ORDER[chapterIdx]], st.accent);
 
     mapNodes.length = 0;
     const base = themeOffset(chapterIdx);
@@ -1875,19 +1574,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
       mapNodes.push({ idx: base + i, x, y, r: nr });
     }
-    // 连线
-    ctx.strokeStyle = "rgba(120,110,90,0.4)";
-    ctx.lineWidth = 5;
-    ctx.setLineDash([2, 9]);
-    ctx.beginPath();
-    for (let i = 0; i < mapNodes.length; i++) {
-      const n = mapNodes[i];
-      if (i === 0) ctx.moveTo(n.x, n.y);
-      else ctx.lineTo(n.x, n.y);
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // 连线:1.3 从虚线改成交替左右脚的小脚印路径
+    drawFootprintTrail(ctx, mapNodes, 15, "rgba(120,110,90,0.45)");
     // 节点
+    const decor = NODE_DECOR[THEME_ORDER[chapterIdx]];
     for (const n of mapNodes) {
       const def = LEVELS[n.idx];
       const unlocked = isLevelUnlocked(progress, n.idx);
@@ -1904,24 +1594,24 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       if (!unlocked) {
-        ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
-        ctx.fillText("🔒", n.x, n.y);
+        // 挂锁改绘制:锁体 + 锁梁 + 锁孔
+        drawLockIcon(ctx, n.x, n.y, r * 0.55);
       } else {
+        drawNodeDecor(ctx, n.x, n.y, r, decor);
         ctx.fillStyle = st.accent;
         ctx.font = `bold ${Math.round(r * 0.8)}px sans-serif`;
         ctx.fillText(String(n.idx - base + 1), n.x, n.y - (isBoss ? r * 0.1 : 0));
         if (isBoss) {
-          ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
-          ctx.fillText("👑", n.x, n.y - r * 0.95);
+          // BOSS 关:三尖小王冠(绘制,不再是 emoji)
+          drawCrownIcon(ctx, n.x, n.y - r * 1.12, r * 0.5);
         } else if (def.gen) {
-          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-          ctx.fillText("⚔", n.x, n.y - r * 1.05);
+          // 遭遇关:交叉双剑(绘制,不再是 emoji)
+          drawSwordsIcon(ctx, n.x, n.y - r * 1.18, r * 0.36);
         }
-        // 星星
-        ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-        let starTxt = "";
-        for (let s = 0; s < 3; s++) starTxt += s < got ? "⭐" : "▫";
-        ctx.fillText(starTxt, n.x, n.y + r * 1.45);
+        // 星级:金渐变星 / 灰空星(与结算星同一规格)
+        for (let s = 0; s < 3; s++) {
+          drawGoldStar(ctx, n.x + (s - 1) * r * 0.58, n.y + r * 1.45, r * 0.24, s < got);
+        }
       }
     }
   }
@@ -1934,10 +1624,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${chapterIdx + 1}-${levelIdx - themeOffset(chapterIdx) + 1} · ${def.name} 通过!`, w / 2, y + 42);
-    ctx.font = "34px sans-serif";
-    let starTxt = "";
-    for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
-    ctx.fillText(starTxt, w / 2, y + 90);
+    // 三颗星逐颗点亮(0.3s 一颗),亮起瞬间蹦一下并撒 4 粒星屑;弱动效直接全亮
+    for (let s = 0; s < 3; s++) {
+      const sx = w / 2 + (s - 1) * 54;
+      const sy = y + 90;
+      const litAt = 0.3 * (s + 1);
+      const lit = s < earnedStars && (reducedMotion || clearAnim >= litAt);
+      const sinceLit = clearAnim - litAt;
+      const pop = lit && !reducedMotion && sinceLit < 0.22 ? 1 + (0.22 - sinceLit) * 1.6 : 1;
+      drawGoldStar(ctx, sx, sy, 20 * pop, lit);
+      if (lit && !reducedMotion && sinceLit < 0.3) {
+        const k = sinceLit / 0.3;
+        ctx.save();
+        ctx.globalAlpha = 1 - k;
+        for (let i = 0; i < 4; i++) {
+          const a = (Math.PI * 2 * i) / 4 + 0.6;
+          drawGoldStar(ctx, sx + Math.cos(a) * (26 + k * 20), sy + Math.sin(a) * (26 + k * 20), 4, true, a);
+        }
+        ctx.restore();
+      }
+    }
     ctx.font = "15px sans-serif";
     ctx.fillStyle = "#5a5a6e";
     ctx.fillText(
@@ -2059,12 +1765,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     btnCampaign = { x: (w - bw2) / 2, y: y0, w: bw2, h: bh2 };
     btnEndless = { x: (w - bw2) / 2, y: y0 + bh2 + gap, w: bw2, h: bh2 };
 
-    const cards: Array<{ rect: Rect; emoji: string; title: string; sub: string; bg: string; fg: string }> = [
+    const cards: Array<{ rect: Rect; emoji: string; title: string; sub: string; star?: boolean; bg: string; fg: string }> = [
       {
         rect: btnCampaign,
         emoji: "🗺️",
         title: `闯关 · ${LEVELS.length} 关`,
-        sub: `⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 十三章主题战役`,
+        sub: `${totalStars(progress)}/${LEVELS.length * 3} · 十三章主题战役`,
+        star: true,
         bg: "#fff1c9",
         fg: "#a05914",
       },
@@ -2093,7 +1800,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillText(c.title, c.rect.x + 18 + c.rect.h * 0.5, c.rect.y + c.rect.h * 0.38);
       ctx.fillStyle = "#5a5a6e";
       ctx.font = "14px sans-serif";
-      ctx.fillText(c.sub, c.rect.x + 18 + c.rect.h * 0.5, c.rect.y + c.rect.h * 0.66, c.rect.w - c.rect.h * 0.5 - 28);
+      let subX = c.rect.x + 18 + c.rect.h * 0.5;
+      if (c.star) {
+        // 星星统计:绘制的小金星,不再是 emoji
+        drawGoldStar(ctx, subX + 6, c.rect.y + c.rect.h * 0.66, 6, true);
+        subX += 15;
+      }
+      ctx.fillText(c.sub, subX, c.rect.y + c.rect.h * 0.66, c.rect.w - c.rect.h * 0.5 - 28);
     }
   }
 
@@ -2149,6 +1862,14 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fillRect(px(c), py(r), cell + 0.5, cell + 0.5);
       }
     }
+    // 1.3:棋盘格只当底色,格子上按坐标种子长小草叶、撒小花小石头,
+    // 「草稿塔防」的裸格子从此变成一片真的花园(路面格不长草)。
+    for (let r = 0; r < GRID_ROWS; r++) {
+      for (let c = 0; c < GRID_COLS; c++) {
+        if (blocked.has(`${c},${r}`)) continue;
+        drawTileDecor(ctx, c, r, px(c), py(r), cell, st.accent);
+      }
+    }
     // 可种植的空格画成圆角"花园土坑",种在哪里一目了然
     const canAfford = petals >= TOWER_INFO[selectedCard].cost;
     const hintPulse = 0.22 + Math.sin(time * 4) * 0.1;
@@ -2181,11 +1902,42 @@ export function mount(api: GameAPI): { destroy: () => void } {
         }
       }
     }
-    // 怪物走的小路:圆润路面 + 小鹅卵石
+    // 怪物走的小路:1.3 从「平涂色块」升级成「压实土路」——
+    // 路缘深色描边 + 路中央淡色磨损带 + 深浅两色鹅卵石。
     for (const key of blocked) {
       const [c, r] = key.split(",").map(Number);
       ctx.fillStyle = st.path;
       ctx.fillRect(px(c), py(r), cell + 0.5, cell + 0.5);
+    }
+    // 路缘:挨着草地的那几条边描一道深色,路和草不再糊在一起
+    ctx.strokeStyle = "rgba(122,90,52,0.32)";
+    ctx.lineWidth = Math.max(1.5, cell * 0.045);
+    ctx.lineCap = "round";
+    for (const key of blocked) {
+      const [c, r] = key.split(",").map(Number);
+      const edges: Array<[number, number, number, number]> = [];
+      if (!blocked.has(`${c},${r - 1}`)) edges.push([px(c), py(r), px(c + 1), py(r)]);
+      if (!blocked.has(`${c},${r + 1}`)) edges.push([px(c), py(r + 1), px(c + 1), py(r + 1)]);
+      if (!blocked.has(`${c - 1},${r}`)) edges.push([px(c), py(r), px(c), py(r + 1)]);
+      if (!blocked.has(`${c + 1},${r}`)) edges.push([px(c + 1), py(r), px(c + 1), py(r + 1)]);
+      for (const [x1, y1, x2, y2] of edges) {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    }
+    // 路中央的磨损带:怪走得多的地方颜色浅一点
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+    ctx.lineWidth = cell * 0.34;
+    ctx.lineJoin = "round";
+    for (const wp of wpList) {
+      ctx.beginPath();
+      for (let i = 0; i < wp.length; i++) {
+        if (i === 0) ctx.moveTo(px(wp[i].x), py(wp[i].y));
+        else ctx.lineTo(px(wp[i].x), py(wp[i].y));
+      }
+      ctx.stroke();
     }
     for (const key of blocked) {
       const [c, r] = key.split(",").map(Number);
@@ -2202,16 +1954,26 @@ export function mount(api: GameAPI): { destroy: () => void } {
         Math.PI * 2,
       );
       ctx.fill();
+      // 第二粒深色鹅卵石,深浅相间才像铺过的石子
+      ctx.fillStyle = "rgba(122,90,52,0.2)";
+      ctx.beginPath();
+      ctx.ellipse(
+        px(c) + cell * (0.62 - (seed % 3) * 0.16),
+        py(r) + cell * (0.66 - ((seed * 3) % 4) * 0.12),
+        cell * 0.055,
+        cell * 0.04,
+        seed * 2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
     }
 
-    // 起点小门与终点花朵(每条路)
+    // 起点藤蔓拱门与终点花朵(每条路)
     for (let pi = 0; pi < wpList.length; pi++) {
       const wp = wpList[pi];
       const start = wp[0];
-      ctx.fillStyle = "#c9b6f2";
-      ctx.beginPath();
-      ctx.arc(px(start.x), py(start.y), cell * 0.32, Math.PI, 0);
-      ctx.fill();
+      drawVineArch(ctx, px(start.x), py(start.y), cell);
       const end = wp[wp.length - 1];
       const fx = px(end.x);
       const fy = py(end.y);
@@ -2227,7 +1989,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.beginPath();
       ctx.arc(fx, fy, fr * 0.8, 0, Math.PI * 2);
       ctx.fill();
-      drawFace(fx, fy, fr * 0.8);
+      // 花芯表情跟着剩余生命变:满心笑、掉一半担忧、只剩 1 颗哭哭
+      drawFace(ctx, fx, fy, fr * 0.8, true, goalMood(hearts, run.hearts));
     }
 
     // 露珠塔光环 / 毒雾塔毒圈(射程受天气影响)
@@ -2260,74 +2023,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
       }
     }
 
-    // 路障:木箱占着塔位,点一点敲碎
+    // 路障:木箱占着塔位,点一点敲碎(1.3 加了木纹)
     for (const [key, bhp] of barricades) {
       const [c, r] = key.split(",").map(Number);
-      const bx = px(c + 0.5);
-      const byc = py(r + 0.5);
-      const s = cell * 0.33;
-      ctx.fillStyle = "#c9a86a";
-      ctx.strokeStyle = "#9a7a44";
-      ctx.lineWidth = Math.max(1.5, cell * 0.035);
-      ctx.beginPath();
-      ctx.roundRect(bx - s, byc - s, s * 2, s * 2, cell * 0.08);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(bx - s, byc - s);
-      ctx.lineTo(bx + s, byc + s);
-      ctx.moveTo(bx + s, byc - s);
-      ctx.lineTo(bx - s, byc + s);
-      ctx.stroke();
-      // 耐久小点
-      ctx.fillStyle = "#7a5a34";
-      for (let i = 0; i < bhp; i++) {
-        ctx.beginPath();
-        ctx.arc(bx - s + cell * 0.09 + i * cell * 0.13, byc + s - cell * 0.1, cell * 0.04, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      drawBarricade(ctx, px(c + 0.5), py(r + 0.5), cell, bhp);
     }
 
     for (const t of towers) {
-      drawTowerBase(px(t.col + 0.5), py(t.row + 0.5), cell * 0.3);
-      drawTowerIcon(t.kind, px(t.col + 0.5), py(t.row + 0.5), cell * 0.3, t.level, t.firedAnim);
+      drawTowerBase(ctx, px(t.col + 0.5), py(t.row + 0.5), cell * 0.3);
+      drawTowerIcon(ctx, t.kind, px(t.col + 0.5), py(t.row + 0.5), cell * 0.3, t.level, t.firedAnim, reducedMotion);
     }
 
     for (const m of monsters) drawMonster(m);
 
+    // 子弹分型:泡泡 / 针刺拖尾 / 花火 / 冰星,各画各的
     for (const b of bullets) {
-      const bx = px(b.x);
-      const by = py(b.y);
-      if (b.needle) {
-        const tgt = b.target;
-        const a = tgt ? Math.atan2(tgt.y - b.y, tgt.x - b.x) : 0;
-        ctx.strokeStyle = "#5aa878";
-        ctx.lineWidth = 3;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(bx - Math.cos(a) * cell * 0.14, by - Math.sin(a) * cell * 0.14);
-        ctx.lineTo(bx + Math.cos(a) * cell * 0.14, by + Math.sin(a) * cell * 0.14);
-        ctx.stroke();
-      } else if (b.splash > 0) {
-        ctx.fillStyle = "#e8926a";
-        ctx.beginPath();
-        ctx.arc(bx, by, cell * 0.14, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#ffd868";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(bx, by, cell * 0.2, time * 8, time * 8 + Math.PI);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = "rgba(160,220,255,0.85)";
-        ctx.beginPath();
-        ctx.arc(bx, by, cell * 0.11, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
-        ctx.beginPath();
-        ctx.arc(bx - cell * 0.03, by - cell * 0.04, cell * 0.035, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      const kind: BulletArtKind = b.needle ? "needle" : b.splash > 0 ? "boom" : b.frostSlow !== undefined ? "frost" : "bubble";
+      const tgt = b.target;
+      const a = tgt ? Math.atan2(tgt.y - b.y, tgt.x - b.x) : 0;
+      drawBullet(ctx, kind, px(b.x), py(b.y), cell, a, reducedMotion ? 0 : time);
     }
 
     for (const p of particles) {
@@ -2485,20 +2199,34 @@ export function mount(api: GameAPI): { destroy: () => void } {
       cardRects.push({ kind, rect });
       if (rect.x > w || rect.x + rect.w < 0) continue;
       const afford = petals >= TOWER_INFO[kind].cost;
-      ctx.fillStyle = selectedCard === kind ? "#fff1c9" : afford ? "#f6f6fa" : "#efeff3";
-      ctx.strokeStyle = selectedCard === kind ? "#ffb84d" : "rgba(0,0,0,0.08)";
+      const picked = selectedCard === kind;
+      // 选中的卡片上浮 2px,卡底带一点纵向渐变,像一张真的卡
+      const lift = picked ? 2 : 0;
+      const cardGrad = ctx.createLinearGradient(0, rect.y - lift, 0, rect.y - lift + rect.h);
+      if (picked) {
+        cardGrad.addColorStop(0, "#fff7dc");
+        cardGrad.addColorStop(1, "#ffe9ae");
+      } else if (afford) {
+        cardGrad.addColorStop(0, "#ffffff");
+        cardGrad.addColorStop(1, "#eeeef4");
+      } else {
+        cardGrad.addColorStop(0, "#ececf0");
+        cardGrad.addColorStop(1, "#e2e2e8");
+      }
+      ctx.fillStyle = cardGrad;
+      ctx.strokeStyle = picked ? "#ffb84d" : "rgba(0,0,0,0.08)";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 10);
+      ctx.roundRect(rect.x, rect.y - lift, rect.w, rect.h, 10);
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = afford ? 1 : 0.45;
-      drawTowerIcon(kind, rect.x + rect.w / 2, rect.y + rect.h * 0.34, rect.h * 0.26);
+      drawTowerIcon(ctx, kind, rect.x + rect.w / 2, rect.y - lift + rect.h * 0.34, rect.h * 0.26);
       ctx.fillStyle = afford ? "#5a5a6e" : "#8a8a9a";
       ctx.font = "bold 14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${TOWER_INFO[kind].cost}🌸`, rect.x + rect.w / 2, rect.y + rect.h - 11);
+      ctx.fillText(`${TOWER_INFO[kind].cost}🌸`, rect.x + rect.w / 2, rect.y - lift + rect.h - 11);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -2595,7 +2323,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.textBaseline = "middle";
     ctx.fillText(`${run.waveName(waveIdx)} 要来啦!`, w / 2, y0 + 18);
 
-    // 图标 + 数量,一行摆得下几个就摆几个,摆不下的收成「+n 种」
+    // 图标 + 数量,一行摆得下几个就摆几个,摆不下的收成「+n 种」。
+    // 1.3:图标从 emoji 换成真正的迷你怪物立绘——预览里长什么样,上场就长什么样。
     const iconW = 52;
     const maxShow = Math.max(1, Math.floor((boxW - 20) / iconW));
     const show = items.slice(0, maxShow);
@@ -2603,10 +2332,29 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (let i = 0; i < show.length; i++) {
       const it = show[i];
       const cx = startX + i * iconW;
-      ctx.font = "22px sans-serif";
-      ctx.fillText(it.emoji, cx, y0 + 46);
+      drawMonsterSprite(ctx, {
+        kind: it.kind,
+        x: cx,
+        y: y0 + 46,
+        r: it.boss ? 11 : 9,
+        wob: 0,
+        hidden: false,
+        flying: MONSTER_INFO[it.kind].flies === true,
+        dashing: false,
+        enraged: false,
+        slowed: false,
+        armor: 0,
+        maxArmor: 0,
+        hpRatio: 1,
+        hurtFlash: 0,
+        healPhase: 0.35,
+        walk: 0,
+        bar: false,
+      });
       ctx.font = it.boss ? "bold 13px sans-serif" : "13px sans-serif";
       ctx.fillStyle = it.boss ? "#c2456a" : "#5a5a6e";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       ctx.fillText(`×${it.count}`, cx, y0 + 64);
       ctx.fillStyle = "#c2456a";
     }
