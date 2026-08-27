@@ -78,6 +78,17 @@ import {
   type SettleResult,
 } from "./logic";
 import { aiDecide, createGame, settleGame, tryMove, type GameState } from "./sim";
+import {
+  LDV_CSS,
+  LD_LAYERS,
+  LD_TIMING,
+  bombFxPlan,
+  canLiftIds,
+  cardFaceArtHTML,
+  curtainDecorHtml,
+  roleBadgeSvg,
+  starRingHtml,
+} from "./visual";
 
 // ---------------------------------------------------------------------------
 // 座位
@@ -138,8 +149,18 @@ function duoSeats(level: AiLevel): SeatCfg[] {
 const CSS = `
 .ld-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;
-  background:linear-gradient(180deg,#fdf3fb,#eef3ff);border-radius:18px;padding:10px;position:relative;}
-.ld-banner{text-align:center;font-size:13px;font-weight:900;color:#7a5aa8;line-height:1.5;}
+  border-radius:18px;padding:10px;position:relative;
+  border:3px solid var(--ld-wood);
+  background:
+    radial-gradient(circle at 0 0,var(--ld-wood) 0 12px,transparent 13px),
+    radial-gradient(circle at 100% 0,var(--ld-wood) 0 12px,transparent 13px),
+    radial-gradient(circle at 0 100%,var(--ld-wood) 0 12px,transparent 13px),
+    radial-gradient(circle at 100% 100%,var(--ld-wood) 0 12px,transparent 13px),
+    radial-gradient(circle at 50% 34%,transparent 0 86px,rgba(255,255,255,.07) 87px 95px,transparent 96px),
+    linear-gradient(180deg,var(--ld-felt),var(--ld-felt-deep));
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.2),inset 0 0 42px rgba(0,0,0,.24);}
+.ld-banner{text-align:center;font-size:13px;font-weight:900;color:#ffefd3;line-height:1.5;
+  text-shadow:0 1px 2px rgba(0,0,0,.3);}
 .ld-foes{display:flex;gap:8px;justify-content:space-between;align-items:flex-start;}
 .ld-foe{flex:1 1 0;min-width:0;max-width:250px;background:#ffffffcc;border-radius:14px;padding:7px 8px;
   display:flex;flex-direction:column;gap:5px;align-items:center;box-shadow:0 2px 7px rgba(150,140,190,.2);}
@@ -163,37 +184,41 @@ const CSS = `
 .ld-row{display:inline-flex;gap:2px;vertical-align:middle;}
 .ld-chip{background:#ffffffdd;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:800;color:#6a5892;
   box-shadow:0 2px 5px rgba(150,140,190,.18);}
-.ld-say{font-size:13px;font-weight:800;color:#7d6aa6;text-align:center;line-height:1.5;min-height:19px;}
-.ld-say-oops{color:#c2557f;}
+.ld-say{font-size:13px;font-weight:800;color:#efe8fa;text-align:center;line-height:1.5;min-height:19px;
+  text-shadow:0 1px 2px rgba(0,0,0,.28);}
+.ld-say-oops{color:#ffb8ce;}
 .ld-mehead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center;}
 .ld-fanbox{position:relative;width:100%;touch-action:none;}
 /* 牌面的点数与花色一律缩在左上角:扇形手牌只露出左边窄窄一条,角标必须待在那一条里 */
-.ld-card{position:absolute;border-radius:7px;background:#fff;border:1.5px solid #cfc4e4;overflow:hidden;
-  box-shadow:0 2px 5px rgba(120,105,160,.3);transform-origin:50% 88%;transition:transform .12s ease;}
-.ld-card-red{color:#d1436a;}
-.ld-card-black{color:#3d3a52;}
-.ld-card-on{border-color:#ff8fc0;box-shadow:0 4px 10px rgba(220,120,170,.5);}
+.ld-card{position:absolute;border-radius:8px;background:var(--ld-card);border:1px solid rgba(90,70,110,.28);
+  overflow:hidden;box-shadow:1px 0 0 rgba(46,26,60,.14),0 2px 5px rgba(15,25,20,.35);
+  transform-origin:50% 88%;transition:transform var(--ldv-lift-ms) ease-out;}
+.ld-card-red{color:var(--ld-warm);}
+.ld-card-black{color:var(--ld-cool);}
+.ld-card-on{border-color:var(--ld-select);box-shadow:0 0 0 1.5px var(--ld-select),0 6px 12px rgba(244,133,159,.5);}
 .ld-card-cur{outline:3px solid #6c4fd0;outline-offset:1px;}
 .ld-c-i{position:absolute;left:2px;top:2px;display:flex;flex-direction:column;align-items:center;
   line-height:1.05;font-weight:900;}
 .ld-c-r{line-height:1;white-space:nowrap;}
 .ld-c-s{line-height:1;}
-.ld-c-big{position:absolute;right:3px;bottom:2px;opacity:.8;line-height:1;}
-.ld-marquee{position:absolute;border:2px dashed #b48be0;background:rgba(180,139,224,.14);
-  border-radius:8px;pointer-events:none;z-index:60;}
+.ld-marquee{position:absolute;border:2px dashed #ffd980;background:rgba(255,217,128,.14);
+  border-radius:8px;pointer-events:none;z-index:${LD_LAYERS.marquee};}
 .ld-hidden{display:flex;align-items:center;justify-content:center;height:100%;
-  font-size:14px;font-weight:800;color:#a99cc4;}
+  font-size:14px;font-weight:800;color:#d9d0ec;}
 .ld-btns{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;}
-.ld-btn{border:none;border-radius:14px;min-height:42px;padding:8px 15px;font-size:15px;font-weight:900;
-  cursor:pointer;font-family:inherit;color:#5b4a7a;background:#efe9ff;box-shadow:0 3px 0 rgba(140,120,190,.4);}
-.ld-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(140,120,190,.4);}
+.ld-btn{border:none;border-radius:999px;min-height:42px;padding:8px 15px;font-size:15px;font-weight:900;
+  cursor:pointer;font-family:inherit;color:#5b4a7a;background:linear-gradient(180deg,#fbf8ff,#e9e1fb);
+  box-shadow:0 3px 0 rgba(80,60,110,.55);}
+.ld-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(80,60,110,.55);}
 .ld-btn:disabled{opacity:.45;cursor:default;box-shadow:none;transform:none;}
 .ld-btn-go{background:linear-gradient(180deg,#f793b6,#e2648f);color:#fff;box-shadow:0 3px 0 #b8496f;}
 .ld-btn-go:active{box-shadow:0 1px 0 #b8496f;}
 .ld-btn-bid{background:linear-gradient(180deg,#ffd98a,#f5bd53);color:#7a4d0b;box-shadow:0 3px 0 #c9922f;}
 .ld-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
-.ld-keys{font-size:11px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
-.ld-cover{position:absolute;inset:0;background:rgba(253,243,251,.99);border-radius:18px;z-index:100;
+.ld-keys{font-size:11px;font-weight:700;color:#e3d9f2;text-align:center;line-height:1.6;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:5px 8px;}
+.ld-cover{position:absolute;inset:0;background:linear-gradient(180deg,#fdeff7,#f7dfec);border-radius:18px;
+  z-index:${LD_LAYERS.cover};
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:18px;}
 .ld-cover-t{font-size:20px;font-weight:900;color:#7a5aa8;}
 .ld-cover-s{font-size:14px;font-weight:700;color:#7d6aa6;line-height:1.6;max-width:300px;}
@@ -237,7 +262,7 @@ const CSS = `
   .ld-card{transition:none;}
   .ld-shake{animation:none;}
 }
-
+${LDV_CSS}
 /* --- 1.2 新增:出牌区、飞牌层、三档牌力提示、底部三钮 ------------------- */
 .ldc-table{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;
   background:#ffffffcc;border-radius:12px;padding:4px 10px;min-height:34px;
@@ -245,21 +270,25 @@ const CSS = `
 .ldc-table-who{font-size:12px;font-weight:900;color:#6a5892;}
 .ldc-table-pass{font-size:13px;font-weight:900;color:#9a8dbb;}
 .ldc-goal{font-size:12px;font-weight:800;color:#8a6a34;background:#fff2d8;border-radius:999px;padding:2px 10px;}
-.ldc-fly-layer{position:absolute;inset:0;pointer-events:none;z-index:70;overflow:visible;}
-.ldc-fly{position:absolute;left:0;top:0;border-radius:7px;background:#fff;border:1.5px solid #cfc4e4;
-  overflow:hidden;box-shadow:0 6px 14px rgba(120,105,160,.4);will-change:transform;}
+.ldc-fly-layer{position:absolute;inset:0;pointer-events:none;z-index:${LD_LAYERS.fly};overflow:visible;}
+.ldc-fly{position:absolute;left:0;top:0;border-radius:8px;background:var(--ld-card);border:1px solid rgba(90,70,110,.28);
+  overflow:hidden;box-shadow:0 6px 14px rgba(10,30,20,.45);will-change:transform;}
 .ldc-card-move{transition:transform ${REARRANGE_MS}ms cubic-bezier(.22,.7,.3,1);}
 .ldc-card-hint{outline:3px dashed #f0a03c;outline-offset:2px;}
 .ldc-mainbar{display:flex;gap:8px;justify-content:center;align-items:stretch;flex-wrap:nowrap;}
 .ldc-mainbar .ld-btn{flex:1 1 0;min-width:0;min-height:48px;padding:8px 6px;}
 .ldc-subbar{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
 .ldc-subbar .ld-btn{min-height:44px;font-size:13px;padding:6px 11px;}
-.ldc-hintline{font-size:12px;font-weight:700;color:#6f5f95;text-align:center;line-height:1.5;
-  background:#f6f1ff;border-radius:10px;padding:4px 9px;}
+/* 提示线做成气泡框:圆角奶油卡 + 顶部小尾巴,字号 ≥ 14px */
+.ldc-hintline{font-size:14px;font-weight:700;color:#6f5f95;text-align:center;line-height:1.5;
+  background:#fff8e9;border:1.5px solid #f0ddba;border-radius:12px;padding:5px 11px;
+  position:relative;z-index:${LD_LAYERS.hud};}
+.ldc-hintline::before{content:"";position:absolute;top:-6px;left:50%;transform:translateX(-50%) rotate(45deg);
+  width:9px;height:9px;background:#fff8e9;border-left:1.5px solid #f0ddba;border-top:1.5px solid #f0ddba;}
 @media (max-width:420px){
   .ldc-mainbar .ld-btn{font-size:14px;min-height:46px;}
   .ldc-subbar .ld-btn{min-height:44px;font-size:12px;padding:5px 8px;}
-  .ldc-hintline{font-size:11px;}
+  .ldc-hintline{font-size:14px;}
 }
 /* --- 舞台矮到装不下这一桌时逐档收紧(fit.ts 实测祖先裁切线后挂上来,窗口5 第2轮 W5R2-A-05) ---
    收的是留白、字号与对家面板上的装饰;出牌那一排 48px、底下那一排 44px、
@@ -307,23 +336,9 @@ function isRedCard(id: number): boolean {
   return id % 4 === 1 || id % 4 === 3;
 }
 
+/** 牌面七道工序在 visual.ts(角标 + 花色 SVG + 中心浮雕 + 朵朵 / 星星王牌立绘) */
 function cardFaceHTML(id: number, cardW: number): string {
-  const rank = cardRank(id);
-  const idx = Math.max(11, Math.round(cardW * 0.32));
-  const big = Math.max(13, Math.round(cardW * 0.44));
-  if (isJoker(id)) {
-    const word = rank === RANK_BIG_JOKER ? "大" : "小";
-    return `<span class="ld-c-i" style="font-size:${Math.round(idx * 0.85)}px"><span class="ld-c-r">${word}</span><span class="ld-c-s">王</span></span>
-            <span class="ld-c-big" style="font-size:${big}px">🃏</span>`;
-  }
-  const label = rankLabel(rank);
-  // 「10」是两个字,窄一号才塞得进那条窄缝
-  const rankSize = label.length > 1 ? Math.round(idx * 0.72) : idx;
-  return `<span class="ld-c-i" style="font-size:${Math.round(idx * 0.85)}px">
-            <span class="ld-c-r" style="font-size:${rankSize}px">${label}</span>
-            <span class="ld-c-s">${cardSuit(id)}</span>
-          </span>
-          <span class="ld-c-big" style="font-size:${big}px">${cardSuit(id)}</span>`;
+  return cardFaceArtHTML(id, cardW);
 }
 
 /** 出牌区 / 对手气泡里的小牌 */
@@ -431,6 +446,10 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
   let tableShown: { seat: number; cards: number[]; passed: boolean } | null = null;
   /** 还有几张牌在半空中(飞的时候不许再点牌) */
   let flying = 0;
+  /** 这一次 render 是不是刚落桌:出牌区补一帧落桌软影(纯展示) */
+  let justLanded = false;
+  /** 叫分翻牌小卡上一次亮的分数:变了才翻面(纯展示) */
+  let bidShown = 0;
 
   const humans = opts.seats.map((s, i) => (s.kind === "human" ? i : -1)).filter((i) => i >= 0);
   /** 界面下方摊开的是哪一家的手牌 */
@@ -462,7 +481,10 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
   keysEl.className = "ld-keys";
   const flyLayer = document.createElement("div");
   flyLayer.className = "ldc-fly-layer";
-  wrap.append(style, banner, foesEl, centerEl, meHead, fanBox, hintEl, btnsEl, subEl, keysEl, flyLayer);
+  // 星屑环 / 上一手渐隐的展示层:盖在飞牌之上、按钮与遮挡幕之下,pointer-events:none
+  const fxLayer = document.createElement("div");
+  fxLayer.className = "ldv-fx-layer";
+  wrap.append(style, banner, foesEl, centerEl, meHead, fanBox, hintEl, btnsEl, subEl, keysEl, flyLayer, fxLayer);
   host.appendChild(wrap);
 
   /** 舞台太矮时的收紧器,整桌摆完才装得上(render 里会回头叫它重量) */
@@ -582,6 +604,41 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     flying = 0;
   }
 
+  /**
+   * 上一手渐隐让位(纯展示):把还摆在出牌区的那一手拓一份进 fx 层,
+   * 240ms 淡出后收走;reduced 瞬时替换,一张影子都不留。
+   */
+  function ghostPrevHand(): void {
+    if (prefersReducedMotion()) return;
+    if (!tableEl || !tableShown || tableShown.passed) return;
+    const r = localRect(tableEl);
+    const g = document.createElement("div");
+    g.className = "ldc-table ldv-ghost";
+    g.innerHTML = tableEl.innerHTML;
+    g.style.left = `${r.x}px`;
+    g.style.top = `${r.y}px`;
+    g.style.width = `${r.w}px`;
+    fxLayer.appendChild(g);
+    later(() => g.remove(), LD_TIMING.fadeMs + 40);
+  }
+
+  /** 炸弹 / 王炸落桌:桌面震一下 + 星屑环(reduced 不震,只出静态星屑环) */
+  function tableBoom(): void {
+    const plan = bombFxPlan(prefersReducedMotion());
+    if (plan.shake) {
+      wrap.classList.add("ldv-shakeboom");
+      later(() => wrap.classList.remove("ldv-shakeboom"), LD_TIMING.shakeMs + 40);
+    }
+    const r = localRect(tableEl ?? centerEl);
+    const ring = document.createElement("div");
+    ring.className = "ldv-ring";
+    ring.style.left = `${r.x + r.w / 2}px`;
+    ring.style.top = `${r.y + r.h / 2}px`;
+    ring.innerHTML = starRingHtml();
+    fxLayer.appendChild(ring);
+    later(() => ring.remove(), LD_TIMING.ringMs);
+  }
+
   /** 当前该谁动:叫分阶段是 bidSeat,出牌阶段是 state.turn */
   function actor(): number {
     return phase === "bid" ? bidSeat : state ? state.turn : 0;
@@ -599,6 +656,19 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       : `<span class="ld-role ld-role-f">农民</span>`;
   }
 
+  /** 头像 + 身份徽章:地主戴小皇冠、农民戴小草帽(跟着 state.landlord 走,纯展示) */
+  function faceHTML(seat: number): string {
+    const s = opts.seats[seat];
+    const img = s.isImg
+      ? `<img class="ld-face" src="${s.avatar}" alt="${s.name}">`
+      : `<span class="ld-face">${s.avatar}</span>`;
+    const badge =
+      phase !== "bid" && state
+        ? `<span class="ldv-badge">${roleBadgeSvg(state.landlord === seat ? "landlord" : "farmer")}</span>`
+        : "";
+    return `<span class="ldv-avatar">${img}${badge}</span>`;
+  }
+
   // -------------------------------------------------------------------------
   // 渲染
   // -------------------------------------------------------------------------
@@ -612,16 +682,13 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       const box = document.createElement("div");
       box.className = `ld-foe${actor() === i ? " ld-foe-on" : ""}`;
       const n = state ? state.hands[i].length : opts.hands[i].length;
-      const face = s.isImg
-        ? `<img class="ld-face" src="${s.avatar}" alt="${s.name}">`
-        : `<span class="ld-face">${s.avatar}</span>`;
       const b = bubbles[i];
       const bubbleHTML = b
         ? b.passed
           ? `<span class="ld-bubble">不要～</span>`
           : `<span class="ld-mini">${miniCardsHTML(b.cards)}</span>`
         : `<span class="ld-mini" aria-hidden="true"></span>`;
-      box.innerHTML = `${face}
+      box.innerHTML = `${faceHTML(i)}
         <span class="ld-foe-name">${s.name}${s.kind === "ai" ? `·${AI_LEVEL_NAMES[s.level]}` : ""}</span>
         <span class="ld-count">${roleTag(i)} 🂠 ${n} 张</span>
         ${bubbleHTML}`;
@@ -636,8 +703,11 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     const info = document.createElement("div");
     info.className = "ld-info";
     if (phase === "bid") {
+      // 倍数牌做成翻牌小卡:分数变了才翻一面(reduced 瞬时换面,由 CSS 停掉动画)
+      const flip = bidShown !== bidBest;
+      bidShown = bidBest;
       info.innerHTML = `<span class="ld-chip">🎲 叫分中</span>
-        <span class="ld-chip">当前 ${bidBest} 分</span>
+        <span class="ld-chip ldv-bid${flip ? " ldv-flip" : ""}">当前 ${bidBest} 分</span>
         <span class="ld-chip">底牌 3 张等着地主</span>`;
     } else if (state) {
       info.innerHTML = `<span class="ld-chip">底分 ${state.base}</span>
@@ -663,6 +733,11 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
           : `<span class="ldc-table-who">${who} 出</span><span class="ld-row">${miniCardsHTML(tableShown.cards)}</span>`;
       } else {
         table.innerHTML = `<span class="ldc-table-pass">牌桌空着,等这一手落下来…</span>`;
+      }
+      // 刚落桌的那一次 render 补一帧落桌软影(1 帧 step,reduced 也保留:功能反馈)
+      if (justLanded) {
+        table.classList.add("ldv-land");
+        justLanded = false;
       }
       centerEl.appendChild(table);
       tableEl = table;
@@ -696,6 +771,11 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     fanBox.dataset.cardw = String(cardW);
     fanBox.dataset.cardh = String(cardH);
 
+    // 轮到自己:整扇手牌呼吸微光(reduced 由 CSS 换成常亮)
+    const myTurnNow =
+      !paused && curtainFor < 0 && phase !== "over" && actor() === showSeat && opts.seats[showSeat]?.kind === "human";
+    fanBox.classList.toggle("ldv-myturn", myTurnNow);
+
     // 换人遮挡幕升起来的时候手牌一张都不画:光靠盖一层不保险,干脆不渲染
     if (curtainFor >= 0) {
       dropAllCardEls();
@@ -704,6 +784,12 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     }
     const placeholder = fanBox.querySelector(".ld-hidden");
     placeholder?.remove();
+
+    // 现在能出的牌抬 6px + 底光:只读 playableGroups 的合法性结论,不改判定;
+    // 热区计算(hitIndex / boxHits)照旧只认选中抬升,一个像素不动
+    const reduced = prefersReducedMotion();
+    const liftable =
+      myTurnNow && phase === "play" && state ? canLiftIds(hand, state.prev) : new Set<number>();
 
     // 出掉的牌把 div 一起收走,剩下的牌复用原来的 div —— 复用才滑得动
     const alive = new Set(hand);
@@ -730,24 +816,24 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
         el.innerHTML = cardFaceHTML(id, cardW);
         el.dataset.cw = String(cardW);
       }
+      const can = liftable.has(id);
       el.className = `ld-card ldc-card-move ${isRedCard(id) ? "ld-card-red" : "ld-card-black"}${
         on ? " ld-card-on" : ""
-      }${hinted.has(id) ? " ldc-card-hint" : ""}${i === cursor && humans.length > 0 ? " ld-card-cur" : ""}`;
+      }${can ? " ldv-can" : ""}${hinted.has(id) ? " ldc-card-hint" : ""}${i === cursor && humans.length > 0 ? " ld-card-cur" : ""}`;
       el.style.width = `${cardW}px`;
       el.style.height = `${cardH}px`;
       el.style.zIndex = String(1 + i);
-      el.style.transform = `translate(${s.x}px, ${s.y - (on ? lift : 0)}px) rotate(${s.rot}deg)`;
+      // 可出牌的 6px 抬升是纯展示(reduced 只留底光);热区仍按选中抬升算
+      const liftY = (on ? lift : 0) + (can && !reduced ? LD_TIMING.liftPx : 0);
+      el.style.transform = `translate(${s.x}px, ${s.y - liftY}px) rotate(${s.rot}deg)`;
     });
   }
 
   function renderMeHead(): void {
     const s = opts.seats[showSeat];
     const hand = myHand();
-    const face = s.isImg
-      ? `<img class="ld-face" src="${s.avatar}" alt="${s.name}">`
-      : `<span class="ld-face">${s.avatar}</span>`;
     const turn = actor() === showSeat ? "该你啦!" : `等 ${opts.seats[actor()].name}…`;
-    meHead.innerHTML = `${face}
+    meHead.innerHTML = `${faceHTML(showSeat)}
       <span class="ld-foe-name">${s.name}</span>
       <span class="ld-count">${roleTag(showSeat)} 🂠 ${hand.length} 张</span>
       <span class="ld-chip">${turn}</span>`;
@@ -815,8 +901,11 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     if (curtainFor >= 0) {
       const s = opts.seats[curtainFor];
       const c = document.createElement("div");
-      c.className = "ld-cover";
-      c.innerHTML = `<div class="ld-cover-t">🙈 轮到 ${s.name} 啦</div>
+      // 可爱幕布只是换皮:手牌照旧一张不渲染(见 renderHand 的遮挡幕分支)
+      c.className = "ld-cover ldv-curtain";
+      c.innerHTML = `${curtainDecorHtml()}
+        <div class="ld-cover-t">🙈 轮到 ${s.name} 啦</div>
+        <div class="ldv-ribbon">请交给 ${s.name}</div>
         <div class="ld-cover-s">另一位先把眼睛捂上,${s.name} 准备好了再点下面的按钮。</div>`;
       c.appendChild(
         mkBtn("我准备好了", "ld-btn-go", () => {
@@ -958,13 +1047,15 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
       tableShown = null;
     }
     // 出了什么牌看桌面就够了(出牌区那行 + 各家气泡),这里不再重复播报
+    let boom = false;
     if (cards.length === 0) {
       say = "";
       opts.sfx("tap");
     } else {
       const p = res.play!;
+      boom = p.type === "bomb" || p.type === "rocket";
       say = p.type === "bomb" ? "💥 炸弹!这一局的倍数翻一倍" : p.type === "rocket" ? "🚀 王炸!这一轮谁也压不住" : "";
-      opts.sfx(p.type === "bomb" || p.type === "rocket" ? "pop" : "tap");
+      opts.sfx(boom ? "pop" : "tap");
     }
     sayBad = false;
     selected.clear();
@@ -976,11 +1067,17 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
     const finished = state.finished;
     const landed = (): void => {
       if (destroyed || !state) return;
+      // 纯展示:上一手渐隐让位,新一手落桌补一帧软影(出牌数据与时序在上面早就定了)
+      if (cards.length > 0) {
+        ghostPrevHand();
+        justLanded = true;
+      }
       bubbles[seat] = { cards: cards.slice(), passed: cards.length === 0 };
       tableShown = { seat, cards: cards.slice(), passed: cards.length === 0 };
       if (finished) {
         phase = "over";
         render();
+        if (boom) tableBoom();
         const settle = settleGame(state);
         later(() => {
           if (!destroyed && state) opts.onDone({ state, settle, landlord: state.landlord, winner: state.winner ?? 0 });
@@ -988,6 +1085,7 @@ function createTable(host: HTMLElement, opts: TableOpts): { destroy: () => void 
         return;
       }
       render();
+      if (boom) tableBoom();
       pump();
     };
 
