@@ -197,7 +197,7 @@ describe("meta 与模块形状", () => {
     expect(meta.category).toBe("party");
     expect(meta.color).toBe("#FFD9C8");
     expect(meta.levels).toBe(188);
-    expect(meta.platform).toBe("both");
+    expect(meta.platform).toBe("mobile");
     expect(meta.blurb.length).toBeGreaterThan(10);
   });
 

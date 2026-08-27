@@ -12,5 +12,5 @@ export const meta = {
   // 188 关闯关 + 同图竞速对战 + 连续清盘无尽 + 朵朵星星左右分屏双人
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
-  platform: "both" as const
+  platform: "mobile" as const
 };

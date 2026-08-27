@@ -10,6 +10,7 @@ import {
   emptyStateText,
   favoriteGames,
   filterGames,
+  heroSubtitle,
   isFav,
   isFiltering,
   levelTotalOf,
@@ -587,5 +588,101 @@ describe("四条件叠加筛选", () => {
     expect(matchesModeChip({ modes: ["coop"] }, "duo")).toBe(true);
     expect(matchesSearch({ id: "gomoku", title: "五子棋" }, "wzq")).toBe(true);
     expect(filterGames(pool, {}).length).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 第 1 轮学习优化：设备芯片得真的筛得动
+//
+// 第 1 轮走查发现「全部 / 手游 / 端游」三颗芯片点下去都是同一批 67 张卡 ——
+// 筛选函数是对的，是没有一款 meta 敢不填 `both`。本窗口这 12 款按各自真实的
+// 操作方式把 `platform` 填准了，这一组用例守住它，别哪天又被批量刷回 `both`。
+// ---------------------------------------------------------------------------
+
+const WINDOW1_METAS = import.meta.glob<{ meta: GameMeta }>(
+  [
+    "../games/orb-arena/meta.ts",
+    "../games/snake-royale/meta.ts",
+    "../games/block-drop/meta.ts",
+    "../games/combo-clash/meta.ts",
+    "../games/mahjong-bloom/meta.ts",
+    "../games/star-estate/meta.ts",
+    "../games/hero-cards/meta.ts",
+    "../games/weiqi-garden/meta.ts",
+    "../games/flight-chess/meta.ts",
+    "../games/merge-2048/meta.ts",
+    "../games/mine-garden/meta.ts",
+    "../games/sudoku-petal/meta.ts"
+  ],
+  { eager: true }
+);
+
+describe("窗口 1 那 12 款的 platform 填得准不准", () => {
+  const metas = Object.values(WINDOW1_METAS).map((m) => m.meta);
+
+  it("12 款全都在，而且都显式填了 platform", () => {
+    expect(metas).toHaveLength(12);
+    for (const m of metas) expect(GAME_PLATFORMS).toContain(m.platform);
+  });
+
+  it("滑动合并、点格子、点牌这些用手指最顺的，标成手游", () => {
+    const mobile = metas.filter((m) => m.platform === "mobile").map((m) => m.id).sort();
+    expect(mobile).toEqual(
+      ["flight-chess", "hero-cards", "mahjong-bloom", "merge-2048", "mine-garden", "star-estate", "sudoku-petal"].sort()
+    );
+  });
+
+  it("同屏双人格斗要两套键位，标成端游", () => {
+    expect(metas.find((m) => m.id === "combo-clash")?.platform).toBe("desktop");
+  });
+
+  it("手指和键盘都顺手的仍旧是 both", () => {
+    const both = metas.filter((m) => m.platform === "both").map((m) => m.id).sort();
+    expect(both).toEqual(["block-drop", "orb-arena", "snake-royale", "weiqi-garden"]);
+  });
+
+  it("三颗芯片筛出来的数量真的不一样了（不再是 12/12/12）", () => {
+    const pool = metas.map((meta) => ({ meta }) as unknown as GameModule);
+    const all = filterGames(pool, { platform: "all" }).length;
+    const mobile = filterGames(pool, { platform: "mobile" }).length;
+    const desktop = filterGames(pool, { platform: "desktop" }).length;
+    expect(all).toBe(12);
+    expect(mobile).toBe(11); // 7 款 mobile + 4 款 both
+    expect(desktop).toBe(5); // 1 款 desktop + 4 款 both
+    expect(new Set([all, mobile, desktop]).size).toBeGreaterThan(1);
+  });
+
+  it("标成端游的那一款，在手游芯片下就查不到了", () => {
+    const pool = metas.map((meta) => ({ meta }) as unknown as GameModule);
+    const ids = filterGames(pool, { platform: "mobile" }).map((g) => g.meta.id);
+    expect(ids).not.toContain("combo-clash");
+    expect(filterGames(pool, { platform: "desktop" }).map((g) => g.meta.id)).toContain("combo-clash");
+  });
+});
+
+describe("首页气泡的数量跟着实际收录走", () => {
+  it("有几款就说几款,不再写死 55", () => {
+    expect(heroSubtitle(67, 188)).toContain("67 款原创小游戏");
+    expect(heroSubtitle(67, 188)).not.toContain("55");
+    expect(heroSubtitle(120, 188)).toContain("120 款");
+  });
+
+  it("闯关关数也跟着最长的那一款走", () => {
+    expect(heroSubtitle(67, 188)).toContain("闯关最长 188 关");
+    expect(heroSubtitle(67, 99)).toContain("闯关最长 99 关");
+  });
+
+  it("一款都没有 / 数字是脏的时候不许说出「0 款」这种话", () => {
+    expect(heroSubtitle(0, 0)).toBe("原创小游戏合集。上面可以筛选、搜索、收藏 🌈");
+    expect(heroSubtitle(Number.NaN, Number.POSITIVE_INFINITY)).toBe(
+      "原创小游戏合集。上面可以筛选、搜索、收藏 🌈"
+    );
+    expect(heroSubtitle(-3, -1)).not.toContain("-");
+  });
+
+  it("还是原来那句招呼的口气,没有低幼词", () => {
+    const t = heroSubtitle(67, 188);
+    expect(t).toContain("上面可以筛选、搜索、收藏");
+    expect(t).not.toMatch(/宝宝|乖乖|小朋友们快来/);
   });
 });

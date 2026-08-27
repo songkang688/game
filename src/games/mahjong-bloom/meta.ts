@@ -12,5 +12,5 @@ export const meta = {
   // 国标规则的四人麻将:188 关残局战役 + 一人三机对战 + 快棋无尽 + 同屏双人,全程离线
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
-  platform: "both" as const
+  platform: "mobile" as const
 };

@@ -13,5 +13,5 @@ export const meta = {
   // 不做双人同屏 —— 身份场靠隐藏身份撑着,两个人挤一块屏会互相看光手牌与身份。
   modes: ["campaign", "versus", "endless"] as const,
   levels: 188,
-  platform: "both" as const
+  platform: "mobile" as const
 };

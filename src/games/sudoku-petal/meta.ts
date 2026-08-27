@@ -13,5 +13,5 @@ export const meta = {
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
   ageHint: 9,
-  platform: "both" as const
+  platform: "mobile" as const
 };

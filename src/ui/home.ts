@@ -18,8 +18,10 @@ import {
   emptyStateText,
   favoriteGames,
   filterGames,
+  heroSubtitle,
   isFav,
   isFiltering,
+  levelTotalOf,
   loadFavIds,
   progressBadgeText,
   saveFavIds,
@@ -291,8 +293,16 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   });
   const heroBubble = document.createElement("div");
   heroBubble.className = "hero-bubble";
-  // 款数当场数,别写死:每加一批新游戏都要回来改数字的话,迟早会忘
-  heroBubble.innerHTML = `<strong>${greetingText()}朵朵和星星请你来玩!</strong><span>${games.length} 款原创小游戏,闯关最长 188 关。上面可以筛选、搜索、收藏 🌈</span>`;
+  // 款数和关数都当场数,别写死:每加一批新游戏都要回来改数字的话,迟早会忘。
+  // 具体那句话怎么组由 `heroSubtitle` 拼(它连 0 款 / NaN 这些脏值也有兜底,单测盯着)。
+  const heroStrong = document.createElement("strong");
+  heroStrong.textContent = `${greetingText()}朵朵和星星请你来玩!`;
+  const heroSpan = document.createElement("span");
+  heroSpan.textContent = heroSubtitle(
+    games.length,
+    games.reduce((m, g) => Math.max(m, levelTotalOf(g.meta)), 0)
+  );
+  heroBubble.append(heroStrong, heroSpan);
   const heroXingxing = createAvatarImg("xingxingRun", {
     round: false,
     className: "hero-figure hero-figure--xingxing"

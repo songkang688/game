@@ -70,6 +70,11 @@ export const MJ_CSS = `
   box-shadow:0 2px 6px rgba(190,140,180,.25);overflow-wrap:anywhere;line-height:1.4;}
 .mj-goal{flex:1 1 100%;font-size:16px;font-weight:800;color:#8a4a70;text-align:center;line-height:1.5;
   overflow-wrap:anywhere;}
+.mj-pause{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;gap:6px;
+  align-items:center;justify-content:center;text-align:center;padding:16px;
+  background:rgba(255,244,248,.92);border-radius:16px;}
+.mj-pause-t{font-size:20px;font-weight:900;color:#8a4a70;line-height:1.4;}
+.mj-pause-k{font-size:15px;font-weight:800;color:#7a5a90;line-height:1.6;overflow-wrap:anywhere;}
 .mj-board{display:flex;flex-direction:column;gap:8px;}
 .mj-foe{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:34px;}
 .mj-foe-name{font-size:16px;font-weight:900;color:#6c5a8c;white-space:nowrap;}
@@ -285,6 +290,41 @@ export function popFans(host: HTMLElement, fans: readonly FanHit[], total: numbe
 // ---------------------------------------------------------------------------
 // 键位:点选为主,键盘是补充
 // ---------------------------------------------------------------------------
+
+/** 暂停层上那两行字。抽成纯函数,好让单测直接读文案 */
+export function pauseVeilText(): { title: string; keys: string } {
+  return {
+    title: "⏸️ 先歇一会儿",
+    keys: "牌桌先停住啦。点上面的「▶ 继续」,或者再按一次 Esc,就接着摸牌。"
+  };
+}
+
+/**
+ * 暂停的时候在牌桌上盖一层看得见的布。
+ *
+ * 原来暂停只有右上角那颗按钮从「⏸ 暂停」变成「▶ 继续」,牌桌本身一点变化都没有,
+ * 孩子按了 Esc 常常不知道自己已经把牌局按停了。别的 11 款都有明确的一层,这一款补齐。
+ */
+export function renderPauseVeil(wrap: HTMLElement, paused: boolean): void {
+  const old = wrap.querySelector(".mj-pause");
+  if (!paused) {
+    old?.remove();
+    return;
+  }
+  if (old) return;
+  const veil = document.createElement("div");
+  veil.className = "mj-pause";
+  veil.setAttribute("role", "status");
+  const text = pauseVeilText();
+  const t = document.createElement("div");
+  t.className = "mj-pause-t";
+  t.textContent = text.title;
+  const k = document.createElement("div");
+  k.className = "mj-pause-k";
+  k.textContent = text.keys;
+  veil.append(t, k);
+  wrap.appendChild(veil);
+}
 
 export type HumanKind = "duo" | "star";
 
@@ -531,6 +571,7 @@ export function mountPuzzle(
     pause.textContent = paused ? "▶ 继续" : "⏸ 暂停";
     pause.addEventListener("click", togglePause);
     top.append(goal, left, wind, floor, pause);
+    renderPauseVeil(wrap, paused);
 
     board.innerHTML = "";
     const riverBox = document.createElement("div");
@@ -1011,6 +1052,7 @@ export function createLive(host: HTMLElement, opts: LiveOptions): { destroy: () 
       render();
     });
     top.append(wall, floor, round, hint, pause);
+    renderPauseVeil(wrap, paused);
 
     board.innerHTML = "";
     // 对家在上,上下家在中间那行的两侧,自己永远在下方

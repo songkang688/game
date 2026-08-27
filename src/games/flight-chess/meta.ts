@@ -12,5 +12,5 @@ export const meta = {
   // 188 关残局战役 + 1 人对 3 个本机 AI + 连胜无尽 + 朵朵星星同屏两色,全程离线
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
-  platform: "both" as const
+  platform: "mobile" as const
 };

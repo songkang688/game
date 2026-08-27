@@ -12,5 +12,5 @@ export const meta = {
   // 188 关挑战塔 + 四档人机 BO3 + 连胜无尽 + 同屏双人 + 训练场,全程离线本机对局
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
-  platform: "both" as const
+  platform: "desktop" as const
 };

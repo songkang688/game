@@ -272,6 +272,21 @@ export function isFiltering(filter: Partial<HomeFilter> = {}): boolean {
 // 进度徽章
 // ---------------------------------------------------------------------------
 
+/**
+ * 首页欢迎气泡的第二行。
+ *
+ * 以前这句把「55 款」写死在模板里,1.2 一路加新款以后就对不上了 ——
+ * 首页明明列着 67 张卡,气泡还在说 55。改成跟着真实收录数走,
+ * 以后再加多少款都不用回来改文案。
+ */
+export function heroSubtitle(gameCount: number, maxLevels: number): string {
+  const n = Number.isFinite(gameCount) ? Math.max(0, Math.floor(gameCount)) : 0;
+  const lv = Number.isFinite(maxLevels) ? Math.max(0, Math.floor(maxLevels)) : 0;
+  const head = n > 0 ? `${n} 款原创小游戏` : "原创小游戏合集";
+  const levels = lv > 0 ? `,闯关最长 ${lv} 关` : "";
+  return `${head}${levels}。上面可以筛选、搜索、收藏 🌈`;
+}
+
 /** 这款游戏的闯关总数:meta 没填就按通用框架的 188 关算 */
 export function levelTotalOf(meta: Pick<GameMeta, "levels">): number {
   const n = meta.levels;

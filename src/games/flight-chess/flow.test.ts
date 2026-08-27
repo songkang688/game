@@ -225,7 +225,7 @@ describe("meta 与首页契约", () => {
       blurb: "四个人掷骰子绕圈飞。叠在一起最安全，跳格飞线最开心，先到齐的人获胜。",
       modes: ["campaign", "versus", "endless", "twoPlayer"],
       levels: 188,
-      platform: "both"
+      platform: "mobile"
     });
   });
 

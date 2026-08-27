@@ -72,7 +72,7 @@ describe("star-estate · meta 与章节", () => {
     expect(meta.category).toBe("party");
     expect(meta.color).toBe("#FFF0D6");
     expect(meta.levels).toBe(188);
-    expect(meta.platform).toBe("both");
+    expect(meta.platform).toBe("mobile");
     expect([...meta.modes]).toEqual(["campaign", "versus", "endless", "twoPlayer"]);
   });
 

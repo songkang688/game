@@ -290,7 +290,7 @@ describe("meta 与模块形状", () => {
     expect(meta.modes).toEqual(["campaign", "versus", "endless", "twoPlayer"]);
     expect(meta.levels).toBe(188);
     expect(meta.ageHint).toBe(9);
-    expect(meta.platform).toBe("both");
+    expect(meta.platform).toBe("mobile");
   });
 
   it("mount 是个函数,光加载模块不碰 DOM", () => {

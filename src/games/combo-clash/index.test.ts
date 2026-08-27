@@ -24,7 +24,7 @@ describe("combo-clash · meta 是纯数据卡片", () => {
     expect(meta.category).toBe("party");
     expect(meta.color).toBe("#FFD6EA");
     expect(meta.levels).toBe(188);
-    expect(meta.platform).toBe("both");
+    expect(meta.platform).toBe("desktop");
     expect(meta.blurb.length).toBeGreaterThan(10);
   });
 

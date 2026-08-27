@@ -291,7 +291,7 @@ describe("meta 与模块形状", () => {
     expect(meta.blurb).toBe("同样的数字撞在一起就会变成更大的星星。合成到 2048,还能继续往上叠。");
     expect(meta.modes).toEqual(["campaign", "versus", "endless", "twoPlayer"]);
     expect(meta.levels).toBe(188);
-    expect(meta.platform).toBe("both");
+    expect(meta.platform).toBe("mobile");
   });
 
   it("mount 是个函数,光加载模块不碰 DOM", () => {

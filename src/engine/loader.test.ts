@@ -243,6 +243,51 @@ describe("meta.ts 抽取一致性", () => {
     );
   });
 
+  // -------------------------------------------------------------------------
+  // 1.2 新增的 platform。
+  //
+  // 第 1 轮走查发现首页三颗设备芯片怎么点都是同一批卡：`types.ts` 加了字段、
+  // `homeFilters.ts` 会筛，可这里的白名单归一化从没把 platform 抄过去，
+  // 首页拿到的 meta 根本没有这个键。补上,并用用例钉死。
+  // -------------------------------------------------------------------------
+  it("platform 会原样带到首页(三个取值都要能过来)", () => {
+    const [metas, impls] = tables({
+      a: fakeMeta("a", { platform: "mobile" }),
+      b: fakeMeta("b", { platform: "desktop" }),
+      c: fakeMeta("c", { platform: "both" })
+    });
+    const games = collectGames(metas, impls);
+    expect(games.map((g) => g.meta.platform)).toEqual(["mobile", "desktop", "both"]);
+  });
+
+  it("platform 是脏值就当没填(下游按 both 处理,不会让游戏消失)", () => {
+    const [metas, impls] = tables({
+      a: fakeMeta("a", { platform: "ios" as unknown as GameMeta["platform"] }),
+      b: fakeMeta("b", { platform: 3 as unknown as GameMeta["platform"] })
+    });
+    for (const g of collectGames(metas, impls)) expect(g.meta.platform).toBeUndefined();
+  });
+
+  it("没填 platform 的老 meta 不会凭空多出这个键", () => {
+    const [metas, impls] = tables({ a: fakeMeta("a") });
+    const meta = collectGames(metas, impls)[0]?.meta as Record<string, unknown>;
+    expect("platform" in meta).toBe(false);
+  });
+
+  it("仓库里真实的 meta.ts,platform 一路带到首页没被吃掉", () => {
+    // collectGames 的第二张表要的是「懒加载函数」,这里把 eager 收来的实现包一层
+    const lazy = Object.fromEntries(
+      Object.entries(realImplModules).map(([path, mod]) => [path, () => Promise.resolve(mod)])
+    );
+    const games = collectGames(realMetaModules, lazy);
+    const byId = new Map(games.map((g) => [g.meta.id, g.meta.platform]));
+    expect(byId.get("merge-2048")).toBe("mobile");
+    expect(byId.get("combo-clash")).toBe("desktop");
+    expect(byId.get("orb-arena")).toBe("both");
+    // 至少要有两种不同的取值,不然首页那排芯片就是摆设
+    expect(new Set([...byId.values()]).size).toBeGreaterThan(1);
+  });
+
   it("meta.ts 是纯数据模块:只有字符串 / 数字 / 字符串数组,可 JSON 序列化", () => {
     for (const [metaPath, metaMod] of Object.entries(realMetaModules)) {
       const meta = metaMod.meta as Record<string, unknown>;

@@ -12,5 +12,5 @@ export const meta = {
   // 188 关战役 + 同一发牌序列的对战竞速 + 马拉松无尽 + 左右两块盘的同屏双人,全程离线
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
-  platform: "both" as const
+  platform: "mobile" as const
 };

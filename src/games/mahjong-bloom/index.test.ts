@@ -18,6 +18,8 @@ import {
   keyAction,
   levelSolvable,
   meta,
+  pauseVeilText,
+  renderPauseVeil,
   mount,
   mountPuzzle,
   popFans,
@@ -184,7 +186,7 @@ describe("meta 与模块形状", () => {
     expect(meta.emoji).toBe("🀄");
     expect(meta.category).toBe("party");
     expect(meta.levels).toBe(188);
-    expect(meta.platform).toBe("both");
+    expect(meta.platform).toBe("mobile");
     expect(meta.modes).toEqual(["campaign", "versus", "endless", "twoPlayer"]);
   });
 
@@ -822,5 +824,73 @@ describe("杠按钮跟规则对得上", () => {
   it("手里四张一样才亮杠", () => {
     expect(kanAvailable(parseTiles("1111m234p567s99s"), [])).toBe(true);
     expect(kanAvailable(parseTiles("111m234p567s99s2z"), [])).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 第 1 轮学习优化：暂停要看得见
+//
+// 走查发现按 Esc 之后牌桌一点变化都没有,只有右上角那颗按钮换了字,
+// 孩子分不清自己到底按停了没有。补一层盖在牌桌上的暂停布。
+// ---------------------------------------------------------------------------
+describe("暂停层", () => {
+  beforeEach(installDom);
+  afterEach(removeDom);
+
+  const host = (): FakeEl => {
+    const el = new FakeEl("div");
+    el.className = "mj-wrap";
+    return el;
+  };
+  const veils = (wrap: FakeEl): FakeEl[] => wrap.byClass("mj-pause");
+
+  it("暂停时盖上一层,恢复时收走", () => {
+    const wrap = host();
+    renderPauseVeil(wrap as unknown as HTMLElement, true);
+    expect(veils(wrap)).toHaveLength(1);
+    renderPauseVeil(wrap as unknown as HTMLElement, false);
+    expect(veils(wrap)).toHaveLength(0);
+  });
+
+  it("反复刷新也只有一层,不会越堆越多", () => {
+    const wrap = host();
+    for (let i = 0; i < 5; i++) renderPauseVeil(wrap as unknown as HTMLElement, true);
+    expect(veils(wrap)).toHaveLength(1);
+  });
+
+  it("本来就没暂停时反复调用不会留下垃圾节点", () => {
+    const wrap = host();
+    renderPauseVeil(wrap as unknown as HTMLElement, false);
+    renderPauseVeil(wrap as unknown as HTMLElement, false);
+    expect(wrap.children).toHaveLength(0);
+  });
+
+  it("这层是 role=status,读屏能念出来", () => {
+    const wrap = host();
+    renderPauseVeil(wrap as unknown as HTMLElement, true);
+    expect(veils(wrap)[0].getAttribute("role")).toBe("status");
+  });
+
+  it("上面写清楚了怎么接着玩", () => {
+    const t = pauseVeilText();
+    expect(t.title).toContain("先歇一会儿");
+    expect(t.keys).toContain("Esc");
+    expect(t.keys).toContain("继续");
+  });
+
+  it("暂停层的文案不低幼、不写商标", () => {
+    const t = `${pauseVeilText().title}${pauseVeilText().keys}`;
+    expect(t).not.toMatch(/宝宝|乖乖|棒棒哒/);
+    expect(t).not.toMatch(/三国杀|斗地主|大富翁/);
+  });
+
+  it("样式表里有这一层,而且是盖满整块牌桌的", () => {
+    expect(MJ_CSS).toContain(".mj-pause{");
+    expect(MJ_CSS).toContain("position:absolute;inset:0");
+  });
+
+  it("暂停层的字号在 360px 上也够大", () => {
+    expect(MJ_CSS).toMatch(/\.mj-pause-t\{[^}]*font-size:20px/);
+    expect(MJ_CSS).toMatch(/\.mj-pause-k\{[^}]*font-size:15px/);
   });
 });

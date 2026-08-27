@@ -77,7 +77,7 @@ describe("mine-garden · meta 是纯数据卡片", () => {
     expect(meta.color).toBe("#E5F8D8");
     expect(meta.blurb).toBe("看数字绕开刺种。第一下一定安全，插好小旗，把整片花园都翻开。");
     expect(meta.levels).toBe(188);
-    expect(meta.platform).toBe("both");
+    expect(meta.platform).toBe("mobile");
   });
 
   it("四种模式都是壳认识的模式名", () => {
