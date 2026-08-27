@@ -451,6 +451,21 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   /** 砖被彩虹波扫到时散出来的小花(纯装饰,不参与判定) */
   const petals: { x: number; y: number; dx: number; life: number; emoji: string }[] = [];
 
+  /**
+   * 系统里勾了「减少动态效果」就别晃。
+   *
+   * CSS 那边有 `prefers-reduced-motion` 的媒体查询,但画布上的东西归不了 CSS 管,
+   * 这里自己问一次。问不到(测试桩 / 老浏览器)就当没勾。
+   */
+  const calmMotion = (() => {
+    const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    try {
+      return mm?.("(prefers-reduced-motion: reduce)").matches === true;
+    } catch {
+      return false;
+    }
+  })();
+
   // ---- DOM -----------------------------------------------------------------
   const wrap = el("div", "bmb-wrap");
   const hud = el("div", "bmb-hud");
@@ -890,7 +905,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     // 人
     fighters.forEach((f, i) => {
       const v = views[i];
-      const cx = v.rx * cell + cell / 2;
+      // 被罩住的人在泡泡里左右晃:一眼看出这不是「站着不动」而是「出不来」
+      const sway = f.bubbleT > 0 && !calmMotion ? Math.sin(world.time / 130) * cell * 0.06 : 0;
+      const cx = v.rx * cell + cell / 2 + sway;
       const cy = v.ry * cell + cell / 2 - v.hop;
       const r = cell * 0.34;
       g.fillStyle = P_COLOR[i];
@@ -928,6 +945,13 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
         g.fillStyle = "rgba(180,230,250,.35)";
         g.fill();
         g.globalAlpha = 1;
+        // 头顶的倒计时圈:还剩多久自己晃出来,一圈走完就出来了
+        const left = Math.max(0, Math.min(1, f.bubbleT / BUBBLE_MS));
+        g.strokeStyle = "#5bb7e8";
+        g.lineWidth = Math.max(2, cell * 0.07);
+        g.beginPath();
+        g.arc(cx, cy - r * 1.9, r * 0.42, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+        g.stroke();
         // 合作模式:队友贴上来拍的时候,泡泡外面转一圈进度弧
         if (world.rescue && f.rescueT > 0) {
           const k = Math.min(1, f.rescueT / RESCUE_TOUCH_MS);

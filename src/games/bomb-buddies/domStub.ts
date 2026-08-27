@@ -299,7 +299,9 @@ export interface Harness {
   restore: () => void;
 }
 
-export function install(opts: { innerWidth?: number; innerHeight?: number; search?: string } = {}): Harness {
+export function install(
+  opts: { innerWidth?: number; innerHeight?: number; search?: string; reduceMotion?: boolean } = {}
+): Harness {
   const g = globalThis as Record<string, unknown>;
   const saved = {
     document: g.document,
@@ -309,6 +311,7 @@ export function install(opts: { innerWidth?: number; innerHeight?: number; searc
     caf: g.cancelAnimationFrame,
     storage: g.localStorage,
     performance: g.performance,
+    matchMedia: g.matchMedia,
   };
 
   const frames = new Map<number, (t: number) => void>();
@@ -331,7 +334,9 @@ export function install(opts: { innerWidth?: number; innerHeight?: number; searc
       if (list && i >= 0) list.splice(i, 1);
     },
     getComputedStyle: () => ({ overflowY: "visible" }),
-    matchMedia: () => ({ matches: false }),
+    matchMedia: (q: string) => ({
+      matches: opts.reduceMotion === true && q.includes("reduced-motion"),
+    }),
   };
 
   const loc = { search: opts.search ?? "" };
@@ -363,6 +368,7 @@ export function install(opts: { innerWidth?: number; innerHeight?: number; searc
   g.document = doc;
   g.window = win;
   g.location = loc;
+  g.matchMedia = win.matchMedia;
   g.requestAnimationFrame = (fn: (t: number) => void): number => {
     const id = nextId++;
     frames.set(id, fn);
@@ -405,6 +411,7 @@ export function install(opts: { innerWidth?: number; innerHeight?: number; searc
       g.document = saved.document;
       g.window = saved.window;
       g.location = saved.location;
+      g.matchMedia = saved.matchMedia;
       g.requestAnimationFrame = saved.raf;
       g.cancelAnimationFrame = saved.caf;
       g.localStorage = saved.storage;

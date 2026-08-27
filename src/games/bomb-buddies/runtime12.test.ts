@@ -238,6 +238,16 @@ describe("手机 360px 排得下", () => {
     expect(KEY_HELP.length).toBeGreaterThan(10);
   });
 
+  it("勾了「减少动态效果」照样能玩:CSS 关掉过渡,画布上的晃动也自己收住", () => {
+    expect(CSS).toMatch(/@media \(prefers-reduced-motion:reduce\)/);
+    const m = boot({ reduceMotion: true });
+    openMode(m, "双人合作");
+    // 被罩住的人本来会左右晃,勾了之后不晃——跑几十帧不能报错,画面照旧出得来
+    m.h.flush(40);
+    expect(findOne(m.root, "bmb-board")).not.toBe(null);
+    m.handle.destroy();
+  });
+
   it("只有要拖的东西吃手势,别处留给滚动——舞台是 overflow:hidden,漏出去就按不到", () => {
     expect(CSS).toContain(".bmb-board,.bmb-stick,.bmb-act{touch-action:none;}");
     // 兜底:实在矮得放不下,模式外壳自己能滚
