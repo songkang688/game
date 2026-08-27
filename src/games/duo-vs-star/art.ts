@@ -109,6 +109,11 @@ export function drawGoldStar(
   ctx.strokeStyle = "rgba(200,130,30,.5)";
   ctx.lineWidth = 1;
   ctx.stroke();
+  // 独立高光点(r2 修复 W4R1-07):与 candy-swing / duo-arena / garden-guard 的金星第三层对齐
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  ctx.beginPath();
+  ctx.ellipse(x - r * 0.28, y - r * 0.3, r * 0.18, r * 0.11, -0.5, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 /** 4 芒小闪光（冲击星 / 冰晶闪点共用） */
@@ -301,25 +306,26 @@ function drawBlush(
 function drawCharTrait(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, r: number): void {
   switch (id) {
     case "duoduo": {
-      // 花瓣发饰：左上 5 瓣小花 + 黄芯
-      const cx = x - r * 0.52;
-      const cy = y - r * 0.78;
+      // 花瓣发饰：左上 5 瓣小花 + 黄芯。
+      // r2 修复 W4R1-04:花饰放大一档并抬出轮廓,16px 灰度下头饰通道站稳
+      const cx = x - r * 0.56;
+      const cy = y - r * 0.88;
       ctx.fillStyle = "#ff8fbe";
       for (let i = 0; i < 5; i++) {
         const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
         ctx.beginPath();
-        ctx.arc(cx + Math.cos(a) * r * 0.26, cy + Math.sin(a) * r * 0.26, r * 0.18, 0, Math.PI * 2);
+        ctx.arc(cx + Math.cos(a) * r * 0.34, cy + Math.sin(a) * r * 0.34, r * 0.24, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = "#ffd75e";
       ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.14, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r * 0.18, 0, Math.PI * 2);
       ctx.fill();
       return;
     }
     case "xingxing":
-      // 星形呆毛
-      drawGoldStar(ctx, x, y - r * 1.08, r * 0.34, 0.35);
+      // 星形呆毛(r2 修复 W4R1-04:0.34→0.5,16px 下 2.2px→3.4px 边界站稳)
+      drawGoldStar(ctx, x, y - r * 1.18, r * 0.5, 0.35);
       return;
     case "nuonuo":
       // 头顶两颗糯米团子

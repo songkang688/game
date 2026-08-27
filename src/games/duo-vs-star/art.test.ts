@@ -215,6 +215,23 @@ describe("星星粒子与平台", () => {
     expect(names(path.calls)).toContain("closePath");
   });
 
+  it("r2 W4R1-07:金星有独立白高光第三层(渐变+描边+高光,与全库金星规格对齐)", () => {
+    const rec = recorder();
+    drawGoldStar(rec.ctx, 100, 100, 8, 0.5);
+    const n = names(rec.calls);
+    expect(n).toContain("ellipse");
+    expect(n.filter((x) => x === "fill").length).toBeGreaterThanOrEqual(2);
+    const fills = rec.calls.filter((c) => c.fn === "set fillStyle").map((c) => String(c.args[0]));
+    expect(fills.some((f) => f.startsWith("rgba(255,255,255"))).toBe(true);
+  });
+
+  it("r2 W4R1-04:主角双人头饰比例钉在放大档(星呆毛 0.5r/花瓣 0.24r),16px 不许再缩", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./art.ts", import.meta.url), "utf8");
+    expect(src).toMatch(/drawGoldStar\(ctx, x, y - r \* 1\.18, r \* 0\.5, 0\.35\)/);
+    expect(src).toMatch(/r \* 0\.34, cy \+ Math\.sin\(a\) \* r \* 0\.34, r \* 0\.24/);
+  });
+
   it("4 芒闪光与蓬蓬云都是非空绘制（等待重生的 ☁️ 字符下岗）", () => {
     const sp = recorder();
     drawSparkle(sp.ctx, 0, 0, 8);
