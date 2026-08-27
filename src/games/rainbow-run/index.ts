@@ -201,11 +201,15 @@ import {
   coinLOD,
   coinSweepPhase,
   drawBoardArt,
+  drawBoardIcon,
+  drawBoltIcon,
   drawCoin,
   drawCoinDot,
   drawCoinSweep,
   drawContactShadow,
   drawJetFlame,
+  drawJetIcon,
+  drawMagnetIcon,
   drawObstacleArt,
   drawPowerIcon,
   drawRunner,
@@ -2813,24 +2817,22 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.textAlign = "right";
     ctx.fillText("💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, MAX_HEARTS - hearts)), w - 10, 20);
     // 道具倒计时:移到任务条下方,不再和第二行进度条打架;13→14px
+    // 图标从 emoji 换成绘制小图标(与场上的道具泡泡同一套形状,认得出对应关系)
     let px2 = w - 10;
     ctx.font = "14px sans-serif";
     const ptY = rowY + 52 + extraRow;
-    if (magnetTimer > 0) {
-      ctx.fillText(`🧲${Math.ceil(magnetTimer)}s`, px2, ptY);
+    const timerChip = (sec: number, icon: (c: CanvasRenderingContext2D, s: number) => void): void => {
+      ctx.fillText(`${Math.ceil(sec)}s`, px2, ptY);
+      ctx.save();
+      ctx.translate(px2 - 32, ptY);
+      icon(ctx, 8);
+      ctx.restore();
       px2 -= 58;
-    }
-    if (jetTimer > 0) {
-      ctx.fillText(`🚀${Math.ceil(jetTimer)}s`, px2, ptY);
-      px2 -= 58;
-    }
-    if (boardTimer > 0) {
-      ctx.fillText(`🛹${Math.ceil(boardTimer)}s`, px2, ptY);
-      px2 -= 58;
-    }
-    if (railTimer > 0) {
-      ctx.fillText(`⚡${Math.ceil(railTimer)}s`, px2, ptY);
-    }
+    };
+    if (magnetTimer > 0) timerChip(magnetTimer, drawMagnetIcon);
+    if (jetTimer > 0) timerChip(jetTimer, drawJetIcon);
+    if (boardTimer > 0) timerChip(boardTimer, drawBoardIcon);
+    if (railTimer > 0) timerChip(railTimer, drawBoltIcon);
 
     // HUD 第二行(赛道进度 + 任务条)从 y=40 起,按钮画到 44px 高就压上去了 —— 只扩热区
     const backFace: Rect = { x: 6, y: 6, w: 62, h: 28 };

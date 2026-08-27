@@ -316,6 +316,20 @@ export function drawBoardIcon(ctx: Ctx, s: number): void {
   ctx.stroke();
 }
 
+/** 加速滑轨的闪电小图标(HUD 倒计时用,替掉 ⚡ emoji)。 */
+export function drawBoltIcon(ctx: Ctx, s: number): void {
+  ctx.fillStyle = "#2ec9b8";
+  ctx.beginPath();
+  ctx.moveTo(s * 0.28, -s);
+  ctx.lineTo(-s * 0.5, s * 0.16);
+  ctx.lineTo(-s * 0.04, s * 0.16);
+  ctx.lineTo(-s * 0.28, s);
+  ctx.lineTo(s * 0.5, -s * 0.16);
+  ctx.lineTo(s * 0.04, -s * 0.16);
+  ctx.closePath();
+  ctx.fill();
+}
+
 /** 一颗道具泡泡:泡泡球底 + 绘制图标(不再用字符占位)。 */
 export function drawPowerIcon(ctx: Ctx, kind: PowerKind, r: number): void {
   drawBubble(ctx, r);

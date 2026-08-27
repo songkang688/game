@@ -28,6 +28,7 @@ import {
   coinSweepPhase,
   drawBoardArt,
   drawBoardIcon,
+  drawBoltIcon,
   drawBubble,
   drawCoin,
   drawCoinDot,
@@ -421,6 +422,10 @@ describe("彩虹跑跑 1.3 · 道具图标", () => {
     // 单个图标本体也各不相同
     expect(seq((c) => drawMagnetIcon(c, 10))).not.toBe(seq((c) => drawJetIcon(c, 10)));
     expect(seq((c) => drawJetIcon(c, 10))).not.toBe(seq((c) => drawBoardIcon(c, 10)));
+    // HUD 倒计时的滑轨闪电也是绘制图标,不是 ⚡ 字符
+    const bolt = record((c) => drawBoltIcon(c, 8));
+    expect(bolt.texts).toHaveLength(0);
+    expect(bolt.ops.filter((op) => op.startsWith("lineTo")).length).toBeGreaterThanOrEqual(5);
   });
 
   it("泡泡球底是渐变球体 + 高光弧;星星带光晕;浮动 ±3px 且 reduced 静止", () => {
