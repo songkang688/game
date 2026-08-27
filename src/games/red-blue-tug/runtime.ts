@@ -129,8 +129,15 @@ export function sideButtonsOverlap(m: SideLayout): boolean {
 
 /** 朵朵(红队)的键 */
 export const RED_KEYS: readonly string[] = ["KeyF", "KeyA"];
-/** 星星(蓝队)的键 */
-export const BLUE_KEYS: readonly string[] = ["KeyJ", "KeyL"];
+/**
+ * 星星(蓝队)的键。
+ *
+ * 平台的双人约定是「朵朵 WASD+F+G,星星 ↑←↓→+L+K」,所以屏幕上一律写 **K**——
+ * 跨游戏的肌肉记忆才对得上。老版本写的是 J,已经玩熟的孩子按 J 照样算数,
+ * 所以 J 留在表里继续接管,只是不再往屏幕上写。
+ */
+export const BLUE_KEY_MAIN = "KeyK";
+export const BLUE_KEYS: readonly string[] = [BLUE_KEY_MAIN, "KeyL", "KeyJ"];
 /** 单人打小电脑时,空格也算自己的键 */
 export const SOLO_KEYS: readonly string[] = ["Space"];
 

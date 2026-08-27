@@ -65,6 +65,20 @@ export function endlessParams(round: EndlessRound): EndlessParams {
   };
 }
 
+/** 一轮超时之后、下一轮开起来之前，倒计时徽章上摆的那句话 */
+export const ENDLESS_SKIP_BADGE = "⏳ 这一轮先跳过";
+
+/**
+ * 倒计时徽章上的字。
+ *
+ * 只画得出**有限的正整数秒**；`Infinity` / `NaN` / 负数这类哨兵值一律换成
+ * 「这一轮先跳过」——`⏳ Infinity 秒` 是不能给孩子看的东西。
+ */
+export function endlessClockText(left: number): string {
+  if (!Number.isFinite(left) || left <= 0) return ENDLESS_SKIP_BADGE;
+  return `⏳ ${Math.floor(left)} 秒`;
+}
+
 /**
  * 超时的处理：**不是失败**。这一轮不计分，直接进下一轮。
  * 返回下一轮的轮号与一句安慰话（永远不出现「输了」「失败」这类词）。

@@ -7,7 +7,7 @@ import { save } from "../../engine/save";
 import guide from "./guide";
 import { CHAPTERS, LEVELS, type TugLevel } from "./levels";
 import { adaptiveAiRate, mechanicsOf } from "./logic";
-import { TUG12, ropeSag, ropeShake } from "./tuning";
+import { TOGGLE_MIN_H, TUG12, ropeSag, ropeShake } from "./tuning";
 import {
   beatHitIndex,
   beatTrack,
@@ -28,7 +28,7 @@ import { AI_TIERS, aiController, type AiTier, type Controller } from "./ai";
 import { AI_POWER_SCALE, PLAYER_POWER_SCALE, endlessSetup, levelSetup } from "./duel";
 import { boundKeys, createDisposer, keySideOf, sideLayout } from "./runtime";
 
-const CSS = `
+export const RBG_CSS = `
 .rbg-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0E4, #FFE4EC); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
 .rbg-top { display: flex; justify-content: space-between; margin-bottom: 8px; gap: 6px; align-items: center; }
 .rbg-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 4px 12px 4px 4px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(200,120,120,.25); }
@@ -53,7 +53,7 @@ const CSS = `
 .rbg-gear { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; min-height: 22px; }
 .rbg-chip { display: inline-flex; align-items: center; gap: 5px; background: #ffffffd9; border-radius: 999px; padding: 3px 11px; font-size: 14px; font-weight: 800; color: #B0555F; box-shadow: 0 2px 5px rgba(190,120,130,.2); }
 .rbg-chip-hot { background: linear-gradient(180deg, #FFE0B2, #FFC98A); color: #97551A; }
-.rbg-toggle { border: none; border-radius: 999px; padding: 5px 13px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #7C6A9B; box-shadow: 0 3px 0 rgba(150,130,180,.25); }
+.rbg-toggle { border: none; border-radius: 999px; padding: 5px 13px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #7C6A9B; box-shadow: 0 3px 0 rgba(150,130,180,.25); display: inline-flex; align-items: center; justify-content: center; min-height: ${TOGGLE_MIN_H}px; }
 .rbg-toggle[aria-pressed="true"] { background: linear-gradient(180deg, #FFD9A6, #FFC17E); color: #8A4E16; }
 .rbg-toggle:focus-visible, .rbg-pull:focus-visible { outline: 3px solid #8A2F2F; outline-offset: 3px; }
 .rbg-meters { display: flex; gap: 12px; margin-bottom: 8px; }
@@ -184,7 +184,7 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
   wrap.className = "rbg-wrap";
   const rivalName = duo ? "🔵 星星队 · 玩家 2" : `🔵 星星队 · ${spec.tier?.emoji ?? ""}${spec.tier?.name ?? "小电脑"}`;
   wrap.innerHTML = `
-    <style>${CSS}</style>
+    <style>${RBG_CSS}</style>
     <div class="rbg-top">
       <span class="rbg-badge" style="color:#C24545"><img class="rbg-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />🔴 朵朵队 · 你</span>
       ${spec.redlight ? '<span class="rbg-light" role="img" aria-label="红绿灯">🟢</span>' : ""}
@@ -272,7 +272,7 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
     const label = duo
       ? hand === "L"
         ? "朵朵<span class='rbg-sub'>按住 F</span>"
-        : "星星<span class='rbg-sub'>按住 J</span>"
+        : "星星<span class='rbg-sub'>按住 K</span>"
       : spec.offhand
         ? hand === "L"
           ? "👈 左手<span class='rbg-sub'>按住蓄力</span>"
@@ -640,7 +640,7 @@ function versusSpec(pick: VersusPick, seed: number): RunSpec {
       aiAdapt: 0,
       supply: false,
       seed,
-      hint: "两个人各按一边:朵朵按住 F,星星按住 J,谁先把小旗拉过线谁赢!",
+      hint: "两个人各按一边:朵朵按住 F,星星按住 K,谁先把小旗拉过线谁赢!",
       chips: ["👫 同屏双人", "🎈 加油点双方共用"],
     };
   }
@@ -677,7 +677,7 @@ function mountVersus(
   const wrap = document.createElement("div");
   wrap.className = "rbg-wrap";
   wrap.innerHTML = `
-    <style>${CSS}${SHELL_CSS}</style>
+    <style>${RBG_CSS}${SHELL_CSS}</style>
     <div class="rbg-head">
       <button class="rbg-back" type="button">🗺️ 回关卡</button>
       <span class="rbg-chip rbg-score"></span>
@@ -708,7 +708,7 @@ function mountVersus(
       note: tier.blurb,
       pick: { kind: "ai", tier },
     }));
-    picks.push({ label: "👫 同屏双人", note: "朵朵按住 F,星星按住 J,也可以一人按一边屏幕。", pick: { kind: "duo" } });
+    picks.push({ label: "👫 同屏双人", note: "朵朵按住 F,星星按住 K,也可以一人按一边屏幕。", pick: { kind: "duo" } });
     for (const p of picks) {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -833,7 +833,7 @@ function mountEndless(
   const wrap = document.createElement("div");
   wrap.className = "rbg-wrap";
   wrap.innerHTML = `
-    <style>${CSS}${SHELL_CSS}</style>
+    <style>${RBG_CSS}${SHELL_CSS}</style>
     <div class="rbg-head">
       <button class="rbg-back" type="button">🗺️ 回关卡</button>
       <span class="rbg-chip rbg-round"></span>

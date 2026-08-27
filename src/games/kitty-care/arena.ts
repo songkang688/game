@@ -32,6 +32,7 @@ import {
   chaseHint,
   cureBack,
   cureHint,
+  cureMessage,
   curePick,
   curePlan,
   cureStart,
@@ -39,6 +40,7 @@ import {
   feedDrop,
   judgeStyleItem,
   nearestSnap,
+  nextWashCell,
   playStep,
   scoreOutfit,
   scrub,
@@ -48,7 +50,7 @@ import {
   type SnapPoint,
   type TaskOutcome
 } from "./tasks";
-import type { Life } from "./runtime";
+import type { Life, Loop } from "./runtime";
 
 const TASK_INFO: Record<KittyTask, { icon: string; name: string }> = {
   feed: { icon: "🍽️", name: "喂饭" },
@@ -158,6 +160,12 @@ export class Arena {
   private spec: TaskSpec | null = null;
   private onDone: (() => void) | null = null;
   private dead = false;
+  /**
+   * 当前这件事自己起的循环（现在只有哄睡的拍子灯）。
+   * 换一件事、拆舞台都要先把它们停掉——`Life` 是整局共用的，
+   * 光靠 `destroy()` 收，无尽里每跑一遍哄睡就会多留一个在那儿空转。
+   */
+  private readonly loops: Loop[] = [];
 
   constructor(host: HTMLElement, opts: ArenaOptions) {
     this.opts = opts;
@@ -404,9 +412,21 @@ export class Arena {
     this.renderTask();
   }
 
+  /** 停掉上一件事留下的循环（换任务、拆舞台都从这儿走） */
+  private stopLoops(): void {
+    for (const loop of this.loops) loop.stop();
+    this.loops.length = 0;
+  }
+
+  /** 现在还挂着几个循环（测试用） */
+  get liveLoops(): number {
+    return this.loops.filter((l) => l.live).length;
+  }
+
   private renderTask(): void {
     const spec = this.spec;
     if (!spec || this.dead) return;
+    this.stopLoops();
     this.playEl.textContent = "";
     if (this.cats[this.targetCat()].hiding) {
       this.renderSoothe();
@@ -608,11 +628,13 @@ export class Arena {
     this.life.on(pad, "pointerleave", () => {
       rubbing = false;
     });
-    // 键盘 / 无指针环境：每点一下自动往下搓一行
+    // 键盘 / 无指针环境：每点一下自动挑一个还没搓过的格子搓掉，一路能搓到干净
     let auto = 0;
     this.life.on(pad, "click", () => {
-      const c = washCellCenter(state, Math.min(state.cells.length - 1, auto));
-      auto += 2;
+      const i = nextWashCell(state, auto);
+      if (i < 0) return;
+      auto = i + 1;
+      const c = washCellCenter(state, i);
       rub(c.x, c.y);
     });
   }
@@ -634,14 +656,14 @@ export class Arena {
     this.playEl.append(lights, note);
 
     const started = now();
-    this.life.every(() => {
+    this.loops.push(this.life.every(() => {
       if (this.dead) return;
       const t = now() - started;
       state.beats.forEach((b, i) => {
         dots[i].classList.toggle("ktc-beat-live", !state.hit[i] && Math.abs(b - t) <= BEAT_WINDOW_MS);
         dots[i].classList.toggle("ktc-beat-hit", state.hit[i]);
       });
-    }, 80);
+    }, 80));
 
     this.life.on(note, "click", () => {
       if (this.dead || !this.lockedOnTarget()) return;
@@ -740,7 +762,8 @@ export class Arena {
     this.planEl.hidden = false;
     this.safetyEl.hidden = false;
 
-    const draw = (): void => {
+    // 刚刚那一下要说的话：护理台整块重画时把它带上，别让通用提示在同一 tick 里盖掉
+    const draw = (note?: string, miss = false): void => {
       this.planEl.textContent = "";
       curePlan(state).forEach((step, i) => {
         if (i > 0) this.planEl.appendChild(el("span", undefined, " → "));
@@ -748,7 +771,7 @@ export class Arena {
         chip.style.opacity = step.state === "done" ? "0.5" : step.state === "todo" ? "0.35" : "1";
         this.planEl.appendChild(chip);
       });
-      this.say(cureHint(state));
+      this.say(cureMessage(note, cureHint(state), miss));
       this.playEl.textContent = "";
       const row = el("div", "ktc-btns");
       const cur = round.steps[state.step];
@@ -759,7 +782,8 @@ export class Arena {
           const res = curePick(state, tool.name);
           state = res.state;
           this.settle(res, row);
-          if (!res.done) draw();
+          // 心情掉光时 settle 已经把舞台换成安抚按钮了，别再画回护理台把它盖掉
+          if (!res.done && !this.cats[this.targetCat()].hiding) draw(res.note, res.miss);
         });
         row.appendChild(b);
       }
@@ -773,8 +797,7 @@ export class Arena {
         const res = cureBack(state);
         state = res.state;
         if (res.acted) this.sfx("tap");
-        this.say(res.note);
-        draw();
+        draw(res.note);
       });
       const tools = el("div", "ktc-tools");
       tools.appendChild(back);
@@ -864,6 +887,7 @@ export class Arena {
 
   destroy(): void {
     this.dead = true;
+    this.stopLoops();
     this.spec = null;
     this.onDone = null;
     this.root.remove();

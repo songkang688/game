@@ -315,6 +315,20 @@ export class AlbumStore {
   }
 }
 
+/**
+ * 通关结算那一下的三件事收在一处：掉一件收藏、拼出结算里那句话、
+ * **顺手喊一声让模式条上的相册计数当场跟上**。
+ *
+ * 少了最后这一声，孩子在结算里看到「（1/24）」、回到地图却还是「📷 小屋相册 0/24」，
+ * 得进一次相册再退出来才对得上。
+ */
+export function claimDrop(store: AlbumStore, level: number, onChange: () => void = () => {}): string {
+  const drop = store.dropForLevel(level);
+  if (!drop) return "小屋相册已经收集齐啦！";
+  onChange();
+  return `小屋相册收到一件新收藏：${drop.emoji} ${drop.name}（${store.count()}/${ALBUM_TOTAL}）`;
+}
+
 // ---------------------------------------------------------------------------
 // 平台收藏册：有就复用，没有就降级
 // ---------------------------------------------------------------------------

@@ -236,6 +236,25 @@ export function washCellCenter(state: WashState, index: number): Vec {
 }
 
 /**
+ * 键盘 / 无指针环境的兜底要搓哪一格：从 `from` 起往后找**第一个还没搓过的**，
+ * 找到末尾就绕回开头。全搓完了返回 −1。
+ *
+ * 早先的兜底是「每点一下 `auto += 2`，再夹到最后一格」——步进 2 只碰得到一半格子，
+ * `auto` 越过末格之后每一下都在重复搓同一格，覆盖率封顶在 53% 再也上不去。
+ * 认「还没搓过」而不是认下标，才保证每点一下都真的有进展。
+ */
+export function nextWashCell(state: WashState, from = 0): number {
+  const n = state.cells.length;
+  if (n === 0) return -1;
+  const start = ((Math.floor(from) % n) + n) % n;
+  for (let k = 0; k < n; k++) {
+    const i = (start + k) % n;
+    if (!state.cells[i]) return i;
+  }
+  return -1;
+}
+
+/**
  * 在 (u, v) 处画一下：笔刷半径内的格子全部算搓过。
  * 覆盖率到 `WASH_TARGET` 就完成——不用一格一格点，画圈就行。
  */
@@ -483,6 +502,25 @@ export function curePick(state: CureState, toolName: string): TaskOutcome<CureSt
         : "已经看清楚啦，这一步该动手照顾了～"
       : "这一样这一步还用不上，换一个试试～"
   });
+}
+
+/**
+ * 护理台屏幕上那一行字。
+ *
+ * 护理台每动一下都要整块重画，重画时会把「这一步该做哪一类事」的通用提示写上去；
+ * 如果直接这么写，刚刚那句针对性的话（比如「先看一看再动手，顺序反了它会紧张～」）
+ * 会在同一个 tick 里被盖掉，孩子一个字都看不到。所以这里统一收口：
+ *
+ * - 做岔了：**只留那句针对性的**，通用提示这一下让位；
+ * - 做对了：把「第 N 步做好了」和下一步的类型提示接起来一起给；
+ * - 没有新话要说：照旧给通用提示。
+ */
+export function cureMessage(note: string | undefined, hint: string, miss = false): string {
+  const n = (note ?? "").trim();
+  const h = (hint ?? "").trim();
+  if (!n) return h;
+  if (miss || !h) return n;
+  return `${n}${h}`;
 }
 
 /** 回退一步：把上一步撤销，重新选（回到第 0 步就没得退了，什么也不发生） */

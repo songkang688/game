@@ -80,6 +80,24 @@ export interface TimerHost {
 }
 
 /**
+ * 一个还在跑的循环：`stop()` 单独把它收掉（重复 stop 无害）。
+ * 有了它，「换一轮先停上一轮的秒表」才写得出来，不必等到 `destroy()`。
+ */
+export interface Loop {
+  stop(): void;
+  /** 还在跑吗（测试与断言用） */
+  readonly live: boolean;
+}
+
+/** 已经停掉的循环：`every()` 在 `destroy()` 之后返回它，调用方不用判空 */
+const DEAD_LOOP: Loop = {
+  stop() {},
+  get live() {
+    return false;
+  }
+};
+
+/**
  * 一局游戏里所有会「留下来」的东西都登记在这儿：
  * 延时、循环、动画帧、事件监听。`destroy()` 一次全部收干净，
  * 收完 `pending` 全是 0——这一条有单测盯着。
@@ -102,12 +120,24 @@ export class Life {
     this.timers.add(id);
   }
 
-  every(fn: () => void, ms: number): void {
-    if (this.dead) return;
+  /** 起一个循环，并把「单独停掉它」的把手交回去（不接也行，`destroy()` 照样收） */
+  every(fn: () => void, ms: number): Loop {
+    if (this.dead) return DEAD_LOOP;
     const id = this.host.setInterval(() => {
       if (!this.dead) fn();
     }, ms);
     this.loops.add(id);
+    const loops = this.loops;
+    const host = this.host;
+    return {
+      get live() {
+        return loops.has(id);
+      },
+      stop() {
+        if (!loops.delete(id)) return;
+        host.clearInterval(id);
+      }
+    };
   }
 
   /** 下一帧跑一次（连续动画就在回调里再登记一次，destroy 之后自动断链） */

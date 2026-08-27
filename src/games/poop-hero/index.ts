@@ -23,7 +23,14 @@ import {
   type LevelDef,
 } from "./levels";
 import { BINS, binInfo, hygieneTip, trashById } from "./trash";
-import { createDisposer, padMetrics, parseLevelParam, resolveInitialLevel } from "./runtime";
+import {
+  HUD_BTN_MIN_H,
+  HUD_BTN_MIN_W,
+  createDisposer,
+  padMetrics,
+  parseLevelParam,
+  resolveInitialLevel,
+} from "./runtime";
 import {
   BEAM_BOTTOM,
   BEAM_TOP,
@@ -110,7 +117,7 @@ const BEAN_COLORS = [
 // 样式
 // ---------------------------------------------------------------------------
 
-const CSS = `
+export const PH_CSS = `
 .ph-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;position:relative;}
 .ph-hud{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
@@ -123,7 +130,9 @@ const CSS = `
 .ph-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:12px;font-weight:900;color:#6B4A32;}
 .ph-btn{border:none;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#8A5A3C;box-shadow:0 3px 0 rgba(170,130,100,.3);}
+  font-family:inherit;background:#ffffffdd;color:#8A5A3C;box-shadow:0 3px 0 rgba(170,130,100,.3);
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:${HUD_BTN_MIN_W}px;min-height:${HUD_BTN_MIN_H}px;}
 .ph-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,130,100,.3);}
 .ph-btn:focus-visible,.ph-key:focus-visible{outline:3px solid #6B4A32;outline-offset:2px;}
 .ph-stagebox{position:relative;border-radius:16px;overflow:hidden;background:#FFF6EC;
@@ -362,7 +371,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   const wrap = el("div", "ph-wrap");
   wrap.dataset.players = String(opts.players);
   const style = el("style");
-  style.textContent = CSS;
+  style.textContent = PH_CSS;
   wrap.appendChild(style);
 
   // ---- HUD ----
@@ -1315,7 +1324,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { destroy: () => void } {
   const root = el("div");
   const style = el("style");
-  style.textContent = CSS;
+  style.textContent = PH_CSS;
   const head = el("div", "ph-head");
   const back = el("button", "ph-btn", "🗺️ 回关卡");
   back.type = "button";
@@ -1413,7 +1422,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
 function mountCoop(host: HTMLElement, api: GameApi, onExit: () => void): { destroy: () => void } {
   const root = el("div");
   const style = el("style");
-  style.textContent = CSS;
+  style.textContent = PH_CSS;
   const head = el("div", "ph-head");
   const back = el("button", "ph-btn", "🗺️ 回关卡");
   back.type = "button";
@@ -1527,7 +1536,7 @@ function openLevelOnMap(host: HTMLElement, level: number): boolean {
 export function mount(api: GameApi): { destroy: () => void } {
   const root = el("div");
   const style = el("style");
-  style.textContent = CSS;
+  style.textContent = PH_CSS;
   const bar = el("div", "ph-modebar");
   const levelHost = el("div");
   const modeHost = el("div");

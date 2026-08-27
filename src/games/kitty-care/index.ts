@@ -24,18 +24,21 @@ import {
   AlbumStore,
   HOME_SPOTS,
   SPOT_LABELS,
+  claimDrop,
   shareWalletWithCollection,
   type AlbumPiece,
   type HomeSpot
 } from "./album";
-import { endlessLine, endlessParams, endlessRound, endlessTimeout } from "./endless";
+import { endlessClockText, endlessLine, endlessParams, endlessRound, endlessTimeout } from "./endless";
 import { KTC_CSS } from "./styles";
 import {
   Life,
   openLevelOnMap,
   parseLevelParam,
   prefersReducedMotion,
-  resolveInitialLevel
+  resolveInitialLevel,
+  type Loop,
+  type TimerHost
 } from "./runtime";
 
 /** 相册用的星星钱包：先用平台 API，能连上收藏册就跟收藏册看同一份余额 */
@@ -72,7 +75,11 @@ function placedFurniture(store: AlbumStore): Array<{ spot: HomeSpot; emoji: stri
 // 闯关：一关就是一串任务，全款没有任何「照顾失败」的出口
 // ---------------------------------------------------------------------------
 
-function makePlayLevel(api: GameApi): (stage: HTMLElement, ctx: PlayCtx) => PlayHandle {
+function makePlayLevel(
+  api: GameApi,
+  /** 通关掉了一件收藏就喊一声，好让模式条上的相册计数当场跟上 */
+  onAlbumChange: () => void = () => {}
+): (stage: HTMLElement, ctx: PlayCtx) => PlayHandle {
   return function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const cfg: KittyLevel = LEVELS[ctx.level];
     const life = new Life();
@@ -118,10 +125,7 @@ function makePlayLevel(api: GameApi): (stage: HTMLElement, ctx: PlayCtx) => Play
         ended = true;
         arena.setTaskBar(cfg.tasks, taskIdx, catCount, (i) => catForTask(i, catCount));
         const got = finalStars(arena.mistakes, arena.starCap());
-        const drop = store.dropForLevel(ctx.level);
-        const gift = drop
-          ? `小屋相册收到一件新收藏：${drop.emoji} ${drop.name}（${store.count()}/${ALBUM_TOTAL}）`
-          : "小屋相册已经收集齐啦！";
+        const gift = claimDrop(store, ctx.level, onAlbumChange);
         life.after(() => {
           if (!ended) return;
           ctx.win(
@@ -150,8 +154,13 @@ function makePlayLevel(api: GameApi): (stage: HTMLElement, ctx: PlayCtx) => Play
 // 无尽：照顾马拉松（超时只是这一轮不计分，没有失败结局）
 // ---------------------------------------------------------------------------
 
-function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
-  const life = new Life();
+export function mountEndless(
+  host: HTMLElement,
+  api: GameApi,
+  onBack: () => void,
+  timers?: TimerHost
+): { destroy: () => void } {
+  const life = timers ? new Life(timers) : new Life();
   const store = ensureAlbum(api);
   const wrap = document.createElement("div");
   const bar = document.createElement("div");
@@ -173,6 +182,17 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
   let arena: Arena | null = null;
   let dead = false;
   let left = 0;
+  /**
+   * 这一轮的秒表。整个马拉松**同一时刻只许有一个**——
+   * 早先每开一轮都挂一个新的、旧的又没人停，第 N 轮就有 N 个在减同一个 `left`，
+   * 倒计时快 N 倍。所以换轮、超时、拆场三个出口都要先把它停掉。
+   */
+  let clock: Loop | null = null;
+
+  const stopClock = (): void => {
+    clock?.stop();
+    clock = null;
+  };
 
   life.on(back, "click", () => {
     api.play("tap");
@@ -181,6 +201,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 
   const startRound = (): void => {
     if (dead) return;
+    stopClock();
     arena?.destroy();
     stageHost.textContent = "";
     const cfg = endlessRound(round);
@@ -201,7 +222,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     arena.selected = target;
     const paint = (): void => {
       arena?.setBadges([
-        { text: `⏳ ${Math.max(0, left)} 秒`, state: "clock" },
+        { text: endlessClockText(left), state: "clock" },
         { text: `已经照顾好 ${done} 件事` },
         { text: `最好 ${best} 件` }
       ]);
@@ -225,22 +246,26 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
         best = save.recordEndlessBest(meta.id, done);
         api.addStars(1);
         round++;
+        stopClock();
         life.after(startRound, 500);
       }
     );
-    life.every(() => {
+    clock = life.every(() => {
       if (dead) return;
       left--;
-      paint();
-      if (left <= 0) {
-        // 超时：不是失败，这一轮不计分，直接换下一件事
-        const skip = endlessTimeout(cfg);
-        round = skip.nextIndex;
-        arena?.say(skip.note);
-        best = save.recordEndlessBest(meta.id, done);
-        life.after(startRound, 600);
-        left = Number.POSITIVE_INFINITY;
+      if (left > 0) {
+        paint();
+        return;
       }
+      // 超时：不是失败，这一轮不计分，直接换下一件事
+      left = 0;
+      stopClock();
+      paint();
+      const skip = endlessTimeout(cfg);
+      round = skip.nextIndex;
+      arena?.say(skip.note);
+      best = save.recordEndlessBest(meta.id, done);
+      life.after(startRound, 600);
     }, 1000);
   };
 
@@ -249,6 +274,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
   return {
     destroy() {
       dead = true;
+      stopClock();
       save.recordEndlessBest(meta.id, done);
       life.destroy();
       arena?.destroy();
@@ -454,7 +480,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel: makePlayLevel(api),
+      playLevel: makePlayLevel(api, refreshBar),
       guide,
       mapHint: "看清楚它想要什么再动手，一次都不做岔就是 3 星～",
       grandMessage: "188 天的照顾全部完成，小屋里到处都是你们的照片！"

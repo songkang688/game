@@ -102,6 +102,14 @@ export const MIN_HOT_DUO = 34;
 /** 按键网格的列数:← ↓ → 占前三列,清扫 / 冲刺放第四列 */
 export const PAD_COLUMNS = 4;
 
+/**
+ * HUD 那排小药丸按钮(⏸ 暂停 / 📖 攻略 …)的最小热区。
+ * 摇杆那几个大键有 `padMetrics` 守着,这排小的只靠 padding 撑,
+ * 窄屏上 padding 一收就掉到 30×32——比手指按得准的下限还小,所以在 CSS 里钉死。
+ */
+export const HUD_BTN_MIN_W = MIN_HOT;
+export const HUD_BTN_MIN_H = 32;
+
 export interface PadMetrics {
   /** 一个按键的边长(px) */
   key: number;
