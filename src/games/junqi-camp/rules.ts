@@ -324,7 +324,7 @@ export interface GameState {
   history: GameEvent[];
   /** 司令回营之后，这一方的军旗位置就公开了 */
   flagShown: Record<Side, boolean>;
-  /** 闯关的守备队关：星星按兵不动，也不会因为不动而判负 */
+  /** 闯关的守备队关：康康按兵不动，也不会因为不动而判负 */
   garrison: boolean;
   outcome: Outcome | null;
 }

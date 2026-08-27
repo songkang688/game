@@ -52,7 +52,7 @@ function parse(rows: string[]): ReturnType<typeof makeBoard> {
 
 function soloWorld(rows: string[], at: [number, number], power = 2): World {
   const board = parse(rows);
-  const me = makeFighter(0, "朵朵", "🌸", idx(board, at[0], at[1]));
+  const me = makeFighter(0, "鸭梨", "🌸", idx(board, at[0], at[1]));
   me.power = power;
   return createWorld({ board, fighters: [me], seed: 5, richness: 0 });
 }
@@ -149,7 +149,7 @@ describe("逃生路径 BFS(纯函数)", () => {
     // 直走廊:火力盖住一整条,唯一的出口远到跑不到
     const rows = ["#" + ".".repeat(20) + "#"];
     const board = parse(["#".repeat(22), rows[0], "#".repeat(22)]);
-    const me = makeFighter(0, "朵朵", "🌸", idx(board, 1, 1));
+    const me = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1));
     const world = createWorld({ board, fighters: [me], seed: 1, richness: 0 });
     world.bombs.push(bombOf(idx(board, 1, 1), 20));
     // 走一格要 2 秒,引信只有 2.4 秒,注定跑不出去
@@ -214,8 +214,8 @@ describe("目标搜索", () => {
 
   it("distanceToFoe 只看没被泡泡困住的对手", () => {
     const board = parse(["#######", "#.....#", "#######"]);
-    const a = makeFighter(0, "朵朵", "🌸", idx(board, 1, 1), 0);
-    const b = makeFighter(1, "星星", "⭐", idx(board, 4, 1), 1);
+    const a = makeFighter(0, "鸭梨", "🌸", idx(board, 1, 1), 0);
+    const b = makeFighter(1, "康康", "⭐", idx(board, 4, 1), 1);
     const world = createWorld({ board, fighters: [a, b], seed: 1, richness: 0 });
     expect(distanceToFoe(world, 0)).toBe(3);
     b.bubbleT = 1000;
@@ -375,7 +375,7 @@ describe("电脑玩家不会把自己炸掉", () => {
   it("手上有遥控弹又能盖住对手时会主动按引爆,盖到自己就不按", () => {
     const board = parse(["#########", "#.......#", "#########"]);
     const a = makeFighter(0, "电脑", "🤖", idx(board, 5, 1), 0);
-    const b = makeFighter(1, "星星", "⭐", idx(board, 2, 1), 1);
+    const b = makeFighter(1, "康康", "⭐", idx(board, 2, 1), 1);
     a.ai = true;
     a.remote = true;
     const world = createWorld({ board, fighters: [a, b], seed: 1, richness: 0 });

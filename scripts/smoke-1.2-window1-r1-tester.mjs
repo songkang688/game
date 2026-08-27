@@ -12,7 +12,7 @@
  *      B1 手游 / 端游筛选与分类、玩法、搜索四条件叠加,缺省 platform 当 both;
  *      C1 view25d 是自己写的透视数学,页面里没有 three.js;
  *   C. 12 款逐款:战役第 1 / 100 / 188 关、真实胜负各一次、对战 / 无尽 / 双人各玩到结算、
- *      双人键位(朵朵 WASD+F+G,星星 方向键+L+K)、360px 不溢出、退出再进不泄漏。
+ *      双人键位(鸭梨 WASD+F+G,康康 方向键+L+K)、360px 不溢出、退出再进不泄漏。
  *
  * 跑法(puppeteer-core 是临时工具,没有进 package.json):
  *   npm i --no-save puppeteer-core
@@ -94,7 +94,7 @@ const GAMES = [
   },
   {
     id: "star-estate",
-    title: "朵星地产",
+    title: "梨康地产",
     p: "se",
     modes: ["🤝 对战 1v3", "♾️ 短盘连胜", "👫 双人同屏"],
     keys: ["KeyF", "KeyG", "KeyD"],
@@ -938,7 +938,7 @@ async function main() {
         log(res.v !== "", `${label}:玩到结算`, res.v ? `结算「${res.v}」· ${res.acts} 次操作` : `${res.acts} 次操作 / ${Math.round(res.ms / 1000)}s 内没等到结算`);
       }
 
-      // 6) 双人键位:朵朵 WASD+F+G,星星 方向键+L+K
+      // 6) 双人键位:鸭梨 WASD+F+G,康康 方向键+L+K
       const duoLabel = g.modes.find((m) => m.includes("双人"));
       if (duoLabel) {
         await page.goto(`${BASE}/?t=${Date.now()}#/game/${g.id}`, { waitUntil: "networkidle0" });
@@ -966,8 +966,8 @@ async function main() {
           await sleep(120);
         }
         const after = await fingerprint(page);
-        log(before !== midway, `${duoLabel}:朵朵 WASD+F+G 有反应`);
-        log(midway !== after, `${duoLabel}:星星 方向键+L+K 有反应`);
+        log(before !== midway, `${duoLabel}:鸭梨 WASD+F+G 有反应`);
+        log(midway !== after, `${duoLabel}:康康 方向键+L+K 有反应`);
         const flow = await overflowX(page);
         log(flow.doc <= 1, `${duoLabel}:360px 不溢出`, `doc+${flow.doc}${flow.doc > 1 ? " " + flow.bad : ""}`);
       } else {
@@ -1077,7 +1077,7 @@ async function main() {
       ["block-drop", "方块叠叠乐", "fkddl"],
       ["combo-clash", "连招对决", "lzdj"],
       ["mahjong-bloom", "花开麻将", "hkmj"],
-      ["star-estate", "朵星地产", "dxdc"],
+      ["star-estate", "梨康地产", "dxdc"],
       ["hero-cards", "英杰令", "yjl"],
       ["weiqi-garden", "围子花园", "wzhy"],
       ["flight-chess", "飞行棋乐园", "fxqly"],
@@ -1136,10 +1136,10 @@ async function main() {
     const s2 = await sides();
     const moved = (a, b) => a.cursor !== b.cursor || a.opened !== b.opened || a.flags !== b.flags;
     if (s0.length === 2) {
-      log(moved(s0[0], s1[0]), "mine-garden 双人:朵朵 WASD+F+G 只动左边", JSON.stringify([s0[0], s1[0]]));
-      log(!moved(s0[1], s1[1]), "mine-garden 双人:朵朵按键不会串到星星那边", JSON.stringify([s0[1], s1[1]]));
-      log(moved(s1[1], s2[1]), "mine-garden 双人:星星 方向键+L+K 只动右边", JSON.stringify([s1[1], s2[1]]));
-      log(!moved(s1[0], s2[0]), "mine-garden 双人:星星按键不会串到朵朵那边", JSON.stringify([s1[0], s2[0]]));
+      log(moved(s0[0], s1[0]), "mine-garden 双人:鸭梨 WASD+F+G 只动左边", JSON.stringify([s0[0], s1[0]]));
+      log(!moved(s0[1], s1[1]), "mine-garden 双人:鸭梨按键不会串到康康那边", JSON.stringify([s0[1], s1[1]]));
+      log(moved(s1[1], s2[1]), "mine-garden 双人:康康 方向键+L+K 只动右边", JSON.stringify([s1[1], s2[1]]));
+      log(!moved(s1[0], s2[0]), "mine-garden 双人:康康按键不会串到鸭梨那边", JSON.stringify([s1[0], s2[0]]));
     } else {
       log(false, "mine-garden 双人:两块盘面都在", `找到 ${s0.length} 块`);
     }

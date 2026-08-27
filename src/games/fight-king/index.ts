@@ -1,9 +1,9 @@
 export { meta } from "./meta";
 
-// 朵星格斗王 —— 2D 卡通对打。
+// 梨康格斗王 —— 2D 卡通对打。
 //
 // 五种模式共用同一套对局界面：
-//   · 双人对战：同屏两套键位，朵朵 WASD+F/G，星星 方向键+L/K；
+//   · 双人对战：同屏两套键位，鸭梨 WASD+F/G，康康 方向键+L/K；
 //   · 人机对战：AI 五档，一档比一档多会一样本事（会跳会投 → 会防反 → 高手）；
 //   · 格斗塔：走 src/games/level99.ts 的 188 关框架，八章八位守擂者；
 //   · 无尽：连胜挑战，赢一场换一个更强的对手；
@@ -92,10 +92,10 @@ import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../l
 /**
  * 格斗塔默认派谁上场。
  *
- * 以前这里固定是 `CHARACTERS[0]`（朵朵）。第 2 轮验收拿仓库自带那把尺量下来
+ * 以前这里固定是 `CHARACTERS[0]`（鸭梨）。第 2 轮验收拿仓库自带那把尺量下来
  * （`curve.test.ts` 的做法：玩家一侧交给 lv4 的手、对手照配表取档位与增益、固定 seed），
- * 朵朵在第 125 关往后一路 0/8，换个小伙伴立刻 4~6/8 —— **关卡表不是墙，默认主角才是**（R2B-3）。
- * 所以默认改成实测能一路推到塔顶的星星；朵朵仍旧排在选人格第一位，想用她随时点。
+ * 鸭梨在第 125 关往后一路 0/8，换个小伙伴立刻 4~6/8 —— **关卡表不是墙，默认主角才是**（R2B-3）。
+ * 所以默认改成实测能一路推到塔顶的康康；鸭梨仍旧排在选人格第一位，想用她随时点。
  */
 export const TOWER_HERO_ID = "xingxing";
 
@@ -1462,7 +1462,7 @@ function frameTable(ch: Character): HTMLElement {
 type Mode = "versus" | "cpu" | "tower" | "endless" | "training";
 
 const MODE_CARDS: Array<{ mode: Mode; emoji: string; title: string; desc: string }> = [
-  { mode: "versus", emoji: "🥊", title: "双人对战", desc: "同屏两套键位，朵朵 WASD+F/G，星星 方向键+L/K" },
+  { mode: "versus", emoji: "🥊", title: "双人对战", desc: "同屏两套键位，鸭梨 WASD+F/G，康康 方向键+L/K" },
   { mode: "cpu", emoji: "🤖", title: "人机对战", desc: "AI 五档：轻松 / 普通 / 灵巧 / 老练 / 高手，每一档新学会一样本事" },
   { mode: "tower", emoji: "🏯", title: "格斗塔 188 关", desc: "八层八位守擂者，越往上对手越会打（不是越耐打）" },
   { mode: "endless", emoji: "🔥", title: "无尽连胜", desc: "一场接一场，最长连胜会记进你的成绩单" },
@@ -1501,7 +1501,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function showMenu(): void {
     clearScreen();
     const card = el("div", "fk-card");
-    card.appendChild(el("div", "fk-h", "🥋 朵星格斗王"));
+    card.appendChild(el("div", "fk-h", "🥋 梨康格斗王"));
     card.appendChild(
       el(
         "div",

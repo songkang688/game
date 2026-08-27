@@ -5,7 +5,7 @@
  *  1. `destroy` 要把定时器与两套键位收干净,离开对战场不留后台任务;
  *  2. 1.2 追加的样式一律 `rbt-` 前缀(拔河那款用的是 rbg 前缀,不许撞),而且只贴在老规则后面;
  *  3. 手机 360px 上按钮 ≥ 72px、两侧热区之间的隔离带 ≥ 24px;
- *  4. 红线:无血无伤、失败只鼓励、只用朵朵 / 星星、无商标、保持 2D、不联网不内购。
+ *  4. 红线:无血无伤、失败只鼓励、只用鸭梨 / 康康、无商标、保持 2D、不联网不内购。
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -72,7 +72,7 @@ describe("红蓝点点 · destroy 归零", () => {
   it("两套键位分开挂、也分开卸:装了几个 keydown 就卸几个", () => {
     const on = [...arena.matchAll(/window\.addEventListener\("keydown"/g)].length;
     const off = [...arena.matchAll(/window\.removeEventListener\("keydown"/g)].length;
-    // 对战场两套(朵朵 + 星星)、无尽一套
+    // 对战场两套(鸭梨 + 康康)、无尽一套
     expect(on).toBe(3);
     expect(off).toBe(on);
   });
@@ -228,9 +228,9 @@ describe("红蓝点点 · 分级红线", () => {
     expect(arena).toContain("save.recordEndlessBest(meta.id, cleared)");
   });
 
-  it("角色只有朵朵和星星", () => {
-    expect(arena).toContain("朵朵");
-    expect(arena).toContain("星星");
+  it("角色只有鸭梨和康康", () => {
+    expect(arena).toContain("鸭梨");
+    expect(arena).toContain("康康");
     expect(allSource).toContain("AVATAR_URLS.duoduo");
   });
 });

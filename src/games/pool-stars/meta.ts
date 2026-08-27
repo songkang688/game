@@ -4,7 +4,7 @@
  */
 export const meta = {
   id: "pool-stars",
-  title: "朵星台球",
+  title: "梨康台球",
   emoji: "🎱",
   category: "casual" as const,
   color: "#CDE8D0",

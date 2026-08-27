@@ -15,7 +15,7 @@ export const MAP_H = 13;
 
 /** 星星堡垒的位置(底边正中) */
 export const BASE: { cx: number; cy: number } = { cx: 6, cy: 12 };
-/** 朵朵 / 星星的出生点 */
+/** 鸭梨 / 康康的出生点 */
 export const PLAYER_SPAWNS: ReadonlyArray<{ cx: number; cy: number }> = [
   { cx: 3, cy: 12 },
   { cx: 9, cy: 12 },

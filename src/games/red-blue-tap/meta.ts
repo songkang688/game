@@ -9,7 +9,7 @@ export const meta = {
   category: "party" as const,
   color: "#4dabf7",
   blurb: "188 关抢点大战！双人同屏比谁更准，反应、顺序、颜色、计数四种回合轮着来。",
-  // 10 章合计 188 关;闯关对手是小电脑(星星),另有同屏两人的「双人对战」与「点到手软」无尽
+  // 10 章合计 188 关;闯关对手是小电脑(康康),另有同屏两人的「双人对战」与「点到手软」无尽
   modes: ["campaign", "versus", "endless"] as const,
   levels: 188,
 };

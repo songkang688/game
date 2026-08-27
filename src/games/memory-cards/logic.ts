@@ -337,7 +337,7 @@ export function cardWidthAt(width: number, cols: number, rows: number, pad = 12)
 
 export type Seat = 0 | 1;
 
-export const SEAT_NAMES: [string, string] = ["朵朵", "星星"];
+export const SEAT_NAMES: [string, string] = ["鸭梨", "康康"];
 
 /** 配到了就接着翻，没配到才换人 */
 export function nextTurn(cur: Seat, matched: boolean): Seat {

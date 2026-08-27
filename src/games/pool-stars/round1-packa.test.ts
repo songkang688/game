@@ -1,5 +1,5 @@
 /**
- * 朵星台球 · 窗口 2 第 1 轮验收 · 测试员包 A 的复现测试。
+ * 梨康台球 · 窗口 2 第 1 轮验收 · 测试员包 A 的复现测试。
  *
  * 这一份只做「记录取证」，不改玩法：走查铁则第 1 / 3 / 6 条在既有测试里没覆盖到的缺口，
  * 把测出来的现象钉成断言，修复员改完之后一眼就能看出到底改没改。
@@ -36,8 +36,8 @@ afterEach(() => {
 });
 
 const DUO_SEATS: SeatPlan[] = [
-  { name: "朵朵", emoji: "🌸", color: "#e8558f", ai: null },
-  { name: "星星", emoji: "⭐", color: "#3f7fd6", ai: null },
+  { name: "鸭梨", emoji: "🌸", color: "#e8558f", ai: null },
+  { name: "康康", emoji: "⭐", color: "#3f7fd6", ai: null },
 ];
 
 function mountTable(over: Partial<TableOptions> = {}): {
@@ -47,7 +47,7 @@ function mountTable(over: Partial<TableOptions> = {}): {
   const settled: ShotIntent[] = [];
   const handle = createTable(dom.root as unknown as HTMLElement, {
     balls: [makeBall(0, "cue", 40, 50), makeBall(1, "warm", 140, 28)],
-    seats: [{ name: "朵朵", emoji: "🌸", color: "#e8558f", ai: null }],
+    seats: [{ name: "鸭梨", emoji: "🌸", color: "#e8558f", ai: null }],
     turn: 0,
     banner: "练习台",
     tip: "先找线再出杆。",
@@ -213,35 +213,35 @@ describe("PA-PS-1 · Esc 暂停的封锁范围", () => {
 /* ------------------------------------------------------------------ */
 
 describe("PA-PS-2 · 双人同屏键位互不抢占", () => {
-  it("出杆键分座位：轮到朵朵时星星的 L 按不动，F 才有用", () => {
+  it("出杆键分座位：轮到鸭梨时康康的 L 按不动，F 才有用", () => {
     const { handle } = mountTable({ seats: DUO_SEATS, turn: 0 });
     shoot("l");
-    expect(handle.rolling(), "轮到朵朵，星星的 L 却把球打出去了").toBe(false);
+    expect(handle.rolling(), "轮到鸭梨，康康的 L 却把球打出去了").toBe(false);
     shoot("f");
     expect(handle.rolling()).toBe(true);
     handle.destroy();
   });
 
-  it("轮到星星时朵朵的 F 按不动，L 才有用", () => {
+  it("轮到康康时鸭梨的 F 按不动，L 才有用", () => {
     const { handle } = mountTable({ seats: DUO_SEATS, turn: 1 });
     shoot("f");
-    expect(handle.rolling(), "轮到星星，朵朵的 F 却把球打出去了").toBe(false);
+    expect(handle.rolling(), "轮到康康，鸭梨的 F 却把球打出去了").toBe(false);
     shoot("l");
     expect(handle.rolling()).toBe(true);
     handle.destroy();
   });
 
-  it("取消蓄力键也分座位：星星的 K 取消不掉朵朵的蓄力", () => {
+  it("取消蓄力键也分座位：康康的 K 取消不掉鸭梨的蓄力", () => {
     const { handle } = mountTable({ seats: DUO_SEATS, turn: 0 });
     fireWin("keydown", "f");
     dom.clock.ms += 200;
     fireWin("keydown", "k");
     fireWin("keyup", "f");
-    expect(handle.rolling(), "星星的 K 取消掉了朵朵的蓄力").toBe(true);
+    expect(handle.rolling(), "康康的 K 取消掉了鸭梨的蓄力").toBe(true);
     handle.destroy();
   });
 
-  it("G 能取消掉朵朵自己的蓄力，松开 F 就不出杆了", () => {
+  it("G 能取消掉鸭梨自己的蓄力，松开 F 就不出杆了", () => {
     const { handle } = mountTable({ seats: DUO_SEATS, turn: 0 });
     fireWin("keydown", "f");
     dom.clock.ms += 200;
@@ -251,39 +251,39 @@ describe("PA-PS-2 · 双人同屏键位互不抢占", () => {
     handle.destroy();
   });
 
-  it("瞄准键也分座位：轮到星星时朵朵的 D 拨不动角度", () => {
+  it("瞄准键也分座位：轮到康康时鸭梨的 D 拨不动角度", () => {
     const { handle, settled } = mountTable({ seats: DUO_SEATS, turn: 1 });
     for (let i = 0; i < 10; i++) fireWin("keydown", "d");
     shoot("l", 200);
     runUntilSettled(settled);
     expect(settled).toHaveLength(1);
-    expect(settled[0].angle, "朵朵的 D 改动了星星的瞄准角").toBeCloseTo(0, 5);
+    expect(settled[0].angle, "鸭梨的 D 改动了康康的瞄准角").toBeCloseTo(0, 5);
     handle.destroy();
   });
 
-  it("反过来轮到朵朵时星星的方向键也够不着", () => {
+  it("反过来轮到鸭梨时康康的方向键也够不着", () => {
     const { handle, settled } = mountTable({ seats: DUO_SEATS, turn: 0 });
     for (let i = 0; i < 10; i++) fireWin("keydown", "ArrowRight");
     shoot("f", 200);
     runUntilSettled(settled);
     expect(settled).toHaveLength(1);
-    expect(settled[0].angle, "星星的方向键改动了朵朵的瞄准角").toBeCloseTo(0, 5);
+    expect(settled[0].angle, "康康的方向键改动了鸭梨的瞄准角").toBeCloseTo(0, 5);
     handle.destroy();
   });
 
-  it("各自那一套照旧管用：朵朵的 D 与星星的方向键都拨得动自己那一杆", () => {
+  it("各自那一套照旧管用：鸭梨的 D 与康康的方向键都拨得动自己那一杆", () => {
     const duo = mountTable({ seats: DUO_SEATS, turn: 0 });
     for (let i = 0; i < 10; i++) fireWin("keydown", "d");
     shoot("f", 200);
     runUntilSettled(duo.settled);
-    expect(duo.settled[0].angle, "朵朵自己的 D 也拨不动了").toBeCloseTo(0.3, 5);
+    expect(duo.settled[0].angle, "鸭梨自己的 D 也拨不动了").toBeCloseTo(0.3, 5);
     duo.handle.destroy();
 
     const star = mountTable({ seats: DUO_SEATS, turn: 1 });
     for (let i = 0; i < 10; i++) fireWin("keydown", "ArrowRight");
     shoot("l", 200);
     runUntilSettled(star.settled);
-    expect(star.settled[0].angle, "星星自己的方向键也拨不动了").toBeCloseTo(0.3, 5);
+    expect(star.settled[0].angle, "康康自己的方向键也拨不动了").toBeCloseTo(0.3, 5);
     star.handle.destroy();
   });
 
@@ -301,7 +301,7 @@ describe("PA-PS-2 · 双人同屏键位互不抢占", () => {
   it("电脑回合里两个人的出杆键都按不动", () => {
     const { handle } = mountTable({
       seats: [
-        { name: "朵朵", emoji: "🌸", color: "#e8558f", ai: null },
+        { name: "鸭梨", emoji: "🌸", color: "#e8558f", ai: null },
         { name: "电脑", emoji: "🤖", color: "#3f7fd6", ai: 2 },
       ],
       turn: 1,

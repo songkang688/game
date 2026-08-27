@@ -62,8 +62,8 @@ function soloBoard(fen: string | undefined, extra: Record<string, unknown> = {})
   const handle = createBoard(dom.root as unknown as HTMLElement, {
     fen,
     seats: [
-      { name: "朵朵", emoji: "🌸", color: "#fff", ai: null },
-      { name: "星星", emoji: "⭐", color: "#eef", ai: null },
+      { name: "鸭梨", emoji: "🌸", color: "#fff", ai: null },
+      { name: "康康", emoji: "⭐", color: "#eef", ai: null },
     ],
     banner: "测试",
     tip: "测试提示",
@@ -235,7 +235,7 @@ describe("棋盘视图", () => {
     handle.destroy();
   });
 
-  it("朵朵 WASD + F 走白棋，星星 方向键 + L 走黑棋", () => {
+  it("鸭梨 WASD + F 走白棋，康康 方向键 + L 走黑棋", () => {
     const { handle } = soloBoard(undefined);
     const press = (key: string) => fireWindow(dom, "keydown", { key, preventDefault: () => undefined });
     // 光标开局在 e1，往上两格到 e3？先到 e2 选中兵
@@ -294,7 +294,7 @@ describe("棋盘视图", () => {
     let asked = 0;
     const { handle } = soloBoard(undefined, {
       seats: [
-        { name: "朵朵", emoji: "🌸", color: "#fff", ai: null },
+        { name: "鸭梨", emoji: "🌸", color: "#fff", ai: null },
         { name: "电脑", emoji: "🤖", color: "#eef", ai: 1 },
       ],
       aiDelayMs: 200,

@@ -385,7 +385,7 @@ function wordText(spec: Extract<MathSpec, { kind: "word" }>): string {
     case "fill":
       return `摘了 ${n1} 个${item}，先送走 ${n2} 个，剩下的每${bag}放 ${n3} 个，能装满几${bag}？`;
     case "trip":
-      return `朵朵去果园摘${item}，每分钟走 ${n1} 米，走了 ${n2} 分钟，再走 ${n3} 米就到，一共多少米？`;
+      return `鸭梨去果园摘${item}，每分钟走 ${n1} 米，走了 ${n2} 分钟，再走 ${n3} 米就到，一共多少米？`;
     case "price":
       return `${item}每千克 ${n1} 元，买了 ${n2} 千克，付出 ${n3} 元，应该找回多少元？`;
     default:
@@ -507,7 +507,7 @@ export function renderSpec(spec: MathSpec): { promptHTML: string; ask: string } 
         const item = FARM_ITEMS[spec.item % FARM_ITEMS.length];
         return {
           promptHTML: bigText(
-            `${spec.total} 个${item}按 ${spec.p} : ${spec.q} 分给朵朵和星星，星星分到几个？`
+            `${spec.total} 个${item}按 ${spec.p} : ${spec.q} 分给鸭梨和康康，康康分到几个？`
           ),
           ask: "先算一共分成几份～",
         };

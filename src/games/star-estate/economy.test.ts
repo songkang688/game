@@ -43,7 +43,7 @@ import { makeDeck, type EstateCard } from "./cards";
 import { mulberry32 } from "../level99";
 
 function seats(n: number, cash = START_CASH): EstateState {
-  const names = ["朵朵", "星星", "糯糯", "云云"];
+  const names = ["鸭梨", "康康", "糯糯", "云云"];
   const emoji = ["🌸", "⭐", "🍡", "☁️"];
   return createState(
     Array.from({ length: n }, (_, i) => ({ name: names[i], emoji: emoji[i], cash })),

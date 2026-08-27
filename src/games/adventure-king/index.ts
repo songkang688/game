@@ -2,7 +2,7 @@ import { meta } from "./meta";
 export { meta };
 
 // 冒险小王:横版探索闯关。
-// 朵朵背着回旋镖和抓钩钻进遗迹走廊:小坑直接跳,宽裂口甩抓钩荡过去,
+// 鸭梨背着回旋镖和抓钩钻进遗迹走廊:小坑直接跳,宽裂口甩抓钩荡过去,
 // 守卫用回旋镖敲晕,集齐日纹石 / 月纹石 / 星纹石三件神器才推得开尽头的首领之门。
 // 三种玩法:188 关八大遗迹战役、无尽遗迹(一层比一层深)、计时速通(每章记录最好时间)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
@@ -187,7 +187,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   const canvas = document.createElement("canvas");
   canvas.className = "ak-canvas";
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", "遗迹走廊:朵朵在石台之间跑跳、荡抓钩、找神器");
+  canvas.setAttribute("aria-label", "遗迹走廊:鸭梨在石台之间跑跳、荡抓钩、找神器");
   wrap.appendChild(canvas);
 
   const pad = document.createElement("div");
@@ -497,7 +497,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     c2d.beginPath();
     c2d.ellipse(x, y + 3 * scale, r, 5 * scale, 0, 0, Math.PI * 2);
     c2d.fill();
-    // 朵朵:圆脑袋 + 小马尾 + 探险背包带
+    // 鸭梨:圆脑袋 + 小马尾 + 探险背包带
     c2d.fillStyle = "#ffb3c8";
     c2d.beginPath();
     c2d.roundRect(x - r, y - PLAYER_H * scale, r * 2, PLAYER_H * scale, 12 * scale);
@@ -949,7 +949,7 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
 
   function renderBoard(): void {
     board.style.gridTemplateColumns = `repeat(${state.w},1fr)`;
-    board.setAttribute("aria-label", `${current.template.name}:朵朵在房间里找出口,已探索 ${Math.round(exploredRatio(state) * 100)}%`);
+    board.setAttribute("aria-label", `${current.template.name}:鸭梨在房间里找出口,已探索 ${Math.round(exploredRatio(state) * 100)}%`);
     board.innerHTML = "";
     for (let y = 0; y < state.h; y++) {
       for (let x = 0; x < state.w; x++) {

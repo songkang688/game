@@ -2,8 +2,8 @@
  * 翻翻暗棋 · 棋盘视图。
  *
  * 32 个格子就是 32 个按钮，点一下翻子，再点一下走子；
- * 键盘朵朵用 WASD + F / G，星星用方向键 + L / K，各管各的一个光标。
- * 单人局里方向键与 L / K 是朵朵的别名，老键位一条都不丢。
+ * 键盘鸭梨用 WASD + F / G，康康用方向键 + L / K，各管各的一个光标。
+ * 单人局里方向键与 L / K 是鸭梨的别名，老键位一条都不丢。
  * 翻子和吃子都有动画，不许瞬变。
  */
 import { COLS, KINDS, RANK, ROWS, colOf, indexOf, labelOf, rowOf, type Color, type Kind } from "./board";
@@ -117,13 +117,13 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
 
   const cells: HTMLButtonElement[] = [];
   let selected = -1;
-  /** 一人一个光标：朵朵从左上角起，星星从右下角起，谁也拨不走谁的 */
+  /** 一人一个光标：鸭梨从左上角起，康康从右下角起，谁也拨不走谁的 */
   const cursors: Record<Side, number> = { duo: 0, star: ROWS * COLS - 1 };
   let targets: number[] = [];
   const timers: Array<ReturnType<typeof setTimeout>> = [];
   let destroyed = false;
 
-  /** 单人局里星星那一套键（方向键 + L / K）也归朵朵，老键位一条都不丢 */
+  /** 单人局里康康那一套键（方向键 + L / K）也归鸭梨，老键位一条都不丢 */
   const starSeat: Side = opts.humans.includes("star") ? "star" : "duo";
 
   function humanTurn(): boolean {
@@ -199,7 +199,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     refresh();
   }
 
-  // 两套键位各管各的座位：朵朵 WASD + F / G，星星 方向键 + L / K
+  // 两套键位各管各的座位：鸭梨 WASD + F / G，康康 方向键 + L / K
   const DUO_MOVE: Record<string, [number, number]> = {
     w: [-1, 0],
     s: [1, 0],

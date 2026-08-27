@@ -222,7 +222,7 @@ interface Pilot {
 }
 
 const PILOT_INK = ["#B44F84", "#39699F"];
-const PILOT_NAME = ["朵朵", "星星"];
+const PILOT_NAME = ["鸭梨", "康康"];
 
 function makePilot(index: number, x: number): Pilot {
   return {
@@ -427,7 +427,7 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     el(
       "span",
       "sks-legend",
-      opts.players === 2 ? "⌨️ 朵朵 WASD·F·G / 星星 方向键·L·K" : "⌨️ WASD·方向键 / F 开火 / G 炸弹"
+      opts.players === 2 ? "⌨️ 鸭梨 WASD·F·G / 康康 方向键·L·K" : "⌨️ WASD·方向键 / F 开火 / G 炸弹"
     )
   );
 
@@ -676,7 +676,7 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     const pad = el("div", "sks-pad");
     const name = el("div", "sks-pad-name");
     name.style.color = p.ink;
-    name.textContent = opts.players === 2 ? (p.index === 0 ? "朵朵" : "星星") : "拖着飞";
+    name.textContent = opts.players === 2 ? (p.index === 0 ? "鸭梨" : "康康") : "拖着飞";
     pad.appendChild(name);
     const layout: Array<{ label: string; action: SkyAction; cls?: string; aria: string }> = [
       { label: "◀", action: "left", aria: "向左飞" },
@@ -2039,7 +2039,7 @@ function mountCoop(host: HTMLElement, api: GameApi, onExit: () => void): { destr
         const won = result.cleared && result.bossDown;
         api.play(won ? "win" : "oops");
         const line = won
-          ? `两个人一共请回 ${together} 架小飞机,${boss.name}也回机库啦!朵朵 ${pilots[0].downed} 架,星星 ${pilots[1].downed} 架。`
+          ? `两个人一共请回 ${together} 架小飞机,${boss.name}也回机库啦!鸭梨 ${pilots[0].downed} 架,康康 ${pilots[1].downed} 架。`
           : `这次差一点点。下次试试贴在一起飞:合流波一发能顶好几发,一个人吸引弹幕、一个人负责对准。`;
         if (won) round++;
         sortie?.veil(won ? "配合成功 🏆" : "再来一次 💪", line, [
@@ -2113,7 +2113,7 @@ function mountDuo(host: HTMLElement, api: GameApi, onExit: () => void): { destro
         const line =
           a.downed === b.downed
             ? `打成平手!两个人各请回 ${a.downed} 架小飞机,擦弹一共 ${result.grazes} 次。`
-            : `${a.downed > b.downed ? a.name : b.name}这一趟多请回了几架:朵朵 ${a.downed} 架,星星 ${b.downed} 架 —— 另一位下次贴着弹走试试,擦弹也算本事。`;
+            : `${a.downed > b.downed ? a.name : b.name}这一趟多请回了几架:鸭梨 ${a.downed} 架,康康 ${b.downed} 架 —— 另一位下次贴着弹走试试,擦弹也算本事。`;
         if (result.cleared) round++;
         sortie?.veil(result.cleared ? "这一趟飞完啦 🎉" : "再来一趟 💪", line, [
           { label: "🔁 再飞一趟", onClick: () => start() },

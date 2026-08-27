@@ -26,9 +26,9 @@ import { shuffleWall } from "./wall";
 const T = (s: string): number => parseTiles(s)[0];
 
 const SEATS: TableOptions["seats"] = [
-  { name: "朵朵", human: "duo" },
+  { name: "鸭梨", human: "duo" },
   { name: "糯糯", tier: "normal" },
-  { name: "星星", tier: "normal" },
+  { name: "康康", tier: "normal" },
   { name: "云云", tier: "normal" }
 ];
 
@@ -305,9 +305,9 @@ describe("整盘能跑到底", () => {
         dealer: g % 4,
         floor: 8,
         seats: [
-          { name: "朵朵", tier: "pro" },
+          { name: "鸭梨", tier: "pro" },
           { name: "糯糯", tier: "normal" },
-          { name: "星星", tier: "hell" },
+          { name: "康康", tier: "hell" },
           { name: "云云", tier: "rookie" }
         ]
       });

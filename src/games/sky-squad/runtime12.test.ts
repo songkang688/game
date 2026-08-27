@@ -200,7 +200,7 @@ describe("sky-squad 1.2 运行时 · 拖着飞", () => {
 // ---------------------------------------------------------------------------
 
 describe("sky-squad 1.2 运行时 · 双人", () => {
-  it("两个人同时按键互不串:朵朵往左、星星往右", async () => {
+  it("两个人同时按键互不串:鸭梨往左、康康往右", async () => {
     const h = (harness = install());
     const sortie = await openSortie(h, { players: 2 });
     const before = sortie.snapshot().pilots;
@@ -211,7 +211,7 @@ describe("sky-squad 1.2 运行时 · 双人", () => {
     expect(after[0].x).toBeLessThan(before[0].x - 20);
     expect(after[1].x).toBeGreaterThan(before[1].x + 20);
 
-    // 松开朵朵的键,只有朵朵停下,星星继续往右
+    // 松开鸭梨的键,只有鸭梨停下,康康继续往右
     h.key("keyup", "KeyA");
     const mid = sortie.snapshot().pilots;
     h.flush(20);
@@ -417,8 +417,8 @@ describe("sky-squad 1.2 平台接线", () => {
       expect(pads.dataset.players, `${entry} 不是两个人`).toBe("2");
       expect(findAll(h.root, "sks-pad").length).toBe(2);
       const text = allText(h.root);
-      expect(text).toContain("朵朵 WASD");
-      expect(text).toContain("星星 方向键");
+      expect(text).toContain("鸭梨 WASD");
+      expect(text).toContain("康康 方向键");
       findButton(h.root, "← 返回")?.fire("click");
       h.flush(2);
     }

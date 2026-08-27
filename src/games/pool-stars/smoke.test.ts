@@ -1,4 +1,4 @@
-// 朵星台球 · 无头冒烟:不开浏览器,把整款游戏挂起来再拆掉。
+// 梨康台球 · 无头冒烟:不开浏览器,把整款游戏挂起来再拆掉。
 //
 // 这一份守三件事:
 //  1. meta 与首页契约对得上(id / 分类 / 模式 / 关数 / 手游端游);
@@ -51,7 +51,7 @@ function fakeApi(root: El) {
 describe("meta 契约", () => {
   it("id、分类、颜色、关数都按规格填", () => {
     expect(meta.id).toBe("pool-stars");
-    expect(meta.title).toBe("朵星台球");
+    expect(meta.title).toBe("梨康台球");
     expect(meta.emoji).toBe("🎱");
     expect(meta.category).toBe("casual");
     expect(meta.color).toBe("#CDE8D0");

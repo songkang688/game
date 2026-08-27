@@ -151,7 +151,7 @@ describe("puff-bros 几何红线", () => {
 });
 
 describe("puff-bros 键位", () => {
-  it("朵朵是 WASD + F/G,星星是方向键 + L/K", () => {
+  it("鸭梨是 WASD + F/G,康康是方向键 + L/K", () => {
     expect(KEY_MAP.KeyW).toEqual({ player: 0, action: "up" });
     expect(KEY_MAP.KeyA).toEqual({ player: 0, action: "left" });
     expect(KEY_MAP.KeyS).toEqual({ player: 0, action: "down" });
@@ -522,7 +522,7 @@ describe("puff-bros 三局两胜赛制", () => {
 
   it("比分能读成一句话", () => {
     const m = applyRound(newMatch(), 0);
-    expect(scoreLine(m, ["朵朵", "星星"])).toBe("朵朵 1 : 0 星星");
+    expect(scoreLine(m, ["鸭梨", "康康"])).toBe("鸭梨 1 : 0 康康");
   });
 });
 

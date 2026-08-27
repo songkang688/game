@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 —— 对局状态机的整局回归测试。
+ * 梨康格斗王 —— 对局状态机的整局回归测试。
  *
  * 这里不再单看某个纯函数，而是真的把比赛跑起来：
  * 走位、起跳、出招、格挡、破防、投技、受身、连段上限、顿帧、真实胜负，
@@ -146,9 +146,9 @@ describe("按键组合选招", () => {
     const air = { airborne: true, meter: 0 };
     expect(pickMove(duo, inputOf({ light: true }), 1, air)).toBe("jL");
     expect(pickMove(duo, inputOf({ heavy: true }), 1, air)).toBe("jH");
-    // 朵朵没有空中必杀，前+重还是跳重击
+    // 鸭梨没有空中必杀，前+重还是跳重击
     expect(pickMove(duo, inputOf({ right: true, heavy: true }), 1, air)).toBe("jH");
-    // 星星的流星踢是空中专用
+    // 康康的流星踢是空中专用
     const xing = characterById("xingxing");
     expect(pickMove(xing, inputOf({ right: true, heavy: true }), 1, air)).toBe("s2");
     // 在地上就出不了空中必杀

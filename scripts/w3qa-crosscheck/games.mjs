@@ -271,7 +271,7 @@ export const GAMES = {
     plan: shooterPlan(),
     modes: [
       { name: "无尽守老巢", enter: async (p) => { await clickText(p, /无尽守老巢/); }, plan: shooterPlan() },
-      { name: "单人闯关拉星星(合作)", enter: async (p) => { await clickText(p, /单人闯关/); await sleep(400); await l99Enter(p); }, plan: shooterPlan() },
+      { name: "单人闯关拉康康(合作)", enter: async (p) => { await clickText(p, /单人闯关/); await sleep(400); await l99Enter(p); }, plan: shooterPlan() },
       { name: "双人对战", enter: async (p) => { await clickText(p, /双人对战/); }, plan: shooterPlan() }
     ]
   },

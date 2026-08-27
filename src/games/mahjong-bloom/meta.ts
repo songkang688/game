@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🀄",
   category: "party" as const,
   color: "#FFE8F0",
-  blurb: "吃碰杠胡,把番数凑够八番。和朵朵星星还有两位棋友坐一桌,看谁先开花。",
+  blurb: "吃碰杠胡,把番数凑够八番。和鸭梨康康还有两位棋友坐一桌,看谁先开花。",
   // 国标规则的四人麻将:188 关残局战役 + 一人三机对战 + 快棋无尽 + 同屏双人,全程离线
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,

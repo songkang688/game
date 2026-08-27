@@ -490,7 +490,7 @@ export interface MatchResult {
 
 export const DEFAULT_ROLES: readonly Role[] = ["lord", "loyal", "rebel", "rebel", "spy"];
 
-export const SEAT_NAMES: readonly string[] = ["朵朵", "星星", "糯糯", "云云", "闪闪"];
+export const SEAT_NAMES: readonly string[] = ["鸭梨", "康康", "糯糯", "云云", "闪闪"];
 
 /** 洗一副身份:座位 0 固定当花主,其余四个随机 */
 export function rollRoles(rand: () => number): Role[] {

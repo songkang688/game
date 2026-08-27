@@ -238,7 +238,7 @@ const SIMPLE_HEROES = ["duoduo", "xingxing", "nuonuo", "yunmu", "doujiang", "lub
 const SKILL_HEROES = ["dundun", "shanshan", "xingdu", "jiujiu", "lvdou", "shuangye", "fengling", "huazhu"];
 /**
  * 前几章的对手只用「不会额外挡刀」的英杰。
- * 啾啾(任意牌当盾)、星督(翻判定当盾)、朵朵(元气归零还能再开一次)这几位
+ * 啾啾(任意牌当盾)、星督(翻判定当盾)、鸭梨(元气归零还能再开一次)这几位
  * 放在入门章里会让残局算不清,他们留到第 4 章往后再登场。
  */
 const PLAIN_FOES = ["nuonuo", "doujiang", "yunmu", "xingxing", "lvdou", "fengling", "shuangye", "lubai"];
@@ -286,7 +286,7 @@ function chapter1(
   const total = foeVigor * 2 + foeDodge * 2;
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId: pick(rand, SIMPLE_HEROES),
       role: "lord",
       vigor: playerVigor(2),
@@ -341,7 +341,7 @@ function chapter2(
   const foes = seatCount - 1;
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId: pick(rand, SIMPLE_HEROES),
       role: "lord",
       vigor: playerVigor(foes),
@@ -395,7 +395,7 @@ function chapter3(
   const foeVigor = 1 + (step >= 3 ? 1 : 0);
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId: pick(rand, SIMPLE_HEROES),
       role: "lord",
       vigor: playerVigor(foes),
@@ -451,7 +451,7 @@ function chapter4(
   const foeVigor = 1 + (step >= 2 ? 1 : 0);
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId: step >= 1 ? "lubai" : pick(rand, SIMPLE_HEROES),
       role: "lord",
       vigor: playerVigor(foes, 1),
@@ -510,7 +510,7 @@ function chapter5(
   const foeVigor = 1 + (step >= 1 ? 1 : 0) + (step >= 3 ? 1 : 0);
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId,
       role: "lord",
       vigor: playerVigor(foes, 1),
@@ -564,7 +564,7 @@ function chapter6(
   const asRebel = k % 2 === 1;
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId: pick(rand, SIMPLE_HEROES),
       role: asRebel ? "rebel" : "loyal",
       vigor: playerVigor(3, 1),
@@ -581,7 +581,7 @@ function chapter6(
       revealed: false
     },
     {
-      name: "星星",
+      name: "康康",
       heroId: "huazhu",
       role: "lord",
       vigor: asRebel ? 2 + (step >= 2 ? 1 : 0) : 5,
@@ -632,7 +632,7 @@ function chapter7(
   const withLoyal = step >= 1;
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId: pick(rand, SIMPLE_HEROES),
       role: "spy",
       vigor: playerVigor(3, 2),
@@ -650,7 +650,7 @@ function chapter7(
       revealed: false
     },
     {
-      name: "星星",
+      name: "康康",
       heroId: "xingxing",
       role: "lord",
       vigor: 4 + (step >= 2 ? 1 : 0),
@@ -706,7 +706,7 @@ function chapter8(
   const coop = k % 4 === 3;
   const seats: SeatSpec[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       heroId: pick(rand, SKILL_HEROES),
       role: coop ? "loyal" : "lord",
       vigor: playerVigor(3, 3),
@@ -725,7 +725,7 @@ function chapter8(
       revealed: !coop
     },
     {
-      name: "星星",
+      name: "康康",
       heroId: "huazhu",
       role: coop ? "lord" : "loyal",
       vigor: 5,
@@ -758,7 +758,7 @@ function chapter8(
     tier: step >= 2 ? "hell" : "pro",
     recipe: undefined,
     factionLock: coop,
-    goal: coop ? "和星星结盟,把两位夺花请下桌(同盟之间不能互相出击牌)" : "把两位夺花都请下桌",
+    goal: coop ? "和康康结盟,把两位夺花请下桌(同盟之间不能互相出击牌)" : "把两位夺花都请下桌",
     hint: coop
       ? "这一关是双势力合作:同一边的人不能互相出击牌,火力要一起对外。"
       : "整套牌堆都在,对手是地狱档。先拆装备,再集中火力。",

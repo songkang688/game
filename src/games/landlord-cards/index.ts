@@ -1,12 +1,12 @@
 import { meta } from "./meta";
 export { meta };
 
-// 朵朵抢地主 —— 完整规则的三人抢地主纸牌。
+// 鸭梨抢地主 —— 完整规则的三人抢地主纸牌。
 //
 // 54 张牌、叫分抢地主、三张底牌、单张对子三带顺子连对飞机四带二炸弹王炸、
 // 春天与反春天、翻倍,全套规则都在 logic.ts / sim.ts 里,这里只负责摆牌桌:
 // 扇形手牌、点选与横划框选、三档牌力提示、飞牌动画、温和的非法提示,以及四种玩法——
-// 对战(朵朵 vs 星星 vs 小牌灵)、188 层地主塔、无尽连胜、本地两人。
+// 对战(鸭梨 vs 康康 vs 小牌灵)、188 层地主塔、无尽连胜、本地两人。
 //
 // 这是一款纸牌策略游戏:全程没有货币、没有真实价值的输赢,倍数只是这一局的分数放大器。
 import { save } from "../../engine/save";
@@ -90,7 +90,7 @@ interface SeatCfg {
   avatar: string;
   isImg: boolean;
   level: AiLevel;
-  /** 人类玩家用哪一套键位:0 = 朵朵(WASD+F/G),1 = 星星(方向键+L/K) */
+  /** 人类玩家用哪一套键位:0 = 鸭梨(WASD+F/G),1 = 康康(方向键+L/K) */
   keys: 0 | 1;
 }
 
@@ -100,11 +100,11 @@ const BOT_FACES = [
   { name: "圆圆", avatar: "🐼" },
 ];
 
-function humanSeat(name: "朵朵" | "星星", keys: 0 | 1): SeatCfg {
+function humanSeat(name: "鸭梨" | "康康", keys: 0 | 1): SeatCfg {
   return {
     kind: "human",
     name,
-    avatar: name === "朵朵" ? AVATAR_URLS.duoduo : AVATAR_URLS.xingxing,
+    avatar: name === "鸭梨" ? AVATAR_URLS.duoduo : AVATAR_URLS.xingxing,
     isImg: true,
     level: "hard",
     keys,
@@ -121,14 +121,14 @@ function soloSeats(playerSeat: number, level: AiLevel): SeatCfg[] {
   const seats: SeatCfg[] = [];
   let bot = 0;
   for (let i = 0; i < 3; i++) {
-    seats.push(i === playerSeat ? humanSeat("朵朵", 0) : botSeat(bot++, level));
+    seats.push(i === playerSeat ? humanSeat("鸭梨", 0) : botSeat(bot++, level));
   }
   return seats;
 }
 
-/** 朵朵 + 星星 + 一个小牌灵 */
+/** 鸭梨 + 康康 + 一个小牌灵 */
 function duoSeats(level: AiLevel): SeatCfg[] {
-  return [humanSeat("朵朵", 0), humanSeat("星星", 1), botSeat(0, level)];
+  return [humanSeat("鸭梨", 0), humanSeat("康康", 1), botSeat(0, level)];
 }
 
 // ---------------------------------------------------------------------------
@@ -1514,7 +1514,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
 }
 
 // ---------------------------------------------------------------------------
-// 双人对战:朵朵 + 星星 + 一个小牌灵
+// 双人对战:鸭梨 + 康康 + 一个小牌灵
 // ---------------------------------------------------------------------------
 
 function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
@@ -1553,7 +1553,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
     const xingWon = mySideWon(r, 1);
     if (duoWon) score[0]++;
     if (xingWon) score[1]++;
-    const title = duoWon && xingWon ? "🤝 朵朵和星星是一伙的,一起赢啦!" : duoWon ? "🏆 朵朵赢啦!" : xingWon ? "🏆 星星赢啦!" : "🤖 这局被小牌灵拿下啦!";
+    const title = duoWon && xingWon ? "🤝 鸭梨和康康是一伙的,一起赢啦!" : duoWon ? "🏆 鸭梨赢啦!" : xingWon ? "🏆 康康赢啦!" : "🤖 这局被小牌灵拿下啦!";
     const spark = battleHighlight({
       won: duoWon || xingWon,
       ...mySideStats(r, duoWon ? 0 : 1),
@@ -1562,7 +1562,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
     const box = document.createElement("div");
     box.className = "ld-over";
     box.innerHTML = `<div class="ld-over-t">${title}</div>
-      <div class="ld-over-s">${spark}<br>${settleLine(r.settle)}<br>总比分:朵朵 ${score[0]} · 星星 ${score[1]}</div>`;
+      <div class="ld-over-s">${spark}<br>${settleLine(r.settle)}<br>总比分:鸭梨 ${score[0]} · 康康 ${score[1]}</div>`;
     const again = document.createElement("button");
     again.type = "button";
     again.className = "ld-open ld-open-vs";
@@ -1581,14 +1581,14 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
   function startRound(): void {
     table?.destroy();
     stage.innerHTML = "";
-    chip.textContent = `⚔️ 第 ${round} 局 · 朵朵 ${score[0]} : ${score[1]} 星星`;
+    chip.textContent = `⚔️ 第 ${round} 局 · 鸭梨 ${score[0]} : ${score[1]} 康康`;
     const d = dealCards(920000 + round * 4523 + bump * 65537);
     table = createTable(stage, {
       hands: d.hands,
       bottom: d.bottom,
       seats: duoSeats("normal"),
       bidStart: (round - 1) % 2,
-      banner: "⚔️ 朵朵 vs 星星 vs 小牌灵 —— 谁抢到地主谁一个人打两个!<br>换人时会先盖住牌,另一位记得捂眼睛哦",
+      banner: "⚔️ 鸭梨 vs 康康 vs 小牌灵 —— 谁抢到地主谁一个人打两个!<br>换人时会先盖住牌,另一位记得捂眼睛哦",
       sfx: (n) => api.play(n),
       onRedeal: () => {
         bump++;
@@ -1686,7 +1686,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       },
       mapHint: "先叫分抢地主,再一手一手把牌走完;拿不准就点「提示」。",
       grandMessage: "188 层地主塔全部登顶,你就是牌桌上的小王者!",
-      guideTitle: "朵朵抢地主 · 出牌手记",
+      guideTitle: "鸭梨抢地主 · 出牌手记",
     }
   );
 

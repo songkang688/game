@@ -1,5 +1,5 @@
 /**
- * 星星射击场的 188 关战役:十个靶场章节,一章一套新机制。
+ * 康康射击场的 188 关战役:十个靶场章节,一章一套新机制。
  * 全部靠 `level99.ts` 的确定性随机生成,同一关每次布局一模一样,可测可复现。
  */
 import { mulberry32, randInt, type Chapter } from "../level99";
@@ -30,10 +30,10 @@ export const CHAPTERS: Chapter[] = [
   { name: "铁皮工厂", emoji: "🤖", color: "#E2F3E8", desc: "铁皮机器人来回巡逻,打中就摊手坐下。", size: 20 },
   { name: "遮挡迷城", emoji: "🧱", color: "#F3E7DA", desc: "木板会挡住星星弹,得找没被挡住的角度。", size: 20 },
   { name: "编号挑战", emoji: "🔢", color: "#E7F0FB", desc: "靶子带号码,必须从 1 号开始按顺序打。", size: 20 },
-  { name: "忍住不打", emoji: "🌸", color: "#FFF3E1", desc: "好人靶和朵朵的花朵靶都不能碰,看清楚再按发射。", size: 20 },
+  { name: "忍住不打", emoji: "🌸", color: "#FFF3E1", desc: "好人靶和鸭梨的花朵靶都不能碰,看清楚再按发射。", size: 20 },
   { name: "彩虹限时", emoji: "🌈", color: "#FDE6F0", desc: "彩虹靶只待几秒,分裂靶打中还会变两个。", size: 20 },
   { name: "综合考场", emoji: "📋", color: "#EAE7F8", desc: "护盾靶要打两次,前面所有机制混在一起考。", size: 18 },
-  { name: "星星大师赛", emoji: "🏆", color: "#FFF0C9", desc: "全部靶种全开,还要顶住命中率线。", size: 12 },
+  { name: "康康大师赛", emoji: "🏆", color: "#FFF0C9", desc: "全部靶种全开,还要顶住命中率线。", size: 12 },
 ];
 
 export interface LevelDef {

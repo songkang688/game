@@ -136,7 +136,7 @@ describe("军旗对决 · 电脑对手", () => {
     let hellWins = 0;
     let rookieWins = 0;
     for (let i = 0; i < 20; i++) {
-      // 一半盘让地狱档坐朵朵这边，一半盘换边，省得先手占便宜
+      // 一半盘让地狱档坐鸭梨这边，一半盘换边，省得先手占便宜
       const seed = 5000 + i * 131;
       const hellIsDuo = i % 2 === 0;
       const r = hellIsDuo ? playMatch(seed, "hell", "rookie") : playMatch(seed, "rookie", "hell");

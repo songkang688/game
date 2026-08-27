@@ -34,9 +34,9 @@ function everyLine(): string[] {
   out.push(arenaLoseLine(0, 6, -1));
   for (const [r, b] of [[0, 0], [3, 3], [2, 9], [12, 8]]) out.push(arenaEndlessLine(r, b));
   out.push(arenaCoopLine(10, 10, 40), arenaCoopLine(4, 10, 9));
-  out.push(arenaVersusLine(-1, [3, 3], ["朵朵", "星星"]));
-  out.push(arenaVersusLine(0, [4, 1], ["朵朵", "星星"]));
-  out.push(arenaVersusLine(1, [0, 5], ["朵朵", "星星"]));
+  out.push(arenaVersusLine(-1, [3, 3], ["鸭梨", "康康"]));
+  out.push(arenaVersusLine(0, [4, 1], ["鸭梨", "康康"]));
+  out.push(arenaVersusLine(1, [0, 5], ["鸭梨", "康康"]));
   out.push(draftTitle(1), draftTitle(4));
   return out;
 }
@@ -96,8 +96,8 @@ describe("1.2 文案红线", () => {
   });
 
   it("对战平手不点名赢家,分出胜负时点名的是真赢的那边", () => {
-    expect(arenaVersusLine(-1, [2, 2], ["朵朵", "星星"])).toContain("平手");
-    expect(arenaVersusLine(0, [4, 0], ["朵朵", "星星"])).toContain("朵朵这边守得更稳");
-    expect(arenaVersusLine(1, [0, 4], ["朵朵", "星星"])).toContain("星星这边守得更稳");
+    expect(arenaVersusLine(-1, [2, 2], ["鸭梨", "康康"])).toContain("平手");
+    expect(arenaVersusLine(0, [4, 0], ["鸭梨", "康康"])).toContain("鸭梨这边守得更稳");
+    expect(arenaVersusLine(1, [0, 4], ["鸭梨", "康康"])).toContain("康康这边守得更稳");
   });
 });

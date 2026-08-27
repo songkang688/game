@@ -2,7 +2,7 @@ import type { GuideBook } from "../../ui/level188Contract";
 
 const guide: GuideBook = {
   gameId: "landlord-cards",
-  title: "朵朵抢地主",
+  title: "鸭梨抢地主",
   general: [
     "拿到牌先在心里数一遍:几手能走完?顺子、连对、飞机各算一手,剩下的散牌单张也各算一手。手数越少越占便宜。牌力提示的「推荐一手」算的就是这笔账。",
     "叫分不是越高越好。大牌多、散牌少才值得叫到 3 分;一手散牌硬当地主,底牌再好也难救。",

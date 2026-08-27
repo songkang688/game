@@ -9,7 +9,7 @@ export const meta = {
   category: "casual" as const,
   color: "#E5F8D8",
   blurb: "看数字绕开刺种。第一下一定安全，插好小旗，把整片花园都翻开。",
-  // 188 关闯关 + 同图竞速对战 + 连续清盘无尽 + 朵朵星星左右分屏双人
+  // 188 关闯关 + 同图竞速对战 + 连续清盘无尽 + 鸭梨康康左右分屏双人
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
   platform: "mobile" as const

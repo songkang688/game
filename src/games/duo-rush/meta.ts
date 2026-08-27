@@ -4,11 +4,11 @@
  */
 export const meta = {
   id: "duo-rush",
-  title: "朵星双人冲刺",
+  title: "梨康双人冲刺",
   emoji: "🏃",
   category: "party" as const,
   color: "#CDE9FF",
-  blurb: "2.5D 分屏竞速!朵朵星星各控三车道,道具、中途分岔、幽灵配速和人机四档都能跑。",
+  blurb: "2.5D 分屏竞速!鸭梨康康各控三车道,道具、中途分岔、幽灵配速和人机四档都能跑。",
   // index.ts:2.5D 分屏无尽竞速 / 道具竞速 / 抢金币 / 幽灵对战 / 人机四档,没有闯关地图。
   // 1.2 结论:双人竞速做 188 关会退化成刷图,跑酷闯关归 rainbow-run,本款明确不做 campaign;
   // 平台的「直达第 N 关」由 rush12.ts 的 levelToSetup() 映射成「赛道难度档 + 人机档」。

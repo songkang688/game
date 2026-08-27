@@ -105,7 +105,7 @@ export interface Owner {
   id: string;
   name: string;
   color: string;
-  /** 人类玩家:朵朵用 WASD+F/G,星星用方向键 +L/K */
+  /** 人类玩家:鸭梨用 WASD+F/G,康康用方向键 +L/K */
   human?: "duo" | "star";
   tier?: AiTier;
   /** 队友(第 8 章):不能吃掉他最后一颗圆 */
@@ -727,7 +727,7 @@ function makeBots(n: number, tier: AiTier, ally: boolean): Owner[] {
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = levelConfig(ctx.level);
   const owners: Owner[] = [
-    { id: "me", name: "朵朵", color: "#F5A9C8", human: "duo" },
+    { id: "me", name: "鸭梨", color: "#F5A9C8", human: "duo" },
     ...makeBots(cfg.bots, cfg.botTier, cfg.ally)
   ];
   const run = createRun(stage, {
@@ -870,7 +870,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       chip.textContent = `♾️ 第 ${wave} 波 · 累计 ${Math.round(total)} · 最好 ${best}`;
       run = createRun(stage, {
         cfg,
-        owners: [{ id: "me", name: "朵朵", color: "#F5A9C8", human: "duo" }, ...makeBots(cfg.bots, cfg.botTier, false)],
+        owners: [{ id: "me", name: "鸭梨", color: "#F5A9C8", human: "duo" }, ...makeBots(cfg.bots, cfg.botTier, false)],
         banner: `${AI_TIER_LABELS[cfg.botTier]}对手`,
         sfx: (n) => api.play(n),
         onDone: (r) => {
@@ -892,7 +892,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       const cfg = { ...endlessConfig(3), shrink: 0, timeSec: 100, targetMass: 320, mapW: 1800, mapH: 1800 };
       run = createRun(stage, {
         cfg,
-        owners: [{ id: "me", name: "朵朵", color: "#F5A9C8", human: "duo" }, ...makeBots(7, "pro", false)],
+        owners: [{ id: "me", name: "鸭梨", color: "#F5A9C8", human: "duo" }, ...makeBots(7, "pro", false)],
         banner: "🤝 限时混战",
         sfx: (n) => api.play(n),
         onDone: (r) => {
@@ -910,11 +910,11 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     run = createRun(stage, {
       cfg,
       owners: [
-        { id: "me", name: "朵朵", color: "#F5A9C8", human: "duo" },
-        { id: "star", name: "星星", color: "#A9C8F5", human: "star" },
+        { id: "me", name: "鸭梨", color: "#F5A9C8", human: "duo" },
+        { id: "star", name: "康康", color: "#A9C8F5", human: "star" },
         ...makeBots(3, "normal", false)
       ],
-      banner: "👫 朵朵 WASD+F/G · 星星 方向键+L/K",
+      banner: "👫 鸭梨 WASD+F/G · 康康 方向键+L/K",
       split: true,
       sfx: (n) => api.play(n),
       onDone: () => {

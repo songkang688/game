@@ -92,7 +92,7 @@ describe("寻找外星朋友 · 章节切分", () => {
     expect(new Set(ALIEN_NAMES).size).toBe(ALIEN_NAMES.length);
     expect(new Set(CLUE_ITEMS).size).toBe(CLUE_ITEMS.length);
     // 外星小朋友必须来自本作既有的原创角色
-    const CAST = ["朵朵", "星星", "糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾"];
+    const CAST = ["鸭梨", "康康", "糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾"];
     for (const n of ALIEN_NAMES) expect(CAST).toContain(n);
   });
 

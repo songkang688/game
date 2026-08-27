@@ -189,7 +189,7 @@ describe("对战 / 双人 / 无尽的配置", () => {
     expect(cfg.tiers[3]).toBe("pro");
   });
 
-  it("双人:朵朵与星星各一色，另外两色交给电脑", () => {
+  it("双人:鸭梨与康康各一色，另外两色交给电脑", () => {
     const cfg = duoConfig();
     expect(cfg.seats).toEqual([0, 1, 2, 3]);
     expect(cfg.tiers[0]).toBeUndefined();

@@ -323,7 +323,7 @@ async function main() {
     await sleep(80);
     if ((await cursorLabel(page)) !== before) moved = true;
   }
-  log(moved, "WASD 移得动光标(朵朵键位)");
+  log(moved, "WASD 移得动光标(鸭梨键位)");
 
   {
     // 挪到一个空格上,数字键直填

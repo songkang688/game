@@ -4,7 +4,7 @@
  * 战场是一张紧凑的字符网格:
  *   `.` 空地   `#` 积木砖(能打碎,一小角一小角地碎)   `S` 钢板(要彩纸穿甲弹)
  *   `~` 水洼(开不过去,弹丸飞得过)   `*` 草丛(半透明遮挡)   `i` 冰面(打滑)
- *   `B` 星星老巢   `1`/`2` 朵朵 / 星星出生点   `e` 铁皮车出生点
+ *   `B` 星星老巢   `1`/`2` 鸭梨 / 康康出生点   `e` 铁皮车出生点
  *
  * 1.2 在这一层加了三件事:地形五件套(补冰面 + 砖的四分之一格)、
  * 三种弹丸(直线弹 / 弹力球 / 彩纸穿甲弹,`ballistics12.ts`)、
@@ -169,13 +169,13 @@ export const ENEMY_SPECS: Record<EnemyKind, EnemySpecInfo> = {
 export const ENEMY_KINDS: readonly EnemyKind[] = ["swift", "armor", "power", "smart"];
 
 // ---------------------------------------------------------------------------
-// 键位:朵朵 WASD + F/G,星星 方向键 + L/K,Esc 暂停
+// 键位:鸭梨 WASD + F/G,康康 方向键 + L/K,Esc 暂停
 // ---------------------------------------------------------------------------
 
 export type TankAction = "up" | "right" | "down" | "left" | "fire" | "brick";
 
 export interface KeyBind {
-  /** 0 = 朵朵,1 = 星星 */
+  /** 0 = 鸭梨,1 = 康康 */
   player: 0 | 1;
   action: TankAction;
 }
@@ -241,7 +241,7 @@ export interface TankMap {
   brickMask: number[];
   /** 星星堡垒所在格;对战地图没有堡垒 */
   base: Cell | null;
-  /** 玩家出生点:0 号是朵朵,1 号是星星 */
+  /** 玩家出生点:0 号是鸭梨,1 号是康康 */
   playerSpawns: Cell[];
   enemySpawns: Cell[];
 }
@@ -315,7 +315,7 @@ export function parseMap(rows: readonly string[]): TankMap {
       }
     }
   }
-  if (playerSpawns[0] === undefined) throw new Error("地图缺少朵朵的出生点 1");
+  if (playerSpawns[0] === undefined) throw new Error("地图缺少鸭梨的出生点 1");
   return { w, h, tiles, brickHp, brickMask, base, playerSpawns, enemySpawns };
 }
 
@@ -442,7 +442,7 @@ export interface Tank {
   id: number;
   side: TankSide;
   kind: TankKind;
-  /** 0 = 朵朵,1 = 星星;敌人为 -1 */
+  /** 0 = 鸭梨,1 = 康康;敌人为 -1 */
   player: number;
   x: number;
   y: number;
@@ -558,7 +558,7 @@ export interface World {
   limit: number;
   status: "playing" | "win" | "lose";
   reason: string;
-  /** 对战模式的赢家(0 朵朵 / 1 星星),其余模式为 -1 */
+  /** 对战模式的赢家(0 鸭梨 / 1 康康),其余模式为 -1 */
   winner: number;
   /** 对战模式两边把对方弹飞了几次 */
   scores: [number, number];
@@ -583,7 +583,7 @@ export interface World {
   players: number;
   /**
    * 哪个位子交给电脑陪练(对战一个人来的时候用):
-   * `aiTiers[1] = "chase"` 就是星星那台由电脑开,难度是「追人」。
+   * `aiTiers[1] = "chase"` 就是康康那台由电脑开,难度是「追人」。
    */
   aiTiers: Array<AiTier | null>;
 }
@@ -1452,7 +1452,7 @@ function advanceBullet(w: World, b: Bullet, dist: number): boolean {
         if (w.scores[b.player] >= w.target) {
           w.status = "win";
           w.winner = b.player;
-          w.reason = `${b.player === 0 ? "朵朵" : "星星"}先把对手弹飞 ${w.target} 次`;
+          w.reason = `${b.player === 0 ? "鸭梨" : "康康"}先把对手弹飞 ${w.target} 次`;
         }
       }
     } else {

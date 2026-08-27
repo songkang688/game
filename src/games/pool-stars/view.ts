@@ -1,12 +1,12 @@
 /**
- * 朵星台球 · Canvas 球桌视图。
+ * 梨康台球 · Canvas 球桌视图。
  *
  * 一张球桌四种玩法共用：闯关、人机对战、无尽残局、双人同屏。
  * 视图只负责「让人看得懂、按得动」，规则一律交给 rules.ts，物理一律交给 physics.ts。
  *
  * 交互：
  *  - 桌面：方向键调角度（按住 Shift 微调），按住 F 蓄力、松开击球，G 取消蓄力；
- *    双人同屏时星星用 L 蓄力 / K 取消；Esc 暂停。
+ *    双人同屏时康康用 L 蓄力 / K 取消；Esc 暂停。
  *  - 手机：手指在球桌上拖动瞄准，力度条跟着拉开的距离走，松手就击球；
  *    另外还有一个 ≥44px 的击球钮，按住蓄力松手出杆。
  *
@@ -352,7 +352,7 @@ const KIND_NAME: Record<BallKind, string> = {
 
 /**
  * 瞄准键：`[归哪一位, 拨几个细调步长]`。
- * 朵朵一套 `WASD`、星星一套方向键；上下是「大步」，左右是「小步」。
+ * 鸭梨一套 `WASD`、康康一套方向键；上下是「大步」，左右是「小步」。
  */
 const AIM_KEYS: Record<string, ["duo" | "star", number]> = {
   a: ["duo", -1],
@@ -780,7 +780,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
 
   /**
    * 这一套瞄准键归哪个座位。
-   * 双人同屏（两个座位都是真人）时朵朵一套、星星一套；
+   * 双人同屏（两个座位都是真人）时鸭梨一套、康康一套；
    * 单人局里两套都归那位真人 —— 老键位一条不丢。
    */
   function aimSeat(owner: "duo" | "star"): number {
@@ -854,7 +854,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
     const aim = AIM_KEYS[k];
     if (aim) {
       e.preventDefault();
-      // 瞄准键也按座位分：朵朵 WASD、星星 方向键，谁也拨不动对方那一杆
+      // 瞄准键也按座位分：鸭梨 WASD、康康 方向键，谁也拨不动对方那一杆
       if (aimSeat(aim[0]) !== turn) return;
       nudge(fine * aim[1]);
       return;

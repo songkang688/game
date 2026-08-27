@@ -2,7 +2,7 @@ import { meta } from "./meta";
 export { meta };
 
 // 飞行棋乐园:四色纸飞机绕 52 格环线，本色格跳 4 格、虚线航线飞 12 格、
-// 叠机堡垒挡路、终点通道必须正好走到。188 关残局 + 四人对战 + 连胜无尽 + 朵朵星星双人，全程离线。
+// 叠机堡垒挡路、终点通道必须正好走到。188 关残局 + 四人对战 + 连胜无尽 + 鸭梨康康双人，全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import {
   compatFromMeta,
@@ -227,7 +227,7 @@ export function overLine(win: boolean, homeGot: number): string {
 
 export interface TableSeat {
   color: Color;
-  /** 人类玩家:duo = 朵朵键位，star = 星星键位;null 表示电脑 */
+  /** 人类玩家:duo = 鸭梨键位，star = 康康键位;null 表示电脑 */
   human: "duo" | "star" | null;
   tier: AiTier;
   /**
@@ -468,7 +468,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   msg.className = "fc-msg";
   const keys = document.createElement("div");
   keys.className = "fc-keys";
-  keys.textContent = "键盘:F 掷骰 / G 换飞机 / WASD 选棋 · 星星 方向键 + L / K · Esc 暂停";
+  keys.textContent = "键盘:F 掷骰 / G 换飞机 / WASD 选棋 · 康康 方向键 + L / K · Esc 暂停";
 
   wrap.append(top, goalBar, seatRow, boardWrap, hud, picker, msg, keys);
   host.appendChild(wrap);
@@ -503,8 +503,8 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       const who = COLOR_INFO[seat.color];
       const label = seat.human
         ? seat.human === "duo"
-          ? "你（朵朵键位）"
-          : "你（星星键位）"
+          ? "你（鸭梨键位）"
+          : "你（康康键位）"
         : seat.idle
           ? "这一关在补给，不动"
           : AI_TIER_LABELS[seat.tier];
@@ -778,7 +778,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       const el = document.createElement("div");
       el.className = "fc-pause";
       el.innerHTML = `<div class="fc-pause-t">✈️ 先歇一会儿</div>
-        <div class="fc-keys">F 掷骰 / G 换飞机 / WASD 选棋<br>星星:方向键 + L 掷骰 + K 换飞机<br>Esc 或点下面的按钮继续</div>`;
+        <div class="fc-keys">F 掷骰 / G 换飞机 / WASD 选棋<br>康康:方向键 + L 掷骰 + K 换飞机<br>Esc 或点下面的按钮继续</div>`;
       const go = document.createElement("button");
       go.type = "button";
       go.className = "fc-btn fc-btn-go";
@@ -981,13 +981,13 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       rules: cfg.rules,
       seed: Math.floor(Math.random() * 1e9),
       rounds: 200,
-      goalText: `🎯 把 4 架朵朵纸飞机全部送到终点　·　对手 ${AI_TIER_LABELS[pick]}`,
+      goalText: `🎯 把 4 架鸭梨纸飞机全部送到终点　·　对手 ${AI_TIER_LABELS[pick]}`,
       sfx: (n) => api.play(n),
       onOver: (r) => {
         const mine = homeCount(r.state, 0);
         if (r.humanWon && allHome(r.state, 0)) api.addStars(2);
         showOver(
-          allHome(r.state, 0) ? "朵朵这一局到齐啦！" : "这一局到此为止",
+          allHome(r.state, 0) ? "鸭梨这一局到齐啦！" : "这一局到此为止",
           `${overLine(allHome(r.state, 0), mine)} 名次:${r.ranks.map((c) => COLOR_INFO[c].name).join(" > ")}。`,
           "🔁 再来一局"
         );
@@ -1028,7 +1028,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
   function runDuo(): void {
     stage.innerHTML = "";
     const cfg = duoConfig();
-    chip.textContent = "👫 朵朵 WASD+F/G · 星星 方向键+L/K";
+    chip.textContent = "👫 鸭梨 WASD+F/G · 康康 方向键+L/K";
     table?.destroy();
     table = createTable(stage, {
       seats: [
@@ -1040,14 +1040,14 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       rules: cfg.rules,
       seed: Math.floor(Math.random() * 1e9),
       rounds: 200,
-      goalText: "🎯 朵朵与星星各执一色，先把自己 4 架送到齐的人获胜",
+      goalText: "🎯 鸭梨与康康各执一色，先把自己 4 架送到齐的人获胜",
       sfx: (n) => api.play(n),
       onOver: (r) => {
         const duoHome = homeCount(r.state, 0);
         const starHome = homeCount(r.state, 1);
         const title =
-          duoHome === starHome ? "打成平手！" : duoHome > starHome ? "朵朵这一局更快" : "星星这一局更快";
-        showOver(title, `朵朵到家 ${duoHome} 架，星星到家 ${starHome} 架。换个开局顺序再来一次吧。`, "🔁 再来一局");
+          duoHome === starHome ? "打成平手！" : duoHome > starHome ? "鸭梨这一局更快" : "康康这一局更快";
+        showOver(title, `鸭梨到家 ${duoHome} 架，康康到家 ${starHome} 架。换个开局顺序再来一次吧。`, "🔁 再来一局");
       }
     });
   }

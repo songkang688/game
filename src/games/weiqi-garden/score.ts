@@ -254,8 +254,8 @@ export function judge(rule: ScoreRule, black: number, white: number, komi: numbe
     winner === "draw"
       ? `不分上下,这一局是和棋!`
       : winner === "black"
-        ? `朵朵（黑）多了 ${margin} ${unit}。`
-        : `星星（白）多了 ${margin} ${unit}。`;
+        ? `鸭梨（黑）多了 ${margin} ${unit}。`
+        : `康康（白）多了 ${margin} ${unit}。`;
   return { rule, black, white, komi, diff, winner, text };
 }
 
@@ -284,15 +284,15 @@ export function scoreLines(board: Board, opts: FinalOptions): string[] {
   if (opts.rule === "chinese") {
     const s = chineseScore(board, opts.dead ?? []);
     return [
-      `朵朵（黑）：子 ${s.blackStones} + 围空 ${s.blackTerritory} = ${s.black}`,
-      `星星（白）：子 ${s.whiteStones} + 围空 ${s.whiteTerritory} = ${s.white}`,
+      `鸭梨（黑）：子 ${s.blackStones} + 围空 ${s.blackTerritory} = ${s.black}`,
+      `康康（白）：子 ${s.whiteStones} + 围空 ${s.whiteTerritory} = ${s.white}`,
       s.neutral > 0 ? `中立点 ${s.neutral}（单官与公气,两边都不算）` : "单官已经填完啦"
     ];
   }
   const s = japaneseScore(board, opts.dead ?? [], opts.captures);
   return [
-    `朵朵（黑）：空目 ${s.blackTerritory} + 提子 ${s.blackCaptures} = ${s.black}`,
-    `星星（白）：空目 ${s.whiteTerritory} + 提子 ${s.whiteCaptures} = ${s.white}`,
+    `鸭梨（黑）：空目 ${s.blackTerritory} + 提子 ${s.blackCaptures} = ${s.black}`,
+    `康康（白）：空目 ${s.whiteTerritory} + 提子 ${s.whiteCaptures} = ${s.white}`,
     "双活的公气两边都不得目。"
   ];
 }

@@ -38,8 +38,8 @@ function makeDuo(): Stage[] {
   const host = new El("div") as unknown as HTMLElement;
   dom.root.appendChild(host as unknown as El);
   return [
-    { keys: ["f"], cancelKeys: ["g"], name: "🌸 朵朵 · F" },
-    { keys: ["l"], cancelKeys: ["k"], name: "⭐ 星星 · L" },
+    { keys: ["f"], cancelKeys: ["g"], name: "🌸 鸭梨 · F" },
+    { keys: ["l"], cancelKeys: ["k"], name: "⭐ 康康 · L" },
   ].map((seat) =>
     createStage(host, {
       seed: 4321,
@@ -77,11 +77,11 @@ describe("双人同屏 · 触屏按谁的手指分台", () => {
     hotOf(stages[1]).dispatch("pointerdown", { pointerId: 12 });
     expect(phases(stages)).toEqual(["charging", "charging"]);
 
-    // 星星抬手：朵朵还在蓄力
+    // 康康抬手：鸭梨还在蓄力
     fireWindow(dom, "pointerup", { pointerId: 12 });
     expect(phases(stages)).toEqual(["charging", "flying"]);
 
-    // 朵朵再抬手才轮到朵朵起跳
+    // 鸭梨再抬手才轮到鸭梨起跳
     fireWindow(dom, "pointerup", { pointerId: 11 });
     expect(phases(stages)).toEqual(["flying", "flying"]);
     for (const s of stages) s.destroy();
@@ -104,7 +104,7 @@ describe("双人同屏 · 触屏按谁的手指分台", () => {
     for (const s of stages) s.tick(20);
     hotOf(stages[0]).dispatch("pointerdown", { pointerId: 7 });
     expect(phases(stages)).toEqual(["charging", "ready"]);
-    // 星星在自己那半屏点了一下又抬起来（没按在朵朵的蓄力上）
+    // 康康在自己那半屏点了一下又抬起来（没按在鸭梨的蓄力上）
     fireWindow(dom, "touchend", { changedTouches: [{ identifier: 3 }] });
     fireWindow(dom, "pointerup", { pointerId: 9 });
     expect(phases(stages)).toEqual(["charging", "ready"]);
@@ -121,15 +121,15 @@ describe("双人同屏 · 触屏按谁的手指分台", () => {
     for (const s of stages) s.destroy();
   });
 
-  it("蓄力时长真的各按各的：朵朵按够了站得住，星星手一抖就够不着", () => {
+  it("蓄力时长真的各按各的：鸭梨按够了站得住，康康手一抖就够不着", () => {
     const stages = makeDuo();
     for (const s of stages) s.tick(20);
     hotOf(stages[0]).dispatch("pointerdown", { pointerId: 31 });
     hotOf(stages[1]).dispatch("pointerdown", { pointerId: 32 });
-    // 星星按了一下就松手:力不够,够不着下一座台
+    // 康康按了一下就松手:力不够,够不着下一座台
     stages[1].tick(60);
     fireWindow(dom, "pointerup", { pointerId: 32 });
-    // 朵朵接着按到正好的力度再松:这一下的时长完全由自己决定
+    // 鸭梨接着按到正好的力度再松:这一下的时长完全由自己决定
     stages[0].tick(requiredPower(stages[0].state()) * MAX_HOLD);
     fireWindow(dom, "pointerup", { pointerId: 31 });
     for (const s of stages) s.tick(2600);
@@ -155,7 +155,7 @@ describe("双人同屏 · 触屏按谁的手指分台", () => {
     fireWindow(dom, "keydown", { key: "f" });
     fireWindow(dom, "keydown", { key: "l" });
     expect(phases(stages)).toEqual(["charging", "charging"]);
-    // 星星按 K 收力,朵朵一点事没有
+    // 康康按 K 收力,鸭梨一点事没有
     fireWindow(dom, "keydown", { key: "k" });
     expect(phases(stages)).toEqual(["charging", "ready"]);
     fireWindow(dom, "keyup", { key: "f" });

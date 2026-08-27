@@ -25,7 +25,7 @@ function lossesToWin(index: number, withMercy: boolean): number {
   return -1;
 }
 
-describe("朵朵抢地主 · 换一副牌这件事本身", () => {
+describe("鸭梨抢地主 · 换一副牌这件事本身", () => {
   it("第一副就是关卡表里那一副,一个数没动", () => {
     for (const lv of LEVELS) expect(levelDealSeed(lv, 0)).toBe(lv.seed);
   });
@@ -44,7 +44,7 @@ describe("朵朵抢地主 · 换一副牌这件事本身", () => {
   });
 });
 
-describe("朵朵抢地主 · 连输两次之前不插手", () => {
+describe("鸭梨抢地主 · 连输两次之前不插手", () => {
   it("头两次原样换牌:摔两跤是塔的一部分", () => {
     expect(MERCY_AFTER_LOSSES).toBe(2);
     for (const i of [0, 80, 119, 187]) {
@@ -65,7 +65,7 @@ describe("朵朵抢地主 · 连输两次之前不插手", () => {
   });
 });
 
-describe("朵朵抢地主 · 连输两次之后帮着挑", () => {
+describe("鸭梨抢地主 · 连输两次之后帮着挑", () => {
   it("挑出来的那一副,照着教练提示打真的赢得下来", () => {
     for (const i of [80, 149, 152, 166, 169, 176, 187]) {
       const pick = mercyRedeal(LEVELS[i], MERCY_AFTER_LOSSES);
@@ -97,7 +97,7 @@ describe("朵朵抢地主 · 连输两次之后帮着挑", () => {
   });
 });
 
-describe("朵朵抢地主 · 全塔复算：连输次数的尾巴", () => {
+describe("鸭梨抢地主 · 全塔复算：连输次数的尾巴", () => {
   it("第 188 关不再要连输 5 次以上（测试员实测 5 次，本轮复算 6 次）", () => {
     expect(lossesToWin(187, false)).toBeGreaterThanOrEqual(5);
     expect(lossesToWin(187, true)).toBeLessThanOrEqual(MERCY_AFTER_LOSSES);
@@ -118,7 +118,7 @@ describe("朵朵抢地主 · 全塔复算：连输次数的尾巴", () => {
   });
 });
 
-describe("朵朵抢地主 · 接线（源码巡检）", () => {
+describe("鸭梨抢地主 · 接线（源码巡检）", () => {
   it("战役发牌走的是「换一副 + 连输两次帮着挑」这条路", () => {
     expect(INDEX).toContain("levelDealSeed(lv, mercyRedeal(lv, bump))");
   });

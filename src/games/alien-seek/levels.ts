@@ -470,7 +470,7 @@ export function buildVersusRound(round: number): FindLevel {
     targets: Math.min(9, 5 + (r % 2 === 0 ? 2 : 0)),
     seconds: 45,
     deduce: false,
-    hint: "朵朵用 W A S D 挪光标、F 确认;星星用方向键、L 确认。",
+    hint: "鸭梨用 W A S D 挪光标、F 确认;康康用方向键、L 确认。",
   };
   const lv = generate({ ...opts, targets: opts.targets }, 660000 + r * 3313, -1);
   return lv as FindLevel;

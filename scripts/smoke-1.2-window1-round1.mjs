@@ -31,7 +31,7 @@ const GAMES = [
   ["block-drop", "方块叠叠乐"],
   ["combo-clash", "连招对决"],
   ["mahjong-bloom", "花开麻将"],
-  ["star-estate", "朵星地产"],
+  ["star-estate", "梨康地产"],
   ["hero-cards", "英杰令"],
   ["weiqi-garden", "围子花园"],
   ["flight-chess", "飞行棋乐园"],

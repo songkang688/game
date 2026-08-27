@@ -49,7 +49,7 @@ const PLANS = [
     deadzone: 0.06,
     // 彩豆画成 #F7C6DE 的小圆点
     food: [0xf7, 0xc6, 0xde],
-    // 朵朵自己是 #F5A9C8，第 1 关那只对手（糯糯）是 BOT_COLORS[0] = #F6B8D0。
+    // 鸭梨自己是 #F5A9C8，第 1 关那只对手（糯糯）是 BOT_COLORS[0] = #F6B8D0。
     // 三种粉都很近，容差得收到 6 才分得开
     self: [0xf5, 0xa9, 0xc8],
     prey: [[0xf6, 0xb8, 0xd0]],

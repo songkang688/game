@@ -260,7 +260,7 @@ describe("单人切换(运行时)", () => {
     game.openCampaignLevel(1);
     h.key("keydown", "Tab"); // 进单人,当前是凛凛
     const before = allText(h.root);
-    // 星星那一套(方向键)在单人模式下指挥的也是凛凛
+    // 康康那一套(方向键)在单人模式下指挥的也是凛凛
     tapStep(h, "ArrowRight");
     tapStep(h, "ArrowRight");
     // 焰焰待命的标记始终挂着,说明控制权没跑掉

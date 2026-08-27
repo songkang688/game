@@ -62,7 +62,7 @@ export interface WeiqiLevel {
   rule: ScoreRule;
   /** 初始盘面,`.` 空 `X` 黑 `O` 白 */
   rows: string[];
-  /** 该谁走(闯关一律朵朵执黑先走) */
+  /** 该谁走(闯关一律鸭梨执黑先走) */
   turn: Color;
   /** 提子题 / 对局任务要提到几颗 */
   need: number;
@@ -337,7 +337,7 @@ function dameLevel(size: BoardSize, seed: number, gaps: number): Stamped {
 
 /**
  * 标死子题:一盘已经下完的九路棋。
- * 左半边整片是朵朵的黑棋、右半边整片是星星的白棋,两边各自留了两只真眼所以都活着;
+ * 左半边整片是鸭梨的黑棋、右半边整片是康康的白棋,两边各自留了两只真眼所以都活着;
  * 各自的地里再困住对方几颗**做不出眼、也逃不出去**的子 —— 那几颗就是要标死的。
  * 黑地底下还留了一小块空地,让两边的目数不一样,数出来才有胜负。
  */
@@ -510,7 +510,7 @@ function buildLevel(index: number): WeiqiLevel {
       moveBudget: battle ? 8 : 3,
       parMoves: 1,
       title: `${battle ? KIND_LABELS.battle : KIND_LABELS.capture} 第 ${inChapter + 1} 题`,
-      task: battle ? `星星会还手,在 8 手之内提到 ${need} 颗白子。` : CAPTURE_TASKS[inChapter % CAPTURE_TASKS.length],
+      task: battle ? `康康会还手,在 8 手之内提到 ${need} 颗白子。` : CAPTURE_TASKS[inChapter % CAPTURE_TASKS.length],
       hint: battle
         ? "先把能提的提掉,对方还手之后再数一遍气,别急着追。"
         : "棋盘变大不影响数气,先看清这块白棋还剩几口。"

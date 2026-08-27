@@ -41,7 +41,7 @@ import { previewPath, shotVelocity } from "./ballistics12";
 import { BRICK_FULL, Q_SW, quarterCount } from "./terrain12";
 
 /**
- * 一间空屋子:朵朵在左、星星在右,想往哪儿摆砖就往哪儿摆。
+ * 一间空屋子:鸭梨在左、康康在右,想往哪儿摆砖就往哪儿摆。
  * 走 `endless` 是因为战役模式「场上没敌人 = 过关」,一排帧就冻住,单点的东西就没法测了。
  */
 function room(rows: readonly string[], extra: Partial<Parameters<typeof createWorld>[0]> = {}): World {
@@ -316,7 +316,7 @@ describe("被击中:零件散一地,3 秒后组装回来", () => {
   it("出生点被人堵着就换个地方组装,不许被按在原地反复打散", () => {
     const w = room(["e.......", "........", "........", "........", "1.....2."], { players: 2 });
     const camper = w.tanks[0];
-    // 假装有一辆铁皮车蹲在朵朵的出生点门口
+    // 假装有一辆铁皮车蹲在鸭梨的出生点门口
     w.tanks.push({ ...camper, id: 900, side: "enemy", player: -1, x: 0.5, y: 4.5 });
     const spot = safeSpawn(w, 0);
     expect(spot.cx).not.toBe(0);
@@ -429,7 +429,7 @@ describe("对战的电脑陪练", () => {
     const bot = playerTank(w, 1);
     expect(human && bot).toBeTruthy();
     if (!human || !bot) return;
-    bot.dir = 3; // 炮口对着朵朵那一边
+    bot.dir = 3; // 炮口对着鸭梨那一边
     // 真人这一格照读输入
     expect(inputForPlayer(w, human, [{ dir: 1, fire: true, brick: false }, IDLE_INPUT])).toEqual({
       dir: 1,

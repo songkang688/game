@@ -31,7 +31,7 @@ const GAMES = [
   { id: "block-drop", title: "方块叠叠乐", level: 164 },
   { id: "combo-clash", title: "连招对决", level: 24 },
   { id: "mahjong-bloom", title: "花开麻将", level: 96 },
-  { id: "star-estate", title: "朵星地产", level: 164 },
+  { id: "star-estate", title: "梨康地产", level: 164 },
   { id: "hero-cards", title: "英杰令", level: 24 },
   { id: "weiqi-garden", title: "围子花园", level: 96 },
   { id: "flight-chess", title: "飞行棋乐园", level: 164 },

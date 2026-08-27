@@ -31,7 +31,7 @@ function fakeHost(): KeyHost & { count: () => number; press: (key: string) => nu
 }
 
 describe("红蓝赛跑 · 两套键位", () => {
-  it("朵朵 A / D 交替、W 跳；星星 ← / → 交替、↑ 跳", () => {
+  it("鸭梨 A / D 交替、W 跳；康康 ← / → 交替、↑ 跳", () => {
     expect(RED_KEYS.a).toBe("left");
     expect(RED_KEYS.d).toBe("right");
     expect(RED_KEYS.w).toBe("jump");

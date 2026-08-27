@@ -73,7 +73,7 @@ export interface Target {
 
 export interface Thrower {
   id: number;
-  /** 0 = 朵朵,1 = 星星 / 电脑 */
+  /** 0 = 鸭梨,1 = 康康 / 电脑 */
   seat: number;
   x: number;
   y: number;
@@ -112,7 +112,7 @@ export interface Match {
 }
 
 // ---------------------------------------------------------------------------
-// 键位:朵朵 WASD + F/G,星星 方向键 + L/K,Esc 暂停
+// 键位:鸭梨 WASD + F/G,康康 方向键 + L/K,Esc 暂停
 // ---------------------------------------------------------------------------
 
 export type SnowAction = "up" | "down" | "left" | "right" | "throw" | "wall";
@@ -395,7 +395,7 @@ function checkStatus(match: Match): void {
       if (liveTargets(match, foe).length === 0) {
         match.status = "win";
         match.winner = who.seat;
-        match.reason = `${who.seat === 0 ? "朵朵" : "对手"}把对面三盏雪灯笼全砸化啦`;
+        match.reason = `${who.seat === 0 ? "鸭梨" : "对手"}把对面三盏雪灯笼全砸化啦`;
         return;
       }
     }

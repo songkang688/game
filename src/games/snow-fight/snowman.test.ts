@@ -115,9 +115,9 @@ describe("HUD 要的两个读数", () => {
 describe("分级红线", () => {
   it("三句提示只鼓励,不出现输 / 死 / 血 / 伤 / 疼", () => {
     const lines = [
-      hitLine(makeHitState(), "朵朵"),
-      hitLine(bump(makeHitState()), "朵朵"),
-      hitLine({ phase: "warming", timer: REST_TIME, bumps: 0, total: 3 }, "星星"),
+      hitLine(makeHitState(), "鸭梨"),
+      hitLine(bump(makeHitState()), "鸭梨"),
+      hitLine({ phase: "warming", timer: REST_TIME, bumps: 0, total: 3 }, "康康"),
     ];
     for (const line of lines) {
       expect(line).not.toMatch(/死|血|伤|疼|痛|杀|淘汰|失败|输了/);

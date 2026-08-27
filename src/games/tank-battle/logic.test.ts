@@ -154,12 +154,12 @@ describe("地形的三种「挡」", () => {
   });
 });
 
-describe("键位:朵朵和星星互不抢占", () => {
+describe("键位:鸭梨和康康互不抢占", () => {
   it("一个键只属于一位玩家", () => {
     expect(keyConflicts()).toEqual([]);
   });
 
-  it("朵朵是 WASD + F/G,星星是方向键 + L/K", () => {
+  it("鸭梨是 WASD + F/G,康康是方向键 + L/K", () => {
     for (const code of ["KeyW", "KeyA", "KeyS", "KeyD", "KeyF", "KeyG"]) {
       expect(KEY_MAP[code].player, code).toBe(0);
     }

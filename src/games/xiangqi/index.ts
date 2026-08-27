@@ -1,10 +1,10 @@
 import { meta } from "./meta";
 export { meta };
 
-// 朵朵星星象棋 1.2：
+// 鸭梨康康象棋 1.2：
 //  · 残局闯关 188 课 —— 走平台的 188 关框架（课号 / 星级 / 攻略 / 跳关全归框架管），
 //    8 章从「一车封路」一路练到「别走成和棋」，每课都有唯一主线解；
-//  · 自由对战 —— 人机六档（小象学步…星海棋神）+ 朵朵 VS 星星双人同屏；
+//  · 自由对战 —— 人机六档（小象学步…星海棋神）+ 鸭梨 VS 康康双人同屏；
 //  · 残局连胜 —— 一课接一课地解，错一次结束，最高连胜写平台 endlessBest。
 // 规则、记谱、AI、对局状态都在旁边的纯逻辑模块里，这个文件只做「装配 + 画面」。
 import {
@@ -99,7 +99,7 @@ const AVATAR_URLS = import.meta.glob("../../assets/avatars/*.png", {
 
 type Mascot = "duoduo" | "xingxing" | "robot";
 
-const MASCOT_NAME: Record<Mascot, string> = { duoduo: "朵朵", xingxing: "星星", robot: "棋灵象" };
+const MASCOT_NAME: Record<Mascot, string> = { duoduo: "鸭梨", xingxing: "康康", robot: "棋灵象" };
 
 function avatarHTML(who: Mascot, size = 30): string {
   const file = who === "duoduo" ? "duoduo-q.png" : who === "xingxing" ? "xingxing-q.png" : "";
@@ -816,7 +816,7 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
       "🤝 和谁下（六档，从小象学步到星海棋神）",
       [
         ...DIFFICULTIES.map((d) => ({ v: d, text: DIFFICULTY_NAME[d] })),
-        { v: "pvp", text: "👫 朵朵 VS 星星" },
+        { v: "pvp", text: "👫 鸭梨 VS 康康" },
       ],
       tier,
       (v) => {
@@ -871,10 +871,10 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
       board: initialBoard(),
       human: ai ? humanSide : "both",
       ai,
-      headline: ai ? DIFFICULTY_NAME[ai] : "👫 朵朵 VS 星星",
+      headline: ai ? DIFFICULTY_NAME[ai] : "👫 鸭梨 VS 康康",
       opening: ai
         ? `${DIFFICULTY_BLURB[ai]}。红棋先走，点自己的子看看它能去哪。`
-        : "🌸 朵朵执红先走，⭐ 星星执黑。悔棋和求和都要两边都同意。",
+        : "🌸 鸭梨执红先走，⭐ 康康执黑。悔棋和求和都要两边都同意。",
       extras: [{ cls: "xq-back", label: "🔧 换玩法", onClick: () => showSetup() }],
       onEnd: (r) => {
         if (r.winner === null) {
@@ -882,7 +882,7 @@ function mountFree(host: HTMLElement, api: GameApi, back: () => void): { destroy
           return;
         }
         if (!ai) {
-          const who = r.winner === "red" ? "朵朵（红）" : "星星（黑）";
+          const who = r.winner === "red" ? "鸭梨（红）" : "康康（黑）";
           api.onWin(1, `${who}赢下了这一局，再来一盘！`);
           return;
         }
@@ -1011,7 +1011,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   const rulesEl = document.createElement("div");
   rulesEl.className = "xq-rules xq-hidden";
   rulesEl.innerHTML = `<button class="xq-rules-close" type="button">✖ 关闭</button>
-    <h3 style="margin-top:2px">📖 朵朵星星象棋 · 规则</h3>${RULES_HTML}`;
+    <h3 style="margin-top:2px">📖 鸭梨康康象棋 · 规则</h3>${RULES_HTML}`;
   root.append(style, bar, levelHost, modeHost, rulesEl);
   api.root.appendChild(root);
 

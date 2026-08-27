@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 —— 键位表与输入换算（纯函数，不碰 DOM）。
+ * 梨康格斗王 —— 键位表与输入换算（纯函数，不碰 DOM）。
  *
  * 两位玩家的键位必须完全不重叠，否则同屏对战会互相抢键；
  * 这件事由 `controls.test.ts` 牢牢盯住，谁改键位都会当场被测试拦下来。
@@ -15,7 +15,7 @@ export interface KeyMap {
   heavy: string;
 }
 
-/** 朵朵（1 号位）：WASD 走位，F 轻击、G 重击 */
+/** 鸭梨（1 号位）：WASD 走位，F 轻击、G 重击 */
 export const P1_KEYS: KeyMap = {
   up: "KeyW",
   down: "KeyS",
@@ -25,7 +25,7 @@ export const P1_KEYS: KeyMap = {
   heavy: "KeyG"
 };
 
-/** 星星（2 号位）：方向键走位，L 轻击、K 重击 */
+/** 康康（2 号位）：方向键走位，L 轻击、K 重击 */
 export const P2_KEYS: KeyMap = {
   up: "ArrowUp",
   down: "ArrowDown",
@@ -115,8 +115,8 @@ export function sideOfTouch(clientX: number, viewportWidth: number): 0 | 1 {
 /** 键位说明文案（帮助面板与训练模式共用） */
 export function keyHintLines(): string[] {
   return [
-    "🌸 朵朵：W 跳 / A 左 / S 蹲 / D 右，F 轻击、G 重击",
-    "⭐ 星星：方向键走位，L 轻击、K 重击",
+    "🌸 鸭梨：W 跳 / A 左 / S 蹲 / D 右，F 轻击、G 重击",
+    "⭐ 康康：方向键走位，L 轻击、K 重击",
     "前 + 轻击 = 必杀一，前 + 重击 = 必杀二，后 + 重击 = 必杀三",
     "轻击 + 重击 一起按 = 转圈摔；蹲下 + 轻击 + 重击 = 超必杀（要满槽）",
     "按住「远离对手」的方向键就是格挡；蹲着挡下段，站着挡上段",

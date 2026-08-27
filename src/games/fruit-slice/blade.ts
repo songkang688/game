@@ -231,7 +231,7 @@ export const EXTRA_SPEC: Record<ExtraKind, ExtraSpec> = {
     name: "小花朵",
     emoji: "🌼",
     slicable: false,
-    tip: "花朵是给朵朵的礼物,别切它,绕开就好",
+    tip: "花朵是给鸭梨的礼物,别切它,绕开就好",
   },
   twin: {
     name: "连体果",
@@ -255,7 +255,7 @@ export const FLOWER_COST = 1;
 
 /** 切到花朵时的温和提示:只提醒,不责怪 */
 export function flowerLine(): string {
-  return "哎呀,那是给朵朵的花~下次绕开它就好";
+  return "哎呀,那是给鸭梨的花~下次绕开它就好";
 }
 
 /** 冰冻果切了减速几秒 */

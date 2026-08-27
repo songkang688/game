@@ -412,7 +412,7 @@ describe("snake-royale · 产品红线", () => {
     expect(index).toContain("brakeHeld.clear()");
   });
 
-  it("双人键位齐全:朵朵 WASD+F/G,星星 方向键 +L/K,Esc 暂停", () => {
+  it("双人键位齐全:鸭梨 WASD+F/G,康康 方向键 +L/K,Esc 暂停", () => {
     const index = SOURCES.find((s) => s.f === "index.ts")!.text;
     for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", '"Escape"', '=== "f"', '=== "g"', '=== "l"', '=== "k"']) {
       expect(index).toContain(key);

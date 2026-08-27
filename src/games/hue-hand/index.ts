@@ -68,7 +68,7 @@ export interface SeatCfg {
   avatar: string;
   isImg: boolean;
   tier: AiTier;
-  /** 人类玩家用哪一套键位:0 = 朵朵(WASD + F/G),1 = 星星(方向键 + L/K) */
+  /** 人类玩家用哪一套键位:0 = 鸭梨(WASD + F/G),1 = 康康(方向键 + L/K) */
   keys: 0 | 1;
 }
 
@@ -109,14 +109,14 @@ export function versusTitle(winner: number): string {
 
 /** 双人同屏的总比分。平局不算谁赢,单独记一格「平 N」 */
 export function duoScoreLine(wins: readonly number[], draws: number): string {
-  return `朵朵 ${wins[0]} : ${wins[1]} 星星${draws > 0 ? ` · 平 ${draws}` : ""}`;
+  return `鸭梨 ${wins[0]} : ${wins[1]} 康康${draws > 0 ? ` · 平 ${draws}` : ""}`;
 }
 
-function humanSeat(name: "朵朵" | "星星", keys: 0 | 1): SeatCfg {
+function humanSeat(name: "鸭梨" | "康康", keys: 0 | 1): SeatCfg {
   return {
     kind: "human",
     name,
-    avatar: name === "朵朵" ? AVATAR_URLS.duoduo : AVATAR_URLS.xingxing,
+    avatar: name === "鸭梨" ? AVATAR_URLS.duoduo : AVATAR_URLS.xingxing,
     isImg: true,
     tier: "expert",
     keys,
@@ -130,14 +130,14 @@ function botSeat(i: number, tier: AiTier): SeatCfg {
 
 /** 一个人 + 若干电脑:缺的人一律 AI 补 */
 function soloSeats(players: number, tiers: AiTier[]): SeatCfg[] {
-  const seats: SeatCfg[] = [humanSeat("朵朵", 0)];
+  const seats: SeatCfg[] = [humanSeat("鸭梨", 0)];
   for (let i = 1; i < players; i++) seats.push(botSeat(i - 1, tiers[i - 1] ?? "normal"));
   return seats;
 }
 
-/** 双人同屏:朵朵 + 星星 */
+/** 双人同屏:鸭梨 + 康康 */
 function duoSeats(): SeatCfg[] {
-  return [humanSeat("朵朵", 0), humanSeat("星星", 1)];
+  return [humanSeat("鸭梨", 0), humanSeat("康康", 1)];
 }
 
 // ---------------------------------------------------------------------------
@@ -1415,7 +1415,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
 }
 
 // ---------------------------------------------------------------------------
-// 双人同屏:朵朵 + 星星
+// 双人同屏:鸭梨 + 康康
 // ---------------------------------------------------------------------------
 
 function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
@@ -1436,7 +1436,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
       deck: dealRoundDeck(cfg),
       seats: duoSeats(),
       startTurn: (round - 1) % 2,
-      banner: "👫 朵朵和星星各拿一手牌,轮到谁就先把另一位的牌盖起来<br>朵朵 A/D + F/G · 星星 ←/→ + L/K",
+      banner: "👫 鸭梨和康康各拿一手牌,轮到谁就先把另一位的牌盖起来<br>鸭梨 A/D + F/G · 康康 ←/→ + L/K",
       sfx: (n) => api.play(n),
       onDone: (r) => {
         // 牌用完判平局:两边的胜场都不涨,和 tap-tiles 打平那一路是同一个口径
@@ -1445,7 +1445,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
         api.addStars(1);
         overPanel(
           shell.stage,
-          r.winner < 0 ? DRAW_TITLE : r.winner === 0 ? "🏆 朵朵先出完啦!" : "🏆 星星先出完啦!",
+          r.winner < 0 ? DRAW_TITLE : r.winner === 0 ? "🏆 鸭梨先出完啦!" : "🏆 康康先出完啦!",
           `这一局收了 ${r.gained} 分。总比分:${duoScoreLine(wins, draws)}。`,
           "🔁 再来一局",
           () => {

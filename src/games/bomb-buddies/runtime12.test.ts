@@ -5,7 +5,7 @@
  *  1. **五种模式都真的打得开**——`meta.modes` 里声明了什么,界面上就得有什么入口,
  *     而且点进去真的能走到对局,不许留「声明了却玩不了」的模式;
  *  2. **手机 360px 塞得下**:摇杆 104 + 动作钮 46,两套排进 360 还有富余,热区都 ≥ 44;
- *  3. **两套键位不抢**:F 只放朵朵的泡泡,L 只放星星的;
+ *  3. **两套键位不抢**:F 只放鸭梨的泡泡,L 只放康康的;
  *  4. **平台接线与退出归零**:`openCampaignLevel` / `initialLevel` / `?level=` 都通,
  *     `destroy` 之后 rAF、window 监听、键位、朗读、状态一样不剩。
  *
@@ -101,8 +101,8 @@ describe("五种模式", () => {
     const m = boot();
     openMode(m, "双人对战");
     expect(findAll(m.root, "bmb-stick").length).toBe(2);
-    expect(allText(m.root)).toContain("朵朵");
-    expect(allText(m.root)).toContain("星星");
+    expect(allText(m.root)).toContain("鸭梨");
+    expect(allText(m.root)).toContain("康康");
     m.handle.destroy();
   });
 
@@ -313,7 +313,7 @@ describe("摇杆", () => {
     m.handle.destroy();
   });
 
-  it("双人时两套动作钮各六颗,朵朵按不到星星的钮", () => {
+  it("双人时两套动作钮各六颗,鸭梨按不到康康的钮", () => {
     const m = boot();
     openMode(m, "双人对战");
     expect(findAll(m.root, "bmb-act").length).toBe(6);
@@ -347,7 +347,7 @@ describe("两套键位不抢", () => {
     m.handle.destroy();
   });
 
-  it("双人对战里 W 只动朵朵,方向键只动星星,谁也抢不到谁", () => {
+  it("双人对战里 W 只动鸭梨,方向键只动康康,谁也抢不到谁", () => {
     const m = boot();
     openMode(m, "双人对战");
     m.h.flush(2);
@@ -581,7 +581,7 @@ describe("样式与音效的规矩", () => {
   });
 
   it("carryOf 把该带上楼的七样都带上,不多不少", () => {
-    const f = makeFighter(0, "朵朵", "🌸", 0, 0);
+    const f = makeFighter(0, "鸭梨", "🌸", 0, 0);
     f.power = 4;
     f.kick = true;
     f.shield = 2;

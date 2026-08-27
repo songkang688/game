@@ -273,7 +273,7 @@ describe("puff-bros 1.2 运行时 · 输入", () => {
     game.destroy();
   });
 
-  it("双人同屏:朵朵松开手指,不会把星星正按着的键也一起松掉", async () => {
+  it("双人同屏:鸭梨松开手指,不会把康康正按着的键也一起松掉", async () => {
     const h = (harness = install({ innerWidth: 360 }));
     const { game } = await mountGame(h);
     h.flush(2);
@@ -294,7 +294,7 @@ describe("puff-bros 1.2 运行时 · 输入", () => {
     expect(a.classList.contains("pfb-down")).toBe(true);
     expect(b.classList.contains("pfb-down")).toBe(true);
 
-    // 1 号手指抬起来:只松掉朵朵那一颗,星星那颗照旧按着
+    // 1 号手指抬起来:只松掉鸭梨那一颗,康康那颗照旧按着
     h.fireWindow("pointerup", { pointerId: 1 });
     expect(a.classList.contains("pfb-down")).toBe(false);
     expect(b.classList.contains("pfb-down")).toBe(true);
@@ -382,7 +382,7 @@ describe("puff-bros 1.2 运行时 · 画面", () => {
     const { game } = await mountGame(h, { initialLevel: 6 });
     h.flush(4);
     const ctx = ctxOf(h);
-    // 起跳(KeyW 是朵朵的跳),等它落回地面
+    // 起跳(KeyW 是鸭梨的跳),等它落回地面
     h.key("keydown", "KeyW");
     h.flush(3, 16);
     h.key("keyup", "KeyW");

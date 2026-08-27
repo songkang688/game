@@ -166,7 +166,7 @@ const dodge = (): Card => makeCard("dodge", "leaf", 5);
 /** 一桌两个人:玩家是花主、手上全是花瓣击,对面元气见底 */
 function duel(opts: { foeVigor?: number; foeHand?: Card[]; myHand?: Card[] } = {}): SeatSpec[] {
   return [
-    { name: "朵朵", heroId: "duoduo", role: "lord", hand: opts.myHand ?? [slash(), slash(), slash()] },
+    { name: "鸭梨", heroId: "duoduo", role: "lord", hand: opts.myHand ?? [slash(), slash(), slash()] },
     { name: "云云", heroId: "yunmu", role: "rebel", vigor: opts.foeVigor ?? 1, hand: opts.foeHand ?? [] }
   ];
 }
@@ -322,7 +322,7 @@ describe("窄屏与动效红线", () => {
 });
 
 describe("键位", () => {
-  it("朵朵用 WASD 挪光标、F 确定、G 取消", () => {
+  it("鸭梨用 WASD 挪光标、F 确定、G 取消", () => {
     expect(keyAction("w")).toBe("up");
     expect(keyAction("a")).toBe("left");
     expect(keyAction("s")).toBe("down");
@@ -331,7 +331,7 @@ describe("键位", () => {
     expect(keyAction("g")).toBe("cancel");
   });
 
-  it("星星用方向键 + L / K", () => {
+  it("康康用方向键 + L / K", () => {
     expect(keyAction("ArrowUp")).toBe("up");
     expect(keyAction("ArrowDown")).toBe("down");
     expect(keyAction("ArrowLeft")).toBe("left");
@@ -482,7 +482,7 @@ describe("牌桌", () => {
   it("轮到自己要挡的时候,手牌里只有能挡的那张亮着", () => {
     // 对面先手,朝玩家出一击
     const seats: SeatSpec[] = [
-      { name: "朵朵", heroId: "duoduo", role: "lord", hand: [dodge(), makeCard("heal", "flower", 9)] },
+      { name: "鸭梨", heroId: "duoduo", role: "lord", hand: [dodge(), makeCard("heal", "flower", 9)] },
       { name: "云云", heroId: "yunmu", role: "rebel", hand: [slash()] }
     ];
     const { host, t } = table(seats);
@@ -540,7 +540,7 @@ describe("牌桌", () => {
 
   it("F 选牌、W / S 换人、F 打出去,全程不用鼠标", () => {
     const { host, t } = table([
-      { name: "朵朵", heroId: "duoduo", role: "lord", hand: [slash()] },
+      { name: "鸭梨", heroId: "duoduo", role: "lord", hand: [slash()] },
       { name: "云云", heroId: "yunmu", role: "rebel", vigor: 3 },
       { name: "闪闪", heroId: "nuonuo", role: "rebel", vigor: 3 }
     ]);

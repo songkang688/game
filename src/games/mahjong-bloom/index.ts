@@ -1436,7 +1436,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           resetMatch();
           runVersus();
         },
-        "朵朵坐下方,另外三家是本机棋友。点手里的牌就能打出去,四盘轮一圈庄。"
+        "鸭梨坐下方,另外三家是本机棋友。点手里的牌就能打出去,四盘轮一圈庄。"
       );
       for (const t of ["rookie", "normal", "pro", "hell"] as AiTier[]) {
         const line = document.createElement("div");
@@ -1459,13 +1459,13 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       return;
     }
     picker(
-      `朵朵和星星各坐一家,另外两家是棋友,一圈 ${MATCH_HANDS} 盘`,
+      `鸭梨和康康各坐一家,另外两家是棋友,一圈 ${MATCH_HANDS} 盘`,
       ["▶ 开局"],
       () => {
         resetMatch();
         runDuo();
       },
-      "朵朵用 WASD 挑牌、F 打出、G 吃碰杠胡;星星用方向键、L 打出、K 吃碰杠胡。Esc 暂停。"
+      "鸭梨用 WASD 挑牌、F 打出、G 吃碰杠胡;康康用方向键、L 打出、K 吃碰杠胡。Esc 暂停。"
     );
   }
 
@@ -1490,9 +1490,9 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       roundWind: 1,
       hints: true,
       seats: [
-        { name: "朵朵", human: "duo" },
+        { name: "鸭梨", human: "duo" },
         { name: "糯糯", tier },
-        { name: "星星", tier },
+        { name: "康康", tier },
         { name: "云云", tier }
       ],
       sfx: (n) => api.play(n),
@@ -1519,8 +1519,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const place = rank.findIndex((x) => x.i === me) + 1;
     if (place === 1) api.addStars(3);
     return place === 1
-      ? `朵朵一共 ${matchScore[me]} 花分,四盘下来排第一,今天手气真好!`
-      : `朵朵一共 ${matchScore[me]} 花分,排第 ${place}。下一圈把番凑够,名次就上来了。`;
+      ? `鸭梨一共 ${matchScore[me]} 花分,四盘下来排第一,今天手气真好!`
+      : `鸭梨一共 ${matchScore[me]} 花分,排第 ${place}。下一圈把番凑够,名次就上来了。`;
   }
 
   function resetMatch(): void {
@@ -1540,9 +1540,9 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       roundWind: 1,
       hints: true,
       seats: [
-        { name: "朵朵", human: "duo" },
+        { name: "鸭梨", human: "duo" },
         { name: "糯糯", tier: cfg.tier },
-        { name: "星星", tier: cfg.tier },
+        { name: "康康", tier: cfg.tier },
         { name: "云云", tier: cfg.tier }
       ],
       sfx: (n) => api.play(n),
@@ -1578,7 +1578,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function runDuo(): void {
     clearLive();
-    chip.textContent = `👫 第 ${handNo}/${MATCH_HANDS} 盘 · 朵朵 WASD+F/G · 星星 方向键+L/K`;
+    chip.textContent = `👫 第 ${handNo}/${MATCH_HANDS} 盘 · 鸭梨 WASD+F/G · 康康 方向键+L/K`;
     const seed = Math.floor(Math.random() * 1e9);
     live = createLive(stage, {
       seed,
@@ -1587,9 +1587,9 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       roundWind: 1,
       hints: true,
       seats: [
-        { name: "朵朵", human: "duo" },
+        { name: "鸭梨", human: "duo" },
         { name: "糯糯", tier: "normal" },
-        { name: "星星", human: "star" },
+        { name: "康康", human: "star" },
         { name: "云云", tier: "normal" }
       ],
       sfx: (n) => api.play(n),
@@ -1600,10 +1600,10 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         const starScore = matchScore[2];
         const line =
           duoScore === starScore
-            ? "朵朵和星星打成平手,再来一盘分高下!"
+            ? "鸭梨和康康打成平手,再来一盘分高下!"
             : duoScore > starScore
-              ? `朵朵 ${duoScore} 分,星星 ${starScore} 分,朵朵暂时领先。`
-              : `星星 ${starScore} 分,朵朵 ${duoScore} 分,星星暂时领先。`;
+              ? `鸭梨 ${duoScore} 分,康康 ${starScore} 分,鸭梨暂时领先。`
+              : `康康 ${starScore} 分,鸭梨 ${duoScore} 分,康康暂时领先。`;
         if (!done) {
           handNo++;
           showOver("这一盘结束啦", `${line} 还剩 ${MATCH_HANDS - handNo + 1} 盘。`, "▶ 打下一盘", runDuo);

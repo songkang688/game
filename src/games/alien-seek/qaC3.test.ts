@@ -193,8 +193,8 @@ describe("档C R3 · alien-seek · 四种模式一个不漏", () => {
       expect(lv.targets.length % 2, `第 ${r} 局目标数是双数`).toBe(1);
       expect(levelIsBeatable(lv, 3), `第 ${r} 局时间不够`).toBe(true);
     }
-    expect(versusWinner(3, 1)).toBe("朵朵");
-    expect(versusWinner(1, 3)).toBe("星星");
+    expect(versusWinner(3, 1)).toBe("鸭梨");
+    expect(versusWinner(1, 3)).toBe("康康");
     expect(versusWinner(2, 2)).toBe("平局");
     expect(versusLine(2, 2)).toContain("平手");
   });

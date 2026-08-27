@@ -4,7 +4,7 @@
  * 四件和 DOM 打交道、但本身可以纯函数化的事,单独放这儿方便逐条写用例:
  *  1. `createDisposer`:rAF / 定时器 / 事件监听统一登记,`destroy` 一把归零;
  *  2. `sideLayout`:360px 手机上两侧大按钮的尺寸 —— 各自 ≥72px、中间留隔离带;
- *  3. `keySideOf`:两套键位(朵朵 F/A、星星 J/L,单人再加空格),`destroy` 时一起卸;
+ *  3. `keySideOf`:两套键位(鸭梨 F/A、康康 J/L,单人再加空格),`destroy` 时一起卸;
  *  4. `resolveInitialLevel`:壳层给的 `initialLevel` 或地址栏 `?level=N` 直开第 N 关。
  */
 import { LABEL_FONT_MIN, SIDE_BTN_MIN, SIDE_GAP_MIN } from "./tuning";
@@ -127,12 +127,12 @@ export function sideButtonsOverlap(m: SideLayout): boolean {
 // 3. 两套键位
 // ---------------------------------------------------------------------------
 
-/** 朵朵(红队)的键 */
+/** 鸭梨(红队)的键 */
 export const RED_KEYS: readonly string[] = ["KeyF", "KeyA"];
 /**
- * 星星(蓝队)的键。
+ * 康康(蓝队)的键。
  *
- * 平台的双人约定是「朵朵 WASD+F+G,星星 ↑←↓→+L+K」,所以屏幕上一律写 **K**——
+ * 平台的双人约定是「鸭梨 WASD+F+G,康康 ↑←↓→+L+K」,所以屏幕上一律写 **K**——
  * 跨游戏的肌肉记忆才对得上。老版本写的是 J,已经玩熟的孩子按 J 照样算数,
  * 所以 J 留在表里继续接管,只是不再往屏幕上写。
  */

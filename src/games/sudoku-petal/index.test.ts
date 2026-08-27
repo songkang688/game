@@ -236,7 +236,7 @@ function fakeApi(root: FakeEl) {
 
 function seatOpts(over: Partial<SeatOpts> = {}): SeatOpts {
   return {
-    name: "朵朵",
+    name: "鸭梨",
     who: "duo",
     entry: bankAt(0),
     cell: 40,
@@ -349,7 +349,7 @@ describe("360px 窄屏红线", () => {
 });
 
 describe("键位", () => {
-  it("朵朵走 WASD + F 种下 + G 切铅笔", () => {
+  it("鸭梨走 WASD + F 种下 + G 切铅笔", () => {
     expect(keyAction("w", "duo")).toEqual({ type: "move", dr: -1, dc: 0 });
     expect(keyAction("S", "duo")).toEqual({ type: "move", dr: 1, dc: 0 });
     expect(keyAction("a", "duo")).toEqual({ type: "move", dr: 0, dc: -1 });
@@ -358,7 +358,7 @@ describe("键位", () => {
     expect(keyAction("g", "duo")).toEqual({ type: "pencil" });
   });
 
-  it("星星走方向键 + L 种下 + K 切铅笔,不吃朵朵那一套", () => {
+  it("康康走方向键 + L 种下 + K 切铅笔,不吃鸭梨那一套", () => {
     expect(keyAction("ArrowUp", "star")).toEqual({ type: "move", dr: -1, dc: 0 });
     expect(keyAction("ArrowRight", "star")).toEqual({ type: "move", dr: 0, dc: 1 });
     expect(keyAction("l", "star")).toEqual({ type: "fill" });
@@ -687,10 +687,10 @@ describe("一张桌子:计时、暂停、键盘与 destroy", () => {
     t.destroy();
   });
 
-  it("键盘落到对的那块盘上:朵朵按 WASD,星星按方向键,互不串台", () => {
+  it("键盘落到对的那块盘上:鸭梨按 WASD,康康按方向键,互不串台", () => {
     const { host, t } = table([
-      seatOpts({ name: "🌸 朵朵", who: "duo" }),
-      seatOpts({ name: "⭐ 星星", who: "star" })
+      seatOpts({ name: "🌸 鸭梨", who: "duo" }),
+      seatOpts({ name: "⭐ 康康", who: "star" })
     ]);
     expect(host.byClass("sp-grid")).toHaveLength(2);
     const before = host.byClass("sp-cur").map((e) => e.getAttribute("aria-label"));
@@ -704,7 +704,7 @@ describe("一张桌子:计时、暂停、键盘与 destroy", () => {
 
   it("假人到点会自己走一步,档位越高走得越勤", () => {
     const { host, t } = table([
-      seatOpts({ name: "朵朵" }),
+      seatOpts({ name: "鸭梨" }),
       seatOpts({ name: "地狱假人", who: null, ai: "hell", errorLimit: 0 })
     ]);
     const filledBefore = host.byClass("sp-cell").filter((c) => c.querySelector(".sp-digit")?.textContent).length;
@@ -774,7 +774,7 @@ describe("整款游戏挂载", () => {
     expect(root.byClass("sp-mode")).toHaveLength(1);
     expect(root.byClass("sp-grid")).toHaveLength(2);
     const names = root.byClass("sp-name").map((e) => e.textContent);
-    expect(names[0]).toBe("朵朵");
+    expect(names[0]).toBe("鸭梨");
     expect(names[1]).toContain("假人");
     // 四档假人 + 八章赛题都挑得到
     const labels = root.byClass("sp-mhead")[1].byClass("sp-tool").map((b) => b.textContent);
@@ -863,13 +863,13 @@ describe("整款游戏挂载", () => {
     }
   });
 
-  it("双人同屏直接给两块盘,朵朵和星星各一片", () => {
+  it("双人同屏直接给两块盘,鸭梨和康康各一片", () => {
     const root = new FakeEl("div");
     const { api } = fakeApi(root);
     const handle = mount(api);
     root.byClass("sp-open")[2].fire("click");
     expect(root.byClass("sp-grid")).toHaveLength(2);
-    expect(root.byClass("sp-name").map((e) => e.textContent)).toEqual(["🌸 朵朵", "⭐ 星星"]);
+    expect(root.byClass("sp-name").map((e) => e.textContent)).toEqual(["🌸 鸭梨", "⭐ 康康"]);
     const hint = root.byClass("sp-msg").find((e) => e.textContent.includes("方向键"));
     expect(hint?.textContent).toContain("W A S D");
     handle.destroy();
@@ -892,9 +892,9 @@ describe("文案红线", () => {
     }
   });
 
-  it("角色只有朵朵和星星,失败话术只鼓励", () => {
-    const names = PUZZLE_BANK.length > 0 ? ["朵朵", "星星"] : [];
-    expect(names).toEqual(["朵朵", "星星"]);
+  it("角色只有鸭梨和康康,失败话术只鼓励", () => {
+    const names = PUZZLE_BANK.length > 0 ? ["鸭梨", "康康"] : [];
+    expect(names).toEqual(["鸭梨", "康康"]);
     const corpus = [...guide.general, ...guide.entries.flatMap((e) => e.tips)].join("");
     for (const bad of ["笨", "死", "血", "输给", "太差"]) expect(corpus).not.toContain(bad);
   });

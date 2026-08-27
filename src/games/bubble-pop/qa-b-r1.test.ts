@@ -116,8 +116,8 @@ describe("档B R1 · 泡泡噗噗 · 赢一次 + 输一次", () => {
     expect(INDEX.text).not.toMatch(/你输了|失败了|太笨/);
   });
 
-  it("没得消的时候朵朵吹一口气重排,最多三次,不扣分", () => {
-    expect(INDEX.text).toContain("朵朵吹一口气");
+  it("没得消的时候鸭梨吹一口气重排,最多三次,不扣分", () => {
+    expect(INDEX.text).toContain("鸭梨吹一口气");
     expect(INDEX.text).toContain("不扣分");
     const grid = [
       [0, 1, 0, 1, 0, 1, 0, 1],

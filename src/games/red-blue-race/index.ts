@@ -485,7 +485,7 @@ function buildSoloPads(): { el: HTMLElement; pad: PadSet } {
   return { el, pad: { left, right, jump } };
 }
 
-/** 双人:左半屏归朵朵、右半屏归星星,各自一套左右脚 + 跳 */
+/** 双人:左半屏归鸭梨、右半屏归康康,各自一套左右脚 + 跳 */
 function buildDuoPads(): { el: HTMLElement; red: PadSet; blue: PadSet } {
   const el = document.createElement("div");
   el.className = "rbr-pads rbr-pads-duo";
@@ -502,8 +502,8 @@ function buildDuoPads(): { el: HTMLElement; red: PadSet; blue: PadSet } {
     el.appendChild(box);
     return { left, right, jump };
   };
-  const red = make("red", "朵朵", "A / D · W");
-  const blue = make("blue", "星星", "← / → · ↑");
+  const red = make("red", "鸭梨", "A / D · W");
+  const blue = make("blue", "康康", "← / → · ↑");
   return { el, red, blue };
 }
 
@@ -613,9 +613,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const top = document.createElement("div");
   top.className = "rbr-top";
   top.innerHTML = `
-    <span class="rbr-badge"><img class="rbr-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />🔴 朵朵</span>
+    <span class="rbr-badge"><img class="rbr-ava" src="${AVATAR_URLS.duoduo}" alt="鸭梨" />🔴 鸭梨</span>
     <span class="rbr-meters"><span class="rbr-chip rbr-dist">0 米</span><span class="rbr-chip rbr-lead">并排起跑</span></span>
-    <span class="rbr-badge rbr-badge-right">🔵 星星<img class="rbr-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
+    <span class="rbr-badge rbr-badge-right">🔵 康康<img class="rbr-ava" src="${AVATAR_URLS.xingxing}" alt="康康" /></span>
   `;
   wrap.appendChild(top);
 
@@ -623,8 +623,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   gearEl.className = "rbr-gear";
   wrap.appendChild(gearEl);
 
-  const redLane = buildLane("red", AVATAR_URLS.duoduo, "朵朵在奔跑", "朵朵", lanes.red, reduced, rt);
-  const blueLane = buildLane("blue", AVATAR_URLS.xingxing, "星星在奔跑", "星星", lanes.blue, reduced, rt);
+  const redLane = buildLane("red", AVATAR_URLS.duoduo, "鸭梨在奔跑", "鸭梨", lanes.red, reduced, rt);
+  const blueLane = buildLane("blue", AVATAR_URLS.xingxing, "康康在奔跑", "康康", lanes.blue, reduced, rt);
   wrap.append(redLane.el, blueLane.el);
 
   const callEl = document.createElement("div");
@@ -738,9 +738,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const delay = FINISH_SLOWMO_MS + 60;
     if (won) {
       const got = ai <= 70 ? 3 : ai <= 88 ? 2 : 1;
-      rt.later(() => ctx.win(got as 1 | 2 | 3, `朵朵先冲线!星星跑到 ${Math.round(ai)} 米,节奏咬得很紧。`), delay);
+      rt.later(() => ctx.win(got as 1 | 2 | 3, `鸭梨先冲线!康康跑到 ${Math.round(ai)} 米,节奏咬得很紧。`), delay);
     } else {
-      rt.later(() => ctx.lose("这局星星先到线~交替按稳一点、机关提前起跳,差的这一段很快能追回来!"), delay);
+      rt.later(() => ctx.lose("这局康康先到线~交替按稳一点、机关提前起跳,差的这一段很快能追回来!"), delay);
     }
   }
 
@@ -920,7 +920,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 }
 
 // ---------------------------------------------------------------------------
-// 对战场:本地两人(朵朵 vs 星星)或挑战四档小电脑
+// 对战场:本地两人(鸭梨 vs 康康)或挑战四档小电脑
 // ---------------------------------------------------------------------------
 
 type Foe = "duo" | AiLevel;
@@ -1004,7 +1004,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
   }
 
   function foeNote(f: Foe): string {
-    if (f === "duo") return "朵朵 A / D 交替、W 跳;星星 ← / → 交替、↑ 跳。手机各按各的半边屏幕。";
+    if (f === "duo") return "鸭梨 A / D 交替、W 跳;康康 ← / → 交替、↑ 跳。手机各按各的半边屏幕。";
     const p = profileOf(f);
     return `${p.blurb}(目标节奏 ${p.tapsPerSec} 次/秒——你也按得出来的频率)`;
   }
@@ -1059,12 +1059,12 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
     let lastTime = 0;
     let aiStumbleUntil = 0;
 
-    const redLane = buildLane("red", AVATAR_URLS.duoduo, "朵朵在奔跑", "朵朵", track.red, reduced, rt);
+    const redLane = buildLane("red", AVATAR_URLS.duoduo, "鸭梨在奔跑", "鸭梨", track.red, reduced, rt);
     const blueLane = buildLane(
       "blue",
       AVATAR_URLS.xingxing,
-      "星星在奔跑",
-      duo ? "星星" : `星星 · ${profileOf(level as AiLevel).label}`,
+      "康康在奔跑",
+      duo ? "康康" : `康康 · ${profileOf(level as AiLevel).label}`,
       track.blue,
       reduced,
       rt
@@ -1091,7 +1091,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
 
     const keyHint = document.createElement("div");
     keyHint.className = "rbr-keyhint";
-    keyHint.textContent = duo ? "朵朵 A / D + W　　星星 ← / → + ↑" : "键盘:A / D 或 ← / → 交替,W / ↑ / 空格 跳";
+    keyHint.textContent = duo ? "鸭梨 A / D + W　　康康 ← / → + ↑" : "键盘:A / D 或 ← / → 交替,W / ↑ / 空格 跳";
     board.appendChild(keyHint);
 
     const msgEl = document.createElement("div");
@@ -1123,7 +1123,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       rt.later(() => {
         const ov = document.createElement("div");
         ov.className = "rbv-over";
-        const winner = redWon ? "朵朵" : duo ? "星星" : `小电脑(${profileOf(level as AiLevel).label})`;
+        const winner = redWon ? "鸭梨" : duo ? "康康" : `小电脑(${profileOf(level as AiLevel).label})`;
         const loserPos = Math.round(redWon ? blue.pos : red.pos);
         ov.innerHTML = `
           <div style="font-size:44px;line-height:1">🏁</div>
@@ -1346,11 +1346,11 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
 // 无尽「跑不完的跑道」:机关越跑越密,撞 3 次这一趟收工
 // ---------------------------------------------------------------------------
 
-/** 玩家在跑道上的固定站位(百分比),机关与陪跑星星都相对它滚动 */
+/** 玩家在跑道上的固定站位(百分比),机关与陪跑康康都相对它滚动 */
 const VIEW_ME_PCT = 30;
 /** 视野里能看到前方多少米 */
 const VIEW_AHEAD = 45;
-/** 开局领先陪跑星星多少米 */
+/** 开局领先陪跑康康多少米 */
 const START_GAP = 28;
 
 interface EndlessOb {
@@ -1392,8 +1392,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     </div>
     <div class="rbe-lane">
       <div class="rbe-ground"></div>
-      <div class="rbe-pacer" style="left:0%"><img class="rbe-face" src="${AVATAR_URLS.xingxing}" alt="星星在陪你跑" /></div>
-      <div class="rbe-me" style="left:${VIEW_ME_PCT}%"><img class="rbe-face" src="${AVATAR_URLS.duoduo}" alt="朵朵在长跑" /></div>
+      <div class="rbe-pacer" style="left:0%"><img class="rbe-face" src="${AVATAR_URLS.xingxing}" alt="康康在陪你跑" /></div>
+      <div class="rbe-me" style="left:${VIEW_ME_PCT}%"><img class="rbe-face" src="${AVATAR_URLS.duoduo}" alt="鸭梨在长跑" /></div>
     </div>
   `;
   wrap.appendChild(body);
@@ -1573,7 +1573,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
         dist += ITEM_BOOST;
         pacerSlowUntil = now + ITEM_SLOW_MS;
         api.play("coin");
-        msgEl.textContent = "🎁 礼物箱到手,星星慢下来啦!";
+        msgEl.textContent = "🎁 礼物箱到手,康康慢下来啦!";
       } else if (!jumping) {
         takeHit(o, now);
         if (over) return;
@@ -1620,7 +1620,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     }
     const dt = Math.min(0.05, lastTime ? (now - lastTime) / 1000 : 0.016);
     lastTime = now;
-    // 星星只是陪跑员:被它超过只是个提示,不会因此结束
+    // 康康只是陪跑员:被它超过只是个提示,不会因此结束
     let speed = endlessChaserSpeed(dist);
     if (now < pacerSlowUntil) speed *= ITEM_SLOW_FACTOR;
     pacer += speed * dt;

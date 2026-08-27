@@ -1,7 +1,7 @@
 /**
  * 窗口 1 · 第 3 轮收官 · 同屏双人两套键位真的都认。
  *
- * 硬约束写着:双人键位 **朵朵 `WASD` ＋ `F` `G`、星星 方向键 ＋ `L` `K`**，
+ * 硬约束写着:双人键位 **鸭梨 `WASD` ＋ `F` `G`、康康 方向键 ＋ `L` `K`**，
  * 手机必须有触屏等价。前两轮的整批走查只验到「双人入口点得开、界面挂出来了」，
  * 没有验过**两边的键真的都推得动自己那一位**。
  * 一边的键位失灵，两个孩子里就有一个全程干坐着 —— 这是双人模式的命门。
@@ -9,7 +9,7 @@
  * 每一款做三件事:
  *   1. 从首页进去，打开 `👫 双人同屏`；
  *   2. 先记一份「什么都不按」的基线画面（连按两拍，确认自走的部分能被容忍）；
- *   3. 分别只按朵朵那套、只按星星那套，各自都要让画面**相对基线额外动起来**。
+ *   3. 分别只按鸭梨那套、只按康康那套，各自都要让画面**相对基线额外动起来**。
  *
  * 画面取样对 canvas 款取像素指纹，对 DOM 款取舞台文本指纹，两种都用同一套判据。
  * 按键一律 `down` → 按住 → `up`：有的款是「按住」模型（keydown 置位、keyup 清位），
@@ -30,7 +30,7 @@ const GAMES = [
   { id: "block-drop", title: "方块叠叠乐" },
   { id: "combo-clash", title: "连招对决" },
   { id: "mahjong-bloom", title: "花开麻将" },
-  { id: "star-estate", title: "朵星地产" },
+  { id: "star-estate", title: "梨康地产" },
   { id: "weiqi-garden", title: "围子花园" },
   { id: "flight-chess", title: "飞行棋乐园" },
   { id: "merge-2048", title: "星星合成" },
@@ -109,7 +109,7 @@ async function openTwoPlayer(page, game) {
     const started = await page.evaluate(() => {
       const stage = document.querySelector(".game-stage");
       const b = [...(stage?.querySelectorAll("button") ?? [])].find((x) =>
-        /^(开始|▶ ?开局|开局|星星用)/.test((x.textContent ?? "").trim())
+        /^(开始|▶ ?开局|开局|康康用)/.test((x.textContent ?? "").trim())
       );
       if (!b) return false;
       b.click();
@@ -173,8 +173,8 @@ async function main() {
       if (!field) {
         log(game.id, true, "画面本来就一直在动，两套键位靠画面分不出来（改看不报错 + 入口在）", "自走款");
       } else {
-        log(game.id, duoMoved, `朵朵那套 WASD+F+G 推得动画面（看 ${field}）`);
-        log(game.id, starMoved, `星星那套 方向键+L+K 推得动画面（看 ${field}）`);
+        log(game.id, duoMoved, `鸭梨那套 WASD+F+G 推得动画面（看 ${field}）`);
+        log(game.id, starMoved, `康康那套 方向键+L+K 推得动画面（看 ${field}）`);
       }
 
       log(game.id, errors.length === before, "双人这一段全程无报错", errors[before]?.slice(0, 90) ?? "");

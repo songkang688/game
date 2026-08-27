@@ -170,7 +170,7 @@ describe("双人同屏的遮挡", () => {
     byText("双人同屏")?.click();
     expect(handCards().length).toBe(7);
 
-    // 朵朵先走一手:能出就出,出不了就摸一张过掉
+    // 鸭梨先走一手:能出就出,出不了就摸一张过掉
     const playable = handCards().find((c) => !c.className.includes("hh-card-dim"));
     if (playable) playable.click();
     else {
@@ -242,10 +242,10 @@ describe("键位提示与光标跟随", () => {
     const handle = mount(rec.api);
     byText("双人同屏")?.click();
     const keys = dom.root.querySelector(".hh-keys")?.textContent ?? "";
-    // 朵朵四个方向键都认:W / A / S / D
-    for (const k of ["W", "A", "S", "D"]) expect(keys, `朵朵的 ${k}`).toContain(k);
-    // 星星的上下也认,不只是左右
-    for (const k of ["←", "→", "↑", "↓"]) expect(keys, `星星的 ${k}`).toContain(k);
+    // 鸭梨四个方向键都认:W / A / S / D
+    for (const k of ["W", "A", "S", "D"]) expect(keys, `鸭梨的 ${k}`).toContain(k);
+    // 康康的上下也认,不只是左右
+    for (const k of ["←", "→", "↑", "↓"]) expect(keys, `康康的 ${k}`).toContain(k);
     expect(keys).toContain("F 出牌");
     expect(keys).toContain("G 抽牌");
     expect(keys).toContain("L 出牌");
@@ -325,7 +325,7 @@ describe("窄屏与按钮尺寸", () => {
 });
 
 describe("闯关的手数限制", () => {
-  const HUMAN: SeatCfg = { kind: "human", name: "朵朵", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
   const BOT: SeatCfg = { kind: "ai", name: "团团", avatar: "🐰", isImg: false, tier: "rookie", keys: 0 };
 
   /** 从整副牌里挑一张还没用过的,拿到的是副本,id 天然不重复 */
@@ -337,7 +337,7 @@ describe("闯关的手数限制", () => {
 
   /**
    * 摆一副顺序完全确定的牌:2 人各摸 2 张,台面翻出粉 5。
-   * 朵朵手上两张绿牌都接不上,只能摸牌;摸上来的第一张是粉 9,正好能出。
+   * 鸭梨手上两张绿牌都接不上,只能摸牌;摸上来的第一张是粉 9,正好能出。
    * 数组末尾先被 pop,所以发牌顺序要倒着排。
    */
   function riggedDeck(): Card[] {
@@ -401,7 +401,7 @@ describe("闯关的手数限制", () => {
     expect(r).toBeTruthy();
     expect(r?.winner).toBe(-1);
     expect(r?.gained).toBe(0);
-    // 记的是朵朵自己动的手数,不是全桌加起来的步数
+    // 记的是鸭梨自己动的手数,不是全桌加起来的步数
     expect(r?.actions[0]).toBe(1);
     expect(r?.actions.length).toBe(2);
     table.destroy();
@@ -419,11 +419,11 @@ describe("闯关的手数限制", () => {
 });
 
 describe("「就一张」的抢按窗口", () => {
-  const HUMAN: SeatCfg = { kind: "human", name: "朵朵", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
   /** 高手档才会点破别人忘喊 */
   const HUNTER: SeatCfg = { kind: "ai", name: "点点", avatar: "🦊", isImg: false, tier: "expert", keys: 0 };
 
-  /** 朵朵手上两张粉牌,打掉一张就剩一张 —— 正好落进「可以被点破」的窗口 */
+  /** 鸭梨手上两张粉牌,打掉一张就剩一张 —— 正好落进「可以被点破」的窗口 */
   function riggedDeck(): Card[] {
     const pool = buildDeck();
     const pick = (color: Color, num: number): Card => {
@@ -506,7 +506,7 @@ describe("「就一张」的抢按窗口", () => {
 });
 
 describe("牌都用完了的那一局", () => {
-  const HUMAN: SeatCfg = { kind: "human", name: "朵朵", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
+  const HUMAN: SeatCfg = { kind: "human", name: "鸭梨", avatar: "🌸", isImg: false, tier: "expert", keys: 0 };
   const BOT: SeatCfg = { kind: "ai", name: "团团", avatar: "🐰", isImg: false, tier: "rookie", keys: 0 };
 
   /**
@@ -557,9 +557,9 @@ describe("牌都用完了的那一局", () => {
   });
 
   it("双人同屏的平局单记一格「平 N」,两边胜场都不涨", () => {
-    expect(duoScoreLine([0, 0], 0)).toBe("朵朵 0 : 0 星星");
-    expect(duoScoreLine([1, 0], 0)).toBe("朵朵 1 : 0 星星");
-    expect(duoScoreLine([1, 0], 2)).toBe("朵朵 1 : 0 星星 · 平 2");
+    expect(duoScoreLine([0, 0], 0)).toBe("鸭梨 0 : 0 康康");
+    expect(duoScoreLine([1, 0], 0)).toBe("鸭梨 1 : 0 康康");
+    expect(duoScoreLine([1, 0], 2)).toBe("鸭梨 1 : 0 康康 · 平 2");
   });
 });
 

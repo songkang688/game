@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 —— 判定纯函数与帧数据表的回归测试。
+ * 梨康格斗王 —— 判定纯函数与帧数据表的回归测试。
  *
  * 四块重点（题目要求的那四件事都在这儿）：
  *  1. 判定框重叠：朝向镜像、上段打不到蹲着的、下段打不到跳起来的；
@@ -160,7 +160,7 @@ describe("帧数据表", () => {
     }
   });
 
-  it("moveOf / characterById 找不到时退回朵朵，不会返回空", () => {
+  it("moveOf / characterById 找不到时退回鸭梨，不会返回空", () => {
     expect(characterById("查无此人").id).toBe("duoduo");
     expect(moveOf("查无此人", "5L").slot).toBe("5L");
     expect(moveOf("dundun", "super").name).toBe("天旋地转墩");
@@ -211,7 +211,7 @@ describe("判定框重叠", () => {
     expect(crouch.w).toBe(48);
   });
 
-  it("朵朵的站立重击够得到 60 距离外的星星，够不到 130 外的", () => {
+  it("鸭梨的站立重击够得到 60 距离外的康康，够不到 130 外的", () => {
     const move = duoduo.moves["5H"];
     const near = worldBox(100, 0, 1, move.box);
     expect(rectsOverlap(near, hurtRect(160, 0, xingxing.halfWidth, xingxing.height, xingxing.crouchHeight, false))).toBe(

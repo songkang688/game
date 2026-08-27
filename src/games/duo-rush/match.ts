@@ -1,5 +1,5 @@
 /**
- * 朵星双人冲刺 · 一局对战的确定性状态机。
+ * 梨康双人冲刺 · 一局对战的确定性状态机。
  *
  * 这里不碰 canvas、不碰 DOM，只管「输入进来、时间往前推、谁赢了」，
  * 所以整局比赛可以在单测里原样重放。
@@ -167,7 +167,7 @@ export interface MatchState {
   /** 幽灵录像来自谁 */
   ghostSource: GhostSource;
   over: boolean;
-  /** 0 = 朵朵赢，1 = 星星（或电脑 / 幽灵）赢，-1 = 平局，null = 还没打完 */
+  /** 0 = 鸭梨赢，1 = 康康（或电脑 / 幽灵）赢，-1 = 平局，null = 还没打完 */
   winner: 0 | 1 | -1 | null;
   events: MatchEvent[];
 }
@@ -236,7 +236,7 @@ export function branchForLane(lane: number): 0 | 1 {
 }
 
 export function createMatch(opts: MatchOptions): MatchState {
-  const names = opts.names ?? ["朵朵", "星星"];
+  const names = opts.names ?? ["鸭梨", "康康"];
   const emojis = opts.emojis ?? ["🌸", "⭐"];
   const isGhostRace = opts.mode === "ghost";
   const aiLevel = isGhostRace ? null : (opts.aiLevel ?? null);

@@ -135,7 +135,7 @@ describe("weiqi-garden · 键位", () => {
     expect(keyAction("d")).toBe("right");
   });
 
-  it("F 确认落子、G 停一手、Esc 暂停;星星那套 L / K 也认", () => {
+  it("F 确认落子、G 停一手、Esc 暂停;康康那套 L / K 也认", () => {
     expect(keyAction("f")).toBe("confirm");
     expect(keyAction("F")).toBe("confirm");
     expect(keyAction("l")).toBe("confirm");
@@ -144,7 +144,7 @@ describe("weiqi-garden · 键位", () => {
     expect(keyAction("Escape")).toBe("pause");
   });
 
-  it("双人开局说明把两套键位分开写清楚,不会让星星去按朵朵的键", () => {
+  it("双人开局说明把两套键位分开写清楚,不会让康康去按鸭梨的键", () => {
     for (const k of ["WASD", "F 落子", "G 停一手", "方向键", "L 落子", "K 停一手"]) {
       expect(DUO_HINT).toContain(k);
     }
@@ -167,8 +167,8 @@ describe("weiqi-garden · 提子动效与文案", () => {
 
   it("提子的说法是请回篮子,没有打打杀杀", () => {
     expect(captureLine(3, WHITE)).toContain("篮子");
-    expect(captureLine(3, WHITE)).toContain("星星");
-    expect(captureLine(1, BLACK)).toContain("朵朵");
+    expect(captureLine(3, WHITE)).toContain("康康");
+    expect(captureLine(1, BLACK)).toContain("鸭梨");
     expect(captureLine(0, BLACK)).toBe("");
     expect(captureLine(2, WHITE)).not.toMatch(/杀|死|血/);
   });
@@ -369,7 +369,7 @@ describe("weiqi-garden · 挂载与 destroy", () => {
 
 describe("weiqi-garden · 读屏听得见盘面在变", () => {
   it("saySentence 只留有字的那几段,提示接在后面", () => {
-    expect(saySentence(["第 3 手", "轮到朵朵（黑）"])).toBe("第 3 手,轮到朵朵（黑）。");
+    expect(saySentence(["第 3 手", "轮到鸭梨（黑）"])).toBe("第 3 手,轮到鸭梨（黑）。");
     expect(saySentence(["第 3 手", "  "], "成劫啦!")).toBe("第 3 手。成劫啦!");
     expect(saySentence([], "停了一手。")).toBe("停了一手。");
     expect(saySentence([], "   ")).toBe("");
@@ -378,9 +378,9 @@ describe("weiqi-garden · 读屏听得见盘面在变", () => {
   it("对局那一句把手数、该谁下、两边提子都说全", () => {
     const line = matchSay(7, BLACK, { black: 2, white: 5 });
     expect(line).toContain("第 7 手");
-    expect(line).toContain("轮到朵朵");
-    expect(line).toContain("朵朵提了 2 颗");
-    expect(line).toContain("星星提了 5 颗");
+    expect(line).toContain("轮到鸭梨");
+    expect(line).toContain("鸭梨提了 2 颗");
+    expect(line).toContain("康康提了 5 颗");
   });
 
   it("数一数阶段改播标死了几颗,不再报手数", () => {

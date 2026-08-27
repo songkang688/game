@@ -123,10 +123,10 @@ describe("weiqi-garden · 坐标、星位与让子", () => {
     expect(handicapPoints(9, 0)).toEqual([]);
   });
 
-  it("黑是朵朵、白是星星,换手换得对", () => {
+  it("黑是鸭梨、白是康康,换手换得对", () => {
     expect(other(BLACK)).toBe(WHITE);
     expect(other(WHITE)).toBe(BLACK);
-    expect(colorName(BLACK)).toContain("朵朵");
-    expect(colorName(WHITE)).toContain("星星");
+    expect(colorName(BLACK)).toContain("鸭梨");
+    expect(colorName(WHITE)).toContain("康康");
   });
 });

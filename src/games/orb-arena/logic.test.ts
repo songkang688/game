@@ -237,7 +237,7 @@ describe("排行榜", () => {
     cell({ id: "3", owner: "bot0", mass: 90 }),
     cell({ id: "4", owner: "bot1", mass: 70 })
   ];
-  const names = { me: "朵朵", bot0: "糯糯", bot1: "云云" };
+  const names = { me: "鸭梨", bot0: "糯糯", bot1: "云云" };
 
   it("按总质量排,自家分身要合起来算", () => {
     const rows = leaderboard(cells, names);

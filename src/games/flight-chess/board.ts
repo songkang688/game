@@ -32,7 +32,7 @@ export const GRID = 15;
 /** 每色飞机数 */
 export const PLANES_PER_COLOR = 4;
 
-/** 0 朵朵 / 1 星星 / 2 小花 / 3 小鸟 */
+/** 0 鸭梨 / 1 康康 / 2 小花 / 3 小鸟 */
 export type Color = 0 | 1 | 2 | 3;
 
 export const COLORS: readonly Color[] = [0, 1, 2, 3];
@@ -50,10 +50,10 @@ export interface ColorInfo {
   corner: string;
 }
 
-/** 四位队员:朵朵、星星，加上本作原创的小花与小鸟 */
+/** 四位队员:鸭梨、康康，加上本作原创的小花与小鸟 */
 export const COLOR_INFO: readonly ColorInfo[] = [
-  { name: "朵朵", token: "🌸", ink: "#E0679B", soft: "#FFDCEA", corner: "左上" },
-  { name: "星星", token: "⭐", ink: "#D79A24", soft: "#FFEFC4", corner: "右上" },
+  { name: "鸭梨", token: "🌸", ink: "#E0679B", soft: "#FFDCEA", corner: "左上" },
+  { name: "康康", token: "⭐", ink: "#D79A24", soft: "#FFEFC4", corner: "右上" },
   { name: "小花", token: "🌼", ink: "#3E9C6A", soft: "#D6F5DF", corner: "右下" },
   { name: "小鸟", token: "🐦", ink: "#3D82BE", soft: "#D6ECFB", corner: "左下" }
 ];
@@ -79,11 +79,11 @@ function seg(from: XY, to: XY): XY[] {
  * 渲染时那一步照样是一格一格地跳，不会瞬移。
  */
 export const RING_XY: readonly XY[] = [
-  // 左臂上沿 → 上臂左侧（朵朵起飞格 0 在最左边）
+  // 左臂上沿 → 上臂左侧（鸭梨起飞格 0 在最左边）
   ...seg({ x: 0, y: 6 }, { x: 5, y: 6 }),
   ...seg({ x: 6, y: 5 }, { x: 6, y: 0 }),
   { x: 7, y: 0 },
-  // 上臂右侧 → 右臂上沿（星星起飞格 13）
+  // 上臂右侧 → 右臂上沿（康康起飞格 13）
   ...seg({ x: 8, y: 0 }, { x: 8, y: 5 }),
   ...seg({ x: 9, y: 6 }, { x: 14, y: 6 }),
   { x: 14, y: 7 },

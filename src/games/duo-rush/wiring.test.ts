@@ -237,7 +237,7 @@ describe("中途分岔接进比赛了", () => {
 
   it("两个人各走一条支路,回到主赛道的那一米完全一样", () => {
     const state = createMatch({ mode: "items", seed: 4 });
-    applyAction(state, 1, "right"); // 星星贴右道,朵朵留中道
+    applyAction(state, 1, "right"); // 康康贴右道,鸭梨留中道
     applyAction(state, 1, "right");
     let mergeAt = 0;
     for (let i = 0; i < 60 * 60 && !state.over; i++) {
@@ -279,7 +279,7 @@ describe("让分与领先反馈", () => {
     const fair = createMatch({ mode: "rush", seed: 15 });
     const kind = createMatch({ mode: "rush", seed: 15, handicap: true });
     for (const s of [fair, kind]) {
-      s.runners[1].dist = 400; // 星星先跑出去一大截
+      s.runners[1].dist = 400; // 康康先跑出去一大截
       run(s, 6);
     }
     const gapFair = fair.runners[1].dist - fair.runners[0].dist;
@@ -305,7 +305,7 @@ describe("让分与领先反馈", () => {
   it("让分只帮落后的一方,领先的一方一点便宜都占不到", () => {
     const fair = createMatch({ mode: "rush", seed: 15 });
     const kind = createMatch({ mode: "rush", seed: 15, handicap: true });
-    for (const s of [fair, kind]) s.runners[0].dist = 5000; // 这回是朵朵领先
+    for (const s of [fair, kind]) s.runners[0].dist = 5000; // 这回是鸭梨领先
     const fairFrom = fair.runners[0].dist;
     const kindFrom = kind.runners[0].dist;
     stepMatch(fair, 1 / 60);
@@ -351,7 +351,7 @@ describe("幽灵来源与存档 key", () => {
 });
 
 describe("1.2 键位与触屏控件", () => {
-  it("朵朵多了 F/G,星星多了 L/K,四张表两两零交集", () => {
+  it("鸭梨多了 F/G,康康多了 L/K,四张表两两零交集", () => {
     expect(Object.keys(P1_EXTRA_KEYS).sort()).toEqual(["KeyF", "KeyG"]);
     expect(Object.keys(P2_EXTRA_KEYS).sort()).toEqual(["KeyK", "KeyL"]);
     const all = [

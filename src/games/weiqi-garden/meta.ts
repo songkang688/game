@@ -9,7 +9,7 @@ export const meta = {
   category: "party" as const,
   color: "#E8E4D8",
   blurb: "先从九路花园下起。围空、打劫、数目或点目,慢慢走进十三路和十九路。",
-  // 188 关死活 / 官子 / 布局 + 四档人机自由对战 + 九路连胜无尽 + 朵朵星星同屏双人
+  // 188 关死活 / 官子 / 布局 + 四档人机自由对战 + 九路连胜无尽 + 鸭梨康康同屏双人
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
   platform: "both" as const

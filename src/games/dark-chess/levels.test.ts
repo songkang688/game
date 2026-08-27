@@ -4,7 +4,7 @@ import { TIERS, chooseAction, playDuel, type Tier } from "./ai";
 import { CHAPTERS, TOTAL, chapterIndexOf, chaptersValid, endlessPlan, planFor, rateLevel, setupFor } from "./levels";
 import { applyAction, legalActions, newGame, status, type GameState, type Side } from "./rules";
 
-/** 参考解题器：用最强档把这一关下完，看看朵朵能不能赢 */
+/** 参考解题器：用最强档把这一关下完，看看鸭梨能不能赢 */
 function solve(state: GameState, rivalTier: Tier, seed: number, maxPlies: number): "win" | "lose" | "draw" {
   for (let i = 0; i < maxPlies; i++) {
     const st = status(state);
@@ -95,7 +95,7 @@ describe("翻翻暗棋 · 关卡局面", () => {
     expect(setupFor(30).cells.some((c) => c && !c.covered)).toBe(true);
   });
 
-  it("残局关是直接定好阵营的明棋，朵朵先走", () => {
+  it("残局关是直接定好阵营的明棋，鸭梨先走", () => {
     const state = setupFor(120);
     expect(state.colors.duo).toBe("red");
     expect(state.colors.star).toBe("blue");

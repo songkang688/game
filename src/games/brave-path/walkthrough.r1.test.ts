@@ -5,7 +5,7 @@
  *  1. 从首页进入（`loadGames()` → `meta.modes` → 动态加载出 `mount`）；
  *  2. 玩到真实胜负——赢一次 + 输一次，两边的收场话都只鼓励；
  *  3. 战役第 1 / 100 / 188 关各走一遍（真打，不是只看关卡表）；
- *  4. 闯关 / 无尽之路 / 对战星星的队伍（含同图竞速）每种模式都玩到结算；
+ *  4. 闯关 / 无尽之路 / 对战康康的队伍（含同图竞速）每种模式都玩到结算；
  *  5. 360px 窄屏过一遍。
  *
  * 这一批只补断言，不动 `index.ts` / `logic.ts` 的玩法。
@@ -60,7 +60,7 @@ function refHero(level: number, element: Element, rankBoost = 0): Fighter {
   const s = expectedHero(level);
   const rank = Math.max(1, Math.min(5, 1 + Math.floor(level / 45) + rankBoost));
   return makeFighter({
-    name: "朵朵",
+    name: "鸭梨",
     emoji: "🌸",
     element,
     maxHp: s.maxHp,
@@ -138,7 +138,7 @@ describe("勇者小路 · R1 · 赢一次 + 输一次", () => {
   });
 
   it("输一次：光着身子的勇者硬碰末章首领会输，而且收场只鼓励", () => {
-    const weak = makeFighter({ name: "朵朵", emoji: "🌸", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
+    const weak = makeFighter({ name: "鸭梨", emoji: "🌸", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
     const lastBoss = bossLevels()[bossLevels().length - 1];
     const res = simulateBattle(weak, makeFighter(makeBossSpec(lastBoss)), 13, 60);
     expect(res.winner).toBe("foe");
@@ -178,7 +178,7 @@ describe("勇者小路 · R1 · 战役第 1 / 100 / 188 关", () => {
 });
 
 describe("勇者小路 · R1 · 无尽之路玩到结算", () => {
-  it("能一层层往下走，走到打不动为止，并给出结算文案与星星", () => {
+  it("能一层层往下走，走到打不动为止，并给出结算文案与康康", () => {
     let hero = refHero(40, "light");
     let depth = 0;
     let blessings = 0;
@@ -220,8 +220,8 @@ describe("勇者小路 · R1 · 无尽之路玩到结算", () => {
   });
 });
 
-describe("勇者小路 · R1 · 对战星星的队伍玩到结算", () => {
-  it("三对三接力能打到分出胜负，赢了给星星、输了也有鼓励话", () => {
+describe("勇者小路 · R1 · 对战康康的队伍玩到结算", () => {
+  it("三对三接力能打到分出胜负，赢了给康康、输了也有鼓励话", () => {
     const save = { ...defaultSave(), level: 20 };
     const out = runArena(save, 4242);
     expect(out.result.bouts.length).toBeGreaterThanOrEqual(1);

@@ -13,7 +13,7 @@ const CHROME = process.env.CHROME_PATH ?? "/usr/local/bin/google-chrome";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** 朵朵 WASD+F/G/V,星星 方向键+L/K/J,外加通用键 */
+/** 鸭梨 WASD+F/G/V,康康 方向键+L/K/J,外加通用键 */
 export const DUO_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyV"];
 export const STAR_KEYS = ["ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "KeyL", "KeyK", "KeyJ"];
 export const COMMON_KEYS = ["Space", "Enter", "KeyB", "Tab"];

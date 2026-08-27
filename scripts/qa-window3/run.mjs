@@ -27,9 +27,9 @@ const IDLE_MS = Number(arg("idlems", 11000));
 const MODE_MS = Number(arg("modems", 11000));
 
 export const GAMES = [
-  { id: "duo-rush", title: "朵星双人冲刺", levels: 0, drag: false },
-  { id: "duo-arena", title: "朵星擂台", levels: 0, drag: false },
-  { id: "duo-vs-star", title: "朵朵大战星星", levels: 188, drag: false },
+  { id: "duo-rush", title: "梨康双人冲刺", levels: 0, drag: false },
+  { id: "duo-arena", title: "梨康擂台", levels: 0, drag: false },
+  { id: "duo-vs-star", title: "鸭梨大战康康", levels: 188, drag: false },
   { id: "sling-birds", title: "弹弹小鸟", levels: 188, drag: true },
   { id: "candy-swing", title: "糖果秋千", levels: 188, drag: true },
   { id: "gold-hook", title: "金矿钩钩", levels: 188, drag: false },
@@ -39,7 +39,7 @@ export const GAMES = [
   { id: "garden-guard", title: "花园守卫", levels: 188, drag: false, canvasOnly: true },
   { id: "sprout-defense", title: "绿芽保卫战", levels: 188, drag: false, canvasOnly: true },
   { id: "monster-crisis", title: "小怪物危机", levels: 188, drag: false },
-  { id: "shoot-range", title: "星星射击场", levels: 188, drag: true },
+  { id: "shoot-range", title: "康康射击场", levels: 188, drag: true },
   { id: "sky-squad", title: "飞机小队", levels: 188, drag: true },
   { id: "tank-battle", title: "铁皮坦克大战", levels: 188, drag: false },
   { id: "bomb-buddies", title: "泡泡炸弹人", levels: 188, drag: false },
@@ -244,8 +244,8 @@ async function main() {
   const home = await page.evaluate(() => ({
     cards: document.querySelectorAll(".game-card").length,
     ourCards: [
-      "朵星双人冲刺","朵星擂台","朵朵大战星星","弹弹小鸟","糖果秋千","金矿钩钩","花园守卫",
-      "绿芽保卫战","小怪物危机","星星射击场","飞机小队","铁皮坦克大战","泡泡炸弹人","雪球大作战",
+      "梨康双人冲刺","梨康擂台","鸭梨大战康康","弹弹小鸟","糖果秋千","金矿钩钩","花园守卫",
+      "绿芽保卫战","小怪物危机","康康射击场","飞机小队","铁皮坦克大战","泡泡炸弹人","雪球大作战",
       "碰碰车大乱斗","保龄球小馆","冰冰火火森林","噗噗兄弟","王子公主大冒险",
     ].filter((t) => [...document.querySelectorAll(".game-card")].some((c) => (c.textContent ?? "").includes(t))).length,
   }));

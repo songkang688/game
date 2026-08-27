@@ -219,7 +219,7 @@ export function emptyInput(): Input {
 
 export type InputName = keyof Input;
 
-/** 双人键位:朵朵 W A S D + F/G,星星 ↑←↓→ + L/K */
+/** 双人键位:鸭梨 W A S D + F/G,康康 ↑←↓→ + L/K */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {
   KeyW: { player: 0, action: "up" },
   KeyA: { player: 0, action: "left" },
@@ -1552,7 +1552,7 @@ export function isMatchOver(m: MatchState): boolean {
   return m.rounds[0] >= ROUNDS_TO_WIN || m.rounds[1] >= ROUNDS_TO_WIN || m.played >= MAX_ROUNDS;
 }
 
-/** 赛况一句话:「朵朵 1 : 0 星星」 */
+/** 赛况一句话:「鸭梨 1 : 0 康康」 */
 export function scoreLine(m: MatchState, names: [string, string]): string {
   return `${names[0]} ${m.rounds[0]} : ${m.rounds[1]} ${names[1]}`;
 }

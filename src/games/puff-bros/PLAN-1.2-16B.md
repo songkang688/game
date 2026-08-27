@@ -65,7 +65,7 @@
 
 ### 6. 双人 + 触屏是否互不抢占？
 
-键位是两套：`KEY_MAP` 里朵朵 `WASD + F/G`、星星 `↑←↓→ + L/K`；`keyToAction(code, playerCount, humanCount)`
+键位是两套：`KEY_MAP` 里鸭梨 `WASD + F/G`、康康 `↑←↓→ + L/K`；`keyToAction(code, playerCount, humanCount)`
 在一个人玩时把两套都归 0 号，人机对战时方向键那套也归真人。触屏 `pb-pads` 按 `humans` 渲染 1 或 2 套，
 每颗按钮的 `pointerdown / pointerup` 只写自己那一路 `inputs[player]`——**互不抢占，这条是过的**。
 

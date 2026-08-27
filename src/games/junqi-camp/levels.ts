@@ -66,9 +66,9 @@ export interface LevelPlan {
   level: number;
   chapter: number;
   index: number;
-  /** 朵朵最多走几手 */
+  /** 鸭梨最多走几手 */
   budget: number;
-  /** 守备队关：星星按兵不动 */
+  /** 守备队关：康康按兵不动 */
   garrison: boolean;
   /** 电子暗棋：对面全是背面 */
   hidden: boolean;
@@ -95,7 +95,7 @@ function put(b: Build, at: Pos, side: Side, kind: Kind): Pos {
   return at;
 }
 
-/** 每一关都给朵朵留一面自己的旗，摆在自己大本营里（它本来也不能动） */
+/** 每一关都给鸭梨留一面自己的旗，摆在自己大本营里（它本来也不能动） */
 function ownFlag(b: Build): void {
   put(b, idx(11, 1), "duo", "junqi");
   put(b, idx(11, 3), "duo", "dilei");
@@ -107,7 +107,7 @@ interface Made {
   hint: string;
 }
 
-/** 星星那面旗摆哪个大本营 */
+/** 康康那面旗摆哪个大本营 */
 function flagCol(k: number): number {
   return k % 2 === 0 ? 1 : 3;
 }
@@ -313,7 +313,7 @@ function chapter8(k: number): Made {
 
   put(b, idx(0, fc), "star", "junqi");
   put(b, idx(0, oc), "star", "dilei");
-  // 星星的机动力量都放在够不着旗子门口的地方（行营与中路，一手到不了第 2 行）
+  // 康康的机动力量都放在够不着旗子门口的地方（行营与中路，一手到不了第 2 行）
   put(b, idx(3, 2), "star", "shizhang");
   put(b, idx(4, oc), "star", "lianzhang");
   if (k % 2 === 0) put(b, idx(4, fc), "star", "paizhang");
@@ -378,7 +378,7 @@ export function positionFor(level: number): GameState {
   return makeState(made.cells, { turn: "duo", garrison: plan.garrison });
 }
 
-/** 朵朵这一关最多能走几手（守备队关一手就是一步，实战关要算上对面） */
+/** 鸭梨这一关最多能走几手（守备队关一手就是一步，实战关要算上对面） */
 export function maxPliesOf(plan: LevelPlan): number {
   return plan.garrison ? plan.budget : plan.budget * 2;
 }
@@ -499,7 +499,7 @@ function solveVersus(
   return dfs(start, budget, []);
 }
 
-/** 这一关的参考解：一串朵朵的走子，回放到胜利。搜不出来返回 null（测试会红） */
+/** 这一关的参考解：一串鸭梨的走子，回放到胜利。搜不出来返回 null（测试会红） */
 export function solveLevel(level: number, nodeCap = 40000): Move[] | null {
   const plan = planFor(level);
   const start = positionFor(level);
@@ -534,5 +534,5 @@ export function levelRand(level: number): () => number {
   return mulberry32(planFor(level).seed);
 }
 
-/** 星星的大本营位置（视图画目标用） */
+/** 康康的大本营位置（视图画目标用） */
 export const STAR_HQ: readonly Pos[] = HQ.star;

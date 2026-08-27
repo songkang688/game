@@ -51,7 +51,7 @@ import {
   type World,
 } from "./logic";
 
-const P_NAME = ["朵朵", "星星"];
+const P_NAME = ["鸭梨", "康康"];
 const P_EMOJI = ["🌸", "⭐"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 
@@ -875,7 +875,7 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
       releaseAll();
       showVeil(
         "⏸ 休息一下",
-        "按 Esc 或点「继续」回到场上。朵朵用 WASD 开车、F 冲撞、G 刹车;星星用方向键开车、L 冲撞、K 刹车。" +
+        "按 Esc 或点「继续」回到场上。鸭梨用 WASD 开车、F 冲撞、G 刹车;康康用方向键开车、L 冲撞、K 刹车。" +
           "冲撞键轻点是小冲刺,按住 0.8 秒蓄满再松手是强撞——蓄力的时候车会慢下来,对手看得见。",
         [{ label: "▶ 继续", onClick: () => togglePause() }]
       );
@@ -1272,8 +1272,8 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       aiSkill: aiSkill ?? undefined,
       banner: `${arena.name} · 第 ${round} 局`,
       tip: aiSkill
-        ? `${arena.hint} 朵朵:WASD 开车、F 冲刺、G 刹车。`
-        : `${arena.hint} 朵朵:WASD + F/G;星星:方向键 + L/K。`,
+        ? `${arena.hint} 鸭梨:WASD 开车、F 冲刺、G 刹车。`
+        : `${arena.hint} 鸭梨:WASD + F/G;康康:方向键 + L/K。`,
       sfx: (n) => api.play(n),
       onDone: (res) => roundOver(res.winner),
     });

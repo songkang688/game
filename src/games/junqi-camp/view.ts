@@ -3,7 +3,7 @@
  *
  * 铁路画粗线、公路画细线、行营画圆、大本营画方，一眼能看懂。
  * 点一枚自己的子选中，再点一个亮着的落点，最后按「确认」走。
- * 键盘按座位分：朵朵 WASD 挪光标、F 确认、G 取消；星星 方向键 + L / K。
+ * 键盘按座位分：鸭梨 WASD 挪光标、F 确认、G 取消；康康 方向键 + L / K。
  * 两个座位各有各的光标（双人同屏时谁也拨不走对方那一个），画面上只画该走的那一位。
  * 对撞一定有动画：两子翻开 → 停一下 → 回营的那一方淡出。
  * 12 行的棋盘在 360px 上放不下，所以整块棋盘可以缩放，也能拖着看。
@@ -225,7 +225,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
 
   let selected = -1;
   let pending = -1;
-  /** 一人一个光标：朵朵从自己家门口起，星星从对面家门口起，谁也拨不走谁的 */
+  /** 一人一个光标：鸭梨从自己家门口起，康康从对面家门口起，谁也拨不走谁的 */
   const cursors: Record<Side, Pos> = { duo: idx(9, 2), star: idx(2, 2) };
   let targets: Pos[] = [];
   let destroyed = false;
@@ -293,7 +293,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   function describe(p: Pos, kind: Kind | null, piece: Cell): string {
     const place = inCamp(p) ? "行营" : inHQ(p) ? "大本营" : "";
     if (!piece) return `${cellName(p)}${place ? `，${place}` : ""}，空格`;
-    const who = piece.side === "duo" ? "朵朵" : "星星";
+    const who = piece.side === "duo" ? "鸭梨" : "康康";
     const what = kind ? LABEL[kind] : "盖着的子";
     return `${cellName(p)}${place ? `，${place}` : ""}，${who}的${what}`;
   }

@@ -181,7 +181,7 @@ export interface NewGameOptions {
   turn?: Side;
 }
 
-/** 开一盘新棋：两边各自布好阵，朵朵先走 */
+/** 开一盘新棋：两边各自布好阵，鸭梨先走 */
 export function newGame(seed: number, opts: NewGameOptions = {}): GameState {
   const duo = piecesFrom(randomSetup("duo", seed, opts.duoSkill ?? 1), "duo", 1);
   const star = piecesFrom(randomSetup("star", seed + 977, opts.starSkill ?? 1), "star", 200);

@@ -248,13 +248,13 @@ describe("雪球大作战 · 对战与人机", () => {
   it("双人对战没有电脑,谁先砸完对面三盏灯笼谁赢", () => {
     const match = createMatch(duelMatch(null));
     expect(match.throwers.every((t) => t.ai === null)).toBe(true);
-    // 让朵朵一路打过去
+    // 让鸭梨一路打过去
     for (let i = 0; i < 60 && match.status === "playing"; i++) {
       const seat = current(match).seat;
       const foe = liveTargets(match, 1 - seat);
       if (foe.length === 0) break;
       if (seat === 1) {
-        // 星星这一方站着不动,只是把回合让出去
+        // 康康这一方站着不动,只是把回合让出去
         takeShot(match, 85, 5);
         continue;
       }
@@ -288,7 +288,7 @@ describe("雪球大作战 · 对战与人机", () => {
     expect(foe.bumps).toBe(1);
     expect(match.targets.every((t) => !t.melted)).toBe(true);
     expect(out?.line).not.toMatch(/输|死|血|伤|疼/);
-    // 被砸中的一方歇一回合,所以还是朵朵先扔
+    // 被砸中的一方歇一回合,所以还是鸭梨先扔
     expect(current(match).seat).toBe(0);
   });
 });

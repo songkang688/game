@@ -4,7 +4,7 @@
  * 对应测试员档C 两条：
  *
  * - **W5C-T02（建议）**：360px 上「🔥 拼一把」实测 107×26，高度差 6px。
- * - **W5C-T01（建议）**：星星队第二个键取了 `J`，平台双人约定是 `K`。
+ * - **W5C-T01（建议）**：康康队第二个键取了 `J`，平台双人约定是 `K`。
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -57,13 +57,13 @@ describe("红蓝拔河 · 齿轮条上的小开关（W5C-T02）", () => {
   });
 });
 
-describe("红蓝拔河 · 星星队的键位对齐平台约定（W5C-T01）", () => {
+describe("红蓝拔河 · 康康队的键位对齐平台约定（W5C-T01）", () => {
   it("屏幕上一律写 K，K 与 L 都真的接管得到", () => {
     expect(BLUE_KEY_MAIN).toBe("KeyK");
     expect(BLUE_KEYS[0]).toBe("KeyK");
     expect(keySideOf("KeyK", true)).toBe("blue");
     expect(keySideOf("KeyL", true)).toBe("blue");
-    // 平台双人约定里星星那半边不含 F / A，别把朵朵的键抢过来
+    // 平台双人约定里康康那半边不含 F / A，别把鸭梨的键抢过来
     for (const code of RED_KEYS) expect(BLUE_KEYS).not.toContain(code);
   });
 
@@ -82,7 +82,7 @@ describe("红蓝拔河 · 星星队的键位对齐平台约定（W5C-T01）", ()
 
   it("屏幕上给孩子看的提示都改成了 K，没有一处还写着 J", () => {
     const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "index.ts"), "utf8");
-    expect(src, "还有地方写着「星星按住 J」").not.toMatch(/星星[^\n]{0,40}按住 J/);
-    expect((src.match(/星星[^\n]{0,40}按住 K/g) ?? []).length, "屏幕上的 K 提示少了").toBeGreaterThanOrEqual(3);
+    expect(src, "还有地方写着「康康按住 J」").not.toMatch(/康康[^\n]{0,40}按住 J/);
+    expect((src.match(/康康[^\n]{0,40}按住 K/g) ?? []).length, "屏幕上的 K 提示少了").toBeGreaterThanOrEqual(3);
   });
 });

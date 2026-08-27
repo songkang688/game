@@ -1667,7 +1667,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.fillText("×2", 0, 1);
   }
 
-  /** 1.2 小花朵:这是给朵朵的礼物,不能切。画得柔和一点,一眼就和果子区分开。 */
+  /** 1.2 小花朵:这是给鸭梨的礼物,不能切。画得柔和一点,一眼就和果子区分开。 */
   function drawFlower(f: Flying): void {
     const r = f.r;
     ctx.rotate(-f.rot * 0.6);

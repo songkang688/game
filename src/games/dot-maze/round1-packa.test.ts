@@ -4,7 +4,7 @@
  * 只记录、不改玩法。既有的 index.test.ts 已经把「挂得上、拆得干净」测透了，
  * 这一份补的是走查铁则里它没覆盖的三块：
  *  - 铁则 1：在**界面上**真的赢一次、真的输一次，再退出、再进来；
- *  - 铁则 3：四种玩法各自的键位归属（朵朵 WASD、星星 方向键、Esc 暂停，互不抢占）；
+ *  - 铁则 3：四种玩法各自的键位归属（鸭梨 WASD、康康 方向键、Esc 暂停，互不抢占）；
  *  - 铁则 4 / 5：360px 的热区，以及 meta.blurb 与实现里的叫法对不对得上。
  *
  * 标了「【已知问题】」的用例断言的是**当前行为**，修好之后会红，那时候连断言一起翻面。
@@ -12,7 +12,7 @@
  *  - PA-DM-1（一般）：`.dmz-btn`（换个玩法 / 回选关）靠 padding 撑高度，只有 33px 出头；
  *  - PA-DM-2（一般）：`meta.blurb` 把豆子叫「小星星」，可界面上「⭐ 小星命」才是小星星，
  *    HUD 与攻略里一律叫「豆」，卡片和游戏里对不上；
- *  - PA-DM-3（一般）：规格里朵朵的 F / G 与星星的 L / K 四个键都没接
+ *  - PA-DM-3（一般）：规格里鸭梨的 F / G 与康康的 L / K 四个键都没接
  *    —— 第 2 轮学习优化员已落地：G / K 撤回预输入的转向，F / L 在攻略里写明不用。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -158,7 +158,7 @@ describe("PA-DM · 一局迷宫的真实胜负", () => {
     const { mountStage } = await import("./index");
     const ends: Array<{ won: boolean }> = [];
     const handle = mountStage(dom.root as unknown as HTMLElement, {
-      // 只有一条命，小幽灵就守在朵朵右手边第一格，豆子还在它后面，绕不过去
+      // 只有一条命，小幽灵就守在鸭梨右手边第一格，豆子还在它后面，绕不过去
       cfg: corridorCfg({ ghostCount: 1, lives: 1, maze: corridor({ dotsAt: [4, 5], homeX: 2 }) }),
       starRole: "none",
       label: "走查",
@@ -221,7 +221,7 @@ describe("PA-DM · 一局迷宫的真实胜负", () => {
 /* ------------------------------------------------------------------ */
 
 describe("PA-DM · 键位归属", () => {
-  it("单人玩时 WASD 与方向键等价，谁都能开朵朵", async () => {
+  it("单人玩时 WASD 与方向键等价，谁都能开鸭梨", async () => {
     const { mountStage } = await import("./index");
     for (const k of ["d", "ArrowRight"]) {
       const ends: boolean[] = [];
@@ -233,14 +233,14 @@ describe("PA-DM · 键位归属", () => {
       });
       key(k);
       for (let i = 0; i < 20 && ends.length === 0; i++) flushFrames(dom, 1, 130);
-      expect(ends, `按 ${k} 没能把朵朵开动`).toEqual([true]);
+      expect(ends, `按 ${k} 没能把鸭梨开动`).toEqual([true]);
       handle.destroy();
     }
   });
 
   it("抢豆对战里两个人各管各的：一边的键改不动另一边的分数", async () => {
     const { mountStage } = await import("./index");
-    // 朵朵和星星都会自己往前走，所以「谁抢占了谁」得跟一局都不按键的对照局比。
+    // 鸭梨和康康都会自己往前走，所以「谁抢占了谁」得跟一局都不按键的对照局比。
     // 同一份 cfg、同一个内部种子，三局的推进完全可复现。
     function run(keys: string[]): [number, number] {
       const handle = mountStage(dom.root as unknown as HTMLElement, {
@@ -253,22 +253,22 @@ describe("PA-DM · 键位归属", () => {
         for (const k of keys) key(i % 2 === 0 ? k : k);
         flushFrames(dom, 6, 60);
       }
-      const m = /朵朵 (\d+) · 星星 (\d+)/.exec(dom.root.querySelector(".dmz-score")!.textContent)!;
+      const m = /鸭梨 (\d+) · 康康 (\d+)/.exec(dom.root.querySelector(".dmz-score")!.textContent)!;
       const out: [number, number] = [Number(m[1]), Number(m[2])];
       handle.destroy();
       return out;
     }
     const [baseDuo, baseStar] = run([]);
-    // 两边都用「掉头」这个一定生效的动作：朵朵开局朝右，星星开局朝左
+    // 两边都用「掉头」这个一定生效的动作：鸭梨开局朝右，康康开局朝左
     const [duoKeyed, starUntouched] = run(["a"]);
     const [duoUntouched, starKeyed] = run(["ArrowRight"]);
-    expect(duoKeyed, "按了 WASD 朵朵的路线却一点没变").not.toBe(baseDuo);
-    expect(starUntouched, "朵朵按 WASD 把星星的分数也带偏了").toBe(baseStar);
-    expect(starKeyed, "按了方向键星星的路线却一点没变").not.toBe(baseStar);
-    expect(duoUntouched, "星星按方向键把朵朵的分数也带偏了").toBe(baseDuo);
+    expect(duoKeyed, "按了 WASD 鸭梨的路线却一点没变").not.toBe(baseDuo);
+    expect(starUntouched, "鸭梨按 WASD 把康康的分数也带偏了").toBe(baseStar);
+    expect(starKeyed, "按了方向键康康的路线却一点没变").not.toBe(baseStar);
+    expect(duoUntouched, "康康按方向键把鸭梨的分数也带偏了").toBe(baseDuo);
   });
 
-  it("双人追逃里方向键只喂给那只带光圈的小幽灵，朵朵的清豆节奏不受影响", async () => {
+  it("双人追逃里方向键只喂给那只带光圈的小幽灵，鸭梨的清豆节奏不受影响", async () => {
     const { mountStage } = await import("./index");
     function run(keys: string[]): string {
       const handle = mountStage(dom.root as unknown as HTMLElement, {
@@ -286,10 +286,10 @@ describe("PA-DM · 键位归属", () => {
       return out;
     }
     const quiet = run([]);
-    // 只按方向键：朵朵照自己的节奏走，剩余豆数跟对照局一模一样
-    expect(run(["ArrowLeft"]), "方向键改动了朵朵的清豆节奏").toBe(quiet);
-    // 换成 WASD 掉个头，朵朵的路线就变了
-    expect(run(["a"]), "WASD 没能改动朵朵的走向").not.toBe(quiet);
+    // 只按方向键：鸭梨照自己的节奏走，剩余豆数跟对照局一模一样
+    expect(run(["ArrowLeft"]), "方向键改动了鸭梨的清豆节奏").toBe(quiet);
+    // 换成 WASD 掉个头，鸭梨的路线就变了
+    expect(run(["a"]), "WASD 没能改动鸭梨的走向").not.toBe(quiet);
   });
 
   it("Esc 暂停会冻住整局，虚拟方向键也推不动，再按一次继续", async () => {
@@ -338,19 +338,19 @@ describe("PA-DM · 键位归属", () => {
     raceMod = await import("./index");
   });
 
-  it("取消键 G 把朵朵提前按下、还没到路口的那次转向撤回来", () => {
+  it("取消键 G 把鸭梨提前按下、还没到路口的那次转向撤回来", () => {
     const quiet = raceScore([]);
     // 先证明「按 A 掉头」确实改得动局面，取消键才有话可说
-    expect(raceScore(["a"]), "按了 A 朵朵却没掉头").not.toBe(quiet);
+    expect(raceScore(["a"]), "按了 A 鸭梨却没掉头").not.toBe(quiet);
     expect(raceScore(["a", "g"]), "按完 A 再按 G，掉头没被撤回来").toBe(quiet);
   });
 
-  it("取消键 K 只撤星星自己那次转向，撤不到朵朵头上", () => {
+  it("取消键 K 只撤康康自己那次转向，撤不到鸭梨头上", () => {
     const quiet = raceScore([]);
-    expect(raceScore(["ArrowRight"]), "按了方向键星星却没掉头").not.toBe(quiet);
-    expect(raceScore(["ArrowRight", "k"]), "按完方向键再按 K，星星的掉头没被撤回来").toBe(quiet);
-    // K 是星星的键：朵朵按下的转向不归它管，撤不掉
-    expect(raceScore(["a", "k"]), "星星的 K 把朵朵的转向也撤了").toBe(raceScore(["a"]));
+    expect(raceScore(["ArrowRight"]), "按了方向键康康却没掉头").not.toBe(quiet);
+    expect(raceScore(["ArrowRight", "k"]), "按完方向键再按 K，康康的掉头没被撤回来").toBe(quiet);
+    // K 是康康的键：鸭梨按下的转向不归它管，撤不掉
+    expect(raceScore(["a", "k"]), "康康的 K 把鸭梨的转向也撤了").toBe(raceScore(["a"]));
   });
 
   it("迷宫里没有确认这一步，F / L 按下去不改变任何局面（攻略里已写明不用）", () => {
@@ -361,7 +361,7 @@ describe("PA-DM · 键位归属", () => {
     expect(guide, "攻略没写明 F / L 不用").toMatch(/F\s*和\s*L\s*不用管/);
   });
 
-  it("单人局里 G 和 K 都归朵朵，撤的是同一次转向", async () => {
+  it("单人局里 G 和 K 都归鸭梨，撤的是同一次转向", async () => {
     const { mountStage } = await import("./index");
     function solo(keys: string[]): string {
       const handle = mountStage(dom.root as unknown as HTMLElement, {
@@ -707,7 +707,7 @@ describe("L3A-16 · 无尽结算分「破了 / 没破」两种说法", () => {
     expect(zero.length).toBeGreaterThan(6);
   });
 
-  it("两种说法都过红线筛子，也不出现朵朵星星以外的角色", async () => {
+  it("两种说法都过红线筛子，也不出现鸭梨康康以外的角色", async () => {
     for (const [s, bf, b] of [
       [30, 0, 30],
       [40, 120, 120],

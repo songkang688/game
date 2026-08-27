@@ -301,10 +301,10 @@ describe("alien-seek 1.2 · 清单栏与模式", () => {
   });
 
   it("双人抢答的比分不会串台", () => {
-    expect(versusWinner(4, 2)).toBe("朵朵");
-    expect(versusWinner(1, 3)).toBe("星星");
+    expect(versusWinner(4, 2)).toBe("鸭梨");
+    expect(versusWinner(1, 3)).toBe("康康");
     expect(versusWinner(2, 2)).toBe("平局");
-    expect(versusLine(4, 2)).toContain("朵朵");
+    expect(versusLine(4, 2)).toContain("鸭梨");
     expect(versusLine(2, 2)).toContain("平手");
   });
 

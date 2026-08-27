@@ -66,10 +66,10 @@ describe("档B R1 修复 · 五款一起过红线", () => {
     }
   });
 
-  it("角色红线:出现的具名主角只有朵朵 / 星星", () => {
+  it("角色红线:出现的具名主角只有鸭梨 / 康康", () => {
     for (const [game, sources] of ALL) {
       const text = joinSources(sources);
-      for (const name of ["朵朵", "星星"]) {
+      for (const name of ["鸭梨", "康康"]) {
         // 出现与否都行,出现了就得是这两位;这里只确认没有别家 IP 的名字混进来
         expect(typeof text.includes(name)).toBe("boolean");
       }

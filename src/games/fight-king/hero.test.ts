@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 · 格斗塔默认出战角色（QA 第 2 轮 · 包 B · R2B-3）。
+ * 梨康格斗王 · 格斗塔默认出战角色（QA 第 2 轮 · 包 B · R2B-3）。
  *
  * 第 2 轮验收拿仓库自带那把尺量出来：格斗塔从第 125 关起一路 0/8，
  * 可**换个小伙伴立刻 4~6/8** —— 关卡表不是墙，固定用 `CHARACTERS[0]` 开局的默认主角才是。
@@ -80,7 +80,7 @@ describe("格斗塔后段不再是墙", () => {
   it("默认角色是八位里现成的一位，没有新增角色也没有改数值", () => {
     expect(CHARACTERS.some((c) => c.id === TOWER_HERO_ID)).toBe(true);
     expect(CHARACTERS).toHaveLength(8);
-    expect(characterById(TOWER_HERO_ID).name).toBe("星星");
+    expect(characterById(TOWER_HERO_ID).name).toBe("康康");
   });
 });
 
@@ -148,9 +148,9 @@ describe("提示与角色介绍的文案", () => {
     }
   });
 
-  it("朵朵的介绍不再把她说成「新手先选她准没错」", () => {
+  it("鸭梨的介绍不再把她说成「新手先选她准没错」", () => {
     const duoduo = characterById(CHARACTERS[0].id);
-    expect(duoduo.name).toBe("朵朵");
+    expect(duoduo.name).toBe("鸭梨");
     expect(duoduo.style).not.toContain("新手先选");
     expect(duoduo.style.length).toBeGreaterThan(8);
   });

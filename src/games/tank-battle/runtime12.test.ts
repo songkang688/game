@@ -303,7 +303,7 @@ describe("模式入口", () => {
       h.flush(2);
       expect(findOne(h.root, "tkb-canvas")).toBeNull();
     }
-    // 合作是个开关:按一下拉星星进来
+    // 合作是个开关:按一下拉康康进来
     const coop = findButton(h.root, "单人闯关");
     coop?.fire("click");
     h.flush(1);

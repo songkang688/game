@@ -1,5 +1,5 @@
 /**
- * 朵星地产 · 机会 / 命运卡（纯数据 + 洗牌抽牌）。
+ * 梨康地产 · 机会 / 命运卡（纯数据 + 洗牌抽牌）。
  *
  * 机会 18 张、命运 18 张，全部原创文案，粉彩萌系、六年级读得懂。
  * 抽完自动洗回，同一副牌在一局里循环使用。
@@ -37,17 +37,17 @@ export interface EstateCard {
 /** 机会转盘：多半是「动起来」的卡 */
 export const CHANCE_CARDS: readonly EstateCard[] = [
   { id: "c01", text: "顺风来啦，一路飘回出发花园，领 200 星币。", effect: { kind: "moveTo", pos: 0, passGo: true } },
-  { id: "c02", text: "朵朵约你去看流星，前进到天文台坡·流星坪。", effect: { kind: "moveTo", pos: 34, passGo: true } },
+  { id: "c02", text: "鸭梨约你去看流星，前进到天文台坡·流星坪。", effect: { kind: "moveTo", pos: 34, passGo: true } },
   { id: "c03", text: "月亮广场今晚有灯会，直接前进到满月顶。", effect: { kind: "moveTo", pos: 39, passGo: true } },
   { id: "c04", text: "汽水街新出了气泡水，前进到气泡口尝一口。", effect: { kind: "moveTo", pos: 6, passGo: true } },
   { id: "c05", text: "赶上一班快车，前进到最近的车站。", effect: { kind: "nearestStation" } },
   { id: "c06", text: "风把你往回吹了三格，慢慢走回去吧。", effect: { kind: "moveBy", steps: -3 } },
-  { id: "c07", text: "在朵朵公园捡到一个装着 50 星币的小钱包，交给失物处后得到谢礼。", effect: { kind: "cash", amount: 50 } },
-  { id: "c08", text: "星星帮你摆摊卖手工书签，赚到 120 星币。", effect: { kind: "cash", amount: 120 } },
+  { id: "c07", text: "在鸭梨公园捡到一个装着 50 星币的小钱包，交给失物处后得到谢礼。", effect: { kind: "cash", amount: 50 } },
+  { id: "c08", text: "康康帮你摆摊卖手工书签，赚到 120 星币。", effect: { kind: "cash", amount: 120 } },
   { id: "c09", text: "小屋屋顶要刷漆：每栋小屋 40 星币，每座大屋 115 星币。", effect: { kind: "repairs", perHouse: 40, perHotel: 115 } },
   { id: "c10", text: "你在反思角门口踩到湿地板，去里面坐一会儿吧。", effect: { kind: "goJail" } },
   { id: "c11", text: "拿到一张出门卡，什么时候想用都行。", effect: { kind: "outCard" } },
-  { id: "c12", text: "参加朵星画展拿了第一名，奖金 150 星币。", effect: { kind: "cash", amount: 150 } },
+  { id: "c12", text: "参加梨康画展拿了第一名，奖金 150 星币。", effect: { kind: "cash", amount: 150 } },
   { id: "c13", text: "帮邻居搬花盆搬到手酸，每个人都送你 20 星币当谢礼。", effect: { kind: "collectEach", amount: 20 } },
   { id: "c14", text: "请大家喝一轮热可可，每人 25 星币。", effect: { kind: "payEach", amount: 25 } },
   { id: "c15", text: "路灯维修基金开始收钱，场上每个人都交 40 星币。", effect: { kind: "allPay", amount: 40 } },
@@ -68,7 +68,7 @@ export const FATE_CARDS: readonly EstateCard[] = [
   { id: "f08", text: "房屋年检：每栋小屋 40 星币，每座大屋 115 星币。", effect: { kind: "repairs", perHouse: 40, perHotel: 115 } },
   { id: "f09", text: "你在休息亭睡过头，被请去反思角坐一会儿。", effect: { kind: "goJail" } },
   { id: "f10", text: "收到一张出门卡，收好别弄丢。", effect: { kind: "outCard" } },
-  { id: "f11", text: "去朵朵公园野餐，走到公园歇一歇。", effect: { kind: "moveTo", pos: 20, passGo: true } },
+  { id: "f11", text: "去鸭梨公园野餐，走到公园歇一歇。", effect: { kind: "moveTo", pos: 20, passGo: true } },
   { id: "f12", text: "彩虹滨捡贝壳大赛拿了名次，奖金 80 星币。", effect: { kind: "cash", amount: 80 } },
   { id: "f13", text: "给全场每个人买一支星糖，每人 20 星币。", effect: { kind: "payEach", amount: 20 } },
   { id: "f14", text: "社区花坛集资，场上每个人都交 30 星币。", effect: { kind: "allPay", amount: 30 } },

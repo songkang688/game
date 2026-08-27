@@ -306,7 +306,7 @@ describe("军旗对决 · 暗棋信息集", () => {
     const know = knownInfo("duo", s.history);
     const facts = [...know.facts.values()];
     expect(facts.some((f) => f.kind === "lianzhang")).toBe(true);
-    // 星星那边走一步，朵朵就知道这枚子会动
+    // 康康那边走一步，鸭梨就知道这枚子会动
     applyMove(s, { from: idx(4, 4), to: idx(3, 4) });
     const after = knownInfo("duo", s.history);
     expect([...after.facts.values()].some((f) => f.moved)).toBe(true);

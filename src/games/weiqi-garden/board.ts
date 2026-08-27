@@ -8,9 +8,9 @@
 
 /** 空点 */
 export const EMPTY = 0;
-/** 黑子,朵朵执黑 */
+/** 黑子,鸭梨执黑 */
 export const BLACK = 1;
-/** 白子,星星执白 */
+/** 白子,康康执白 */
 export const WHITE = 2;
 
 export type Color = 1 | 2;
@@ -45,9 +45,9 @@ export function other(color: Color): Color {
   return color === BLACK ? WHITE : BLACK;
 }
 
-/** 颜色的中文名字(界面与提示语共用,黑=朵朵、白=星星) */
+/** 颜色的中文名字(界面与提示语共用,黑=鸭梨、白=康康) */
 export function colorName(color: Color): string {
-  return color === BLACK ? "朵朵（黑）" : "星星（白）";
+  return color === BLACK ? "鸭梨（黑）" : "康康（白）";
 }
 
 export function createBoard(size: number): Board {
@@ -255,7 +255,7 @@ export function positionHash(board: Board, turn?: Color): string {
 
 // ---------------------------------------------------------------------------
 // 文本盘面:关卡表、测试与调试都用这个格式
-// `.` 空点、`X` 黑(朵朵)、`O` 白(星星)
+// `.` 空点、`X` 黑(鸭梨)、`O` 白(康康)
 // ---------------------------------------------------------------------------
 
 export function parseRows(rows: readonly string[]): Board {

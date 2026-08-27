@@ -126,7 +126,7 @@ export interface StageOptions {
   starRole: StarRole;
   /** 顶部标题 */
   label: string;
-  /** 结算回调：won 表示朵朵这边达成目标 */
+  /** 结算回调：won 表示鸭梨这边达成目标 */
   onEnd: (result: { won: boolean; score: number; livesLeft: number; starScore: number }) => void;
   /** 每帧回调（HUD 额外信息） */
   extraChip?: () => string;
@@ -178,7 +178,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const noteEl = wrap.querySelector(".dmz-note") as HTMLElement;
 
   const sfx = opts.play ?? ((): void => {});
-  // 追逃模式里星星操纵第 0 只小幽灵：交给 logic 记下来，AI 就不会再覆盖它的方向
+  // 追逃模式里康康操纵第 0 只小幽灵：交给 logic 记下来，AI 就不会再覆盖它的方向
   const cfg: RunConfig = opts.starRole === "ghost" ? { ...opts.cfg, controlled: 0 } : opts.cfg;
   const state: RunState = createRun(cfg, 20240612);
   const maze: Maze = state.maze;
@@ -191,7 +191,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       score: 0,
       cd: opts.cfg.stepMs,
     };
-    // 星星的出生格不能是墙
+    // 康康的出生格不能是墙
     if (maze.wall[cellIndex(maze, star.cell.x, star.cell.y)]) star.cell = { ...maze.spawn };
   }
 
@@ -407,14 +407,14 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   }
 
   function renderHud(): void {
-    scoreEl.textContent = star ? `🍬 朵朵 ${state.score} · 星星 ${star.score}` : `🍬 ${state.score}`;
+    scoreEl.textContent = star ? `🍬 鸭梨 ${state.score} · 康康 ${star.score}` : `🍬 ${state.score}`;
     livesEl.textContent = `⭐ ${"●".repeat(Math.max(0, state.lives))}`;
     leftEl.textContent = `🫐 剩 ${remaining(state)}`;
     extraEl.textContent = opts.extraChip ? opts.extraChip() : opts.label;
     noteEl.textContent = paused ? "已暂停，按 Esc 继续。" : state.notice;
     canvas.setAttribute(
       "aria-label",
-      `朵朵${state.score}分，小星命${state.lives}，剩${remaining(state)}颗豆${paused ? "，已暂停" : ""}`
+      `鸭梨${state.score}分，小星命${state.lives}，剩${remaining(state)}颗豆${paused ? "，已暂停" : ""}`
     );
   }
 
@@ -491,7 +491,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
       e.preventDefault();
       return;
     }
-    // 取消键：朵朵 G、星星 K，把提前按下、还没到路口的那次转向撤回来。
+    // 取消键：鸭梨 G、康康 K，把提前按下、还没到路口的那次转向撤回来。
     // 迷宫里没有「确认」这一步，所以 F / L 不接（攻略里已写明）。
     if (key === "g") {
       clearTurn(state);
@@ -524,7 +524,7 @@ export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: ()
   const onPauseClick = (): void => togglePause();
   pauseBtn?.addEventListener("click", onPauseClick);
 
-  /** 星星那一侧的「撤回转向」：抢豆的星星把待转方向收回当前方向，操纵小幽灵时同理，单人局归朵朵 */
+  /** 康康那一侧的「撤回转向」：抢豆的康康把待转方向收回当前方向，操纵小幽灵时同理，单人局归鸭梨 */
   function cancelStarTurn(): void {
     if (star) star.next = star.dir;
     else if (opts.starRole === "ghost") steerGhost(state, state.ghosts[state.controlled]?.dir ?? state.controlledDir);
@@ -758,7 +758,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     const tip = document.createElement("div");
     tip.className = "dmz-tip";
     tip.textContent =
-      "朵朵：WASD 或滑动屏幕｜星星：方向键｜Esc 或方向键盘上的 ⏸ 暂停。无尽最高分：" +
+      "鸭梨：WASD 或滑动屏幕｜康康：方向键｜Esc 或方向键盘上的 ⏸ 暂停。无尽最高分：" +
       save.getGameProgress(meta.id).endlessBest;
     menu.appendChild(tip);
     view.appendChild(menu);
@@ -806,12 +806,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "抢豆",
-      hint: "同一张图两个人抢豆：朵朵 WASD，星星方向键，豆子吃完分高者胜。想歇一下就按 Esc 或点 ⏸。",
+      hint: "同一张图两个人抢豆：鸭梨 WASD，康康方向键，豆子吃完分高者胜。想歇一下就按 Esc 或点 ⏸。",
       starRole: "eater",
       makeConfig: (round) => ({ ...configFor(60 + round * 9), fog: false }),
       onRoundEnd: ({ won, score, starScore }, next) => {
-        if (won) api.onWin(2, `朵朵 ${score} 分对星星 ${starScore} 分，这一局朵朵赢啦！`);
-        else api.onLose(`星星 ${starScore} 分对朵朵 ${score} 分，下一局换条路线试试。`);
+        if (won) api.onWin(2, `鸭梨 ${score} 分对康康 ${starScore} 分，这一局鸭梨赢啦！`);
+        else api.onLose(`康康 ${starScore} 分对鸭梨 ${score} 分，下一局换条路线试试。`);
         next(true);
       },
     });
@@ -824,12 +824,12 @@ export function mount(api: GameApi): { destroy: () => void } {
     view.appendChild(host);
     child = mountRounds(host, api, {
       title: "追逃",
-      hint: "朵朵用 WASD 清豆，星星用方向键操纵带光圈的那只小幽灵。想歇一下就按 Esc 或点 ⏸。",
+      hint: "鸭梨用 WASD 清豆，康康用方向键操纵带光圈的那只小幽灵。想歇一下就按 Esc 或点 ⏸。",
       starRole: "ghost",
       makeConfig: (round) => configFor(150 + round * 7),
       onRoundEnd: ({ won, score }, next) => {
-        if (won) api.onWin(2, `朵朵清光了豆子，拿到 ${score} 分！`);
-        else api.onLose("星星这一局守得真严，换个人来试试。");
+        if (won) api.onWin(2, `鸭梨清光了豆子，拿到 ${score} 分！`);
+        else api.onLose("康康这一局守得真严，换个人来试试。");
         next(true);
       },
     });

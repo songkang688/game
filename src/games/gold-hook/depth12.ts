@@ -307,7 +307,7 @@ export const LIGHT_MIN = 150;
  */
 export const LIGHT_MAX_DIM = 0.55;
 /**
- * 照明圈从这条线往下画。上面那一条是地面、绞盘台和朵朵星星，
+ * 照明圈从这条线往下画。上面那一条是地面、绞盘台和鸭梨康康，
  * 也是钩子悬挂点所在的那一带 —— 压暗了连绳子从哪儿出来都看不清。
  */
 export const LIGHT_BAND_TOP = 96;

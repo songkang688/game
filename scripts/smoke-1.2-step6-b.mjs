@@ -84,7 +84,7 @@ async function backToMenu(page) {
   await page.waitForSelector(".fs-open", { timeout: 10000 });
 }
 
-/** 把画布 aria-label 里的「朵朵的果盆，120分，最大「梨」，盆里 7 颗，不限」拆成结构 */
+/** 把画布 aria-label 里的「鸭梨的果盆，120分，最大「梨」，盆里 7 颗，不限」拆成结构 */
 async function readBowl(page) {
   return page.$eval(".fs-canvaswrap canvas", (el) => {
     const label = el.getAttribute("aria-label") ?? "";

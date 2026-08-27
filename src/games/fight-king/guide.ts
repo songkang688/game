@@ -2,7 +2,7 @@ import type { GuideBook } from "../../ui/level188Contract";
 
 const guide: GuideBook = {
   gameId: "fight-king",
-  title: "朵星格斗王",
+  title: "梨康格斗王",
   general: [
     "每一招都分三段:起手、命中、收招。起手那几帧还够不到人,收招那几帧自己动不了,想赢就是抢在对方收招的时候出手。",
     "按住远离对手的方向就是格挡:站着挡上段和中段,蹲着挡下段。扫堂腿是下段,站着挡不住。",

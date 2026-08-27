@@ -198,7 +198,7 @@ describe("迷宫舞台", () => {
     const canvas = dom.root.querySelector(".dmz-canvas")!;
     expect(canvas.getAttribute("data-cols")).toBe(String(cfg.maze.w));
     expect(canvas.getAttribute("role")).toBe("img");
-    expect(canvas.getAttribute("aria-label")).toMatch(/朵朵\d+分，小星命\d+，剩\d+颗豆$/);
+    expect(canvas.getAttribute("aria-label")).toMatch(/鸭梨\d+分，小星命\d+，剩\d+颗豆$/);
     key("Escape");
     flushFrames(dom, 1, 60);
     expect(canvas.getAttribute("aria-label")).toContain("已暂停");
@@ -222,7 +222,7 @@ describe("迷宫舞台", () => {
     handle.destroy();
   });
 
-  it("WASD 归朵朵，走一段之后豆子真的少了，也响了吃豆的音", async () => {
+  it("WASD 归鸭梨，走一段之后豆子真的少了，也响了吃豆的音", async () => {
     const { mountStage } = await import("./index");
     const sounds: string[] = [];
     const handle = mountStage(dom.root as unknown as HTMLElement, {
@@ -267,7 +267,7 @@ describe("迷宫舞台", () => {
     handle.destroy();
   });
 
-  it("虚拟方向键和滑动都能给朵朵转向", async () => {
+  it("虚拟方向键和滑动都能给鸭梨转向", async () => {
     const { mountStage } = await import("./index");
     const handle = mountStage(dom.root as unknown as HTMLElement, {
       cfg: { ...configFor(0), ghostCount: 0 },
@@ -287,7 +287,7 @@ describe("迷宫舞台", () => {
     handle.destroy();
   });
 
-  it("抢豆对战里方向键归星星，两个人各吃各的", async () => {
+  it("抢豆对战里方向键归康康，两个人各吃各的", async () => {
     const { mountStage } = await import("./index");
     const handle = mountStage(dom.root as unknown as HTMLElement, {
       cfg: { ...configFor(60), ghostCount: 0 },
@@ -296,19 +296,19 @@ describe("迷宫舞台", () => {
       onEnd: () => undefined,
     });
     const score = () => dom.root.querySelector(".dmz-score")!.textContent;
-    expect(score()).toContain("星星");
+    expect(score()).toContain("康康");
     for (let i = 0; i < 12; i++) {
       key(i % 2 === 0 ? "ArrowLeft" : "ArrowDown");
       key(i % 2 === 0 ? "d" : "s");
       flushFrames(dom, 6, 60);
     }
-    const [, duo, star] = /朵朵 (\d+) · 星星 (\d+)/.exec(score()) ?? [];
+    const [, duo, star] = /鸭梨 (\d+) · 康康 (\d+)/.exec(score()) ?? [];
     expect(Number(duo)).toBeGreaterThan(0);
     expect(Number(star)).toBeGreaterThan(0);
     handle.destroy();
   });
 
-  it("双人追逃里方向键接到操纵小幽灵那条线上，不是当成朵朵的转向", async () => {
+  it("双人追逃里方向键接到操纵小幽灵那条线上，不是当成鸭梨的转向", async () => {
     const { mountStage } = await import("./index");
     const handle = mountStage(dom.root as unknown as HTMLElement, {
       cfg: { ...configFor(150), ghostCount: 4 },

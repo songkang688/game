@@ -204,7 +204,7 @@ describe("档B R2 · 泡泡噗噗 · 竞态", () => {
     expect(countLeftOn(twice)).toBe(countLeftOn(once));
   });
 
-  it("朵朵吹一口气重排:泡泡一个不多一个不少,而且真的重排开了", () => {
+  it("鸭梨吹一口气重排:泡泡一个不多一个不少,而且真的重排开了", () => {
     const cfg = LEVELS[73];
     const grid = seedBoard(cfg, 99);
     const rand = mulberry32(20260827);

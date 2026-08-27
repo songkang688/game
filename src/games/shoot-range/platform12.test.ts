@@ -1,5 +1,5 @@
 /**
- * 星星射击场 1.2 · 运行时与平台接线的用例。
+ * 康康射击场 1.2 · 运行时与平台接线的用例。
  *
  * 这一份跑的是真的 `mount()`：用 `domStub` 搭一块 360px 宽的手机屏，
  * 把手指、键盘、rAF 全喂进去，验的是「按下去到底发生了什么」——
@@ -471,7 +471,7 @@ describe("shoot-range 1.2 · 双人同屏", () => {
     expect(findAll(h.root, "shr-pad-name").map((n) => n.textContent).join(" ")).toContain("方向键");
   });
 
-  it("两根手指能同时按:左半边算朵朵的,右半边算星星的,谁也不抢谁", () => {
+  it("两根手指能同时按:左半边算鸭梨的,右半边算康康的,谁也不抢谁", () => {
     const { h } = boot();
     openMode(h, 1);
     h.flush(1);
@@ -491,7 +491,7 @@ describe("shoot-range 1.2 · 双人同屏", () => {
     expect(cols.find((t) => t.startsWith(DUO_NAME[1]))).toContain("/1");
   });
 
-  it("键盘两套键位并行:F 只动朵朵,L 只动星星", () => {
+  it("键盘两套键位并行:F 只动鸭梨,L 只动康康", () => {
     const { h } = boot();
     openMode(h, 1);
     h.flush(1);

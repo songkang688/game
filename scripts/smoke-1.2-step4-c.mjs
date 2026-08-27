@@ -297,12 +297,12 @@ async function run() {
       await checkNoOverflow(page, `${vp.name} 连胜无尽`);
     }
 
-    // ---- 双人同屏:朵朵 F、星星 L 各掷各的 ----
+    // ---- 双人同屏:鸭梨 F、康康 L 各掷各的 ----
     if (await openMode(page, "双人同屏")) {
       await page.waitForSelector(".fc-board", { timeout: 15000 });
       log((await loc(page, ".fc-seat").count()) === 4, `${vp.name} 双人同屏也是四色同场`);
       // 「轮到谁」那个牌子会自己变回去:掷完之后回合可能在这 1.6 秒里绕过
-      // 两个电脑座位又转回朵朵,前后一比又是同一句话,于是偶发假红。
+      // 两个电脑座位又转回鸭梨,前后一比又是同一句话,于是偶发假红。
       // 改看 badge2 上单调递增的「已掷 N 次」,并且轮询到变为止,不睡死时长。
       const rolls2p = async () =>
         Number(/已掷\s*(\d+)/.exec((await loc(page, ".fc-top .fc-badge").nth(1).textContent()) ?? "")?.[1] ?? -1);

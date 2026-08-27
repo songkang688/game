@@ -820,7 +820,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const seats: SeatOpts[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       human: "duo",
       start: startBoard(ctx.level),
       seed: cfg.seed,
@@ -1028,7 +1028,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       hint: cfg.hint,
       seats: [
         {
-          name: "朵朵",
+          name: "鸭梨",
           human: "duo",
           start: freshBoard(cfg.size, seed),
           seed,
@@ -1064,7 +1064,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       hint: "两边的生成序列一样,拼的是谁排得更整齐。",
       seats: [
         {
-          name: "朵朵",
+          name: "鸭梨",
           human: "duo",
           start: freshBoard(cfg.size, seed),
           seed,
@@ -1104,14 +1104,14 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function runDuo(seed: number): void {
     stage.innerHTML = "";
-    chip.textContent = "👫 朵朵 WASD · 星星 方向键";
+    chip.textContent = "👫 鸭梨 WASD · 康康 方向键";
     table = createTable(stage, {
       goalText: "两块盘一起叠,比谁的最大块更大",
       split: true,
-      hint: "朵朵用 W A S D,星星用方向键,手机各滑各的那块盘。",
+      hint: "鸭梨用 W A S D,康康用方向键,手机各滑各的那块盘。",
       seats: [
         {
-          name: "朵朵",
+          name: "鸭梨",
           human: "duo",
           start: freshBoard(4, seed),
           seed,
@@ -1122,7 +1122,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           onDone: () => undefined
         },
         {
-          name: "星星",
+          name: "康康",
           human: "star",
           start: freshBoard(4, seed + 1),
           seed: seed + 1,
@@ -1139,9 +1139,9 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           a.best === b.best
             ? "两个人打成平手,再来一盘！"
             : a.best > b.best
-              ? "朵朵这一盘的块更大！"
-              : "星星这一盘的块更大！";
-        showOver("这一盘结束啦", `朵朵最大 ${a.best}、${a.score} 分;星星最大 ${b.best}、${b.score} 分。${line}`, "🔁 再来一盘");
+              ? "鸭梨这一盘的块更大！"
+              : "康康这一盘的块更大！";
+        showOver("这一盘结束啦", `鸭梨最大 ${a.best}、${a.score} 分;康康最大 ${b.best}、${b.score} 分。${line}`, "🔁 再来一盘");
       }
     });
   }

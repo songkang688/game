@@ -343,14 +343,14 @@ describe("接住小水果 · 风与传送带", () => {
 // ---------------------------------------------------------------------------
 
 describe("接住小水果 · 双人同屏", () => {
-  it("朵朵用 A/D、星星用方向键，两套键位写在数据里", () => {
+  it("鸭梨用 A/D、康康用方向键，两套键位写在数据里", () => {
     expect(PLAYERS.doudou.keys).toContain("A");
     expect(PLAYERS.doudou.keys).toContain("D");
     expect(PLAYERS.star.keys).toContain("←");
     expect(PLAYERS.star.keys).toContain("→");
   });
 
-  it("左半屏归朵朵、右半屏归星星，分数各记各的不串台", () => {
+  it("左半屏归鸭梨、右半屏归康康，分数各记各的不串台", () => {
     expect(duoSide(10)).toBe("doudou");
     expect(duoSide(350)).toBe("star");
     let st = duoInit();
@@ -366,8 +366,8 @@ describe("接住小水果 · 双人同屏", () => {
     expect(duoDone(duoInit())).toBe(false);
     expect(duoDone({ doudou: DUO_GOAL, star: 3, missDoudou: 0, missStar: 0 })).toBe(true);
     const word = duoWord({ doudou: DUO_GOAL, star: 12, missDoudou: 0, missStar: 2 });
-    expect(word).toContain("朵朵");
-    expect(word).toContain("星星");
+    expect(word).toContain("鸭梨");
+    expect(word).toContain("康康");
     expect(word).not.toMatch(/输|笨|差/);
     expect(duoWord(duoInit())).toContain("打平");
   });

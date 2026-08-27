@@ -1321,8 +1321,8 @@ export function endlessLine(floor: number, best: number): string {
 export type InputName = "up" | "right" | "down" | "left" | "drop" | "boom" | "kick";
 
 /**
- * 朵朵 WASD + F 放泡 / G 拍破 / V 踢泡;
- * 星星 方向键 + L 放泡 / K 拍破 / J 踢泡。两套键零重叠。
+ * 鸭梨 WASD + F 放泡 / G 拍破 / V 踢泡;
+ * 康康 方向键 + L 放泡 / K 拍破 / J 踢泡。两套键零重叠。
  */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {
   KeyW: { player: 0, action: "up" },

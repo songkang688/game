@@ -1,4 +1,4 @@
-// 朵星台球 · 球桌视图的回归测试。
+// 梨康台球 · 球桌视图的回归测试。
 //
 // 测试环境是 node、没有 jsdom，所以这里用自带的极简 DOM 桩 `domStub.ts`：
 // 它把监听器、rAF、定时器都数得出来，「destroy 之后不留任何东西」才是可断言的，不是嘴上说说。
@@ -143,7 +143,7 @@ function mountTable(over: Partial<Parameters<typeof createTable>[1]> = {}) {
   const settled: Array<{ potted: number[]; shot: ShotIntent }> = [];
   const handle = createTable(dom.root as unknown as HTMLElement, {
     balls: [makeBall(0, "cue", 40, 50), makeBall(1, "warm", 140, 28)],
-    seats: [{ name: "朵朵", emoji: "🌸", color: "#e8558f", ai: null }],
+    seats: [{ name: "鸭梨", emoji: "🌸", color: "#e8558f", ai: null }],
     turn: 0,
     banner: "练习台",
     tip: "先找线再出杆。",

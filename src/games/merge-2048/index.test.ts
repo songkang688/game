@@ -249,7 +249,7 @@ function fakeApi(root: FakeEl) {
 
 function seatOpts(over: Partial<SeatOpts> = {}): SeatOpts {
   return {
-    name: "朵朵",
+    name: "鸭梨",
     human: "duo",
     start: boardFrom([
       [2, 2, 0, 0],
@@ -407,7 +407,7 @@ describe("动画与窄屏红线", () => {
 });
 
 describe("键位与滑屏", () => {
-  it("朵朵认 WASD", () => {
+  it("鸭梨认 WASD", () => {
     expect(keyToDir("a", "duo")).toBe("left");
     expect(keyToDir("D", "duo")).toBe("right");
     expect(keyToDir("w", "duo")).toBe("up");
@@ -415,7 +415,7 @@ describe("键位与滑屏", () => {
     expect(keyToDir("ArrowLeft", "duo")).toBeNull();
   });
 
-  it("星星认方向键", () => {
+  it("康康认方向键", () => {
     expect(keyToDir("ArrowLeft", "star")).toBe("left");
     expect(keyToDir("ArrowRight", "star")).toBe("right");
     expect(keyToDir("ArrowUp", "star")).toBe("up");
@@ -594,7 +594,7 @@ describe("一块盘的实际操作", () => {
     pressKey("a");
     tick(10);
     const badge = host.byClass("mg-badge").find((b) => b.textContent.includes("最大"));
-    expect(badge?.textContent).toContain("朵朵");
+    expect(badge?.textContent).toContain("鸭梨");
     t.destroy();
   });
 });
@@ -609,28 +609,28 @@ describe("读屏播报", () => {
   }
 
   it("合出更大的数字时说「合出」,没合大就只报当前最大", () => {
-    expect(moveAnnounce("朵朵", st({ steps: 3, best: 16, score: 40 }), 8)).toBe("第 3 步,合出 16,40 分");
-    expect(moveAnnounce("朵朵", st({ steps: 4, best: 16, score: 44 }), 16)).toBe("第 4 步,最大 16,44 分");
+    expect(moveAnnounce("鸭梨", st({ steps: 3, best: 16, score: 40 }), 8)).toBe("第 3 步,合出 16,40 分");
+    expect(moveAnnounce("鸭梨", st({ steps: 4, best: 16, score: 44 }), 16)).toBe("第 4 步,最大 16,44 分");
   });
 
   it("双人同屏才带名字,一个人玩的时候不啰嗦", () => {
-    expect(moveAnnounce("星星", st({ steps: 1, best: 4, score: 4 }), 2, true)).toBe("星星:第 1 步,合出 4,4 分");
-    expect(moveAnnounce("星星", st({ steps: 1, best: 4, score: 4 }), 2, false)).not.toContain("星星");
+    expect(moveAnnounce("康康", st({ steps: 1, best: 4, score: 4 }), 2, true)).toBe("康康:第 1 步,合出 4,4 分");
+    expect(moveAnnounce("康康", st({ steps: 1, best: 4, score: 4 }), 2, false)).not.toContain("康康");
   });
 
   it("三种结束各有各的说法,都说清楚为什么结束", () => {
-    expect(overAnnounce("朵朵", st({ reached: true, best: 32, steps: 9 }))).toContain("目标达成");
-    expect(overAnnounce("朵朵", st({ outOfSteps: true, best: 8 }))).toContain("步数用完");
-    expect(overAnnounce("朵朵", st({ stuck: true, best: 64, steps: 30 }))).toContain("挪不动");
-    expect(overAnnounce("朵朵", st({ best: 4 }))).toContain("这一盘结束");
+    expect(overAnnounce("鸭梨", st({ reached: true, best: 32, steps: 9 }))).toContain("目标达成");
+    expect(overAnnounce("鸭梨", st({ outOfSteps: true, best: 8 }))).toContain("步数用完");
+    expect(overAnnounce("鸭梨", st({ stuck: true, best: 64, steps: 30 }))).toContain("挪不动");
+    expect(overAnnounce("鸭梨", st({ best: 4 }))).toContain("这一盘结束");
     // 达成优先于其它两种,不会同时念两句
-    expect(overAnnounce("朵朵", st({ reached: true, stuck: true, best: 32 }))).toContain("目标达成");
+    expect(overAnnounce("鸭梨", st({ reached: true, stuck: true, best: 32 }))).toContain("目标达成");
   });
 
   it("播报里只有数字与中文,不带 emoji 与标点噪音", () => {
     const lines = [
-      moveAnnounce("朵朵", st({ steps: 2, best: 8, score: 12 }), 4),
-      overAnnounce("朵朵", st({ reached: true, best: 32, steps: 9 }))
+      moveAnnounce("鸭梨", st({ steps: 2, best: 8, score: 12 }), 4),
+      overAnnounce("鸭梨", st({ reached: true, best: 32, steps: 9 }))
     ];
     for (const line of lines) {
       expect(line).not.toMatch(/[🌸⭐🚩♾️🤝👫]/u);
@@ -825,15 +825,15 @@ describe("读屏播报", () => {
 
     it("双人同屏时播报带上是谁走的", () => {
       const { host, t } = table(
-        [seatOpts({ name: "朵朵", human: "duo" }), seatOpts({ name: "星星", human: "star" })],
+        [seatOpts({ name: "鸭梨", human: "duo" }), seatOpts({ name: "康康", human: "star" })],
         { split: true }
       );
       pressKey("a");
       tick(10);
-      expect(host.byClass("mg-say")[0].textContent).toContain("朵朵:");
+      expect(host.byClass("mg-say")[0].textContent).toContain("鸭梨:");
       pressKey("ArrowLeft");
       tick(10);
-      expect(host.byClass("mg-say")[0].textContent).toContain("星星:");
+      expect(host.byClass("mg-say")[0].textContent).toContain("康康:");
       t.destroy();
     });
 
@@ -951,8 +951,8 @@ describe("双人同屏与假人", () => {
   it("左右两块盘各认各的键位,互不串台", () => {
     const { host, t } = table(
       [
-        seatOpts({ name: "朵朵", human: "duo" }),
-        seatOpts({ name: "星星", human: "star" })
+        seatOpts({ name: "鸭梨", human: "duo" }),
+        seatOpts({ name: "康康", human: "star" })
       ],
       { split: true }
     );
@@ -1110,7 +1110,7 @@ describe("整款游戏挂载", () => {
     const handle = mount(api);
     root.byClass("mg-open")[2].fire("click");
     expect(root.byClass("mg-board")).toHaveLength(2);
-    expect(root.byClass("mg-name").map((e) => e.textContent)).toEqual(["朵朵", "星星"]);
+    expect(root.byClass("mg-name").map((e) => e.textContent)).toEqual(["鸭梨", "康康"]);
     handle.destroy();
   });
 });

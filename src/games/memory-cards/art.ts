@@ -171,7 +171,7 @@ const WEATHER: Icon[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 六、朵朵一家（本作原创角色）
+// 六、鸭梨一家（本作原创角色）
 // ---------------------------------------------------------------------------
 
 /** 一个小人：头发形状 + 衣服颜色区分谁是谁 */
@@ -189,8 +189,8 @@ function person(hair: string, cloth: string, hairTop: "bun" | "long" | "short" |
 }
 
 const FAMILY: Icon[] = [
-  { name: "朵朵", shapes: [...person("#5C4630", "#F58FB0", "bun"), c(30, 16, 7, "#F5C33B")] },
-  { name: "星星", shapes: [...person("#3E3A52", "#7FC4E8", "short"), poly("#F5C33B", 74, 8, 79, 20, 92, 20, 82, 28, 86, 40, 74, 33, 62, 40, 66, 28, 56, 20, 69, 20)] },
+  { name: "鸭梨", shapes: [...person("#5C4630", "#F58FB0", "bun"), c(30, 16, 7, "#F5C33B")] },
+  { name: "康康", shapes: [...person("#3E3A52", "#7FC4E8", "short"), poly("#F5C33B", 74, 8, 79, 20, 92, 20, 82, 28, 86, 40, 74, 33, 62, 40, 66, 28, 56, 20, 69, 20)] },
   { name: "妈妈", shapes: person("#4A3826", "#C98AD8", "long") },
   { name: "爸爸", shapes: person("#2F2A20", "#6C9BD8", "cap") },
   { name: "小弟弟", shapes: [poly("#8FD07A", 26, 92, 74, 92, 68, 66, 32, 66), c(50, 46, 24, "#F7DCC4"), arc(50, 36, 24, Math.PI, 2 * Math.PI, "#6B5236", 12), c(42, 48, 3.5, INK), c(58, 48, 3.5, INK), c(50, 58, 4, "#E58BA8")] },
@@ -211,7 +211,7 @@ export const THEME_PACKS: ThemePack[] = [
   { id: "vehicles", name: "交通工具", back: "#D6EBFF", icons: VEHICLES },
   { id: "instruments", name: "乐器架", back: "#FFF0C9", icons: INSTRUMENTS },
   { id: "weather", name: "天气窗", back: "#E2F0F7", icons: WEATHER },
-  { id: "family", name: "朵朵一家", back: "#F3D9FF", icons: FAMILY },
+  { id: "family", name: "鸭梨一家", back: "#F3D9FF", icons: FAMILY },
 ];
 
 /** 每套至少这么多个图案 */

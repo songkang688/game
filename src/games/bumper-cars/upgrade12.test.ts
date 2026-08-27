@@ -63,7 +63,7 @@ function rect(w = 100, h = 70, springs: Field["springs"] = []): Field {
 }
 
 function hero(x: number, y: number, lives = 1) {
-  return makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x, y, lives });
+  return makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x, y, lives });
 }
 
 function foe(x: number, y: number, lives = 1, id = 1) {
@@ -481,7 +481,7 @@ describe("1.2 · 电脑车手四档", () => {
   });
 
   it("自己在打转的时候,电脑只干一件事:把方向顶向最近的台沿法线", () => {
-    const me = makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: 101, y: 35, lives: 1, ai: true });
+    const me = makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x: 101, y: 35, lives: 1, ai: true });
     const other = makeCar({ id: 1, name: "糯糯", emoji: "🐰", color: "#f7a9c4", team: 1, x: 20, y: 35, lives: 1, ai: true });
     const world = createWorld({ field: rect(), cars: [me, other] });
     me.teeter = TEETER_MS;
@@ -492,7 +492,7 @@ describe("1.2 · 电脑车手四档", () => {
   });
 
   it("卡角高手会放着近的不打,专挑正在打转的那台补最后一下", () => {
-    const me = makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: 50, y: 35, lives: 1, ai: true });
+    const me = makeCar({ id: 0, name: "鸭梨", emoji: "🌸", color: "#e8558f", team: 0, x: 50, y: 35, lives: 1, ai: true });
     const near = makeCar({ id: 1, name: "近", emoji: "🐰", color: "#f7a9c4", team: 1, x: 58, y: 35, lives: 1, ai: true });
     const lip = makeCar({ id: 2, name: "远", emoji: "🐻", color: "#c4a9f7", team: 1, x: 95, y: 35, lives: 1, ai: true });
     lip.teeter = TEETER_MS;
@@ -538,7 +538,7 @@ describe("1.2 · 双人同屏输入不串台", () => {
 
   it("同一帧里两个座位的蓄力互不影响", () => {
     const a = hero(20, 20);
-    const b = makeCar({ id: 1, name: "星星", emoji: "⭐", color: "#3f7fd6", team: 1, x: 20, y: 55, lives: 1 });
+    const b = makeCar({ id: 1, name: "康康", emoji: "⭐", color: "#3f7fd6", team: 1, x: 20, y: 55, lives: 1 });
     const world = createWorld({ field: rect(), cars: [a, b] });
     const go: Intent = { dx: 1, dy: 0, dash: false, brake: false };
     for (let i = 0; i < 20; i++) stepWorld(world, 16, [{ ...go, charge: true }, go]);

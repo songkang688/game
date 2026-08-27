@@ -812,7 +812,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     goalText: goalLine(cfg),
     seats: [
       {
-        name: "朵朵",
+        name: "鸭梨",
         human: "duo",
         seed: cfg.seed,
         bag: cfg.bag,
@@ -975,7 +975,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       banner: kind === "marathon" ? `最好成绩 ${best}` : undefined,
       seats: [
         {
-          name: "朵朵",
+          name: "鸭梨",
           human: "duo",
           seed,
           bag: cfg.bag,
@@ -1015,7 +1015,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       split: true,
       seats: [
         {
-          name: "朵朵",
+          name: "鸭梨",
           human: "duo",
           seed,
           bag: [...PIECE_IDS],
@@ -1059,13 +1059,13 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function runDuo(seed: number): void {
     stage.innerHTML = "";
-    chip.textContent = "👫 朵朵 WASD+F/G · 星星 方向键+L/K";
+    chip.textContent = "👫 鸭梨 WASD+F/G · 康康 方向键+L/K";
     table = createTable(stage, {
       goalText: "两个人一起叠,互相发垃圾行",
       split: true,
       seats: [
         {
-          name: "朵朵",
+          name: "鸭梨",
           human: "duo",
           seed,
           bag: [...PIECE_IDS],
@@ -1079,7 +1079,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           onDone: () => undefined
         },
         {
-          name: "星星",
+          name: "康康",
           human: "star",
           seed: seed + 1,
           bag: [...PIECE_IDS],
@@ -1096,7 +1096,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       onOver: (rs) => {
         showOver(
           "这一局结束啦",
-          `朵朵消了 ${rs[0].lines} 行,星星消了 ${rs[1].lines} 行。再来一局吧！`,
+          `鸭梨消了 ${rs[0].lines} 行,康康消了 ${rs[1].lines} 行。再来一局吧！`,
           "🔁 再来一局"
         );
       }

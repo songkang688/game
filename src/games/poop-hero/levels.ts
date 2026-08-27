@@ -825,7 +825,7 @@ export function buildEndless(round: number): LevelDef {
 /**
  * 双人合作模式的第 round 张图(0 基)。
  *
- * 1.2 起两个人是**分工**的:朵朵只负责清扫、星星只负责把垃圾搬去分类站。
+ * 1.2 起两个人是**分工**的:鸭梨只负责清扫、康康只负责把垃圾搬去分类站。
  * 清到 100% 再一起站到净化门前才算赢;三星还要求搬运目标也达成,
  * 所以一个人再厉害也只能拿两星 —— 必须两个人配合。
  */
@@ -861,7 +861,7 @@ export function buildCoop(round: number): LevelDef {
     chapterIndex: ci,
     name: `合作第 ${r + 1} 关 · ${CHAPTERS[ci].name}`,
     feature: "两人分工",
-    hint: "朵朵负责清扫,星星负责把垃圾送进分类站;两件事都做到才是三星。",
+    hint: "鸭梨负责清扫,康康负责把垃圾送进分类站;两件事都做到才是三星。",
     len,
     goalX: len - GOAL_INSET,
     gaps: b.gaps,

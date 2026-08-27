@@ -12,7 +12,7 @@ function down(...codes: string[]): Set<string> {
 }
 
 describe("两套键位的分工", () => {
-  it("朵朵是 WASD + F / G", () => {
+  it("鸭梨是 WASD + F / G", () => {
     expect(P1_KEYS.KeyW).toBe("up");
     expect(P1_KEYS.KeyA).toBe("left");
     expect(P1_KEYS.KeyS).toBe("down");
@@ -21,7 +21,7 @@ describe("两套键位的分工", () => {
     expect(P1_KEYS.KeyG).toBe("heavy");
   });
 
-  it("星星是方向键 + L / K", () => {
+  it("康康是方向键 + L / K", () => {
     expect(P2_KEYS.ArrowUp).toBe("up");
     expect(P2_KEYS.ArrowLeft).toBe("left");
     expect(P2_KEYS.ArrowDown).toBe("down");

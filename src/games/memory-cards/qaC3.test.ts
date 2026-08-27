@@ -251,7 +251,7 @@ describe("档C R3 · memory-cards · 四种模式一个不漏", () => {
     // 无尽
     expect(endlessLevel(1, THEME_PACKS.length).pairs).toBeGreaterThan(0);
     // 双人
-    expect(SEAT_NAMES).toEqual(["朵朵", "星星"]);
+    expect(SEAT_NAMES).toEqual(["鸭梨", "康康"]);
     // 记忆辅助
     expect(assistLabel(true)).not.toBe(assistLabel(false));
   });

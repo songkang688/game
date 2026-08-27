@@ -427,12 +427,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
   }
 
-  /** 没得消了就让朵朵吹一口气，把泡泡重新排一遍（不扣分、不扣步） */
+  /** 没得消了就让鸭梨吹一口气，把泡泡重新排一遍（不扣分、不扣步） */
   function blowAway(): void {
     shuffles++;
     busy = true;
     ctx.sfx("tap");
-    msgEl.textContent = `😮‍💨 场上没有能消的了——朵朵吹一口气，泡泡重新排一排（第 ${shuffles}/${MAX_SHUFFLE} 次，不扣分）`;
+    msgEl.textContent = `😮‍💨 场上没有能消的了——鸭梨吹一口气，泡泡重新排一排（第 ${shuffles}/${MAX_SHUFFLE} 次，不扣分）`;
     boardEl.classList.add("bbp-ripple");
     later(() => {
       copyInto(grid, blowShuffle(grid, COLS, cfg.colors, Math.random));

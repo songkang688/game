@@ -83,7 +83,7 @@ function put(cells: Cell[], r: number, c: number, color: Color, kind: Kind, cove
  * 残局摆法。
  *
  * 可解性是**摆出来的**：对方的将被逼到角上，两个方向都被挡死，
- * 而朵朵手里有两枚兵——「将请不动兵」这一条让兵可以一路顶到底，
+ * 而鸭梨手里有两枚兵——「将请不动兵」这一条让兵可以一路顶到底，
  * 所以一定存在一条赢棋的路。测试里用参考解题器把它真的走一遍。
  */
 function endgameCells(plan: LevelPlan): Cell[] {
@@ -100,7 +100,7 @@ function endgameCells(plan: LevelPlan): Cell[] {
   put(cells, r + dr, c, "blue", "soldier");
   put(cells, r, c + dc, plan.chapter === 5 ? "blue" : "blue", plan.chapter === 5 ? "horse" : "soldier");
 
-  // 朵朵：两枚兵负责收官，一辆车负责清障，帅缩在对角安全的地方
+  // 鸭梨：两枚兵负责收官，一辆车负责清障，帅缩在对角安全的地方
   put(cells, r + 2 * dr, c, "red", "soldier");
   put(cells, r, c + 2 * dc, "red", "soldier");
   put(cells, r + dr, c + 2 * dc, "red", "chariot");

@@ -184,7 +184,7 @@ describe("R3 包A · fruit-stack", () => {
     const labels = keys.map((k) => k.textContent);
     note(`[fruit-stack 双人键位] 屏上虚拟键 ${keys.length} 个：${labels.join(" ")}`);
     expect(keys.length).toBeGreaterThanOrEqual(6);
-    // 键盘：朵朵 A/D/F/G，星星 方向键 /L/K —— 逐个按一遍不应抛异常，且落点会动
+    // 键盘：鸭梨 A/D/F/G，康康 方向键 /L/K —— 逐个按一遍不应抛异常，且落点会动
     for (const code of ["KeyA", "KeyD", "KeyF", "KeyG", "ArrowLeft", "ArrowRight", "KeyL", "KeyK"]) {
       fireWindow(dom, "keydown", { code });
       fireWindow(dom, "keyup", { code });

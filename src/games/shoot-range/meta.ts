@@ -4,7 +4,7 @@
  */
 export const meta = {
   id: "shoot-range",
-  title: "星星射击场",
+  title: "康康射击场",
   emoji: "🎯",
   category: "casual" as const,
   color: "#ffe0ec",

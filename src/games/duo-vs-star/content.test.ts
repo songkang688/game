@@ -1,5 +1,5 @@
 /**
- * 朵朵大战星星 —— 内容体检 + 文案红线巡检。
+ * 鸭梨大战康康 —— 内容体检 + 文案红线巡检。
  *
  * 一半是数据体检（角色 / 场地 / 道具的表填得对不对），
  * 一半是把整个游戏目录里**所有会被孩子看见的中文**（连注释一起）过一遍筛子：
@@ -126,8 +126,8 @@ function checkCopy(where: string, text: string): void {
 describe("出场名单", () => {
   it("至少十位好朋友，而且都是本作原创角色", () => {
     const CAST = [
-      "朵朵",
-      "星星",
+      "鸭梨",
+      "康康",
       "糯糯",
       "云云",
       "墩墩",
@@ -172,8 +172,8 @@ describe("出场名单", () => {
   });
 
   it("按 id / 下标都能取到人，越界会自动绕回来", () => {
-    expect(fighterById("xingxing").name).toBe("星星");
-    expect(fighterById("查无此人").name).toBe("朵朵");
+    expect(fighterById("xingxing").name).toBe("康康");
+    expect(fighterById("查无此人").name).toBe("鸭梨");
     expect(fighterAt(0)).toBe(ROSTER[0]);
     expect(fighterAt(ROSTER.length)).toBe(ROSTER[0]);
     expect(fighterAt(-1)).toBe(ROSTER[ROSTER.length - 1]);

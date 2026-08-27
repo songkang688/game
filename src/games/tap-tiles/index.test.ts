@@ -225,7 +225,7 @@ describe("360px 下的四列", () => {
 });
 
 describe("键位与点位", () => {
-  it("单人四轨是 D F J K,双人是朵朵 A S、星星 K L", () => {
+  it("单人四轨是 D F J K,双人是鸭梨 A S、康康 K L", () => {
     expect(KEYS_SOLO).toEqual(["d", "f", "j", "k"]);
     expect(KEYS_DUO).toEqual(["a", "s", "k", "l"]);
     expect(laneForKey("D", false)).toBe(0);
@@ -237,7 +237,7 @@ describe("键位与点位", () => {
     expect(laneForKey("z", false)).toBe(-1);
   });
 
-  it("双人分轨另认朵朵的 D 与星星的方向键,主键一个都没换", () => {
+  it("双人分轨另认鸭梨的 D 与康康的方向键,主键一个都没换", () => {
     // 主键原样保留
     expect(KEYS_DUO).toEqual(["a", "s", "k", "l"]);
     // 别名和主键落在同一条轨上
@@ -419,7 +419,7 @@ describe("另外三种模式", () => {
     byText("双人同屏")?.click();
     flushFrames(dom, 1, 0);
     const start = dom.clock.ms;
-    // 第 1 局的谱和 matchChart(41) 一模一样,挑一个落在朵朵第 2 轨(键 S / D)的音符
+    // 第 1 局的谱和 matchChart(41) 一模一样,挑一个落在鸭梨第 2 轨(键 S / D)的音符
     const note = matchChart(41).notes.find((n) => n.lane === 1);
     expect(note, "谱面里得有一个落在第 2 轨的音符").toBeTruthy();
 
@@ -443,7 +443,7 @@ describe("另外三种模式", () => {
     byText("双人同屏")?.click();
     flushFrames(dom, 1, 0);
     const start = dom.clock.ms;
-    // 朵朵第 1 轨没有别名,仍旧按 A;别的三条轨全走别名键
+    // 鸭梨第 1 轨没有别名,仍旧按 A;别的三条轨全走别名键
     const keyFor = ["a", "d", "ArrowLeft", "ArrowRight"];
     const notes = [...matchChart(41).notes].sort((a, b) => a.time - b.time);
     // 取开头够长的一段:要把三个别名键都用上
@@ -478,13 +478,13 @@ describe("另外三种模式", () => {
     handle.destroy();
   });
 
-  it("双人分轨:键位提示写明朵朵管左两轨、星星管右两轨", () => {
+  it("双人分轨:键位提示写明鸭梨管左两轨、康康管右两轨", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
     byText("双人同屏")?.click();
     const keys = dom.root.querySelector(".tt-keys")?.innerHTML ?? "";
-    expect(keys).toContain("朵朵");
-    expect(keys).toContain("星星");
+    expect(keys).toContain("鸭梨");
+    expect(keys).toContain("康康");
     expect(keys).toContain("A S");
     expect(keys).toContain("K L");
     handle.destroy();

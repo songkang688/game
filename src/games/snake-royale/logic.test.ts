@@ -275,7 +275,7 @@ describe("snake-royale · 缩圈", () => {
 describe("snake-royale · 排行榜", () => {
   const rows = [
     { id: "bot1", name: "云云", length: 70, alive: true },
-    { id: "me", name: "朵朵", length: 90, alive: true },
+    { id: "me", name: "鸭梨", length: 90, alive: true },
     { id: "bot2", name: "糯糯", length: 120, alive: true },
     { id: "bot3", name: "闪闪", length: 40, alive: false }
   ];

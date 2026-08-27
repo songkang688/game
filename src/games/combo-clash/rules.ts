@@ -610,9 +610,9 @@ export interface InputFrame {
   right: boolean;
   up: boolean;
   down: boolean;
-  /** 轻击(朵朵 F / 星星 L) */
+  /** 轻击(鸭梨 F / 康康 L) */
   light: boolean;
-  /** 重击(朵朵 G / 星星 K) */
+  /** 重击(鸭梨 G / 康康 K) */
   heavy: boolean;
   /** 必杀钮(F+G 同按,或手机上的第三个大钮) */
   burst: boolean;

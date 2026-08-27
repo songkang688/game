@@ -112,9 +112,9 @@ describe("窗口4 档A · R2 修复 · 红线总闸（五款一起过）", () =>
     }
   });
 
-  it("角色只有朵朵 / 星星 + 原创配角，没有借来的名字", () => {
+  it("角色只有鸭梨 / 康康 + 原创配角，没有借来的名字", () => {
     const known = SOURCES.map((s) => s.text).join("\n");
-    expect(known).toContain("朵朵");
+    expect(known).toContain("鸭梨");
     for (const w of ["奥特", "皮卡", "喜羊", "光头强", "熊大", "熊二", "海绵宝宝", "小猪佩奇"]) {
       expect(known.includes(w), `出现了「${w}」`).toBe(false);
     }

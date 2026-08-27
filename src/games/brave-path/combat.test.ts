@@ -53,7 +53,7 @@ const plainAttack = (): number => 0.6;
 
 function hero(over: Partial<FighterSpec> = {}): Fighter {
   return makeFighter({
-    name: "朵朵",
+    name: "鸭梨",
     emoji: "🌸",
     element: "grass",
     maxHp: 120,
@@ -495,7 +495,7 @@ describe("技能与冷却", () => {
 describe("道具与有限背包", () => {
   it("背包最多 4 格，多的会被砍掉", () => {
     const f = makeFighter({
-      name: "朵朵",
+      name: "鸭梨",
       emoji: "🌸",
       element: "grass",
       maxHp: 100,
@@ -788,9 +788,9 @@ describe("自动战斗与策略 AI", () => {
   });
 
   it("三对三接力：一方全部歇下才算输，总有一方胜出", () => {
-    const mine = [hero({ name: "朵朵" }), hero({ name: "糯糯", element: "grass" }), hero({ name: "云云", element: "light" })];
+    const mine = [hero({ name: "鸭梨" }), hero({ name: "糯糯", element: "grass" }), hero({ name: "云云", element: "light" })];
     const theirs = [
-      dummy({ name: "星星", element: "light", maxHp: 90 }),
+      dummy({ name: "康康", element: "light", maxHp: 90 }),
       dummy({ name: "闪闪", element: "light", maxHp: 80 }),
       dummy({ name: "啾啾", element: "water", maxHp: 80 })
     ];

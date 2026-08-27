@@ -66,7 +66,7 @@ function stubWrap(top: number, clipBottom: number, heights: [number, number, num
   return { wrap: wrap as unknown as HTMLElement, worn };
 }
 
-describe("朵朵抢地主 · 舞台看得见多少", () => {
+describe("鸭梨抢地主 · 舞台看得见多少", () => {
   it("取最靠里的那一层裁切祖先算下沿", () => {
     // 测试员那台 360×640：这一桌从 y=270 起，舞台裁在 y=626
     expect(visibleRoomPx(270, [626, 899])).toBe(356);
@@ -89,7 +89,7 @@ describe("朵朵抢地主 · 舞台看得见多少", () => {
   });
 });
 
-describe("朵朵抢地主 · 该收到第几档", () => {
+describe("鸭梨抢地主 · 该收到第几档", () => {
   // 本轮 CDP 实测的三组高度：原样 467 / 挤一挤 383 / 再挤挤 340
   const measured = (tier: 0 | 1 | 2): number => [467, 383, 340][tier];
 
@@ -112,7 +112,7 @@ describe("朵朵抢地主 · 该收到第几档", () => {
   });
 });
 
-describe("朵朵抢地主 · 收紧器跑起来是什么样", () => {
+describe("鸭梨抢地主 · 收紧器跑起来是什么样", () => {
   it("360×640 上真的会挂到第二档", () => {
     const { wrap, worn } = stubWrap(270, 626, [467, 383, 340]);
     fitTableStage(wrap);
@@ -156,7 +156,7 @@ describe("朵朵抢地主 · 收紧器跑起来是什么样", () => {
   });
 });
 
-describe("朵朵抢地主 · 两档收紧不许动热区", () => {
+describe("鸭梨抢地主 · 两档收紧不许动热区", () => {
   it("出牌那一排、底下那一排、模式入口,两档里一个都没被碰", () => {
     expect(px(rule(".ldc-mainbar .ld-btn"), "min-height")).toBeGreaterThanOrEqual(44);
     expect(px(rule(".ldc-subbar .ld-btn"), "min-height")).toBe(44);
@@ -198,7 +198,7 @@ describe("朵朵抢地主 · 两档收紧不许动热区", () => {
   });
 });
 
-describe("朵朵抢地主 · 收紧器怎么接进去的（源码巡检）", () => {
+describe("鸭梨抢地主 · 收紧器怎么接进去的（源码巡检）", () => {
   it("整桌摆完才量（量早了对家面板和手牌扇都还是空的）", () => {
     expect(INDEX.indexOf("  render();\n  // 整桌都摆好了才量")).toBeGreaterThan(0);
     expect(INDEX.indexOf("fit = fitTableStage(wrap")).toBeGreaterThan(INDEX.indexOf("wrap.append(style, banner"));
@@ -241,7 +241,7 @@ describe("朵朵抢地主 · 收紧器怎么接进去的（源码巡检）", () 
  * 收的是本款自己的壳，热区一分没动：两颗入口键仍是 44px，回到地图照样露面。
  * 仓内已有七款同样的做法（钓鱼星星 / 泡泡兄弟 / 怪兽危机 / 黄金矿工 / 碰碰车 / 炸弹伙伴 / 保龄球道）。
  */
-describe("朵朵抢地主 · 模式条只在选关地图上露面", () => {
+describe("鸭梨抢地主 · 模式条只在选关地图上露面", () => {
   it("[hidden] 得压得住 display:flex,不然「收起模式条」全是空转", () => {
     // 这一条同时钉住一个一直在的老毛病:开无尽 / 开对战时 bar.hidden 没起过作用
     expect(rule(".ld-bar")).toContain("display:flex");

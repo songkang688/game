@@ -197,8 +197,8 @@ describe("首页四个入口", () => {
     const handle = mount(rec.api);
     byText("双人同屏")!.dispatch("click");
     expect(boards()).toHaveLength(2);
-    expect(dom.root.textContent).toContain("朵朵");
-    expect(dom.root.textContent).toContain("星星");
+    expect(dom.root.textContent).toContain("鸭梨");
+    expect(dom.root.textContent).toContain("康康");
     flushFrames(dom, 4);
     handle.destroy();
   });
@@ -219,7 +219,7 @@ describe("首页四个入口", () => {
 });
 
 describe("双人同屏的键位", () => {
-  it("朵朵 WASD + F，星星 方向键 + L", () => {
+  it("鸭梨 WASD + F，康康 方向键 + L", () => {
     expect(SEAT_KEYS[0]).toEqual({ up: "w", down: "s", left: "a", right: "d", go: "f" });
     expect(SEAT_KEYS[1]).toEqual({
       up: "arrowup", down: "arrowdown", left: "arrowleft", right: "arrowright", go: "l",

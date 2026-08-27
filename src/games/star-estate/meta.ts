@@ -4,12 +4,12 @@
  */
 export const meta = {
   id: "star-estate",
-  title: "朵星地产",
+  title: "梨康地产",
   emoji: "🏦",
   category: "party" as const,
   color: "#FFF0D6",
   blurb: "掷骰子绕棋盘,买下一条街再盖小屋。收过路费,看谁最后还捧得住钱包。",
-  // 188 关残局战役 + 1 人对 3 个本机 AI + 短盘连胜无尽 + 朵朵星星同屏轮流,全程离线
+  // 188 关残局战役 + 1 人对 3 个本机 AI + 短盘连胜无尽 + 鸭梨康康同屏轮流,全程离线
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
   platform: "mobile" as const

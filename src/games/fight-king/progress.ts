@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 —— 存档与平台接线（除了读写 localStorage，其余全是纯函数）。
+ * 梨康格斗王 —— 存档与平台接线（除了读写 localStorage，其余全是纯函数）。
  *
  *  · 无尽连胜的最好成绩统一走平台的 `save.recordEndlessBest("fight-king", n)`，
  *    本作**不新建任何 localStorage key**；1.1 之前散在外面的老 key 只读一次、只取最大值。

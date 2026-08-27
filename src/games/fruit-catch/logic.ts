@@ -593,8 +593,8 @@ export function beltX(fromX: number, planX: number, k: number): number {
 export type Player = "doudou" | "star";
 
 export const PLAYERS: Readonly<Record<Player, { name: string; emoji: string; keys: string; color: string }>> = {
-  doudou: { name: "朵朵", emoji: "🌸", keys: "A / D", color: "#F07AA8" },
-  star: { name: "星星", emoji: "⭐", keys: "← / →", color: "#5A9BE8" }
+  doudou: { name: "鸭梨", emoji: "🌸", keys: "A / D", color: "#F07AA8" },
+  star: { name: "康康", emoji: "⭐", keys: "← / →", color: "#5A9BE8" }
 };
 
 export interface DuoState {
@@ -608,7 +608,7 @@ export function duoInit(): DuoState {
   return { doudou: 0, star: 0, missDoudou: 0, missStar: 0 };
 }
 
-/** 落在左半屏归朵朵，右半屏归星星 */
+/** 落在左半屏归鸭梨，右半屏归康康 */
 export function duoSide(x: number, width = W): Player {
   return x < width / 2 ? "doudou" : "star";
 }

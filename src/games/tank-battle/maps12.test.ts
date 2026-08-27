@@ -2,7 +2,7 @@
  * 对战对称地图与冰原老巢的用例(1.2 新增)。
  *
  * 「对称」是这三张对战图的硬约束:翻过去必须和原图一模一样,
- * 朵朵的出生点和星星的互换。谁都占不到地形便宜,这一条要写成断言,
+ * 鸭梨的出生点和康康的互换。谁都占不到地形便宜,这一条要写成断言,
  * 不然改图的人一手滑就把左边多塞了一块钢板。
  */
 import { describe, expect, it } from "vitest";
@@ -28,7 +28,7 @@ function countChar(rows: readonly string[], ch: string): number {
 }
 
 describe("翻图工具", () => {
-  it("翻图时朵朵和星星互换,别的字符原样不动", () => {
+  it("翻图时鸭梨和康康互换,别的字符原样不动", () => {
     expect(swapSides("1")).toBe("2");
     expect(swapSides("2")).toBe("1");
     for (const ch of [...TILE_CHARS, "e"]) expect(swapSides(ch)).toBe(ch);
@@ -68,8 +68,8 @@ describe("三张对战场", () => {
     for (const arena of ARENAS) {
       const w = arena.rows[0].length;
       for (const row of arena.rows) expect(row.length, `${arena.name} 行宽不齐`).toBe(w);
-      expect(countChar(arena.rows, "1"), `${arena.name} 朵朵出生点`).toBe(1);
-      expect(countChar(arena.rows, "2"), `${arena.name} 星星出生点`).toBe(1);
+      expect(countChar(arena.rows, "1"), `${arena.name} 鸭梨出生点`).toBe(1);
+      expect(countChar(arena.rows, "2"), `${arena.name} 康康出生点`).toBe(1);
       // 对战场不放老巢:这是纯粹的互相追,不用守家
       expect(countChar(arena.rows, "B")).toBe(0);
     }

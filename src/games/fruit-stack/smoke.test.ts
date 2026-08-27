@@ -132,7 +132,7 @@ describe("冒烟:对战与无尽", () => {
       expect(strong.won, `第 ${round} 张盆连高手都合不出目标`).toBe(true);
       const winner = weak.won && weak.drops < strong.drops ? 1 : 0;
       expect(winner === 0 || winner === 1).toBe(true);
-      expect(versusLine([1, 0])).toContain("朵朵");
+      expect(versusLine([1, 0])).toContain("鸭梨");
     }
   });
 

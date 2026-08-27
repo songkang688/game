@@ -353,7 +353,7 @@ describe("一块舞台跑起来", () => {
     stage.destroy();
   });
 
-  it("指路话按这一路真正认的键现编:星星那半屏写的是 L 和 K", () => {
+  it("指路话按这一路真正认的键现编:康康那半屏写的是 L 和 K", () => {
     expect(singleKeyHint(["f", " ", "spacebar"], ["g"])).toBe(
       "这一款只用一个键:按住 F 或 空格 蓄力,松手就跳,蓄过头了按 G 收力"
     );
@@ -383,7 +383,7 @@ describe("一块舞台跑起来", () => {
     noisy.destroy();
   });
 
-  it("双人各收各的力:朵朵按 G、星星按 K,谁也收不掉对方的", () => {
+  it("双人各收各的力:鸭梨按 G、康康按 K,谁也收不掉对方的", () => {
     const duo = makeStage({ keys: ["f"], cancelKeys: ["g"] });
     const star = makeStage({ keys: ["l"], cancelKeys: ["k"] });
     for (const f of dom.winListeners.get("keydown") ?? []) f({ key: "f" });
@@ -510,13 +510,13 @@ describe("四种模式都开得出来", () => {
     handle.destroy();
   });
 
-  it("双人同屏是上下两块,朵朵 F、星星 L", () => {
+  it("双人同屏是上下两块,鸭梨 F、康康 L", () => {
     const rec = fakeApi(dom.root);
     const handle = mount(rec.api);
     byText("双人同屏")!.dispatch("click");
     expect(dom.root.findAll((e) => e.className.includes("hp-canvas"))).toHaveLength(2);
-    expect(dom.root.textContent).toContain("朵朵");
-    expect(dom.root.textContent).toContain("星星");
+    expect(dom.root.textContent).toContain("鸭梨");
+    expect(dom.root.textContent).toContain("康康");
     expect(dom.root.textContent).toContain("F");
     expect(dom.root.textContent).toContain("L");
     flushFrames(dom, 4);
@@ -550,8 +550,8 @@ describe("四种模式都开得出来", () => {
 
     const h3 = mount(fakeApi(dom.root).api);
     byText("双人同屏")!.dispatch("click");
-    expect(dom.root.textContent).toContain("朵朵按 G");
-    expect(dom.root.textContent).toContain("星星按 K");
+    expect(dom.root.textContent).toContain("鸭梨按 G");
+    expect(dom.root.textContent).toContain("康康按 K");
     flushFrames(dom, 4);
     h3.destroy();
   });

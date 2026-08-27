@@ -209,7 +209,7 @@ describe("雪球大作战 · 另外三种模式的场地", () => {
     expect(spec.throwers[0].walls).toBe(spec.throwers[1].walls);
   });
 
-  it("双人对战没有电脑,人机对战只有星星那一边是电脑", () => {
+  it("双人对战没有电脑,人机对战只有康康那一边是电脑", () => {
     expect(duelMatch(null).mode).toBe("versus");
     expect(duelMatch(null).throwers.every((t) => !t.ai)).toBe(true);
     for (const level of ["easy", "normal", "hard"] as const) {

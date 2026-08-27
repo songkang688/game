@@ -97,7 +97,7 @@ export function emptyInput(): Input {
 
 export type InputName = keyof Input;
 
-/** 双人键位:朵朵 W A S D + F/G,星星 ↑←↓→ + L/K */
+/** 双人键位:鸭梨 W A S D + F/G,康康 ↑←↓→ + L/K */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {
   KeyW: { player: 0, action: "up" },
   KeyA: { player: 0, action: "left" },
@@ -1103,7 +1103,7 @@ export function coopMessage(def: LevelDef, w: World): string {
   const g = coopGoals(def, r);
   const a = w.players[0]?.cleaned ?? 0;
   const b = w.players[1]?.sorted ?? 0;
-  const head = `城市干干净净,大家都笑啦!朵朵清了 ${a} 处,星星送对了 ${b} 件。`;
+  const head = `城市干干净净,大家都笑啦!鸭梨清了 ${a} 处,康康送对了 ${b} 件。`;
   const next: string[] = [];
   if (!g.clean) next.push(`还剩 ${r.dirtTotal - r.cleaned} 处没清完`);
   if (!g.haul) next.push(`分类站还差 ${Math.max(0, def.haulGoal - (r.sorted ?? 0))} 件`);

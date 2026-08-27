@@ -73,7 +73,7 @@ import { CHAPTERS, LEVELS, TOTAL, buildCoopWave, endlessLevelIndex } from "./lev
 /* ------------------------------------------------------------------ */
 
 const P_COLOR = ["#e6558f", "#3f7fd6"];
-const P_NAME = ["朵朵", "星星"];
+const P_NAME = ["鸭梨", "康康"];
 
 /** 八套场景皮:无尽每 10 波换一套,闯关按章节取。 */
 const SCENE_SKY = ["#fff3f8", "#fff6ec", "#f4fbea", "#eef7ff", "#f2eeff", "#fff0fa", "#eef6f6", "#f8f0ff"];
@@ -1282,7 +1282,7 @@ function mountCoop(host: HTMLElement, api: GameApi, onBack: () => void): { destr
     view = createArenaView(shell.stage, {
       state,
       title: "双人合作守家",
-      hint: "两个人守同一个家:朵朵用左边摇杆 + 🎨,星星用右边摇杆 + 🎨;键盘是 W A S D / F 和 ↑←↓→ / L。成长卡两个人分开挑!",
+      hint: "两个人守同一个家:鸭梨用左边摇杆 + 🎨,康康用右边摇杆 + 🎨;键盘是 W A S D / F 和 ↑←↓→ / L。成长卡两个人分开挑!",
       scene: 3,
       sfx: (n) => api.play(n),
       onDone: (res) => {
@@ -1336,13 +1336,13 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
     view = createArenaView(shell.stage, {
       state,
       title: "各守一半",
-      hint: "左边是朵朵的家,右边是星星的家,两边来的小怪物一模一样。谁先被抱光元气谁就输,撑到最后元气多的那边赢!",
+      hint: "左边是鸭梨的家,右边是康康的家,两边来的小怪物一模一样。谁先被抱光元气谁就输,撑到最后元气多的那边赢!",
       scene: 7,
       sfx: (n) => api.play(n),
       onDone: (res) => {
         api.addStars(1);
         const title =
-          res.winner < 0 ? "🤝 平手!" : res.winner === 0 ? "🎀 朵朵这边守住啦!" : "⭐ 星星这边守住啦!";
+          res.winner < 0 ? "🤝 平手!" : res.winner === 0 ? "🎀 鸭梨这边守住啦!" : "⭐ 康康这边守住啦!";
         overBox(shell.stage, title, arenaVersusLine(res.winner, res.jars, P_NAME), [
           { label: "🔁 换边再来", cls: "mcr-btn-vs", onClick: () => {
             api.play("tap");

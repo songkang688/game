@@ -4,7 +4,7 @@
  */
 export const meta = {
   id: "fight-king",
-  title: "朵星格斗王",
+  title: "梨康格斗王",
   emoji: "🥋",
   category: "party" as const,
   color: "#FFDCE8",

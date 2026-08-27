@@ -1,4 +1,4 @@
-# 11-C · `duo-vs-star`「朵朵大战星星」1.2 升级计划
+# 11-C · `duo-vs-star`「鸭梨大战康康」1.2 升级计划
 
 对着 `docs/plan-1.2-step11-C-duo-vs-star.md` 写，只动 `src/games/duo-vs-star/**`。
 本款 1.1 已经很厚（12 位角色 / 10 张场地 / 14 种道具 / 188 关 / 五模式全在），

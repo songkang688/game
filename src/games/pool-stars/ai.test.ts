@@ -1,4 +1,4 @@
-// 朵星台球 · 四档电脑球手与无头对局的回归测试。
+// 梨康台球 · 四档电脑球手与无头对局的回归测试。
 // 关键断言:固定 seed 下地狱档打菜鸟档 20 局,胜率显著更高。
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "../level99";

@@ -17,7 +17,7 @@ export const QUEEN = 5;
 export const KING = 6;
 
 export type PieceType = 1 | 2 | 3 | 4 | 5 | 6;
-/** 1 = 白（朵朵），-1 = 黑（星星） */
+/** 1 = 白（鸭梨），-1 = 黑（康康） */
 export type Color = 1 | -1;
 
 export const WHITE: Color = 1;

@@ -120,13 +120,13 @@ const NOTE_GLYPHS = ["♪", "♫", "♬", "♩"];
 
 /** 四轨键位:单人 D F J K */
 export const KEYS_SOLO = ["d", "f", "j", "k"];
-/** 双人分轨:朵朵 A S 管左两轨,星星 K L 管右两轨 */
+/** 双人分轨:鸭梨 A S 管左两轨,康康 K L 管右两轨 */
 export const KEYS_DUO = ["a", "s", "k", "l"];
 
 /**
  * 双人分轨的备用键(主键 A / S / K / L 一个都没换,这里只是多认几个):
- * 朵朵的 D 和 S 同轨,这样她左右手就是 A / D;星星的 ← → 和 K / L 同轨,
- * 向「星星用方向键」的统一口径靠拢。
+ * 鸭梨的 D 和 S 同轨,这样她左右手就是 A / D;康康的 ← → 和 K / L 同轨,
+ * 向「康康用方向键」的统一口径靠拢。
  */
 export const ALIAS_DUO: Readonly<Record<string, number>> = {
   d: 1,
@@ -260,7 +260,7 @@ export interface StageOpts {
   banner: string;
   /** 开场提示语(显示在判定线下面那行,省一行顶部高度) */
   hint?: string;
-  /** 双人分轨:左两轨给朵朵、右两轨给星星 */
+  /** 双人分轨:左两轨给鸭梨、右两轨给康康 */
   split?: boolean;
   /** 对战对手 */
   rival?: AiTier | null;
@@ -337,7 +337,7 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
   hud.appendChild(pauseBtn);
 
   keys.innerHTML = split
-    ? "朵朵 A S 管左两轨(S 也可以按 D) · 星星 K L 管右两轨(也可以按 ← →) · Esc 暂停"
+    ? "鸭梨 A S 管左两轨(S 也可以按 D) · 康康 K L 管右两轨(也可以按 ← →) · Esc 暂停"
     : "键盘 D F J K 对四条轨 · 也能直接点 · Esc 暂停";
 
   function judgeY(): number {
@@ -995,7 +995,7 @@ function mountVersus(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: ()
 }
 
 // ---------------------------------------------------------------------------
-// 双人同屏:朵朵管左两轨,星星管右两轨,合作打同一张谱
+// 双人同屏:鸭梨管左两轨,康康管右两轨,合作打同一张谱
 // ---------------------------------------------------------------------------
 
 function mountTwoPlayer(host: HTMLElement, api: GameApi, tones: ToneKit, onBack: () => void): { destroy: () => void } {
@@ -1012,7 +1012,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, tones: ToneKit, onBack:
       chart: matchChart(round + 40),
       rules: { emptyRule: "combo", maxMiss: 5 },
       banner:
-        "👫 一张谱两个人打<br>朵朵管左边两轨(A / S,S 也可以用 D),星星管右边两轨(K / L,也可以用 ← / →)",
+        "👫 一张谱两个人打<br>鸭梨管左边两轨(A / S,S 也可以用 D),康康管右边两轨(K / L,也可以用 ← / →)",
       split: true,
       sfx: (n) => api.play(n),
       tones,

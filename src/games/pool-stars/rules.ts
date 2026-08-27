@@ -1,5 +1,5 @@
 /**
- * 朵星台球 · 美式八球简化规则（全部纯函数）。
+ * 梨康台球 · 美式八球简化规则（全部纯函数）。
  *
  * 犯规表逐条对应 PLAN.md 里那张表：
  *  1 开球没过中线 / 没碰球堆 → 犯规重摆
@@ -307,7 +307,7 @@ export function remainingOf(balls: readonly Ball[], group: Group): number {
 
 export interface MatchState {
   balls: Ball[];
-  /** 该谁出杆：0 = 朵朵 / 玩家，1 = 星星 / 电脑 */
+  /** 该谁出杆：0 = 鸭梨 / 玩家，1 = 康康 / 电脑 */
   turn: 0 | 1;
   /** 两人的分组；台面开放时都是 null */
   groups: [Group | null, Group | null];

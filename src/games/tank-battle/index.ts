@@ -70,7 +70,7 @@ import { AI_TIERS, TIER_SPECS, type AiTier } from "./ai12";
 import { BRICK_FULL, GRASS_ALPHA, Q_NE, Q_NW, Q_SE, Q_SW } from "./terrain12";
 import { mulberry32 } from "../level99";
 
-const P_NAME = ["朵朵", "星星"];
+const P_NAME = ["鸭梨", "康康"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 const P_KEYS = ["WASD 走 · F 发射 · R 换弹 · G 补墙", "方向键 走 · L 发射 · O 换弹 · K 补墙"];
 
@@ -705,7 +705,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const gaps = fortGaps(w).length;
     const chips: string[] = [];
     if (w.mode === "versus") {
-      chips.push(`🌸 朵朵 ${w.scores[0]}`, `⭐ 星星 ${w.scores[1]}`, `🎯 先打散 ${w.target} 次赢`);
+      chips.push(`🌸 鸭梨 ${w.scores[0]}`, `⭐ 康康 ${w.scores[1]}`, `🎯 先打散 ${w.target} 次赢`);
     } else {
       chips.push(`🚜 还剩 ${left} 辆`, `🌼 已变花 ${w.defeated}`);
       if (w.map.base) {
@@ -939,7 +939,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
       const ov = document.createElement("div");
       ov.className = "tkb-over";
       ov.innerHTML = `<div class="tkb-over-t">⏸️ 先歇一会儿</div>
-        <div class="tkb-over-s">按 Esc 或点「继续」回到战场。<br>朵朵:WASD 走、F 发射、R 换弹、G 补墙。<br>星星:方向键走、L 发射、O 换弹、K 补墙。</div>`;
+        <div class="tkb-over-s">按 Esc 或点「继续」回到战场。<br>鸭梨:WASD 走、F 发射、R 换弹、G 补墙。<br>康康:方向键走、L 发射、O 换弹、K 补墙。</div>`;
       board.appendChild(ov);
     }
   }
@@ -1308,9 +1308,9 @@ function buildVersus(
     const ov = document.createElement("div");
     ov.className = "tkb-mode";
     ov.innerHTML = `<div class="tkb-over-t">🎉 ${who}</div>
-      <div class="tkb-over-s">朵朵 ${res.scores[0]} : ${res.scores[1]} 星星。<br>
+      <div class="tkb-over-s">鸭梨 ${res.scores[0]} : ${res.scores[1]} 康康。<br>
       被打散不疼,零件捡起来就好。下一局换张场地、换个包抄方向试试。</div>`;
-    speak(`${who}。朵朵 ${res.scores[0]} 比 ${res.scores[1]} 星星。`);
+    speak(`${who}。鸭梨 ${res.scores[0]} 比 ${res.scores[1]} 康康。`);
     const again = document.createElement("button");
     again.type = "button";
     again.className = "tkb-open tkb-open-vs";
@@ -1403,7 +1403,7 @@ export function mount(api: GameApi): TankBattleHandle {
   bar.append(coopBtn, endlessBtn, vsBtn);
 
   function refreshBar(): void {
-    coopBtn.textContent = players === 2 ? "👫 双人合作:开(点我关)" : "👤 单人闯关(点我拉星星一起)";
+    coopBtn.textContent = players === 2 ? "👫 双人合作:开(点我关)" : "👤 单人闯关(点我拉康康一起)";
     coopBtn.setAttribute("aria-pressed", players === 2 ? "true" : "false");
     const best = save.getGameProgress(meta.id).endlessBest;
     endlessBtn.textContent = best > 0 ? `♾️ 无尽守老巢 · 最好 第 ${best} 波` : "♾️ 无尽守老巢 · 点我开始!";

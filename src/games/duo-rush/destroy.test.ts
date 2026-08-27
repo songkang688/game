@@ -37,7 +37,7 @@ function startRace(h: Harness): void {
   }
 }
 
-describe("朵星双人冲刺 · 1.2 destroy 归零", () => {
+describe("梨康双人冲刺 · 1.2 destroy 归零", () => {
   it("模板真的解析出来了:开跑键、画布、两组触屏按键都在", async () => {
     const h = install();
     harness = h;
@@ -45,8 +45,8 @@ describe("朵星双人冲刺 · 1.2 destroy 归零", () => {
 
     expect(findOne(h.root, "dr-start"), "没铺出开跑键").not.toBeNull();
     expect(findOne(h.root, "dr-canvas"), "没铺出赛道画布").not.toBeNull();
-    expect(findOne(h.root, "dur-pad-0"), "朵朵那半屏没有触屏按键").not.toBeNull();
-    expect(findOne(h.root, "dur-pad-1"), "星星那半屏没有触屏按键").not.toBeNull();
+    expect(findOne(h.root, "dur-pad-0"), "鸭梨那半屏没有触屏按键").not.toBeNull();
+    expect(findOne(h.root, "dur-pad-1"), "康康那半屏没有触屏按键").not.toBeNull();
 
     game.destroy();
   });
@@ -132,7 +132,7 @@ describe("朵星双人冲刺 · 1.2 destroy 归零", () => {
  * 竞态:本款的开跑链上有一条倒计时 setTimeout 和一条结算 setTimeout,
  * 「倒计时还没走完就按了换玩法」「结算还没弹就退出」是最容易漏东西的两处。
  */
-describe("朵星双人冲刺 · 1.2 抢按与竞态", () => {
+describe("梨康双人冲刺 · 1.2 抢按与竞态", () => {
   it("destroy 调两次不炸,第二次是空操作", async () => {
     const h = install();
     harness = h;

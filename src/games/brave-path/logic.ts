@@ -5,7 +5,7 @@
  *  1. 勇者成长：等级、经验、金币、技能点、装备四个槽（武器 / 护甲 / 挂饰 / 属性徽章）；
  *  2. 有限背包：出发前只能带 4 格道具，仓库里剩下的这一趟就用不上；
  *  3. 无尽深渊：越往下越难，走不动了就是「探险结束 · 回城休息」；
- *  4. 星星的队伍：三对三接力自动对战，配装改一改结果就会变。
+ *  4. 康康的队伍：三对三接力自动对战，配装改一改结果就会变。
  */
 import {
   BAG_SLOTS,
@@ -414,8 +414,8 @@ export function learnSkill(save: HeroSave, skillId: string): LearnResult {
 /**
  * 学会一招之后，身上至少留一招。
  *
- * 技能栏本来能一个一个卸干净。卸干净之后星星那边照样带三个随等级涨阶的技能，
- * 朵朵只剩平砍——20 级的擂台胜率从 20/20 掉到 4/20，而孩子从界面上看不出
+ * 技能栏本来能一个一个卸干净。卸干净之后康康那边照样带三个随等级涨阶的技能，
+ * 鸭梨只剩平砍——20 级的擂台胜率从 20/20 掉到 4/20，而孩子从界面上看不出
  * 是自己把招式卸光了，只会觉得「这游戏突然打不赢了」。
  */
 export const MIN_LOADOUT = 1;
@@ -533,7 +533,7 @@ export function powerScore(stats: BaseStats): number {
   return Math.round(stats.maxHp * 0.5 + stats.atk * 6 + stats.def * 5 + stats.spd * 2 + stats.crit * 220);
 }
 
-export const HERO_NAME = "朵朵";
+export const HERO_NAME = "鸭梨";
 export const HERO_EMOJI = "🌸";
 
 /** 造一个能直接上场的勇者（hp 传进来就是带伤续战，不传就是满状态） */
@@ -573,7 +573,7 @@ export const ENDLESS_GROWTH = 1.045;
 /**
  * 第一位守关排在第 4 层。
  *
- * 之前是「每 8 层一位」，可 1 级的朵朵大概第 4 层就走不动了——
+ * 之前是「每 8 层一位」，可 1 级的鸭梨大概第 4 层就走不动了——
  * 第一次下深渊的孩子永远见不到守关长什么样，也就体会不到
  * 「练一练能多走几层」的那个甜头。挪到第 4 层，第一趟就撞得上。
  */
@@ -776,7 +776,7 @@ export function applyBlessing(hero: Fighter, blessing: Blessing): Fighter {
 }
 
 // ---------------------------------------------------------------------------
-// 对战：我的队伍 VS 星星的队伍
+// 对战：我的队伍 VS 康康的队伍
 // ---------------------------------------------------------------------------
 
 export interface CompanionDef {
@@ -898,10 +898,10 @@ export function buildCompanion(id: string, heroLevel: number, scale = 1): Fighte
   });
 }
 
-export const RIVAL_NAME = "星星";
+export const RIVAL_NAME = "康康";
 export const RIVAL_EMOJI = "⭐";
 
-/** 星星本人：光系，速度快，会破盾也会大招 */
+/** 康康本人：光系，速度快，会破盾也会大招 */
 export function buildRivalLeader(heroLevel: number, scale: number): Fighter {
   const base = baseHeroStats(heroLevel);
   const rank = Math.max(1, Math.min(MAX_SKILL_RANK, 1 + Math.floor(heroLevel / 12)));
@@ -937,7 +937,7 @@ export function gearFactor(save: HeroSave): number {
 export const GEAR_MATCH_EXPONENT = 0.6;
 
 /**
- * 擂台难度：赢得越多，星星的队伍越强（倍数封顶，永远留得住翻盘的余地）。
+ * 擂台难度：赢得越多，康康的队伍越强（倍数封顶，永远留得住翻盘的余地）。
  * gear 是勇者的装备倍数，对手会跟着抬一部分，比的是「配得好不好」而不是「肝没肝」。
  *
  * 三对三是接力打的，一点点数值差会被放大成几乎必胜或几乎必输。所以随胜场的
@@ -952,7 +952,7 @@ export function arenaScale(wins: number, gear = 1): number {
   return Math.round(byWins * byGear * 1000) / 1000;
 }
 
-/** 星星的三人队伍（第几次挑战决定同伴组合，配置固定可预测） */
+/** 康康的三人队伍（第几次挑战决定同伴组合，配置固定可预测） */
 export function buildRivalTeam(heroLevel: number, wins: number, gear = 1): Fighter[] {
   const scale = arenaScale(wins, gear);
   const order = ["shanshan", "dundun", "jiujiu", "yunyun", "lvlvdou", "nuonuo"];
@@ -965,10 +965,10 @@ export function buildRivalTeam(heroLevel: number, wins: number, gear = 1): Fight
   ];
 }
 
-/** 同伴能分到多少装备红利：朵朵把换下来的装备匀给他们，但匀不满 */
+/** 同伴能分到多少装备红利：鸭梨把换下来的装备匀给他们，但匀不满 */
 export const MATE_GEAR_SHARE = 0.75;
 
-/** 我的三人队伍：朵朵打头，后面跟着选好的两位同伴 */
+/** 我的三人队伍：鸭梨打头，后面跟着选好的两位同伴 */
 export function buildMyTeam(save: HeroSave): Fighter[] {
   const mates = save.party.filter((id) => companionById(id)).slice(0, 2);
   while (mates.length < 2) {
@@ -1000,8 +1000,8 @@ export function runArena(save: HeroSave, seed: number): ArenaOutcome {
   const exp = win ? 60 + save.arenaWins * 8 : 20;
   const stars: 0 | 1 | 2 | 3 = win ? (result.aLeft >= 3 ? 3 : result.aLeft === 2 ? 2 : 1) : 0;
   const text = win
-    ? `${result.aLeft} 位队友还站着，这一场是我们的！星星笑着说下次要换个阵容。`
-    : "星星的队伍这次更有默契。换换徽章属性、调调上阵技能，再来一场！";
+    ? `${result.aLeft} 位队友还站着，这一场是我们的！康康笑着说下次要换个阵容。`
+    : "康康的队伍这次更有默契。换换徽章属性、调调上阵技能，再来一场！";
   return { result, win, coins, exp, stars, text };
 }
 

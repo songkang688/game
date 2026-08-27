@@ -62,7 +62,7 @@ export const QUIET_WARN_AT = 8;
 export const PLY_WARN_AT = 10;
 
 export interface TableResult {
-  /** 朵朵赢了没有 */
+  /** 鸭梨赢了没有 */
   won: boolean;
   draw: boolean;
   plies: number;
@@ -71,7 +71,7 @@ export interface TableResult {
 
 export interface TableOptions {
   state: GameState;
-  /** 星星那边是电脑还是第二个人 */
+  /** 康康那边是电脑还是第二个人 */
   rival: "ai" | "human";
   tier: Tier;
   showCounter: boolean;
@@ -138,7 +138,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   }
 
   function renderHud(): void {
-    const who = state.turn === "duo" ? "朵朵" : opts.rival === "ai" ? "小对手" : "星星";
+    const who = state.turn === "duo" ? "鸭梨" : opts.rival === "ai" ? "小对手" : "康康";
     turnChip.textContent = paused ? "已暂停" : `轮到${who}`;
     turnChip.className = state.turn === "duo" ? "dc-chip dc-turn dc-hot" : "dc-chip dc-turn";
     plyChip.textContent = `第 ${state.plies + 1} 手`;
@@ -381,7 +381,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     const tip = document.createElement("div");
     tip.className = "dc-tip";
-    tip.textContent = `朵朵：WASD 移光标，F 确认，G 取消｜星星：方向键 + L / K｜Esc 暂停。无尽最高连胜 ${
+    tip.textContent = `鸭梨：WASD 移光标，F 确认，G 取消｜康康：方向键 + L / K｜Esc 暂停。无尽最高连胜 ${
       save.getGameProgress(meta.id).endlessBest
     } 场`;
     menu.appendChild(tip);
@@ -401,7 +401,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         playLevel,
         guide,
         mapHint: "翻子看运气，走子看脑子，兵能请将去休息。",
-        grandMessage: "188 关全部翻完，暗棋杯的奖杯归朵朵和星星啦！",
+        grandMessage: "188 关全部翻完，暗棋杯的奖杯归鸭梨和康康啦！",
       }
     );
   }
@@ -457,7 +457,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         onEnd: ({ won, draw, why }) => {
           api.play(won ? "win" : "pop");
           if (draw) api.onLose(why);
-          else api.onWin(2, won ? "朵朵赢下这一盘！" : "星星赢下这一盘！");
+          else api.onWin(2, won ? "鸭梨赢下这一盘！" : "康康赢下这一盘！");
           runOne();
         },
       });

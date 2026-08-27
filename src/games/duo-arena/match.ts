@@ -1,5 +1,5 @@
 /**
- * 朵星擂台 · 赛制层。
+ * 梨康擂台 · 赛制层。
  *
  * 把「一局怎么打」和「一场怎么算」彻底分开:回合里只管抢元气,赛制层管比分、赛点、
  * 让分、守擂连胜,以及 `?level=N` 落到哪一档人机、哪一张场地。
@@ -11,7 +11,7 @@ import { STAGE_COUNT, type Stage, stageAt } from "./stages";
 
 export type Seat = 0 | 1;
 
-/** 一个回合的结果:0 = 朵朵(1P)拿下,1 = 星星(2P)拿下,-1 = 平 */
+/** 一个回合的结果:0 = 鸭梨(1P)拿下,1 = 康康(2P)拿下,-1 = 平 */
 export type RoundResult = 0 | 1 | -1;
 
 /** 三种模式:双人同屏 / 单人挑战人机 / 无尽守擂 */
@@ -19,7 +19,7 @@ export type ArenaMode = "duo" | "solo" | "keep";
 
 export interface MatchProgress {
   results: RoundResult[];
-  /** [朵朵, 星星] 各拿下几个回合 */
+  /** [鸭梨, 康康] 各拿下几个回合 */
   wins: [number, number];
   done: boolean;
   winner: Seat | null;

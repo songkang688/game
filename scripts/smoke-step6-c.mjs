@@ -1,5 +1,5 @@
 /**
- * 1.1 第 6 步 C 档的手动冒烟替身：用真浏览器把「朵星双人冲刺」的 2.5D 分屏跑一遍。
+ * 1.1 第 6 步 C 档的手动冒烟替身：用真浏览器把「梨康双人冲刺」的 2.5D 分屏跑一遍。
  *
  * 验的是四件事：
  *  1. 375×667 与 1280×800 都不横向溢出，而且分屏方向会自动切（窄屏上下 / 宽屏左右）；
@@ -30,7 +30,7 @@ function log(ok, what, extra = "") {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** 把 aria-label 里的「朵朵中道123米金币4剩3」拆成结构 */
+/** 把 aria-label 里的「鸭梨中道123米金币4剩3」拆成结构 */
 function parseLabel(label) {
   const parts = String(label ?? "").split("，");
   const one = (text) => {
@@ -135,7 +135,7 @@ async function main() {
     log(
       Boolean(okBoth),
       `${vp.name} 两人同时按键各动各的`,
-      `朵朵 ${before[0]?.lane}→${after[0]?.lane}，星星 ${before[1]?.lane}→${after[1]?.lane}`,
+      `鸭梨 ${before[0]?.lane}→${after[0]?.lane}，康康 ${before[1]?.lane}→${after[1]?.lane}`,
     );
 
     // 反向再来一次，确认不是一次性的
@@ -149,7 +149,7 @@ async function main() {
     log(
       back[0].lane > after[0].lane && back[1].lane < after[1].lane,
       `${vp.name} 反方向也各动各的`,
-      `朵朵 ${after[0].lane}→${back[0].lane}，星星 ${after[1].lane}→${back[1].lane}`,
+      `鸭梨 ${after[0].lane}→${back[0].lane}，康康 ${after[1].lane}→${back[1].lane}`,
     );
 
     // ---- 真的在往前跑 ----
@@ -193,14 +193,14 @@ async function main() {
     await sleep(320);
   };
   const t0 = await readRunners(page);
-  // 上半屏（朵朵）往左滑
+  // 上半屏（鸭梨）往左滑
   await swipe(cvBox.x + cvBox.w / 2, cvBox.y + cvBox.h * 0.25, -70, 0);
   const t1 = await readRunners(page);
-  log(t1[0].lane < t0[0].lane && t1[1].lane === t0[1].lane, "上半屏滑动只动朵朵", `朵朵 ${t0[0].lane}→${t1[0].lane}，星星 ${t0[1].lane}→${t1[1].lane}`);
-  // 下半屏（星星）往右滑
+  log(t1[0].lane < t0[0].lane && t1[1].lane === t0[1].lane, "上半屏滑动只动鸭梨", `鸭梨 ${t0[0].lane}→${t1[0].lane}，康康 ${t0[1].lane}→${t1[1].lane}`);
+  // 下半屏（康康）往右滑
   await swipe(cvBox.x + cvBox.w / 2, cvBox.y + cvBox.h * 0.75, 70, 0);
   const t2 = await readRunners(page);
-  log(t2[1].lane > t1[1].lane && t2[0].lane === t1[0].lane, "下半屏滑动只动星星", `朵朵 ${t1[0].lane}→${t2[0].lane}，星星 ${t1[1].lane}→${t2[1].lane}`);
+  log(t2[1].lane > t1[1].lane && t2[0].lane === t1[0].lane, "下半屏滑动只动康康", `鸭梨 ${t1[0].lane}→${t2[0].lane}，康康 ${t1[1].lane}→${t2[1].lane}`);
   await page.setViewport({ width: 375, height: 667 });
 
   // ---- 幽灵对战与人机对战各开一局 ----
