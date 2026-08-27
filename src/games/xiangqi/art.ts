@@ -512,44 +512,37 @@ export function pieceIconSVG(side: Side, type: PieceType, size: number): string 
 /* AI 对手「棋灵象」的画制头像（替掉 1.2 时代的 🐘 emoji 兜底）           */
 /* ------------------------------------------------------------------ */
 
-/** 棋灵象的紫系配色：底片沿用原头像圆片的 #E4D9FF，头身取同族中紫，描边取深紫 */
-export const ROBOT_BG = "#E4D9FF";
-export const ROBOT_BODY = "#BCA6E6";
-export const ROBOT_EDGE = "#8268B4";
-
 /**
- * Q 版小象头像：大耳朵 + 卷鼻子是剪影特征，左上高光 + 深紫描边给体积，
- * 眼有高光点、脸有腮红、额心一点金星（「棋灵」的灵气）。
+ * Q 版小象头像：**复用棋子 sprite 的面 / 侧壁 / 描边规格**（B 档 TOP10 之 4）——
+ * 底是 PIECE_FACE 圆面 + PIECE_WALL 月牙侧壁 + 投影，与座位条上的迷你棋子
+ * 同一套材质；象头用 BLACK_INK 双笔画「圆头 + 大耳 + 卷鼻」，耳内一抹
+ * RED_INK 10% 淡红。原创造型，不近似任何会徽 / 商标。
  * 纯 SVG 字符串，座位条 / 结算行直接 innerHTML 内联。
  */
 export function robotAvatarSVG(size: number): string {
+  const ink = BLACK_INK;
+  const earTint = "rgba(194,59,46,.1)"; // RED_INK 10%
   return (
     `<svg class="xq-robot" viewBox="0 0 48 48" width="${size}" height="${size}"` +
     ` style="vertical-align:middle" aria-hidden="true">` +
-    // 底圆片：和朵朵/星星头像同规格的圆底
-    `<circle cx="24" cy="24" r="23" fill="${ROBOT_BG}"/>` +
-    // 两只大耳（剪影特征①），内耳一抹粉
-    `<ellipse cx="10" cy="23" rx="7.4" ry="9.4" fill="${ROBOT_BODY}" stroke="${ROBOT_EDGE}" stroke-width="1.6"/>` +
-    `<ellipse cx="38" cy="23" rx="7.4" ry="9.4" fill="${ROBOT_BODY}" stroke="${ROBOT_EDGE}" stroke-width="1.6"/>` +
-    `<ellipse cx="10.8" cy="23" rx="4" ry="5.8" fill="#EBCBE4"/>` +
-    `<ellipse cx="37.2" cy="23" rx="4" ry="5.8" fill="#EBCBE4"/>` +
-    // 圆头 + 左上 45° 高光（宪法光照约定）
-    `<circle cx="24" cy="25" r="14" fill="${ROBOT_BODY}" stroke="${ROBOT_EDGE}" stroke-width="1.8"/>` +
-    `<ellipse cx="18.6" cy="19.2" rx="5.6" ry="4" fill="rgba(255,255,255,.38)"/>` +
-    // 卷鼻子（剪影特征②）：有宽度的实体，不是一根线
-    `<path d="M22.4 28.5 C21.2 32.5 21.6 35.8 23.6 37.8 C25.2 39.3 27.8 39.6 29.8 38.4` +
-    ` L29 36.6 C27.4 37.4 25.8 37.2 24.9 36.2 C23.5 34.6 23.4 31.8 24.6 28.9 Z"` +
-    ` fill="${ROBOT_BODY}" stroke="${ROBOT_EDGE}" stroke-width="1.5" stroke-linejoin="round"/>` +
-    // 眼睛（带高光点）与腮红
-    `<circle cx="18.6" cy="24" r="2.1" fill="#4A3A68"/>` +
-    `<circle cx="29.4" cy="24" r="2.1" fill="#4A3A68"/>` +
-    `<circle cx="17.9" cy="23.2" r=".8" fill="#fff"/>` +
-    `<circle cx="28.7" cy="23.2" r=".8" fill="#fff"/>` +
-    `<ellipse cx="14.6" cy="28.4" rx="2.5" ry="1.6" fill="#F3AECB" opacity=".8"/>` +
-    `<ellipse cx="33.4" cy="28.4" rx="2.5" ry="1.6" fill="#F3AECB" opacity=".8"/>` +
-    // 额心一点金星：呼应棋盘金线，也是「棋灵」的小灵气
-    `<path d="M24 13.2 L24.9 15.4 L27.2 15.7 L25.5 17.2 L26 19.4 L24 18.2 L22 19.4 L22.5 17.2 L20.8 15.7 L23.1 15.4 Z"` +
-    ` fill="${FRAME_GOLD}" stroke="#C9A65A" stroke-width=".6"/>` +
+    // 投影 + 侧壁 + 面 + 内圈:与 pieceIconSVG 同一套棋子材质
+    `<ellipse cx="24.6" cy="28.2" rx="20.1" ry="18.3" fill="rgba(110,75,35,.25)"/>` +
+    `<circle cx="24" cy="26.2" r="19.5" fill="${PIECE_WALL}"/>` +
+    `<circle cx="24" cy="23.2" r="19.5" fill="${PIECE_FACE}"/>` +
+    `<circle cx="24" cy="23.2" r="17.7" fill="none" stroke="${ink}" stroke-width="1.6"/>` +
+    // 象头三笔:大耳(剪影①)、圆头、卷鼻(剪影②),全部 BLACK_INK 描边
+    `<ellipse cx="14.2" cy="21.4" rx="5.2" ry="6.6" fill="${earTint}" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<ellipse cx="33.8" cy="21.4" rx="5.2" ry="6.6" fill="${earTint}" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<circle cx="24" cy="22.4" r="8.6" fill="${PIECE_FACE}" stroke="${ink}" stroke-width="2"/>` +
+    `<path d="M22.6 26.2 C21.9 28.9 22.2 31.1 23.7 32.5 C24.9 33.6 26.7 33.8 28.1 32.9` +
+    ` L27.4 31.4 C26.3 31.9 25.3 31.8 24.7 31.1 C23.8 30 23.8 28.2 24.6 26.4 Z"` +
+    ` fill="${PIECE_FACE}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    // 眼睛(带高光点)与眉上一点朱砂(呼应红方印色,同为圆点不成徽记)
+    `<circle cx="20.4" cy="21" r="1.5" fill="${ink}"/>` +
+    `<circle cx="27.6" cy="21" r="1.5" fill="${ink}"/>` +
+    `<circle cx="19.9" cy="20.4" r=".6" fill="#fff"/>` +
+    `<circle cx="27.1" cy="20.4" r=".6" fill="#fff"/>` +
+    `<circle cx="24" cy="14.6" r="1.2" fill="${RED_INK}"/>` +
     `</svg>`
   );
 }
