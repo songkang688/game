@@ -119,7 +119,8 @@ describe("翻翻暗棋 · index 契约", () => {
     const handle = mount(api);
     dom.root.find((e) => e.textContent.includes("人机对战"))!.dispatch("click", {});
     const cells = dom.root.findAll((e) => e.className.includes("dc-cell"));
-    expect(cells[0].textContent).toBe("🌸");
+    // r3 起格子文字口径走 aria-label（textContent 桩已清理）：翻开前这一格还盖着
+    expect(cells[0].getAttribute("aria-label")).toContain("还盖着");
     cells[0].dispatch("click", {});
     // 翻子动画结束前先不改字，动画过后这一格一定不再是背面
     expect(dom.root.find((e) => e.className.includes("dc-note"))?.textContent).toContain("翻开");

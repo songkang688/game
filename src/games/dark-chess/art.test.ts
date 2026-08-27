@@ -69,8 +69,10 @@ describe("牌背 · 信息红线", () => {
     expect(b.innerHTML).toContain("<svg");
     expect(b.innerHTML).toContain("暗");
     expect(b.innerHTML).not.toContain("🌸");
-    // 文本层仍是旧字符：这是既有契约与无 SVG 环境的降级，真实 DOM 里被 SVG 层整体替换
-    expect(b.textContent).toBe("🌸");
+    // r3 起格子文字口径统一走 aria-label（读屏正文兼测试契约）；
+    // 真实 DOM 里总被 innerHTML 抹掉的 textContent 降级桩已清理，桩层恒空
+    expect(b.getAttribute("aria-label")).toContain("还盖着");
+    expect(b.textContent).toBe("");
     board.destroy();
   });
 

@@ -7,8 +7,9 @@
  * 翻子和吃子都有动画，不许瞬变。
  *
  * 1.3 视觉升级（画皮不动骨，规则与回调时序一根手指都不碰）：
- *  - 每格的渲染分两层：`textContent` 是测试契约与无 SVG 环境的降级文本层，
- *    随后写入的 `innerHTML` SVG 面板层在真实 DOM 里整体接管画面（见 `setCellContent`）；
+ *  - 每格画面是 `innerHTML` 写入的 SVG 面板层（见 `setCellContent`），文字口径统一走
+ *    `refresh()` 里逐格重设的 `aria-label`（空格 / 还盖着 / 红蓝 + 兵种）——既是读屏正文，
+ *    也是测试契约（r3 起替代早年被 innerHTML 覆盖的 textContent 桩层）；
  *  - 牌背 / 棋面 / 花瓣等绘制资产全部来自 `./art` 的纯函数。
  */
 import { COLS, KINDS, RANK, ROWS, colOf, indexOf, labelOf, rowOf, type Color, type Kind } from "./board";
@@ -337,10 +338,11 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   window.addEventListener("keydown", onKey);
 
   /**
-   * 重写某一格的两层内容：文本层 + SVG 面板层。
+   * 重写某一格的 SVG 面板层。
    *
-   * 文本层（textContent）沿用 1.2 的老字符：它是既有测试的契约，也是 SVG 万一没了时的降级；
-   * 紧随其后的 innerHTML 在真实 DOM 里会把它整体替换成绘制资产，屏幕上只见 SVG。
+   * 文字口径不在这儿：`refresh()` 每轮都会按三态重设 `aria-label`（读屏正文兼测试契约）。
+   * 1.2 时代的 textContent 降级桩在真实 DOM 里总被紧随的 innerHTML 整体抹掉、
+   * 零渲染零读屏价值，r3 终验清理掉（r1 遗留 1 / r2 fixer 移交 / A 档 r3 对账 #12）。
    * 钥匙没变就一个字节都不写——光标每动一下都要 refresh，别让 32 格白白重画。
    */
   function setCellContent(i: number): void {
@@ -352,16 +354,13 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     for (const e of extras[i]) e.remove();
     extras[i] = [];
     if (!c) {
-      b.textContent = "";
       b.innerHTML = "";
       return;
     }
     if (c.covered) {
-      b.textContent = "🌸";
       b.innerHTML = `<span class="dc-face">${backSVG(i)}</span>`;
       return;
     }
-    b.textContent = labelOf(c.color, c.kind);
     // 渐变 id 拼上格号：同兵种开出多枚时，同文档内联也不会重复 id
     b.innerHTML = `<span class="dc-face">${pieceFaceSVG(c.color, c.kind, i)}</span>`;
   }
