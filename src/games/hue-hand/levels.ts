@@ -10,7 +10,7 @@
 import { TOTAL_LEVELS, chapterOf, chapterStart, rateBelow, type Chapter } from "../level99";
 import { TIER_NAMES, type AiTier } from "./ai";
 import { buildDeck, shuffle, type Card, type CardKind } from "./deck";
-import { firstLeadScore, simulateGame, simulateMatch } from "./sim";
+import { firstLeadScore, hasOpeningPlay, simulateGame, simulateMatch } from "./sim";
 
 export const CHAPTERS: Chapter[] = [
   { name: "对上颜色", emoji: "🎨", color: "#FFE1EE", desc: "只有数字牌:颜色一样、或者数字一样就能出", size: 24 },
@@ -310,4 +310,36 @@ export function buildVersusRound(round: number, players: number, tier: AiTier): 
 export function roundDeck(cfg: RoundConfig, bump = 0): Card[] {
   const pool = buildDeck().filter((c) => cfg.kinds.includes(c.kind));
   return shuffle(pool, cfg.seed + bump * 131).cards;
+}
+
+/** 一次连胜 / 一次对局里,同一局最多换几副牌去凑一副「开局接得上」的 */
+export const DEAL_TRIES = 12;
+
+/**
+ * 无尽 / 对战真正发出去的那副牌。
+ *
+ * 两件事一起解决:
+ *  1. **重开不再原样重放**。这两个模式的牌堆过去只由「第几局」决定,所以每次从头开始
+ *     发到的牌一模一样,连胜三次就把前几局背下来了。`sitting` 是这一次坐下来的批次号,
+ *     输了重开就 +1,换一批牌;同一次连胜之内仍旧完全确定,断线重挂也发同一副。
+ *  2. **开局至少有一张接得上**。这两个模式的牌堆从来没验过,发到一手全接不上只能先摸牌。
+ *     发牌前先试算一遍,不合格就换下一副,`DEAL_TRIES` 副之内挑不出来就用最后那一副
+ *     (摸一张就能继续,不至于卡住)。
+ *
+ * `sitting = 0` 走的仍旧是原来那一副牌 —— 第一次玩的手感一个字节没变。
+ */
+export function dealRoundDeck(cfg: RoundConfig, sitting = 0, seat = 0): Card[] {
+  const base = Math.max(0, Math.round(sitting)) * DEAL_TRIES;
+  let deck = roundDeck(cfg, base);
+  for (let i = 0; i < DEAL_TRIES; i++) {
+    deck = roundDeck(cfg, base + i);
+    const fair = hasOpeningPlay({
+      players: cfg.players,
+      seed: cfg.seed,
+      handSize: cfg.handSize,
+      deck,
+    }, seat);
+    if (fair) return deck;
+  }
+  return deck;
 }

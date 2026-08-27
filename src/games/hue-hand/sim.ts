@@ -199,3 +199,13 @@ export function duel(a: AiTier, b: AiTier, games: number, baseSeed = 20250808): 
 export function playableNow(state: HueState, card: Parameters<typeof canPlay>[0]): boolean {
   return canPlay(card, topCard(state), state.color);
 }
+
+/**
+ * 这一副牌发下去,某个座位开局手上有没有接得上的牌。
+ * 开局一张都接不上只能先摸牌,不致命但很扫兴 —— 无尽 / 对战换牌重开时拿它筛一道。
+ */
+export function hasOpeningPlay(opts: CreateOpts, seat = 0): boolean {
+  const state = createGame(opts);
+  const top = topCard(state);
+  return (state.players[seat]?.hand ?? []).some((c) => canPlay(c, top, state.color));
+}

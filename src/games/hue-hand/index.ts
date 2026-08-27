@@ -33,7 +33,7 @@ import {
   levelStars,
   loseLine,
   matchStars,
-  roundDeck,
+  dealRoundDeck,
   winLine,
   type HueLevel,
   type RoundConfig,
@@ -1185,6 +1185,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
   let streak = 0;
   let best = save.getGameProgress(meta.id).endlessBest;
   let points = 0;
+  /** 这是第几次从头连胜:连胜断了重来就换一批牌,免得每次都在背同样那几副 */
+  let sitting = 0;
   let table: { destroy: () => void } | null = null;
 
   function startRound(): void {
@@ -1194,7 +1196,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     shell.chip.textContent = `♾️ 连胜 ${streak} · 最好 ${best} · 累计 ${points} 分`;
     table = createTable(shell.stage, {
       cfg,
-      deck: roundDeck(cfg),
+      deck: dealRoundDeck(cfg, sitting),
       seats: soloSeats(cfg.players, cfg.tiers),
       banner: `♾️ ${cfg.hint}<br>赢一局就把别人手上剩的牌折成分收走`,
       sfx: (n) => api.play(n),
@@ -1218,6 +1220,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
               api.play("tap");
               streak = 0;
               points = 0;
+              sitting++;
               startRound();
             }
           );
@@ -1304,7 +1307,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
     shell.chip.textContent = `⚔️ 第 ${round} 局 · 你 ${totals[0]} 分`;
     table = createTable(shell.stage, {
       cfg,
-      deck: roundDeck(cfg),
+      deck: dealRoundDeck(cfg),
       seats: soloSeats(cfg.players, cfg.tiers),
       startTurn: (round - 1) % cfg.players,
       banner: `⚔️ ${cfg.players} 人桌 · 对手是「${TIER_NAMES[tier]}」档<br>先出完手牌的人赢下这一局`,
@@ -1357,7 +1360,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     shell.chip.textContent = `👫 第 ${round} 局 · 朵朵 ${wins[0]} : ${wins[1]} 星星`;
     table = createTable(shell.stage, {
       cfg,
-      deck: roundDeck(cfg),
+      deck: dealRoundDeck(cfg),
       seats: duoSeats(),
       startTurn: (round - 1) % 2,
       banner: "👫 朵朵和星星各拿一手牌,轮到谁就先把另一位的牌盖起来<br>朵朵 A/D + F/G · 星星 ←/→ + L/K",

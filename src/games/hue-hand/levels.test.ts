@@ -5,6 +5,7 @@ import {
   buildEndlessRound,
   buildLevel,
   buildVersusRound,
+  dealRoundDeck,
   levelBrief,
   levelDeck,
   levelStars,
@@ -12,8 +13,9 @@ import {
   matchStars,
   roundDeck,
   winLine,
+  type RoundConfig,
 } from "./levels";
-import { firstLeadScore, simulateGame, simulateMatch } from "./sim";
+import { firstLeadScore, hasOpeningPlay, simulateGame, simulateMatch } from "./sim";
 
 describe("章节切分", () => {
   it("8 章,大小之和恒等于 188", () => {
@@ -159,5 +161,69 @@ describe("无尽与对战的每一轮", () => {
 
   it("无尽每一轮都用整副 108 张", () => {
     expect(roundDeck(buildEndlessRound(3)).length).toBe(108);
+  });
+});
+
+/**
+ * 无尽 / 对战重开时的发牌（QA 第 2 轮 · 包 B · R2B-10 的手感面）。
+ *
+ * 这两个模式的牌堆过去只由「第几局」决定，所以连胜断了从头再来，发到的牌一模一样；
+ * 而且这些牌堆从来没验过可解性，实测 36 个「局数 × 人数」组合里有 3 个开局一张都接不上。
+ */
+describe("重开一局的发牌", () => {
+  const seat0 = (cfg: RoundConfig, deck: ReturnType<typeof roundDeck>): boolean =>
+    hasOpeningPlay({ players: cfg.players, seed: cfg.seed, handSize: cfg.handSize, deck });
+
+  const ids = (deck: ReturnType<typeof roundDeck>): string => deck.map((c) => c.id).join(",");
+
+  it("第一次玩发的还是原来那副牌：老玩家的第 1 局手感一个字节没变", () => {
+    for (let n = 1; n <= 24; n++) {
+      const cfg = buildEndlessRound(n);
+      expect(ids(dealRoundDeck(cfg, 0)), `无尽第 ${n} 局`).toBe(ids(roundDeck(cfg)));
+    }
+  });
+
+  it("连胜断了重来就换一批牌，不再原样重放", () => {
+    const cfg = buildEndlessRound(1);
+    const first = ids(dealRoundDeck(cfg, 0));
+    for (let sitting = 1; sitting <= 5; sitting++) {
+      expect(ids(dealRoundDeck(cfg, sitting)), `第 ${sitting + 1} 次连胜`).not.toBe(first);
+    }
+  });
+
+  it("同一次连胜之内完全确定：同一批同一局，发两次一模一样", () => {
+    const cfg = buildEndlessRound(7);
+    expect(ids(dealRoundDeck(cfg, 3))).toBe(ids(dealRoundDeck(cfg, 3)));
+  });
+
+  it("换出来的仍旧是整副 108 张", () => {
+    for (let sitting = 0; sitting <= 4; sitting++) {
+      expect(dealRoundDeck(buildEndlessRound(5), sitting).length).toBe(108);
+      expect(dealRoundDeck(buildVersusRound(3, 4, "expert"), sitting).length).toBe(108);
+    }
+  });
+
+  it("旧口径下对战确实会发出「开局一张接不上」的牌", () => {
+    const bad = [
+      buildVersusRound(4, 4, "normal"),
+      buildVersusRound(9, 4, "normal"),
+      buildVersusRound(11, 4, "normal"),
+    ];
+    for (const cfg of bad) expect(seat0(cfg, roundDeck(cfg))).toBe(false);
+  });
+
+  it("新口径下，无尽与对战每一局、每一批发牌，玩家开局都有牌可接", () => {
+    for (let sitting = 0; sitting <= 5; sitting++) {
+      for (let n = 1; n <= 24; n++) {
+        const cfg = buildEndlessRound(n);
+        expect(seat0(cfg, dealRoundDeck(cfg, sitting)), `无尽第 ${n} 局 · 第 ${sitting} 批`).toBe(true);
+      }
+      for (const players of [2, 3, 4]) {
+        for (let r = 1; r <= 12; r++) {
+          const cfg = buildVersusRound(r, players, "normal");
+          expect(seat0(cfg, dealRoundDeck(cfg, sitting)), `${players} 人第 ${r} 局 · 第 ${sitting} 批`).toBe(true);
+        }
+      }
+    }
   });
 });

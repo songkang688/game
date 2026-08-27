@@ -15,7 +15,9 @@ import {
   windowListenerCount,
   type Dom,
 } from "./domStub";
-import { buildDeck, type Card, type Color } from "./deck";
+import { buildDeck, cardLabel, type Card, type Color } from "./deck";
+import { buildEndlessRound, dealRoundDeck } from "./levels";
+import { createGame, legalPlays } from "./rules";
 import { createTable, cardWidthFor, meta, mount, type SeatCfg, type TableDone } from "./index";
 
 let dom: Dom;
@@ -190,6 +192,27 @@ describe("无尽与闯关入口", () => {
     byText("回选关")?.click();
     expect(dom.root.querySelector(".l99-map")).toBeTruthy();
     handle.destroy();
+  });
+
+  it("无尽第 1 局发的是 dealRoundDeck 挑过的那副牌,而且开局一定有牌可接", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("无尽连胜")?.click();
+
+    const cfg = buildEndlessRound(1);
+    const deck = dealRoundDeck(cfg, 0);
+    const expected = createGame({ players: cfg.players, seed: cfg.seed, handSize: cfg.handSize, deck });
+    const onScreen = handCards().map((c) => c.getAttribute("aria-label"));
+    expect(onScreen).toEqual(expected.players[0].hand.map((c) => cardLabel(c)));
+    expect(legalPlays(expected, 0).length).toBeGreaterThan(0);
+    handle.destroy();
+  });
+
+  it("连胜断了重来会换一批牌:同一局的第 2 批发的不是同一副", () => {
+    const cfg = buildEndlessRound(1);
+    const first = dealRoundDeck(cfg, 0).map((c) => c.id).join(",");
+    const second = dealRoundDeck(cfg, 1).map((c) => c.id).join(",");
+    expect(second).not.toBe(first);
   });
 
   it("从地图点第 1 关能开出一桌牌", () => {
