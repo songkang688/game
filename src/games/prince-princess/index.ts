@@ -96,6 +96,7 @@ import {
   drawBossFigure,
   drawEnemy,
   drawGuardHalo,
+  drawPadlockBadge,
   flagWavePhase,
   gemGlowAlpha,
   headwearDetail,
@@ -608,7 +609,8 @@ function drawExitArch(
     g.fill();
   }
   g.globalAlpha = 1;
-  emoji(g, open ? s.icon : "🔒", cx, baseY - h * 0.52, 24 * scale);
+  // 修复员 R2 · N2:门上挂锁从 emoji 字形换成自绘徽记(开门锁弓掀起,合门锁弓扣死)
+  drawPadlockBadge(g, cx, baseY - h * 0.52, 7 * scale, open);
 }
 
 /** 检查点:蓝色的小旗。只有检查点是旗子(1.3 加 2 帧飘动,reduced 时 wave 恒 0) */

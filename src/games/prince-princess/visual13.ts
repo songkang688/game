@@ -16,6 +16,7 @@
 
 import { shade, withAlpha } from "../../art/kit/palette";
 import { strokeOutline } from "../../art/kit/outline";
+import { traceStar } from "../../art/kit/star";
 import {
   spawnRibbons,
   spawnSparkles,
@@ -793,4 +794,70 @@ export function drawBossFigure(
     ctx.fill();
   }
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// 修复员 R2(N2 + G4/L-1 + N4 画布部分):画布 emoji() 助手退休,小徽章全矢量。
+// 工艺与既有画笔同规格:两停以上渐变、kit strokeOutline 描边(深 20%)、光照左上;
+// 全部纯静态识别件(原 emoji 字形也是静态),reduced 无需分支,判定一概不沾。
+// DOM 出场卡 / HUD chips 里的 emoji 属功能文字口径,不在此列(登记遗留交第 3 轮)。
+// ---------------------------------------------------------------------------
+
+/** 圆角矩形路径(visual13 本地小工具,画完不 fill 不 stroke) */
+function badgeRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
+}
+
+/** 徽章几何合法性:半径为正且圆心有限 */
+function badgeOk(x: number, y: number, s: number): boolean {
+  return s > 0 && Number.isFinite(x) && Number.isFinite(y);
+}
+
+/**
+ * 挂锁(N2,替换门锁 emoji 字形,思路对齐 iff `drawPadlock`):
+ * 圆环锁弓 + 金色 2 停圆角锁体 + 锁孔;open 时锁弓向右上掀起,开 / 合一眼分。
+ * s 是锁体半高;开合语义由调用方读 `doorOpen(world)` 传入,这里只管画。
+ */
+export function drawPadlockBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, open: boolean): void {
+  if (!badgeOk(cx, cy, s)) return;
+  const bw = s * 1.6;
+  const bh = s * 1.4;
+  const top = cy - s * 0.2;
+  // 锁弓:先画,压在锁体后面
+  ctx.strokeStyle = "#8C82A8";
+  ctx.lineWidth = Math.max(1.2, s * 0.3);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  if (open) {
+    ctx.arc(cx + s * 0.5, top - s * 0.5, s * 0.58, Math.PI * 0.9, Math.PI * 1.85);
+  } else {
+    ctx.arc(cx, top - s * 0.45, s * 0.55, Math.PI, Math.PI * 2);
+  }
+  ctx.stroke();
+  ctx.lineCap = "butt";
+  // 锁体:金 2 停(顶亮底沉)圆角方 + 描边
+  const gold = ctx.createLinearGradient(cx, top, cx, top + bh);
+  gold.addColorStop(0, shade(PP_COLORS.ppGold, 16));
+  gold.addColorStop(1, shade(PP_COLORS.ppGold, -8));
+  badgeRect(ctx, cx - bw / 2, top, bw, bh, s * 0.3);
+  ctx.fillStyle = gold;
+  ctx.fill();
+  strokeOutline(ctx, PP_COLORS.ppGold, 1.5);
+  // 锁孔:圆头 + 短槽
+  ctx.fillStyle = shade(PP_COLORS.ppGold, -46);
+  ctx.beginPath();
+  ctx.arc(cx, top + bh * 0.38, Math.max(0.8, s * 0.2), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(cx - Math.max(0.5, s * 0.09), top + bh * 0.44, Math.max(1, s * 0.18), bh * 0.3);
 }
