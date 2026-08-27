@@ -643,6 +643,181 @@ export function pickupArt(kind: PickupArtKind, r: number): FoePart[] {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Boss 肚皮徽章的矢量符号(修复员 G1:26px emoji 字形 → 圆底小徽章)
+// ---------------------------------------------------------------------------
+
+/**
+ * 八位章 Boss 的徽章符号:云 / 彩虹 / 大钟 / 棒棒糖 / 雪花 / 沙漏 / 机器人 / 月亮。
+ * 坐标单位 = 徽章半径 r,全部夹在 ±r;role 沿用四通道
+ * (white=符号主体、dark=符号刻线、base=徽章底色回填、light=次级色带)。
+ * 认不出的 id 兜底画五角星 —— 徽章永远有的画,绘制层不许炸。
+ */
+export function bossBadgeArt(id: string, r: number): FoePart[] {
+  switch (id) {
+    case "cotton-carrier":
+      // 棉花云:三球云团
+      return [
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.42, y: r * 0.1, rx: r * 0.3, ry: r * 0.24 }] },
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: -r * 0.1, rx: r * 0.4, ry: r * 0.32 }] },
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: r * 0.42, y: r * 0.12, rx: r * 0.28, ry: r * 0.22 }] },
+      ];
+    case "rainbow-top":
+      // 彩虹:双色带拱桥 + 两端云朵
+      return [
+        {
+          role: "white",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: -r * 0.62, y: r * 0.42 },
+            { kind: "curve", c1x: -r * 0.58, c1y: -r * 0.62, c2x: r * 0.58, c2y: -r * 0.62, x: r * 0.62, y: r * 0.42 },
+          ],
+        },
+        {
+          role: "light",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: -r * 0.36, y: r * 0.42 },
+            { kind: "curve", c1x: -r * 0.32, c1y: -r * 0.18, c2x: r * 0.32, c2y: -r * 0.18, x: r * 0.36, y: r * 0.42 },
+          ],
+        },
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.62, y: r * 0.45, rx: r * 0.18, ry: r * 0.14 }] },
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: r * 0.62, y: r * 0.45, rx: r * 0.18, ry: r * 0.14 }] },
+      ];
+    case "clock-tower":
+      // 发条大钟:白表盘 + 深色时分针
+      return [
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: 0, rx: r * 0.7, ry: r * 0.7 }] },
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: 0, y: 0 },
+            { kind: "line", x: 0, y: -r * 0.45 },
+            { kind: "move", x: 0, y: 0 },
+            { kind: "line", x: r * 0.32, y: r * 0.12 },
+          ],
+        },
+      ];
+    case "lolly-tower":
+      // 棒棒糖:白糖盘 + 深色螺旋两卷 + 短棍
+      return [
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: -r * 0.22, rx: r * 0.5, ry: r * 0.5 }] },
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: 0, y: -r * 0.56 },
+            { kind: "curve", c1x: r * 0.34, c1y: -r * 0.56, c2x: r * 0.34, c2y: -r * 0.02, x: 0, y: -r * 0.02 },
+            { kind: "curve", c1x: -r * 0.18, c1y: -r * 0.02, c2x: -r * 0.18, c2y: -r * 0.4, x: 0, y: -r * 0.4 },
+          ],
+        },
+        {
+          role: "white",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: 0, y: r * 0.28 },
+            { kind: "line", x: 0, y: r * 0.8 },
+          ],
+        },
+      ];
+    case "ice-kite":
+      // 冰晶:六向雪花 + 上梢小叉
+      return [
+        {
+          role: "white",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: 0, y: -r * 0.78 },
+            { kind: "line", x: 0, y: r * 0.78 },
+            { kind: "move", x: -r * 0.68, y: -r * 0.39 },
+            { kind: "line", x: r * 0.68, y: r * 0.39 },
+            { kind: "move", x: -r * 0.68, y: r * 0.39 },
+            { kind: "line", x: r * 0.68, y: -r * 0.39 },
+          ],
+        },
+        {
+          role: "white",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: -r * 0.18, y: -r * 0.5 },
+            { kind: "line", x: 0, y: -r * 0.32 },
+            { kind: "line", x: r * 0.18, y: -r * 0.5 },
+          ],
+        },
+      ];
+    case "sand-ark":
+      // 沙漏:白漏斗 + 底仓小沙堆
+      return [
+        {
+          role: "white",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.5, y: -r * 0.68 },
+            { kind: "line", x: r * 0.5, y: -r * 0.68 },
+            { kind: "line", x: r * 0.06, y: 0 },
+            { kind: "line", x: r * 0.5, y: r * 0.68 },
+            { kind: "line", x: -r * 0.5, y: r * 0.68 },
+            { kind: "line", x: -r * 0.06, y: 0 },
+            { kind: "close" },
+          ],
+        },
+        {
+          role: "dark",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.26, y: r * 0.58 },
+            { kind: "line", x: r * 0.26, y: r * 0.58 },
+            { kind: "line", x: 0, y: r * 0.28 },
+            { kind: "close" },
+          ],
+        },
+      ];
+    case "meteor-bot":
+      // 机器人:方头 + 双眼 + 天线球 + 小嘴(圆润 Q 版,不写实)
+      return [
+        {
+          role: "white",
+          mode: "fill",
+          segs: [
+            { kind: "move", x: -r * 0.55, y: -r * 0.42 },
+            { kind: "line", x: r * 0.55, y: -r * 0.42 },
+            { kind: "line", x: r * 0.55, y: r * 0.48 },
+            { kind: "line", x: -r * 0.55, y: r * 0.48 },
+            { kind: "close" },
+          ],
+        },
+        { role: "dark", mode: "fill", segs: [{ kind: "ellipse", x: -r * 0.24, y: 0, rx: r * 0.11, ry: r * 0.13 }] },
+        { role: "dark", mode: "fill", segs: [{ kind: "ellipse", x: r * 0.24, y: 0, rx: r * 0.11, ry: r * 0.13 }] },
+        {
+          role: "dark",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: -r * 0.18, y: r * 0.28 },
+            { kind: "line", x: r * 0.18, y: r * 0.28 },
+          ],
+        },
+        {
+          role: "white",
+          mode: "stroke",
+          segs: [
+            { kind: "move", x: 0, y: -r * 0.42 },
+            { kind: "line", x: 0, y: -r * 0.68 },
+          ],
+        },
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: -r * 0.78, rx: r * 0.1, ry: r * 0.1 }] },
+      ];
+    case "moon-lantern":
+      // 月亮:白圆再用徽章底色回填一刀,剩下一弯月牙
+      return [
+        { role: "white", mode: "fill", segs: [{ kind: "ellipse", x: 0, y: 0, rx: r * 0.62, ry: r * 0.62 }] },
+        { role: "base", mode: "fill", segs: [{ kind: "ellipse", x: r * 0.3, y: -r * 0.16, rx: r * 0.52, ry: r * 0.52 }] },
+      ];
+    default:
+      return [{ role: "white", mode: "fill", segs: starSegs(r * 0.8) }];
+  }
+}
+
 /** 一段路径里所有出现过的坐标(含贝塞尔控制点与椭圆外接盒),包围盒断言用 */
 export function segExtent(segs: readonly ArtSeg[]): number {
   let m = 0;

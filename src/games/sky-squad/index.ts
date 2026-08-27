@@ -50,6 +50,7 @@ import {
   TRAIL_STEP_S,
   WINGMAN_SCALE,
   PICKUP_BADGE,
+  bossBadgeArt,
   cueGlowAlpha,
   easeOutQuad,
   foeArt,
@@ -1802,9 +1803,38 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     ctx.arc(-13, -12, 4.4, 0, Math.PI * 2);
     ctx.arc(13, -12, 4.4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.font = '900 26px "PingFang SC",system-ui,sans-serif';
-    ctx.textAlign = "center";
-    ctx.fillText(b.spec.emoji, 0, 30);
+    // 修复员 G1:肚皮名牌从 26px emoji 字形换成矢量小徽章(圆底 2 停 + 该章符号)
+    const badgeBase = shade(ph.color, -12);
+    const badgeGrad = ctx.createLinearGradient(0, 17, 0, 43);
+    badgeGrad.addColorStop(0, shade(badgeBase, 14));
+    badgeGrad.addColorStop(1, badgeBase);
+    ctx.fillStyle = badgeGrad;
+    ctx.beginPath();
+    ctx.arc(0, 30, 13, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, badgeBase, 1.5);
+    ctx.save();
+    ctx.translate(0, 30);
+    const badgeRole: Record<"base" | "light" | "dark" | "white", string> = {
+      base: badgeBase,
+      light: shade(ph.color, 26),
+      dark: shade(ph.color, -44),
+      white: "rgba(255,255,255,.95)",
+    };
+    for (const part of bossBadgeArt(b.spec.id, 9)) {
+      tracePath(ctx, part.segs);
+      if (part.mode === "fill") {
+        ctx.fillStyle = badgeRole[part.role];
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = badgeRole[part.role];
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.lineCap = "butt";
+      }
+    }
+    ctx.restore();
     ctx.restore();
   }
 

@@ -9,7 +9,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FakeCtx } from "./domStub";
-import { PICKUP_BADGE, pickupArt, segExtent, tracePath, type PickupArtKind } from "./art";
+import { BOSSES } from "./levels";
+import { PICKUP_BADGE, bossBadgeArt, pickupArt, segExtent, tracePath, type PickupArtKind } from "./art";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (f: string): string => readFileSync(join(HERE, f), "utf8");
@@ -50,5 +51,31 @@ describe("sky-squad · 修复员 S7 · 拾取物矢量化", () => {
     expect(src).not.toMatch(/fillText\(PICKUP_INFO/);
     expect(src).toContain("pickupArt(");
     expect(src).toContain("ballGradient(ctx, 0, 0, 15");
+  });
+});
+
+describe("sky-squad · 修复员 G1 · Boss 肚皮徽章矢量化", () => {
+  it("八位章 Boss 的徽章符号都有矢量件,坐标夹在 ±r,认不出的 id 兜底星形", () => {
+    for (const boss of BOSSES) {
+      const parts = bossBadgeArt(boss.id, 9);
+      expect(parts.length, boss.id).toBeGreaterThanOrEqual(2);
+      for (const part of parts) expect(segExtent(part.segs), boss.id).toBeLessThanOrEqual(9 + 1e-6);
+    }
+    expect(bossBadgeArt("unknown-boss", 9).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("徽章符号放到画笔上画得动不抛(全 Boss 冒烟)", () => {
+    const g = new FakeCtx() as unknown as CanvasRenderingContext2D;
+    for (const boss of BOSSES) {
+      for (const part of bossBadgeArt(boss.id, 9)) {
+        expect(() => tracePath(g, part.segs), boss.id).not.toThrow();
+      }
+    }
+  });
+
+  it("index.ts 的 Boss 肚皮不再 fillText emoji 字形,改走 bossBadgeArt", () => {
+    const src = read("index.ts");
+    expect(src).not.toMatch(/fillText\(b\.spec\.emoji/);
+    expect(src).toContain("bossBadgeArt(");
   });
 });
