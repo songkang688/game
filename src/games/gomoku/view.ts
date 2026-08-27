@@ -310,6 +310,12 @@ export function createBoardView(host: HTMLElement, opts: BoardViewOpts): BoardVi
       ctx.bezierCurveTo(VIEW_W * 0.3, i * 64 - 16, VIEW_W * 0.6, i * 64 + 34, VIEW_W + 20, i * 64 + 4);
       ctx.stroke();
     }
+    // 盘外一圈极淡径向暗角(内圈透明、外圈 alpha 0.06),聚焦盘面;一次填充,不进动画循环
+    const vg = ctx.createRadialGradient(VIEW_W / 2, VIEW_W / 2, VIEW_W * 0.34, VIEW_W / 2, VIEW_W / 2, VIEW_W * 0.72);
+    vg.addColorStop(0, "rgba(74,50,32,0)");
+    vg.addColorStop(1, "rgba(74,50,32,0.06)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_W);
     // 1.3 精装：桌面色一圈 + 深木边框 + 金线 + 四角铜饰（画在木纹之上、棋盘线之下）
     paintBoardFrame(ctx, VIEW_W);
     ctx.strokeStyle = "#C79A66";
