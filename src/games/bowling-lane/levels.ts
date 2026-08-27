@@ -175,7 +175,11 @@ export function buildLevel(index: number): BowlLevel {
   const standing =
     twist === "split" ? splitRack(SPLITS[Math.floor(ramp * (SPLITS.length - 0.001))] ?? SPLITS[0]) : new Array<boolean>(PINS).fill(true);
   const pinsUp = standing.filter(Boolean).length;
-  const scale = pinsUp >= PINS ? 1 : pinsUp / PINS;
+  // 分瓶那一架打不出全中也打不出补中(压根凑不满十瓶),一格顶多就是把站着的都清掉。
+  // 所以目标分不能照满架那套「每格 12–15 分」折算,得按「这一架总共几个瓶」重新算,
+  // 不然会定出一个再准也够不着的数。
+  const target =
+    pinsUp >= PINS ? Math.round(recipe.frames * perFrame) : Math.round(recipe.frames * pinsUp * 0.72);
   // 限球数那一章:章内越往后球越紧,但永远给得起「每格两球」的底线
   const ballLimit = twist === "limit" ? recipe.frames * 2 - (ramp > 0.55 ? 1 : 0) : 0;
   const chainNeed = twist === "limit" ? 2 : 0;
@@ -183,7 +187,7 @@ export function buildLevel(index: number): BowlLevel {
     index: level,
     chapter,
     frames: recipe.frames,
-    target: Math.round(recipe.frames * perFrame * scale),
+    target,
     kinds,
     oil: recipe.oil,
     standing,

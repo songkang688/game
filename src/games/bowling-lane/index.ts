@@ -115,7 +115,7 @@ const CSS = `
 .bl-roll--p1{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 4px 0 #2f63aa;}
 .bl-roll--p1:active{box-shadow:0 2px 0 #2f63aa;}
 .bl-roll[disabled]{opacity:.5;cursor:default;transform:none;}
-.bl-nudge{display:flex;gap:8px;align-items:center;}
+.bl-nudge{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;}
 .bl-nudge button{border:none;border-radius:14px;width:48px;height:40px;font-size:17px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#4a4270;background:#ffffffe0;box-shadow:0 3px 0 rgba(130,130,180,.35);}
 .bl-nudge button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(130,130,180,.35);}

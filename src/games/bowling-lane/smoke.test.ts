@@ -30,6 +30,8 @@ function playGame(opts: {
   bumpers?: boolean;
   drift?: number;
   gutter?: number;
+  /** 这一关最多投几球;0 / 不给 = 不限 */
+  ballLimit?: number;
 }): Played {
   const fresh = (): boolean[] => (opts.rack ? opts.rack.slice() : new Array<boolean>(PINS).fill(true));
   const rolls: number[] = [];
@@ -38,6 +40,8 @@ function playGame(opts: {
   while (guard++ < 80) {
     const st = turnState(rolls, opts.frames);
     if (st.over) break;
+    // 限球数的关卡:球用光就得收摊,和 index.ts 里的规矩一样
+    if (opts.ballLimit && rolls.length >= opts.ballLimit) break;
     if (st.freshRack) standing = fresh();
     const shot = aiShot(standing, opts.skill, opts.seed + st.frame * 3 + st.ball);
     const res = simulateShot(
@@ -133,10 +137,26 @@ describe("冒烟:一整局真的打得完", () => {
   });
 });
 
+/** 照着关卡数据原样开一局:1.2 的护栏 / 移动瓶 / 分瓶 / 限球数都真的生效 */
+function playCampaign(level: number, skill: AiLevel): Played {
+  const lv = buildLevel(level);
+  return playGame({
+    frames: lv.frames,
+    kinds: lv.kinds,
+    oil: lv.oil,
+    skill,
+    seed: lv.seed,
+    rack: lv.standing,
+    bumpers: lv.bumpers,
+    drift: lv.drift,
+    ballLimit: lv.ballLimit,
+  });
+}
+
 describe("冒烟:188 关闯关", () => {
   it("第 1 关真的打得过,而且不是靠瞎蒙", () => {
     const lv = buildLevel(0);
-    const game = playGame({ frames: lv.frames, kinds: lv.kinds, oil: lv.oil, skill: 3, seed: lv.seed });
+    const game = playCampaign(0, 3);
     expect(game.complete).toBe(true);
     expect(game.total, "第 1 关没够到目标分").toBeGreaterThanOrEqual(lv.target);
   });
@@ -144,7 +164,7 @@ describe("冒烟:188 关闯关", () => {
   it("八个章节的开章第一关都打得通,不是只有第 1 关能过", () => {
     for (const level of [0, 24, 48, 72, 96, 119, 142, 165]) {
       const lv = buildLevel(level);
-      const game = playGame({ frames: lv.frames, kinds: lv.kinds, oil: lv.oil, skill: 3, seed: lv.seed });
+      const game = playCampaign(level, 3);
       expect(game.total, `第 ${level + 1} 关(第 ${lv.chapter + 1} 章开章)没打通`).toBeGreaterThanOrEqual(lv.target);
     }
   });
@@ -155,9 +175,7 @@ describe("冒烟:188 关闯关", () => {
     const rate = (skill: AiLevel): number => {
       let win = 0;
       for (const level of sample) {
-        const lv = buildLevel(level);
-        const game = playGame({ frames: lv.frames, kinds: lv.kinds, oil: lv.oil, skill, seed: lv.seed });
-        if (game.total >= lv.target) win++;
+        if (playCampaign(level, skill).total >= buildLevel(level).target) win++;
       }
       return win / sample.length;
     };
@@ -172,13 +190,44 @@ describe("冒烟:188 关闯关", () => {
       let win = 0;
       let n = 0;
       for (let i = from; i < to; i += 3) {
-        const lv = buildLevel(i);
         n++;
-        if (playGame({ frames: lv.frames, kinds: lv.kinds, oil: lv.oil, skill: 2, seed: lv.seed }).total >= lv.target) win++;
+        if (playCampaign(i, 2).total >= buildLevel(i).target) win++;
       }
       return win / n;
     };
     expect(clear(0, 24)).toBeGreaterThan(clear(165, 188));
+  });
+
+  it("限球数那一章:球用光就收摊,可冠军档照样够得到目标分", () => {
+    let played = 0;
+    let win = 0;
+    for (let i = 165; i < 188; i += 2) {
+      const lv = buildLevel(i);
+      expect(lv.ballLimit, `第 ${i + 1} 关应该是限球数的`).toBeGreaterThan(0);
+      const game = playCampaign(i, 3);
+      expect(game.balls, `第 ${i + 1} 关投超球数了`).toBeLessThanOrEqual(lv.ballLimit);
+      played++;
+      if (game.total >= lv.target) win++;
+    }
+    expect(win / played, "限了球数之后冠军档都过不去,球给少了").toBeGreaterThan(0.7);
+  });
+
+  it("有护栏的那一章洗不了沟:再乱投也不会白丢一整格", () => {
+    for (let i = 48; i < 72; i += 6) {
+      const lv = buildLevel(i);
+      expect(lv.bumpers).toBe(true);
+      const game = playGame({
+        frames: lv.frames,
+        kinds: lv.kinds,
+        oil: lv.oil,
+        skill: 1,
+        seed: lv.seed,
+        rack: lv.standing,
+        bumpers: true,
+      });
+      expect(game.rolls.length).toBeGreaterThan(0);
+      expect(game.total, `第 ${i + 1} 关有护栏还打了个 0 分`).toBeGreaterThan(0);
+    }
   });
 });
 
