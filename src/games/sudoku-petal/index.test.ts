@@ -604,20 +604,26 @@ describe("竞速假人", () => {
     expect(AI_PROFILES.rookie.missRate).toBeGreaterThan(0);
   });
 
-  it("假人按技巧一步一步填,不是抄答案:地狱档每一步都填在对的位置", () => {
-    const entry = bankAt(60);
-    const board = boardFromBank(entry);
-    const solution = solutionOfBank(entry);
-    let steps = 0;
-    while (board.cells.some((v) => v === EMPTY) && steps < 200) {
-      const move = nextMove(board, 0.99, AI_PROFILES.hell);
-      if (!move) break;
-      expect(move.slip).toBe(false);
-      expect(move.digit, `第 ${steps} 步填错了`).toBe(solution[move.idx]);
-      board.cells[move.idx] = move.digit;
-      steps += 1;
+  it("假人按技巧一步一步填,不是抄答案:地狱档八章都能一手不错地推到底", () => {
+    // 数对与区块摒除只划候选、不落子,常常要连划好几轮才逼得出一个独苗。
+    // 这里连着高难章一起跑,盯住「一手不错、正好用掉空格数那么多手」。
+    for (const lv of [0, 30, 60, 90, 110, 130, 150, 170]) {
+      const entry = bankAt(lv);
+      const board = boardFromBank(entry);
+      const solution = solutionOfBank(entry);
+      const holes = board.cells.filter((v) => v === EMPTY).length;
+      let steps = 0;
+      while (board.cells.some((v) => v === EMPTY) && steps < holes + 8) {
+        const move = nextMove(board, 0.99, AI_PROFILES.hell);
+        if (!move) break;
+        expect(move.slip).toBe(false);
+        expect(move.digit, `第 ${lv + 1} 关第 ${steps} 手填错了`).toBe(solution[move.idx]);
+        board.cells[move.idx] = move.digit;
+        steps += 1;
+      }
+      expect(board.cells, `第 ${lv + 1} 关没推到底`).toEqual(solution);
+      expect(steps, `第 ${lv + 1} 关多绕了路`).toBe(holes);
     }
-    expect(board.cells).toEqual(solution);
   });
 
   it("菜鸟档真的会种错一朵,而且错的那一朵仍然是合规矩的落子", () => {

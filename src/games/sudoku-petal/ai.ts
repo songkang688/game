@@ -67,7 +67,10 @@ export interface AiMove {
 
 /**
  * 假人的下一步:按技巧从易到难找一个能填的格子。
- * 四招都使不上(理论上不会,题库保证纯逻辑可解)就退化成「挑候选最少的格子填一个合法的」。
+ *
+ * 数对与区块摒除**只划候选、不落子**,而且常常要连划好几轮才逼得出一个独苗,
+ * 所以这里是个循环:划一轮就重找一次唯余 / 隐性唯一,直到有格子能填或者再也划不动。
+ * 四招都使不上(题库保证不会)才退化成「挑候选最少的格子填一个合规矩的」。
  */
 export function nextMove(board: SudokuBoard, roll = 1, profile: AiProfile = AI_PROFILES.normal): AiMove | null {
   if (board.cells.every((v) => v > EMPTY)) return null;
@@ -76,31 +79,28 @@ export function nextMove(board: SudokuBoard, roll = 1, profile: AiProfile = AI_P
   let idx = -1;
   let digit = 0;
   let by: TechniqueKind = "nakedSingle";
+  // 这一手是被哪一档技巧逼出来的:划过候选就记下最深的那一档
+  let deepest: TechniqueKind | null = null;
 
-  const naked = findNakedSingle(board, grid);
-  if (naked) {
-    idx = naked.idx;
-    digit = naked.digit;
-    by = "nakedSingle";
-  } else {
+  for (let round = 0; round < 80 && idx < 0; round++) {
+    const naked = findNakedSingle(board, grid);
+    if (naked) {
+      idx = naked.idx;
+      digit = naked.digit;
+      by = deepest ?? "nakedSingle";
+      break;
+    }
     const hidden = findHiddenSingle(board, grid);
     if (hidden) {
       idx = hidden.idx;
       digit = hidden.digit;
-      by = "hiddenSingle";
-    } else {
-      // 数对与区块摒除只划候选、不落子,所以先划一轮再重找唯余
-      const pair = findNakedPair(board, grid) ?? findPointingPair(board, grid);
-      if (pair) {
-        for (const s of pair.strikes) grid[s.idx] &= ~s.mask;
-        by = pair.kind;
-        const after = findNakedSingle(board, grid) ?? findHiddenSingle(board, grid);
-        if (after) {
-          idx = after.idx;
-          digit = after.digit;
-        }
-      }
+      by = deepest ?? "hiddenSingle";
+      break;
     }
+    const pair = findNakedPair(board, grid) ?? findPointingPair(board, grid);
+    if (!pair) break;
+    for (const s of pair.strikes) grid[s.idx] &= ~s.mask;
+    if (!deepest || TECHNIQUE_ORDER.indexOf(pair.kind) > TECHNIQUE_ORDER.indexOf(deepest)) deepest = pair.kind;
   }
 
   if (idx < 0) {
