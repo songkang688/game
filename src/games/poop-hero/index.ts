@@ -1049,7 +1049,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     ctx2.fill();
     ctx2.stroke();
 
-    // ── 工序⑨ 状态附加:扫帚跟手;冲刺残影与星星尾流在 render 的图层④/⑥
+    // ── 工序⑨ 状态附加:扫帚跟手;冲刺残影画在身后一层、星星尾流压在最上,都在 render 里
     if (holding) drawBroom(ctx2, w, h, p);
     ctx2.restore();
   }
