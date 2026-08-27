@@ -63,6 +63,7 @@ import {
   kittyStateFor,
   roomScene,
   splitStepText,
+  stepCenterOffset,
   toolIconSvg
 } from "./cureScene";
 
@@ -906,7 +907,7 @@ export class Arena {
       const holder = this.planEl as unknown as { scrollLeft?: number; clientWidth?: number };
       const cur = nowCard as unknown as { offsetLeft?: number; offsetWidth?: number } | null;
       if (cur && typeof holder.clientWidth === "number" && holder.clientWidth > 0 && typeof cur.offsetLeft === "number") {
-        holder.scrollLeft = Math.max(0, cur.offsetLeft - (holder.clientWidth - (cur.offsetWidth ?? 0)) / 2);
+        holder.scrollLeft = stepCenterOffset(cur.offsetLeft, cur.offsetWidth ?? 0, holder.clientWidth);
       }
       // 对话气泡的小尾巴指向护理角的小猫（几何算不出来就落回居中）
       const st = this.msgEl.style as unknown as { setProperty?: (k: string, v: string) => void };

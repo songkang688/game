@@ -49,6 +49,15 @@ export function splitStepText(text: string): { icon: string; label: string } {
   return { icon: head, label: t.slice(sp + 1) };
 }
 
+/**
+ * 步骤卡链横滑时，当前步要滚到中间：给出该写进 scrollLeft 的值。
+ * 量不到宽度（holderWidth ≤ 0）就返回 0，最左端不许滚出负数。
+ */
+export function stepCenterOffset(cardLeft: number, cardWidth: number, holderWidth: number): number {
+  if (!(holderWidth > 0)) return 0;
+  return Math.max(0, cardLeft - (holderWidth - cardWidth) / 2);
+}
+
 // ---------------------------------------------------------------------------
 // 对话气泡尾巴：几何上真的指向小猫
 // ---------------------------------------------------------------------------
