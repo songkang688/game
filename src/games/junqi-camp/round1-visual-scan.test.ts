@@ -3,8 +3,8 @@
  *
  *  ① 牌背红线：backSVG 无参数、每次调用逐字节相同——红蓝双方构造上不可能泄密；
  *  ② 军衔条 12 种互异且每条都有描边（体积口径），emoji 零直出；
- *  ③ 双方 HUD 徽标/大本营确实只差旗色——这正是本轮专项③记「严重」的量化证据：
- *     去掉双方主色后其余字节完全相同（形状通道缺位，交 C 档补）。
+ *  ③ 双方 HUD 徽标/大本营的形状第二通道——本轮专项③曾记「严重」（去色后逐字节相同），
+ *     C 档已修：朵朵波浪旗+小花徽/三角尖旗，星星燕尾旗+白星徽；断言翻转为钉住修后状态。
  */
 import { describe, expect, it } from "vitest";
 import { SIDE_COLOR, SIDE_DARK, allRankBadges, backSVG, crestSVG, hqSVG, rankBadgeSVG } from "./art";
@@ -35,17 +35,17 @@ describe("军衔条 12 种", () => {
   });
 });
 
-describe("专项③的量化证据:双方图形只差颜色", () => {
+describe("专项③的量化证据:双方图形有颜色之外的形状通道", () => {
   const stripSideColors = (svg: string): string => {
     let out = svg;
     for (const c of [...Object.values(SIDE_COLOR), ...Object.values(SIDE_DARK)]) out = out.split(c).join("#SIDE");
     return out;
   };
 
-  it("crestSVG 与 hqSVG 双方版本去色后逐字节相同(形状通道缺位,已记「严重」交 C 档)", () => {
+  it("crestSVG 与 hqSVG 双方版本去色后仍互不相同(C 档修复:形状第二通道已补)", () => {
     expect(crestSVG("duo")).not.toBe(crestSVG("star"));
-    expect(stripSideColors(crestSVG("duo"))).toBe(stripSideColors(crestSVG("star")));
+    expect(stripSideColors(crestSVG("duo"))).not.toBe(stripSideColors(crestSVG("star")));
     expect(hqSVG("duo")).not.toBe(hqSVG("star"));
-    expect(stripSideColors(hqSVG("duo"))).toBe(stripSideColors(hqSVG("star")));
+    expect(stripSideColors(hqSVG("duo"))).not.toBe(stripSideColors(hqSVG("star")));
   });
 });

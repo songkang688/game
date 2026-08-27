@@ -12,7 +12,7 @@
  * 12 行的棋盘在 360px 上放不下，所以整块棋盘可以缩放，也能拖着看；
  * 缩到最小时军衔条自动收起，只留汉字，保住可读性。
  */
-import { backSVG, hoistSVG, hqSVG, mountainSVG, rankBadgeSVG, smokeSVG, tentSVG } from "./art";
+import { backSVG, hoistSVG, hqSVG, mountainSVG, rankBadgeSVG, sideMarkSVG, smokeSVG, tentSVG } from "./art";
 import {
   CAMP,
   CELLS,
@@ -65,10 +65,16 @@ const KIND_FACE: Record<Kind, string> = (() => {
 const BACK_FACE = backSVG();
 const TENT_FACE = tentSVG();
 const HQ_FACE: Record<Side, string> = { duo: hqSVG("duo"), star: hqSVG("star") };
+/** 双方形状角标（专项③第二通道）：翻开的棋面左下角，去掉颜色也认得出是谁的子 */
+const SIDE_MARK: Record<Side, string> = {
+  duo: `<span class="jq-mark" aria-hidden="true">${sideMarkSVG("duo")}</span>`,
+  star: `<span class="jq-mark" aria-hidden="true">${sideMarkSVG("star")}</span>`,
+};
 
 /** 一格该画什么：有子画军衔徽章或统一牌背，空格画帐篷 / 碉堡地形 */
 export function faceHTML(p: Pos, kind: Kind | null, piece: Cell): string {
-  if (piece) return kind ? KIND_FACE[kind] : BACK_FACE;
+  // 形状角标只跟「翻开的」棋面走；牌背保持无侧别，暗棋信息红线不破
+  if (piece) return kind ? KIND_FACE[kind] + SIDE_MARK[piece.side] : BACK_FACE;
   if (inCamp(p)) return TENT_FACE;
   if (inHQ(p)) return HQ_FACE[halfOf(p)];
   return "";
@@ -103,6 +109,9 @@ export const CSS = `
   transition:transform .22s ease,opacity .22s ease,box-shadow .18s ease;}
 .jq-rank{display:block;line-height:0;margin-bottom:1px;pointer-events:none;}
 .jq-rank svg,.jq-face>svg{display:block;pointer-events:none;}
+/* 双方形状角标（专项③第二通道）：左下角，避开右下的落点绿点提示 */
+.jq-mark{position:absolute;left:2px;bottom:2px;width:11px;height:11px;line-height:0;pointer-events:none;}
+.jq-mark svg{display:block;width:100%;height:100%;}
 .jq-han{display:block;text-shadow:0 1px 0 rgba(255,255,255,.55);}
 .jq-tiny .jq-rank{display:none;}
 .jq-cell.jq-camp .jq-face{border-radius:50%;}

@@ -39,6 +39,16 @@ function goldStar(cx: number, cy: number, r: number): string {
   return `<polygon points="${starPts(cx, cy, r)}" fill="${GOLD}" stroke="${GOLD_DARK}" stroke-width="0.8" stroke-linejoin="round"/>`;
 }
 
+/** 五瓣小花的花瓣圈（朵朵的形状徽记零件） */
+function petalRing(cx: number, cy: number, r: number, pr: number, fill: string, line: string): string {
+  let out = "";
+  for (let i = 0; i < 5; i++) {
+    const rad = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+    out += `<circle cx="${(cx + Math.cos(rad) * r).toFixed(2)}" cy="${(cy + Math.sin(rad) * r).toFixed(2)}" r="${pr}" fill="${fill}" stroke="${line}" stroke-width="0.7"/>`;
+  }
+  return out;
+}
+
 function goldBar(y: number): string {
   return `<rect x="7" y="${y}" width="16" height="2.2" rx="1.1" fill="${GOLD}" stroke="${GOLD_DARK}" stroke-width="0.5"/>`;
 }
@@ -142,9 +152,16 @@ export function tentSVG(): string {
   );
 }
 
-/** 大本营碉堡：垛口墙 + 拱门 + 旗杆小旗（双方旗色不同，这是明摆着的地形不泄密） */
+/**
+ * 大本营碉堡：垛口墙 + 拱门 + 旗杆小旗（双方旗色不同，这是明摆着的地形不泄密）。
+ * 旗形也是双方互异的形状通道：朵朵三角尖旗、星星燕尾旗——去掉颜色也认得出这是谁家。
+ */
 export function hqSVG(side: Side): string {
   const flag = SIDE_COLOR[side];
+  const pennant =
+    side === "duo"
+      ? `<polygon points="28.6,1.6 21.6,3.4 28.6,5.2" fill="${flag}"/>`
+      : `<path d="M28.6 1.6 L21.6 1.6 L23.6 3.4 L21.6 5.2 L28.6 5.2 Z" fill="${flag}"/>`;
   return (
     `<svg viewBox="0 0 36 32" width="32" height="29" aria-hidden="true">` +
     `<ellipse cx="18" cy="29" rx="14" ry="2.4" fill="#8F7A50" opacity="0.3"/>` +
@@ -154,7 +171,7 @@ export function hqSVG(side: Side): string {
     `<rect x="25" y="10" width="6" height="5" rx="1.2" fill="#C9B48A" stroke="#8F7A50" stroke-width="1.2"/>` +
     `<path d="M13.5 28 v-6.5 a4.5 4.5 0 0 1 9 0 V28 Z" fill="#8F7A50"/>` +
     `<rect x="28.6" y="1" width="1.5" height="10" rx="0.75" fill="#8F7A50"/>` +
-    `<polygon points="28.6,1.6 21.6,3.4 28.6,5.2" fill="${flag}"/>` +
+    pennant +
     `</svg>`
   );
 }
@@ -188,31 +205,71 @@ export function smokeSVG(): string {
   );
 }
 
-/** 扛旗成功的升旗杆：金顶旗杆，旗面挂 fx-flag 类，交给 CSS 从杆底升到顶再飘两下 */
+/**
+ * 扛旗成功的升旗杆：金顶旗杆，旗面挂 fx-flag 类，交给 CSS 从杆底升到顶再飘两下。
+ * 旗面是双方互异的形状通道：朵朵三角尖旗配小花徽，星星燕尾旗配白星徽。
+ */
 export function hoistSVG(side: Side): string {
   const flag = SIDE_COLOR[side];
   const dark = SIDE_DARK[side];
+  const face =
+    side === "duo"
+      ? `<polygon points="6,5 24,9 6,13" fill="${flag}" stroke="${dark}" stroke-width="0.9" stroke-linejoin="round"/>` +
+        petalRing(11, 9, 1.9, 1.15, "#FFF4DE", dark) +
+        `<circle cx="11" cy="9" r="1" fill="${GOLD}"/>`
+      : `<path d="M6 5 L24 5 L20.4 9 L24 13 L6 13 Z" fill="${flag}" stroke="${dark}" stroke-width="0.9" stroke-linejoin="round"/>` +
+        `<polygon points="${starPts(12, 9, 2.4)}" fill="#FFF4DE"/>`;
   return (
     `<svg viewBox="0 0 26 46" width="24" height="43" aria-hidden="true">` +
     `<rect x="4" y="3" width="2" height="41" rx="1" fill="#8F7A50"/>` +
     `<circle cx="5" cy="3" r="2.2" fill="${GOLD}" stroke="${GOLD_DARK}" stroke-width="0.8"/>` +
     `<g class="fx-flag">` +
-    `<polygon points="6,5 24,9 6,13" fill="${flag}" stroke="${dark}" stroke-width="0.9" stroke-linejoin="round"/>` +
-    `<polygon points="${starPts(11, 9, 2.2)}" fill="#FFF4DE"/>` +
+    face +
     `</g>` +
     `</svg>`
   );
 }
 
-/** HUD 上的小军旗徽标：飘着的小旗 + 白星，双方只差旗色 */
+/**
+ * HUD 上的小军旗徽标。颜色之外的形状第二通道（专项③）：
+ * 朵朵是波浪旗 + 五瓣小花徽，星星是燕尾旗 + 白星徽——去掉颜色也一眼分得开。
+ */
 export function crestSVG(side: Side): string {
   const flag = SIDE_COLOR[side];
   const dark = SIDE_DARK[side];
+  const face =
+    side === "duo"
+      ? `<path d="M3.6 2 Q11 0.4 20 2.6 Q18.4 5.6 20 8.6 Q11 10.8 3.6 8.6 Z" fill="${flag}" stroke="${dark}" stroke-width="0.9" stroke-linejoin="round"/>` +
+        petalRing(9.5, 5.4, 2, 1.2, "#FFF4DE", dark) +
+        `<circle cx="9.5" cy="5.4" r="1" fill="${GOLD}"/>`
+      : `<path d="M3.6 2 L20 2 L16.8 5.5 L20 9 L3.6 9 Z" fill="${flag}" stroke="${dark}" stroke-width="0.9" stroke-linejoin="round"/>` +
+        `<polygon points="${starPts(9.5, 5.5, 2.6)}" fill="#FFF4DE"/>`;
   return (
     `<svg viewBox="0 0 22 16" width="20" height="15" aria-hidden="true">` +
     `<rect x="2" y="1" width="1.6" height="14" rx="0.8" fill="#8F7A50"/>` +
-    `<path d="M3.6 2 Q11 0.4 20 2.6 Q18.4 5.6 20 8.6 Q11 10.8 3.6 8.6 Z" fill="${flag}" stroke="${dark}" stroke-width="0.9" stroke-linejoin="round"/>` +
-    `<polygon points="${starPts(9.5, 5.4, 2.4)}" fill="#FFF4DE"/>` +
+    face +
+    `</svg>`
+  );
+}
+
+/**
+ * 双方的形状角标（专项③第二通道，盖在翻开棋面的左下角）：
+ * 朵朵一朵圆瓣小花、星星一颗尖角五角星——16px 灰度下靠剪影就分得清是谁的子。
+ * 只跟着「翻开的」棋面走；牌背由 backSVG 统一无侧别，信息红线不破。
+ */
+export function sideMarkSVG(side: Side): string {
+  if (side === "duo") {
+    return (
+      `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">` +
+      petalRing(8, 8, 3.4, 2.5, "#FFF4E4", SIDE_DARK.duo) +
+      `<circle cx="8" cy="8" r="2.2" fill="${SIDE_COLOR.duo}" stroke="${SIDE_DARK.duo}" stroke-width="0.8"/>` +
+      `</svg>`
+    );
+  }
+  return (
+    `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">` +
+    `<polygon points="${starPts(8, 8.6, 7)}" fill="#F2F7FF" stroke="${SIDE_DARK.star}" stroke-width="1" stroke-linejoin="round"/>` +
+    `<polygon points="${starPts(8, 8.6, 3.4)}" fill="${SIDE_COLOR.star}"/>` +
     `</svg>`
   );
 }
