@@ -12,7 +12,7 @@
  */
 import { mulberry32, type Chapter } from "../level99";
 import { buildSkeleton, decorate, freeCells } from "./generate";
-import { isPlainRules, type Move, type Puzzle } from "./logic";
+import { hasIce, hasPortal, isPlainRules, type Move, type Puzzle } from "./logic";
 import { solutionFootprint, solve } from "./solver";
 
 // ---------------------------------------------------------------------------
@@ -104,6 +104,13 @@ export interface Recipe {
   portalPairs: number;
   feature: string;
   hint: string;
+  /**
+   * 严格兑现机关：点了漩涡就一定要摆出漩涡，摆不出来这一张就不算满分候选。
+   *
+   * 战役的 188 关是**按固定种子长出来的既有内容**，改了生成器等于把老玩家打过的关换掉，
+   * 所以战役一律不开这个开关；无尽每一仓都是当场现造、不进存档，开了只有好处。
+   */
+  strictDecor?: boolean;
 }
 
 function lerpInt(from: number, to: number, t: number): number {
@@ -313,6 +320,19 @@ function wantsDecor(recipe: Recipe): boolean {
 }
 
 /**
+ * 撒完之后，配方点名的机关是不是真的摆上去了。
+ *
+ * `decorate()` 是「尽量满足」：候选空格被冰面占完、或者凑不出成对的两格，
+ * 漩涡就悄悄少一对，可关卡标签、难度分算的却是配方上写的那个数。
+ * 严格档拿这个函数当验收，摆不出来就不算满分候选，逼生成器再试几张。
+ */
+function decorRealized(p: Puzzle, recipe: Recipe): boolean {
+  if (recipe.iceRuns > 0 && !hasIce(p)) return false;
+  if (recipe.portalPairs > 0 && !hasPortal(p)) return false;
+  return true;
+}
+
+/**
  * 候选打分:难度优先、机关其次。
  * 「够难」这一条值 600 分,压过任何机关 —— 宁可给一关没有冰面的硬题,
  * 也不给一关撒满冰面但一步就推完的白送题。
@@ -362,16 +382,24 @@ function attemptBuild(recipe: Recipe, seed: number): Candidate | null {
     return score >= idealScore(true);
   };
 
+  // 严格档多试几张:一张撒不出漩涡就换一张,别把「点了机关却没机关」的那张交出去
+  const strict = recipe.strictDecor === true;
+  const boldTries = strict ? 10 : 4;
+  // 严格档先摆漩涡再铺冰面 —— 冰面是贪心的,先铺就会把成对的空格吃光
+  const portalsFirst = strict && recipe.portalPairs > 0;
+
   // 大胆档:随便撒,撒完重新求解,过了(而且没把关卡变白送)才用
-  for (let bold = 0; bold < 4; bold++) {
+  for (let bold = 0; bold < boldTries; bold++) {
     const cand = decorate(skeleton, {
       iceRuns: recipe.iceRuns,
       portalPairs: recipe.portalPairs,
       rand,
+      portalsFirst,
     });
     const res = solve(cand, { nodeCap: 50_000 });
     if (!res.solved) continue;
-    if (consider({ puzzle: cand, moves: res.moves, pushes: res.pushes, decorated: true })) return best;
+    const decorated = strict ? decorRealized(cand, recipe) : true;
+    if (consider({ puzzle: cand, moves: res.moves, pushes: res.pushes, decorated })) return best;
   }
 
   // 保底档:只撒在参考解一路没踩到的格子上,原来那条解一步不改照样走得通
@@ -382,10 +410,16 @@ function attemptBuild(recipe: Recipe, seed: number): Candidate | null {
     portalPairs: recipe.portalPairs,
     rand,
     allowed,
+    portalsFirst,
   });
   const safeRes = solve(safe, { nodeCap: 140_000 });
   if (safeRes.solved) {
-    consider({ puzzle: safe, moves: safeRes.moves, pushes: safeRes.pushes, decorated: true });
+    consider({
+      puzzle: safe,
+      moves: safeRes.moves,
+      pushes: safeRes.pushes,
+      decorated: strict ? decorRealized(safe, recipe) : true,
+    });
   }
   return best;
 }
@@ -554,6 +588,8 @@ export function buildEndless(round: number): LevelDef {
     portalPairs: endlessPortalPairs(r),
     feature: "仓库大挑战",
     hint: "一仓接一仓,推完就换下一仓!步数用完这趟就结束。",
+    // 无尽是现造的、不进存档,所以这里要求「点了漩涡就一定摆出漩涡」
+    strictDecor: true,
   };
   return finalize("endless", r, ci, recipe, bestOfAttempts(recipe, 0x5ee000 + r * 26417 + 5), mulberry32(r * 13 + 3));
 }

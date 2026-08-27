@@ -7,6 +7,7 @@ import { TOTAL_LEVELS, chapterOf, loadStars, mulberry32, saveStar, type StorageL
 import { THEME_PACKS } from "./art";
 import { CHAPTERS, LEVELS, type MemoryLevel } from "./levels";
 import {
+  ENDLESS_MAX_DECOYS,
   ENDLESS_MAX_MISS,
   ENDLESS_MAX_PAIRS,
   ENDLESS_ROTATE_FROM,
@@ -369,7 +370,8 @@ describe("档C R2 · memory-cards · 无尽打 200 轮", () => {
     for (let r = 1; r <= 200; r++) {
       const cfg = endlessLevel(r, THEME_PACKS.length);
       expect(cfg.pairs).toBeLessThanOrEqual(ENDLESS_MAX_PAIRS);
-      expect(deckSize(cfg)).toBeLessThanOrEqual(ENDLESS_MAX_PAIRS * 2);
+      // 第 3 轮起第 30 轮之后会混进最多 3 张独苗卡(L3-02),牌数上限跟着放宽这 3 张
+      expect(deckSize(cfg)).toBeLessThanOrEqual(ENDLESS_MAX_PAIRS * 2 + ENDLESS_MAX_DECOYS);
       expect(cfg.maxMiss).toBeGreaterThan(ENDLESS_MAX_MISS);
       expect(cfg.cols).toBeLessThanOrEqual(5);
     }

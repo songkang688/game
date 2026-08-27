@@ -267,6 +267,13 @@ export interface DecorSpec {
   rand: () => number;
   /** 只许撒在这些格子上(保底档传参考解的补集);不传就是整张图随便撒 */
   allowed?: Set<number>;
+  /**
+   * 先摆传送门再铺冰面。
+   *
+   * 默认(false)是先冰后门 —— 冰面一段一段贪着铺,候选格少的时候会把成对的空格吃光,
+   * 传送门就悄悄少一对。要求「点了漩涡就一定有漩涡」的地方把这个打开。
+   */
+  portalsFirst?: boolean;
 }
 
 /** 撒机关能用的候选格:空地,且不是目标点 / 箱子起点 / 仓鼠起点 */
@@ -293,33 +300,46 @@ export function decorate(p: Puzzle, spec: DecorSpec): Puzzle {
   const pool = shuffle(decorCandidates(p, spec.allowed), spec.rand);
   let cursor = 0;
 
-  for (let run = 0; run < spec.iceRuns && cursor < pool.length; run++) {
-    const head = pool[cursor++];
-    if (next.ice[head]) continue;
-    next.ice[head] = true;
-    // 顺着一个方向连成一小段,单个孤零零的冰格看不出是冰面
-    const dir = pickOne(spec.rand, ALL_DIRS) as Dir;
-    let cur = head;
-    const len = randInt(spec.rand, 1, 2);
-    for (let i = 0; i < len; i++) {
-      const nxt = stepCell(next, cur, dir);
-      if (nxt < 0 || next.wall[nxt] || next.target[nxt]) break;
-      if (next.boxes.includes(nxt) || next.hamsters.includes(nxt)) break;
-      if (spec.allowed && !spec.allowed.has(nxt)) break;
-      next.ice[nxt] = true;
-      cur = nxt;
+  const spreadIce = (): void => {
+    for (let run = 0; run < spec.iceRuns && cursor < pool.length; run++) {
+      const head = pool[cursor++];
+      if (next.ice[head] || next.portal[head] >= 0) continue;
+      next.ice[head] = true;
+      // 顺着一个方向连成一小段,单个孤零零的冰格看不出是冰面
+      const dir = pickOne(spec.rand, ALL_DIRS) as Dir;
+      let cur = head;
+      const len = randInt(spec.rand, 1, 2);
+      for (let i = 0; i < len; i++) {
+        const nxt = stepCell(next, cur, dir);
+        if (nxt < 0 || next.wall[nxt] || next.target[nxt]) break;
+        if (next.boxes.includes(nxt) || next.hamsters.includes(nxt)) break;
+        if (next.portal[nxt] >= 0) break;
+        if (spec.allowed && !spec.allowed.has(nxt)) break;
+        next.ice[nxt] = true;
+        cur = nxt;
+      }
     }
-  }
+  };
 
-  for (let pair = 0; pair < spec.portalPairs; pair++) {
-    const a = pool.find((c, i) => i >= cursor && next.portal[c] < 0 && !next.ice[c]);
-    if (a === undefined) break;
-    cursor = pool.indexOf(a) + 1;
-    const b = pool.find((c, i) => i >= cursor && next.portal[c] < 0 && !next.ice[c] && c !== a);
-    if (b === undefined) break;
-    cursor = pool.indexOf(b) + 1;
-    next.portal[a] = b;
-    next.portal[b] = a;
+  const openPortals = (): void => {
+    for (let pair = 0; pair < spec.portalPairs; pair++) {
+      const a = pool.find((c, i) => i >= cursor && next.portal[c] < 0 && !next.ice[c]);
+      if (a === undefined) break;
+      cursor = pool.indexOf(a) + 1;
+      const b = pool.find((c, i) => i >= cursor && next.portal[c] < 0 && !next.ice[c] && c !== a);
+      if (b === undefined) break;
+      cursor = pool.indexOf(b) + 1;
+      next.portal[a] = b;
+      next.portal[b] = a;
+    }
+  };
+
+  if (spec.portalsFirst) {
+    openPortals();
+    spreadIce();
+  } else {
+    spreadIce();
+    openPortals();
   }
 
   return next;

@@ -315,6 +315,25 @@ export function endlessRowFill(rowsPushed: number): number {
   return Math.min(0.95, 0.6 + rowsPushed * 0.03);
 }
 
+/** 无尽第几行起加第 4 种、第 5 种颜色 */
+export const ENDLESS_COLOR_STEPS = [4, 10] as const;
+
+/**
+ * 这一刻的无尽调色板:开局 3 色，压到第 4 行加第 4 色，第 10 行加第 5 色。
+ *
+ * 原来无尽从第一颗泡泡起就是**满配 5 色**——比战役第 1 主题还密的配色，
+ * 一进门就得在 5 种颜色里找同色，而这时候玩家可能连瞄准都还没摸熟。
+ * 密度那条曲线（`endlessRowFill`）只让墙越来越挤，颜色数从头到尾一个样，
+ * 所以「难」全压在开头。这里把颜色也做成一条曲线：**开头松一点，后段和原来一样**。
+ *
+ * 只截取传进来的颜色表前几种，不新造颜色；表本身短于三种就原样返回。
+ */
+export function endlessPalette(rowsPushed: number, colors: readonly string[]): string[] {
+  const n = Math.max(0, Math.round(rowsPushed) || 0);
+  const want = 3 + ENDLESS_COLOR_STEPS.filter((step) => n >= step).length;
+  return colors.slice(0, Math.max(1, Math.min(colors.length, want)));
+}
+
 /** 生成下压进来的那一行(长度按翻转后的顶行算) */
 export function endlessRow(g: Grid, colors: readonly string[], rand: () => number, rowsPushed = 0): string {
   const len = rowLen(g.flip ^ 1, 0);

@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ENDLESS_MAX_PAIRS,
+  ENDLESS_PEAK_ROUND as MEMORY_PEAK,
   ENDLESS_ROTATE_FROM,
   ENDLESS_SWAP_FROM,
   endlessDifficulty as memoryDifficulty,
@@ -30,8 +31,9 @@ import {
 } from "../snake-snack/levels";
 import { ENDLESS_PUSH_EVERY, endlessShouldPush } from "../bubble-aim/aim12";
 
-/** memory-cards 的难度分第几轮到顶:组数第 8 轮封顶,两样机关分别到第 32 / 34 轮 */
-const MEMORY_PEAK = 34;
+// memory-cards 的到顶轮次原来在这儿硬写成 34（组数第 8 轮封顶、两样机关到第 32 / 34 轮）。
+// 第 3 轮（L3-02）给它接上了第三样机关，到顶挪到第 42 轮，同时把这个数导出成常量——
+// 五款到这儿全部用各自导出的 `ENDLESS_PEAK_ROUND`，不再有一个写死在测试里的数。
 
 interface Curve {
   game: string;

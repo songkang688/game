@@ -514,6 +514,24 @@ export function endlessCols(pairs: number): number {
 export const ENDLESS_ROTATE_FROM = 16;
 /** 从第几轮起单张牌开始自己挪窝 */
 export const ENDLESS_SWAP_FROM = 10;
+/** 从第几轮起混进没有同伴的独苗卡 */
+export const ENDLESS_DECOY_FROM = 30;
+/** 独苗卡最多几张:5 列摆 23 张是 5 行,360px 上每张还有 64px,再多就该滚屏了 */
+export const ENDLESS_MAX_DECOYS = 3;
+
+/**
+ * 第 round 轮混几张独苗卡。
+ *
+ * 组数第 8 轮封顶、转牌阵第 32 轮到底、挪窝第 34 轮到底——三样都到顶之后,
+ * 第 35 轮和第 999 轮就是同一关换个配色。独苗卡是第 9 章「幻影干扰卡」验证过的老机关,
+ * 是这一款手上最后一样还没用完的余量:它只多一张牌,不占新的一行以上,
+ * 却把「记住位置」变成「记住位置 + 认出那张假的」。每 6 轮多一张,封顶 3 张。
+ */
+export function endlessDecoys(round: number): number {
+  const n = Math.max(1, Math.round(round) || 1);
+  if (n < ENDLESS_DECOY_FROM) return 0;
+  return Math.min(ENDLESS_MAX_DECOYS, 1 + Math.floor((n - ENDLESS_DECOY_FROM) / 6));
+}
 
 /**
  * 牌数封顶之后接着上的两样「不加牌」的机关。
@@ -542,13 +560,21 @@ export function endlessDifficulty(round: number): number {
   const { rotateEvery, swapEvery } = endlessTwist(round);
   const swapPart = swapEvery > 0 ? 1 + (14000 - swapEvery) / 6000 : 0;
   const rotatePart = rotateEvery > 0 ? 1 + (9 - rotateEvery) / 4 : 0;
-  return endlessPairs(round) * 10 + swapPart + rotatePart;
+  return endlessPairs(round) * 10 + swapPart + rotatePart + endlessDecoys(round) * 1.5;
 }
+
+/**
+ * 难度分到顶的那一轮；再往后只换主题配色。
+ * 组数第 8 轮、转牌阵第 32 轮、挪窝第 34 轮、独苗卡第 42 轮各自到顶。
+ * 和另外三款的 `ENDLESS_PEAK_ROUND` 是同一个口径。
+ */
+export const ENDLESS_PEAK_ROUND = ENDLESS_DECOY_FROM + (ENDLESS_MAX_DECOYS - 1) * 6;
 
 /** 无尽这一轮的关卡配置（复用同一套发牌与判定） */
 export function endlessLevel(round: number, packs: number): MemoryLevel {
   const pairs = endlessPairs(round);
   const { rotateEvery, swapEvery } = endlessTwist(round);
+  const decoys = endlessDecoys(round);
   return {
     pairs,
     cols: endlessCols(pairs),
@@ -561,6 +587,7 @@ export function endlessLevel(round: number, packs: number): MemoryLevel {
     theme: endlessTheme(round, packs),
     ...(rotateEvery > 0 ? { rotateEvery } : {}),
     ...(swapEvery > 0 ? { swapEvery } : {}),
+    ...(decoys > 0 ? { decoys } : {}),
   };
 }
 

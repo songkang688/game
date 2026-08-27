@@ -7,7 +7,9 @@ import { THEME_PACKS } from "./art";
 import { type MemoryLevel } from "./levels";
 import {
   CARD_MIN_W,
+  ENDLESS_DECOY_FROM,
   ENDLESS_MAX_COLS,
+  ENDLESS_MAX_DECOYS,
   ENDLESS_MAX_PAIRS,
   ENDLESS_ROTATE_FROM,
   ENDLESS_SWAP_FROM,
@@ -77,13 +79,24 @@ describe("档C R1 学习优化 · L1-03 无尽封顶之后接着变难", () => {
     expect(both.rotateEvery).toBeGreaterThan(0);
   });
 
-  it("机关只加难度不加牌:任何一轮都还是 ≤10 组 20 张、≤5 列", () => {
+  // 第 3 轮补记(L3-02):这一条原来写的是「任何一轮都不加牌」。
+  // 收官时把无尽从第 34 轮延到第 42 轮，接上的那样机关是独苗卡，它**会**多一两张牌——
+  // 上限 3 张，5 列 23 张仍然是 5 行、360px 上每张 64px，所以判定改成
+  // 「第 30 轮之前一张都不多」+「往后最多多 3 张，行数列数都不越界」，
+  // 原来那句话的用意（前段手感不许被机关拱大）一个字没松。
+  it("机关只加难度不加牌:第 30 轮之前还是 ≤10 组 20 张、≤5 列", () => {
     for (let r = 1; r <= 200; r++) {
       const cfg = endlessLevel(r, THEME_PACKS.length);
       expect(cfg.pairs).toBeLessThanOrEqual(ENDLESS_MAX_PAIRS);
-      expect(deckSize(cfg), `第 ${r} 轮的牌数`).toBeLessThanOrEqual(ENDLESS_MAX_PAIRS * 2);
       expect(cfg.cols).toBeLessThanOrEqual(ENDLESS_MAX_COLS);
-      expect(cfg.decoys ?? 0, `第 ${r} 轮不该混独苗卡`).toBe(0);
+      if (r < ENDLESS_DECOY_FROM) {
+        expect(deckSize(cfg), `第 ${r} 轮的牌数`).toBeLessThanOrEqual(ENDLESS_MAX_PAIRS * 2);
+        expect(cfg.decoys ?? 0, `第 ${r} 轮不该混独苗卡`).toBe(0);
+      } else {
+        expect(deckSize(cfg), `第 ${r} 轮的牌数`).toBeLessThanOrEqual(
+          ENDLESS_MAX_PAIRS * 2 + ENDLESS_MAX_DECOYS
+        );
+      }
       // 三次机会由外面统管,单轮不许先判负
       expect(cfg.maxMiss).toBeGreaterThan(3);
       expect(cfg.timeLimit).toBe(0);

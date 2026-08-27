@@ -63,6 +63,7 @@ import {
   chainScore,
   detonate,
   endlessLine,
+  endlessPalette,
   endlessRow,
   endlessShouldPush,
   endlessStartRows,
@@ -94,7 +95,10 @@ interface GameApi {
 
 const FLY_SPEED = 820;
 const SAVE_KEY = "yiduo.bubble-aim.campaign.v2";
-/** 无尽墙用的调色板:五色够热闹,又不至于凑不齐三连 */
+/**
+ * 无尽墙用的调色板:五色够热闹,又不至于凑不齐三连。
+ * 实际每一行用几种由 `endlessPalette(rowsPushed, …)` 决定 —— 开局 3 色,压下来再逐步补满。
+ */
 const ENDLESS_COLORS = ["R", "Y", "G", "B", "P"];
 
 const COLOR_FILL: Record<string, [string, string]> = {
@@ -441,7 +445,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     rowsPushed = 0;
     chain = 0;
     floatTime = 0;
-    grid = parseLayout(endlessStartRows(ENDLESS_COLORS, Math.random));
+    grid = parseLayout(endlessStartRows(endlessPalette(0, ENDLESS_COLORS), Math.random));
     obstacles = {};
     dropQueue = [];
     dropEvery = 0;
@@ -661,7 +665,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   /** 无尽墙的一发结算:每 5 发压一行,泡泡顶到警戒线就收工 */
   function afterEndlessShot(): void {
     if (endlessShouldPush(shotsFired)) {
-      descend(grid, endlessRow(grid, ENDLESS_COLORS, Math.random, rowsPushed));
+      descend(grid, endlessRow(grid, endlessPalette(rowsPushed, ENDLESS_COLORS), Math.random, rowsPushed));
       rowsPushed++;
       api.play("jump");
       msgEl.textContent = "⬇️ 墙又压下来一行,顶住!";
@@ -670,7 +674,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       // 清空了就补一批新的,无尽不该停在空屏。
       // 长度必须按 grid.flip 起头:descend 要的是 rowLen(flip ^ 1, 0),
       // 而 flip 每压一行翻一次,给错了 parseRow 会抛异常(C2-02)
-      for (const line of endlessStartRows(ENDLESS_COLORS, Math.random, 2, grid.flip ^ 1)) {
+      const palette = endlessPalette(rowsPushed, ENDLESS_COLORS);
+      for (const line of endlessStartRows(palette, Math.random, 2, grid.flip ^ 1)) {
         descend(grid, line);
       }
       msgEl.textContent = "清空啦!新的一波泡泡来喽~";
