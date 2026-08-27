@@ -93,6 +93,7 @@ import { shade, withAlpha } from "../../art/kit/palette";
 import { bubbleFilm, bubbleGloss, sheenAngle } from "../../art/kit/bubbleSkin";
 import {
   BRO_KITS,
+  CANDY_KINDS,
   PB_BUBBLE_HOLD,
   PB_COLORS,
   PB_WARP_A,
@@ -100,6 +101,7 @@ import {
   broBody,
   cloudScroll,
   cloudTint,
+  drawCandy,
   highFiveFrame,
   mouthState,
   paintBro,
@@ -153,8 +155,6 @@ const GOO = {
   hopper: { body: "#FFD36E", dark: "#E0AE3C", face: "#7A5410", label: "蹦蹦怪" },
   chaser: { body: "#FF9A8B", dark: "#DE6E5E", face: "#7C3225", label: "追追怪" },
 };
-
-const CANDY_ART = ["🍬", "🍭", "🧁", "🍡"];
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -1278,10 +1278,12 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     // 上升气流:脚底下那条一直往上追的气流线
     drawClimbLine(g);
 
+    // 修复员 S6:糖果从 17px 裸 emoji 换成自绘四型(圆糖 / 棒棒糖 / 纸杯 / 团子),
+    // 轮换下标与坐标不动,纸角 / 木棍 / 竹签把糖果剪影与泡泡拉开
     for (let i = 0; i < world.candies.length; i++) {
       const c = world.candies[i];
       if (c.taken) continue;
-      emojiAt(g, CANDY_ART[i % CANDY_ART.length], c.x, c.y, 17);
+      drawCandy(g, CANDY_KINDS[i % CANDY_KINDS.length], c.x, c.y);
     }
 
     for (const m of world.monsters) {

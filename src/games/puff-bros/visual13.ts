@@ -698,3 +698,141 @@ export function paintCloud(
 export function cloudTint(skyTone: string, layer: 0 | 1): string {
   return withAlpha(shade(skyTone, layer === 0 ? -10 : -18), layer === 0 ? 0.5 : 0.42);
 }
+
+// ---------------------------------------------------------------------------
+// 糖果四型(修复员 S6:17px 裸 emoji → 自绘,收集物与泡泡剪影拉开)
+// ---------------------------------------------------------------------------
+
+export type CandyKind = "wrap" | "lolly" | "cup" | "dango";
+
+/** 糖果轮换序(替掉原 CANDY_ART emoji 数组,index 按下标取型) */
+export const CANDY_KINDS: readonly CandyKind[] = ["wrap", "lolly", "cup", "dango"];
+
+/** 糖果配色(粉彩,收集物主色互不重复;木签 / 奶油单列) */
+export const PB_CANDY = {
+  wrap: "#F78FB8",
+  lolly: "#F4859F",
+  cup: "#F2A8C8",
+  dango: ["#B4DCA4", "#FFF6EC", "#F7B3C7"] as readonly string[],
+  stick: "#C99B6A",
+  cream: "#FFF3E2",
+} as const;
+
+/** 左上白高光点(bubbleSkin 同源:-0.3r 方向) */
+function candyGloss(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  g.fillStyle = "rgba(255,255,255,.85)";
+  g.beginPath();
+  g.arc(x - r * 0.3, y - r * 0.3, Math.max(1, r * 0.18), 0, Math.PI * 2);
+  g.fill();
+}
+
+/**
+ * 收集物糖果:圆糖(椭圆 2 停 + 左右三角纸角)/ 棒棒糖(圆盘白螺旋 + 木棍)/
+ * 纸杯(梯形裙线 + 奶油双弧 + 顶珠)/ 团子(三丸纵串 + 竹签)。
+ * 统一左上白高光 + 1.5px 深 20% 描边;纸角 / 木棍 / 竹签就是与泡泡
+ * (正圆 + 月牙光)拉开剪影的防混淆件。纯静态,reduced 无需分支。
+ */
+export function drawCandy(g: CanvasRenderingContext2D, kind: CandyKind, x: number, y: number): void {
+  g.save();
+  if (kind === "wrap") {
+    // 纸角先画(压在糖体后)
+    g.fillStyle = shade(PB_CANDY.wrap, -12);
+    for (const side of [-1, 1] as const) {
+      g.beginPath();
+      g.moveTo(x + side * 6.4, y);
+      g.lineTo(x + side * 11, y - 4.6);
+      g.lineTo(x + side * 11, y + 4.6);
+      g.closePath();
+      g.fill();
+    }
+    strokeOutline(g, PB_CANDY.wrap, 1.5);
+    g.fillStyle = ballGradient(g, x, y, 8, PB_CANDY.wrap, { light: 20, dark: -12 });
+    g.beginPath();
+    g.ellipse(x, y, 8, 6.5, 0, 0, Math.PI * 2);
+    g.fill();
+    strokeOutline(g, PB_CANDY.wrap, 1.5);
+    candyGloss(g, x, y - 1, 6.5);
+  } else if (kind === "lolly") {
+    // 木棍
+    g.strokeStyle = PB_CANDY.stick;
+    g.lineWidth = 3;
+    g.lineCap = "round";
+    g.beginPath();
+    g.moveTo(x, y + 3);
+    g.lineTo(x, y + 11);
+    g.stroke();
+    g.lineCap = "butt";
+    // 圆盘 + 白螺旋两圈
+    g.fillStyle = ballGradient(g, x, y - 2, 7, PB_CANDY.lolly, { light: 18, dark: -12 });
+    g.beginPath();
+    g.arc(x, y - 2, 7, 0, Math.PI * 2);
+    g.fill();
+    strokeOutline(g, PB_CANDY.lolly, 1.5);
+    g.strokeStyle = "rgba(255,255,255,.9)";
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.arc(x, y - 2, 4.4, -Math.PI * 0.5, Math.PI * 0.9);
+    g.stroke();
+    g.beginPath();
+    g.arc(x, y - 2, 2.1, Math.PI * 0.6, Math.PI * 1.9);
+    g.stroke();
+    candyGloss(g, x, y - 2, 7);
+  } else if (kind === "cup") {
+    // 梯形纸杯 + 三道裙线
+    g.fillStyle = shade(PB_CANDY.cup, 6);
+    g.beginPath();
+    g.moveTo(x - 7, y - 1);
+    g.lineTo(x + 7, y - 1);
+    g.lineTo(x + 4.6, y + 8);
+    g.lineTo(x - 4.6, y + 8);
+    g.closePath();
+    g.fill();
+    strokeOutline(g, PB_CANDY.cup, 1.5);
+    g.strokeStyle = shade(PB_CANDY.cup, -14);
+    g.lineWidth = 1;
+    for (const k of [-1, 0, 1]) {
+      g.beginPath();
+      g.moveTo(x + k * 3.4, y - 0.4);
+      g.lineTo(x + k * 2.4, y + 7.4);
+      g.stroke();
+    }
+    // 奶油双弧 + 顶珠
+    g.fillStyle = PB_CANDY.cream;
+    g.beginPath();
+    g.ellipse(x, y - 2.6, 7.4, 3.6, 0, Math.PI, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(x, y - 5.2, 4.8, 3, 0, Math.PI, Math.PI * 2);
+    g.fill();
+    strokeOutline(g, PB_CANDY.cream, 1.5);
+    g.fillStyle = PB_CANDY.lolly;
+    g.beginPath();
+    g.arc(x, y - 8.4, 2, 0, Math.PI * 2);
+    g.fill();
+    strokeOutline(g, PB_CANDY.lolly, 1.5);
+    candyGloss(g, x - 2, y - 4.6, 4);
+  } else {
+    // 竹签先画(压在丸串后)
+    g.strokeStyle = PB_CANDY.stick;
+    g.lineWidth = 1.6;
+    g.lineCap = "round";
+    g.beginPath();
+    g.moveTo(x, y - 10.5);
+    g.lineTo(x, y + 10.5);
+    g.stroke();
+    g.lineCap = "butt";
+    // 三丸纵串:绿 / 白 / 粉
+    const balls = PB_CANDY.dango;
+    for (let i = 0; i < 3; i++) {
+      const by = y + (i - 1) * 6.4;
+      const color = balls[i] ?? balls[0];
+      g.fillStyle = ballGradient(g, x, by, 4.2, color, { light: 14, dark: -12 });
+      g.beginPath();
+      g.arc(x, by, 4.2, 0, Math.PI * 2);
+      g.fill();
+      strokeOutline(g, color, 1.5);
+    }
+    candyGloss(g, x, y - 6.4, 4.2);
+  }
+  g.restore();
+}
