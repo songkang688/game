@@ -6,7 +6,7 @@
 ## 一次发版的完整步骤
 
 1. **对齐版本号。** `package.json` 里的 `version` 必须和要打的 tag 去掉 `v` 之后完全一致
-   ——比如 tag `v1.1.0` 对应 `"version": "1.1.0"`。
+   ——比如 tag `v1.2.0` 对应 `"version": "1.2.0"`。
    工作流第一步就会校验这一条,对不上直接失败,不会出包(否则文件名里的版本会和 Release 对不上)。
 
 2. **确认要发的提交已经在远端分支上**,本地跑一遍 `npm test && npm run build` 心里有底。
@@ -14,15 +14,16 @@
 3. **打 annotated tag 并推上去:**
 
    ```bash
-   git fetch origin game-1.1
-   git checkout game-1.1 && git pull origin game-1.1
-   git tag -a v1.1.0 -m "一朵一星 1.1.0"
-   git push origin v1.1.0
+   git fetch origin game-1.2
+   git checkout game-1.2 && git pull origin game-1.2
+   git tag -a v1.2.0 -m "一朵一星 1.2.0"
+   git push origin v1.2.0
    ```
 
+   > 当前发版分支是 **`game-1.2`**(1.1 时是 `game-1.1`,已归档)。
    > tag 一律用 `-a`(annotated,带作者和说明),不要用轻量 tag。
    > **不要 force 改已经推出去的 tag**:别人可能已经下载过那个版本的包了。
-   > 发错了就把版本号往上加一位,重新发一个(比如 `v1.1.1`)。
+   > 发错了就把版本号往上加一位,重新发一个(比如 `v1.2.1`)。
 
 4. **盯 Actions。** 仓库 → Actions → `Release` 工作流,或者:
 
@@ -32,13 +33,13 @@
    ```
 
 5. 全绿之后,Release 页会出现在
-   `https://github.com/songkang688/game/releases/tag/v1.1.0`,资产就是各平台安装包。
+   `https://github.com/songkang688/game/releases/tag/v1.2.0`,资产就是各平台安装包。
 
 ## 工作流里都有什么
 
 | 工作流 | 什么时候跑 | 干什么 |
 | ---- | ---- | ---- |
-| `.github/workflows/ci.yml` | push 到 `main` / `game-1.1`,以及所有 PR | Node 22 上 `npm ci && npm test && npm run build` |
+| `.github/workflows/ci.yml` | push 到 `main` / `game-1.1` / `game-1.2`,以及所有 PR | Node 22 上 `npm ci && npm test && npm run build` |
 | `.github/workflows/release.yml` | push `v*` tag | 校验版本号 → 跑测试 → 三个平台出包 → 建 Release 挂资产 |
 
 `release.yml` 的 job:
@@ -67,7 +68,7 @@
 ## 某个平台的包没打出来怎么补(不用重新打 tag)
 
 `release.yml` 带了一个手动入口:仓库 → Actions → `Release` → **Run workflow**,
-在 `tag` 里填已经存在的 tag(比如 `v1.1.0`)。它会 **用那个 tag 上的代码** 重新走一遍打包,
+在 `tag` 里填已经存在的 tag(比如 `v1.2.0`)。它会 **用那个 tag 上的代码** 重新走一遍打包,
 把产物补挂到那个 tag 已有的 Release 上(工作流本身用的是你所在分支的最新版本,
 所以修好的打包脚本能直接生效,不用为了修 CI 再发一个版本号)。
 
