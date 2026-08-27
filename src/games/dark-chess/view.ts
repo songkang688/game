@@ -31,10 +31,11 @@ const QUIET_HOURGLASS = svgUri(hourglassSVG("#5b46a8"));
 const CAP_HOURGLASS = svgUri(hourglassSVG("#95651a"));
 
 export const CSS = `
-.dc-board{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;width:100%;max-width:520px;margin:0 auto;
+.dc-board{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;width:100%;max-width:520px;margin:0 auto;
   position:relative;padding:7px;border:6px solid #9a6a3a;border-radius:16px;
   background:linear-gradient(180deg,#f3e3c6,#e7d2ae);box-shadow:0 3px 0 #7c5227,inset 0 1px 0 #fff3dd;}
-.dc-cell{position:relative;aspect-ratio:1/1;min-height:44px;border:none;border-radius:10px;cursor:pointer;padding:0;
+/* 触区与列宽解耦：minmax(0,1fr)+min-width:0 让 8 列在 360/320 收得进容器，44px 触控高度不丢 */
+.dc-cell{position:relative;aspect-ratio:1/1;min-height:44px;min-width:0;border:none;border-radius:10px;cursor:pointer;padding:0;
   font-family:inherit;font-size:20px;font-weight:900;line-height:1;background:#EBD9BD;color:#7a5a34;
   box-shadow:0 2px 0 rgba(150,120,80,.35);transition:transform .16s ease,opacity .18s ease;}
 /* 石板格：斜向交替 2% 左右的明度差，8 列在眼里就不糊成一片 */
