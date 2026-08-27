@@ -212,6 +212,10 @@ export function installDom(width = 800, reduced = false): Dom {
     document: {
       head,
       body: root,
+      hidden: false,
+      // engine/audio 在模块顶层挂 pointerdown/visibilitychange;测试里不放真声音,空实现即可
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
       createElement: (tag: string) => new El(tag),
       // 和真 DOM 一样：已经从 head 里摘掉的节点就查不到了
       getElementById: (id: string) => {

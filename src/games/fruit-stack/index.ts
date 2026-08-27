@@ -500,6 +500,11 @@ function createBowl(host: HTMLElement, opts: BowlOptions): Bowl {
     g.lineTo(b.w - RIM, b.h - RIM);
     g.lineTo(b.w - RIM, 0);
     g.stroke();
+    // 座位色内衬(B 档 #9):盆口两侧内沿各一道 3px 色带(上 60% 高),
+    // 与座位条字色同源——双盆同款时余光也认得出哪盆是自己的;纯视觉,碰撞盒不变
+    g.fillStyle = opts.seat === 0 ? "#a8306a" : "#28568f";
+    g.fillRect(RIM, 0, 3, b.h * 0.6);
+    g.fillRect(b.w - RIM - 3, 0, 3, b.h * 0.6);
   }
 
   function render(): void {
