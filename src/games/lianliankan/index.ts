@@ -55,46 +55,107 @@ import {
 } from "./logic";
 
 const CSS = `
-.llk-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF2E4, #FDEBF3); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
-.llk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: nowrap; }
-.llk-badge { background: #fff; border-radius: 14px; padding: 5px 9px; font-weight: 700; color: #D98548; box-shadow: 0 2px 6px rgba(220,160,100,.25); font-size: 14px; white-space: nowrap; }
-.llk-badge.llk-hurry { color: #E8590C; animation: llkBlink 1s infinite; }
+.llk-wrap {
+  --llk-desk: #E8D5BC;
+  --llk-tile-top: #FFFDF6;
+  --llk-tile-top2: #F4EDE0;
+  --llk-tile-side: #D8CBB4;
+  --llk-select: #F4859F;
+  --llk-trail: #FFD678;
+  --llk-hint: rgba(255,214,120,.28);
+  --llk-hurry: #F0955A;
+  --llk-ms-hover: 120ms;
+  --llk-ms-trail: 240ms;
+  --llk-ms-clear: 200ms;
+  --llk-ms-hint: 2s;
+  --llk-ms-shuffle: 180ms;
+  --llk-ms-heart: 900ms;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:
+    repeating-linear-gradient(93deg, rgba(150,104,58,.05) 0 2px, rgba(150,104,58,0) 2px 9px),
+    repeating-linear-gradient(88deg, rgba(120,84,48,.045) 0 13px, rgba(120,84,48,0) 13px 31px),
+    linear-gradient(180deg, #F2E2C8, var(--llk-desk));
+  border-radius: 16px; padding: 12px; user-select: none; position: relative; z-index: 0; overflow: hidden;
+}
+/* 茶室四角的茶点小装饰:俯视茶杯(环 + 心)与茶点(小圆点),低饱和不抢牌面 */
+.llk-wrap::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at calc(100% - 22px) 22px, rgba(196,150,96,.22) 0 7px, rgba(196,150,96,0) 8px),
+    radial-gradient(circle at calc(100% - 22px) 22px, rgba(146,106,66,0) 0 11px, rgba(146,106,66,.20) 11px 14px, rgba(146,106,66,0) 15px),
+    radial-gradient(circle at 20px calc(100% - 20px), rgba(196,150,96,.18) 0 6px, rgba(196,150,96,0) 7px),
+    radial-gradient(circle at 20px calc(100% - 20px), rgba(146,106,66,0) 0 9px, rgba(146,106,66,.16) 9px 12px, rgba(146,106,66,0) 13px),
+    radial-gradient(circle at 14px 18px, rgba(146,106,66,.12) 0 4px, rgba(146,106,66,0) 5px),
+    radial-gradient(circle at 27px 12px, rgba(146,106,66,.10) 0 3.5px, rgba(146,106,66,0) 4.5px),
+    radial-gradient(circle at calc(100% - 16px) calc(100% - 14px), rgba(146,106,66,.12) 0 4px, rgba(146,106,66,0) 5px),
+    radial-gradient(circle at calc(100% - 29px) calc(100% - 20px), rgba(146,106,66,.10) 0 3.5px, rgba(146,106,66,0) 4.5px);
+}
+.llk-top { display: flex; justify-content: center; align-items: stretch; margin-bottom: 8px; gap: 5px; flex-wrap: wrap; }
+.llk-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(180deg, #FFFEFA, #FFF3E2); border-radius: 12px; padding: 5px 7px; font-weight: 700; color: #8A6238; box-shadow: 0 2px 0 #E2CFB2, 0 3px 7px rgba(160,120,70,.16); font-size: 14px; white-space: nowrap; }
+.llk-glyph { width: 14px; height: 14px; flex: none; }
+.llk-bico { display: inline-flex; width: 14px; height: 14px; flex: none; }
+.llk-bico .llk-glyph { width: 100%; height: 100%; }
+.llk-badge.llk-hurry { background: linear-gradient(180deg, #FFAF7E, var(--llk-hurry)); color: #FFF9F2; box-shadow: 0 2px 0 #D07A42, 0 3px 9px rgba(240,149,90,.4); animation: llkHeart var(--llk-ms-heart) ease-in-out infinite; }
 .llk-badge.llk-rule { color: #7A5AA8; background: #F3ECFF; }
-@keyframes llkBlink { 50% { opacity: .5; } }
+@keyframes llkHeart { 50% { transform: scale(1.03); } }
 .llk-tools { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
-.llk-tool { border: none; border-radius: 14px; min-height: 44px; min-width: 118px; padding: 6px 14px; font-weight: 700; background: #FFD9A8; color: #8A5A20; cursor: pointer; box-shadow: 0 3px 0 #EFBC82; font-size: 15px; font-family: inherit; }
-.llk-tool.llk-hintbtn { background: #D9ECFF; color: #2F6DA8; box-shadow: 0 3px 0 #A8CDEF; }
-.llk-tool:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFBC82; }
+.llk-tool { display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: none; border-radius: 12px; min-height: 44px; min-width: 74px; padding: 4px 8px; font-weight: 700; background: linear-gradient(180deg, #FFE3B8, #FFD199); color: #8A5A20; cursor: pointer; box-shadow: 0 3px 0 #E5B276, 0 4px 8px rgba(180,130,70,.2); font-size: 14px; font-family: inherit; }
+.llk-tool.llk-hintbtn { background: linear-gradient(180deg, #E2F1FF, #CBE4FB); color: #2F6DA8; box-shadow: 0 3px 0 #9FC6E8, 0 4px 8px rgba(90,140,190,.2); }
+.llk-tool:active { transform: translateY(1px); box-shadow: 0 2px 0 #E5B276; }
+.llk-tool.llk-hintbtn:active { box-shadow: 0 2px 0 #9FC6E8; }
 .llk-tool:disabled { opacity: .5; }
 .llk-boardbox { position: relative; }
 .llk-board { display: grid; gap: 3px; transition: transform .3s ease; }
 .llk-board.llk-spin { transform: rotate(90deg) scale(.86); }
-.llk-cell { aspect-ratio: 1; border: none; border-radius: 10px; font-size: clamp(13px, 4vw, 24px); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; box-shadow: 0 2px 4px rgba(200,140,90,.18); transition: transform .12s, opacity .2s, box-shadow .12s; }
+/* 麻将砖三层:顶面米白渐变(圆角 10px)+ 底部 3px 暖灰立面 + 1px 软影 */
+.llk-cell { aspect-ratio: 1; border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; position: relative; background-color: var(--llk-tile-top); background-image: linear-gradient(160deg, var(--llk-tile-top), rgba(255,253,246,.24) 46%, rgba(216,203,180,.34) 100%); box-shadow: 0 3px 0 var(--llk-tile-side), 0 4px 5px rgba(140,105,66,.2); transition: transform var(--llk-ms-hover) ease-out, box-shadow var(--llk-ms-hover) ease-out, opacity .2s; }
+/* 图标绘制区 = 牌面 68% */
+.llk-cell > span { width: 68%; height: 68%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.llk-cell .llk-face { width: 100%; height: 100%; display: block; filter: drop-shadow(0 1px 1px rgba(120,90,50,.22)); }
 .llk-cell.llk-edge { aspect-ratio: auto; background: transparent !important; box-shadow: none; pointer-events: none; }
 .llk-cell.llk-gone { background: transparent !important; box-shadow: none; cursor: default; }
-.llk-cell.llk-sel { box-shadow: 0 0 0 3px #FF9E5E; transform: scale(1.08); }
-.llk-cell.llk-hint { box-shadow: 0 0 0 3px #4C9BE8; animation: llkHint .6s ease-in-out 2; }
-.llk-cell.llk-mask { background: #E7E0F5 !important; color: #8B7BB8; }
-.llk-cell.llk-linking { box-shadow: 0 0 0 3px #FFB347, 0 0 12px 3px rgba(255,160,70,.6); }
-.llk-cell.llk-clear { animation: llkClear .18s ease forwards; }
+/* 已消除的格位留一道极浅凹槽痕迹:伪元素画的,不新增节点、不挡任何点击 */
+.llk-cell.llk-gone:not(.llk-edge)::after { content: ""; position: absolute; inset: 8%; border-radius: 9px; background: rgba(120,90,54,.05); box-shadow: inset 0 1.5px 3px rgba(120,90,54,.1), inset 0 -1px 1.5px rgba(255,253,246,.5); pointer-events: none; }
+@media (hover: hover) and (pointer: fine) {
+  .llk-cell:not(.llk-gone):not(.llk-edge):hover { transform: translateY(-2px); box-shadow: 0 5px 0 var(--llk-tile-side), 0 8px 10px rgba(140,105,66,.24); }
+  .llk-cell.llk-shape3:not(.llk-gone):hover { transform: translateY(-2px) rotate(45deg); }
+}
+.llk-cell.llk-sel { transform: translateY(-4px); box-shadow: 0 0 0 3px var(--llk-select), 0 6px 0 var(--llk-tile-side), 0 9px 14px rgba(244,133,159,.42); }
+.llk-cell.llk-hint { box-shadow: 0 0 0 3px var(--llk-hint), 0 0 16px 7px var(--llk-hint), 0 3px 0 var(--llk-tile-side); animation: llkHintBreath calc(var(--llk-ms-hint) / 2) ease-in-out 2; }
+.llk-cell.llk-mask { background-color: #E7E0F5 !important; }
+.llk-cell.llk-linking { box-shadow: 0 0 0 3px var(--llk-trail), 0 0 14px 4px rgba(255,214,120,.65), 0 3px 0 var(--llk-tile-side); }
+.llk-cell.llk-clear { animation: llkClear var(--llk-ms-clear) ease-in forwards; }
 .llk-cell.llk-shake { animation: llkShake ${SHAKE_MS}ms ease; }
-.llk-cell:active { transform: scale(.92); }
+.llk-cell.llk-shuf { animation: llkShufHop var(--llk-ms-shuffle) ease-in-out both; }
+.llk-cell:active { transform: scale(.94); }
 /* 同色系靠轮廓区分，色觉不敏感也认得出 */
 .llk-shape0 { border-radius: 50%; }
 .llk-shape1 { border-radius: 6px; }
 .llk-shape2 { border-radius: 50% 12% 50% 12%; }
 .llk-shape3 { border-radius: 26%; transform: rotate(45deg); }
-.llk-shape3 > span { display: block; transform: rotate(-45deg); }
+.llk-shape3 > span { transform: rotate(-45deg); }
 .llk-shape4 { border-radius: 46% 46% 40% 40%; }
-.llk-cell.llk-shape3.llk-sel { transform: rotate(45deg) scale(1.08); }
-@keyframes llkClear { to { transform: scale(.2); opacity: 0; } }
+.llk-cell.llk-shape3.llk-sel { transform: translateY(-4px) rotate(45deg); }
+/* 360px 兜底:牌面量出来不足 34px 时省略侧沿,只留顶面 + 描边 */
+.llk-board.llk-slim .llk-cell { box-shadow: 0 0 0 1px var(--llk-tile-side); }
+.llk-board.llk-slim .llk-cell.llk-gone, .llk-board.llk-slim .llk-cell.llk-edge { box-shadow: none; }
+.llk-board.llk-slim .llk-cell.llk-sel { box-shadow: 0 0 0 3px var(--llk-select); }
+.llk-board.llk-slim .llk-cell.llk-linking { box-shadow: 0 0 0 3px var(--llk-trail); }
+.llk-board.llk-slim .llk-cell.llk-hint { box-shadow: 0 0 0 3px var(--llk-hint), 0 0 12px 5px var(--llk-hint); }
+@keyframes llkClear { 45% { transform: perspective(320px) rotateY(78deg) scale(.86); opacity: .95; } 100% { transform: perspective(320px) rotateY(96deg) scale(.18); opacity: 0; } }
 @keyframes llkShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-@keyframes llkHint { 50% { opacity: .55; } }
-.llk-line { position: absolute; inset: 0; pointer-events: none; }
-.llk-msg { text-align: center; min-height: 22px; color: #D98548; font-weight: 700; margin-top: 8px; font-size: 15px; line-height: 1.45; }
-.llk-modebar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+@keyframes llkHintBreath { 50% { box-shadow: 0 0 0 5px var(--llk-hint), 0 0 26px 13px var(--llk-hint), 0 3px 0 var(--llk-tile-side); } }
+@keyframes llkShufHop { 45% { transform: translateY(-7px) rotate(2deg) scale(.96); } }
+@keyframes llkTrailFade { to { opacity: 0; } }
+/* 流星覆盖层:独立 SVG 挂在盘面容器最后,pointer-events: none 绝不挡点击 */
+.llk-fx { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.llk-line { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: block; animation: llkTrailFade 200ms ease-out var(--llk-ms-trail) both; }
+.llk-line.llk-line-calm { animation: none; }
+.llk-line .llk-dust { filter: drop-shadow(0 0 3px rgba(255,214,120,.8)); }
+.llk-msg { text-align: center; min-height: 22px; color: #8A5A30; font-weight: 700; margin-top: 8px; font-size: 15px; line-height: 1.45; }
+.llk-modebar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
 .llk-open { border: none; border-radius: 14px; min-height: 44px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFE0B8; color: #A05C1E; cursor: pointer; box-shadow: 0 3px 0 #EFC291; }
-.llk-open:active { transform: translateY(2px); box-shadow: 0 1px 0 #EFC291; }
+.llk-open:active { transform: translateY(1px); box-shadow: 0 2px 0 #EFC291; }
 .llk-back { border: none; border-radius: 14px; min-height: 44px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }
 .llk-over { text-align: center; padding: 14px 8px; }
 .llk-over h3 { margin: 0 0 6px; font-size: 19px; color: #A05C1E; }
@@ -102,8 +163,15 @@ const CSS = `
 .llk-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) {
   .llk-board, .llk-cell { transition: none; }
-  .llk-badge.llk-hurry, .llk-cell.llk-hint { animation: none; }
+  /* hurry 只变色不缩放;洗牌瞬换;流星不滑动;翻转消散改淡出 */
+  .llk-badge.llk-hurry, .llk-cell.llk-shuf, .llk-line { animation: none; }
+  .llk-cell.llk-hint { animation: none; }
+  .llk-cell.llk-clear { animation: llkFadeOut 120ms ease forwards; }
+  .llk-cell:hover, .llk-cell.llk-sel { transform: none; }
+  .llk-cell.llk-shape3:hover, .llk-cell.llk-shape3.llk-sel { transform: rotate(45deg); }
+  .llk-cell:not(.llk-gone):not(.llk-edge):hover { box-shadow: 0 0 0 2px var(--llk-select), 0 3px 0 var(--llk-tile-side); }
 }
+@keyframes llkFadeOut { to { opacity: 0; } }
 `;
 
 function el<T extends HTMLElement = HTMLElement>(tag: string, cls?: string, text?: string): T {

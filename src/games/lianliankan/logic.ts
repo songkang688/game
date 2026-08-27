@@ -22,12 +22,12 @@ export type Sfx = SoundName;
 // 一、连线状态机
 // ---------------------------------------------------------------------------
 
-/** 折线撑在屏幕上的时长（规格要求 180–260ms） */
-export const LINK_HOLD_MS = 220;
+/** 折线撑在屏幕上的时长（规格要求 180–260ms；1.3 起与流星光带同长 240ms） */
+export const LINK_HOLD_MS = 240;
 /** 关掉动效时也要走同一套状态机，只是折线只闪一帧 */
 export const LINK_HOLD_CALM_MS = 16;
-/** 两块一起缩小消失的时长 */
-export const CLEAR_MS = 180;
+/** 两块一起缩小消失的时长（1.3 起是翻转消散 200ms） */
+export const CLEAR_MS = 200;
 /** 连错时抖一下，不扣任何东西 */
 export const SHAKE_MS = 120;
 /** 收拢时每挪一格花多久（规格要求 60–80ms） */
