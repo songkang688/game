@@ -74,8 +74,8 @@
 - 构建时有一条 Rollup 提示 `[INEFFECTIVE_DYNAMIC_IMPORT] src/ui/parentAuth.ts …`，
   是 `game-1.2` 上就有的既有告警，不是本叉引入的，不影响产物。
 
-> **本轮没有发布到 npm，也没有建 GitHub Release。** 本分支只维护 PR
-> （base = `game-1.2`），出正式包要走下面的流程，由有写权限的维护者执行。
+> **正式发行只挂三个包**:Mac 通用 dmg、Windows 便携版、安卓 debug APK。
+> 打 annotated tag `v1.2.0-kk` 即可触发 CI 出包(见下面「正式发版」)。
 
 ## 三、怎么出包
 
@@ -101,32 +101,33 @@ npm run build                     # 先出 dist/,下面各端都基于它
 4. 部署注意：`vite.config.ts` 里 `base: "./"`，放子目录也能跑，不用改配置。
    更新版本后旧客户端会自动拉新（`registerType: "autoUpdate"`）。
 
-### 🪟 Windows
+### 🪟 Windows 便携版
 
 ```bash
 npm run dist:win        # 便携版 exe,Linux 上也能交叉打
-npm run dist:win:nsis   # 安装器 exe,在 Linux 上打需要 wine,建议直接在 Windows 上跑
-npm run dist:win:all    # scripts/dist-win.sh,两个一起出
 ```
 
-产物（`release/` 目录，已在 `.gitignore` 里）：
-
-| 命令 | 产物 |
-| --- | --- |
-| `npm run dist:win` | `release/yiduo-yixing-1.2.0-kk-win-portable.exe` |
-| `npm run dist:win:nsis` | `release/yiduo-yixing-1.2.0-kk-win-setup.exe` |
+产物: `release/yiduo-yixing-1.2.0-kk-win-portable.exe`（`release/` 已在 `.gitignore` 里）。
 
 安装 / 打开时 SmartScreen 会提示「不常见的应用」——没买代码签名证书，
 点「更多信息 → 仍要运行」即可。
 
-### 🐧 Linux / 🍎 macOS
+正式 Release **不再挂** NSIS 安装器。本地若还要打安装器: `npm run dist:win:nsis`。
 
-| 平台 | 命令 | 产物 |
-| --- | --- | --- |
-| Linux | `npm run dist` 或 `npm run dist:linux` | `release/yiduo-yixing-1.2.0-kk-linux-x86_64.AppImage`（`chmod +x` 后双击） |
-| macOS（必须在 Mac 上执行） | `npm run dist:mac` | `release/yiduo-yixing-1.2.0-kk-mac-<arch>.dmg` / `.zip`，x64 与 arm64 各一份 |
+### 🍎 macOS 安装包
+
+必须在 Mac 上执行(或走 GitHub Actions 的 macos-latest):
+
+```bash
+npm run dist:mac        # 一份 universal dmg,Intel 与 Apple 芯片都能装
+```
+
+产物: `release/yiduo-yixing-1.2.0-kk-mac.dmg`。
 
 mac 包无签名，第一次打开要 **右键图标 → 打开 → 再点一次「打开」**。
+不再打 zip,也不再按芯片拆两份 dmg。
+
+Linux AppImage 不再进正式 Release。本地若还要: `npm run dist:linux`。
 
 ### 🤖 安卓 APK
 
@@ -144,14 +145,13 @@ npm run android:apk     # 构建 → cap sync android → gradlew assembleDebug
 
 1. **tag 必须与 `package.json` 的 `version` 对得上**：本叉是 `1.2.0-kk`，
    所以 tag 是 `v1.2.0-kk`。`release.yml` 第一步就校验，对不上直接失败、不出包。
-2. 打 tag 之前先确认 PR 已经合入目标分支；本分支自身**不合进 `game-1.2`**，
-   要发版由维护者在合并后的分支上打。
+2. 本叉 **不合进 `game-1.2`**。tag 打在 `1.2-kk` 这条线上即可；
+   工作流设了 `make_latest: false`，不会把一朵一星主线的 Latest 徽章抢走。
 
 ```bash
-# 维护者操作,本窗口不执行
-git tag -a v1.2.0-kk -m "鸭梨康康 1.2-kk"
+git tag -a v1.2.0-kk -m "鸭梨康康 1.2.0-kk"
 git push origin v1.2.0-kk
 ```
 
-CI 会跑测试 → Linux/Windows/macOS/安卓四路出包 → 建 Release 挂资产。
+CI 会跑测试 → Mac dmg / Windows 便携版 / 安卓 APK 三路出包 → 建 Release 挂资产。
 **不要 force push 已经推出去的 tag**，发错就把版本号往上加一位重发。
