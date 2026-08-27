@@ -301,6 +301,27 @@ describe("1.3 双英雄小画家", () => {
     const shielded = rec((c) => drawHero(c, hero(0, { shields: 2 }), 1, false));
     expect(shielded.filter((o) => o === "fill@rgba(255,255,255,.9)").length).toBe(2);
   });
+
+  it("r2 W4R1-02:剪影双通道——P2 尖顶帽高出 P1 贝雷进剪影,围裙 P1 圆摆 / P2 锯齿摆", () => {
+    const HERO_R = 11;
+    const a = rec((c) => drawHero(c, hero(0), 1, false));
+    const b = rec((c) => drawHero(c, hero(1), 1, false));
+    // 取全部路径指令的终点 y(局部坐标,身体圆心为原点),看谁的帽子伸得高
+    const topY = (ops: string[]): number =>
+      Math.min(
+        ...ops
+          .filter((o) => /^(moveTo|lineTo|quad):/.test(o))
+          .map((o) => Number(o.slice(o.indexOf(":") + 1).split(",").pop())),
+      );
+    // P2 帽尖(含星揪揪)伸到 -1.4R 之上;P1 的路径点全都到不了——帽形本身可辨,不再只靠 2px 帽徽
+    expect(topY(b)).toBeLessThan(-HERO_R * 1.4);
+    expect(topY(a)).toBeGreaterThan(-HERO_R * 1.4);
+    // P1 围裙走 roundRect 圆摆;P2 围裙是锯齿下摆(lineTo 至少多 8 条),重叠区灰度纹理不同
+    const rr = (ops: string[]): number => ops.filter((o) => o.startsWith("roundRect:")).length;
+    const lt = (ops: string[]): number => ops.filter((o) => o.startsWith("lineTo:")).length;
+    expect(rr(a)).toBe(rr(b) + 1);
+    expect(lt(b) - lt(a)).toBeGreaterThanOrEqual(8);
+  });
 });
 
 /* ---------------- 三、家与场地 ---------------- */

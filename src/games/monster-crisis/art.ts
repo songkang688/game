@@ -198,14 +198,32 @@ export function drawHero(
   c.arc(0, 0, HERO_R, 0, TAU);
   c.fill();
   c.stroke();
-  // 画家围裙:下半身一块浅色兜兜,上面还蹭着两点颜料
+  // 画家围裙:下半身一块浅色兜兜,上面还蹭着两点颜料。
+  // r2 修复 W4R1-02:下摆形状差异化——P1 圆摆 / P2 锯齿摆,
+  // 重叠区的灰度纹理跟着不同,16px 灰度下多一条附件通道。
   c.save();
   c.beginPath();
   c.arc(0, 0, HERO_R - 1.1, 0, TAU);
   c.clip();
   c.fillStyle = skin.apron;
-  roundRect(c, -HERO_R * 0.74, HERO_R * 0.26, HERO_R * 1.48, HERO_R, HERO_R * 0.4);
-  c.fill();
+  if (skin.badge === "flower") {
+    roundRect(c, -HERO_R * 0.74, HERO_R * 0.26, HERO_R * 1.48, HERO_R, HERO_R * 0.4);
+    c.fill();
+  } else {
+    const hemL = -HERO_R * 0.74;
+    const hemW = HERO_R * 1.48;
+    const teeth = 4;
+    c.beginPath();
+    c.moveTo(hemL, HERO_R * 0.26);
+    c.lineTo(hemL + hemW, HERO_R * 0.26);
+    c.lineTo(hemL + hemW, HERO_R * 0.74);
+    for (let i = 0; i < teeth; i++) {
+      c.lineTo(hemL + hemW - (i + 0.5) * (hemW / teeth), HERO_R * 1.02);
+      c.lineTo(hemL + hemW - (i + 1) * (hemW / teeth), HERO_R * 0.74);
+    }
+    c.closePath();
+    c.fill();
+  }
   c.fillStyle = "#ffd66b";
   c.beginPath();
   c.arc(-2.6, HERO_R * 0.56, 1.3, 0, TAU);
@@ -219,21 +237,24 @@ export function drawHero(
   const blink = motion && Math.sin(t * 1.9 + h.idx * 2.1) > 0.965;
   drawFace(c, 0, -HERO_R * 0.08, HERO_R * 0.72, blink);
 
-  // 画家贝雷帽:扁扁一顶歪戴着,帽顶一粒小揪揪
+  // 画家帽:r2 修复 W4R1-02——两顶帽子换成两种「形状」而不只是两种颜色。
+  // P1 扁贝雷歪戴 + 花徽;P2 尖顶画家帽 + 帽尖大星揪揪。
+  // 16px 灰度下帽形直接进剪影(旧版双人剪影逐像素重合,只能靠站位记人)。
   c.fillStyle = skin.hat;
   c.strokeStyle = shade(skin.hat, 0.7);
   c.lineWidth = 2;
-  c.beginPath();
-  c.ellipse(-HERO_R * 0.08, -HERO_R * 0.78, HERO_R * 0.74, HERO_R * 0.34, -0.12, 0, TAU);
-  c.fill();
-  c.stroke();
-  c.beginPath();
-  c.arc(-HERO_R * 0.08, -HERO_R * 1.1, 2.1, 0, TAU);
-  c.fill();
-  // 帽徽:P1 五瓣小花 / P2 四芒星 —— 形状 + 颜色双通道区分双人
-  const bx = HERO_R * 0.36;
-  const by = -HERO_R * 0.84;
   if (skin.badge === "flower") {
+    // P1:扁扁一顶歪戴着,帽顶一粒小揪揪
+    c.beginPath();
+    c.ellipse(-HERO_R * 0.08, -HERO_R * 0.78, HERO_R * 0.74, HERO_R * 0.34, -0.12, 0, TAU);
+    c.fill();
+    c.stroke();
+    c.beginPath();
+    c.arc(-HERO_R * 0.08, -HERO_R * 1.1, 2.1, 0, TAU);
+    c.fill();
+    // 花徽:五瓣小花
+    const bx = HERO_R * 0.36;
+    const by = -HERO_R * 0.84;
     c.fillStyle = "#fff";
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * TAU;
@@ -246,7 +267,20 @@ export function drawHero(
     c.arc(bx, by, 1.5, 0, TAU);
     c.fill();
   } else {
-    drawSparkStar(c, bx, by, 3.6, "#fff");
+    // P2:尖顶画家帽,帽檐同宽、帽身向上收成尖,顶上一颗大四芒星
+    c.beginPath();
+    c.moveTo(-HERO_R * 0.72, -HERO_R * 0.6);
+    c.quadraticCurveTo(-HERO_R * 0.34, -HERO_R * 1.46, HERO_R * 0.12, -HERO_R * 1.5);
+    c.quadraticCurveTo(HERO_R * 0.5, -HERO_R * 1.1, HERO_R * 0.7, -HERO_R * 0.6);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    // 帽檐一条压边,和贝雷的软边区分
+    c.beginPath();
+    c.ellipse(0, -HERO_R * 0.62, HERO_R * 0.76, HERO_R * 0.16, 0, 0, TAU);
+    c.fill();
+    c.stroke();
+    drawSparkStar(c, HERO_R * 0.12, -HERO_R * 1.58, HERO_R * 0.42, "#fff");
   }
 
   // 举着的刷子:前摇时往回收,甩出去的一瞬间伸到最长(1.2 的 reach 数值不动)
