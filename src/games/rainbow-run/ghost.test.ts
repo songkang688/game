@@ -10,6 +10,8 @@ import {
   clampGhost,
   emptyGhost,
   ghostDurationMs,
+  ghostGap,
+  ghostGapLine,
   ghostMetersAt,
   ghostStateAt,
   parseGhost,
@@ -209,5 +211,37 @@ describe("彩虹跑跑 · 幽灵回放", () => {
     expect(beatsGhost(300, ghost)).toBe(false);
     expect(beatsGhost(299.9, ghost)).toBe(false);
     expect(beatsGhost(9999, null)).toBe(false);
+  });
+});
+
+describe("彩虹跑跑 · 幽灵名牌的领先 / 落后", () => {
+  it("三种状态各归各的,差多少米永远是非负数", () => {
+    expect(ghostGap(320, 300)).toEqual({ state: "ahead", meters: 20 });
+    expect(ghostGap(280, 300)).toEqual({ state: "behind", meters: 20 });
+    expect(ghostGap(300, 300)).toEqual({ state: "even", meters: 0 });
+  });
+
+  it("差不到一米算并排,不再写「领先 0 米」", () => {
+    expect(ghostGap(300.4, 300)).toEqual({ state: "even", meters: 0 });
+    expect(ghostGap(299.6, 300)).toEqual({ state: "even", meters: 0 });
+    expect(ghostGapLine(ghostGap(300.4, 300))).toBe("👻 并排跑着呢");
+    expect(ghostGapLine(ghostGap(300.4, 300))).not.toContain("0 米");
+  });
+
+  it("坏数字当 0 处理,名牌不会印出 NaN", () => {
+    expect(ghostGap(Number.NaN, 120)).toEqual({ state: "behind", meters: 120 });
+    expect(ghostGap(120, Number.NaN)).toEqual({ state: "ahead", meters: 120 });
+    for (const line of [
+      ghostGapLine(ghostGap(Number.NaN, Number.NaN)),
+      ghostGapLine(ghostGap(Number.NaN, 120)),
+    ]) {
+      expect(line).not.toContain("NaN");
+    }
+  });
+
+  it("名牌文案和幽灵的实时米数对得上", () => {
+    const run: GhostRun = { meters: 400, events: [{ t: 2000, input: "jump" }] };
+    expect(ghostGapLine(ghostGap(250, ghostMetersAt(run, 1000)))).toBe("👻 领先 50 米");
+    expect(ghostGapLine(ghostGap(150, ghostMetersAt(run, 1000)))).toBe("👻 落后 50 米");
   });
 });

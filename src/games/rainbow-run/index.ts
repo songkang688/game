@@ -167,6 +167,8 @@ import {
   GHOST_KEY,
   GhostPlayer,
   GhostRecorder,
+  ghostGap,
+  ghostGapLine,
   parseGhost,
   serializeGhost,
 } from "./ghost";
@@ -2085,13 +2087,13 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.lineWidth = 2.5;
     ctx.stroke();
     // 名牌上写领先还是落后:比的是「跑到这一刻,上一趟到了第几米」
-    const lead = Math.round(dist - ghostPlayer.metersAt(runMs));
+    const gap = ghostGap(dist, ghostPlayer.metersAt(runMs));
     ctx.globalAlpha = 0.85;
-    ctx.fillStyle = lead >= 0 ? "#2f7a52" : "#a05a2f";
+    ctx.fillStyle = gap.state === "behind" ? "#a05a2f" : gap.state === "even" ? "#4a5a8a" : "#2f7a52";
     ctx.font = "bold 13px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText(lead >= 0 ? `👻 领先 ${lead} 米` : `👻 落后 ${-lead} 米`, gx, bodyY - r - 8);
+    ctx.fillText(ghostGapLine(gap), gx, bodyY - r - 8);
     ctx.restore();
   }
 

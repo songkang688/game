@@ -271,3 +271,30 @@ export function ghostMetersAt(run: GhostRun, tMs: number): number {
   if (dur <= 0) return run.meters;
   return (run.meters * Math.max(0, Math.min(dur, tMs))) / dur;
 }
+
+/** 名牌上这一刻的三种状态:领先 / 并排 / 落后。 */
+export type GhostGapState = "ahead" | "even" | "behind";
+
+export interface GhostGap {
+  state: GhostGapState;
+  /** 差多少米(取整,永远是非负数;并排就是 0) */
+  meters: number;
+}
+
+/**
+ * 这一刻领先还是落后上一趟的自己。整米比较:
+ * 差不到一米就算**并排**——名牌上写「领先 0 米」既不好懂也不好看。
+ */
+export function ghostGap(meters: number, ghostMeters: number): GhostGap {
+  const mine = Math.round(Number.isFinite(meters) ? meters : 0);
+  const theirs = Math.round(Number.isFinite(ghostMeters) ? ghostMeters : 0);
+  const diff = mine - theirs;
+  if (diff === 0) return { state: "even", meters: 0 };
+  return diff > 0 ? { state: "ahead", meters: diff } : { state: "behind", meters: -diff };
+}
+
+/** 名牌上的一行字。 */
+export function ghostGapLine(gap: GhostGap): string {
+  if (gap.state === "even") return "👻 并排跑着呢";
+  return gap.state === "ahead" ? `👻 领先 ${gap.meters} 米` : `👻 落后 ${gap.meters} 米`;
+}
