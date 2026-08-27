@@ -46,6 +46,12 @@ export const CLF_CSS = `
 .clf-stage{position:relative;z-index:2;width:100%;max-width:400px;overflow:hidden;border-radius:14px;
   min-height:${CANVAS_MIN_VH}vh;display:flex;align-items:center;justify-content:center;background:#fff;
   box-shadow:0 4px 0 #0001;touch-action:none;}
+/* 这一屏真的挂上滚动条那一档（见 fitColoringStage）：画布得把竖向手势让出去。
+   pinCanvas 把画布按滚动量往下钉，它恒占滚动视口的上半张，而涂色时手指本来就
+   落在画布上——画布还锁着 touch-action:none 的话一步都划不动，底下的调色板整排
+   就仍旧够不着（窗口5 第2轮 W5R2-F-A-05）。让的是手势不是尺寸，热区一分没动；
+   双指捏合缩放走的是 pointer 事件，两根手指下去照样认。 */
+.clf-wrap.clf-scrolly .clf-stage{touch-action:pan-y;}
 .clf-canvas{background:#fff;max-width:100%;height:auto;display:block;transform-origin:center center;
   transition:transform .2s ease;}
 .clf-canvas .clf-region{cursor:pointer;stroke:#495057;stroke-width:3;stroke-linejoin:round;
@@ -229,6 +235,7 @@ export function fitColoringStage(
     if (!measurable || !view) return;
     // 先把上一次钳出来的都还原，不然量到的是钳完的高度，越量越小
     wrap.classList.remove("clf-tight");
+    wrap.classList.remove("clf-scrolly");
     wrap.style.maxHeight = "";
     wrap.style.overflowY = "";
     wrap.style.overscrollBehavior = "";
@@ -250,6 +257,8 @@ export function fitColoringStage(
       wrap.style.maxHeight = `${Math.floor(room)}px`;
       wrap.style.overflowY = "auto";
       wrap.style.overscrollBehavior = "contain";
+      // 真的滚起来了才让画布放开竖向手势——「挤一挤」那一档挂了不代表在滚
+      wrap.classList.add("clf-scrolly");
     }
   };
   relayout();
