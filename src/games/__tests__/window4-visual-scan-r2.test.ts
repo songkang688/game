@@ -48,14 +48,15 @@ function emojiCount(text: string): number {
 }
 
 describe("窗口4 r2 · W4R2-01 duo-arena 事件飘字字面量 emoji(变量链上画布)", () => {
-  it("pushFloat 调用里的字面量 emoji 现状 8 处钉住【一般 · 待修:全部改纯文字+手绘图标后应为 0】", () => {
+  it("pushFloat 调用里的字面量 emoji 清零【r2 已修:8 处前缀全部改纯文字,状态自有画面表达】", () => {
     const source = src("duo-arena", "index.ts");
     const lines = source
       .split("\n")
       .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
       .filter((l) => /pushFloat\(/.test(l) && /\p{Extended_Pictographic}/u.test(l));
-    // 🫧×3 / 💫 / 🎉 / ❄️ / ✨ / 🌀 —— fl.text 最终经 drawCourt 的 fillText 上画布
-    expect(lines).toHaveLength(8);
+    // 修复前是 8 处(泡泡/晕/礼花/雪花/星光/漩涡前缀);护盾有盾圈、冰冻有冰花、
+    // 双倍有星光、转晕有转圈动画,文字不再需要 emoji 配图
+    expect(lines).toHaveLength(0);
   });
 
   it("回归守护:技能飘字与人机徽章不回退(r1 修复 f7af94d 的三件套还在)", () => {
@@ -67,15 +68,17 @@ describe("窗口4 r2 · W4R2-01 duo-arena 事件飘字字面量 emoji(变量链�
 });
 
 describe("窗口4 r2 · W4R2-02 duo-rush 画布 HUD emoji 串(hudText → drawHud fillText)", () => {
-  it("hudText + branchTag 字面量 emoji 现状 8 枚钉住【一般 · 待修:改文字段+手绘图标后应为 0】", () => {
+  it("HUD 路径字面量 emoji 清零【r2 已修:hudText 拆成 hudTokens token 渲染,图标全走 art.ts 手绘】", () => {
     const source = src("duo-rush", "index.ts");
-    const hud = fnBody(source, "function hudText(");
+    // 旧的整串 fillText 入口不复存在,取而代之的是 token 化的 hudTokens + drawHudToken
+    expect(source).not.toContain("function hudText(");
+    const hud = fnBody(source, "function hudTokens(");
     const branch = fnBody(source, "function branchTag(");
-    // ❤️ 🤍 🪙 ✋×2 🤝(hudText) + 🌿 🌈(branchTag)
-    expect(emojiCount(hud) + emojiCount(branch)).toBe(8);
-    // 变量链还挂着 r.emoji 与 POWERUPS[*].emoji,一并钉住入口(修掉后这两行取反)
-    expect(hud).toMatch(/r\.emoji/);
-    expect(fnBody(source, "function activeIcons(")).toMatch(/\.emoji/);
+    expect(emojiCount(hud) + emojiCount(branch)).toBe(0);
+    // 变量链断开:HUD 路径不再取 r.emoji / POWERUPS[*].emoji,道具走 PowerKind 枚举交手绘图标
+    expect(hud).not.toMatch(/\.emoji/);
+    expect(fnBody(source, "function activePowerIcons(")).not.toMatch(/\.emoji/);
+    expect(source).toContain("function drawHudToken(");
   });
 });
 
@@ -91,35 +94,39 @@ describe("窗口4 r2 · W4R2-03 duo-vs-star 花名册 16px 最难分对(xingxing
     }
   });
 
-  it("现状钉住:xingxing 星呆毛 r*0.34、jiujiu 弧呆毛 r*0.22【一般 · 待修:16px XOR 0%,放大后取反】", () => {
+  it("放大档钉住:xingxing 星呆毛 r*0.5、jiujiu 弧呆毛 r*0.34【r2 已修:双双放大,16px 站进像素网格】", () => {
     const trait = exportBody(src("duo-vs-star", "art.ts"), "function drawCharTrait(");
-    // 16px 灰度量化(2026-08 第 2 轮):xingxing vs jiujiu 剪影 XOR 0%、重叠灰度差 7.2/255,
-    // 是 12 角色两两里最难分的一对——呆毛都缩进不了像素网格。
-    expect(trait).toMatch(/case "xingxing":[\s\S]{0,220}r \* 0\.34/);
-    expect(trait).toMatch(/case "jiujiu":[\s\S]{0,700}r \* 0\.22/);
+    // 修复前 xingxing 0.34 / jiujiu 0.22,16px 剪影 XOR 0%、重叠灰度差 7.2/255,
+    // 是 12 角色两两里最难分的一对;现在钉在放大档,不许再缩回像素网格以下。
+    expect(trait).toMatch(/case "xingxing":[\s\S]{0,260}r \* 0\.5/);
+    expect(trait).toMatch(/arc\(x, y - r \* 1\.08, r \* 0\.34/);
   });
 });
 
 describe("窗口4 r2 · W4R2-04 garden-guard 原型 BOSS 剪影(皇冠之外无轮廓配饰)", () => {
-  it("现状钉住:drawMonsterSprite 除 boss2 钳子外无原型专属配饰【一般 · 待修:补轮廓外配饰后取反】", () => {
+  it("已修:drawMonsterSprite 走 bossTrimOf 原型查表,四类轮廓外配饰分支齐全,boss2 钳子保留", () => {
     const art = src("garden-guard", "art.ts");
     const body = exportBody(art, "export function drawMonsterSprite(");
-    // 16px 灰度量化(第 2 轮):bossArmor/bossSwift/bossSplit 两两剪影 XOR 全部 0%、
-    // 灰度差 6.9–14.9/255,只有会飞的 bossFly 靠飞行通道分开(64.3%)。
+    // 修复前 bossArmor/bossSwift/bossSplit 两两剪影 XOR 全部 0%(只差颜色);
+    // 现在按最近原型查表——铁壳护板/疾风速度羽/浮云云座/双生分裂环,
+    // 家族归属与几何细节由 garden-guard/art.test.ts 的 3 例钉住。
     expect(body).toContain('v.kind === "boss2"');
-    for (const kind of ["bossArmor", "bossSwift", "bossSplit"]) {
-      expect(body.includes(`"${kind}"`), `drawMonsterSprite 已出现 ${kind} 专属分支,请取反本断言`).toBe(false);
+    expect(body).toContain("bossTrimOf(");
+    for (const trim of ['"plate"', '"feather"', '"cloud"', '"ring"']) {
+      expect(body.includes(`trim === ${trim}`), `drawMonsterSprite 缺 ${trim} 配饰分支`).toBe(true);
     }
+    expect(exportBody(art, "export function bossTrimOf(")).toContain("if (!spec.boss)");
   });
 });
 
 describe("窗口4 r2 · W4R2-05 duo-vs-star 360px 档触控键触区", () => {
-  it("现状钉住:≤380px 媒体查询把触控键 min-width 缩到 38px【一般 · 待修:回到 ≥40px 且不溢出】", () => {
+  it("触控键回到 ≥40px 触区底线【r2 已修:min-width 38→40,gap 6→4 保零溢出】", () => {
     const source = src("duo-vs-star", "index.ts");
     const media = source.slice(source.indexOf("@media (max-width:380px)"));
-    // 360×640 DPR2 实测:7 键一行 38×40(◀▲▼▶✋💥🤝),低于 40px 触区底线 2px;
-    // 这是 1.2 「一个像素都不许溢出」的取舍,修复方向:分两行或收 gap,把 38 提回 ≥40。
-    expect(media).toMatch(/\.dvs-pad button\{min-width:38px;min-height:40px/);
+    // 修复前 7 键一行 38×40,低于 40px 触区底线 2px;现在改收 gap 补回宽度预算:
+    // 360px 下 7×40+6×4=304px(+两侧 6px 内边距=316)<360,320px 下 304≤308 也不溢出。
+    expect(media).toMatch(/\.dvs-pad button\{min-width:40px;min-height:40px/);
+    expect(media).toMatch(/\.dvs-pad\{justify-content:center;gap:4px;\}/);
   });
 });
 
