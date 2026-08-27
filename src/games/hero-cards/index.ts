@@ -117,8 +117,10 @@ export const HC_CSS = `
 @keyframes hcshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .hc-seat-hit{animation:hcshake 260ms ease;outline:3px solid #E2574D;}
 .hc-mid{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:stretch;margin:8px 0;}
+/* 桌面织物暗纹(1.3 r2 R2-2):与 .mj-board 同 45°/6px 节距;浅暖米底上白纹不可见,
+   改用木沿色 #EBD2B4 向深派生的暖褐,alpha 4% 顶格不越线,眯眼低于牌堆/头像一阶 */
 .hc-table{display:flex;gap:8px;align-items:center;border-radius:14px;padding:6px 10px;
-  background:linear-gradient(180deg,#FBEBD8,#F5DCC2);
+  background:repeating-linear-gradient(45deg,rgba(170,120,80,.04) 0 6px,transparent 6px 12px),linear-gradient(180deg,#FBEBD8,#F5DCC2);
   box-shadow:inset 0 0 0 2px #EBD2B4,0 2px 6px rgba(210,160,140,.25);}
 .hc-deck-art{width:46px;height:58px;flex:0 0 auto;}
 .hc-discard{display:flex;align-items:center;}
