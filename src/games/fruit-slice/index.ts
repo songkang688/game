@@ -2127,7 +2127,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.roundRect(k.x - bw / 2, k.y + r + 12, Math.max(4, (bw * left) / k.spec.hp), 12, 6);
     ctx.fill();
     ctx.fillStyle = "#5a5a6e";
-    ctx.font = "bold 13px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`还剩 ${left} 刀`, k.x, k.y + r + 34);
@@ -2164,7 +2164,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     mechBadgeRows = 0;
     if (badges.length === 0) return;
 
-    ctx.font = "bold 13px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     const gap = 6;

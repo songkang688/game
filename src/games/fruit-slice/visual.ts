@@ -120,10 +120,11 @@ export function silhouettePoints(name: SliceFruitName, r: number, steps = 48): P
     } else {
       let rho: number;
       if (name === "桃桃") {
+        // 顶凹 0.12r / 底尖 0.08r 是规格钉死的;两肩鼓 0.1r 把心形撑出来,20px 灰度下也别认成橙橙
         rho =
-          0.97 -
+          0.96 -
           0.12 * bump(a, -Math.PI / 2, 0.5) +
-          0.07 * (bump(a, -Math.PI / 2 - 0.9, 0.55) + bump(a, -Math.PI / 2 + 0.9, 0.55)) +
+          0.1 * (bump(a, -Math.PI / 2 - 0.95, 0.6) + bump(a, -Math.PI / 2 + 0.95, 0.6)) +
           0.08 * bump(a, Math.PI / 2, 0.34);
       } else if (name === "瓜瓜") {
         const sx = 1.12;
