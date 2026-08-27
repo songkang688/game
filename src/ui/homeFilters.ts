@@ -119,7 +119,11 @@ const PINYIN_INITIALS: Record<string, string> = {
  */
 const INITIALS_ALIASES: Record<string, string[]> = {
   "music-stars": ["yyxx"],
-  "sling-birds": ["ttxn"]
+  "sling-birds": ["ttxn"],
+  // 「长蛇争霸」的长念 cháng,但小朋友多半会照「zhǎng」去打 z
+  "snake-royale": ["zszb"],
+  // 「飞行棋」的行念 xíng,照「háng」打 h 的也认
+  "flight-chess": ["fhqly"]
 };
 
 /**

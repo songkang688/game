@@ -131,6 +131,72 @@ describe("拼音首字母", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// 1.2 窗口 1 新增的 12 款:字表是手工维护的,新标题不补进来就一个字都搜不到。
+// 下面那个「和已上架 meta 的约定」里已经逐款钉过首字母串了,这里补的是搜索行为:
+// 串长对不对、前缀 / 中段 / 大写能不能命中、十二款会不会互相撞车、多音字有没有候选。
+// ---------------------------------------------------------------------------
+
+describe("窗口 1 的 12 款新游戏也能用拼音搜", () => {
+  const WINDOW1: { id: string; title: string; initials: string }[] = [
+    { id: "orb-arena", title: "圆圆大作战", initials: "yydzz" },
+    { id: "snake-royale", title: "长蛇争霸", initials: "cszb" },
+    { id: "block-drop", title: "方块叠叠乐", initials: "fkddl" },
+    { id: "combo-clash", title: "连招对决", initials: "lzdj" },
+    { id: "mahjong-bloom", title: "花开麻将", initials: "hkmj" },
+    { id: "star-estate", title: "朵星地产", initials: "dxdc" },
+    { id: "hero-cards", title: "英杰令", initials: "yjl" },
+    { id: "weiqi-garden", title: "围子花园", initials: "wzhy" },
+    { id: "flight-chess", title: "飞行棋乐园", initials: "fxqly" },
+    { id: "merge-2048", title: "星星合成", initials: "xxhc" },
+    { id: "mine-garden", title: "扫雷花园", initials: "slhy" },
+    { id: "sudoku-petal", title: "数独花田", initials: "sdht" }
+  ];
+
+  it("每一款的首字母串都逐字对得上,没有一个字被字表漏掉", () => {
+    for (const g of WINDOW1) {
+      expect(pinyinInitials(g.title), g.id).toBe(g.initials);
+      // 一个汉字出一个字母:串长必须等于标题里的汉字数
+      expect(g.initials.length, g.id).toBe([...g.title].length);
+    }
+  });
+
+  it("整串、前缀、中间一段都能搜到", () => {
+    for (const g of WINDOW1) {
+      expect(matchesSearch(g, g.initials), g.id).toBe(true);
+      expect(matchesSearch(g, g.initials.slice(0, 2)), g.id).toBe(true);
+      expect(matchesSearch(g, g.initials.slice(1)), g.id).toBe(true);
+      expect(matchesSearch(g, g.initials.toUpperCase()), g.id).toBe(true);
+    }
+  });
+
+  it("十二款的首字母串互不相同,搜出来不会一片全中", () => {
+    expect(new Set(WINDOW1.map((g) => g.initials)).size).toBe(WINDOW1.length);
+  });
+
+  it("多音字给了第二种念法的候选串", () => {
+    // 长:cháng / zhǎng
+    expect(searchKeys({ id: "snake-royale", title: "长蛇争霸" })).toContain("zszb");
+    expect(matchesSearch({ id: "snake-royale", title: "长蛇争霸" }, "zszb")).toBe(true);
+    // 行:xíng / háng
+    expect(searchKeys({ id: "flight-chess", title: "飞行棋乐园" })).toContain("fhqly");
+    expect(matchesSearch({ id: "flight-chess", title: "飞行棋乐园" }, "fhqly")).toBe(true);
+  });
+
+  it("新补的字没有把老标题搜歪", () => {
+    expect(pinyinInitials("贪吃毛毛虫")).toBe("tcmmc");
+    expect(pinyinInitials("五子棋")).toBe("wzq");
+    expect(pinyinInitials("连连看")).toBe("llk");
+    expect(pinyinInitials("红蓝拔河")).toBe("hlbh");
+    expect(pinyinInitials("绿芽保卫战")).toBe("lybwz");
+  });
+
+  it("顺手把老标题里缺的字也补齐了,飞机小队与雪球大作战不再掉字", () => {
+    expect(pinyinInitials("飞机小队")).toContain("f");
+    expect(pinyinInitials("雪球大作战")).toBe("qdzz");
+  });
+});
+
 describe("搜索匹配", () => {
   it("空搜索词等于没搜,所有游戏都留着", () => {
     expect(matchesSearch(CAMPAIGN.meta, "")).toBe(true);
