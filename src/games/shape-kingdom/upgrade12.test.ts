@@ -55,6 +55,7 @@ import {
 } from "./hints";
 import {
   buildDrawTasks,
+  dotBoardMetrics,
   drawMetrics,
   isDrawLevel,
   isSnapped,
@@ -746,6 +747,87 @@ describe("形状王国 1.2 · 作图台", () => {
     expect(findOne(stage, "shk-castle")!.textContent).toContain("🏰");
     handle.destroy();
     expect(stage.children).toHaveLength(0);
+  });
+
+  it("手指真的点两下也拉得出长方形——不是只有拖才行（W5-B-05）", () => {
+    // 上面那条只发了 click，从来没走 pointerdown / pointerup，所以一直是绿的；
+    // 而真机上手指落下先走指针那条路，原来它按下就把第一个点顶掉、松开又清成 null，
+    // 「点两个点」永远凑不成一对。这一条把真机的事件顺序原样发一遍。
+    const dom = installDom();
+    restoreDom = dom.restore;
+    const stage = new StubEl("div");
+    const task = { kind: "rect", cols: 6, rows: 4, goal: "area", target: 12, ask: "画一个面积 12 的长方形", hints: trio("一", "二", "三") } as const;
+    const handle: PlayHandle = runDrawRound({
+      stage: stage as unknown as HTMLElement,
+      ctx: stubCtx(),
+      theme: { bg: "#fff", accent: "#333" },
+      tasks: [{ ...task }],
+      viewportWidth: 360,
+    });
+    const m = dotBoardMetrics(360, 6, 4);
+    const board = findOne(stage, "shk-board")!;
+    const at = (r: number, c: number) => ({ clientX: m.hit / 2 + c * m.unit, clientY: m.hit / 2 + r * m.unit });
+    /** 一次真实的「原地点一下」：按下 → 原地松开 → 浏览器补一个 detail=1 的 click */
+    const tap = (r: number, c: number): void => {
+      board.fire("pointerdown", at(r, c));
+      board.fire("pointerup", at(r, c));
+      findByLabel(stage, `第 ${r + 1} 行第 ${c + 1} 列的点`)!.fire("click", { detail: 1 } as never);
+    };
+
+    tap(0, 0);
+    // 第一下只是把点摆上，还没有矩形
+    expect(findOne(stage, "shk-readout")!.textContent).not.toContain("面积");
+    expect(findByLabel(stage, "第 1 行第 1 列的点")!.classList.contains("shk-dot-on")).toBe(true);
+
+    tap(3, 4);
+    expect(findOne(stage, "shk-readout")!.textContent, "点两下还是拉不出矩形").toContain("面积 12");
+    handle.destroy();
+  });
+
+  it("按住拖还是原来那套手感，而且拖完不会被紧跟着的 click 再点一下", () => {
+    const dom = installDom();
+    restoreDom = dom.restore;
+    const stage = new StubEl("div");
+    const task = { kind: "rect", cols: 6, rows: 4, goal: "area", target: 12, ask: "画一个面积 12 的长方形", hints: trio("一", "二", "三") } as const;
+    const handle: PlayHandle = runDrawRound({
+      stage: stage as unknown as HTMLElement,
+      ctx: stubCtx(),
+      theme: { bg: "#fff", accent: "#333" },
+      tasks: [{ ...task }],
+      viewportWidth: 360,
+    });
+    const m = dotBoardMetrics(360, 6, 4);
+    const board = findOne(stage, "shk-board")!;
+    const at = (r: number, c: number) => ({ clientX: m.hit / 2 + c * m.unit, clientY: m.hit / 2 + r * m.unit });
+
+    board.fire("pointerdown", at(0, 0));
+    board.fire("pointermove", at(1, 2));
+    board.fire("pointermove", at(3, 4));
+    board.fire("pointerup", at(3, 4));
+    // 拖到哪儿就是哪儿，一次拖动就出矩形
+    expect(findOne(stage, "shk-readout")!.textContent).toContain("面积 12");
+    // 浏览器在拖完之后照样会补一个 click；它不许把刚拉好的矩形当成「第一个点」重新开始
+    findByLabel(stage, "第 4 行第 5 列的点")!.fire("click", { detail: 1 } as never);
+    expect(findOne(stage, "shk-readout")!.textContent, "拖完被 click 又点了一下").toContain("面积 12");
+    handle.destroy();
+  });
+
+  it("键盘按 Enter 那条路还通：合成 click 的 detail 是 0，不许被指针那条路的判别挡掉", () => {
+    const dom = installDom();
+    restoreDom = dom.restore;
+    const stage = new StubEl("div");
+    const task = { kind: "rect", cols: 6, rows: 4, goal: "area", target: 12, ask: "画一个面积 12 的长方形", hints: trio("一", "二", "三") } as const;
+    const handle: PlayHandle = runDrawRound({
+      stage: stage as unknown as HTMLElement,
+      ctx: stubCtx(),
+      theme: { bg: "#fff", accent: "#333" },
+      tasks: [{ ...task }],
+      viewportWidth: 360,
+    });
+    findByLabel(stage, "第 1 行第 1 列的点")!.fire("click", { detail: 0 } as never);
+    findByLabel(stage, "第 4 行第 5 列的点")!.fire("click", { detail: 0 } as never);
+    expect(findOne(stage, "shk-readout")!.textContent).toContain("面积 12");
+    handle.destroy();
   });
 
   it("摆错了只温和提示并递一级提示，提示里不含答案", () => {

@@ -672,7 +672,15 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
         dot.style.left = `${(pad + c * m.unit - m.hit / 2).toFixed(1)}px`;
         dot.style.top = `${(pad + r * m.unit - m.hit / 2).toFixed(1)}px`;
         dot.setAttribute("aria-label", `第 ${r + 1} 行第 ${c + 1} 列的点`);
-        dot.addEventListener("click", () => tapDot(r, c));
+        // 只接键盘合成的 click。手指 / 鼠标那条路在 onUp 里已经判过「原地抬起 = 一次点击」，
+        // 这里再接一次就会同一下点两回（第一下摆上、第二下立刻撤掉），看起来就是「点了没反应」。
+        // 键盘按 Enter / 空格派发的 click 是合成事件，detail 恒为 0，拿这个区分最稳，
+        // 不用去维护一个「吞掉下一次 click」的标志位——那种标志位在「松手时不在任何点上」
+        // （不会有后续 click）时会漏收，把下一次真的键盘操作也吞掉。
+        dot.addEventListener("click", (e) => {
+          if ((e as MouseEvent).detail) return;
+          tapDot(r, c);
+        });
         board.appendChild(dot);
         dots[r].push(dot);
       }
@@ -727,8 +735,13 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       paint();
     }
 
-    // 拖动：按下吸附到最近的点，松开时再吸附一次
+    // 拖动：按下吸附到最近的点，松开时再吸附一次。
+    // 「原地抬起」不算拖，算一次点击——读数那行白纸黑字写着「点两个点（或者按住拖）」，
+    // 可原来按下就把 corner 顶掉、松开又清成 null，第一下点的那个点永远留不住，
+    // 「点两个点」这条路从来没通过（测试员 W5-B-05）。
     let dragFrom: { r: number; c: number } | null = null;
+    /** 这一次按下之后，手指有没有真的滑到别的点上去 */
+    let movedAway = false;
     const rel = (e: { clientX: number; clientY: number }): { x: number; y: number } => {
       const box = board.getBoundingClientRect();
       return { x: e.clientX - box.left - pad, y: e.clientY - box.top - pad };
@@ -738,23 +751,33 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       const hit = nearestDot(p.x, p.y, m.unit, task.cols, task.rows);
       if (!isSnapped(hit.dist)) return;
       dragFrom = { r: hit.r, c: hit.c };
-      corner = dragFrom;
-      rectSel = null;
-      paint();
+      movedAway = false;
+      // corner 这时一个字都不能动：万一这是一次「原地点一下」，
+      // 上一次点的那个点还得留着跟它凑成矩形。
     };
     const onMove = (e: PointerEvent): void => {
       if (!dragFrom) return;
       const p = rel(e);
       const hit = nearestDot(p.x, p.y, m.unit, task.cols, task.rows);
+      if (hit.r !== dragFrom.r || hit.c !== dragFrom.c) movedAway = true;
+      if (!movedAway) return;
+      // 确认是拖了，这才接管：起点就是按下的那个点，之前挂着的半个点作废
+      corner = dragFrom;
       setRect(dragFrom, { r: hit.r, c: hit.c });
       paintReadout();
     };
     const onUp = (e: PointerEvent): void => {
       if (!dragFrom) return;
+      const from = dragFrom;
+      dragFrom = null;
+      if (!movedAway) {
+        // 原地抬起：走两点定矩形那条路（第一下摆上、第二下拉出矩形）
+        tapDot(from.r, from.c);
+        return;
+      }
       const p = rel(e);
       const hit = nearestDot(p.x, p.y, m.unit, task.cols, task.rows);
-      setRect(dragFrom, { r: hit.r, c: hit.c });
-      dragFrom = null;
+      setRect(from, hit);
       corner = null;
       paint();
     };
