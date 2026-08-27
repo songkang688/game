@@ -3,7 +3,7 @@
 // 三轮下来一共登记 9 条问题、落地 11 条改进,这一份是发车前最后一次逐条点名:
 //  ① 前两轮清掉的(C1-01 / C2-02)不许回潮;
 //  ② 三轮落地的曲线与提示都还在;
-//  ③ 五款的硬约束(商标 0 / 无血无死亡 / 角色只用朵朵星星 / 存档 key 只增不改 /
+//  ③ 五款的硬约束(商标 0 / 无血无死亡 / 角色只用鸭梨康康 / 存档 key 只增不改 /
 //     音效只走 api.play / 不许 three.js·CDN·Socket / destroy 收得干净)全款扫一遍;
 //  ④ C3-01 的范围钉死在 1.0 老章,不许扩散。
 //
@@ -186,13 +186,13 @@ describe("档C R3 修复 · 硬约束全款扫描", () => {
     }
   });
 
-  it("角色只有朵朵和星星:双人局的座位名没被换掉", () => {
+  it("角色只有鸭梨和康康:双人局的座位名没被换掉", () => {
     const seats = readFileSync(dirOf("memory-cards") + "logic.ts", "utf8");
-    expect(seats).toContain('["朵朵", "星星"]');
+    expect(seats).toContain('["鸭梨", "康康"]');
     for (const g of GAMES) {
       const src = indexOf(g);
-      // 出现了「朵朵」就必须同时有「星星」(两个人一起玩的那几款)
-      if (src.includes("朵朵")) expect(src, `${g} 只有朵朵没有星星`).toContain("星星");
+      // 出现了「鸭梨」就必须同时有「康康」(两个人一起玩的那几款)
+      if (src.includes("鸭梨")) expect(src, `${g} 只有鸭梨没有康康`).toContain("康康");
     }
   });
 

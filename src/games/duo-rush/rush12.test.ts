@@ -174,14 +174,14 @@ describe("1.2 赛道分岔与合流", () => {
 
 describe("1.2 幽灵快照", () => {
   it("自己的和对手的两种来源都能存", () => {
-    const self = makeGhostSnapshot("self", 520, 12.5, "朵朵");
-    const rival = makeGhostSnapshot("rival", 610, 13.2, "星星");
+    const self = makeGhostSnapshot("self", 520, 12.5, "鸭梨");
+    const rival = makeGhostSnapshot("rival", 610, 13.2, "康康");
     expect(self?.source).toBe("self");
     expect(rival?.source).toBe("rival");
   });
 
   it("序列化 → 反序列化能原样回来", () => {
-    const snap = makeGhostSnapshot("rival", 777, 18.34, "星星");
+    const snap = makeGhostSnapshot("rival", 777, 18.34, "康康");
     expect(snap).not.toBeNull();
     const back = parseGhostSnapshot(serializeGhostSnapshot(snap!));
     expect(back).toEqual(snap);
@@ -196,9 +196,9 @@ describe("1.2 幽灵快照", () => {
   });
 
   it("成绩非法就不生成快照", () => {
-    expect(makeGhostSnapshot("self", 0, 10, "朵朵")).toBeNull();
-    expect(makeGhostSnapshot("self", 100, 0, "朵朵")).toBeNull();
-    expect(makeGhostSnapshot("self", Number.NaN, 10, "朵朵")).toBeNull();
+    expect(makeGhostSnapshot("self", 0, 10, "鸭梨")).toBeNull();
+    expect(makeGhostSnapshot("self", 100, 0, "鸭梨")).toBeNull();
+    expect(makeGhostSnapshot("self", Number.NaN, 10, "鸭梨")).toBeNull();
   });
 });
 

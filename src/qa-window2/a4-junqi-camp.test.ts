@@ -163,9 +163,9 @@ describe("R3 包A · junqi-camp", () => {
     flushFrames(dom, 2);
     const afterDuoKeys = cursorText();
     note(
-      `[junqi-camp PA-JQ-1/2] 开局光标=${before || "（无高亮）"}｜星星按方向键后=${afterStarKeys || "（无变化）"}｜朵朵按 WASD 后=${afterDuoKeys || "（无变化）"}`
+      `[junqi-camp PA-JQ-1/2] 开局光标=${before || "（无高亮）"}｜康康按方向键后=${afterStarKeys || "（无变化）"}｜鸭梨按 WASD 后=${afterDuoKeys || "（无变化）"}`
     );
-    // 朵朵回合里：星星的方向键动不了朵朵的光标，朵朵自己的 WASD 才动得了
+    // 鸭梨回合里：康康的方向键动不了鸭梨的光标，鸭梨自己的 WASD 才动得了
     expect(afterStarKeys).toBe(before);
     expect(afterDuoKeys).not.toBe(before);
     handle.destroy();

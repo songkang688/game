@@ -1,10 +1,10 @@
 /**
- * 朵星双人冲刺 · 双人键位与触屏手势。
+ * 梨康双人冲刺 · 双人键位与触屏手势。
  *
  * 两套键位分别放在两张表里，**没有任何一个键同时属于两个人**，
  * 所以同屏两个人各按各的，谁也抢不走谁的键（`keys.test.ts` 一直盯着这条）。
- *  · 朵朵（1P）：`W` 跳 / `A` 左道 / `S` 下滑 / `D` 右道 / `F` 用道具 / `G` 加油
- *  · 星星（2P）：`↑` 跳 / `←` 左道 / `↓` 下滑 / `→` 右道 / `L` 用道具 / `K` 加油
+ *  · 鸭梨（1P）：`W` 跳 / `A` 左道 / `S` 下滑 / `D` 右道 / `F` 用道具 / `G` 加油
+ *  · 康康（2P）：`↑` 跳 / `←` 左道 / `↓` 下滑 / `→` 右道 / `L` 用道具 / `K` 加油
  *  · `Esc`：暂停（两个人共用）
  *
  * 移动四键是 1.1 就定下来的，`P1_KEYS` / `P2_KEYS` 原样不动；
@@ -40,13 +40,13 @@ export const P2_KEYS: Readonly<Record<string, MoveAction>> = {
   ArrowRight: "right",
 };
 
-/** 1.2 新增：朵朵的副键，F 用道具、G 加油 */
+/** 1.2 新增：鸭梨的副键，F 用道具、G 加油 */
 export const P1_EXTRA_KEYS: Readonly<Record<string, Action>> = {
   KeyF: "use",
   KeyG: "cheer",
 };
 
-/** 1.2 新增：星星的副键，L 用道具、K 加油 */
+/** 1.2 新增：康康的副键，L 用道具、K 加油 */
 export const P2_EXTRA_KEYS: Readonly<Record<string, Action>> = {
   KeyL: "use",
   KeyK: "cheer",

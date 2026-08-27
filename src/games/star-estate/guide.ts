@@ -2,7 +2,7 @@ import type { GuideBook } from "../../ui/level188Contract";
 
 const guide: GuideBook = {
   gameId: "star-estate",
-  title: "朵星地产 · 经营笔记",
+  title: "梨康地产 · 经营笔记",
   general: [
     "每一关都要自己下场买地：光绕圈领工资、一块地都不买，钱够了也不算过关。局内那一行「🏷️ 自己买下 X/Y」就是在数这个。",
     "买地不是越多越好。同色的一整条街全在你手上（这叫垄断），空地租金立刻翻倍，那才是真正会下金蛋的地方。",

@@ -1,5 +1,5 @@
 /**
- * 朵朵大战星星 · 出场名单（纯数据）。
+ * 鸭梨大战康康 · 出场名单（纯数据）。
  * 全部是本作原创的小伙伴，体重 / 速度 / 跳跃 / 力度各不相同：
  * 轻的跑得快但容易被撞飞，沉的稳当却慢半拍，谁都有自己的活法。
  *
@@ -35,8 +35,8 @@ export interface Fighter {
 export const ROSTER: Fighter[] = [
   {
     id: "duoduo",
-    name: "朵朵",
-    emoji: "🌸",
+    name: "鸭梨",
+    emoji: "🍐",
     color: "#ff9ec4",
     weight: 100,
     speed: 1.0,
@@ -47,8 +47,8 @@ export const ROSTER: Fighter[] = [
   },
   {
     id: "xingxing",
-    name: "星星",
-    emoji: "⭐",
+    name: "康康",
+    emoji: "👓",
     color: "#ffd75e",
     weight: 92,
     speed: 1.06,
@@ -179,7 +179,7 @@ export const ROSTER: Fighter[] = [
   },
 ];
 
-/** 按 id 找角色，找不到就退回朵朵，绝不返回 undefined */
+/** 按 id 找角色，找不到就退回鸭梨，绝不返回 undefined */
 export function fighterById(id: string): Fighter {
   return ROSTER.find((f) => f.id === id) ?? ROSTER[0];
 }

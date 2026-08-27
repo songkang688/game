@@ -6,7 +6,7 @@ export const meta = {
   id: "gomoku",
   title: "五子棋",
   emoji: "⚫",
-  // 主玩法是自由对战(人机六档 + 朵朵 VS 星星双人),归到「对战」比「休闲」准
+  // 主玩法是自由对战(人机六档 + 鸭梨 VS 康康双人),归到「对战」比「休闲」准
   category: "party" as const,
   color: "#F6E3C5",
   blurb: "188 道真解局，人机六档从菜鸟打到地狱，还有连胜挑战！",

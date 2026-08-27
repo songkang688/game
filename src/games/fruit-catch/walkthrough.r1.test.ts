@@ -169,7 +169,7 @@ describe("接住小水果 · R1 · 双人抢果玩到结算", () => {
     }
   });
 
-  it("落点归属按半屏切：左半归朵朵，右半归星星", () => {
+  it("落点归属按半屏切：左半归鸭梨，右半归康康", () => {
     expect(duoSide(1)).toBe("doudou");
     expect(duoSide(W / 2 - 1)).toBe("doudou");
     expect(duoSide(W / 2)).toBe("star");

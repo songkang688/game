@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BID_STEP, auctionLine, auctionOnce, type Bidder } from "./auction";
 
-const NAME = (id: number): string => ["朵朵", "星星", "糯糯", "云云"][id] ?? "银行";
+const NAME = (id: number): string => ["鸭梨", "康康", "糯糯", "云云"][id] ?? "银行";
 
 describe("无底价拍卖", () => {
   it("一个人都不出价就流拍，地留在银行手里", () => {
@@ -22,7 +22,7 @@ describe("无底价拍卖", () => {
     ]);
     expect(r.winner).toBe(0);
     expect(r.price).toBe(BID_STEP);
-    expect(auctionLine(1, r, NAME)).toContain("朵朵");
+    expect(auctionLine(1, r, NAME)).toContain("鸭梨");
   });
 
   it("一档一档往上加，谁先到上限谁出局", () => {

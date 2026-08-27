@@ -345,7 +345,7 @@ describe("接住小水果 · R2 · 双人接果玩到结算", () => {
     const win = duoWinner(st);
     expect(win === "doudou" || win === "star").toBe(true);
     const word = duoWord(st);
-    expect(word).toContain(win === "doudou" ? "朵朵" : "星星");
+    expect(word).toContain(win === "doudou" ? "鸭梨" : "康康");
     expect(word).not.toMatch(/输了|失败|太差/);
   });
 
@@ -366,7 +366,7 @@ describe("接住小水果 · R2 · 双人接果玩到结算", () => {
     expect(st.star).toBe(before);
   });
 
-  it("左半屏归朵朵、右半屏归星星，分界线正好在中间", () => {
+  it("左半屏归鸭梨、右半屏归康康，分界线正好在中间", () => {
     expect(duoSide(1)).toBe("doudou");
     expect(duoSide(W - 1)).toBe("star");
     expect(duoSide(W / 2 - 1)).toBe("doudou");

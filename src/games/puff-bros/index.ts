@@ -116,10 +116,10 @@ const PALETTES: Palette[] = [
   { sky0: "#FFF1E8", sky1: "#FFF9F4", far: "#FAD6BE", deck: "#F0A87C", deckSoft: "#FBE2D0", deco: "#D4814F" },
 ];
 
-/** 两位噗噗兄弟的配色:朵朵粉,星星蓝 */
+/** 两位噗噗兄弟的配色:鸭梨粉,康康蓝 */
 const BROS = [
-  { body: "#FF9EC4", dark: "#E2749F", belly: "#FFE3EE", eye: "#5A3350", name: "朵朵" },
-  { body: "#8FBEF5", dark: "#6693CE", belly: "#E1EDFC", eye: "#2F4A73", name: "星星" },
+  { body: "#FF9EC4", dark: "#E2749F", belly: "#FFE3EE", eye: "#5A3350", name: "鸭梨" },
+  { body: "#8FBEF5", dark: "#6693CE", belly: "#E1EDFC", eye: "#2F4A73", name: "康康" },
 ];
 
 /** 三种咕噜怪的配色 */
@@ -655,8 +655,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
         padCount === 1
           ? "WASD / 方向键移动 · F 或 L 吹泡泡 · G 或 K 噗一口"
           : pi === 0
-            ? "朵朵 · W A S D · F 吹 · G 噗"
-            : "星星 · ↑←↓→ · L 吹 · K 噗"
+            ? "鸭梨 · W A S D · F 吹 · G 噗"
+            : "康康 · ↑←↓→ · L 吹 · K 噗"
       )
     );
     for (const k of PAD_KEYS) {
@@ -756,8 +756,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   /**
    * 这颗键是被哪根手指按住的。
    *
-   * 1.1 在 window 上挂了一条「抬手就全松」:两个人同屏时,朵朵抬一下手会把
-   * 星星正按着的键也一起清掉,人当场定在原地。这里记住按下时的 `pointerId`,
+   * 1.1 在 window 上挂了一条「抬手就全松」:两个人同屏时,鸭梨抬一下手会把
+   * 康康正按着的键也一起清掉,人当场定在原地。这里记住按下时的 `pointerId`,
    * window 上那条只松掉**同一根手指**按着的键,另一个人按着的原样留着。
    */
   const heldBy = new Map<HTMLButtonElement, number>();
@@ -1237,9 +1237,9 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   function refreshHud(): void {
     if (world.rivalry) {
       leftChip.className = "pfb-chip pfb-chip-a";
-      leftChip.textContent = `🌸 朵朵 ${world.players[0]?.pops ?? 0}`;
+      leftChip.textContent = `🍐 鸭梨 ${world.players[0]?.pops ?? 0}`;
       rightChip.className = "pfb-chip pfb-chip-b";
-      rightChip.textContent = `⭐ 星星 ${world.players[1]?.pops ?? 0}`;
+      rightChip.textContent = `👓 康康 ${world.players[1]?.pops ?? 0}`;
       const target = Math.max(1, world.def.roundTarget);
       const lead = Math.max(world.players[0]?.pops ?? 0, world.players[1]?.pops ?? 0);
       barFill.style.width = `${Math.min(100, (lead / target) * 100)}%`;

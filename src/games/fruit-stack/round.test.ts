@@ -3,7 +3,7 @@
  *
  * 原来 `checkEnd` 是四个分支挨个问，`winner` 每一支都被显式改写，
  * 于是「同一帧两边都达标」永远算 0 号赢，`roundOver()` 里那句「这一局打平」够不着；
- * 「1 号收摊」还被记成 `cleared: true, reason: "goal"`（星星堆爆了却写成朵朵达标过关）。
+ * 「1 号收摊」还被记成 `cleared: true, reason: "goal"`（康康堆爆了却写成鸭梨达标过关）。
  */
 import { describe, expect, it } from "vitest";
 import { decideRound, type BowlEnd } from "./index";

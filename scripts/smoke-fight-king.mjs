@@ -1,9 +1,9 @@
 /**
- * 朵星格斗王（fight-king）真机冒烟。
+ * 梨康格斗王（fight-king）真机冒烟。
  *
  * 逐条对着验收单跑：
  *  1. 两种视口（375×667 与 1280×800）都能挂载出画面，不白屏、不报错；
- *  2. 双人对战：两套键位互不抢占（只按朵朵的键，星星纹丝不动；反之亦然）；
+ *  2. 双人对战：两套键位互不抢占（只按鸭梨的键，康康纹丝不动；反之亦然）；
  *  3. 人机对战：让 AI 打站着不动的玩家，跑到真实胜负；
  *  4. 格斗塔：进第 1 关能挂出对局；
  *  5. 训练模式：帧数据表出得来；
@@ -102,7 +102,7 @@ async function run(page, viewport, label) {
   });
   check("对局画面撑满可用宽度", canvasBox.w > 200 && canvasBox.h > 60, `${Math.round(canvasBox.w)}×${Math.round(canvasBox.h)}`);
 
-  // 只按朵朵的攻击键：星星的元气条不该动
+  // 只按鸭梨的攻击键：康康的元气条不该动
   const before = await hud(page);
   await holdKeys(page, ["KeyD"], 900);
   await holdKeys(page, ["KeyF"], 700);
@@ -110,10 +110,10 @@ async function run(page, viewport, label) {
   check(
     "只按 1 号位键位时 2 号位不会被抢键",
     afterP1.widths[0] === before.widths[0],
-    `朵朵元气 ${before.widths[0]} → ${afterP1.widths[0]}`
+    `鸭梨元气 ${before.widths[0]} → ${afterP1.widths[0]}`
   );
 
-  // 只按星星的键：朵朵的元气条不该动
+  // 只按康康的键：鸭梨的元气条不该动
   const before2 = await hud(page);
   await holdKeys(page, ["ArrowLeft"], 500);
   await holdKeys(page, ["KeyK"], 700);
@@ -121,7 +121,7 @@ async function run(page, viewport, label) {
   check(
     "只按 2 号位键位时 1 号位不会被抢键",
     afterP2.widths[1] === before2.widths[1],
-    `星星元气 ${before2.widths[1]} → ${afterP2.widths[1]}`
+    `康康元气 ${before2.widths[1]} → ${afterP2.widths[1]}`
   );
 
   // 两个人分别打到对方，双方的元气条都能掉

@@ -188,7 +188,7 @@ describe("画布的读屏文字", () => {
     flushFrames(dom, 3);
     const canvas = dom.root.find((e) => e.tagName === "canvas")!;
     expect(canvas.getAttribute("role")).toBe("img");
-    expect(canvas.getAttribute("aria-label")).toMatch(/朵朵的果盆，0分，最大「籽」，盆里0颗/);
+    expect(canvas.getAttribute("aria-label")).toMatch(/鸭梨的果盆，0分，最大「籽」，盆里0颗/);
 
     fireWindow(dom, "keydown", { code: "KeyF" });
     flushFrames(dom, 4);

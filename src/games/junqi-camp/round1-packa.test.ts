@@ -10,8 +10,8 @@
  *
  * 标了「【已知问题】」的用例断言的是**当前行为**，修好之后会红，那时候连断言一起翻面。
  * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
- *  - PA-JQ-1（严重）：双人同屏只有一个共用光标，星星的方向键在朵朵回合照样拨得动它；
- *  - PA-JQ-2（一般，与 PA-JQ-1 同根）：星星那套 L / K 一个都没接，第二个人只能借朵朵的 F / G。
+ *  - PA-JQ-1（严重）：双人同屏只有一个共用光标，康康的方向键在鸭梨回合照样拨得动它；
+ *  - PA-JQ-2（一般，与 PA-JQ-1 同根）：康康那套 L / K 一个都没接，第二个人只能借鸭梨的 F / G。
  *    这两条第 1 轮修复员已一起修（每个座位各一个光标、键位按座位派发），
  *    「双人同屏键位」那一组断言已经翻成修好后的行为；
  *  - PA-JQ-3（一般）：暂停时按「确认」不落子，但已经选好的落点被悄悄丢掉了。
@@ -284,7 +284,7 @@ describe("PA-JQ · 战役 1 / 100 / 188 关", () => {
         ).not.toBeNull();
         expect(
           cellsOnScreen().some((c) => c.className.includes("jq-duo")),
-          "朵朵一枚能动的子都没有"
+          "鸭梨一枚能动的子都没有"
         ).toBe(true);
         await playSolution(level, state, ends);
         expect(ends, `第 ${human} 关走完参考解没收场`).toHaveLength(1);
@@ -316,33 +316,33 @@ describe("PA-JQ · 战役 1 / 100 / 188 关", () => {
 /* ------------------------------------------------------------------ */
 
 describe("PA-JQ · 双人同屏键位", () => {
-  it("朵朵那套管用：WASD 挪光标、F 选子、G 取消", () => {
+  it("鸭梨那套管用：WASD 挪光标、F 选子、G 取消", () => {
     const { table } = duelTable();
     expect(cursorAt(), "光标不在自己家门口").toBe(idx(9, 2));
     driveCursorTo(DUEL_START, ["w", "s", "a", "d"]);
     expect(cursorAt()).toBe(DUEL_START);
     key("f");
-    expect(selectedAt(), "F 没选中朵朵的连长").toBe(DUEL_START);
+    expect(selectedAt(), "F 没选中鸭梨的连长").toBe(DUEL_START);
     key("g");
     expect(selectedAt(), "G 没把选中取消掉").toBe(-1);
     table.destroy();
   });
 
-  it("两套键位各管各的光标：朵朵回合里星星的方向键拨不走朵朵的光标", () => {
+  it("两套键位各管各的光标：鸭梨回合里康康的方向键拨不走鸭梨的光标", () => {
     const { state, table } = duelTable();
     expect(state.turn).toBe("duo");
     const home = cursorAt();
     key("ArrowUp");
     key("ArrowUp");
-    expect(cursorAt(), "星星的方向键把朵朵的光标拨走了").toBe(home);
+    expect(cursorAt(), "康康的方向键把鸭梨的光标拨走了").toBe(home);
     key("w");
-    expect(cursorAt(), "朵朵自己的 W 反而不管用了").toBe(home - 5);
+    expect(cursorAt(), "鸭梨自己的 W 反而不管用了").toBe(home - 5);
     key("s");
     expect(cursorAt()).toBe(home);
     table.destroy();
   });
 
-  it("轮到星星时反过来也一样：朵朵的 WASD 拨不走星星的光标", async () => {
+  it("轮到康康时反过来也一样：鸭梨的 WASD 拨不走康康的光标", async () => {
     const { state, ends, table } = duelTable();
     clickMove(DUEL_START, DUEL_SIDESTEP);
     await waitFor(() => state.turn === "star");
@@ -352,30 +352,30 @@ describe("PA-JQ · 双人同屏键位", () => {
     const here = cursorAt();
     key("w");
     key("w");
-    expect(cursorAt(), "朵朵的 WASD 把星星的光标拨走了").toBe(here);
+    expect(cursorAt(), "鸭梨的 WASD 把康康的光标拨走了").toBe(here);
     key("ArrowDown");
-    expect(cursorAt(), "星星自己的方向键不管用了").toBe(here + 5);
+    expect(cursorAt(), "康康自己的方向键不管用了").toBe(here + 5);
     table.destroy();
   });
 
-  it("朵朵回合里星星先挪好自己的光标，换手之后那一格还在", async () => {
+  it("鸭梨回合里康康先挪好自己的光标，换手之后那一格还在", async () => {
     const { state, ends, table } = duelTable();
-    // 朵朵回合：星星先把自己的光标往下挪两格，朵朵这边看不出任何变化
+    // 鸭梨回合：康康先把自己的光标往下挪两格，鸭梨这边看不出任何变化
     const duoHome = cursorAt();
     key("ArrowDown");
     key("ArrowDown");
-    expect(cursorAt(), "星星的方向键串到朵朵的光标上了").toBe(duoHome);
+    expect(cursorAt(), "康康的方向键串到鸭梨的光标上了").toBe(duoHome);
 
     clickMove(DUEL_START, DUEL_SIDESTEP);
     await waitFor(() => state.turn === "star");
     await sleep(120);
     expect(ends, "第一手就收场了，后面验不了").toHaveLength(0);
-    // 换手之后画面上换成星星那一个光标，刚才挪的两格记着
-    expect(cursorAt(), "星星换手之后光标没接上刚才挪的两格").toBe(idx(4, 2));
+    // 换手之后画面上换成康康那一个光标，刚才挪的两格记着
+    expect(cursorAt(), "康康换手之后光标没接上刚才挪的两格").toBe(idx(4, 2));
     table.destroy();
   });
 
-  it("星星那套 L / K 接上了：L 确认、K 取消，都只管星星自己", async () => {
+  it("康康那套 L / K 接上了：L 确认、K 取消，都只管康康自己", async () => {
     const { state, ends, table } = duelTable();
     clickMove(DUEL_START, DUEL_SIDESTEP);
     await waitFor(() => state.turn === "star");
@@ -383,51 +383,51 @@ describe("PA-JQ · 双人同屏键位", () => {
     expect(ends, "第一手就收场了，后面验不了").toHaveLength(0);
 
     driveCursorTo(STAR_START, ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
-    expect(cursorAt(), "方向键没把星星的光标挪到自己的连长上").toBe(STAR_START);
+    expect(cursorAt(), "方向键没把康康的光标挪到自己的连长上").toBe(STAR_START);
     key("f");
-    expect(selectedAt(), "轮到星星，朵朵的 F 却选中了子").toBe(-1);
+    expect(selectedAt(), "轮到康康，鸭梨的 F 却选中了子").toBe(-1);
     key("l");
-    expect(selectedAt(), "L 没选中星星的连长").toBe(STAR_START);
+    expect(selectedAt(), "L 没选中康康的连长").toBe(STAR_START);
     key("g");
-    expect(selectedAt(), "轮到星星，朵朵的 G 却取消掉了").toBe(STAR_START);
+    expect(selectedAt(), "轮到康康，鸭梨的 G 却取消掉了").toBe(STAR_START);
     key("k");
-    expect(selectedAt(), "K 没把星星的选中取消掉").toBe(-1);
+    expect(selectedAt(), "K 没把康康的选中取消掉").toBe(-1);
     table.destroy();
   });
 
-  it("朵朵回合里星星按 L / K 一概不生效", () => {
+  it("鸭梨回合里康康按 L / K 一概不生效", () => {
     const { state, table } = duelTable();
     expect(state.turn).toBe("duo");
     driveCursorTo(DUEL_START, ["w", "s", "a", "d"]);
     key("l");
-    expect(selectedAt(), "星星的 L 替朵朵选了子").toBe(-1);
+    expect(selectedAt(), "康康的 L 替鸭梨选了子").toBe(-1);
     key("f");
     expect(selectedAt()).toBe(DUEL_START);
     key("k");
-    expect(selectedAt(), "星星的 K 取消掉了朵朵的选中").toBe(DUEL_START);
+    expect(selectedAt(), "康康的 K 取消掉了鸭梨的选中").toBe(DUEL_START);
     key("g");
     expect(selectedAt()).toBe(-1);
     table.destroy();
   });
 
-  it("两个人各走一手，星星扛回旗子就真收场", async () => {
+  it("两个人各走一手，康康扛回旗子就真收场", async () => {
     const { state, ends, table } = duelTable();
     clickMove(DUEL_START, DUEL_SIDESTEP);
     await waitFor(() => state.turn === "star");
     await sleep(120);
-    expect(turnChipText()).toContain("星星");
+    expect(turnChipText()).toContain("康康");
 
     clickMove(STAR_START, DUO_FLAG);
     await waitFor(() => ends.length > 0);
     expect(ends, "旗子被扛走了却没收场").toHaveLength(1);
-    // createTable 站在朵朵这一边报结果：星星赢了就是 won=false、不是平局
+    // createTable 站在鸭梨这一边报结果：康康赢了就是 won=false、不是平局
     expect(ends[0].won).toBe(false);
     expect(ends[0].draw).toBe(false);
     expect(state.outcome?.winner).toBe("star");
     table.destroy();
   });
 
-  it("单人局里两套键位都归朵朵，方向键与 L / K 老路不断", () => {
+  it("单人局里两套键位都归鸭梨，方向键与 L / K 老路不断", () => {
     const state = duelState();
     const ends: TableResult[] = [];
     const table = createTable(dom.root as unknown as HTMLElement, {
@@ -463,7 +463,7 @@ describe("PA-JQ · 双人同屏键位", () => {
     await sleep(120);
     expect(state.plies, "暂停时还是把子走了").toBe(before);
     key("Escape");
-    expect(turnChipText()).toContain("轮到朵朵");
+    expect(turnChipText()).toContain("轮到鸭梨");
     clickMove(DUEL_START, DUEL_SIDESTEP);
     await waitFor(() => state.plies > before);
     expect(state.plies, "恢复之后走不动了").toBe(before + 1);
@@ -725,7 +725,7 @@ describe("PA-JQ · meta 与实现", () => {
 
 describe("PA-JQ · destroy 之后", () => {
   it("拆掉棋盘之后 AI 的 setTimeout 不再回来落子", async () => {
-    // 轮到星星，AI 已经排上 560ms 之后的那一手
+    // 轮到康康，AI 已经排上 560ms 之后的那一手
     const state = duelState();
     state.turn = "star";
     const ends: TableResult[] = [];

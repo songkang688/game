@@ -33,7 +33,7 @@ function refHero(level: number, element: Element, rankBoost = 0): Fighter {
   const s = expectedHero(level);
   const rank = Math.max(1, Math.min(5, 1 + Math.floor(level / 45) + rankBoost));
   return makeFighter({
-    name: "朵朵", emoji: "🌸", element,
+    name: "鸭梨", emoji: "🍐", element,
     maxHp: s.maxHp, atk: s.atk, def: s.def, spd: s.spd, crit: 0.1,
     skills: [{ id: "gustStep", rank }, { id: "crackHammer", rank }, { id: "warmSong", rank }],
     bag: [{ id: "honey", count: 2 }, { id: "berry", count: 2 }]
@@ -143,7 +143,7 @@ describe("勇者小路 · R3 · 188 关一关不漏", () => {
   });
 
   it("赢一次也输一次：光着身子闯每一章的首领都会输，收场话一个吓人的字都没有", () => {
-    const bare = makeFighter({ name: "朵朵", emoji: "🌸", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
+    const bare = makeFighter({ name: "鸭梨", emoji: "🍐", element: "grass", maxHp: 30, atk: 3, def: 1, spd: 5, crit: 0 });
     for (const lv of bossLevels()) {
       const res = simulateBattle(bare, makeFighter(makeBossSpec(lv)), lv * 91 + 3, 60);
       expect(res.winner, `第 ${lv + 1} 关`).toBe("foe");

@@ -100,8 +100,8 @@ export const HEROES: readonly CollectionItem[] = [
     id: "duoduo",
     kind: "hero",
     slot: "hero",
-    name: "朵朵",
-    blurb: "扎双马尾的小队长,起跑前总要把鞋带系两遍。",
+    name: "鸭梨",
+    blurb: "白蕾丝配藏青针织衫的小队长,出门前总要把珍珠耳钉戴好。",
     cost: 0,
     stats: { coin: 5, luck: 4 },
     color: "#ff9ec4",
@@ -111,8 +111,8 @@ export const HEROES: readonly CollectionItem[] = [
     id: "xingxing",
     kind: "hero",
     slot: "hero",
-    name: "星星",
-    blurb: "背蓝书包的短跑手,最爱在下坡那一段加速。",
+    name: "康康",
+    blurb: "戴圆框眼镜的短跑手,米白羽绒服一鼓风就跑得更快。",
     cost: 0,
     stats: { speed: 5, jump: 4 },
     color: "#6ec1ff",
@@ -368,7 +368,7 @@ export function itemsOfKind(kind: ItemKind): CollectionItem[] {
   return ITEMS.filter((it) => it.kind === kind);
 }
 
-/** 开局就跟着你的那两位(朵朵和星星),不花星星 */
+/** 开局就跟着你的那两位(鸭梨和康康),不花星星 */
 export const STARTER_IDS: readonly string[] = ITEMS.filter((it) => it.cost === 0).map(
   (it) => it.id
 );
@@ -384,7 +384,7 @@ export function unlockCost(item: CollectionItem): number {
 
 /**
  * 从 `fromLevel` 升到下一级要花多少星星。
- * 越贵的收藏品升级越贵,但起步价压在 20 颗,保证白送的朵朵和星星也能慢慢练。
+ * 越贵的收藏品升级越贵,但起步价压在 20 颗,保证白送的鸭梨和康康也能慢慢练。
  */
 export function upgradeCost(item: CollectionItem, fromLevel: number): number {
   const lv = Math.min(MAX_LEVEL - 1, Math.max(1, Math.floor(fromLevel) || 1));

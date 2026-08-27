@@ -8,7 +8,7 @@ export { meta };
 //  - 闯关:188 关八章,从兵的走法一路练到四步杀,最后一章还要学会怎么把局面走成和棋;
 //  - 人机对战:菜鸟 / 普通 / 高手 / 地狱四档,可以选执白还是执黑;
 //  - 无尽:一局接一局的残局连胜,对手逐场加深;
-//  - 双人同屏:朵朵执白、星星执黑,可以随时翻转棋盘。
+//  - 双人同屏:鸭梨执白、康康执黑,可以随时翻转棋盘。
 //
 // 走法、判胜负、AI 全部自己写,没有走法库、没有 wasm、没有外部引擎,断网照样下。
 import { save } from "../../engine/save";
@@ -33,8 +33,8 @@ import { insufficientMaterial, status, type Game, type Status } from "./rules";
 import { AI_BLURB, AI_LABEL, AI_TIERS, TIER_PLAN, chooseMove, forcesMate, type AiTier } from "./search";
 import { createBoard, type BoardHandle, type Judgement, type SeatPlan } from "./view";
 
-const DUO: SeatPlan = { name: "朵朵", emoji: "🌸", color: "#F7DCE8", ai: null };
-const XING: SeatPlan = { name: "星星", emoji: "⭐", color: "#DCE6F7", ai: null };
+const DUO: SeatPlan = { name: "鸭梨", emoji: "🍐", color: "#F7DCE8", ai: null };
+const XING: SeatPlan = { name: "康康", emoji: "👓", color: "#DCE6F7", ai: null };
 
 function aiSeat(tier: AiTier): SeatPlan {
   return { name: AI_LABEL[tier], emoji: "🤖", color: "#E4E0F2", ai: tier };
@@ -305,7 +305,7 @@ function mountVersus(
       banner: `第 ${round} 局`,
       tip: cfg.tier
         ? `你执${cfg.side === WHITE ? "白" : "黑"}。白方先走，点一个自己的棋子再点落点。`
-        : "朵朵执白先走，星星执黑。手机点选，键盘朵朵 WASD+F 选、G 取消；星星 方向键+L 选、K 取消。",
+        : "鸭梨执白先走，康康执黑。手机点选，键盘鸭梨 WASD+F 选、G 取消；康康 方向键+L 选、K 取消。",
       showHints: true,
       allowFlip: true,
       allowResign: true,

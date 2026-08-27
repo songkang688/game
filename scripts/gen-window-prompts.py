@@ -34,14 +34,14 @@ COMMON_RULES = r'''
 ## 二、公共硬约束（每一款都适用）
 
 - 面向孩子的文案和代码注释禁止商标。黑名单至少扫：`愤怒的小鸟` `植物大战僵尸` `水果忍者` `地铁跑酷` `森林冰火人` `屁王兄弟` `拳皇` `街霸` `超级玛丽` `马里奥` `割绳子` `俄罗斯方块` `Tetris` `贪吃蛇大作战` `球球大作战` `我的世界` `Minecraft` `三国杀` `大富翁` `斗地主` `Pac-Man` `吃豆人` `宝可梦` `皮卡丘` `奥特曼` `喜羊羊` `蛋仔` `原神` `王者荣耀`。命中即自己改掉再交。
-- 角色只用朵朵 / 星星及本作原创配角。无血、无死亡描写。失败只鼓励。
+- 角色只用鸭梨 / 康康及本作原创配角。无血、无死亡描写。失败只鼓励。
 - 无广告、无内购、无账号、无联网上报。IO 类本地人机，禁止 Socket。
 - **禁止 three.js**、禁止 CDN 字体/外链音源/统计 SDK。离线可玩。
 - 不把 `dist/`、`release/`、安装包、APK、大视频推进 git。
 - 目录：`src/games/<id>/meta.ts` 纯数据、禁止 import 玩法；`index.ts` 顶部 `export {{ meta }} from "./meta"`，导出 `mount(api): {{ destroy }}`。
 - 存档 key 只增不改：`yiduo-yixing.save.v1`、`l99.<id>`、`l99skip.<id>`、`collection.v1`、`fav.v1`、`recent.v1`、1.2 新增 `root.v1`（密码绝不能写入任何 storage）。
 - 闯关走 `level99.ts`（188 关）；答题走 `quiz99.ts`；音效只用 `api.play(...)`。
-- 双人键位：朵朵 `WASD+F+G`，星星 `方向键+L+K`，`Esc` 暂停；手机必须有触屏等价。
+- 双人键位：鸭梨 `WASD+F+G`，康康 `方向键+L+K`，`Esc` 暂停；手机必须有触屏等价。
 - `destroy` 必须拆掉监听 / timer / rAF / AudioContext。
 - 每款都要能回答：能闯关吗？能对战吗？能无尽吗？并把 `meta.modes`、`meta.platform`（缺省当 `both`）填准。
 - 新游戏每款 ≥ 15 个单测；升级每款新增 ≥ 8 个单测。
@@ -158,7 +158,7 @@ WINDOWS = [
 | --- | --- | --- |
 | A | `combo-clash` 连招对决 | `docs/plan-1.2-step3-A-combo-clash.md` |
 | B | `mahjong-bloom` 花开麻将 | `docs/plan-1.2-step3-B-mahjong-bloom.md` |
-| C | `star-estate` 朵星地产 | `docs/plan-1.2-step3-C-star-estate.md` |
+| C | `star-estate` 梨康地产 | `docs/plan-1.2-step3-C-star-estate.md` |
 
 ### 第 4 步 · 新游戏
 
@@ -203,7 +203,7 @@ WINDOWS = [
 | --- | --- | --- |
 | A | `dot-maze` 豆豆迷宫 | `docs/plan-1.2-step6-A-dot-maze.md` |
 | B | `fruit-stack` 果果合成 | `docs/plan-1.2-step6-B-fruit-stack.md` |
-| C | `pool-stars` 朵星台球 | `docs/plan-1.2-step6-C-pool-stars.md` |
+| C | `pool-stars` 梨康台球 | `docs/plan-1.2-step6-C-pool-stars.md` |
 
 ### 第 7 步 · 新游戏
 

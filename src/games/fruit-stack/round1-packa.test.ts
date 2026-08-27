@@ -192,22 +192,22 @@ describe("PA-FS-2 · 双人同屏键位互不抢占", () => {
     return { handle, sounds: rec.sounds, canvases: dom.root.findAll((e) => e.tagName === "canvas") };
   }
 
-  it("F 只放朵朵那一盆，L 只放星星那一盆", () => {
+  it("F 只放鸭梨那一盆，L 只放康康那一盆", () => {
     const { handle, canvases } = openDuo();
     expect(canvases).toHaveLength(2);
     fireWindow(dom, "keydown", { code: "KeyF" });
     flushFrames(dom, 4);
-    expect(canvases[0].getAttribute("data-drops"), "F 没放进朵朵那一盆").toBe("1");
-    expect(canvases[1].getAttribute("data-drops"), "F 顺手也放了星星那一盆").toBe("0");
+    expect(canvases[0].getAttribute("data-drops"), "F 没放进鸭梨那一盆").toBe("1");
+    expect(canvases[1].getAttribute("data-drops"), "F 顺手也放了康康那一盆").toBe("0");
 
     fireWindow(dom, "keydown", { code: "KeyL" });
     flushFrames(dom, 4);
-    expect(canvases[1].getAttribute("data-drops"), "L 没放进星星那一盆").toBe("1");
-    expect(canvases[0].getAttribute("data-drops"), "L 顺手又放了朵朵那一盆").toBe("1");
+    expect(canvases[1].getAttribute("data-drops"), "L 没放进康康那一盆").toBe("1");
+    expect(canvases[0].getAttribute("data-drops"), "L 顺手又放了鸭梨那一盆").toBe("1");
     handle.destroy();
   });
 
-  it("A / D 只挪朵朵的落点，方向键只挪星星的落点", () => {
+  it("A / D 只挪鸭梨的落点，方向键只挪康康的落点", () => {
     const { handle, canvases } = openDuo();
     const aim = (c: El): string => c.getAttribute("data-aim") ?? c.getAttribute("aria-label") ?? "";
     const before = [aim(canvases[0]), aim(canvases[1])];
@@ -240,24 +240,24 @@ describe("PA-FS-2 · 双人同屏键位互不抢占", () => {
     handle.destroy();
   });
 
-  it("朵朵的 G 与星星的 K 把跑偏的落点收回盆正中央", () => {
+  it("鸭梨的 G 与康康的 K 把跑偏的落点收回盆正中央", () => {
     const { handle, canvases } = openDuo();
     const aim = (i: number): number => Number(canvases[i].getAttribute("data-aim"));
     const center = [aim(0), aim(1)];
     // 两个人各自把落点推到一边
     hold("KeyD", 6);
     hold("ArrowLeft", 6);
-    expect(aim(0), "朵朵的落点没挪动").toBeGreaterThan(center[0]);
-    expect(aim(1), "星星的落点没挪动").toBeLessThan(center[1]);
+    expect(aim(0), "鸭梨的落点没挪动").toBeGreaterThan(center[0]);
+    expect(aim(1), "康康的落点没挪动").toBeLessThan(center[1]);
 
     fireWindow(dom, "keydown", { code: "KeyG" });
     flushFrames(dom, 2);
-    expect(aim(0), "G 没把朵朵的落点收回中间").toBeCloseTo(center[0], 1);
-    expect(aim(1), "G 顺手把星星的落点也拨了").toBeLessThan(center[1]);
+    expect(aim(0), "G 没把鸭梨的落点收回中间").toBeCloseTo(center[0], 1);
+    expect(aim(1), "G 顺手把康康的落点也拨了").toBeLessThan(center[1]);
 
     fireWindow(dom, "keydown", { code: "KeyK" });
     flushFrames(dom, 2);
-    expect(aim(1), "K 没把星星的落点收回中间").toBeCloseTo(center[1], 1);
+    expect(aim(1), "K 没把康康的落点收回中间").toBeCloseTo(center[1], 1);
     handle.destroy();
   });
 
@@ -282,7 +282,7 @@ describe("PA-FS-2 · 双人同屏键位互不抢占", () => {
     expect(snap(), "上下键居然改动了盘面").toEqual(before);
     const tips = GUIDE.general.concat(GUIDE.entries.flatMap((e) => e.tips)).join(" ");
     expect(tips, "攻略里没写清这一款用不上上下键").toContain("W / S");
-    expect(tips, "攻略里没写清归位键").toMatch(/朵朵按 G、星星按 K/);
+    expect(tips, "攻略里没写清归位键").toMatch(/鸭梨按 G、康康按 K/);
     handle.destroy();
   });
 
@@ -308,7 +308,7 @@ describe("PA-FS-2 · 双人同屏键位互不抢占", () => {
     handle.destroy();
   });
 
-  it("人机对战里星星那套键不会替电脑动手", () => {
+  it("人机对战里康康那套键不会替电脑动手", () => {
     // 电脑自己也会一直投，所以只比「按了 L」和「没按 L」两局在同样帧数后的投放数
     function runAi(spamL: boolean): string | null {
       const handle = mount(fakeApi().api);
@@ -347,7 +347,7 @@ describe("L3A-5 · 遮罩挡得住手指，程序上也得挡住", () => {
     return { handle, canvases: dom.root.findAll((e) => e.tagName === "canvas") };
   }
 
-  /** 屏幕上那一组「◀ ▶ 放下」按 aria-label 认人：朵朵▶、朵朵放下…… */
+  /** 屏幕上那一组「◀ ▶ 放下」按 aria-label 认人：鸭梨▶、鸭梨放下…… */
   function padKey(label: string): El {
     const btn = dom.root.find((e) => e.getAttribute("aria-label") === label);
     if (!btn) throw new Error(`屏幕上找不到「${label}」钮`);
@@ -371,7 +371,7 @@ describe("L3A-5 · 遮罩挡得住手指，程序上也得挡住", () => {
     const { handle, canvases } = openDuo();
     esc();
     expect(dom.root.find((e) => e.className.includes("fs-veil")), "没盖上遮罩").not.toBeNull();
-    const drop = padKey("朵朵放下");
+    const drop = padKey("鸭梨放下");
     drop.dispatch("click", {});
     resumeAndSettle();
     expect(canvases[0].getAttribute("data-drops"), "遮罩盖着的时候「放下」把果子投下去了").toBe("0");
@@ -385,7 +385,7 @@ describe("L3A-5 · 遮罩挡得住手指，程序上也得挡住", () => {
     const { handle, canvases } = openDuo();
     const aim = (): number => Number(canvases[0].getAttribute("data-aim"));
     const before = aim();
-    const right = padKey("朵朵▶");
+    const right = padKey("鸭梨▶");
     esc();
     for (let i = 0; i < 6; i++) {
       right.dispatch("pointerdown", {});
@@ -420,7 +420,7 @@ describe("L3A-5 · 遮罩挡得住手指，程序上也得挡住", () => {
     handle.destroy();
   });
 
-  it("L3A-6：人机对战那一行提示也把朵朵的归位键写全了", () => {
+  it("L3A-6：人机对战那一行提示也把鸭梨的归位键写全了", () => {
     const handle = mount(fakeApi().api);
     byText("人机对战")!.dispatch("click");
     flushFrames(dom, 3);
@@ -569,7 +569,7 @@ describe("L3A-17 · 双盆一局的收场判定（`decideRound`）", () => {
     expect(out?.reason).toBe("goal");
   });
 
-  it("同一帧两边都收摊也是打平，收场理由跟着朵朵那一边说", () => {
+  it("同一帧两边都收摊也是打平，收场理由跟着鸭梨那一边说", () => {
     expect(decideRound([bowl({ lost: true }), bowl({ lost: true })])?.winner).toBe(-1);
     expect(decideRound([bowl({ lost: true }), bowl({ lost: true })])?.reason).toBe("over");
     const bothEmpty = decideRound([bowl({ lost: true, left: 0 }), bowl({ lost: true, left: 0 })]);
@@ -586,15 +586,15 @@ describe("L3A-17 · 双盆一局的收场判定（`decideRound`）", () => {
     expect(decideRound([bowl({ lost: true }), bowl({ won: true })])?.winner).toBe(1);
   });
 
-  it("星星把盆堆过线：判朵朵赢，但不再记成朵朵「达标过关」", () => {
+  it("康康把盆堆过线：判鸭梨赢，但不再记成鸭梨「达标过关」", () => {
     const out = decideRound([IDLE, bowl({ lost: true })]);
-    expect(out?.winner, "对家收摊了，赢的还是该判给朵朵").toBe(0);
-    expect(out?.cleared, "对家收摊被记成了朵朵达标过关").toBe(false);
+    expect(out?.winner, "对家收摊了，赢的还是该判给鸭梨").toBe(0);
+    expect(out?.cleared, "对家收摊被记成了鸭梨达标过关").toBe(false);
     expect(out?.reason, "对家收摊的收场理由被记成了 goal").toBe("over");
     expect(decideRound([IDLE, bowl({ lost: true, left: 0 })])?.reason).toBe("empty");
   });
 
-  it("朵朵那边堆过线 / 果子用完，收场理由分得开", () => {
+  it("鸭梨那边堆过线 / 果子用完，收场理由分得开", () => {
     expect(decideRound([bowl({ lost: true }), IDLE])).toEqual({ winner: 1, cleared: false, reason: "over" });
     expect(decideRound([bowl({ lost: true, left: 0 }), IDLE])).toEqual({
       winner: 1,

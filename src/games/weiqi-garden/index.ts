@@ -3,7 +3,7 @@ export { meta };
 
 /**
  * 围子花园:九路 / 十三路 / 十九路的围棋。
- * 188 关死活官子闯关 + 四档人机自由对战 + 九路连胜无尽 + 朵朵星星同屏双人,
+ * 188 关死活官子闯关 + 四档人机自由对战 + 九路连胜无尽 + 鸭梨康康同屏双人,
  * 棋力全部来自本仓库的启发式与浅层随机模拟,离线可玩,不接任何外部引擎。
  */
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
@@ -112,16 +112,16 @@ export type KeyAction = "up" | "down" | "left" | "right" | "confirm" | "pass" | 
 /**
  * 同屏双人开局前那一行说明。
  *
- * 原来只写了「点交叉点。F 确认,G 停一手」—— 那是朵朵那套键。
+ * 原来只写了「点交叉点。F 确认,G 停一手」—— 那是鸭梨那套键。
  * 坐在右边的孩子照着按 F,按的是对家的键,轮到自己反而不知道该按什么，
  * 所以两套键位各写各的。
  */
 export const DUO_HINT =
-  "朵朵执黑先走,星星执白,轮流点交叉点。朵朵 WASD 挪光标、F 落子、G 停一手;星星 方向键挪光标、L 落子、K 停一手。";
+  "鸭梨执黑先走,康康执白,轮流点交叉点。鸭梨 WASD 挪光标、F 落子、G 停一手;康康 方向键挪光标、L 落子、K 停一手。";
 
 /**
  * 点选落子是主要玩法,键盘是等价通道:
- * 方向键 / `WASD` 挪光标,`F`(朵朵)或 `L`(星星)确认落子,`G` / `K` 停一手,`Esc` 暂停。
+ * 方向键 / `WASD` 挪光标,`F`(鸭梨)或 `L`(康康)确认落子,`G` / `K` 停一手,`Esc` 暂停。
  */
 export function keyAction(key: string): KeyAction {
   switch (key) {
@@ -210,7 +210,7 @@ export function matchSay(
     return saySentence(["数一数阶段", `已标死 ${opts.dead ?? 0} 颗`], opts.note);
   }
   return saySentence(
-    [`第 ${moves} 手`, `轮到${colorName(turn)}`, `朵朵提了 ${captures.black} 颗`, `星星提了 ${captures.white} 颗`],
+    [`第 ${moves} 手`, `轮到${colorName(turn)}`, `鸭梨提了 ${captures.black} 颗`, `康康提了 ${captures.white} 颗`],
     opts.note
   );
 }
@@ -671,7 +671,7 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
     const last = state.moves.length ? state.moves[state.moves.length - 1].pt : null;
     view.render(state.board, { last, dead, ghost: null });
     turnChip.textContent = counting ? "🧮 数一数" : `轮到 ${colorName(state.turn)}`;
-    capChip.textContent = `提子 朵朵 ${state.captures[BLACK]} · 星星 ${state.captures[WHITE]}`;
+    capChip.textContent = `提子 鸭梨 ${state.captures[BLACK]} · 康康 ${state.captures[WHITE]}`;
     infoChip.textContent = `${SIZE_LABELS[opts.size]} · ${RULE_LABELS[opts.rule]} · 第 ${state.moves.length} 手`;
     if (note !== undefined) msg.textContent = note;
     // 同一句不重写:读屏对 live 区是「变了才念」,重复写会让它把没变的话再念一遍
@@ -785,14 +785,14 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
     const pt = aiMove(state.board, WHITE, tier, { ko: state.ko, history: state.history });
     if (pt === null) {
       state = passMove(state);
-      refresh("星星停了一手。");
+      refresh("康康停了一手。");
       afterMove();
       return;
     }
     const res = playMove(state, pt);
     if (!res.ok) {
       state = passMove(state);
-      refresh("星星停了一手。");
+      refresh("康康停了一手。");
       afterMove();
       return;
     }
@@ -800,7 +800,7 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
     state = res.state;
     opts.sfx(res.captured.length > 0 ? "pop" : "tap");
     if (res.captured.length > 0) animateCaptures(before, pt, res.captured, WHITE);
-    else refresh(`星星下在 ${coordLabel(opts.size, pt)}。`);
+    else refresh(`康康下在 ${coordLabel(opts.size, pt)}。`);
     afterMove();
   }
 
@@ -832,7 +832,7 @@ function createMatch(host: HTMLElement, opts: MatchOptions): Match {
     box.className = "wq-over";
     const t = document.createElement("div");
     t.className = "wq-over-t";
-    t.textContent = verdict.winner === "draw" ? "和棋!" : verdict.winner === "black" ? "朵朵赢啦!" : "星星赢啦!";
+    t.textContent = verdict.winner === "draw" ? "和棋!" : verdict.winner === "black" ? "鸭梨赢啦!" : "康康赢啦!";
     const s = document.createElement("div");
     s.className = "wq-over-s";
     s.textContent = `${verdict.text} 贴还 ${verdict.komi}。`;
@@ -1102,7 +1102,7 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
       finishLose("这块差一口气,下次先补一手。再来一次一定行!");
       return;
     }
-    // 对局任务里星星会还手,别的题型让玩家安静地想
+    // 对局任务里康康会还手,别的题型让玩家安静地想
     if (level.kind === "battle") {
       later(() => {
         if (done || paused) return;
@@ -1114,7 +1114,7 @@ export function mountPuzzle(host: HTMLElement, opts: PuzzleOptions): PlayHandle 
           if (r.ok) state = r.state;
           else state = passMove(state);
         }
-        refresh("星星应了一手,再数一遍气。");
+        refresh("康康应了一手,再数一遍气。");
       }, 240);
     }
   }

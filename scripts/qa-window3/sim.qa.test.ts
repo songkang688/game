@@ -240,7 +240,7 @@ describe("prince-princess", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11-C 朵朵大战星星
+// 11-C 鸭梨大战康康
 // ---------------------------------------------------------------------------
 describe("duo-vs-star", () => {
   it("对战分得出胜负 / 12 位角色胜率不偏 / 车轮战能连打", async () => {
@@ -489,7 +489,7 @@ describe("bumper-cars", () => {
 
     const boot = (lv: ReturnType<typeof buildLevel>, mySkill: number, drive: boolean) => {
       const cars = [
-        logic.makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
+        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
         ...lv.foes.map((foe, i) => {
           const spot = lv.foeSpawns[i] ?? lv.foeSpawns[0] ?? lv.spawn;
           return logic.makeCar({ id: i + 1, name: foe.name, emoji: foe.emoji, color: foe.color, team: 1, x: spot.x, y: spot.y, lives: foe.lives, mass: foe.mass, r: foe.r, ai: true });
@@ -600,7 +600,7 @@ describe("snow-fight", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11-A 朵星双人冲刺
+// 11-A 梨康双人冲刺
 // ---------------------------------------------------------------------------
 describe("duo-rush", () => {
   it("竞速能跑出名次 / 撞满会掉血 / 无尽赛道能一直生成", async () => {
@@ -634,7 +634,7 @@ describe("duo-rush", () => {
       );
       if (winner === 0 || winner === 1) decided++;
       lines.push(
-        `${lvl}档:朵朵 ${a.dist.toFixed(0)}米/撞${a.crashes} vs 星星 ${b.dist.toFixed(0)}米/撞${b.crashes} → 胜者${winner}`
+        `${lvl}档:鸭梨 ${a.dist.toFixed(0)}米/撞${a.crashes} vs 康康 ${b.dist.toFixed(0)}米/撞${b.crashes} → 胜者${winner}`
       );
     }
     r.win = decided > 0;
@@ -659,7 +659,7 @@ describe("duo-rush", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11-B 朵星擂台
+// 11-B 梨康擂台
 // ---------------------------------------------------------------------------
 describe("duo-arena", () => {
   it("三局两胜能收官 / 人机四档强度单调 / 守擂能连打", async () => {
@@ -695,7 +695,7 @@ describe("duo-arena", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 14-A 星星射击场
+// 14-A 康康射击场
 // ---------------------------------------------------------------------------
 describe("shoot-range", () => {
   it("命中率高能三星 / 误伤好人靶只剩一星 / 无尽越打越紧", async () => {
@@ -845,7 +845,7 @@ describe(`第 ${IDLE_LV + 1} 关摆烂对照`, () => {
       const logic = await import("../../src/games/bumper-cars/logic");
       const lv = buildLevel(IDLE_LV);
       const cars = [
-        logic.makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
+        logic.makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts, ai: true }),
         ...lv.foes.map((foe, i) => {
           const spot = lv.foeSpawns[i] ?? lv.foeSpawns[0] ?? lv.spawn;
           return logic.makeCar({ id: i + 1, name: foe.name, emoji: foe.emoji, color: foe.color, team: 1, x: spot.x, y: spot.y, lives: foe.lives, mass: foe.mass, r: foe.r, ai: true });

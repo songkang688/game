@@ -195,12 +195,12 @@ describe("豆豆迷宫 · 一局的推进", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* 双人追逃：星星操纵的那只小幽灵                                       */
+/* 双人追逃：康康操纵的那只小幽灵                                       */
 /* ------------------------------------------------------------------ */
 
 /**
  * 上排是一条笔直的长廊，巢在最右头，出生点在最左头；
- * 下排另开一条通道，方便把朵朵停在角落里单独看小幽灵怎么走。
+ * 下排另开一条通道，方便把鸭梨停在角落里单独看小幽灵怎么走。
  */
 function corridor(): Maze {
   return parseMaze([
@@ -212,13 +212,13 @@ function corridor(): Maze {
   ]);
 }
 
-/** 把朵朵停在左下角：脚下那格的下方是墙，它就走不动了，观察小幽灵不受干扰 */
+/** 把鸭梨停在左下角：脚下那格的下方是墙，它就走不动了，观察小幽灵不受干扰 */
 function parkPlayer(state: ReturnType<typeof createRun>): void {
   state.player = { x: 1, y: 3 };
   state.dir = "down";
 }
 
-describe("豆豆迷宫 · 星星操纵一只小幽灵", () => {
+describe("豆豆迷宫 · 康康操纵一只小幽灵", () => {
   it("没有指定 controlled 时四只全归 AI", () => {
     const state = createRun(cfg({ ghostCount: 4 }), 1);
     expect(state.controlled).toBe(-1);
@@ -231,7 +231,7 @@ describe("豆豆迷宫 · 星星操纵一只小幽灵", () => {
     expect(createRun(cfg({ ghostCount: 2, controlled: 1 }), 1).controlled).toBe(1);
   });
 
-  it("被操纵的那只完全听星星的，AI 不会再把方向覆盖掉", () => {
+  it("被操纵的那只完全听康康的，AI 不会再把方向覆盖掉", () => {
     const state = createRun(cfg({ maze: corridor(), ghostCount: 1, controlled: 0 }), 1);
     parkPlayer(state);
     expect(state.ghosts[0].cell).toEqual({ x: 9, y: 1 });
@@ -262,7 +262,7 @@ describe("豆豆迷宫 · 星星操纵一只小幽灵", () => {
     const state = createRun(cfg({ maze: corridor(), ghostCount: 1, controlled: 0 }), 1);
     parkPlayer(state);
     state.ghosts = state.ghosts.map((g) => ({ ...g, mood: "eyes" as const, cell: { x: 3, y: 3 } }));
-    // 星星这时按什么都不算数，眼睛只认巢
+    // 康康这时按什么都不算数，眼睛只认巢
     steerGhost(state, "left");
     for (let i = 0; i < 40 && state.ghosts[0].mood === "eyes"; i++) stepRun(state, 200);
     expect(state.ghosts[0].mood).not.toBe("eyes");
@@ -272,7 +272,7 @@ describe("豆豆迷宫 · 星星操纵一只小幽灵", () => {
   it("掉一次命之后 controlled 还指着同一只，位置也回到巢", () => {
     const state = createRun(cfg({ maze: corridor(), ghostCount: 2, controlled: 1, lives: 3 }), 1);
     const kind = state.ghosts[1].kind;
-    // 把被操纵的那只搬到朵朵下一步要踩的格子上
+    // 把被操纵的那只搬到鸭梨下一步要踩的格子上
     state.ghosts = state.ghosts.map((g, i) => (i === 1 ? { ...g, cell: { x: 2, y: 1 } } : g));
     requestTurn(state, "right", state.elapsed);
     stepRun(state, 100);

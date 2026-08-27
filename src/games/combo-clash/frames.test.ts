@@ -110,7 +110,7 @@ describe("combo-clash · 角色与帧数据", () => {
   });
 
   it("characterById 取不到也不会炸,退回第一位", () => {
-    expect(characterById("duoduo").name).toBe("朵朵");
+    expect(characterById("duoduo").name).toBe("鸭梨");
     expect(characterById("谁啊").id).toBe(CHARACTERS[0].id);
   });
 

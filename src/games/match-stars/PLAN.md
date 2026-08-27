@@ -84,7 +84,7 @@ planEndMs(tweens)     : number        整段下落什么时候结束
   人机三档：`rookie` 随机合法滑 / `normal` 会看一步连锁 / `expert` 会囤 4 连。
 - **无尽**：订单队列无限，每清 1 张 +1 步；难度来自订单更苛刻，没有倒计时。
   最高分走 `save.recordEndlessBest("match-stars", n)`。
-- **双人同屏**：朵朵 `WASD + F`、星星 方向键 `+ L`；手机上下半屏各自触控。
+- **双人同屏**：鸭梨 `WASD + F`、康康 方向键 `+ L`；手机上下半屏各自触控。
 
 ## 七、2.5D 决策
 

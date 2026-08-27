@@ -1,9 +1,9 @@
 /**
  * 翻翻暗棋 · 双人同屏的键位分家（QA 第 2 轮 · 包 B · R2B-1）。
  *
- * 修之前 `w/a/s/d` 与 `f` / `g` 是无条件接的：轮到星星时，坐左边的朵朵按 D 能拨光标、
- * 按 F 能直接替星星把这一手下掉，整盘还共用一个光标。
- * 这里守住三件事：一人一个光标、不是自己的回合按了不算、单人局里方向键仍是朵朵的别名。
+ * 修之前 `w/a/s/d` 与 `f` / `g` 是无条件接的：轮到康康时，坐左边的鸭梨按 D 能拨光标、
+ * 按 F 能直接替康康把这一手下掉，整盘还共用一个光标。
+ * 这里守住三件事：一人一个光标、不是自己的回合按了不算、单人局里方向键仍是鸭梨的别名。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { indexOf, type Cell, type Color, type Kind } from "./board";
@@ -72,24 +72,24 @@ function noteText(): string {
 }
 
 describe("双人同屏 · 一人一套键", () => {
-  it("轮到星星，朵朵的 WASD 拨不动光标", () => {
+  it("轮到康康，鸭梨的 WASD 拨不动光标", () => {
     const state = board("star");
     const table = mountTable(state, "human");
     const home = cursorAt();
     press("d");
-    expect(cursorAt(), "朵朵的 D 把星星的光标拨走了").toBe(home);
+    expect(cursorAt(), "鸭梨的 D 把康康的光标拨走了").toBe(home);
     press("s");
-    expect(cursorAt(), "朵朵的 S 把星星的光标拨走了").toBe(home);
+    expect(cursorAt(), "鸭梨的 S 把康康的光标拨走了").toBe(home);
     press("ArrowLeft");
-    expect(cursorAt(), "星星自己的方向键反而不管用了").toBe(home - 1);
+    expect(cursorAt(), "康康自己的方向键反而不管用了").toBe(home - 1);
     table.destroy();
   });
 
-  it("轮到星星，朵朵按 F 不会替星星落子", () => {
+  it("轮到康康，鸭梨按 F 不会替康康落子", () => {
     vi.useFakeTimers();
     const state = board("star");
     const table = mountTable(state, "human");
-    // 先把星星的光标挪到一枚盖着的子上，证明这一格本来是翻得动的
+    // 先把康康的光标挪到一枚盖着的子上，证明这一格本来是翻得动的
     const target = indexOf(2, 4);
     for (let g = 0; g < 40 && cursorAt() !== target; g++) {
       const cur = cursorAt();
@@ -102,29 +102,29 @@ describe("双人同屏 · 一人一套键", () => {
 
     press("f");
     vi.advanceTimersByTime(400);
-    expect(state.plies, "朵朵的 F 替星星把这一手下掉了").toBe(0);
+    expect(state.plies, "鸭梨的 F 替康康把这一手下掉了").toBe(0);
     expect(state.turn).toBe("star");
     expect(noteText()).not.toContain("翻开");
 
     press("l");
     vi.advanceTimersByTime(400);
-    expect(state.plies, "星星自己的 L 不管用了").toBe(1);
+    expect(state.plies, "康康自己的 L 不管用了").toBe(1);
     expect(state.turn).toBe("duo");
     table.destroy();
   });
 
-  it("轮到朵朵，星星的方向键与 L 都不算数", () => {
+  it("轮到鸭梨，康康的方向键与 L 都不算数", () => {
     vi.useFakeTimers();
     const state = board("duo");
     const table = mountTable(state, "human");
     const home = cursorAt();
     press("ArrowRight");
-    expect(cursorAt(), "星星的方向键把朵朵的光标拨走了").toBe(home);
+    expect(cursorAt(), "康康的方向键把鸭梨的光标拨走了").toBe(home);
     press("l");
     vi.advanceTimersByTime(400);
-    expect(state.plies, "星星的 L 替朵朵落子了").toBe(0);
+    expect(state.plies, "康康的 L 替鸭梨落子了").toBe(0);
     press("d");
-    expect(cursorAt(), "朵朵自己的 D 不管用了").toBe(home + 1);
+    expect(cursorAt(), "鸭梨自己的 D 不管用了").toBe(home + 1);
     table.destroy();
   });
 
@@ -132,14 +132,14 @@ describe("双人同屏 · 一人一套键", () => {
     vi.useFakeTimers();
     const state = board("duo");
     const table = mountTable(state, "human");
-    // 朵朵先把自己的光标挪到第 1 行第 3 格
+    // 鸭梨先把自己的光标挪到第 1 行第 3 格
     press("d");
     press("d");
     press("s");
     const duoSpot = cursorAt();
     expect(duoSpot).toBe(indexOf(1, 2));
 
-    // 换成星星走：屏幕上换成星星自己的光标，不是朵朵刚才那一格
+    // 换成康康走：屏幕上换成康康自己的光标，不是鸭梨刚才那一格
     state.turn = "star";
     table.destroy();
 
@@ -149,18 +149,18 @@ describe("双人同屏 · 一人一套键", () => {
     press("ArrowLeft");
     expect(cursorAt()).toBe(starHome - 1);
     press("w");
-    expect(cursorAt(), "朵朵的 W 串到星星的光标上了").toBe(starHome - 1);
+    expect(cursorAt(), "鸭梨的 W 串到康康的光标上了").toBe(starHome - 1);
     table2.destroy();
   });
 
-  it("星星回合按 G 收不掉朵朵那边的选择，朵朵回合按 K 也一样", () => {
+  it("康康回合按 G 收不掉鸭梨那边的选择，鸭梨回合按 K 也一样", () => {
     const state = board("duo");
     const table = mountTable(state, "human");
-    // 朵朵先选中自己的将
+    // 鸭梨先选中自己的将
     cells()[indexOf(0, 0)].dispatch("click", {});
     expect(cells()[indexOf(0, 0)].className).toContain("dc-sel");
     press("k");
-    expect(cells()[indexOf(0, 0)].className, "星星的 K 把朵朵选中的子收走了").toContain("dc-sel");
+    expect(cells()[indexOf(0, 0)].className, "康康的 K 把鸭梨选中的子收走了").toContain("dc-sel");
     press("g");
     expect(cells()[indexOf(0, 0)].className).not.toContain("dc-sel");
     table.destroy();

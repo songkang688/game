@@ -1,5 +1,5 @@
 /**
- * 朵朵大战星星 · 合作动作与合作特训三课的单测。
+ * 鸭梨大战康康 · 合作动作与合作特训三课的单测。
  *
  * 这一份守的是 1.2 最要紧的一条设计：顶举与接应**只有两个人才做得到**。
  * 所以下面既有纯函数的边界断言，也真的开一局只有一个人的对局，
@@ -386,6 +386,6 @@ describe("一个人过不了合作特训", () => {
     });
     for (let i = 0; i < 60 * 5; i++) stepMatch(s, 1 / 60, {});
     expect(s.over).toBe(false);
-    expect(fighterById(s.actors[0].slot.charId).name).toBe("朵朵");
+    expect(fighterById(s.actors[0].slot.charId).name).toBe("鸭梨");
   });
 });

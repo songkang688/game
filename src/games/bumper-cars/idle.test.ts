@@ -81,7 +81,7 @@ interface IdleRun {
 function idlePlay(level: number): IdleRun {
   const lv: CarLevel = buildLevel(level);
   const cars: Car[] = [
-    makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts }),
+    makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: lv.spawn.x, y: lv.spawn.y, lives: lv.hearts }),
     ...lv.foes.map((foe, i) => {
       const spot = lv.foeSpawns[i] ?? lv.foeSpawns[0] ?? lv.spawn;
       return makeCar({

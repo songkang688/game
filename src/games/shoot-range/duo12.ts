@@ -1,9 +1,9 @@
 /**
- * 星星射击场 1.2 · 双人同屏。
+ * 康康射击场 1.2 · 双人同屏。
  *
  * 1.1 是上下分屏：一人一块画布、一人一份完全一样的靶阵，两个人其实各玩各的。
  * 1.2 改成**同屏**：一套靶，两套准星，谁先打到算谁的，分数分列显示。
- * 朵朵是粉色准星，星星是蓝色准星；键盘两套键位并行，触屏按落点归属分给两个人，
+ * 鸭梨是粉色准星，康康是蓝色准星；键盘两套键位并行，触屏按落点归属分给两个人，
  * 所以「一人用键盘一人用手指」「两个人各按半边屏幕」都能同时动。
  *
  * 两种同屏玩法：
@@ -15,7 +15,7 @@ import { accuracy, duelResult } from "./logic";
 /** 两个人的准星颜色（也用在分数列与触屏按钮上） */
 export const DUO_INK = ["#B44F84", "#39699F"] as const;
 /** 两个人的名字 */
-export const DUO_NAME = ["朵朵", "星星"] as const;
+export const DUO_NAME = ["鸭梨", "康康"] as const;
 
 /** 比一比一局多少秒 */
 export const ARENA_SECONDS = 60;
@@ -43,7 +43,7 @@ export function makeDuoSide(index: number): DuoSide {
 }
 
 export interface ArenaOutcome {
-  /** 0 = 朵朵赢，1 = 星星赢，-1 = 平手 */
+  /** 0 = 鸭梨赢，1 = 康康赢，-1 = 平手 */
   winner: number;
   line: string;
 }

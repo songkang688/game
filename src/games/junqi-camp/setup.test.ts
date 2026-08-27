@@ -109,7 +109,7 @@ describe("军旗对决 · 布局合法性", () => {
     expect(BACK_TWO_ROWS.star).toContain(rowOf(guard));
   });
 
-  it("开一盘新棋，两边各 25 枚、朵朵先走、两份布阵都合法", () => {
+  it("开一盘新棋，两边各 25 枚、鸭梨先走、两份布阵都合法", () => {
     const s = newGame(9527);
     expect(s.turn).toBe("duo");
     expect(s.cells.filter((c) => c?.side === "duo")).toHaveLength(25);

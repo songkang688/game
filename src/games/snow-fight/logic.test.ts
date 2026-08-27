@@ -57,7 +57,7 @@ function aim(fromX: number, angle: number, targetX: number, targetY: number, win
 }
 
 describe("雪球大作战 · 键位", () => {
-  it("朵朵 WASD + F/G,星星 方向键 + L/K,两个人互不抢占", () => {
+  it("鸭梨 WASD + F/G,康康 方向键 + L/K,两个人互不抢占", () => {
     expect(keyConflicts()).toEqual([]);
     expect(KEY_MAP.KeyW.player).toBe(0);
     expect(KEY_MAP.KeyF).toEqual({ player: 0, action: "throw" });

@@ -284,7 +284,7 @@ async function main() {
     await sleep(240);
     if ((await sig()) !== before) wasd = true;
   }
-  log(wasd, "WASD 也推得动（朵朵键位）");
+  log(wasd, "WASD 也推得动（鸭梨键位）");
 
   await page.keyboard.press("Escape");
   await sleep(150);

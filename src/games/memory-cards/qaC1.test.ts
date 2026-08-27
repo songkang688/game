@@ -347,10 +347,10 @@ describe("档C R1 · memory-cards · 对战 / 双人玩到结算", () => {
     expect(new Set(s.turns).size).toBeGreaterThanOrEqual(1);
   });
 
-  it("两个座位就是朵朵和星星,没有别的角色", () => {
-    expect(SEAT_NAMES).toEqual(["朵朵", "星星"]);
-    expect(versusLine([3, 1])).toContain("朵朵");
-    expect(versusLine([1, 3])).toContain("星星");
+  it("两个座位就是鸭梨和康康,没有别的角色", () => {
+    expect(SEAT_NAMES).toEqual(["鸭梨", "康康"]);
+    expect(versusLine([3, 1])).toContain("鸭梨");
+    expect(versusLine([1, 3])).toContain("康康");
     expect(versusLine([2, 2])).toContain("平手");
   });
 });

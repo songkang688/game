@@ -1386,7 +1386,7 @@ export function endlessLine(wave: number, best: number): string {
 
 export type InputName = "up" | "right" | "down" | "left" | "dash" | "brake";
 
-/** 朵朵 WASD + F 冲刺 / G 刹车;星星 方向键 + L 冲刺 / K 刹车 */
+/** 鸭梨 WASD + F 冲刺 / G 刹车;康康 方向键 + L 冲刺 / K 刹车 */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {
   KeyW: { player: 0, action: "up" },
   KeyD: { player: 0, action: "right" },

@@ -84,9 +84,9 @@ describe("接住小水果 · R1 修复 · 全源码红线复核", () => {
     }
   });
 
-  it("角色只用朵朵和星星", () => {
-    expect(PLAYERS.doudou.name).toBe("朵朵");
-    expect(PLAYERS.star.name).toBe("星星");
+  it("角色只用鸭梨和康康", () => {
+    expect(PLAYERS.doudou.name).toBe("鸭梨");
+    expect(PLAYERS.star.name).toBe("康康");
   });
 
   it("三条漏球提示条条只描述、只给方法，最后一颗爱心也是鼓励", () => {

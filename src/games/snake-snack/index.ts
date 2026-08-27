@@ -612,7 +612,7 @@ function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => void } {
   (wrap.querySelector(".sn-right") as HTMLButtonElement).addEventListener("click", () => turn([1, 0]));
 
   const onKeyDown = (e: KeyboardEvent) => {
-    // 星星走方向键，朵朵走 WASD —— 双身位时两边都指挥同一套镜像规则
+    // 康康走方向键，鸭梨走 WASD —— 双身位时两边都指挥同一套镜像规则
     if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") { turn([0, -1]); e.preventDefault(); }
     if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") { turn([0, 1]); e.preventDefault(); }
     if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") { turn([-1, 0]); e.preventDefault(); }

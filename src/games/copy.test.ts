@@ -268,7 +268,7 @@ describe("文案红线 · 商标与官方角色名", () => {
   it("筛子确实能拦下踩线的句子", () => {
     expect(firstHit("跟着皮卡丘一起跑", BRAND_WORDS)).toBe("皮卡丘");
     expect(firstHit("这关有点像 Minecraft", BRAND_WORDS)).toBe("minecraft");
-    expect(firstHit("跟着朵朵和星星一起跑", BRAND_WORDS)).toBeNull();
+    expect(firstHit("跟着鸭梨和康康一起跑", BRAND_WORDS)).toBeNull();
   });
 });
 

@@ -53,7 +53,7 @@ export interface SeatState {
   discards: number[];
   flowers: number[];
   score: number;
-  /** 人类玩家：朵朵用 WASD+F/G，星星用方向键 +L/K */
+  /** 人类玩家：鸭梨用 WASD+F/G，康康用方向键 +L/K */
   human?: "duo" | "star";
   tier: AiTier;
   /** 门风 1..4 */
@@ -114,7 +114,7 @@ export interface TableOptions {
   melds?: Meld[][];
 }
 
-const DEFAULT_NAMES = ["朵朵", "糯糯", "星星", "云云"];
+const DEFAULT_NAMES = ["鸭梨", "糯糯", "康康", "云云"];
 
 /** 开一盘 */
 export function createTable(opts: TableOptions): TableState {

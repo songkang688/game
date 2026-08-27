@@ -248,15 +248,15 @@ describe("寻找外星朋友 · 计分与计时", () => {
 
 describe("寻找外星朋友 · 双人对战与无尽", () => {
   it("对战按找到的个数判胜负", () => {
-    expect(versusWinner(3, 1)).toBe("朵朵");
-    expect(versusWinner(1, 3)).toBe("星星");
+    expect(versusWinner(3, 1)).toBe("鸭梨");
+    expect(versusWinner(1, 3)).toBe("康康");
     expect(versusWinner(2, 2)).toBe("平局");
   });
 
   it("对战播报里带着比分,而且只出现本作角色名", () => {
-    expect(versusLine(3, 1)).toContain("朵朵");
+    expect(versusLine(3, 1)).toContain("鸭梨");
     expect(versusLine(3, 1)).toContain("3 比 1");
-    expect(versusLine(1, 4)).toContain("星星");
+    expect(versusLine(1, 4)).toContain("康康");
     expect(versusLine(2, 2)).toContain("平手");
   });
 

@@ -135,7 +135,7 @@ const STAR_MOVE: Record<string, [number, number]> = {
 
 /**
  * 键盘按下 → 这一座位要做什么。
- * 朵朵 `WASD` + `F`(填入) + `G`(切铅笔);星星 方向键 + `L`(填入) + `K`(切铅笔)。
+ * 鸭梨 `WASD` + `F`(填入) + `G`(切铅笔);康康 方向键 + `L`(填入) + `K`(切铅笔)。
  * 数字键 1–9 两边都能直接填(单人玩的时候最顺手)。
  */
 export function keyAction(key: string, who: Who, soloDigits = true): SeatAction | null {
@@ -948,7 +948,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const seats: SeatOpts[] = [
     {
-      name: "朵朵",
+      name: "鸭梨",
       who: "duo",
       entry,
       cell: cellPxFor(entry.n, viewportWidth(), spec.race ? 2 : 1),
@@ -1068,7 +1068,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
       hint: "两边是一模一样的题,谁先种满谁赢。",
       seats: [
         {
-          name: "朵朵",
+          name: "鸭梨",
           who: "duo",
           entry,
           cell: cellPxFor(entry.n, viewportWidth(), 2),
@@ -1154,7 +1154,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         hint: "错三题这一轮就结束,慢一点没关系。",
         seats: [
           {
-            name: "朵朵",
+            name: "鸭梨",
             who: "duo",
             entry,
             cell: cellPxFor(entry.n, viewportWidth(), 1),
@@ -1197,10 +1197,10 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const cell = cellPxFor(entry.n, viewportWidth(), 2);
     table = createTable(board, {
       goalText: "同一题,左右各种一片",
-      hint: "朵朵用 W A S D 移动、F 种下、G 切铅笔;星星用方向键、L 种下、K 切铅笔。手机上直接点各自的数字钮。",
+      hint: "鸭梨用 W A S D 移动、F 种下、G 切铅笔;康康用方向键、L 种下、K 切铅笔。手机上直接点各自的数字钮。",
       seats: [
         {
-          name: "🌸 朵朵",
+          name: "🍐 鸭梨",
           who: "duo",
           entry,
           cell,
@@ -1210,7 +1210,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
           onDone: () => undefined
         },
         {
-          name: "⭐ 星星",
+          name: "👓 康康",
           who: "star",
           entry,
           cell,

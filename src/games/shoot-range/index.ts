@@ -1,10 +1,10 @@
 import { meta } from "./meta";
 export { meta };
 
-// 星星射击场:188 关十大靶场 + 无尽「打不完的靶场」+ 双人同屏比一比 / 一起打。
+// 康康射击场:188 关十大靶场 + 无尽「打不完的靶场」+ 双人同屏比一比 / 一起打。
 //
 // 嘉年华打靶场:靶子是同心圆靶 / 气球 / 飞碟 / 铁皮机器人 / 分裂靶 / 护盾靶 / 彩虹靶,
-// 外加两种不许打的——举旗子的好人靶和朵朵的花朵靶。准星是一圈小花瓣加中心星点,
+// 外加两种不许打的——举旗子的好人靶和鸭梨的花朵靶。准星是一圈小花瓣加中心星点,
 // 不是瞄准镜十字线;打中只有「啵一声变彩纸」「摊手坐下」这类卡通反馈,没有任何受伤表现。
 //
 // 1.2 的三件事:手感三件套(feel12)、四类新靶(targets12)、
@@ -786,8 +786,8 @@ function createField(opts: FieldOptions): FieldHandle {
     name.textContent =
       opts.players === 2
         ? s.index === 0
-          ? "朵朵 WASD · F 发射 · G 装星星"
-          : "星星 方向键 · L 发射 · K 装星星"
+          ? "鸭梨 WASD · F 发射 · G 装星星"
+          : "康康 方向键 · L 发射 · K 装星星"
         : "WASD / 方向键微调 · F/L 发射 · G/K 装星星";
     pad.appendChild(name);
 
@@ -1207,7 +1207,7 @@ function createField(opts: FieldOptions): FieldHandle {
         break;
       }
       case "flower": {
-        // 朵朵种的花:五片花瓣一张笑脸,画得越可爱越舍不得打
+        // 鸭梨种的花:五片花瓣一张笑脸,画得越可爱越舍不得打
         for (let i = 0; i < 5; i++) {
           const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
           ctx.beginPath();
@@ -1663,7 +1663,7 @@ function mountArena(host: HTMLElement, api: GameApi, onExit: () => void): { dest
       host: shell.stage,
       players: 2,
       tint: "#F2ECFB",
-      hint: `同一片靶场,两套准星:朵朵按左半边、星星按右半边(或者一人键盘一人手指)。${ARENA_SECONDS} 秒比分数。`,
+      hint: `同一片靶场,两套准星:鸭梨按左半边、康康按右半边(或者一人键盘一人手指)。${ARENA_SECONDS} 秒比分数。`,
       seconds: ARENA_SECONDS,
       shotBudget: 0,
       magSize: 6,
@@ -1949,7 +1949,7 @@ export function mount(api: GameApi): ShootRangeHandle {
         };
       },
       mapHint: "清完全部靶子就过关,命中率越高星星越多。笑脸靶和花朵靶碰一下就掉星。",
-      grandMessage: "188 关靶场全部打通,你就是名副其实的星星神射手!",
+      grandMessage: "188 关靶场全部打通,你就是名副其实的康康神射手!",
       guideTitle: GUIDE.title,
       guide: GUIDE,
     }

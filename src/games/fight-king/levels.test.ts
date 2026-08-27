@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 —— 格斗塔 188 关配表与无尽曲线的回归测试。
+ * 梨康格斗王 —— 格斗塔 188 关配表与无尽曲线的回归测试。
  */
 import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, assertTotal, chapterOf } from "../level99";

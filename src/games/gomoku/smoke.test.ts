@@ -229,7 +229,7 @@ describe("五子棋 · 自由对战", () => {
     for (const d of DIFFICULTIES) {
       expect(findByText(dom.root, DIFFICULTY_NAME[d])).not.toBeNull();
     }
-    expect(findByText(dom.root, "朵朵 VS 星星")).not.toBeNull();
+    expect(findByText(dom.root, "鸭梨 VS 康康")).not.toBeNull();
     handle.destroy();
   });
 
@@ -291,7 +291,7 @@ describe("五子棋 · 自由对战", () => {
 
   it("提示每局 3 次，用完变灰，而且只说方位不报坐标", async () => {
     const { handle } = await openFree();
-    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "鸭梨 VS 康康")!.dispatch("click", {});
     findByText(dom.root, "开始下棋")!.dispatch("click", {});
     const canvas = dom.root.find((e) => e.tagName === "canvas")!;
     tapBoard(canvas, 15, 7, 7);
@@ -311,21 +311,21 @@ describe("五子棋 · 自由对战", () => {
 
   it("双人同屏黑白轮流，没有 AI 抢着下", async () => {
     const { handle } = await openFree();
-    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "鸭梨 VS 康康")!.dispatch("click", {});
     findByText(dom.root, "开始下棋")!.dispatch("click", {});
     const canvas = dom.root.find((e) => e.tagName === "canvas")!;
-    expect(dom.root.allText()).toContain("该朵朵");
+    expect(dom.root.allText()).toContain("该鸭梨");
     tapBoard(canvas, 15, 7, 7);
-    expect(dom.root.allText()).toContain("该星星");
+    expect(dom.root.allText()).toContain("该康康");
     tapBoard(canvas, 15, 8, 7);
-    expect(dom.root.allText()).toContain("该朵朵");
+    expect(dom.root.allText()).toContain("该鸭梨");
     expect(countStones(dom.root)).toBeGreaterThan(0);
     handle.destroy();
   });
 
   it("开着禁手规则时，黑棋踩三三会给白棋一个 8 秒的申告窗口", async () => {
     const { spy, handle } = await openFree();
-    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "鸭梨 VS 康康")!.dispatch("click", {});
     findByText(dom.root, "9×9 入门")!.dispatch("click", {});
     findByText(dom.root, "白棋能指出禁手")!.dispatch("click", {});
     findByText(dom.root, "开始下棋")!.dispatch("click", {});
@@ -352,7 +352,7 @@ describe("五子棋 · 自由对战", () => {
 
   it("白棋放过禁手就接着下，不判负", async () => {
     const { spy, handle } = await openFree();
-    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "鸭梨 VS 康康")!.dispatch("click", {});
     findByText(dom.root, "9×9 入门")!.dispatch("click", {});
     findByText(dom.root, "白棋能指出禁手")!.dispatch("click", {});
     findByText(dom.root, "开始下棋")!.dispatch("click", {});
@@ -367,13 +367,13 @@ describe("五子棋 · 自由对战", () => {
     findByText(dom.root, "不指出，继续下")!.dispatch("click", {});
     expect(spy.wins.length).toBe(0);
     expect(spy.loses.length).toBe(0);
-    expect(dom.root.allText()).toContain("该星星");
+    expect(dom.root.allText()).toContain("该康康");
     handle.destroy();
   });
 
   it("悔棋按钮开局是灰的，落子之后才能按", async () => {
     const { handle } = await openFree();
-    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "鸭梨 VS 康康")!.dispatch("click", {});
     findByText(dom.root, "开始下棋")!.dispatch("click", {});
     const undo = dom.root.find((e) => e.className.includes("gmk-undo") && !e.className.includes("gmk-confirm"))!;
     expect(undo.disabled).toBe(true);

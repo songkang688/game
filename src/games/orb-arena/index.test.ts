@@ -61,7 +61,7 @@ function run(over: Partial<Parameters<typeof createRun>[1]> = {}, owners?: Owner
   const handle = createRun(stage as unknown as HTMLElement, {
     cfg: tinyLevel(),
     owners: owners ?? [
-      { id: "me", name: "朵朵", color: "#F5A9C8", human: "duo" },
+      { id: "me", name: "鸭梨", color: "#F5A9C8", human: "duo" },
       { id: "bot0", name: "糯糯", color: "#B8D8F6", tier: "rookie" }
     ],
     sfx: (n) => sounds.push(n),
@@ -132,8 +132,8 @@ describe("一局真的跑起来", () => {
 
   it("双人同屏给两块画面,两套键位各管各的", () => {
     const { stage, handle } = run({}, [
-      { id: "me", name: "朵朵", color: "#F5A9C8", human: "duo" },
-      { id: "star", name: "星星", color: "#A9C8F5", human: "star" }
+      { id: "me", name: "鸭梨", color: "#F5A9C8", human: "duo" },
+      { id: "star", name: "康康", color: "#A9C8F5", human: "star" }
     ]);
     expect(stage.byClass("oa-canvas")).toHaveLength(2);
     expect(dom.pressKey("d")).toBe(true);

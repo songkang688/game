@@ -1,14 +1,14 @@
 import { meta } from "./meta";
 export { meta };
 
-// 朵星台球:美式八球的简化落地。
+// 梨康台球:美式八球的简化落地。
 //
 // 四种玩法共用同一张球桌 `createTable`:
 //  - 闯关:188 关八章,前七章是一杆一杆的技巧关(直线 / 库边 / 分组 / 母球控制 / 组合球 /
 //    指定袋 / 残局),第八章「球房杯」是完整的一局八球对电脑;
 //  - 人机对战:三局两胜,电脑四档可选;
 //  - 无尽:一局一局的残局,失误即止,记最高连过;
-//  - 双人同屏:朵朵和星星轮流出杆。
+//  - 双人同屏:鸭梨和康康轮流出杆。
 //
 // 规则、犯规、胜负全部走 rules.ts 的纯函数,画面上看到的每一次滚球都是 physics.ts 真算出来的,
 // 和单测跑的是同一套代码。
@@ -38,8 +38,8 @@ import {
 } from "./rules";
 import { createTable, type SeatPlan, type ShotIntent, type TableHandle } from "./view";
 
-const P_NAME = ["朵朵", "星星"];
-const P_EMOJI = ["🌸", "⭐"];
+const P_NAME = ["鸭梨", "康康"];
+const P_EMOJI = ["🍐", "👓"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 
 const SHELL_CSS = `
@@ -643,7 +643,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       guide: GUIDE,
       mapHint: "瞄的是目标球后面的那个影子点，不是球心；力度够用就好，母球才停得住。",
       grandMessage: "188 关全部通关，这张球桌上的每条线你都走过一遍啦！",
-      guideTitle: "朵星台球 · 出杆手册",
+      guideTitle: "梨康台球 · 出杆手册",
     }
   );
 

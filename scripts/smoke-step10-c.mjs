@@ -1,5 +1,5 @@
 /**
- * 1.1 第 10 步 C 档的手动冒烟替身:用真浏览器把「星星射击场」和「飞机小队」
+ * 1.1 第 10 步 C 档的手动冒烟替身:用真浏览器把「康康射击场」和「飞机小队」
  * 各玩到**真实胜负**,并检查 375×667 与 1280×800 都不横向溢出。
  *
  * 跑法(playwright 是临时工具,没有进 package.json):
@@ -63,7 +63,7 @@ async function checkNoOverflow(page, label) {
 }
 
 // --------------------------------------------------------------------------
-// 星星射击场:import 关卡模块拿到靶心坐标,换算成画布上的点再真点一遍
+// 康康射击场:import 关卡模块拿到靶心坐标,换算成画布上的点再真点一遍
 // --------------------------------------------------------------------------
 
 async function playShootRange(page, level) {
@@ -135,29 +135,29 @@ async function run() {
     const page = await ctx.newPage();
     page.on("pageerror", (err) => log(false, `${vp.name} 页面报错`, String(err)));
 
-    // ---- 星星射击场:第 1 关(静止靶,能算出确定的靶心) ----
+    // ---- 康康射击场:第 1 关(静止靶,能算出确定的靶心) ----
     await page.goto(`${BASE}/?t=${Date.now()}`, { waitUntil: "load" });
     await seedProgress(page, "shoot-range", 0);
     const opened = await openLevel(page, "shoot-range", 0);
-    log(opened, `${vp.name} 星星射击场 第 1 关打得开`);
+    log(opened, `${vp.name} 康康射击场 第 1 关打得开`);
     if (opened) {
       const plan = await playShootRange(page, 0);
       const title = await waitOutcome(page, 60000);
-      log(title.includes("过关"), `${vp.name} 星星射击场 打到真实胜负`, `${title} · ${plan.need} 个靶`);
+      log(title.includes("过关"), `${vp.name} 康康射击场 打到真实胜负`, `${title} · ${plan.need} 个靶`);
       const sub = (await page.locator(".l99-ov-sub").first().textContent())?.trim() ?? "";
-      log(/命中率\s*\d+%/.test(sub), `${vp.name} 星星射击场 结算带命中率评级`, sub);
-      await checkNoOverflow(page, `${vp.name} 星星射击场`);
+      log(/命中率\s*\d+%/.test(sub), `${vp.name} 康康射击场 结算带命中率评级`, sub);
+      await checkNoOverflow(page, `${vp.name} 康康射击场`);
     }
 
-    // ---- 星星射击场:后期关(移动靶 + 遮挡 + 好人靶),只要求走到胜负任一侧 ----
+    // ---- 康康射击场:后期关(移动靶 + 遮挡 + 好人靶),只要求走到胜负任一侧 ----
     await seedProgress(page, "shoot-range", 150);
     if (await openLevel(page, "shoot-range", 150)) {
       await playShootRange(page, 150);
       const title = await waitOutcome(page, 90000);
-      log(title.length > 0, `${vp.name} 星星射击场 第 151 关走到结算`, title);
+      log(title.length > 0, `${vp.name} 康康射击场 第 151 关走到结算`, title);
     }
 
-    // ---- 星星射击场:双人分屏,两套键位互不抢占 ----
+    // ---- 康康射击场:双人分屏,两套键位互不抢占 ----
     await page.goto(`${BASE}/?t=${Date.now()}#/game/shoot-range`, { waitUntil: "load" });
     await page.waitForSelector(".sr-modebar", { timeout: 15000 });
     await page.locator(".sr-mode.sr-mode-duo").click();
@@ -178,14 +178,14 @@ async function run() {
       return { afterDuo, afterStar: chips() };
     });
     const shotsOf = (text) => Number(/命中 \d+\/(\d+)/.exec(text ?? "")?.[1] ?? -1);
-    // 朵朵按 F 时星星一发不动;星星按 L 时朵朵的发数原地不变
+    // 鸭梨按 F 时康康一发不动;康康按 L 时鸭梨的发数原地不变
     const okDuo =
       shotsOf(duo.afterDuo[0]) === 3 &&
       shotsOf(duo.afterDuo[1]) === 0 &&
       shotsOf(duo.afterStar[0]) === 3 &&
       shotsOf(duo.afterStar[1]) === 2;
-    log(okDuo, `${vp.name} 星星射击场 双人两套键位互不抢占`, [...duo.afterDuo, "→", ...duo.afterStar].join(" | "));
-    await checkNoOverflow(page, `${vp.name} 星星射击场双人`);
+    log(okDuo, `${vp.name} 康康射击场 双人两套键位互不抢占`, [...duo.afterDuo, "→", ...duo.afterStar].join(" | "));
+    await checkNoOverflow(page, `${vp.name} 康康射击场双人`);
 
     // ---- 飞机小队:第 1 关 ----
     await page.goto(`${BASE}/?t=${Date.now()}`, { waitUntil: "load" });

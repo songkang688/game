@@ -472,7 +472,7 @@ describe("无尽深渊", () => {
 
   it("祝福真的会改数值，而且不改传进来的角色", () => {
     const base = makeFighter({
-      name: "朵朵", emoji: "🌸", element: "grass",
+      name: "鸭梨", emoji: "🍐", element: "grass",
       maxHp: 200, atk: 40, def: 10, spd: 10, crit: 0.1, hp: 100
     });
     const snapshot = JSON.stringify(base);
@@ -491,7 +491,7 @@ describe("无尽深渊", () => {
 
   it("回复类祝福不会超过星芒上限", () => {
     const full = makeFighter({
-      name: "朵朵", emoji: "🌸", element: "grass", maxHp: 100, atk: 10, def: 1, spd: 5
+      name: "鸭梨", emoji: "🍐", element: "grass", maxHp: 100, atk: 10, def: 1, spd: 5
     });
     const healed = applyBlessing(full, { id: "x", kind: "heal", name: "泉", emoji: "♨️", amount: 1, desc: "回复" });
     expect(healed.hp).toBe(100);
@@ -564,7 +564,7 @@ describe("无尽深渊", () => {
   });
 });
 
-describe("对战：星星的队伍", () => {
+describe("对战：康康的队伍", () => {
   it("六位同伴都是本作原创角色，属性配置各不相同", () => {
     const names = COMPANIONS.map((c) => c.name);
     expect(names).toEqual(["糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾"]);
@@ -590,14 +590,14 @@ describe("对战：星星的队伍", () => {
     expect(s.spd).toBeGreaterThan(t.spd);
   });
 
-  it("双方都是三个人，我方队首是朵朵，对方队首是星星", () => {
+  it("双方都是三个人，我方队首是鸭梨，对方队首是康康", () => {
     const s = saveAtLevel(20);
     const mine = buildMyTeam(s);
     const theirs = buildRivalTeam(s.level, s.arenaWins);
     expect(mine.length).toBe(3);
     expect(theirs.length).toBe(3);
-    expect(mine[0].name).toBe("朵朵");
-    expect(theirs[0].name).toBe("星星");
+    expect(mine[0].name).toBe("鸭梨");
+    expect(theirs[0].name).toBe("康康");
   });
 
   it("赢得越多对手越强，但强度封顶", () => {

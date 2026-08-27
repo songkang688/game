@@ -175,8 +175,8 @@ function reducedMotion(): boolean {
 export type KeyAction = "left" | "right" | "up" | "down" | "confirm" | "cancel" | "pause" | null;
 
 /**
- * 朵朵:`WASD` 移光标 + `F` 确定 + `G` 取消。
- * 星星:方向键 + `L` / `K`(这一款没有同屏双人,方向键留给不习惯 WASD 的人)。
+ * 鸭梨:`WASD` 移光标 + `F` 确定 + `G` 取消。
+ * 康康:方向键 + `L` / `K`(这一款没有同屏双人,方向键留给不习惯 WASD 的人)。
  * `Esc` 暂停。
  */
 export function keyAction(key: string): KeyAction {
@@ -935,7 +935,7 @@ export function randomSeats(seed: number): SeatSpec[] {
   };
   const roles = rollRoles(rand);
   const heroIds = rollHeroes(rand, roles);
-  const names = ["朵朵", "星星", "糯糯", "云云", "闪闪"];
+  const names = ["鸭梨", "康康", "糯糯", "云云", "闪闪"];
   return roles.map((role, i) => ({ name: names[i], heroId: heroIds[i], role }));
 }
 

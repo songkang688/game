@@ -60,10 +60,10 @@ const AI_DELAY_MS = 560;
 export const LOSE_LINE = "旗子这次没扛回来，下一盘先修条铁路。";
 
 export interface TableResult {
-  /** 朵朵赢了没有 */
+  /** 鸭梨赢了没有 */
   won: boolean;
   draw: boolean;
-  /** 朵朵走了几手 */
+  /** 鸭梨走了几手 */
   duoMoves: number;
   why: string;
 }
@@ -133,7 +133,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   }
 
   function renderHud(): void {
-    const who = state.turn === "duo" ? "朵朵" : opts.rival === "human" ? "星星" : "小对手";
+    const who = state.turn === "duo" ? "鸭梨" : opts.rival === "human" ? "康康" : "小对手";
     turnChip.textContent = paused ? "已暂停" : `轮到${who}`;
     turnChip.className = state.turn === "duo" ? "jq-chip jq-hot" : "jq-chip";
     const left = Math.max(0, opts.maxPlies - state.plies);
@@ -217,7 +217,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   }
 
   const twoHumans = opts.rival === "human";
-  /** 单人局里方向键与 L / K 也归朵朵，老键位一条都不丢 */
+  /** 单人局里方向键与 L / K 也归鸭梨，老键位一条都不丢 */
   const starSeat: Side = twoHumans ? "star" : "duo";
 
   board = createBoard(boardHost, {
@@ -239,7 +239,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
     if (!paused) scheduleAi();
   }
 
-  // 两套键位各管各的座位：朵朵 WASD + F / G，星星 方向键 + L / K
+  // 两套键位各管各的座位：鸭梨 WASD + F / G，康康 方向键 + L / K
   const DUO_MOVE: Record<string, [number, number]> = {
     w: [-1, 0],
     s: [1, 0],
@@ -434,7 +434,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         playLevel,
         guide,
         mapHint: "铁路直着走，工兵会拐弯，旗子在对面的大本营里。",
-        grandMessage: "188 关全部扛下来，军旗杯的奖杯归朵朵和星星啦！",
+        grandMessage: "188 关全部扛下来，军旗杯的奖杯归鸭梨和康康啦！",
       }
     );
   }
@@ -493,7 +493,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         onEnd: ({ won, draw, why }) => {
           api.play(draw ? "pop" : "win");
           if (draw) api.onLose(why);
-          else api.onWin(2, won ? "朵朵扛回旗子啦！" : "星星扛回旗子啦！");
+          else api.onWin(2, won ? "鸭梨扛回旗子啦！" : "康康扛回旗子啦！");
           runOne();
         },
       });

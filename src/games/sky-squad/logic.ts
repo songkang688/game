@@ -430,7 +430,7 @@ export function endlessScore(wave: number, downed: number): number {
 
 export type SkyAction = "left" | "right" | "up" | "down" | "fire" | "bomb";
 
-/** 双人键位:朵朵 W A S D + F(开火)/G(炸弹),星星 ↑←↓→ + L(开火)/K(炸弹) */
+/** 双人键位:鸭梨 W A S D + F(开火)/G(炸弹),康康 ↑←↓→ + L(开火)/K(炸弹) */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: SkyAction }> = {
   KeyW: { player: 0, action: "up" },
   KeyA: { player: 0, action: "left" },

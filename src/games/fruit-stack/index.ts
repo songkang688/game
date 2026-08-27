@@ -10,7 +10,7 @@ export { meta };
 // 四种玩法共用同一套容器运行时 `createBowl`:
 //  - 闯关:188 关八大主题,容器、警戒线、弹性与目标逐章变化(走 level99 框架);
 //  - 对战:左右两个容器同一串果子序列,比谁先合成目标级;
-//  - 双人同屏:两人各一个容器,朵朵 A/D + F,星星 方向键 + L;
+//  - 双人同屏:两人各一个容器,鸭梨 A/D + F,康康 方向键 + L;
 //  - 无尽:全链条开放,记最高分与最大的那颗果。
 import { save } from "../../engine/save";
 import { mountLevelGame, rateBelow, type GameApi, type PlayCtx, type SoundName } from "../level99";
@@ -42,8 +42,8 @@ import {
 import { allSettled, clamp, createWorld, nearLine, overLine, stepPhysics, type World } from "./physics";
 import { createRuntime, type Runtime } from "./runtime";
 
-const P_NAME = ["朵朵", "星星"];
-const P_EMOJI = ["🌸", "⭐"];
+const P_NAME = ["鸭梨", "康康"];
+const P_EMOJI = ["🍐", "👓"];
 
 /** 两次投放之间的冷却:防止连点把一整串果子糊在同一个点上 */
 const DROP_CD = 460;
@@ -580,7 +580,7 @@ export type RoundVerdict = Pick<TableResult, "winner" | "cleared" | "reason">;
  *
  * 两座并排的时候按「同一帧同时发生就是平局」处理：原先四个分支挨个问，
  * 两边同帧达标永远算 0 号赢，`roundOver()` 里那句「这一局打平」根本走不到（`R3-PA-FS-3`）。
- * 顺带把「1 号收摊」的口径改成跟着输的那一边走 —— 星星把盆堆爆了不该记成朵朵达标过关。
+ * 顺带把「1 号收摊」的口径改成跟着输的那一边走 —— 康康把盆堆爆了不该记成鸭梨达标过关。
  */
 export function decideRound(bowls: readonly BowlEnd[]): RoundVerdict | null {
   const why = (b: BowlEnd): "over" | "empty" => (b.left <= 0 ? "empty" : "over");
@@ -720,7 +720,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     held.add(ev.code);
     if (ev.code === "KeyF") bowls[0]?.requestDrop();
     if (ev.code === "KeyL" && opts.seats > 1 && !opts.ai) bowls[1]?.requestDrop();
-    // 取消键:朵朵 G、星星 K,把落点收回盆正中央(单盆时两个键都归朵朵)
+    // 取消键:鸭梨 G、康康 K,把落点收回盆正中央(单盆时两个键都归鸭梨)
     if (ev.code === "KeyG") bowls[0]?.centerAim();
     if (ev.code === "KeyK") bowls[opts.seats > 1 && !opts.ai ? 1 : 0]?.centerAim();
   });
@@ -793,7 +793,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
     pauseBtn.textContent = paused ? "▶ 继续" : "⏸ 暂停";
     if (paused) {
       held.clear();
-      showVeil("⏸ 歇一会儿", "按 Esc 或点「继续」接着摆。朵朵:A / D 移动,F 放下,G 落点归位;星星:方向键 + L / K;手机直接在盆上拖动,松手就落。", [
+      showVeil("⏸ 歇一会儿", "按 Esc 或点「继续」接着摆。鸭梨:A / D 移动,F 放下,G 落点归位;康康:方向键 + L / K;手机直接在盆上拖动,松手就落。", [
         { label: "▶ 继续", onClick: () => togglePause() },
       ]);
     } else {
@@ -870,7 +870,7 @@ function createTable(host: HTMLElement, opts: TableOptions): Table {
   };
 }
 
-// 这一款只有左右:朵朵 A / D 移动、F 放下、G 落点归位;星星 方向键 + L / K。
+// 这一款只有左右:鸭梨 A / D 移动、F 放下、G 落点归位;康康 方向键 + L / K。
 // 上下(W / S 与 ↑ / ↓)在这一款里没有对应动作,攻略里写明了不用记。
 const KEY_CODES = new Set(["KeyA", "KeyD", "KeyF", "KeyG", "KeyK", "KeyL", "ArrowLeft", "ArrowRight"]);
 
@@ -1059,8 +1059,8 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       limited: false,
       banner: `第 ${round} 局`,
       tip: aiSkill
-        ? `${lv.hint} 朵朵:A / D 移动,F 放下,G 落点归位;手机直接在盆上拖。`
-        : `${lv.hint} 朵朵:A / D + F,G 归位;星星:方向键 + L,K 归位。`,
+        ? `${lv.hint} 鸭梨:A / D 移动,F 放下,G 落点归位;手机直接在盆上拖。`
+        : `${lv.hint} 鸭梨:A / D + F,G 归位;康康:方向键 + L,K 归位。`,
       sfx: (n) => api.play(n),
       onDone: (res) => roundOver(res.winner),
     });

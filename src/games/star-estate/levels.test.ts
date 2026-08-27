@@ -108,7 +108,7 @@ function passiveRun(level: number): { won: boolean; peak: number; bought: number
 describe("star-estate · meta 与章节", () => {
   it("meta 按规格落地", () => {
     expect(meta.id).toBe("star-estate");
-    expect(meta.title).toBe("朵星地产");
+    expect(meta.title).toBe("梨康地产");
     expect(meta.emoji).toBe("🏦");
     expect(meta.category).toBe("party");
     expect(meta.color).toBe("#FFF0D6");
@@ -225,7 +225,7 @@ describe("star-estate · meta 与章节", () => {
     expect(startingDeeds(cfg), "第 171 关本来就送了一手地").toBeGreaterThan(0);
     expect(state.players[0].deedsBought).toBe(0);
 
-    // 把一批地白判给朵朵（对手收摊时就是这么整批转过来的），仍然不算数
+    // 把一批地白判给鸭梨（对手收摊时就是这么整批转过来的），仍然不算数
     const before = deedsOf(state, 0).length;
     let handed = 0;
     for (let pos = 0; pos < state.tiles.length && handed < 6; pos++) {
@@ -367,7 +367,7 @@ describe("star-estate · 产品红线", () => {
   it("无血无死亡，破产文案只鼓励", () => {
     const text = JSON.stringify(guide) + JSON.stringify(CHAPTERS) + src("index.ts");
     for (const bad of ["死", "血", "尸", "杀", "赌", "高利贷"]) expect(text).not.toContain(bad);
-    expect(src("index.ts")).toContain("钱包空啦，去朵朵公园歇一会儿");
+    expect(src("index.ts")).toContain("钱包空啦，去鸭梨公园歇一会儿");
   });
 
   it("货币只是游戏内数字：没有真实货币、内购、广告", () => {
@@ -416,7 +416,7 @@ describe("star-estate · 产品红线", () => {
     expect((index.match(/setTimeout\(/g) ?? []).length).toBe(1);
   });
 
-  it("键位按规格：F 掷骰、G 购买 / 建屋，星星 方向键 + L/K，Esc 暂停", () => {
+  it("键位按规格：F 掷骰、G 购买 / 建屋，康康 方向键 + L/K，Esc 暂停", () => {
     const index = src("index.ts");
     for (const key of ['"f"', '"g"', '"l"', '"k"', '"w"', '"a"', '"s"', '"d"', "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", '"Escape"']) {
       expect(index, `键位 ${key} 没接`).toContain(key);

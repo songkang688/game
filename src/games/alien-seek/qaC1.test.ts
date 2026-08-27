@@ -300,7 +300,7 @@ describe("档C R1 · alien-seek · 对战 / 双人玩到结算", () => {
   it("两个光标各抢各的,六局都能分出结果并走到结算", () => {
     for (let r = 1; r <= 6; r++) {
       const lv = buildVersusRound(r);
-      // 朵朵从左边出发、星星从右边出发:各自去抢离自己更近的那些目标
+      // 鸭梨从左边出发、康康从右边出发:各自去抢离自己更近的那些目标
       let a = 0;
       let b = 0;
       for (const t of lv.targets) {
@@ -310,7 +310,7 @@ describe("档C R1 · alien-seek · 对战 / 双人玩到结算", () => {
       }
       expect(a + b).toBe(lv.targets.length);
       const who = versusWinner(a, b);
-      expect(["朵朵", "星星", "平局"]).toContain(who);
+      expect(["鸭梨", "康康", "平局"]).toContain(who);
       const line = versusLine(a, b);
       expect(line.length).toBeGreaterThan(6);
       expect(/笨|差劲|输了/.test(line)).toBe(false);
@@ -326,8 +326,8 @@ describe("档C R1 · alien-seek · 对战 / 双人玩到结算", () => {
   it("平局也有一句好话,分数不会串台", () => {
     expect(versusWinner(3, 3)).toBe("平局");
     expect(versusLine(3, 3)).toContain("平手");
-    expect(versusLine(5, 2)).toContain("朵朵");
-    expect(versusLine(2, 5)).toContain("星星");
+    expect(versusLine(5, 2)).toContain("鸭梨");
+    expect(versusLine(2, 5)).toContain("康康");
   });
 });
 

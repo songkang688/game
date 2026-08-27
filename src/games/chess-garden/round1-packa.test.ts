@@ -10,7 +10,7 @@
  * 标了「【已知问题】」的用例断言的是**当前行为**，修好之后会红，那时候连断言一起翻面。
  * 记在 `docs/qa/1.2-window2-round1-tester-packA.md` 的问题表里：
  *  - PA-CG-1（一般）：Esc 只能进暂停，再按一次不恢复，得用鼠标点「继续下棋」；
- *  - PA-CG-2（一般）：规格里朵朵的 G 与星星的 K（取消选中）没接；
+ *  - PA-CG-2（一般）：规格里鸭梨的 G 与康康的 K（取消选中）没接；
  *  - PA-CG-3（一般）：`mount` 的 destroy 不回收注入到 document.head 的 `cg-shell-style`。
  *
  * 第 2 轮学习优化员已把 PA-CG-1 / PA-CG-2 / PA-CG-3 三条落地，对应的断言都已翻成修好后的行为。
@@ -63,14 +63,14 @@ function fakeApi() {
   };
 }
 
-/** 双人同屏的一块棋盘：朵朵执白、星星执黑，两边都是真人 */
+/** 双人同屏的一块棋盘：鸭梨执白、康康执黑，两边都是真人 */
 function duoBoard(fen?: string, extra: Record<string, unknown> = {}) {
   const overs: string[] = [];
   const handle = createBoard(dom.root as unknown as HTMLElement, {
     fen,
     seats: [
-      { name: "朵朵", emoji: "🌸", color: "#fff", ai: null },
-      { name: "星星", emoji: "⭐", color: "#eef", ai: null },
+      { name: "鸭梨", emoji: "🍐", color: "#fff", ai: null },
+      { name: "康康", emoji: "👓", color: "#eef", ai: null },
     ],
     banner: "双人同屏",
     tip: "轮流走。",
@@ -302,28 +302,28 @@ describe("R2-PA-3 · 360px 上的棋盘格", () => {
 /* ------------------------------------------------------------------ */
 
 describe("PA-CG · 双人同屏键位互不抢占", () => {
-  it("轮到白方时星星的方向键和 L 一概不认", () => {
+  it("轮到白方时康康的方向键和 L 一概不认", () => {
     const { handle } = duoBoard();
     expect(handle.snapshot().turn).toBe(WHITE);
     const cursor = handle.snapshot().cursor;
     press("ArrowUp");
     press("ArrowLeft");
-    expect(handle.snapshot().cursor, "白方回合被星星的方向键挪了光标").toBe(cursor);
+    expect(handle.snapshot().cursor, "白方回合被康康的方向键挪了光标").toBe(cursor);
     press("l");
-    expect(handle.snapshot().selected, "白方回合被星星的 L 选中了子").toBe(-1);
+    expect(handle.snapshot().selected, "白方回合被康康的 L 选中了子").toBe(-1);
     handle.destroy();
   });
 
-  it("轮到黑方时朵朵的 WASD 和 F 一概不认", () => {
+  it("轮到黑方时鸭梨的 WASD 和 F 一概不认", () => {
     const { handle } = duoBoard();
     handle.playHuman(fromSan(handle.game.pos, "e4")!);
     expect(handle.snapshot().turn).toBe(BLACK);
     const cursor = handle.snapshot().cursor;
     press("w");
     press("a");
-    expect(handle.snapshot().cursor, "黑方回合被朵朵的 WASD 挪了光标").toBe(cursor);
+    expect(handle.snapshot().cursor, "黑方回合被鸭梨的 WASD 挪了光标").toBe(cursor);
     press("f");
-    expect(handle.snapshot().selected, "黑方回合被朵朵的 F 选中了子").toBe(-1);
+    expect(handle.snapshot().selected, "黑方回合被鸭梨的 F 选中了子").toBe(-1);
     handle.destroy();
   });
 
@@ -346,7 +346,7 @@ describe("PA-CG · 双人同屏键位互不抢占", () => {
     handle.destroy();
   });
 
-  it("朵朵的 G 与星星的 K 都能把选中的子放回去", () => {
+  it("鸭梨的 G 与康康的 K 都能把选中的子放回去", () => {
     const { handle } = duoBoard();
     press("w");
     press("f");
@@ -371,7 +371,7 @@ describe("PA-CG · 双人同屏键位互不抢占", () => {
     const picked = handle.snapshot().selected;
     expect(picked).toBe(parseSquare("e2"));
     press("k");
-    expect(handle.snapshot().selected, "白方回合被星星的 K 取消了选中").toBe(picked);
+    expect(handle.snapshot().selected, "白方回合被康康的 K 取消了选中").toBe(picked);
     press("g");
     expect(handle.snapshot().selected).toBe(-1);
     handle.playHuman(fromSan(handle.game.pos, "e4")!);
@@ -382,7 +382,7 @@ describe("PA-CG · 双人同屏键位互不抢占", () => {
     const black = handle.snapshot().selected;
     expect(black).toBeGreaterThanOrEqual(0);
     press("g");
-    expect(handle.snapshot().selected, "黑方回合被朵朵的 G 取消了选中").toBe(black);
+    expect(handle.snapshot().selected, "黑方回合被鸭梨的 G 取消了选中").toBe(black);
     handle.destroy();
   });
 
@@ -424,7 +424,7 @@ describe("PA-CG · Esc 暂停", () => {
   it("暂停期间电脑也不落子，恢复之后才接着想", () => {
     const { handle } = duoBoard(undefined, {
       seats: [
-        { name: "朵朵", emoji: "🌸", color: "#fff", ai: null },
+        { name: "鸭梨", emoji: "🍐", color: "#fff", ai: null },
         { name: "电脑", emoji: "🤖", color: "#eef", ai: 1 },
       ],
       aiDelayMs: 200,
@@ -476,7 +476,7 @@ describe("PA-CG · Esc 暂停", () => {
   it("Esc 恢复之后电脑接着想，不会漏掉那一手", () => {
     const { handle } = duoBoard(undefined, {
       seats: [
-        { name: "朵朵", emoji: "🌸", color: "#fff", ai: null },
+        { name: "鸭梨", emoji: "🍐", color: "#fff", ai: null },
         { name: "电脑", emoji: "🤖", color: "#eef", ai: 1 },
       ],
       aiDelayMs: 200,

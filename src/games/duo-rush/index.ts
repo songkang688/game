@@ -1,7 +1,7 @@
 import { meta } from "./meta";
 export { meta };
 
-// 朵星双人冲刺 —— 2.5D 双人分屏无尽竞速。
+// 梨康双人冲刺 —— 2.5D 双人分屏无尽竞速。
 // 两个人各占半屏，各自三条车道向远处收拢；赛道是同一份，比的完全是操作。
 // 玩法状态机在 match.ts，透视投影在 view25d.ts，键位在 keys.ts，
 // 这里只干三件事：把画面画出来、把输入接进去、离开时清干净。
@@ -106,7 +106,7 @@ function avatarHTML(who: "duoduo" | "xingxing", size = 26): string {
   if (url) {
     return `<img src="${url}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;vertical-align:middle">`;
   }
-  const emoji = who === "duoduo" ? "🌸" : "⭐";
+  const emoji = who === "duoduo" ? "🍐" : "👓";
   const bg = who === "duoduo" ? "#FFD9E8" : "#D9E6FF";
   return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;background:${bg};align-items:center;justify-content:center;font-size:${Math.round(size * 0.58)}px;vertical-align:middle">${emoji}</span>`;
 }
@@ -191,8 +191,8 @@ const RULES_HTML = `
   <b>♾️ 无尽对战</b>：各有 ${CRASH_LIMIT} 颗心，都用完了比谁跑得远。<br>
   <b>🪙 抢金币赛</b>：撞了不掉心但会绊一下，<b>先吃到 ${COIN_RACE_TARGET} 枚金币</b>的人获胜。</p>
   <h3>⌨️ 两个人怎么分键</h3>
-  <p>朵朵用左手：<b>W 跳 / A 左道 / S 下滑 / D 右道 / F 用道具 / G 加油</b>。<br>
-  星星用右手：<b>↑ 跳 / ← 左道 / ↓ 下滑 / → 右道 / L 用道具 / K 加油</b>。<br>
+  <p>鸭梨用左手：<b>W 跳 / A 左道 / S 下滑 / D 右道 / F 用道具 / G 加油</b>。<br>
+  康康用右手：<b>↑ 跳 / ← 左道 / ↓ 下滑 / → 右道 / L 用道具 / K 加油</b>。<br>
   两套键完全分开，同时按也不会串台。<b>Esc</b> 随时暂停。</p>
   <h3>📱 手机怎么玩</h3>
   <p>画面切成两半，<b>各自在自己那半边滑</b>：上滑跳、下滑滚、左右滑换道，和键盘一模一样。<br>
@@ -242,7 +242,7 @@ function loadGhost(source: GhostSource): GhostSnapshot | null {
     if (snap) return snap;
     if (source !== "self") return null;
     const legacy = parseGhostRecord(raw);
-    return legacy ? makeGhostSnapshot("self", legacy.dist, legacy.seconds, "朵朵") : null;
+    return legacy ? makeGhostSnapshot("self", legacy.dist, legacy.seconds, "鸭梨") : null;
   } catch {
     return null;
   }
@@ -256,7 +256,7 @@ function saveGhost(snap: GhostSnapshot): void {
   }
 }
 
-/** HUD / 设置面板上那一行：「🫥 对手上一局 · 星星 1200 米（22 秒）」 */
+/** HUD / 设置面板上那一行：「🫥 对手上一局 · 康康 1200 米（22 秒）」 */
 function ghostCaption(snap: GhostSnapshot | null): string {
   if (!snap) return "";
   const who = snap.source === "rival" ? "对手上一局" : "上次的自己";
@@ -417,15 +417,15 @@ export function mount(api: GameApi): { destroy: () => void } {
             (seat) => `<div class="dur-pad dur-pad-${seat}" data-seat="${seat}">
           ${PAD_BUTTONS.map(
             (b) =>
-              `<button type="button" class="dur-padbtn" data-act="${b.action}" aria-label="${seat === 0 ? "朵朵" : "星星"}${b.label}">${b.emoji}</button>`,
+              `<button type="button" class="dur-padbtn" data-act="${b.action}" aria-label="${seat === 0 ? "鸭梨" : "康康"}${b.label}">${b.emoji}</button>`,
           ).join("\n          ")}
         </div>`,
           )
           .join("\n        ")}
       </div>
       <div class="dr-keys">
-        <span class="k1">${avatarHTML("duoduo", 18)} 朵朵 W 跳 · A 左 · S 滑 · D 右 · F 道具 · G 加油</span>
-        <span class="k2">${avatarHTML("xingxing", 18)} 星星 ↑ 跳 · ← 左 · ↓ 滑 · → 右 · L 道具 · K 加油</span>
+        <span class="k1">${avatarHTML("duoduo", 18)} 鸭梨 W 跳 · A 左 · S 滑 · D 右 · F 道具 · G 加油</span>
+        <span class="k2">${avatarHTML("xingxing", 18)} 康康 ↑ 跳 · ← 左 · ↓ 滑 · → 右 · L 道具 · K 加油</span>
         <span>📱 各自在自己那半边滑动，右下角两颗按钮是道具和加油</span>
       </div>
       <div class="dr-btns">
@@ -444,7 +444,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     </div>
     <div class="dr-rules dr-hidden">
       <button class="dr-rules-close" type="button">✖ 关闭</button>
-      <h3 style="margin-top:2px">📖 朵星双人冲刺 · 规则</h3>
+      <h3 style="margin-top:2px">📖 梨康双人冲刺 · 规则</h3>
       ${RULES_HTML}
     </div>
   `;
@@ -531,7 +531,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     if (mode === "ghost") {
       hintEl.textContent = "幽灵对战一个人就能跑，对手是一段录下来的配速。";
     } else if (aiLevel === null) {
-      hintEl.textContent = "两个人一起玩：朵朵用左手 W A S D + F G，星星用右手方向键 + L K。";
+      hintEl.textContent = "两个人一起玩：鸭梨用左手 W A S D + F G，康康用右手方向键 + L K。";
     } else {
       hintEl.textContent = `电脑 · ${AI_LABELS[aiLevel]}：${AI_HINTS[aiLevel]}`;
     }

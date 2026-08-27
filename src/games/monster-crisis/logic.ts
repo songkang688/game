@@ -638,9 +638,9 @@ export function versusWinner(heartsLeft: number, timeLeft: number): VersusSide |
 
 export function versusLine(side: VersusSide, heartsLeft: number, seconds: number): string {
   if (side === "defender") {
-    return `朵朵撑满了 ${formatClock(seconds)},还剩 ${heartsLeft} 罐颜料,守家成功!`;
+    return `鸭梨撑满了 ${formatClock(seconds)},还剩 ${heartsLeft} 罐颜料,守家成功!`;
   }
-  return `星星在 ${formatClock(seconds)} 里把颜料全搬走啦,指挥得真妙!`;
+  return `康康在 ${formatClock(seconds)} 里把颜料全搬走啦,指挥得真妙!`;
 }
 
 /* ------------------------------------------------------------------ */

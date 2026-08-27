@@ -28,7 +28,7 @@ function showParentPanel(): void {
   const list = document.createElement("ul");
   list.className = "parent-list";
   const items = [
-    "🌸 「一朵一星」1.1 有 55 款原创小游戏。闯关最长 188 关:前 99 关适合低年级,后面的关卡和新玩法会更有挑战。",
+    "🍐 「鸭梨康康」1.2-kk 有 76 款原创小游戏。闯关最长 188 关:前 99 关适合低年级,后面的关卡和新玩法会更有挑战。",
     "🎨 所有游戏均为原创同类型玩法,不使用任何商业 IP。",
     "🚫 无广告、无内购、无联网账号。",
     "💾 星星和进度只保存在本机(localStorage),不上传。",
@@ -115,7 +115,7 @@ function showParentPanel(): void {
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       const stamp = new Date().toISOString().slice(0, 10);
-      a.download = `一朵一星进度备份-${stamp}.txt`;
+      a.download = `鸭梨康康进度备份-${stamp}.txt`;
       a.click();
       window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       downloaded = true;

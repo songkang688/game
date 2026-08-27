@@ -325,7 +325,7 @@ export function showResultDialog(opts: {
   const content = document.createElement("div");
   content.className = "result-content";
 
-  // 朵朵和星星出来一起庆祝 / 打气
+  // 鸭梨和康康出来一起庆祝 / 打气
   const buddies = document.createElement("div");
   buddies.className = `result-buddies ${opts.win ? "result-buddies--win" : "result-buddies--lose"}`;
   buddies.setAttribute("aria-hidden", "true");

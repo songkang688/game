@@ -20,16 +20,16 @@ import {
 const side = (index: 0 | 1, over: Partial<DuoSide> = {}): DuoSide => ({ ...makeDuoSide(index), ...over });
 
 describe("shoot-range 1.2 双人同屏 · 两套准星", () => {
-  it("朵朵和星星各一个名字、一种颜色,颜色不一样才分得清谁是谁", () => {
-    expect(DUO_NAME[0]).toBe("朵朵");
-    expect(DUO_NAME[1]).toBe("星星");
+  it("鸭梨和康康各一个名字、一种颜色,颜色不一样才分得清谁是谁", () => {
+    expect(DUO_NAME[0]).toBe("鸭梨");
+    expect(DUO_NAME[1]).toBe("康康");
     expect(DUO_INK[0]).not.toBe(DUO_INK[1]);
     for (const ink of DUO_INK) expect(ink).toMatch(/^#[0-9A-Fa-f]{6}$/);
-    expect(makeDuoSide(0).name).toBe("朵朵");
+    expect(makeDuoSide(0).name).toBe("鸭梨");
     expect(makeDuoSide(1).score).toBe(0);
   });
 
-  it("触屏按落点分人:左半边归朵朵、右半边归星星;单人时都归自己", () => {
+  it("触屏按落点分人:左半边归鸭梨、右半边归康康;单人时都归自己", () => {
     expect(assignSide(10, 360, 2)).toBe(0);
     expect(assignSide(179, 360, 2)).toBe(0);
     expect(assignSide(181, 360, 2)).toBe(1);
@@ -44,13 +44,13 @@ describe("shoot-range 1.2 双人同屏 · 两套准星", () => {
     const b = side(1, { score: 40, hits: 3, shots: 12 });
     const lineA = scoreColumn(a);
     const lineB = scoreColumn(b);
-    expect(lineA).toContain("朵朵");
+    expect(lineA).toContain("鸭梨");
     expect(lineA).toContain("120");
     expect(lineA).toContain("80%");
-    expect(lineB).toContain("星星");
+    expect(lineB).toContain("康康");
     expect(lineB).toContain("40");
     expect(lineB).not.toContain("120");
-    expect(lineA).not.toContain("星星");
+    expect(lineA).not.toContain("康康");
   });
 });
 
@@ -66,7 +66,7 @@ describe("shoot-range 1.2 双人同屏 · 比一比", () => {
     const messy = side(1, { score: 150, hits: 9, shots: 18 });
     const res = arenaResult(tidy, messy);
     expect(res.winner).toBe(0);
-    expect(res.line).toContain("朵朵");
+    expect(res.line).toContain("鸭梨");
     // 分数命中率全一样才是平手
     const even = arenaResult(side(0, { score: 90, hits: 6, shots: 10 }), side(1, { score: 90, hits: 6, shots: 10 }));
     expect(even.winner).toBe(-1);

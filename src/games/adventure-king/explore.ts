@@ -638,7 +638,7 @@ export const STICKER_SETS: ReadonlyArray<{ chapter: string; emoji: string; items
   { chapter: "星尘穹顶", emoji: "✨", items: ["星尘沙漏", "夜光罗盘", "流星纸鹤", "银河书签"] },
   { chapter: "藤影暗室", emoji: "🍃", items: ["藤影书页", "夜花标本", "青苔画笔", "垂枝风铃"] },
   { chapter: "熔纹地宫", emoji: "🔥", items: ["暖石护符", "陶土小炉", "火纹瓷片", "赤金小铲"] },
-  { chapter: "云顶王座", emoji: "👑", items: ["云顶羽笔", "王座软垫", "朵朵的旗", "星星的哨"] },
+  { chapter: "云顶王座", emoji: "👑", items: ["云顶羽笔", "王座软垫", "鸭梨的旗", "康康的哨"] },
 ];
 
 /** 一张贴纸的 id:`章-序号` */

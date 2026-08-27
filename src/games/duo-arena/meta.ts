@@ -4,7 +4,7 @@
  */
 export const meta = {
   id: "duo-arena",
-  title: "朵星擂台",
+  title: "梨康擂台",
   emoji: "🥊",
   category: "party" as const,
   color: "#FFE3D0",

@@ -6,7 +6,7 @@ import type { GuideBook } from "../../ui/level188Contract";
  */
 const guide: GuideBook = {
   gameId: "xiangqi",
-  title: "朵朵星星象棋",
+  title: "鸭梨康康象棋",
   general: [
     "落子前先看对方上一步做了什么。大多数失误都是因为没注意到对手刚刚打开了一条线。",
     "每一步都问自己三句话:我的将帅安全吗?我有没有子力被白吃?我这一步创造了什么威胁?",

@@ -1,7 +1,7 @@
 import { meta } from "./meta";
 export { meta };
 
-// 朵星擂台 —— 上下分屏的双人抢元气擂台赛。
+// 梨康擂台 —— 上下分屏的双人抢元气擂台赛。
 //
 // 1.2 把 1.1 那个「各点各半场」的连点小游戏做成了真正的对战:
 //  · 两个人各自操控一个小人在自己那半场跑位,走到目标身上就收进元气袋,`F`/`L` 出手能多够一点;
@@ -126,7 +126,7 @@ function avatarHTML(who: "duoduo" | "xingxing", size = 22): string {
   if (url) {
     return `<img src="${url}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;vertical-align:middle">`;
   }
-  const emoji = who === "duoduo" ? "🌸" : "⭐";
+  const emoji = who === "duoduo" ? "🍐" : "👓";
   const bg = who === "duoduo" ? "#FFD9E8" : "#D9E6FF";
   return `<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;background:${bg};align-items:center;justify-content:center;font-size:${Math.round(size * 0.58)}px;vertical-align:middle">${emoji}</span>`;
 }
@@ -298,7 +298,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="dua-panel dua-setup">
-      <div class="dua-title">🥊 朵星擂台<br><span style="font-size:14px;font-weight:700;color:#7A6A90">走位抢元气 · 三局两胜 · 四张擂台轮换</span></div>
+      <div class="dua-title">🥊 梨康擂台<br><span style="font-size:14px;font-weight:700;color:#7A6A90">走位抢元气 · 三局两胜 · 四张擂台轮换</span></div>
       <div class="dua-group">
         <h4>① 选个玩法</h4>
         <div class="dua-chips dua-modes">
@@ -344,7 +344,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     </div>
     <div class="dua-rules dua-hidden">
       <button class="dua-rules-close" type="button">✖ 关闭</button>
-      <h3 style="margin-top:2px">📖 朵星擂台 · 规则</h3>
+      <h3 style="margin-top:2px">📖 梨康擂台 · 规则</h3>
       <div class="dua-rules-body"></div>
     </div>
   `;
@@ -372,8 +372,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     const court = q<HTMLElement>(courtSel);
     return {
       seat,
-      name: seat === SEAT_DUO ? "朵朵" : "星星",
-      emoji: seat === SEAT_DUO ? "🌸" : "⭐",
+      name: seat === SEAT_DUO ? "鸭梨" : "康康",
+      emoji: seat === SEAT_DUO ? "🍐" : "👓",
       color: seat === SEAT_DUO ? "#E8558F" : "#3F7FD6",
       x: 0.3,
       y: 0.5,
@@ -583,11 +583,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       <p>一场 <b>三局两胜</b>,每回合 ${ROUND_SECONDS} 秒。回合结束时<b>元气多的人拿下这回合</b>,先拿两个回合赢下整场;
       三个回合还不分,就加打 ${SUDDEN_SECONDS} 秒的决胜回合。谁站上赛点,顶上会亮起「🔥 赛点局」,背景也会变色。</p>
       <h3>🕹️ 键位</h3>
-      <p>🌸 朵朵(下半场):<b>W A S D</b> 走位 · <b>F</b> 出手 · <b>G</b> 技能<br>
-      ⭐ 星星(上半场):<b>↑ ← ↓ →</b> 走位 · <b>L</b> 出手 · <b>K</b> 技能<br>
+      <p>🍐 鸭梨(下半场):<b>W A S D</b> 走位 · <b>F</b> 出手 · <b>G</b> 技能<br>
+      👓 康康(上半场):<b>↑ ← ↓ →</b> 走位 · <b>L</b> 出手 · <b>K</b> 技能<br>
       <b>Esc</b> 暂停。手机上每个半场自带摇杆和两个按钮,和键盘完全一样。</p>
       <h3>🎈 元气怎么来</h3>
-      <p>走到目标身上就收进元气袋:🌸/⭐ 小标志 <b>+1</b>、🪙 金币 <b>+2</b>、🎁 礼物盒有惊喜(<b>+3</b>、
+      <p>走到目标身上就收进元气袋:🍐/👓 小标志 <b>+1</b>、🪙 金币 <b>+2</b>、🎁 礼物盒有惊喜(<b>+3</b>、
       <b>❄️ 冰住对手 ${FREEZE_SECONDS} 秒</b>、<b>✨ 双倍星光 ${DOUBLE_SECONDS} 秒</b>)。
       💫 迷糊泡千万别踩,踩到 <b>-2</b> 还要原地转 ${BOMB_STUN_SECONDS} 秒圈。元气最低是 0,不会变成负数。</p>
       <h3>✋ 出手与技能</h3>
@@ -886,8 +886,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       r === -1
         ? `平局!${duo.score} : ${star.score}`
         : r === 0
-          ? `🌸 朵朵拿下这回合 ${duo.score} : ${star.score}`
-          : `⭐ 星星拿下这回合 ${star.score} : ${duo.score}`;
+          ? `🍐 鸭梨拿下这回合 ${duo.score} : ${star.score}`
+          : `👓 康康拿下这回合 ${star.score} : ${duo.score}`;
     api.play(r === -1 ? "pop" : "win");
 
     if (progress.done) {

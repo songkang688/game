@@ -27,8 +27,8 @@ describe("bumper-cars 档位战绩", () => {
     const duel = (round: number, a: number, b: number, salt: number): number => {
       const arena = buildArena(round);
       const cars = [
-        makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x: arena.spawns[0].x, y: arena.spawns[0].y, lives: 1, ai: true }),
-        makeCar({ id: 1, name: "星星", emoji: "⭐", color: "#3f7fd6", team: 1, x: arena.spawns[1].x, y: arena.spawns[1].y, lives: 1, ai: true }),
+        makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x: arena.spawns[0].x, y: arena.spawns[0].y, lives: 1, ai: true }),
+        makeCar({ id: 1, name: "康康", emoji: "👓", color: "#3f7fd6", team: 1, x: arena.spawns[1].x, y: arena.spawns[1].y, lives: 1, ai: true }),
       ];
       const world = createWorld({
         field: arena.field, cars, pads: arena.pads, hazards: arena.hazards, spinners: arena.spinners,

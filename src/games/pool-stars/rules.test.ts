@@ -1,4 +1,4 @@
-// 朵星台球 · 八球规则与犯规表的回归测试。
+// 梨康台球 · 八球规则与犯规表的回归测试。
 // PLAN.md 里那张 13 行的犯规表,这里一行一行对着测。
 import { describe, expect, it } from "vitest";
 import { TABLE, makeBall, simulateShot, strike, type Ball, type ShotResult } from "./physics";

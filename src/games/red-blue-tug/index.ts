@@ -135,7 +135,7 @@ const SHELL_CSS = `
 
 /** 一局的全部参数;三种模式各自拼一份出来 */
 interface RunSpec {
-  /** 朵朵满力每秒拉多少 */
+  /** 鸭梨满力每秒拉多少 */
   playerPower: number;
   /** 对面满力每秒拉多少 */
   rivalPower: number;
@@ -188,7 +188,7 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
   let ended = false;
   let startAt = 0;
   let lastTime = 0;
-  /** -100(星星队赢) .. +100(朵朵队赢) */
+  /** -100(康康队赢) .. +100(鸭梨队赢) */
   let rope = 0;
 
   const playerCfg = sideConfig(spec.playerStamina);
@@ -214,13 +214,13 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
 
   const wrap = document.createElement("div");
   wrap.className = "rbg-wrap";
-  const rivalName = duo ? "🔵 星星队 · 玩家 2" : `🔵 星星队 · ${spec.tier?.emoji ?? ""}${spec.tier?.name ?? "小电脑"}`;
+  const rivalName = duo ? "🔵 康康队 · 玩家 2" : `🔵 康康队 · ${spec.tier?.emoji ?? ""}${spec.tier?.name ?? "小电脑"}`;
   wrap.innerHTML = `
     <style>${RBG_CSS}</style>
     <div class="rbg-top">
-      <span class="rbg-badge" style="color:#C24545"><img class="rbg-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />🔴 朵朵队 · 你</span>
+      <span class="rbg-badge" style="color:#C24545"><img class="rbg-ava" src="${AVATAR_URLS.duoduo}" alt="鸭梨" />🔴 鸭梨队 · 你</span>
       ${spec.redlight ? '<span class="rbg-light" role="img" aria-label="红绿灯">🟢</span>' : ""}
-      <span class="rbg-badge rbg-badge-right" style="color:#3576BF">${rivalName}<img class="rbg-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
+      <span class="rbg-badge rbg-badge-right" style="color:#3576BF">${rivalName}<img class="rbg-ava" src="${AVATAR_URLS.xingxing}" alt="康康" /></span>
     </div>
     <div class="rbg-gear"></div>
     <div class="rbg-field">
@@ -229,19 +229,19 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
       <div class="rbg-mid"></div>
       <div class="rbg-cushion" style="left:4%">🛋️</div>
       <div class="rbg-cushion" style="right:4%">🛋️</div>
-      <div class="rbg-team rbg-red rbg-team-red"><img class="rbg-puller" src="${AVATAR_URLS.duoduo}" alt="朵朵在拔河" /></div>
+      <div class="rbg-team rbg-red rbg-team-red"><img class="rbg-puller" src="${AVATAR_URLS.duoduo}" alt="鸭梨在拔河" /></div>
       <div class="rbg-rope"></div>
       <div class="rbg-flag">🚩</div>
-      <div class="rbg-team rbg-blue-team rbg-team-blue"><img class="rbg-puller" src="${AVATAR_URLS.xingxing}" alt="星星在拔河" /></div>
+      <div class="rbg-team rbg-blue-team rbg-team-blue"><img class="rbg-puller" src="${AVATAR_URLS.xingxing}" alt="康康在拔河" /></div>
     </div>
     <div class="rbg-meters">
       <div class="rbg-meter-box rbg-box-left">
-        <div class="rbg-meter-cap"><span>💪 朵朵体力</span><span class="rbg-pct-left">100%</span></div>
-        <div class="rbg-meter rbg-meter-left" role="img" aria-label="朵朵的体力条"><div class="rbg-meter-fill"></div></div>
+        <div class="rbg-meter-cap"><span>💪 鸭梨体力</span><span class="rbg-pct-left">100%</span></div>
+        <div class="rbg-meter rbg-meter-left" role="img" aria-label="鸭梨的体力条"><div class="rbg-meter-fill"></div></div>
       </div>
       <div class="rbg-meter-box rbg-box-right">
-        <div class="rbg-meter-cap"><span class="rbg-pct-right">100%</span><span>星星体力 💪</span></div>
-        <div class="rbg-meter rbg-meter-right" role="img" aria-label="星星的体力条"><div class="rbg-meter-fill"></div></div>
+        <div class="rbg-meter-cap"><span class="rbg-pct-right">100%</span><span>康康体力 💪</span></div>
+        <div class="rbg-meter rbg-meter-right" role="img" aria-label="康康的体力条"><div class="rbg-meter-fill"></div></div>
       </div>
     </div>
     <div class="rbg-ctrl"></div>
@@ -303,8 +303,8 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
     if (hand === "R") btn.style.marginLeft = `${layout.gap}px`;
     const label = duo
       ? hand === "L"
-        ? "朵朵<span class='rbg-sub'>按住 F</span>"
-        : "星星<span class='rbg-sub'>按住 K</span>"
+        ? "鸭梨<span class='rbg-sub'>按住 F</span>"
+        : "康康<span class='rbg-sub'>按住 K</span>"
       : spec.offhand
         ? hand === "L"
           ? "👈 左手<span class='rbg-sub'>按住蓄力</span>"
@@ -313,7 +313,7 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
           ? "🪢 用力拉<span class='rbg-sub'>按住 F / 空格</span>"
           : "🪢 用力拉<span class='rbg-sub'>两只手都行</span>";
     btn.innerHTML = label;
-    btn.setAttribute("aria-label", duo ? (hand === "L" ? "朵朵拉绳" : "星星拉绳") : "拉绳");
+    btn.setAttribute("aria-label", duo ? (hand === "L" ? "鸭梨拉绳" : "康康拉绳") : "拉绳");
     return btn;
   }
   const btnL = makeButton("L");
@@ -474,7 +474,7 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
     const seconds = (performance.now() - startAt) / 1000;
     down.L = false;
     down.R = false;
-    const loser = winner === "red" ? "星星队" : "朵朵队";
+    const loser = winner === "red" ? "康康队" : "鸭梨队";
     const fin = document.createElement("div");
     fin.className = "rbg-finale";
     fin.innerHTML = `<div class="rbg-finale-row">🛋️ 😄 😄</div><div>${loser}一屁股坐到软垫上,两队都笑成一团!</div>`;
@@ -643,7 +643,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, settings: { comeback: boole
         const got = secs <= 16 ? 3 : secs <= 28 ? 2 : 1;
         ctx.win(got as 1 | 2 | 3, `只用 ${Math.round(secs)} 秒就把小旗拉过线,发力的节奏踩得很准!`);
       } else {
-        ctx.lose("这局星星队先过线。下一局试试「歇半秒、拉一秒」的节奏,再把 🎈 加油点踩上,力气就够用了!");
+        ctx.lose("这局康康队先过线。下一局试试「歇半秒、拉一秒」的节奏,再把 🎈 加油点踩上,力气就够用了!");
       }
     },
   });
@@ -680,7 +680,7 @@ function versusSpec(pick: VersusPick, seed: number): RunSpec {
       aiAdapt: 0,
       supply: false,
       seed,
-      hint: "两个人各按一边:朵朵按住 F,星星按住 K,谁先把小旗拉过线谁赢!",
+      hint: "两个人各按一边:鸭梨按住 F,康康按住 K,谁先把小旗拉过线谁赢!",
       chips: ["👫 同屏双人", "🎈 加油点双方共用"],
     };
   }
@@ -730,7 +730,7 @@ function mountVersus(
   const scoreEl = wrap.querySelector(".rbg-score") as HTMLElement;
 
   function paintScore(): void {
-    scoreEl.textContent = `🏆 朵朵 ${redWins} : ${blueWins} 星星`;
+    scoreEl.textContent = `🏆 鸭梨 ${redWins} : ${blueWins} 康康`;
   }
 
   function showPicker(): void {
@@ -751,7 +751,7 @@ function mountVersus(
       note: tier.blurb,
       pick: { kind: "ai", tier },
     }));
-    picks.push({ label: "👫 同屏双人", note: "朵朵按住 F,星星按住 K,也可以一人按一边屏幕。", pick: { kind: "duo" } });
+    picks.push({ label: "👫 同屏双人", note: "鸭梨按住 F,康康按住 K,也可以一人按一边屏幕。", pick: { kind: "duo" } });
     for (const p of picks) {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -784,7 +784,7 @@ function mountVersus(
         ov.className = "rbg-over";
         ov.innerHTML = `
           <div style="font-size:44px;line-height:1">${winner === "red" ? "🏅" : "🪢"}</div>
-          <div class="rbg-over-title">${winner === "red" ? "朵朵队把小旗拉过线啦!" : "星星队这一局更稳!"}</div>
+          <div class="rbg-over-title">${winner === "red" ? "鸭梨队把小旗拉过线啦!" : "康康队这一局更稳!"}</div>
           <div class="rbg-over-sub">${
             winner === "red"
               ? "蓄力—发力—换气的节奏踩得漂亮,再换个更强的对手试试?"

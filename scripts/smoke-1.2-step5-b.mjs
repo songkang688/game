@@ -544,8 +544,8 @@ async function main() {
       [...document.querySelectorAll(".mn-field .mn-chip")].map((el) => el.textContent ?? "").join(" ")
     );
     log(
-      duo === 2 && duoNames.includes("朵朵") && duoNames.includes("星星"),
-      "双人同屏：左右两块地都在，朵朵和星星各一份",
+      duo === 2 && duoNames.includes("鸭梨") && duoNames.includes("康康"),
+      "双人同屏：左右两块地都在，鸭梨和康康各一份",
       `块数=${duo}`
     );
     await leave();

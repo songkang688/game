@@ -324,7 +324,7 @@ describe("snow-fight 1.2 运行时 · 手机 360px", () => {
 // ---------------------------------------------------------------------------
 
 describe("snow-fight 1.2 运行时 · 双人同屏", () => {
-  it("A/D/W/S/F/G 归朵朵,方向键 + L/K 归星星,谁也抢不了谁", async () => {
+  it("A/D/W/S/F/G 归鸭梨,方向键 + L/K 归康康,谁也抢不了谁", async () => {
     const h = (harness = install());
     const { bout } = await openBout(h, duelArena(null, 5), { viewW: FIELD_W_12, humans: 2 });
     h.flush(2);
@@ -371,12 +371,12 @@ describe("snow-fight 1.2 运行时 · 双人同屏", () => {
     }
     // 两块牌子上写着各自的键位,认得出谁是谁
     const marks = findAll(h.root, "snf-pad-t").map((el) => el.textContent);
-    expect(marks[0]).toContain("朵朵");
-    expect(marks[1]).toContain("星星");
+    expect(marks[0]).toContain("鸭梨");
+    expect(marks[1]).toContain("康康");
     bout.destroy();
   });
 
-  it("单人局里星星那套键一点反应都没有(免得旁边的人乱按)", async () => {
+  it("单人局里康康那套键一点反应都没有(免得旁边的人乱按)", async () => {
     const h = (harness = install());
     const { bout } = await openBout(h, duelArena("normal", 6), { viewW: FIELD_W_12, humans: 1 });
     h.flush(2);

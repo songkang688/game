@@ -63,7 +63,7 @@ export type Effect =
   | { kind: "delta"; n: number }
   /** 布尔询问的「是」 */
   | { kind: "flag" }
-  /** 朵朵的花开:弃两张手牌回到 1 点元气 */
+  /** 鸭梨的花开:弃两张手牌回到 1 点元气 */
   | { kind: "bloom"; who: number }
   /** 播报一句 */
   | { kind: "note"; text: string };
@@ -285,8 +285,8 @@ export const HEROES: readonly Hero[] = [
   },
   {
     id: "xingxing",
-    name: "星星",
-    emoji: "⭐",
+    name: "康康",
+    emoji: "👓",
     vigor: 4,
     blurb: "许个愿多摸一张,代价是留不住太多牌。",
     skills: [
@@ -304,8 +304,8 @@ export const HEROES: readonly Hero[] = [
   },
   {
     id: "duoduo",
-    name: "朵朵",
-    emoji: "🌸",
+    name: "鸭梨",
+    emoji: "🍐",
     vigor: 4,
     blurb: "花瓣掉光了也还能再开一次。",
     skills: [

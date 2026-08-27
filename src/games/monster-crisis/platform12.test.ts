@@ -432,8 +432,8 @@ describe("1.2 四种模式都能打到结算", () => {
     findButton(h.root, "各守一半")?.fire("click");
     h.flush(1);
     // 两个家 = HUD 上两条元气罐
-    expect(allText(h.root)).toContain("朵朵 🫙");
-    expect(allText(h.root)).toContain("星星 🫙");
+    expect(allText(h.root)).toContain("鸭梨 🫙");
+    expect(allText(h.root)).toContain("康康 🫙");
 
     expect(runUntilSettled(h, 8000)).toBe(true);
     expect(allText(h.root)).toMatch(/平手|这边守住啦/);

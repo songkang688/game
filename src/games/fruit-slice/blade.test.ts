@@ -176,7 +176,7 @@ describe("水果切切乐 · 1.2 四种目标", () => {
     expect(EXTRA_SPEC.flower.slicable).toBe(false);
     expect(FLOWER_COST).toBe(1);
     const line = flowerLine();
-    expect(line).toContain("朵朵");
+    expect(line).toContain("鸭梨");
     expect(line).not.toContain("失败");
     expect(line).not.toContain("笨");
   });

@@ -1,11 +1,11 @@
 /**
  * 红蓝赛跑 · 1.2 两套键位(纯逻辑 + 一个可测的绑定器)。
  *
- * 全站双人键位约定:朵朵 `WASD` + `F` / `G`,星星 `方向键` + `L` / `K`。
+ * 全站双人键位约定:鸭梨 `WASD` + `F` / `G`,康康 `方向键` + `L` / `K`。
  * 本款把「左右交替跑」落在两个横向键上,跳落在上方键上:
  *
- *  · 朵朵(红道):`A` 左脚 / `D` 右脚 / `W`、`F`、`G` 跳;
- *  · 星星(蓝道):`←` 左脚 / `→` 右脚 / `↑`、`L`、`K` 跳。
+ *  · 鸭梨(红道):`A` 左脚 / `D` 右脚 / `W`、`F`、`G` 跳;
+ *  · 康康(蓝道):`←` 左脚 / `→` 右脚 / `↑`、`L`、`K` 跳。
  *
  * 单人模式下两套键都开给同一个人(有人习惯方向键,有人习惯 A/D),
  * 空格也当跳;双人模式下各管各的,一个键不许串到对面那条道去。
@@ -14,7 +14,7 @@
  * ——「`destroy` 时两套键位全卸」这条规格就靠它写断言。
  */
 
-/** 哪条道:红=朵朵,蓝=星星 */
+/** 哪条道:红=鸭梨,蓝=康康 */
 export type Racer = "red" | "blue";
 
 /** 一次按键落到什么动作上 */
@@ -25,7 +25,7 @@ export interface RaceKeyHit {
   action: RaceAction;
 }
 
-/** 朵朵(红道)的键位 */
+/** 鸭梨(红道)的键位 */
 export const RED_KEYS: Readonly<Record<string, RaceAction>> = {
   a: "left",
   d: "right",
@@ -34,7 +34,7 @@ export const RED_KEYS: Readonly<Record<string, RaceAction>> = {
   g: "jump"
 };
 
-/** 星星(蓝道)的键位 */
+/** 康康(蓝道)的键位 */
 export const BLUE_KEYS: Readonly<Record<string, RaceAction>> = {
   ArrowLeft: "left",
   ArrowRight: "right",

@@ -107,7 +107,7 @@ describe("poop-hero 物理与关卡红线", () => {
 });
 
 describe("poop-hero 双人键位", () => {
-  it("朵朵是 W A S D + F/G", () => {
+  it("鸭梨是 W A S D + F/G", () => {
     expect(keyToAction("KeyW", 2)).toEqual({ player: 0, action: "up" });
     expect(keyToAction("KeyA", 2)).toEqual({ player: 0, action: "left" });
     expect(keyToAction("KeyS", 2)).toEqual({ player: 0, action: "down" });
@@ -116,7 +116,7 @@ describe("poop-hero 双人键位", () => {
     expect(keyToAction("KeyG", 2)).toEqual({ player: 0, action: "sub" });
   });
 
-  it("星星是方向键 + L/K", () => {
+  it("康康是方向键 + L/K", () => {
     expect(keyToAction("ArrowUp", 2)).toEqual({ player: 1, action: "up" });
     expect(keyToAction("ArrowLeft", 2)).toEqual({ player: 1, action: "left" });
     expect(keyToAction("ArrowDown", 2)).toEqual({ player: 1, action: "down" });

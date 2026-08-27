@@ -40,7 +40,7 @@ describe("combo-clash · meta 是纯数据卡片", () => {
 });
 
 describe("combo-clash · 双人键位", () => {
-  it("朵朵是 WASD + F 轻 + G 重", () => {
+  it("鸭梨是 WASD + F 轻 + G 重", () => {
     expect(duoKey("a")).toBe("left");
     expect(duoKey("d")).toBe("right");
     expect(duoKey("w")).toBe("up");
@@ -49,7 +49,7 @@ describe("combo-clash · 双人键位", () => {
     expect(duoKey("g")).toBe("heavy");
   });
 
-  it("星星是方向键 + L 轻 + K 重", () => {
+  it("康康是方向键 + L 轻 + K 重", () => {
     expect(starKey("ArrowLeft")).toBe("left");
     expect(starKey("ArrowRight")).toBe("right");
     expect(starKey("ArrowUp")).toBe("up");
@@ -101,7 +101,7 @@ describe("combo-clash · 十位原创小伙伴", () => {
     expect(new Set(CHARACTER_IDS).size).toBe(CHARACTER_IDS.length);
   });
 
-  it("朵朵和星星都在名单里", () => {
+  it("鸭梨和康康都在名单里", () => {
     expect(CHARACTER_IDS).toContain("duoduo");
     expect(CHARACTER_IDS).toContain("xingxing");
   });

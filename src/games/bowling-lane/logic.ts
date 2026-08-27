@@ -927,7 +927,7 @@ export function aiShot(standing: readonly boolean[], skill: AiLevel, turn: numbe
 export type InputName = "confirm" | "cancel" | "up" | "down" | "left" | "right";
 
 /**
- * 朵朵 W A S D + F 确认 / G 取消;星星 方向键 + L 确认 / K 取消。
+ * 鸭梨 W A S D + F 确认 / G 取消;康康 方向键 + L 确认 / K 取消。
  * 三段式只需要「确认」一个键,方向键留给微调落点。
  */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: InputName }> = {

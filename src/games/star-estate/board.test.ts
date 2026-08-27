@@ -22,7 +22,7 @@ import {
   unmortgageCost
 } from "./board";
 
-describe("朵星地产 · 原创棋盘", () => {
+describe("梨康地产 · 原创棋盘", () => {
   it("正好 40 格，格号连续，四角就位", () => {
     expect(BOARD.length).toBe(BOARD_LEN);
     BOARD.forEach((t, i) => expect(t.pos).toBe(i));

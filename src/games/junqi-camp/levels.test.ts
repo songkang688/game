@@ -58,13 +58,13 @@ describe("军旗对决 · 章节切分", () => {
 });
 
 describe("军旗对决 · 每一关的局面", () => {
-  it("每一关都摆着星星的军旗和朵朵能动的子", () => {
+  it("每一关都摆着康康的军旗和鸭梨能动的子", () => {
     for (let lv = 0; lv < TOTAL; lv++) {
       const s = positionFor(lv);
       const flag = s.cells.findIndex((c) => c?.side === "star" && c.kind === "junqi");
       expect(flag, `第 ${lv + 1} 关缺军旗`).toBeGreaterThanOrEqual(0);
       expect(HQ.star, `第 ${lv + 1} 关军旗不在大本营`).toContain(flag);
-      expect(legalMoves(s.cells, "duo").length, `第 ${lv + 1} 关朵朵没子可动`).toBeGreaterThan(0);
+      expect(legalMoves(s.cells, "duo").length, `第 ${lv + 1} 关鸭梨没子可动`).toBeGreaterThan(0);
       expect(status(s).kind, `第 ${lv + 1} 关一上来就结束了`).toBe("playing");
       expect(levelHint(lv).length).toBeGreaterThan(4);
     }

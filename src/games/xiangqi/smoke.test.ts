@@ -1,4 +1,4 @@
-// 朵朵星星象棋 · 无头冒烟：不开浏览器，把整款游戏挂起来再拆掉。
+// 鸭梨康康象棋 · 无头冒烟：不开浏览器，把整款游戏挂起来再拆掉。
 //
 // 盯五件事：
 //  1. meta 与首页契约对得上，章节和恰好 188；
@@ -61,7 +61,7 @@ function msgOf(root: El): string {
 describe("meta 契约", () => {
   it("id、标题、分类、关数都按规格填", () => {
     expect(meta.id).toBe("xiangqi");
-    expect(meta.title).toBe("朵朵星星象棋");
+    expect(meta.title).toBe("鸭梨康康象棋");
     expect(meta.category).toBe("party");
     expect(meta.levels).toBe(TOTAL_LEVELS);
     expect(meta.levels).toBe(PUZZLES.length);
@@ -363,7 +363,7 @@ describe("自由对战", () => {
     for (const d of DIFFICULTIES) {
       expect(findByText(dom.root, DIFFICULTY_NAME[d]), d).not.toBeNull();
     }
-    expect(findByText(dom.root, "朵朵 VS 星星")).not.toBeNull();
+    expect(findByText(dom.root, "鸭梨 VS 康康")).not.toBeNull();
     handle.destroy();
   });
 
@@ -380,7 +380,7 @@ describe("自由对战", () => {
 
   it("双人同屏时悔棋要两边都点头", async () => {
     const { handle } = await openFree();
-    findByText(dom.root, "朵朵 VS 星星")!.dispatch("click", {});
+    findByText(dom.root, "鸭梨 VS 康康")!.dispatch("click", {});
     findByText(dom.root, "开始下棋")!.dispatch("click", {});
     const canvas = boardCanvas(dom.root);
     // 炮二平五：点子 → 点落点 → 确认

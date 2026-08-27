@@ -1,17 +1,17 @@
 /**
- * 朵朵大战星星 · 双人键位。
+ * 鸭梨大战康康 · 双人键位。
  *
  * 两套键位分别放在两张表里，**没有任何一个键同时属于两个人**，
  * 所以同屏两个人各按各的，谁也抢不走谁的键（`keys.test.ts` 会一直盯着这条）。
- *  · 朵朵（1P）：W A S D 走动 + F 挥击 + G 重击
- *  · 星星（2P）：↑ ← ↓ → 走动 + L 挥击 + K 重击
+ *  · 鸭梨（1P）：W A S D 走动 + F 挥击 + G 重击
+ *  · 康康（2P）：↑ ← ↓ → 走动 + L 挥击 + K 重击
  *  · Esc：暂停（两个人共用）
  */
 import { emptyInput, type Input } from "./ai";
 
 export type Seat = "p1" | "p2";
 
-/** 朵朵：WASD + F（挥击）/ G（重击） */
+/** 鸭梨：WASD + F（挥击）/ G（重击） */
 export const P1_KEYS: Readonly<Record<string, keyof Input>> = {
   KeyW: "up",
   KeyA: "left",
@@ -21,7 +21,7 @@ export const P1_KEYS: Readonly<Record<string, keyof Input>> = {
   KeyG: "heavy",
 };
 
-/** 星星：方向键 + L（挥击）/ K（重击） */
+/** 康康：方向键 + L（挥击）/ K（重击） */
 export const P2_KEYS: Readonly<Record<string, keyof Input>> = {
   ArrowUp: "up",
   ArrowLeft: "left",

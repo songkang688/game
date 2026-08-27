@@ -4,7 +4,7 @@
  * 单测能验的都在 `src/games/dot-maze/*.test.ts` 里验过了（含 DOM 桩上的 destroy 断言）。
  * 这份脚本补的是桩验不了的那几件事：
  *  1. 375×667 与 1280×800 都不横向溢出，360px 上整张迷宫完整入屏且每格 ≥ 14px；
- *  2. WASD 真的能让朵朵吃到豆，Esc 能停住、再按能继续；
+ *  2. WASD 真的能让鸭梨吃到豆，Esc 能停住、再按能继续；
  *  3. 四个模式入口都点得进去，回菜单也回得来；
  *  4. 离开游戏之后 keydown 监听与 rAF 全部停掉，不在后台空转。
  *
@@ -74,10 +74,10 @@ async function openMode(page, label) {
   if (!clicked) throw new Error(`找不到模式按钮：${label}`);
 }
 
-/** 把画布 aria-label 里的「朵朵120分，小星命4，剩138颗豆」拆成结构 */
+/** 把画布 aria-label 里的「鸭梨120分，小星命4，剩138颗豆」拆成结构 */
 async function readStage(page) {
   return page.$eval(".dmz-canvas", (el) => {
-    const m = /朵朵(\d+)分，小星命(\d+)，剩(\d+)颗豆(，已暂停)?/.exec(el.getAttribute("aria-label") ?? "");
+    const m = /鸭梨(\d+)分，小星命(\d+)，剩(\d+)颗豆(，已暂停)?/.exec(el.getAttribute("aria-label") ?? "");
     const r = el.getBoundingClientRect();
     return {
       score: m ? +m[1] : null,
@@ -163,7 +163,7 @@ async function main() {
     const eaten = await eatSome(page, ["w", "a", "s", "d"]);
     log(
       eaten.after !== null && eaten.before !== null && eaten.after < eaten.before,
-      `${vp.name} WASD 能让朵朵吃到豆`,
+      `${vp.name} WASD 能让鸭梨吃到豆`,
       `剩 ${eaten.before} → ${eaten.after}`,
     );
 

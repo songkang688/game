@@ -536,7 +536,7 @@ function overPanel(host: HTMLElement, title: string, sub: string, label: string,
 // 对战：双人清订单，先完成 3 张的赢
 // ---------------------------------------------------------------------------
 
-/** 座位的键位：朵朵 WASD + F，星星 方向键 + L */
+/** 座位的键位：鸭梨 WASD + F，康康 方向键 + L */
 export const SEAT_KEYS: Array<{ up: string; down: string; left: string; right: string; go: string }> = [
   { up: "w", down: "s", left: "a", right: "d", go: "f" },
   { up: "arrowup", down: "arrowdown", left: "arrowleft", right: "arrowright", go: "l" },
@@ -627,8 +627,8 @@ function mountDuel(
     };
 
     const names = aiTier
-      ? ["🌸 你", `${TIER_FACES[tier]} ${TIER_NAMES[tier]}`]
-      : ["🌸 朵朵 · WASD + F", "⭐ 星星 · 方向键 + L"];
+      ? ["🍐 你", `${TIER_FACES[tier]} ${TIER_NAMES[tier]}`]
+      : ["🍐 鸭梨 · WASD + F", "👓 康康 · 方向键 + L"];
     shell.chip.textContent = `⚔️ 第 ${round} 局 · ${wins[0]} : ${wins[1]}`;
     shell.say.textContent = aiTier
       ? `先清完 ${DUEL_TARGET} 张订单就赢。点两颗相邻的星星交换。`
@@ -688,7 +688,7 @@ function mountDuel(
     if (w === 1) api.addStars(1);
     const title = aiTier
       ? w === 1 ? "🏆 你赢啦！" : "🤝 对手先清完了"
-      : w === 1 ? "🏆 朵朵赢啦！" : "🏆 星星赢啦！";
+      : w === 1 ? "🏆 鸭梨赢啦！" : "🏆 康康赢啦！";
     panel = overPanel(
       shell.wrap,
       title,

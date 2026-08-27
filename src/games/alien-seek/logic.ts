@@ -232,9 +232,9 @@ export function travelTime(ax: number, ay: number, bx: number, by: number): numb
 }
 
 /** 双人对战:谁先找到的多谁赢,一样多算平局 */
-export function versusWinner(a: number, b: number): "朵朵" | "星星" | "平局" {
-  if (a > b) return "朵朵";
-  if (b > a) return "星星";
+export function versusWinner(a: number, b: number): "鸭梨" | "康康" | "平局" {
+  if (a > b) return "鸭梨";
+  if (b > a) return "康康";
   return "平局";
 }
 

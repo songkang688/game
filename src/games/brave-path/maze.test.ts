@@ -163,7 +163,7 @@ describe("无尽之路：楼层与休息点", () => {
   });
 
   it("补给作用在勇者身上：回血不会超过上限，也不改传进来的那个对象", () => {
-    const hero = makeFighter({ name: "朵朵", emoji: "🌸", element: "grass", maxHp: 100, atk: 20, def: 8, spd: 10, hp: 40 });
+    const hero = makeFighter({ name: "鸭梨", emoji: "🍐", element: "grass", maxHp: 100, atk: 20, def: 8, spd: 10, hp: 40 });
     const heal = SUPPLIES.find((s) => s.id === "spring");
     expect(heal).toBeDefined();
     const after = applySupply(hero, heal!);

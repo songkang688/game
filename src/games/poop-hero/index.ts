@@ -92,10 +92,10 @@ const PALETTES: Palette[] = [
   { sky0: "#F0EBFC", sky1: "#F9F5FF", far: "#D8CEF2", ground: "#B79CE8", groundDark: "#E2D7F6", deco: "#9B7ADC" },
 ];
 
-/** 两位小主角的配色:朵朵粉披风,星星蓝披风 */
+/** 两位小主角的配色:鸭梨粉披风,康康蓝披风 */
 const HERO_COLORS = [
-  { body: "#FFD9A8", cape: "#FF8FB8", capeDark: "#E4699A", mask: "#7B4DA8", name: "朵朵" },
-  { body: "#FFE2BE", cape: "#7FB2FF", capeDark: "#5A8ADD", mask: "#2F6BAE", name: "星星" },
+  { body: "#FFD9A8", cape: "#FF8FB8", capeDark: "#E4699A", mask: "#7B4DA8", name: "鸭梨" },
+  { body: "#FFE2BE", cape: "#7FB2FF", capeDark: "#5A8ADD", mask: "#2F6BAE", name: "康康" },
 ];
 
 const FLOWERS = ["🌸", "🌼", "🌷", "🌻", "💐"];
@@ -425,8 +425,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
   if (opts.def.roles && opts.players === 2) {
     const roles = el("div", "pph-roles");
     roles.append(
-      el("span", "pph-role pph-role-sweep", "朵朵 · 清扫"),
-      el("span", "pph-role pph-role-haul", "星星 · 搬运分类")
+      el("span", "pph-role pph-role-sweep", "鸭梨 · 清扫"),
+      el("span", "pph-role pph-role-haul", "康康 · 搬运分类")
     );
     wrap.appendChild(roles);
   }
@@ -476,8 +476,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       opts.players === 1
         ? "WASD / 方向键移动 · F 或 L 冲刺 · G 或 K 扫一扫"
         : pi === 0
-          ? "朵朵 · W A S D · F 冲刺 · G 扫"
-          : "星星 · ↑←↓→ · L 冲刺 · K 扫"
+          ? "鸭梨 · W A S D · F 冲刺 · G 扫"
+          : "康康 · ↑←↓→ · L 冲刺 · K 扫"
     );
     pad.appendChild(name);
     for (const k of PAD_KEYS) {
@@ -1480,7 +1480,7 @@ function mountCoop(host: HTMLElement, api: GameApi, onExit: () => void): { destr
       players: 2,
       sfx: (n) => api.play(n),
       title: def.name,
-      tip: "分工行动!朵朵清扫,星星把垃圾送进三色桶,最后一起站到净化门前。",
+      tip: "分工行动!鸭梨清扫,康康把垃圾送进三色桶,最后一起站到净化门前。",
       showTimer: true,
       goalBar: "coop",
       onQuit: onExit,

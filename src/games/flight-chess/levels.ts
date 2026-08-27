@@ -526,13 +526,13 @@ export function versusConfig(tier: AiTier): MatchSetup {
   };
 }
 
-/** 双人:朵朵一色、星星一色，另两色 AI */
+/** 双人:鸭梨一色、康康一色，另两色 AI */
 export function duoConfig(): MatchSetup {
   return {
     seats: [0, 1, 2, 3],
     tiers: { 2: "normal", 3: "normal" },
     rules: CLASSIC_RULES,
-    label: "朵朵与星星各执一色，小花小鸟由电脑补位"
+    label: "鸭梨与康康各执一色，小花小鸟由电脑补位"
   };
 }
 

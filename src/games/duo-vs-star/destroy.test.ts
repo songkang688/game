@@ -27,7 +27,7 @@ async function mountGame(h: Harness): Promise<{ destroy: () => void }> {
   } as never);
 }
 
-describe("朵朵大战星星 · 1.2 destroy 归零", () => {
+describe("鸭梨大战康康 · 1.2 destroy 归零", () => {
   it("停在菜单就 destroy:window 监听、rAF、节点都回到挂载前", async () => {
     const h = install();
     harness = h;
@@ -115,7 +115,7 @@ describe("朵朵大战星星 · 1.2 destroy 归零", () => {
  * 竞态:菜单 → 选人 → 开打这条链上每一步都能被连点,
  * 结算浮层还会在对局之上再叠一层。这几条把它们跑一遍。
  */
-describe("朵朵大战星星 · 1.2 抢按与竞态", () => {
+describe("鸭梨大战康康 · 1.2 抢按与竞态", () => {
   it("destroy 调两次不炸,第二次是空操作(mount 里就有 destroyed 闸)", async () => {
     const h = install();
     harness = h;

@@ -188,7 +188,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   logo.className = "logo";
   const logoDuoduo = createAvatarImg("duoduo", { className: "logo-avatar logo-avatar--duoduo" });
   const logoTitle = document.createElement("h1");
-  logoTitle.innerHTML = `<span class="logo-emoji logo-emoji--flower" aria-hidden="true">🌸</span>一朵一星<span class="logo-emoji logo-emoji--star" aria-hidden="true">⭐</span>`;
+  logoTitle.innerHTML = `<span class="logo-emoji logo-emoji--flower" aria-hidden="true">🍐</span>鸭梨康康<span class="logo-emoji logo-emoji--star" aria-hidden="true">👓</span>`;
   const logoXingxing = createAvatarImg("xingxing", {
     className: "logo-avatar logo-avatar--xingxing"
   });
@@ -284,7 +284,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   header.appendChild(actions);
   screen.appendChild(header);
 
-  // ---- 问候语:朵朵和星星的欢迎气泡 ----
+  // ---- 问候语:鸭梨和康康的欢迎气泡 ----
   const hero = document.createElement("div");
   hero.className = "home-hero";
   const heroDuoduo = createAvatarImg("duoduoCheer", {
@@ -296,7 +296,7 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
   // 款数和关数都当场数,别写死:每加一批新游戏都要回来改数字的话,迟早会忘。
   // 具体那句话怎么组由 `heroSubtitle` 拼(它连 0 款 / NaN 这些脏值也有兜底,单测盯着)。
   const heroStrong = document.createElement("strong");
-  heroStrong.textContent = `${greetingText()}朵朵和星星请你来玩!`;
+  heroStrong.textContent = `${greetingText()}鸭梨和康康请你来玩!`;
   const heroSpan = document.createElement("span");
   heroSpan.textContent = heroSubtitle(
     games.length,

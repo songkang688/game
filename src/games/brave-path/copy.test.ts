@@ -199,10 +199,10 @@ describe("文案红线 · 静态表", () => {
 /* ------------------------------------------------------------------ */
 
 describe("文案红线 · 角色只用本作原创的那几位", () => {
-  const CAST = ["朵朵", "星星", "糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾"];
+  const CAST = ["鸭梨", "康康", "糯糯", "云云", "墩墩", "闪闪", "绿绿豆", "啾啾"];
 
-  it("主角是朵朵", () => {
-    expect(HERO_NAME).toBe("朵朵");
+  it("主角是鸭梨", () => {
+    expect(HERO_NAME).toBe("鸭梨");
     expect(CAST).toContain(HERO_NAME);
   });
 
@@ -219,8 +219,8 @@ describe("文案红线 · 角色只用本作原创的那几位", () => {
 describe("文案红线 · 打起来之后冒出的话", () => {
   function fighter(over: Partial<FighterSpec> = {}) {
     return makeFighter({
-      name: "朵朵",
-      emoji: "🌸",
+      name: "鸭梨",
+      emoji: "🍐",
       element: "grass",
       maxHp: 130,
       atk: 28,

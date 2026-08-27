@@ -303,7 +303,7 @@ describe("界面纯函数", () => {
     const s = createState([0, 1], CLASSIC_RULES);
     place(s, 0, [10, BASE, BASE, BASE]);
     const line = movePreview(s, { kind: "fly", plane: { color: 0, idx: 0 } }, 2);
-    expect(line).toContain("朵朵");
+    expect(line).toContain("鸭梨");
     expect(line).toContain("航线");
     expect(line).not.toContain("undefined");
     expect(movePreview(s, { kind: "takeOff", plane: { color: 0, idx: 1 } }, 6)).toContain("起飞");
@@ -489,7 +489,7 @@ describe("牌桌:挂载、走完一局、destroy 干净", () => {
     expect(idleSeat?.innerHTML).toContain("补给");
 
     vi.advanceTimersByTime(1000 * 60);
-    // 轮到谁的提示始终是朵朵，另一色的三架还停在摆好的位置上
+    // 轮到谁的提示始终是鸭梨，另一色的三架还停在摆好的位置上
     const badge = world.root.querySelectorAll(".fc-badge")[0];
     expect(badge.textContent).toContain(COLOR_INFO[0].name);
     const parked = world.root
@@ -516,6 +516,6 @@ describe("牌桌:挂载、走完一局、destroy 干净", () => {
         expect(() => resolveLanding(s, { color: c, idx: i }, 3)).not.toThrow();
       }
     }
-    expect(COLOR_INFO[cfg.player].name).toBe("朵朵");
+    expect(COLOR_INFO[cfg.player].name).toBe("鸭梨");
   });
 });

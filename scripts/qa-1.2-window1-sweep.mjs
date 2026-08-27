@@ -36,7 +36,7 @@ const GAMES = [
   { id: "block-drop", title: "方块叠叠乐" },
   { id: "combo-clash", title: "连招对决" },
   { id: "mahjong-bloom", title: "花开麻将" },
-  { id: "star-estate", title: "朵星地产" },
+  { id: "star-estate", title: "梨康地产" },
   { id: "hero-cards", title: "英杰令" },
   { id: "weiqi-garden", title: "围子花园" },
   { id: "flight-chess", title: "飞行棋乐园" },

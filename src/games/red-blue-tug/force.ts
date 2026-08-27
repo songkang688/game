@@ -257,7 +257,7 @@ export interface ComebackStep {
 /**
  * 落后一方被拉到 ≥80% 位置时开 2 秒「拼一把」窗口。
  *
- * `side` 是 +1(朵朵,绳子往正方向算赢)或 -1(星星);
+ * `side` 是 +1(鸭梨,绳子往正方向算赢)或 -1(康康);
  * `enabled` 关掉就永远没有加成 —— 这条是可开关的,默认开。
  */
 export function comebackStep(

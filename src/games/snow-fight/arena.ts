@@ -761,7 +761,7 @@ export function campaignArena(level: SnowLevel, seed = 20260215): Arena {
     fighters: [
       // 能一路走到雪堡前面 20 格:远处的高靶子够不着的时候得往前压,
       // 压上去雪厚、视野好,但雪人也更容易砸到你——这就是「阵地选择」的代价。
-      { seat: 0, name: "朵朵", x: 6, dir: 1, minX: 2, maxX: 20, balls: 2 },
+      { seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 2, maxX: 20, balls: 2 },
     ],
     fortX: FORT_X,
   });
@@ -807,8 +807,8 @@ export function duelArena(ai: AiLevel | null, seed = 771): Arena {
     covers,
     foes,
     fighters: [
-      { seat: 0, name: "朵朵", x: 18, dir: 1, minX: 15, maxX: 25, balls: 3 },
-      { seat: 1, name: ai ? "雪人教练" : "星星", x: 42, dir: -1, minX: 35, maxX: 45, balls: 3, ai },
+      { seat: 0, name: "鸭梨", x: 18, dir: 1, minX: 15, maxX: 25, balls: 3 },
+      { seat: 1, name: ai ? "雪人教练" : "康康", x: 42, dir: -1, minX: 35, maxX: 45, balls: 3, ai },
     ],
     clock: DUEL_TIME,
   });
@@ -870,7 +870,7 @@ export function endlessArena(seed = 90210): Arena {
       { kind: "wall", x: 25, w: 2.4, h: 4.2, row: 1 },
     ],
     foes: [],
-    fighters: [{ seat: 0, name: "朵朵", x: 8, dir: 1, minX: 3, maxX: 24, balls: 3 }],
+    fighters: [{ seat: 0, name: "鸭梨", x: 8, dir: 1, minX: 3, maxX: 24, balls: 3 }],
     fortX: FORT_X,
   });
   for (const spec of waveFoes(1, a.rand)) a.foes.push(makeFoe(spec, a.nextId++));

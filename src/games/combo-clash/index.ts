@@ -151,12 +151,12 @@ function reducedMotion(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// 键位:朵朵 WASD + F/G,星星 方向键 + L/K
+// 键位:鸭梨 WASD + F/G,康康 方向键 + L/K
 // ---------------------------------------------------------------------------
 
 type Dir = "left" | "right" | "up" | "down" | "light" | "heavy";
 
-/** 朵朵这一侧的键位 */
+/** 鸭梨这一侧的键位 */
 export function duoKey(k: string): Dir | null {
   if (k === "a") return "left";
   if (k === "d") return "right";
@@ -167,7 +167,7 @@ export function duoKey(k: string): Dir | null {
   return null;
 }
 
-/** 星星这一侧的键位 */
+/** 康康这一侧的键位 */
 export function starKey(k: string): Dir | null {
   if (k === "ArrowLeft") return "left";
   if (k === "ArrowRight") return "right";
@@ -824,7 +824,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     const note = document.createElement("div");
     note.className = "cc-note";
     const me = characterById(chosenChar);
-    note.textContent = `${me.emoji} ${me.name}(${ARCHETYPE_LABELS[me.archetype]}):${me.style}。键位:朵朵 WASD 移动 + F 轻 + G 重,F+G 一起按是必杀钮;星星 方向键 + L 轻 + K 重;Esc 暂停。手机用左边摇杆和右边三个大钮。`;
+    note.textContent = `${me.emoji} ${me.name}(${ARCHETYPE_LABELS[me.archetype]}):${me.style}。键位:鸭梨 WASD 移动 + F 轻 + G 重,F+G 一起按是必杀钮;康康 方向键 + L 轻 + K 重;Esc 暂停。手机用左边摇杆和右边三个大钮。`;
     stage.appendChild(note);
 
     if (mode === "versus") {
@@ -877,7 +877,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         const b = document.createElement("button");
         b.type = "button";
         b.className = `cc-open${c.id === foeChar ? "" : " cc-ghost"}`;
-        b.textContent = `星星用 ${c.name}`;
+        b.textContent = `康康用 ${c.name}`;
         b.addEventListener("click", () => {
           foeChar = c.id;
           api.play("tap");
@@ -961,7 +961,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function startDuo(): void {
     clearStage();
-    chip.textContent = "👫 朵朵 WASD+F/G · 星星 方向键+L/K";
+    chip.textContent = "👫 鸭梨 WASD+F/G · 康康 方向键+L/K";
     arena = createArena(stage, {
       cfg: versusMatchConfig(chosenChar, foeChar),
       goalText: "三局两胜,两个人一台设备",

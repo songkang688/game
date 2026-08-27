@@ -57,9 +57,9 @@ import {
   type Viewport,
 } from "./seek12";
 
-/** 两位玩家的光标颜色:朵朵粉、星星蓝 */
+/** 两位玩家的光标颜色:鸭梨粉、康康蓝 */
 const P_COLOR = ["#e8558f", "#3f7fd6"];
-const P_NAME = ["朵朵", "星星"];
+const P_NAME = ["鸭梨", "康康"];
 
 const CSS = `
 .as-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
@@ -501,7 +501,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   let clock = 0;
   let message = "";
   let messageTimer = 0;
-  /** 已经点开的藏身点 → 是谁点开的(0 朵朵 / 1 星星) */
+  /** 已经点开的藏身点 → 是谁点开的(0 鸭梨 / 1 康康) */
   const found = new Map<number, number>();
   /** 推理关点错过的藏身点,画个叉 */
   const crossed = new Set<number>();
@@ -802,7 +802,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
         return;
       }
     }
-    // 单人时两套键位都归朵朵用,谁顺手用谁
+    // 单人时两套键位都归鸭梨用,谁顺手用谁
     if (opts.players === 1) {
       const dir = KEYS[1][e.key];
       if (dir) {
@@ -1000,7 +1000,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     const title = document.createElement("div");
     title.className = "as-pad-t";
     title.style.color = P_COLOR[player];
-    title.textContent = player === 0 ? "朵朵 W A S D / F" : "星星 ↑←↓→ / L";
+    title.textContent = player === 0 ? "鸭梨 W A S D / F" : "康康 ↑←↓→ / L";
     pad.appendChild(title);
 
     const mk = (label: string, aria: string, hot = false): HTMLButtonElement => {

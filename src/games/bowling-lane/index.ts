@@ -5,7 +5,7 @@ export { meta };
 //
 // 三种玩法共用同一张「投球台」`createDesk`:
 //  - 闯关:188 关八大主题,一关两到四格,目标分一路涨,后面几章还混特殊瓶(走 level99 框架);
-//  - 双人对战:整整十格,朵朵和星星轮流投,也可以换成三档电脑球手;
+//  - 双人对战:整整十格,鸭梨和康康轮流投,也可以换成三档电脑球手;
 //  - 无尽:一格一格往下打,哪一格没够到目标分就结束。
 //
 // 记分完全交给 scoring.ts 那个纯函数,画面上看到的每一次滚瓶也都是 logic.ts 真算出来的,
@@ -61,8 +61,8 @@ import {
 } from "./logic";
 import { PINS, frameMarks, longestStrikeRun, scoreGame, totalScore, turnState, type FrameScore } from "./scoring";
 
-const P_NAME = ["朵朵", "星星"];
-const P_EMOJI = ["🌸", "⭐"];
+const P_NAME = ["鸭梨", "康康"];
+const P_EMOJI = ["🍐", "👓"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 
 // ---------------------------------------------------------------------------
@@ -859,7 +859,7 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
       el(
         "div",
         "bl-veil-s",
-        "按 Esc 或点「继续」接着投。朵朵用 F 停指针、G 退回上一段;星星用 L 停指针、K 退回上一段,方向键左右微调落点。屏幕上的「↩ 重来」按钮和 G / K 是一回事。"
+        "按 Esc 或点「继续」接着投。鸭梨用 F 停指针、G 退回上一段;康康用 L 停指针、K 退回上一段,方向键左右微调落点。屏幕上的「↩ 重来」按钮和 G / K 是一回事。"
       )
     );
     const row = el("div", "bl-veil-btns");
@@ -1092,8 +1092,8 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void, aiSkil
       guide: 0.5,
       banner: `${vs.name} · 第 ${round} 局`,
       tip: aiSkill
-        ? `${vs.hint} 朵朵:F 停指针、G 退回上一段,方向键左右微调落点。`
-        : `${vs.hint} 朵朵:F/G;星星:L/K。轮到谁,谁的键才管用。`,
+        ? `${vs.hint} 鸭梨:F 停指针、G 退回上一段,方向键左右微调落点。`
+        : `${vs.hint} 鸭梨:F/G;康康:L/K。轮到谁,谁的键才管用。`,
       sfx: (n) => api.play(n),
       onDone: (res) => {
         desk?.destroy();

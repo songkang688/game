@@ -174,7 +174,7 @@ describe("拐弯补正", () => {
 
   it("端到端:按着上键往右跑,人真的从口子里拐上去了", () => {
     const board = parse(["##.##", "....."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 1, 1), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1), 0);
     const world = createWorld({ board, fighters: [f] });
     run(world, 1200, () => [{ dir: DIR_UP, drop: false, detonate: false }]);
     expect(f.pos).toBe(idx(board, 2, 0));
@@ -334,7 +334,7 @@ describe("道具与泡泡护盾", () => {
   });
 
   it("护盾最多叠两层,捡第三个不再涨", () => {
-    const f = makeFighter(0, "朵朵", "🌸", 0, 0);
+    const f = makeFighter(0, "鸭梨", "🍐", 0, 0);
     expect(f.shield).toBe(0);
     expect(applyItem(f, "shield")).toBe(true);
     expect(applyItem(f, "shield")).toBe(true);
@@ -345,7 +345,7 @@ describe("道具与泡泡护盾", () => {
 
   it("有护盾时被彩虹波扫到只掉一层盾,人不进泡泡", () => {
     const board = parse(["....."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 2, 0), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 2, 0), 0);
     f.shield = 2;
     const world = createWorld({ board, fighters: [f] });
     bubble(world, 0);
@@ -357,7 +357,7 @@ describe("道具与泡泡护盾", () => {
 
   it("同一圈彩虹波不会连扣两层盾", () => {
     const board = parse(["....."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 2, 0), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 2, 0), 0);
     f.shield = 2;
     const world = createWorld({ board, fighters: [f] });
     bubble(world, 0);
@@ -367,7 +367,7 @@ describe("道具与泡泡护盾", () => {
 
   it("盾掉光了才会被罩住", () => {
     const board = parse(["....."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 2, 0), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 2, 0), 0);
     const world = createWorld({ board, fighters: [f] });
     bubble(world, 0);
     expect(f.bubbleT).toBeGreaterThan(0);
@@ -376,7 +376,7 @@ describe("道具与泡泡护盾", () => {
 
   it("踢泡钮:脚边有泡泡就把它踹出去,没有就什么也不发生", () => {
     const board = parse([".......", "......."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 1, 0), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 0), 0);
     f.kick = true;
     const world = createWorld({ board, fighters: [f] });
     expect(kickBomb(world, 0, DIR_RIGHT)).toBe(false);
@@ -387,7 +387,7 @@ describe("道具与泡泡护盾", () => {
 
   it("没有踢泡道具的人按踢泡钮不起作用", () => {
     const board = parse([".......", "......."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 1, 0), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 0), 0);
     const world = createWorld({ board, fighters: [f] });
     world.bombs = [bomb(1, idx(board, 2, 0), 1)];
     expect(kickBomb(world, 0, DIR_RIGHT)).toBe(false);
@@ -422,8 +422,8 @@ describe("道具与泡泡护盾", () => {
 describe("合作救援", () => {
   function coopWorld(): { world: World; a: Fighter; b: Fighter; board: ReturnType<typeof makeBoard> } {
     const board = parse([".......", ".......", "......."]);
-    const a = makeFighter(0, "朵朵", "🌸", idx(board, 1, 1), 0);
-    const b = makeFighter(1, "星星", "⭐", idx(board, 5, 1), 0);
+    const a = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1), 0);
+    const b = makeFighter(1, "康康", "👓", idx(board, 5, 1), 0);
     const world = createWorld({ board, fighters: [a, b], rescue: true });
     return { world, a, b, board };
   }
@@ -439,7 +439,7 @@ describe("合作救援", () => {
     bubble(world, 0);
     expect(a.bubbleT).toBe(RESCUE_MS);
 
-    const solo = createWorld({ board: parse(["....."]), fighters: [makeFighter(0, "朵朵", "🌸", 2, 0)] });
+    const solo = createWorld({ board: parse(["....."]), fighters: [makeFighter(0, "鸭梨", "🍐", 2, 0)] });
     bubble(solo, 0);
     expect(solo.fighters[0].bubbleT).toBeLessThan(RESCUE_MS);
   });
@@ -678,7 +678,7 @@ describe("分级红线", () => {
 
   it("人被彩虹波扫到只是进泡泡:还在场上、还能被放出来,没有任何「出局」状态", () => {
     const board = parse(["....."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 2, 0), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 2, 0), 0);
     const world = createWorld({ board, fighters: [f] });
     bubble(world, 0);
     expect(world.fighters).toContain(f);
@@ -695,7 +695,7 @@ describe("分级红线", () => {
 describe("回归:2 秒引信下人还跑得掉", () => {
   it("放下泡泡以后一直往右走,2 秒破的时候人已经在波纹外面了", () => {
     const board = parse([".........", ".........", "........."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 1, 1), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 1, 1), 0);
     f.speed = 3;
     const world = createWorld({ board, fighters: [f] });
     dropBomb(world, 0);
@@ -707,7 +707,7 @@ describe("回归:2 秒引信下人还跑得掉", () => {
 
   it("原地不动的话 2 秒后会被自己的彩虹波罩住(时间线是真的在走)", () => {
     const board = parse([".........", ".........", "........."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 4, 1), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 4, 1), 0);
     const world = createWorld({ board, fighters: [f] });
     dropBomb(world, 0);
     run(world, BUBBLE_POP_MS + 200);
@@ -716,7 +716,7 @@ describe("回归:2 秒引信下人还跑得掉", () => {
 
   it("放下去 0.4 秒内泡泡还在鼓,不会瞬间就破", () => {
     const board = parse([".........", "........."]);
-    const f = makeFighter(0, "朵朵", "🌸", idx(board, 4, 1), 0);
+    const f = makeFighter(0, "鸭梨", "🍐", idx(board, 4, 1), 0);
     const world = createWorld({ board, fighters: [f] });
     const b = dropBomb(world, 0);
     expect(bubbleStage(b?.fuse ?? 0)).toBe("grow");
@@ -737,7 +737,7 @@ describe("回归:2 秒引信下人还跑得掉", () => {
       [DIR_DOWN, 0, 1],
       [DIR_LEFT, -1, 0],
     ] as const) {
-      const f = makeFighter(0, "朵朵", "🌸", idx(board, 2, 1), 0);
+      const f = makeFighter(0, "鸭梨", "🍐", idx(board, 2, 1), 0);
       const world = createWorld({ board, fighters: [f] });
       // 一档速度走一格 230ms,这里只给 200ms:确认走的是**一格**,不是滑出去两格
       run(world, 200, () => [{ dir, drop: false, detonate: false }]);

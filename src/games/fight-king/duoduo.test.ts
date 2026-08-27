@@ -1,14 +1,14 @@
 /**
- * 朵星格斗王 · 朵朵在格斗塔后段不再是墙（QA 第 3 轮 · 包 B · R3B-2）。
+ * 梨康格斗王 · 鸭梨在格斗塔后段不再是墙（QA 第 3 轮 · 包 B · R3B-2）。
  *
- * 第 2 轮把默认出战从朵朵换成星星，症状（默认角色推不动后段）没了，
- * 可**朵朵本人一个数都没动**：第 3 轮测试员抽的后段八关里她有 6 关整片 0/8。
- * 朵朵是对外两位主角之一、选人排里还排第 1 位，孩子点她进后段就推不动。
+ * 第 2 轮把默认出战从鸭梨换成康康，症状（默认角色推不动后段）没了，
+ * 可**鸭梨本人一个数都没动**：第 3 轮测试员抽的后段八关里她有 6 关整片 0/8。
+ * 鸭梨是对外两位主角之一、选人排里还排第 1 位，孩子点她进后段就推不动。
  *
  * 根因不在关卡表，也不在她那几个数值 —— 是她**两个必杀挂反了键**：
  * 「前 + 重」原来是对空招樱吹雪（够 64、收招 26 帧），「后 + 重」才是突进招追风踢。
  * 中距离最常按的就是「前 + 重」，于是她每按一次都在原地打空一记大收招的对空招；
- * 八位小伙伴里另外五位的对空招本来就挂在「后 + 重」，朵朵是那两个例外之一。
+ * 八位小伙伴里另外五位的对空招本来就挂在「后 + 重」，鸭梨是那两个例外之一。
  * 这一份把她接回同一套口径：**只换槽位，招式数值一个都没改。**
  *
  * 尺子和 `curve.test.ts` / `hero.test.ts` 是同一把：玩家一侧交给游戏自带最高档 lv4 的手，
@@ -62,15 +62,15 @@ function clearRate(heroId: string, level: number, games = 8): number {
 const NAMED_WALLS = [124, 148, 159, 164, 175, 179];
 /** 测试员本轮抽的后段八关（0 基） */
 const LATE_EIGHT = [124, 132, 148, 159, 164, 175, 179, 187];
-/** 朵朵当对手的关（改她等于改这些关的难度） */
+/** 鸭梨当对手的关（改她等于改这些关的难度） */
 const DUO_IS_FOE: number[] = [];
 for (let lv = 0; lv < TOTAL_LEVELS; lv++) if (foeIdOf(lv) === "duoduo") DUO_IS_FOE.push(lv);
 
-describe("R3B-2 · 朵朵后段不再整片 0/8", () => {
+describe("R3B-2 · 鸭梨后段不再整片 0/8", () => {
   it("测试员点名的六关，每一关都赢得下来", () => {
     // 改之前这六关逐关都是 0/8
     for (const lv of NAMED_WALLS) {
-      expect(clearRate("duoduo", lv), `第 ${lv + 1} 关朵朵一局都赢不下来`).toBeGreaterThan(0);
+      expect(clearRate("duoduo", lv), `第 ${lv + 1} 关鸭梨一局都赢不下来`).toBeGreaterThan(0);
     }
     const total = NAMED_WALLS.reduce((s, lv) => s + clearRate("duoduo", lv), 0);
     expect(total, "六关合起来还是太薄").toBeGreaterThanOrEqual(10);
@@ -99,25 +99,25 @@ describe("R3B-2 · 朵朵后段不再整片 0/8", () => {
     expect(clearRate("duoduo", 99, 4), "第 100 关反而打不过了").toBeGreaterThanOrEqual(2);
   }, 120000);
 
-  it("默认出战的星星仍旧是更稳的那一位，没被这一笔打残", () => {
+  it("默认出战的康康仍旧是更稳的那一位，没被这一笔打残", () => {
     const duo = LATE_EIGHT.reduce((s, lv) => s + clearRate("duoduo", lv), 0);
     const star = LATE_EIGHT.reduce((s, lv) => s + clearRate(TOWER_HERO_ID, lv), 0);
-    expect(star, "默认出战的星星反而不如朵朵了").toBeGreaterThan(duo);
+    expect(star, "默认出战的康康反而不如鸭梨了").toBeGreaterThan(duo);
   }, 120000);
 
-  it("朵朵同时也是塔里 24 关的对手，那 24 关没有被顶成打不过", () => {
+  it("鸭梨同时也是塔里 24 关的对手，那 24 关没有被顶成打不过", () => {
     expect(DUO_IS_FOE).toHaveLength(24);
     const row = DUO_IS_FOE.map((lv) => clearRate(TOWER_HERO_ID, lv));
     for (let i = 0; i < row.length; i++) {
-      expect(row[i], `第 ${DUO_IS_FOE[i] + 1} 关（对手是朵朵）默认角色一局都赢不下来`).toBeGreaterThan(0);
+      expect(row[i], `第 ${DUO_IS_FOE[i] + 1} 关（对手是鸭梨）默认角色一局都赢不下来`).toBeGreaterThan(0);
     }
     // 改之前 177 / 192，改之后 162 —— 难度是抬了一点，但没有塌
-    expect(row.reduce((a, b) => a + b, 0), "朵朵当对手的那 24 关整体被顶得太高").toBeGreaterThanOrEqual(140);
+    expect(row.reduce((a, b) => a + b, 0), "鸭梨当对手的那 24 关整体被顶得太高").toBeGreaterThanOrEqual(140);
   }, 180000);
 });
 
 describe("R3B-2 · 这一笔到底改了什么（只换槽位，一个数没改）", () => {
-  it("朵朵的对空招挂到「后 + 重」，「前 + 重」是突进招", () => {
+  it("鸭梨的对空招挂到「后 + 重」，「前 + 重」是突进招", () => {
     const duo = characterById("duoduo");
     expect(duo.moves.s2.name).toBe("追风踢");
     expect(duo.moves.s2.advance, "「前 + 重」不是突进招").toBeGreaterThan(0);
@@ -127,7 +127,7 @@ describe("R3B-2 · 这一笔到底改了什么（只换槽位，一个数没改�
     expect(duo.moves.s3.advance).toBe(0);
   });
 
-  it("对空招挂在「后 + 重」是八位里的多数口径，朵朵不再是例外", () => {
+  it("对空招挂在「后 + 重」是八位里的多数口径，鸭梨不再是例外", () => {
     const onS3 = CHARACTERS.filter((c) => {
       const s = createMatch(c.id, c.id, { buffs: [noBuff(), noBuff()] });
       return antiAirSlot(s.fighters[0]) === "s3";

@@ -1,5 +1,5 @@
 /**
- * 朵星地产 · 四档本机 AI。
+ * 梨康地产 · 四档本机 AI。
  *
  * | 档 | 打法 |
  * | --- | --- |
@@ -43,7 +43,7 @@ export const AI_TIERS: readonly AiTier[] = ["rookie", "normal", "pro", "hell"];
 export const AI_TIER_LABELS: Record<AiTier, string> = {
   rookie: "菜鸟糯糯",
   normal: "普通云云",
-  pro: "高手星星",
+  pro: "高手康康",
   hell: "地狱月月"
 };
 
@@ -344,8 +344,8 @@ export function buildContext(state: EstateState, opts: HeadlessOptions): TurnCon
   };
 }
 
-const SEAT_EMOJI = ["🌸", "⭐", "🍡", "☁️"];
-const SEAT_NAME = ["朵朵", "星星", "糯糯", "云云"];
+const SEAT_EMOJI = ["🍐", "👓", "🍡", "☁️"];
+const SEAT_NAME = ["鸭梨", "康康", "糯糯", "云云"];
 
 export function buildState(opts: HeadlessOptions): EstateState {
   const seats: SeatSpec[] = opts.tiers.map((_, i) => ({

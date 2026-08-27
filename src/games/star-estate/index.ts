@@ -1,8 +1,8 @@
 import { meta } from "./meta";
 export { meta };
 
-// 朵星地产:掷骰子绕 40 格环线,买地、垄断、平均建屋、抵押周转、拍卖、逼破产。
-// 188 关残局战役 + 1 人对 3 个本机 AI + 短盘连胜无尽 + 朵朵星星同屏轮流,全程离线。
+// 梨康地产:掷骰子绕 40 格环线,买地、垄断、平均建屋、抵押周转、拍卖、逼破产。
+// 188 关残局战役 + 1 人对 3 个本机 AI + 短盘连胜无尽 + 鸭梨康康同屏轮流,全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import {
   compatFromMeta,
@@ -230,7 +230,7 @@ export function eventLine(state: EstateState, ev: EstateEvent): string {
     case "fee":
       return `${who(ev.player)} 交了 ${ev.amount} 星币手续费`;
     case "bankrupt":
-      return `${who(ev.player)} 的钱包空啦，去朵朵公园歇一会儿，下一局再来。`;
+      return `${who(ev.player)} 的钱包空啦，去鸭梨公园歇一会儿，下一局再来。`;
     case "over":
       return `这一局结束：${who(ev.winner)} 收摊收得最稳。`;
     default:
@@ -1083,7 +1083,7 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       toggleMortgage();
       return;
     }
-    // 朵朵用 WASD 选地块，星星用方向键；顺时针 +1、逆时针 -1
+    // 鸭梨用 WASD 选地块，康康用方向键；顺时针 +1、逆时针 -1
     const step = isStar
       ? k === "ArrowRight" || k === "ArrowDown"
         ? 1
@@ -1111,7 +1111,7 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       pauseEl = document.createElement("div");
       pauseEl.className = "se-pause";
       pauseEl.innerHTML = `<div class="se-pause-t">⏸️ 先歇一会儿</div>
-        <div class="se-goal">朵朵：W A S D 选地块、F 掷骰、G 购买 / 建屋、M 抵押。<br>星星：方向键选地块、L 掷骰、K 购买 / 建屋。<br>再按一次 Esc 继续。</div>`;
+        <div class="se-goal">鸭梨：W A S D 选地块、F 掷骰、G 购买 / 建屋、M 抵押。<br>康康：方向键选地块、L 掷骰、K 购买 / 建屋。<br>再按一次 Esc 继续。</div>`;
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "se-open";
@@ -1160,7 +1160,7 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const cfg = levelConfig(ctx.level);
   const seats: TableSeat[] = cfg.tiers.map((tier, i) => ({
-    name: i === 0 ? "朵朵" : ["星星", "糯糯", "云云"][(i - 1) % 3],
+    name: i === 0 ? "鸭梨" : ["康康", "糯糯", "云云"][(i - 1) % 3],
     emoji: i === 0 ? "🌸" : ["⭐", "🍡", "☁️"][(i - 1) % 3],
     human: i === 0 ? "duo" : undefined,
     tier,
@@ -1180,7 +1180,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     onOver: (r) => {
       // 只有真的达成目标、或者对手全部收摊才算过关；到点没够线一律重来。
       // 对手先收摊也要看自己买够地没有 —— 只掷骰、一块地都不买，不算学会了这一章
-      // （对手收摊时地会整批转到朵朵名下，所以这里数的是自己买的，不是手里有的）。
+      // （对手收摊时地会整批转到鸭梨名下，所以这里数的是自己买的，不是手里有的）。
       const shortBuys = Math.max(0, cfg.goal.minBuys - (r.bought[0] ?? 0));
       const won = r.reason === "goal" || (r.reason === "bankrupt" && r.winner === 0 && shortBuys === 0);
       if (!won) {
@@ -1310,8 +1310,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     chip.textContent = `🤝 对手：${AI_TIER_LABELS[tier]} ×3`;
     table = createTable(stage, {
       seats: [
-        { name: "朵朵", emoji: "🌸", human: "duo", tier: "pro", cash: cfg.cash },
-        { name: "星星", emoji: "⭐", tier, cash: cfg.cash },
+        { name: "鸭梨", emoji: "🍐", human: "duo", tier: "pro", cash: cfg.cash },
+        { name: "康康", emoji: "👓", tier, cash: cfg.cash },
         { name: "糯糯", emoji: "🍡", tier, cash: cfg.cash },
         { name: "云云", emoji: "☁️", tier, cash: cfg.cash }
       ],
@@ -1323,7 +1323,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         if (r.humanWon) api.addStars(2);
         showOver(
           r.humanWon ? "这一局赢下来啦！" : "这一局到此为止",
-          `${r.reason === "settle" ? "80 回合到点比净资产" : "有人先收摊了"}：朵朵 ${r.netWorths[0]} 星币，` +
+          `${r.reason === "settle" ? "80 回合到点比净资产" : "有人先收摊了"}：鸭梨 ${r.netWorths[0]} 星币，` +
             `对手 ${r.netWorths.slice(1).join(" / ")}。`,
           "🔁 再打一场"
         );
@@ -1337,7 +1337,7 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
     chip.textContent = `♾️ 连胜 ${streak} · 最高 ${best}`;
     table = createTable(stage, {
       seats: [
-        { name: "朵朵", emoji: "🌸", human: "duo", tier: "pro", cash: cfg.cash },
+        { name: "鸭梨", emoji: "🍐", human: "duo", tier: "pro", cash: cfg.cash },
         { name: AI_TIER_LABELS[cfg.tiers[1]], emoji: "⭐", tier: cfg.tiers[1], cash: cfg.cash }
       ],
       rules: {
@@ -1372,11 +1372,11 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
 
   function runDuo(): void {
     stage.innerHTML = "";
-    chip.textContent = "👫 朵朵 WASD+F/G · 星星 方向键+L/K";
+    chip.textContent = "👫 鸭梨 WASD+F/G · 康康 方向键+L/K";
     table = createTable(stage, {
       seats: [
-        { name: "朵朵", emoji: "🌸", human: "duo", tier: "pro" },
-        { name: "星星", emoji: "⭐", human: "star", tier: "pro" },
+        { name: "鸭梨", emoji: "🍐", human: "duo", tier: "pro" },
+        { name: "康康", emoji: "👓", human: "star", tier: "pro" },
         { name: "糯糯", emoji: "🍡", tier: "normal" },
         { name: "云云", emoji: "☁️", tier: "rookie" }
       ],
@@ -1396,8 +1396,8 @@ function mountExtra(host: HTMLElement, api: GameApi, mode: ExtraMode, onBack: ()
         const duo = r.netWorths[0];
         const star = r.netWorths[1];
         showOver(
-          duo === star ? "打成平手！" : duo > star ? "朵朵这一局更稳" : "星星这一局更稳",
-          `朵朵 ${duo} 星币，星星 ${star} 星币。再来一局换个买地顺序试试。`,
+          duo === star ? "打成平手！" : duo > star ? "鸭梨这一局更稳" : "康康这一局更稳",
+          `鸭梨 ${duo} 星币，康康 ${star} 星币。再来一局换个买地顺序试试。`,
           "🔁 再来一局"
         );
       }
@@ -1490,8 +1490,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       chapters: CHAPTERS,
       playLevel,
       mapHint: "先看清这一关的目标，再决定买哪条街。垄断一整条街，租金才真的涨得起来。",
-      grandMessage: "188 关全部拿下，朵星地产的招牌就挂你名字了！",
-      guideTitle: "朵星地产 · 经营笔记"
+      grandMessage: "188 关全部拿下，梨康地产的招牌就挂你名字了！",
+      guideTitle: "梨康地产 · 经营笔记"
     }
   );
 

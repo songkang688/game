@@ -36,7 +36,7 @@ function table(planes: Partial<Record<Color, number[]>> = {}, rules = CLASSIC_RU
   return s;
 }
 
-/** 把 count 架 foe 色的飞机停到「朵朵行程 p」那一格上 */
+/** 把 count 架 foe 色的飞机停到「鸭梨行程 p」那一格上 */
 function foesAt(s: FlightState, foe: Color, p: number, count: number): void {
   const ring = ringAt(ME, p);
   const theirs = ((ring - ARM * foe) % RING_LEN + RING_LEN) % RING_LEN;

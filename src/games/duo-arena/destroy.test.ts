@@ -47,17 +47,17 @@ function startBout(h: Harness): void {
   }
 }
 
-describe("朵星擂台 · 1.2 destroy 归零", () => {
+describe("梨康擂台 · 1.2 destroy 归零", () => {
   it("模板真的解析出来了:开擂键、两块场地画布、两组触屏按键都在", async () => {
     const h = install();
     harness = h;
     const game = await mountGame(h);
 
     expect(findOne(h.root, "dua-start"), "没铺出开擂键").not.toBeNull();
-    expect(findOne(h.root, "dua-court-x"), "星星那块场地没铺出来").not.toBeNull();
-    expect(findOne(h.root, "dua-court-d"), "朵朵那块场地没铺出来").not.toBeNull();
-    expect(findOne(h.root, "dua-pad-x"), "星星那半屏没有触屏按键").not.toBeNull();
-    expect(findOne(h.root, "dua-pad-d"), "朵朵那半屏没有触屏按键").not.toBeNull();
+    expect(findOne(h.root, "dua-court-x"), "康康那块场地没铺出来").not.toBeNull();
+    expect(findOne(h.root, "dua-court-d"), "鸭梨那块场地没铺出来").not.toBeNull();
+    expect(findOne(h.root, "dua-pad-x"), "康康那半屏没有触屏按键").not.toBeNull();
+    expect(findOne(h.root, "dua-pad-d"), "鸭梨那半屏没有触屏按键").not.toBeNull();
 
     game.destroy();
   });

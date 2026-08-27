@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 —— 帧数据纯数据表。
+ * 梨康格斗王 —— 帧数据纯数据表。
  *
  * 这份文件只放"数字"，不放任何判定逻辑：
  *  · 八位原创小伙伴的体型 / 移动力 / 元气 / 格挡槽；
@@ -492,8 +492,8 @@ function special(slot: "s1" | "s2" | "s3" | "super", m: Partial<Move> & { name: 
 const SPECS: CharSpec[] = [
   {
     id: "duoduo",
-    name: "朵朵",
-    emoji: "🌸",
+    name: "鸭梨",
+    emoji: "🍐",
     color: "#FFC7DC",
     ink: "#B24A78",
     blurb: "爱种花的小姑娘，出手干净利落。",
@@ -524,7 +524,7 @@ const SPECS: CharSpec[] = [
         box: { x: 22, y: 22, w: 76, h: 46 }
       }),
       // 前 + 重 = 追风踢：突进招挂在"往前"那个键上。
-      // 第 3 轮 R3B-2 的根因就在这儿 —— 原来朵朵是反的（往后按才往前冲、往前按却是对空），
+      // 第 3 轮 R3B-2 的根因就在这儿 —— 原来鸭梨是反的（往后按才往前冲、往前按却是对空），
       // 于是中距离每按一次「前 + 重」都在原地打空一记收招 26 帧的对空招。
       // 八位小伙伴里另外五位的对空招本来就在「后 + 重」，这一改是把她接回同一套口径。
       special("s2", {
@@ -572,8 +572,8 @@ const SPECS: CharSpec[] = [
   },
   {
     id: "xingxing",
-    name: "星星",
-    emoji: "⭐",
+    name: "康康",
+    emoji: "👓",
     color: "#BFD8FF",
     ink: "#3A62A8",
     blurb: "夜里最亮的那颗，跑起来一闪一闪。",
@@ -1109,7 +1109,7 @@ export const CHARACTERS: Character[] = SPECS.map(buildCharacter);
 /** 角色 id → 角色 */
 const CHAR_BY_ID = new Map<string, Character>(CHARACTERS.map((c) => [c.id, c]));
 
-/** 按 id 找角色，找不到就退回朵朵（永远不返回 undefined，免得白屏） */
+/** 按 id 找角色，找不到就退回鸭梨（永远不返回 undefined，免得白屏） */
 export function characterById(id: string): Character {
   return CHAR_BY_ID.get(id) ?? CHARACTERS[0];
 }

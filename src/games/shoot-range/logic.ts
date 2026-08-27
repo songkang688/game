@@ -1,5 +1,5 @@
 /**
- * 星星射击场 —— 弹道、命中判定、计分与评级的纯逻辑。
+ * 康康射击场 —— 弹道、命中判定、计分与评级的纯逻辑。
  *
  * 这里一行 DOM 都没有:关卡生成、弹道反解、扫掠命中、遮挡、编号顺序、
  * 连击倍率、命中率评级、靶潮波次、双人分屏比分全是纯函数,单测直接调。
@@ -65,7 +65,7 @@ export const TARGET_INFO: Record<TargetKind, { name: string; emoji: string; desc
   split: { name: "分裂靶", emoji: "🫧", desc: "打中会分成两个小的,小的还要再打一次。" },
   shield: { name: "护盾靶", emoji: "🛡️", desc: "外面罩着一层软壳,要打两次才倒。" },
   rainbow: { name: "彩虹靶", emoji: "🌈", desc: "只待几秒就走,越早打中分越高。" },
-  flower: { name: "花朵靶", emoji: "🌸", desc: "朵朵种的花,打中要扣分,得忍住。" },
+  flower: { name: "花朵靶", emoji: "🌸", desc: "鸭梨种的花,打中要扣分,得忍住。" },
 };
 
 export interface Target {
@@ -571,7 +571,7 @@ export function nudgeAim(aim: Aim, dx: number, dy: number, bounds = AIM_BOUNDS):
 
 export type RangeAction = "left" | "right" | "up" | "down" | "fire" | "reload";
 
-/** 双人键位:朵朵 W A S D + F(开火)/G(换弹),星星 ↑←↓→ + L(开火)/K(换弹) */
+/** 双人键位:鸭梨 W A S D + F(开火)/G(换弹),康康 ↑←↓→ + L(开火)/K(换弹) */
 export const KEY_MAP: Record<string, { player: 0 | 1; action: RangeAction }> = {
   KeyW: { player: 0, action: "up" },
   KeyA: { player: 0, action: "left" },
@@ -650,7 +650,7 @@ export interface DuelSide {
 }
 
 export interface DuelResult {
-  /** 0 = 朵朵赢,1 = 星星赢,-1 = 平手 */
+  /** 0 = 鸭梨赢,1 = 康康赢,-1 = 平手 */
   winner: number;
   accA: number;
   accB: number;

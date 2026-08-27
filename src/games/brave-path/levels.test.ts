@@ -252,8 +252,8 @@ describe("平衡性抽查（推荐水平的勇者跑一遍 188 关）", () => {
     const s = expectedHero(level);
     const rank = Math.max(1, Math.min(5, 1 + Math.floor(level / 45)));
     return makeFighter({
-      name: "朵朵",
-      emoji: "🌸",
+      name: "鸭梨",
+      emoji: "🍐",
       element,
       maxHp: s.maxHp,
       atk: s.atk,
@@ -354,8 +354,8 @@ describe("整关走通（星芒在一关里连续消耗）", () => {
     const s = expectedHero(level);
     const rank = Math.max(1, Math.min(5, 1 + Math.floor(level / 45)));
     return makeFighter({
-      name: "朵朵",
-      emoji: "🌸",
+      name: "鸭梨",
+      emoji: "🍐",
       element,
       maxHp: s.maxHp,
       atk: s.atk,

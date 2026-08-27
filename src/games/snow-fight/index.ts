@@ -68,8 +68,8 @@ import { BUMP_LIMIT, bumpsLeft, freezeRatio } from "./snowman";
 import { BALL_R_12, CHARGE_MAX, chargeRatio, windWord } from "./throw12";
 import type { AiLevel } from "./physics";
 
-const P_NAME = ["朵朵", "星星"];
-const P_MARK = ["🌸", "⭐"];
+const P_NAME = ["鸭梨", "康康"];
+const P_MARK = ["🍐", "👓"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 /** 两套键位互不重叠:一个人按 A/D/W/S/F/G,另一个按方向键 + L/K */
 const P_KEYS = [
@@ -578,7 +578,7 @@ function drawFighter(c: CanvasRenderingContext2D, cam: Camera, f: Fighter, time:
   if (f.hit.phase === "warming") {
     c.fillText("🔥", x, base - r * 3.2);
   } else {
-    c.fillText(P_MARK[f.seat] ?? "🌸", x, base - r * 3.2);
+    c.fillText(P_MARK[f.seat] ?? "🍐", x, base - r * 3.2);
   }
   // 手里攥着几颗:头顶上一排小白点,不用低头看 HUD
   c.fillStyle = "#ffffff";
@@ -797,7 +797,7 @@ interface RunOptions {
   arena: Arena;
   /** 场地画多宽(闯关只画到 VIEW_W,对战要画满 FIELD_W_12) */
   viewW: number;
-  /** 有几位真人在场(1 = 只有朵朵的键位生效) */
+  /** 有几位真人在场(1 = 只有鸭梨的键位生效) */
   humans: 1 | 2;
   hint: string;
   /** 天色照第几章画(给函数就是「天色会跟着局势走」,无尽就是一波比一波晚) */
@@ -1410,7 +1410,7 @@ function mountDuel(host: HTMLElement, api: GameApi, back: () => void, ai: AiLeve
     runner?.destroy();
     runner = null;
     const who =
-      a.winner < 0 ? "两边打成平手" : ai ? (a.winner === 0 ? "朵朵赢啦" : `${AI_12[ai].name}赢啦`) : `${P_NAME[a.winner]}赢啦`;
+      a.winner < 0 ? "两边打成平手" : ai ? (a.winner === 0 ? "鸭梨赢啦" : `${AI_12[ai].name}赢啦`) : `${P_NAME[a.winner]}赢啦`;
     const ov = panel(`🎉 ${who}`, [
       `${a.reason}。`,
       `雪灯笼 ${liveFoes(a, 0).length} : ${liveFoes(a, 1).length}。被砸中的人拍拍雪就好,一点都不疼。`,

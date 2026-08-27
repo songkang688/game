@@ -4,7 +4,7 @@ export { meta };
 /**
  * 扫雷花园：看数字绕开刺种，把整片花园翻开。
  *
- * 188 关闯关 + 同图竞速对战 + 连续清盘无尽 + 朵朵星星左右分屏双人。
+ * 188 关闯关 + 同图竞速对战 + 连续清盘无尽 + 鸭梨康康左右分屏双人。
  * 全部离线，逻辑在 `board.ts` / `solver.ts` / `run.ts` 里，本文件只负责画和接线。
  */
 import {
@@ -96,7 +96,7 @@ export type KeyScheme = "solo" | "p1" | "p2" | "none";
 
 /**
  * 单人：方向键或 `WASD` 挪光标，`F` 翻开，`G` 插旗，`Esc` 暂停。
- * 双人：朵朵 `WASD` + `F` + `G`，星星 方向键 + `L` + `K`。
+ * 双人：鸭梨 `WASD` + `F` + `G`，康康 方向键 + `L` + `K`。
  */
 export function keyAction(key: string, scheme: KeyScheme = "solo"): FieldKey {
   if (scheme === "none") return key === "Escape" ? "pause" : null;
@@ -1199,7 +1199,7 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
     const note = el(
       "div",
       "mn-note",
-      "两张一模一样的图，左边朵朵（WASD 挪、F 翻开、G 插旗），右边星星（方向键挪、L 翻开、K 插旗）。谁先扫完谁赢。"
+      "两张一模一样的图，左边鸭梨（WASD 挪、F 翻开、G 插旗），右边康康（方向键挪、L 翻开、K 插旗）。谁先扫完谁赢。"
     );
     const go = document.createElement("button");
     go.type = "button";
@@ -1255,17 +1255,17 @@ function mountDuo(host: HTMLElement, api: GameApi): { destroy: () => void } {
     left = mountField(lHost, {
       ...common,
       scheme: "p1",
-      title: "🌸 朵朵",
+      title: "🍐 鸭梨",
       onEnd: (info) => {
-        if (info.win) settle("朵朵");
+        if (info.win) settle("鸭梨");
       }
     });
     right = mountField(rHost, {
       ...common,
       scheme: "p2",
-      title: "⭐ 星星",
+      title: "👓 康康",
       onEnd: (info) => {
-        if (info.win) settle("星星");
+        if (info.win) settle("康康");
       }
     });
   }

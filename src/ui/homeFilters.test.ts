@@ -229,6 +229,42 @@ describe("窗口 1 的 12 款新游戏也能用拼音搜", () => {
   });
 });
 
+// 1.2-kk 把两位小主角改成鸭梨 / 康康,标题跟着换。鸭、梨、康三个字原来不在字表里,
+// 漏一个字整串就短一截,拼音搜索会静悄悄搜不到 —— 这里逐条钉住。
+describe("1.2-kk 换人物后的标题照样能用拼音搜", () => {
+  const RENAMED: { title: string; initials: string }[] = [
+    { title: "鸭梨大战康康", initials: "yldzkk" },
+    { title: "梨康双人冲刺", initials: "lksrcc" },
+    { title: "梨康擂台", initials: "lklt" },
+    { title: "梨康格斗王", initials: "lkgdw" },
+    { title: "梨康地产", initials: "lkdc" },
+    { title: "鸭梨康康象棋", initials: "ylkkxq" },
+    { title: "鸭梨抢地主", initials: "ylqdz" }
+  ];
+
+  it("每一条都逐字对得上,一个字都没被字表漏掉", () => {
+    for (const g of RENAMED) {
+      expect(pinyinInitials(g.title), g.title).toBe(g.initials);
+      expect(g.initials.length, g.title).toBe([...g.title].length);
+    }
+  });
+
+  it("整串和前缀都搜得到", () => {
+    for (const g of RENAMED) {
+      const meta = { id: "renamed", title: g.title };
+      expect(matchesSearch(meta, g.initials), g.title).toBe(true);
+      expect(matchesSearch(meta, g.initials.slice(0, 2)), g.title).toBe(true);
+      expect(matchesSearch(meta, "鸭梨") || matchesSearch(meta, "梨康"), g.title).toBe(true);
+    }
+  });
+
+  it("补了新字也没把带星星的老标题搞歪:评分和玩法里的星星不改名", () => {
+    expect(pinyinInitials("星星消消乐")).toBe("xxxxl");
+    expect(pinyinInitials("音乐星星")).toBe("ylxx");
+    expect(pinyinInitials("星星射击场")).toBe("xxsjc");
+  });
+});
+
 describe("搜索匹配", () => {
   it("空搜索词等于没搜,所有游戏都留着", () => {
     expect(matchesSearch(CAMPAIGN.meta, "")).toBe(true);
@@ -434,7 +470,7 @@ describe("和已上架 meta 的约定", () => {
     "poop-hero": "bbcr",
     "red-blue-tug": "hlbh",
     "sprout-defense": "lybwz",
-    xiangqi: "ddxxxq"
+    xiangqi: "ylkkxq"
   };
 
   it("1.1 已在架游戏的标题拼音首字母没有跑偏", () => {
@@ -454,7 +490,7 @@ describe("和已上架 meta 的约定", () => {
     "block-drop": "fkddl",
     "combo-clash": "lzdj",
     "mahjong-bloom": "hkmj",
-    "star-estate": "dxdc",
+    "star-estate": "lkdc",
     "hero-cards": "yjl",
     "weiqi-garden": "wzhy",
     "flight-chess": "fxqly",

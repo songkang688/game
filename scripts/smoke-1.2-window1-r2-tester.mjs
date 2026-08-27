@@ -4,7 +4,7 @@
  * 和第 1 轮那份 `smoke-1.2-window1-r1-tester.mjs` 的区别:
  *   · 战役样本换成 **第 2 / 50 / 150 关**(第 1 轮是 1 / 100 / 188),越界夹到合法关;
  *   · 视口除了 360×640 再抽一档 **1280×800** 宽屏做对照;
- *   · 双人键位一律 **分边取证**(画布左右/上下半 + 分边 DOM 叶子 + 朵朵/星星 HUD 行),
+ *   · 双人键位一律 **分边取证**(画布左右/上下半 + 分边 DOM 叶子 + 鸭梨/康康 HUD 行),
  *     并且先采一遍「什么都不按」的空跑基线再做差集 —— 第 1 轮 `mine-garden` 的整屏
  *     指纹误报就是栽在「两块盘同种子长得一样」和「画面自己在动」这两件事上;
  *   · 二级界面(对战/无尽/双人)也量 360px 字号,不只入口屏;
@@ -118,7 +118,7 @@ const GAMES = [
   {
     id: "star-estate",
     duoKind: "turn",
-    title: "朵星地产",
+    title: "梨康地产",
     p: "se",
     modes: { versus: "🤝 对战 1v3", endless: "♾️ 短盘连胜", twoPlayer: "👫 双人同屏" },
     keys: ["KeyF", "KeyG", "KeyD"],
@@ -384,9 +384,9 @@ async function sideProbe(page) {
 }
 
 /**
- * 按玩家颜色数像素:朵朵 #F5A9C8(粉)、星星 #A9C8F5(蓝),都是各款 index.ts 里写死的。
+ * 按玩家颜色数像素:鸭梨 #F5A9C8(粉)、康康 #A9C8F5(蓝),都是各款 index.ts 里写死的。
  * 混战类(圆圆 / 长蛇)两块 pane 都在画同一个场地、而且一直在动,
- * 「变没变」这种问法分不出人,只能问「朵朵那团粉色的重心往哪边挪了」。
+ * 「变没变」这种问法分不出人,只能问「鸭梨那团粉色的重心往哪边挪了」。
  */
 async function colorCentroids(page) {
   return page.evaluate(() => {
@@ -423,7 +423,7 @@ async function colorCentroids(page) {
           sx += px;
         }
       }
-      out.push({ pane: i, 朵朵n: dn, 朵朵x: dn ? Math.round(dx / dn) : null, 星星n: sn, 星星x: sn ? Math.round(sx / sn) : null });
+      out.push({ pane: i, 鸭梨n: dn, 鸭梨x: dn ? Math.round(dx / dn) : null, 康康n: sn, 康康x: sn ? Math.round(sx / sn) : null });
     });
     return out;
   });
@@ -440,7 +440,7 @@ async function holdKey(page, key, ms) {
 async function whoseTurn(page) {
   return page.evaluate(() => {
     const t = (document.querySelector(".game-stage")?.textContent ?? "").replace(/\s+/g, " ");
-    const m = /轮到\s*(朵朵|星星)|(朵朵|星星)\s*的回合/.exec(t);
+    const m = /轮到\s*(鸭梨|康康)|(鸭梨|康康)\s*的回合/.exec(t);
     return m ? m[1] ?? m[2] : "";
   });
 }
@@ -473,11 +473,11 @@ async function pickThrough(page, prefix, maxDepth = 4) {
         (b) => !b.closest("[hidden]") && b.getClientRects().length > 0 && !b.disabled && !back.test(b.textContent ?? "")
       );
       if (btns.length === 0) return false;
-      // 优先点真正「开局」的那颗:combo-clash 要先挑朵朵的角色、再点「星星用 X」才开打,
+      // 优先点真正「开局」的那颗:combo-clash 要先挑鸭梨的角色、再点「康康用 X」才开打,
       // 光顺着头像一路点下去,四层预算用完了局还没开。
       const go =
-        btns.find((b) => /星星用\s*星星/.test(b.textContent ?? "")) ??
-        btns.find((b) => /开始|开局|▶|星星用/.test(b.textContent ?? "")) ??
+        btns.find((b) => /康康用\s*康康/.test(b.textContent ?? "")) ??
+        btns.find((b) => /开始|开局|▶|康康用/.test(b.textContent ?? "")) ??
         btns.find((b) => String(b.className).includes(`${p}-open`)) ??
         btns[0];
       go.click();
@@ -1084,19 +1084,19 @@ async function duoBySeat(page, g) {
   const onlyP1 = byP1.filter((k) => !byP2.includes(k) && k.startsWith("座"));
   const onlyP2 = byP2.filter((k) => !byP1.includes(k) && k.startsWith("座"));
   note(`分边容器 ${before1.__split ?? "(没找到,走几何四分)"} · 空跑自己会变的:${[...idle].join(",") || "无"}`);
-  log(byP1.length > 0, `${g.title} 双人:朵朵 WASD+F+G 有反应`, `动了 ${byP1.join(",") || "(无)"}`);
-  log(byP2.length > 0, `${g.title} 双人:星星 方向键+L+K 有反应`, `动了 ${byP2.join(",") || "(无)"}`);
+  log(byP1.length > 0, `${g.title} 双人:鸭梨 WASD+F+G 有反应`, `动了 ${byP1.join(",") || "(无)"}`);
+  log(byP2.length > 0, `${g.title} 双人:康康 方向键+L+K 有反应`, `动了 ${byP2.join(",") || "(无)"}`);
   log(
     onlyP1.length > 0 && onlyP2.length > 0,
     `${g.title} 双人:两套键位各管各的一座(分边可辨,互不串台)`,
-    `只认朵朵=${onlyP1.join(",") || "-"} · 只认星星=${onlyP2.join(",") || "-"}`
+    `只认鸭梨=${onlyP1.join(",") || "-"} · 只认康康=${onlyP2.join(",") || "-"}`
   );
   return onlyP1.length > 0 && onlyP2.length > 0;
 }
 
 /**
  * 混战类(圆圆 / 长蛇 / 连招):两个人在同一个场地里,pane 一直在动,
- * 「变没变」分不出人 —— 改问「朵朵那团粉色 / 星星那团蓝色的重心往哪边挪」。
+ * 「变没变」分不出人 —— 改问「鸭梨那团粉色 / 康康那团蓝色的重心往哪边挪」。
  * 一律成对做:先按住左键再按住右键,看重心的横坐标是不是跟着反向 → 正向走。
  */
 async function duoByColor(page, g) {
@@ -1128,21 +1128,21 @@ async function duoByColor(page, g) {
   };
 
   const fd = await sweep("KeyA", "KeyD");
-  const duo = bestPane(fd, "朵朵");
-  const duoCross = bestPane(fd, "星星");
+  const duo = bestPane(fd, "鸭梨");
+  const duoCross = bestPane(fd, "康康");
   const fs = await sweep("ArrowLeft", "ArrowRight");
-  const star = bestPane(fs, "星星");
-  const starCross = bestPane(fs, "朵朵");
+  const star = bestPane(fs, "康康");
+  const starCross = bestPane(fs, "鸭梨");
 
   const fmt = (b) => (b ? `pane${b.pane} 左→右 ${b.d1 > 0 ? "+" : ""}${b.d1}px、右→左 ${b.d2}px` : "这个颜色在画布上找不到足够的像素");
-  note(`按住 A/D 时星星那团的动静:${fmt(duoCross)} · 按住 ←/→ 时朵朵那团的动静:${fmt(starCross)}`);
-  log(Boolean(duo && duo.score > 0), `${g.title} 双人:朵朵那团粉色跟着 A/D 左右来回`, fmt(duo));
-  log(Boolean(star && star.score > 0), `${g.title} 双人:星星那团蓝色跟着 ←/→ 左右来回`, fmt(star));
+  note(`按住 A/D 时康康那团的动静:${fmt(duoCross)} · 按住 ←/→ 时鸭梨那团的动静:${fmt(starCross)}`);
+  log(Boolean(duo && duo.score > 0), `${g.title} 双人:鸭梨那团粉色跟着 A/D 左右来回`, fmt(duo));
+  log(Boolean(star && star.score > 0), `${g.title} 双人:康康那团蓝色跟着 ←/→ 左右来回`, fmt(star));
   const ok = Boolean(duo && duo.score > 0 && star && star.score > 0);
   log(
     ok,
     `${g.title} 双人:两套键位各推各的那一颗(按玩家颜色分人,不看整屏)`,
-    `朵朵 ${fmt(duo)} | 星星 ${fmt(star)}`
+    `鸭梨 ${fmt(duo)} | 康康 ${fmt(star)}`
   );
   return ok;
 }
@@ -1164,8 +1164,8 @@ async function duoByTurn(page, g) {
     }
     if (seen.at(-1) !== who) seen.push(who);
     // 先量「他自己那套键」——串台探针要是先按,会把这个人的回合白白用掉,
-    // 结果就是永远轮不到星星(上一版就栽在这)。
-    const keys = who === "朵朵" ? P1_KEYS : P2_KEYS;
+    // 结果就是永远轮不到康康(上一版就栽在这)。
+    const keys = who === "鸭梨" ? P1_KEYS : P2_KEYS;
     const before = await sideProbe(page);
     // 一轮按两个键:地产那种「先掷骰、再决定买不买」的回合,一个键推不完
     for (let j = 0; j < 2; j++) {
@@ -1178,7 +1178,7 @@ async function duoByTurn(page, g) {
     // 回合还在他手上,才拿对家那套键探一下会不会串台
     if (!cross.has(who) && (await whoseTurn(page)) === who) {
       const b0 = await sideProbe(page);
-      const foeKeys = who === "朵朵" ? P2_KEYS : P1_KEYS;
+      const foeKeys = who === "鸭梨" ? P2_KEYS : P1_KEYS;
       await page.keyboard.press(foeKeys[ki % foeKeys.length]).catch(() => {});
       await sleep(420);
       cross.set(who, changedKeys(b0, await sideProbe(page)));
@@ -1189,8 +1189,8 @@ async function duoByTurn(page, g) {
     log(false, `${g.title} 双人:读不到「轮到谁」的提示,回合制取证做不下去`);
     return false;
   }
-  for (const who of ["朵朵", "星星"]) {
-    const keyName = who === "朵朵" ? "WASD+F+G" : "方向键+L+K";
+  for (const who of ["鸭梨", "康康"]) {
+    const keyName = who === "鸭梨" ? "WASD+F+G" : "方向键+L+K";
     log(
       own.has(who),
       `${g.title} 双人:轮到 ${who} 时 ${keyName} 真的吃得进去`,
@@ -1206,7 +1206,7 @@ async function duoByTurn(page, g) {
 }
 
 function other(who) {
-  return who === "朵朵" ? "星星" : "朵朵";
+  return who === "鸭梨" ? "康康" : "鸭梨";
 }
 
 async function partE(browser) {
@@ -1636,14 +1636,14 @@ async function partL(browser) {
 /**
  * PART=E 的通用回合探针只能说「按了对家的键、画布动了」,画布动也可能只是光标挪了一格,
  * 说服力不够。这里改读围子花园自己播报的「第 N 手」:
- * 手数只有真落子才会 +1,所以「轮到朵朵时按星星的键,手数涨了」= 星星替朵朵下了子,
+ * 手数只有真落子才会 +1,所以「轮到鸭梨时按康康的键,手数涨了」= 康康替鸭梨下了子,
  * 是决定性证据,不用再猜画布上那一下是光标还是棋子。
  */
 async function readWeiqi(page) {
   return page.evaluate(() => {
     const all = (document.querySelector(".game-stage")?.textContent ?? "").replace(/\s+/g, " ");
     const mv = /第\s*(\d+)\s*手/.exec(all);
-    const tn = /轮到\s*(朵朵|星星)/.exec(all);
+    const tn = /轮到\s*(鸭梨|康康)/.exec(all);
     return { moves: mv ? Number(mv[1]) : null, turn: tn ? tn[1] : "", raw: all.slice(0, 90) };
   });
 }
@@ -1667,11 +1667,11 @@ async function partK(browser) {
     return;
   }
 
-  // 第 1 段:轮到朵朵,只按星星那套键(←/→ 挪光标 + L 确认)。手数涨了就是串台。
+  // 第 1 段:轮到鸭梨,只按康康那套键(←/→ 挪光标 + L 确认)。手数涨了就是串台。
   const rounds = [];
   for (let i = 0; i < 6; i++) {
     const before = await readWeiqi(page);
-    if (before.turn !== "朵朵") break;
+    if (before.turn !== "鸭梨") break;
     await pressAll(page, ["ArrowRight", "ArrowDown", "KeyL"], 180);
     await sleep(500);
     const after = await readWeiqi(page);
@@ -1681,10 +1681,10 @@ async function partK(browser) {
   const crossed = rounds.find((x) => x.after.moves > x.before.moves);
   log(
     crossed === undefined,
-    "围子花园 双人:轮到朵朵时,星星那套键不该落得下子",
+    "围子花园 双人:轮到鸭梨时,康康那套键不该落得下子",
     crossed
       ? `串台了 —— 按 ←/↓/L 之后手数 ${crossed.before.moves} → ${crossed.after.moves}、轮次 ${crossed.before.turn} → ${crossed.after.turn}`
-      : `按了 ${rounds.length} 轮星星的键,手数一直停在 ${start.moves}(不串台)`
+      : `按了 ${rounds.length} 轮康康的键,手数一直停在 ${start.moves}(不串台)`
   );
 
   // 第 2 段:反向再探一次 —— 这一手轮到谁,就拿另一套键去试,看是不是两个方向都串
@@ -1696,8 +1696,8 @@ async function partK(browser) {
     own1 = await readWeiqi(page);
   }
   note(
-    `反向探针:轮到 ${own0.turn} 时按朵朵那套的 F,手数 ${own0.moves} → ${own1.moves}、轮次 ${own0.turn} → ${own1.turn}` +
-      (own1.moves > own0.moves && own0.turn === "星星" ? "(另一个方向也串)" : "")
+    `反向探针:轮到 ${own0.turn} 时按鸭梨那套的 F,手数 ${own0.moves} → ${own1.moves}、轮次 ${own0.turn} → ${own1.turn}` +
+      (own1.moves > own0.moves && own0.turn === "康康" ? "(另一个方向也串)" : "")
   );
 
   // 第 3 段:同一份 keyAction 是不是真把两套键映成同一个动作(纯函数,不碰玩法)

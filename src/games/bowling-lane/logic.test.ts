@@ -426,14 +426,14 @@ describe("评分与文案", () => {
     const lose = loseLine(60, 100);
     expect(lose).toContain("40");
     expect(lose).toContain("别急");
-    expect(versusLine([80, 60], ["朵朵", "星星"])).toBe("朵朵 80 比 60 星星");
+    expect(versusLine([80, 60], ["鸭梨", "康康"])).toBe("鸭梨 80 比 60 康康");
     expect(endlessLine(9, 9)).toContain("刷新");
     expect(endlessLine(3, 9)).toContain("9");
   });
 });
 
 describe("键位", () => {
-  it("朵朵用 WASD + F/G,星星用方向键 + L/K", () => {
+  it("鸭梨用 WASD + F/G,康康用方向键 + L/K", () => {
     expect(keyToAction("KeyF", 2)).toEqual({ player: 0, action: "confirm" });
     expect(keyToAction("KeyG", 2)).toEqual({ player: 0, action: "cancel" });
     expect(keyToAction("KeyL", 2)).toEqual({ player: 1, action: "confirm" });

@@ -132,7 +132,7 @@ describe("棋盘常量与坐标", () => {
 
   it("四位队员都有中文名与棋子造型，说的是绕回基地不是别的", () => {
     expect(COLOR_INFO).toHaveLength(4);
-    expect(COLOR_INFO.map((c) => c.name)).toEqual(["朵朵", "星星", "小花", "小鸟"]);
+    expect(COLOR_INFO.map((c) => c.name)).toEqual(["鸭梨", "康康", "小花", "小鸟"]);
     for (const info of COLOR_INFO) {
       expect(info.token.length).toBeGreaterThan(0);
       expect(info.ink).toMatch(/^#[0-9A-Fa-f]{6}$/);

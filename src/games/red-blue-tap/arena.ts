@@ -2,7 +2,7 @@
  * 红蓝点点 · 1.2 对战场与「点到手软」无尽。
  *
  * 这一份只管画面与接线,判分一律走 `rounds.ts` 的纯函数:
- *  · `versus` 同屏两侧:左朵朵、右星星,一轮只生成**一份** `RoundPlan`,
+ *  · `versus` 同屏两侧:左鸭梨、右康康,一轮只生成**一份** `RoundPlan`,
  *    左侧位序 p 与右侧位序 n-1-p 指向同一个逻辑格子,所以两边难度严格镜像;
  *  · 抢点判定的时间戳全部由 `createDuel(plan, now)` 里那一个 `now()` 盖,
  *    界面拿不到、也塞不进自己的时钟;
@@ -264,17 +264,17 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       <span class="rbt-vs-tag">先到 ${VERSUS_TARGET} 分</span>
     </div>
     <div class="rbt-vs-score">
-      <img class="rbt-vs-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />
+      <img class="rbt-vs-ava" src="${AVATAR_URLS.duoduo}" alt="鸭梨" />
       <span class="rbt-vs-left">0</span>
       <span>:</span>
       <span class="rbt-vs-right">0</span>
-      <img class="rbt-vs-ava" src="${AVATAR_URLS.xingxing}" alt="星星" />
+      <img class="rbt-vs-ava" src="${AVATAR_URLS.xingxing}" alt="康康" />
     </div>
     <div class="rbt-vs-brief"></div>
     <div class="rbt-vs-body">
-      <div class="rbt-vs-side rbt-vs-side-left"><div class="rbt-vs-name">朵朵 · A S D F</div></div>
+      <div class="rbt-vs-side rbt-vs-side-left"><div class="rbt-vs-name">鸭梨 · A S D F</div></div>
       <div class="rbt-vs-gap" aria-hidden="true"></div>
-      <div class="rbt-vs-side rbt-vs-side-right"><div class="rbt-vs-name rbt-vs-name-right">星星 · J K L ;</div></div>
+      <div class="rbt-vs-side rbt-vs-side-right"><div class="rbt-vs-name rbt-vs-name-right">康康 · J K L ;</div></div>
     </div>
     <div class="rbt-vs-cloud"></div>
     <div class="rbt-vs-foot">两边的题目是镜像的：同样的颜色、同样的号码，只是左右翻过来，谁也不吃亏。</div>
@@ -314,8 +314,8 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
   function renderScore(): void {
     leftScoreEl.textContent = String(score.left);
     rightScoreEl.textContent = String(score.right);
-    modeBtn.textContent = mode === "duo" ? "👫 两个人玩" : `🤖 挑战星星 · ${AI_TIERS[aiLevel].name}`;
-    rightNameEl.textContent = mode === "duo" ? "星星 · J K L ;" : `小电脑 · ${AI_TIERS[aiLevel].name}`;
+    modeBtn.textContent = mode === "duo" ? "👫 两个人玩" : `🤖 挑战康康 · ${AI_TIERS[aiLevel].name}`;
+    rightNameEl.textContent = mode === "duo" ? "康康 · J K L ;" : `小电脑 · ${AI_TIERS[aiLevel].name}`;
   }
 
   /** 同一个时钟源:两侧的抢点判定都从这里取时间 */
@@ -385,7 +385,7 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
       right: Math.max(0, score.right + r.delta.right)
     };
     renderScore();
-    if (r.winner) cloudEl.textContent = r.winner === "left" ? "朵朵这轮又快又准！" : "星星这轮拿下！";
+    if (r.winner) cloudEl.textContent = r.winner === "left" ? "鸭梨这轮又快又准！" : "康康这轮拿下！";
     else if (r.delta.left > 0 || r.delta.right > 0) cloudEl.textContent = "点得刚刚好，两边都有分！";
     if (score.left >= VERSUS_TARGET || score.right >= VERSUS_TARGET) {
       finish();
@@ -459,7 +459,7 @@ export function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void)
     api.play("win");
     const ov = document.createElement("div");
     ov.className = "rbt-vs-over";
-    const who = mode === "duo" ? (leftWon ? "朵朵这边" : "星星这边") : leftWon ? "你" : "小电脑";
+    const who = mode === "duo" ? (leftWon ? "鸭梨这边" : "康康这边") : leftWon ? "你" : "小电脑";
     ov.innerHTML = `
       <div style="font-size:44px;line-height:1">${leftWon ? "🎉" : "💫"}</div>
       <div class="rbt-vs-over-title">${score.left} : ${score.right}　${who}赢下这一场</div>
@@ -599,7 +599,7 @@ export function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void
     </div>
     <div class="rbt-vs-brief"></div>
     <div class="rbt-vs-body">
-      <div class="rbt-vs-side rbt-e-side"><div class="rbt-vs-name">朵朵 · A S D F</div></div>
+      <div class="rbt-vs-side rbt-e-side"><div class="rbt-vs-name">鸭梨 · A S D F</div></div>
     </div>
     <div class="rbt-vs-cloud"></div>
     <div class="rbt-vs-foot">四种回合轮着来，节奏一轮比一轮快。失误三次就收工，撑过的轮数就是成绩。</div>

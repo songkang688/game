@@ -111,17 +111,17 @@ export function collectGames(
   for (const [path, raw] of Object.entries(metaModules)) {
     const meta = extractMeta(raw);
     if (!meta) {
-      console.warn(`[一朵一星] 忽略无效游戏模块(缺少合法 meta): ${path}`);
+      console.warn(`[鸭梨康康] 忽略无效游戏模块(缺少合法 meta): ${path}`);
       continue;
     }
     const implPath = path.replace(/meta\.ts$/, "index.ts");
     const lazyImport = implLoaders[implPath];
     if (typeof lazyImport !== "function") {
-      console.warn(`[一朵一星] 忽略无实现的游戏(缺少 ${implPath}): ${path}`);
+      console.warn(`[鸭梨康康] 忽略无实现的游戏(缺少 ${implPath}): ${path}`);
       continue;
     }
     if (seen.has(meta.id)) {
-      console.warn(`[一朵一星] 游戏 id 重复,已忽略后来者: "${meta.id}" (${path})`);
+      console.warn(`[鸭梨康康] 游戏 id 重复,已忽略后来者: "${meta.id}" (${path})`);
       continue;
     }
     seen.add(meta.id);

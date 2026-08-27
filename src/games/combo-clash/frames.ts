@@ -614,8 +614,8 @@ function buildSpecial(slot: MoveSlot, base: Omit<Move, "slot" | "name" | "note">
 const CHAR_SPECS: CharSpec[] = [
   {
     id: "duoduo",
-    name: "朵朵",
-    emoji: "🌸",
+    name: "鸭梨",
+    emoji: "🍐",
     color: "#FFC1DC",
     ink: "#B85C8A",
     archetype: "rush",
@@ -651,12 +651,12 @@ const CHAR_SPECS: CharSpec[] = [
   },
   {
     id: "xingxing",
-    name: "星星",
-    emoji: "⭐",
+    name: "康康",
+    emoji: "👓",
     color: "#FFE08A",
     ink: "#B98A1E",
     archetype: "zoner",
-    blurb: "会丢星光弹的小星星,喜欢在远处点人。",
+    blurb: "会丢星光弹的小康康,喜欢在远处点人。",
     style: "远距离压制,靠星光弹逼对手跳过来",
     vigor: 112,
     walk: 2.2,
@@ -684,7 +684,7 @@ const CHAR_SPECS: CharSpec[] = [
         box: { x: 26, y: 30, w: 34, h: 30 },
         knockback: 5
       },
-      s2: { name: "星星回旋", note: "转身一圈,贴边时特别好接", power: 16, startup: 12, launch: 5.5 },
+      s2: { name: "康康回旋", note: "转身一圈,贴边时特别好接", power: 16, startup: 12, launch: 5.5 },
       sv1: { name: "满天星幕", note: "LV1 超必:一排星光同时亮起来", power: 25 },
       sv2: { name: "银河长河", note: "LV2 超必:一整条星河横着推过去", power: 37 }
     }

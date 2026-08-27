@@ -1,5 +1,5 @@
 /**
- * 朵星格斗王 —— 键位与触屏摇杆的回归测试。
+ * 梨康格斗王 —— 键位与触屏摇杆的回归测试。
  *
  * 最重要的一条：**同屏双人的两套键位不许有任何重叠**。
  * 谁以后改键位改重了，这里第一时间红。
@@ -31,7 +31,7 @@ describe("双人键位", () => {
     expect(new Set(all).size).toBe(all.length);
   });
 
-  it("朵朵是 WASD + F/G，星星是方向键 + L/K", () => {
+  it("鸭梨是 WASD + F/G，康康是方向键 + L/K", () => {
     expect(P1_KEYS).toEqual({ up: "KeyW", down: "KeyS", left: "KeyA", right: "KeyD", light: "KeyF", heavy: "KeyG" });
     expect(P2_KEYS).toEqual({
       up: "ArrowUp",
@@ -147,8 +147,8 @@ describe("键位说明", () => {
     const lines = keyHintLines();
     expect(lines.length).toBeGreaterThanOrEqual(6);
     const all = lines.join("\n");
-    expect(all).toContain("朵朵");
-    expect(all).toContain("星星");
+    expect(all).toContain("鸭梨");
+    expect(all).toContain("康康");
     expect(all).toContain("Esc");
     expect(all).toContain("格挡");
     expect(all).toContain("受身");

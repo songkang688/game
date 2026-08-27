@@ -98,13 +98,13 @@ import {
   type World,
 } from "./logic";
 
-const P_NAME = ["朵朵", "星星"];
-const P_EMOJI = ["🌸", "⭐"];
+const P_NAME = ["鸭梨", "康康"];
+const P_EMOJI = ["🍐", "👓"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
 
 /** 两套键位一个字都不重叠,写在一处,暂停面板与各模式提示共用 */
 export const KEY_HELP =
-  "朵朵:WASD 走 · F 放泡 · V 踢泡 · G 拍破;星星:方向键走 · L 放泡 · J 踢泡 · K 拍破。";
+  "鸭梨:WASD 走 · F 放泡 · V 踢泡 · G 拍破;康康:方向键走 · L 放泡 · J 踢泡 · K 拍破。";
 
 // ---------------------------------------------------------------------------
 // 样式
@@ -1502,7 +1502,7 @@ function mountDuel(host: HTMLElement, api: GameApi, onBack: () => void, aiSkill:
       ai: aiSkill ? [{ index: 1, skill: aiSkill }] : [],
       banner: `第 ${round} 局 · ${scores[0]}:${scores[1]}`,
       tip: aiSkill
-        ? "朵朵:WASD 走 · F 放泡 · V 踢泡 · G 拍破。把电脑逼进死胡同就赢了。"
+        ? "鸭梨:WASD 走 · F 放泡 · V 踢泡 · G 拍破。把电脑逼进死胡同就赢了。"
         : `${KEY_HELP}谁先被泡泡罩住,这一局就算对方赢。`,
       sfx: (n) => api.play(n),
       onDone: (res) => roundOver(res.winner, res.winner < 0),

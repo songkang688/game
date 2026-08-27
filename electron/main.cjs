@@ -17,7 +17,7 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: "#fff5fa",
     autoHideMenuBar: true,
-    title: "一朵一星",
+    title: "鸭梨康康",
     ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),

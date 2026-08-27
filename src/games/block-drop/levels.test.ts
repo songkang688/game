@@ -356,7 +356,7 @@ describe("block-drop · 产品红线", () => {
     expect(index).toContain("clearTimeout(t)");
   });
 
-  it("双人键位齐全:朵朵 WASD+F/G,星星 方向键 +L/K,Esc 暂停", () => {
+  it("双人键位齐全:鸭梨 WASD+F/G,康康 方向键 +L/K,Esc 暂停", () => {
     const index = src("index.ts");
     for (const key of [
       '=== "a"',

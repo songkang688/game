@@ -132,7 +132,7 @@ describe("mine-garden · 键位", () => {
     expect(keyAction("q")).toBeNull();
   });
 
-  it("双人：朵朵 WASD+F+G，星星 方向键+L+K，互不串台", () => {
+  it("双人：鸭梨 WASD+F+G，康康 方向键+L+K，互不串台", () => {
     expect(keyAction("w", "p1")).toBe("up");
     expect(keyAction("f", "p1")).toBe("open");
     expect(keyAction("g", "p1")).toBe("flag");
@@ -577,9 +577,9 @@ describe("mine-garden · 闯关接线", () => {
     modeHost(dom).button("开始 ▶")?.fire("click");
     const fields = modeHost(dom).byClass("mn-field");
     expect(fields).toHaveLength(2);
-    expect(fields[0].findText("朵朵")).not.toBeNull();
-    expect(fields[1].findText("星星")).not.toBeNull();
-    // 朵朵按 D 只挪左边，星星按方向键只挪右边
+    expect(fields[0].findText("鸭梨")).not.toBeNull();
+    expect(fields[1].findText("康康")).not.toBeNull();
+    // 鸭梨按 D 只挪左边，康康按方向键只挪右边
     const leftCells = fields[0].byClass("mn-cell");
     tap(leftCells[indexOf(9, 4, 4)]);
     // 翻开的格子挂的是 mn-lit(不再和「模式入口按钮」共用 mn-open)

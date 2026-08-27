@@ -11,7 +11,7 @@ import {
 } from "./keys";
 
 describe("双人键位", () => {
-  it("朵朵是 W A S D，星星是四个方向键", () => {
+  it("鸭梨是 W A S D，康康是四个方向键", () => {
     expect(Object.keys(P1_KEYS).sort()).toEqual(["KeyA", "KeyD", "KeyS", "KeyW"]);
     expect(Object.keys(P2_KEYS).sort()).toEqual([
       "ArrowDown",
@@ -47,7 +47,7 @@ describe("双人键位", () => {
     expect(resolveKey("ArrowRight")).toEqual({ seat: 1, action: "right" });
   });
 
-  // KeyL 从 1.2 起是星星的道具键,所以这里换一个真的没人要的键来守这条规矩
+  // KeyL 从 1.2 起是康康的道具键,所以这里换一个真的没人要的键来守这条规矩
   it("不相干的键一律不接管,留给页面自己用", () => {
     for (const code of ["KeyQ", "Space", "Enter", "Tab", "KeyZ"]) {
       expect(resolveKey(code)).toBeNull();
@@ -87,12 +87,12 @@ describe("手机滑动", () => {
 describe("左右半屏各归各人", () => {
   const size = { width: 400, height: 300 };
 
-  it("上下分屏时上半屏是朵朵、下半屏是星星", () => {
+  it("上下分屏时上半屏是鸭梨、下半屏是康康", () => {
     expect(seatAtPoint(200, 40, size, "column")).toBe(0);
     expect(seatAtPoint(200, 260, size, "column")).toBe(1);
   });
 
-  it("左右分屏时左半屏是朵朵、右半屏是星星", () => {
+  it("左右分屏时左半屏是鸭梨、右半屏是康康", () => {
     expect(seatAtPoint(40, 150, size, "row")).toBe(0);
     expect(seatAtPoint(360, 150, size, "row")).toBe(1);
   });

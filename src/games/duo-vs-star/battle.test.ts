@@ -57,8 +57,8 @@ describe("建局", () => {
   it("按槽位建出角色，每人拿到自己的上场机会", () => {
     const s = createMatch(cfg({ stocks: 3 }));
     expect(s.actors).toHaveLength(2);
-    expect(s.actors[0].char.name).toBe("朵朵");
-    expect(s.actors[1].char.name).toBe("星星");
+    expect(s.actors[0].char.name).toBe("鸭梨");
+    expect(s.actors[1].char.name).toBe("康康");
     expect(s.actors.every((a) => a.stocks === 3)).toBe(true);
     expect(s.over).toBe(false);
   });
@@ -80,7 +80,7 @@ describe("建局", () => {
   it("找不到的场地 / 角色会退回默认，绝不崩", () => {
     const s = createMatch(cfg({ stageId: "不存在的场地", slots: [{ charId: "谁", team: 0, control: "p1" }] }));
     expect(s.stage.id).toBe("cloud-square");
-    expect(s.actors[0].char.name).toBe("朵朵");
+    expect(s.actors[0].char.name).toBe("鸭梨");
   });
 
   it("同一个种子跑出完全一样的一局", () => {

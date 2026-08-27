@@ -334,9 +334,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   wrap.innerHTML = `
     <style>${CSS}</style>
     <div class="rbt-top">
-      <span class="rbt-badge rbt-me"><img class="rbt-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" /><span class="rbt-me-score">朵朵(你) 0</span></span>
+      <span class="rbt-badge rbt-me"><img class="rbt-ava" src="${AVATAR_URLS.duoduo}" alt="鸭梨" /><span class="rbt-me-score">鸭梨(你) 0</span></span>
       <span class="rbt-badge">先到 ${cfg.targetPoints} 分</span>
-      <span class="rbt-badge rbt-ai"><span class="rbt-ai-score">星星(电脑) 0</span><img class="rbt-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
+      <span class="rbt-badge rbt-ai"><span class="rbt-ai-score">康康(电脑) 0</span><img class="rbt-ava" src="${AVATAR_URLS.xingxing}" alt="康康" /></span>
     </div>
     ${gears.length ? `<div class="rbt-gear"></div>` : ""}
     <div class="rbt-arena"></div>
@@ -386,8 +386,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   }
 
   function renderTop(): void {
-    meEl.textContent = `朵朵(你) ${meScore}`;
-    aiEl.textContent = `星星(电脑) ${aiScore}`;
+    meEl.textContent = `鸭梨(你) ${meScore}`;
+    aiEl.textContent = `康康(电脑) ${aiScore}`;
     if (comboChip) {
       const hot = inCombo(streak, cfg);
       comboChip.classList.toggle("rbt-chip-hot", hot);
@@ -409,9 +409,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     clearDots();
     if (meScore >= cfg.targetPoints) {
       const got = aiScore <= 2 ? 3 : aiScore <= cfg.targetPoints - 2 ? 2 : 1;
-      later(() => ctx.win(got as 1 | 2 | 3, `${meScore} 比 ${aiScore}，朵朵队赢下这一局，抢点的判断很到位！`), 400);
+      later(() => ctx.win(got as 1 | 2 | 3, `${meScore} 比 ${aiScore}，鸭梨队赢下这一局，抢点的判断很到位！`), 400);
     } else {
-      later(() => ctx.lose("这局星星队分数高一点～视线放在屏幕中间用余光扫，连击一起来分数就追上了！"), 400);
+      later(() => ctx.lose("这局康康队分数高一点～视线放在屏幕中间用余光扫，连击一起来分数就追上了！"), 400);
     }
   }
 
@@ -500,7 +500,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     d.aiTimer = setTimeout(() => {
       if (destroyed || ended || d.gone) return;
       if (canMiss && aiMisses(tier, Math.random)) {
-        msgEl.textContent = `星星（${aiTier(tier).name}）手滑了一下，快抢！`;
+        msgEl.textContent = `康康（${aiTier(tier).name}）手滑了一下，快抢！`;
         armAi(d, Math.max(220, ms * 0.75), fire, false);
         return;
       }

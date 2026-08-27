@@ -85,9 +85,9 @@ describe("勇者之路 · R1 修复 · 全源码红线复核", () => {
     }
   });
 
-  it("角色只用朵朵 / 星星与原创配角", () => {
-    expect(HERO_NAME).toBe("朵朵");
-    expect(RIVAL_NAME).toBe("星星");
+  it("角色只用鸭梨 / 康康与原创配角", () => {
+    expect(HERO_NAME).toBe("鸭梨");
+    expect(RIVAL_NAME).toBe("康康");
   });
 
   it("没有联网、没有广告内购账号、没有自己合成声音、没有外部依赖", () => {

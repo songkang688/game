@@ -857,7 +857,7 @@ export function loseLine(reason: "time" | "hearts"): string {
 
 export type HeroAction = "up" | "down" | "left" | "right" | "power" | "cheer";
 
-/** 朵朵那一套(W A S D + F + G)开凛凛,星星那一套(方向键 + L + K)开焰焰 */
+/** 鸭梨那一套(W A S D + F + G)开凛凛,康康那一套(方向键 + L + K)开焰焰 */
 export const KEY_MAP: Record<string, { hero: Hero; action: HeroAction }> = {
   KeyW: { hero: "ice", action: "up" },
   KeyS: { hero: "ice", action: "down" },

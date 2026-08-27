@@ -4,7 +4,7 @@
  */
 export const meta = {
   id: "duo-vs-star",
-  title: "朵朵大战星星",
+  title: "鸭梨大战康康",
   emoji: "💥",
   category: "party" as const,
   color: "#ffd0e4",

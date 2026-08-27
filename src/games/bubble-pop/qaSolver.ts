@@ -160,7 +160,7 @@ export interface BubbleRun {
 }
 
 /**
- * 贪心玩家:先把隐藏泡点亮,再一直挑收益最大的一手,没得消就让朵朵吹一口气重排。
+ * 贪心玩家:先把隐藏泡点亮,再一直挑收益最大的一手,没得消就让鸭梨吹一口气重排。
  * 这条路径和 `onCell → afterPop → runCollapse → checkEnd` 完全同构,
  * 只是把动画换成了直接取 `plan.next`。
  */

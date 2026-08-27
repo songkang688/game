@@ -22,8 +22,8 @@ import {
 
 function table(n: number, cash = START_CASH) {
   const seats: SeatSpec[] = [
-    { name: "朵朵", emoji: "🌸", cash },
-    { name: "星星", emoji: "⭐", cash },
+    { name: "鸭梨", emoji: "🍐", cash },
+    { name: "康康", emoji: "👓", cash },
     { name: "糯糯", emoji: "🍡", cash },
     { name: "云云", emoji: "☁️", cash }
   ].slice(0, n);

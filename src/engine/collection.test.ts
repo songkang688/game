@@ -95,11 +95,11 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("收藏册图鉴", () => {
-  it("人物至少 6 位,朵朵和星星一开始就在", () => {
+  it("人物至少 6 位,鸭梨和康康一开始就在", () => {
     expect(HEROES.length).toBeGreaterThanOrEqual(6);
     const names = HEROES.map((h) => h.name);
-    expect(names).toContain("朵朵");
-    expect(names).toContain("星星");
+    expect(names).toContain("鸭梨");
+    expect(names).toContain("康康");
     expect([...STARTER_IDS].sort()).toEqual(["duoduo", "xingxing"]);
   });
 
@@ -253,7 +253,7 @@ describe("解锁", () => {
     expect(wallet.balance).toBe(500);
   });
 
-  it("朵朵和星星开局就在,不用花星星", () => {
+  it("鸭梨和康康开局就在,不用花星星", () => {
     const { store, wallet } = makeStore(0);
     expect(store.isUnlocked("duoduo")).toBe(true);
     expect(store.isUnlocked("xingxing")).toBe(true);
@@ -422,7 +422,7 @@ describe("坏存档降级为默认", () => {
     expect(data.equipped.pet).toBeUndefined();
   });
 
-  it("人物槽空着或指向没解锁的人时,自动换回朵朵", () => {
+  it("人物槽空着或指向没解锁的人时,自动换回鸭梨", () => {
     expect(sanitizeCollection({ levels: {}, equipped: {} }).equipped.hero).toBe("duoduo");
     expect(
       sanitizeCollection({ levels: {}, equipped: { hero: "shanshan" } }).equipped.hero

@@ -24,7 +24,7 @@ function rect(w = 100, h = 70, springs: Field["springs"] = []): Field {
 }
 
 function hero(x: number, y: number) {
-  return makeCar({ id: 0, name: "朵朵", emoji: "🌸", color: "#e8558f", team: 0, x, y, lives: 3, ai: true });
+  return makeCar({ id: 0, name: "鸭梨", emoji: "🍐", color: "#e8558f", team: 0, x, y, lives: 3, ai: true });
 }
 
 function foe(id: number, x: number, y: number) {

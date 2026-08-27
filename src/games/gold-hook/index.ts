@@ -100,10 +100,10 @@ const PALETTES: Palette[] = [
   { sky0: "#F1EFFB", sky1: "#D6D1EE", wall: "#C7C0E6", vein: "#A096D2", ground: "#BFB6E4", groundDark: "#978CCB" },
 ];
 
-/** 朵朵 / 星星:一粉一蓝,两个人轮流转绞盘 */
+/** 鸭梨 / 康康:一粉一蓝,两个人轮流转绞盘 */
 const CREW = [
-  { name: "朵朵", body: "#FF9EC4", dark: "#E2749F", helmet: "#FFD166", face: "#FFE7D6" },
-  { name: "星星", body: "#8FBEF5", dark: "#6693CE", helmet: "#9AD07C", face: "#FFE7D6" },
+  { name: "鸭梨", body: "#FF9EC4", dark: "#E2749F", helmet: "#FFD166", face: "#FFE7D6" },
+  { name: "康康", body: "#8FBEF5", dark: "#6693CE", helmet: "#9AD07C", face: "#FFE7D6" },
 ];
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -1348,7 +1348,7 @@ export function mount(api: GameApi): GoldHookHandle {
           };
         },
         mapHint: "先钩又轻又值钱的,石头能绕就绕。金币超过目标的一倍半就是三颗星!",
-        grandMessage: "188 条矿脉全部挖通,朵朵和星星的矿车已经装不下啦!",
+        grandMessage: "188 条矿脉全部挖通,鸭梨和康康的矿车已经装不下啦!",
         guide: GUIDE,
         guideTitle: "钩矿小攻略",
       }

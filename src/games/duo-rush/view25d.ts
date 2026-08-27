@@ -1,5 +1,5 @@
 /**
- * 朵星双人冲刺 · 2.5D 伪三维投影与分屏布局（纯函数，不碰 canvas）。
+ * 梨康双人冲刺 · 2.5D 伪三维投影与分屏布局（纯函数，不碰 canvas）。
  *
  * 用的是最朴素的针孔透视：把摄像机放在跑者后面 `CAM_DEPTH` 米处，
  * 前方 z 米的东西缩放成 `CAM_DEPTH / (CAM_DEPTH + z)`。
@@ -50,7 +50,7 @@ export function stageSize(availWidth: number): Size & { layout: SplitLayout } {
   return { width, height: paneH, layout };
 }
 
-/** 两个人各自那一格的位置（0 = 朵朵，1 = 星星）。 */
+/** 两个人各自那一格的位置（0 = 鸭梨，1 = 康康）。 */
 export function paneRects(size: Size, layout: SplitLayout): [Rect, Rect] {
   if (layout === "column") {
     const h = size.height / 2;

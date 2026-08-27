@@ -241,14 +241,14 @@ describe("档C R2 · alien-seek · 竞态", () => {
     const r = startRound(lv);
     for (const tg of lv.targets) {
       const s = lv.spots[tg.spot];
-      // 朵朵和星星同一拍点同一个点
+      // 鸭梨和康康同一拍点同一个点
       pick(r, lv, 0, s.x, s.y);
       pick(r, lv, 1, s.x, s.y);
     }
     expect(r.scores[0] + r.scores[1]).toBe(lv.targets.length);
     expect(r.scores[1]).toBe(0);
     const line = versusLine(r.scores[0], r.scores[1]);
-    expect(line).toContain("朵朵");
+    expect(line).toContain("鸭梨");
     for (const bad of ["输", "笨", "菜"]) expect(line).not.toContain(bad);
   });
 
@@ -421,8 +421,8 @@ describe("档C R2 · alien-seek · 存档往返", () => {
   it("双人局的比分不进存档,只有战役星级会落盘", () => {
     const st = memStore();
     const lv = buildVersusRound(5);
-    expect(versusWinner(3, 1)).toBe("朵朵");
-    expect(versusWinner(1, 3)).toBe("星星");
+    expect(versusWinner(3, 1)).toBe("鸭梨");
+    expect(versusWinner(1, 3)).toBe("康康");
     expect(versusWinner(2, 2)).toBe("平局");
     expect(lv.spots.length).toBeGreaterThan(0);
     expect(st.keys!()).toEqual([]);

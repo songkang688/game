@@ -9,16 +9,16 @@ export const CHROME = process.env.CHROME_PATH ?? "/usr/local/bin/google-chrome";
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const TITLES = {
-  "duo-rush": "朵星双人冲刺",
-  "duo-arena": "朵星擂台",
-  "duo-vs-star": "朵朵大战星星",
+  "duo-rush": "梨康双人冲刺",
+  "duo-arena": "梨康擂台",
+  "duo-vs-star": "鸭梨大战康康",
   "sling-birds": "弹弹小鸟",
   "candy-swing": "糖果秋千",
   "gold-hook": "金矿钩钩",
   "garden-guard": "花园守卫",
   "sprout-defense": "绿芽保卫战",
   "monster-crisis": "小怪物危机",
-  "shoot-range": "星星射击场",
+  "shoot-range": "康康射击场",
   "sky-squad": "飞机小队",
   "tank-battle": "铁皮坦克大战",
   "bomb-buddies": "泡泡炸弹人",

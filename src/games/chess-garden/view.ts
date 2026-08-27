@@ -482,7 +482,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   });
   tools.append(hintBtn, flipBtn, resignBtn);
 
-  /** 朵朵执白 WASD 移光标、F 选中 / 落子、G 取消；星星执黑 方向键 + L / K；Esc 暂停与继续 */
+  /** 鸭梨执白 WASD 移光标、F 选中 / 落子、G 取消；康康执黑 方向键 + L / K；Esc 暂停与继续 */
   const WHITE_KEYS: Record<string, [number, number]> = {
     w: [0, 1],
     s: [0, -1],
@@ -528,7 +528,7 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
       pickSquare(cursor);
       return;
     }
-    // 取消键：朵朵 G、星星 K，把刚选中的那颗子放回去，选错了不用非得走一手
+    // 取消键：鸭梨 G、康康 K，把刚选中的那颗子放回去，选错了不用非得走一手
     if ((lower === "g" && game.pos.turn === WHITE) || (lower === "k" && game.pos.turn === BLACK)) {
       ev.preventDefault?.();
       if (selected < 0) return;

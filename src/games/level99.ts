@@ -915,7 +915,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     buttons.push({ label: "🗺️ 回地图", ghost: true, onClick: () => showMap() });
 
     const buddy = level % 2 === 0 ? AVATAR_URLS.duoduoCheer : AVATAR_URLS.xingxingRun;
-    const buddyAlt = level % 2 === 0 ? "朵朵在为你庆祝" : "星星在为你欢呼";
+    const buddyAlt = level % 2 === 0 ? "鸭梨在为你庆祝" : "康康在为你欢呼";
     showOverlay(
       `<img class="l99-ov-buddy" src="${buddy}" alt="${buddyAlt}" />
        <div class="l99-ov-stars">${starRowHTML(got)}</div>
@@ -936,7 +936,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     api.play("oops");
     const word = msg ?? LOSE_WORDS[Math.floor(Math.random() * LOSE_WORDS.length)];
     const buddy = level % 2 === 0 ? AVATAR_URLS.xingxing : AVATAR_URLS.duoduo;
-    const buddyAlt = level % 2 === 0 ? "星星给你打气" : "朵朵给你打气";
+    const buddyAlt = level % 2 === 0 ? "康康给你打气" : "鸭梨给你打气";
     showOverlay(
       `<img class="l99-ov-buddy l99-ov-buddy-round" src="${buddy}" alt="${buddyAlt}" />
        <div class="l99-ov-title">就差一点点！</div>

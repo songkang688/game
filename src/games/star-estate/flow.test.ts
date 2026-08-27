@@ -17,8 +17,8 @@ import { mulberry32 } from "../level99";
 import { eventLine, tileSummary, ESTATE_CONSTS } from "./index";
 
 function table(n = 3, cash = START_CASH): EstateState {
-  const names = ["朵朵", "星星", "糯糯", "云云"];
-  const emoji = ["🌸", "⭐", "🍡", "☁️"];
+  const names = ["鸭梨", "康康", "糯糯", "云云"];
+  const emoji = ["🍐", "👓", "🍡", "☁️"];
   return createState(
     Array.from({ length: n }, (_, i) => ({ name: names[i], emoji: emoji[i], cash })),
     cash
@@ -62,7 +62,7 @@ describe("拍卖不背着玩家掏钱", () => {
     const s = table(3);
     const events: EstateEvent[] = [];
     const r = runAuction(s, 39, -1, ctxWith(100, new Set([0])), events, new Map([[0, 500]]));
-    // 两个 AI 的上限都是 100，朵朵刚好把价钱顶到 100 就没人跟得上了
+    // 两个 AI 的上限都是 100，鸭梨刚好把价钱顶到 100 就没人跟得上了
     expect(r.winner).toBe(0);
     expect(r.price).toBe(100);
     expect(s.players[0].cash).toBe(START_CASH - 100);
@@ -169,7 +169,7 @@ describe("播报文案", () => {
     expect(tileSummary(s, 39)).toContain(String(tileAt(39).price));
     grantTile(s, 39, 1);
     const line = tileSummary(s, 39);
-    expect(line).toContain("星星");
+    expect(line).toContain("康康");
     expect(line).toContain("空地");
     expect(line).toContain("租金");
   });

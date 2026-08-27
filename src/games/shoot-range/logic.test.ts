@@ -352,23 +352,23 @@ describe("shoot-range 无尽靶潮", () => {
 
 describe("shoot-range 分屏对战", () => {
   it("先比命中率,命中率一样比命中数,再一样才平手", () => {
-    const a = { name: "朵朵", hits: 8, shots: 10, friendHits: 0 };
-    const b = { name: "星星", hits: 6, shots: 10, friendHits: 0 };
+    const a = { name: "鸭梨", hits: 8, shots: 10, friendHits: 0 };
+    const b = { name: "康康", hits: 6, shots: 10, friendHits: 0 };
     expect(duelResult(a, b).winner).toBe(0);
     expect(duelResult(b, a).winner).toBe(1);
-    const same = duelResult({ ...a }, { ...a, name: "星星" });
+    const same = duelResult({ ...a }, { ...a, name: "康康" });
     expect(same.winner).toBe(-1);
     expect(same.line).toContain("平手");
-    const moreHits = duelResult({ name: "朵朵", hits: 8, shots: 10, friendHits: 0 }, { name: "星星", hits: 4, shots: 5, friendHits: 0 });
+    const moreHits = duelResult({ name: "鸭梨", hits: 8, shots: 10, friendHits: 0 }, { name: "康康", hits: 4, shots: 5, friendHits: 0 });
     expect(moreHits.winner).toBe(0);
   });
 
   it("误打好人靶按少算一发有效命中处理,足以逆转胜负", () => {
-    const clean = { name: "朵朵", hits: 7, shots: 10, friendHits: 0 };
-    const sloppy = { name: "星星", hits: 8, shots: 10, friendHits: 2 };
+    const clean = { name: "鸭梨", hits: 7, shots: 10, friendHits: 0 };
+    const sloppy = { name: "康康", hits: 8, shots: 10, friendHits: 2 };
     const res = duelResult(clean, sloppy);
     expect(res.winner).toBe(0);
     expect(res.accB).toBeCloseTo(0.6, 5);
-    expect(res.line).toContain("朵朵");
+    expect(res.line).toContain("鸭梨");
   });
 });

@@ -133,13 +133,13 @@ describe("十四名英杰各来一条", () => {
     expect(queryFlag(state, { kind: "anyAsDodge", who: 0 })).toBe(false);
   });
 
-  it("星星·星愿:多摸一张,手牌上限却少一张", () => {
+  it("康康·星愿:多摸一张,手牌上限却少一张", () => {
     const state = table(["xingxing", "lubai", "lubai"]);
     expect(queryNumber(state, { kind: "drawPhase", who: 0, base: 2 })).toBe(3);
     expect(queryNumber(state, { kind: "handLimit", who: 0, base: 4 })).toBe(3);
   });
 
-  it("朵朵·花开:元气归零时弃两张回 1 点,每局只有一次,手牌不够也开不了", () => {
+  it("鸭梨·花开:元气归零时弃两张回 1 点,每局只有一次,手牌不够也开不了", () => {
     const two = [makeCard("slash"), makeCard("dodge")];
     const state = table(["duoduo", "lubai", "lubai"], [two]);
     expect(trigger(state, { kind: "dying", who: 0 })).toEqual([{ kind: "bloom", who: 0 }]);
@@ -178,7 +178,7 @@ describe("事件分发", () => {
 
   it("数值询问是各家修正累加,布尔询问是有人举手就算", () => {
     const state = table(["xingxing", "dundun", "lubai"]);
-    // 星星 -1、墩墩 +1,只有星星那条对得上 who=0
+    // 康康 -1、墩墩 +1,只有康康那条对得上 who=0
     expect(queryNumber(state, { kind: "handLimit", who: 0, base: 5 })).toBe(4);
     expect(queryFlag(state, { kind: "groupTrick", who: 1, card: "starShower" })).toBe(true);
     expect(queryFlag(state, { kind: "groupTrick", who: 0, card: "starShower" })).toBe(false);

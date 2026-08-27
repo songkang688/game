@@ -9,7 +9,7 @@ export const meta = {
   category: "party" as const,
   color: "#D6F0FF",
   blurb: "四个人掷骰子绕圈飞。叠在一起最安全，跳格飞线最开心，先到齐的人获胜。",
-  // 188 关残局战役 + 1 人对 3 个本机 AI + 连胜无尽 + 朵朵星星同屏两色,全程离线
+  // 188 关残局战役 + 1 人对 3 个本机 AI + 连胜无尽 + 鸭梨康康同屏两色,全程离线
   modes: ["campaign", "versus", "endless", "twoPlayer"] as const,
   levels: 188,
   platform: "mobile" as const

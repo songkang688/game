@@ -71,7 +71,7 @@ function sandbox(over: Partial<Parameters<typeof createArena>[0]> = {}): Arena {
     windPlan: [0],
     covers: [],
     foes: [{ x: 30, y: 2, r: 1.3 }],
-    fighters: [{ seat: 0, name: "朵朵", x: 6, dir: 1, minX: 2, maxX: 20, balls: 3 }],
+    fighters: [{ seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 2, maxX: 20, balls: 3 }],
     ...over,
   });
 }
@@ -129,7 +129,7 @@ describe("蓄力与出手", () => {
   });
 
   it("空着手按蓄力扔不出去,得先蹲下搓一颗", () => {
-    const a = sandbox({ fighters: [{ seat: 0, name: "朵朵", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
+    const a = sandbox({ fighters: [{ seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
     hold(a, charging(), 1.5);
     stepArena(a, DT, { 0: idleInput() });
     expect(a.balls.length).toBe(0);
@@ -153,7 +153,7 @@ describe("蓄力与出手", () => {
 
 describe("蹲下搓雪", () => {
   it("蹲够 0.6 秒手上多一颗,脚下的雪跟着变薄", () => {
-    const a = sandbox({ fighters: [{ seat: 0, name: "朵朵", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
+    const a = sandbox({ fighters: [{ seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
     const deep = depthAt(a.field, 6);
     const ev = hold(a, crouching(), SCOOP_TIME + 0.05);
     expect(ev.filter((e) => e.kind === "scoop").length).toBe(1);
@@ -184,7 +184,7 @@ describe("蹲下搓雪", () => {
   });
 
   it("走出去会把正在搓的那一颗弄散(站起来 = 打断)", () => {
-    const a = sandbox({ fighters: [{ seat: 0, name: "朵朵", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
+    const a = sandbox({ fighters: [{ seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
     hold(a, crouching(), SCOOP_TIME * 0.7);
     expect(a.fighters[0].hands.progress).toBeGreaterThan(0);
     stepArena(a, DT, { 0: idleInput() });
@@ -201,7 +201,7 @@ describe("掩体挡球", () => {
   it("雪墙挡下雪球并掉一层,砸三下就没了", () => {
     const a = sandbox({
       covers: [{ kind: "wall", x: 14, w: 2.4, h: 6, row: 0 }],
-      fighters: [{ seat: 0, name: "朵朵", x: 6, dir: 1, minX: 6, maxX: 6, balls: 3 }],
+      fighters: [{ seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 6, maxX: 6, balls: 3 }],
     });
     const wall = a.covers[0];
     expect(wall.hp).toBe(3);
@@ -220,7 +220,7 @@ describe("掩体挡球", () => {
   it("自己躲的那个掩体不挡自己的球:从墙后面探头往外扔天经地义", () => {
     const a = sandbox({
       covers: [{ kind: "wall", x: 4, w: 2.4, h: 6, row: 0 }],
-      fighters: [{ seat: 0, name: "朵朵", x: 7, dir: 1, minX: 7, maxX: 7, balls: 3 }],
+      fighters: [{ seat: 0, name: "鸭梨", x: 7, dir: 1, minX: 7, maxX: 7, balls: 3 }],
     });
     a.fighters[0].aim = 40;
     hold(a, charging(), 0.9);
@@ -233,7 +233,7 @@ describe("掩体挡球", () => {
 
 describe("被砸中就变雪人", () => {
   it("变雪人 1.5 秒不能动,正在搓的那一颗也散了——但没有血、没有淘汰", () => {
-    const a = sandbox({ fighters: [{ seat: 0, name: "朵朵", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
+    const a = sandbox({ fighters: [{ seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 2, maxX: 20, balls: 0 }] });
     const target = a.fighters[0];
     // 先蹲下搓半颗,搓到一半挨一发
     hold(a, crouching(), SCOOP_TIME * 0.6);
@@ -332,7 +332,7 @@ describe("188 关闯关", () => {
       windPlan: [0],
       covers: [],
       foes: [{ kind: "snowfoe", x: 15, y: 1.6, march: 3 }],
-      fighters: [{ seat: 0, name: "朵朵", x: 6, dir: 1, minX: 2, maxX: 8, balls: 0 }],
+      fighters: [{ seat: 0, name: "鸭梨", x: 6, dir: 1, minX: 2, maxX: 8, balls: 0 }],
     });
     hold(a, idleInput(), 6);
     expect(a.status).toBe("lose");

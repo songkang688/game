@@ -12,7 +12,7 @@ export { meta };
 // 一竿的节奏:瞄(看风)→ 蓄力(决定甩多远)→ 下沉 → 等咬钩 → 浮标下沉的 0.4 秒反应窗口
 // → 张力博弈(红区亮起还有 1.2 秒可以救)→ 上鱼小演出(可放生)。
 //
-// 全程没有伤害:线断了、鱼跑了都只是这一竿白费,朵朵和星星会接着给你打气。
+// 全程没有伤害:线断了、鱼跑了都只是这一竿白费,鸭梨和康康会接着给你打气。
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
 import { save } from "../../engine/save";
 import GUIDE from "./guide";
@@ -1190,7 +1190,7 @@ function createRun(host: HTMLElement, opts: RunOpts): Runner {
     released += 1;
     const out = releaseFish(caught.fish.id);
     opts.sfx("meow");
-    showText = `💧 ${caught.fish.name} 摆摆尾巴游走了${out.firstRelease ? ",朵朵给你记了一颗星星" : ""}。`;
+    showText = `💧 ${caught.fish.name} 摆摆尾巴游走了${out.firstRelease ? ",鸭梨给你记了一颗星星" : ""}。`;
     say(showText);
     opts.onRelease?.(caught.fish, out.firstRelease);
     refreshHud();

@@ -14,7 +14,7 @@ export const CHAPTERS: Chapter[] = [
   { name: "能量豆", emoji: "🔵", color: "#DCEEFF", desc: "能量豆一亮就反攻，连击 200 / 400 / 800 / 1600。", size: 24 },
   { name: "隧道风", emoji: "🌀", color: "#E3F7EC", desc: "多条隧道左右相通，穿过去会稍微慢一点。", size: 22 },
   { name: "迷雾迷宫", emoji: "🌫️", color: "#E9E4F7", desc: "视野变小，靠小地图记路。", size: 22 },
-  { name: "双人追逃", emoji: "👫", color: "#FFE0F0", desc: "星星操纵一只小幽灵，朵朵负责清豆。", size: 24 },
+  { name: "双人追逃", emoji: "👫", color: "#FFE0F0", desc: "康康操纵一只小幽灵，鸭梨负责清豆。", size: 24 },
   { name: "迷宫杯", emoji: "🏆", color: "#FFEFC2", desc: "全机制高速，把整张图吃干净。", size: 24 },
 ];
 
@@ -42,7 +42,7 @@ export interface LevelPlan {
   tunnels: number;
   powerPellets: number;
   fog: boolean;
-  /** 星星是否操纵一只小幽灵 */
+  /** 康康是否操纵一只小幽灵 */
   duoChase: boolean;
   stepMs: number;
   lives: number;

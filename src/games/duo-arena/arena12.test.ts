@@ -313,10 +313,10 @@ describe("1.2 平台接线与赛点", () => {
   });
 
   it("赛点提示语点名领先的那一位", () => {
-    expect(matchPointLine(0, 0, ["朵朵", "星星"])).toBeNull();
-    expect(matchPointLine(1, 0, ["朵朵", "星星"])).toContain("朵朵");
-    expect(matchPointLine(0, 1, ["朵朵", "星星"])).toContain("星星");
-    expect(matchPointLine(1, 1, ["朵朵", "星星"])).toContain("赛点");
+    expect(matchPointLine(0, 0, ["鸭梨", "康康"])).toBeNull();
+    expect(matchPointLine(1, 0, ["鸭梨", "康康"])).toContain("鸭梨");
+    expect(matchPointLine(0, 1, ["鸭梨", "康康"])).toContain("康康");
+    expect(matchPointLine(1, 1, ["鸭梨", "康康"])).toContain("赛点");
   });
 
   it("三局两胜赛制与既有胜负判定接得上", () => {

@@ -4,7 +4,7 @@ export { meta } from "./meta";
 // 三种玩法共用一套战斗界面：
 //   · 闯关：188 关八章战役，每关一条小路，路上有小怪、宝箱、小摊、岔路，章末是 Boss；
 //   · 无尽：无尽深渊，越往下越难，走不动了就「探险结束 · 回城休息」；
-//   · 对战：我的三人小队和星星的队伍自动接力，改配装再来一场。
+//   · 对战：我的三人小队和康康的队伍自动接力，改配装再来一场。
 import { meta } from "./meta";
 import {
   BAG_SLOTS,
@@ -1096,7 +1096,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     );
     addMode(
       "⚔️",
-      "对战 · 星星的队伍",
+      "对战 · 康康的队伍",
       `三对三接力，双方自动比拼。已挑战 ${save.arenaPlays} 次，赢了 ${save.arenaWins} 次。`,
       "linear-gradient(180deg,#eef7ff,#dcecff)",
       "arena"
@@ -1417,10 +1417,10 @@ export function mount(api: GameApi): { destroy: () => void } {
     };
   }
 
-  /* ---------------- 对战：星星的队伍 ---------------- */
+  /* ---------------- 对战：康康的队伍 ---------------- */
 
   function renderArena(): void {
-    view.appendChild(topBar("⚔️ 星星的队伍"));
+    view.appendChild(topBar("⚔️ 康康的队伍"));
     const host = el("div");
     view.appendChild(host);
     current = mountArena(host);
@@ -1460,7 +1460,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       dropRace();
       wrap.innerHTML = "";
       const intro = el("div", "bvp-card");
-      intro.appendChild(el("div", "bvp-h", "⚔️ 和星星的队伍比一场"));
+      intro.appendChild(el("div", "bvp-h", "⚔️ 和康康的队伍比一场"));
       intro.appendChild(
         el(
           "div",
@@ -1476,7 +1476,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       const theirs = buildRivalTeam(save.level, save.arenaWins, gearFactor(save));
       const grid = el("div", "bvp-team");
       grid.appendChild(teamCard("🌸 我的队伍", mine, "linear-gradient(180deg,#fff4f9,#ffe6f1)"));
-      grid.appendChild(teamCard("⭐ 星星的队伍", theirs, "linear-gradient(180deg,#f0f6ff,#e0ecff)"));
+      grid.appendChild(teamCard("👓 康康的队伍", theirs, "linear-gradient(180deg,#f0f6ff,#e0ecff)"));
       wrap.appendChild(grid);
 
       const row = el("div", "bvp-bar");
@@ -1506,7 +1506,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         el(
           "div",
           "bvp-sub",
-          "同一张迷宫，你和星星留下的影子各跑各的：先找到钥匙 🔑，再穿过门 🚪 冲到 🏁。" +
+          "同一张迷宫，你和康康留下的影子各跑各的：先找到钥匙 🔑，再穿过门 🚪 冲到 🏁。" +
             "影子跑的是最短路，但它会时不时犹豫一下——你只要不绕远路，就追得上。"
         )
       );

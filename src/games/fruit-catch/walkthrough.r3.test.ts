@@ -111,7 +111,7 @@ describe("接住小水果 · R3 · 三种玩法各玩到结算", () => {
     expect(duoDone(st)).toBe(true);
     expect(duoWinner(st)).toBe("doudou");
     const word = duoWord(st);
-    expect(word).toContain("朵朵");
+    expect(word).toContain("鸭梨");
     for (const w of BLAME_WORDS) expect(word, `不该说「${w}」`).not.toContain(w);
 
     // 打平也说得出话

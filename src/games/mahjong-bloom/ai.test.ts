@@ -21,9 +21,9 @@ import { parseTiles } from "./tiles";
 const T = (s: string): number => parseTiles(s)[0];
 
 const SEATS: TableOptions["seats"] = [
-  { name: "朵朵", tier: "pro" },
+  { name: "鸭梨", tier: "pro" },
   { name: "糯糯", tier: "normal" },
-  { name: "星星", tier: "hell" },
+  { name: "康康", tier: "hell" },
   { name: "云云", tier: "rookie" }
 ];
 
@@ -176,9 +176,9 @@ describe("整盘不会卡死", () => {
         dealer: g % 4,
         floor: g % 2 === 0 ? 8 : 1,
         seats: [
-          { name: "朵朵", tier: "rookie" },
+          { name: "鸭梨", tier: "rookie" },
           { name: "糯糯", tier: "normal" },
-          { name: "星星", tier: "pro" },
+          { name: "康康", tier: "pro" },
           { name: "云云", tier: "hell" }
         ]
       });

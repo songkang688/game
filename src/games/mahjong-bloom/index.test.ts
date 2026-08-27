@@ -295,7 +295,7 @@ describe("窄屏与动效红线", () => {
 });
 
 describe("键位", () => {
-  it("朵朵用 WASD 挑牌、F 打出、G 吃碰杠胡", () => {
+  it("鸭梨用 WASD 挑牌、F 打出、G 吃碰杠胡", () => {
     expect(keyAction("w")).toEqual({ who: "duo", kind: "up" });
     expect(keyAction("a")).toEqual({ who: "duo", kind: "left" });
     expect(keyAction("s")).toEqual({ who: "duo", kind: "down" });
@@ -304,7 +304,7 @@ describe("键位", () => {
     expect(keyAction("g")).toEqual({ who: "duo", kind: "act" });
   });
 
-  it("星星用方向键、L 打出、K 吃碰杠胡", () => {
+  it("康康用方向键、L 打出、K 吃碰杠胡", () => {
     expect(keyAction("ArrowLeft")).toEqual({ who: "star", kind: "left" });
     expect(keyAction("ArrowRight")).toEqual({ who: "star", kind: "right" });
     expect(keyAction("ArrowUp")).toEqual({ who: "star", kind: "up" });
@@ -643,9 +643,9 @@ describe("四人牌桌", () => {
   }
 
   const SOLO: LiveOptions["seats"] = [
-    { name: "朵朵", human: "duo" },
+    { name: "鸭梨", human: "duo" },
     { name: "糯糯", tier: "normal" },
-    { name: "星星", tier: "normal" },
+    { name: "康康", tier: "normal" },
     { name: "云云", tier: "normal" }
   ];
 
@@ -720,11 +720,11 @@ describe("四人牌桌", () => {
     live.destroy();
   });
 
-  it("双人同桌:朵朵和星星各坐一家,另两家是棋友", () => {
+  it("双人同桌:鸭梨和康康各坐一家,另两家是棋友", () => {
     const { host, live } = table([
-      { name: "朵朵", human: "duo" },
+      { name: "鸭梨", human: "duo" },
       { name: "糯糯", tier: "normal" },
-      { name: "星星", human: "star" },
+      { name: "康康", human: "star" },
       { name: "云云", tier: "normal" }
     ]);
     expect(live.state.seats.filter((s) => s.human).length).toBe(2);
@@ -733,14 +733,14 @@ describe("四人牌桌", () => {
     live.destroy();
   });
 
-  it("双人同桌时 WASD 只动朵朵、方向键只动星星", () => {
+  it("双人同桌时 WASD 只动鸭梨、方向键只动康康", () => {
     const { host, live } = table([
-      { name: "朵朵", human: "duo" },
+      { name: "鸭梨", human: "duo" },
       { name: "糯糯", tier: "normal" },
-      { name: "星星", human: "star" },
+      { name: "康康", human: "star" },
       { name: "云云", tier: "normal" }
     ]);
-    // 庄家是朵朵,现在轮到她;方向键是星星的,按了不该动朵朵的光标
+    // 庄家是鸭梨,现在轮到她;方向键是康康的,按了不该动鸭梨的光标
     const before = host.byClass("mj-cur").length;
     pressKey("ArrowLeft");
     expect(host.byClass("mj-cur").length).toBe(before);
@@ -802,7 +802,7 @@ describe("四人牌桌", () => {
 
 describe("无尽计分与档位文案", () => {
   it("赢一盘至少进一分,输了按实际花分算", () => {
-    const st = createTable({ seed: 7, floor: 8, seats: [{ name: "朵朵" }, {}, {}, {}].map((s) => ({ name: s.name ?? "棋友" })) });
+    const st = createTable({ seed: 7, floor: 8, seats: [{ name: "鸭梨" }, {}, {}, {}].map((s) => ({ name: s.name ?? "棋友" })) });
     st.result = {
       kind: "hu",
       winner: 0,
@@ -824,7 +824,7 @@ describe("无尽计分与档位文案", () => {
   });
 
   it("还没出结果就不加分", () => {
-    const st = createTable({ seed: 7, floor: 8, seats: [{ name: "朵朵" }, { name: "糯糯" }, { name: "星星" }, { name: "云云" }] });
+    const st = createTable({ seed: 7, floor: 8, seats: [{ name: "鸭梨" }, { name: "糯糯" }, { name: "康康" }, { name: "云云" }] });
     expect(endlessGain(st, 0)).toBe(0);
   });
 

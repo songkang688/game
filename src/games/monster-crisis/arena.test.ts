@@ -444,7 +444,7 @@ describe("四种模式都能打到结算", () => {
     expect(res.wavesCleared).toBeGreaterThan(0);
     expect([-1, 0, 1]).toContain(res.winner);
 
-    // 星星那边摆烂:先失守的是右边,赢家一定是朵朵
+    // 康康那边摆烂:先失守的是右边,赢家一定是鸭梨
     const lopsided = make();
     const res2 = runArena(lopsided, { acts: [true, false], maxSeconds: 600 });
     expect(res2.winner).toBe(0);

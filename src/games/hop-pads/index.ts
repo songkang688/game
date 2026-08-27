@@ -1111,7 +1111,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
 }
 
 // ---------------------------------------------------------------------------
-// 双人同屏:上下分屏,朵朵 F / 星星 L
+// 双人同屏:上下分屏,鸭梨 F / 康康 L
 // ---------------------------------------------------------------------------
 
 /** 双人一局跳多少座 */
@@ -1130,9 +1130,9 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     panel?.remove();
     panel = null;
     shell.body.innerHTML = "";
-    shell.chip.textContent = `👫 第 ${round} 局 · 朵朵 ${wins[0]} : ${wins[1]} 星星`;
+    shell.chip.textContent = `👫 第 ${round} 局 · 鸭梨 ${wins[0]} : ${wins[1]} 康康`;
     shell.say.textContent =
-      "上半屏是朵朵,按 F 或按住上半块屏幕;下半屏是星星,按 L 或按住下半块。蓄过头:朵朵按 G、星星按 K 收力。";
+      "上半屏是鸭梨,按 F 或按住上半块屏幕;下半屏是康康,按 L 或按住下半块。蓄过头:鸭梨按 G、康康按 K 收力。";
     shell.say.className = "hp-say";
 
     const seed = matchSeed(round + 500);
@@ -1146,15 +1146,15 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
         scores[0] === scores[1]
           ? `${scores[0]} 比 ${scores[1]},平手!再来一局。`
           : scores[0] > scores[1]
-            ? `朵朵 ${scores[0]} 分,星星 ${scores[1]} 分,这一局朵朵赢。`
-            : `星星 ${scores[1]} 分,朵朵 ${scores[0]} 分,这一局星星赢。`;
+            ? `鸭梨 ${scores[0]} 分,康康 ${scores[1]} 分,这一局鸭梨赢。`
+            : `康康 ${scores[1]} 分,鸭梨 ${scores[0]} 分,这一局康康赢。`;
       if (scores[0] > scores[1]) wins[0]++;
       else if (scores[1] > scores[0]) wins[1]++;
       api.addStars(1);
       panel = overPanel(
         stages[0]?.root ?? shell.body,
         "🏁 这一局结束",
-        `${line} 总比分 朵朵 ${wins[0]} : ${wins[1]} 星星。`,
+        `${line} 总比分 鸭梨 ${wins[0]} : ${wins[1]} 康康。`,
         "🔁 再来一局",
         () => {
           api.play("tap");
@@ -1169,8 +1169,8 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     shell.body.appendChild(wrap);
 
     const seats: Array<{ name: string; keys: string[]; cancelKeys: string[]; color: string }> = [
-      { name: "🌸 朵朵 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268" },
-      { name: "⭐ 星星 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA" },
+      { name: "🍐 鸭梨 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268" },
+      { name: "👓 康康 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA" },
     ];
     seats.forEach((seat, i) => {
       const st = createStage(wrap, {

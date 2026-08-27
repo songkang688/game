@@ -2,11 +2,11 @@ import { meta } from "./meta";
 export { meta };
 
 /**
- * 朵朵大战星星 —— 全明星弹飞式派对混战。
+ * 鸭梨大战康康 —— 全明星弹飞式派对混战。
  *
  * 五种模式共用同一个「擂台」组件：canvas 画场地、键盘 / 触屏出招、
  * 逻辑全部交给 battle.ts 的确定性状态机。
- *  · 双人对战：同屏两套键位，朵朵 WASD+F/G，星星 方向键+L/K
+ *  · 双人对战：同屏两套键位，鸭梨 WASD+F/G，康康 方向键+L/K
  *  · 人机混战：最多 4 人，小电脑三档
  *  · 团队赛：2v2，和队友一起把对面请出场
  *  · 无尽车轮战：赢一场换一个更强的对手
@@ -997,7 +997,7 @@ export function mount(api: GameApi): { destroy: () => void } {
   function showMenu(): void {
     clearView();
     const menu = el("div", "dvs-menu");
-    menu.appendChild(el("div", "dvs-title", "💥 朵朵大战星星 · 全明星弹飞混战"));
+    menu.appendChild(el("div", "dvs-title", "💥 鸭梨大战康康 · 全明星弹飞混战"));
     menu.appendChild(
       el(
         "div",
@@ -1008,7 +1008,7 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     const modes = el("div", "dvs-modes");
     const list: Array<[string, string, () => void]> = [
-      ["👫 双人对战", "同屏两套键位，朵朵 WASD+F/G，星星 方向键+L/K", () => showVersus()],
+      ["👫 双人对战", "同屏两套键位，鸭梨 WASD+F/G，康康 方向键+L/K", () => showVersus()],
       ["🤖 人机混战", "最多 4 人一起打，小电脑有轻松 / 正常 / 高手三档", () => showBrawl()],
       ["🤝 团队赛 2v2", "你和队友一队，配合把对面两位请出场", () => showTeam()],
       ["🙌 合作特训 3 课", "顶举和接应，两个人一起才做得到，一个人怎么按都过不了", () => showCoop()],
@@ -1029,8 +1029,8 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     const keys = el("div", "dvs-keys");
     keys.innerHTML =
-      "<b>键盘</b>：朵朵 <b>W A S D</b> 走动 + <b>F</b> 挥击 + <b>G</b> 重击；" +
-      "星星 <b>↑ ← ↓ →</b> 走动 + <b>L</b> 挥击 + <b>K</b> 重击；<b>Esc</b> 暂停。<br>" +
+      "<b>键盘</b>：鸭梨 <b>W A S D</b> 走动 + <b>F</b> 挥击 + <b>G</b> 重击；" +
+      "康康 <b>↑ ← ↓ →</b> 走动 + <b>L</b> 挥击 + <b>K</b> 重击；<b>Esc</b> 暂停。<br>" +
       "<b>手机 / 平板</b>：屏幕下方每人一组按键，和键盘完全一样，<b>🤝</b> 一个键就是接应。<br>" +
       "<b>配合</b>：队友踩在你头顶时按「上」把他<b>顶举</b>上去；队友飘到场边外面，按「下 + 重击」<b>接应</b>他回来。<br>" +
       "<b>小技巧</b>：轻击把对方的元气磨下去，等数字变红了再来一记重击；" +

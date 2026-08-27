@@ -4,7 +4,7 @@ export { meta };
 // 五子棋 1.2：
 //  · 解局学堂 188 —— 走平台的 188 关框架（关号 / 星级 / 攻略 / 跳关全归框架管），
 //    第 100–188 题是 1.2 重做的真解局，每题带解法分类；
-//  · 自由对战 —— 人机六档（菜鸟…地狱）+ 朵朵 VS 星星双人同屏；
+//  · 自由对战 —— 人机六档（菜鸟…地狱）+ 鸭梨 VS 康康双人同屏；
 //  · 连胜挑战 —— 从菜鸟起，赢一盘升一档，输一盘结束，最高连胜写平台 endlessBest。
 // 规则、AI、对局状态都在旁边的纯逻辑模块里，这个文件只做「装配 + 画面」。
 import {
@@ -255,7 +255,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
   }
 
   function tierLabel(): string {
-    return o.ai ? DIFFICULTY_NAME[o.ai] : "👫 朵朵 VS 星星";
+    return o.ai ? DIFFICULTY_NAME[o.ai] : "👫 鸭梨 VS 康康";
   }
 
   function refresh(): void {
@@ -269,7 +269,7 @@ function mountTable(host: HTMLElement, o: TableOpts): Table {
     } else if (o.puzzle) {
       turnEl.textContent = current === 1 ? `⚫ 还可以走 ${movesLeft} 步` : "⚪ 白棋防守中…";
     } else if (o.human === "both") {
-      turnEl.textContent = current === 1 ? "⚫ 该朵朵（黑棋）啦" : "⚪ 该星星（白棋）啦";
+      turnEl.textContent = current === 1 ? "⚫ 该鸭梨（黑棋）啦" : "⚪ 该康康（白棋）啦";
     } else {
       turnEl.textContent = current === 1 ? "⚫ 该黑棋啦" : "⚪ 该白棋啦";
     }
@@ -733,7 +733,7 @@ function mountFree(
       "🤝 和谁下（六档，从菜鸟到地狱）",
       [
         ...DIFFICULTIES.map((d) => ({ v: d, text: DIFFICULTY_NAME[d] })),
-        { v: "pvp", text: "👫 朵朵 VS 星星" },
+        { v: "pvp", text: "👫 鸭梨 VS 康康" },
       ],
       tier,
       (v) => {
@@ -790,10 +790,10 @@ function mountFree(
       ai,
       forbidden,
       hints: newHints("free"),
-      headline: ai ? DIFFICULTY_NAME[ai] : "👫 朵朵 VS 星星",
+      headline: ai ? DIFFICULTY_NAME[ai] : "👫 鸭梨 VS 康康",
       opening: ai
         ? `你执黑棋先下。${DIFFICULTY_BLURB[ai]}。提示每局 3 次，只圈一片区域哦。`
-        : "🌸 朵朵执黑先下，⭐ 星星执白，轮流点棋盘落子！",
+        : "🍐 鸭梨执黑先下，👓 康康执白，轮流点棋盘落子！",
       extras: [{ cls: "gmk-back", label: "🔧 换玩法", onClick: () => showSetup() }],
       onEnd: (r) => {
         const win = r.winner;
@@ -803,12 +803,12 @@ function mountFree(
           api.onWin(
             1,
             r.reason === "claim"
-              ? "⚪ 星星指出了黑棋的禁手，这一局星星赢！"
+              ? "⚪ 康康指出了黑棋的禁手，这一局康康赢！"
               : r.reason === "overline"
-                ? "⚫ 黑棋连成了六颗，长连禁手，这一局星星赢！"
+                ? "⚫ 黑棋连成了六颗，长连禁手，这一局康康赢！"
                 : win === 1
-                  ? "⚫ 朵朵连成五颗，赢啦！"
-                  : "⚪ 星星连成五颗，赢啦！"
+                  ? "⚫ 鸭梨连成五颗，赢啦！"
+                  : "⚪ 康康连成五颗，赢啦！"
           );
         } else if (win === 1) {
           const stars: 1 | 2 | 3 = ai === "novice" || ai === "easy" ? 2 : 3;

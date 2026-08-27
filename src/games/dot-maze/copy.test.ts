@@ -75,8 +75,8 @@ const BRAND_WORDS = [
   "sega",
 ];
 
-/** 本作原创的角色：朵朵、星星，和四只迷途小幽灵 */
-const ORIGINAL_NAMES = ["朵朵", "星星", "直直", "拐拐", "绕绕", "乱乱"];
+/** 本作原创的角色：鸭梨、康康，和四只迷途小幽灵 */
+const ORIGINAL_NAMES = ["鸭梨", "康康", "直直", "拐拐", "绕绕", "乱乱"];
 
 function checkCopy(where: string, text: string): void {
   for (const bad of HURT_WORDS) {
