@@ -62,7 +62,9 @@ const CSS = `
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
   touch-action:none;position:relative;}
 .bc-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
-.bc-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:800;white-space:nowrap;
+/* 比分与剩余车数走这个芯片。规格第八节要求字号 ≥ 14px:这是比赛里唯一
+   要用余光扫的数字,再小就得低头找,所以下面两个 @media 只收内边距,不动字号。 */
+.bc-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(120,110,170,.18);}
 .bc-chip-p0{color:#a8306a;background:#ffeaf3;}
 .bc-chip-p1{color:#28568f;background:#e6f0ff;}
@@ -86,8 +88,10 @@ const CSS = `
   pointer-events:none;background:linear-gradient(180deg,#ffffff,#e7e0f5);box-shadow:0 3px 7px rgba(90,80,140,.3);
   display:flex;align-items:center;justify-content:center;font-size:19px;}
 .bc-acts{display:flex;flex-direction:column;gap:6px;}
-.bc-acts button{border:none;border-radius:13px;height:44px;width:60px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;line-height:1.2;}
+/* 冲撞键与刹车键是手指全程按住的两颗,热区不许低于 44px(规格第八节)。
+   下面窄屏 / 矮屏两档只收宽度和字号,高度锁死 44。 */
+.bc-acts button{border:none;border-radius:13px;height:44px;min-height:44px;width:60px;font-size:13px;
+  font-weight:900;cursor:pointer;font-family:inherit;color:#fff;line-height:1.2;}
 .bc-acts button:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bc-acts--p0 button{background:linear-gradient(180deg,#f79ac0,#e8558f);box-shadow:0 3px 0 #bf3a70;}
 .bc-acts--p1 button{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 3px 0 #2f63aa;}
@@ -123,20 +127,20 @@ const CSS = `
 @media (max-width:420px){
   .bc-stick{width:92px;height:92px;}
   .bc-knob{width:38px;height:38px;margin:-19px 0 0 -19px;font-size:17px;}
-  .bc-acts button{height:38px;width:54px;font-size:12px;}
-  .bc-chip{font-size:11.5px;padding:3px 8px;}
+  .bc-acts button{height:44px;width:54px;font-size:12px;}
+  .bc-chip{padding:3px 8px;}
   .bc-pads{gap:9px;}
 }
 /* 手机竖屏一共 667 像素高,场地上面还压着标题栏。每一行都收一点,
    保证摇杆整块留在首屏里,不用一边滚屏一边躲对手。 */
 @media (max-height:720px){
   .bc-wrap{gap:5px;}
-  .bc-chip{font-size:11px;padding:2px 7px;}
+  .bc-chip{padding:2px 7px;}
   .bc-btn{padding:5px 11px;font-size:12px;}
   .bc-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
   .bc-stick{width:86px;height:86px;}
   .bc-knob{width:36px;height:36px;margin:-18px 0 0 -18px;}
-  .bc-acts button{height:35px;width:52px;font-size:11.5px;}
+  .bc-acts button{height:44px;width:52px;font-size:11.5px;}
 }
 @media (prefers-reduced-motion:reduce){
   .bc-btn:active,.bc-acts button:active,.bc-pick:active{transform:none;}
@@ -518,7 +522,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
 
   function layout(): void {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
-    const roomH = Math.max(200, (window.innerHeight || 700) - 300);
+    // 场地上下压着标题栏、HUD、提示语和摇杆那一排。摇杆旁边两颗键锁死 44px 热区
+    // 之后这一排比原来高了近 20px,预留值跟着让出来,免得矮屏上摇杆被挤出首屏。
+    const roomH = Math.max(200, (window.innerHeight || 700) - 320);
     scale = Math.min(avail / lv.field.w, roomH / lv.field.h);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cw = Math.round(lv.field.w * scale);

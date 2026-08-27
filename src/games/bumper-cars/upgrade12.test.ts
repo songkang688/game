@@ -5,6 +5,7 @@
 //   ① 恢复系数被夹在 0.6–0.8;② 挨重撞后 0.3 秒失控旋转;③ 蓄力强撞(前摇 + 冷却);
 //   ④ 三种场地机关(弹簧墙 / 旋转盘 / 油渍);⑤ 出界两段式(先打转两秒);⑥ 电脑车手四档。
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { AI_LABEL, AI_LEVELS, TRAITS, chooseCarAction, pickTarget, type AiLevel } from "./ai";
 import { buildLevel, buildWave, waveSkill } from "./levels";
 import {
@@ -570,5 +571,70 @@ describe("1.2 · 188 关里真的摆上了新机关", () => {
     expect(withSlick).toBeGreaterThan(0);
     expect(buildLevel(0).spinners.length).toBe(0);
     expect(buildLevel(0).slicks.length).toBe(0);
+  });
+});
+
+/**
+ * 1.2 监督修复员补的 360px 版面守门用例。
+ *
+ * 规格第八节写死两条硬指标:双人同屏时左右各一套控件、**热区 ≥ 44px**;
+ * 比分 / 剩余车数一行显示、**字号 ≥ 14px**。这两条此前一条断言都没有,
+ * 结果窄屏那一档把冲撞键收到了 38px、矮屏那一档收到了 35px,芯片一路缩到 11px。
+ * 已经改回来了,这里把它钉住:以后谁再为了挤版面去动这几个数,先在这儿变红。
+ */
+describe("360px 版面:热区与字号的硬指标", () => {
+  const css = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  /** 把 `.选择器{...}` 那一整块声明取出来(同一个选择器可能出现在多个 @media 里) */
+  function blocks(selector: string): string[] {
+    const out: string[] = [];
+    const needle = `${selector}{`;
+    let at = css.indexOf(needle);
+    while (at >= 0) {
+      const end = css.indexOf("}", at);
+      out.push(css.slice(at + needle.length, end));
+      at = css.indexOf(needle, end);
+    }
+    return out;
+  }
+
+  function numbers(decls: string[], prop: string): number[] {
+    const out: number[] = [];
+    for (const d of decls) {
+      for (const m of d.matchAll(new RegExp(`(?:^|[;\\s])${prop}\\s*:\\s*([\\d.]+)px`, "g"))) {
+        out.push(Number(m[1]));
+      }
+    }
+    return out;
+  }
+
+  it("冲撞键 / 刹车键在每一档屏幕下都不低于 44px", () => {
+    const decls = blocks(".bc-acts button");
+    expect(decls.length, "找不到动作键的样式").toBeGreaterThanOrEqual(3);
+    const heights = numbers(decls, "height");
+    expect(heights.length).toBeGreaterThanOrEqual(3);
+    for (const h of heights) expect(h, `动作键高度 ${h}px 低于 44px 热区`).toBeGreaterThanOrEqual(44);
+    for (const w of numbers(decls, "width")) {
+      expect(w, `动作键宽度 ${w}px 低于 44px 热区`).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  it("摇杆本体在最窄的一档也还有 86px,够放下一根手指", () => {
+    const sizes = numbers(blocks(".bc-stick"), "width");
+    expect(sizes.length).toBeGreaterThanOrEqual(3);
+    for (const s of sizes) expect(s, `摇杆 ${s}px 太小`).toBeGreaterThanOrEqual(86);
+  });
+
+  it("比分 / 剩余车数的芯片字号在每一档都不小于 14px", () => {
+    const fonts = numbers(blocks(".bc-chip"), "font-size");
+    expect(fonts.length, "芯片一条字号都没写").toBeGreaterThanOrEqual(1);
+    for (const f of fonts) expect(f, `芯片字号 ${f}px 小于 14px`).toBeGreaterThanOrEqual(14);
+  });
+
+  it("窄屏 / 矮屏两档 @media 都还在,只是不再拿热区和字号开刀", () => {
+    expect(css).toContain("@media (max-width:420px)");
+    expect(css).toContain("@media (max-height:720px)");
+    // 矮屏那一档仍然要为摇杆让出竖向空间,场地的预留值不能改回去
+    expect(css).toMatch(/window\.innerHeight \|\| 700\) - 320/);
   });
 });

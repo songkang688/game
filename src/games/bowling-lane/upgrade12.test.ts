@@ -4,6 +4,7 @@
 // 记分的六种边界、真连锁、三段式可撤销、八章各有花样、三档 AI 的高斯手抖、
 // 无尽一档一档抬难度、伪 2.5D 投影与俯视坐标互转可逆。
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { save } from "../../engine/save";
 import {
   ALL_LEVELS,
@@ -546,5 +547,86 @@ describe("1.2 伪 2.5D 投影", () => {
     const b = simulateShot({ standing: FULL(), oil: 0.4 }, POCKET_SHOT);
     expect(a.count).toBe(b.count);
     expect(laneProject(LANE_W / 2, HEAD_Y, small).k).toBeCloseTo(laneProject(LANE_W / 2, HEAD_Y, big).k, 6);
+  });
+});
+
+/**
+ * 1.2 监督修复员补的 360px 版面守门用例。
+ *
+ * 规格第八节写死了两条硬指标:蓄力 / 落点 / 旋转三个控件**热区 ≥ 44px 且不重叠**;
+ * 记分表横向可滑动、当前格高亮、**字号 ≥ 14px**。这两条此前一条断言都没有,
+ * 结果落点微调键只有 40px,记分表的球标 12px、总分 11px,窄屏还要再收一档。
+ * 已经改回来了,这里把它钉住。
+ */
+describe("360px 版面:热区、字号与横向可滑", () => {
+  const css = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  function blocks(selector: string): string[] {
+    const out: string[] = [];
+    const needle = `${selector}{`;
+    let at = css.indexOf(needle);
+    while (at >= 0) {
+      const end = css.indexOf("}", at);
+      out.push(css.slice(at + needle.length, end));
+      at = css.indexOf(needle, end);
+    }
+    return out;
+  }
+
+  function numbers(decls: string[], prop: string): number[] {
+    const out: number[] = [];
+    for (const d of decls) {
+      for (const m of d.matchAll(new RegExp(`(?:^|[;\\s])${prop}\\s*:\\s*([\\d.]+)px`, "g"))) {
+        out.push(Number(m[1]));
+      }
+    }
+    return out;
+  }
+
+  it("停指针 / 左右微调 / 退回一段三颗控件的热区都不低于 44px", () => {
+    const roll = blocks(".bl-roll");
+    expect(roll.length).toBeGreaterThanOrEqual(1);
+    expect(numbers(roll, "min-height")[0], "出球键没锁 44px 热区").toBeGreaterThanOrEqual(44);
+
+    const nudge = blocks(".bl-nudge button");
+    expect(nudge.length).toBeGreaterThanOrEqual(1);
+    for (const h of numbers(nudge, "height")) {
+      expect(h, `落点微调键 ${h}px 低于 44px 热区`).toBeGreaterThanOrEqual(44);
+    }
+    for (const w of numbers(nudge, "width")) {
+      expect(w, `落点微调键 ${w}px 低于 44px 热区`).toBeGreaterThanOrEqual(44);
+    }
+
+    const undo = blocks(".bwl-undo");
+    expect(undo.length).toBeGreaterThanOrEqual(1);
+    for (const h of numbers(undo, "height")) {
+      expect(h, `撤销键 ${h}px 低于 44px 热区`).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  it("比分芯片与记分表的数字在每一档屏幕下都不小于 14px", () => {
+    const chip = numbers(blocks(".bl-chip"), "font-size");
+    expect(chip.length, "芯片一条字号都没写").toBeGreaterThanOrEqual(1);
+    for (const f of chip) expect(f, `比分芯片 ${f}px 小于 14px`).toBeGreaterThanOrEqual(14);
+
+    for (const sel of [".bl-fr-m", ".bl-fr-s"]) {
+      const fonts = numbers(blocks(sel), "font-size");
+      expect(fonts.length, `${sel} 一条字号都没写`).toBeGreaterThanOrEqual(1);
+      for (const f of fonts) expect(f, `${sel} 的 ${f}px 小于 14px`).toBeGreaterThanOrEqual(14);
+    }
+  });
+
+  it("记分表横向可滑、当前格有高亮:字号放大之后这两条更要成立", () => {
+    const card = blocks(".bl-card")[0] ?? "";
+    expect(card, "记分表不能横向滑动").toContain("overflow-x:auto");
+    expect(card, "记分表被换行了,滑动就没意义了").toContain("flex-wrap:nowrap");
+    expect(blocks(".bl-fr-now").length, "当前格没有高亮样式").toBeGreaterThanOrEqual(1);
+    expect(blocks(".bl-chip-now").length, "当前投球的人没有高亮样式").toBeGreaterThanOrEqual(1);
+  });
+
+  it("窄屏 / 矮屏两档 @media 都还在,只是不再拿热区和字号开刀", () => {
+    expect(css).toContain("@media (max-width:420px)");
+    expect(css).toContain("@media (max-height:720px)");
+    expect(css).toMatch(/window\.innerHeight \|\| 700\) - 386/);
   });
 });

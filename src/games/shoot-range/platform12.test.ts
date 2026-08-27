@@ -9,6 +9,7 @@
  * 用例里一律用 `at()` 把「场地上的某个点」折算成手指的 client 坐标，不写死像素。
  */
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { save } from "../../engine/save";
 import type { GameApi } from "../level99";
 import {
@@ -648,5 +649,52 @@ describe("shoot-range 1.2 · 360px 与样式红线", () => {
     expect(targetLegend().join(" ")).toContain("彩虹靶");
     expect(targetLegend().join(" ")).toContain("花朵靶");
     expect(feelNote()).toContain("蓄力");
+  });
+});
+
+/**
+ * 1.2 监督修复员补的 360px 热区守门用例。
+ *
+ * 这一款的版面本来就是合规的(`--k` 单人 46px、双人与窄屏 44px、
+ * 芯片与提示语一律 14px),但此前**一条断言都没有** —— 合规靠的是当时写代码的人细心,
+ * 不是靠用例兜着。补上,免得以后有人为了挤版面把 `--k` 调到 40 都没人拦。
+ */
+describe("360px 热区与字号:双人同屏时两套控件各自够大", () => {
+  const css = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  function values(prop: string): number[] {
+    const out: number[] = [];
+    for (const m of css.matchAll(new RegExp(`${prop}\\s*:\\s*([\\d.]+)px`, "g"))) out.push(Number(m[1]));
+    return out;
+  }
+
+  it("虚拟键盘的格子边长 `--k` 在每一档下都不低于 44px", () => {
+    const ks = values("--k");
+    expect(ks.length, "一条 --k 都没有").toBeGreaterThanOrEqual(3);
+    for (const k of ks) expect(k, `虚拟键格子 ${k}px 低于 44px 热区`).toBeGreaterThanOrEqual(44);
+    // 双人同屏那一档单独写过一次:两套控件并排也不许缩水
+    expect(css).toContain('.shr-pads[data-players="2"]{--k:44px;}');
+    // 格子是用 --k 铺出来的,不是各写一个死数
+    expect(css).toContain("grid-template-columns:repeat(3,var(--k))");
+    expect(css).toContain("grid-auto-rows:var(--k)");
+  });
+
+  it("HUD 芯片、提示语、准星标题的字号都不小于 14px", () => {
+    for (const sel of [".shr-chip", ".shr-tip", ".shr-pad-name"]) {
+      const at = css.indexOf(`${sel}{`);
+      expect(at, `找不到 ${sel}`).toBeGreaterThan(0);
+      const decl = css.slice(at, css.indexOf("}", at));
+      const m = decl.match(/font-size:\s*([\d.]+)px/);
+      expect(m, `${sel} 没写字号`).not.toBeNull();
+      expect(Number(m![1]), `${sel} 的字号小于 14px`).toBeGreaterThanOrEqual(14);
+    }
+  });
+
+  it("窄屏那一档只收内边距,不动热区字号", () => {
+    const at = css.indexOf("@media (max-width:420px)");
+    expect(at).toBeGreaterThan(0);
+    const block = css.slice(at, css.indexOf("}\n@media", at) + 1);
+    expect(block).toContain("--k:44px");
+    expect(block, "窄屏档不该再压字号").not.toMatch(/font-size/);
   });
 });

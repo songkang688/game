@@ -74,7 +74,9 @@ const CSS = `
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
   touch-action:manipulation;position:relative;width:100%;}
 .bl-hud{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;align-items:center;width:100%;}
-.bl-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:800;white-space:nowrap;
+/* 比分芯片与记分表是这一款唯二要读数字的地方,规格第八节写着字号 ≥ 14px:
+   下面窄屏 / 矮屏两档只收内边距,不动字号。 */
+.bl-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;white-space:nowrap;
   box-shadow:0 2px 5px rgba(110,120,170,.18);}
 .bl-chip-p0{color:#a8306a;background:#ffeaf3;}
 .bl-chip-p1{color:#28568f;background:#e6f0ff;}
@@ -88,12 +90,12 @@ const CSS = `
 .bl-lane{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(100,110,160,.22);line-height:0;}
 .bl-lane canvas{display:block;}
 .bl-card{display:flex;gap:2px;justify-content:center;flex-wrap:nowrap;width:100%;overflow-x:auto;padding-bottom:2px;}
-.bl-fr{background:#fff;border-radius:8px;min-width:30px;flex:0 0 auto;text-align:center;
+.bl-fr{background:#fff;border-radius:8px;min-width:36px;flex:0 0 auto;text-align:center;
   box-shadow:0 1px 3px rgba(110,120,170,.2);padding:1px 0 2px;}
 .bl-fr-now{outline:2px solid #ffb43c;}
 .bl-fr-n{font-size:9px;font-weight:800;color:#9a93b8;line-height:1.2;}
-.bl-fr-m{font-size:12px;font-weight:900;letter-spacing:1px;line-height:1.25;min-height:15px;}
-.bl-fr-s{font-size:11px;font-weight:800;color:#5d5786;line-height:1.2;min-height:13px;}
+.bl-fr-m{font-size:14px;font-weight:900;letter-spacing:1px;line-height:1.25;min-height:18px;}
+.bl-fr-s{font-size:14px;font-weight:800;color:#5d5786;line-height:1.2;min-height:17px;}
 .bl-gauges{display:flex;flex-direction:column;gap:4px;width:100%;max-width:520px;}
 .bl-gauge{position:relative;height:20px;border-radius:999px;background:#efecf8;overflow:hidden;
   box-shadow:inset 0 2px 4px rgba(110,110,160,.18);}
@@ -107,16 +109,17 @@ const CSS = `
 .bl-gauge--idle{opacity:.42;}
 .bl-tip{font-size:12.5px;font-weight:700;line-height:1.5;text-align:center;max-width:620px;color:#645e8c;
   background:#ffffffcc;border-radius:12px;padding:5px 10px;}
+/* 三段式的三颗控件(停指针 / 左右微调 / 退回一段)热区一律 ≥ 44px。 */
 .bl-roll{border:none;border-radius:18px;padding:12px 30px;font-size:17px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f79ac0,#e8558f);box-shadow:0 4px 0 #bf3a70;
-  min-width:190px;}
+  min-width:190px;min-height:44px;}
 .bl-roll:active{transform:translateY(2px);box-shadow:0 2px 0 #bf3a70;}
 .bl-roll:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-roll--p1{background:linear-gradient(180deg,#8db6ec,#3f7fd6);box-shadow:0 4px 0 #2f63aa;}
 .bl-roll--p1:active{box-shadow:0 2px 0 #2f63aa;}
 .bl-roll[disabled]{opacity:.5;cursor:default;transform:none;}
 .bl-nudge{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;}
-.bl-nudge button{border:none;border-radius:14px;width:48px;height:40px;font-size:17px;font-weight:900;
+.bl-nudge button{border:none;border-radius:14px;width:48px;height:44px;min-height:44px;font-size:17px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#4a4270;background:#ffffffe0;box-shadow:0 3px 0 rgba(130,130,180,.35);}
 .bl-nudge button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(130,130,180,.35);}
 .bl-nudge button:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -158,9 +161,9 @@ const CSS = `
 .bwl-twist{background:#fff7e2;color:#8a6a24;}
 .bwl-legend{font-size:11.5px;font-weight:800;color:#7b6f9e;text-align:center;line-height:1.5;max-width:620px;}
 @media (max-width:420px){
-  .bl-chip{font-size:11.5px;padding:3px 8px;}
-  .bl-fr{min-width:26px;}
-  .bl-fr-m{font-size:11px;letter-spacing:0;}
+  .bl-chip{padding:3px 8px;}
+  .bl-fr{min-width:32px;}
+  .bl-fr-m{letter-spacing:0;}
   .bl-roll{min-width:150px;padding:11px 22px;font-size:16px;}
   .bwl-legend{font-size:11px;}
   .bwl-undo{min-width:46px;padding:0 6px;}
@@ -168,7 +171,7 @@ const CSS = `
 /* 手机竖屏统共 667 像素高,球道上面还压着标题栏,每一行都收一点 */
 @media (max-height:720px){
   .bl-wrap{gap:5px;}
-  .bl-chip{font-size:11px;padding:2px 7px;}
+  .bl-chip{padding:2px 7px;}
   .bl-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
   .bl-gauge{height:18px;}
   .bl-needle{height:16px;}
@@ -352,8 +355,9 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
 
   function layout(): void {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 520));
-    // 上下还压着 HUD、记分牌、三条指针和按钮,球道最多吃掉这么高
-    const roomH = clamp((window.innerHeight || 700) - 372, 150, 460);
+    // 上下还压着 HUD、记分牌、三条指针和按钮,球道最多吃掉这么高。
+    // 记分表字号提到 14px、落点微调键补到 44px 热区之后这几行各高了一点,预留值跟着让出来。
+    const roomH = clamp((window.innerHeight || 700) - 386, 150, 460);
     const w = Math.round(avail);
     const h = Math.round(Math.min(roomH, w * 1.25));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
