@@ -228,9 +228,9 @@ export const WQ_CSS = `
 .wq-btn.wq-on{background:#F2E3C2;color:#7A5A26;}
 .wq-btn:disabled{opacity:.5;cursor:default;}
 .wq-btn:focus-visible,.wq-open:focus-visible,.wq-canvas:focus-visible{outline:3px solid #3F3520;outline-offset:3px;}
-.wq-msg{text-align:center;font-size:14px;font-weight:800;color:#6A5A42;min-height:22px;line-height:1.6;margin-top:8px;
+.wq-msg{text-align:center;font-size:16px;font-weight:800;color:#6A5A42;min-height:22px;line-height:1.6;margin-top:8px;
   overflow-wrap:anywhere;}
-.wq-note{text-align:center;font-size:13px;font-weight:700;color:#8A7A5E;line-height:1.6;margin:6px auto 0;max-width:520px;
+.wq-note{text-align:center;font-size:16px;font-weight:700;color:#8A7A5E;line-height:1.6;margin:6px auto 0;max-width:520px;
   overflow-wrap:anywhere;}
 .wq-rows{background:#ffffffcc;border-radius:12px;padding:8px 10px;font-size:13px;font-weight:700;color:#6A5A42;
   line-height:1.7;margin:8px auto 0;max-width:520px;overflow-wrap:anywhere;}
@@ -246,8 +246,6 @@ export const WQ_CSS = `
   .wq-chip{font-size:13px;padding:5px 9px;}
   .wq-btn{font-size:13px;padding:8px 11px;}
   .wq-open{font-size:14px;padding:9px 13px;}
-  .wq-msg{font-size:13px;}
-  .wq-note{font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){
   .wq-canvas{transition:none;}

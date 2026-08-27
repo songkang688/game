@@ -114,7 +114,7 @@ const CSS = `
 .se-btn-go{background:#F3B27A;color:#5c3208;box-shadow:0 3px 0 #D2905A;}
 .se-btn-sm{min-width:62px;min-height:44px;font-size:14px;padding:0 10px;}
 .se-btn:focus-visible,.se-tile:focus-visible{outline:3px solid #6b3d0d;outline-offset:2px;}
-.se-msg{text-align:center;min-height:1.6em;color:#7a5230;font-weight:800;margin-top:8px;font-size:14px;
+.se-msg{text-align:center;min-height:1.6em;color:#7a5230;font-weight:800;margin-top:8px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 .se-drawer{margin-top:10px;background:#fff;border-radius:14px;padding:8px;box-shadow:0 2px 8px rgba(200,170,120,.25);}
 .se-drawer-h{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;
@@ -148,7 +148,6 @@ const CSS = `
   .se-badge{font-size:13px;padding:4px 8px;}
   .se-seat{flex:1 1 46%;font-size:13px;}
   .se-btn{min-width:72px;font-size:15px;padding:0 8px;}
-  .se-msg{font-size:13px;}
   .se-deed{flex:1 1 100%;font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){

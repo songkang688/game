@@ -63,7 +63,7 @@ const CSS = `
   font-size:13px;font-weight:800;color:#5b4a86;line-height:1.5;max-width:44%;}
 .oa-board summary{cursor:pointer;font-size:13px;}
 .oa-me{color:#a8347a;}
-.oa-msg{text-align:center;min-height:20px;color:#6b53a8;font-weight:800;margin-top:6px;font-size:14px;
+.oa-msg{text-align:center;min-height:20px;color:#6b53a8;font-weight:800;margin-top:6px;font-size:16px;line-height:1.45;
   overflow-wrap:anywhere;}
 .oa-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .oa-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;

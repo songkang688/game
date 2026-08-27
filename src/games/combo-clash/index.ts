@@ -77,7 +77,7 @@ const CSS = `
 .cc-dots b{color:#E0568F;}
 .cc-combo{font-size:13px;font-weight:800;color:#8a5aa8;min-height:18px;overflow-wrap:anywhere;}
 .cc-canvas{width:100%;height:auto;display:block;border-radius:14px;background:#FFF7FC;touch-action:none;}
-.cc-msg{text-align:center;min-height:20px;color:#7a4a86;font-weight:800;margin-top:6px;font-size:14px;
+.cc-msg{text-align:center;min-height:20px;color:#7a4a86;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 .cc-pad{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap;}
 .cc-stick{width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.6);position:relative;
@@ -110,7 +110,7 @@ const CSS = `
 .cc-face em{font-style:normal;font-size:22px;line-height:1;}
 .cc-face span{font-size:13px;font-weight:900;color:#7a4a86;}
 .cc-face i{font-style:normal;font-size:13px;color:#9a7ba8;}
-.cc-note{text-align:center;font-size:13px;font-weight:700;color:#8a6a9a;line-height:1.6;overflow-wrap:anywhere;
+.cc-note{text-align:center;font-size:16px;font-weight:700;color:#8a6a9a;line-height:1.6;overflow-wrap:anywhere;
   margin:6px auto;max-width:520px;}
 .cc-over{text-align:center;padding:22px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(190,150,190,.3);}
 .cc-over-t{font-size:21px;font-weight:900;color:#8a4a76;margin-bottom:8px;}
@@ -122,7 +122,6 @@ const CSS = `
 @media (max-width:360px){
   .cc-name{font-size:13px;}
   .cc-timer{font-size:19px;}
-  .cc-msg{font-size:13px;}
   .cc-stick{width:96px;height:96px;}
   .cc-btn{min-width:56px;min-height:56px;font-size:15px;}
   .cc-open{padding:9px 13px;font-size:14px;}

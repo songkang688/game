@@ -136,7 +136,7 @@ export const CSS = `
   cursor:pointer;background:#fff;color:#37627f;box-shadow:0 2px 6px rgba(120,160,200,.3);padding:0 8px;line-height:1.3;}
 .fc-pick-on{outline:3px solid #2E80BC;}
 .fc-pick:disabled{opacity:.4;cursor:default;}
-.fc-msg{text-align:center;min-height:2.8em;color:#3a5a72;font-weight:800;margin-top:6px;font-size:13px;
+.fc-msg{text-align:center;min-height:2.8em;color:#3a5a72;font-weight:800;margin-top:6px;font-size:16px;
   line-height:1.5;overflow-wrap:anywhere;}
 .fc-goal{text-align:center;font-size:13px;font-weight:800;color:#2f6b96;line-height:1.5;margin-bottom:6px;
   overflow-wrap:anywhere;}

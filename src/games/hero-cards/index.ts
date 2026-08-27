@@ -108,7 +108,7 @@ export const HC_CSS = `
 .hc-btn:disabled{opacity:.45;cursor:default;}
 .hc-btn-go{background:#F5A97A;color:#5c2a08;box-shadow:0 3px 0 #D2854F;}
 .hc-btn:focus-visible,.hc-card:focus-visible,.hc-seat:focus-visible{outline:3px solid #6b3210;outline-offset:2px;}
-.hc-msg{text-align:center;min-height:1.6em;font-size:14px;font-weight:800;color:#8a5238;margin-top:6px;
+.hc-msg{text-align:center;min-height:1.6em;font-size:16px;font-weight:800;color:#8a5238;margin-top:6px;
   line-height:1.5;overflow-wrap:anywhere;}
 .hc-fly{position:absolute;font-size:15px;font-weight:900;color:#8a4318;background:#fff;border-radius:8px;
   padding:2px 6px;pointer-events:none;z-index:6;box-shadow:0 2px 6px rgba(190,130,100,.35);
@@ -140,7 +140,6 @@ export const HC_CSS = `
   .hc-card{width:48px;min-height:70px;}
   .hc-card-name{font-size:13px;}
   .hc-btn{min-width:74px;font-size:15px;padding:0 8px;}
-  .hc-msg{font-size:13px;}
   .hc-log{font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){

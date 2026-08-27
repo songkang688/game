@@ -111,7 +111,7 @@ export const MG_CSS = `
 .mg-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #E3C280;}
 .mg-btn.mg-star{background:#E4DDFB;color:#4c3f85;box-shadow:0 3px 0 #C2B7EC;}
 .mg-btn:focus-visible,.mg-open:focus-visible,.mg-back:focus-visible{outline:3px solid #4a3a10;outline-offset:3px;}
-.mg-msg{text-align:center;min-height:20px;color:#7a5f2e;font-weight:800;margin-top:6px;font-size:14px;
+.mg-msg{text-align:center;min-height:20px;color:#7a5f2e;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 /* 只给读屏听的一行:看不见、不占位,但 aria-live 会把盘面的变化念出来 */
 .mg-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;
@@ -134,7 +134,6 @@ export const MG_CSS = `
   .mg-wrap{padding:6px;}
   .mg-badge{font-size:13px;padding:4px 8px;}
   .mg-btn{min-width:48px;padding:0 6px;}
-  .mg-msg{font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){
   .mg-tile{transition:none;}

@@ -77,7 +77,7 @@ const CSS = `
 .sr-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #97CC88;}
 .sr-btn.sr-star{background:#CFE3FA;color:#2f4a75;box-shadow:0 3px 0 #A6C4E8;}
 .sr-btn:focus-visible{outline:3px solid #245c38;outline-offset:3px;}
-.sr-msg{text-align:center;min-height:20px;color:#3f7a52;font-weight:800;margin-top:6px;font-size:14px;
+.sr-msg{text-align:center;min-height:20px;color:#3f7a52;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 .sr-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .sr-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
@@ -103,7 +103,6 @@ const CSS = `
   .sr-badge{font-size:13px;padding:4px 8px;}
   .sr-board{font-size:12px;max-width:54%;top:60px;}
   .sr-btn{min-width:74px;font-size:14px;padding:0 10px;}
-  .sr-msg{font-size:13px;}
 }
 `;
 

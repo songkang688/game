@@ -310,9 +310,9 @@ export const MG_CSS = `
 .mg-btn.mg-on{background:#DCEFC9;color:#37642A;}
 .mg-btn:disabled{opacity:.5;cursor:default;}
 .mg-btn:focus-visible,.mg-open:focus-visible,.mg-cell:focus-visible{outline:3px solid #274C1C;outline-offset:2px;}
-.mg-msg{text-align:center;font-size:14px;font-weight:800;color:#41633A;min-height:22px;line-height:1.6;margin-top:8px;
+.mg-msg{text-align:center;font-size:16px;font-weight:800;color:#41633A;min-height:22px;line-height:1.6;margin-top:8px;
   overflow-wrap:anywhere;}
-.mg-note{text-align:center;font-size:13px;font-weight:700;color:#5B7A4C;line-height:1.6;margin:6px auto 0;
+.mg-note{text-align:center;font-size:16px;font-weight:700;color:#5B7A4C;line-height:1.6;margin:6px auto 0;
   max-width:520px;overflow-wrap:anywhere;}
 .mg-setup{display:flex;flex-direction:column;gap:8px;align-items:center;}
 .mg-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;}

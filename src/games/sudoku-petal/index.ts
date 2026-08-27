@@ -234,7 +234,7 @@ export const SP_CSS = `
 .sp-tool:active{transform:translateY(2px);box-shadow:0 1px 0 #F0C4D8;}
 .sp-tool.sp-on{background:#D9F0DC;color:#2f6b3c;box-shadow:0 3px 0 #AFD9B6;}
 .sp-key:focus-visible,.sp-tool:focus-visible,.sp-open:focus-visible,.sp-back:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
-.sp-msg{text-align:center;min-height:20px;color:#5f4a8a;font-weight:800;margin-top:6px;font-size:14px;
+.sp-msg{text-align:center;min-height:20px;color:#5f4a8a;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;max-width:340px;}
 .sp-hintbox{background:#FFFBEA;border-radius:12px;padding:8px 10px;font-size:14px;font-weight:700;color:#7a5f1e;
   line-height:1.6;max-width:340px;text-align:left;}

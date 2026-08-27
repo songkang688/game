@@ -197,6 +197,39 @@ describe("360×640 走查回落:说明文字不许小过正文下限", () => {
   it("长蛇争霸的皮肤按钮是控件,不小于 14px", () => {
     expect(fontSizeOf(SNAKE_TS, ".sr-skin")).toBeGreaterThanOrEqual(MIN_CONTROL_PX);
   });
+
+  // 12 款各有一行「刚才发生了什么」的状态文字(`.xx-msg`),外加几款的补充说明
+  // (`.xx-note`)。这是孩子玩的时候盯得最多的一行,而 8 款还在 360px 的媒体查询里
+  // 把它**再调小到 13px** —— 360×640 正是验收视口,越窄越小是反的。
+  const GAME_BODY_CLASSES: [string, string[]][] = [
+    ["orb-arena", [".oa-msg"]],
+    ["snake-royale", [".sr-msg"]],
+    ["block-drop", [".bd-msg"]],
+    ["combo-clash", [".cc-msg", ".cc-note"]],
+    ["mahjong-bloom", [".mj-msg"]],
+    ["star-estate", [".se-msg"]],
+    ["hero-cards", [".hc-msg"]],
+    ["weiqi-garden", [".wq-msg", ".wq-note"]],
+    ["flight-chess", [".fc-msg"]],
+    ["merge-2048", [".mg-msg"]],
+    ["mine-garden", [".mg-msg", ".mg-note"]],
+    ["sudoku-petal", [".sp-msg"]]
+  ];
+
+  for (const [id, classes] of GAME_BODY_CLASSES) {
+    it(`${id} 的状态文字在窄屏也不小过 ${MIN_BODY_PX}px`, () => {
+      const src = readFileSync(new URL(`../games/${id}/index.ts`, import.meta.url), "utf8");
+      for (const cls of classes) {
+        // fontSizeOf 取的是层叠后**最后一条**,窄屏媒体查询写在后面,
+        // 所以这一条同时管住了基准值和 360px 分支
+        const px = fontSizeOf(src, cls);
+        expect(px, `${id} 里找不到 ${cls}`).not.toBeNull();
+        expect(px, `${id} 的 ${cls} 是状态文字,360px 上不能小过 ${MIN_BODY_PX}px`).toBeGreaterThanOrEqual(
+          MIN_BODY_PX
+        );
+      }
+    });
+  }
 });
 
 describe("360×640 走查回落:首页搜索框不许顶出屏幕", () => {

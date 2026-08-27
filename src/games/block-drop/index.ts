@@ -85,7 +85,7 @@ const CSS = `
 .bd-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #A2BEE8;}
 .bd-btn.bd-star{background:#F7D9E4;color:#7a3a58;box-shadow:0 3px 0 #E3AFC4;}
 .bd-btn:focus-visible{outline:3px solid #24406b;outline-offset:3px;}
-.bd-msg{text-align:center;min-height:20px;color:#3f5b8a;font-weight:800;margin-top:6px;font-size:14px;
+.bd-msg{text-align:center;min-height:20px;color:#3f5b8a;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 .bd-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 .bd-open{border:none;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
@@ -109,7 +109,6 @@ const CSS = `
   .bd-side{flex-direction:row;min-width:0;gap:4px;}
   .bd-side .bd-mini{flex:1 1 0;min-width:0;}
   .bd-mini{font-size:13px;padding:3px 4px;}
-  .bd-msg{font-size:13px;}
 }
 `;
 
