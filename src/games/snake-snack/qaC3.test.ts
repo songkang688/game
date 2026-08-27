@@ -77,13 +77,18 @@ describe("档C R3 · snake-snack · 188 关一关不漏", () => {
   });
 
   /**
-   * 【C3-01 轻微 · 待修】1.0 的第 4 / 6 章镜像生成墙的时候没过 `dedupe()`,
-   * 同一格被写进 `walls` 两遍。碰撞用的是 `wallSet()`,所以**玩起来看不出来**,
-   * 但这一列数据是脏的:`walls.length` 比真实墙数多,画的时候同一格画两遍。
-   * 这里先把现状钉死(哪几关、脏多少格),本轮修复员补上 `dedupe()` 之后
-   * 直接把断言翻成「一格重复都没有」。
+   * 【C3-01 结论:维持现状，钉住不许扩散】
+   *
+   * 1.0 的六章生成墙的时候没过 `dedupe()`（回字的四角、十字的中心、镜像的中轴都会撞车），
+   * 同一格被写进 `walls` 两遍：**25 关、88 个重复格，全在第 99 关以内**。
+   * 玩起来看不出来——碰撞判定走 `wallSet()`（Set），画墙也是同一格画两遍、像素一致。
+   * 本轮修复员实测补 `dedupe()` 会当场打红 `levels188.test.ts` 里那把
+   * 「前 99 关一笔未改」的 FNV 指纹锁，所以维持现状（理由见第 3 轮修复员报告）。
+   *
+   * 这条断言的作用因此变成两件事：**钉住范围别扩散**（1.1/1.2 的 89 关必须一格都不重），
+   * 以及**钉住它确实只是重复**（去重后墙的集合不变）。
    */
-  it("【C3-01 待修】重复墙格只出现在 1.0 老章的镜像关,而且一格都没多出格子外", () => {
+  it("重复墙格锁死在 1.0 老章的 25 关里,新章一格都不许重(C3-01 回归闸)", () => {
     const dirty: Array<[number, number]> = [];
     LEVELS.forEach((lv, i) => {
       const seen = new Set<number>();
@@ -95,17 +100,22 @@ describe("档C R3 · snake-snack · 188 关一关不漏", () => {
       }
       if (dup > 0) dirty.push([i + 1, dup]);
     });
-    // 现状:25 关、88 个重复格,全在 1.0 的 99 关以内(第 52–67、85–98)
     expect(dirty).toHaveLength(25);
     expect(dirty.reduce((s, d) => s + d[1], 0)).toBe(88);
     for (const [lvNo] of dirty) {
       expect(lvNo, `第 ${lvNo} 关重复,超出了 1.0 老章的范围`).toBeLessThanOrEqual(LEGACY_LEVELS);
     }
-    // 重复只是「多写了一遍」,去重之后墙的集合一格不多一格不少
+    // 1.1 / 1.2 追加的 89 关走的是过了 dedupe 的那条路,一格都不许重
+    for (let i = LEGACY_LEVELS; i < LEVELS.length; i++) {
+      const lv = LEVELS[i];
+      expect(wallSet(lv).size, `第 ${i + 1} 关有重复的墙格`).toBe(lv.walls.length);
+    }
+    // 重复只是「多写了一遍」:去重之后墙的集合一格不多一格不少
     LEVELS.forEach((lv, i) => {
-      const set = wallSet(lv);
-      expect(set.size, `第 ${i + 1} 关去重之后墙反而变多了`).toBeLessThanOrEqual(lv.walls.length);
-      expect(set.size, `第 ${i + 1} 关去重之后一堵墙都不剩`).toBe(
+      expect(wallSet(lv).size, `第 ${i + 1} 关去重之后墙反而变多了`).toBeLessThanOrEqual(
+        lv.walls.length
+      );
+      expect(wallSet(lv).size, `第 ${i + 1} 关去重之后一堵墙都不剩`).toBe(
         new Set(lv.walls.map(([x, y]) => cellKey(x, y))).size
       );
     });

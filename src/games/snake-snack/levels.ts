@@ -86,7 +86,17 @@ function safeTwin(walls: Array<[number, number]>): Array<[number, number]> {
   return safe(walls).filter(([x, y]) => !(y === 2 && x >= GRID - 8 && x <= GRID - 2));
 }
 
-/** 去掉重复的墙格（镜像生成时可能撞车） */
+/**
+ * 去掉重复的墙格（镜像生成、回字四角、十字中心都会撞车）。
+ *
+ * **只有 1.1 / 1.2 追加的第 100–188 关走这一步**。1.0 的六章漏了它，
+ * 于是第 52–67、85–98 共 25 关里同一格墙被写了两遍（C3-01，合计 88 格）。
+ * 那 88 格**玩起来看不出来**——碰撞判定走的是 `wallSet()`（Set），
+ * 画墙也是同一格画两遍、像素完全一致；脏的只是 `walls.length` 这个数。
+ * 之所以不补：`levels188.test.ts` 上有一把 FNV 指纹锁焊住 1.0 的前 99 关，
+ * 去个重就得先拆锁，那是拿「老关卡一字不动」去换一处玩家看不见的数据洁癖。
+ * 判定改由 `wallSet(lv).size` 走，`qaC3.test.ts` 里有断言钉着它别再脏下去。
+ */
 function dedupe(walls: Array<[number, number]>): Array<[number, number]> {
   const seen = new Set<number>();
   const out: Array<[number, number]> = [];
