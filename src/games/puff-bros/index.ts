@@ -102,6 +102,8 @@ import {
   cloudScroll,
   cloudTint,
   drawCandy,
+  drawDizzyStars,
+  drawEventSpark,
   highFiveFrame,
   mouthState,
   paintBro,
@@ -113,6 +115,7 @@ import {
   springCoilYs,
   swayAngle,
   updraftFeather,
+  type SparkKind,
 } from "./visual13";
 
 // ---------------------------------------------------------------------------
@@ -310,12 +313,7 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
   g.closePath();
 }
 
-function emojiAt(g: CanvasRenderingContext2D, ch: string, x: number, y: number, size: number): void {
-  g.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",system-ui,sans-serif`;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText(ch, x, y);
-}
+// 修复员 G5:emojiAt 助手随最后一批画布 emoji 字形(飘字粒子)一起退休。
 
 /**
  * 系统里勾了「减弱动效」没有。
@@ -574,7 +572,8 @@ interface Particle {
   y: number;
   vy: number;
   life: number;
-  text: string;
+  /** 修复员 G5:emoji 字形 → 矢量小图种类 */
+  art: SparkKind;
   size: number;
 }
 
@@ -634,20 +633,21 @@ const SFX_FOR_EVENT: Partial<Record<WorldEvent["kind"], SoundName>> = {
   lose: "oops",
 };
 
-const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], string>> = {
-  double: "🫧",
-  puff: "💨",
-  spring: "☁️",
-  crack: "✨",
-  warp: "🌀",
-  tumble: "💫",
-  catch: "🫧",
-  pop: "✨",
-  burst: "💨",
-  candy: "🍬",
-  hurt: "💫",
-  escape: "😵",
-  combo: "🌟",
+// 修复员 G5:飘字粒子从 13 只 emoji 换矢量小图(泡 / 风 / 云 / 星屑 / 旋涡 / 晕星 / 糖 / 大星)
+const PARTICLE_FOR_EVENT: Partial<Record<WorldEvent["kind"], SparkKind>> = {
+  double: "bubble",
+  puff: "gust",
+  spring: "cloud",
+  crack: "spark",
+  warp: "swirl",
+  tumble: "twinkle",
+  catch: "bubble",
+  pop: "spark",
+  burst: "gust",
+  candy: "candy",
+  hurt: "twinkle",
+  escape: "twinkle",
+  combo: "star",
 };
 
 /**
@@ -999,7 +999,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
       if (sound) playThrottled(sound, now);
       const art = PARTICLE_FOR_EVENT[ev.kind];
       if (art) {
-        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, text: art, size: 18 });
+        particles.push({ x: ev.x, y: ev.y, vy: -34, life: 0.9, art, size: 18 });
         if (particles.length > 40) particles.shift();
       }
     }
@@ -1121,10 +1121,8 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
     }
     ctx.fillStyle = c.face;
     if (m.dizzy > 0) {
-      ctx.font = "10px system-ui,sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("××", 0, -h * 0.5);
+      // 修复员 G5:「××」字形 → 眩晕星 2 颗绕头(300ms 相位;reduced 定格)
+      drawDizzyStars(ctx, 0, -h * 0.62, 9, world.time * 1000, !motion);
     } else {
       ctx.beginPath();
       ctx.arc(m.dir * 2 - 4, -h * 0.56, 2.2, 0, Math.PI * 2);
@@ -1328,7 +1326,7 @@ function createField(host: HTMLElement, opts: FieldOpts): Field {
 
     for (const pt of particles) {
       g.globalAlpha = Math.max(0, Math.min(1, pt.life));
-      emojiAt(g, pt.text, pt.x, pt.y, pt.size);
+      drawEventSpark(g, pt.art, pt.x, pt.y, pt.size * 0.5);
     }
     g.globalAlpha = 1;
     g.setTransform(1, 0, 0, 1, 0, 0);

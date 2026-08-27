@@ -836,3 +836,163 @@ export function drawCandy(g: CanvasRenderingContext2D, kind: CandyKind, x: numbe
   }
   g.restore();
 }
+
+// ---------------------------------------------------------------------------
+// 修复员 G5:眩晕星与事件小图(替换「××」字形与 13 只 emoji 飘字粒子)
+// ---------------------------------------------------------------------------
+
+/** 眩晕星公转一圈的毫秒数;两颗星相位差半圈 = 300ms(learner G5 规格) */
+export const DIZZY_ORBIT_MS = 600;
+
+/** 眩晕星此刻的公转相位(弧度);reduced 恒 0 = 定格在初相 */
+export function dizzyPhase(tMs: number, reduced: boolean): number {
+  return reduced ? 0 : ((tMs % DIZZY_ORBIT_MS) / DIZZY_ORBIT_MS) * Math.PI * 2;
+}
+
+/** 四角星屑(两枚交叠细菱形):眩晕星与 spark 粒子共用 */
+function sparkStarPath(g: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  g.beginPath();
+  g.moveTo(cx, cy - r);
+  g.lineTo(cx + r * 0.32, cy);
+  g.lineTo(cx, cy + r);
+  g.lineTo(cx - r * 0.32, cy);
+  g.closePath();
+  g.moveTo(cx - r, cy);
+  g.lineTo(cx, cy + r * 0.32);
+  g.lineTo(cx + r, cy);
+  g.lineTo(cx, cy - r * 0.32);
+  g.closePath();
+}
+
+/**
+ * 眩晕星 2 颗绕头(替换 10px「××」字形):相位差 300ms,轨道是头顶扁椭圆;
+ * reduced 定格在初相。只画星,不碰任何眩晕计时。
+ */
+export function drawDizzyStars(
+  g: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  orbit: number,
+  tMs: number,
+  reduced: boolean
+): void {
+  const base = dizzyPhase(tMs, reduced);
+  for (const half of [0, 1] as const) {
+    const a = base + half * Math.PI;
+    const sx = cx + Math.cos(a) * orbit;
+    const sy = cy + Math.sin(a) * orbit * 0.34;
+    g.fillStyle = half === 0 ? "#FFD678" : "#FFE9A8";
+    sparkStarPath(g, sx, sy, Math.max(2.5, orbit * 0.42));
+    g.fill();
+  }
+}
+
+/** 事件小图的种类(与旧 emoji 一一对位:泡/风/云/星屑/旋涡/晕星/糖/大星) */
+export type SparkKind = "bubble" | "gust" | "cloud" | "spark" | "swirl" | "twinkle" | "candy" | "star";
+
+/**
+ * 事件飘字粒子的矢量小图(替换 PARTICLE_FOR_EVENT 的 emoji 字形)。
+ * s 是半径级尺寸;透明度与上浮由调用方的粒子账本管,这里只管形。
+ */
+export function drawEventSpark(g: CanvasRenderingContext2D, kind: SparkKind, x: number, y: number, s: number): void {
+  g.save();
+  if (kind === "bubble") {
+    g.strokeStyle = "rgba(140,200,240,.95)";
+    g.lineWidth = Math.max(1.2, s * 0.2);
+    g.beginPath();
+    g.arc(x, y, s * 0.8, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = "rgba(255,255,255,.9)";
+    g.beginPath();
+    g.arc(x - s * 0.28, y - s * 0.3, Math.max(0.8, s * 0.16), 0, Math.PI * 2);
+    g.fill();
+  } else if (kind === "gust") {
+    g.strokeStyle = "rgba(255,255,255,.92)";
+    g.lineWidth = Math.max(1.4, s * 0.22);
+    g.lineCap = "round";
+    for (const [oy, len] of [
+      [-0.3, 1],
+      [0.15, 0.7],
+      [0.55, 0.45],
+    ] as Array<[number, number]>) {
+      g.beginPath();
+      g.moveTo(x - s * len, y + s * oy);
+      g.quadraticCurveTo(x, y + s * oy - s * 0.22, x + s * len, y + s * oy);
+      g.stroke();
+    }
+    g.lineCap = "butt";
+  } else if (kind === "cloud") {
+    g.fillStyle = "rgba(255,255,255,.95)";
+    for (const [ox, oy, rr] of [
+      [-0.5, 0.1, 0.45],
+      [0, -0.15, 0.6],
+      [0.5, 0.12, 0.42],
+    ] as Array<[number, number, number]>) {
+      g.beginPath();
+      g.arc(x + s * ox, y + s * oy, s * rr, 0, Math.PI * 2);
+      g.fill();
+    }
+    strokeOutline(g, "#CDE4F5", 1.2);
+  } else if (kind === "spark") {
+    g.fillStyle = "#FFE9A8";
+    sparkStarPath(g, x, y, s * 0.9);
+    g.fill();
+    g.fillStyle = "#FFFFFF";
+    sparkStarPath(g, x + s * 0.55, y - s * 0.5, s * 0.4);
+    g.fill();
+  } else if (kind === "swirl") {
+    g.strokeStyle = "rgba(150,190,235,.95)";
+    g.lineWidth = Math.max(1.4, s * 0.2);
+    g.lineCap = "round";
+    for (const [rr, a0, a1] of [
+      [0.85, -0.4, 1.1],
+      [0.55, 0.6, 2.2],
+      [0.28, 1.6, 3.4],
+    ] as Array<[number, number, number]>) {
+      g.beginPath();
+      g.arc(x, y, s * rr, a0, a1);
+      g.stroke();
+    }
+    g.lineCap = "butt";
+  } else if (kind === "twinkle") {
+    g.strokeStyle = "rgba(200,180,240,.9)";
+    g.lineWidth = Math.max(1.2, s * 0.16);
+    g.beginPath();
+    g.ellipse(x, y, s * 0.9, s * 0.34, -0.35, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = "#FFD678";
+    sparkStarPath(g, x, y - s * 0.18, s * 0.55);
+    g.fill();
+  } else if (kind === "candy") {
+    g.fillStyle = shade(PB_CANDY.wrap, -12);
+    for (const side of [-1, 1] as const) {
+      g.beginPath();
+      g.moveTo(x + side * s * 0.5, y);
+      g.lineTo(x + side * s * 0.95, y - s * 0.4);
+      g.lineTo(x + side * s * 0.95, y + s * 0.4);
+      g.closePath();
+      g.fill();
+    }
+    g.fillStyle = ballGradient(g, x, y, s * 0.62, PB_CANDY.wrap, { light: 20, dark: -12 });
+    g.beginPath();
+    g.ellipse(x, y, s * 0.62, s * 0.5, 0, 0, Math.PI * 2);
+    g.fill();
+    strokeOutline(g, PB_CANDY.wrap, 1.2);
+  } else {
+    // star:五角大星(连击专属,金 2 停)
+    g.fillStyle = ballGradient(g, x, y, s, "#FFD678", { light: 16, dark: -10 });
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 === 0 ? s : s * 0.48;
+      const a = -Math.PI / 2 + (i / 10) * Math.PI * 2;
+      const px = x + Math.cos(a) * rr;
+      const py = y + Math.sin(a) * rr;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+    strokeOutline(g, "#FFD678", 1.2);
+  }
+  g.restore();
+}

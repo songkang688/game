@@ -10,7 +10,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FakeCtx } from "./domStub";
-import { CANDY_KINDS, PB_CANDY, drawCandy } from "./visual13";
+import {
+  CANDY_KINDS,
+  DIZZY_ORBIT_MS,
+  PB_CANDY,
+  dizzyPhase,
+  drawCandy,
+  drawDizzyStars,
+  drawEventSpark,
+  type SparkKind,
+} from "./visual13";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (f: string): string => readFileSync(join(HERE, f), "utf8");
@@ -46,5 +55,39 @@ describe("puff-bros · 修复员 S6 · 糖果四型自绘", () => {
     // 棒棒糖 / 纸杯 / 团子字形全退场;🍬 仅剩事件粒子表(G5 同批换)与 HUD DOM 计数字
     for (const e of ["🍭", "🧁", "🍡"]) expect(src).not.toContain(e);
     expect((src.match(/🍬/g) ?? []).length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("puff-bros · 修复员 G5 · 眩晕星与事件小图", () => {
+  const SPARKS: SparkKind[] = ["bubble", "gust", "cloud", "spark", "swirl", "twinkle", "candy", "star"];
+
+  it("眩晕星画得动不抛;两颗相位差半圈 = 300ms(周期 600ms)", () => {
+    expect(() => drawDizzyStars(ctx(), 0, -20, 9, 1234, false)).not.toThrow();
+    expect(DIZZY_ORBIT_MS).toBe(600);
+  });
+
+  it("眩晕星 reduced 定格:任意毫秒相位恒 0;常规档 300ms 恰好转过半圈", () => {
+    expect(dizzyPhase(0, true)).toBe(0);
+    expect(dizzyPhase(450, true)).toBe(0);
+    expect(dizzyPhase(150, false)).toBeGreaterThan(0);
+    expect(dizzyPhase(300, false)).toBeCloseTo(Math.PI, 6);
+  });
+
+  it("八种事件小图都画得动不抛(泡/风/云/星屑/旋涡/晕星/糖/大星)", () => {
+    for (const kind of SPARKS) {
+      expect(() => drawEventSpark(ctx(), kind, 100, 80, 9), kind).not.toThrow();
+      expect(() => drawEventSpark(ctx(), kind, 2, 2, 1), kind).not.toThrow();
+    }
+  });
+
+  it("index.ts 眩晕「××」字形与 13 只飘字 emoji 全部退场,emojiAt 助手退休", () => {
+    const src = read("index.ts");
+    expect(src).not.toContain('fillText("××"');
+    expect(src).toContain("drawDizzyStars(");
+    expect(src).toContain("drawEventSpark(");
+    expect(src).not.toContain("emojiAt(g");
+    for (const e of ["🌀", "💫", "😵", "🌟", "☁️"]) expect(src).not.toContain(e);
+    // 🍬 只剩 HUD DOM 计数文案一处(粒子表已换矢量)
+    expect((src.match(/🍬/g) ?? []).length).toBeLessThanOrEqual(1);
   });
 });
