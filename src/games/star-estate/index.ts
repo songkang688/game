@@ -82,17 +82,20 @@ const CSS = `
 .se-tile{position:relative;border:none;border-radius:6px;background:#fffdf8;padding:1px;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-family:inherit;
   overflow:hidden;min-width:0;min-height:0;}
-.se-tile-emoji{font-size:clamp(9px,2.2vw,15px);line-height:1;}
-.se-tile-price{font-size:clamp(6px,1.3vw,9px);font-weight:800;color:#8a6a44;line-height:1.1;}
+.se-tile-emoji{font-size:clamp(13px,2.2vw,15px);line-height:1;}
+.se-tile-price{font-size:13px;font-weight:800;color:#8a6a44;line-height:1.1;}
 .se-tile-band{position:absolute;top:0;left:0;right:0;height:22%;border-radius:6px 6px 0 0;}
 .se-tile-own{position:absolute;bottom:0;left:0;right:0;height:16%;font-size:0;}
-.se-tile-houses{position:absolute;top:22%;left:0;right:0;text-align:center;font-size:clamp(5px,1.2vw,9px);
-  line-height:1;color:#3f7d55;font-weight:900;}
+/* 房子用色块点表示：格子只有 30px 宽时，任何字号都读不动，读数交给放大预览。 */
+.se-tile-houses{position:absolute;top:22%;left:0;right:0;display:flex;justify-content:center;
+  align-items:center;gap:1px;font-size:0;line-height:0;pointer-events:none;}
+.se-pip{display:block;width:14%;max-width:5px;aspect-ratio:1;border-radius:1px;background:#3f7d55;}
+.se-pip-hotel{width:30%;max-width:11px;aspect-ratio:1.4;border-radius:2px;background:#c1443b;}
 .se-tile-mort{position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(150,150,170,.35) 0 4px,transparent 4px 8px);
   border-radius:6px;}
 .se-tile-sel{outline:3px solid #E4762F;z-index:3;}
 .se-tile-corner{background:#FFF3DC;}
-.se-token{position:absolute;font-size:clamp(9px,2.1vw,15px);line-height:1;pointer-events:none;z-index:4;
+.se-token{position:absolute;font-size:clamp(13px,2.1vw,15px);line-height:1;pointer-events:none;z-index:4;
   transition:left ${HOP_MS}ms linear,top ${HOP_MS}ms linear;transform:translate(-50%,-50%);}
 .se-coin{position:absolute;font-size:18px;pointer-events:none;z-index:6;transition:left ${COIN_MS}ms ease,top ${COIN_MS}ms ease,opacity ${COIN_MS}ms ease;
   transform:translate(-50%,-50%);}
@@ -136,6 +139,11 @@ const CSS = `
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .se-pause-t{font-size:20px;font-weight:900;color:#8a5a2a;}
 @keyframes sepaper{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--dx),64px) rotate(220deg);opacity:0}}
+/* 窄屏格子只剩 30px 上下，价格数字塞进去既读不动也挤掉图标，
+   按规格改走「棋盘缩到整屏 + 当前格放大预览」，价格只在预览里给。 */
+@media (max-width:480px){
+  .se-tile-price{display:none;}
+}
 @media (max-width:360px){
   .se-badge{font-size:13px;padding:4px 8px;}
   .se-seat{flex:1 1 46%;font-size:13px;}
@@ -457,7 +465,15 @@ function createTable(host: HTMLElement, opts: TableOpts): Table {
       el.innerHTML = `${band ? `<span class="se-tile-band" style="background:${band}"></span>` : ""}
         <span class="se-tile-emoji">${tile.emoji}</span>
         ${price ? `<span class="se-tile-price">${price}</span>` : ""}
-        ${st.houses > 0 ? `<span class="se-tile-houses">${st.houses >= MAX_HOUSES ? "🏨" : "🏠".repeat(st.houses)}</span>` : ""}
+        ${
+          st.houses > 0
+            ? `<span class="se-tile-houses">${
+                st.houses >= MAX_HOUSES
+                  ? `<i class="se-pip se-pip-hotel"></i>`
+                  : `<i class="se-pip"></i>`.repeat(st.houses)
+              }</span>`
+            : ""
+        }
         ${owner !== BANK ? `<span class="se-tile-own" style="background:${seatColor(owner)}"></span>` : ""}
         ${st.mortgaged ? `<span class="se-tile-mort"></span>` : ""}`;
       el.classList.toggle("se-tile-sel", tile.pos === selected);

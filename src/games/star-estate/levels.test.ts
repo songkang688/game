@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TOTAL_LEVELS, assertTotal, chapterOf, totalSize } from "../level99";
-import { BRAND_WORDS } from "../copy.test";
 import { meta } from "./meta";
 import guide from "./guide";
 import {
@@ -37,6 +36,18 @@ const FILES = [
 ];
 const src = (f: string): string => readFileSync(join(HERE, f), "utf8");
 const SOURCES = FILES.map((f) => ({ f, text: src(f) }));
+
+/**
+ * 全站商标黑名单直接从 copy.test.ts 的源码里抠出来。
+ * 不能 import 它：那会把整份 copy.test 的用例挂到本文件名下重跑一遍，
+ * 别人游戏挂了会算到 star-estate 头上。读文本就只拿到清单本身。
+ */
+const BRAND_WORDS: string[] = (() => {
+  const text = readFileSync(join(HERE, "..", "copy.test.ts"), "utf8");
+  const block = /export const BRAND_WORDS[^[]*\[([\s\S]*?)\n\];/.exec(text);
+  if (!block) throw new Error("没在 copy.test.ts 里找到 BRAND_WORDS");
+  return [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+})();
 
 /** 规格额外点名的地产桌游黑名单：官方名与官方街道名一个都不许出现 */
 const ESTATE_BRANDS = [
@@ -195,6 +206,10 @@ describe("star-estate · 攻略", () => {
 
 describe("star-estate · 产品红线", () => {
   it("全部源码扫不出任何商标", () => {
+    // 清单是从源码里抠的，先确认真抠出来了，别让正则失手变成空扫描
+    expect(BRAND_WORDS.length).toBeGreaterThanOrEqual(30);
+    expect(BRAND_WORDS).toContain("王者荣耀");
+    expect(BRAND_WORDS).toContain("愤怒的小鸟");
     for (const { f, text } of SOURCES) {
       for (const brand of BRAND_WORDS) {
         expect(`${f}:${text.toLowerCase().includes(brand.toLowerCase())}`).toBe(`${f}:false`);
@@ -285,6 +300,10 @@ describe("star-estate · 产品红线", () => {
     const sizes = [...index.matchAll(/font-size:(\d+)px/g)].map((m) => Number(m[1]));
     expect(sizes.length).toBeGreaterThan(4);
     expect(Math.min(...sizes)).toBeGreaterThanOrEqual(13);
+    // clamp() 的下限就是窄屏上的实际字号，真机量出来过 9px，这里一并钉死
+    const clampFloors = [...index.matchAll(/font-size:clamp\((\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
+    expect(clampFloors.length).toBeGreaterThan(3);
+    expect(Math.min(...clampFloors)).toBeGreaterThanOrEqual(13);
     // 棋盘缩到整屏 + 当前格放大预览
     expect(index).toContain("aspect-ratio:1");
     expect(index).toContain("se-preview");
