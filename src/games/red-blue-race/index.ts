@@ -55,6 +55,7 @@ import {
   speedRatio
 } from "./feel";
 import { RACE_LOOKS, runnerSvg } from "../../art/kit/runnerSvg";
+import { trimRunnerSvg } from "../../art/kit/runnerDuoTrim";
 import {
   RBR_TOKENS_CSS,
   buntingSvg,
@@ -475,11 +476,13 @@ let runnerSeq = 0;
 function runnerFramesHtml(side: "red" | "blue", faceHref: string): string {
   const look = RACE_LOOKS[side];
   const pre = `rbr${side}${++runnerSeq}`;
+  // W8R1-05:红蓝双方 16px 灰度下只靠色相可分,叠一层剪影级配件
+  // (红方双丸子头亮部套装 / 蓝方反戴帽舌暗部套装),判定与热区零改动
   return (
-    `<span class="rbr-rframe rbr-fa">${runnerSvg({ look, phase: 0, faceHref, idPrefix: `${pre}A` })}</span>` +
-    `<span class="rbr-rframe rbr-fb">${runnerSvg({ look, phase: 1, faceHref, idPrefix: `${pre}B` })}</span>` +
-    `<span class="rbr-rframe rbr-fjump">${runnerSvg({ look, pose: "jump", faceHref, idPrefix: `${pre}J` })}</span>` +
-    `<span class="rbr-rframe rbr-fslip">${runnerSvg({ look, pose: "slip", faceHref, idPrefix: `${pre}S` })}</span>`
+    `<span class="rbr-rframe rbr-fa">${trimRunnerSvg(runnerSvg({ look, phase: 0, faceHref, idPrefix: `${pre}A` }), side, { phase: 0 })}</span>` +
+    `<span class="rbr-rframe rbr-fb">${trimRunnerSvg(runnerSvg({ look, phase: 1, faceHref, idPrefix: `${pre}B` }), side, { phase: 1 })}</span>` +
+    `<span class="rbr-rframe rbr-fjump">${trimRunnerSvg(runnerSvg({ look, pose: "jump", faceHref, idPrefix: `${pre}J` }), side, { pose: "jump" })}</span>` +
+    `<span class="rbr-rframe rbr-fslip">${trimRunnerSvg(runnerSvg({ look, pose: "slip", faceHref, idPrefix: `${pre}S` }), side, { pose: "slip" })}</span>`
   );
 }
 
