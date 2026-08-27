@@ -21,6 +21,7 @@ import {
   PAD_TIGHT_GAP_PX,
   SHORT_SCREEN_PX,
   SIDE_GUTTER_PX,
+  TOUCH_MIN_PX,
   VERSUS_CHROME_PX,
   padHeightPx,
   padLayout,
@@ -90,5 +91,20 @@ describe("红蓝点点 · 双人对战的四颗键在矮屏上也按得到", () 
     expect(source).toContain(`export const KEY_TIGHT_PX = ${KEY_TIGHT_PX}`);
     expect(KEY_TIGHT_PX).toBeGreaterThanOrEqual(TAP_MIN);
     expect(KEY_TIGHT_PX).toBeLessThan(KEY_MIN_PX);
+  });
+
+  it("对战屏顶上那两颗（返回、换模式）也得够 44px", () => {
+    // 复审时用 elementFromPoint 逐个量热区，这两颗实测只有 34px 高，
+    // 是这一款仅有的两处破底线的热区
+    expect(TOUCH_MIN_PX).toBe(TAP_MIN);
+    const at = ARENA_CSS.indexOf(".rbt-vs-back, .rbt-vs-mode {");
+    const decl = ARENA_CSS.slice(at, ARENA_CSS.indexOf("\n", at));
+    expect(decl).toContain(`min-height: ${TOUCH_MIN_PX}px`);
+    expect(decl).toContain("box-sizing: border-box");
+    // 抬高之后文字得居中，不然贴着上边更难按
+    expect(decl).toContain("align-items: center");
+    // 矮屏那一档不许把它又收回去
+    const short = ARENA_CSS.slice(ARENA_CSS.indexOf(`@media (max-width: 420px) and (max-height: ${SHORT_SCREEN_PX}px)`));
+    expect(short).not.toMatch(/\.rbt-vs-(back|mode)[^{]*\{[^}]*min-height/);
   });
 });

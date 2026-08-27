@@ -49,6 +49,9 @@ export const STAGE_VISIBLE_AT_720_PX = 618;
 /** 「矮屏」的门槛 */
 export const SHORT_SCREEN_PX = 720;
 
+/** 触屏可点元素的最小边长 */
+export const CHIP_MIN_PX = 44;
+
 /** 各处竖向尺寸的常规值（基准样式与矮屏样式共用这一份，不许各写各的） */
 export const BASE_SIZES = {
   wrapPad: 14,
@@ -85,6 +88,62 @@ const TRIM_TIMES: Record<keyof typeof BASE_SIZES, number> = {
   scorePad: 2,
 };
 
+/**
+ * 舞台真正看得见的那一段，从 `selfTop` 往下还剩多少像素。
+ *
+ * `clipperBottoms` 是所有会裁掉内容的祖先的下沿——取最小的那个，因为只要有一层裁，
+ * 再往下就看不见了。一层都没有（比如用例里的裸节点）就返回 `Infinity`，表示不用钳。
+ */
+export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]): number {
+  if (clipperBottoms.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(...clipperBottoms) - selfTop;
+}
+
+/**
+ * 把本款的壳钳进「舞台看得见的那一段」，钳不下就让它自己滚。
+ *
+ * 为什么不能只靠下面矮屏那一档里的 `max-height:100%`：百分比要有一个**定高**的父级
+ * 才算得出来，而壳层这条链上 `.l99-stage` / `.l99-stage-wrap` 全是内容撑出来的 auto 高
+ * ——它们自己先长到内容那么高，`100%` 于是等于内容自己的高度，永远钳不住。
+ * 真机实测 360×640 第 188 关：`.mst-wrap` 高 416、舞台只看得见 362，
+ * `scrollHeight === clientHeight`（`canScroll` 为 0），声音设置栏那三颗芯片
+ * `elementFromPoint` 一律返回 null。真正定高的那一层是 `.game-stage`（平台文件，
+ * 交给窗口1），本款够不着它的 CSS，但够得着它的**盒子**——量一次下沿，
+ * 把像素值写成自己的 `max-height` 就成了。
+ *
+ * 只在真的装不下时才写 `max-height` / `overflow-y`，装得下就把两样都还回去。
+ * （这段和 `shape-kingdom/draw.ts` 里那份是同一套做法，两款各存一份是有意的：
+ * 抽成共用文件得放到 `src/games/` 根上，那是跨窗口的共用目录，本档不许动。）
+ */
+export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: () => void } {
+  const view = el.ownerDocument?.defaultView ?? null;
+  const measurable = typeof el.getBoundingClientRect === "function" && !!view;
+  const relayout = (): void => {
+    if (!measurable || !view) return;
+    // 先把上一次钳出来的值还原，不然量到的是钳完的高度，越量越小
+    el.style.maxHeight = "";
+    el.style.overflowY = "";
+    const bottoms: number[] = [];
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = view.getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+    }
+    const room = visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+    if (!Number.isFinite(room) || room <= 0) return;
+    if (el.scrollHeight <= room + 1) return;
+    el.style.maxHeight = `${Math.floor(room)}px`;
+    el.style.overflowY = "auto";
+  };
+  relayout();
+  view?.addEventListener("resize", relayout);
+  return {
+    relayout,
+    dispose(): void {
+      view?.removeEventListener("resize", relayout);
+    },
+  };
+}
+
 /** 矮屏样式一共替这一屏省下多少竖向像素 */
 export function shortScreenSavingPx(): number {
   let sum = 0;
@@ -113,17 +172,26 @@ export const MST_CSS = `
 .mst-dot-ok{background:#ffa94d;}
 .mst-dot-miss{background:#ffffff55;}
 
-.mst-sky{position:relative;width:100%;max-width:${SKY_MAX_PX}px;min-height:${BASE_SIZES.sky}px;}
+/* max-width 要跟容器一起夹：沙盒把键盘装在一个 shrink-to-fit 的空 div 里，
+   那种盒子的宽度取自内容的 max-content——键排有多宽它就有多宽，一路撑到
+   ${SKY_MAX_PX}px 为止，320px 的机器上整块星空于是探到舞台外面去，
+   横向滚动再怎么滚也把两端的键滚不回可视区（测试员 W5-B-03 复现 B）。 */
+.mst-sky{position:relative;width:100%;max-width:min(${SKY_MAX_PX}px,100%);min-height:${BASE_SIZES.sky}px;}
+/* 沙盒的键盘宿主：撑满可用宽度，不许 shrink-to-fit 到内容的 max-content */
+.mst-sb-keys{width:100%;min-width:0;display:flex;justify-content:center;}
 .mst-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;
   transition:opacity .5s ease;}
 .mst-lines-on{opacity:1;}
 .mst-keys{position:relative;display:flex;justify-content:center;align-items:flex-end;
   min-height:${BASE_SIZES.sky}px;width:100%;}
-/* 键排比可用宽度还宽时（七声音阶 8 个键就是）改成横向可滚：
-   键上挂着 touch-action:none 保证按下去出声，滑动从键与键之间、星空那一片起手 */
+/* 键排比可用宽度还宽时（七声音阶 8 个键就是）改成横向可滚 */
 .mst-keys-scroll{overflow-x:auto;justify-content:flex-start;touch-action:pan-x;
   scrollbar-width:thin;padding-bottom:4px;}
-.mst-keys-scroll .mst-star{flex:0 0 auto;}
+/* 滚起来的那一档里，键自己也得让出横向手势：键身 44px、缝只有 4px，
+   要是键还挂着 touch-action:none，一根手指落哪儿都在键上，这一行就**滚不动**，
+   「哆」和「高哆」等于还是按不到。按下去出声照旧走 pointerdown，
+   手指真的横着划走时浏览器补一个 pointercancel，音会正常停。 */
+.mst-keys-scroll .mst-star{flex:0 0 auto;touch-action:pan-x;}
 .mst-star{border:none;background:transparent;padding:0;cursor:pointer;font-family:inherit;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
   transition:transform .12s ease,filter .12s ease;touch-action:none;}
@@ -164,8 +232,12 @@ export const MST_CSS = `
   transition:transform .1s,opacity .2s;}
 .mst-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #d9b800;}
 .mst-btn:disabled{opacity:.4;cursor:default;}
-.mst-chip{min-height:38px;padding:6px 12px;font-size:14px;font-weight:800;border:none;cursor:pointer;
-  border-radius:999px;background:#ffffff2b;color:#fff;font-family:inherit;}
+/* 触屏底线 44px：这批芯片（自由弹奏入口、静音、音量、音色、练习速度）原来是 38px，
+   本档五款里唯一一批不到底线的热区，档A 那边同一条规矩已经在自己五款上落过一遍。
+   只抬高不动配色圆角；inline-flex 居中，免得抬高之后文字贴着上边。 */
+.mst-chip{min-height:${CHIP_MIN_PX}px;padding:6px 12px;font-size:14px;font-weight:800;border:none;cursor:pointer;
+  border-radius:999px;background:#ffffff2b;color:#fff;font-family:inherit;
+  display:inline-flex;align-items:center;justify-content:center;}
 .mst-chip.mst-chip-on{background:#fff;color:#1b2a5e;}
 .mst-drum{min-width:120px;min-height:88px;border:none;border-radius:20px;cursor:pointer;font-family:inherit;
   font-size:18px;font-weight:900;color:#3b2a00;background:#ffe066;box-shadow:0 5px 0 #d9b800;
@@ -185,7 +257,11 @@ export const MST_CSS = `
      内容一高就被硬裁掉，而裁掉的那一截里正是过关必须按的键
      ——测试员 W5-B-01 在 360×720 上量到内容 ${SCORE_LEVEL_CONTENT_PX}px、可视只有 ${STAGE_VISIBLE_AT_720_PX}px。
      本款自己能做的两件事这里都做了：① 竖向逐项收一档；② 收完还高就在本款壳里自己滚。
-     热区一个都不动：.mst-btn 的 44px、星星键盘的边长（按 keyLayout 内联）都不在这一档里。 */
+     热区一个都不动：.mst-btn 的 44px、星星键盘的边长（按 keyLayout 内联）都不在这一档里。
+     下面这行 max-height:100% 今天是空转的：百分比要有定高父级，而壳层这条链上
+     .l99-stage / .l99-stage-wrap 都是内容撑出来的 auto 高。真正把它钳住的是
+     fitIntoStage() 量出来的像素值（内联样式，优先级更高）；这行留着是等平台
+     哪天给舞台链定了高就自动接上，两边不打架。 */
   .mst-wrap{min-height:0;max-height:100%;overflow-y:auto;touch-action:pan-y;
     gap:${SHORT_SIZES.wrapGap}px;padding:${SHORT_SIZES.wrapPad}px 10px;}
   .mst-msg{min-height:${SHORT_SIZES.msg}px;font-size:16px;}
@@ -228,8 +304,15 @@ export interface StarBoardOptions {
   notes: readonly StarBoardNote[];
   /** 双声部关把键拉开，一根手指盖不住两个 */
   wideGap?: boolean;
-  /** 可用宽度（像素），不传就按 360px 的窄屏算 */
+  /** 可用宽度（像素），不传就量 `host`，再没有才退回按屏宽估 */
   width?: number;
+  /**
+   * 键盘将要挂进去的那个容器（已经在文档里）。有它就直接量它的 `clientWidth`——
+   * 那才是键排真正能占的宽度。`boardWidth()` 只减得掉 `.mst-wrap` 自己的内边距，
+   * 减不掉壳层顶栏、`.l99-stage` 的内边距和舞台描边，在 360px 上要多估 40–60px，
+   * 于是「算着放得下、实际放不下」，键排照样探到舞台外面（测试员 W5-B-03）。
+   */
+  host?: HTMLElement | null;
   onDown: (index: number, pointerId: number) => void;
   onUp?: (index: number, pointerId: number) => void;
 }
@@ -254,12 +337,23 @@ export interface StarBoardHandle {
   destroy(): void;
 }
 
+/**
+ * 量宿主容器的内容宽度。量不到（还没进文档、或者用例里的桩节点没有布局）就返回
+ * `null`，让调用方退回 `boardWidth()` 的估算。按 `.mst-sky` 的上限夹一次，
+ * 免得桌面上一行键铺得比星空还宽。
+ */
+export function hostWidth(host?: HTMLElement | null): number | null {
+  const w = host?.clientWidth;
+  if (typeof w !== "number" || !Number.isFinite(w) || w <= 0) return null;
+  return Math.min(SKY_MAX_PX, Math.floor(w));
+}
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 export function createStarBoard(opts: StarBoardOptions): StarBoardHandle {
   const count = opts.midis.length;
   const minGap = opts.wideGap ? DUET_MIN_GAP_PX : KEY_MIN_GAP_PX;
-  const available = opts.width ?? boardWidth();
+  const available = opts.width ?? hostWidth(opts.host) ?? boardWidth();
   const layout = keyLayout(available, count, minGap);
   const fits = layoutFits(layout, count, available);
   const lowMidi = Math.min(...opts.midis);

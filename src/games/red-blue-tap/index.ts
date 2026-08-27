@@ -67,6 +67,19 @@ const CSS = `
   .rbt-arena { height: 280px; }
   .rbt-dot { width: 56px; height: 56px; font-size: 30px; }
 }
+/* 又窄又矮的机器上，竞技场上面那一截（比分条 + 道具芯片）在 320px 宽会各折成两三行,
+   一共吃掉 150 多像素，把竞技场顶到舞台裁切线以下——而点是随机摆的，
+   落在下半截的那颗就按不着，表现成「时灵时不灵」。这里只收留白与字号，
+   .rbt-dot 的热区一分不动（那是这一款唯一的操作对象）。 */
+@media (max-width: 420px) and (max-height: 700px) {
+  .rbt-top { margin-bottom: 4px; }
+  .rbt-badge { padding: 3px 8px; font-size: 13px; }
+  .rbt-badge.rbt-ai { padding: 3px 3px 3px 8px; }
+  .rbt-ava { width: 22px; height: 22px; }
+  .rbt-gear { gap: 4px; margin-bottom: 4px; min-height: 0; }
+  .rbt-chip { padding: 2px 8px; font-size: 12px; }
+  .rbt-msg { margin-top: 4px; min-height: 18px; font-size: 14px; }
+}
 `;
 
 const ENDLESS_CSS = `
@@ -130,6 +143,53 @@ function placeDot(el: HTMLElement, taken: Array<[number, number]> = []): void {
   taken.push([x, y]);
   el.style.left = `${x}%`;
   el.style.top = `${y}%`;
+}
+
+/** 竞技场再矮也得摆得开三行点，低于这个高度宁可让它被裁一点也不再收 */
+export const ARENA_MIN_PX = 216;
+
+/**
+ * 竞技场该多高：CSS 给的高度与「舞台看得见的那一段」取小，再守住 ARENA_MIN_PX 的下限。
+ * 纯函数，用例直接喂数字。
+ */
+export function arenaHeightPx(cssHeight: number, room: number): number {
+  if (!Number.isFinite(room) || room <= 0) return cssHeight;
+  return Math.max(ARENA_MIN_PX, Math.min(cssHeight, Math.floor(room)));
+}
+
+/**
+ * 把竞技场压进舞台看得见的那一段。
+ *
+ * 点是按**百分比**摆在竞技场里的（`placeDot` 写的是 `left/top: n%`），所以只要竞技场
+ * 本身不超出可视范围，每一颗点就都按得到；反过来，竞技场一被裁，落在下半截的点就是
+ * 真的按不到——这一款整个玩法就是「按亮起来的那颗点」，按不到等于这一局作废。
+ * 320×640 上实测：竞技场高 280、上面那一截（本款的无尽入口条 + 壳层关卡条在窄屏折行）
+ * 把它顶到 y=416，舞台底边只到 626，**下面 70px 里的点一颗都按不着**，而点又是随机摆的，
+ * 所以是「时灵时不灵」——比一直坏更难查。
+ *
+ * 不走滚动条：这是个连点游戏，能滚就会「想点却滚走了」。直接收高度，点跟着百分比回来。
+ * 返回拆监听的函数。
+ */
+export function fitArena(el: HTMLElement): () => void {
+  const view = el.ownerDocument?.defaultView ?? null;
+  if (!view || typeof el.getBoundingClientRect !== "function") return () => {};
+  const relayout = (): void => {
+    el.style.height = "";
+    const css = el.getBoundingClientRect().height;
+    let bottom = Number.POSITIVE_INFINITY;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = view.getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+        bottom = Math.min(bottom, p.getBoundingClientRect().bottom);
+      }
+    }
+    if (!Number.isFinite(bottom)) return;
+    const next = arenaHeightPx(css, bottom - el.getBoundingClientRect().top);
+    if (next < css) el.style.height = `${next}px`;
+  };
+  relayout();
+  view.addEventListener("resize", relayout);
+  return () => view.removeEventListener("resize", relayout);
 }
 
 function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
@@ -535,6 +595,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   later(spawnRound, 700);
   renderTop();
+  // 竞技场比舞台看得见的那一段高的时候，落在下半截的点是真按不到的（见 fitArena）
+  const fitArenaOff = fitArena(arenaEl);
 
   return {
     destroy() {
@@ -543,6 +605,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       clearDots();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      fitArenaOff();
       wrap.remove();
     },
   };

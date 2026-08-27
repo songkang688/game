@@ -17,6 +17,7 @@ import type { PlayCtx, PlayHandle, StorageLike } from "../level99";
 import { runQuiz, type QuizOptions, type QuizTheme } from "../quiz99";
 import { buildReviewQuestions, type ShapeQ, type ShapeQKind } from "./levels";
 import { HINT_LABELS, safeHints, type HintTrio } from "./hints";
+import { fitIntoStage } from "./draw";
 
 // ---------------------------------------------------------------------------
 // 错题本（纯函数 + 本地存档）
@@ -166,6 +167,11 @@ const REVIEW_CSS = `
 .shk-hintbtn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .shk-hinttext{flex:1 1 220px;min-width:0;font-size:14px;font-weight:700;line-height:1.6;
   background:#ffffffcc;border-radius:12px;padding:6px 10px;text-align:center;}
+/* 答题器自己没有滚动兜底，题面 + 三颗选项在 640 高的机器上比舞台看得见的那一段还高，
+   最后一个选项就落到裁切线以下点不着（测试员 W5-B-01：第 100 关「22 厘米」低 54px，
+   万一它就是正解，这一关直接卡死）。答题器的 .qz-wrap 是公共文件生的、本档不许动，
+   但它挂在哪儿是本款说了算——给它一个本款自己的宿主，再由 fitIntoStage 钳住宿主。 */
+.shk-quizhost{min-width:0;}
 `;
 
 export interface ReviewOptions {
@@ -224,6 +230,13 @@ export function runQuizWithReview(opts: ReviewOptions, deps: ReviewDeps = {}): P
   stage.appendChild(wrap);
   panel = wrap;
 
+  // 答题器挂在本款自己的宿主里，宿主再钳进舞台看得见的那一段：内容一高就在这里滚，
+  // 而不是被舞台默默裁掉。提示条留在宿主外面不跟着滚，孩子滑题面时提示一直看得见。
+  const quizHost = document.createElement("div");
+  quizHost.className = "shk-quizhost";
+  stage.appendChild(quizHost);
+  const fit = fitIntoStage(quizHost);
+
   /** 提示条跟着的那道题（回顾轮换过题库之后指的就是回顾题） */
   let live: ShapeQ[] = questions;
 
@@ -235,6 +248,8 @@ export function runQuizWithReview(opts: ReviewOptions, deps: ReviewDeps = {}): P
     hintBtn.disabled = !has;
     hintBtn.textContent = hintButtonLabel(0);
     hintBar.hidden = !has;
+    // 换一道题题面高度就变，钳位跟着重算一次
+    fit.relayout();
   }
 
   hintBtn.addEventListener("click", () => {
@@ -290,7 +305,8 @@ export function runQuizWithReview(opts: ReviewOptions, deps: ReviewDeps = {}): P
       win: () => ctx.win(stars, `${tail}${REVIEW_DONE_LINE}`),
       lose: () => ctx.win(stars, `${tail}${REVIEW_TRIED_LINE}`),
     };
-    handle = runner({ stage, ctx: reviewCtx, questions: reviewQs, theme, maxWrong: reviewQs.length * 2 });
+    handle = runner({ stage: quizHost, ctx: reviewCtx, questions: reviewQs, theme, maxWrong: reviewQs.length * 2 });
+    fit.relayout();
   }
 
   const trackedCtx: PlayCtx = {
@@ -313,12 +329,15 @@ export function runQuizWithReview(opts: ReviewOptions, deps: ReviewDeps = {}): P
   };
 
   resetHint();
-  handle = runner({ stage, ctx: trackedCtx, questions, theme });
+  handle = runner({ stage: quizHost, ctx: trackedCtx, questions, theme });
+  fit.relayout();
 
   return {
     destroy() {
       destroyed = true;
       dropHandle();
+      fit.dispose();
+      quizHost.remove();
       panel?.remove();
       panel = null;
     },

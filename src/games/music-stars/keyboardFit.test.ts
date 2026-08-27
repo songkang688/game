@@ -195,15 +195,21 @@ describe("音乐星星 · 摆不下就挂横向滚动，键一颗都不许被切
     expect(MST_CSS).toContain(".mst-btn{min-height:44px");
   });
 
-  it("滚动那条样式真的能滚、而且不会顺手把按键的手势也抢走", () => {
+  it("滚动那条样式真的能滚，而不滚的那一档里按键的手势一分没让", () => {
     const at = MST_CSS.indexOf(".mst-keys-scroll{");
     expect(at, "没有横向滚动的样式").toBeGreaterThan(-1);
     const rule = MST_CSS.slice(at, MST_CSS.indexOf("}", at));
     expect(rule).toContain("overflow-x:auto");
     expect(rule).toContain("touch-action:pan-x");
-    // 键自己仍然是 touch-action:none：按下去出声，不会变成一划就滚走
+    // 不滚的那一档里键仍然是 touch-action:none：按下去出声，不会变成一划就滚走
     const starAt = MST_CSS.indexOf("\n.mst-star{");
     const star = MST_CSS.slice(starAt, MST_CSS.indexOf("}", starAt));
     expect(star).toContain("touch-action:none");
+    // 但滚起来那一档里键必须让出横向手势。原来这里想的是「从键与键之间、星空那一片
+    // 起手划」——真机上不成立：键 44px、缝只有 4px，一根手指落哪儿都在键上，
+    // 这一行于是滚不动，「哆」「高哆」从「切在屏外」变成「滚不过去」，还是按不到。
+    const scrolledAt = MST_CSS.indexOf(".mst-keys-scroll .mst-star{");
+    const scrolled = MST_CSS.slice(scrolledAt, MST_CSS.indexOf("}", scrolledAt));
+    expect(scrolled, "滚动档里键还锁着手势，这一行就滚不动").toContain("touch-action:pan-x");
   });
 });

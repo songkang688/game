@@ -19,7 +19,7 @@ import { openLevelOnMap, parseLevelParam, resolveInitialLevel } from "./runtime"
 import { createSandbox, type SandboxHandle } from "./sandboxUi";
 import { StarSynth } from "./synth";
 import { midiToFreq, PENTATONIC_MIDI, PENTATONIC_NOTES } from "./tuning";
-import { createAudioBar, createStarBoard, injectCss } from "./ui";
+import { createAudioBar, createStarBoard, fitIntoStage, injectCss } from "./ui";
 
 /**
  * 五声音阶 do re mi sol la。
@@ -112,6 +112,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
   const board = createStarBoard({
     midis: NOTE_MIDIS.slice(0, cfg.starCount),
     notes: PENTATONIC_NOTES.slice(0, cfg.starCount),
+    // wrap 这时已经在舞台里了，量它才知道键排真正能占多宽
+    host: wrap,
     onDown: (i) => onStarDown(i),
   });
   wrap.appendChild(board.el);
@@ -303,6 +305,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
 
   updateHud();
   startRound();
+  // 内容都摆完了再钳：矮屏上这一屏比舞台看得见的那一段高，钳完才滚得到声音设置栏
+  const fit = fitIntoStage(wrap);
 
   return {
     destroy() {
@@ -311,6 +315,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, synth: StarSynth): PlayHand
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
       replayBtn.removeEventListener("click", onReplay);
+      fit.dispose();
       audioBar.destroy();
       board.destroy();
       wrap.remove();
@@ -365,6 +370,8 @@ export function mount(api: GameApi): { destroy: () => void } {
     }
     sandbox = createSandbox({ synth, onClose: () => closeSandbox() });
     sandboxHost.appendChild(sandbox.el);
+    // 进文档之后才量得到真实宽度，键盘按它重排一次
+    sandbox.relayout();
     gameHost.hidden = true;
     sandboxBtn.textContent = "🗺️ 回去闯关";
   };

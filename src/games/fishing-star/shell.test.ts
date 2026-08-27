@@ -11,6 +11,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import guide from "./guide";
+import { TOUCH_MIN_PX } from "./index";
 import { meta } from "./meta";
 
 const dir = fileURLToPath(new URL(".", import.meta.url));
@@ -132,6 +133,24 @@ describe("手机 360px", () => {
     expect(short).toMatch(/\.fs-act\{[^}]*min-height:44px/);
     // 这一档必须排在既有的 720 那一档后面,否则被它盖回去
     expect(css.indexOf("@media (max-height:720px)")).toBeLessThan(at);
+  });
+
+  it("小按钮（⏸ 暂停、结算页那几颗）抬到 44px 触屏底线", () => {
+    // 复审时用 elementFromPoint 逐个量热区，这一批实测只有 34px 高——
+    // 本档统一的规矩是「可点的最小边长 44px」，只抬高度不动配色圆角
+    expect(TOUCH_MIN_PX).toBe(44);
+    // 这里读的是源码原文，样式里写的是模板占位符而不是数字
+    const btn = css.slice(css.indexOf(".fs-btn{"), css.indexOf(".fs-btn:active"));
+    expect(btn).toContain("min-height:${TOUCH_MIN_PX}px");
+    // 抬高之后文字得居中，不然贴着上边更难按
+    expect(btn).toContain("align-items:center");
+    expect(btn).toContain("box-sizing:border-box");
+    // 矮屏那两档不许把它又收回去
+    for (const q of ["@media (max-height:720px)", "@media (max-height:660px)"]) {
+      const at = css.indexOf(q);
+      const block = css.slice(at, css.indexOf("@media", at + 10));
+      expect(block, `${q} 里把 .fs-btn 的高度又收回去了`).not.toMatch(/\.fs-btn\{[^}]*min-height/);
+    }
   });
 
   it("图鉴卡片不窄于 88px,窄屏那一档也一样", () => {

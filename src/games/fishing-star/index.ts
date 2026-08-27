@@ -130,6 +130,9 @@ import {
 // 样式
 // ---------------------------------------------------------------------------
 
+/** 触屏可点元素的最小边长 */
+export const TOUCH_MIN_PX = 44;
+
 const CSS = `
 .fs-wrap{--fs-ink:#3f5670;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--fs-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
@@ -140,8 +143,11 @@ const CSS = `
 .fs-chip b{font-weight:900;color:#1f6f9c;}
 .fs-chip--goal{background:#e6f5ff;color:#1f6f9c;}
 .fs-chip--warn{background:#ffe8ee;color:#b23a63;}
+/* 触屏底线 44px：这颗按钮（⏸ 暂停、结算页的几颗）原来只有 34px 高，
+   小手指按不准。只抬高不动配色圆角；inline-flex 居中，免得文字贴着上边。 */
 .fs-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#5aa9d6,#3d87b8);box-shadow:0 3px 0 #2d6a94;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#5aa9d6,#3d87b8);box-shadow:0 3px 0 #2d6a94;
+  min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;}
 .fs-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #2d6a94;}
 .fs-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .fs-btn--ghost{background:linear-gradient(180deg,#a9c4d8,#87a7bf);box-shadow:0 3px 0 #6b8aa1;}

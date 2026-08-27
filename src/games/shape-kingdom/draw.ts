@@ -91,6 +91,61 @@ export function dotBoardMetrics(viewportWidth: number, cols: number, rows: numbe
   return { board, unit, hit, width: unit * cols + hit, height: unit * rows + hit };
 }
 
+/**
+ * 舞台真正看得见的那一段，从 `selfTop` 往下还剩多少像素。
+ *
+ * `clipperBottoms` 是所有会裁掉内容的祖先的下沿——取最小的那个，因为只要有一层裁，
+ * 再往下就看不见了。一层都没有（比如用例里的裸节点）就返回 `Infinity`，表示不用钳。
+ */
+export function visibleRoomPx(selfTop: number, clipperBottoms: readonly number[]): number {
+  if (clipperBottoms.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(...clipperBottoms) - selfTop;
+}
+
+/**
+ * 把作图台钳进「舞台看得见的那一段」，钳不下就让它自己滚。
+ *
+ * 为什么不能只靠 CSS：矮屏那一档写的是 `max-height:100%`，可百分比要有一个**定高**的
+ * 父级才算得出来，而壳层这条链上 `.l99-stage` / `.l99-stage-wrap` 全是内容撑出来的
+ * auto 高——它们自己先长到 653px，`100%` 于是等于内容自己的高度，永远钳不住，
+ * `scrollHeight === clientHeight`，滚动条一次都不会出现。真机实测：360×640 上
+ * `.shk-draw` 高 517、舞台只看得见 408，`canScroll` 仍是 0，「✅ 我摆好了」照样点不着。
+ * 真正定高的那一层是 `.game-stage`（平台文件，交给窗口1），本款够不着它的 CSS，
+ * 但够得着它的**盒子**——量一次下沿，把像素值写成自己的 `max-height` 就成了。
+ *
+ * 只在真的装不下时才写 `max-height` / `overflow-y`，装得下就把两样都还回去，
+ * 免得高屏上凭空多出一个滚动容器（那会把 `.shk-board` 的投影裁掉）。
+ * 返回拆监听的函数，`destroy` 时叫一声。
+ */
+export function fitIntoStage(el: HTMLElement): { relayout: () => void; dispose: () => void } {
+  const view = el.ownerDocument?.defaultView ?? null;
+  const measurable = typeof el.getBoundingClientRect === "function" && !!view;
+  const relayout = (): void => {
+    if (!measurable || !view) return;
+    // 先把上一次钳出来的值还原，不然量到的是钳完的高度，越量越小
+    el.style.maxHeight = "";
+    el.style.overflowY = "";
+    const bottoms: number[] = [];
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = view.getComputedStyle(p).overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") bottoms.push(p.getBoundingClientRect().bottom);
+    }
+    const room = visibleRoomPx(el.getBoundingClientRect().top, bottoms);
+    if (!Number.isFinite(room) || room <= 0) return;
+    if (el.scrollHeight <= room + 1) return;
+    el.style.maxHeight = `${Math.floor(room)}px`;
+    el.style.overflowY = "auto";
+  };
+  relayout();
+  view?.addEventListener("resize", relayout);
+  return {
+    relayout,
+    dispose(): void {
+      view?.removeEventListener("resize", relayout);
+    },
+  };
+}
+
 export interface DotHit {
   r: number;
   c: number;
@@ -409,7 +464,11 @@ export const DRAW_CSS = `
      裁掉的那一截里正是交卷用的「✅ 我摆好了」——测试员 W5-B-01 在 360×720 上量到它
      低于裁切线 37px、360×640 上低 117px，按不着就交不了卷。
      本款自己能做的两件事：① 竖向逐项收一档；② 收完还高就在本款壳里自己滚。
-     按钮热区（.shk-btn 的 min-height:44px）一个都不动。 */
+     按钮热区（.shk-btn 的 min-height:44px）一个都不动。
+     下面这行 max-height:100% 今天是空转的：百分比要有定高父级，而壳层这条链上
+     .l99-stage / .l99-stage-wrap 都是内容撑出来的 auto 高。真正把它钳住的是
+     fitIntoStage() 量出来的像素值（内联样式，优先级更高）；这行留着是等平台
+     哪天给舞台链定了高就自动接上，两边不打架。 */
   .shk-draw{min-height:0;max-height:100%;overflow-y:auto;gap:6px;padding:8px;}
   .shk-castle{font-size:17px;min-height:20px;}
   .shk-ask{font-size:15px;}
@@ -527,6 +586,8 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
   wrap.appendChild(msg);
 
   stage.appendChild(wrap);
+  // 进 DOM 之后立刻钳一次：矮屏上作图台比舞台看得见的那一段高，钳完才滚得到交卷键
+  const fit = fitIntoStage(wrap);
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -884,6 +945,8 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
     else if (task.kind === "symfill") buildSymfillBoard(task);
     else buildTilingBoard(task);
     paintHeader();
+    // 换一道题内容就换一批，高度跟着变，钳位重算一次
+    fit.relayout();
   }
 
   function finish(): void {
@@ -945,6 +1008,7 @@ export function runDrawRound(opts: DrawRoundOptions): PlayHandle {
       destroyed = true;
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      fit.dispose();
       wrap.remove();
     },
   };

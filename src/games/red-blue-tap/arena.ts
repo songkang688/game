@@ -90,6 +90,9 @@ export function padHeightPx(layout: PadLayout, slots = SLOT_COUNT): number {
 export function padWidthPx(layout: PadLayout): number {
   return layout.columns * layout.keyPx + (layout.columns - 1) * layout.gap;
 }
+/** 触屏可点元素的最小边长 */
+export const TOUCH_MIN_PX = 44;
+
 /** 一局对战先到几分 */
 export const VERSUS_TARGET = 7;
 
@@ -100,7 +103,9 @@ export const KEYS_RIGHT = ["j", "k", "l", ";"];
 export const ARENA_CSS = `
 .rbt-vs { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E7F1FF, #FFEAF2); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
 .rbt-vs-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.rbt-vs-back, .rbt-vs-mode { border: none; border-radius: 999px; padding: 8px 14px; font-size: 15px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffdd; color: #3F5C9A; box-shadow: 0 3px 0 rgba(90,110,170,.28); }
+/* 触屏底线 ${TOUCH_MIN_PX}px：这两颗原来只有 34px 高，是本款仅有的两处不到底线的热区。
+   只抬高不动配色圆角；inline-flex 居中，免得文字贴着上边。 */
+.rbt-vs-back, .rbt-vs-mode { border: none; border-radius: 999px; padding: 8px 14px; font-size: 15px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffdd; color: #3F5C9A; box-shadow: 0 3px 0 rgba(90,110,170,.28); min-height: ${TOUCH_MIN_PX}px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 .rbt-vs-back:active, .rbt-vs-mode:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(90,110,170,.28); }
 .rbt-vs-back:focus-visible, .rbt-vs-mode:focus-visible { outline: 3px solid #2F4E86; outline-offset: 3px; }
 .rbt-vs-tag { background: #ffffffd6; border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 800; color: #5B7FC9; }

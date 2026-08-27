@@ -20,7 +20,7 @@ import {
   type ScaleKind,
 } from "./sandbox";
 import { DIATONIC_NOTES, PENTATONIC_NOTES, midiToFreq } from "./tuning";
-import { createStarBoard, type StarBoardHandle } from "./ui";
+import { createStarBoard, fitIntoStage, type StarBoardHandle } from "./ui";
 import type { StarSynth } from "./synth";
 
 export interface SandboxOptions {
@@ -33,6 +33,11 @@ export interface SandboxOptions {
 
 export interface SandboxHandle {
   el: HTMLElement;
+  /**
+   * 挂进文档之后叫一声：键盘的宽度得量真实容器才准，而 `createSandbox` 返回时
+   * `el` 还是游离节点，`clientWidth` 一律是 0。同时把壳钳进舞台看得见的那一段。
+   */
+  relayout(): void;
   destroy(): void;
 }
 
@@ -61,6 +66,8 @@ export function createSandbox(opts: SandboxOptions): SandboxHandle {
     <div class="mst-sb-clips"></div>
   `;
 
+  const fit = fitIntoStage(wrap);
+
   const stateEl = wrap.querySelector(".mst-sb-state") as HTMLElement;
   const msgEl = wrap.querySelector(".mst-sb-msg") as HTMLElement;
   const keysHost = wrap.querySelector(".mst-sb-keys") as HTMLElement;
@@ -84,6 +91,8 @@ export function createSandbox(opts: SandboxOptions): SandboxHandle {
     board = createStarBoard({
       midis,
       notes,
+      // 量真正装键盘的那个盒子：七声八键在手机上放不下，得让它知道到底差多少
+      host: keysHost,
       onDown: (i, pointerId) => {
         opts.synth.unlock();
         opts.synth.play(midiToFreq(midis[i]), 600, 1);
@@ -104,6 +113,7 @@ export function createSandbox(opts: SandboxOptions): SandboxHandle {
     scale = scale === "penta" ? "hepta" : "penta";
     scaleBtn.textContent = scale === "penta" ? "🎼 五声音阶" : "🎼 七声音阶";
     buildBoard();
+    fit.relayout();
   });
 
   const recBtn = button("⏺️ 录一段", () => {
@@ -200,6 +210,11 @@ export function createSandbox(opts: SandboxOptions): SandboxHandle {
 
   return {
     el: wrap,
+    relayout(): void {
+      // 进文档之后键盘宿主才有真实宽度，按它重建一次；八键塞不下就带上横向滚动
+      buildBoard();
+      fit.relayout();
+    },
     destroy(): void {
       for (const t of timers) clearTimeout(t);
       timers.clear();
@@ -207,6 +222,7 @@ export function createSandbox(opts: SandboxOptions): SandboxHandle {
       intervals.clear();
       for (const off of cleanups) off();
       cleanups.length = 0;
+      fit.dispose();
       board?.destroy();
       board = null;
       wrap.remove();

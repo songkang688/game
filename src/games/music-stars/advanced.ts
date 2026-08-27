@@ -41,6 +41,7 @@ import {
   createAudioBar,
   createBeatBar,
   createStarBoard,
+  fitIntoStage,
   injectCss,
   renderScore,
   type BeatBarHandle,
@@ -188,6 +189,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       notes: notes.slice(0, cfg.starCount),
       // 双声部关同一拍要按两颗，键必须拉开，一根手指盖不住两个
       wideGap: cfg.mode === "duet",
+      // wrap 这时已经在舞台里了，量它才知道键排真正能占多宽
+      host: wrap,
       onDown: (i, pointerId) => onStarDown(i, pointerId),
       onUp: (_i, pointerId) => onStarUp(pointerId),
     });
@@ -635,9 +638,12 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       paintScore();
       renderDots(scores[roundIdx].length);
       msgEl.textContent = "照着简谱弹：1 哆 2 来 3 咪 5 索 6 拉；数字下面有横线的是半拍，后面带「-」的是两拍";
+      // 简谱一行几个音每一轮都不一样，这一屏的高度跟着变，钳位重算一次
+      fit.relayout();
       return;
     }
     if (cfg.mode === "interval") renderIntervalChoices();
+    fit.relayout();
     playRound();
   }
 
@@ -659,6 +665,8 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   msgEl.textContent = modeIntro(cfg.mode);
   updateHud();
   later(startRound, 700);
+  // 内容都摆完了再钳：矮屏上简谱视奏这一屏比舞台看得见的那一段高，钳完才滚得到底下的键
+  const fit = fitIntoStage(wrap);
 
   return {
     destroy() {
@@ -669,6 +677,7 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
       if (chordTimer) clearTimeout(chordTimer);
       chordTimer = null;
       replayBtn.removeEventListener("click", onReplay);
+      fit.dispose();
       for (const off of cleanups) off();
       cleanups.length = 0;
       beatBar?.destroy();
