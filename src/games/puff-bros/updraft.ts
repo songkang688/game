@@ -234,3 +234,35 @@ export function climbMessage(meters: number, best: number): string {
 export function climbSurfaceY(def: ArenaDef, surface: number): number {
   return surfaceY(def.platforms, surface);
 }
+
+// ---------------------------------------------------------------------------
+// 上升气流自己的纪录位
+// ---------------------------------------------------------------------------
+
+/**
+ * 上升气流的最好高度单独存一格,不跟「噗噗不停」抢平台那一格。
+ *
+ * 平台每款游戏只给一个无尽成绩位(`save` 的 `endlessBest`),而本款有**两种**
+ * 无尽:噗噗不停记**分**(一波 40 分起,几波下来就是几百),上升气流记**米**
+ * (一段 20 米,爬得好也就几十米)。两种挤在同一格里会出两件事:
+ *
+ *  1. 分数量级压着米数,玩过一趟噗噗不停之后,上升气流**再也刷不出新纪录**;
+ *  2. 那一格的数字会被上升气流按「米」念出来 —— 300 分显示成「最好 300 米」,
+ *     孩子根本没爬过这么高。
+ *
+ * 所以平台那一格留给噗噗不停(它是本款的主无尽),上升气流用本文件这个键。
+ */
+export const CLIMB_BEST_KEY = "yiduo.puff-bros.climb.best";
+
+/** 读存下来的最好高度;读不出、是坏数据、或是负数都算 0(绝不把纪录读成 NaN)。 */
+export function parseClimbBest(raw: string | null | undefined): number {
+  if (typeof raw !== "string") return 0;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n);
+}
+
+/** 写回去之前先规整一下,别把 NaN / 小数 / 负数存进去。 */
+export function serializeClimbBest(meters: number): string {
+  return String(Math.max(0, Math.round(Number.isFinite(meters) ? meters : 0)));
+}

@@ -5,7 +5,7 @@
  * `pfb-` 前缀与局部 style、360px 上左右半屏各一套控件且热区不小于 44px、
  * 双人同屏「谁抬手松谁的键」、五种机关真的画得出来、五种模式都走得到结算、
  * 平台直达第 N 关 / `initialLevel` / `?level=` / Skip 走 `requestSkip`、
- * 上升气流的高度写进 `save.recordEndlessBest("puff-bros", height)`,
+ * 上升气流的高度写进本款自己的 `CLIMB_BEST_KEY`(不跟噗噗不停抢平台那一格),
  * 以及 `destroy` 之后一根线都不留。
  */
 import { afterEach, describe, expect, it } from "vitest";
@@ -481,8 +481,12 @@ describe("puff-bros 1.2 运行时 · 五种模式都能结算", () => {
     game.destroy();
   });
 
-  it("上升气流(endless):气流线追上来就结算,高度写进 recordEndlessBest", async () => {
+  it("上升气流(endless):气流线追上来就结算,高度写进本款自己那一格,不动平台那格", async () => {
     const { save } = await import("../../engine/save");
+    const { CLIMB_BEST_KEY, parseClimbBest } = await import("./updraft");
+    // 先把平台那一格垫上一个「噗噗不停」量级的分数(几百分),
+    // 从前两种无尽挤一格的时候,这个数会把上升气流的米数永远压死。
+    save.recordEndlessBest(meta.id, 321);
     const before = save.getGameProgress(meta.id).endlessBest;
     const h = (harness = install());
     const { game } = await mountGame(h);
@@ -490,6 +494,8 @@ describe("puff-bros 1.2 运行时 · 五种模式都能结算", () => {
     findButton(h.root, "上升气流")?.fire("click");
     h.flush(3);
     expect(allText(h.root)).toContain("米");
+    // 进来时这一格还是空的,不会把平台那 321 分冒充成「最好 321 米」
+    expect(allText(h.root), "上升气流不该把波次分数念成米数").not.toContain("321 米");
 
     // 站着不动:气流线一路追上来,先打转,救不回来才结束这一趟
     const spent = until(h, () => veilTitle(h) !== "", 900, 50);
@@ -497,8 +503,48 @@ describe("puff-bros 1.2 运行时 · 五种模式都能结算", () => {
     expect(veilTitle(h)).toContain("米");
     expect(findButton(h.root, "再来一趟")).not.toBeNull();
     expect(findButton(h.root, "回关卡")).not.toBeNull();
-    // 爬到过第一层,高度是正的,而且真的记进了平台那条无尽成绩
-    expect(save.getGameProgress(meta.id).endlessBest).toBeGreaterThanOrEqual(before);
+    // 爬到过第一层,高度是正的,记进的是上升气流自己那一格
+    const climbed = parseClimbBest(h.storage.get(CLIMB_BEST_KEY) ?? null);
+    expect(climbed, "上升气流的纪录没落到自己那一格").toBeGreaterThan(0);
+    // 平台那一格是「噗噗不停」的,爬一趟不许把它顶掉
+    expect(save.getGameProgress(meta.id).endlessBest, "爬一趟不该动噗噗不停的分数").toBe(before);
+    game.destroy();
+  });
+
+  /**
+   * 1.2 监督修复员补的:两种无尽本来共用平台那一个成绩位。
+   * 噗噗不停记分(几百),上升气流记米(几十),而 `recordEndlessBest` 取 max ——
+   * 结果是玩过一趟噗噗不停之后,上升气流**再也刷不出新纪录**,
+   * 而且那格分数还会被按「米」念出来。现在各记各的。
+   */
+  it("玩过噗噗不停之后,上升气流照样能刷出自己的新纪录", async () => {
+    const { save } = await import("../../engine/save");
+    const { CLIMB_BEST_KEY, heightLine, parseClimbBest } = await import("./updraft");
+    save.recordEndlessBest(meta.id, 321);
+    const h = (harness = install());
+    const { game } = await mountGame(h);
+    h.flush(2);
+
+    // 菜单上两个按钮各念各的单位,不再是同一个数字出现两次
+    const waveLabel = findButton(h.root, "噗噗不停")?.textContent ?? "";
+    const climbLabel = findButton(h.root, "上升气流")?.textContent ?? "";
+    expect(waveLabel).toContain("321 分");
+    expect(climbLabel, "还没爬过就不该有米数纪录").toContain("往上爬");
+    expect(climbLabel).not.toContain("321");
+
+    // 爬一趟:这一趟一定是新纪录,因为这一格本来是空的
+    findButton(h.root, "上升气流")?.fire("click");
+    h.flush(3);
+    expect(until(h, () => veilTitle(h) !== "", 900, 50)).toBeGreaterThan(0);
+    expect(veilTitle(h), "第一趟就该是新纪录").toContain("新纪录");
+    const climbed = parseClimbBest(h.storage.get(CLIMB_BEST_KEY) ?? null);
+    expect(climbed).toBeGreaterThan(0);
+
+    // 回到菜单:上升气流那颗按钮念的是米数,噗噗不停那颗还是分数
+    findButton(h.root, "回关卡")?.fire("click");
+    h.flush(3);
+    expect(findButton(h.root, "上升气流")?.textContent).toContain(heightLine(climbed));
+    expect(findButton(h.root, "噗噗不停")?.textContent).toContain("321 分");
     game.destroy();
   });
 

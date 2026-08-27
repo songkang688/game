@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ARENA_W, FLOOR_Y, MAX_ROWS, SUPPORT_INSET, WALL, rowSurface, supportChain, surfaceSpan } from "./arena";
 import {
+  CLIMB_BEST_KEY,
   CLIMB_ROWS,
   LINE_SPEED_MAX,
   SECTION_METERS,
@@ -12,9 +13,11 @@ import {
   heightLine,
   lineSpeed,
   lineY,
+  parseClimbBest,
   rowOfSurface,
+  serializeClimbBest,
 } from "./updraft";
-import { createWorld, emptyInput, stepWorld, type Input, type World } from "./logic";
+import { createWorld, emptyInput, endlessScore, stepWorld, type Input, type World } from "./logic";
 
 const SECTIONS = Array.from({ length: 10 }, (_, i) => buildClimbSection(i));
 
@@ -189,5 +192,61 @@ describe("puff-bros 上升气流 · 玩起来", () => {
     run(w, 1.5);
     expect(w.players[0].bounds.phase).toBe("in");
     expect(w.players[0].onGround).toBe(true);
+  });
+});
+
+/* ---------------- 上升气流自己的纪录位 ---------------- */
+
+/**
+ * 1.2 监督修复员修的:两种无尽本来挤在平台那一个成绩位里。
+ *
+ * 噗噗不停记**分**(`endlessScore` 一波 40 分起,几波下来就是几百),
+ * 上升气流记**米**(一段 20 米,爬得好也就几十米)。挤一格的后果有两个,
+ * 都是玩家能看见的:
+ *
+ *  1. 分数量级压着米数,`recordEndlessBest` 又是取 max —— 孩子玩过一趟
+ *     噗噗不停之后,上升气流**再也刷不出新纪录**,每趟都被判「没破纪录」;
+ *  2. 上升气流那一格是按「米」念的,300 分会显示成「最好 300 米」,
+ *     孩子根本没爬到过那个高度。
+ *
+ * 现在上升气流用本文件的 `CLIMB_BEST_KEY` 单独记一格。
+ */
+describe("上升气流的纪录不跟噗噗不停抢格子", () => {
+  it("纪录键是本款专用的,不会和别款或平台那一格撞上", () => {
+    expect(CLIMB_BEST_KEY).toContain("puff-bros");
+    expect(CLIMB_BEST_KEY).toContain("climb");
+  });
+
+  it("读得回自己写出去的高度", () => {
+    for (const m of [0, 1, 20, 87, 4000]) {
+      expect(parseClimbBest(serializeClimbBest(m))).toBe(m);
+    }
+  });
+
+  it("坏数据一律读成 0,绝不把纪录读成 NaN 或负数", () => {
+    for (const bad of [null, undefined, "", "不是数字", "NaN", "-5", "abc12"]) {
+      const got = parseClimbBest(bad as string | null);
+      expect(Number.isFinite(got), `${String(bad)} 读出了非数字`).toBe(true);
+      expect(got, `${String(bad)} 该读成 0`).toBe(0);
+    }
+  });
+
+  it("写进去的一律是规整过的整数,小数和负数不会落盘", () => {
+    expect(serializeClimbBest(12.7)).toBe("13");
+    expect(serializeClimbBest(-9)).toBe("0");
+    expect(serializeClimbBest(Number.NaN)).toBe("0");
+    expect(serializeClimbBest(Number.POSITIVE_INFINITY)).toBe("0");
+  });
+
+  it("一趟几十米的好成绩,不会被几百分的波次成绩判成「没破纪录」", () => {
+    // 噗噗不停那边随手一趟的量级(清 10 个 + 拿 8 颗糖 + 过 3 波)
+    const waveScore = endlessScore(10, 8, 3);
+    expect(waveScore).toBeGreaterThan(200);
+    // 上升气流爬满四段也才这么多米
+    const climbed = climbHeight(4, 0);
+    expect(climbed).toBe(4 * SECTION_METERS);
+    expect(climbed, "米数确实比分数小一个量级,所以更不能挤一格").toBeLessThan(waveScore);
+    // 各记各的:上升气流那一格里只有米数,波次分数进不来
+    expect(parseClimbBest(serializeClimbBest(climbed))).toBe(climbed);
   });
 });

@@ -44,6 +44,7 @@ import { SQUASH_TIME, squashScale as landingSquash } from "./feel";
 import { PUFF_WINDUP, puffRing, squishScale as pushSquish, windupProgress } from "./push";
 import { TUMBLE_TIME, tumbleProgress } from "./bounds";
 import {
+  CLIMB_BEST_KEY,
   SECTION_METERS,
   bottomLine,
   buildClimbSection,
@@ -51,7 +52,9 @@ import {
   climbMessage,
   heightLine,
   lineY,
+  parseClimbBest,
   rowOfSurface,
+  serializeClimbBest,
 } from "./updraft";
 import {
   BOT_LEVELS,
@@ -1454,10 +1457,30 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
  * 脚底下那条气流线一直在往上追,被追上、或者掉出屏底,都先**打转**——
  * 那一段时间里还能左右挪、还能噗一口自救,救不回来才结束这一趟。
  *
- * 高度按米记,写进 `save.recordEndlessBest("puff-bros", height)`。平台每款游戏
- * 只有一个无尽成绩位,所以两种无尽记在同一条线上:波次记分、上升气流记米数,
- * 一米算一分。
+ * 高度按米记,存在本款自己的 `CLIMB_BEST_KEY` 里 —— 平台那一格无尽成绩留给
+ * 「噗噗不停」。两种无尽的单位不一样(那边记分、这边记米),挤一格会让米数
+ * 永远刷不过分数,详见 `updraft.ts` 里 `CLIMB_BEST_KEY` 上面那段。
  */
+/** 读上升气流的最好高度。存储被禁用(无痕窗口)时安静地当作还没有纪录。 */
+function readClimbBest(): number {
+  try {
+    return parseClimbBest(globalThis.localStorage?.getItem(CLIMB_BEST_KEY));
+  } catch {
+    return 0;
+  }
+}
+
+/** 写回上升气流的最好高度;写不进去也不能把这一趟的结算流程搞崩。 */
+function writeClimbBest(meters: number): number {
+  const next = Math.max(0, Math.round(Number.isFinite(meters) ? meters : 0));
+  try {
+    globalThis.localStorage?.setItem(CLIMB_BEST_KEY, serializeClimbBest(next));
+  } catch {
+    /* 存不下就只在这一趟里生效,不打扰玩家 */
+  }
+  return next;
+}
+
 function mountClimb(host: HTMLElement, api: GameApi, onExit: () => void): { destroy: () => void } {
   const root = el("div");
   const style = el("style");
@@ -1476,7 +1499,7 @@ function mountClimb(host: HTMLElement, api: GameApi, onExit: () => void): { dest
   let section = 0;
   /** 这一段里踩到过的最高一层 —— 高度只涨不跌,掉下来一点读数不会跟着缩回去 */
   let peak = 0;
-  let best = save.getGameProgress(meta.id).endlessBest;
+  let best = readClimbBest();
   let settled = false;
   bestChip.textContent = best > 0 ? `🏅 最好 ${heightLine(best)}` : "🏅 还没有纪录";
 
@@ -1503,7 +1526,7 @@ function mountClimb(host: HTMLElement, api: GameApi, onExit: () => void): { dest
     settled = true;
     const meters = height();
     const record = meters > best;
-    if (record) best = save.recordEndlessBest(meta.id, meters);
+    if (record) best = writeClimbBest(meters);
     bestChip.textContent = `🏅 最好 ${heightLine(best)}`;
     const bonus = Math.min(6, Math.floor(meters / 25));
     if (bonus > 0) api.addStars(bonus);
@@ -1789,10 +1812,11 @@ export function mount(api: GameApi): PuffBrosHandle {
   let direct: { destroy: () => void } | null = null;
 
   function refreshBar(): void {
-    // 平台每款游戏只有一个无尽成绩位,两种无尽共用它:波次记分、上升气流记米数
-    const best = save.getGameProgress(meta.id).endlessBest;
-    endlessBtn.textContent = best > 0 ? `♾️ 噗噗不停 · 最好 ${best}` : "♾️ 噗噗不停 · 来一趟!";
-    climbBtn.textContent = best > 0 ? `🎈 上升气流 · 最好 ${best}` : "🎈 上升气流 · 往上爬!";
+    // 两种无尽各记各的:噗噗不停用平台那一格记分,上升气流用本款自己那一格记米
+    const waveBest = save.getGameProgress(meta.id).endlessBest;
+    const climbBest = readClimbBest();
+    endlessBtn.textContent = waveBest > 0 ? `♾️ 噗噗不停 · 最好 ${waveBest} 分` : "♾️ 噗噗不停 · 来一趟!";
+    climbBtn.textContent = climbBest > 0 ? `🎈 上升气流 · 最好 ${heightLine(climbBest)}` : "🎈 上升气流 · 往上爬!";
     coopBtn.textContent = coopPlayers === 1 ? "👤 闯关:一个人" : "👫 闯关:两个人";
     coopBtn.setAttribute("aria-label", `188 关闯关目前是${coopPlayers === 1 ? "一个人" : "两个人一起"}玩,点一下切换`);
   }
