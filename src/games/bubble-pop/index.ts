@@ -42,18 +42,11 @@ import {
   revealHidden,
   STONE,
 } from "./logic";
+import { bpCellSkin, bpIsTiny, bpVisualCss } from "./visual";
 
 const COLS = 8;
 /** 一关里最多帮孩子「吹气重排」几次，之后才收局（重排不扣分） */
 const MAX_SHUFFLE = 3;
-
-const COLORS = [
-  { bg: "radial-gradient(circle at 35% 30%, #FFE1EE, #FF9EC8)", ring: "#FF9EC8", mark: "●" },
-  { bg: "radial-gradient(circle at 35% 30%, #DFF3FF, #8FCBFF)", ring: "#8FCBFF", mark: "▲" },
-  { bg: "radial-gradient(circle at 35% 30%, #E6FBDF, #9FE08D)", ring: "#9FE08D", mark: "■" },
-  { bg: "radial-gradient(circle at 35% 30%, #FFF6DA, #FFD26E)", ring: "#FFD26E", mark: "★" },
-  { bg: "radial-gradient(circle at 35% 30%, #F0E2FF, #C9A0F0)", ring: "#C9A0F0", mark: "♥" },
-];
 
 const CSS = `
 .bp-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E4F6FF, #F2EDFF); border-radius: 16px; padding: 12px; user-select: none; position: relative; }
@@ -91,7 +84,7 @@ const CSS = `
   .bbp-ripple { animation: none; }
   .bp-cell.bp-rainbow { animation: none; }
 }
-`;
+` + bpVisualCss();
 
 /** 孩子的系统开了「减少动态效果」就把塌陷压到一帧（状态机还是同一个） */
 function prefersReduced(): boolean {
@@ -117,49 +110,23 @@ function pitchOf(cells: HTMLElement[]): { x: number; y: number } {
   };
 }
 
-/** 把一颗泡泡画到格子上（颜色 + 图案双通道，色觉不敏感也分得清） */
+/** 把一颗泡泡画到格子上（颜色 + 图案双通道，色觉不敏感也分得清；皮肤参数全在 visual.ts） */
 function paintCell(el: HTMLButtonElement, v: number): void {
-  el.classList.remove("bp-rainbow");
   el.textContent = "";
   el.classList.toggle("bp-empty", v < 0);
   // dataset 只是给自动冒烟脚本读的状态镜像，不参与玩法
   el.dataset.v = String(v);
-  if (v < 0) {
-    el.style.background = "";
-    el.style.boxShadow = "";
-  } else if (v === RAINBOW) {
-    el.classList.add("bp-rainbow");
-    el.style.background = "conic-gradient(#FF9EC8, #FFD26E, #9FE08D, #8FCBFF, #C9A0F0, #FF9EC8)";
-    el.style.boxShadow = "0 2px 8px rgba(150,120,220,.5)";
-    el.textContent = "🌈";
-  } else if (v === CHAIN) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #FFE9D6, #FFA45C)";
-    el.style.boxShadow = "0 2px 8px rgba(230,140,60,.5)";
-    el.textContent = "🎇";
-  } else if (v === STONE) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #DCD8CC, #A8A296)";
-    el.style.boxShadow = "0 2px 5px rgba(120,110,100,.4)";
-    el.textContent = "🪨";
-  } else if (v === BOLT) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #FFF9DA, #FFD84D)";
-    el.style.boxShadow = "0 2px 8px rgba(230,180,40,.5)";
-    el.textContent = "⚡";
-  } else if (isFrozen(v)) {
-    el.style.background = COLORS[v - FROZEN_OFFSET].bg;
-    el.style.boxShadow = "inset 0 0 0 3px #9FD6FF, 0 2px 5px rgba(120,180,230,.4)";
-    el.textContent = "🧊";
-  } else if (isHidden(v)) {
-    el.style.background = "radial-gradient(circle at 35% 30%, #6B6580, #3E3A4E)";
-    el.style.boxShadow = "0 2px 6px rgba(60,50,80,.5)";
-    el.textContent = "🏮";
-  } else if (isChameleon(v)) {
-    el.style.background = COLORS[v - CHAMELEON_BASE].bg;
-    el.style.boxShadow = `inset 0 0 0 3px #7FCF95, 0 2px 5px ${COLORS[v - CHAMELEON_BASE].ring}66`;
-    el.textContent = "🦎";
-  } else {
-    const skin = COLORS[v] ?? COLORS[0];
-    el.style.background = skin.bg;
-    el.style.boxShadow = `0 2px 5px ${skin.ring}66`;
+  const skin = bpCellSkin(v);
+  el.classList.toggle("bp-rainbow", skin.rainbow);
+  el.style.background = skin.background;
+  el.style.boxShadow = skin.boxShadow;
+  if (skin.pattern) {
+    const pat = document.createElement("span");
+    pat.className = skin.patternClass ? `bp-pat ${skin.patternClass}` : "bp-pat";
+    pat.innerHTML = skin.pattern;
+    el.appendChild(pat);
+  }
+  if (skin.mark) {
     const mark = document.createElement("span");
     mark.className = "bbp-mark";
     mark.textContent = skin.mark;
@@ -171,6 +138,11 @@ function paintBoard(cells: HTMLButtonElement[], grid: number[][], rows: number):
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < COLS; c++) paintCell(cells[r * COLS + c], grid[r][c]);
   }
+}
+
+/** 泡径 < 32px 时给容器挂 bp-tiny：副高光 / 铆钉这类点缀省略，纹样保留 */
+function syncTiny(container: HTMLElement, cells: HTMLElement[]): void {
+  container.classList.toggle("bp-tiny", bpIsTiny(cells[0]?.clientWidth ?? 0));
 }
 
 /** 把逻辑终态整片搬进现有盘面（保持数组身份不变，闭包里到处引用它） */
@@ -388,6 +360,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   function render(): void {
     paintBoard(cells, grid, rows);
+    syncTiny(wrap, cells);
     leftEl.textContent = `🫧 剩 ${countLeftOn(grid)} 个`;
     scoreEl.textContent = `✨ ${score} 分`;
     if (gravEl) gravEl.textContent = gravityUp ? "🙃 重力 ⬆️" : "🙂 重力 ⬇️";
@@ -618,6 +591,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
   const cells: HTMLButtonElement[] = [];
   let boardEl: HTMLElement | null = null;
   let msgEl: HTMLElement | null = null;
+  let panelEl: HTMLElement | null = null;
 
   function later(fn: () => void, ms: number): void {
     bag.after(fn, ms);
@@ -635,6 +609,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
 
   function render(): void {
     paintBoard(cells, grid, SEA_ROWS);
+    if (panelEl) syncTiny(panelEl, cells);
     chip.textContent = `🌊 ${score} 分 · 涨潮 ${pushes} 次 · 最好 ${best} 分`;
   }
 
@@ -766,6 +741,7 @@ function mountSea(host: HTMLElement, api: GameApi, onBack: () => void): { destro
 
     const panel = document.createElement("div");
     panel.className = "bp-wrap";
+    panelEl = panel;
     const line = document.createElement("div");
     line.className = "bbp-line";
     boardEl = document.createElement("div");
