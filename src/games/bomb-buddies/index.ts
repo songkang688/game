@@ -104,7 +104,9 @@ import { topSideBlock } from "../../art/kit/block25d";
 import { drawParticles, spawnPetals, stepParticles, type Particle } from "../../art/kit/sparkle";
 import { blinkOn, drawChibi, walkFrameAt, type ChibiSpec } from "../../art/kit/chibi";
 import {
+  BB_CHIBI_OUTFIT,
   BB_COLORS,
+  BB_CROWN_GOLD,
   BB_PULSE_TINT,
   BbBoomFx,
   BbFighterFx,
@@ -115,6 +117,8 @@ import {
   crackStage,
   dangerEdgeAlpha,
   dangerGlowAlpha,
+  drawBossKing,
+  drawCritter,
   drawDoor,
   drawHudRing,
   drawItemIcon,
@@ -134,8 +138,9 @@ const P_COLOR = ["#e8558f", "#3f7fd6"];
  * 剪影靠「花发卡 vs 星呆毛 + 裙 vs 裤」双保险区分,灰度截图下也分得清。
  */
 const CHIBI_SPECS: ChibiSpec[] = [
-  { skin: "#FFE3D2", outfit: BB_COLORS.bbPink, outfitStyle: "dress", accessory: "flower", accessoryColor: "#FF9FBE" },
-  { skin: "#FFE9D8", outfit: BB_COLORS.bbBlue, outfitStyle: "pants", accessory: "star", accessoryColor: "#FFD678" },
+  // 修复员 B1:服装改用灰度拉开档(粉亮蓝深,灰差 ≥15/255),裙裤之外多一条明暗通道
+  { skin: "#FFE3D2", outfit: BB_CHIBI_OUTFIT[0], outfitStyle: "dress", accessory: "flower", accessoryColor: "#FF9FBE" },
+  { skin: "#FFE9D8", outfit: BB_CHIBI_OUTFIT[1], outfitStyle: "pants", accessory: "star", accessoryColor: "#FFD678" },
 ];
 
 /** 两套键位一个字都不重叠,写在一处,暂停面板与各模式提示共用 */
@@ -821,17 +826,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     g.closePath();
   }
 
-  /**
-   * 小怪的 emoji 字形(小怪不在本步替换清单里,照旧)。
-   * 角色 / 门 / 道具 / 花瓣已全部改为程序化自绘,这里再也不经手它们。
-   */
-  function glyphAt(text: string, cx: number, cy: number, size: number): void {
-    if (!g) return;
-    g.font = `${Math.round(size)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(text, cx, cy);
-  }
+  // 修复员 S3/S4:小怪与泡泡王也改为程序化自绘(drawCritter / drawBossKing),
+  // glyphAt 随最后一批 emoji 字形一起退休 —— 画布上再无 emoji 角色。
 
   /** 三套主题装饰(花园藤蔓 / 冰原霜花 / 星空星子):只换装饰层,不换布局数据 */
   const theme = themeOfChapter(lv.chapter);
@@ -1016,23 +1012,35 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     }
 
     // ⑥ 小怪 + 双人小人(角色画在格中心,判定格位置不动)
+    //    修复员 S3/S4:裸 emoji / 平涂粉圆 → 四母形自绘小怪 + 三停渐变泡泡王
     for (const c of world.critters) {
       const px = (c.pos % board.w) * cell;
       const py = Math.floor(c.pos / board.w) * cell;
       const info = CRITTER_INFO[c.kind];
+      const ccx = px + cell / 2;
+      const ccy = py + cell / 2;
       if (c.kind === "boss") {
-        g.fillStyle = "#ffe0f0";
-        g.beginPath();
-        g.arc(px + cell / 2, py + cell / 2, cell * 0.46, 0, Math.PI * 2);
-        g.fill();
+        drawBossKing(g, ccx, ccy, cell);
+      } else {
+        drawCritter(g, c.kind, ccx, ccy, cell, c.dir === DIR_LEFT ? -1 : 1);
       }
-      glyphAt(info.emoji, px + cell / 2, py + cell / 2, cell * (c.kind === "boss" ? 0.72 : 0.6));
       if (info.layers > 1) {
+        // 层数徽记搬到头顶小圆牌(自绘圆 + 描边;数字是功能文字,字形保留)
+        const bx = px + cell * 0.84;
+        const by = py + cell * 0.1;
+        const br = Math.max(6, cell * 0.17);
+        g.fillStyle = "#FFF6FA";
+        g.beginPath();
+        g.arc(bx, by, br, 0, Math.PI * 2);
+        g.fill();
+        g.strokeStyle = shade(BB_CROWN_GOLD, -20);
+        g.lineWidth = 1.5;
+        g.stroke();
         g.fillStyle = "#7a5da8";
-        g.font = `900 ${Math.round(cell * 0.28)}px system-ui, sans-serif`;
+        g.font = `900 ${Math.round(cell * 0.24)}px system-ui, sans-serif`;
         g.textAlign = "center";
         g.textBaseline = "middle";
-        g.fillText(`${c.layers}`, px + cell * 0.8, py + cell * 0.22);
+        g.fillText(`${c.layers}`, bx, by + 0.5);
       }
     }
 

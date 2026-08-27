@@ -18,7 +18,17 @@ import { shade } from "../../art/kit/palette";
 import { strokeOutline } from "../../art/kit/outline";
 import { easeOutQuad } from "../../art/kit/sparkle";
 import { SQUAT_MS } from "../../art/kit/chibi";
-import { DIRS, FUSE_MS, xOf, yOf, type Board, type Bomb, type ChainWave, type ItemKind } from "./logic";
+import {
+  DIRS,
+  FUSE_MS,
+  xOf,
+  yOf,
+  type Board,
+  type Bomb,
+  type ChainWave,
+  type CritterKind,
+  type ItemKind,
+} from "./logic";
 
 // ---------------------------------------------------------------------------
 // 四·补一 配色板(token 一个不许飘)
@@ -411,6 +421,251 @@ export function drawItemIcon(
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// 修复员 S3/S4/B1:小怪四母形 + 泡泡王 + 双人服装灰度(替换裸 emoji,判定不动)
+// ---------------------------------------------------------------------------
+
+/**
+ * 小怪主色(learner #5:几何母形 + 专属色双通道识别):
+ * 咕噜=草绿水滴 / 蹦蹦=樱粉竖长圆双立耳 / 追追=杏橙圆体前倾耳 / 钻墙=雾紫幽灵摆边。
+ */
+export const BB_CRITTER = {
+  slime: "#8FCF7A",
+  hopper: "#F7A8C4",
+  chaser: "#F5B36B",
+  ghosty: "#C7B8E8",
+} as const;
+
+/** 泡泡王三停径向渐变(learner #5 原文:粉白 → #ffd6ea → 底 #e8a9cc) */
+export const BB_BOSS_STOPS = ["#FFF6FA", "#FFD6EA", "#E8A9CC"] as const;
+/** 王冠金(亮停由 shade(+18) 现算成 2 停) */
+export const BB_CROWN_GOLD = "#F2C14E";
+/** 小怪体半径系数(格内留白,与双人小人同档) */
+export const BB_CRITTER_R = 0.34;
+/** 泡泡王体半径系数:0.56 ≥ 1.6 × 0.34,首领感的底线(格位置判定不动) */
+export const BB_BOSS_R = 0.56;
+
+/** 小怪 / 泡泡王统一眼型:竖椭圆 + 白高光点(learner #5 规格) */
+function critterEyes(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  spread = 0.34
+): void {
+  ctx.fillStyle = "#4A4266";
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.ellipse(cx + s * r * spread, cy, Math.max(1, r * 0.1), Math.max(1.4, r * 0.16), 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "rgba(255,255,255,.92)";
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.arc(cx + s * r * spread - r * 0.03, cy - r * 0.05, Math.max(0.5, r * 0.045), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** 2 停体渐变:顶亮 +16 → 底 -8(左上光源的纵向近似) */
+function critterBodyGrad(ctx: CanvasRenderingContext2D, color: string, top: number, bottom: number): CanvasGradient {
+  const grad = ctx.createLinearGradient(0, top, 0, bottom);
+  grad.addColorStop(0, shade(color, 16));
+  grad.addColorStop(1, shade(color, -8));
+  return grad;
+}
+
+/**
+ * 四小怪自绘(替换蛙/兔/猫/幽灵四只裸 emoji 字形)。
+ * 几何全部挂在格中心 (cx,cy) 与 cell 比例上,格位置判定一个数不动;
+ * facing 只镜像朝向(追追怪的前倾耳 / 小尾能看出追谁),纯静态件,reduced 无关。
+ */
+export function drawCritter(
+  ctx: CanvasRenderingContext2D,
+  kind: Exclude<CritterKind, "boss">,
+  cx: number,
+  cy: number,
+  cell: number,
+  facing: 1 | -1 = 1
+): void {
+  const r = cell * BB_CRITTER_R;
+  const color = BB_CRITTER[kind];
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(facing, 1);
+  ctx.fillStyle = BB_COLORS.bbShadow;
+  ctx.beginPath();
+  ctx.ellipse(0, r * 1.1, r * 0.78, r * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = critterBodyGrad(ctx, color, -r * 1.2, r * 1.1);
+  if (kind === "slime") {
+    // 水滴形蹲体:顶收尖、底铺开
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.15);
+    ctx.bezierCurveTo(r * 0.85, -r * 0.75, r * 0.98, -r * 0.1, r * 0.95, r * 0.4);
+    ctx.arc(0, r * 0.4, r * 0.95, 0, Math.PI);
+    ctx.bezierCurveTo(-r * 0.98, -r * 0.1, -r * 0.85, -r * 0.75, 0, -r * 1.15);
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    // 顶垂一滴(识别件)
+    ctx.fillStyle = shade(color, 16);
+    ctx.beginPath();
+    ctx.arc(r * 0.34, -r * 0.98, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    critterEyes(ctx, 0, -r * 0.12, r);
+  } else if (kind === "hopper") {
+    // 双立耳 + 竖长圆身
+    for (const s of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.ellipse(s * r * 0.42, -r * 1.06, r * 0.2, r * 0.52, s * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.78, r * 1.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    ctx.fillStyle = shade(color, -14);
+    for (const s of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.ellipse(s * r * 0.42, -r * 1.02, r * 0.09, r * 0.3, s * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    critterEyes(ctx, 0, -r * 0.24, r);
+  } else if (kind === "chaser") {
+    // 小尾(画在身后)
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.66, r * 0.34);
+    ctx.quadraticCurveTo(-r * 1.35, r * 0.14, -r * 1.12, -r * 0.42);
+    ctx.quadraticCurveTo(-r * 0.98, r * 0.02, -r * 0.58, r * 0.66);
+    ctx.closePath();
+    ctx.fill();
+    // 前倾双立耳(往行进方向斜)
+    for (const ex of [r * 0.02, r * 0.48]) {
+      ctx.beginPath();
+      ctx.moveTo(ex - r * 0.24, -r * 0.6);
+      ctx.lineTo(ex + r * 0.38, -r * 1.16);
+      ctx.lineTo(ex + r * 0.3, -r * 0.46);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    critterEyes(ctx, r * 0.08, -r * 0.16, r);
+  } else {
+    // 幽灵摆边纱体(半透明 0.85 = 能钻墙的视觉语言)
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.25, r * 0.85, Math.PI, 0);
+    ctx.lineTo(r * 0.85, r * 0.72);
+    for (let k = 2; k >= 0; k--) {
+      const wx = -r * 0.85 + ((k + 0.5) / 3) * r * 1.7;
+      ctx.quadraticCurveTo(wx + r * 0.27, r * 1.05, wx, r * 0.72);
+      ctx.quadraticCurveTo(wx - r * 0.27, r * 0.44, wx - r * 0.56, r * 0.72);
+    }
+    ctx.closePath();
+    ctx.fill();
+    strokeOutline(ctx, color, 1.5);
+    // 内层暗芯(纱下有影,不是一张平片)
+    ctx.fillStyle = shade(color, -12);
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.06, r * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    critterEyes(ctx, 0, -r * 0.32, r);
+  }
+  ctx.restore();
+}
+
+/**
+ * 泡泡王(替换「平涂粉圆 + 龙 emoji 字形」):三停径向渐变 + 大月牙反光 +
+ * 三齿金王冠 + 皱眉鼓腮表情。体半径 0.56×cell ≥ 1.6× 小怪,格位置判定不动;
+ * 层数徽记的小圆牌由 index 层画(数字是功能文字,字形保留)。
+ */
+export function drawBossKing(ctx: CanvasRenderingContext2D, cx: number, cy: number, cell: number): void {
+  const r = cell * BB_BOSS_R;
+  ctx.fillStyle = BB_COLORS.bbShadow;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + r * 1.04, r * 0.86, r * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 三停体:高光偏左上 45°
+  const grad = ctx.createRadialGradient(cx - r * 0.38, cy - r * 0.42, r * 0.12, cx, cy, r * 1.05);
+  grad.addColorStop(0, BB_BOSS_STOPS[0]);
+  grad.addColorStop(0.55, BB_BOSS_STOPS[1]);
+  grad.addColorStop(1, BB_BOSS_STOPS[2]);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  strokeOutline(ctx, BB_BOSS_STOPS[2], 2);
+  // 大月牙反光
+  ctx.strokeStyle = "rgba(255,255,255,.85)";
+  ctx.lineWidth = Math.max(2, r * 0.14);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.72, -Math.PI * 0.82, -Math.PI * 0.38);
+  ctx.stroke();
+  ctx.lineCap = "butt";
+  // 皱眉(往中间压)+ 竖椭圆眼
+  ctx.strokeStyle = "#8A4A6E";
+  ctx.lineWidth = Math.max(1.5, r * 0.09);
+  ctx.lineCap = "round";
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.moveTo(cx + s * r * 0.46, cy - r * 0.4);
+    ctx.lineTo(cx + s * r * 0.14, cy - r * 0.24);
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  critterEyes(ctx, cx, cy, r * 0.9, 0.3);
+  // 鼓腮(两侧深一档粉)+ 撇嘴(倒 U)
+  ctx.fillStyle = shade(BB_BOSS_STOPS[1], -10);
+  for (const s of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.ellipse(cx + s * r * 0.52, cy + r * 0.34, r * 0.22, r * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "#8A4A6E";
+  ctx.lineWidth = Math.max(1.5, r * 0.08);
+  ctx.beginPath();
+  ctx.arc(cx, cy + r * 0.66, r * 0.18, Math.PI * 1.15, Math.PI * 1.85);
+  ctx.stroke();
+  // 三齿金王冠(2 停 + 描边 + 冠底珠)
+  const cw = r * 0.6;
+  const baseY = cy - r * 0.86;
+  const ch = r * 0.44;
+  const gold = ctx.createLinearGradient(0, baseY - ch * 1.15, 0, baseY);
+  gold.addColorStop(0, shade(BB_CROWN_GOLD, 18));
+  gold.addColorStop(1, BB_CROWN_GOLD);
+  ctx.fillStyle = gold;
+  ctx.beginPath();
+  ctx.moveTo(cx - cw, baseY);
+  ctx.lineTo(cx - cw, baseY - ch * 0.9);
+  ctx.lineTo(cx - cw * 0.5, baseY - ch * 0.45);
+  ctx.lineTo(cx, baseY - ch * 1.15);
+  ctx.lineTo(cx + cw * 0.5, baseY - ch * 0.45);
+  ctx.lineTo(cx + cw, baseY - ch * 0.9);
+  ctx.lineTo(cx + cw, baseY);
+  ctx.closePath();
+  ctx.fill();
+  strokeOutline(ctx, BB_CROWN_GOLD, 1.5);
+  ctx.fillStyle = "#FF9FBE";
+  ctx.beginPath();
+  ctx.arc(cx, baseY - ch * 0.16, r * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * 修复员 B1:双人服装主色的「拉开一档」版。
+ * 原 bbPink(#F4859F)/ bbBlue(#7FB2F0)灰度亮度几乎同值(169.2 vs 169.8),
+ * tester 三通道读数里灰差只有 9.9 —— 这里粉提亮、蓝加深,把灰差拉到 ≥ 15/255,
+ * 16px 灰度截图下裙 / 裤之外多出一条明暗通道。bbPink / bbBlue 本体 token 不动
+ * (地板 / 摇杆 / HUD 仍用旧值,visual13.test 的配色表照旧成立)。
+ */
+export const BB_CHIBI_OUTFIT: readonly [string, string] = ["#F79BB2", "#5E97DE"];
 
 /** 硬墙铆钉四点(顶面四角) */
 export function drawRivets(
