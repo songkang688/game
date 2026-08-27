@@ -5,7 +5,8 @@
 export const meta = {
   id: "red-blue-race",
   title: "红蓝赛跑",
-  emoji: "🏁",
+  // 1.3 视觉升级:终点旗全面改为自绘格纹旗,卡片图标一并换成运动背心,不再用旗帜 emoji
+  emoji: "🎽",
   category: "party" as const,
   color: "#51cf66",
   blurb:

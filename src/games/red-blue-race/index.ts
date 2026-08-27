@@ -54,14 +54,19 @@ import {
   settleClickAccepted,
   speedRatio
 } from "./feel";
-
-const OB_EMOJI: Record<ObstacleType, string> = {
-  puddle: "💧",
-  hurdle: "🚧",
-  hill: "⛰️",
-  star: "⭐",
-  item: "🎁"
-};
+import { RACE_LOOKS, runnerSvg } from "../../art/kit/runnerSvg";
+import {
+  RBR_TOKENS_CSS,
+  buntingSvg,
+  checkerFlagSvg,
+  crownSvg,
+  finishArchSvg,
+  laneLeftPct,
+  obstacleSvg,
+  standsSvg,
+  startLightsHtml,
+  whistleSvg
+} from "./art";
 
 /**
  * 让分开关是「这次坐下来玩」的设置:默认关,开了以后本次会话都记着,
@@ -77,33 +82,109 @@ const START_WORDS = { ready: "各就位…", set: "预备…", go: "跑!" };
 // ---------------------------------------------------------------------------
 
 const CSS = `
+${RBR_TOKENS_CSS}
 .rbr-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #E8F8E0, #FFF7E0); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; overflow: hidden; }
 .rbr-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
 .rbr-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 4px 12px 4px 4px; font-weight: 700; color: #3F6B33; box-shadow: 0 2px 6px rgba(110,170,90,.25); font-size: 14px; }
 .rbr-badge.rbr-badge-right { padding: 4px 4px 4px 12px; }
 .rbr-ava { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 1px 4px rgba(90,130,80,.3); }
+.rbr-mid { display: flex; flex-direction: column; gap: 3px; align-items: center; flex: 1; min-width: 120px; }
 .rbr-meters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; font-weight: 800; color: #3F6B33; }
-.rbr-runner-img { width: 40px; height: 40px; border-radius: 50%; border: 3px solid #fff; object-fit: cover; box-shadow: 0 3px 8px rgba(90,110,80,.35); background: #fff; display: block; }
-.rbr-runner.rbr-me .rbr-runner-img { border-color: #FFB3B3; }
-.rbr-runner.rbr-airun .rbr-runner-img { border-color: #A9C6FF; }
-.rbr-lane { position: relative; height: 60px; border-radius: 14px; margin-bottom: 8px; overflow: hidden; }
-.rbr-lane-red { background: linear-gradient(180deg, #FFE4E4, #FFD4D4); }
-.rbr-lane-blue { background: linear-gradient(180deg, #E0EEFF, #D0E4FF); }
-.rbr-lane-tag { position: absolute; left: 8px; top: 4px; font-size: 12px; font-weight: 800; color: #5A5A5A; opacity: .75; }
-.rbr-finish { position: absolute; right: 4px; top: 0; bottom: 0; display: flex; align-items: center; font-size: 22px; }
-.rbr-ground { position: absolute; left: 0; right: 0; bottom: 6px; height: 2px; background: rgba(120,120,120,.22); }
-.rbr-speed { position: absolute; height: 2px; border-radius: 2px; background: rgba(90,110,90,.3); opacity: 0; }
+/* HUD 双色进度双条 + 领先方小皇冠(⑥ 功能件层) */
+.rbr-bars { display: flex; flex-direction: column; gap: 4px; width: 100%; max-width: 170px; }
+.rbr-bar { position: relative; height: 8px; border-radius: 999px; background: #ffffffcc; box-shadow: inset 0 1px 2px rgba(120,90,60,.25); }
+.rbr-bar b { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 999px; transition: width .15s linear; }
+.rbr-bar-red b { background: linear-gradient(90deg, #FF9AA8, var(--rbr-red)); }
+.rbr-bar-blue b { background: linear-gradient(90deg, #9ABEF5, var(--rbr-blue)); }
+.rbr-crown { position: absolute; top: -10px; left: 0; width: 15px; height: 11px; opacity: 0; transition: left .15s linear, opacity .2s ease; }
+.rbr-crown svg { width: 100%; height: 100%; display: block; }
+.rbr-crown-on { opacity: 1; }
+/* ---------------------------------------------------------------------------
+   2.5D 赛场(z 序照四·补一):① 天空 + 看台彩旗 → ② 透视跑道面 → ③ 障碍
+   → ④ 跑者 → ⑤ 尘土/溅水/彩纸 → ⑥ 起跑灯/HUD → ⑦ 结算浮层。
+   整个 rbr-scene 是纯展示层,pointer-events 关死,按键热区全在它外面。
+   --------------------------------------------------------------------------- */
+.rbr-scene { position: relative; margin-bottom: 8px; pointer-events: none; }
+.rbr-sky { position: relative; height: 38px; overflow: hidden; border-radius: 14px 14px 0 0; background: linear-gradient(180deg, var(--rbr-sky), #F6FCFF); z-index: 1; }
+.rbr-stand-layer { position: absolute; left: -6%; right: -6%; bottom: 7px; height: 17px; }
+.rbr-flag-layer { position: absolute; left: -4%; right: -4%; top: 2px; height: 12px; }
+.rbr-stand-layer svg, .rbr-flag-layer svg { width: 100%; height: 100%; display: block; }
+.rbr-horizon { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, rgba(255,255,255,0), var(--rbr-lane-line), rgba(255,255,255,0)); }
+.rbr-live .rbr-stand-layer { animation: rbrPara 7s linear infinite alternate; }
+.rbr-live .rbr-flag-layer { animation: rbrPara 5s linear infinite alternate-reverse; }
+@keyframes rbrPara { from { transform: translateX(0); } to { transform: translateX(-14px); } }
+.rbr-persp { position: relative; perspective: 720px; perspective-origin: 50% -30%; z-index: 2; }
+.rbr-track3d { position: relative; transform: rotateX(18deg); transform-origin: 50% 0%; }
+.rbr-arch { position: absolute; right: -2px; top: -12px; bottom: -2px; width: 40px; z-index: 6; }
+.rbr-arch svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(120,80,40,.25)); }
+.rbr-ribbon-l, .rbr-ribbon-r { transform-box: fill-box; transition: transform .5s ease, opacity .5s ease; }
+.rbr-ribbon-l { transform-origin: 0% 50%; }
+.rbr-ribbon-r { transform-origin: 100% 50%; }
+.rbr-finished .rbr-ribbon-l { transform: rotate(38deg); opacity: 0; }
+.rbr-finished .rbr-ribbon-r { transform: rotate(-38deg); opacity: 0; }
+.rbr-lane { position: relative; height: 58px; border-radius: 7px; margin-bottom: 5px; overflow: hidden; box-shadow: inset 0 1.5px 0 var(--rbr-lane-line), inset 0 -1.5px 0 var(--rbr-lane-line); }
+.rbr-lane-red { background: linear-gradient(180deg, var(--rbr-track-far), var(--rbr-track)); }
+.rbr-lane-blue { background: linear-gradient(180deg, #C98A60, var(--rbr-track-far)); }
+.rbr-lane::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; opacity: .8; z-index: 2; }
+.rbr-lane-red::before { background: var(--rbr-red); }
+.rbr-lane-blue::before { background: var(--rbr-blue); }
+.rbr-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--rbr-lane-line); opacity: .38; z-index: 1; }
+.rbr-lane-tag { position: absolute; left: 10px; top: 3px; font-size: 12px; font-weight: 800; color: #FFFFFF; text-shadow: 0 1px 2px rgba(120,70,40,.55); opacity: .95; z-index: 2; }
+.rbr-finline { position: absolute; top: 0; bottom: 0; left: 94%; width: 7px; background: repeating-linear-gradient(180deg, #4A4458 0 6px, #FFFFFF 6px 12px); opacity: .85; z-index: 1; }
+.rbr-speed { position: absolute; height: 2px; border-radius: 2px; background: rgba(255,255,255,.5); opacity: 0; z-index: 2; }
 .rbr-lane-run .rbr-speed { animation: rbrSpeed .5s linear infinite; }
 @keyframes rbrSpeed { 0% { transform: translateX(14px); opacity: 0; } 40% { opacity: .8; } 100% { transform: translateX(-46px); opacity: 0; } }
-.rbr-runner { position: absolute; top: 50%; transform: translateY(-50%); font-size: 30px; transition: left .12s linear; }
-.rbr-runner-inner { display: block; animation: rbrStride .7s ease-in-out infinite; }
-.rbr-runner.rbr-jump .rbr-runner-inner { animation: none; }
+/* ④ 跑者小人:两帧跑姿 + 跳跃 + 滑倒四层帧,帧频吃 --rbr-gait(setStride 写入) */
+.rbr-runner { position: absolute; width: 46px; height: 52px; top: 50%; transform: translateY(-56%); transition: left .12s linear; z-index: 4; }
+.rbr-rframe { position: absolute; inset: 0; }
+.rbr-rframe svg { width: 100%; height: 100%; display: block; }
+.rbr-fb, .rbr-fjump, .rbr-fslip { opacity: 0; }
+.rbr-lane-run .rbr-fa, .rbe-lane .rbr-fa { animation: rbrGaitA var(--rbr-gait, 700ms) steps(1, end) infinite; }
+.rbr-lane-run .rbr-fb, .rbe-lane .rbr-fb { animation: rbrGaitB var(--rbr-gait, 700ms) steps(1, end) infinite; }
+@keyframes rbrGaitA { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes rbrGaitB { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
+.rbr-jump .rbr-fa, .rbr-jump .rbr-fb, .rbr-slip .rbr-fa, .rbr-slip .rbr-fb { animation: none; opacity: 0; }
+.rbr-jump .rbr-fjump { opacity: 1; }
+.rbr-slip .rbr-fslip { opacity: 1; }
 .rbr-runner.rbr-jump { animation: rbrJump .45s ease; }
-@keyframes rbrJump { 0%,100% { transform: translateY(-50%); } 50% { transform: translateY(-112%); } }
-@keyframes rbrStride { 0%,100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-3px) rotate(4deg); } }
-.rbr-ob { position: absolute; top: 4px; font-size: 17px; opacity: .9; transition: opacity .2s ease; }
-.rbr-ob-gone { opacity: .22; filter: grayscale(1); }
-.rbr-hill { position: absolute; top: 0; bottom: 0; background: rgba(160,130,80,.18); border-radius: 8px; }
+@keyframes rbrJump { 0%,100% { transform: translateY(-56%); } 50% { transform: translateY(-118%); } }
+.rbr-runner.rbr-bump { animation: rbrBumpShake .3s ease; }
+@keyframes rbrBumpShake { 0%,100% { margin-left: 0; } 30% { margin-left: -5px; } 65% { margin-left: 3px; } }
+.rbr-fslip .kit-slip-stars { transform-box: fill-box; transform-origin: 50% 130%; animation: rbrSlipSpin var(--rbr-slip-ms, 500ms) ease-in-out infinite alternate; }
+@keyframes rbrSlipSpin { from { transform: rotate(-11deg); } to { transform: rotate(11deg); } }
+/* ③ 障碍 / 道具:自绘 SVG,不再用 emoji */
+.rbr-ob { position: absolute; top: 5px; width: 26px; height: 25px; opacity: .95; transition: opacity .2s ease; z-index: 3; }
+.rbr-ob svg { width: 100%; height: 100%; display: block; }
+.rbr-ob-puddle { top: auto; bottom: 5px; width: 30px; height: 18px; }
+.rbr-ob-hurdle { top: 8px; width: 27px; height: 23px; }
+.rbr-ob-star { top: 7px; width: 24px; height: 21px; }
+.rbr-ob-item { top: 6px; width: 23px; height: 23px; }
+.rbr-ob-hill { top: auto; bottom: 4px; width: 36px; height: 20px; }
+.rbr-ob-gone { opacity: .18; filter: grayscale(.9); }
+.rbr-hill { position: absolute; top: 0; bottom: 0; background: linear-gradient(180deg, rgba(201,138,96,.42), rgba(201,138,96,.16)); border-radius: 8px; z-index: 1; }
+/* ⑤ 尘土 / 溅水 / 拾取飞行 / 飘字 */
+.rbr-dust { position: absolute; bottom: 6px; width: 7px; height: 7px; border-radius: 50%; background: #EAD9C4; opacity: .95; pointer-events: none; z-index: 5; animation: rbrDustL var(--rbr-dust-ms, 240ms) ease-out forwards; }
+.rbr-dust-b { animation-name: rbrDustR; }
+@keyframes rbrDustL { to { transform: translate(-9px, -7px) scale(1.7); opacity: 0; } }
+@keyframes rbrDustR { to { transform: translate(9px, -6px) scale(1.5); opacity: 0; } }
+.rbr-splash { position: absolute; bottom: 10px; width: 6px; height: 8px; border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; background: var(--rbr-puddle); pointer-events: none; z-index: 5; animation: rbrSplashL var(--rbr-slip-ms, 500ms) ease-out forwards; }
+.rbr-splash-b { animation-name: rbrSplashR; }
+@keyframes rbrSplashL { 55% { opacity: .95; } to { transform: translate(-10px, -12px); opacity: 0; } }
+@keyframes rbrSplashR { 55% { opacity: .95; } to { transform: translate(10px, -11px); opacity: 0; } }
+.rbr-flyer { position: absolute; width: 22px; height: 22px; z-index: 5; pointer-events: none; transition: left var(--rbr-fly-ms, 260ms) ease-in, top var(--rbr-fly-ms, 260ms) ease-in, transform var(--rbr-fly-ms, 260ms) ease-in; }
+.rbr-flyer svg { width: 100%; height: 100%; display: block; }
+.rbr-flyer-go { transform: scale(.45); }
+.rbr-float { position: absolute; top: -4px; z-index: 5; font-size: 14px; font-weight: 900; color: #7A4E0E; text-shadow: 0 1px 0 #fff; pointer-events: none; animation: rbrFloatUp .8s ease-out forwards; white-space: nowrap; }
+@keyframes rbrFloatUp { to { transform: translateY(-16px); opacity: 0; } }
+/* ⑥ 起跑灯(红红绿)与裁判哨音气泡 */
+.rbr-callrow { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 26px; margin: 2px 0 6px; }
+.rbr-lights { display: inline-flex; gap: 5px; align-items: center; }
+.rbr-light { width: 12px; height: 12px; border-radius: 50%; background: #E7E0D2; box-shadow: inset 0 1px 2px rgba(90,80,60,.35); }
+.rbr-light-on-red { background: radial-gradient(circle at 35% 30%, #FF9A8A, #E0503C); box-shadow: 0 0 6px rgba(224,80,60,.8); }
+.rbr-light-on-go { background: radial-gradient(circle at 35% 30%, #9FE8A8, #3E9E58); box-shadow: 0 0 7px rgba(70,170,100,.8); }
+.rbr-refbubble { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 800; color: #7A4E0E; box-shadow: 0 3px 10px rgba(140,110,60,.3); z-index: 6; pointer-events: none; animation: rbrBubblePop .22s ease; }
+.rbr-refbubble svg { width: 20px; height: 15px; }
+@keyframes rbrBubblePop { from { transform: translateX(-50%) scale(.7); opacity: 0; } }
 .rbr-gear { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; min-height: 22px; }
 .rbr-chip { display: inline-flex; align-items: center; gap: 5px; background: #ffffffd9; border-radius: 999px; padding: 4px 11px; font-size: 14px; font-weight: 800; color: #3F6B33; box-shadow: 0 2px 5px rgba(110,150,90,.2); }
 /* 让分开关原来只有 30px 高,偏偏是攻略点名推荐、大人最常点的那一颗(窗口5 第1轮 W5-A-03) */
@@ -133,9 +214,14 @@ const CSS = `
 .rbr-jump-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #27653C; }
 .rbr-keyhint { text-align: center; font-size: 13px; font-weight: 700; color: #4F6048; margin-top: 6px; }
 .rbr-msg { text-align: center; min-height: 20px; color: #3F6B33; font-weight: 700; margin-top: 8px; font-size: 14px; }
-.rbr-confetti { position: absolute; top: -14px; width: 8px; height: 14px; border-radius: 2px; pointer-events: none; animation: rbrFall 1.1s ease-in forwards; }
+/* 彩纸:星星 / 纸带两种粒子混发 */
+.rbr-confetti { position: absolute; top: -14px; width: 8px; height: 14px; border-radius: 2px; pointer-events: none; z-index: 5; animation: rbrFall 1.1s ease-in forwards; }
+.rbr-confetti-star { width: 11px; height: 11px; border-radius: 0; clip-path: polygon(50% 0, 63% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 37% 35%); }
 @keyframes rbrFall { to { transform: translateY(340px) rotate(320deg); opacity: 0; } }
 .rbr-slowmo .rbr-runner { transition: left .5s ease-out; }
+/* 冲线慢镜的加速度线(时长跟 FINISH_SLOWMO_MS 的 --rbr-slowmo-ms 走) */
+.rbr-slowmo .rbr-scene::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none; background: repeating-linear-gradient(100deg, rgba(255,255,255,0) 0 34px, rgba(255,255,255,.45) 34px 36px, rgba(255,255,255,0) 36px 70px); animation: rbrZoomLines var(--rbr-slowmo-ms, 300ms) ease-out forwards; }
+@keyframes rbrZoomLines { from { transform: translateX(28px); opacity: 0; } 40% { opacity: 1; } to { transform: translateX(-40px); opacity: .15; } }
 @media (max-width: 420px) {
   .rbr-step { font-size: 17px; }
   .rbr-side { padding: 6px; gap: 6px; }
@@ -155,10 +241,16 @@ const CSS = `
 .rbr-tight .rbr-meters { font-size: 12px; gap: 4px; }
 .rbr-tight .rbr-gear { margin-bottom: 5px; gap: 6px; }
 .rbr-tight .rbr-chip { font-size: 12px; padding: 3px 9px; }
-.rbr-tight .rbr-lane { height: 52px; margin-bottom: 5px; }
-.rbr-tight .rbr-runner { font-size: 25px; }
-.rbr-tight .rbr-runner-img { width: 34px; height: 34px; border-width: 2px; }
-.rbr-tight .rbr-call { font-size: 16px; min-height: 20px; margin: 0 0 4px; letter-spacing: 1px; }
+.rbr-tight .rbr-lane { height: 50px; margin-bottom: 4px; }
+.rbr-tight .rbr-sky { height: 26px; }
+.rbr-tight .rbr-scene { margin-bottom: 6px; }
+.rbr-tight .rbr-runner { width: 40px; height: 45px; }
+.rbr-tight .rbr-bars { gap: 3px; max-width: 150px; }
+.rbr-tight .rbr-bar { height: 6px; }
+.rbr-tight .rbr-ob { transform: scale(.88); transform-origin: left bottom; }
+.rbr-tight .rbr-arch { width: 34px; }
+.rbr-tight .rbr-call, .rbr-tight .rbr-callrow { font-size: 16px; min-height: 20px; margin: 0 0 4px; letter-spacing: 1px; }
+.rbr-tight .rbr-callrow .rbr-call { margin: 0; }
 /* 跳键原来独占一整行,是这一屏最下面那 64px;收成三键一排,高度直接省掉一行 */
 .rbr-tight .rbr-pads:not(.rbr-pads-duo) { grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 5px; }
 .rbr-tight .rbr-pads:not(.rbr-pads-duo) .rbr-jump-btn { grid-column: auto; }
@@ -172,7 +264,7 @@ const CSS = `
 .rbr-tight .rbe-head { margin-bottom: 6px; gap: 6px; }
 .rbr-tight .rbe-chip { font-size: 12px; padding: 4px 9px; }
 .rbr-tight .rbe-lane { height: 78px; margin-bottom: 5px; }
-.rbr-tight .rbe-face { width: 34px; height: 34px; }
+.rbr-tight .rbe-me, .rbr-tight .rbe-pacer { width: 36px; height: 41px; }
 .rbr-tight .rbv-head { margin-bottom: 5px; }
 .rbr-tight .rbv-foes { padding: 2px 0 5px; }
 .rbr-tight .rbv-foe-note { margin-bottom: 4px; min-height: 15px; font-size: 12px; }
@@ -180,20 +272,32 @@ const CSS = `
 /* 名字和头像在赛道条上还各挂着一份,抬头条这一份让位给「点得着」 */
 .rbr-tighter .rbr-badge { display: none; }
 .rbr-tighter .rbr-top { margin-bottom: 4px; }
-.rbr-tighter .rbr-lane { height: 44px; margin-bottom: 4px; }
-.rbr-tighter .rbr-runner-img { width: 28px; height: 28px; }
-.rbr-tighter .rbr-runner { font-size: 21px; }
-.rbr-tighter .rbr-ob { font-size: 15px; top: 2px; }
-.rbr-tighter .rbr-finish { font-size: 18px; }
+.rbr-tighter .rbr-lane { height: 42px; margin-bottom: 4px; }
+.rbr-tighter .rbr-sky { display: none; }
+.rbr-tighter .rbr-scene { margin-bottom: 5px; }
+.rbr-tighter .rbr-runner { width: 34px; height: 38px; }
+.rbr-tighter .rbr-bars { display: none; }
+.rbr-tighter .rbr-ob { transform: scale(.76); }
+.rbr-tighter .rbr-arch { width: 28px; top: -8px; }
 .rbr-tighter .rbr-call { font-size: 15px; min-height: 18px; margin: 0 0 3px; }
+.rbr-tighter .rbr-callrow { min-height: 18px; margin: 0 0 3px; }
 .rbr-tighter .rbr-step, .rbr-tighter .rbr-jump-btn { min-height: 52px; font-size: 15px; }
 .rbr-tighter .rbr-side .rbr-step { min-height: 46px; font-size: 13px; }
 .rbr-tighter .rbr-msg, .rbr-tighter .rbe-msg { font-size: 11px; margin-top: 4px; min-height: 14px; line-height: 1.35; }
 .rbr-tighter .rbe-lane { height: 66px; }
-.rbr-tighter .rbe-face { width: 28px; height: 28px; }
+.rbr-tighter .rbe-me, .rbr-tighter .rbe-pacer { width: 30px; height: 34px; }
+/* 减弱动效:跑姿交替、视差、慢镜特效、粒子全停;位置更新与结算不受影响 */
 @media (prefers-reduced-motion: reduce) {
   .rbr-lane-run .rbr-speed { animation: none; opacity: 0; }
-  .rbr-runner-inner { animation: none; }
+  .rbr-lane-run .rbr-fa, .rbr-lane-run .rbr-fb, .rbe-lane .rbr-fa, .rbe-lane .rbr-fb { animation: none; }
+  .rbr-fb { opacity: 0; }
+  .rbr-live .rbr-stand-layer, .rbr-live .rbr-flag-layer { animation: none; }
+  .rbr-fslip .kit-slip-stars { animation: none; }
+  .rbr-dust, .rbr-splash { display: none; }
+  .rbr-slowmo .rbr-scene::after { display: none; }
+  .rbr-flyer { display: none; }
+  .rbr-refbubble { animation: none; }
+  .rbr-ribbon-l, .rbr-ribbon-r { transition: none; }
   .rbr-beat { animation: none; }
   .rbr-confetti { display: none; }
 }
@@ -217,13 +321,16 @@ const ENDLESS_CSS = `
 .rbe-chip { background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 800; color: #2C6349; box-shadow: 0 2px 6px rgba(110,160,130,.24); }
 .rbe-lane { position: relative; height: 104px; border-radius: 16px; overflow: hidden; background: linear-gradient(180deg, #FFF6DE 0 62%, #E6F2CF 62% 100%); margin-bottom: 8px; }
 .rbe-ground { position: absolute; left: 0; right: 0; top: 62%; height: 3px; background: rgba(120,140,90,.5); }
-.rbe-me, .rbe-pacer { position: absolute; top: 26%; transform: translateY(-26%); transition: left .1s linear; }
-.rbe-face { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #fff; object-fit: cover; background: #fff; display: block; box-shadow: 0 3px 8px rgba(110,130,90,.32); }
-.rbe-me .rbe-face { border-color: #FFB3B3; }
-.rbe-pacer .rbe-face { border-color: #A9C6FF; opacity: .85; }
+.rbe-me, .rbe-pacer { position: absolute; top: 26%; transform: translateY(-26%); transition: left .1s linear; width: 44px; height: 50px; }
+.rbe-pacer { opacity: .85; }
 .rbe-me.rbe-jump { animation: rbeJump .42s ease; }
 @keyframes rbeJump { 0%,100% { transform: translateY(-26%); } 50% { transform: translateY(-96%); } }
-.rbe-ob { position: absolute; top: 40%; font-size: 22px; transition: left .1s linear; }
+.rbe-ob { position: absolute; top: 40%; width: 26px; height: 24px; transition: left .1s linear; }
+.rbe-ob svg { width: 100%; height: 100%; display: block; }
+.rbe-ob-puddle { top: auto; bottom: 26%; width: 30px; height: 18px; }
+.rbe-ob-hurdle { width: 27px; height: 24px; }
+.rbe-ob-star { width: 24px; height: 21px; }
+.rbe-ob-item { width: 23px; height: 23px; }
 .rbe-msg { text-align: center; min-height: 20px; font-size: 14px; font-weight: 700; color: #2C6349; margin-top: 8px; }
 .rbe-over { position: absolute; inset: 0; border-radius: 20px; background: rgba(255,252,246,.97); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px; }
 .rbe-over-title { font-size: 22px; font-weight: 900; color: #2C6349; }
@@ -234,7 +341,7 @@ const ENDLESS_CSS = `
 .rbe-over-btn:focus-visible { outline: 3px solid #1F2A22; outline-offset: 3px; }
 @media (max-width: 420px) {
   .rbe-lane { height: 92px; }
-  .rbe-face { width: 36px; height: 36px; }
+  .rbe-me, .rbe-pacer { width: 38px; height: 43px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rbe-me.rbe-jump { animation: none; }
@@ -244,7 +351,10 @@ const ENDLESS_CSS = `
 const VERSUS_CSS = `
 .rbv-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0F0, #EFF4FF); border-radius: 20px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; overflow: hidden; }
 .rbv-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.rbv-score { font-size: 16px; font-weight: 900; color: #3E3C52; background: #fff; border-radius: 999px; padding: 5px 14px; box-shadow: 0 2px 6px rgba(120,120,160,.22); }
+/* 比分卡片化:白卡 + 红蓝描边渐变,不再是普通药丸 */
+.rbv-score { font-size: 16px; font-weight: 900; color: #3E3C52; background: linear-gradient(#fff, #fff) padding-box, linear-gradient(90deg, var(--rbr-red), var(--rbr-blue)) border-box; border: 2px solid transparent; border-radius: 14px; padding: 6px 16px; box-shadow: 0 3px 8px rgba(120,120,160,.25); }
+.rbr-overflag { width: 54px; height: 58px; }
+.rbr-overflag svg { width: 100%; height: 100%; display: block; }
 .rbv-foes { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
 .rbv-foes::-webkit-scrollbar { display: none; }
 .rbv-foe { flex: 0 0 auto; border: none; border-radius: 14px; padding: 9px 12px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; background: #ffffffc4; color: #43435C; box-shadow: 0 2px 5px rgba(120,120,160,.2); white-space: nowrap; min-height: 40px; }
@@ -319,12 +429,12 @@ function createRuntime(): Runtime {
 
 const CONFETTI_COLORS = ["#FF8A8A", "#7FBFFF", "#FFD37A", "#8FD98A", "#D8A6F0"];
 
-/** 冲线彩带:减弱动效时一条都不撒 */
+/** 冲线彩纸:星星 / 纸带两种粒子混发,减弱动效时一片都不撒 */
 function spawnConfetti(host: HTMLElement, rt: Runtime, reduced: boolean): void {
   const n = confettiCount(reduced);
   for (let i = 0; i < n; i++) {
     const bit = document.createElement("i");
-    bit.className = "rbr-confetti";
+    bit.className = i % 3 === 0 ? "rbr-confetti rbr-confetti-star" : "rbr-confetti";
     bit.style.left = `${6 + Math.random() * 88}%`;
     bit.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
     bit.style.animationDelay = `${Math.random() * 0.25}s`;
@@ -333,16 +443,47 @@ function spawnConfetti(host: HTMLElement, rt: Runtime, reduced: boolean): void {
   }
 }
 
+/** 抢跑时的裁判哨音气泡:只提醒「再等等哦」,不批评 */
+function showRefereeBubble(host: HTMLElement, rt: Runtime): void {
+  if (host.querySelector(".rbr-refbubble")) return;
+  const bubble = document.createElement("div");
+  bubble.className = "rbr-refbubble";
+  bubble.innerHTML = `${whistleSvg()}<span>再等等哦</span>`;
+  host.appendChild(bubble);
+  rt.later(() => bubble.remove(), 900);
+}
+
 interface LaneView {
   el: HTMLElement;
   setPos: (pos: number) => void;
   setStride: (ratio: number) => void;
   setRunning: (on: boolean) => void;
   jump: () => void;
+  /** 纯展示:踩水坑坐地转圈星 + 溅水两滴(位置回退在调用方,和 1.2 一样) */
+  slip: () => void;
+  /** 纯展示:撞栏架晃一下 */
+  bump: () => void;
   fade: (index: number) => void;
+  /** 纯展示:道具飞向跑者头顶 + 「+n 米」飘字(结算在调用方,先加完再飞) */
+  fly: (index: number, label: string) => void;
 }
 
-/** 一条跑道:机关标记 + 跑者 + 地面速度线。红蓝两条完全一样,只有底色不同 */
+/** 同页多条赛道的 SVG 渐变 id 计数器(闯关 / 对战 / 无尽都从这里取号) */
+let runnerSeq = 0;
+
+/** 跑者四层帧(两帧跑姿 + 跳 + 滑倒),帧切换全交给 CSS 类 */
+function runnerFramesHtml(side: "red" | "blue", faceHref: string): string {
+  const look = RACE_LOOKS[side];
+  const pre = `rbr${side}${++runnerSeq}`;
+  return (
+    `<span class="rbr-rframe rbr-fa">${runnerSvg({ look, phase: 0, faceHref, idPrefix: `${pre}A` })}</span>` +
+    `<span class="rbr-rframe rbr-fb">${runnerSvg({ look, phase: 1, faceHref, idPrefix: `${pre}B` })}</span>` +
+    `<span class="rbr-rframe rbr-fjump">${runnerSvg({ look, pose: "jump", faceHref, idPrefix: `${pre}J` })}</span>` +
+    `<span class="rbr-rframe rbr-fslip">${runnerSvg({ look, pose: "slip", faceHref, idPrefix: `${pre}S` })}</span>`
+  );
+}
+
+/** 一条跑道:机关标记 + 跑者小人 + 米数刻度 + 速度线。红蓝两条完全一样,只有配色不同 */
 function buildLane(
   side: "red" | "blue",
   avatar: string,
@@ -359,6 +500,14 @@ function buildLane(
   tagEl.textContent = tag;
   el.appendChild(tagEl);
 
+  // 米数刻度:贴在透视面上,近端疏远端密的收敛感由 rotateX 自己给
+  for (const pct of [20, 40, 60, 80]) {
+    const tick = document.createElement("i");
+    tick.className = "rbr-tick";
+    tick.style.left = `${pct}%`;
+    el.appendChild(tick);
+  }
+
   for (let i = 0; i < 4; i++) {
     const line = document.createElement("i");
     line.className = "rbr-speed";
@@ -368,10 +517,6 @@ function buildLane(
     line.style.animationDelay = `${i * 0.12}s`;
     el.appendChild(line);
   }
-
-  const ground = document.createElement("div");
-  ground.className = "rbr-ground";
-  el.appendChild(ground);
 
   const obEls = new Map<number, HTMLElement>();
   obstacles.forEach((ob, i) => {
@@ -383,52 +528,173 @@ function buildLane(
       el.appendChild(zone);
     }
     const mark = document.createElement("div");
-    mark.className = "rbr-ob";
+    mark.className = `rbr-ob rbr-ob-${ob.type}`;
     mark.style.left = `${ob.pos}%`;
-    mark.textContent = OB_EMOJI[ob.type];
+    mark.innerHTML = obstacleSvg(ob.type, `${side}Ob${++runnerSeq}`);
     el.appendChild(mark);
     obEls.set(i, mark);
   });
 
   const finish = document.createElement("div");
-  finish.className = "rbr-finish";
-  finish.textContent = "🏁";
+  finish.className = "rbr-finline";
   el.appendChild(finish);
 
   const runner = document.createElement("div");
   runner.className = `rbr-runner ${side === "red" ? "rbr-me" : "rbr-airun"}`;
   runner.style.left = "0%";
-  const inner = document.createElement("span");
-  inner.className = "rbr-runner-inner";
-  const img = document.createElement("img");
-  img.className = "rbr-runner-img";
-  img.src = avatar;
-  img.alt = alt;
-  inner.appendChild(img);
-  runner.appendChild(inner);
+  runner.setAttribute("role", "img");
+  runner.setAttribute("aria-label", alt);
+  runner.innerHTML = runnerFramesHtml(side, avatar);
   el.appendChild(runner);
-  if (reduced) inner.style.animation = "none";
+
+  /** 落地小尘土 / 溅水两滴,都挂 rt.later 自清 */
+  const puff = (cls: string, lifeMs: number): void => {
+    if (reduced) return;
+    for (const extra of ["", "-b"]) {
+      const bit = document.createElement("i");
+      bit.className = `${cls}${extra ? ` ${cls}${extra}` : ""}`;
+      bit.style.left = `calc(${runner.style.left} + ${extra ? 26 : 10}px)`;
+      el.appendChild(bit);
+      rt.later(() => bit.remove(), lifeMs);
+    }
+  };
 
   return {
     el,
     setPos(pos) {
-      runner.style.left = `${Math.max(0, Math.min(92, pos * 0.92))}%`;
+      runner.style.left = `${laneLeftPct(pos)}%`;
     },
     setStride(ratio) {
       if (reduced) return;
-      // 跑步动画随速度变频:跑得越快腿摆得越快
-      inner.style.animationDuration = `${runCycleMs(ratio)}ms`;
+      // 跑步两帧交替随速度变频:跑得越快腿换得越快(映射只走 runCycleMs)
+      runner.style.setProperty("--rbr-gait", `${runCycleMs(ratio)}ms`);
     },
     setRunning(on) {
       el.classList.toggle("rbr-lane-run", on && !reduced);
     },
     jump() {
       runner.classList.add("rbr-jump");
-      rt.later(() => runner.classList.remove("rbr-jump"), 450);
+      rt.later(() => {
+        runner.classList.remove("rbr-jump");
+        puff("rbr-dust", 300);
+      }, 450);
+    },
+    slip() {
+      runner.classList.add("rbr-slip");
+      puff("rbr-splash", 550);
+      rt.later(() => runner.classList.remove("rbr-slip"), 500);
+    },
+    bump() {
+      runner.classList.add("rbr-bump");
+      rt.later(() => runner.classList.remove("rbr-bump"), 300);
     },
     fade(index) {
       obEls.get(index)?.classList.add("rbr-ob-gone");
+    },
+    fly(index, label) {
+      // 飘字永远给(减弱动效下「直接飘字」),飞行动画只在不减弱时加
+      const float = document.createElement("i");
+      float.className = "rbr-float";
+      float.textContent = label;
+      float.style.left = `calc(${runner.style.left} + 6px)`;
+      el.appendChild(float);
+      rt.later(() => float.remove(), 850);
+      const src = obEls.get(index);
+      if (reduced || !src) return;
+      const flyer = document.createElement("i");
+      flyer.className = "rbr-flyer";
+      flyer.innerHTML = src.innerHTML;
+      flyer.style.left = src.style.left;
+      flyer.style.top = "8px";
+      el.appendChild(flyer);
+      // 下一拍再改终点,transition 才有起点可走
+      rt.later(() => {
+        flyer.classList.add("rbr-flyer-go");
+        flyer.style.left = `calc(${runner.style.left} + 12px)`;
+        flyer.style.top = "-4px";
+      }, 16);
+      rt.later(() => flyer.remove(), 320);
     }
+  };
+}
+
+interface SceneView {
+  el: HTMLElement;
+  /** 开跑 / 停跑:看台彩旗视差跟着起停 */
+  live: (on: boolean) => void;
+  /** 冲线:缎带荡开 */
+  finished: () => void;
+}
+
+/**
+ * 2.5D 赛场:天空(看台 + 彩旗两层视差)+ 透视跑道面(perspective 720px ·
+ * rotateX 18°,近端宽远端窄)+ 终点格纹拱门。整个容器 pointer-events:none,
+ * 只包视觉层——按键热区全在它外面,一个像素都不挪。
+ */
+function buildScene(redLaneEl: HTMLElement, blueLaneEl: HTMLElement, reduced: boolean): SceneView {
+  const scene = document.createElement("div");
+  scene.className = "rbr-scene";
+  const sky = document.createElement("div");
+  sky.className = "rbr-sky";
+  const stand = document.createElement("div");
+  stand.className = "rbr-stand-layer";
+  stand.innerHTML = standsSvg();
+  const flags = document.createElement("div");
+  flags.className = "rbr-flag-layer";
+  flags.innerHTML = buntingSvg();
+  const horizon = document.createElement("i");
+  horizon.className = "rbr-horizon";
+  sky.append(stand, flags, horizon);
+
+  const persp = document.createElement("div");
+  persp.className = "rbr-persp";
+  const track = document.createElement("div");
+  track.className = "rbr-track3d";
+  const arch = document.createElement("div");
+  arch.className = "rbr-arch";
+  arch.innerHTML = finishArchSvg(`arch${++runnerSeq}`);
+  track.append(redLaneEl, blueLaneEl, arch);
+  persp.appendChild(track);
+  scene.append(sky, persp);
+
+  return {
+    el: scene,
+    live(on) {
+      scene.classList.toggle("rbr-live", on && !reduced);
+    },
+    finished() {
+      scene.classList.add("rbr-finished");
+    }
+  };
+}
+
+/** HUD 双色进度双条 + 领先方小皇冠(纯展示,只读两边的米数) */
+function raceBarsHtml(): string {
+  return (
+    `<span class="rbr-bars" aria-hidden="true">` +
+    `<i class="rbr-bar rbr-bar-red"><b></b><span class="rbr-crown">${crownSvg()}</span></i>` +
+    `<i class="rbr-bar rbr-bar-blue"><b></b><span class="rbr-crown">${crownSvg()}</span></i>` +
+    `</span>`
+  );
+}
+
+/** 绑好双条后返回「喂两个米数进来」的更新函数,皇冠只戴在领先方头上 */
+function bindRaceBars(host: HTMLElement): (redPos: number, bluePos: number) => void {
+  const q = (sel: string): HTMLElement | null => host.querySelector(sel);
+  const redFill = q(".rbr-bar-red b");
+  const blueFill = q(".rbr-bar-blue b");
+  const redCrown = q(".rbr-bar-red .rbr-crown");
+  const blueCrown = q(".rbr-bar-blue .rbr-crown");
+  return (redPos, bluePos) => {
+    if (!redFill || !blueFill || !redCrown || !blueCrown) return;
+    const pa = Math.max(0, Math.min(100, (redPos / TRACK_LEN) * 100));
+    const pb = Math.max(0, Math.min(100, (bluePos / TRACK_LEN) * 100));
+    redFill.style.width = `${pa}%`;
+    blueFill.style.width = `${pb}%`;
+    redCrown.style.left = `calc(${pa}% - 8px)`;
+    blueCrown.style.left = `calc(${pb}% - 8px)`;
+    redCrown.classList.toggle("rbr-crown-on", redPos > bluePos);
+    blueCrown.classList.toggle("rbr-crown-on", bluePos > redPos);
   };
 }
 
@@ -527,21 +793,37 @@ interface StartGate {
 /**
  * 起跑口令:「各就位 → 预备 →(随机 700–2100ms)→ 跑!」。
  * 口令没响就按算抢跑:那一方回退 0.5 秒(累计封顶 1.5 秒),**不判负**。
+ * `lightsEl` 是三盏起跑指示灯(红红绿),纯展示:在口令的三个既有节点上点亮,
+ * 时序、判定一个数都不碰。
  */
-function createStartGate(callEl: HTMLElement, rt: Runtime, rand: () => number, onGo: () => void): StartGate {
+function createStartGate(
+  callEl: HTMLElement,
+  rt: Runtime,
+  rand: () => number,
+  onGo: () => void,
+  lightsEl?: HTMLElement | null
+): StartGate {
   let started = false;
   const falseStarts = { red: 0, blue: 0 };
   const setback = { red: 0, blue: 0 };
   const frozenUntil = { red: 0, blue: 0 };
+  const lamps = lightsEl ? Array.from(lightsEl.querySelectorAll<HTMLElement>(".rbr-light")) : [];
+  const lamp = (i: number, cls: string): void => lamps[i]?.classList.add(cls);
+  const lampsOff = (): void => {
+    for (const l of lamps) l.classList.remove("rbr-light-on-red", "rbr-light-on-go");
+  };
 
   callEl.textContent = START_WORDS.ready;
   callEl.classList.remove("rbr-call-go");
+  lamp(0, "rbr-light-on-red");
   rt.later(() => {
     callEl.textContent = START_WORDS.set;
+    lamp(1, "rbr-light-on-red");
     rt.later(() => {
       started = true;
       callEl.textContent = START_WORDS.go;
       callEl.classList.add("rbr-call-go");
+      lamp(2, "rbr-light-on-go");
       const now = performance.now();
       frozenUntil.red = setback.red > 0 ? now + setback.red : 0;
       frozenUntil.blue = setback.blue > 0 ? now + setback.blue : 0;
@@ -549,6 +831,7 @@ function createStartGate(callEl: HTMLElement, rt: Runtime, rand: () => number, o
       rt.later(() => {
         callEl.textContent = "";
         callEl.classList.remove("rbr-call-go");
+        lampsOff();
       }, 700);
     }, startDelayMs(rand));
   }, 500);
@@ -606,6 +889,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const wrap = document.createElement("div");
   wrap.className = "rbr-wrap";
+  // 慢镜特效时长跟着 FINISH_SLOWMO_MS 这一个常量走,CSS 里不许再抄一份数
+  wrap.style.setProperty("--rbr-slowmo-ms", `${FINISH_SLOWMO_MS}ms`);
   const style = document.createElement("style");
   style.textContent = CSS;
   wrap.appendChild(style);
@@ -614,10 +899,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   top.className = "rbr-top";
   top.innerHTML = `
     <span class="rbr-badge"><img class="rbr-ava" src="${AVATAR_URLS.duoduo}" alt="朵朵" />🔴 朵朵</span>
-    <span class="rbr-meters"><span class="rbr-chip rbr-dist">0 米</span><span class="rbr-chip rbr-lead">并排起跑</span></span>
+    <span class="rbr-mid">${raceBarsHtml()}<span class="rbr-meters"><span class="rbr-chip rbr-dist">0 米</span><span class="rbr-chip rbr-lead">并排起跑</span></span></span>
     <span class="rbr-badge rbr-badge-right">🔵 星星<img class="rbr-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
   `;
   wrap.appendChild(top);
+  const renderBars = bindRaceBars(top);
 
   const gearEl = document.createElement("div");
   gearEl.className = "rbr-gear";
@@ -625,12 +911,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const redLane = buildLane("red", AVATAR_URLS.duoduo, "朵朵在奔跑", "朵朵", lanes.red, reduced, rt);
   const blueLane = buildLane("blue", AVATAR_URLS.xingxing, "星星在奔跑", "星星", lanes.blue, reduced, rt);
-  wrap.append(redLane.el, blueLane.el);
+  const scene = buildScene(redLane.el, blueLane.el, reduced);
+  wrap.appendChild(scene.el);
 
+  const callRow = document.createElement("div");
+  callRow.className = "rbr-callrow";
+  callRow.innerHTML = startLightsHtml();
   const callEl = document.createElement("div");
   callEl.className = "rbr-call";
   callEl.setAttribute("role", "status");
-  wrap.appendChild(callEl);
+  callRow.appendChild(callEl);
+  wrap.appendChild(callRow);
 
   const { el: padsEl, pad } = buildSoloPads();
   wrap.appendChild(padsEl);
@@ -701,12 +992,19 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     msgEl.textContent = `本关新玩法:${gears.join(" + ")},看清楚再冲!`;
   }
 
-  const gate = createStartGate(callEl, rt, Math.random, () => {
-    lastTime = performance.now();
-    redLane.setRunning(true);
-    blueLane.setRunning(true);
-    msgEl.textContent = "跑起来了!左右交替按,看到 💧🚧 提前跳。";
-  });
+  const gate = createStartGate(
+    callEl,
+    rt,
+    Math.random,
+    () => {
+      lastTime = performance.now();
+      redLane.setRunning(true);
+      blueLane.setRunning(true);
+      scene.live(true);
+      msgEl.textContent = "跑起来了!左右交替按,看到水坑和栏架提前跳。";
+    },
+    callRow.querySelector(".rbr-lights")
+  );
 
   function renderGear(): void {
     if (stamFill && staminaMax > 0) {
@@ -723,6 +1021,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     redLane.setStride(speedRatio(tapHz, HUMAN_TAP_CAP_HZ));
     distEl.textContent = `${Math.round(me)} 米`;
     leadEl.textContent = leadHint(me - ai);
+    renderBars(me, ai);
     renderGear();
   }
 
@@ -732,7 +1031,9 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     rt.stopFrame();
     redLane.setRunning(false);
     blueLane.setRunning(false);
-    // 冲线:彩带 + 300ms 慢镜,让孩子看清自己是怎么撞线的
+    scene.live(false);
+    scene.finished();
+    // 冲线:彩纸 + 300ms 慢镜(加速度线),让孩子看清自己是怎么撞线的
     wrap.classList.add("rbr-slowmo");
     if (won) spawnConfetti(wrap, rt, reduced);
     const delay = FINISH_SLOWMO_MS + 60;
@@ -749,6 +1050,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const now = performance.now();
     if (!gate.started()) {
       msgEl.textContent = gate.falseStart("red");
+      showRefereeBubble(wrap, rt);
       ctx.sfx("pop");
       return;
     }
@@ -784,6 +1086,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         clearedObs.add(i);
         redLane.fade(i);
         me = Math.min(TRACK_LEN, me + 8);
+        redLane.fly(i, "+8 米");
         ctx.sfx("coin");
         msgEl.textContent = "⭐ 踩到星星,咻——冲刺!";
       } else if (ob.type === "item") {
@@ -792,6 +1095,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         redLane.fade(i);
         blueLane.fade(i);
         me = Math.min(TRACK_LEN, me + ITEM_BOOST);
+        redLane.fly(i, `+${ITEM_BOOST} 米`);
         aiSlowUntil = now + ITEM_SLOW_MS;
         ctx.sfx("coin");
         msgEl.textContent = "🎁 礼物箱抢到手!小电脑要打滑一小会儿。";
@@ -801,13 +1105,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (ob.type === "puddle") {
           me = Math.max(0, ob.pos - 2);
           stunnedUntil = now + 800;
+          redLane.slip();
           ctx.sfx("oops");
-          msgEl.textContent = "💧 踩进水坑打滑啦,下次提前按「跳」!";
+          msgEl.textContent = "哎呀,踩进水坑坐了个屁股蹲儿,下次提前按「跳」!";
         } else {
           me = Math.max(0, ob.pos - 4);
           stunnedUntil = now + 600;
+          redLane.bump();
           ctx.sfx("oops");
-          msgEl.textContent = "🚧 撞上栏架弹回来啦,提前按「跳」!";
+          msgEl.textContent = "撞上栏架弹回来啦,提前按「跳」!";
         }
       }
     });
@@ -821,6 +1127,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const now = performance.now();
     if (!gate.started()) {
       msgEl.textContent = gate.falseStart("red");
+      showRefereeBubble(wrap, rt);
       return;
     }
     if (now < gate.frozenUntil("red") || now < stunnedUntil || jumping) return;
@@ -873,12 +1180,15 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
           redLane.fade(i);
           blueLane.fade(i);
           ai = Math.min(TRACK_LEN, ai + ITEM_BOOST);
+          blueLane.fly(i, `+${ITEM_BOOST} 米`);
           meSlowUntil = now + ITEM_SLOW_MS;
           msgEl.textContent = "🎁 礼物箱被小电脑抢先啦,稳住节奏追回来!";
         } else if ((ob.type === "puddle" || ob.type === "hurdle") && !aiPassed.has(i)) {
           // 小电脑遇到水坑 / 栏架也会停顿一下
           aiPassed.add(i);
           blueLane.fade(i);
+          if (ob.type === "puddle") blueLane.slip();
+          else blueLane.bump();
           aiPauseUntil = now + 550;
         }
       });
@@ -959,6 +1269,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
 
   const wrap = document.createElement("div");
   wrap.className = "rbv-wrap";
+  wrap.style.setProperty("--rbr-slowmo-ms", `${FINISH_SLOWMO_MS}ms`);
   const style = document.createElement("style");
   style.textContent = `${CSS}\n${VERSUS_CSS}`;
   wrap.appendChild(style);
@@ -979,6 +1290,11 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
   distEl.className = "rbr-chip";
   distEl.textContent = "0 : 0 米";
   head.append(back, scoreEl, distEl);
+  const barsBox = document.createElement("span");
+  barsBox.className = "rbr-mid";
+  barsBox.innerHTML = raceBarsHtml();
+  head.appendChild(barsBox);
+  const renderVsBars = bindRaceBars(barsBox);
   wrap.appendChild(head);
 
   const foesEl = document.createElement("div");
@@ -1069,12 +1385,17 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       reduced,
       rt
     );
-    board.append(redLane.el, blueLane.el);
+    const scene = buildScene(redLane.el, blueLane.el, reduced);
+    board.appendChild(scene.el);
 
+    const callRow = document.createElement("div");
+    callRow.className = "rbr-callrow";
+    callRow.innerHTML = startLightsHtml();
     const callEl = document.createElement("div");
     callEl.className = "rbr-call";
     callEl.setAttribute("role", "status");
-    board.appendChild(callEl);
+    callRow.appendChild(callEl);
+    board.appendChild(callRow);
 
     let redPad: PadSet;
     let bluePad: PadSet | null = null;
@@ -1105,6 +1426,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       redLane.setStride(speedRatio(red.tapHz, HUMAN_TAP_CAP_HZ));
       blueLane.setStride(speedRatio(blue.tapHz, HUMAN_TAP_CAP_HZ));
       distEl.textContent = `${Math.round(red.pos)} : ${Math.round(blue.pos)} 米`;
+      renderVsBars(red.pos, blue.pos);
     }
 
     function settle(redWon: boolean): void {
@@ -1113,6 +1435,8 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       rt.stopFrame();
       redLane.setRunning(false);
       blueLane.setRunning(false);
+      scene.live(false);
+      scene.finished();
       if (redWon) scoreRed++;
       else scoreBlue++;
       scoreEl.textContent = `🔴 ${scoreRed} : ${scoreBlue} 🔵`;
@@ -1126,7 +1450,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
         const winner = redWon ? "朵朵" : duo ? "星星" : `小电脑(${profileOf(level as AiLevel).label})`;
         const loserPos = Math.round(redWon ? blue.pos : red.pos);
         ov.innerHTML = `
-          <div style="font-size:44px;line-height:1">🏁</div>
+          <div class="rbr-overflag">${checkerFlagSvg(`ovFlag${round}`)}</div>
           <div class="rbv-over-title">${winner} 先冲线!</div>
           <div class="rbv-over-sub">另一边跑到 ${loserPos} 米,差距就在几步之间。左右交替按稳,下一局就能换个结果。</div>
         `;
@@ -1159,12 +1483,19 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       }, FINISH_SLOWMO_MS);
     }
 
-    const gate = createStartGate(callEl, rt, rand, () => {
-      lastTime = performance.now();
-      redLane.setRunning(true);
-      blueLane.setRunning(true);
-      msgEl.textContent = "跑!左右交替按最快,💧🚧 提前跳。";
-    });
+    const gate = createStartGate(
+      callEl,
+      rt,
+      rand,
+      () => {
+        lastTime = performance.now();
+        redLane.setRunning(true);
+        blueLane.setRunning(true);
+        scene.live(true);
+        msgEl.textContent = "跑!左右交替按最快,水坑栏架提前跳。";
+      },
+      callRow.querySelector(".rbr-lights")
+    );
 
     /** 星星与礼物箱:礼物箱两条道共用一个,谁先冲到谁拿 */
     function takePickups(who: "red" | "blue", runner: DuelRunner, before: number, now: number): void {
@@ -1177,6 +1508,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
           runner.cleared.add(i);
           lane.fade(i);
           runner.pos = Math.min(TRACK_LEN, runner.pos + 8);
+          lane.fly(i, "+8 米");
           api.play("coin");
         } else if (ob.type === "item") {
           if (takenItems.has(i)) return;
@@ -1184,6 +1516,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
           redLane.fade(i);
           blueLane.fade(i);
           runner.pos = Math.min(TRACK_LEN, runner.pos + ITEM_BOOST);
+          lane.fly(i, `+${ITEM_BOOST} 米`);
           other.slowUntil = now + ITEM_SLOW_MS;
           api.play("coin");
           msgEl.textContent = "🎁 礼物箱被抢走一个,另一边稳住节奏追!";
@@ -1202,6 +1535,8 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
         lane.fade(i);
         runner.pos = Math.max(0, ob.pos - (ob.type === "puddle" ? 2 : 3));
         runner.stunUntil = now + (ob.type === "puddle" ? 700 : 550);
+        if (ob.type === "puddle") lane.slip();
+        else lane.bump();
         api.play("oops");
       });
     }
@@ -1213,6 +1548,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       const now = performance.now();
       if (!gate.started()) {
         msgEl.textContent = gate.falseStart(who);
+        showRefereeBubble(wrap, rt);
         api.play("pop");
         return;
       }
@@ -1240,6 +1576,7 @@ function mountVersus(host: HTMLElement, api: GameApi, onExit: () => void): { des
       const now = performance.now();
       if (!gate.started()) {
         msgEl.textContent = gate.falseStart(who);
+        showRefereeBubble(wrap, rt);
         return;
       }
       if (now < gate.frozenUntil(who) || now < runner.stunUntil || runner.jumping) return;
@@ -1392,8 +1729,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     </div>
     <div class="rbe-lane">
       <div class="rbe-ground"></div>
-      <div class="rbe-pacer" style="left:0%"><img class="rbe-face" src="${AVATAR_URLS.xingxing}" alt="星星在陪你跑" /></div>
-      <div class="rbe-me" style="left:${VIEW_ME_PCT}%"><img class="rbe-face" src="${AVATAR_URLS.duoduo}" alt="朵朵在长跑" /></div>
+      <div class="rbe-pacer" style="left:0%" role="img" aria-label="星星在陪你跑">${runnerFramesHtml("blue", AVATAR_URLS.xingxing)}</div>
+      <div class="rbe-me" style="left:${VIEW_ME_PCT}%" role="img" aria-label="朵朵在长跑">${runnerFramesHtml("red", AVATAR_URLS.duoduo)}</div>
     </div>
   `;
   wrap.appendChild(body);
@@ -1406,7 +1743,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
   wrap.appendChild(keyHint);
   const msgEl = document.createElement("div");
   msgEl.className = "rbe-msg";
-  msgEl.textContent = `左右交替按,💧🚧 要跳,🎁⭐ 顺手抢。撞 3 次收工,跑满 ${ENDLESS_GOAL_M} 米也收工。`;
+  msgEl.textContent = `左右交替按,水坑栏架要跳,🎁⭐ 顺手抢。撞 3 次收工,跑满 ${ENDLESS_GOAL_M} 米也收工。`;
   wrap.appendChild(msgEl);
   host.appendChild(wrap);
 
@@ -1428,8 +1765,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     while (nextPos < dist + VIEW_AHEAD + 40) {
       const type = KINDS[kindCursor++ % KINDS.length];
       const el = document.createElement("div");
-      el.className = "rbe-ob";
-      el.textContent = OB_EMOJI[type];
+      el.className = `rbe-ob rbe-ob-${type}`;
+      el.innerHTML = obstacleSvg(type, `eOb${++runnerSeq}`);
       laneEl.appendChild(el);
       obs.push({ type, pos: nextPos, el, gone: false });
       // 间距随距离收窄,密度就一路往上走
@@ -1525,7 +1862,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     for (const o of obs) o.el.remove();
     obs.length = 0;
     bestEl.textContent = best > 0 ? `🏅 最远 ${best} 米` : "🏅 还没有纪录";
-    msgEl.textContent = `左右交替按,💧🚧 要跳,🎁⭐ 顺手抢。撞 3 次收工,跑满 ${ENDLESS_GOAL_M} 米也收工。`;
+    msgEl.textContent = `左右交替按,水坑栏架要跳,🎁⭐ 顺手抢。撞 3 次收工,跑满 ${ENDLESS_GOAL_M} 米也收工。`;
     refill();
     render();
     lastTime = 0;
@@ -1538,6 +1875,9 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     dropOb(o);
     dist = Math.max(0, o.pos - 2);
     stunnedUntil = now + (o.type === "puddle" ? 700 : 550);
+    // 纯展示:坐地转圈星(水坑)或晃一下(栏架),时长与冷却无关
+    meEl.classList.add(o.type === "puddle" ? "rbr-slip" : "rbr-bump");
+    rt.later(() => meEl.classList.remove("rbr-slip", "rbr-bump"), o.type === "puddle" ? 500 : 300);
     api.play("oops");
     if (endlessRunOver(hits)) {
       render();
@@ -1546,8 +1886,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     }
     msgEl.textContent =
       o.type === "puddle"
-        ? `💧 滑了一下,还能撞 ${endlessHitsLeft(hits)} 次,提前按「跳」。`
-        : `🚧 碰到栏架,还能撞 ${endlessHitsLeft(hits)} 次,提前按「跳」。`;
+        ? `滑了一下,还能撞 ${endlessHitsLeft(hits)} 次,提前按「跳」。`
+        : `碰到栏架,还能撞 ${endlessHitsLeft(hits)} 次,提前按「跳」。`;
   }
 
   function onStep(key: StepKey): void {
@@ -1589,7 +1929,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     const now = performance.now();
     if (now < stunnedUntil || jumping) return;
     jumping = true;
-    meEl.classList.add("rbe-jump");
+    meEl.classList.add("rbe-jump", "rbr-jump");
     api.play("jump");
     const target = obs.find(
       (o) => !o.gone && (o.type === "puddle" || o.type === "hurdle") && o.pos >= dist && o.pos <= dist + 9
@@ -1603,7 +1943,7 @@ function mountEndless(host: HTMLElement, api: GameApi, onExit: () => void): { de
     }
     rt.later(() => {
       jumping = false;
-      meEl.classList.remove("rbe-jump");
+      meEl.classList.remove("rbe-jump", "rbr-jump");
     }, 420);
     refill();
     render();

@@ -47,8 +47,9 @@ export interface RaceLevel {
 
 export const CHAPTERS: Chapter[] = [
   { name: "操场直道", emoji: "🏃", color: "#DFF3D5", desc: "狂点按钮往前冲，比小电脑先到终点！", size: 17 },
-  { name: "水坑赛道", emoji: "💧", color: "#D6EBFF", desc: "看到水坑提前跳，踩进去会打滑！", size: 17 },
-  { name: "跨栏赛场", emoji: "🚧", color: "#FFE9D6", desc: "跨栏挡路，起跳才能越过去！", size: 17 },
+  // 1.3 视觉升级:水坑 / 栏架在赛道里都改为自绘 SVG,章节图标同步换掉这两枚 emoji(纯展示,关数机关不动)
+  { name: "水坑赛道", emoji: "💦", color: "#D6EBFF", desc: "看到水坑提前跳，踩进去会打滑！", size: 17 },
+  { name: "跨栏赛场", emoji: "🦘", color: "#FFE9D6", desc: "跨栏挡路，起跳才能越过去！", size: 17 },
   { name: "上坡森林", emoji: "⛰️", color: "#E4EFD8", desc: "上坡路每一步都变短，要更用力！", size: 16 },
   { name: "夜跑霓虹", emoji: "🌃", color: "#E3DFF5", desc: "踩到 ⭐ 就自动向前冲刺一大段！", size: 16 },
   { name: "冠军巡回", emoji: "🏆", color: "#FFF3C4", desc: "水坑跨栏上坡全都有，冠军之战！", size: 16 },
