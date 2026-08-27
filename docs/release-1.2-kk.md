@@ -5,7 +5,7 @@
 | 对外版本 | **1.2-kk** |
 | `package.json` `version` | `1.2.0-kk`（语义化版本的预发布写法，`electron-builder` / CI 校验都吃这个格式） |
 | 产品显示名 | **鸭梨康康**（原「一朵一星」） |
-| 分支 | `1.2-kk`，从 `origin/game-1.2` 切出，**只维护 PR，base = `game-1.2`** |
+| 分支 | `1.2-kk`，从 `origin/game-1.2` 切出，**只维护 PR，base = `game-1.2`**（[PR #35](https://github.com/songkang688/game/pull/35)） |
 | 游戏数量 | 76 款（`src/games/*/meta.ts` 点数） |
 | 存档兼容 | ✅ 完全兼容，key 前缀仍是 `yiduo-yixing.` |
 
@@ -14,7 +14,9 @@
 ## 一、这一版改了什么
 
 - **换人物**：朵朵 → **鸭梨**（左，女），星星（角色）→ **康康**（右，男）。
-  头像、首页欢迎语、游戏内文案、双人对战 P1/P2 的称呼全部跟着改。
+  头像、首页欢迎语、游戏内文案、双人对战 P1/P2 的称呼全部跟着改，
+  局内分人的小图标从 🌸/⭐ 换成 🍐/👓。含角色的 9 款游戏标题也一并改名，
+  对照表见 [`docs/game-1.2-kk.md`](./game-1.2-kk.md)。
 - **换产品名**：一朵一星 → **鸭梨康康**。落到这些地方：
   - `package.json` → `build.productName`（Windows / macOS 安装包显示名）
   - `vite.config.ts` → PWA `manifest.name` / `short_name` / `description`（手机主屏图标下的字）
