@@ -32,9 +32,7 @@ import {
   nthWeekdayDate,
   shiftHours,
   to12Hour,
-  to24Hour,
   weekdayAfter,
-  type DayPeriod,
   type Quarter,
 } from "./logic";
 
@@ -270,46 +268,53 @@ function qDepart(rand: () => number, t: number): ClockQ {
 // 1.1 新机制二：24 小时制 ↔ 12 小时制，以及跨城对表
 // ---------------------------------------------------------------------------
 
-const PERIODS: DayPeriod[] = ["上午", "下午"];
+/**
+ * 干扰项的偏移量（小时）。
+ * `±12` 是这一类最经典的错法：该加半天的时候没加、不该加的时候加了；
+ * `±1` 打的是时段词的分界（早上和上午在 8 点换、下午和晚上在 17 点换），也是常错的地方。
+ */
+const PERIOD_DELTAS = [12, -12, 1, -1, 11, 13];
 
-/** 12 小时制说法 → 24 小时制写法 */
+/** 普通计时法说法 → 24 小时制写法 */
 function qH24(rand: () => number): ClockQ {
-  const period = pick(rand, PERIODS);
-  const hour12 = randInt(rand, 1, 12);
+  // 先摇 24 小时制的整点，再倒推出时段词。反过来「先挑词、再摇 1..12 点」会凑出
+  // 「中午 3 点」「凌晨 9 点」这种说不通的题面——时段词管的钟点区间是固定的。
+  const hour24 = randInt(rand, 0, 23);
   const minute = randInt(rand, 0, 11) * 5;
-  const answer = formatHM24(hmToMinutes(to24Hour(hour12, period), minute));
+  const { hour, period } = to12Hour(hour24);
+  const answer = formatHM24(hmToMinutes(hour24, minute));
   const { choices, correct } = threeChoices(rand, answer, () => {
     const roll = randInt(rand, 0, 2);
-    if (roll === 0) return formatHM24(hmToMinutes(hour12, minute));
-    if (roll === 1) return formatHM24(hmToMinutes(to24Hour(hour12, period) + 12, minute));
-    return formatHM24(hmToMinutes(to24Hour(hour12, period), minute + randInt(rand, 1, 11) * 5));
+    // ① 把 12 时制的钟点原样抄成 24 时制；② 半天加反了；③ 分钟抄错
+    if (roll === 0) return formatHM24(hmToMinutes(hour, minute));
+    if (roll === 1) return formatHM24(hmToMinutes(hour24 + pick(rand, PERIOD_DELTAS), minute));
+    return formatHM24(hmToMinutes(hour24, minute + randInt(rand, 1, 11) * 5));
   });
   return {
     kind: "h24", answer,
-    promptHTML: `<span style="${BIG}">🗼 ${period} ${hour12}:${String(minute).padStart(2, "0")}</span>`,
+    promptHTML: `<span style="${BIG}">🗼 ${period} ${hour}:${String(minute).padStart(2, "0")}</span>`,
     ask: "写成 24 小时制是几点？",
     choices, correct,
   };
 }
 
-/** 24 小时制写法 → 上午 / 下午几点 */
+/** 24 小时制写法 → 普通计时法说法（夜里 / 凌晨 / 早上 / 上午 / 中午 / 下午 / 晚上） */
 function qH12(rand: () => number): ClockQ {
   const hour24 = randInt(rand, 0, 23);
   const minute = randInt(rand, 0, 11) * 5;
   const { hour, period } = to12Hour(hour24);
   const mm = String(minute).padStart(2, "0");
   const answer = `${period} ${hour}:${mm}`;
-  const other: DayPeriod = period === "上午" ? "下午" : "上午";
+  // 干扰项一律由 to12Hour 生成：**每一个都得是中文里真说得出口的说法**，
+  // 只是配错了时刻。拿「上午 12 点」这种压根不存在的话去当干扰项，孩子学到的是错的。
   const { choices, correct } = threeChoices(rand, answer, () => {
-    const roll = randInt(rand, 0, 2);
-    if (roll === 0) return `${other} ${hour}:${mm}`;
-    if (roll === 1) return `${period} ${(hour % 12) + 1}:${mm}`;
-    return `${other} ${((hour + 10) % 12) + 1}:${mm}`;
+    const alt = to12Hour(hour24 + pick(rand, PERIOD_DELTAS));
+    return `${alt.period} ${alt.hour}:${mm}`;
   });
   return {
     kind: "h12", answer,
     promptHTML: `<span style="${BIG}">🗼 ${formatHM24(hmToMinutes(hour24, minute))}</span>`,
-    ask: "这是上午还是下午几点？",
+    ask: "换成平时说话的说法，是几点？",
     choices, correct,
   };
 }

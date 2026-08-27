@@ -218,12 +218,33 @@ function hourTip(svg: string): { x: number; y: number } {
   return { x: Number(m[1]), y: Number(m[2]) };
 }
 
-/** 「上午 10:40」/「下午 1:20」→ 一天内的分钟数 */
+/**
+ * 时段词 → 这一段管的 24 小时制整点区间（含两端）。
+ *
+ * 这份表是**照小学课本《24 时计时法》单独抄的一份**，不从 `logic.ts` import——
+ * 用产品代码去验产品代码等于什么都没验。W5R2-A-03 就是拿这张表逐题核出来的。
+ */
+const PERIOD_RANGE: Record<string, [number, number]> = {
+  夜里: [0, 0],
+  凌晨: [1, 5],
+  早上: [6, 8],
+  上午: [9, 11],
+  中午: [12, 12],
+  下午: [13, 17],
+  晚上: [18, 23],
+};
+
+const PERIOD_WORDS = Object.keys(PERIOD_RANGE).join("|");
+
+/** 「上午 10:40」/「中午 12:20」/「晚上 10:15」→ 一天内的分钟数（时段词说错了就抛） */
 function parsePeriodHM(text: string): number {
-  const m = text.match(/(上午|下午) (\d{1,2}):(\d{2})/);
-  if (!m) throw new Error(`带上下午的时刻解析失败: ${text}`);
+  const m = text.match(new RegExp(`(${PERIOD_WORDS}) (\\d{1,2}):(\\d{2})`));
+  if (!m) throw new Error(`带时段词的时刻解析失败: ${text}`);
+  const [from, to] = PERIOD_RANGE[m[1]];
   const h12 = Number(m[2]) % 12;
-  return (m[1] === "上午" ? h12 : h12 + 12) * 60 + Number(m[3]);
+  const h24 = from >= 12 ? h12 + 12 : h12;
+  if (h24 < from || h24 > to) throw new Error(`时段词和钟点对不上: ${text}`);
+  return h24 * 60 + Number(m[3]);
 }
 
 /** 「3 分 20 秒」/「45 秒」/「2 分」→ 秒数 */
@@ -282,18 +303,16 @@ function verify(q: ReturnType<typeof buildQuestions>[number], where: string): vo
       break;
     }
     case "h24": {
-      const m = text.match(/(上午|下午) (\d{1,2}):(\d{2})/);
-      expect(m, where).not.toBeNull();
-      const h12 = Number(m![2]);
-      const base = h12 === 12 ? 0 : h12;
-      const h24 = m![1] === "上午" ? base : base + 12;
-      expect(q.answer, where).toBe(fmtHM24(h24 * 60 + Number(m![3])));
+      // parsePeriodHM 自己会核「时段词和钟点对不对得上」，对不上直接抛
+      expect(q.answer, where).toBe(fmtHM24(parsePeriodHM(text)));
       break;
     }
     case "h12": {
       const mins = parseHM(text);
       const h = Math.floor(mins / 60);
-      const period = h < 12 ? "上午" : "下午";
+      const period = Object.keys(PERIOD_RANGE).find(
+        (p) => h >= PERIOD_RANGE[p][0] && h <= PERIOD_RANGE[p][1]
+      );
       const hour = h % 12 === 0 ? 12 : h % 12;
       expect(q.answer, where).toBe(`${period} ${hour}:${String(mins % 60).padStart(2, "0")}`);
       break;
@@ -558,7 +577,9 @@ describe("时钟小屋 · 1.1 第 100–188 关", () => {
         if (q.kind === "h24" || q.kind === "zone") {
           expect(q.answer).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/);
         }
-        if (q.kind === "h12") expect(q.answer).toMatch(/^(上午|下午) ([1-9]|1[0-2]):[0-5]\d$/);
+        if (q.kind === "h12") {
+          expect(q.answer).toMatch(new RegExp(`^(${PERIOD_WORDS}) ([1-9]|1[0-2]):[0-5]\\d$`));
+        }
       }
     }
   });

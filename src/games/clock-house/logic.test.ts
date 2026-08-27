@@ -159,12 +159,14 @@ test("formatDuration：小时 / 分钟的说法都自然", () => {
 });
 
 test("to24Hour / to12Hour：12 与 24 小时制来回都不丢", () => {
-  assert.equal(to24Hour(12, "上午"), 0);
-  assert.equal(to24Hour(12, "下午"), 12);
+  assert.equal(to24Hour(12, "夜里"), 0);
+  assert.equal(to24Hour(12, "中午"), 12);
   assert.equal(to24Hour(3, "下午"), 15);
   assert.equal(to24Hour(3, "上午"), 3);
-  assert.deepEqual(to12Hour(0), { hour: 12, period: "上午" });
-  assert.deepEqual(to12Hour(12), { hour: 12, period: "下午" });
+  assert.equal(to24Hour(8, "晚上"), 20);
+  assert.equal(to24Hour(4, "凌晨"), 4);
+  assert.deepEqual(to12Hour(0), { hour: 12, period: "夜里" });
+  assert.deepEqual(to12Hour(12), { hour: 12, period: "中午" });
   assert.deepEqual(to12Hour(15), { hour: 3, period: "下午" });
   for (let h = 0; h < 24; h++) {
     const { hour, period } = to12Hour(h);
@@ -352,8 +354,9 @@ test("crossesNoon / formatPeriodHM：跨中午那一段要认得出来、说得�
   assert.equal(crossesNoon(hmToMinutes(11, 0), 60), false, "正好停在 12 点整不算跨过去");
   assert.equal(formatPeriodHM(hmToMinutes(10, 40)), "上午 10:40");
   assert.equal(formatPeriodHM(hmToMinutes(13, 20)), "下午 1:20");
-  assert.equal(formatPeriodHM(hmToMinutes(12, 0)), "下午 12:00");
-  assert.equal(formatPeriodHM(hmToMinutes(0, 5)), "上午 12:05");
+  // 12 点是「中午」不是「下午 12 点」、0 点是「夜里」不是「上午 12 点」（W5R2-A-03）
+  assert.equal(formatPeriodHM(hmToMinutes(12, 0)), "中午 12:00");
+  assert.equal(formatPeriodHM(hmToMinutes(0, 5)), "夜里 12:05");
   // 跨中午的经过时间就是普通减法，中午那道坎不许多算也不许少算
   assert.equal(elapsedMinutes(hmToMinutes(10, 40), hmToMinutes(13, 20)), 160);
 });

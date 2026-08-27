@@ -112,22 +112,66 @@ export function formatDuration(mins: number): string {
   return `${h} 小时 ${m} 分`;
 }
 
-export type DayPeriod = "上午" | "下午";
+/**
+ * 一天里的时段词，按时间先后排。
+ *
+ * 这里刻意**不是**「上午 / 下午」这种 AM/PM 二分。普通计时法在中文里是七段说法，
+ * 而二分法会说出两句课堂上会被判错的话：0 点不叫「上午 12 点」（那是夜里 / 凌晨），
+ * 12 点也不叫「下午 12 点」（那是中午）。这是一款专门教时制换算的游戏，说法必须跟课本一致。
+ */
+export const DAY_PERIODS = ["夜里", "凌晨", "早上", "上午", "中午", "下午", "晚上"] as const;
 
-/** 12 小时制 → 24 小时制的小时数（上午 12 点是 0 点，下午 12 点还是 12 点） */
-export function to24Hour(hour12: number, period: DayPeriod): number {
-  const h = ((((Math.round(hour12) - 1) % 12) + 12) % 12) + 1;
-  if (period === "上午") return h === 12 ? 0 : h;
-  return h === 12 ? 12 : h + 12;
+export type DayPeriod = (typeof DAY_PERIODS)[number];
+
+/**
+ * 每个时段词管的小时区间（24 小时制，含两端）。
+ * 分界取小学课本《24 时计时法》里的常见说法：夜里 12 时 = 0 时、中午 12 时、晚上 6 时 = 18 时。
+ */
+export const PERIOD_BANDS: ReadonlyArray<{ from: number; to: number; period: DayPeriod }> = [
+  { from: 0, to: 0, period: "夜里" },
+  { from: 1, to: 5, period: "凌晨" },
+  { from: 6, to: 8, period: "早上" },
+  { from: 9, to: 11, period: "上午" },
+  { from: 12, to: 12, period: "中午" },
+  { from: 13, to: 17, period: "下午" },
+  { from: 18, to: 23, period: "晚上" },
+];
+
+/** 24 小时制的整点属于哪个时段 */
+export function dayPeriodOf(hour24: number): DayPeriod {
+  const h = ((Math.round(hour24) % 24) + 24) % 24;
+  for (const band of PERIOD_BANDS) {
+    if (h >= band.from && h <= band.to) return band.period;
+  }
+  return "夜里";
 }
 
-/** 24 小时制 → 12 小时制 */
+/** 一个时段词底下说得通的 24 小时制整点（出题时用它挑时刻，不会凑出「中午 3 点」） */
+export function hoursOfPeriod(period: DayPeriod): number[] {
+  const band = PERIOD_BANDS.find((b) => b.period === period);
+  if (!band) return [];
+  const out: number[] = [];
+  for (let h = band.from; h <= band.to; h++) out.push(h);
+  return out;
+}
+
+/**
+ * 12 小时制说法 → 24 小时制的小时数。
+ *
+ * 「下午 / 晚上 / 中午」这三段在钟点上要跨到后半天：下午 1 点 = 13 点、晚上 6 点 = 18 点；
+ * 钟点写 12 的那两个端点单独记——中午 12 点还是 12 点，夜里 / 晚上 12 点是 0 点。
+ */
+export function to24Hour(hour12: number, period: DayPeriod): number {
+  const h = ((((Math.round(hour12) - 1) % 12) + 12) % 12) + 1;
+  if (period === "中午" || period === "下午") return h === 12 ? 12 : h + 12;
+  if (period === "晚上") return h === 12 ? 0 : h + 12;
+  return h === 12 ? 0 : h;
+}
+
+/** 24 小时制 → 「时段词 + 12 小时制钟点」 */
 export function to12Hour(hour24: number): { hour: number; period: DayPeriod } {
   const h = ((Math.round(hour24) % 24) + 24) % 24;
-  if (h === 0) return { hour: 12, period: "上午" };
-  if (h < 12) return { hour: h, period: "上午" };
-  if (h === 12) return { hour: 12, period: "下午" };
-  return { hour: h - 12, period: "下午" };
+  return { hour: h % 12 === 0 ? 12 : h % 12, period: dayPeriodOf(h) };
 }
 
 /** 时刻整体加减若干小时（跨天回绕），时区题用 */
@@ -302,7 +346,7 @@ export function crossesNoon(from: number, duration: number): boolean {
   return start < NOON_MINUTES && start + Math.round(duration) > NOON_MINUTES;
 }
 
-/** 一天内的分钟数 → 「上午 10:40」/「下午 1:20」（跨中午的题用这种说法才看得出难点） */
+/** 一天内的分钟数 → 「上午 10:40」/「下午 1:20」/「中午 12:20」（跨中午的题用这种说法才看得出难点） */
 export function formatPeriodHM(mins: number): string {
   const m = ((Math.round(mins) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
   const { hour, period } = to12Hour(Math.floor(m / 60));
