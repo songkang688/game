@@ -315,7 +315,11 @@ const KEYS_P1 = { left: "a", right: "d", up: "w", down: "s", play: "f", draw: "g
 const KEYS_P2 = { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown", play: "l", draw: "k" };
 
 function keyHint(seat: SeatCfg): string {
-  const one = seat.keys === 0 ? "A / D 挑牌 · F 出牌 · G 抽牌" : "← / → 挑牌 · L 出牌 · K 抽牌";
+  // 提示行要把 KEYS_P1 / KEYS_P2 认的键写全:上下和左右是同一件事(往前挑 / 往后挑)
+  const one =
+    seat.keys === 0
+      ? "W A S D 挑牌 · F 出牌 · G 抽牌"
+      : "← → ↑ ↓ 挑牌 · L 出牌 · K 抽牌";
   return `${seat.name}:${one}`;
 }
 
@@ -525,6 +529,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
     const h = Math.round(w * 1.45);
     const playable = new Set(legalPlays(state, showSeat).map((c) => c.id));
     cursor = Math.max(0, Math.min(cursor, hand.length - 1));
+    const cards: HTMLElement[] = [];
     hand.forEach((card, i) => {
       const el = document.createElement("button");
       el.type = "button";
@@ -536,7 +541,11 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       el.setAttribute("aria-label", cardLabel(card));
       el.addEventListener("click", () => tapCard(i));
       handEl.appendChild(el);
+      cards.push(el);
     });
+    // 360px 上七张牌一行摆不下,`.hh-hand` 要横滑。光标挪到看不见的那张时得把它带进视野,
+    // 不然孩子按 A / D 会以为键坏了。`nearest` 保证已经看得见的时候一动不动,也不会带着整页乱跳。
+    cards[cursor]?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }
 
   function mkBtn(label: string, cls: string, onClick: () => void, disabled = false): HTMLButtonElement {

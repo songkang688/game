@@ -202,6 +202,58 @@ describe("无尽与闯关入口", () => {
   });
 });
 
+describe("键位提示与光标跟随", () => {
+  it("提示行把 KEYS_P1 / KEYS_P2 认的键写全了,不再只写 A / D", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("双人同屏")?.click();
+    const keys = dom.root.querySelector(".hh-keys")?.textContent ?? "";
+    // 朵朵四个方向键都认:W / A / S / D
+    for (const k of ["W", "A", "S", "D"]) expect(keys, `朵朵的 ${k}`).toContain(k);
+    // 星星的上下也认,不只是左右
+    for (const k of ["←", "→", "↑", "↓"]) expect(keys, `星星的 ${k}`).toContain(k);
+    expect(keys).toContain("F 出牌");
+    expect(keys).toContain("G 抽牌");
+    expect(keys).toContain("L 出牌");
+    expect(keys).toContain("K 抽牌");
+    handle.destroy();
+  });
+
+  it("上下键和左右键挪的是同一个光标", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("对战")?.click();
+    byText("开打")?.click();
+    const curIndex = (): number => handCards().findIndex((c) => c.className.includes("hh-card-cur"));
+    expect(curIndex()).toBe(0);
+    fireWindow(dom, "keydown", { key: "s" });
+    expect(curIndex()).toBe(1);
+    fireWindow(dom, "keydown", { key: "w" });
+    expect(curIndex()).toBe(0);
+    handle.destroy();
+  });
+
+  it("光标挪到哪张牌,就把哪张牌滚进视野(360px 上一行摆不下七张)", () => {
+    const rec = fakeApi(dom.root);
+    const handle = mount(rec.api);
+    byText("对战")?.click();
+    byText("开打")?.click();
+    // 七张 50px 的牌加间距超过 360px,`.hh-hand` 必须横滑才看得到最右那张
+    expect(handCards().length * (cardWidthFor(360) + 6)).toBeGreaterThan(360);
+
+    fireWindow(dom, "keydown", { key: "a" }); // 从第 0 张往回绕到最后一张
+    const cards = handCards();
+    const cur = cards.findIndex((c) => c.className.includes("hh-card-cur"));
+    expect(cur).toBe(cards.length - 1);
+    expect(cards[cur].scrollCount).toBeGreaterThan(0);
+    // 只带光标那一张进视野,别的牌不去动它
+    for (let i = 0; i < cards.length; i++) {
+      if (i !== cur) expect(cards[i].scrollCount, `第 ${i} 张不该被滚`).toBe(0);
+    }
+    handle.destroy();
+  });
+});
+
 describe("窄屏与按钮尺寸", () => {
   it("360px 下手牌是横向可滑的一条,牌不小于 48px", () => {
     const rec = fakeApi(dom.root);

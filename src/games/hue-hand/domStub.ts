@@ -149,8 +149,10 @@ export class El {
       height: pxOf(this.style.height, this.height || 90),
     };
   }
+  /** 被滚进视野过几次(桩不真滚,只记账,给「光标跟随」一类的用例查) */
+  scrollCount = 0;
   scrollIntoView(): void {
-    /* 桩:滚动不用真做 */
+    this.scrollCount++;
   }
   focus(): void {
     /* 桩:焦点不用真做 */
