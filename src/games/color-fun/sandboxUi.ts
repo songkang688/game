@@ -34,6 +34,46 @@ export interface SandboxHandle {
   destroy: () => void;
 }
 
+/** 做无障碍屏蔽只用得上这三件事；接口窄一点，用例拿个桩就能验 */
+export interface MuteTarget {
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void;
+}
+
+/** 浮层盖住底下的东西以后，这两个属性一起上，键盘与读屏才真的绕开它 */
+const MUTE_ATTRS: ReadonlyArray<[string, string]> = [
+  ["inert", ""],
+  ["aria-hidden", "true"],
+];
+
+/**
+ * 把浮层背后的那些节点标成 `inert` + `aria-hidden`，返回一个原样还原的函数。
+ *
+ * 画室是 `position:absolute; z-index:9` 的一层纸，视觉上盖住了选关地图，
+ * 但地图上十来个控件仍然 Tab 得到——键盘和读屏的孩子会一路走进看不见的地图，
+ * 甚至误触「开始冒险」直接跳出画室（窗口5 第1轮 W5-A-05）。
+ * 还原时按原值放回去，本来就写着这两个属性的节点不会被顺手擦掉。
+ */
+export function muteBehind(targets: readonly MuteTarget[]): () => void {
+  const undo: Array<() => void> = [];
+  for (const el of targets) {
+    for (const [name, value] of MUTE_ATTRS) {
+      const before = el.getAttribute(name);
+      undo.push(() => (before === null ? el.removeAttribute(name) : el.setAttribute(name, before)));
+      el.setAttribute(name, value);
+    }
+  }
+  return () => {
+    for (const fn of undo) fn();
+  };
+}
+
+/** 这个键算不算「关上画室」（`Esc` 是老浏览器上 `Escape` 的旧名字） */
+export function isSandboxDismissKey(key: string): boolean {
+  return key === "Escape" || key === "Esc";
+}
+
 /** 在 `host` 上盖一层自由涂色画室 */
 export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): SandboxHandle {
   const doc = host.ownerDocument;
@@ -81,7 +121,13 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
     <div class="clf-gallery"></div>
     <div class="clf-empty"></div>
   `;
+  // 开画室之前记下焦点在谁身上，关上以后原样还给他（多半就是「🎨 自由涂色」那颗按钮）
+  const opener = doc.activeElement as { focus?: () => void } | null;
   host.appendChild(sheet);
+  // 画室盖住的那几层（模式条与选关地图）对键盘和读屏一并让位
+  const restoreBehind = muteBehind(
+    Array.from(host.children).filter((el) => el !== sheet) as unknown as MuteTarget[]
+  );
 
   const picksEl = sheet.querySelector(".clf-picks") as HTMLElement;
   const svg = sheet.querySelector(".clf-canvas") as unknown as SVGSVGElement;
@@ -260,6 +306,16 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
     opts.onClose?.();
   });
 
+  // Esc 关上画室：和平台其它弹窗一个习惯。焦点锁在画室里，按键一定从这儿冒上来
+  sheet.addEventListener("keydown", (e) => {
+    const ev = e as KeyboardEvent;
+    if (!isSandboxDismissKey(ev.key)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    sfx("tap");
+    opts.onClose?.();
+  });
+
   // 长按一张作品可以删掉；短按是打开，两者不冲突
   galleryEl.addEventListener("contextmenu", (e) => {
     const btn = (e.target as HTMLElement | null)?.closest?.(".clf-work");
@@ -280,6 +336,8 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
   renderTools();
   renderGallery();
   say("随便涂，没有对错～涂错了按撤销就好。");
+  // 第一站就落在「✖ 关上画室」，Tab 一路都在画室里转
+  closeBtn.focus?.();
 
   return {
     destroy() {
@@ -288,6 +346,8 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
       timeouts.clear();
       history.clear();
       sheet.remove();
+      restoreBehind();
+      opener?.focus?.();
     },
   };
 }
