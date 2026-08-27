@@ -383,7 +383,9 @@ export const MN_CSS = `
 @keyframes mncrumb{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translate(4px,-10px)}}
 @keyframes mnpop{0%{transform:scale(.2) translateY(4px);opacity:0}30%{opacity:1}100%{transform:scale(1.05) translateY(-7px);opacity:0}}
 .mn-mini{display:block;margin:6px auto 0;border-radius:8px;background:#DCEBCF;border:1px solid #B9D3A4;
-  box-shadow:0 2px 6px rgba(110,150,90,.3);}
+  box-shadow:0 2px 6px rgba(110,150,90,.3);box-sizing:border-box;max-width:100%;}
+/* display:block 会盖掉 UA 的 [hidden]{display:none}——这行补回来，收起时不再留一块空底板 */
+.mn-mini[hidden]{display:none;}
 .mn-minitip{text-align:center;font-size:var(--mt-body,16px);font-weight:700;color:#5B7A4C;margin-top:2px;}
 .mn-tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
 .mn-btn{border:none;border-radius:12px;padding:9px 13px;min-height:40px;font-size:14px;font-weight:900;cursor:pointer;
@@ -656,7 +658,10 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   }
 
   function drawMini(): void {
-    const scale = Math.max(2, Math.floor(300 / run.opts.w));
+    // 鸟瞰图按容器实际宽收敛：320px 视口下容器不足 300px，画布跟着缩，不越界
+    const measured = (wrap as { clientWidth?: number }).clientWidth || 0;
+    const avail = measured > 0 ? Math.min(300, Math.max(96, measured - 8)) : 300;
+    const scale = Math.max(2, Math.floor(avail / run.opts.w));
     mini.width = run.opts.w * scale;
     mini.height = run.opts.h * scale;
     const ctx = (mini as HTMLCanvasElement).getContext?.("2d");
