@@ -157,7 +157,7 @@ const CSS = `
 .fk-card{background:linear-gradient(180deg,#fffdff,#f5f0ff);border-radius:20px;padding:14px;
   box-shadow:0 4px 14px rgba(140,120,190,.16);margin-bottom:12px;}
 .fk-h{font-size:18px;font-weight:900;margin:0 0 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.fk-sub{font-size:13px;font-weight:700;color:var(--fk-soft);line-height:1.7;}
+.fk-sub{font-size:14px;font-weight:700;color:var(--fk-soft);line-height:1.7;}
 .fk-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 @media (max-width:420px){.fk-modes{grid-template-columns:1fr;}}
 .fk-mode{border:none;border-radius:18px;padding:14px;text-align:left;cursor:pointer;font-family:inherit;
@@ -165,7 +165,7 @@ const CSS = `
 .fk-mode:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(130,105,180,.22);}
 .fk-mode-emoji{font-size:26px;line-height:1;}
 .fk-mode-t{font-size:16px;font-weight:900;color:#5b4890;}
-.fk-mode-d{font-size:12.5px;font-weight:700;color:#8271ab;line-height:1.55;margin-top:3px;}
+.fk-mode-d{font-size:14px;font-weight:700;color:#8271ab;line-height:1.55;margin-top:3px;}
 .fk-btn{border:none;border-radius:14px;padding:9px 15px;font-size:15px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.28);white-space:nowrap;}
 .fk-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,95,170,.28);}
@@ -185,9 +185,9 @@ const CSS = `
 .fk-ch-n{font-size:12px;font-weight:900;color:#5b4890;}
 .fk-ch-on{outline:3px solid #e0679f;background:#fff;}
 /* 连着几场没赢下来才写字,平时是空的,所以不占地方 */
-.fk-swap{font-size:13px;font-weight:800;color:#a3568a;line-height:1.6;margin-top:8px;}
+.fk-swap{font-size:14px;font-weight:800;color:#a3568a;line-height:1.6;margin-top:8px;}
 .fk-swap:empty{display:none;}
-.fk-info{margin-top:8px;font-size:12.5px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
+.fk-info{margin-top:8px;font-size:14px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
   box-shadow:0 4px 14px rgba(140,120,190,.2);}
 .fk-canvas{display:block;width:100%;height:auto;touch-action:none;}
@@ -251,7 +251,7 @@ const CSS = `
   white-space:nowrap;overflow:hidden;}
 .fk-combo-r{text-align:right;}
 .fk-train-modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0;}
-.fk-train-hint{font-size:12px;font-weight:700;color:#8271ab;line-height:1.6;margin-bottom:4px;}
+.fk-train-hint{font-size:14px;font-weight:700;color:#8271ab;line-height:1.6;margin-bottom:4px;}
 .fk-live b{color:#c8497f;}
 .fk-hidden{display:none !important;}
 .fk-fd{width:100%;border-collapse:collapse;font-size:12px;}
@@ -262,7 +262,7 @@ const CSS = `
 .fk-fd-plus{color:#3f8f5f;}
 .fk-fd-minus{color:#c05b5b;}
 .fk-scroll{overflow-x:auto;}
-.fk-live{font-size:12.5px;font-weight:800;color:#5b4890;line-height:1.7;}
+.fk-live{font-size:14px;font-weight:800;color:#5b4890;line-height:1.7;}
 .fk-btn:focus-visible,.fk-mode:focus-visible,.fk-ch:focus-visible,.fk-padbtn:focus-visible{
   outline:3px solid #3c2a6b;outline-offset:3px;}
 /* 手机上两套摇杆挤在一行：摇杆收小，四颗按钮排成 2×2，但热区一律保住 44px */
@@ -272,10 +272,10 @@ const CSS = `
   .fk-stick{width:74px;height:74px;align-self:center;}
   .fk-stick-dot{width:28px;height:28px;margin:-14px 0 0 -14px;}
   .fk-padbtns{grid-template-columns:1fr 1fr;gap:5px;}
-  .fk-padbtn{padding:12px 2px;min-height:44px;font-size:13px;}
+  .fk-padbtn{padding:12px 2px;min-height:44px;font-size:14px;}
   .fk-clock{width:58px;}
   .fk-clock-t{font-size:18px;}
-  .fk-combo{font-size:13px;}
+  .fk-combo{font-size:14px;}
 }
 /* 360px：名字缩到两个字 + 省略号，HUD 说什么也不许被顶出屏幕 */
 @media (max-width:380px){
