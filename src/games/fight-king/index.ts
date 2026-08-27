@@ -121,7 +121,7 @@ const CSS = `
   display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 2px 0 rgba(130,105,180,.18);}
 .fk-ch:active{transform:translateY(1px);}
 .fk-ch-e{font-size:21px;line-height:1;}
-.fk-ch-n{font-size:11.5px;font-weight:900;color:#5b4890;}
+.fk-ch-n{font-size:12px;font-weight:900;color:#5b4890;}
 .fk-ch-on{outline:3px solid #e0679f;background:#fff;}
 .fk-info{margin-top:8px;font-size:12.5px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
@@ -208,7 +208,7 @@ const CSS = `
 }
 /* 360px：名字缩到两个字 + 省略号，HUD 说什么也不许被顶出屏幕 */
 @media (max-width:380px){
-  .fk-name{font-size:11.5px;}
+  .fk-name{font-size:12px;}
   .fk-hud{padding:6px 6px 0;}
   .fk-stick{width:66px;height:66px;}
 }

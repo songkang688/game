@@ -92,8 +92,12 @@ describe("五个入口", () => {
     // 训练场的帧数读数与触屏钮的钮名原来都是 11px，双人时左右各四颗钮更难认
     expect(css).toContain(".fk-clock-r{font-size:12px;");
     expect(css).toContain(".fk-pad-name{font-size:12px;");
-    for (const px of [8, 9, 10, 11]) {
-      expect(css, `还有 ${px}px 的字`).not.toContain(`font-size:${px}px`);
+    // 整份 CSS 逐条量过去，带小数的也算数（.fk-ch-n 与 360px 档的 .fk-name 原来是 11.5px，
+    // 只挡整数像素的话它们会从筛子缝里漏过去）
+    const sizes = [...css.matchAll(/font-size:([\d.]+)px/g)].map((m) => Number(m[1]));
+    expect(sizes.length, "一条 font-size 都没扒到").toBeGreaterThan(15);
+    for (const px of sizes) {
+      expect(px, `还有 ${px}px 的字`).toBeGreaterThanOrEqual(12);
     }
   });
 
