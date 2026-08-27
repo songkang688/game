@@ -13,6 +13,7 @@
  */
 
 import { shade, withAlpha } from "../../art/kit/palette";
+import { SIDE_RATIO, roundRectPath, topSideBlock } from "../../art/kit/block25d";
 import { DX, DY } from "./terrain12";
 import type { Tank, World } from "./logic";
 import { REBUILD_SECONDS } from "./logic";
@@ -213,3 +214,344 @@ export class TankFx {
 
 /** 半透明白 / 半透明描边这类到处要用的小抄 */
 export const SOFT_WHITE = withAlpha("#FFFFFF", 0.55);
+
+// ---------------------------------------------------------------------------
+// 格内双面块:右下 2px 投影 + 顶/侧双面,全部收在调用者给的盒子里
+// ---------------------------------------------------------------------------
+
+/**
+ * 一格地形的标准画法:投影先落在右下(偏 `SHADOW_PX`),块体再画在左上 ——
+ * 投影、侧面、顶面三层加起来也不超出 `(x, y, w, h)`,判定格子一寸不多占。
+ */
+export function cellBlock(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  base: string,
+  radius = 2
+): void {
+  const bw = Math.max(1, w - SHADOW_PX);
+  const bh = Math.max(1, h - SHADOW_PX);
+  c.fillStyle = TK_COLORS.tkShadow;
+  roundRectPath(c, x + SHADOW_PX, y + SHADOW_PX, bw, bh, radius);
+  c.fill();
+  topSideBlock(c, x, y, bw, bh, base, SIDE_RATIO, radius);
+}
+
+// ---------------------------------------------------------------------------
+// 阵营徽章:全部自绘矢量,彻底替换 emoji fillText。
+// 双通道可辨:形状(花/星/齿轮/铆钉/闪电)+ 颜色(车体主色不同),缩到 8px 也分得清。
+// ---------------------------------------------------------------------------
+
+export type BadgeKind = "flower" | "star" | "gear" | "rivet" | "bolt";
+
+/** 敌方四款车型 → 徽章形状(齿轮 / 铆钉 / 闪电三款,颜色再拉开一档) */
+export const KIND_BADGE: Readonly<Record<string, BadgeKind>> = {
+  swift: "bolt",
+  armor: "rivet",
+  power: "gear",
+  smart: "gear",
+};
+
+function starPath(c: CanvasRenderingContext2D, x: number, y: number, R: number, inner = 0.45): void {
+  c.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (Math.PI / 5) * i - Math.PI / 2;
+    const r = i % 2 === 0 ? R : R * inner;
+    const px = x + Math.cos(a) * r;
+    const py = y + Math.sin(a) * r;
+    if (i === 0) c.moveTo(px, py);
+    else c.lineTo(px, py);
+  }
+  c.closePath();
+}
+
+/** 朵朵徽章:五瓣小花(白瓣 + 金芯) */
+export function drawFlowerBadge(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = "#FFF6F9";
+  for (let i = 0; i < 5; i++) {
+    const a = ((Math.PI * 2) / 5) * i - Math.PI / 2;
+    c.beginPath();
+    c.ellipse(x + Math.cos(a) * r * 0.52, y + Math.sin(a) * r * 0.52, r * 0.42, r * 0.3, a, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.fillStyle = TK_GOLD;
+  c.beginPath();
+  c.arc(x, y, r * 0.34, 0, Math.PI * 2);
+  c.fill();
+}
+
+/** 星星徽章:金色五角星 + 深金描边 */
+export function drawStarBadge(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = TK_GOLD;
+  c.strokeStyle = shade(TK_GOLD, -26);
+  c.lineWidth = Math.max(1, r * 0.16);
+  starPath(c, x, y, r);
+  c.fill();
+  c.stroke();
+}
+
+/** 齿轮徽章(敌方·火力/机灵):八齿 + 中孔 */
+export function drawGearBadge(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = TK_IRON;
+  for (let i = 0; i < 8; i++) {
+    const a = ((Math.PI * 2) / 8) * i;
+    c.beginPath();
+    c.arc(x + Math.cos(a) * r * 0.72, y + Math.sin(a) * r * 0.72, r * 0.26, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.beginPath();
+  c.arc(x, y, r * 0.62, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = "#EDE7F2";
+  c.beginPath();
+  c.arc(x, y, r * 0.26, 0, Math.PI * 2);
+  c.fill();
+}
+
+/** 铆钉徽章(敌方·装甲):圆盘 + 四颗铆钉 */
+export function drawRivetBadge(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = TK_IRON;
+  c.beginPath();
+  c.arc(x, y, r * 0.8, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = "#EDE7F2";
+  for (let i = 0; i < 4; i++) {
+    const a = (Math.PI / 2) * i + Math.PI / 4;
+    c.beginPath();
+    c.arc(x + Math.cos(a) * r * 0.46, y + Math.sin(a) * r * 0.46, r * 0.16, 0, Math.PI * 2);
+    c.fill();
+  }
+}
+
+/** 闪电徽章(敌方·快速):亮黄折线闪电 */
+export function drawBoltBadge(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = "#FFE08A";
+  c.strokeStyle = TK_IRON;
+  c.lineWidth = Math.max(0.8, r * 0.12);
+  c.beginPath();
+  c.moveTo(x + r * 0.18, y - r);
+  c.lineTo(x - r * 0.42, y + r * 0.12);
+  c.lineTo(x - r * 0.04, y + r * 0.1);
+  c.lineTo(x - r * 0.2, y + r);
+  c.lineTo(x + r * 0.46, y - r * 0.14);
+  c.lineTo(x + r * 0.06, y - r * 0.12);
+  c.closePath();
+  c.fill();
+  c.stroke();
+}
+
+/** 徽章总入口:按形状分发 */
+export function drawBadge(c: CanvasRenderingContext2D, kind: BadgeKind, x: number, y: number, r: number): void {
+  if (kind === "flower") drawFlowerBadge(c, x, y, r);
+  else if (kind === "star") drawStarBadge(c, x, y, r);
+  else if (kind === "gear") drawGearBadge(c, x, y, r);
+  else if (kind === "rivet") drawRivetBadge(c, x, y, r);
+  else drawBoltBadge(c, x, y, r);
+}
+
+/** 护甲小盾牌(金边,固定 8px):替换 1.2 那颗「像渲染 bug」的白点 */
+export function drawShieldBadge(c: CanvasRenderingContext2D, x: number, y: number, px = ARMOR_BADGE_PX): void {
+  const w = px / 2;
+  const h = px / 2;
+  c.fillStyle = "#FFFDF6";
+  c.strokeStyle = TK_GOLD;
+  c.lineWidth = Math.max(1, px * 0.16);
+  c.beginPath();
+  c.moveTo(x - w, y - h * 0.7);
+  c.quadraticCurveTo(x, y - h, x + w, y - h * 0.7);
+  c.lineTo(x + w, y + h * 0.1);
+  c.quadraticCurveTo(x + w * 0.6, y + h * 0.8, x, y + h);
+  c.quadraticCurveTo(x - w * 0.6, y + h * 0.8, x - w, y + h * 0.1);
+  c.closePath();
+  c.fill();
+  c.stroke();
+  c.fillStyle = TK_GOLD;
+  c.beginPath();
+  c.arc(x, y, px * 0.14, 0, Math.PI * 2);
+  c.fill();
+}
+
+/** 炮口十字闪光(两帧):四条短臂 + 中心亮点,只是「打出去了」的回执 */
+export function drawMuzzleFlash(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = "rgba(255,236,150,.45)";
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = "#FFF7DA";
+  c.lineWidth = Math.max(1.2, r * 0.3);
+  c.beginPath();
+  c.moveTo(x - r, y);
+  c.lineTo(x + r, y);
+  c.moveTo(x, y - r);
+  c.lineTo(x, y + r);
+  c.stroke();
+}
+
+/** 护盾圈的六边形网纹(reduced 时角度冻结、透明度恒定) */
+export function drawHexRing(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  angle: number,
+  alpha: number
+): void {
+  c.strokeStyle = withAlpha("#FFFFFF", alpha);
+  c.lineWidth = Math.max(1.2, r * 0.09);
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.stroke();
+  c.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = ((Math.PI * 2) / 6) * i + angle;
+    const px = x + Math.cos(a) * r * 0.86;
+    const py = y + Math.sin(a) * r * 0.86;
+    if (i === 0) c.moveTo(px, py);
+    else c.lineTo(px, py);
+  }
+  c.closePath();
+  c.stroke();
+}
+
+// ---------------------------------------------------------------------------
+// 散架零件:齿轮 / 弹簧 / 履带片 / 轮子 / 螺母,五件对应 1.2 的五个 emoji
+// ---------------------------------------------------------------------------
+
+export type PartKind = "gear" | "spring" | "track" | "wheel" | "nut";
+export const PART_KINDS: readonly PartKind[] = ["gear", "spring", "track", "wheel", "nut"];
+
+const PART_METAL = "#9AA3B2";
+const PART_DARK = shade("#9AA3B2", -28);
+const PART_GRAY = "#BDBDC6";
+
+/** 一枚玩具零件;`gray` = reduced 的一帧灰显 */
+export function drawPart(
+  c: CanvasRenderingContext2D,
+  kind: PartKind,
+  x: number,
+  y: number,
+  r: number,
+  gray = false
+): void {
+  const metal = gray ? PART_GRAY : PART_METAL;
+  const dark = gray ? PART_GRAY : PART_DARK;
+  if (kind === "gear") {
+    c.fillStyle = metal;
+    for (let i = 0; i < 6; i++) {
+      const a = ((Math.PI * 2) / 6) * i;
+      c.beginPath();
+      c.arc(x + Math.cos(a) * r * 0.7, y + Math.sin(a) * r * 0.7, r * 0.28, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.beginPath();
+    c.arc(x, y, r * 0.58, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = dark;
+    c.beginPath();
+    c.arc(x, y, r * 0.24, 0, Math.PI * 2);
+    c.fill();
+  } else if (kind === "spring") {
+    c.strokeStyle = metal;
+    c.lineWidth = Math.max(1.2, r * 0.3);
+    c.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const yy = y - r * 0.6 + i * r * 0.6;
+      c.moveTo(x - r * 0.5, yy);
+      c.quadraticCurveTo(x, yy - r * 0.4, x + r * 0.5, yy);
+    }
+    c.stroke();
+  } else if (kind === "track") {
+    c.fillStyle = dark;
+    roundRectPath(c, x - r * 0.9, y - r * 0.4, r * 1.8, r * 0.8, r * 0.25);
+    c.fill();
+    c.fillStyle = metal;
+    c.beginPath();
+    c.arc(x - r * 0.4, y, r * 0.18, 0, Math.PI * 2);
+    c.arc(x + r * 0.4, y, r * 0.18, 0, Math.PI * 2);
+    c.fill();
+  } else if (kind === "wheel") {
+    c.fillStyle = dark;
+    c.beginPath();
+    c.arc(x, y, r * 0.8, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = metal;
+    c.beginPath();
+    c.arc(x, y, r * 0.42, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = dark;
+    c.beginPath();
+    c.arc(x, y, r * 0.14, 0, Math.PI * 2);
+    c.fill();
+  } else {
+    // 螺母:六边形 + 中孔
+    c.fillStyle = metal;
+    c.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = ((Math.PI * 2) / 6) * i + Math.PI / 6;
+      const px = x + Math.cos(a) * r * 0.75;
+      const py = y + Math.sin(a) * r * 0.75;
+      if (i === 0) c.moveTo(px, py);
+      else c.lineTo(px, py);
+    }
+    c.closePath();
+    c.fill();
+    c.fillStyle = dark;
+    c.beginPath();
+    c.arc(x, y, r * 0.3, 0, Math.PI * 2);
+    c.fill();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 粒子矢量:小花 / 烟团 / 星屑 / 砖屑,替换 🌼💨✨🧱 的 fillText
+// ---------------------------------------------------------------------------
+
+/** 变花退场:五瓣粉白小花 + 金芯 */
+export function drawFxFlower(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = "#FFD7E4";
+  for (let i = 0; i < 5; i++) {
+    const a = ((Math.PI * 2) / 5) * i - Math.PI / 2;
+    c.beginPath();
+    c.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.42, r * 0.3, a, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.fillStyle = TK_GOLD;
+  c.beginPath();
+  c.arc(x, y, r * 0.3, 0, Math.PI * 2);
+  c.fill();
+}
+
+/** 冒烟:三团灰白圆,越散越淡(k 是 0..1 的进度) */
+export function drawFxSmoke(c: CanvasRenderingContext2D, x: number, y: number, r: number, k: number): void {
+  c.fillStyle = "rgba(214,210,222,.8)";
+  const lift = (1 - k) * r;
+  c.beginPath();
+  c.arc(x - r * 0.5, y - lift * 0.4, r * 0.5, 0, Math.PI * 2);
+  c.arc(x + r * 0.4, y - lift * 0.7, r * 0.62, 0, Math.PI * 2);
+  c.arc(x, y - lift, r * 0.4, 0, Math.PI * 2);
+  c.fill();
+}
+
+/** 星屑:四角星(护罩挡下一发、通用火花都用它) */
+export function drawFxSparkle(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = "#FFF3C2";
+  c.beginPath();
+  c.moveTo(x, y - r);
+  c.quadraticCurveTo(x + r * 0.18, y - r * 0.18, x + r, y);
+  c.quadraticCurveTo(x + r * 0.18, y + r * 0.18, x, y + r);
+  c.quadraticCurveTo(x - r * 0.18, y + r * 0.18, x - r, y);
+  c.quadraticCurveTo(x - r * 0.18, y - r * 0.18, x, y - r);
+  c.closePath();
+  c.fill();
+}
+
+/** 砖屑:两片斜着飞的小砖块 */
+export function drawFxCrumb(c: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  c.fillStyle = TK_COLORS.tkBrick;
+  c.fillRect(x - r * 1.2, y - r * 0.5, r, r * 0.8);
+  c.fillStyle = TK_COLORS.tkBrickSide;
+  c.fillRect(x + r * 0.3, y - r * 0.1, r * 0.8, r * 0.65);
+}
