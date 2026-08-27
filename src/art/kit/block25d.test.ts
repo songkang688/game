@@ -4,7 +4,7 @@
  * 颜色那半验证顶面 = 主色、侧面 = shade(-22)、sideRatio 默认 0.18。
  */
 import { describe, expect, it } from "vitest";
-import { hexToRgb, rgbToHex, shade, withAlpha } from "./palette";
+import { hexToRgb, shade, withAlpha } from "./palette";
 import { SIDE_RATIO, SIDE_SHADE, blockFaces, roundRectPath, topSideBlock, type BlockCtx } from "./block25d";
 
 /** 记录桩:收集全部路径坐标,顺带记 fill 时用的是什么颜色 */
@@ -38,7 +38,8 @@ describe("art/kit · palette", () => {
     expect(rLight).toBeGreaterThan(r0);
     // 认不出的颜色当中灰,画画路上不许抛错
     expect(shade("not-a-color", -22)).toMatch(/^#[0-9a-f]{6}$/i);
-    expect(rgbToHex(300, -5, 128)).toBe("#ff0080");
+    // 提到 255 以上也夹得住:纯白再加光还是纯白
+    expect(shade("#FFFFFF", 22)).toBe("#ffffff");
     expect(withAlpha("#F4859F", 0.5)).toBe("rgba(244,133,159,0.5)");
   });
 
