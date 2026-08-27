@@ -20,25 +20,28 @@ describe("box-hamster 舞台底纹(fixer 落地 B 档 TOP-9)", () => {
     }
   });
 
-  it("材质层峰值透明度全部 ≤8%(rgba 的 a 与 fill-opacity 逐个查)", () => {
+  it("材质层峰值透明度全部 ≤8%(rgba 的 a 逐个查)", () => {
     for (const t of BH_THEMES) {
-      const alphas = [
-        ...[...t.mat.matchAll(/rgba\([^)]*?,\s*(\.\d+|0|1)\)/g)].map((m) => Number(m[1])),
-        ...[...t.mat.matchAll(/fill-opacity='(\.\d+)'/g)].map((m) => Number(m[1])),
-      ];
+      const alphas = [...t.mat.matchAll(/rgba\([^)]*?,\s*(\.\d+|0|1)\)/g)].map((m) => Number(m[1]));
       expect(alphas.length, `${t.id} 的 mat 里找不到透明度声明`).toBeGreaterThan(0);
       for (const a of alphas) expect(a, `${t.id} 底纹超过 8% 透明度`).toBeLessThanOrEqual(0.08);
     }
   });
 
-  it("木屋=45° 木纹 24px 周期;冰窖=两粒光斑;花园=96px 平铺小花", () => {
+  it("木屋=45° 木纹 24px 周期;冰窖=两粒光斑;花园=三瓣小花 96px 平铺", () => {
     const [cabin, cellar, garden] = BH_THEMES;
     expect(cabin.mat).toContain("repeating-linear-gradient(45deg");
     expect(cabin.mat).toContain("12px 24px");
     expect((cellar.mat.match(/radial-gradient\(/g) ?? []).length).toBe(2);
-    expect(garden.mat).toContain("data:image/svg+xml");
-    expect(garden.mat).toContain("96px 96px repeat");
-    expect((garden.mat.match(/%3Ccircle/g) ?? []).length).toBe(3); // 三瓣
+    expect((garden.mat.match(/radial-gradient\(/g) ?? []).length).toBe(3); // 三瓣
+    expect((garden.mat.match(/96px 96px repeat/g) ?? []).length).toBe(3);
+  });
+
+  it("底纹不携带任何外链协议字样(全库 qaC3fix 硬约束)", () => {
+    for (const t of BH_THEMES) {
+      expect(t.mat.includes("http"), `${t.id} 的 mat 引了外链协议`).toBe(false);
+      expect(t.mat).not.toContain("url(");
+    }
   });
 
   it("index 消费 mat 而不是裸 tint;主题角标 deco 原样保留", () => {

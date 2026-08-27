@@ -280,12 +280,14 @@ export interface BhTheme {
   mat: string;
 }
 
-/** 花园底纹:三瓣小花 data-URI,96px 平铺,6% 透明度(纯装饰) */
-const GARDEN_MAT_TILE =
-  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E` +
-  `%3Cg fill='%23F4859F' fill-opacity='.06'%3E` +
-  `%3Ccircle cx='48' cy='40' r='5'/%3E%3Ccircle cx='41' cy='51' r='5'/%3E%3Ccircle cx='55' cy='51' r='5'/%3E` +
-  `%3C/g%3E%3C/svg%3E") 0 0 / 96px 96px repeat`;
+/**
+ * 花园底纹:三瓣小花,96px 平铺,6% 透明度(纯装饰)。
+ * 用三粒 radial-gradient 拼瓣而不是 data-URI SVG——全库硬约束禁止源码里
+ * 出现外链协议字样(qaC3fix 扫描),渐变写法也和另两主题的底纹同族。
+ */
+const GARDEN_PETAL = (x: number, y: number): string =>
+  `radial-gradient(circle at ${x}% ${y}%, rgba(244,133,159,.06) 0 5px, rgba(244,133,159,0) 6px) 0 0 / 96px 96px repeat`;
+const GARDEN_MAT_TILE = [GARDEN_PETAL(50, 42), GARDEN_PETAL(43, 53), GARDEN_PETAL(57, 53)].join(", ");
 
 const CABIN_DECO =
   `<svg viewBox="0 0 32 32" aria-hidden="true">` +
