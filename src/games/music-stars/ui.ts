@@ -300,6 +300,16 @@ export const MST_CSS = `
      热区一个都没动：让的是手势，不是尺寸。 */
   .mst-star{touch-action:pan-y;}
   .mst-keys-scroll .mst-star{touch-action:pan-x pan-y;}
+  /* 上面那条给键身让了竖向，可 touch-action 是**沿祖先链取交集**的：
+     键头上的 .mst-keys-scroll 还写着 touch-action:pan-x，
+     键说「随便划」、容器说「只许横着」，取交集就是「只许横着」——
+     双声部那一章（L155，键排横向可滚）于是一分都没让出来。
+     真机三档真手指从键身上起手往上推两趟：320×640 / 360×640 / 320×568
+     全是 scrollTop 0 → 0 → 0，而壳当时还有 51 / 51 / 123px 没滚出来。
+     容器这一层也放行竖向之后，同一批手势 0 → 51 / 51 / 123，一趟推到底。
+     只在这一档放：屏够高时壳没有竖向余量，基准那条 pan-x 原样留着。
+     横向一分没丢，overflow-x:auto 与 pan-x 都还在（LB-13 剩下那一半）。 */
+  .mst-keys-scroll{touch-action:pan-x pan-y;}
   .mst-msg{min-height:${SHORT_SIZES.msg}px;font-size:16px;}
   .mst-dots{min-height:${SHORT_SIZES.dots}px;}
   .mst-sky{min-height:${SHORT_SIZES.sky}px;}
