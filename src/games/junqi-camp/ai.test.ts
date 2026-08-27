@@ -1,9 +1,18 @@
 // 军旗对决 · 四档电脑对手：走的棋要合法、要可复现，档位之间要真的拉得开差距。
 import { describe, expect, it } from "vitest";
-import { TIERS, TIER_LABELS, TIER_SETUP, TIER_TIPS, chooseMove, type Tier } from "./ai";
+import { TIERS, TIER_LABELS, TIER_SETUP, TIER_TIPS, chooseMove, shufflePenalty, type Tier } from "./ai";
 import { HQ, idx, type Side } from "./board";
 import { newGame } from "./setup";
-import { applyMove, legalMoves, makeState, movesFrom, status, type Cell, type Kind } from "./rules";
+import {
+  applyMove,
+  legalMoves,
+  makeState,
+  movesFrom,
+  status,
+  type Cell,
+  type GameEvent,
+  type Kind,
+} from "./rules";
 
 interface MatchResult {
   winner: Side | null;
@@ -72,6 +81,55 @@ describe("军旗对决 · 电脑对手", () => {
     const s = makeState(cells, { turn: "duo" });
     const move = chooseMove(s, "duo", "hell", 5);
     expect(move).toEqual({ from: idx(1, 1), to: HQ.star[0] });
+  });
+
+  it("拉锯罚分只认「原样退回上一手起点」，来回过一轮就翻倍", () => {
+    const trail: GameEvent[] = [
+      { t: "move", side: "duo", piece: { id: 7, side: "duo", kind: "tuanzhang" }, from: 20, to: 25, rail: false, turned: false },
+    ];
+    // 上一手 20→25，这一手要 25→20：正是拉锯
+    expect(shufflePenalty(trail, "duo", { from: 25, to: 20 }, 7)).toBe(22);
+    // 换一枚子走同一条线不算拉锯
+    expect(shufflePenalty(trail, "duo", { from: 25, to: 20 }, 9)).toBe(0);
+    // 往前挪、不是退回去的也不算
+    expect(shufflePenalty(trail, "duo", { from: 25, to: 31 }, 7)).toBe(0);
+    // 空历史与对手的历史都不该扣分
+    expect(shufflePenalty([], "duo", { from: 25, to: 20 }, 7)).toBe(0);
+    expect(shufflePenalty(trail, "star", { from: 25, to: 20 }, 7)).toBe(0);
+
+    const twice: GameEvent[] = [
+      { t: "move", side: "duo", piece: { id: 7, side: "duo", kind: "tuanzhang" }, from: 20, to: 25, rail: false, turned: false },
+      { t: "move", side: "duo", piece: { id: 7, side: "duo", kind: "tuanzhang" }, from: 25, to: 20, rail: false, turned: false },
+      { t: "move", side: "duo", piece: { id: 7, side: "duo", kind: "tuanzhang" }, from: 20, to: 25, rail: false, turned: false },
+    ];
+    expect(shufflePenalty(twice, "duo", { from: 25, to: 20 }, 7)).toBeGreaterThan(22);
+  });
+
+  it("高手 / 地狱档不会拿同一枚子在两个格子之间来回蹭", () => {
+    /** 60 手之内，同一方的同一枚子在同一对格子上最多来回了几趟 */
+    function worstShuffle(seed: number, tier: Tier): number {
+      const state = newGame(seed, { duoSkill: TIER_SETUP[tier], starSkill: TIER_SETUP[tier] });
+      const seen = new Map<string, number>();
+      let worst = 0;
+      for (let i = 0; i < 60 && !state.outcome; i++) {
+        const move = chooseMove(state, state.turn, tier, 4242 + i);
+        if (!move) break;
+        const piece = state.cells[move.from];
+        const key = `${state.turn}:${piece?.id}:${Math.min(move.from, move.to)}-${Math.max(move.from, move.to)}`;
+        const n = (seen.get(key) ?? 0) + 1;
+        seen.set(key, n);
+        worst = Math.max(worst, n);
+        expect(applyMove(state, move).ok).toBe(true);
+      }
+      return worst;
+    }
+
+    // 这三个 seed 是加罚分之前真的会蹭的局：地狱档 1337 号局蹭到 6 趟，
+    // 高手档 5044 / 8077 两局各蹭 3 趟。加了罚分之后都压到 2 趟以内。
+    for (const [seed, tier] of [[1337, "hell"], [5044, "pro"], [8077, "pro"]] as [number, Tier][]) {
+      const worst = worstShuffle(seed, tier);
+      expect(worst, `${tier} 档 ${seed} 号局在同一对格子上蹭了 ${worst} 趟`).toBeLessThanOrEqual(2);
+    }
   });
 
   it("固定 seed 下地狱档对菜鸟档，胜率明显更高", () => {

@@ -27,6 +27,7 @@ import {
   legalMoves,
   movesFrom,
   type Cell,
+  type GameEvent,
   type GameState,
   type Kind,
   type Knowledge,
@@ -183,6 +184,8 @@ function scoreMove(
     // 留一枚子守着自己的旗
     const guardZone = BACK_TWO_ROWS[side].includes(rowOf(move.from));
     if (guardZone && guards(board, side) <= 1) score -= 12;
+    // 别在同一对格子之间来回拉锯
+    score -= shufflePenalty(state.history, side, move, me.id);
   }
 
   if (tier === "hell") {
@@ -196,6 +199,51 @@ function scoreMove(
   }
 
   return score;
+}
+
+/**
+ * 这一方最近走过的几手（新的排在前面）。只看「挪子」，吃子那种事件不算。
+ */
+function recentMoves(
+  history: readonly GameEvent[],
+  side: Side,
+  limit = 6
+): { id: number; from: Pos; to: Pos }[] {
+  const out: { id: number; from: Pos; to: Pos }[] = [];
+  for (let i = history.length - 1; i >= 0 && out.length < limit; i--) {
+    const ev = history[i];
+    if (ev.t !== "move" || ev.side !== side) continue;
+    out.push({ id: ev.piece.id, from: ev.from, to: ev.to });
+  }
+  return out;
+}
+
+/**
+ * 拉锯罚分：同一枚子在两个格子之间来回挪，是最没意思的一种拖延——
+ * 场面看着在动，其实一步没往前走，孩子会觉得电脑在发呆。
+ * 走回上一手刚离开的那一格就扣一笔；已经这么来回过一轮的扣得更狠。
+ * 只有真的没别的事可做时才会走它，所以不会因此把子往嘴边送。
+ */
+export function shufflePenalty(
+  history: readonly GameEvent[],
+  side: Side,
+  move: Move,
+  pieceId: number
+): number {
+  const trail = recentMoves(history, side);
+  const mine = trail.filter((m) => m.id === pieceId);
+  if (mine.length === 0) return 0;
+  const last = mine[0];
+  if (last.to !== move.from || last.from !== move.to) return 0;
+  // 上一手 A→B，这一手要 B→A：先扣一笔
+  let penalty = 22;
+  // 再往前翻，同一对格子已经走过一个来回的，扣双倍
+  for (const m of mine.slice(1)) {
+    if ((m.from === move.from && m.to === move.to) || (m.from === move.to && m.to === move.from)) {
+      penalty += 22;
+    }
+  }
+  return penalty;
 }
 
 /** 自己最后两行还剩几枚能动的子 */
