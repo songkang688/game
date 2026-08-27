@@ -12,8 +12,9 @@ import GUIDE from "./guide";
 import { CHAPTERS } from "./levels";
 import { meta } from "./meta";
 import { TIERS, TIER_LABELS } from "./ai";
-import { BLUE_LABEL, RED_LABEL } from "./board";
-import { CSS as BOARD_CSS } from "./view";
+import { BLUE_LABEL, RED_LABEL, labelOf, type Kind } from "./board";
+import { applyAction, newGame } from "./rules";
+import { CSS as BOARD_CSS, counterLine, createBoard } from "./view";
 
 let dom: Dom;
 
@@ -143,6 +144,69 @@ describe("翻翻暗棋 · index 契约", () => {
     const cell = (gap: number): number => (360 - gap * 7) / 8;
     expect(cell(3)).toBeGreaterThan(cell(4));
     expect(cell(3)).toBeGreaterThan(42);
+  });
+});
+
+describe("翻翻暗棋 · 记牌面板", () => {
+  const FULL: Record<Kind, number> = { general: 1, guard: 2, elephant: 2, chariot: 2, horse: 2, cannon: 2, soldier: 5 };
+
+  it("按相克次序从大到小列到兵种,不再只写一个总数", () => {
+    expect(counterLine("red", FULL)).toBe("红还盖着 16 · 帅1 仕2 相2 俥2 傌2 炮2 兵5");
+    expect(counterLine("blue", FULL)).toBe("蓝还盖着 16 · 将1 士2 象2 車2 馬2 砲2 卒5");
+  });
+
+  it("翻光了的兵种不再占位置,全翻完就写一句「都翻出来啦」", () => {
+    expect(counterLine("red", { ...FULL, guard: 0, elephant: 0, chariot: 0, horse: 0, cannon: 0 })).toBe(
+      "红还盖着 6 · 帅1 兵5"
+    );
+    const none: Record<Kind, number> = {
+      general: 0,
+      guard: 0,
+      elephant: 0,
+      chariot: 0,
+      horse: 0,
+      cannon: 0,
+      soldier: 0,
+    };
+    expect(counterLine("blue", none)).toBe("蓝还盖着 0 · 都翻出来啦");
+  });
+
+  it("真开一盘:两行写全七个兵种,翻掉一枚之后那一格的数少 1", () => {
+    const state = newGame(31);
+    const host = dom.root;
+    const board = createBoard(host as unknown as HTMLElement, {
+      state,
+      humans: ["duo"],
+      showCounter: true,
+      onHumanAction: () => undefined,
+      onNote: () => undefined,
+    });
+    const lines = (): string[] =>
+      dom.root
+        .find((e) => e.className.includes("dc-count"))!
+        .children.map((c) => c.textContent);
+    expect(lines()).toEqual([counterLine("red", FULL), counterLine("blue", FULL)]);
+
+    const piece = state.cells[0]!;
+    applyAction(state, { type: "flip", at: 0 });
+    board.refresh();
+    const after = lines()[piece.color === "red" ? 0 : 1];
+    expect(after).toContain(`${labelOf(piece.color, piece.kind)}${FULL[piece.kind] - 1}`);
+    board.destroy();
+  });
+
+  it("没开记牌面板的关卡照旧收着", () => {
+    const board = createBoard(dom.root as unknown as HTMLElement, {
+      state: newGame(31),
+      humans: ["duo"],
+      showCounter: false,
+      onHumanAction: () => undefined,
+      onNote: () => undefined,
+    });
+    const count = dom.root.find((e) => e.className.includes("dc-count"))!;
+    expect(count.hidden).toBe(true);
+    expect(count.children).toHaveLength(0);
+    board.destroy();
   });
 });
 

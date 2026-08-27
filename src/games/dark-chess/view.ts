@@ -6,7 +6,7 @@
  * 单人局里方向键与 L / K 是朵朵的别名，老键位一条都不丢。
  * 翻子和吃子都有动画，不许瞬变。
  */
-import { COLS, ROWS, colOf, indexOf, labelOf, rowOf, type Color } from "./board";
+import { COLS, KINDS, RANK, ROWS, colOf, indexOf, labelOf, rowOf, type Color, type Kind } from "./board";
 import {
   applyAction,
   coveredCount,
@@ -59,6 +59,23 @@ function reducedMotion(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * 记牌面板的一行字。
+ *
+ * 暗棋真正要学的是「大子翻出来没有」：还剩一枚帅没露面，谁都不敢把士往前送。
+ * `remainingUnknown()` 一直是按兵种数的（函数注释写的就是「还有哪些兵种没露过面」），
+ * 以前屏幕上只落下一个总数，最要紧的那半截被丢掉了。
+ * 现在按相克次序从大到小列出来，翻光了的兵种自动不占位置，一行还是一行。
+ */
+export function counterLine(color: Color, left: Record<Kind, number>): string {
+  const head = `${color === "red" ? "红" : "蓝"}还盖着 ${KINDS.reduce((a, k) => a + left[k], 0)}`;
+  const kinds = KINDS.slice()
+    .sort((a, b) => RANK[b] - RANK[a])
+    .filter((k) => left[k] > 0)
+    .map((k) => `${labelOf(color, k)}${left[k]}`);
+  return kinds.length > 0 ? `${head} · ${kinds.join(" ")}` : `${head} · 都翻出来啦`;
 }
 
 export interface BoardOptions {
@@ -241,15 +258,10 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     }
     if (opts.showCounter) {
       const left = remainingUnknown(state);
-      const parts: string[] = [];
-      for (const color of ["red", "blue"] as Color[]) {
-        const total = Object.values(left[color]).reduce((a, b2) => a + b2, 0);
-        parts.push(`${color === "red" ? "红" : "蓝"}还盖着 ${total}`);
-      }
       counter.innerHTML = "";
-      for (const p of parts) {
+      for (const color of ["red", "blue"] as Color[]) {
         const s = document.createElement("span");
-        s.textContent = p;
+        s.textContent = counterLine(color, left[color]);
         counter.appendChild(s);
       }
     }
