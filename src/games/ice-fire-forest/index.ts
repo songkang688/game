@@ -383,6 +383,19 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   // ---- 虚拟按键 ------------------------------------------------------------
   const held = new Set<string>();
 
+  /**
+   * 按下一个方向。
+   *
+   * 跳跃缓冲必须**按「一次按下」记一次**,不能按住期间每帧重记 ——
+   * 每帧重记的话,快按一下会走两格:按下的那一瞬间先走一步,
+   * 松手后那条一直被刷新的缓冲又在 120ms 内兑现出第二步。
+   * 真机上这个毛病一按就现,格子游戏里尤其难受。
+   */
+  function pressDir(hero: Hero, action: string, repeat: boolean): void {
+    held.add(`${hero}:${action}`);
+    if (!repeat) views[hero].buffer = bufferPress(views[hero].buffer, action, performance.now());
+  }
+
   interface PadHandle {
     el: HTMLElement;
     name: HTMLElement;
@@ -451,7 +464,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   function bindHold(btn: HTMLButtonElement, hero: Hero, action: string): void {
     const on = (e: Event): void => {
       e.preventDefault();
-      held.add(`${routeHero(soloState, hero)}:${action}`);
+      pressDir(routeHero(soloState, hero), action, false);
     };
     const off = (): void => {
       held.delete(`ice:${action}`);
@@ -464,7 +477,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     btn.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        held.add(`${routeHero(soloState, hero)}:${action}`);
+        pressDir(routeHero(soloState, hero), action, e.repeat);
       }
     });
     btn.addEventListener("keyup", off);
@@ -499,7 +512,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
       doTeam(hero);
       return;
     }
-    held.add(`${hero}:${bind.action}`);
+    pressDir(hero, bind.action, e.repeat);
   }
 
   function onKeyUp(e: KeyboardEvent): void {
@@ -732,11 +745,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
         }
       }
     }
-    if (!stepReady(now, v.readyAt)) {
-      // 上一格还没走完就按下的方向:记住 120ms,一到点立刻兑现
-      if (action) v.buffer = bufferPress(v.buffer, action, now);
-      return;
-    }
+    if (!stepReady(now, v.readyAt)) return;
     if (!action && bufferAlive(v.buffer, now)) {
       const taken = bufferTake(v.buffer, now);
       v.buffer = taken.next;

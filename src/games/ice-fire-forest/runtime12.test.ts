@@ -347,6 +347,114 @@ function waitCloud(h: Harness): void {
   h.flush(1, FEEL.CLOUD_MS + 40);
 }
 
+/**
+ * 找一关当「尺子」:凛凛从出发点往某个方向走
+ * **第一格空着、第二格上正好有一颗他捡得起来的宝石**。
+ * 这样 HUD 上的宝石数就成了「刚才到底走了几格」的读数。
+ */
+function findRuler(): { level: number; dir: number } {
+  const dxs = [1, -1, 0, 0];
+  const dys = [0, 0, 1, -1];
+  for (let i = 0; i < COOP_FROM_LEVEL; i++) {
+    const lv: ParsedLevel = parseLevel(analyzeLevel(i).grid);
+    if (lv.tiles.some((t) => t === TILE.BELT)) continue;
+    const gems = new Map(lv.gems.map((g) => [g.pos, g.kind]));
+    const start = initialState(lv);
+    for (let dir = 0; dir < 4; dir++) {
+      const one = moveHero(lv, start, "ice", dir);
+      if (one.kind !== "moved" || gems.has(one.state.ice)) continue;
+      const two = moveHero(lv, one.state, "ice", dir);
+      if (two.kind !== "moved") continue;
+      const kind = gems.get(two.state.ice);
+      if (kind === "blue" || kind === "white") return { level: i, dir };
+    }
+  }
+  throw new Error("找不到一关能当尺子用");
+}
+
+describe("按一下只走一格", () => {
+  /**
+   * 真机走查揪出来的毛病:跳跃缓冲原先按「按住期间每帧重记一次」写,
+   * 结果**快按一下会走两格** —— 按下那一瞬间先走一步,
+   * 松手之后那条一直被刷新的缓冲又在 120ms 内兑现出第二步。
+   * 缓冲必须是「一次按下记一次」。
+   */
+  it("快按一下只走一格 —— 第二格那颗宝石不许被顺手捡走", async () => {
+    const h = install();
+    harness = h;
+    const ruler = findRuler();
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(ruler.level + 1);
+    const code = keyFor("ice", ruler.dir);
+    expect(chipText(h, "💎")).toContain("💎 0/");
+
+    h.key("keydown", code);
+    h.flush(1, 16); // 这一帧走掉第一格
+    h.flush(3, 20); // 手指还没松,但离下一格的点还差着
+    h.key("keyup", code);
+    h.flush(8, 40); // 松手之后再跑一阵,缓冲不许冒出第二步
+
+    expect(chipText(h, "💎")).toContain("💎 0/");
+    game.destroy();
+  });
+
+  it("按住不放才连着走 —— 那颗宝石这下捡得到", async () => {
+    const h = install();
+    harness = h;
+    const ruler = findRuler();
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(ruler.level + 1);
+    const code = keyFor("ice", ruler.dir);
+    h.key("keydown", code);
+    h.flush(3, FEEL.STEP_MS + 20);
+    h.key("keyup", code);
+    expect(chipText(h, "💎")).toContain("💎 1/");
+    game.destroy();
+  });
+
+  it("上一格还没走完时补按的那一下,到点照样兑现(缓冲本来的用处还在)", async () => {
+    const h = install();
+    harness = h;
+    const ruler = findRuler();
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(ruler.level + 1);
+    const code = keyFor("ice", ruler.dir);
+
+    // 第一格:第 16ms 走掉,下一格最早要等到 16 + STEP_MS
+    h.key("keydown", code);
+    h.flush(1, 16);
+    h.key("keyup", code);
+    // 第 56ms 补按第二下并马上松手 —— 离「到点」还差 105ms,在 120ms 缓冲之内
+    h.flush(1, 40);
+    h.key("keydown", code);
+    h.key("keyup", code);
+    // 第 166ms 这一帧刚过点,缓冲该兑现 —— 第二格的宝石到手
+    h.flush(1, 110);
+    expect(chipText(h, "💎")).toContain("💎 1/");
+    game.destroy();
+  });
+
+  it("缓冲过期(超过 120ms)的那一下就当没按过", async () => {
+    const h = install();
+    harness = h;
+    const ruler = findRuler();
+    const { game } = await mountGame(h);
+    game.openCampaignLevel(ruler.level + 1);
+    const code = keyFor("ice", ruler.dir);
+
+    h.key("keydown", code);
+    h.flush(1, 16);
+    h.key("keyup", code);
+    // 补按得太早,离冷却结束还差得远,缓冲会过期
+    h.key("keydown", code);
+    h.key("keyup", code);
+    h.flush(1, FEEL.JUMP_BUFFER_MS + 40);
+    h.flush(4, 40);
+    expect(chipText(h, "💎")).toContain("💎 0/");
+    game.destroy();
+  });
+});
+
 describe("掉池回检查点", () => {
   it("188 关里确实有「一脚踩空」的地方,用例不是空转", () => {
     const trap = findTrap();
