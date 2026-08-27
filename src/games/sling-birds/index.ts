@@ -1627,10 +1627,11 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   function drawBanner(c: CanvasRenderingContext2D): void {
     if (introT <= 0) return;
+    // 横幅标题不再贴章节 emoji——两端的 drawBannerBadge 已是全绘制的章节角标
     const title = level
-      ? `${CHAPTERS[level.chapter].emoji} 第${level.id}关 ${level.name}`
+      ? `第${level.id}关 ${level.name}`
       : endlessRound
-        ? `♾️ ${endlessRound.name} · 共 ${ENDLESS_BIRDS} 只小鸟`
+        ? `${endlessRound.name} · 共 ${ENDLESS_BIRDS} 只小鸟`
         : "";
     if (!title) return;
     const a = clamp(introT > 1.6 ? (2 - introT) * 2.5 : introT / 0.5, 0, 1);

@@ -345,3 +345,20 @@ describe("弹弓 / 弹道 / 场景资产", () => {
     expect(count(calls, "closePath")).toBe(1);
   });
 });
+
+/* ---------------- r1 监督修复:画布横幅 emoji 清零 ---------------- */
+
+describe("1.3 r1 · 关卡横幅画布 emoji 清零", () => {
+  it("drawBanner 标题不再拼章节 emoji(角标已是绘制资产;DOM 选关页文案不在此列)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const indexSrc = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
+    const from = indexSrc.indexOf("function drawBanner");
+    expect(from, "drawBanner 还在").toBeGreaterThan(-1);
+    const body = indexSrc.slice(from, indexSrc.indexOf("\n  }", from));
+    expect(body, "横幅标题还在拼 .emoji").not.toMatch(/\.emoji/);
+    expect(body, "横幅标题还有 ♾ 字符").not.toMatch(/♾/);
+    // 两端的章节角标(绘制资产)仍然接着
+    expect(body).toMatch(/drawBannerBadge/);
+  });
+});
