@@ -807,3 +807,295 @@ export function drawVignette(ctx: Ctx, w: number, h: number, strength: number): 
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
 }
+
+/* ------------------------------------------------------------------ */
+/* 菜单 / HUD 徽章(visual-r2 修遗留 #3 + N-03):替掉画布 fillText emoji */
+/* 直出的小图标。统一规格:左上高光、1.5~2px 档描边、粉彩板,全部       */
+/* save/restore 自净,不污染调用方的 fillStyle / font。                  */
+/* ------------------------------------------------------------------ */
+
+/** 挂锁(替 🔒):灰梁 + 金身渐变 + 锁孔 + 左上高光。 */
+export function drawPadlock(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  // 锁梁:一道圆弧,先画在身后
+  ctx.strokeStyle = "#8a90a6";
+  ctx.lineWidth = Math.max(1.5, r * 0.24);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.28, r * 0.42, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  // 锁身:上亮下暗的金面
+  const g = ctx.createLinearGradient(0, -r * 0.3, 0, r * 0.9);
+  g.addColorStop(0, CROWN_GOLD);
+  g.addColorStop(1, CROWN_GOLD_DARK);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.62, -r * 0.3, r * 1.24, r * 1.16, r * 0.24);
+  ctx.fill();
+  ctx.strokeStyle = "#a87f28";
+  ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.stroke();
+  // 锁孔
+  ctx.fillStyle = "#7a5a1a";
+  ctx.beginPath();
+  ctx.arc(0, r * 0.14, r * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.07, r * 0.14, r * 0.14, r * 0.4, r * 0.06);
+  ctx.fill();
+  // 左上高光
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.3, -r * 0.06, r * 0.14, r * 0.24, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 读秒小闹钟(替 ⏱):白面钢蓝圈 + 顶钮 + 时分两针 + 左上弧光。 */
+export function drawClockBadge(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  // 顶钮
+  ctx.fillStyle = "#4a7ac9";
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.18, -r * 1.18, r * 0.36, r * 0.3, r * 0.1);
+  ctx.fill();
+  // 表面
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#4a7ac9";
+  ctx.lineWidth = Math.max(1.5, r * 0.18);
+  ctx.stroke();
+  // 时分两针 + 中心点
+  ctx.strokeStyle = "#2a4a5e";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -r * 0.56);
+  ctx.moveTo(0, 0);
+  ctx.lineTo(r * 0.38, r * 0.1);
+  ctx.stroke();
+  ctx.fillStyle = "#2a4a5e";
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // 左上弧光
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.66, Math.PI * 1.05, Math.PI * 1.45);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 下潜箭头(替 ⬇):白面深描边的圆角下箭,和 HUD 白字同一亮度。 */
+export function drawDownChevron(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.strokeStyle = "rgba(30,58,84,0.85)";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.3, -r * 0.95);
+  ctx.lineTo(r * 0.3, -r * 0.95);
+  ctx.lineTo(r * 0.3, -r * 0.1);
+  ctx.lineTo(r * 0.68, -r * 0.1);
+  ctx.lineTo(0, r * 0.95);
+  ctx.lineTo(-r * 0.68, -r * 0.1);
+  ctx.lineTo(-r * 0.3, -r * 0.1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 闪电(替电电草的 ⚡):亮黄折线面 + 暗金描边 + 一点白芒。 */
+export function drawBoltGlyph(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#ffe14a";
+  ctx.strokeStyle = "#c9a516";
+  ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.1, -r);
+  ctx.lineTo(r * 0.5, -r * 0.9);
+  ctx.lineTo(r * 0.12, -r * 0.12);
+  ctx.lineTo(r * 0.42, -r * 0.05);
+  ctx.lineTo(-r * 0.34, r);
+  ctx.lineTo(-r * 0.05, r * 0.1);
+  ctx.lineTo(-r * 0.42, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.beginPath();
+  ctx.arc(-r * 0.02, -r * 0.62, r * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 对战节点徽章(替 ⚔):白圆牌里一粉一紫两条相向小鱼,不用兵器语义。 */
+export function drawVsBadge(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#e05a7a";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.stroke();
+  const fish = (dir: 1 | -1, color: string): void => {
+    ctx.fillStyle = color;
+    // 身子
+    ctx.beginPath();
+    ctx.ellipse(dir * -r * 0.34, 0, r * 0.3, r * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 尾巴(朝外的小三角)
+    ctx.beginPath();
+    ctx.moveTo(dir * -r * 0.58, 0);
+    ctx.lineTo(dir * -r * 0.82, -r * 0.18);
+    ctx.lineTo(dir * -r * 0.82, r * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    // 眼睛(朝向中间)
+    ctx.fillStyle = "#3a3a4a";
+    ctx.beginPath();
+    ctx.arc(dir * -r * 0.18, -r * 0.05, r * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  fish(1, "#ff9eb5");
+  fish(-1, "#b8a9f5");
+  ctx.restore();
+}
+
+/** 翻开的小图鉴(替 📖):左右两页 + 中缝 + 页面浅行线。 */
+export function drawBookBadge(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineJoin = "round";
+  // 封底
+  ctx.fillStyle = "#a06a2a";
+  ctx.beginPath();
+  ctx.roundRect(-r, -r * 0.62, r * 2, r * 1.3, r * 0.18);
+  ctx.fill();
+  // 左右两页(上亮下暗)
+  const page = ctx.createLinearGradient(0, -r * 0.55, 0, r * 0.6);
+  page.addColorStop(0, "#fffdf4");
+  page.addColorStop(1, "#f0e6cc");
+  ctx.fillStyle = page;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.88, -r * 0.42);
+  ctx.quadraticCurveTo(-r * 0.4, -r * 0.62, 0, -r * 0.42);
+  ctx.lineTo(0, r * 0.5);
+  ctx.quadraticCurveTo(-r * 0.4, r * 0.3, -r * 0.88, r * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(r * 0.88, -r * 0.42);
+  ctx.quadraticCurveTo(r * 0.4, -r * 0.62, 0, -r * 0.42);
+  ctx.lineTo(0, r * 0.5);
+  ctx.quadraticCurveTo(r * 0.4, r * 0.3, r * 0.88, r * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#7a5a1a";
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.42);
+  ctx.lineTo(0, r * 0.5);
+  ctx.stroke();
+  // 页面行线(极淡)
+  ctx.strokeStyle = "rgba(122,90,26,0.35)";
+  ctx.lineWidth = Math.max(0.8, r * 0.06);
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(side * r * 0.18, -r * 0.16 + i * r * 0.3);
+      ctx.lineTo(side * r * 0.68, -r * 0.22 + i * r * 0.3);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/** 未收录问号牌(替 ❓):浅圆底 + 画出来的问号(弧 + 竖点),零字符。 */
+export function drawQuestBadge(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#b8b8c2";
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.stroke();
+  ctx.strokeStyle = "#8a8fa6";
+  ctx.lineWidth = Math.max(1.5, r * 0.16);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.24, r * 0.3, Math.PI * 0.9, Math.PI * 2.25);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(r * 0.09, 0);
+  ctx.lineTo(0, r * 0.16);
+  ctx.stroke();
+  ctx.fillStyle = "#8a8fa6";
+  ctx.beginPath();
+  ctx.arc(0, r * 0.48, r * 0.11, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 小灯泡(替 💡):暖光渐变球 + 灯座 + 三道短光线。 */
+export function drawBulbBadge(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  // 三道短光线(左上光源方向为主)
+  ctx.strokeStyle = "rgba(224,160,48,0.85)";
+  ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.lineCap = "round";
+  for (const a of [-Math.PI * 0.78, -Math.PI * 0.5, -Math.PI * 0.22]) {
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r * 0.78, -r * 0.15 + Math.sin(a) * r * 0.78);
+    ctx.lineTo(Math.cos(a) * r * 1.05, -r * 0.15 + Math.sin(a) * r * 1.05);
+    ctx.stroke();
+  }
+  // 玻璃球
+  const g = ctx.createRadialGradient(-r * 0.2, -r * 0.34, r * 0.1, 0, -r * 0.15, r * 0.62);
+  g.addColorStop(0, "#fff8d0");
+  g.addColorStop(1, CROWN_GOLD);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.15, r * 0.58, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = CROWN_GOLD_DARK;
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.stroke();
+  // 灯座
+  ctx.fillStyle = "#9fb0c8";
+  ctx.beginPath();
+  ctx.roundRect(-r * 0.24, r * 0.4, r * 0.48, r * 0.34, r * 0.1);
+  ctx.fill();
+  ctx.strokeStyle = "#7a8aa0";
+  ctx.lineWidth = Math.max(0.8, r * 0.08);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * 对手小徽章(N-03,替名牌里的 rivalProfile.emoji):
+ * 直接复用局内对手的 drawFishBody(紫身 + 银星带),定格静态一帧,
+ * 名牌小头像和场上那条鱼是同一套画法,零代差。
+ */
+export function drawRivalChip(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  drawFishBody(ctx, { r, color: "#b8a9f5", t: 0, reduced: true, head: "star" });
+  ctx.restore();
+}
