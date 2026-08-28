@@ -12,6 +12,7 @@ import {
 } from "../../engine";
 import { save } from "../../engine/save";
 import { prefersReducedMotion } from "../../engine/view25d";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import {
   BASE,
   COLORS,
@@ -193,7 +194,8 @@ export const CSS = `
 .fc-token-gold{filter:drop-shadow(0 0 5px ${KIT_PALETTE.starGold}) drop-shadow(0 0 2px rgba(255,255,255,.9));}
 .fc-fireworks{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:8;}
 .fc-hud{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin:8px 0 6px;}
-.fc-dice{min-width:56px;min-height:56px;border-radius:16px;background:#fff;box-shadow:0 3px 8px rgba(120,160,200,.35);
+/* 宽高要定死:骰面 SVG 没写 width/height,收缩盒里 76% 会循环解析回 300×150 固有值,盒子被撑成海报大 */
+.fc-dice{width:56px;height:56px;flex:0 0 auto;border-radius:16px;background:#fff;box-shadow:0 3px 8px rgba(120,160,200,.35);
   display:flex;align-items:center;justify-content:center;font-size:34px;line-height:1;color:#2f6b96;}
 .fc-dice .fc-die{width:76%;height:auto;display:block;}
 .fc-dice-spin{animation:fcroll .32s linear infinite;}
@@ -207,6 +209,8 @@ export const CSS = `
 .fc-btn-go{background:#FFC7DC;color:#8E2B54;box-shadow:0 3px 0 #EFA1C0;}
 .fc-btn-go:active{box-shadow:0 1px 0 #EFA1C0;}
 .fc-btn-sm{min-width:64px;min-height:44px;font-size:14px;padding:0 10px;}
+/* r5 N-2:掷骰+选棋是每回合必点,矮横屏盘面比屏高时贴底常驻,不许折叠线下 */
+.fc-actions{position:sticky;bottom:0;z-index:6;background:rgba(240,248,255,.92);border-radius:14px;}
 .fc-picker{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:4px 0;}
 .fc-pick{min-width:66px;min-height:44px;border:none;border-radius:14px;font-family:inherit;font-size:14px;font-weight:800;
   cursor:pointer;background:#fff;color:#37627f;box-shadow:0 2px 6px rgba(120,160,200,.3);padding:0 8px;line-height:1.3;
@@ -250,7 +254,25 @@ export const CSS = `
   .fc-wrap{padding:6px;}
   .fc-seat{flex:1 1 45%;padding:4px 6px;}
   .fc-btn{min-width:84px;font-size:15px;padding:0 10px;}
-  .fc-dice{min-width:48px;min-height:48px;font-size:28px;}
+  .fc-dice{width:48px;height:48px;font-size:28px;}
+}
+/* r5 N-2:矮横屏竖排装不下(盘 440 + 座位 + 骰行 > 412),改「盘左控件右」双栏,
+   闯关壳(.l99-stage)overflow:hidden 粘不住 sticky,只能靠一屏全装下 */
+@media (min-width:700px) and (max-height:520px){
+  .fc-wrap{display:grid;grid-template-columns:minmax(0,11fr) minmax(0,13fr);gap:2px 10px;
+    align-items:start;align-content:start;padding:8px;}
+  .fc-top,.fc-goal{grid-column:1 / -1;margin-bottom:2px;}
+  .fc-goal{font-size:14px;}
+  .fc-boardwrap{grid-column:1;grid-row:3 / span 5;align-self:center;}
+  .fc-seats,.fc-actions,.fc-msg{grid-column:2;}
+  .fc-seats{margin-bottom:2px;}
+  .fc-seat{flex:1 1 45%;padding:3px 6px;font-size:14px;}
+  .fc-seat-tier{font-size:14px;}
+  .fc-hud{margin:4px 0 2px;}
+  .fc-dice{width:46px;height:46px;}
+  .fc-btn{min-height:44px;}
+  .fc-msg{min-height:1.6em;font-size:14px;margin-top:2px;}
+  .fc-keys{display:none;}
 }
 @media (prefers-reduced-motion:reduce){
   .fc-token,.fc-token-arc{transition:none;}
@@ -665,8 +687,34 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
   keys.className = "fc-keys";
   keys.textContent = "键盘:F 掷骰 / G 换飞机 / WASD 选棋 · 星星 方向键 + L / K · Esc 暂停";
 
-  wrap.append(top, goalBar, seatRow, boardWrap, hud, picker, msg, keys);
+  // 掷骰行 + 选棋行合抱成一条 sticky 操作条:矮屏上盘面再高,这两排也贴底常驻
+  const actions = document.createElement("div");
+  actions.className = "fc-actions";
+  actions.append(hud, picker);
+
+  wrap.append(top, goalBar, seatRow, boardWrap, actions, msg, keys);
   host.appendChild(wrap);
+
+  /* r5 N-2 配方 B:盘面(正方形)按舞台可视余量收宽,骰行/选棋/战报全家当装进一屏。
+     「下方家当」量 wrap 下沿减盘下沿:竖排时是骰行+选棋+战报,矮横屏双栏时右列自理、差值≈0。
+     量不到(单测桩)一个样式不写;缩到 220px 以下宁可交给舞台滚动。 */
+  function fitBoard(): void {
+    if (typeof boardWrap.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function")
+      return;
+    boardWrap.style.maxWidth = "";
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    const b = boardWrap.getBoundingClientRect();
+    if (!Number.isFinite(b.top) || !(b.height > 0)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(b));
+    const room = clip - b.top - below - 8;
+    if (!Number.isFinite(room) || b.height <= room + 1) return;
+    boardWrap.style.maxWidth = `${Math.max(220, Math.floor(room))}px`;
+  }
+  fitBoard();
+  after(0, fitBoard);
+  const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasResize) window.addEventListener("resize", fitBoard);
 
   /* --------------------------- 渲染 --------------------------- */
 
@@ -1210,6 +1258,7 @@ export function createTable(host: HTMLElement, opts: TableOptions): { destroy: (
       destroyed = true;
       for (const id of timers) clearTimeout(id);
       timers.clear();
+      if (hasResize) window.removeEventListener("resize", fitBoard);
       window.removeEventListener("keydown", onKey);
       pauseEl?.remove();
       wrap.remove();
