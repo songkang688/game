@@ -1,7 +1,7 @@
 # 三人组第 13 轮 · 测试修复员 B
 
 基线：`origin/game-1.3` @ `8b0d4d8`（r12 N-60/61/62、N-2/3/4 已合）。
-交卷：`cursor/trio-r13-tester-b-65de` **`f3f0aa7`**。
+交卷：`cursor/trio-r13-tester-b-65de` 代码 **`68c0aef`**，报告 **`71b347d`**（rebase `origin/game-1.3` @ `9176155`）。
 范围：休闲 / 对战棋类分屏。**未改** A 独占 level99 / collection / quiz / `styles.css`。
 **未重做** N-52…57、N-60/61/62 第三套画布钳、N-45、N-40。
 
