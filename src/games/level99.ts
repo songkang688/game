@@ -19,7 +19,7 @@ import { AVATAR_URLS } from "../ui/avatars";
 import { isGuardedClick } from "../ui/dialogs";
 import { getLevelExtras, type GuideBook } from "../ui/level188Contract";
 // 契约文件只有常量与纯逻辑,没有弹窗 UI,静态 import 不会把 dialog 代码拖进游戏 chunk
-import { clampJumpTarget, isRootOpen, rootRemainMinutes, rootRemainMs } from "../ui/root12Contract";
+import { clampJumpTarget, isRootOpen, isRootPermanent, rootRemainMinutes, rootRemainMs, rootStatusLine } from "../ui/root12Contract";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -465,8 +465,13 @@ export function jumpTargetLevel(raw: string, total: number = TOTAL_LEVELS): numb
   return n === null ? null : n - 1;
 }
 
-/** 直达控件旁边那行小字 */
-export function rootJumpNote(remainMs: number): string {
+/**
+ * 直达控件旁边那行小字（N-38）。
+ * 永久开启走 rootStatusLine，不再把远未来时间戳换算成「4193047370 分钟」。
+ * 限时态仍报剩余分钟，文案格式与修前一致。
+ */
+export function rootJumpNote(remainMs: number, nowMs: number = Date.now()): string {
+  if (isRootPermanent(nowMs)) return rootStatusLine(nowMs);
   return `管理员权限还剩 ${rootRemainMinutes(remainMs)} 分钟`;
 }
 
@@ -621,6 +626,16 @@ const L99_CSS = `
   .l99-jump-note{font-size:16px;margin:0;}
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
+}
+/* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
+   给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
+@media (max-height:500px){
+  .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
+  .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
+    overflow-x:auto;gap:6px;margin:0;}
+  .l99-stagebar:has(.l99-jump) .l99-jump{flex-wrap:nowrap;gap:4px;}
+  .l99-stagebar:has(.l99-jump) .l99-jump-note{display:none;}
+  .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}

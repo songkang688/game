@@ -137,7 +137,7 @@ const CSS = `
 .ak-open:active{transform:translateY(2px);box-shadow:0 2px 0 #b1642a;}
 .ak-open:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .ak-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
-  background:linear-gradient(180deg,#fff6e8,#f2ecff);display:flex;flex-direction:column;gap:8px;}
+  background:linear-gradient(180deg,#fff6e8,#f2ecff);display:flex;flex-direction:column;gap:8px;min-height:0;}
 .ak-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ak-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
@@ -209,6 +209,20 @@ const CSS = `
 @media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
+/* N-30 配方 G:矮横屏 D-pad 挪房间网格右侧,工具行置顶;房间生成/钥匙判定零触碰 */
+@media (max-height:500px){
+  .ak-mode.advk-shell{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto 1fr auto auto;
+    gap:6px;padding:6px;min-height:0;max-height:100%;overflow:hidden;}
+  .ak-mode.advk-shell > .ak-mhead{grid-column:1/-1;grid-row:1;}
+  .ak-mode.advk-shell > .advk-hud{grid-column:1/-1;grid-row:2;}
+  .ak-mode.advk-shell > .advk-tools{grid-column:1/-1;grid-row:3;}
+  .ak-mode.advk-shell > .advk-room{grid-column:1;grid-row:4;max-width:min(280px,48vw);max-height:min(64dvh,280px);
+    width:100%;align-self:center;}
+  .ak-mode.advk-shell > .advk-pad2{grid-column:2;grid-row:4;margin-top:0;align-self:center;}
+  .ak-mode.advk-shell > .advk-say{grid-column:1/-1;grid-row:5;}
+  .ak-mode.advk-shell > .advk-mini{grid-column:1/-1;}
+  .ak-mode.advk-shell > .advk-album{grid-column:1/-1;grid-row:6;max-height:28dvh;overflow:auto;}
+}
 ${touchUpliftCss([".ak-open"])}
 ${bodyFontUpliftCss([".ak-tip"])}
 `;
@@ -1028,7 +1042,7 @@ function cellGlyph(state: RoomState, x: number, y: number): { html: string; cls:
 function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
   const bag = new Disposer();
   const wrap = document.createElement("div");
-  wrap.className = "ak-mode";
+  wrap.className = "ak-mode advk-shell";
   wrap.innerHTML = `<style>${CSS}</style>`;
 
   const head = document.createElement("div");
