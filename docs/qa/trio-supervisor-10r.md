@@ -79,3 +79,13 @@ R2–R10 仍排队。红线不变。本文件只在监督 worktree 更新，不�
 - 学习员 `bc-9b1ceaeb-0d25-53c0-af51-581f533ce4af` 交卷 SHA `81b5a66d` 已在 `game-1.3`：补测 N-40/41/42 + 配方 L。
 - 立刻派 R2=trio-r10 学习员（续同一角色，只学只记，编号 N-43 起）。
 - A `bc-12e9c82b…` / B `bc-8f16f806…` 仍在 R1 修复，不重复加派测试员。R3 的 A/B 等他们空闲后改读 `trio-r10-playbook.md`；当前执行仍以最新 `trio-r9-playbook.md` 为准。
+
+### 第二拍定时器（`origin/game-1.3 = 0a8c0344`）
+
+**R1 修复已合入，不再当未做：**
+
+- A：`39d61b50` N-38/33/37/36/34/35/30 + `trio-r9-tester-A.md`（merge `7fdfb7be`）
+- B：`b2c07a6e` N-25/N-31 塔与训练场、N-1 果篮、N-32 无尽战斗、N-26/N-27 键排、N-29+N-23（merge `323ac8cc`）
+- r10 笔记已在树：`699cd5fd` + `0a8c0344`（N-43 color-fun / N-44 竖式 / N-45 金钩商店）+ `trio-r10-playbook.md`
+
+本监督 A/B/学习员列表上仍 RUNNING；同环境已有多路「第10轮关账 / r10 leftover / r10 learner」。**本拍不加派**，避免同一 playbook 多人抢文件。下一空闲且无在途 r10 测试员时，才派 R3 执行 `trio-r10-playbook.md`。
