@@ -24,8 +24,11 @@ export const BVP_LOBBY_SHORT_CSS = `
   .bvp-lobby .bvp-hero-line{gap:6px;margin-top:4px !important;}
   .bvp-lobby .bvp-chip{padding:4px 8px;}
   .bvp-lobby .bvp-modes{gap:6px;}
-  .bvp-lobby .bvp-mode{padding:8px 10px;gap:8px;align-items:center;min-height:44px;}
+  .bvp-lobby .bvp-mode{padding:8px 10px;gap:8px;align-items:center;min-height:44px;min-width:0;}
   .bvp-lobby .bvp-mode-em{font-size:22px;}
+  /* r18:nowrap 描述的 min-content 会把 1fr 轨撑到 960px、右列溢出 1104;
+     网格项 + 文字列都放开 min-width,描述才真正省略而不是把卡推出屏 */
+  .bvp-lobby .bvp-row-main{min-width:0;flex:1 1 auto;overflow:hidden;}
   .bvp-lobby .bvp-mode-t{font-size:15px;margin-bottom:0;}
   .bvp-lobby .bvp-mode-d{max-height:1.35em;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 }

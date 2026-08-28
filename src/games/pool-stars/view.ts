@@ -83,8 +83,11 @@ export function tableLayout(viewportWidth: number, availHeight: number = MAX_VER
     // 剩余高度不够时优先整桌进屏，不靠 MIN_BALL 把桌子再撑出舞台
     scale = fit < minScale ? Math.max(fit, 0.01) : fit;
   } else {
-    scale = Math.min(avail / TABLE.w, 3.4);
-    scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
+    // r18 · N-12:横版一样要看剩余高——915×412 上 340 高的台面把力度/击球全排到线下。
+    // 高度紧张时和竖版同一取舍:整桌进屏优先,不靠 MIN_BALL 把台面撑出舞台。
+    const fit = Math.min(avail / TABLE.w, 3.4, capH / TABLE.h);
+    const minScale = MIN_BALL_PX / (2 * TABLE.r);
+    scale = fit < minScale ? Math.max(fit, 0.01) : Math.max(fit, minScale);
   }
   const cssW = vertical ? TABLE.h * scale : TABLE.w * scale;
   const cssH = vertical ? TABLE.w * scale : TABLE.h * scale;
@@ -249,6 +252,16 @@ const CSS = `
   .ps-chip{font-size:14px;padding:4px 8px;}
   .ps-shoot{min-width:150px;padding:12px 20px;font-size:16px;}
   .ps-tip{font-size:14px;}
+}
+/* r18 · N-12:矮横屏此前无任何高度媒体,台面 340 高把力度 519/击球 570/暂停 627 全排线下。
+   台面按余高缩(resize 里钳),控制排整列挪到台面右侧,一屏全进 412。台面碰撞零触碰。 */
+@media (min-width:560px) and (max-height:500px){
+  .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
+    column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
+  .ps-hud{grid-column:1 / -1;}
+  .ps-table{grid-column:1;grid-row:2 / span 5;justify-self:end;align-self:center;}
+  .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
+  .ps-tip{max-width:340px;}
 }
 @media (prefers-reduced-motion:reduce){
   .ps-btn:active,.ps-shoot:active{transform:none;}
@@ -537,7 +550,19 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
       w: viewportWidth(),
       h: MAX_VERTICAL_PX,
     });
-    lay = tableLayout(viewportWidth(), room.h);
+    // r18 · N-12:矮横屏(宽 ≥560、高 ≤500)按「舞台底 − 台面顶」的真实余高钳台面,
+    // 控制排由 CSS 挪到台面右侧一列;竖版/高屏路径原样。
+    let availH = room.h;
+    const ih = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 0;
+    if (ih > 0 && ih <= 500 && viewportWidth() >= 560) {
+      const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
+      const tb = tableBox.getBoundingClientRect?.();
+      availH =
+        st && tb && st.height > 0 && tb.top > st.top
+          ? Math.max(120, Math.round(st.bottom - tb.top - 12))
+          : Math.max(120, room.h - 96);
+    }
+    lay = tableLayout(viewportWidth(), availH);
     canvas.width = Math.round(lay.cssW);
     canvas.height = Math.round(lay.cssH);
     canvas.style.width = `${lay.cssW}px`;
