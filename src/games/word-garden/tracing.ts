@@ -49,20 +49,31 @@ import {
 /** 手机 360px 上描红区的最小边长（规格底线） */
 export const MIN_PAD_PX = 240;
 
-/** 矮横屏装不下 240 时允许再收，再矮才滚（N-36） */
+/** 可视段自己都装不下 240 的矮横屏，允许再收到这里；比这还矮才滚（N-36） */
 export const SHORT_PAD_MIN_PX = 120;
 
 /**
- * 米字格边长：宽尺 min(72vw, 300) 与「可视余量 − 头/提示/花园」取小。
+ * 米字格边长：宽尺 min(72vw, 300) 与「可视余量 − 必须与格子同框的那几行」取小。
  * 纯函数便于单测；笔顺判定不走这里。
+ *
+ * `chromePx` 是「格子上面那几行 + 木桌箍在四周的内边距」，不含花园与提示 ——
+ * 那两块在格子下面，往下滚一屏就是（N-36 复测，trio-r9-A）。
+ * `hardChromePx` 是其中**滚不掉**的那部分（木桌内边距）：可视段自己都装不下 240 时，
+ * 上面那几行可以让 `fitQuizHost` 滚出去，木桌边却始终箍着格子，得从边长里让出来。
  */
-export function padSidePx(vw: number, visibleRoomPx: number, chromePx: number): {
+export function padSidePx(
+  vw: number,
+  visibleRoomPx: number,
+  chromePx: number,
+  hardChromePx = 0
+): {
   side: number;
   allowScroll: boolean;
 } {
   const byW = Math.min(vw * 0.72, 300);
   const room = Number.isFinite(visibleRoomPx) ? visibleRoomPx : Number.POSITIVE_INFINITY;
   const chrome = Number.isFinite(chromePx) && chromePx > 0 ? chromePx : 0;
+  const hardChrome = Number.isFinite(hardChromePx) && hardChromePx > 0 ? hardChromePx : 0;
   if (!Number.isFinite(room)) {
     return { side: Math.min(300, Math.max(MIN_PAD_PX, Math.floor(byW))), allowScroll: false };
   }
@@ -71,8 +82,19 @@ export function padSidePx(vw: number, visibleRoomPx: number, chromePx: number): 
     return { side: Math.min(300, Math.max(MIN_PAD_PX, Math.floor(byW))), allowScroll: false };
   }
   if (wanted >= MIN_PAD_PX) return { side: Math.floor(wanted), allowScroll: false };
-  if (wanted >= SHORT_PAD_MIN_PX) return { side: Math.floor(wanted), allowScroll: false };
-  return { side: MIN_PAD_PX, allowScroll: true };
+  // 装不下 240 了，先分清是哪一种装不下（N-36 复测，trio-r9-A）。
+  //
+  // 可视段自己容得下 240 —— 屏幕并不矮，只是格子底下还压着花园和提示行。
+  // 这一档把规格底线留住、其余交给宿主滚（提示行有 `.wgd-scroll` 的 sticky 兜底），
+  // 拿底线去换「少滚一屏」是把描红本身做小了：360×640 上量到过 191px 的米字格。
+  if (room >= MIN_PAD_PX) return { side: MIN_PAD_PX, allowScroll: true };
+  // 可视段自己都不到 240 —— 这才是 SHORT_PAD_MIN_PX 那句话说的矮横屏。
+  // `.wgd-pad` 是 touch-action:none 的手势面，手指落上去只描红、不带着壳滚，
+  // 出屏就等于描不了，所以这一档宁可小也要整格在屏上：
+  // 让上面那几行滚出去，只跟木桌边分这段可视余量，收到 120 打住。
+  const short = Math.floor(room - hardChrome);
+  if (short >= SHORT_PAD_MIN_PX) return { side: Math.min(300, short), allowScroll: true };
+  return { side: SHORT_PAD_MIN_PX, allowScroll: true };
 }
 
 export const TRACE_INTRO = "米字格里按顺序描一描，描错顺序也没关系，我们再来一次～";
@@ -267,6 +289,8 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   const gardenCardEl = wrap.querySelector(".wgd-gardencard") as HTMLElement;
   const msgEl = wrap.querySelector(".wgd-msg") as HTMLElement;
   const sayBtn = wrap.querySelector(".wgd-say") as HTMLButtonElement;
+  const padwrapEl = wrap.querySelector(".wgd-padwrap") as HTMLElement;
+  const deskEl = wrap.querySelector(".wgd-desk") as HTMLElement;
 
   function sizePad(): void {
     const view = wrap.ownerDocument?.defaultView;
@@ -281,11 +305,17 @@ export function runTracing(opts: TraceOptions): PlayHandle {
         );
       }
     }
-    const room = visibleRoomPx(wrap.getBoundingClientRect().top, bottoms);
-    const padBox = pad.getBoundingClientRect();
-    const chrome = Math.max(0, wrap.scrollHeight - padBox.height);
+    const wrapTop = wrap.getBoundingClientRect().top;
+    const room = visibleRoomPx(wrapTop, bottoms);
+    // 只减「必须和格子同框的那些像素」：格子上面那几行（进度条 + 字卡），
+    // 加上木桌 `.wgd-desk` 箍在格子四周的那一圈内边距。
+    // 花园与提示行在格子**下面**，往下滚一屏就是，减掉它们等于替它们把描红本身做小 ——
+    // 360×640 上量到过 191px 的米字格，而那一档 259px 整格看得见（N-36 复测）。
+    const deskBox = deskEl.getBoundingClientRect();
+    const deskPad = Math.max(0, deskBox.height - pad.getBoundingClientRect().height);
+    const chrome = Math.max(0, padwrapEl.getBoundingClientRect().top - wrapTop) + deskPad;
     const vw = typeof view.innerWidth === "number" && view.innerWidth > 0 ? view.innerWidth : 480;
-    const { side } = padSidePx(vw, room, chrome);
+    const { side } = padSidePx(vw, room, chrome, deskPad);
     pad.style.width = `${side}px`;
     pad.style.height = `${side}px`;
     pad.style.minWidth = "0";

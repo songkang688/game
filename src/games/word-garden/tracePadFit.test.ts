@@ -1,140 +1,114 @@
 /**
- * N-36(trio-r9):识字描红关米字格矮横屏出屏,且没有逃生门。
+ * N-36 复测(trio-r9 测试修复员 A):米字格边长尺算错了「余量」。
  *
- * 真机实测(Chrome 无头,localStorage 种进度进第 102 关,免 root 行干扰):
- * 修前 915×412 米字格 `.wgd-pad` 底沿探出舞台 50px、宿主自滚 279 —— 而 `.wgd-pad` 写着
- * `touch-action:none`,手指落在格子上只描红、不带着壳一起滚,所以「滚一下再描下半个字」
- * 这条逃生门在格子上是关死的:下半个字**根本描不了**。同样的裁切量放在普通盘面上只是难看,
- * 放在手势面上是玩不下去,这也是它比 N-34/N-35 重一档的原因。
+ * 上游 r12 一带用 `padSidePx` 按可视余量算边长,思路对,但 `chrome` 传的是
+ * 「宿主里除格子以外的全部内容」—— 把**格子下面**的花园与提示行也算进了竞争者。
+ * 那两块往下滚一屏就是,替它们让位等于把描红本身做小:
  *
- * 两件事一起修:
- * 1. 矮横屏(`max-height:500px`)改「格子在左、字卡/花园/提示在右」的双栏,把 915 的横向余量
- *    换成格子那一列的高度(纯 CSS grid 分区,DOM 顺序与读屏次序一个字不动);
- * 2. `padSizePx` 按可视余量把边长收到规格下限 `MIN_PAD_PX` 为止,收完再让 `fitQuizHost` 复位。
+ *   真机 Chrome 无头,localStorage 种进度进第 102 关(免 root 行干扰):
+ *   - 360×640 竖屏 米字格 **191×191** —— 低于 `MIN_PAD_PX` 这条「手机 360px 规格底线」,
+ *     而这一档余量足够,修前修后都是整格可见,收它纯亏。
+ *   - 844×390 矮横屏 240×240 但**底沿切掉 12px** —— 可视段自己都装不下 240 时
+ *     还留着 240,格子是 `touch-action:none` 的手势面,切掉就等于描不了。
  *
- * 修后 915×412:格子 240×240 **整格首屏可见**(出屏 50→0),宿主自滚 279→10;
- * 竖屏三档与 1024×768 / 1280×800 逐像素原样(格子 300×300、出屏 0、自滚 0)。
- * 描红判定另测过:同一条归一化笔画,在钳过的 240px 格子与没钳的 300px 格子上
- * 都判「第 1 笔『竖』写好啦」、0/3→1/3,`padPoint` 按 box 取比例,收边长不动判定。
+ * 改法:`chrome` 只算「必须与格子同框」的部分(格子上方那几行 + 木桌 `.wgd-desk`
+ * 箍在四周的内边距);可视段装得下 240 就守住底线、其余交给宿主滚;
+ * 可视段自己都不到 240 才往下收,并且只跟滚不掉的木桌边分余量。
+ *
+ * 修后同一批实测(修前 → 修后,全部 出屏=0):
+ *   360×640 191→259 | 844×390 240(切12)→214(切0) | 915×412 240→240(原样)
+ *   390×844 280 | 412×915 296 | 1024×768 300 | 1280×800 300  ——— 后四档逐像素不动。
+ * 判定另测:同一条归一化笔画在 259 / 240 / 300 三种边长上都判
+ * 「第 1 笔『竖』写好啦」、0/3→1/3,`padPoint` 按 box 取比例,收边长不动判分。
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { MIN_PAD_PX, WGD_CSS, padSizePx } from "./tracing";
+import { MIN_PAD_PX, SHORT_PAD_MIN_PX, padSidePx } from "./tracing";
 
 const TRACING = readFileSync(new URL("./tracing.ts", import.meta.url), "utf8");
 
-/** 取出某个媒体查询块的完整内容(括号配平) */
-function mediaBlock(src: string, query: string): string {
-  const start = src.indexOf(query);
-  expect(start, `应有 ${query}`).toBeGreaterThanOrEqual(0);
-  let depth = 0;
-  let i = src.indexOf("{", start);
-  const bodyStart = i;
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") {
-      depth--;
-      if (depth === 0) break;
-    }
-  }
-  return src.slice(bodyStart, i + 1);
+/** 取 `sizePad()` 那段函数体,用来盯住「传下去的 chrome 是怎么拼的」 */
+function sizePadBody(): string {
+  const at = TRACING.indexOf("function sizePad()");
+  expect(at, "应有 sizePad()").toBeGreaterThan(-1);
+  return TRACING.slice(at, at + 1400);
 }
 
-describe("N-36 描红面按可视余量收边长", () => {
-  it("没溢出就一个像素都不收", () => {
-    expect(padSizePx(300, 0)).toBe(300);
-    expect(padSizePx(300, -20)).toBe(300);
-    expect(padSizePx(300, Number.NaN)).toBe(300);
+describe("N-36 复测:余量该减谁", () => {
+  const body = sizePadBody();
+
+  it("减掉格子**上面**那几行 —— 它们得和格子同时在屏上", () => {
+    expect(body).toMatch(/padwrapEl\.getBoundingClientRect\(\)\.top - wrapTop/);
   });
 
-  it("溢出多少收多少", () => {
-    expect(padSizePx(300, 24)).toBe(276);
-    expect(padSizePx(292, 12)).toBe(280);
+  it("减掉木桌箍在格子四周的内边距 —— 它跟着格子走,滚不掉", () => {
+    expect(body).toMatch(/deskBox\.height - pad\.getBoundingClientRect\(\)\.height/);
+    // 且这一份要单独作为「硬余量」传下去,矮横屏那档才知道哪部分让不掉
+    expect(body).toMatch(/padSidePx\(vw, room, chrome, deskPad\)/);
   });
 
-  it("收到规格下限就不再收(格子小过 240 就描不动了,剩下的交给宿主滚)", () => {
-    expect(padSizePx(300, 999)).toBe(MIN_PAD_PX);
-    expect(padSizePx(300, 100)).toBe(MIN_PAD_PX);
-    expect(MIN_PAD_PX).toBe(240);
-  });
-
-  it("本来就比下限小的格子原样返回,只收不放", () => {
-    // 极窄屏上 86vw 可能本就不到 240:这时候再「补」到 240 会把格子怼出屏幕
-    expect(padSizePx(200, 30)).toBe(200);
-    expect(padSizePx(200, 0)).toBe(200);
-  });
-
-  it("量不到尺寸时返回 0,由调用方跳过这次收(jsdom 里就是这一档)", () => {
-    expect(padSizePx(0, 10)).toBe(0);
-    expect(padSizePx(Number.NaN, 10)).toBe(0);
+  it("不再拿「宿主里除格子以外的一切」当竞争者(花园与提示在格子下面,滚一屏就是)", () => {
+    expect(body).not.toMatch(/wrap\.scrollHeight - padBox\.height/);
   });
 });
 
-describe("N-36 矮横屏双栏:把横向余量换成格子的高度", () => {
-  const short = mediaBlock(WGD_CSS, "@media (max-height:500px)");
-
-  it("矮横屏走双栏,格子独占左列、贯穿四行", () => {
-    expect(short).toMatch(/\.wgd-trace\{[^}]*display:grid/);
-    expect(short).toMatch(/grid-template-columns:auto minmax\(0,1fr\)/);
-    // 四行都把左列让给 pad,格子才拿得到整段高度
-    expect(short).toMatch(/grid-template-areas:"pad top" "pad card" "pad garden" "pad msg"/);
-    expect(short).toMatch(/\.wgd-padwrap\{[^}]*grid-area:pad/);
+describe("N-36 复测:三种「装不下」要分开处理", () => {
+  it("余量够 —— 按余量取边长,上限 300", () => {
+    expect(padSidePx(1280, 900, 120).side).toBe(300);
+    expect(padSidePx(390, 700, 180).side).toBe(280);
   });
 
-  it("双栏只改摆放,DOM 顺序与读屏次序一个字不动", () => {
-    // grid-area 分区不搬 DOM;模板里四块的先后必须还是「抬头→字卡→格子→花园→提示」
-    const order = [".wgd-top", ".wgd-card", ".wgd-padwrap", ".wgd-garden", ".wgd-msg"];
-    let at = -1;
-    for (const cls of order) {
-      const next = TRACING.indexOf(`class="${cls.slice(1)}"`);
-      expect(next, `模板里应有 ${cls}`).toBeGreaterThan(at);
-      at = next;
+  it("余量不够 240、但可视段自己装得下 240 —— 守住规格底线,其余交给宿主滚", () => {
+    // 360×640 真机这一档:修前 191(破底线),修后 259
+    const { side, allowScroll } = padSidePx(360, 426, 235);
+    expect(side).toBeGreaterThanOrEqual(MIN_PAD_PX);
+    expect(allowScroll).toBe(true);
+  });
+
+  it("可视段自己都不到 240 —— 收到装得下为止,别留着 240 挨切", () => {
+    // 844×390 真机这一档:修前 240 切 12px,修后 214 整格可见
+    const { side } = padSidePx(844, 232, 190, 24);
+    expect(side).toBeLessThanOrEqual(232);
+    expect(side).toBeGreaterThanOrEqual(SHORT_PAD_MIN_PX);
+  });
+
+  it("可视段连 120 都不到,才退回下限让宿主滚兜底", () => {
+    expect(padSidePx(844, 80, 60).side).toBe(SHORT_PAD_MIN_PX);
+  });
+
+  it("收边长永远不越过 300 上限,也不会算出负数", () => {
+    for (const room of [0, 50, 120, 240, 300, 500, 2000]) {
+      for (const chrome of [0, 24, 120, 400]) {
+        const { side } = padSidePx(915, room, chrome, 24);
+        expect(side).toBeGreaterThanOrEqual(SHORT_PAD_MIN_PX);
+        expect(side).toBeLessThanOrEqual(300);
+      }
     }
-    // 没有人用 order / row-reverse 之类把朗读次序真的翻过来
-    expect(short).not.toMatch(/order:\s*-?\d/);
-    expect(short).not.toMatch(/direction:\s*rtl/);
-  });
-
-  it("竖屏与宽屏不进这个分支:只按高度收,不按宽度收", () => {
-    expect(short).not.toMatch(/max-width/);
-    // 默认档(1280×800 / 1024×768 / 竖屏)的格子尺寸原样
-    expect(WGD_CSS).toMatch(/\.wgd-pad\{width:min\(72vw,300px\)/);
-    expect(WGD_CSS).toMatch(/@media \(max-width:400px\)\{\s*\.wgd-pad\{width:min\(86vw,300px\)/);
-  });
-
-  it("花园那格在双栏里放开高度上限,不然右列自己又挤出一条内滚", () => {
-    expect(short).toMatch(/\.wgd-garden\{[^}]*max-height:none/);
   });
 });
 
-describe("N-36 红线:手势面还是手势面,尺寸下限还在", () => {
-  it("`.wgd-pad` 仍旧 touch-action:none —— 修的是「让它整格可见」,不是「让它能滚」", () => {
-    expect(WGD_CSS).toMatch(/\.wgd-pad\{[^}]*touch-action:none/);
+describe("N-36 复测红线", () => {
+  it("`.wgd-pad` 还是 touch-action:none 的手势面 —— 修的是「让它整格可见」,不是「让它能滚」", () => {
+    // `${MIN_PAD_PX}` 这个插值自带一对花括号，[^}] 跨不过去，直接按位置取
+    const at = TRACING.indexOf(".wgd-pad{");
+    expect(at, "应有 .wgd-pad 规则").toBeGreaterThan(-1);
+    expect(TRACING.slice(at, at + 220)).toContain("touch-action:none");
   });
 
-  it("CSS 里的 min-width 兜住下限,inline 宽度再小也压不过它", () => {
-    expect(WGD_CSS).toMatch(new RegExp(`\\.wgd-pad\\{[^}]*min-width:${MIN_PAD_PX}px`));
-  });
-
-  it("收边长前先把上次写死的宽度还回去,不然越量越小", () => {
-    expect(TRACING).toMatch(/pad\.style\.width = "";/);
-  });
-
-  it("量的是格子自己探出多少,不是宿主一共溢出多少", () => {
-    // 竖屏那档格子整格可见、只是底下花园要滚,收它是白收
-    expect(TRACING).toMatch(/function padOverflowPx\(\)/);
-    expect(TRACING).toMatch(/pad\.getBoundingClientRect\(\)\.bottom - visibleBottom/);
-  });
-
-  it("换字重排与窗口改尺寸都走收边长那条路,收完由 fitQuizHost 复位", () => {
-    expect(TRACING).toMatch(/fitPad\(\);/);
-    expect(TRACING).toMatch(/addEventListener\("resize", fitPad\)/);
-    expect(TRACING).toMatch(/removeEventListener\("resize", fitPad\)/);
+  it("规格底线这条常量还在,注释没被改成别的数", () => {
+    expect(MIN_PAD_PX).toBe(240);
+    expect(SHORT_PAD_MIN_PX).toBe(120);
+    expect(SHORT_PAD_MIN_PX).toBeLessThan(MIN_PAD_PX);
   });
 
   it("判定轨迹换算照旧按 box 取比例,收边长不动判分", () => {
     expect(TRACING).toMatch(/\(\(ev\.clientX - box\.left\) \/ w\) \* GRID/);
     expect(TRACING).toMatch(/\(\(ev\.clientY - box\.top\) \/ h\) \* GRID/);
+  });
+
+  it("窗口改尺寸重算一次,destroy 时把那条监听拆掉", () => {
+    expect(TRACING).toMatch(/addEventListener\("resize", sizePad\)/);
+    expect(TRACING).toMatch(/removeEventListener\("resize", sizePad\)/);
   });
 });
