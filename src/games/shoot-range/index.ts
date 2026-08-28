@@ -203,6 +203,18 @@ export const CSS = `
   .shr-chip{padding:4px 7px;}
   .shr-pads{--k:44px;}
 }
+/* N-78 r17:915×412 双人开火键 539..679 全在舞台裁切线(322px)外、画布底 483。
+   矮横屏改「键左、靶场中、键右」三列,靶场宽钳 310(等比 192 高);判定/计分零触碰 */
+@media (min-width:640px) and (max-height:500px){
+  .shr-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:10px;align-items:start;}
+  .shr-bar{grid-column:1 / -1;grid-row:1;margin-bottom:4px;}
+  .shr-box{grid-column:2;grid-row:2;width:100%;max-width:310px;justify-self:center;}
+  .shr-pads{display:contents;}
+  .shr-pad{align-content:start;}
+  .shr-pad:first-child{grid-column:1;grid-row:2;}
+  .shr-pad:last-child{grid-column:3;grid-row:2;}
+  .shr-tip{grid-column:1 / -1;grid-row:3;margin-top:2px;}
+}
 @media (prefers-reduced-motion:reduce){
   .shr-toast{transition:none;}
 }
