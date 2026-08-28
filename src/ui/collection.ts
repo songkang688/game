@@ -350,16 +350,16 @@ const COLLECTION_CSS = `
 .collection-stars{flex:0 0 auto;padding:4px 12px;border-radius:999px;background:#fff3c4;color:#8a6a1f;font-weight:700;min-height:44px;display:inline-flex;align-items:center}
 .collection-close{flex:0 0 auto;width:44px;height:44px;border:none;border-radius:50%;
   background:#ffe0ec;color:#a4557a;font-size:18px;cursor:pointer}
-.collection-note{margin:0;padding:6px 18px 0;font-size:13px;color:#8a7a93}
+.collection-note{margin:0;padding:6px 18px 0;font-size:16px;line-height:1.45;color:#8a7a93}
 .collection-body{display:flex;flex:1 1 auto;gap:14px;padding:12px 18px;overflow:hidden}
 .collection-preview{flex:0 0 232px;display:flex;flex-direction:column;align-items:center;gap:8px;
   padding:12px;border-radius:20px;background:rgba(255,255,255,.72)}
 .collection-canvas{flex:0 0 auto;width:200px;height:230px;border-radius:16px;
   background:linear-gradient(180deg,#fdfbff,#eef4ff)}
 .collection-meta{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0}
-.collection-outfit{margin:0;font-size:13px;color:#6b4d72;text-align:center;line-height:1.5}
+.collection-outfit{margin:0;font-size:16px;color:#6b4d72;text-align:center;line-height:1.5}
 .collection-bonus{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
-.collection-bonus li{padding:3px 9px;border-radius:999px;background:#eaf6ff;color:#3f6d99;font-size:12px}
+.collection-bonus li{padding:3px 9px;border-radius:999px;background:#eaf6ff;color:#3f6d99;font-size:14px}
 .collection-main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
 .collection-tabs{display:flex;gap:8px;padding-bottom:10px}
 .collection-tab{padding:8px 18px;border:none;border-radius:999px;background:rgba(255,255,255,.8);
@@ -372,18 +372,18 @@ const COLLECTION_CSS = `
 .collection-card--locked{opacity:.78}
 .collection-card--equipped{border-color:#ffb3d1}
 .card-chip{height:52px;border-radius:14px}
-.card-name{margin:0;font-size:15px;color:#5f4a6b}
-.card-slot{font-size:11px;color:#a08fae;margin-left:6px}
-.card-blurb{margin:0;font-size:12px;color:#8a7a93;line-height:1.45}
-.card-stats{margin:0;font-size:12px;color:#3f6d99}
-.card-badge{margin:0;font-size:12px;color:#a4557a}
+.card-name{margin:0;font-size:16px;color:#5f4a6b}
+.card-slot{font-size:14px;color:#a08fae;margin-left:6px}
+.card-blurb{margin:0;font-size:16px;color:#8a7a93;line-height:1.45}
+.card-stats{margin:0;font-size:14px;color:#3f6d99}
+.card-badge{margin:0;font-size:14px;color:#a4557a}
 .card-actions{display:flex;gap:6px;margin-top:auto;flex-wrap:wrap}
 .card-btn{flex:1 1 auto;min-height:44px;padding:0 10px;border:none;border-radius:999px;
-  background:#ffd6e7;color:#a4557a;font-size:13px;cursor:pointer}
+  background:#ffd6e7;color:#a4557a;font-size:14px;cursor:pointer}
 .card-btn--try{background:#d8ecff;color:#3f6d99}
 .card-btn[disabled]{opacity:.5;cursor:not-allowed}
 .collection-foot{display:flex;align-items:center;gap:10px;padding:10px 18px 14px}
-.collection-tip{flex:1 1 auto;margin:0;font-size:12px;color:#8a7a93}
+.collection-tip{flex:1 1 auto;margin:0;font-size:16px;line-height:1.4;color:#8a7a93}
 .collection-done{min-height:44px;padding:0 22px;border:none;border-radius:999px;
   background:#ffb3d1;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
 /* N-59:915×412 宽屏仍走双栏,预览竖卡 230px 把升级/试穿切出 412。矮屏收预览、页签与知道啦锁 44。
@@ -406,6 +406,10 @@ const COLLECTION_CSS = `
 @media (max-width:640px){
   .collection-overlay{padding:0}
   .collection-panel{width:100%;max-height:100%;height:100%;border-radius:0;border-width:0}
+  /* r18 A:全屏档贴着屏幕四边,刘海机上标题/关闭钮会缩进状态栏、底部按钮被手势条压住,
+     head/foot 各让出安全区;普通屏 env() 为 0,布局一个像素不变。 */
+  .collection-head{padding-top:max(14px,env(safe-area-inset-top,0px))}
+  .collection-foot{padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}
   .collection-body{flex-direction:column;overflow-y:auto}
   .collection-preview{flex:0 0 auto;flex-direction:row;align-items:center;gap:12px}
   .collection-canvas{width:112px;height:132px}

@@ -1191,6 +1191,35 @@ button {
     gap: 4px;
   }
 
+  /* r18 A:390px 顶栏游戏名曾被挤到只剩一个字。顶栏间距收紧,
+     攻略钮的文字尺寸归零、用 ::before 画回书本图标 —— aria-label 与 44 热区不变,
+     l99 地图工具行里的攻略钮不在顶栏,保持带字。 */
+  .game-topbar {
+    gap: 6px;
+  }
+
+  /* 返回与星星胶囊也各让几像素:热区仍 ≥44,文字字号不动 */
+  .game-topbar .btn--back {
+    min-width: 44px;
+    padding: 0 10px;
+  }
+
+  .game-topbar .star-chip {
+    padding: 0 10px;
+  }
+
+  .game-topbar .guide-btn {
+    font-size: 0;
+    min-width: 44px;
+    padding: 8px 10px;
+  }
+
+  .game-topbar .guide-btn::before {
+    content: "📖";
+    font-size: 20px;
+    line-height: 1;
+  }
+
   /* 窄屏把「返回」缩成 🏠 图标(aria-label 仍是「返回首页」),
      省下的宽度留给游戏标题,不然标题会被截成一个字 */
   .btn--back .btn-back-label {
