@@ -3,6 +3,7 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { save } from "../../engine/save";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import {
   anyMove,
   applyGravity,
@@ -334,6 +335,34 @@ class BoardView {
 
   /** 360px 兜底：量出真实牌宽，低于 34px 就切成「顶面 + 描边」的轻量画法 */
   fit(): void {
+    // r5 N-6 配方 B 之 3:连线要整盘规划,先按舞台可视余量给盘面钳条 max-width
+    // (格边长宽高两把尺取小)。fr 布局高随宽线性走,比例一折就是宽上限;
+    // 格宽底线沿 34px(与 slim 阈值同一把尺),缩到底还装不下交给舞台滚动。
+    if (typeof this.root.getBoundingClientRect === "function") {
+      this.root.style.maxWidth = "";
+      const clip = stageClipBottom(this.root);
+      let wrapEl: HTMLElement | null = this.root.parentElement ?? null;
+      for (let i = 0; wrapEl && i < 4; i++) {
+        if (typeof wrapEl.className === "string" && wrapEl.className.includes("llk-wrap")) break;
+        wrapEl = wrapEl.parentElement ?? null;
+      }
+      if (Number.isFinite(clip) && wrapEl && typeof wrapEl.getBoundingClientRect === "function") {
+        const b = this.root.getBoundingClientRect();
+        if (Number.isFinite(b.top) && b.height > 1 && b.width > 1) {
+          const below = Math.max(0, rectBottom(wrapEl.getBoundingClientRect()) - rectBottom(b));
+          const room = clip - b.top - below - 6;
+          if (Number.isFinite(room) && room > 0 && b.height > room + 1) {
+            const floor = Math.ceil(
+              (this.board.cols + RING_FRAC * 2) * 34 + CELL_GAP_PX * (this.board.cols + 1)
+            );
+            const cap = Math.max(Math.floor((b.width * room) / b.height), floor);
+            this.root.style.maxWidth = `${cap}px`;
+            this.root.style.marginLeft = "auto";
+            this.root.style.marginRight = "auto";
+          }
+        }
+      }
+    }
     const w = this.boardEl.clientWidth;
     const px =
       w > 0
