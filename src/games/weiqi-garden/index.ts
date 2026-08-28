@@ -346,6 +346,10 @@ export const WQ_CSS = `
   .wq-wrap>.wq-hud{position:absolute;top:0;left:0;width:auto;z-index:6;margin:0;}
   .wq-scroll{max-height:min(280px, calc(100dvh - 128px));}
 }
+@media (min-width:700px) and (max-height:840px) and (min-height:501px){
+  .wq-scroll{max-height:min(420px, calc(100dvh - 180px));}
+  .wq-tools{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(251,247,238,.45),#FBF7EE);}
+}
 @media (prefers-reduced-motion:reduce){
   .wq-canvas{transition:none;}
 }

@@ -195,6 +195,7 @@ const CSS = `
 .dvs-go:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
 .dvs-back{border:none;border-radius:999px;padding:7px 13px;min-height:40px;font-size:13.5px;font-weight:900;cursor:pointer;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
+.dvs-back{min-height:44px;box-sizing:border-box;}
 .dvs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 
 .dvs-arena{border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}

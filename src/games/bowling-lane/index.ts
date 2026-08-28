@@ -106,7 +106,8 @@ const CSS = `
 .bl-chip-p1{color:#28568f;background:#e6f0ff;}
 .bl-chip-now{outline:2px solid #ffb43c;}
 .bl-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7aa8e0,#5585c8);box-shadow:0 3px 0 #3f6da8;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#7aa8e0,#5585c8);box-shadow:0 3px 0 #3f6da8;
+  min-height:44px;box-sizing:border-box;}
 .bl-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #3f6da8;}
 .bl-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-btn--ghost{background:linear-gradient(180deg,#b3aecd,#918bb0);box-shadow:0 3px 0 #736e8f;}
@@ -159,7 +160,8 @@ const CSS = `
   background:linear-gradient(180deg,#eef4ff,#fdf1f6);display:flex;flex-direction:column;gap:8px;}
 .bl-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .bl-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#3f6da8;box-shadow:0 3px 0 rgba(90,120,180,.28);}
+  font-family:inherit;background:#ffffffdd;color:#3f6da8;box-shadow:0 3px 0 rgba(90,120,180,.28);
+  min-height:44px;box-sizing:border-box;}
 .bl-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(90,120,180,.28);}
 .bl-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;

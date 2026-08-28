@@ -425,6 +425,9 @@ export const MN_CSS = `
   .mn-duo>div{flex:1 1 0;min-width:0;}
   .mn-msg{min-height:0;margin-top:4px;}
 }
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
+  .mn-duo{flex-wrap:nowrap;gap:8px;}
+  .mn-duo>div{flex:1 1 0;min-width:0;}
 }
 @media (prefers-reduced-motion:reduce){
   .mn-cell.mn-lit{animation:none;}

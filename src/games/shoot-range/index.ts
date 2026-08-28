@@ -193,6 +193,7 @@ export const CSS = `
 .shr-toggle{border:none;border-radius:999px;min-height:36px;padding:6px 12px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#FFF0F6;color:#A2557C;box-shadow:0 2px 0 rgba(190,140,170,.3);white-space:nowrap;
   flex:0 0 auto;}
+.shr-toggle,.shr-back{min-height:44px;box-sizing:border-box;}
 .shr-toggle[aria-pressed="false"]{background:#F0EDF2;color:#8B8291;}
 .shr-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#8F4E71;}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这几块要单独写一条,

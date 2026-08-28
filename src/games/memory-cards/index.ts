@@ -132,6 +132,10 @@ const CSS = `
   .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(48px, 16dvh, 72px); }
   .mmc-msg { min-height: 0; margin-top: 4px; }
 }
+@media (min-width: 640px) and (max-height: 840px) and (min-height: 501px) {
+  .mmc-board { gap: 6px; max-height: min(420px, 58dvh); }
+  .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(52px, 14dvh, 88px); }
+}
 @media (prefers-reduced-motion: reduce) {
   .mmc-inner { transition: none; }
   .mmc-card.mmc-up .mmc-inner { transform: none; }

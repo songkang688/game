@@ -263,7 +263,7 @@ const CSS = `
   .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
   .ps-tip{max-width:340px;}
 }
-@media (min-width:560px) and (max-height:840px){
+@media (min-width:560px) and (max-height:840px) and (min-height:501px){
   .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
     column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
   .ps-hud{grid-column:1 / -1;}

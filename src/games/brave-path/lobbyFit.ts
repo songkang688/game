@@ -32,6 +32,9 @@ export const BVP_LOBBY_SHORT_CSS = `
   .bvp-lobby .bvp-mode-t{font-size:15px;margin-bottom:0;}
   .bvp-lobby .bvp-mode-d{max-height:1.35em;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .bvp-lobby .bvp-mode{min-height:44px;padding:10px 12px;}
+}
 `;
 
 export const BVP_LOBBY_CSS = `${BVP_MODE_CSS}${BVP_LOBBY_SHORT_CSS}`;
