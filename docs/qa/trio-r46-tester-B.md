@@ -44,6 +44,16 @@
 
 设置页后段选项在 wrap 内滚（五子棋 wrap scrollHeight 514 / client 304），开始钮 sticky 在屏。
 
+## 抽验三 915×412 设置页开始钮（开擂 / 围子 / 音砖）
+
+不回退五子棋 / 象棋 / 弹弹小鸟 820。不改 `level99` / `home` / `kit`。各款 500 原文不动。
+
+| 选择器 | 390×844 | 915×412 | 1024×768 |
+| --- | --- | --- | --- |
+| `.dua-start` 开擂 | 56×326.8 IN | **56×232.5 IN** bot 360（双栏后上移） | **56×232.5 IN** |
+| `.wq-setup .wq-open` | 44×78.9 IN | **44×78.9 IN** bot 382 | **44×78.9 IN** |
+| `.tt-over .tt-open` | 44×74.9 IN | **44×74.9 IN** bot 376 | **44×74.9 IN** |
+
 ## 测试
 
-`src/games/hotspot.r46b.test.ts`、`hotspot.r46clip.test.ts`、`hotspot.r46clip3.test.ts`、`gomoku/shortLandscape.r10.test.ts`、`xiangqi/shortLandscape.r10.test.ts`、`xiangqi/shortLandscape.r11.test.ts` 绿。`npm run build` 绿。
+`hotspot.r46clip4.test.ts`、`hotspot.r46clip3.test.ts`、`duo-arena/shortLandscape.r11.test.ts`、`weiqi-garden/shortLandscape.r10.test.ts`、`weiqi-garden/freeBoard.r18.test.ts` 绿。`npm run build` 绿。
