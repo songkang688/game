@@ -2832,6 +2832,107 @@ reg("🧿", "蓝玻璃珠", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 9 章 镜像水面（W8R1-04 余量 · 🌊 走 ▲ 非对称浪头） ----
+
+reg("🪞", "小镜子", () => {
+  const frame = P.gold;
+  const glass = "#dff3fa";
+  return (
+    gs(24, 43, 12) +
+    // 手柄（偏右下）
+    `<path d="M29 30.5 L34.5 41.5" stroke="${o(frame)}" stroke-width="6.4" stroke-linecap="round"/>` +
+    `<path d="M29 30.5 L34.5 41.5" stroke="${frame}" stroke-width="4" stroke-linecap="round"/>` +
+    // 椭圆镜面
+    `<ellipse cx="22.5" cy="19.5" rx="11.5" ry="13.5" fill="${glass}" stroke="${o(frame)}" stroke-width="5.6"/>` +
+    `<ellipse cx="22.5" cy="19.5" rx="11.5" ry="13.5" fill="none" stroke="${frame}" stroke-width="3.4"/>` +
+    `<circle cx="22.5" cy="4.6" r="1.7" fill="${frame}" stroke="${o(frame)}" stroke-width="1.2"/>` +
+    `<path d="M16.5 14 Q19 10.5 23 10" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>` +
+    `<path d="M27.5 26.5 Q24 28.5 20 27.8" fill="none" stroke="#a8ccd8" stroke-width="1.8" stroke-linecap="round" opacity=".7"/>`
+  );
+});
+
+reg("🫧", "泡泡串", () => {
+  // 双胞胎 🫧↔💧 的区分位：大小三连泡（💧 是单颗水滴）
+  const c = "#bfe3f4";
+  const out = o("#8fb8d8");
+  const bubble = (x: number, y: number, r: number): string =>
+    `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}" fill-opacity=".55" stroke="${out}" stroke-width="1.8"/>` +
+    `<path d="M${x - r * 0.62} ${y - r * 0.28} Q${x - r * 0.32} ${y - r * 0.72} ${x + r * 0.1} ${y - r * 0.72}" fill="none" stroke="#ffffff" stroke-width="${Math.max(1.4, r * 0.2)}" stroke-linecap="round" opacity=".9"/>`;
+  return (
+    bubble(18, 27, 11.5) + bubble(35, 14.5, 7) + bubble(35.5, 33.5, 4.6) +
+    `<circle cx="27.5" cy="42" r="1.6" fill="${c}" stroke="${out}" stroke-width="1.2"/>`
+  );
+});
+
+reg("🌊", "浪花", () => {
+  // FLIPPABLE ▲：浪头向左卷、浪尾向右摊，剪影左右非对称
+  const c = P.blue;
+  const out = o(c);
+  return (
+    gs(24, 43, 15) +
+    `<path d="M42.5 39.5 L5.5 39.5 Q4.5 30 9.5 22.5 Q15 14.5 25 13 Q34 11.5 39 16.5 Q42.5 20.5 40 25 Q37.5 29 33 28 Q29 27 28.5 23 Q28.2 20 30.5 18.5 Q26 18.5 22.5 22 Q18.5 26 20 32 Q21 36.5 25.5 38 Q34 40.5 42.5 36.5 Z"` +
+    ` fill="${c}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M42.5 39.5 L42.5 36.5 Q34 40.5 25.5 38 Q30 40 36 39.7 Z M39 16.5 Q42.5 20.5 40 25 Q38.5 27.5 36 28 Q39 24 37.5 20 Q36.5 17.5 34 16 Q37 15.5 39 16.5 Z" fill="${shade(c, -14)}" opacity=".8"/>` +
+    // 浪尖泡沫
+    `<circle cx="30" cy="14" r="2.2" fill="#eaf5fd" stroke="${out}" stroke-width="1.3"/>` +
+    `<circle cx="36.5" cy="13.5" r="1.7" fill="#eaf5fd" stroke="${out}" stroke-width="1.2"/>` +
+    `<circle cx="9" cy="20" r="1.6" fill="#eaf5fd" stroke="${out}" stroke-width="1.2"/>` +
+    `<path d="M11 30 Q14.5 27 18 29.5 M24 34.5 Q28 32.5 32 34" fill="none" stroke="#eaf5fd" stroke-width="2.2" stroke-linecap="round" opacity=".9"/>` +
+    hi(14, 18.5, 2.6, 1.6)
+  );
+});
+
+reg("🪷", "莲花", () => {
+  // 双胞胎 🪷↔🪸 的区分位：整朵花 + 荷叶座（🪸 是分叉珊瑚枝）
+  const c = P.rose;
+  const out = o(c);
+  return (
+    gs(24, 43, 14) +
+    // 荷叶座
+    `<path d="M7 38 Q24 33 41 38 Q33 42.5 24 42.5 Q15 42.5 7 38 Z" fill="${P.green}" stroke="${o(P.green)}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // 侧瓣两对
+    `<path d="M8.5 20 Q17 21.5 19.5 30 Q20.5 34.5 16.5 35.5 Q11 36.5 9.5 30 Q8.5 25.5 8.5 20 Z" fill="${shade(c, 12)}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M39.5 20 Q31 21.5 28.5 30 Q27.5 34.5 31.5 35.5 Q37 36.5 38.5 30 Q39.5 25.5 39.5 20 Z" fill="${shade(c, 12)}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M14 13.5 Q21 17 21.5 27 Q21.5 32 17.5 31 Q13 29.5 12.5 22.5 Q12.2 17.5 14 13.5 Z" fill="${c}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M34 13.5 Q27 17 26.5 27 Q26.5 32 30.5 31 Q35 29.5 35.5 22.5 Q35.8 17.5 34 13.5 Z" fill="${c}" stroke="${out}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    // 中瓣
+    `<path d="M24 8.5 Q29.5 15 29 25.5 Q28.5 33.5 24 33.5 Q19.5 33.5 19 25.5 Q18.5 15 24 8.5 Z" fill="${shade(c, 18)}" stroke="${out}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M24 33.5 Q28.5 33.5 29 25.5 Q29.3 19.5 26.5 13 Q27.5 21 25.5 28.5 Q24.8 31.5 22.5 33.2 Q23.2 33.5 24 33.5 Z" fill="${shade(c, -8)}" opacity=".65"/>` +
+    `<ellipse cx="24" cy="34" rx="4.6" ry="2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.2"/>` +
+    hi(21, 14.5, 2, 1.3)
+  );
+});
+
+reg("🪸", "珊瑚枝", () => {
+  // 双胞胎 🪸↔🪷 的区分位：分叉的枝（🪷 是整朵花）
+  const c = "#f4977c";
+  const out = o(c);
+  const arm = (d: string, w: number): string =>
+    `<path d="${d}" fill="none" stroke="${out}" stroke-width="${w + 3.2}" stroke-linecap="round"/>` +
+    `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  return (
+    gs(24, 43.5, 14) +
+    // 沙丘底座
+    `<path d="M9 43.5 Q24 38.5 39 43.5 Z" fill="#f2d9a8" stroke="${o("#f2d9a8")}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    // 主干与分枝
+    arm("M24 41 Q23.5 30 24 22 Q24.3 15 27 10.5", 5.2) +
+    arm("M24 30 Q17.5 27.5 14.5 21 Q13 17.5 13.5 13.5", 4.2) +
+    arm("M24 33 Q31 31.5 34.5 25.5 Q36.5 22 36 18.5", 4.2) +
+    arm("M15.5 24 Q11.5 23 9.5 19.5", 3.2) +
+    arm("M33 27 Q37.5 27 40.5 24.5", 3.2) +
+    // 枝头圆芽
+    `<circle cx="27.5" cy="9.5" r="2.6" fill="${shade(c, 16)}" stroke="${out}" stroke-width="1.4"/>` +
+    `<circle cx="13.5" cy="12.5" r="2.3" fill="${shade(c, 16)}" stroke="${out}" stroke-width="1.4"/>` +
+    `<circle cx="36.5" cy="17.5" r="2.3" fill="${shade(c, 16)}" stroke="${out}" stroke-width="1.4"/>` +
+    `<circle cx="9" cy="18.5" r="1.9" fill="${shade(c, 16)}" stroke="${out}" stroke-width="1.3"/>` +
+    `<circle cx="41.5" cy="23.5" r="1.9" fill="${shade(c, 16)}" stroke="${out}" stroke-width="1.3"/>` +
+    // 小气泡
+    `<circle cx="40" cy="9" r="1.6" fill="none" stroke="#a8ccd8" stroke-width="1.3" opacity=".85"/>` +
+    `<circle cx="42.5" cy="4.5" r="1.1" fill="none" stroke="#a8ccd8" stroke-width="1.1" opacity=".7"/>` +
+    hi(20.5, 17, 1.8, 1.1)
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------
