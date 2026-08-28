@@ -128,6 +128,25 @@ const CSS = `
   .dmz-pads .dmz-pad{grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;}
   .dmz-pads .dmz-key{min-height:44px;font-size:17px;}
 }
+/* N-27(trio-r7):矮横屏(915×412 一族)方向键挪画布两侧 —— 单人 D-pad 去右侧、
+   双人一人一侧,键排不再卷在纵向流里折叠线下;竖屏排布零改动 */
+@media (max-height:500px){
+  .dmz-wrap.dmz-solo,.dmz-wrap.dmz-duo{display:grid;align-content:start;align-items:center;column-gap:10px;}
+  .dmz-solo{grid-template-columns:minmax(0,1fr) auto;}
+  .dmz-solo .dmz-hud{grid-column:1/-1;grid-row:1;}
+  .dmz-solo .dmz-canvas{grid-column:1;grid-row:2;justify-self:center;}
+  .dmz-solo>.dmz-pad{grid-column:2;grid-row:2;margin:0;}
+  .dmz-solo .dmz-note{grid-column:1/-1;grid-row:3;margin-top:4px;}
+  .dmz-duo{grid-template-columns:auto minmax(0,1fr) auto;}
+  .dmz-duo .dmz-hud{grid-column:1/-1;grid-row:1;}
+  .dmz-duo .dmz-pads{display:contents;}
+  .dmz-duo .dmz-canvas{grid-column:2;grid-row:2;justify-self:center;}
+  .dmz-duo .dmz-pad-col{grid-column:1;grid-row:2;}
+  .dmz-duo .dmz-pad-col.dmz-pad-star{grid-column:3;}
+  .dmz-duo .dmz-note{grid-column:1/-1;grid-row:3;margin-top:4px;}
+  .dmz-pads .dmz-pad{grid-template-columns:repeat(3,minmax(44px,1fr));gap:4px;}
+  .dmz-pads .dmz-key{min-height:44px;font-size:17px;}
+}
 @media (prefers-reduced-motion:reduce){
   .dmz-key:active,.dmz-mode:active,.dmz-btn:active{transform:none;}
 }
@@ -188,7 +207,8 @@ interface StarEater {
 export function mountStage(host: HTMLElement, opts: StageOptions): { destroy: () => void } {
   const soft = reducedMotion();
   const wrap = document.createElement("div");
-  wrap.className = "dmz-wrap";
+  // N-27:单人/双人各挂一个布局类,矮横屏把方向键挪到画布两侧(见 CSS max-height:500px 档)
+  wrap.className = `dmz-wrap ${opts.starRole === "none" ? "dmz-solo" : "dmz-duo"}`;
   const duoPad = `
     <div class="dmz-pad">
       <button type="button" class="dmz-key dmz-pause" data-act="pause" aria-label="暂停">⏸</button>
