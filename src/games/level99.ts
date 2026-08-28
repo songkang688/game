@@ -638,9 +638,13 @@ const L99_CSS = `
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
   /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
-     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
-  .l99-wrap{max-height:calc(100dvh - 136px);}
+     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。
+     r18:钳高只在地图态生效(:has 同块 N-37 已在用);关内把整段高度还给舞台,
+     否则 915×412 下白留 ~60px、棋盘还被剪。 */
+  .l99-wrap:has(.l99-map){max-height:calc(100dvh - 136px);}
   .l99-view{overscroll-behavior:contain;}
+  /* r18:关内装不下的盘面允许竖滚(sticky 底键照常钉住),被剪=永远点不到才是大忌 */
+  .l99-stage{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}

@@ -124,6 +124,10 @@ const CSS = `
 @media (max-height: 500px) {
   .llk-board { max-width: min(420px, 78dvh); margin-inline: auto; width: 100%; }
   .llk-msg { min-height: 0; margin-top: 4px; }
+  /* r18:盘面高过桌面时改在桌面里竖滚(徽章/洗牌行钉顶),底行牌不再被剪到点不到 */
+  .llk-wrap { display: flex; flex-direction: column; min-height: 0; }
+  .llk-top { flex: 0 0 auto; }
+  .llk-holder { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 }
 .llk-board.llk-spin { transform: rotate(90deg) scale(.86); }
 /* 麻将砖三层:顶面米白渐变(圆角 10px)+ 底部 3px 暖灰立面 + 1px 软影 */

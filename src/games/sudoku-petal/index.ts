@@ -447,6 +447,13 @@ export const SP_CSS = `
   .sp-corner{display:none;}
 }
 @media (max-height:500px){
+  /* r18:矮横屏盘面高过卡片时允许竖滚 —— overflow:hidden 会把底行格子剪到永远点不到,
+     sticky 数字键/工具行也只有在滚动容器里才真的钉底 */
+  .sp-wrap{overflow-y:auto;overscroll-behavior:contain;max-height:100%;box-sizing:border-box;}
+  /* 模式说明那句话让位给盘面(按钮还在,少的只是重复的一句话);入口钮收薄,热区仍 ≥44 */
+  .sp-modetip{display:none;}
+  .sp-modebar{margin:0 0 6px;gap:6px;}
+  .sp-open{padding:6px 14px;font-size:14px;}
   .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}

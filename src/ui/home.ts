@@ -103,6 +103,8 @@ const HOME_EXTRA_CSS = `
 .home-search-input{flex:1;min-width:0;border:0;outline:0;background:transparent;min-height:44px;
   font-family:inherit;font-size:17px;font-weight:700;color:var(--ink)}
 .home-search-input::placeholder{color:var(--ink-soft);opacity:.7;font-weight:600}
+/* Chrome 会给 type=search 自带一颗小 ✕,和右边 44×44 的自定义清空钮重复,藏掉只留大的 */
+.home-search-input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
 .home-search-clear{display:grid;place-items:center;flex:0 0 auto;min-width:44px;min-height:44px;
   border:0;background:transparent;font-size:19px;line-height:1;color:var(--ink-soft)}
 .tabs.cat-tabs{margin-bottom:2px}
