@@ -1810,7 +1810,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         const run = playLevel(stage, ctx);
         return {
           destroy() {
-            run.destroy();
+            run.destroy?.();
             bar.hidden = false;
           }
         };
