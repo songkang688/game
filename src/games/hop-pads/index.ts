@@ -96,6 +96,9 @@ const CSS = `
 .hp-over-s{font-size:16px;font-weight:700;color:#7C6350;line-height:1.6;max-width:300px;}
 .hp-tip{text-align:center;font-size:14px;font-weight:700;color:#9A8676;line-height:1.5;}
 .hp-duo{display:flex;flex-direction:column;gap:8px;}
+@media (max-height:500px){
+  .hp-duo{gap:4px;}
+}
 .hp-name{position:absolute;left:12px;bottom:36px;font-size:15px;font-weight:900;color:#8A5330;
   pointer-events:none;text-shadow:0 1px 0 #fff;}
 @media (max-width:420px){
@@ -147,6 +150,10 @@ export function project(cam: Camera, x: number, z: number, y = 0): { sx: number;
 
 /** 画布再矮也不能低于这个高度:低于它蓄力条和前面几座台面就挤在一起看不清了 */
 export const STAGE_MIN_H = 170;
+/** 双人上下分屏每块画布的默认想要高度 */
+export const DUO_CANVAS_WANT = 236;
+/** 双人分屏每块画布再矮就看不清蓄力条 */
+export const DUO_CANVAS_MIN = 110;
 
 /**
  * 画布该多高:想按宽算出 want,可视余量却只有 room(root 顶到 `.game-stage`
@@ -162,6 +169,22 @@ export function stageHeightPx(want: number, room: number, below: number, min = S
   if (!Number.isFinite(room) || room <= 0) return want;
   const fits = Math.floor(room - Math.max(0, Number.isFinite(below) ? below : 0) - 4);
   return Math.max(min, Math.min(want, fits));
+}
+
+/**
+ * 双人同屏两块画布各分一半余量。gap 是两块之间的缝。
+ * 量不到 room 时退回 want(236),单人路径不走这里。
+ */
+export function duoCanvasHeightPx(
+  want: number,
+  room: number,
+  gap = 8,
+  min = DUO_CANVAS_MIN
+): number {
+  if (!Number.isFinite(want)) return want;
+  if (!Number.isFinite(room) || room <= 0) return want;
+  const per = Math.floor((room - Math.max(0, gap) - 4) / 2);
+  return Math.max(min, Math.min(want, per));
 }
 
 /** 画面能装下多少纵深:决定 scale。台面最远也要能看见前面三四座 */
@@ -347,8 +370,8 @@ export interface StageOpts {
   color?: string;
   /** 角色造型:朵朵还是星星(纯视觉,判定不认它) */
   variant?: HeroVariant;
-  /** 画布高度(CSS 像素),不给就按宽度自适应 */
-  height?: number;
+  /** 画布高度(CSS 像素);函数则每次 resize 重算。不给就按宽度自适应(单人) */
+  height?: number | (() => number);
   /** 无尽模式:每跳一座重算一次难度 */
   ramp?: (hops: number) => Difficulty;
   sfx: (n: SoundName) => void;
@@ -547,9 +570,10 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
 
   function resize(): void {
     const cssW = Math.max(240, host.clientWidth || root.clientWidth || 360);
-    // 双人上下分屏(opts.height)有自己的一套定高,这里只钳单人画布
+    // 双人上下分屏(opts.height)按余量各钳一半;单人仍走 stageHeightPx
+    const wantH = typeof opts.height === "function" ? opts.height() : opts.height;
     const cssH =
-      opts.height ?? stageHeightPx(Math.round(clamp(cssW * 1.06, 280, 460)), stageRoomPx(), belowChromePx());
+      wantH ?? stageHeightPx(Math.round(clamp(cssW * 1.06, 280, 460)), stageRoomPx(), belowChromePx());
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
@@ -1544,6 +1568,33 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     wrap.className = "hp-duo";
     shell.body.appendChild(wrap);
 
+    const duoGap = (): number => {
+      const say = shell.say.getBoundingClientRect?.();
+      const sayH = say && Number.isFinite(say.height) ? say.height : 0;
+      return 8 + Math.max(0, sayH);
+    };
+    const duoH = (): number => {
+      let node: HTMLElement | null = wrap.parentElement ?? wrap;
+      let room = Number.NaN;
+      for (let i = 0; node && i < 12; i++) {
+        if (typeof node.className === "string" && node.className.includes("game-stage")) {
+          if (typeof node.getBoundingClientRect !== "function") break;
+          const r = node.getBoundingClientRect();
+          const inner =
+            typeof node.clientHeight === "number" && node.clientHeight > 0
+              ? (node.clientTop || 0) + node.clientHeight
+              : r.height;
+          const top = wrap.getBoundingClientRect().top;
+          if (Number.isFinite(r.top) && Number.isFinite(inner) && Number.isFinite(top) && inner > 0) {
+            room = r.top + inner - top;
+          }
+          break;
+        }
+        node = node.parentElement;
+      }
+      return duoCanvasHeightPx(DUO_CANVAS_WANT, room, duoGap());
+    };
+
     const seats: Array<{ name: string; keys: string[]; cancelKeys: string[]; color: string; variant: HeroVariant }> = [
       { name: "🌸 朵朵 · F", keys: ["f"], cancelKeys: ["g"], color: "#F2A268", variant: "duo" },
       { name: "⭐ 星星 · L", keys: ["l"], cancelKeys: ["k"], color: "#7FA7EA", variant: "star" },
@@ -1558,7 +1609,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
         name: seat.name,
         color: seat.color,
         variant: seat.variant,
-        height: 236,
+        height: duoH,
         sfx: (n) => api.play(n),
         onGoal: (run) => {
           if (done[i]) return;

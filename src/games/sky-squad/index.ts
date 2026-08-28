@@ -133,16 +133,16 @@ export const CSS = `
   padding:5px 14px;font-size:14px;font-weight:800;color:#3F6BA8;box-shadow:0 3px 8px rgba(110,140,190,.28);
   pointer-events:none;opacity:0;transition:opacity .25s ease;max-width:92%;text-align:center;}
 .sks-toast.sks-on{opacity:1;}
-.sks-opt{border:none;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:800;cursor:pointer;
+.sks-opt{border:none;border-radius:999px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#5A7BA8;box-shadow:0 2px 0 rgba(120,150,200,.3);
-  white-space:nowrap;flex:none;}
+  white-space:nowrap;flex:none;min-height:44px;}
 .sks-opt[aria-pressed="true"]{background:#DCEBFF;color:#2F5E9B;}
 /* 键盘图例只是提示:一行塞不下就省略,不许把整条 HUD 顶出屏(1024 平板上量过) */
 .sks-legend{align-self:center;font-size:14px;font-weight:700;color:#63799C;white-space:nowrap;
   flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
 /* 方向盘排成一横条:纵版飞行最缺的就是竖着的地方,九宫格那一坨会把飞机顶出屏幕 */
 .sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:42px;flex-wrap:wrap;}
-.sks-pads[data-players="2"]{--k:36px;}
+.sks-pads[data-players="2"]{--k:44px;}
 .sks-pad{display:flex;align-items:center;gap:4px;}
 .sks-pad-name{font-size:14px;font-weight:800;white-space:nowrap;}
 .sks-key{width:var(--k);height:var(--k);flex:none;}
@@ -167,12 +167,12 @@ export const CSS = `
 .sks-mode.sks-mode-vs{background:linear-gradient(180deg,#FFC46B,#E79B36);box-shadow:0 4px 0 #C07C1F;}
 .sks-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #4570B8;}
 .sks-topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-.sks-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.3);}
+.sks-back{border:none;border-radius:999px;padding:8px 13px;font-size:14px;font-weight:900;cursor:pointer;
+  font-family:inherit;background:#ffffffdd;color:#3F6BA8;box-shadow:0 3px 0 rgba(120,150,200,.3);min-height:44px;}
 .sks-title{flex:1;text-align:center;font-size:15px;font-weight:900;color:#35608F;}
 @media (max-width:420px){
   .sks-pads{--k:38px;gap:6px;}
-  .sks-pads[data-players="2"]{--k:34px;}
+  .sks-pads[data-players="2"]{--k:44px;}
   /* 手机上是拖着飞的,键盘说明先让位给天空 */
   .sks-legend{display:none;}
   /* 390px 手机上 HUD/模式栏改为换行:画布是固定高的,多一行只多占滚动页,

@@ -1,35 +1,42 @@
 # 三人组第 11 轮 · 测试修复员 B
 
-基线：`origin/game-1.3` @ `0004892d`（r10 A/B 已合入；交卷后派 r11 剩余项）。
-范围：休闲 / 对战 / 动手。**未改** level99 / quiz99 / color-fun / math-farm。
-未重做 N-25/31/1/32/26/27/29/23/40/41/42/2/3/4。
+基线：`origin/game-1.3` @ `0e435ad1`（playbook 派 N-52 起）。
+范围：休闲 / 对战 / 动手。**未改** A 独占：level99 / quiz99 / word-garden / pinyin / clock-house / find-diff / collection / parentAuth / styles.css。
+**未改** N-43/44 color-fun、math-farm。
+**未重做** N-25/26/27/29/23/1/32、N-31 关内 `.fk-train-shell`、N-45 `gdh-veil--shop`（主干已有）。
+N-40 `.dr-btns` 矮屏 sticky 已在主干，本轮跳过。
+
+进场 `npm test` 水位：全库偶发超时（`bomb-buddies/ai.test.ts`、`snake-snack/qaC1.test.ts`、xiangqi 搜索档）与玩法无关，只复跑不改绿。
 
 ## 本轮已关
 
 | 编号 | 款 | 坏在哪 | 怎么修 |
 |---|---|---|---|
-| **N-45** | gold-hook 关内商店 veil | 915×412 进关点🛒：「接着挖」整钮线下，第三件 buy 也可能线下；底栏 HUD 压 veil 下沿 | 配方 I：`.gdh-veil--shop` 货架 `.gdh-shoplist` 单独 overflow；`.gdh-shopfoot` sticky 不透明底钉「接着挖」；veil `z-index:6` 压过 HUD。买卖/`SHOP` 零触碰。暂停不挂商店类 |
-| **C-8 补** | ice-fire-forest 双垫 | r10 右栏仍 `flex-direction:column`，412 高第二套垫出屏 | 矮横屏双垫改 `row` 并排，`grid-row:3` |
-| **N-10 补** | xiangqi | 248 收幅仍可能把悔棋排顶出首屏 | 500px 高档 `.xq-btns` sticky bottom；840 档不动 |
-| **C-2** | brick-break | r10 已钳画布 + wrap `pan-y` + 键排 sticky | 本轮只复测，源码零改 |
+| **N-52** | duo-arena | 915×412 菜单「开擂」~527；对局两块 186 半场上下摞，下半场+暂停线下 | 配方 L：`max-height:500px` 放开 `.dua-wrap` 440 宽限制，对局两半场 CSS grid 并排；开擂/暂停 sticky 底。`match.ts` 零触碰 |
+| **N-53** | tank-battle 对战 | 双垫 ~607 线下、画布溢出、暂停/回选关/芯片 ~32 | 配方 G：`boardRoom` 减去 HUD+暂停+垫高再钳 cell；矮屏 `.tkb-pads-two` nowrap sticky；`.tkb-act/.tkb-back/.tkb-chip` min-height 44。关卡表/弹道零触碰 |
+| **N-54** | hop-pads 双人 | 每块写死 236，两块叠出屏；单人 r9 已绿 | `duoCanvasHeightPx((room−gap)/2)`，resize 回调；单人仍 `stageHeightPx` |
+| **N-55** | snow-fight 对战 | 宽矮屏十二键仍上下摞 481–531 | `data-duo` + 500px 高档两块 3×2 牌 grid 并排。回合/灯笼零触碰 |
+| **N-56** | sky-squad 合作 | 暂停 33、开关 31、双人 `--k` 36/34 | **只抬热区**：back/opt min-height 44，双人 `--k:44`。不重钳画布 |
+| **N-57** | fight-king 训练选人 | 「开打」~531、假人钮 38；关内 N-31 已绿 | `.fk-pick-train`：假人+开打并排钉在标题下 sticky；`.fk-btn` 44。**不改** `.fk-train-shell` |
 
-## 验收（Chrome 数字见后续补测段）
+## 未做 / 降级
 
-- 商店路径：**闯关矿洞 → 进关 → 🛒**（模式选单无商店）。
-- 主档 915×412：不滚能点「接着挖」与至少首屏买钮。
-- 对照 390×844 / 1280×800：商店 + 暂停 veil 不劣化。
-- 暂停「继续挖」点得到（勿回归）。
+- N-2/3/4 回合必点、C-2…C-8、N-16：本轮无余力。
+- N-40：主干已有 `.dr-btns` sticky，跳过。
+- N-45：主干 `gdh-veil--shop`，跳过。
+- 390 / 1280 以源码断言 + 既有单测护栏；Chrome 915 数字若环境无空闲 preview 口则交卷后补量。
 
-## 测试
+## 测试（只增）
 
-只增：
-
-- `src/games/gold-hook/shopVeil.r11.test.ts`
-- `src/games/ice-fire-forest/landscapePads.r11.test.ts`
-- `src/games/xiangqi/shortLandscape.r11.test.ts`
+- `src/games/duo-arena/shortLandscape.r11.test.ts`
+- `src/games/tank-battle/shortLandscape.r11.test.ts`
+- `src/games/hop-pads/duoFit.r11.test.ts`
+- `src/games/snow-fight/duoPads.r11.test.ts`
+- `src/games/sky-squad/hotspots.r11.test.ts`
+- `src/games/fight-king/pickTrain.r11.test.ts`
 
 ## 护栏
 
-- 不改存档 key、题库、seed、胜负判定、kit
+- 不改存档 key、`meta.id`、题库、seed、胜负判定、kit
 - 测试只增不减
-- 禁 force push
+- 禁 force push `game-1.3`；撞车取先合版

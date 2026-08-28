@@ -124,7 +124,8 @@ const CSS = `
 .tkb-mode[hidden],.tkb-mini-cv[hidden],.tkb-canvas[hidden]{display:none;}
 .tkb-chip{background:linear-gradient(180deg,#ffffff,#fdf4ec);border:1px solid rgba(160,140,120,.22);
   border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
-  box-shadow:0 2px 6px rgba(150,140,180,.24);white-space:nowrap;}
+  box-shadow:0 2px 6px rgba(150,140,180,.24);white-space:nowrap;min-height:44px;
+  display:inline-flex;align-items:center;}
 .tkb-chip-warn{background:linear-gradient(180deg,#ffeef3,#ffe4ec);border-color:rgba(200,90,130,.3);color:#b8436f;}
 .tkb-board{position:relative;line-height:0;}
 .tkb-canvas{display:block;border-radius:14px;background:#f5ebdd;touch-action:none;
@@ -164,7 +165,8 @@ const CSS = `
 .tkb-key:focus-visible,.tkb-act:focus-visible,.tkb-open:focus-visible,.tkb-mini-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .tkb-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .tkb-act{border:none;border-radius:999px;padding:7px 14px;font-size:13.5px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#67529c;box-shadow:0 3px 0 rgba(120,90,160,.26);white-space:nowrap;}
+  font-family:inherit;background:#ffffffdd;color:#67529c;box-shadow:0 3px 0 rgba(120,90,160,.26);white-space:nowrap;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .tkb-act:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.26);}
 .tkb-act-on{background:#e7dcff;color:#4d3a86;}
 .tkb-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
@@ -180,7 +182,8 @@ const CSS = `
 .tkb-mode > *{min-width:0;}
 .tkb-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;}
 .tkb-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#6a7a52;box-shadow:0 3px 0 rgba(110,130,80,.3);}
+  font-family:inherit;background:#ffffffdd;color:#6a7a52;box-shadow:0 3px 0 rgba(110,130,80,.3);
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
 .tkb-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,130,80,.3);}
 @media (max-width:420px){
   .tkb-pads{gap:4px;justify-content:space-between;}
@@ -215,6 +218,12 @@ const CSS = `
   .tkb-mode{padding:5px;gap:4px;}
   .tkb-pad{gap:2px;}
   .tkb-pads-two .tkb-sticks{gap:3px;}
+}
+/* N-53:矮横屏双垫并排钉底,画布高度在 JS 里再减去这一截预留 */
+@media (max-height:500px){
+  .tkb-pads-two{flex-wrap:nowrap;position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
+  .tkb-acts{position:sticky;bottom:0;z-index:6;}
 }
 @media (prefers-reduced-motion:reduce){.tkb-key:active{transform:none;}}
 `;
@@ -956,7 +965,10 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   function boardRoom(): number {
     const guess = Math.max(220, Math.min(430, (globalThis.innerHeight || 700) - 300));
     const measured = stagePlayRoom(wrap, { w: host.clientWidth || 340, h: guess }).h;
-    return Math.max(150, Math.min(430, measured));
+    // 舞台余量是整块 wrap 的,画布若吃满,摇杆就排到裁切线下面。双人垫更高一截。
+    const key = opts.players === 2 ? TOUCH_MIN_TWO : TOUCH_MIN;
+    const chrome = 36 + 22 + 48 + key * 2 + 18 + 28;
+    return Math.max(150, Math.min(430, measured - chrome));
   }
 
   function layout(): void {
