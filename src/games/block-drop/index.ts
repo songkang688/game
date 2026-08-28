@@ -194,6 +194,10 @@ const CSS = `
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
   .bd-canvas{max-height:min(260px,62dvh);}
 }
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
+  .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+  .bd-canvas{max-height:min(320px,62dvh);}
+}
 @media (max-width:360px){
   .bd-badge{padding:4px 8px;}
   .bd-btn{min-width:48px;font-size:14px;padding:0 6px;}
