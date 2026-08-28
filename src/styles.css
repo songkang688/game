@@ -67,6 +67,9 @@ button {
   font-family: inherit;
   color: inherit;
   cursor: pointer;
+  /* iOS Safari 无视 user-scalable=no:连点型玩法(地鼠/点点/下一关)双击会缩放页面,
+     manipulation 保留滚动与捏合、只禁双击缩放,对桌面端零影响 */
+  touch-action: manipulation;
 }
 
 /* ---------- 键盘焦点(深粉 3px 外圈 + 白色垫圈,深浅底上都看得见) ---------- */
