@@ -11,6 +11,7 @@ import { save } from "../../engine/save";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { TIER_NAMES, aiCatchesOneCard, aiPlay, type AiTier } from "./ai";
+import { actionIconSVG, botFaceSVG, cardBackSVG, colorShapeSVG, lighten } from "./art";
 import {
   COLORS,
   COLOR_HEX,
@@ -94,11 +95,11 @@ export const CATCH_DELAY_MS = 1800;
 /** 倒数分几格走完 */
 export const CATCH_TICKS = 3;
 
-/** 三个电脑对手:原创角色 */
+/** 三个电脑对手:原创角色(1.3 visual-r1 起头像走画制 SVG,与升级后的卡面同一质感) */
 const BOT_FACES = [
-  { name: "团团", avatar: "🐰" },
-  { name: "圆圆", avatar: "🐼" },
-  { name: "点点", avatar: "🦊" },
+  { name: "团团", avatar: botFaceSVG("tuantuan") },
+  { name: "圆圆", avatar: botFaceSVG("yuanyuan") },
+  { name: "点点", avatar: botFaceSVG("diandian") },
 ];
 
 /** 对战结算的标题。`winner < 0` 是「牌都用完了」的平局,没有赢家 */
@@ -148,11 +149,18 @@ const CSS = `
 .hh-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;
   background:linear-gradient(180deg,#fff4fa,#eef2ff);border-radius:18px;padding:10px;position:relative;overflow:hidden;}
-.hh-banner{text-align:center;font-size:13px;font-weight:900;color:#7a5aa8;line-height:1.5;}
-.hh-colorbar{border-radius:14px;padding:7px 12px;text-align:center;font-size:15px;font-weight:900;
-  color:#fff;text-shadow:0 1px 3px rgba(80,40,80,.4);transition:background .32s ease;
-  display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
-.hh-colorbar-dot{width:15px;height:15px;border-radius:50%;background:#fff;opacity:.85;}
+.hh-banner{text-align:center;font-size:14px;font-weight:900;color:#7a5aa8;line-height:1.5;}
+.hh-colorbar{position:relative;overflow:hidden;border-radius:14px;padding:7px 12px;text-align:center;
+  font-size:15px;font-weight:900;color:#fff;text-shadow:0 1px 3px rgba(80,40,80,.4);
+  transition:background .32s ease;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+.hh-colorbar-dot{width:20px;height:20px;border-radius:50%;background:#ffffff44;line-height:0;
+  display:flex;align-items:center;justify-content:center;animation:hhbreathe 2s ease-in-out infinite;}
+.hh-colorbar-dot svg{display:block;}
+@keyframes hhbreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+.hh-colorwave{position:absolute;left:50%;top:50%;width:14px;height:14px;border-radius:50%;
+  transform:translate(-50%,-50%);opacity:.75;pointer-events:none;animation:hhwave .4s ease-out forwards;}
+@keyframes hhwave{from{transform:translate(-50%,-50%) scale(1);opacity:.75}
+  to{transform:translate(-50%,-50%) scale(30);opacity:0}}
 .hh-chain{background:#fff;color:#c33b6d;border-radius:999px;padding:1px 10px;font-size:14px;font-weight:900;
   animation:hhbump .5s ease infinite;}
 .hh-turns{background:#ffffffdd;color:#6a4fa8;border-radius:999px;padding:1px 10px;font-size:14px;font-weight:900;}
@@ -164,35 +172,52 @@ const CSS = `
 .hh-foe-on{outline:3px solid #ff9ec7;}
 .hh-face{width:34px;height:34px;border-radius:50%;object-fit:cover;background:#f3ecff;
   display:flex;align-items:center;justify-content:center;font-size:20px;border:2px solid #fff;}
-.hh-foe-name{font-size:13px;font-weight:900;color:#5f4a86;text-align:center;line-height:1.3;
+.hh-foe-name{font-size:14px;font-weight:900;color:#5f4a86;text-align:center;line-height:1.3;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
-.hh-count{font-size:13px;font-weight:800;color:#7b6f9a;}
+.hh-count{font-size:14px;font-weight:800;color:#7b6f9a;}
 .hh-backs{display:flex;gap:2px;justify-content:center;min-height:20px;flex-wrap:wrap;}
-.hh-back-c{width:12px;height:18px;border-radius:3px;background:linear-gradient(150deg,#c9a8ea,#8f7ae0);}
-.hh-bubble{font-size:13px;font-weight:900;color:#b8306a;background:#ffe6f0;border-radius:999px;padding:1px 8px;}
-.hh-catch{border:none;border-radius:999px;padding:4px 9px;font-size:13px;font-weight:900;cursor:pointer;
+.hh-back-c{width:13px;height:19px;display:block;}
+.hh-bubble{font-size:14px;font-weight:900;color:#b8306a;background:#ffe6f0;border-radius:999px;padding:1px 8px;}
+.hh-bubble-in{animation:hhbounce .45s cubic-bezier(.34,1.56,.64,1);}
+@keyframes hhbounce{0%{transform:scale(.2) translateY(8px)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+.hh-catch{border:none;border-radius:999px;padding:4px 9px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#ffd36e,#f0ad33);color:#7a4d0b;box-shadow:0 3px 0 #c9922f;}
 .hh-catch:active{transform:translateY(2px);box-shadow:0 1px 0 #c9922f;}
 .hh-table{display:flex;align-items:center;justify-content:center;gap:14px;min-height:104px;position:relative;}
 .hh-pile{position:relative;width:66px;height:96px;}
-.hh-deck{width:62px;height:92px;border-radius:11px;border:none;cursor:pointer;padding:0;font-family:inherit;
-  background:linear-gradient(150deg,#c9a8ea,#8f7ae0);box-shadow:0 4px 0 #6f57c8;color:#fff;
-  font-size:13px;font-weight:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
-.hh-deck:active{transform:translateY(2px);box-shadow:0 2px 0 #6f57c8;}
-.hh-deck:disabled{opacity:.5;cursor:default;}
-.hh-say{font-size:13px;font-weight:800;color:#7d6aa6;text-align:center;line-height:1.5;min-height:19px;}
+.hh-backsvg{display:block;width:100%;height:100%;}
+.hh-deck{position:relative;width:66px;height:96px;border:none;cursor:pointer;padding:0;font-family:inherit;background:none;}
+.hh-deck-stack{position:absolute;inset:0;transition:transform .12s ease;}
+.hh-back{position:absolute;inset:2px;filter:drop-shadow(0 3px 2px rgba(90,70,140,.35));}
+.hh-back-2{transform:translate(3px,2px) rotate(3deg);}
+.hh-back-1{transform:translate(1px,1px) rotate(-2deg);}
+.hh-deck-count{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);z-index:2;white-space:nowrap;
+  background:#fffdf6ee;color:#6a52a0;border-radius:999px;padding:1px 8px;font-size:14px;font-weight:900;
+  box-shadow:0 1px 3px rgba(90,70,140,.3);}
+.hh-deck:active .hh-deck-stack{transform:translateY(2px);}
+.hh-deck:disabled{opacity:.55;cursor:default;}
+.hh-heap{position:relative;width:66px;height:96px;}
+.hh-heap .hh-top{position:absolute;inset:0;}
+.hh-heap-c{position:absolute;inset:0;filter:saturate(.85) brightness(.96);}
+.hh-say{font-size:14px;font-weight:800;color:#7d6aa6;text-align:center;line-height:1.5;min-height:21px;}
 .hh-say-oops{color:#c2557f;}
-.hh-card{position:relative;border:none;border-radius:11px;cursor:pointer;padding:0;font-family:inherit;
+.hh-card{position:relative;border:none;border-radius:10px;cursor:pointer;padding:0;font-family:inherit;
   background:var(--soft,#fff);box-shadow:0 3px 7px rgba(120,105,160,.32);overflow:hidden;
   display:flex;align-items:center;justify-content:center;flex:0 0 auto;
   transition:transform .16s ease,box-shadow .16s ease;}
-.hh-card-oval{position:absolute;left:8%;top:6%;width:84%;height:88%;border-radius:50%/40%;
-  background:#ffffffcc;transform:rotate(-16deg);}
+.hh-card-frame{position:absolute;inset:2px;border:2px solid rgba(255,255,255,.8);border-radius:7px;pointer-events:none;}
+.hh-card-oval{position:absolute;left:9%;top:7%;width:82%;height:86%;border-radius:50%/40%;
+  background:#fffffff2;transform:rotate(-20deg);box-shadow:0 1px 3px rgba(90,60,110,.18);}
 .hh-card-face{position:relative;font-size:26px;font-weight:900;color:var(--ink,#b8306a);line-height:1;
   text-shadow:0 1px 0 #fff;}
-.hh-card-corner{position:absolute;left:4px;top:3px;font-size:13px;font-weight:900;color:#fff;line-height:1;}
-.hh-card-corner2{position:absolute;right:4px;bottom:3px;font-size:13px;font-weight:900;color:#fff;line-height:1;}
-.hh-card-wild{background:conic-gradient(#F58FBB 0turn .25turn,#EFB33F .25turn .5turn,#54B584 .5turn .75turn,#5A9BE0 .75turn 1turn);}
+.hh-card-icon{position:relative;display:flex;align-items:center;justify-content:center;line-height:0;}
+.hh-card-mark{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);line-height:0;opacity:.95;}
+.hh-card-corner{position:absolute;left:4px;top:3px;font-size:13px;font-weight:900;color:#fff;line-height:1;
+  text-shadow:0 1px 2px rgba(90,50,110,.45);display:flex;flex-direction:column;align-items:center;gap:1px;}
+.hh-card-corner2{position:absolute;right:4px;bottom:3px;font-size:13px;font-weight:900;color:#fff;line-height:1;
+  text-shadow:0 1px 2px rgba(90,50,110,.45);display:flex;flex-direction:column;align-items:center;gap:1px;}
+.hh-card-corner svg,.hh-card-corner2 svg{display:block;}
+.hh-card-wild{background:conic-gradient(from .125turn,#F58FBB 0turn .25turn,#EFB33F .25turn .5turn,#54B584 .5turn .75turn,#5A9BE0 .75turn 1turn);}
 .hh-card-on{transform:translateY(-10px);box-shadow:0 8px 14px rgba(200,120,170,.5);}
 .hh-card-cur{outline:3px solid #6c4fd0;outline-offset:1px;}
 .hh-card-dim{opacity:.5;}
@@ -221,8 +246,12 @@ const CSS = `
 .hh-one.hh-one-hot{background:linear-gradient(180deg,#ffb45e,#ef7d24);box-shadow:0 4px 0 #c15e10;
   animation-duration:.45s;}
 @keyframes hhcall{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-.hh-keys{font-size:13px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
-.hh-fly{position:absolute;z-index:60;pointer-events:none;transition:transform .42s cubic-bezier(.3,.9,.4,1),opacity .42s ease;}
+.hh-keys{font-size:14px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
+.hh-fly{position:absolute;z-index:60;pointer-events:none;transition:transform .3s cubic-bezier(.3,.9,.4,1),opacity .3s ease;}
+.hh-fly-arc{animation:hharc .3s ease-out;}
+@keyframes hharc{0%,100%{transform:translateY(0)}45%{transform:translateY(-16px)}}
+.hh-flyback{display:block;line-height:0;filter:drop-shadow(0 4px 4px rgba(90,70,140,.35));}
+.hh-hidden-back{width:26px;height:38px;display:inline-block;margin-right:6px;line-height:0;}
 .hh-cover{position:absolute;inset:0;background:rgba(255,246,251,.985);border-radius:18px;z-index:100;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:18px;}
 .hh-cover-t{font-size:20px;font-weight:900;color:#7a5aa8;}
@@ -230,6 +259,7 @@ const CSS = `
 .hh-wheel{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
 .hh-swatch{width:74px;height:74px;border:none;border-radius:50%;cursor:pointer;font-family:inherit;
   font-size:14px;font-weight:900;color:#fff;text-shadow:0 1px 3px rgba(70,40,70,.45);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   box-shadow:0 4px 10px rgba(120,90,160,.35);animation:hhpop .32s cubic-bezier(.34,1.56,.64,1) both;}
 .hh-swatch:nth-child(2){animation-delay:.05s;}
 .hh-swatch:nth-child(3){animation-delay:.1s;}
@@ -252,28 +282,45 @@ const CSS = `
 .hh-goback{border:none;border-radius:999px;padding:8px 13px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
 .hh-goback:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
-.hh-chip{background:#ffffffdd;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#6a5892;
+.hh-chip{background:#ffffffdd;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;color:#6a5892;
   box-shadow:0 2px 5px rgba(150,140,190,.18);}
-.hh-over{border-radius:16px;background:#fffdfa;padding:14px;text-align:center;display:flex;
-  flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
+.hh-over{position:relative;overflow:hidden;border-radius:16px;background:#fffdfa;padding:14px;text-align:center;
+  display:flex;flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
 .hh-over-t{font-size:20px;font-weight:900;color:#6a4fa8;}
 .hh-over-s{font-size:14px;font-weight:700;color:#6f6390;line-height:1.6;}
+.hh-ranks{display:flex;flex-direction:column;gap:6px;width:100%;max-width:340px;position:relative;z-index:1;}
+.hh-rank{display:flex;align-items:center;gap:8px;background:#f4efff;border-radius:12px;padding:5px 10px;text-align:left;}
+.hh-rank-win{background:linear-gradient(90deg,#fff3c9,#ffe9f3);box-shadow:0 2px 6px rgba(210,160,90,.3);}
+.hh-rank .hh-face{width:28px;height:28px;font-size:17px;flex:0 0 auto;}
+.hh-rank-name{font-size:14px;font-weight:900;color:#5f4a86;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hh-rank-note{margin-left:auto;font-size:14px;font-weight:800;color:#7b6f9a;white-space:nowrap;}
+.hh-rank-backs{display:flex;gap:2px;}
+.hh-mini{width:11px;height:16px;display:block;line-height:0;}
+.hh-fan{display:flex;}
+.hh-fan-c{width:14px;height:21px;display:block;line-height:0;transform-origin:50% 90%;}
+.hh-fan-c+.hh-fan-c{margin-left:-5px;}
+.hh-confetti{position:absolute;inset:0;pointer-events:none;z-index:0;}
+.hh-confetti-p{position:absolute;top:-14px;width:8px;height:13px;border-radius:3px;opacity:.9;
+  animation:hhfall 1.5s ease-in forwards;}
+@keyframes hhfall{to{transform:translateY(360px) rotate(230deg);opacity:0}}
 @media (max-width:420px){
   .hh-wrap{padding:8px;gap:6px;}
   .hh-foe{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;padding:5px 6px;gap:4px;}
   .hh-face{width:26px;height:26px;font-size:15px;}
-  .hh-foe-name{font-size:13px;max-width:64px;}
+  .hh-foe-name{max-width:64px;}
   .hh-backs{flex-basis:100%;justify-content:flex-start;min-height:16px;}
   .hh-btns{gap:5px;}
   .hh-btn{padding:7px 10px;font-size:14px;}
-  .hh-keys{font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){
-  .hh-fly{transition-duration:.12s;}
+  .hh-fly{display:none;}
   .hh-chain,.hh-one{animation:none;}
   .hh-swatch{animation-duration:.12s;}
   .hh-card{transition:none;}
   .hh-shake{animation:none;}
+  .hh-colorbar{transition:none;}
+  .hh-colorbar-dot,.hh-bubble-in,.hh-fly-arc,.hh-confetti-p{animation:none;}
+  .hh-colorwave{display:none;}
 }
 `;
 
@@ -281,21 +328,58 @@ const CSS = `
 // 牌面
 // ---------------------------------------------------------------------------
 
-/** 手牌与台面共用的一张牌面:圆角卡片 + 粉彩四色 + 大符号 */
-function paintCard(el: HTMLElement, card: Card, w: number, h: number): void {
+/**
+ * 手牌与台面共用的一张牌面,四层印刷质感:
+ *  1. 卡底:主色对角渐变(左上提亮 12%),万能牌交给 .hh-card-wild 的四色花瓣转盘;
+ *  2. 中央斜切白椭圆(−20°,样式在 .hh-card-oval)+ 2px 白内框(.hh-card-frame);
+ *  3. 中央图案:数字牌是大数字 + 底部花色点缀,功能牌换成原创 SVG 图标;
+ *  4. 双角标保留:数字/加二/加四写字,跳过/反转/万能摆缩小图标,
+ *     有色牌一律再配一枚四色小符号(圆/方/三角/星)——色弱的第二通道。
+ */
+export function paintCard(el: HTMLElement, card: Card, w: number, h: number): void {
   const color = card.color;
+  const ink = color ? COLOR_HEX[color] : "#6b4f9e";
   el.style.width = `${w}px`;
   el.style.height = `${h}px`;
   el.style.setProperty("--soft", color ? COLOR_SOFT[color] : "#fff");
-  el.style.setProperty("--ink", color ? COLOR_HEX[color] : "#6b4f9e");
-  el.style.background = color ? COLOR_HEX[color] : "";
+  el.style.setProperty("--ink", ink);
+  el.style.background = color
+    ? `linear-gradient(135deg,${lighten(COLOR_HEX[color], 0.12)},${COLOR_HEX[color]})`
+    : "";
   el.className = `${el.className.replace(/ hh-card-wild/g, "")}${isWild(card) ? " hh-card-wild" : ""}`;
   const face = cardFace(card);
-  const small = face.length > 1 ? Math.round(w * 0.36) : Math.round(w * 0.5);
+  const cornerShape = color ? colorShapeSVG(color, Math.max(7, Math.round(w * 0.15)), "#fff") : "";
+  const cornerFace =
+    card.kind === "num" || card.kind === "draw2" || card.kind === "wild4"
+      ? face
+      : actionIconSVG(card.kind, "#fff", Math.max(10, Math.round(w * 0.2)));
+  const corner = `${cornerFace}${cornerShape}`;
+  let center: string;
+  let mark = "";
+  if (card.kind === "num") {
+    center = `<span class="hh-card-face" style="font-size:${Math.round(w * 0.5)}px">${face}</span>`;
+    mark = color
+      ? `<span class="hh-card-mark">${colorShapeSVG(color, Math.max(8, Math.round(w * 0.18)))}</span>`
+      : "";
+  } else {
+    center = `<span class="hh-card-icon">${actionIconSVG(card.kind, ink, Math.round(w * 0.58))}</span>`;
+  }
   el.innerHTML = `<span class="hh-card-oval"></span>
-    <span class="hh-card-corner">${face}</span>
-    <span class="hh-card-face" style="font-size:${small}px">${face}</span>
-    <span class="hh-card-corner2">${face}</span>`;
+    <span class="hh-card-frame"></span>
+    <span class="hh-card-corner">${corner}</span>
+    ${center}${mark}
+    <span class="hh-card-corner2">${corner}</span>`;
+}
+
+/** 出牌飞行时长(规格:0.3s 弧线) */
+export const PLAY_FLY_MS = 300;
+
+/** 摸牌飞行时长(规格:0.25s) */
+export const DRAW_FLY_MS = 250;
+
+/** 每张牌落定时的微旋转(±5°):用牌的 id 定死,重渲染不会跳 */
+export function spinOf(card: Card): number {
+  return ((card.id * 47) % 11) - 5;
 }
 
 /** 手牌宽度:窄屏也不低于 48px */
@@ -392,6 +476,10 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
   let cursor = 0;
   let say = "";
   let sayBad = false;
+  /** 色条上一次画的颜色:换色那一下要荡波纹 */
+  let shownColor: Color = state.color;
+  /** 哪些座位的「就一张!」气泡已经弹过场了,重渲染不再重播弹跳 */
+  const bubbleSeen = new Set<number>();
   /** 正在等玩家挑颜色的那张万能牌 */
   let wildPick: number | null = null;
   /** 加四明知违规还要打:第二次点才真的打出去 */
@@ -454,28 +542,64 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
   }
 
   // -------------------------------------------------------------------------
-  // 动画:出牌飞到中央、抽牌从牌堆滑进手里
+  // 动画:出牌飞到中央、抽牌从牌堆滑进手里、罚牌连着飞
   // -------------------------------------------------------------------------
 
-  function flyCard(card: Card, from: HTMLElement | null, to: HTMLElement | null, spin: boolean): void {
-    if (!from || !to || destroyed) return;
+  /**
+   * 造一个飞行替身:外层走位移(带落定旋转),内层走一段小弧线,到点自己收走。
+   * face 给牌就牌面朝上飞,不给就用花背(对手摸牌、罚抽都是背面朝上)。
+   * reduceMotion 直接落位:一个替身都不造,牌桌照常重渲染。
+   */
+  function flyGhost(face: Card | null, from: HTMLElement | null, to: HTMLElement | null, ms: number, deg: number): void {
+    if (!from || !to || destroyed || reduceMotion()) return;
     const box = wrap.getBoundingClientRect?.();
     const a = from.getBoundingClientRect?.();
     const b = to.getBoundingClientRect?.();
     if (!box || !a || !b || (a.width === 0 && b.width === 0)) return;
+    const inner = document.createElement("div");
+    inner.className = face ? "hh-card hh-fly-arc" : "hh-flyback hh-fly-arc";
+    if (face) {
+      paintCard(inner, face, Math.max(40, a.width || 56), Math.max(58, a.height || 84));
+    } else {
+      inner.style.width = "44px";
+      inner.style.height = "64px";
+      inner.innerHTML = cardBackSVG();
+    }
+    inner.style.animationDuration = `${ms}ms`;
     const ghost = document.createElement("div");
-    ghost.className = "hh-card hh-fly";
-    paintCard(ghost, card, Math.max(40, a.width || 56), Math.max(58, a.height || 84));
+    ghost.className = "hh-fly";
+    ghost.style.transition = `transform ${ms}ms cubic-bezier(.3,.9,.4,1),opacity ${ms}ms ease`;
     ghost.style.left = `${a.left - box.left}px`;
     ghost.style.top = `${a.top - box.top}px`;
+    ghost.appendChild(inner);
     wrap.appendChild(ghost);
     const dx = b.left - a.left;
     const dy = b.top - a.top;
-    const ms = reduceMotion() ? 130 : 420;
     later(() => {
-      ghost.style.transform = `translate(${dx}px, ${dy}px) rotate(${spin ? 14 : -8}deg) scale(1.02)`;
+      ghost.style.transform = `translate(${dx}px, ${dy}px) rotate(${deg}deg)`;
     }, 16);
-    later(() => ghost.remove(), ms + 60);
+    later(() => ghost.remove(), ms + 70);
+  }
+
+  /** 出牌:牌面朝上 0.3s 飞向弃牌堆,落定带这张牌自己的 ±5° 微旋转 */
+  function flyCard(card: Card, from: HTMLElement | null, to: HTMLElement | null): void {
+    flyGhost(card, from, to, PLAY_FLY_MS, spinOf(card));
+  }
+
+  /** 自己摸牌:牌面朝上 0.25s 从牌堆滑进手里 */
+  function flyDraw(card: Card, from: HTMLElement | null, to: HTMLElement | null): void {
+    flyGhost(card, from, to, DRAW_FLY_MS, -4);
+  }
+
+  /** 背面朝上飞一张(对手摸牌、罚抽) */
+  function flyBack(from: HTMLElement | null, to: HTMLElement | null): void {
+    flyGhost(null, from, to, DRAW_FLY_MS, 5);
+  }
+
+  /** 一次抽 N 张:N 张花背间隔 60ms 连着飞,最多演 8 张,起点终点到点再查(渲染会换节点) */
+  function flyBurst(n: number, from: () => HTMLElement | null, to: () => HTMLElement | null): void {
+    const count = Math.min(8, n);
+    for (let i = 0; i < count; i++) later(() => flyBack(from(), to()), i * 60);
   }
 
   function pileEl(): HTMLElement | null {
@@ -484,6 +608,11 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
 
   function deckEl(): HTMLElement | null {
     return tableEl.querySelector(".hh-deck") as HTMLElement | null;
+  }
+
+  /** 第 seat 位对手的卡片盒(对手出牌/摸牌的飞行起点与终点) */
+  function foeBoxEl(seat: number): HTMLElement | null {
+    return foesEl.querySelector(`.hh-foe-p${seat}`) as HTMLElement | null;
   }
 
   // -------------------------------------------------------------------------
@@ -501,11 +630,23 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       left === null
         ? ""
         : `<span class="hh-turns${left <= 3 ? " hh-turns-low" : ""}">还剩 ${left} 手</span>`;
-    colorBar.innerHTML = `<span class="hh-colorbar-dot"></span><span>现在是${COLOR_NAMES[c]}</span>${chain}${turns}`;
+    // 呼吸圆点里摆当前色的形状符号(圆/方/三角/星):和卡面角标同一套第二通道
+    colorBar.innerHTML = `<span class="hh-colorbar-dot">${colorShapeSVG(c, 13, "#fff")}</span><span>现在是${COLOR_NAMES[c]}</span>${chain}${turns}`;
     colorBar.setAttribute(
       "aria-label",
       left === null ? `现在是${COLOR_NAMES[c]}` : `现在是${COLOR_NAMES[c]},还剩 ${left} 手`
     );
+    // 变色仪式:换色那一下从中心荡开一圈新色波纹(reduceMotion 直接切,不荡)
+    if (shownColor !== c) {
+      shownColor = c;
+      if (!reduceMotion()) {
+        const wave = document.createElement("span");
+        wave.className = "hh-colorwave";
+        wave.style.background = COLOR_HEX[c];
+        colorBar.appendChild(wave);
+        later(() => wave.remove(), 440);
+      }
+    }
   }
 
   function renderFoes(): void {
@@ -515,12 +656,20 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       const s = opts.seats[i];
       const p = state.players[i];
       const box = document.createElement("div");
-      box.className = `hh-foe${state.turn === i && !over ? " hh-foe-on" : ""}`;
+      box.className = `hh-foe hh-foe-p${i}${state.turn === i && !over ? " hh-foe-on" : ""}`;
       const face = s.isImg
         ? `<img class="hh-face" src="${s.avatar}" alt="${s.name}">`
         : `<span class="hh-face">${s.avatar}</span>`;
-      const backs = new Array(Math.min(10, p.hand.length)).fill(`<span class="hh-back-c"></span>`).join("");
-      const called = p.hand.length === 1 && p.called ? `<span class="hh-bubble">就一张!</span>` : "";
+      const backs = new Array(Math.min(10, p.hand.length))
+        .fill(`<span class="hh-back-c">${cardBackSVG()}</span>`)
+        .join("");
+      // 气泡第一次冒头才弹跳,之后的重渲染不再重播
+      const calling = p.hand.length === 1 && p.called;
+      const called = calling
+        ? `<span class="hh-bubble${bubbleSeen.has(i) ? "" : " hh-bubble-in"}">就一张!</span>`
+        : "";
+      if (calling) bubbleSeen.add(i);
+      else bubbleSeen.delete(i);
       box.innerHTML = `${face}
         <span class="hh-foe-name">${s.name}${s.kind === "ai" ? `·${TIER_NAMES[s.tier]}` : ""}</span>
         <span class="hh-count">${p.hand.length} 张</span>
@@ -540,20 +689,36 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
 
   function renderTable(): void {
     tableEl.innerHTML = "";
+    // 牌堆:三张微错位的花背叠出厚度,张数摆在徽章上,不再用字体字符占位
     const deckBtn = document.createElement("button");
     deckBtn.type = "button";
     deckBtn.className = "hh-deck";
-    deckBtn.innerHTML = `<span>🂠</span><span>${state.deck.length} 张</span>`;
+    const back = cardBackSVG();
+    deckBtn.innerHTML = `<span class="hh-deck-stack" aria-hidden="true"><span class="hh-back hh-back-2">${back}</span><span class="hh-back hh-back-1">${back}</span><span class="hh-back hh-back-0">${back}</span></span><span class="hh-deck-count">${state.deck.length} 张</span>`;
     deckBtn.setAttribute("aria-label", `牌堆还有 ${state.deck.length} 张,点一下摸牌`);
     deckBtn.disabled = !canAct() || chainPending(state) || state.drawnId !== null;
     deckBtn.addEventListener("click", humanDraw);
     tableEl.appendChild(deckBtn);
 
+    // 弃牌堆:顶牌下面垫两张出过的牌,微微旋开(−6°/4°),出过牌才有
+    const heap = document.createElement("div");
+    heap.className = "hh-heap";
+    const history = state.pile.slice(0, -1).slice(-2);
+    history.forEach((card, idx) => {
+      const under = document.createElement("div");
+      under.className = "hh-card hh-heap-c";
+      paintCard(under, card, 66, 96);
+      under.style.transform = `rotate(${idx === history.length - 1 ? -6 : 4}deg)`;
+      under.setAttribute("aria-hidden", "true");
+      heap.appendChild(under);
+    });
     const top = document.createElement("div");
     top.className = "hh-card hh-top";
     paintCard(top, topCard(state), 66, 96);
+    top.style.transform = `rotate(${spinOf(topCard(state))}deg)`;
     top.setAttribute("aria-label", `台面上是${cardLabel(topCard(state))}`);
-    tableEl.appendChild(top);
+    heap.appendChild(top);
+    tableEl.appendChild(heap);
   }
 
   function renderHand(): void {
@@ -561,7 +726,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
     if (curtainFor >= 0) {
       const hidden = document.createElement("div");
       hidden.className = "hh-hidden";
-      hidden.textContent = "🂠 牌先收起来啦";
+      hidden.innerHTML = `<span class="hh-hidden-back" aria-hidden="true">${cardBackSVG()}</span>牌先收起来啦`;
       handEl.appendChild(hidden);
       return;
     }
@@ -613,7 +778,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       btnsEl.appendChild(mkBtn("✅ 出这张", "hh-btn-go", () => tapCardById(state.drawnId as number)));
       btnsEl.appendChild(mkBtn("🙅 先不出", "", humanPass));
     } else {
-      btnsEl.appendChild(mkBtn("🂠 抽牌", "", humanDraw, !mine || chainPending(state)));
+      btnsEl.appendChild(mkBtn("🎴 抽牌", "", humanDraw, !mine || chainPending(state)));
       btnsEl.appendChild(mkBtn("✅ 出牌", "hh-btn-go", () => tapCard(cursor), !mine));
     }
     btnsEl.appendChild(mkBtn(paused ? "▶️ 继续" : "⏸ 暂停", "", togglePause, over));
@@ -673,7 +838,8 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
         b.type = "button";
         b.className = "hh-swatch";
         b.style.background = COLOR_HEX[color];
-        b.textContent = `${i + 1} ${COLOR_NAMES[color]}`;
+        // 色块 + 形状符号 + 中文名:三条通道一起上,色弱也挑得准
+        b.innerHTML = `${colorShapeSVG(color, 15, "#fff")}<span>${i + 1} ${COLOR_NAMES[color]}</span>`;
         b.addEventListener("click", () => confirmWild(color));
         wheel.appendChild(b);
       });
@@ -778,7 +944,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       return false;
     }
     if (!fromDraw) bump(showSeat);
-    if (card) flyCard(card, from ?? null, pileEl(), true);
+    if (card) flyCard(card, from ?? null, pileEl());
     opts.sfx(card && isWild(card) ? "pop" : "tap");
     riskyConfirm = null;
     tell(card ? `打出${cardLabel(card)}。` : "");
@@ -834,7 +1000,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       const hand = state.players[showSeat].hand;
       later(() => {
         const el = handEl.children[hand.findIndex((c) => c.id === res.card?.id)] as HTMLElement | undefined;
-        if (res.card) flyCard(res.card, deckEl(), el ?? null, false);
+        if (res.card) flyDraw(res.card, deckEl(), el ?? null);
       }, 0);
     }
     tell(
@@ -862,6 +1028,8 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
     const got = takeChain(state, showSeat);
     bump(showSeat);
     opts.sfx("pop");
+    // 叠加惩罚:N 张花背从牌堆连着飞进手里
+    flyBurst(got, () => deckEl(), () => handEl);
     tell(`一次抽了 ${got} 张,这条链断在这里。`);
     afterMove();
   }
@@ -889,6 +1057,15 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
     opts.sfx("coin");
     tell(`点破 ${opts.seats[target].name} 忘喊「就一张」,他罚抽 ${res.drawn} 张!`);
     render();
+    // 点破成功的演出:对手盒子抖一下,罚牌连着飞过去
+    const box = foeBoxEl(target);
+    if (box && !reduceMotion()) {
+      box.className += " hh-shake";
+      later(() => {
+        box.className = box.className.replace(" hh-shake", "");
+      }, 340);
+    }
+    flyBurst(res.drawn, () => deckEl(), () => foeBoxEl(target));
   }
 
   function togglePause(): void {
@@ -939,6 +1116,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
         opts.sfx("oops");
         tell(`${opts.seats[hunter].name} 点破了你没喊「就一张」,罚抽 ${res.drawn} 张。下次手快一点!`, true);
         render();
+        flyBurst(res.drawn, () => deckEl(), () => handEl);
       }
     }, CATCH_DELAY_MS);
   }
@@ -975,12 +1153,13 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
     } else if (action.type === "take") {
       const got = takeChain(state, seat);
       opts.sfx("pop");
+      flyBurst(got, () => deckEl(), () => foeBoxEl(seat));
       tell(`${cfg.name} 接不上,一次抽了 ${got} 张。`);
     } else if (action.type === "play") {
       const card = state.players[seat].hand.find((c) => c.id === action.cardId);
       const res = playCard(state, seat, action.cardId, action.color);
       if (res.ok && card) {
-        flyCard(card, foesEl.querySelector(".hh-foe-on") as HTMLElement | null, pileEl(), true);
+        flyCard(card, foeBoxEl(seat), pileEl());
         opts.sfx(isWild(card) ? "pop" : "tap");
         tell(`${cfg.name} 打出${cardLabel(card)}。`);
         if (state.players[seat].hand.length === 1 && cfg.tier !== "rookie") {
@@ -991,7 +1170,9 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
     } else {
       const res = drawFromDeck(state, seat);
       if (res.playable && res.card) {
+        flyBack(deckEl(), foeBoxEl(seat));
         playCard(state, seat, res.card.id, undefined);
+        flyCard(res.card, foeBoxEl(seat), pileEl());
         opts.sfx("tap");
         tell(`${cfg.name} 摸了一张,顺手就打出去了。`);
         if (state.players[seat].hand.length === 1 && cfg.tier !== "rookie") callOneCard(state, seat);
@@ -1001,6 +1182,7 @@ export function createTable(host: HTMLElement, opts: TableOpts): { destroy: () =
       } else {
         passAfterDraw(state, seat);
         opts.sfx("pop");
+        flyBack(deckEl(), foeBoxEl(seat));
         tell(`${cfg.name} 摸了一张。`);
       }
     }
@@ -1227,17 +1409,64 @@ function makeShell(host: HTMLElement, api: GameApi, onBack: () => void): ModeShe
   return { wrap, chip, stage, destroy: () => wrap.remove() };
 }
 
+/**
+ * 结算名次列表:赢家排最前,其余按剩牌少到多。
+ * 每行头像 + 名字 + 剩余手牌小图;胜者那行摆一把小卡扇,
+ * 有人赢的时候全场撒彩带(位置与延迟按序号定死,不引随机;reduceMotion 由 CSS 关掉动画)。
+ */
+export function resultRanksHTML(seats: readonly SeatCfg[], r: TableDone): string {
+  const back = cardBackSVG();
+  const order = seats
+    .map((_, i) => i)
+    .sort((a, b) => {
+      if (a === r.winner) return -1;
+      if (b === r.winner) return 1;
+      return r.state.players[a].hand.length - r.state.players[b].hand.length;
+    });
+  const rows = order
+    .map((i) => {
+      const s = seats[i];
+      const left = r.state.players[i].hand.length;
+      const win = i === r.winner;
+      const face = s.isImg
+        ? `<img class="hh-face" src="${s.avatar}" alt="${s.name}">`
+        : `<span class="hh-face">${s.avatar}</span>`;
+      const fan = new Array(5)
+        .fill(0)
+        .map((_, k) => `<span class="hh-fan-c" style="transform:rotate(${(k - 2) * 14}deg)">${back}</span>`)
+        .join("");
+      const minis = win
+        ? `<span class="hh-fan">${fan}</span>`
+        : `<span class="hh-rank-backs">${new Array(Math.min(6, left)).fill(`<span class="hh-mini">${back}</span>`).join("")}</span>`;
+      const note = win ? "先出完!" : `剩 ${left} 张 · ${r.scores[i]} 分`;
+      return `<div class="hh-rank${win ? " hh-rank-win" : ""}">${face}<span class="hh-rank-name">${s.name}</span>${minis}<span class="hh-rank-note">${note}</span></div>`;
+    })
+    .join("");
+  const confetti =
+    r.winner >= 0 && seats[r.winner]?.kind === "human"
+      ? `<span class="hh-confetti" aria-hidden="true">${new Array(12)
+          .fill(0)
+          .map(
+            (_, k) =>
+              `<span class="hh-confetti-p" style="left:${(k * 83) % 97}%;background:${COLOR_HEX[COLORS[k % COLORS.length]]};animation-delay:${k * 70}ms"></span>`
+          )
+          .join("")}</span>`
+      : "";
+  return `${confetti}<div class="hh-ranks">${rows}</div>`;
+}
+
 function overPanel(
   stage: HTMLElement,
   title: string,
   sub: string,
   label: string,
-  onAgain: () => void
+  onAgain: () => void,
+  ranksHTML = ""
 ): void {
   stage.innerHTML = "";
   const box = document.createElement("div");
   box.className = "hh-over";
-  box.innerHTML = `<div class="hh-over-t">${title}</div><div class="hh-over-s">${sub}</div>`;
+  box.innerHTML = `<div class="hh-over-t">${title}</div><div class="hh-over-s">${sub}</div>${ranksHTML}`;
   const again = document.createElement("button");
   again.type = "button";
   again.className = "hh-open";
@@ -1264,11 +1493,12 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
     table?.destroy();
     shell.stage.innerHTML = "";
     const cfg = buildEndlessRound(streak + 1);
+    const seats = soloSeats(cfg.players, cfg.tiers);
     shell.chip.textContent = `♾️ 连胜 ${streak} · 最好 ${best} · 累计 ${points} 分`;
     table = createTable(shell.stage, {
       cfg,
       deck: dealRoundDeck(cfg, sitting),
-      seats: soloSeats(cfg.players, cfg.tiers),
+      seats,
       banner: `♾️ ${cfg.hint}<br>赢一局就把别人手上剩的牌折成分收走`,
       sfx: (n) => api.play(n),
       onDone: (r) => {
@@ -1293,7 +1523,8 @@ function mountEndless(host: HTMLElement, api: GameApi, onBack: () => void): { de
               points = 0;
               sitting++;
               startRound();
-            }
+            },
+            resultRanksHTML(seats, r)
           );
         }
       },
@@ -1375,11 +1606,12 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
     table?.destroy();
     shell.stage.innerHTML = "";
     const cfg = buildVersusRound(round, players, tier);
+    const seats = soloSeats(cfg.players, cfg.tiers);
     shell.chip.textContent = `⚔️ 第 ${round} 局 · 你 ${totals[0]} 分`;
     table = createTable(shell.stage, {
       cfg,
       deck: dealRoundDeck(cfg),
-      seats: soloSeats(cfg.players, cfg.tiers),
+      seats,
       startTurn: (round - 1) % cfg.players,
       banner: `⚔️ ${cfg.players} 人桌 · 对手是「${TIER_NAMES[tier]}」档<br>先出完手牌的人赢下这一局`,
       sfx: (n) => api.play(n),
@@ -1398,7 +1630,8 @@ function mountVersus(host: HTMLElement, api: GameApi, onBack: () => void): { des
             api.play("tap");
             round++;
             startRound();
-          }
+          },
+          resultRanksHTML(seats, r)
         );
       },
     });
@@ -1430,11 +1663,12 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
     table?.destroy();
     shell.stage.innerHTML = "";
     const cfg = buildVersusRound(round + 100, 2, "normal");
+    const seats = duoSeats();
     shell.chip.textContent = `👫 第 ${round} 局 · ${duoScoreLine(wins, draws)}`;
     table = createTable(shell.stage, {
       cfg,
       deck: dealRoundDeck(cfg),
-      seats: duoSeats(),
+      seats,
       startTurn: (round - 1) % 2,
       banner: "👫 朵朵和星星各拿一手牌,轮到谁就先把另一位的牌盖起来<br>朵朵 A/D + F/G · 星星 ←/→ + L/K",
       sfx: (n) => api.play(n),
@@ -1452,7 +1686,8 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
             api.play("tap");
             round++;
             startRound();
-          }
+          },
+          resultRanksHTML(seats, r)
         );
       },
     });

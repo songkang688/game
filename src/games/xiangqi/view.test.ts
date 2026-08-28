@@ -1,10 +1,11 @@
-// 棋盘视图：只验「看得见」的那几件事 —— 徽章、脉冲、变暗、点击换算、清理干净。
-// canvas 上画了什么没法断言，所以画笔本身只保证不抛错。
+// 棋盘视图：验「看得见」的那几件事 —— 徽章、脉冲、变暗、点击换算、清理干净；
+// 1.3 之后 domStub 会记下每一笔画布调用，绘制路径与演出降级也能逐条断言。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CHECK_BADGE_MS, CSS, GEOM, PIECE_FACE, RED_INK, BLACK_INK, createBoardView } from "./view";
-import { initialBoard, type Pos } from "./logic";
-import { installDom, restoreDom, flushFrames, type Dom, type El } from "./domStub";
+import { idx, initialBoard, makeEmptyBoard, type Board, type Move, type Pos } from "./logic";
+import { ctxCalls, installDom, restoreDom, flushFrames, type Dom, type El } from "./domStub";
 import { MIN_HIT_PX, pointAt } from "./session";
+import { COMPASS_ORANGE, FRAME_GOLD, MOVE_MS, PETAL_PINK, POS_MARK, RIVER_WAVE, CAPTURE_GOLD } from "./art";
 
 let dom: Dom;
 
@@ -286,5 +287,291 @@ describe("看得清：颜色与手机适配", () => {
     ]) {
       expect(hitHeight(ruleBody(sel)), `${sel} 不到 44px`).toBeGreaterThanOrEqual(MIN_HIT_PX);
     }
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * 1.3 视觉契约：只改观感不改手感 —— 绘制路径、走子三段、吃子花瓣、
+ * 将军红光、结算印章、reduced 降级逐条锁死。
+ * ------------------------------------------------------------------------- */
+
+const px = (x: number): number => pointAt(GEOM, x, 0).cx;
+const py = (y: number): number => pointAt(GEOM, 0, y).cy;
+
+/** 这一段调用流水里所有 drawImage 的目标中心点 */
+function imageCenters(): Array<{ x: number; y: number }> {
+  return ctxCalls
+    .filter((c) => c.m === "drawImage")
+    .map((c) => ({
+      x: (c.a[1] as number) + (c.a[3] as number) / 2,
+      y: (c.a[2] as number) + (c.a[4] as number) / 2,
+    }));
+}
+
+/** 是不是正好落在某个交叉点坐标上 */
+function onGrid(v: number): boolean {
+  const m = (v - GEOM.margin) % GEOM.cell;
+  return Math.abs(m) < 0.001 || Math.abs(m - GEOM.cell) < 0.001;
+}
+
+/** 这一段流水里写过的所有 strokeStyle / fillStyle 字符串值 */
+function styleSets(prop: "strokeStyle" | "fillStyle"): string[] {
+  return ctxCalls.filter((c) => c.m === `set:${prop}` && typeof c.a[0] === "string").map((c) => c.a[0] as string);
+}
+
+/** 在测试里手工把一步走完（视图不管规则，直接改数组） */
+function applied(b: Board, m: Move): Board {
+  const n = b.slice();
+  n[idx(m.to.x, m.to.y)] = n[idx(m.from.x, m.from.y)];
+  n[idx(m.from.x, m.from.y)] = null;
+  return n;
+}
+
+describe("1.3 视觉契约 · 绘制路径", () => {
+  it("满盘 32 子全走 sprite 路径：一帧 ≥ 32 次 drawImage", () => {
+    const { view } = makeView();
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    expect(ctxCalls.filter((c) => c.m === "drawImage").length).toBeGreaterThanOrEqual(32);
+    view.destroy();
+  });
+
+  it("楚河汉界文字回归：每一帧都写着「楚 河」「汉 界」", () => {
+    const { view } = makeView();
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const texts = ctxCalls.filter((c) => c.m === "fillText").map((c) => c.a[0]);
+    expect(texts).toContain("楚 河");
+    expect(texts).toContain("汉 界");
+    view.destroy();
+  });
+
+  it("九宫斜线回归：两座九宫的四条对角线一条不少", () => {
+    const { view } = makeView();
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const hasSeg = (x0: number, y0: number, x1: number, y1: number): boolean =>
+      ctxCalls.some(
+        (c, i) =>
+          c.m === "moveTo" &&
+          c.a[0] === px(x0) &&
+          c.a[1] === py(y0) &&
+          ctxCalls[i + 1]?.m === "lineTo" &&
+          ctxCalls[i + 1].a[0] === px(x1) &&
+          ctxCalls[i + 1].a[1] === py(y1),
+      );
+    for (const top of [0, 7]) {
+      expect(hasSeg(3, top, 5, top + 2), `九宫 ${top} 撇线丢了`).toBe(true);
+      expect(hasSeg(5, top, 3, top + 2), `九宫 ${top} 捺线丢了`).toBe(true);
+    }
+    view.destroy();
+  });
+
+  it("棋盘装饰上齐了：位点角标、双层木框金线、河界水波", () => {
+    const { view } = makeView();
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const strokes = styleSets("strokeStyle");
+    expect(strokes).toContain(POS_MARK);
+    expect(strokes).toContain(FRAME_GOLD);
+    expect(strokes).toContain(RIVER_WAVE);
+    view.destroy();
+  });
+
+  it("最后一手换成罗盘印记（橙色细圈），不再是方框", () => {
+    const { view } = makeView();
+    view.update({ lastMove: { from: { x: 7, y: 7 }, to: { x: 4, y: 7 } } });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    expect(styleSets("strokeStyle").some((v) => v.startsWith(COMPASS_ORANGE))).toBe(true);
+    view.destroy();
+  });
+});
+
+describe("1.3 视觉契约 · 走子三段（拿起—滑动—落定）", () => {
+  const mv: Move = { from: { x: 4, y: 6 }, to: { x: 4, y: 5 } };
+
+  it("滑动 160ms：动画中段那颗子悬在两个交叉点之间", () => {
+    expect(MOVE_MS).toBe(160);
+    const { view } = makeView();
+    view.update({ board: applied(initialBoard(), mv), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "P" }, null);
+    ctxCalls.length = 0;
+    flushFrames(dom, 1); // +50ms，滑到 160ms 的中段
+    const mid = imageCenters().some(
+      (c) => Math.abs(c.x - px(4)) < 0.01 && c.y > py(5) + 2 && c.y < py(6) - 2,
+    );
+    expect(mid, "滑动中段没有悬在两点之间的子").toBe(true);
+    view.destroy();
+  });
+
+  it("演出散场后全部落定：每一颗子都画回交叉点", () => {
+    const { view } = makeView();
+    view.update({ board: applied(initialBoard(), mv), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "P" }, null);
+    flushFrames(dom, 13); // 650ms > ANIM_TOTAL_MS，演出该收了
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const centers = imageCenters();
+    expect(centers.length).toBeGreaterThanOrEqual(32);
+    for (const c of centers) {
+      expect(onGrid(c.x), `x=${c.x} 不在交叉点上`).toBe(true);
+      expect(onGrid(c.y), `y=${c.y} 不在交叉点上`).toBe(true);
+    }
+    view.destroy();
+  });
+
+  it("reduce 直接落定：第一帧就全部在交叉点上，不滑动", () => {
+    const { view } = makeView(true);
+    view.update({ board: applied(initialBoard(), mv), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "P" }, null);
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    for (const c of imageCenters()) {
+      expect(onGrid(c.x)).toBe(true);
+      expect(onGrid(c.y)).toBe(true);
+    }
+    view.destroy();
+  });
+
+  it("动画进行中点棋盘：落点换算一个都不偏（px/py 反算回归）", () => {
+    const { view, taps, canvas } = makeView();
+    view.update({ board: applied(initialBoard(), mv), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "P" }, null);
+    flushFrames(dom, 1);
+    tap(canvas, 3, 3);
+    expect(taps).toEqual([{ x: 3, y: 3 }]);
+    view.destroy();
+  });
+});
+
+describe("1.3 视觉契约 · 吃子花瓣与金环", () => {
+  const mv: Move = { from: { x: 0, y: 0 }, to: { x: 0, y: 4 } };
+
+  function boardAfterCapture(): Board {
+    const b = makeEmptyBoard();
+    b[idx(0, 4)] = { side: "red", type: "R" };
+    return b;
+  }
+
+  it("吃大子（车马炮）：花瓣退场 + 一圈金环", () => {
+    const { view } = makeView();
+    view.update({ board: boardAfterCapture(), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "R" }, { side: "black", type: "H" });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    expect(styleSets("fillStyle")).toContain(PETAL_PINK);
+    expect(styleSets("strokeStyle").some((v) => v.startsWith(`rgba(${CAPTURE_GOLD}`))).toBe(true);
+    view.destroy();
+  });
+
+  it("吃小子（兵卒）：有花瓣但不给金环", () => {
+    const { view } = makeView();
+    view.update({ board: boardAfterCapture(), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "R" }, { side: "black", type: "P" });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    expect(styleSets("fillStyle")).toContain(PETAL_PINK);
+    expect(styleSets("strokeStyle").some((v) => v.startsWith(`rgba(${CAPTURE_GOLD}`))).toBe(false);
+    view.destroy();
+  });
+
+  it("花瓣散完就回收：演出窗口过后一片都不再画", () => {
+    const { view } = makeView();
+    view.update({ board: boardAfterCapture(), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "R" }, { side: "black", type: "H" });
+    flushFrames(dom, 13); // 650ms > PETAL_MS
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    expect(styleSets("fillStyle")).not.toContain(PETAL_PINK);
+    expect(styleSets("strokeStyle").some((v) => v.startsWith(`rgba(${CAPTURE_GOLD}`))).toBe(false);
+    view.destroy();
+  });
+
+  it("reduce 下吃子直接消失：不出花瓣不旋转", () => {
+    const { view } = makeView(true);
+    view.update({ board: boardAfterCapture(), lastMove: mv });
+    view.animateMove(mv, { side: "red", type: "R" }, { side: "black", type: "H" });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    expect(styleSets("fillStyle")).not.toContain(PETAL_PINK);
+    view.destroy();
+  });
+});
+
+describe("1.3 视觉契约 · 将军红光与结算仪式", () => {
+  it("reduce 下将军警告是静态描边：两帧的红光值一模一样且不消失", () => {
+    const { view } = makeView(true);
+    view.update({ checkSide: "red" });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const first = styleSets("strokeStyle").filter((v) => v.startsWith("rgba(226,60,45"));
+    expect(first.length).toBeGreaterThan(0);
+    expect(first.some((v) => v.includes("0.85"))).toBe(true);
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const second = styleSets("strokeStyle").filter((v) => v.startsWith("rgba(226,60,45"));
+    expect(second).toEqual(first);
+    view.destroy();
+  });
+
+  it("动效模式将军红光在呼吸：相邻两帧透明度不同", () => {
+    const { view } = makeView();
+    view.update({ checkSide: "red" });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const first = styleSets("strokeStyle").filter((v) => v.startsWith("rgba(226,60,45"));
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const second = styleSets("strokeStyle").filter((v) => v.startsWith("rgba(226,60,45"));
+    expect(first.length).toBeGreaterThan(0);
+    expect(second).not.toEqual(first);
+    view.destroy();
+  });
+
+  it("印章盖「胜」：盖到一半有金色微尘，reduce 直接盖好没有微尘", () => {
+    const a = makeView();
+    a.view.stampSeal("胜");
+    ctxCalls.length = 0;
+    flushFrames(dom, 1); // 50ms / 400ms，盖到一半
+    expect(ctxCalls.some((c) => c.m === "fillText" && c.a[0] === "胜")).toBe(true);
+    expect(styleSets("fillStyle")).toContain(FRAME_GOLD);
+    a.view.destroy();
+    const b = makeView(true);
+    b.view.stampSeal("胜");
+    ctxCalls.length = 0;
+    flushFrames(dom, 2); // 第一帧是 A 视图 destroy 后留下的死帧，第二帧才轮到 B
+    expect(ctxCalls.some((c) => c.m === "fillText" && c.a[0] === "胜")).toBe(true);
+    expect(styleSets("fillStyle")).not.toContain(FRAME_GOLD);
+    b.view.destroy();
+  });
+
+  it("将杀结算：胜方帅画在变暗层之上并跳起两下", () => {
+    const { view } = makeView();
+    view.update({ dim: true, winSide: "red" });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const dimIdx = ctxCalls.findIndex((c) => c.m === "set:fillStyle" && c.a[0] === "rgba(40,25,10,.28)");
+    expect(dimIdx).toBeGreaterThanOrEqual(0);
+    const after = ctxCalls.slice(dimIdx).filter((c) => c.m === "drawImage");
+    expect(after.length).toBe(1); // 变暗之后只补画胜方的帅
+    const cy = (after[0].a[2] as number) + (after[0].a[4] as number) / 2;
+    const cx = (after[0].a[1] as number) + (after[0].a[3] as number) / 2;
+    expect(Math.abs(cx - px(4))).toBeLessThan(0.01);
+    expect(cy).toBeLessThan(py(9) - 1); // 跳起来了
+    view.destroy();
+  });
+
+  it("reduce 下胜方帅不跳：稳稳站在九宫的交叉点上", () => {
+    const { view } = makeView(true);
+    view.update({ dim: true, winSide: "red" });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1);
+    const dimIdx = ctxCalls.findIndex((c) => c.m === "set:fillStyle" && c.a[0] === "rgba(40,25,10,.28)");
+    const after = ctxCalls.slice(dimIdx).filter((c) => c.m === "drawImage");
+    expect(after.length).toBe(1);
+    const cy = (after[0].a[2] as number) + (after[0].a[4] as number) / 2;
+    expect(Math.abs(cy - py(9))).toBeLessThan(0.001);
+    view.destroy();
   });
 });

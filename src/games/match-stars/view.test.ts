@@ -7,11 +7,32 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mulberry32 } from "../level99";
-import { EMPTY, ROCKET_H, makeCellset, shuffleOn, type Cellset } from "./board";
+import { EMPTY, RAINBOW, ROCKET_H, makeCellset, shuffleOn, type Cellset } from "./board";
 import { applyPlan, detonatePlan, planRound } from "./duel";
 import { El, flushFrames, installDom, restoreDom, runUntil, type Dom } from "./domStub";
-import { boardBleed, boardWidthAt, cellPitch, createStage, type Stage, type TokenSkin } from "./view";
-import type { Phase } from "./anim";
+import {
+  boardBleed,
+  boardWidthAt,
+  cellPitch,
+  chainPopText,
+  createStage,
+  CSS,
+  type Stage,
+  type TokenSkin,
+} from "./view";
+import { timings, type Phase } from "./anim";
+import {
+  celebrationHTML,
+  gearSVG,
+  rainbowStarSVG,
+  specialOverlaySVG,
+  STAR_STYLES,
+  starTokenSVG,
+  themeClassOf,
+  tokenSVG,
+  type GearKind,
+  type SpecialKind,
+} from "./art";
 
 const COLS = 4;
 const ROWS = 4;
@@ -413,5 +434,364 @@ describe("没有「一次 render 直达终态」的后门", () => {
     expect(h.stage.phase()).toBe("idle");
     expect(h.cell.grid).toEqual(frozen);
     expect(h.stage.movingCount()).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1.3 视觉契约:棋盘上不再有 emoji 占位,全部换成绘制资产
+// ---------------------------------------------------------------------------
+
+/** 常用的 emoji 探测:棋子 / 机关 / 特殊块以前用的那几个字符,一个都不许再出现在绘制层 */
+const EMOJI_RE = /[⭐💖🍀🌙🍊🌈🧊🌿🍥🧱➡️⬇️💥]/u;
+
+function tileAt(h: Harness, i: number): El {
+  return (h.stage.board as unknown as El).children[i].querySelector(".mst-tile")!;
+}
+
+function gearAt(h: Harness, i: number): El {
+  return (h.stage.board as unknown as El).children[i].querySelector(".mst-gear")!;
+}
+
+function fxCount(cls: string): number {
+  return dom.root.findAll((e) => e.className.split(/\s+/).includes(cls)).length;
+}
+
+describe("1.3 视觉契约 · 棋子是 SVG 星星家族", () => {
+  it("tile 里是 SVG 节点，不再是 emoji 文本", () => {
+    const h = mk([0, 1, 2]);
+    for (const i of [0, 5, 12, 15]) {
+      const tile = tileAt(h, i);
+      expect(tile.querySelector("svg")).toBeTruthy();
+      expect(EMOJI_RE.test(tile.textContent)).toBe(false);
+    }
+  });
+
+  it("六色 SVG 互不相同，且六种轮廓（第二辨识通道）互不相同", () => {
+    const svgs = [0, 1, 2, 3, 4, 5].map((c) => starTokenSVG(c));
+    for (let a = 0; a < svgs.length; a++) {
+      for (let b = a + 1; b < svgs.length; b++) expect(svgs[a]).not.toBe(svgs[b]);
+    }
+    const shapes = new Set(svgs.map((s) => /mst-star-([a-z]+)/.exec(s)?.[1]));
+    expect(shapes.size).toBe(6);
+    expect(new Set(STAR_STYLES.map((s) => s.shape)).size).toBe(6);
+    expect(new Set(STAR_STYLES.map((s) => s.base)).size).toBe(6);
+    // 每颗都有渐变主体 + 高光 + 一张脸
+    for (const s of svgs) {
+      expect(s).toContain("linearGradient");
+      expect(s).toContain("mst-gloss");
+      expect(s).toContain("mst-face");
+    }
+  });
+
+  it("彩虹星是七彩渐变大星 + 白芯 + 皇冠，带缓慢旋转类（不再是 🌈）", () => {
+    const h = mk([0, 1, 2]);
+    h.cell.grid[0] = RAINBOW;
+    h.stage.paint();
+    const tile = tileAt(h, 0);
+    expect(tile.querySelector("svg")).toBeTruthy();
+    expect(tile.innerHTML).toContain("mst-rainbowstar");
+    expect(tile.innerHTML).toContain("mst-spin");
+    expect(tile.textContent).not.toContain("🌈");
+    const svg = rainbowStarSVG();
+    expect(svg).toContain("mst-ovl-crown");
+    expect((svg.match(/<stop /g) ?? []).length).toBeGreaterThanOrEqual(7);
+    expect(CSS).toContain("mst-spin 6s linear infinite");
+  });
+});
+
+describe("1.3 视觉契约 · 特殊块画进 SVG，不再是双字符拼接", () => {
+  it("四种 overlay 互不相同，且都是矢量标记不是 emoji", () => {
+    const kinds: SpecialKind[] = [1, 2, 3, 4];
+    const svgs = kinds.map((k) => specialOverlaySVG(k));
+    for (let a = 0; a < svgs.length; a++) {
+      for (let b = a + 1; b < svgs.length; b++) expect(svgs[a]).not.toBe(svgs[b]);
+    }
+    for (const s of svgs) {
+      expect(s.startsWith("<g")).toBe(true);
+      expect(EMOJI_RE.test(s)).toBe(false);
+    }
+  });
+
+  it("盘面上的火箭 / 炸弹是单个 SVG，图案叠在星星里", () => {
+    const h = mk([0, 1, 2]);
+    h.cell.special[5] = 1;
+    h.cell.special[6] = 2;
+    h.cell.special[9] = 3;
+    h.stage.paint();
+    expect(tileAt(h, 5).innerHTML).toContain("mst-ovl-h");
+    expect(tileAt(h, 6).innerHTML).toContain("mst-ovl-v");
+    expect(tileAt(h, 9).innerHTML).toContain("mst-ovl-bomb");
+    for (const i of [5, 6, 9]) {
+      expect(EMOJI_RE.test(tileAt(h, i).textContent)).toBe(false);
+      // 一格只有一张 SVG,不是「emoji+emoji」两截字符
+      expect((tileAt(h, i).innerHTML.match(/<svg/g) ?? []).length).toBe(1);
+    }
+    // 炸弹是圆润卡通造型:圆主体 + 引线 + 火花点
+    expect(tokenSVG(0, 3)).toContain("mst-star-bomb");
+  });
+});
+
+describe("1.3 视觉契约 · 机关是绘制的罩层", () => {
+  it("冰 / 藤 / 霜两档 / 砖五种 gear SVG 互不相同且无 emoji", () => {
+    const kinds: GearKind[] = ["ice", "vine", "frost1", "frost2", "brick"];
+    const svgs = kinds.map((k) => gearSVG(k));
+    for (let a = 0; a < svgs.length; a++) {
+      for (let b = a + 1; b < svgs.length; b++) expect(svgs[a]).not.toBe(svgs[b]);
+    }
+    for (const s of svgs) {
+      expect(s).toContain("<svg");
+      expect(EMOJI_RE.test(s)).toBe(false);
+    }
+    // 样式表里也不许再藏 emoji 角标
+    expect(EMOJI_RE.test(CSS)).toBe(false);
+  });
+
+  it("盘面上的机关格挂的是 SVG 罩层节点", () => {
+    const h = mk([0, 1, 2]);
+    const c = h.cell as Cellset & { ice?: boolean[]; vine?: boolean[]; frost?: number[] };
+    c.ice = new Array(16).fill(false);
+    c.vine = new Array(16).fill(false);
+    c.frost = new Array(16).fill(0);
+    c.ice[5] = true;
+    c.fixed[5] = true;
+    c.vine[6] = true;
+    c.frost[9] = 1;
+    c.frost[10] = 2;
+    h.stage.paint();
+    expect(gearAt(h, 5).innerHTML).toContain("mst-gear-ice");
+    expect(gearAt(h, 6).innerHTML).toContain("mst-gear-vine");
+    expect(gearAt(h, 9).innerHTML).toContain("mst-gear-frost1");
+    expect(gearAt(h, 10).innerHTML).toContain("mst-gear-frost2");
+    for (const i of [5, 6, 9, 10]) expect(gearAt(h, i).querySelector("svg")).toBeTruthy();
+    // 机关清掉之后罩层跟着摘掉
+    c.ice[5] = false;
+    c.fixed[5] = false;
+    h.stage.paint();
+    expect(gearAt(h, 5).querySelector("svg")).toBeNull();
+  });
+
+  it("破冰碎 3 片、解藤飘叶子（都是粒子，reduced 一片都不出）", () => {
+    const h = mk([0, 1, 2]);
+    const c = h.cell as Cellset & { ice?: boolean[]; vine?: boolean[] };
+    c.ice = new Array(16).fill(false);
+    c.vine = new Array(16).fill(false);
+    c.ice[5] = true;
+    c.fixed[5] = true;
+    c.vine[6] = true;
+    h.stage.paint();
+    c.ice[5] = false;
+    c.fixed[5] = false;
+    c.vine[6] = false;
+    h.stage.paint();
+    expect(fxCount("mst-p-shard")).toBe(3);
+    expect(fxCount("mst-p-leaf")).toBe(2);
+  });
+});
+
+describe("1.3 视觉契约 · 时间线特效（时序不变）", () => {
+  it("时长表一格没动：boom/fall/land/belt 的节奏和 1.2 完全一致", () => {
+    expect(timings(false)).toEqual({
+      swapMs: 140,
+      boomMs: 200,
+      perCellMs: 70,
+      staggerMs: 20,
+      landMs: 90,
+      beltMs: 200,
+      settleMs: 120,
+    });
+    const calm = timings(true);
+    for (const v of Object.values(calm)) expect(v).toBeLessThanOrEqual(16);
+  });
+
+  it("爆开时迸星屑，全场粒子总数永远 ≤ 30，收场后清干净", () => {
+    const h = mk([0, 1, 2]);
+    h.stage.tap(12);
+    h.stage.tap(13);
+    expect(runUntil(dom, () => fxCount("mst-p-spark") > 0, 60)).toBeGreaterThanOrEqual(0);
+    let peak = 0;
+    for (let f = 0; f < 400 && h.stage.busy(); f++) {
+      flushFrames(dom, 1);
+      peak = Math.max(peak, fxCount("mst-p-spark") + fxCount("mst-p-dust"));
+      expect(fxCount("mst-p-spark") + fxCount("mst-p-dust")).toBeLessThanOrEqual(30);
+    }
+    expect(peak).toBeGreaterThan(0);
+    flushFrames(dom, 60);
+    expect(fxCount("mst-p-spark") + fxCount("mst-p-dust")).toBe(0);
+  });
+
+  it("一次消掉 ≥ 5 颗才放冲击波环", () => {
+    const h = mk([0, 1, 2]);
+    // 摆一个 L 形:换 12/13 之后第 1 列竖三连 + 第 3 行横三连,共 5 颗
+    h.cell.grid = [
+      1, 2, 3, 2,
+      2, 0, 3, 4,
+      3, 0, 1, 2,
+      0, 4, 0, 0,
+    ];
+    h.stage.paint();
+    h.stage.tap(12);
+    h.stage.tap(13);
+    expect(runUntil(dom, () => fxCount("mst-ring") > 0, 80)).toBeGreaterThanOrEqual(0);
+    settle(h);
+    // 普通三连不放环
+    const g = mk([0, 1, 2]);
+    g.stage.tap(12);
+    g.stage.tap(13);
+    let seenRing = false;
+    for (let f = 0; f < 400 && g.stage.busy(); f++) {
+      flushFrames(dom, 1);
+      if (fxCount("mst-ring") > 0) seenRing = true;
+    }
+    expect(seenRing).toBe(false);
+  });
+
+  it("下落拖一帧极淡残影，落地扬微尘", () => {
+    const h = mk([0, 1, 2]);
+    h.stage.tap(12);
+    h.stage.tap(13);
+    runUntil(dom, () => h.stage.phase() === "fall", 60);
+    flushFrames(dom, 3);
+    const ghosts = (h.stage.board as unknown as El).findAll((e) =>
+      e.className.split(/\s+/).includes("mst-ghost")
+    );
+    expect(ghosts.some((g) => g.style.opacity === "0.22")).toBe(true);
+    runUntil(dom, () => h.stage.phase() === "land", 200);
+    expect(fxCount("mst-p-dust")).toBeGreaterThan(0);
+    settle(h);
+    // 稳定后残影全部熄灭
+    expect(ghosts.some((g) => g.style.opacity === "0.22")).toBe(false);
+  });
+
+  it("连锁 ≥ 3 才弹「连锁 ×N」花体字", () => {
+    expect(chainPopText(1)).toBe("");
+    expect(chainPopText(2)).toBe("");
+    expect(chainPopText(3)).toBe("连锁 ×3");
+    // 喂三轮必连的补块:第 0 列先 4,4,4 再 3,3,3,凑出三连锁
+    const h = mk([4, 4, 4, 3, 3, 3, 0, 1, 2]);
+    h.stage.tap(12);
+    h.stage.tap(13);
+    expect(
+      runUntil(dom, () => fxCount("mst-chainpop") > 0, 400)
+    ).toBeGreaterThanOrEqual(0);
+    const pop = dom.root.find((e) => e.className.includes("mst-chainpop"))!;
+    expect(pop.textContent).toBe("连锁 ×3");
+    settle(h);
+    flushFrames(dom, 60);
+    expect(fxCount("mst-chainpop")).toBe(0);
+  });
+
+  it("传送带虚线换成流动箭头纹，样式随 reduced 静止", () => {
+    expect(CSS).toContain(".mst-cell.mst-belt::after");
+    expect(CSS).toContain("@keyframes mst-flow");
+    expect(CSS).toContain("mst-belt-rev");
+    expect(CSS).not.toContain("dashed");
+    expect(CSS).toContain(".mst-reduced .mst-spin,.mst-reduced .mst-cell.mst-belt::after");
+  });
+});
+
+describe("1.3 视觉契约 · 读屏文案钉死不变", () => {
+  it("describe() 仍然用 token 的 emoji 名报格子（第 N 行第 N 列，名字）", () => {
+    const h = mk([0, 1, 2]);
+    const board = h.stage.board as unknown as El;
+    // START[12] = 0 → ⭐;START[1] = 3 → 🌙
+    expect(board.children[12].getAttribute("aria-label")).toBe("第 4 行第 1 列，⭐");
+    expect(board.children[1].getAttribute("aria-label")).toBe("第 1 行第 2 列，🌙");
+    h.cell.grid[0] = RAINBOW;
+    h.stage.paint();
+    expect(board.children[0].getAttribute("aria-label")).toBe("第 1 行第 1 列，彩虹星");
+  });
+});
+
+describe("1.3 视觉契约 · reduced 全链路", () => {
+  function calmHarness(): Harness {
+    restoreDom();
+    dom = installDom(360, true);
+    return mk([4, 4, 4, 3, 3, 3, 0, 1, 2], true);
+  }
+
+  it("reduced 下粒子为 0：星屑 / 微尘 / 冲击波 / 残影一个都不出", () => {
+    const h = calmHarness();
+    expect((h.stage.root as unknown as El).className).toContain("mst-reduced");
+    h.stage.tap(12);
+    h.stage.tap(13);
+    for (let f = 0; f < 200 && h.stage.busy(); f++) {
+      flushFrames(dom, 1);
+      expect(fxCount("mst-p-spark")).toBe(0);
+      expect(fxCount("mst-p-dust")).toBe(0);
+      expect(fxCount("mst-ring")).toBe(0);
+      const ghosts = (h.stage.board as unknown as El).findAll((e) =>
+        e.className.split(/\s+/).includes("mst-ghost")
+      );
+      expect(ghosts.some((g) => g.style.opacity === "0.22")).toBe(false);
+    }
+  });
+
+  it("reduced 下 land 段照走但不形变（1.2 的口径回归）", () => {
+    const h = calmHarness();
+    h.stage.tap(12);
+    h.stage.tap(13);
+    let sawLand = false;
+    for (let f = 0; f < 200 && h.stage.busy(); f++) {
+      flushFrames(dom, 1);
+      if (h.stage.phase() === "land") {
+        sawLand = true;
+        const board = h.stage.board as unknown as El;
+        for (const btn of board.children) {
+          const tile = btn.querySelector(".mst-tile")!;
+          expect(tile.style.transform ?? "").not.toMatch(/scale/);
+        }
+      }
+    }
+    expect(sawLand).toBe(true);
+  });
+
+  it("正常模式 land 段确实压扁回弹（有 scale），旋转 / 流动在 reduced 媒询里静止", () => {
+    const h = mk([0, 1, 2]);
+    h.stage.tap(12);
+    h.stage.tap(13);
+    runUntil(dom, () => h.stage.phase() === "land", 200);
+    flushFrames(dom, 2);
+    const board = h.stage.board as unknown as El;
+    const squashed = board.children.some((btn) =>
+      /scale\(0\.9/.test(btn.querySelector(".mst-tile")!.style.transform ?? "")
+    );
+    expect(squashed).toBe(true);
+    expect(CSS).toContain("@media (prefers-reduced-motion:reduce)");
+    expect(CSS).toMatch(/prefers-reduced-motion[\s\S]*animation:none/);
+  });
+});
+
+describe("1.3 视觉契约 · 主题查表与结算仪式", () => {
+  it("背景按关卡段换主题：晨光 → 森林 → 星夜", () => {
+    expect(themeClassOf(0)).toBe("mst-theme-dawn");
+    expect(themeClassOf(62)).toBe("mst-theme-dawn");
+    expect(themeClassOf(63)).toBe("mst-theme-forest");
+    expect(themeClassOf(125)).toBe("mst-theme-forest");
+    expect(themeClassOf(126)).toBe("mst-theme-night");
+    expect(themeClassOf(187)).toBe("mst-theme-night");
+    for (const t of ["dawn", "forest", "night"]) expect(CSS).toContain(`.mst-wrap.mst-theme-${t}`);
+  });
+
+  it("过关仪式：三星逐颗砸下（0.15s 间隔 + easeOutBack），星屑雨 ≤ 20", () => {
+    const html = celebrationHTML(2, false);
+    expect((html.match(/mst-cheer-star/g) ?? []).length).toBe(3);
+    expect((html.match(/mst-lit/g) ?? []).length).toBe(2);
+    expect((html.match(/mst-dim/g) ?? []).length).toBe(1);
+    expect(html).toContain("animation-delay:0.00s");
+    expect(html).toContain("animation-delay:0.15s");
+    expect(html).toContain("animation-delay:0.30s");
+    expect((html.match(/mst-rain/g) ?? []).length).toBeLessThanOrEqual(20);
+    expect((html.match(/mst-rain/g) ?? []).length).toBeGreaterThan(0);
+    expect(CSS).toContain("cubic-bezier(.34,1.56,.64,1)");
+    // reduced:雨为 0、星星直亮
+    const calm = celebrationHTML(3, true);
+    expect(calm).not.toContain("mst-rain");
+    expect((calm.match(/mst-lit/g) ?? []).length).toBe(3);
+    expect(CSS).toContain(".mst-reduced .mst-cheer-star");
+  });
+
+  it("失败棋盘灰化的样式在（温柔收场，不闪不吓）", () => {
+    expect(CSS).toContain(".mst-gray");
+    expect(CSS).toMatch(/mst-gray\{filter:grayscale/);
   });
 });

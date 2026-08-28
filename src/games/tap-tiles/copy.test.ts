@@ -135,6 +135,7 @@ describe("音符下落 · 源码巡检", () => {
     expect(sourceFiles.sort()).toEqual(
       [
         "ai.ts",
+        "art.ts",
         "audio.ts",
         "chart.ts",
         "domStub.ts",

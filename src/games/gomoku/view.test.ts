@@ -3,8 +3,25 @@
 // （那会把整页的滚动吞掉）。
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeBoard, setCell } from "./ai";
-import { installDom, restoreDom, windowListenerCount, type Dom, type El } from "./domStub";
-import { CSS, MIN_HIT_PX, VIEW_W, createBoardView } from "./view";
+import { ctxCalls, flushFrames, installDom, restoreDom, windowListenerCount, type Dom, type El } from "./domStub";
+import { paintStone } from "./art";
+import {
+  CSS,
+  DROP_MS,
+  FORBID_MS,
+  MIN_HIT_PX,
+  RIPPLE_MS,
+  VIEW_W,
+  WIN_JUMP_GAP_MS,
+  WIN_JUMP_MS,
+  WIN_SWEEP_MS,
+  createBoardView,
+  dropScaleAt,
+  forbiddenShakeAt,
+  hintPulse,
+  sweepProgressAt,
+  winJumpOffset,
+} from "./view";
 
 let dom: Dom;
 
@@ -278,5 +295,139 @@ describe("360px 上的热区", () => {
     for (const sel of [".gmk-btns button", ".gmk-seg button", ".gmk-mode", ".gmk-over-btn", ".gmk-start"]) {
       expect(hitHeight(ruleBody(sel)), `${sel} 不到 44px`).toBeGreaterThanOrEqual(MIN_HIT_PX);
     }
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * 1.3 视觉契约：只改观感不改手感 —— 绘制路径、动画公式、reduced 降级逐条锁死。
+ * ------------------------------------------------------------------------- */
+
+describe("1.3 视觉契约 · 绘制路径", () => {
+  it("一帧 draw() 绘制非空，棋子走 sprite/渐变路径（drawImage 或 createRadialGradient）", () => {
+    const board = makeBoard(15);
+    setCell(board, 7, 7, 1);
+    setCell(board, 8, 7, 2);
+    const { view } = mountView(15);
+    view.update({ board, size: 15 });
+    ctxCalls.length = 0;
+    flushFrames(dom, 1, 16);
+    expect(ctxCalls.length).toBeGreaterThan(0);
+    expect(ctxCalls.includes("drawImage") || ctxCalls.includes("createRadialGradient")).toBe(true);
+    view.destroy();
+  });
+
+  it("黑白子绘制配方不同（渐变三档逐档不等，色弱也分得清）", () => {
+    const stopsOf = (p: 1 | 2): string[] => {
+      const got: string[] = [];
+      const grad = { addColorStop: (_o: number, c: string) => void got.push(c) };
+      const rec = new Proxy(
+        {},
+        {
+          get: (_t, k) => (k === "createRadialGradient" || k === "createLinearGradient" ? () => grad : () => undefined),
+          set: () => true,
+        }
+      ) as unknown as CanvasRenderingContext2D;
+      paintStone(rec, 0, 0, 10, p);
+      return got;
+    };
+    const black = stopsOf(1);
+    const white = stopsOf(2);
+    expect(black.length).toBe(3);
+    expect(white.length).toBe(3);
+    for (let i = 0; i < 3; i++) expect(black[i]).not.toBe(white[i]);
+  });
+
+  it("bloom 之后一帧画得出金花（谜题过关的目标点开花标记）", () => {
+    const { view } = mountView(9);
+    view.bloom(4, 4);
+    ctxCalls.length = 0;
+    flushFrames(dom, 3, 60);
+    // 空盘上唯一的 ellipse 只可能来自金花的五片花瓣
+    expect(ctxCalls.includes("ellipse")).toBe(true);
+    view.destroy();
+  });
+});
+
+describe("1.3 视觉契约 · 动画公式回归（改版前后同输入同输出）", () => {
+  it("dropScale 公式一毫米没动：1.5 倍砸下、easeOutBack 回弹", () => {
+    expect(DROP_MS).toBe(220);
+    expect(dropScaleAt(0)).toBeCloseTo(1.5, 8);
+    expect(dropScaleAt(0.25)).toBeCloseTo(1.25796625, 6);
+    expect(dropScaleAt(0.5)).toBeCloseTo(1.00342201, 6);
+    expect(dropScaleAt(0.75)).toBeCloseTo(0.89557562, 6);
+    expect(dropScaleAt(0.9)).toBeCloseTo(0.88099699, 6);
+    expect(dropScaleAt(1)).toBe(1);
+    expect(dropScaleAt(1.5)).toBe(1);
+    expect(dropScaleAt(-0.1)).toBe(1);
+  });
+
+  it("胜利线扫光时序回归：WIN_SWEEP_MS 不变、进度线性到 1 封顶", () => {
+    expect(WIN_SWEEP_MS).toBe(620);
+    expect(sweepProgressAt(0)).toBe(0);
+    expect(sweepProgressAt(310)).toBeCloseTo(0.5, 8);
+    expect(sweepProgressAt(620)).toBe(1);
+    expect(sweepProgressAt(5000)).toBe(1);
+    expect(sweepProgressAt(-50)).toBe(0);
+  });
+
+  it("禁手红叉抖动衰减回归：正弦抖 + 线性衰减到 0", () => {
+    expect(FORBID_MS).toBe(1400);
+    expect(forbiddenShakeAt(100)).toBeCloseTo(1.22259309, 6);
+    expect(forbiddenShakeAt(400)).toBeCloseTo(-0.85489032, 6);
+    expect(forbiddenShakeAt(1200)).toBeCloseTo(-0.31052422, 6);
+    expect(forbiddenShakeAt(1400)).toBeCloseTo(0, 8);
+    expect(Math.abs(forbiddenShakeAt(1200))).toBeLessThan(Math.abs(forbiddenShakeAt(100)));
+  });
+
+  it("提示区脉动幅度减半（±0.04），reduced 下静止在 0.16", () => {
+    expect(hintPulse(123, true)).toBe(0.16);
+    expect(hintPulse(98765, true)).toBe(0.16);
+    let maxDev = 0;
+    for (let t = 0; t < 3000; t += 37) maxDev = Math.max(maxDev, Math.abs(hintPulse(t, false) - 0.16));
+    expect(maxDev).toBeLessThanOrEqual(0.04 + 1e-9);
+    expect(maxDev).toBeGreaterThan(0.03);
+  });
+
+  it("胜利仪式跳子：扫完才跳、逐颗错开 60ms、reduced 不跳", () => {
+    const c = 24;
+    expect(WIN_JUMP_MS).toBe(150);
+    expect(WIN_JUMP_GAP_MS).toBe(60);
+    expect(winJumpOffset(-10, 0, c, false)).toBe(0);
+    expect(winJumpOffset(WIN_JUMP_MS / 2, 0, c, false)).toBeCloseTo(-c * 0.3, 6);
+    expect(winJumpOffset(WIN_JUMP_MS / 2, 4, c, false)).toBe(0);
+    expect(winJumpOffset(WIN_JUMP_MS / 2 + WIN_JUMP_GAP_MS, 1, c, false)).toBeCloseTo(-c * 0.3, 6);
+    expect(winJumpOffset(WIN_JUMP_MS + 500, 0, c, false)).toBe(0);
+    expect(winJumpOffset(WIN_JUMP_MS / 2, 0, c, true)).toBe(0);
+  });
+});
+
+describe("1.3 视觉契约 · 落定波纹", () => {
+  it("回弹结束瞬间出现一圈波纹，0.25s 后散尽", () => {
+    const board = makeBoard(9);
+    setCell(board, 4, 4, 1);
+    const { view } = mountView(9);
+    view.update({ board, size: 9 });
+    view.drop(4, 4);
+    expect(view.ripplesActive()).toBe(0);
+    flushFrames(dom, 4, 60); // 越过 DROP_MS = 220
+    expect(view.ripplesActive()).toBe(1);
+    flushFrames(dom, 5, 60); // 再越过 RIPPLE_MS = 250
+    expect(view.ripplesActive()).toBe(0);
+    expect(RIPPLE_MS).toBe(250);
+    view.destroy();
+  });
+
+  it("reduced 下波纹一个也不产生", () => {
+    (globalThis as { matchMedia?: unknown }).matchMedia = (q: string) => ({ matches: q.includes("reduce") });
+    const board = makeBoard(9);
+    setCell(board, 4, 4, 1);
+    const { view } = mountView(9);
+    view.update({ board, size: 9 });
+    view.drop(4, 4);
+    for (let i = 0; i < 9; i++) {
+      flushFrames(dom, 1, 60);
+      expect(view.ripplesActive()).toBe(0);
+    }
+    view.destroy();
   });
 });

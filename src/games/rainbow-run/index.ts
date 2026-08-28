@@ -76,7 +76,7 @@ import {
   wouldHit,
   zapperActive,
 } from "./logic";
-import type { ThemeStyle } from "./logic";
+import type { Theme, ThemeStyle } from "./logic";
 import {
   COYOTE_TIME,
   RunInput,
@@ -191,6 +191,46 @@ import {
   serializeSkipList,
 } from "./campaign";
 import type { RunnerBoosts } from "./campaign";
+import {
+  CoinSprite,
+  HEADBAND_P1,
+  PARALLAX_THEMES,
+  RunnerPose,
+  blinkHidden,
+  coinFrameAt,
+  coinLOD,
+  coinSweepPhase,
+  drawBoardArt,
+  drawBoardIcon,
+  drawBoltIcon,
+  drawCoin,
+  drawCoinDot,
+  drawCoinFrame,
+  drawCoinSweep,
+  drawContactShadow,
+  drawHeartPip,
+  drawJetFlame,
+  drawJetIcon,
+  drawMagnetIcon,
+  drawNoteChip,
+  drawObstacleArt,
+  drawPowerIcon,
+  drawRunner,
+  drawRunnerAfterimage,
+  drawSilhouetteUnit,
+  drawStarPickup,
+  makeCoinSprite,
+  pickupFloat,
+  titleFitPx,
+  worldDotsLit,
+  drawMiniStar,
+  drawPadlock,
+  drawFinishFlag,
+  drawStopwatchBadge,
+  drawInfinityBadge,
+  drawTargetBadge,
+  drawForkArrow,
+} from "./art";
 import { touchArea } from "./touch";
 import type { Rect } from "./touch";
 import { save } from "../../engine/save";
@@ -251,6 +291,8 @@ interface Puff {
   y: number;
   life: number;
   color: string;
+  /** 星屑:画成小星星而不是圆点(吃到星币时撒的那三粒) */
+  star?: boolean;
 }
 
 interface Floaty {
@@ -399,6 +441,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
   root.appendChild(canvas);
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
 
+  // 星币旋转帧:预渲染 8 帧到离屏画布,之后每帧只 drawImage(4 倍超采样,贴近镜头也不糊)
+  const coinSprite: CoinSprite = makeCoinSprite(10, 4, (cw, chh) => {
+    const c = document.createElement("canvas");
+    c.width = cw;
+    c.height = chh;
+    return c;
+  });
+
   let w = 640;
   let h = 480;
   let cam: Camera = makeCamera(w, h);
@@ -449,6 +499,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
   let speed = 250;
   let scrollPhase = 0;
   let shake = 0;
+  /** 撞了一下:接下来 0.3 秒换 × 眼(只影响表情,不影响判定) */
+  let hurtFlash = 0;
   let magnetTimer = 0;
   let jetTimer = 0;
   let boardTimer = 0;
@@ -456,6 +508,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
   let jumpElapsed = 0;
   let jumpJudged = false;
   let perfectStreak = 0;
+  /** 这一趟连着跳出过的最长完美串(只进结算面板,不进任何判定) */
+  let bestStreak = 0;
   let reviveUsed = false;
   /** 宠物「绵绵」白送的那一次接住,不花星星 */
   let petReviveLeft = 0;
@@ -518,6 +572,10 @@ export function mount(api: GameAPI): RainbowRunHandle {
   const pickups: Pickup[] = [];
   const puffs: Puff[] = [];
   const floats: Floaty[] = [];
+  /** 里程碑横幅一共停留多久(秒)。 */
+  const BANNER_TIME = 0.8;
+  /** 换世界时的里程碑横幅(无尽专用,纯演出)。 */
+  let banner: { title: string; world: Theme; accent: string; t: number } | null = null;
   // 画之前按深度排一次序,远的先画;复用同一对数组,不每帧新建
   const drawOrder: Obstacle[] = [];
   const pickOrder: Pickup[] = [];
@@ -550,7 +608,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     powerups: ["magnet", "jet", "board"],
     mission: { type: "coins", n: 999999 },
     feature: "endless",
-    hint: "一直跑一直跑!吃金币躲障碍,每 1600 米换一个世界,越跑越快!",
+    hint: "一直跑一直跑!吃糖果币躲障碍,每 1600 米换一个世界,越跑越快!",
   };
 
   const mapNodes: Array<{ idx: number; x: number; y: number; r: number }> = [];
@@ -759,7 +817,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     if (state.finished) ghostAlive = false;
   }
 
-  /** 无尽跑:根据当前距离切换主题世界(换世界时广播一下)。 */
+  /** 无尽跑:根据当前距离切换主题世界(换世界时拉一条里程碑横幅)。 */
   function syncEndlessTheme(): void {
     const stage = Math.floor(dist / ENDLESS_STAGE_LEN) % THEME_ORDER.length;
     const world = THEME_ORDER[stage];
@@ -770,7 +828,13 @@ export function mount(api: GameAPI): RainbowRunHandle {
       // 换世界只换皮:待刷的那一段留着不动,免得把必过窗口从中间切断
       if (dist > 50) {
         const st = THEME_STYLE[world];
-        addFloat(w / 2, h * 0.35, `${st.emoji} 进入${st.name}!`, st.accent, true);
+        // 里程碑横幅:「第 N 世界」+ 世界图标从横幅左端飞到右端,0.8 秒收场
+        banner = {
+          title: `第 ${Math.floor(dist / ENDLESS_STAGE_LEN) + 1} 世界 · ${st.name}`,
+          world,
+          accent: st.accent,
+          t: BANNER_TIME,
+        };
         api.play("win");
       }
     }
@@ -800,8 +864,11 @@ export function mount(api: GameAPI): RainbowRunHandle {
     jumpFeel = initJumpFeel();
     jumpBody = groundedBody();
     slideElapsed = 0;
+    hurtFlash = 0;
     perfectStreak = 0;
+    bestStreak = 0;
     forkSign = null;
+    banner = null;
     forkTimer = level().fork ? 5 : Infinity;
     bossBeaten = false;
     reviveUsed = false;
@@ -882,6 +949,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     stats.heartsLost++;
     invincible = 1.5;
     shake = 0.4;
+    hurtFlash = 0.3;
     api.play("oops");
     for (let k = 0; k < particleCount(8, qualityTier); k++) {
       puffs.push({
@@ -1124,6 +1192,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
   function update(dt: number): void {
     time += dt;
     shake = Math.max(0, shake - dt);
+    hurtFlash = Math.max(0, hurtFlash - dt);
     invincible = Math.max(0, invincible - dt);
     magnetTimer = Math.max(0, magnetTimer - dt);
     jetTimer = Math.max(0, jetTimer - dt);
@@ -1138,6 +1207,10 @@ export function mount(api: GameAPI): RainbowRunHandle {
       floats[i].life -= dt;
       floats[i].y -= dt * 34;
       if (floats[i].life <= 0) floats.splice(i, 1);
+    }
+    if (banner) {
+      banner.t -= dt;
+      if (banner.t <= 0) banner = null;
     }
 
     if (phase !== "run") return;
@@ -1319,6 +1392,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
         if (!jumpJudged) {
           jumpJudged = true;
           const perfect = isPerfectJump(jumpElapsed);
+          if (perfect) bestStreak = Math.max(bestStreak, perfectStreak + 1);
           if (completesPerfectRun(perfectStreak, perfect)) {
             stats.perfectRuns = (stats.perfectRuns ?? 0) + 1;
             score += 30;
@@ -1378,9 +1452,22 @@ export function mount(api: GameAPI): RainbowRunHandle {
           puffs.push({ x: p.x, y: p.y, life: 0.5, color: "#ffe387" });
         } else if (p.kind === "coin") {
           stats.coins++;
-          score += Math.round(5 * boosts.coinMul);
+          const gain = Math.round(5 * boosts.coinMul);
+          score += gain;
           api.play("pop");
-          addFloat(p.x, p.y - 20, "+1🍬", "#e05a7a");
+          // 金色 +5 飘字 + 三粒星屑(粒子数走画质分档)。
+          // 散布用确定性偏移,不消耗 Math.random——种子回放的随机流一个数都不能挪
+          for (let k = 0; k < particleCount(3, qualityTier); k++) {
+            const a = (Math.PI * 2 * k) / 3 + p.x * 0.05;
+            puffs.push({
+              x: p.x + Math.cos(a) * 12,
+              y: p.y + Math.sin(a) * 9,
+              life: 0.5,
+              color: "#ffd868",
+              star: true,
+            });
+          }
+          addFloat(p.x, p.y - 20, `+${gain}`, "#e0a030");
           if (endless) chaserGap = chaserBoost(chaserGap, CHASER_COIN_BONUS);
         } else if (p.kind === "rail") {
           railTimer = RAIL_SECONDS;
@@ -1476,32 +1563,30 @@ export function mount(api: GameAPI): RainbowRunHandle {
   }
 
   /**
-   * 远景视差:两三层圆润的小丘挂在地平线上,越远的层跑得越慢、颜色越淡。
-   * 掉帧时从最近那层开始砍,地平线的轮廓不会一下子空掉。
+   * 远景视差:两三层剪影挂在地平线上,越远的层跑得越慢、颜色越淡。
+   * 1.3 起剪影按世界换形状(棒棒糖树 / 棕榈 / 雪杉 / 极光带……),
+   * 层参数、横移与配色公式全部沿用 view3d 的老口径;
+   * 掉帧时仍从最近那层开始砍,地平线的轮廓不会一下子空掉。
    */
-  function drawParallax(theme: ThemeStyle): void {
+  function drawParallax(theme: ThemeStyle, def: LevelDef): void {
     const hy = cam.horizonY;
     const layers = Math.min(PARALLAX_LAYERS.length, QUALITY_TIERS[qualityTier].parallax);
+    const shapes = PARALLAX_THEMES[def.world];
+    const kinds = [shapes.far, shapes.mid, shapes.near] as const;
     for (let i = 0; i < layers; i++) {
       const layer = PARALLAX_LAYERS[i];
       const span = Math.max(48, layer.span * w);
       const shift = parallaxShift(scrollPhase, layer.factor, span);
-      const top = hy - hy * layer.height * 0.55;
+      const topH = hy * layer.height * 0.55;
       // 远景层跟着天色走色温:黄昏偏橘、夜里偏靛,近处的层调得轻一点
       const base = mixHex(theme.skyBottom, theme.accent, 0.2 + i * 0.22);
       ctx.fillStyle = withAlpha(
         mixHex(base, light.tint, light.layerMix * (1 - i * 0.18)),
         layer.alpha,
       );
-      ctx.beginPath();
-      ctx.moveTo(-span * 2, hy + 4);
       for (let x = -span * 2 + shift; x < w + span; x += span) {
-        ctx.lineTo(x, hy + 4);
-        ctx.quadraticCurveTo(x + span * 0.5, top, x + span, hy + 4);
+        drawSilhouetteUnit(ctx, kinds[i], x, span, hy + 4, topH);
       }
-      ctx.lineTo(w + span * 2, hy + 4);
-      ctx.closePath();
-      ctx.fill();
     }
   }
 
@@ -1572,6 +1657,24 @@ export function mount(api: GameAPI): RainbowRunHandle {
       }
     }
 
+    // 彩虹渐变路肩:跑道两侧各一条,顺着透视收向消失点(1.3 新增,纯装饰)
+    const shoulder = ctx.createLinearGradient(0, farY, 0, nearY);
+    const shoulderBands = ["#ff9eb5", "#ffd868", "#8fd8c8", "#9adcf0", "#c9a6f2"];
+    for (let i = 0; i < shoulderBands.length; i++) {
+      shoulder.addColorStop(i / (shoulderBands.length - 1), withAlpha(shoulderBands[i], 0.5));
+    }
+    ctx.fillStyle = shoulder;
+    for (const j of [0, 3]) {
+      const dir = j === 0 ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(edgeX(j, farS) + dir * 3 * farS, farY);
+      ctx.lineTo(edgeX(j, farS) + dir * 9 * farS, farY);
+      ctx.lineTo(edgeX(j, nearS) + dir * 9 * nearS, nearY);
+      ctx.lineTo(edgeX(j, nearS) + dir * 3 * nearS, nearY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
     // 车道分隔线:四条都指向同一个消失点,中间两条画成一段段的虚线
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
     for (let j = 0; j <= 3; j++) {
@@ -1633,15 +1736,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
         ctx.translate(w / 2 + side * off * s, y);
         ctx.scale(s, s);
         ctx.globalAlpha = Math.max(0, 1 - fogAlpha(s));
-        drawDecoShape(theme, def, d);
+        drawDecoShape(theme, def.world, d);
         ctx.restore();
       }
     }
   }
 
-  /** 一个装饰物,画在原点上,缩放交给画布变换。 */
-  function drawDecoShape(theme: ThemeStyle, def: LevelDef, seed: number): void {
-    const world = def.world;
+  /** 一个装饰物,画在原点上,缩放交给画布变换(里程碑横幅也拿它当世界图标)。 */
+  function drawDecoShape(theme: ThemeStyle, world: Theme, seed: number): void {
     if (world === "grass") {
       ctx.fillStyle = theme.deco;
       for (let p = 0; p < 5; p++) {
@@ -1762,22 +1864,39 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.restore();
   }
 
-  /** 一个可以吃的东西,画在原点上。 */
-  function drawPickupShape(p: Pickup, laneW: number): void {
+  /** 一个可以吃的东西,画在原点上(scale 是投影倍率,给星币挑画法用)。 */
+  function drawPickupShape(p: Pickup, laneW: number, scale: number): void {
     if (p.kind === "star") {
-      drawStar(0, 0, 14, "#ffd868");
+      ctx.translate(0, pickupFloat(time, reducedMotion, p.x * 0.13));
+      drawStarPickup(ctx, 14, Math.abs(Math.sin(time * 3 + p.x * 0.02)));
       return;
     }
     if (p.kind === "coin") {
-      ctx.fillStyle = "#ffb84d";
-      ctx.beginPath();
-      ctx.arc(0, 0, 10, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, 6, 0, Math.PI * 2);
-      ctx.stroke();
+      // 360px 红线:投影缩到快看不清时退化成亮点(性能 + 可读)
+      if (coinLOD(scale) === "dot") {
+        drawCoinDot(ctx, 10);
+        return;
+      }
+      // 被磁铁吸着飞的星币,身后拖两帧金色残影
+      if (magnetTimer > 0 && !p.taken) {
+        const dx = laneX(lane) - p.x;
+        const dy = playerY() - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const ghosts: ReadonlyArray<readonly [number, number]> = [
+          [7, 0.3],
+          [14, 0.15],
+        ];
+        for (const [off, alpha] of ghosts) {
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.translate((-dx / d) * off, (-dy / d) * off);
+          drawCoin(ctx, coinSprite, coinFrameAt(time + p.x * 0.01));
+          ctx.restore();
+        }
+      }
+      // 8 帧旋转 sprite:各币相位错开,免得整屏一起翻面
+      drawCoin(ctx, coinSprite, coinFrameAt(time + p.x * 0.01));
+      if (!reducedMotion) drawCoinSweep(ctx, 10, coinSweepPhase(time + p.x * 0.02));
       return;
     }
     if (p.kind === "rail") {
@@ -1798,17 +1917,9 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.stroke();
       return;
     }
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.beginPath();
-    ctx.arc(0, 0, 18, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#c9a6f2";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.font = "18px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(p.kind === "magnet" ? "🧲" : p.kind === "jet" ? "🚀" : "🛹", 0, 1);
+    // 道具泡泡球:渐变球体 + 绘制图标(磁铁 / 火箭 / 滑板),不再用字符占位
+    ctx.translate(0, pickupFloat(time, reducedMotion, p.x * 0.11));
+    drawPowerIcon(ctx, p.kind, 18);
   }
 
   /** 追风棉花云:跟在身后,越近画得越大,近到一定程度整块画面边缘会泛红。 */
@@ -1838,6 +1949,16 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.arc(-9, -10, 3.5, 0, Math.PI * 2);
     ctx.arc(9, -10, 3.5, 0, Math.PI * 2);
     ctx.fill();
+    // 卷云眉毛:外高内低,压出一张生气脸(追近的红晕警告仍在下面)
+    ctx.strokeStyle = "#3a3a4a";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-15, -19);
+    ctx.lineTo(-5, -15);
+    ctx.moveTo(15, -19);
+    ctx.lineTo(5, -15);
+    ctx.stroke();
     ctx.restore();
     if (chaserWarning(chaserGap)) {
       ctx.fillStyle = `rgba(255,138,168,${0.16 + 0.14 * Math.abs(Math.sin(time * 7))})`;
@@ -1845,139 +1966,21 @@ export function mount(api: GameAPI): RainbowRunHandle {
     }
   }
 
+  /**
+   * 障碍换成 1.3 的立面画法(art.ts):顶面 / 立面双色 + 统一接地影。
+   * 滚滚球转速仍旧跟着它在轨道上跑了多远走;电光门通没通电仍由 logic 判。
+   */
   function drawObstacleShape(o: Obstacle, laneW: number): void {
-    const x = 0;
-    const oy = 0;
-    if (o.kind === "rock") {
-      ctx.fillStyle = "#c9a6f2";
-      ctx.beginPath();
-      ctx.ellipse(x, oy, laneW * 0.3, laneW * 0.26, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.beginPath();
-      ctx.arc(x - laneW * 0.1, oy - laneW * 0.08, laneW * 0.07, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (o.kind === "hurdle") {
-      ctx.fillStyle = "#f8f8ff";
-      ctx.strokeStyle = "#e0a8bc";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(x - laneW * 0.32, oy - 10, laneW * 0.64, 20, 8);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(x - laneW * 0.2, oy - 10);
-      ctx.lineTo(x - laneW * 0.2, oy + 10);
-      ctx.moveTo(x + laneW * 0.2, oy - 10);
-      ctx.lineTo(x + laneW * 0.2, oy + 10);
-      ctx.stroke();
-    } else if (o.kind === "bar") {
-      ctx.fillStyle = "#9adcf0";
-      ctx.fillRect(x - laneW * 0.36, oy - 26, 8, 30);
-      ctx.fillRect(x + laneW * 0.36 - 8, oy - 26, 8, 30);
-      const bands = ["#ff9eb5", "#ffd868", "#8fd8c8"];
-      for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = bands[i];
-        ctx.fillRect(x - laneW * 0.36, oy - 26 + i * 6, laneW * 0.72, 6);
-      }
-    } else if (o.kind === "pit") {
-      // 坑洞:深色椭圆 + 裂纹边
-      ctx.fillStyle = "rgba(60,55,90,0.85)";
-      ctx.beginPath();
-      ctx.ellipse(x, oy, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(x, oy, laneW * 0.34, laneW * 0.18, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (o.kind === "roller") {
-      // 滚滚球:带旋转纹路的大圆球
-      const rr = laneW * 0.27;
-      // 转速跟着它在轨道上跑了多远走,不是跟着屏幕位置走
-      const spin = o.y * 0.04;
-      ctx.fillStyle = "#e8a05a";
-      ctx.beginPath();
-      ctx.arc(x, oy, rr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.65)";
-      ctx.lineWidth = 3.5;
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(x, oy, rr * 0.65, spin + (i * Math.PI * 2) / 3, spin + (i * Math.PI * 2) / 3 + 1.1);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "rgba(120,70,30,0.4)";
-      ctx.beginPath();
-      ctx.ellipse(x, oy + rr + 5, rr * 0.9, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (o.kind === "zapper") {
-      // 电光门:两根柱子,通电时中间闪电
-      const active = zapperActive(time, o.phase);
-      const half = laneW * 0.36;
-      ctx.fillStyle = active ? "#ffd868" : "#9a9ab8";
-      ctx.beginPath();
-      ctx.roundRect(x - half - 5, oy - 26, 10, 42, 4);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.roundRect(x + half - 5, oy - 26, 10, 42, 4);
-      ctx.fill();
-      if (active) {
-        ctx.strokeStyle = `rgba(255,238,120,${0.75 + Math.sin(time * 20) * 0.25})`;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(x - half + 5, oy - 6);
-        for (let i = 1; i <= 4; i++) {
-          const zx = x - half + 5 + ((half * 2 - 10) * i) / 4;
-          ctx.lineTo(zx, oy - 6 + (i % 2 === 0 ? 6 : -8));
-        }
-        ctx.stroke();
-        ctx.font = "13px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("⚡", x, oy - 34);
-      }
-    } else if (o.kind === "crate") {
-      // 彩纸箱:方方正正带丝带,下滑铲得碎
-      const s = laneW * 0.3;
-      ctx.fillStyle = "#f2c48a";
-      ctx.beginPath();
-      ctx.roundRect(x - s, oy - s * 0.72, s * 2, s * 1.44, 6);
-      ctx.fill();
-      ctx.strokeStyle = "#c98a4a";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = "#ff9eb5";
-      ctx.fillRect(x - s * 0.16, oy - s * 0.72, s * 0.32, s * 1.44);
-      ctx.fillStyle = "#9adcf0";
-      ctx.fillRect(x - s, oy - s * 0.16, s * 2, s * 0.32);
-    } else {
-      // 云朵怪:飘来飘去的软云
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.beginPath();
-      ctx.arc(x - laneW * 0.16, oy, laneW * 0.15, 0, Math.PI * 2);
-      ctx.arc(x, oy - laneW * 0.08, laneW * 0.18, 0, Math.PI * 2);
-      ctx.arc(x + laneW * 0.16, oy, laneW * 0.15, 0, Math.PI * 2);
-      ctx.arc(x, oy + laneW * 0.06, laneW * 0.16, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#3a3a4a";
-      ctx.beginPath();
-      ctx.arc(x - laneW * 0.06, oy - laneW * 0.03, 3, 0, Math.PI * 2);
-      ctx.arc(x + laneW * 0.06, oy - laneW * 0.03, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#3a3a4a";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, oy + laneW * 0.03, 5, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-    }
+    drawObstacleArt(ctx, o.kind, laneW, {
+      time,
+      spin: o.y * 0.04,
+      active: o.kind === "zapper" && zapperActive(time, o.phase),
+    });
   }
 
   function drawPlayer(): void {
     const pxx = laneX(laneFloat);
     const py = playerY();
-    const blink = invincible > 0 && Math.floor(invincible * 8) % 2 === 0;
-    if (blink) return;
     const jumping = action === "jump";
     const sliding = action === "slide";
     const flying = jetTimer > 0;
@@ -2006,60 +2009,36 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.rotate(tilt);
       ctx.translate(-pxx, -bodyY);
     }
-    if (boardTimer > 0) {
-      // 小滑板
-      ctx.fillStyle = "#c9a6f2";
-      ctx.beginPath();
-      ctx.roundRect(pxx - r * 1.1, bodyY + r * 0.85, r * 2.2, 8, 4);
-      ctx.fill();
-      ctx.fillStyle = "#8a5ac9";
-      ctx.beginPath();
-      ctx.arc(pxx - r * 0.6, bodyY + r * 0.85 + 10, 5, 0, Math.PI * 2);
-      ctx.arc(pxx + r * 0.6, bodyY + r * 0.85 + 10, 5, 0, Math.PI * 2);
-      ctx.fill();
+    ctx.translate(pxx, bodyY);
+    // 无敌闪烁降到 3Hz(光敏红线),隐帧改画两帧金色残影,不再整个人消失
+    if (blinkHidden(invincible)) {
+      drawRunnerAfterimage(ctx, r, sx, sy);
+      ctx.restore();
+      return;
     }
-    if (flying) {
-      // 喷气火花
-      ctx.fillStyle = "#ffd868";
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(pxx - 10 + i * 10, bodyY + r * 1.1 + Math.random() * 12, 4 + Math.random() * 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.fillStyle = "#ffb3c8";
-    ctx.beginPath();
-    ctx.ellipse(pxx, bodyY, r * sx, r * sy, 0, 0, Math.PI * 2);
-    ctx.fill();
-    if (!jumping && !sliding && !flying) {
-      const step = Math.sin(scrollPhase * 0.05) * 8;
-      ctx.fillStyle = "#e88aa5";
-      ctx.beginPath();
-      ctx.arc(pxx - 12, bodyY + r * 0.8 + step * 0.4, 7, 0, Math.PI * 2);
-      ctx.arc(pxx + 12, bodyY + r * 0.8 - step * 0.4, 7, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#3a3a4a";
-    ctx.beginPath();
-    ctx.arc(pxx - 10, bodyY - 5 * sy, 3.5, 0, Math.PI * 2);
-    ctx.arc(pxx + 10, bodyY - 5 * sy, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#3a3a4a";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(pxx, bodyY + 5 * sy, 9, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255,120,150,0.4)";
-    ctx.beginPath();
-    ctx.arc(pxx - 18, bodyY + 2, 5, 0, Math.PI * 2);
-    ctx.arc(pxx + 18, bodyY + 2, 5, 0, Math.PI * 2);
-    ctx.fill();
+    // 小滑板:板身 + 双轮 + 会转的轮辐线
+    if (boardTimer > 0) drawBoardArt(ctx, r, scrollPhase * 0.09);
+    // 喷气鞋:锥形三层尾焰(芯白 / 中黄 / 外橙),轻微抖动,reduced 静止
+    if (flying) drawJetFlame(ctx, r, time, reducedMotion);
+    const pose: RunnerPose =
+      hurtFlash > 0 ? "hurt" : flying ? "fly" : jumping ? "jump" : sliding ? "slide" : "run";
+    drawRunner(ctx, {
+      pose,
+      r,
+      // 双脚交替沿用老公式;双臂在 art 里按反相位摆
+      step: Math.sin(scrollPhase * 0.05) * 8,
+      t: time,
+      squashX: sx,
+      squashY: sy,
+      reduced: reducedMotion,
+      band: HEADBAND_P1,
+    });
     if (magnetTimer > 0) {
       ctx.strokeStyle = "rgba(178,138,232,0.5)";
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 7]);
       ctx.beginPath();
-      ctx.arc(pxx, bodyY, r * 2.2 + Math.sin(time * 5) * 5, 0, Math.PI * 2);
+      ctx.arc(0, 0, r * 2.2 + Math.sin(time * 5) * 5, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -2095,7 +2074,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
     const gap = ghostGap(dist, ghostPlayer.metersAt(runMs));
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = gap.state === "behind" ? "#a05a2f" : gap.state === "even" ? "#4a5a8a" : "#2f7a52";
-    ctx.font = "bold 13px sans-serif";
+    // 宪法下限 14px(visual-r3 修 N-R3-01):幽灵名牌原 13px
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(ghostGapLine(gap), gx, bodyY - r - 8);
@@ -2126,6 +2106,29 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
   }
 
+  /**
+   * 顶部大标题避让(visual-r1 修 A 档 P-02):优先整幅居中;
+   * basePx 下会压到 [left,right] 之外的按钮时,改在空档内居中并自动缩字号
+   * (不小于 15px),fillText 的 maxWidth 再兜一层底。宽屏画面与原来一个像素不差。
+   */
+  function fitTitle(text: string, y: number, basePx: number, left: number, right: number): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `bold ${basePx}px sans-serif`;
+    const tw = ctx.measureText(text).width;
+    if (w / 2 - tw / 2 >= left + 6 && w / 2 + tw / 2 <= right - 6) {
+      ctx.fillText(text, w / 2, y);
+      return;
+    }
+    const avail = Math.max(60, right - left - 12);
+    const px = titleFitPx((p) => {
+      ctx.font = `bold ${p}px sans-serif`;
+      return ctx.measureText(text).width;
+    }, basePx, 15, avail);
+    ctx.font = `bold ${px}px sans-serif`;
+    ctx.fillText(text, (left + right) / 2, y, avail);
+  }
+
   function drawThemes(): void {
     const grad = ctx.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, "#dff1ff");
@@ -2135,11 +2138,11 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.fillRect(0, 0, w, h);
 
     ctx.fillStyle = "#8a5ac9";
-    ctx.font = "bold 24px sans-serif";
+    // 360 窄屏标题末字会撞右上的 🎁 收藏册按钮(x 从 w-46 起),交给避让工具画
+    fitTitle("🌈 彩虹跑跑 · 十二大世界", 26, 24, 10, hasCollection() ? w - 54 : w - 10);
+    ctx.font = "14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("🌈 彩虹跑跑 · 十二大世界", w / 2, 26);
-    ctx.font = "14px sans-serif";
     ctx.fillStyle = "#6a5a7e";
     ctx.fillText(
       `共 ${LEVELS.length} 关 · ⭐ ${totalStars(progress)}/${LEVELS.length * 3} · 先选世界,再选关卡`,
@@ -2209,17 +2212,25 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.stroke();
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
-      ctx.fillText(unlocked ? st.emoji : "🔒", rect.x + 10, rect.y + ch * 0.3);
+      if (unlocked) {
+        ctx.font = `${Math.round(ch * 0.32)}px sans-serif`;
+        ctx.fillText(st.emoji, rect.x + 10, rect.y + ch * 0.3);
+      } else {
+        // 挂锁画制(visual-r2 修遗留#2):替掉 🔒 字符,落在原 emoji 的图标位
+        ctx.save();
+        ctx.translate(rect.x + 10 + ch * 0.16, rect.y + ch * 0.3);
+        drawPadlock(ctx, ch * 0.15);
+        ctx.restore();
+      }
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       // 章节名、简介、进度这三行都量过宽:超出先降字号,降到底就掐尾巴。
       // 卡片在 360 宽的两列布局里只有 150 出头,不量就会横着捅出去。
       const titleX = rect.x + 10 + ch * 0.42;
-      ctx.font = `bold ${Math.max(13, Math.min(17, Math.round(ch * 0.22)))}px sans-serif`;
+      ctx.font = `bold ${Math.max(14, Math.min(17, Math.round(ch * 0.22)))}px sans-serif`;
       fitText(`第${i + 1}章 ${st.name}`, titleX, rect.y + ch * 0.3, rect.x + rect.w - 8 - titleX);
       ctx.fillStyle = unlocked ? "#5a5a6e" : "#a8a8b4";
       const bodyW = rect.w - 18;
-      ctx.font = "13px sans-serif";
+      ctx.font = "14px sans-serif";
       fitText(unlocked ? st.blurb : "通关上一个世界解锁", rect.x + 10, rect.y + ch * 0.6, bodyW);
       const size = themeSize(i);
       if (unlocked) {
@@ -2247,17 +2258,18 @@ export function mount(api: GameAPI): RainbowRunHandle {
     drawButton(backFace, "◀ 世界", "rgba(255,255,255,0.85)", "#5a5a6e");
 
     ctx.fillStyle = st.accent;
-    ctx.font = "bold 22px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, w / 2, 28);
+    // 章节名长的世界在 320 宽会蹭到「◀ 世界」,同一把避让尺(P-02 同类项)
+    fitTitle(`${st.emoji} 第${chapterIdx + 1}章 · ${st.name}`, 28, 22, 76, w - 8);
     const size = themeSize(chapterIdx);
     ctx.font = "14px sans-serif";
-    ctx.fillText(
-      `⭐ ${themeStars(progress, chapterIdx)}/${size * 3} · 通关解锁下一关,回放可刷 3 星`,
-      w / 2,
-      54,
-    );
+    // 星标画制(visual-r2 修遗留#2):行首 ⭐ 换 drawMiniStar,文字整体居中不变
+    const starLine = `${themeStars(progress, chapterIdx)}/${size * 3} · 通关解锁下一关,回放可刷 3 星`;
+    const starLineW = ctx.measureText(starLine).width;
+    ctx.save();
+    ctx.translate(w / 2 - starLineW / 2 - 3, 54);
+    drawMiniStar(ctx, 7, true);
+    ctx.restore();
+    ctx.fillText(starLine, w / 2 + 7, 54);
 
     mapNodes.length = 0;
     const base = themeOffset(chapterIdx);
@@ -2304,8 +2316,11 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       if (!unlocked) {
-        ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
-        ctx.fillText("🔒", n.x, n.y);
+        // 挂锁画制(visual-r2 修遗留#2):替掉 🔒 字符
+        ctx.save();
+        ctx.translate(n.x, n.y);
+        drawPadlock(ctx, r * 0.52);
+        ctx.restore();
       } else {
         ctx.fillStyle = st.accent;
         ctx.font = `bold ${Math.round(r * 0.85)}px sans-serif`;
@@ -2314,16 +2329,25 @@ export function mount(api: GameAPI): RainbowRunHandle {
           ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
           ctx.fillText(BOSSES[def.boss].emoji, n.x, n.y - r * 0.95);
         } else if (isFinal) {
-          ctx.font = `${Math.round(r * 0.6)}px sans-serif`;
-          ctx.fillText("🏁", n.x, n.y - r * 0.95);
+          // 终点旗画制(visual-r2 修遗留#2):替掉 🏁 字符
+          ctx.save();
+          ctx.translate(n.x, n.y - r * 0.95);
+          drawFinishFlag(ctx, r * 0.32);
+          ctx.restore();
         } else if (def.gen) {
-          ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-          ctx.fillText("⏱", n.x, n.y - r * 0.95);
+          // 限时表画制(visual-r2 修遗留#2):替掉 ⏱ 字符
+          ctx.save();
+          ctx.translate(n.x, n.y - r * 0.95);
+          drawStopwatchBadge(ctx, r * 0.28);
+          ctx.restore();
         }
-        ctx.font = `${Math.round(r * 0.5)}px sans-serif`;
-        let starTxt = "";
-        for (let s = 0; s < 3; s++) starTxt += s < got ? "⭐" : "▫";
-        ctx.fillText(starTxt, n.x, n.y + r * 1.45);
+        // 节点星级画制(visual-r2 修遗留#2):拿到=金星、空位=灰白描边星,替掉 ⭐▫ 字符
+        for (let s = 0; s < 3; s++) {
+          ctx.save();
+          ctx.translate(n.x + (s - 1) * r * 0.62, n.y + r * 1.45);
+          drawMiniStar(ctx, r * 0.26, s < got);
+          ctx.restore();
+        }
       }
     }
   }
@@ -2336,10 +2360,13 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${def.name} 跑完啦!`, w / 2, y + 40);
-    ctx.font = "34px sans-serif";
-    let starTxt = "";
-    for (let s = 0; s < 3; s++) starTxt += s < earnedStars ? "⭐" : "☆";
-    ctx.fillText(starTxt, w / 2, y + 86);
+    // 结算三星画制(visual-r2 修遗留#2):拿到=金星、空位=灰白描边星,替掉 ⭐☆ 字符
+    for (let s = 0; s < 3; s++) {
+      ctx.save();
+      ctx.translate(w / 2 + (s - 1) * 42, y + 86);
+      drawMiniStar(ctx, 16, s < earnedStars);
+      ctx.restore();
+    }
     ctx.font = "15px sans-serif";
     // 深绿/深灰:15px 小字要 4.5:1(原 #4a9a5a/#9a9aa8 只有 3.5/2.8:1)
     ctx.fillStyle = missionOk ? "#357a42" : "#62626f";
@@ -2349,7 +2376,25 @@ export function mount(api: GameAPI): RainbowRunHandle {
       y + 124,
     );
     ctx.fillStyle = "#5a5a6e";
-    ctx.fillText(`🍬${stats.coins} ⭐${stats.stars} · 掉心 ${stats.heartsLost} · 分 ${score}`, w / 2, y + 148);
+    // 统计行图标画制(visual-r2 修遗留#2):🍬⭐ 换静态星币/迷你星,量宽后整行居中
+    const coinsTxt = String(stats.coins);
+    const starsTxt = `${stats.stars} · 掉心 ${stats.heartsLost} · 分 ${score}`;
+    const rowW = 16 + ctx.measureText(coinsTxt).width + 20 + ctx.measureText(starsTxt).width;
+    let rx = w / 2 - rowW / 2;
+    ctx.textAlign = "left";
+    ctx.save();
+    ctx.translate(rx + 7, y + 148);
+    drawCoinFrame(ctx, 7, 0);
+    ctx.restore();
+    ctx.fillText(coinsTxt, rx + 16, y + 148);
+    rx += 16 + ctx.measureText(coinsTxt).width + 6;
+    ctx.save();
+    ctx.translate(rx + 7, y + 148);
+    drawMiniStar(ctx, 7, true);
+    ctx.restore();
+    ctx.fillStyle = "#5a5a6e";
+    ctx.fillText(starsTxt, rx + 16, y + 148);
+    ctx.textAlign = "center";
     const bw2 = 132;
     btnMap = { x: w / 2 - bw2 - 10, y: y + 178, w: bw2, h: 44 };
     drawButton(btnMap, "回地图", "#f0f0f5", "#5a5a6e");
@@ -2373,7 +2418,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
       Math.min(450, w - 40),
       (canRevive ? 260 : 210) +
         (bossLose ? 28 : 0) +
-        (endless ? 16 : 0) +
+        (endless ? 58 : 0) +
         (ghostRow ? 22 : 0) +
         (skippable ? 56 : 0),
     );
@@ -2431,6 +2476,36 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.font = "15px sans-serif";
     }
     let by = y + (endless ? 146 : loseReason === "boss" ? 138 : 116) + (ghostRow ? 22 : 0);
+    // 无尽结算:世界进度带(跑过的世界小点点亮) + 最高连击;破纪录时两侧点金色小星
+    if (endless) {
+      const total = THEME_ORDER.length;
+      const lit = worldDotsLit(dist, ENDLESS_STAGE_LEN, total);
+      const gap = Math.min(24, (Math.min(450, w - 40) - 96) / (total - 1));
+      const x0 = w / 2 - (gap * (total - 1)) / 2;
+      const dotY = by + 6;
+      for (let i = 0; i < total; i++) {
+        const st = THEME_STYLE[THEME_ORDER[i]];
+        ctx.fillStyle = i < lit ? st.accent : "#e2e2ea";
+        ctx.beginPath();
+        ctx.arc(x0 + i * gap, dotY, i < lit ? 5.5 : 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (broke.meters) {
+        drawStar(x0 - 20, dotY, 7, "#e0a030");
+        drawStar(x0 + (total - 1) * gap + 20, dotY, 7, "#e0a030");
+      }
+      ctx.fillStyle = "#5a5a6e";
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      fitText(
+        `跑过 ${lit} 个世界 · 最高完美连跳 ${bestStreak}`,
+        w / 2,
+        dotY + 20,
+        Math.min(440, w - 50),
+      );
+      by = dotY + 36;
+    }
     btnRevive = null;
     if (canRevive) {
       btnRevive = { x: w / 2 - 110, y: by, w: 220, h: 44 };
@@ -2464,19 +2539,30 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     if (endless) {
-      ctx.fillText("♾️ 无尽彩虹跑", w / 2, y + 42);
+      // 无尽 ∞ 徽记画制(visual-r2 修遗留#2):替掉 ♾️ 字符,双环画在标题左侧
+      const endlessTitle = "无尽彩虹跑";
+      const endlessTitleW = ctx.measureText(endlessTitle).width;
+      ctx.save();
+      ctx.translate(w / 2 - endlessTitleW / 2 - 4, y + 42);
+      drawInfinityBadge(ctx, 11);
+      ctx.restore();
+      ctx.fillText(endlessTitle, w / 2 + 13, y + 42);
       ctx.fillStyle = "#5a5a6e";
       ctx.font = "16px sans-serif";
       ctx.fillText(def.hint, w / 2, y + 84);
       ctx.fillStyle = "#c47a2a";
       ctx.font = "bold 16px sans-serif";
-      ctx.fillText(
+      // 任务小靶画制(visual-r2 修遗留#2):替掉 🎯 字符,🍬 纪录换文字「糖果」已含
+      const goalLine =
         endlessRecord.meters > 0
-          ? `🎯 目标:超过 ${endlessRecord.meters} 米 · 糖果纪录 🍬${endlessRecord.coins}`
-          : "🎯 目标:跑得越远越厉害!",
-        w / 2,
-        y + 122,
-      );
+          ? `目标:超过 ${endlessRecord.meters} 米 · 糖果纪录 ${endlessRecord.coins}`
+          : "目标:跑得越远越厉害!";
+      const goalLineW = ctx.measureText(goalLine).width;
+      ctx.save();
+      ctx.translate(w / 2 - goalLineW / 2 - 4, y + 122);
+      drawTargetBadge(ctx, 8);
+      ctx.restore();
+      ctx.fillText(goalLine, w / 2 + 9, y + 122);
       ctx.font = "14px sans-serif";
       ctx.fillStyle = "#a0a0b2";
       fitText(
@@ -2499,7 +2585,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
     fitText(def.hint, w / 2, y + 84, Math.min(430, w - 60));
     ctx.fillStyle = "#c47a2a";
     ctx.font = "bold 16px sans-serif";
-    ctx.fillText(`🎯 任务:${missionLabel(def.mission)}`, w / 2, y + 122);
+    // 任务小靶画制(visual-r2 修遗留#2):替掉 🎯 字符,整行居中不变
+    const missionLine = `任务:${missionLabel(def.mission)}`;
+    const missionLineW = ctx.measureText(missionLine).width;
+    ctx.save();
+    ctx.translate(w / 2 - missionLineW / 2 - 4, y + 122);
+    drawTargetBadge(ctx, 8);
+    ctx.restore();
+    ctx.fillText(missionLine, w / 2 + 9, y + 122);
     ctx.font = "14px sans-serif";
     ctx.fillStyle = "#a0a0b2";
     const tips: string[] = [];
@@ -2530,21 +2623,22 @@ export function mount(api: GameAPI): RainbowRunHandle {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let i = 0; i < lines.length; i++) {
-      ctx.font = "13px sans-serif";
+      ctx.font = "14px sans-serif";
       ctx.fillStyle = i === 0 && boostLine !== "" ? "#8a5ac9" : "#5a8ac9";
       fitText(lines[i], w / 2, baseY + i * 20, Math.min(440, w - 40));
     }
   }
 
   /**
-   * 一行放不下就先缩字号,缩到 13px(全站可读性下限)还是塞不进就掐尾巴加省略号。
+   * 一行放不下就先缩字号,缩到 14px(宪法可读性下限,visual-r3 修 N-R3-01 前是 13px)
+   * 还是塞不进就掐尾巴加省略号。
    * 窄屏上宁可少几个字,也不许把提示语顶出面板、把章节简介捅出卡片。
    */
   function fitText(text: string, cx: number, cy: number, maxW: number): void {
     const base = ctx.font;
     const size = Number(/(\d+)px/.exec(base)?.[1] ?? 16);
     let px = size;
-    while (px > 13 && ctx.measureText(text).width > maxW) {
+    while (px > 14 && ctx.measureText(text).width > maxW) {
       px -= 1;
       ctx.font = base.replace(/\d+px/, `${px}px`);
     }
@@ -2571,7 +2665,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 12, (Math.random() - 0.5) * shake * 12);
 
     drawSky(theme, def);
-    drawParallax(theme);
+    drawParallax(theme, def);
     drawGround(theme, def);
     drawSideDeco(theme, def);
     const laneW = w * LANE_SPREAD;
@@ -2614,7 +2708,7 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.translate(projectFlatX(cam, p.x, s), screenYAtDepth(cam, depthOf(cam, p.y)));
       ctx.scale(s, s);
       ctx.globalAlpha = 1 - fogAlpha(s);
-      drawPickupShape(p, laneW);
+      drawPickupShape(p, laneW, s);
       ctx.restore();
     }
 
@@ -2637,7 +2731,18 @@ export function mount(api: GameAPI): RainbowRunHandle {
         ctx.font = "bold 14px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(`◀ 岔路口 · ${forkSign.gate.name} ▶`, 0, 0);
+        // 路牌箭头画制(visual-r2 修遗留#2):◀▶ 字符换圆角实心三角,指向左右两道
+        const forkLabel = `岔路口 · ${forkSign.gate.name}`;
+        const forkLabelW = ctx.measureText(forkLabel).width;
+        ctx.fillText(forkLabel, 0, 0);
+        ctx.save();
+        ctx.translate(-forkLabelW / 2 - 12, 0);
+        drawForkArrow(ctx, 6, -1);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(forkLabelW / 2 + 12, 0);
+        drawForkArrow(ctx, 6, 1);
+        ctx.restore();
         ctx.restore();
       }
     }
@@ -2649,10 +2754,14 @@ export function mount(api: GameAPI): RainbowRunHandle {
 
     for (const p of puffs) {
       ctx.globalAlpha = Math.max(0, p.life / 0.5);
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.star) {
+        drawStar(p.x, p.y, 6, p.color);
+      } else {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -2664,6 +2773,35 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.textBaseline = "middle";
       ctx.fillText(f.text, f.x, f.y);
       ctx.globalAlpha = 1;
+    }
+
+    // 里程碑横幅:「第 N 世界」缎带 + 世界图标从左端飞到右端(reduced 静在左端)
+    if (banner && phase === "run") {
+      const k = Math.max(0, banner.t / BANNER_TIME);
+      const ease = reducedMotion ? 1 : Math.min(1, (1 - k) * 6);
+      const bw2 = Math.min(320, w - 60) * ease;
+      const by2 = h * 0.3;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k * 3);
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.roundRect(w / 2 - bw2 / 2, by2 - 24, bw2, 48, 16);
+      ctx.fill();
+      ctx.strokeStyle = banner.accent;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = banner.accent;
+      ctx.font = "bold 18px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      fitText(banner.title, w / 2 + 14, by2, Math.max(40, bw2 - 88));
+      const iconX =
+        w / 2 - bw2 / 2 + 26 + (reducedMotion ? 0 : (1 - k) * Math.max(0, bw2 - 52));
+      ctx.save();
+      ctx.translate(iconX, by2);
+      drawDecoShape(THEME_STYLE[banner.world], banner.world, 1);
+      ctx.restore();
+      ctx.restore();
     }
 
     ctx.restore();
@@ -2711,8 +2849,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.roundRect(bx, cy, Math.max(10, bw * frac), 18, 9);
       ctx.fill();
       ctx.fillStyle = "#4a4a5e";
-      // 13px 是全站可读性下限,追赶条这一行原来是 12px
-      ctx.font = "bold 13px sans-serif";
+      // 宪法下限 14px(visual-r3 修 N-R3-01):追赶条这一行 12px→13px→14px
+      ctx.font = "bold 14px sans-serif";
       ctx.fillText(
         `${CHASER_EMOJI} ${CHASER_NAME}${chaserWarning(chaserGap) ? " 快跑!" : " 在后面追"}`,
         w / 2,
@@ -2745,11 +2883,15 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(
-        `🎯 ${missionLabel(m)}${m.type === "noHit" ? (stats.heartsLost === 0 ? " ✓保持中" : " ✗") : ` ${prog}/${m.n}`}`,
-        w / 2,
-        rowY + 26,
-      );
+      // 任务小靶画制(visual-r3 修 N-R3-02):局内任务条第三处 🎯 也换 drawTargetBadge,
+      // 与无尽入口/结算任务行同一枚徽章,整行居中不变
+      const hudMissionLine = `${missionLabel(m)}${m.type === "noHit" ? (stats.heartsLost === 0 ? " ✓保持中" : " ✗") : ` ${prog}/${m.n}`}`;
+      const hudMissionW = ctx.measureText(hudMissionLine).width;
+      ctx.save();
+      ctx.translate(w / 2 - hudMissionW / 2 - 4, rowY + 26);
+      drawTargetBadge(ctx, 7);
+      ctx.restore();
+      ctx.fillText(hudMissionLine, w / 2 + 9, rowY + 26);
     }
 
     // 大王护甲条:接在任务条下面,窄屏也和任务条同宽,不会横着挤出去
@@ -2768,7 +2910,8 @@ export function mount(api: GameAPI): RainbowRunHandle {
       ctx.roundRect(bx, by0, Math.max(12, (bw * hits) / boss.hp), 22, 11);
       ctx.fill();
       ctx.fillStyle = "#4a4a5e";
-      ctx.font = "13px sans-serif";
+      // 宪法下限 14px(visual-r3 修 N-R3-01):大王护甲条原 13px
+      ctx.font = "14px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(
@@ -2778,32 +2921,58 @@ export function mount(api: GameAPI): RainbowRunHandle {
       );
     }
 
+    // 计数图标换绘制小图标(visual-r1 修 P-07):星币/星星用场上同款画法,
+    // 节奏音符画制,数字与原来同字号同基线
     ctx.font = "15px sans-serif";
     ctx.textAlign = "left";
     ctx.fillStyle = "#5a5a6e";
-    const comboTxt = !endless && level().rhythm ? ` 🎵${perfectStreak}/${PERFECT_STREAK_GOAL}` : "";
-    ctx.fillText(`🍬${stats.coins} ⭐${stats.stars}${comboTxt}`, 76, 20);
-    ctx.textAlign = "right";
-    ctx.fillText("💗".repeat(Math.max(0, hearts)) + "🤍".repeat(Math.max(0, MAX_HEARTS - hearts)), w - 10, 20);
+    let hudX = 76;
+    ctx.save();
+    ctx.translate(hudX + 8, 20);
+    drawCoinFrame(ctx, 7.5, 0);
+    ctx.restore();
+    hudX += 19;
+    ctx.fillText(String(stats.coins), hudX, 20);
+    hudX += ctx.measureText(String(stats.coins)).width + 11;
+    ctx.save();
+    ctx.translate(hudX + 6, 20);
+    drawStarPickup(ctx, 6, 0);
+    ctx.restore();
+    hudX += 15;
+    ctx.fillText(String(stats.stars), hudX, 20);
+    if (!endless && level().rhythm) {
+      hudX += ctx.measureText(String(stats.stars)).width + 12;
+      ctx.save();
+      ctx.translate(hudX + 5, 20);
+      drawNoteChip(ctx, 6.5);
+      ctx.restore();
+      hudX += 13;
+      ctx.fillText(`${perfectStreak}/${PERFECT_STREAK_GOAL}`, hudX, 20);
+    }
+    // 心心换画制心片(💗🤍 → drawHeartPip),掉心从右往左灰下去,排布与原 emoji 串一致
+    for (let i = 0; i < MAX_HEARTS; i++) {
+      ctx.save();
+      ctx.translate(w - 18 - 19 * (MAX_HEARTS - 1 - i), 20);
+      drawHeartPip(ctx, 8, i < hearts);
+      ctx.restore();
+    }
     // 道具倒计时:移到任务条下方,不再和第二行进度条打架;13→14px
+    // 图标从 emoji 换成绘制小图标(与场上的道具泡泡同一套形状,认得出对应关系)
     let px2 = w - 10;
     ctx.font = "14px sans-serif";
     const ptY = rowY + 52 + extraRow;
-    if (magnetTimer > 0) {
-      ctx.fillText(`🧲${Math.ceil(magnetTimer)}s`, px2, ptY);
+    const timerChip = (sec: number, icon: (c: CanvasRenderingContext2D, s: number) => void): void => {
+      ctx.fillText(`${Math.ceil(sec)}s`, px2, ptY);
+      ctx.save();
+      ctx.translate(px2 - 32, ptY);
+      icon(ctx, 8);
+      ctx.restore();
       px2 -= 58;
-    }
-    if (jetTimer > 0) {
-      ctx.fillText(`🚀${Math.ceil(jetTimer)}s`, px2, ptY);
-      px2 -= 58;
-    }
-    if (boardTimer > 0) {
-      ctx.fillText(`🛹${Math.ceil(boardTimer)}s`, px2, ptY);
-      px2 -= 58;
-    }
-    if (railTimer > 0) {
-      ctx.fillText(`⚡${Math.ceil(railTimer)}s`, px2, ptY);
-    }
+    };
+    if (magnetTimer > 0) timerChip(magnetTimer, drawMagnetIcon);
+    if (jetTimer > 0) timerChip(jetTimer, drawJetIcon);
+    if (boardTimer > 0) timerChip(boardTimer, drawBoardIcon);
+    if (railTimer > 0) timerChip(railTimer, drawBoltIcon);
 
     // HUD 第二行(赛道进度 + 任务条)从 y=40 起,按钮画到 44px 高就压上去了 —— 只扩热区
     const backFace: Rect = { x: 6, y: 6, w: 62, h: 28 };
