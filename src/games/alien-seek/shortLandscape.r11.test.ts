@@ -26,7 +26,7 @@ describe("C-6 推理关 121 · 915×412 双栏壳", () => {
     expect(SRC).toContain("canvas.clientWidth");
     expect(SRC).toContain("vh <= 500 && vw >= 640");
     expect(SRC).toContain('wrap.classList.add("as-land")');
-    expect(SRC).toContain("vh - 148");
+    expect(SRC).toContain("vh - Math.max(0, top) - 4");
   });
 
   it("工具与方向键热区仍 ≥44（不靠收热区塞进屏）", () => {

@@ -186,13 +186,13 @@ const CSS = `
 }
 .as-wrap.as-land{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
   gap:4px 10px;align-items:stretch;height:100%;max-height:100%;min-height:0;
-  overflow:hidden;box-sizing:border-box;}
+  overflow:hidden;box-sizing:border-box;position:relative;}
 .as-wrap.as-land>style{grid-column:1/-1;height:0;margin:0;padding:0;border:0;overflow:hidden;}
 .as-wrap.as-land>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
 .as-wrap.as-land>.as-clues{grid-column:2;max-height:64px;overflow:auto;padding:4px 8px;gap:2px;}
 .as-wrap.as-land>.als-list{grid-column:2;max-height:44px;}
-.as-wrap.as-land>.als-tools{grid-column:2;}
-.as-wrap.as-land>.as-pads{grid-column:2;margin:0;align-self:end;}
+.as-wrap.as-land>.als-tools{grid-column:2;position:absolute;right:0;bottom:92px;width:36%;z-index:2;}
+.as-wrap.as-land>.as-pads{grid-column:2;margin:0;position:absolute;right:0;bottom:0;width:36%;z-index:2;}
 .as-wrap.as-land>.as-tip{grid-column:2;font-size:12px;line-height:1.25;max-height:2.4em;overflow:hidden;}
 ${touchUpliftCss([".as-open", ".as-back"])}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
@@ -1149,11 +1149,11 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     // 矮宽横屏:画布跟左栏走,高度再钳一档,右边工具+D-pad 留在 412 里
     if (vh > 0 && vh <= 500 && vw >= 640) {
       wrap.classList.add("as-land");
-      const hostH = host.clientHeight || 0;
-      const box = Math.max(160, Math.round(Math.min(vh - 96, hostH > 80 ? hostH : vh - 96)));
+      const top = wrap.getBoundingClientRect().top;
+      const box = Math.max(160, Math.round(vh - Math.max(0, top) - 4));
       wrap.style.maxHeight = `${box}px`;
       wrap.style.overflow = "hidden";
-      const cap = Math.max(120, Math.round(Math.min(vh - 148, box)));
+      const cap = Math.max(120, box);
       if (nextH > cap) nextH = cap;
     } else {
       wrap.classList.remove("as-land");

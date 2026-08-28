@@ -17,8 +17,8 @@ describe("C-6 r15 · root×121 先灭舞台自滚", () => {
 
   it("矮横屏挂 as-land，D-pad 在右栏底而不是 sticky", () => {
     expect(SRC).toContain(".as-wrap.as-land");
-    expect(SRC).toContain(".as-wrap.as-land>.as-pads{grid-column:2;margin:0;align-self:end;}");
-    expect(SRC).toContain(".as-wrap.as-land>.als-tools{grid-column:2;}");
+    expect(SRC).toContain(".as-wrap.as-land>.as-pads{grid-column:2;margin:0;position:absolute;right:0;bottom:0");
+    expect(SRC).toContain(".as-wrap.as-land>.als-tools{grid-column:2;position:absolute");
     const land = SRC.slice(SRC.indexOf(".as-wrap.as-land{"));
     expect(land).toContain("overflow:hidden");
     expect(land).toContain("max-height:100%");
@@ -28,6 +28,6 @@ describe("C-6 r15 · root×121 先灭舞台自滚", () => {
 
   it("画布钳高给 root 抬头让位（148 > 旧 72）", () => {
     expect(SRC).toContain("wrap.style.maxHeight");
-    expect(SRC).toContain("vh - 96");
+    expect(SRC).toContain("vh - Math.max(0, top) - 4");
   });
 });
