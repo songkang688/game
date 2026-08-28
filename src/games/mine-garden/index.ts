@@ -15,6 +15,7 @@ import {
 } from "../../engine";
 import { save } from "../../engine/save";
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import {
   FLAG,
   GUESS,
@@ -420,6 +421,15 @@ export const MN_CSS = `
   .mn-chip{padding:5px 9px;}
   .mn-duo>div{min-width:0;flex:1 1 100%;}
 }
+/* r5 N-20:915×412 矮横屏纵排装不下(第 5 行+长按钮折叠线下)——盘左、HUD/提示/工具右双栏;
+   双人分屏两块盘各自窄,保持原纵排 */
+@media (min-width:700px) and (max-height:520px){
+  .mn-field{display:grid;grid-template-columns:minmax(0,auto) minmax(210px,1fr);column-gap:12px;row-gap:6px;
+    align-items:start;justify-content:center;}
+  .mn-field .mn-scroll{grid-column:1;grid-row:1 / span 5;}
+  .mn-hud,.mn-mini,.mn-minitip,.mn-msg,.mn-tools{grid-column:2;margin:0;}
+  .mn-duo .mn-field{display:block;}
+}
 @media (prefers-reduced-motion:reduce){
   .mn-cell.mn-lit{animation:none;}
   .mn-cell.mn-bloom{animation:none;}
@@ -646,7 +656,20 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
 
   function layout(): void {
     const px = cellPx(run.opts.w, Math.min(viewportWidth(), (host as { clientWidth?: number }).clientWidth || viewportWidth()));
-    const size = opts.compact ? Math.max(MIN_CELL, Math.round(px * 0.8)) : px;
+    let size = opts.compact ? Math.max(MIN_CELL, Math.round(px * 0.8)) : px;
+    // r5 N-20:格径宽高两把尺取小——按舞台可视余量(减掉盘下鸟瞰图/提示/工具排)
+    // 反推行高上限再收一刀;MIN_CELL(28)是手指底线,贴着底线还装不下才交给舞台滚。
+    if (typeof scroll.getBoundingClientRect === "function" && typeof wrap.getBoundingClientRect === "function") {
+      const clip = stageClipBottom(wrap);
+      const sRect = scroll.getBoundingClientRect();
+      if (Number.isFinite(clip) && Number.isFinite(sRect.top)) {
+        const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(sRect));
+        const room = clip - sRect.top - below - 4;
+        // 滚动槽内衬 3×2,格缝 2px
+        const cap = Math.floor((room - 6 - (run.opts.h - 1) * 2) / run.opts.h);
+        if (Number.isFinite(cap)) size = Math.max(MIN_CELL, Math.min(size, cap));
+      }
+    }
     grid.style.gridTemplateColumns = `repeat(${run.opts.w}, ${size}px)`;
     grid.style.fontSize = `${Math.max(13, Math.round(size * 0.52))}px`;
     for (const c of cells) {
@@ -1094,6 +1117,8 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
   }, 250);
 
   layout();
+  // 挂载那一刻可能还没排好版(量不到舞台),抽空补量一次
+  timers.after(layout, 0);
   paintAll();
   paintHud();
 
