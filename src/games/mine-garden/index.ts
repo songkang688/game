@@ -656,7 +656,10 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
     // N-71:双人 9×9 按宽取 35px 后第 7 行切底。矮横屏再按余高钳格,MIN_CELL 28 不破
     const vh = (globalThis as { innerHeight?: number }).innerHeight;
     if (typeof vh === "number" && vh > 0 && vh <= 500) {
-      const budget = Math.floor((vh - 168) / Math.max(1, run.opts.h));
+      const budget = Math.floor((vh - 168 - 60) / Math.max(1, run.opts.h));
+      if (budget > 0) size = Math.max(MIN_CELL, Math.min(size, budget));
+    } else if (typeof vh === "number" && vh > 500 && vh <= 840) {
+      const budget = Math.floor((vh - 220) / Math.max(1, run.opts.h));
       if (budget > 0) size = Math.max(MIN_CELL, Math.min(size, budget));
     }
     grid.style.gridTemplateColumns = `repeat(${run.opts.w}, ${size}px)`;

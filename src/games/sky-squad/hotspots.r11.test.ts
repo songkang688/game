@@ -16,4 +16,9 @@ describe("N-56 sky-squad 双人合作只抬热区", () => {
   it("不重钳画布高度公式", () => {
     expect(SRC).toContain("canvasBoxHeight");
   });
+
+  it("U-19 单人摇杆也是 44,中高视口钉垫", () => {
+    expect(SRC).toContain(".sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:44px;flex-wrap:wrap;}");
+    expect(SRC).toContain("@media (max-height:840px)");
+  });
 });

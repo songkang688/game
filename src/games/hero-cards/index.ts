@@ -224,6 +224,17 @@ export const HC_CSS = `
   .hc-seats{margin-bottom:4px;}
   .hc-wrap{max-height:calc(100dvh - 76px);}
 }
+/* U-15:390 手牌与平板横屏回合键同样钉底,500 档原文不动 */
+@media (max-height:840px){
+  .hc-hand{
+    position:sticky;bottom:52px;z-index:5;margin:0;padding:8px 4px 6px;
+    background:linear-gradient(180deg, rgba(255,248,242,.35), #FFF8F2 40%);
+  }
+  .hc-pad{
+    position:sticky;bottom:0;z-index:6;margin-top:0;padding:6px 4px 4px;
+    background:#FFF8F2;box-shadow:0 -8px 14px rgba(210,160,140,.18);
+  }
+}
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
   .hc-petal{display:none;}

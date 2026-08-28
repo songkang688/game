@@ -145,6 +145,7 @@ const CSS = `
   .brk-btn:active, .brk-open:active { transform: none; }
 }
 ${touchUpliftCss([".brk-open", ".brk-back"])}
+.brk-open,.brk-back{min-height:44px;box-sizing:border-box;}
 `;
 
 function reducedMotion(): boolean {

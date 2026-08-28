@@ -2038,6 +2038,23 @@ html {
   }
 }
 
+/* U-4:平板横屏(1024×768) hero 偏肥,首卡只露半行;480/500 档零回退 */
+@media (min-width: 700px) and (max-height: 840px) {
+  .home-screen .home-hero {
+    margin: 6px 0 2px;
+    gap: 4px;
+  }
+
+  .home-screen .hero-figure {
+    display: none;
+  }
+
+  .home-screen .hero-bubble {
+    padding: 8px 14px;
+    margin-bottom: 6px;
+  }
+}
+
 /* ---------- 弱化动效:位移、抖动、闪烁一律停掉 ---------- */
 @media (prefers-reduced-motion: reduce) {
   /* 悬停位移与旋转:全局那条只压时长,元素还是会「跳」到新位置 */

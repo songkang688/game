@@ -193,6 +193,7 @@ const CSS = `
   .blp-gift-drop { animation-duration: .01s; }
 }
 ${touchUpliftCss([".blp-open", ".blp-back"])}
+.blp-open,.blp-back{min-height:44px;box-sizing:border-box;}
 `;
 
 function reducedMotion(): boolean {

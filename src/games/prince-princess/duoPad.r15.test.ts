@@ -9,4 +9,8 @@ describe("N-79 prince-princess 两人一起 D-pad", () => {
     expect(CSS).toContain(".pcp-wrap[data-players=\"2\"] .pcp-cv{height:118px;}");
     expect(CSS).toContain(".pcp-pads{position:sticky;bottom:0");
   });
+
+  it("U-20 840 档也钉垫", () => {
+    expect(CSS).toContain("@media (max-height:840px)");
+  });
 });

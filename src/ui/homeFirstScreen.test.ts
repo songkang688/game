@@ -68,4 +68,10 @@ describe("S-1 首页首屏媒体查询", () => {
       for (const px of sizes) expect(px).toBeGreaterThanOrEqual(14);
     }
   });
+
+  it("U-4 平板横屏收 hero,S-1 两档原文仍在", () => {
+    expect(CSS).toContain("@media (min-width: 700px) and (max-height: 840px)");
+    expect(CSS).toContain("@media (max-width: 480px)");
+    expect(CSS).toContain("@media (max-height: 500px)");
+  });
 });
