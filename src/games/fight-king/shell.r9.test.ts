@@ -33,7 +33,7 @@ describe("N-31 fight-king 训练场触屏键排", () => {
     expect(src).toContain("position:sticky;bottom:0");
     expect(src).toContain("position:sticky;top:0");
     expect(src).toContain("wrap.appendChild(trainPanel);");
-    expect(src).toContain("wrap.appendChild(pads);");
+    expect(src).toContain("bar.appendChild(modeRow)");
     expect(src.indexOf("wrap.appendChild(trainPanel);")).toBeLessThan(src.lastIndexOf("wrap.appendChild(pads);"));
   });
 
