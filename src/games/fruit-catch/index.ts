@@ -94,7 +94,7 @@ const CSS = `
 .frc-badge { background: #fff; border: 1px solid rgba(220,170,100,.35); border-radius: 14px; padding: 5px 9px; font-weight: 700; color: #D08A3E; box-shadow: 0 2px 6px rgba(220,170,100,.25); font-size: 14px; white-space: nowrap; }
 .frc-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .frc-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFD26E, #FF9E5E); border-radius: 8px; transition: width .3s; }
-.frc-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; }
+.frc-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; margin: 0 auto; }
 .frc-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
 .frc-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFD9A0; color: #8A5A20; cursor: pointer; box-shadow: 0 4px 0 #EBBB77; touch-action: none; }
 .frc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBBB77; }
@@ -114,7 +114,84 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) {
   .frc-fill { transition: none; }
 }
+/* 矮横屏（915×412 一族）：画布是 360×460 的竖幅，按宽铺满就有 800 多高，
+   整块连着 ⬅️➡️ 一起掉到裁切线以下。横向有的是余量——画布占左栏，
+   分数条 / 进度条 / 按钮排 / 提示语全挪到右栏，接水果这种实时玩法不许靠滚。 */
+@media (min-width: 700px) and (max-height: 560px) {
+  .frc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 250px);
+    column-gap: 10px; align-items: start; }
+  .frc-wrap > * { grid-column: 2; }
+  .frc-wrap > .frc-canvas { grid-column: 1; grid-row: 1 / span 8; align-self: start; margin: 0 auto; }
+  .frc-top { flex-wrap: wrap; }
+  .frc-ctrl { gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .frc-btn { width: 68px; height: 48px; font-size: 22px; }
+  .frc-legend { margin-top: 6px; }
+}
 `;
+
+/**
+ * 画布显示高的下限：再矮篮子和果子就分不清了，低于它宁可交给舞台滚动。
+ * 三档实测（915×412 / 1024×768 / 1280×800）都够不着这个下限，纯保底用。
+ */
+export const FC_MIN_CANVAS_H = 200;
+
+/**
+ * 画布该钳到多高，null = 量不出可视余量（测试桩 / 独立挂载），一个样式都不写。
+ *
+ * 画布是 `width:100%` 的 replaced 元素：360×460 的竖幅在 656px 宽的宿主里显示高 838px，
+ * 而 `.game-stage` 矮横屏只有 322px 可视——画布连同 ⬅️➡️ 整块出屏。
+ * 钳的是 `max-height`：replaced 元素的 max-height 一旦生效，宽会**按比例**一起收
+ * （CSS 2.1 §10.4），所以不用去猜「这一栏本来有多宽」，画面比例也不会被压扁。
+ * backing 分辨率与接果判定坐标全都不动（判定走 `getBoundingClientRect` 换算，缩放天然跟随）。
+ */
+export function canvasCapHeightPx(roomPx: number, minH = FC_MIN_CANVAS_H): number | null {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  return Math.max(minH, Math.floor(roomPx - 4));
+}
+
+/** 往上找平台舞台（`.game-stage`，定高会裁内容）的下沿；量不到返回 NaN */
+function stageClipBottom(from: HTMLElement): number {
+  let node: HTMLElement | null = from.parentElement ?? null;
+  for (let i = 0; node && i < 16; i++) {
+    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+      if (typeof node.getBoundingClientRect !== "function") break;
+      const r = node.getBoundingClientRect();
+      const inner = node.clientHeight > 0 ? (node.clientTop || 0) + node.clientHeight : r.height;
+      if (Number.isFinite(r.top) && inner > 0) return r.top + inner;
+      break;
+    }
+    node = node.parentElement ?? null;
+  }
+  return Number.NaN;
+}
+
+/**
+ * 把画布钳进舞台可视余量。
+ *
+ * 「画布下面还有多高的家当」只认**真的排在画布下面**的兄弟（`top >= 画布下沿`）：
+ * 矮横屏双栏下按钮排挪到了右栏，它再高也不占画布的竖向预算。
+ */
+function fitFruitCanvas(canvas: HTMLCanvasElement, wrap: HTMLElement): void {
+  if (!canvas.style || typeof canvas.getBoundingClientRect !== "function") return;
+  if (typeof wrap.getBoundingClientRect !== "function") return;
+  const clip = stageClipBottom(wrap);
+  if (!Number.isFinite(clip)) return;
+  const rect = canvas.getBoundingClientRect();
+  if (!Number.isFinite(rect.top)) return;
+  let below = 0;
+  for (const child of Array.from(wrap.children)) {
+    if (child === canvas || typeof child.getBoundingClientRect !== "function") continue;
+    const r = child.getBoundingClientRect();
+    if (r.height <= 0) continue;
+    if (r.top >= rect.bottom - 2) below = Math.max(below, r.bottom - rect.bottom);
+  }
+  // 外壳自己的下留白也要算进去，不然正好差一圈 padding
+  const wrapRect = wrap.getBoundingClientRect();
+  below += Math.max(0, wrapRect.bottom - Math.max(rect.bottom + below, wrapRect.top));
+  const cap = canvasCapHeightPx(clip - rect.top - below);
+  const px = cap === null ? "" : `${cap}px`;
+  if (canvas.style.maxHeight !== px) canvas.style.maxHeight = px;
+}
 
 function el<T extends HTMLElement = HTMLElement>(tag: string, cls?: string, text?: string): T {
   const node = document.createElement(tag) as T;
@@ -365,8 +442,12 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     powerEl.textContent = bits.join(" ");
   }
 
+  /** 量布局是回流读，不必每帧；draw 每 15 帧（~250ms）量一次 */
+  let fitTick = 0;
+
   function draw(): void {
     if (!c2d) return;
+    if (fitTick++ % 15 === 0) fitFruitCanvas(canvas, wrap);
     c2d.clearRect(0, 0, W, H);
     // 图层序（FC_LAYERS）：① 天空日月 ② 程序云 ③ 果树枝草地
     drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
@@ -726,8 +807,12 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
       : Math.max(W / 2 + 6, Math.min(BASKET_MAX_X, x));
   }
 
+  /** 量布局是回流读，不必每帧；draw 每 15 帧（~250ms）量一次 */
+  let fitTick = 0;
+
   function draw(): void {
     if (!c2d) return;
+    if (fitTick++ % 15 === 0) fitFruitCanvas(canvas, wrap);
     c2d.clearRect(0, 0, W, H);
     drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
     c2d.strokeStyle = "rgba(140,140,170,.35)";
@@ -1028,8 +1113,12 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
     plan = plan.concat(rainExtend(plan, rainSeed, plan.length, RAIN_CHUNK));
   }
 
+  /** 量布局是回流读，不必每帧；draw 每 15 帧（~250ms）量一次 */
+  let fitTick = 0;
+
   function draw(): void {
     if (!c2d) return;
+    if (fitTick++ % 15 === 0) fitFruitCanvas(canvas, wrap);
     c2d.clearRect(0, 0, W, H);
     drawFcScene(c2d, { w: W, h: H, theme: cfg.theme, t: clock, reduced: calm });
     if (magnetLeft > 0) {
