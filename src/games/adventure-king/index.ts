@@ -206,8 +206,24 @@ const CSS = `
 .advk-case-lock{background:linear-gradient(180deg,#f2eee5,#e6dfd1);}
 .advk-case-lock .advk-case-item{filter:grayscale(1);opacity:.55;}
 .advk-case-lock .advk-case-name{color:#a99e8c;}
+.advk-mid,.advk-left,.advk-side{display:flex;flex-direction:column;gap:8px;min-width:0;}
 @media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
+/* N-30(trio-r7):矮横屏把古堡收成双栏 —— 棋盘在左、说话行/工具钮/方向盘/陈列在右,
+   房间格按可视余量钳宽(11×7 房间,高≈宽×7/11),D-pad 与四个工具钮不滚可点 */
+@media (max-height:500px){
+  .advk-mid{flex-direction:row;align-items:flex-start;justify-content:center;gap:12px;}
+  .advk-left{flex:0 1 auto;}
+  .advk-side{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(180px,240px);
+    column-gap:10px;row-gap:6px;align-items:start;}
+  .advk-side .advk-pad2{grid-column:1;grid-row:1/span 3;grid-template-columns:repeat(3,48px);margin-top:0;}
+  .advk-side .advk-pad2 button{min-height:44px;}
+  .advk-side .advk-say{grid-column:2;grid-row:1;text-align:left;}
+  .advk-side .advk-tools{grid-column:2;grid-row:2;justify-content:flex-start;}
+  .advk-side .advk-tool{padding:6px 10px;font-size:13px;}
+  .advk-side .advk-album{grid-column:2;grid-row:3;}
+  .advk-room{max-width:clamp(220px,calc((100dvh - 214px)*11/7),420px);}
+}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
 ${touchUpliftCss([".ak-open"])}
 ${bodyFontUpliftCss([".ak-tip"])}
@@ -1057,7 +1073,18 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
   album.className = "advk-album";
   const pad = document.createElement("div");
   pad.className = "advk-pad2";
-  wrap.append(head, hud, board, mini, say, tools, pad, album);
+  // N-30:竖屏仍是 board→mini→say→tools→pad→album 的原顺序;
+  // 矮横屏由 .advk-mid 切成「左棋盘 / 右控件」双栏(见 CSS 的 max-height:500px 档)
+  const mid = document.createElement("div");
+  mid.className = "advk-mid";
+  const left = document.createElement("div");
+  left.className = "advk-left";
+  const side = document.createElement("div");
+  side.className = "advk-side";
+  left.append(board, mini);
+  side.append(say, tools, pad, album);
+  mid.append(left, side);
+  wrap.append(head, hud, mid);
   host.appendChild(wrap);
 
   let rooms = 0;
