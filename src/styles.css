@@ -2682,7 +2682,7 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 4px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
