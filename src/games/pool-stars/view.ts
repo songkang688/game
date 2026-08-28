@@ -12,7 +12,11 @@
  *
  * 360px：球桌自动转成竖版（短边朝上），球直径不小于 14px，
  * 力度条与击球钮都不小于 44px，字号不小于 13px。
+ *
+ * 1.3 手机端修复：resize 时真量 `.game-stage` 的剩余高度（减去 HUD / 按钮 / 提示），
+ * 竖版球桌按剩余高度缩放，不再固定 560px 高把玩法区顶出屏幕。
  */
+import { measureStageRoom } from "../../engine/stageRoom";
 import type { SoundName } from "../level99";
 import {
   GOLD,
@@ -62,23 +66,41 @@ export interface Layout {
 
 /** 竖版时球桌最高画到多少像素（再高手机一屏就装不下了） */
 export const MAX_VERTICAL_PX = 560;
+/** 量到剩余高度再挤,球桌也不缩得比这个矮(实在放不下的部分靠舞台滚动) */
+export const MIN_TABLE_PX = 180;
 /** 球直径的下限：小于这个数手指点不准 */
 export const MIN_BALL_PX = 14;
 /** 力度条与击球钮的最小热区 */
 export const MIN_TOUCH_PX = 44;
 
-export function tableLayout(viewportWidth: number): Layout {
+/**
+ * 球桌布局。
+ * `availHeight` 是量出来的「舞台剩余高度」(1.3 手机端修复新增,可不传):
+ *  - 不传:维持 1.2 的老口径,竖版封顶 MAX_VERTICAL_PX、球径 ≥ MIN_BALL_PX;
+ *  - 传了:剩余高度是硬约束,球桌高绝不超过它(下限 MIN_TABLE_PX),
+ *    球径下限在放不下时让位——比起球大但半张桌子被裁掉,先保证整桌都看得见、划得动。
+ */
+export function tableLayout(viewportWidth: number, availHeight?: number): Layout {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 480;
   const avail = clamp(w - 16, 260, 760);
   const vertical = w < 560;
+  // 竖着放的是哪条边:竖版长边(TABLE.w)朝上,横版短边(TABLE.h)朝上
+  const upSide = vertical ? TABLE.w : TABLE.h;
+  const hasRoom = typeof availHeight === "number" && Number.isFinite(availHeight) && availHeight > 0;
+  const capH = hasRoom
+    ? Math.max(MIN_TABLE_PX, Math.min(vertical ? MAX_VERTICAL_PX : Number.POSITIVE_INFINITY, availHeight))
+    : vertical
+      ? MAX_VERTICAL_PX
+      : Number.POSITIVE_INFINITY;
   let scale: number;
   if (vertical) {
-    scale = Math.min(avail / TABLE.h, MAX_VERTICAL_PX / TABLE.w);
-    scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
+    scale = Math.min(avail / TABLE.h, capH / TABLE.w);
   } else {
     scale = Math.min(avail / TABLE.w, 3.4);
-    scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
   }
+  scale = Math.max(scale, MIN_BALL_PX / (2 * TABLE.r));
+  // 剩余高度优先于球径下限:量到了多高就画多高,球桌不再顶出屏幕
+  scale = Math.min(scale, capH / upSide);
   const cssW = vertical ? TABLE.h * scale : TABLE.w * scale;
   const cssH = vertical ? TABLE.w * scale : TABLE.h * scale;
   return {
@@ -522,7 +544,10 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   }
 
   function resize(): void {
-    lay = tableLayout(viewportWidth());
+    // 真量 `.game-stage` 里球桌还剩多高(扣掉 HUD、力度条、按钮行、提示语);
+    // 量不到(测试桩没布局引擎 / 没挂在壳层舞台里)返回 null,退回 1.2 只按宽度的老口径
+    const room = measureStageRoom(tableBox, MIN_TABLE_PX);
+    lay = tableLayout(viewportWidth(), room ?? undefined);
     canvas.width = Math.round(lay.cssW);
     canvas.height = Math.round(lay.cssH);
     canvas.style.width = `${lay.cssW}px`;

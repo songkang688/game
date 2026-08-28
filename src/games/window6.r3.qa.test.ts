@@ -10,7 +10,9 @@
  *     mole-pop 天线星 = 三颗描边星 + 单杆天线(无电光件)、
  *     brave-path 钥匙/锁 = 同心环头 + 锁梁锁身(无「一路小圆点链」);
  *  3. 360px 布局的静态根因:文档级 overflow-x:hidden 兜底 +
- *     首页 .tabs / 战役 .l99-tabs 两条页签条是设计内横滑容器(overflow-x:auto),
+ *     首页 .tabs 页签条是设计内横滑容器(overflow-x:auto);战役 .l99-tabs 在
+ *     1.3 手机端修复后改成换行铺开(flex-wrap:wrap)——原先横滑 + 藏滚动条
+ *     在手机上看起来就像末个页签被切掉,两种口径都不会顶出文档级横滚,
  *     这是 38 个运行时采样点文档级溢出全 0 的结构性保证;
  *  4. 金币三件套:brave-path 金币图标高光弧 / 内环暗缘 / 落影椭圆齐备,非平涂黄圆。
  */
@@ -129,9 +131,13 @@ describe("窗口6 r3 tester · 360px 布局静态根因钉(壳层滚动容器只
     expect(css).toMatch(/\.tabs\s*\{[^}]*overflow-x:\s*auto/);
   });
 
-  it("战役章节页签 .l99-tabs 是设计内横滑容器(overflow-x:auto)", () => {
+  it("战役章节页签 .l99-tabs 换行铺开,不再靠横滑 + 藏滚动条(1.3 手机端修复)", () => {
     const src = readFileSync(join(__dirname, "level99.ts"), "utf8");
-    expect(src).toMatch(/\.l99-tabs\{[^}]*overflow-x:auto/);
+    // 换行铺开:每个章节页签都完整可见,末个页签不再像被切掉一半
+    expect(src).toMatch(/\.l99-tabs\{[^}]*flex-wrap:wrap/);
+    // 横滑 + 藏滚动条的老写法不许回潮(规则本体,注释里的说明不算)
+    expect(src).not.toMatch(/\.l99-tabs\{[^}]*overflow-x:auto/);
+    expect(src).not.toMatch(/\.l99-tabs\{[^}]*scrollbar-width:none/);
   });
 });
 

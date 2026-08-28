@@ -476,7 +476,11 @@ function starRowHTML(stars: number): string {
 
 const L99_CSS = `
 .l99-wrap{max-width:680px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-  user-select:none;-webkit-user-select:none;position:relative;}
+  user-select:none;-webkit-user-select:none;position:relative;
+  /* 1.3 手机端修复:壳层舞台(.game-stage)已改成竖向可滚;这里把整棵关卡树排成
+     flex 列并至少铺满舞台,关内玩法区(.l99-stage)才能拿到「剩余高度」自适应 */
+  display:flex;flex-direction:column;min-height:100%;width:100%;}
+.l99-view{flex:1 0 auto;display:flex;flex-direction:column;min-width:0;}
 .l99-map{border-radius:20px;padding:14px;background:linear-gradient(180deg,#FFF7FB,#F0F4FF);}
 .l99-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 /* 「🚩 0/188 关」「⭐ 0/564」是孩子要读的进度,不是按钮也不是格子数字,按正文 16px 走 */
@@ -491,8 +495,9 @@ const L99_CSS = `
   font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
 .l99-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .l99-tool-skip{background:#efe9fb;color:#665390;}
-.l99-tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:none;}
-.l99-tabs::-webkit-scrollbar{display:none;}
+/* 1.3 手机端修复:章节页签改成换行铺开。原来 overflow-x:auto 还把滚动条藏起来
+   (scrollbar-width:none),手机上看起来就像最后一个页签被切掉了一半 */
+.l99-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px 2px 8px;}
 .l99-tab{flex:0 0 auto;border:none;border-radius:14px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
 .l99-tab.l99-tab-on{color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
@@ -529,14 +534,17 @@ const L99_CSS = `
 .l99-jump-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .l99-maphint{margin-top:12px;text-align:center;font-size:16px;line-height:1.45;font-weight:700;
   color:#77619b;overflow-wrap:anywhere;word-break:break-word;}
-.l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);}
-.l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;}
+/* flex:1 0 auto:关卡卡至少填满舞台剩余高度,内容更高时跟着长(舞台负责滚),
+   overflow:hidden 只负责圆角,永远不会真的裁玩法区 */
+.l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);
+  display:flex;flex-direction:column;flex:1 0 auto;}
+.l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;flex:0 0 auto;}
 .l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
 .l99-beststars{font-size:12px;letter-spacing:1px;}
-.l99-stage{padding:10px;}
+.l99-stage{padding:10px;flex:1 0 auto;min-width:0;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .l99-ov-big{font-size:56px;line-height:1;}
@@ -559,6 +567,16 @@ const L99_CSS = `
   .l99-grid{gap:6px;}
   .l99-node-num{font-size:15px;}
   .l99-node-stars{font-size:10px;}
+}
+/* 1.3 手机端修复:740px 上下的竖屏手机,关内选关条 + 攻略 + 管理员跳关一叠就吃掉小半屏。
+   热区仍 ≥44px(styles.css 兜底)、字号不动,只压内边距和间距,把高度还给玩法区 */
+@media (max-height:740px){
+  .l99-map{padding:10px;}
+  .l99-stagebar{padding:6px 8px;gap:6px;}
+  .l99-stage{padding:8px;}
+  .l99-tools{gap:6px;}
+  .l99-jump{gap:4px;}
+  .l99-pagehint{margin:0 0 6px;}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
@@ -589,6 +607,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   style.textContent = L99_CSS;
   wrap.appendChild(style);
   const view = document.createElement("div");
+  view.className = "l99-view";
   wrap.appendChild(view);
   api.root.appendChild(wrap);
 

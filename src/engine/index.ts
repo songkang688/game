@@ -51,3 +51,6 @@ export {
   scaleAtDepth
 } from "./view25d";
 export type { MediaQueryLike, Projected, View25dCamera } from "./view25d";
+// 1.3 手机端修复:量 `.game-stage` 的剩余高度,替代各游戏 `innerHeight - 常数` 的猜法
+export { findStage, measureStageRoom, roomWithin } from "./stageRoom";
+export type { RectLike, StageElementLike } from "./stageRoom";

@@ -233,6 +233,18 @@ describe("样式表的无障碍红线", () => {
     }
   });
 
+  it("游戏舞台竖着能滚:内容比舞台高时手指划得动,不再整段裁掉(1.3 手机端修复)", () => {
+    const stage = ruleBody(".game-stage");
+    expect(stage).toMatch(/overflow-x:\s*hidden/);
+    expect(stage).toMatch(/overflow-y:\s*auto/);
+    // 只裁不滚的老写法(overflow: hidden)不许回潮
+    expect(stage).not.toMatch(/overflow:\s*hidden/);
+    // 游戏页底部让开 iPhone Home 条那类安全区,最后一排按钮不被系统手势条盖住
+    expect(ruleBody(".game-screen")).toMatch(/padding-bottom:\s*calc\([^)]*safe-area-inset-bottom/);
+    // 740px 上下的竖屏手机也有矮屏压缩档(原来只有 ≤560px 的横放档,竖屏手机整档漏掉)
+    expect(CSS).toMatch(/@media \(max-height: 740px\)/);
+  });
+
   it("四个目标断点都有对应的适配规则", () => {
     // 320(超窄)、375/420(手机)、768(平板)、矮屏横放
     expect(CSS).toMatch(/@media \(max-width: 340px\)/);

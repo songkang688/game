@@ -11,6 +11,7 @@ export { meta };
 //
 // 全程没有血也没有伤:被顶出场地只是转一圈再开回来,生命用光就是这一局结束。
 import { save } from "../../engine/save";
+import { measureStageRoom } from "../../engine/stageRoom";
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
 import { AI_LABEL, AI_LEVELS, chooseCarAction, huntersFor, type AiLevel } from "./ai";
 import GUIDE from "./guide";
@@ -554,7 +555,8 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 720));
     // 场地上下压着标题栏、HUD、提示语和摇杆那一排。摇杆旁边两颗键锁死 44px 热区
     // 之后这一排比原来高了近 20px,预留值跟着让出来,免得矮屏上摇杆被挤出首屏。
-    const roomH = Math.max(200, (window.innerHeight || 700) - 320);
+    // 1.3 手机端修复:优先真量 `.game-stage` 的剩余高度,量不到再退回老估算。
+    const roomH = measureStageRoom(arena, 200) ?? Math.max(200, (window.innerHeight || 700) - 320);
     scale = Math.min(avail / lv.field.w, roomH / lv.field.h);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cw = Math.round(lv.field.w * scale);

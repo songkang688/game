@@ -841,7 +841,8 @@ button {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  padding-bottom: 14px;
+  /* 底部让开 iPhone Home 条等安全区,最后一排按钮不被系统手势条盖住 */
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
 }
 
 .game-topbar {
@@ -885,7 +886,11 @@ button {
   border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: var(--shadow);
-  overflow: hidden;
+  /* 1.3 手机端修复:舞台只裁横向;内容比舞台高时必须竖着能滚,
+     手机上选关地图 / HUD 叠起来超过一屏,手指要划得动,不能整段裁掉 */
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ---------- 弹窗 ---------- */
@@ -3004,5 +3009,22 @@ html {
   .cg-wrap {
     padding: 10px 0;
     border-radius: 12px;
+  }
+}
+
+/* ==========================================================================
+   1.3 手机端显示修复(只增不删,追加在最后)
+   实拍病灶:740px 上下的竖屏手机里,游戏页顶栏 + 关内 HUD 吃掉小半屏,
+   玩法区被顶出视口;原来只有 ≤560px 的矮屏横放档,竖屏手机整档漏掉了。
+   热区仍 ≥44px、字号一个不降,这里只压内边距,多让几十像素给玩法区。
+   ========================================================================== */
+@media (max-height: 740px) {
+  .screen.game-screen {
+    padding-top: 10px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .game-topbar {
+    padding: 6px 0;
   }
 }
