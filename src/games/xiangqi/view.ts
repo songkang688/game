@@ -168,6 +168,10 @@ export const CSS = `
   .xq-btns button{flex:1 1 74px;min-height:${MIN_HIT_PX}px;padding:10px 2px;}
   .xq-badge{font-size:28px;}
 }
+/* 平板横屏高度是短边:460 宽的棋盘(高≈510)会把悔棋/提示那排顶出首屏,收窄一点整套都装得下 */
+@media (min-width:700px) and (max-height:840px){
+  .xq-wrap{max-width:380px;}
+}
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}
 }
