@@ -743,9 +743,32 @@ export function openCollection(scope?: string, opts?: OpenCollectionOptions): Co
 
   let offStore: () => void = () => {};
 
+  // N-48:收藏册 overlay 曾跨路由残留(学习员一度误号 N-42,与 puff 热区同号)。
+  // 学 S-3 parentAuth:hashchange 即关面板;密码/星星存档约定不动。
+  const routeHosts: Array<{
+    addEventListener: (type: string, fn: () => void) => void;
+    removeEventListener: (type: string, fn: () => void) => void;
+  }> = [];
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    routeHosts.push(window);
+  }
+  const docRoute = doc as unknown as {
+    addEventListener?: (type: string, fn: () => void) => void;
+    removeEventListener?: (type: string, fn: () => void) => void;
+  };
+  if (typeof docRoute.addEventListener === "function") {
+    const sameAsWin = typeof window !== "undefined" && (docRoute as unknown) === window;
+    if (!sameAsWin) routeHosts.push(docRoute as (typeof routeHosts)[number]);
+  }
+  function onRouteChange(): void {
+    close();
+  }
+  for (const host of routeHosts) host.addEventListener("hashchange", onRouteChange);
+
   function close(): void {
     if (closed) return;
     closed = true;
+    for (const host of routeHosts) host.removeEventListener("hashchange", onRouteChange);
     doc.removeEventListener("keydown", onKeyDown, true);
     offStore();
     overlay.remove();

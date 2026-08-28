@@ -103,6 +103,8 @@ import {
   type SparkleParticle,
 } from "../../art/kit/sparklePaper";
 import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
+import { canvasDisplayCapPx, canvasRoomPx } from "./stageFit";
+export { canvasDisplayCapPx, MIN_CANVAS_DISPLAY_PX } from "./stageFit";
 
 /** 两位玩家的光标颜色:朵朵粉、星星蓝 */
 const P_COLOR = ["#e8558f", "#3f7fd6"];
@@ -166,6 +168,24 @@ const CSS = `
 .als-tool:disabled{opacity:.5;cursor:default;box-shadow:none;}
 .als-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (prefers-reduced-motion:reduce){.as-btn:active,.als-tool:active{transform:none;}}
+/* C-6:矮横屏画布按宽拉到 ~0.64×宽,工具+D-pad(推理关再加线索盒)整排线下。
+   宽屏双栏:场景左、线索/工具/垫右;钳高见 stageFit.canvasDisplayCapPx。判定零触碰。 */
+@media (max-height:500px){
+  .as-wrap{gap:4px;}
+  .as-clues{padding:5px 8px;gap:2px;max-height:88px;overflow:auto;}
+  .as-clue{font-size:13px;line-height:1.35;}
+  .as-tip{min-height:0;margin:0;font-size:12px;line-height:1.3;}
+  .als-list{padding:2px 0;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;}
+  .as-canvas{grid-column:1;grid-row:1 / span 4;max-height:100%;}
+  .as-clues{grid-column:2;grid-row:1;max-width:260px;max-height:min(120px,40vh);}
+  .als-list{grid-column:1 / -1;grid-row:auto;}
+  .als-tools{grid-column:2;}
+  .as-pads{grid-column:2;}
+  .as-tip{grid-column:1 / -1;}
+}
 ${touchUpliftCss([".as-open", ".as-back"])}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
 `;
@@ -1113,8 +1133,14 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   }
 
   function syncSize(): void {
-    cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
-    cssH = Math.round(cssW * (SCENE_H / SCENE_W));
+    cssW = Math.max(
+      160,
+      Math.round(canvas.clientWidth || host.clientWidth || wrap.clientWidth || 320)
+    );
+    const wantH = Math.round(cssW * (SCENE_H / SCENE_W));
+    const room = canvasRoomPx(canvas, wrap);
+    const cap = canvasDisplayCapPx(wantH, room);
+    cssH = cap ?? wantH;
     view = clampView(view, viewport());
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     const bw = Math.max(1, Math.round(cssW * dpr));

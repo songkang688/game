@@ -232,6 +232,16 @@ class FakeDoc {
     for (const fn of [...(this.listeners.get("keydown") ?? [])]) fn(e);
     return e;
   }
+
+  fire(type: string, extra: Partial<FakeEvent> = {}): FakeEvent {
+    const e = makeEvent(this, extra);
+    for (const fn of [...(this.listeners.get(type) ?? [])]) fn(e);
+    return e;
+  }
+
+  listenerCount(type: string): number {
+    return (this.listeners.get(type) ?? []).length;
+  }
 }
 
 function walk(root: FakeEl, visit: (el: FakeEl) => void): void {
@@ -624,6 +634,18 @@ describe("关闭与监听清理", () => {
     const overlay = findOne(doc.body, "collection-overlay")!;
     overlay.fire("click", {}, findOne(panel, "collection-card"));
     expect(findOne(doc.body, "collection-overlay")).not.toBeNull();
+  });
+
+  it("N-48 hashchange 关掉 overlay,不留监听", () => {
+    const { doc, subs } = open();
+    expect(findOne(doc.body, "collection-overlay")).not.toBeNull();
+    expect(doc.listenerCount("hashchange")).toBe(1);
+    doc.fire("hashchange");
+    expect(findOne(doc.body, "collection-overlay")).toBeNull();
+    expect(isCollectionOpen()).toBe(false);
+    expect(doc.keydownCount()).toBe(0);
+    expect(doc.listenerCount("hashchange")).toBe(0);
+    expect(subs()).toBe(0);
   });
 
   it("destroy 就是 close 的别名", () => {

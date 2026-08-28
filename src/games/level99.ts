@@ -589,7 +589,8 @@ const L99_CSS = `
 .l99-admin-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;width:100%;}
 .l99-jump{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
 .l99-jump-input{width:76px;min-height:44px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
-  font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;}
+  font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;box-sizing:border-box;}
+.l99-jump .l99-tool{min-height:44px;box-sizing:border-box;}
 .l99-jump-note{font-size:16px;line-height:1.45;font-weight:700;color:#8d7bab;}
 .l99-jump-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .l99-maphint{margin-top:12px;text-align:center;font-size:16px;line-height:1.45;font-weight:700;
