@@ -181,6 +181,19 @@ const CSS = `
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
+/* r18 B:平板横屏(501–900 高)缩放工具 755、方向盘 831+ 同样沉出视口,
+   复用 C-6 已验证的双栏配方;≤500 的 r11 档一字不动。 */
+@media (max-height:900px) and (min-height:501px) and (min-width:900px){
+  .as-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,36%);
+    gap:8px 12px;align-items:stretch;align-content:start;height:100%;max-height:100%;min-height:0;overflow:hidden;}
+  .as-wrap>.as-canvas{grid-column:1;grid-row:1/-1;width:100%;max-height:100%;}
+  .as-wrap>.as-clues{grid-column:2;max-height:28%;overflow:auto;padding:6px 8px;gap:3px;}
+  .as-wrap>.als-list{grid-column:2;max-height:76px;}
+  .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
+  .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:3;margin:0;
+    background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
+  .as-wrap>.as-tip{grid-column:2;}
+}
 ${touchUpliftCss([".as-open", ".as-back"])}
 .as-open,.as-back{min-height:44px;}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
