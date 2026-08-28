@@ -130,6 +130,7 @@ const CSS = `
 .ak-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .ak-tip{text-align:center;font-size:13px;font-weight:700;color:#7a6046;line-height:1.5;}
 .ak-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
+.ak-bar[hidden]{display:none;}
 .ak-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f0a35c,#d9803a);box-shadow:0 4px 0 #b1642a;}
 .ak-open.ak-open-time{background:linear-gradient(180deg,#7fa8e8,#5a80c8);box-shadow:0 4px 0 #45619b;}
