@@ -414,11 +414,14 @@ export const MST_CSS = `
 @media (max-height:500px) and (min-width:640px){
   .mst-wrap.mst-scoreplay{max-height:calc(100dvh - 88px);overflow:hidden;min-height:0;
     display:flex;flex-direction:column;}
-  .mst-wrap.mst-scoreplay .mst-sky{min-height:56px;max-height:72px;}
+  .mst-wrap.mst-scoreplay .mst-sky{min-height:70px;max-height:90px;}
   .mst-wrap.mst-scoreplay .mst-keys{position:sticky;bottom:0;z-index:5;flex:0 0 auto;
-    min-height:48px;padding-top:4px;
+    min-height:64px;padding-top:2px;
     background:linear-gradient(180deg,rgba(18,28,64,0),#162044 28%);}
+  /* 音高错落的 marginBottom 会把「哆」顶出 412;只压视觉落差,判定/发声不动 */
+  .mst-wrap.mst-scoreplay .mst-star{margin-bottom:0 !important;}
   .mst-wrap.mst-scoreplay .mst-tools{position:sticky;bottom:0;z-index:4;}
+  .mst-wrap.mst-scoreplay .mst-beat{display:none;}
 }
 @media (prefers-reduced-motion:reduce){
   .mst-lines{transition:none;}
