@@ -269,6 +269,28 @@ export function scrollToShowPx(top: number, bottom: number, client: number, max:
   return Math.max(0, Math.min(max, Math.round(want)));
 }
 
+/**
+ * 首帧之后允许格子**往回长**到多大;不该长就返回 null。
+ *
+ * 为什么需要这一条:挂载那一刻 `.fdf-panels` 还是空的,`.l99-stage` 这类
+ * **随内容长高**的裁切祖先此时几乎没有高度,`stageRoomPx()` 量出来的余量
+ * 小得离谱,`panelCellForRoom()` 直接钳到 26px 下限——390×844 的手机和
+ * 1024×768 的平板上棋盘四周明明一大片空,格子却只有 26px(三办 R4 实测)。
+ * 等真实内容排完再量一次,余量就是真的了;这里按同一套公式复算,
+ * 只许放大、不许缩小(缩小的活儿归 fitViewport 的钳制,别抢)。
+ */
+export function regrowCellPx(
+  currentPx: number,
+  rows: number,
+  viewportHeight: number,
+  roomPx: number,
+  max = SMALL_CELL_PX,
+): number | null {
+  if (!Number.isFinite(currentPx) || currentPx <= 0) return null;
+  const grown = Math.min(panelCellPx(rows, viewportHeight, max), panelCellForRoom(rows, roomPx, max));
+  return grown > currentPx ? grown : null;
+}
+
 /** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */
 export function miniCellPx(cols: number, viewportWidth: number): number {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;

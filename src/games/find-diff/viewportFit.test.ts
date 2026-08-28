@@ -21,7 +21,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { VIEWPORT_MIN_ROOM, viewportRoomPx } from "./runtime";
+import { VIEWPORT_MIN_ROOM, regrowCellPx, viewportRoomPx } from "./runtime";
 
 const SRC = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const CSS = SRC.slice(SRC.indexOf("const CSS = `"), SRC.indexOf("\n`;", SRC.indexOf("const CSS = `")));
@@ -88,5 +88,45 @@ describe("找不同 · 钳两张图那一块（W5R2-C-04）", () => {
 
   it("格子下限一个字没动：26px 配 22px 命中半径，热区仍是 44px", () => {
     expect(SRC).toContain("export const PLAY_CELL_PX = 44;");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 三办 R4 · 测试员 A:格子被空骨架量出来的假余量钳到 26px,首帧后要能回涨
+//
+// 挂载那一刻 `.fdf-panels` 还是空的,`.l99-stage` 这类随内容长高的裁切祖先
+// 几乎没有高度,`stageRoomPx()` 量出的余量小得离谱 —— 390×844 手机和
+// 1024×768 平板上棋盘四周一大片空,格子却停在 26px 下限。
+// ---------------------------------------------------------------------------
+
+describe("找不同 · 首帧后格子按真实余量回涨(三办 R4-A)", () => {
+  it("手机 390×844:真实余量 525px,3 行格子从 26 回涨到 44 上限", () => {
+    expect(regrowCellPx(26, 3, 844, 525)).toBe(44);
+  });
+
+  it("已经是公式给的尺寸就不折腾(返回 null,不重画)", () => {
+    expect(regrowCellPx(44, 3, 844, 525)).toBeNull();
+  });
+
+  it("真挤的矮屏(360×640 舞台只给 404px)按余量长到 39,不越界", () => {
+    expect(regrowCellPx(26, 3, 640, 404)).toBe(39);
+  });
+
+  it("只放大不缩小:公式算出更小值时按兵不动,缩小归 fitViewport 管", () => {
+    expect(regrowCellPx(44, 3, 640, 300)).toBeNull();
+  });
+
+  it("脏值不炸:量不到余量 / 当前值不合法都返回 null", () => {
+    expect(regrowCellPx(Number.NaN, 3, 844, 525)).toBeNull();
+    expect(regrowCellPx(0, 3, 844, 525)).toBeNull();
+    // roomPx 是 Infinity(没有裁切祖先)时按屏高那条公式回涨
+    expect(regrowCellPx(26, 3, 844, Number.POSITIVE_INFINITY)).toBe(44);
+  });
+
+  it("挂载代码真的接了这条:首帧 rAF 里复算并重画", () => {
+    expect(SRC).toContain("regrowCellPx(playPx, scene.rows");
+    const rafBlock = SRC.slice(SRC.indexOf("raf.call(win"), SRC.indexOf("win?.addEventListener"));
+    expect(rafBlock).toContain("paintAll(false)");
+    expect(rafBlock).toContain("fitViewport()");
   });
 });

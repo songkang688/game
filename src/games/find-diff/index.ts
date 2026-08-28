@@ -40,6 +40,7 @@ import {
   missCooldownMs,
   panelCellPx,
   panelCellForRoom,
+  regrowCellPx,
   stageRoomPx,
   openLevelOnMap,
   parseLevelParam,
@@ -760,7 +761,23 @@ function createRunner(host: HTMLElement, opts: RunnerOptions): Runner {
   const raf = win?.requestAnimationFrame;
   if (typeof raf === "function") {
     raf.call(win, () => {
-      if (liveFit) fitViewport();
+      if (!liveFit) return;
+      // 挂载那一刻面板还空着,随内容长高的裁切祖先量出的余量偏小,格子被
+      // 冤枉地钳到 26px;真实布局出来后按同一套公式复算,只放大不缩小
+      const grown = regrowCellPx(playPx, scene.rows, view.innerHeight ?? 640, stageRoomPx(root), PLAY_CELL_PX);
+      if (grown !== null && foundSet.size === 0) {
+        playPx = grown;
+        // 格子盒子的尺寸在 grid 模板上,重填内容前得把模板一起改大
+        for (const grid of triple ? [playGrid] : [playGrid, ...refGrids]) {
+          grid.style.gridTemplateColumns = `repeat(${scene.cols},${playPx}px)`;
+          grid.style.gridAutoRows = `${playPx}px`;
+        }
+        paintAll(false);
+        msgEl.textContent = shouldSuggestZoom(playPx, zoom)
+          ? "格子有点小，可以两根手指放大，两张图会一起放大～"
+          : "";
+      }
+      fitViewport();
     });
   }
   win?.addEventListener("resize", fitViewport);
