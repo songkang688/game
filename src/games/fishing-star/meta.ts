@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🎣",
   category: "casual" as const,
   color: "#e2f2fb",
-  blurb: "岸上蓄力抛竿,水下咬钩收杆:张力进红区还有 1.2 秒能救回来。188 关八大水域,「钓到天黑」无尽赛总重量,25 种原创鱼图鉴记你最大的一条。",
+  blurb: "岸上蓄力抛竿,水下咬钩收竿:张力进红区还有 1.2 秒能救回来。188 关八大水域,「钓到天黑」无尽赛总重量,25 种原创鱼图鉴记你最大的一条。",
   // levels.ts 的 CHAPTERS 八章合计 188 关;index.ts 另有「钓到天黑」无尽、图鉴与星星装备页
   modes: ["campaign", "endless"] as const,
   levels: 188,

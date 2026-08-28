@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🍑",
   category: "action" as const,
   color: "#ffe0a3",
-  blurb: "188 回合十二果园切果战役!彩虹连刀、双倍果、连体果,还有一波比一波密的无尽水果暴风!",
+  blurb: "188 回合十二果园切果战役!六种果子六种手绘切面,彩虹连刀、双倍果、连体果,还有一波比一波密的无尽水果暴风!",
   // logic.ts 的 TOTAL_ROUNDS = 188;index.ts 另有禅宗、街机无尽与 1.2 的水果暴风(都算无尽玩法)
   modes: ["campaign", "endless"] as const,
   // 手指划刀最顺手;桌面按住鼠标拖也是同一套判定

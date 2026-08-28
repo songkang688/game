@@ -100,6 +100,24 @@ import {
 } from "./blade";
 import { save } from "../../engine/save";
 import { speak, stopSpeaking } from "../speech";
+// 1.3 视觉升级(第 20 步 B 档):专属剪影 / 切面果肉 / 舞台氛围 / 粒子,全是皮不动骨
+import {
+  FS_COLORS,
+  MIN_DETAIL_PX,
+  PETAL_COMBO,
+  PetalRain,
+  TRAIL_RIBBON_MS,
+  auraFor,
+  drawCrossSection,
+  drawKingCrown,
+  juiceColorFor,
+  kingBeadColor,
+  silhouettePoints,
+  traceSilhouette,
+  type SliceFruitName,
+} from "./visual";
+import { JuicePool } from "../../art/kit/juice";
+import { SparklePool, traceStar } from "../../art/kit/sparkle";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -218,6 +236,8 @@ interface Half {
   /** 水果名,决定切面细节(瓜籽/橙瓣/桃核…) */
   name: string;
   life: number;
+  /** 刚切开:切面亮 1 帧再落定(纯视觉,reduced 直接落定) */
+  fresh?: boolean;
 }
 
 interface TrailPoint {
@@ -340,6 +360,10 @@ export function mount(api: GameAPI): { destroy: () => void } {
   const splashes: Splash[] = [];
   const rings: Ring[] = [];
   const floats: Floaty[] = [];
+  // 1.3 纯视觉粒子:果汁液滴 / 白闪星花 / 花瓣雨(destroy 时一并清空)
+  const juice = new JuicePool();
+  const sparkles = new SparklePool();
+  const petals = new PetalRain();
 
   /**
    * 系统开了「减弱动态效果」。
@@ -354,9 +378,15 @@ export function mount(api: GameAPI): { destroy: () => void } {
   /** 装饰性残留的消退倍速:减弱动效时收得快得多 */
   const FX_FADE = reducedMotion ? 5 : 1;
 
-  /** 刀光拖尾留几帧、留多久 */
+  /**
+   * 1.3 视觉层的减弱动效别名:星花/液滴/花瓣雨/脉动/弹跳这些新装饰统一读它,
+   * 玩法(抛物线/判定/计时)一律不看这面开关。
+   */
+  const fxCalm = reducedMotion;
+
+  /** 刀光拖尾留几帧、留多久(1.3:尾迹时长走视觉常量 TRAIL_RIBBON_MS) */
   const TRAIL_MAX = reducedMotion ? 5 : 16;
-  const TRAIL_SEC = reducedMotion ? 0.06 : 0.18;
+  const TRAIL_SEC = reducedMotion ? 0.06 : TRAIL_RIBBON_MS / 1000;
 
   let time = 0;
   let launchTimer = 0.8;
@@ -758,6 +788,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
   /** 果肉飞两半:切开的通用表现。 */
   function splitHalves(f: Flying, kind: FruitKind, angle: number): void {
     splashes.push({ x: f.x, y: f.y, life: 0.5, color: kind.flesh });
+    // 切中反馈(纯视觉):接触点白闪星花 + 果汁液滴沿切向飞出(reduced 星花留 1 帧、液滴不生成)
+    sparkles.spawn(f.x, f.y, fxCalm, Math.min(22, f.r * 0.55 + 8));
+    juice.spawn(f.x, f.y, angle, juiceColorFor(kind.name, kind.skin), fxCalm);
     for (const side of [-1, 1]) {
       halves.push({
         x: f.x,
@@ -771,6 +804,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         flesh: kind.flesh,
         name: kind.name,
         life: 1.2,
+        fresh: true,
       });
     }
   }
@@ -803,6 +837,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     api.play("pop");
     addFloat(f.x, f.y - 10, chain > 1 ? `+${gain} ×${chain}` : `+${gain}`, "#c47a2a");
     splitHalves(f, kind, Math.atan2(y2 - y1, x2 - x1));
+    // 连击够数就飘一场同色花瓣雨(纯装饰,reduced 关)
+    if (comboCount >= PETAL_COMBO) petals.burst(kind.skin, fxCalm);
   }
 
   /** 硬壳果:第一刀弹开,第二刀才切得开。 */
@@ -1295,6 +1331,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (floats[i].life <= 0) floats.splice(i, 1);
     }
     while (trail.length > 0 && time - trail[0].t > TRAIL_SEC) trail.shift();
+    juice.update(rawDt * 1000);
+    petals.update(rawDt * 1000);
     for (let i = splashes.length - 1; i >= 0; i--) {
       splashes[i].life -= dt * FX_FADE;
       if (splashes[i].life <= 0) splashes.splice(i, 1);
@@ -1436,43 +1474,61 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return `rgb(${r},${g},${b})`;
   }
 
-  function drawBomb(f: Flying, big: boolean): void {
-    ctx.fillStyle = big ? "#4a4258" : "#5c6b8a";
+  /**
+   * 炸弹 = 「乌云娃娃」:皱眉的灰蓝小云朵 + 头顶引信星火(一颗眨眼的小星星)。
+   * 零写实武器元素,切到它只是「哎呀」;大乌云更黑一号、挂个 ! 徽章提醒别碰。
+   */
+  function drawCloudBomb(f: Flying, big: boolean): void {
+    const r = f.r;
+    const base = big ? shade(FS_COLORS.cloud, -36) : FS_COLORS.cloud;
+    const grad = ctx.createRadialGradient(-r * 0.4, -r * 0.45, r * 0.1, 0, 0, r * 1.15);
+    grad.addColorStop(0, shade(base, 26));
+    grad.addColorStop(1, base);
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = shade(base, -38);
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    // 云团:三个圆瓣一条路径描完
     ctx.beginPath();
-    ctx.arc(0, 0, f.r, 0, Math.PI * 2);
+    ctx.arc(-r * 0.48, r * 0.16, r * 0.5, Math.PI * 0.45, Math.PI * 1.5);
+    ctx.arc(0, -r * 0.22, r * 0.6, Math.PI * 0.95, Math.PI * 2.08);
+    ctx.arc(r * 0.5, r * 0.18, r * 0.48, Math.PI * 1.4, Math.PI * 0.6);
+    ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+    // 引信星火:头顶一颗小星星眨呀眨(reduced 时定住不闪)
+    const twinkle = fxCalm ? 1 : 0.75 + Math.sin(time * 9) * 0.35;
+    ctx.fillStyle = "#ffd868";
+    traceStar(ctx, r * 0.52, -r * 0.98, r * 0.24 * twinkle);
+    ctx.fill();
+    // 皱眉 + 嘟嘴
+    ctx.strokeStyle = "#3f4557";
+    ctx.lineWidth = Math.max(2, r * 0.08);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.42, -r * 0.36);
+    ctx.lineTo(-r * 0.16, -r * 0.24);
+    ctx.moveTo(r * 0.42, -r * 0.36);
+    ctx.lineTo(r * 0.16, -r * 0.24);
+    ctx.stroke();
+    ctx.fillStyle = "#3f4557";
+    ctx.beginPath();
+    ctx.arc(-r * 0.28, -r * 0.04, r * 0.1, 0, Math.PI * 2);
+    ctx.arc(r * 0.28, -r * 0.04, r * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, r * 0.42, r * 0.16, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
     if (big) {
-      // 大炸弹:红色警戒条纹
-      ctx.strokeStyle = "#e05a7a";
-      ctx.lineWidth = 5;
+      // 大乌云挂个「!」小徽章,提醒这个更凶
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.beginPath();
-      ctx.arc(0, 0, f.r * 0.72, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.arc(-r * 0.55, -r * 0.72, r * 0.24, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = "#e05a7a";
-      ctx.font = `bold ${f.r * 0.7}px sans-serif`;
+      ctx.font = `bold ${Math.round(r * 0.36)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("!", 0, f.r * 0.05);
-    }
-    ctx.strokeStyle = "#3a4258";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(0, -f.r);
-    ctx.quadraticCurveTo(f.r * 0.4, -f.r * 1.4, f.r * 0.7, -f.r * 1.2);
-    ctx.stroke();
-    ctx.fillStyle = "#ffd868";
-    ctx.beginPath();
-    ctx.arc(f.r * 0.7, -f.r * 1.2, 5 + Math.sin(time * 20) * 2, 0, Math.PI * 2);
-    ctx.fill();
-    if (!big) {
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(-f.r * 0.3, -f.r * 0.15, f.r * 0.14, 0, Math.PI * 2);
-      ctx.arc(f.r * 0.3, -f.r * 0.15, f.r * 0.14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(0, f.r * 0.3, f.r * 0.15, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillText("!", -r * 0.55, -r * 0.7);
     }
   }
 
@@ -1502,26 +1558,63 @@ export function mount(api: GameAPI): { destroy: () => void } {
   }
 
   function drawIce(f: Flying): void {
+    const wisp01 = auraFor({ freezeTimer, doubleTimer }, time * 1000, fxCalm).wisp01;
     ctx.shadowColor = "#bfe9ff";
-    ctx.shadowBlur = 14 + Math.sin(time * 6) * 5;
-    ctx.fillStyle = "#bfe9ff";
+    ctx.shadowBlur = fxCalm ? 12 : 14 + Math.sin(time * 6) * 5;
+    const body = ctx.createRadialGradient(-f.r * 0.35, -f.r * 0.4, f.r * 0.1, 0, 0, f.r * 1.1);
+    body.addColorStop(0, "#ffffff");
+    body.addColorStop(1, "#bfe9ff");
+    ctx.fillStyle = body;
     ctx.beginPath();
     ctx.arc(0, 0, f.r, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
-    // 雪花
+    // 冰晶棱面:中央六边形棱面 + 顶点棱线,一眼「这是块冰」
+    ctx.fillStyle = FS_COLORS.ice;
+    ctx.strokeStyle = "#9cc8e8";
+    ctx.lineWidth = Math.max(1.5, f.r * 0.05);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * i) / 3 - Math.PI / 6;
+      const px = Math.cos(a) * f.r * 0.56;
+      const py = Math.sin(a) * f.r * 0.56;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * i) / 3 - Math.PI / 6;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * f.r * 0.56, Math.sin(a) * f.r * 0.56);
+      ctx.lineTo(Math.cos(a) * f.r * 0.92, Math.sin(a) * f.r * 0.92);
+      ctx.stroke();
+    }
+    // 雪花芯
     ctx.strokeStyle = "#5a8ac9";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(2, f.r * 0.08);
     ctx.lineCap = "round";
     for (let i = 0; i < 6; i++) {
       const a = (Math.PI * i) / 3;
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(a) * f.r * 0.65, Math.sin(a) * f.r * 0.65);
+      ctx.lineTo(Math.cos(a) * f.r * 0.42, Math.sin(a) * f.r * 0.42);
       ctx.stroke();
+    }
+    // 寒气丝两缕(ICE_WISP_MS 循环,reduced 定住)
+    const sway = (wisp01 - 0.5) * f.r * 0.3;
+    ctx.strokeStyle = "rgba(221,242,255,0.85)";
+    ctx.lineWidth = Math.max(1.5, f.r * 0.06);
+    for (const side of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * f.r * 0.4, Math.sin(a) * f.r * 0.4);
-      ctx.lineTo(Math.cos(a + 0.4) * f.r * 0.58, Math.sin(a + 0.4) * f.r * 0.58);
+      ctx.moveTo(side * f.r * 0.95, -f.r * 0.1);
+      ctx.quadraticCurveTo(
+        side * f.r * 1.12,
+        -f.r * 0.45 + sway * side,
+        side * f.r * 0.9,
+        -f.r * 0.78 - sway * side,
+      );
       ctx.stroke();
     }
     ctx.fillStyle = "rgba(255,255,255,0.7)";
@@ -1653,12 +1746,20 @@ export function mount(api: GameAPI): { destroy: () => void } {
     body.addColorStop(0, "#fff3b0");
     body.addColorStop(1, "#ffce4a");
     ctx.fillStyle = body;
-    ctx.strokeStyle = "#d99a10";
-    ctx.lineWidth = Math.max(2, r * 0.09);
+    // 金边脉动:GOLD_PULSE_MS 一个周期呼吸,reduced 时钉在中间当静态金边
+    const pulse = auraFor({ freezeTimer, doubleTimer }, time * 1000, fxCalm).goldPulse01;
+    ctx.strokeStyle = FS_COLORS.gold;
+    ctx.lineWidth = Math.max(2, r * (0.08 + 0.06 * pulse));
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.globalAlpha = 0.25 + 0.35 * pulse;
+    ctx.lineWidth = Math.max(1.5, r * 0.05);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
     ctx.rotate(-f.rot);
     ctx.fillStyle = "#8a5a10";
     ctx.font = `bold ${Math.round(r * 0.9)}px sans-serif`;
@@ -1739,7 +1840,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (f.fly === "bomb" || f.fly === "bigbomb") {
-      drawBomb(f, f.fly === "bigbomb");
+      drawCloudBomb(f, f.fly === "bigbomb");
       ctx.restore();
       return;
     }
@@ -1774,80 +1875,126 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     const k = f.kind as FruitKind;
-    // 果身:高光渐变 + 描边
+    const name = k.name as SliceFruitName;
+    // 果身:专属剪影(心形/宽椭圆/凸脐圆/倒水滴/橄榄形)+ 高光渐变 + 描边。
+    // 剪影外接 ≤ SILHOUETTE_MAX_SCALE × f.r,切割判定仍是 f.r 的圆,画大不改判。
+    const pts = silhouettePoints(name, f.r);
     const bodyGrad = ctx.createRadialGradient(-f.r * 0.35, -f.r * 0.4, f.r * 0.1, 0, 0, f.r * 1.15);
     bodyGrad.addColorStop(0, shade(k.skin, 30));
     bodyGrad.addColorStop(1, k.skin);
     ctx.fillStyle = bodyGrad;
     ctx.strokeStyle = shade(k.skin, -42);
     ctx.lineWidth = Math.max(1.5, f.r * 0.07);
-    ctx.beginPath();
-    ctx.arc(0, 0, f.r, 0, Math.PI * 2);
+    traceSilhouette(ctx, pts);
     ctx.fill();
     ctx.stroke();
-    // 品种细节(裁到果身里画)
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(0, 0, f.r * 0.97, 0, Math.PI * 2);
-    ctx.clip();
-    if (k.name === "瓜瓜") {
-      ctx.strokeStyle = "#4e9a4e";
-      ctx.lineWidth = f.r * 0.16;
-      ctx.lineCap = "round";
-      for (const dx of [-0.55, 0, 0.55]) {
+    // 品种细节(裁进剪影里画;渲染半径太小就整层省略,免得糊成一团)
+    if (f.r >= MIN_DETAIL_PX) {
+      ctx.save();
+      traceSilhouette(ctx, silhouettePoints(name, f.r * 0.97));
+      ctx.clip();
+      if (name === "瓜瓜") {
+        // 深浅条纹 5 道随形
+        ctx.lineCap = "round";
+        const stripes = [-0.72, -0.36, 0, 0.36, 0.72];
+        for (let i = 0; i < stripes.length; i++) {
+          const dx = stripes[i];
+          ctx.strokeStyle = i % 2 === 0 ? "#4e9a4e" : "#68b85e";
+          ctx.lineWidth = f.r * (i % 2 === 0 ? 0.16 : 0.1);
+          ctx.beginPath();
+          ctx.moveTo(dx * f.r, -f.r);
+          ctx.quadraticCurveTo(dx * 1.7 * f.r, 0, dx * f.r, f.r);
+          ctx.stroke();
+        }
+      } else if (name === "桃桃") {
+        ctx.strokeStyle = shade(k.skin, -30);
+        ctx.lineWidth = Math.max(1.5, f.r * 0.06);
         ctx.beginPath();
-        ctx.moveTo(dx * f.r, -f.r);
-        ctx.quadraticCurveTo(dx * 1.7 * f.r, 0, dx * f.r, f.r);
+        ctx.moveTo(f.r * 0.05, -f.r * 0.9);
+        ctx.quadraticCurveTo(f.r * 0.45, -f.r * 0.3, f.r * 0.15, f.r * 0.7);
         ctx.stroke();
+      } else if (name === "橙橙") {
+        ctx.fillStyle = shade(k.skin, -22);
+        for (let i = 0; i < 7; i++) {
+          const a = (Math.PI * 2 * i) / 7 + 0.4;
+          ctx.beginPath();
+          ctx.arc(Math.cos(a) * f.r * 0.62, Math.sin(a) * f.r * 0.62, f.r * 0.045, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (name === "莓莓") {
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI * 2 * i) / 6 + 0.7;
+          ctx.beginPath();
+          ctx.ellipse(Math.cos(a) * f.r * 0.5, Math.sin(a) * f.r * 0.45, f.r * 0.07, f.r * 0.11, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (name === "柠柠") {
+        ctx.fillStyle = shade(k.skin, -18);
+        for (let i = 0; i < 8; i++) {
+          const a = (Math.PI * 2 * i) / 8 + 0.2;
+          ctx.beginPath();
+          ctx.arc(Math.cos(a) * f.r * 0.66, Math.sin(a) * f.r * 0.5, f.r * 0.035, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-    } else if (k.name === "桃桃") {
-      ctx.strokeStyle = shade(k.skin, -30);
-      ctx.lineWidth = Math.max(1.5, f.r * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(f.r * 0.05, -f.r * 0.98);
-      ctx.quadraticCurveTo(f.r * 0.45, -f.r * 0.3, f.r * 0.15, f.r * 0.6);
-      ctx.stroke();
-    } else if (k.name === "橙橙") {
-      ctx.fillStyle = shade(k.skin, -22);
-      for (let i = 0; i < 7; i++) {
-        const a = (Math.PI * 2 * i) / 7 + 0.4;
-        ctx.beginPath();
-        ctx.arc(Math.cos(a) * f.r * 0.62, Math.sin(a) * f.r * 0.62, f.r * 0.045, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (k.name === "莓莓") {
-      ctx.fillStyle = "rgba(255,255,255,0.55)";
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI * 2 * i) / 6 + 0.7;
-        ctx.beginPath();
-        ctx.ellipse(Math.cos(a) * f.r * 0.55, Math.sin(a) * f.r * 0.55, f.r * 0.07, f.r * 0.11, a, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (k.name === "柠柠") {
-      ctx.fillStyle = shade(k.skin, -18);
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8 + 0.2;
-        ctx.beginPath();
-        ctx.arc(Math.cos(a) * f.r * 0.7, Math.sin(a) * f.r * 0.7, f.r * 0.035, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.restore();
     }
-    ctx.restore();
-    // 叶子 + 果柄
-    ctx.strokeStyle = "#8a6a3e";
-    ctx.lineWidth = Math.max(2, f.r * 0.08);
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(0, -f.r * 0.92);
-    ctx.lineTo(f.r * 0.06, -f.r * 1.14);
-    ctx.stroke();
-    ctx.fillStyle = "#7ac97a";
-    ctx.strokeStyle = "#55a855";
-    ctx.lineWidth = Math.max(1, f.r * 0.04);
-    ctx.beginPath();
-    ctx.ellipse(f.r * 0.26, -f.r * 1.08, f.r * 0.3, f.r * 0.14, -0.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    // 蒂部点缀:各果不一样,抛起时的第二识别点
+    if (name === "莓莓") {
+      // 蒂部五角叶盖
+      ctx.fillStyle = "#5fae55";
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (Math.PI * 2 * i) / 5;
+        const tipX = Math.cos(a) * f.r * 0.5;
+        const tipY = -f.r * 0.78 + Math.sin(a) * f.r * 0.24;
+        if (i === 0) ctx.moveTo(tipX, tipY);
+        else ctx.lineTo(tipX, tipY);
+        const mid = a + Math.PI / 5;
+        ctx.lineTo(Math.cos(mid) * f.r * 0.2, -f.r * 0.82 + Math.sin(mid) * f.r * 0.1);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else if (name === "橙橙") {
+      // 叶柄斜出 25°
+      ctx.save();
+      ctx.translate(0, -f.r * 0.98);
+      ctx.rotate((25 * Math.PI) / 180);
+      ctx.strokeStyle = "#8a6a3e";
+      ctx.lineWidth = Math.max(2, f.r * 0.08);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -f.r * 0.2);
+      ctx.stroke();
+      ctx.fillStyle = "#7ac97a";
+      ctx.strokeStyle = "#55a855";
+      ctx.lineWidth = Math.max(1, f.r * 0.04);
+      ctx.beginPath();
+      ctx.ellipse(f.r * 0.22, -f.r * 0.22, f.r * 0.26, f.r * 0.12, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    } else if (name === "桃桃") {
+      // 心形顶凹处的侧叶一片
+      ctx.fillStyle = "#7ac97a";
+      ctx.strokeStyle = "#55a855";
+      ctx.lineWidth = Math.max(1, f.r * 0.04);
+      ctx.beginPath();
+      ctx.ellipse(f.r * 0.3, -f.r * 0.86, f.r * 0.3, f.r * 0.13, -0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (name === "瓜瓜") {
+      // 卷卷小瓜藤
+      ctx.strokeStyle = "#55a855";
+      ctx.lineWidth = Math.max(2, f.r * 0.06);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(0, -f.r * 0.84);
+      ctx.quadraticCurveTo(f.r * 0.16, -f.r * 1.02, f.r * 0.3, -f.r * 0.92);
+      ctx.stroke();
+    }
     // 高光
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.beginPath();
@@ -1883,7 +2030,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.translate(half.x, half.y);
     ctx.rotate(half.rot);
     ctx.globalAlpha = Math.min(1, half.life / 0.5);
-    // 半球果皮(带渐变和描边)
+    // 半球果皮(带渐变和描边);瓜瓜/柠柠的半球随剪影加宽,和整果对得上
+    const domeW = half.name === "瓜瓜" ? 1.12 : half.name === "柠柠" ? 1.05 : 1;
     const domeGrad = ctx.createLinearGradient(0, 0, 0, r);
     domeGrad.addColorStop(0, half.skin);
     domeGrad.addColorStop(1, shade(half.skin, -24));
@@ -1891,81 +2039,25 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.strokeStyle = shade(half.skin, -42);
     ctx.lineWidth = Math.max(1.5, r * 0.07);
     ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI);
+    ctx.ellipse(0, 0, r * domeW, r, 0, 0, Math.PI);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    // 切面:白瓤圈 + 果肉
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r * 0.98, r * 0.34, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = half.flesh;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r * 0.84, r * 0.27, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // 品种切面细节(压扁坐标系里按圆画)
+    // 专属切面果肉(橙瓣/瓜籽/桃核/莓芯/柠格/蕉籽,六种各一套)
     ctx.save();
-    ctx.scale(1, 0.27 / 0.84);
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.84, 0, Math.PI * 2);
-    ctx.clip();
-    if (half.name === "瓜瓜") {
-      // 西瓜籽
-      ctx.fillStyle = "#3a3a4a";
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI * 2 * i) / 6 + 0.5;
-        const d = r * (i % 2 === 0 ? 0.5 : 0.3);
-        ctx.beginPath();
-        ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * 0.05, r * 0.09, a + Math.PI / 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (half.name === "橙橙" || half.name === "柠柠") {
-      // 橙瓣 / 柠檬瓣
-      ctx.strokeStyle = shade(half.flesh, -36);
-      ctx.lineWidth = r * 0.05;
-      ctx.lineCap = "round";
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * r * 0.14, Math.sin(a) * r * 0.14);
-        ctx.lineTo(Math.cos(a) * r * 0.72, Math.sin(a) * r * 0.72);
-        ctx.stroke();
-      }
-      ctx.fillStyle = shade(half.flesh, -20);
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (half.name === "桃桃") {
-      // 桃核 + 放射纹
-      ctx.strokeStyle = shade(half.flesh, -26);
-      ctx.lineWidth = r * 0.04;
-      for (let i = 0; i < 10; i++) {
-        const a = (Math.PI * 2 * i) / 10;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * r * 0.28, Math.sin(a) * r * 0.28);
-        ctx.lineTo(Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "#c47a4a";
-      ctx.strokeStyle = "#a05c32";
-      ctx.lineWidth = r * 0.04;
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      // 莓莓:小籽点点
-      ctx.fillStyle = shade(half.flesh, -42);
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8 + 0.4;
-        const d = r * (i % 2 === 0 ? 0.5 : 0.28);
-        ctx.beginPath();
-        ctx.arc(Math.cos(a) * d, Math.sin(a) * d, r * 0.045, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+    ctx.scale(domeW, 1);
+    drawCrossSection(ctx, half.name, r, half.flesh, half.skin);
     ctx.restore();
+    // 切开瞬间切面亮 1 帧再落定(reduced 直接落定)
+    if (half.fresh) {
+      if (!fxCalm) {
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r * 0.98 * domeW, r * 0.34, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      half.fresh = false;
+    }
     // 果汁往下滴一滴
     if (half.life < 1) {
       ctx.fillStyle = half.flesh;
@@ -2007,11 +2099,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    // 王冠
-    ctx.font = `${Math.round(r * 0.7)}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(k.spec.emoji, 0, -r * 1.12);
+    // 王冠(窗口 7 R1 修复 A-6):自绘小皇冠,珠色分果王,随本体同角度摆
+    drawKingCrown(ctx, r, kingBeadColor(k.spec));
     // 表情
     ctx.fillStyle = "#4a2a3a";
     ctx.beginPath();
@@ -2037,7 +2126,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.roundRect(k.x - bw / 2, k.y + r + 12, Math.max(4, (bw * left) / k.spec.hp), 12, 6);
     ctx.fill();
     ctx.fillStyle = "#5a5a6e";
-    ctx.font = "bold 13px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`还剩 ${left} 刀`, k.x, k.y + r + 34);
@@ -2074,7 +2163,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     mechBadgeRows = 0;
     if (badges.length === 0) return;
 
-    ctx.font = "bold 13px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     const gap = 6;
@@ -2111,6 +2200,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
   }
 
+  /** 刀光三层丝带:外晕渐隐 → 中层主题色 → 芯线白。reduced 收成单层细线。 */
   function drawTrail(): void {
     if (trail.length < 2) return;
     ctx.lineCap = "round";
@@ -2120,26 +2210,109 @@ export function mount(api: GameAPI): { destroy: () => void } {
       const alpha = Math.max(0, 1 - age / TRAIL_SEC);
       // 刀光加宽到最粗 24px(白芯)+32px(粉晕),和判定走廊一致,孩子看得清切到哪
       const width = 18 * (i / trail.length) + 6;
-      ctx.globalAlpha = alpha * 0.45;
-      // 彩虹刀余辉:整条刀光换成彩虹渐变(1.2 的一划切 ≥4 颗奖励演出)
-      // 减弱动效时彩虹刀不再逐帧刷色相(那是闪烁),换成沿刀身的一段固定渐变
-      ctx.strokeStyle = rainbowBlade > 0
+      const x1 = trail[i - 1].x;
+      const y1 = trail[i - 1].y;
+      const x2 = trail[i].x;
+      const y2 = trail[i].y;
+      if (fxCalm) {
+        // 减弱动效:单层细线,只保留「刀在哪」的功能信息
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.strokeStyle = FS_COLORS.trailCore;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        continue;
+      }
+      // 彩虹刀余辉:中层换成彩虹渐变(1.2 的一划切 ≥4 颗奖励演出)
+      const trailMid = rainbowBlade > 0
         ? `hsl(${(((reducedMotion ? 0 : time * 200) + i * 26) % 360).toFixed(0)}, 85%, 68%)`
-        : "#ff9eb5";
-      ctx.lineWidth = width + 8;
+        : FS_COLORS.trailMid;
+      // 外晕渐隐
+      ctx.globalAlpha = alpha * 0.22;
+      ctx.strokeStyle = trailMid;
+      ctx.lineWidth = width + 16;
       ctx.beginPath();
-      ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
-      ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = "rgba(255,255,255,0.95)";
-      ctx.lineWidth = width;
+      // 中层主题色
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.strokeStyle = trailMid;
+      ctx.lineWidth = width + 6;
       ctx.beginPath();
-      ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
-      ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      // 芯线白
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = FS_COLORS.trailCore;
+      ctx.lineWidth = width * 0.72;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * 舞台语义(纯装饰):上方轻纱幕布渐变 + 下方砧板木纹台面。
+   * 局内与菜单共用,让「果园舞台」贯穿三界面;不挡判定、不改布局。
+   */
+  function drawStageDecor(): void {
+    // 轻纱幕布:顶部一段粉纱渐隐 + 三道垂坠弧
+    const curtain = ctx.createLinearGradient(0, 0, 0, h * 0.2);
+    curtain.addColorStop(0, FS_COLORS.curtain);
+    curtain.addColorStop(1, "rgba(255,220,235,0)");
+    ctx.fillStyle = curtain;
+    ctx.fillRect(-24, -24, w + 48, h * 0.2 + 24);
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      const cx = (w * (i + 0.5)) / 3;
+      ctx.beginPath();
+      ctx.moveTo(cx - w / 6, -2);
+      ctx.quadraticCurveTo(cx, h * 0.055, cx + w / 6, -2);
+      ctx.stroke();
+    }
+    // 砧板台面:底部木纹横板
+    const boardH = Math.max(26, h * 0.07);
+    ctx.fillStyle = FS_COLORS.stage;
+    ctx.fillRect(-24, h - boardH, w + 48, boardH + 24);
+    ctx.strokeStyle = "rgba(196,160,110,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-24, h - boardH);
+    ctx.lineTo(w + 24, h - boardH);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(196,160,110,0.28)";
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i <= 2; i++) {
+      const wy = h - boardH + (boardH * i) / 3;
+      ctx.beginPath();
+      ctx.moveTo(-24, wy);
+      ctx.quadraticCurveTo(w * 0.5, wy + 3, w + 24, wy - 2);
+      ctx.stroke();
+    }
+  }
+
+  /** 标题缎带:两侧折角尾巴 + 圆角横带,菜单与面板一族共用。 */
+  function drawRibbon(cx: number, cy: number, rw: number, rh: number): void {
+    ctx.fillStyle = "#ffc3d5";
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + side * (rw / 2 + rh * 0.45), cy);
+      ctx.lineTo(cx + side * (rw / 2 - 4), cy - rh / 2);
+      ctx.lineTo(cx + side * (rw / 2 - 4), cy + rh / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.fillStyle = "#ffe4ee";
+    ctx.beginPath();
+    ctx.roundRect(cx - rw / 2, cy - rh / 2, rw, rh, rh / 2);
+    ctx.fill();
   }
 
   function panelBox(pw: number, ph: number): { x: number; y: number } {
@@ -2151,6 +2324,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
     ctx.beginPath();
     ctx.roundRect(x, y, pw, ph, 22);
     ctx.fill();
+    ctx.strokeStyle = "#ffd9e5";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, pw, ph, 22);
+    ctx.stroke();
+    // 标题缎带垫在首行文字后面,面板一族观感统一
+    drawRibbon(w / 2, y + 41, Math.min(pw * 0.74, 320), 40);
     return { x, y };
   }
 
@@ -2169,6 +2349,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function drawMenu(): void {
     ctx.fillStyle = "rgba(255,248,240,0.94)";
     ctx.fillRect(0, 0, w, h);
+    // 菜单也上舞台:幕布 + 砧板 + 标题缎带,和局内一个味
+    drawStageDecor();
+    drawRibbon(w / 2, h * 0.14, Math.min(304, w - 76), 46);
     ctx.fillStyle = "#c47a2a";
     ctx.font = "bold 30px sans-serif";
     ctx.textAlign = "center";
@@ -2281,12 +2464,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
       ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
-      ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
+      // blurb 12px 封顶提为 14px 地板(1.2 遗留清零),配套 fitLine 测宽截断:
+      // 360px 双列卡 cw≈153px 装不下整句,截到卡内宽并补省略号,不再溢出压邻卡
+      ctx.font = `${Math.max(14, Math.round(ch * 0.16))}px sans-serif`;
       ctx.fillStyle = unlocked ? (isDarkOrchard(i) ? "#f0e8da" : "#5a5a6e") : "#a8a8b4";
-      ctx.fillText(unlocked ? st.blurb : "通关上一个果园解锁", rect.x + 10, rect.y + ch * 0.6);
+      const innerW = cw - 20;
+      ctx.fillText(
+        fitLine(unlocked ? st.blurb : "通关上一个果园解锁", innerW),
+        rect.x + 10,
+        rect.y + ch * 0.6,
+      );
       const size = themeSize(i);
       ctx.fillText(
-        unlocked ? `${cleared}/${size} 回合 · ⭐${themeStars(progress, i)}/${size * 3}` : "",
+        unlocked
+          ? fitLine(`${cleared}/${size} 回合 · ⭐${themeStars(progress, i)}/${size * 3}`, innerW)
+          : "",
         rect.x + 10,
         rect.y + ch * 0.82,
       );
@@ -2398,6 +2590,16 @@ export function mount(api: GameAPI): { destroy: () => void } {
     return y;
   }
 
+  /** 单行测宽截断:装不下 maxW 就截短补省略号(章节卡等窄容器防溢出)。 */
+  function fitLine(text: string, maxW: number): string {
+    if (ctx.measureText(text).width <= maxW) return text;
+    let out = text;
+    while (out.length > 1 && ctx.measureText(`${out}…`).width > maxW) {
+      out = out.slice(0, -1);
+    }
+    return `${out}…`;
+  }
+
   function drawIntroPanel(): void {
     const { y } = panelBox(Math.min(460, w - 40), mode === "classic" ? 252 : 210);
     ctx.textAlign = "center";
@@ -2425,7 +2627,8 @@ export function mount(api: GameAPI): { destroy: () => void } {
       if (r.mirror) tags.push("🪞 镜像会翻");
       if (tags.length > 0) {
         ctx.fillStyle = "#8a7a5e";
-        ctx.font = "13px sans-serif";
+        // 回合条件说明是功能文案,不许低于 14px(W7R2 清 R1 遗留 A-13)
+        ctx.font = "14px sans-serif";
         wrapText(tags.join(" · "), w / 2, y + 122, Math.min(w - 60, 420), 18);
       }
       ctx.fillStyle = "#c47a2a";
@@ -2600,6 +2803,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
         ctx.fill();
       }
     }
+    // ① 舞台木纹 + 幕布 → ② 花瓣雨(果和刀光都会画在它们之上)
+    drawStageDecor();
+    petals.draw(ctx, w, h);
     if (freezeTimer > 0) {
       // 飘雪
       ctx.fillStyle = "rgba(255,255,255,0.8)";
@@ -2654,6 +2860,9 @@ export function mount(api: GameAPI): { destroy: () => void } {
     for (const half of halves) drawHalf(half);
     for (const f of flying) drawFruit(f);
 
+    // ④ 果汁液滴:压在果上、刀光下
+    juice.draw(ctx);
+
     for (const s of splashes) {
       ctx.globalAlpha = Math.max(0, s.life) * 0.9;
       ctx.fillStyle = s.color;
@@ -2680,12 +2889,21 @@ export function mount(api: GameAPI): { destroy: () => void } {
 
     drawTrail();
 
+    // ⑥ 切中白闪星花:在刀光之上、飘分之下
+    sparkles.draw(ctx);
+
     for (const f of floats) {
       ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.4));
-      ctx.fillStyle = f.color;
       ctx.font = f.big ? "bold 24px sans-serif" : "bold 16px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      if (f.big) {
+        // 大字飘分加白描边,深色果园背景上也看得清
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 3;
+        ctx.strokeText(f.text, f.x, f.y);
+      }
+      ctx.fillStyle = f.color;
       ctx.fillText(f.text, f.x, f.y);
       ctx.globalAlpha = 1;
     }
@@ -2771,10 +2989,22 @@ export function mount(api: GameAPI): { destroy: () => void } {
       bannerY += 26;
     }
     if (bladeStreak >= 2 && phase === "play") {
+      // 连击卡片化:白底小卡 + 数字弹跳(reduced 不弹) + 白描边
+      const bounce = fxCalm ? 0 : Math.abs(Math.sin(time * 7)) * 3;
+      const label = `🔗 连击 ×${bladeStreak}`;
+      ctx.font = `bold ${Math.round(17 + bounce)}px sans-serif`;
       ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const cardW = ctx.measureText(label).width + 22;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(w / 2 - cardW / 2, bannerY - 14 - bounce / 2, cardW, 28 + bounce, 14);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.lineWidth = 3;
+      ctx.strokeText(label, w / 2, bannerY);
       ctx.fillStyle = "#1f7a5e";
-      ctx.font = "bold 17px sans-serif";
-      ctx.fillText(`🔗 连击 ×${bladeStreak}`, w / 2, bannerY);
+      ctx.fillText(label, w / 2, bannerY);
     }
 
     // ---- 覆盖层 ----
@@ -2806,6 +3036,12 @@ export function mount(api: GameAPI): { destroy: () => void } {
   raf = requestAnimationFrame(frame);
   bag.add(() => cancelAnimationFrame(raf));
   bag.add(() => stopSpeaking());
+  // 视觉粒子归零:液滴 / 星花 / 花瓣一个不留
+  bag.add(() => {
+    juice.clear();
+    sparkles.clear();
+    petals.clear();
+  });
   bag.add(() => canvas.remove());
 
   return {

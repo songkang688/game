@@ -8,7 +8,7 @@ export const meta = {
   emoji: "🔗",
   category: "casual" as const,
   color: "#FFEBDD",
-  blurb: "188 关十大场馆 + 无尽连到底!消除会画出真实折线,四种收拢边滑边靠拢,每关还有 3 次真求解提示。",
+  blurb: "188 关十大场馆 + 无尽连到底!原创手绘图标牌面,消除会画出流星光带的真实折线,四种收拢边滑边靠拢,每关还有 3 次真求解提示。",
   // 10 章合计 188 关,外加清空就自动补新盘的无尽「连到底」
   modes: ["campaign", "endless"] as const,
   levels: 188,
