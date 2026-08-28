@@ -283,6 +283,15 @@ export function panelsSideBySide(viewW: number, viewH: number): boolean {
   return viewW >= 600 && viewW > viewH;
 }
 
+/**
+ * 三图关要不要走矮横屏专用排（N-68，≠ L-1 两图并排）。
+ * 视口口径与 `panelsSideBySide` 相同；调用方还要自己确认 `scene.second`。
+ * 竖屏 / 方屏仍走「上排两张参考 + 下图」，零回归。
+ */
+export function tripleLandscape(viewW: number, viewH: number): boolean {
+  return panelsSideBySide(viewW, viewH);
+}
+
 /** 并排时主棋盘一格的边长:同 `panelCellPx`,但一张图能吃的高度从 40% 提到 62% */
 export function panelCellPxRow(rows: number, viewportHeight: number, max = SMALL_CELL_PX): number {
   const h = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 640;
