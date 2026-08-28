@@ -416,6 +416,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
           width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
         }
+        .dr-canvas { max-height: min(52dvh, 320px); width: auto; max-width: 100%; margin: 0 auto; }
         .dr-btns {
           position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
           background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);

@@ -431,6 +431,11 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 
 续修：`styles.css` / 地鼠 / 拼图 的 `min-width:700 && max-height:840` **补 `min-height:501`**（守门 `toContain` 旧串仍成立）；拼音选票/拼写横屏分栏扩到平板（不拷 scene 72px / runner 16px）；冲刺赛道 840 补菜单 CTA sticky，**不隐藏**键盘提示。
 
+| 项 | 改法 | 视口 |
+| --- | --- | --- |
+| prince / poop / puff 仅 620 收画布 | **加** `840 && min-height:621` 轻钳（220/256/230），**不盲拷** 620 的 142/138/170 | 1024×768 |
+| duo-rush `.dr-canvas` | 840 档 `max-height:min(52dvh,320px)`；默认 `.dr-canvas` 规则仍无 max-height；**不隐藏** `.dr-keys` | 平板横屏 |
+
 ## 附：第 3 轮环境水位
 
 - 环境再次重置后 `npm ci` + `npm run build` 全绿；零改 src，未重跑全量 vitest（水位沿用：19484 绿 + N-105 的 5 红）。

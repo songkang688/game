@@ -108,3 +108,12 @@ describe("puff-bros · 修复员装饰件 · 地板与浮台顶亮边", () => {
     expect(src).toContain("roundRect(g, pl.x, pl.y, pl.w, 5, 3)");
   });
 });
+
+describe("puff-bros · 平板 768 高画布漏档", () => {
+  it("独立 840&&min-height:621 轻钳,不盲拷 620 的 170px", () => {
+    const src = read("index.ts");
+    expect(src).toContain("@media (max-height:840px) and (min-height:621px)");
+    expect(src).toContain(".pfb-cv{height:230px;}");
+    expect(src).toContain(".pfb-cv{height:170px;}");
+  });
+});

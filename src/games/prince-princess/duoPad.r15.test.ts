@@ -13,4 +13,11 @@ describe("N-79 prince-princess 两人一起 D-pad", () => {
   it("U-20 840 档也钉垫", () => {
     expect(CSS).toContain("@media (max-height:840px)");
   });
+
+  it("平板 768 高不盲拷 620 画布高，独立 840&&min-height:621", () => {
+    expect(CSS).toContain("@media (max-height:840px) and (min-height:621px)");
+    expect(CSS).toContain(".pcp-cv{height:220px;}");
+    expect(CSS).toContain(".pcp-wrap[data-players=\"2\"] .pcp-cv{height:252px;}");
+    expect(CSS).toContain(".pcp-wrap[data-players=\"2\"] .pcp-cv{height:216px;}");
+  });
 });
