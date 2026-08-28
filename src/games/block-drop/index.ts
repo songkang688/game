@@ -12,6 +12,7 @@ import {
 } from "../../engine";
 import { save } from "../../engine/save";
 import { prefersReducedMotion } from "../../engine/view25d";
+import { resetStageScroll, stageScrollTopPx } from "../stageFit";
 import {
   COLS,
   GARBAGE_CELL,
@@ -175,6 +176,14 @@ const CSS = `
 .bd-over-s{font-size:16px;font-weight:700;color:#54709b;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
 @media (min-width:760px){
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
+}
+/* r5 N-21:915×412 井钳到 180 下限还差一截(七键排在折叠线下)——
+   井左、徽章/七键/提示右双栏,纵向只剩井自己,180 下限也装得下 */
+@media (min-width:700px) and (max-height:520px){
+  .bd-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(240px,440px);
+    column-gap:12px;row-gap:6px;align-items:start;align-content:start;justify-content:center;}
+  .bd-seats{grid-column:1;grid-row:1 / span 3;}
+  .bd-wrap > .bd-top,.bd-wrap > .bd-pad,.bd-wrap > .bd-msg{grid-column:2;margin:0;}
 }
 @media (max-width:360px){
   .bd-badge{padding:4px 8px;}
@@ -747,6 +756,8 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
     <div class="bd-msg"></div>
   `;
   stage.appendChild(wrap);
+  // 选关图卷到下面选的关,开局滚回顶:不然井的抬头被卷走,量余量也偏大
+  resetStageScroll(stage);
   const seatsHost = wrap.querySelector(".bd-seats") as HTMLElement;
   const padEl = wrap.querySelector(".bd-pad") as HTMLElement;
   const msgEl = wrap.querySelector(".bd-msg") as HTMLElement;
@@ -977,7 +988,8 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
       if (typeof c.getBoundingClientRect !== "function") continue;
       const top = c.getBoundingClientRect().top;
       if (!Number.isFinite(top)) continue;
-      const px = wellDisplayPx(c.height, clip - top - below - 4);
+      // 减掉舞台残余滚动:预算按「滚回顶」的位置算,井才装得进第一屏
+      const px = wellDisplayPx(c.height, clip - top - stageScrollTopPx(wrap) - below - 4);
       if (px !== null) {
         c.style.height = `${px}px`;
         // 宽交给内在比例(canvas 是 replaced 元素),max-width:100% 仍旧兜着窄屏

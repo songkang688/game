@@ -11,6 +11,7 @@ import {
   type ModeEntry
 } from "../../engine";
 import { save } from "../../engine/save";
+import { resetStageScroll, stageScrollTopPx } from "../stageFit";
 import {
   ARCHETYPE_LABELS,
   CHARACTERS,
@@ -190,6 +191,17 @@ const CSS = `
   .cc-open{padding:9px 13px;font-size:14px;}
   .cc-face{min-width:64px;}
   .cc-stars{width:44px;}
+}
+/* r5 N-22:915×412 血条+画布+提示+摇杆纵排装不下(轻/重/必杀折叠线下)——
+   摇杆按钮排像街机一样悬浮在战场下沿两角,纵向只剩血条/画布/提示,140 下限也装得下 */
+@media (min-width:700px) and (max-height:520px){
+  .cc-wrap{position:relative;}
+  .cc-pad{position:absolute;left:14px;right:14px;bottom:12px;margin:0;z-index:3;pointer-events:none;}
+  .cc-pad .cc-stick,.cc-pad .cc-btn{pointer-events:auto;}
+  .cc-stick{width:96px;height:96px;opacity:.85;}
+  .cc-btn{opacity:.92;}
+  /* 左右留出悬浮摇杆/按钮的位置,提示语别钻到按钮底下 */
+  .cc-msg{margin-top:4px;padding:0 120px;}
 }
 @media (prefers-reduced-motion:reduce){
   .cc-bar>i{transition:none;}
@@ -500,7 +512,8 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
     if (!Number.isFinite(canvasRect.top)) return;
     // 画布下面的家当(提示行 + 摇杆按钮排):高度不随画布显示高变,量一次就是稳的
     const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    // 减掉舞台残余滚动:预算按「滚回顶」的位置算,战场才装得进第一屏
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - stageScrollTopPx(wrap) - below - 4);
     if (px !== null) {
       // CSS 里画布是 width:100%,只钳高会压扁人物;宽也按 backing 比例一起钳才是等比
       canvas.style.maxHeight = `${px}px`;
@@ -546,6 +559,8 @@ export function createArena(host: HTMLElement, opts: ArenaOpts): Arena {
 
   wrap.append(hud, canvas, msg, pad, info);
   host.appendChild(wrap);
+  // 选关图/菜单可能带着残余滚动进场,开打滚回顶:不然血条被卷走,量余量也偏大
+  resetStageScroll(host);
 
   // --- 输入 ---
   const held: [HeldKeys, HeldKeys] = [emptyHeld(), emptyHeld()];
