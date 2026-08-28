@@ -193,9 +193,12 @@ export const CSS = `
 .fc-token-gold{filter:drop-shadow(0 0 5px ${KIT_PALETTE.starGold}) drop-shadow(0 0 2px rgba(255,255,255,.9));}
 .fc-fireworks{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:8;}
 .fc-hud{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin:8px 0 6px;}
-.fc-dice{min-width:56px;min-height:56px;border-radius:16px;background:#fff;box-shadow:0 3px 8px rgba(120,160,200,.35);
+/* r18 B:骰 SVG 只有 viewBox 没有内在尺寸,width:76%+height:auto 会按替换元素默认
+   300px 解析,骰子涨成 300×244 盖住棋盘(各视口皆然)。盒子定死 56px,面 76% 才是设计稿。 */
+.fc-dice{width:56px;height:56px;min-width:56px;min-height:56px;flex:0 0 auto;border-radius:16px;
+  background:#fff;box-shadow:0 3px 8px rgba(120,160,200,.35);
   display:flex;align-items:center;justify-content:center;font-size:34px;line-height:1;color:#2f6b96;}
-.fc-dice .fc-die{width:76%;height:auto;display:block;}
+.fc-dice .fc-die{width:76%;height:auto;display:block;aspect-ratio:28/30;}
 .fc-dice-spin{animation:fcroll .32s linear infinite;}
 @keyframes fcroll{0%{transform:rotate(0)}25%{transform:rotate(-13deg)}75%{transform:rotate(13deg)}100%{transform:rotate(0)}}
 .fc-dice-six{animation:fcsix ${FLASH_MS}ms ease;}
@@ -250,7 +253,19 @@ export const CSS = `
   .fc-wrap{padding:6px;}
   .fc-seat{flex:1 1 45%;padding:4px 6px;}
   .fc-btn{min-width:84px;font-size:15px;padding:0 10px;}
-  .fc-dice{min-width:48px;min-height:48px;font-size:28px;}
+  .fc-dice{width:48px;height:48px;min-width:48px;min-height:48px;font-size:28px;}
+}
+/* r18 B:平板横屏(768/820 高)整局 ~1025px 高,骰子行原来沉在 886px 完全够不着。
+   中等高度把掷骰行/选机行钉在可视底(l99-stage 已可滚),盘面按余高温和收一点,
+   500px 以下的深钳(r12/r14)原样保留。 */
+@media (max-height:900px) and (min-height:501px){
+  .fc-boardwrap{max-width:min(440px, max(280px, calc(100dvh - 368px)));}
+  .fc-hud{
+    position:sticky;bottom:0;z-index:6;margin:4px 0 0;padding:6px 4px 4px;
+    background:linear-gradient(180deg, rgba(234,246,255,.4), #EAF6FF 36%, #FFF2F7);
+    box-shadow:0 -8px 14px rgba(120,160,200,.16);
+  }
+  .fc-picker{position:sticky;bottom:0;z-index:5;padding:4px 0 2px;background:#FFF2F7ee;}
 }
 /* N-2 配方 E：矮屏把掷骰行钉在舞台底，盘面按余高收方 */
 @media (max-height:500px){
