@@ -364,8 +364,8 @@ export interface StageOpts {
   color?: string;
   /** 角色造型:朵朵还是星星(纯视觉,判定不认它) */
   variant?: HeroVariant;
-  /** 画布高度(CSS 像素),不给就按宽度自适应 */
-  height?: number;
+  /** 画布高度(CSS 像素),不给就按宽度自适应;双人可传函数以便排版后再量 */
+  height?: number | (() => number);
   /** 无尽模式:每跳一座重算一次难度 */
   ramp?: (hops: number) => Difficulty;
   sfx: (n: SoundName) => void;
@@ -564,9 +564,10 @@ export function createStage(host: HTMLElement, opts: StageOpts): Stage {
 
   function resize(): void {
     const cssW = Math.max(240, host.clientWidth || root.clientWidth || 360);
+    const wantH = typeof opts.height === "function" ? opts.height() : opts.height;
     // 双人上下分屏(opts.height)有自己的一套定高,这里只钳单人画布
     const cssH =
-      opts.height ?? stageHeightPx(Math.round(clamp(cssW * 1.06, 280, 460)), stageRoomPx(), belowChromePx());
+      wantH ?? stageHeightPx(Math.round(clamp(cssW * 1.06, 280, 460)), stageRoomPx(), belowChromePx());
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
@@ -1612,7 +1613,7 @@ function mountTwoPlayer(host: HTMLElement, api: GameApi, onBack: () => void): { 
         name: seat.name,
         color: seat.color,
         variant: seat.variant,
-        height: duoPaneHeightFromShell(shell),
+        height: () => duoPaneHeightFromShell(shell),
         sfx: (n) => api.play(n),
         onGoal: (run) => {
           if (done[i]) return;

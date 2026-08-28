@@ -16,7 +16,7 @@ describe("N-54 hop-pads 双人同屏按块钳高", () => {
   it("单人 stageHeightPx 下限仍是 STAGE_MIN_H，双人挂载不再写死 236", () => {
     expect(stageHeightPx(460, 120, 40)).toBe(STAGE_MIN_H);
     expect(SRC).toContain("duoPaneHeightFromShell");
-    expect(SRC).toContain("height: duoPaneHeightFromShell(shell)");
+    expect(SRC).toContain("height: () => duoPaneHeightFromShell(shell)");
     expect(SRC).not.toMatch(/height:\s*236/);
   });
 });
