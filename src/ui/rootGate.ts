@@ -240,6 +240,15 @@ const ROOT_GATE_CSS = `
 .rootgate-btn.rootgate-ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a}
 .rootgate-btn.rootgate-off{background:linear-gradient(180deg,#7c7396,#615980);box-shadow:0 4px 0 #4b4463}
 .rootgate-btn:focus-visible,.rootgate-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px}
+/* N-109:915×412 弹窗盒内「打开/不打开」初见 413~459 折线下(盒可滚,功能没坏,观感账)。
+   矮横屏放宽列宽让四个时长胶囊排成一行(省一整行 52px)、收 gap 与空 tip 行,
+   CTA 进 412。字号一个不动(说明文字 16px 红线),390/1024 不落档零变化。 */
+@media (max-height:500px){
+  .rootgate{max-width:520px;gap:6px}
+  .rootgate-tip{min-height:0}
+  .rootgate-input{min-height:44px}
+  .rootgate-btn{min-height:44px}
+}
 `;
 
 function ensureStyle(): void {
