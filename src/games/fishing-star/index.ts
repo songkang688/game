@@ -211,7 +211,7 @@ const CSS = `
   background:#ffffffcc;border-radius:12px;padding:5px 10px;min-height:19px;}
 .fs-act{border:none;border-radius:18px;padding:13px 30px;font-size:17px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f0a35c,#dd8232);box-shadow:0 5px 0 #b4652248;
-  min-width:190px;touch-action:none;min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;}
+  min-width:190px;min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;touch-action:none;}
 .fs-act:active{transform:translateY(3px);box-shadow:0 2px 0 #b4652248;}
 .fs-act:focus-visible{outline:3px solid #ffb43c;outline-offset:3px;}
 .fs-act--reel{background:linear-gradient(180deg,#6fc48f,#3f9c68);box-shadow:0 5px 0 #2d7a4e48;}
