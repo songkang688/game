@@ -107,7 +107,7 @@ const CSS = `
 .bl-chip-now{outline:2px solid #ffb43c;}
 .bl-btn{border:none;border-radius:999px;padding:6px 13px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#7aa8e0,#5585c8);box-shadow:0 3px 0 #3f6da8;
-  min-height:44px;}
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 .bl-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #3f6da8;}
 .bl-btn:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-btn--ghost{background:linear-gradient(180deg,#b3aecd,#918bb0);box-shadow:0 3px 0 #736e8f;}
