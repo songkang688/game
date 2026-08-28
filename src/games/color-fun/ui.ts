@@ -217,6 +217,9 @@ export const CLF_CSS = `
   .clf-wrap .clf-mixer{max-width:100%;}
   .clf-wrap .clf-palette{max-width:100%;justify-content:center;}
 }
+@media (max-height:840px) and (min-width:640px){
+  .clf-wrap>.clf-ops{position:sticky;top:0;align-self:start;}
+}
 `;
 
 /**

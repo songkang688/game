@@ -129,6 +129,10 @@ const CSS = `
     background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
   .ak-tip{display:none;}
 }
+@media (max-height:840px){
+  .ak-pad{position:sticky;bottom:0;z-index:2;padding:4px 0 2px;
+    background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
+}
 .ak-btn{border:none;border-radius:16px;min-width:56px;min-height:52px;padding:6px 12px;font-size:20px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#6b4a2a;background:#fff3dd;
   box-shadow:0 4px 0 rgba(180,140,90,.45);}
@@ -233,6 +237,9 @@ const CSS = `
   .ak-mode.advk-shell > .advk-say{grid-column:1/-1;grid-row:5;}
   .ak-mode.advk-shell > .advk-mini{grid-column:1/-1;}
   .ak-mode.advk-shell > .advk-album{grid-column:1/-1;grid-row:6;max-height:28dvh;overflow:auto;}
+}
+@media (max-height:840px){
+  .ak-mode.advk-shell > .advk-pad2{position:sticky;bottom:0;z-index:3;}
 }
 ${touchUpliftCss([".ak-open"])}
 .ak-open,.ak-back{min-height:44px;}

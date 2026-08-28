@@ -181,6 +181,9 @@ const CSS = `
     background:linear-gradient(180deg,transparent,#f6f2ff 28%);}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
 }
+@media (max-height:840px) and (min-width:640px){
+  .as-wrap>.als-tools,.as-wrap>.as-pads{position:sticky;bottom:0;z-index:3;}
+}
 /* r18 B:412 高的找物关侧栏(清单56+缩放96+方向盘166+提示)总高≈380px,as-wrap 可视只有
    ~208px。病根是没有显式行模板时 grid-row:1/-1 跨不了隐式行——画布把第 1 行撑到自己那么
    高,侧栏其余行整段被推下去还被 overflow:hidden 裁掉。补上显式行模板让画布真正跨行,

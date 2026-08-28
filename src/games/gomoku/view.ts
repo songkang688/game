@@ -184,6 +184,12 @@ export const CSS = `
   .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;flex:0 0 auto;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
 }
+@media (max-height:840px){
+  .gmk-panel .gmk-start{position:sticky;bottom:0;z-index:5;background:#FFB3CD;min-height:48px;}
+  .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
+  .gmk-canvas{max-height:min(280px,52dvh);}
+}
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
   .gmk-seat.gmk-seat-on .gmk-seat-ico{animation:none;}
