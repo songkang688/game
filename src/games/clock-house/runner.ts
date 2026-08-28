@@ -72,6 +72,10 @@ export const CLK_CSS = `
   .clk-face-mini { width: 68px; height: 68px; }
   .clk-dial-title { font-size: 16px; }
 }
+@media (max-height: 820px) and (pointer: coarse) {
+  .clk-face { width: min(52vw, 200px); }
+  .clk-dial-title { font-size: 16px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .clk-hint { animation: none; }
   .clk-face-svg .clk-hand { transition: none; }

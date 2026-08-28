@@ -247,7 +247,7 @@ export const CSS = `
 .mst-reduced .mst-spin,.mst-reduced .mst-cell.mst-belt::after,.mst-reduced .mst-chainpop,
 .mst-wrap.mst-reduced .mst-cheer-star{animation:none;}
 .mst-reduced .mst-cheer-star{animation:none;transform:none;opacity:1;}
-.mst-msg{text-align:center;min-height:22px;color:#B06BC0;font-weight:800;margin-top:6px;font-size:15px;line-height:1.4;}
+.mst-msg{text-align:center;min-height:22px;color:#B06BC0;font-weight:800;margin-top:6px;font-size:16px;line-height:1.4;}
 .mst-btn{border:none;border-radius:16px;min-height:44px;padding:10px 16px;font-size:16px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#D882B6,#BD6497);box-shadow:0 4px 0 #994B79;}
 .mst-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #994B79;}
@@ -268,6 +268,10 @@ export const CSS = `
 @media (max-width:420px){
   .mst-wrap{padding:6px;--mst-bleed:16px;}
   .mst-seats{flex-direction:column;}
+}
+@media (max-height:820px) and (pointer:coarse){
+  .mst-btn{min-height:44px;}
+  .mst-wrap{padding:8px;}
 }
 @media (prefers-reduced-motion:reduce){
   .mst-fill{transition:none;}

@@ -174,7 +174,7 @@ const CSS = `
 @keyframes fdfRipple{from{transform:scale(.35);opacity:.9}to{transform:scale(1.15);opacity:0}}
 .fdf-confetti{font-size:20px;letter-spacing:6px;animation:fdfPop .6s ease-out;}
 @keyframes fdfPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
-.fdf-msg{min-height:20px;font-size:14px;font-weight:800;text-align:center;line-height:1.4;}
+.fdf-msg{min-height:20px;font-size:16px;font-weight:800;text-align:center;line-height:1.4;}
 .fdf-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
 /* 两张图收到底线仍装不下时（横屏 640×360）由 fitViewport() 挂上这一档：
    整屏自己滚，翻到底不许把外面那层也带着走。两张图那一格有自己的滚动条与
@@ -197,6 +197,10 @@ const CSS = `
 @media (max-width:380px){
   .fdf-wrap{padding:8px;}
   .fdf-zoomrow input{width:88px;}
+}
+@media (max-height:820px) and (pointer:coarse){
+  .fdf-wrap{padding:8px;gap:6px;}
+  .fdf-btn{min-height:44px;}
 }
 @media (prefers-reduced-motion:reduce){
   .fdf-cell.fdf-slide,.fdf-cell.fdf-hintspot,.fdf-ripple,.fdf-confetti{animation:none;}

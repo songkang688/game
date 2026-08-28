@@ -143,7 +143,7 @@ const QUIZ_CSS = `
 @keyframes qzPop2 { 50% { transform: scale(1.12); } }
 .qz-choice.qz-hint { animation: qzTwinkle 1s ease-in-out infinite; box-shadow: 0 0 0 4px #ffd43b, 0 4px 0 rgba(120,120,160,.3); }
 @keyframes qzTwinkle { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
-.qz-msg { text-align: center; min-height: 24px; font-weight: 800; font-size: 15px; }
+.qz-msg { text-align: center; min-height: 24px; font-weight: 800; font-size: 16px; }
 .qz-skip { text-align: center; font-weight: 800; font-size: 14px; background: #ffffffcc; border-radius: 14px; padding: 6px 10px; }
 .qz-choice:focus-visible, .qz-say:focus-visible { outline: 3px solid #3c2a6b; outline-offset: 3px; }
 .qz-say-row { display: flex; justify-content: center; }
@@ -171,6 +171,17 @@ const QUIZ_CSS = `
   .qz-say { min-height: 44px; padding: 6px 18px; }
   .qz-jump-go { min-height: 44px; padding: 8px 16px; }
   .qz-badge { padding: 3px 10px; }
+}
+/* N-131:平板横屏 1024×768 落在 500–820,500 档不生效。粗指针中间档只收展示空隙,热区不降。 */
+@media (max-height: 820px) and (pointer: coarse) {
+  .qz-wrap { min-height: 0; padding: 10px 12px; gap: 8px; }
+  .qz-prompt { font-size: 32px; min-height: 56px; padding: 8px 12px; }
+  .qz-prompt svg, .qz-prompt img { max-height: 96px; width: auto; }
+  .qz-prompt .mtf-vert, .qz-wrap > .mtf-illus:not(.mtf-illus-count) { max-height: 88px; overflow: hidden; }
+  .qz-choice { min-height: 52px; }
+  .qz-choice.qz-big { min-height: 56px; }
+  .qz-say { min-height: 44px; }
+  .qz-jump-go { min-height: 44px; }
 }
 `;
 

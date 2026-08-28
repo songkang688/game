@@ -307,7 +307,8 @@ function leafTint(region: number): string {
 
 export const SP_CSS = `
 .sp-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FBF3DF,#EDF6E6);
-  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;overflow:hidden;}
+  border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;position:relative;overflow-x:hidden;overflow-y:auto;
+  -webkit-overflow-scrolling:touch;}
 .sp-corner{position:absolute;bottom:2px;width:58px;height:44px;pointer-events:none;opacity:.9;}
 .sp-corner-l{left:4px;}
 .sp-corner-r{right:4px;transform:scaleX(-1);}
@@ -456,7 +457,7 @@ export const SP_CSS = `
   .sp-seats{flex-wrap:nowrap;gap:8px;}
   .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:4px;max-width:50%;}
   .sp-pad{width:auto;max-width:128px;margin-top:0;grid-template-columns:repeat(3,1fr);}
-  .sp-key{min-height:40px;font-size:15px;}
+  .sp-key{min-height:44px;font-size:15px;}
   .sp-msg,.sp-hintbox{max-height:2.2em;overflow:hidden;}
 }
 @media (prefers-reduced-motion:reduce){
