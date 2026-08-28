@@ -602,7 +602,11 @@ const L99_CSS = `
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
 .l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
-.l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
+/* 关内安全网(r18 B):以前 overflow:hidden 会把塞不下的骰子/蓄力条整块裁掉(平板横屏
+   1024×768 时 flight-chess 435px 内容不可达)。改成竖向可滚,游戏自钳的款式量法不变
+   (无溢出时几何完全一致),塞不下的至少能划到 —— 不许再出现"够不着的按钮"。 */
+.l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;flex-direction:column;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .l99-ov-big{font-size:56px;line-height:1;}
@@ -624,6 +628,13 @@ const L99_CSS = `
   .l99-map{padding:10px;}
   .l99-grid{gap:6px;}
   .l99-node-num{font-size:15px;}
+}
+/* 平板横屏/宽屏(r18 B):680px 地图在 1024/1180 宽的白卡里两侧各空 140–165px,显得空洞。
+   只在选关页(:has(.l99-map))把列宽加到 820px,格子 75→92px 更好点;关内 .l99-stage-wrap
+   保持 680 预算,不动任何游戏的画布量法。 */
+@media (min-width:1000px){
+  .l99-wrap:has(.l99-map){max-width:820px;}
+  .l99-grid{gap:10px;}
 }
 @media (max-height:740px){
   .l99-stagebar{padding:6px 8px;gap:6px;}
