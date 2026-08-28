@@ -436,6 +436,8 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 | prince / poop 仅 620 收画布 | **加** `840 && min-height:621` 轻钳 220/256，**不盲拷** 620 的 142/138 | 1024×768 |
 | puff-bros | 已有 JS `fitCanvas` 按舞台余高等比缩放，**不要**再叠 230px CSS（会先闪矮再被 JS 撑开） | 平板横屏 |
 | duo-rush `.dr-canvas` | 840 档 `max-height:min(52dvh,320px)`；默认 `.dr-canvas` 规则仍无 max-height；**不隐藏** `.dr-keys` | 平板横屏 |
+| 收藏册 | 840&&501&&min-width:641 撑满 overlay；**不盲拷** 500 的 72×84 预览 | 1024×768 |
+| rootGate / farm runner / 拼音 scene·timed | **不要**扩 840（N-109 明文平板零变化；禁止盲拷清单） | — |
 
 ## 附：第 3 轮环境水位
 

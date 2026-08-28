@@ -414,6 +414,13 @@ const COLLECTION_CSS = `
   .collection-bonus{justify-content:flex-start}
   .collection-grid{overflow:visible;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 }
+@media (max-height:840px) and (min-height:501px) and (min-width:641px){
+  .collection-overlay{padding:10px;align-items:stretch}
+  .collection-panel{max-height:100%;height:100%}
+  .collection-body{min-height:0}
+  .collection-grid{min-height:0}
+  .collection-foot{flex-shrink:0}
+}
 `;
 
 /** 已经注入过样式的 document(极简 DOM 没有 getElementById,靠这张表兜底) */
