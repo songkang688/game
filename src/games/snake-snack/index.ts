@@ -132,6 +132,16 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .snk-beat i { animation: none; } }
 .snk-pad-off .sn-pad { display: none; }
 .snk-hint { text-align: center; font-size: 13px; color: #8A6A16; min-height: 18px; margin-top: 4px; }
+/* 矮横屏(915×412 一类):画布左、徽章+方向键右,方形画布按剩余高度钳边长 */
+@media (min-width:640px) and (max-height:500px){
+  .sn-wrap{display:grid;grid-template-columns:minmax(0,auto) 200px;column-gap:14px;justify-content:center;align-items:start;padding:8px 12px;}
+  .sn-canvas{grid-column:1;grid-row:1 / span 4;width:auto;max-width:100%;height:min(320px,calc(100dvh - 190px));}
+  .sn-top{grid-column:2;grid-row:1;margin-bottom:0;justify-content:flex-start;gap:4px;}
+  .sn-badge{font-size:12px;padding:3px 8px;}
+  .snk-hint{grid-column:2;grid-row:2;text-align:left;margin-top:2px;}
+  .sn-pad{grid-column:2;grid-row:3;margin-top:6px;grid-template-columns:repeat(3,60px);grid-template-rows:46px 46px;justify-content:start;}
+  .sn-msg{grid-column:2;grid-row:4;text-align:left;margin-top:4px;}
+}
 `;
 
 interface Worm {
