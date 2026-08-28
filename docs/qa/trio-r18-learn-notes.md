@@ -1,74 +1,131 @@
-# 三人组 99 轮战役 · 第 1 轮（trio-r18）· 学习优化员抽验笔记
+# 三人组第 18 轮 · 学习优化员抽验笔记（UX-99 wave1；只学习、只记录，零代码改动）
 
-> 基线：`origin/game-1.3 = e58ccceb`（含 r17 学习员笔记、r17 A 的 N-89 壳标题收高 `10022068`、UX-99 监督派发表 PR #81）。
-> 模型：`claude-fable-5-thinking-xhigh`。分支 `cursor/trio-r18-learner-c337`。本工位零改 `src/**`。
-> **编号**：grep 全部 trio 文档最大号 = **N-91**（r17）。本工位新伤 **N-92…N-99**（N-99 是主干红灯）。
-> **不覆盖** `trio-r14*` / `r15*` / `r16*` / `r17*` 原文。工装 `/tmp/r18-scan.mjs`、截图 `/tmp/r18-shots/` 不进库。
-> 主档 **915×412**；本轮换抓手补了 **390×844 竖屏地图** 与 **1024×768 平板横屏**。
+> 基线：`origin/game-1.3 = c8a3d154`（含 N-89 壳标题 `10022068`、r17 笔记撞号改 N-94…N-97 `c8a3d154`、UX-99 派发表 `e58ccceb`）。
+> **不覆盖** `trio-r14*` / `trio-r15*` / `trio-r16*` / `trio-r17*` 原文。
+> **编号**：r17 已占到 **N-97**（N-89…N-91 + 云学习员改号 N-94…N-97；N-92/N-93 号在 r17 对账里被点名弃用防混淆，本工位跳过）。本工位从 **N-98** 续编。
+> 主档 **915×412**，对照 **390×844** 与 1024×768。工装 `/tmp/trio-r18-measure.mjs`、截图 `/tmp/trio-r18-shots/` 不进库。`src/**` 一行未动。
+> 水位：沿用 r17 A 交卷实测 **1182 files / 19477 tests**（`56798ddf`）；本工位零改 src，不动水位。
 
 ## 一、抽验方式
-    
-- 无头 puppeteer-core + `google-chrome 148`，`npm run build` + `vite preview --port 4173`；每案独立 browser context。
-- 换面原则：避开已量死的结算弹窗、N-77 相册、N-87/88、r17 三号（N-89/90/91）与 root×钓鱼/花园守卫；
-  专挑 r10–r17 提及 ≤2 次的款：`duo-vs-star`（0 次）、`landlord-cards`（0 次）、`bumper-cars`、`ice-fire-forest`、
-  `sprout-defense`、`xiangqi`、`match-stars`、`ocean-munch`、`pinyin-train`、`word-garden`、`dot-maze`。
-- 实测画面 **20 个**（游戏 × 模式 × 视口 × root 开/关 × 覆盖层），全部 `getBoundingClientRect` 留数字。
-- root 档：`localStorage["yiduo-yixing.root.v1"] = {"expiresAt":99999999999999,"mode":"permanent"}` 预注入，独立 context。
+
+- `npm run build`（绿，PWA precache 200 entries）+ `npx vite preview --port 4187`；puppeteer-core + `/usr/local/bin/google-chrome`，每案独立 `createBrowserContext()`。
+- 量法同 r4–r17：`getBoundingClientRect` 留 top/bottom；fold = 可交互元素 bottom > 视口；另量 **裁切祖先链**（computed overflow-y + scrollHeight/clientHeight），能说清 sticky 为什么失效。
+- root 档直接种 `yiduo-yixing.root.v1 = {"expiresAt":253370764800000,"mode":"permanent"}`（与 `ROOT_PERMANENT_EXPIRES_AT` 同值）；密码流本身没走 UI（密码 `kangkang` 只在门里活一瞬，不落盘，源码 `root12Contract.ts` 复核过）。
+- 换面：本轮 A/B 未覆盖的态——**N-89 合入后的技能键复测**、r17 点名的 N-90/N-91 复核、B 面旧号竖屏对照、未量过的棋牌（斗地主/花色接龙/数独花田/象棋残局学堂）、暂停覆盖层、root×地图直达条、1024 平板地图。
 
 ## 二、对账（已合入 → ✅，勿再做）
 
 | 批次 | SHA / PR | 结论 |
 | --- | --- | --- |
-| r17 A（N-89 壳标题收高） | `10022068` | ✅ `@media (max-height:500px)` 顶栏收高已合，勿第二套 |
-| r16 摘合 | `30cc10ab` | N-77 相册、N-87 冲刺 CTA、N-88 格斗开打、N-47 芯片 ✅ |
-| N-86 大厅卡 | `7a2d560b` | ✅ |
-| r15 B | PR #78 `8cbe0441` | N-75…N-85 ✅；N-55 对战十二键仍开 |
-| r13/r14 A | `215958e` / `87c5aff` | N-63 / C-6 / N-37 / N-68 / N-73 ✅ |
-| UX-99 派发表 | PR #81 `e58ccceb` | 本拍 = 战役第 1 轮；r18 A/B 两测试员在途（A 占壳+学习、B 占休闲对战） |
-| 旧 PR #76/#77/#79/#80 | — | 偏旧，**禁止**再合（会倒删 N-75+） |
+| N-89 壳标题 | `10022068`（r17 A 第 5 工位） | 500px 档收 `.game-screen` 顶栏 ✅；**本轮 915 实测顶栏 18–62 h=44，全部关内标题一致** |
+| N-87 守门 | `dcfacba0` + `644201d9` | `casualFit.r10b` 断言换钉 `.dr-menu-cta` ✅ 已绿，勿回退 |
+| r17 A 回归 | `56798ddf` | A 面全项 915 绿，水位 1182/19477 |
+| r17 笔记撞号 | `c8a3d154` | 云学习员复测改号 **N-94…N-97**（duo-vs-star 开打 / xiangqi 自由对战设置屏 / bomb-buddies 画布 / math-farm root 深关）——**仍开**，归 r18 A/B |
+| r15 B / 摘合批 | PR #78 `8cbe0441` / `30cc10ab` / `7a2d560b` | N-75…N-85、N-77/86/87/88/47 ✅ 照旧 |
+| PR #76/#79 | — | 整 PR 偏旧，禁止再合 |
 
-r17 playbook 旧号（N-60/61/62、N-12、N-10、N-3、N-55、C-8、N-90、N-91）**本轮未复测**、未见新修 commit，仍按 r17 口径开着，勿换号。
+## 三、N-89 合入后的 915 复测——**贴线族整批结案证据**（本轮最大发现）
 
-## 三、新发现（N-92 起；🔧 = 建议修，观察 = 记录不派）
+r16 量到的「技能键 top 394–398 切 ~28px」贴线族，在 N-89 壳标题收高合入后**全部进 412**。逐条实测（915×412，闯关 L1 关内）：
+
+| # | 对象 | r16 旧数字 | 本轮实测 | 结论 |
+| --- | --- | --- | --- | --- |
+| N-60 | orb-arena 闯关技能键 `.oa-pad` | top 398 切底 | 键 **288–334**（h=46）IN，fold 0，crop 0 | ✅ **可结案**，A/B 落回归数字即可 |
+| N-61 | snake-royale 闯关技能键 `.sr-pad` | top 398 切底 | 键 **288–334** IN，fold 0，crop 0 | ✅ 同上 |
+| N-62 | merge-2048 四向 `.mg-pad` | top 394 切底 | 四键 **288–334** IN，fold 0，crop 0 | ✅ 同上 |
+| N-90 | tap-tiles 闯关关内 | r16 观察 crop 66 | canvas **190–380**、stats 145–175，fold 0，crop 0 | ✅ **可书面结案**，无需动 tap-tiles 源码 |
+| N-91 | fruit-catch 闯关画布 | r16 crop 159 | `.frc-canvas` **194–354**（h=160 = `MIN_CANVAS_DISPLAY_PX` 生效钳住），fold 0，crop 0 | ✅ **可书面结案**；160px 显示高偏矮属观感项，勿再钳 |
+| N-10 | weiqi-garden 闯关工具行 | 工具 450、盘出屏 43 | 工具行 **284–336 IN**；残余 canvas 底切 **31**、`.wq-scroll` 切 12 | 🟡 **大幅好转**，降级为小残余（盘可滚，工具可点） |
+
+> 结论给下轮：**别再给这批加第二套垫**。N-89 一处收壳消化了整族贴线，r17 playbook 里 N-60/61/62 的「再垫 1 档」和 N-90/N-91 的修法**全部作废**，只需回归数字落账。
+
+## 四、旧号残余（不换号，仍开）
+
+| # | 对象 | 本轮 915 实测 | 本轮 390×844 对照 | 性质 |
+| --- | --- | --- | --- | --- |
+| N-12 | pool-stars | 力度条 **519–563**、蓄力击球 **570–620**、暂停 **627–671** 全线下；canvas 340 高切 100 | **竖屏也坏**：击球 **884–934**、暂停 **941–985** 线下，力度条切 33（canvas 560 吃满） | 🔧 仍无任何 `max-height` 媒体；修矮横屏同时必须把 390 竖屏一起收（canvas 显示高按余量钳 + `.ps-bars`/击球/暂停钉底） |
+| N-3 | star-estate | 棋盘 `.se-board` **343–516** 切 104，24 个地格线下（top 499）；骰子切 2 | 掷骰/购买 **808–854**、结束回合 **862–908** 线下（棋盘 488–798 IN） | 🔧 两档视口验收都要写数字；只动棋盘显示高/操作行钉底，勿再砍 `max-height:min(156px,38dvh)` |
+| N-55 | snow-fight **对战**十二键 | 第一排 332–378 IN；**第二排 382–428 底切 16px** | 未测（竖屏另档） | 🔧 只差 16px：`data-duo` 排再收 gap/padding 一档即进 412，禁止重写键排 |
+| C-8 | balloon-pop 闯关天空 | `.blp-sky` 178–598（h=420 固定）底切 **186**，两颗可点气球线下 | — | 🔧 仍无显示高钳；只钳 `.blp-sky` CSS 显示高，**禁止改 `logic.ts` 的 `SKY_H=420`** |
+| N-94…N-97 | 见 r17 笔记 `c8a3d154` | 未重测（云学习员数字新鲜：开打 451 / 开始下棋 713 / 画布底 475 / 选项 416） | — | 🔧 归 r18 A/B，按 r17 playbook 修 |
+
+## 五、新抽验（N-98 起）
+
+| # | 对象 | 实测（915×412） | 定位证据 | 性质 |
+| --- | --- | --- | --- | --- |
+| N-98 | **hue-hand 花色接龙**「🎴 抽牌 / ✅ 出牌 / ⏸ 暂停」三键整排线下（唯一 CTA 出屏） | 三键 top **422–466** 全线下；`.hh-btns` computed `position:sticky` | 裁切祖先是 **`.l99-host`（overflow-y:hidden，scrollHeight 668 > clientHeight 334）**——sticky 在 hidden 祖先里无活动余地，**与 N-75 麻将手牌同病**；`.hh-wrap` 整体 596 高、top −65 且滚不到。390×844 竖屏三键 **713–757 IN** 正常，纯矮横屏病 | 🔧 B：照 N-75 配方矮横屏把 `.hh-btns` 改 **fixed 钉视口底**（源码 317 行已有 `@media (max-height:500px)` sticky 档，改定位即可），或把 `.hh-table`/手牌区收进余量；勿改牌序/规则 |
+| N-99 | **sudoku-petal 数独花田** 闯关盘面底部约 2 行格子被裁且滚不到 | 盘格两排 **391–447 / 448–504** 切割线下；`.sp-pad`（数字键）340–384、`.sp-tools` 336–384 **在屏**；`.sp-msg` 583 线下 | 裁切祖先是 **`.sp-wrap`（overflow-y:hidden，scrollHeight 446 > clientHeight 178）**——盘身要 446px 但可视只剩 178px 且不滚；数字键能点、要填的格子看不见。390×844 竖屏 pad 722–768 / tools 780–824 IN 正常 | 🔧 A（学习款）：矮横屏按可视余量钳格子尺寸（照 N-68 `miniCellPxRow` / N-63 `mapClampPx` 的纯函数配方），或让 `.sp-wrap` 矮档改 `overflow:auto` 内滚；**题库/seed/判定零触碰** |
+
+## 六、干净清单（本轮实测 fold 0，下轮不必再量）
+
+- **landlord-cards 斗地主** 915 对战开局：46 个可交互全 IN，fold 0，crop 0。
+- **暂停覆盖层**（抽 tap-tiles 闯关 915）：overlay 整屏 0–412，「继续玩」在屏，fold 0——r8 模式 I/J 的覆盖层病本轮未复发。
+- **root×bowling 地图 915**：直达条 `.l99-jump` **27–71**（h=44）+「管理员权限已永久开启」文案在条内；当前关 **246–325 IN**；模式芯片 70–114 IN；地图自滚（后续关线下属正常滚动内容）。
+- **root×xiangqi 残局学堂 915**：`.l99-view` 可滚（568 > 276），当前课 **218–298 IN**（注意：这与 N-95 的**自由对战设置屏**是两个态，N-95 仍开）。
+- **bowling 1024×768 平板**：地图 150–750 整幅 IN、当前关 437–514、三颗模式芯片 100–144，选关地图观感达标。
+- **hue-hand / sudoku-petal 390×844 竖屏**：键排全 IN（见第五节），竖屏无需动。
+- **rainbow-run 1024×768**：进场态 fold 0。
+
+## 七、skills / 他窗配方学习（本轮吃进笔记的方法论）
+
+- `frontend-design`「唯一 CTA 必须在第一屏」：N-98 的「出牌」正是唯一动作排在 412 线下，与 N-87「怎么玩」、N-88/N-94「开打」同一句话的第四次复发——**新款接入 l99 壳时 CTA 进 412 应当成守门测试模板**（`.l99-host` overflow:hidden 是系统性裁切源，凡 sticky 底栏放它里面都会失效）。
+- `canvas-design`「空间说话，改显示不改世界」：C-8 的 `SKY_H=420` 是逻辑世界高度，N-91 的 `MIN_CANVAS_DISPLAY_PX=160` 是显示钳——本轮实测后者已正确生效，验证了「视觉层裁显示、不动世界常量」配方可复制到 C-8。
+- `theme-factory` 触区纪律：本轮全部实测键排 h ≥ 44（hue-hand 44、sudoku pad 44/46、snf 46、l99 直达 44），Q 粉彩没有以缩热区为代价——修 N-98/N-99 时保持。
+- 1.2 window 学习员配方（`1.2-window2-round2-learner-packA` 一族）的「裁切祖先链定位法」本轮落进工装：量 sticky 失效时同时报 overflow 祖先的 sh/ch，一次就能把 N-98/N-99 定性到改法级，比只报 top/bottom 少一轮往返。
+- 1.3 window8 学习员「建议写到文件+函数+坐标级才会被采纳」：本轮新伤全部给到 选择器 + 行号线索 + 同病先例（N-75/N-68/N-63），下轮 A/B 可以直接动手。
+
+## 八、学习员纪律（本轮自查）
+
+- `src/**` 零改动；只交本文件 + `trio-r18-playbook.md` 两个新文件。
+- 未覆盖 r14–r17 任何原文；编号从 r17 最大号 N-97 之后接续。
+- 工装/截图全部在 `/tmp`，不进库。
+- 同环境另有「学习员第8轮记 r17 笔记」工位：其 r17 文件已先合（`c8a3d154`），本工位只写 r18 对新文件，无撞车面。
+
+---
+
+# 附录 · r18 第二学习员补充抽验（战役第 1 轮拍 · 分支 `cursor/trio-r18-learner-c337`）
+
+> 本段由并行学习员（父监督 bc-90e40d7d 拍，模型 `claude-fable-5-thinking-xhigh`）在 `e58ccceb` 基线独立抽验后追加。
+> 上文先合版（`8b23ab11`）为准：**撞号已按先合版让位**——本工位原拟 N-92…N-99，现改号 **N-100…N-105**；
+> 与先合版重叠的两条（duo-vs-star 选人 CTA、xiangqi 自由对战）**并入 N-94 / N-95 作独立回归证据**，不另开号。
+> 工装 `/tmp/r18-scan.mjs`、截图 `/tmp/r18-shots/` 不进库；`src/**` 与测试零改动。
+
+## 补 A、给 N-94 / N-95 的独立复测证据（两处坐实，数字吻合）
+
+- **N-94** duo-vs-star 选人屏：`.dvs-go` **439~488 OUT**（先合版 451，同病）；场地末行 397~427 切；`.dvs-pick` h=**30**、`.dvs-back` h=**40**。390×844 绿（`.dvs-go` **631~680 IN**）。六模式卡 165~370 IN 不用动。
+- **N-95** xiangqi 自由对战：`.xq-start` **701~755 OUT**（先合版 713）；⭐ 星海棋神 397~444 切、先手行 587~689 OUT；`.l99-host` 滚 334/765。模式芯片行 `.xq-mode` 66~110 IN h=44 勿动。另一病根线索：单列 207px 窄卡居中、两侧全空白，矮横屏可分 2~3 栏。
+
+## 补 B、新发现（N-100 起）
 
 | # | 对象 | 视口 | 实测（top~bottom） | 性质 |
 | --- | --- | --- | --- | --- |
-| N-92 | **level99 壳**：多行章节 tab 款进场，「开始冒险 ▶」`.l99-continue` 与「🎯 跳到当前关 / ⏭️ 跳过」工具行被 `.l99-view` 的 scrollIntoView 卷出视口顶 | 915×412 | word-garden **-154~-110 / -104~-60**；ice-fire-forest **-104 / -54**；xiangqi **-50 / 0**；landlord-cards **-52 / -2**；bumper-cars **-39 / +11**；root×pinyin-train 加重：**「🎫 直达」-54~-10、跳过（管理员）-106** 进场全不可见。390×844 与 1024×768 全 IN（match-stars 1024 实测 162~206 IN） | 🔧 A |
-| N-93 | **duo-vs-star** 双人对战选人屏：唯一 CTA「两人就位，开打 ▶」`.dvs-go` 整体线下；`.dvs-pick` 触区 h=**30**、`.dvs-back` h=**40** | 915×412 | `.dvs-go` **439~488 OUT**（场地末行 397~427 切）；390×844 绿（**631~680 IN**） | 🔧 B |
-| N-94 | **duo-vs-star** 开打后赛中：触屏双列虚拟键（◀▲▼▶✋💥🤝 ×2）**14 键全部线下**，触屏两人没法打；canvas 122~302 IN | 915×412 | 键柱 **400~746 OUT**（`.game-stage` 滚 334/711）；390×844 未复测赛中（选人已绿） | 🔧 B（重） |
-| N-95 | **bumper-cars** 对战：915 画布仅 **140×140**（390 竖屏同局 331×331），圆台缩成小块、大量留白；模式芯片 `.bc-open` h=**34**、AI 档 `.bc-pick` h=**32** < 44 | 915×412 / 1024×768 | 画布 177~317 x:388~528；1024×768 两颗「🛑刹车」**741~785**，底切 17px；390×844 绿（键 705~799 IN h=44） | 🔧 B |
-| N-96 | **ice-fire-forest** 闯关第 1 关：主画布底切 **59px**（凛凛/焙焙键垫 253~393 IN h=44 没事，但谜题下几行看不见） | 915×412 | canvas **232~471 OUT**（`.l99-stage` 滚 220/394） | 🔧 B |
-| N-97 | **xiangqi** 自由对战面板：单列 207px 窄卡居中、两侧大片空白，六档难度+先手+CTA 垂直排两屏半，「开始下棋 ▶」线下 343px | 915×412 | `.xq-start` **701~755 OUT**；⭐ 星海棋神 397~444 切、先手行 587~689 OUT（`.l99-host` 滚 334/765）；模式芯片行 `.xq-mode` 66~110 IN h=44 ✅ | 🔧 B |
-| N-98 | **landlord-cards** 对战中「◀ 回选关」`.ld-back` 触区 h=**33** < 44（叫分行本身绿） | 915×412 | `.ld-back` 76~109；叫分 `.ld-btn` 299~347 IN h=48、暂停 350~394 IN ✅ | 🔧 B（轻） |
-| N-99 | **主干红灯**：PR #78 `81b228c2` 的矮横屏媒体查询把 `combo-clash .cc-info`、`mahjong-bloom .mj-goal` 调到 **14px**（后者还锁 nowrap），破 360px 文字 ≥16px 守门。r17-A 的绿灯（1182/19477）在 `30cc10ab`，PR #78 在其后合入，故当时没炸 | vitest | `src/ui/mobileText.test.ts` 3 例 + `src/games/window1-mobile-text.test.ts` 2 例红；修法=把两处媒体查询字号回 16px、解 `.mj-goal` nowrap，**不许砍守门测试**，也别回退 N-75/76 键排布局 | 🔧 B（最优先） |
-| 观察 | **sprout-defense / ocean-munch** 入场即全 canvas（DOM 仅壳 4 键），画布 66~400 IN；塔选/模式菜单画在 canvas 里，无头工装量不到内部热区 | 915×412 | canvas IN ✅；内部热区尺寸留人工/像素级抽验，本轮不开号 | 观察 |
-| 观察 | **word-garden** 攻略覆盖层：✕ 18~62、「知道啦」352~396 全 IN，`.guide-body` 自滚 270/718 ✅ | 915×412 | 绿 | 观察 |
+| N-100 | **level99 壳**：章节 tab 折多行的款，进场 `.l99-view` 被当前关 scrollIntoView 卷到 300+，「开始冒险 ▶」`.l99-continue` 与「🎯 跳到当前关 / ⏭️ 跳过」工具行全在视口上方；**root 加重**：跳关工具随行不可见 | 915×412 | word-garden **-154~-110 / -104~-60**；ice-fire-forest **-104 / -54**；xiangqi **-50 / 0**；landlord-cards **-52 / -2**；bumper-cars **-39 / +11**；root×pinyin-train「🎫 直达」**-54~-10**、「⏭️ 跳过（管理员）」-106。与干净清单「root×bowling 直达条 27~71 IN」**不矛盾**：bowling tab 单行不触发滚动，此伤只咬 tab 折 2 行以上的款。390×844 / 1024×768 全 IN（pinyin-train 竖屏 CTA 43~87、match-stars 平板 162~206） | 🔧 A |
+| N-101 | **duo-vs-star 开打后赛中**（≠ N-94 选人屏）：触屏双列虚拟键（◀▲▼▶✋💥🤝 ×2，h=46）**14 键全部线下**，触屏两人没法打；canvas 122~302 IN | 915×412 | 键柱 **400~746 OUT**（`.game-stage` 滚 334/711） | 🔧 B（重，与 N-94 同目录连修） |
+| N-102 | **bumper-cars** 对战：915 画布仅 **140×140**（390 竖屏同局 331×331），圆台缩成小块、大量留白；模式芯片 `.bc-open` h=**34**、AI 档 `.bc-pick` h=**32** | 915×412 / 1024×768 | 画布 177~317 x:388~528；1024×768 两颗「🛑刹车」**741~785** 底切 17px；390×844 绿（键 705~799 IN h=44） | 🔧 B |
+| N-103 | **ice-fire-forest** 闯关第 1 关：主画布底切 **59px**（凛凛/焙焙键垫 253~393 IN h=44 没事，谜题下几行看不见） | 915×412 | canvas **232~471 OUT**（`.l99-stage` 滚 220/394） | 🔧 B |
+| N-104 | **landlord-cards** 对战中「◀ 回选关」`.ld-back` 触区 h=**33**（干净清单的 fold 0 只测了裁切，没测热区高） | 915×412 | `.ld-back` 76~109；叫分 `.ld-btn` 299~347 IN h=48、暂停 350~394 IN ✅ | 🔧 B（轻） |
+| N-105 | **主干红灯**：PR #78 `81b228c2` 的 `@media (max-height:500px)` 把 `combo-clash .cc-info`、`mahjong-bloom .mj-goal` 调到 **14px**（后者还锁 nowrap），破 360px 文字 ≥16px 守门。r17-A 的绿灯（1182/19477）在 `30cc10ab`，PR #78 其后才合入，故当时没炸 | vitest | `e58ccceb` 实跑 `npx vitest run`：**1193 files（1191 绿 + 2 红）/ 19489 tests（19484 绿 + 5 红）**；红 = `src/ui/mobileText.test.ts` 3 例 + `src/games/window1-mobile-text.test.ts` 2 例 | 🔧 B（**最优先**；修法=字号回 16px + 解 nowrap，不许砍守门测试、不许回退 N-75/76 键排） |
 
-### 本轮绿档（留数字防回退）
+> 触区更正：上文红线「控件别太小：本轮实测全库已达标」以先合版抽面为限；本工位补测出 **30/32/33/34/40** 五处 <44
+> （N-94 芯片、N-102 两排、N-104 回选关、`.dvs-back`），修各号时一并抬到 44。
 
-- pinyin-train 390×844 地图：CTA 43~87 IN、tab 全 44px、格子 61~64px、`.l99-view` 自滚 730/793 ✅（竖屏地图滚动、格子、底部 CTA 三项全绿）。
-- word-garden 915×412 关内第 1 关：选项 `.qz-choice` 288~336 IN h=48 ✅。
-- landlord-cards 915×412 模式芯片 `.ld-open` 66~110 IN h=44 ✅（N-63 口径没回退：模式条不进卷轴）。
+## 补 C、本工位绿档（留数字防回退）
+
+- pinyin-train 390×844 地图：CTA 43~87 IN、tab 全 44、格子 61~64px、`.l99-view` 自滚 730/793 ✅（竖屏地图滚动/格子/底部 CTA 三项全绿）。
+- word-garden 915×412 关内 L1：`.qz-choice` 288~336 IN h=48 ✅；攻略覆盖层 ✕ 18~62、「知道啦」352~396 IN、`.guide-body` 自滚 270/718 ✅。
+- landlord-cards 915×412 模式芯片 `.ld-open` 66~110 IN h=44（N-63 口径没回退）；对战叫分行绿（见 N-104 行内）。
 - match-stars 1024×768 地图+三芯片 96~140 IN ✅。duo-vs-star 915×412 六模式卡 165~370 IN ✅。
-- bumper-cars / duo-vs-star 390×844 全绿（见 N-95/N-93 行内数字）。
+- bumper-cars / duo-vs-star 390×844 全绿（数字见 N-102 / 补 A）。
+- sprout-defense / ocean-munch 915×412 入场画布 66~400 IN（全 canvas 款，内部热区 DOM 量不到，观察项留下轮像素级工装，不开号）。
 
-## 四、skills / 他窗配方摘记（怎么用到 N-92…98）
+## 补 D、skills 摘记增量（先合版第七节之外）
 
-- `frontend-design`「唯一 CTA 必须在第一屏」：N-93 `.dvs-go`、N-97 `.xq-start` 就是这条的反例；修法优先 sticky/固定底或横屏分栏，别缩字号硬塞。
-- `canvas-design`「视觉层裁显示、不改世界常量」：N-96 只钳 canvas 显示高或改 fit 计算，**别动**冰火关卡逻辑网格；N-95 只放大显示画布，勿改碰撞世界尺寸（参照 C-8 `SKY_H` 前车之鉴）。
-- `theme-factory`/宪法第七节：触区 ≥ 44×44 是硬门槛，N-93/95/98 的 30/32/33/34/40 全违宪；修触区优先 padding/min-height，不加第三套渐变。
-- 视觉宪法第七节「可点热区 ≥44、HUD 字 ≥14」+ 1.2 窗口配方「矮横屏 @media (max-height:500px) 收壳让舞台」（r15 wrap chrome 76→108、N-89 顶栏收高）是 N-92 的修法参照：先收壳/锚定，不动 paneH 常量。
-- 1.2-window 布局配方里「sticky 底部键排」（N-40 赛道、N-75 麻将手牌 fixed）可直接迁移到 N-94 键柱与 N-97 CTA。
+- `frontend-design`「唯一 CTA 第一屏」在本拍第 5、6 次复发（N-94 独立复测、N-101 赛中键柱）：建议 A 下轮把「凡 `.l99-host`/`.game-stage` 内 sticky 底栏必须配 fixed 降级或收内容」写进壳层守门测试模板。
+- `canvas-design`「改显示不改世界」适用 N-102/N-103：只放大/钳显示画布，勿动碰撞世界尺寸与关卡网格（C-8 `SKY_H` 前车）。
+- 1.2 window 配方「fixed 钉视口底」（N-75）可直接迁移 N-101 键柱；「矮横屏收壳让舞台」（N-89）是 N-100 修法参照——先动滚动锚定/壳，不碰 paneH 常量。
 
-## 五、水位（进场 = 交卷，零改动；主干红灯如实上账）
+## 补 E、水位与纪律
 
-- `npx vitest run` @ `e58ccceb`：**1193 files（1191 绿 + 2 红）/ 19489 tests（19484 绿 + 5 红）**。
-  红灯即 N-99（PR #78 带进来的 14px 违反 360px 守门），学习员按纪律**不改测试、不改 src**，只上账派单。
-- `npm run build` 绿（tsc + vite，PWA precache 正常）。本工位未改 `src/**`、未改任何测试。
-
-## 六、纪律自查
-
-- 零改 `src/**`；只新增 `trio-r18-learn-notes.md`、`trio-r18-playbook.md`、`trio-supervisor-99r.md`。
-- 未覆盖 r14–r17 任何文件；未动 `trio-supervisor-10r.md` / `trio-supervisor-ux99.md` 的对账表。
-- N-92 不是 N-63 回退（模式芯片仍钉顶、实测 IN），也不是 N-39（不动聚焦）；修它的人别碰 `showMap(true)` 四处调用。
-- 与在途 r18 测试员 A（bc-5ad2f2d2，占壳+学习）/ B（bc-e60fef30，占休闲对战）避让：本工位只交文档；下轮任务单见 `trio-r18-playbook.md`。
+- 进场 = 交卷：`npx vitest run` @ `e58ccceb` = **1193 / 19489，2 文件 5 用例红**（= N-105，非本工位引入；先合版沿用的 1182/19477 是 PR #78 合入前的旧数）。`npm run build` 绿。
+- 本工位零改 `src/**`、零改测试；merge 时两份 r18 文件取先合版全文，本段只追加。
+- 监督拍登记见 `trio-supervisor-99r.md`。

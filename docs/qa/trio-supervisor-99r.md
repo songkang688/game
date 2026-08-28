@@ -9,9 +9,12 @@
 | --- | --- | --- | --- |
 | 测试修复员 A | bc-5ad2f2d2（壳+学习：kangkang、390/915、N-77 回归、选关滚动） | claude-fable-5-thinking-xhigh | 在途 |
 | 测试修复员 B | bc-e60fef30（休闲对战：N-87/88 回归、N-75…N-86、分屏/底栏） | claude-fable-5-thinking-xhigh | 在途 |
-| 学习优化员 | `cursor/trio-r18-learner-c337` → `trio-r18-learn-notes.md` + `trio-r18-playbook.md` | claude-fable-5-thinking-xhigh | 交卷 |
+| 学习优化员（先合） | `8b23ab11`：r18 笔记/playbook 主文（N-98 hue-hand、N-99 sudoku-petal；r17 云补测改号 N-94…N-97） | — | 交卷已合 |
+| 学习优化员（本拍） | `cursor/trio-r18-learner-c337`：撞车让位先合版，独有发现改号 **N-100…N-105** 以附录并入两份 r18 文件 | claude-fable-5-thinking-xhigh | 交卷 |
 
-- 学习员基线 `e58ccceb`，进场=交卷水位 **1193 files / 19489 tests，其中 2 文件 / 5 用例红**（= N-99，PR #78 带入的
-  14px 违反 360px 守门；r17-A 的绿灯在 PR #78 合入之前，故当时没炸）。学习员零改 `src/**`，只上账。
-- 新伤 **N-92…N-99**（level99 进场卷顶、duo-vs-star 选人/赛中、bumper-cars 画布、ice-fire-forest 画布、xiangqi 面板、landlord 触区、主干红灯）。
-- 第 2 轮 A/B 任务单：`trio-r18-playbook.md`（B 第一优先 N-99 抢修红灯，再 N-94/N-93/N-97；A 主攻 N-92）。
+- 撞车处理：两位 r18 学习员并行，`trio-r18-learn-notes.md` / `trio-r18-playbook.md` 取先合版全文，本拍补充段追加文末；
+  原拟 N-92/N-93 弃用（r17 对账点名防混淆），duo-vs-star 选人 / xiangqi 自由对战两条与先合版 N-94/N-95 重叠，折进回归证据。
+- 本拍独有新伤 **N-100…N-105**：level99 进场卷顶（A）、duo-vs-star 赛中键柱（B 重）、bumper-cars 画布+触区（B）、
+  ice-fire-forest 画布切 59（B）、landlord 回选关触区 33（B 轻）、**主干红灯**（B 最优先：PR #78 的 14px 破 360px ≥16px 守门，5 用例红）。
+- 实测水位 @ `e58ccceb`：**1193 files / 19489 tests，2 文件 5 用例红**（= N-105；先合版沿用的 1182/19477 是 PR #78 合入前旧数）。
+- 第 2 轮 A/B 任务单：`trio-r18-playbook.md`（主文 + 附录）。B 第零优先 N-105 抢修红灯；A 主攻 N-99/N-100。
