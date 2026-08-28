@@ -7,6 +7,6 @@ describe("N-75 mahjong-bloom 对局手牌矮横屏", () => {
     expect(MJ_CSS).toContain("@media (max-height:500px)");
     expect(MJ_CSS).toContain(".mj-hand{position:sticky;bottom:0");
     expect(MJ_CSS).toContain("flex-wrap:nowrap");
-    expect(MJ_CSS).toContain(".mj-wrap{height:100%;max-height:calc(100dvh - 76px)");
+    expect(MJ_CSS).toContain(".mj-wrap{height:100%;max-height:calc(100dvh - 108px)");
   });
 });

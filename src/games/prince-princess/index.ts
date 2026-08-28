@@ -279,7 +279,7 @@ export const CSS = `
 }
 /* N-79:两人一起闯关 D-pad 540/578。无尽城堡塔画布本轮已在屏,此档只压双人闯关画布 */
 @media (max-height:500px){
-  .pcp-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+  .pcp-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
     display:flex;flex-direction:column;box-sizing:border-box;}
   .pcp-hud{flex:0 0 auto;margin-bottom:4px;}
   .pcp-cv{height:118px;}

@@ -250,7 +250,7 @@ const CSS = `
   .snf-pads[data-duo]{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;max-width:none;flex-wrap:nowrap;}
   .snf-pads[data-duo] .snf-pad-duo{min-width:0;}
   /* N-85:闯关搓雪键。N-55 对战十二键的 data-duo 并排规则保持 */
-  .snf-wrap{max-height:calc(100dvh - 76px);overflow:hidden;}
+  .snf-wrap{max-height:calc(100dvh - 108px);overflow:hidden;}
   .snf-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
     background:linear-gradient(180deg,rgba(238,245,253,0),#eef5fd 16px);}
   .snf-canvas{max-height:min(168px,40dvh);}

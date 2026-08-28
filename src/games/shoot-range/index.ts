@@ -205,7 +205,7 @@ export const CSS = `
 }
 /* N-78:双人开火被舞台自滚卷走。先锁 wrap,再把画布按余高收、垫钉底。菜单芯片 40 归 N-47 勿动 */
 @media (max-height:500px){
-  .shr-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+  .shr-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
     display:flex;flex-direction:column;box-sizing:border-box;}
   .shr-bar{flex:0 0 auto;}
   .shr-box{flex:1 1 auto;min-height:0;}
@@ -1063,7 +1063,7 @@ function createField(opts: FieldOptions): FieldHandle {
     if (vh <= 500) {
       const padH = typeof pads.getBoundingClientRect === "function" ? pads.getBoundingClientRect().height : 0;
       const barH = typeof topbar.getBoundingClientRect === "function" ? topbar.getBoundingClientRect().height : 36;
-      cap = Math.max(96, Math.min(148, vh - 76 - barH - Math.max(padH, opts.players === 2 ? 120 : 88) - 18));
+      cap = Math.max(96, Math.min(148, vh - 108 - barH - Math.max(padH, opts.players === 2 ? 120 : 88) - 18));
     }
     const cssH = Math.min(cap, ratioH);
     canvas.style.height = `${cssH}px`;

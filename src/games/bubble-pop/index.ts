@@ -82,7 +82,7 @@ const CSS = `
 @media (max-width: 380px) { .bp-badge { font-size: 14px; } .bp-board { gap: 5px; } .bbp-chip { font-size: 14px; } }
 /* N-82:无尽泡泡海 12 行 × min-width 36 撑出 412。基线 36 保留,矮屏才收格 */
 @media (max-height: 500px) {
-  .bp-wrap { height: 100%; max-height: calc(100dvh - 76px); min-height: 0; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; padding: 8px; }
+  .bp-wrap { height: 100%; max-height: calc(100dvh - 108px); min-height: 0; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; padding: 8px; }
   .bp-top { flex: 0 0 auto; }
   .bp-board { flex: 1 1 auto; min-height: 0; width: min(100%, calc((100dvh - 148px) * 8 / 12)); max-height: min(240px, calc(100dvh - 148px)); margin: 0 auto; }
   .bp-cell { min-width: 0; min-height: 0; }

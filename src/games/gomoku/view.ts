@@ -177,7 +177,7 @@ export const CSS = `
   .gmk-panel .gmk-tierblurb{min-height:0;max-height:2.2em;overflow:hidden;}
   .gmk-panel{gap:8px;}
   /* N-83:闯关工具行。开始下棋仍只在 .gmk-panel 里,进局收盘+钉工具 */
-  .gmk-wrap{max-height:calc(100dvh - 76px);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .gmk-wrap{max-height:calc(100dvh - 108px);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
   .gmk-top,.gmk-seats{flex:0 0 auto;}
   .gmk-boardbox{flex:1 1 auto;min-height:0;display:flex;justify-content:center;align-items:center;}
   .gmk-canvas{max-height:min(168px,42dvh);width:auto;max-width:100%;margin:0 auto;}

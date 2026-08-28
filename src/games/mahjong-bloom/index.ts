@@ -242,7 +242,7 @@ export const MJ_CSS = `
 }
 /* N-75:矮横屏对局手牌整排线下。牌宽仍 44(N-41 勿回滚),收的是桌高,手牌钉底横滑 */
 @media (max-height:500px){
-  .mj-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+  .mj-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
     display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
   .mj-top{margin-bottom:4px;flex:0 0 auto;}
   .mj-goal{flex:0 0 auto;font-size:14px;line-height:1.3;max-height:1.4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

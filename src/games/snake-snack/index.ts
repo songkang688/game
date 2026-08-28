@@ -134,7 +134,7 @@ const CSS = `
 .snk-hint { text-align: center; font-size: 13px; color: #8A6A16; min-height: 18px; margin-top: 4px; }
 /* N-81:无尽花园画布 width:100% 在 915 上被拉成近正方形,方向键 678。收盘+钉键,CELL 常量不改 */
 @media (max-height: 500px) {
-  .sn-wrap { height: 100%; max-height: calc(100dvh - 76px); min-height: 0; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; }
+  .sn-wrap { height: 100%; max-height: calc(100dvh - 108px); min-height: 0; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; }
   .sn-top { flex: 0 0 auto; }
   .sn-canvas { max-height: min(168px, 42dvh); }
   .sn-pad { position: sticky; bottom: 0; z-index: 5; flex: 0 0 auto; margin-top: 6px;

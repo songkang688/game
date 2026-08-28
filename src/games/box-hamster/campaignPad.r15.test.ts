@@ -10,6 +10,6 @@ describe("N-80 box-hamster 闯关方向键", () => {
     expect(CELL_MIN).toBe(18);
     expect(SRC).toContain("@media (max-height:500px)");
     expect(SRC).toContain(".bh-pad{position:sticky;bottom:0");
-    expect(SRC).toContain(".bh-wrap{height:100%;max-height:calc(100dvh - 76px)");
+    expect(SRC).toContain(".bh-wrap{height:100%;max-height:calc(100dvh - 108px)");
   });
 });

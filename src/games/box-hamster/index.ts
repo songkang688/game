@@ -140,7 +140,7 @@ const CSS = `
 @media (max-width:340px){ .bh-grid{--cell:28px;} }
 /* N-80:闯关方向键 571。无尽键已在屏,只锁矮屏闯关壳,CELL_MIN 不降 */
 @media (max-height:500px){
-  .bh-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+  .bh-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
     display:flex;flex-direction:column;box-sizing:border-box;}
   .bh-tags,.bh-hud{flex:0 0 auto;}
   .bh-stagebox{flex:1 1 auto;min-height:0;overflow:hidden;}

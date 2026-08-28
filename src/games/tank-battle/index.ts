@@ -222,7 +222,7 @@ const CSS = `
 /* N-53:矮横屏双垫并排钉底,画布高度在 JS 里再减去这一截预留 */
 @media (max-height:500px){
   .tkb-root{overflow:hidden;max-height:100%;}
-  .tkb-wrap{max-height:calc(100dvh - 76px);overflow:hidden;}
+  .tkb-wrap{max-height:calc(100dvh - 108px);overflow:hidden;}
   .tkb-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
     background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
   .tkb-pads-two{flex-wrap:nowrap;position:sticky;bottom:0;z-index:5;padding-top:4px;

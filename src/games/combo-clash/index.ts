@@ -193,7 +193,7 @@ export const CSS = `
 }
 /* N-76:矮横屏把轻/重/必杀钉进 412;训练场日志可滚,帧数据不改 */
 @media (max-height:500px){
-  .cc-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+  .cc-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
     display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
   .cc-hud{flex:0 0 auto;margin-bottom:2px;}
   .cc-canvas{max-height:min(120px,32dvh);width:auto;margin:0 auto;}
