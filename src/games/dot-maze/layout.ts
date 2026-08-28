@@ -50,6 +50,21 @@ export function maxCanvasWidth(cols: number): number {
 export const MIN_CANVAS_DISPLAY_PX = 160;
 
 /**
+ * 矮横屏（915×412 一族）单独的下限。
+ *
+ * 那一族竖着只有 412px,壳层顶栏 + 关卡条 + HUD 各占一截之后,留给迷宫的净高只有
+ * 150 上下:守着 160 的下限就等于让迷宫压着裁切线,而线以下正是方向键——
+ * 触屏玩家一步都动不了。迷宫是等比缩,缩了仍然整张在屏、判定走的是相对滑动,
+ * 所以这一族把下限让到 128,先保证「整张图 + 整排键」都在首屏。
+ */
+export const MIN_CANVAS_DISPLAY_SHORT_PX = 128;
+
+/** 是不是「矮横屏」一族（和 CSS 里 min-width:700 + max-height:560 那条分支同一口径） */
+export function isShortLandscape(w: number, h: number): boolean {
+  return w >= 700 && h <= 560;
+}
+
+/**
  * 画布该「显示」多高(null = 原生高度就装得下,一个样式都不用写)。
  *
  * 画布分辨率按屏宽定,显示层是 `width:100%; height:auto`——横屏 640×360 上
