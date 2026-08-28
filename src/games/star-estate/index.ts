@@ -273,6 +273,22 @@ const CSS = `
   .se-wrap{max-height:calc(100dvh - 76px);}
   .se-board-wrap{max-height:min(156px,38dvh);}
 }
+/* N-3 r18:412 高下整块棋盘(含骰子/当前格预览)曾被顶到剪裁线外(top 387),
+   骰子转起来根本看不见。宽而矮的屏改双栏:棋盘居左、按余高只放大不缩小(≥156px),
+   回合/席位/三键/播报走右列。格局只动 CSS,回合与胜负逻辑零触碰 */
+@media (min-width:640px) and (max-height:500px){
+  .se-wrap{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;row-gap:4px;
+    align-content:start;align-items:start;}
+  .se-wrap>*{grid-column:2;min-width:0;}
+  .se-board-wrap{grid-column:1;grid-row:1 / span 8;margin:0;flex:none;
+    width:max(156px, min(calc(100dvh - 258px), 340px));max-width:none;max-height:none;}
+  .se-top{margin-bottom:0;}
+  .se-badge{max-height:2.4em;overflow:auto;padding:3px 8px;}
+  .se-seats{margin-bottom:0;gap:4px;}
+  .se-seat{padding:3px 6px;line-height:1.35;}
+  .se-pad{position:static;margin-top:0;padding:2px 0;background:none;box-shadow:none;}
+  .se-drawer{min-width:0;}
+}
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}
   .se-coin{transition:opacity 120ms linear;}

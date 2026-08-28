@@ -338,8 +338,14 @@ export const WQ_CSS = `
   .wq-open{font-size:14px;padding:9px 13px;}
 }
 @media (min-width:700px) and (max-height:500px){
-  .wq-scroll{max-height:min(260px, calc(100dvh - 168px));}
-  .wq-tools{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(251,247,238,.45),#FBF7EE);}
+  /* N-10 r18:168px 低估了棋盘上方的壳+抬头,412 高下滚动盒底边曾伸到 468,
+     盒底那几路怎么滚都够不着。按实测预算收到 100dvh-300(留 96px 下限),
+     棋盘整块都能在盒内滚到;摸法与 700px 断点不动 */
+  .wq-scroll{max-height:max(96px, calc(100dvh - 240px));}
+  .l99-stage-wrap .wq-scroll{max-height:max(96px, calc(100dvh - 300px));}
+  .wq-hud{margin-bottom:4px;}
+  .wq-chip{padding:4px 9px;}
+  .wq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:6px 0 2px;background:linear-gradient(180deg,rgba(251,247,238,.45),#FBF7EE);}
 }
 @media (prefers-reduced-motion:reduce){
   .wq-canvas{transition:none;}

@@ -249,6 +249,15 @@ const CSS = `
 @media (max-height:500px){
   .snf-pads[data-duo]{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;max-width:none;flex-wrap:nowrap;}
   .snf-pads[data-duo] .snf-pad-duo{min-width:0;}
+  /* N-55 r18:412 高下第二排键仍切 ~16px。牌名让位(粉/蓝描边照旧分辨左右家),
+     键回 44 触区下限,双人档整块再收一点,十二键全部进首屏 */
+  .snf-wrap:has(.snf-pads[data-duo]){max-height:calc(100dvh - 128px);}
+  .snf-pads[data-duo] .snf-pad-t{display:none;}
+  .snf-pads[data-duo] .snf-pad-duo{padding:2px 3px;gap:2px;}
+  .snf-pads[data-duo] .snf-btn,.snf-pads[data-duo] .snf-btn-throw,.snf-pads[data-duo] .snf-btn-scoop{
+    min-height:44px;min-width:44px;padding:2px;}
+  .snf-wrap:has(.snf-pads[data-duo]) .snf-say{max-height:22px;overflow:hidden;}
+  .snf-wrap:has(.snf-pads[data-duo]) .snf-tip{display:none;}
   /* N-85:闯关搓雪键。N-55 对战十二键的 data-duo 并排规则保持 */
   .snf-wrap{max-height:calc(100dvh - 108px);overflow:hidden;}
   .snf-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;

@@ -245,10 +245,29 @@ const CSS = `
   flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center;padding:16px;}
 .ps-veil-t{font-size:20px;font-weight:900;color:#3f8f68;}
 .ps-veil-s{font-size:14px;font-weight:700;color:#43604f;line-height:1.6;max-width:340px;}
+.ps-side{display:contents;}
 @media (max-width:420px){
   .ps-chip{font-size:14px;padding:4px 8px;}
   .ps-shoot{min-width:150px;padding:12px 20px;font-size:16px;}
   .ps-tip{font-size:14px;}
+}
+/* N-12:矮横屏(平板/手机横过来)整列摞不下,台面等比缩小放左边,
+   蓄力/击球/暂停这列放右边;台面物理与碰撞一个字不改,只缩显示 */
+@media (min-width:640px) and (max-height:500px){
+  .ps-wrap{flex-direction:row;flex-wrap:nowrap;align-items:flex-start;justify-content:center;gap:8px;}
+  .ps-hud{flex:0 1 auto;width:auto;max-width:130px;flex-direction:column;align-items:stretch;gap:4px;}
+  .ps-table{flex:0 1 auto;min-width:0;margin-top:2px;}
+  .ps-table canvas{max-width:100%;height:auto !important;width:auto !important;
+    max-height:max(96px, calc(100dvh - 148px));}
+  .l99-stage-wrap .ps-table canvas{max-height:max(96px, calc(100dvh - 268px));}
+  .ps-side{display:flex;flex-direction:column;gap:6px;align-items:center;
+    flex:0 1 300px;min-width:230px;overflow-y:auto;overscroll-behavior:contain;
+    max-height:max(120px, calc(100dvh - 138px));}
+  .l99-stage-wrap .ps-side{max-height:max(120px, calc(100dvh - 248px));}
+  .ps-bars{max-width:100%;}
+  .ps-shoot{min-width:150px;padding:10px 18px;}
+  .ps-btn{padding:8px 12px;}
+  .ps-tip{font-size:14px;padding:4px 9px;}
 }
 @media (prefers-reduced-motion:reduce){
   .ps-btn:active,.ps-shoot:active{transform:none;}
@@ -499,7 +518,11 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
   extraRow.append(spinBtn, placeBtn, pauseBtn);
   const pockRow = el("div", "ps-pockets");
   const tipBox = el("div", "ps-tip", tip);
-  wrap.append(hud, tableBox, bars, aimRow, extraRow, pockRow, tipBox);
+  // N-12:控制排统一装进一个分组;竖屏/高屏下 display:contents 完全等价于原布局,
+  // 矮横屏(915×412)才切成「台面居左、控制列居右」的双栏,击球/暂停不再掉出首屏
+  const side = el("div", "ps-side");
+  side.append(bars, aimRow, extraRow, pockRow, tipBox);
+  wrap.append(hud, tableBox, side);
   host.appendChild(wrap);
 
   const pocketBtns: HTMLButtonElement[] = POCKET_LABEL.map((label, i) => {
