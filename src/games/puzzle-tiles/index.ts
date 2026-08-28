@@ -92,7 +92,7 @@ const CSS = `
 }
 /* 390×667:宽<700 吃不到上条,盘底切 56px */
 @media (max-width: 699px) and (max-height: 840px) and (min-height: 501px) {
-  .pz-board { max-width: min(100%, calc(100dvh - 400px)); margin: 0 auto; }
+  .pz-board { max-width: min(100%, calc(100dvh - 412px)); margin: 0 auto; }
 }
 .pz-tile { aspect-ratio: 1; border: none; border-radius: 16px; font-size: var(--pz-fs, clamp(22px, 8vw, 44px)); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: transform .14s; box-shadow: 0 3px 8px rgba(120,120,200,.2); padding: 0; }
 .pz-tile small { font-size: var(--pz-num, 12px); color: rgba(90,80,120,.65); font-weight: 700; }

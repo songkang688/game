@@ -171,15 +171,20 @@ export const CSS = `
 /* 平板横屏高度是短边:460 宽的棋盘(高≈510)会把悔棋/提示那排顶出首屏,收窄一点整套都装得下 */
 @media (min-width:700px) and (max-height:840px) and (min-height:501px){
   .xq-wrap{max-width:380px;}
+  .xq-msg{position:sticky;bottom:102px;z-index:3;background:#FFF8F0;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
-/* 390×667:宽<700 吃不到 380 钳,键排切出 140px。不盲拷 500 的 248px */
+/* 390×667/844:宽<700 时 wrap 100% 仍等于屏宽,钳 wrap 无效。按余高反推棋盘宽。不盲拷 248px */
 @media (max-width:699px) and (max-height:840px) and (min-height:501px){
-  .xq-wrap{max-width:min(100%, calc((100dvh - 210px) * 0.82));}
+  .xq-wrap{max-height:100%;overflow-y:auto;}
+  .xq-boardbox{max-width:min(100%, calc((100dvh - 420px) * 0.85));margin-inline:auto;}
+  .xq-msg{position:sticky;bottom:110px;z-index:3;background:#FFF8F0;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
 @media (max-width:699px) and (max-height:900px) and (min-height:841px){
-  .xq-wrap{max-width:min(100%, calc((100dvh - 210px) * 0.82));}
+  .xq-wrap{max-height:100%;overflow-y:auto;}
+  .xq-boardbox{max-width:min(100%, calc((100dvh - 420px) * 0.85));margin-inline:auto;}
+  .xq-msg{position:sticky;bottom:110px;z-index:3;background:#FFF8F0;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
 }
 @media (min-width:700px) and (max-height:500px){

@@ -190,6 +190,12 @@ export const CSS = `
     background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
   .gmk-canvas{max-height:min(280px,52dvh);}
 }
+@media (max-height:900px) and (min-height:841px){
+  .gmk-panel .gmk-start{position:sticky;bottom:0;z-index:5;background:#FFB3CD;min-height:48px;}
+  .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
+  .gmk-canvas{max-height:min(360px,52dvh);}
+}
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
   .gmk-seat.gmk-seat-on .gmk-seat-ico{animation:none;}
