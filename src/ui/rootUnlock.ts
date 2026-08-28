@@ -62,6 +62,7 @@ export interface LockedNodeLike {
 export interface LockedTabLike {
   classList: { remove(cls: string): void };
   textContent: string | null;
+  querySelector?(selector: string): { remove(): void } | null;
 }
 
 /** 一张选关地图(.l99-map)要用到的最小接口 */
@@ -105,7 +106,9 @@ function unlockMap(map: LevelMapLike): number {
   for (let i = 0; i < tabs.length; i++) {
     const tab = tabs[i] as LockedTabLike;
     tab.classList.remove("l99-tab-lock");
-    tab.textContent = stripLockMark(tab.textContent);
+    const mark = typeof tab.querySelector === "function" ? tab.querySelector(".l99-tab-lockmark") : null;
+    if (mark && typeof mark.remove === "function") mark.remove();
+    else tab.textContent = stripLockMark(tab.textContent);
   }
 
   if (isRootPermanent()) {

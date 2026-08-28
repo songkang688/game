@@ -538,7 +538,8 @@ const L99_CSS = `
   user-select:none;-webkit-user-select:none;position:relative;width:100%;height:100%;min-height:0;
   display:flex;flex-direction:column;box-sizing:border-box;}
 .l99-view{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;
-  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  touch-action:pan-y;overscroll-behavior:contain;}
 .l99-map{border-radius:20px;padding:14px;background:linear-gradient(180deg,#FFF7FB,#F0F4FF);
   flex:0 0 auto;box-sizing:border-box;max-width:100%;}
 .l99-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
@@ -554,11 +555,17 @@ const L99_CSS = `
   font-family:inherit;background:#ffffffd9;color:#5f4a8a;box-shadow:0 3px 0 rgba(120,90,160,.22);white-space:nowrap;}
 .l99-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.22);}
 .l99-tool-skip{background:#efe9fb;color:#665390;}
-.l99-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px 2px 8px;max-width:100%;}
-.l99-tab{flex:0 0 auto;border:none;border-radius:14px;padding:8px 12px;font-size:14px;font-weight:800;cursor:pointer;
+.l99-tabs{display:flex;gap:3px;flex-wrap:wrap;padding:2px 0 6px;max-width:100%;align-items:center;}
+.l99-wrap .l99-tabs{padding-inline:0;}
+.l99-tab{flex:0 0 auto;border:none;border-radius:12px;padding:0;min-width:36px;min-height:44px;
+  display:inline-flex;align-items:center;justify-content:center;gap:3px;font-size:14px;font-weight:800;cursor:pointer;
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
-.l99-tab.l99-tab-on{color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
+.l99-tab:not(.l99-tab-on){width:36px;overflow:hidden;}
+.l99-tab.l99-tab-on{padding:0 8px;color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
 .l99-tab.l99-tab-lock{opacity:.55;}
+.l99-tab-emoji{font-size:18px;line-height:1;}
+.l99-tab-name{font-size:13px;font-weight:800;max-width:4.6em;overflow:hidden;text-overflow:ellipsis;}
+.l99-tab-lockmark{font-size:11px;line-height:1;flex:0 0 auto;}
 /* 下面几行都是讲给孩子听的说明文字,按 mobileText.MIN_BODY_PX 走 16px:
    360px 手机上量过,13px / 12px 的小字在选关地图里根本看不清。 */
 .l99-chapdesc{font-size:16px;line-height:1.45;font-weight:700;color:#77619b;text-align:center;
@@ -638,8 +645,9 @@ const L99_CSS = `
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
   /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
-     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
-  .l99-wrap{max-height:calc(100dvh - 136px);}
+     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。
+     N-118:不再用 100dvh-136px 硬钳——那 136px 在 915×412 留下底部盲区,
+     触摸滚不到最后一行。高度交给 .l99-host>.l99-wrap 的 flex 吃满壳卡余高。 */
   .l99-view{overscroll-behavior:contain;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
@@ -717,10 +725,18 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     return typeof w === "number" && w > 0 ? w : 480;
   }
 
+  /** N-118:列数按地图容器宽,不按 innerWidth——680px max-width 的格子不该用 915 视口去排 8 列。 */
+  function mapLayoutWidth(): number {
+    const map = view.querySelector(".l99-map") as { clientWidth?: number } | null;
+    const cw = map?.clientWidth || wrap.clientWidth;
+    if (typeof cw === "number" && cw > 0) return cw;
+    return viewportWidth();
+  }
+
   const onResize = (): void => {
     const grid = view.querySelector(".l99-grid");
     if (grid && typeof (grid as HTMLElement).style !== "undefined") {
-      (grid as HTMLElement).style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+      (grid as HTMLElement).style.gridTemplateColumns = `repeat(${mapColumns(mapLayoutWidth())},1fr)`;
     }
   };
   (globalThis as { addEventListener?: typeof window.addEventListener }).addEventListener?.("resize", onResize);
@@ -898,18 +914,38 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     desc.className = "l99-chapdesc";
     const grid = document.createElement("div");
     grid.className = "l99-grid";
-    grid.style.gridTemplateColumns = `repeat(${mapColumns(viewportWidth())},1fr)`;
+    grid.style.gridTemplateColumns = `repeat(${mapColumns(mapLayoutWidth())},1fr)`;
     const furthestChapter = chapterOf(opts.chapters, furthest);
 
     opts.chapters.forEach((ch, ci) => {
       const tab = document.createElement("button");
       tab.type = "button";
       const locked = ci > furthestChapter;
-      tab.className = `l99-tab${ci === viewChapter ? " l99-tab-on" : ""}${locked ? " l99-tab-lock" : ""}`;
-      tab.style.background = ci === viewChapter ? ch.color : "";
-      tab.textContent = `${ch.emoji} ${ch.name}${locked ? " 🔒" : ""}`;
+      const on = ci === viewChapter;
+      tab.className = `l99-tab${on ? " l99-tab-on" : ""}${locked ? " l99-tab-lock" : ""}`;
+      tab.style.background = on ? ch.color : "";
+      // N-117:非当前章只露 emoji,当前章 emoji+名;锁标独立节点给 rootUnlock 摘。
+      const emojiEl = document.createElement("span");
+      emojiEl.className = "l99-tab-emoji";
+      emojiEl.setAttribute("aria-hidden", "true");
+      emojiEl.textContent = ch.emoji;
+      tab.appendChild(emojiEl);
+      if (on) {
+        const nameEl = document.createElement("span");
+        nameEl.className = "l99-tab-name";
+        nameEl.textContent = ch.name;
+        tab.appendChild(nameEl);
+      }
+      if (locked) {
+        const lockEl = document.createElement("span");
+        lockEl.className = "l99-tab-lockmark";
+        lockEl.setAttribute("aria-hidden", "true");
+        lockEl.textContent = "🔒";
+        tab.appendChild(lockEl);
+      }
       tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-selected", ci === viewChapter ? "true" : "false");
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+      tab.setAttribute("aria-label", `${ch.emoji} ${ch.name}${locked ? "，未解锁" : ""}`);
       tab.addEventListener("click", () => {
         api.play("tap");
         viewChapter = ci;
