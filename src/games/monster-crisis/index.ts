@@ -185,6 +185,20 @@ export const CSS = `
   .mcr-card{min-width:118px;flex:1 1 118px;}
   .mcr-cards{max-height:52vh;}
 }
+@media (max-height:500px) and (min-width:700px){
+  /* N-106:摇杆排在流内 368~464 被舞台裁掉下半(sticky/自滚在 l99-host 链失效)——
+     每人「摇杆+甩弹」组 fixed 钉到视口下角,画布居中不受遮挡;
+     z-index 压在 .mcr-layer(z9)之下,暂停/技能卡浮层照旧盖得住 */
+  .mcr-pads{min-height:0;position:static;display:contents;}
+  .mcr-pad{position:fixed;bottom:10px;z-index:5;gap:8px;padding:6px 8px;border-radius:20px;
+    background:rgba(244,240,255,.92);box-shadow:0 3px 10px rgba(110,90,160,.28);}
+  .mcr-pad:first-child{left:10px;right:auto;}
+  .mcr-pad:last-child{left:auto;right:10px;}
+  /* 单人態 stick/note/fire 直接挂在 .mcr-pads 下(无 .mcr-pad 包装):同样钉两下角 */
+  .mcr-pads > .mcr-stick{position:fixed;bottom:14px;left:14px;z-index:5;}
+  .mcr-pads > .mcr-fire{position:fixed;bottom:22px;right:16px;z-index:5;}
+  .mcr-pads > .mcr-padname{display:none;}
+}
 @media (prefers-reduced-motion:reduce){
   .mcr-fire:active,.mcr-btn:active,.mcr-card:active,.mcr-back:active,.mcr-hudbtn:active{transform:none;}
 }
