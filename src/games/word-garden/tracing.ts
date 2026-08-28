@@ -106,7 +106,6 @@ export const WGD_CSS = `
 }
 @media (max-height:840px) and (min-height:501px){
   .wgd-trace{min-height:0;padding:10px;gap:8px;}
-  /* 第二处 500 档把花园钳到 10vh；平板不盲拷，只略收让描字盘。 */
   .wgd-garden{max-height:12vh;min-height:40px;}
 }
 .wgd-fiber{stroke:rgba(190,158,110,.18);stroke-width:.8;fill:none;}

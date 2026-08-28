@@ -442,6 +442,8 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 | mine-garden | 840 钉 `.mn-tools` sticky，**不拷** 500 的 `mn-msg min-height:0` | 1024×768 |
 | flight-chess | 去掉 840 档后多余 `}`，避免后续 `prefers-reduced-motion` 解析漂移 | 全视口 |
 | tap-tiles | 守门：840 **不得**拷 `.tt-keys{display:none}` | 平板横屏 |
+| word-garden / landlord | 840 `@media` 块内注释外移（clock-house/shell.test 会把注释当选择器） | — |
+| bowling-lane | 840&&min-height:501 钉停键；**不拷** 720 的 `bwl-legend{display:none}`；721 档原文仍在 | 667–768 高 |
 
 ## 附：第 3 轮环境水位
 

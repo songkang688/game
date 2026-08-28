@@ -221,6 +221,10 @@ const CSS = `
   .bl-roll{padding:10px 20px;}
   .bwl-legend{display:none;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .bl-nudge{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(253,241,246,0),#fdf1f6 40%);}
+}
 @media (max-height:840px) and (min-height:721px){
   .bl-wrap{gap:5px;}
   .bl-nudge{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
