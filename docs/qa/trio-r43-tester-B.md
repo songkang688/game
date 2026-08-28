@@ -12,6 +12,15 @@
 | **N-192** | `.ba-lv` 补 min-height/min-width 44 |
 | **N-193** | `.cs-lv` 同样 44；不改 `.cds-tap` / `.fk-ch` |
 
+## 三视口（无头 Chrome · 地图已解锁格）
+
+| 选择器 | 390×844 | 915×412 | 1024×768 |
+| --- | --- | --- | --- |
+| `.ba-lv` | **59×65 IN** | **59×77 IN** | **59×77 IN** |
+| `.cs-lv` | **44×57 IN** | **44×77 IN** | **44×77 IN** |
+| `.rbt-vs-btn` | CSS `TOUCH_MIN_PX`；进对战结算才挂 | 同左 | 同左 |
+| `.rte-btn` | 规则 44；大厅入口仍 `.rte-open` h44 | 同左 | 同左 |
+
 ## 测试
 
-`src/games/hotspot.r43b.test.ts`。
+`src/games/hotspot.r43b.test.ts`。`npm run build` 绿。
