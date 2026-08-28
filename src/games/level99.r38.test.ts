@@ -167,7 +167,7 @@ describe("N-185 *-catch", () => {
     expect(HH).toContain(".hh-catch{");
     expect(HH).toContain(".hh-deck{");
     expect(HH).toContain(".hh-card{");
-    expect(HH).toMatch(/\.hh-catch\{[^}]*padding:4px 9px/);
+    expect(HH).toContain("btn.className = \"hh-catch\"");
   });
 
   it("可点 *-catch 须 ≥44 或 TOUCH 插值（B 的 .hh-catch 走文件白名单）", () => {
