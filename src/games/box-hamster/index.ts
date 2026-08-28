@@ -138,6 +138,18 @@ const CSS = `
   .bh-tip{font-size:11px;}
 }
 @media (max-width:340px){ .bh-grid{--cell:28px;} }
+/* N-80:915×412 闯关方向盘 ⬆579/◀⬇▶637 全掉出舞台裁切线(322px)——HUD+方向盘+提示的固定家当
+   竖着就超过舞台高。矮横屏改「棋盘左、按键右」两列,fitBoard 量到的余量随之变大,推箱规则零触碰 */
+@media (min-width:640px) and (max-height:500px){
+  .bh-wrap{display:grid;grid-template-columns:minmax(0,1fr) 176px;column-gap:12px;align-items:start;}
+  .bh-hud{grid-column:1 / -1;grid-row:1;margin-bottom:4px;justify-content:center;}
+  .bh-chip{font-size:12px;padding:3px 8px;}
+  .bh-btn{padding:4px 8px;font-size:12px;}
+  .bh-stagebox{grid-column:1;grid-row:2 / span 3;padding:6px;}
+  .bh-tags{grid-column:2;grid-row:2;margin-bottom:0;align-content:start;}
+  .bh-pad{grid-column:2;grid-row:3;margin-top:6px;grid-template-columns:repeat(3,52px);grid-auto-rows:44px;}
+  .bh-tip{grid-column:2;grid-row:4;margin-top:4px;font-size:11px;max-height:36px;overflow:hidden;}
+}
 @media (prefers-reduced-motion:reduce){ .bh-hint{animation:none;box-shadow:inset 0 0 0 3px #F2A93B;} }
 ${bhVisualCss()}`;
 
