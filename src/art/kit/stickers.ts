@@ -16,7 +16,7 @@
  * 纯函数 + 常量：吃 emoji 吐 SVG 字符串，不碰 DOM、不开计时器，node 环境可直接断言。
  * viewBox 统一 48×48。
  */
-import { shade } from "./palette";
+import { shade, tryHexToRgb } from "./palette";
 
 /** 贴纸色板（粉彩基调，主色向黑压 45% 即描边色） */
 export const STICKER_PALETTE = {
@@ -45,6 +45,7 @@ const INK = P.ink;
 
 /** 主色 → 描边色（向黑压 45%，与 crops 同规） */
 export function stickerOutline(main: string): string {
+  if (!tryHexToRgb(main)) return main;
   return shade(main, -45);
 }
 

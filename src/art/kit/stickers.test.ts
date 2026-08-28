@@ -80,7 +80,7 @@ describe("贴纸工序（沿 crops.ts 规格）", () => {
   });
 
   it("描边色推导：主色向黑压 45%", () => {
-    expect(stickerOutline("#ffd93d")).toBe("#8C7722");
+    expect(stickerOutline("#ffd93d")).toBe("#8c7722");
     expect(stickerOutline("不是颜色")).toBe("不是颜色");
   });
 });

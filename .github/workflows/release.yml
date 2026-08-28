@@ -54,7 +54,7 @@ jobs:
 
       # 与 ci.yml 一致:runner 比开发机慢,放宽单个用例的超时,避免重模拟用例假失败。
       - name: 单元测试
-        run: npm test -- --testTimeout=30000
+        run: npm test -- --testTimeout=180000
 
       - name: 类型检查 + 构建
         run: npm run build

@@ -689,13 +689,11 @@ describe("weiqi-garden · 1.3 视觉契约:标记形状通道与光标对比度"
     expect(ctx.count("stroke")).toBeGreaterThan(0);
 
     const lum = (hex: string): number => {
-      const rgb = hexToRgb(hex);
-      expect(rgb, `${hex} 不是合法色`).not.toBeNull();
+      const [r, g, b] = hexToRgb(hex);
       const lin = (v: number): number => {
         const c = v / 255;
         return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
       };
-      const { r, g, b } = rgb as { r: number; g: number; b: number };
       return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
     };
     const contrast = (a: string, b: string): number => {

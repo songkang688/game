@@ -84,17 +84,16 @@ describe("卡面 cardArtSVG", () => {
   it("红门(花/果)卡面含红色系填充,黑门(叶/石)含深色系", () => {
     for (const suit of SUITS) {
       const art = SUIT_ART[suit];
-      const rgb = hexToRgb(art.color);
-      expect(rgb, suit).not.toBeNull();
+      const [r, g, b] = hexToRgb(art.color);
       const svg = cardArtSVG(makeCard("slash", suit, 7));
       expect(svg).toContain(art.color);
       if (suit === "flower" || suit === "berry") {
         // 红色系:红通道压过绿蓝
-        expect(rgb!.r).toBeGreaterThan(rgb!.g);
-        expect(rgb!.r).toBeGreaterThan(rgb!.b);
+        expect(r).toBeGreaterThan(g);
+        expect(r).toBeGreaterThan(b);
       } else {
         // 黑色系:整体够暗(传统黑花色),色弱下还有形状兜底
-        expect(rgb!.r + rgb!.g + rgb!.b).toBeLessThan(320);
+        expect(r + g + b).toBeLessThan(320);
       }
     }
   });
