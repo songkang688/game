@@ -603,8 +603,12 @@ const L99_CSS = `
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
 .l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
 .l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
-.l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
+/* z-index 30:要盖过游戏钉底的 fixed 工具条(如麻将手牌 z 20),但仍在壳层 .overlay(50)之下。
+   矮横屏 .l99-wrap 被钳高后弹层可能装不下:overflow 兜底可滚,safe center 保证顶部按钮不被
+   居中裁掉(老浏览器不认 safe 时回落到普通 center,行为与修前一致)。 */
+.l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:30;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;
+  gap:12px;text-align:center;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .l99-ov-big{font-size:56px;line-height:1;}
 .l99-ov-buddy{width:104px;height:104px;object-fit:contain;pointer-events:none;
   filter:drop-shadow(0 6px 10px rgba(180,120,180,.28));animation:l99buddy .5s cubic-bezier(.34,1.56,.64,1);}
@@ -640,6 +644,13 @@ const L99_CSS = `
   /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
      四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
   .l99-wrap{max-height:calc(100dvh - 136px);}
+  /* 矮横屏胜负弹层:头像/星星/标题收一档,按钮不再掉出 276px 的钳高盒(915×412 实测) */
+  .l99-overlay{gap:8px;padding:12px;}
+  .l99-ov-buddy{width:64px;height:64px;}
+  .l99-ov-buddy-round{width:56px;height:56px;}
+  .l99-ov-big{font-size:36px;}
+  .l99-ov-stars{font-size:26px;}
+  .l99-ov-title{font-size:19px;}
   .l99-view{overscroll-behavior:contain;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;

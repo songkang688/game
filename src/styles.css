@@ -1729,7 +1729,8 @@ html {
   }
 
   .dialog {
-    width: min(96vw, 320px);
+    /* overlay 两侧各留 20px:96vw 在 320px 屏上是 307px,会把弹窗顶出右边界 7px */
+    width: min(calc(100vw - 40px), 320px);
     padding: 22px 16px 18px;
   }
 }
