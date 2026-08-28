@@ -152,6 +152,24 @@ const CSS = `
 .cc-btn.cc-burst{background:#D9D2FB;color:#4f3f96;box-shadow:0 4px 0 #B4A8E8;}
 .cc-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #E7A9C6;}
 .cc-btn:focus-visible,.cc-open:focus-visible,.cc-back:focus-visible{outline:3px solid #46246b;outline-offset:3px;}
+/* N-76 r17:915×412 双人/训练三键 440..504 掉出舞台裁切线(322px),画布已被 fitDisplay 钳到底仍不够。
+   矮横屏改「摇杆左、擂台中、三键右」;帧数据/胜负零触碰,训练日志限高可滚 */
+@media (min-width:640px) and (max-height:500px){
+  .cc-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:10px;align-items:center;padding:6px 10px;}
+  .cc-hud{grid-column:1 / -1;grid-row:1;margin-bottom:2px;}
+  .cc-topline{min-height:20px;}
+  .cc-ava{width:18px;height:18px;}
+  .cc-name{font-size:13px;}
+  .cc-timer{font-size:16px;}
+  .cc-mid{min-width:64px;}
+  .cc-combo{min-height:0;font-size:12px;}
+  .cc-canvas{grid-column:2;grid-row:2;}
+  .cc-msg{grid-column:1 / -1;grid-row:3;margin-top:2px;min-height:0;font-size:12px;}
+  .cc-pad{display:contents;}
+  .cc-stick{grid-column:1;grid-row:2;}
+  .cc-btns{grid-column:3;grid-row:2;max-width:150px;justify-content:center;}
+  .cc-info{grid-column:1 / -1;grid-row:4;max-height:44px;overflow-y:auto;padding:4px 8px;font-size:12px;}
+}
 .cc-modebar,.cc-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .cc-modebar[hidden]{display:none;}
