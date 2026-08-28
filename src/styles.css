@@ -1912,6 +1912,36 @@ html {
   }
 }
 
+/* ---------- N-123(U-4):平板横屏/小笔记本(1024×768、1180×820、1280×800)首卡 top=557,
+   首屏只露 211px 高的半行卡。hero 插图缩一档、气泡与三行页签收边距,首卡 top 进 500。
+   与 S-1 两档互斥:min-width:700 隔开 480 档、min-height:501 隔开 500 档;
+   768×1024 竖屏(高 1024)不落档。只动几何留白,筛选/搜索热区 ≥44 红线不涉及。 */
+@media (min-width: 700px) and (min-height: 501px) and (max-height: 840px) {
+  .home-screen .home-hero {
+    margin: 4px 0 2px;
+    gap: 6px;
+  }
+
+  .home-screen .hero-figure {
+    width: 72px;
+    height: 72px;
+  }
+
+  .home-screen .hero-bubble {
+    margin-bottom: 4px;
+    padding: 8px 18px;
+    gap: 2px;
+  }
+
+  .home-screen .tabs {
+    margin: 6px 0 8px;
+  }
+
+  .home-screen .home-toolbar {
+    margin: 6px 0 10px;
+  }
+}
+
 @media (max-height: 500px) {
   /* N-89:915×412 关内顶栏再收 ~28px 给 sticky 底键；热区仍 ≥44。勿改 orb/snake paneH=200 */
   .game-screen .game-topbar {
