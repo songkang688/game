@@ -95,6 +95,8 @@ import {
   type WorldSource
 } from "./world";
 import { save } from "../../engine/save";
+import { isRootOpen } from "../../ui/root12Contract";
+import { unlockedWithRoot } from "./rootUnlock";
 import { speak, stopSpeaking, whenSpeechReady } from "../speech";
 
 type SoundName = WorldSound;
@@ -373,7 +375,8 @@ export function mount(api: GameApi): { destroy: () => void } {
   }
 
   function isUnlocked(id: number): boolean {
-    return id === 1 || starsOf(id - 1) > 0;
+    // 管理员权限(kangkang 密码)开着时全关可进;关着/过期回落到星级解锁
+    return unlockedWithRoot(isRootOpen(), id === 1 || starsOf(id - 1) > 0);
   }
 
   function chapterUnlocked(c: number): boolean {

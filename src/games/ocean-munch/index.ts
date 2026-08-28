@@ -169,7 +169,9 @@ import {
 import type { Headdress, Swirl } from "./art";
 import { save } from "../../engine/save";
 import { getLevelExtras } from "../../ui/level188Contract";
+import { isRootOpen } from "../../ui/root12Contract";
 import { speak, stopSpeaking } from "../speech";
+import { fitLineWith, mapRowYs, unlockedWithRoot } from "./mapFit";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
 
@@ -1231,9 +1233,9 @@ export function mount(api: GameAPI): OceanMunchHandle {
       });
   }
 
-  /** 关卡解锁:上一关通关过,或者上一关被家长跳过。 */
+  /** 关卡解锁:上一关通关过、上一关被家长跳过,或管理员权限开着(root 开则全开)。 */
   function levelUnlocked(idx: number): boolean {
-    return isUnlockedWith(progress, skips, idx);
+    return unlockedWithRoot(isRootOpen(), isUnlockedWith(progress, skips, idx));
   }
 
   /** 章节解锁跟着同一个口径走。 */
@@ -3679,13 +3681,22 @@ export function mount(api: GameAPI): OceanMunchHandle {
       }
       ctx.fillStyle = unlocked ? st.accent : "#9a9aa8";
       ctx.font = `bold ${Math.min(17, Math.round(ch * 0.22))}px sans-serif`;
-      ctx.fillText(`第${i + 1}章 ${st.name}`, rect.x + 10 + ch * 0.42, rect.y + ch * 0.3);
+      // 390px 手机两列卡只有 150px 宽:标题 / 简介 / 进度全部量宽截断,
+      // 不再横着捅进邻卡、也不再被邻卡的挂锁压住(1.3 UX 走查修复)
+      const measure = (s: string): number => ctx.measureText(s).width;
+      const titleX = rect.x + 10 + ch * 0.42;
+      ctx.fillText(fitLineWith(measure, `第${i + 1}章 ${st.name}`, rect.x + rect.w - 8 - titleX), titleX, rect.y + ch * 0.3);
       ctx.font = `${Math.min(12, Math.round(ch * 0.16))}px sans-serif`;
       ctx.fillStyle = unlocked ? "#3a4a5e" : "#a8a8b4";
-      ctx.fillText(unlocked ? st.blurb : "通关上一片海域解锁", rect.x + 10, rect.y + ch * 0.6);
+      const innerW = rect.w - 20;
+      ctx.fillText(fitLineWith(measure, unlocked ? st.blurb : "通关上一片海域解锁", innerW), rect.x + 10, rect.y + ch * 0.6);
       ctx.fillText(
         unlocked
-          ? `${cleared}/${themeSize(i)} 关 · ⭐${themeStars(progress, i)}/${themeSize(i) * 3} · BOSS ${BOSS_INFO[st.boss].name}`
+          ? fitLineWith(
+              measure,
+              `${cleared}/${themeSize(i)} 关 · ⭐${themeStars(progress, i)}/${themeSize(i) * 3} · BOSS ${BOSS_INFO[st.boss].name}`,
+              innerW,
+            )
           : "",
         rect.x + 10,
         rect.y + ch * 0.82,
@@ -3728,12 +3739,14 @@ export function mount(api: GameAPI): OceanMunchHandle {
     // 最后一行的星星也要留得下:375×667 上原来会被切掉一截
     const my1 = h - 62;
     const nr = Math.max(16, Math.min(28, (mx1 - mx0) / cols / 2.4, (my1 - my0) / rows / 2.6));
+    // 行距夹上限再整块居中:11 关 3 行的章节不再被摊满整个画布(1.3 UX 走查修复)
+    const rowYs = mapRowYs(rows, my0, my1, Math.max(nr * 3.2, 84));
     for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols);
       const colRaw = i % cols;
       const col = row % 2 === 0 ? colRaw : cols - 1 - colRaw;
       const x = mx0 + ((mx1 - mx0) * col) / (cols - 1);
-      const y = my0 + (rows === 1 ? 0 : ((my1 - my0) * row) / (rows - 1));
+      const y = rowYs[row];
       mapNodes.push({ idx: base + i, x, y, r: nr });
     }
     ctx.strokeStyle = "rgba(255,255,255,0.65)";

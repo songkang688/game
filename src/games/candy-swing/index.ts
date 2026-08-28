@@ -93,6 +93,8 @@ import {
 } from "./art";
 import { needsMigration, readProgress, writeProgress, type Progress } from "./progress";
 import { save } from "../../engine/save";
+import { isRootOpen } from "../../ui/root12Contract";
+import { unlockedWithRoot } from "./rootUnlock";
 import { speak, stopSpeaking } from "../speech";
 
 type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -514,7 +516,8 @@ export function mount(api: GameApi): CandySwingHandle {
   }
 
   function levelUnlocked(i: number): boolean {
-    return i === 0 || progress.stars[i - 1] > 0;
+    // 管理员权限(kangkang 密码)开着时全关可进;关着/过期回落到星级解锁
+    return unlockedWithRoot(isRootOpen(), i === 0 || progress.stars[i - 1] > 0);
   }
 
   function allCleared(): boolean {
