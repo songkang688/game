@@ -20,6 +20,16 @@
 
 `.l99-*` 本拍零改。
 
+## 抽验 915×412 CTA（尚未动过的三款 · 820 中间档）
+
+修前：砖塔 `.brk-back` top 492 整颗线下；数独 `.sp-key` top 532；怪物 `.mcr-fire` bot 453。不改玩法、不改 `level99`、不改 500 档原文。
+
+| 选择器 | 390×844 | 915×412 | 1024×768 |
+| --- | --- | --- | --- |
+| `.brk-back` | 40×133.4 IN（uiTouch 40；高 844 不命中 820） | **44×133.4 IN** bot 388 | **44×133.4 IN** |
+| `.sp-key` | 46×66.9 IN | **44×44 IN** bot 348 | **44×44 IN** |
+| `.mcr-fire` | 64×64 IN | **74×74 IN** bot 381 | **74×74 IN** |
+
 ## 测试
 
-`src/games/hotspot.r46b.test.ts`、`hotspot.r27b.test.ts`、`hotspot.r45b.test.ts` 绿。`npm run build` 绿。
+`src/games/hotspot.r46b.test.ts`、`hotspot.r46clip.test.ts`、`brick-break/stageFit.r10.test.ts`、`sudoku-petal/shortLandscape.r14.test.ts` 绿。`npm run build` 绿。
