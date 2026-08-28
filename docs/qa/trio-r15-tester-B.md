@@ -1,7 +1,7 @@
 # 三人组第 15 轮 · 测试修复员 B
 
-基线：`origin/game-1.3` @ `45cb5d2f`（含 r15 学习笔记 N-75…85；源码水位仍是 r12 A/B + r13 A 合入）。
-范围：休闲 / 对战。**未改** find-diff / music-stars / kitty-care / quiz99。**未重做** N-69…72/74、N-41 牌宽、N-53/N-55 对战源码口径。
+基线：`origin/game-1.3` @ `5eab9df3`（含 r14 A N-63/C-6/N-68/N-73、r14 B N-69…74 / N-49/50/54/64-67、r15 笔记 N-75…85）。
+范围：休闲 / 对战。**未改** find-diff / music-stars / kitty-care / quiz99 / 存档 / 题库 / seed。**未重做** N-69…74、N-49/50/54/64-67、N-41 牌宽、N-53/N-55 对战源码口径。
 
 preview 工装 `:4186`。
 
