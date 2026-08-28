@@ -249,6 +249,11 @@ const CSS = `
 @media (max-height:500px){
   .snf-pads[data-duo]{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;max-width:none;flex-wrap:nowrap;}
   .snf-pads[data-duo] .snf-pad-duo{min-width:0;}
+  /* N-85:闯关搓雪键。N-55 对战十二键的 data-duo 并排规则保持 */
+  .snf-wrap{max-height:calc(100dvh - 76px);overflow:hidden;}
+  .snf-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(238,245,253,0),#eef5fd 16px);}
+  .snf-canvas{max-height:min(168px,40dvh);}
 }
 `;
 
@@ -832,7 +837,10 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const top = boxOf(board).top;
     if (screen <= 0 || top <= 0 || top >= screen) return null;
     const below =
-      Math.max(boxOf(say).height, SAY_RESERVE) + boxOf(tip).height + boxOf(pads).height + BELOW_PAD;
+      Math.max(boxOf(say).height, SAY_RESERVE) +
+      boxOf(tip).height +
+      Math.max(boxOf(pads).height, opts.humans === 1 ? 118 : 0) +
+      BELOW_PAD;
     return screen - top - below;
   }
 
@@ -851,7 +859,8 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const flat = VIEW_H * s;
     const room = boardRoom();
     const want = room === null ? Math.max(MIN_BOARD_H, flat * 2) : Math.max(MIN_BOARD_TIGHT, room - GROUND_PAD);
-    const ys = Math.max(1, Math.min(MAX_STRETCH, want / flat));
+    const shortY = (globalThis.innerHeight || 800) <= 500;
+    const ys = Math.max(shortY ? 0.7 : 1, Math.min(MAX_STRETCH, want / flat));
     cam = { s, ys, h: Math.round(flat * ys) };
     cssW = Math.round(opts.viewW * s);
     const cssH = cam.h + GROUND_PAD;

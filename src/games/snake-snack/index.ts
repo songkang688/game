@@ -99,7 +99,7 @@ const CSS = `
 .sn-badge { background: linear-gradient(180deg, #FFFFFF, #F3F9EC); border: 1px solid #DCE9CD; border-radius: 14px; padding: 5px 10px; font-weight: 700; color: #67A05B; box-shadow: 0 2px 6px rgba(120,180,110,.25); font-size: 14px; }
 .sn-badge.sn-shut { color: #C2456F; }
 /* 画布靠划动转弯,不拦掉浏览器手势的话,真机上一划就变成滚页面 + pointercancel */
-.sn-canvas { width: 100%; border-radius: 16px; display: block; background: #F4FBEF; touch-action: none; }
+.sn-canvas { width: auto; max-width: 100%; height: auto; max-height: min(280px, 56dvh); margin: 0 auto; display: block; border-radius: 16px; background: #F4FBEF; touch-action: none; }
 .sn-pad { display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 48px 48px; gap: 6px; justify-content: center; margin-top: 10px; }
 .sn-btn { border: none; border-radius: 14px; font-size: 22px; background: #BEE8B0; color: #3F6B36; cursor: pointer; box-shadow: 0 3px 0 #9CCC8E; touch-action: none; padding: 0; }
 .sn-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #9CCC8E; }
@@ -132,6 +132,15 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .snk-beat i { animation: none; } }
 .snk-pad-off .sn-pad { display: none; }
 .snk-hint { text-align: center; font-size: 13px; color: #8A6A16; min-height: 18px; margin-top: 4px; }
+/* N-81:无尽花园画布 width:100% 在 915 上被拉成近正方形,方向键 678。收盘+钉键,CELL 常量不改 */
+@media (max-height: 500px) {
+  .sn-wrap { height: 100%; max-height: calc(100dvh - 76px); min-height: 0; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; }
+  .sn-top { flex: 0 0 auto; }
+  .sn-canvas { max-height: min(168px, 42dvh); }
+  .sn-pad { position: sticky; bottom: 0; z-index: 5; flex: 0 0 auto; margin-top: 6px;
+    background: linear-gradient(180deg, rgba(234,251,228,0), #EAFBE4 14px); padding-top: 4px; }
+  .sn-msg { flex: 0 0 auto; max-height: 1.3em; overflow: hidden; margin-top: 4px; }
+}
 `;
 
 interface Worm {

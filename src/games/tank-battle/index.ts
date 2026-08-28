@@ -221,6 +221,10 @@ const CSS = `
 }
 /* N-53:矮横屏双垫并排钉底,画布高度在 JS 里再减去这一截预留 */
 @media (max-height:500px){
+  .tkb-root{overflow:hidden;max-height:100%;}
+  .tkb-wrap{max-height:calc(100dvh - 76px);overflow:hidden;}
+  .tkb-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
   .tkb-pads-two{flex-wrap:nowrap;position:sticky;bottom:0;z-index:5;padding-top:4px;
     background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
   .tkb-acts{position:sticky;bottom:0;z-index:6;}
@@ -967,7 +971,8 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     const measured = stagePlayRoom(wrap, { w: host.clientWidth || 340, h: guess }).h;
     // 舞台余量是整块 wrap 的,画布若吃满,摇杆就排到裁切线下面。双人垫更高一截。
     const key = opts.players === 2 ? TOUCH_MIN_TWO : TOUCH_MIN;
-    const chrome = 36 + 22 + 48 + key * 2 + 18 + 28;
+    const extra = opts.players === 1 ? 72 : 0;
+    const chrome = 36 + 22 + 48 + key * 2 + 18 + 28 + extra;
     return Math.max(150, Math.min(430, measured - chrome));
   }
 

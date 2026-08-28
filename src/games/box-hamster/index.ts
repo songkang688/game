@@ -138,6 +138,17 @@ const CSS = `
   .bh-tip{font-size:11px;}
 }
 @media (max-width:340px){ .bh-grid{--cell:28px;} }
+/* N-80:闯关方向键 571。无尽键已在屏,只锁矮屏闯关壳,CELL_MIN 不降 */
+@media (max-height:500px){
+  .bh-wrap{height:100%;max-height:calc(100dvh - 76px);min-height:0;overflow:hidden;
+    display:flex;flex-direction:column;box-sizing:border-box;}
+  .bh-tags,.bh-hud{flex:0 0 auto;}
+  .bh-stagebox{flex:1 1 auto;min-height:0;overflow:hidden;}
+  .bh-pad{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
+    grid-auto-rows:40px;gap:4px;
+    background:linear-gradient(180deg,rgba(255,248,236,0),#FFF8EC 14px);padding-top:4px;}
+  .bh-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:4px;}
+}
 @media (prefers-reduced-motion:reduce){ .bh-hint{animation:none;box-shadow:inset 0 0 0 3px #F2A93B;} }
 ${bhVisualCss()}`;
 
