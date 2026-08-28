@@ -19,7 +19,15 @@ import { AVATAR_URLS } from "../ui/avatars";
 import { isGuardedClick } from "../ui/dialogs";
 import { getLevelExtras, type GuideBook } from "../ui/level188Contract";
 // 契约文件只有常量与纯逻辑,没有弹窗 UI,静态 import 不会把 dialog 代码拖进游戏 chunk
-import { clampJumpTarget, isRootOpen, rootRemainMinutes, rootRemainMs } from "../ui/root12Contract";
+import {
+  clampJumpTarget,
+  isRootOpen,
+  isRootPermanent,
+  rootRemainMinutes,
+  rootRemainMs
+} from "../ui/root12Contract";
+// 只取一个字符串常量,rootUnlock 的 DOM 层不会被拖进游戏 chunk
+import { ROOT_PERMANENT_NOTE } from "../ui/rootUnlock";
 import { speak, stopSpeaking } from "./speech";
 
 export type SoundName = "tap" | "win" | "oops" | "coin" | "pop" | "meow" | "jump";
@@ -465,8 +473,15 @@ export function jumpTargetLevel(raw: string, total: number = TOTAL_LEVELS): numb
   return n === null ? null : n - 1;
 }
 
-/** 直达控件旁边那行小字 */
-export function rootJumpNote(remainMs: number): string {
+/**
+ * 直达控件旁边那行小字。
+ *
+ * N-38:开「永久」时 `rootRemainMs()` 返回的是一个到远未来的巨大有限数,
+ * 直接换算成分钟会写出「还剩 4193047370 分钟」。永久态改说地图侧同一句
+ * `ROOT_PERMANENT_NOTE`,限时态照旧报剩余分钟。
+ */
+export function rootJumpNote(remainMs: number, permanent = false): string {
+  if (permanent) return ROOT_PERMANENT_NOTE;
   return `管理员权限还剩 ${rootRemainMinutes(remainMs)} 分钟`;
 }
 
@@ -716,7 +731,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     go.textContent = "🎫 直达";
     const note = document.createElement("span");
     note.className = "l99-jump-note";
-    note.textContent = rootJumpNote(rootRemainMs());
+    note.textContent = rootJumpNote(rootRemainMs(), isRootPermanent());
     const jump = (): void => {
       const target = jumpTargetLevel(input.value, total);
       if (target === null) return;
