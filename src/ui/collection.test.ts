@@ -232,6 +232,10 @@ class FakeDoc {
     for (const fn of [...(this.listeners.get("keydown") ?? [])]) fn(e);
     return e;
   }
+
+  fire(type: string, extra: Partial<FakeEvent> = {}): void {
+    for (const fn of [...(this.listeners.get(type) ?? [])]) fn(makeEvent(this.activeElement, extra));
+  }
 }
 
 function walk(root: FakeEl, visit: (el: FakeEl) => void): void {
@@ -626,6 +630,18 @@ describe("关闭与监听清理", () => {
     expect(findOne(doc.body, "collection-overlay")).not.toBeNull();
   });
 
+  it("N-48 hashchange 关掉 overlay,监听清干净(对照 S-3)", () => {
+    const { doc, subs } = open();
+    expect(findOne(doc.body, "collection-overlay")).not.toBeNull();
+    expect((doc.listeners.get("hashchange") ?? []).length).toBeGreaterThan(0);
+    doc.fire("hashchange");
+    expect(findOne(doc.body, "collection-overlay")).toBeNull();
+    expect(doc.keydownCount()).toBe(0);
+    expect((doc.listeners.get("hashchange") ?? []).length).toBe(0);
+    expect(subs()).toBe(0);
+    expect(isCollectionOpen()).toBe(false);
+  });
+
   it("destroy 就是 close 的别名", () => {
     const { doc, handle, subs } = open();
     handle.destroy();
@@ -682,6 +698,7 @@ describe("样式自带,不动公共 styles.css", () => {
     const styles = findAll(doc.head, "").filter((el) => el.tagName === "style");
     expect(styles.length).toBe(1);
     expect(styles[0].textContent).toContain("@media (max-width:640px)");
+    expect(styles[0].textContent).toContain("@media (max-height:500px)");
     expect(styles[0].textContent).toContain(".collection-panel");
     closeCollection();
     openCollection(undefined, {
