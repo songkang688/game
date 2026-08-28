@@ -9,12 +9,13 @@
 | --- | --- |
 | N-152 | 静态巡检 `*-veil-btn` + `cursor:pointer` 须 `min-height`≥44。抽验 `sky-squad` `.sks-veil-btn`。同模板补 `poop-hero` / `puff-bros` / `prince-princess` 结算钮；打靶只动 `.shr-veil-btn`（不改 `.shr-back`/`.shr-toggle`）。`.bh-veil-btn` 白名单走 N-47。 |
 
-## 三视口口径（Chrome 量 `.sks-mode` / `.sks-veil-btn`）
+## 三视口口径（Chrome headless，`#/game/sky-squad`）
 
-预览 `#/game/sky-squad` 后填入下表（提交前量）。
-
-| 视口 | `.sks-mode` | `.sks-veil-btn` |
+| 视口 | `.sks-mode`（3 颗） | `.sks-veil-btn` |
 | --- | --- | --- |
-| 390×844 | 待量 | 结算层出现后 ≥44 |
-| 915×412 | 待量 | 同左 |
-| 1024×768 | 待量 | 同左 |
+| 390×844 | 44 / 44 / 44 | 44 |
+| 915×412 | 44 / 44 / 44 | 44 |
+| 1024×768 | 44 / 44 / 44 | 44 |
+
+`.sks-veil-btn` 大厅默认隐藏，同页注入同 class 探针量的是已挂 CSS。`.bh-veil-btn` 仍属 N-47，未改。
+
