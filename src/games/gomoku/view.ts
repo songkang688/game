@@ -133,7 +133,7 @@ export const CSS = `
   text-align:center;}
 .gmk-seg button.gmk-on{border-color:#F2A0C0;background:#FFE4EF;color:#C2497E;}
 .gmk-seg button:focus-visible{outline:3px solid #C2497E;outline-offset:2px;}
-.gmk-tierblurb{font-size:12.5px;color:#8A6B45;font-weight:700;margin-top:6px;min-height:18px;line-height:1.5;}
+.gmk-tierblurb{font-size:14px;color:#8A6B45;font-weight:700;margin-top:6px;min-height:21px;line-height:1.5;}
 .gmk-start{border:none;border-radius:18px;padding:13px;font-size:18px;font-weight:900;background:#FFB3CD;color:#86285A;
   cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
 .gmk-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
@@ -144,7 +144,7 @@ export const CSS = `
 .gmk-mode:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(150,96,31,.25);}
 .gmk-mode-streak{background:#FFD7E4;color:#A8325C;box-shadow:0 3px 0 rgba(168,50,92,.25);}
 .gmk-claimbar{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap;}
-.gmk-claimtip{font-size:13px;font-weight:800;color:#A8325C;}
+.gmk-claimtip{font-size:14px;font-weight:800;color:#A8325C;}
 .gmk-over{position:absolute;inset:0;background:rgba(255,250,245,.95);border-radius:18px;z-index:5;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .gmk-over-title{font-size:22px;font-weight:900;color:#8A5AA8;}
