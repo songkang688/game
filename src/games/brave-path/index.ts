@@ -211,25 +211,15 @@ const CSS = `
   font-size:13px;font-weight:700;color:#5b4b82;line-height:1.75;margin-bottom:10px;}
 .bvp-log p{margin:0 0 3px;}
 .bvp-log p:last-child{color:#3f2f66;}
-/* N-32(trio-r7):攻击/防御/莓果是回合必点,操作行贴底常驻(配方 E)——
-   内容装不下时钉在滚动口下沿,不透明底 + 上缘阴影,战报从它底下滚过去不透出来 */
-.bvp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:sticky;bottom:0;z-index:2;
-  background:#f8f3fef2;padding:8px 0 4px;border-radius:14px 14px 0 0;
-  box-shadow:0 -8px 12px -10px rgba(75,58,110,.4);}
+.bvp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 @media(min-width:480px){.bvp-acts{grid-template-columns:1fr 1fr 1fr;}}
-/* N-32:矮横屏(915×412 一族)战斗改双栏 —— 我方卡+回合提示+操作行在左,
-   对方卡+预判+战报在右;sticky 在 grid 区域里没有活动余量,靠双栏把操作行收进首屏 */
-@media(max-height:500px){
-  .bvp-battle{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:10px;align-items:start;}
-  .bvp-battle .bvp-bar{grid-column:1/-1;grid-row:1;}
-  .bvp-battle .bvp-fighter-hero{grid-column:1;grid-row:2;margin-bottom:6px;}
-  .bvp-battle .bvp-fighter-foe{grid-column:2;grid-row:2;margin-bottom:6px;}
-  .bvp-battle .bvp-turn-hint{grid-column:1;grid-row:3;}
-  .bvp-battle .bvp-fore-note{grid-column:2;grid-row:3;}
-  .bvp-battle .bvp-acts{grid-column:1;grid-row:4;grid-template-columns:repeat(3,1fr);align-self:end;}
-  .bvp-battle .bvp-log{grid-column:2;grid-row:4;max-height:104px;min-height:44px;margin-bottom:0;}
-  .bvp-battle .bvp-fighter{padding:8px 10px;}
-  .bvp-battle .bvp-face{width:40px;height:40px;font-size:22px;}
+.bvp-endless-fight .bvp-acts{
+  position:sticky;bottom:0;z-index:6;padding:8px 0 4px;
+  background:linear-gradient(180deg,rgba(246,239,228,0),var(--bvp-floor) 12px);
+  box-shadow:0 -8px 14px rgba(75,58,110,.12);
+}
+@media (max-height:520px){
+  .bvp-endless-fight .bvp-log{max-height:72px;}
 }
 .bvp-act{border:none;border-radius:14px;padding:11px 8px;font-family:inherit;cursor:pointer;text-align:center;
   background:#fff;box-shadow:0 3px 0 rgba(120,95,170,.24);color:var(--bvp-ink);position:relative;overflow:hidden;
@@ -408,8 +398,7 @@ function fighterBadge(f: Fighter, side: "hero" | "foe", foeLevel?: number): stri
 }
 
 function fighterCard(f: Fighter, showStats: boolean, side: "hero" | "foe", foeLevel?: number): FighterCard {
-  // 侧别类只给 N-32 的矮横屏双栏做 CSS 定位用,不进任何判定
-  const root = el("div", `bvp-fighter bvp-fighter-${side}`);
+  const root = el("div", "bvp-fighter");
   const top = el("div", "bvp-fighter-top");
   const face = el("div", `bvp-face bvp-face-${side}`);
   face.setAttribute("aria-hidden", "true");
@@ -694,7 +683,8 @@ const EVENT_STEP = 520;
 
 function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => void } {
   const cleanup = new Cleanup();
-  const wrap = el("div", "bvp-battle");
+  const wrap = el("div");
+  if (opts.onFlee) wrap.className = "bvp-endless-fight";
   host.appendChild(wrap);
 
   let state: CombatState = startCombat(opts.hero, opts.foe);
@@ -722,12 +712,12 @@ function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => v
   head.appendChild(foreChip);
 
   const foeCard = fighterCard(state.foe, false, "foe", opts.foeLevel);
-  const foreNote = el("div", "bvp-note bvp-fore-note", FORECAST_HINTS[guess]);
+  const foreNote = el("div", "bvp-note", FORECAST_HINTS[guess]);
   const logBox = el("div", "bvp-log");
   logBox.setAttribute("role", "log");
   logBox.setAttribute("aria-live", "polite");
   const heroCard = fighterCard(state.hero, true, "hero");
-  const hint = el("div", "bvp-note bvp-turn-hint");
+  const hint = el("div", "bvp-note");
   const acts = el("div", "bvp-acts");
 
   wrap.append(head, foeCard.root, foreNote, logBox, heroCard.root, hint, acts);

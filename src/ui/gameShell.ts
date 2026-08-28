@@ -63,8 +63,16 @@ export function skipReason(gameId: string, level: number): string {
   return `孩子想跳过《${title}》第 ${level + 1} 关,需要家长确认`;
 }
 
+/** 当前壳层暂停面板:跳关开门前先拆掉,避免 .dialog--pause 与 .dialog--gate 叠两层 */
+let releaseShellPause: (() => void) | null = null;
+
 /** 请求跳关授权:家长高权限门通过才返回 true;门还没接上时一律不放行 */
 export async function requestSkip(gameId: string, level: number): Promise<boolean> {
+  try {
+    releaseShellPause?.();
+  } catch {
+    // 暂停面板拆不掉也不能挡住家长门
+  }
   const m = await loadParentAuth();
   if (!m) return false;
   try {
@@ -391,6 +399,13 @@ export function mountGameScreen(
     pauseDialog = null;
   }
 
+  /** N-58:已暂停时再点跳关,先关暂停并 resume,屏幕上只留一层家长门;Esc 一次回游戏 */
+  releaseShellPause = () => {
+    if (disposed || !pauseDialog) return;
+    closePause();
+    tellGame("resume");
+  };
+
   /** 游戏模块自己实现了 pause/resume 就顺手调一下,没实现也不影响面板 */
   function tellGame(method: "pause" | "resume"): void {
     const fn = (mounted as unknown as Record<string, unknown> | null)?.[method];
@@ -657,6 +672,7 @@ export function mountGameScreen(
 
   return () => {
     disposed = true;
+    releaseShellPause = null;
     window.removeEventListener("keydown", onGlobalKeyDown);
     stopRootUnlock();
     closeDialog();

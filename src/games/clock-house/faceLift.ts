@@ -23,17 +23,20 @@ import { CLK_TOKENS, HOUR_HAND_SHAPE, MINUTE_HAND_SHAPE, arrowHandD, hubSVG } fr
 export const LIFT_ATTR = "data-clk-lift";
 
 /**
- * 旧钟面的两根细线指针：宽 6 = 时针、宽 4 = 分针（clockSVG 的既定写法，钉死匹配）。
- * trio-r7 L-2 补账：liftFacesIn 读的是 **DOM 序列化后的 innerHTML**——浏览器把
- * 模板串里的 `<line …/>` 重排成 `<line …></line>`，只认自闭合写法的正则在真机上
- * 一根针都换不到（刻度 9→11px 是纯属性替换所以侥幸生效，指针与轴心两代同堂照旧）。
- * 结尾改成两种写法都认，纯字符串单测与真实 DOM 走的是同一条路。
+ * 旧钟面两根细线指针。真机 `svg.innerHTML` 常把自闭合写成 `></line>`，属性顺序也不稳，
+ * 所以按属性袋匹配，不钉死序列化形态。
  */
-const HAND_LINE_RE =
-  /<line x1="50" y1="50" x2="([\d.]+)" y2="([\d.]+)" stroke="#(?:e8590c|1971c2)" stroke-width="(6|4)" stroke-linecap="round"(?:\/>|><\/line>)/g;
+function attrOf(attrs: string, name: string): string | undefined {
+  return new RegExp(`(?:^|\\s)${name}="([^"]+)"`).exec(attrs)?.[1];
+}
 
-/** 旧钟面的轴心小圆（同样兼容自闭合与序列化两种结尾） */
-const OLD_HUB_RE = /<circle cx="50" cy="50" r="3\.4" fill="#5c4a7d"(?:\/>|><\/circle>)/;
+function handLineRe(): RegExp {
+  return /<line\b([^>]*?)\/?>(?:<\/line>)?/gi;
+}
+
+function hubCircleRe(): RegExp {
+  return /<circle\b([^>]*?)\/?>(?:<\/circle>)?/gi;
+}
 
 /**
  * 换装一张旧钟面的**内部** SVG 标记（纯字符串进出，node 环境可直接断言）。
@@ -41,7 +44,13 @@ const OLD_HUB_RE = /<circle cx="50" cy="50" r="3\.4" fill="#5c4a7d"(?:\/>|><\/ci
  */
 export function liftFaceBody(inner: string): string {
   return inner
-    .replace(HAND_LINE_RE, (_all, x2: string, y2: string, w: string) => {
+    .replace(handLineRe(), (all, attrs: string) => {
+      const x2 = attrOf(attrs, "x2");
+      const y2 = attrOf(attrs, "y2");
+      const w = attrOf(attrs, "stroke-width");
+      const stroke = (attrOf(attrs, "stroke") ?? "").toLowerCase();
+      if (!x2 || !y2 || (w !== "6" && w !== "4")) return all;
+      if (stroke !== "#e8590c" && stroke !== "#1971c2") return all;
       const hour = w === "6";
       const color = hour ? CLK_TOKENS.hourOrange : CLK_TOKENS.minuteTeal;
       const shape = hour ? HOUR_HAND_SHAPE : MINUTE_HAND_SHAPE;
@@ -51,7 +60,11 @@ export function liftFaceBody(inner: string): string {
         ` fill="${color}" stroke="${shade(color, -30)}" stroke-width="1.4" stroke-linejoin="round"/>`
       );
     })
-    .replace(OLD_HUB_RE, hubSVG())
+    .replace(hubCircleRe(), (all, attrs: string) => {
+      if (attrOf(attrs, "r") !== "3.4") return all;
+      if ((attrOf(attrs, "fill") ?? "").toLowerCase() !== "#5c4a7d") return all;
+      return hubSVG();
+    })
     .replace(/font-size="9"/g, 'font-size="11"');
 }
 

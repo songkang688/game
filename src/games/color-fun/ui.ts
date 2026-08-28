@@ -72,6 +72,9 @@ export const CLF_CSS = `
   word-break:break-word;}
 .clf-chip-done{opacity:.55;text-decoration:line-through;}
 .clf-chip-dot{width:15px;height:15px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 2px #0003;flex:0 0 auto;}
+/* 操作排（色票/撤销/调色锅/色盘）单独成列：矮横屏双栏时钉在画布右侧，
+   不要跟画布一起卷进 .clf-scrolly。竖屏仍是画布下面那一叠，gap 跟外壳对齐。 */
+.clf-ops{display:flex;flex-direction:column;align-items:center;gap:inherit;width:100%;min-width:0;}
 .clf-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .clf-tool{border:none;border-radius:999px;min-height:${SWATCH_MIN_PX}px;padding:8px 16px;font-size:15px;
   font-weight:900;cursor:pointer;font-family:inherit;background:#ffffffe0;color:#5c4a30;
@@ -166,29 +169,6 @@ export const CLF_CSS = `
   .clf-swatch.clf-fresh .clf-swatch-dot{animation:none;}
   .clf-flake{animation:none;display:none;}
 }
-/* L-1(trio-r7):矮横屏(915×412 一族)画布地板 180px + 调色板 88px > 208px 滚动窗,
-   canPinCanvas 判「钉不住」,孩子涂一块颜色要在画布和调色板之间来回滚两趟。
-   这一档把这一屏切成「画布左 / 尾队右」grid 双栏:选色 → 涂色同屏零滚动。
-   竖屏 flex 纵向流与 tight/tighter/pin 机制原样;热区一个不动;
-   fitColoringStage 量的整屏滚动高在 grid 下照常成立,
-   真装不下(比 412 更矮的横屏)仍旧走 clf-scrolly + pinCanvas 的老路兜底。
-   必须排在「再挤挤」那一档前面:那份守门测试把 tighter 之后的所有声明都算作
-   tighter 档,别让这档的 clf-tools 误撞它的热区红线。 */
-@media (max-height:500px){
-  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,400px);
-    column-gap:12px;row-gap:4px;padding:6px;align-items:start;justify-items:center;}
-  /* 左栏只放画布:180px 地板 + 上下 6px 内边距 = 192,208px 的滚动窗稳稳装下。
-     span 只跨右栏的 5 个常驻项(徽章行/指令行/工具行/调色板/消息行):跨到空行
-     会把画布高摊进空行凭空长 48px(Chrome 的 track 分配),
-     可选项(预览横幅/图例/调色锅)自然流到画布下方的行 6-8。
-     55vh 最小高是竖屏的账;横屏画布被列宽卡住(400×300 线稿等比),再垫最小高只剩死空间 */
-  .clf-stage{grid-column:1;grid-row:1/span 5;min-height:0;}
-  .clf-top,.clf-preview,.clf-legend,.clf-chips,.clf-tools,.clf-mixer,.clf-palette,.clf-msg{grid-column:2;}
-  /* 「挤一挤」的 gap:6px 特异度更高,这档横屏把纵缝压回 4px(「再挤挤」自己就是 4px)。
-     选择器顺序有讲究:tighter 在前 tight 在后,免得「tighter{」这个字样被那份
-     按字符串定位的守门测试当成「再挤挤」档的起点 */
-  .clf-wrap.clf-tighter,.clf-wrap.clf-tight{row-gap:4px;padding:5px 6px;}
-}
 /* 「再挤挤」这一档（W5R3-TA-02）——它治的不是「够不着」，是**来回滚**。
    真机 320×568 第 181 关：这一屏 701px 塞进 282px 的窗口，每一颗按钮慢拖都够得着，
    可画布 180px + 调色锅那一排 105px = 285px > 282px，canPinCanvas() 判「钉不住」，
@@ -214,6 +194,29 @@ export const CLF_CSS = `
 .clf-wrap.clf-tighter .clf-palette{padding:2px 2px 3px;gap:6px;}
 .clf-wrap.clf-tighter .clf-swatch-name{font-size:12px;line-height:1.1;}
 .clf-wrap.clf-tighter .clf-msg{min-height:16px;font-size:13px;line-height:1.3;}
+/* N-43(trio-r11):915×412 七关型色盘/调色锅整排掉进 .clf-scrolly 线下。
+   矮横屏改双栏——画布左、操作排右 sticky；画布放开 55vh 下限。竖屏与高屏零变化。 */
+@media (max-height:500px){
+  .clf-wrap{min-height:0;}
+  .clf-stage{min-height:0;}
+}
+@media (max-height:500px) and (min-width:640px){
+  .clf-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,38%);
+    grid-template-areas:"top top" "preview preview" "legend legend" "stage ops";
+    align-items:stretch;gap:6px 10px;padding:6px 8px;}
+  .clf-wrap>.clf-studio{grid-area:1 / 1 / -1 / -1;}
+  .clf-wrap>.clf-top{grid-area:top;}
+  .clf-wrap>.clf-preview{grid-area:preview;}
+  .clf-wrap>.clf-legend{grid-area:legend;}
+  .clf-wrap>.clf-stage{grid-area:stage;min-height:0;max-width:none;width:100%;
+    max-height:min(260px,calc(100dvh - 88px));align-self:stretch;}
+  .clf-wrap>.clf-ops{grid-area:ops;position:sticky;top:0;align-self:start;gap:6px;
+    width:100%;max-width:100%;}
+  .clf-wrap.clf-scrolly{overflow:hidden;}
+  .clf-wrap .clf-chips{max-height:44px;}
+  .clf-wrap .clf-mixer{max-width:100%;}
+  .clf-wrap .clf-palette{max-width:100%;justify-content:center;}
+}
 `;
 
 /**

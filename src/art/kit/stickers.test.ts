@@ -98,11 +98,10 @@ describe("贴纸是纯函数", () => {
   });
 
   it("查不到返回 null，不抛错", () => {
-    // 🚀 在 trio-r7 L-3 收进了图集，这里换一枚始终不收录的当反例
-    expect(sticker("🛸")).toBeNull();
+    expect(sticker("🤷")).toBeNull();
     expect(sticker("")).toBeNull();
-    expect(hasSticker("🛸")).toBe(false);
-    expect(stickerName("🛸")).toBeNull();
+    expect(hasSticker("🤷")).toBe(false);
+    expect(stickerName("🤷")).toBeNull();
   });
 
   it("VS16 变体符归一：带不带 ️ 查到同一张", () => {

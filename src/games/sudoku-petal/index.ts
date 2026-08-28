@@ -437,6 +437,11 @@ export const SP_CSS = `
   .sp-key{font-size:17px;}
   .sp-corner{display:none;}
 }
+@media (max-height:500px){
+  .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
+    padding-top:4px;}
+  .sp-tools{bottom:0;z-index:6;}
+}
 @media (prefers-reduced-motion:reduce){
   .sp-cell.sp-pop{animation:none;}
   .sp-cell.sp-bloom .sp-petal{animation:none;}

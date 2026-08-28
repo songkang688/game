@@ -242,6 +242,12 @@ export const MG_CSS = `
   .mg-badge{padding:4px 8px;}
   .mg-btn{min-width:48px;padding:0 6px;}
 }
+/* N-62:四向贴底;盘面预算多扣一排键,避免 392 切底 */
+@media (max-height:500px){
+  .mg-pad{position:sticky;bottom:0;z-index:5;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(247,236,211,.3),#F7ECD3 38%);}
+  .mg-msg{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
+}
 @media (prefers-reduced-motion:reduce){
   .mg-tile{transition:none;}
   .mg-tile.mg-pop{animation:none;}
@@ -1053,7 +1059,7 @@ export function cellPxFor(size: number, width: number, seats = 1, heightPx = Num
 }
 
 /** 桌面上盘面以外的「家当」大约占的高度:目标行 + 名牌 + 方向按钮排 + 提示行 + 留白 */
-export const TABLE_CHROME_PX = 170;
+export const TABLE_CHROME_PX = 216;
 
 /**
  * 盘面的竖向预算:量得到平台舞台(`.game-stage`,定高会裁内容)的下沿就用

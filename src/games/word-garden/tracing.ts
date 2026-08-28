@@ -21,7 +21,7 @@ import { shadeFlower } from "./flowerShade";
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
-import { fitQuizHost } from "./fit";
+import { clipBottomPx, fitQuizHost, visibleRoomPx } from "./fit";
 import {
   ARROW_POINTS,
   easeInOutQuad,
@@ -49,6 +49,32 @@ import {
 /** 手机 360px 上描红区的最小边长（规格底线） */
 export const MIN_PAD_PX = 240;
 
+/** 矮横屏装不下 240 时允许再收，再矮才滚（N-36） */
+export const SHORT_PAD_MIN_PX = 120;
+
+/**
+ * 米字格边长：宽尺 min(72vw, 300) 与「可视余量 − 头/提示/花园」取小。
+ * 纯函数便于单测；笔顺判定不走这里。
+ */
+export function padSidePx(vw: number, visibleRoomPx: number, chromePx: number): {
+  side: number;
+  allowScroll: boolean;
+} {
+  const byW = Math.min(vw * 0.72, 300);
+  const room = Number.isFinite(visibleRoomPx) ? visibleRoomPx : Number.POSITIVE_INFINITY;
+  const chrome = Number.isFinite(chromePx) && chromePx > 0 ? chromePx : 0;
+  if (!Number.isFinite(room)) {
+    return { side: Math.min(300, Math.max(MIN_PAD_PX, Math.floor(byW))), allowScroll: false };
+  }
+  const wanted = Math.min(byW, room - chrome);
+  if (!Number.isFinite(wanted) || wanted >= 300) {
+    return { side: Math.min(300, Math.max(MIN_PAD_PX, Math.floor(byW))), allowScroll: false };
+  }
+  if (wanted >= MIN_PAD_PX) return { side: Math.floor(wanted), allowScroll: false };
+  if (wanted >= SHORT_PAD_MIN_PX) return { side: Math.floor(wanted), allowScroll: false };
+  return { side: MIN_PAD_PX, allowScroll: true };
+}
+
 export const TRACE_INTRO = "米字格里按顺序描一描，描错顺序也没关系，我们再来一次～";
 
 /** 预演箭头走完一遍的时长（纯视觉） */
@@ -74,6 +100,10 @@ export const WGD_CSS = `
   box-shadow:inset 0 2px 5px rgba(255,255,255,.35),0 4px 12px rgba(120,90,50,.28);}
 .wgd-pad{width:min(72vw,300px);min-width:${MIN_PAD_PX}px;height:auto;touch-action:none;border-radius:12px;
   display:block;box-shadow:0 3px 10px rgba(120,100,70,.25);}
+@media (max-height:500px){
+  .wgd-trace{min-height:0;padding:8px;gap:6px;}
+  .wgd-garden{min-height:32px;max-height:10vh;}
+}
 .wgd-fiber{stroke:rgba(190,158,110,.18);stroke-width:.8;fill:none;}
 .wgd-grid-edge{stroke:#d94f4f;stroke-width:2;fill:none;}
 .wgd-grid-line{stroke:rgba(217,79,79,.35);stroke-width:1;stroke-dasharray:4 4;}
@@ -112,8 +142,12 @@ export const WGD_CSS = `
   box-shadow:0 3px 8px rgba(140,110,60,.25);}
 .wgd-pad:focus-visible,.wgd-say:focus-visible,.wgd-garden-flower:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 @media (max-width:400px){
-  .wgd-pad{width:min(86vw,300px);}
+  .wgd-pad{width:min(86vw,300px,var(--wgd-pad-room,300px));max-height:min(86vw,300px,var(--wgd-pad-room,300px));}
   .wgd-peek{font-size:16px;}
+}
+@media (max-height:500px){
+  .wgd-trace{min-height:0;padding:8px;gap:6px;}
+  .wgd-garden{max-height:10vh;min-height:36px;}
 }
 @media (prefers-reduced-motion:reduce){
   .wgd-next,.wgd-startdot,.wgd-bloom,.wgd-fall,.wgd-ink-oops{animation:none;}
@@ -233,6 +267,32 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   const gardenCardEl = wrap.querySelector(".wgd-gardencard") as HTMLElement;
   const msgEl = wrap.querySelector(".wgd-msg") as HTMLElement;
   const sayBtn = wrap.querySelector(".wgd-say") as HTMLButtonElement;
+
+  function sizePad(): void {
+    const view = wrap.ownerDocument?.defaultView;
+    if (!view || typeof wrap.getBoundingClientRect !== "function") return;
+    const bottoms: number[] = [];
+    for (let p = wrap.parentElement; p; p = p.parentElement) {
+      const cs = view.getComputedStyle(p);
+      const oy = cs.overflowY;
+      if (oy === "auto" || oy === "scroll" || oy === "hidden") {
+        bottoms.push(
+          clipBottomPx(p.getBoundingClientRect(), p.clientTop, p.clientHeight, cs.borderBottomWidth)
+        );
+      }
+    }
+    const room = visibleRoomPx(wrap.getBoundingClientRect().top, bottoms);
+    const padBox = pad.getBoundingClientRect();
+    const chrome = Math.max(0, wrap.scrollHeight - padBox.height);
+    const vw = typeof view.innerWidth === "number" && view.innerWidth > 0 ? view.innerWidth : 480;
+    const { side } = padSidePx(vw, room, chrome);
+    pad.style.width = `${side}px`;
+    pad.style.height = `${side}px`;
+    pad.style.minWidth = "0";
+  }
+  sizePad();
+  fit.relayout();
+  wrap.ownerDocument?.defaultView?.addEventListener("resize", sizePad);
 
   /** 没有中文语音包时按钮一直藏着，做题一点不受影响 */
   const unwatchSpeech = whenSpeechReady(() => {
@@ -501,6 +561,8 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   render();
   msgEl.textContent = TRACE_INTRO;
   speak(TRACE_INTRO);
+  sizePad();
+  fit.relayout();
 
   return {
     destroy() {
@@ -519,6 +581,7 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       previewRaf = 0;
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      wrap.ownerDocument?.defaultView?.removeEventListener("resize", sizePad);
       fit.dispose();
       wrap.remove();
     },

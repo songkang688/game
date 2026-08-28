@@ -919,6 +919,10 @@ const MAX_BOARD_H = 360;
  */
 export function boardHeightBudget(viewportW: number, viewportH: number): number {
   const h = viewportH > 0 ? viewportH : 700;
-  const ratio = viewportW >= 700 ? 0.46 : 0.29;
-  return Math.min(MAX_BOARD_H, Math.max(150, h * ratio));
+  const short = h <= 520;
+  const wide = viewportW >= 700;
+  const sidePads = short && viewportW >= 640;
+  const ratio = sidePads ? 0.58 : wide ? 0.46 : 0.29;
+  const floor = sidePads ? 120 : 150;
+  return Math.min(MAX_BOARD_H, Math.max(floor, h * ratio));
 }

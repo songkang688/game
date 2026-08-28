@@ -171,11 +171,20 @@ const CSS = `
 .fk-mode-t{font-size:16px;font-weight:900;color:#5b4890;}
 .fk-mode-d{font-size:14px;font-weight:700;color:#8271ab;line-height:1.55;margin-top:3px;}
 .fk-btn{border:none;border-radius:14px;padding:9px 15px;font-size:15px;font-weight:800;cursor:pointer;
-  font-family:inherit;background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.28);white-space:nowrap;}
+  font-family:inherit;background:#fff;color:#6b56a0;box-shadow:0 3px 0 rgba(120,95,170,.28);white-space:nowrap;
+  min-height:44px;}
 .fk-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,95,170,.28);}
 .fk-btn[disabled]{opacity:.45;cursor:default;box-shadow:none;transform:none;}
 .fk-btn-go{background:linear-gradient(180deg,#e0679f,#c8497f);color:#fff;box-shadow:0 4px 0 #a33765;}
 .fk-btn-go:active{box-shadow:0 1px 0 #a33765;}
+/* N-57:训练场选人壳把假人钮和开打并排钉在标题下,不改关内 .fk-train-shell */
+.fk-dummy-go{align-items:center;}
+@media (max-height:500px){
+  .fk-pick-train .fk-dummy-go{
+    position:sticky;top:0;z-index:5;background:#fffdff;padding:6px 0;margin-bottom:8px;
+  }
+  .fk-pick-train .fk-info{min-height:0;max-height:2.6em;overflow:hidden;}
+}
 .fk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .fk-bar[hidden]{display:none;}
@@ -193,6 +202,15 @@ const CSS = `
 /* 连着几场没赢下来才写字,平时是空的,所以不占地方 */
 .fk-swap{font-size:14px;font-weight:800;color:#a3568a;line-height:1.6;margin-top:8px;}
 .fk-swap:empty{display:none;}
+/* N-25:矮屏/窄屏把塔的出战八宫格收成一行,展开才铺开。人机/双人/无尽不走这套壳 */
+.fk-tower-compact{display:none;align-items:center;gap:8px;flex-wrap:wrap;}
+.fk-tower-now{font-size:14px;font-weight:900;color:#5b4890;}
+@media (max-height:640px),(max-width:430px){
+  .fk-tower-hero:not(.fk-tower-open) .fk-grid,
+  .fk-tower-hero:not(.fk-tower-open) .fk-pick-t{display:none;}
+  .fk-tower-hero .fk-tower-compact{display:flex;}
+  .fk-tower-hero{padding:10px;}
+}
 .fk-info{margin-top:8px;font-size:14px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
   box-shadow:0 4px 14px rgba(140,120,190,.2);}
@@ -258,6 +276,18 @@ const CSS = `
 .fk-combo-r{text-align:right;}
 .fk-train-modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0;}
 .fk-train-hint{font-size:14px;font-weight:700;color:#8271ab;line-height:1.6;margin-bottom:4px;}
+/* N-31:教学表自滚,触屏键排与假人行常驻。FIGHT_MIN_H / 帧数表 / 判定零触碰 */
+.fk-train-shell .fk-scroll{max-height:min(220px,42dvh);overflow:auto;-webkit-overflow-scrolling:touch;}
+@media (max-height:640px){
+  .fk-train-shell .fk-pads{
+    position:sticky;bottom:0;z-index:6;margin-top:6px;
+    background:linear-gradient(180deg,rgba(255,253,255,0),#fffdff 12px);
+    padding:8px 0 4px;
+  }
+  .fk-train-shell .fk-train-modes{
+    position:sticky;top:0;z-index:4;background:#fffdff;padding:4px 0;
+  }
+}
 .fk-live b{color:#c8497f;}
 .fk-hidden{display:none !important;}
 .fk-fd{width:100%;border-collapse:collapse;font-size:14px;}
@@ -801,7 +831,6 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
     pads.appendChild(buildPad(1, characterById(o.p2).name));
   }
   if (!coarsePointer()) pads.classList.add("fk-hidden");
-  wrap.appendChild(pads);
 
   const padToggle = button("fk-btn", "📱 触屏按键", () => {
     pads.classList.toggle("fk-hidden");
@@ -815,11 +844,10 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   const trainLive = el("div", "fk-live");
   const dummyHint = el("div", "fk-train-hint");
   if (o.training) {
-    // 标题图标画制(visual-r2 修遗留#5):与菜单模式卡同一枚学士帽 SVG
+    wrap.classList.add("fk-train-shell");
     const h = el("div", "fk-h");
     h.innerHTML = `${modeIconSVG("training", 20)}<span> 训练场</span>`;
 
-    // 假人三选一：站立 / 蹲防 / 随机反击
     const modeRow = el("div", "fk-train-modes");
     modeRow.appendChild(el("span", "fk-sub", "假人："));
     const modeBtns: HTMLButtonElement[] = [];
@@ -839,8 +867,12 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
 
     const scroll = el("div", "fk-scroll");
     scroll.appendChild(frameTable(characterById(o.p1)));
-    trainPanel.append(h, modeRow, dummyHint, trainLive, scroll);
+    bar.appendChild(modeRow);
+    trainPanel.append(h, dummyHint, trainLive, scroll);
     wrap.appendChild(trainPanel);
+    wrap.appendChild(pads);
+  } else {
+    wrap.appendChild(pads);
   }
 
   host.appendChild(wrap);
@@ -1837,14 +1869,14 @@ export function mount(api: GameApi): { destroy: () => void } {
 
   /* ---------------- 选人 ---------------- */
 
-  function showSelect(mode: Exclude<Mode, "tower">): void {
+    function showSelect(mode: Exclude<Mode, "tower">): void {
     clearScreen();
     let p1 = CHARACTERS[0].id;
     let p2 = CHARACTERS[1].id;
     let ai: AiLevel = 1;
     let dummy: DummyMode = "stand";
 
-    const card = el("div", "fk-card");
+    const card = el("div", mode === "training" ? "fk-card fk-pick-train" : "fk-card");
     const bar = el("div", "fk-bar");
     bar.appendChild(
       button("fk-btn", "◀ 返回", () => {
@@ -1858,6 +1890,34 @@ export function mount(api: GameApi): { destroy: () => void } {
     modeH.innerHTML = `${modeIconSVG(mode, 20)}<span> ${escapeHtml(modeCard?.title ?? "")}</span>`;
     bar.appendChild(modeH);
     card.appendChild(bar);
+
+    if (mode === "training") {
+      const row = el("div", "fk-bar fk-dummy-go");
+      row.style.marginTop = "4px";
+      row.appendChild(el("span", "fk-sub", "假人行为："));
+      const dummyBtns: HTMLButtonElement[] = [];
+      const dummyHint = el("div", "fk-sub", DUMMY_HINTS[dummy]);
+      DUMMY_MODES.forEach((m, i) => {
+        const b = button("fk-btn", DUMMY_LABELS[m], () => {
+          dummy = m;
+          sfx("tap");
+          dummyBtns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
+          dummyHint.textContent = DUMMY_HINTS[m];
+        });
+        b.setAttribute("aria-label", `假人行为 ${DUMMY_LABELS[m]}：${DUMMY_HINTS[m]}`);
+        dummyBtns.push(b);
+        row.appendChild(b);
+      });
+      dummyBtns[DUMMY_MODES.indexOf(dummy)].classList.add("fk-ch-on");
+      row.appendChild(
+        button("fk-btn fk-btn-go", "开打 ▶", () => {
+          sfx("jump");
+          startPlain(mode, p1, p2, ai, dummy);
+        })
+      );
+      card.appendChild(row);
+      card.appendChild(dummyHint);
+    }
 
     const picks = el("div", "fk-picks");
     const leftInfo = el("div", "fk-info");
@@ -1951,44 +2011,24 @@ export function mount(api: GameApi): { destroy: () => void } {
       card.appendChild(hint);
     }
 
-    if (mode === "training") {
-      const row = el("div", "fk-bar");
-      row.style.marginTop = "10px";
-      row.appendChild(el("span", "fk-sub", "假人行为："));
-      const btns: HTMLButtonElement[] = [];
-      DUMMY_MODES.forEach((m, i) => {
-        const b = button("fk-btn", DUMMY_LABELS[m], () => {
-          dummy = m;
-          sfx("tap");
-          btns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
-          hint.textContent = DUMMY_HINTS[m];
-        });
-        b.setAttribute("aria-label", `假人行为 ${DUMMY_LABELS[m]}：${DUMMY_HINTS[m]}`);
-        btns.push(b);
-        row.appendChild(b);
-      });
-      btns[DUMMY_MODES.indexOf(dummy)].classList.add("fk-ch-on");
-      const hint = el("div", "fk-sub", DUMMY_HINTS[dummy]);
-      card.appendChild(row);
-      card.appendChild(hint);
-    }
-
     if (mode === "endless") {
       const badge = el("div", "fk-sub", streakBadge(bestStreak()));
       badge.style.marginTop = "8px";
       card.appendChild(badge);
     }
 
-    const goRow = el("div", "fk-bar");
-    goRow.style.marginTop = "12px";
-    goRow.appendChild(
-      button("fk-btn fk-btn-go", "开打 ▶", () => {
-        sfx("jump");
-        if (mode === "endless") startEndless(p1, p2, ai, 0);
-        else startPlain(mode, p1, p2, ai, dummy);
-      })
-    );
-    card.appendChild(goRow);
+    if (mode !== "training") {
+      const goRow = el("div", "fk-bar");
+      goRow.style.marginTop = "12px";
+      goRow.appendChild(
+        button("fk-btn fk-btn-go", "开打 ▶", () => {
+          sfx("jump");
+          if (mode === "endless") startEndless(p1, p2, ai, 0);
+          else startPlain(mode, p1, p2, ai, dummy);
+        })
+      );
+      card.appendChild(goRow);
+    }
     view.appendChild(card);
   }
 
@@ -2145,8 +2185,20 @@ export function mount(api: GameApi): { destroy: () => void } {
 
     // 塔里默认派 TOWER_HERO_ID 上场（见那条常量的注释）；上面这一排随时能换人
     let heroId: string = TOWER_HERO_ID;
-    const heroRow = el("div", "fk-card");
+    const heroRow = el("div", "fk-card fk-tower-hero");
     heroRow.appendChild(el("div", "fk-pick-t", "出战角色（随时可以换，换完从当前关继续）"));
+    const compact = el("div", "fk-tower-compact");
+    const compactNow = el("span", "fk-tower-now");
+    const refreshCompact = (): void => {
+      compactNow.textContent = `当前出战：${characterById(heroId).name}`;
+    };
+    const swapBtn = button("fk-btn", "换人 ▾", () => {
+      const open = heroRow.classList.toggle("fk-tower-open");
+      swapBtn.textContent = open ? "收起 ▴" : "换人 ▾";
+      sfx("tap");
+    });
+    compact.append(compactNow, swapBtn);
+    heroRow.appendChild(compact);
     const grid = el("div", "fk-grid");
     const heroBtns: HTMLButtonElement[] = [];
     CHARACTERS.forEach((ch, i) => {
@@ -2160,11 +2212,13 @@ export function mount(api: GameApi): { destroy: () => void } {
         sfx("pop");
         heroBtns.forEach((x, j) => x.classList.toggle("fk-ch-on", i === j));
         swapTip.textContent = "";
+        refreshCompact();
       });
       heroBtns.push(b);
       grid.appendChild(b);
     });
     heroBtns[Math.max(0, CHARACTERS.findIndex((c) => c.id === TOWER_HERO_ID))].classList.add("fk-ch-on");
+    refreshCompact();
     heroRow.appendChild(grid);
     // 连着几场没赢下来就在这儿提一句「换个小伙伴试试」，平时是空的
     const swapTip = el("div", "fk-swap");

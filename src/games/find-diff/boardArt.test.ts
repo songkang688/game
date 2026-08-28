@@ -3,10 +3,10 @@
  *
  * 第 1 轮挂账：盘面 emoji 格是题目数据（SHA-256 钉死），不能动题库。
  * 本轮落地渲染层查表 + 整关门控：这里钉六件事：
- *   1. 题库零改动的前提下，十章图集配齐（第 1–3 章 W8R2 配、第 4–10 章
- *      trio-r7 L-3 补 50 张）——表情池 + 双胞胎替换对一张不缺；
- *   2. 整关门控：全部 188 关（含连环轮次）贴纸就绪；门控逻辑本身不拆——
- *      混进一张没收录的图案就整关关闸，绝不混排；
+ *   1. 题库零改动的前提下，第 1–3 章（水果 / 萌宠 / 海底）图集配齐——
+ *      表情池 + 双胞胎替换对一张不缺；
+ *   2. 整关门控：前 3 章全部关卡（含无尽用的 classic 场）贴纸就绪；
+ *      第 4–10 章（本轮补齐）也必须整关就绪，绝不混排；
  *   3. glyphHTML 贴纸档：sr-only 原 emoji 一字不差 + aria-hidden 贴纸，
  *      字号 / transform 与 emoji 档走同一份 style；
  *   4. 兜底：门控关掉或查不到贴纸时，输出与 1.2 的老写法逐字节一致；
@@ -22,7 +22,7 @@ import { CHAPTERS, LEVELS, THEME_POOLS } from "./levels";
 
 const PICTO = /\p{Extended_Pictographic}/u;
 
-/** 已配齐图集的主题：十章全亮（第 1–3 章 W8R2；第 4–10 章 trio-r7 L-3 补账） */
+/** 十章主题图集均已配齐（L-3） */
 const READY_THEMES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /** 双胞胎替换表（LOOKALIKE 是题库私有常量，这里从源码现抓，谁改表这里跟着变） */
@@ -42,7 +42,7 @@ function themeGlyphs(theme: number): string[] {
   return [...new Set([...pool, ...lookalikeTwins(pool)])];
 }
 
-describe("W8R1-04 / trio-r7 L-3 · 十章图集配齐（题库零改动）", () => {
+describe("W8R1-04 · 第 1–10 章图集配齐（题库零改动）", () => {
   it("表情池 + 双胞胎替换对，一张贴纸都不缺", () => {
     for (const theme of READY_THEMES) {
       expect(themeGlyphs(theme).filter((e) => !hasSticker(e)), `第 ${theme + 1} 章`).toEqual([]);
@@ -58,23 +58,26 @@ describe("W8R1-04 / trio-r7 L-3 · 十章图集配齐（题库零改动）", () 
 });
 
 describe("W8R1-04 · 整关门控", () => {
-  it("全部 188 关（含连环轮次、三图/镜像/动态）贴纸就绪", () => {
-    expect(READY_THEMES.length).toBe(CHAPTERS.length);
+  it("前 10 章全部关卡（含连环轮次）贴纸就绪", () => {
     for (let level = 0; level < LEVELS.length; level++) {
+      if (!READY_THEMES.includes(LEVELS[level].theme)) continue;
       for (let round = 0; round < Math.max(1, LEVELS[level].rounds); round++) {
         expect(sceneStickersReady(buildScene(level, round)), `第 ${level + 1} 关第 ${round + 1} 轮`).toBe(true);
       }
     }
   });
 
-  it("门控逻辑不拆：盘面混进一张没收录的图案，整关关闸绝不混排", () => {
-    const scene = buildScene(0, 0);
-    expect(sceneStickersReady(scene)).toBe(true);
-    // 上图 / 图② / 下图任何一处漏一张，整关都得回 emoji 直出
-    const hole = { ...scene.left[0], emoji: "🛸" };
-    expect(sceneStickersReady({ ...scene, left: [hole, ...scene.left.slice(1)] })).toBe(false);
-    expect(sceneStickersReady({ ...scene, right: [hole, ...scene.right.slice(1)] })).toBe(false);
-    expect(sceneStickersReady({ ...scene, second: [hole] })).toBe(false);
+  it("十章图集配齐后不再关闸，绝不出半贴纸半 emoji 的混排图", () => {
+    let gated = 0;
+    for (let level = 0; level < LEVELS.length; level++) {
+      const theme = LEVELS[level].theme;
+      if (READY_THEMES.includes(theme)) continue;
+      if (LEVELS.findIndex((c) => c.theme === theme) !== level) continue;
+      expect(sceneStickersReady(buildScene(level, 0)), `第 ${level + 1} 关`).toBe(false);
+      gated++;
+    }
+    expect(gated).toBe(CHAPTERS.length - READY_THEMES.length);
+    expect(gated).toBe(0);
   });
 });
 

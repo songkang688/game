@@ -164,6 +164,10 @@ export const CSS = `
 .gmk-over-stoneimg{line-height:0;filter:drop-shadow(0 3px 5px rgba(120,80,40,.35));}
 .gmk-ceremony{animation:gmk-cardin .28s ease-out;}
 @keyframes gmk-cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (min-width:700px) and (max-height:500px){
+  .gmk-wrap{max-width:248px;}
+  .gmk-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
+}
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
   .gmk-seat.gmk-seat-on .gmk-seat-ico{animation:none;}

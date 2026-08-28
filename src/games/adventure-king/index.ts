@@ -6,6 +6,7 @@ export { meta };
 // 守卫用回旋镖敲晕,集齐日纹石 / 月纹石 / 星纹石三件神器才推得开尽头的首领之门。
 // 三种玩法:188 关八大遗迹战役、无尽遗迹(一层比一层深)、计时速通(每章记录最好时间)。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { corridorCanvasCssH, corridorWantH, measureClipRoomPx } from "./corridorFit";
 import { save } from "../../engine/save";
 import {
   ARTIFACT_EMOJI,
@@ -115,13 +116,19 @@ import {
   type RoomState,
 } from "./explore";
 import { bodyFontUpliftCss, touchUpliftCss } from "../../art/kit/uiTouch";
-import { corridorRoomPx } from "./corridorFit";
 
 const CSS = `
 .ak-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;}
 .ak-canvas{width:100%;display:block;border-radius:16px;background:#f6f0ff;touch-action:none;}
 .ak-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+/* N-16:矮横屏把触控键钉在画布下沿;提示行收掉。古堡走 advk- 前缀,吃不到这段。 */
+@media (max-height:500px){
+  .ak-wrap{gap:4px;max-height:100%;min-height:0;}
+  .ak-pad{position:sticky;bottom:0;z-index:2;padding:4px 0 2px;
+    background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
+  .ak-tip{display:none;}
+}
 .ak-btn{border:none;border-radius:16px;min-width:56px;min-height:52px;padding:6px 12px;font-size:20px;
   font-weight:900;cursor:pointer;font-family:inherit;color:#6b4a2a;background:#fff3dd;
   box-shadow:0 4px 0 rgba(180,140,90,.45);}
@@ -138,7 +145,7 @@ const CSS = `
 .ak-open:active{transform:translateY(2px);box-shadow:0 2px 0 #b1642a;}
 .ak-open:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .ak-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
-  background:linear-gradient(180deg,#fff6e8,#f2ecff);display:flex;flex-direction:column;gap:8px;}
+  background:linear-gradient(180deg,#fff6e8,#f2ecff);display:flex;flex-direction:column;gap:8px;min-height:0;}
 .ak-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ak-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
@@ -157,19 +164,6 @@ const CSS = `
 .ak-over-t{font-size:20px;font-weight:900;color:#a4632a;}
 .ak-over-s{font-size:14px;font-weight:700;color:#7a6046;line-height:1.6;}
 @media (min-width:560px){.ak-grid{grid-template-columns:repeat(4,1fr);}}
-/* N-16(trio-r7):矮横屏走廊切双栏 —— 画布在左、键排 + 提示行在右(同 dot-maze 的 N-27 配方)。
-   画布上方壳层头部就占 ~112px,键排再垫底只剩 104px 余量,被 160px 显示下限顶住必裁;
-   挪到右栏后画布可用高 ~206px、键排 ⏸ 六键全程在线。键排收紧一档(热区仍 ≥44px),
-   提示行的键盘段(.ak-tip-keys)在触屏矮横屏里藏掉,字号守 W6R1-10 的 14px 底线 */
-@media (max-height:500px){
-  .ak-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,210px);
-    grid-template-rows:auto 1fr;align-items:start;column-gap:10px;}
-  .ak-canvas{grid-column:1;grid-row:1/span 2;}
-  .ak-pad{grid-column:2;grid-row:1;align-content:flex-start;}
-  .ak-tip{grid-column:2;grid-row:2;}
-  .ak-btn{min-height:44px;min-width:48px;font-size:18px;padding:4px 10px;}
-  .ak-tip-keys{display:none;}
-}
 @media (prefers-reduced-motion:reduce){.ak-btn:active{transform:none;}}
 
 /* 1.2 探索层:无尽古堡的俯视房间(advk- 前缀,和上面的横版走廊分开) */
@@ -220,25 +214,23 @@ const CSS = `
 .advk-case-lock{background:linear-gradient(180deg,#f2eee5,#e6dfd1);}
 .advk-case-lock .advk-case-item{filter:grayscale(1);opacity:.55;}
 .advk-case-lock .advk-case-name{color:#a99e8c;}
-.advk-mid,.advk-left,.advk-side{display:flex;flex-direction:column;gap:8px;min-width:0;}
 @media (min-width:560px){.advk-museum{grid-template-columns:repeat(4,1fr);}}
 @media (max-width:400px){.advk-cell{font-size:13px;}.advk-mini{font-size:11px;}}
-/* N-30(trio-r7):矮横屏把古堡收成双栏 —— 棋盘在左、说话行/工具钮/方向盘/陈列在右,
-   房间格按可视余量钳宽(11×7 房间,高≈宽×7/11),D-pad 与四个工具钮不滚可点 */
-@media (max-height:500px){
-  .advk-mid{flex-direction:row;align-items:flex-start;justify-content:center;gap:12px;}
-  .advk-left{flex:0 1 auto;}
-  .advk-side{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(180px,240px);
-    column-gap:10px;row-gap:6px;align-items:start;}
-  .advk-side .advk-pad2{grid-column:1;grid-row:1/span 3;grid-template-columns:repeat(3,48px);margin-top:0;}
-  .advk-side .advk-pad2 button{min-height:44px;}
-  .advk-side .advk-say{grid-column:2;grid-row:1;text-align:left;}
-  .advk-side .advk-tools{grid-column:2;grid-row:2;justify-content:flex-start;}
-  .advk-side .advk-tool{padding:6px 10px;font-size:13px;}
-  .advk-side .advk-album{grid-column:2;grid-row:3;}
-  .advk-room{max-width:clamp(220px,calc((100dvh - 214px)*11/7),420px);}
-}
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
+/* N-30 配方 G:矮横屏 D-pad 挪房间网格右侧,工具行置顶;房间生成/钥匙判定零触碰 */
+@media (max-height:500px){
+  .ak-mode.advk-shell{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto 1fr auto auto;
+    gap:6px;padding:6px;min-height:0;max-height:100%;overflow:hidden;}
+  .ak-mode.advk-shell > .ak-mhead{grid-column:1/-1;grid-row:1;}
+  .ak-mode.advk-shell > .advk-hud{grid-column:1/-1;grid-row:2;}
+  .ak-mode.advk-shell > .advk-tools{grid-column:1/-1;grid-row:3;}
+  .ak-mode.advk-shell > .advk-room{grid-column:1;grid-row:4;max-width:min(280px,48vw);max-height:min(64dvh,280px);
+    width:100%;align-self:center;}
+  .ak-mode.advk-shell > .advk-pad2{grid-column:2;grid-row:4;margin-top:0;align-self:center;}
+  .ak-mode.advk-shell > .advk-say{grid-column:1/-1;grid-row:5;}
+  .ak-mode.advk-shell > .advk-mini{grid-column:1/-1;}
+  .ak-mode.advk-shell > .advk-album{grid-column:1/-1;grid-row:6;max-height:28dvh;overflow:auto;}
+}
 ${touchUpliftCss([".ak-open"])}
 ${bodyFontUpliftCss([".ak-tip"])}
 `;
@@ -284,13 +276,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
 
   const tip = document.createElement("div");
   tip.className = "ak-tip";
-  // 键盘段单独一个 span:矮横屏右栏只有 ~200px 宽,长键盘说明会把栏撑到折叠线下,藏掉
-  const tipTouch = document.createElement("span");
-  tipTouch.textContent = lv.hint;
-  const tipKeys = document.createElement("span");
-  tipKeys.className = "ak-tip-keys";
-  tipKeys.textContent = " 键盘:A D 跑、W 跳、F 回旋镖、G 抓钩(方向键 + L / K 也一样),Esc 暂停。";
-  tip.append(tipTouch, tipKeys);
+  tip.textContent = `${lv.hint} 键盘:A D 跑、W 跳、F 回旋镖、G 抓钩(方向键 + L / K 也一样),Esc 暂停。`;
   wrap.appendChild(tip);
   host.appendChild(wrap);
 
@@ -331,57 +317,12 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     messageTimer = 1.8;
   }
 
-  // N-16(trio-r7):915×412 一族矮横屏里 430px 画布独吞视口,键排 + 提示行全线下。
-  // mount / resize 时量一次 `.game-stage` 可视余量,syncSize 里给 cssH 封顶;
-  // scale = cssH / VIEW_H 跟着缩,等于拉远镜头,世界坐标与跑跳判定零触碰。
-  let roomCap: number | null = null;
-
-  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
-  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
-    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
-
-  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN */
-  function stageClipBottom(): number {
-    let node: HTMLElement | null = wrap.parentElement ?? null;
-    for (let i = 0; node && i < 10; i++) {
-      if (typeof node.className === "string" && node.className.includes("game-stage")) {
-        if (typeof node.getBoundingClientRect !== "function") break;
-        const r = node.getBoundingClientRect();
-        const inner =
-          typeof node.clientHeight === "number" && node.clientHeight > 0
-            ? (node.clientTop || 0) + node.clientHeight
-            : r.height;
-        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
-        break;
-      }
-      node = node.parentElement ?? null;
-    }
-    return Number.NaN;
-  }
-
-  function measureRoom(): void {
-    if (destroyed) return;
-    if (typeof canvas.getBoundingClientRect !== "function" || typeof wrap.getBoundingClientRect !== "function")
-      return;
-    const clip = stageClipBottom();
-    if (!Number.isFinite(clip)) return;
-    const canvasRect = canvas.getBoundingClientRect();
-    if (!Number.isFinite(canvasRect.top)) return;
-    // 矮横屏走廊是双栏(grid):键排 + 提示行在画布右边,不占画布下方余量;
-    // 竖屏 flex 纵排才把「wrap 下沿 − 画布下沿」记成家当(高度不随画布显示高变,量一次就是稳的)
-    const sideBySide =
-      typeof getComputedStyle === "function" && getComputedStyle(wrap).display === "grid";
-    const below = sideBySide
-      ? 0
-      : Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
-    roomCap = corridorRoomPx(clip, canvasRect.top, below);
-  }
-
   function syncSize(): void {
-    // 双栏档画布只占左栏,量画布自己的显示宽,免得逻辑宽 ≠ 显示宽把画面拉扁
-    cssW = Math.max(240, Math.round(canvas.clientWidth || host.clientWidth || wrap.clientWidth || 320));
-    cssH = clamp(Math.round(cssW * 0.9), 250, 430);
-    if (roomCap !== null && roomCap < cssH) cssH = roomCap;
+    cssW = Math.max(240, Math.round(host.clientWidth || wrap.clientWidth || 320));
+    const want = corridorWantH(cssW);
+    const room = measureClipRoomPx(host);
+    const below = (pad.offsetHeight || 0) + (tip.offsetHeight || 0) + 16;
+    cssH = corridorCanvasCssH(want, room, below);
     scale = cssH / VIEW_H;
     const dpr = Math.min(2, (globalThis as { devicePixelRatio?: number }).devicePixelRatio || 1);
     const bw = Math.max(1, Math.round(cssW * dpr));
@@ -914,13 +855,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   bag.add(() => cancelAnimationFrame(raf));
   bag.add(() => wrap.remove());
 
-  measureRoom();
   syncSize();
-  // 挂载那一刻可能还没排好版;抽空补量一次(不用 rAF,免得测试桩的帧队列被挤)
-  const fitTimer = setTimeout(measureRoom, 0);
-  bag.add(() => clearTimeout(fitTimer));
-  window.addEventListener("resize", measureRoom);
-  bag.add(() => window.removeEventListener("resize", measureRoom));
   last = performance.now();
   raf = requestAnimationFrame(frame);
 
@@ -1118,7 +1053,7 @@ function cellGlyph(state: RoomState, x: number, y: number): { html: string; cls:
 function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { destroy: () => void } {
   const bag = new Disposer();
   const wrap = document.createElement("div");
-  wrap.className = "ak-mode";
+  wrap.className = "ak-mode advk-shell";
   wrap.innerHTML = `<style>${CSS}</style>`;
 
   const head = document.createElement("div");
@@ -1147,18 +1082,7 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
   album.className = "advk-album";
   const pad = document.createElement("div");
   pad.className = "advk-pad2";
-  // N-30:竖屏仍是 board→mini→say→tools→pad→album 的原顺序;
-  // 矮横屏由 .advk-mid 切成「左棋盘 / 右控件」双栏(见 CSS 的 max-height:500px 档)
-  const mid = document.createElement("div");
-  mid.className = "advk-mid";
-  const left = document.createElement("div");
-  left.className = "advk-left";
-  const side = document.createElement("div");
-  side.className = "advk-side";
-  left.append(board, mini);
-  side.append(say, tools, pad, album);
-  mid.append(left, side);
-  wrap.append(head, hud, mid);
+  wrap.append(head, hud, board, mini, say, tools, pad, album);
   host.appendChild(wrap);
 
   let rooms = 0;
