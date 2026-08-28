@@ -628,7 +628,7 @@ const L99_CSS = `
 .l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;
-  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}
 .l99-ov-big{font-size:56px;line-height:1;}
 .l99-ov-buddy{width:104px;height:104px;object-fit:contain;pointer-events:none;
   filter:drop-shadow(0 6px 10px rgba(180,120,180,.28));animation:l99buddy .5s cubic-bezier(.34,1.56,.64,1);}
@@ -675,6 +675,15 @@ const L99_CSS = `
   /* N-37 加重档:root 抬头已收一行后,限时条+火车舞台再让票。无 .l99-jump 不生效。 */
   .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
   .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
+  /* N-204：915×412 过关 overlay 内容略高于 320，钮贴底。收 padding/头像，钮列钉底，
+     仍 overflow-y:auto + pan-y。不改 ov-btn 44/48、showOverlay、冷静期。 */
+  .l99-overlay{padding:10px 12px;gap:8px;justify-content:flex-start;}
+  .l99-ov-buddy{width:72px;height:72px;}
+  .l99-ov-buddy-round{width:64px;height:64px;}
+  .l99-ov-stars{font-size:26px;}
+  .l99-ov-title{font-size:18px;}
+  .l99-ov-sub{margin:0;font-size:16px;}
+  .l99-ov-btns{margin-top:auto;padding-bottom:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
