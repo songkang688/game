@@ -201,6 +201,13 @@ const CSS = `
   .bwl-legend{font-size:11px;}
   .bwl-undo{min-width:46px;padding:0 6px;}
 }
+/* r18 B:极矮横屏内容仍可能溢出(l99 舞台已可滚),三段式的「停!」是每球必按的
+   核心键,钉在可视底不许滚丢。 */
+@media (max-height:520px){
+  .bl-nudge{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(253,241,246,0),#fdf1f6 40%);}
+  .bwl-legend{display:none;}
+}
 /* 手机竖屏统共 667 像素高,球道上面还压着标题栏,每一行都收一点 */
 @media (max-height:720px){
   .bl-wrap{gap:5px;}
@@ -386,12 +393,33 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
   // 所有碰撞还是在俯视坐标里算(logic.ts),这里只是把 (x, y) 投影到画布上。
   const view: LaneView = { w: 320, h: 360 };
 
+  /** 球道下面自家的记分牌/指针/按钮实测总高(绝对定位的遮罩不算流内,跳过) */
+  function extrasHeight(): number {
+    let sum = 0;
+    for (const child of Array.from(wrap.children)) {
+      if (child === laneBox || !(child instanceof HTMLElement)) continue;
+      if (child.hidden) continue;
+      try {
+        if (getComputedStyle(child).position === "absolute") continue;
+      } catch {
+        // 单测桩没有 getComputedStyle 也不能炸
+      }
+      sum += child.offsetHeight || 0;
+    }
+    return sum;
+  }
+
   function layout(): void {
     const avail = Math.max(240, Math.min(host.clientWidth || 360, 520));
     // 上下还压着 HUD、记分牌、三条指针和按钮。矮屏按舞台剩余高度缩球道。
     const guessed = clamp((window.innerHeight || 700) - 386, 150, 460);
-    const roomH = clamp(stagePlayRoom(host, { w: avail, h: guessed }).h, 150, 460);
-    const w = Math.round(avail);
+    // r18 B:舞台余高还要扣掉自家 HUD/记分牌/指针/按钮的实测高度,不然 768/844 高
+    // 的屏上球道吃满余高,「🎳 停!(蓄力)」被顶到视口外(量不到就退回老猜法)。
+    const room = stagePlayRoom(host, { w: avail, h: guessed }).h;
+    const extras = extrasHeight();
+    const roomH = clamp(extras > 0 ? room - extras - 40 : Math.min(room, guessed), 150, 460);
+    // 球道高度被压扁时同步收窄,近宽远窄的梯形不至于摊成一条横带
+    const w = Math.round(Math.min(avail, Math.max(260, roomH / 0.85)));
     const h = Math.round(Math.min(roomH, w * 1.25));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.style.width = `${w}px`;
@@ -408,6 +436,12 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     render();
   };
   window.addEventListener("resize", onResize);
+  // 首帧时提示行/记分牌还没换行定型,extras 量偏小;渲染稳定后再校一次
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(onResize);
+    });
+  }
 
   // ---- 一局的状态 --------------------------------------------------------------
   let turnSeat = 0;
