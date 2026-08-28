@@ -119,6 +119,12 @@ export const CSS = `
   .dc-board{padding:3px;border-width:4px;}
   /* 最小格里点数行自动收起，只留汉字，别挤糊了 */
   .dc-face g.dcd{display:none;} }
+/* N-65:8 列大方格把取消/暂停顶到 518。矮宽屏收盘钉工具 */
+@media (min-width:640px) and (max-height:500px){
+  .dc-board{max-width:min(280px,62dvh);}
+  .dc-row{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(255,248,236,.35),#fff8ec);}
+}
 @media (prefers-reduced-motion:reduce){ .dc-cell{transition-duration:.06s;} .dc-btn:active{transform:none;}
   .dc-cell.dc-flip2,.dc-petal,.dc-cell.dc-parade{animation-duration:.05s;}
   .dc-rain .dc-petal{animation:none;opacity:0;} }

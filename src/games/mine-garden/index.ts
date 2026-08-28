@@ -420,6 +420,12 @@ export const MN_CSS = `
   .mn-chip{padding:5px 9px;}
   .mn-duo>div{min-width:0;flex:1 1 100%;}
 }
+@media (min-width:640px) and (max-height:500px){
+  .mn-duo{flex-wrap:nowrap;gap:8px;}
+  .mn-duo>div{flex:1 1 0;min-width:0;}
+  .mn-msg{min-height:0;margin-top:4px;}
+}
+}
 @media (prefers-reduced-motion:reduce){
   .mn-cell.mn-lit{animation:none;}
   .mn-cell.mn-bloom{animation:none;}
@@ -646,7 +652,13 @@ export function mountField(host: HTMLElement, opts: FieldOptions): FieldHandle {
 
   function layout(): void {
     const px = cellPx(run.opts.w, Math.min(viewportWidth(), (host as { clientWidth?: number }).clientWidth || viewportWidth()));
-    const size = opts.compact ? Math.max(MIN_CELL, Math.round(px * 0.8)) : px;
+    let size = opts.compact ? Math.max(MIN_CELL, Math.round(px * 0.8)) : px;
+    // N-71:双人 9×9 按宽取 35px 后第 7 行切底。矮横屏再按余高钳格,MIN_CELL 28 不破
+    const vh = (globalThis as { innerHeight?: number }).innerHeight;
+    if (typeof vh === "number" && vh > 0 && vh <= 500) {
+      const budget = Math.floor((vh - 168) / Math.max(1, run.opts.h));
+      if (budget > 0) size = Math.max(MIN_CELL, Math.min(size, budget));
+    }
     grid.style.gridTemplateColumns = `repeat(${run.opts.w}, ${size}px)`;
     grid.style.fontSize = `${Math.max(13, Math.round(size * 0.52))}px`;
     for (const c of cells) {

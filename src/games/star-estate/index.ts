@@ -270,6 +270,8 @@ const CSS = `
   .se-board-wrap{max-height:min(200px,42dvh);max-width:min(200px,42dvh,calc(100dvh - 140px));flex:0 1 auto;}
   .se-log{max-height:2.2em;}
   .se-seats{margin-bottom:4px;}
+  .se-wrap{max-height:calc(100dvh - 76px);}
+  .se-board-wrap{max-height:min(156px,38dvh);}
 }
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}

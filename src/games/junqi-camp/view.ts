@@ -169,6 +169,12 @@ export const CSS = `
 .jq-legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;font-size:14px;
   font-weight:700;color:#6b7758;}
 .jq-legend span{background:#ffffffcc;border-radius:999px;padding:3px 9px;}
+/* N-64:min-height 300 把确认行顶到 485。矮横屏收盘,工具钉底。布阵/胜负不动 */
+@media (max-height:500px){
+  .jq-stage{min-height:0;height:min(58dvh,236px);}
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+}
 @media (prefers-reduced-motion:reduce){
   .jq-face{transition-duration:.06s;animation:none!important;}
   .jq-fx{animation:none!important;transition:none!important;}

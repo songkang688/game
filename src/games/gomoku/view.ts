@@ -167,6 +167,9 @@ export const CSS = `
 @media (min-width:700px) and (max-height:500px){
   .gmk-wrap{max-width:248px;}
   .gmk-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
+  /* N-67:设置页 CTA 431——248 外壳把选项折高。有开始钮时放宽,进局仍 248 */
+  .gmk-wrap:has(.gmk-start){max-width:420px;}
+  .gmk-start{position:sticky;bottom:0;z-index:5;margin-top:6px;}
 }
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
