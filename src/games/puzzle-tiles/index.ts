@@ -86,7 +86,7 @@ const CSS = `
 @media (max-height: 500px) {
   .pz-board { max-width: min(100%, calc(100dvh - 220px)); margin: 0 auto; }
 }
-@media (min-width: 700px) and (max-height: 840px) {
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
   .pz-board { max-width: min(100%, calc(100dvh - 220px)); margin: 0 auto; }
 }
 .pz-tile { aspect-ratio: 1; border: none; border-radius: 16px; font-size: var(--pz-fs, clamp(22px, 8vw, 44px)); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: transform .14s; box-shadow: 0 3px 8px rgba(120,120,200,.2); padding: 0; }

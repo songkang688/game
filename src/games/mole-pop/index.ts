@@ -159,7 +159,7 @@ const CSS = `
 @media (max-height: 500px) {
   .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
 }
-@media (min-width: 700px) and (max-height: 840px) {
+@media (min-width: 700px) and (max-height: 840px) and (min-height: 501px) {
   .mp-board { max-width: min(100%, calc(100dvh - 240px)); margin: 0 auto; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {

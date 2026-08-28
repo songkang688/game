@@ -429,6 +429,8 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 
 学习员 C 红线仍是零改 `src/**`；本机因额度耗尽代写本节，不替代云端 C 对账。
 
+续修：`styles.css` / 地鼠 / 拼图 的 `min-width:700 && max-height:840` **补 `min-height:501`**（守门 `toContain` 旧串仍成立）；拼音选票/拼写横屏分栏扩到平板（不拷 scene 72px / runner 16px）；冲刺赛道 840 补菜单 CTA sticky，**不隐藏**键盘提示。
+
 ## 附：第 3 轮环境水位
 
 - 环境再次重置后 `npm ci` + `npm run build` 全绿；零改 src，未重跑全量 vitest（水位沿用：19484 绿 + N-105 的 5 红）。

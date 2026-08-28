@@ -407,6 +407,15 @@ export function mount(api: GameApi): { destroy: () => void } {
         }
       }
       @media (max-height: 840px) and (min-height: 501px) {
+        .dr-setup { display: flex; flex-direction: column; }
+        .dr-menu-cta {
+          order: -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+          position: sticky; top: 0; z-index: 4; padding: 4px 0 8px;
+          background: linear-gradient(180deg, #E9F4FF 72%, rgba(233,244,255,.88));
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
+          width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
+        }
         .dr-btns {
           position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
           background: linear-gradient(180deg, rgba(233,244,255,.55), #E9F4FF 28%, #FFEEF6);
