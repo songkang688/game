@@ -22,6 +22,7 @@ import {
   type Position,
 } from "./board";
 import type { SoundName } from "../level99";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import { captureMarkSVG, petalSVG, pieceSVG, potSVG, sproutSVG } from "./art";
 import { inCheck, legalMoves, makeMove, toChinese, type Move } from "./moves";
 import { createGame, gameStatus, playMove, resign, type Game, type Status } from "./rules";
@@ -63,6 +64,8 @@ export interface BoardOptions {
   allowFlip?: boolean;
   /** 显示「认输」按钮 */
   allowResign?: boolean;
+  /** 头部工具排的额外按钮(闯关的「重摆题面」放这儿,别吃盘面下方的高) */
+  extraTools?: Array<{ label: string; onClick: () => void }>;
   sfx: (n: SoundName) => void;
   /** 人走的每一手先过这一关；返回 ok:false 就退回去重走（闯关题目用） */
   judge?: (move: Move, pos: Position, game: Game) => Judgement;
@@ -187,6 +190,61 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
   head.append(bannerEl, tools);
   wrap.append(head, seatBar, boardFrame, tipEl, logBox, overlay);
   host.appendChild(wrap);
+
+  /** `.cg-wrap` 的纵向间距,量「盘下家当」时每件补一份 */
+  const WRAP_GAP = 8;
+
+  /**
+   * 盘宽地板 = 8 × 格径下限。常规 40px/格(320);矮横屏媒体查询把
+   * `.cg-sq` 的下限放宽到 30px(240),这里要跟同一档,不然 JS 钳出的宽
+   * 比 CSS 的格径下限还窄,格子会横着挤出 overflow:hidden 的盘框。
+   */
+  function boardFloorPx(): number {
+    const mq = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    try {
+      if (mq && mq("(min-width:700px) and (max-height:520px)").matches) return 240;
+    } catch {
+      /* 量不到就按常规档 */
+    }
+    return 320;
+  }
+
+  /**
+   * r5 N-8:盘面按舞台可视余量钳宽。格子 aspect-ratio:1、gap 0,盘高=盘宽,
+   * 所以「按高预算收」落到给棋盘框写一条 width。8 格 × 40px(格子热区底线)
+   * 是地板,比它还挤就贴着地板交给舞台滚动。
+   * 盘下家当只数「真在盘下面」的:矮横屏双栏时提示/记谱挪到右列,不占盘的高预算。
+   */
+  function fitBoard(): void {
+    if (closed || typeof boardFrame.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多大」
+    boardFrame.style.width = "";
+    boardFrame.style.maxWidth = "";
+    const frameRect = boardFrame.getBoundingClientRect();
+    if (!Number.isFinite(frameRect.top) || !(frameRect.height > 0)) return;
+    const frameBottom = rectBottom(frameRect);
+    let below = 0;
+    for (const sib of [tipEl, logBox]) {
+      if (typeof sib.getBoundingClientRect !== "function") continue;
+      const r = sib.getBoundingClientRect();
+      if (Number.isFinite(r.top) && r.top >= frameBottom - 2) below += r.height + WRAP_GAP;
+    }
+    // 闯关模式在 wrap 外面还挂了一排「重摆题面」,同样吃盘下的高
+    for (let n = wrap.nextElementSibling as HTMLElement | null; n; n = n.nextElementSibling as HTMLElement | null) {
+      if (typeof n.getBoundingClientRect !== "function") break;
+      const r = n.getBoundingClientRect();
+      if (Number.isFinite(r.height)) below += r.height + WRAP_GAP;
+    }
+    const room = clip - frameRect.top - below - 4;
+    if (!Number.isFinite(room) || room <= 0) return;
+    if (frameRect.height <= room + 1) return;
+    const cap = Math.max(boardFloorPx(), Math.floor(room));
+    boardFrame.style.width = `${cap}px`;
+    boardFrame.style.maxWidth = "100%";
+    boardFrame.style.marginInline = "auto";
+  }
 
   const squares: HTMLElement[] = [];
   for (let i = 0; i < 64; i++) {
@@ -347,6 +405,8 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     renderSeats();
     renderBoard();
     renderLog();
+    // 横幅/提示换行数变了盘的高预算就变,每次重画顺手重量一次
+    fitBoard();
   }
 
   /** 走完一手让棋子滑过去：先按起点摆好，再在下一帧回到落点 */
@@ -585,6 +645,11 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
     giveUp(game.pos.turn);
   });
   tools.append(hintBtn, flipBtn, resignBtn);
+  for (const extra of opts.extraTools ?? []) {
+    const b = button("cg-tool", extra.label);
+    b.addEventListener("click", extra.onClick);
+    tools.appendChild(b);
+  }
 
   /** 朵朵执白 WASD 移光标、F 选中 / 落子、G 取消；星星执黑 方向键 + L / K；Esc 暂停与继续 */
   const WHITE_KEYS: Record<string, [number, number]> = {
@@ -644,6 +709,9 @@ export function createBoard(host: HTMLElement, opts: BoardOptions): BoardHandle 
 
   const keyHost = (globalThis as { window?: unknown }).window ?? globalThis;
   bind(keyHost, "keydown", onKey);
+  // 转屏/开合记谱都会改盘的可视余量,跟着重量一次(bind 自带 destroy 摘监听)
+  bind(keyHost, "resize", fitBoard);
+  bind(logBox, "toggle", fitBoard);
 
   // -------------------------------------------------------------------------
   // 对外

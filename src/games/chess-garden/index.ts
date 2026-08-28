@@ -70,6 +70,10 @@ const SHELL_CSS = `
 .cg-btn:active{transform:translateY(2px);box-shadow:0 2px 0 #97682c;}
 .cg-over-art{width:min(230px,72vw);margin:0 auto;}
 .cg-over-art svg{width:100%;height:auto;display:block;}
+/* r5 N-8:矮横屏模式壳的边距收一号,给盘面多让些高 */
+@media(min-width:700px) and (max-height:520px){
+  .cg-mode{padding:6px 10px;gap:6px;}
+}
 `;
 
 const SHELL_STYLE_ID = "cg-shell-style";
@@ -209,6 +213,17 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
     showHints: spec.chapterIndex <= 3,
     allowFlip: false,
     allowResign: false,
+    // r5 N-8:重摆钮并进盘面头部工具排,不再挂在盘下面吃「整盘可见」的高预算
+    extraTools: [
+      {
+        label: "♻️ 重摆题面",
+        onClick: () => {
+          ctx.sfx("tap");
+          mistakes++;
+          board?.reset(spec.fen);
+        },
+      },
+    ],
     sfx: (n) => ctx.sfx(n),
     aiDelayMs: 260,
     judge: (move, _pos, game) => {
@@ -224,16 +239,6 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): { destroy: () => void } {
       else ctx.lose("这一局走岔了，把棋子放回题面重来一次就好。");
     },
   });
-
-  const tools = el("div", "cg-row");
-  const again = button("cg-btn", "♻️ 重摆题面");
-  again.addEventListener("click", () => {
-    ctx.sfx("tap");
-    mistakes++;
-    board?.reset(spec.fen);
-  });
-  tools.appendChild(again);
-  stage.appendChild(tools);
 
   return {
     destroy() {

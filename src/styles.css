@@ -2194,6 +2194,40 @@ html {
   }
 }
 
+/* r5 N-8：915×412 矮横屏纵排装不下（裁 436）——盘左、信息右双栏，
+   盘宽再由 view.ts 的 fitBoard 按舞台可视余量钳（8×40px 格子热区是地板）。 */
+@media (min-width: 700px) and (max-height: 520px) {
+  .cg-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(200px, 1fr);
+    column-gap: 12px;
+    row-gap: 6px;
+    align-items: start;
+    align-content: start;
+    max-width: none;
+  }
+
+  .cg-frame {
+    grid-column: 1;
+    grid-row: 1 / span 5;
+  }
+
+  .cg-head,
+  .cg-seats,
+  .cg-tip,
+  .cg-log,
+  .cg-overlay {
+    grid-column: 2;
+  }
+
+  /* 412px 高连壳带盘满打满算,格径下限放宽到 30px(fitBoard 的地板跟同一档) */
+  .cg-sq {
+    aspect-ratio: 1;
+    min-width: 30px;
+    min-height: 30px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cg-piece {
     transition-duration: 40ms !important;
