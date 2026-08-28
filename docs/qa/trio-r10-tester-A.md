@@ -1,55 +1,49 @@
-# 三人组第 10 轮 · 测试修复员 A 记录
+# 三人组第 10 轮 · 测试修复员 A 记录（`c14c`）
 
-基线:进场 `origin/game-1.3`（已含 r9-A：N-33/36/37/38/34/35/30 + 收藏册热区）。
-分支:`cursor/trio-r10-tester-a-7779`，目标合入 `game-1.3`。
-执行依据:用户本轮派单优先于 `trio-r10-playbook.md`（那份把 N-40/41 写成 A，**本轮 A 不接**，交给 B）。r9 已合入项 **零重做**。休闲对战动手目录未提交。
+基线:rebase 后 `origin/game-1.3 = ce14c0a5`（已含并行 A `7779` 的 N-39 / L-3 / faceLift 序列化 L-2，以及 r11 N-43/N-44）。
+分支:`cursor/trio-r10-tester-a-c14c`。
+本拍只补 **并行 7779 没做的 L-2 源函数换装**（`clockSVG` 本身换 arrowHandD），并留下接线断言。
 
-水位:进场主干约 1095+/19288+。本轮只增测试（`level99.n39` / `quiz99.s4` / `corridorFit` + faceLift 真机序列化 + boardArt 十章 + stickers 查不到改 🤷）。交卷 `npm test` = **1112 文件 / 19339 用例全绿**；`npm run build` 全绿。代码提交 `928aa663` 已由 `406ca902` 合入 `game-1.3`；本分支 rebase 后只补本记录。
+并行 `7779` 已合入主干的记录见 git 历史 `58a6e71c`（N-39 / S-4 `.qz-jump-input` / N-16 走廊 / L-3 贴纸 / faceLift 真机序列化）。**那些文件本拍不再重做。**
 
-## 修了什么
+## 对账
 
-### N-39 l99 蓝本地图首次进图/回地图聚焦 ✅（配方 K）
+- N-39：主干已 `showMap(true)` ×4 + 切章 `showMap()` + 无 `instanceof HTMLElement`。本拍加 `src/games/level99.r10.test.ts` 守门。
+- L-3：主干 `stickers.ts` 已扩第 4–10 章；`boardArt` 头注已写十章配齐。本拍 **零再改 stickers/boardArt**（rebase 撞车取先合版）。
+- L-2：主干仍走 `faceLift` 消费端换装，`clockSVG` 产物仍是细线针。r7 原文是改渲染函数。本拍改 `clockSVG`。
+- 未改 `styles.css` 结算、`tracing.ts`、`collection.ts`、`quiz99.ts`、pinyin-train、adventure-king、fight-king、fruit-catch。
 
-- **坏在哪**:`showMap(focusCurrent = false)` 只在直达/跳过传 true；初次进图与三处「回地图」默认 false。915×412 hop-pads 当前关 426–502 整格线下。
-- **怎么修**:初次 `showMap(true)`；过关/失败 overlay「回地图」、关内「选关」三处同样 true。切章 `viewChapter = ci; showMap();` **保持 false**。聚焦仍是 `.l99-node-cur` + `scrollIntoView({block:"center"})`。
-- **测试桩**:无 `HTMLElement` 的用例（如 xiangqi smoke）不能 `instanceof HTMLElement`——有全局才 instanceof，否则鸭子调用。
-- **测试**:`src/games/level99.n39.test.ts`（四路径 true / 切章 false / 视口尺子：426–502 在 412 高为假，居中格为真）。
+## 本拍修了什么
 
-### S-4 扩容 `.qz-jump-input` 38→44 ✅
+### L-2 `clockSVG` 换 arrowHandD / hubSVG / 11px ✅
 
-- 管理员面。`quiz99.ts` `min-height:44px`。`quiz99.s4.test.ts` 取反 38。
+- 指针 `arrowHandD(HOUR/MINUTE_HAND_SHAPE)`，轴心 `hubSVG()`，刻度 11px。
+- 针尖仍按原角度 × 原长度（时 20 / 分 30）。`data-h` / `data-q` 零触碰。
+- `LEGACY_DIGEST`：`asLegacyHtml` 把换装钟还原成 1.1 细线再哈希，题面数字/选项/正确项仍钉死。
+- `faceLift` 对新产品恒等（细线已不存在）；旧细线夹具仍覆盖 liftFaceBody。
+- 测试:`src/games/clock-house/clockSVG.r10.test.ts`。
+- 浏览器:第 1 关 `svg[data-h]` 无 `<line>`、有 `clk-lift-hour` + `clk-hub`。`/tmp/r10a-clock-house-l2.png`。
 
-### N-16 adventure-king 走廊引擎三态 ✅（勿混 N-30）
+### N-39 守门测试（代码已在主干）
 
-- **坏在哪**:`clamp(cssW×0.9, 250, 430)` 在 915 宽给出 430，键排整排线下。闯关 / 无尽遗迹 / 计时速通共用 `createRunner`。
-- **怎么修**:抽出 `corridorWantH` / `corridorCanvasCssH` / `measureClipRoomPx`（量不到裁切祖先则原样 want）。矮横屏 `.ak-pad` sticky、收 `.ak-tip`。古堡仍只 `advk-shell`，走廊不挂。
-- **测试**:`corridorFit.test.ts`：915 宽 want=430，room 300 / below 108 → 188；`createRunner` 接线；古堡类名未混。
+- `level99.r10.test.ts`：初次 `showMap(true)`、三处回地图 true、切章 false、聚焦路径不写 `instanceof HTMLElement`。
+- 浏览器复证 hop-pads 915×412 当前关 top=201 可见可点；回地图同样；1280×800 在屏。`/tmp/r10a-hop-pads-*.png`。
 
-### N-37 加重档（root × pinyin-train 限时 135）✅ 收紧一档
+### L-3
 
-- r9 `:has(.l99-jump)` 抬头仍在。本轮加：`.l99-stage-wrap:has(.l99-jump) .tm-bar` 再收、`.pyt-scene` 72→**44**；`timed.ts` 矮屏条本身也收。无 root 无 `.l99-jump`，72px 基线不动。
-- **测试**:`level99.r9.test.ts` 补两条 CSS 钉子。浏览器 915×412 三票数字交卷时若环境被切走则书面：规则按余量让票，判定/题库零触碰。
+- 先合版已销账。浏览器抽第 4 章 31 格全贴纸。`/tmp/r10a-find-diff-ch4.png`。
 
-### L-2 clock-house 钟面 ✅（真机 `</line>`）
+## 还剩什么
 
-- `clockSVG` 仍被 LEGACY_DIGEST 钉死，继续 faceLift。本轮让 `liftFaceBody` 吃属性乱序 + `></line>` / `></circle>`。`levels.ts` 角度/`data-h`/`data-q` 零触碰。
-- **测试**:faceLift 新增真机序列化例。
+- r10/r11 清单里本拍未接的项以最新 playbook 为准（N-43/N-44 已由其他 A 合入）。
+- 5s timeout 类 AI 用例（bomb-buddies / snake-* / xiangqi 两步杀）与本拍无关，整库拥堵时会红。
 
-### L-3 find-diff 第 4–10 章贴纸 ✅
+## 水位
 
-- `stickers.ts` 扩容（kit 例外）+ `boardArt.ts` 只改头注。门控逻辑、`levels.ts` SHA 零触碰。`READY_THEMES` 扩到十章。查不到用例从 🚀 改为 🤷（火箭已入图集）。
+| 步骤 | 文件 | 用例 |
+|---|---|---|
+| 本拍改动前全库（含并行合入） | 1111 | 19336（5 条 timeout 红，隔离后 2 条仍 timeout） |
+| `npm run build` | 过 | tsc + vite |
+| 本拍新增 | `clockSVG.r10.test.ts` + `level99.r10.test.ts` | 只增不减 |
 
-## 跳过 / 未关
-
-| 编号 | 状态 |
-|------|------|
-| N-33/36/37 抬头/38/34/35/30/收藏册 | r9 已合入，**禁止重做** |
-| N-40/41/42 | 用户点名 **B**，本分支未动 duo-rush / math-farm 竖式 / gold-hook 商店 |
-| 休闲对战动手目录 | 未提交（B 在修） |
-| N-16 浏览器 915 六键 top | 纯函数 + CSS 守门；无头 Chrome 复证若被并行切分支则未留截图 |
-
-## 红线
-
-- 存档 key、题库、判定未改。
-- 测试只增不减。
-- 禁 force。视口主档 915×412。管理员 `kangkang`。
+管理员 `kangkang`；预览 4177；Chrome `/usr/local/bin/google-chrome`。
