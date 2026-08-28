@@ -18,6 +18,7 @@ import { createDuoPair } from "./avatars";
 import { recordRecent } from "./recent";
 import { getLevelExtras, registerLevelExtras, type GuideBook } from "./level188Contract";
 import { loadGuideBook, mountGuide, readCurrentLevel } from "./guide";
+import { watchRootUnlock } from "./rootUnlock";
 import {
   INTRO_HOLD_MS,
   INTRO_LEAVE_MS,
@@ -360,6 +361,9 @@ export function mountGameScreen(
   stage.setAttribute("aria-label", `${game.meta.title} 游戏区`);
   screen.appendChild(stage);
 
+  // 管理员权限开着时,选关地图每次渲染完都把锁定关卡统一解锁(共享一份,不进游戏代码)
+  const stopRootUnlock = watchRootUnlock(stage);
+
   let mounted: { destroy: () => void } | null = null;
   let dialog: DialogHandle | null = null;
   let pauseDialog: DialogHandle | null = null;
@@ -654,6 +658,7 @@ export function mountGameScreen(
   return () => {
     disposed = true;
     window.removeEventListener("keydown", onGlobalKeyDown);
+    stopRootUnlock();
     closeDialog();
     closePause();
     clearIntro();

@@ -12,16 +12,17 @@
 import { showDialog, type DialogHandle } from "./dialogs";
 import {
   ROOT_ADMIN_PHONE,
+  ROOT_DEFAULT_DURATION,
   ROOT_DEFAULT_PASSWORD,
+  ROOT_DURATION_CHOICES,
   ROOT_LOCK_MS,
   ROOT_MAX_WRONG,
-  ROOT_TTL_MS,
   clearRootSession,
   isRootOpen,
+  openRootSession,
   registerRoot12Extras,
-  rootRemainMinutes,
-  rootRemainMs,
-  writeRootSession,
+  rootStatusLine,
+  type RootDurationKey,
   type RootStorageLike
 } from "./root12Contract";
 
@@ -59,11 +60,12 @@ export function rootLockText(remainMs: number): string {
   return `密码连着输错了,先歇 ${sec} 秒再试一次。`;
 }
 
-/** 家长面板旁边显示的一行状态(六年级语气,不写吓人词) */
-export function rootStatusText(nowMs: number = now()): string {
-  const remain = rootRemainMs(nowMs);
-  if (remain <= 0) return "管理员权限已关闭";
-  return `管理员权限已开,还剩 ${rootRemainMinutes(remain)} 分钟`;
+/**
+ * 家长面板旁边显示的一行状态(六年级语气,不写吓人词)。
+ * 永久开启时不再说「还剩 X 分钟」,而是「已永久开启」;文案统一走契约的 rootStatusLine。
+ */
+export function rootStatusText(nowMs: number = now(), storage?: RootStorageLike | null): string {
+  return rootStatusLine(nowMs, storage);
 }
 
 /** 一次密码尝试的结果(弹窗照着它更新界面) */
@@ -83,11 +85,13 @@ export interface RootAttempt {
 /**
  * 判定一次密码输入并更新锁定状态。
  * 密码只在参数里活过这一瞬,不写进任何存储。
+ * duration 是时长选项的 key(30 分钟 / 1 小时 / 4 小时 / 永久),缺省 1 小时。
  */
 export function submitRootPassword(
   password: string,
   nowMs: number = now(),
-  storage?: RootStorageLike | null
+  storage?: RootStorageLike | null,
+  duration: RootDurationKey | string = ROOT_DEFAULT_DURATION
 ): RootAttempt {
   const lockRemain = rootLockRemainMs(nowMs);
   if (lockRemain > 0) {
@@ -102,13 +106,13 @@ export function submitRootPassword(
   if (password === ROOT_DEFAULT_PASSWORD) {
     wrongCount = 0;
     lockUntil = 0;
-    writeRootSession(nowMs + ROOT_TTL_MS, storage);
+    openRootSession(nowMs, duration, storage);
     return {
       ok: true,
       opened: true,
       locked: false,
       lockRemainMs: 0,
-      tip: rootStatusText(nowMs)
+      tip: rootStatusText(nowMs, storage)
     };
   }
   wrongCount++;
@@ -138,6 +142,13 @@ export interface RootDialogButton {
   label: string;
 }
 
+/** 弹窗里的一个时长选项(默认 1 小时被选中) */
+export interface RootDialogDuration {
+  key: RootDurationKey;
+  label: string;
+  selected: boolean;
+}
+
 /** 弹窗内容清单:DOM 层照着画,测试层照着断言 */
 export interface RootDialogSpec {
   title: string;
@@ -147,6 +158,9 @@ export interface RootDialogSpec {
   /** 密码框类型,永远是 password */
   inputType: "password";
   inputLabel: string;
+  /** 「开多久」的选项,默认选中 1 小时,最后一项是永久 */
+  durations: RootDialogDuration[];
+  durationLabel: string;
   buttons: RootDialogButton[];
   /** 锁定期间输入框与「打开」都要禁用 */
   inputDisabled: boolean;
@@ -167,13 +181,19 @@ export function rootDialogSpec(
   if (opened) buttons.push({ key: "close", label: "关闭管理员权限" });
   return {
     title: "管理员权限",
-    desc: `${reason}。输入管理员密码就能打开,打开后一小时自动关闭。`,
+    desc: `${reason}。输入管理员密码、选好开多久就能打开;打开期间所有关卡都能玩。`,
     phoneLine: ROOT_CONTACT_LINE,
     inputType: "password",
     inputLabel: "管理员密码",
+    durations: ROOT_DURATION_CHOICES.map((c) => ({
+      key: c.key,
+      label: c.label,
+      selected: c.key === ROOT_DEFAULT_DURATION
+    })),
+    durationLabel: "开多久",
     buttons,
     inputDisabled: lockRemain > 0,
-    tip: lockRemain > 0 ? rootLockText(lockRemain) : opened ? rootStatusText(nowMs) : ""
+    tip: lockRemain > 0 ? rootLockText(lockRemain) : opened ? rootStatusText(nowMs, storage) : ""
   };
 }
 
@@ -204,6 +224,13 @@ const ROOT_GATE_CSS = `
 .rootgate-input{min-height:46px;border:3px solid #e6dcf5;border-radius:14px;padding:0 14px;
   font-family:inherit;font-size:17px;font-weight:700;color:#4a3a6b;background:#fff}
 .rootgate-input:disabled{opacity:.55}
+.rootgate-durlabel{margin:0;font-size:15px;font-weight:800;color:#5b4a80}
+.rootgate-durs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.rootgate-dur{min-height:44px;border:2px solid #e6dcf5;border-radius:999px;padding:0 16px;cursor:pointer;
+  font-family:inherit;font-size:15px;font-weight:800;color:#5b4a80;background:#fff}
+.rootgate-dur[aria-pressed="true"]{background:linear-gradient(180deg,#c84483,#ad3a72);
+  border-color:transparent;color:#fff;box-shadow:0 3px 0 #8f2c5c}
+.rootgate-dur:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px}
 .rootgate-tip{margin:0;min-height:20px;font-size:15px;font-weight:800;color:#7a4a96;line-height:1.4}
 .rootgate-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .rootgate-btn{min-height:46px;border:0;border-radius:16px;padding:0 20px;cursor:pointer;
@@ -257,6 +284,30 @@ export function requestRootOpen(reason = "要用管理员权限"): Promise<boole
     input.setAttribute("aria-label", spec.inputLabel);
     input.placeholder = spec.inputLabel;
 
+    // 「开多久」:一排胶囊,默认选中 1 小时,最后一项是永久
+    let durationKey: RootDurationKey = ROOT_DEFAULT_DURATION;
+    const durLabel = document.createElement("p");
+    durLabel.className = "rootgate-durlabel";
+    durLabel.textContent = spec.durationLabel;
+    const durRow = document.createElement("div");
+    durRow.className = "rootgate-durs";
+    durRow.setAttribute("role", "group");
+    durRow.setAttribute("aria-label", spec.durationLabel);
+    const durBtns = new Map<RootDurationKey, HTMLButtonElement>();
+    for (const d of spec.durations) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "rootgate-dur";
+      btn.textContent = d.label;
+      btn.setAttribute("aria-pressed", String(d.selected));
+      btn.addEventListener("click", () => {
+        durationKey = d.key;
+        for (const [key, el] of durBtns) el.setAttribute("aria-pressed", String(key === d.key));
+      });
+      durRow.appendChild(btn);
+      durBtns.set(d.key, btn);
+    }
+
     const tip = document.createElement("p");
     tip.className = "rootgate-tip";
     tip.setAttribute("role", "status");
@@ -276,7 +327,7 @@ export function requestRootOpen(reason = "要用管理员权限"): Promise<boole
       byKey.set(b.key, btn);
     }
 
-    content.append(title, desc, phone, input, tip, row);
+    content.append(title, desc, phone, input, durLabel, durRow, tip, row);
 
     let ticker: ReturnType<typeof setInterval> | null = null;
     let settled = false;
@@ -328,7 +379,7 @@ export function requestRootOpen(reason = "要用管理员权限"): Promise<boole
 
     const submit = (): void => {
       if (settled) return;
-      const attempt = submitRootPassword(input.value, now());
+      const attempt = submitRootPassword(input.value, now(), undefined, durationKey);
       input.value = "";
       if (attempt.ok) {
         finish(true);
