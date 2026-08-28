@@ -221,6 +221,11 @@ const CSS = `
   .bl-roll{padding:10px 20px;}
   .bwl-legend{display:none;}
 }
+@media (max-height:840px) and (min-height:721px){
+  .bl-wrap{gap:5px;}
+  .bl-nudge{position:sticky;bottom:0;z-index:6;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(253,241,246,0),#fdf1f6 40%);}
+}
 @media (prefers-reduced-motion:reduce){
   .bl-btn:active,.bl-roll:active,.bl-pick:active,.bl-nudge button:active{transform:none;}
 }

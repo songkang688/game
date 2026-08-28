@@ -178,10 +178,14 @@ const CSS = `
   .bc-knob{width:36px;height:36px;margin:-18px 0 0 -18px;}
   .bc-acts button{height:44px;width:52px;font-size:11.5px;}
 }
+@media (max-height:840px) and (min-height:721px){
+  .bc-wrap{gap:6px;}
+  .bc-stick{width:92px;height:92px;}
+}
 @media (max-height:500px) and (min-width:640px){
   .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
 }
 @media (prefers-reduced-motion:reduce){

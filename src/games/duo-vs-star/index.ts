@@ -280,6 +280,18 @@ const CSS = `
   .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:58px;gap:4px;}
   .dvs-pad .dvs-padname{width:auto;}
 }
+@media (max-height:840px) and (min-height:521px) and (orientation:landscape){
+  .dvs-arena{
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:8px;
+  }
+  .dvs-bar,.dvs-cards,.dvs-hint{grid-column:1 / -1;}
+  .dvs-canvas{grid-column:2;max-width:100%;}
+  .dvs-pads{
+    grid-column:1 / -1;grid-row:4;display:flex;justify-content:space-between;align-items:center;
+    pointer-events:none;padding:0 4px 8px;background:transparent;
+  }
+  .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:64px;gap:6px;}
+}
 `;
 
 /* ------------------------------------------------------------------ */

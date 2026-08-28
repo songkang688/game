@@ -104,6 +104,9 @@ export const WGD_CSS = `
   .wgd-trace{min-height:0;padding:8px;gap:6px;}
   .wgd-garden{min-height:32px;max-height:10vh;}
 }
+@media (max-height:840px) and (min-height:501px){
+  .wgd-trace{min-height:0;padding:10px;gap:8px;}
+}
 .wgd-fiber{stroke:rgba(190,158,110,.18);stroke-width:.8;fill:none;}
 .wgd-grid-edge{stroke:#d94f4f;stroke-width:2;fill:none;}
 .wgd-grid-line{stroke:rgba(217,79,79,.35);stroke-width:1;stroke-dasharray:4 4;}

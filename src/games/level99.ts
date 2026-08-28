@@ -677,7 +677,7 @@ const L99_CSS = `
     background:#FFF7FB;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(150,130,200,.16);}
 }
 @media (min-width:1000px){
-  .l99-wrap{max-width:820px;}
+  .l99-wrap{max-width:min(960px, 94vw);}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}

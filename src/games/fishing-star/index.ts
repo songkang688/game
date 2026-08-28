@@ -268,6 +268,10 @@ const CSS = `
   .fs-act{padding:11px 20px;font-size:15.5px;}
   .fs-track{height:14px;}
 }
+@media (max-height:840px) and (min-height:721px){
+  .fs-wrap{gap:6px;}
+  .fs-act{min-height:44px;}
+}
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-act:active,.fs-open:active{transform:none;}
 }
