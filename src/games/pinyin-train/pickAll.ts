@@ -8,6 +8,7 @@
 import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
+import { fitQuizHost } from "./fit";
 import type { PickAllTask } from "./levels";
 import { TICKET_CSS, buildScene, classifyToken } from "./scene";
 
@@ -80,7 +81,9 @@ const CSS = `
   .pk-chip{font-size:17px;min-width:64px;min-height:50px;padding:10px 12px;}
   .pk-title{font-size:18px;}
 }
-/* N-35 配方 G:矮横屏舞台左、选票右;380 下限在 412 高档会把票挤下线 */
+/* N-35 配方 G:矮横屏舞台左、选票右;380 下限在 412 高档会把票挤下线。
+   r18(N-94):装不下时的钳高与滚动交给 fitQuizHost(量高、自适应、装得下自动还原),
+   CSS 只负责 sticky 的两端快捷键在卷轴里仍随手可点。 */
 @media (max-height:500px){
   .pk-wrap{min-height:0;padding:8px;gap:6px;}
   .pk-title{font-size:17px;}
@@ -147,6 +150,11 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
   // 火车舞台（纯视觉）：挑对整车后，正确卡片逐一挂厢、鸣笛发车
   const scene = buildScene({ target: task.correct.length });
   wrap.insertBefore(scene.el, wrap.querySelector(".pk-chips"));
+
+  // r18(N-94):挑拣车厢内容 ~320px,915×412 舞台槽位只有 ~190px,390×844 也差 7px,
+  // 「✅ 就挑这些」与反馈行掉在裁切线下且无可滚祖先。复用答题屏同款量高钳位:
+  // 装不下才钳 + 自滚,装得下原样;sticky 的「再听一遍 / 就挑这些」在卷轴里仍随手可点。
+  const fit = fitQuizHost(wrap);
 
   const chipsEl = wrap.querySelector(".pk-chips") as HTMLElement;
   const countEl = wrap.querySelector(".pk-count") as HTMLElement;
@@ -256,6 +264,7 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
       stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      fit.dispose();
       scene.destroy();
       wrap.remove();
     },
