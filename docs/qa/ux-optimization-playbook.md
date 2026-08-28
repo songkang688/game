@@ -1,6 +1,6 @@
 # UX 优化 playbook（学习员 #3 · 技能对照版，零 src 改动）
 
-> **第 15 轮更新（配方轮）**。基线：`origin/game-1.3 = 206d0522`（主干三轮稳，在途无新伤）。本轮产出：**§八 新配方库 R-1…R-6**（scroll-margin 锚定护栏 / auto-fill 关卡格 / container query 试点 / 幽灵热区守门 / overscroll 补全 / ResizeObserver 舞台 fit）——全部锚定仓库真实先例，修 N-100/N-103/N-108/N-124 时直接抄。号池不变：水位 **N-109**，在途拟名 N-117…124，**勿开 N-110…116**；三处双开（顶栏/bubble-aim/l99 竖滚）只等先合版。
+> **第 16 轮更新（配方轮续）**。基线：`origin/game-1.3 = 206d0522`（主干四轮稳）。§八配方库扩到 **R-1…R-10**（新增：安全区左右 inset / dvh 军规 / sticky 失效祖先链判据 / 关卡页负 top 诊断）。号池大事：**新工位 1cd5** 尊重 r21 拟名并从 N-125 续编——**N-125 fruit-slice 菜单卡 / N-126 canvas 返回热区 / N-127 = N-124 扩面 20 款零高度媒体 / N-128 = `.l99-host` 静态守门立号（A）**；其 tester 单已实修 N-121/122/124。e75a 交 r1 报告（自编 PT-1…4，水位 **1194/19496**）。主干水位仍 N-109；**勿开 N-110…116**。
 > **定位**：与 `trio-rN-learn-notes/playbook` 的逐案抽验并行，本文是「模式层」清单。**任务号以主干 r18 playbook（主文+附录）为权威**，本文叠加 U-x 模式层与竖屏首扫。
 > **编号纪律**：本文条目一律用 **U-x**，不占 N 号。⚠️ 撞号仍在发生（A 自编 N-92/93/94、862b 的 r19 改号 N-103…N-107 又撞主干），动手前必看 **§3.0 消歧表**；新伤一律只记「文件+数字」待统编。
 > ⚠️ **U 号撞车**：并行学习员 `docs/ux-iteration-playbook.md`（在途）的 U-1…U-6 与本文定义不同。消歧：先合版为准；引用对方写「**迭代U-x**」，本文写「U-x」。#1（A）领 U-101…，#2（B）领 U-201…。
@@ -71,6 +71,8 @@
 | **5f46 平板横屏 8 连单（第 12 轮新收大户）** | — | 认领：保龄球（**=迭代U-13/N-11，动此三号先对账 5f46**）、飞行棋骰子 sticky（**=迭代U-14**）、记忆翻牌限宽（**=迭代U-16**）、寻找外星朋友 C-6 双栏、暗棋/军旗/金矿 600px 空洞收敛（**=拟名 N-124 断点空洞族首批实修**）、l99 竖滚安全网+地图 680→820（与 4e78 双开）、bubble-aim（与 e75a 双开）、红灯（弃，主干已合） |
 | 独有新伤单（无撞车，先合即定）| — | 9ad5 `7a4f732e` l99 胜负弹层+320 弹窗、`1bdf3287` **全局 button touch-action:manipulation**（动 styles.css——A 独占撞面，A 动壳前先 fetch）；4e78 `7007612f` 幽灵热区（§一）、`e9995575` l99 舞台竖滚（军棋/台球/地产/飞行棋/果堆/英雄卡 stage-wrap 剪死）；b255 `ae99317d` 顶栏 43→67+收藏册安全区；**e75a `8b41214a`**（新工位）bubble-aim 竖屏解锁触摸滚动+ba/cs 平板地图画布放宽——**与本文 §四 U-5 抽查名单撞面**，先合则 U-5 只剩 brave-path |
 | 学习优化-C 647a（r3 `b6c139e5`） | U-7…U-21 | 番号撞车持续，引用冠「迭代U-x」。r3 新九伤**全 B 面**：U-13 bowling CTA（P0，**疑与 N-11 同伤，动手先并号**）、U-14 flight-chess 掷骰（P0）、U-18 match-stars 消除盘（P0）、U-15 hero-cards、U-16 memory 网格+模式键 36、**U-17 puzzle-tiles——已被主干定名 N-108（并号，引用用 N-108）**、U-19 sky-squad D-pad 38–42（疑与 N-46/N-56 同伤）、U-20 prince-princess 平板、U-21 mine-garden（自注若 r14 有号则并号）。其 U-6/U-8 已自并入 N-105/C-5。**同族配方「网格高度反推钳」**：aspect-ratio:1 网格在矮横屏按宽膨胀顶穿舞台——C-5/U-16/N-108/U-18/U-21 五款一个配方连修 |
+| **1cd5 新工位（第 16 轮新收）** | N-125…N-128 + 实修 N-121/122/124 | **编号纪律最佳**：尊重 r21 拟名从 N-125 续编（学习单 `08076ffd`）。N-125 fruit-slice 矮横屏菜单卡<44（B）、N-126 canvas 内返回热区未走 touchArea 配方（B）、N-127 = N-124 扩面「20 款零高度媒体」（A+B）、**N-128 = `.l99-host` 溢出静态守门立号（A；即 §6.9 第 3 条，系统病第 5 次点名）**。tester 单 `2220e869` 实修 N-121/122/124（merge-2048/shoot-range 等）——与 9ad5 模式键四款**不同款不撞**，可共存 |
+| e75a `b0a0a22e`（第 16 轮新收） | PT-1…PT-4 | 又一套自编号（`pt-portrait-tablet-r1.md` 竖屏/平板走查报告，水位 1194/19496）+ N-105 抢修（弃，主干已合）；引用冠「PT-x」，并号交学习员统编 |
 
 ### 3.1 号池现状（任务归属与独占文件以 `trio-r18-playbook.md` 为准）
 
@@ -218,6 +220,9 @@
 | 另路 A 4e78 `832dc1f0`+`6a533420`（第 13 轮新收） | 顶栏游戏名 3px 缝修复（攻略钮藏字留图标、热区/aria 不变）；**r18 测试员 A 报告交卷**（390/915 全链路） | 在途；顶栏与 b255 双开（§3.0）；报告先合则 A 面 390/915 账以其为底 |
 | 9ad5 `abe8ad03`（第 13 轮新收） | merge 主干（撞车取先合版），r2 底座就绪 | 在途；#2 r2 从此基开工 |
 | 5f46 `50a91a5d`（第 14 轮新收） | bubble-aim classList→className 拼接，测试桩假元素不再崩 | 在途；bubble-aim 双开侧的兼容追补 |
+| 1cd5 `2220e869`+`08076ffd`（第 16 轮新收） | 实修 N-121/122/124（merge-2048/shoot-range 等平板中间档+模式键）；r22 笔记开 N-125…N-128 | 在途；编号纪律最佳，N-128 静态守门立号给 A |
+| e75a `b0a0a22e`（第 16 轮新收） | 竖屏/平板全量走查 r1 报告 PT-1…4；**水位 1194/19496**（新基准） | 在途；PT-x 待统编；N-105 抢修弃 |
+| 5f46 `a703e1f8`（第 16 轮新收） | 保龄球去 `instanceof HTMLElement`（**桩环境没有 HTMLElement 会炸关**）、settle rAF 入 destroy 账 | 在途；工装教训入 §八 R-9 附注 |
 
 ### 6.9 可达性判据与 UI 门回归（第 11 轮新增，r19 收口军规）
 
@@ -225,7 +230,7 @@
 - **回归走 UI 门**：脚本 `btn.click()` 不受视口裁切影响，会漏「门自己出屏」类伤（N-109 漏报即此因）。root 解锁等门类流程回归一律走真 UI（🔑 → 输入 → 打开），顺手验 storage 无残留。
 - **壳层静态断言**（A 侧建议项）：`.l99-host` hidden 已第 4 次复发（N-75→N-98→N-101→N-108）——补「直系内容 scrollHeight > clientHeight 时必须存在可滚层或 fixed 底栏」的守门断言，比逐游戏修省力。
 
-## 七、第 15 轮给 #1/#2 的可勾选执行清单（新配方挂钩）
+## 七、第 16 轮给 #1/#2 的可勾选执行清单（配方挂钩续）
 
 任务号与独占以主干 r18/r19 playbook + 迭代 playbook（PR #83）为权威；**动手前先读 §3.0（已合清仓+封存）与 §6.9 可达性判据**。**已合只回归**：红灯 N-105、N-12/N-10/N-3、N-55/N-81、C-8、N-90 判定线——再写新份 = 打回。**仍封存**：N-99 数独（三路）、N-100 误滚（两路）、bubble-aim（e75a vs 5f46）、l99 竖滚（4e78 vs 5f46）、**顶栏游戏名挤扁（b255 vs 4e78，本轮新双开）**、模式键+胜负弹层（9ad5 交卷待合）。视口红线：**390×844 划到底 + 915×412 不裁切**，切底伤加测 1024×768。
 
@@ -235,11 +240,12 @@
 - [ ] **顶栏挤扁勿三开**：b255/4e78 两版在途（§3.0 新条）——动顶栏前先对账，只等先合版；另路 A 报告 `6a533420` 先合则 390/915 壳层账以其为底
 - [ ] **N-100 验收面升级**：修法**优先走 §八 R-1**（`.l99-node` 加 scroll-margin-block 一行，比 JS 校正稳），验收 17 款跑循环脚本（清单在 `trio-r19-learn-notes.md` §四）；b255 部分修复若先合只补残余页签面
 - [ ] **封存项零动作**：N-99 先对账 4e78/b255；动 styles.css 前先 fetch 9ad5（touch-action 已交卷待合）
-- [ ] **空白项**：N-97 math-farm 深关选项 416 → 拟名 N-123 首页平板 hero（首卡 557→≤500，只加档）→ 幽灵热区按 **§八 R-4**（断言片段+`rg "inset:0"` 静态粗筛全仓跑一遍）→ **壳层静态断言**（§6.9 第 3 条，根治 `.l99-host` 四次复发）
+- [ ] **空白项**：N-97 math-farm 深关选项 416 → 拟名 N-123 首页平板 hero（首卡 557→≤500，只加档）→ 幽灵热区按 **§八 R-4**（断言片段+`rg "inset:0"` 静态粗筛全仓跑一遍）→ **N-128 壳层静态守门**（1cd5 已立号，即 §6.9 第 3 条+R-9 修法阶梯③——A 的正式任务不再是建议项）
+- [ ] **N-127（=N-124 扩面）A 份**：「20 款零高度媒体」清单在 1cd5 r22 笔记——壳层能救的（R-3 container query 底座）A 出；逐款救济档 B 出，勿交叉
 - [ ] 拟名 N-117/N-118 壳层族：5f46 已带地图 680→820——对账后只做页签收纳（N-117）不重做密度；N-120 pan-y 对账 4e78/5f46 竖滚安全网
 - [ ] 结案落账：N-60/61/62/N-90/N-91 回归数字（禁再修）；降级台账 3 项不占必修位
-- [ ] U-101 竖屏首扫；U-2 横屏左右安全区（`styles.css:261`）
-- [ ] 交卷：水位只增不减 + 红灯守门保持绿；🟡/🔧 按 §6.9 分开列；报告进当轮 tester-A 文件
+- [ ] U-101 竖屏首扫；U-2 横屏左右安全区（**修法照 §八 R-7**，overlay 先例照抄）
+- [ ] 交卷：水位只增不减（新基准 **1194/19496**，e75a 报告）+ 红灯守门保持绿；🟡/🔧 按 §6.9 分开列；报告进当轮 tester-A 文件
 
 **#2（B 休闲对战，r2 进行中，底座已同步 `abe8ad03`）**——按序执行：
 
@@ -247,6 +253,7 @@
 - [ ] **r2 以 N-108 领跑**：puzzle-tiles 拼块滚不到（钳拼块边长或 `.pz-board` 内滚——内滚方案按 **§八 R-5** 同行补 overscroll；+热区尾款五件套 `.pz-back`30/`.pzt-eye`32/`.pzt-undo`32/`.pz-hint`34/`.pz-open`38；勿改打乱 seed/判定；=迭代U-17 已并号）
 - [ ] **后续必修（按序）**：N-98 hue-hand → N-95 xiangqi 设置屏（阻断级；滚动盒按 R-5）→ N-94 dvs 选人 → N-101 dvs 赛中 14 键（同目录连修）→ **N-107 fruit-stack 六键**（最重）→ N-96 bomb-buddies → N-106 monster-crisis 摇杆 → N-102 bumper → **N-103 ice-fire（试点 §八 R-3 container query，成了就是 33 款 N-124 的模板）** → N-104 landlord h33
 - [ ] **647a 九伤剩余（先对账 5f46 再动）**：保龄球/飞行棋/记忆翻牌 5f46 已认领**勿双开**；仍空白的：迭代U-18 match-stars 盘（P0）、U-15 hero-cards、U-20 prince-princess、U-21 mine-garden（先并号 r14）、U-19 sky-squad（对账 N-46/N-56）；网格同族走「高度反推钳」配方
+- [ ] **1cd5 新号 B 份**：N-125 fruit-slice 矮横屏菜单卡 <44、N-126 canvas 内返回热区走 touchArea 配方——1cd5 tester 单已在修 N-121/122/124 相邻面，**动手前 fetch 其分支对账勿撞款**；sticky 类修法先过 §八 R-9 判据
 - [ ] 已合回归落账：N-12/N-10/N-3（N-3 补平板档数字）、N-55/N-81、C-8（SKY_H 未动）各留两档数字；9efa 残余单 `20fcbec4` 先合则台球/地产回归以其为底
 - [ ] U-201 竖屏首扫；U-5 选关格抽查（bubble-aim 只等先合，剩 brave-path/candy-swing——**过小就按 §八 R-2 改 auto-fill**，省整组媒体查询）；U-6 reduced-motion
 - [ ] 交卷：水位只增不减；每条两档数字（切底伤加 1024×768）；🟡/🔧 分开列；报告进当轮 tester-B 文件
@@ -289,3 +296,27 @@
 - **先例**：duo-rush / ice-fire-forest / puff-bros / sling-birds 已用 `ResizeObserver`；duo-rush `domStub.ts` 有现成测试桩。
 - **缺口**：多数游戏 fit 逻辑挂 `window.resize`——**壳层收窄但视口不变时不触发**（N-89 收壳后各游戏没跟着重排、5f46 保龄球「扣自家 HUD 实测高」全是这个病）。
 - **配方**：新写/重写 fit 时观察 `.l99-stage`（或游戏自己的舞台节点）尺寸而非 window；测试抄 duo-rush 的桩。与 R-3 二选一或叠加：CSS 能表达的用 R-3，要算像素的用 R-6。
+
+### R-7 横屏左右安全区（U-2 落地配方，第 16 轮补锚）
+
+- **先例（仓库唯一四边写法）**：`styles.css:3298-3299` `.overlay` 弹窗——`padding: max(20px, env(safe-area-inset-top,0px)) max(20px, env(safe-area-inset-right,0px)) …` 四边全包。
+- **病灶**：`styles.css:261` `.screen` 的水平 padding 是裸 `clamp(14px,4vw,32px)`，无 env()——iPhone 横屏刘海带会吃掉返回/暂停钮（U-2 的病）。
+- **配方**：照 overlay 先例改 `padding-inline: max(clamp(14px,4vw,32px), env(safe-area-inset-left,0px)) max(clamp(14px,4vw,32px), env(safe-area-inset-right,0px))`。无 inset 的浏览器 `max()` 落回原值，桌面布局零变。验收：DevTools iPhone 15 Pro 横屏模拟 + 1280×800 截图零 diff。
+
+### R-8 dvh 军规（100vh 禁令）
+
+- **现状（好消息）**：壳层已是 dvh 口径——`styles.css:63` `min-height:100dvh`、`843-844` `.game-screen{height:100dvh;max-height:100dvh}`；且 **src/games 内 100vh 现存 0 处**。
+- **军规**：保持零。游戏内联 CSS **禁写 `100vh`**（iOS Safari 地址栏收展时 100vh 比可视高多 ~60px，底部控制排必被切）；要视口高用 `dvh`（跟随收展）或 `svh`（保守恒小）；**更优先**：别用视口单位，改 `stagePlayRoom()` / R-6 按舞台余高算。守门：`rg "100vh" src/games` 应恒为空，可加进 lint 脚本。
+
+### R-9 sticky 失效祖先链判据（N-75/N-98 族四次复发的固化诊断）
+
+- **病灶链（全部行号）**：`level99.ts:661` `.game-stage--l99{overflow-y:hidden}` → `:662` `.l99-host{overflow:hidden}` → `:597` `.l99-stage-wrap{overflow:hidden}` → `:605` `.l99-stage{overflow:hidden}`——**四层 hidden**。sticky 只相对「最近可滚动祖先」生效；祖先全 hidden 时 `position:sticky;bottom:0`（如 hue-hand `index.ts:318` `.hh-btns`）**等于 static**，按钮随内容出屏。
+- **判据**：sticky 不粘时逐层向上查 `getComputedStyle(el).overflowY`——第一个非 visible 的祖先若是 hidden 且 scrollHeight>clientHeight，就是凶手。
+- **修法阶梯**：① 中间层有条件改 `overflow-y:auto` 让 sticky 有效（同行补 R-5）；② 改不动就 `position:fixed` 钉视口底 + `safeBottom()` 垫底（N-75/N-81 配方）；③ 根治靠 **N-128 静态守门**（1cd5 已立号给 A）。
+- **工装附注（5f46 `a703e1f8` 教训）**：游戏代码勿写 `instanceof HTMLElement`——测试桩环境没有该全局，直接炸关；改鸭子判断（`"getBoundingClientRect" in el`）。
+
+### R-10 关卡页负 top 诊断（N-100 族的「谁滚的」三步定位）
+
+- **先例**：`level99.ts:994` `scrollIntoView({block:"center"})` 是滚动源；`:1002-1013` 是 N-63 修复——事后把 `.game-stage` 祖先链的 `scrollTop` 归零（`p.scrollTop > 0 → = 0`）。
+- **诊断三步**：① 进地图后量抬头条 `getBoundingClientRect().top`，负值即卷顶；② 照 `:1002` 的写法沿 `parentElement` 链打印所有 `scrollTop>0` 的容器——**滚错容器**（`.game-stage` 被滚 = N-63 复发）还是**滚对容器但 center 过头**（`.l99-view` 内 N-100）；③ 前者恢复归零逻辑，后者用 **R-1 scroll-margin**（勿再写第三套 JS 校正）。
+- **护栏**：b255「当前关整格可见时不滚」逻辑与 R-1 叠加不冲突；页签折行款修完跑 r19 §四 17 款清单。
