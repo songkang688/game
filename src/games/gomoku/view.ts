@@ -177,6 +177,19 @@ export const CSS = `
   .gmk-panel .gmk-tierblurb{min-height:0;max-height:2.2em;overflow:hidden;}
   .gmk-panel{gap:8px;}
 }
+/* N-83 r17:闯关对局 248 盘底仍到 510(出屏 98),sticky 工具叠在盘面上。
+   矮横屏对局态改「盘左、座位+工具右」,盘宽按剩余高度钳;设置页(:has(.gmk-start))不动 N-67 */
+@media (min-width:700px) and (max-height:500px){
+  .gmk-wrap:not(:has(.gmk-start)){max-width:none;display:grid;grid-template-columns:auto 168px;
+    column-gap:10px;justify-content:center;align-items:start;}
+  .gmk-wrap:not(:has(.gmk-start)) .gmk-top{grid-column:1 / -1;grid-row:1;margin-bottom:4px;justify-content:center;}
+  .gmk-wrap:not(:has(.gmk-start)) .gmk-boardbox{grid-column:1;grid-row:2 / span 3;width:min(240px,52dvh);}
+  .gmk-wrap:not(:has(.gmk-start)) .gmk-seats{grid-column:2;grid-row:2;flex-direction:column;gap:6px;margin-bottom:0;}
+  .gmk-wrap:not(:has(.gmk-start)) .gmk-btns{grid-column:2;grid-row:3;position:static;margin-top:6px;padding:0;}
+  .gmk-wrap:not(:has(.gmk-start)) .gmk-btns button{min-width:64px;min-height:${MIN_HIT_PX}px;padding:8px 4px;font-size:14px;}
+  .gmk-wrap:not(:has(.gmk-start)) .gmk-msg{grid-column:2;grid-row:4;}
+  .gmk-wrap:not(:has(.gmk-start)) .gmk-claimbar{grid-column:1 / -1;grid-row:5;margin-top:2px;}
+}
 @media (prefers-reduced-motion:reduce){
   .gmk-badge.gmk-think{animation:none;}
   .gmk-seat.gmk-seat-on .gmk-seat-ico{animation:none;}
