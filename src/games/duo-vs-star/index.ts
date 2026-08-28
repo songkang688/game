@@ -176,7 +176,7 @@ const CSS = `
 .dvs-sub{text-align:center;font-size:13.5px;font-weight:700;color:#7b6aa0;line-height:1.6;margin:0 0 10px;}
 .dvs-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;}
 .dvs-mode{border:none;border-radius:16px;padding:13px 10px;cursor:pointer;font-family:inherit;text-align:left;
-  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);}
+  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);min-height:44px;}
 .dvs-mode:active{transform:translateY(2px);}
 .dvs-mode b{display:block;font-size:15.5px;color:#6b4a94;margin-bottom:3px;}
 .dvs-mode span{display:block;font-size:12.5px;color:#8a7aa6;line-height:1.5;}
@@ -227,7 +227,7 @@ const CSS = `
 .dvs-padname{font-size:11.5px;font-weight:900;color:#8a7aa6;width:100%;text-align:center;}
 .dvs-lesson{display:grid;gap:8px;margin-top:6px;}
 .dvs-lessonbtn{border:none;border-radius:16px;padding:11px 12px;cursor:pointer;font-family:inherit;text-align:left;
-  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);}
+  background:#fff;box-shadow:0 4px 10px rgba(150,120,190,.18);min-height:44px;}
 .dvs-lessonbtn b{display:block;font-size:15px;color:#6b4a94;margin-bottom:3px;}
 .dvs-lessonbtn span{display:block;font-size:12.5px;color:#8a7aa6;line-height:1.5;}
 .dvs-lessonbtn:active{transform:translateY(2px);}
