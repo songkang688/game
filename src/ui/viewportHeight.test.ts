@@ -18,6 +18,8 @@ describe("壳层 visualViewport / 安全区", () => {
   it("继续/返回躲开刘海与底部手势条", () => {
     expect(CSS).toContain("padding-bottom: max(14px, env(safe-area-inset-bottom, 0px))");
     expect(CSS).toContain("padding-left: max(clamp(14px, 4vw, 32px), env(safe-area-inset-left, 0px))");
+    expect(CSS).toContain("padding-right: max(clamp(14px, 4vw, 32px), env(safe-area-inset-right, 0px))");
+    expect(CSS).toMatch(/@media \(max-height: 560px\)[\s\S]*?padding-bottom: max\(8px, env\(safe-area-inset-bottom, 0px\)\)/);
     expect(L99).toMatch(/\.l99-continue\{[^}]*min-height:44px/);
     expect(L99).toMatch(/\.l99-back\{[^}]*min-height:44px/);
   });
