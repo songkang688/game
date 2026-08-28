@@ -74,4 +74,13 @@ describe("S-1 首页首屏媒体查询", () => {
     expect(CSS).toContain("@media (max-width: 480px)");
     expect(CSS).toContain("@media (max-height: 500px)");
   });
+
+  it("U-4 平板横屏收副标题与共N款,筛选并排,热区不降", () => {
+    const tablet = mediaBlock("(min-width: 700px) and (max-height: 840px) and (min-height: 501px)");
+    expect(tablet).toMatch(/\.home-screen \.hero-bubble span\s*\{\s*display:\s*none/);
+    expect(tablet).toMatch(/\.home-screen \.home-count\s*\{\s*display:\s*none/);
+    expect(tablet).toMatch(/display:\s*inline-flex/);
+    const heights = [...tablet.matchAll(/min-height:\s*(\d+)px/g)].map((m) => Number(m[1]));
+    for (const px of heights) expect(px).toBeGreaterThanOrEqual(44);
+  });
 });
