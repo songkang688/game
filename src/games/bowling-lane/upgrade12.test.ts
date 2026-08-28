@@ -627,6 +627,6 @@ describe("360px 版面:热区、字号与横向可滑", () => {
   it("窄屏 / 矮屏两档 @media 都还在,只是不再拿热区和字号开刀", () => {
     expect(css).toContain("@media (max-width:420px)");
     expect(css).toContain("@media (max-height:720px)");
-    expect(css).toMatch(/window\.innerHeight \|\| 700\) - 386/);
+    expect(css).toContain("stagePlayRoom");
   });
 });

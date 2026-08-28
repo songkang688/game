@@ -25,6 +25,7 @@ import {
 import { getLevelExtras } from "../../ui/level188Contract";
 import { stopSpeaking } from "../speech";
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import GUIDE from "./guide";
 import {
   AI_LABEL,
@@ -789,10 +790,9 @@ function createMatch(host: HTMLElement, opts: MatchOpts): Runner {
   function layout(): void {
     const wide = (globalThis as { innerWidth?: number }).innerWidth ?? 400;
     const avail = Math.max(MIN_CELL_PX * board.w, Math.min(host.clientWidth || wide, 620));
-    const viewH = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
-    // 高度不够就只能让棋盘小一点,但**不允许**把格子压到 24px 以下 ——
-    // 宁可这一屏挤一挤,也不能让孩子看不清脚下那格是砖还是泡泡。
-    const maxH = Math.max(MIN_CELL_PX * board.h, roomForBoard(viewH));
+    const guessed = (globalThis as { innerHeight?: number }).innerHeight ?? 700;
+    const roomH = Math.max(MIN_CELL_PX * board.h, stagePlayRoom(host, { w: avail, h: guessed }).h);
+    const maxH = Math.max(MIN_CELL_PX * board.h, roomForBoard(guessed), roomH);
     cell = boardCellSize(board.w, board.h, avail, maxH);
     const cssW = cell * board.w;
     const cssH = cell * board.h;
