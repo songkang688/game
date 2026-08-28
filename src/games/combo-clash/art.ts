@@ -24,9 +24,8 @@ function fin(n: unknown): n is number {
 
 /** `#rrggbb` + 透明度 → `rgba()`;非法 hex 原样返回,不抛 */
 function rgba(hex: string, a: number): string {
-  const c = hexToRgb(hex);
-  if (!c) return hex;
-  return `rgba(${c.r},${c.g},${c.b},${a})`;
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
 /** 负数也回得来的取模(视差平铺用) */

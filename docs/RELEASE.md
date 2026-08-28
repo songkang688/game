@@ -16,7 +16,7 @@
 ## 一次发版的完整步骤
 
 1. **对齐版本号。** `package.json` 里的 `version` 必须和要打的 tag 去掉 `v` 之后完全一致
-   ——比如 tag `v1.3.2` 对应 `"version": "1.3.2"`。
+   ——比如 tag `v1.3.3` 对应 `"version": "1.3.3"`。
    工作流第一步就会校验这一条,对不上直接失败,不会出包(否则文件名里的版本会和 Release 对不上)。
 
 2. **确认要发的提交已经在远端分支上**,本地跑一遍 `npm test -- --testTimeout=30000 && npm run build` 心里有底。
@@ -26,8 +26,8 @@
    ```bash
    git fetch origin game-1.3
    git checkout game-1.3 && git pull origin game-1.3
-   git tag -a v1.3.2 -m "一朵一星 1.3.2"
-   git push origin v1.3.2
+   git tag -a v1.3.3 -m "一朵一星 1.3.3"
+   git push origin v1.3.3
    ```
 
    > tag 一律用 `-a`(annotated,带作者和说明),不要用轻量 tag。
@@ -42,7 +42,7 @@
    ```
 
 5. 全绿之后,Release 页会出现在
-   `https://github.com/songkang688/game/releases/tag/v1.3.2`,资产就是上面三个包。
+   `https://github.com/songkang688/game/releases/tag/v1.3.3`,资产就是上面三个包。
    这是正式 1.3 线,工作流里 `make_latest: true`,会成为 Latest。
 
 ## 工作流里都有什么

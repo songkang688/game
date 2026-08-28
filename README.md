@@ -183,7 +183,7 @@ npm run build      # 类型检查 + 构建到 dist/
 npm run preview    # 本地预览构建产物
 ```
 
-当前版本号 **1.3.2**（`package.json`）。开发线在分支 `game-1.3`。
+当前版本号 **1.3.3**（`package.json`）。开发线在分支 `game-1.3`。
 
 ## 📱 手机上安装（PWA）——最简单，推荐
 

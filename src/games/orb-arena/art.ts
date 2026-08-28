@@ -22,9 +22,8 @@ function fin(n: unknown): n is number {
 
 /** `#rrggbb` + 透明度 → `rgba()`;非法 hex 原样返回,不抛 */
 function rgba(hex: string, a: number): string {
-  const c = hexToRgb(hex);
-  if (!c) return hex;
-  return `rgba(${c.r},${c.g},${c.b},${a})`;
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
 /** 标准五角星/N 芒星路径(kit 未导出此原语,这里自备一份纯路径) */

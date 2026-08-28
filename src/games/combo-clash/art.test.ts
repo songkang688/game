@@ -328,8 +328,8 @@ describe("combo-clash · 主题舞台(按 levels 章节查表)", () => {
 
   it("近景土丘三阶光影(1.3 r1 P5):基色 + 顶部亮弧 + 底缘暗带,三主题都齐", () => {
     const asRgba = (hex: string, a: number): string => {
-      const c = hexToRgb(hex);
-      return c ? `rgba(${c.r},${c.g},${c.b},${a})` : hex;
+      const [r, g, b] = hexToRgb(hex);
+      return `rgba(${r},${g},${b},${a})`;
     };
     for (const theme of ["sakura", "night", "candy"] as const) {
       const stub = makeStubCtx();
