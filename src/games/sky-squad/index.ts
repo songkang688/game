@@ -162,7 +162,7 @@ export const CSS = `
 .sks-modebar[hidden]{display:none;}
 .sks-mode{border:none;border-radius:999px;padding:8px 13px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#7FB2FF,#5A8ADD);box-shadow:0 4px 0 #4570B8;
-  white-space:nowrap;flex:none;}
+  white-space:nowrap;flex:none;min-height:44px;}
 .sks-mode.sks-mode-duo{background:linear-gradient(180deg,#F79BB8,#E0729A);box-shadow:0 4px 0 #C25A80;}
 .sks-mode.sks-mode-vs{background:linear-gradient(180deg,#FFC46B,#E79B36);box-shadow:0 4px 0 #C07C1F;}
 .sks-mode:active{transform:translateY(2px);box-shadow:0 2px 0 #4570B8;}
