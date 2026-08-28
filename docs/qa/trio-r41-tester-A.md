@@ -9,3 +9,7 @@
 | N-185 | 静态扫可点 `*-catch` ≥44 或 TOUCH 插值。库内仅 `.hh-catch`（`padding:4px 9px`，无 min-height），走 B 文件白名单。不扫 `.hh-deck` / `.hh-back*` / `.hh-card`。不替代 N-148/184。 |
 
 闸在 `level99.r38.test.ts`。未改 `hue-hand/index.ts`。
+
+## 壳层安全区 / 地址栏（本拍）
+
+`.screen.game-screen`：左右 `max(原 padding, env(safe-area-inset-*))`，底仍 `safe-area-inset-bottom`。顶沿用已有 `.screen { padding-top: max(18px, env(safe-area-inset-top)) }`，刘海不挡「返回」。`--vv-h` 跟 `visualViewport.height`；未注入时 `max-height: 100svh`，避免 390 竖屏地址栏展开后 100dvh 仍按大视口裁 `.l99-view`。不回退 CTA 回卷、平板 wrap 760、N-118。

@@ -61,6 +61,7 @@ body {
 #app,
 .view {
   min-height: 100dvh;
+  min-height: var(--vv-h, 100dvh);
 }
 
 button {
@@ -844,6 +845,26 @@ button {
   max-height: 100dvh;
   min-height: 0;
   padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+}
+
+/* 刘海/横屏圆角：返回钮躲开 inset-left；地址栏用 --vv-h，未注入时 100svh 封顶以免裁 .l99-view */
+.screen.game-screen {
+  padding-left: max(clamp(14px, 4vw, 32px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(14px, 4vw, 32px), env(safe-area-inset-right, 0px));
+  height: var(--vv-h, 100dvh);
+  max-height: var(--vv-h, 100dvh);
+}
+
+@supports (height: 100svh) {
+  .screen.game-screen {
+    max-height: var(--vv-h, 100svh);
+  }
+
+  .view:has(.game-screen) {
+    height: var(--vv-h, 100svh);
+    max-height: var(--vv-h, 100svh);
+    overflow: hidden;
+  }
 }
 
 .game-topbar {
@@ -1711,6 +1732,11 @@ html {
   .screen {
     padding-left: 10px;
     padding-right: 10px;
+  }
+
+  .screen.game-screen {
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
   }
 
   .game-topbar {
