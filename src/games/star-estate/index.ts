@@ -210,6 +210,8 @@ const CSS = `
   font-family:inherit;font-size:16px;font-weight:800;color:#6b4a24;background:#FFF6E6;line-height:1.5;overflow-wrap:anywhere;}
 .se-deed-mort{background:#EFEDF4;color:#6a6478;}
 .se-modebar,.se-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.se-modebar[hidden]{display:none;}
 .se-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#7a5230;text-align:center;overflow-wrap:anywhere;}
 .se-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;
   cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#E9A05C,#CE7F3B);box-shadow:0 4px 0 #A96227;}
@@ -1772,7 +1774,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "先看清这一关的目标，再决定买哪条街。垄断一整条街，租金才真的涨得起来。",
       grandMessage: "188 关全部拿下，朵星地产的招牌就挂你名字了！",
       guideTitle: "朵星地产 · 经营笔记"

@@ -168,6 +168,8 @@ const CSS = `
 .llk-line .llk-dust { filter: drop-shadow(0 0 3px rgba(255,214,120,.8)); }
 .llk-msg { text-align: center; min-height: 22px; color: #8A5A30; font-weight: 700; margin-top: 8px; font-size: 15px; line-height: 1.45; }
 .llk-modebar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
+/* display:flex 会压过 hidden 属性的 UA display:none,进关时模式条要真的让位 */
+.llk-modebar[hidden] { display: none; }
 .llk-open { border: none; border-radius: 14px; min-height: 44px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #FFE0B8; color: #A05C1E; cursor: pointer; box-shadow: 0 3px 0 #EFC291; }
 .llk-open:active { transform: translateY(1px); box-shadow: 0 2px 0 #EFC291; }
 .llk-back { border: none; border-radius: 14px; min-height: 44px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: #E7E1FA; color: #5B4B8A; cursor: pointer; }

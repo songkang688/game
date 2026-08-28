@@ -283,6 +283,8 @@ export const WQ_CSS = `
 .wq-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(180deg,#FBF7EE,#F2EFE6);
   border-radius:16px;padding:10px;user-select:none;-webkit-user-select:none;}
 .wq-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.wq-modebar[hidden]{display:none;}
 .wq-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#6A5A42;text-align:center;overflow-wrap:anywhere;}
 .wq-open{border:none;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;font-family:inherit;background:linear-gradient(180deg,#8C7A5B,#6F6047);box-shadow:0 4px 0 #574B38;}
@@ -1618,7 +1620,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 150px,棋盘能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "先数气、再看眼,最后才想劫 —— 这三步能解掉大半的题。",
       grandMessage: "188 关全部走完,九路十三路十九路都拿下啦!",
       guide,

@@ -144,6 +144,8 @@ export const CSS = `
   color:#7A234F;cursor:pointer;box-shadow:0 5px 0 #E890B2;width:100%;font-family:inherit;}
 .xq-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E890B2;}
 .xq-modebar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.xq-modebar[hidden]{display:none;}
 .xq-mode{flex:1 1 150px;min-height:${MIN_HIT_PX}px;border:none;border-radius:16px;padding:12px 8px;font-size:15px;
   font-weight:900;cursor:pointer;font-family:inherit;background:#FFE1EC;color:#A82F63;box-shadow:0 4px 0 #E8A9C4;}
 .xq-mode-streak{background:#FFEFC7;color:#8A5A10;box-shadow:0 4px 0 #E8C97F;}

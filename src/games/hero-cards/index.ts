@@ -132,8 +132,8 @@ export const HC_CSS = `
   line-height:1.4;}
 .hc-log{background:#FFFDFA;border-radius:12px;padding:8px;font-size:16px;font-weight:700;color:#6b5a4a;
   line-height:1.6;min-height:4.8em;max-height:8em;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line;}
-.hc-hand{display:flex;gap:6px;overflow-x:auto;padding:12px 4px 8px;scrollbar-width:none;}
-.hc-hand::-webkit-scrollbar{display:none;}
+/* 手牌抽多了会超一屏,窄屏又摸不到隐形滚动条——直接换行,张张看得见点得着 */
+.hc-hand{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;row-gap:10px;padding:12px 4px 8px;}
 /* 卡面米白纸感(1.3 r1 P8):纯白平涂换纵向纸色渐变,和暖色桌面不再生硬 */
 .hc-card{flex:0 0 auto;width:60px;min-height:84px;border:none;border-radius:9px;background:linear-gradient(180deg,#fffdf8,#f6efe2);cursor:pointer;
   position:relative;font-family:inherit;padding:0;
@@ -181,6 +181,8 @@ export const HC_CSS = `
   background:#FFF6EC;border-radius:10px;padding:4px 10px;}
 .hc-reveal{font-size:var(--mt-body,16px);font-weight:800;color:#7a5238;line-height:1.7;margin-bottom:10px;}
 .hc-modebar,.hc-optbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.hc-modebar[hidden]{display:none;}
 .hc-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#8a5238;text-align:center;overflow-wrap:anywhere;}
 .hc-open{border:none;border-radius:999px;padding:10px 18px;min-height:44px;font-size:15px;font-weight:900;
   color:#fff;cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#EE9A63,#D07540);
@@ -1381,7 +1383,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 100px,牌桌能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "先看清这一关要请谁下桌,再算距离。够不着就先挂武器、先拆坐骑。",
       grandMessage: "188 关残局全部拿下,这张英杰令就归你了!",
       guide

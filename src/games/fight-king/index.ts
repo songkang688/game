@@ -177,6 +177,8 @@ const CSS = `
 .fk-btn-go{background:linear-gradient(180deg,#e0679f,#c8497f);color:#fff;box-shadow:0 4px 0 #a33765;}
 .fk-btn-go:active{box-shadow:0 1px 0 #a33765;}
 .fk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.fk-bar[hidden]{display:none;}
 .fk-picks{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 @media (max-width:520px){.fk-picks{grid-template-columns:1fr;}}
 .fk-pick{background:#fff;border-radius:16px;padding:10px;box-shadow:0 3px 10px rgba(140,120,190,.14);}

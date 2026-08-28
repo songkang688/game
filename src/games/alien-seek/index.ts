@@ -128,6 +128,8 @@ const CSS = `
 .as-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .as-tip{text-align:center;font-size:13px;font-weight:700;color:#6f6390;line-height:1.5;}
 .as-bar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.as-bar[hidden]{display:none;}
 .as-open{border:none;border-radius:999px;padding:9px 16px;font-size:15px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
 .as-open.as-open-vs{background:linear-gradient(180deg,#f08aa8,#d9628a);box-shadow:0 4px 0 #b04a6c;}

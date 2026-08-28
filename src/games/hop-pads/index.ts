@@ -63,6 +63,8 @@ const CSS = `
   -webkit-user-select:none;touch-action:none;display:flex;flex-direction:column;gap:8px;
   background:linear-gradient(180deg,#FFF3E8,#F1F0FF);border-radius:18px;padding:10px;position:relative;}
 .hp-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;}
+/* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
+.hp-bar[hidden]{display:none;}
 .hp-open{border:none;border-radius:16px;min-height:44px;padding:9px 16px;font-size:15px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#fff;background:linear-gradient(180deg,#F2A268,#DB7F42);
   box-shadow:0 4px 0 #B4642F;}
@@ -1587,7 +1589,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // 关内把模式入口收起来:手机上这一条要占约 96px,跳台能整个抬进首屏
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const h = playLevel(stage, ctx);
+        return {
+          destroy() {
+            h?.destroy?.();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: `按住蓄力、松手起跳,踩中${KIND_NAMES.steady}中间的圆心才算完美。掉下去有云朵接着,不怕。`,
       grandMessage: "188 关全部跳完,你就是跳跳台上最稳的那一个!",
       guide: guideBook,
