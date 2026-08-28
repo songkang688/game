@@ -1745,6 +1745,36 @@ html {
   }
 }
 
+/* N-123：1024×768 平板横屏 hero 横向留白收敛；915×412 不命中 min-height:600 */
+@media (min-width: 980px) and (min-height: 600px) {
+  .home-screen .home-hero {
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin: 6px 0 8px;
+  }
+
+  .home-screen .hero-bubble {
+    flex: 1 1 auto;
+    max-width: none;
+    text-align: left;
+    margin-bottom: 0;
+    padding: 12px 20px;
+  }
+
+  .home-screen .hero-bubble::after {
+    left: 36px;
+    transform: rotate(45deg);
+  }
+
+  .home-screen .grid,
+  .home-screen .recent-grid,
+  .home-screen .fav-grid {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  }
+}
+
 /* 手机竖屏常见高度：顶栏收一收，把垂直空间还给舞台 */
 @media (max-height: 740px) {
   .game-screen {

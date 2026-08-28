@@ -69,3 +69,13 @@ describe("S-1 首页首屏媒体查询", () => {
     }
   });
 });
+
+describe("N-123 平板横屏 hero", () => {
+  it("1024×768 命中、915×412 不命中的中间档", () => {
+    expect(CSS).toMatch(/@media \(min-width: 980px\) and \(min-height: 600px\)/);
+    const tablet = mediaBlock("(min-width: 980px) and (min-height: 600px)");
+    expect(tablet).toMatch(/\.home-screen \.home-hero/);
+    expect(tablet).toMatch(/justify-content:\s*space-between/);
+    expect(tablet).toMatch(/minmax\(210px,\s*1fr\)/);
+  });
+});

@@ -561,7 +561,9 @@ const L99_CSS = `
   display:inline-flex;align-items:center;justify-content:center;gap:3px;font-size:14px;font-weight:800;cursor:pointer;
   background:#ffffffb0;color:#6b6b7e;box-shadow:0 2px 5px rgba(140,130,180,.15);font-family:inherit;white-space:nowrap;}
 .l99-tab:not(.l99-tab-on){width:36px;overflow:hidden;}
-.l99-tab.l99-tab-on{padding:0 8px;color:#5a4a80;outline:3px solid #ffffff;box-shadow:0 3px 8px rgba(140,120,200,.3);}
+/* N-119：当前章页签加厚（行内仍刷章节色；只加重描边与投影，不改徽章收纳） */
+.l99-tab.l99-tab-on{padding:0 8px;color:#4a3480;outline:3px solid #ffffff;
+  box-shadow:0 4px 0 rgba(120,80,180,.32),0 8px 16px rgba(140,120,200,.32);}
 .l99-tab.l99-tab-lock{opacity:.55;}
 .l99-tab-emoji{font-size:18px;line-height:1;}
 .l99-tab-name{font-size:13px;font-weight:800;max-width:4.6em;overflow:hidden;text-overflow:ellipsis;}
@@ -583,6 +585,11 @@ const L99_CSS = `
 .l99-star{color:#e3ddef;display:inline-flex;}
 .l99-star svg{display:block;}
 .l99-star-on{color:#ffb937;filter:drop-shadow(0 1px 1px rgba(200,120,0,.35));}
+/* N-119：章节色走节点行内 background；CSS 叠高光。三星用 :has 金边，不改 DOM */
+.l99-node:not(.l99-node-lock):not(.l99-node-skip){
+  box-shadow:inset 0 10px 14px rgba(255,255,255,.46),inset 0 -8px 12px rgba(80,40,120,.08),0 3px 8px rgba(140,130,190,.18);}
+.l99-node:not(.l99-node-lock):not(.l99-node-skip):has(.l99-star:nth-child(3).l99-star-on){
+  box-shadow:inset 0 8px 12px rgba(255,255,255,.4),0 0 0 3px #F2C14A,0 4px 12px rgba(196,140,20,.32);}
 .l99-node-cur{outline:3px solid #ff8fc0;animation:l99pulse 1.4s ease infinite;}
 .l99-node-cur .l99-node-num{color:#b52e72;}
 @keyframes l99pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
