@@ -264,6 +264,11 @@ export const CSS = `
     position:sticky;bottom:0;z-index:5;padding:4px 0 2px;
     background:#FFF2F7ee;
   }
+  /* r12:先锁死本款不把 .game-stage 撑出滚条,100dvh 含壳层会让骰子仍在 525 */
+  .fc-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .fc-boardwrap{max-height:min(200px,42dvh);max-width:min(200px,42dvh,calc(100dvh - 148px));flex:0 1 auto;}
+  .fc-msg{min-height:0;max-height:2.2em;overflow:hidden;}
+  .fc-seats{margin-bottom:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .fc-token,.fc-token-arc{transition:none;}

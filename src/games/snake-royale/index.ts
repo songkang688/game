@@ -128,7 +128,7 @@ export const SR_CSS = `
 .sr-mode{max-width:760px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}
 .sr-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;}
 .sr-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffd9;color:#4f9e6b;box-shadow:0 3px 0 rgba(90,150,110,.3);}
+  font-family:inherit;background:#ffffffd9;color:#4f9e6b;box-shadow:0 3px 0 rgba(90,150,110,.3);min-height:44px;}
 .sr-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(120,170,130,.25);}
 .sr-over-t{font-size:21px;font-weight:900;color:#3f7a52;margin-bottom:8px;}
 .sr-over-s{font-size:16px;font-weight:700;color:#54886a;line-height:1.6;margin-bottom:14px;overflow-wrap:anywhere;}
@@ -147,7 +147,30 @@ export const SR_CSS = `
   .sr-board{max-width:54%;top:60px;}
   .sr-btn{min-width:74px;font-size:14px;padding:0 10px;}
 }
+/* N-61:闯关加速/急停复用双人底栏 */
+@media (max-height:500px){
+  .sr-pad{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(234,247,228,.25),#EAF7E4 40%);}
+  .sr-msg{min-height:0;max-height:1.5em;overflow:hidden;margin-top:4px;}
+}
 `;
+
+export const SR_DUO_PANE_H = 224;
+export const SR_SOLO_PANE_H = 372;
+export const SR_SHORT_PANE_H = 200;
+
+function shortLandscapeH(): boolean {
+  try {
+    return Boolean(globalThis.matchMedia?.("(max-height: 500px)")?.matches);
+  } catch {
+    return false;
+  }
+}
+
+export function snakePaneH(paneCount: number, shortH = shortLandscapeH()): number {
+  if (paneCount > 1) return SR_DUO_PANE_H;
+  return shortH ? SR_SHORT_PANE_H : SR_SOLO_PANE_H;
+}
 
 export interface Owner {
   id: string;
@@ -334,7 +357,7 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
   const canvases: HTMLCanvasElement[] = [];
   const paneCount = Math.max(1, humans.length);
   const paneW = 640;
-  const paneH = paneCount > 1 ? 224 : 372;
+  const paneH = snakePaneH(paneCount);
   for (let i = 0; i < paneCount; i++) {
     const c = document.createElement("canvas");
     c.className = "sr-canvas";

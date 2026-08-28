@@ -266,6 +266,10 @@ const CSS = `
     background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);
     box-shadow:0 -8px 14px rgba(200,170,120,.18);
   }
+  .se-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .se-board-wrap{max-height:min(200px,42dvh);max-width:min(200px,42dvh,calc(100dvh - 140px));flex:0 1 auto;}
+  .se-log{max-height:2.2em;}
+  .se-seats{margin-bottom:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}

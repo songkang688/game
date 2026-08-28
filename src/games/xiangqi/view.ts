@@ -175,6 +175,7 @@ export const CSS = `
 @media (min-width:700px) and (max-height:500px){
   .xq-wrap{max-width:248px;}
   .xq-btns{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(255,248,240,.4),#FFF8F0);}
+  .xq-wrap{max-width:min(248px,52dvh);max-height:100%;overflow:hidden;}
 }
 @media (prefers-reduced-motion:reduce){
   .xq-badge{animation:none;opacity:1;transform:translate(-50%,-50%);}

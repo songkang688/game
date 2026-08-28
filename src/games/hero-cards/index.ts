@@ -219,6 +219,9 @@ export const HC_CSS = `
     position:sticky;bottom:0;z-index:6;margin-top:0;padding:6px 4px 4px;
     background:#FFF8F2;box-shadow:0 -8px 14px rgba(210,160,140,.18);
   }
+  .hc-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;}
+  .hc-log{max-height:2em;}
+  .hc-seats{margin-bottom:4px;}
 }
 @media (prefers-reduced-motion:reduce){
   .hc-fly{display:none;}
