@@ -363,6 +363,10 @@ export const FARM_CSS = `
   .mtf-quizhost:has(.qz-jump) .qz-top { order: 8; }
   .mtf-quizhost:has(.qz-jump) .qz-jump { order: 9; }
 }
+@media (max-height: 840px) {
+  .mtf-quizhost .qz-choices { position: sticky; bottom: 0; z-index: 4;
+    background: linear-gradient(180deg, rgba(255, 252, 255, .35), #fff 45%); }
+}
 
 /* ---- reduced：风车 / 云 / 蜜蜂 / 成长 / 收获动画全停，静态阶段图与反馈色保留 ---- */
 @media (prefers-reduced-motion: reduce) {

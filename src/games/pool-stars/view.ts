@@ -263,6 +263,13 @@ const CSS = `
   .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
   .ps-tip{max-width:340px;}
 }
+@media (min-width:560px) and (max-height:840px){
+  .ps-wrap{display:grid;grid-template-columns:minmax(0,auto) minmax(250px,340px);
+    column-gap:10px;row-gap:5px;justify-content:center;align-items:start;}
+  .ps-hud{grid-column:1 / -1;}
+  .ps-table{grid-column:1;grid-row:2 / span 5;justify-self:end;align-self:center;}
+  .ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;justify-self:center;margin:0;}
+}
 @media (prefers-reduced-motion:reduce){
   .ps-btn:active,.ps-shoot:active{transform:none;}
   .ps-table{transform:none !important;}

@@ -172,6 +172,9 @@ const QUIZ_CSS = `
   .qz-jump-go { min-height: 44px; padding: 8px 16px; }
   .qz-badge { padding: 3px 10px; }
 }
+@media (max-height: 840px) {
+  .qz-choices { position: sticky; bottom: 0; z-index: 3; }
+}
 `;
 
 export function runQuiz(opts: QuizOptions): PlayHandle {

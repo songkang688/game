@@ -125,6 +125,9 @@ const CSS = `
   .llk-board { max-width: min(420px, 78dvh); margin-inline: auto; width: 100%; }
   .llk-msg { min-height: 0; margin-top: 4px; }
 }
+@media (max-height: 840px) {
+  .llk-board { max-width: min(520px, 70dvh); margin-inline: auto; width: 100%; }
+}
 .llk-board.llk-spin { transform: rotate(90deg) scale(.86); }
 /* 麻将砖三层:顶面米白渐变(圆角 10px)+ 底部 3px 暖灰立面 + 1px 软影 */
 .llk-cell { aspect-ratio: 1; border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; position: relative; background-color: var(--llk-tile-top); background-image: linear-gradient(160deg, var(--llk-tile-top), rgba(255,253,246,.24) 46%, rgba(216,203,180,.34) 100%); box-shadow: 0 3px 0 var(--llk-tile-side), 0 4px 5px rgba(140,105,66,.2); transition: transform var(--llk-ms-hover) ease-out, box-shadow var(--llk-ms-hover) ease-out, opacity .2s; }
