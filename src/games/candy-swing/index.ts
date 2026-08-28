@@ -468,7 +468,8 @@ export function mount(api: GameApi): CandySwingHandle {
       /* 平板/横屏:选关地图别缩在 400px 一条窄柱里,两边留白离谱。
          放宽到 720px、每章 8 列;进关后画布是 3:4 定比,仍回到 400px 档(1.3 UX 走查修复) */
       @media (min-width: 700px) {
-        .cs-wrap.cs-view-map { max-width: 720px; }
+        /* 平台舞台是 flex,不写 width 的话 wrap 会缩回内容宽,max-width 白放宽 */
+        .cs-wrap.cs-view-map { max-width: 720px; width: 100%; }
         .cs-wrap.cs-view-map .cs-grid { grid-template-columns: repeat(8, 1fr); }
         .cs-wrap.cs-view-map .cds-modes { max-width: 480px; margin-left: auto; margin-right: auto; }
       }

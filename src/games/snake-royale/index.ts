@@ -119,6 +119,8 @@ export const SR_CSS = `
 .sr-msg{text-align:center;min-height:20px;color:#3f7a52;font-weight:800;margin-top:6px;font-size:16px;
   overflow-wrap:anywhere;line-height:1.5;}
 .sr-modebar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;}
+/* display:flex 会把浏览器自带的 [hidden]{display:none} 顶掉,进关收条全靠这一句 */
+.sr-modebar[hidden]{display:none;}
 .sr-modetip{flex:1 1 100%;margin:0 0 2px;font-size:16px;line-height:1.5;font-weight:700;color:#3f7a52;text-align:center;overflow-wrap:anywhere;}
 .sr-open{border:none;border-radius:999px;padding:9px 18px;min-height:44px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#6fc48b,#4f9e6b);box-shadow:0 4px 0 #3d7d54;}
