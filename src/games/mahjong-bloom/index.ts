@@ -245,8 +245,8 @@ export const MJ_CSS = `
   .mj-wrap{height:100%;max-height:calc(100dvh - 108px);min-height:0;overflow:hidden;
     display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
   .mj-top{margin-bottom:4px;flex:0 0 auto;}
-  /* 字号 16px 红线与「正文不锁 nowrap」都要守住:目标行最多两行,超出可滚 */
-  .mj-goal{flex:0 0 auto;line-height:1.3;max-height:2.7em;overflow:auto;}
+  /* N-105:字号回 16px、解 nowrap(正文守门);高度紧改两行截断,不挤手牌 */
+  .mj-goal{flex:0 0 auto;font-size:16px;line-height:1.3;max-height:2.6em;overflow:hidden;}
   .mj-board{flex:1 1 auto;min-height:0;overflow:hidden;gap:4px;padding:4px;border-width:4px;}
   .mj-river{min-height:28px;max-height:48px;overflow:auto;}
   .mj-foe{min-height:22px;}
