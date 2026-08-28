@@ -8,10 +8,9 @@
 ## 水位
 
 - 进场对账（r8 笔记）: **1090 文件 / 19248 用例**（`77c89fc8`）。
-- 本轮交卷 `npm test`（ vitest run）: **1096 文件 / 19297 用例量级**（相对进场 **+6 文件 / +49 用例** 只增不减；新增 `tracePadFit.test.ts` 及既有文件内断言）。
-- `npm run build`（`tsc --noEmit && vite build`）全绿。
-
-> 全量第一次跑在未修 N-36 断言时记下 1096 files / 19297 tests，其中 2 条是本轮 pad 用例写宽了（已修）；另有 fruit-catch / sudoku-petal 等超时属既有慢测，与本分支无关。针对性重跑本轮触及文件 **10 files / 278 tests 全绿**。
+- 本轮交卷全量 `npx vitest run`:**1096 文件 / 19297 用例**（相对 r8 进场 **+6 文件 / +49 用例**，只增不减）。
+- 其中 1 条 `bomb-buddies/ai.test.ts` 默认 5s 超时偶发（本分支未改该文件）；`--testTimeout=30000` 复跑 **33/33 绿**。本轮触及文件 **10 files / 278 tests 全绿**。
+- `npx tsc --noEmit && npx vite build` 全绿。
 
 ## 修了什么
 
