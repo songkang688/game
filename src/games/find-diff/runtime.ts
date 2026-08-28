@@ -283,6 +283,22 @@ export function panelsSideBySide(viewW: number, viewH: number): boolean {
   return viewW >= 600 && viewW > viewH;
 }
 
+/**
+ * N-68:三图关在真横屏上走单独横排(两张参考 + 可点下图并排),
+ * 不再跟 L-1 的 `rowLayout = !triple && panelsSideBySide` 抢同一条。
+ * 竖屏仍旧上排两张参考、下排可点图。
+ */
+export function triplePanelsRow(viewW: number, viewH: number): boolean {
+  return panelsSideBySide(viewW, viewH);
+}
+
+/** 三栏时按宽摊格:915 宽三块,每块扣掉相框再除列数,下限 26 */
+export function tripleCellPxByWidth(cols: number, viewW: number, max = SMALL_CELL_PX): number {
+  const w = Number.isFinite(viewW) && viewW > 0 ? viewW : 360;
+  const per = Math.floor(w / 3) - 28;
+  return Math.max(26, Math.min(max, Math.floor(per / Math.max(1, cols))));
+}
+
 /** 并排时主棋盘一格的边长:同 `panelCellPx`,但一张图能吃的高度从 40% 提到 62% */
 export function panelCellPxRow(rows: number, viewportHeight: number, max = SMALL_CELL_PX): number {
   const h = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 640;

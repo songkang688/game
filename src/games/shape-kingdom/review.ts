@@ -181,6 +181,7 @@ const REVIEW_CSS = `
   .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-prompt{font-size:20px;min-height:36px;padding:2px 8px;}
   .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-prompt svg,
   .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-prompt img{max-height:40px;}
+  .l99-stage-wrap:has(.l99-jump) .shk-quizhost .qz-choices{position:sticky;bottom:0;z-index:2;}
 }
 `;
 

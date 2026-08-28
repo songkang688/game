@@ -637,6 +637,10 @@ const L99_CSS = `
 /* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
+  /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
+     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
+  .l99-wrap{max-height:calc(100dvh - 136px);}
+  .l99-view{overscroll-behavior:contain;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}
@@ -992,6 +996,17 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
           // 老浏览器不支持 options 就算了
         }
         cur.focus?.();
+        // N-63:scrollIntoView 会连 .game-stage 一起滚,模式条飞到负 top。
+        // 滚条已经交给 .l99-view,舞台顶归零;hop-pads 当前关仍在地图盒里。
+        // 不写 wrap.closest:node 单测桩没有 closest,初次 showMap(true) 会整库红
+        let p: { className?: unknown; scrollTop?: number; parentElement?: unknown } | null = wrap;
+        while (p) {
+          if (typeof p.className === "string" && p.className.includes("game-stage")) {
+            if (typeof p.scrollTop === "number" && p.scrollTop > 0) p.scrollTop = 0;
+            break;
+          }
+          p = (p.parentElement as typeof p) ?? null;
+        }
       }
       // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
       const stageEl = wrap.closest?.(".game-stage") as HTMLElement | null | undefined;

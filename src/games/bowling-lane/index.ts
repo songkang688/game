@@ -162,7 +162,9 @@ const CSS = `
   font-family:inherit;background:#ffffffdd;color:#3f6da8;box-shadow:0 3px 0 rgba(90,120,180,.28);}
 .bl-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(90,120,180,.28);}
 .bl-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
-.bl-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;}
+.bl-bar{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;
+  position:sticky;top:0;z-index:8;padding:4px 0 2px;
+  background:linear-gradient(180deg,#eef4ff,#fdf1f6);}
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
 .bl-bar[hidden],.bl-picks[hidden]{display:none;}
 .bl-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
@@ -172,7 +174,9 @@ const CSS = `
 .bl-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-open--ai{background:linear-gradient(180deg,#6fbfa8,#4c9d86);box-shadow:0 4px 0 #3b7c69;}
 .bl-open--en{background:linear-gradient(180deg,#9a86e4,#7358cc);box-shadow:0 4px 0 #5b43a3;}
-.bl-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.bl-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;
+  position:sticky;top:48px;z-index:7;padding:0 0 4px;
+  background:linear-gradient(180deg,#fdf1f6,#fff8fb);}
 .bl-pick{border:none;border-radius:14px;padding:7px 13px;font-size:13px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffe0;color:#544d7d;box-shadow:0 3px 0 rgba(130,130,190,.35);
   min-height:44px;display:inline-flex;align-items:center;}

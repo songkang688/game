@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { nodeCurFullyVisible } from "./level99";
 
 const SRC = readFileSync(fileURLToPath(new URL("./level99.ts", import.meta.url)), "utf8");
 
@@ -22,5 +23,10 @@ describe("N-63 l99 模式条不跟地图抢 game-stage 卷轴", () => {
     expect(SRC).toContain("unpinL99Host()");
     expect(SRC).toContain('cur.scrollIntoView?.({ block: "center" })');
     expect(SRC).toContain("stageEl.scrollTop = 0");
+  });
+
+  it("hop-pads 当前关尺子仍按整格在 412 内", () => {
+    expect(nodeCurFullyVisible({ top: 201, bottom: 277 }, 412)).toBe(true);
+    expect(nodeCurFullyVisible({ top: -174, bottom: -98 }, 412)).toBe(false);
   });
 });

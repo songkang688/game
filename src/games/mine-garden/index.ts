@@ -390,7 +390,7 @@ export const MN_CSS = `
 .mn-mini[hidden]{display:none;}
 .mn-minitip{text-align:center;font-size:var(--mt-body,16px);font-weight:700;color:#5B7A4C;margin-top:2px;}
 .mn-tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
-.mn-btn{border:none;border-radius:12px;padding:9px 13px;min-height:40px;font-size:14px;font-weight:900;cursor:pointer;
+.mn-btn{border:none;border-radius:12px;padding:9px 13px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#fff;color:#3F6033;box-shadow:0 3px 0 rgba(110,150,90,.32);white-space:nowrap;}
 .mn-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,150,90,.32);}
 .mn-btn.mn-on{background:#DCEFC9;color:#37642A;}

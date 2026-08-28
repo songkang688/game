@@ -62,7 +62,9 @@ const CSS = `
 .hp-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:none;display:flex;flex-direction:column;gap:8px;
   background:linear-gradient(180deg,#FFF3E8,#F1F0FF);border-radius:18px;padding:10px;position:relative;}
-.hp-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;}
+.hp-bar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;
+  position:sticky;top:0;z-index:8;padding:4px 0 2px;
+  background:linear-gradient(180deg,#FFF3E8,#F1F0FF);}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .hp-bar[hidden]{display:none;}
 .hp-open{border:none;border-radius:16px;min-height:44px;padding:9px 16px;font-size:15px;font-weight:900;

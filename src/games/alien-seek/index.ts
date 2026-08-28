@@ -986,6 +986,7 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     deduce ? "推理场景:按线索找出外星小朋友躲在哪个地方" : "找物场景:点出躲着外星小朋友和线索物的地方"
   );
   wrap.appendChild(canvas);
+  if (deduce) wrap.classList.add("as-deduce");
 
   if (deduce) {
     const box = document.createElement("div");
@@ -1026,6 +1027,14 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
       : `${lv.hint} 直接点画面,或用 W A S D + F(方向键 + L 也行)挪光标,Esc 暂停。`;
   wrap.appendChild(tip);
   host.appendChild(wrap);
+  if (deduce) {
+    for (let p: HTMLElement | null = wrap; p; p = p.parentElement) {
+      if (typeof p.className === "string" && p.className.includes("game-stage")) {
+        if (p.scrollTop) p.scrollTop = 0;
+        break;
+      }
+    }
+  }
 
   const c2d = canvas.getContext("2d") as CanvasRenderingContext2D;
 

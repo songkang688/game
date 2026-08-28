@@ -191,7 +191,8 @@ const CSS = `
   padding:4px 10px;box-shadow:0 2px 5px rgba(170,140,110,.18);}
 .advk-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 .advk-tool{border:none;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffdd;color:#7a5230;box-shadow:0 3px 0 rgba(170,140,110,.3);}
+  font-family:inherit;background:#ffffffdd;color:#7a5230;box-shadow:0 3px 0 rgba(170,140,110,.3);
+  min-height:44px;display:inline-flex;align-items:center;}
 .advk-tool:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(170,140,110,.3);}
 .advk-tool:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .advk-mini{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.15;
