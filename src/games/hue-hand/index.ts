@@ -149,7 +149,7 @@ const CSS = `
 .hh-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;user-select:none;
   -webkit-user-select:none;touch-action:manipulation;display:flex;flex-direction:column;gap:8px;
   background:linear-gradient(180deg,#fff4fa,#eef2ff);border-radius:18px;padding:10px;position:relative;overflow:hidden;}
-.hh-banner{text-align:center;font-size:13px;font-weight:900;color:#7a5aa8;line-height:1.5;}
+.hh-banner{text-align:center;font-size:14px;font-weight:900;color:#7a5aa8;line-height:1.5;}
 .hh-colorbar{position:relative;overflow:hidden;border-radius:14px;padding:7px 12px;text-align:center;
   font-size:15px;font-weight:900;color:#fff;text-shadow:0 1px 3px rgba(80,40,80,.4);
   transition:background .32s ease;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
@@ -172,15 +172,15 @@ const CSS = `
 .hh-foe-on{outline:3px solid #ff9ec7;}
 .hh-face{width:34px;height:34px;border-radius:50%;object-fit:cover;background:#f3ecff;
   display:flex;align-items:center;justify-content:center;font-size:20px;border:2px solid #fff;}
-.hh-foe-name{font-size:13px;font-weight:900;color:#5f4a86;text-align:center;line-height:1.3;
+.hh-foe-name{font-size:14px;font-weight:900;color:#5f4a86;text-align:center;line-height:1.3;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
-.hh-count{font-size:13px;font-weight:800;color:#7b6f9a;}
+.hh-count{font-size:14px;font-weight:800;color:#7b6f9a;}
 .hh-backs{display:flex;gap:2px;justify-content:center;min-height:20px;flex-wrap:wrap;}
 .hh-back-c{width:13px;height:19px;display:block;}
-.hh-bubble{font-size:13px;font-weight:900;color:#b8306a;background:#ffe6f0;border-radius:999px;padding:1px 8px;}
+.hh-bubble{font-size:14px;font-weight:900;color:#b8306a;background:#ffe6f0;border-radius:999px;padding:1px 8px;}
 .hh-bubble-in{animation:hhbounce .45s cubic-bezier(.34,1.56,.64,1);}
 @keyframes hhbounce{0%{transform:scale(.2) translateY(8px)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
-.hh-catch{border:none;border-radius:999px;padding:4px 9px;font-size:13px;font-weight:900;cursor:pointer;
+.hh-catch{border:none;border-radius:999px;padding:4px 9px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:linear-gradient(180deg,#ffd36e,#f0ad33);color:#7a4d0b;box-shadow:0 3px 0 #c9922f;}
 .hh-catch:active{transform:translateY(2px);box-shadow:0 1px 0 #c9922f;}
 .hh-table{display:flex;align-items:center;justify-content:center;gap:14px;min-height:104px;position:relative;}
@@ -192,14 +192,14 @@ const CSS = `
 .hh-back-2{transform:translate(3px,2px) rotate(3deg);}
 .hh-back-1{transform:translate(1px,1px) rotate(-2deg);}
 .hh-deck-count{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);z-index:2;white-space:nowrap;
-  background:#fffdf6ee;color:#6a52a0;border-radius:999px;padding:1px 8px;font-size:13px;font-weight:900;
+  background:#fffdf6ee;color:#6a52a0;border-radius:999px;padding:1px 8px;font-size:14px;font-weight:900;
   box-shadow:0 1px 3px rgba(90,70,140,.3);}
 .hh-deck:active .hh-deck-stack{transform:translateY(2px);}
 .hh-deck:disabled{opacity:.55;cursor:default;}
 .hh-heap{position:relative;width:66px;height:96px;}
 .hh-heap .hh-top{position:absolute;inset:0;}
 .hh-heap-c{position:absolute;inset:0;filter:saturate(.85) brightness(.96);}
-.hh-say{font-size:13px;font-weight:800;color:#7d6aa6;text-align:center;line-height:1.5;min-height:19px;}
+.hh-say{font-size:14px;font-weight:800;color:#7d6aa6;text-align:center;line-height:1.5;min-height:21px;}
 .hh-say-oops{color:#c2557f;}
 .hh-card{position:relative;border:none;border-radius:10px;cursor:pointer;padding:0;font-family:inherit;
   background:var(--soft,#fff);box-shadow:0 3px 7px rgba(120,105,160,.32);overflow:hidden;
@@ -246,7 +246,7 @@ const CSS = `
 .hh-one.hh-one-hot{background:linear-gradient(180deg,#ffb45e,#ef7d24);box-shadow:0 4px 0 #c15e10;
   animation-duration:.45s;}
 @keyframes hhcall{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-.hh-keys{font-size:13px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
+.hh-keys{font-size:14px;font-weight:700;color:#8b7ead;text-align:center;line-height:1.6;}
 .hh-fly{position:absolute;z-index:60;pointer-events:none;transition:transform .3s cubic-bezier(.3,.9,.4,1),opacity .3s ease;}
 .hh-fly-arc{animation:hharc .3s ease-out;}
 @keyframes hharc{0%,100%{transform:translateY(0)}45%{transform:translateY(-16px)}}
@@ -282,7 +282,7 @@ const CSS = `
 .hh-goback{border:none;border-radius:999px;padding:8px 13px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   font-family:inherit;background:#ffffffdd;color:#6a52a0;box-shadow:0 3px 0 rgba(120,90,160,.28);}
 .hh-goback:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.28);}
-.hh-chip{background:#ffffffdd;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#6a5892;
+.hh-chip{background:#ffffffdd;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:800;color:#6a5892;
   box-shadow:0 2px 5px rgba(150,140,190,.18);}
 .hh-over{position:relative;overflow:hidden;border-radius:16px;background:#fffdfa;padding:14px;text-align:center;
   display:flex;flex-direction:column;gap:10px;align-items:center;box-shadow:0 3px 10px rgba(160,150,190,.25);}
@@ -293,7 +293,7 @@ const CSS = `
 .hh-rank-win{background:linear-gradient(90deg,#fff3c9,#ffe9f3);box-shadow:0 2px 6px rgba(210,160,90,.3);}
 .hh-rank .hh-face{width:28px;height:28px;font-size:17px;flex:0 0 auto;}
 .hh-rank-name{font-size:14px;font-weight:900;color:#5f4a86;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.hh-rank-note{margin-left:auto;font-size:13px;font-weight:800;color:#7b6f9a;white-space:nowrap;}
+.hh-rank-note{margin-left:auto;font-size:14px;font-weight:800;color:#7b6f9a;white-space:nowrap;}
 .hh-rank-backs{display:flex;gap:2px;}
 .hh-mini{width:11px;height:16px;display:block;line-height:0;}
 .hh-fan{display:flex;}
@@ -307,11 +307,10 @@ const CSS = `
   .hh-wrap{padding:8px;gap:6px;}
   .hh-foe{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;padding:5px 6px;gap:4px;}
   .hh-face{width:26px;height:26px;font-size:15px;}
-  .hh-foe-name{font-size:13px;max-width:64px;}
+  .hh-foe-name{max-width:64px;}
   .hh-backs{flex-basis:100%;justify-content:flex-start;min-height:16px;}
   .hh-btns{gap:5px;}
   .hh-btn{padding:7px 10px;font-size:14px;}
-  .hh-keys{font-size:13px;}
 }
 @media (prefers-reduced-motion:reduce){
   .hh-fly{display:none;}
