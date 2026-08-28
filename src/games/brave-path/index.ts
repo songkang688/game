@@ -213,6 +213,14 @@ const CSS = `
 .bvp-log p:last-child{color:#3f2f66;}
 .bvp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 @media(min-width:480px){.bvp-acts{grid-template-columns:1fr 1fr 1fr;}}
+.bvp-endless-fight .bvp-acts{
+  position:sticky;bottom:0;z-index:6;padding:8px 0 4px;
+  background:linear-gradient(180deg,rgba(246,239,228,0),var(--bvp-floor) 12px);
+  box-shadow:0 -8px 14px rgba(75,58,110,.12);
+}
+@media (max-height:520px){
+  .bvp-endless-fight .bvp-log{max-height:72px;}
+}
 .bvp-act{border:none;border-radius:14px;padding:11px 8px;font-family:inherit;cursor:pointer;text-align:center;
   background:#fff;box-shadow:0 3px 0 rgba(120,95,170,.24);color:var(--bvp-ink);position:relative;overflow:hidden;
   transition:transform .15s ease,box-shadow .15s ease;}
@@ -676,6 +684,7 @@ const EVENT_STEP = 520;
 function mountBattle(host: HTMLElement, opts: BattleOptions): { destroy: () => void } {
   const cleanup = new Cleanup();
   const wrap = el("div");
+  if (opts.onFlee) wrap.className = "bvp-endless-fight";
   host.appendChild(wrap);
 
   let state: CombatState = startCombat(opts.hero, opts.foe);

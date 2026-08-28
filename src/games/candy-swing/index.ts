@@ -404,6 +404,8 @@ export function mount(api: GameApi): CandySwingHandle {
       .cs-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .cs-msg { text-align: center; min-height: 20px; color: #B06AB3; font-weight: 700; margin-top: 8px; font-size: 14px; }
       .cs-hidden { display: none; }
+      .cs-map { max-height: min(960px, max(180px, calc(100dvh - 120px))); overflow-y: auto; }
+      .cs-lv.cs-lv-cur { outline: 3px solid #e0679f; }
       .cs-map-title { text-align: center; font-size: 20px; font-weight: 800; color: #D65C8B; margin: 4px 0 2px; }
       .cs-map-total { text-align: center; font-size: 14px; font-weight: 700; color: #B06AB3; margin-bottom: 10px; }
       .cs-chapter { border-radius: 18px; padding: 10px 12px 12px; margin-bottom: 12px; }
@@ -561,8 +563,10 @@ export function mount(api: GameApi): CandySwingHandle {
         const btn = document.createElement("button");
         btn.type = "button";
         const unlocked = levelUnlocked(i);
-        btn.className = unlocked ? "cs-lv" : "cs-lv locked";
         const got = progress.stars[i];
+        const isCurrent = unlocked && got === 0 && (i === 0 || progress.stars[i - 1] > 0) &&
+          !progress.stars.slice(0, i).some((st, j) => st === 0 && levelUnlocked(j));
+        btn.className = (unlocked ? "cs-lv" : "cs-lv locked") + (isCurrent ? " cs-lv-cur" : "");
         btn.innerHTML = unlocked
           ? `<span class="n">${i + 1}</span><span class="s">${"★".repeat(got)}${"☆".repeat(3 - got)}</span>`
           : `<span class="n">🔒</span><span class="s">&nbsp;</span>`;
@@ -579,6 +583,14 @@ export function mount(api: GameApi): CandySwingHandle {
       box.appendChild(grid);
       chaptersEl.appendChild(box);
     });
+    const cur = chaptersEl.querySelector(".cs-lv-cur") ?? chaptersEl.querySelector(".cs-lv:not(.locked)");
+    if (cur && typeof (cur as { scrollIntoView?: (o: { block: string }) => void }).scrollIntoView === "function") {
+      try {
+        (cur as { scrollIntoView: (o: { block: string }) => void }).scrollIntoView({ block: "center" });
+      } catch {
+        // ignore
+      }
+    }
   }
 
   function showMap(): void {

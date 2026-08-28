@@ -94,8 +94,11 @@ const CSS = `
 .frc-badge { background: #fff; border: 1px solid rgba(220,170,100,.35); border-radius: 14px; padding: 5px 9px; font-weight: 700; color: #D08A3E; box-shadow: 0 2px 6px rgba(220,170,100,.25); font-size: 14px; white-space: nowrap; }
 .frc-bar { height: 10px; background: #fff; border-radius: 8px; overflow: hidden; margin-bottom: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,.08); }
 .frc-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #FFD26E, #FF9E5E); border-radius: 8px; transition: width .3s; }
-.frc-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; }
+.frc-canvas { width: 100%; height: auto; border-radius: 16px; display: block; touch-action: none; }
 .frc-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; }
+@media (max-height: 520px) {
+  .frc-ctrl { position: sticky; bottom: 0; z-index: 4; background: linear-gradient(180deg, rgba(255,249,232,0), #FFF9E8 10px); padding-top: 8px; }
+}
 .frc-btn { width: 84px; height: 56px; border: none; border-radius: 18px; font-size: 26px; background: #FFD9A0; color: #8A5A20; cursor: pointer; box-shadow: 0 4px 0 #EBBB77; touch-action: none; }
 .frc-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #EBBB77; }
 .frc-msg { text-align: center; min-height: 20px; color: #D08A3E; font-weight: 700; margin-top: 8px; font-size: 14px; line-height: 1.45; }
@@ -115,6 +118,59 @@ const CSS = `
   .frc-fill { transition: none; }
 }
 `;
+
+
+/** 画布显示高下限:再矮篮口和果子叠在一起,低于它宁可交给舞台滚动 */
+export const MIN_CANVAS_DISPLAY_PX = 160;
+
+export function canvasDisplayCapPx(
+  nativeH: number,
+  roomPx: number,
+  min = MIN_CANVAS_DISPLAY_PX
+): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
+function stageClipBottom(from: HTMLElement): number {
+  let node: HTMLElement | null = from.parentElement;
+  for (let i = 0; node && i < 10; i++) {
+    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+      if (typeof node.getBoundingClientRect !== "function") break;
+      const r = node.getBoundingClientRect();
+      const inner =
+        typeof node.clientHeight === "number" && node.clientHeight > 0
+          ? (node.clientTop || 0) + node.clientHeight
+          : r.height;
+      if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+      break;
+    }
+    node = node.parentElement;
+  }
+  return Number.NaN;
+}
+
+function bindCanvasFit(canvas: HTMLCanvasElement, wrap: HTMLElement, jan: Janitor): void {
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+  const fit = (): void => {
+    if (!canvas.style || typeof canvas.getBoundingClientRect !== "function") return;
+    if (typeof wrap.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    canvas.style.maxHeight = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(canvasRect));
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    canvas.style.maxHeight = px === null ? "" : `${px}px`;
+  };
+  jan.on(window, "resize", fit);
+  fit();
+}
 
 function el<T extends HTMLElement = HTMLElement>(tag: string, cls?: string, text?: string): T {
   const node = document.createElement(tag) as T;
@@ -324,6 +380,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 
   const canvas = wrap.querySelector(".frc-canvas") as HTMLCanvasElement;
   canvas.style.background = theme.bg;
+  bindCanvasFit(canvas, wrap, jan);
   const c2d = canvas.getContext("2d");
   const scoreEl = wrap.querySelector(".frc-score") as HTMLElement;
   const comboEl = wrap.querySelector(".frc-combo") as HTMLElement | null;
@@ -710,6 +767,7 @@ function mountDuo(host: HTMLElement, api: GameApi, back: () => void): { destroy:
 
   const canvas = wrap.querySelector(".frc-canvas") as HTMLCanvasElement;
   canvas.style.background = "linear-gradient(180deg, #E6F4FF 0%, #FFF3E4 100%)";
+  bindCanvasFit(canvas, wrap, jan);
   const c2d = canvas.getContext("2d");
   const aEl = wrap.querySelector(".frc-a") as HTMLElement;
   const bEl = wrap.querySelector(".frc-b") as HTMLElement;
@@ -983,6 +1041,7 @@ function mountRain(host: HTMLElement, api: GameApi, back: () => void): { destroy
 
   const canvas = wrap.querySelector(".frc-canvas") as HTMLCanvasElement;
   canvas.style.background = "linear-gradient(180deg, #FFE9C9 0%, #FFF6E4 100%)";
+  bindCanvasFit(canvas, wrap, jan);
   const c2d = canvas.getContext("2d");
   const scoreEl = wrap.querySelector(".frc-score") as HTMLElement;
   const chainEl = wrap.querySelector(".frc-chain") as HTMLElement;
