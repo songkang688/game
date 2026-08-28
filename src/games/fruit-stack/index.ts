@@ -60,7 +60,9 @@ const KEY_STEP = 9;
 const CSS = `
 .fs-wrap{--fs-ink:#5a4664;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--fs-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;user-select:none;-webkit-user-select:none;
-  touch-action:none;position:relative;width:100%;
+  /* 1.3 手机端修复:壳只留 pan-y——舞台竖着能滚,手指落在壳上得划得动;
+     吃拖动手势的果盆 canvas 与按住不放的 ◀ ▶ 键各自挂 touch-action:none */
+  touch-action:pan-y;position:relative;width:100%;
   /* B 档 r2 一致性②:粉白壳卡(与 canvas 内天空渐变同族)。侧内衬收敛为 0:
      双盆画布宽取自 host.clientWidth(卡外容器),侧内衬会让双盆行溢出卡外——上下留卡即可 */
   background:linear-gradient(180deg,#FFF4F8,#FBF0FF);border-radius:16px;padding:10px 0;box-sizing:border-box;}
@@ -101,7 +103,8 @@ const CSS = `
   background:#ffffffcc;border-radius:12px;padding:5px 10px;}
 .fs-pad{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
 .fs-key{border:none;border-radius:14px;min-width:56px;height:44px;font-size:15px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#f5a3bd,#e0759b);box-shadow:0 3px 0 #b8557a;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#f5a3bd,#e0759b);box-shadow:0 3px 0 #b8557a;
+  touch-action:none;}
 .fs-key--p1{background:linear-gradient(180deg,#96bced,#5f8fce);box-shadow:0 3px 0 #46709f;}
 .fs-key:active{transform:translateY(2px);}
 .fs-key:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}

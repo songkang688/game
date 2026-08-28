@@ -198,7 +198,9 @@ export function aimPreview(cue: Vec, angle: number, balls: readonly Ball[], maxL
 const CSS = `
 .ps-wrap{--ps-ink:#2f4a3c;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--ps-ink);
   display:flex;flex-direction:column;gap:7px;align-items:center;width:100%;position:relative;
-  user-select:none;-webkit-user-select:none;touch-action:none;
+  /* 1.3 手机端修复:壳只留 pan-y——舞台竖着能滚,手指落在壳上得划得动;
+     真正吃拖动手势的两处(台面 canvas、蓄力键)各自挂 touch-action:none */
+  user-select:none;-webkit-user-select:none;touch-action:pan-y;
   /* B 档 r2 一致性①:淡草绿壳卡(与台呢同色相、高明度),深台面被浅卡包住——家族卡片语汇归队。
      侧内衬 6px 是 320px 实测值:竖版台面 cssW 封顶 280px,恰好放进 320-2×14(屏)-2×6(卡) */
   background:linear-gradient(180deg,#EFF7F0,#E7F1EA);border-radius:16px;padding:10px 6px;box-sizing:border-box;}
@@ -209,7 +211,7 @@ const CSS = `
 .ps-chip-p1{color:#28568f;background:#e6f0ff;}
 .ps-chip-now{outline:2px solid #ffb43c;}
 .ps-table{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(70,110,90,.24);line-height:0;}
-.ps-table canvas{display:block;}
+.ps-table canvas{display:block;touch-action:none;}
 .ps-bars{display:flex;flex-direction:column;gap:5px;width:100%;max-width:520px;}
 .ps-power{position:relative;height:${MIN_TOUCH_PX}px;border-radius:999px;background:#eaf3ec;overflow:hidden;
   box-shadow:inset 0 2px 4px rgba(90,120,100,.2);}
@@ -226,7 +228,7 @@ const CSS = `
 .ps-btn[aria-pressed="true"]{background:linear-gradient(180deg,#8fd6ae,#5fb98c);color:#fff;box-shadow:0 3px 0 #3f8f68;}
 .ps-shoot{border:none;border-radius:18px;min-height:${MIN_TOUCH_PX + 6}px;padding:12px 30px;font-size:17px;font-weight:900;
   cursor:pointer;font-family:inherit;color:#fff;background:linear-gradient(180deg,#f79ac0,#e8558f);
-  box-shadow:0 4px 0 #bf3a70;min-width:180px;}
+  box-shadow:0 4px 0 #bf3a70;min-width:180px;touch-action:none;}
 .ps-shoot:active{transform:translateY(2px);box-shadow:0 2px 0 #bf3a70;}
 .ps-shoot:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .ps-shoot[disabled]{opacity:.5;cursor:default;transform:none;}
