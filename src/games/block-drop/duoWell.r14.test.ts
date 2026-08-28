@@ -14,6 +14,8 @@ describe("N-74 block-drop 双人井字", () => {
     expect(SRC).toContain("@media (max-height:500px)");
     expect(SRC).toContain(".bd-wrap{height:100%;max-height:100%");
     expect(SRC).toContain(".bd-seats.bd-split{flex-direction:row");
+    expect(SRC).toContain(".bd-mode{height:100%;max-height:100%");
+    expect(SRC).toContain("stageEl.scrollTop = 0");
   });
 });
 

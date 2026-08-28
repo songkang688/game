@@ -184,6 +184,7 @@ const CSS = `
   .bd-seats.bd-split{flex-direction:row;align-items:flex-start;}
 }
 @media (max-height:500px){
+  .bd-mode{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
   .bd-wrap{height:100%;max-height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;padding:6px;}
   .bd-seats{flex:1 1 auto;min-height:0;overflow:hidden;}
   .bd-seats.bd-split{flex-direction:row;align-items:stretch;gap:6px;}
@@ -977,6 +978,14 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
 
   function fitWells(): void {
     if (destroyed) return;
+    let stageEl: HTMLElement | null = wrap.parentElement ?? null;
+    for (let i = 0; stageEl && i < 8; i++) {
+      if (typeof stageEl.className === "string" && stageEl.className.includes("game-stage")) {
+        if (typeof stageEl.scrollTop === "number") stageEl.scrollTop = 0;
+        break;
+      }
+      stageEl = stageEl.parentElement ?? null;
+    }
     const clip = stageClipBottom();
     if (!Number.isFinite(clip)) return;
     if (typeof wrap.getBoundingClientRect !== "function" || typeof seatsHost.getBoundingClientRect !== "function") return;
