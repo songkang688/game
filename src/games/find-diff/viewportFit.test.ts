@@ -187,7 +187,7 @@ describe("找不同 · 真横屏两图并排(三办 R5-A L-1)", () => {
     expect(SRC).toContain("panelsSideBySide(view.innerWidth ?? 360, view.innerHeight ?? 640)");
     expect(SRC).toContain('panelsEl.classList.add("fdf-panels-row")');
     expect(SRC).toContain('opts.playLabel.replace(/下图/g, "右图")');
-    expect(SRC).toContain("PLAY_CELL_PX, rowLayout)");
+    expect(SRC).toContain("PLAY_CELL_PX, rowLayout || tripleRow)");
     // 中缝皮肤的 96% 宽必须被三层选择器压回,否则两图被挤到屏幕两端
     expect(SRC).toContain(".fdf-panels-row .fdf-split.fdf-seam");
   });

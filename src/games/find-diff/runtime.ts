@@ -326,6 +326,22 @@ export function regrowCellPx(
   return grown > currentPx ? grown : null;
 }
 
+/**
+ * 三图并排(N-68,trio-r8)时参考图那一行的格子:按**舞台可视余量**摊高。
+ *
+ * 病根:915×412 第 100 关族「三图侦探社」沿用竖排(上排两参考图 + 下图在底),
+ * 参考图在屏、要点的下图 `.fdf-cell-play` 整排(实测 471/501/531)折叠线下。
+ * 并排后两张参考图仍横排一行(竖摞的账算不过来:两份挂牌 + 两份画框 ≈64px,
+ * 162px 可视高只给格子剩 15px/行,早穿 22px 下限),整行挪到下图左侧,
+ * 高度只吃一份:格子 = (余量 − 并排家当)/行数。宽的账仍归 `miniCellPx`,两头取小。
+ * 量不出余量返回上限(与 panelCellForRoom 同约定)。
+ */
+export function miniCellPxRow(rows: number, roomPx: number): number {
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return 32;
+  const perMini = roomPx - PANEL_CHROME_ROW_PX;
+  return Math.max(22, Math.min(32, Math.floor(perMini / Math.max(1, rows))));
+}
+
 /** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */
 export function miniCellPx(cols: number, viewportWidth: number): number {
   const w = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;
