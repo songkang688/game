@@ -597,7 +597,7 @@ const L99_CSS = `
 .l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);
   flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;}
 .l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;flex:0 0 auto;}
-.l99-back{border:none;border-radius:999px;padding:7px 12px;font-size:14px;font-weight:900;cursor:pointer;
+.l99-back{border:none;border-radius:999px;padding:7px 12px;min-height:44px;font-size:14px;font-weight:900;cursor:pointer;
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
