@@ -433,7 +433,8 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 
 | 项 | 改法 | 视口 |
 | --- | --- | --- |
-| prince / poop / puff 仅 620 收画布 | **加** `840 && min-height:621` 轻钳（220/256/230），**不盲拷** 620 的 142/138/170 | 1024×768 |
+| prince / poop 仅 620 收画布 | **加** `840 && min-height:621` 轻钳 220/256，**不盲拷** 620 的 142/138 | 1024×768 |
+| puff-bros | 已有 JS `fitCanvas` 按舞台余高等比缩放，**不要**再叠 230px CSS（会先闪矮再被 JS 撑开） | 平板横屏 |
 | duo-rush `.dr-canvas` | 840 档 `max-height:min(52dvh,320px)`；默认 `.dr-canvas` 规则仍无 max-height；**不隐藏** `.dr-keys` | 平板横屏 |
 
 ## 附：第 3 轮环境水位

@@ -281,9 +281,6 @@ const CSS = `
   .pfb-pads[data-pads="2"]{--k:${TOUCH_MIN}px;}
   .pfb-tip{margin-top:4px;font-size:11px;}
 }
-@media (max-height:840px) and (min-height:621px){
-  .pfb-cv{height:230px;}
-}
 /* N-42 / C-8: 矮横屏把六键垫到画布右侧，暂停钮已抬到 44 */
 @media (max-height:500px) and (min-width:640px){
   .pfb-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;}
