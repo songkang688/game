@@ -26,8 +26,13 @@ describe("C-8 / N-45 补帐", () => {
     expect(read("./duo-arena/index.ts")).toContain(".dua-start{position:sticky;bottom:0");
   });
 
-  it("duo-rush 菜单开跑钮 sticky，赛道 match 仍无布局串", () => {
-    expect(read("./duo-rush/index.ts")).toContain(".dr-start { position: sticky; bottom: 0");
+  it("duo-rush 菜单开跑钮钉在屏内（N-87 先合版：CTA 行提顶 sticky），赛道 match 仍无布局串", () => {
+    // r16 N-87(30cc10ab) 把「开跑随表单 sticky bottom」升级成「怎么玩/收藏册/开跑提顶并排 sticky top」，
+    // 用户不变量一致：矮横屏菜单主按钮不滚就点得到。撞车取先合版，断言跟着主干走。
+    const src = read("./duo-rush/index.ts");
+    expect(src).toContain(".dr-menu-cta");
+    expect(src).toContain("position: sticky; top: 0");
+    expect(src).toContain(".dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start");
     expect(read("./duo-rush/match.ts")).not.toContain("dr-btns");
   });
 
