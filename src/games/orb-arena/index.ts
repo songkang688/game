@@ -94,7 +94,7 @@ export const OA_CSS = `
 .oa-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .oa-board{position:absolute;top:44px;right:14px;background:#ffffffdb;border-radius:12px;padding:6px 9px;
   font-size:16px;font-weight:800;color:#5b4a86;line-height:1.5;max-width:44%;}
-.oa-board summary{cursor:pointer;font-size:16px;}
+.oa-board summary{cursor:pointer;font-size:16px;min-height:44px;display:flex;align-items:center;box-sizing:border-box;}
 .oa-row{display:flex;align-items:center;gap:5px;}
 .oa-row canvas{flex:0 0 auto;border-radius:50%;}
 .oa-rname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:8em;}

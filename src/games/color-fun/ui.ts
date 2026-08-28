@@ -133,7 +133,7 @@ export const CLF_CSS = `
 .clf-pick.clf-pick-on{outline:3px solid #f08c00;}
 .clf-gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;max-width:400px;}
 .clf-work{border:none;border-radius:10px;padding:2px;background:#fff;cursor:pointer;font-family:inherit;
-  box-shadow:0 2px 6px rgba(150,130,80,.22);}
+  box-shadow:0 2px 6px rgba(150,130,80,.22);min-width:44px;min-height:44px;}
 .clf-work svg{width:100%;height:auto;display:block;}
 .clf-work.clf-work-on{outline:3px solid #f08c00;}
 .clf-empty{font-size:13px;font-weight:700;color:#96795a;text-align:center;}

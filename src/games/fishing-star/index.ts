@@ -211,7 +211,7 @@ const CSS = `
   background:#ffffffcc;border-radius:12px;padding:5px 10px;min-height:19px;}
 .fs-act{border:none;border-radius:18px;padding:13px 30px;font-size:17px;font-weight:900;cursor:pointer;
   font-family:inherit;color:#fff;background:linear-gradient(180deg,#f0a35c,#dd8232);box-shadow:0 5px 0 #b4652248;
-  min-width:190px;touch-action:none;}
+  min-width:190px;touch-action:none;min-height:${TOUCH_MIN_PX}px;box-sizing:border-box;}
 .fs-act:active{transform:translateY(3px);box-shadow:0 2px 0 #b4652248;}
 .fs-act:focus-visible{outline:3px solid #ffb43c;outline-offset:3px;}
 .fs-act--reel{background:linear-gradient(180deg,#6fc48f,#3f9c68);box-shadow:0 5px 0 #2d7a4e48;}
@@ -256,7 +256,7 @@ const CSS = `
 .fs-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 @media (max-width:420px){
   .fs-chip{font-size:11.5px;padding:3px 8px;}
-  .fs-act{padding:12px 22px;font-size:16px;min-width:160px;}
+  .fs-act{padding:12px 22px;font-size:16px;min-width:160px;min-height:${TOUCH_MIN_PX}px;}
   .fs-dex{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));}
 }
 /* 手机竖屏一共 667 像素高,水面上面还压着标题栏。每一行都收一点,
@@ -265,7 +265,7 @@ const CSS = `
   .fs-wrap{gap:5px;}
   .fs-chip{font-size:11px;padding:2px 7px;}
   .fs-tip{font-size:11.5px;line-height:1.35;padding:3px 9px;}
-  .fs-act{padding:11px 20px;font-size:15.5px;}
+  .fs-act{padding:11px 20px;font-size:15.5px;min-height:${TOUCH_MIN_PX}px;}
   .fs-track{height:14px;}
 }
 @media (prefers-reduced-motion:reduce){

@@ -130,12 +130,12 @@ export const WGD_CSS = `
   box-shadow:inset 0 2px 4px rgba(255,255,255,.5),0 2px 8px rgba(110,150,80,.25);}
 .wgd-garden[data-stage="soil"]{background:linear-gradient(#efe3c8,#e2cfa8);}
 .wgd-garden[data-stage="sprout"]{background:linear-gradient(#e4f0c0,#cfe89e);}
-.wgd-garden-row{display:flex;justify-content:flex-start;align-items:center;gap:6px;min-height:34px;flex-wrap:wrap;}
+.wgd-garden-row{display:flex;justify-content:flex-start;align-items:center;gap:6px;min-height:44px;flex-wrap:wrap;}
 .wgd-garden[data-stage="soil"] .wgd-garden-row::before{content:"写好一个字，这里就开一朵花～";
   font-size:13px;font-weight:800;color:#a08652;}
 .wgd-garden[data-stage="sprout"] .wgd-garden-row::after{content:"🌱";font-size:16px;}
 .wgd-garden[data-stage="meadow"] .wgd-garden-row::after{content:"🌿";font-size:16px;}
-.wgd-garden-flower{border:none;background:none;padding:0;width:34px;height:34px;cursor:pointer;}
+.wgd-garden-flower{border:none;background:none;padding:0;width:44px;height:44px;min-width:44px;min-height:44px;cursor:pointer;}
 .wgd-garden-flower svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 1px rgba(110,90,50,.35));}
 .wgd-gardencard{position:absolute;right:8px;top:-16px;background:#fffdf7;border:2px solid #ffd93d;
   border-radius:12px;padding:4px 10px;font-size:16px;font-weight:900;color:#5c4a2d;
@@ -147,7 +147,7 @@ export const WGD_CSS = `
 }
 @media (max-height:500px){
   .wgd-trace{min-height:0;padding:8px;gap:6px;}
-  .wgd-garden{max-height:10vh;min-height:36px;}
+  .wgd-garden{max-height:10vh;min-height:44px;}
 }
 @media (prefers-reduced-motion:reduce){
   .wgd-next,.wgd-startdot,.wgd-bloom,.wgd-fall,.wgd-ink-oops{animation:none;}

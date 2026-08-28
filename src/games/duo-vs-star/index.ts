@@ -239,7 +239,8 @@ const CSS = `
 .dvs-over .sub{font-size:14.5px;font-weight:700;color:#77619b;line-height:1.6;max-width:330px;}
 .dvs-over .row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;}
 .dvs-over button{border:none;border-radius:16px;padding:11px 22px;font-size:15.5px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;}
+  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 4px 0 #8f2c5c;
+  min-height:44px;}
 .dvs-over button.ghost{background:linear-gradient(180deg,#5470c0,#4560ab);box-shadow:0 4px 0 #34498a;}
 .dvs-over button:active{transform:translateY(2px);}
 .dvs-hidden{display:none;}
