@@ -277,6 +277,22 @@ export const CSS = `
   .pcp-pads{--k:42px;margin-top:4px;}
   .pcp-pads[data-players="2"]{--k:34px;}
 }
+/* N-79 r17:915×412 两人一起两套 D-pad 540/578、画布底 498 全在舞台裁切线(322px)外。
+   矮横屏改「朵朵键左、画布中、星星键右」三列;跳跃/攻击判定与关卡数据零触碰 */
+@media (min-width:640px) and (max-height:500px){
+  .pcp-wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:10px;align-items:start;}
+  .pcp-hud{grid-column:1 / -1;grid-row:1;margin-bottom:4px;gap:4px;flex-wrap:nowrap;overflow-x:auto;}
+  .pcp-chip{font-size:12px;padding:2px 6px;white-space:nowrap;}
+  .pcp-bar{min-width:80px;}
+  .pcp-stagebox{grid-column:2;grid-row:2;}
+  .pcp-cv{height:160px;}
+  .pcp-wrap[data-players="2"] .pcp-cv{height:160px;}
+  .pcp-pads{display:contents;}
+  .pcp-pad{align-content:start;}
+  .pcp-pad:first-child{grid-column:1;grid-row:2;}
+  .pcp-pad:last-child{grid-column:3;grid-row:2;}
+  .pcp-tip{grid-column:1 / -1;grid-row:3;margin-top:2px;}
+}
 @media (prefers-reduced-motion:reduce){
   .pcp-bar-fill,.pcp-toast{transition:none;}
 }
