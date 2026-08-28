@@ -38,4 +38,10 @@ describe("r18 pool-stars 矮横屏台面钳高", () => {
     expect(SRC).toContain(".ps-table{grid-column:1;grid-row:2 / span 5;");
     expect(SRC).toContain(".ps-bars,.ps-row,.ps-pockets,.ps-tip{grid-column:2;");
   });
+
+  it("竖屏高>500 按舞台余高给击球排留空,500 横屏分支原文不动", () => {
+    expect(SRC).toContain("ih > 500 && viewportWidth() < 560");
+    expect(SRC).toContain("st.bottom - tb.top - 210");
+    expect(SRC).toContain("ih > 0 && ih <= 500 && viewportWidth() >= 560");
+  });
 });

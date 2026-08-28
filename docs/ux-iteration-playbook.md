@@ -456,6 +456,9 @@ adventure-king / poop-hero / ocean-munch / dot-maze / block-drop / red-blue-race
 | hero-cards 390×844 | 高 844>840，手牌/回合键 HARD-OUT 且 sh==ch | **加** `900 && min-height:841` 钉底 + wrap 可滚；不拷 500 的 log 限高 |
 | xiangqi 390×667/844 | 宽<700 吃不到 380 钳，键排切 140px | **加** `max-width:699 && 840 && 501` 与 `900 && 841` 高度反推棋盘盒；不拷 248px |
 | gomoku 390×844 | 高>840 吃不到 840 sticky | **加** `900 && 841` 钉工具行，画布轻钳 360，不拷 500 的 168px |
+| pool-stars 390×844 | 竖桌默认 `MAX_VERTICAL_PX=560` 把击球/暂停顶出 90px+ | resize 在 `ih>500 && 宽<560` 按舞台余高 −210 钳台面；**不改** `ih≤500 && 宽≥560` 的 915 分支 |
+| match-stars 1024×768 | 840 仍用 220 chrome，末行切 111px | **加** `700&&840` 预算 360；220 原文留给 toContain |
+| chess-garden 闯关 | 「重摆题面」在 `.cg-row` 不在 `.cg-tools`，1024 切 16px | 840&&501 钉 `.cg-row` |
 
 **新军规**：`max-height:840` 救不了 390×844；钉底/钳盘要补 `max-height:900px and (min-height:841px)`，或确认默认布局已进屏。700&&840 的高度反推预算不要盲拷 500 的 chrome 数字——平板舞台顶栏更肥。窄屏不要钳 `.wrap{max-width}`（等于 100% 屏宽时无效），要钳 **棋盘盒/画布** 按余高反推。
 

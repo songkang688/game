@@ -273,6 +273,9 @@ export const CSS = `
 @media (max-height:840px) and (min-height:501px){
   .mst-boardwrap{max-width:min(100%, calc(100dvh - 220px));margin-inline:auto;}
 }
+@media (min-width:700px) and (max-height:840px) and (min-height:501px){
+  .mst-boardwrap{max-width:min(100%, calc(100dvh - 360px));margin-inline:auto;}
+}
 @media (max-height:500px){
   .mst-boardwrap{max-width:min(100%, calc(100dvh - 168px));margin-inline:auto;}
 }

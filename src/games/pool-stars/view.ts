@@ -568,6 +568,13 @@ export function createTable(host: HTMLElement, opts: TableOptions): TableHandle 
         st && tb && st.height > 0 && tb.top > st.top
           ? Math.max(120, Math.round(st.bottom - tb.top - 12))
           : Math.max(120, room.h - 96);
+    } else if (ih > 500 && viewportWidth() < 560) {
+      const st = (wrap.closest?.(".game-stage") as HTMLElement | null)?.getBoundingClientRect?.();
+      const tb = tableBox.getBoundingClientRect?.();
+      availH =
+        st && tb && st.height > 0 && tb.top > st.top
+          ? Math.max(160, Math.round(st.bottom - tb.top - 210))
+          : Math.max(160, room.h - 210);
     }
     lay = tableLayout(viewportWidth(), availH);
     canvas.width = Math.round(lay.cssW);
