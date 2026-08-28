@@ -4,6 +4,7 @@ export { meta };
 // 数独花田:每一行、每一列、每一朵九宫花都要种满 1 到 9。
 // 188 关战役 + 同题竞速的对战 + 错三题结束的无尽 + 左右分盘的同屏双人,对手是本机假人,全程离线。
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
+import { rectBottom, stageClipBottom } from "../stageFit";
 import {
   compatFromMeta,
   describeModes,
@@ -440,6 +441,23 @@ export const SP_CSS = `
   .sp-key{font-size:17px;}
   .sp-corner{display:none;}
 }
+/* r5 N-9:915×412 矮横屏纵排装不下——单盘时盘左、数字钮/工具右双栏,
+   格径由 fitSeat 按高预算再收。竞速/双人是两块盘并排,双栏会把两盘挤成上下摞,
+   所以只对 :only-child 的单盘生效,多盘保持原并排+格径钳到底线交给舞台滚。 */
+@media (min-width:700px) and (max-height:520px){
+  .sp-wrap{padding:6px 10px;}
+  .sp-top{margin-bottom:4px;}
+  .sp-badge{font-size:14px;padding:3px 8px;}
+  .sp-corner{display:none;}
+  .sp-seats > .sp-seat:only-child{display:grid;grid-template-columns:minmax(0,auto) minmax(200px,300px);
+    column-gap:12px;row-gap:6px;align-items:start;justify-content:center;}
+  .sp-seats > .sp-seat:only-child .sp-grid{grid-column:1;grid-row:1 / span 6;}
+  .sp-seat:only-child .sp-name,.sp-seat:only-child .sp-pad,.sp-seat:only-child .sp-tools,
+  .sp-seat:only-child .sp-hintbox,.sp-seat:only-child .sp-msg,.sp-seat:only-child .sp-say{grid-column:2;}
+  .sp-seat:only-child .sp-hintbox[hidden]{display:none;}
+  /* 数字钮排进右列后按 44px 热区自动换行,别为塞一行把钮挤瘦 */
+  .sp-seat:only-child .sp-pad{grid-template-columns:repeat(auto-fit,minmax(44px,1fr)) !important;margin-top:0;}
+}
 @media (prefers-reduced-motion:reduce){
   .sp-cell.sp-pop{animation:none;}
   .sp-cell.sp-bloom .sp-petal{animation:none;}
@@ -667,6 +685,55 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
   if (opts.who) wrap.append(pad, tools, hintBox);
   wrap.append(msg, say);
   host.appendChild(wrap);
+
+  /** 把一档格径落到每个格子上(创建时按宽算过一次,fitSeat 还会按高再收) */
+  function applyCell(px: number): void {
+    grid.style.gridTemplateColumns = `repeat(${n},${px}px)`;
+    const digit = digitFontPx(px);
+    const note = noteFontPx(px);
+    for (const c of cells) {
+      c.style.width = `${px}px`;
+      c.style.height = `${px}px`;
+      c.style.fontSize = `${digit}px`;
+    }
+    for (const nb of noteBoxes) nb.style.fontSize = `${note}px`;
+  }
+
+  /**
+   * r5 N-9:格径宽高两把尺取小。创建时只按宽算,915×412 矮横屏与竖屏平板上
+   * 盘的下半截会折在舞台裁切线下。这里量「舞台可视下沿 − 盘上沿 − 盘下家当」
+   * 的高预算,反推格径再收一刀;CELL_MIN_PX(34)是地板,贴着地板还装不下
+   * 就交给舞台滚动(BL-W6-03 口径)。盘下家当只数真在盘下面的:矮横屏双栏时
+   * 数字钮/工具排挪到盘右侧,不吃盘的高预算。
+   */
+  function fitSeat(): void {
+    if (typeof grid.getBoundingClientRect !== "function") return;
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    applyCell(opts.cell);
+    const gRect = grid.getBoundingClientRect();
+    if (!Number.isFinite(gRect.top) || !(gRect.height > 0)) return;
+    const gridBottom = rectBottom(gRect);
+    let below = 0;
+    for (const sib of [pad, tools, hintBox, msg]) {
+      if (sib.hidden || typeof sib.getBoundingClientRect !== "function") continue;
+      const r = sib.getBoundingClientRect();
+      if (Number.isFinite(r.top) && r.top >= gridBottom - 2) below += r.height + 6;
+    }
+    const room = clip - gRect.top - below - 4;
+    if (!Number.isFinite(room) || room <= 0) return;
+    if (gRect.height <= room + 1) return;
+    // 盘高 = n×格径 + 定值家当(格缝/内衬/篱笆边),从实测高反出定值再解格径
+    const chrome = gRect.height - n * opts.cell;
+    const cap = Math.floor((room - chrome) / n);
+    const next = Math.max(CELL_MIN_PX, Math.min(opts.cell, cap));
+    if (next !== opts.cell) applyCell(next);
+  }
+
+  fitSeat();
+  if (typeof setTimeout === "function") timers.push(setTimeout(fitSeat, 0));
+  const hasResize = typeof window !== "undefined" && typeof window.addEventListener === "function";
+  if (hasResize) window.addEventListener("resize", fitSeat);
 
   /** 只有人在玩的那块盘才播;假人一步一句会把读屏刷屏 */
   function announce(text: string): void {
@@ -1083,6 +1150,7 @@ export function createSeat(host: HTMLElement, opts: SeatOpts): Seat {
     hints: () => hintsUsed,
     finished: () => solved || failed,
     destroy() {
+      if (hasResize) window.removeEventListener("resize", fitSeat);
       for (const id of timers) clearTimeout(id);
       timers.length = 0;
       wrap.remove();
@@ -1736,7 +1804,17 @@ export function mount(api: GameApi): { destroy: () => void } {
     {
       id: meta.id,
       chapters: CHAPTERS,
-      playLevel,
+      // r5 N-9:玩关时收掉模式条+顶部那句模式介绍(915×412 它们把盘顶出屏),退出关卡还回来
+      playLevel: (stage, ctx) => {
+        bar.hidden = true;
+        const run = playLevel(stage, ctx);
+        return {
+          destroy() {
+            run.destroy();
+            bar.hidden = false;
+          }
+        };
+      },
       mapHint: "先找那些被围得只剩一种可能的格子,填完局面会自己松动。",
       grandMessage: "188 片花田全部种满,花田杯冠军就是你！",
       guide,

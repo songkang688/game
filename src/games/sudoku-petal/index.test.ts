@@ -1151,6 +1151,8 @@ describe("视觉契约 · 盘面与七态", () => {
       const solution = solutionOfBank(entry);
       const hole = cellsFromString(entry.p).findIndex((v) => v === EMPTY);
       const { s, host } = seat({ entry, errorLimit: 0 });
+      // 挂载时排了一记 0ms 的 fitSeat 补量(r5 N-9),先冲掉它,只数填数动画的计时器
+      vi.advanceTimersByTime(0);
       const cells = host.byClass("sp-cell");
       cells[hole].fire("click");
       s.act({ type: "digit", digit: solution[hole] });
