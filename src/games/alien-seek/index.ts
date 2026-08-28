@@ -178,6 +178,21 @@ const CSS = `
   .as-wrap>.als-tools{grid-column:2;position:sticky;top:0;z-index:2;}
   .as-wrap>.as-pads{grid-column:2;position:sticky;bottom:0;z-index:2;margin:0;}
   .as-wrap>.as-tip{grid-column:2;font-size:12px;line-height:1.35;}
+  /* C-6 补账(trio-r8):sticky 在 grid 单元格里没有活动余地=没用,推理关右栏
+     线索77+工具96+方向盘166+提示49=388px 还是塞不进 ~226px 的窗(确认键 428、
+     向下键 477 线下,r13 实锤)。只动推理关(as-deduce 标记):右栏放宽到 300px 起
+     (五键一行 246px 得装下),D-pad 压成一行(3x3 里的占位 span 在 flex 里零宽,
+     热区 44 一个不动)、暂停同排、工具行不换行可横滑、线索盒收矮内滚
+     (读为主,能滚不算罪)。find 关保持 r11 已验收的原样。 */
+  .as-wrap.as-deduce{grid-template-columns:minmax(0,1fr) minmax(300px,48%);}
+  /* 1/-1 在没有显式行的网格里解析成「只占第 1 行」,画布把 row1 撑到 214px,
+     右栏工具被顶到 404 线下——显式跨满右栏四行(线索/工具/方向盘/提示) */
+  .as-wrap.as-deduce>.as-canvas{grid-row:1/span 4;}
+  .as-wrap.as-deduce>.as-clues{max-height:52px;}
+  .as-wrap.as-deduce>.als-tools{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;max-width:100%;}
+  .as-wrap.as-deduce>.as-pads{flex-wrap:nowrap;align-items:center;}
+  .as-wrap.as-deduce .as-pad{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;}
+  .as-wrap.as-deduce .as-pad-t{width:100%;text-align:center;}
 }
 ${touchUpliftCss([".as-open", ".as-back"])}
 ${bodyFontUpliftCss([".as-tip", ".as-pad-t", ".als-name"])}
@@ -973,7 +988,8 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
   const penalty = lv.penalty ?? missPenalty(lv.chapter);
 
   const wrap = document.createElement("div");
-  wrap.className = "as-wrap";
+  // as-deduce 是推理关矮横屏专属档的标记(C-6 补账),find 关不卷入
+  wrap.className = deduce ? "as-wrap as-deduce" : "as-wrap";
   wrap.innerHTML = `<style>${CSS}</style>`;
   const canvas = document.createElement("canvas");
   canvas.className = "as-canvas";
@@ -1125,6 +1141,29 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     return { left: 0, top: 0, width: cssW, height: cssH };
   }
 
+  // C-6 补账(trio-r8):vh−72 只减了壳内家当,平台抬头(~186px)没进账,画布还是
+  // 戳穿舞台底(915×412 实测 186..454)。真实的账要按最近裁切祖先的下沿量;
+  // syncSize 每帧都跑,祖先只找一次缓存,每帧只读两个 rect。
+  let clipEl: HTMLElement | null | undefined;
+  function findClipEl(): HTMLElement | null {
+    const w = canvas.ownerDocument?.defaultView ?? null;
+    if (!w || typeof canvas.getBoundingClientRect !== "function") return null;
+    let best: HTMLElement | null = null;
+    let bottom = Number.POSITIVE_INFINITY;
+    for (let p = canvas.parentElement; p; p = p.parentElement) {
+      if (typeof p.getBoundingClientRect !== "function") return best;
+      const cs = w.getComputedStyle(p);
+      if (cs.overflowY === "auto" || cs.overflowY === "scroll" || cs.overflowY === "hidden") {
+        const b = p.getBoundingClientRect().bottom;
+        if (b < bottom) {
+          bottom = b;
+          best = p;
+        }
+      }
+    }
+    return best;
+  }
+
   function syncSize(): void {
     const colW = Math.round(canvas.clientWidth || host.clientWidth || wrap.clientWidth || 320);
     cssW = Math.max(240, colW);
@@ -1133,7 +1172,13 @@ function createRunner(host: HTMLElement, opts: RunnerOpts): { destroy: () => voi
     const vw = (globalThis as { innerWidth?: number }).innerWidth || 0;
     // 矮宽横屏:画布跟左栏走,高度再钳一档,右边工具+D-pad 留在 412 里
     if (vh > 0 && vh <= 500 && vw >= 640) {
-      const cap = Math.max(120, Math.round(vh - 72));
+      let cap = Math.max(120, Math.round(vh - 72));
+      if (clipEl === undefined) clipEl = findClipEl();
+      if (clipEl && typeof canvas.getBoundingClientRect === "function") {
+        // 12px 呼吸位:裁切口是 padding box,舞台底部内边距也得让出来
+        const room = Math.floor(clipEl.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top - 12);
+        if (room >= 120) cap = Math.min(cap, room);
+      }
       if (nextH > cap) nextH = cap;
     }
     cssH = nextH;
