@@ -169,6 +169,13 @@ const QUIZ_CSS = `
   .qz-ask { min-height: 20px; }
   .qz-say { min-height: 44px; padding: 6px 18px; }
   .qz-badge { padding: 3px 10px; }
+  /* N-37(trio-r9):管理员权限开着时答题器多一整行「🎫 直达这题」(44+6px),
+     叠上 l99 关内抬头多出的一行,915×412 上答案钮整排被推到宿主自滚线下。
+     矮横屏让这一行浮到题号行中间的空档里(左右两颗徽章一个不挡),不再占一整行;
+     题号行只在直达确实存在时让出 44px 接住它,权限关着时布局逐像素不变。 */
+  .qz-wrap:has(.qz-jump) .qz-top { min-height: 44px; }
+  .qz-jump { position: absolute; top: 8px; left: 0; right: 0; margin: 0; z-index: 4; pointer-events: none; }
+  .qz-jump > * { pointer-events: auto; }
 }
 `;
 

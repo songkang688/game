@@ -637,6 +637,14 @@ const L99_CSS = `
   .l99-map{padding:10px;}
   .l99-head{margin-bottom:6px;}
 }
+/* N-37(trio-r9):管理员权限开着时,关内抬头多出「跳过第 N 关 + 🎫 直达 + 权限状态小字」,
+   实测 915×412 抬头 56→106px,答题区被整体下推 50px(math-farm 三个答案钮整排掉到自滚线下)。
+   矮横屏把权限状态小字从关内抬头收起 —— 那句话地图侧一直在显示,关内只留能点的两颗钮,
+   跳过与直达就并回标题行,抬头回到 56px。权限关着时这一档一个像素都不动。 */
+@media (max-height:500px){
+  .l99-stagebar{padding:6px 8px;gap:6px;}
+  .l99-stagebar .l99-jump-note{display:none;}
+}
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
