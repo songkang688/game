@@ -238,6 +238,11 @@ export function mount(api: GameApi): { destroy: () => void } {
       .slb-tab.slb-on { color: #3D3660; background: linear-gradient(135deg, #BFE0FB, #D9CCF7); outline: 3px solid #fff; box-shadow: 0 3px 8px rgba(140,120,200,.3); }
       .slb-tab:disabled { opacity: .55; cursor: not-allowed; }
       .slb-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+      @media (max-height:840px) and (min-height:501px) {
+        .slb-grid { max-width: min(100%, calc((100dvh - 280px) * 5 / 4)); margin-inline: auto; }
+        .slb-ctrl { position: sticky; bottom: 0; z-index: 4; padding-top: 4px;
+          background: linear-gradient(180deg, rgba(234,246,255,0), #EAF6FF 45%); }
+      }
       .slb-cell { position: relative; border: none; border-radius: 14px; aspect-ratio: 1; font-size: 17px; font-weight: 900; cursor: pointer; background: #fff; color: #3E6D9E; box-shadow: 0 3px 0 rgba(150,170,210,.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px; font-family: inherit; }
       .slb-cell:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(150,170,210,.35); }
       .slb-cell.slb-lock { background: #E9EDF5; color: #A9B4C8; cursor: not-allowed; }

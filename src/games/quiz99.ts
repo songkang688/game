@@ -173,7 +173,8 @@ const QUIZ_CSS = `
   .qz-badge { padding: 3px 10px; }
 }
 @media (max-height: 840px) and (min-height: 501px) {
-  .qz-choices { position: sticky; bottom: 0; z-index: 3; }
+  .qz-choices { position: sticky; bottom: 0; z-index: 3; padding-top: 4px;
+    background: linear-gradient(180deg, rgba(255,255,255,0), #fff 42%); }
 }
 `;
 
