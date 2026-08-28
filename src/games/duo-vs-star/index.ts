@@ -272,12 +272,18 @@ const CSS = `
   }
   .dvs-bar,.dvs-cards,.dvs-hint{grid-column:1 / -1;}
   .dvs-canvas{grid-column:2;max-width:100%;}
+  /* N-101:键柱原来排在画布下方(grid-row:4,915×412 实测 400~746 全线下),
+     改进画布那一行(grid-row:2)左右空档——画布等比钳窄后两侧全空,正好放键 */
   .dvs-pads{
-    grid-column:1 / -1;grid-row:4;display:flex;justify-content:space-between;align-items:center;
+    grid-column:1 / -1;grid-row:2;align-self:stretch;display:flex;justify-content:space-between;align-items:center;
     pointer-events:none;padding:0 2px 6px;background:transparent;
   }
   .dvs-pad{pointer-events:auto;flex-direction:column;flex-wrap:nowrap;max-width:58px;gap:4px;}
-  .dvs-pad .dvs-padname{width:auto;}
+  /* N-101:七键一柱 360px 高装不进 412,改两键一行竖码(4 行 ≈214px);
+     热区 ≥44 守住,输入映射/出招判定零触碰 */
+  .dvs-pads .dvs-pad{flex-direction:row;flex-wrap:wrap;justify-content:center;align-content:center;width:96px;max-width:96px;}
+  .dvs-pads .dvs-pad button{min-width:44px;min-height:44px;}
+  .dvs-pad .dvs-padname{width:100%;}
 }
 `;
 
