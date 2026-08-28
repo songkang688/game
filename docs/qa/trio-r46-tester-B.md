@@ -30,6 +30,20 @@
 | `.sp-key` | 46×66.9 IN | **44×44 IN** bot 348 | **44×44 IN** |
 | `.mcr-fire` | 64×64 IN | **74×74 IN** bot 381 | **74×74 IN** |
 
+## 抽验二 915×412 CTA（五子棋 / 象棋 / 弹弹小鸟）
+
+不回退上一抽三款 820。不改 `level99` / `home` / `kit`。五子棋·象棋 500/840 原文不动。
+
+修前：五子棋「关（推荐）」top 427；象棋「开始下棋」top 701；小鸟重来 bot 416 贴线。
+
+| 选择器 | 390×844 | 915×412 | 1024×768 |
+| --- | --- | --- | --- |
+| `.gmk-start` | 50×338.8 IN | **48×708 IN** bot 400 | **50×708 IN** |
+| `.xq-start` | 54×342.8 IN | **54×632 IN** bot 400 | **54×632 IN** |
+| `.slb-retry` | 48×96.5 IN | **48×96.5 IN** bot 358 | **48×96.5 IN** |
+
+设置页后段选项在 wrap 内滚（五子棋 wrap scrollHeight 514 / client 304），开始钮 sticky 在屏。
+
 ## 测试
 
-`src/games/hotspot.r46b.test.ts`、`hotspot.r46clip.test.ts`、`brick-break/stageFit.r10.test.ts`、`sudoku-petal/shortLandscape.r14.test.ts` 绿。`npm run build` 绿。
+`src/games/hotspot.r46b.test.ts`、`hotspot.r46clip.test.ts`、`hotspot.r46clip3.test.ts`、`gomoku/shortLandscape.r10.test.ts`、`xiangqi/shortLandscape.r10.test.ts`、`xiangqi/shortLandscape.r11.test.ts` 绿。`npm run build` 绿。
