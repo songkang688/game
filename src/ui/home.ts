@@ -12,6 +12,8 @@ import { showParentGate } from "./parentGate";
 import { createAvatarImg } from "./avatars";
 import { RECENT_SHOWN, loadRecentIds } from "./recent";
 import { applyMobileTextVars } from "./mobileText";
+// 契约文件只有常量与纯逻辑,不会把密码门弹窗拖进首页首屏 chunk
+import { isRootOpen, rootStatusLine } from "./root12Contract";
 import {
   MODE_CHIPS,
   PLATFORM_CHIPS,
@@ -113,6 +115,8 @@ const HOME_EXTRA_CSS = `
 /* 管理员入口:大人才用,做得不显眼,但热区仍是 44×44 */
 .icon-btn--admin{opacity:.55;font-size:17px}
 .icon-btn--admin:hover,.icon-btn--admin:focus-visible{opacity:1}
+/* 管理员权限开着时钥匙亮起来,一眼看出当前是解锁状态 */
+.icon-btn--admin.icon-btn--admin-on{opacity:1;background:#ffe3f1;box-shadow:inset 0 0 0 2px #c84483}
 /* 心形是卡片的兄弟节点(按钮不能套按钮),浮在卡片右上角,热区 44×44 */
 .fav-slot{position:relative;display:flex}
 .fav-slot>.game-card,.fav-slot>.recent-card{flex:1;min-width:0}
@@ -257,12 +261,18 @@ export function renderHome(container: HTMLElement, games: GameModule[]): () => v
     const adminBtn = document.createElement("button");
     adminBtn.type = "button";
     adminBtn.className = "icon-btn icon-btn--admin";
-    adminBtn.title = "管理员权限";
-    adminBtn.setAttribute("aria-label", "管理员权限");
     adminBtn.textContent = "🔑";
+    // 开着时钥匙亮起来,悬停 / 读屏能听到「永久开启」或「还剩 X 分钟」
+    const renderAdminState = (): void => {
+      const status = rootStatusLine();
+      adminBtn.classList.toggle("icon-btn--admin-on", isRootOpen());
+      adminBtn.title = status;
+      adminBtn.setAttribute("aria-label", status);
+    };
+    renderAdminState();
     adminBtn.addEventListener("click", () => {
       playSound("tap");
-      void openRootGateSafely();
+      void openRootGateSafely().then(renderAdminState);
     });
     actions.appendChild(adminBtn);
   }

@@ -3032,3 +3032,39 @@ html {
     border-radius: 12px;
   }
 }
+
+/* ===== 1.3 · 管理员门与安全区(壳层,末尾追加) ===== */
+
+/* 管理员解锁的关卡格(src/ui/rootUnlock.ts 挂的类):
+   白底粉虚线框 + 🔓,和真实进度(彩色实底 + 星星)一眼区分,
+   权限一关地图重画,这个类自然消失,恢复真实锁定态。 */
+.l99-node-rootopen {
+  background: #fff7fb;
+  border: 2px dashed #d4699f;
+  box-shadow: none;
+}
+
+.l99-node-rootopen .l99-node-num {
+  color: #b52f74;
+}
+
+.l99-node-rootopen .l99-node-stars {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+/* 刘海屏 / 状态栏 / 底部手势条:viewport-fit=cover 时 env() 才有值,
+   普通浏览器里 max() 落回原本的内边距,布局一个像素都不变。 */
+.screen {
+  padding-top: max(18px, env(safe-area-inset-top, 0px));
+}
+
+.home-screen {
+  padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
+}
+
+/* 弹窗遮罩四边都躲开安全区:横屏刘海机上「关闭」按钮不会缩进圆角里 */
+.overlay {
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+}

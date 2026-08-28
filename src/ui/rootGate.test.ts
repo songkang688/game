@@ -15,10 +15,12 @@ import {
 import {
   ROOT_DEFAULT_PASSWORD,
   ROOT_LOCK_MS,
+  ROOT_PERMANENT_EXPIRES_AT,
   ROOT_STORAGE_KEY,
   ROOT_TTL_MS,
   getRoot12Extras,
   isRootOpen,
+  isRootPermanent,
   resetRoot12Extras,
   rootRemainMs,
   type RootStorageLike
@@ -113,11 +115,85 @@ describe("rootGate 密码判定", () => {
     expect(isRootOpen(clock, st)).toBe(false);
   });
 
-  it("localStorage 里搜不到 kangkang", () => {
+  it("localStorage 里搜不到 kangkang,落盘只有过期时间和 mode", () => {
     const st = memStorage();
     submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, st);
     expect(st.dump()).not.toContain("kangkang");
-    expect(st.getItem(ROOT_STORAGE_KEY)).toBe(JSON.stringify({ expiresAt: clock + ROOT_TTL_MS }));
+    expect(st.getItem(ROOT_STORAGE_KEY)).toBe(
+      JSON.stringify({ expiresAt: clock + ROOT_TTL_MS, mode: "timed" })
+    );
+  });
+});
+
+describe("rootGate 时长选择", () => {
+  it("不选时长就是默认 1 小时", () => {
+    const st = memStorage();
+    submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, st);
+    expect(rootRemainMs(clock, st)).toBe(ROOT_TTL_MS);
+    expect(isRootPermanent(clock, st)).toBe(false);
+  });
+
+  it("选 30 分钟:密码对就开 30 分钟,到点自动关", () => {
+    const st = memStorage();
+    const r = submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, st, "30m");
+    expect(r.ok).toBe(true);
+    expect(rootRemainMs(clock, st)).toBe(30 * 60 * 1000);
+    expect(isRootOpen(clock + 29 * 60_000, st)).toBe(true);
+    expect(isRootOpen(clock + 31 * 60_000, st)).toBe(false);
+  });
+
+  it("选永久:十年后还开着,存档里是远未来时间戳 + permanent 标记", () => {
+    const st = memStorage();
+    const r = submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, st, "forever");
+    expect(r.ok).toBe(true);
+    expect(isRootPermanent(clock, st)).toBe(true);
+    expect(isRootOpen(clock + 10 * 365 * 24 * 60 * 60_000, st)).toBe(true);
+    expect(st.getItem(ROOT_STORAGE_KEY)).toBe(
+      JSON.stringify({ expiresAt: ROOT_PERMANENT_EXPIRES_AT, mode: "permanent" })
+    );
+  });
+
+  it("选永久时落盘的内容里也搜不到密码", () => {
+    const st = memStorage();
+    submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, st, "forever");
+    expect(st.dump()).not.toContain("kangkang");
+    expect(st.dump()).not.toContain(ROOT_DEFAULT_PASSWORD);
+  });
+
+  it("永久开着也能被「关闭管理员权限」立刻关掉", () => {
+    submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, null, "forever");
+    expect(isRootOpen(clock, null)).toBe(true);
+    closeRoot();
+    expect(isRootOpen(clock, null)).toBe(false);
+    expect(isRootPermanent(clock, null)).toBe(false);
+  });
+
+  it("密码不对时选什么时长都开不了", () => {
+    const st = memStorage();
+    const r = submitRootPassword("kangkang1", clock, st, "forever");
+    expect(r.ok).toBe(false);
+    expect(isRootOpen(clock, st)).toBe(false);
+  });
+
+  it("不认识的时长 key 退回默认 1 小时,不抛异常", () => {
+    const st = memStorage();
+    expect(() => submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, st, "永远")).not.toThrow();
+    expect(rootRemainMs(clock, st)).toBe(ROOT_TTL_MS);
+  });
+
+  it("弹窗清单里有四个时长选项,默认选中 1 小时,最后一项是永久", () => {
+    const spec = rootDialogSpec("要直达关卡", clock, memStorage());
+    expect(spec.durations.map((d) => d.key)).toEqual(["30m", "1h", "4h", "forever"]);
+    expect(spec.durations.find((d) => d.selected)?.key).toBe("1h");
+    expect(spec.durations[spec.durations.length - 1].label).toBe("永久");
+    expect(spec.durationLabel).toBe("开多久");
+  });
+
+  it("时长选项文案里不写 root,也不写高权限", () => {
+    const spec = rootDialogSpec("要直达关卡", clock, memStorage());
+    const text = spec.durations.map((d) => d.label).join("|");
+    expect(text.toLowerCase()).not.toContain("root");
+    expect(text).not.toContain("高权限");
   });
 });
 
@@ -212,6 +288,15 @@ describe("rootGate 关闭与过期", () => {
     submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, null);
     clock += 17 * 60_000;
     expect(rootStatusText(clock)).toBe("管理员权限已开,还剩 43 分钟");
+  });
+
+  it("状态文案:永久开着时说「永久开启」,不再报还剩几分钟", () => {
+    submitRootPassword(ROOT_DEFAULT_PASSWORD, clock, null, "forever");
+    clock += 300 * 24 * 60 * 60_000;
+    const text = rootStatusText(clock);
+    expect(text).toBe("管理员权限已永久开启");
+    expect(text).not.toContain("还剩");
+    expect(text).not.toContain("分钟");
   });
 
   it("状态文案里不写 root,也不写高权限", () => {
