@@ -333,12 +333,13 @@ ${touchUpliftCss([".bvp-btn"])}
 ${bodyFontUpliftCss([".bvp-chip", ".bvp-btn-sm"])}
 /* N-124 模式:915×412 对战大厅开打,500 档 .bvp-lobby / 无尽三钮原文不动 */
 @media (max-height:820px) and (min-width:640px) and (pointer:coarse){
-  .bvp-arena-setup{max-height:calc(100dvh - 108px);overflow:auto;box-sizing:border-box;}
+  .bvp-arena-setup{max-height:calc(100dvh - 160px);overflow:auto;box-sizing:border-box;
+    display:flex;flex-direction:column;}
   .bvp-arena-setup .bvp-card{padding:8px 10px;margin-bottom:6px;}
   .bvp-arena-setup .bvp-sub{max-height:2.2em;overflow:hidden;}
-  .bvp-arena-setup .bvp-team{gap:6px;}
-  .bvp-arena-setup .bvp-bar{position:sticky;bottom:0;z-index:5;margin:0;padding:6px 0 2px;
-    background:linear-gradient(180deg,rgba(246,239,228,.25),#f6efe4);}
+  .bvp-arena-setup .bvp-team{gap:6px;min-height:0;}
+  .bvp-arena-setup .bvp-bar{order:-1;position:sticky;top:0;z-index:5;margin:0 0 6px;padding:6px 0 8px;
+    background:linear-gradient(180deg,#f6efe4 72%,rgba(246,239,228,.88));}
 }
 `;
 

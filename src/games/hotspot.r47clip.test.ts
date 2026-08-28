@@ -17,11 +17,12 @@ describe("r47 B 抽验 · 大厅/设置开始钮 820", () => {
     expect(dvs).toContain(".dvs-go{position:sticky;bottom:0;z-index:5;");
 
     const bvp = read("brave-path/index.ts");
-    expect(bvp).toContain("@media (max-height:500px){");
+    expect(bvp).toContain("@media (max-height:520px){");
     expect(bvp).toContain(".bvp-endless-fight .bvp-acts{");
+    expect(read("brave-path/lobbyFit.ts")).toContain("@media (max-height:500px){");
     expect(bvp).toContain("wrap.className = \"bvp-arena-setup\"");
     expect(bvp).toContain("@media (max-height:820px) and (min-width:640px) and (pointer:coarse)");
-    expect(bvp).toContain(".bvp-arena-setup .bvp-bar{position:sticky;bottom:0;z-index:5;");
+    expect(bvp).toContain(".bvp-arena-setup .bvp-bar{order:-1;position:sticky;top:0;z-index:5;");
 
     const tug = read("red-blue-tug/index.ts");
     expect(tug).toContain(".rbg-picks { display: flex; flex-direction: column; gap: 8px; }");
