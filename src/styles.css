@@ -1791,6 +1791,228 @@ html {
   }
 }
 
+/* ---------- S-1(trio-r5):首页首屏必须见到首行游戏卡 ----------
+   竖屏手机(360×640 首卡 top=722、390×844 top=717 只露半张):hero 与筛选条收紧;
+   横屏矮屏(915×412 首卡 top=557 首屏 0 卡):hero 只留一句欢迎语,玩法/设备两排筛选并成一排。
+   红线:筛选条与搜索框热区始终 ≥44px;1024×768 与 1280×800 不落入任一档,零回归。 */
+@media (max-width: 480px) {
+  /* .screen 的安全区 padding-top 写在文件尾部,这里用双类名压过它、env() 照留 */
+  .screen.home-screen {
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
+  }
+
+  .home-screen .home-header {
+    padding: 2px 0;
+    gap: 8px;
+  }
+
+  /* 顶栏按钮收到 46×46(仍 ≥44 热区):360px 下顶栏要换两行,每行省一点是一点 */
+  .home-screen .home-header .icon-btn {
+    width: 46px;
+    height: 46px;
+    font-size: 22px;
+  }
+
+  .home-screen .home-header .chip {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 17px;
+  }
+
+  .home-screen .logo {
+    gap: 6px;
+  }
+
+  .home-screen .logo-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .home-screen .logo h1 {
+    font-size: 26px;
+    letter-spacing: 1px;
+  }
+
+  .home-screen .logo-emoji {
+    font-size: 22px;
+  }
+
+  .home-screen .home-hero {
+    margin: 8px 0 2px;
+    gap: 6px;
+  }
+
+  /* 吉祥物插图让位:首屏主角是「能玩的东西」,欢迎语气泡照留 */
+  .home-screen .hero-figure {
+    display: none;
+  }
+
+  .home-screen .hero-bubble {
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    gap: 2px;
+  }
+
+  .home-screen .tabs {
+    margin-top: 8px;
+    padding: 4px 4px 6px;
+    gap: 8px;
+  }
+
+  .home-screen .tab {
+    min-height: 44px;
+    padding: 0 16px;
+    font-size: 17px;
+  }
+
+  .home-screen .mode-chips .tab,
+  .home-screen .platform-chips .tab {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 16px;
+  }
+
+  .home-screen .home-toolbar {
+    margin: 8px 0 12px;
+  }
+
+  .home-screen .home-search {
+    min-height: 46px;
+  }
+
+  .home-screen .recent-section {
+    margin: 8px 0 2px;
+  }
+}
+
+/* 360px:顶栏动作行(星星数 + 五颗圆钮)再收一挡就能排进一行,省出整整一行高度 */
+@media (max-width: 380px) {
+  .home-screen .header-actions {
+    gap: 6px;
+  }
+
+  .home-screen .home-header .icon-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  .home-screen .home-header .chip {
+    gap: 4px;
+    padding: 0 10px;
+    font-size: 16px;
+  }
+}
+
+@media (max-height: 500px) {
+  .screen.home-screen {
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+  }
+
+  .home-screen .home-header {
+    padding: 2px 0;
+  }
+
+  .home-screen .logo-avatar {
+    width: 38px;
+    height: 38px;
+    border-width: 2px;
+  }
+
+  .home-screen .logo h1 {
+    font-size: 24px;
+    letter-spacing: 1px;
+  }
+
+  .home-screen .logo-emoji {
+    font-size: 20px;
+  }
+
+  .home-screen .home-hero {
+    margin: 4px 0 2px;
+  }
+
+  /* hero 只留一句欢迎语:插图与副标题都让位给游戏卡 */
+  .home-screen .hero-figure {
+    display: none;
+  }
+
+  .home-screen .hero-bubble {
+    padding: 5px 14px;
+    margin-bottom: 4px;
+    gap: 0;
+  }
+
+  .home-screen .hero-bubble strong {
+    font-size: 17px;
+  }
+
+  .home-screen .hero-bubble span {
+    display: none;
+  }
+
+  .home-screen .tabs {
+    margin-top: 4px;
+    padding: 2px 4px 4px;
+    gap: 8px;
+  }
+
+  .home-screen .tab {
+    min-height: 44px;
+    padding: 0 16px;
+    font-size: 17px;
+  }
+
+  /* 玩法 + 设备两排筛选并成一排(inline-flex 排不下会自然换行,仍可横滑);
+     芯片收窄到 915px 里两排合计放得下,热区仍 ≥44px、字号 ≥14px */
+  .home-screen .tabs.mode-chips,
+  .home-screen .tabs.platform-chips {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
+    vertical-align: top;
+    gap: 6px;
+  }
+
+  .home-screen .tabs.mode-chips {
+    margin-right: 12px;
+  }
+
+  .home-screen .mode-chips .tab,
+  .home-screen .platform-chips .tab {
+    min-height: 44px;
+    padding: 0 10px;
+    font-size: 15px;
+  }
+
+  .home-screen .mode-chips .tab-emoji,
+  .home-screen .platform-chips .tab-emoji {
+    font-size: 17px;
+  }
+
+  .home-screen .home-toolbar {
+    margin: 4px 0 8px;
+  }
+
+  .home-screen .home-search {
+    min-height: 44px;
+  }
+
+  .home-screen .recent-section {
+    margin: 6px 0 2px;
+  }
+
+  /* 「共 N 款」的说明行让位给首行游戏卡;分区标题收紧 */
+  .home-screen .home-count {
+    display: none;
+  }
+
+  .home-screen .section-title {
+    margin-bottom: 6px;
+    font-size: 18px;
+  }
+}
+
 /* ---------- 弱化动效:位移、抖动、闪烁一律停掉 ---------- */
 @media (prefers-reduced-motion: reduce) {
   /* 悬停位移与旋转:全局那条只压时长,元素还是会「跳」到新位置 */
