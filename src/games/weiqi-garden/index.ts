@@ -337,6 +337,10 @@ export const WQ_CSS = `
   .wq-btn{padding:8px 11px;}
   .wq-open{font-size:14px;padding:9px 13px;}
 }
+@media (min-width:700px) and (max-height:500px){
+  .wq-scroll{max-height:min(260px, calc(100dvh - 168px));}
+  .wq-tools{position:sticky;bottom:0;z-index:4;padding:6px 0 2px;background:linear-gradient(180deg,rgba(251,247,238,.45),#FBF7EE);}
+}
 @media (prefers-reduced-motion:reduce){
   .wq-canvas{transition:none;}
 }
@@ -1115,10 +1119,12 @@ function hostWidth(host: HTMLElement): number {
     const iw = (globalThis as { innerWidth?: number }).innerWidth;
     return typeof iw === "number" && iw > 80 ? Math.min(iw - 32, 520) : 320;
   })();
-  // 平板横屏的短边是高度:棋盘按宽度铺满会把下面的按钮顶出屏,得同时受舞台高度约束。
-  // 220 是棋盘上下的徽章行 + 提示语 + 按钮排的合计;量不到舞台时退回按宽度算,行为不变。
-  const room = stagePlayRoom(host, { w: byWidth, h: byWidth + 220 });
-  return Math.max(240, Math.min(byWidth, room.h - 220));
+  const ih = (globalThis as { innerHeight?: number }).innerHeight;
+  const short = typeof ih === "number" && ih > 0 && ih <= 500;
+  const chrome = short ? 168 : 220;
+  const floor = short ? 180 : 240;
+  const room = stagePlayRoom(host, { w: byWidth, h: byWidth + chrome });
+  return Math.max(floor, Math.min(byWidth, room.h - chrome));
 }
 
 // ---------------------------------------------------------------------------

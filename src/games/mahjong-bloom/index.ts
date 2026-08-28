@@ -131,7 +131,7 @@ export const MJ_CSS = `
 }
 .mj-gap{width:10px;flex:0 0 auto;}
 /* 牌体三层:象牙渐变顶面 + 右/下 2px 米黄侧墙(inset)+ 2px 传统绿底座 */
-.mj-tile{flex:0 0 auto;width:34px;height:46px;border-radius:7px;border:none;padding:0;cursor:pointer;position:relative;
+.mj-tile{flex:0 0 auto;min-width:44px;min-height:44px;width:44px;height:46px;border-radius:7px;border:none;padding:0;cursor:pointer;position:relative;
   background:linear-gradient(180deg,#FFFEF9,#F4EDDD);
   box-shadow:inset -2px -2px 0 #D8CBAE,0 2px 0 #2E8B6A,0 4px 7px rgba(30,70,50,.35);
   display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;font-family:inherit;}
@@ -228,7 +228,6 @@ export const MJ_CSS = `
 .mj-sheet-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
 @media (max-width:360px){
   .mj-wrap{padding:8px;}
-  .mj-tile{width:30px;height:42px;}
   .mj-t-n{font-size:16px;}
   .mj-badge{padding:4px 8px;}
   /* 16px 的「牌墙 N 张」要地方,78px 装不下 */
