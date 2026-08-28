@@ -627,7 +627,8 @@ const L99_CSS = `
 .l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
 .l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
 .l99-ov-big{font-size:56px;line-height:1;}
 .l99-ov-buddy{width:104px;height:104px;object-fit:contain;pointer-events:none;
   filter:drop-shadow(0 6px 10px rgba(180,120,180,.28));animation:l99buddy .5s cubic-bezier(.34,1.56,.64,1);}
@@ -637,7 +638,7 @@ const L99_CSS = `
 .l99-ov-stars{font-size:34px;display:flex;justify-content:center;gap:6px;}
 .l99-ov-title{font-size:23px;font-weight:900;color:#8a5aa8;}
 .l99-ov-sub{font-size:16px;font-weight:700;color:#77619b;line-height:1.6;max-width:320px;}
-.l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;flex:0 0 auto;}
 .l99-ov-btn{border:none;border-radius:18px;padding:12px 26px;font-size:17px;font-weight:900;color:#fff;cursor:pointer;
   min-height:44px;background:linear-gradient(180deg,#c84483,#ad3a72);box-shadow:0 5px 0 #8f2c5c;font-family:inherit;}
 .l99-ov-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8f2c5c;}
