@@ -125,18 +125,49 @@ function viewportHeightPx(): number {
   return typeof h === "number" && h > 0 ? h : 0;
 }
 
-/** 往上找平台舞台(overflow:hidden 的那个盒子)的底边;找不到就退回视口底 */
+/**
+ * 往上找真正裁人的那条底边:`.game-stage` 之外,壳层的关卡包装(l99-stage-wrap)
+ * 和 wrap 自己都是 overflow:hidden,矮横屏上它们比舞台更早把画布剪掉(N-90:
+ * 915×412 实测 wrap 底 336、舞台底 404,判定线躲在 336 以下就再也看不见)。
+ * 逐层取最小的底边;一层都量不到就退回视口底。
+ */
 function clipBottomPx(el: HTMLElement | null): number {
   let node: HTMLElement | null = el;
+  let best = 0;
   for (let i = 0; node && i < 8; i++) {
-    if (typeof node.className === "string" && node.className.includes("game-stage")) {
+    const cls = typeof node.className === "string" ? node.className : "";
+    let clips = cls.includes("game-stage");
+    if (!clips && typeof getComputedStyle === "function") {
+      try {
+        const o = getComputedStyle(node).overflowY;
+        clips = o === "hidden" || o === "clip";
+      } catch {
+        clips = false;
+      }
+    }
+    if (clips) {
       const r = node.getBoundingClientRect?.();
-      if (r && r.bottom > 0) return r.bottom;
-      break;
+      if (r && r.bottom > 0) best = best === 0 ? r.bottom : Math.min(best, r.bottom);
+      if (cls.includes("game-stage")) break;
     }
     node = node.parentElement;
   }
-  return viewportHeightPx();
+  return best > 0 ? best : viewportHeightPx();
+}
+
+/**
+ * N-90:画布高被 MIN_STAGE_PX 兜底后仍可能伸出剪裁盒(壳层矮横屏只给 ~164px)。
+ * 判定是纯时间制(approachMs 固定毫秒),把判定线的高度比例往上收不改难度,
+ * 只是音符下落的像素路径变短。收到底也不低于 0.45,画布够住时保持 0.8 不动。
+ */
+export function fitJudgeRatio(stagePx: number, canvasTop: number, clipBottom: number): number {
+  if (!Number.isFinite(stagePx) || stagePx <= 0) return JUDGE_LINE_RATIO;
+  if (!Number.isFinite(canvasTop) || !Number.isFinite(clipBottom) || clipBottom <= canvasTop) {
+    return JUDGE_LINE_RATIO;
+  }
+  // 线下留 14px 白:判定线本身不许贴着剪裁边,不然「压线」的音符看不见尾巴
+  const ratio = (clipBottom - canvasTop - 14) / stagePx;
+  return Math.max(0.45, Math.min(JUDGE_LINE_RATIO, ratio));
 }
 
 // 调色板与 sprite 都在 art.ts:index 只负责拼装,不再逐帧手绘
@@ -246,6 +277,15 @@ const CSS = `
 @media (max-width:340px){
   .tt-hud{gap:6px;}
   .tt-stat{padding:4px 7px;}
+}
+/* N-90:矮横屏壳层只给画布 ~164px。键盘提示行让位(触屏直接点轨道),
+   旁白浮到画布底角不占行高;判定线经 fitJudgeRatio 收进可视区(时间制判定,难度不变) */
+@media (max-height:500px){
+  .tt-wrap{padding:6px;gap:4px;}
+  .tt-keys{display:none;}
+  .tt-say{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);z-index:3;
+    max-width:94%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    background:rgba(255,255,255,.88);border-radius:10px;padding:1px 10px;pointer-events:none;}
 }
 @media (prefers-reduced-motion:reduce){
   .tt-btn:active,.tt-open:active,.tt-goback:active{transform:none;}
@@ -406,8 +446,10 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     ? "朵朵 A S 管左两轨(S 也可以按 D) · 星星 K L 管右两轨(也可以按 ← →) · Esc 暂停"
     : "键盘 D F J K 对四条轨 · 也能直接点 · Esc 暂停";
 
+  let judgeRatio = JUDGE_LINE_RATIO;
+
   function judgeY(): number {
-    return Math.round(height * JUDGE_LINE_RATIO);
+    return Math.round(height * judgeRatio);
   }
 
   function nowMs(): number {
@@ -939,6 +981,8 @@ export function createStage(host: HTMLElement, opts: StageOpts): { destroy: () =
     const top = canvas.getBoundingClientRect?.()?.top ?? 0;
     const bottom = clipBottomPx(wrap);
     height = fitStageHeight(roomy, bottom > 0 && top > 0 ? bottom - top - roomBelowCanvas() : 0);
+    // N-90:MIN_STAGE_PX 兜底后画布底仍可能被剪,把判定线收进看得见的那段
+    judgeRatio = top > 0 ? fitJudgeRatio(height, top, bottom) : JUDGE_LINE_RATIO;
     canvas.width = width;
     canvas.height = height;
     canvas.style.width = `${width}px`;

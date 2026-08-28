@@ -173,6 +173,17 @@ const CSS = `
 .blp-over h3 { margin: 0 0 6px; font-size: 19px; color: #A8386A; }
 .blp-over p { margin: 4px 0; font-size: 14px; color: #6B5B7A; line-height: 1.5; }
 .blp-again { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+/* C-8:矮横屏只钳天空的「显示高」,SKY_H=420 的世界常量与上升时间一个字不动。
+   气球顶锚定(style.top=y),钳高后可见窗口仍是逃逸线附近那段,大小与修前被视口
+   裁出的窗口一致;收益是 HUD/播报/气球全部回到首屏,线下不再有够不着的气球 */
+@media (max-height:500px) {
+  .blp-wrap { padding: 8px; }
+  .blp-top { margin-bottom: 4px; }
+  .blp-badge { padding: 3px 8px; }
+  .blp-sky { max-height: max(96px, calc(100dvh - 200px)); }
+  .l99-stage-wrap .blp-sky { max-height: max(96px, calc(100dvh - 300px)); }
+  .blp-msg { margin-top: 4px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .blp-pop, .blp-shake { animation-duration: .01s; }
   .blp-open:active, .blp-balloon:active { transform: none; }
