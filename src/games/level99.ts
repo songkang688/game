@@ -466,10 +466,19 @@ export function buildFallbackGuide(gameId: string, chapters: Chapter[], title?: 
   };
 }
 
-function starRowHTML(stars: number): string {
+/**
+ * 12×12 内联 SVG 星形(S-2):以前是 ★ 字符,10–12px 时只剩一团糊点。
+ * 宽高用 1em 跟着容器 font-size 走,节点格 12px、关内顶栏 14px、结算页 34px 三处共用;
+ * fill 走 currentColor,亮灭仍由 .l99-star / .l99-star-on 的 color 决定,双态对比不变。
+ */
+const STAR_SVG =
+  `<svg viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true" focusable="false">` +
+  `<path fill="currentColor" d="M6 .6 7.5 4l3.9.3-3 2.6.9 3.9L6 8.7l-3.3 2.1.9-3.9-3-2.6L4.5 4Z"/></svg>`;
+
+export function starRowHTML(stars: number): string {
   let s = "";
   for (let i = 0; i < 3; i++) {
-    s += `<span class="l99-star${i < stars ? " l99-star-on" : ""}">★</span>`;
+    s += `<span class="l99-star${i < stars ? " l99-star-on" : ""}" aria-hidden="true">${STAR_SVG}</span>`;
   }
   return s;
 }
@@ -512,9 +521,11 @@ const L99_CSS = `
   font-family:inherit;padding:0;}
 .l99-node:active{transform:scale(.94);}
 .l99-node-num{font-size:17px;font-weight:900;color:#6b5a90;line-height:1;}
-.l99-node-stars{font-size:11px;line-height:1;letter-spacing:1px;}
-.l99-star{color:#e3ddef;}
-.l99-star-on{color:#ffb937;text-shadow:0 1px 2px rgba(200,120,0,.35);}
+/* 星是 1em 的 SVG(见 STAR_SVG):这里的 font-size 就是星的边长,12px 起步别再往下压 */
+.l99-node-stars{font-size:12px;line-height:1;display:inline-flex;gap:2px;}
+.l99-star{color:#e3ddef;display:inline-flex;}
+.l99-star svg{display:block;}
+.l99-star-on{color:#ffb937;filter:drop-shadow(0 1px 1px rgba(200,120,0,.35));}
 .l99-node-cur{outline:3px solid #ff8fc0;animation:l99pulse 1.4s ease infinite;}
 .l99-node-cur .l99-node-num{color:#b52e72;}
 @keyframes l99pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -526,7 +537,7 @@ const L99_CSS = `
 .l99-node:focus-visible,.l99-tab:focus-visible,.l99-tool:focus-visible,.l99-continue:focus-visible,
 .l99-back:focus-visible,.l99-ov-btn:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .l99-jump{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
-.l99-jump-input{width:76px;min-height:38px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
+.l99-jump-input{width:76px;min-height:44px;border:2px solid #e0d6f2;border-radius:12px;padding:0 8px;
   font-family:inherit;font-size:15px;font-weight:800;color:#5f4a8a;background:#fff;}
 .l99-jump-note{font-size:16px;line-height:1.45;font-weight:700;color:#8d7bab;}
 .l99-jump-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
@@ -539,7 +550,7 @@ const L99_CSS = `
   background:#ffffffd9;color:#7a5aa0;box-shadow:0 3px 0 rgba(120,90,160,.25);font-family:inherit;white-space:nowrap;}
 .l99-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(120,90,160,.25);}
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
-.l99-beststars{font-size:12px;letter-spacing:1px;}
+.l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
 .l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
@@ -549,7 +560,7 @@ const L99_CSS = `
 .l99-ov-buddy-round{border-radius:50%;border:3px solid #fff;object-fit:cover;width:84px;height:84px;
   box-shadow:0 5px 12px rgba(150,120,200,.3);}
 @keyframes l99buddy{from{transform:scale(.3) rotate(-8deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
-.l99-ov-stars{font-size:34px;letter-spacing:6px;}
+.l99-ov-stars{font-size:34px;display:flex;justify-content:center;gap:6px;}
 .l99-ov-title{font-size:23px;font-weight:900;color:#8a5aa8;}
 .l99-ov-sub{font-size:16px;font-weight:700;color:#77619b;line-height:1.6;max-width:320px;}
 .l99-ov-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
@@ -562,7 +573,6 @@ const L99_CSS = `
   .l99-map{padding:10px;}
   .l99-grid{gap:6px;}
   .l99-node-num{font-size:15px;}
-  .l99-node-stars{font-size:10px;}
 }
 @media (max-height:740px){
   .l99-stagebar{padding:6px 8px;gap:6px;}
