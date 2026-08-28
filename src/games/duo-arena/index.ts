@@ -307,6 +307,10 @@ const CSS = `
   .dua-start{position:sticky;bottom:0;z-index:5;background:#FFB37E;}
   .dua-btns{position:sticky;bottom:0;z-index:4;margin:0;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(228,239,255,.35),#E4EFFF 40%);}
+  .dua-wrap{max-width:min(960px,100%);}
+  .dua-game{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;row-gap:6px;}
+  .dua-top,.dua-tags,.dua-btns,.dua-msg{grid-column:1 / -1;}
+  .dua-court{height:min(240px,52dvh);margin-bottom:0;}
 }
 `;
 

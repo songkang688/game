@@ -290,6 +290,9 @@ const CSS = `
   .se-mode .se-seat-info{display:none;}
   .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
 }
+@media (max-height:840px) and (min-height:501px) and (min-width:700px){
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}
   .se-coin{transition:opacity 120ms linear;}

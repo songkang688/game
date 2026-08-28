@@ -221,6 +221,9 @@ export const KTC_CSS = `
 }
 @media (max-height:840px) and (min-height:501px) and (min-width:600px){
   .ktc-album .ktc-tools{position:sticky;top:0;z-index:3;background:#fff8ee;}
+  .ktc-album .ktc-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
+  .ktc-album .ktc-card{min-height:0;flex-direction:row;flex-wrap:wrap;justify-content:center;
+    padding:6px;gap:6px;}
 }
 .ktc-card{background:#fff;border-radius:16px;padding:8px;box-shadow:0 3px 8px rgba(160,110,40,.18);
   display:flex;flex-direction:column;align-items:center;gap:4px;min-height:132px;text-align:center;}
