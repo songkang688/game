@@ -251,10 +251,15 @@ const CSS = `
 /* C-8：矮横屏双垫挪到棋盘右侧并排,竖叠会把第二套垫顶出 412 高 */
 @media (max-height:500px) and (min-width:640px){
   .iff-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;justify-items:stretch;}
-  .iff-hud,.iff-swapbar{grid-column:1/-1;}
-  .iff-board{grid-column:1;min-width:0;}
-  .iff-tip{grid-column:1;}
-  .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
+  .iff-hud{grid-column:1/-1;}
+  /* N-103:换人条也挪进右栏——棋盘头顶只剩 HUD 一行,显示高预算多出一档键排 */
+  .iff-swapbar{grid-column:2;grid-row:2;width:auto;}
+  .iff-board{grid-column:1;grid-row:2 / span 3;min-width:0;}
+  .iff-tip{grid-column:1;grid-row:5;}
+  /* N-103:双垫 fixed 钉视口右下——.l99-stage overflow:hidden 会把在流内的第 2/3 排键
+     裁掉(root×188 顶下来更糟),fixed 脱离裁切链,root 与否都稳定;z 压在 l99 弹层(30)下 */
+  .iff-pads{position:fixed;right:10px;bottom:10px;z-index:5;flex-direction:row;align-items:flex-end;
+    width:auto;max-width:none;gap:10px;background:rgba(255,255,255,.82);border-radius:18px;padding:6px 8px;}
 }
 @media (prefers-reduced-motion:reduce){
   .iff-btn:active,.iff-pad button:active,.iff-swap:active{transform:none;}
@@ -962,9 +967,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
   let camCell = 24;
   let camReady = false;
 
-  function layout(): void {
+  function applyLayout(budgetH: number): void {
     const availW = Math.max(200, (stage.clientWidth || 340) - 8);
-    const budgetH = boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667);
     const fit = Math.min(availW / level.w, budgetH / level.h);
     // 小于 MIN_CELL 就不再压缩,改由摄像机跟随 —— 贴边看不清前方比看不见全图更难受
     baseCell = Math.max(MIN_CELL, Math.min(fit, MAX_CELL));
@@ -978,6 +982,39 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx, analysis: LevelAnalysis): L
     const c = canvas.getContext("2d");
     if (c) c.setTransform(dpr, 0, 0, dpr, 0, 0);
     camReady = false;
+  }
+
+  /** 往上找会裁内容的舞台盒(.l99-stage / .game-stage),量它的可视底;量不到给 NaN */
+  function stageVisibleBottom(): number {
+    let node: HTMLElement | null = canvas.parentElement;
+    for (let i = 0; node && i < 12; i++) {
+      const cls = typeof node.className === "string" ? node.className : "";
+      if (cls.includes("l99-stage") || cls.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") return Number.NaN;
+        const r = node.getBoundingClientRect();
+        const inner = node.clientHeight > 0 ? node.clientHeight : r.height;
+        if (Number.isFinite(r.top) && inner > 0) {
+          const vh = (globalThis as { innerHeight?: number }).innerHeight ?? Number.NaN;
+          return Number.isFinite(vh) ? Math.min(r.top + inner, vh) : r.top + inner;
+        }
+        return Number.NaN;
+      }
+      node = node.parentElement;
+    }
+    return Number.NaN;
+  }
+
+  function layout(): void {
+    applyLayout(boardHeightBudget(window.innerWidth || 375, window.innerHeight || 667));
+    // N-103:预算模型按视口比例拍的,没算壳顶栏/关卡条/HUD/root 工具行的实高——
+    // 铺完量一次画布底对舞台可视底的缺口,超了就按缺口收一刀重排(root 态自动进预算)
+    if (typeof canvas.getBoundingClientRect !== "function") return;
+    const clip = stageVisibleBottom();
+    if (!Number.isFinite(clip)) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(rect.bottom)) return;
+    const over = Math.ceil(rect.bottom + 6 - clip);
+    if (over > 0 && viewH - over >= 96) applyLayout(viewH - over);
   }
 
   function heroScreenPos(hero: Hero, now: number): { x: number; y: number; lift: number } {
