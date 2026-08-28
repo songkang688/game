@@ -150,7 +150,7 @@ const QUIZ_CSS = `
 .qz-say { border: none; border-radius: 999px; background: #ffffffe6; cursor: pointer; font-family: inherit; font-weight: 900; font-size: 16px; padding: 10px 24px; min-height: 46px; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
 .qz-say:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,120,160,.3); }
 .qz-jump { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
-.qz-jump-input { width: 76px; min-height: 38px; border: 2px solid #e0d6f2; border-radius: 12px; padding: 0 8px; font-family: inherit; font-size: 15px; font-weight: 800; }
+.qz-jump-input { width: 76px; min-height: 44px; border: 2px solid #e0d6f2; border-radius: 12px; padding: 0 8px; font-family: inherit; font-size: 15px; font-weight: 800; }
 .qz-jump-go { border: none; border-radius: 999px; padding: 8px 16px; font-family: inherit; font-size: 14px; font-weight: 900; cursor: pointer; background: #ffffffe6; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
 .qz-jump-input:focus-visible, .qz-jump-go:focus-visible { outline: 3px solid #3c2a6b; outline-offset: 3px; }
 /* L-1(trio-r5):横屏矮屏(915×412 一族)答题器整块比舞台可视段还高,选项钮掉到折叠线下。
