@@ -21,7 +21,7 @@
 - **C-8** hue-hand：`.hh-btns` sticky。
 - **N-49** 数独：`.sp-pad/.sp-tools` sticky（对战竞速同源键排）。
 
-## 未做
+交卷 `npm test`：1148 files 中 2 个超时 flake（`snake-snack/qaC1`、`bomb-buddies/ai` 一类），复跑全绿。本轮相关单测 86 绿。`npm run build` 通过。
 
 N-52 对局复测、N-46/47、N-12/13。Chrome 915 实测量交卷后补；以源码函数断言护栏。
 
