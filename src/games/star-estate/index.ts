@@ -273,6 +273,14 @@ const CSS = `
   .se-wrap{max-height:calc(100dvh - 76px);}
   .se-board-wrap{max-height:min(156px,38dvh);}
 }
+/* r18 · N-3:模式屏(1v3/短盘/双人)实测 .se-wrap 顶距 128,76 的预算让 .se-pad 的
+   sticky 根本钉不住(掷骰 442 线下)。只在模式屏补真预算;座位藏净资产行抬棋盘;
+   行动排收窄靠右,少遮棋盘下缘。闯关 .se-wrap 与 38dvh 棋盘钳一律不动。 */
+@media (max-height:500px) and (min-width:700px){
+  .se-mode .se-wrap{max-height:calc(100dvh - 128px);}
+  .se-mode .se-seat-info{display:none;}
+  .se-mode .se-pad{width:max-content;align-self:flex-end;padding:8px 10px 4px;}
+}
 @media (prefers-reduced-motion:reduce){
   .se-token{transition:none;}
   .se-coin{transition:opacity 120ms linear;}

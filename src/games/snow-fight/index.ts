@@ -254,6 +254,10 @@ const CSS = `
   .snf-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
     background:linear-gradient(180deg,rgba(238,245,253,0),#eef5fd 16px);}
   .snf-canvas{max-height:min(168px,40dvh);}
+  /* r18 · N-55 实测补账:双人 wrap 顶距 128,十二键 sticky 钉在 wrap 底(432)切掉第二行。
+     照 N-75 麻将配方 fixed 钉视口底;闯关 .snf-pads(无 data-duo)与 N-85 垫一律不动。 */
+  .snf-pads[data-duo]{position:fixed;left:10px;right:10px;bottom:6px;
+    background:linear-gradient(180deg,rgba(238,245,253,.65),#eef5fd 12px);}
 }
 `;
 
