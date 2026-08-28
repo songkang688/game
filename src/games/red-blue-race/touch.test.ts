@@ -37,7 +37,7 @@ describe("红蓝赛跑 · 360px 上点得着", () => {
   });
 
   it("关内那几颗常按的按钮本来就够大，这一轮没有被改小", () => {
-    expect(minHeight(".rbe-back")).toBeGreaterThanOrEqual(36);
+    expect(minHeight(".rbe-back")).toBeGreaterThanOrEqual(44);
     expect(minHeight(".rbv-over-btn")).toBeGreaterThanOrEqual(44);
   });
 });

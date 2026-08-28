@@ -158,7 +158,7 @@ const CSS = `
 .bl-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#eef4ff,#fdf1f6);display:flex;flex-direction:column;gap:8px;}
 .bl-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-.bl-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
+.bl-back{border:none;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:900;cursor:pointer;min-height:44px;
   font-family:inherit;background:#ffffffdd;color:#3f6da8;box-shadow:0 3px 0 rgba(90,120,180,.28);}
 .bl-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(90,120,180,.28);}
 .bl-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}

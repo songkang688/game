@@ -224,7 +224,7 @@ const CSS = `
 .fs-mode{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:18px;padding:10px;
   background:linear-gradient(180deg,#eaf6fd,#fdf3ea);display:flex;flex-direction:column;gap:8px;}
 .fs-mhead{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-.fs-back{border:none;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:900;cursor:pointer;
+.fs-back{border:none;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:900;cursor:pointer;min-height:44px;
   font-family:inherit;background:#ffffffdd;color:#2f7ba6;box-shadow:0 3px 0 rgba(80,130,170,.28);}
 .fs-back:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(80,130,170,.28);}
 .fs-back:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}

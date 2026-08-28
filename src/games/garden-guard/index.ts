@@ -708,6 +708,13 @@ export function mount(api: GameAPI): { destroy: () => void } {
   function inRect(x: number, y: number, r: Rect | null): boolean {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
+  /** N-126/N-129:绘制可小于 44,点按中心扩到 44 */
+  function hit44(r: Rect | null): Rect | null {
+    if (!r) return null;
+    const w = Math.max(r.w, 44);
+    const h = Math.max(r.h, 44);
+    return { x: Math.max(0, r.x + (r.w - w) / 2), y: Math.max(0, r.y + (r.h - h) / 2), w, h };
+  }
 
   function onPointerDown(e: PointerEvent): void {
     if (destroyed) return;
@@ -728,7 +735,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "themes") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = "home";
         return;
@@ -748,7 +755,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "map") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = "themes";
         return;
@@ -767,7 +774,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
       return;
     }
     if (phase === "intro") {
-      if (inRect(x, y, btnBack)) {
+      if (inRect(x, y, hit44(btnBack))) {
         api.play("tap");
         phase = mode === "endless" ? "home" : "map";
         return;
@@ -825,7 +832,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     }
 
     // 玩关卡时左上角随时回地图
-    if (inRect(x, y, btnBack)) {
+    if (inRect(x, y, hit44(btnBack))) {
       api.play("tap");
       phase = mode === "endless" ? "home" : "map";
       return;
@@ -859,7 +866,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
     // 塔操作面板
     if (selectedTower) {
       const t = selectedTower;
-      if (inRect(x, y, panelUpgrade) && t.level < MAX_TOWER_LEVEL) {
+      if (inRect(x, y, hit44(panelUpgrade)) && t.level < MAX_TOWER_LEVEL) {
         const cost = upgradeCost(t.kind, t.level);
         if (petals >= cost) {
           petals -= cost;
@@ -873,7 +880,7 @@ export function mount(api: GameAPI): { destroy: () => void } {
         }
         return;
       }
-      if (inRect(x, y, panelSell)) {
+      if (inRect(x, y, hit44(panelSell))) {
         const refund = sellRefund(t.kind, t.level);
         petals += refund;
         occupied.delete(`${t.col},${t.row}`);

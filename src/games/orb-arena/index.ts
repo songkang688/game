@@ -112,7 +112,7 @@ export const OA_CSS = `
 .oa-open:active{transform:translateY(2px);box-shadow:0 2px 0 #62479f;}
 .oa-mode{max-width:720px;margin:0 auto;font-family:"PingFang SC","Microsoft YaHei",sans-serif;}
 .oa-mhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px;}
-.oa-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;
+.oa-back{border:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:900;cursor:pointer;min-height:44px;
   font-family:inherit;background:#ffffffd9;color:#7b5cc4;box-shadow:0 3px 0 rgba(120,90,180,.3);}
 .oa-over{text-align:center;padding:24px 16px;background:#fff;border-radius:18px;box-shadow:0 4px 14px rgba(150,130,200,.25);}
 .oa-over-t{font-size:21px;font-weight:900;color:#6b53a8;margin-bottom:8px;}
