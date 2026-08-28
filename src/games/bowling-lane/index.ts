@@ -11,8 +11,32 @@ export { meta };
 // 记分完全交给 scoring.ts 那个纯函数,画面上看到的每一次滚瓶也都是 logic.ts 真算出来的,
 // 和单测跑的是同一套代码。
 import { save } from "../../engine/save";
+import { shade, withAlpha } from "../../art/kit/palette";
+import { mirrorEllipse, reflectStreak } from "../../art/kit/mirror";
 import { mountLevelGame, type GameApi, type PlayCtx, type SoundName } from "../level99";
 import GUIDE from "./guide";
+import {
+  BL_COLORS,
+  BL_GOLD,
+  BL_HALL_LIFT_ALPHA,
+  BL_HALL_TINT,
+  BL_HALL_TINT_ALPHA,
+  FOLLOW_IN_MS,
+  FOLLOW_OUT_MS,
+  FOLLOW_ZOOM,
+  OIL_STREAK_MS,
+  drawBall,
+  drawCeilingLamp,
+  drawNeighborLanes,
+  drawPin,
+  drawStar,
+  neonAlpha,
+  pinFallAngle,
+  pinFallDir,
+  seamAlphaAt,
+  seamXs,
+  strikeFlashOn,
+} from "./visual13";
 import { CHAPTERS, buildEndlessFrame, buildLevel, buildVersus, chapterOfLevel } from "./levels";
 import {
   AI_LABEL,
@@ -23,7 +47,6 @@ import {
   LANE_LEN,
   LANE_W,
   PIN_R,
-  PIN_TRAITS,
   STAGE_LABEL,
   STAGE_MS,
   aiShot,
@@ -90,8 +113,9 @@ const CSS = `
 .bl-lane{border-radius:16px;overflow:hidden;box-shadow:0 6px 16px rgba(100,110,160,.22);line-height:0;}
 .bl-lane canvas{display:block;}
 .bl-card{display:flex;gap:2px;justify-content:center;flex-wrap:nowrap;width:100%;overflow-x:auto;padding-bottom:2px;}
-.bl-fr{background:#fff;border-radius:8px;min-width:36px;flex:0 0 auto;text-align:center;
-  box-shadow:0 1px 3px rgba(110,120,170,.2);padding:1px 0 2px;}
+/* 1.3 计分板卡片化:白 72% 底、圆角、当前格靠 .bl-fr-now 的高亮描边 */
+.bl-fr{background:rgba(255,255,255,.72);border:1px solid rgba(110,120,170,.14);border-radius:10px;min-width:36px;
+  flex:0 0 auto;text-align:center;box-shadow:0 1px 3px rgba(110,120,170,.2);padding:1px 0 2px;}
 .bl-fr-now{outline:2px solid #ffb43c;}
 .bl-fr-n{font-size:9px;font-weight:800;color:#9a93b8;line-height:1.2;}
 .bl-fr-m{font-size:14px;font-weight:900;letter-spacing:1px;line-height:1.25;min-height:18px;}
@@ -119,8 +143,10 @@ const CSS = `
 .bl-roll--p1:active{box-shadow:0 2px 0 #2f63aa;}
 .bl-roll[disabled]{opacity:.5;cursor:default;transform:none;}
 .bl-nudge{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;}
+/* 1.3:左右微调箭头加圆钮质感(顶部受光的radial),热区不动 */
 .bl-nudge button{border:none;border-radius:14px;width:48px;height:44px;min-height:44px;font-size:17px;font-weight:900;
-  cursor:pointer;font-family:inherit;color:#4a4270;background:#ffffffe0;box-shadow:0 3px 0 rgba(130,130,180,.35);}
+  cursor:pointer;font-family:inherit;color:#4a4270;background:radial-gradient(circle at 50% 34%,#ffffff,#e9e3f6);
+  box-shadow:0 3px 0 rgba(130,130,180,.35);}
 .bl-nudge button:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(130,130,180,.35);}
 .bl-nudge button:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bl-veil{position:absolute;inset:0;background:rgba(252,253,255,.95);border-radius:16px;z-index:6;display:flex;
@@ -502,6 +528,9 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
       },
       shot
     );
+    // 倒瓶动画的记账清零:这一球谁倒下、往哪边倒,重新记
+    downAt.fill(0);
+    downDir.fill(1);
     shotSeed++;
   }
 
@@ -517,6 +546,7 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
 
     if (knocked === PINS && st.ball === 0) {
       opts.sfx("win");
+      strikeAt = clock;
       throwConfetti();
     } else if (knocked > 0) opts.sfx("coin");
     else opts.sfx("oops");
@@ -639,11 +669,7 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
   }
 
   // ---- 画面 --------------------------------------------------------------------
-  function pinFace(kind: PinKind): string {
-    return PIN_TRAITS[kind].emoji;
-  }
-
-  /** 彩纸:只在全中的时候撒一把,`prefers-reduced-motion` 下压根不生成 */
+  /** 星星彩纸:只在全中的时候撒一把,`prefers-reduced-motion` 下压根不生成 */
   interface Bit {
     x: number;
     y: number;
@@ -652,8 +678,23 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     life: number;
     hue: string;
   }
-  const CONFETTI = ["#ff9ec4", "#ffd166", "#8fd6b4", "#9ec5ff", "#c9a7f5"];
+  const CONFETTI = ["#ff9ec4", BL_GOLD, "#8fd6b4", "#9ec5ff", "#c9a7f5"];
   let bits: Bit[] = [];
+
+  // ---- 渲染侧小账本(纯视觉,destroy 一并清零) ---------------------------------
+  /** 每只瓶「第一次被看见倒下」的时刻与方向:倒瓶旋转动画用 */
+  const downAt: number[] = new Array<number>(PINS).fill(0);
+  const downDir: Array<1 | -1> = new Array<1 | -1>(PINS).fill(1);
+  /** 全中的时刻:瓶台灯箱闪三下(reduced 一次长亮) */
+  let strikeAt = Number.NEGATIVE_INFINITY;
+  /** 油区倒影拉丝(reduced 不生成) */
+  interface Streak {
+    x: number;
+    y: number;
+    life: number;
+  }
+  let streaks: Streak[] = [];
+  let lastStreakAt = 0;
 
   function throwConfetti(): void {
     if (calm) return;
@@ -720,33 +761,122 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     g.restore();
   }
 
+  /** 两侧霓虹装饰线:沿球道边缘的会聚线跑,粉 / 蓝呼吸(reduced 常亮) */
+  function neonRail(x: number, color: string, aMul: number): void {
+    if (!g) return;
+    g.save();
+    g.lineCap = "round";
+    const N = 10;
+    for (const [w, a] of [
+      [5, 0.22],
+      [2, 0.85],
+    ] as Array<[number, number]>) {
+      g.strokeStyle = withAlpha(color, a * aMul);
+      g.lineWidth = w;
+      g.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const p = laneProject(x, (LANE_LEN * i) / N, view);
+        if (i === 0) g.moveTo(p.sx, p.sy);
+        else g.lineTo(p.sx, p.sy);
+      }
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  /** 瓶台灯箱:暖光往上晕开 + 立面横板 + 顶部小星招牌;全中时闪三下 */
+  function drawLightbox(): void {
+    if (!g) return;
+    const deckTop = laneProject(LANE_W / 2, HEAD_Y - 10, view).sy;
+    const flash = strikeFlashOn(clock - strikeAt, calm);
+    const grad = g.createLinearGradient(0, deckTop, 0, 0);
+    grad.addColorStop(0, withAlpha(BL_COLORS.blGlow, flash ? 0.9 : 0.5));
+    grad.addColorStop(1, withAlpha(BL_COLORS.blGlow, 0.04));
+    g.fillStyle = grad;
+    g.fillRect(0, 0, view.w, Math.max(2, deckTop));
+    const bh = Math.max(9, view.h * 0.042);
+    g.fillStyle = flash ? shade(BL_COLORS.blGlow, 14) : BL_COLORS.blGlow;
+    g.fillRect(view.w * 0.08, 2, view.w * 0.84, bh);
+    g.strokeStyle = shade(BL_COLORS.blGlow, -18);
+    g.lineWidth = 1.5;
+    g.strokeRect(view.w * 0.08, 2, view.w * 0.84, bh);
+    drawStar(g, view.w / 2, 2 + bh / 2, bh * 0.34, flash ? "#FFFFFF" : BL_GOLD);
+  }
+
   function render(): void {
     if (!g) return;
     g.clearRect(0, 0, view.w, view.h);
-    // 球道两侧的暗底(梯形之外的地面)
+    // 球道两侧的暗底(梯形之外的馆内地面)
     g.fillStyle = "#3b3556";
     g.fillRect(0, 0, view.w, view.h);
+    // C-2 粉彩夜场(方案 A):暗底提暖一档 —— 提亮 6%(≈shade(+6))再叠 4% 粉紫,
+    // 「灰紫」调成「粉紫」;主道与灯箱随后原样压顶,亮度预算一分不动
+    g.fillStyle = withAlpha("#FFFFFF", BL_HALL_LIFT_ALPHA);
+    g.fillRect(0, 0, view.w, view.h);
+    g.fillStyle = withAlpha(BL_HALL_TINT, BL_HALL_TINT_ALPHA);
+    g.fillRect(0, 0, view.w, view.h);
+    // 修复员装饰件:两侧邻道暗剪影 + 馆内立柱竖线
+    // (纯静态,画在跟球运镜之前 —— 不进缩放)
+    drawNeighborLanes(g, view);
 
     g.save();
-    // 「跟球」运镜:球一出手镜头轻轻往球那边推一点,球停了就收回来
+    // 「跟球」运镜:参数与 1.2 完全一致(FOLLOW_ZOOM/IN/OUT 只是常量化)
     if (follow > 0 && lane && !calm) {
       const b = laneProject(lane.ball.x, lane.ball.y, view);
-      const k = 1 + 0.14 * follow;
+      const k = 1 + FOLLOW_ZOOM * follow;
       g.translate(b.sx, b.sy);
       g.scale(k, k);
       g.translate(-b.sx, -b.sy);
     }
 
-    band(0, LANE_W, 0, LANE_LEN, "#f7e6c8");
-    // 两侧球沟:有护栏就是一条鼓起来的栏杆,没护栏才是真的沟
-    const gutFill = opts.bumpers ? "#f2a9c6" : "#cfd6e6";
+    // 尽头灯箱先铺:球道压在暖光上,透视灭点立刻有了去处
+    drawLightbox();
+
+    // 木板双色:8 块板沿 laneProject 会聚,相邻一深一浅
+    band(0, LANE_W, 0, LANE_LEN, BL_COLORS.blWoodA);
+    const seams = seamXs(gutterW);
+    for (let i = 1; i < seams.length; i += 2) {
+      const right = i + 1 < seams.length ? seams[i + 1] : LANE_W - gutterW;
+      band(seams[i], right, 0, LANE_LEN, BL_COLORS.blWoodB);
+    }
+    // 木板缝:一条一条沿会聚线画,远端间距和透明度一起收缩
+    g.lineCap = "round";
+    const SEG = 10;
+    for (const sx of seams) {
+      for (let i = 0; i < SEG; i++) {
+        const t0 = i / SEG;
+        const t1 = (i + 1) / SEG;
+        const p0 = laneProject(sx, LANE_LEN * t0, view);
+        const p1 = laneProject(sx, LANE_LEN * t1, view);
+        g.strokeStyle = `rgba(160,120,70,${seamAlphaAt((t0 + t1) / 2).toFixed(3)})`;
+        g.lineWidth = 1.1 * p0.k;
+        g.beginPath();
+        g.moveTo(p0.sx, p0.sy);
+        g.lineTo(p1.sx, p1.sy);
+        g.stroke();
+      }
+    }
+    // 两侧球沟:有护栏就是一条鼓起来的栏杆,没护栏才是真的沟;
+    // 沟内壁(贴球道那一侧)压深 22%,凹下去的立面感就出来了
+    const gutFill = opts.bumpers ? "#f2a9c6" : BL_COLORS.blGutter;
+    const wallFill = opts.bumpers ? shade("#f2a9c6", -22) : BL_COLORS.blGutterWall;
     band(0, gutterW, 0, LANE_LEN, gutFill);
     band(LANE_W - gutterW, LANE_W, 0, LANE_LEN, gutFill);
-    // 打油区:油越厚越亮,一眼看出这一关拐不拐得动
+    const wallW = Math.min(1.1, gutterW * 0.4);
+    band(gutterW - wallW, gutterW, 0, LANE_LEN, wallFill);
+    band(LANE_W - gutterW, LANE_W - gutterW + wallW, 0, LANE_LEN, wallFill);
+    // 打油区:油越厚越亮(功能表达,保留)+ 镜面高光带两条(纵向白渐变条)
     band(gutterW, LANE_W - gutterW, 0, DECK_END * 0.62, `rgba(180,205,255,${0.1 + opts.oil * 0.34})`);
-    // 瓶台与犯规线
+    band(LANE_W * 0.34, LANE_W * 0.48, 0, DECK_END * 0.62, BL_COLORS.blOil);
+    band(LANE_W * 0.56, LANE_W * 0.62, 0, DECK_END * 0.62, withAlpha("#FFFFFF", 0.14));
+    // 球经过油区的倒影拉丝(reduced 不生成)
+    for (const s of streaks) {
+      const p = laneProject(s.x, s.y, view);
+      reflectStreak(g, p.sx, p.sy + 2, 16 * p.k, 3 * p.k, "#FFFFFF", 0.35 * (s.life / OIL_STREAK_MS));
+    }
+    // 瓶台与犯规线(几何不动,犯规线加深一档才看得见)
     band(gutterW, LANE_W - gutterW, HEAD_Y - 8, LANE_LEN, "#e0c79a");
-    band(gutterW, LANE_W - gutterW, 1.4, 2.6, "#d8b98a");
+    band(gutterW, LANE_W - gutterW, 1.4, 2.6, shade(BL_COLORS.blWoodB, -18));
 
     // 口袋教学线:前两章画得实,越往后越淡,第七章起彻底不画。
     // 线指的是「口袋在哪儿」,力度、落点、旋转还得自己定。
@@ -761,7 +891,7 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
       rail(releaseX(clamp(pending.aim + aimNudge, -1, 1), gutterW), 0, HEAD_Y, "rgba(70,60,110,.6)", [4, 4]);
     }
 
-    // 瓶
+    // 瓶:细颈宽肩剪影,被击后绕瓶底支点旋转倒下(250ms + 弹跳,reduced 直躺)
     const perUnit = view.w / LANE_W;
     const pins = lane ? lane.pins : null;
     for (let i = 0; i < PINS; i++) {
@@ -770,12 +900,14 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
       let py: number;
       let down: boolean;
       let here: boolean;
+      let vx = 0;
       if (pins) {
         const pin = pins[i];
         px = pin.x;
         py = pin.y;
         down = pin.down || pinShift(pin) > 0.6;
         here = !pin.gone;
+        vx = pin.vx;
       } else {
         const home = pinSpot(i);
         px = home.x;
@@ -786,52 +918,53 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
       if (!here) continue;
       const p = laneProject(px, py, view);
       const r = Math.max(2, PIN_R * perUnit * p.k);
-      g.save();
-      g.globalAlpha = down ? 0.45 : 1;
-      g.fillStyle = down ? "#c9c2d8" : "#ffffff";
-      g.beginPath();
-      // 倒下的瓶画成躺平的椭圆:一眼看出「这一个已经倒了」
-      if (down) g.ellipse(p.sx, p.sy, r * 1.5, r * 0.55, 0, 0, Math.PI * 2);
-      else g.ellipse(p.sx, p.sy, r, r * 1.3, 0, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = down ? "#b3abc6" : "#e5638f";
-      g.lineWidth = 1.2;
-      g.stroke();
-      if (kind !== "wood") {
-        g.font = `${Math.max(7, r * 1.5)}px "Apple Color Emoji","Segoe UI Emoji",system-ui,sans-serif`;
-        g.textAlign = "center";
-        g.textBaseline = "middle";
-        g.fillText(pinFace(kind), p.sx, p.sy);
+      const h = r * 3.1;
+      if (down && downAt[i] === 0) {
+        // 第一次看见它倒:记时刻与方向,方向沿受击矢量的横向分量
+        downAt[i] = clock;
+        downDir[i] = pinFallDir(vx);
       }
-      g.restore();
+      drawPin(g, {
+        sx: p.sx,
+        sy: p.sy + r * 0.6,
+        h,
+        kind,
+        fall: down ? pinFallAngle(clock - downAt[i], calm) : 0,
+        dir: downDir[i],
+        alpha: down ? 0.7 : 1,
+      });
     }
 
-    // 球:近大远小,表面那道花纹跟着滚动的距离转,一眼看得出球在转
+    // 球:三停径向渐变 + 三指孔(相位沿用旧白点)+ 球下镜面倒影
     if (lane && !lane.ball.gone) {
       const b = lane.ball;
       const p = laneProject(b.x, b.y, view);
       const r = Math.max(3, BALL_R * perUnit * p.k);
-      g.save();
-      g.fillStyle = seat.plan.color;
-      g.beginPath();
-      g.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-      g.fill();
-      const spun = calm ? 0 : b.y / 3;
-      g.fillStyle = "#ffffffcc";
-      for (let i = 0; i < 3; i++) {
-        const a = spun + (i * Math.PI * 2) / 3;
+      mirrorEllipse(g, p.sx, p.sy + r * 1.28, r * 0.85, r * 0.3, seat.plan.color);
+      // 出手那一小段,球道接触点留一圈微光
+      if (b.y < 10 && !calm) {
+        g.save();
+        g.fillStyle = withAlpha("#FFFFFF", 0.28 * (1 - b.y / 10));
         g.beginPath();
-        g.arc(p.sx + Math.cos(a) * r * 0.42, p.sy + Math.sin(a) * r * 0.42, r * 0.16, 0, Math.PI * 2);
+        g.ellipse(p.sx, p.sy + r * 0.9, r * 1.5, r * 0.5, 0, 0, Math.PI * 2);
         g.fill();
+        g.restore();
       }
-      g.restore();
+      drawBall(g, p.sx, p.sy, r, seat.plan.color, b.y, calm);
     }
     g.restore();
 
+    // 馆内氛围:天花板垂灯两盏 + 两侧霓虹装饰线(粉/蓝呼吸,reduced 常亮)
+    drawCeilingLamp(g, view.w * 0.16, view.h * 0.075, Math.max(7, view.w * 0.028));
+    drawCeilingLamp(g, view.w * 0.84, view.h * 0.075, Math.max(7, view.w * 0.028));
+    const na = neonAlpha(clock, calm);
+    neonRail(-1.3, BL_COLORS.blNeonPink, na);
+    neonRail(LANE_W + 1.3, BL_COLORS.blNeonBlue, na);
+
+    // 星星彩纸雨(全中专属)
     for (const bit of bits) {
       g.globalAlpha = clamp(bit.life / 900, 0, 1);
-      g.fillStyle = bit.hue;
-      g.fillRect(bit.x - 2.5, bit.y - 2.5, 5, 5);
+      drawStar(g, bit.x, bit.y, 4.2, bit.hue, bit.life / 130);
     }
     g.globalAlpha = 1;
   }
@@ -928,7 +1061,16 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
     if (!paused) {
       clock += dt;
       stepConfetti(dt);
-      follow = clamp(follow + (lane ? dt / 260 : -dt / 200), 0, 1);
+      // 油区倒影拉丝:推进寿命;球正滚在油区里时每隔一小段落一条(reduced 不生成)
+      if (streaks.length > 0) {
+        for (const s of streaks) s.life -= dt;
+        streaks = streaks.filter((s) => s.life > 0);
+      }
+      if (!calm && lane && !lane.ball.gone && lane.ball.y < DECK_END * 0.62 && clock - lastStreakAt > 45) {
+        streaks.push({ x: lane.ball.x, y: lane.ball.y, life: OIL_STREAK_MS });
+        lastStreakAt = clock;
+      }
+      follow = clamp(follow + (lane ? dt / FOLLOW_IN_MS : -dt / FOLLOW_OUT_MS), 0, 1);
       if (lane) {
         // stepLane 单步最多推进 8ms,一帧要补几步才跟得上真实时间
         let rest = dt;
@@ -974,6 +1116,10 @@ function createDesk(host: HTMLElement, opts: DeskOpts): Runner {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
       canvas.removeEventListener("pointerdown", onLaneTap);
+      // 新加的纯视觉状态一并归零:彩纸、倒影拉丝、倒瓶记账
+      bits = [];
+      streaks = [];
+      downAt.fill(0);
       clearVeil();
       wrap.remove();
     },

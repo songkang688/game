@@ -4,7 +4,9 @@
  */
 export const meta = {
   id: "bomb-buddies",
-  title: "泡泡炸弹人",
+  // 1.3 窗口 5:原名内嵌某商业游戏的通行中文名(tester 报告 Z1 记阻断),
+  // 更名为原创的「泡泡布阵」——摆泡泡、布阵型,正是这款的玩法本体。
+  title: "泡泡布阵",
   emoji: "🫧",
   category: "action" as const,
   color: "#e6f0ff",

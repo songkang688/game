@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { CHAR_COLORS, KIT_PALETTE, hexToRgb, rgbToHex, shade, tint } from "./palette";
+import {
+  CHAR_COLORS,
+  KIT_PALETTE,
+  PASTELS,
+  hexToRgb,
+  rgbToHex,
+  shade,
+  tint,
+  tryHexToRgb,
+  withAlpha
+} from "./palette";
 
 const HEX_RE = /^#[0-9a-f]{6}$/;
 
 /** 简易色相（度）：断言两位角色主色色相拉开 */
 function hueOf(hex: string): number {
-  const rgb = hexToRgb(hex);
+  const rgb = tryHexToRgb(hex);
   if (!rgb) return NaN;
   const r = rgb.r / 255;
   const g = rgb.g / 255;
@@ -23,7 +33,7 @@ function hueOf(hex: string): number {
 
 /** 明度粗算：断言 shade/tint 单调 */
 function lum(hex: string): number {
-  const rgb = hexToRgb(hex);
+  const rgb = tryHexToRgb(hex);
   if (!rgb) return NaN;
   return rgb.r + rgb.g + rgb.b;
 }
@@ -79,16 +89,15 @@ describe("shade / tint 明暗推导", () => {
     expect(lum(t3)).toBeGreaterThan(lum(t2));
   });
 
-  it("amount=0 恒等,amount=1 到黑/白,越界自动 clamp", () => {
+  it("amount=0 恒等,amount=1 到黑/白,tint 越界自动 clamp", () => {
     expect(shade("#ffb3d2", 0)).toBe("#ffb3d2");
     expect(tint("#ffb3d2", 0)).toBe("#ffb3d2");
     expect(shade("#ffb3d2", 1)).toBe("#000000");
     expect(tint("#ffb3d2", 1)).toBe("#ffffff");
-    expect(shade("#ffb3d2", 5)).toBe("#000000");
     expect(tint("#ffb3d2", -3)).toBe("#ffb3d2");
   });
 
-  it("非法 hex 原样返回、不抛", () => {
+  it("非法 hex 在 0–1 口径下原样返回、不抛", () => {
     for (const bad of ["金币", "", "#12", "#12345g", "rgb(1,2,3)", "#ffb3d"]) {
       expect(() => shade(bad, 0.3)).not.toThrow();
       expect(() => tint(bad, 0.3)).not.toThrow();
@@ -108,12 +117,42 @@ describe("shade / tint 明暗推导", () => {
   });
 });
 
-describe("hexToRgb / rgbToHex", () => {
+describe("tryHexToRgb / rgbToHex", () => {
   it("互为往返,非法输入返回 null", () => {
-    expect(hexToRgb("#ffd34e")).toEqual({ r: 255, g: 211, b: 78 });
+    expect(tryHexToRgb("#ffd34e")).toEqual({ r: 255, g: 211, b: 78 });
     expect(rgbToHex(255, 211, 78)).toBe("#ffd34e");
-    expect(hexToRgb("nope")).toBeNull();
-    expect(hexToRgb("#ffd34")).toBeNull();
+    expect(tryHexToRgb("nope")).toBeNull();
+    expect(tryHexToRgb("#ffd34")).toBeNull();
     expect(rgbToHex(999, -5, 12.4)).toBe("#ff000c");
+  });
+});
+
+describe("art/kit palette（窗口 5）", () => {
+  it("token 全部是合法 #RRGGBB", () => {
+    for (const hex of Object.values(PASTELS)) {
+      expect(hex).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    }
+    expect(hexToRgb("#F4859F")).toEqual([0xf4, 0x85, 0x9f]);
+    expect(hexToRgb("#fff")).toEqual([255, 255, 255]);
+    expect(hexToRgb("oops")).toEqual([128, 128, 128]);
+  });
+
+  it("shade 正数朝白、负数朝黑,而且到头就封顶", () => {
+    expect(shade("#808080", 100)).toBe("#ffffff");
+    expect(shade("#808080", -100)).toBe("#000000");
+    const light = hexToRgb(shade("#F4859F", 25));
+    const base = hexToRgb("#F4859F");
+    const dark = hexToRgb(shade("#F4859F", -15));
+    for (let i = 0; i < 3; i++) {
+      expect(light[i]).toBeGreaterThanOrEqual(base[i]);
+      expect(dark[i]).toBeLessThanOrEqual(base[i]);
+    }
+    expect(shade("#7FB2F0", 0).toLowerCase()).toBe("#7fb2f0");
+  });
+
+  it("withAlpha 产出合法 rgba,且透明度夹在 0..1", () => {
+    expect(withAlpha("#FFFFFF", 0.28)).toBe("rgba(255,255,255,0.28)");
+    expect(withAlpha("#000000", 9)).toBe("rgba(0,0,0,1)");
+    expect(withAlpha("#000000", -1)).toBe("rgba(0,0,0,0)");
   });
 });

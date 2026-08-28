@@ -33,6 +33,40 @@ import { makeBulletPool, makePuffPool, makeShotPool, spawnPooled, type PooledPuf
 import { LINK_DIST, POWER_MAX, TRACK_INFO, coopLink, powerLevel, shotPlan, steer, type PowerTrack } from "./power";
 import GUIDE from "./guide";
 import {
+  CLOUD_BASE_SPEED,
+  CLOUD_PARALLAX,
+  CLOUD_WRAP,
+  FLAME,
+  LAYER_ORDER,
+  LOW_CLOUD_ALPHA,
+  SHADOW,
+  SKS_DECOR,
+  SKS_PALETTE,
+  SPARKLE_LIFE_S,
+  SPARKLE_MAX,
+  SPIN_SMOKE_MS,
+  TILT,
+  TRAIL_FADE_FRAMES,
+  TRAIL_STEP_S,
+  WINGMAN_SCALE,
+  PICKUP_BADGE,
+  bossBadgeArt,
+  cueGlowAlpha,
+  easeOutQuad,
+  foeArt,
+  pickupArt,
+  planePath,
+  shadowScaleAt,
+  tiltScaleX,
+  tracePath,
+  wingLights,
+  type LayerName,
+} from "./art";
+import { shade, withAlpha } from "../../art/kit/palette";
+import { ballGradient, softShadow } from "../../art/kit/volume";
+import { strokeOutline } from "../../art/kit/outline";
+import { makeParallax } from "../../art/kit/parallax";
+import {
   FOE_INFO,
   PICKUP_INFO,
   TOUCH_LIFT,
@@ -75,12 +109,14 @@ export const CSS = `
   padding-bottom:2px;scrollbar-width:none;}
 .sks-hud::-webkit-scrollbar{display:none;}
 .sks-hud .sks-back{flex:none;white-space:nowrap;}
-.sks-chip{background:#fff;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:800;color:#3F6BA8;
+/* 1.3:HUD 卡片化 —— 圆角 12px、白 72% 底、1.5px 描边,双人 / 分数各自一张小卡 */
+.sks-chip{background:rgba(255,255,255,.72);border-radius:12px;border:1.5px solid rgba(120,150,200,.4);
+  padding:4px 10px;font-size:14px;font-weight:800;color:#3F6BA8;
   box-shadow:0 2px 6px rgba(120,150,200,.24);white-space:nowrap;flex:none;}
-.sks-chip-duo{background:#FFE6F0;color:#B44F84;}
-.sks-chip-star{background:#E4EEFF;color:#39699F;}
-.sks-chip-boss{background:#F4E7FB;color:#7A4EA3;}
-.sks-chip-score{background:#E9F7EC;color:#3C7A55;}
+.sks-chip-duo{background:rgba(255,230,240,.72);border-color:rgba(196,110,150,.4);color:#B44F84;}
+.sks-chip-star{background:rgba(228,238,255,.72);border-color:rgba(90,130,190,.4);color:#39699F;}
+.sks-chip-boss{background:rgba(244,231,251,.72);border-color:rgba(150,110,190,.4);color:#7A4EA3;}
+.sks-chip-score{background:rgba(233,247,236,.72);border-color:rgba(90,160,120,.4);color:#3C7A55;}
 .sks-box{position:relative;border-radius:16px;overflow:hidden;background:#EAF2FF;
   box-shadow:0 4px 12px rgba(120,150,200,.26);}
 .sks-cv{display:block;width:100%;height:360px;touch-action:none;}
@@ -219,6 +255,8 @@ interface Pilot {
   /** 被碰到之后打转的剩余秒数 */
   spin: number;
   grounded: boolean;
+  /** 侧倾量 -1..1(纯绘制状态:压坡度转弯的 2.5D 观感,world 坐标不掺和) */
+  tilt: number;
 }
 
 const PILOT_INK = ["#B44F84", "#39699F"];
@@ -244,6 +282,7 @@ function makePilot(index: number, x: number): Pilot {
     grazes: 0,
     spin: 0,
     grounded: false,
+    tilt: 0,
   };
 }
 
@@ -314,6 +353,8 @@ export interface SortieSnapshot {
   shake: number;
   /** 减少动态是不是生效了 */
   calm: boolean;
+  /** 1.3 纯视觉层的家底:云层滚动量 / 装饰星屑 / 打转烟圈(destroy 归零断言用) */
+  deco: { cloudScroll: number; sparkles: number; rings: number };
 }
 
 export interface SortieHandle {
@@ -383,6 +424,15 @@ export function createSortie(opts: SortieOptions): SortieHandle {
   /** 判定核心默认显示;手指偏移默认开 */
   let showCore = true;
   let liftOn = true;
+
+  // ---- 1.3 纯视觉状态(只被绘制层读写,destroy 一并归零) --------------------
+  /** 三层云海的视差滚动器:高空 0.2× / 中层 0.5× / 低层 0.9× */
+  const clouds = makeParallax([CLOUD_PARALLAX.hi, CLOUD_PARALLAX.mid, CLOUD_PARALLAX.low], CLOUD_WRAP);
+  /** 翼尖拖出的装饰星屑(reduced 一颗不出) */
+  const sparkles: Array<{ x: number; y: number; life: number }> = [];
+  /** 敌机被击的打转烟圈(reduced 用一帧白闪替代) */
+  const rings: Array<{ x: number; y: number; r: number; age: number }> = [];
+  let sparkleGap = 0;
 
   const chipWave = el("span", "sks-chip");
   const chipGear = el("span", "sks-chip");
@@ -781,6 +831,8 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     const away = glideAway(foe);
     gliders.push({ x: foe.x, y: foe.y, vx: away.vx, vy: away.vy, r: info.r, spin: 0, life: 2, color: info.color });
     puff(foe.x, foe.y, info.r * 0.7, 0.6, "smoke");
+    // 打转烟圈(纯视觉):360ms 白圈荡开;reduced 只闪一帧
+    rings.push({ x: foe.x, y: foe.y, r: info.r, age: 0 });
     downedTotal++;
     if (by) by.downed++;
     opts.sfx("pop");
@@ -1229,6 +1281,38 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     refreshHud();
   }
 
+  /**
+   * 纯视觉层的一帧:云海滚动、侧倾跟随、星屑与烟圈的寿命。
+   * 只动绘制状态,一个玩法数值都不碰;reduced 时视差与星屑全部停摆。
+   */
+  function stepVisual(dt: number): void {
+    clouds.step(dt, reduce ? 0 : CLOUD_BASE_SPEED);
+    const follow = Math.min(1, (dt * 1000) / TILT.followMs);
+    for (const p of pilots) {
+      let dir = 0;
+      if (!reduce && !p.grounded) {
+        if (p.hold.left) dir -= 1;
+        if (p.hold.right) dir += 1;
+        if (dir === 0 && p.dragging && Math.abs(p.tx - p.x) > 4) dir = p.tx > p.x ? 1 : -1;
+      }
+      p.tilt += (dir - p.tilt) * follow;
+      // 星屑:飞行中翼尖零星洒一点,上限封死,reduced 一颗不出
+      if (!reduce && !p.grounded && (dir !== 0 || p.dragging)) {
+        sparkleGap -= dt;
+        if (sparkleGap <= 0 && sparkles.length < SPARKLE_MAX) {
+          sparkleGap = 0.05;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          sparkles.push({ x: p.x + side * (24 + Math.random() * 10), y: p.y + 12 + Math.random() * 8, life: SPARKLE_LIFE_S });
+        }
+      }
+    }
+    for (const s of sparkles) s.life -= dt;
+    for (let i = sparkles.length - 1; i >= 0; i--) if (sparkles[i].life <= 0) sparkles.splice(i, 1);
+    const ringLife = reduce ? 1 / 60 : SPIN_SMOKE_MS / 1000;
+    for (const w of rings) w.age += dt;
+    for (let i = rings.length - 1; i >= 0; i--) if (rings[i].age >= ringLife) rings.splice(i, 1);
+  }
+
   // -------------------------------------------------------------------------
   // 绘制
   // -------------------------------------------------------------------------
@@ -1333,10 +1417,10 @@ export function createSortie(opts: SortieOptions): SortieHandle {
 
   function drawBullets(ctx: CanvasRenderingContext2D): void {
     for (const b of bullets.live) {
-      ctx.save();
-      ctx.translate(b.x, b.y);
       if (b.warn > 0) {
         // 预警:先亮一圈,再画一小段「它要往哪飞」的虚线
+        ctx.save();
+        ctx.translate(b.x, b.y);
         ctx.strokeStyle = "rgba(255,168,110,.95)";
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -1351,8 +1435,22 @@ export function createSortie(opts: SortieOptions): SortieHandle {
         ctx.restore();
         continue;
       }
-      ctx.rotate(Math.atan2(b.vy, b.vx) - Math.PI / 2);
-      ctx.fillStyle = "#FFAF62";
+      const ang = Math.atan2(b.vy, b.vx) - Math.PI / 2;
+      // 拖尾:沿速度反方向回放 3 帧渐隐(reduced 也保留 —— 拖尾是弹道可读性)
+      for (let i = TRAIL_FADE_FRAMES; i >= 1; i--) {
+        ctx.save();
+        ctx.translate(b.x - b.vx * TRAIL_STEP_S * i, b.y - b.vy * TRAIL_STEP_S * i);
+        ctx.rotate(ang);
+        ctx.globalAlpha = 0.3 * (1 - i / (TRAIL_FADE_FRAMES + 1));
+        ctx.fillStyle = SKS_DECOR.bulletFill;
+        drawEnemyShape(ctx, b.shape, b.r * (1 - 0.1 * i));
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(ang);
+      ctx.fillStyle = SKS_DECOR.bulletFill;
       drawEnemyShape(ctx, b.shape, b.r);
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -1381,10 +1479,16 @@ export function createSortie(opts: SortieOptions): SortieHandle {
           ctx.lineWidth = 3;
           ctx.stroke();
           break;
-        case "beam":
+        case "beam": {
+          // 光带尾:身后一截渐隐的光,速度感全靠它
+          ctx.fillStyle = withAlpha(s.color, 0.32);
+          roundRect(ctx, -s.r * 0.8, 10, s.r * 1.6, 22, s.r * 0.8);
+          ctx.fill();
+          ctx.fillStyle = s.color;
           roundRect(ctx, -s.r, -16, s.r * 2, 32, s.r);
           ctx.fill();
           break;
+        }
         case "ring":
           ctx.strokeStyle = s.color;
           ctx.lineWidth = 3.5;
@@ -1393,48 +1497,172 @@ export function createSortie(opts: SortieOptions): SortieHandle {
           ctx.stroke();
           break;
         case "arrow":
-        default:
+        default: {
+          // 光带尾:从弹身往后渐隐
+          const tail = ctx.createLinearGradient(0, -s.r * 0.5, 0, s.r * 1.6 + 14);
+          tail.addColorStop(0, withAlpha(s.color, 0.5));
+          tail.addColorStop(1, withAlpha(s.color, 0));
+          ctx.fillStyle = tail;
+          roundRect(ctx, -s.r * 0.45, -s.r * 0.5, s.r * 0.9, s.r * 1.6 + 14, s.r * 0.45);
+          ctx.fill();
+          // 星星头:五角小星 + 亮心
+          ctx.fillStyle = s.color;
           ctx.beginPath();
-          ctx.moveTo(0, -s.r * 1.8);
-          ctx.lineTo(s.r, s.r);
-          ctx.lineTo(-s.r, s.r);
+          const R = s.r * 1.5;
+          for (let i = 0; i < 10; i++) {
+            const rad = i % 2 === 0 ? R : R * 0.45;
+            const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+            const px = Math.cos(a) * rad;
+            const py = Math.sin(a) * rad - s.r * 0.4;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
           ctx.closePath();
           ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,.85)";
+          ctx.beginPath();
+          ctx.arc(0, -s.r * 0.4, s.r * 0.5, 0, Math.PI * 2);
+          ctx.fill();
           break;
+        }
       }
       ctx.restore();
     }
   }
 
+  /**
+   * 主机 / 僚机共用的机体绘制(七道工序里的 ②–⑥):
+   * 后掠机翼 → 尾翼 → 三停渐变机身 + 1.5px 描边 → 玻璃舱盖斜高光 → 翼尖小灯,
+   * 尾焰双层垫底。`k` 是缩放(僚机 0.55 复用同一份 `planePath`)。
+   */
+  function drawShip(ctx: CanvasRenderingContext2D, k: number, variant: 0 | 1, body: string, tilt: number): void {
+    const path = planePath(k, variant);
+    const inkLine = shade(body, -30);
+    const fillPart = (segs: Parameters<typeof tracePath>[1], fill: string | CanvasGradient): void => {
+      tracePath(ctx, segs);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = inkLine;
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    };
+
+    // 工序 6 · 双层尾焰:外焰沿用 1.2 的抖动参数,内焰 0.6 倍同步缩放
+    const jit = reduce ? 0 : Math.sin(clock * FLAME.jitterHz) * FLAME.jitterAmp;
+    const flameY = 20 * k;
+    ctx.fillStyle = SKS_PALETTE.sksFlameOut;
+    ctx.beginPath();
+    ctx.moveTo(-5.5 * k, flameY);
+    ctx.lineTo(0, flameY + (FLAME.baseLen + jit) * k);
+    ctx.lineTo(5.5 * k, flameY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = SKS_PALETTE.sksFlameIn;
+    ctx.beginPath();
+    ctx.moveTo(-5.5 * k * FLAME.innerScale, flameY);
+    ctx.lineTo(0, flameY + (FLAME.baseLen + jit) * k * FLAME.innerScale);
+    ctx.lineTo(5.5 * k * FLAME.innerScale, flameY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 工序 2 · 后掠机翼(贝塞尔前缘):压坡度时内侧机翼抬 3px
+    const liftL = tilt < 0 ? TILT.wingLiftPx * Math.min(1, -tilt) : 0;
+    const liftR = tilt > 0 ? TILT.wingLiftPx * Math.min(1, tilt) : 0;
+    const wingFill = shade(body, 14);
+    ctx.save();
+    ctx.translate(0, -liftL);
+    fillPart(path.wingL, wingFill);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(0, -liftR);
+    fillPart(path.wingR, wingFill);
+    ctx.restore();
+    fillPart(path.finL, shade(body, -8));
+    fillPart(path.finR, shade(body, -8));
+
+    // 工序 3 · 机身三停线性渐变(顶光 +25% → 主体 → 腹部 -15%)+ 1.5px 描边
+    const grad = ctx.createLinearGradient(0, -24 * k, 0, 20 * k);
+    grad.addColorStop(0, shade(body, 25));
+    grad.addColorStop(0.55, body);
+    grad.addColorStop(1, shade(body, -15));
+    fillPart(path.body, grad);
+
+    // 工序 4 · 驾驶舱玻璃 + 斜向高光条(宽 0.3 舱宽、45°,裁在舱里)
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(0, -8 * k, 5.5 * k, 7.5 * k, 0, 0, Math.PI * 2);
+    const glass = ctx.createLinearGradient(-4 * k, -15 * k, 4 * k, -1 * k);
+    glass.addColorStop(0, SKS_DECOR.canopyTop);
+    glass.addColorStop(1, SKS_DECOR.canopyBottom);
+    ctx.fillStyle = glass;
+    ctx.fill();
+    ctx.strokeStyle = inkLine;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.clip();
+    ctx.save();
+    ctx.translate(0, -8 * k);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillStyle = "rgba(255,255,255,.78)";
+    ctx.fillRect(-1.65 * k, -9 * k, 3.3 * k, 18 * k);
+    ctx.restore();
+    ctx.restore();
+
+    // 工序 5 · 翼尖小灯:左红右绿交替闪(周期 800ms,reduced 常亮)
+    const lights = wingLights(clock * 1000, reduce);
+    const lamp = (x: number, y: number, color: string, on: boolean): void => {
+      ctx.save();
+      if (on) {
+        ctx.globalAlpha = ctx.globalAlpha * 0.35;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.8 * k, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.save();
+      if (!on) ctx.globalAlpha = ctx.globalAlpha * 0.25;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.9 * k, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+    lamp(-33.5 * k, 10 * k - liftL, SKS_DECOR.wingLightL, lights.left);
+    lamp(33.5 * k, 10 * k - liftR, SKS_DECOR.wingLightR, lights.right);
+  }
+
   function drawPlane(ctx: CanvasRenderingContext2D, p: Pilot): void {
+    const variant = (p.index === 0 ? 0 : 1) as 0 | 1;
+    const body = p.index === 0 ? SKS_PALETTE.sksPlanePink : SKS_PALETTE.sksPlaneBlue;
+
+    // 僚机:同一份剪影按 0.55 缩放复用 + 半透明牵引光索连到主机(一眼看出编队)
+    for (const off of wingmanOffsets(shotPlan(p.plane.levels).wingmen)) {
+      const wx = p.x + off.dx;
+      const wy = p.y + off.dy;
+      ctx.save();
+      ctx.strokeStyle = SKS_DECOR.tether;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y + 8);
+      ctx.quadraticCurveTo((p.x + wx) / 2, (p.y + wy) / 2 + 7, wx, wy - 8);
+      ctx.stroke();
+      ctx.translate(wx, wy);
+      drawShip(ctx, WINGMAN_SCALE, variant, shade(body, 22), 0);
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.translate(p.x, p.y);
     // 被碰到 = 打个转(不是坠毁),转完就正过来
     if (p.spin > 0) ctx.rotate(p.spin * (reduce ? 2 : 9));
     if (p.plane.invuln > 0) ctx.globalAlpha = reduce ? 0.7 : 0.45 + 0.4 * Math.sin(clock * 14);
-    ctx.fillStyle = p.index === 0 ? "#FFC2D8" : "#B9D6FF";
-    ctx.beginPath();
-    ctx.ellipse(-22, 6, 14, 8, -0.3, 0, Math.PI * 2);
-    ctx.ellipse(22, 6, 14, 8, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = p.index === 0 ? "#F58BB4" : "#7FB2FF";
-    roundRect(ctx, -11, -22, 22, 42, 11);
-    ctx.fill();
-    ctx.fillStyle = "#FFFFFF";
-    ctx.beginPath();
-    ctx.ellipse(0, -8, 7, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = p.ink;
-    ctx.beginPath();
-    ctx.arc(0, -8, 3.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,214,120,.85)";
-    ctx.beginPath();
-    ctx.moveTo(-6, 20);
-    ctx.lineTo(0, 20 + 12 + (reduce ? 0 : Math.sin(clock * 24) * 4));
-    ctx.lineTo(6, 20);
-    ctx.closePath();
-    ctx.fill();
+    // 工序 7 · 侧倾:scaleX 0.82–1.0 只包在这对 save/restore 里,world 坐标不动
+    ctx.save();
+    ctx.scale(tiltScaleX(p.tilt), 1);
+    drawShip(ctx, 1, variant, body, p.tilt);
+    ctx.restore();
     ctx.globalAlpha = 1;
 
     if (p.plane.shield > 0) {
@@ -1445,79 +1673,58 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       ctx.stroke();
     }
     ctx.restore();
-
-    // 判定核心:白环 + 亮心,默认就开着 —— 孩子必须看得见「只有这一点会被碰到」。
-    // 手机上天空会缩得很小,所以核心按**屏幕像素**兜底:再怎么缩也有 5px 半径。
-    if (showCore) {
-      const r = Math.max(CORE_DOT_R, 5 / viewScale);
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.strokeStyle = "rgba(255,255,255,.95)";
-      ctx.lineWidth = Math.max(2.4, 2 / viewScale);
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = p.plane.invuln > 0 ? "#9FE3FF" : "#FF6FA8";
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    for (const off of wingmanOffsets(shotPlan(p.plane.levels).wingmen)) {
-      ctx.save();
-      ctx.translate(p.x + off.dx, p.y + off.dy);
-      ctx.fillStyle = p.index === 0 ? "#FFD9E6" : "#D5E6FF";
-      roundRect(ctx, -8, -12, 16, 24, 8);
-      ctx.fill();
-      ctx.fillStyle = p.ink;
-      ctx.beginPath();
-      ctx.arc(0, -3, 2.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
   }
 
+  /**
+   * 判定核心:白环 + 亮心,默认就开着 —— 孩子必须看得见「只有这一点会被碰到」。
+   * 手机上天空会缩得很小,所以核心按**屏幕像素**兜底:再怎么缩也有 5px 半径。
+   * 画在 planes 层最顶(所有机体之后),皮肤再华丽也盖不住它。
+   */
+  function drawCore(ctx: CanvasRenderingContext2D, p: Pilot): void {
+    if (!showCore) return;
+    const r = Math.max(CORE_DOT_R, 5 / viewScale);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.strokeStyle = "rgba(255,255,255,.95)";
+    ctx.lineWidth = Math.max(2.4, 2 / viewScale);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = p.plane.invuln > 0 ? "#9FE3FF" : "#FF6FA8";
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * 四种敌机新剪影(几何在 art.ts 的 foeArt,全部落在原 info.r 判定半径内):
+   * scout=纸飞机 / puff=气球飞艇 / kite=风筝 / tanker=胖运输艇。
+   * 受光面统一左上,基底剪影配 1.5px 统一描边。
+   */
   function drawFoe(ctx: CanvasRenderingContext2D, f: Foe): void {
     const info = FOE_INFO[f.kind];
     ctx.save();
     ctx.translate(f.x, f.y);
-    ctx.fillStyle = info.color;
-    switch (f.kind) {
-      case "scout":
-        ctx.beginPath();
-        ctx.moveTo(0, info.r);
-        ctx.lineTo(-info.r, -info.r * 0.7);
-        ctx.lineTo(info.r, -info.r * 0.7);
-        ctx.closePath();
+    const roleFill: Record<"base" | "light" | "dark" | "white", string> = {
+      base: info.color,
+      light: shade(info.color, 18),
+      dark: shade(info.color, -26),
+      white: "rgba(255,255,255,.88)",
+    };
+    for (const part of foeArt(f.kind, info.r)) {
+      tracePath(ctx, part.segs);
+      if (part.mode === "fill") {
+        ctx.fillStyle = roleFill[part.role];
         ctx.fill();
-        break;
-      case "puff":
-        ctx.beginPath();
-        ctx.arc(0, 0, info.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(-info.r * 0.7, 2, info.r * 0.5, 0, Math.PI * 2);
-        ctx.arc(info.r * 0.7, 2, info.r * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-      case "kite":
-        ctx.beginPath();
-        ctx.moveTo(0, info.r);
-        ctx.lineTo(-info.r * 0.8, 0);
-        ctx.lineTo(0, -info.r);
-        ctx.lineTo(info.r * 0.8, 0);
-        ctx.closePath();
-        ctx.fill();
-        break;
-      case "tanker":
-        roundRect(ctx, -info.r, -info.r * 0.66, info.r * 2, info.r * 1.32, info.r * 0.5);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,.6)";
-        roundRect(ctx, -info.r * 0.55, -info.r * 0.3, info.r * 1.1, info.r * 0.5, info.r * 0.24);
-        ctx.fill();
-        break;
+        if (part.role === "base") strokeOutline(ctx, info.color, 1.5);
+      } else {
+        ctx.strokeStyle = roleFill[part.role];
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
     }
+    // 定位眼保留:它们是卡通小飞机,不是武器
     ctx.fillStyle = "#5A4A62";
     ctx.beginPath();
     ctx.arc(-info.r * 0.28, -info.r * 0.05, 2.6, 0, Math.PI * 2);
@@ -1526,6 +1733,7 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     ctx.restore();
   }
 
+  /** BOSS 机体分层:蓄力红晕 → 底盘暗色 → 主体三停渐变 → 顶部炮台小剪影 → 脸 */
   function drawBoss(ctx: CanvasRenderingContext2D, b: BossRuntime): void {
     const ph = b.spec.phases[b.phase];
     const cueF = b.cueTotal > 0 ? Math.max(0, b.cueLeft) / b.cueTotal : 0;
@@ -1538,13 +1746,54 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       else if (b.cueMove === "bloom") ctx.scale(1 + 0.22 * (1 - cueF), 1 + 0.22 * (1 - cueF));
       else ctx.rotate((reduce ? 0.6 : 2.4) * (1 - cueF) * Math.PI);
     }
-    ctx.fillStyle = ph.color;
+    // 蓄力红晕:cueLeft 越接近 0 越亮(功能提示画法升级,reduced 也保留)
+    const glow = cueGlowAlpha(b.cueLeft, b.cueTotal);
+    if (glow > 0) {
+      ctx.save();
+      ctx.globalAlpha = glow;
+      ctx.strokeStyle = SKS_DECOR.bossGlow;
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 72, 54, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 66, 48, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // ① 底盘暗色
+    ctx.fillStyle = shade(ph.color, -26);
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 60, 38, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // ② 主体三停渐变 + 描边
+    const grad = ctx.createLinearGradient(0, -44, 0, 44);
+    grad.addColorStop(0, shade(ph.color, 25));
+    grad.addColorStop(0.55, ph.color);
+    grad.addColorStop(1, shade(ph.color, -15));
+    ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.ellipse(0, 0, 62, 44, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = b.cueLeft > 0 ? "#FFD27A" : "rgba(255,255,255,.85)";
-    ctx.lineWidth = b.cueLeft > 0 ? 6 : 4;
+    ctx.strokeStyle = shade(ph.color, -30);
+    ctx.lineWidth = 2;
     ctx.stroke();
+    // ③ 顶部炮台独立小剪影:圆顶 + 天线球(可爱风,不写实)
+    ctx.fillStyle = shade(ph.color, -32);
+    ctx.beginPath();
+    ctx.ellipse(0, -42, 15, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = shade(ph.color, -32);
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -48);
+    ctx.lineTo(0, -55);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -57, 3, 0, Math.PI * 2);
+    ctx.fill();
+    // 白肚皮 + 眼睛 + 名牌(分级风格保留:它是大家伙,不是怪物)
     ctx.fillStyle = "rgba(255,255,255,.75)";
     ctx.beginPath();
     ctx.ellipse(0, -12, 30, 20, 0, 0, Math.PI * 2);
@@ -1554,19 +1803,58 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     ctx.arc(-13, -12, 4.4, 0, Math.PI * 2);
     ctx.arc(13, -12, 4.4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.font = '900 26px "PingFang SC",system-ui,sans-serif';
-    ctx.textAlign = "center";
-    ctx.fillText(b.spec.emoji, 0, 30);
+    // 修复员 G1:肚皮名牌从 26px emoji 字形换成矢量小徽章(圆底 2 停 + 该章符号)
+    const badgeBase = shade(ph.color, -12);
+    const badgeGrad = ctx.createLinearGradient(0, 17, 0, 43);
+    badgeGrad.addColorStop(0, shade(badgeBase, 14));
+    badgeGrad.addColorStop(1, badgeBase);
+    ctx.fillStyle = badgeGrad;
+    ctx.beginPath();
+    ctx.arc(0, 30, 13, 0, Math.PI * 2);
+    ctx.fill();
+    strokeOutline(ctx, badgeBase, 1.5);
+    ctx.save();
+    ctx.translate(0, 30);
+    const badgeRole: Record<"base" | "light" | "dark" | "white", string> = {
+      base: badgeBase,
+      light: shade(ph.color, 26),
+      dark: shade(ph.color, -44),
+      white: "rgba(255,255,255,.95)",
+    };
+    for (const part of bossBadgeArt(b.spec.id, 9)) {
+      tracePath(ctx, part.segs);
+      if (part.mode === "fill") {
+        ctx.fillStyle = badgeRole[part.role];
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = badgeRole[part.role];
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.lineCap = "butt";
+      }
+    }
     ctx.restore();
+    ctx.restore();
+  }
 
+  /** BOSS 元气条(圆角壳 + 分段刻度)与预告倒计时:画布内 HUD,永远在最顶层 */
+  function drawBossHud(ctx: CanvasRenderingContext2D, b: BossRuntime): void {
+    const cueF = b.cueTotal > 0 ? Math.max(0, b.cueLeft) / b.cueTotal : 0;
     // 元气条 + 三段刻度(看得见「还有几段」)。本作没有血,掉光只是迫降滑走
     const w = 200;
     const pct = Math.max(0, b.hp / b.spec.hp);
     roundRect(ctx, SKY_W / 2 - w / 2, 18, w, 14, 7);
-    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillStyle = "rgba(255,255,255,.72)";
     ctx.fill();
+    ctx.strokeStyle = "rgba(120,150,200,.8)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
     roundRect(ctx, SKY_W / 2 - w / 2 + 2, 20, (w - 4) * pct, 10, 5);
-    ctx.fillStyle = "#F5A3C4";
+    const fillGrad = ctx.createLinearGradient(0, 20, 0, 30);
+    fillGrad.addColorStop(0, shade("#F5A3C4", 18));
+    fillGrad.addColorStop(1, "#F5A3C4");
+    ctx.fillStyle = fillGrad;
     ctx.fill();
     ctx.strokeStyle = "rgba(120,150,200,.55)";
     ctx.lineWidth = 2;
@@ -1579,21 +1867,39 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       ctx.stroke();
     }
 
-    // 预告倒计时条
+    // 预告倒计时条(同一套圆角壳语言)
     if (b.cueLeft > 0) {
       roundRect(ctx, SKY_W / 2 - 70, 40, 140, 8, 4);
-      ctx.fillStyle = "rgba(255,255,255,.8)";
+      ctx.fillStyle = "rgba(255,255,255,.72)";
       ctx.fill();
+      ctx.strokeStyle = "rgba(120,150,200,.8)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
       roundRect(ctx, SKY_W / 2 - 68, 42, 136 * (1 - cueF), 4, 2);
       ctx.fillStyle = "#FFB84D";
       ctx.fill();
     }
   }
 
+  /** 一朵三球棉花云 + 它自己的底部投影(中层专用,云才有厚度) */
+  function drawCotton(ctx: CanvasRenderingContext2D, x: number, y: number, k: number): void {
+    softShadow(ctx, x + 4, y + 13 * k, 30 * k, 8 * k, 0.1);
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = SKS_PALETTE.sksCloudMid;
+    ctx.beginPath();
+    ctx.arc(x - 21 * k, y + 3 * k, 15 * k, 0, Math.PI * 2);
+    ctx.arc(x, y - 6 * k, 21 * k, 0, Math.PI * 2);
+    ctx.arc(x + 23 * k, y + 4 * k, 14 * k, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function draw(): void {
     if (!g) return;
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = g;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     // 天空是 480×720 的定值,画布多矮都得整片装进去:等比缩放 + 居中。
     // 1.1 是按宽度缩放的,画布一矮,玩家那一行(596)就被裁到下沿外面,拖着飞却看不见自己。
     const fit = skyFit(canvas.width, canvas.height);
@@ -1602,125 +1908,222 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     const jitter = shake > 0 && !reduce ? Math.sin(clock * 70) * shake * 6 : 0;
     // 富余出来的两条边也铺同一片天,只压暗一点点当边界 —— 不留灰条
     if (fit.offX > 0.5 || fit.offY > 0.5) {
-      const wide = g.createLinearGradient(0, 0, 0, canvas.height);
+      const wide = ctx.createLinearGradient(0, 0, 0, canvas.height);
       wide.addColorStop(0, "#FFFFFF");
       wide.addColorStop(1, tint);
-      g.fillStyle = wide;
-      g.fillRect(0, 0, canvas.width, canvas.height);
-      g.fillStyle = "rgba(104,136,186,.16)";
-      g.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = wide;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "rgba(104,136,186,.16)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-    g.save();
-    g.translate(fit.offX + jitter * s, fit.offY);
-    g.scale(s, s);
-    g.beginPath();
-    g.rect(0, 0, SKY_W, SKY_H);
-    g.clip();
+    ctx.save();
+    ctx.translate(fit.offX + jitter * s, fit.offY);
+    ctx.scale(s, s);
+    ctx.beginPath();
+    ctx.rect(0, 0, SKY_W, SKY_H);
+    ctx.clip();
 
-    const grad = g.createLinearGradient(0, 0, 0, SKY_H);
-    grad.addColorStop(0, "#FFFFFF");
-    grad.addColorStop(1, tint);
-    g.fillStyle = grad;
-    g.fillRect(0, 0, SKY_W, SKY_H);
-
-    // 云层视差:两层不同速度往下飘,纵版的速度感就出来了(仍然是 2D)
-    for (const layer of [
-      { speed: 16, alpha: 0.35, scale: 1.4, seed: 0 },
-      { speed: 30, alpha: 0.62, scale: 1, seed: 71 },
-    ]) {
-      g.fillStyle = `rgba(255,255,255,${layer.alpha})`;
-      for (let i = 0; i < 5; i++) {
-        const cy = ((clock * layer.speed + i * 170 + layer.seed) % (SKY_H + 200)) - 100;
-        const cx = ((i * 149 + layer.seed) % SKY_W) + 24;
-        g.beginPath();
-        g.ellipse(cx, cy, 44 * layer.scale, 20 * layer.scale, 0, 0, Math.PI * 2);
-        g.ellipse(cx + 30 * layer.scale, cy + 6, 30 * layer.scale, 15 * layer.scale, 0, 0, Math.PI * 2);
-        g.fill();
-      }
-    }
-
-    for (const gl of gliders) {
-      g.save();
-      g.globalAlpha = Math.max(0, Math.min(1, gl.life));
-      g.translate(gl.x, gl.y);
-      g.rotate(reduce ? 0 : Math.sin(gl.spin) * 0.5);
-      g.fillStyle = gl.color;
-      roundRect(g, -gl.r * 0.8, -gl.r * 0.5, gl.r * 1.6, gl.r, gl.r * 0.4);
-      g.fill();
-      g.restore();
-    }
-
-    for (const pf of puffs.live) {
-      const f = Math.max(0, pf.life / pf.max);
-      g.globalAlpha = f * 0.85;
-      if (pf.tone === "graze") {
-        g.strokeStyle = "#7FE7C4";
-        g.lineWidth = 3;
-        g.beginPath();
-        g.arc(pf.x, pf.y, pf.r * (1.8 - f), 0, Math.PI * 2);
-        g.stroke();
-      } else {
-        g.fillStyle = pf.tone === "spark" ? "#FFE8A3" : "#FFFFFF";
-        g.beginPath();
-        g.arc(pf.x, pf.y, pf.r * (1.4 - f), 0, Math.PI * 2);
-        g.fill();
-      }
-    }
-    g.globalAlpha = 1;
-
-    for (const f of foes) drawFoe(g, f);
-    if (boss) drawBoss(g, boss);
-
-    for (const it of pickups) {
-      g.save();
-      g.translate(it.x, it.y + (reduce ? 0 : Math.sin(it.phase * 4) * 3));
-      g.fillStyle = "#FFFFFF";
-      g.beginPath();
-      g.arc(0, 0, 15, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = "#8FD0FF";
-      g.lineWidth = 3;
-      g.stroke();
-      g.font = '700 17px "PingFang SC",system-ui,sans-serif';
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillStyle = "#3F6BA8";
-      g.fillText(PICKUP_INFO[it.kind].emoji, 0, 1);
-      g.restore();
-    }
-
-    // 合流提示:两机靠近时拉一条彩虹带,告诉两个人「再近一点就合体」
-    if (opts.link && pilots.length === 2 && !pilots[0].grounded && !pilots[1].grounded) {
-      const d = Math.hypot(pilots[0].x - pilots[1].x, pilots[0].y - pilots[1].y);
-      if (d < LINK_DIST * 1.5) {
-        g.save();
-        g.globalAlpha = linkGlow > 0 ? 0.85 : 0.3;
-        g.strokeStyle = linkGlow > 0 ? "#9BE7FF" : "#C9DCF5";
-        g.lineWidth = linkGlow > 0 ? 7 : 3;
-        g.beginPath();
-        g.moveTo(pilots[0].x, pilots[0].y);
-        g.lineTo(pilots[1].x, pilots[1].y);
-        g.stroke();
-        g.restore();
-      }
-    }
-
-    drawShots(g);
-    drawBullets(g);
-
-    for (const p of pilots) {
-      if (p.grounded) continue;
-      drawPlane(g, p);
-    }
-    g.restore();
+    // 图层序 ①–⑨ 由 LAYER_ORDER 一锤定音:云永远盖不住弹幕与判定核心
+    const painters: Record<LayerName, () => void> = {
+      // ① 天空三停渐变:规格顶色 → 规格底色 → 章节 tint 收在地平线
+      sky: () => {
+        const grad = ctx.createLinearGradient(0, 0, 0, SKY_H);
+        grad.addColorStop(0, SKS_PALETTE.sksSkyTop);
+        grad.addColorStop(0.6, SKS_PALETTE.sksSkyBottom);
+        grad.addColorStop(1, tint);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, SKY_W, SKY_H);
+      },
+      // ② 高空薄云:0.2× 视差,细长条
+      cloudHi: () => {
+        ctx.fillStyle = SKS_PALETTE.sksCloudHi;
+        for (let i = 0; i < 4; i++) {
+          const cx = (i * 163 + 40) % SKY_W;
+          const cy = ((i * (CLOUD_WRAP / 4) + clouds.offsets[0]) % CLOUD_WRAP) - 120;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, 70, 12, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx + 46, cy + 8, 44, 8, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      },
+      // ③ 中层棉花云:0.5× 视差;飞机的椭圆投影就落在这层云上(纵深靠影子)
+      cloudMid: () => {
+        for (let i = 0; i < 5; i++) {
+          const cx = (i * 149 + 60) % SKY_W;
+          const cy = ((i * (CLOUD_WRAP / 5) + 37 + clouds.offsets[1]) % CLOUD_WRAP) - 120;
+          drawCotton(ctx, cx, cy, 0.8 + (i % 3) * 0.25);
+        }
+        for (const p of pilots) {
+          if (p.grounded) continue;
+          softShadow(ctx, p.x, p.y + SHADOW.offsetY, 26, 8, SHADOW.alpha, shadowScaleAt(p.y));
+          for (const off of wingmanOffsets(shotPlan(p.plane.levels).wingmen)) {
+            softShadow(
+              ctx,
+              p.x + off.dx,
+              p.y + off.dy + SHADOW.offsetY * WINGMAN_SCALE,
+              26 * WINGMAN_SCALE,
+              8 * WINGMAN_SCALE,
+              SHADOW.alpha,
+              shadowScaleAt(p.y + off.dy)
+            );
+          }
+        }
+      },
+      // ④ 低层大朵云:0.9× 视差,左上受光边,透明度封在 0.5 以下不遮弹幕
+      cloudLow: () => {
+        for (let i = 0; i < 3; i++) {
+          const cx = (i * 211 + 90) % SKY_W;
+          const cy = ((i * (CLOUD_WRAP / 3) + 71 + clouds.offsets[2]) % CLOUD_WRAP) - 120;
+          ctx.save();
+          ctx.globalAlpha = LOW_CLOUD_ALPHA;
+          ctx.fillStyle = "#FFFFFF";
+          ctx.beginPath();
+          ctx.arc(cx - 35, cy - 13, 27, 0, Math.PI * 2);
+          ctx.arc(cx - 3, cy - 21, 35, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = SKS_DECOR.lowCloud;
+          ctx.beginPath();
+          ctx.arc(cx - 30, cy - 8, 27, 0, Math.PI * 2);
+          ctx.arc(cx + 2, cy - 16, 35, 0, Math.PI * 2);
+          ctx.arc(cx + 38, cy - 2, 25, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      },
+      // ⑤ 敌机(含迫降滑行 / Boss 机体)与敌弹
+      foes: () => {
+        for (const gl of gliders) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, gl.life));
+          ctx.translate(gl.x, gl.y);
+          ctx.rotate(reduce ? 0 : Math.sin(gl.spin) * 0.5);
+          ctx.fillStyle = gl.color;
+          roundRect(ctx, -gl.r * 0.8, -gl.r * 0.5, gl.r * 1.6, gl.r, gl.r * 0.4);
+          ctx.fill();
+          strokeOutline(ctx, gl.color, 1.5);
+          ctx.restore();
+        }
+        for (const f of foes) drawFoe(ctx, f);
+        if (boss) drawBoss(ctx, boss);
+        drawBullets(ctx);
+      },
+      // ⑥ 我方弹与拾取物
+      shots: () => {
+        // 修复员 S7:平涂白圆 + emoji 字形 → kit 三停渐变专属色圈 + 矢量符号
+        // (每类一个底色圈,弹雨里靠色圈 + 图形双通道识别;±3px 浮动与 reduced 分支原样)
+        for (const it of pickups) {
+          ctx.save();
+          ctx.translate(it.x, it.y + (reduce ? 0 : Math.sin(it.phase * 4) * 3));
+          const badge = PICKUP_BADGE[it.kind];
+          ctx.fillStyle = ballGradient(ctx, 0, 0, 15, badge.ring);
+          ctx.beginPath();
+          ctx.arc(0, 0, 15, 0, Math.PI * 2);
+          ctx.fill();
+          strokeOutline(ctx, badge.ring, 2);
+          const roleFill: Record<"base" | "light" | "dark" | "white", string> = {
+            base: badge.color,
+            light: shade(badge.color, 20),
+            dark: shade(badge.color, -24),
+            white: "rgba(255,255,255,.92)",
+          };
+          for (const part of pickupArt(it.kind, 8.5)) {
+            tracePath(ctx, part.segs);
+            if (part.mode === "fill") {
+              ctx.fillStyle = roleFill[part.role];
+              ctx.fill();
+              if (part.role === "base") strokeOutline(ctx, badge.color, 1.5);
+            } else {
+              ctx.strokeStyle = roleFill[part.role];
+              ctx.lineWidth = 1.6;
+              ctx.lineCap = "round";
+              ctx.stroke();
+              ctx.lineCap = "butt";
+            }
+          }
+          ctx.restore();
+        }
+        drawShots(ctx);
+      },
+      // ⑦ 主机 + 僚机;判定核心画在这层最顶,谁都盖不住
+      planes: () => {
+        // 合流提示:两机靠近时拉一条彩虹带,告诉两个人「再近一点就合体」
+        if (opts.link && pilots.length === 2 && !pilots[0].grounded && !pilots[1].grounded) {
+          const d = Math.hypot(pilots[0].x - pilots[1].x, pilots[0].y - pilots[1].y);
+          if (d < LINK_DIST * 1.5) {
+            ctx.save();
+            ctx.globalAlpha = linkGlow > 0 ? 0.85 : 0.3;
+            ctx.strokeStyle = linkGlow > 0 ? "#9BE7FF" : "#C9DCF5";
+            ctx.lineWidth = linkGlow > 0 ? 7 : 3;
+            ctx.beginPath();
+            ctx.moveTo(pilots[0].x, pilots[0].y);
+            ctx.lineTo(pilots[1].x, pilots[1].y);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+        for (const p of pilots) {
+          if (!p.grounded) drawPlane(ctx, p);
+        }
+        for (const p of pilots) {
+          if (!p.grounded) drawCore(ctx, p);
+        }
+      },
+      // ⑧ 粒子:烟 / 火花 / 擦弹环 + 星屑 + 打转烟圈
+      puffs: () => {
+        for (const pf of puffs.live) {
+          const f = Math.max(0, pf.life / pf.max);
+          ctx.globalAlpha = f * 0.85;
+          if (pf.tone === "graze") {
+            ctx.strokeStyle = "#7FE7C4";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(pf.x, pf.y, pf.r * (1.8 - f), 0, Math.PI * 2);
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = pf.tone === "spark" ? "#FFE8A3" : "#FFFFFF";
+            ctx.beginPath();
+            ctx.arc(pf.x, pf.y, pf.r * (1.4 - f), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1;
+        for (const sp of sparkles) {
+          const t = 1 - sp.life / SPARKLE_LIFE_S;
+          ctx.globalAlpha = 0.7 * Math.max(0, 1 - t);
+          ctx.fillStyle = SKS_DECOR.sparkle;
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, 2.6 * (1 - t * 0.6), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        // 打转烟圈:360ms easeOutQuad 荡开;reduced 是一帧白闪
+        const dur = reduce ? 1 / 60 : SPIN_SMOKE_MS / 1000;
+        for (const w of rings) {
+          const t = easeOutQuad(w.age / dur);
+          ctx.globalAlpha = 0.8 * (1 - t);
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(w.x, w.y, w.r * (0.55 + 0.9 * t), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      },
+      // ⑨ 画布内 HUD:Boss 元气条与预告倒计时(DOM 的 HUD 天然更上层)
+      hud: () => {
+        if (boss) drawBossHud(ctx, boss);
+      },
+    };
+    for (const layer of LAYER_ORDER) painters[layer]();
+    ctx.restore();
 
     // 能飞的那一片有多大,给条细边框标出来(留白也是天,不标就看不出边)
     if (fit.offX > 0.5 || fit.offY > 0.5) {
-      g.save();
-      g.strokeStyle = "rgba(255,255,255,.85)";
-      g.lineWidth = Math.max(1, 2 * s);
-      g.strokeRect(fit.offX, fit.offY, SKY_W * s, SKY_H * s);
-      g.restore();
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,.85)";
+      ctx.lineWidth = Math.max(1, 2 * s);
+      ctx.strokeRect(fit.offX, fit.offY, SKY_W * s, SKY_H * s);
+      ctx.restore();
     }
   }
 
@@ -1728,7 +2131,10 @@ export function createSortie(opts: SortieOptions): SortieHandle {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000 || 0);
     last = now;
-    if (running && !paused && !finished) step(dt);
+    if (running && !paused && !finished) {
+      step(dt);
+      stepVisual(dt);
+    }
     // 上面那条选关工具条会随着提示语变高变矮,窗口却没 resize 事件。
     // 半秒量一次,发现地方变了再改画布 —— 别让飞机悄悄溜到下沿外面。
     if (++layoutTick >= 30) {
@@ -1772,6 +2178,10 @@ export function createSortie(opts: SortieOptions): SortieHandle {
       gliders = [];
       pickups = [];
       boss = null;
+      // 1.3 纯视觉层一并归零:云层滚动器 / 星屑 / 烟圈
+      clouds.reset();
+      sparkles.length = 0;
+      rings.length = 0;
       veilNode?.remove();
       veilNode = null;
       wrap.remove();
@@ -1806,6 +2216,7 @@ export function createSortie(opts: SortieOptions): SortieHandle {
         : null,
       shake,
       calm: reduce,
+      deco: { cloudScroll: clouds.total(), sparkles: sparkles.length, rings: rings.length },
     }),
   };
 }

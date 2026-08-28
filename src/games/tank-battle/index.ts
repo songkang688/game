@@ -69,6 +69,36 @@ import { SHELLS, SHELL_ORDER, nextShell, previewPath, shotVelocity, type ShellKi
 import { AI_TIERS, TIER_SPECS, type AiTier } from "./ai12";
 import { BRICK_FULL, GRASS_ALPHA, Q_NE, Q_NW, Q_SE, Q_SW } from "./terrain12";
 import { mulberry32 } from "../level99";
+import { shade, withAlpha } from "../../art/kit/palette";
+import {
+  KIND_BADGE,
+  PART_KINDS,
+  SHADOW_PX,
+  TANK_SIDE_RATIO,
+  TK_COLORS,
+  TK_GOLD,
+  TK_IRON,
+  TRACK_TOOTH_GAP,
+  TRACK_TOOTH_H,
+  TURRET_RATIO,
+  TankFx,
+  cellBlock,
+  drawBadge,
+  drawFxCrumb,
+  drawFxFlower,
+  drawFxSmoke,
+  drawFxSparkle,
+  drawHexRing,
+  drawMuzzleFlash,
+  drawPart,
+  drawShieldBadge,
+  drawTurretSheen,
+  iceSheenPos,
+  rebuildProgress,
+  ringAngle,
+  trackToothOffset,
+  waterFrame,
+} from "./visual13";
 
 const P_NAME = ["朵朵", "星星"];
 const P_COLOR = ["#e8558f", "#3f7fd6"];
@@ -91,11 +121,12 @@ const CSS = `
 /* display:flex 会把浏览器自带的 [hidden]{display:none} 顶掉,得自己补一条压回去 */
 .tkb-wrap[hidden],.tkb-hud[hidden],.tkb-bar[hidden],.tkb-pads[hidden],.tkb-acts[hidden],
 .tkb-mode[hidden],.tkb-mini-cv[hidden],.tkb-canvas[hidden]{display:none;}
-.tkb-chip{background:#fff;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
+.tkb-chip{background:linear-gradient(180deg,#ffffff,#fdf4ec);border:1px solid rgba(160,140,120,.22);
+  border-radius:999px;padding:5px 11px;font-size:13px;font-weight:800;color:#5f5280;
   box-shadow:0 2px 6px rgba(150,140,180,.24);white-space:nowrap;}
-.tkb-chip-warn{background:#ffe9ef;color:#b8436f;}
+.tkb-chip-warn{background:linear-gradient(180deg,#ffeef3,#ffe4ec);border-color:rgba(200,90,130,.3);color:#b8436f;}
 .tkb-board{position:relative;line-height:0;}
-.tkb-canvas{display:block;border-radius:14px;background:#5f5a52;touch-action:none;
+.tkb-canvas{display:block;border-radius:14px;background:#f5ebdd;touch-action:none;
   box-shadow:0 4px 14px rgba(90,80,110,.28);}
 .tkb-mini{position:absolute;right:6px;bottom:6px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
 .tkb-mini-btn{border:none;border-radius:999px;padding:4px 9px;font-size:11.5px;font-weight:900;cursor:pointer;
@@ -200,7 +231,22 @@ function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number,
   c.closePath();
 }
 
-/** 积木砖:四个小块各画各的,被崩掉的那一角就是空的(缝里能钻弹丸) */
+// 地形一次算好的配色(每帧逐格调用,别在热路径里反复 shade)
+const GROUND_A = TK_COLORS.tkGround;
+const GROUND_B = shade(TK_COLORS.tkGround, -5);
+const BRICK_EDGE = withAlpha(shade(TK_COLORS.tkBrick, 30), 0.9);
+const BRICK_SEAM = "rgba(255,244,232,.5)";
+const STEEL_RIVET = shade(TK_COLORS.tkSteel, -32);
+const WATER_TOP = shade(TK_COLORS.tkWater, 8);
+const WATER_DEEP = shade(TK_COLORS.tkWater, -10);
+const ICE_CRACK = withAlpha(shade(TK_COLORS.tkIce, -16), 0.8);
+const GRASS_DARK = shade(TK_COLORS.tkGrass, -14);
+const GRASS_LIGHT = shade(TK_COLORS.tkGrass, 16);
+const BASE_WALL = "#F2DCA8";
+const BASE_FENCE = shade("#F2DCA8", -26);
+
+/** 积木砖:四个小块各画各的,被崩掉的那一角就是空的(缝里能钻弹丸)。
+ *  每个小块都是一枚 2.5D 双面块(顶亮 / 右侧暗 / 右下投影),0.8px 的缝就是砖缝。 */
 function drawBrick(c: CanvasRenderingContext2D, x: number, y: number, s: number, mask: number): void {
   const half = s / 2;
   const bits: Array<[number, number, number]> = [
@@ -211,92 +257,171 @@ function drawBrick(c: CanvasRenderingContext2D, x: number, y: number, s: number,
   ];
   for (const [bit, dx, dy] of bits) {
     if (!(mask & bit)) continue;
-    c.fillStyle = mask === BRICK_FULL ? "#c1714a" : "#cf8358";
-    roundRect(c, x + dx + 0.8, y + dy + 0.8, half - 1.6, half - 1.6, 2);
-    c.fill();
-    c.strokeStyle = "rgba(255,255,255,.45)";
+    const bx = x + dx + 0.8;
+    const by = y + dy + 0.8;
+    const bs = half - 1.6;
+    cellBlock(c, bx, by, bs, bs, TK_COLORS.tkBrick, 1.5);
+    const topW = bs - SHADOW_PX;
+    // 顶亮边:光从左上 45° 来
+    c.strokeStyle = BRICK_EDGE;
     c.lineWidth = 1;
     c.beginPath();
-    c.moveTo(x + dx + 1.5, y + dy + half / 2);
-    c.lineTo(x + dx + half - 1.5, y + dy + half / 2);
+    c.moveTo(bx + 1, by + 1);
+    c.lineTo(bx + topW - 1, by + 1);
+    c.stroke();
+    // 顶面中间一道浅浅的砖缝
+    c.strokeStyle = BRICK_SEAM;
+    c.beginPath();
+    c.moveTo(bx + 1, by + topW / 2);
+    c.lineTo(bx + topW - 1, by + topW / 2);
     c.stroke();
   }
 }
 
+/** 钢块:双面块 + 对角高光 + 铆钉四点,一看就知道普通弹丸啃不动 */
 function drawSteel(c: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  c.fillStyle = "#b9bfc9";
-  roundRect(c, x + 1, y + 1, s - 2, s - 2, 4);
-  c.fill();
-  c.fillStyle = "#8f97a3";
-  const r = Math.max(1.2, s * 0.07);
-  for (const [dx, dy] of [
-    [0.28, 0.28],
-    [0.72, 0.28],
-    [0.28, 0.72],
-    [0.72, 0.72],
+  cellBlock(c, x + 1, y + 1, s - 2, s - 2, TK_COLORS.tkSteel, 3);
+  const topW = s - 2 - SHADOW_PX;
+  const side = Math.max(1, topW * TANK_SIDE_RATIO);
+  const face = topW - side;
+  // 对角高光:左下 → 右上一道斜光,只画在顶面里
+  c.strokeStyle = "rgba(255,255,255,.55)";
+  c.lineWidth = Math.max(1.2, s * 0.08);
+  c.beginPath();
+  c.moveTo(x + 1 + face * 0.2, y + 1 + face * 0.78);
+  c.lineTo(x + 1 + face * 0.72, y + 1 + face * 0.24);
+  c.stroke();
+  // 铆钉四点
+  c.fillStyle = STEEL_RIVET;
+  const r = Math.max(1.1, s * 0.055);
+  for (const [fx, fy] of [
+    [0.26, 0.26],
+    [0.74, 0.26],
+    [0.26, 0.74],
+    [0.74, 0.74],
   ]) {
     c.beginPath();
-    c.arc(x + s * dx, y + s * dy, r, 0, Math.PI * 2);
+    c.arc(x + 1 + face * fx, y + 1 + face * fy, r, 0, Math.PI * 2);
     c.fill();
   }
 }
 
-function drawWater(c: CanvasRenderingContext2D, x: number, y: number, s: number, t: number): void {
-  c.fillStyle = "#6fb6dd";
+/** 水面:纵向渐变打底,两帧波纹交替滚动(reduced 冻在第 0 帧) */
+function drawWater(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  tMs: number,
+  reduced: boolean
+): void {
+  const g = c.createLinearGradient(x, y, x, y + s);
+  g.addColorStop(0, WATER_TOP);
+  g.addColorStop(1, WATER_DEEP);
+  c.fillStyle = g;
   c.fillRect(x, y, s, s);
-  c.strokeStyle = "rgba(255,255,255,.55)";
+  const frame = waterFrame(tMs, reduced);
+  const slide = frame === 0 ? 0 : s * 0.18;
+  c.strokeStyle = "rgba(255,255,255,.6)";
   c.lineWidth = Math.max(1, s * 0.06);
   for (let k = 0; k < 2; k++) {
-    const yy = y + s * (0.34 + k * 0.34) + Math.sin(t * 2 + x + k) * s * 0.05;
+    const yy = y + s * (0.32 + k * 0.36) + (frame === 0 ? 0 : s * 0.04);
     c.beginPath();
-    c.moveTo(x + s * 0.14, yy);
-    c.quadraticCurveTo(x + s * 0.5, yy - s * 0.12, x + s * 0.86, yy);
+    c.moveTo(x + s * 0.12 + slide, yy);
+    c.quadraticCurveTo(x + s * 0.38 + slide, yy - s * 0.1, x + s * 0.56 + slide, yy);
     c.stroke();
   }
 }
 
-/** 冰面:浅蓝的一格,加两道反光,一看就知道会滑 */
-function drawIce(c: CanvasRenderingContext2D, x: number, y: number, s: number): void {
-  c.fillStyle = "#cfe9f7";
+/** 冰面:浅蓝底 + 细裂纹 + 斜向高光扫条(4000ms 一趟,reduced 冻结) */
+function drawIce(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  tMs: number,
+  reduced: boolean
+): void {
+  c.fillStyle = TK_COLORS.tkIce;
   c.fillRect(x, y, s, s);
-  c.strokeStyle = "rgba(255,255,255,.85)";
-  c.lineWidth = Math.max(1, s * 0.05);
+  // 细裂纹:两截短折线
+  c.strokeStyle = ICE_CRACK;
+  c.lineWidth = 1;
   c.beginPath();
-  c.moveTo(x + s * 0.18, y + s * 0.72);
-  c.lineTo(x + s * 0.5, y + s * 0.22);
-  c.moveTo(x + s * 0.56, y + s * 0.78);
-  c.lineTo(x + s * 0.82, y + s * 0.42);
+  c.moveTo(x + s * 0.2, y + s * 0.68);
+  c.lineTo(x + s * 0.42, y + s * 0.44);
+  c.lineTo(x + s * 0.5, y + s * 0.5);
+  c.moveTo(x + s * 0.6, y + s * 0.76);
+  c.lineTo(x + s * 0.78, y + s * 0.5);
   c.stroke();
+  // 高光扫条:斜 45°,只在本格里扫(clip 住,绝不越格)
+  const p = iceSheenPos(tMs, reduced);
+  c.save();
+  c.beginPath();
+  c.rect(x, y, s, s);
+  c.clip();
+  const cx = x - s * 0.5 + p * s * 2;
+  c.strokeStyle = "rgba(255,255,255,.5)";
+  c.lineWidth = Math.max(1.5, s * 0.14);
+  c.beginPath();
+  c.moveTo(cx, y + s);
+  c.lineTo(cx + s * 0.6, y);
+  c.stroke();
+  c.restore();
 }
 
-/** 草丛:半透明,躲进去只看得见影子,不至于完全瞎 */
+/** 草丛:三簇叠层。半透明遮挡关系(GRASS_ALPHA)与 1.2 完全一致,藏车规则不变 */
 function drawGrass(c: CanvasRenderingContext2D, x: number, y: number, s: number): void {
   c.globalAlpha = GRASS_ALPHA;
-  c.fillStyle = "#5fa658";
+  c.fillStyle = GRASS_DARK;
   roundRect(c, x, y, s, s, 3);
   c.fill();
-  c.fillStyle = "#8cc878";
-  for (const [dx, dy] of [
-    [0.25, 0.7],
-    [0.5, 0.45],
-    [0.75, 0.72],
+  // 三簇:每簇一深一浅两瓣叠着,层次比一排椭圆厚
+  for (const [fx, fy] of [
+    [0.28, 0.66],
+    [0.54, 0.42],
+    [0.76, 0.7],
   ]) {
+    c.fillStyle = TK_COLORS.tkGrass;
     c.beginPath();
-    c.ellipse(x + s * dx, y + s * dy, s * 0.16, s * 0.26, 0, 0, Math.PI * 2);
+    c.ellipse(x + s * fx, y + s * fy, s * 0.2, s * 0.28, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = GRASS_LIGHT;
+    c.beginPath();
+    c.ellipse(x + s * (fx - 0.04), y + s * (fy - 0.08), s * 0.11, s * 0.16, 0, 0, Math.PI * 2);
     c.fill();
   }
   c.globalAlpha = 1;
 }
 
-function drawBase(c: CanvasRenderingContext2D, x: number, y: number, s: number, shielded: boolean, t: number): void {
-  c.fillStyle = "#f7e7b8";
-  roundRect(c, x + 1, y + 1, s - 2, s - 2, 5);
-  c.fill();
-  c.fillStyle = "#ffb937";
+/** 星星堡垒:双面块城座 + 围栏 + 金星 + 小旗,守的就是它 */
+function drawBase(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  shielded: boolean,
+  tMs: number,
+  reduced: boolean
+): void {
+  cellBlock(c, x + 1, y + 1, s - 2, s - 2, BASE_WALL, 4);
+  const topW = s - 2 - SHADOW_PX;
+  const side = Math.max(1, topW * TANK_SIDE_RATIO);
+  const face = topW - side;
+  // 围栏:顶面下缘一排小桩
+  c.fillStyle = BASE_FENCE;
+  const post = Math.max(1.4, s * 0.08);
+  for (const fx of [0.2, 0.5, 0.8]) {
+    c.fillRect(x + 1 + face * fx - post / 2, y + 1 + face * 0.86 - post / 2, post, post);
+  }
+  const cx = x + 1 + face / 2;
+  const cy = y + 1 + face / 2;
+  // 金色五角星(描边压深一档,小格子上也立得住)
+  const R = s * 0.3;
+  c.fillStyle = TK_GOLD;
+  c.strokeStyle = shade(TK_GOLD, -24);
+  c.lineWidth = 1;
   c.beginPath();
-  const cx = x + s / 2;
-  const cy = y + s / 2;
-  const R = s * 0.36;
   for (let i = 0; i < 10; i++) {
     const a = (Math.PI / 5) * i - Math.PI / 2;
     const r = i % 2 === 0 ? R : R * 0.45;
@@ -307,119 +432,243 @@ function drawBase(c: CanvasRenderingContext2D, x: number, y: number, s: number, 
   }
   c.closePath();
   c.fill();
+  c.stroke();
+  // 小旗:右上角一杆粉色三角旗
+  const fx0 = x + 1 + face * 0.82;
+  const fy0 = y + 1 + face * 0.1;
+  c.strokeStyle = TK_IRON;
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(fx0, fy0);
+  c.lineTo(fx0, fy0 + s * 0.22);
+  c.stroke();
+  c.fillStyle = TK_COLORS.tkPink;
+  c.beginPath();
+  c.moveTo(fx0, fy0);
+  c.lineTo(fx0 - s * 0.16, fy0 + s * 0.06);
+  c.lineTo(fx0, fy0 + s * 0.12);
+  c.closePath();
+  c.fill();
   if (shielded) {
-    c.strokeStyle = `rgba(120,200,255,${0.55 + Math.sin(t * 4) * 0.2})`;
+    const pulse = reduced ? 0 : Math.sin(tMs / 250) * 0.2;
+    c.strokeStyle = `rgba(120,200,255,${0.55 + pulse})`;
     c.lineWidth = Math.max(1.5, s * 0.09);
     c.beginPath();
-    c.arc(cx, cy, s * 0.46, 0, Math.PI * 2);
+    c.arc(x + s / 2, y + s / 2, s * 0.46, 0, Math.PI * 2);
     c.stroke();
   }
 }
 
-const KIND_FACE: Record<string, string> = {
-  swift: "💨",
-  armor: "🛡",
-  power: "💥",
-  smart: "🕵",
-};
+/** 屏幕右下方向折回车体局部坐标(车按 dir × 90° 旋转,投影与侧面必须全图统一朝右下) */
+const RD_LOCAL: ReadonlyArray<readonly [number, number]> = [
+  [1, 1],
+  [1, -1],
+  [-1, -1],
+  [-1, 1],
+];
 
-/** 一辆铁皮车。后坐、前摇的小顿、以及一点点斜投影的厚度感都在这儿 */
-function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, t: number): void {
+/** 车身轮廓(局部坐标),投影层与侧面层都用同一份剪影 */
+function tankSilhouette(c: CanvasRenderingContext2D, half: number, ox: number, oy: number): void {
+  roundRect(c, -half + ox, -half * 0.95 + oy, half * 2, half * 1.9, half * 0.3);
+}
+
+/** 车体的侧面/高光色算一次记一次:一帧十几辆车,别每辆都跑 shade */
+const BODY_SHADES = new Map<string, { side: string; lite: string }>();
+function bodyShades(base: string): { side: string; lite: string } {
+  let hit = BODY_SHADES.get(base);
+  if (!hit) {
+    hit = { side: shade(base, -22), lite: shade(base, 14) };
+    BODY_SHADES.set(base, hit);
+  }
+  return hit;
+}
+
+const BARREL_RING = shade(TK_IRON, -18);
+
+/**
+ * 一辆铁皮车:固定八道工序(四·补二)。
+ * ① 右下投影 ② 齿状履带 ③ 车身双面 ④ 炮塔圆壳+舱盖 ⑤ 炮管套环+口部亮边
+ * ⑥ 阵营徽章(自绘矢量) ⑦ 护甲小盾牌 ⑧ 炮口十字闪光。
+ * 后坐位移仍旧只认 `recoilPixels`,判定半径 `TANK_HALF` 一个数都没动。
+ */
+function drawTank(c: CanvasRenderingContext2D, tk: Tank, s: number, tMs: number, opts: DrawOpts): void {
   if (tk.spin > 0) return; // 散架了:这一会儿画的是零件,不是车
   const kick = recoilPixels(tk.recoil, s);
   const px = tk.x * s - [0, 1, 0, -1][tk.dir] * kick;
   const py = tk.y * s - [-1, 0, 1, 0][tk.dir] * kick;
   const half = TANK_HALF * s;
   const body =
-    tk.side === "player" ? P_COLOR[tk.player] ?? P_COLOR[0] : ENEMY_SPECS[tk.kind as EnemyKind]?.color ?? "#9a9fb5";
+    tk.side === "player"
+      ? tk.player === 0
+        ? TK_COLORS.tkPink
+        : TK_COLORS.tkBlue
+      : ENEMY_SPECS[tk.kind as EnemyKind]?.color ?? "#9a9fb5";
+  const { side: bodySide, lite: bodyTopLite } = bodyShades(body);
+  const [rdx, rdy] = RD_LOCAL[tk.dir];
+  const sideH = half * 1.24 * TANK_SIDE_RATIO;
+
   c.save();
   c.translate(px, py);
   c.rotate((tk.dir * Math.PI) / 2);
-  // 底下垫一层深色:俯视图里那一点点厚度感就靠它
-  c.fillStyle = "rgba(40,34,52,.25)";
-  roundRect(c, -half * 0.66, -half * 0.8, half * 1.32, half * 1.8, half * 0.35);
+
+  // ① 右下投影(全图统一 2px,折回局部坐标再画)
+  c.fillStyle = TK_COLORS.tkShadow;
+  tankSilhouette(c, half, rdx * SHADOW_PX, rdy * SHADOW_PX);
   c.fill();
-  // 轮子
-  c.fillStyle = "rgba(60,55,70,.85)";
-  roundRect(c, -half, -half * 0.95, half * 0.42, half * 1.9, 2);
+
+  // ② 履带两条:齿距 3px、齿高 1.5px,相位随里程推进(倒溜反向),reduced 冻结
+  const trackW = half * 0.42;
+  const trackY = -half * 0.95;
+  const trackH = half * 1.9;
+  const offset = opts.reduced ? 0 : trackToothOffset(opts.fx.rollOf(tk));
+  for (const tx of [-half, half * 0.58]) {
+    c.fillStyle = TK_IRON;
+    roundRect(c, tx, trackY, trackW, trackH, 2);
+    c.fill();
+    c.fillStyle = "rgba(255,255,255,.28)";
+    for (let yy = trackY + 1 - offset; yy < trackY + trackH - TRACK_TOOTH_H; yy += TRACK_TOOTH_GAP) {
+      if (yy < trackY + 0.5) continue;
+      c.fillRect(tx + 0.8, yy, trackW - 1.6, TRACK_TOOTH_H);
+    }
+  }
+
+  // ③ 车身:顶面主色 + 右侧面 shade(-22)(侧面高度 = 0.18 × 车宽,方向永远朝屏幕右下)
+  c.fillStyle = bodySide;
+  roundRect(c, -half * 0.62 + rdx * sideH * 0.5, -half * 0.9 + rdy * sideH * 0.5, half * 1.24, half * 1.7, half * 0.3);
   c.fill();
-  roundRect(c, half * 0.58, -half * 0.95, half * 0.42, half * 1.9, 2);
-  c.fill();
-  // 车身
   c.fillStyle = body;
-  roundRect(c, -half * 0.62, -half * 0.9, half * 1.24, half * 1.7, half * 0.35);
+  roundRect(c, -half * 0.62, -half * 0.9, half * 1.24, half * 1.7, half * 0.3);
   c.fill();
-  // 发射管
-  c.fillStyle = "rgba(50,45,60,.9)";
-  roundRect(c, -half * 0.14, -half * 1.25, half * 0.28, half * 0.62, 1.5);
+  // 顶面高光:光从左上来,车头沿亮一条
+  c.strokeStyle = bodyTopLite;
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(-half * 0.5, -half * 0.78);
+  c.lineTo(half * 0.5, -half * 0.78);
+  c.stroke();
+
+  // ⑤(前半) 炮管:先画管身,炮塔壳压在根部之上
+  c.fillStyle = TK_IRON;
+  roundRect(c, -half * 0.14, -half * 1.25, half * 0.28, half * 0.72, 1.5);
   c.fill();
+  // 口部 1px 亮边
+  c.fillStyle = "rgba(255,255,255,.75)";
+  c.fillRect(-half * 0.14, -half * 1.25, half * 0.28, 1);
+
+  // ④ 炮塔独立圆壳(0.55 车宽)+ 舱盖圆点 + 顶面高光弧
+  const turret = half * 1.24 * TURRET_RATIO * 0.5 + half * 0.14;
+  c.fillStyle = bodySide;
+  c.beginPath();
+  c.arc(rdx * sideH * 0.5, rdy * sideH * 0.5, turret, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = bodyTopLite;
+  c.beginPath();
+  c.arc(0, 0, turret, 0, Math.PI * 2);
+  c.fill();
+  // C-3 ①:左上高光弧换家族语言 —— shade(顶色,+18) 2px(原 1px 白细线),弧段同位
+  drawTurretSheen(c, 0, 0, turret * 0.72, bodyTopLite);
+  // 舱盖圆点:徽章占中心,舱盖靠车尾一点
+  c.fillStyle = bodySide;
+  c.beginPath();
+  c.arc(0, turret * 0.62, half * 0.12, 0, Math.PI * 2);
+  c.fill();
+
+  // ⑤(后半) 炮管根部套环:比管身各宽 1px 的一圈
+  c.fillStyle = BARREL_RING;
+  roundRect(c, -half * 0.14 - 1, -half * 0.72, half * 0.28 + 2, Math.max(2, half * 0.14), 1);
+  c.fill();
+
   if (tk.windup > 0) {
-    // 前摇:管口先亮一下,然后弹丸才出膛
+    // 前摇:管口先亮一下,然后弹丸才出膛(时长仍是 MUZZLE_WINDUP,一个数没动)
     const k = 1 - tk.windup / MUZZLE_WINDUP;
     c.fillStyle = `rgba(255,236,150,${0.35 + k * 0.5})`;
     c.beginPath();
     c.arc(0, -half * 1.3, half * (0.2 + k * 0.16), 0, Math.PI * 2);
     c.fill();
   }
-  c.restore();
-
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  c.font = `${Math.round(s * 0.34)}px system-ui`;
-  if (tk.side === "player") {
-    c.fillStyle = "#fff";
-    c.fillText(tk.player === 0 ? "🌸" : "⭐", px, py);
-  } else {
-    c.fillText(KIND_FACE[tk.kind] ?? "🚜", px, py);
+  // ⑧ 炮口十字闪光:弹丸出膛后 2 帧(reduced 留 1 帧,这是功能反馈)
+  if (opts.fx.muzzleOf(tk) > 0) {
+    drawMuzzleFlash(c, 0, -half * 1.32, half * 0.42);
   }
-
-  if (tk.armorMax > 1 && tk.armor < tk.armorMax) {
-    c.fillStyle = "rgba(230,230,240,.8)";
-    c.beginPath();
-    c.arc(px + half * 0.6, py - half * 0.7, s * 0.12, 0, Math.PI * 2);
+  // 受击白闪 2 帧:只叠一层白剪影,不动任何逻辑时序
+  if (opts.fx.hitOf(tk) > 0) {
+    c.fillStyle = "rgba(255,255,255,.7)";
+    tankSilhouette(c, half, 0, 0);
     c.fill();
   }
+  c.restore();
+
+  // ⑥ 阵营徽章:自绘矢量,画在炮塔正中,永远正着(不跟车转,8px 也认得出)
+  const badge: Parameters<typeof drawBadge>[1] =
+    tk.side === "player" ? (tk.player === 0 ? "flower" : "star") : KIND_BADGE[tk.kind] ?? "gear";
+  drawBadge(c, badge, px, py, Math.max(4, half * 0.42));
+
+  // ⑦ 护甲小盾牌(金边 8px):替换那颗白点
+  if (tk.armorMax > 1 && tk.armor < tk.armorMax) {
+    drawShieldBadge(c, px + half * 0.6, py - half * 0.7);
+  }
   if (tk.shield > 0) {
-    c.strokeStyle = `rgba(255,255,255,${0.5 + Math.sin(t * 12) * 0.25})`;
-    c.lineWidth = Math.max(1.5, s * 0.07);
-    c.beginPath();
-    c.arc(px, py, half * 1.15, 0, Math.PI * 2);
-    c.stroke();
+    const pulse = opts.reduced ? 0.62 : 0.5 + Math.sin(tMs / 83) * 0.25;
+    drawHexRing(c, px, py, half * 1.15, opts.reduced ? 0 : tMs / 600, pulse);
   }
 }
 
-/** 散架的那 3 秒:零件先飞散,再在出生点一件一件装回来 */
-function drawRebuilding(c: CanvasRenderingContext2D, tk: Tank, s: number): void {
+/**
+ * 散架的那 3 秒:自绘零件(齿轮/弹簧/履带片/轮子/螺母)先飞散,再在出生点装回来。
+ * 时间参数原封不动读 `SCATTER_SECONDS` / `REBUILD_SECONDS`;
+ * 重生点加旋转光环(1200ms/圈)+ 进度环;reduced 时零件一帧灰显、光环静态、进度弧保留。
+ */
+function drawRebuilding(c: CanvasRenderingContext2D, tk: Tank, s: number, tMs: number, reduced: boolean): void {
   if (tk.spin <= 0) return;
   const gone = REBUILD_SECONDS - tk.spin;
-  const parts = ["🔩", "⚙️", "🔧", "🛞", "🧰"];
+  const partR = Math.max(3, s * 0.15);
   if (gone < SCATTER_SECONDS) {
     const k = gone / SCATTER_SECONDS;
-    c.font = `${Math.round(s * 0.34)}px system-ui`;
-    c.textAlign = "center";
-    c.textBaseline = "middle";
+    if (reduced) {
+      // 一帧灰显:零件静静摆在原地,不做抛散动画
+      c.globalAlpha = 0.8;
+      for (const [i, kind] of PART_KINDS.entries()) {
+        const a = (i / PART_KINDS.length) * Math.PI * 2;
+        drawPart(c, kind, (tk.scatterX + Math.cos(a) * 0.4) * s, (tk.scatterY + Math.sin(a) * 0.4) * s, partR, true);
+      }
+      c.globalAlpha = 1;
+      return;
+    }
     c.globalAlpha = Math.max(0, 1 - k);
-    for (const [i, face] of parts.entries()) {
-      const a = (i / parts.length) * Math.PI * 2;
-      c.fillText(face, (tk.scatterX + Math.cos(a) * k * 1.1) * s, (tk.scatterY + Math.sin(a) * k * 1.1) * s);
+    for (const [i, kind] of PART_KINDS.entries()) {
+      const a = (i / PART_KINDS.length) * Math.PI * 2;
+      drawPart(c, kind, (tk.scatterX + Math.cos(a) * k * 1.1) * s, (tk.scatterY + Math.sin(a) * k * 1.1) * s, partR);
     }
     c.globalAlpha = 1;
     return;
   }
   // 组装:零件从四周收回出生点,收满就回场
   const k = (gone - SCATTER_SECONDS) / Math.max(0.01, REBUILD_SECONDS - SCATTER_SECONDS);
-  c.font = `${Math.round(s * 0.3)}px system-ui`;
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  for (const [i, face] of parts.entries()) {
-    const a = (i / parts.length) * Math.PI * 2;
+  const cx = tk.x * s;
+  const cy = tk.y * s;
+  for (const [i, kind] of PART_KINDS.entries()) {
+    const a = (i / PART_KINDS.length) * Math.PI * 2;
     const r = (1 - k) * 1.0;
-    c.fillText(face, (tk.x + Math.cos(a) * r) * s, (tk.y + Math.sin(a) * r) * s);
+    drawPart(c, kind, (tk.x + Math.cos(a) * r) * s, (tk.y + Math.sin(a) * r) * s, partR, reduced);
   }
-  c.strokeStyle = "rgba(255,255,255,.75)";
+  // 旋转光环:六颗光点绕圈(reduced 冻在起始角,静态环保留)
+  const halo = ringAngle(tMs, reduced);
+  c.fillStyle = "rgba(255,240,180,.85)";
+  for (let i = 0; i < 6; i++) {
+    const a = halo + (i / 6) * Math.PI * 2;
+    c.beginPath();
+    c.arc(cx + Math.cos(a) * s * 0.56, cy + Math.sin(a) * s * 0.56, Math.max(1.2, s * 0.05), 0, Math.PI * 2);
+    c.fill();
+  }
+  // 进度环:只读 REBUILD_SECONDS 折出来的进度,不定义自己的时长
+  c.strokeStyle = "rgba(255,255,255,.4)";
   c.lineWidth = Math.max(1.5, s * 0.07);
   c.beginPath();
-  c.arc(tk.x * s, tk.y * s, s * 0.42, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+  c.arc(cx, cy, s * 0.42, 0, Math.PI * 2);
+  c.stroke();
+  c.strokeStyle = "rgba(255,255,255,.9)";
+  c.beginPath();
+  c.arc(cx, cy, s * 0.42, -Math.PI / 2, -Math.PI / 2 + rebuildProgress(tk.spin) * Math.PI * 2);
   c.stroke();
 }
 
@@ -449,22 +698,44 @@ function drawPreview(c: CanvasRenderingContext2D, w: World, tk: Tank, s: number)
   c.restore();
 }
 
-function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number, showPreview: boolean): void {
+interface DrawOpts {
+  preview: boolean;
+  reduced: boolean;
+  fx: TankFx;
+}
+
+/** 图层序(每帧从底到顶):①地面 ②水/冰 ③砖/钢/基地(双面块) ④坦克+弹 ⑤草丛 ⑥粒子 */
+function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number, opts: DrawOpts): void {
   const map = w.map;
+  const tMs = t * 1000;
   c.clearRect(0, 0, map.w * s, map.h * s);
-  c.fillStyle = "#6b675e";
+  c.fillStyle = GROUND_A;
   c.fillRect(0, 0, map.w * s, map.h * s);
 
+  // ① 地面棋盘微差 + ② 水面 / 冰面(平铺层,不带厚度)
+  for (let cy = 0; cy < map.h; cy++) {
+    for (let cx = 0; cx < map.w; cx++) {
+      const tile = map.tiles[cy * map.w + cx];
+      const x = cx * s;
+      const y = cy * s;
+      if (tile === "~") {
+        drawWater(c, x, y, s, tMs, opts.reduced);
+      } else if (tile === "i") {
+        drawIce(c, x, y, s, tMs, opts.reduced);
+      } else if ((cx + cy) % 2 === 1) {
+        c.fillStyle = GROUND_B;
+        c.fillRect(x, y, s, s);
+      }
+    }
+  }
+
+  // ③ 有厚度的块:砖 / 钢 / 基地(统一双面块 + 右下投影)
   for (let cy = 0; cy < map.h; cy++) {
     for (let cx = 0; cx < map.w; cx++) {
       const i = cy * map.w + cx;
       const tile = map.tiles[i];
       const x = cx * s;
       const y = cy * s;
-      if (tile !== "~" && tile !== "i") {
-        c.fillStyle = (cx + cy) % 2 === 0 ? "#75705f" : "#6d6959";
-        c.fillRect(x, y, s, s);
-      }
       if (tile === "#") {
         drawBrick(c, x, y, s, map.brickMask[i] || BRICK_FULL);
         if (isFortBrick(map, cx, cy)) {
@@ -474,89 +745,108 @@ function drawWorld(c: CanvasRenderingContext2D, w: World, s: number, t: number, 
         }
       } else if (tile === "S") {
         drawSteel(c, x, y, s);
-      } else if (tile === "~") {
-        drawWater(c, x, y, s, t);
-      } else if (tile === "i") {
-        drawIce(c, x, y, s);
       } else if (tile === "B") {
-        drawBase(c, x, y, s, w.baseShield, t);
+        drawBase(c, x, y, s, w.baseShield, tMs, opts.reduced);
       }
     }
   }
 
-  if (showPreview) {
+  if (opts.preview) {
     for (const tk of w.tanks) {
       if (tk.side === "player") drawPreview(c, w, tk, s);
     }
   }
 
+  // ④ 弹丸:主色圆 + 左上高光点,读起来是「弹力球」不是像素点
   for (const b of w.bullets) {
+    const r = Math.max(2, s * 0.1);
+    const bx = b.x * s;
+    const by = b.y * s;
+    c.fillStyle = TK_COLORS.tkShadow;
+    c.beginPath();
+    c.arc(bx + 1, by + 1, r, 0, Math.PI * 2);
+    c.fill();
     c.fillStyle = SHELLS[b.kind ?? "plain"].color;
     c.beginPath();
-    c.arc(b.x * s, b.y * s, Math.max(2, s * 0.1), 0, Math.PI * 2);
+    c.arc(bx, by, r, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "rgba(255,255,255,.85)";
+    c.beginPath();
+    c.arc(bx - r * 0.32, by - r * 0.32, r * 0.32, 0, Math.PI * 2);
     c.fill();
   }
 
-  for (const tk of w.tanks) drawTank(c, tk, s, t);
-  for (const tk of w.tanks) drawRebuilding(c, tk, s);
+  for (const tk of w.tanks) drawTank(c, tk, s, tMs, opts);
+  for (const tk of w.tanks) drawRebuilding(c, tk, s, tMs, opts.reduced);
 
-  // 草丛画在车上面:开进去就只剩个影子
+  // ⑤ 草丛画在车上面:开进去就只剩个影子(半透明关系与 1.2 一致)
   for (let cy = 0; cy < map.h; cy++) {
     for (let cx = 0; cx < map.w; cx++) {
       if (map.tiles[cy * map.w + cx] === "*") drawGrass(c, cx * s, cy * s, s);
     }
   }
 
+  // ⑥ 粒子:全部自绘矢量,canvas 上没有一笔是贴字
   for (const e of w.effects) {
     const k = 1 - e.t / e.life;
-    c.globalAlpha = Math.max(0, Math.min(1, k));
-    c.textAlign = "center";
-    c.textBaseline = "middle";
-    c.font = `${Math.round(s * (e.kind === "flower" ? 0.7 : 0.45))}px system-ui`;
-    const face =
-      e.kind === "flower"
-        ? "🌼"
-        : e.kind === "smoke"
-          ? "💨"
-          : e.kind === "shield"
-            ? "✨"
-            : e.kind === "crumb"
-              ? "🧱"
-              : e.kind === "parts" || e.kind === "build"
-                ? ""
-                : "✳️";
-    if (face) c.fillText(face, e.x * s, e.y * s - (1 - k) * s * 0.3);
+    const alpha = Math.max(0, Math.min(1, k));
+    if (alpha <= 0) continue;
+    const ex = e.x * s;
+    const ey = e.y * s - (1 - k) * s * 0.3;
+    c.globalAlpha = alpha;
+    if (e.kind === "flower") drawFxFlower(c, ex, ey, s * 0.32);
+    else if (e.kind === "smoke") drawFxSmoke(c, ex, ey, s * 0.2, k);
+    else if (e.kind === "shield") drawFxSparkle(c, ex, ey, s * 0.24);
+    else if (e.kind === "crumb") drawFxCrumb(c, ex, ey, s * 0.12);
+    else if (e.kind !== "parts" && e.kind !== "build") drawFxSparkle(c, ex, ey, s * 0.16);
     c.globalAlpha = 1;
   }
 }
 
-/** 角落里的小地图:默认折叠,展开也只有一小块,不遮战场 */
+/** 小地图上敌车的点色(和图例第二颗点同色) */
+const MINI_ENEMY = "#FF7A7A";
+
+/** 角落里的小地图:圆角壳 + 粉彩地形速览 + 我方/敌方/基地三色图例点 */
 function drawMinimap(c: CanvasRenderingContext2D, w: World, px: number): void {
-  const s = px / Math.max(w.map.w, w.map.h);
   c.clearRect(0, 0, px, px);
+  // 圆角壳:壳内上半是战场速览,下沿一条图例
+  c.fillStyle = "rgba(28,24,38,.85)";
+  roundRect(c, 0, 0, px, px, 8);
+  c.fill();
+  const pad = 3;
+  const legendH = 9;
+  const s = Math.min((px - pad * 2) / w.map.w, (px - pad * 2 - legendH) / w.map.h);
   for (let cy = 0; cy < w.map.h; cy++) {
     for (let cx = 0; cx < w.map.w; cx++) {
       const tile = w.map.tiles[cy * w.map.w + cx];
       if (tile === ".") continue;
       c.fillStyle =
         tile === "#"
-          ? "#c1714a"
+          ? TK_COLORS.tkBrick
           : tile === "S"
-            ? "#b9bfc9"
+            ? TK_COLORS.tkSteel
             : tile === "~"
-              ? "#6fb6dd"
+              ? TK_COLORS.tkWater
               : tile === "*"
-                ? "#5fa658"
+                ? TK_COLORS.tkGrass
                 : tile === "i"
-                  ? "#cfe9f7"
-                  : "#ffb937";
-      c.fillRect(cx * s, cy * s, s, s);
+                  ? TK_COLORS.tkIce
+                  : TK_GOLD;
+      c.fillRect(pad + cx * s, pad + cy * s, s, s);
     }
   }
   for (const tk of w.tanks) {
-    c.fillStyle = tk.side === "player" ? P_COLOR[tk.player] ?? P_COLOR[0] : "#ff7a7a";
+    c.fillStyle = tk.side === "player" ? (tk.player === 0 ? TK_COLORS.tkPink : TK_COLORS.tkBlue) : MINI_ENEMY;
     c.beginPath();
-    c.arc(tk.x * s, tk.y * s, Math.max(1.5, s * 0.42), 0, Math.PI * 2);
+    c.arc(pad + tk.x * s, pad + tk.y * s, Math.max(1.5, s * 0.42), 0, Math.PI * 2);
+    c.fill();
+  }
+  // 图例:我方(粉) / 敌方(红) / 基地(金),纯色点不占文字
+  const ly = px - legendH / 2 - 1.5;
+  for (const [i, col] of [TK_COLORS.tkPink, MINI_ENEMY, TK_GOLD].entries()) {
+    c.fillStyle = col;
+    c.beginPath();
+    c.arc(px * (0.25 + i * 0.25), ly, 2.4, 0, Math.PI * 2);
     c.fill();
   }
 }
@@ -637,6 +927,8 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   let shake = 0;
   let miniOpen = false;
   const reduced = prefersReducedMotion();
+  // 渲染侧的小账本(履带里程/闪光帧),destroy 时 reset 归零
+  const fx = new TankFx();
 
   const pauseBtn = document.createElement("button");
   pauseBtn.type = "button";
@@ -790,9 +1082,10 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     if (c) {
       const dx = shake > 0 ? (Math.random() - 0.5) * shake * 14 : 0;
       const dy = shake > 0 ? (Math.random() - 0.5) * shake * 14 : 0;
+      fx.update(w, clock * 1000, reduced);
       c.save();
       c.translate(dx, dy);
-      drawWorld(c, w, cell, clock, !paused);
+      drawWorld(c, w, cell, clock, { preview: !paused, reduced, fx });
       c.restore();
     }
     if (miniOpen) {
@@ -979,6 +1272,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
       window.removeEventListener("resize", onResize);
       held.clear();
       tapped.clear();
+      fx.reset();
       stopSpeaking();
       wrap.remove();
     },

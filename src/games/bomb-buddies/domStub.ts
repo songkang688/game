@@ -1,5 +1,5 @@
 /**
- * 泡泡炸弹人 · 测试用的极简 DOM 桩。
+ * 泡泡布阵 · 测试用的极简 DOM 桩。
  *
  * 仓库的 vitest 跑在 node 环境(没有 jsdom,也不许为此引依赖),
  * 所以本款自己搭一份桩,只实现运行时真正用到的那几样:建节点、挂/摘监听、
@@ -60,6 +60,7 @@ export class FakeCtx {
   quadraticCurveTo(): void {}
   bezierCurveTo(): void {}
   arc(): void {}
+  arcTo(): void {}
   ellipse(): void {}
   roundRect(): void {}
   rect(): void {}

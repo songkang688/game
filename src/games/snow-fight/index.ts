@@ -17,6 +17,7 @@ export { meta };
 import {
   loadStars,
   mountLevelGame,
+  mulberry32,
   rateAbove,
   rateBelow,
   saveStar,
@@ -65,8 +66,63 @@ import { AI_12, aiInput, aiTitle } from "./brains";
 import { HAND_MAX, ballsLeftAt, depthAt } from "./economy";
 import { ROW_LIFT, coverBox, rowBase, type Cover12 } from "./covers12";
 import { BUMP_LIMIT, bumpsLeft, freezeRatio } from "./snowman";
-import { BALL_R_12, CHARGE_MAX, chargeRatio, windWord } from "./throw12";
+import { BALL_R_12, CHARGE_MAX, windWord } from "./throw12";
 import type { AiLevel } from "./physics";
+import {
+  SNF_PALETTE,
+  SNOWFALL_CAP_13,
+  WINK_S,
+  ballRollPhase,
+  chargeReadout,
+  fighterDrawRadius,
+  flagFrame,
+  flagLen,
+  meltRise,
+  scarfSwing,
+  throwPhase,
+} from "./visual13";
+import {
+  paintAimArrow,
+  paintChargeSnowball,
+  paintCrate,
+  paintFighterBody,
+  paintFighterShadow,
+  paintFortKeep,
+  paintLanding,
+  paintPineRow,
+  paintSeatMark,
+  paintSlope,
+  paintSnowFoe,
+  paintFeedbackPuff,
+  paintSnowMounds,
+  paintSnowWall,
+  paintSnowball,
+  paintSnowman,
+  paintStanceRing,
+  paintWarmFlame,
+  paintWindFlag,
+  teamColor,
+  type FighterPose,
+} from "./paint13";
+import { withAlpha } from "../../art/kit/palette";
+import { makeParallax } from "../../art/kit/parallax";
+import { spawnRibbons, spawnSparkles, stepParticles, drawParticles, type Particle } from "../../art/kit/sparkle";
+import {
+  burstPowder,
+  burstSplash,
+  clearSnowfield,
+  drawBursts,
+  drawSnowfield,
+  footprintAlpha,
+  makeSnowfield,
+  resizeSnowfield,
+  stampFootprint,
+  stepBursts,
+  stepFootprints,
+  stepSnowfield,
+  type Footprint,
+  type SnowBurst,
+} from "../../art/kit/snow";
 
 const P_NAME = ["朵朵", "星星"];
 const P_MARK = ["🌸", "⭐"];
@@ -120,6 +176,8 @@ const CSS = `
 .snf-chip-p0{background:#fff0f6;color:#b8436f;}
 .snf-chip-p1{background:#e6f0ff;color:#2f5fa8;}
 .snf-chip-warn{background:#fff3e2;color:#a4642a;}
+/* 1.3 视觉:对战比分 / 倒计时卡片化(圆角 12px、白 72% 底) */
+.snf-chip-score{border-radius:12px;background:rgba(255,255,255,.72);box-shadow:0 2px 8px rgba(120,150,200,.3);}
 /* 模式标题会长到一行放不下(人机那三档还带一句介绍),这一类得让它换行 */
 .snf-chip-wide{white-space:normal;max-width:100%;line-height:1.45;text-align:center;}
 .snf-board{position:relative;line-height:0;width:100%;display:flex;justify-content:center;}
@@ -231,17 +289,6 @@ function rowScale(row: 0 | 1): number {
   return row === 1 ? FAR_SCALE : 1;
 }
 
-function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-  c.beginPath();
-  c.moveTo(x + rr, y);
-  c.arcTo(x + w, y, x + w, y + h, rr);
-  c.arcTo(x + w, y + h, x, y + h, rr);
-  c.arcTo(x, y + h, x, y, rr);
-  c.arcTo(x, y, x + w, y, rr);
-  c.closePath();
-}
-
 /**
  * 一章一个天色。
  *
@@ -281,7 +328,7 @@ export function endlessSky(a: Arena): number {
   return Math.min(SKY_LAST, a.wave - 1);
 }
 
-function drawSky(c: CanvasRenderingContext2D, cam: Camera, w: number, t: number, sky: Sky, flakes: number): void {
+function drawSky(c: CanvasRenderingContext2D, cam: Camera, w: number, t: number, sky: Sky): void {
   const g = c.createLinearGradient(0, 0, 0, cam.h);
   g.addColorStop(0, sky.top);
   g.addColorStop(1, sky.bottom);
@@ -304,19 +351,10 @@ function drawSky(c: CanvasRenderingContext2D, cam: Camera, w: number, t: number,
       c.fill();
     }
   }
-  // 一直在下的雪:位置只跟时间有关,不占状态,所以暂停 / 重挂都不会闪
-  c.fillStyle = "rgba(255,255,255,.85)";
-  for (let i = 0; i < flakes; i++) {
-    const px = ((i * 137.5 + t * 12) % (w + 20)) - 10;
-    const py = ((i * 61.7 + t * 26) % (cam.h + 20)) - 10;
-    c.beginPath();
-    c.arc(px, py, Math.max(1, cam.s * 0.06) + (i % 3) * 0.4, 0, Math.PI * 2);
-    c.fill();
-  }
 }
 
-/** 远处的雪山和小松树:位置固定,只是让雪原不那么空 */
-function drawBackdrop(c: CanvasRenderingContext2D, cam: Camera, w: number): void {
+/** 远处的雪山 + 松树剪影两层(远淡近深,offset 是两层各自的视差滚动量) */
+function drawBackdrop(c: CanvasRenderingContext2D, cam: Camera, w: number, pineOffsets: readonly number[]): void {
   const base = sy(cam, 0);
   c.fillStyle = "#e6eff9";
   for (const [cx, r] of [
@@ -329,20 +367,8 @@ function drawBackdrop(c: CanvasRenderingContext2D, cam: Camera, w: number): void
     c.fill();
   }
   const treeH = Math.max(12, cam.h * 0.17);
-  c.fillStyle = "#cbdcec";
-  for (const cx of [0.16, 0.33, 0.47, 0.64, 0.79, 0.93]) {
-    const x = w * cx;
-    for (let k = 0; k < 3; k++) {
-      const y = base - (treeH * k) / 3.4;
-      const half = (treeH * (3 - k)) / 9;
-      c.beginPath();
-      c.moveTo(x, y - treeH / 2.6);
-      c.lineTo(x - half, y);
-      c.lineTo(x + half, y);
-      c.closePath();
-      c.fill();
-    }
-  }
+  paintPineRow(c, w, base - treeH * 0.25, treeH * 0.72, SNF_PALETTE.sfPineFar, 96, pineOffsets[0] ?? 0);
+  paintPineRow(c, w, base, treeH, SNF_PALETTE.sfPineNear, 132, pineOffsets[1] ?? 0);
 }
 
 /**
@@ -353,7 +379,7 @@ function drawBackdrop(c: CanvasRenderingContext2D, cam: Camera, w: number): void
  */
 function drawGround(c: CanvasRenderingContext2D, cam: Camera, w: number, a: Arena): void {
   const y = sy(cam, 0);
-  c.fillStyle = "#eaf1f9";
+  c.fillStyle = SNF_PALETTE.sfSnow;
   c.fillRect(0, y, w, GROUND_PAD);
   const field = a.field;
   for (let i = 0; i < field.depth.length; i++) {
@@ -362,9 +388,11 @@ function drawGround(c: CanvasRenderingContext2D, cam: Camera, w: number, a: Aren
     if (x0 > w) break;
     const d = Math.max(0, Math.min(1, field.depth[i] ?? 0));
     const th = 3 + d * (GROUND_PAD - 6);
-    c.fillStyle = d > 0.05 ? "#ffffff" : "#dfe8f2";
+    c.fillStyle = d > 0.05 ? SNF_PALETTE.sfSnowLit : "#dfe8f2";
     c.fillRect(x0, y + GROUND_PAD - th, Math.max(1, pw - 0.6), th);
   }
+  // 雪丘高光斑(seed 固定可复现)+ 雪层下缘冷蓝阴影
+  paintSnowMounds(c, w, y, GROUND_PAD);
   c.strokeStyle = "#d3e0ee";
   c.lineWidth = 1.2;
   c.beginPath();
@@ -373,11 +401,24 @@ function drawGround(c: CanvasRenderingContext2D, cam: Camera, w: number, a: Aren
   c.stroke();
 }
 
+/** 两队的脚印淡痕:走过 2 秒渐隐(reduced 不生成,这里只管画) */
+function drawFootprints(c: CanvasRenderingContext2D, cam: Camera, list: Footprint[]): void {
+  const y = sy(cam, 0);
+  for (const p of list) {
+    c.globalAlpha = footprintAlpha(p) * 0.4;
+    c.fillStyle = p.tint;
+    c.beginPath();
+    c.ellipse(sx(cam, p.x) + p.side * cam.s * 0.22, y + GROUND_PAD * 0.32, Math.max(1.6, cam.s * 0.2), Math.max(1, cam.s * 0.1), 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
 /** 雪堡与警戒线:雪人走到这里这一轮就结束(不是被打败,是该重来一次) */
 function drawFort(c: CanvasRenderingContext2D, cam: Camera, fortX: number): void {
   const gx = sx(cam, fortX);
   const base = sy(cam, 0);
-  c.fillStyle = "#eef4fb";
+  c.fillStyle = SNF_PALETTE.sfFort;
   c.beginPath();
   c.moveTo(0, base);
   c.lineTo(0, sy(cam, 4));
@@ -389,6 +430,15 @@ function drawFort(c: CanvasRenderingContext2D, cam: Camera, fortX: number): void
   c.strokeStyle = "rgba(160,190,220,.7)";
   c.lineWidth = 1.4;
   c.stroke();
+  // 雪丘背光面:冷蓝一抹(不用黑影)
+  c.fillStyle = SNF_PALETTE.sfShadow;
+  c.beginPath();
+  c.moveTo(gx * 0.3, sy(cam, 5.4));
+  c.lineTo(gx * 0.6, sy(cam, 4));
+  c.lineTo(gx * 0.6, base);
+  c.lineTo(gx * 0.44, base);
+  c.closePath();
+  c.fill();
   c.setLineDash([4, 4]);
   c.strokeStyle = "rgba(240,150,180,.85)";
   c.beginPath();
@@ -396,10 +446,8 @@ function drawFort(c: CanvasRenderingContext2D, cam: Camera, fortX: number): void
   c.lineTo(gx, sy(cam, 3.4));
   c.stroke();
   c.setLineDash([]);
-  c.textAlign = "center";
-  c.textBaseline = "bottom";
-  c.font = `${Math.max(13, Math.round(cam.s * 0.9))}px system-ui`;
-  c.fillText("🏰", gx * 0.3, base - 3);
+  // 城头自绘:两垛口 + 小旗(替掉 emoji)
+  paintFortKeep(c, gx * 0.3, sy(cam, 5.4) + 2, cam.s);
 }
 
 /** 三种掩体各画各的样子:一眼要能分出「砸得碎 / 推得动 / 得蹲下」 */
@@ -411,56 +459,16 @@ function drawCover(c: CanvasRenderingContext2D, cam: Camera, cv: Cover12): void 
   const bottom = sy(cam, box.y0);
   const far = cv.row === 1;
   c.globalAlpha = far ? 0.72 : 1;
+  const px = { x, w, top, bottom };
   if (cv.kind === "slope") {
-    // 雪坡:一个斜面,左低右高。站着挡不住,蹲下才半隐藏
-    c.fillStyle = "#ffffff";
-    c.beginPath();
-    c.moveTo(x, bottom);
-    c.lineTo(x + w, top);
-    c.lineTo(x + w, bottom);
-    c.closePath();
-    c.fill();
-    c.strokeStyle = "rgba(150,185,220,.85)";
-    c.lineWidth = 1.4;
-    c.stroke();
-    c.fillStyle = "rgba(120,160,200,.5)";
-    c.font = `${Math.max(11, Math.round(cam.s * 0.7))}px system-ui`;
-    c.textAlign = "center";
-    c.textBaseline = "bottom";
-    c.fillText("⛰️", x + w * 0.62, bottom - 2);
+    // 雪坡:站着挡不住,蹲下才半隐藏(几何一点没动,换成堆雪画法)
+    paintSlope(c, px);
   } else if (cv.kind === "crate") {
     // 木箱:砸不碎,但会被推着走
-    c.fillStyle = "#e6cfa8";
-    roundRect(c, x, top, w, bottom - top, 3);
-    c.fill();
-    c.strokeStyle = "#b99a6c";
-    c.lineWidth = 1.6;
-    c.stroke();
-    c.beginPath();
-    c.moveTo(x, top);
-    c.lineTo(x + w, bottom);
-    c.moveTo(x + w, top);
-    c.lineTo(x, bottom);
-    c.stroke();
+    paintCrate(c, px);
   } else {
-    // 雪墙:砸三下碎,每掉一层多一道裂纹、颜色也淡一档
-    const worn = cv.hp / Math.max(1, cv.maxHp);
-    c.fillStyle = worn > 0.66 ? "#ffffff" : worn > 0.33 ? "#eef6fd" : "#dfeefa";
-    roundRect(c, x, top, w, bottom - top, Math.min(w / 2, cam.s * 0.4));
-    c.fill();
-    c.strokeStyle = "rgba(140,180,215,.9)";
-    c.lineWidth = 1.5;
-    c.stroke();
-    const cracks = Math.max(0, cv.maxHp - cv.hp);
-    c.strokeStyle = "rgba(110,150,190,.6)";
-    c.lineWidth = 1.2;
-    for (let i = 0; i < cracks; i++) {
-      const yy = top + ((bottom - top) * (i + 1)) / (cracks + 1);
-      c.beginPath();
-      c.moveTo(x + 2, yy);
-      c.lineTo(x + w - 2, yy + (i % 2 === 0 ? 3 : -3));
-      c.stroke();
-    }
+    // 堆雪墙:砸三下碎,耗损阶段读既有 hp(顶部圆鼓 + 冷蓝侧影 + 三阶段缺口)
+    paintSnowWall(c, px, cv.hp, cv.maxHp);
   }
   c.globalAlpha = 1;
 }
@@ -473,25 +481,8 @@ function drawFoe(c: CanvasRenderingContext2D, cam: Camera, f: Foe, time: number)
   const r = Math.max(6, f.r * cam.s * k);
   c.globalAlpha = f.row === 1 ? 0.85 : 1;
   if (f.kind === "snowfoe") {
-    c.fillStyle = "#ffffff";
-    c.beginPath();
-    c.arc(x, y + r * 0.5, r * 0.95, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(x, y - r * 0.55, r * 0.68, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = "rgba(150,185,220,.85)";
-    c.lineWidth = 1.3;
-    c.stroke();
-    c.fillStyle = "#5b6885";
-    c.beginPath();
-    c.arc(x - r * 0.25, y - r * 0.62, Math.max(1, r * 0.1), 0, Math.PI * 2);
-    c.arc(x + r * 0.25, y - r * 0.62, Math.max(1, r * 0.1), 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = "#f0a2b8";
-    c.beginPath();
-    c.arc(x, y - r * 0.32, Math.max(1, r * 0.14), 0, Math.PI);
-    c.fill();
+    // 1.3 修复员 S5:纯白双圆 + 两点眼 → 三停渐变双球 + 深青歪毛线帽(paint13)
+    paintSnowFoe(c, x, y, r);
     c.globalAlpha = 1;
     return;
   }
@@ -517,68 +508,53 @@ function drawFoe(c: CanvasRenderingContext2D, cam: Camera, f: Foe, time: number)
 
 /**
  * 一个投手。四种样子:站着、蹲着(在搓雪)、变雪人、暖手休息。
- * 变雪人画成一个顶着胡萝卜鼻子的小雪人 —— 不掉血、不倒地,只是动不了。
+ * 1.3 换成「裹成球的小孩」七道工序(paint13.ts),判定半径与 1.2 一字不差;
+ * 变雪人补齐三件套 + 融化高光 —— 不掉血、不倒地,只是动不了,而且在笑。
  */
-function drawFighter(c: CanvasRenderingContext2D, cam: Camera, f: Fighter, time: number): void {
+function drawFighter(
+  c: CanvasRenderingContext2D,
+  cam: Camera,
+  f: Fighter,
+  time: number,
+  look: { swing: number; wink: boolean }
+): void {
   const x = sx(cam, f.x);
   const base = sy(cam, 0);
   const full = Math.max(8, BODY_R_12 * cam.s * 0.72);
-  const r = f.crouch ? full * CROUCH_SCALE + full * 0.25 : full;
+  const r = fighterDrawRadius(full, f.crouch);
   const frozen = f.hit.phase !== "free";
-  if (!frozen) {
-    c.fillStyle = `rgba(255,214,120,${0.2 + Math.sin(time * 3 + f.seat) * 0.08})`;
-    c.beginPath();
-    c.ellipse(x, base - r * 0.2, r * 1.8, r * 0.5, 0, 0, Math.PI * 2);
-    c.fill();
-  }
+  // 第 7 道工序:站位压痕环(呼吸沿用原正弦参数,黄椭圆换成雪面压痕)
+  if (!frozen) paintStanceRing(c, x, base, r, f.seat, time);
   if (f.hit.phase === "snowman") {
-    // 变雪人:两个雪球摞起来,顶上一根胡萝卜
-    c.fillStyle = "#ffffff";
-    c.beginPath();
-    c.arc(x, base - full * 0.8, full * 0.85, 0, Math.PI * 2);
-    c.fill();
-    c.beginPath();
-    c.arc(x, base - full * 2, full * 0.6, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = "rgba(150,185,220,.9)";
-    c.lineWidth = 1.4;
-    c.stroke();
-    c.fillStyle = "#f2954f";
-    c.beginPath();
-    c.moveTo(x, base - full * 2);
-    c.lineTo(x + full * 0.75, base - full * 1.92);
-    c.lineTo(x, base - full * 1.84);
-    c.closePath();
-    c.fill();
-    // 倒计时圈:还有多久能动
-    const k = freezeRatio(f.hit);
-    c.strokeStyle = "rgba(90,140,200,.75)";
-    c.lineWidth = 2.4;
-    c.beginPath();
-    c.arc(x, base - full * 2, full * 1.15, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k);
-    c.stroke();
+    // 变雪人:三件套齐了,解冻倒计时画成融化高光从脚往头爬(读既有时长)
+    paintSnowman(c, x, base, full, meltRise(freezeRatio(f.hit)), time);
     return;
   }
-  c.fillStyle = f.hit.phase === "warming" ? "#cfd9e8" : P_COLOR[f.seat] ?? P_COLOR[0];
-  roundRect(c, x - r * 0.75, base - r * 2.1, r * 1.5, r * 2.1, r * 0.6);
-  c.fill();
-  c.fillStyle = "#ffe8d2";
-  c.beginPath();
-  c.arc(x, base - r * 2.5, r * 0.72, 0, Math.PI * 2);
-  c.fill();
-  c.fillStyle = "#5b6885";
-  const eyeDir = f.dir * r * 0.24;
-  c.beginPath();
-  c.arc(x + eyeDir - r * 0.16, base - r * 2.56, Math.max(1, r * 0.1), 0, Math.PI * 2);
-  c.arc(x + eyeDir + r * 0.16, base - r * 2.56, Math.max(1, r * 0.1), 0, Math.PI * 2);
-  c.fill();
-  c.textAlign = "center";
-  c.textBaseline = "bottom";
-  c.font = `${Math.max(12, Math.round(full * 1.1))}px system-ui`;
+  // 第 1–6 道工序:冷蓝落影 → 主体三停渐变 → 针织帽 → 围巾 → 手套三帧 → 表情
+  paintFighterShadow(c, x, base, full);
+  const pose: FighterPose = {
+    x,
+    base,
+    full,
+    r,
+    dir: f.dir,
+    seat: f.seat,
+    crouch: f.crouch,
+    warming: f.hit.phase === "warming",
+    phase: throwPhase(f.charge, f.cooldown),
+    chargeK: chargeReadout(f.charge ?? 0),
+    swing: look.swing,
+    time,
+    wink: look.wink,
+  };
+  paintFighterBody(c, pose);
+  // 修复员 R2 · N1:头顶座位标与暖手从 emoji 字形换成自绘徽记
+  // (原字形底线在 base - r*3.2、字号约 full*1.1,徽记半径取 full*0.55、圆心上移半径,占位同处)
+  const ms = Math.max(5.5, full * 0.55);
   if (f.hit.phase === "warming") {
-    c.fillText("🔥", x, base - r * 3.2);
+    paintWarmFlame(c, x, base - r * 3.2 - ms, ms);
   } else {
-    c.fillText(P_MARK[f.seat] ?? "🌸", x, base - r * 3.2);
+    paintSeatMark(c, x, base - r * 3.2 - ms, ms, f.seat);
   }
   // 手里攥着几颗:头顶上一排小白点,不用低头看 HUD
   c.fillStyle = "#ffffff";
@@ -612,18 +588,8 @@ function drawLanding(c: CanvasRenderingContext2D, cam: Camera, ring: { x: number
   const cy = sy(cam, 0);
   const rx = Math.max(4, ring.r * cam.s);
   const ry = Math.max(2.5, rx * 0.32);
-  const alpha = (hot ? 0.85 : 0.4) * (1 - ring.blur * 0.5);
-  c.save();
-  c.setLineDash(ring.blur > 0.4 ? [4, 5] : [7, 4]);
-  c.lineWidth = hot ? 2.4 : 1.6;
-  c.strokeStyle = `rgba(232,85,143,${alpha})`;
-  c.beginPath();
-  c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  c.stroke();
-  c.setLineDash([]);
-  c.fillStyle = `rgba(232,85,143,${alpha * 0.16})`;
-  c.fill();
-  c.restore();
+  // 雪面凹陷 + 功能虚线圈:半径 / 圆心 / 透明度 / 虚线节奏与 1.2 完全一致
+  paintLanding(c, cx, cy, rx, ry, hot, ring.blur);
 }
 
 /**
@@ -654,65 +620,31 @@ function drawBall(
     c.stroke();
     c.lineCap = "butt";
   }
-  c.fillStyle = "#ffffff";
-  c.strokeStyle = "rgba(140,175,210,.9)";
-  c.lineWidth = 1.2;
-  c.beginPath();
-  c.arc(x, y, r, 0, Math.PI * 2);
-  c.fill();
-  c.stroke();
-  if (!motion) return;
-  // 转起来:一道横纹绕着球心走,看得见它在滚
-  const a = b.spin ?? 0;
-  c.strokeStyle = "rgba(150,185,220,.8)";
-  c.lineWidth = 1;
-  c.beginPath();
-  c.ellipse(x, y, r * 0.72, r * 0.72 * Math.abs(Math.cos(a)), 0, 0, Math.PI * 2);
-  c.stroke();
+  // 三停渐变 + 底部冷阴影 + 两道滚纹(纹路相位随 spin×age;reduced 静止纹)
+  paintSnowball(c, x, y, r, ballRollPhase(b.spin ?? 0, !motion));
 }
 
 interface Puff {
   x: number;
   y: number;
   t: number;
-  face: string;
 }
 
-function drawPuffs(c: CanvasRenderingContext2D, cam: Camera, puffs: Puff[]): void {
-  c.textAlign = "center";
-  c.textBaseline = "middle";
+/** 修复员 G3:8 种 emoji 反馈冒泡 → 白 + 冷蓝两停溅雪(reduced 单帧淡出) */
+function drawPuffs(c: CanvasRenderingContext2D, cam: Camera, puffs: Puff[], reduced: boolean): void {
   for (const p of puffs) {
-    const k = Math.max(0, 1 - p.t / 0.9);
-    c.globalAlpha = k;
-    c.font = `${Math.max(14, Math.round(cam.s * 1.1))}px system-ui`;
-    c.fillText(p.face, sx(cam, p.x), sy(cam, p.y) - (1 - k) * cam.s);
-    c.globalAlpha = 1;
+    paintFeedbackPuff(c, sx(cam, p.x), sy(cam, p.y), Math.max(8, cam.s * 0.6), p.t / 0.9, reduced);
   }
 }
 
-function drawWindFlag(c: CanvasRenderingContext2D, cam: Camera, w: number, wind: number, ink: string): void {
+/** 风旗:文字 + 波浪两帧的旗面 + 描边箭头(长度 / 阈值 / 文字全走旧映射) */
+function drawWindFlag(c: CanvasRenderingContext2D, cam: Camera, w: number, wind: number, ink: string, anim: number, motion: boolean): void {
   const cx = w / 2;
   const cy = Math.max(15, cam.h * 0.1);
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  c.font = `700 ${Math.max(12, Math.round(cam.s * 0.8))}px system-ui`;
-  c.fillStyle = ink;
-  c.fillText(windWord(wind), cx, cy);
-  if (Math.abs(wind) < 0.25) return;
-  const len = Math.min(46, 12 + Math.abs(wind) * 12);
-  const dir = wind > 0 ? 1 : -1;
-  c.strokeStyle = ink;
-  c.lineWidth = 2;
-  c.beginPath();
-  c.moveTo(cx - (len / 2) * dir, cy + 14);
-  c.lineTo(cx + (len / 2) * dir, cy + 14);
-  c.lineTo(cx + (len / 2 - 6) * dir, cy + 10);
-  c.moveTo(cx + (len / 2) * dir, cy + 14);
-  c.lineTo(cx + (len / 2 - 6) * dir, cy + 18);
-  c.stroke();
+  paintWindFlag(c, cx, cy, wind, ink, flagFrame(anim, !motion), flagLen(wind), windWord(wind), Math.max(12, Math.round(cam.s * 0.8)));
 }
 
-/** 准星:从手上伸出去的一小段箭头,告诉你现在抬了多高 */
+/** 准星:从手上伸出去的一小段箭头 + 渐隐点阵,几何与 1.2 完全一致 */
 function drawAimArrow(c: CanvasRenderingContext2D, cam: Camera, f: Fighter): void {
   const hx = sx(cam, f.x + f.dir * 0.6);
   const hy = sy(cam, 1.5 * (f.crouch ? CROUCH_SCALE + 0.25 : 1));
@@ -720,30 +652,15 @@ function drawAimArrow(c: CanvasRenderingContext2D, cam: Camera, f: Fighter): voi
   const len = Math.max(20, cam.s * 2.6);
   const ex = hx + Math.cos(rad) * len * f.dir;
   const ey = hy - Math.sin(rad) * len * cam.ys;
-  c.strokeStyle = f.seat === 0 ? "rgba(232,85,143,.8)" : "rgba(63,127,214,.8)";
-  c.lineWidth = 2.4;
-  c.beginPath();
-  c.moveTo(hx, hy);
-  c.lineTo(ex, ey);
-  c.stroke();
-  c.fillStyle = c.strokeStyle;
-  c.beginPath();
-  c.arc(ex, ey, 3, 0, Math.PI * 2);
-  c.fill();
+  paintAimArrow(c, hx, hy, ex, ey, f.seat === 0 ? "rgba(232,85,143,.8)" : "rgba(63,127,214,.8)");
 }
 
-/** 蓄力条:按住多久就有多长,满档变色 */
+/** 蓄力读数:雪球从小滚大(读数仍是 chargeRatio,一个点都不偏) */
 function drawChargeBar(c: CanvasRenderingContext2D, cssW: number, cam: Camera, seat: number, held: number): void {
   const w = Math.min(200, cssW * 0.46);
   const x = seat === 0 ? 10 : cssW - w - 10;
   const y = cam.h - 16;
-  const k = chargeRatio(held);
-  c.fillStyle = "rgba(255,255,255,.88)";
-  roundRect(c, x, y, w, 10, 5);
-  c.fill();
-  c.fillStyle = k > 0.92 ? "#e8558f" : seat === 0 ? "#f08aa8" : "#5b8ec4";
-  roundRect(c, x + 1, y + 1, Math.max(2, (w - 2) * k), 8, 4);
-  c.fill();
+  paintChargeSnowball(c, x, y, w, chargeReadout(held), seat);
 }
 
 // ---------------------------------------------------------------------------
@@ -812,6 +729,8 @@ interface Runner {
   destroy: () => void;
   /** 给用例用的探针:现在画面上这一局是什么样 */
   arena: Arena;
+  /** 给用例用的探针:飘雪 / 脚印 / 溅雪 / 彩带各还剩多少(destroy 归零断言用) */
+  fxCount: () => { flakes: number; footprints: number; bursts: number; confetti: number };
 }
 
 function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptions): Runner {
@@ -861,6 +780,24 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
   /** 掉帧就少画点雪花:先保证抛物线是顺的 */
   let flakeScale = motion ? 1 : 0;
   let slowFrames = 0;
+  /**
+   * 纯视觉的那点家当(1.3):飘雪场(上限 24,reduced 直接 0 颗)、两队脚印淡痕、
+   * 溅雪 / 雪粉、结算彩带、松树两层视差、围巾甩动与眨单眼的小本子。
+   * 全部只看 Arena、绝不写回;destroy 一把清干净。
+   */
+  const fx = {
+    snow: makeSnowfield(motion ? SNOWFALL_CAP_13 : 0, cssW, cam.h, mulberry32(20260215)),
+    foot: [] as Footprint[],
+    bursts: [] as SnowBurst[],
+    confetti: [] as Particle[],
+    lastX: new Map<number, number>(),
+    footSide: 1 as 1 | -1,
+    scarfAt: [-9, -9],
+    score: [0, 0],
+    winkAt: [-9, -9],
+    pines: makeParallax([0.35, 1], 396),
+    rand: mulberry32(20260216),
+  };
 
   // 暂停贴在画布右上角:手机上一横排按钮就得吃掉五十多像素,那点高度留给雪原
   const pauseBtn = document.createElement("button");
@@ -919,6 +856,7 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     canvas.style.height = `${cssH}px`;
     const c = canvas.getContext("2d");
     if (c) c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    resizeSnowfield(fx.snow, cssW, cam.h);
   }
 
   function seatOf(seat: number): Fighter | undefined {
@@ -965,7 +903,8 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     for (const [i, text] of chipsFor().entries()) {
       const el = document.createElement("span");
       const tone = i === 0 ? " snf-chip-p0" : i === 1 && opts.humans === 2 ? " snf-chip-p1" : "";
-      el.className = `snf-chip${tone}${text.includes("挖秃") ? " snf-chip-warn" : ""}`;
+      const card = text.startsWith("🏮") || text.startsWith("⏳") ? " snf-chip-score" : "";
+      el.className = `snf-chip${tone}${card}${text.includes("挖秃") ? " snf-chip-warn" : ""}`;
       el.textContent = text;
       el.setAttribute("aria-live", "off");
       hud.appendChild(el);
@@ -976,19 +915,23 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
 
   function playEvents(events: ArenaEvent[]): void {
     for (const e of events) {
-      if (e.kind === "throw") sfx("pop");
-      else if (e.kind === "scoop") puffs.push({ x: e.x, y: 0.7, t: 0, face: "❄️" });
+      if (e.kind === "throw") {
+        sfx("pop");
+        // 出手瞬间:围巾往后甩一下 + 4 颗雪粉喷散(reduced 全停)
+        if (e.seat < 2) fx.scarfAt[e.seat] = clock;
+        if (motion) fx.bursts.push(...burstPowder(sx(cam, e.x), sy(cam, e.y), seatOf(e.seat)?.dir ?? 1, fx.rand));
+      } else if (e.kind === "scoop") puffs.push({ x: e.x, y: 0.7, t: 0 });
       else if (e.kind === "melt") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: e.foe === "snowfoe" ? "🌼" : "✨" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("coin");
       } else if (e.kind === "cover") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: e.broke ? "💥" : e.pushed !== 0 ? "📦" : "💨" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("tap");
       } else if (e.kind === "shield") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: "🛡️" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("tap");
       } else if (e.kind === "snowman") {
-        puffs.push({ x: e.x, y: e.y, t: 0, face: e.warming ? "🔥" : "⛄" });
+        puffs.push({ x: e.x, y: e.y, t: 0 });
         sfx("oops");
         const f = seatOf(e.seat);
         if (f) {
@@ -1001,7 +944,16 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
         say.textContent = `第 ${e.wave} 波雪人来啦!趁现在多搓两颗。`;
         opts.onWave?.(a);
       } else if (e.kind === "splash") {
-        puffs.push({ x: e.x, y: 0.4, t: 0, face: "💨" });
+        // 落地:雪面溅雪 6 瓣(320ms;reduced 不生成,落点凹陷提示照旧)
+        if (motion) fx.bursts.push(...burstSplash(sx(cam, e.x), sy(cam, 0), undefined, fx.rand));
+      } else if (e.kind === "over" && e.win && motion) {
+        // 胜利结算:撒雪花 + 彩带(失败只鼓励,不撒)
+        const colors = [SNF_PALETTE.sfPink, SNF_PALETTE.sfBlue, "#FFD678", "#FFFFFF"];
+        fx.confetti = [
+          ...fx.confetti,
+          ...spawnSparkles(cssW / 2, cam.h * 0.3, { colors, rand: fx.rand, lifeMs: 900, speed: 150, gravity: 260 }),
+          ...spawnRibbons(cssW / 2, cam.h * 0.24, { colors, rand: fx.rand, lifeMs: 1100 }),
+        ];
       }
     }
   }
@@ -1028,6 +980,14 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
         slowFrames = 0;
       }
     }
+    // 纯视觉的钟:暂停就全停;结束后彩带还要飘完那 460ms,所以不看 finished
+    if (!paused) {
+      stepSnowfield(fx.snow, dt);
+      stepFootprints(fx.foot, dt);
+      stepBursts(fx.bursts, dt);
+      if (fx.confetti.length > 0) fx.confetti = stepParticles(fx.confetti, dt);
+      if (motion) fx.pines.step(dt, 2.4);
+    }
     if (!paused && !finished) {
       clock += dt;
       for (const p of puffs) p.t += dt;
@@ -1037,6 +997,23 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
         inputs[f.seat] = f.ai ? aiInput(a, f, dt) : f.seat < opts.humans ? holdToInput(held[f.seat] ?? noHold()) : idleInput();
       }
       playEvents(stepArena(a, dt, inputs));
+      // 脚印淡痕 + 命中对方眨单眼:只读 Arena,不写回一个字
+      for (const f of a.fighters) {
+        if (motion && f.hit.phase === "free") {
+          const last = fx.lastX.get(f.id);
+          if (last === undefined) {
+            fx.lastX.set(f.id, f.x);
+          } else if (Math.abs(f.x - last) > 0.9) {
+            fx.footSide = fx.footSide === 1 ? -1 : 1;
+            stampFootprint(fx.foot, f.x, fx.footSide, withAlpha(teamColor(f.seat), 0.5));
+            fx.lastX.set(f.id, f.x);
+          }
+        }
+        if (f.seat < 2 && f.score > (fx.score[f.seat] ?? 0)) {
+          fx.score[f.seat] = f.score;
+          fx.winkAt[f.seat] = clock;
+        }
+      }
       hudAt += dt;
       if (hudAt > 0.12) {
         hudAt = 0;
@@ -1052,36 +1029,55 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
     if (c) draw(c);
   }
 
+  /**
+   * 图层序(1.3,从底到顶):① 天空 → ② 松树两层视差 → ③ 地面雪丘 + 脚印
+   * → ④ 掩体 / 雪墙 → ⑤ 角色与雪人 → ⑥ 雪球与落点圈 → ⑦ 溅雪 / 飘雪 / 彩带
+   * → ⑧ 蓄力雪球 / 风旗 / 准星(功能件,永远最顶,不许被飘雪盖住) → ⑨ HUD(DOM)。
+   */
   function draw(c: CanvasRenderingContext2D): void {
     // 关了动效就让靶子站住别晃:时间不往前走,摇摆的相位就一直是 0
     const anim = motion ? clock : 0;
     const sky = skyNow();
-    drawSky(c, cam, cssW, anim, sky, Math.round(sky.flakes * flakeScale));
-    drawBackdrop(c, cam, cssW);
-    drawGround(c, cam, cssW, a);
-    if (a.mode !== "duel") drawFort(c, cam, a.fortX);
+    drawSky(c, cam, cssW, anim, sky); // ①
+    drawBackdrop(c, cam, cssW, fx.pines.offsets); // ②
+    drawGround(c, cam, cssW, a); // ③
+    drawFootprints(c, cam, fx.foot); // ③
+    if (a.mode !== "duel") drawFort(c, cam, a.fortX); // ④
     // 远排先画,近排压在上面:两排一叠就有了「远处更远」的样子
     for (const cv of a.covers) if (cv.row === 1) drawCover(c, cam, cv);
     for (const f of a.foes) if (f.row === 1) drawFoe(c, cam, f, anim);
     for (const cv of a.covers) if (cv.row === 0) drawCover(c, cam, cv);
     for (const f of a.foes) if (f.row === 0) drawFoe(c, cam, f, anim);
     for (const f of a.fighters) {
-      // 落点圈:没在蓄力也画一个虚的(那是「轻轻一点就松手」会落到的地方),
+      // ⑤ 角色与雪人(围巾甩动 / 眨单眼这些小账本只在这儿读)
+      drawFighter(c, cam, f, clock, {
+        swing: scarfSwing(clock - (fx.scarfAt[f.seat] ?? -9), !motion),
+        wink: clock - (fx.winkAt[f.seat] ?? -9) < WINK_S,
+      });
+    }
+    for (const f of a.fighters) {
+      // ⑥ 落点圈:没在蓄力也画一个虚的(那是「轻轻一点就松手」会落到的地方),
       // 蓄力中画实的。小朋友照着圈调,不用先学会看角度
       if (f.hit.phase === "free" && f.hands.balls > 0 && !f.crouch && (f.ai === null || f.charge !== null)) {
         drawLanding(c, cam, aimCircle(a, f), f.charge !== null);
       }
-      drawAimArrow(c, cam, f);
-      drawFighter(c, cam, f, clock);
     }
-    // 转过的角度 = 转速 × 在天上待了多久,不额外记状态,暂停 / 重挂都对得上
+    // ⑥ 转过的角度 = 转速 × 在天上待了多久,不额外记状态,暂停 / 重挂都对得上
     for (const b of a.balls) drawBall(c, cam, { ...b, spin: b.spin * b.age }, motion);
-    drawWindFlag(c, cam, cssW, a.wind, skyNow().ink);
+    // ⑦ 溅雪 / 飘雪 / 彩带
+    c.fillStyle = "rgba(255,255,255,.92)";
+    drawBursts(c, fx.bursts);
+    // 密度听各章天色的(SKIES.flakes),但上限钉死 24 颗、掉帧再按 flakeScale 打折
+    drawSnowfield(c, fx.snow, Math.round(Math.min(sky.flakes, SNOWFALL_CAP_13) * flakeScale));
+    if (fx.confetti.length > 0) drawParticles(c, fx.confetti);
+    drawPuffs(c, cam, puffs, !motion);
+    // ⑧ 功能件永远最顶
+    drawWindFlag(c, cam, cssW, a.wind, skyNow().ink, anim, motion);
     for (let s = 0; s < opts.humans; s++) {
       const f = seatOf(s);
       if (f && f.charge !== null) drawChargeBar(c, cssW, cam, s, f.charge);
     }
-    drawPuffs(c, cam, puffs);
+    for (const f of a.fighters) drawAimArrow(c, cam, f);
   }
 
   // ---- 键盘 ---------------------------------------------------------------
@@ -1284,6 +1280,12 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
 
   return {
     arena: a,
+    fxCount: () => ({
+      flakes: fx.snow.flakes.length,
+      footprints: fx.foot.length,
+      bursts: fx.bursts.length,
+      confetti: fx.confetti.length,
+    }),
     destroy() {
       finished = true;
       cancelAnimationFrame(raf);
@@ -1300,6 +1302,13 @@ function mountRun(host: HTMLElement, sfx: (n: SoundName) => void, opts: RunOptio
       drag = null;
       puffs.length = 0;
       a.balls = [];
+      // 1.3 的视觉家当也清干净:飘雪场、脚印、溅雪、彩带、视差、随手小本子
+      clearSnowfield(fx.snow);
+      fx.foot.length = 0;
+      fx.bursts.length = 0;
+      fx.confetti = [];
+      fx.lastX.clear();
+      fx.pines.reset();
       stopSpeaking();
       wrap.remove();
     },
