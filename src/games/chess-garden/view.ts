@@ -47,6 +47,8 @@ export const DUO_SHORT_CSS = `
 }
 @media (max-height:840px) and (min-height:501px){
   .cg-wrap.cg-duoplay .cg-frame{width:min(360px,62dvh);max-width:62dvh;margin:0 auto;}
+  .cg-wrap.cg-duoplay .cg-tools{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(242,247,234,0.35),#eaf3e4);}
 }
 `;
 

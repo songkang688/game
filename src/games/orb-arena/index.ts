@@ -132,6 +132,7 @@ export const OA_CSS = `
 @media (max-height:840px) and (min-height:501px){
   .oa-pad{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(243,238,255,.2),#F3EEFF 40%);}
+  .oa-board{max-width:min(52%, 58dvh);}
 }
 `;
 
