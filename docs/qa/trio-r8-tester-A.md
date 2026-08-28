@@ -9,7 +9,7 @@
 ## 水位
 
 - 进场:`npm test` 全绿基线(r8 playbook 口径 1090 文件 / 19248 用例)。
-- 交卷:**1185 文件 / 19500 用例,1184 过 / 1 失败(上游自带,见下)/ 1 跳过**;`npm run build` 全绿(PWA precache 200 entries)。
+- 交卷:**1185 文件 / 19500 用例:19498 过 / 1 失败(上游自带,见下)/ 1 跳过**;`npm run build` 全绿(PWA precache 200 entries)。
 - 唯一失败 `src/games/casualFit.r10b.test.ts`(duo-rush 菜单开跑钮断言)**是 `game-1.3` 底座自带**:本分支对 `duo-rush/**` 与该测试文件零改动(`git diff origin/game-1.3 -- src/games/duo-rush` 为空可复证)。duo-rush 是休闲款,B 工位,A 不越界修,记账待派。
 
 ## 撞车对账(先合版赢,本分支不重复带上去的)
