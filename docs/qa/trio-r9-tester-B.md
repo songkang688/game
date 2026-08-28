@@ -17,8 +17,9 @@
 
 | 编号 | 测了什么 | 坏在哪 | 怎么修 |
 |---|---|---|---|
-| **N-45** | gold-hook 闯关进关 → 🛒，主档 915×412 | r10 笔记：veil 内滚 230，「接着挖」top 513 整钮线下，第三件 buy 亦线下 | 配方 I：`.gdh-shoplist` 限高自滚；`.gdh-veil-foot` sticky 钉「接着挖」；商店态去掉居中 auto 边距。暂停 veil 不套商店脚。买卖/`SHOP` 表零触碰 |
-| **N-15** | bomb-buddies 对战 × 915×412 | r10：390×844 双人干净，915 六键全线下 | 键排 sticky；矮横屏 `display:contents` 把两套摇杆分列棋盘两侧。不改 AI/埋弹判定 |
+| **N-45** | gold-hook 闯关→🛒 915×412 | r10：veil 内滚 230，「接着挖」top 513 线下 | 货架自滚 + sticky 脚。puppeteer：veilScroll **29**，「接着挖」不在线下；第三买钮 top 416 贴线轻伤 |
+| **N-31 补** | fight-king 训练场开触屏 | 先合版后假人三钮仍 top 497 线下 | 假人钮挂顶栏。复测 **belowCount 0**（帧表 crop 属教学自滚） |
+| **N-15** | bomb-buddies 对战 915×412 | 六键全线下 | sticky + 双栏。puppeteer：**crop 0 / below 0** |
 
 配套测试：`gold-hook/shopVeil.r9.test.ts`、`bomb-buddies/landscape-r9.test.ts`。
 
@@ -53,3 +54,6 @@
 - `src/games/gold-hook/style.ts`、`index.ts`、`shopVeil.r9.test.ts`
 - `src/games/bomb-buddies/index.ts`、`landscape-r9.test.ts`
 - `docs/qa/trio-r9-tester-B.md`（本记录）
+
+
+先合版抽核 915×412：塔 crop 94 / 键排 below 0（原 498）；fruit-catch crop 86 / 左右钮 below 0（原 741）。
