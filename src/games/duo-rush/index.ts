@@ -389,6 +389,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-btns button { flex: 1; min-height: 46px; border: none; border-radius: 14px; padding: 11px 4px; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); font-family: inherit; }
       /* N-40: 矮横屏赛道态暂停/再来/换玩法钉在舞台底，不重钳已在屏的画布与半屏圆钮 */
       @media (max-height: 500px) {
+        .dr-start { position: sticky; bottom: 0; z-index: 3; }
         .dr-keys { display: none; }
         .dr-btns {
           position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;

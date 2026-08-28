@@ -81,7 +81,12 @@ export const CSS = `
 .gdh-veil-title{font-size:19px;font-weight:900;color:#8A5A22;}
 .gdh-veil-sub{font-size:14px;font-weight:700;color:#7A6242;line-height:1.6;max-width:320px;}
 
-.gdh-shoplist{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;}
+.gdh-shoplist{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;min-height:0;overflow-y:auto;flex:1;}
+.gdh-shopfoot{position:sticky;bottom:0;z-index:2;width:100%;max-width:300px;background:#fffbf4;padding:8px 0 2px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;}
+.gdh-veil.gdh-shop{overflow:hidden;padding-bottom:52px;}
+.gdh-veil.gdh-shop>:first-child{margin-top:0;}
+.gdh-veil.gdh-shop>:last-child{margin-bottom:0;}
 .gdh-shopitem{display:flex;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:8px 10px;
   box-shadow:0 3px 8px rgba(170,140,90,.22);text-align:left;}
 .gdh-shopemoji{font-size:24px;line-height:1;}

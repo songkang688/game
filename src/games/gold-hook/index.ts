@@ -660,6 +660,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   function closeVeil(): void {
     veilMode = "none";
     veil.hidden = true;
+    veil.classList.remove("gdh-shop");
     veil.innerHTML = "";
     paused = false;
     last = 0;
@@ -671,6 +672,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     veilMode = "shop";
     paused = true;
     veil.hidden = false;
+    veil.classList.add("gdh-shop");
     veil.innerHTML = "";
     veil.append(
       el("div", "gdh-veil-title", "🛒 矿洞小商店"),
@@ -710,7 +712,9 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       o.sfx("tap");
       closeVeil();
     });
-    veil.append(list, purse, close);
+    const foot = el("div", "gdh-shopfoot");
+    foot.append(purse, close);
+    veil.append(list, foot);
 
     function refreshShop(): void {
       purse.textContent = `钱包里还有 ${wallet.coins} 金币`;
