@@ -18,10 +18,10 @@ import { describe, expect, it } from "vitest";
 const GAMES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("窗口4 r3 · W4R3-01 duo-vs-star 返回/暂停键触区(W4R2-05 残余)", () => {
-  it("现状钉住:.dvs-back 已补 min-height:40px(C-9 / N-26)", () => {
+  it("现状钉住:.dvs-back 已补 min-height:44px(C-9/N-26 时 40,N-101 抬到 44 红线)", () => {
     const source = readFileSync(join(GAMES_DIR, "duo-vs-star", "index.ts"), "utf8");
     const rule = source.slice(source.indexOf(".dvs-back{"), source.indexOf(".dvs-back:active"));
-    expect(rule).toContain("min-height:40px");
+    expect(rule).toContain("min-height:44px");
   });
 
   it("回归守护:r2 修复的 .dvs-pad 七键 40px 底线与 gap:4 不回退(0c2c6da)", () => {
