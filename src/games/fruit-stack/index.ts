@@ -144,6 +144,16 @@ const CSS = `
   .fs-bowls{gap:6px;}
   .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
+@media (max-height:500px){
+  /* N-107:矮横屏键排 522~566 全掉在 .l99-host overflow:hidden 折线下,sticky 无效——
+     每座位一组键 fixed 到视口两侧垂直居中(P0 左盆/P1 右盆同侧),不遮果盆;
+     z-index 压在 .fs-veil(z6)之下,暂停遮罩盖住键,暂停期不吃点击 */
+  .fs-pad > .fs-pad{position:fixed;z-index:5;top:50%;transform:translateY(-50%);
+    flex-direction:column;flex-wrap:nowrap;background:rgba(255,244,248,.94);padding:6px;
+    border-radius:16px;box-shadow:0 3px 10px rgba(150,100,140,.3);}
+  .fs-pad > .fs-pad:first-child{left:10px;right:auto;}
+  .fs-pad > .fs-pad:last-child{left:auto;right:10px;}
+}
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-key:active,.fs-pick:active{transform:none;}
 }
