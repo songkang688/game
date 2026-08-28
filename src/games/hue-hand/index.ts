@@ -315,8 +315,13 @@ const CSS = `
   .hh-btn{padding:7px 10px;font-size:14px;}
 }
 @media (max-height:500px){
-  .hh-btns{position:sticky;bottom:0;z-index:5;padding:6px 0 2px;
-    background:linear-gradient(180deg,rgba(246,242,255,.25),#f6f2ff 40%);}
+  /* N-98:sticky 在 .l99-host/.hh-wrap overflow:hidden 链里只钉裁切盒还压住手牌;
+     照 N-75 配方 fixed 钉视口底,wrap 自己开内滚,553px 内容才滚得到(对手行/横幅) */
+  .hh-wrap{overflow-y:auto;overscroll-behavior:contain;padding-bottom:8px;}
+  .hh-wrap > .hh-btns{position:fixed;left:12px;right:12px;bottom:8px;z-index:20;
+    padding:6px 8px;border-radius:14px;background:rgba(246,242,255,.94);
+    box-shadow:0 -2px 10px rgba(120,90,160,.22);}
+  .hh-keys{display:none;}
   .hh-hidden{min-height:48px;}
 }
 @media (prefers-reduced-motion:reduce){
