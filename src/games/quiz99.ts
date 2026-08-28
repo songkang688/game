@@ -171,6 +171,14 @@ const QUIZ_CSS = `
   .qz-say { min-height: 44px; padding: 6px 18px; }
   .qz-jump-go { min-height: 44px; padding: 8px 16px; }
   .qz-badge { padding: 3px 10px; }
+  /* N-37(r9-A 复测):管理员开着时答题器里多出一整行 .qz-jump(44px + 间距),
+     矮横屏上把 math-farm 三颗答案钮整排顶到舞台底下 31px,而且宿主不自滚 —— 够不着。
+     让这一行浮到题号行右侧的空档里:脱离纵向流就不再从答题区身上切走一行,
+     题号行同时留出右内边距,「🔥 连对 N」那颗徽章不会被压在底下。
+     root 关着没有 .qz-jump,:has 整段不生效,孩子面逐像素不变。 */
+  .qz-wrap:has(.qz-jump) .qz-jump { position: absolute; top: 4px; right: 0; left: auto; width: auto;
+    margin: 0; z-index: 4; justify-content: flex-end; flex-wrap: nowrap; }
+  .qz-wrap:has(.qz-jump) .qz-top { padding-right: 216px; }
 }
 `;
 

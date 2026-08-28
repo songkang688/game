@@ -108,6 +108,45 @@ describe("N-37 关内抬头:管理员那一行不再独占", () => {
   });
 });
 
+describe("N-37 答题器:直达行浮进题号行右侧空档", () => {
+  const short = mediaBlock(QUIZ99, "@media (max-height: 500px)");
+
+  it("直达行脱离纵向流,不再从答题区身上切走一整行", () => {
+    expect(short).toMatch(/\.qz-wrap:has\(\.qz-jump\) \.qz-jump\s*\{[^}]*position:\s*absolute/);
+    expect(short).toMatch(/\.qz-wrap:has\(\.qz-jump\) \.qz-jump\s*\{[^}]*right:\s*0/);
+  });
+
+  it("题号行留出右内边距,「连对」那颗徽章不会被压在浮起来的那条底下", () => {
+    const top = /\.qz-wrap:has\(\.qz-jump\) \.qz-top\s*\{([^}]*)\}/.exec(short);
+    expect(top, "应有题号行让位规则").not.toBeNull();
+    const px = /padding-right:\s*(\d+)px/.exec(top?.[1] ?? "");
+    expect(px, "应留右内边距").not.toBeNull();
+    // 真机量到直达那条 191–195px 宽,留位必须盖得住
+    expect(Number(px?.[1])).toBeGreaterThanOrEqual(200);
+  });
+
+  it("取反:整段挂在 :has(.qz-jump) 上 —— root 关着时答题器逐像素不变", () => {
+    for (const line of short.split("\n")) {
+      if (!line.includes("{") || !line.includes(".qz-jump")) continue;
+      const sel = line.split("{")[0].trim();
+      if (!sel || sel.startsWith("/*") || sel.startsWith("*") || sel.startsWith("@")) continue;
+      // .qz-jump-go 那条是 L-1 早就有的热区下限,不在本次改动范围
+      if (/^\.qz-jump-(go|input)\b/.test(sel)) continue;
+      expect(sel, `${sel} 必须挂在 :has(.qz-jump) 上`).toContain(":has(.qz-jump)");
+    }
+  });
+
+  it("取反:直达框与确认钮仍旧是 44px 热区,没被顺手压扁去腾地方", () => {
+    expect(QUIZ99).toMatch(/\.qz-jump-input\s*\{[^}]*min-height:\s*44px/);
+    expect(short).toMatch(/\.qz-jump-go\s*\{[^}]*min-height:\s*44px/);
+  });
+
+  it("取反:答题交互件没被这次改动碰过(L-1 那档的 46/44px 下限还在)", () => {
+    expect(short).toMatch(/\.qz-choice\s*\{[^}]*min-height:\s*46px/);
+    expect(short).toMatch(/\.qz-say\s*\{[^}]*min-height:\s*44px/);
+  });
+});
+
 describe("N-37 护栏:判分与直达语义零触碰", () => {
   it("答题器的判分入口还在原处", () => {
     expect(QUIZ99).toMatch(/export function runQuiz/);
