@@ -192,6 +192,7 @@ const CSS = `
 .pfb-bar-txt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:14px;font-weight:900;color:#33526E;white-space:nowrap;overflow:hidden;}
 .pfb-btn{border:none;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:900;cursor:pointer;
+  min-width:${TOUCH_MIN}px;min-height:${TOUCH_MIN}px;display:inline-flex;align-items:center;justify-content:center;
   font-family:inherit;background:#ffffffdd;color:#3F5C77;box-shadow:0 3px 0 rgba(110,140,175,.32);}
 .pfb-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(110,140,175,.32);}
 .pfb-btn:focus-visible,.pfb-key:focus-visible,.pfb-mode:focus-visible,.pfb-veil-btn:focus-visible,
@@ -235,7 +236,7 @@ const CSS = `
 /* display:flex 会盖掉 hidden 属性自带的 display:none,进了某个模式就得把这排按钮收起来 */
 .pfb-modebar[hidden]{display:none;}
 .pfb-mode{border:none;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:900;color:#fff;
-  cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
+  min-height:${TOUCH_MIN}px;cursor:pointer;font-family:inherit;background:linear-gradient(180deg,#7FC4E8,#5AA0CB);box-shadow:0 4px 0 #46809F;}
 .pfb-mode.pfb-mode-duel{background:linear-gradient(180deg,#F79BB8,#DE6E97);box-shadow:0 4px 0 #B95278;}
 .pfb-mode.pfb-mode-bot{background:linear-gradient(180deg,#B79AE6,#9375CD);box-shadow:0 4px 0 #7256A6;}
 .pfb-mode.pfb-mode-coop{background:linear-gradient(180deg,#9AD07C,#78B45B);box-shadow:0 4px 0 #5E9146;}
@@ -279,6 +280,14 @@ const CSS = `
   .pfb-pads{--k:46px;margin-top:4px;}
   .pfb-pads[data-pads="2"]{--k:${TOUCH_MIN}px;}
   .pfb-tip{margin-top:4px;font-size:11px;}
+}
+/* N-42 / C-8: 矮横屏把六键垫到画布右侧，暂停钮已抬到 44 */
+@media (max-height:500px) and (min-width:640px){
+  .pfb-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;}
+  .pfb-hud{grid-column:1/-1;}
+  .pfb-stagebox{grid-column:1;min-width:0;}
+  .pfb-pads{grid-column:2;grid-row:2;margin-top:0;flex-direction:column;justify-content:flex-start;}
+  .pfb-tip{grid-column:1/-1;}
 }
 @media (prefers-reduced-motion:reduce){ .pfb-toast{transition:none;} }
 `;

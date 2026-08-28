@@ -484,6 +484,12 @@ export function nodeAriaLabel(level: number, stars: number, state: "locked" | "s
   return `第 ${n} 关，还没通关`;
 }
 
+/** N-39：当前关格子是否整格落在视口内（top≥0 且 bottom≤视口高） */
+export function nodeCurFullyVisible(rect: { top: number; bottom: number }, viewportH: number): boolean {
+  return Number.isFinite(rect.top) && Number.isFinite(rect.bottom) && Number.isFinite(viewportH)
+    && viewportH > 0 && rect.bottom > rect.top && rect.top >= 0 && rect.bottom <= viewportH;
+}
+
 /**
  * 没有专属攻略数据时，按章节自动拼一份「只讲方法、不给答案」的攻略。
  * 纯函数便于测试；具体游戏的细则由后续步骤补 `guide` 字段覆盖。
@@ -637,6 +643,9 @@ const L99_CSS = `
   .l99-stagebar:has(.l99-jump) .l99-jump{flex-wrap:nowrap;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-jump-note{display:none;}
   .l99-stagebar:has(.l99-jump) .l99-tool-skip{padding:6px 10px;font-size:13px;}
+  /* N-37 加重档:root 抬头已收一行后,限时条+火车舞台再让票。无 .l99-jump 不生效。 */
+  .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
+  .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
 }
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}

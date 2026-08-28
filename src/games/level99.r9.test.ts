@@ -50,6 +50,8 @@ describe("N-37 矮横屏 root 抬头收成一行", () => {
     expect(SRC).toContain("flex-wrap:nowrap");
     const compact = SRC.slice(SRC.indexOf("/* N-37"));
     expect(compact).toContain(":has(.l99-jump)");
+    expect(compact).toContain(".l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}");
+    expect(compact).toContain(".l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px");
     expect(compact).not.toMatch(/\.l99-stagebar\{[^}]*padding:4px 8px/);
   });
 });

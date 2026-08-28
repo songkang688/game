@@ -1,44 +1,39 @@
 # 三人组第 10 轮 · 测试修复员 A/B 任务清单（playbook）
 
-> 依据：`trio-r10-learn-notes.md`（基线 `game-1.3 = 4b3a4cab`）。
-> **先读**：r9 笔记已合入。S-1/S-2/S-3/S-4(l99)/C-1/N-28/竞技场留白/garden-guard/find-diff+shape 答题 L-1 **不要重做**。
-> **在途先收再开新坑**（未合入不算销账）：
-> - A：`cursor/trio-r9-tester-a-7779` = N-33/34/35/36/37/38/30/收藏册 44px；`cursor/tester-a-r7-fixes-def4` = N-27/N-32/L-2（与 r9-A **双改 N-30，取先合版**）。
-> - B：`cursor/casual-duo-fit-r5-b-4683` = N-1/C 组/N-2…/配方 F/N-16…18；守门测试必须并进 `modebarHidden.guard.test.ts`。
-> **只列仍未落地的 🔧**。已合入的不抄。新伤 **N-43…N-45**（勿与 r9 的 N-40 duo-rush / N-41 麻将 / N-42 puff 混账）。A = 壳层+闯关学习，B = 休闲对战动手。
-> 配方 A–C r4、D–F r5、G/H r6、I/J r8、K r9；本轮只补 J/I/H 笔，不新开字母。
+> 依据：`trio-r10-learn-notes.md`（含并行学习员 N-43…N-45 + **R2 补测 §八**）。抽验时点 `game-1.3` 已含 A `39d61b50` + B `b2c07a6e`（merge `323ac8cc`）。
+> **禁止重做（已在主干 ✅）**：S-1/S-2/S-3/S-4(l99)/L-1(shape 答题+find-diff)/C-1/N-28/竞技场留白/garden-guard 节点图/N-24；**N-33 sticky、N-38 永久文案、收藏册 44、N-34/N-35/N-36、N-30 古堡**；**N-25 塔、N-1 果篮、N-32 无尽战斗、N-26/C-9、N-27、N-29、N-23 地图聚焦**。动手前 `git fetch origin game-1.3` 再对账，别写第三份双栏/sticky。
+> **只列仍 🔧**。A = 壳层+闯关学习；B = 休闲对战。配方 A–C r4、D–F r5、G/H r6、I/J r8、K/L r9。
+> 水位进场：本学习员实测 **1109 文件 / 19330 用例** 全绿。测试只增不减。
 
 ## 通用纪律
 
-- 不改存档 key：`yiduo-yixing.l99.<id>` / skip / `yiduo-yixing.root.v1` / 钱包 / `meta.id`。
-- 不动题库/判定/seed。kit 已有文件只 import。
-- 测试只增不减。进场记 `npm test`（主干水位约 1095/19288；偶发 2 红超时/五子棋随机，**不要为变绿改那些用例**）。
-- 宽屏 412×915 / 1280×800 零回归。禁 force。
-- 开/关对照每档隔离 incognito 或先 `localStorage.clear()`（r9 工装红线）。
+- 不改存档 key / `meta.id`；不动题库、seed、win/lose。
+- kit 已有文件只 import。宽屏 412×915 与 1280×800 零回归。禁 force。
+- 开/关对照每档隔离 context 或先 `localStorage.clear()`。
+- `casual-duo-fit-r5-b-4683` 若仍未合：rebase 到最新主干，`[hidden]` 与守门测试取 A 先合版、只留一份 `modebarHidden.guard.test.ts`。合入后把下列与该分支重叠的 C/N 销账，勿双修。
 
 ## 测试步骤备忘
 
-- `npm run build && npx vite preview --port 4173`；puppeteer-core + `/usr/local/bin/google-chrome`。
-- 主档 915×412。color-fun 关号（0-index 进度格数 = 关号）：mix 34、number 51、memory 84、shade 99、rule 121、legend 143、limited 166。math-farm 竖式用第 100 关族。shape 作图 = 第 102 关族。gold-hook 商店：**先点闯关矿洞 → 进关 → 🛒**，模式选单上没有商店。
+- `npm run build && npx vite preview --port 4173`；puppeteer-core + `/usr/local/bin/google-chrome`。主档 **915×412**。
+- color-fun 关号、math-farm 竖式、gold-hook 商店路径见原 r10 笔记第一节 / 原 playbook（N-43…N-45 不改口径）。
+- 坦克裁切：`.game-stage` 可能为 0，必须扫 `.tkb-root` 自滚（N-19）。
 
 ---
 
 ## 壳层（给 A）
 
-### 在途批次合入后只需复测、不要重写（除非主干仍无 sticky）
+### S-4 扩容 `.qz-jump-input` 🔧
 
-- **N-33** 结算 `.dialog-buttons` sticky（配方 I）。已由测试员 A 第 9 轮合入 `game-1.3`。本轮只复测，不要重写 sticky。正面样板 = 攻略 drawer footer。
-- **N-38** `rootJumpNote` 永久文案。已合入 `game-1.3`。本轮只复测永久文案。
-- **收藏册 40/36px**：已合入 `game-1.3`（44px）。销账。
-- **S-4 扩容 `.qz-jump-input`**：主干 `quiz99.ts:153` 仍 38px，**r9-A 明确没动** → 本轮仍要做。min-height 38→44，管理员面。
+- `quiz99.ts:153` 仍 `min-height:38px` → 44。r9-A 明确没动。管理员面；限时关 root 态里它还容易沉线下，一次带走。
 
-### N-39 l99 蓝本地图首次进图/回地图不聚焦 🔧（r9 新号，主干+ r9-A 都没动）
+### N-39 l99 蓝本地图首次进图/回地图不聚焦 🔧（配方 K）
 
-- 照 `trio-r9-playbook.md` 原文：`showMap(true)` 四处（初次进图 + 三处回地图），切章那处保持 false。验收样本 hop-pads。配方 K。
+- 主干仍 `showMap(focusCurrent = false)`；初次进图与三处「回地图」未传 true。R2 复证 hop-pads 当前关 **426–502 整格线下**。
+- 改哪/验收照 r9 playbook：四处补 `showMap(true)`；切章那处保持 false。验收样本 hop-pads。
 
-### N-37 合入后补测 🔧
+### N-33 / N-38 / 收藏册 ✅ 勿动
 
-- r9-A 用 `:has(.l99-jump)` 收抬头。合入后按 r9 加重档验收：**root × pinyin-train 第 135 关** 三票须在 915×412 不滚可点。未覆盖就补，别新开号。
+- R2 浏览器：结算两钮在屏、sticky 计算值为 `sticky`；永久文案正确；收藏 44px 在源码。不要重写 sticky。
 
 ---
 
@@ -46,51 +41,70 @@
 
 ### N-43 color-fun 全关型矮横屏色盘/调色锅线下 🔧（配方 G/J）
 
-- **现象**：915×412 七关型交互件全线下（limited 最重：10 控 top 508–655，wrap 自滚 352）。画布在屏，撤销/重做/色票/调色锅都不滚点不到。
-- **改哪**：`src/games/color-fun/index.ts`（皮肤 CSS）。矮横屏：画布钳高 **或** 双栏（画布左、色盘+锅右 sticky）；`.clf-scrolly` 不要把操作排卷进去。判定/线稿/混色表零触碰。
-- **验收矩阵**：7 关型 × 915×412；memory/limited 再跑 390×844 / 412×915 / 1024×768。第 1 关 guide 回归。补布局断言（色盘 top < 视口高）。
+- 照本文原 playbook / learn-notes 第三节。七关型 × 915×412。
 
-### N-44 math-farm 竖式插图关答案钮线下 🔧（扩 L-1 紧凑档）
+### N-44 math-farm 竖式插图关答案钮线下 🔧
 
-- **现象**：不开 root、第 100 关族 915×412：竖式题看得见，三枚 `.qz-choice` top 481 整排线下；第 1 关同视口全绿。
-- **改哪**：`math-farm/illustrate.ts` 或 runner 插图宿主矮屏 `max-height`；**或** `quiz99.ts` 紧凑档选择器从 `.qz-prompt svg` 扩到农场插图根节点。题目数据/对错零触碰。
-- **验收**：有 `kind:vertical` 的关 915×412 三钮不滚可点；第 1 关数字不劣化；root 开关各一档（N-37 合入后）。
+- 照原文。R2 另测 **root × 第 81 关**（非竖式）：三枚 `.qz-choice` top 381 切底——验收时连 root 开/关各一档，别只修竖式却把普通题切掉。
 
-### N-36 / N-34 / N-35 / N-30
+### N-37 合入后补测（不新开号）
 
-- 已合入 r9-A（`game-1.3`）。只复测，勿再做第三份双栏。
+- r9-A `:has(.l99-jump)` 已在主干。仍须 **root × pinyin-train 135** 三票在屏。clock-house L1 × root 本轮已绿。
 
-### L-2 / L-3
+### L-2 / L-3 🔧
 
-- L-2：`tester-a-r7` 在途有 `faceLift` 序列化补丁（真机 `</line>`）；合入后真机复验第 1 关针。L-3 贴纸仍开，照 r7。
+- L-2 钟面、L-3 贴纸补章。照 r7。`tester-a-r7-fixes-def4` 若有 `faceLift` 先 fetch，撞车取先合版。
+
+### N-34 / N-35 / N-36 / N-30 ✅ 勿再做第三份
 
 ---
 
 ## 休闲对战动手（给 B）
 
-### 第一件事：rebase `casual-duo-fit-r5-b-4683` 到最新 game-1.3
+### N-46 sky-squad 关内六键切半 + 双人 36px 🔧（新，配方 G）
 
-- `[hidden]` 与 A 已合入行撞车 → 弃自己的重复行。
-- 守门测试两文件 → 只留 `src/games/modebarHidden.guard.test.ts`。
+- **现象**：915×412 闯关 `.sks-key` top 397、h=42，底边出屏；暂停 33px。双人同屏键 **36×36**。r5「HUD 换行干净」不管键排。
+- **改哪**：`src/games/sky-squad/index.ts` 矮横屏键排贴底或再让画布；`min-width/min-height:44`。飞行判定/合流波零触碰。
+- **验收**：闯关+双人同屏 915×412 六键不滚可点且 ≥44；390×844 / 1280×800 零回归。
 
-### N-45 gold-hook 关内商店 veil 必点钮线下 🔧（配方 I）
+### N-47 模式菜单芯片热区 <44 🔧（新，开关态）
 
-- **现象**：915×412 进关点🛒：veil 内滚 230，「接着挖 ▶」top 513 整钮线下，第三件 buy 钮 top 416 线下；底栏 HUD 压住下沿。
-- **改哪**：`src/games/gold-hook/style.ts`（`.gdh-veil`）+ `index.ts` 结构。把「接着挖」钉在 veil footer（sticky + 不透明底），货架 `.gdh-shoplist` 单独 overflow；`padding-bottom` 让出 HUD 高。买卖逻辑、关内金币、`SHOP` 表零触碰。
-- **验收**：915×412 不滚能点「接着挖」与至少首屏买钮；390×844 / 1280×800 零回归；暂停 veil 不劣化。
+- bowling 菜单 34px / 王子公主模式钮 37px / 坦克模式条 38px。只改菜单层 `min-height:44`，关内判定不动。
+- 验收：三款菜单 915×412 芯片 getBoundingClientRect ≥44；进关后模式条仍 `[hidden]`。
 
-### 仍开且在途未声明覆盖的（合入 B 后再对账删）
+### N-45 gold-hook 关内商店 veil 🔧（配方 I）
 
-- **N-25 / N-31** 已由测试员 B 第 9 轮合入 `game-1.3`，只复测。
-- **N-15** bomb-buddies：本轮确认 **390×844 双人干净、915×412 对战六键全线下**。B 若只钳了闯关 canvas，补 **对战态 × 915**。
-- **N-26 / N-29 / N-23** 已由测试员 B 第 9 轮合入，只复测。
-- C-8 菜单组、N-2/3/4：以 B 分支提交说明为准，合入后销。
+- 照原 r10 playbook。进关点🛒，钉「接着挖」。
+
+### N-10 棋类三款横屏 🔧（复证仍开，不换号）
+
+- 915×412：xiangqi 裁 437 / 出屏 245 / 钮 top 687；gomoku 331/216；weiqi-garden 188/43。照 r5。
+
+### N-40 duo-rush 赛道工具条线下 🔧（配方 L）
+
+- 暂停/再来/换玩法 top 462，crop 175，画布在屏。sticky 底或双栏，勿重钳画布。
+
+### N-31 训练场 🔧（B 已合源码，915 未绿）
+
+- 假人三钮 top 447、开打 531、高 38px。补 915×412 真机，不要再发明第二套壳。
+
+### 配方 F / C-8 旧号仍开（合入 casual-duo 分支后先对账再改）
+
+- **N-11** bowling 关内四钮 top 587 / 裁 237；暂停 34px 一并抬到 44。
+- **N-15** bomb-buddies **双人**六键 top 498–600（必须 915 对战/合作态）。
+- **N-19** tank-battle D-pad 503–552；暂停 32→44。量 `.tkb-root`。
+- **N-22** combo-clash 轻/重/必杀 top 451 / 裁 131。
+- **C-8** snow-fight 闯关+双人键排线下；shoot-range 键 560+ canvas 出屏 90；hue-hand 三钮 416 / 裁 335；ice-fire-forest / puff-bros 菜单热区走 N-42+C-8 原文。
+- **N-13 fruit-stack / N-14 bumper-cars / N-16 走廊 / N-17 王子关内 / N-41 麻将牌宽 / N-42 puff 暂停 34**：r9 数字仍有效，本轮未换号重测麻将/puff。
+- **N-2/N-3/N-4、N-5…N-9+N-20、N-21、C-2…C-7、C-4**：r4/r5 原文；B 在途覆盖的合入后销。
+
+### N-25 / N-1 / N-26 / N-27 / N-29 / N-23 / N-32 ✅ 勿重写
 
 ---
 
-## 完成定义
+## 完成定义（两人共用）
 
-1. 在途分支合入或书面记录「未合 / 冲突取谁」。
-2. `npm test` / `npm run build` 水位只增不减；全库一份 modebar 守门。
-3. N-43 七关型、N-44 竖式关、N-45 商店 915×412 留数字；N-37×限时 135 若 A 已合则复测。
-4. 报告对账 r9/r10 编号；撞车先合版。
+1. 上表 🔧 关账或书面降级（BL-W6-03 格式）。已 ✅ 项零重做。
+2. `npm test` / `npm run build` 全绿，水位 ≥ **1109 / 19330**；每条修复有小测试。全库一份 modebar 守门。
+3. 新伤 N-46/N-47 与 N-10/N-40/N-15/N-19 在 915×412 留数字；N-43…N-45 按原矩阵。
+4. 撞车取先合版。报告写清 fetch 后的 `game-1.3` SHA。

@@ -43,6 +43,11 @@ const CSS = `
 .tm-fill{height:100%;width:100%;border-radius:8px;transition:width .25s linear;}
 .tm-bar.tm-rush .tm-clock{color:#c92a2a;animation:tmPulse 1s ease-in-out infinite;}
 @keyframes tmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@media (max-height:500px){
+  .tm-bar{margin-bottom:4px;gap:6px;font-size:12px;}
+  .tm-clock{padding:2px 8px;}
+  .tm-track{height:6px;}
+}
 @media (prefers-reduced-motion:reduce){.tm-bar.tm-rush .tm-clock{animation:none;}}
 `;
 
