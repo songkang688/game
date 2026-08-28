@@ -153,7 +153,7 @@ export const SR_CSS = `
     background:linear-gradient(180deg,rgba(234,247,228,.25),#EAF7E4 40%);}
   .sr-msg{min-height:0;max-height:1.5em;overflow:hidden;margin-top:4px;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .sr-pad{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(234,247,228,.25),#EAF7E4 40%);}
 }

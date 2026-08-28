@@ -455,7 +455,7 @@ export const SP_CSS = `
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .sp-wrap{overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
     padding-top:4px;}

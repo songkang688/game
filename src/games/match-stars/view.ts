@@ -270,7 +270,7 @@ export const CSS = `
   .mst-seats{flex-direction:column;}
 }
 /* U-18:方格盘宽驱动高,矮屏/平板横屏按余高反推钳宽,末行不再顶穿 l99 舞台 */
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .mst-boardwrap{max-width:min(100%, calc(100dvh - 220px));margin-inline:auto;}
 }
 @media (max-height:500px){

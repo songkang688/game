@@ -136,7 +136,7 @@ export const CSS = `
   .dc-duoplay .dc-note{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
   .dc-duoplay .dc-count{max-height:2.2em;overflow:hidden;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .dc-duoplay .dc-row{position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(255,248,236,.3),#fff8ec 40%);}
   .dc-duoplay .dc-board{max-width:min(360px,62dvh);}

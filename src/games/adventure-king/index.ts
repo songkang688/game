@@ -129,7 +129,7 @@ const CSS = `
     background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
   .ak-tip{display:none;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .ak-pad{position:sticky;bottom:0;z-index:2;padding:4px 0 2px;
     background:linear-gradient(180deg,#fff6e8f2,#f2ecfff2);}
 }
@@ -238,7 +238,7 @@ const CSS = `
   .ak-mode.advk-shell > .advk-mini{grid-column:1/-1;}
   .ak-mode.advk-shell > .advk-album{grid-column:1/-1;grid-row:6;max-height:28dvh;overflow:auto;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .ak-mode.advk-shell > .advk-pad2{position:sticky;bottom:0;z-index:3;}
 }
 ${touchUpliftCss([".ak-open"])}

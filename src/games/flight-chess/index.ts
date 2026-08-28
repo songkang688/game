@@ -288,6 +288,16 @@ export const CSS = `
   .fc-wrap{max-height:calc(100dvh - 76px);}
   .fc-boardwrap{max-height:min(156px,38dvh);}
 }
+@media (max-height:840px) and (min-height:501px){
+  .fc-hud{
+    position:sticky;bottom:0;z-index:6;margin:4px 0 0;padding:6px 4px 4px;
+    background:linear-gradient(180deg, rgba(234,246,255,.4), #EAF6FF 36%, #FFF2F7);
+    box-shadow:0 -8px 14px rgba(120,160,200,.16);
+  }
+  .fc-picker{position:sticky;bottom:0;z-index:5;padding:4px 0 2px;background:#FFF2F7ee;}
+  .fc-boardwrap{max-height:min(280px,52dvh);max-width:min(280px,52dvh,calc(100dvh - 148px));}
+}
+}
 @media (prefers-reduced-motion:reduce){
   .fc-token,.fc-token-arc{transition:none;}
   .fc-token-pick{animation:none;}

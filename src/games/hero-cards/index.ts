@@ -225,7 +225,7 @@ export const HC_CSS = `
   .hc-wrap{max-height:calc(100dvh - 76px);}
 }
 /* U-15:390 手牌与平板横屏回合键同样钉底,500 档原文不动 */
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .hc-hand{
     position:sticky;bottom:52px;z-index:5;margin:0;padding:8px 4px 6px;
     background:linear-gradient(180deg, rgba(255,248,242,.35), #FFF8F2 40%);

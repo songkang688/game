@@ -220,7 +220,7 @@ const CSS = `
   .tkb-pads-two .tkb-sticks{gap:3px;}
 }
 /* U-7:平板横屏/高竖屏同样钉双垫。500 档原句一字不改,守门测试还咬它 */
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .tkb-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
     background:linear-gradient(180deg,rgba(255,250,246,0),#fffaf6 16px);}
   .tkb-pads-two{flex-wrap:nowrap;position:sticky;bottom:0;z-index:5;padding-top:4px;

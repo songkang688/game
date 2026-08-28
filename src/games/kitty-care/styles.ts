@@ -219,7 +219,7 @@ export const KTC_CSS = `
   .ktc-album .ktc-cardname{font-size:12px;}
   .ktc-album .ktc-cardnote{display:none;}
 }
-@media (max-height:840px) and (min-width:600px){
+@media (max-height:840px) and (min-height:501px) and (min-width:600px){
   .ktc-album .ktc-tools{position:sticky;top:0;z-index:3;background:#fff8ee;}
 }
 .ktc-card{background:#fff;border-radius:16px;padding:8px;box-shadow:0 3px 8px rgba(160,110,40,.18);

@@ -184,7 +184,7 @@ export const CSS = `
   .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;flex:0 0 auto;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .gmk-panel .gmk-start{position:sticky;bottom:0;z-index:5;background:#FFB3CD;min-height:48px;}
   .gmk-btns,.gmk-claimbar{position:sticky;bottom:0;z-index:4;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(255,250,245,.4),#FFF8F0);}

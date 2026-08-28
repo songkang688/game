@@ -86,7 +86,7 @@ const CSS = `
   .pk-title{font-size:17px;}
   .pk-go{position:sticky;bottom:0;z-index:2;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .pk-go{position:sticky;bottom:0;z-index:2;}
 }
 @media (max-height:500px) and (min-width:640px){

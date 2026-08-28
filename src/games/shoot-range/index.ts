@@ -215,7 +215,7 @@ export const CSS = `
     background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
   .shr-tip{flex:0 0 auto;max-height:1.3em;overflow:hidden;margin-top:2px;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .shr-pads{position:sticky;bottom:0;z-index:5;flex:0 0 auto;margin-top:4px;
     background:linear-gradient(180deg,rgba(255,247,251,0),#FFF7FB 16px);padding-top:4px;}
   .shr-cv{height:min(220px,48dvh);}

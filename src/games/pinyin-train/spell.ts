@@ -225,7 +225,7 @@ const CSS = `
   .pyt-view{min-height:28px;font-size:${PINYIN_FONT_MIN + 6}px;}
   .pyt-go{position:sticky;bottom:0;z-index:2;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .pyt-go{position:sticky;bottom:0;z-index:2;}
 }
 @media (max-height:500px) and (min-width:640px){

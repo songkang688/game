@@ -319,7 +319,7 @@ const CSS = `
     background:linear-gradient(180deg,rgba(246,242,255,.25),#f6f2ff 40%);}
   .hh-hidden{min-height:48px;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .hh-btns{position:sticky;bottom:0;z-index:5;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(246,242,255,.25),#f6f2ff 40%);}
 }

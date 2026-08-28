@@ -102,7 +102,7 @@ const CSS = `
   .hp-duo{gap:4px;max-height:calc(100dvh - 72px);overflow:hidden;}
   .hp-duo .hp-canvas{max-height:min(148px,36dvh);}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .hp-duo .hp-canvas{max-height:min(220px,42dvh);}
 }
 .hp-name{position:absolute;left:12px;bottom:36px;font-size:15px;font-weight:900;color:#8A5330;

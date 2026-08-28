@@ -256,7 +256,7 @@ const CSS = `
   .iff-tip{grid-column:1;}
   .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
 }
-@media (min-width:640px) and (max-height:840px){
+@media (min-width:640px) and (max-height:840px) and (min-height:501px){
   .iff-pads{position:sticky;bottom:0;z-index:4;}
 }
 @media (prefers-reduced-motion:reduce){

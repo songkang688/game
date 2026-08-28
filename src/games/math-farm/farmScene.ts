@@ -363,7 +363,7 @@ export const FARM_CSS = `
   .mtf-quizhost:has(.qz-jump) .qz-top { order: 8; }
   .mtf-quizhost:has(.qz-jump) .qz-jump { order: 9; }
 }
-@media (max-height: 840px) {
+@media (max-height: 840px) and (min-height:501px) {
   .mtf-quizhost .qz-choices { position: sticky; bottom: 0; z-index: 4;
     background: linear-gradient(180deg, rgba(255, 252, 255, .35), #fff 45%); }
 }

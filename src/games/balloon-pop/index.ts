@@ -184,7 +184,7 @@ const CSS = `
   .l99-stage-wrap .blp-sky { max-height: max(96px, calc(100dvh - 300px)); }
   .blp-msg { margin-top: 4px; }
 }
-@media (max-height:840px) {
+@media (max-height:840px) and (min-height:501px) {
   .blp-sky { max-height: max(120px, calc(100dvh - 240px)); }
   .l99-stage-wrap .blp-sky { max-height: max(120px, calc(100dvh - 320px)); }
 }

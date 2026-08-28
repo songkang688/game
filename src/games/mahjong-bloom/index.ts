@@ -255,7 +255,7 @@ export const MJ_CSS = `
     flex:0 0 auto;padding:4px 2px 6px;row-gap:0;
     background:linear-gradient(180deg,rgba(30,95,67,0),rgba(30,95,67,.85) 12px,#1e5f43);}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .mj-hand{position:fixed;left:10px;right:10px;bottom:6px;z-index:20;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
     padding:4px 2px 6px;
     background:linear-gradient(180deg,rgba(30,95,67,0),rgba(30,95,67,.85) 12px,#1e5f43);}

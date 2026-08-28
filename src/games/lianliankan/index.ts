@@ -125,7 +125,7 @@ const CSS = `
   .llk-board { max-width: min(420px, 78dvh); margin-inline: auto; width: 100%; }
   .llk-msg { min-height: 0; margin-top: 4px; }
 }
-@media (max-height: 840px) {
+@media (max-height: 840px) and (min-height:501px) {
   .llk-board { max-width: min(520px, 70dvh); margin-inline: auto; width: 100%; }
 }
 .llk-board.llk-spin { transform: rotate(90deg) scale(.86); }

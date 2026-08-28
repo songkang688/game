@@ -274,7 +274,7 @@ const CSS = `
   .se-board-wrap{max-height:min(156px,38dvh);}
 }
 /* U-1:平板横屏(768/820 高)吃不到 500 档,同款 sticky + 棋盘钳高扩一档 */
-@media (max-height:900px){
+@media (max-height:900px) and (min-height:501px){
   .se-pad{
     position:sticky;bottom:0;z-index:6;margin-top:6px;padding:8px 4px 4px;
     background:linear-gradient(180deg, rgba(255,248,236,.45), #FFF8EC 30%, #FFF1F6);

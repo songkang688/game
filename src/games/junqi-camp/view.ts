@@ -175,7 +175,7 @@ export const CSS = `
   .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
     background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
 }
@@ -195,7 +195,7 @@ export const CSS = `
   .jq-duoplay .jq-note{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
   .jq-duoplay .jq-legend{display:none;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
     position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
     background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}

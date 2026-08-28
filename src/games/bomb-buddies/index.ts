@@ -324,7 +324,7 @@ export const CSS = `
   .bmb-padwrap:last-child{grid-area:padr;}
   .bmb-padwrap:only-child{grid-area:padr;}
 }
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .bmb-pads{position:sticky;bottom:0;z-index:4;}
 }
 @media (prefers-reduced-motion:reduce){

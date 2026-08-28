@@ -124,7 +124,7 @@ const CSS = `
 .brk-badge.brk-pace-hot { color: #B4432B; background: #FFEDE6; }
 .brk-canvas { width: 100%; height: auto; max-height: calc(100dvh - 168px); object-fit: contain; border-radius: 16px; display: block; background: linear-gradient(180deg, #FDEFF5, #F3E4F0); touch-action: none; }
 /* U-11:平板横屏/矮横屏壳层更高,168 预算会切掉挡板;默认句留给 C-2 守门 */
-@media (max-height: 840px) {
+@media (max-height: 840px) and (min-height:501px) {
   .brk-canvas { max-height: calc(100dvh - 248px); }
 }
 .brk-ctrl { display: flex; justify-content: center; gap: 24px; margin-top: 10px; position: sticky; bottom: 0; z-index: 3; padding: 6px 0 2px; background: linear-gradient(180deg, rgba(255,239,228,.2), #FFEFE4); }

@@ -181,7 +181,7 @@ export const CSS = `
   .sks-modebar{flex-wrap:wrap;overflow-x:visible;}
 }
 /* U-19:中高视口钉方向盘,避免 915/平板切底 */
-@media (max-height:840px){
+@media (max-height:840px) and (min-height:501px){
   .sks-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
     background:linear-gradient(180deg,rgba(240,246,255,0),#F0F6FF 14px);}
 }
