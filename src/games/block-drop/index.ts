@@ -106,6 +106,28 @@ export function acceptsRepeat(key: string): boolean {
   return REPEATABLE_KEYS.has(key.length === 1 ? key.toLowerCase() : key);
 }
 
+/** 井画布显示高度的下限:比这还矮 20 行就真看不清了,剩下的交给舞台滚动兜底 */
+export const WELL_DISPLAY_MIN = 180;
+
+/**
+ * 井画布该「显示」多高(null = 原生高度就装得下,一个字都不用写)。
+ *
+ * 20 行的井按格子边长长高(24px 一格连墙 488px),CSS 里只有 `max-width:100%`
+ * 按宽缩——竖屏 360×640 上目标行 + 名牌 + 井 + 触屏按钮排加起来 ~640px,
+ * 而 `.game-stage` 的可视高只有 ~520px:按钮排(手机上唯一的操作入口)整排
+ * 掉在裁切线以下;横屏 640×360 更是井本身只剩上半截。
+ * 只钳 CSS 显示尺寸:backing store(canvas.width/height)与所有判定一个数不动,
+ * 触屏手势按相对位移(onMove 的 dx/dy)换算,缩放不影响手感。
+ */
+export function wellDisplayPx(nativeH: number, roomPx: number, min = WELL_DISPLAY_MIN): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  // 差一个像素以内不算超:亚像素抖动不值得为它改样式
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
 const CSS = `
 .bd-wrap{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#EEF4FF,#F9FBFF);
   border-radius:16px;padding:10px;user-select:none;}
@@ -907,6 +929,69 @@ function createTable(stage: HTMLElement, opts: TableOpts): { destroy: () => void
     }
   };
   window.addEventListener("keydown", onKeyDown);
+
+  // ---- 井的显示高度:量真实可视高再钳(见 wellDisplayPx 的注释) ----
+
+  /** 一个盒子的下沿(测试桩的 rect 可能没有 bottom,用 top+height 兜底) */
+  const rectBottom = (r: { top: number; bottom?: number; height: number }): number =>
+    Number.isFinite(r.bottom) ? (r.bottom as number) : r.top + r.height;
+
+  /** 往上找平台舞台(.game-stage,定高会裁内容)的下沿;量不到返回 NaN(测试桩 / 独立挂载) */
+  function stageClipBottom(): number {
+    let node: HTMLElement | null = wrap.parentElement ?? null;
+    for (let i = 0; node && i < 8; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        // 滚动口是 padding box:clientHeight 量得出就用它(白边一并扣掉)
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement ?? null;
+    }
+    return Number.NaN;
+  }
+
+  function fitWells(): void {
+    if (destroyed) return;
+    const clip = stageClipBottom();
+    if (!Number.isFinite(clip)) return;
+    if (typeof wrap.getBoundingClientRect !== "function" || typeof seatsHost.getBoundingClientRect !== "function") return;
+    const list = Array.from(seatsHost.querySelectorAll(".bd-canvas")) as HTMLCanvasElement[];
+    if (list.length === 0) return;
+    // 先摘掉上一次的钳位再量:量到的必须是「本来要多高」,不然缩完装得下就以为本来就装得下
+    for (const c of list) {
+      if (!c.style) return;
+      c.style.height = "";
+      c.style.width = "";
+    }
+    // 井底下还有多高的「家当」(按钮排 + 提示行):这些高度不随井的显示高变,量一次就是稳的
+    const below = Math.max(0, rectBottom(wrap.getBoundingClientRect()) - rectBottom(seatsHost.getBoundingClientRect()));
+    for (const c of list) {
+      if (typeof c.getBoundingClientRect !== "function") continue;
+      const top = c.getBoundingClientRect().top;
+      if (!Number.isFinite(top)) continue;
+      const px = wellDisplayPx(c.height, clip - top - below - 4);
+      if (px !== null) {
+        c.style.height = `${px}px`;
+        // 宽交给内在比例(canvas 是 replaced 元素),max-width:100% 仍旧兜着窄屏
+        c.style.width = "auto";
+      }
+    }
+  }
+
+  fitWells();
+  // 挂载那一刻可能还没上屏,量不到位置;下一帧补量一次
+  const fitRaf = typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => fitWells()) : 0;
+  window.addEventListener("resize", fitWells);
+  offs.push(() => {
+    window.removeEventListener("resize", fitWells);
+    if (fitRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
+  });
 
   function frame(ts: number): void {
     if (destroyed) return;
