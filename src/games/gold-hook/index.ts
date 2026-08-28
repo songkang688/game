@@ -660,6 +660,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
   function closeVeil(): void {
     veilMode = "none";
     veil.hidden = true;
+    veil.className = "gdh-veil";
     veil.innerHTML = "";
     paused = false;
     last = 0;
@@ -671,8 +672,10 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     veilMode = "shop";
     paused = true;
     veil.hidden = false;
+    veil.className = "gdh-veil gdh-veil--shop";
     veil.innerHTML = "";
-    veil.append(
+    const head = el("div", "gdh-shophead");
+    head.append(
       el("div", "gdh-veil-title", "🛒 矿洞小商店"),
       el("div", "gdh-veil-sub", "花的是这一趟挖到的金币,买完记得再挖回来。")
     );
@@ -704,13 +707,15 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
       list.appendChild(row);
       rows.push({ kind, btn });
     }
+    const foot = el("div", "gdh-shopfoot");
     const purse = el("div", "gdh-veil-sub", "");
     const close = button("gdh-btn gdh-btn-fire", "接着挖 ▶");
     close.addEventListener("click", () => {
       o.sfx("tap");
       closeVeil();
     });
-    veil.append(list, purse, close);
+    foot.append(purse, close);
+    veil.append(head, list, foot);
 
     function refreshShop(): void {
       purse.textContent = `钱包里还有 ${wallet.coins} 金币`;
@@ -730,6 +735,7 @@ function runField(host: HTMLElement, o: RunOpts): { destroy: () => void } {
     veilMode = "pause";
     paused = true;
     veil.hidden = false;
+    veil.className = "gdh-veil";
     veil.innerHTML = "";
     const back = button("gdh-btn gdh-btn-fire", "继续挖 ▶");
     back.addEventListener("click", () => {
