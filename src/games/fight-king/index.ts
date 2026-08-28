@@ -205,11 +205,32 @@ const CSS = `
 /* N-25:矮屏/窄屏把塔的出战八宫格收成一行,展开才铺开。人机/双人/无尽不走这套壳 */
 .fk-tower-compact{display:none;align-items:center;gap:8px;flex-wrap:wrap;}
 .fk-tower-now{font-size:14px;font-weight:900;color:#5b4890;}
+.fk-tower-hint{margin-bottom:8px;}
 @media (max-height:640px),(max-width:430px){
   .fk-tower-hero:not(.fk-tower-open) .fk-grid,
   .fk-tower-hero:not(.fk-tower-open) .fk-pick-t{display:none;}
   .fk-tower-hero .fk-tower-compact{display:flex;}
   .fk-tower-hero{padding:10px;}
+}
+/* N-25 续:先合版收了八宫格,矮横屏 915×412 塔里还是裁 289、四枚触屏键整排线下。
+   横向还空着 240px,所以这里再走一遍配方 G:返回条与出战条并成一排腾出一行,
+   对局壳画面在左、标题条与键排在右。只认 .fk-tower-fight / .fk-tower-head 两个塔专属类,
+   人机 / 双人 / 无尽(裁 27,已干净)与训练场(先合版 sticky 已生效)一个字都不碰。 */
+@media (max-height:520px) and (orientation:landscape){
+  .fk-tower-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;}
+  .fk-tower-head>.fk-bar{margin-bottom:0;}
+  .fk-tower-head>.fk-tower-hero{flex:1 1 220px;margin:0;padding:5px 10px;}
+  .fk-tower-fight{
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(212px,300px);
+    column-gap:8px;align-items:start;
+  }
+  .fk-tower-fight>.fk-bar{grid-column:2;grid-row:1;margin-bottom:6px;}
+  .fk-tower-fight>.fk-stage{grid-column:1;grid-row:1 / span 2;}
+  .fk-tower-fight>.fk-pads{grid-column:2;grid-row:2;margin-top:0;}
+  .fk-tower-fight>.fk-pads .fk-pad{gap:6px;}
+  /* 塔里只有一块摇杆,名字牌 HUD 上已经有一份,这一行让给按键 */
+  .fk-tower-fight>.fk-pads .fk-pad-name{display:none;}
+  .fk-tower-hint{margin-bottom:2px;}
 }
 .fk-info{margin-top:8px;font-size:14px;font-weight:700;color:#7b6aa0;line-height:1.6;min-height:52px;}
 .fk-stage{position:relative;border-radius:18px;overflow:hidden;background:#fdf3f8;
@@ -468,6 +489,8 @@ interface FightOptions {
   onQuit?: () => void;
   /** 顶部额外按钮 */
   extraButtons?: Array<{ label: string; onClick: () => void }>;
+  /** 挂在对局壳上的额外类名，给某一款单独排版用（格斗塔的矮横屏双栏） */
+  shellClass?: string;
 }
 
 interface FightHandle {
@@ -530,6 +553,7 @@ function createFight(host: HTMLElement, o: FightOptions): FightHandle {
   /* ---------------- DOM ---------------- */
 
   const wrap = el("div");
+  if (o.shellClass) wrap.classList.add(o.shellClass);
 
   const bar = el("div", "fk-bar");
   const titleChip = el("span", "fk-h", o.title);
@@ -2178,7 +2202,10 @@ export function mount(api: GameApi): { destroy: () => void } {
       })
     );
     bar.appendChild(el("span", "fk-h", "🏯 格斗塔 188 关"));
-    view.appendChild(bar);
+    // 矮横屏靠这层壳把返回条和「当前出战」并成一排，竖屏/大屏还是上下两行
+    const head = el("div", "fk-tower-head");
+    head.appendChild(bar);
+    view.appendChild(head);
 
     const towerHost = el("div");
     view.appendChild(towerHost);
@@ -2223,7 +2250,7 @@ export function mount(api: GameApi): { destroy: () => void } {
     // 连着几场没赢下来就在这儿提一句「换个小伙伴试试」，平时是空的
     const swapTip = el("div", "fk-swap");
     heroRow.appendChild(swapTip);
-    view.insertBefore(heroRow, towerHost);
+    head.appendChild(heroRow);
 
     let currentFight: FightHandle | null = null;
     /** 同一关连着几场没赢下来 */
@@ -2241,8 +2268,7 @@ export function mount(api: GameApi): { destroy: () => void } {
         grandMessage: "188 关全部打完，格斗塔的塔顶归你啦！",
         playLevel: (stageEl: HTMLElement, ctx: PlayCtx) => {
           const stage = towerStage(ctx.level);
-          const hint = el("div", "fk-sub");
-          hint.style.marginBottom = "8px";
+          const hint = el("div", "fk-sub fk-tower-hint");
           hint.textContent = `${stage.boss ? "👑 守擂者：" : "对手："}${characterById(stage.foeId).name} · ${AI_LABELS[stage.aiLevel]}档　${stage.hint}`;
           stageEl.appendChild(hint);
           const host = el("div");
@@ -2259,6 +2285,7 @@ export function mount(api: GameApi): { destroy: () => void } {
             // 舞台主题按章节分段：每两章换一套（樱花山道 → 星空擂台 → 海边木台 → 雪夜灯笼）
             stageIndex: Math.floor(stage.chapterIndex / 2),
             title: `🏯 第 ${ctx.level + 1} 关${stage.boss ? " · 守擂者" : ""}`,
+            shellClass: "fk-tower-fight",
             sfx: (n) => ctx.sfx(n),
             onEnd: (winner, info) => {
               if (winner === 0) {
