@@ -172,13 +172,26 @@ const CSS = `
 .bvp-sub{font-size:13px;font-weight:700;color:var(--bvp-soft);line-height:1.65;}
 .bvp-modes{display:grid;grid-template-columns:1fr;gap:10px;}
 @media(min-width:560px){.bvp-modes{grid-template-columns:1fr 1fr;}}
+/* r4 C-8:915×412 矮横屏英雄卡+四个模式钮挤不进首屏,卡片和模式钮各收一号 */
+@media(min-width:700px) and (max-height:520px){
+  .bvp-card{padding:9px 12px;margin-bottom:6px;}
+  .bvp-h{font-size:14px;margin:0 0 4px;}
+  .bvp-sub{font-size:12px;line-height:1.45;}
+  .bvp-modes{gap:6px;}
+  .bvp-mode{padding:8px 12px;gap:9px;}
+  .bvp-mode-em{font-size:24px;}
+  .bvp-mode-t{font-size:14px;margin-bottom:2px;}
+  .bvp-mode-d{font-size:12px;line-height:1.45;}
+  .bvp-hero-line{margin-top:6px;gap:6px;}
+  .bvp-chip{padding:3px 9px;font-size:12px;}
+}
 .bvp-mode{border:none;border-radius:18px;padding:15px;text-align:left;cursor:pointer;font-family:inherit;
   display:flex;gap:12px;align-items:flex-start;box-shadow:0 4px 12px rgba(140,120,190,.18);color:var(--bvp-ink);}
 .bvp-mode:active{transform:translateY(2px);}
 .bvp-mode-em{font-size:34px;line-height:1;flex:0 0 auto;}
 .bvp-mode-t{font-size:17px;font-weight:900;display:block;margin-bottom:3px;}
 .bvp-mode-d{font-size:13px;font-weight:700;color:var(--bvp-soft);line-height:1.55;display:block;}
-.bvp-hero-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:800;color:var(--bvp-soft);}
+.bvp-hero-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:800;color:var(--bvp-soft);margin-top:10px;}
 .bvp-fighter{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:0 3px 10px rgba(140,120,190,.16);margin-bottom:9px;
   position:relative;transition:transform var(--bvp-t-turn) ease-out,box-shadow var(--bvp-t-turn) ease-out;}
 .bvp-fighter-top{display:flex;align-items:center;gap:9px;margin-bottom:7px;}
@@ -1240,7 +1253,6 @@ export function mount(api: GameApi): { destroy: () => void } {
       )
     );
     const line = el("div", "bvp-hero-line");
-    line.style.marginTop = "10px";
     line.innerHTML = `<span class="bvp-chip">Lv.${save.level}</span>
       <span class="bvp-chip">${elementTag(s)}</span>
       <span class="bvp-chip">星芒 ${s.maxHp}</span>

@@ -233,6 +233,8 @@ const CSS = `
 .dua-chip small{display:block;font-weight:600;font-size:11.5px;color:#8A7AA0;margin-top:2px;line-height:1.35;}
 .dua-start{border:none;border-radius:18px;padding:15px;font-size:19px;font-weight:800;background:#FFB37E;color:#7A3A10;
   cursor:pointer;box-shadow:0 5px 0 #E08F55;width:100%;font-family:inherit;min-height:52px;}
+/* r4 C-8:矮横屏菜单比屏高,舞台能滚,但主按钮不该要人先滚——sticky 常驻折叠线上 */
+.dua-setup .dua-start{position:sticky;bottom:4px;z-index:3;}
 .dua-start:active{transform:translateY(3px);box-shadow:0 2px 0 #E08F55;}
 .dua-rulesbtn{border:none;border-radius:16px;padding:12px;font-size:15px;font-weight:800;background:#D9F2C4;color:#3F6B22;
   cursor:pointer;box-shadow:0 4px 0 #ADD68E;width:100%;font-family:inherit;min-height:46px;}

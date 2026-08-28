@@ -376,6 +376,8 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-hint { color: #6E86A0; font-size: 13.5px; margin: 8px 2px 0; min-height: 19px; line-height: 1.5; }
       .dr-ghostline { color: #8A6AB0; font-size: 13.5px; font-weight: 700; margin: 0 2px; min-height: 19px; }
       .dr-start { border: none; border-radius: 18px; padding: 15px; font-size: 20px; font-weight: 800; background: #8FD3FF; color: #14496E; cursor: pointer; box-shadow: 0 5px 0 #64AEE0; width: 100%; font-family: inherit; }
+      /* r4 C-8:矮横屏菜单比屏高,舞台能滚,但主按钮不该要人先滚——sticky 常驻折叠线上 */
+      .dr-setup .dr-start { position: sticky; bottom: 4px; z-index: 3; }
       .dr-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #64AEE0; }
       .dr-softbtn { border: none; border-radius: 16px; padding: 12px; font-size: 16px; font-weight: 800; background: #D9F2C4; color: #4A7A2A; cursor: pointer; box-shadow: 0 4px 0 #ADD68E; width: 100%; font-family: inherit; }
       .dr-softbtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #ADD68E; }
