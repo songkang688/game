@@ -192,6 +192,29 @@ interface CrackFx {
   t: number;
 }
 
+export const MIN_CANVAS_DISPLAY_PX = 160;
+
+export function canvasDisplayCapPx(
+  nativeH: number,
+  roomPx: number,
+  min = MIN_CANVAS_DISPLAY_PX
+): number | null {
+  if (!Number.isFinite(nativeH) || nativeH <= 0) return null;
+  if (!Number.isFinite(roomPx) || roomPx <= 0) return null;
+  const cap = Math.floor(roomPx);
+  if (nativeH <= cap + 1) return null;
+  return Math.max(min, cap);
+}
+
+function focusCurrentNode(node: { scrollIntoView?: (opts: { block: string }) => void } | null): void {
+  if (!node || typeof node.scrollIntoView !== "function") return;
+  try {
+    node.scrollIntoView({ block: "center" });
+  } catch {
+    // 老内核不认 options
+  }
+}
+
 export function mount(api: GameApi): { destroy: () => void; fxCount: () => number } {
   let destroyed = false;
   let raf = 0;
@@ -271,11 +294,10 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .ba-level { flex: 0 1 auto; min-width: 40px; overflow: hidden; text-overflow: ellipsis; }
       .ba-btn { border: none; border-radius: 12px; padding: 5px 9px; font-size: 14px; font-weight: 700; background: #CDE6FF; color: #2A6099; cursor: pointer; box-shadow: 0 3px 0 #A9CCEE; }
       .ba-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #A9CCEE; }
-      .ba-canvas { width: 100%; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
+      .ba-canvas { width: 100%; height: auto; border-radius: 16px; display: block; touch-action: none; cursor: crosshair; }
       .ba-msg { text-align: center; min-height: 20px; color: #4E8AC2; font-weight: 700; margin-top: 8px; font-size: 13px; }
-      /* 高个子屏幕别把地图钉死在 520px:下面空一大截还得多滚半天(dvh 不认的老内核走上一行兜底) */
       .ba-map { background: rgba(255,255,255,0.7); border-radius: 16px; padding: 12px; max-height: 520px; overflow-y: auto; }
-      .ba-map { max-height: clamp(420px, calc(100dvh - 150px), 960px); }
+      .ba-map { max-height: min(960px, max(160px, calc(100dvh - 120px))); }
       .ba-map-title { text-align: center; font-weight: 800; color: #2A6099; font-size: 17px; margin-bottom: 4px; }
       .ba-map-sub { text-align: center; color: #5E86B0; font-size: 12px; margin-bottom: 10px; }
       .ba-theme { border-radius: 14px; padding: 10px; margin-bottom: 10px; }
@@ -289,6 +311,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       .ba-lv .mech { font-size: 10px; min-height: 13px; }
       .ba-lv.locked { background: #E3EAF2; box-shadow: 0 3px 0 #CBD6E2; cursor: not-allowed; }
       .ba-lv.locked .num { color: #9AA9BC; }
+      .ba-lv.ba-lv-cur { outline: 3px solid #e0679f; }
       .bba-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
       .bba-mode { border: none; border-radius: 14px; padding: 8px 12px; font-size: 13px; font-weight: 800; background: #FFE7B8; color: #8A5A12; cursor: pointer; box-shadow: 0 3px 0 #E7C489; }
       .bba-mode:active { transform: translateY(2px); box-shadow: 0 1px 0 #E7C489; }
@@ -332,6 +355,42 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
   const backBtn = wrap.querySelector(".ba-back") as HTMLButtonElement;
   const swapBtn = wrap.querySelector(".bba-swap") as HTMLButtonElement;
   const endlessBtn = wrap.querySelector(".bba-endless") as HTMLButtonElement;
+
+  function stageClipBottom(from: HTMLElement): number {
+    let node: HTMLElement | null = from.parentElement;
+    for (let i = 0; node && i < 10; i++) {
+      if (typeof node.className === "string" && node.className.includes("game-stage")) {
+        if (typeof node.getBoundingClientRect !== "function") break;
+        const r = node.getBoundingClientRect();
+        const inner =
+          typeof node.clientHeight === "number" && node.clientHeight > 0
+            ? (node.clientTop || 0) + node.clientHeight
+            : r.height;
+        if (Number.isFinite(r.top) && Number.isFinite(inner) && inner > 0) return r.top + inner;
+        break;
+      }
+      node = node.parentElement;
+    }
+    return Number.NaN;
+  }
+
+  function fitCanvas(): void {
+    if (!canvas.style || typeof canvas.getBoundingClientRect !== "function") return;
+    if (typeof wrap.getBoundingClientRect !== "function") return;
+    if (screen !== "play") return;
+    const clip = stageClipBottom(wrap);
+    if (!Number.isFinite(clip)) return;
+    canvas.style.maxHeight = "";
+    const canvasRect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(canvasRect.top)) return;
+    const wrapR = wrap.getBoundingClientRect();
+    const wrapBottom = Number.isFinite(wrapR.bottom) ? wrapR.bottom : wrapR.top + wrapR.height;
+    const canvasBottom = Number.isFinite(canvasRect.bottom) ? canvasRect.bottom : canvasRect.top + canvasRect.height;
+    const below = Math.max(0, wrapBottom - canvasBottom);
+    const px = canvasDisplayCapPx(canvasRect.height, clip - canvasRect.top - below - 4);
+    canvas.style.maxHeight = px === null ? "" : `${px}px`;
+  }
+  window.addEventListener("resize", fitCanvas);
 
   function unlocked(i: number): boolean {
     // 管理员权限(kangkang)开着时选关全解锁,和 l99 框架的口径一致
@@ -383,8 +442,10 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
         const btn = document.createElement("button");
         btn.type = "button";
         const open = unlocked(i);
-        btn.className = open ? "ba-lv" : "ba-lv locked";
         const s = progress.stars[i];
+        const isCurrent = open && s === 0 && (i === 0 || progress.stars[i - 1] > 0) &&
+          !progress.stars.slice(0, i).some((st, j) => st === 0 && unlocked(j));
+        btn.className = "ba-lv" + (open ? "" : " locked") + (isCurrent ? " ba-lv-cur" : "");
         const icons = levelMechanisms(def).map((m) => MECH_INFO[m].icon).join("");
         btn.innerHTML = `
           <span class="num">${open ? i + 1 : "🔒"}</span>
@@ -406,6 +467,8 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     msgEl.textContent = allCleared()
       ? "全部通关！还可以回去刷三星哦！"
       : "点亮的关卡都能玩，一路打到星尘试炼！";
+    focusCurrentNode(mapEl.querySelector(".ba-lv-cur") as { scrollIntoView?: (opts: { block: string }) => void } | null
+      ?? mapEl.querySelector(".ba-lv:not(.locked)") as { scrollIntoView?: (opts: { block: string }) => void } | null);
   }
 
   // ---------- 关卡 ----------
@@ -481,6 +544,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     loader = freshLoader();
     msgEl.textContent = def.tip;
     updateHud();
+    fitCanvas();
   }
 
   /**
@@ -518,6 +582,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
     loader = freshLoader();
     msgEl.textContent = `♾️ 无尽墙:每 ${ENDLESS_PUSH_EVERY} 发压下一行,顶住!`;
     updateHud();
+    fitCanvas();
   }
 
   function retryLevel(): void {
@@ -1354,6 +1419,7 @@ export function mount(api: GameApi): { destroy: () => void; fxCount: () => numbe
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", fitCanvas);
       wrap.remove();
     },
     /** 测试探针:还挂着多少视觉粒子 / 计时(destroy 后必须是 0) */

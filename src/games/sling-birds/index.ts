@@ -229,6 +229,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       .slb-say { flex: 0 0 auto; border: none; border-radius: 14px; width: 46px; height: 46px; font-size: 21px; background: #EAF2FD; cursor: pointer; box-shadow: 0 3px 0 #C6DCF5; touch-action: manipulation; }
       .slb-say:active { transform: translateY(2px); box-shadow: 0 1px 0 #C6DCF5; }
       .slb-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin: 0 1px; vertical-align: -2px; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+      .slb-map { overflow-y: auto; max-height: min(960px, max(180px, calc(100dvh - 80px))); }
       .slb-map-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
       .slb-map-title { font-size: 20px; font-weight: 900; color: #4C7DB3; }
       .slb-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -427,6 +428,14 @@ export function mount(api: GameApi): { destroy: () => void } {
         openLevel(l.id);
       });
       gridEl.appendChild(cell);
+    }
+    const cur = gridEl.querySelector(".slb-next") ?? gridEl.querySelector(".slb-cell:not(.slb-lock)");
+    if (cur && typeof (cur as { scrollIntoView?: (o: { block: string }) => void }).scrollIntoView === "function") {
+      try {
+        (cur as { scrollIntoView: (o: { block: string }) => void }).scrollIntoView({ block: "center" });
+      } catch {
+        // ignore
+      }
     }
   }
 
