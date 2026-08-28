@@ -427,25 +427,19 @@ export const MST_CSS = `
   .mst-wrap.mst-level>.mst-sky{grid-column:1;grid-row:2;}
   .mst-wrap.mst-level>.mst-tools{grid-column:2;}
 }
-/* N-73(trio-r8 顺手账,r14 编号):进阶四场(100–188)壳纵排 头块134+键盘104+芯片44
-   ≈ 323px > 915×412 的 ~208px 滚动窗——第 167 关简谱视奏「哆」键切底、声音芯片线下。
-   同一档把进阶壳切「头块(徽章/简谱/节拍条)左 / 键盘+鼓+选项+工具右」双栏:
-   右栏恒 ${SKY_MAX_PX}px 键排零裁,头块吃剩余宽度(简谱字号只会更宽松)。
-   span 5 恰好盖住右栏五个直接子项(鼓排/键盘/选项/再听行/声音条),不多跨空行。
-   节奏鼓、听辨选项、双声部同理受益;判定、旋律、keyLayout 内联尺寸零触碰。
-   fx 特效层是 absolute 覆盖层,不进 grid 流。 */
-@media (max-height:500px) and (min-width:700px){
-  .mst-wrap.mst-adv{display:grid;max-width:none;
-    grid-template-columns:minmax(0,1fr) ${SKY_MAX_PX}px;
-    column-gap:12px;row-gap:${SHORT_SIZES.wrapGap}px;align-items:start;justify-items:center;}
-  .mst-wrap.mst-adv>.mst-adv-head{grid-column:1;grid-row:1/span 5;justify-self:stretch;}
-  .mst-wrap.mst-adv>.mst-sky,.mst-wrap.mst-adv>.mst-choices,
-  .mst-wrap.mst-adv>.mst-tools{grid-column:2;}
-  /* 左栏 ~527px 比原来窄:徽章行换行 66px、消息三行 67px 把头块顶到 216 > 208 窗。
-     只收展示字号与留白(徽章/消息都不是热区),压回一行/两行 */
-  .mst-wrap.mst-adv .mst-top{gap:4px;}
-  .mst-wrap.mst-adv .mst-badge{font-size:12px;padding:3px 8px;}
-  .mst-wrap.mst-adv .mst-msg{font-size:14px;min-height:18px;}
+/* N-73:简谱视奏琴键在 915×412 切底。只收视奏壳(.mst-scoreplay),沙盒与节奏鼓键不进。
+   琴键钉在壳底;芯片可次级。旋律/判定零触碰。 */
+@media (max-height:500px) and (min-width:640px){
+  .mst-wrap.mst-scoreplay{max-height:calc(100dvh - 88px);overflow:hidden;min-height:0;
+    display:flex;flex-direction:column;}
+  .mst-wrap.mst-scoreplay .mst-sky{min-height:70px;max-height:90px;}
+  .mst-wrap.mst-scoreplay .mst-keys{position:sticky;bottom:0;z-index:5;flex:0 0 auto;
+    min-height:64px;padding-top:2px;
+    background:linear-gradient(180deg,rgba(18,28,64,0),#162044 28%);}
+  /* 音高错落的 marginBottom 会把「哆」顶出 412;只压视觉落差,判定/发声不动 */
+  .mst-wrap.mst-scoreplay .mst-star{margin-bottom:0 !important;}
+  .mst-wrap.mst-scoreplay .mst-tools{position:sticky;bottom:0;z-index:4;}
+  .mst-wrap.mst-scoreplay .mst-beat{display:none;}
 }
 @media (prefers-reduced-motion:reduce){
   .mst-lines{transition:none;}

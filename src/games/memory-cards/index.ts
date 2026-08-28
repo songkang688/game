@@ -123,6 +123,14 @@ const CSS = `
   .mmc-wrap { padding: 8px; }
   .mmc-badge { font-size: 14px; padding: 4px 9px; }
 }
+/* N-69:915×412 上 4×4 竖卡(3/4)把后三行顶到 490+。矮横屏钳卡高,第一屏至少两行可点。配对规则不动 */
+@media (min-width: 640px) and (max-height: 500px) {
+  .mmc-wrap { padding: 6px 8px; }
+  .mmc-bar { margin-bottom: 6px; }
+  .mmc-board { gap: 4px; max-height: min(280px, 68dvh); }
+  .mmc-card { aspect-ratio: auto; min-height: 44px; height: clamp(48px, 16dvh, 72px); }
+  .mmc-msg { min-height: 0; margin-top: 4px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .mmc-inner { transition: none; }
   .mmc-card.mmc-up .mmc-inner { transform: none; }

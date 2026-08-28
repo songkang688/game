@@ -283,6 +283,22 @@ export function panelsSideBySide(viewW: number, viewH: number): boolean {
   return viewW >= 600 && viewW > viewH;
 }
 
+/**
+ * N-68:三图关在真横屏上走单独横排(两张参考 + 可点下图并排),
+ * 不再跟 L-1 的 `rowLayout = !triple && panelsSideBySide` 抢同一条。
+ * 竖屏仍旧上排两张参考、下排可点图。
+ */
+export function triplePanelsRow(viewW: number, viewH: number): boolean {
+  return panelsSideBySide(viewW, viewH);
+}
+
+/** 三栏时按宽摊格:915 宽三块,每块扣掉相框再除列数,下限 26 */
+export function tripleCellPxByWidth(cols: number, viewW: number, max = SMALL_CELL_PX): number {
+  const w = Number.isFinite(viewW) && viewW > 0 ? viewW : 360;
+  const per = Math.floor(w / 3) - 28;
+  return Math.max(26, Math.min(max, Math.floor(per / Math.max(1, cols))));
+}
+
 /** 并排时主棋盘一格的边长:同 `panelCellPx`,但一张图能吃的高度从 40% 提到 62% */
 export function panelCellPxRow(rows: number, viewportHeight: number, max = SMALL_CELL_PX): number {
   const h = Number.isFinite(viewportHeight) && viewportHeight > 0 ? viewportHeight : 640;
@@ -324,22 +340,6 @@ export function regrowCellPx(
     ? Math.min(panelCellPxRow(rows, viewportHeight, max), panelCellForRoomRow(rows, roomPx, max))
     : Math.min(panelCellPx(rows, viewportHeight, max), panelCellForRoom(rows, roomPx, max));
   return grown > currentPx ? grown : null;
-}
-
-/**
- * 三图并排(N-68,trio-r8)时参考图那一行的格子:按**舞台可视余量**摊高。
- *
- * 病根:915×412 第 100 关族「三图侦探社」沿用竖排(上排两参考图 + 下图在底),
- * 参考图在屏、要点的下图 `.fdf-cell-play` 整排(实测 471/501/531)折叠线下。
- * 并排后两张参考图仍横排一行(竖摞的账算不过来:两份挂牌 + 两份画框 ≈64px,
- * 162px 可视高只给格子剩 15px/行,早穿 22px 下限),整行挪到下图左侧,
- * 高度只吃一份:格子 = (余量 − 并排家当)/行数。宽的账仍归 `miniCellPx`,两头取小。
- * 量不出余量返回上限(与 panelCellForRoom 同约定)。
- */
-export function miniCellPxRow(rows: number, roomPx: number): number {
-  if (!Number.isFinite(roomPx) || roomPx <= 0) return 32;
-  const perMini = roomPx - PANEL_CHROME_ROW_PX;
-  return Math.max(22, Math.min(32, Math.floor(perMini / Math.max(1, rows))));
 }
 
 /** 三图模式上排那两张参考图的格子：并排还得塞进 360px 宽 */

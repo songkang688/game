@@ -106,9 +106,18 @@ export const FONT_MIN_PX = 16;
 export function cellPxFor(n: number, width: number, seats = 1): number {
   const w = Number.isFinite(width) && width > 0 ? width : 480;
   const usable = Math.max(220, w - 24);
-  const per = seats > 1 && usable >= 720 ? usable / seats - 16 : usable;
+  // 915 舞台扣白边后常 <720,两盘会折行叠成 crop 1046(N-49)。640 起就左右分
+  const sideBySide = seats > 1 && usable >= 640;
+  const per = sideBySide ? usable / seats - 16 : usable;
   const raw = Math.floor((per - (n - 1) - 6) / n);
-  return Math.max(CELL_MIN_PX, Math.min(CELL_MAX_PX, raw));
+  let px = Math.max(CELL_MIN_PX, Math.min(CELL_MAX_PX, raw));
+  const h = (globalThis as { innerHeight?: number }).innerHeight;
+  if (typeof h === "number" && h > 0 && h <= 500) {
+    const boardBudget = (h - 128) / (sideBySide ? 1 : Math.max(1, seats));
+    const byH = Math.floor((boardBudget - 14) / Math.max(1, n));
+    if (byH > 0) px = Math.max(26, Math.min(px, byH));
+  }
+  return px;
 }
 
 /** 盘面数字的字号:跟着格子走,但绝不小于 16px */
@@ -441,6 +450,14 @@ export const SP_CSS = `
   .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
     padding-top:4px;}
   .sp-tools{bottom:0;z-index:6;}
+}
+/* N-70 双人同屏:数字排在盘下会切 394 / 工具 452。N-49 竞速:两盘折行叠高。矮宽屏左右分座+键靠盘 */
+@media (min-width:640px) and (max-height:500px){
+  .sp-seats{flex-wrap:nowrap;gap:8px;}
+  .sp-seat{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:4px;max-width:50%;}
+  .sp-pad{width:auto;max-width:128px;margin-top:0;grid-template-columns:repeat(3,1fr);}
+  .sp-key{min-height:40px;font-size:15px;}
+  .sp-msg,.sp-hintbox{max-height:2.2em;overflow:hidden;}
 }
 @media (prefers-reduced-motion:reduce){
   .sp-cell.sp-pop{animation:none;}

@@ -185,6 +185,13 @@ const CSS = `
   }
   .fk-pick-train .fk-info{min-height:0;max-height:2.6em;overflow:hidden;}
 }
+/* N-88:双人对战选人「开打」钉在返回行,≠训练场 .fk-pick-train / 关内 .fk-train-shell */
+@media (max-height:500px){
+  .fk-pick-versus .fk-versus-go{
+    position:sticky;top:0;z-index:5;background:#fffdff;padding:6px 0;margin-bottom:8px;
+  }
+  .fk-pick-versus .fk-info{min-height:0;max-height:2.6em;overflow:hidden;}
+}
 .fk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .fk-bar[hidden]{display:none;}
@@ -1876,7 +1883,14 @@ export function mount(api: GameApi): { destroy: () => void } {
     let ai: AiLevel = 1;
     let dummy: DummyMode = "stand";
 
-    const card = el("div", mode === "training" ? "fk-card fk-pick-train" : "fk-card");
+    const card = el(
+      "div",
+      mode === "training"
+        ? "fk-card fk-pick-train"
+        : mode === "versus"
+          ? "fk-card fk-pick-versus"
+          : "fk-card"
+    );
     const bar = el("div", "fk-bar");
     bar.appendChild(
       button("fk-btn", "◀ 返回", () => {
@@ -1889,6 +1903,15 @@ export function mount(api: GameApi): { destroy: () => void } {
     const modeH = el("span", "fk-h");
     modeH.innerHTML = `${modeIconSVG(mode, 20)}<span> ${escapeHtml(modeCard?.title ?? "")}</span>`;
     bar.appendChild(modeH);
+    if (mode === "versus") {
+      bar.classList.add("fk-versus-go");
+      bar.appendChild(
+        button("fk-btn fk-btn-go", "开打 ▶", () => {
+          sfx("jump");
+          startPlain(mode, p1, p2, ai, dummy);
+        })
+      );
+    }
     card.appendChild(bar);
 
     if (mode === "training") {
@@ -2017,7 +2040,7 @@ export function mount(api: GameApi): { destroy: () => void } {
       card.appendChild(badge);
     }
 
-    if (mode !== "training") {
+    if (mode !== "training" && mode !== "versus") {
       const goRow = el("div", "fk-bar");
       goRow.style.marginTop = "12px";
       goRow.appendChild(

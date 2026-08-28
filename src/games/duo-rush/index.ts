@@ -388,8 +388,17 @@ export function mount(api: GameApi): { destroy: () => void } {
       .dr-btns { display: flex; gap: 8px; margin-top: 8px; }
       .dr-btns button { flex: 1; min-height: 46px; border: none; border-radius: 14px; padding: 11px 4px; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.12); font-family: inherit; }
       /* N-40: 矮横屏赛道态暂停/再来/换玩法钉在舞台底，不重钳已在屏的画布与半屏圆钮 */
+      /* N-87: 菜单态怎么玩/收藏册/开跑提到顶并排钉进 412，勿回退 .dr-btns */
       @media (max-height: 500px) {
-        .dr-start { position: sticky; bottom: 0; z-index: 3; }
+        .dr-setup { display: flex; flex-direction: column; }
+        .dr-menu-cta {
+          order: -1; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+          position: sticky; top: 0; z-index: 4; padding: 4px 0 8px;
+          background: linear-gradient(180deg, #E9F4FF 72%, rgba(233,244,255,.88));
+        }
+        .dr-menu-cta .dr-softbtn, .dr-menu-cta .dr-start {
+          width: auto; flex: 1 1 140px; min-height: 44px; font-size: 15px; padding: 10px 8px;
+        }
         .dr-keys { display: none; }
         .dr-btns {
           position: sticky; bottom: 0; z-index: 7; margin-top: 4px; padding: 6px 0 2px;
@@ -464,9 +473,11 @@ export function mount(api: GameApi): { destroy: () => void } {
         <p class="dr-hint dur-handicap-hint">默认关闭。打开以后画面上会一直写着「让分」，谁都看得见。</p>
       </div>
       <p class="dr-ghostline"></p>
+      <div class="dr-menu-cta">
       <button class="dr-softbtn dr-rulesbtn" type="button">📖 怎么玩（点我看规则）</button>
       <button class="dr-softbtn dr-collectbtn dr-hidden" type="button">🎁 我的收藏册</button>
       <button class="dr-start" type="button">准备好，开跑 ▶</button>
+      </div>
     </div>
     <div class="dr-game dr-hidden">
       <div class="dur-stage">

@@ -86,7 +86,7 @@ export interface TableOptions {
 export function createTable(host: HTMLElement, opts: TableOptions): { destroy: () => void } {
   const state = opts.state;
   const wrap = document.createElement("div");
-  wrap.className = "dc-wrap";
+  wrap.className = opts.rival === "human" ? "dc-wrap dc-duoplay" : "dc-wrap";
   host.appendChild(wrap);
 
   const top = document.createElement("div");

@@ -93,7 +93,7 @@ export interface TableOptions {
 export function createTable(host: HTMLElement, opts: TableOptions): { destroy: () => void } {
   const state = opts.state;
   const wrap = document.createElement("div");
-  wrap.className = "jq-wrap";
+  wrap.className = opts.rival === "human" ? "jq-wrap jq-duoplay" : "jq-wrap";
   host.appendChild(wrap);
 
   const top = document.createElement("div");

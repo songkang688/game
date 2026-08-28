@@ -118,45 +118,6 @@ export function mapColumns(width: number): number {
 }
 
 /**
- * N-63(trio-r8):矮横屏地图钳高的纯函数——`.l99-map` 最多能长多高。
- *
- * 病根:游戏侧模式条(bowling「双人对战/人机/无尽格」这类)排在 l99 地图**上方**、
- * 同在一个滚动盒里;`showMap(true)` 聚焦当前关时 `scrollIntoView({block:"center"})`
- * 会把**每一层**可滚祖先都对中——915×412 实测 bowling 舞台被卷下 252px,
- * `.bl-open` 三钮 top −174 整排出顶,孩子不往回滚就点不到模式条。
- * 修法:矮横屏把地图钳到可视余量内自己滚,聚焦改在**图内**手动居中,
- * 外层滚动盒一动不动——模式条稳在顶,当前关也仍然在屏(两头都要)。
- * 量不到裁切线(jsdom / 没有可滚祖先)或余量矮过 MAP_CLAMP_MIN_PX 就返回 null=不钳,
- * 照旧走 scrollIntoView 的老路(N-39 主修零触碰)。
- */
-export const MAP_CLAMP_MIN_PX = 160;
-
-export function mapClampPx(clipBottom: number, mapTop: number, slackPx = 8): number | null {
-  if (!Number.isFinite(clipBottom) || clipBottom <= 0) return null;
-  if (!Number.isFinite(mapTop)) return null;
-  const room = Math.floor(clipBottom - mapTop - slackPx);
-  if (!Number.isFinite(room) || room < MAP_CLAMP_MIN_PX) return null;
-  return room;
-}
-
-/** 地图头顶到最近那条裁切线(overflowY hidden/auto/scroll 的祖先下沿,含边框修正)的绝对位置 */
-function mapClipBottomPx(el: HTMLElement): number {
-  const win = el.ownerDocument?.defaultView ?? null;
-  if (!win || typeof el.getBoundingClientRect !== "function") return Number.POSITIVE_INFINITY;
-  let bottom = Number.POSITIVE_INFINITY;
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    if (typeof p.getBoundingClientRect !== "function") break;
-    const cs = win.getComputedStyle(p);
-    if (cs.overflowY === "auto" || cs.overflowY === "scroll" || cs.overflowY === "hidden") {
-      const bw = Number.parseFloat(cs.borderBottomWidth);
-      const b = p.getBoundingClientRect().bottom - (Number.isFinite(bw) && bw > 0 ? bw : 0);
-      if (b < bottom) bottom = b;
-    }
-  }
-  return bottom;
-}
-
-/**
  * 竞技场画布逻辑高按壳卡缺口等比补足(trio-r4 遗留的 orb-arena / snake-royale 卡底留白)。
  * 画布显示宽被容器定死(width:100%),只能改逻辑高来消化竖向缺口;
  * gapPx<0(矮横屏内容溢出)时也允许收一点。钳在 [min(原高,240), 960]:
@@ -633,8 +594,6 @@ const L99_CSS = `
 .l99-jump-input:focus-visible{outline:3px solid #3c2a6b;outline-offset:3px;}
 .l99-maphint{margin-top:12px;text-align:center;font-size:16px;line-height:1.45;font-weight:700;
   color:#77619b;overflow-wrap:anywhere;word-break:break-word;}
-/* N-63:矮横屏钳高后的地图是自己的滚动盒,触屏顺手一点 */
-.l99-map-clamp{-webkit-overflow-scrolling:touch;touch-action:pan-y;}
 .l99-stage-wrap{border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 4px 14px rgba(150,130,200,.18);
   flex:1 1 auto;min-height:0;display:flex;flex-direction:column;width:100%;}
 .l99-stagebar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap;flex:0 0 auto;}
@@ -678,6 +637,10 @@ const L99_CSS = `
 /* N-37:管理员开启态才出现直达行。矮横屏把跳过/直达收成一行,小字藏起来,
    给 quiz 宿主让出抬头。root 关着没有 .l99-jump,:has 整段不生效,布局与修前一致。 */
 @media (max-height:500px){
+  /* N-63:地图滚条留在 .l99-view,舞台顶不再被 showMap(true) 卷走模式条。
+     四处 showMap(true) 保持;当前关仍靠 scrollIntoView 在地图盒里居中。 */
+  .l99-wrap{max-height:calc(100dvh - 136px);}
+  .l99-view{overscroll-behavior:contain;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}
@@ -692,6 +655,12 @@ const L99_CSS = `
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
 }
+/* N-63:showMap(true) 的 scrollIntoView 会把 .game-stage 一起卷走,
+   挂在地图上面的模式条(保龄双人对战等) top 变负。舞台改由内部 .l99-view 滚,
+   模式条留在 flex 顶。四处 showMap(true) 与 N-39 聚焦都不改。 */
+.game-stage.game-stage--l99{overflow-y:hidden;display:flex;flex-direction:column;}
+.l99-host{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;height:100%;overflow:hidden;}
+.l99-host>.l99-wrap{flex:1 1 auto;min-height:0;}
 `;
 
 export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy: () => void } {
@@ -720,6 +689,28 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
   view.className = "l99-view";
   wrap.appendChild(view);
   api.root.appendChild(wrap);
+  pinL99Host();
+
+  function pinL99Host(): void {
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    const stage = closest?.(".game-stage") ?? null;
+    stage?.classList?.add("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && n !== stage) {
+      n.classList?.add("l99-host");
+      n = n.parentElement;
+    }
+  }
+
+  function unpinL99Host(): void {
+    const closest = wrap.closest?.bind(wrap) as ((sel: string) => HTMLElement | null) | undefined;
+    closest?.(".game-stage")?.classList?.remove("game-stage--l99");
+    let n: HTMLElement | null = wrap.parentElement;
+    while (n && !n.classList?.contains("game-stage")) {
+      n.classList?.remove("l99-host");
+      n = n.parentElement;
+    }
+  }
 
   function viewportWidth(): number {
     const w = (globalThis as { innerWidth?: number }).innerWidth;
@@ -992,42 +983,34 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
     }
     view.appendChild(map);
 
-    // N-63(trio-r8):矮横屏地图钳进可视余量内自己滚,聚焦当前关不再带动外层滚动盒,
-    // 游戏侧模式条(排在地图上方)稳在顶。竖屏与高屏零变化,量不到就不钳(见 mapClampPx)。
-    let mapClamped = false;
-    const win = typeof window !== "undefined" ? window : null;
-    if (win?.matchMedia?.("(max-height:500px)").matches && typeof map.getBoundingClientRect === "function") {
-      const room = mapClampPx(mapClipBottomPx(map), map.getBoundingClientRect().top);
-      if (room !== null) {
-        map.style.maxHeight = `${room}px`;
-        map.style.overflowY = "auto";
-        map.classList.add("l99-map-clamp");
-        mapClamped = true;
-      }
-    }
-
     if (focusCurrent) {
       const cur = grid.querySelector(".l99-node-cur") as {
         scrollIntoView?: (opts: { block: string }) => void;
         focus?: () => void;
-        getBoundingClientRect?: () => DOMRect;
       } | null;
       // 认有没有 focus,不写 instanceof HTMLElement:node 单测环境没有这个全局,初次 showMap(true) 会整库红
       if (cur) {
-        if (mapClamped && typeof cur.getBoundingClientRect === "function") {
-          // 图内手动居中:scrollIntoView 会把每层可滚祖先都对中,模式条又要被卷出顶
-          const nr = cur.getBoundingClientRect();
-          const mr = map.getBoundingClientRect();
-          map.scrollTop += Math.round(nr.top + nr.height / 2 - (mr.top + mr.height / 2));
-        } else {
-          try {
-            cur.scrollIntoView?.({ block: "center" });
-          } catch {
-            // 老浏览器不支持 options 就算了
-          }
+        try {
+          cur.scrollIntoView?.({ block: "center" });
+        } catch {
+          // 老浏览器不支持 options 就算了
         }
         cur.focus?.();
+        // N-63:scrollIntoView 会连 .game-stage 一起滚,模式条飞到负 top。
+        // 滚条已经交给 .l99-view,舞台顶归零;hop-pads 当前关仍在地图盒里。
+        // 不写 wrap.closest:node 单测桩没有 closest,初次 showMap(true) 会整库红
+        let p: { className?: unknown; scrollTop?: number; parentElement?: unknown } | null = wrap;
+        while (p) {
+          if (typeof p.className === "string" && p.className.includes("game-stage")) {
+            if (typeof p.scrollTop === "number" && p.scrollTop > 0) p.scrollTop = 0;
+            break;
+          }
+          p = (p.parentElement as typeof p) ?? null;
+        }
       }
+      // 外层舞台若仍被 scrollIntoView 推过,拉回 0,模式条才留在顶
+      const stageEl = wrap.closest?.(".game-stage") as HTMLElement | null | undefined;
+      if (stageEl) stageEl.scrollTop = 0;
     }
   }
 
@@ -1202,6 +1185,7 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
         "resize",
         onResize
       );
+      unpinL99Host();
       wrap.remove();
     }
   };

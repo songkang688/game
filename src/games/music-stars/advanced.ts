@@ -131,12 +131,10 @@ export function playAdvancedLevel(opts: AdvancedOptions): PlayHandle {
   }
 
   const wrap = document.createElement("div");
-  // mst-adv 是矮横屏双栏档的标记(N-73):进阶四场共用,沙盒不挂
-  wrap.className = "mst-wrap mst-adv";
+  wrap.className = cfg.mode === "score" ? "mst-wrap mst-scoreplay" : "mst-wrap";
   wrap.style.background = opts.background;
   injectCss(wrap);
   const head = document.createElement("div");
-  head.className = "mst-adv-head";
   head.innerHTML = `
     <div class="mst-top">
       <div class="mst-badge mst-round"></div>

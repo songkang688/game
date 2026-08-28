@@ -169,11 +169,27 @@ export const CSS = `
 .jq-legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:6px;font-size:14px;
   font-weight:700;color:#6b7758;}
 .jq-legend span{background:#ffffffcc;border-radius:999px;padding:3px 9px;}
+/* N-64:min-height 300 把确认行顶到 485。矮横屏收盘,工具钉底。布阵/胜负不动 */
+@media (max-height:500px){
+  .jq-stage{min-height:0;height:min(58dvh,236px);}
+  .jq-tools{position:sticky;bottom:0;z-index:4;margin-top:4px;padding:4px 0 2px;
+    background:linear-gradient(180deg,rgba(243,247,234,.3),#E7F0F7);}
+}
 @media (prefers-reduced-motion:reduce){
   .jq-face{transition-duration:.06s;animation:none!important;}
   .jq-fx{animation:none!important;transition:none!important;}
   .jq-hoist .fx-flag{animation:none!important;}
   .jq-btn:active{transform:none;}
+}
+/* N-64:jq-duoplay confirm row. .jq-mode untouched. stage min-height 300 pushed pause off-screen */
+@media (max-height:500px){
+  .jq-duoplay .jq-stage{height:min(48dvh,220px);min-height:140px;}
+  .jq-duoplay .jq-tools,.jq-duoplay .jq-row{
+    position:sticky;bottom:0;z-index:6;margin-top:4px;padding:6px 0 2px;
+    background:linear-gradient(180deg,rgba(244,248,236,.25),#F4F8EC 42%);}
+  .jq-duoplay .jq-tools{bottom:48px;z-index:5;}
+  .jq-duoplay .jq-note{min-height:0;max-height:1.4em;overflow:hidden;margin-top:4px;}
+  .jq-duoplay .jq-legend{display:none;}
 }
 `;
 

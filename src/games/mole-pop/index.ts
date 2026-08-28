@@ -168,6 +168,7 @@ const CSS = `
   .mp-badge .mp-mult.mp-pop { animation: none; }
 }
 .mp-open, .mp-back { min-height: 40px; }
+.mp-open, .mp-back { min-height: 44px; }
 `;
 
 interface RoundOpts {
