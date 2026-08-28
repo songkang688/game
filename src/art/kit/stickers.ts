@@ -2116,6 +2116,145 @@ reg("🐚", "贝壳", () => {
   );
 });
 
+// ---- 找不同图鉴 · 第 4 章 甜品小屋（W8R1-04 余量 · 第 3 轮终验按稿补齐） ----
+
+reg("🍰", "奶油蛋糕", () => {
+  // 双胞胎 🍰↔🎂 的区分位：三角切片 + 顶上单颗草莓（🎂 是整圆双层 + 蜡烛）
+  const cream = "#fff3df";
+  const sponge = "#f6d7a0";
+  const jam = P.rose;
+  return (
+    gs(24, 42, 15) +
+    `<ellipse cx="24" cy="39.5" rx="16.5" ry="3.2" fill="#eef2fa" stroke="#a8b4cc" stroke-width="1.5"/>` +
+    // 奶油外壳（沿两条上边形成霜盖）
+    `<path d="M28 8 L43 38.5 L7 38.5 Z" fill="${cream}" stroke="${o(sponge)}" stroke-width="2" stroke-linejoin="round"/>` +
+    // 蛋糕坯
+    `<path d="M28 16.5 L39 38.5 L10.5 38.5 Z" fill="${sponge}"/>` +
+    // 夹心果酱层
+    `<path d="M18.6 25.5 L34.5 25.5 L36.7 30 L16.4 30 Z" fill="${jam}" opacity=".85"/>` +
+    // 底部暗面
+    `<path d="M12 35.5 L38 35.5 L39 38.5 L10.5 38.5 Z" fill="${shade(sponge, -16)}" opacity=".7"/>` +
+    // 顶上的草莓（区分位）
+    `<circle cx="28" cy="6.8" r="3.4" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.6"/>` +
+    `<ellipse cx="27" cy="5.6" rx="1" ry=".7" fill="#ffe9a8"/>` +
+    hi(21, 20, 2.8, 1.7)
+  );
+});
+
+reg("🎂", "生日蛋糕", () => {
+  // 双胞胎 🎂↔🍰 的区分位：整圆双层 + 蜡烛（🍰 是三角切片 + 草莓）
+  const lower = "#f4a8bc";
+  const upper = "#f8c6d4";
+  const candle = "#8ecbe8";
+  return (
+    gs(24, 43, 16) +
+    `<ellipse cx="24" cy="40" rx="17.5" ry="3.2" fill="#eef2fa" stroke="#a8b4cc" stroke-width="1.5"/>` +
+    // 下层
+    `<path d="M7.5 29 L40.5 29 L40.5 38 Q40.5 40 38.5 40 L9.5 40 Q7.5 40 7.5 38 Z" fill="${lower}" stroke="${o(lower)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M36.5 29 L40.5 29 L40.5 38 Q40.5 40 38.5 40 L34.5 40 Q36.5 39.5 36.5 37.5 Z" fill="${shade(lower, -14)}" opacity=".8"/>` +
+    // 下层奶油帘
+    `<path d="M7.5 29 L40.5 29 L40.5 30.5 Q37.5 33.5 34.8 30.5 Q32 33.5 29.2 30.5 Q26.5 33.5 24 30.5 Q21.5 33.5 18.8 30.5 Q16 33.5 13.2 30.5 Q10.5 33.5 7.5 30.5 Z" fill="${P.cream}" stroke="${o(lower)}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    // 上层
+    `<path d="M12 20 L36 20 L36 29 L12 29 Z" fill="${upper}" stroke="${o(upper)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M12 20 L36 20 L36 21.5 Q33.5 24 31.5 21.5 Q29.5 24 27.5 21.5 Q25.8 24 24 21.5 Q22.2 24 20.5 21.5 Q18.5 24 16.5 21.5 Q14.5 24 12 21.5 Z" fill="${P.cream}" stroke="${o(upper)}" stroke-width="1.2" stroke-linejoin="round"/>` +
+    // 三根蜡烛（区分位）
+    `<rect x="16" y="11.5" width="3" height="8.5" rx="1.2" fill="${candle}" stroke="${o(candle)}" stroke-width="1.2"/>` +
+    `<rect x="22.5" y="10" width="3" height="10" rx="1.2" fill="${P.gold}" stroke="${o(P.gold)}" stroke-width="1.2"/>` +
+    `<rect x="29" y="11.5" width="3" height="8.5" rx="1.2" fill="#b0e0a8" stroke="${o("#b0e0a8")}" stroke-width="1.2"/>` +
+    `<ellipse cx="17.5" cy="9" rx="1.5" ry="2.2" fill="${P.orange}" stroke="${o(P.orange)}" stroke-width=".9"/>` +
+    `<ellipse cx="24" cy="7.4" rx="1.5" ry="2.2" fill="${P.orange}" stroke="${o(P.orange)}" stroke-width=".9"/>` +
+    `<ellipse cx="30.5" cy="9" rx="1.5" ry="2.2" fill="${P.orange}" stroke="${o(P.orange)}" stroke-width=".9"/>` +
+    hi(16, 24.5, 2.6, 1.6)
+  );
+});
+
+reg("🧁", "纸杯蛋糕", () => {
+  const cup = "#f0a8c0";
+  const cream = "#fff3df";
+  return (
+    gs(24, 43, 12) +
+    // 纸杯（带竖褶）
+    `<path d="M12.5 27 L35.5 27 L32.5 41 Q32 42.5 30.5 42.5 L17.5 42.5 Q16 42.5 15.5 41 Z" fill="${cup}" stroke="${o(cup)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M17.8 27.5 L19.5 42 M23.9 27.5 L24 42 M30 27.5 L28.5 42" fill="none" stroke="${shade(cup, -16)}" stroke-width="1.3" opacity=".65"/>` +
+    `<path d="M31.5 27.5 L35.5 27 L32.5 41 Q32 42.5 30.5 42.5 L29 42.5 Q31.7 39 31.5 27.5 Z" fill="${shade(cup, -14)}" opacity=".7"/>` +
+    // 奶油三叠
+    `<ellipse cx="24" cy="25.5" rx="12.5" ry="5.4" fill="${cream}" stroke="${o("#f6d7a0")}" stroke-width="1.8"/>` +
+    `<ellipse cx="24" cy="20" rx="9" ry="4.8" fill="${cream}" stroke="${o("#f6d7a0")}" stroke-width="1.8"/>` +
+    `<path d="M18.5 16.5 Q19.5 11.5 24 11.5 Q28.5 11.5 29.5 16.5 Q27 19 24 18.6 Q21 19 18.5 16.5 Z" fill="${cream}" stroke="${o("#f6d7a0")}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<path d="M29 21.5 Q31.5 23.5 30.5 26.5" fill="none" stroke="${shade("#f6d7a0", -8)}" stroke-width="1.2" opacity=".7"/>` +
+    // 樱桃
+    `<circle cx="24" cy="9.5" r="2.8" fill="${P.red}" stroke="${o(P.red)}" stroke-width="1.4"/>` +
+    `<path d="M24.3 7 Q24.8 5 26.3 4.4" fill="none" stroke="${P.green}" stroke-width="1.5" stroke-linecap="round"/>` +
+    hi(19, 14, 2.2, 1.4)
+  );
+});
+
+reg("🍩", "甜甜圈", () => {
+  // 双胞胎 🍩↔🍪 的区分位：中孔 + 粉糖霜披挂（🍪 无孔、巧克力豆）
+  const dough = "#e8b878";
+  const icing = P.rose;
+  const sprinkle = (x: number, y: number, rot: number, c: string): string =>
+    `<rect x="${x}" y="${y}" width="3.4" height="1.5" rx=".75" fill="${c}" transform="rotate(${rot} ${x + 1.7} ${y + 0.75})"/>`;
+  return (
+    gs(24, 42.5, 14) +
+    `<path fill-rule="evenodd" d="M24 10.5 A15 15 0 1 0 24.01 10.5 Z M24 19.5 A6 6 0 1 1 23.99 19.5 Z" fill="${dough}" stroke="${o(dough)}" stroke-width="2"/>` +
+    `<path d="M24 40.5 a15 15 0 0 0 13.8 -20.6 a17 17 0 0 1 -13.8 20.6" fill="${shade(dough, -13)}" opacity=".75"/>` +
+    // 糖霜披挂（带波浪下摆，同样留中孔）
+    `<path fill-rule="evenodd" d="M9.4 24 Q9.4 11 24 11 Q38.6 11 38.6 24 Q38.6 27 36 27.5 Q33.5 28 32.5 25.5 Q31 22.5 29 25 Q27 27.8 24.5 26 Q22 24.2 20 26.5 Q18 28.8 15.5 27 Q13 25.2 11.8 26.5 Q9.4 28 9.4 24 Z M24 19.5 A6 6 0 1 1 23.99 19.5 Z" fill="${icing}" stroke="${o(icing)}" stroke-width="1.8"/>` +
+    `<circle cx="24" cy="25.5" r="6" fill="none" stroke="${o(dough)}" stroke-width="1.6" opacity=".55"/>` +
+    sprinkle(15, 17, -24, "#fff3df") + sprinkle(22, 13.5, 10, P.teal) + sprinkle(30, 16.5, 28, P.gold) +
+    sprinkle(33.5, 22, -40, "#fff3df") + sprinkle(13, 22.5, 36, P.gold) +
+    hi(16.5, 15.5, 2.8, 1.7)
+  );
+});
+
+reg("🍫", "巧克力", () => {
+  const choc = "#8a5a3c";
+  const foil = "#f0e6d4";
+  return (
+    gs(24, 42.5, 12) +
+    // 巧克力板
+    `<rect x="12" y="7.5" width="24" height="26" rx="2.5" fill="${choc}" stroke="${o(choc)}" stroke-width="2"/>` +
+    `<path d="M24.2 8 L23.8 33 M12.5 16 L35.5 16 M12.5 24.5 L35.5 24.5" stroke="${shade(choc, -22)}" stroke-width="1.5" opacity=".8"/>` +
+    `<path d="M14.5 10 L21.5 10 M14.5 18.5 L21.5 18.5 M26.5 10 L33.5 10 M26.5 18.5 L33.5 18.5" stroke="${shade(choc, 22)}" stroke-width="1.4" opacity=".7"/>` +
+    // 下半的包装纸（锯齿口）
+    `<path d="M11 28.5 L15 31.5 L19 28.5 L23 31.5 L27 28.5 L31 31.5 L35 28.5 L37 30 L37 40 Q37 42 35 42 L13 42 Q11 42 11 40 Z" fill="${foil}" stroke="${o("#d8c8a8")}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    `<rect x="11.6" y="33.5" width="24.8" height="4.6" fill="${P.teal}" opacity=".85"/>` +
+    `<path d="M33 31 L37 30 L37 40 Q37 42 35 42 L32.5 42 Q34 41 33.8 38 Z" fill="${shade(foil, -12)}" opacity=".75"/>` +
+    hi(16, 11, 2.4, 1.5)
+  );
+});
+
+reg("🍭", "棒棒糖", () => {
+  // 双胞胎 🍭↔🍬 的区分位：圆盘糖 + 小木棒竖构图（🍬 是双扭糖纸横构图）
+  const c = P.rose;
+  const out = o(c);
+  return (
+    gs(24, 42.5, 9) +
+    `<path d="M24 31.5 L24 43" stroke="${o(P.wood)}" stroke-width="3.2" stroke-linecap="round"/>` +
+    `<circle cx="24" cy="19.5" r="12.5" fill="${c}" stroke="${out}" stroke-width="2"/>` +
+    `<path d="M24 32 a12.5 12.5 0 0 0 11.5 -17.4 a14.5 14.5 0 0 1 -11.5 17.4" fill="${shade(c, -13)}" opacity=".8"/>` +
+    // 白色螺旋纹
+    `<path d="M24 19.5 a2.6 2.6 0 0 1 2.6 2.6 a5.2 5.2 0 0 1 -10.4 0 a7.8 7.8 0 0 1 7.8 -7.8 a10.4 10.4 0 0 1 9.5 5.9" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>` +
+    hi(18.5, 13, 2.8, 1.7)
+  );
+});
+
+reg("🍮", "焦糖布丁", () => {
+  const flan = "#f8ce7a";
+  const caramel = "#c97b3d";
+  return (
+    gs(24, 42.5, 15) +
+    `<ellipse cx="24" cy="39" rx="16.5" ry="3.4" fill="#eef2fa" stroke="#a8b4cc" stroke-width="1.5"/>` +
+    // 布丁身（上窄下宽）
+    `<path d="M14.5 15.5 L33.5 15.5 Q36 15.5 36.5 18 L38.5 34 Q39 37.5 35.5 37.5 L12.5 37.5 Q9 37.5 9.5 34 L11.5 18 Q12 15.5 14.5 15.5 Z" fill="${flan}" stroke="${o(flan)}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="M33 16 L36.5 18 L38.5 34 Q39 37.5 35.5 37.5 L32 37.5 Q35 36.5 34.6 32.5 Z" fill="${shade(flan, -14)}" opacity=".75"/>` +
+    // 焦糖顶（波浪下摆）
+    `<path d="M14.5 15.5 L33.5 15.5 Q36 15.5 36.5 18 L37 22 Q34.5 25.5 32.5 22.5 Q30.5 19.5 28.5 23 Q26.5 26.5 24 23.5 Q21.5 20.5 19.5 23.5 Q17.5 26.5 15.5 23 Q13.5 19.5 11.2 22.5 L11.5 18 Q12 15.5 14.5 15.5 Z" fill="${caramel}" stroke="${o(caramel)}" stroke-width="1.8" stroke-linejoin="round"/>` +
+    hi(17, 19, 2.8, 1.7)
+  );
+});
+
 // ---------------------------------------------------------------------------
 // 出口
 // ---------------------------------------------------------------------------
