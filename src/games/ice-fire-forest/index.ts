@@ -248,13 +248,13 @@ const CSS = `
   .iff-tip{font-size:11.5px;padding:4px 8px;}
   .iff-pad{gap:3px;}
 }
-/* C-8：矮横屏双垫挪到棋盘右侧，不压 44 热区 */
+/* C-8：矮横屏双垫挪到棋盘右侧并排,竖叠会把第二套垫顶出 412 高 */
 @media (max-height:500px) and (min-width:640px){
   .iff-wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;column-gap:8px;justify-items:stretch;}
   .iff-hud,.iff-swapbar{grid-column:1/-1;}
   .iff-board{grid-column:1;min-width:0;}
   .iff-tip{grid-column:1;}
-  .iff-pads{grid-column:2;grid-row:3 / span 2;flex-direction:column;width:auto;max-width:none;position:sticky;top:0;}
+  .iff-pads{grid-column:2;grid-row:3;flex-direction:row;align-items:flex-start;width:auto;max-width:none;position:sticky;top:0;}
 }
 @media (prefers-reduced-motion:reduce){
   .iff-btn:active,.iff-pad button:active,.iff-swap:active{transform:none;}
