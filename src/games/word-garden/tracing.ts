@@ -562,13 +562,8 @@ export function runTracing(opts: TraceOptions): PlayHandle {
   render();
   msgEl.textContent = TRACE_INTRO;
   speak(TRACE_INTRO);
-  applyPadRoom();
+  sizePad();
   fit.relayout();
-  const onWinResize = (): void => {
-    applyPadRoom();
-    fit.relayout();
-  };
-  wrap.ownerDocument?.defaultView?.addEventListener("resize", onWinResize);
 
   return {
     destroy() {
@@ -578,7 +573,6 @@ export function runTracing(opts: TraceOptions): PlayHandle {
       path = [];
       unwatchSpeech();
       stopSpeaking();
-      wrap.ownerDocument?.defaultView?.removeEventListener("resize", onWinResize);
       pad.removeEventListener("pointerdown", onDown);
       pad.removeEventListener("pointermove", onMove);
       pad.removeEventListener("pointerup", onUp);
