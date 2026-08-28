@@ -144,6 +144,10 @@ const CSS = `
   .fs-bowls{gap:6px;}
   .fs-key{min-width:50px;height:44px;font-size:14px;}
 }
+@media (max-height:840px){
+  .fs-pad{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,247,250,0),#fff7fa 16px);}
+}
 @media (prefers-reduced-motion:reduce){
   .fs-btn:active,.fs-key:active,.fs-pick:active{transform:none;}
 }

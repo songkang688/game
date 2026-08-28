@@ -79,7 +79,7 @@ const CSS = `
 .pz-preview { display: grid; gap: 2px; background: #fff; padding: 5px; border-radius: 10px; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pz-preview i { width: 16px; height: 16px; border-radius: 4px; font-style: normal; font-size: 11px; display: flex; align-items: center; justify-content: center; }
 .pz-preview.pz-hidden i { background: #E8E6F5 !important; color: transparent; }
-.pz-hint { border: none; border-radius: 14px; padding: 8px 14px; font-weight: 800; background: #D5C8F8; color: #5D48A0; cursor: pointer; box-shadow: 0 3px 0 #B7A3E8; font-size: 15px; font-family: inherit; }
+.pz-hint { border: none; border-radius: 14px; padding: 8px 14px; font-weight: 800; background: #D5C8F8; color: #5D48A0; cursor: pointer; box-shadow: 0 3px 0 #B7A3E8; font-size: 15px; font-family: inherit; min-height: 44px; box-sizing: border-box; }
 .pz-hint:active { transform: translateY(2px); box-shadow: 0 1px 0 #B7A3E8; }
 .pz-hint:disabled { opacity: .5; }
 .pz-board { display: grid; gap: 8px; position: relative; }
@@ -109,11 +109,11 @@ const CSS = `
 .pz-bar-modes { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 10px; }
 /* display:flex 会压过 hidden 属性的 UA display:none,进关/进模式时模式条要真的让位 */
 .pz-bar-modes[hidden] { display: none; }
-.pz-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8E86E0, #6E64C8); box-shadow: 0 4px 0 #544BA4; }
+.pz-open { border: none; border-radius: 999px; padding: 9px 18px; font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; font-family: inherit; background: linear-gradient(180deg, #8E86E0, #6E64C8); box-shadow: 0 4px 0 #544BA4; min-height: 44px; box-sizing: border-box; }
 .pz-open:active { transform: translateY(2px); box-shadow: 0 2px 0 #544BA4; }
 .pz-mode { max-width: 680px; margin: 0 auto; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
 .pz-mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
-.pz-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); }
+.pz-back { border: none; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 900; cursor: pointer; font-family: inherit; background: #ffffffd9; color: #6E64C8; box-shadow: 0 3px 0 rgba(110,100,200,.3); min-height: 44px; box-sizing: border-box; }
 .pz-back:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(110,100,200,.3); }
 .pz-chip { background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 800; font-size: 14px; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
 .pz-over { text-align: center; padding: 26px 16px; background: #fff; border-radius: 18px; box-shadow: 0 4px 14px rgba(130,130,210,.25); }
@@ -122,7 +122,7 @@ const CSS = `
 
 /* ---- 1.2 新增（全部 pzt- 前缀，不改上面 1.0/1.1 的规则） ---- */
 .pzt-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.pzt-eye, .pzt-undo { border: none; border-radius: 14px; padding: 8px 12px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; background: #fff; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); }
+.pzt-eye, .pzt-undo { border: none; border-radius: 14px; padding: 8px 12px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; background: #fff; color: #6E64C8; box-shadow: 0 2px 6px rgba(130,130,210,.25); min-height: 44px; box-sizing: border-box; }
 .pzt-eye:active, .pzt-undo:active { transform: translateY(1px); }
 .pzt-undo:disabled { opacity: .45; cursor: default; }
 /* 整图半透明底图：铺在画板上当参照，不吃点击 */

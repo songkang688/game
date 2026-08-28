@@ -21,4 +21,8 @@ describe("N-56 sky-squad 双人合作只抬热区", () => {
     expect(SRC).toContain(".sks-pads{display:flex;justify-content:center;gap:10px;margin-top:6px;--k:44px;flex-wrap:wrap;}");
     expect(SRC).toContain("@media (max-height:840px)");
   });
+
+  it("模式键也满 44", () => {
+    expect(SRC).toMatch(/\.sks-mode\{[^}]*min-height:44px/);
+  });
 });

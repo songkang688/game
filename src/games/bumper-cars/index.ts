@@ -146,14 +146,16 @@ const CSS = `
 /* display:flex 会盖掉浏览器自带的 [hidden]{display:none},这里补回来 */
 .bc-bar[hidden],.bc-picks[hidden]{display:none;}
 .bc-open{border:none;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:900;cursor:pointer;
-  font-family:inherit;color:#fff;background:linear-gradient(180deg,#e07aa8,#c8558a);box-shadow:0 4px 0 #a03f6d;}
+  font-family:inherit;color:#fff;background:linear-gradient(180deg,#e07aa8,#c8558a);box-shadow:0 4px 0 #a03f6d;
+  min-height:44px;box-sizing:border-box;}
 .bc-open:active{transform:translateY(2px);box-shadow:0 2px 0 #a03f6d;}
 .bc-open:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
 .bc-open--ai{background:linear-gradient(180deg,#6fbfa8,#4c9d86);box-shadow:0 4px 0 #3b7c69;}
 .bc-open--en{background:linear-gradient(180deg,#8f7ae0,#6f57c8);box-shadow:0 4px 0 #57429f;}
 .bc-picks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
 .bc-pick{border:none;border-radius:14px;padding:7px 13px;font-size:13px;font-weight:900;cursor:pointer;
-  font-family:inherit;background:#ffffffe0;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.35);}
+  font-family:inherit;background:#ffffffe0;color:#5b4a7a;box-shadow:0 3px 0 rgba(140,120,190,.35);
+  min-height:44px;box-sizing:border-box;}
 .bc-pick[aria-pressed="true"]{background:linear-gradient(180deg,#e07aa8,#c8558a);color:#fff;box-shadow:0 3px 0 #a03f6d;}
 .bc-pick:active{transform:translateY(2px);}
 .bc-pick:focus-visible{outline:3px solid #ffb43c;outline-offset:2px;}
@@ -177,6 +179,9 @@ const CSS = `
   .bc-acts button{height:44px;width:52px;font-size:11.5px;}
 }
 @media (max-height:500px) and (min-width:640px){
+  .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
+}
+@media (max-height:840px){
   .bc-pads{position:sticky;bottom:0;z-index:3;background:linear-gradient(180deg,transparent,#f2f5ff);}
 }
 @media (prefers-reduced-motion:reduce){

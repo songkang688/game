@@ -9,4 +9,8 @@ describe("C-8 hue-hand r12 矮屏抽牌排", () => {
     expect(SRC).toContain("@media (max-height:500px)");
     expect(SRC).toContain(".hh-btns{position:sticky;bottom:0");
   });
+
+  it("N-98 增量:840 档同样钉抽牌排", () => {
+    expect(SRC).toContain("@media (max-height:840px)");
+  });
 });

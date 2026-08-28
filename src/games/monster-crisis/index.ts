@@ -185,6 +185,10 @@ export const CSS = `
   .mcr-card{min-width:118px;flex:1 1 118px;}
   .mcr-cards{max-height:52vh;}
 }
+@media (max-height:840px){
+  .mcr-pads{position:sticky;bottom:0;z-index:5;padding-top:4px;
+    background:linear-gradient(180deg,rgba(255,253,250,0),#fffdfa 16px);}
+}
 @media (prefers-reduced-motion:reduce){
   .mcr-fire:active,.mcr-btn:active,.mcr-card:active,.mcr-back:active,.mcr-hudbtn:active{transform:none;}
 }
