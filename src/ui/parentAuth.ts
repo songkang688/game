@@ -589,9 +589,17 @@ export function requestParentAuth(level: AuthLevel, reason: string): Promise<boo
       if (finished) return;
       finished = true;
       window.clearInterval(timer);
+      window.removeEventListener("hashchange", onRouteChange);
       handle.close();
       resolve(ok);
     }
+
+    // S-3(trio-r5):弹窗开着切路由(浏览器返回/前进、系统手势)时遮罩曾跨页残留。
+    // 路由一变就当家长放弃:关弹窗、不授权;密码与答案照旧一个字不落存储。
+    function onRouteChange(): void {
+      finish(false);
+    }
+    window.addEventListener("hashchange", onRouteChange);
 
     function renderQuestion(): void {
       const q = session.question();
