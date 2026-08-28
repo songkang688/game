@@ -603,8 +603,12 @@ const L99_CSS = `
 .l99-stagetitle{flex:1;text-align:center;font-size:15px;font-weight:900;color:#5c4a7d;}
 .l99-beststars{font-size:14px;display:inline-flex;gap:2px;}
 /* position:relative:游戏挂的 inset:0 全屏景片(math-farm 等)锚到舞台本体,
-   不再往上找到 .l99-wrap 把「选关」抬头条整个盖住(按钮被盖还收点击=幽灵热区) */
-.l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;position:relative;}
+   不再往上找到 .l99-wrap 把「选关」抬头条整个盖住(按钮被盖还收点击=幽灵热区)。
+   overflow-y:auto:N-63 把滚条从 .game-stage 挪进 l99 内部后,关内长内容(军棋按钮排/
+   台球击球钮/地产卡…)在手机竖屏被 stage-wrap 的圆角裁死;装得下不出滚条,装不下能滚到。 */
+.l99-stage{padding:10px;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;position:relative;}
 .l99-overlay{position:absolute;inset:0;background:rgba(255,250,253,.96);border-radius:20px;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;}
 .l99-ov-big{font-size:56px;line-height:1;}
@@ -645,8 +649,6 @@ const L99_CSS = `
      否则 915×412 下白留 ~60px、棋盘还被剪。 */
   .l99-wrap:has(.l99-map){max-height:calc(100dvh - 136px);}
   .l99-view{overscroll-behavior:contain;}
-  /* r18:关内装不下的盘面允许竖滚(sticky 底键照常钉住),被剪=永远点不到才是大忌 */
-  .l99-stage{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
   .l99-stagebar:has(.l99-jump){padding:4px 8px;gap:4px;}
   .l99-stagebar:has(.l99-jump) .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;
     overflow-x:auto;gap:6px;margin:0;}
