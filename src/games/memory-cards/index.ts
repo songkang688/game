@@ -3,6 +3,7 @@ export { meta };
 
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle, type SoundName } from "../level99";
 import { save } from "../../engine/save";
+import { stagePlayRoom } from "../../engine/stageRoom";
 import { CHAPTERS, LEVELS, type MemoryLevel } from "./levels";
 import { BONUS_ICONS, THEME_PACKS, packForTheme, type Icon, type IconCtx } from "./art";
 import {
@@ -315,6 +316,36 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
 
   boardEl.style.gridTemplateColumns = `repeat(${cfg.cols}, minmax(0, 1fr))`;
   boardEl.style.gap = `${boardGap(cfg.cols, rows)}px`;
+
+  /**
+   * r18 B:中等高度(平板横屏 768/820)卡片跟着 660px 容器等比放大到 276px 高,
+   * 后排整行沉出视口。按「舞台余高 ÷ 行数」反推卡宽给棋盘限宽,整副牌进一屏。
+   * ≤500px 矮横屏另有 N-69 的钳高媒体,这里不掺和;量不到舞台(单测桩)不动。
+   */
+  function capBoardWidth(): void {
+    const vh = window.innerHeight || 0;
+    if (!(vh > 500)) {
+      boardEl.style.maxWidth = "";
+      boardEl.style.margin = "";
+      return;
+    }
+    const room = stagePlayRoom(host, { w: 0, h: 0 }).h;
+    if (room <= 1) return;
+    const gap = boardGap(cfg.cols, rows);
+    const chrome = 150; // 徽章行 + 进度条 + 底部提示行的呼吸量
+    const cardH = Math.max(72, (room - chrome - gap * (rows - 1)) / rows);
+    const maxW = Math.round(cfg.cols * (cardH * 3) / 4 + gap * (cfg.cols - 1));
+    if (maxW > 0 && maxW < (boardEl.clientWidth || Number.MAX_SAFE_INTEGER)) {
+      boardEl.style.maxWidth = `${maxW}px`;
+      boardEl.style.margin = "0 auto";
+    } else {
+      boardEl.style.maxWidth = "";
+      boardEl.style.margin = "";
+    }
+  }
+  capBoardWidth();
+  const onBoardResize = (): void => capBoardWidth();
+  window.addEventListener("resize", onBoardResize);
 
   function later(fn: () => void, ms: number): void {
     const t = setTimeout(() => {
@@ -699,6 +730,7 @@ function createBoard(host: HTMLElement, opts: BoardOpts): { destroy: () => void 
     destroy() {
       destroyed = true;
       done = true;
+      window.removeEventListener("resize", onBoardResize);
       if (ticker) clearInterval(ticker);
       ticker = null;
       if (beat) clearInterval(beat);
