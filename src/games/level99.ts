@@ -651,6 +651,19 @@ const L99_CSS = `
   .l99-stage-wrap:has(.l99-jump) .tm-bar{margin-bottom:2px;gap:4px;font-size:12px;}
   .l99-stage-wrap:has(.l99-jump) .pyt-scene{height:44px;}
 }
+/* r18 A:390×844 竖屏关内标题条不再竖着堆四行(攻略/跳过/直达/剩余提示曾把 bar 撑到 247px,
+   舞台只剩 483px)。工具收成一条可横滚的行,小字提示藏起来 —— 完整文案仍在输入框 title 与
+   首页钥匙的 aria-label 上。只动关内 .l99-stagebar,地图工具行照旧换行;500px 短横屏配方不动。 */
+@media (max-width:480px){
+  .l99-stagebar .l99-tools{flex-wrap:nowrap;width:100%;justify-content:flex-start;overflow-x:auto;gap:6px;}
+  .l99-stagebar .l99-admin-row{width:auto;flex:0 0 auto;flex-wrap:nowrap;justify-content:flex-start;gap:6px;}
+  .l99-stagebar .l99-jump{flex-wrap:nowrap;gap:4px;}
+  .l99-stagebar .l99-jump-note{display:none;}
+  .l99-stagebar .l99-jump-input{width:64px;}
+  /* 竖屏兜底:关卡内容比舞台高时(数独的盘+键+消息行、带模式条的学习款)允许竖着划,
+     不再硬裁 —— 内容塞得下时 auto 一个像素都不改。横向仍旧 hidden,防画布抖动横溢。 */
+  .l99-stage{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+}
 @media (prefers-reduced-motion:reduce){
   .l99-node-cur{animation:none;}
   .l99-ov-buddy{animation:none;}
@@ -987,11 +1000,20 @@ export function mountLevelGame(api: GameApi, opts: LevelGameOptions): { destroy:
       const cur = grid.querySelector(".l99-node-cur") as {
         scrollIntoView?: (opts: { block: string }) => void;
         focus?: () => void;
+        getBoundingClientRect?: () => { top: number; bottom: number };
       } | null;
       // 认有没有 focus,不写 instanceof HTMLElement:node 单测环境没有这个全局,初次 showMap(true) 会整库红
       if (cur) {
+        // r18 A:当前关整格已经在滚动区里看得见时就别滚 —— 初次进图第 1 关本来就在首屏,
+        // scrollIntoView 反而把进度条和「开始冒险」卷出视口,竖屏顶上只剩半个被裁的按钮。
+        // 量不出矩形(单测桩)按「看不见」算,照旧滚,N-39 的聚焦行为不回退。
+        const vr = typeof view.getBoundingClientRect === "function" ? view.getBoundingClientRect() : null;
+        const nr = typeof cur.getBoundingClientRect === "function" ? cur.getBoundingClientRect() : null;
+        const seen = vr && nr
+          ? nodeCurFullyVisible({ top: nr.top - vr.top, bottom: nr.bottom - vr.top }, vr.height)
+          : false;
         try {
-          cur.scrollIntoView?.({ block: "center" });
+          if (!seen) cur.scrollIntoView?.({ block: "center" });
         } catch {
           // 老浏览器不支持 options 就算了
         }

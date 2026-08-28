@@ -445,6 +445,12 @@ export const SP_CSS = `
   .sp-seats{gap:10px;}
   .sp-key{font-size:17px;}
   .sp-corner{display:none;}
+  /* r18 A:竖屏手机上模式条曾占 ~160px(说明句两行+按钮折两行),把花田盘顶出舞台底。
+     按钮收成一条可横滚的行、说明句只在这一档收起(role=group 的 aria-label 仍是完整口径,
+     桌面与平板不变),热区 44 不动。 */
+  .sp-modebar{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;padding-bottom:2px;}
+  .sp-modebar .sp-open{flex:0 0 auto;white-space:nowrap;}
+  .sp-modetip{display:none;}
 }
 @media (max-height:500px){
   .sp-pad,.sp-tools{position:sticky;bottom:0;z-index:5;background:linear-gradient(180deg,rgba(255,252,255,.35),#fff 40%);
