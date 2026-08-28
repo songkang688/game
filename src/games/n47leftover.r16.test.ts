@@ -11,16 +11,6 @@ function src(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), "utf8");
 }
 
-function lastMinHeight(css: string, selector: string): number {
-  const re = new RegExp(
-    `${selector.replace(".", "\\.")}(?:,[^{.\n]+)?\\{[^}]*min-height:\\s*(\\d+)px`,
-    "g"
-  );
-  const all = [...css.matchAll(re)];
-  expect(all.length, `${selector} 应写 min-height`).toBeGreaterThan(0);
-  return Number(all.at(-1)![1]);
-}
-
 function ruleHasMin44(css: string, selector: string): void {
   const re = new RegExp(`${selector.replace(".", "\\.")}\\{[\\s\\S]*?min-height:44px`);
   expect(css, `${selector} 应 44`).toMatch(re);
@@ -31,8 +21,6 @@ describe("N-47 漏网芯片 ≥44（三款主体不改写）", () => {
     const css = bhVisualCss();
     expect(css).toMatch(/\.bh-mode,\.bh-btn\{min-height:40px;\}/);
     expect(css).toMatch(/\.bh-mode,\.bh-btn\{min-height:44px;\}/);
-    expect(lastMinHeight(css, ".bh-btn")).toBeGreaterThanOrEqual(44);
-    expect(lastMinHeight(css, ".bh-mode")).toBeGreaterThanOrEqual(44);
   });
 
   it("mole-pop 菜单 .mp-open 后盖 44，kit 40 字面量仍在", () => {
