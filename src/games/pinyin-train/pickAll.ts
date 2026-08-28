@@ -9,6 +9,7 @@ import { rateBelow, type PlayCtx, type PlayHandle } from "../level99";
 import type { QuizTheme } from "../quiz99";
 import { speak, speechReady, stopSpeaking, whenSpeechReady } from "../speech";
 import type { PickAllTask } from "./levels";
+import { TICKET_CSS, buildScene, classifyToken } from "./scene";
 
 /** 挑拣车厢要朗读的整句话：题目加判断方法，听一遍就知道该挑什么 */
 export function pickAllSpeech(task: PickAllTask): string {
@@ -110,14 +111,14 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
   wrap.className = "pk-wrap";
   wrap.style.background = theme.bg;
   wrap.innerHTML = `
-    <style>${CSS}</style>
+    <style>${CSS}${TICKET_CSS}</style>
     <div class="pk-top">
       <span class="pk-badge pk-count" style="color:${theme.accent}">已挑 0 个</span>
       <span class="pk-badge pk-life" style="color:#b84708">💗 ${"❤".repeat(task.maxWrong + 1)}</span>
     </div>
     <div class="pk-title" style="color:${theme.accent}">🚃 ${task.title}</div>
     <div class="pk-hint" style="color:${theme.accent}">${task.hint}</div>
-    <div class="pk-say-row"><button type="button" class="pk-say" style="color:${theme.accent}" hidden>🔈 再听一遍</button></div>
+    <div class="pk-say-row"><button type="button" class="pk-say pyt-horn" style="color:${theme.accent}" hidden>📢 再听一遍</button></div>
     <div class="pk-chips"></div>
     <div class="pk-bottom">
       <button type="button" class="pk-go">✅ 就挑这些</button>
@@ -125,6 +126,10 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
     </div>
   `;
   stage.appendChild(wrap);
+
+  // 火车舞台（纯视觉）：挑对整车后，正确卡片逐一挂厢、鸣笛发车
+  const scene = buildScene({ target: task.correct.length });
+  wrap.insertBefore(scene.el, wrap.querySelector(".pk-chips"));
 
   const chipsEl = wrap.querySelector(".pk-chips") as HTMLElement;
   const countEl = wrap.querySelector(".pk-count") as HTMLElement;
@@ -153,7 +158,8 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
   for (const chip of task.chips) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "pk-chip";
+    // 车票三色助记只按文字长相分类上色，正确与否绝不从颜色上漏出去
+    btn.className = `pk-chip pyt-ticket pyt-tk-${classifyToken(chip)}`;
     btn.textContent = chip;
     btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", `${chip}，还没挑中`);
@@ -194,6 +200,9 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
       ended = true;
       ctx.sfx("coin");
       for (const c of task.correct) chipEls.get(c)?.classList.add("pk-good");
+      // 纯视觉：挑对的整车逐一挂厢，随后鸣笛发车
+      for (const c of task.correct) scene.hook(c);
+      settle(() => scene.depart(), 320);
       msgEl.textContent = pickAllFeedback(verdict);
       const got = rateBelow(wrong, 0, 1);
       settle(() => ctx.win(got, wrong === 0 ? "一次就全挑对，眼力真准！" : "全挑对啦，这一车稳稳到站！"), 700);
@@ -202,6 +211,8 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
     wrong++;
     ctx.sfx("oops");
     updateHud();
+    // 纯视觉：车厢轻晃不脱钩 + 站牌「再听一遍」
+    scene.wobble();
     for (const btn of chipEls.values()) {
       btn.classList.add("pk-shake");
     }
@@ -228,6 +239,7 @@ export function runPickAll(opts: PickAllOptions): PlayHandle {
       stopSpeaking();
       timeouts.forEach((t) => clearTimeout(t));
       timeouts.clear();
+      scene.destroy();
       wrap.remove();
     },
   };

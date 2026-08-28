@@ -276,3 +276,46 @@ export function drawParticles(ctx: CanvasRenderingContext2D, list: Particle[]): 
   }
   ctx.globalAlpha = 1;
 }
+
+/** 窗口 8：CSS 星屑（不碰 DOM，只算轨迹和 keyframes） */
+export const SPARK_COUNT = 5;
+export const SPARK_MS = 320;
+
+export interface SparkSpec {
+  dx: number;
+  dy: number;
+  delayMs: number;
+  sizePx: number;
+}
+
+export function sparkleSpecs(rand: () => number, count = SPARK_COUNT): SparkSpec[] {
+  const n = Math.max(1, Math.floor(count));
+  const out: SparkSpec[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.min(1, Math.max(0, rand()));
+    const angle = (-160 + (140 / Math.max(1, n - 1)) * i + (r * 2 - 1) * 10) * (Math.PI / 180);
+    const dist = 26 + r * 22;
+    out.push({
+      dx: Math.round(Math.cos(angle) * dist),
+      dy: Math.round(Math.sin(angle) * dist) - 8,
+      delayMs: Math.round(i * 24),
+      sizePx: 10 + Math.round(r * 6)
+    });
+  }
+  return out;
+}
+
+export function sparkleCss(prefix: string): string {
+  const p = prefix.replace(/[^a-z-]/gi, "");
+  return `
+.${p}-spark { position: absolute; left: 50%; top: 40%; pointer-events: none; z-index: 6; animation: ${p}SparkFly ${SPARK_MS}ms ease-out forwards; will-change: transform, opacity; }
+@keyframes ${p}SparkFly {
+  0% { transform: translate(-50%, -50%) scale(.4); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--${p}-spark-dx, 0px)), calc(-50% + var(--${p}-spark-dy, -30px))) scale(1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .${p}-spark { display: none; }
+}
+`;
+}

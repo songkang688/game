@@ -225,4 +225,127 @@ export const KTC_CSS = `
   .ktc-heart{display:none;}
   .ktc-cat,.ktc-moodfill,.ktc-coverfill,.ktc-target{transition:none;}
 }
+
+/* ================= 1.3 视觉升级（第 26 步 C 档）：只动皮肤，不动任何热区 =================
+   小屋场景层 / 看病护理角三态立绘 / 步骤卡链 / 道具图标 / 治愈仪式 / 卡壳与木质计分。
+   全部追加在既有规则之后：上面的每一条一字未改。 */
+
+/* 小屋场景：窗 + 阳光斜带 + 相框 + 猫爬架剪影 + 地毯 + 猫窝（纯装饰，不接指针） */
+.ktc-scene{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:16px;}
+.ktc-scn-beam{position:absolute;left:9%;top:9%;width:110px;height:64%;transform:skewX(-18deg);
+  transform-origin:top left;background:linear-gradient(180deg,rgba(255,231,166,.42),rgba(255,231,166,0));}
+.ktc-scn-window{position:absolute;left:4.5%;top:5%;width:92px;}
+.ktc-scn-window svg{display:block;width:100%;}
+.ktc-scn-sill{position:absolute;left:6px;bottom:6px;right:6px;display:flex;gap:4px;justify-content:flex-start;}
+.ktc-scn-frames{position:absolute;right:6%;top:7%;width:74px;opacity:.95;}
+.ktc-scn-frames svg{display:block;width:100%;}
+.ktc-scn-tree{position:absolute;right:2%;bottom:16%;width:84px;}
+.ktc-scn-tree svg{display:block;width:100%;}
+.ktc-scn-rug{position:absolute;left:50%;bottom:5%;width:72%;height:42px;transform:translateX(-50%);
+  border-radius:50%;opacity:.7;background:radial-gradient(ellipse at center,#f2c6c2 55%,#e8b0ab 56% 76%,#f2c6c2 77%);}
+.ktc-scn-bed{position:absolute;left:5%;bottom:9%;width:70px;}
+.ktc-scn-bed svg{display:block;width:100%;}
+
+/* 顶栏（轮次 / 任务清单）卡片化：只加内描边与浮起，尺寸零改动 */
+.ktc-top .ktc-badge{box-shadow:0 2px 6px rgba(180,130,60,.22),inset 0 0 0 1.5px #ffe3bd,inset 0 2px 0 #ffffff;}
+
+/* 看病护理角：三态立绘 + 特效层（全部 pointer-events:none，不挡任何按钮） */
+.ktc-nook{position:relative;z-index:3;display:flex;justify-content:center;margin:2px auto 0;
+  min-height:116px;pointer-events:none;}
+.ktc-kitty{position:relative;}
+.ktc-kitty-svg{display:block;}
+.ktc-kitty-in .ktc-kitty-svg{animation:ktcKittyIn .26s ease-out;}
+@keyframes ktcKittyIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+.ktc-kitty-sway{transform-origin:86px 92px;animation:ktcKittySway 1.2s ease-in-out infinite;}
+@keyframes ktcKittySway{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(12deg)}}
+.ktc-kitty-roll .ktc-kitty-svg{animation:ktcKittyRoll 1s ease-in-out;}
+@keyframes ktcKittyRoll{0%{transform:rotate(0)}55%{transform:rotate(360deg) translateY(-4px)}100%{transform:rotate(360deg)}}
+.ktc-carefx{position:absolute;inset:-14px -40px;pointer-events:none;z-index:4;}
+
+/* 选对：道具图标飞向小猫 + 在背上刷两下；reduced 瞬贴静态一帧 */
+.ktc-fly{position:absolute;left:50%;bottom:0;width:34px;height:34px;pointer-events:none;
+  transform:translate(-50%,-8px);animation:ktcFly .5s ease-in-out forwards;}
+.ktc-fly svg{width:100%;height:100%;display:block;}
+@keyframes ktcFly{0%{transform:translate(-50%,52px) scale(.75);opacity:0}25%{opacity:1}
+  60%{transform:translate(-50%,-4px) scale(1.05)}
+  78%{transform:translate(calc(-50% - 9px),-9px) rotate(-14deg)}
+  92%{transform:translate(calc(-50% + 7px),-5px) rotate(10deg)}
+  100%{transform:translate(-50%,-7px) rotate(0);opacity:0}}
+.ktc-fly.ktc-fly-still{animation:none;transform:translate(-50%,-4px);}
+
+/* 选错：小猫歪头 +「喵?」气泡（不批评；歪头动画沿用既有 ktc-tilt） */
+.ktc-meow{position:absolute;right:6px;top:0;background:#fff;border-radius:12px 12px 12px 3px;
+  padding:2px 9px;font-size:14px;font-weight:900;color:#8a5a1e;
+  box-shadow:0 2px 6px rgba(160,110,40,.25);animation:ktcMeow .35s ease-out;}
+@keyframes ktcMeow{from{transform:translateY(5px) scale(.7);opacity:0}to{transform:none;opacity:1}}
+
+/* 痊愈仪式：咕噜气泡 + 爱心泡泡上飘 + 彩纸（reduced 泡泡彩纸全停，只留静态立绘与印章） */
+.ktc-purr{position:absolute;left:50%;top:-4px;transform:translateX(-50%);background:#fff7ec;
+  border-radius:999px;padding:3px 12px;font-size:14px;font-weight:900;color:#b06a2c;
+  box-shadow:0 2px 6px rgba(160,110,40,.22);animation:ktcMeow .35s ease-out;}
+.ktc-heartbubble{position:absolute;bottom:6px;color:#ff8ba0;pointer-events:none;line-height:1;
+  animation:ktcHeartUp 1s ease-out forwards;}
+@keyframes ktcHeartUp{0%{transform:translateY(0) scale(.7);opacity:0}20%{opacity:1}
+  100%{transform:translateY(-76px) scale(1.15);opacity:0}}
+.ktc-confetti{position:absolute;top:-6px;width:6px;height:10px;border-radius:2px;pointer-events:none;
+  animation:ktcConfetti 1s ease-in forwards;}
+@keyframes ktcConfetti{from{transform:translateY(0) rotate(0);opacity:1}
+  to{transform:translateY(104px) rotate(230deg);opacity:0}}
+
+/* 步骤卡链：一步一张圆角小卡（todo 灰 / now 亮边呼吸 / done 绿）＋卡间箭头；
+   360px 横排放不下就横滑，当前步由代码居中。文本内容与 curePlan 一字不差。 */
+.ktc-plan{display:flex;align-items:stretch;gap:4px;overflow-x:auto;scrollbar-width:none;
+  padding:6px 10px;line-height:1.3;}
+.ktc-plan[hidden]{display:none;}
+.ktc-step{display:inline-flex;align-items:center;gap:4px;background:#f1ede6;border-radius:12px;
+  padding:4px 8px;box-shadow:inset 0 0 0 2px transparent;position:relative;flex:0 0 auto;}
+.ktc-step-idx{font-size:11px;font-weight:900;color:#b09a80;background:#fff;border-radius:999px;
+  width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.ktc-step-icon{font-size:16px;line-height:1;}
+.ktc-step-name{font-size:13px;font-weight:800;white-space:nowrap;}
+.ktc-step-todo{opacity:.55;color:#8d94a5;}
+.ktc-step-now{background:#fff;box-shadow:inset 0 0 0 2px #ffd93d;color:#8a5a1e;
+  animation:ktcStepBreath 1.6s ease-in-out infinite;}
+@keyframes ktcStepBreath{0%,100%{box-shadow:inset 0 0 0 2px #ffd93d,0 0 0 0 rgba(255,217,61,0)}
+  50%{box-shadow:inset 0 0 0 2px #ffd93d,0 0 0 4px rgba(255,217,61,.32)}}
+.ktc-step-done{background:#e8f6e3;box-shadow:inset 0 0 0 2px #7bc86c;color:#3f7a36;}
+.ktc-stamp{position:absolute;right:-7px;top:-9px;font-size:14px;line-height:1;
+  transform:rotate(14deg);animation:ktcStamp .28s ease-out;}
+@keyframes ktcStamp{from{transform:rotate(14deg) scale(1.3);opacity:0}to{transform:rotate(14deg) scale(1);opacity:1}}
+.ktc-step-arrow{color:#c9b797;font-weight:900;align-self:center;flex:0 0 auto;}
+
+/* 道具按钮图标位：图标顶到小字上面（order:-1），按钮盒子与热区一个像素不动 */
+.ktc-toolicon{order:-1;width:30px;height:30px;display:block;pointer-events:none;}
+.ktc-toolicon svg{width:100%;height:100%;display:block;}
+
+/* 喂饭/逗猫道具贴纸位（W8R1-03）：裸 emoji 换 kit 贴纸，盒子与热区一个像素不动。
+   食物托盘与逗猫棒按钮里靠 order:-1 顶到小字上面，气泡里行内对齐。 */
+.ktc-propicon{display:inline-flex;vertical-align:middle;pointer-events:none;}
+.ktc-propicon svg{display:block;}
+.ktc-drag .ktc-propicon,.ktc-toy .ktc-propicon{order:-1;}
+.ktc-propsr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+/* say 提示行在看病里升级成对话气泡：小尾巴指向护理角的小猫（--ktc-tail-x 由代码算） */
+.ktc-wrap.ktc-caring .ktc-msg{background:#ffffffef;border-radius:14px;padding:6px 14px;
+  width:fit-content;max-width:94%;margin-left:auto;margin-right:auto;
+  box-shadow:0 3px 8px rgba(160,110,40,.16);}
+.ktc-wrap.ktc-caring .ktc-msg::before{content:"";position:absolute;left:var(--ktc-tail-x,50%);
+  top:-7px;transform:translateX(-50%);border:7px solid transparent;border-top:none;
+  border-bottom:8px solid #ffffffef;}
+
+/* 搭配：drawSlot 槽位卡壳（内描边，几何零改动）、drawScore 计分牌木质化 */
+.ktc-btn.ktc-slotcard{box-shadow:0 4px 0 rgba(180,130,60,.3),inset 0 0 0 2px #f3e2cb,inset 0 3px 0 #fffdf7;}
+.ktc-score.ktc-wood{background:linear-gradient(180deg,#f7e3c6,#eccfa5);color:#6b4a20;
+  box-shadow:inset 0 0 0 2px #d9b27c,inset 0 3px 0 #fff3dd,0 3px 8px rgba(160,110,40,.25);}
+
+@media (max-width:420px){
+  .ktc-step-name{font-size:12px;}
+  .ktc-scn-frames{display:none;}
+}
+@media (prefers-reduced-motion:reduce){
+  .ktc-kitty-in .ktc-kitty-svg,.ktc-kitty-sway,.ktc-kitty-roll .ktc-kitty-svg,
+  .ktc-step-now,.ktc-stamp,.ktc-fly,.ktc-meow,.ktc-purr{animation:none;}
+  .ktc-heartbubble,.ktc-confetti{display:none;}
+}
 `;

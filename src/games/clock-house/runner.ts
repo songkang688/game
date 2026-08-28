@@ -20,6 +20,8 @@ import { speak } from "../speech";
 import { mountDial, type DialHandle } from "./dial";
 import { fitQuizHost } from "./fit";
 import { methodHint } from "./hints";
+import { mountFaceLift, type FaceLiftHandle } from "./faceLift";
+import { HOUSE_CSS, mountClockFx, type ClockFxHandle } from "./house";
 import { typeOfKind, type ClockKind } from "./kinds";
 import { buildQuestions, makeReviewQuestions, CHAPTER_THEMES, type ClockQ } from "./levels";
 import { recordMistakes } from "./mistakes";
@@ -44,15 +46,21 @@ export const MIN_FACE_PX = 200;
  * 在壳层这条 auto 高的链上钳不住任何东西，那正是 W5R2-F-A-01 的成因。
  */
 export const CLK_CSS = `
-.clk-quizhost { min-width: 0; }
+.clk-quizhost { position: relative; min-width: 0; }
 .clk-dial-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .clk-dial-title { font-size: 18px; font-weight: 900; line-height: 1.5; word-break: keep-all; }
-.clk-dial-read { font-size: 16px; font-weight: 800; color: #5c4a7d; }
+.clk-dial-read { font-size: 16px; font-weight: 800; color: #5c4a7d; background: linear-gradient(#f6e2c4, #eccfa4);
+  border: 2px solid #a06b3a; border-radius: 12px; padding: 5px 14px; box-shadow: 0 2px 0 rgba(130,95,45,.3); }
 .clk-face { width: min(62vw, 240px); min-width: ${MIN_FACE_PX}px; height: auto; touch-action: none; }
 .clk-face-mini { width: 76px; height: 76px; }
 .clk-toggle { min-height: 44px; min-width: 44px; border: none; border-radius: 999px; cursor: pointer;
   font-family: inherit; font-size: 15px; font-weight: 800; padding: 10px 18px; color: #5c4a7d;
-  background: #ffffffe6; box-shadow: 0 3px 0 rgba(120,120,160,.3); }
+  background: #ffffffe6; box-shadow: 0 3px 0 rgba(120,120,160,.3); transition: background .2s ease-out, color .2s ease-out; }
+.clk-toggle::before { content: ""; display: inline-block; width: 30px; height: 18px; border-radius: 999px;
+  margin-right: 8px; vertical-align: -4px; transition: background .2s ease-out;
+  background: radial-gradient(circle at 27% 50%, #fff 0 6px, rgba(0,0,0,0) 6.6px), #c9cfd8; }
+.clk-toggle-on { color: #0b7285; background: #e6fcf8; }
+.clk-toggle-on::before { background: radial-gradient(circle at 73% 50%, #fff 0 6px, rgba(0,0,0,0) 6.6px), #2ec4b6; }
 .clk-toggle:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(120,120,160,.3); }
 .clk-toggle:focus-visible, .clk-face:focus-visible { outline: 3px solid #3c2a6b; outline-offset: 3px; }
 .clk-hint { font-size: 16px; line-height: 1.5; animation: clkHintIn .3s ease-out; }
@@ -67,6 +75,8 @@ export const CLK_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .clk-hint { animation: none; }
   .clk-face-svg .clk-hand { transition: none; }
+  .clk-toggle { transition: none; }
+  .clk-toggle::before { transition: none; }
 }
 `;
 
@@ -87,6 +97,8 @@ function attachHelper(
   const prompt = stage.querySelector(".qz-prompt");
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const offs: Array<() => void> = [];
+  // 1.3 视觉：小鸟反馈层（读判定结果只做映射：答对咕咕 + 星屑，答错只歪头）
+  const fx: ClockFxHandle = mountClockFx(stage);
   let observer: MutationObserver | null = null;
   let dial: DialHandle | null = null;
   let index = 0;
@@ -132,11 +144,13 @@ function attachHelper(
     const q = questions[index];
     if (!q || at < 0) return;
     if (at === q.correct) {
+      fx.cheer();
       // 没有 MutationObserver 的环境靠这条自己跟上题号（壳答对 850ms 后才换题）
       if (!observer) later(advance, 900);
       return;
     }
     wrongHere++;
+    fx.oops();
     if (!reported) {
       reported = true;
       onFirstWrong(q.kind);
@@ -151,6 +165,8 @@ function attachHelper(
         msg.textContent = line;
         msg.classList.add("clk-hint");
       }
+      // 壳亮 qz-hint 的同一时刻，给正确项补一圈柔光（不改门槛、不提前泄答案）
+      fx.glowCorrect(stage.querySelector(".qz-choice.qz-hint"));
       speak(line);
     }, 0);
   };
@@ -174,6 +190,7 @@ function attachHelper(
       timers.clear();
       dial?.destroy();
       dial = null;
+      fx.destroy();
     },
   };
 }
@@ -184,6 +201,10 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const style = stage.ownerDocument.createElement("style");
   style.textContent = CLK_CSS;
   stage.appendChild(style);
+  // 1.3 视觉皮肤（小屋 / 房间 / 小鸟 / 星屑）单独一个节点，CLK_CSS 的既有契约一字不动
+  const skin = stage.ownerDocument.createElement("style");
+  skin.textContent = HOUSE_CSS;
+  stage.appendChild(skin);
 
   // 答题屏是 `quiz99` 渲染的（公共资产，禁改），但它挂在哪儿是本款说了算：
   // 给它一个本款自己的宿主，再由 fitQuizHost 按舞台下沿钳住。
@@ -264,14 +285,19 @@ export function playClockLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
   const mainQuestions = buildQuestions(ctx.level);
   quiz = runQuiz({ stage: host, ctx: mainCtx, questions: mainQuestions, theme });
   helper = attachHelper(host, mainQuestions, noteWrong, fit.relayout);
+  // 1.3 视觉（W8R1-07）：前 99 关旧题面钟渲染后就地换新工序指针——
+  // 题库字符串零改动，正题与错题回顾共用这一个观察器
+  const lift: FaceLiftHandle = mountFaceLift(host);
   fit.relayout();
 
   return {
     destroy() {
       destroyed = true;
+      lift.destroy();
       dropRound();
       fit.dispose();
       host.remove();
+      skin.remove();
       style.remove();
     },
   };

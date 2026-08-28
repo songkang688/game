@@ -19,7 +19,9 @@ import {
   type SandboxWork,
   type StorageLike,
 } from "./sandbox";
-import { CLF_CSS, makeSwatch, pictureSvgBody, thumbnailSvg } from "./ui";
+import { CLF_CSS, makeSwatch, pictureSvgBody, prefersReducedMotion, thumbnailSvg } from "./ui";
+import { FLY_MS, RIPPLE_MS, STUDIO_CSS, paletteBrushHTML, rippleGhostMarkup, svgPointOf } from "./studio";
+import { rippleRadius, rippleReach } from "../../art/kit/paintBlob";
 
 export interface SandboxOptions {
   /** 音效走壳层，沙盒自己不产声音资源 */
@@ -120,6 +122,7 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
   sheet.setAttribute("tabindex", "-1");
   sheet.innerHTML = `
     <style>${CLF_CSS}</style>
+    <style>${STUDIO_CSS}</style>
     <div class="clf-sheet-head">
       <span class="clf-sheet-title">🎨 自由涂色</span>
       <button type="button" class="clf-tool clf-close">✖ 关上画室</button>
@@ -157,6 +160,9 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
   const clearBtn = sheet.querySelector(".clf-clear") as HTMLButtonElement;
   const saveBtn = sheet.querySelector(".clf-save") as HTMLButtonElement;
   const closeBtn = sheet.querySelector(".clf-close") as HTMLButtonElement;
+  // 调色盘实体化：木板皮肤只是 class，热区尺寸一个不动
+  paletteEl.classList.add("clf-board");
+  let rippleSeq = 0;
 
   function say(text: string): void {
     msgEl.textContent = text;
@@ -171,10 +177,11 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
   }
 
   function renderCanvas(): void {
-    svg.innerHTML = pictureSvgBody(PICTURES[picIndex]);
+    // 涟漪擦除层压在区域上面（pointer-events:none，不挡点击），跟着线稿一起重建
+    svg.innerHTML = `${pictureSvgBody(PICTURES[picIndex])}<g class="clf-ripple-layer"></g>`;
     svg.querySelectorAll<SVGElement>(".clf-region").forEach((el) => {
       const id = el.getAttribute("data-id") ?? "";
-      el.addEventListener("click", () => onRegion(id));
+      el.addEventListener("click", (e) => onRegion(id, e));
     });
     paintAll();
   }
@@ -184,12 +191,53 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
     redoBtn.disabled = !history.canRedo;
   }
 
-  function onRegion(id: string): void {
+  /** 颜料涟漪（纯视觉过渡）：旧色残影被从点击点长大的圆洞擦掉，最终色 = 逻辑色 */
+  function spawnRipple(id: string, fromColor: string | null, ev?: Event): void {
+    if (prefersReducedMotion()) return;
+    const r = PICTURES[picIndex].regions.find((x) => x.id === id);
+    const layer = svg.querySelector(".clf-ripple-layer");
+    const el = svg.querySelector(`[data-id="${id}"]`);
+    if (!r || !layer || !el) return;
+    let cx = r.lx;
+    let cy = r.ly;
+    const me = ev as MouseEvent | undefined;
+    if (me && typeof me.clientX === "number" && typeof svg.getBoundingClientRect === "function") {
+      const p = svgPointOf(svg.getBoundingClientRect(), me.clientX, me.clientY);
+      if (p) {
+        cx = p.x;
+        cy = p.y;
+      }
+    }
+    let radius = rippleRadius(400, 300);
+    const shape = el as unknown as { getBBox?: () => { x: number; y: number; width: number; height: number } };
+    if (typeof shape.getBBox === "function") {
+      try {
+        radius = rippleReach(cx, cy, shape.getBBox());
+      } catch {
+        // 画布还没铺开量不出包围盒，就按整幅算
+      }
+    }
+    const g = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.innerHTML = rippleGhostMarkup(
+      r.svg,
+      fromColor ? PIGMENT_HEX[fromColor] ?? "#ffffff" : "#ffffff",
+      `clfSbRip${++rippleSeq}`,
+      cx,
+      cy,
+      radius,
+      RIPPLE_MS
+    );
+    layer.appendChild(g);
+    later(() => g.remove(), RIPPLE_MS + 40);
+  }
+
+  function onRegion(id: string, ev?: Event): void {
     const before = history.replay()[id] ?? null;
     if (before === picked) return;
     history.push({ region: id, from: before, to: picked });
     sfx("pop");
     paintAll();
+    spawnRipple(id, before, ev);
     renderTools();
     say(`涂上${picked}啦，想改随时按撤销～`);
   }
@@ -218,6 +266,8 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
 
   function renderPalette(): void {
     paletteEl.innerHTML = "";
+    // 木板上先躺一支画笔，笔尖蘸着当前色（纯装饰 span，不接点击不进 Tab 序）
+    paletteEl.insertAdjacentHTML("beforeend", paletteBrushHTML(PIGMENT_HEX[picked] ?? "#c9cfd8"));
     for (const p of PIGMENTS) {
       const btn = makeSwatch(doc, p.name);
       if (p.name === picked) btn.classList.add("clf-picked");
@@ -236,8 +286,11 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
     works.forEach((work, i) => {
       const btn = doc.createElement("button");
       btn.type = "button";
-      btn.className = `clf-work${replacing ? " clf-work-on" : ""}`;
-      btn.innerHTML = thumbnailSvg(PICTURES[safePicIndex(work.pic)], work.fills);
+      // 展墙升级：木质相框 + 底部铭牌只是壳，存档结构与点开 / 换掉的接线原样
+      btn.className = `clf-work clf-framed${replacing ? " clf-work-on" : ""}`;
+      btn.innerHTML =
+        thumbnailSvg(PICTURES[safePicIndex(work.pic)], work.fills) +
+        `<span class="clf-work-plaque">第 ${i + 1} 幅</span>`;
       btn.setAttribute(
         "aria-label",
         replacing ? `把第 ${i + 1} 张换成现在这幅` : `打开第 ${i + 1} 张作品接着涂`
@@ -278,6 +331,28 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
     return { pic: picIndex, fills: history.replay(), at: Date.now() };
   }
 
+  /** 存好一幅：缩略图从画布飞进画廊「挂上展墙」（纯装饰；减弱动效直接入列） */
+  function flyToGallery(): void {
+    if (prefersReducedMotion()) return;
+    if (typeof sheet.getBoundingClientRect !== "function") return;
+    const from = svg.getBoundingClientRect();
+    const to = galleryEl.getBoundingClientRect();
+    const base = sheet.getBoundingClientRect();
+    if (!(from.width > 0) || !(base.width > 0)) return;
+    const ghost = doc.createElement("span");
+    ghost.className = "clf-fly";
+    ghost.innerHTML = thumbnailSvg(PICTURES[picIndex], history.replay());
+    ghost.style.left = `${(from.left - base.left + from.width / 2 - 36 + sheet.scrollLeft).toFixed(1)}px`;
+    ghost.style.top = `${(from.top - base.top + from.height / 2 - 27 + sheet.scrollTop).toFixed(1)}px`;
+    ghost.style.setProperty("--clf-fly-x", `${(to.left + to.width / 2 - (from.left + from.width / 2)).toFixed(1)}px`);
+    ghost.style.setProperty(
+      "--clf-fly-y",
+      `${(to.top + Math.min(to.height / 2, 60) - (from.top + from.height / 2)).toFixed(1)}px`
+    );
+    sheet.appendChild(ghost);
+    later(() => ghost.remove(), FLY_MS + 60);
+  }
+
   undoBtn.addEventListener("click", () => {
     if (!history.undo()) return;
     sfx("tap");
@@ -311,6 +386,7 @@ export function openSandbox(host: HTMLElement, opts: SandboxOptions = {}): Sandb
       sfx("coin");
       say(`存好啦！画廊里现在有 ${works.length}/12 张。`);
       replacing = false;
+      flyToGallery();
     } else {
       sfx("oops");
       replacing = true;

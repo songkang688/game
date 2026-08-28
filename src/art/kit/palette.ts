@@ -97,7 +97,7 @@ export const PASTELS = {
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 
-function parseHex(hex: string): { r: number; g: number; b: number } | null {
+function readHex(hex: string): { r: number; g: number; b: number } | null {
   if (typeof hex !== "string") return null;
   const raw = hex.trim().replace(/^#/, "");
   const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
@@ -109,10 +109,16 @@ function parseHex(hex: string): { r: number; g: number; b: number } | null {
   };
 }
 
+/** 窗口 8：`#RGB` / `#RRGGBB` → 三通道；解析不了返回 null */
+export function parseHex(hex: string): [number, number, number] | null {
+  const rgb = readHex(hex);
+  return rgb ? [rgb.r, rgb.g, rgb.b] : null;
+}
+
 /** 窗口 1：解析失败返回 null，不抛 */
 export function tryHexToRgb(hex: string): { r: number; g: number; b: number } | null {
   if (typeof hex !== "string" || !HEX_RE.test(hex)) return null;
-  return parseHex(hex);
+  return readHex(hex);
 }
 
 /**
@@ -120,7 +126,7 @@ export function tryHexToRgb(hex: string): { r: number; g: number; b: number } | 
  * 认不出来退回中性灰，不抛错（绘制层不许炸）。
  */
 export function hexToRgb(hex: string): [number, number, number] {
-  const rgb = parseHex(hex);
+  const rgb = readHex(hex);
   if (!rgb) return [128, 128, 128];
   return [rgb.r, rgb.g, rgb.b];
 }
@@ -152,8 +158,9 @@ function shadeUnit(hex: string, amount: number): string {
   return mixToward(hex, 0, amount);
 }
 
-/** 窗口 5：n 取 ±100。正数朝白，负数朝黑。非法 hex 按中性灰再混。 */
+/** 窗口 5 / 8：n 取 ±100。正数朝白，负数朝黑。CSS 函数原样退回，其它非法值走中性灰。 */
 function shadePercent(hex: string, n: number): string {
+  if (typeof hex === "string" && hex.includes("(")) return hex;
   const [r, g, b] = hexToRgb(hex);
   const f = Math.max(-100, Math.min(100, n)) / 100;
   const mix = (v: number): number => (f >= 0 ? v + (255 - v) * f : v * (1 + f));
@@ -193,7 +200,14 @@ export const PASTEL = {
   blue: "#a9d8ff",
   mint: "#8fe0c4",
   lemon: "#ffd75e",
-  lilac: "#d9bcff"
+  lilac: "#d9bcff",
+  red: "#E85D75",
+  vsBlue: "#4A7FD8",
+  idleGray: "#C9CFD8",
+  readyYellow: "#F0C25A",
+  starGold: "#FFD678",
+  cloudWhite: "#FFFFFF",
+  inkNavy: "#2F4E86"
 } as const;
 
 /** 感知加权明度(0..1)：对比度自查用 */

@@ -38,31 +38,61 @@ export function stepHint(step: "radical" | "part", clue: string): string {
   return step === "radical" ? `再想想字的意思：${clue}` : "偏旁挑对啦，另一半再看看～";
 }
 
+/**
+ * 挑对 / 挑错走的视觉分支（1.3 换肤只加类名，判定还是 checkStep 说了算）。
+ * 拼对：木卡磁吸合体 + 金边一闪；拼错：轻弹回 + 摇头 ±3°，不批评。
+ */
+export function stepFeedbackClass(ok: boolean): "bc-good" | "bc-bad" {
+  return ok ? "bc-good" : "bc-bad";
+}
+
+/**
+ * 1.3 视觉升级：部件块换成木质字卡（木纹渐变 + 深棕描边 + 抬起阴影，
+ * 木色 #d9a066 对齐 kit 规格 token woodCard）。动画时序按规格 4.3：
+ * 拼对磁吸 260ms、金边一闪 260ms、拼错轻弹回摇头 ±3° 320ms；
+ * prefers-reduced-motion 下全部瞬间到位。判定与选项数据零改动。
+ */
 const CSS = `
 .bc-wrap{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;border-radius:16px;padding:14px;
   display:flex;flex-direction:column;gap:10px;min-height:380px;user-select:none;-webkit-user-select:none;}
 .bc-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
 .bc-badge{background:#ffffffd9;border-radius:999px;padding:5px 12px;font-weight:800;font-size:14px;
   box-shadow:0 2px 6px rgba(120,120,160,.2);}
-.bc-clue{text-align:center;font-size:17px;font-weight:800;line-height:1.5;}
+.bc-clue{text-align:center;font-size:17px;font-weight:800;line-height:1.5;background:#fffdf7f2;
+  border:2px solid #f0e3cc;border-radius:14px;padding:6px 12px;box-shadow:0 3px 8px rgba(140,110,70,.14);}
 .bc-slots{display:flex;align-items:center;justify-content:center;gap:10px;}
-.bc-slot{width:74px;height:74px;border-radius:18px;background:#fff;display:flex;align-items:center;
-  justify-content:center;font-size:36px;font-weight:900;color:#4a4460;box-shadow:0 3px 10px rgba(120,120,160,.2);
-  border:3px dashed #dcd6ea;}
-.bc-slot.bc-filled{border-style:solid;border-color:#69db7c;background:#f4fff2;}
-.bc-plus{font-size:26px;font-weight:900;color:#a79fc0;}
-.bc-arrow{font-size:22px;font-weight:900;color:#a79fc0;}
+.bc-slot{width:74px;height:74px;border-radius:18px;background:#fffdf7;display:flex;align-items:center;
+  justify-content:center;font-size:36px;font-weight:900;color:#5b3a1e;box-shadow:0 3px 10px rgba(140,110,70,.2);
+  border:3px dashed #d9b98f;}
+.bc-slot.bc-filled{border-style:solid;border-color:#a9713d;color:#4a2f14;
+  background:repeating-linear-gradient(98deg,rgba(255,255,255,.09) 0 3px,rgba(120,70,20,.07) 3px 6px),
+    linear-gradient(#e9c185,#d9a066 55%,#c8925a);
+  box-shadow:0 4px 0 #a9713d,0 7px 10px rgba(120,80,30,.22);}
+.bc-plus{font-size:26px;font-weight:900;color:#b08d5e;}
+.bc-arrow{font-size:22px;font-weight:900;color:#b08d5e;}
 .bc-made{border:3px solid #ffd8a8;background:#fff9f0;}
 .bc-step{text-align:center;font-size:15px;font-weight:800;}
 .bc-choices{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
-.bc-pick{border:none;border-radius:18px;min-width:82px;min-height:72px;cursor:pointer;font-family:inherit;
-  font-size:32px;font-weight:900;color:#4a4460;background:#fff;box-shadow:0 4px 0 rgba(120,120,160,.3);
+.bc-pick{border:2px solid #a9713d;border-radius:18px;min-width:82px;min-height:72px;cursor:pointer;font-family:inherit;
+  font-size:32px;font-weight:900;color:#4a2f14;
+  background:repeating-linear-gradient(98deg,rgba(255,255,255,.09) 0 3px,rgba(120,70,20,.07) 3px 6px),
+    linear-gradient(#e9c185,#d9a066 55%,#c8925a);
+  box-shadow:0 5px 0 #a9713d,0 8px 12px rgba(120,80,30,.25);
   transition:transform .12s;}
-.bc-pick:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(120,120,160,.3);}
-.bc-pick.bc-bad{animation:bcShake .38s;opacity:.55;}
-@keyframes bcShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-.bc-pick.bc-good{background:#e4f9e0;animation:bcPop .35s;}
-@keyframes bcPop{50%{transform:scale(1.14)}}
+.bc-pick:active{transform:translateY(3px);box-shadow:0 2px 0 #a9713d;}
+.bc-pick.bc-bad{animation:bcShake .32s ease-out;opacity:.55;}
+@keyframes bcShake{0%,100%{transform:translateX(0) rotate(0)}30%{transform:translateX(-4px) rotate(-3deg)}
+  65%{transform:translateX(4px) rotate(3deg)}}
+.bc-pick.bc-good{background:#e4f9e0;animation:bcPop .26s ease-out;
+  box-shadow:0 0 0 3px #ffd93d,0 5px 0 #a9713d;}
+@keyframes bcPop{50%{transform:scale(1.12)}}
+.bc-slots.bc-snap .bc-slot-r{animation:bcSnapR .26s ease-out;}
+.bc-slots.bc-snap .bc-slot-p{animation:bcSnapL .26s ease-out;}
+@keyframes bcSnapR{40%{transform:translateX(7px)}100%{transform:translateX(0)}}
+@keyframes bcSnapL{40%{transform:translateX(-7px)}100%{transform:translateX(0)}}
+.bc-slot.bc-flash{animation:bcFlash .26s ease-out;box-shadow:0 0 0 2px rgba(255,217,61,.4);}
+@keyframes bcFlash{0%{box-shadow:0 0 0 0 rgba(255,217,61,0)}45%{box-shadow:0 0 0 5px #ffd93d}
+  100%{box-shadow:0 0 0 2px rgba(255,217,61,.4)}}
 .bc-msg{min-height:24px;text-align:center;font-size:15px;font-weight:800;}
 .bc-say-row{display:flex;justify-content:center;}
 .bc-say{border:none;border-radius:999px;background:#ffffffe6;cursor:pointer;font-family:inherit;font-weight:900;
@@ -73,18 +103,14 @@ const CSS = `
   .bc-slot{width:62px;height:62px;font-size:30px;}
   .bc-pick{min-width:70px;min-height:62px;font-size:27px;}
 }
-/* 320 宽的旧手机上四选一会折成 3+1 两行，第二行整颗落在舞台裁切线以下（W5R3-A-02）。
-   工坊已经接了 fitQuizHost 的钳位兜底，但能一行排下就别让孩子先滚一次屏才看得见第四个字。
-   预算不能拿屏宽算：舞台自己就比屏窄（320 机上 .game-stage 只有 300px），
-   再减掉壳与工坊的内边距，真机量到工坊内容宽 = 252px（padding 收到 10px 之后）。
-   最宽的一档 4×54 + 3×6 = 234px，还余 18px。
-   竖直方向一动不动——热区还是 62px 高、54px 宽（下限 44px），只收左右和字号。 */
+/* 320 宽的旧手机上四选一会折成 3+1 两行，第二行整颗落在舞台裁切线以下（W5R3-A-02）。 */
 @media (max-width:340px){
   .bc-wrap{padding:10px;}
   .bc-choices{gap:6px;}
   .bc-pick{min-width:54px;font-size:24px;}
 }
-@media (prefers-reduced-motion:reduce){.bc-pick.bc-good{animation:none;}}
+@media (prefers-reduced-motion:reduce){.bc-pick.bc-good,.bc-pick.bc-bad,.bc-slots.bc-snap .bc-slot,
+  .bc-slot.bc-flash{animation:none;}}
 `;
 
 export function runBuildChar(opts: BuildCharOptions): PlayHandle {
@@ -144,6 +170,7 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
   const progressEl = wrap.querySelector(".bc-progress") as HTMLElement;
   const lifeEl = wrap.querySelector(".bc-life") as HTMLElement;
   const clueEl = wrap.querySelector(".bc-clue") as HTMLElement;
+  const slotsEl = wrap.querySelector(".bc-slots") as HTMLElement;
   const slotR = wrap.querySelector(".bc-slot-r") as HTMLElement;
   const slotP = wrap.querySelector(".bc-slot-p") as HTMLElement;
   const slotC = wrap.querySelector(".bc-slot-c") as HTMLElement;
@@ -169,6 +196,9 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
   function render(): void {
     const round = task.rounds[roundIdx];
     updateHud();
+    // 上一轮的磁吸 / 金闪只是一瞬的视觉，换题时摘干净
+    slotsEl.classList.remove("bc-snap");
+    slotC.classList.remove("bc-flash");
     clueEl.textContent = `「${round.word}」的这个字：${round.clue}`;
     speak(clueEl.textContent);
     slotR.textContent = step === "part" ? round.radical : "?";
@@ -199,7 +229,7 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
     if (!checkStep(round, step, opt)) {
       wrong++;
       ctx.sfx("oops");
-      btn.classList.add("bc-bad");
+      btn.classList.add(stepFeedbackClass(false));
       btn.disabled = true;
       msgEl.textContent = stepHint(step, round.clue);
       updateHud();
@@ -209,7 +239,7 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
       }
       return;
     }
-    btn.classList.add("bc-good");
+    btn.classList.add(stepFeedbackClass(true));
     ctx.sfx("coin");
     if (step === "radical") {
       slotR.textContent = round.radical;
@@ -222,6 +252,9 @@ export function runBuildChar(opts: BuildCharOptions): PlayHandle {
     slotP.textContent = round.part;
     slotP.classList.add("bc-filled");
     slotC.textContent = round.char;
+    // 两块木卡磁吸合体 + 成字格金边一闪（260ms 纯视觉，reduced 瞬间合体）
+    slotsEl.classList.add("bc-snap");
+    slotC.classList.add("bc-flash");
     msgEl.textContent = `拼成啦：${round.char}（${round.word}）`;
     later(() => {
       roundIdx++;

@@ -18,6 +18,7 @@ import { runQuiz } from "../quiz99";
 import { speak } from "../speech";
 import { runBuildChar } from "./buildChar";
 import { fitQuizHost } from "./fit";
+import { attachPicArt, type PicArtHandle } from "./picArt";
 import {
   buildCharTask,
   buildQuestions,
@@ -146,6 +147,7 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
 
   let quiz: PlayHandle | null = null;
   let watcher: WatcherHandle | null = null;
+  let pic: PicArtHandle | null = null;
   let banner: HTMLElement | null = null;
   let destroyed = false;
   let reviewing = false;
@@ -154,6 +156,8 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
   function dropRound(): void {
     watcher?.destroy();
     watcher = null;
+    pic?.destroy();
+    pic = null;
     try {
       quiz?.destroy?.();
     } catch (err) {
@@ -197,6 +201,8 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
       skipped: false,
     });
     watcher = watchWrong(host, questions, () => {}, fit.relayout);
+    // 配图贴纸层（W8R1-02）：只画不判，换装后喊钳位重量一次高度
+    pic = attachPicArt(host, { onChanged: fit.relayout });
     fit.relayout();
     speak(REVIEW_NOTE);
   }
@@ -218,6 +224,8 @@ function playQuizLevel(stage: HTMLElement, ctx: PlayCtx, theme: (typeof CHAPTER_
   const questions = buildQuestions(ctx.level);
   quiz = runQuiz({ stage: host, ctx: mainCtx, questions, theme, bigChoices: true });
   watcher = watchWrong(host, questions, noteWrong, fit.relayout);
+  // 配图贴纸层（W8R1-02）：题面与选项里的裸 emoji 换 kit 贴纸，字库数据零改动
+  pic = attachPicArt(host, { onChanged: fit.relayout });
   fit.relayout();
 
   return {

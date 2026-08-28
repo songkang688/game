@@ -52,6 +52,22 @@ import {
   type TaskOutcome
 } from "./tasks";
 import { fitIntoStage, type Life, type Loop } from "./runtime";
+import { kitty, type KittyState } from "../../art/kit/kittySvg";
+import { sticker } from "../../art/kit/stickers";
+import {
+  MEOW_TEXT,
+  PURR_TEXT,
+  bubbleTailX,
+  calicoVariantForSeed,
+  confettiSpecs,
+  furForSeed,
+  heartBubbleSpecs,
+  kittyStateFor,
+  roomScene,
+  splitStepText,
+  stepCenterOffset,
+  toolIconSvg
+} from "./cureScene";
 
 const TASK_INFO: Record<KittyTask, { icon: string; name: string }> = {
   feed: { icon: "🍽️", name: "喂饭" },
@@ -85,6 +101,8 @@ export interface ArenaOptions {
   theme: number;
   /** 已经摆进小屋的家具（相册解锁的那些） */
   furniture?: Array<{ spot: HomeSpot; emoji: string; name: string }>;
+  /** 痊愈进度（已照顾好的天数，**只读**）：窗台摆件随它变多，纯装饰 */
+  cured?: number;
   reduceMotion?: boolean;
 }
 
@@ -129,6 +147,26 @@ function btn(cls: string, label: string, sub?: string): HTMLElement & { subEl?: 
 function relabel(button: HTMLElement & { subEl?: HTMLElement }, sub: string): void {
   button.setAttribute("aria-label", sub);
   if (button.subEl) button.subEl.textContent = sub;
+}
+
+/** 道具贴纸的边长（W8R1-03：喂饭/逗猫核心道具由裸 emoji 换成 kit 贴纸） */
+export const PROP_PX = { food: 32, bowl: 42, toy: 30, chaser: 24, bubble: 24 } as const;
+
+/**
+ * emoji → 贴纸小节点（沿看病 `toolIconSvg` 的工序：空标签按钮 + 图标 span + 小字）。
+ * 贴纸永远是纯装饰（aria-hidden），朗读内容由宿主自己的标签 / sr-only 原文负责，
+ * 绝不给装饰件挂标签去和真按钮撞车；图集查不到就原样回退文本，绝不空一块。
+ */
+export function propIcon(emoji: string, px: number): HTMLElement {
+  const span = el("span", "ktc-propicon");
+  const svg = sticker(emoji, px);
+  if (svg) {
+    span.innerHTML = svg;
+    span.setAttribute("aria-hidden", "true");
+  } else {
+    span.textContent = emoji;
+  }
+  return span;
 }
 
 function now(): number {
@@ -195,6 +233,11 @@ export class Arena {
     this.root.style.background = THEME_BG[opts.theme] ?? THEME_BG[0];
 
     const room = el("div", "ktc-room");
+    // 小屋场景（1.3）：窗 + 阳光斜带 + 相框 + 猫爬架剪影 + 地毯 + 猫窝，
+    // 窗台摆件随痊愈进度变多（进度只读）。整层不接指针，家具 emoji 叠在它上面。
+    const scene = el("div", "ktc-scene");
+    scene.innerHTML = roomScene(Math.max(0, Math.floor(opts.cured ?? 0)));
+    room.appendChild(scene);
     for (const item of opts.furniture ?? []) {
       const spot = el("span", `ktc-room-spot ktc-room-${item.spot}`, item.emoji);
       spot.setAttribute("aria-label", `${SPOT_LABELS[item.spot]}的${item.name}`);
@@ -473,6 +516,8 @@ export class Arena {
     this.playEl.textContent = "";
     // 只有逗猫 / 打扮会摆场地；每次重画先摘掉，画到那两种任务时再挂回去
     this.root.classList.remove("ktc-hasfield");
+    // 看病的对话气泡皮也一样：换任务先摘，画到看病再挂回去（纯视觉记号）
+    this.root.classList.remove("ktc-caring");
     if (this.cats[this.targetCat()].hiding) {
       this.renderSoothe();
       return;
@@ -507,16 +552,22 @@ export class Arena {
   private renderFeed(spec: TaskSpec): void {
     let state = buildFeed(spec.seed, spec.options);
     const name = this.cats[this.targetCat()].name;
-    this.bubble(`💭 ${name}想吃 ${state.want.emoji}`);
+    // 想吃气泡（W8R1-03）：想吃物可见层换贴纸，原 emoji 收进 sr-only（读屏念的
+    // 和原来一字不差）；判定读的是闭包里的 name，零改动
+    this.bubbleEl.textContent = `💭 ${name}想吃 `;
+    this.bubbleEl.appendChild(el("span", "ktc-propsr", state.want.emoji));
+    this.bubbleEl.appendChild(propIcon(state.want.emoji, PROP_PX.bubble));
     this.say("把它想吃的那一样拖进饭碗里～");
-    const bowl = el("div", "ktc-target ktc-bowl", "🥣");
+    const bowl = el("div", "ktc-target ktc-bowl");
+    bowl.appendChild(propIcon("🥣", PROP_PX.bowl));
     bowl.setAttribute("aria-label", "饭碗");
     this.playEl.appendChild(bowl);
 
     const tray = el("div", "ktc-tray");
     let picked: string | null = null;
     for (const food of state.options) {
-      const item = btn("ktc-drag", food.emoji, food.name);
+      const item = btn("ktc-drag", "", food.name);
+      item.appendChild(propIcon(food.emoji, PROP_PX.food));
       this.life.on(item, "click", () => {
         if (this.dead || !this.lockedOnTarget()) return;
         picked = food.name;
@@ -555,12 +606,18 @@ export class Arena {
   private renderPlay(spec: TaskSpec): void {
     let state = buildPlay(spec.playTaps);
     const name = this.cats[this.targetCat()].name;
-    this.bubble(`🪶 ${name}想玩逗猫棒`);
+    // 想玩气泡：羽毛前缀换贴纸（W8R1-03）
+    this.bubbleEl.textContent = "";
+    this.bubbleEl.appendChild(propIcon("🪶", PROP_PX.bubble));
+    this.bubbleEl.appendChild(el("span", undefined, ` ${name}想玩逗猫棒`));
     this.say(chaseHint(state));
     const field = el("div", "ktc-field");
     this.root.classList.add("ktc-hasfield");
-    const toy = btn("ktc-toy", "🪶", "逗猫棒");
-    const chaser = el("span", "ktc-chaser", "🐾");
+    const toy = btn("ktc-toy", "", "逗猫棒");
+    toy.appendChild(propIcon("🪶", PROP_PX.toy));
+    const chaser = el("span", "ktc-chaser");
+    chaser.appendChild(propIcon("🐾", PROP_PX.chaser));
+    chaser.setAttribute("aria-hidden", "true");
     chaser.style.position = "absolute";
     field.append(toy, chaser);
     this.playEl.appendChild(field);
@@ -816,29 +873,138 @@ export class Arena {
     this.bubble(`${round.symptom.emoji} ${name}${round.symptom.name}`);
     this.planEl.hidden = false;
     this.safetyEl.hidden = false;
+    // 对话气泡皮只在看病里穿（提示行文字本身一字不动）
+    this.root.classList.add("ktc-caring");
+
+    // -- 以下到 draw() 之前全是 1.3 的纯视觉层：判定、文案、热区一个都不碰 --
+
+    // 护理角：三态立绘随 curePlan 进度切换；毛色与三花斑位跟关卡种子走，不闪变
+    const fur = furForSeed(spec.seed);
+    const variant = calicoVariantForSeed(spec.seed);
+    const nook = el("div", "ktc-nook");
+    const kittyEl = el("div", "ktc-kitty");
+    const fxEl = el("div", "ktc-carefx");
+    nook.append(kittyEl, fxEl);
+    let shown: KittyState | null = null;
+    const paintKitty = (): void => {
+      const ks = kittyStateFor(state.step, state.done);
+      if (ks === shown) return;
+      shown = ks;
+      kittyEl.innerHTML = kitty(ks, fur, 112, { variant, prefix: "ktc" });
+      if (this.opts.reduceMotion) return;
+      // 交叉淡入 260ms：摘了再挂让动画重跑（读一次 offsetWidth 触发重排，测试桩里没有就跳过）
+      kittyEl.classList.remove("ktc-kitty-in");
+      void (kittyEl as unknown as { offsetWidth?: number }).offsetWidth;
+      kittyEl.classList.add("ktc-kitty-in");
+    };
+
+    // 选对 / 选错的视觉分支（互斥）：飞行道具图标 ↔「喵?」气泡
+    const clearFx = (): void => {
+      fxEl.textContent = "";
+    };
+    const flyIcon = (toolName: string): void => {
+      clearFx();
+      const flyer = el("span", "ktc-fly");
+      if (this.opts.reduceMotion) flyer.classList.add("ktc-fly-still");
+      flyer.innerHTML = toolIconSvg(toolName);
+      fxEl.appendChild(flyer);
+      this.life.after(() => flyer.remove(), 520);
+    };
+    const meow = (): void => {
+      clearFx();
+      const word = el("span", "ktc-meow", MEOW_TEXT);
+      fxEl.appendChild(word);
+      this.life.after(() => word.remove(), 900);
+    };
+
+    // 治愈仪式：打滚 + 咕噜气泡 + 爱心泡泡 5 颗 + 彩纸；reduced 只留静态痊愈立绘与印章
+    const ritual = (): void => {
+      clearFx();
+      const purr = el("span", "ktc-purr", PURR_TEXT);
+      fxEl.appendChild(purr);
+      this.life.after(() => purr.remove(), 1100);
+      if (this.opts.reduceMotion) return;
+      kittyEl.classList.add("ktc-kitty-roll");
+      this.life.after(() => kittyEl.classList.remove("ktc-kitty-roll"), 1050);
+      for (const spot of heartBubbleSpecs()) {
+        const heart = el("span", "ktc-heartbubble", "♥");
+        heart.style.left = `${spot.leftPct}%`;
+        heart.style.fontSize = `${spot.sizePx}px`;
+        heart.style.animationDelay = `${spot.delayMs}ms`;
+        fxEl.appendChild(heart);
+        this.life.after(() => heart.remove(), 1050 + spot.delayMs);
+      }
+      for (const bit of confettiSpecs()) {
+        const paper = el("span", "ktc-confetti");
+        paper.style.left = `${bit.leftPct}%`;
+        paper.style.background = bit.color;
+        paper.style.animationDelay = `${bit.delayMs}ms`;
+        paper.style.transform = `rotate(${bit.tiltDeg}deg)`;
+        fxEl.appendChild(paper);
+        this.life.after(() => paper.remove(), 1050 + bit.delayMs);
+      }
+    };
+
+    // 步骤卡链：一步一张圆角小卡（todo 灰 / now 亮边呼吸 / done 绿 + 爪印章），
+    // 卡间箭头描边化。卡上文字取自 curePlan 原文，一字不丢、不提前泄题。
+    const paintPlan = (): void => {
+      this.planEl.textContent = "";
+      let nowCard: HTMLElement | null = null;
+      curePlan(state).forEach((step, i) => {
+        if (i > 0) this.planEl.appendChild(el("span", "ktc-step-arrow", "→"));
+        const card = el("span", `ktc-step ktc-step-${step.state}`);
+        const part = splitStepText(step.text);
+        card.appendChild(el("span", "ktc-step-idx", String(i + 1)));
+        if (part.icon) card.appendChild(el("span", "ktc-step-icon", part.icon));
+        card.appendChild(el("span", "ktc-step-name", part.label));
+        if (step.state === "done") card.appendChild(el("span", "ktc-stamp", "🐾"));
+        if (step.state === "now") nowCard = card;
+        this.planEl.appendChild(card);
+      });
+      // 360px 上卡链放不下会横滑：把当前步滚到中间（量不到宽度的环境安静跳过）
+      const holder = this.planEl as unknown as { scrollLeft?: number; clientWidth?: number };
+      const cur = nowCard as unknown as { offsetLeft?: number; offsetWidth?: number } | null;
+      if (cur && typeof holder.clientWidth === "number" && holder.clientWidth > 0 && typeof cur.offsetLeft === "number") {
+        holder.scrollLeft = stepCenterOffset(cur.offsetLeft, cur.offsetWidth ?? 0, holder.clientWidth);
+      }
+      // 对话气泡的小尾巴指向护理角的小猫（几何算不出来就落回居中）
+      const st = this.msgEl.style as unknown as { setProperty?: (k: string, v: string) => void };
+      if (typeof st.setProperty === "function") {
+        st.setProperty("--ktc-tail-x", `${bubbleTailX(this.msgEl.getBoundingClientRect?.(), nook.getBoundingClientRect?.())}%`);
+      }
+    };
 
     // 刚刚那一下要说的话：护理台整块重画时把它带上，别让通用提示在同一 tick 里盖掉
     const draw = (note?: string, miss = false): void => {
-      this.planEl.textContent = "";
-      curePlan(state).forEach((step, i) => {
-        if (i > 0) this.planEl.appendChild(el("span", undefined, " → "));
-        const chip = el("span", undefined, `${i + 1}.${step.text}`);
-        chip.style.opacity = step.state === "done" ? "0.5" : step.state === "todo" ? "0.35" : "1";
-        this.planEl.appendChild(chip);
-      });
+      paintPlan();
+      paintKitty();
       this.say(cureMessage(note, cureHint(state), miss));
       this.playEl.textContent = "";
+      this.playEl.appendChild(nook);
       const row = el("div", "ktc-btns");
       const cur = round.steps[state.step];
       for (const tool of cur?.options ?? []) {
-        const b = btn("ktc-btn", tool.emoji, tool.name);
+        const b = btn("ktc-btn ktc-tool", "", tool.name);
+        const icon = el("span", "ktc-toolicon");
+        icon.innerHTML = toolIconSvg(tool.name);
+        b.appendChild(icon);
         this.life.on(b, "click", () => {
           if (this.dead || !this.lockedOnTarget()) return;
           const res = curePick(state, tool.name);
           keep(res.state);
+          // 纯视觉分支：选对图标飞向小猫用一下，选错只歪头「喵?」（settle 照旧管判定反馈）
+          if (res.miss) meow();
+          else if (res.acted) flyIcon(tool.name);
           this.settle(res, row);
+          if (res.done) {
+            // 痊愈：卡链全部盖章 + 三态切到 cured + 仪式；流程收尾仍由 settle 负责
+            paintPlan();
+            paintKitty();
+            ritual();
+            return;
+          }
           // 心情掉光时 settle 已经把舞台换成安抚按钮了，别再画回护理台把它盖掉
-          if (!res.done && !this.cats[this.targetCat()].hiding) draw(res.note, res.miss);
+          if (!this.cats[this.targetCat()].hiding) draw(res.note, res.miss);
         });
         row.appendChild(b);
       }
@@ -879,7 +1045,8 @@ export class Arena {
       const row = el("div", "ktc-btns");
       for (const item of cur.options) {
         const tags = item.tags.length > 0 ? item.tags.join("·") : "百搭";
-        const b = btn("ktc-btn", item.emoji, `${item.name}\n${tags}`);
+        // 1.3：槽位加圆角卡壳（内描边走 box-shadow，按钮几何与热区零改动）
+        const b = btn("ktc-btn ktc-slotcard", item.emoji, `${item.name}\n${tags}`);
         this.life.on(b, "click", () => {
           if (this.dead || !this.lockedOnTarget()) return;
           picks.push(item);
@@ -899,7 +1066,8 @@ export class Arena {
       const score = scoreOutfit(picks, round.theme);
       this.playEl.textContent = "";
       this.bubble(`👗 ${round.theme} · ${score.label}`);
-      const panel = el("div", "ktc-score");
+      // 1.3：计分牌木质化（只换皮，评分行文一字不差）
+      const panel = el("div", "ktc-score ktc-wood");
       panel.appendChild(el("div", undefined, `评分规则：加分标签 +1，减分标签 −1，百搭 +1`));
       for (const line of score.lines) {
         const row = el("div", undefined, `${line.emoji} ${line.name}：${line.reason}（${line.delta >= 0 ? "+" : ""}${line.delta}）`);

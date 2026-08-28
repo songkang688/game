@@ -28,6 +28,7 @@ import { runSpell } from "./spell";
 import { runTimed } from "./timed";
 import { openLevelOnMap, parseLevelParam, resolveInitialLevel } from "./runtime";
 import { fitQuizHost } from "./fit";
+import { QUIZ_SKIN_CSS, buildScene, decorateQuizTickets, trainWatchCtx } from "./scene";
 
 /** 壳层给的 `initialLevel`（1 基），没有就看地址栏的 `?level=N` */
 function wantedLevel(api: GameApi): unknown {
@@ -64,19 +65,34 @@ export function mount(api: GameApi): { destroy: () => void } {
           const host = document.createElement("div");
           // 网格 / flex 子项默认 min-width:auto，长题面会把宿主撑破，钳高之前先把这一格按住
           host.style.minWidth = "0";
+          // 车票化选项的覆盖样式挂在宿主这个类名下（1.3 视觉皮肤，quiz99 一个字不动）
+          host.className = "pyt-quizskin";
+          // 火车舞台（纯视觉）：答对挂厢、答错轻晃、整关赢了鸣笛发车；
+          // 舞台放在宿主上方，fitQuizHost 量的是宿主自己的头顶，钳位照旧
+          const questions = buildQuestions(innerCtx.level);
+          const scene = buildScene({ target: questions.length });
+          const skin = document.createElement("style");
+          skin.textContent = QUIZ_SKIN_CSS;
+          inner.appendChild(skin);
+          inner.appendChild(scene.el);
           inner.appendChild(host);
           const fit = fitQuizHost(host);
+          const deco = decorateQuizTickets(host);
           const handle = runQuizWithReview({
             stage: host,
-            ctx: innerCtx,
-            questions: buildQuestions(innerCtx.level),
+            // 只看不改的观察层：coin/oops 回声驱动挂厢与轻晃，win/lose 原样透传
+            ctx: trainWatchCtx(innerCtx, scene, questions.map((q) => q.answer)),
+            questions,
             theme,
             level: innerCtx.level,
           });
           return {
             destroy() {
+              deco.dispose();
               fit.dispose();
               handle?.destroy?.();
+              scene.destroy();
+              skin.remove();
               host.remove();
             },
           };

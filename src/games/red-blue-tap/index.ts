@@ -4,6 +4,9 @@ export { meta };
 import { mountLevelGame, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import { AVATAR_URLS } from "../../ui/avatars";
 import { save } from "../../engine/save";
+import { scorePop, spawnRippleAtDot } from "./fx";
+import { CAMPAIGN_VISUAL_CSS } from "./skin";
+import { DOT_ART_CSS, dotFace } from "./dotArt";
 import { CHAPTERS, LEVELS, type TapLevel } from "./levels";
 import { resetClippedScroll } from "./stageScroll";
 import {
@@ -483,6 +486,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     }
     if (msg) msgEl.textContent = msg;
     renderTop();
+    // 计分徽章轻弹一下（纯视觉，reduced 不弹）
+    scorePop(mine ? meEl : aiEl);
     if (meScore >= cfg.targetPoints || aiScore >= cfg.targetPoints) {
       finish();
       return;
@@ -571,8 +576,11 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "rbt-dot";
-    el.textContent =
-      kind === "freeze" ? POWER_SKIN.freeze : kind === "magnet" ? POWER_SKIN.magnet : kind === "trap" ? skin.trap : skin.mine;
+    // W8R2-01：点面贴纸化只动可见层——sr-only 里还是原 emoji，判定照旧读 kind
+    dotFace(
+      el,
+      kind === "freeze" ? POWER_SKIN.freeze : kind === "magnet" ? POWER_SKIN.magnet : kind === "trap" ? skin.trap : skin.mine
+    );
     if (label > 0) {
       const tag = document.createElement("span");
       tag.className = "rbt-dot-num";
@@ -612,6 +620,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         e.preventDefault();
         if (ended || d.gone) return;
         if (!passGate(d)) return;
+        // 波纹要在点被摘掉之前读它的位置：抢对金色星环、碰陷阱灰色淡纹
+        spawnRippleAtDot(arenaEl, d.el, d.kind !== "trap");
         removeDot(d);
         if (d.kind === "trap") {
           score(false, 1, `碰到 ${skin.trap} 啦，这可是陷阱！`);
@@ -659,6 +669,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
       e.preventDefault();
       if (ended || d.gone) return;
       if (!passGate(d)) return;
+      spawnRippleAtDot(arenaEl, d.el, true);
       removeDot(d);
       ctx.sfx("pop");
       if (kind === "freeze") {
@@ -679,6 +690,7 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
     d.el.classList.add("rbt-dot-next");
     later(() => {
       if (destroyed || ended || d.gone) return;
+      spawnRippleAtDot(arenaEl, d.el, true);
       removeDot(d);
       ctx.sfx("pop");
       score(true, 1, "🧲 磁铁把它吸过来啦！");
@@ -725,12 +737,14 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
         if (seqNext === 0) return;
         if (d.label !== seqNext) {
           const want = seqNext;
+          spawnRippleAtDot(arenaEl, d.el, false);
           stopExpire();
           created.forEach((x) => { if (!x.gone) removeDot(x); });
           seqNext = 0;
           score(false, 1, `这一串轮到 ${want} 号啦，慢一点看清号码，下一串一定拍得对！`);
           return;
         }
+        spawnRippleAtDot(arenaEl, d.el, true);
         d.el.classList.add("rbt-dot-done");
         removeDot(d);
         ctx.sfx("pop");
@@ -784,7 +798,8 @@ function playLevel(stage: HTMLElement, ctx: PlayCtx): PlayHandle {
 export function mount(api: GameApi): { destroy: () => void } {
   const root = document.createElement("div");
   const barStyle = document.createElement("style");
-  barStyle.textContent = ENDLESS_CSS + CSS_V12;
+  // 1.3 视觉层（果冻点点 / 波纹 / 计分弹跳）贴在 1.2 规则后面，老规则一条不动
+  barStyle.textContent = ENDLESS_CSS + CSS_V12 + CAMPAIGN_VISUAL_CSS + DOT_ART_CSS;
   const bar = document.createElement("div");
   bar.className = "rte-bar";
   const levelHost = document.createElement("div");

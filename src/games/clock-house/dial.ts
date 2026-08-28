@@ -9,7 +9,8 @@
  * 所以钟面先由 `clockface.faceSVG(..., { dial: true })` 画成静态 SVG，
  * 再由这里在题面渲染完之后接管；`destroy` 会把指针监听、按钮和 pointer capture 一起摘掉。
  */
-import { HANDS, handTip } from "./clockface";
+import { HANDS, handDAt, handTip } from "./clockface";
+import { houseHTML } from "./house";
 import {
   angleToMinute,
   clockHour,
@@ -86,6 +87,19 @@ export function mountDial(svg: Element): DialHandle {
   toggle.className = "clk-toggle";
   const offs: Array<() => void> = [];
 
+  // 1.3 小屋化：把钟面嵌进布谷鸟小屋（屋顶 / 木壁板 / 摆锤 / 小窗）。
+  // 纯装饰层——svg 本体（也就是拖拽热区）原样搬进屋身开槽，尺寸与事件零改动。
+  let house: HTMLElement | null = host.ownerDocument.createElement("div");
+  house.className = "clk-house";
+  house.innerHTML = houseHTML();
+  host.insertBefore(house, svg);
+  (house.querySelector(".clk-house-mid") ?? house).appendChild(svg);
+
+  // 指针的箭头造型层（端点载体 line 之上）；找不到就只挪 line，绝不因换肤拖垮拖动
+  const hourPath = svg.querySelector('[data-clk-handp="hour"]');
+  const minutePath = svg.querySelector('[data-clk-handp="minute"]');
+  let lastMinute = clockMinute(Math.round(time));
+
   function paint(): void {
     const h = handTip(hourHandAngleAt(time), HANDS.hour.length);
     const m = handTip(minuteHandAngleAt(time), HANDS.minute.length);
@@ -93,11 +107,23 @@ export function mountDial(svg: Element): DialHandle {
     (hourHand as Element).setAttribute("y2", h.y.toFixed(2));
     (minuteHand as Element).setAttribute("x2", m.x.toFixed(2));
     (minuteHand as Element).setAttribute("y2", m.y.toFixed(2));
+    // 造型层与端点载体同源：d 里的针尖就是 handTip 的输出
+    hourPath?.setAttribute("d", handDAt("hour", hourHandAngleAt(time)));
+    minutePath?.setAttribute("d", handDAt("minute", minuteHandAngleAt(time)));
+    // 分针跨过一格整分：轻微「哒」一格弹性（animationend 收类名，reduced 下 CSS 直接关）
+    const minuteNow = clockMinute(Math.round(time));
+    if (minutePath && minuteNow !== lastMinute) {
+      lastMinute = minuteNow;
+      minutePath.classList.add("clk-tickpop");
+    }
     svg.setAttribute("data-t", String(Math.round(time)));
     svg.setAttribute("aria-label", formatClockMinute(time));
     readout.textContent = dialReadout(time, precise);
     toggle.textContent = precise ? "🎯 精确模式：开" : "🎯 精确模式：关";
     toggle.setAttribute("aria-pressed", precise ? "true" : "false");
+    // 拨杆两态 + 精确模式下分针刻度增亮（都是类名开关，开关逻辑本身一行没动）
+    toggle.classList.toggle("clk-toggle-on", precise);
+    svg.classList.toggle("clk-precise", precise);
   }
 
   function moveTo(ev: PointerLike): void {
@@ -131,6 +157,11 @@ export function mountDial(svg: Element): DialHandle {
   on<PointerEvent>(svg, "pointercancel", stop);
   on<PointerEvent>(svg, "pointerleave", stop);
 
+  // 「哒」一格的弹性动画播完就摘类名，下次跨分才能再触发（不开任何计时器）
+  if (minutePath) {
+    on<AnimationEvent>(minutePath, "animationend", () => minutePath.classList.remove("clk-tickpop"));
+  }
+
   // 键盘也能拨：左右一次一分钟，上下一次五分钟，读屏用户不掉队
   svg.setAttribute("tabindex", "0");
   svg.setAttribute("role", "slider");
@@ -159,6 +190,9 @@ export function mountDial(svg: Element): DialHandle {
       while (offs.length) offs.pop()?.();
       readout.remove();
       toggle.remove();
+      // 小屋装饰层连同摆锤动画一起收走（svg 是题面的一部分，随题面被壳整体替换）
+      house?.remove();
+      house = null;
     },
     getTime: () => time,
   };

@@ -46,6 +46,29 @@ import {
   sideLayout,
 } from "./runtime";
 import { fitFieldIntoStage } from "./fit";
+import { BASE_LEAN_DEG, SQUAD_W, TUG_ART, tugTeamHtml } from "../../art/kit/tugTeam";
+import {
+  CONFETTI_COLORS,
+  HIT_YANK_MS,
+  MISS_SWAY_MS,
+  beatLeftPct,
+  beatRingR,
+  confettiCount,
+  createFxSpool,
+  dustCount,
+  finaleHtml,
+  headCards,
+  pullFx,
+  ribbonLeftPct,
+  ribbonSvg,
+  riverSvg,
+  ropePathD,
+  sceneSvg,
+  shadowShiftPx,
+  teamLeanDeg,
+  trophyStack,
+  type PullFx,
+} from "./theater";
 
 export const RBG_CSS = `
 .rbg-wrap { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(180deg, #FFF0E4, #FFE4EC); border-radius: 16px; padding: 12px; user-select: none; touch-action: manipulation; position: relative; }
@@ -53,22 +76,56 @@ export const RBG_CSS = `
 .rbg-badge { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 4px 12px 4px 4px; font-weight: 800; font-size: 15px; box-shadow: 0 2px 6px rgba(200,120,120,.25); }
 .rbg-badge.rbg-badge-right { padding: 4px 4px 4px 12px; }
 .rbg-ava { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; box-shadow: 0 1px 4px rgba(120,80,120,.3); }
-.rbg-puller { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #fff; object-fit: cover; box-shadow: 0 3px 8px rgba(120,80,120,.3); background: #fff; }
-.rbg-team-red .rbg-puller { border-color: #FFB3B3; }
-.rbg-team-blue .rbg-puller { border-color: #A9C6FF; }
 .rbg-light { font-size: 26px; min-width: 34px; text-align: center; }
-.rbg-field { position: relative; height: 124px; border-radius: 16px; background: linear-gradient(180deg, #E8F6DA 0 68%, #CFE8B8 68% 100%); overflow: hidden; margin-bottom: 8px; }
-.rbg-team { position: absolute; top: 30px; font-size: 34px; }
-.rbg-rope { position: absolute; top: 52px; height: 6px; background: linear-gradient(180deg, #D8A968, #B9853F); border-radius: 3px; }
-.rbg-flag { position: absolute; top: 24px; font-size: 26px; }
-.rbg-zone { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(200,80,80,.35); }
-.rbg-mid { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: rgba(90,60,60,.35); }
-.rbg-cushion { position: absolute; bottom: 6px; font-size: 26px; opacity: .55; }
-.rbg-beat { position: absolute; top: 30px; font-size: 24px; pointer-events: none; will-change: transform; }
-.rbg-beat-hot { filter: drop-shadow(0 0 6px #FFD36A); }
+.rbg-field { position: relative; height: 124px; border-radius: 16px; background: linear-gradient(180deg, ${TUG_ART.skyTop} 0 26%, ${TUG_ART.skyBottom} 40%, ${TUG_ART.grassLight} 44%, ${TUG_ART.grassDark} 100%); overflow: hidden; margin-bottom: 8px; }
+.rbg-scene-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rbg-bunting { animation: rbgSwing 2.4s ease-in-out infinite alternate; will-change: transform; }
+.rbg-flower-a { animation: rbgSwing 2.4s ease-in-out infinite alternate; }
+.rbg-flower-b { animation: rbgSwing 2.4s ease-in-out infinite alternate-reverse; }
+.rbg-river { position: absolute; left: 50%; top: 34%; bottom: 0; width: 30px; transform: translateX(-50%); }
+.rbg-river-svg { width: 100%; height: 100%; display: block; }
+.rbg-ticks { position: absolute; left: 8%; right: 8%; top: 58%; height: 8px; background: repeating-linear-gradient(90deg, rgba(122,90,60,.3) 0 2px, transparent 2px 21px); }
+.rbg-zone { position: absolute; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, rgba(255,51,85,.12), rgba(255,51,85,.55)); }
+.rbg-mid { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: rgba(90,60,60,.16); }
+.rbg-team { position: absolute; top: 18px; width: ${SQUAD_W}px; height: 56px; transform-origin: 50% 96%; transition: transform .22s ease-out, left .12s linear; will-change: transform; }
+.rbg-squad { position: absolute; inset: 0; }
+.rbg-slot { position: absolute; top: 0; width: 48px; height: 56px; transform-origin: 50% 93%; }
+.rbg-yank .rbg-squad-red { animation: rbgYankR ${HIT_YANK_MS}ms ease-in-out; }
+.rbg-yank .rbg-squad-blue { animation: rbgYankB ${HIT_YANK_MS}ms ease-in-out; }
+.rbg-rope { position: absolute; top: 36px; overflow: visible; }
+.rbg-rope.rbg-sway { animation: rbgSway ${MISS_SWAY_MS}ms ease-out; }
+.rbg-flag { position: absolute; top: 38px; width: 20px; transition: left .22s ease-out, top .22s ease-out; will-change: left; }
+.rbg-beat { position: absolute; top: 47px; width: 0; height: 0; pointer-events: none; will-change: transform; }
+.rbg-beat-ring { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); border: 3px solid #FFD36A; border-radius: 50%; box-shadow: 0 0 8px rgba(255,211,106,.65); }
+.rbg-beat-core { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); font-size: 15px; }
+.rbg-beat-hot .rbg-beat-ring { border-color: #FF9A3D; }
+.rbg-beat-hot .rbg-beat-core { filter: drop-shadow(0 0 6px #FFD36A); }
+.rbg-still .rbg-beat-ring { display: none; }
+.rbg-still .rbg-beat-hot .rbg-beat-core { transform: translate(-50%, -50%) scale(1.35); }
+.rbg-still .rbg-bunting, .rbg-still .rbg-flower-a, .rbg-still .rbg-flower-b { animation: none; }
+.rbg-fx { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.rbg-dust { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: rgba(217,160,102,.65); animation: rbgDust .45s ease-out forwards; }
+.rbg-confetti { position: absolute; top: -10px; width: 7px; height: 11px; border-radius: 2px; opacity: .95; animation: rbgConfetti .9s ease-in forwards; }
 .rbg-supply { position: absolute; border: none; background: none; font-size: 32px; cursor: pointer; padding: 2px; }
 .rbg-finale { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: rgba(255,250,244,.9); font-weight: 900; color: #B0555F; font-size: 16px; text-align: center; padding: 8px; }
 .rbg-finale-row { font-size: 30px; letter-spacing: 4px; }
+.rbg-ceremony { display: flex; align-items: flex-end; justify-content: center; gap: 14px; position: relative; }
+.rbg-pile { position: relative; width: 96px; height: 62px; }
+.rbg-pile-slot { position: absolute; bottom: 0; transform-origin: 50% 93%; }
+.rbg-pile-a { left: 0; transform: scale(.8) rotate(-8deg); }
+.rbg-pile-b { left: 46px; transform: scale(.8) rotate(8deg); }
+.rbg-pile-top { left: 23px; bottom: 20px; transform: scale(.76); }
+.rbg-sit { display: inline-block; transform: scale(.9); transform-origin: 50% 100%; }
+.rbg-hat { position: absolute; left: 26%; top: 4px; animation: rbgHatToss .9s ease-out forwards; }
+.rbg-hat-b { left: 56%; animation-delay: .12s; }
+.rbg-finale-line { font-size: 14px; max-width: 300px; }
+@keyframes rbgSwing { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+@keyframes rbgYankR { 45% { transform: rotate(-6deg) translateY(1px); } }
+@keyframes rbgYankB { 45% { transform: rotate(6deg) translateY(1px); } }
+@keyframes rbgSway { 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+@keyframes rbgDust { to { transform: translate(-6px, -14px) scale(1.7); opacity: 0; } }
+@keyframes rbgConfetti { to { transform: translate(var(--rbg-cx, 0px), 128px) rotate(540deg); opacity: .2; } }
+@keyframes rbgHatToss { 40% { transform: translateY(-26px) rotate(-140deg); opacity: 1; } to { transform: translateY(4px) rotate(-320deg); opacity: 0; } }
 .rbg-gear { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; min-height: 22px; }
 .rbg-chip { display: inline-flex; align-items: center; gap: 5px; background: #ffffffd9; border-radius: 999px; padding: 3px 11px; font-size: 14px; font-weight: 800; color: #B0555F; box-shadow: 0 2px 5px rgba(190,120,130,.2); }
 .rbg-chip-hot { background: linear-gradient(180deg, #FFE0B2, #FFC98A); color: #97551A; }
@@ -88,7 +145,9 @@ export const RBG_CSS = `
 .rbg-pull.rbg-blue { background: linear-gradient(180deg, #7FA8FF, #5577E8); box-shadow: 0 5px 0 #3B55C2; }
 .rbg-pull.rbg-blue:active, .rbg-pull.rbg-blue.rbg-down { box-shadow: 0 2px 0 #3B55C2; }
 .rbg-pull.rbg-ghost { background: linear-gradient(180deg, #DCD3E8, #C4B8D6); box-shadow: 0 5px 0 #A79ABB; cursor: default; }
-.rbg-sub { font-size: 13px; font-weight: 700; opacity: .92; }
+.rbg-sub { font-size: 14px; font-weight: 700; opacity: .92; }
+/* W8R1-10：键帽提示 12px 太小，提到 14px（按钮盒子与热区零改动，文本原样） */
+.rbg-pull .rbg-sub { display: inline-block; margin-top: 3px; background: rgba(255,255,255,.94); color: #7C5B63; border-radius: 8px; padding: 1px 8px; font-size: 14px; opacity: 1; box-shadow: inset 0 -2px 0 rgba(150,110,120,.4), 0 1px 2px rgba(120,80,90,.25); }
 .rbg-msg { text-align: center; min-height: 22px; color: #B0555F; font-weight: 700; margin-top: 8px; font-size: 15px; }
 /* 拔河场退到底线 76px 还装不下时（320×640 实测差 37px）由 fitFieldIntoStage() 打上。
    只减空隙——外框内边距 12→6、四处块间距 8→4、提示行上边距 8→4，一共让出 32px；
@@ -119,7 +178,8 @@ export const RBG_CSS = `
    两颗大按钮自己写着 touch-action:none，按住蓄力那一下不会被当成滚动手势。 */
 .rbg-wrap.rbg-scroll { overscroll-behavior: contain; }
 @media (prefers-reduced-motion: reduce) {
-  .rbg-beat, .rbg-team, .rbg-rope { transition: none !important; }
+  .rbg-beat, .rbg-team, .rbg-rope, .rbg-flag { transition: none !important; }
+  .rbg-bunting, .rbg-flower-a, .rbg-flower-b, .rbg-squad, .rbg-confetti, .rbg-dust, .rbg-hat, .rbg-beat-ring, .rbg-rope.rbg-sway { animation: none !important; }
 }
 `;
 
@@ -146,6 +206,9 @@ const SHELL_CSS = `
 .rbg-pick { border: none; border-radius: 16px; padding: 10px 14px; font-size: 15px; font-weight: 900; cursor: pointer; font-family: inherit; text-align: left; background: #fff; color: #7A4A72; box-shadow: 0 3px 0 rgba(170,130,170,.3); }
 .rbg-pick:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(170,130,170,.3); }
 .rbg-pick-note { display: block; font-size: 13px; font-weight: 700; color: #8E7A96; margin-top: 2px; }
+.rbg-card { display: inline-flex; align-items: center; gap: 4px; background: #fff; border-radius: 12px; padding: 5px 10px; font-size: 14px; font-weight: 800; color: #8A5E66; box-shadow: 0 2px 6px rgba(190,120,130,.22); white-space: nowrap; }
+.rbg-card-ico { font-size: 15px; line-height: 1; }
+.rbg-cups { letter-spacing: -7px; margin-left: 2px; margin-right: 6px; font-size: 13px; line-height: 1; }
 `;
 
 // ---------------------------------------------------------------------------
@@ -201,6 +264,8 @@ function viewportWidth(): number {
 
 function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
   const gone = createDisposer();
+  /** 尘土 / 彩纸 / 猛拉帧这类一次性动效的计时器统管,destroy 一把清零 */
+  const spool = createFxSpool();
   const duo = spec.tier === null;
   const reduced = prefersReducedMotion();
   const layout = sideLayout(viewportWidth());
@@ -242,16 +307,18 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
       <span class="rbg-badge rbg-badge-right" style="color:#3576BF">${rivalName}<img class="rbg-ava" src="${AVATAR_URLS.xingxing}" alt="星星" /></span>
     </div>
     <div class="rbg-gear"></div>
-    <div class="rbg-field">
+    <div class="rbg-field${reduced ? " rbg-still" : ""}">
+      ${sceneSvg()}
+      <div class="rbg-river" aria-hidden="true">${riverSvg()}</div>
+      <div class="rbg-ticks" aria-hidden="true"></div>
       <div class="rbg-zone" style="left:15%"></div>
       <div class="rbg-zone" style="right:15%"></div>
       <div class="rbg-mid"></div>
-      <div class="rbg-cushion" style="left:4%">🛋️</div>
-      <div class="rbg-cushion" style="right:4%">🛋️</div>
-      <div class="rbg-team rbg-red rbg-team-red"><img class="rbg-puller" src="${AVATAR_URLS.duoduo}" alt="朵朵在拔河" /></div>
-      <div class="rbg-rope"></div>
-      <div class="rbg-flag">🚩</div>
-      <div class="rbg-team rbg-blue-team rbg-team-blue"><img class="rbg-puller" src="${AVATAR_URLS.xingxing}" alt="星星在拔河" /></div>
+      <div class="rbg-team rbg-red rbg-team-red" role="img" aria-label="朵朵队在拔河">${tugTeamHtml("red")}</div>
+      <svg class="rbg-rope" viewBox="0 0 200 28" width="200" height="28" aria-hidden="true" focusable="false"><path class="rbg-rope-main" fill="none" stroke="${TUG_ART.ropeTan}" stroke-width="6" stroke-linecap="round"/><path class="rbg-rope-twist" fill="none" stroke="${TUG_ART.ropeLine}" stroke-width="6" stroke-linecap="round" stroke-dasharray="2.5 7"/></svg>
+      <div class="rbg-flag" aria-hidden="true">${ribbonSvg()}</div>
+      <div class="rbg-team rbg-blue-team rbg-team-blue" role="img" aria-label="星星队在拔河">${tugTeamHtml("blue")}</div>
+      <div class="rbg-fx" aria-hidden="true"></div>
     </div>
     <div class="rbg-meters">
       <div class="rbg-meter-box rbg-box-left">
@@ -269,9 +336,14 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
 
   const fieldEl = wrap.querySelector(".rbg-field") as HTMLElement;
   const flagEl = wrap.querySelector(".rbg-flag") as HTMLElement;
-  const ropeEl = wrap.querySelector(".rbg-rope") as HTMLElement;
+  const ropeEl = wrap.querySelector(".rbg-rope") as unknown as SVGSVGElement;
+  const ropeMain = wrap.querySelector(".rbg-rope-main") as SVGPathElement;
+  const ropeTwist = wrap.querySelector(".rbg-rope-twist") as SVGPathElement;
   const redEl = wrap.querySelector(".rbg-red") as HTMLElement;
   const blueEl = wrap.querySelector(".rbg-blue-team") as HTMLElement;
+  const redSquad = redEl.querySelector(".rbg-squad") as HTMLElement;
+  const blueSquad = blueEl.querySelector(".rbg-squad") as HTMLElement;
+  const fxEl = wrap.querySelector(".rbg-fx") as HTMLElement;
   const lightEl = wrap.querySelector(".rbg-light") as HTMLElement | null;
   const msgEl = wrap.querySelector(".rbg-msg") as HTMLElement;
   const gearEl = wrap.querySelector(".rbg-gear") as HTMLElement;
@@ -394,12 +466,12 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
     setDown(side === "red" ? "L" : "R", false);
   });
 
-  // ---- 加油点的画面 ----
+  // ---- 加油点的画面:绳上节拍收缩环(数据源与刷新时机与 1.2 一字不差) ----
   const beatEls: HTMLElement[] = [];
   for (let i = 0; i < 3; i++) {
     const el = document.createElement("div");
     el.className = "rbg-beat";
-    el.textContent = "🎈";
+    el.innerHTML = `<span class="rbg-beat-ring"></span><span class="rbg-beat-core">🎈</span>`;
     el.style.display = "none";
     fieldEl.appendChild(el);
     beatEls.push(el);
@@ -414,11 +486,64 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
         if (beats[i] - nowMs > TUG12.BEAT_TRAVEL_MS) break;
         const el = beatEls[slot++];
         el.style.display = "";
-        el.style.left = `${8 + ((track + 1) / 2) * 84}%`;
+        el.style.left = `${beatLeftPct(track)}%`;
+        // 环从 r=26 收缩到 r=8,最小时刻正好是拍点时刻(±BEAT_WINDOW_MS 窗口中心)
+        const r = beatRingR(beats[i], nowMs);
+        const ring = el.firstElementChild as HTMLElement;
+        ring.style.width = `${r * 2}px`;
+        ring.style.height = `${r * 2}px`;
         el.classList.toggle("rbg-beat-hot", Math.abs(beats[i] - nowMs) <= TUG12.BEAT_WINDOW_MS);
       }
     }
     for (let i = slot; i < beatEls.length; i++) beatEls[i].style.display = "none";
+  }
+
+  // ---- 命中 / miss 的画面反馈(互斥两分支,reduced 全停) ----
+  function spawnDust(): void {
+    spool.spawn(dustCount(reduced), 450, (i) => {
+      const el = document.createElement("span");
+      el.className = "rbg-dust";
+      const pct = ribbonLeftPct(rope / TUG12.ROPE_WIN);
+      el.style.left = `calc(${pct}% ${i === 0 ? "-" : "+"} ${70 + Math.random() * 20}px)`;
+      el.style.top = `${56 + Math.random() * 8}px`;
+      fxEl.appendChild(el);
+      return () => el.remove();
+    });
+  }
+
+  function playPullFx(kind: PullFx): void {
+    if (reduced || ended) return;
+    if (kind === "hit") {
+      // 全队猛拉一帧(+6° 回弹),外加两粒尘土
+      spool.spawn(1, HIT_YANK_MS, () => {
+        fieldEl.classList.remove("rbg-yank");
+        void fieldEl.offsetWidth;
+        fieldEl.classList.add("rbg-yank");
+        return () => fieldEl.classList.remove("rbg-yank");
+      });
+      spawnDust();
+    } else {
+      // miss 只让绳子轻晃 ±2px,不批评
+      spool.spawn(1, MISS_SWAY_MS, () => {
+        ropeEl.classList.remove("rbg-sway");
+        void ropeEl.getBoundingClientRect();
+        ropeEl.classList.add("rbg-sway");
+        return () => ropeEl.classList.remove("rbg-sway");
+      });
+    }
+  }
+
+  function throwConfetti(): void {
+    spool.spawn(confettiCount(reduced), 1400, (i) => {
+      const el = document.createElement("span");
+      el.className = "rbg-confetti";
+      el.style.left = `${8 + Math.random() * 84}%`;
+      el.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+      el.style.animationDelay = `${Math.round(Math.random() * 180)}ms`;
+      el.style.setProperty("--rbg-cx", `${Math.round((Math.random() - 0.5) * 40)}px`);
+      fxEl.appendChild(el);
+      return () => el.remove();
+    });
   }
 
   // ---- 补给 ----
@@ -468,20 +593,29 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
   }
 
   function render(nowMs: number): void {
-    const flagPct = 50 - (rope / TUG12.ROPE_WIN) * 35;
+    // 丝带位置 = 拉力值的同一条线性映射(50 − ratio×35),数据源与 1.2 一字不差
+    const ratio = rope / TUG12.ROPE_WIN;
+    const flagPct = ribbonLeftPct(ratio);
     const shake = ropeShake(playerFactor + rivalFactor, reduced);
     const wobble = shake ? Math.sin(nowMs / 26) * shake : 0;
-    flagEl.style.left = `calc(${flagPct}% - 13px)`;
-    flagEl.style.top = `${24 + ropeSag(playerFactor + rivalFactor) * 0.4}px`;
-    ropeEl.style.left = `calc(${flagPct}% - 92px)`;
-    ropeEl.style.width = "184px";
-    ropeEl.style.height = `${Math.max(4, 8 - ropeSag(playerFactor + rivalFactor) * 0.3)}px`;
+    const sag = ropeSag(playerFactor + rivalFactor);
+    flagEl.style.left = `calc(${flagPct}% - 10px)`;
+    flagEl.style.top = `${36 + sag * 0.4}px`;
+    // 麻绳:两段贝塞尔在丝带处汇合,力量越大绷得越直(ropeSag 原样只读)
+    ropeEl.style.left = `calc(${flagPct}% - 100px)`;
     ropeEl.style.transform = `translateY(${wobble * 0.4}px)`;
-    redEl.style.left = `calc(${flagPct}% - 142px)`;
-    blueEl.style.left = `calc(${flagPct}% + 68px)`;
-    // 力量越大人越往后仰
-    redEl.style.transform = `rotate(${-8 * Math.min(1.4, playerFactor)}deg) translateX(${wobble * 0.3}px)`;
-    blueEl.style.transform = `rotate(${8 * Math.min(1.4, rivalFactor)}deg) translateX(${-wobble * 0.3}px)`;
+    const ropeD = ropePathD(200, 8, sag * 0.9);
+    ropeMain.setAttribute("d", ropeD);
+    ropeTwist.setAttribute("d", ropeD);
+    redEl.style.left = `calc(${flagPct}% - ${SQUAD_W + 60}px)`;
+    blueEl.style.left = `calc(${flagPct}% + 60px)`;
+    // 拉力偏移越大全队后仰越狠:基准 −6°,再按 |ratio| 分 ±4/±7/±10 三档
+    const lean = BASE_LEAN_DEG + teamLeanDeg(ratio);
+    const shx = shadowShiftPx(ratio);
+    redEl.style.transform = `translateX(${wobble * 0.3}px) rotate(${-lean}deg)`;
+    blueEl.style.transform = `translateX(${-wobble * 0.3}px) rotate(${lean}deg)`;
+    redSquad.style.setProperty("--rbg-shx", `${shx}px`);
+    blueSquad.style.setProperty("--rbg-shx", `${-shx}px`);
     renderMeter(meterLeft, fillLeft, pctLeft, staminaRatio(player, playerCfg), player.winded);
     renderMeter(meterRight, fillRight, pctRight, staminaRatio(rival, rivalCfg), rival.winded);
     renderBeats(nowMs);
@@ -493,11 +627,12 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
     const seconds = (performance.now() - startAt) / 1000;
     down.L = false;
     down.R = false;
-    const loser = winner === "red" ? "星星队" : "朵朵队";
+    // 胜负仪式:胜方叠罗汉欢呼 + 抛帽 + 彩纸,败方坐地吐舌头笑;结算时机 900ms 原样
     const fin = document.createElement("div");
     fin.className = "rbg-finale";
-    fin.innerHTML = `<div class="rbg-finale-row">🛋️ 😄 😄</div><div>${loser}一屁股坐到软垫上,两队都笑成一团!</div>`;
+    fin.innerHTML = finaleHtml(winner);
     fieldEl.appendChild(fin);
+    throwConfetti();
     hooks.sfx(winner === "red" ? "win" : "pop");
     gone.timer(setTimeout(() => hooks.onEnd(winner, seconds), 900) as unknown as number);
   }
@@ -574,12 +709,15 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
         hooks.sfx("coin");
         msgEl.textContent = "🎈 加油点踩准了!额外拉一大把!";
       }
+      // 命中 → 全队猛拉一帧;miss → 绳子轻晃。只描画面,判定与数值在上面原样
+      playPullFx(pullFx(hit));
     }
     if (green && stepR.pressEdge) {
       const hit = beatHitIndex(beats, nowMs, stepR.edgeRestMs, rivalBeatFrom);
       if (hit >= 0) {
         rivalBeatFrom = hit + 1;
         delta -= TUG12.BEAT_IMPULSE;
+        playPullFx("hit");
       }
     }
 
@@ -613,6 +751,8 @@ function runTug(spec: RunSpec, hooks: RunHooks): TugRun {
     root: wrap,
     destroy() {
       ended = true;
+      // 节拍环随 rAF 停画,彩纸 / 尘土 / 猛拉帧的计时器由 spool 一把清零
+      spool.clear();
       gone.dispose();
       wrap.remove();
     },
@@ -904,19 +1044,29 @@ function mountEndless(
     <style>${RBG_CSS}${SHELL_CSS}</style>
     <div class="rbg-head">
       <button class="rbg-back" type="button">🗺️ 回关卡</button>
-      <span class="rbg-chip rbg-round"></span>
-      <span class="rbg-chip rbg-best"></span>
+      <span class="rbg-card rbg-round"></span>
+      <span class="rbg-card rbg-streak"></span>
+      <span class="rbg-card rbg-best"></span>
     </div>
     <div class="rbg-stage"></div>
   `;
   host.appendChild(wrap);
   const stageEl = wrap.querySelector(".rbg-stage") as HTMLElement;
   const roundEl = wrap.querySelector(".rbg-round") as HTMLElement;
+  const streakEl = wrap.querySelector(".rbg-streak") as HTMLElement;
   const bestEl = wrap.querySelector(".rbg-best") as HTMLElement;
 
   function paintHead(): void {
-    roundEl.textContent = `🪢 第 ${streak + 1} 局 · 已连胜 ${streak}`;
-    bestEl.textContent = best > 0 ? `🏅 最高连胜 ${best}` : "🏅 还没有纪录";
+    // 顶栏三卡:局数 / 连胜(奖杯堆叠) / 纪录,数据源(streak / best)原样只读
+    const cards = headCards(streak, best);
+    roundEl.innerHTML = `<span class="rbg-card-ico">${cards[0].icon}</span><span>${cards[0].value}</span>`;
+    const cups = trophyStack(streak);
+    streakEl.innerHTML =
+      `<span class="rbg-card-ico">${cards[1].icon}</span><span>连胜 ${cards[1].value}</span>` +
+      (cups > 0 ? `<span class="rbg-cups" aria-hidden="true">${"🏆".repeat(cups)}</span>` : "");
+    bestEl.innerHTML = `<span class="rbg-card-ico">${cards[2].icon}</span><span>${
+      best > 0 ? `纪录 ${cards[2].value}` : "还没有纪录"
+    }</span>`;
   }
 
   function gameOver(): void {
