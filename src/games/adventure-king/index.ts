@@ -222,8 +222,10 @@ const CSS = `
 @media (prefers-reduced-motion:reduce){.advk-pad2 button:active{transform:none;}}
 /* N-30 配方 G:矮横屏 D-pad 挪房间网格右侧,工具行置顶;房间生成/钥匙判定零触碰 */
 @media (max-height:500px){
+  /* max-height:100% 在 l99-host 无定高时绑不住:壳长到 408px 被 322px 宿主裁 86px,
+     第 6 行「打开陈列」415↑永远线下且滚不到;换 dvh 钳高 + 竖向自滚,默认视野 13 控件不动 */
   .ak-mode.advk-shell{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto 1fr auto auto;
-    gap:6px;padding:6px;min-height:0;max-height:100%;overflow:hidden;}
+    gap:6px;padding:6px;min-height:0;max-height:calc(100dvh - 90px);overflow-y:auto;overflow-x:hidden;}
   .ak-mode.advk-shell > .ak-mhead{grid-column:1/-1;grid-row:1;}
   .ak-mode.advk-shell > .advk-hud{grid-column:1/-1;grid-row:2;}
   .ak-mode.advk-shell > .advk-tools{grid-column:1/-1;grid-row:3;}
@@ -232,7 +234,11 @@ const CSS = `
   .ak-mode.advk-shell > .advk-pad2{grid-column:2;grid-row:4;margin-top:0;align-self:center;}
   .ak-mode.advk-shell > .advk-say{grid-column:1/-1;grid-row:5;}
   .ak-mode.advk-shell > .advk-mini{grid-column:1/-1;}
-  .ak-mode.advk-shell > .advk-album{grid-column:1/-1;grid-row:6;max-height:28dvh;overflow:auto;}
+  /* overflow:auto 让 album 的自动最小尺寸归零,壳层一钳高网格就把第 6 行压塌成 0;
+     min-height 托住一行按钮的高度,行不塌、壳层滚动量才长得出来;
+     开馆态把行托满 28dvh(上游给的上限),展柜别在 48px 缝里内滚 */
+  .ak-mode.advk-shell > .advk-album{grid-column:1/-1;grid-row:6;min-height:48px;max-height:28dvh;overflow:auto;}
+  .ak-mode.advk-shell > .advk-album.advk-album-open{min-height:28dvh;}
 }
 ${touchUpliftCss([".ak-open"])}
 .ak-open,.ak-back{min-height:44px;}
@@ -1110,6 +1116,7 @@ function mountCastle(host: HTMLElement, api: GameApi, onBack: () => void): { des
   function renderAlbum(): void {
     const done = albumBonusStars(stickers);
     const total = STICKER_SETS.reduce((n, s) => n + s.items.length, 0);
+    album.classList.toggle("advk-album-open", albumOpen);
     album.innerHTML = "";
     const head = document.createElement("div");
     head.className = "advk-album-head";
