@@ -117,6 +117,45 @@ export function mapColumns(width: number): number {
   return 8;
 }
 
+/**
+ * 竞技场画布逻辑高按壳卡缺口等比补足(trio-r4 遗留的 orb-arena / snake-royale 卡底留白)。
+ * 画布显示宽被容器定死(width:100%),只能改逻辑高来消化竖向缺口;
+ * gapPx<0(矮横屏内容溢出)时也允许收一点。钳在 [min(原高,240), 960]:
+ * 下限不许把并排/分屏原本更矮的画布反向抬高,上限防止竖屏拉成一根面条。
+ */
+export function fitPaneH(paneH: number, paneW: number, displayW: number, gapPx: number, rows: number): number {
+  if (!(displayW > 0) || !(rows > 0) || !Number.isFinite(gapPx)) return paneH;
+  const delta = (gapPx / rows) * (paneW / displayW);
+  const lo = Math.min(paneH, 240);
+  return Math.max(lo, Math.min(960, Math.round(paneH + delta)));
+}
+
+/**
+ * 进关时量一次壳卡(.game-stage)底部缺口,把成排画布的逻辑高补足;
+ * 拿不到壳卡或量不出宽(单测的 jsdom)就原样返回。rows 按画布 top 去重:
+ * 竖排分屏各占一行要平分缺口,横排并排只算一行。
+ */
+export function fitPanesToStage(
+  wrap: HTMLElement,
+  canvases: HTMLCanvasElement[],
+  paneW: number,
+  paneH: number
+): number {
+  // 单测的 FakeEl/jsdom 没有 closest 或量不出尺寸,这些环境一律原样返回
+  if (typeof wrap.closest !== "function") return paneH;
+  const card = wrap.closest(".game-stage");
+  const first = canvases[0];
+  if (!card || !first || typeof first.getBoundingClientRect !== "function") return paneH;
+  const displayW = first.getBoundingClientRect().width;
+  if (!(displayW > 0)) return paneH;
+  // 16px = 壳卡圆角边框 + l99-stage 内边距的呼吸量
+  const gap = card.getBoundingClientRect().bottom - 16 - wrap.getBoundingClientRect().bottom;
+  const rows = new Set(canvases.map((c) => Math.round(c.getBoundingClientRect().top))).size || 1;
+  const fitted = fitPaneH(paneH, paneW, displayW, gap, rows);
+  if (fitted !== paneH) for (const c of canvases) c.height = fitted;
+  return fitted;
+}
+
 // ---------------------------------------------------------------------------
 // 确定性随机（关卡生成器共用，保证同一关每次布局一致、可测试）
 // ---------------------------------------------------------------------------

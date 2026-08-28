@@ -3,7 +3,7 @@ export { meta };
 
 // 长蛇争霸:开阔原野上的本地竞技。188 关战役 + 本机混战 + 缩圈无尽 + 同屏双人。
 // 场上所有「其他玩家」都是本机 AI,全程离线,不开任何网络连接。
-import { loadStars, mountLevelGame, totalStars, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
+import { fitPanesToStage, loadStars, mountLevelGame, totalStars, type GameApi, type PlayCtx, type PlayHandle } from "../level99";
 import {
   compatFromMeta,
   describeModes,
@@ -333,11 +333,13 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
 
   const canvases: HTMLCanvasElement[] = [];
   const paneCount = Math.max(1, humans.length);
+  const paneW = 640;
+  const paneH = paneCount > 1 ? 224 : 372;
   for (let i = 0; i < paneCount; i++) {
     const c = document.createElement("canvas");
     c.className = "sr-canvas";
-    c.width = 640;
-    c.height = paneCount > 1 ? 224 : 372;
+    c.width = paneW;
+    c.height = paneH;
     c.setAttribute("aria-label", `${humans[i]?.name ?? "长蛇"} 的原野画面`);
     panes.appendChild(c);
     canvases.push(c);
@@ -419,6 +421,9 @@ export function createRun(stage: HTMLElement, opts: RunOpts): { destroy: () => v
     };
     padEl.append(mk(`${h.name} 💨 加速`, boostHeld), mk(`${h.name} 🛑 急停`, brakeHeld));
   }
+
+  // 卡底留白(trio-r4 遗留):按钮/提示都建齐后量一次壳卡缺口,把画布加高,竖屏不再露一大截白底
+  fitPanesToStage(wrap, canvases, paneW, paneH);
 
   const DUO_KEYS: Record<string, Pt> = { w: { x: 0, y: -1 }, s: { x: 0, y: 1 }, a: { x: -1, y: 0 }, d: { x: 1, y: 0 } };
   const STAR_KEYS: Record<string, Pt> = {
