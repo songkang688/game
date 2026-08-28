@@ -1,7 +1,7 @@
 /**
- * trio-r38…r40 A：N-176 *-pick、N-179 *-lessonbtn、N-182 *-softbtn。
+ * trio-r38…r41 A：N-176 *-pick、N-179 *-lessonbtn、N-182 *-softbtn、N-185 *-catch。
  * 不回退 CTA 回卷 / 消消乐钳高 / N-119/123 / 平板 wrap 760。
- * B 热区文件白名单（N-174/169/94/102/177/181）。
+ * B 热区文件白名单（N-174/169/94/102/177/181/184）。
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -17,10 +17,11 @@ const BL = readFileSync(fileURLToPath(new URL("./bowling-lane/index.ts", import.
 const CLF = readFileSync(fileURLToPath(new URL("./color-fun/ui.ts", import.meta.url)), "utf8");
 const DVS = readFileSync(fileURLToPath(new URL("./duo-vs-star/index.ts", import.meta.url)), "utf8");
 const DR = readFileSync(fileURLToPath(new URL("./duo-rush/index.ts", import.meta.url)), "utf8");
+const HH = readFileSync(fileURLToPath(new URL("./hue-hand/index.ts", import.meta.url)), "utf8");
 
-/** N-174 rbg-pick、N-169 pfb-pick、N-94 dvs-pick、N-102 bc-pick、N-177 lessonbtn、N-181 softbtn */
+/** N-174 rbg-pick、N-169 pfb-pick、N-94 dvs-pick、N-102 bc-pick、N-177 lessonbtn、N-181 softbtn、N-184 hh-catch */
 const B_ALLOW_FILE =
-  /(red-blue-tug|puff-bros|duo-vs-star|bumper-cars|duo-rush|brave-path|gold-hook|adventure-king)\//;
+  /(red-blue-tug|puff-bros|duo-vs-star|bumper-cars|duo-rush|brave-path|gold-hook|adventure-king|hue-hand)\//;
 
 const KIT_TOKEN =
   /TOUCH_MIN|MIN_HIT_PX|HUD_BTN_MIN_H|MIN_HOT|TOGGLE_MIN_H|MIN_TOUCH_PX|CHIP_MIN|SWATCH_MIN/;
@@ -152,6 +153,33 @@ describe("N-182 *-softbtn", () => {
       for (const r of rulesOf(src)) {
         if (/\.dr-start\b/.test(r.sel)) continue;
         if (!classSuffix(r.sel, "softbtn")) continue;
+        if (!clickable(r.sel, r.body)) continue;
+        if (tallEnough(r.body)) continue;
+        hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
+      }
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+});
+
+describe("N-185 *-catch", () => {
+  it("族存在于 hue-hand；不扫牌面兄弟；不替代 N-148/184", () => {
+    expect(HH).toContain(".hh-catch{");
+    expect(HH).toContain(".hh-deck{");
+    expect(HH).toContain(".hh-card{");
+    expect(HH).toMatch(/\.hh-catch\{[^}]*padding:4px 9px/);
+  });
+
+  it("可点 *-catch 须 ≥44 或 TOUCH 插值（B 的 .hh-catch 走文件白名单）", () => {
+    const hits: string[] = [];
+    for (const file of walkSrc(GAMES)) {
+      const rel = file.slice(GAMES.length).replace(/\\/g, "/");
+      if (B_ALLOW_FILE.test(rel + "/")) continue;
+      if (/\.test\.(ts|css)$/.test(rel)) continue;
+      const src = readFileSync(file, "utf8");
+      for (const r of rulesOf(src)) {
+        if (/\.hh-(deck|back|card|pile|heap|bubble)\b/.test(r.sel)) continue;
+        if (!classSuffix(r.sel, "catch")) continue;
         if (!clickable(r.sel, r.body)) continue;
         if (tallEnough(r.body)) continue;
         hits.push(`${rel} :: ${r.sel.slice(0, 90)}`);
